@@ -4,4 +4,4 @@
 
 "modules" contain the OpenTufu scripts, Ansible playbooks and CI/CD pipelines for each TAPaaS service
 
-"Installer" contain the orchestrating script and overall configuration files. you want to branch and edit this for each installation
+"configuration" contain the overall configuration files. you want to branch and edit this for each installation

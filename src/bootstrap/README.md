@@ -13,7 +13,9 @@ b) download and create a bootable usb stick for Proxmox (TODO:insert link)
 c) boot and install proxmox on server
 d) go to gui of proxmox and configure tank1 and tank2
 e) go to shell of proxmox and run the Proxmoxsetup script:
-    - curl 
+```
+bash -c "$(curl -fsSL https>//raw/githubusercontent.com/larsrossen/TAPaaS/src/bootstrap/ProxmoxSetup.sh)"
+```
 
 f) check that it all looks fine!!
 g) run the Selfmanagesetup script
