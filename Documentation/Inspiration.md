@@ -6,6 +6,11 @@ We have taken inspiration and code from this project, thank you
 *Why did we not just contribute to this project:* 
 The helper scripts is trying ot freate a consolidated list of all possible configurations. We are trying to consolidate into a single coherent and integrated systems. So we need a subset of the scripts and some overall orchestration
 
+## [Garage by Deuxfleur](https://garagehq.deuxfleurs.fr/)
+This is perfect for Tapas: Data resiliency for everyone
+We are including Garage in Tapas
+The core principle and philosophy of Deuxfleurs is very alligned with Tapas
+
 ## [CASAOS](https://casaos.zimaspace.com/)
 Your Personal Cloud OS
 
@@ -35,9 +40,9 @@ Great securit model, on Tapaas we implement something similar (trying to get it 
 
 # inspirational youtubers
 
-[Techno Tim](https://www.youtube.com/@TechnoTim)
-[Brandon Lee: VirtualizationHowto](https://www.youtube.com/@VirtualizationHowto) 
-[Tech The Lazy Automator](https://www.youtube.com/@Tech-TheLazyAutomator)
-[Jim's Garage](https://www.youtube.com/@Jims-Garage)
-[Patric at ServeTheHome](https://www.youtube.com/@ServeTheHomeVideo)
-[Tech Tutorials by David McKone](https://www.youtube.com/@TechTutorialsDavidMcKone)
+* [Techno Tim](https://www.youtube.com/@TechnoTim)
+* [Brandon Lee: VirtualizationHowto](https://www.youtube.com/@VirtualizationHowto) 
+* [Tech The Lazy Automator](https://www.youtube.com/@Tech-TheLazyAutomator)
+* [Jim's Garage](https://www.youtube.com/@Jims-Garage)
+* [Patric at ServeTheHome](https://www.youtube.com/@ServeTheHomeVideo)
+* [Tech Tutorials by David](https://www.youtube.com/@TechTutorialsDavidMcKone)
