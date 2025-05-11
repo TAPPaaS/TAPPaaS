@@ -31,4 +31,6 @@ Similar in goals to Frappa. as with Frappa we see Dokku as a potential module in
 
 # inspirational youtubers
 
+[Techno Tim](https://www.youtube.com/@TechnoTim)
 [Brandon Lee: VirtualizationHowto](https://www.youtube.com/@VirtualizationHowto) 
+[Tech The Lazy Automator](https://www.youtube.com/@Tech-TheLazyAutomator)
