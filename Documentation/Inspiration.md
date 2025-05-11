@@ -29,8 +29,15 @@ It is not focused on creating a resilient infrastructure platform, nor is it per
 Similar in goals to Frappa. as with Frappa we see Dokku as a potential module in Tapas.
 
 
+## [QUBES OS](https://www.qubes-os.org/)
+Great securit model, on Tapaas we implement something similar (trying to get it to a zero trust model). Qubes OS is aimed at the desktop, and can be a worthy alternative to Macos or windows if you care for security (as you should)
+
+
 # inspirational youtubers
 
 [Techno Tim](https://www.youtube.com/@TechnoTim)
 [Brandon Lee: VirtualizationHowto](https://www.youtube.com/@VirtualizationHowto) 
 [Tech The Lazy Automator](https://www.youtube.com/@Tech-TheLazyAutomator)
+[Jim's Garage](https://www.youtube.com/@Jims-Garage)
+[Patric at ServeTheHome](https://www.youtube.com/@ServeTheHomeVideo)
+[Tech Tutorials by David McKone](https://www.youtube.com/@TechTutorialsDavidMcKone)
