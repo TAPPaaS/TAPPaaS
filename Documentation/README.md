@@ -1,6 +1,6 @@
 # Documentation directory for TAPaaS
 
-Start with the Vision document
+Start with the Vision document and customer segment document
 
 Move on to the Architecture to understand what is TAPaaS
 
