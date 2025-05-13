@@ -47,3 +47,8 @@ Great securit model, on Tapaas we implement something similar (trying to get it 
 * [Patric at ServeTheHome](https://www.youtube.com/@ServeTheHomeVideo)
 * [Tech Tutorials by David](https://www.youtube.com/@TechTutorialsDavidMcKone)
 * [Digital Spaceport](www.youtube.com/@DigitalSpaceport)
+
+
+
+# relevant videos to consider
+* [A Homelabbers Networking Playground with Opnsense, Proxmox, VLANs and Tailscale](https://youtu.be/XXx7NDgDaRU)
