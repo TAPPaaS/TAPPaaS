@@ -34,6 +34,29 @@ Target Harddisk
         Select Next
 
 
+
+Recommended ZFS Parameters for Proxmox Boot on SSDs
+Parameter	Recommended Value	Explanation
+ashift	12	Sets block size to 4K (2^12). Ideal for SSDs which use 4K internally.
+compression	lz4	Fast compression with minimal CPU overhead. Saves space and improves performance.
+atime	off	Disables access time updates on reads. Reduces unnecessary writes.
+relatime	on (optional)	If you need access time updates but want to reduce write load.
+xattr	sa	Stores extended attributes in inodes (faster and more efficient).
+dedup	off	Deduplication is memory-intensive and not recommended for boot pools.
+sync	standard	Default is safest. Only change if you know what you're doing.
+copies	1	No need for extra copies on mirrored SSDs.
+zfs_arc_max	~50% of RAM	Limit ARC size to avoid starving Proxmox and VMs of memory. Set in /etc/modprobe.d/zfs.conf.
+
+
+
+
+Use Case	Recommended Compression
+    Boot pool only  zstd or zstd-3
+    VM storage pool lz4 (for speed) or zstd (for space savings)
+    Backups/archive zstd-6 or higher
+
+
+
 Analysis of your configuration:
 	•	Total disk capacity per SSD: 480.10 GB
 	•	ZFS partition size per SSD: 428.42 GB
