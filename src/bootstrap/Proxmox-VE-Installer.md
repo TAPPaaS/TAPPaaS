@@ -35,6 +35,37 @@ Target Harddisk
 
 
 
+post install (power saving optimization)
+
+    measure baseline power usage:
+    apt install powertop
+
+    Let it idle for a few minutes. Run: 
+    powertop --time=60
+
+    check powerconsumption and idle state.
+
+   install power management, activate powersave profile:
+    apt install tuned
+    tuned-adm profile powersave
+
+
+Let it idle for a few minutes. Run: 
+    powertop --time=60
+
+    re-check powerconsumption and idle state
+   
+
+
+
+    
+
+
+
+
+
+
+
 Recommended ZFS Parameters for Proxmox Boot on SSDs
 Parameter	Recommended Value	Explanation
 ashift	12	Sets block size to 4K (2^12). Ideal for SSDs which use 4K internally.
