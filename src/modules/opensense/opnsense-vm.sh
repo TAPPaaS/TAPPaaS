@@ -47,7 +47,6 @@ function error_handler() {
   local exit_code="$?"
   local line_number="$1"
   local command="$2"
-  post_update_to_api "failed" "$command"
   local error_message="${RD}[ERROR]${CL} in line ${RD}$line_number${CL}: exit code ${RD}$exit_code${CL}: while executing command ${YW}$command${CL}"
   echo -e "\n$error_message\n"
   cleanup_vmid
@@ -79,7 +78,6 @@ function cleanup_vmid() {
 
 function cleanup() {
   popd >/dev/null
-  post_update_to_api "done" "none"
   rm -rf $TEMP_DIR
 }
 
@@ -221,17 +219,17 @@ function default_settings() {
   CPU_TYPE=""
   CORE_COUNT="4"
   RAM_SIZE="8192"
-  BRG="vmbr0"
-  IP_ADDR=""
+  BRG="enp7s0"
+  IP_ADDR="10.1.1.1"
   WAN_IP_ADDR=""
-  LAN_GW=""
+  LAN_GW="10.1.1.1"
   WAN_GW=""
-  NETMASK=""
+  NETMASK="16"
   WAN_NETMASK=""
   VLAN=""
   MAC=$GEN_MAC
   WAN_MAC=$GEN_MAC_LAN
-  WAN_BRG="vmbr1"
+  WAN_BRG="enp5s0"
   MTU=""
   START_VM="yes"
   METHOD="default"
