@@ -139,7 +139,7 @@ fi
 msg_ok "Found \"tank1\" zfspool"
 
 msg_info "Checking for \"tank2\" zfspool"
-if ! pvesm status -content images | grep zfspool | grep tank3 ; then
+if ! pvesm status -content images | grep zfspool | grep -q tank2 ; then
   msg_error "did not find a \"tank2\" zfspool"
   echo -e "Exiting..."
   sleep 2
