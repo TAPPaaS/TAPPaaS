@@ -14,14 +14,14 @@ a) Build/buy/allocate a primary TAPaaS server according to minimum specs (see do
 b) download and create a bootable usb stick for Proxmox (TODO:insert link)
 c) boot and install proxmox on server
 d) go to gui of proxmox and configure tank1 and tank2
-e) go to shell of proxmox and run the Proxmoxsetup script:
+e) go to shell of proxmox and run the post proxmox install script:
 ```
-bash -c "$(curl -fsSL https>//raw/githubusercontent.com/larsrossen/TAPaaS/src/bootstrap/ProxmoxSetup.sh)"
+bash -c "$(curl -fsSL https>//raw/githubusercontent.com/larsrossen/TAPaaS/src/bootstrap/TAPaaSPostPVEInstall.sh)"
 ```
 f) after reboot check that it all looks fine!!
-g) run the SelfmanageSetup script from the root console
+g) run the TAPaaSBootstrap script from the root console
 ```
-bash -c "$(curl -fsSL https>//raw/githubusercontent.com/larsrossen/TAPaaS/src/bootstrap/SelfManageSetup.sh)"
+bash -c "$(curl -fsSL https>//raw/githubusercontent.com/larsrossen/TAPaaS/src/bootstrap/TAPaaSBootstrap.sh)"
 ```
 h) go to the URL of selfmanage and continue from there.
 
