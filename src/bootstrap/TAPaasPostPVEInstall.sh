@@ -8,7 +8,10 @@
 #
 # This script is heavely based on the Proxmox Helper Script: Proxmost PVE post Install
 #
-# TODO: better documentations, and more initial checks
+# TODO: better documentations, 
+# TODO: Display final HW config, 
+# TODO: Throw warning is no mirror on zppols and boot. Configure power management
+
 
 header_info() {
   clear
