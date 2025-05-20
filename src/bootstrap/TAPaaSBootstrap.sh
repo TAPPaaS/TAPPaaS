@@ -234,6 +234,11 @@ DISK_EXT=".qcow2"
 DISK_REF="$VMID/"
 DISK_IMPORT="-format qcow2"
 THIN=""
+for i in {0,1}; do
+  disk="DISK$i"
+  eval DISK${i}=vm-${VMID}-disk-${i}${DISK_EXT:-}
+  eval DISK${i}_REF=${STORAGE}:${DISK_REF:-}${!disk}
+done
 
 msg_info "Installing Pre-Requisite libguestfs-tools onto Host"
 apt-get -qq update && apt-get -qq install libguestfs-tools lsb-release -y >/dev/null
