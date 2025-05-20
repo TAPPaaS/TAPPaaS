@@ -217,7 +217,6 @@ check_root
 arch_check
 pve_check
 ssh_check
-start_script
 
 msg_info "Validating Storage"
 while read -r line; do
