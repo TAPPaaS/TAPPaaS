@@ -230,10 +230,6 @@ echo -en "\e[1A\e[0K"
 FILE=$(basename $URL)
 msg_ok "Downloaded ${CL}${BL}${FILE}${CL}"
 
-DISK_EXT=".qcow2"
-DISK_REF="$VMID/"
-DISK_IMPORT="-format qcow2"
-THIN=""
 for i in {0,1}; do
   disk="DISK$i"
   eval DISK${i}=vm-${VMID}-disk-${i}${DISK_EXT:-}
