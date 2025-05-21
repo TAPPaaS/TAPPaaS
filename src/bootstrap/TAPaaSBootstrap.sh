@@ -23,15 +23,6 @@ function header_info() {
 EOF
 }
 
-echo -e "\n Loading..."
-GEN_MAC=02:$(openssl rand -hex 5 | awk '{print toupper($0)}' | sed 's/\(..\)/\1:/g; s/.$//')
-RANDOM_UUID="$(cat /proc/sys/kernel/random/uuid)"
-METHOD=""
-NSAPP="debian12vm"
-var_os="debian"
-var_version="12"
-DISK_SIZE="8G"
-
 YW=$(echo "\033[33m")
 BL=$(echo "\033[36m")
 HA=$(echo "\033[1;34m")
@@ -63,13 +54,14 @@ DEFAULT="${TAB}⚙️${TAB}${CL}"
 MACADDRESS="${TAB}🔗${TAB}${CL}"
 VLANTAG="${TAB}🏷️${TAB}${CL}"
 CREATING="${TAB}🚀${TAB}${CL}"
-ADVANCED="${TAB}🧩${TAB}${CL}"
 THIN="discard=on,ssd=1,"
 set -e
 trap 'error_handler $LINENO "$BASH_COMMAND"' ERR
 trap cleanup EXIT
 trap 'post_update_to_api "failed" "INTERRUPTED"' SIGINT
 trap 'post_update_to_api "failed" "TERMINATED"' SIGTERM
+TEMP_DIR=$(mktemp -d)
+pushd $TEMP_DIR >/dev/null
 
 function error_handler() {
   local exit_code="$?"
@@ -108,9 +100,6 @@ function cleanup() {
   popd >/dev/null
   rm -rf $TEMP_DIR
 }
-
-TEMP_DIR=$(mktemp -d)
-pushd $TEMP_DIR >/dev/null
 
 function msg_info() {
   local msg="$1"
@@ -177,6 +166,9 @@ function exit-script() {
 }
 
 function default_settings() {
+  GEN_MAC=02:$(openssl rand -hex 5 | awk '{print toupper($0)}' | sed 's/\(..\)/\1:/g; s/.$//')
+  DISK_SIZE="8G"
+  TEMPLATEVMID="8000"
   VMID=$(get_valid_nextid)
   HN="tapaas"
   FORMAT=",efitype=4m"
@@ -192,39 +184,40 @@ function default_settings() {
   MTU=""
   START_VM="yes"
   STORAGE="tank1"
-  METHOD="default"
-  echo -e "${CONTAINERID}${BOLD}${DGN}Virtual Machine ID: ${BGN}${VMID}${CL}"
-  echo -e "${CONTAINERTYPE}${BOLD}${DGN}Machine Type: ${BGN}i440fx${CL}"
-  echo -e "${DISKSIZE}${BOLD}${DGN}Disk Size: ${BGN}${DISK_SIZE}${CL}"
-  echo -e "${DISKSIZE}${BOLD}${DGN}Disk Cache: ${BGN}None${CL}"
-  echo -e "${HOSTNAME}${BOLD}${DGN}Hostname: ${BGN}${HN}${CL}"
-  echo -e "${OS}${BOLD}${DGN}CPU Model: ${BGN}KVM64${CL}"
-  echo -e "${CPUCORE}${BOLD}${DGN}CPU Cores: ${BGN}${CORE_COUNT}${CL}"
-  echo -e "${RAMSIZE}${BOLD}${DGN}RAM Size: ${BGN}${RAM_SIZE}${CL}"
-  echo -e "${BRIDGE}${BOLD}${DGN}Bridge: ${BGN}${BRG}${CL}"
-  echo -e "${MACADDRESS}${BOLD}${DGN}MAC Address: ${BGN}${MAC}${CL}"
-  echo -e "${VLANTAG}${BOLD}${DGN}VLAN: ${BGN}Default${CL}"
-  echo -e "${DEFAULT}${BOLD}${DGN}Interface MTU Size: ${BGN}Default${CL}"
-  echo -e "${GATEWAY}${BOLD}${DGN}Start VM when completed: ${BGN}yes${CL}"
-  echo -e "${CREATING}${BOLD}${DGN}Creating a Debian 12 VM using the above default settings${CL}"
+  URL=https://cloud-images.ubuntu.com/noble/current/noble-server-cloudimg-amd64.img
 }
 
 #
 # ok here we go
 header_info
+
 default_settings
+
+msg_info "Doing sanity check of Proxmox PVE."
 
 check_root
 arch_check
 pve_check
 ssh_check
 
+  echo -e "${CREATING}${BOLD}${DGN}Creating a TAPaaS Template VM using the following settings${CL}:"
+  echo -e " - ${CONTAINERID}${BOLD}${DGN}Template VM ID: ${BGN}${TEMPLATEVMID}${CL}"
+  echo -e " - ${CONTAINERID}${BOLD}${DGN}Virtual Machine ID: ${BGN}${VMID}${CL}"
+  echo -e " - ${CONTAINERTYPE}${BOLD}${DGN}Machine Type: ${BGN}i440fx${CL}"
+  echo -e " - ${DISKSIZE}${BOLD}${DGN}Disk Size: ${BGN}${DISK_SIZE}${CL}"
+  echo -e " - ${DISKSIZE}${BOLD}${DGN}Disk Cache: ${BGN}None${CL}"
+  echo -e " - ${HOSTNAME}${BOLD}${DGN}Hostname: ${BGN}${HN}${CL}"
+  echo -e " - ${OS}${BOLD}${DGN}CPU Model: ${BGN}KVM64${CL}"
+  echo -e " - ${CPUCORE}${BOLD}${DGN}CPU Cores: ${BGN}${CORE_COUNT}${CL}"
+  echo -e " - ${RAMSIZE}${BOLD}${DGN}RAM Size: ${BGN}${RAM_SIZE}${CL}"
+  echo -e " - ${BRIDGE}${BOLD}${DGN}Bridge: ${BGN}${BRG}${CL}"
+  echo -e " - ${MACADDRESS}${BOLD}${DGN}MAC Address: ${BGN}${MAC}${CL}"
+  echo -e " - ${VLANTAG}${BOLD}${DGN}VLAN: ${BGN}Default${CL}"
+  echo -e " - ${DEFAULT}${BOLD}${DGN}Interface MTU Size: ${BGN}Default${CL}"
+# TODO: Clean up message structure
 msg_ok "Using ${CL}${BL}$STORAGE${CL} ${GN}for Storage Location."
-msg_ok "Virtual Machine ID is ${CL}${BL}$VMID${CL}."
-msg_info "Retrieving the URL for the Ubuntu 24.04 Disk Image"
-URL=https://cloud-images.ubuntu.com/noble/current/noble-server-cloudimg-amd64.img
-sleep 2
-msg_ok "${CL}${BL}${URL}${CL}"
+msg_ok "The URL for the Ubuntu Nobel Numbat (24.04 LTS) Disk Image: ${CL}${BL}${URL}${CL}"
+msg_ok ""
 curl -f#SL -o "$(basename "$URL")" "$URL"
 echo -en "\e[1A\e[0K"
 FILE=$(basename $URL)
@@ -232,7 +225,7 @@ msg_ok "Downloaded ${CL}${BL}${FILE}${CL}"
 
 for i in {0,1}; do
   disk="DISK$i"
-  eval DISK${i}=vm-${VMID}-disk-${i}${DISK_EXT:-}
+  eval DISK${i}=vm-${TEMPLATEVMID}-disk-${i}${DISK_EXT:-}
   eval DISK${i}_REF=${STORAGE}:${DISK_REF:-}${!disk}
 done
 
@@ -249,7 +242,9 @@ virt-customize -q -a "${FILE}" --install qemu-guest-agent,apt-transport-https,ca
   virt-customize -q -a "${FILE}" --run-command "echo -n > /etc/machine-id" >/dev/null
 msg_ok "Added Docker and Docker Compose Plugin to Ubuntu Nobel Numbat (24.04 LTS) Disk Image successfully"
 
-msg_info "Creating a Docker VM"
+#TODO: add DHCP and hostname (no hostname for template)
+
+msg_info "Creating a Unbuntu with Docker VM"
 qm create $VMID -agent 1${MACHINE} -tablet 0 -localtime 1 -bios ovmf${CPU_TYPE} -cores $CORE_COUNT -memory $RAM_SIZE \
   -name $HN -tags TAPaaS -net0 virtio,bridge=$BRG,macaddr=$MAC$VLAN$MTU -onboot 1 -ostype l26 -scsihw virtio-scsi-pci
 pvesm alloc $STORAGE $VMID $DISK0 4M 1>&/dev/null
@@ -263,6 +258,7 @@ qm set $VMID \
 qm resize $VMID scsi0 8G >/dev/null
 qm set $VMID --agent enabled=1 >/dev/null
 
+# TODO: update description to be descriptive!!
 DESCRIPTION=$(
   cat <<EOF
 <div align='center'>
@@ -293,20 +289,25 @@ DESCRIPTION=$(
 </div>
 EOF
 )
-qm set "$VMID" -description "$DESCRIPTION" >/dev/null
+qm set "$TEMPLATEVMID" -description "$DESCRIPTION" >/dev/null
 
 if [ -n "$DISK_SIZE" ]; then
   msg_info "Resizing disk to $DISK_SIZE GB"
-  qm resize $VMID scsi0 ${DISK_SIZE} >/dev/null
+  qm resize $TEMPLATEVMID scsi0 ${DISK_SIZE} >/dev/null
 else
   msg_info "Using default disk size of $DEFAULT_DISK_SIZE GB"
-  qm resize $VMID scsi0 ${DEFAULT_DISK_SIZE} >/dev/null
+  qm resize $TEMPLATEVMID scsi0 ${DEFAULT_DISK_SIZE} >/dev/null
 fi
 
-msg_ok "Created a Docker VM ${CL}${BL}(${HN})"
+msg_ok "Created a Ubuntu with Docker VM ${CL}${BL}(${HN})"
 if [ "$START_VM" == "yes" ]; then
-  msg_info "Starting Docker VM"
-  qm start $VMID
-  msg_ok "Started Docker VM"
+  msg_info "Starting VM"
+  qm start $TEMPLATEVMID
+  msg_ok "Started VM"
 fi
 msg_ok "Completed Successfully!\n"
+
+# TODO: convert to template
+# TODO: create clone as tapas
+# TODO: name template "Tapastemplate" instead of tapaasa
+# TODO: set hostname of tapaas
