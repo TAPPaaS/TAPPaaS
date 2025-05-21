@@ -192,6 +192,7 @@ function create_vm_descriptions_html() {
     <i class="fa fa-exclamation-circle fa-fw" style="color: #f5f5f5;"></i>
     <a href='https://github.com/larsrossen/tapaas/issues' target='_blank' rel='noopener noreferrer' style='text-decoration: none; color: #00617f;'>Issues</a>
   </span>
+  This is the template for the TAPaaS Docker VM. It is based on Ubuntu Nobel Numbat (24.04 LTS) and includes Docker and Docker Compose Plugin.
 </div>
 EOF
   )
@@ -223,6 +224,8 @@ EOF
     <i class="fa fa-exclamation-circle fa-fw" style="color: #f5f5f5;"></i>
     <a href='https://github.com/larsrossen/tapaas/issues' target='_blank' rel='noopener noreferrer' style='text-decoration: none; color: #00617f;'>Issues</a>
   </span>
+  This is the TAPaaS CICD VM. It is based on the TAPaaS Docker VM template and includes Gitea, Ansible and Terraform. it contain the entire TAPaaS source
+  go to <a href='http://tapaas-cicd:xxxx' gitea web interface </a>
 </div>
 EOF
   )
@@ -246,7 +249,6 @@ function default_settings() {
   MAC="$GEN_MAC"
   VLAN=""
   MTU=""
-  START_VM="no"
   STORAGE="tank1"
   URL=https://cloud-images.ubuntu.com/noble/current/noble-server-cloudimg-amd64.img
 }
@@ -265,15 +267,6 @@ pushd $TEMP_DIR >/dev/null
 
 default_settings
 create_vm_descriptions_html
-
-msg_info "Doing sanity check of Proxmox PVE."
-check_root
-arch_check
-pve_check
-ssh_check
-msg_ok "Done sanity check of Proxmox PVE. Everything OK to proceed"
-
-msg_ok "We have 4 steps to complete: 1. Create a TAPaaS template. 2. Create TAPaaS CICD VM. 3. Install Gitea, Ansible and Teraform in VM. 4. Pobulate Git with TAPaaS"
 
 echo -e "${CREATING}${BOLD}${DGN}Creating TAPaaS Template VM and TAPaaS CICD VM using the following settings${CL}:"
 echo -e " - ${CONTAINERID}${BOLD}${DGN}TAPaaS Template VM ID: ${BGN}${TEMPLATEVMID}${CL}, Template Name: ${BGN}${TEMPLATEVMNAME}${CL}"
@@ -297,6 +290,16 @@ echo -en "\e[1A\e[0K"
 FILE=$(basename $URL)
 msg_ok "Downloaded Ubuntu Nobel Numbat (24.04 LTS): ${CL}${BL}${FILE}${CL}"
 
+msg_info "Doing sanity check of Proxmox PVE."
+check_root
+arch_check
+pve_check
+ssh_check
+msg_ok "Done sanity check of Proxmox PVE. Everything OK to proceed"
+
+msg_ok "We have 4 steps to complete: 1. Create a TAPaaS template. 2. Create TAPaaS CICD VM. 3. Install Gitea, Ansible and Teraform in VM. 4. Pobulate Git"
+
+# TODO: clean up this code
 for i in {0,1}; do
   disk="DISK$i"
   eval DISK${i}=vm-${TEMPLATEVMID}-disk-${i}${DISK_EXT:-}
@@ -316,11 +319,9 @@ virt-customize -q -a "${FILE}" --install qemu-guest-agent,apt-transport-https,ca
   virt-customize -q -a "${FILE}" --run-command "echo -n > /etc/machine-id" >/dev/null
 msg_ok "Added Docker and Docker Compose Plugin to Ubuntu Nobel Numbat (24.04 LTS) Disk Image successfully"
 
-#TODO: add DHCP and hostname (no hostname for template)
-
 msg_info "Step 1: Creating the TAPaaS Unbuntu with Docker VM template"
 qm create $TEMPLATEVMID -agent 1${MACHINE} -tablet 0 -localtime 1 -bios ovmf${CPU_TYPE} -cores $CORE_COUNT -memory $RAM_SIZE \
-  -name $TEMPLATEVMNAME -tags TAPaaS -net0 virtio,bridge=$BRG,macaddr=$MAC$VLAN$MTU -onboot 1 -ostype l26 -scsihw virtio-scsi-pci
+  -name $TEMPLATEVMNAME -net0 virtio,bridge=$BRG,macaddr=$MAC$VLAN$MTU -onboot 1 -ostype l26 -scsihw virtio-scsi-pci
 pvesm alloc $STORAGE $TEMPLATEVMID $DISK0 4M 1>&/dev/null
 qm importdisk $TEMPLATEVMID ${FILE} $STORAGE ${DISK_IMPORT:-} 1>&/dev/null
 qm set $TEMPLATEVMID \
@@ -331,15 +332,17 @@ qm set $TEMPLATEVMID \
   -serial0 socket >/dev/null
 qm resize $TEMPLATEVMID scsi0 8G >/dev/null
 qm set $TEMPLATEVMID --agent enabled=1 >/dev/null
-qm set $TEMPLATEVMID --Tag TAPaaS,CICD >/dev/null
+qm set $TEMPLATEVMID --Tag TAPaaS >/dev/null
 qm set $TEMPLATEVMID --ipconfig0 ip=dhcp >/dev/null
-qm set "$TEMPLATEVMID" -description "$TEMPLATEDESCRIPTION" >/dev/null
+qm set $TEMPLATEVMID --sshkey ~/.ssh/id_rsa.pub;
+qm set $TEMPLATEVMID -description "$TEMPLATEDESCRIPTION" >/dev/null
 qm resize $TEMPLATEVMID scsi0 ${DISK_SIZE} >/dev/null
 qm template $TEMPLATEVMID >/dev/null
 msg_ok "Done Step 1: Creating a TAPaaS Unbuntu with Docker VM Template"
 
 msg_info "Step 2: Creating a TAPaaS CICD VM"
 qm clone $TEMPLATEVMID $VMID --name $VMNAME --full 1 >/dev/null
+qm set $VMID --Tag TAPaaS,CICD >/dev/null
 #TODO set hostname in VM
 qm start $VMID
 msg_ok "Done Step 2: Creating a TAPaaS CICD VM" 
