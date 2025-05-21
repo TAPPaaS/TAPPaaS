@@ -165,102 +165,10 @@ function exit-script() {
   exit
 }
 
-function default_settings() {
-  GEN_MAC=02:$(openssl rand -hex 5 | awk '{print toupper($0)}' | sed 's/\(..\)/\1:/g; s/.$//')
-  DISK_SIZE="8G"
-  TEMPLATEVMID="8000"
-  VMID=$(get_valid_nextid)
-  HN="tapaas"
-  FORMAT=",efitype=4m"
-  MACHINE=""
-  DISK_CACHE=""
-  DISK_SIZE="8G"
-  CPU_TYPE=""
-  CORE_COUNT="2"
-  RAM_SIZE="4096"
-  BRG="vmbr0"
-  MAC="$GEN_MAC"
-  VLAN=""
-  MTU=""
-  START_VM="yes"
-  STORAGE="tank1"
-  URL=https://cloud-images.ubuntu.com/noble/current/noble-server-cloudimg-amd64.img
-}
-
-#
-# ok here we go
-header_info
-
-default_settings
-
-msg_info "Doing sanity check of Proxmox PVE."
-
-check_root
-arch_check
-pve_check
-ssh_check
-
-  echo -e "${CREATING}${BOLD}${DGN}Creating a TAPaaS Template VM using the following settings${CL}:"
-  echo -e " - ${CONTAINERID}${BOLD}${DGN}Template VM ID: ${BGN}${TEMPLATEVMID}${CL}"
-  echo -e " - ${CONTAINERID}${BOLD}${DGN}Virtual Machine ID: ${BGN}${VMID}${CL}"
-  echo -e " - ${CONTAINERTYPE}${BOLD}${DGN}Machine Type: ${BGN}i440fx${CL}"
-  echo -e " - ${DISKSIZE}${BOLD}${DGN}Disk Size: ${BGN}${DISK_SIZE}${CL}"
-  echo -e " - ${DISKSIZE}${BOLD}${DGN}Disk Cache: ${BGN}None${CL}"
-  echo -e " - ${HOSTNAME}${BOLD}${DGN}Hostname: ${BGN}${HN}${CL}"
-  echo -e " - ${OS}${BOLD}${DGN}CPU Model: ${BGN}KVM64${CL}"
-  echo -e " - ${CPUCORE}${BOLD}${DGN}CPU Cores: ${BGN}${CORE_COUNT}${CL}"
-  echo -e " - ${RAMSIZE}${BOLD}${DGN}RAM Size: ${BGN}${RAM_SIZE}${CL}"
-  echo -e " - ${BRIDGE}${BOLD}${DGN}Bridge: ${BGN}${BRG}${CL}"
-  echo -e " - ${MACADDRESS}${BOLD}${DGN}MAC Address: ${BGN}${MAC}${CL}"
-  echo -e " - ${VLANTAG}${BOLD}${DGN}VLAN: ${BGN}Default${CL}"
-  echo -e " - ${DEFAULT}${BOLD}${DGN}Interface MTU Size: ${BGN}Default${CL}"
-# TODO: Clean up message structure
-msg_ok "Using ${CL}${BL}$STORAGE${CL} ${GN}for Storage Location."
-msg_ok "The URL for the Ubuntu Nobel Numbat (24.04 LTS) Disk Image: ${CL}${BL}${URL}${CL}"
-msg_ok ""
-curl -f#SL -o "$(basename "$URL")" "$URL"
-echo -en "\e[1A\e[0K"
-FILE=$(basename $URL)
-msg_ok "Downloaded ${CL}${BL}${FILE}${CL}"
-
-for i in {0,1}; do
-  disk="DISK$i"
-  eval DISK${i}=vm-${TEMPLATEVMID}-disk-${i}${DISK_EXT:-}
-  eval DISK${i}_REF=${STORAGE}:${DISK_REF:-}${!disk}
-done
-
-msg_info "Installing Pre-Requisite libguestfs-tools onto Host"
-apt-get -qq update && apt-get -qq install libguestfs-tools lsb-release -y >/dev/null
-msg_ok "Installed libguestfs-tools successfully"
-
-msg_info "Adding Docker and Docker Compose Plugin to Ubuntu Nobel Numbat (24.04 LTS) Disk Image"
-virt-customize -q -a "${FILE}" --install qemu-guest-agent,apt-transport-https,ca-certificates,curl,gnupg,software-properties-common,lsb-release >/dev/null &&
-  virt-customize -q -a "${FILE}" --run-command "mkdir -p /etc/apt/keyrings && curl -fsSL https://download.docker.com/linux/debian/gpg | gpg --dearmor -o /etc/apt/keyrings/docker.gpg" >/dev/null &&
-  virt-customize -q -a "${FILE}" --run-command "echo 'deb [arch=amd64 signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/debian bookworm stable' > /etc/apt/sources.list.d/docker.list" >/dev/null &&
-  virt-customize -q -a "${FILE}" --run-command "apt-get update -qq && apt-get install -y docker-ce docker-ce-cli containerd.io docker-compose-plugin" >/dev/null &&
-  virt-customize -q -a "${FILE}" --run-command "systemctl enable docker" >/dev/null &&
-  virt-customize -q -a "${FILE}" --run-command "echo -n > /etc/machine-id" >/dev/null
-msg_ok "Added Docker and Docker Compose Plugin to Ubuntu Nobel Numbat (24.04 LTS) Disk Image successfully"
-
-#TODO: add DHCP and hostname (no hostname for template)
-
-msg_info "Creating a Unbuntu with Docker VM"
-qm create $VMID -agent 1${MACHINE} -tablet 0 -localtime 1 -bios ovmf${CPU_TYPE} -cores $CORE_COUNT -memory $RAM_SIZE \
-  -name $HN -tags TAPaaS -net0 virtio,bridge=$BRG,macaddr=$MAC$VLAN$MTU -onboot 1 -ostype l26 -scsihw virtio-scsi-pci
-pvesm alloc $STORAGE $VMID $DISK0 4M 1>&/dev/null
-qm importdisk $VMID ${FILE} $STORAGE ${DISK_IMPORT:-} 1>&/dev/null
-qm set $VMID \
-  -efidisk0 ${DISK0_REF}${FORMAT} \
-  -scsi0 ${DISK1_REF},${DISK_CACHE}${THIN}size=${DISK_SIZE} \
-  -ide2 ${STORAGE}:cloudinit \
-  -boot order=scsi0 \
-  -serial0 socket >/dev/null
-qm resize $VMID scsi0 8G >/dev/null
-qm set $VMID --agent enabled=1 >/dev/null
-
+function create_vm_descriptions_html() {
 # TODO: update description to be descriptive!!
-DESCRIPTION=$(
-  cat <<EOF
+  TEMPLATEDESCRIPTION=$(
+    cat <<EOF
 <div align='center'>
   <a href='https://tapaas.org' target='_blank' rel='noopener noreferrer'>
     <img src='https://raw.githubusercontent.com/larsrossen/TAPaaS/Documentation/taapaas.png' alt='Logo' style='width:81px;height:112px;'/>
@@ -288,18 +196,145 @@ DESCRIPTION=$(
   </span>
 </div>
 EOF
-)
-qm set "$TEMPLATEVMID" -description "$DESCRIPTION" >/dev/null
+  )
+# TODO: update description to be descriptive!!
+  DESCRIPTION=$(
+    cat <<EOF
+<div align='center'>
+  <a href='https://tapaas.org' target='_blank' rel='noopener noreferrer'>
+    <img src='https://raw.githubusercontent.com/larsrossen/TAPaaS/Documentation/taapaas.png' alt='Logo' style='width:81px;height:112px;'/>
+  </a>
 
-if [ -n "$DISK_SIZE" ]; then
-  msg_info "Resizing disk to $DISK_SIZE GB"
-  qm resize $TEMPLATEVMID scsi0 ${DISK_SIZE} >/dev/null
-else
-  msg_info "Using default disk size of $DEFAULT_DISK_SIZE GB"
-  qm resize $TEMPLATEVMID scsi0 ${DEFAULT_DISK_SIZE} >/dev/null
-fi
+  <h2 style='font-size: 24px; margin: 20px 0;'>Docker VM</h2>
 
-msg_ok "Created a Ubuntu with Docker VM ${CL}${BL}(${HN})"
+  <p style='margin: 16px 0;'>
+    <a href='https://ko-fi.com/community_scripts' target='_blank' rel='noopener noreferrer'>
+      <img src='https://img.shields.io/badge/&#x2615;-Buy us a coffee-blue' alt='spend Coffee' />
+    </a>
+  </p>
+
+  <span style='margin: 0 10px;'>
+    <i class="fa fa-github fa-fw" style="color: #f5f5f5;"></i>
+    <a href='https://github.com/larsrossen/tapaas' target='_blank' rel='noopener noreferrer' style='text-decoration: none; color: #00617f;'>GitHub</a>
+  </span>
+  <span style='margin: 0 10px;'>
+    <i class="fa fa-comments fa-fw" style="color: #f5f5f5;"></i>
+    <a href='https://github.com/larsrossen/tapaas/discussions' target='_blank' rel='noopener noreferrer' style='text-decoration: none; color: #00617f;'>Discussions</a>
+  </span>
+  <span style='margin: 0 10px;'>
+    <i class="fa fa-exclamation-circle fa-fw" style="color: #f5f5f5;"></i>
+    <a href='https://github.com/larsrossen/tapaas/issues' target='_blank' rel='noopener noreferrer' style='text-decoration: none; color: #00617f;'>Issues</a>
+  </span>
+</div>
+EOF
+  )
+}
+
+function default_settings() {
+  GEN_MAC=02:$(openssl rand -hex 5 | awk '{print toupper($0)}' | sed 's/\(..\)/\1:/g; s/.$//')
+  DISK_SIZE="8G"
+  TEMPLATEVMID="8000"
+  VMID=$(get_valid_nextid)
+  HN="tapaas"
+  FORMAT=",efitype=4m"
+  MACHINE=""
+  DISK_CACHE=""
+  DISK_SIZE="8G"
+  CPU_TYPE=""
+  CORE_COUNT="2"
+  RAM_SIZE="4096"
+  BRG="vmbr0"
+  MAC="$GEN_MAC"
+  VLAN=""
+  MTU=""
+  START_VM="no"
+  STORAGE="tank1"
+  URL=https://cloud-images.ubuntu.com/noble/current/noble-server-cloudimg-amd64.img
+}
+
+#
+# ok here we go
+#
+header_info
+
+default_settings
+create_vm_descriptions_html
+
+msg_info "Doing sanity check of Proxmox PVE."
+
+check_root
+arch_check
+pve_check
+ssh_check
+
+echo -e "${CREATING}${BOLD}${DGN}Creating a TAPaaS Template VM using the following settings${CL}:"
+echo -e " - ${CONTAINERID}${BOLD}${DGN}Template VM ID: ${BGN}${TEMPLATEVMID}${CL}"
+echo -e " - ${CONTAINERID}${BOLD}${DGN}Virtual Machine ID: ${BGN}${VMID}${CL}"
+echo -e " - ${CONTAINERTYPE}${BOLD}${DGN}Machine Type: ${BGN}i440fx${CL}"
+echo -e " - ${DISKSIZE}${BOLD}${DGN}Disk Size: ${BGN}${DISK_SIZE}${CL}"
+echo -e " - ${DISKSIZE}${BOLD}${DGN}Disk Cache: ${BGN}None${CL}"
+echo -e " - ${DISKSIZE}${BOLD}${DGN}Disk/Storage Location: ${BGN}${STORAGE}${CL}"
+echo -e " - ${HOSTNAME}${BOLD}${DGN}Hostname: ${BGN}${HN}${CL}"
+echo -e " - ${OS}${BOLD}${DGN}CPU Model: ${BGN}KVM64${CL}"
+echo -e " - ${CPUCORE}${BOLD}${DGN}CPU Cores: ${BGN}${CORE_COUNT}${CL}"
+echo -e " - ${RAMSIZE}${BOLD}${DGN}RAM Size: ${BGN}${RAM_SIZE}${CL}"
+echo -e " - ${BRIDGE}${BOLD}${DGN}Bridge: ${BGN}${BRG}${CL}"
+echo -e " - ${MACADDRESS}${BOLD}${DGN}MAC Address: ${BGN}${MAC}${CL}"
+echo -e " - ${VLANTAG}${BOLD}${DGN}VLAN: ${BGN}Default${CL}"
+echo -e " - ${DEFAULT}${BOLD}${DGN}Interface MTU Size: ${BGN}Default${CL}"
+echo -e " - ${DISKSIZE}${BOLD}${DGN}Linux Distribution: ${BGN}Ubuntu Nobel Numbat (24.04 LTS)${CL}"
+echo -e " - ${DISKSIZE}${BOLD}${DGN}URL of Distribution Image: ${BGN}${URL}${CL}"
+msg_info "Downloading Ubuntu Nobel Numbat (24.04 LTS) Image"
+curl -f#SL -o "$(basename "$URL")" "$URL"
+echo -en "\e[1A\e[0K"
+FILE=$(basename $URL)
+msg_ok "Downloaded Ubuntu Nobel Numbat (24.04 LTS): ${CL}${BL}${FILE}${CL}"
+
+for i in {0,1}; do
+  disk="DISK$i"
+  eval DISK${i}=vm-${TEMPLATEVMID}-disk-${i}${DISK_EXT:-}
+  eval DISK${i}_REF=${STORAGE}:${DISK_REF:-}${!disk}
+done
+
+msg_info "Installing Pre-Requisite libguestfs-tools onto Host"
+apt-get -qq update && apt-get -qq install libguestfs-tools lsb-release -y >/dev/null
+msg_ok "Installed libguestfs-tools successfully"
+
+msg_info "Adding Docker and Docker Compose Plugin to Ubuntu Nobel Numbat (24.04 LTS) Disk Image"
+virt-customize -q -a "${FILE}" --install qemu-guest-agent,apt-transport-https,ca-certificates,curl,gnupg,software-properties-common,lsb-release >/dev/null &&
+  virt-customize -q -a "${FILE}" --run-command "mkdir -p /etc/apt/keyrings && curl -fsSL https://download.docker.com/linux/debian/gpg | gpg --dearmor -o /etc/apt/keyrings/docker.gpg" >/dev/null &&
+  virt-customize -q -a "${FILE}" --run-command "echo 'deb [arch=amd64 signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/debian bookworm stable' > /etc/apt/sources.list.d/docker.list" >/dev/null &&
+  virt-customize -q -a "${FILE}" --run-command "apt-get update -qq && apt-get install -y docker-ce docker-ce-cli containerd.io docker-compose-plugin" >/dev/null &&
+  virt-customize -q -a "${FILE}" --run-command "systemctl enable docker" >/dev/null &&
+  virt-customize -q -a "${FILE}" --run-command "echo -n > /etc/machine-id" >/dev/null
+msg_ok "Added Docker and Docker Compose Plugin to Ubuntu Nobel Numbat (24.04 LTS) Disk Image successfully"
+
+#TODO: add DHCP and hostname (no hostname for template)
+
+msg_info "Creating an Unbuntu with Docker VM"
+qm create $TEMPLATEVMID -agent 1${MACHINE} -tablet 0 -localtime 1 -bios ovmf${CPU_TYPE} -cores $CORE_COUNT -memory $RAM_SIZE \
+  -name $HN -tags TAPaaS -net0 virtio,bridge=$BRG,macaddr=$MAC$VLAN$MTU -onboot 1 -ostype l26 -scsihw virtio-scsi-pci
+pvesm alloc $STORAGE $TEMPLATEVMID $DISK0 4M 1>&/dev/null
+qm importdisk $TEMPLATEVMID ${FILE} $STORAGE ${DISK_IMPORT:-} 1>&/dev/null
+qm set $TEMPLATEVMID \
+  -efidisk0 ${DISK0_REF}${FORMAT} \
+  -scsi0 ${DISK1_REF},${DISK_CACHE}${THIN}size=${DISK_SIZE} \
+  -ide2 ${STORAGE}:cloudinit \
+  -boot order=scsi0 \
+  -serial0 socket >/dev/null
+qm resize $TEMPLATEVMID scsi0 8G >/dev/null
+qm set $TEMPLATEVMID --agent enabled=1 >/dev/null
+qm set $TEMPLATEVMID --Tag TAPaaS,CICD >/dev/null
+qm set $TEMPLATEVMID --ipconfig0 ip=dhcp >/dev/null
+qm set "$TEMPLATEVMID" -description "$TEMPLATEDESCRIPTION" >/dev/null
+qm resize $TEMPLATEVMID scsi0 ${DISK_SIZE} >/dev/null
+msg_ok "Done creating an Unbuntu with Docker VM"
+
+msg_info "Creating a Proxmox Template of the VM"
+qm template $TEMPLATEVMID >/dev/null
+msg_ok "Done creating a Proxmox Template of the VM"
+
+
 if [ "$START_VM" == "yes" ]; then
   msg_info "Starting VM"
   qm start $TEMPLATEVMID
