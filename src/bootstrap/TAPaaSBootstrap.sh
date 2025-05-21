@@ -284,11 +284,6 @@ echo -e " - ${VLANTAG}${BOLD}${DGN}VLAN: ${BGN}Default${CL}"
 echo -e " - ${DEFAULT}${BOLD}${DGN}Interface MTU Size: ${BGN}Default${CL}"
 echo -e " - ${DISKSIZE}${BOLD}${DGN}Linux Distribution: ${BGN}Ubuntu Nobel Numbat (24.04 LTS)${CL}"
 echo -e " - ${DISKSIZE}${BOLD}${DGN}URL of Distribution Image: ${BGN}${URL}${CL}"
-msg_info "Downloading Ubuntu Nobel Numbat (24.04 LTS) Image"
-curl -f#SL -o "$(basename "$URL")" "$URL"
-echo -en "\e[1A\e[0K"
-FILE=$(basename $URL)
-msg_ok "Downloaded Ubuntu Nobel Numbat (24.04 LTS): ${CL}${BL}${FILE}${CL}"
 
 msg_info "Doing sanity check of Proxmox PVE."
 check_root
@@ -305,6 +300,12 @@ for i in {0,1}; do
   eval DISK${i}=vm-${TEMPLATEVMID}-disk-${i}${DISK_EXT:-}
   eval DISK${i}_REF=${STORAGE}:${DISK_REF:-}${!disk}
 done
+
+msg_info "Downloading Ubuntu Nobel Numbat (24.04 LTS) Image"
+curl -f#SL -o "$(basename "$URL")" "$URL"
+echo -en "\e[1A\e[0K"
+FILE=$(basename $URL)
+msg_ok "Downloaded Ubuntu Nobel Numbat (24.04 LTS): ${CL}${BL}${FILE}${CL}"
 
 msg_info "Installing Pre-Requisite libguestfs-tools onto Host"
 apt-get -qq update && apt-get -qq install libguestfs-tools lsb-release -y >/dev/null
@@ -334,20 +335,51 @@ qm resize $TEMPLATEVMID scsi0 8G >/dev/null
 qm set $TEMPLATEVMID --agent enabled=1 >/dev/null
 qm set $TEMPLATEVMID --Tag TAPaaS >/dev/null
 qm set $TEMPLATEVMID --ipconfig0 ip=dhcp >/dev/null
-qm set $TEMPLATEVMID --sshkey ~/.ssh/id_rsa.pub;
+qm set $TEMPLATEVMID --sshkey ~/.ssh/id_rsa.pub >/dev/null
 qm set $TEMPLATEVMID -description "$TEMPLATEDESCRIPTION" >/dev/null
+#TODO create tapaas user and set in cloud init
 qm resize $TEMPLATEVMID scsi0 ${DISK_SIZE} >/dev/null
 qm template $TEMPLATEVMID >/dev/null
-msg_ok "Done Step 1: Creating a TAPaaS Unbuntu with Docker VM Template"
+msg_ok "Done Step 1: Creating the TAPaaS Unbuntu with Docker VM template"
 
 msg_info "Step 2: Creating a TAPaaS CICD VM"
 qm clone $TEMPLATEVMID $VMID --name $VMNAME --full 1 >/dev/null
 qm set $VMID --Tag TAPaaS,CICD >/dev/null
-#TODO set hostname in VM
-qm start $VMID
+qm start $VMID >/dev/null
 msg_ok "Done Step 2: Creating a TAPaaS CICD VM" 
 
 msg_info "Step 3: Installing Gitea, Ansible and Terraform in VM"
+get VM IP
+VMIP=$(qm guest exec $VMID -- ip -4 addr show dev eth0 | grep -oP '(?<=inet\s)\d+(\.\d+){3}')
+ssh ubuntu@$VMIP "sudo wget -q -O gitea https://dl.gitea.com/gitea/1.23.8/gitea-1.23.8-linux-amd64" >/dev/null
+ssh ubuntu@$VMIP "sudo adduser --system --shell /bin/bash --gecos 'Git Version Control' --group --disabled-password --home /home/git  git" >/dev/null
+ssh ubuntu@$VMIP "sudo mkdir -p /var/lib/gitea/{custom,data,log}; sudo chown -R git:git /var/lib/gitea/; sudo chmod -R 750 /var/lib/gitea/; sudo mkdir /etc/gitea; sudo chown root:git /etc/gitea; sudo chmod 770 /etc/gitea"
+ssh ubuntu@$VMIP "sudo mv gitea /usr/local/bin/gitea; sudo chmod +x /usr/local/bin/gitea"
+# set it as a systemd service
+ssh ubuntu@$VMIP "sudo tee /etc/systemd/system/gitea.service >/dev/null" <<EOF
+[Unit]
+Description=Gitea (Git with a cup of tea)
+After=network.target
+[Service]
+RestartSec=2s
+Type=simple
+User=git
+Group=git
+WorkingDirectory=/var/lib/gitea/
+ExecStart=/usr/local/bin/gitea web --config /etc/gitea/app.ini
+Restart=always
+Environment=USER=git HOME=/home/git GITEA_WORK_DIR=/var/lib/gitea
+[Install]
+WantedBy=multi-user.target
+EOF
+ssh ubuntu@$VMIP sudo systemctl enable gitea --now
+sleep 2
+# Now to the inital registration
+# curl -H "Content-type: application/x-www-form-urlencoded" -d "db_type=SQLite3" -d "db_path=/var/lib/gitea/data/gitea.db" -d "app_name=\"Local TAPaaS Git Repository\"" -d "repo_root_path=/var/lib/gitea/data/git-repositories" -d "lfs_root_path=/var/liv/gitea/data/lfs" -d "run_user=git" -d "domain=192.168.14.57" -d "ssh_port=22" -d "http_port=3000" -d "app_url=http://192.158.14.57:3000/" -d "log_root_path=/var/lib/gitea/log" -d "default_allow_create_organization=on"  -X POST  http://192.168.14.57:3000/
+
+# install ansible
+# ssh ubuntu@$VMIP sudo apt install ansible -y >/dev/null
+
 msg_ok "Done Step 3: Installing Gitea, Ansible and Terraform in VM"
 
 msg_info "Step 4: Populating Git with TAPaaS"
