@@ -23,45 +23,40 @@ function header_info() {
 EOF
 }
 
-YW=$(echo "\033[33m")
-BL=$(echo "\033[36m")
-HA=$(echo "\033[1;34m")
-RD=$(echo "\033[01;31m")
-BGN=$(echo "\033[4;92m")
-GN=$(echo "\033[1;92m")
-DGN=$(echo "\033[32m")
-CL=$(echo "\033[m")
+function init_print_variables() {
+  YW=$(echo "\033[33m")
+  BL=$(echo "\033[36m")
+  HA=$(echo "\033[1;34m")
+  RD=$(echo "\033[01;31m")
+  BGN=$(echo "\033[4;92m")
+  GN=$(echo "\033[1;92m")
+  DGN=$(echo "\033[32m")
+  CL=$(echo "\033[m")
 
-CL=$(echo "\033[m")
-BOLD=$(echo "\033[1m")
-BFR="\\r\\033[K"
-HOLD=" "
-TAB="  "
+  CL=$(echo "\033[m")
+  BOLD=$(echo "\033[1m")
+  BFR="\\r\\033[K"
+  HOLD=" "
+  TAB="  "
 
-CM="${TAB}✔️${TAB}${CL}"
-CROSS="${TAB}✖️${TAB}${CL}"
-INFO="${TAB}💡${TAB}${CL}"
-OS="${TAB}🖥️${TAB}${CL}"
-CONTAINERTYPE="${TAB}📦${TAB}${CL}"
-DISKSIZE="${TAB}💾${TAB}${CL}"
-CPUCORE="${TAB}🧠${TAB}${CL}"
-RAMSIZE="${TAB}🛠️${TAB}${CL}"
-CONTAINERID="${TAB}🆔${TAB}${CL}"
-HOSTNAME="${TAB}🏠${TAB}${CL}"
-BRIDGE="${TAB}🌉${TAB}${CL}"
-GATEWAY="${TAB}🌐${TAB}${CL}"
-DEFAULT="${TAB}⚙️${TAB}${CL}"
-MACADDRESS="${TAB}🔗${TAB}${CL}"
-VLANTAG="${TAB}🏷️${TAB}${CL}"
-CREATING="${TAB}🚀${TAB}${CL}"
-THIN="discard=on,ssd=1,"
-set -e
-trap 'error_handler $LINENO "$BASH_COMMAND"' ERR
-trap cleanup EXIT
-trap 'post_update_to_api "failed" "INTERRUPTED"' SIGINT
-trap 'post_update_to_api "failed" "TERMINATED"' SIGTERM
-TEMP_DIR=$(mktemp -d)
-pushd $TEMP_DIR >/dev/null
+  CM="${TAB}✔️${TAB}${CL}"
+  CROSS="${TAB}✖️${TAB}${CL}"
+  INFO="${TAB}💡${TAB}${CL}"
+  OS="${TAB}🖥️${TAB}${CL}"
+  CONTAINERTYPE="${TAB}📦${TAB}${CL}"
+  DISKSIZE="${TAB}💾${TAB}${CL}"
+  CPUCORE="${TAB}🧠${TAB}${CL}"
+  RAMSIZE="${TAB}🛠️${TAB}${CL}"
+  CONTAINERID="${TAB}🆔${TAB}${CL}"
+  HOSTNAME="${TAB}🏠${TAB}${CL}"
+  BRIDGE="${TAB}🌉${TAB}${CL}"
+  GATEWAY="${TAB}🌐${TAB}${CL}"
+  DEFAULT="${TAB}⚙️${TAB}${CL}"
+  MACADDRESS="${TAB}🔗${TAB}${CL}"
+  VLANTAG="${TAB}🏷️${TAB}${CL}"
+  CREATING="${TAB}🚀${TAB}${CL}"
+  THIN="discard=on,ssd=1,"
+}
 
 function error_handler() {
   local exit_code="$?"
@@ -93,6 +88,9 @@ function cleanup_vmid() {
   if qm status $VMID &>/dev/null; then
     qm stop $VMID &>/dev/null
     qm destroy $VMID &>/dev/null
+  fi
+  if qm status $TEMPLATEVMID &>/dev/null; then
+    qm destroy $TEMPLATEVMID &>/dev/null
   fi
 }
 
@@ -235,7 +233,8 @@ function default_settings() {
   DISK_SIZE="8G"
   TEMPLATEVMID="8000"
   VMID=$(get_valid_nextid)
-  HN="tapaas"
+  VMNAME="tapaas-cicd"
+  TEMPLATEVMNAME="tapaas-ubuntu"
   FORMAT=",efitype=4m"
   MACHINE=""
   DISK_CACHE=""
@@ -256,25 +255,33 @@ function default_settings() {
 # ok here we go
 #
 header_info
+init_print_variables
+
+set -e
+trap 'error_handler $LINENO "$BASH_COMMAND"' ERR
+trap cleanup EXIT
+TEMP_DIR=$(mktemp -d)
+pushd $TEMP_DIR >/dev/null
 
 default_settings
 create_vm_descriptions_html
 
 msg_info "Doing sanity check of Proxmox PVE."
-
 check_root
 arch_check
 pve_check
 ssh_check
+msg_ok "Done sanity check of Proxmox PVE. Everything OK to proceed"
 
-echo -e "${CREATING}${BOLD}${DGN}Creating a TAPaaS Template VM using the following settings${CL}:"
-echo -e " - ${CONTAINERID}${BOLD}${DGN}Template VM ID: ${BGN}${TEMPLATEVMID}${CL}"
-echo -e " - ${CONTAINERID}${BOLD}${DGN}Virtual Machine ID: ${BGN}${VMID}${CL}"
+msg_ok "We have 4 steps to complete: 1. Create a TAPaaS template. 2. Create TAPaaS CICD VM. 3. Install Gitea, Ansible and Teraform in VM. 4. Pobulate Git with TAPaaS"
+
+echo -e "${CREATING}${BOLD}${DGN}Creating TAPaaS Template VM and TAPaaS CICD VM using the following settings${CL}:"
+echo -e " - ${CONTAINERID}${BOLD}${DGN}TAPaaS Template VM ID: ${BGN}${TEMPLATEVMID}${CL}, Template Name: ${BGN}${TEMPLATEVMNAME}${CL}"
+echo -e " - ${CONTAINERID}${BOLD}${DGN}TAPaaS CICD VM ID: ${BGN}${VMID}${CL}, Template Name: ${BGN}${VMNAME}${CL}"
 echo -e " - ${CONTAINERTYPE}${BOLD}${DGN}Machine Type: ${BGN}i440fx${CL}"
 echo -e " - ${DISKSIZE}${BOLD}${DGN}Disk Size: ${BGN}${DISK_SIZE}${CL}"
 echo -e " - ${DISKSIZE}${BOLD}${DGN}Disk Cache: ${BGN}None${CL}"
 echo -e " - ${DISKSIZE}${BOLD}${DGN}Disk/Storage Location: ${BGN}${STORAGE}${CL}"
-echo -e " - ${HOSTNAME}${BOLD}${DGN}Hostname: ${BGN}${HN}${CL}"
 echo -e " - ${OS}${BOLD}${DGN}CPU Model: ${BGN}KVM64${CL}"
 echo -e " - ${CPUCORE}${BOLD}${DGN}CPU Cores: ${BGN}${CORE_COUNT}${CL}"
 echo -e " - ${RAMSIZE}${BOLD}${DGN}RAM Size: ${BGN}${RAM_SIZE}${CL}"
@@ -311,9 +318,9 @@ msg_ok "Added Docker and Docker Compose Plugin to Ubuntu Nobel Numbat (24.04 LTS
 
 #TODO: add DHCP and hostname (no hostname for template)
 
-msg_info "Creating an Unbuntu with Docker VM"
+msg_info "Step 1: Creating the TAPaaS Unbuntu with Docker VM template"
 qm create $TEMPLATEVMID -agent 1${MACHINE} -tablet 0 -localtime 1 -bios ovmf${CPU_TYPE} -cores $CORE_COUNT -memory $RAM_SIZE \
-  -name $HN -tags TAPaaS -net0 virtio,bridge=$BRG,macaddr=$MAC$VLAN$MTU -onboot 1 -ostype l26 -scsihw virtio-scsi-pci
+  -name $TEMPLATEVMNAME -tags TAPaaS -net0 virtio,bridge=$BRG,macaddr=$MAC$VLAN$MTU -onboot 1 -ostype l26 -scsihw virtio-scsi-pci
 pvesm alloc $STORAGE $TEMPLATEVMID $DISK0 4M 1>&/dev/null
 qm importdisk $TEMPLATEVMID ${FILE} $STORAGE ${DISK_IMPORT:-} 1>&/dev/null
 qm set $TEMPLATEVMID \
@@ -328,21 +335,18 @@ qm set $TEMPLATEVMID --Tag TAPaaS,CICD >/dev/null
 qm set $TEMPLATEVMID --ipconfig0 ip=dhcp >/dev/null
 qm set "$TEMPLATEVMID" -description "$TEMPLATEDESCRIPTION" >/dev/null
 qm resize $TEMPLATEVMID scsi0 ${DISK_SIZE} >/dev/null
-msg_ok "Done creating an Unbuntu with Docker VM"
-
-msg_info "Creating a Proxmox Template of the VM"
 qm template $TEMPLATEVMID >/dev/null
-msg_ok "Done creating a Proxmox Template of the VM"
+msg_ok "Done Step 1: Creating a TAPaaS Unbuntu with Docker VM Template"
 
+msg_info "Step 2: Creating a TAPaaS CICD VM"
+qm clone $TEMPLATEVMID $VMID --name $VMNAME --full 1 >/dev/null
+#TODO set hostname in VM
+qm start $VMID
+msg_ok "Done Step 2: Creating a TAPaaS CICD VM" 
 
-if [ "$START_VM" == "yes" ]; then
-  msg_info "Starting VM"
-  qm start $TEMPLATEVMID
-  msg_ok "Started VM"
-fi
-msg_ok "Completed Successfully!\n"
+msg_info "Step 3: Installing Gitea, Ansible and Terraform in VM"
+msg_ok "Done Step 3: Installing Gitea, Ansible and Terraform in VM"
 
-# TODO: convert to template
-# TODO: create clone as tapas
-# TODO: name template "Tapastemplate" instead of tapaasa
-# TODO: set hostname of tapaas
+msg_info "Step 4: Populating Git with TAPaaS"
+msg_ok "Done Step 4: Populating Git with TAPaaS"
+
