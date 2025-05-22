@@ -111,9 +111,9 @@ msg_ok "Done Installing Ansible"
 
 # installing opentpfu
 msg_info "Installing OpenTofu"
-sudo curl --proto '=https' --tlsv1.2 -fsSL https://get.opentofu.org/install-opentofu.sh -o install-opentofu.sh
+sudo curl --proto '=https' --tlsv1.2 -fsSL https://get.opentofu.org/install-opentofu.sh -o install-opentofu.sh >/dev/null
 sudo chmod +x install-opentofu.sh
-sudo ./install-opentofu.sh --install-method deb
+sudo ./install-opentofu.sh --install-method deb >/dev/null
 sudo rm -f install-opentofu.sh
 msg_ok "Done Installing OpenTofu"
 
