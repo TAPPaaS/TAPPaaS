@@ -36,7 +36,7 @@ See Example.md for proposals
 - run the TAPaaSPostPVEInstall.sh script in the proxmox node
 ```
 GITTOKEN=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
-curl -fsSL -H "Authoriszation:token $GITTOKEN https>//raw/githubusercontent.com/larsrossen/TAPaaS/src/bootstrap/TAPaaSPostPVEInstall.sh | bash
+curl -fsSL -H "Authorization: token $GITTOKEN" https://raw.githubusercontent.com/larsrossen/TAPaaS/refs/heads/main/src/bootstrap/TAPaaSPostPVEInstall.sh | bash
 ```
 (note the -H token stuff is only needed as long as the script is in a private repository, the togen gives read access)
 
@@ -44,7 +44,7 @@ curl -fsSL -H "Authoriszation:token $GITTOKEN https>//raw/githubusercontent.com/
 - run the TAPaaSBootstrap script from the root console
 ```
 GITTOKEN=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
-curl -fsSL -H "Authoriszation:token $GITTOKEN https>//raw/githubusercontent.com/larsrossen/TAPaaS/src/bootstrap/TAPaaSBootstrap.sh | bash
+curl -fsSL -H "Authorization:token $GITTOKEN https>//raw/githubusercontent.com/larsrossen/TAPaaS/refs/heads/main/src/bootstrap/TAPaaSBootstrap.sh | bash
 ```
 You should now have a PVE node with a TAPaaS template and a TAPaaS CICD VM
 

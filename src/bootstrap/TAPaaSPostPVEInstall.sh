@@ -78,13 +78,10 @@ msg_ok "Found \"tank1\" zfspool"
 
 msg_info "Checking for \"tank2\" zfspool"
 if ! pvesm status -content images | grep zfspool | grep -q tank2 ; then
-  msg_error "did not find a \"tank2\" zfspool"
-  echo -e "Exiting..."
-  sleep 2
-  exit
-fi
+  msg_ok "did not find a \"tank2\" zfspool. Some modules of TAPaaS will not work"
+else
 msg_ok "Found \"tank2\" zfspool"
-
+fi
 #
 # Check it this have already been run, in which case skip all the repository and other updates
 #
