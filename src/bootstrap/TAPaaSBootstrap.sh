@@ -339,12 +339,11 @@ qm start $VMID >/dev/null
 msg_ok "Step 5 Done: Created a TAPaaS CICD VM" 
 
 echo -e "${CREATING}${BOLD}${DGN}** Congratulation ** You are almost done bootstraping. Please do the following:${CL}"
-echo -e "${CREATING}${BOLD}${DGN} 1) Log into TAPaaS CICD VM using ssh from host a host terminal: ssh tapaas@<insert ip of CICD VM>${CL}"
+echo -e "${CREATING}${BOLD}${DGN} 1) Log into TAPaaS CICD VM using ssh from a host teminal: ssh tapaas@<insert ip of CICD VM>${CL}"
 echo -e "${CREATING}${BOLD}${DGN} 2) In the shell of the TAPaaS CICD VM do:${CL}:"
 echo -e "${CREATING}${BOLD}${DGN}   2a) create ssh keys: ssh-keygen -t ed25519 ${CL}"
 echo -e "${CREATING}${BOLD}${DGN}   2b) add ssh keys to your github: cat ~/.ssh/id_rsa${CL} (not needed when TAPaas is public)"
 echo -e "${CREATING}${BOLD}${DGN}   2c) clone the tapaas repository: git clone git@github.com:larsrossen/TAPaaS.git${CL}"
-echo -e "${CREATING}${BOLD}${DGN}   2d) make the script executable: chmod 775 ./TAPaaS/src/bootstrap/TAPaaS-CICD-bootstrap.sh${CL}"
 echo -e "${CREATING}${BOLD}${DGN}   2d) run the final bootstrap code: ./TAPaaS/src/bootstrap/TAPaaS-CICD-bootstrap.sh${CL}"
 echo -e "${CREATING}${BOLD}${DGN}   2e) set the git user name: git config --global user.name <your name> ${CL}" 
 echo -e "${CREATING}${BOLD}${DGN}   2f) set the git user email: git config --global user.email <your email> ${CL}"

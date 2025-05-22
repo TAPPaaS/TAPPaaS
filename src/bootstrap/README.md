@@ -8,44 +8,5 @@ This directory contains two scripts (and some helper scripts)
 
 ## how to bootstrap
 
-Steps:
-
-a) Build/buy/allocate a primary TAPaaS server according to minimum specs (see documentation)
-b) download and create a bootable usb stick for Proxmox (TODO:insert link)
-c) boot and install proxmox on server
-d) go to gui of proxmox and configure tank1 and tank2
-e) go to shell of proxmox and run the post proxmox install script:
-```
-bash -c "$(curl -fsSL https>//raw/githubusercontent.com/larsrossen/TAPaaS/src/bootstrap/TAPaaSPostPVEInstall.sh)"
-```
-f) after reboot check that it all looks fine!!
-g) run the TAPaaSBootstrap script from the root console
-```
-bash -c "$(curl -fsSL https>//raw/githubusercontent.com/larsrossen/TAPaaS/src/bootstrap/TAPaaSBootstrap.sh)"
-```
-h) go to the URL of selfmanage and continue from there.
-
-TODO: describe firewall bootstrap
-
-## what is done during bootstrap
-
-### ProxmoxSetup.sh
-
-Actions taken by script:
-- check version
-- check resources (tank1, tank 2, network, free space, ...)
-- install repository sources and disable community warning
-- ...
-
-### SelfManageSetup.sh
-
-Actions taken by script
-- create a self manage VM based on unbuntu
-- install docker on VM
-- install Gitea in docker
-- configure Gitea with a clone of TAPaaS
-- install Ansible and needed dependencies and modules
-- install teraform and needed dependencies and modules
-- Configure Gitea runners for TAPaaS
-- Sanity check
+See the Bootstrap.md in the Documentation directory
 
