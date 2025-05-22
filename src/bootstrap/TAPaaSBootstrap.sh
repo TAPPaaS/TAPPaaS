@@ -292,7 +292,7 @@ pve_check
 ssh_check
 msg_ok "Done sanity check of Proxmox PVE. Everything OK to proceed"
 
-msg_ok "We have 4 steps to complete: 1. Create a TAPaaS template. 2. Create TAPaaS CICD VM. 3. Install Gitea, Ansible and Teraform in VM. 4. Pobulate Git"
+msg_ok "We have 4 steps to complete: 1. Create a TAPaaS template. 2. Create TAPaaS CICD VM. 3. Ansible and Opetofu in VM. 4. Populate Git"
 
 # TODO: clean up this code
 for i in {0,1}; do
@@ -346,7 +346,8 @@ msg_info "Step 2: Creating a TAPaaS CICD VM"
 qm clone $TEMPLATEVMID $VMID --name $VMNAME --full 1 >/dev/null
 qm set $VMID --Tag TAPaaS,CICD >/dev/null
 qm start $VMID >/dev/null
-sleep 10
+msg_info: "Waiting for VM to start"
+sleep 30
 # TODO make a better wait: the following does not work
 # while ! qm status $VMID | grep -q running; do
 #   sleep 1
