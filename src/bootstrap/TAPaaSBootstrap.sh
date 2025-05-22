@@ -346,7 +346,7 @@ msg_info "Step 2: Creating a TAPaaS CICD VM"
 qm clone $TEMPLATEVMID $VMID --name $VMNAME --full 1 >/dev/null
 qm set $VMID --Tag TAPaaS,CICD >/dev/null
 qm start $VMID >/dev/null
-msg_info: "Waiting for VM to start"
+msg_info "Waiting for VM to start"
 sleep 30
 # TODO make a better wait: the following does not work
 # while ! qm status $VMID | grep -q running; do
