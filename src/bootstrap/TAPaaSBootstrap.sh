@@ -322,6 +322,7 @@ qm set $TEMPLATEVMID \
   -serial0 socket >/dev/null
 qm resize $TEMPLATEVMID scsi0 8G >/dev/null
 qm set $TEMPLATEVMID --agent enabled=1 >/dev/null
+qm set $TEMPLATEVMID --ciuser tapaas >/dev/null
 qm set $TEMPLATEVMID --Tag TAPaaS >/dev/null
 qm set $TEMPLATEVMID --ipconfig0 ip=dhcp >/dev/null
 qm set $TEMPLATEVMID --sshkey ~/.ssh/id_rsa.pub >/dev/null
