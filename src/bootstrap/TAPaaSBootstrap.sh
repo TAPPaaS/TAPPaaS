@@ -346,9 +346,11 @@ msg_info "Step 2: Creating a TAPaaS CICD VM"
 qm clone $TEMPLATEVMID $VMID --name $VMNAME --full 1 >/dev/null
 qm set $VMID --Tag TAPaaS,CICD >/dev/null
 qm start $VMID >/dev/null
-while ! qm status $VMID | grep -q running; do
-  sleep 1
-done
+sleep 10
+# TODO make a better wait: the following does not work
+# while ! qm status $VMID | grep -q running; do
+#   sleep 1
+# done
 msg_ok "Done Step 2: Creating a TAPaaS CICD VM" 
 
 msg_info "Step 3: Installing Gitea, Ansible and Terraform in VM"
@@ -392,5 +394,6 @@ ssh ubuntu@$VMIP sudo rm -f install-opentofu.sh
 msg_ok "Done Step 3: Installing Gitea, Ansible and Terraform in VM"
 
 msg_info "Step 4: Populating Git with TAPaaS"
+ssh ubuntu@$VMIP "sudo 
 msg_ok "Done Step 4: Populating Git with TAPaaS"
 
