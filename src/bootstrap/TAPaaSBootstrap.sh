@@ -346,6 +346,7 @@ msg_info "Step 2: Creating a TAPaaS CICD VM"
 qm clone $TEMPLATEVMID $VMID --name $VMNAME --full 1 >/dev/null
 qm set $VMID --Tag TAPaaS,CICD >/dev/null
 qm start $VMID >/dev/null
+sleep 5
 msg_ok "Done Step 2: Creating a TAPaaS CICD VM" 
 
 msg_info "Step 3: Installing Gitea, Ansible and Terraform in VM"
