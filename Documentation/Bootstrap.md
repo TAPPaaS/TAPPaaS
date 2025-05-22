@@ -80,7 +80,9 @@ you can now connect to the CICD VM using the connection buttom in the lower left
 
 Next you need to set up tokens for Opentofu (terraform)
 - in proxmox menu: Datacenter->Permision->API tokens: add a token with id: tapaas-token associated with root@pam
-- copy the token and write it into a file : src/configuration.globalvariables
+- copy the token and write it into a file : cat >.ssh/tapaas-token
+- make the file read/write for owner only: chmod 600 .ssh/tapaas-token
+
 
 ## Firewall and network setup
 
