@@ -171,7 +171,7 @@ function create_vm_descriptions_html() {
     <img src='https://www.tapaas.org/taapaas.png' alt='Logo' style='width:81px;height:112px;'/>
   </a>
 
-  <h2 style='font-size: 24px; margin: 20px 0;'>Docker  Template</h2>
+  <h2 style='font-size: 24px; margin: 20px 0;'>TAPaaS Ubuntu Template</h2>
 
   <span style='margin: 0 10px;'>
     <i class="fa fa-github fa-fw" style="color: #f5f5f5;"></i>
@@ -187,7 +187,7 @@ function create_vm_descriptions_html() {
   </span>
   <br>
   <br>
-  This is the template for the TAPaaS Docker VM. It is based on Ubuntu Nobel Numbat (24.04 LTS) and includes Docker and Docker Compose Plugin.
+  This is the template for the generic TAPaaS VM. It is based on Ubuntu Nobel Numbat (24.04 LTS) and includes Docker foundation tools.
 </div>
 EOF
   )
@@ -327,7 +327,6 @@ qm set $TEMPLATEVMID --Tag TAPaaS >/dev/null
 qm set $TEMPLATEVMID --ipconfig0 ip=dhcp >/dev/null
 qm set $TEMPLATEVMID --sshkey ~/.ssh/id_rsa.pub >/dev/null
 qm set $TEMPLATEVMID -description "$TEMPLATEDESCRIPTION" >/dev/null
-#TODO create tapaas user and set in cloud init
 qm resize $TEMPLATEVMID scsi0 ${DISK_SIZE} >/dev/null
 qm template $TEMPLATEVMID >/dev/null
 msg_ok "Step 4 Done: Created the TAPaaS Unbuntu with Docker VM template"
@@ -335,13 +334,14 @@ msg_ok "Step 4 Done: Created the TAPaaS Unbuntu with Docker VM template"
 msg_info "Step 5: Creating a TAPaaS CICD VM"
 qm clone $TEMPLATEVMID $VMID --name $VMNAME --full 1 >/dev/null
 qm set $VMID --Tag TAPaaS,CICD >/dev/null
+qm set $TEMPLATEVMID -description "$DESCRIPTION" >/dev/null
 qm start $VMID >/dev/null
 msg_ok "Step 5 Done: Created a TAPaaS CICD VM" 
 
 echo -e "${CREATING}${BOLD}${DGN}** Congratulation ** You are almost done bootstraping. Please do the following:${CL}"
 echo -e "${CREATING}${BOLD}${DGN} 1) Log into TAPaaS CICD VM using ssh from host a host terminal: ssh tapaas@<insert ip of CICD VM>${CL}"
 echo -e "${CREATING}${BOLD}${DGN} 2) In the shell of the TAPaaS CICD VM do:${CL}:"
-echo -e "${CREATING}${BOLD}${DGN}   2a) cretate ssh keys: sshkeygen${CL}"
+echo -e "${CREATING}${BOLD}${DGN}   2a) cretate ssh keys: ssh-keygen -t ed25519 -C "<your email>" ${CL}"
 echo -e "${CREATING}${BOLD}${DGN}   2b) add ssh keys to your github: cat ~/.ssh/id_rsa${CL} (not needed when TAPaas is public)"
 echo -e "${CREATING}${BOLD}${DGN}   2c) clone the tapaas repository: git clone git@github.com:larsrossen/TAPaaS.git${CL}"
 echo -e "${CREATING}${BOLD}${DGN}   2d) run the final bootstrap code: ./TAPaaS/src/bootstrap/TAPaaS-CICD-bootstrap.sh${CL}"
