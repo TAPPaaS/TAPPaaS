@@ -346,6 +346,7 @@ echo -e "${CREATING}${BOLD}${DGN}   2b) add ssh keys to your github: cat ~/.ssh/
 echo -e "${CREATING}${BOLD}${DGN}   2c) clone the tapaas repository: git clone git@github.com:larsrossen/TAPaaS.git${CL}"
 echo -e "${CREATING}${BOLD}${DGN}   2d) make the script executable: chmod 775 ./TAPaaS/src/bootstrap/TAPaaS-CICD-bootstrap.sh${CL}"
 echo -e "${CREATING}${BOLD}${DGN}   2d) run the final bootstrap code: ./TAPaaS/src/bootstrap/TAPaaS-CICD-bootstrap.sh${CL}"
-echo -e "${CREATING}${BOLD}${DGN}   2e) set the git user name: git config --global user.name <your name> ${CL}"
+echo -e "${CREATING}${BOLD}${DGN}   2e) set the git user name: git config --global user.name <your name> ${CL}" 
+echo -e "${CREATING}${BOLD}${DGN}   2f) set the git user email: git config --global user.email <your email> ${CL}"
 echo -e "${CREATING}${BOLD}${DGN} You might want to cunsult the bootstrap information in TAPaaS/Documentation/Bootstrap.md${CL}"
 
