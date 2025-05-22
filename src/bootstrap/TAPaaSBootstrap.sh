@@ -164,21 +164,14 @@ function exit-script() {
 }
 
 function create_vm_descriptions_html() {
-# TODO: update description to be descriptive!!
   TEMPLATEDESCRIPTION=$(
     cat <<EOF
 <div align='center'>
   <a href='https://tapaas.org' target='_blank' rel='noopener noreferrer'>
-    <img src='https://raw.githubusercontent.com/larsrossen/TAPaaS/Documentation/taapaas.png' alt='Logo' style='width:81px;height:112px;'/>
+    <img src='https://www.tapaas.org/taapaas.png' alt='Logo' style='width:81px;height:112px;'/>
   </a>
 
-  <h2 style='font-size: 24px; margin: 20px 0;'>Docker VM</h2>
-
-  <p style='margin: 16px 0;'>
-    <a href='https://ko-fi.com/community_scripts' target='_blank' rel='noopener noreferrer'>
-      <img src='https://img.shields.io/badge/&#x2615;-Buy us a coffee-blue' alt='spend Coffee' />
-    </a>
-  </p>
+  <h2 style='font-size: 24px; margin: 20px 0;'>Docker  Template</h2>
 
   <span style='margin: 0 10px;'>
     <i class="fa fa-github fa-fw" style="color: #f5f5f5;"></i>
@@ -192,6 +185,8 @@ function create_vm_descriptions_html() {
     <i class="fa fa-exclamation-circle fa-fw" style="color: #f5f5f5;"></i>
     <a href='https://github.com/larsrossen/tapaas/issues' target='_blank' rel='noopener noreferrer' style='text-decoration: none; color: #00617f;'>Issues</a>
   </span>
+  <br>
+  <br>
   This is the template for the TAPaaS Docker VM. It is based on Ubuntu Nobel Numbat (24.04 LTS) and includes Docker and Docker Compose Plugin.
 </div>
 EOF
@@ -204,13 +199,7 @@ EOF
     <img src='https://raw.githubusercontent.com/larsrossen/TAPaaS/Documentation/taapaas.png' alt='Logo' style='width:81px;height:112px;'/>
   </a>
 
-  <h2 style='font-size: 24px; margin: 20px 0;'>Docker VM</h2>
-
-  <p style='margin: 16px 0;'>
-    <a href='https://ko-fi.com/community_scripts' target='_blank' rel='noopener noreferrer'>
-      <img src='https://img.shields.io/badge/&#x2615;-Buy us a coffee-blue' alt='spend Coffee' />
-    </a>
-  </p>
+  <h2 style='font-size: 24px; margin: 20px 0;'>TAPaaS CICD VM</h2>
 
   <span style='margin: 0 10px;'>
     <i class="fa fa-github fa-fw" style="color: #f5f5f5;"></i>
@@ -224,8 +213,9 @@ EOF
     <i class="fa fa-exclamation-circle fa-fw" style="color: #f5f5f5;"></i>
     <a href='https://github.com/larsrossen/tapaas/issues' target='_blank' rel='noopener noreferrer' style='text-decoration: none; color: #00617f;'>Issues</a>
   </span>
-  This is the TAPaaS CICD VM. It is based on the TAPaaS Docker VM template and includes Gitea, Ansible and Terraform. it contain the entire TAPaaS source
-  go to <a href='http://tapaas-cicd:xxxx' gitea web interface </a>
+  <br>
+  <br>
+  This is the TAPaaS CI/CD VM. It is based on the TAPaaS Docker VM template and includes Git, Ansible and Terraform. it contain the entire TAPaaS source
 </div>
 EOF
   )
@@ -251,6 +241,12 @@ function default_settings() {
   MTU=""
   STORAGE="tank1"
   URL=https://cloud-images.ubuntu.com/noble/current/noble-server-cloudimg-amd64.img
+  # TODO: clean up this code
+  for i in {0,1}; do
+    disk="DISK$i"
+    eval DISK${i}=vm-${TEMPLATEVMID}-disk-${i}${DISK_EXT:-}
+    eval DISK${i}_REF=${STORAGE}:${DISK_REF:-}${!disk}
+  done
 }
 
 #
@@ -268,7 +264,7 @@ pushd $TEMP_DIR >/dev/null
 default_settings
 create_vm_descriptions_html
 
-echo -e "${CREATING}${BOLD}${DGN}Creating TAPaaS Template VM and TAPaaS CICD VM using the following settings${CL}:"
+echo -e "${CREATING}${BOLD}${DGN}Creating TAPaaS Template VM and TAPaaS CICD VM using the following settings:${CL}"
 echo -e " - ${CONTAINERID}${BOLD}${DGN}TAPaaS Template VM ID: ${BGN}${TEMPLATEVMID}${CL}, Template Name: ${BGN}${TEMPLATEVMNAME}${CL}"
 echo -e " - ${CONTAINERID}${BOLD}${DGN}TAPaaS CICD VM ID: ${BGN}${VMID}${CL}, Template Name: ${BGN}${VMNAME}${CL}"
 echo -e " - ${CONTAINERTYPE}${BOLD}${DGN}Machine Type: ${BGN}i440fx${CL}"
@@ -290,37 +286,30 @@ check_root
 arch_check
 pve_check
 ssh_check
-msg_ok "Done sanity check of Proxmox PVE. Everything OK to proceed"
+msg_ok "Done sanity check of Proxmox PVE. Everything is OK to proceed"
 
-msg_ok "We have 4 steps to complete: 1. Create a TAPaaS template. 2. Create TAPaaS CICD VM. 3. Ansible and Opetofu in VM. 4. Populate Git"
+msg_ok "We have 5 steps to complete: 1. install VM tools 2. download Ubuntu 3. add Docker to image 4. Create a TAPaaS template. 5. Create TAPaaS CICD VM."
 
-# TODO: clean up this code
-for i in {0,1}; do
-  disk="DISK$i"
-  eval DISK${i}=vm-${TEMPLATEVMID}-disk-${i}${DISK_EXT:-}
-  eval DISK${i}_REF=${STORAGE}:${DISK_REF:-}${!disk}
-done
+msg_info "Step 1: Installing Pre-Requisite libguestfs-tools onto Host"
+apt-get -qq update && apt-get -qq install libguestfs-tools lsb-release -y >/dev/null
+msg_ok "Step 1 Done: Installed libguestfs-tools successfully"
 
-msg_info "Downloading Ubuntu Nobel Numbat (24.04 LTS) Image"
+msg_info "Step 2. Downloading Ubuntu Nobel Numbat (24.04 LTS) Image"
 curl -f#SL -o "$(basename "$URL")" "$URL"
 echo -en "\e[1A\e[0K"
 FILE=$(basename $URL)
-msg_ok "Downloaded Ubuntu Nobel Numbat (24.04 LTS): ${CL}${BL}${FILE}${CL}"
+msg_ok "Step 2 Done: Downloaded Ubuntu Nobel Numbat (24.04 LTS): ${CL}${BL}${FILE}${CL}"
 
-msg_info "Installing Pre-Requisite libguestfs-tools onto Host"
-apt-get -qq update && apt-get -qq install libguestfs-tools lsb-release -y >/dev/null
-msg_ok "Installed libguestfs-tools successfully"
-
-msg_info "Adding Docker and Docker Compose Plugin to Ubuntu Nobel Numbat (24.04 LTS) Disk Image"
+msg_info "Step 3: Adding Docker and Docker Compose Plugin to Ubuntu Nobel Numbat (24.04 LTS) Disk Image"
 virt-customize -q -a "${FILE}" --install qemu-guest-agent,apt-transport-https,ca-certificates,curl,gnupg,software-properties-common,lsb-release >/dev/null &&
   virt-customize -q -a "${FILE}" --run-command "mkdir -p /etc/apt/keyrings && curl -fsSL https://download.docker.com/linux/debian/gpg | gpg --dearmor -o /etc/apt/keyrings/docker.gpg" >/dev/null &&
   virt-customize -q -a "${FILE}" --run-command "echo 'deb [arch=amd64 signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/debian bookworm stable' > /etc/apt/sources.list.d/docker.list" >/dev/null &&
   virt-customize -q -a "${FILE}" --run-command "apt-get update -qq && apt-get install -y docker-ce docker-ce-cli containerd.io docker-compose-plugin" >/dev/null &&
   virt-customize -q -a "${FILE}" --run-command "systemctl enable docker" >/dev/null &&
   virt-customize -q -a "${FILE}" --run-command "echo -n > /etc/machine-id" >/dev/null
-msg_ok "Added Docker and Docker Compose Plugin to Ubuntu Nobel Numbat (24.04 LTS) Disk Image successfully"
+msg_ok "Step 3 Done: Added Docker and Docker Compose Plugin to Ubuntu Nobel Numbat (24.04 LTS) Disk Image successfully"
 
-msg_info "Step 1: Creating the TAPaaS Unbuntu with Docker VM template"
+msg_info "Step 4: Creating the TAPaaS Unbuntu with Docker VM template"
 qm create $TEMPLATEVMID -agent 1${MACHINE} -tablet 0 -localtime 1 -bios ovmf${CPU_TYPE} -cores $CORE_COUNT -memory $RAM_SIZE \
   -name $TEMPLATEVMNAME -net0 virtio,bridge=$BRG,macaddr=$MAC$VLAN$MTU -onboot 1 -ostype l26 -scsihw virtio-scsi-pci
 pvesm alloc $STORAGE $TEMPLATEVMID $DISK0 4M 1>&/dev/null
@@ -340,61 +329,19 @@ qm set $TEMPLATEVMID -description "$TEMPLATEDESCRIPTION" >/dev/null
 #TODO create tapaas user and set in cloud init
 qm resize $TEMPLATEVMID scsi0 ${DISK_SIZE} >/dev/null
 qm template $TEMPLATEVMID >/dev/null
-msg_ok "Done Step 1: Creating the TAPaaS Unbuntu with Docker VM template"
+msg_ok "Step 4 Done: Created the TAPaaS Unbuntu with Docker VM template"
 
-msg_info "Step 2: Creating a TAPaaS CICD VM"
+msg_info "Step 5: Creating a TAPaaS CICD VM"
 qm clone $TEMPLATEVMID $VMID --name $VMNAME --full 1 >/dev/null
 qm set $VMID --Tag TAPaaS,CICD >/dev/null
 qm start $VMID >/dev/null
-msg_info "Waiting for VM to start"
-sleep 30
-# TODO make a better wait: the following does not work
-# while ! qm status $VMID | grep -q running; do
-#   sleep 1
-# done
-msg_ok "Done Step 2: Creating a TAPaaS CICD VM" 
+msg_ok "Step 5 Done: Created a TAPaaS CICD VM" 
 
-msg_info "Step 3: Installing Gitea, Ansible and Terraform in VM"
-# get VM IP
-VMIP=$(qm guest exec $VMID -- ip -4 addr show dev eth0 | grep -oP '(?<=inet\s)\d+(\.\d+){3}')
-ssh ubuntu@$VMIP "sudo wget -q -O gitea https://dl.gitea.com/gitea/1.23.8/gitea-1.23.8-linux-amd64" >/dev/null
-ssh ubuntu@$VMIP "sudo adduser --system --shell /bin/bash --gecos 'Git Version Control' --group --disabled-password --home /home/git  git" >/dev/null
-ssh ubuntu@$VMIP "sudo mkdir -p /var/lib/gitea/{custom,data,log}; sudo chown -R git:git /var/lib/gitea/; sudo chmod -R 750 /var/lib/gitea/; sudo mkdir /etc/gitea; sudo chown root:git /etc/gitea; sudo chmod 770 /etc/gitea"
-ssh ubuntu@$VMIP "sudo mv gitea /usr/local/bin/gitea; sudo chmod +x /usr/local/bin/gitea"
-# set it as a systemd service
-ssh ubuntu@$VMIP "sudo tee /etc/systemd/system/gitea.service >/dev/null" <<EOF
-[Unit]
-Description=Gitea (Git with a cup of tea)
-After=network.target
-[Service]
-RestartSec=2s
-Type=simple
-User=git
-Group=git
-WorkingDirectory=/var/lib/gitea/
-ExecStart=/usr/local/bin/gitea web --config /etc/gitea/app.ini
-Restart=always
-Environment=USER=git HOME=/home/git GITEA_WORK_DIR=/var/lib/gitea
-[Install]
-WantedBy=multi-user.target
-EOF
-ssh ubuntu@$VMIP sudo systemctl enable gitea --now
-sleep 2
-# Now to the inital registration
-# curl -H "Content-type: application/x-www-form-urlencoded" -d "db_type=SQLite3" -d "db_path=/var/lib/gitea/data/gitea.db" -d "app_name=\"Local TAPaaS Git Repository\"" -d "repo_root_path=/var/lib/gitea/data/git-repositories" -d "lfs_root_path=/var/liv/gitea/data/lfs" -d "run_user=git" -d "domain=192.168.14.57" -d "ssh_port=22" -d "http_port=3000" -d "app_url=http://192.158.14.57:3000/" -d "log_root_path=/var/lib/gitea/log" -d "default_allow_create_organization=on"  -X POST  http://192.168.14.57:3000/
-
-install ansible
-ssh ubuntu@$VMIP sudo apt install ansible -y >/dev/null
-
-# installing opentpfu
-ssh ubuntu@$VMIP sudo curl --proto '=https' --tlsv1.2 -fsSL https://get.opentofu.org/install-opentofu.sh -o install-opentofu.sh
-ssh ubuntu@$VMIP sudo chmod +x install-opentofu.sh
-ssh ubuntu@$VMIP sudo ./install-opentofu.sh --install-method deb
-ssh ubuntu@$VMIP sudo rm -f install-opentofu.sh
-
-msg_ok "Done Step 3: Installing Gitea, Ansible and Terraform in VM"
-
-msg_info "Step 4: Populating Git with TAPaaS"
-ssh ubuntu@$VMIP "sudo 
-msg_ok "Done Step 4: Populating Git with TAPaaS"
+echo -e "${CREATING}${BOLD}${DGN}** Congratulation ** You are almost done bootstraping. Please do the following:${CL}"
+echo -e "${CREATING}${BOLD}${DGN} 1) Log into TAPaaS CICD VM using ssh from host a host terminal: ssh tapaas@<insert ip of CICD VM>${CL}"
+echo -e "${CREATING}${BOLD}${DGN} 2) In the shell of the TAPaaS CICD VM do:${CL}:"
+echo -e "${CREATING}${BOLD}${DGN}   2a) cretate ssh keys: sshkeygen${CL}"
+echo -e "${CREATING}${BOLD}${DGN}   2b) add ssh keys to your github: cat ~/.ssh/id_rsa${CL} (not needed when TAPaas is public)"
+echo -e "${CREATING}${BOLD}${DGN}   2c) clone the tapaas repository: git clone git@github.com:larsrossen/TAPaaS.git${CL}"
+echo -e "${CREATING}${BOLD}${DGN}   2d) run the final bootstrap code: ./TAPaaS/src/bootstrap/TAPaaS-CICD-bootstrap.sh${CL}"
 
