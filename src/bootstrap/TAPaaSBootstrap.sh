@@ -349,7 +349,7 @@ qm start $VMID >/dev/null
 msg_ok "Done Step 2: Creating a TAPaaS CICD VM" 
 
 msg_info "Step 3: Installing Gitea, Ansible and Terraform in VM"
-get VM IP
+# get VM IP
 VMIP=$(qm guest exec $VMID -- ip -4 addr show dev eth0 | grep -oP '(?<=inet\s)\d+(\.\d+){3}')
 ssh ubuntu@$VMIP "sudo wget -q -O gitea https://dl.gitea.com/gitea/1.23.8/gitea-1.23.8-linux-amd64" >/dev/null
 ssh ubuntu@$VMIP "sudo adduser --system --shell /bin/bash --gecos 'Git Version Control' --group --disabled-password --home /home/git  git" >/dev/null
