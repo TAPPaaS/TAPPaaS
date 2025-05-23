@@ -123,3 +123,21 @@ if [[ $? -ne 0 ]]; then
   exit 1
 fi
 msg_ok "Ethernet PCI devices found"
+#
+# ensure vfio modules loaded
+msg_info "Loading vfio modules@
+if ! lsmod | grep -q vfio; then
+  modprobe vfio
+  modprobe vfio_iommu_type1
+  modprobe vfio_pci
+  cat <<EOF >>/etc/modules
+# Load vfio modules on boot
+vfio
+vfio_iommu_type1
+vfio_pci
+EOF
+  update-initramfs -u -k all
+  msg_ok "vfio modules loaded"
+else
+  msg_ok "vfio modules already loaded"
+fi
