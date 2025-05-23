@@ -48,6 +48,7 @@ Great securit model, on Tapaas we implement something similar (trying to get it 
 * [Tech Tutorials by David](https://www.youtube.com/@TechTutorialsDavidMcKone)
 * [Digital Spaceport](www.youtube.com/@DigitalSpaceport)
 * [Home Network Guy](https://www.youtube.com/@homenetworkguy)
+* [apalrd's adventures](https://www.youtube.com/@apalrdsadventures)
 
 
 # relevant videos to consider
