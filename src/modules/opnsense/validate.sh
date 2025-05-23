@@ -106,9 +106,6 @@ trap cleanup EXIT
 TEMP_DIR=$(mktemp -d)
 pushd $TEMP_DIR >/dev/null
 
-default_settings
-create_vm_descriptions_html
-
 msg_info "Checking for IOMMU (interrupt remapping)"
 if dmesg | grep -q -e "DMAR-IR: Enabled IRQ remapping in x2apic mode" -e "AMD-Vi: Interrupt remapping enabled"; then
   msg_ok "IOMMU is enabled"
