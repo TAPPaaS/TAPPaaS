@@ -125,7 +125,7 @@ fi
 msg_ok "Ethernet PCI devices found"
 #
 # ensure vfio modules loaded
-msg_info "Loading vfio modules"
+msg_info  "Loading vfio modules into kernel"
 if ! lsmod | grep -q vfio; then
   modprobe vfio
   modprobe vfio_iommu_type1
