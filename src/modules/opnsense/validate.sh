@@ -116,13 +116,13 @@ fi
 
 #
 # find the ethernet pci devices
-msg_info "Finding ethernet PCI devices"
-pvesh get /nodes/testserver1/hardware/pci --pci-class-blacklist "" | grep Ethernet
-if [[ $? -ne 0 ]]; then
-  msg_error "No ethernet PCI devices found. Please check your hardware."
-  exit 1
-fi
-msg_ok "Ethernet PCI devices found"
+msg_info "Finding ethernet PCI devices\n"
+msg_info "ensure that the ethernet devices are on different iommugroups. if not then mappin is not possible \n"
+pvesh get /nodes/testserver1/hardware/pci --pci-class-blacklist "" | grep -e Ethernet -e class
+
+msg_ok "no let us find the PCI devices to mapp"
+lspci -nnk | grep Ethernet
+
 #
 # ensure vfio modules loaded
 msg_info  "Loading vfio modules into kernel"
