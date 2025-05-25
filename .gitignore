@@ -5,3 +5,6 @@ src/modules/opnsense/.terraform/providers/registry.opentofu.org/bpg/proxmox/0.78
 src/modules/opnsense/.terraform/providers/registry.opentofu.org/bpg/proxmox/0.78.0/linux_amd64/CHANGELOG.md
 src/modules/opnsense/.terraform/providers/registry.opentofu.org/bpg/proxmox/0.78.0/linux_amd64/LICENSE
 src/modules/opnsense/.terraform/providers/registry.opentofu.org/bpg/proxmox/0.78.0/linux_amd64/README.md
+src/modules/opnsense/terraform.tfstate
+src/modules/opnsense/terraform.tfstate.backup
+src/modules/opnsense/tapaas.tfvars

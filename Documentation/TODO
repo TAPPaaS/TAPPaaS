@@ -1,0 +1,10 @@
+# Open list of stuff that is outstanding
+
+- Create a global variable file containing
+  - name of node
+  - ip number ranges
+
+- change tofu to use a dedicated token instead of root token
+  - also move token to local variable file
+
+- consider startup order of VMs

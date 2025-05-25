@@ -14,22 +14,23 @@ terraform {
 # For info on authentification see https://registry.terraform.io/providers/bpg/proxmox/latest/docs
 # This simply set up tofu to use the root account. really we should set up a dedicated terraform user on server
 provider "proxmox" {
-  endpoint = "https://192.168.2.250:8006"
-  api_token = "root@pam!tapaas=b412fbcd-6d41-4fe3-a7c5-5cb30ccc9d11"
+  endpoint = var.node_endpoint
+  api_token = var.api_token
   insecure = true
   ssh {
     agent = true
-    username = "root"
+    username = var.admin_username
+    password = var.admin_password
   }
 }
 
-resource "proxmox_virtual_environment_vm" "ubuntu_vm" {
-  name        = "terraform-provider-proxmox-ubuntu-vm"
-  description = "Managed by Terraform"
-  tags        = ["terraform", "ubuntu"]
+resource "proxmox_virtual_environment_vm" "OPNsense_vm" {
+  name        = "OPNsense"
+  description = "TAPaaS OPNsense firewall VM, Managed by Terraform"
+  tags        = ["terraform", "tapaas", "opnsense"]
 
-  node_name = "first-node"
-  vm_id     = 4321
+  node_name = var.node_name
+  vm_id     = 666
 
   agent {
     # read 'Qemu guest agent' section, change to true only when ready
@@ -39,13 +40,13 @@ resource "proxmox_virtual_environment_vm" "ubuntu_vm" {
   stop_on_destroy = true
 
   startup {
-    order      = "3"
-    up_delay   = "60"
+    order      = "1"
+    up_delay   = "0"
     down_delay = "60"
   }
 
   cpu {
-    cores        = 2
+    cores        = 4
     type         = "x86-64-v2-AES"  # recommended for modern CPUs
   }
 
@@ -60,32 +61,13 @@ resource "proxmox_virtual_environment_vm" "ubuntu_vm" {
     interface    = "scsi0"
   }
 
-  initialization {
-    ip_config {
-      ipv4 {
-        address = "dhcp"
-      }
-    }
 
-    user_account {
-      keys     = [trimspace(tls_private_key.ubuntu_vm_key.public_key_openssh)]
-      password = random_password.ubuntu_vm_password.result
-      username = "ubuntu"
-    }
-
-    user_data_file_id = proxmox_virtual_environment_file.cloud_config.id
-  }
-
-  network_device {
-    bridge = "vmbr0"
-  }
+#  network_device {
+#    bridge = "vmbr0"
+#  }
 
   operating_system {
-    type = "l26"
-  }
-
-  tpm_state {
-    version = "v2.0"
+    type = "other"
   }
 
   serial_device {}
@@ -100,34 +82,7 @@ resource "proxmox_virtual_environment_vm" "ubuntu_vm" {
 resource "proxmox_virtual_environment_download_file" "latest_ubuntu_22_jammy_qcow2_img" {
   content_type = "iso"
   datastore_id = "local"
-  node_name    = "pve"
+  node_name    = var.node_name
   url          = "https://cloud-images.ubuntu.com/jammy/current/jammy-server-cloudimg-amd64.img"
 }
-
-resource "random_password" "ubuntu_vm_password" {
-  length           = 16
-  override_special = "_%@"
-  special          = true
-}
-
-resource "tls_private_key" "ubuntu_vm_key" {
-  algorithm = "RSA"
-  rsa_bits  = 2048
-}
-
-output "ubuntu_vm_password" {
-  value     = random_password.ubuntu_vm_password.result
-  sensitive = true
-}
-
-output "ubuntu_vm_private_key" {
-  value     = tls_private_key.ubuntu_vm_key.private_key_pem
-  sensitive = true
-}
-
-output "ubuntu_vm_public_key" {
-  value = tls_private_key.ubuntu_vm_key.public_key_openssh
-}
-
-
  
