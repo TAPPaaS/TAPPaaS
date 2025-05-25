@@ -1,2 +1,7 @@
 .DS_Store
 src/configuration/globalvariables
+src/modules/opnsense/.terraform.lock.hcl
+src/modules/opnsense/.terraform/providers/registry.opentofu.org/bpg/proxmox/0.78.0/linux_amd64/terraform-provider-proxmox_v0.78.0
+src/modules/opnsense/.terraform/providers/registry.opentofu.org/bpg/proxmox/0.78.0/linux_amd64/CHANGELOG.md
+src/modules/opnsense/.terraform/providers/registry.opentofu.org/bpg/proxmox/0.78.0/linux_amd64/LICENSE
+src/modules/opnsense/.terraform/providers/registry.opentofu.org/bpg/proxmox/0.78.0/linux_amd64/README.md

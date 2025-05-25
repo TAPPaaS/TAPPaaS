@@ -338,6 +338,10 @@ qm set $TEMPLATEVMID -description "$DESCRIPTION" >/dev/null
 qm start $VMID >/dev/null
 msg_ok "Step 5 Done: Created a TAPaaS CICD VM" 
 
+msg_info "Bonus Step: set up a few configurartions on PVE node to support terraform and ansible"
+apt-get install -y sudo >/dev/null
+msg_ok "Bonus Step Done: Installed sudo on PVE node"
+
 echo -e "${CREATING}${BOLD}${DGN}** Congratulation ** You are almost done bootstraping. Please do the following:${CL}"
 echo -e "${CREATING}${BOLD}${DGN} 1) Log into TAPaaS CICD VM using ssh from a host teminal: ssh tapaas@<insert ip of CICD VM>${CL}"
 echo -e "${CREATING}${BOLD}${DGN} 2) In the shell of the TAPaaS CICD VM do:${CL}:"

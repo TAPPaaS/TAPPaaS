@@ -4,55 +4,130 @@ terraform {
   required_providers {
     proxmox = {
       source  = "bpg/proxmox"
-      version = "~> 0.29.0" # Or the latest version
+      version = "~> 0.78.0" # Or the latest version
     }
   }
 }
 
 
 # Configure the Proxmox provider
+# For info on authentification see https://registry.terraform.io/providers/bpg/proxmox/latest/docs
+# This simply set up tofu to use the root account. really we should set up a dedicated terraform user on server
 provider "proxmox" {
-  host = "192.168.2.250"
-  user = "root"
-  # password = "your_proxmox_password"
-  # Optional: Use API key instead of password
-  api_key = "b412fbcd-6d41-4fe3-a7c5-5cb30ccc9d11"
+  endpoint = "https://192.168.2.250:8006"
+  api_token = "root@pam!tapaas=b412fbcd-6d41-4fe3-a7c5-5cb30ccc9d11"
+  insecure = true
+  ssh {
+    agent = true
+    username = "root"
+  }
 }
 
-# Create the Proxmox VM
-resource "proxmox_vm_qemu" "example" {
-  name  = "OPNsense"          # VM name
-  vmid  = 500              # VM ID (must be unique)
-  node  = "your_proxmox_node_name"    # The name of the Proxmox node where the VM will be created
-  description = "My first VM"
-  # ... other VM properties
+resource "proxmox_virtual_environment_vm" "ubuntu_vm" {
+  name        = "terraform-provider-proxmox-ubuntu-vm"
+  description = "Managed by Terraform"
+  tags        = ["terraform", "ubuntu"]
 
-  # Boot configuration
-  boot {
-    order = "scsi0"  # Boot from hard disk (adjust as needed)
+  node_name = "first-node"
+  vm_id     = 4321
+
+  agent {
+    # read 'Qemu guest agent' section, change to true only when ready
+    enabled = false
+  }
+  # if agent is not enabled, the VM may not be able to shutdown properly, and may need to be forced off
+  stop_on_destroy = true
+
+  startup {
+    order      = "3"
+    up_delay   = "60"
+    down_delay = "60"
   }
 
-  # Define the disk configuration
+  cpu {
+    cores        = 2
+    type         = "x86-64-v2-AES"  # recommended for modern CPUs
+  }
+
+  memory {
+    dedicated = 2048
+    floating  = 2048 # set equal to dedicated to enable ballooning
+  }
+
   disk {
-    size = "32G"       # Disk size
-    type = "scsi0"    # Disk type (adjust as needed)
+    datastore_id = "tank1"
+    file_id      = proxmox_virtual_environment_download_file.latest_ubuntu_22_jammy_qcow2_img.id
+    interface    = "scsi0"
   }
 
-  # Define the ISO image
-  cdrom {
-    path = "iso/ubuntu-22.04-desktop-amd64.iso"  # Path to the ISO image on Proxmox
-    # For remote ISO, use:
-    # url = "http://example.com/iso/ubuntu-22.04-desktop-amd64.iso"
+  initialization {
+    ip_config {
+      ipv4 {
+        address = "dhcp"
+      }
+    }
+
+    user_account {
+      keys     = [trimspace(tls_private_key.ubuntu_vm_key.public_key_openssh)]
+      password = random_password.ubuntu_vm_password.result
+      username = "ubuntu"
+    }
+
+    user_data_file_id = proxmox_virtual_environment_file.cloud_config.id
   }
 
-  # Define network configuration
-  network {
-    bridge = "vmbr0"     # Proxmox network bridge
-    ip_address = "192.168.1.101"  # Static IP (optional)
-    gateway = "192.168.1.1"      # Gateway (optional)
-    netmask = "255.255.255.0"    # Netmask (optional)
-    type = "bridge"            # Network type
+  network_device {
+    bridge = "vmbr0"
   }
 
-  # Other VM configuration (CPU, memory, etc.)
+  operating_system {
+    type = "l26"
+  }
+
+  tpm_state {
+    version = "v2.0"
+  }
+
+  serial_device {}
+
+  virtiofs {
+    mapping = "data_share"
+    cache = "always"
+    direct_io = true
+  }
 }
+
+resource "proxmox_virtual_environment_download_file" "latest_ubuntu_22_jammy_qcow2_img" {
+  content_type = "iso"
+  datastore_id = "local"
+  node_name    = "pve"
+  url          = "https://cloud-images.ubuntu.com/jammy/current/jammy-server-cloudimg-amd64.img"
+}
+
+resource "random_password" "ubuntu_vm_password" {
+  length           = 16
+  override_special = "_%@"
+  special          = true
+}
+
+resource "tls_private_key" "ubuntu_vm_key" {
+  algorithm = "RSA"
+  rsa_bits  = 2048
+}
+
+output "ubuntu_vm_password" {
+  value     = random_password.ubuntu_vm_password.result
+  sensitive = true
+}
+
+output "ubuntu_vm_private_key" {
+  value     = tls_private_key.ubuntu_vm_key.private_key_pem
+  sensitive = true
+}
+
+output "ubuntu_vm_public_key" {
+  value = tls_private_key.ubuntu_vm_key.public_key_openssh
+}
+
+
+ 
