@@ -11,7 +11,16 @@
 | 60      | IoT           | 10.0.60.0/24   | Trunk-4       | IoT isolation            | Minimal rights             | IoT devices, admins      | –                                      | Zeek                                     | Suricata                            | Restrictive ACL       | Yes        | Partially automated  | Zeek + Graylog                       |
 | 70      | Guest         | 10.0.70.0/24   | Trunk-4       | Guest access             | Guest isolation            | Guests                   | –                                      | OpenWRT                                  | pfSense captive portal               | Restrictive ACL       | Yes        | Fully automated      | OpenWRT + Graylog                    |
 
+## Tool Priority Definitions
 
+**Must Have:**  
+Tools that are absolutely essential to make the network secure, reliable, and manageable. Without these tools, the network will not function at an acceptable level.
+
+**Should Have:**  
+Tools that are highly recommended to simplify management, improve security, or increase scalability. They are important, but not immediately critical for basic operation.
+
+**Could Have:**  
+Tools that provide extra functionality, foster innovation, or enhance user experience, but are not required for core network functionality.
 
 Integration Possibilities Between These Tools
 Below is an overview of how the key open source tools in your design can work together and reinforce each other. This is based on industry best practices and recent expert insights.
