@@ -1,0 +1,122 @@
+
+# VLAN Architecture & Tooling Matrix
+
+| VLAN-ID | Segment        | Subnet         | Trunk Profile | Segment Purpose           | Design Principles           | Key Users                | Must Have Tools                        | Should Have Tools                        | Could Have Tools                | ACL Policy / VACL    | Redundancy | Automation Status    | Integration & Automation (Tool)      |
+|---------|---------------|----------------|---------------|--------------------------|----------------------------|--------------------------|----------------------------------------|------------------------------------------|-------------------------------|----------------------|------------|---------------------|---------------------------------------|
+| 10      | Management    | 10.0.10.0/24   | Trunk-1       | Central management       | Least privilege, logging   | Administrators           | Proxmox VE<br>OPNsense<br>Ansible      | NetBox<br>Zabbix<br>Keycloak             | OpenVAS<br>Monit                | Strict, deny-all     | Yes        | Fully automated      | NetBox + Ansible + Graylog           |
+| 20      | DMZ           | 10.0.20.0/24   | Trunk-1       | External exposure        | Segregation, firewall      | External, admins         | Nginx<br>Caddy                         | Pangolin                                 | Suricata                        | PVLAN + VACL         | Yes        | Partially automated  | OPNsense + Suricata + Graylog        |
+| 30      | Prod-Servers  | 10.0.30.0/24   | Trunk-2       | Production applications  | Isolation, monitoring      | Users, admins            | Nextcloud<br>Postgres                  | n8n<br>Supabase<br>OpenWebUI             | Ollama                            | Restrictive ACL       | Yes        | Fully automated      | Ansible + Graylog + Monit            |
+| 40      | Prod-Storage  | 10.0.40.0/24   | Trunk-2       | Production storage       | Encryption, backup         | Servers, admins          | TrueNAS                                | OpenMediaVault                           | rclone                             | Restrictive ACL       | Yes        | Fully automated      | TrueNAS + Proxmox Backup Server      |
+| 50      | Workstations  | 10.0.50.0/24   | Trunk-3       | Workstations             | Segregation, NAC           | Employees                | –                                      | FreeRADIUS                               | PacketFence                         | Restrictive ACL       | Yes        | Fully automated      | FreeRADIUS + NetBox                  |
+| 60      | IoT           | 10.0.60.0/24   | Trunk-4       | IoT isolation            | Minimal rights             | IoT devices, admins      | –                                      | Zeek                                     | Suricata                            | Restrictive ACL       | Yes        | Partially automated  | Zeek + Graylog                       |
+| 70      | Guest         | 10.0.70.0/24   | Trunk-4       | Guest access             | Guest isolation            | Guests                   | –                                      | OpenWRT                                  | pfSense captive portal               | Restrictive ACL       | Yes        | Fully automated      | OpenWRT + Graylog                    |
+
+
+
+Integration Possibilities Between These Tools
+Below is an overview of how the key open source tools in your design can work together and reinforce each other. This is based on industry best practices and recent expert insights.
+Management, Inventory & Automation
+	•	NetBox/phpIPAM (asset inventory) integrates with provisioning tools such as Ansible and OpenTofu. This allows you to automatically keep your network documentation up to date with every change.
+	•	Ansible can run playbooks that directly use NetBox data (for example, for automatically configuring switches, firewalls, and VMs).
+Monitoring, Logging & SIEM
+	•	Zabbix / Icinga / Netdata (monitoring) can send alerts and metrics to Graylog, SigNoz, or an ELK stack for centralized logging and SIEM functionality.
+	•	Graylog and ELK can collect logs from firewalls (such as OPNsense), IDS/IPS systems (Snort, Suricata), and application servers for centralized analysis and alerting.
+	•	Suricata and Snort (IDS/IPS) send their alerts directly to SIEM platforms like Graylog or ELK, giving you a single central place for incident detection and analysis.
+Security, IAM & Secrets Management
+	•	Keycloak / Authelia (IAM) provide Single Sign-On (SSO) for web applications such as Nextcloud, OpenWebUI, Supabase, and monitoring dashboards.
+	•	Bitwarden / Vault (secrets management) can be integrated with Ansible for secure storage of credentials and API keys, so these are never in plain text in scripts or configs.
+	•	OpenVAS and Lynis (vulnerability scanning) can send reports directly to Graylog or ELK for centralized storage and follow-up.
+Network Security & Access Control
+	•	OPNsense acts as a central firewall, can directly integrate with IDS/IPS (Suricata, Snort), and logging tools (Graylog, ELK).
+	•	FreeRADIUS / PacketFence (NAC) can automatically assign VLANs based on user/device profiles, with logging to Graylog or SIEM.
+	•	Suricata can run as a plugin on OPNsense, so you have IDS/IPS functionality directly on your firewall.
+Backup, Restore & Storage
+	•	Proxmox Backup Server automates backups of VMs and containers, and can report to monitoring/logging (Zabbix, Graylog).
+	•	rclone can be used for offsite backups, with logging to Graylog for audit trails.
+Other Integrations
+	•	Wireshark and Nmap can be used for troubleshooting and periodic network checks, with results stored in Graylog or ELK for forensic analysis.
+	•	systemd / Monit can automatically restart critical services and send alerts to monitoring or SIEM platforms.
+Summary
+	•	Central logging/SIEM (Graylog, ELK, SigNoz) is the linchpin for integration: all tools send their logs and alerts here.
+	•	Provisioning/automation (Ansible, OpenTofu) works together with asset management (NetBox) and secrets management (Vault/Bitwarden).
+	•	Security (IDS/IPS, vulnerability scanning, IAM) is intertwined with monitoring, logging, and automation.
+	•	Network security (OPNsense, NAC) connects policies, segmentation, and detection.
+Result: One cohesive, scalable, secure, and well-manageable network, where all tools reinforce each other and information is centrally available.
+
+
+
+
+
+
+To further optimize your VLAN and tooling matrix for scalability, you can apply the strategies below. These are based on industry best practices, recent experiences from the Tweakers community, and insights from the referenced sources.
+1. Use Layer 3 Switching and ACLs
+	•	Why: Layer 3 switching allows you to route traffic between VLANs without bottlenecks and with better performance than a central router. You can set Access Control Lists (ACLs) per VLAN for precise access control.
+	•	How: Use managed switches with Layer 3 functionality. Document and manage ACLs centrally, for example in NetBox or via Ansible scripts.
+2. Standardize VLAN and Subnet Structure
+	•	Why: A consistent setup with clear VLAN IDs, subnets, and naming conventions makes growth easier and prevents confusion during expansion or troubleshooting.
+	•	How: Establish naming conventions in your matrix and document them in a central tool like NetBox.
+3. Implement Dynamic VLAN Assignment (NAC/802.1X)
+	•	Why: With Network Access Control (NAC), you can automatically assign devices to the correct VLAN based on type, user, or policy. This increases flexibility and scalability for growing networks.
+	•	How: Use FreeRADIUS or PacketFence and link them to your IAM system.
+4. Automate Provisioning and Management
+	•	Why: By using Ansible, OpenTofu, and Git for provisioning and configuration management, you can quickly roll out new VLANs or segments and adjust existing ones without manual work or errors.
+	•	How: Create playbooks and templates for VLAN configuration, firewall rules, and monitoring. Link these to your NetBox inventory.
+5. Centralize Monitoring and Logging
+	•	Why: Centralizing all logs and monitoring data (for example in Graylog, ELK, or SigNoz) allows you to scale the network easily without losing oversight.
+	•	How: Have all switches, firewalls, and servers log to a central platform, and automate the addition of new sources.
+6. Make Segments Modular and Reusable
+	•	Why: By treating segments (e.g., IoT, Guest, Workstation) as “building blocks,” you can easily copy or expand segments as the network grows, without having to redesign everything.
+	•	How: Standardize policies, tools, and integrations per segment type in your matrix.
+7. Document Everything Centrally and Keep It Up-to-Date
+	•	Why: Good, central documentation (like with NetBox) prevents mistakes during expansion and makes it easy to onboard new administrators.
+	•	How: Automate updates to your inventory and matrix with every change via scripts or integrations with your provisioning tools.
+8. Implement Trunking and Tagging Best Practices
+	•	Why: Trunk ports and correct VLAN tagging are essential for scaling multiple VLANs across your network without errors or security leaks.
+	•	How: Use standardized trunk profiles on your switches and automate their management with Ansible or Unifi profiles.
+9. Plan for Redundancy and Failover
+	•	Why: Scalability also means availability. Redundant uplinks, switches, and firewalls prevent single points of failure.
+	•	How: Design your matrix with dual connections and automatic failover, and document this as a standard.
+10. Evaluate and Update Regularly
+	•	Why: Networks grow and change. Regular reviews of your matrix and tooling prevent technical debt and bottlenecks.
+	•	How: Schedule semi-annual audits and updates of your matrix with your team.
+Example of Scalable Matrix Adjustments
+	•	Add columns for “VLAN-ID,” “Subnet,” “Trunk Profile,” “ACL Policy,” “Redundancy,” and “Automation Status.”
+	•	Create a template per segment for new VLANs (for example: every new project gets its own ‘workstation’, ‘IoT’, and ‘storage’ VLAN with standard policies and tools).
+	•	Document per tool how it integrates with other segments and tooling.
+Summary:
+Make your matrix scalable by standardizing, automating, centralizing, and working modularly. Use tools like NetBox, Ansible, FreeRADIUS, Graylog, and Layer 3 switches. Document everything and evaluate regularly for ongoing growth and ease of management.
+
+
+
+
+
+VLAN Architecture & Tooling Matrix
+This matrix is designed for scalability, automation, and easy management. Each segment is modular, with clear policies, tooling, and integration points. Use this matrix as a blueprint for your network documentation and as a foundation for further growth.
+Result & Recommendations
+	•	Modular design: Each VLAN segment is a building block, easy to expand or copy.
+	•	Standardization: Naming, subnets, policies, and tooling are uniform, simplifying management and troubleshooting.
+	•	Automation: By specifying automation status and tooling, you instantly see where you can accelerate or improve.
+	•	Central documentation: Everything is up-to-date and centrally documented, making growth, management, and audits easier.
+	•	Scalability: With Layer 3 switching, trunk profiles, central logging, and dynamic VLAN assignment, the network is ready for growth without redesign.
+
+
+
+Example: Scalable VLAN Architecture & Tooling Matrix
+
+| VLAN-ID | Segment        | Subnet         | Trunk Profile | Purpose of Segment        | Design Principles         | Key Users                | Must Have Tools                  | Should Have Tools             | Could Have Tools             | ACL Policy / VACL    | Redundancy | Automation Status    | Integration & Automation (Tool)      |
+|---------|---------------|----------------|---------------|--------------------------|--------------------------|--------------------------|----------------------------------|-------------------------------|------------------------------|----------------------|------------|---------------------|---------------------------------------|
+| 10      | Management    | 10.0.10.0/24   | Trunk-1       | Central management       | Least privilege, logging | Administrators           | Proxmox VE<br>OPNsense<br>Ansible | NetBox<br>Zabbix<br>Keycloak  | OpenVAS<br>Monit             | Strict, deny-all     | Yes        | Fully automated      | NetBox + Ansible + Graylog           |
+| 20      | DMZ           | 10.0.20.0/24   | Trunk-1       | External exposure        | Segregation, firewall    | External, admins         | Nginx<br>Caddy                   | Pangolin                      | Suricata                     | PVLAN + VACL         | Yes        | Partially automated  | OPNsense + Suricata + Graylog        |
+| 30      | Prod-Servers  | 10.0.30.0/24   | Trunk-2       | Production applications  | Isolation, monitoring    | Users, admins            | Nextcloud<br>Postgres            | n8n<br>Supabase<br>OpenWebUI  | Ollama                       | Restrictive ACL       | Yes        | Fully automated      | Ansible + Graylog + Monit            |
+| 40      | Prod-Storage  | 10.0.40.0/24   | Trunk-2       | Production storage       | Encryption, backup       | Servers, admins          | TrueNAS                          | OpenMediaVault                | rclone                       | Restrictive ACL       | Yes        | Fully automated      | TrueNAS + Proxmox Backup Server      |
+| 50      | Workstations  | 10.0.50.0/24   | Trunk-3       | Workstations             | Segregation, NAC         | Employees                | –                                | FreeRADIUS                    | PacketFence                   | Restrictive ACL       | Yes        | Fully automated      | FreeRADIUS + NetBox                  |
+| 60      | IoT           | 10.0.60.0/24   | Trunk-4       | IoT isolation            | Minimal rights           | IoT devices, admins      | –                                | Zeek                          | Suricata                      | Restrictive ACL       | Yes        | Partially automated  | Zeek + Graylog                       |
+| 70      | Guest         | 10.0.70.0/24   | Trunk-4       | Guest access             | Guest isolation          | Guests                   | –                                | OpenWRT                       | pfSense captive portal         | Restrictive ACL       | Yes        | Fully automated      | OpenWRT + Graylog                    |
+
+
+Explanation
+	•	Adding new segments: Copy a row, adjust VLAN-ID, subnet, users, and tools. Policies and automation are directly applicable.
+	•	Trunk profiles: Standardize which VLANs traverse which uplinks for easier management and troubleshooting.
+	•	Redundancy: Indicate whether segments have redundant (dual) uplinks or switches.
+	•	Automation status: Track whether provisioning, monitoring, and logging are fully automated.
+	•	Integration & Automation: Specify the main integrations per segment (e.g., NetBox for inventory, Ansible for provisioning, Graylog for logging).
