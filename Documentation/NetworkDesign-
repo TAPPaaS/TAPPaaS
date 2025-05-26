@@ -1,223 +1,205 @@
-# VLAN Architecture & Tooling Matrix
+# Enterprise-Grade VLAN Network Design: Review & Recommendations
 
 _Last updated: 2025-05-26_
 
 ---
 
-## 1. Visual Overview
+## Table of Contents
 
-### Simple Network Topology
+1. [Executive Summary](#1-executive-summary)
+2. [Network Topology Diagram](#2-network-topology-diagram)
+3. [VLAN Matrix & Numbering Rationale](#3-vlan-matrix--numbering-rationale)
+4. [Design Rationale & Examples](#4-design-rationale--examples)
+5. [Alternative Options & Rationale](#5-alternative-options--rationale)
+6. [Change Management & Self-Healing](#6-change-management--self-healing)
+7. [Subnetting Rationale: 10.0.x.x vs 192.168.x.x](#7-subnetting-rationale-100xx-vs-192168xx)
+8. [Security & Best Practices](#8-security--best-practices)
+9. [Glossary](#9-glossary)
+10. [Key Takeaways](#10-key-takeaways)
 
+---
 
-graph TDInternet –> FirewallFirewall –> SwitchSwitch –> ManagementSwitch –> DMZSwitch –> ProdServersSwitch –> ProdStorageSwitch –> WorkstationsSwitch –> IoTSwitch –> Guest
+## 1. Executive Summary
 
+| Segment         | Recommended VLAN | Subnet         | Rationale                                                                                       | Alternatives (see below)        |
+|-----------------|-----------------|----------------|-------------------------------------------------------------------------------------------------|---------------------------------|
+| Native/Bootstrap| VLAN 99         | 10.0.99.0/24   | Native VLAN for trunking, bootstrap, and initial setup.                                         | N/A                             |
+| Management      | VLAN 10         | 10.0.10.0/24   | Isolate admin tools, HA with UniFi, least privilege, easy monitoring                             | Dual-homed HA, Server VLAN      |
+| DMZ             | VLAN 20         | 10.0.20.0/24   | Expose only necessary services, strong firewalling                                              | N/A                             |
+| Prod-Servers    | VLAN 30         | 10.0.30.0/24   | Segregate user-facing apps, restrict access                                                     | N/A                             |
+| Prod-Storage    | VLAN 40         | 10.0.40.0/24   | Protect storage, enable backup, restrict access                                                 | N/A                             |
+| Workstations    | VLAN 50         | 10.0.50.0/24   | User devices, enforce NAC, restrict lateral movement                                            | N/A                             |
+| IoT/Media       | VLAN 60         | 10.0.60.0/24   | Isolate untrusted IoT, media, and set-top boxes; allow only required access                     | Separate Media VLAN (see below) |
+| Guest           | VLAN 70         | 10.0.70.0/24   | Internet-only, strong isolation                                                                 | N/A                             |
+| Camera (CCTV)   | VLAN 80         | 10.0.80.0/24   | Isolate cameras/NVR, allow only management and storage access                                   | N/A                             |
+| Voice (VoIP)    | VLAN 90         | 10.0.90.0/24   | Dedicated for phones/PBX, enable QoS, restrict to call control                                 | N/A                             |
 
+---
+
+## 2. Network Topology Diagram
+
+graph TDInternet –> FirewallFirewall –> SwitchSwitch –> NativeSwitch –> ManagementSwitch –> DMZSwitch –> ProdServersSwitch –> ProdStorageSwitch –> WorkstationsSwitch –> IoTMediaSwitch –> GuestSwitch –> CameraSwitch –> Voice
+
+Native["VLAN 99<br>Native/Bootstrap"]
 Management["VLAN 10<br>Management"]
 DMZ["VLAN 20<br>DMZ"]
 ProdServers["VLAN 30<br>Prod-Servers"]
 ProdStorage["VLAN 40<br>Prod-Storage"]
 Workstations["VLAN 50<br>Workstations"]
-IoT["VLAN 60<br>IoT"]
+IoTMedia["VLAN 60<br>IoT/Media"]
 Guest["VLAN 70<br>Guest"]
+Camera["VLAN 80<br>Camera"]
+Voice["VLAN 90<br>Voice"]
 
---
 
-*Tip: Use [Mermaid Preview](https://marketplace.visualstudio.com/items?itemName=vstirbu.vscode-mermaid-preview) in VS Code to view this diagram. Or use [draw.io](https://draw.io) for more advanced visuals.*
+## 3. VLAN Matrix & Numbering Rationale
 
----
-## 2. VLAN Matrix
+### VLAN Numbering Best Practices
 
-### Column Explanations
-
-- **VLAN-ID:** Unique number for each VLAN.
-- **Segment:** Name or role of the VLAN.
-- **Subnet:** IP address range for the VLAN.
-- **Trunk Profile:** Which uplinks or switch ports carry this VLAN.
-- **Purpose:** What this segment is used for.
-- **Design Principles:** Key rules (e.g., least privilege, logging).
-- **Key Users:** Who uses this VLAN.
-- **Must/Should/Could Have Tools:** Tools by priority for this segment.
-- **ACL Policy / VACL:** Access control policy applied to this VLAN.
-- **Redundancy:** Indicates if failover is configured.
-- **Automation Status:** Whether setup and management are automated.
-- **Integration & Automation (Tool):** Main tools integrated for this VLAN.
-- **Notes:** Special considerations or recommendations.
+- **Do not use VLAN 1** for anything (default/native VLAN, security risk)[4].
+- **Start with a Native/Bootstrap VLAN** (e.g., VLAN 99) for initial switch/server setup and trunking[4].
+- **Use logical, incrementing numbers** for core segments, leaving gaps for future growth (e.g., 10, 20, 30, ...)[4][2].
+- **Align VLAN ID with third octet of subnet** for clarity (e.g., VLAN 30 = 10.0.30.0/24)[2][4].
+- **Group similar device types** (e.g., IoT and Media in one VLAN unless scale or risk justifies separation)[2][8].
+- **Reserve higher VLANs (e.g., 100+)** for future expansion or special projects.
 
 ### VLAN Matrix Table
 
-| VLAN-ID | Segment        | Subnet         | Trunk Profile | Purpose                | Design Principles         | Key Users                | Must Have Tools                  | Should Have Tools             | Could Have Tools             | ACL Policy / VACL    | Redundancy | Automation Status    | Integration & Automation (Tool)      | Notes                                           |
-|---------|---------------|----------------|---------------|------------------------|--------------------------|--------------------------|----------------------------------|-------------------------------|------------------------------|----------------------|------------|---------------------|---------------------------------------|-------------------------------------------------|
-| 10      | Management    | 10.0.10.0/24   | Trunk-1       | Central management     | Least privilege, logging | Administrators           | Proxmox VE, OPNsense, Ansible     | NetBox, Zabbix, Keycloak      | OpenVAS, Monit               | Strict, deny-all     | Yes        | Fully automated      | NetBox + Ansible + Graylog           | Recommended location for Home Assistant with UniFi Controller |
-| 20      | DMZ           | 10.0.20.0/24   | Trunk-1       | External exposure      | Segregation, firewall    | External, admins         | Nginx, Caddy                      | Pangolin (WAF), Suricata      | -                            | PVLAN + VACL         | Yes        | Partially automated  | OPNsense + Suricata + Graylog        |                                                 |
-| 30      | Prod-Servers  | 10.0.30.0/24   | Trunk-2       | Production apps        | Isolation, monitoring    | Users, admins            | Nextcloud, Postgres               | n8n, Supabase, OpenWebUI      | Ollama                       | Restrictive ACL       | Yes        | Fully automated      | Ansible + Graylog + Monit            | Possible location for Home Assistant if user-focused |
-| 40      | Prod-Storage  | 10.0.40.0/24   | Trunk-2       | Production storage     | Encryption, backup       | Servers, admins          | TrueNAS                           | OpenMediaVault                | rclone                       | Restrictive ACL       | Yes        | Fully automated      | TrueNAS + Proxmox Backup Server      |                                                 |
-| 50      | Workstations  | 10.0.50.0/24   | Trunk-3       | Workstations           | Segregation, NAC         | Employees                | FreeRADIUS                        | PacketFence                   | -                            | Restrictive ACL       | Yes        | Fully automated      | FreeRADIUS + NetBox                  |                                                 |
-| 60      | IoT           | 10.0.60.0/24   | Trunk-4       | IoT isolation          | Minimal rights           | IoT devices, admins      | Zeek                              | Suricata                      | -                            | Restrictive ACL       | Yes        | Partially automated  | Zeek + Graylog                       | Recommended location if HA is only for IoT automation |
-| 70      | Guest         | 10.0.70.0/24   | Trunk-4       | Guest access           | Guest isolation          | Guests                   | OpenWRT                           | pfSense captive portal        | -                            | Restrictive ACL       | Yes        | Fully automated      | OpenWRT + Graylog                    |                                                 |
-
-*Note: “-” means no tool is required or applicable.*
-
----
-
-## 3. Key Concepts & Glossary
-
-- **VLAN:** Virtual LAN, a way to segment network traffic logically.
-- **Trunk Profile:** Defines which VLANs are allowed on a switch port.
-- **PVLAN:** Private VLAN, provides additional segmentation within a VLAN.
-- **VACL:** VLAN Access Control List, controls traffic inside or between VLANs.
-- **NAC:** Network Access Control, controls which devices/users can join VLANs.
-- **Redundancy:** Multiple connections/devices to avoid single points of failure.
-- **Automation Status:** Indicates if provisioning, monitoring, and logging are automated.
+| VLAN-ID | Segment        | Subnet         | Purpose                | Key Devices                  | Notes                                                                                     |
+|---------|---------------|----------------|------------------------|------------------------------|-------------------------------------------------------------------------------------------|
+| 99      | Native        | 10.0.99.0/24   | Native/Bootstrap VLAN  | Switch/host mgmt/trunking    | Use for initial setup, trunking, and native VLAN; not for production traffic              |
+| 10      | Management    | 10.0.10.0/24   | Admin tools, HA/UniFi  | Proxmox, OPNsense, HA, NVR   | Least privilege, strict firewall, monitoring                                              |
+| 20      | DMZ           | 10.0.20.0/24   | External services      | Web servers                  | Expose only necessary services, strong firewall                                            |
+| 30      | Prod-Servers  | 10.0.30.0/24   | Production apps        | Nextcloud, n8n, Supabase     | Restrict access, monitor                                                                  |
+| 40      | Prod-Storage  | 10.0.40.0/24   | Storage/backup         | TrueNAS, backup servers      | Encryption, backup, restrict access                                                       |
+| 50      | Workstations  | 10.0.50.0/24   | User devices           | Laptops, desktops            | NAC, restrict lateral movement                                                            |
+| 60      | IoT/Media     | 10.0.60.0/24   | IoT, media, set-top    | Cameras, TV, set-top, sensors| Isolate all untrusted/consumer devices; allow only required access; see rationale below   |
+| 70      | Guest         | 10.0.70.0/24   | Guest internet         | Guest devices                | Internet-only, captive portal, no internal access                                         |
+| 80      | Camera        | 10.0.80.0/24   | CCTV                   | Cameras, NVR                 | Cameras/NVR together, allow management from Mgmt VLAN, restrict outbound                  |
+| 90      | Voice         | 10.0.90.0/24   | VoIP phones            | IP Phones, PBX               | Enable QoS, restrict to call control, secure switch ports                                 |
 
 ---
 
-## 4. Tool Priority Definitions
+## 4. Design Rationale & Examples
 
-- **Must Have:** Essential for security, reliability, and management.
-- **Should Have:** Highly recommended to improve management or scalability.
-- **Could Have:** Optional tools that add extra features or convenience.
+### 4.1 Bootstrapping and Logical Build-Up
 
----
+- **Start with Native/Bootstrap VLAN (99):**  
+  - Use for initial Proxmox install, switch management, and trunking.
+  - Move all production traffic out of VLAN 1 for security[4].
+- **Management VLAN (10):**  
+  - Isolate all admin tools, hypervisors, and network controllers.
+  - Home Assistant with UniFi Controller belongs here for security and manageability.
+- **Incrementally add**:  
+  - DMZ (20) for public services.
+  - Prod-Servers (30) for applications.
+  - Prod-Storage (40) for backups and file servers.
+  - Workstations (50) for user devices.
+  - IoT/Media (60) for all consumer, smart, and entertainment devices.
+  - Guest (70) for internet-only access.
+  - Camera (80) for CCTV/NVR, if you want extra isolation from general IoT.
+  - Voice (90) for VoIP, with QoS enabled.
 
-## 5. Integration & Automation Overview
+### 4.2 Media and IoT Placement
 
-- **NetBox:** Asset inventory; integrates with Ansible for automation.
-- **Ansible:** Automates configuration of switches, firewalls, and VMs.
-- **Graylog/ELK:** Centralizes logs and security alerts.
-- **OPNsense:** Firewall; integrates with Suricata IDS/IPS.
-- **FreeRADIUS:** Dynamic VLAN assignment via NAC.
-- **Proxmox Backup Server:** Automates VM/container backups.
-- **Monit:** Monitors and restarts critical services.
+- **Best Practice:**  
+  - Place media devices (TVs, set-top boxes, smart speakers) in the IoT VLAN[2][8].
+  - This isolates all less-trusted, consumer devices from user devices and critical infrastructure.
+  - Use mDNS/SSDP relays or firewall rules to allow casting and streaming from user VLANs if needed.
 
----
+- **When to Separate Media:**  
+  - Only if you have a large number of media devices, or if you want even stricter segmentation for high-value environments.
 
-## 6. Step-by-Step: Adding a New VLAN
+### 4.3 Example: Adding a New VLAN
 
-1. Define the VLAN’s purpose and users.
-2. Assign VLAN-ID, subnet, and trunk profile.
-3. Update documentation (NetBox and this matrix).
-4. Configure devices using Ansible or manually.
-5. Set ACLs and security policies.
-6. Integrate with monitoring and logging tools.
-7. Test connectivity, access, and logging.
-
----
-
-## 7. Example: Adding a New IoT VLAN
-
-**Scenario:** Add VLAN for new IoT devices.
-
-- **Purpose:** Isolate IoT devices.
-- **Users:** IoT devices and admins.
-- **Assign:** VLAN-ID 80, subnet 10.0.80.0/24, trunk profile Trunk-4.
-- **Document:** Add to NetBox and matrix.
-- **Configure:** Use Ansible to update switch, firewall, router.
-- **ACLs:** Restrict IoT to internet and monitoring tools.
-- **Monitoring:** Ensure Zeek and Graylog collect logs.
-- **Test:** Connect test device and verify isolation and logging.
+- **Scenario:** Add a VLAN for new IoT and media devices.
+- **Steps:**
+  1. Assign VLAN 60, subnet 10.0.60.0/24.
+  2. Configure switch ports, DHCP, and firewall rules.
+  3. Document in NetBox and diagrams.
+  4. Allow only necessary outbound/inbound access (e.g., streaming, updates).
+  5. Use relays for casting/streaming protocols as needed.
 
 ---
 
-## 8. Change Management & Auditing
+## 5. Alternative Options & Rationale
 
-- **Update Process:**  
-  - Update matrix and NetBox for any VLAN or tool changes.  
-  - Use version control (e.g., Git) for documentation and automation scripts.
+| Option                    | Security | Usability | Complexity | When to Use / Rationale                                     |
+|---------------------------|----------|-----------|------------|-------------------------------------------------------------|
+| Media in Workstations     | Low      | High      | Low        | For ease of use, low security need; not recommended for SMBs|
+| Media in IoT/Media VLAN   | High     | Medium    | Medium     | **Best for security; recommended by experts**               |
+| Separate Media VLAN       | Very High| Medium    | High       | For very large or high-value environments                   |
+| HA in IoT VLAN            | Medium   | Medium    | Medium     | Only if HA is not running management functions              |
+| Dual-homed HA             | High     | High      | High       | Advanced setups needing both management and IoT access      |
+| Camera in IoT VLAN        | Medium   | Medium    | Medium     | Only if NVR is not critical; less secure than dedicated VLAN|
 
-- **Regular Reviews:**  
-  - Schedule quarterly audits of matrix, docs, and automation.  
-  - Review security policies and ACLs.
-
----
-
-## 9. Troubleshooting Tips
-
-- **VLAN not working?**  
-  - Check VLAN allowed on trunk ports.  
-  - Verify subnet and IP addressing.  
-  - Review ACLs and VACLs.  
-  - Check automation logs.  
-  - Inspect Graylog or SIEM for errors.
-
-- **Automation failed?**  
-  - Check Ansible/NetBox logs.  
-  - Verify device configs manually.  
-  - Confirm automation credentials.
-
-- **Unexpected access?**  
-  - Audit ACLs and trunk profiles.  
-  - Check for VLAN hopping risks.
+**Rationale:**  
+- Experts and advanced home lab users (Tweakers, Cisco, Reddit) recommend isolating less-trusted devices (media, IoT, cameras) from user and management VLANs[2][4][8].
+- Use relays (mDNS/SSDP) or firewall rules to enable necessary cross-VLAN communication without sacrificing security.
 
 ---
 
-## 10. Security Checklist
+## 6. Change Management & Self-Healing
 
-- Use 802.1Q tagging for VLANs.  
-- Avoid reserved VLAN IDs (0, 1, 4095).  
-- Secure trunk ports to allow only necessary VLANs.  
-- Regularly audit ACLs and segmentation.  
-- Use redundancy for uplinks and devices.  
-- Review logs and SIEM alerts frequently.  
-- Mitigate VLAN hopping by disabling unused ports and using strong ACLs.
-
----
-
-## 11. Best Practices
-
-- Use Layer 3 switching for inter-VLAN routing.  
-- Standardize VLAN naming and numbering.  
-- Automate provisioning, monitoring, and logging.  
-- Centralize documentation and monitoring.  
-- Regularly review and update your network design.
+- **Documentation:**  
+  - Update VLAN matrix and diagrams with every change.
+  - Use version control (Git) for documentation and automation scripts.
+- **Auditing:**  
+  - Schedule quarterly reviews of VLANs, firewall rules, and logs.
+- **Self-Healing:**  
+  - Automate monitoring and alerting (e.g., Graylog, Monit).
+  - Use configuration management (Ansible, NetBox) for auto-remediation.
 
 ---
 
-## 12. Home Assistant Placement: Multi-Role Considerations
+## 7. Subnetting Rationale: 10.0.x.x vs 192.168.x.x
 
-### Challenge
-
-Home Assistant (HA) serves three roles:
-
-1. Management: Runs UniFi Controller and manages network infrastructure.  
-2. Shared Server: Provides UI and integrations for users.  
-3. IoT Integration: Discovers and controls IoT devices.
-
-**Goal:** Enterprise-grade security, reliability, and manageability with minimal complexity.
-
-### Placement Options Compared
-
-| Option                  | Description                                    | Pros                                                  | Cons                                                   | Security Considerations                               | Recommended For                                  |
-|-------------------------|------------------------------------------------|-------------------------------------------------------|--------------------------------------------------------|------------------------------------------------------|-------------------------------------------------|
-| **A. Management VLAN**  | HA in Management VLAN with UniFi Controller    | Strong isolation, direct access to infrastructure     | User & IoT access require firewall rules and relays    | Least privilege, strict firewalling                  | High-security, enterprise, management-focused   |
-| **B. Server VLAN**      | HA in Server VLAN with user-facing apps        | Easy user access                                      | Management & IoT access complex, weaker isolation       | Requires tight ACLs, risk of lateral movement        | User-centric, basic labs                         |
-| **C. IoT VLAN**         | HA in IoT VLAN with devices                      | Easiest IoT discovery                                 | Exposes management to less-trusted devices              | Not recommended for management or user access         | IoT-only automations                            |
-| **D. Dual-Homed**       | HA with interfaces in multiple VLANs            | Maximum flexibility                                  | Complex, higher risk if misconfigured                    | Requires strict host firewalling and monitoring       | Advanced/enterprise labs                         |
-
-### Recommendation
-
-**Place Home Assistant in the Management VLAN** if it hosts UniFi Controller and manages infrastructure. Use firewall rules and mDNS/SSDP relays to allow user and IoT access as needed. Consider dual-homed setups only if you have advanced skills and monitoring.
+- **10.0.x.x/24 (RFC1918, Class A)** is preferred for enterprise and scalable home lab networks:
+  - **More address space:** 10.0.0.0/8 allows for 16 million addresses, making future expansion, subnetting, and lab environments easier[2][4].
+  - **Alignment with VLAN ID:** Using 10.0.VLANID.0/24 (e.g., VLAN 20 = 10.0.20.0/24) makes documentation, troubleshooting, and automation simpler[2][4][6].
+  - **Less overlap:** 192.168.x.x is commonly used by consumer routers and ISPs, which can cause conflicts with VPNs or remote access[2][8].
+  - **Industry best practice:** Many enterprises and advanced home labs use 10.0.x.x for internal segmentation[2][4][6].
+- **192.168.x.x/24** is fine for small setups, but can lead to conflicts and less flexibility as you grow.
 
 ---
 
-## 13. References & Further Reading
+## 8. Security & Best Practices
 
-- [IEEE 802.1Q VLAN Tagging Standard](https://standards.ieee.org/ieee/802.1Q/6210/)  
-- [NetBox Documentation](https://netbox.readthedocs.io/)  
-- [Ansible Networking Guide](https://docs.ansible.com/ansible/latest/network/index.html)  
-- [OPNsense Documentation](https://docs.opnsense.org/)  
-- [Graylog Documentation](https://docs.graylog.org/)  
-- [Cisco VLAN Security Best Practices](https://www.cisco.com/c/en/us/support/docs/lan-switching/vlan/10023-3.html)  
-
----
-
-## 14. Key Takeaways
-
-- Place critical management tools in the Management VLAN.  
-- Use clear firewall rules for cross-VLAN access.  
-- Automate provisioning and monitoring for consistency.  
-- Regularly audit and update your network design.  
-- Balance security with usability, minimizing complexity.
+- Use 802.1Q tagging for all VLANs.
+- Avoid reserved VLAN IDs (0, 1, 4095)[1][4].
+- Secure trunk ports; allow only necessary VLANs.
+- Enable QoS on Voice VLAN.
+- Use redundancy for uplinks and critical devices.
+- Regularly audit ACLs and segmentation.
+- Disable unused switch ports.
+- Use strong passwords and 2FA for admin interfaces.
+- Centralize logging and monitor for anomalies.
 
 ---
 
-*End of Document*
+## 9. Glossary
+
+- **VLAN:** Virtual LAN, logical network segmentation.
+- **NVR:** Network Video Recorder.
+- **QoS:** Quality of Service, prioritizes network traffic.
+- **NAC:** Network Access Control.
+- **ACL:** Access Control List.
+- **mDNS/SSDP:** Protocols for device discovery.
+- **PBX:** Private Branch Exchange, phone system.
+- **DMZ:** Demilitarized Zone, for public-facing services.
+- **Trunk:** Switch port carrying multiple VLANs.
+- **Self-Healing:** Automated detection and correction of network issues.
+- **Bootstrap VLAN:** Temporary VLAN for initial system setup and trunking.
+
+---
+
+## 10. Key Takeaways
+
+- **Start with a Native/Bootstrap VLAN for initial setup and trunking; never use VLAN 1 for production.**
+- **Use logical, incrementing VLAN IDs and align them with subnetting for clarity and scalability.**
+- **Place all IoT, media, and set-top boxes in a single IoT/Media VLAN for strong security and simple management.**
+- **Use the 10.0.VLANID.0/24 subnet scheme for flexibility, clarity, and future growth.**
+- **Automate, document, and regularly review your network for enterprise-grade reliability and security.**
+- **Follow both enterprise and advanced home lab best practices for a robust, future-proof design.**
+
+---
