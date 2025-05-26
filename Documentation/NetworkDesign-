@@ -8,7 +8,9 @@ _Last updated: 2025-05-26_
 
 ### Simple Network Topology
 
+
 graph TDInternet –> FirewallFirewall –> SwitchSwitch –> ManagementSwitch –> DMZSwitch –> ProdServersSwitch –> ProdStorageSwitch –> WorkstationsSwitch –> IoTSwitch –> Guest
+
 
 Management["VLAN 10<br>Management"]
 DMZ["VLAN 20<br>DMZ"]
@@ -18,165 +20,204 @@ Workstations["VLAN 50<br>Workstations"]
 IoT["VLAN 60<br>IoT"]
 Guest["VLAN 70<br>Guest"]
 
+--
+
 *Tip: Use [Mermaid Preview](https://marketplace.visualstudio.com/items?itemName=vstirbu.vscode-mermaid-preview) in VS Code to view this diagram. Or use [draw.io](https://draw.io) for more advanced visuals.*
 
+---
 ## 2. VLAN Matrix
 
 ### Column Explanations
 
 - **VLAN-ID:** Unique number for each VLAN.
-- **Segment:** Name/role of the VLAN.
-- **Subnet:** IP range for the VLAN.
-- **Trunk Profile:** Which uplinks/switch ports carry this VLAN.
+- **Segment:** Name or role of the VLAN.
+- **Subnet:** IP address range for the VLAN.
+- **Trunk Profile:** Which uplinks or switch ports carry this VLAN.
 - **Purpose:** What this segment is used for.
 - **Design Principles:** Key rules (e.g., least privilege, logging).
 - **Key Users:** Who uses this VLAN.
 - **Must/Should/Could Have Tools:** Tools by priority for this segment.
-- **ACL Policy / VACL:** Main access control policy.
-- **Redundancy:** Is there failover for this segment?
-- **Automation Status:** Is setup/management automated?
-- **Integration & Automation (Tool):** Main integration(s) for this VLAN.
+- **ACL Policy / VACL:** Access control policy applied to this VLAN.
+- **Redundancy:** Indicates if failover is configured.
+- **Automation Status:** Whether setup and management are automated.
+- **Integration & Automation (Tool):** Main tools integrated for this VLAN.
+- **Notes:** Special considerations or recommendations.
 
 ### VLAN Matrix Table
 
-| VLAN-ID | Segment        | Subnet         | Trunk Profile | Purpose                | Design Principles         | Key Users                | Must Have Tools                  | Should Have Tools             | Could Have Tools             | ACL Policy / VACL    | Redundancy | Automation Status    | Integration & Automation (Tool)      |
-|---------|---------------|----------------|---------------|------------------------|--------------------------|--------------------------|----------------------------------|-------------------------------|------------------------------|----------------------|------------|---------------------|---------------------------------------|
-| 10      | Management    | 10.0.10.0/24   | Trunk-1       | Central management     | Least privilege, logging | Administrators           | Proxmox VE, OPNsense, Ansible     | NetBox, Zabbix, Keycloak      | OpenVAS, Monit               | Strict, deny-all     | Yes        | Fully automated      | NetBox + Ansible + Graylog           |
-| 20      | DMZ           | 10.0.20.0/24   | Trunk-1       | External exposure      | Segregation, firewall    | External, admins         | Nginx, Caddy                      | Pangolin (WAF), Suricata      | -                            | PVLAN + VACL         | Yes        | Partially automated  | OPNsense + Suricata + Graylog        |
-| 30      | Prod-Servers  | 10.0.30.0/24   | Trunk-2       | Production apps        | Isolation, monitoring    | Users, admins            | Nextcloud, Postgres               | n8n, Supabase, OpenWebUI      | Ollama                       | Restrictive ACL       | Yes        | Fully automated      | Ansible + Graylog + Monit            |
-| 40      | Prod-Storage  | 10.0.40.0/24   | Trunk-2       | Production storage     | Encryption, backup       | Servers, admins          | TrueNAS                           | OpenMediaVault                | rclone                       | Restrictive ACL       | Yes        | Fully automated      | TrueNAS + Proxmox Backup Server      |
-| 50      | Workstations  | 10.0.50.0/24   | Trunk-3       | Workstations           | Segregation, NAC         | Employees                | FreeRADIUS                        | PacketFence                   | -                            | Restrictive ACL       | Yes        | Fully automated      | FreeRADIUS + NetBox                  |
-| 60      | IoT           | 10.0.60.0/24   | Trunk-4       | IoT isolation          | Minimal rights           | IoT devices, admins      | Zeek                              | Suricata                      | -                            | Restrictive ACL       | Yes        | Partially automated  | Zeek + Graylog                       |
-| 70      | Guest         | 10.0.70.0/24   | Trunk-4       | Guest access           | Guest isolation          | Guests                   | OpenWRT                           | pfSense captive portal        | -                            | Restrictive ACL       | Yes        | Fully automated      | OpenWRT + Graylog                    |
+| VLAN-ID | Segment        | Subnet         | Trunk Profile | Purpose                | Design Principles         | Key Users                | Must Have Tools                  | Should Have Tools             | Could Have Tools             | ACL Policy / VACL    | Redundancy | Automation Status    | Integration & Automation (Tool)      | Notes                                           |
+|---------|---------------|----------------|---------------|------------------------|--------------------------|--------------------------|----------------------------------|-------------------------------|------------------------------|----------------------|------------|---------------------|---------------------------------------|-------------------------------------------------|
+| 10      | Management    | 10.0.10.0/24   | Trunk-1       | Central management     | Least privilege, logging | Administrators           | Proxmox VE, OPNsense, Ansible     | NetBox, Zabbix, Keycloak      | OpenVAS, Monit               | Strict, deny-all     | Yes        | Fully automated      | NetBox + Ansible + Graylog           | Recommended location for Home Assistant with UniFi Controller |
+| 20      | DMZ           | 10.0.20.0/24   | Trunk-1       | External exposure      | Segregation, firewall    | External, admins         | Nginx, Caddy                      | Pangolin (WAF), Suricata      | -                            | PVLAN + VACL         | Yes        | Partially automated  | OPNsense + Suricata + Graylog        |                                                 |
+| 30      | Prod-Servers  | 10.0.30.0/24   | Trunk-2       | Production apps        | Isolation, monitoring    | Users, admins            | Nextcloud, Postgres               | n8n, Supabase, OpenWebUI      | Ollama                       | Restrictive ACL       | Yes        | Fully automated      | Ansible + Graylog + Monit            | Possible location for Home Assistant if user-focused |
+| 40      | Prod-Storage  | 10.0.40.0/24   | Trunk-2       | Production storage     | Encryption, backup       | Servers, admins          | TrueNAS                           | OpenMediaVault                | rclone                       | Restrictive ACL       | Yes        | Fully automated      | TrueNAS + Proxmox Backup Server      |                                                 |
+| 50      | Workstations  | 10.0.50.0/24   | Trunk-3       | Workstations           | Segregation, NAC         | Employees                | FreeRADIUS                        | PacketFence                   | -                            | Restrictive ACL       | Yes        | Fully automated      | FreeRADIUS + NetBox                  |                                                 |
+| 60      | IoT           | 10.0.60.0/24   | Trunk-4       | IoT isolation          | Minimal rights           | IoT devices, admins      | Zeek                              | Suricata                      | -                            | Restrictive ACL       | Yes        | Partially automated  | Zeek + Graylog                       | Recommended location if HA is only for IoT automation |
+| 70      | Guest         | 10.0.70.0/24   | Trunk-4       | Guest access           | Guest isolation          | Guests                   | OpenWRT                           | pfSense captive portal        | -                            | Restrictive ACL       | Yes        | Fully automated      | OpenWRT + Graylog                    |                                                 |
 
-*Note: “-” means no tool is required or not applicable for this segment.*
+*Note: “-” means no tool is required or applicable.*
 
 ---
 
-## 3. Tool Priority Definitions
+## 3. Key Concepts & Glossary
+
+- **VLAN:** Virtual LAN, a way to segment network traffic logically.
+- **Trunk Profile:** Defines which VLANs are allowed on a switch port.
+- **PVLAN:** Private VLAN, provides additional segmentation within a VLAN.
+- **VACL:** VLAN Access Control List, controls traffic inside or between VLANs.
+- **NAC:** Network Access Control, controls which devices/users can join VLANs.
+- **Redundancy:** Multiple connections/devices to avoid single points of failure.
+- **Automation Status:** Indicates if provisioning, monitoring, and logging are automated.
+
+---
+
+## 4. Tool Priority Definitions
 
 - **Must Have:** Essential for security, reliability, and management.
-- **Should Have:** Highly recommended for easier management or scalability.
-- **Could Have:** Nice-to-have features, not critical.
-
----
-
-## 4. Key Concepts
-
-- **VLAN:** Virtual LAN, segments network traffic.
-- **Trunk Profile:** Which VLANs are allowed on a switch port.
-- **PVLAN:** Private VLAN, extra segmentation inside a VLAN.
-- **VACL:** VLAN Access Control List, controls traffic within/between VLANs.
-- **NAC:** Network Access Control, manages who/what can join which VLAN.
-- **Redundancy:** Multiple connections/devices to avoid single points of failure.
-- **Automation Status:** Is provisioning, monitoring, and logging automated?
+- **Should Have:** Highly recommended to improve management or scalability.
+- **Could Have:** Optional tools that add extra features or convenience.
 
 ---
 
 ## 5. Integration & Automation Overview
 
-- **NetBox:** Asset inventory, integrates with Ansible for automation.
-- **Ansible:** Automates configuration (switches, firewalls, VMs).
+- **NetBox:** Asset inventory; integrates with Ansible for automation.
+- **Ansible:** Automates configuration of switches, firewalls, and VMs.
 - **Graylog/ELK:** Centralizes logs and security alerts.
-- **OPNsense:** Firewall, integrates with Suricata (IDS/IPS).
-- **FreeRADIUS:** Assigns VLANs dynamically (NAC).
-- **Proxmox Backup Server:** Automated VM/container backups.
+- **OPNsense:** Firewall; integrates with Suricata IDS/IPS.
+- **FreeRADIUS:** Dynamic VLAN assignment via NAC.
+- **Proxmox Backup Server:** Automates VM/container backups.
 - **Monit:** Monitors and restarts critical services.
 
 ---
 
 ## 6. Step-by-Step: Adding a New VLAN
 
-1. Define purpose and users.
-2. Assign VLAN-ID, subnet, trunk profile.
-3. Update documentation (NetBox, this matrix).
-4. Configure devices (Ansible or manually).
+1. Define the VLAN’s purpose and users.
+2. Assign VLAN-ID, subnet, and trunk profile.
+3. Update documentation (NetBox and this matrix).
+4. Configure devices using Ansible or manually.
 5. Set ACLs and security policies.
-6. Integrate with monitoring/logging.
-7. Test connectivity and access.
+6. Integrate with monitoring and logging tools.
+7. Test connectivity, access, and logging.
 
 ---
 
 ## 7. Example: Adding a New IoT VLAN
 
-**Scenario:**  
-You want to add a VLAN for a new batch of IoT devices.
+**Scenario:** Add VLAN for new IoT devices.
 
-**Steps:**
-1. **Purpose:** Isolate IoT devices from the rest of the network.
-2. **Users:** Only IoT devices and admins.
-3. **Assign:** VLAN-ID 80, subnet 10.0.80.0/24, trunk profile Trunk-4.
-4. **Document:** Add to NetBox and the matrix.
-5. **Configure:** Use Ansible to update switch, firewall, and router configs.
-6. **ACLs:** Restrict access so IoT can only reach the internet and monitoring tools.
-7. **Monitoring:** Ensure Zeek and Graylog receive logs from this VLAN.
-8. **Test:** Connect a test IoT device and verify isolation and logging.
+- **Purpose:** Isolate IoT devices.
+- **Users:** IoT devices and admins.
+- **Assign:** VLAN-ID 80, subnet 10.0.80.0/24, trunk profile Trunk-4.
+- **Document:** Add to NetBox and matrix.
+- **Configure:** Use Ansible to update switch, firewall, router.
+- **ACLs:** Restrict IoT to internet and monitoring tools.
+- **Monitoring:** Ensure Zeek and Graylog collect logs.
+- **Test:** Connect test device and verify isolation and logging.
 
 ---
 
 ## 8. Change Management & Auditing
 
 - **Update Process:**  
-  - Always update this matrix and NetBox when you add, remove, or change VLANs or tools.
-  - Use version control (e.g., Git) for tracking changes to documentation and automation scripts.
+  - Update matrix and NetBox for any VLAN or tool changes.  
+  - Use version control (e.g., Git) for documentation and automation scripts.
 
 - **Regular Reviews:**  
-  - Schedule quarterly audits to check if the matrix, documentation, and automation scripts are up to date.
-  - Review security policies and access controls during each audit.
+  - Schedule quarterly audits of matrix, docs, and automation.  
+  - Review security policies and ACLs.
 
 ---
 
 ## 9. Troubleshooting Tips
 
 - **VLAN not working?**  
-  - Check if the VLAN is allowed on the trunk port.
-  - Verify correct subnet and IP addressing.
-  - Review ACLs and VACLs for accidental blocks.
-  - Ensure automation scripts ran successfully.
-  - Look for errors in Graylog or your SIEM.
+  - Check VLAN allowed on trunk ports.  
+  - Verify subnet and IP addressing.  
+  - Review ACLs and VACLs.  
+  - Check automation logs.  
+  - Inspect Graylog or SIEM for errors.
 
 - **Automation failed?**  
-  - Check Ansible/NetBox logs for errors.
-  - Manually verify device configurations.
-  - Confirm credentials and permissions for automation tools.
+  - Check Ansible/NetBox logs.  
+  - Verify device configs manually.  
+  - Confirm automation credentials.
 
 - **Unexpected access?**  
-  - Audit ACLs and trunk profiles.
-  - Look for VLAN hopping risks (see security checklist).
+  - Audit ACLs and trunk profiles.  
+  - Check for VLAN hopping risks.
 
 ---
 
 ## 10. Security Checklist
 
-- Use 802.1Q tagging for VLANs.
-- Avoid reserved VLAN IDs (0, 1, 4095).
-- Secure trunk ports (allow only needed VLANs).
-- Regularly audit ACLs and segmentation.
-- Use redundancy for uplinks/devices.
-- Review logs and SIEM alerts often.
+- Use 802.1Q tagging for VLANs.  
+- Avoid reserved VLAN IDs (0, 1, 4095).  
+- Secure trunk ports to allow only necessary VLANs.  
+- Regularly audit ACLs and segmentation.  
+- Use redundancy for uplinks and devices.  
+- Review logs and SIEM alerts frequently.  
 - Mitigate VLAN hopping by disabling unused ports and using strong ACLs.
 
 ---
 
 ## 11. Best Practices
 
-- Use Layer 3 switching for routing between VLANs.
-- Standardize naming and numbering.
-- Automate as much as possible.
-- Centralize monitoring and documentation.
-- Review and update matrix regularly.
+- Use Layer 3 switching for inter-VLAN routing.  
+- Standardize VLAN naming and numbering.  
+- Automate provisioning, monitoring, and logging.  
+- Centralize documentation and monitoring.  
+- Regularly review and update your network design.
 
 ---
 
-## 12. References & Further Reading
+## 12. Home Assistant Placement: Multi-Role Considerations
 
-- [IEEE 802.1Q VLAN Tagging Standard](https://standards.ieee.org/ieee/802.1Q/6210/)
-- [NetBox Documentation](https://netbox.readthedocs.io/)
-- [Ansible Networking Guide](https://docs.ansible.com/ansible/latest/network/index.html)
-- [OPNsense Documentation](https://docs.opnsense.org/)
-- [Graylog Documentation](https://docs.graylog.org/)
-- [Best Practices for VLAN Security (Cisco)](https://www.cisco.com/c/en/us/support/docs/lan-switching/vlan/10023-3.html)
+### Challenge
+
+Home Assistant (HA) serves three roles:
+
+1. Management: Runs UniFi Controller and manages network infrastructure.  
+2. Shared Server: Provides UI and integrations for users.  
+3. IoT Integration: Discovers and controls IoT devices.
+
+**Goal:** Enterprise-grade security, reliability, and manageability with minimal complexity.
+
+### Placement Options Compared
+
+| Option                  | Description                                    | Pros                                                  | Cons                                                   | Security Considerations                               | Recommended For                                  |
+|-------------------------|------------------------------------------------|-------------------------------------------------------|--------------------------------------------------------|------------------------------------------------------|-------------------------------------------------|
+| **A. Management VLAN**  | HA in Management VLAN with UniFi Controller    | Strong isolation, direct access to infrastructure     | User & IoT access require firewall rules and relays    | Least privilege, strict firewalling                  | High-security, enterprise, management-focused   |
+| **B. Server VLAN**      | HA in Server VLAN with user-facing apps        | Easy user access                                      | Management & IoT access complex, weaker isolation       | Requires tight ACLs, risk of lateral movement        | User-centric, basic labs                         |
+| **C. IoT VLAN**         | HA in IoT VLAN with devices                      | Easiest IoT discovery                                 | Exposes management to less-trusted devices              | Not recommended for management or user access         | IoT-only automations                            |
+| **D. Dual-Homed**       | HA with interfaces in multiple VLANs            | Maximum flexibility                                  | Complex, higher risk if misconfigured                    | Requires strict host firewalling and monitoring       | Advanced/enterprise labs                         |
+
+### Recommendation
+
+**Place Home Assistant in the Management VLAN** if it hosts UniFi Controller and manages infrastructure. Use firewall rules and mDNS/SSDP relays to allow user and IoT access as needed. Consider dual-homed setups only if you have advanced skills and monitoring.
 
 ---
 
-*End of File*
+## 13. References & Further Reading
+
+- [IEEE 802.1Q VLAN Tagging Standard](https://standards.ieee.org/ieee/802.1Q/6210/)  
+- [NetBox Documentation](https://netbox.readthedocs.io/)  
+- [Ansible Networking Guide](https://docs.ansible.com/ansible/latest/network/index.html)  
+- [OPNsense Documentation](https://docs.opnsense.org/)  
+- [Graylog Documentation](https://docs.graylog.org/)  
+- [Cisco VLAN Security Best Practices](https://www.cisco.com/c/en/us/support/docs/lan-switching/vlan/10023-3.html)  
+
+---
+
+## 14. Key Takeaways
+
+- Place critical management tools in the Management VLAN.  
+- Use clear firewall rules for cross-VLAN access.  
+- Automate provisioning and monitoring for consistency.  
+- Regularly audit and update your network design.  
+- Balance security with usability, minimizing complexity.
+
+---
+
+*End of Document*
