@@ -1,10 +1,10 @@
 # define the provider
 terraform {
-  required_version = ">= 1.9" # Or your OpenTofu version
+#  required_version = ">= 1.9" # Or your OpenTofu version
   required_providers {
     proxmox = {
-      source  = "bpg/proxmox"
-      version = "~> 0.78.0" # Or the latest version
+      source  = "telmate/proxmox"
+      version = "~> 1.0.0" # Or the latest version
     }
   }
 }
@@ -51,13 +51,13 @@ resource "proxmox_virtual_environment_vm" "OPNsense_vm" {
   }
 
   memory {
-    dedicated = 2048
-    floating  = 2048 # set equal to dedicated to enable ballooning
+    dedicated = 4096 # in MB, adjust as needed
+    floating  = 4096 # set equal to dedicated to enable ballooning
   }
 
   disk {
     datastore_id = "tank1"
-    file_id      = proxmox_virtual_environment_download_file.latest_ubuntu_22_jammy_qcow2_img.id
+    file_id      = proxmox_virtual_environment_download_file.opnsense_iso.id
     interface    = "scsi0"
   }
 
@@ -70,7 +70,9 @@ resource "proxmox_virtual_environment_vm" "OPNsense_vm" {
     type = "other"
   }
 
-  serial_device {}
+  serial_device {
+    device = "socket"
+  }
 
   virtiofs {
     mapping = "data_share"
@@ -79,10 +81,12 @@ resource "proxmox_virtual_environment_vm" "OPNsense_vm" {
   }
 }
 
-resource "proxmox_virtual_environment_download_file" "latest_ubuntu_22_jammy_qcow2_img" {
+resource "proxmox_virtual_environment_download_file" "opnsense_iso" {
   content_type = "iso"
   datastore_id = "local"
+  file_name   = "OPNsense-25.1-dvd-amd64.iso"
   node_name    = var.node_name
-  url          = "https://cloud-images.ubuntu.com/jammy/current/jammy-server-cloudimg-amd64.img"
+  url          = "https://opnsense.com/download/OPNsense-25.1-dvd-amd64.iso.bz2"
+  overwrite    = false
 }
  
