@@ -1,6 +1,22 @@
+# Open list of stuff that is outstanding
+
+note this should / will be moved to formal backlog
+
+
+- Create a global variable file containing
+  - name of node
+  - ip number ranges
+
+- change tofu to use a dedicated token instead of root token
+  - also move token to local variable file
+
+- consider startup order of VMs
+
+
 to add:
 
 - reference to LevelOneTechs
+
 - IT4Hme should have a book store: calibra
 
 describe in the "why section" : 
@@ -19,8 +35,6 @@ https://calmtech.com/book
 Consider FriFunk : https://freifunk.net/en/
 
 consider B.A.T.M.A.N. mesh network
-
-Discuss CasaOS
 
 Examples of lock in to avoid
 - Synology changed license terms to only alow synology branded Hard drives

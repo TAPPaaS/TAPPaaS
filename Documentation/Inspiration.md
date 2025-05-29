@@ -37,6 +37,9 @@ Similar in goals to Frappa. as with Frappa we see Dokku as a potential module in
 ## [QUBES OS](https://www.qubes-os.org/)
 Great securit model, on Tapaas we implement something similar (trying to get it to a zero trust model). Qubes OS is aimed at the desktop, and can be a worthy alternative to Macos or windows if you care for security (as you should)
 
+## [HEXOS](https://hexos.com/)
+There seems to be some interresing core aideas in Hexos that is overlapping with TAPaaS. Right now HexOS is still closed beta, so har to tell exactly what it will deliver, and it is unclear how much of it will be open Source and what kind of open source
+
 
 # inspirational youtubers
 
@@ -48,7 +51,8 @@ Great securit model, on Tapaas we implement something similar (trying to get it 
 * [Tech Tutorials by David](https://www.youtube.com/@TechTutorialsDavidMcKone)
 * [Digital Spaceport](www.youtube.com/@DigitalSpaceport)
 * [Home Network Guy](https://www.youtube.com/@homenetworkguy)
-* [apalrd's adventures](https://www.youtube.com/@apalrdsadventures)
+* [Apalrd's Adventures](https://www.youtube.com/@apalrdsadventures)
+* [Lawrence Systems](https://www.youtube.com/@LAWRENCESYSTEMS)
 
 
 # relevant videos to consider

@@ -1,8 +1,7 @@
 # Documentation directory for TAPaaS
 
 ## Why TAPaaS
-Start with the [Vision](./Vision.md) document, it outline the overall problem that needs to be solved
-move on to [Customer Segment](CustomerSegment.md) document. This explains for whom it is for
+Start with the [Vision](./Vision.md) document, it outline the overall problem that needs to be solve and explains who could benefit from TAPPaaS
 
 ## How 
 
