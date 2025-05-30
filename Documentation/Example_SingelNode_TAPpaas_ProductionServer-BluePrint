@@ -1,11 +1,15 @@
-# TAP-PaaS Node: Trusted, Automated, and Privacy-Respecting Single Node Design  
+# TAP-PaaS Node: Secure, Automated, Privacy-Respecting Single Node Design  
 ## For Home/SMB Office and Home Automation Workloads (2025)
 
 ---
 
 ## **Design Overview**
 
-This document consolidates all key design considerations and recommendations for deploying a robust, high-performing, and secure single-node TAP-PaaS production server. The design supports modern home/SMB office workloads and home automation, with built-in trust, automation, and privacy by design.
+This summary consolidates all key design considerations and recommendations for a robust, high-performing, and secure single-node TAP-PaaS production server. The design supports modern home/SMB office workloads and home automation, with built-in trust, automation, and privacy by design.
+
+**Key principle:**  
+The automation stack (Git, OpenTofu, Ansible) should be kept logically—and, where feasible, physically or virtually—separate from application services. This supports best practices in infrastructure-as-code (IaC), DevSecOps, and compliance.  
+*See: [Source 1](#source-1-recommendations), [Source 2](#source-2-original-document)*
 
 ---
 
@@ -32,7 +36,8 @@ This document consolidates all key design considerations and recommendations for
 | **VLAN 10**           | 10.0.10.0/24   | System management, hypervisor, network mgmt | Both         | Enterprise SSD Mirror       | 32GB / 120–240GB            | Proxmox, OPNsense, UniFi Controller, NVR         | Dedicated management VLAN and mirrored storage for OS, firewall, and network tools.                 |
 | **VLAN 15 (Access)**  | 10.0.15.0/24   | Secure remote access (VPN, overlay)       | Both            | SSD Mirror                  | 32GB / 120GB                | Pangolin, Headscale                              | Essential for secure remote/server access. Segregated for tight firewalling and monitoring.         |
 | **VLAN 20**           | 10.0.20.0/24   | DMZ/public services, IAM                  | Production      | SSD Mirror (if needed)      | 32GB / 120GB                | Keycloak, Web servers, public endpoints           | Expose only necessary services; strong firewalling and segmentation.                                |
-| **VLAN 30**           | 10.0.30.0/24   | Office suite, shared services             | Acceptance/Prod | SSD Mirror                  | 500GB / 2–4TB               | Nextcloud, OnlyOffice, SearxNG, Git, OpenTofu, Ansible, Home Assistant | Main office/collab workloads, shared services. High uptime, mirrored storage, network segmentation. |
+| **VLAN 25 (Automation)** | 10.0.25.0/24 | Automation stack (IaC/CI/CD)              | Both            | SSD Mirror                  | 32GB / 120GB                | Git, OpenTofu, Ansible                            | Dedicated segment for automation; restrict access to production and management endpoints.           |
+| **VLAN 30**           | 10.0.30.0/24   | Office suite, shared services             | Acceptance/Prod | SSD Mirror                  | 500GB / 2–4TB               | Nextcloud, OnlyOffice, SearxNG, Home Assistant    | Main office/collab workloads, shared services. High uptime, mirrored storage, network segmentation. |
 |                       |                | High-IOPS/scratch/temp VMs                | Acceptance/Prod | NVMe                        | 32GB / 500GB                | Temp VMs, fast workspace                          | NVMe for high-IOPS, non-critical, or easily restorable workloads.                                   |
 | **VLAN 40**           | 10.0.40.0/24   | Storage and backup services               | Production      | SSD Mirror, HDD             | 2–4TB (SSD), 1TB+ (HDD)     | Proxmox Backup Server, PBS Datastore, Backups, Archives | Secure, redundant backup/restore for acceptance and production.                                    |
 | **VLAN 50**           | 10.0.50.0/24   | Workstations, user devices                | Both            | N/A                         | N/A                         | Laptops, desktops                                 | User devices, access to office suite and shared services via segmented VLANs.                      |
@@ -44,40 +49,35 @@ This document consolidates all key design considerations and recommendations for
 
 ---
 
-### **Key Design Recommendations**
+## **Key Recommendations and Best Practices**
 
-#### 1. **Bootstrap and Management**
-- Start with VLAN 99 for secure, isolated setup and out-of-band management.
-- Use VLAN 10 for all system management, hypervisor, and network tools (Proxmox, OPNsense, UniFi Controller).
-- Keep all management traffic and interfaces off user, IoT, and DMZ VLANs.
+### 1. **Strict Separation for Automation Stack**
+- Place Git, OpenTofu, and Ansible in a dedicated VLAN (e.g., VLAN 25).
+- Restrict network/API access from automation runners to only what is required.
+- Store infrastructure code in a separate Git repository.
+- Use isolated CI/CD runners; firewall rules should restrict automation-to-production access.
+- All automation actions must be logged, auditable, and secrets encrypted.
 
-#### 2. **Access Control & Zero Trust**
-- Use VLAN 15 for all remote access (Pangolin, Headscale) and strictly firewall access to management, office, and automation VLANs.
-- Monitor and log all access attempts.
+### 2. **Service Segmentation**
+- Shared services (Home Assistant, SearxNG) live in VLAN 30, accessible via firewall rules.
+- Management (Proxmox, OPNsense, UniFi) is isolated in VLAN 10.
+- IAM (Keycloak) is in the DMZ (VLAN 20) with strict access controls.
+- Pangolin and Headscale (remote access) are in VLAN 15.
+- IoT/media devices are isolated in VLAN 60.
 
-#### 3. **Service Segmentation**
-- Place shared services (Home Assistant) in VLAN 30 (Office Suite) for controlled, cross-functional access.
-- Place Keycloak (IAM) in VLAN 20 (DMZ) with strict firewall rules.
-- Keep UniFi Controller and network management in VLAN 10.
-- Isolate IoT/media devices in VLAN 60.
-
-#### 4. **Storage Assignment**
-- Use mirrored SSDs (ZFS mirror) for all critical data and services.
-- Use NVMe for fast, non-critical or temporary workloads (scratch, test, CI/CD).
-- Use HDD for backups and archives.
+### 3. **Storage Assignment**
+- Mirrored SSDs (ZFS mirror) for all critical data/services.
+- NVMe for high-IOPS, non-critical, or temporary workloads.
+- HDD for backups and archives.
 - Segment storage pools for acceptance/test and production/live workloads.
 
-#### 5. **Security & Privacy**
-- Strictly segment VLANs, use strong firewalling, and monitor all access.
+### 4. **Security, Privacy, and Automation**
+- Enforce least privilege and zero-trust principles.
 - Regularly audit VLAN assignments, firewall rules, and logs.
-- Use open-source, self-hosted IAM (Keycloak) for privacy and control.
+- Use open-source IAM (Keycloak) for privacy and control.
 - Automate configuration and documentation for repeatability and auditability.
 
-#### 6. **Automation and Documentation**
-- Use automation tools (Ansible, OpenTofu, Git) for infrastructure as code, repeatable deployments, and change management.
-- Document all network, storage, and service assignments.
-
-#### 7. **Scalability & Future-Proofing**
+### 5. **Scalability & Future-Proofing**
 - Leave gaps in VLAN numbering for future expansion.
 - Use 10.0.x.x/24 subnetting for clarity and scalability.
 - Design storage and network for easy scaling as needs grow.
@@ -103,11 +103,10 @@ This document consolidates all key design considerations and recommendations for
 
 ---
 
-## **Summary Table Legend**
-- **Environment:** Acceptance = test/validation; Production = live workloads; Both = shared or always-on
-- **VLAN/Subnet:** Logical network segmentation for security and manageability
-- **Storage Pool:** Physical or virtual storage assignment (ZFS mirror, NVMe, HDD)
-- **Min/Recommended Size:** Minimum and recommended capacity for each pool or use case
+## **References**
+
+- [Source 1: Should the Automation Stack Be Kept Separate? (Design Guidance for TAP-PaaS Single Node)](https://www.sans.org/cyber-security-courses/cloud-security-architecture/)
+- [Source 2: TAP-PaaS Node: Trusted, Automated, and Privacy-Respecting Single Node Design](https://blog.jetbrains.com/phpstorm/2025/05/php-annotated-may-2025/)
 
 ---
 
