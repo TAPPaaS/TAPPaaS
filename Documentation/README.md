@@ -1,11 +1,11 @@
-# Documentation directory for TAPaaS
+# Documentation directory for TAPPaas
 
-## Why TAPaaS
-Start with the [Vision](./Vision.md) document, it outline the overall problem that needs to be solve and explains who could benefit from TAPPaaS
+## Why TAPpaas
+Start with the [Vision](./Vision.md) document, it outline the overall problem that needs to be solve and explains who could benefit from TAPpaas
 
 ## How 
 
-look at the Architecture of TAPaaS in [Architecture](Architecture.md)
+look at the Architecture of TAPpaas in [Architecture](Architecture.md)
 Follow the [Examples](Examples.md) document for possible TAPaaS deployments
 
 ## Getting started
