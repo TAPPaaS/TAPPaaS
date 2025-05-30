@@ -1,0 +1,114 @@
+# TAP-PaaS Node: Trusted, Automated, and Privacy-Respecting Single Node Design  
+## For Home/SMB Office and Home Automation Workloads (2025)
+
+---
+
+## **Design Overview**
+
+This document consolidates all key design considerations and recommendations for deploying a robust, high-performing, and secure single-node TAP-PaaS production server. The design supports modern home/SMB office workloads and home automation, with built-in trust, automation, and privacy by design.
+
+---
+
+## **Core Principles**
+
+- **Trust & Security:**  
+  Segregate networks and services using VLANs, strict firewalling, and least-privilege access.
+- **Automation:**  
+  Automate configuration, deployment, and documentation for repeatability and rapid recovery.
+- **Privacy:**  
+  Use open-source, self-hosted identity and access management (Keycloak), zero-trust access (Pangolin, Headscale), and strict segmentation of user, device, and management networks.
+- **Performance & Resilience:**  
+  Use mirrored SSDs for critical workloads, NVMe for high-IOPS tasks, and HDDs for backups. Segment acceptance and production environments.
+- **Clarity & Scalability:**  
+  Use clear VLAN numbering, 10.0.x.x/24 subnets, and leave space for future growth.
+
+---
+
+## **Unified VLAN, Storage, and Service Table**
+
+| **VLAN / Segment**    | **Subnet**     | **Role / Focus**                         | **Environment** | **Storage Pool**            | **Min/Recommended Size**     | **Key Devices / Apps**                          | **Rationale**                                                                                      |
+|-----------------------|:--------------:|:-----------------------------------------|:---------------:|:---------------------------:|:---------------------------:|:-------------------------------------------------|:---------------------------------------------------------------------------------------------------|
+| **VLAN 99**           | 10.0.99.0/24   | Bootstrap, OOB mgmt, trunking            | Both            | Enterprise SSD Mirror       | 32GB / 120–240GB            | Proxmox, Switch Mgmt, IPMI                       | Secure initial setup, trunking, and management. Isolate from production traffic.                   |
+| **VLAN 10**           | 10.0.10.0/24   | System management, hypervisor, network mgmt | Both         | Enterprise SSD Mirror       | 32GB / 120–240GB            | Proxmox, OPNsense, UniFi Controller, NVR         | Dedicated management VLAN and mirrored storage for OS, firewall, and network tools.                 |
+| **VLAN 15 (Access)**  | 10.0.15.0/24   | Secure remote access (VPN, overlay)       | Both            | SSD Mirror                  | 32GB / 120GB                | Pangolin, Headscale                              | Essential for secure remote/server access. Segregated for tight firewalling and monitoring.         |
+| **VLAN 20**           | 10.0.20.0/24   | DMZ/public services, IAM                  | Production      | SSD Mirror (if needed)      | 32GB / 120GB                | Keycloak, Web servers, public endpoints           | Expose only necessary services; strong firewalling and segmentation.                                |
+| **VLAN 30**           | 10.0.30.0/24   | Office suite, shared services             | Acceptance/Prod | SSD Mirror                  | 500GB / 2–4TB               | Nextcloud, OnlyOffice, SearxNG, Git, OpenTofu, Ansible, Home Assistant | Main office/collab workloads, shared services. High uptime, mirrored storage, network segmentation. |
+|                       |                | High-IOPS/scratch/temp VMs                | Acceptance/Prod | NVMe                        | 32GB / 500GB                | Temp VMs, fast workspace                          | NVMe for high-IOPS, non-critical, or easily restorable workloads.                                   |
+| **VLAN 40**           | 10.0.40.0/24   | Storage and backup services               | Production      | SSD Mirror, HDD             | 2–4TB (SSD), 1TB+ (HDD)     | Proxmox Backup Server, PBS Datastore, Backups, Archives | Secure, redundant backup/restore for acceptance and production.                                    |
+| **VLAN 50**           | 10.0.50.0/24   | Workstations, user devices                | Both            | N/A                         | N/A                         | Laptops, desktops                                 | User devices, access to office suite and shared services via segmented VLANs.                      |
+| **VLAN 60**           | 10.0.60.0/24   | Home automation, IoT/media devices        | Acceptance/Prod | SSD Mirror                  | 32GB / 120GB                | TVs, set-top, sensors                             | Isolated from user and management VLANs; access controlled via firewall.                           |
+|                       |                | High-IOPS/scratch/temp VMs                | Acceptance/Prod | NVMe                        | 32GB / 500GB                | Temp VMs, fast workspace                          | NVMe for high-IOPS, non-critical, or easily restorable workloads.                                   |
+| **VLAN 70**           | 10.0.70.0/24   | Guest network                             | Both            | N/A                         | N/A                         | Guest devices                                     | Internet-only, no access to internal resources.                                                    |
+| **VLAN 80**           | 10.0.80.0/24   | Camera/CCTV                               | Both            | N/A                         | N/A                         | Cameras, NVR                                      | Isolated from IoT, management access only from Mgmt VLAN.                                          |
+| **VLAN 90**           | 10.0.90.0/24   | Voice/VoIP                                | Both            | N/A                         | N/A                         | IP Phones, PBX                                    | Dedicated for VoIP, QoS enabled, secure switch ports.                                              |
+
+---
+
+### **Key Design Recommendations**
+
+#### 1. **Bootstrap and Management**
+- Start with VLAN 99 for secure, isolated setup and out-of-band management.
+- Use VLAN 10 for all system management, hypervisor, and network tools (Proxmox, OPNsense, UniFi Controller).
+- Keep all management traffic and interfaces off user, IoT, and DMZ VLANs.
+
+#### 2. **Access Control & Zero Trust**
+- Use VLAN 15 for all remote access (Pangolin, Headscale) and strictly firewall access to management, office, and automation VLANs.
+- Monitor and log all access attempts.
+
+#### 3. **Service Segmentation**
+- Place shared services (Home Assistant) in VLAN 30 (Office Suite) for controlled, cross-functional access.
+- Place Keycloak (IAM) in VLAN 20 (DMZ) with strict firewall rules.
+- Keep UniFi Controller and network management in VLAN 10.
+- Isolate IoT/media devices in VLAN 60.
+
+#### 4. **Storage Assignment**
+- Use mirrored SSDs (ZFS mirror) for all critical data and services.
+- Use NVMe for fast, non-critical or temporary workloads (scratch, test, CI/CD).
+- Use HDD for backups and archives.
+- Segment storage pools for acceptance/test and production/live workloads.
+
+#### 5. **Security & Privacy**
+- Strictly segment VLANs, use strong firewalling, and monitor all access.
+- Regularly audit VLAN assignments, firewall rules, and logs.
+- Use open-source, self-hosted IAM (Keycloak) for privacy and control.
+- Automate configuration and documentation for repeatability and auditability.
+
+#### 6. **Automation and Documentation**
+- Use automation tools (Ansible, OpenTofu, Git) for infrastructure as code, repeatable deployments, and change management.
+- Document all network, storage, and service assignments.
+
+#### 7. **Scalability & Future-Proofing**
+- Leave gaps in VLAN numbering for future expansion.
+- Use 10.0.x.x/24 subnetting for clarity and scalability.
+- Design storage and network for easy scaling as needs grow.
+
+---
+
+## **How to Use This Design**
+
+1. **Bootstrap:**  
+   - Deploy management and hypervisor tools in isolated VLANs.
+   - Configure core network segmentation and firewalling.
+2. **Acceptance/Test:**  
+   - Validate all workloads in acceptance VLANs/storage pools before moving to production.
+   - Use automation for repeatable, auditable deployments.
+3. **Production:**  
+   - Deploy office suite, automation, and DMZ services in their respective VLANs.
+   - Enforce privacy and security with IAM, zero-trust access, and strict segmentation.
+   - Use robust, redundant storage for all critical data.
+4. **Ongoing Operations:**  
+   - Use NVMe for high-IOPS or temporary workloads.
+   - Store all backups and archives on HDD.
+   - Regularly audit, monitor, and update all configurations.
+
+---
+
+## **Summary Table Legend**
+- **Environment:** Acceptance = test/validation; Production = live workloads; Both = shared or always-on
+- **VLAN/Subnet:** Logical network segmentation for security and manageability
+- **Storage Pool:** Physical or virtual storage assignment (ZFS mirror, NVMe, HDD)
+- **Min/Recommended Size:** Minimum and recommended capacity for each pool or use case
+
+---
+
+**This document is your blueprint for a trusted, automated, privacy-respecting single-node TAP-PaaS server—ready for home/SMB office and home automation workloads, with robust storage, secure network segmentation, and future-proof scalability.**
