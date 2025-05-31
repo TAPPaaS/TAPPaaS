@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 
-# Copyright (c) 2025 TAPaaS org
-# This file is part of the TAPaaS project.
-# TAPaaS is free software: you can redistribute it and/or modify
+# Copyright (c) 2025 TAPPaaS org
+# This file is part of the TAPPaaS project.
+# TAPPaaS is free software: you can redistribute it and/or modify
 # it under the terms of the Creative Commons Attribution-NonCommercial-ShareAlike 4.0 International (CC BY-NC-SA 4.0) license.
 # Author: larsrossen
 #
@@ -117,9 +117,9 @@ sudo ./install-opentofu.sh --install-method deb >/dev/null
 sudo rm -f install-opentofu.sh
 msg_ok "Done Installing OpenTofu"
 
-msg_ok "**** Congratulation TAPaaS is not bootstrapped ****"
+msg_ok "**** Congratulation TAPPaaS is not bootstrapped ****"
 msg_ok "  next step is to get firewall installed and configured"
-msg_ok "  and then install all the right TAPaaS modules"
-msg_ok "Please run: sudo TAPaaS/src/modules/install.sh opensense"
+msg_ok "  and then install all the right TAPPaaS modules"
+msg_ok "Please run: sudo TAPPaaS/src/modules/install.sh opensense"
 
 

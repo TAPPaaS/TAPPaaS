@@ -4,7 +4,7 @@
 
 # The stack
 
-TAPaaS follows a fully standard approach to with a seperation into three layers
+TAPPaaS follows a fully standard approach to with a seperation into three layers
 
 - Applicaiton layer: deployment specific with a catalogue of common applicaitons needed for many deployments
 - Platform Layer: core services needed to support the applicaiton layer

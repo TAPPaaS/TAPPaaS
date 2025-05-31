@@ -6,7 +6,7 @@ Start with the [Vision](./Vision.md) document, it outline the overall problem th
 ## How 
 
 look at the Architecture of TAPpaas in [Architecture](Architecture.md)
-Follow the [Examples](Examples.md) document for possible TAPaaS deployments
+Follow the [Examples](Examples.md) document for possible TAPPaaS deployments
 
 ## Getting started
 

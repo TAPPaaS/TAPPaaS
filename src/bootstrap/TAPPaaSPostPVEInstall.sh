@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 
-# Copyright (c) 2025 TAPaaS org
-# This file is part of the TAPaaS project.
-# TAPaaS is free software: you can redistribute it and/or modify
+# Copyright (c) 2025 TAPPaaS org
+# This file is part of the TAPPaaS project.
+# TAPPaaS is free software: you can redistribute it and/or modify
 # it under the terms of the Creative Commons Attribution-NonCommercial-ShareAlike 4.0 International (CC BY-NC-SA 4.0) license.
 # Author: larsrossen
 #
@@ -77,7 +77,7 @@ msg_ok "Found \"tank1\" zfspool"
 
 msg_info "Checking for \"tank2\" zfspool"
 if ! pvesm status -content images | grep zfspool | grep -q tank2 ; then
-  msg_ok "did not find a \"tank2\" zfspool. Some modules of TAPaaS will not work"
+  msg_ok "did not find a \"tank2\" zfspool. Some modules of TAPPaaS will not work"
 else
 msg_ok "Found \"tank2\" zfspool"
 fi
@@ -85,7 +85,7 @@ fi
 # Check it this have already been run, in which case skip all the repository and other updates
 #
 
-if ! [ -f /var/log/tapaas.step1 ]; then
+if ! [ -f /var/log/tappaas.step1 ]; then
 #
 # 
 msg_info "Correcting Proxmox VE Sources"
@@ -129,11 +129,11 @@ msg_info "Enabling high availability"
   systemctl enable -q --now corosync
 msg_ok "Enabled high availability"
 #
-echo "The TAPaaS post proxmox install script have been run" `date` >/var/log/tapaas.step1
+echo "The TAPPaaS post proxmox install script have been run" `date` >/var/log/tappaas.step1
 #
 else
-  msg_ok "The TAPaaS post proxmox install script has already been run: Only updating proxmox libraries"
-  msg_ok "If you want to run it again, please delete /var/log/tapaas.step1"
+  msg_ok "The TAPPaaS post proxmox install script has already been run: Only updating proxmox libraries"
+  msg_ok "If you want to run it again, please delete /var/log/tappaas.step1"
   msg_ok "and run the script again"
 fi
 #  

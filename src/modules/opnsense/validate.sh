@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 
-# Copyright (c) 2025 TAPaaS org
-# This file is part of the TAPaaS project.
-# TAPaaS is free software: you can redistribute it and/or modify
+# Copyright (c) 2025 TAPPaaS org
+# This file is part of the TAPPaaS project.
+# TAPPaaS is free software: you can redistribute it and/or modify
 # it under the terms of the Creative Commons Attribution-NonCommercial-ShareAlike 4.0 International (CC BY-NC-SA 4.0) license.
 # Author: larsrossen
 #

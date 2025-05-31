@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 
-# Copyright (c) 2025 TAPaaS org
-# This file is part of the TAPaaS project.
-# TAPaaS is free software: you can redistribute it and/or modify
+# Copyright (c) 2025 TAPPaaS org
+# This file is part of the TAPPaaS project.
+# TAPPaaS is free software: you can redistribute it and/or modify
 # it under the terms of the Creative Commons Attribution-NonCommercial-ShareAlike 4.0 International (CC BY-NC-SA 4.0) license.
 # Author: larsrossen
 #
@@ -167,27 +167,27 @@ function create_vm_descriptions_html() {
   TEMPLATEDESCRIPTION=$(
     cat <<EOF
 <div align='center'>
-  <a href='https://tapaas.org' target='_blank' rel='noopener noreferrer'>
-    <img src='https://www.tapaas.org/taapaas.png' alt='Logo' style='width:81px;height:112px;'/>
+  <a href='https://tappaas.org' target='_blank' rel='noopener noreferrer'>
+    <img src='https://www.tappaas.org/taapaas.png' alt='Logo' style='width:81px;height:112px;'/>
   </a>
 
-  <h2 style='font-size: 24px; margin: 20px 0;'>TAPaaS Ubuntu Template</h2>
+  <h2 style='font-size: 24px; margin: 20px 0;'>TAPPaaS Ubuntu Template</h2>
 
   <span style='margin: 0 10px;'>
     <i class="fa fa-github fa-fw" style="color: #f5f5f5;"></i>
-    <a href='https://github.com/larsrossen/tapaas' target='_blank' rel='noopener noreferrer' style='text-decoration: none; color: #00617f;'>GitHub</a>
+    <a href='https://github.com/TAPpaas/TAPpaas' target='_blank' rel='noopener noreferrer' style='text-decoration: none; color: #00617f;'>GitHub</a>
   </span>
   <span style='margin: 0 10px;'>
     <i class="fa fa-comments fa-fw" style="color: #f5f5f5;"></i>
-    <a href='https://github.com/larsrossen/tapaas/discussions' target='_blank' rel='noopener noreferrer' style='text-decoration: none; color: #00617f;'>Discussions</a>
+    <a href='https://github.com/TAPpaas/TAPpaas/discussions' target='_blank' rel='noopener noreferrer' style='text-decoration: none; color: #00617f;'>Discussions</a>
   </span>
   <span style='margin: 0 10px;'>
     <i class="fa fa-exclamation-circle fa-fw" style="color: #f5f5f5;"></i>
-    <a href='https://github.com/larsrossen/tapaas/issues' target='_blank' rel='noopener noreferrer' style='text-decoration: none; color: #00617f;'>Issues</a>
+    <a href='https://github.com/TAPpaas/TAPpaas/issues' target='_blank' rel='noopener noreferrer' style='text-decoration: none; color: #00617f;'>Issues</a>
   </span>
   <br>
   <br>
-  This is the template for the generic TAPaaS VM. It is based on Ubuntu Nobel Numbat (24.04 LTS) and includes Docker foundation tools.
+  This is the template for the generic TAPPaaS VM. It is based on Ubuntu Nobel Numbat (24.04 LTS) and includes Docker foundation tools.
 </div>
 EOF
   )
@@ -195,27 +195,27 @@ EOF
   DESCRIPTION=$(
     cat <<EOF
 <div align='center'>
-  <a href='https://tapaas.org' target='_blank' rel='noopener noreferrer'>
-    <img src='https://raw.githubusercontent.com/larsrossen/TAPaaS/Documentation/taapaas.png' alt='Logo' style='width:81px;height:112px;'/>
+  <a href='https://tappaas.org' target='_blank' rel='noopener noreferrer'>
+    <img src='https://raw.githubusercontent.com/larsrossen/TAPPaaS/Documentation/taapaas.png' alt='Logo' style='width:81px;height:112px;'/>
   </a>
 
-  <h2 style='font-size: 24px; margin: 20px 0;'>TAPaaS CICD VM</h2>
+  <h2 style='font-size: 24px; margin: 20px 0;'>TAPPaaS CICD VM</h2>
 
   <span style='margin: 0 10px;'>
     <i class="fa fa-github fa-fw" style="color: #f5f5f5;"></i>
-    <a href='https://github.com/larsrossen/tapaas' target='_blank' rel='noopener noreferrer' style='text-decoration: none; color: #00617f;'>GitHub</a>
+    <a href='https://github.com/TAPpaas/TAPpaas' target='_blank' rel='noopener noreferrer' style='text-decoration: none; color: #00617f;'>GitHub</a>
   </span>
   <span style='margin: 0 10px;'>
     <i class="fa fa-comments fa-fw" style="color: #f5f5f5;"></i>
-    <a href='https://github.com/larsrossen/tapaas/discussions' target='_blank' rel='noopener noreferrer' style='text-decoration: none; color: #00617f;'>Discussions</a>
+    <a href='https://github.com/TAPpaas/TAPpaas/discussions' target='_blank' rel='noopener noreferrer' style='text-decoration: none; color: #00617f;'>Discussions</a>
   </span>
   <span style='margin: 0 10px;'>
     <i class="fa fa-exclamation-circle fa-fw" style="color: #f5f5f5;"></i>
-    <a href='https://github.com/larsrossen/tapaas/issues' target='_blank' rel='noopener noreferrer' style='text-decoration: none; color: #00617f;'>Issues</a>
+    <a href='https://github.com/TAPpaas/TAPpaas/issues' target='_blank' rel='noopener noreferrer' style='text-decoration: none; color: #00617f;'>Issues</a>
   </span>
   <br>
   <br>
-  This is the TAPaaS CI/CD VM. It is based on the TAPaaS Docker VM template and includes Git, Ansible and Terraform. it contain the entire TAPaaS source
+  This is the TAPPaaS CI/CD VM. It is based on the TAPPaaS Docker VM template and includes Git, Ansible and Terraform. it contain the entire TAPPaaS source
 </div>
 EOF
   )
@@ -226,8 +226,8 @@ function default_settings() {
   DISK_SIZE="8G"
   TEMPLATEVMID="8000"
   VMID=$(get_valid_nextid)
-  VMNAME="tapaas-cicd"
-  TEMPLATEVMNAME="tapaas-ubuntu"
+  VMNAME="tappaas-cicd"
+  TEMPLATEVMNAME="tappaas-ubuntu"
   FORMAT=",efitype=4m"
   MACHINE=""
   DISK_CACHE=""
@@ -264,9 +264,9 @@ pushd $TEMP_DIR >/dev/null
 default_settings
 create_vm_descriptions_html
 
-echo -e "${CREATING}${BOLD}${DGN}Creating TAPaaS Template VM and TAPaaS CICD VM using the following settings:${CL}"
-echo -e "     - ${CONTAINERID}${BOLD}${DGN}TAPaaS Template VM ID: ${BGN}${TEMPLATEVMID}${CL}, Template Name: ${BGN}${TEMPLATEVMNAME}${CL}"
-echo -e "     - ${CONTAINERID}${BOLD}${DGN}TAPaaS CICD VM ID: ${BGN}${VMID}${CL}, Template Name: ${BGN}${VMNAME}${CL}"
+echo -e "${CREATING}${BOLD}${DGN}Creating TAPPaaS Template VM and TAPPaaS CICD VM using the following settings:${CL}"
+echo -e "     - ${CONTAINERID}${BOLD}${DGN}TAPPaaS Template VM ID: ${BGN}${TEMPLATEVMID}${CL}, Template Name: ${BGN}${TEMPLATEVMNAME}${CL}"
+echo -e "     - ${CONTAINERID}${BOLD}${DGN}TAPPaaS CICD VM ID: ${BGN}${VMID}${CL}, Template Name: ${BGN}${VMNAME}${CL}"
 echo -e "     - ${CONTAINERTYPE}${BOLD}${DGN}Machine Type: ${BGN}i440fx${CL}"
 echo -e "     - ${DISKSIZE}${BOLD}${DGN}Disk Size: ${BGN}${DISK_SIZE}${CL}"
 echo -e "     - ${DISKSIZE}${BOLD}${DGN}Disk Cache: ${BGN}None${CL}"
@@ -288,7 +288,7 @@ pve_check
 ssh_check
 msg_ok "Done sanity check of Proxmox PVE. Everything is OK to proceed"
 
-msg_ok "We have 5 steps to complete: 1. install VM tools 2. download Ubuntu 3. add Docker to image 4. Create a TAPaaS template. 5. Create TAPaaS CICD VM."
+msg_ok "We have 5 steps to complete: 1. install VM tools 2. download Ubuntu 3. add Docker to image 4. Create a TAPPaaS template. 5. Create TAPPaaS CICD VM."
 
 msg_info "Step 1: Installing Pre-Requisite libguestfs-tools onto Host"
 apt-get -qq update && apt-get -qq install libguestfs-tools lsb-release -y >/dev/null
@@ -309,7 +309,7 @@ virt-customize -q -a "${FILE}" --install qemu-guest-agent,apt-transport-https,ca
   virt-customize -q -a "${FILE}" --run-command "echo -n > /etc/machine-id" >/dev/null
 msg_ok "Step 3 Done: Added Docker and Docker Compose Plugin to Ubuntu Nobel Numbat (24.04 LTS) Disk Image successfully"
 
-msg_info "Step 4: Creating the TAPaaS Unbuntu with Docker VM template"
+msg_info "Step 4: Creating the TAPPaaS Unbuntu with Docker VM template"
 qm create $TEMPLATEVMID -agent 1${MACHINE} -tablet 0 -localtime 1 -bios ovmf${CPU_TYPE} -cores $CORE_COUNT -memory $RAM_SIZE \
   -name $TEMPLATEVMNAME -net0 virtio,bridge=$BRG,macaddr=$MAC$VLAN$MTU -onboot 1 -ostype l26 -scsihw virtio-scsi-pci
 pvesm alloc $STORAGE $TEMPLATEVMID $DISK0 4M 1>&/dev/null
@@ -322,34 +322,34 @@ qm set $TEMPLATEVMID \
   -serial0 socket >/dev/null
 qm resize $TEMPLATEVMID scsi0 8G >/dev/null
 qm set $TEMPLATEVMID --agent enabled=1 >/dev/null
-qm set $TEMPLATEVMID --ciuser tapaas >/dev/null
-qm set $TEMPLATEVMID --Tag TAPaaS >/dev/null
+qm set $TEMPLATEVMID --ciuser tappaas >/dev/null
+qm set $TEMPLATEVMID --Tag TAPPaaS >/dev/null
 qm set $TEMPLATEVMID --ipconfig0 ip=dhcp >/dev/null
 qm set $TEMPLATEVMID --sshkey ~/.ssh/id_rsa.pub >/dev/null
 qm set $TEMPLATEVMID -description "$TEMPLATEDESCRIPTION" >/dev/null
 qm resize $TEMPLATEVMID scsi0 ${DISK_SIZE} >/dev/null
 qm template $TEMPLATEVMID >/dev/null
-msg_ok "Step 4 Done: Created the TAPaaS Unbuntu with Docker VM template"
+msg_ok "Step 4 Done: Created the TAPPaaS Unbuntu with Docker VM template"
 
-msg_info "Step 5: Creating a TAPaaS CICD VM"
+msg_info "Step 5: Creating a TAPPaaS CICD VM"
 qm clone $TEMPLATEVMID $VMID --name $VMNAME --full 1 >/dev/null
-qm set $VMID --Tag TAPaaS,CICD >/dev/null
+qm set $VMID --Tag TAPPaaS,CICD >/dev/null
 qm set $TEMPLATEVMID -description "$DESCRIPTION" >/dev/null
 qm start $VMID >/dev/null
-msg_ok "Step 5 Done: Created a TAPaaS CICD VM" 
+msg_ok "Step 5 Done: Created a TAPPaaS CICD VM" 
 
 msg_info "Bonus Step: set up a few configurartions on PVE node to support terraform and ansible"
 apt-get install -y sudo >/dev/null
 msg_ok "Bonus Step Done: Installed sudo on PVE node"
 
 echo -e "${CREATING}${BOLD}${DGN}** Congratulation ** You are almost done bootstraping. Please do the following:${CL}"
-echo -e "${CREATING}${BOLD}${DGN} 1) Log into TAPaaS CICD VM using ssh from a host teminal: ssh tapaas@<insert ip of CICD VM>${CL}"
-echo -e "${CREATING}${BOLD}${DGN} 2) In the shell of the TAPaaS CICD VM do:${CL}:"
+echo -e "${CREATING}${BOLD}${DGN} 1) Log into TAPPaaS CICD VM using ssh from a host teminal: ssh tappaas@<insert ip of CICD VM>${CL}"
+echo -e "${CREATING}${BOLD}${DGN} 2) In the shell of the TAPPaaS CICD VM do:${CL}:"
 echo -e "${CREATING}${BOLD}${DGN}   2a) create ssh keys: ssh-keygen -t ed25519 ${CL}"
-echo -e "${CREATING}${BOLD}${DGN}   2b) add ssh keys to your github: cat ~/.ssh/id_rsa${CL} (not needed when TAPaas is public)"
-echo -e "${CREATING}${BOLD}${DGN}   2c) clone the tapaas repository: git clone git@github.com:larsrossen/TAPaaS.git${CL}"
-echo -e "${CREATING}${BOLD}${DGN}   2d) run the final bootstrap code: ./TAPaaS/src/bootstrap/TAPaaS-CICD-bootstrap.sh${CL}"
+echo -e "${CREATING}${BOLD}${DGN}   2b) add ssh keys to your github: cat ~/.ssh/id_rsa${CL} (not needed when TAPPaas is public)"
+echo -e "${CREATING}${BOLD}${DGN}   2c) clone the tappaas repository: git clone git@github.com:larsrossen/TAPPaaS.git${CL}"
+echo -e "${CREATING}${BOLD}${DGN}   2d) run the final bootstrap code: ./TAPPaaS/src/bootstrap/TAPPaaS-CICD-bootstrap.sh${CL}"
 echo -e "${CREATING}${BOLD}${DGN}   2e) set the git user name: git config --global user.name <your name> ${CL}" 
 echo -e "${CREATING}${BOLD}${DGN}   2f) set the git user email: git config --global user.email <your email> ${CL}"
-echo -e "${CREATING}${BOLD}${DGN} You might want to cunsult the bootstrap information in TAPaaS/Documentation/Bootstrap.md${CL}"
+echo -e "${CREATING}${BOLD}${DGN} You might want to cunsult the bootstrap information in TAPPaaS/Documentation/Bootstrap.md${CL}"
 

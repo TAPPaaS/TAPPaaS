@@ -30,4 +30,4 @@ EOF
 ssh ubuntu@$VMIP sudo systemctl enable gitea --now
 sleep 2
 # Now to the inital registration
-# curl -H "Content-type: application/x-www-form-urlencoded" -d "db_type=SQLite3" -d "db_path=/var/lib/gitea/data/gitea.db" -d "app_name=\"Local TAPaaS Git Repository\"" -d "repo_root_path=/var/lib/gitea/data/git-repositories" -d "lfs_root_path=/var/liv/gitea/data/lfs" -d "run_user=git" -d "domain=192.168.14.57" -d "ssh_port=22" -d "http_port=3000" -d "app_url=http://192.158.14.57:3000/" -d "log_root_path=/var/lib/gitea/log" -d "default_allow_create_organization=on"  -X POST  http://192.168.14.57:3000/
+# curl -H "Content-type: application/x-www-form-urlencoded" -d "db_type=SQLite3" -d "db_path=/var/lib/gitea/data/gitea.db" -d "app_name=\"Local TAPPaaS Git Repository\"" -d "repo_root_path=/var/lib/gitea/data/git-repositories" -d "lfs_root_path=/var/liv/gitea/data/lfs" -d "run_user=git" -d "domain=192.168.14.57" -d "ssh_port=22" -d "http_port=3000" -d "app_url=http://192.158.14.57:3000/" -d "log_root_path=/var/lib/gitea/log" -d "default_allow_create_organization=on"  -X POST  http://192.168.14.57:3000/

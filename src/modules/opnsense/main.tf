@@ -26,8 +26,8 @@ provider "proxmox" {
 
 resource "proxmox_virtual_environment_vm" "OPNsense_vm" {
   name        = "OPNsense"
-  description = "TAPaaS OPNsense firewall VM, Managed by Terraform"
-  tags        = ["terraform", "tapaas", "opnsense"]
+  description = "TAPPaaS OPNsense firewall VM, Managed by Terraform"
+  tags        = ["terraform", "tappaas", "opnsense"]
 
   node_name = var.node_name
   vm_id     = 666

@@ -1,4 +1,4 @@
-This is a summary of key Proxmox VE Installer parameters for TAPaaS production node
+This is a summary of key Proxmox VE Installer parameters for TAPPaaS production node
 
 Target Harddisk
     Select options

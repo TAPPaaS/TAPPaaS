@@ -1,4 +1,4 @@
-# Example TAPaaS deployments
+# Example TAPPaaS deployments
 
 The followng give examples of more concrete use cases and the associated hardware suitalbe for this deployment
 

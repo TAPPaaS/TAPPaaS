@@ -1,8 +1,8 @@
-# These are the steps to get a minimal TAPaaS system up and running.
+# These are the steps to get a minimal TAPPaaS system up and running.
 
 ## Prerequsite
 
-1. An internet connection and a wired acces point for the TAPaaS server
+1. An internet connection and a wired acces point for the TAPPaaS server
 2. A fully qualified name (FQN) of the first proxmox server
   - preferably the domain name of the FQN should be owned by you like "mydomain.org" 
   - preferably you have DNS set up for the domain and you have a public IPv4 adress for setup
@@ -36,7 +36,7 @@ See Example.md for proposals
 - run the TAPaaSPostPVEInstall.sh script in the proxmox node
 ```
 GITTOKEN=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
-curl -fsSL -H "Authorization: token $GITTOKEN" https://raw.githubusercontent.com/larsrossen/TAPaaS/refs/heads/main/src/bootstrap/TAPaaSPostPVEInstall.sh | bash
+curl -fsSL -H "Authorization: token $GITTOKEN" https://raw.githubusercontent.com/TAPpaas/TAPpaas/refs/heads/main/src/bootstrap/TAPaaSPostPVEInstall.sh | bash
 ```
 (note the -H token stuff is only needed as long as the script is in a private repository, the togen gives read access)
 
@@ -44,26 +44,26 @@ curl -fsSL -H "Authorization: token $GITTOKEN" https://raw.githubusercontent.com
 - run the TAPaaSBootstrap script from the root console
 ```
 GITTOKEN=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
-curl -fsSL -H "Authorization:token $GITTOKEN https>//raw/githubusercontent.com/larsrossen/TAPaaS/refs/heads/main/src/bootstrap/TAPaaSBootstrap.sh | bash
+curl -fsSL -H "Authorization:token $GITTOKEN https>//raw/githubusercontent.com/TAPpaas/TAPpaas/refs/heads/main/src/bootstrap/TAPaaSBootstrap.sh | bash
 ```
-You should now have a PVE node with a TAPaaS template and a TAPaaS CICD VM
+You should now have a PVE node with a TAPPaaS template and a TAPPaaS CICD VM
 
-## TAPaaS CICD bootstrap
+## TAPPaaS CICD bootstrap
 
-Setting up the CICD toolchain and git repository. This is done in the TAPaaS-CICD VM
+Setting up the CICD toolchain and git repository. This is done in the TAPPaaS-CICD VM
 
 The only way to access the VM is through ssh from the proxmox node console.
 
-You need the IP of the VM: look it up in the summary of the TAPaaS CICD VM in the proxmox gui
+You need the IP of the VM: look it up in the summary of the TAPPaaS CICD VM in the proxmox gui
 
 Now Do:
 
-- Log into TAPaaS CICD VM using ssh from a host teminal: ssh tapaas@<insert ip of CICD VM>
-- In the shell of the TAPaaS CICD VM do:
+- Log into TAPPaaS CICD VM using ssh from a host teminal: ssh tappaas@<insert ip of CICD VM>
+- In the shell of the TAPPaaS CICD VM do:
   - create ssh keys: ssh-keygen -t ed25519
-  - add ssh keys to your github: copy and paste the output of cat ~/.ssh/id_ed25519.pub (not needed when TAPaas is public)
-  - clone the tapaas repository: git clone git@github.com:larsrossen/TAPaaS.git
-  - run the final bootstrap code: ./TAPaaS/src/bootstrap/TAPaaS-CICD-bootstrap.sh
+  - add ssh keys to your github: copy and paste the output of cat ~/.ssh/id_ed25519.pub (not needed when TAPPaas is public)
+  - clone the TAPpaas repository: git clone git@github.com:TAPpaas/TAPpaas.git
+  - run the final bootstrap code: ./TAPpaas/src/bootstrap/TAPpaas-CICD-bootstrap.sh
   - set the git user name: git config --global user.name <your name> 
   - set the git user email: git config --global user.email <your email>
 
@@ -75,18 +75,18 @@ Set up a coding environment connected to the CICD
 - Install the Visual Code Remote Development extension pack (search in VC and install in VC)
 - ensure you ahve ssh installed on your development machine and you have keys generated
 - upload keys to the tapas@tapas-cicd VM users, authorized keys.
-- test that you can ssh into tapaas@tapaas-cicd from the development machine
+- test that you can ssh into tappaas@tappaas-cicd from the development machine
 you can now connect to the CICD VM using the connection buttom in the lower left corner of VC
 
 Next you need to set up tokens for Opentofu (terraform)
-- in proxmox menu: Datacenter->Permision->API tokens: add a token with id: tapaas-token associated with root@pam
+- in proxmox menu: Datacenter->Permision->API tokens: add a token with id: tappaas-token associated with root@pam
   - make sure the "Privilege Seperation" is unchecked (or do setup/add needed permission for terraform )
-- copy the token and write it into a file : cat >.ssh/tapaas-token
-- make the file read/write for owner only: chmod 600 .ssh/tapaas-token
+- copy the token and write it into a file : cat >.ssh/tappaas-token
+- make the file read/write for owner only: chmod 600 .ssh/tappaas-token
 
 
 ## Firewall and network setup
 
-## Define your TAPaaS
+## Define your TAPPaaS
 
 ## Run the updater
