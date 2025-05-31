@@ -2,7 +2,7 @@
 
 ## Introduction
 
-Hardware is going to be controversial and constantly it will be outdated. But let us nail down some boundary conditions, that hopefully can be a bit more stable and be the defining frame for actual selections.
+Hardware is going to be controversial and constantly it will be outdated. But let us nail down some boundary conditions, that hopefully can be a bit more stable and be the defining frame for actual selections. see [Examples](../Examples/README.md) for concrete examples.
 
 The general design principles is that most of IT4HOME should be delivered as an appliance. think something like a Fritzbox <https://en.avm.de/products/fritzbox/> or the Unify Dream machine <https://store.ui.com/us/en/collections/unifi-dream-machine/products/udm-pro>
 

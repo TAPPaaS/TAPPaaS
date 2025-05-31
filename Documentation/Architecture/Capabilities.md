@@ -1,20 +1,29 @@
-The IT setup for a Home must deliver a range of capabilities., which we will structure at a high level here. Note Capabilities describe the "What" part of the IT4HOME project.  It is NOT describing "How" to deliver this, and there will likely not be an one to one mapping from capabilities to applications or systems that will make up the solutions.
+# A Capability Model for TAPPaaS
 
+## Introduction
+
+TAPPaaS is designed both top down and bottom up. Top down we looked at the capabilities needed to adress the needs described in the [Vision](../Vision.md). THe bottom up have been looking at real software and real implementations to determine what is possible and what makes sense
+
+Here we are trying to bring this together in a structured manner. This is a description of WHAT we wnat TAPPaaS to deliver. The HOW to deliver it is in the [SoftwareStack](TheSoftwareStack.md)
+
+## TAPPaaS high level structure
+
+As with most complex IT solutions you can divide the capabilites of the solution into some dependen sub system.
 At the very high level we structure the capabilities into the following groups
 
 ```mermaid
 classDiagram
-  IT4HOME *-- Security
-  IT4HOME *-- Functions
-  IT4HOME *-- Management
+  TAPPaaS *-- Security
+  TAPPaaS *-- Business Functions
+  TAPPaaS *-- Management
 	Security ..> Foundation
-	Functions ..> Foundation
+	Business Functions ..> Foundation
   Management ..> Foundation
 ```
 
 In the following we decompose the high level capabilities
 
-## Functions
+## Busines Functions
 
 Functions is what this is all about: providing functions to the members of your home. all the other parts like foundation, Management and Security is just there to ensure that you can get the IT you need working in a stable, scalable, secure and maintainable way
 
@@ -51,9 +60,6 @@ So the functions we are aiming at:
 - Virtual Assistant
 - eBook bookshelf
 
-#### Community related
-
-See [IT4Community](/IT4Community/Readme.md)
 
 ## Security
 
