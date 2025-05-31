@@ -1,4 +1,13 @@
-He following is the list of major software that can be used to implement the IT4Home. each comes with a description of alternatives, and makes references to what Capabilities it delivers
+# TAPPaaS Software stack
+
+This is the reason we call it TAPPaaS. Pronounced Tapas like the Spanish dish: A collection of delicious appetizers that makes up a comprehensive serving.
+
+The Software Stack of TAPPaaS delivers the capabilities we believe is needed for a well served Private IT Platform.
+
+| Capability | Mandatory | Software | Comments |
+| :--------- | :-------: | :------- | : ------ |
+| Compute    | Yes  | Proxmox | provide exce;ent compute cluster capability
+
 
 # Foundation
 
