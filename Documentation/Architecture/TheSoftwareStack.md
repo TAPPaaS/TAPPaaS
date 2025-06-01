@@ -21,7 +21,7 @@ Let us get foundation out of the way first. Everything is runnning on top of the
 | Compute    | Mandatory  | Proxmox | provide exce;ent compute cluster capability |
 | Storage    | Mandatory  | Proxmox-ZFS | ZFS gives a lot of flexability. and is build into proxmox, making it well alligned with Cluster management |
 | Connectivity | Mandatory | OPNsense | Virtualized and combined with a layer 3 switch and proxmox bridging and vlan support |
-
+| User Mgmt. | Mandatory | ?? | | 
 
 ### Base Cloud Infrastructure platform: Proxmox
 
@@ -59,30 +59,49 @@ The alternative to Proxmox ZFS is FreeeNAS, but we consider the benefits compare
 | Capability | Priority | Software | Comments |
 |------------|-----------|----------|----------|
 | email | High | PostIT | Very difficult to run autonomously, maintance is high|
-|||||
-|||||
-|||||
+| Adress book | High | NextCloud | need to be integrated into many other applications |
+| Calendering | High | NextCloud | |
+| Note Taking | Medium | ?? | Could simply be files in Nextcloud, but need to be investigated |
+| Photos | High | NextCloud with Memories module ||
+| Music | High | Jellyfin | |
+| Video | High | Jellyfin| |
+| Podcasts | medium | ?? | |
+| Document | high | NextCloud | |
+| Virtual Assistant | medium | ?? | |
+| Bookshelf | low | CAlibra?? | |
 
 ## Small Community
 
 | Capability | Priority | Software | Comments |
 |------------|-----------|----------|----------|
-|||||
-|||||
+| WiFi Rooming | medium | R.O.B.I.N. ?? | |
+| Internet Sharing | High | OPNsense | |
+| Public Bookshelf | Medium | Calibra, wikipedia hosting, ... ?? | |
+| Comunity Social | High | Mastedont | |
+| Video Conferencing | low | ?? | |
 
 ## SMB
 
 | Capability | Priority | Software | Comments |
 |------------|-----------|----------|----------|
-|||||
-|||||
+| Email | High | | | 
+| Corporate website | High | | |
+| ERP System | Medium |||
+| Office Wifi | Medium | | |
+| Corporate VPN | High | TailScale/HeadScale | |
+| Video Conferencing | Medium | ?? | |
+| Chat | Medium | ?? | |
 
-## NGO
+## Software Development
 
 | Capability | Priority | Software | Comments |
 |------------|-----------|----------|----------|
-|||||
-|||||
+| Git | High | Gitea | |
+| CICD | High | Gitea, Terraform, Ansible | |
+| Chat | Medium | ?? | |
+| Backlog | High | ?? | |
+| Application platform | high | K3S, Garage, PostGreSQL | |
+| Reverse Proxy | High | Pangolin | |
 
 
 ### Object storage: Garage

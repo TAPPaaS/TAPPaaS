@@ -65,16 +65,16 @@ So the functions we are aiming at:
 
 #### Houshold Member Related
 
-- Email
+- Email: you want to own you emails and email adress
 - Address book
-- Calendering
-- Note taking
-- photo upload, storage and sharing
-- music library
+- Calendering: need to be sharable within home and community and externally
+- Note taking: must be sharable
+- photo upload, storage and sharing: Need to have good indexing and sharing functionality
+- music library: own your music, need to be streemable. and sharable
 - video library
 - podcast library
-- Document store
-- Virtual Assistant
+- Document store: Can be very private or shared across a user group
+- Virtual Assistant: you personal AI in a box
 - eBook bookshelf
 
 
@@ -84,9 +84,9 @@ Note a small community can start with a single home, and will contain all the fu
 
 However with a Community deployment you would want to add a few more functionalities
 
-- WiFi roming
-- Internet sharing (with redundancy)
-- Public book shelf (local hosted wikiedia, gutenberghus, ...)
+- WiFi rooming: Make it possible to move around the comunit and preserve access to same Wifi
+- Internet sharing (with redundancy): 10 households having 10 Internet connections is overkill
+- Public book shelf: Local hosted wikiedia, gutenberghus, .... Ensure access to information in case of internet outage
 - Community Social
 - Video Conferencing
 
@@ -95,15 +95,19 @@ However with a Community deployment you would want to add a few more functionali
 - Corporate email
 - Corporate web site
 - ERP system
-- Office WiFi
+- Office WiFi: Ensure there is a dedicated WiFi for SMB workers and guests
 - Corporate VPN
+- Video Conferencing
+- Chat
 
 ### Software Development
 
 - Git Repository
 - CI-CD
+- Chat
+- Backlog management
 - Application Platform
-
+- Reverse Proxy
 
 ### Small Utility
 
@@ -163,4 +167,4 @@ The Physical security can be considered a Business function.
   - Switch and Access Points
   - DHCP and DNS
   - DMZ with Reverse Proxy
-- 
+- User Management
