@@ -2,7 +2,9 @@
 
 The Automated/Application Platform as a (selfhosted) Service
 
-pronounced Tapas, and associated with tapas as a delicious dish combining a lot of smaller servinges
+Trusted - Automated - Private
+
+pronounced Tapas, and associated with tapas as a delicious dish combining a lot of smaller servinges. A community inspired initiative under motto - sharing is caring. 
 
 Goal:
 Creating a fully automated and maintaned platform that can serve
