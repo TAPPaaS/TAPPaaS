@@ -1,8 +1,6 @@
 # TAPPaaS
 
-The Automated/Application Platform as a (selfhosted) Service
-
-Trusted - Automated - Private
+Trusted - Automated - Private Platform as a (selfhosted) Service
 
 pronounced Tapas, and associated with tapas as a delicious dish combining a lot of smaller servinges. A community inspired initiative under motto - sharing is caring. 
 
