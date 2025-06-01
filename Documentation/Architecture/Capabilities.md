@@ -25,18 +25,20 @@ In the following we decompose the high level capabilities
 
 ## Busines Functions
 
-Business Functions is what this is all about: providing functions to the users of TAPPaaS. all the other parts like foundation, Management and Security is just there to ensure that you can get the IT you need working in a stable, scalable, secure, private and maintainable way.
+Business Functions is what this is all about: providing functions to the users of TAPPaaS. all the other parts like foundation, Management and Security is just there to ensure that you can get the IT you need working in a stable, scalable, integrated, secure, private and maintainable way.
 
 What Business function is essential to each deployment of TAPPaaS will differ, but we define a set of functions that TAPPaaS should support based on the typical deployment. You can configure what is relevant for you deployment.
 
+These examples of deployments are just examples, where we try and highlight the essential functionality that you need for that kind of deployment. 
+
 ```mermaid
 classDiagram
-  Business Function *-- A Home
-  Business Function *-- Small Community
-  Business Function *-- Small Business Owner
-  Business Function *-- Small SW Development Organisation
-  Business Function *-- Small Utility Company
-  Business Function *-- NGO
+  A Home ..> Business Function
+  Small Community ..> Business Function
+  Small Business Owner ..> Business Function
+  Small SW Development Organisation ..> Business Function
+  Small Utility Company ..> Business Function
+  NGO ..> Business Function
   
 ```
 
@@ -167,4 +169,3 @@ The Physical security can be considered a Business function.
   - Switch and Access Points
   - DHCP and DNS
   - DMZ with Reverse Proxy
-- User Management
