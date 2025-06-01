@@ -4,6 +4,14 @@ This is the reason we call it TAPPaaS. Pronounced Tapas like the Spanish dish: A
 
 The Software Stack of TAPPaaS delivers the capabilities we believe is needed for a well served Private IT Platform.
 
+Selectin from the enourmous pool of software we have used the principles of:
+
+1) must be Open Source
+2) must show a track record of being Secure
+3) must be "established", and sufficinet feature complete
+4) must be open w.r.t. data formats (enabeling migration away)
+
+
 ## Foundation
 
 Let us get foundation out of the way first. Everything is runnning on top of the foundation.
@@ -50,7 +58,7 @@ The alternative to Proxmox ZFS is FreeeNAS, but we consider the benefits compare
 
 | Capability | Priority | Software | Comments |
 |------------|-----------|----------|----------|
-|||||
+| email | High | PostIT | Very difficult to run autonomously, maintance is high|
 |||||
 |||||
 |||||
