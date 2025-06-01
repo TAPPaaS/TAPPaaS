@@ -4,14 +4,18 @@ This is the reason we call it TAPPaaS. Pronounced Tapas like the Spanish dish: A
 
 The Software Stack of TAPPaaS delivers the capabilities we believe is needed for a well served Private IT Platform.
 
-| Capability | Mandatory | Software | Comments |
-| :--------- | :-------: | :------- | : ------ |
-| Compute    | Yes  | Proxmox | provide exce;ent compute cluster capability
+## Foundation
+
+Let us get foundation out of the way first. Everything is runnning on top of the foundation.
+
+| Capability | Priority | Software | Comments |
+|------------|-----------|----------|----------|
+| Compute    | Mandatory  | Proxmox | provide exce;ent compute cluster capability |
+| Storage    | Mandatory  | Proxmox-ZFS | ZFS gives a lot of flexability. and is build into proxmox, making it well alligned with Cluster management |
+| Connectivity | Mandatory | OPNsense | Virtualized and combined with a layer 3 switch and proxmox bridging and vlan support |
 
 
-# Foundation
-
-## Base Cloud Infrastructure platform: Proxmox
+### Base Cloud Infrastructure platform: Proxmox
 
 This  deliver most of the Compute and Storage foundation
 
@@ -21,12 +25,57 @@ Alternatives:
   - But it also seems more "free"
 - FreeNAS, TrueNAS: good for storage, but not really a cloud platform
 
-## Persistant Storage layer
+### Persistant Storage layer
 
-### File storage, and NFS: Proxmox
+proxmox with ZFS gives: RAID, SNapshotting, Replication, NFS, iSCSI, 
+Problem with proxmox is a limitted GUI for management, and further the choice explosion zfs gives makes it hard to design a solution
+TAPPaaS will adress this with recomended setup and automation
 
-Implement a "tank1" on each node with basic redundancy and replication
-Implement a "tank2" on each node without redundancy for backups and higher level services that have own redundancy
+Note that proxmox and zfs do not give Hight Available storage. in that case we need to look into Object Storage and other distributed storage solutions.
+We do not consider this a Foundation. but something that goes in to the business layer of TAPPaaS together with a HA implementation of a relational database
+
+The alternative to Proxmox ZFS is FreeeNAS, but we consider the benefits compared to what we can do with automation in proxmox to not being worth the effort to run FreeNAS in parallel with proxmox.
+
+## Physical Home
+
+| Capability | Priority | Software | Comments |
+|------------|-----------|----------|----------|
+| Smart Lighting | High | Home Assistant | Will be the main interface to TAPpaas for a home/comunit installation |
+| Smart heating | Low | Home Asistant | |
+| Smart Sprinkler | Low | Home Asistant + OpenSprinkler | |
+| SMART AVR | Medium | ?? | This is the player system. to replace AppleTV, HEOS, etc |
+| Home Butler | Medium | HA + LLM | lots of experimentation ongoing |
+
+## Household Member
+
+| Capability | Priority | Software | Comments |
+|------------|-----------|----------|----------|
+|||||
+|||||
+|||||
+|||||
+
+## Small Community
+
+| Capability | Priority | Software | Comments |
+|------------|-----------|----------|----------|
+|||||
+|||||
+
+## SMB
+
+| Capability | Priority | Software | Comments |
+|------------|-----------|----------|----------|
+|||||
+|||||
+
+## NGO
+
+| Capability | Priority | Software | Comments |
+|------------|-----------|----------|----------|
+|||||
+|||||
+
 
 ### Object storage: Garage
 
