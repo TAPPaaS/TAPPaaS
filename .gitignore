@@ -8,3 +8,4 @@ src/modules/opnsense/.terraform/providers/registry.opentofu.org/bpg/proxmox/0.78
 src/modules/opnsense/terraform.tfstate
 src/modules/opnsense/terraform.tfstate.backup
 src/modules/opnsense/tapaas.tfvars
+.vscode/settings.json

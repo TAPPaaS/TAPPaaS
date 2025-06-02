@@ -6,7 +6,7 @@
 # it under the terms of the Creative Commons Attribution-NonCommercial-ShareAlike 4.0 International (CC BY-NC-SA 4.0) license.
 # Author: larsrossen
 #
-# This script is heavely based on the Proxmox Helper Script: Docker VM
+# This script is heavily based on the Proxmox Helper Script: Docker VM
 #
 
 function header_info() {
@@ -346,10 +346,11 @@ echo -e "${CREATING}${BOLD}${DGN}** Congratulation ** You are almost done bootst
 echo -e "${CREATING}${BOLD}${DGN} 1) Log into TAPPaaS CICD VM using ssh from a host teminal: ssh tappaas@<insert ip of CICD VM>${CL}"
 echo -e "${CREATING}${BOLD}${DGN} 2) In the shell of the TAPPaaS CICD VM do:${CL}:"
 echo -e "${CREATING}${BOLD}${DGN}   2a) create ssh keys: ssh-keygen -t ed25519 ${CL}"
-echo -e "${CREATING}${BOLD}${DGN}   2b) add ssh keys to your github: cat ~/.ssh/id_rsa${CL} (not needed when TAPPaas is public)"
-echo -e "${CREATING}${BOLD}${DGN}   2c) clone the tappaas repository: git clone git@github.com:larsrossen/TAPPaaS.git${CL}"
+echo -e "${CREATING}${BOLD}${DGN}   2b) add ssh keys to your github: cat ~/.ssh/id_rsa${CL} (not needed when TAPPaas is public)${CL}"
+echo -e "${CREATING}${BOLD}${DGN}       thest that the key authentication works: ssh -T git@github.com${CL}"
+echo -e "${CREATING}${BOLD}${DGN}   2c) clone the tappaas repository: git clone git@github.com:TAPpaas/TAPpaas.git${CL}"
 echo -e "${CREATING}${BOLD}${DGN}   2d) run the final bootstrap code: ./TAPPaaS/src/bootstrap/TAPPaaS-CICD-bootstrap.sh${CL}"
 echo -e "${CREATING}${BOLD}${DGN}   2e) set the git user name: git config --global user.name <your name> ${CL}" 
 echo -e "${CREATING}${BOLD}${DGN}   2f) set the git user email: git config --global user.email <your email> ${CL}"
-echo -e "${CREATING}${BOLD}${DGN} You might want to cunsult the bootstrap information in TAPPaaS/Documentation/Bootstrap.md${CL}"
+echo -e "${CREATING}${BOLD}${DGN} You might want to consult the bootstrap information in TAPPaaS/Documentation/Bootstrap.md${CL}"
 
