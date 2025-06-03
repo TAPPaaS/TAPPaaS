@@ -67,6 +67,7 @@ The alternative to Proxmox ZFS is FreeeNAS, but we consider the benefits compare
 | Video | High | Jellyfin| |
 | Podcasts | medium | ?? | |
 | Document | high | NextCloud | |
+| Offline Web | low | Karakeep | selfhosted open source version of Pocket |
 | Virtual Assistant | medium | ?? | |
 | Bookshelf | low | CAlibra?? | |
 
@@ -85,6 +86,7 @@ The alternative to Proxmox ZFS is FreeeNAS, but we consider the benefits compare
 | Capability | Priority | Software | Comments |
 |------------|-----------|----------|----------|
 | Email | High | | | 
+| Office Suite | High | CryptPad | |
 | Corporate website | High | | |
 | ERP System | Medium |||
 | Office Wifi | Medium | | |

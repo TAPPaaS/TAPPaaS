@@ -76,6 +76,7 @@ So the functions we are aiming at:
 - video library
 - podcast library
 - Document store: Can be very private or shared across a user group
+- Offline web: ability to remember interesting parts of the web, and store for later (offline) reading.
 - Virtual Assistant: you personal AI in a box
 - eBook bookshelf
 
@@ -95,6 +96,7 @@ However with a Community deployment you would want to add a few more functionali
 ### SMB
 
 - Corporate email
+- Office Suite: document, presentation and spreadsheet with collaboration features and Microsoft compatibility
 - Corporate web site
 - ERP system
 - Office WiFi: Ensure there is a dedicated WiFi for SMB workers and guests
