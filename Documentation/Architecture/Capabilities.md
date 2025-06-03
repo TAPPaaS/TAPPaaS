@@ -2,13 +2,13 @@
 
 ## Introduction
 
-TAPPaaS is designed both top down and bottom up. Top down we looked at the capabilities needed to adress the needs described in the [Vision](../Vision.md). THe bottom up have been looking at real software and real implementations to determine what is possible and what makes sense
+TAPPaaS is designed both top down and bottom up. Top down we looked at the capabilities needed to address the needs described in the [Vision](../Vision.md). THe bottom up have been looking at real software and real implementations to determine what is possible and what makes sense
 
-Here we are trying to bring this together in a structured manner. This is a description of WHAT we wnat TAPPaaS to deliver. The HOW to deliver it is in the [SoftwareStack](TheSoftwareStack.md)
+Here we are trying to bring this together in a structured manner. This is a description of WHAT we want TAPPaaS to deliver. The HOW to deliver it is in the [SoftwareStack](TheSoftwareStack.md)
 
 ## TAPPaaS high level structure
 
-As with most complex IT solutions you can divide the capabilites of the solution into some dependen sub system.
+As with most complex IT solutions you can divide the capabilities of the solution into some dependent sub system.
 At the very high level we structure the capabilities into the following groups
 
 ```mermaid
@@ -23,7 +23,7 @@ classDiagram
 
 In the following we decompose the high level capabilities
 
-## Busines Functions
+## Business Functions
 
 Business Functions is what this is all about: providing functions to the users of TAPPaaS. all the other parts like foundation, Management and Security is just there to ensure that you can get the IT you need working in a stable, scalable, integrated, secure, private and maintainable way.
 
@@ -36,7 +36,7 @@ classDiagram
   A Home ..> Business Function
   Small Community ..> Business Function
   Small Business Owner ..> Business Function
-  Small SW Development Organisation ..> Business Function
+  Small SW Development Organization ..> Business Function
   Small Utility Company ..> Business Function
   NGO ..> Business Function
   
@@ -44,7 +44,7 @@ classDiagram
 
 Note we are using the word "small" a lot. Make no mistake, TAPPaaS as a core architecture can scale up, but our initial design criteria is to cater for the SMB/Home out of the box.
 
-### Capabilites needed by a home
+### Capabilities needed by a home
 
 Functionality can be grouped into functionality that is linked to a physical home, and thus stays with home and functionality that is linked to a user but is not bound to the physical home (except through the foundation layer and possible integrations)
 
@@ -67,12 +67,12 @@ So the functions we are aiming at:
 
 #### Houshold Member Related
 
-- Email: you want to own you emails and email adress
+- Email: you want to own you emails and email address
 - Address book
 - Calendering: need to be sharable within home and community and externally
 - Note taking: must be sharable
 - photo upload, storage and sharing: Need to have good indexing and sharing functionality
-- music library: own your music, need to be streemable. and sharable
+- music library: own your music, need to be streamable. and sharable
 - video library
 - podcast library
 - Document store: Can be very private or shared across a user group
@@ -86,9 +86,9 @@ Note a small community can start with a single home, and will contain all the fu
 
 However with a Community deployment you would want to add a few more functionalities
 
-- WiFi rooming: Make it possible to move around the comunit and preserve access to same Wifi
+- WiFi rooming: Make it possible to move around the community and preserve access to same Wifi
 - Internet sharing (with redundancy): 10 households having 10 Internet connections is overkill
-- Public book shelf: Local hosted wikiedia, gutenberghus, .... Ensure access to information in case of internet outage
+- Public book shelf: Local hosted Wikipedia, Project Gutenberg, .... Ensure access to information in case of internet outage
 - Community Social
 - Video Conferencing
 
@@ -119,7 +119,7 @@ However with a Community deployment you would want to add a few more functionali
 
 ### NGO
 
-Generally an NGO need the same functionality out of the box as the SMB, but there are important design criterias
+Generally an NGO need the same functionality out of the box as the SMB, but there are important design criteria
 - Strict Privacy
 - Easy to setup and maintain
 - Cost efficient
@@ -164,7 +164,7 @@ The Physical security can be considered a Business function.
 - Compute
 - Storage
 - Connectivity 
-  - VLAN seperations
+  - VLAN separations
   - WAN and Firewall
   - Switch and Access Points
   - DHCP and DNS

@@ -16,6 +16,7 @@ function header_info {
                                                                          
 EOF
 }
+
 header_info
 echo -e "Loading..."
 #API VARIABLES
@@ -153,10 +154,6 @@ function send_line_to_vm() {
   qm sendkey $VMID ret
 }
 
-TEMP_DIR=$(mktemp -d)
-pushd $TEMP_DIR >/dev/null
-
-
 function msg_info() {
   local msg="$1"
   echo -ne " ${HOLD} ${YW}${msg}..."
@@ -170,38 +167,6 @@ function msg_ok() {
 function msg_error() {
   local msg="$1"
   echo -e "${BFR} ${CROSS} ${RD}${msg}${CL}"
-}
-
-function pve_check() {
-  if ! pveversion | grep -Eq "pve-manager/8\.[1-4](\.[0-9]+)*"; then
-    msg_error "This version of Proxmox Virtual Environment is not supported"
-    echo -e "Requires Proxmox Virtual Environment Version 8.1 or later."
-    echo -e "Exiting..."
-    sleep 2
-    exit
-  fi
-}
-
-function arch_check() {
-  if [ "$(dpkg --print-architecture)" != "amd64" ]; then
-    echo -e "\n ${CROSS} This script will not work with PiMox! \n"
-    echo -e "Exiting..."
-    sleep 2
-    exit
-  fi
-}
-
-function ssh_check() {
-  if command -v pveversion >/dev/null 2>&1; then
-    if [ -n "${SSH_CLIENT:+x}" ]; then
-      if whiptail --backtitle "Proxmox VE Helper Scripts" --defaultno --title "SSH DETECTED" --yesno "It's suggested to use the Proxmox shell instead of SSH, since SSH can create issues while gathering variables. Would you like to proceed with using SSH?" 10 62; then
-        echo "you've been warned"
-      else
-        clear
-        exit
-      fi
-    fi
-  fi
 }
 
 function exit-script() {
@@ -219,7 +184,8 @@ function default_settings() {
   CPU_TYPE=""
   CORE_COUNT="4"
   RAM_SIZE="8192"
-  BRG="enp7s0"
+  STORAGE="tank1"
+  BRG=""
   IP_ADDR=""
   WAN_IP_ADDR=""
   LAN_GW=""
@@ -229,74 +195,40 @@ function default_settings() {
   VLAN=""
   MAC=$GEN_MAC
   WAN_MAC=$GEN_MAC_LAN
-  WAN_BRG="enp5s0"
+  WAN_BRG=""
   MTU=""
   START_VM="yes"
   METHOD="default"
 
+  # TODO optimize this
+  for i in {0,1}; do
+    disk="DISK$i"
+    eval DISK${i}=vm-${VMID}-disk-${i}${DISK_EXT:-}
+    eval DISK${i}_REF=${STORAGE}:${DISK_REF:-}${!disk}
+  done
+
   echo -e "${DGN}Using Virtual Machine ID: ${BGN}${VMID}${CL}"
   echo -e "${DGN}Using Hostname: ${BGN}${HN}${CL}"
   echo -e "${DGN}Allocated Cores: ${BGN}${CORE_COUNT}${CL}"
-  echo -e "${DGN}Allocated RAM: ${BGN}${RAM_SIZE}${CL}"
-  if ! grep -q "^iface ${BRG}" /etc/network/interfaces; then
-    msg_error "Bridge '${BRG}' does not exist in /etc/network/interfaces"
-    exit
-  else
-    echo -e "${DGN}Using LAN Bridge: ${BGN}${BRG}${CL}"
-  fi
-  echo -e "${DGN}Using LAN VLAN: ${BGN}Default${CL}"
-  echo -e "${DGN}Using LAN MAC Address: ${BGN}${MAC}${CL}"
   echo -e "${DGN}Using WAN MAC Address: ${BGN}${WAN_MAC}${CL}"
-  if ! grep -q "^iface ${WAN_BRG}" /etc/network/interfaces; then
-    msg_error "Bridge '${WAN_BRG}' does not exist in /etc/network/interfaces"
-    exit
-  else
-    echo -e "${DGN}Using WAN Bridge: ${BGN}${WAN_BRG}${CL}"
-  fi
   echo -e "${DGN}Using Interface MTU Size: ${BGN}Default${CL}"
-  echo -e "${DGN}Start VM when completed: ${BGN}yes${CL}"
+  echo -e "${DGN}Using Storage Location: ${BGN}${STORAGE}${CL}"
   echo -e "${BL}Creating a OPNsense VM using the above default settings${CL}"
 }
 
 
-function start_script() {
-  header_info
-  echo -e "${BL}Using Default Settings${CL}"
-  default_settings
-}
+header_info
+echo -e "${BL}Using Default Settings${CL}"
+default_settings
 
-arch_check
-pve_check
-ssh_check
-start_script
+# find the WAN and LAN PCI netcards to pass through to the VM
 
-msg_info "Validating Storage"
-while read -r line; do
-  TAG=$(echo $line | awk '{print $1}')
-  TYPE=$(echo $line | awk '{printf "%-10s", $2}')
-  FREE=$(echo $line | numfmt --field 4-6 --from-unit=K --to=iec --format %.2f | awk '{printf( "%9sB", $6)}')
-  ITEM="  Type: $TYPE Free: $FREE "
-  OFFSET=2
-  if [[ $((${#ITEM} + $OFFSET)) -gt ${MSG_MAX_LENGTH:-} ]]; then
-    MSG_MAX_LENGTH=$((${#ITEM} + $OFFSET))
-  fi
-  STORAGE_MENU+=("$TAG" "$ITEM" "OFF")
-done < <(pvesm status -content images | awk 'NR>1')
-VALID=$(pvesm status -content images | awk 'NR>1')
-if [ -z "$VALID" ]; then
-  msg_error "Unable to detect a valid storage location."
-  exit
-elif [ $((${#STORAGE_MENU[@]} / 3)) -eq 1 ]; then
-  STORAGE=${STORAGE_MENU[0]}
-else
-  while [ -z "${STORAGE:+x}" ]; do
-    STORAGE=$(whiptail --backtitle "Proxmox VE Helper Scripts" --title "Storage Pools" --radiolist \
-      "Which storage pool would you like to use for ${HN}?\nTo make a selection, use the Spacebar.\n" \
-      16 $(($MSG_MAX_LENGTH + 23)) 6 \
-      "${STORAGE_MENU[@]}" 3>&1 1>&2 2>&3)
-  done
-fi
-msg_ok "Using ${CL}${BL}$STORAGE${CL} ${GN}for Storage Location."
+
+NETPORTS=$(ip a | grep DOWN | grep -v NO-CARRIER | cut -d":" -f2 | sed 's/^[ \t]*//;s/[ \t]*$//')
+
+    echo -e "${DGN}Using WAN Bridge: ${BGN}${WAN_BRG}${CL}"
+    echo -e "${DGN}Using LAN Bridge: ${BGN}${LAN_BRG}${CL}"
+
 msg_ok "Virtual Machine ID is ${CL}${BL}$VMID${CL}."
 msg_info "Retrieving the URL for the OPNsense Qcow2 Disk Image"
 URL=https://download.freebsd.org/releases/VM-IMAGES/14.2-RELEASE/amd64/Latest/FreeBSD-14.2-RELEASE-amd64.qcow2.xz
@@ -308,27 +240,6 @@ FILE=Fressbsd.qcow2
 unxz -cv $(basename $URL) >${FILE}
 msg_ok "Downloaded ${CL}${BL}${FILE}${CL}"
 
-STORAGE_TYPE=$(pvesm status -storage $STORAGE | awk 'NR>1 {print $2}')
-case $STORAGE_TYPE in
-nfs | dir)
-  DISK_EXT=".qcow2"
-  DISK_REF="$VMID/"
-  DISK_IMPORT="-format qcow2"
-  THIN=""
-  ;;
-btrfs)
-  DISK_EXT=".raw"
-  DISK_REF="$VMID/"
-  DISK_IMPORT="-format raw"
-  FORMAT=",efitype=4m"
-  THIN=""
-  ;;
-esac
-for i in {0,1}; do
-  disk="DISK$i"
-  eval DISK${i}=vm-${VMID}-disk-${i}${DISK_EXT:-}
-  eval DISK${i}_REF=${STORAGE}:${DISK_REF:-}${!disk}
-done
 
 msg_info "Creating a OPNsense VM"
 qm create $VMID -agent 1${MACHINE} -tablet 0 -localtime 1 -bios ovmf${CPU_TYPE} -cores $CORE_COUNT -memory $RAM_SIZE \

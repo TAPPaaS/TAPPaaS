@@ -12,12 +12,12 @@ With the advent of large hyper scalers we increasingly rely on these companies m
 
 You can compare the centralized approach of hyper scalers with the original distributed and open standards approach of the internet to what it would look like in the physical world:
 
-- **Centralized approach**: There is one mall in town, is only one mall , you can only get what is in that mall. You are actively discouraged from dining at home, and there is only one way of meeting with friends: go to the mall, as this is also the only transport available. If you own a business then there is only one inbound and one outboud supply chain. 
-- **Distributed approach to cities, business and homes:**  You can chose what food to buy, what friend to invite, how to move around, where to dine out, with or without friends. You business can trive and compete in an open eco system.
+- **Centralized approach**: There is one mall in town, is only one mall , you can only get what is in that mall. You are actively discouraged from dining at home, and there is only one way of meeting with friends: go to the mall, as this is also the only transport available. If you own a business then there is only one inbound and one outbound supply chain. 
+- **Distributed approach to cities, business and homes:**  You can chose what food to buy, what friend to invite, how to move around, where to dine out, with or without friends. You business can thrive and compete in an open eco system.
 
 ## The Problem Part Two: Todays IT world is complex
 
-The big 5, the hyper scalers, are very easy to consume, and they deliver high quality. Designing and deploying a reliable, resillient, secure and easy to use Platform is for most smaller organisaitons, let alone individual famelies and comuniites almost insurmountable. You need to stand up firewalls, identity management security monitoring, basic infrastructure services, backup processes. you need to currate the most important standard applications for your busines and integrate the lot. Then you need to constantly patch and upgrade. And by the way how do I run AI without selling my soul and data to the hyperscaler.
+The big 5, the hyper scalers, are very easy to consume, and they deliver high quality. Designing and deploying a reliable, resilient, secure and easy to use Platform is for most smaller organizations, let alone individual families and communities almost insurmountable. You need to stand up firewalls, identity management security monitoring, basic infrastructure services, backup processes. you need to curate the most important standard applications for your business and integrate the lot. Then you need to constantly patch and upgrade. And by the way how do I run AI without selling my soul and data to the hyperscaler.
 
 Large enterprises can afford solving this. Not so much with Small Business, NGO's, communities, ...
 
@@ -25,25 +25,25 @@ Large enterprises can afford solving this. Not so much with Small Business, NGO'
 
 Our Vision with TAPPaaS it to solve problem two, and in the process also repair the internet aka problem one/
 
-The reason we believe we can solve problem two is that all the needed software to stand up a platform for you home/comunity/ngo/small-business exist as open source today. Further the quality of the open source solutions is very high individually.
+The reason we believe we can solve problem two is that all the needed software to stand up a platform for you home/community/ngo/small-business exist as open source today. Further the quality of the open source solutions is very high individually.
 
 what is missing are three things:
 
-- Curration of the right software: There are 3 major open source firewalls, countless linux server os varians. document collaboration and storage exists in many flavours, and on and on. Most organisations and individuals actually do not care that much. someone just need to make the decition
-- Configuraiton and Integration of all the chosen software: So we decide to use NextCloud and run it virtualized on Proxmox. just that in and by itself can be done in dozend of different ways. Again most people do not care, just tell me
+- Curation of the right software: There are 3 major open source firewalls, countless linux server os variant. document collaboration and storage exists in many flavours, and on and on. Most organizations and individuals actually do not care that much. someone just need to make the decision
+- Configuration and Integration of all the chosen software: So we decide to use NextCloud and run it virtualized on Proxmox. just that in and by itself can be done in many of different ways. Again most people do not care, just tell me
 - Automation of the installation. 
 
 This is not insurmountable if we can create a small community around TAPPaaS
 
-# Target audinece and Design Goals
+# Target audience and Design Goals
 
 We have been looking at 3 primary use cases for TAPPaaS
 
-- SMB businees: TAPPaaS should deliver the foundation for regular office work and also be a foundation for deployment of business specific applicaitons.
-- Organisations that needs high degree of local resilience, typical critical infrastructure provides parts of public sector and NGO's
+- SMB business: TAPPaaS should deliver the foundation for regular office work and also be a foundation for deployment of business specific applications.
+- Organizations that needs high degree of local resilience, typical critical infrastructure provides parts of public sector and NGO's
 - Communities and single family homes
 
-In the follwong we detail each category a bit more and describe the vision for what we solve
+In the following we detail each category a bit more and describe the vision for what we solve
 
 ## SMB
 
@@ -57,7 +57,7 @@ In the follwong we detail each category a bit more and describe the vision for w
 ## NGO's
 
 
-## Communitis and Homes
+## Communities and Homes
 
 Most people have an idea on what a Home is. However the definition is very dependent on the context. As this project is about IT for Homes then it would be appropriate to define what we man by Home.
 
@@ -103,7 +103,7 @@ TAPPaaS should apply you to run every IoT devices in your company/home without r
 
 ### TAPPaaS for my Community
 
-Running a full TAPPaaS infrastructure for a single famely can be seen execive, and forming comunities of homes can be a great way of both scaling the resiliense and spread the cost and burden
+Running a full TAPPaaS infrastructure for a single family can be seen excessive, and forming communities of homes can be a great way of both scaling the resilience and spread the cost and burden
 
 This can either be neighbors  or a village or friends or extended family
 

@@ -115,8 +115,8 @@ COnfigure with standard setup
 Alternative: Nginx
 
 Traefik is more modern in configuration and certificate management
-together with LEtsencrypt we configure a wildcard certificate for our domain
-configure Trafic to pass thorugh 
+together with Letsencrypt we configure a wildcard certificate for our domain
+configure traffic to pass through 
 
 ## Proxmox basis
 
@@ -125,7 +125,7 @@ configure Trafic to pass thorugh
 
 User admin should potentially be via LDAP to be used by all services that needs user administration (NextCloud, Jellyfin, HomeAssistant, VPNs, ...)
 
-This is a fundamental service and is configured in a seperate LXC (Using docker)
+This is a fundamental service and is configured in a separate LXC (Using docker)
 
 It needs to be made available through Traefik
 

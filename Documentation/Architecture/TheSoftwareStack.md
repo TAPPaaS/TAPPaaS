@@ -4,7 +4,7 @@ This is the reason we call it TAPPaaS. Pronounced Tapas like the Spanish dish: A
 
 The Software Stack of TAPPaaS delivers the capabilities we believe is needed for a well served Private IT Platform.
 
-Selectin from the enourmous pool of software we have used the principles of:
+Selecting from the enormous pool of software we have used the principles of:
 
 1) must be Open Source
 2) must show a track record of being Secure
@@ -14,12 +14,12 @@ Selectin from the enourmous pool of software we have used the principles of:
 
 ## Foundation
 
-Let us get foundation out of the way first. Everything is runnning on top of the foundation.
+Let us get foundation out of the way first. Everything is running on top of the foundation.
 
 | Capability | Priority | Software | Comments |
 |------------|-----------|----------|----------|
-| Compute    | Mandatory  | Proxmox | provide exce;ent compute cluster capability |
-| Storage    | Mandatory  | Proxmox-ZFS | ZFS gives a lot of flexability. and is build into proxmox, making it well alligned with Cluster management |
+| Compute    | Mandatory  | Proxmox | provide excellent compute cluster capability |
+| Storage    | Mandatory  | Proxmox-ZFS | ZFS gives a lot of flexibility. and is build into proxmox, making it well aligned with Cluster management |
 | Connectivity | Mandatory | OPNsense | Virtualized and combined with a layer 3 switch and proxmox bridging and vlan support |
 | User Mgmt. | Mandatory | ?? | | 
 
@@ -33,11 +33,11 @@ Alternatives:
   - But it also seems more "free"
 - FreeNAS, TrueNAS: good for storage, but not really a cloud platform
 
-### Persistant Storage layer
+### Persistent Storage layer
 
 proxmox with ZFS gives: RAID, SNapshotting, Replication, NFS, iSCSI, 
-Problem with proxmox is a limitted GUI for management, and further the choice explosion zfs gives makes it hard to design a solution
-TAPPaaS will adress this with recomended setup and automation
+Problem with proxmox is a limited GUI for management, and further the choice explosion zfs gives makes it hard to design a solution
+TAPPaaS will address this with recommended setup and automation
 
 Note that proxmox and zfs do not give Hight Available storage. in that case we need to look into Object Storage and other distributed storage solutions.
 We do not consider this a Foundation. but something that goes in to the business layer of TAPPaaS together with a HA implementation of a relational database
@@ -48,9 +48,9 @@ The alternative to Proxmox ZFS is FreeeNAS, but we consider the benefits compare
 
 | Capability | Priority | Software | Comments |
 |------------|-----------|----------|----------|
-| Smart Lighting | High | Home Assistant | Will be the main interface to TAPpaas for a home/comunit installation |
-| Smart heating | Low | Home Asistant | |
-| Smart Sprinkler | Low | Home Asistant + OpenSprinkler | |
+| Smart Lighting | High | Home Assistant | Will be the main interface to TAPpaas for a home/community installation |
+| Smart heating | Low | Home Assistant | |
+| Smart Sprinkler | Low | Home Assistant + OpenSprinkler | |
 | SMART AVR | Medium | ?? | This is the player system. to replace AppleTV, HEOS, etc |
 | Home Butler | Medium | HA + LLM | lots of experimentation ongoing |
 
@@ -58,8 +58,8 @@ The alternative to Proxmox ZFS is FreeeNAS, but we consider the benefits compare
 
 | Capability | Priority | Software | Comments |
 |------------|-----------|----------|----------|
-| email | High | PostIT | Very difficult to run autonomously, maintance is high|
-| Adress book | High | NextCloud | need to be integrated into many other applications |
+| email | High | PostIT | Very difficult to run autonomously, maintenance is high|
+| Address book | High | NextCloud | need to be integrated into many other applications |
 | Calendering | High | NextCloud | |
 | Note Taking | Medium | ?? | Could simply be files in Nextcloud, but need to be investigated |
 | Photos | High | NextCloud with Memories module ||
@@ -77,7 +77,7 @@ The alternative to Proxmox ZFS is FreeeNAS, but we consider the benefits compare
 | WiFi Rooming | medium | R.O.B.I.N. ?? | |
 | Internet Sharing | High | OPNsense | |
 | Public Bookshelf | Medium | Calibra, wikipedia hosting, ... ?? | |
-| Comunity Social | High | Mastedont | |
+| Community Social | High | Mastedont | |
 | Video Conferencing | low | ?? | |
 
 ## SMB
@@ -121,9 +121,9 @@ alternatives:
 
 ## Firewall: OPNSense
 
-Alternative is PFsense. PFSense is the original but is going more and more comercial
+Alternative is PFsense. PFSense is the original but is going more and more commercial
 
-### User Management: Authentik
+### User Management: Authentik / Keycloak
 
 To be investigated:
 pfsense have a build in LDAP. but it is basic. Authentic looks promising

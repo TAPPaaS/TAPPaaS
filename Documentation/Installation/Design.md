@@ -1,6 +1,6 @@
 # Design your TAPPaaS system
 
-Note this is not aboute the design of TAPPaaS itself but how to dedesign your instance of TAPPaaS
+Note this is not about the design of TAPPaaS itself but how to design your instance of TAPPaaS
 
 There are 4 steps involved:
 
@@ -23,4 +23,4 @@ amount of Network
 # Capture essential information for your TAPPaaS
 
 - name the servers
-- define where stuff should reside if multible servers
+- define where stuff should reside if multiple servers

@@ -21,7 +21,7 @@ to add:
 
 describe in the "why section" : 
 
-- the internet was originally an interconnect of networks. and importantly the network was independent ad would work without the internetwork connections
+- the internet was originally an interconnect of networks. and importantly the network was independent ad would work without the internet connections
 - Today nothing work if the "internet" is not available
 - we need to bring this back
 
@@ -38,5 +38,5 @@ consider B.A.T.M.A.N. mesh network
 
 Examples of lock in to avoid
 - Synology changed license terms to only alow synology branded Hard drives
-- you need to pay indefinetly for storing your pictures
+- you need to pay indefinitely for storing your pictures
 - google domain (small business edition of google office suite) moved from free to pay

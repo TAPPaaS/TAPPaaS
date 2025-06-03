@@ -10,16 +10,17 @@
 #
 
 function header_info() {
+  # generated with https://patorjk.com/software/taag/#p=display&f=Big&t=TAPPaaS%20Bootstrap
   clear
   cat <<"EOF"
-  _______       _____             _____   ____              _       _                   
- |__   __|/\   |  __ \           / ____| |  _ \            | |     | |                  
-    | |  /  \  | |__) |_ _  __ _| (___   | |_) | ___   ___ | |_ ___| |_ _ __ __ _ _ __  
-    | | / /\ \ |  ___/ _` |/ _` |\___ \  |  _ < / _ \ / _ \| __/ __| __| '__/ _` | '_ \ 
-    | |/ ____ \| |  | (_| | (_| |____) | | |_) | (_) | (_) | |_\__ \ |_| | | (_| | |_) |
-    |_/_/    \_\_|   \__,_|\__,_|_____/  |____/ \___/ \___/ \__|___/\__|_|  \__,_| .__/ 
-                                                                                 | |    
-                                                                                 |_|    
+  _______       _____  _____             _____   ____              _       _                   
+ |__   __|/\   |  __ \|  __ \           / ____| |  _ \            | |     | |                  
+    | |  /  \  | |__) | |__) |_ _  __ _| (___   | |_) | ___   ___ | |_ ___| |_ _ __ __ _ _ __  
+    | | / /\ \ |  ___/|  ___/ _` |/ _` |\___ \  |  _ < / _ \ / _ \| __/ __| __| '__/ _` | '_ \ 
+    | |/ ____ \| |    | |  | (_| | (_| |____) | | |_) | (_) | (_) | |_\__ \ |_| | | (_| | |_) |
+    |_/_/    \_\_|    |_|   \__,_|\__,_|_____/  |____/ \___/ \___/ \__|___/\__|_|  \__,_| .__/ 
+                                                                                        | |    
+                                                                                        |_|    
 EOF
 }
 
@@ -347,7 +348,7 @@ echo -e "${CREATING}${BOLD}${DGN} 1) Log into TAPPaaS CICD VM using ssh from a h
 echo -e "${CREATING}${BOLD}${DGN} 2) In the shell of the TAPPaaS CICD VM do:${CL}:"
 echo -e "${CREATING}${BOLD}${DGN}   2a) create ssh keys: ssh-keygen -t ed25519 ${CL}"
 echo -e "${CREATING}${BOLD}${DGN}   2b) add ssh keys to your github: cat ~/.ssh/id_rsa${CL} (not needed when TAPPaas is public)${CL}"
-echo -e "${CREATING}${BOLD}${DGN}       thest that the key authentication works: ssh -T git@github.com${CL}"
+echo -e "${CREATING}${BOLD}${DGN}       test that the key authentication works: ssh -T git@github.com${CL}"
 echo -e "${CREATING}${BOLD}${DGN}   2c) clone the tappaas repository: git clone git@github.com:TAPpaas/TAPpaas.git${CL}"
 echo -e "${CREATING}${BOLD}${DGN}   2d) run the final bootstrap code: ./TAPPaaS/src/bootstrap/TAPPaaS-CICD-bootstrap.sh${CL}"
 echo -e "${CREATING}${BOLD}${DGN}   2e) set the git user name: git config --global user.name <your name> ${CL}" 

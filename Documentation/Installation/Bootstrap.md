@@ -63,8 +63,9 @@ Now Do:
 - In the shell of the TAPPaaS CICD VM do:
   - create ssh keys: ssh-keygen -t ed25519
   - add ssh keys to your github: copy and paste the output of cat ~/.ssh/id_ed25519.pub (not needed when TAPPaas is public)
+  - test that the key authentication works: ssh -T git@github.com
   - clone the TAPpaas repository: git clone git@github.com:TAPpaas/TAPpaas.git
-  - run the final bootstrap code: ./TAPpaas/src/bootstrap/TAPpaas-CICD-bootstrap.sh
+  - run the final bootstrap code: ./TAPpaas/src/bootstrap/TAPPaaS-CICD-bootstrap.sh
   - set the git user name: git config --global user.name <your name> 
   - set the git user email: git config --global user.email <your email>
 

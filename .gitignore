@@ -9,3 +9,4 @@ src/modules/opnsense/terraform.tfstate
 src/modules/opnsense/terraform.tfstate.backup
 src/modules/opnsense/tapaas.tfvars
 .vscode/settings.json
+cspell.json

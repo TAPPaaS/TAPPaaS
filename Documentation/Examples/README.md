@@ -1,6 +1,6 @@
 # Example TAPPaaS deployments
 
-The followng give examples of more concrete use cases and the associated hardware suitalbe for this deployment
+The following give examples of more concrete use cases and the associated hardware suitable for this deployment
 
 ## Testing: a minimal system
 
@@ -10,6 +10,6 @@ The followng give examples of more concrete use cases and the associated hardwar
 
 ## SMB: A scalable system for running bespoke software services
 
-## Resillient platform for disaster management
+## Resilient platform for disaster management
 
 ## Private platform for small utility
