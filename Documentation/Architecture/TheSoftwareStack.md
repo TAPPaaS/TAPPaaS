@@ -65,7 +65,7 @@ The alternative to Proxmox ZFS is FreeeNAS, but we consider the benefits compare
 | Photos | High | NextCloud with Memories module ||
 | Music | High | Jellyfin | |
 | Video | High | Jellyfin| |
-| Podcasts | medium | ?? | |
+| Podcasts | medium | [audiobookshelf](https://www.audiobookshelf.org/)?? | |
 | Document | high | NextCloud | |
 | Offline Web | low | Karakeep | selfhosted open source version of Pocket |
 | Virtual Assistant | medium | ?? | |
