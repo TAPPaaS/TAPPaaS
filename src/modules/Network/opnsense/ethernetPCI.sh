@@ -18,7 +18,7 @@ function header_info {
   clear
   cat <<"EOF"
 
-  Validating before installing
+  PCI Passthrough for 
    ____  ____  _   __                        
   / __ \/ __ \/ | / /_______  ____  ________ 
  / / / / /_/ /  |/ / ___/ _ \/ __ \/ ___/ _ \
@@ -106,29 +106,13 @@ trap cleanup EXIT
 TEMP_DIR=$(mktemp -d)
 pushd $TEMP_DIR >/dev/null
 
-msg_info "Checking for IOMMU (interrupt remapping)"
-if dmesg | grep -q -e "DMAR-IR: Enabled IRQ remapping in x2apic mode" -e "AMD-Vi: Interrupt remapping enabled"; then
-  msg_ok "IOMMU is enabled"
-else
-  msg_error "IOMMU is not enabled. Please enable IOMMU in your BIOS settings."
-  exit 1
-fi
 
 #
-# ensure vfio modules loaded
-msg_info  "Loading vfio modules into kernel"
-if ! lsmod | grep -q vfio; then
-  modprobe vfio
-  modprobe vfio_iommu_type1
-  modprobe vfio_pci
-  cat <<EOF >>/etc/modules
-# Load vfio modules on boot
-vfio
-vfio_iommu_type1
-vfio_pci
-EOF
-  update-initramfs -u -k all
-  msg_ok "vfio modules loaded"
-else
-  msg_ok "vfio modules already loaded"
-fi
+# find the ethernet pci devices
+msg_info "Finding ethernet PCI devices\n"
+msg_info "ensure that the ethernet devices are on different iommugroups. if not then mappin is not possible \n"
+pvesh get /nodes/testserver1/hardware/pci --pci-class-blacklist "" | grep -e Ethernet -e class
+
+msg_ok "now let us find the PCI devices to mapp"
+lspci -nnk | grep Ethernet
+

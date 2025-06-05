@@ -1,0 +1,39 @@
+This directory contain automation and instructions for installing the OPNsense software
+
+The steps are:
+
+1) Validate that proxmox and underpinning hardware is ready for a VM with passthrough
+2) Create a VM for OPNsense
+3) Select and setup Ethernet PCI passthrough
+4) Install the OS
+5) Validate that firewall is working
+6) SWitch out firewall
+
+## Validate 
+
+Run validate.sh
+
+## Create VM
+
+Run opnsense-vm.sh
+
+
+## Select PCI passthrough
+
+run ethernetPCI.sh
+
+at this point you should check that there is a VM with PCI passthrough
+
+## Install OPNsense
+
+This is not automated yet. Do the following steps:
+
+- Wire the selected van ethernet port to you existing network
+- go to the console of the OPNsense VM, and start the VM
+- follow the prompt and install 
+  - ....
+
+## Validate
+
+## Switch firewall
+
