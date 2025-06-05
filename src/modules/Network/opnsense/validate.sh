@@ -77,15 +77,6 @@ function msg_error() {
   echo -e "${BFR}${CROSS}${RD}${msg}${CL}"
 }
 
-function check_root() {
-  if [[ "$(id -u)" -ne 0 || $(ps -o comm= -p $PPID) == "sudo" ]]; then
-    clear
-    msg_error "Please run this script as root."
-    echo -e "\nExiting..."
-    sleep 2
-    exit
-  fi
-}
 
 function exit-script() {
   clear
@@ -98,7 +89,6 @@ function exit-script() {
 #
 header_info
 init_print_variables
-check_root
 
 set -e
 trap 'error_handler $LINENO "$BASH_COMMAND"' ERR
@@ -106,8 +96,12 @@ trap cleanup EXIT
 TEMP_DIR=$(mktemp -d)
 pushd $TEMP_DIR >/dev/null
 
-msg_info "Checking for IOMMU (interrupt remapping)"
-if dmesg | grep -q -e "DMAR-IR: Enabled IRQ remapping in x2apic mode" -e "AMD-Vi: Interrupt remapping enabled"; then
+PVE_NODE=192.168.2.250
+
+
+
+msg_info "Checking for IOMMU (interrupt remapping)" 
+if ssh root@$PVE_NODE 'dmesg' | grep -q -e "DMAR-IR: Enabled IRQ remapping in x2apic mode" -e "AMD-Vi: Interrupt remapping enabled" ; then
   msg_ok "IOMMU is enabled"
 else
   msg_error "IOMMU is not enabled. Please enable IOMMU in your BIOS settings."
@@ -117,17 +111,16 @@ fi
 #
 # ensure vfio modules loaded
 msg_info  "Loading vfio modules into kernel"
-if ! lsmod | grep -q vfio; then
-  modprobe vfio
-  modprobe vfio_iommu_type1
-  modprobe vfio_pci
-  cat <<EOF >>/etc/modules
+if ! ssh root@$PVE_NODE 'lsmod' | grep -q vfio; then
+  ssh root@$PVE_NODE 'modprobe vfio; modprobe vfio_iommu_type1; modprobe vfio_pci'
+  ssh root@$PVE_NODE 'cat <<EOF >>/etc/modules
 # Load vfio modules on boot
 vfio
 vfio_iommu_type1
 vfio_pci
 EOF
-  update-initramfs -u -k all
+'
+  ssh root@$PVE_NODE 'update-initramfs -u -k all'
   msg_ok "vfio modules loaded"
 else
   msg_ok "vfio modules already loaded"

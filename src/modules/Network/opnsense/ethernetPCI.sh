@@ -77,15 +77,6 @@ function msg_error() {
   echo -e "${BFR}${CROSS}${RD}${msg}${CL}"
 }
 
-function check_root() {
-  if [[ "$(id -u)" -ne 0 || $(ps -o comm= -p $PPID) == "sudo" ]]; then
-    clear
-    msg_error "Please run this script as root."
-    echo -e "\nExiting..."
-    sleep 2
-    exit
-  fi
-}
 
 function exit-script() {
   clear
@@ -98,7 +89,6 @@ function exit-script() {
 #
 header_info
 init_print_variables
-check_root
 
 set -e
 trap 'error_handler $LINENO "$BASH_COMMAND"' ERR
@@ -106,13 +96,14 @@ trap cleanup EXIT
 TEMP_DIR=$(mktemp -d)
 pushd $TEMP_DIR >/dev/null
 
+PVE_NODE=192.168.2.250
 
 #
 # find the ethernet pci devices
 msg_info "Finding ethernet PCI devices\n"
 msg_info "ensure that the ethernet devices are on different iommugroups. if not then mappin is not possible \n"
-pvesh get /nodes/testserver1/hardware/pci --pci-class-blacklist "" | grep -e Ethernet -e class
+ssh root@$PVE_NODE 'pvesh get /nodes/testserver1/hardware/pci --pci-class-blacklist ""' | grep -e Ethernet -e class
 
 msg_ok "now let us find the PCI devices to mapp"
-lspci -nnk | grep Ethernet
+ssh root@$PVE_NODE 'lspci -nnk' | grep Ethernet
 
