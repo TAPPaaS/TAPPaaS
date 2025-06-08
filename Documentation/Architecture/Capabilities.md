@@ -142,17 +142,15 @@ The Physical security can be considered a Business function.
 
 #### Virtual Security
 
-- User and access Management
-- 2FA
-- Password and key management
-- Backup
+- User and Access Management: Includes 2FA
+- Password and key management: For end users, ensure the organisation is not relying on postit notes
+- Backup - Restore
 - Firewall
-- Encryption 
-  - at rest
-  - in transit
+- Encryption of private data at rest and in transit
 - Remote access
 - Threat detection
 - Threat monitoring
+- DMZ with Reverse Proxy
 
 ## Management
 
@@ -170,4 +168,3 @@ The Physical security can be considered a Business function.
   - WAN and Firewall
   - Switch and Access Points
   - DHCP and DNS
-  - DMZ with Reverse Proxy

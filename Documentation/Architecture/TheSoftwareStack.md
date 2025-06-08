@@ -102,8 +102,8 @@ The alternative to Proxmox ZFS is FreeeNAS, but we consider the benefits compare
 | CICD | High | Gitea, Terraform, Ansible | |
 | Chat | Medium | ?? | |
 | Backlog | High | ?? | |
-| Application platform | high | K3S, Garage, PostGreSQL | |
-| Reverse Proxy | High | Pangolin | |
+| Application platform | High | K3S, Garage, PostGreSQL | |
+| Reverse Proxy | High | Pangolin | for developement the requirement is easy access to a reverse proxy in a secure manner |
 
 
 ### Object storage: Garage
@@ -121,25 +121,43 @@ alternatives:
 
 # Security
 
+| Capability | Priority | Software | Comments |
+|------------|-----------|----------|----------|
+| User and Access mgmt. | Mandatory | ?? | Authentik, Keycloak, proxmox, opnsense??  |
+| Password mgmt. | High | Bitwarden |  |
+| Backup/Restore | Mandatory | proxmox backup mgmt | need to look into complete backup, maybe znapzend, or other zfs methods. |
+| Firewall | High | OPNsense  |  |
+| Remote Access | High | TailScale/HeadScale | complement tailscale with self hosted Headscale |
+| Thread detection | High | ?? | CrowdSec? |
+| Thread monitoring | High | ?? |  |
+| DMZ | Mandatory | Pangolin |  |
+
+
 ## Firewall: OPNSense
 
-Alternative is PFsense. PFSense is the original but is going more and more commercial
+Alternativea are:
 
-### User Management: Authentik / Keycloak
+- PFsense: PFSense is the original but is going more and more commercial
+- OpenWRT: it seems less scalable and less feature rich
+- proxmox firewall: would make it easier as it is already build in, but less secure
+
+
+## User Management: Authentik / Keycloak
 
 To be investigated:
-pfsense have a build in LDAP. but it is basic. Authentic looks promising
-
-### Password management system: Bitwarden
-Fully open source, considered safe, and you can run your own encrypted "cloud" service to sync between clients and accounts
-
+OPNsense have a build in LDAP. but it is basic. Authentic looks promising
+Pangolin also have Identity management
+So do NextCloud and Proxmox
 
 ## Backup: 
 
-znapzend, used to snapshot and replicate zfs volumes across servers
-This is complemented by Proxmox backup server to backup VMs
+- We generally keep all functions contained in VM's or LCM's. 
+- Running a Proxmox Backup service allow us to store backups on secondary tank, on separate nodes and on separate (off site) TAPPaaS systems
+- In case of TAPPaaS deployment in High Availability then the HA mirror will add another backup copy
+- We need to find a solution for backing up the PVE nodes them self, and any data that we store outside containers.
+- We need to give special consideration to encryption keys
 
-This will give two kinds of backups
+We will consider znapzend, used to snapshot and replicate zfs volumes across servers
 
 ## Self Management
 - undecided on dashboard, but Grafana is part of it
