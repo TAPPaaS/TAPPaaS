@@ -37,3 +37,78 @@ This is not automated yet. Do the following steps:
 
 ## Switch firewall
 
+
+
+THis is a scripted attempt at doing the actual OPNSense install
+
+msg_ok "Starting OPNsense VM (Patience this takes 20-30 minutes)"
+qm start $VMID
+sleep 90
+send_line_to_vm "root"
+send_line_to_vm "fetch https://raw.githubusercontent.com/opnsense/update/master/src/bootstrap/opnsense-bootstrap.sh.in"
+qm set $VMID \
+  -net1 virtio,bridge=${WAN_BRG},macaddr=${WAN_MAC} &>/dev/null
+sleep 10
+send_line_to_vm "sh ./opnsense-bootstrap.sh.in -y -f -r 25.1"
+msg_ok "OPNsense VM is being installed, do not close the terminal, or the installation will fail."
+#We need to wait for the OPNsense build proccess to finish, this takes a few minutes
+sleep 1000
+send_line_to_vm "root"
+send_line_to_vm "opnsense"
+send_line_to_vm "2"
+
+if [ "$IP_ADDR" != "" ]; then
+  send_line_to_vm "1"
+  send_line_to_vm "n"
+  send_line_to_vm "${IP_ADDR}"
+  send_line_to_vm "${NETMASK}"
+  send_line_to_vm "${LAN_GW}"
+  send_line_to_vm "n"
+  send_line_to_vm " "
+  send_line_to_vm "n"
+  send_line_to_vm "n"
+  send_line_to_vm " "
+  send_line_to_vm "n"
+  send_line_to_vm "n"
+  send_line_to_vm "n"
+  send_line_to_vm "n"
+  send_line_to_vm "n"
+else
+  send_line_to_vm "1"
+  send_line_to_vm "y"
+  send_line_to_vm "n"
+  send_line_to_vm "n"
+  send_line_to_vm " "
+  send_line_to_vm "n"
+  send_line_to_vm "n"
+  send_line_to_vm "n"
+fi
+#we need to wait for the Config changes to be saved
+sleep 20
+if [ "$WAN_IP_ADDR" != "" ]; then
+  send_line_to_vm "2"
+  send_line_to_vm "2"
+  send_line_to_vm "n"
+  send_line_to_vm "${WAN_IP_ADDR}"
+  send_line_to_vm "${NETMASK}"
+  send_line_to_vm "${LAN_GW}"
+  send_line_to_vm "n"
+  send_line_to_vm " "
+  send_line_to_vm "n"
+  send_line_to_vm " "
+  send_line_to_vm "n"
+  send_line_to_vm "n"
+  send_line_to_vm "n"
+fi
+sleep 10
+send_line_to_vm "0"
+msg_ok "Started OPNsense VM"
+
+msg_ok "Completed Successfully!\n"
+if [ "$IP_ADDR" != "" ]; then
+  echo -e "${INFO}${YW} Access it using the following URL:${CL}"
+  echo -e "${TAB}${GATEWAY}${BGN}http://${IP_ADDR}${CL}"
+else
+  echo -e "${INFO}${YW} LAN IP was DHCP.${CL}"
+  echo -e "${INFO}${BGN}To find the IP login to the VM shell${CL}"
+fi

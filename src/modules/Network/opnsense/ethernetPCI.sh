@@ -102,8 +102,50 @@ PVE_NODE=192.168.2.250
 # find the ethernet pci devices
 msg_info "Finding ethernet PCI devices\n"
 msg_info "ensure that the ethernet devices are on different iommugroups. if not then mappin is not possible \n"
-ssh root@$PVE_NODE 'pvesh get /nodes/testserver1/hardware/pci --pci-class-blacklist ""' | grep -e Ethernet -e class
+msg_info "if the iommu group numner for the ethernet ports you intend to PCI map are not unique in the list below then you might have issues\n"
+echo
+ssh root@$PVE_NODE 'pvesh get /nodes/testserver1/hardware/pci --pci-class-blacklist ""' | grep -e Ethernet -e class |  cut -c 25-131
 
-msg_ok "now let us find the PCI devices to mapp"
-ssh root@$PVE_NODE 'lspci -nnk' | grep Ethernet
+msg_info "Now let us find the PCI devices to map into the VM for WAN and LAN"
 
+# Get Ethernet controllers and format as whiptail menu pairs: "<PCI_ID> <Description>"
+ETHERNET_MENU_ITEMS=()
+while IFS= read -r line; do
+  PCI_ID=$(echo "$line" | awk '{print $1}')
+  DESC=$(echo "$line" | cut -d' ' -f2-)
+  ETHERNET_MENU_ITEMS+=("$PCI_ID" "$DESC")
+done < <(ssh root@$PVE_NODE 'lspci -nnk' | grep "Ethernet controller")
+
+if [ ${#ETHERNET_MENU_ITEMS[@]} -eq 0 ]; then
+  msg_error "No Ethernet controllers found."
+  exit 1
+fi
+
+SELECTED_WAN_PCI=$(
+  whiptail --backtitle "OPNSense PCI Port selection" \
+    --title "Ethernet Port for WAN" \
+    --menu "Please select" 25 70 16 \
+    "${ETHERNET_MENU_ITEMS[@]}" \
+    3>&1 1>&2 2>&3
+)
+
+if [ -z "$SELECTED_WAN_PCI" ]; then
+  exit-script
+fi
+
+msg_ok "Selected PCI device for WAN port: $SELECTED_WAN_PCI\n"
+
+
+SELECTED_LAN_PCI=$(
+  whiptail --backtitle "OPNSense PCI Port selection" \
+    --title "Ethernet Port for LAN" \
+    --menu "Please select" 25 70 16 \
+    "${ETHERNET_MENU_ITEMS[@]}" \
+    3>&1 1>&2 2>&3
+)
+
+if [ -z "$SELECTED_LAN_PCI" ]; then
+  exit-script
+fi
+
+msg_ok "Selected PCI device for LAN port: $SELECTED_LAN_PCI\n"

@@ -221,13 +221,6 @@ header_info
 echo -e "${BL}Using Default Settings${CL}"
 default_settings
 
-# find the WAN and LAN PCI netcards to pass through to the VM
-
-
-NETPORTS=$(ip a | grep DOWN | grep -v NO-CARRIER | cut -d":" -f2 | sed 's/^[ \t]*//;s/[ \t]*$//')
-
-    echo -e "${DGN}Using WAN Bridge: ${BGN}${WAN_BRG}${CL}"
-    echo -e "${DGN}Using LAN Bridge: ${BGN}${LAN_BRG}${CL}"
 
 msg_ok "Virtual Machine ID is ${CL}${BL}$VMID${CL}."
 msg_info "Retrieving the URL for the OPNsense Qcow2 Disk Image"
@@ -256,109 +249,32 @@ qm resize $VMID scsi0 10G >/dev/null
 DESCRIPTION=$(
   cat <<EOF
 <div align='center'>
-  <a href='https://Helper-Scripts.com' target='_blank' rel='noopener noreferrer'>
-    <img src='https://raw.githubusercontent.com/michelroegl-brunner/ProxmoxVE/refs/heads/develop/misc/images/logo-81x112.png' alt='Logo' style='width:81px;height:112px;'/>
+  <a href='https://tappaas.org' target='_blank' rel='noopener noreferrer'>
+    <img src='https://www.tappaas.org/taapaas.png' alt='Logo' style='width:81px;height:112px;'/>
   </a>
 
-  <h2 style='font-size: 24px; margin: 20px 0;'>OPNsense VM</h2>
+  <h2 style='font-size: 24px; margin: 20px 0;'>TAPPaaS Firewall</h2>
 
-  <p style='margin: 16px 0;'>
-    <a href='https://ko-fi.com/community_scripts' target='_blank' rel='noopener noreferrer'>
-      <img src='https://img.shields.io/badge/&#x2615;-Buy us a coffee-blue' alt='spend Coffee' />
-    </a>
-  </p>
-  
   <span style='margin: 0 10px;'>
     <i class="fa fa-github fa-fw" style="color: #f5f5f5;"></i>
-    <a href='https://github.com/community-scripts/ProxmoxVE' target='_blank' rel='noopener noreferrer' style='text-decoration: none; color: #00617f;'>GitHub</a>
+    <a href='https://github.com/TAPpaas/TAPpaas' target='_blank' rel='noopener noreferrer' style='text-decoration: none; color: #00617f;'>GitHub</a>
   </span>
   <span style='margin: 0 10px;'>
     <i class="fa fa-comments fa-fw" style="color: #f5f5f5;"></i>
-    <a href='https://github.com/community-scripts/ProxmoxVE/discussions' target='_blank' rel='noopener noreferrer' style='text-decoration: none; color: #00617f;'>Discussions</a>
+    <a href='https://github.com/TAPpaas/TAPpaas/discussions' target='_blank' rel='noopener noreferrer' style='text-decoration: none; color: #00617f;'>Discussions</a>
   </span>
   <span style='margin: 0 10px;'>
     <i class="fa fa-exclamation-circle fa-fw" style="color: #f5f5f5;"></i>
-    <a href='https://github.com/community-scripts/ProxmoxVE/issues' target='_blank' rel='noopener noreferrer' style='text-decoration: none; color: #00617f;'>Issues</a>
+    <a href='https://github.com/TAPpaas/TAPpaas/issues' target='_blank' rel='noopener noreferrer' style='text-decoration: none; color: #00617f;'>Issues</a>
   </span>
+  <br>
+  <br>
+  This is the OPNsense Firewall/Router for TAPPaaS.
 </div>
 EOF
 )
 qm set "$VMID" -description "$DESCRIPTION" >/dev/null
 
-msg_info "Bridge interfaces are being added."
-qm set $VMID \
-  -net0 virtio,bridge=${BRG},macaddr=${MAC}${VLAN}${MTU} 2>/dev/null
-msg_ok "Bridge interfaces have been successfully added."
+
 
 msg_ok "Created a OPNsense VM ${CL}${BL}(${HN})"
-msg_ok "Starting OPNsense VM (Patience this takes 20-30 minutes)"
-qm start $VMID
-sleep 90
-send_line_to_vm "root"
-send_line_to_vm "fetch https://raw.githubusercontent.com/opnsense/update/master/src/bootstrap/opnsense-bootstrap.sh.in"
-qm set $VMID \
-  -net1 virtio,bridge=${WAN_BRG},macaddr=${WAN_MAC} &>/dev/null
-sleep 10
-send_line_to_vm "sh ./opnsense-bootstrap.sh.in -y -f -r 25.1"
-msg_ok "OPNsense VM is being installed, do not close the terminal, or the installation will fail."
-#We need to wait for the OPNsense build proccess to finish, this takes a few minutes
-sleep 1000
-send_line_to_vm "root"
-send_line_to_vm "opnsense"
-send_line_to_vm "2"
-
-if [ "$IP_ADDR" != "" ]; then
-  send_line_to_vm "1"
-  send_line_to_vm "n"
-  send_line_to_vm "${IP_ADDR}"
-  send_line_to_vm "${NETMASK}"
-  send_line_to_vm "${LAN_GW}"
-  send_line_to_vm "n"
-  send_line_to_vm " "
-  send_line_to_vm "n"
-  send_line_to_vm "n"
-  send_line_to_vm " "
-  send_line_to_vm "n"
-  send_line_to_vm "n"
-  send_line_to_vm "n"
-  send_line_to_vm "n"
-  send_line_to_vm "n"
-else
-  send_line_to_vm "1"
-  send_line_to_vm "y"
-  send_line_to_vm "n"
-  send_line_to_vm "n"
-  send_line_to_vm " "
-  send_line_to_vm "n"
-  send_line_to_vm "n"
-  send_line_to_vm "n"
-fi
-#we need to wait for the Config changes to be saved
-sleep 20
-if [ "$WAN_IP_ADDR" != "" ]; then
-  send_line_to_vm "2"
-  send_line_to_vm "2"
-  send_line_to_vm "n"
-  send_line_to_vm "${WAN_IP_ADDR}"
-  send_line_to_vm "${NETMASK}"
-  send_line_to_vm "${LAN_GW}"
-  send_line_to_vm "n"
-  send_line_to_vm " "
-  send_line_to_vm "n"
-  send_line_to_vm " "
-  send_line_to_vm "n"
-  send_line_to_vm "n"
-  send_line_to_vm "n"
-fi
-sleep 10
-send_line_to_vm "0"
-msg_ok "Started OPNsense VM"
-
-msg_ok "Completed Successfully!\n"
-if [ "$IP_ADDR" != "" ]; then
-  echo -e "${INFO}${YW} Access it using the following URL:${CL}"
-  echo -e "${TAB}${GATEWAY}${BGN}http://${IP_ADDR}${CL}"
-else
-  echo -e "${INFO}${YW} LAN IP was DHCP.${CL}"
-  echo -e "${INFO}${BGN}To find the IP login to the VM shell${CL}"
-fi

@@ -15,3 +15,5 @@ Ensure that the platform is self contained, and will function without reliance o
 A design Goal is to use existing Open Source as much as possible: Reuse instead of reinvent
 
 Another design goal is to REDUCE flexibility. There is value in design and deploy decisions having been taken up front. It does imply that some use case will not fit to TAPPaaS, but for what fits it will be much easier
+
+For more information see the [Vision](Documentation/Vision.md) document, or more generally the [Documentation](Documentation/README.md)

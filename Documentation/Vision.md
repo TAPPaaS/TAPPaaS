@@ -2,7 +2,7 @@
 
 # Vision Introduction
 
-TAPPaaS, that is The Automated Private Platform as a Service, is being designed to solve a problem. A big problem
+TAPPaaS, that is the Trusted Automated Private Platform as a Service, is being designed to solve a problem. A big problem
 
 ## The Problem Part One: The Internet is broken!
 
@@ -33,11 +33,11 @@ what is missing are three things:
 - Configuration and Integration of all the chosen software: So we decide to use NextCloud and run it virtualized on Proxmox. just that in and by itself can be done in many of different ways. Again most people do not care, just tell me
 - Automation of the installation. 
 
-This is not insurmountable if we can create a small community around TAPPaaS
+This is not insurmountable if we can create a small community around TAPPaaS. The community should function as a [Platform Democracy](https://www.cncf.io/blog/2025/05/23/platform-democracy-rethinking-who-builds-and-consumes-your-internal-platform/), implying that the producesers of the platform should also be consumers of the platform.
 
 # Target audience and Design Goals
 
-We have been looking at 3 primary use cases for TAPPaaS
+We have been looking at 3 primary consumers of TAPPaaS
 
 - SMB business: TAPPaaS should deliver the foundation for regular office work and also be a foundation for deployment of business specific applications.
 - Organizations that needs high degree of local resilience, typical critical infrastructure provides parts of public sector and NGO's
