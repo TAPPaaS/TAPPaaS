@@ -9,8 +9,8 @@ Pretty much Intel/AMD CPU will do.
 
 - RAM: 16G byte (likely it will be possible to test in as little as 8G)
 - hard disks: only boot and tank1 needed, no resilience is needed. it can be either SSD or traditional HDDs
-  - Boot: 500G (might work with just 250G)
-  - Tank1: 1 TByte (Might work with 512G)
+  - Boot: 256G (might work with less than 100G, still testing)
+  - Tank1: 1 TByte (Might work with 512G, depends on number of modules that are enabled)
   - Tank2: optional
 - Network: 3 ports of 1 gig.
 
