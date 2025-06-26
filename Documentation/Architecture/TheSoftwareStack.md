@@ -58,7 +58,7 @@ The alternative to Proxmox ZFS is FreeeNAS, but we consider the benefits compare
 
 | Capability | Priority | Software | Comments |
 |------------|-----------|----------|----------|
-| email | High | PostIT | Very difficult to run autonomously, maintenance is high|
+| email | High | PostIO | Very difficult to run autonomously, maintenance is high|
 | Address book | High | NextCloud | need to be integrated into many other applications |
 | Calendering | High | NextCloud | |
 | Note Taking | Medium | ?? | Could simply be files in Nextcloud, but need to be investigated |
