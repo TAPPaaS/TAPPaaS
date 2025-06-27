@@ -12,7 +12,7 @@
 # TODO: Throw warning is no mirror on zpools and boot. Configure power management
 
 #
-# Validate that the ports are availabel and PCI passthrug is possible
+# Validate that the ports are available and PCI passthrug is possible
 
 function header_info {
   clear

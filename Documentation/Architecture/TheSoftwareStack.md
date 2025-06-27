@@ -9,7 +9,7 @@ Selecting from the enormous pool of software we have used the principles of:
 1) must be Open Source
 2) must show a track record of being Secure
 3) must be "established", and sufficinet feature complete
-4) must be open w.r.t. data formats (enabeling migration away)
+4) must be open w.r.t. data formats (enabling migration away)
 
 
 ## Foundation
@@ -103,7 +103,7 @@ The alternative to Proxmox ZFS is FreeeNAS, but we consider the benefits compare
 | Chat | Medium | ?? | |
 | Backlog | High | ?? | |
 | Application platform | High | K3S, Garage, PostGreSQL | |
-| Reverse Proxy | High | Pangolin | for developement the requirement is easy access to a reverse proxy in a secure manner |
+| Reverse Proxy | High | Pangolin | for development the requirement is easy access to a reverse proxy in a secure manner |
 
 
 ### Object storage: Garage
@@ -135,7 +135,7 @@ alternatives:
 
 ## Firewall: OPNSense
 
-Alternativea are:
+Alternatives are:
 
 - PFsense: PFSense is the original but is going more and more commercial
 - OpenWRT: it seems less scalable and less feature rich

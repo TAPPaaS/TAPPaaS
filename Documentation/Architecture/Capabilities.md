@@ -65,7 +65,7 @@ So the functions we are aiming at:
 - Smart AVR
 - House Butler (AI)
 
-#### Houshold Member Related
+#### household Member Related
 
 - Email: you want to own you emails and email address
 - Address book
@@ -116,7 +116,7 @@ However with a Community deployment you would want to add a few more functionali
 ### Small Utility
 
 - Industrial Strength Firewall
-- Network seperation (VLANs)
+- Network separation (VLANs)
 - VPN
 
 ### NGO
@@ -143,7 +143,7 @@ The Physical security can be considered a Business function.
 #### Virtual Security
 
 - User and Access Management: Includes 2FA
-- Password and key management: For end users, ensure the organisation is not relying on postit notes
+- Password and key management: For end users, ensure the organization is not relying on postit notes
 - Backup - Restore
 - Firewall
 - Encryption of private data at rest and in transit

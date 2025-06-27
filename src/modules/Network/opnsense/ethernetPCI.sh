@@ -6,13 +6,13 @@
 # it under the terms of the Creative Commons Attribution-NonCommercial-ShareAlike 4.0 International (CC BY-NC-SA 4.0) license.
 # Author: larsrossen
 #
-# This script is heavely based on the Proxmox Helper Script: Proxmost PVE post Install
+# This script is heavily based on the Proxmox Helper Script: Proxmost PVE post Install
 #
 # TODO: Display final HW config, 
 # TODO: Throw warning is no mirror on zpools and boot. Configure power management
 
 #
-# Validate that the ports are availabel and PCI passthrug is possible
+# Validate that the ports are available and PCI passthrugh is possible
 
 function header_info {
   clear

@@ -51,7 +51,7 @@ qm set $VMID \
 sleep 10
 send_line_to_vm "sh ./opnsense-bootstrap.sh.in -y -f -r 25.1"
 msg_ok "OPNsense VM is being installed, do not close the terminal, or the installation will fail."
-#We need to wait for the OPNsense build proccess to finish, this takes a few minutes
+#We need to wait for the OPNsense build process to finish, this takes a few minutes
 sleep 1000
 send_line_to_vm "root"
 send_line_to_vm "opnsense"
