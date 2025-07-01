@@ -1,3 +1,5 @@
+*© 2024. This work is openly licensed via [MPL-2.0](https://mozilla.org/MPL/2.0/.).*
+
 # Configuration
 
 This define the configuration of the SW stack to deliver the capabilities

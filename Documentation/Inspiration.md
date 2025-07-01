@@ -1,3 +1,5 @@
+*© 2024. This work is openly licensed via [MPL-2.0](https://mozilla.org/MPL/2.0/.).*
+
 # Related work
 
 ## [Proxmox Helper scripts](https://community-scripts.github.io/ProxmoxVE/)

@@ -1,4 +1,4 @@
-*© 2024. This work is openly licensed via [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/).*
+*© 2024. This work is openly licensed via [MPL-2.0](https://mozilla.org/MPL/2.0/.).*
 
 # Vision Introduction
 

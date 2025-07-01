@@ -1,3 +1,5 @@
+*© 2024. This work is openly licensed via [MPL-2.0](https://mozilla.org/MPL/2.0/.).*
+
 # TAPPaaS Software stack
 
 This is the reason we call it TAPPaaS. Pronounced Tapas like the Spanish dish: A collection of delicious appetizers that makes up a comprehensive serving.

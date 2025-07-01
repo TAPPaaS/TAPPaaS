@@ -1,13 +1,14 @@
 #!/usr/bin/env bash
 
 # Copyright (c) 2025 TAPPaaS org
-# This file is part of the TAPPaaS project.
-# TAPPaaS is free software: you can redistribute it and/or modify
-# it under the terms of the Creative Commons Attribution-NonCommercial-ShareAlike 4.0 International (CC BY-NC-SA 4.0) license.
-# Author: larsrossen
 #
-# This script is heavely based on the Proxmox Helper Script: Docker VM
+# This Source Code Form is subject to the terms of the Mozilla Public
+# License, v. 2.0. If a copy of the MPL was not distributed with this
+# file, You can obtain one at https://mozilla.org/MPL/2.0/.
 #
+# This file incorporates work covered by the following copyright and permission notice:
+# Copyright (c) 2021-2025 community-scripts ORG
+# License: MIT | https://github.com/community-scripts/ProxmoxVE/raw/main/LICENSE
 
 function header_info() {
   # generated with https://patorjk.com/software/taag/#p=display&f=Big&t=TAPPaaS%20CICD%20Bootstrap
