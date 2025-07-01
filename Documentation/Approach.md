@@ -40,8 +40,14 @@ Even though there is enough open source software out there to cater for most of 
 ```mermaid
 block-beta
   columns 3
-  d("Define and setup")
-  m("Manual install and test minimum Home use")
+  d("Frame TAPPaaS and create CICD")
+  m("MVP: Manual install and test minimum Home use")
   a("Automate") 
+  d --> m
+  m --> a
+  space space
+  e("Expand on home use cases")
+  space space
+  b("manual implement minimum SMB")
 ```
-
+We are done with Framing, working hard on an MVP
