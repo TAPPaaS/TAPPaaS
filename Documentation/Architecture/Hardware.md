@@ -1,12 +1,17 @@
 *© 2024. This work is openly licensed via [MPL-2.0](https://mozilla.org/MPL/2.0/.).*
 
+TODO: current text focus on HW fro home and community, need to be made more generic
+
 # Hardware
 
 ## Introduction
 
-Hardware is going to be controversial and constantly it will be outdated. But let us nail down some boundary conditions, that hopefully can be a bit more stable and be the defining frame for actual selections. see [Examples](../Examples/README.md) for concrete examples.
+Concrete Hardware suggestions for TAPPaaS is going to be controversial and will constantly be outdated. 
+Instead we will nail down some boundary conditions, that hopefully can be a bit more stable and be the defining frame for actual selections. 
 
-The general design principles is that most of IT4HOME should be delivered as an appliance. think something like a Fritzbox <https://en.avm.de/products/fritzbox/> or the Unify Dream machine <https://store.ui.com/us/en/collections/unifi-dream-machine/products/udm-pro>
+See [Examples](../Examples/README.md) for concrete examples.
+
+The general design principles is that most of TAPPaaS should be delivered as an appliance. think something like a Fritzbox <https://en.avm.de/products/fritzbox/> or the Unify Dream machine <https://store.ui.com/us/en/collections/unifi-dream-machine/products/udm-pro>
 
 However the ambition of delivered functionality is larger so design become more complicated.
 

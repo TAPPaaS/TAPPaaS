@@ -1,3 +1,5 @@
+TODO: still work in progress. The actual choice should be documented and the alternatives should be listed with a reason for why they were deselected
+
 ## Open Source SSO: Options and the Keycloak + Bitwarden Combination
 
 ### What is SSO and Why Use It?
