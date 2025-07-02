@@ -36,25 +36,20 @@ We have compiled a set of principles we want to follow in designing and construc
 (disclaimer: no elephants were harmed creating TAPPaaS)
 
 Even though there is enough open source software out there to cater for most of the TAPPaaS needs then there is an almost endless amount of software modules and details to work out and integrate. For that reason we are following the following conceptual roadmap:
-
-"Spring 2025" "Summer 2025" "Fall 2025" "2026" "..."
  
 
 ```mermaid
 block-beta
   columns 5
-   d("Frame TAPPaaS and create CICD")
+  spring["Spring 2025"] summer["Summer 2025"] fall["Fall 2025"] next["2026"] future["..."]
+  d("Frame TAPPaaS\n and create CICD")
   m("MVP: Manual install\n and test minimum Home use")
   a("Automate") space space
-  d --> m
-  m --> a
   space space
   e("Expand on home use cases")
   aaa("Automate Automate Automate")
   t("Take over the world")
   space space
   b("manual implement minimum SMB") space space
-  m --> e
-  m --> b
 ```
 We are done with Framing, working hard on an MVP
