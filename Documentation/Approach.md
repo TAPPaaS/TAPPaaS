@@ -39,15 +39,21 @@ Even though there is enough open source software out there to cater for most of 
 
 ```mermaid
 block-beta
-  columns 3
+  columns 5
+  "Spring 2025" "Summer 2025" "Fall 2025" "2026" "..."
   d("Frame TAPPaaS and create CICD")
-  m("MVP: Manual install and test minimum Home use")
-  a("Automate") 
+  m("MVP: Manual install\n and test minimum Home use")
+  a("Automate") space space
   d --> m
   m --> a
   space space
   e("Expand on home use cases")
+  aaa("Automate Automate Automate")
+  t("Take over the world")
   space space
-  b("manual implement minimum SMB")
+  b("manual implement minimum SMB") space space
+  m --> e
+  m --> b
+
 ```
 We are done with Framing, working hard on an MVP
