@@ -1,6 +1,59 @@
-# Enterprise-Grade VLAN Network Design: Review & Recommendations
+*© 2024. This work is openly licensed via [MPL-2.0](https://mozilla.org/MPL/2.0/.).*
 
-_Last updated: 2025-05-26_
+# TAPPaaS Network design
+
+## Introduction
+
+There are a number of parts to the TAPPaaS network design:
+
+- The local TAPPaaS network topology, managed as a VLAN overlay network
+- The firewall and router: manage the routing and traffic control between elements of the TAPPaaS network topology as well as the access to and from the Internet
+- The switching infrastructure: In very small TAPPaaS installations the switching is purely virtual but in most cases there is both virtual switching in the virtualization nodes of TAPPaaS and there is a need for physical switching equipment. 
+- IP number allocations
+- The Wifi access points (AP): It is not a priority to manage APs in TAPPaaS and advanced APs are difficult to get as open source. So TAPPaaS is making suggestions for what needs to be configured, not how to do it.
+- The Network services: This is DNS, DHCP, 
+- The connectivity proxies
+- The network monitoring
+
+We recognize that for some it will make sense to reuse existing firewall, switching and WiFI access points. in which case TAPPaaS just makes recommendations to how those components are configured. But in the ideal case TAPPaaS controls all of this infrastructure.
+
+## TAPPaaS network topology
+
+Moving to a self host setup introduce a number of security challenges, and to deal with this we are segmenting TAPPaaS.
+The cost of segmentation is more challenges in connecting the relevant components together, and secondly a log of "internal" traffic will now need to be routed between networks, draining resources that could have been used elsewhere. 
+
+In the TAPPaaS design we are trying to reach a balance between simplicity and security, but we are leaning towards security more than simplicity
+
+![network topology](./networktopology.svg)
+<img src="./networktopology.svg">
+
+## Router and Switching infrastructure
+
+The Router/switch infrastructure for TAPPaaS can be pictured this way
+
+TODO: insert picture of Router with two physical ports, n number of virtual ports, a switch, three proxmox nodes each containing a few virtual switches, and finally a few AP's and a few switch ports with IoT equipment or other stuff connected
+
+### About IP and VLAN numbers
+
+TAPPaaS support IPv4 and IPv6. and in the ideal world the TAPPaaS system plugs into an Internet connection that hands out One public IPv4 and at least a /54 IPv6 range. TAPPaaS can function without IPv6 connectivity, and with no public IPv4.
+
+For IPv4 TAPPaaS do NAT translation to an internal 10.0.0.0/8 network
+
+For the VLANs TAPPaaS is using a 3 digit tag, where the first digit indicate the type of VLAN traffic and the next two digits is used for further subdividing that kind of traffic.
+
+### VLANs
+
+Corresponding to the TAPPaaS Network topology we have at least the following VLANs
+
+TODO: list Native, Management, DMZ, IoT, Guest, Home, Work, Production, Test
+
+TODO: describe examples of sub vlans
+
+### VLAN to IP
+
+
+# Appendix / to be cleaned up
+
 
 ---
 
