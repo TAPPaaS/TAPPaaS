@@ -39,7 +39,7 @@ The segments are:
 
 The Router/switch infrastructure for TAPPaaS can be pictured this way
 
-TODO: insert picture of Router with two physical ports, n number of virtual ports, a switch, three proxmox nodes each containing a few virtual switches, and finally a few AP's and a few switch ports with IoT equipment or other stuff connected
+![Network Switching](./networkswitching.svg)
 
 ### About IP and VLAN numbers
 
