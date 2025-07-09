@@ -51,13 +51,15 @@ Each of the network segments in the TAPPaaS network topology has its own IP sub 
 
 This leads to the following setup of assignments in TAPPaaS:
 
+
 | Segment         | VLAN | IPv4 Subnet  | IPv6 Subnet    | Description |
-|-----------------|------|--------------|----------------|------- -----|
-| Management      | none | 10.0.0.0/24  | <ipv6-prefix>:0::/64 | not tagged traffic is considered management traffic |
-| DMZ             | 100  | 10.1.0.0/24  | <ipv6-prefix>:1::/64 | Demilitarized zone
-| Home/Business   | 200  | 10.2.0.0/24  | <ipv6-prefix>:2::/64 | This is where services for consumption lives
-| Guest           | 300  | 10.3.0.0/24  | <ipv6-prefix>:3::/64 | unconnected client network
-| IoT             | 400  | 10.4.0.0/24  | <ipv6-prefix>:4::/64 | unsecure devices and systems
+|-----------------|------|--------------|----------------|-------------|
+| Management      | none | 10.0.0.0/24  | \<ipv6-prefix\>:0::/64 | not tagged traffic is considered management traffic |
+| DMZ             | 100  | 10.1.0.0/24  | \<ipv6-prefix\>:1::/64 | Demilitarized zone |
+| Home/Business   | 200  | 10.2.0.0/24  | \<ipv6-prefix\>:2::/64 | This is where services for consumption lives |
+| Guest           | 300  | 10.3.0.0/24  | \<ipv6-prefix\>:3::/64 | unconnected client network |
+| IoT             | 400  | 10.4.0.0/24  | \<ipv6-prefix\>:4::/64 | unsecure devices and systems |
+
 
 Notes:
 
