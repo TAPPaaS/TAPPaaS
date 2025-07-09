@@ -20,12 +20,20 @@ We recognize that for some it will make sense to reuse existing firewall, switch
 ## TAPPaaS network topology
 
 Moving to a self host setup introduce a number of security challenges, and to deal with this we are segmenting TAPPaaS.
-The cost of segmentation is more challenges in connecting the relevant components together, and secondly a log of "internal" traffic will now need to be routed between networks, draining resources that could have been used elsewhere. 
+The cost of segmentation is more challenges in connecting the relevant components together, and secondly a lot of "internal" traffic will now need to be routed between networks, draining resources that could have been used elsewhere. 
 
 In the TAPPaaS design we are trying to reach a balance between simplicity and security, but we are leaning towards security more than simplicity
 
 ![Network Topology](./networktopology.svg)
 
+In the diagram the Arrow represent connectivity between segments. The direction indicate who can initiate the traffic (TCP)
+
+The segments are:
+
+- HOME: This is where alle the services for a home resides, such as Home Assistant, NextCloud for file sharing, .... There can be several "homes" in a TAPPaaS setup.
+- IoT: This is where alle the IoT equipment in the environment lives. IoT is generally considered more insecure. Home can access IoT, but not the other way around. If you have particular problematic devices or manage several homes then you can have several IoT segments that are isolated from each other
+- Mgmt: Management section, this is for self management of TAPPaaS. generally the management segment can connect to everything (except for Guest)
+- DMZ: Demilitarized Zone, this is the only place traffic from the internet can enter a TAPPaaS system. it is a reverse tunnel proxy, so it will not be abel to access anything else in TAPPaaS: Services in HOME or other systems that needs to expose services externally will connect to the DMZ.
 
 ## Router and Switching infrastructure
 
