@@ -24,8 +24,7 @@ The cost of segmentation is more challenges in connecting the relevant component
 
 In the TAPPaaS design we are trying to reach a balance between simplicity and security, but we are leaning towards security more than simplicity
 
-![network topology](./networktopology.svg)
-<img src="./networktopology.svg">
+[Network Topology](./networktopology.svg)
 
 ## Router and Switching infrastructure
 
