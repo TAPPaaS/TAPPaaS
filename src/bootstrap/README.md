@@ -20,8 +20,8 @@ After bootstrapping then all management is done inside the TAPPaaS-CICD VM
 - download a Proxmox PVE image from: 
 - create a boot USB (on windows use rufus)
 - boot the machine into the USB and do an install: use ZFS for the boot disk.
-- once it is rebooted go to management console and create the "tanks" as zfs pools (minimum is to have a tank1)
-(if sufficient hw resources are available then use mirror on boot and tank1)
+- once it is rebooted go to management console and create the "tanks" as zfs pools (minimum is to have a tanka1)
+(if sufficient hw resources are available then use mirror on boot and tanka1)
 - run the TAPaaSPostPVEInstall.sh script in the proxmox node shell (via the proxmox management console):
 ```
 GITTOKEN=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

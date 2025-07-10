@@ -72,20 +72,20 @@ if ! pveversion | grep -Eq "pve-manager/8\.[0-4](\.[0-9]+)*"; then
   exit
 fi
 
-msg_info "Checking for \"tank1\" zfspool"
-if ! pvesm status -content images | grep zfspool | grep -q tank1; then
-  msg_error "did not find a \"tank1\" zfspool"
+msg_info "Checking for \"tanka1\" zfspool"
+if ! pvesm status -content images | grep zfspool | grep -q tanka1; then
+  msg_error "did not find a \"tanka1\" zfspool"
   echo -e "Exiting..."
   sleep 2
   exit
 fi
-msg_ok "Found \"tank1\" zfspool"
+msg_ok "Found \"tanka1\" zfspool"
 
-msg_info "Checking for \"tank2\" zfspool"
-if ! pvesm status -content images | grep zfspool | grep -q tank2 ; then
-  msg_ok "did not find a \"tank2\" zfspool. Some modules of TAPPaaS will not work"
+msg_info "Checking for \"tankb1\" zfspool"
+if ! pvesm status -content images | grep zfspool | grep -q tankb1 ; then
+  msg_ok "did not find a \"tankb1\" zfspool. Some modules of TAPPaaS will not work"
 else
-msg_ok "Found \"tank2\" zfspool"
+msg_ok "Found \"tankb1\" zfspool"
 fi
 #
 # Check it this have already been run, in which case skip all the repository and other updates

@@ -30,7 +30,7 @@ The default configuration of of a TAPPaaS node and the default setup of modules 
 
 - there is a /tanka1 zfs data pool that have RAID redundancy and is high performance. A simple node would have two mirrowed ssd drives, but more complicated setus can be accommodated 
   - as default then all SW modules are installed in VMs that have virtual disks on /tanka1
-  - for modules configured for high availability across two TAPPaaS servers/node then there is proxmox replication to the second node /tank1
+  - for modules configured for high availability across two TAPPaaS servers/node then there is proxmox replication to the second node /tanka1
 - if a module require second tier storage then it will as default allocate storage on a /tankb1 zfs data pool
   - /tankb1 should not "waste" resources on having RAID redundancy
   - less performant hard disk can be used for /tankb1

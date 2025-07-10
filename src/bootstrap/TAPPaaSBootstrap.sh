@@ -244,7 +244,7 @@ function default_settings() {
   MAC="$GEN_MAC"
   VLAN=""
   MTU=""
-  STORAGE="tank1"
+  STORAGE="tanka1"
   URL=https://cloud-images.ubuntu.com/noble/current/noble-server-cloudimg-amd64.img
   # TODO: clean up this code
   for i in {0,1}; do
