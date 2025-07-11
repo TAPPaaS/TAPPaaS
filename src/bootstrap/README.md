@@ -1,17 +1,21 @@
 
 # Bootstrapping TAPPaaS
 
+## Overview
+
 Bootstrapping TAPPaaS has not been fully automated. However some steps are scripted.
 
 you need to do the following activities (next sections give exact instructions)
 
 1) Install proxmox on the first TAPPaaS node
-2) TAPaaSPostPVEInstall.sh: this do basic household activities on Proxmox after initial install
+2) TAPaaSPostPVEInstall.sh: Do basic household activities on Proxmox after initial install
 3) TAPaaSBootstrap.sh: this create and install a self management VM (called TAPPaaS-CICD) with all the needed tooling
 4) TAPPaaS-CICD-bootstrap.sh: a script to be run inside the CICD VM
 It you configuration have more than one node then you need to do sept 1 and 2 on the other nodes and join them into a cluster. (TODO: instructions for clustering)
+5) install and configure the firewall
+6) Rewire the network replacing exiting firewall with new firewall and reconfigure IP number of first TAPPaaS node.
 
-After bootstrapping then all management is done inside the TAPPaaS-CICD VM
+After initial 3 stems of bootstrapping then all management is done inside the TAPPaaS-CICD VM
 
 ## how to bootstrap
 
@@ -27,7 +31,7 @@ After bootstrapping then all management is done inside the TAPPaaS-CICD VM
 - run the TAPaaSPostPVEInstall.sh script in the proxmox node shell (via the proxmox management console):
 ```
 GITTOKEN=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
-curl -fsSL -H "Authorization: token $GITTOKEN" https://raw.githubusercontent.com/TAPpaas/TAPpaas/main/src/bootstrap/TAPaaSPostPVEInstall.sh | bash
+curl -fsSL -H "Authorization:token $GITTOKEN" https://raw.githubusercontent.com/TAPpaas/TAPpaas/main/src/bootstrap/TAPPaaSPostPVEInstall.sh | bash
 ```
 (note the -H token stuff is only needed as long as the script is in a private repository, the token gives read access)
 
