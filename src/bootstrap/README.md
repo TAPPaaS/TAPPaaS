@@ -17,23 +17,25 @@ After bootstrapping then all management is done inside the TAPPaaS-CICD VM
 
 ### Proxmox install:
 
-- download a Proxmox PVE image from: 
-- create a boot USB (on windows use rufus)
-- boot the machine into the USB and do an install: use ZFS for the boot disk.
+- prepare physical hardware. see [Examples](../../Documentation/Examples/README.md) or [Hardware](../../Documentation/Architecture/Hardware.md)
+- ensure you designed your basic setup [Design](../../Documentation/Installation/README.md)
+- download a Proxmox VE iso installer image from: [Official Proxmox Download site](https://www.proxmox.com/en/downloads)
+- create a boot USB (on windows we recommend to use [Rufus](https://rufus.ie/en/))
+- boot the machine from the USB and do an install: use ZFS for the boot disk.
 - once it is rebooted go to management console and create the "tanks" as zfs pools (minimum is to have a tanka1)
 (if sufficient hw resources are available then use mirror on boot and tanka1)
 - run the TAPaaSPostPVEInstall.sh script in the proxmox node shell (via the proxmox management console):
 ```
-GITTOKEN=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
-curl -fsSL -H "Authorization: token $GITTOKEN" https://raw.githubusercontent.com/TAPpaas/TAPpaas/refs/heads/main/src/bootstrap/TAPaaSPostPVEInstall.sh | bash
+GITTOKEN=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
+curl -fsSL -H "Authorization: token $GITTOKEN" https://raw.githubusercontent.com/TAPpaas/TAPpaas/main/src/bootstrap/TAPaaSPostPVEInstall.sh | bash
 ```
 (note the -H token stuff is only needed as long as the script is in a private repository, the token gives read access)
 
 - after reboot check that it all looks fine!!
 - run the TAPaaSBootstrap script from the root console
 ```
-GITTOKEN=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
-curl -fsSL -H "Authorization:token $GITTOKEN" https://raw.githubusercontent.com/TAPpaas/TAPpaas/refs/heads/main/src/bootstrap/TAPPaaSBootstrap.sh | bash
+GITTOKEN=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
+curl -fsSL -H "Authorization:token $GITTOKEN" https://raw.githubusercontent.com/TAPpaas/TAPpaas/main/src/bootstrap/TAPPaaSBootstrap.sh | bash
 ```
 You should now have a PVE node with a TAPPaaS template and a TAPPaaS CICD VM
 
@@ -50,9 +52,9 @@ Now Do:
 - Log into TAPPaaS CICD VM using ssh from a host terminal: ssh tappaas@<insert ip of CICD VM>
 - In the shell of the TAPPaaS CICD VM do:
   - create ssh keys: ssh-keygen -t ed25519
-  - add ssh keys to your github: copy and paste the output of cat ~/.ssh/id_ed25519.pub (not needed when TAPPaas is public)
+  - add ssh keys to your github: copy and paste the output of cat ~/.ssh/id_ed25519.pub (not needed when TAPPaaS is public)
   - test that the key authentication works: ssh -T git@github.com
-  - clone the TAPpaas repository: git clone git@github.com:TAPpaas/TAPpaas.git
+  - clone the TAPPaaS repository: git clone git@github.com:TAPpaas/TAPpaas.git
   - run the final bootstrap code: ./TAPpaas/src/bootstrap/TAPPaaS-CICD-bootstrap.sh
   - set the git user name: git config --global user.name <your name> 
   - set the git user email: git config --global user.email <your email>
@@ -74,11 +76,13 @@ Next you need to set up tokens for Opentofu (terraform)
 - copy the token and write it into a file : cat >.ssh/tappaas-token
 - make the file read/write for owner only: chmod 600 .ssh/tappaas-token
 
-### Bost bootstrap activities
+### Post bootstrap activities
 
 
 You will need to do the Network module first which include setting up firewall, and vlans as well as wifi
 This is described in [Network Setup](../modules/Network/README.md)
 
 second module is the [DMZ](../modules/DMZ/README.md)
+
+Now add any other module you think would be relevant to your TAPPaaS instance
 
