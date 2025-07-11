@@ -201,7 +201,7 @@ EOF
     cat <<EOF
 <div align='center'>
   <a href='https://tappaas.org' target='_blank' rel='noopener noreferrer'>
-    <img src='https://raw.githubusercontent.com/larsrossen/TAPPaaS/Documentation/taapaas.png' alt='Logo' style='width:81px;height:112px;'/>
+    <img src='https://www.tappaas.org/taapaas.png' alt='Logo' style='width:81px;height:112px;'/>
   </a>
 
   <h2 style='font-size: 24px; margin: 20px 0;'>TAPPaaS CICD VM</h2>
