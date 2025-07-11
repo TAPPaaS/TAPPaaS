@@ -339,7 +339,7 @@ msg_ok "Step 4 Done: Created the TAPPaaS Unbuntu with Docker VM template"
 msg_info "Step 5: Creating a TAPPaaS CICD VM"
 qm clone $TEMPLATEVMID $VMID --name $VMNAME --full 1 >/dev/null
 qm set $VMID --Tag TAPPaaS,CICD >/dev/null
-qm set $TEMPLATEVMID -description "$DESCRIPTION" >/dev/null
+qm set $VMID -description "$DESCRIPTION" >/dev/null
 qm start $VMID >/dev/null
 msg_ok "Step 5 Done: Created a TAPPaaS CICD VM" 
 

@@ -54,6 +54,8 @@ You need the IP of the VM: look it up in the summary of the TAPPaaS CICD VM in t
 Now Do:
 
 - Log into TAPPaaS CICD VM using ssh from a host terminal: ssh tappaas@<insert ip of CICD VM>
+  - look at the summary page for the tappaas-cicd vm in the PVE portal. 
+  - or do the command "qm guest cmd 100 network-get-interfaces"
 - In the shell of the TAPPaaS CICD VM do:
   - create ssh keys: ssh-keygen -t ed25519
   - add ssh keys to your github: copy and paste the output of cat ~/.ssh/id_ed25519.pub (not needed when TAPPaaS is public)

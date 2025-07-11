@@ -119,9 +119,9 @@ sudo ./install-opentofu.sh --install-method deb >/dev/null
 sudo rm -f install-opentofu.sh
 msg_ok "Done Installing OpenTofu"
 
-msg_ok "**** Congratulation TAPPaaS is not bootstrapped ****"
+msg_ok "**** Congratulation TAPPaaS is now bootstrapped ****"
 msg_ok "  next step is to get firewall installed and configured"
 msg_ok "  and then install all the right TAPPaaS modules"
-msg_ok "Please run: sudo TAPPaaS/src/modules/install.sh opensense"
+msg_ok "  go to ../modules/Network and follow the README.md instruction"
 
 
