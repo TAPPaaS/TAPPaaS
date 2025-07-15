@@ -18,10 +18,14 @@ Click Install on the extension pack by Microsoft.
 ✅ Step 2: Check if SSH is Installed
 Open your terminal and run:
 
+  ssh -V
 
 If you see a version number (like OpenSSH_8.9p1), SSH is installed. If not, install it:
 
 Ubuntu/Debian:
+
+    sudo apt update
+    sudo apt install openssh-client
 
 
 macOS: SSH is already installed.
@@ -34,19 +38,27 @@ Check if you already have keys:
 
 If you don’t see id_rsa and id_rsa.pub, generate them:
 
+    ssh-keygen -t rsa -b 4096 -C "your_email@example.com"
+
 
 Just press Enter to accept the default file location and leave the passphrase empty (or set one if you prefer).
 
 ✅ Step 4: Upload Your Public Key to the Remote VM
+
 Replace tapas@tapas-cicd with your actual username and host if different.
 
 
+    ssh-copy-id tapas@tapas-cicd
+
 If ssh-copy-id is not available, use:
+
+    cat ~/.ssh/id_rsa.pub | ssh tapas@tapas-cicd "mkdir -p ~/.ssh && cat >> ~/.ssh/authorized_keys
 
 
 ✅ Step 5: Test SSH Connection
 Try connecting to the VM:
-
+  
+    ssh tapas@tapas-cicd
 
 If you see a welcome message or terminal access, it works!
 
