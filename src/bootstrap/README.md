@@ -56,25 +56,26 @@ Now Do:
 - Log into TAPPaaS CICD VM using ssh from a host terminal: ssh tappaas@<insert ip of CICD VM>
   - look at the summary page for the tappaas-cicd vm in the PVE portal. 
   - or do the command "qm guest cmd 100 network-get-interfaces"
+
+### Intermediate step for TAPPaaS developers:
+
+THis step is only needed if you plan to update TAPPaaS git from the CICD environment, if you are not a developer of TAPPaaS then you can skip this step
+
 - In the shell of the TAPPaaS CICD VM do:
-  - create ssh keys: ssh-keygen -t ed25519
+  - create ssh keys: ssh-keygen -t ed25519 -q -N ""
   - add ssh keys to your github: copy and paste the output of cat ~/.ssh/id_ed25519.pub (not needed when TAPPaaS is public)
   - test that the key authentication works: ssh -T git@github.com
+    - it will ask if if you want to continue connecting: answer yes
+    - it will hopefully then state that you authenticated but that github does not provide shell access. That is OK
+
+### Clone TAPPaaS to you CICD VM, and complete the bootstrap
+
   - clone the TAPPaaS repository: git clone git@github.com:TAPpaas/TAPpaas.git
   - run the final bootstrap code: ./TAPpaas/src/bootstrap/TAPPaaS-CICD-bootstrap.sh
-  - set the git user name: git config --global user.name <your name> 
+  - set the git user name (from the tappaas-cicd command prompt): git config --global user.name <your name> 
   - set the git user email: git config --global user.email <your email>
 
-### Intermediate step:
-
-Set up a coding environment connected to the CICD
-
-- Install Visual code on your personal developer machine (MacOS, Linux, Windows)
-- Install the Visual Code Remote Development extension pack (search in VC and install in VC)
-- ensure you have ssh installed on your development machine and you have keys generated
-- upload keys to the tapas@tapas-cicd VM users, authorized keys.
-- test that you can ssh into tappaas@tappaas-cicd from the development machine
-you can now connect to the CICD VM using the connection bottom in the lower left corner of VC
+Set up a coding environment connected to the CICD: see [Visual Code Remote Development](./VC-RemoteDev.md)
 
 Next you need to set up tokens for Opentofu (terraform)
 - in proxmox menu: Datacenter->Permission->API tokens: add a token with id: tappaas-token associated with root@pam
