@@ -28,9 +28,13 @@ bash -c "$(curl -fsSL https://raw.githubusercontent.com/community-scripts/Proxmo
 ```
 use advanced settings. 
 use default values except for:
+  ID of VM: 666
   WAN bridge: vmbr0 (opposite of default, this way the opnsense initially will get its IP from existing local area network where proxmox is running)
   LAN bridge: vmbr1 (oppostite of default)
   LAN IP: 10.0.0.0 /24 gateway 10.0.0.1
+  WAN IP: select an IP from the local area network
+  WAN gateway: select you current gateway
+
 
 
 
