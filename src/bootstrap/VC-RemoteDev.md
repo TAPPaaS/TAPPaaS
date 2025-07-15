@@ -45,7 +45,7 @@ Just press Enter to accept the default file location and leave the passphrase em
 
 ✅ Step 4: Upload Your Public Key to the Remote VM
 
-Replace tapas@tapas-cicd with your actual username and host if different.
+Replace tappaas@tappaas-cicd with your actual username and host(-ip) if different.
 
 Fetch the key from your development machine (laptop) and copy this to your clip-board:
 
