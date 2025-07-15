@@ -47,12 +47,18 @@ Just press Enter to accept the default file location and leave the passphrase em
 
 Replace tapas@tapas-cicd with your actual username and host if different.
 
+Fetch the key from your development machine (laptop) and copy this to your clip-board:
 
-    ssh-copy-id tappaas@tappaas-cicd
+    cat ~/.ssh/id_rsa.pub
 
-If ssh-copy-id is not available, use:
 
-    cat ~/.ssh/id_rsa.pub | ssh tappaas@tappaas-cicd "mkdir -p ~/.ssh && cat >> ~/.ssh/authorized_keys
+On your TAPpaas host, in the shell window tappaas@tappaas.cicd.vm:
+
+    cat >> ~/.ssh/authorized_keys
+
+Next, paste your key from your clipboard onto the tappaas@tappaas.cicd.vm and press:
+
+    ctrl-D
 
 
 ✅ Step 5: Test SSH Connection
