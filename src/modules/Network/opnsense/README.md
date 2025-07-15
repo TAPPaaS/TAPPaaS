@@ -26,8 +26,12 @@ Run the proxmox helperscript that installs opnsense. Run the following command f
 ```
 bash -c "$(curl -fsSL https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/vm/opnsense-vm.sh)"
 ```
+use advanced settings. 
+use default values except for:
+  WAN bridge: vmbr0 (opposite of default, this way the opnsense initially will get its IP from existing local area network where proxmox is running)
+  LAN bridge: vmbr1 (oppostite of default)
+  LAN IP: 10.0.0.0 /24 gateway 10.0.0.1
 
-Use default values
 
 
 ## Select PCI passthrough
