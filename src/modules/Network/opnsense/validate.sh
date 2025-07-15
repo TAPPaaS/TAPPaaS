@@ -1,18 +1,23 @@
 #!/usr/bin/env bash
 
 # Copyright (c) 2025 TAPPaaS org
-# This file is part of the TAPPaaS project.
-# TAPPaaS is free software: you can redistribute it and/or modify
-# it under the terms of the Creative Commons Attribution-NonCommercial-ShareAlike 4.0 International (CC BY-NC-SA 4.0) license.
-# Author: larsrossen
 #
-# This script is heavely based on the Proxmox Helper Script: Proxmost PVE post Install
+# This Source Code Form is subject to the terms of the Mozilla Public
+# License, v. 2.0. If a copy of the MPL was not distributed with this
+# file, You can obtain one at https://mozilla.org/MPL/2.0/.
 #
-# TODO: Display final HW config, 
-# TODO: Throw warning is no mirror on zpools and boot. Configure power management
+# This file incorporates work covered by the following copyright and permission notice:
+# Copyright (c) 2021-2025 community-scripts ORG
+# License: MIT | https://github.com/community-scripts/ProxmoxVE/raw/main/LICENSE
+#
+# This script is heavily based on the Proxmox Helper Script: Docker VM
+#
 
 #
 # Validate that the ports are available and PCI passthrug is possible
+# PCI passthroung uses: vfio: enable vfio is not already enabled
+#
+
 
 function header_info {
   clear
@@ -96,9 +101,10 @@ trap cleanup EXIT
 TEMP_DIR=$(mktemp -d)
 pushd $TEMP_DIR >/dev/null
 
-PVE_NODE=192.168.2.250
-
-
+if [ -z "$PVE_NODE" ]; then
+  msg_error "PVE_NODE is not set. Please set the PVE_NODE variable to your Proxmox VE node IP."
+  exit 1
+fi
 
 msg_info "Checking for IOMMU (interrupt remapping)" 
 if ssh root@$PVE_NODE 'dmesg' | grep -q -e "DMAR-IR: Enabled IRQ remapping in x2apic mode" -e "AMD-Vi: Interrupt remapping enabled" ; then

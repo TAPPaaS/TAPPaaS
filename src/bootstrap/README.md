@@ -54,15 +54,8 @@ You need the IP of the VM: look it up in the summary of the TAPPaaS CICD VM in t
 Now Do:
 
 - Log into TAPPaaS CICD VM using ssh from a host terminal: ssh tappaas@<insert ip of CICD VM>
-  - look at the summary page for the tappaas-cicd vm in the PVE portal. 
-  - or do the command "qm guest cmd 100 network-get-interfaces"
-
-### Intermediate step for TAPPaaS developers:
-
-THis step is only needed if you plan to update TAPPaaS git from the CICD environment, if you are not a developer of TAPPaaS then you can skip this step
-
 - In the shell of the TAPPaaS CICD VM do:
-  - create ssh keys: ssh-keygen -t ed25519 -q -N ""
+  - create ssh keys: ssh-keygen -t ed25519
   - add ssh keys to your github: copy and paste the output of cat ~/.ssh/id_ed25519.pub (not needed when TAPPaaS is public)
   - test that the key authentication works: ssh -T git@github.com
     - it will ask if if you want to continue connecting: answer yes
@@ -74,6 +67,11 @@ THis step is only needed if you plan to update TAPPaaS git from the CICD environ
   - run the final bootstrap code: ./TAPpaas/src/bootstrap/TAPPaaS-CICD-bootstrap.sh
   - set the git user name (from the tappaas-cicd command prompt): git config --global user.name <your name> 
   - set the git user email: git config --global user.email <your email>
+- Also add the ssh key to the proxmox root account.
+  - copy the output of : cat ~ /.ssh/id_ed25519.pub
+  - go to the shell of the root account on the proxmox server node and append it to the authorized keys: cat >> authorized_keys
+  - presse enter and paste the key, end with ctrl-D
+  - test that you can ssh to root@<ip of proxmox server> from the tappaas@tappaas-cicd vm account
 
 Set up a coding environment connected to the CICD: see [Visual Code Remote Development](./VC-RemoteDev.md)
 

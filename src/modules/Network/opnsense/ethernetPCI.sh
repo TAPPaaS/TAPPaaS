@@ -100,7 +100,11 @@ trap cleanup EXIT
 TEMP_DIR=$(mktemp -d)
 pushd $TEMP_DIR >/dev/null
 
-PVE_NODE=192.168.2.250
+if [ -z "$PVE_NODE" ]; then
+  msg_error "PVE_NODE is not set. Please set the PVE_NODE variable to your Proxmox VE node IP."
+  exit 1
+fi
+
 
 #
 # find the ethernet pci devices
