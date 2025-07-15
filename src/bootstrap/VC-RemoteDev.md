@@ -69,7 +69,8 @@ Try connecting to the VM:
 If you see a welcome message or terminal access, it works!
 
 ✅ Step 6: Connect to the VM from VS Code
-In VS Code, click the green icon in the bottom-left corner.
+In VS Code, click the '><' icon in the bottom-left corner.
+
 Choose "Connect to Host...".
-Select tapas@tapas-cicd or enter it manually.
+Select tappaas@tappaas-cicd or enter it manually.
 VS Code will open a new window connected to the remote machine
