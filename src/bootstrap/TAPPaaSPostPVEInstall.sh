@@ -148,7 +148,9 @@ apt-get update &>/dev/null
 apt-get -y dist-upgrade &>/dev/null
 msg_ok "Updated Proxmox VE"
 
-msg_info "Rebooting Proxmox VE in 2 seconds"
-  sleep 2
-  msg_ok "rebooting Proxmox VE"
+msg_info "Rebooting Proxmox VE"
+msg_info "please press any key to continue or press ctrl-c to cancel"
+read -n 1 -s
+msg_ok "Rebooting Proxmox VE in 5 seconds"
+sleep 5
 reboot
