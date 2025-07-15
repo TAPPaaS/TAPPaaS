@@ -69,8 +69,32 @@ Try connecting to the VM:
 If you see a welcome message or terminal access, it works!
 
 ✅ Step 6: Connect to the VM from VS Code
+
 In VS Code, click the '><' icon for 'Remote Development' in the bottom-left corner.
 
-Choose "Connect to Host...".
-Select tappaas@tappaas-cicd or enter it manually.
-VS Code will open a new window connected to the remote machine
+An new window opens. 
+
+    Select option "+ Add New SSH Host"
+
+    Select tappaas@tappaas-cicd with your actual username and host(-ip). Press enter.
+
+    Select the highlighted option /User/[your name]/.ssh/config as the SSH configuration file to update. press enter.
+
+    Select 'Connect'
+
+VS Code will open a new window connected to the remote machine.
+You can see the connection details at the bottom left-hand 
+
+    Select Open Folder
+    Select /home/tappaas/TAPpaas/
+
+It will synchronize.
+
+Summary:
+
+you now have the same environment as on your development laptop, but directly on your development or production machine. 
+Instead of correcting a script in github and then downloading it to tappaas-cicd, you can now:
+    modify it in the tappaas_cicd VM
+    test/run it
+    once debugged - you upload it to the central tappaas_github repository.
+
