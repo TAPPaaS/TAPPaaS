@@ -18,7 +18,7 @@ Click Install on the extension pack by Microsoft.
 ✅ Step 2: Check if SSH is Installed
 Open your terminal and run:
 
-  ssh -V
+    ssh -V
 
 If you see a version number (like OpenSSH_8.9p1), SSH is installed. If not, install it:
 
@@ -48,17 +48,17 @@ Just press Enter to accept the default file location and leave the passphrase em
 Replace tapas@tapas-cicd with your actual username and host if different.
 
 
-    ssh-copy-id tapas@tapas-cicd
+    ssh-copy-id tappaas@tappaas-cicd
 
 If ssh-copy-id is not available, use:
 
-    cat ~/.ssh/id_rsa.pub | ssh tapas@tapas-cicd "mkdir -p ~/.ssh && cat >> ~/.ssh/authorized_keys
+    cat ~/.ssh/id_rsa.pub | ssh tappaas@tappaas-cicd "mkdir -p ~/.ssh && cat >> ~/.ssh/authorized_keys
 
 
 ✅ Step 5: Test SSH Connection
 Try connecting to the VM:
   
-    ssh tapas@tapas-cicd
+    ssh tappaas@tappaas-cicd
 
 If you see a welcome message or terminal access, it works!
 
