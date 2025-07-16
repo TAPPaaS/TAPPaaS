@@ -129,6 +129,32 @@ if [ ${#ETHERNET_MENU_ITEMS[@]} -eq 0 ]; then
   exit 1
 fi
 
+SELECTED_LAN_PCI=$(
+  whiptail --backtitle "OPNSense PCI Port selection" \
+    --title "Ethernet Port for LAN" \
+    --menu "Please select" 25 70 16 \
+    "${ETHERNET_MENU_ITEMS[@]}" \
+    3>&1 1>&2 2>&3
+)
+
+if [ -z "$SELECTED_LAN_PCI" ]; then
+  exit-script
+fi
+
+msg_ok "Selected PCI device for LAN port: $SELECTED_LAN_PCI\n"
+
+# create passthrough for LAN port
+msg_info "Configuring PCI passthrough for LAN port ($SELECTED_LAN_PCI) to VM 666..."
+
+ssh root@$PVE_NODE "qm set 666 -hostpci1 $SELECTED_LAN_PCI"
+
+if [ $? -eq 0 ]; then
+  msg_ok "PCI passthrough configured for LAN port ($SELECTED_LAN_PCI) on VM 666."
+else
+  msg_error "Failed to configure PCI passthrough for LAN port ($SELECTED_LAN_PCI) on VM 666."
+  exit 1
+fi
+
 SELECTED_WAN_PCI=$(
   whiptail --backtitle "OPNSense PCI Port selection" \
     --title "Ethernet Port for WAN" \
@@ -143,17 +169,16 @@ fi
 
 msg_ok "Selected PCI device for WAN port: $SELECTED_WAN_PCI\n"
 
+# create passthrough for WAN port
+msg_info "Configuring PCI passthrough for WAN port ($SELECTED_WAN_PCI) to VM 666..."
 
-SELECTED_LAN_PCI=$(
-  whiptail --backtitle "OPNSense PCI Port selection" \
-    --title "Ethernet Port for LAN" \
-    --menu "Please select" 25 70 16 \
-    "${ETHERNET_MENU_ITEMS[@]}" \
-    3>&1 1>&2 2>&3
-)
+ssh root@$PVE_NODE "qm set 666 -hostpci2 $SELECTED_WAN_PCI"
 
-if [ -z "$SELECTED_LAN_PCI" ]; then
-  exit-script
+if [ $? -eq 0 ]; then
+  msg_ok "PCI passthrough configured for WAN port ($SELECTED_WAN_PCI) on VM 666."
+else
+  msg_error "Failed to configure PCI passthrough for WAN port ($SELECTED_WAN_PCI) on VM 666."
+  exit 1
 fi
 
-msg_ok "Selected PCI device for LAN port: $SELECTED_LAN_PCI\n"
+

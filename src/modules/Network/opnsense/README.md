@@ -1,51 +1,42 @@
 This directory contain automation and instructions for installing the OPNsense software
 
-We use proxmox helper scripts to get the basic opnsense VM up and running, then we modify it to use PCI passthrough for the ethernet card.
 TODO: recode to be automated directly using opentufu and ansible.
 
 The steps are:
 
 1) Validate and configure proxmox and underpinning hardware for pci passthrough
-2) creat a a temporary vmrb1
-3) Create a VM with OPNsense using proxmox helperscripts
-4) Select and setup Ethernet PCI passthrough instead of vmrb/1
+2) download Iso and create VM
+3) start VM and configure OPNsense
+4) perform updates to OPNsense via GUI
 5) SWitch out firewall
 
 ## PCI passthrough
 
 Run ./validate.sh
 
-## Create temporary vmbr1
+## downaload iso and create VM
 
-do this in the proxmox gui under networking. add a vmrb1, add the approiate ethernet port for WAN
+- do google search for opnsense download. on download site select and download dvd image
+- in proxmox gui: select local disk and upload iso (you need to decompress it from bz2 if it is compressed)
 
-## Create OPNSense
+- create new VM with 8G RAM and 4-8 cores, and HD of 16G to 32G on tank1. use Name OPNsense and UID 666
+- attach the ISO as a dvd
+- do PCI passthrough of the LAN and WAN ethernet ports
+  - use "PVE_NODE=<ip of proxmox server> ./ethernetPCI.sh" to find and configure the PCI pass through
 
-Run the proxmox helperscript that installs opnsense. Run the following command from the root shell in the proxmox server (not the tappaas cicd VM)
+# Start VM and configure OPNsense
 
-```
-bash -c "$(curl -fsSL https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/vm/opnsense-vm.sh)"
-```
-use advanced settings. 
-use default values except for:
-  ID of VM: 666
-  WAN bridge: vmbr0 (opposite of default, this way the opnsense initially will get its IP from existing local area network where proxmox is running)
-  LAN bridge: vmbr1 (oppostite of default)
-  LAN IP: 10.0.0.0 /24 gateway 10.0.0.1
-  WAN IP: select an IP from the local area network
-  WAN gateway: select you current gateway
+now Start the VM and in the console install opnsense on the virtual HD
+then detach the CD/DVD device after reboot
 
+attach the WAN port to an internet connection (can be you currentl lan, if you do not have an extra internet connection)
+attach a client machine with a web browser to the LAN port and go to the indicated opnsense configuration web GUI 
 
+## create updates to OPNSense via GUI
 
 
-## Select PCI passthrough
-
-run ethernetPCI.sh
-
-at this point you should check that there is a VM with PCI passthrough
 
 
-## Validate
 
 ## Switch firewall
 
