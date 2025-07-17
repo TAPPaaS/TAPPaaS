@@ -34,9 +34,24 @@ attach a client machine with a web browser to the LAN port and go to the indicat
 
 ## create updates to OPNSense via GUI
 
+### Create VLANs
 
+- go to Interfaces -> Devices -> VLAN and add vlans
+- go to the created VLAN as interfaces and configure static IP according to VLAN specs
+- go to Services -> ISC DHCPv4 -> <Vlan> and configure IP range for DHCP
 
+### DNS setup
 
+- Enable services -> dnsmask DNS
+  - use port 53053
+  - Register DHCP Lease enables
+- Enable service -> Unbound DNS -> general
+- register dnsmask with unbound DNS for lan.intenral domain
+  - Service -> Unbound DNS -> Query Forwarding
+    - register lan.intenral to query 127.0.0.1 port 53053
+    - register 10.in-addr.arpa to query 102.0.0.1 port 53053
+    - press apply
+  - 
 
 ## Switch firewall
 
