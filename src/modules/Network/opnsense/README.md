@@ -53,6 +53,24 @@ attach a client machine with a web browser to the LAN port and go to the indicat
     - press apply
   - 
 
+## IPv6 setup
+
+- create gateway: System -> Gateways -> Configuration
+  - add a gateway, on the WAN port, protocol IPv6 give it the gateway adress assigned by the ISP
+- Interface -> WAN: 
+  - IPv6 COnfiguration Type = Static IP
+  - IPv6 address: the assigned IP adress of you router by the provider it WAN connectivity
+  - select gateway: IPv6 gateway rule: select the created gateway
+  - SAve and apply changes
+- Each of the LAN/VLAN interafces
+  - IPv6 Configuration type = Static IPv6
+  - IPv6 adress: The assigned IPv6 range potentially subdivided into sub ranges ending in ::1 and handed out as a 64 bit netwok range
+  - save and apply
+- create Router advertisment on each local interface LAN/VLAN: Services -> Routeradtisments -: (V)LAN
+  - Router Advertisments = Managed
+  - DNS Options, tich the USe the DNS configuration of the DHCPv6 server
+
+
 ## Switch firewall
 
 
