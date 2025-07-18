@@ -23,6 +23,8 @@ Run ./validate.sh
 - attach the ISO as a dvd
 - do PCI passthrough of the LAN and WAN ethernet ports
   - use "PVE_NODE=<ip of proxmox server> ./ethernetPCI.sh" to find and configure the PCI pass through
++ set stert on boot to true in the proxmox gui
++ set boot order to 1
 
 # Start VM and configure OPNsense
 
