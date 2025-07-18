@@ -111,5 +111,6 @@ There are 3 scenarios for this step:
   - Potentially you need to reconfigure IPv6
   - Note that if existing legacy firewall provided WIFI then this now need to be set up for TAPPaaS
 - Replace the ISP provided firewall: this assumes the ISP is having an ethernet termination for WAN
-  - plug in OPNsense wan port insted of legacy firewall
+  - plug in OPNsense wan port instead of legacy firewall
   - see notes above on Wifi and IPv6
+
