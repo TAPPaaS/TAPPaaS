@@ -103,7 +103,7 @@ function create_vm_descriptions_html() {
 # TODO: update description to be descriptive!!
   DESCRIPTION=$(
     cat <<EOF
-"<div align='center'>
+<div align='center'>
   <a href='https://tappaas.org' target='_blank' rel='noopener noreferrer'>
     <img src='https://www.tappaas.org/taapaas.png' alt='Logo' style='width:81px;height:112px;'/>
   </a>
@@ -125,7 +125,7 @@ function create_vm_descriptions_html() {
   <br>
   <br>
   This is the TAPPaaS Pangolin reverse proxy VM. It is based on the TAPPaaS Docker VM template and includes Git, Ansible and Terraform. it contain the entire TAPPaaS source
-</div>"
+</div>
 EOF
   )
 }
@@ -134,7 +134,7 @@ function default_settings() {
   GEN_MAC=02:$(openssl rand -hex 5 | awk '{print toupper($0)}' | sed 's/\(..\)/\1:/g; s/.$//')
   DISK_SIZE="8G"
   TEMPLATEVMID=8000
-  VMID=1000
+  VMID=888
   VMNAME="Pangolin"
   FORMAT=",efitype=4m"
   MACHINE=""
@@ -191,7 +191,12 @@ msg_info "Creating a TAPPaaS Pangolin reverse proxy VM"
 
 ssh root@$PVE_NODE "qm clone $TEMPLATEVMID $VMID --name $VMNAME --full 1 "
 ssh root@$PVE_NODE "qm set $VMID --Tag TAPPaaS,DMZ"
-ssh root@$PVE_NODE "qm set $VMID -description $DESCRIPTION"
+# Write the description to a temporary file and send it over SSH
+echo "$DESCRIPTION" > "$TEMP_DIR/description.txt"
+scp "$TEMP_DIR/description.txt" root@$PVE_NODE:/tmp/description_$VMID.txt
+ssh root@$PVE_NODE "qm set $VMID -description \"\$(cat /tmp/description_$VMID.txt)\" && rm /tmp/description_$VMID.txt"
+# Set the VM's network interface to use VLAN 100
+ssh root@$PVE_NODE "qm set $VMID --net0 virtio,bridge=$BRG,macaddr=$MAC,tag=100"
 ssh root@$PVE_NODE "qm start $VMID "
 
 msg_ok "Done: Created a TAPPaaS Pangolin reverse proxy VM" 
