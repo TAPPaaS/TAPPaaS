@@ -72,32 +72,6 @@ function error_handler() {
   cleanup_vmid
 }
 
-function get_valid_nextid() {
-  local try_id
-  try_id=$(pvesh get /cluster/nextid)
-  while true; do
-    if [ -f "/etc/pve/qemu-server/${try_id}.conf" ] || [ -f "/etc/pve/lxc/${try_id}.conf" ]; then
-      try_id=$((try_id + 1))
-      continue
-    fi
-    if lvs --noheadings -o lv_name | grep -qE "(^|[-_])${try_id}($|[-_])"; then
-      try_id=$((try_id + 1))
-      continue
-    fi
-    break
-  done
-  echo "$try_id"
-}
-
-function cleanup_vmid() {
-  if qm status $VMID &>/dev/null; then
-    qm stop $VMID &>/dev/null
-    qm destroy $VMID &>/dev/null
-  fi
-  if qm status $TEMPLATEVMID &>/dev/null; then
-    qm destroy $TEMPLATEVMID &>/dev/null
-  fi
-}
 
 function cleanup() {
   popd >/dev/null
@@ -119,36 +93,6 @@ function msg_error() {
   echo -e "${BFR}${CROSS}${RD}${msg}${CL}"
 }
 
-function check_root() {
-  if [[ "$(id -u)" -ne 0 || $(ps -o comm= -p $PPID) == "sudo" ]]; then
-    clear
-    msg_error "Please run this script as root."
-    echo -e "\nExiting..."
-    sleep 2
-    exit
-  fi
-}
-
-function pve_check() {
-  if ! pveversion | grep -Eq "pve-manager/8\.[1-4](\.[0-9]+)*"; then
-    msg_error "${CROSS}${RD}This version of Proxmox Virtual Environment is not supported"
-    echo -e "Requires Proxmox Virtual Environment Version 8.1 or later."
-    echo -e "Exiting..."
-    sleep 2
-    exit
-  fi
-}
-
-function arch_check() {
-  if [ "$(dpkg --print-architecture)" != "amd64" ]; then
-    echo -e "\n ${INFO}${YWB}This script will not work with PiMox! \n"
-    echo -e "\n ${YWB}Visit https://github.com/asylumexp/Proxmox for ARM64 support. \n"
-    echo -e "Exiting..."
-    sleep 2
-    exit
-  fi
-}
-
 function exit-script() {
   clear
   echo -e "\n${CROSS}${RD}User exited script${CL}\n"
@@ -156,11 +100,10 @@ function exit-script() {
 }
 
 function create_vm_descriptions_html() {
-  )
 # TODO: update description to be descriptive!!
   DESCRIPTION=$(
     cat <<EOF
-<div align='center'>
+"<div align='center'>
   <a href='https://tappaas.org' target='_blank' rel='noopener noreferrer'>
     <img src='https://www.tappaas.org/taapaas.png' alt='Logo' style='width:81px;height:112px;'/>
   </a>
@@ -182,7 +125,7 @@ function create_vm_descriptions_html() {
   <br>
   <br>
   This is the TAPPaaS Pangolin reverse proxy VM. It is based on the TAPPaaS Docker VM template and includes Git, Ansible and Terraform. it contain the entire TAPPaaS source
-</div>
+</div>"
 EOF
   )
 }
@@ -191,7 +134,7 @@ function default_settings() {
   GEN_MAC=02:$(openssl rand -hex 5 | awk '{print toupper($0)}' | sed 's/\(..\)/\1:/g; s/.$//')
   DISK_SIZE="8G"
   TEMPLATEVMID=8000
-  VMID=$(get_valid_nextid)
+  VMID=1000
   VMNAME="Pangolin"
   FORMAT=",efitype=4m"
   MACHINE=""
@@ -205,17 +148,16 @@ function default_settings() {
   VLAN=""
   MTU=""
   STORAGE="tanka1"
-  # TODO: clean up this code
-  for i in {0,1}; do
-    disk="DISK$i"
-    eval DISK${i}=vm-${VMID}-disk-${i}${DISK_EXT:-}
-    eval DISK${i}_REF=${STORAGE}:${DISK_REF:-}${!disk}
-  done
 }
 
 #
 # ok here we go
 #
+if [ -z "$PVE_NODE" ]; then
+  msg_error "PVE_NODE is not set. Please set the PVE_NODE variable to your Proxmox VE node IP."
+  exit 1
+fi
+
 header_info
 init_print_variables
 
@@ -228,9 +170,10 @@ pushd $TEMP_DIR >/dev/null
 default_settings
 create_vm_descriptions_html
 
-echo -e "${CREATING}${BOLD}${DGN}Creating TAPPaaS Template VM and TAPPaaS CICD VM using the following settings:${CL}"
+
+echo -e "${CREATING}${BOLD}${DGN}Creating TAPPaaS Pangolin VM from template using the following settings:${CL}"
 echo -e "     - ${CONTAINERID}${BOLD}${DGN}TAPPaaS Template VM ID: ${BGN}${TEMPLATEVMID}${CL}, Template Name: ${BGN}${TEMPLATEVMNAME}${CL}"
-echo -e "     - ${CONTAINERID}${BOLD}${DGN}TAPPaaS CICD VM ID: ${BGN}${VMID}${CL}, Template Name: ${BGN}${VMNAME}${CL}"
+echo -e "     - ${CONTAINERID}${BOLD}${DGN}TAPPaaS Pangolin VM ID: ${BGN}${VMID}${CL}, Template Name: ${BGN}${VMNAME}${CL}"
 echo -e "     - ${CONTAINERTYPE}${BOLD}${DGN}Machine Type: ${BGN}i440fx${CL}"
 echo -e "     - ${DISKSIZE}${BOLD}${DGN}Disk Size: ${BGN}${DISK_SIZE}${CL}"
 echo -e "     - ${DISKSIZE}${BOLD}${DGN}Disk Cache: ${BGN}None${CL}"
@@ -242,23 +185,14 @@ echo -e "     - ${BRIDGE}${BOLD}${DGN}Bridge: ${BGN}${BRG}${CL}"
 echo -e "     - ${MACADDRESS}${BOLD}${DGN}MAC Address: ${BGN}${MAC}${CL}"
 echo -e "     - ${VLANTAG}${BOLD}${DGN}VLAN: ${BGN}Default${CL}"
 echo -e "     - ${DEFAULT}${BOLD}${DGN}Interface MTU Size: ${BGN}Default${CL}"
-echo -e "     - ${DISKSIZE}${BOLD}${DGN}Linux Distribution: ${BGN}Ubuntu Nobel Numbat (24.04 LTS)${CL}"
-echo -e "     - ${DISKSIZE}${BOLD}${DGN}URL of Distribution Image: ${BGN}${URL}${CL}"
 
-msg_info "Doing sanity check of Proxmox PVE."
-check_root
-arch_check
-pve_check
-msg_ok "Done sanity check of Proxmox PVE. Everything is OK to proceed"
 
 msg_info "Creating a TAPPaaS Pangolin reverse proxy VM"
 
-ssh root@tappas1 <<'EOF'
-qm clone $TEMPLATEVMID $VMID --name $VMNAME --full 1 
-qm set $VMID --Tag TAPPaaS,DMZ
-qm set $VMID -description "$DESCRIPTION"
-qm start $VMID 
-EOF
+ssh root@$PVE_NODE "qm clone $TEMPLATEVMID $VMID --name $VMNAME --full 1 "
+ssh root@$PVE_NODE "qm set $VMID --Tag TAPPaaS,DMZ"
+ssh root@$PVE_NODE "qm set $VMID -description $DESCRIPTION"
+ssh root@$PVE_NODE "qm start $VMID "
 
 msg_ok "Done: Created a TAPPaaS Pangolin reverse proxy VM" 
 

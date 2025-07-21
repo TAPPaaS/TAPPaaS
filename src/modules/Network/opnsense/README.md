@@ -23,7 +23,7 @@ Run ./validate.sh
 - attach the ISO as a dvd
 - do PCI passthrough of the LAN and WAN ethernet ports
   - use "PVE_NODE=<ip of proxmox server> ./ethernetPCI.sh" to find and configure the PCI pass through
-+ set stert on boot to true in the proxmox gui
++ set start on boot to true in the proxmox gui
 + set boot order to 1
 
 # Start VM and configure OPNsense
@@ -77,9 +77,14 @@ attach a client machine with a web browser to the LAN port and go to the indicat
 general for each interface some firewall rules needs to be configured
 
 - WAN: there should be a default rule to NOT pass any traffic. keep that
-- DMZ: there should be no rules, other than default which will not allow any trafic to leave. keep it this way
-- REmaining LAN/VLANs: add rule to allow/pass any to any traffic
-- for Guest/client: add first rule to block/reject traffic to LAN (management
+- DMZ: allow DMZ to communicate to internet, but not locally
+  - block LAN, and other VLANs
+  - create a pass rule for the rest
+- Remaining LAN/VLANs: add rule to allow/pass any to any traffic
+- for Guest/client: add first rule to block/reject traffic to LAN (management)
+  - for "true guests" block access to other vlans except DMZ
+
+Note: all rules are for both IPv4 and IPv6
 
 ## Switch firewall
 
