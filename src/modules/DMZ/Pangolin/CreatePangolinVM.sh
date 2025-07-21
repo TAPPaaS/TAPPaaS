@@ -108,7 +108,7 @@ function create_vm_descriptions_html() {
     <img src='https://www.tappaas.org/taapaas.png' alt='Logo' style='width:81px;height:112px;'/>
   </a>
 
-  <h2 style='font-size: 24px; margin: 20px 0;'>TAPPaaS CICD VM</h2>
+  <h2 style='font-size: 24px; margin: 20px 0;'>Pangolin Reverse Proxy VM</h2>
 
   <span style='margin: 0 10px;'>
     <i class="fa fa-github fa-fw" style="color: #f5f5f5;"></i>
@@ -124,7 +124,7 @@ function create_vm_descriptions_html() {
   </span>
   <br>
   <br>
-  This is the TAPPaaS Pangolin reverse proxy VM. It is based on the TAPPaaS Docker VM template and includes Git, Ansible and Terraform. it contain the entire TAPPaaS source
+  This is the TAPPaaS Pangolin reverse proxy VM. It is based on the TAPPaaS Docker VM template and has a standard Pangolin install on top
 </div>
 EOF
   )
@@ -197,6 +197,21 @@ scp "$TEMP_DIR/description.txt" root@$PVE_NODE:/tmp/description_$VMID.txt
 ssh root@$PVE_NODE "qm set $VMID -description \"\$(cat /tmp/description_$VMID.txt)\" && rm /tmp/description_$VMID.txt"
 # Set the VM's network interface to use VLAN 100
 ssh root@$PVE_NODE "qm set $VMID --net0 virtio,bridge=$BRG,macaddr=$MAC,tag=100"
+# Configure static network for the VM by creating a cloud-init network config
+cat > "$TEMP_DIR/network-config.yaml" <<EOF
+version: 2
+ethernets:
+  eth0:
+    dhcp4: false
+    addresses: [10.1.0.2/24]
+    gateway4: 10.1.0.1
+    nameservers:
+      addresses: [10.1.0.1]
+EOF
+
+scp "$TEMP_DIR/network-config.yaml" root@$PVE_NODE:/tmp/network-config_$VMID.yaml
+ssh root@$PVE_NODE "qm set $VMID --cicustom 'network=local:snippets/network-config_$VMID.yaml'"
+ssh root@$PVE_NODE "mkdir -p /var/lib/vz/snippets && cp /tmp/network-config_$VMID.yaml /var/lib/vz/snippets/network-config_$VMID.yaml && rm /tmp/network-config_$VMID.yaml"
 ssh root@$PVE_NODE "qm start $VMID "
 
 msg_ok "Done: Created a TAPPaaS Pangolin reverse proxy VM" 
