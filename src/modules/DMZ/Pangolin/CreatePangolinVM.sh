@@ -210,9 +210,15 @@ ethernets:
 EOF
 
 scp "$TEMP_DIR/network-config.yaml" root@$PVE_NODE:/tmp/network-config_$VMID.yaml
-ssh root@$PVE_NODE "qm set $VMID --cicustom 'network=local:snippets/network-config_$VMID.yaml'"
 ssh root@$PVE_NODE "mkdir -p /var/lib/vz/snippets && cp /tmp/network-config_$VMID.yaml /var/lib/vz/snippets/network-config_$VMID.yaml && rm /tmp/network-config_$VMID.yaml"
+msg_ok "Pangolin VM $VMID created from template $TEMPLATEVMID with name $VMNAME, starting up VM"
 ssh root@$PVE_NODE "qm start $VMID "
+sleep 30
+msg_info "Setting up cloud-init network configuration for VM $VMID"
+ssh root@$PVE_NODE "qm set $VMID --cicustom 'network=local:snippets/network-config_$VMID.yaml'"
+sleep 10
+msg_ok "Rebootinhg VM $VMID to apply network configuration"
+ssh root@$PVE_NODE "qm reboot $VMID "
 
 msg_ok "Done: Created a TAPPaaS Pangolin reverse proxy VM" 
 
