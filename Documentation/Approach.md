@@ -17,7 +17,7 @@ We have compiled a set of principles we want to follow in designing and construc
 
 - Every component of TAPPaaS must be Free and Open Source (FOSS). 
   - We do not mind software packages that are developed and "owned" by commercial companies, as long as the package is FOSS
-- Reduce choice: Choice is good, but too much choice is barrier to entry. 
+- Reduce choice: Choice is good, but too much choice is a barrier to entry. 
   - We if there are several good option for providing a functionality, then we make the decision in TAPPaaS. 
   - we will not prevent users of TAPPaaS to replace components/modules, but the default should be good enough
 - Prefer tested, actively maintained and mature software
@@ -25,9 +25,9 @@ We have compiled a set of principles we want to follow in designing and construc
   - If the module require users to be set up, then it need to integrate with the TAPPaaS identity management systems
   - Modules should be integrated with the TAPPaaS backup system and the health monitoring system and the Security monitoring systems
   - any integration to the Firewall and reverse tunnel proxy of TAPPaaS should be done.
-  - ...
+  - Modules are automatically patched and updated
 - Separate experience of Develop, Deploy/Install, Maintain and Use!
-  - Think about how modern heat exchange based house heating is done: DEveloping a new heat exchange is an engineering task. Deploying/Installing a heat exchange in you home, community, require some specialist knowledge and takes a few days. Maintaining a heat exchange is a service check every 1 year by service technician. Using a heat exchange is simply dialing in the temperature in each room.
+  - Think about how modern heat exchange based house heating is done: Developing a new heat exchange is an engineering task. Deploying/Installing a heat exchange in you home, community, require some specialist knowledge and takes a few days. Maintaining a heat exchange is a service check every 1 year by service technician. Using a heat exchange is simply dialing in the temperature in each room.
   - we would like to initially get TAPPaaS to a state where installing still takes specialist knowledge and take a day or two. but maintenance is very low and use is intuitive and simple.
 
 
