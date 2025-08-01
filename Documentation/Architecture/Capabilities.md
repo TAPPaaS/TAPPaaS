@@ -74,7 +74,7 @@ So the functions we are aiming at:
 - Calendering: need to be sharable within home and community and externally
 - Note taking: must be sharable
 - photo upload, storage and sharing: Need to have good indexing and sharing functionality
-- music library: own your music, need to be streamable. and sharable
+- music library: own your music, need to be stream-able. and sharable
 - video library
 - podcast library
 - Document store: Can be very private or shared across a user group
@@ -145,7 +145,7 @@ The Physical security can be considered a Business function.
 #### Virtual Security
 
 - User and Access Management: Includes 2FA
-- Password and key management: For end users, ensure the organization is not relying on postit notes
+- Password and key management: For end users, ensure the organization is not relying on postIT notes
 - Backup - Restore
 - Firewall
 - Encryption of private data at rest and in transit

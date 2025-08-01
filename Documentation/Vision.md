@@ -36,7 +36,7 @@ what is missing are three things:
 
 - Curation of the right software: There are 3 great open source firewalls, countless linux server OS variant. document collaboration and storage exists in many flavours, and on and on. Most organizations and individuals actually do not care that much. someone just need to make the decision
 - Configuration and Integration of all the chosen software: So we decide to use NextCloud and run it virtualized on Proxmox. just that in and by itself can be done in many of different ways. Again most people do not care, just tell me what to do.
-- Automation of the installation. Even with the decitions taken it can take weeks to install and configure everything, as each individual open source package tries to cater for every possibel integration use case, implying that there are endless places where you can make choices that are inconsistent for your scenario. We need to automate all that.
+- Automation of the installation. Even with the decisions taken it can take weeks to install and configure everything, as each individual open source package tries to cater for every possible integration use case, implying that there are endless places where you can make choices that are inconsistent for your scenario. We need to automate all that.
 
 This is not insurmountable. We are creating a small community around TAPPaaS. The community  function as a [Platform Democracy](https://www.cncf.io/blog/2025/05/23/platform-democracy-rethinking-who-builds-and-consumes-your-internal-platform/), implying that the producers of the platform should also be consumers of the platform.
 
@@ -44,7 +44,7 @@ This is not insurmountable. We are creating a small community around TAPPaaS. Th
 
 We have been looking at 3 primary consumers of TAPPaaS
 
-- Communities and single family homes: People that care about not having controll over your own private data. People that want their smarthome and comunity IT to work even when their service provider is not working.
+- Communities and single family homes: People that care about not having control over your own private data. People that want their smarthome and community IT to work even when their service provider is not working.
 - SMB business: TAPPaaS should deliver the foundation for regular office work and also be a foundation for deployment of business specific applications.
 - Organizations that needs high degree of local resilience, typical critical infrastructure provides parts of public sector and NGO's
 

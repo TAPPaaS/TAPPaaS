@@ -5,7 +5,7 @@ Start with the [Vision](./Vision.md) document, it outline the overall problem th
 
 ## How 
 
-TAPPaaS looks to be impossible large and complex in its Vision, in the [Approach](./Approach.md) document we outline why it is possible and we outline the conseptual roadmap
+TAPPaaS looks to be impossible large and complex in its Vision, in the [Approach](./Approach.md) document we outline why it is possible and we outline the conceptual roadmap
 
 look at the [Architecture](./Architecture/README.md) for the detailed description of how TAPPaaS is constructed
 Follow the [Examples](./Examples/README.md) for possible TAPPaaS deployments
@@ -23,4 +23,4 @@ and please please submit bug reports, enhancements and general experience.
 
 ## The Contributors
 
-TAPPaaS controbutors can be found in [Contributers](./Contributors.md)
+TAPPaaS contributors can be found in [Contributers](./Contributors.md)

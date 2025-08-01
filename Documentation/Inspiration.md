@@ -6,12 +6,13 @@
 We have taken inspiration and code from this project, thank you
 
 *Why did we not just contribute to this project:* 
-The helper scripts is trying ot freate a consolidated list of all possible configurations. We are trying to consolidate into a single coherent and integrated systems. So we need a subset of the scripts and some overall orchestration
+The helper scripts is trying to create a consolidated list of all possible proxmox configurations scripts. We are trying to consolidate into a single coherent and integrated systems. So we need a subset of the scripts and some overall orchestration, as well as a lot of inter module integrations
+Further the helper scripts are typically asking a lot of questions up front on what the script should do. Again in TAPPaaS we aim at ensuring this is predetermined
 
 ## [Garage by Deuxfleur](https://garagehq.deuxfleurs.fr/)
-This is perfect for Tapas: Data resiliency for everyone
-We are including Garage in Tapas
-The core principle and philosophy of Deuxfleurs is very alligned with Tapas
+This is perfect for TAPPaaS: Data resiliency for everyone
+We plan to including Garage in TAPPaaS, thoug the build in Ceph file system in Proxmox is competing in the S3 space.
+The core principle and philosophy of Deuxfleurs is very aligned with TAPPaaS
 
 ## [CASAOS](https://casaos.zimaspace.com/)
 Your Personal Cloud OS
@@ -19,10 +20,10 @@ Your Personal Cloud OS
 CASAOS is focused on Personal use of cloud services. Its point and click installation of many Open source product into a single environment is inspirational.
 
 *Why did we not just contribute to this project:*
-This is a "Personal" OS not an os for a community or business
+This is a "Personal" OS not an OS/Platform for a community or business
 It is focused on bringing up containers on a personal server/pc
 It is not focused on creating a resilient IT backbone
-It helps connect a lot of cloud services (google drive, dropbox, icloud, ...). Tapas on the other hand is focused on removing reliance of these services
+It helps connect a lot of cloud services (google drive, dropbox, icloud, ...). TAPPaaS on the other hand is focused on removing reliance of these services
 
 
 ## [Frappe](https://frappe.io/framework)
@@ -30,10 +31,10 @@ It helps connect a lot of cloud services (google drive, dropbox, icloud, ...). T
 Frappe delivers an application framework as well as interesting business applications build on the Frappe Framework. The ease of installation of a complex application stack is inspirational. 
 
 *Why did we not just contribute to this project:*
-It is not focused on creating a resilient infrastructure platform, nor is it pursuing the goal of delivering other application that already exists. As such Frappe applications on the Frappa Framework can be deployed in Tapas and become optional modules in Tapas
+It is not focused on creating a resilient infrastructure platform, nor is it pursuing the goal of delivering other application that already exists. As such Frappe applications on the Frappa Framework can be deployed in TAPPaas and become optional modules in TAPPaaS
 
 ## [Dokku](https://dokku.com/)
-Similar in goals to Frappa. as with Frappa we see Dokku as a potential module in Tapas.
+Similar in goals to Frappa. as with Frappa we see Dokku as a potential module in TAPPaaS
 
 
 ## [QUBES OS](https://www.qubes-os.org/)
@@ -55,6 +56,7 @@ There seems to be some interesting core ideas in Hexos that is overlapping with 
 * [Home Network Guy](https://www.youtube.com/@homenetworkguy)
 * [Apalrd's Adventures](https://www.youtube.com/@apalrdsadventures)
 * [Lawrence Systems](https://www.youtube.com/@LAWRENCESYSTEMS)
+* [NASCompares](https://www.youtube.com/@nascompares)
 
 
 # relevant videos to consider

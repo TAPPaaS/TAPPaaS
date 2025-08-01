@@ -10,7 +10,7 @@ Selecting from the enormous pool of software we have used the principles of:
 
 1) must be Open Source
 2) must show a track record of being Secure
-3) must be "established", and sufficinet feature complete
+3) must be "established", and sufficient feature complete
 4) must be open w.r.t. data formats (enabling migration away from TAPPaaS and/or away from the package)
 
 
@@ -50,7 +50,7 @@ The alternative to Proxmox ZFS is FreeeNAS, but we consider the benefits compare
 
 | Capability | Priority | Software | Comments |
 |------------|-----------|----------|----------|
-| Smart Lighting | High | Home Assistant | Will be the main interface to TAPpaas for a home/community installation |
+| Smart Lighting | High | Home Assistant | Will be the main interface to TAPPaaS for a home/community installation |
 | Smart heating | Low | Home Assistant | |
 | Smart Sprinkler | Low | Home Assistant + OpenSprinkler | |
 | SMART AVR | Medium | ?? | This is the player system. to replace AppleTV, HEOS, etc |
