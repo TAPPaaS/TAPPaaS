@@ -11,7 +11,7 @@ Selecting from the enormous pool of software we have used the principles of:
 1) must be Open Source
 2) must show a track record of being Secure
 3) must be "established", and sufficinet feature complete
-4) must be open w.r.t. data formats (enabling migration away)
+4) must be open w.r.t. data formats (enabling migration away from TAPPaaS and/or away from the package)
 
 
 ## Foundation
@@ -37,7 +37,7 @@ Alternatives:
 
 ### Persistent Storage layer
 
-proxmox with ZFS gives: RAID, SNapshotting, Replication, NFS, iSCSI, 
+proxmox with ZFS gives: RAID, Snapshotting, Replication, NFS, iSCSI, 
 Problem with proxmox is a limited GUI for management, and further the choice explosion zfs gives makes it hard to design a solution
 TAPPaaS will address this with recommended setup and automation
 

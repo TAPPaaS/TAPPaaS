@@ -4,9 +4,9 @@
 
 ## Introduction
 
-TAPPaaS is designed both top down and bottom up. Top down we looked at the capabilities needed to address the needs described in the [Vision](../Vision.md). THe bottom up have been looking at real software and real implementations to determine what is possible and what makes sense
+TAPPaaS is designed both top down and bottom up. Top down we looked at the capabilities needed to address the needs described in the [Vision](../Vision.md). The bottom up have been looking at real software and real implementations to determine what is possible and what makes sense
 
-Here we are trying to bring this together in a structured manner. This is a description of WHAT we want TAPPaaS to deliver. The HOW to deliver it is in the [SoftwareStack](TheSoftwareStack.md)
+We are trying to bring this together in a structured manner. This is a description of WHAT we want TAPPaaS to deliver. The HOW to deliver it is in the [SoftwareStack](TheSoftwareStack.md)
 
 ## TAPPaaS high level structure
 
@@ -16,31 +16,31 @@ At the very high level we structure the capabilities into the following groups
 ```mermaid
 classDiagram
   TAPPaaS *-- Security
-  TAPPaaS *-- Business Functions
+  TAPPaaS *-- Services
   TAPPaaS *-- Management
 	Security ..> Foundation
-	Business Functions ..> Foundation
+	Services ..> Foundation
   Management ..> Foundation
 ```
 
 In the following we decompose the high level capabilities
 
-## Business Functions
+## Services
 
-Business Functions is what this is all about: providing functions to the users of TAPPaaS. all the other parts like foundation, Management and Security is just there to ensure that you can get the IT you need working in a stable, scalable, integrated, secure, private and maintainable way.
+Services is what this is all about: Providing IT functions to the users of TAPPaaS. all the other parts like Foundation, Management and Security is just there to ensure that you can get the IT you need working in a stable, scalable, integrated, secure, private and maintainable way.
 
-What Business function is essential to each deployment of TAPPaaS will differ, but we define a set of functions that TAPPaaS should support based on the typical deployment. You can configure what is relevant for you deployment.
+What services are essential to each deployment of TAPPaaS will differ, but we define a set of services that TAPPaaS should support based on the typical deployment. You can configure what is relevant for you deployment.
 
 These examples of deployments are just examples, where we try and highlight the essential functionality that you need for that kind of deployment. 
 
 ```mermaid
 classDiagram
-  A Home ..> Business Function
-  Small Community ..> Business Function
-  Small Business Owner ..> Business Function
-  Small SW Development Organization ..> Business Function
-  Small Utility Company ..> Business Function
-  NGO ..> Business Function
+  A Home ..> TAPPaaS Services
+  Small Community ..> TAPPaaS Services
+  Small Business Owner ..> TAPPaaS Services
+  Small SW Development Organization ..> TAPPaaS Services
+  Small Utility Company ..> TAPPaaS Service
+  NGO ..> TAPPaaS Services
   
 ```
 
@@ -48,7 +48,7 @@ Note we are using the word "small" a lot. Make no mistake, TAPPaaS as a core arc
 
 ### Capabilities needed by a home
 
-Functionality can be grouped into functionality that is linked to a physical home, and thus stays with home and functionality that is linked to a user but is not bound to the physical home (except through the foundation layer and possible integrations)
+Services can be grouped into functionality that is linked to a physical home, and thus stays with home and functionality that is linked to a user but is not bound to the physical home (except through the foundation layer and possible integrations)
 
 ```mermaid
 classDiagram
@@ -149,7 +149,7 @@ The Physical security can be considered a Business function.
 - Backup - Restore
 - Firewall
 - Encryption of private data at rest and in transit
-- Remote access
+- Remote access and VPN services
 - Threat detection
 - Threat monitoring
 - DMZ with Reverse Proxy
@@ -170,3 +170,4 @@ The Physical security can be considered a Business function.
   - WAN and Firewall
   - Switch and Access Points
   - DHCP and DNS
+- CICD for configuring and installing TAPPaaS
