@@ -5,7 +5,14 @@
 create a domain name in a public DNS registra. 
 register the DNS entries mydeomain.tld and sub entry pangolin.mydomain.tld to point to your public IP
 
-create firewallt NAT rules to pass through TCP port, 80, 443 and UDP port 51820 to pangolin static ip which will be 10.1.0.2
+create firewall NAT rules to pass through TCP port, 80, 443 and UDP port 51820 to pangolin static ip which will be 10.1.0.2
+
+- First disable automatic reflection options in firewall settings advanced
+- create an alias for pangolin to 10.1.0.2
+- for the firewall NAT rules we use reflection NAT and hairpin NAT so for each port we need two rules one Port forward and one Outbound NAT rule
+  - see [OpnSense NAT Reflection](https://docs.opnsense.org/manual/how-tos/nat_reflection.html)
+  - use method 1
+
 
 ## create VM
 
