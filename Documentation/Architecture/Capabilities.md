@@ -35,12 +35,12 @@ These examples of deployments are just examples, where we try and highlight the 
 
 ```mermaid
 classDiagram
-  A Home ..> TAPPaaS Services
-  Small Community ..> TAPPaaS Services
-  Small Business Owner ..> TAPPaaS Services
-  Small SW Development Organization ..> TAPPaaS Services
-  Small Utility Company ..> TAPPaaS Service
-  NGO ..> TAPPaaS Services
+  "A Home" ..> TAPPaaS
+  "Small Community" ..> TAPPaaS
+  "Small Business Owner" ..> TAPPaaS
+  "Small SW Development Organization" ..> TAPPaaS
+  "Small Utility Company" ..> TAPPaaS
+  NGO ..> TAPPaaS
   
 ```
 

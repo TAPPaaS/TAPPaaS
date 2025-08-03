@@ -14,7 +14,7 @@ Pretty much Intel/AMD CPU will do.
   - Tank2: optional
 - Network: 3 ports of 1 gig.
 
-A recommended setup we use is am Atom C3558 base system: Qotom Q20300G9, with 16G memory, 512 SSD for boot, 2TB tank 1 on SSD and 2Tb 2.5inch DHH for tank2
+A recommended setup we use is am Atom C3558 base system: Qotom Q20300G9, with 16G memory, 512 SSD for boot, 2TB tanka1 on SSD and 2Tb 2.5inch HHD for tankb1
 
 ## Community/Home: low cost but high resilience
 
