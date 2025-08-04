@@ -1,7 +1,8 @@
 
-# Bootstrapping TAPPaaS
+# Proxmox node and TAPPaaS CICD setup
 
 ## Overview
+
 
 Bootstrapping TAPPaaS has not been fully automated. However some steps are scripted.
 
@@ -12,8 +13,6 @@ you need to do the following activities (next sections give exact instructions)
 3) TAPaaSBootstrap.sh: this create and install a self management VM (called TAPPaaS-CICD) with all the needed tooling
 4) TAPPaaS-CICD-bootstrap.sh: a script to be run inside the CICD VM
 It you configuration have more than one node then you need to do sept 1 and 2 on the other nodes and join them into a cluster. (TODO: instructions for clustering)
-5) install and configure the firewall
-6) Rewire the network replacing exiting firewall with new firewall and reconfigure IP number of first TAPPaaS node.
 
 After initial 3 stems of bootstrapping then all management is done inside the TAPPaaS-CICD VM
 
@@ -80,14 +79,4 @@ Next you need to set up tokens for Opentofu (terraform)
   - make sure the "Privilege Separation" is unchecked (or do setup/add needed permission for terraform )
 - copy the token and write it into a file : cat >.ssh/tappaas-token
 - make the file read/write for owner only: chmod 600 .ssh/tappaas-token
-
-### Post bootstrap activities
-
-
-You will need to do the Network module first which include setting up firewall, and vlans as well as wifi
-This is described in [Network Setup](../modules/Network/README.md)
-
-second module is the [DMZ](../modules/DMZ/README.md)
-
-Now add any other module you think would be relevant to your TAPPaaS instance
 
