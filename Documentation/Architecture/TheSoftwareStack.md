@@ -63,15 +63,17 @@ The alternative to Proxmox ZFS is FreeeNAS, but we consider the benefits compare
 | email | High | PostIO | Very difficult to run autonomously, maintenance is high|
 | Address book | High | NextCloud | need to be integrated into many other applications |
 | Calendering | High | NextCloud | |
-| Note Taking | Medium | ?? | Could simply be files in Nextcloud, but need to be investigated |
-| Photos | High | NextCloud with Memories module ||
+| Note Taking | Medium | ?? | Could simply be files in NextCloud, but need to be investigated |
+| Photos | High | Immich | considered NextCloud with Memories module, but not well functioning on Android ||
 | Music | High | Jellyfin | |
 | Video | High | Jellyfin| |
 | Podcasts | medium | [audiobookshelf](https://www.audiobookshelf.org/)?? | |
-| Document | high | NextCloud | |
-| Offline Web | low | Karakeep | selfhosted open source version of Pocket |
+| Document | high | CryptPad | consider Nextcloud, but not as FOSS as we would prefer |
+| File synching | high | NextCloud | also function as document backup |
+| Offline Web | low | Karakeep | self-hosted open source version of Pocket |
 | Virtual Assistant | medium | ?? | |
 | Bookshelf | low | CAlibra?? | |
+| chat and video | High | <none> | encourage use of Signal. need a solution for resiliency
 
 ## Small Community
 
@@ -125,11 +127,11 @@ alternatives:
 
 | Capability | Priority | Software | Comments |
 |------------|-----------|----------|----------|
-| User and Access mgmt. | Mandatory | ?? | Authentik, Keycloak, proxmox, opnsense??  |
+| User and Access mgmt. | Mandatory | ?? | Authentik, Keycloak, Pangoling native, proxmox, opnsense??  |
 | Password mgmt. | High | Bitwarden |  |
-| Backup/Restore | Mandatory | proxmox backup mgmt | need to look into complete backup, maybe znapzend, or other zfs methods. |
+| Backup/Restore | Mandatory | proxmox Backup Manager |complement with personal backup (to be designed) |
 | Firewall | High | OPNsense  |  |
-| Remote Access | High | TailScale/HeadScale | complement tailscale with self hosted Headscale |
+| Remote Access | High | Netbird | potentially replace with Pangolin and/or wiregard natively |
 | Thread detection | High | ?? | CrowdSec? |
 | Thread monitoring | High | ?? |  |
 | DMZ | Mandatory | Pangolin |  |
