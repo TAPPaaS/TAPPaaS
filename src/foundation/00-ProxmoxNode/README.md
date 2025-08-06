@@ -29,16 +29,14 @@ After initial 3 stems of bootstrapping then all management is done inside the TA
 (if sufficient hw resources are available then use mirror on boot and tanka1)
 - run the TAPaaSPostPVEInstall.sh script in the proxmox node shell (via the proxmox management console):
 ```
-GITTOKEN=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
-curl -fsSL -H "Authorization:token $GITTOKEN" https://raw.githubusercontent.com/TAPpaas/TAPpaas/main/src/bootstrap/TAPPaaSPostPVEInstall.sh | bash
+curl -fsSL https://raw.githubusercontent.com/TAPpaas/TAPpaas/main/src/boofoundation/00-ProxmoxNodetstrap/TAPPaaSPostPVEInstall.sh | bash
 ```
 (note the -H token stuff is only needed as long as the script is in a private repository, the token gives read access)
 
 - after reboot check that it all looks fine!!
 - run the TAPaaSBootstrap script from the root console
 ```
-GITTOKEN=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
-curl -fsSL -H "Authorization:token $GITTOKEN" https://raw.githubusercontent.com/TAPpaas/TAPpaas/main/src/bootstrap/TAPPaaSBootstrap.sh | bash
+curl -fsSL  https://raw.githubusercontent.com/TAPpaas/TAPpaas/main/src/foundation/00-ProxmoxNode/TAPPaaSBootstrap.sh | bash
 ```
 You should now have a PVE node with a TAPPaaS template and a TAPPaaS CICD VM
 
