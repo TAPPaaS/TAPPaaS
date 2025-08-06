@@ -31,7 +31,6 @@ After initial 3 stems of bootstrapping then all management is done inside the TA
 ```
 curl -fsSL https://raw.githubusercontent.com/TAPpaas/TAPpaas/main/src/boofoundation/00-ProxmoxNodetstrap/TAPPaaSPostPVEInstall.sh | bash
 ```
-(note the -H token stuff is only needed as long as the script is in a private repository, the token gives read access)
 
 - after reboot check that it all looks fine!!
 - run the TAPaaSBootstrap script from the root console
