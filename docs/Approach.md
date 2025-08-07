@@ -30,6 +30,7 @@ We have compiled a set of principles we want to follow in designing and construc
   - Think about how modern heat exchange based house heating is done: Developing a new heat exchange is an engineering task. Deploying/Installing a heat exchange in you home, community, require some specialist knowledge and takes a few days. Maintaining a heat exchange is a service check every 1 year by service technician. Using a heat exchange is simply dialing in the temperature in each room.
   - we would like to initially get TAPPaaS to a state where installing still takes specialist knowledge and take a day or two. but maintenance is very low and use is intuitive and simple.
   - Support Mobile. The tide is shifting and anything that can not be utilized on a mobile devices is increasingly outdated. A software package in TAPPaaS should have support for a mobile experience.
+  - Resilient: The solution must work even when the Internet is not working.
 
 
 # Eating the elephant one bite at a time
