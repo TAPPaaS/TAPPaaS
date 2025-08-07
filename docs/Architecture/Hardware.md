@@ -76,24 +76,5 @@ but we also want something that is easy to manage and automate
 Unify is a great solution for switches and wifi with a great set of integrated management capabilities. Unfortunately it is a closed eco system
 (This is what I have at the moment)
 
-So let us go low cost instead
+For now switching and WiFi is not included in the TAPPaaS recommendations, but guidelines for setup is.
 
-### The rest
-
-## Proposals for HW builds
-
-With this we can define three kinds of appliance boxes:
-
-### Standard
-
-complete needs for a "standard home
-
-### Large
-
-extension allowing the home to be more resilient and solution to be more powerful
-Ideally the Large model is just adding components form the Standard setup
-
-### Satelite
-
-A minimum solution relevant to a secondary home, or yong family member living in another building, etc
-It does not have all functionality and rely on a standard or large installation that it can connect to (via VPN)
