@@ -1,0 +1,9 @@
+# Site settings
+title: TAPPaaS
+author:
+  name: Lars Rossen
+  email: lars@hrossen.dk
+description: "TAPPaaS Documentation site."
+
+# Build settings
+remote_theme: jekyll/minima
