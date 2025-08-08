@@ -10,3 +10,9 @@ Creating and managing a TAPPaaS system has the following major steps
 Once the TAPPaaS system is up and running there is ongoing maintenance
 - regularly run the TAPPaaS update scripts 
 - Health monitoring
+
+You can also verify the configuration using AI, based on the recipe in: 
+
+- [Complinace Report version a](./EvB_TAPPaaS%20compliance%20report.md)
+- [Compliance Report version b](TAPPaaS%20-%20AI%20assisted%20compliance%20report.md)
+

@@ -48,3 +48,6 @@ We have been looking at 3 primary consumers of TAPPaaS
 - SMB business: TAPPaaS should deliver the foundation for regular office work and also be a foundation for deployment of business specific applications.
 - Organizations that needs high degree of local resilience, typical critical infrastructure provides parts of public sector and NGO's
 
+# End Note
+
+Overall TAPPaaS is able to give you [Digital Sovereignty](./Digital%20Sovereignty.md)
