@@ -29,13 +29,13 @@ After initial 3 stems of bootstrapping then all management is done inside the TA
 (if sufficient hw resources are available then use mirror on boot and tanka1)
 - run the TAPaaSPostPVEInstall.sh script in the proxmox node shell (via the proxmox management console):
 ```
-curl -fsSL https://raw.githubusercontent.com/TAPpaas/TAPpaas/main/src/boofoundation/00-ProxmoxNodetstrap/TAPPaaSPostPVEInstall.sh | bash
+curl -fsSL https://raw.githubusercontent.com/TAPPaaS/TAPPaaS/main/src/boofoundation/00-ProxmoxNodetstrap/TAPPaaSPostPVEInstall.sh | bash
 ```
 
 - after reboot check that it all looks fine!!
 - run the TAPaaSBootstrap script from the root console
 ```
-curl -fsSL  https://raw.githubusercontent.com/TAPpaas/TAPpaas/main/src/foundation/00-ProxmoxNode/TAPPaaSBootstrap.sh | bash
+curl -fsSL  https://raw.githubusercontent.com/TAPPaaS/TAPPaaS/main/src/foundation/00-ProxmoxNode/TAPPaaSBootstrap.sh | bash
 ```
 You should now have a PVE node with a TAPPaaS template and a TAPPaaS CICD VM
 
@@ -59,8 +59,8 @@ Now Do:
 
 ### Clone TAPPaaS to you CICD VM, and complete the bootstrap
 
-  - clone the TAPPaaS repository: git clone git@github.com:TAPpaas/TAPpaas.git
-  - run the final bootstrap code: ./TAPpaas/src/bootstrap/TAPPaaS-CICD-bootstrap.sh
+  - clone the TAPPaaS repository: git clone git@github.com:TAPPaaS/TAPPaaS.git
+  - run the final bootstrap code: ./TAPPaaS/src/bootstrap/TAPPaaS-CICD-bootstrap.sh
   - set the git user name (from the tappaas-cicd command prompt): git config --global user.name <your name> 
   - set the git user email: git config --global user.email <your email>
 - Also add the ssh key to the proxmox root account.
