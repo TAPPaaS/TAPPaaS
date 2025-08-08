@@ -25,16 +25,16 @@ TODO: rethink backup hdd connection when using Qotom as single server
 Construct a 3 node system:
 
 - TAPPaaS1: Primary system for firewall, self management, and common services (like the minimal system)
-  - only have boot and tanka disks. only run important stuff. Tanka is mirrow or raidz. SSD
+  - only have boot and tanka disks. only run important stuff. Tanka is mirror or raidz. SSD
   - RAM is ECC
 - TAPPaaS2: AI, Media and fail over node.
   - Runs stuff that do not require HA. which is stored on tankb
-  - has a tanka that is sized similar to tanka on TAPPaaS1, and if used as a HA mirrow
+  - has a tanka that is sized similar to tanka on TAPPaaS1, and if used as a HA mirror
   - has a tankb that is big enough for media (films, music, ...) as well as AI models
   - has a GPU capability for AI (and potential for transcoding, virtualized gaming, etc)
   - GPU and ram is not ECC but large enough to support AI models
-- TAPPaaS3: Small quorum and backup server
-  - boot disk + backup disk: Proxmox backup server runs in an LXC on the boot disk
+- TAPPaaS3: Small Proxmox quorum and backup server
+  - boot disk + backup disk: Proxmox backup server installed natively. A quorum application is installed on PBS
   - Backup disk is at least 2x tanka on TAPPaaS1 + tankb on TAPPaaS2.
     - backup should also be big enough to manage servicing as a backup system for remote TAPPaaS systems.
   - RAM: 4G + 1Gx(number of Tb backup disks)
@@ -42,5 +42,5 @@ Construct a 3 node system:
 
 ## Scale out
 
-Add servers as needed. Pangling can act as a load balancer. CEPH can be added to have consistent storage across nodes. 
+Add servers as needed. Pangolin can act as a load balancer. CEPH can be added to have consistent storage across nodes. 
 

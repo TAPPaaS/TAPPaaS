@@ -15,6 +15,7 @@ The complicated designs are:
 - The [Storage](./StorageDesign.md) design: This is delivered via Proxmox, but require a dedicated design discussion
 - The [Single Sign On](./SingleSignOnDesign.md) design
 - The [Backup](./BackupDesign.md) design
+- The [AI](./AIDesign.md)
 
 
 

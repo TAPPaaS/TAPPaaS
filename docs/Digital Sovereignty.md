@@ -18,10 +18,11 @@ You ensure your digital processes and storage meet the regulations of your own c
 
 
 # Why is digital sovereignty important?
-	•	Protecting privacy and business secrets
-	•	National security and economic stability
-	•	Building trust with customers and partners
-	•	Avoiding dependence on foreign tech giants
+
+- Protecting privacy and business secrets
+- National security and economic stability
+- Building trust with customers and partners
+- Avoiding dependence on foreign tech giants
 
 # Universal pattern and analogy
 Think of digital sovereignty as having a safe in your own home instead of a bank abroad. You hold the key, decide who enters, and set the rules.
@@ -29,7 +30,8 @@ Think of digital sovereignty as having a safe in your own home instead of a bank
 # Practical aspects
 
 Digital sovereignty depends on:
-	•	Where your data physically resides (location and jurisdiction)
-	•	Who supplies your technology (local or foreign provider)
-	•	How much control you have over access, processing, and security of your data
-	•	Whether you can easily switch providers (portability and interoperability)
+
+- Where your data physically resides (location and jurisdiction)
+- Who supplies your technology (local or foreign provider)
+- How much control you have over access, processing, and security of your data
+- Whether you can easily switch providers (portability and interoperability)
