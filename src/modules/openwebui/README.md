@@ -42,6 +42,35 @@ Select VM config of: tappaas-AI-chat
     update Hard Disk (scsi0): from 8GB to 40GB SSD+
   #  update Network Device (net0) 
 
+  update Hard Disk (scsi0):
+    Minimum: 20GB
+    Recommended: 40GB
+
+    Breakdown per service:
+      OpenWebUI: ~2-3GB (base image + data)
+      SearXNG: ~500MB
+      LiteLLM: ~1GB
+      PostgreSQL: ~1-2GB initial
+      System + Docker overhead: ~5GB
+      Extra space for updates/logs: ~10GB
+
+  update RAM:
+    Minimum: 4GB (4096)
+    Recommended: 8GB (8192)
+
+    Breakdown:
+      OpenWebUI: 1-2GB
+      SearXNG: 512MB
+      LiteLLM: 512MB-1GB
+      PostgreSQL: 1GB
+      System + Docker overhead: 1GB
+
+  CPU
+    Minimum: 2 cores
+    Recommended: 4 cores
+
+
+
 start VM
 open 'console' to see the progress...
 
