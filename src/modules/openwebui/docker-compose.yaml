@@ -10,7 +10,7 @@ volumes:
   open_webui_:
   searxng_:
   litellm_:
-  redis_:
+#  redis_:
   postgres_:
 
 networks:
@@ -63,24 +63,26 @@ services:
       - DATABASE_URL=${LITELLM_DATABASE_URL}
       - STORE_MODEL_IN_DB=${STORE_MODEL_IN_DB}
       - OLLAMA_API_BASE=http://host.docker.internal:${OLLAMA_PORT}
+#      - REDIS_URL: redis://default:jouwRedisWachtwoord@redis:6379
     volumes:
       - ./litellm_config:/config
       - litellm_:/app/data
     depends_on:
+#      redis
       postgres:
-        condition: service_healthy
+        condition: service_healthy   
     extra_hosts:
       - "host.docker.internal:host-gateway"
     <<: *defaults
 
-  redis:
-    image: redis:7-alpine
-    ports:
-      - "${REDIS_PORT}:6379"
-    command: redis-server --appendonly yes
-    volumes:
-      - ./redis:/data
-    <<: *defaults
+#  redis:
+#    image: redis:7-alpine
+#    ports:
+#      - "${REDIS_PORT}:6379"
+#    command: redis-server --appendonly yes
+#    volumes:
+#      - ./redis:/data
+#    <<: *defaults
 
   postgres:
     image: postgres:15-alpine
