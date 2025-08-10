@@ -1,0 +1,146 @@
+# ============================================================================
+# Docker Compose Configuration
+# Project: Local AI Platform (OpenWebUI, Searxng, LiteLLM, Ollama, n8n, Postgres)
+# Author: Erik van Busschbach
+# Last updated: 2025-08-07
+# Version: 250807v3
+# ============================================================================
+
+volumes:
+  postgres_:
+  n8n_:
+  litellm_:
+  open_webui_:
+  ollama_:
+  searxng_:
+  npm_:
+  npm_letsencrypt:
+
+networks:
+  ai_network:
+
+x-service-defaults: &defaults
+  restart: unless-stopped
+  networks:
+    - ai_network
+
+services:
+
+  postgres:
+    image: postgres:15-alpine
+    environment:
+      - POSTGRES_USER=${POSTGRES_SUPERUSER}
+      - POSTGRES_PASSWORD=${POSTGRES_SUPERPASS}
+      - POSTGRES_DB=postgres
+      # Pass environment variables for the init script
+      - POSTGRES_DB_N8N=${POSTGRES_DB_N8N}
+      - POSTGRES_USER_N8N=${POSTGRES_USER_N8N}
+      - POSTGRES_PASSWORD_N8N=${POSTGRES_PASSWORD_N8N}
+      - POSTGRES_DB_LLM=${POSTGRES_DB_LLM}
+      - POSTGRES_USER_LLM=${POSTGRES_USER_LLM}
+      - POSTGRES_PASSWORD_LLM=${POSTGRES_PASSWORD_LLM}
+    volumes:
+      - postgres_:/var/lib/postgresql/data
+      - ./init-multiple-dbs.sh:/docker-entrypoint-initdb.d/init-multiple-dbs.sh:ro
+    ports:
+      - "${POSTGRES_PORT}:5432"
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U ${POSTGRES_SUPERUSER} -d postgres']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    <<: *defaults
+
+  n8n:
+    image: n8nio/n8n:latest
+    environment:
+      - DB_TYPE=postgresdb
+      - DB_POSTGRESDB_HOST=${POSTGRES_HOST}
+      - DB_POSTGRESDB_PORT=${POSTGRES_PORT}
+      - DB_POSTGRESDB_DATABASE=${POSTGRES_DB_N8N}
+      - DB_POSTGRESDB_USER=${POSTGRES_USER_N8N}
+      - DB_POSTGRESDB_PASSWORD=${POSTGRES_PASSWORD_N8N}
+      - N8N_ENCRYPTION_KEY=${N8N_ENCRYPTION_KEY}
+      - N8N_USER_MANAGEMENT_JWT_SECRET=${N8N_USER_MANAGEMENT_JWT_SECRET}
+      - N8N_RUNNERS_ENABLED=${N8N_RUNNERS_ENABLED}
+      - N8N_DIAGNOSTICS_ENABLED=${N8N_DIAGNOSTICS_ENABLED}
+      - N8N_PERSONALIZATION_ENABLED=${N8N_PERSONALIZATION_ENABLED}
+    ports:
+      - "5678:5678"
+    volumes:
+      - n8n_:/home/node/.n8n
+      - ./n8n/backup:/backup
+      - ./shared:/data/shared
+    depends_on:
+      postgres:
+        condition: service_healthy
+    <<: *defaults
+
+  litellm:
+    image: ghcr.io/berriai/litellm:main-latest
+    ports:
+      - "${LITELLM_PORT}:4000"
+    environment:
+      - LITELLM_CONFIG=/config/config.yaml
+      - LITELLM_MASTER_KEY=${LITELLM_MASTER_KEY}
+      - LITELLM_SALT_KEY=${LITELLM_SALT_KEY}
+      - DATABASE_URL=${LITELLM_DATABASE_URL}
+      - STORE_MODEL_IN_DB=${STORE_MODEL_IN_DB}
+      - OLLAMA_API_BASE=http://host.docker.internal:${OLLAMA_PORT}
+    volumes:
+      - ./litellm_config:/config
+      - litellm_:/app/data
+    depends_on:
+      postgres:
+        condition: service_healthy
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    <<: *defaults
+
+
+  open-webui:
+    image: ghcr.io/open-webui/open-webui:latest
+    environment:
+      - ENABLE_RAG_WEB_SEARCH=true
+      - RAG_WEB_SEARCH_ENGINE=searxng
+      - RAG_WEB_SEARCH_RESULT_COUNT=3
+      - SEARXNG_QUERY_URL=http://searxng:8080/search
+    ports:
+      - "${OPENWEBUI_PORT}:8080"
+    volumes:
+      - open_webui_:/app/backend/data
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    depends_on:
+      - searxng
+    <<: *defaults
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "${REDIS_PORT}:6379"
+    command: redis-server --appendonly yes
+    volumes:
+      - ./redis:/data
+    <<: *defaults
+
+  qdrant:
+    image: qdrant/qdrant:v1.9.1
+    ports:
+      - "${QDRANT_PORT}:6333"
+    volumes:
+      - qdrant_:/qdrant/storage
+    <<: *defaults
+
+  searxng:
+    image: searxng/searxng:latest
+    ports:
+      - "${SEARXNG_PORT}:8080"
+    volumes:
+      - searxng_:/etc/searxng
+    environment:
+      - SEARXNG_BIND_ADDRESS=0.0.0.0:8080
+      - SEARXNG_BASE_URL=http://localhost:${SEARXNG_PORT}/
+      - SEARXNG_LIMITER=false
+    <<: *defaults
