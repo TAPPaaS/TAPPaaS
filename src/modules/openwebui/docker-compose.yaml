@@ -60,9 +60,9 @@ services:
       - LITELLM_CONFIG=/config/config.yaml
       - LITELLM_MASTER_KEY=${LITELLM_MASTER_KEY}
       - LITELLM_SALT_KEY=${LITELLM_SALT_KEY}
-      - DATABASE_URL=${LITELLM_DATABASE_URL}
+      - LITELLM_DATABASE_URL=postgresql://${POSTGRES_USER_LLM}:${POSTGRES_PASSWORD_LLM}@${POSTGRES_HOST}:${POSTGRES_PORT}/${POSTGRES_DB_LLM}
       - STORE_MODEL_IN_DB=${STORE_MODEL_IN_DB}
-      - OLLAMA_API_BASE=http://host.docker.internal:${OLLAMA_PORT}
+#      - OLLAMA_API_BASE=http://host.docker.internal:${OLLAMA_PORT}
 #      - REDIS_URL: redis://default:jouwRedisWachtwoord@redis:6379
     volumes:
       - ./litellm_config:/config
@@ -89,11 +89,11 @@ services:
     environment:
       - POSTGRES_USER=${POSTGRES_SUPERUSER}
       - POSTGRES_PASSWORD=${POSTGRES_SUPERPASS}
-      - POSTGRES_DB=postgres
+      - POSTGRES_DB=${POSTGRES_DB_LLM}
       # Pass environment variables for the init script
-      - POSTGRES_DB_LLM=${POSTGRES_DB_LLM}
-      - POSTGRES_USER_LLM=${POSTGRES_USER_LLM}
-      - POSTGRES_PASSWORD_LLM=${POSTGRES_PASSWORD_LLM}
+#      - POSTGRES_DB_LLM=${POSTGRES_DB_LLM}
+#      - POSTGRES_USER_LLM=${POSTGRES_USER_LLM}
+#      - POSTGRES_PASSWORD_LLM=${POSTGRES_PASSWORD_LLM}
     volumes:
       - postgres_:/var/lib/postgresql/data
       - ./init-multiple-dbs.sh:/docker-entrypoint-initdb.d/init-multiple-dbs.sh:ro
