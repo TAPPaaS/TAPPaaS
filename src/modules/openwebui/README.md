@@ -46,3 +46,5 @@ start VM
 open 'console' to see the progress...
 
 
+[ connect your visual studio to the tappaas-cicd vm. 
+  ]
