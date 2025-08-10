@@ -13,6 +13,6 @@ Once the TAPPaaS system is up and running there is ongoing maintenance
 
 You can also verify the configuration using AI, based on the recipe in: 
 
-- [Complinace Report version a](./EvB_TAPPaaS%20compliance%20report.md)
+- [Compliance Report version a](./EvB_TAPPaaS%20compliance%20report.md)
 - [Compliance Report version b](TAPPaaS%20-%20AI%20assisted%20compliance%20report.md)
 
