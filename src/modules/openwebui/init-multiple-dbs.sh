@@ -39,9 +39,9 @@ EOSQL
     echo "User '$user' and database '$database' created successfully"
 }
 
-if [ -n "${POSTGRES_DB_N8N:-}" ] && [ -n "${POSTGRES_USER_N8N:-}" ] && [ -n "${POSTGRES_PASSWORD_N8N:-}" ]; then
-    create_user_and_database "$POSTGRES_DB_N8N" "$POSTGRES_USER_N8N" "$POSTGRES_PASSWORD_N8N"
-fi
+#if [ -n "${POSTGRES_DB_N8N:-}" ] && [ -n "${POSTGRES_USER_N8N:-}" ] && [ -n "${POSTGRES_PASSWORD_N8N:-}" ]; then
+#    create_user_and_database "$POSTGRES_DB_N8N" "$POSTGRES_USER_N8N" "$POSTGRES_PASSWORD_N8N"
+#fi
 
 if [ -n "${POSTGRES_DB_LLM:-}" ] && [ -n "${POSTGRES_USER_LLM:-}" ] && [ -n "${POSTGRES_PASSWORD_LLM:-}" ]; then
     create_user_and_database "$POSTGRES_DB_LLM" "$POSTGRES_USER_LLM" "$POSTGRES_PASSWORD_LLM"
