@@ -21,6 +21,10 @@
 #!/bin/sh
 set -euo pipefail
 
+# Harden: check mandatory env vars for safer operation
+: "${POSTGRES_DB:?Environment variable POSTGRES_DB must be set and non-empty (e.g. 'postgres')}"
+: "${POSTGRES_SUPERUSER:?Environment variable POSTGRES_SUPERUSER must be set and non-empty}"
+
 echo "=== [INIT] Multi-database setup START ==="
 
 IFS=',' read -ra DB_PAIRS <<< "$APP_DATABASES"
@@ -37,7 +41,7 @@ for APP_ENTRY in "${DB_PAIRS[@]}"; do
 
     echo "--- [INIT] $APP_NAME: DB=$DB_NAME, User=$DB_USER ---"
 
-    # 1. Maak user aan als die nog niet bestaat
+    # 1. Create user if not exists
     psql -v ON_ERROR_STOP=1 -U "$POSTGRES_SUPERUSER" -d "$POSTGRES_DB" <<-EOSQL
         DO \$\$
         BEGIN
@@ -51,7 +55,7 @@ for APP_ENTRY in "${DB_PAIRS[@]}"; do
         \$\$;
 EOSQL
 
-    # 2. Maak database aan als die nog niet bestaat (eigenaar = gebruiker)
+    # 2. Create database if not exists (owner = user)
     psql -v ON_ERROR_STOP=1 -U "$POSTGRES_SUPERUSER" -d "$POSTGRES_DB" <<-EOSQL
         DO \$\$
         BEGIN
@@ -61,8 +65,8 @@ EOSQL
                     OWNER ${DB_USER}
                     TEMPLATE template0
                     ENCODING 'UTF8'
-                    LC_COLLATE='C'
-                    LC_CTYPE='C'
+                    LC_COLLATE = 'C'
+                    LC_CTYPE = 'C'
                     CONNECTION LIMIT -1;
             ELSE
                 RAISE NOTICE 'Database ${DB_NAME} exists; skipping';
@@ -71,7 +75,7 @@ EOSQL
         \$\$;
 EOSQL
 
-    # 3. Schema isolatie, rechten idempotent toekennen
+    # 3. Schema isolation and permissions
     psql -v ON_ERROR_STOP=1 -U "$POSTGRES_SUPERUSER" -d "$DB_NAME" <<-EOSQL
         CREATE SCHEMA IF NOT EXISTS ${APP_NAME}_schema AUTHORIZATION ${DB_USER};
 
