@@ -3,7 +3,7 @@
 # Project: Local AI Platform (OpenWebUI, Searxng, LiteLLM, Postgres)
 # Author: Erik van Busschbach
 # Last updated: 2025-08-11
-# Version: 250811v6
+# Version: 250811v7
 # Description: This file defines the Docker services for the Local AI Platform,
 #              including OpenWebUI, Searxng, LiteLLM, and Postgres
 #              with secure database initialization and environment variable management.
@@ -31,6 +31,7 @@ x-service-defaults: &defaults
 
 services:
 
+  # --- OpenWebUI frontend ---
   open-webui:
     image: ghcr.io/open-webui/open-webui:latest
     environment:
@@ -48,6 +49,7 @@ services:
       - searxng
     <<: *defaults
 
+  # --- Searxng search engine ---
   searxng:
     image: searxng/searxng:latest
     ports:
@@ -60,53 +62,14 @@ services:
       - SEARXNG_LIMITER=false
     <<: *defaults
 
-litellm:
-  image: ghcr.io/berriai/litellm:main-latest
-  ports:
-    - "${LITELLM_PORT}:4000"
-  environment:
-    - LITELLM_CONFIG=/config/config.yaml
-    - LITELLM_MASTER_KEY=${LITELLM_MASTER_KEY}
-    - LITELLM_SALT_KEY=${LITELLM_SALT_KEY}
-    - STORE_MODEL_IN_DB=${STORE_MODEL_IN_DB}
-  volumes:
-    - ./litellm_config:/config
-    - litellm_:/app/data
-  # Use a script to dynamically set the database URL based on the .env configuration
-  # This allows for flexible database initialization and management
-  # The script will read the APP_DATABASES variable from the .env file
-  # and construct the database URL for LiteLLM
-  # The script should be placed in the same directory as this docker-compose.yaml file
-  # Ensure the script has execute permissions: chmod +x get-db-url.sh
-    - ./get-db-url.sh:/get-db-url.sh:ro
-  entrypoint: ["/bin/sh", "-c"]
-  command: >
-    export LITELLM_DATABASE_URL=$(/get-db-url.sh) &&
-    echo "Using DB URL: $LITELLM_DATABASE_URL" &&
-    exec /start
-  depends_on:
-    postgres:
-      condition: service_healthy   
-  extra_hosts:
-    - "host.docker.internal:host-gateway"
-  <<: *defaults
-
-#  redis:
-#    image: redis:7-alpine
-#    ports:
-#      - "${REDIS_PORT}:6379"
-#    command: redis-server --appendonly yes
-#    volumes:
-#      - ./redis:/data
-#    <<: *defaults
-
+  # --- PostgreSQL database ---
   postgres:
     image: postgres:15-alpine
     environment:
       - POSTGRES_USER=${POSTGRES_SUPERUSER}
       - POSTGRES_PASSWORD=${POSTGRES_SUPERPASS}
-      - POSTGRES_DB=${POSTGRES_DB}       # default = postgres
-      - APP_DATABASES=${APP_DATABASES}   # list of app DB's / users from .env
+      - POSTGRES_DB=${POSTGRES_DB}
+      - APP_DATABASES=${APP_DATABASES}
     volumes:
       - postgres_:/var/lib/postgresql/data
       - ./init-multiple-dbs.sh:/docker-entrypoint-initdb.d/init-multiple-dbs.sh:ro
@@ -119,3 +82,39 @@ litellm:
       retries: 5
       start_period: 10s
     <<: *defaults
+
+  # --- LiteLLM API ---
+  litellm:
+    image: ghcr.io/berriai/litellm:main-latest
+    ports:
+      - "${LITELLM_PORT}:4000"
+    environment:
+      - LITELLM_CONFIG=/config/config.yaml
+      - LITELLM_MASTER_KEY=${LITELLM_MASTER_KEY}
+      - LITELLM_SALT_KEY=${LITELLM_SALT_KEY}
+      - STORE_MODEL_IN_DB=${STORE_MODEL_IN_DB}
+    volumes:
+      - ./litellm_config:/config
+      - litellm_:/app/data
+      - ./get-db-url.sh:/get-db-url.sh:ro
+    entrypoint: ["/bin/sh", "-c"]
+    command: >
+      export LITELLM_DATABASE_URL=$(/get-db-url.sh) &&
+      echo "Using DB URL: $LITELLM_DATABASE_URL" &&
+      exec /start
+    depends_on:
+      postgres:
+        condition: service_healthy
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    <<: *defaults
+
+#  # --- Redis cache (optional) ---
+#  redis:
+#    image: redis:7-alpine
+#    ports:
+#      - "${REDIS_PORT}:6379"
+#    command: redis-server --appendonly yes
+#    volumes:
+#      - ./redis:/data
+#    <<: *defaults
