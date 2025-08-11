@@ -12,11 +12,11 @@
 # ============================================================================
 
 volumes:
-  openwebui_
-  searxng_
-  litellm_
-  postgres_
-  redis_
+  openwebui_ {}
+  searxng_ {}
+  litellm_ {}
+  postgres_ {}
+  redis_ {}
 
 networks:
   ai_network:
