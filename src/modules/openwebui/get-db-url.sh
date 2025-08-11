@@ -7,7 +7,7 @@
 #!/bin/sh
 set -e
 
-# Find first entry for 'litellm'
+# Find first entry in APP_DATABASES starting with 'litellm|'
 ENTRY=$(echo "$APP_DATABASES" | tr ',' '\n' | grep '^litellm|' | xargs)
 
 if [ -z "$ENTRY" ]; then
@@ -19,15 +19,15 @@ IFS='|' read -r APP DB USER PASS <<EOF
 $ENTRY
 EOF
 
-# Trim whitespace from each variable
+# Trim each variable to strip internal padding
 APP=$(echo "$APP" | xargs)
 DB=$(echo "$DB" | xargs)
 USER=$(echo "$USER" | xargs)
 PASS=$(echo "$PASS" | xargs)
 
-# Default host/port if not set
+# Defaults if not set
 POSTGRES_HOST="${POSTGRES_HOST:-postgres}"
 POSTGRES_PORT="${POSTGRES_PORT:-5432}"
 
-# Output the cleaned Database URL (no extra spaces!)
+# Output URL without extra spaces
 echo "postgresql://${USER}:${PASS}@${POSTGRES_HOST}:${POSTGRES_PORT}/${DB}"
