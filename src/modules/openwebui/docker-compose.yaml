@@ -10,9 +10,9 @@
 #   - Secure DB initialization and environment variable passing.
 #   - Modular and easy to extend with clean logs and health checks.
 #   - Named volumes for persistent data storage.
+#   - Includes (init and .env fixes)
 # ============================================================================
 
-# ---------- Persistent Volumes ----------
 volumes:
   openwebui_:
   searxng_:
@@ -20,11 +20,9 @@ volumes:
   postgres_:
   redis_:
 
-# ---------- Networks ----------
 networks:
   ai_network:
 
-# ---------- Defaults ----------
 x-service-defaults: &defaults
   restart: unless-stopped
   networks:
@@ -79,10 +77,11 @@ services:
   postgres:
     image: postgres:15-alpine
     environment:
-      - POSTGRES_USER=${POSTGRES_SUPERUSER}
-      - POSTGRES_PASSWORD=${POSTGRES_SUPERPASS}
-      - POSTGRES_DB=${POSTGRES_DB}
-      - APP_DATABASES=${APP_DATABASES}
+      # Gebruik aliasen volgens .env om consistentie te garanderen
+      - POSTGRES_USER=${POSTGRES_SUPERUSER}    # pgadmin
+      - POSTGRES_PASSWORD=${POSTGRES_SUPERPASS} # postgres-secure-pass-2025
+      - POSTGRES_DB=${POSTGRES_DB}             # postgres
+      - APP_DATABASES=${APP_DATABASES}         # composiet db info voor init script
     ports:
       - "${POSTGRES_PORT}:5432"
     volumes:
@@ -124,7 +123,7 @@ services:
       retries: 3
     <<: *defaults
 
-  # --- Redis cache (optional) ---
+  # --- Redis cache (optioneel) ---
   redis:
     image: redis:7-alpine
     ports:

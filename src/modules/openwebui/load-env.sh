@@ -3,25 +3,22 @@ set -euo pipefail
 
 ##
 # Robust .env loader:
-# - Loads base vars (safe for spaces, special chars)
-# - Ignores comments, blanks
-# - No shell expansion until after loading all base variables
-# - Self-heals: writes new composites back to .env for Compose
+# - Laadt basisvariabelen (veilig voor spaties/specials)
+# - Negeert commentaar en lege regels
+# - Houdt env consistent voor Compose én init scripts
 ##
 
 ENV_FILE="${1:-.env}"
 TMP_ENV=".env.tmp"
 
-# Function: robustly load all base vars
 load_env() {
   if [[ ! -f "$ENV_FILE" ]]; then
     echo "[ERROR] Env file '$ENV_FILE' not found." >&2
     exit 1
   fi
-
   while IFS= read -r line || [[ -n "$line" ]]; do
     [[ -z "$line" || "$line" =~ ^\s*# ]] && continue
-    line="${line%% #*}"                             # strip trailing ' # comment'
+    line="${line%% #*}"
     line="$(echo "$line" | sed -e 's/^[ \t]*//' -e 's/[ \t]*$//')"
     if [[ "$line" == *"="* ]]; then
       export "$line"
@@ -30,20 +27,23 @@ load_env() {
 }
 load_env
 
-# 1️⃣ Build composite APP_DATABASES from per-app components (DRY)
+# Zorg dat ook Postgres base image variabelen beschikbaar zijn
+export POSTGRES_USER="${POSTGRES_SUPERUSER}"
+export POSTGRES_PASSWORD="${POSTGRES_SUPERPASS}"
+
+# 1️⃣ Composite APP_DATABASES string opbouwen
 export APP_DATABASES="litellm|${LITELLM_DB_NAME}|${LITELLM_DB_USER}|${LITELLM_DB_PASS},n8n|${N8N_DB_NAME}|${N8N_DB_USER}|${N8N_DB_PASS}"
 
-# 2️⃣ Compose LiteLLM DB URL (DRY from parts)
+# 2️⃣ LiteLLM DB URL samenstellen
 export LITELLM_DATABASE_URL="postgresql://${LITELLM_DB_USER}:${LITELLM_DB_PASS}@${POSTGRES_HOST}:${POSTGRES_PORT}/${LITELLM_DB_NAME}"
 
-# 3️⃣ Compose DATABASE_URL for compatibility
+# 3️⃣ DATABASE_URL alias instellen
 export DATABASE_URL="$LITELLM_DATABASE_URL"
 
-# 4️⃣ Persist these derived values back to .env (overwrite old entries, keep comments!)
+# 4️⃣ Persist afgeleide waarden terug naar .env
 awk -v appdbs="$APP_DATABASES" \
     -v litellmurl="$LITELLM_DATABASE_URL" \
     -v dburl="$DATABASE_URL" '
-  # Replace or append the DRY keys; preserve comments and order
   BEGIN {set_appdbs=0; set_llurl=0; set_dburl=0}
   /^APP_DATABASES=/ { print "APP_DATABASES=" appdbs; set_appdbs=1; next }
   /^LITELLM_DATABASE_URL=/ { print "LITELLM_DATABASE_URL=" litellmurl; set_llurl=1; next }
@@ -57,9 +57,9 @@ awk -v appdbs="$APP_DATABASES" \
 ' "$ENV_FILE" > "$TMP_ENV"
 mv "$TMP_ENV" "$ENV_FILE"
 
-# 5️⃣ Show status/log
+# 5️⃣ Log status
 echo "[INFO] Environment loaded and persisted"
+echo "[INFO] POSTGRES_USER=$POSTGRES_USER"
+echo "[INFO] POSTGRES_PASSWORD=$POSTGRES_PASSWORD"
 echo "[INFO] APP_DATABASES=$APP_DATABASES"
 echo "[INFO] LITELLM_DATABASE_URL=$LITELLM_DATABASE_URL"
-
-# Optionally, export other derived envs as needed for shell use.
