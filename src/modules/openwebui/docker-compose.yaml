@@ -3,22 +3,20 @@
 # Project: Local AI Platform (OpenWebUI, Searxng, LiteLLM, Postgres, n8n, Ollama, etc.)
 # Author: Erik van Busschbach
 # Last updated: 2025-08-11
-# Version: 250811v7-DRY
+# Version: 250811v8-FIXED
 # Description:
-#   - Defines Docker services for the Local AI platform.
-#   - Uses DRY principles for environment variable management.
-#   - Secure DB initialization and environment variable passing.
-#   - Modular and easy to extend with clean logs and health checks.
-#   - Named volumes for persistent data storage.
-#   - Includes (init and .env fixes)
+#   - DRY environment variable management
+#   - Secure DB initialization
+#   - Correct data volume mounts for Postgres & Redis
+#   - Modular setup with health checks
 # ============================================================================
 
 volumes:
-  openwebui_:
-  searxng_:
-  litellm_:
-  postgres_:
-  redis_:
+  openwebui_
+  searxng_
+  litellm_
+  postgres_
+  redis_
 
 networks:
   ai_network:
@@ -30,7 +28,6 @@ x-service-defaults: &defaults
 
 services:
 
-  # --- OpenWebUI frontend ---
   open-webui:
     image: ghcr.io/open-webui/open-webui:latest
     environment:
@@ -43,9 +40,10 @@ services:
     volumes:
       - ./openwebui/admin_config:/app/config/admin:rw
       - ./openwebui/user_config:/app/config/user:rw
-      - openwebui_:/app/backend:rw
+      - openwebui_/app/backend:rw
     depends_on:
-      - searxng
+      searxng:
+        condition: service_healthy
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8080"]
       interval: 30s
@@ -53,7 +51,6 @@ services:
       retries: 3
     <<: *defaults
 
-  # --- SearxNG meta search engine ---
   searxng:
     image: searxng/searxng:latest
     ports:
@@ -65,7 +62,7 @@ services:
     volumes:
       - ./searxng/admin_config:/etc/searxng/admin:rw
       - ./searxng/user_config:/etc/searxng/user:rw
-      - searxng_:/var/lib/searxng:rw
+      - searxng_/var/lib/searxng:rw
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8080"]
       interval: 30s
@@ -73,21 +70,17 @@ services:
       retries: 3
     <<: *defaults
 
-  # --- PostgreSQL database ---
   postgres:
     image: postgres:15-alpine
     environment:
-      # Gebruik aliasen volgens .env om consistentie te garanderen
-      - POSTGRES_USER=${POSTGRES_SUPERUSER}     # pgadmin
-      - POSTGRES_PASSWORD=${POSTGRES_SUPERPASS} # postgres-secure-pass-2025
-      - POSTGRES_DB=${POSTGRES_DB}              # postgres
-      - APP_DATABASES=${APP_DATABASES}          # composiet db info voor init script
+      - POSTGRES_USER=${POSTGRES_SUPERUSER}
+      - POSTGRES_PASSWORD=${POSTGRES_SUPERPASS}
+      - POSTGRES_DB=${POSTGRES_DB}
+      - APP_DATABASES=${APP_DATABASES}
     ports:
       - "${POSTGRES_PORT}:5432"
     volumes:
-      # mount named volume to standard Postgres data map
-      - postgres_:/var/lib/postgresql/data
-      # Mount admin scripts zodat deze bij eerste start worden uitgevoerd
+      - postgres_/var/lib/postgresql/data
       - ./postgres/admin_scripts:/docker-entrypoint-initdb.d:rw
     healthcheck:
       test: ['CMD-SHELL', 'pg_isready -U ${POSTGRES_SUPERUSER} -d ${POSTGRES_DB}']
@@ -97,25 +90,17 @@ services:
       start_period: 10s
     <<: *defaults
 
-
-  # --- LiteLLM API proxy ---
   litellm:
     image: ghcr.io/berriai/litellm:main-latest
     ports:
       - "${LITELLM_PORT}:4000"
     env_file: .env
     environment:
-      DATABASE_URL: ${DATABASE_URL}
       LITELLM_DATABASE_URL: ${LITELLM_DATABASE_URL}
-      LITELLM_MASTER_KEY: ${LITELLM_MASTER_KEY}
-      LITELLM_SALT_KEY: ${LITELLM_SALT_KEY}
-      STORE_MODEL_IN_DB: ${STORE_MODEL_IN_DB}
-      LITELLM_LOG: ${LITELLM_LOG}
-      APP_DATABASES: ${APP_DATABASES}
     volumes:
       - ./litellm/admin_config:/app/config/admin:rw
       - ./litellm/user_config:/app/config/user:rw
-      - litellm_:/app/rw
+      - litellm_/app/rw
     depends_on:
       postgres:
         condition: service_healthy
@@ -126,14 +111,13 @@ services:
       retries: 3
     <<: *defaults
 
-  # --- Redis cache (optioneel) ---
   redis:
     image: redis:7-alpine
     ports:
       - "${REDIS_PORT}:6379"
     command: redis-server --appendonly yes
     volumes:
-      - redis_:/rw
+      - redis_/data
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 30s
