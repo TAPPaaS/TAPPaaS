@@ -3,7 +3,7 @@
 # Project: Local AI Platform (OpenWebUI, Searxng, LiteLLM, Postgres, n8n, Ollama, etc.)
 # Author: Erik van Busschbach
 # Last updated: 2025-08-11
-# Version: 250811v8-FIXED
+# Version: 250811v9-CLEAN
 # Description:
 #   - DRY environment variable management
 #   - Secure DB initialization
@@ -12,11 +12,11 @@
 # ============================================================================
 
 volumes:
-  openwebui_ {}
-  searxng_ {}
-  litellm_ {}
-  postgres_ {}
-  redis_ {}
+  openwebui_: {}
+  searxng_: {}
+  litellm_: {}
+  postgres_: {}
+  redis_: {}
 
 networks:
   ai_network:
@@ -28,6 +28,7 @@ x-service-defaults: &defaults
 
 services:
 
+  # --- OpenWebUI frontend ---
   open-webui:
     image: ghcr.io/open-webui/open-webui:latest
     environment:
@@ -40,7 +41,7 @@ services:
     volumes:
       - ./openwebui/admin_config:/app/config/admin:rw
       - ./openwebui/user_config:/app/config/user:rw
-      - openwebui_/app/backend:rw
+      - openwebui_:/app/backend:rw
     depends_on:
       searxng:
         condition: service_healthy
@@ -51,6 +52,7 @@ services:
       retries: 3
     <<: *defaults
 
+  # --- SearxNG meta search engine ---
   searxng:
     image: searxng/searxng:latest
     ports:
@@ -62,7 +64,7 @@ services:
     volumes:
       - ./searxng/admin_config:/etc/searxng/admin:rw
       - ./searxng/user_config:/etc/searxng/user:rw
-      - searxng_/var/lib/searxng:rw
+      - searxng_:/var/lib/searxng:rw
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8080"]
       interval: 30s
@@ -70,6 +72,7 @@ services:
       retries: 3
     <<: *defaults
 
+  # --- PostgreSQL database ---
   postgres:
     image: postgres:15-alpine
     environment:
@@ -80,7 +83,9 @@ services:
     ports:
       - "${POSTGRES_PORT}:5432"
     volumes:
-      - postgres_/var/lib/postgresql/data
+      # Mount named volume to standaard datamap zodat init-scripts werken
+      - postgres_:/var/lib/postgresql/data
+      # Init-scripts voor eerste start
       - ./postgres/admin_scripts:/docker-entrypoint-initdb.d:rw
     healthcheck:
       test: ['CMD-SHELL', 'pg_isready -U ${POSTGRES_SUPERUSER} -d ${POSTGRES_DB}']
@@ -90,6 +95,7 @@ services:
       start_period: 10s
     <<: *defaults
 
+  # --- LiteLLM API proxy ---
   litellm:
     image: ghcr.io/berriai/litellm:main-latest
     ports:
@@ -100,7 +106,7 @@ services:
     volumes:
       - ./litellm/admin_config:/app/config/admin:rw
       - ./litellm/user_config:/app/config/user:rw
-      - litellm_/app/rw
+      - litellm_:/app/rw
     depends_on:
       postgres:
         condition: service_healthy
@@ -111,13 +117,15 @@ services:
       retries: 3
     <<: *defaults
 
+  # --- Redis cache (optioneel) ---
   redis:
     image: redis:7-alpine
     ports:
       - "${REDIS_PORT}:6379"
     command: redis-server --appendonly yes
     volumes:
-      - redis_/data
+      # Mount naar standaard Redis datamap voor persistence
+      - redis_:/data
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 30s
