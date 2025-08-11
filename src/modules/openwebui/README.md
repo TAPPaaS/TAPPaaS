@@ -86,6 +86,7 @@ get the IP of the new VM from PVE 'summary'
   upon successful connection
 
   'clone' the modules/openwebui to the new VM
+  scp -r /home/tappaas/TAPpaas/src/modules/openwebui tappaas@ip-of-tappaas-ai-chat-vm:~/src/modules/openwebui
 
 
   
