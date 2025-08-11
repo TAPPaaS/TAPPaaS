@@ -18,78 +18,47 @@
 # - Clear separation of responsibilities
 # - Easier to audit permissions
 
-#!/bin/sh
-set -euo pipefail
-
-# Harden: check mandatory env vars for safer operation
-: "${POSTGRES_DB:?Environment variable POSTGRES_DB must be set and non-empty (e.g. 'postgres')}"
-: "${POSTGRES_SUPERUSER:?Environment variable POSTGRES_SUPERUSER must be set and non-empty}"
+#!/bin/bash
+set -e
 
 echo "=== [INIT] Multi-database setup START ==="
 
-IFS=',' read -ra DB_PAIRS <<< "$APP_DATABASES"
+# Guard required env vars
+: "${POSTGRES_SUPERUSER:?Environment variable POSTGRES_SUPERUSER must be set and non-empty}"
+: "${POSTGRES_PASSWORD:?Environment variable POSTGRES_PASSWORD must be set and non-empty}"
+: "${APP_DATABASES:?Environment variable APP_DATABASES must be set and non-empty}"
 
-for APP_ENTRY in "${DB_PAIRS[@]}"; do
-    APP_ENTRY=$(echo "$APP_ENTRY" | xargs)  # trim whitespace
-    [ -z "$APP_ENTRY" ] && continue        # skip empty lines
+# Loop over the comma-separated app entries
+IFS=',' read -ra DB_ENTRIES <<< "$APP_DATABASES"
+for entry in "${DB_ENTRIES[@]}"; do
+    # Parse: app_name|db_name|db_user|db_password
+    IFS='|' read -ra PARTS <<< "$entry"
+    APP_NAME="${PARTS[0]}"
+    DB_NAME="${PARTS[1]}"
+    DB_USER="${PARTS[2]}"
+    DB_PASS="${PARTS[3]}"
 
-    IFS='|' read -ra FIELDS <<< "$APP_ENTRY"
-    APP_NAME="${FIELDS[0]}"
-    DB_NAME="${FIELDS[1]}"
-    DB_USER="${FIELDS[2]}"
-    DB_PASS="${FIELDS[3]}"
+    echo "--- [INIT] Processing app: $APP_NAME (DB=$DB_NAME, User=$DB_USER) ---"
 
-    echo "--- [INIT] $APP_NAME: DB=$DB_NAME, User=$DB_USER ---"
+    # Create user if not exists
+    USER_EXISTS=$(psql -U "$POSTGRES_SUPERUSER" -tAc "SELECT 1 FROM pg_roles WHERE rolname='$DB_USER'")
+    if [ "$USER_EXISTS" != "1" ]; then
+        echo "NOTICE: Creating user $DB_USER"
+        psql -v ON_ERROR_STOP=1 -U "$POSTGRES_SUPERUSER" -c "CREATE USER $DB_USER WITH PASSWORD '$DB_PASS';"
+    else
+        echo "NOTICE: User $DB_USER already exists, skipping."
+    fi
 
-    # 1. Create user if not exists
-    psql -v ON_ERROR_STOP=1 -U "$POSTGRES_SUPERUSER" -d "$POSTGRES_DB" <<-EOSQL
-        DO \$\$
-        BEGIN
-            IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = '${DB_USER}') THEN
-                RAISE NOTICE 'Creating user ${DB_USER}';
-                CREATE USER ${DB_USER} WITH PASSWORD '${DB_PASS}';
-            ELSE
-                RAISE NOTICE 'User ${DB_USER} exists; skipping';
-            END IF;
-        END
-        \$\$;
-EOSQL
+    # Create database if not exists
+    DB_EXISTS=$(psql -U "$POSTGRES_SUPERUSER" -tAc "SELECT 1 FROM pg_database WHERE datname='$DB_NAME'")
+    if [ "$DB_EXISTS" != "1" ]; then
+        echo "NOTICE: Creating database $DB_NAME"
+        psql -v ON_ERROR_STOP=1 -U "$POSTGRES_SUPERUSER" \
+             -c "CREATE DATABASE $DB_NAME OWNER $DB_USER TEMPLATE template0 ENCODING 'UTF8' LC_COLLATE='C' LC_CTYPE='C' CONNECTION LIMIT -1;"
+    else
+        echo "NOTICE: Database $DB_NAME already exists, skipping."
+    fi
 
-    # 2. Create database if not exists (owner = user)
-    psql -v ON_ERROR_STOP=1 -U "$POSTGRES_SUPERUSER" -d "$POSTGRES_DB" <<-EOSQL
-        DO \$\$
-        BEGIN
-            IF NOT EXISTS (SELECT FROM pg_database WHERE datname = '${DB_NAME}') THEN
-                RAISE NOTICE 'Creating database ${DB_NAME}';
-                CREATE DATABASE ${DB_NAME}
-                    OWNER ${DB_USER}
-                    TEMPLATE template0
-                    ENCODING 'UTF8'
-                    LC_COLLATE = 'C'
-                    LC_CTYPE = 'C'
-                    CONNECTION LIMIT -1;
-            ELSE
-                RAISE NOTICE 'Database ${DB_NAME} exists; skipping';
-            END IF;
-        END
-        \$\$;
-EOSQL
-
-    # 3. Schema isolation and permissions
-    psql -v ON_ERROR_STOP=1 -U "$POSTGRES_SUPERUSER" -d "$DB_NAME" <<-EOSQL
-        CREATE SCHEMA IF NOT EXISTS ${APP_NAME}_schema AUTHORIZATION ${DB_USER};
-
-        REVOKE ALL ON SCHEMA public FROM PUBLIC;
-        REVOKE ALL ON SCHEMA public FROM ${DB_USER};
-
-        GRANT USAGE, CREATE ON SCHEMA ${APP_NAME}_schema TO ${DB_USER};
-        ALTER DEFAULT PRIVILEGES IN SCHEMA ${APP_NAME}_schema
-            GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO ${DB_USER};
-        ALTER DEFAULT PRIVILEGES IN SCHEMA ${APP_NAME}_schema
-            GRANT USAGE, SELECT ON SEQUENCES TO ${DB_USER};
-EOSQL
-
-    echo "--- [INIT] $APP_NAME setup complete ---"
 done
 
-echo "=== [INIT] Multi-database setup DONE ==="
+echo "=== [INIT] Multi-database setup COMPLETE ==="
