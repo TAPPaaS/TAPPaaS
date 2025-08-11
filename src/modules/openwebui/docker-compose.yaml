@@ -89,11 +89,7 @@ services:
     environment:
       - POSTGRES_USER=${POSTGRES_SUPERUSER}
       - POSTGRES_PASSWORD=${POSTGRES_SUPERPASS}
-      - POSTGRES_DB=${POSTGRES_DB_LLM}
-      # Pass environment variables for the init script
-#      - POSTGRES_DB_LLM=${POSTGRES_DB_LLM}
-#      - POSTGRES_USER_LLM=${POSTGRES_USER_LLM}
-#      - POSTGRES_PASSWORD_LLM=${POSTGRES_PASSWORD_LLM}
+      - POSTGRES_DB=${POSTGRES_DB}  # Default database for Postgres}
     volumes:
       - postgres_:/var/lib/postgresql/data
       - ./init-multiple-dbs.sh:/docker-entrypoint-initdb.d/init-multiple-dbs.sh:ro

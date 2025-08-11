@@ -2,15 +2,13 @@
 # Author: TAPpaas Team / Erik Daniel 
 # Date: 2025-08-11
 # Description: Securely initialize multiple databases for TAPpaas applications
-#
-# !/bin/bash
 # 
 # Create app-specific roles and schemas with limited permissions
 # 1. Schema Isolation: Each app gets its own schema
 # 2. Least Privilege: Only necessary permissions are granted
 # 3. Role Hierarchy: Uses group roles for easier management
 # 4. Public Schema Protection: Revokes default public permissions
-# 5. Future-Proof: Easy to add more apps with proper isolation
+# 5. Future-Proof: Easy to add more apps with proper isolation (in .ENV file)
 # 
 # Benefits:
 # - Each app can only access its own schema
@@ -20,64 +18,57 @@
 # - Easier to audit permissions
 
 
-set -e
-set -u
+#!/bin/bash
+set -euo pipefail
 
-function create_secure_database() {
-    local database=$1
-    local app_user=$2
-    local app_password=$3
-    
-    echo "Setting up secure database for '$database'"
-    
-    # Create read-only group role
-    psql -v ON_ERROR_STOP=1 --username "$POSTGRES_SUPERUSER" <<-EOSQL
-        -- Create group role for read-only access
+echo "=== Starting multi-database initialization ==="
+IFS=',' read -ra APP_LIST <<< "$APP_DATABASES"
+
+for APP_ENTRY in "${APP_LIST[@]}"; do
+    IFS='|' read -ra APP <<< "$APP_ENTRY"
+    APP_NAME="${APP[0]}"
+    DB_NAME="${APP[1]}"
+    DB_USER="${APP[2]}"
+    DB_PASS="${APP[3]}"
+
+    echo "--- Setting up DB: $DB_NAME for app: $APP_NAME ---"
+
+    # Create DB, role, schema
+    psql -v ON_ERROR_STOP=1 -U "$POSTGRES_SUPERUSER" -d postgres <<-EOSQL
         DO \$\$
         BEGIN
-            IF NOT EXISTS (SELECT FROM pg_catalog.pg_roles WHERE rolname = '${database}_readonly') THEN
-                CREATE ROLE ${database}_readonly;
+            IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = '${DB_USER}') THEN
+                CREATE USER ${DB_USER} WITH PASSWORD '${DB_PASS}';
             END IF;
         END
         \$\$;
 
-        -- Create app user with specific permissions
-        DO \$\$
-        BEGIN
-            IF NOT EXISTS (SELECT FROM pg_catalog.pg_roles WHERE rolname = '$app_user') THEN
-                CREATE USER $app_user WITH PASSWORD '$app_password';
-                GRANT ${database}_readonly TO $app_user;
-            END IF;
-        END
-        \$\$;
+        CREATE DATABASE ${DB_NAME} OWNER ${DB_USER}
+        TEMPLATE template0
+        ENCODING 'UTF8'
+        LC_COLLATE='en_US.utf8'
+        LC_CTYPE='en_US.utf8'
+        CONNECTION LIMIT -1;
 
-        -- Create database and schema
-        SELECT 'CREATE DATABASE $database'
-        WHERE NOT EXISTS (SELECT FROM pg_database WHERE datname = '$database')\gexec
 EOSQL
 
-    # Set up schema and permissions
-    psql -v ON_ERROR_STOP=1 --username "$POSTGRES_SUPERUSER" -d "$database" <<-EOSQL
-        -- Create app-specific schema
-        CREATE SCHEMA IF NOT EXISTS ${app_user}_schema;
-        
-        -- Revoke public schema usage
-        REVOKE ALL ON ALL TABLES IN SCHEMA public FROM PUBLIC;
+    # Schema isolation & permissions
+    psql -v ON_ERROR_STOP=1 -U "$POSTGRES_SUPERUSER" -d "$DB_NAME" <<-EOSQL
+        CREATE SCHEMA IF NOT EXISTS ${APP_NAME}_schema AUTHORIZATION ${DB_USER};
+
+        -- Restrict public schema
         REVOKE ALL ON SCHEMA public FROM PUBLIC;
-        
-        -- Grant specific permissions
-        GRANT USAGE ON SCHEMA ${app_user}_schema TO $app_user;
-        GRANT CREATE ON SCHEMA ${app_user}_schema TO $app_user;
-        ALTER DEFAULT PRIVILEGES IN SCHEMA ${app_user}_schema 
-            GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO $app_user;
-        ALTER DEFAULT PRIVILEGES IN SCHEMA ${app_user}_schema 
-            GRANT SELECT, USAGE ON SEQUENCES TO $app_user;
+        REVOKE ALL ON SCHEMA public FROM ${DB_USER};
+
+        -- Grant rights in own schema
+        GRANT USAGE, CREATE ON SCHEMA ${APP_NAME}_schema TO ${DB_USER};
+        ALTER DEFAULT PRIVILEGES IN SCHEMA ${APP_NAME}_schema
+            GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO ${DB_USER};
+        ALTER DEFAULT PRIVILEGES IN SCHEMA ${APP_NAME}_schema
+            GRANT USAGE, SELECT ON SEQUENCES TO ${DB_USER};
 EOSQL
 
-    echo "Secure setup completed for '$database'"
-}
+    echo "--- Finished setup for: $DB_NAME ---"
+done
 
-# Create LiteLLM database with secure setup
-if [ -n "${POSTGRES_DB_LLM:-}" ] && [ -n "${POSTGRES_USER_LLM:-}" ] && [ -n "${POSTGRES_PASSWORD_LLM:-}" ]; then
-    create_secure_database "$POSTGRES_DB_LLM" "$POSTGRES_USER_LLM" "$POSTGRES_PASSWORD_LLM"
-fi
+echo "=== All databases initialized successfully ==="
