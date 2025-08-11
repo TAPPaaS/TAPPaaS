@@ -18,7 +18,6 @@
 # - Clear separation of responsibilities
 # - Easier to audit permissions
 
-
 #!/bin/sh
 set -euo pipefail
 
@@ -28,7 +27,7 @@ IFS=',' read -ra DB_PAIRS <<< "$APP_DATABASES"
 
 for APP_ENTRY in "${DB_PAIRS[@]}"; do
     APP_ENTRY=$(echo "$APP_ENTRY" | xargs)  # trim whitespace
-    [ -z "$APP_ENTRY" ] && continue        # skip lege regels
+    [ -z "$APP_ENTRY" ] && continue        # skip empty lines
 
     IFS='|' read -ra FIELDS <<< "$APP_ENTRY"
     APP_NAME="${FIELDS[0]}"
@@ -38,22 +37,22 @@ for APP_ENTRY in "${DB_PAIRS[@]}"; do
 
     echo "--- [INIT] $APP_NAME: DB=$DB_NAME, User=$DB_USER ---"
 
-    # 1. Maak user aan indien niet bestaat
-    psql -v ON_ERROR_STOP=1 -U "$POSTGRES_SUPERUSER" -d postgres <<-EOSQL
+    # 1. Maak user aan als die nog niet bestaat
+    psql -v ON_ERROR_STOP=1 -U "$POSTGRES_SUPERUSER" -d "$POSTGRES_DB" <<-EOSQL
         DO \$\$
         BEGIN
             IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = '${DB_USER}') THEN
                 RAISE NOTICE 'Creating user ${DB_USER}';
                 CREATE USER ${DB_USER} WITH PASSWORD '${DB_PASS}';
             ELSE
-                RAISE NOTICE 'User ${DB_USER} already exists. Skipping.';
+                RAISE NOTICE 'User ${DB_USER} exists; skipping';
             END IF;
         END
         \$\$;
 EOSQL
 
-    # 2. Maak database indien niet bestaat
-    psql -v ON_ERROR_STOP=1 -U "$POSTGRES_SUPERUSER" -d postgres <<-EOSQL
+    # 2. Maak database aan als die nog niet bestaat (eigenaar = gebruiker)
+    psql -v ON_ERROR_STOP=1 -U "$POSTGRES_SUPERUSER" -d "$POSTGRES_DB" <<-EOSQL
         DO \$\$
         BEGIN
             IF NOT EXISTS (SELECT FROM pg_database WHERE datname = '${DB_NAME}') THEN
@@ -66,21 +65,19 @@ EOSQL
                     LC_CTYPE='C'
                     CONNECTION LIMIT -1;
             ELSE
-                RAISE NOTICE 'Database ${DB_NAME} already exists. Skipping.';
+                RAISE NOTICE 'Database ${DB_NAME} exists; skipping';
             END IF;
         END
         \$\$;
 EOSQL
 
-    # 3. Schema-isolatie en permissies (idempotent)
+    # 3. Schema isolatie, rechten idempotent toekennen
     psql -v ON_ERROR_STOP=1 -U "$POSTGRES_SUPERUSER" -d "$DB_NAME" <<-EOSQL
         CREATE SCHEMA IF NOT EXISTS ${APP_NAME}_schema AUTHORIZATION ${DB_USER};
 
-        -- Restrict public schema
         REVOKE ALL ON SCHEMA public FROM PUBLIC;
         REVOKE ALL ON SCHEMA public FROM ${DB_USER};
 
-        -- Grant rights in own schema
         GRANT USAGE, CREATE ON SCHEMA ${APP_NAME}_schema TO ${DB_USER};
         ALTER DEFAULT PRIVILEGES IN SCHEMA ${APP_NAME}_schema
             GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO ${DB_USER};
@@ -88,7 +85,7 @@ EOSQL
             GRANT USAGE, SELECT ON SEQUENCES TO ${DB_USER};
 EOSQL
 
-    echo "--- [INIT] ${APP_NAME}: Setup complete ---"
+    echo "--- [INIT] $APP_NAME setup complete ---"
 done
 
 echo "=== [INIT] Multi-database setup DONE ==="

@@ -8,10 +8,16 @@
 set -e
 
 # Find first entry in APP_DATABASES starting with 'litellm|'
-ENTRY=$(echo "$APP_DATABASES" | tr ',' '\n' | grep '^litellm|')
+ENTRY=$(echo "$APP_DATABASES" | tr ',' '\n' | grep '^litellm|' | xargs)
+
+if [ -z "$ENTRY" ]; then
+    echo "Error: No APP_DATABASES entry found for 'litellm'." >&2
+    exit 1
+fi
+
 IFS='|' read -r APP DB USER PASS <<EOF
 $ENTRY
 EOF
 
-# Generate Database URL
+# Generate and output Database URL
 echo "postgresql://${USER}:${PASS}@${POSTGRES_HOST}:${POSTGRES_PORT}/${DB}"
