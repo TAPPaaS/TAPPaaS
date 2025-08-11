@@ -166,3 +166,33 @@ docker compose logs --tail=20 litellm
 docker compose logs --tail=20 postgres
 ```
 
+docker compose ps
+NAME                     IMAGE                                  COMMAND                  SERVICE      CREATED             STATUS                       PORTS
+openwebui-litellm-1      ghcr.io/berriai/litellm:main-latest    "docker/prod_entrypo…"   litellm      About an hour ago   Up About an hour             0.0.0.0:4000->4000/tcp, [::]:4000->4000/tcp
+openwebui-open-webui-1   ghcr.io/open-webui/open-webui:latest   "bash start.sh"          open-webui   About an hour ago   Up About an hour (healthy)   0.0.0.0:3000->8080/tcp, [::]:3000->8080/tcp
+openwebui-postgres-1     postgres:15-alpine                     "docker-entrypoint.s…"   postgres     About an hour ago   Up About an hour (healthy)   0.0.0.0:5432->5432/tcp, [::]:5432->5432/tcp
+openwebui-searxng-1      searxng/searxng:latest                 "/usr/local/searxng/…"   searxng      About an hour ago   Up About an hour             0.0.0.0:7777->8080/tcp, [::]:7777->8080/tcp
+
+
+
+
+# --- 
+known error - CPU does not support x86-64-v2 --> try deploying on tappaas host with more modern CPU.
+
+docker compose ps
+NAME                     IMAGE                                  COMMAND                  SERVICE      CREATED          STATUS                             PORTS
+openwebui-litellm-1      ghcr.io/berriai/litellm:main-latest    "docker/prod_entrypo…"   litellm      29 seconds ago   Restarting (127) 3 seconds ago     
+openwebui-open-webui-1   ghcr.io/open-webui/open-webui:latest   "bash start.sh"          open-webui   29 seconds ago   Up 22 seconds (health: starting)   0.0.0.0:3000->8080/tcp, [::]:3000->8080/tcp
+openwebui-postgres-1     postgres:15-alpine                     "docker-entrypoint.s…"   postgres     29 seconds ago   Up 23 seconds (healthy)            0.0.0.0:5432->5432/tcp, [::]:5432->5432/tcp
+openwebui-searxng-1      searxng/searxng:latest                 "/usr/local/searxng/…"   searxng      29 seconds ago   Up 23 seconds                      0.0.0.0:7777->8080/tcp, [::]:7777->8080/tcp
+
+
+docker logs openwebui-litellm-1 --tail 50
+Fatal glibc error: CPU does not support x86-64-v2
+Fatal glibc error: CPU does not support x86-64-v2
+Fatal glibc error: CPU does not support x86-64-v2
+Fatal glibc error: CPU does not support x86-64-v2
+Fatal glibc error: CPU does not support x86-64-v2
+Fatal glibc error: CPU does not support x86-64-v2
+Fatal glibc error: CPU does not support x86-64-v2
+Fatal glibc error: CPU does not support x86-64-v2
