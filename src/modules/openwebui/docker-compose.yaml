@@ -11,8 +11,6 @@
 #   - Modular and easy to extend with clean logs and health checks.
 # ============================================================================
 
-version: "3.9"
-
 volumes:
   open_webui_:
   searxng_:
