@@ -86,7 +86,10 @@ services:
 
   # --- LiteLLM API ---
   litellm:
-    image: ghcr.io/berriai/litellm:main-latest
+#    image: ghcr.io/berriai/litellm:main-latest
+#   # Use a specific stable version for production that works on older CPU
+    image: ghcr.io/berriai/litellm:main-v1.68.0-stable
+
     ports:
       - "${LITELLM_PORT}:4000"
     environment:
