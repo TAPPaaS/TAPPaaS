@@ -1,25 +1,24 @@
 # ============================================================================
 # Docker Compose Configuration
-# Project: Local AI Platform (OpenWebUI, Searxng, LiteLLM, Postgres)
+# Project: Local AI Platform (OpenWebUI, Searxng, LiteLLM, Postgres, n8n, Ollama, etc.)
 # Author: Erik van Busschbach
 # Last updated: 2025-08-11
-# Version: 250811v7
-# Description: This file defines the Docker services for the Local AI Platform,
-#              including OpenWebUI, Searxng, LiteLLM, and Postgres
-#              with secure database initialization and environment variable management.
-#              Using DRY (Don't Repeat Yourself) principles for service definitions.
-#              This configuration is designed for local development and testing.
-#              It includes health checks, environment variable management,
-#              and secure database initialization for multiple applications.
-#              The configuration is modular and can be easily extended for additional services. In the .env file, you can define the applications and their database credentials.
+# Version: 250811v7-DRY
+# Description:
+#   - Defines Docker services for the Local AI platform.
+#   - Uses DRY principles for environment variable management.
+#   - Secure DB initialization and environment variable passing.
+#   - Modular and easy to extend with clean logs and health checks.
 # ============================================================================
+
+version: "3.9"
 
 volumes:
   open_webui_:
   searxng_:
   litellm_:
-#  redis_:
   postgres_:
+# redis_:   # Uncomment if Redis enabled
 
 networks:
   ai_network:
@@ -49,7 +48,7 @@ services:
       - searxng
     <<: *defaults
 
-  # --- Searxng search engine ---
+  # --- SearxNG meta search engine ---
   searxng:
     image: searxng/searxng:latest
     ports:
@@ -66,11 +65,11 @@ services:
   postgres:
     image: postgres:15-alpine
     environment:
-      - POSTGRES_USER=${POSTGRES_SUPERUSER}       # used by Postgres image
-      - POSTGRES_SUPERUSER=${POSTGRES_SUPERUSER}  # explicitly set for your init script
+      - POSTGRES_USER=${POSTGRES_SUPERUSER}        # Required by postgres image
+      - POSTGRES_SUPERUSER=${POSTGRES_SUPERUSER}  # Explicit for init scripts & scripts
       - POSTGRES_PASSWORD=${POSTGRES_SUPERPASS}
       - POSTGRES_DB=${POSTGRES_DB}
-      - APP_DATABASES=${APP_DATABASES}
+      - APP_DATABASES=${APP_DATABASES}             # Used by init-multiple-dbs.sh to create all needed DBs and users dynamically
     volumes:
       - postgres_:/var/lib/postgresql/data
       - ./init-multiple-dbs.sh:/docker-entrypoint-initdb.d/init-multiple-dbs.sh:ro
@@ -84,27 +83,31 @@ services:
       start_period: 10s
     <<: *defaults
 
-  # --- LiteLLM API ---
+  # --- LiteLLM API proxy ---
   litellm:
     image: ghcr.io/berriai/litellm:main-latest
     ports:
       - "${LITELLM_PORT}:4000"
+    env_file: .env        # Load the entire environment from .env as source of truth
     environment:
+      # Explicit mapping to guarantee these critical vars get passed in
+      DATABASE_URL: ${DATABASE_URL}
       LITELLM_DATABASE_URL: ${LITELLM_DATABASE_URL}
-      LITELLM_CONFIG: /config/config.yaml
       LITELLM_MASTER_KEY: ${LITELLM_MASTER_KEY}
       LITELLM_SALT_KEY: ${LITELLM_SALT_KEY}
       STORE_MODEL_IN_DB: ${STORE_MODEL_IN_DB}
-      APP_DATABASES: ${APP_DATABASES}
+      LITELLM_LOG: ${LITELLM_LOG}
+      APP_DATABASES: ${APP_DATABASES}              # Optional: pass to litellm if used internally
       POSTGRES_DB: ${POSTGRES_DB}
       POSTGRES_USER: ${POSTGRES_USER}
       POSTGRES_SUPERUSER: ${POSTGRES_SUPERUSER}
     volumes:
-      - ./litellm_config:/config
-      - litellm_:/app/data
+      - ./litellm_config:/app/config                # Your LiteLLM config.yaml here, must be mounted
+      - litellm_:/app/data                         # Persistent data volume for LiteLLM
     depends_on:
       postgres:
         condition: service_healthy
+    <<: *defaults
 
 #  # --- Redis cache (optional) ---
 #  redis:
