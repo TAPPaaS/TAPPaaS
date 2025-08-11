@@ -64,7 +64,7 @@ Now Do:
   - set the git user name (from the tappaas-cicd command prompt): git config --global user.name <your name> 
   - set the git user email: git config --global user.email <your email>
 - Also add the ssh key to the proxmox root account.
-  - copy the output of : cat ~ /.ssh/id_ed25519.pub
+  - copy the output of : cat ~/.ssh/id_ed25519.pub
   - go to the shell of the root account on the proxmox server node and append it to the authorized keys: cat >> authorized_keys
   - presse enter and paste the key, end with ctrl-D
   - test that you can ssh to root@<ip of proxmox server> from the tappaas@tappaas-cicd vm account
