@@ -98,4 +98,43 @@ services:
 
   # --- LiteLLM API proxy ---
   litellm:
-    image
+    image: ghcr.io/berriai/litellm:main-latest
+    ports:
+      - "${LITELLM_PORT}:4000"
+    env_file: .env
+    environment:
+      DATABASE_URL: ${DATABASE_URL}
+      LITELLM_DATABASE_URL: ${LITELLM_DATABASE_URL}
+      LITELLM_MASTER_KEY: ${LITELLM_MASTER_KEY}
+      LITELLM_SALT_KEY: ${LITELLM_SALT_KEY}
+      STORE_MODEL_IN_DB: ${STORE_MODEL_IN_DB}
+      LITELLM_LOG: ${LITELLM_LOG}
+      APP_DATABASES: ${APP_DATABASES}
+    volumes:
+      - ./litellm/admin_config:/app/config/admin:rw
+      - ./litellm/user_config:/app/config/user:rw
+      - litellm_:/app/rw
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:4000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    <<: *defaults
+
+  # --- Redis cache (optional) ---
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "${REDIS_PORT}:6379"
+    command: redis-server --appendonly yes
+    volumes:
+      - redis_:/rw
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+    <<: *defaults
