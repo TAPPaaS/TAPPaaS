@@ -87,35 +87,24 @@ services:
   # --- LiteLLM API ---
   litellm:
     image: ghcr.io/berriai/litellm:main-latest
-
     ports:
       - "${LITELLM_PORT}:4000"
     environment:
-      - LITELLM_DATABASE_URL=${LITELLM_DATABASE_URL:-}
-      - LITELLM_CONFIG=/config/config.yaml
-      - LITELLM_MASTER_KEY=${LITELLM_MASTER_KEY}
-      - LITELLM_SALT_KEY=${LITELLM_SALT_KEY}
-      - STORE_MODEL_IN_DB=${STORE_MODEL_IN_DB}
-      - APP_DATABASES=${APP_DATABASES}
-      - POSTGRES_DB=${POSTGRES_DB}
-      - POSTGRES_USER=${POSTGRES_USER}
-      - POSTGRES_SUPERUSER=${POSTGRES_SUPERUSER}
+      LITELLM_DATABASE_URL: ${LITELLM_DATABASE_URL}
+      LITELLM_CONFIG: /config/config.yaml
+      LITELLM_MASTER_KEY: ${LITELLM_MASTER_KEY}
+      LITELLM_SALT_KEY: ${LITELLM_SALT_KEY}
+      STORE_MODEL_IN_DB: ${STORE_MODEL_IN_DB}
+      APP_DATABASES: ${APP_DATABASES}
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_SUPERUSER: ${POSTGRES_SUPERUSER}
     volumes:
       - ./litellm_config:/config
       - litellm_:/app/data
-      - ./get-db-url.sh:/get-db-url.sh:ro
-    entrypoint: ["/bin/sh", "-c"]
-    command: >
-      export LITELLM_DATABASE_URL=$(/get-db-url.sh) &&
-      echo "Using DB URL: $LITELLM_DATABASE_URL" &&
-      exec /start
-
     depends_on:
       postgres:
         condition: service_healthy
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
-    <<: *defaults
 
 #  # --- Redis cache (optional) ---
 #  redis:
