@@ -1,0 +1,4 @@
+services:
+  litellm:
+    command: >
+      sh -c "echo 'DB URL inside container:' && /get-db-url.sh && tail -f /dev/null"
