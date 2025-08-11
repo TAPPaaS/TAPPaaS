@@ -12,16 +12,19 @@
 #   - Named volumes for persistent data storage.
 # ============================================================================
 
+# ---------- Persistent Volumes ----------
 volumes:
-  openwebui_
-  searxng_
-  litellm_
-  postgres_
-  redis_
+  openwebui_:
+  searxng_:
+  litellm_:
+  postgres_:
+  redis_:
 
+# ---------- Networks ----------
 networks:
   ai_network:
 
+# ---------- Defaults ----------
 x-service-defaults: &defaults
   restart: unless-stopped
   networks:
@@ -42,7 +45,7 @@ services:
     volumes:
       - ./openwebui/admin_config:/app/config/admin:rw
       - ./openwebui/user_config:/app/config/user:rw
-      - openwebui_/app/backend/rw
+      - openwebui_:/app/backend:rw
     depends_on:
       - searxng
     healthcheck:
@@ -64,7 +67,7 @@ services:
     volumes:
       - ./searxng/admin_config:/etc/searxng/admin:rw
       - ./searxng/user_config:/etc/searxng/user:rw
-      - searxng_/var/lib/searxng/rw
+      - searxng_:/var/lib/searxng:rw
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8080"]
       interval: 30s
@@ -83,7 +86,7 @@ services:
     ports:
       - "${POSTGRES_PORT}:5432"
     volumes:
-      - postgres_/var/lib/postgresql/rw
+      - postgres_:/var/lib/postgresql/rw
       - ./postgres/admin_scripts:/docker-entrypoint-initdb.d:rw
     healthcheck:
       test: ['CMD-SHELL', 'pg_isready -U ${POSTGRES_SUPERUSER} -d ${POSTGRES_DB}']
@@ -95,43 +98,4 @@ services:
 
   # --- LiteLLM API proxy ---
   litellm:
-    image: ghcr.io/berriai/litellm:main-latest
-    ports:
-      - "${LITELLM_PORT}:4000"
-    env_file: .env
-    environment:
-      DATABASE_URL: ${DATABASE_URL}
-      LITELLM_DATABASE_URL: ${LITELLM_DATABASE_URL}
-      LITELLM_MASTER_KEY: ${LITELLM_MASTER_KEY}
-      LITELLM_SALT_KEY: ${LITELLM_SALT_KEY}
-      STORE_MODEL_IN_DB: ${STORE_MODEL_IN_DB}
-      LITELLM_LOG: ${LITELLM_LOG}
-      APP_DATABASES: ${APP_DATABASES}
-    volumes:
-      - ./litellm/admin_config:/app/config/admin:rw
-      - ./litellm/user_config:/app/config/user:rw
-      - litellm_/app/rw
-    depends_on:
-      postgres:
-        condition: service_healthy
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:4000/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-    <<: *defaults
-
-  # --- Redis cache (optional) ---
-  redis:
-    image: redis:7-alpine
-    ports:
-      - "${REDIS_PORT}:6379"
-    command: redis-server --appendonly yes
-    volumes:
-      - redis_/rw
-    healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
-      interval: 30s
-      timeout: 5s
-      retries: 3
-    <<: *defaults
+    image
