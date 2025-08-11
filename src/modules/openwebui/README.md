@@ -74,6 +74,94 @@ Select VM config of: tappaas-AI-chat
 start VM
 open 'console' to see the progress...
 
+get the IP of the new VM from PVE 'summary'
 
-[ connect your visual studio to the tappaas-cicd vm. 
-  ]
+[ 
+  
+  connect your visual studio to the tappaas-cicd vm. 
+  sync the repository 
+
+
+  use terminal / test connection with tappaas-ai-chat vm: ssh tappaas@ip-of-tappaas-ai-chat-vm 
+  upon successful connection
+
+  'clone' the modules/openwebui to the new VM
+
+
+  
+
+go to directory: ~/src/modules/openwebui
+
+
+## **1. Prepare `.env` (Single Source of Truth)**
+
+- Define **only base component values** (ports, DB creds, keys)
+- Leave composite vars blank so they are generated:
+  ```
+  LITELLM_DATABASE_URL=
+  DATABASE_URL=
+  APP_DATABASES=
+  ```
+
+---
+
+## **2. Generate & Persist Dynamic Vars**
+
+Run:
+
+```
+source ./load-env.sh
+```
+
+This will:
+- Load base `.env`
+- Generate:
+  - `APP_DATABASES`
+  - `LITELLM_DATABASE_URL`
+  - `DATABASE_URL`
+- Export them to shell
+- **Persist** them back into `.env`
+
+Example output:
+```
+[INFO] Environment loaded and persisted
+[INFO] APP_DATABASES=litellm|litellm_db|llm_user|...
+[INFO] LITELLM_DATABASE_URL=postgresql://llm_user:...
+```
+
+---
+
+## **3. Start Clean Stack**
+
+```
+docker compose down -v --remove-orphans
+docker compose up -d
+```
+
+---
+
+## **4. Validate Configuration**
+
+**Check `.env`:**
+```
+grep -E '^(APP_DATABASES|LITELLM_DATABASE_URL|DATABASE_URL)=' .env
+```
+
+**Validate Compose vars:**
+```
+docker compose config | grep -A3 litellm | grep DATABASE_URL
+```
+
+**Test LiteLLM health:**
+```
+curl -H "Authorization: Bearer $LITELLM_MASTER_KEY" \
+     http://localhost:$LITELLM_PORT/health
+```
+✅ Expect JSON response (no “Missing Environment Variables” page)  
+
+**Optional Logs:**
+```
+docker compose logs --tail=20 litellm
+docker compose logs --tail=20 postgres
+```
+
