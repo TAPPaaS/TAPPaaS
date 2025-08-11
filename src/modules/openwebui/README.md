@@ -177,7 +177,7 @@ openwebui-searxng-1      searxng/searxng:latest                 "/usr/local/sear
 
 
 # --- 
-known error - CPU does not support x86-64-v2 --> try deploying on tappaas host with more modern CPU.
+known error - CPU does not support x86-64-v2 --> change the CPU type in PVE (see instructions below)
 
 docker compose ps
 NAME                     IMAGE                                  COMMAND                  SERVICE      CREATED          STATUS                             PORTS
@@ -192,7 +192,32 @@ Fatal glibc error: CPU does not support x86-64-v2
 Fatal glibc error: CPU does not support x86-64-v2
 Fatal glibc error: CPU does not support x86-64-v2
 Fatal glibc error: CPU does not support x86-64-v2
-Fatal glibc error: CPU does not support x86-64-v2
-Fatal glibc error: CPU does not support x86-64-v2
-Fatal glibc error: CPU does not support x86-64-v2
-Fatal glibc error: CPU does not support x86-64-v2
+
+
+Step-by-step: Enable x86‑64‑v2 in Proxmox
+1. Open the VM settings
+	•	In the Proxmox web interface, go to your virtual machine.
+	•	Click Hardware in the left menu.
+2. Change the CPU type
+	•	Select Processor.
+	•	Click Edit.
+	•	In the CPU type dropdown, do not choose host, but select a model that supports x86‑64‑v2, for example:
+	•	`x86-64-v2-AES` (recommended, as AES acceleration is often useful)
+	•	Or `x86-64-v2` if you don’t need AES.
+3. Set the number of cores
+	•	Configure how many cores the VM may use.This is independent of the CPU type.
+4. Restart the VM
+	•	The change will only take effect after a full restart of the VM.
+5. Test whether x86‑64‑v2 works
+	•	Boot into Linux inside the VM.
+	•	Run in the terminal:
+    lscpu | grep "Flags"
+    Check if you see `sse4_1`, `sse4_2`, and `popcnt` listed.
+
+    Important Notes
+	    •	This is emulation. If your physical CPU doesn’t have these instructions, QEMU/KVM will emulate them in software → this will reduce performance.
+	    •	For production systems, a hardware upgrade is usually better.
+	    •	In compute-intensive use cases, performance might drop noticeably.
+	    •	For testing or temporary solutions, this is often fine.
+
+      
