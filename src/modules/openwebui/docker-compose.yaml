@@ -78,14 +78,16 @@ services:
     image: postgres:15-alpine
     environment:
       # Gebruik aliasen volgens .env om consistentie te garanderen
-      - POSTGRES_USER=${POSTGRES_SUPERUSER}    # pgadmin
+      - POSTGRES_USER=${POSTGRES_SUPERUSER}     # pgadmin
       - POSTGRES_PASSWORD=${POSTGRES_SUPERPASS} # postgres-secure-pass-2025
-      - POSTGRES_DB=${POSTGRES_DB}             # postgres
-      - APP_DATABASES=${APP_DATABASES}         # composiet db info voor init script
+      - POSTGRES_DB=${POSTGRES_DB}              # postgres
+      - APP_DATABASES=${APP_DATABASES}          # composiet db info voor init script
     ports:
       - "${POSTGRES_PORT}:5432"
     volumes:
-      - postgres_:/var/lib/postgresql/rw
+      # mount named volume to standard Postgres data map
+      - postgres_:/var/lib/postgresql/data
+      # Mount admin scripts zodat deze bij eerste start worden uitgevoerd
       - ./postgres/admin_scripts:/docker-entrypoint-initdb.d:rw
     healthcheck:
       test: ['CMD-SHELL', 'pg_isready -U ${POSTGRES_SUPERUSER} -d ${POSTGRES_DB}']
@@ -94,6 +96,7 @@ services:
       retries: 5
       start_period: 10s
     <<: *defaults
+
 
   # --- LiteLLM API proxy ---
   litellm:
