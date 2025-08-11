@@ -11,6 +11,7 @@ For some of the selected applications/module we have a dedicated design document
 
 The complicated designs are:
 
+- The [Security](./SecurityDesign.md) design: Related topic are the Single Sign On and Network Design (and to a smaller extend the backup design)
 - The [Network](./NetworkDesign.md) design: This is primarily being delivered via OPNsense and Proxmox as well as the switching infrastructure
 - The [Storage](./StorageDesign.md) design: This is delivered via Proxmox, but require a dedicated design discussion
 - The [Single Sign On](./SingleSignOnDesign.md) design
