@@ -96,6 +96,10 @@ services:
       - LITELLM_MASTER_KEY=${LITELLM_MASTER_KEY}
       - LITELLM_SALT_KEY=${LITELLM_SALT_KEY}
       - STORE_MODEL_IN_DB=${STORE_MODEL_IN_DB}
+      - APP_DATABASES=${APP_DATABASES}
+      - POSTGRES_DB=${POSTGRES_DB}
+      - POSTGRES_USER=${POSTGRES_USER}
+      - POSTGRES_SUPERUSER=${POSTGRES_SUPERUSER}
     volumes:
       - ./litellm_config:/config
       - litellm_:/app/data

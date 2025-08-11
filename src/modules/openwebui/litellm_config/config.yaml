@@ -1,0 +1,11 @@
+# LiteLLM config to proxy Ollama local models on macOS
+
+model_list:
+  - model_name: ollama/llama3.1:8B                    # Reference name used when calling LiteLLM
+    litellm_params:
+      model: ollama/llama3.1:8B                       # Model name as Ollama expects
+      api_base: "http://host.docker.internal:11434"   # Ollama server URL with port
+
+general_settings:
+  debug: true                                         # Enable debug logs for troubleshooting
+  telemetry: false                                    # Disable telemetry if privacy desired
