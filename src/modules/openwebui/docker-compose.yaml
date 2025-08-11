@@ -2,8 +2,16 @@
 # Docker Compose Configuration
 # Project: Local AI Platform (OpenWebUI, Searxng, LiteLLM, Postgres)
 # Author: Erik van Busschbach
-# Last updated: 2025-08-10
-# Version: 250810v4
+# Last updated: 2025-08-11
+# Version: 250811v6
+# Description: This file defines the Docker services for the Local AI Platform,
+#              including OpenWebUI, Searxng, LiteLLM, and Postgres
+#              with secure database initialization and environment variable management.
+#              Using DRY (Don't Repeat Yourself) principles for service definitions.
+#              This configuration is designed for local development and testing.
+#              It includes health checks, environment variable management,
+#              and secure database initialization for multiple applications.
+#              The configuration is modular and can be easily extended for additional services. In the .env file, you can define the applications and their database credentials.
 # ============================================================================
 
 volumes:
@@ -52,28 +60,31 @@ services:
       - SEARXNG_LIMITER=false
     <<: *defaults
 
-  litellm:
-    image: ghcr.io/berriai/litellm:main-latest
-    ports:
-      - "${LITELLM_PORT}:4000"
-    environment:
-      - LITELLM_CONFIG=/config/config.yaml
-      - LITELLM_MASTER_KEY=${LITELLM_MASTER_KEY}
-      - LITELLM_SALT_KEY=${LITELLM_SALT_KEY}
-      - LITELLM_DATABASE_URL=postgresql://${POSTGRES_USER_LLM}:${POSTGRES_PASSWORD_LLM}@${POSTGRES_HOST}:${POSTGRES_PORT}/${POSTGRES_DB_LLM}
-      - STORE_MODEL_IN_DB=${STORE_MODEL_IN_DB}
-#      - OLLAMA_API_BASE=http://host.docker.internal:${OLLAMA_PORT}
-#      - REDIS_URL: redis://default:jouwRedisWachtwoord@redis:6379
-    volumes:
-      - ./litellm_config:/config
-      - litellm_:/app/data
-    depends_on:
-#      redis
-      postgres:
-        condition: service_healthy   
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
-    <<: *defaults
+litellm:
+  image: ghcr.io/berriai/litellm:main-latest
+  ports:
+    - "${LITELLM_PORT}:4000"
+  environment:
+    - LITELLM_CONFIG=/config/config.yaml
+    - LITELLM_MASTER_KEY=${LITELLM_MASTER_KEY}
+    - LITELLM_SALT_KEY=${LITELLM_SALT_KEY}
+    - STORE_MODEL_IN_DB=${STORE_MODEL_IN_DB}
+  volumes:
+    - ./litellm_config:/config
+    - litellm_:/app/data
+    - ./get-db-url.sh:/get-db-url.sh:ro
+  entrypoint: ["/bin/sh", "-c"]
+  command:
+    - |
+      export LITELLM_DATABASE_URL=$(/get-db-url.sh)
+      echo "Using DB URL: $LITELLM_DATABASE_URL"
+      exec /start  # replace /start by original CMD of image
+  depends_on:
+    postgres:
+      condition: service_healthy   
+  extra_hosts:
+    - "host.docker.internal:host-gateway"
+  <<: *defaults
 
 #  redis:
 #    image: redis:7-alpine
@@ -89,14 +100,15 @@ services:
     environment:
       - POSTGRES_USER=${POSTGRES_SUPERUSER}
       - POSTGRES_PASSWORD=${POSTGRES_SUPERPASS}
-      - POSTGRES_DB=${POSTGRES_DB}  # Default database for Postgres}
+      - POSTGRES_DB=${POSTGRES_DB}       # default = postgres
+      - APP_DATABASES=${APP_DATABASES}   # list of app DB's / users from .env
     volumes:
       - postgres_:/var/lib/postgresql/data
       - ./init-multiple-dbs.sh:/docker-entrypoint-initdb.d/init-multiple-dbs.sh:ro
     ports:
       - "${POSTGRES_PORT}:5432"
     healthcheck:
-      test: ['CMD-SHELL', 'pg_isready -U ${POSTGRES_SUPERUSER} -d postgres']
+      test: ['CMD-SHELL', 'pg_isready -U ${POSTGRES_SUPERUSER} -d ${POSTGRES_DB}']
       interval: 10s
       timeout: 5s
       retries: 5
