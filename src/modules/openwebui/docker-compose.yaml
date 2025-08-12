@@ -12,11 +12,11 @@
 # ============================================================================
 
 volumes:
-  openwebui_: {}
-  searxng_: {}
-  litellm_: {}
-  postgres_: {}
-  redis_: {}
+  ai_openwebui_ {}
+  ai_searxng_ {}
+  ai_litellm_ {}
+  ai_postgres_ {}
+  ai_redis_ {}
 
 networks:
   ai_network:
@@ -25,110 +25,95 @@ x-service-defaults: &defaults
   restart: unless-stopped
   networks:
     - ai_network
+  env_file:
+    - .env
+  healthcheck:
+    interval: 30s
+    timeout: 10s
+    retries: 3
 
 services:
 
-  # --- OpenWebUI frontend ---
   open-webui:
     image: ghcr.io/open-webui/open-webui:latest
     environment:
-      - ENABLE_RAG_WEB_SEARCH=true
-      - RAG_WEB_SEARCH_ENGINE=searxng
-      - RAG_WEB_SEARCH_RESULT_COUNT=3
-      - SEARXNG_QUERY_URL=http://searxng:8080/search
+      ENABLE_RAG_WEB_SEARCH: "true"
+      RAG_WEB_SEARCH_ENGINE: searxng
+      RAG_WEB_SEARCH_RESULT_COUNT: "3"
+      SEARXNG_QUERY_URL: http://searxng:8080/search
     ports:
       - "${OPENWEBUI_PORT}:8080"
     volumes:
       - ./openwebui/admin_config:/app/config/admin:rw
       - ./openwebui/user_config:/app/config/user:rw
-      - openwebui_:/app/backend:rw
+      - ai_openwebui_/app/backend:rw
     depends_on:
       searxng:
         condition: service_healthy
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8080"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
     <<: *defaults
 
-  # --- SearxNG meta search engine ---
   searxng:
     image: searxng/searxng:latest
     ports:
       - "${SEARXNG_PORT}:8080"
     environment:
-      - SEARXNG_BIND_ADDRESS=0.0.0.0:8080
-      - SEARXNG_BASE_URL=http://localhost:${SEARXNG_PORT}/
-      - SEARXNG_LIMITER=false
+      SEARXNG_BIND_ADDRESS: 0.0.0.0:8080
+      SEARXNG_BASE_URL: "http://localhost:${SEARXNG_PORT}/"
+      SEARXNG_LIMITER: "false"
     volumes:
       - ./searxng/admin_config:/etc/searxng/admin:rw
       - ./searxng/user_config:/etc/searxng/user:rw
-      - searxng_:/var/lib/searxng:rw
+      - ai_searxng_/var/lib/searxng:rw
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8080"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
     <<: *defaults
 
-  # --- PostgreSQL database ---
   postgres:
     image: postgres:15-alpine
     environment:
-      - POSTGRES_USER=${POSTGRES_SUPERUSER}
-      - POSTGRES_PASSWORD=${POSTGRES_SUPERPASS}
-      - POSTGRES_DB=${POSTGRES_DB}
-      - APP_DATABASES=${APP_DATABASES}
+      POSTGRES_USER: ${POSTGRES_SUPERUSER}
+      POSTGRES_PASSWORD: ${POSTGRES_SUPERPASS}
+      POSTGRES_DB: ${POSTGRES_DB}
+      APP_DATABASES: ${APP_DATABASES}
     ports:
       - "${POSTGRES_PORT}:5432"
     volumes:
-      # Mount named volume to standaard datamap zodat init-scripts werken
-      - postgres_:/var/lib/postgresql/data
-      # Init-scripts voor eerste start
+      - ai_postgres_/var/lib/postgresql/data
       - ./postgres/admin_scripts:/docker-entrypoint-initdb.d:rw
     healthcheck:
-      test: ['CMD-SHELL', 'pg_isready -U ${POSTGRES_SUPERUSER} -d ${POSTGRES_DB}']
+      test: ['CMD-SHELL', 'pg_isready -U "$$POSTGRES_SUPERUSER" -d "$$POSTGRES_DB"']
       interval: 10s
       timeout: 5s
       retries: 5
       start_period: 10s
     <<: *defaults
 
-  # --- LiteLLM API proxy ---
   litellm:
     image: ghcr.io/berriai/litellm:main-latest
     ports:
       - "${LITELLM_PORT}:4000"
-    env_file: .env
     environment:
       LITELLM_DATABASE_URL: ${LITELLM_DATABASE_URL}
     volumes:
       - ./litellm/admin_config:/app/config/admin:rw
       - ./litellm/user_config:/app/config/user:rw
-      - litellm_:/app/rw
+      - ai_litellm_/app/rw
     depends_on:
       postgres:
         condition: service_healthy
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:4000/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
     <<: *defaults
 
-  # --- Redis cache (optioneel) ---
   redis:
     image: redis:7-alpine
     ports:
       - "${REDIS_PORT}:6379"
     command: redis-server --appendonly yes
     volumes:
-      # Mount naar standaard Redis datamap voor persistence
-      - redis_:/data
+      - ai_redis_/data
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
-      interval: 30s
-      timeout: 5s
-      retries: 3
     <<: *defaults

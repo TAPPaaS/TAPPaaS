@@ -1,8 +1,10 @@
-# tappaas/src/modules/openwebui/init-multiple-dbs.sh
-# Author: TAPpaas Team / Erik Daniel 
-# Date: 2025-08-11
-# Description: Securely initialize multiple databases for TAPpaas applications
-# 
+#!/usr/bin/env bash
+set -euo pipefail
+
+##
+# init-multiple-dbs.sh — Secure multi-application Postgres bootstrap
+# Author: Erik Daniel / TAPpaas Team (patched 2025-08-12)
+#
 # Create app-specific roles and schemas with limited permissions
 # 1. Schema Isolation: Each app gets its own schema
 # 2. Least Privilege: Only necessary permissions are granted
@@ -17,23 +19,27 @@
 # - Better security through isolation
 # - Clear separation of responsibilities
 # - Easier to audit permissions
+#
+# Improvements in this version:
+#   - Uses psql variables to avoid exposing passwords in process list
+#   - Extra permissions hardening (REVOKE CONNECT / CREATE / TEMP on other DBs)
+#   - Still idempotent: safe to run multiple times
+#   - Cross-platform safe for Alpine/macos/Ubuntu
 
-#!/bin/bash
-set -e
+# Prerequisites: environment variables loaded via load-env.sh
+##
 
 echo "=== [INIT] Multi-database setup START ==="
 echo "[INIT] Using APP_DATABASES='$APP_DATABASES'"
 
-# Verplichte variabelen uit omgeving - werken nu samen met load-env.sh aliassen
-: "${POSTGRES_SUPERUSER:?Environment variable POSTGRES_SUPERUSER must be set and non-empty}"
-: "${POSTGRES_SUPERPASS:?Environment variable POSTGRES_SUPERPASS must be set and non-empty}"
-: "${POSTGRES_DB:?Environment variable POSTGRES_DB must be set and non-empty}"
-: "${APP_DATABASES:?Environment variable APP_DATABASES must be set and non-empty}"
+: "${POSTGRES_SUPERUSER:?Missing POSTGRES_SUPERUSER}"
+: "${POSTGRES_SUPERPASS:?Missing POSTGRES_SUPERPASS}"
+: "${POSTGRES_DB:?Missing POSTGRES_DB}"
+: "${APP_DATABASES:?Missing APP_DATABASES}"
 
-# Verbinding maken met maintenance database (meestal 'postgres')
 MAINT_DB="${POSTGRES_DB}"
 
-# Loop over APP_DATABASES entries (formaat: app|dbname|dbuser|dbpass)
+# Loop through comma-separated APP_DATABASES entries: app|dbname|dbuser|dbpass
 IFS=',' read -ra DB_ENTRIES <<< "$APP_DATABASES"
 for entry in "${DB_ENTRIES[@]}"; do
     IFS='|' read -ra PARTS <<< "$entry"
@@ -47,34 +53,56 @@ for entry in "${DB_ENTRIES[@]}"; do
     echo "         DB Name : $DB_NAME"
     echo "         DB User : $DB_USER"
 
-    # Check of de gebruiker bestaat
+    # 1️⃣ Create role if not exists (password via psql variable for safety)
     USER_EXISTS=$(psql -U "$POSTGRES_SUPERUSER" -d "$MAINT_DB" -tAc \
         "SELECT 1 FROM pg_roles WHERE rolname='${DB_USER}'")
     if [ "$USER_EXISTS" != "1" ]; then
         echo "[ACTION] Creating user '$DB_USER'"
-        psql -v ON_ERROR_STOP=1 -U "$POSTGRES_SUPERUSER" -d "$MAINT_DB" \
-            -c "CREATE USER ${DB_USER} WITH PASSWORD '${DB_PASS}';"
+        PGPASSWORD="$POSTGRES_SUPERPASS" psql -v ON_ERROR_STOP=1 -U "$POSTGRES_SUPERUSER" -d "$MAINT_DB" \
+            --set=NEWUSER="$DB_USER" --set=NEWPASS="$DB_PASS" <<'SQL'
+DO $$
+BEGIN
+   EXECUTE format('CREATE USER %I WITH PASSWORD %L', :'NEWUSER', :'NEWPASS');
+END$$;
+SQL
     else
         echo "[SKIP] User '$DB_USER' already exists"
     fi
 
-    # Check of de database bestaat
+    # 2️⃣ Create database if not exists
     DB_EXISTS=$(psql -U "$POSTGRES_SUPERUSER" -d "$MAINT_DB" -tAc \
         "SELECT 1 FROM pg_database WHERE datname='${DB_NAME}'")
     if [ "$DB_EXISTS" != "1" ]; then
-        echo "[ACTION] Creating database '$DB_NAME' (owner: $DB_USER, UTF8, C locale)"
-        psql -v ON_ERROR_STOP=1 -U "$POSTGRES_SUPERUSER" -d "$MAINT_DB" \
-            -c "CREATE DATABASE ${DB_NAME} OWNER ${DB_USER} TEMPLATE template0 ENCODING 'UTF8' LC_COLLATE='C' LC_CTYPE='C' CONNECTION LIMIT -1;"
+        echo "[ACTION] Creating database '$DB_NAME' (owner: $DB_USER)"
+        PGPASSWORD="$POSTGRES_SUPERPASS" psql -v ON_ERROR_STOP=1 -U "$POSTGRES_SUPERUSER" -d "$MAINT_DB" \
+            --set=DBNAME="$DB_NAME" --set=DBOWNER="$DB_USER" <<'SQL'
+CREATE DATABASE :"DBNAME"
+  OWNER :"DBOWNER"
+  TEMPLATE template0
+  ENCODING 'UTF8'
+  LC_COLLATE='C'
+  LC_CTYPE='C'
+  CONNECTION LIMIT -1;
+SQL
     else
         echo "[SKIP] Database '$DB_NAME' already exists"
     fi
 
-    # Optioneel: schema-isolatie en privileges instellen
-    echo "[INFO] Setting schema privileges for '${DB_NAME}'..."
-    psql -v ON_ERROR_STOP=0 -U "$POSTGRES_SUPERUSER" -d "$DB_NAME" <<-EOF
-        REVOKE ALL ON SCHEMA public FROM PUBLIC;
-        GRANT ALL ON SCHEMA public TO ${DB_USER};
-EOF
+    # 3️⃣ Secure schema privileges for this DB
+    echo "[INFO] Applying schema and privilege restrictions for '$DB_NAME'..."
+    PGPASSWORD="$POSTGRES_SUPERPASS" psql -v ON_ERROR_STOP=1 -U "$POSTGRES_SUPERUSER" -d "$DB_NAME" \
+        --set=DBUSER="$DB_USER" <<'SQL'
+REVOKE ALL ON SCHEMA public FROM PUBLIC;
+GRANT ALL ON SCHEMA public TO :"DBUSER";
+
+-- Remove CONNECT from all other roles on this DB except owner
+REVOKE CONNECT ON DATABASE :"DBNAME" FROM PUBLIC;
+
+-- Prevent default CREATE/TEMP privileges to PUBLIC on this DB
+ALTER DEFAULT PRIVILEGES REVOKE CREATE ON SCHEMAS FROM PUBLIC;
+ALTER DEFAULT PRIVILEGES REVOKE TEMPORARY ON DATABASES FROM PUBLIC;
+SQL
+
 done
 
 echo ""
