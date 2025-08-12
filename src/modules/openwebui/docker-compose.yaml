@@ -1,22 +1,23 @@
 # ============================================================================
 # Docker Compose Configuration
-# Project: Local AI Platform (OpenWebUI, Searxng, LiteLLM, Postgres, n8n, Ollama, etc.)
+# Project: Local AI Platform (OpenWebUI, SearxNG, LiteLLM, Postgres, n8n, Ollama, etc.)
 # Author: Erik van Busschbach
-# Last updated: 2025-08-11
-# Version: 250811v9-CLEAN
+# Last updated: 2025-08-12
+# Version: 250812v10-STABLE
 # Description:
 #   - DRY environment variable management
 #   - Secure DB initialization
 #   - Correct data volume mounts for Postgres & Redis
-#   - Modular setup with health checks
+#   - Modular setup with health checks and explicit dependencies
+#   - Cross-platform (macOS/Linux/WSL)
 # ============================================================================
 
 volumes:
-  ai_openwebui_ {}
-  ai_searxng_ {}
-  ai_litellm_ {}
-  ai_postgres_ {}
-  ai_redis_ {}
+  ai_openwebui_: {}
+  ai_searxng_: {}
+  ai_litellm_: {}
+  ai_postgres_: {}
+  ai_redis_: {}
 
 networks:
   ai_network:
@@ -31,9 +32,15 @@ x-service-defaults: &defaults
     interval: 30s
     timeout: 10s
     retries: 3
+  deploy:
+    resources:
+      limits:
+        memory: 512M
+        cpus: '0.50'
 
 services:
 
+  # --- OpenWebUI frontend ---
   open-webui:
     image: ghcr.io/open-webui/open-webui:latest
     environment:
@@ -46,7 +53,7 @@ services:
     volumes:
       - ./openwebui/admin_config:/app/config/admin:rw
       - ./openwebui/user_config:/app/config/user:rw
-      - ai_openwebui_/app/backend:rw
+      - ai_openwebui_:/app/backend:rw
     depends_on:
       searxng:
         condition: service_healthy
@@ -54,6 +61,7 @@ services:
       test: ["CMD", "curl", "-f", "http://localhost:8080"]
     <<: *defaults
 
+  # --- SearxNG search ---
   searxng:
     image: searxng/searxng:latest
     ports:
@@ -65,11 +73,12 @@ services:
     volumes:
       - ./searxng/admin_config:/etc/searxng/admin:rw
       - ./searxng/user_config:/etc/searxng/user:rw
-      - ai_searxng_/var/lib/searxng:rw
+      - ai_searxng_:/var/lib/searxng:rw
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8080"]
     <<: *defaults
 
+  # --- PostgreSQL multi-DB ---
   postgres:
     image: postgres:15-alpine
     environment:
@@ -80,7 +89,7 @@ services:
     ports:
       - "${POSTGRES_PORT}:5432"
     volumes:
-      - ai_postgres_/var/lib/postgresql/data
+      - ai_postgres_:/var/lib/postgresql/data
       - ./postgres/admin_scripts:/docker-entrypoint-initdb.d:rw
     healthcheck:
       test: ['CMD-SHELL', 'pg_isready -U "$$POSTGRES_SUPERUSER" -d "$$POSTGRES_DB"']
@@ -90,6 +99,7 @@ services:
       start_period: 10s
     <<: *defaults
 
+  # --- LiteLLM API ---
   litellm:
     image: ghcr.io/berriai/litellm:main-latest
     ports:
@@ -99,7 +109,7 @@ services:
     volumes:
       - ./litellm/admin_config:/app/config/admin:rw
       - ./litellm/user_config:/app/config/user:rw
-      - ai_litellm_/app/rw
+      - ai_litellm_:/app/rw
     depends_on:
       postgres:
         condition: service_healthy
@@ -107,13 +117,14 @@ services:
       test: ["CMD", "curl", "-f", "http://localhost:4000/health"]
     <<: *defaults
 
+  # --- Redis cache ---
   redis:
     image: redis:7-alpine
     ports:
       - "${REDIS_PORT}:6379"
     command: redis-server --appendonly yes
     volumes:
-      - ai_redis_/data
+      - ai_redis_:/data
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
     <<: *defaults
