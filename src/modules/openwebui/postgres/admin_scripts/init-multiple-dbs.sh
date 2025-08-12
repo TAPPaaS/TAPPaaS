@@ -29,25 +29,17 @@ set -euo pipefail
 # Prerequisites: environment variables loaded via load-env.sh
 ##
 
-#!/usr/bin/env bash
-set -euo pipefail
-
-# ============================================================
-# init-multiple-dbs.sh - Multi-database setup for Postgres
-# Compatible with: macOS, Linux, Windows/WSL
-# Runs once on first start of postgres container when volume is empty
-# ============================================================
-
 echo "=== [INIT] Multi-database setup START ==="
 
-: "${POSTGRES_SUPERUSER:?Need POSTGRES_SUPERUSER in env}"
-: "${POSTGRES_SUPERPASS:?Need POSTGRES_SUPERPASS in env}"
-: "${POSTGRES_DB:?Need POSTGRES_DB in env}"
-: "${APP_DATABASES:?Need APP_DATABASES in env}"
+: "${POSTGRES_SUPERUSER:?Need POSTGRES_SUPERUSER}"
+: "${POSTGRES_SUPERPASS:?Need POSTGRES_SUPERPASS}"
+: "${POSTGRES_DB:?Need POSTGRES_DB}"
+: "${APP_DATABASES:?Need APP_DATABASES}"
 
 MAINT_DB="${POSTGRES_DB}"
 
 IFS=',' read -ra DB_ENTRIES <<< "$APP_DATABASES"
+
 for entry in "${DB_ENTRIES[@]}"; do
     IFS='|' read -ra PARTS <<< "$entry"
     APP_NAME="${PARTS[0]}"
@@ -60,62 +52,29 @@ for entry in "${DB_ENTRIES[@]}"; do
     echo "         DB Name : $DB_NAME"
     echo "         DB User : $DB_USER"
 
-    #
-    # 1️⃣ Create role if not exists
-    #
-    USER_EXISTS=$(PGPASSWORD="$POSTGRES_SUPERPASS" \
-        psql -U "$POSTGRES_SUPERUSER" -d "$MAINT_DB" -Atq \
-        -c "SELECT 1 FROM pg_roles WHERE rolname='${DB_USER}'")
-    if [[ "$USER_EXISTS" != "1" ]]; then
-        echo "[ACTION] Creating user '$DB_USER'"
-        PGPASSWORD="$POSTGRES_SUPERPASS" \
-        psql -v ON_ERROR_STOP=1 \
-            -U "$POSTGRES_SUPERUSER" -d "$MAINT_DB" \
-            --set=NEWUSER="$DB_USER" --set=NEWPASS="$DB_PASS" <<'SQL'
-DO $$
-BEGIN
-   EXECUTE format('CREATE USER %I WITH PASSWORD %L', :'NEWUSER', :'NEWPASS');
-END$$;
+    # Create user if missing
+    PGPASSWORD="$POSTGRES_SUPERPASS" psql -v ON_ERROR_STOP=1 -U "$POSTGRES_SUPERUSER" -d "$MAINT_DB" <<SQL
+SELECT 'CREATE USER $DB_USER WITH PASSWORD '\''$DB_PASS'\'';'
+WHERE NOT EXISTS (
+    SELECT FROM pg_catalog.pg_roles WHERE rolname = '$DB_USER'
+)\gexec
 SQL
-    else
-        echo "[SKIP] User '$DB_USER' already exists"
-    fi
 
-    #
-    # 2️⃣ Create database if not exists
-    #
-    DB_EXISTS=$(PGPASSWORD="$POSTGRES_SUPERPASS" \
-        psql -U "$POSTGRES_SUPERUSER" -d "$MAINT_DB" -Atq \
-        -c "SELECT 1 FROM pg_database WHERE datname='${DB_NAME}'")
-    if [[ "$DB_EXISTS" != "1" ]]; then
-        echo "[ACTION] Creating database '$DB_NAME' (owner: $DB_USER)"
-        PGPASSWORD="$POSTGRES_SUPERPASS" \
-        psql -v ON_ERROR_STOP=1 \
-            -U "$POSTGRES_SUPERUSER" -d "$MAINT_DB" \
-            --set=DBNAME="$DB_NAME" --set=DBOWNER="$DB_USER" <<'SQL'
-CREATE DATABASE :"DBNAME"
-  OWNER :"DBOWNER"
-  TEMPLATE template0
-  ENCODING 'UTF8'
-  LC_COLLATE='en_US.utf8'
-  LC_CTYPE='en_US.utf8'
-  CONNECTION LIMIT -1;
+    # Create database if missing
+    PGPASSWORD="$POSTGRES_SUPERPASS" psql -v ON_ERROR_STOP=1 -U "$POSTGRES_SUPERUSER" -d "$MAINT_DB" <<SQL
+SELECT 'CREATE DATABASE $DB_NAME OWNER $DB_USER ENCODING ''UTF8'' LC_COLLATE ''en_US.utf8'' LC_CTYPE ''en_US.utf8'' TEMPLATE template0;'
+WHERE NOT EXISTS (
+    SELECT FROM pg_database WHERE datname = '$DB_NAME'
+)\gexec
 SQL
-    else
-        echo "[SKIP] Database '$DB_NAME' already exists"
-    fi
 
-    #
-    # 3️⃣ Adjust privileges
-    #
+    # Harden privileges on newly created database
     echo "[INFO] Hardening privileges on database '$DB_NAME'"
-    PGPASSWORD="$POSTGRES_SUPERPASS" \
-    psql -v ON_ERROR_STOP=1 \
-        -U "$POSTGRES_SUPERUSER" -d "$DB_NAME" \
-        --set=DBNAME="$DB_NAME" --set=DBUSER="$DB_USER" <<'SQL'
+    PGPASSWORD="$POSTGRES_SUPERPASS" psql -v ON_ERROR_STOP=1 \
+        -U "$POSTGRES_SUPERUSER" -d "$DB_NAME" <<SQL
 REVOKE ALL ON SCHEMA public FROM PUBLIC;
-GRANT ALL ON SCHEMA public TO :"DBUSER";
-REVOKE CONNECT ON DATABASE :"DBNAME" FROM PUBLIC;
+GRANT ALL ON SCHEMA public TO $DB_USER;
+REVOKE CONNECT ON DATABASE $DB_NAME FROM PUBLIC;
 ALTER DEFAULT PRIVILEGES REVOKE CREATE ON SCHEMAS FROM PUBLIC;
 ALTER DEFAULT PRIVILEGES REVOKE TEMPORARY ON DATABASES FROM PUBLIC;
 SQL
