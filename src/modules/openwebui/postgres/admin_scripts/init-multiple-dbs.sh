@@ -27,10 +27,6 @@ set -euo pipefail
 #   - Cross-platform safe for Alpine/macos/Ubuntu
 
 # Prerequisites: environment variables loaded via load-env.sh
-##
-
-#!/usr/bin/env bash
-set -euo pipefail
 
 ##
 # init-multiple-dbs.sh — Multi-app Postgres bootstrap
@@ -45,6 +41,20 @@ set -euo pipefail
 #
 # Idempotent: Only creates users/DBs if missing.
 ##
+
+#!/usr/bin/env bash
+set -euo pipefail
+
+# ============================================================
+# Multi-database creation for PostgreSQL in Docker
+# ------------------------------------------------------------
+# Reads environment variables from the container:
+#   POSTGRES_SUPERUSER  - superuser name (e.g., pgadmin)
+#   POSTGRES_SUPERPASS  - superuser password
+#   POSTGRES_DB         - maintenance DB (usually 'postgres')
+#   APP_DATABASES       - comma separated list:
+#       app|dbname|dbuser|dbpass,app2|dbname2|dbuser2|dbpass2
+# ============================================================
 
 echo "=== [INIT] Multi-database setup START ==="
 
@@ -65,35 +75,35 @@ for entry in "${DB_ENTRIES[@]}"; do
 
     echo ""
     echo "--- [INIT] Processing app: $APP_NAME ---"
-    echo "         DB : $DB_NAME"
-    echo "         User: $DB_USER"
+    echo "         DB Name : $DB_NAME"
+    echo "         DB User : $DB_USER"
 
-    # 1️⃣ Create role if not exists
-    echo "[CHECK] Creating user if missing..."
+    # 1️⃣ Create user if missing
+    echo "[CHECK] Creating role if missing..."
     PGPASSWORD="$POSTGRES_SUPERPASS" \
     psql -v ON_ERROR_STOP=1 -U "$POSTGRES_SUPERUSER" -d "$MAINT_DB" <<SQL
-SELECT 'CREATE USER "$DB_USER" WITH PASSWORD '\''$DB_PASS'\'';'
+SELECT 'CREATE USER "$DB_USER" WITH PASSWORD ''' || '$DB_PASS' || ''';'
 WHERE NOT EXISTS (
-    SELECT FROM pg_catalog.pg_roles WHERE rolname = '$DB_USER'
+    SELECT FROM pg_roles WHERE rolname = '$DB_USER'
 )\gexec
 SQL
 
-    # 2️⃣ Create database if not exists
+    # 2️⃣ Create database if missing
     echo "[CHECK] Creating database if missing..."
     PGPASSWORD="$POSTGRES_SUPERPASS" \
     psql -v ON_ERROR_STOP=1 -U "$POSTGRES_SUPERUSER" -d "$MAINT_DB" <<SQL
-SELECT 'CREATE DATABASE "$DB_NAME" OWNER "$DB_USER" TEMPLATE template0
+SELECT 'CREATE DATABASE "$DB_NAME" OWNER "$DB_USER"
   ENCODING ''UTF8''
   LC_COLLATE ''en_US.utf8''
   LC_CTYPE ''en_US.utf8''
-  CONNECTION LIMIT -1;'
+  TEMPLATE template0;'
 WHERE NOT EXISTS (
     SELECT FROM pg_database WHERE datname = '$DB_NAME'
 )\gexec
 SQL
 
-    # 3️⃣ Harden public schema privileges
-    echo "[INFO] Hardening schema privileges for $DB_NAME..."
+    # 3️⃣ Harden schema privileges
+    echo "[INFO] Hardening privileges for '$DB_NAME'..."
     PGPASSWORD="$POSTGRES_SUPERPASS" \
     psql -v ON_ERROR_STOP=1 -U "$POSTGRES_SUPERUSER" -d "$DB_NAME" <<SQL
 REVOKE ALL ON SCHEMA public FROM PUBLIC;
@@ -102,9 +112,7 @@ REVOKE CONNECT ON DATABASE "$DB_NAME" FROM PUBLIC;
 ALTER DEFAULT PRIVILEGES REVOKE CREATE ON SCHEMAS FROM PUBLIC;
 ALTER DEFAULT PRIVILEGES REVOKE TEMPORARY ON DATABASES FROM PUBLIC;
 SQL
-
 done
 
 echo ""
 echo "=== [INIT] Multi-database setup COMPLETE ==="
-
