@@ -41,34 +41,16 @@ set -euo pipefail
 #
 # Idempotent: Only creates users/DBs if missing.
 ##
-
 # ============================================================
-# Multi-database setup for PostgreSQL (Docker init script)
-# Runs automatically on first container start with empty volume
+# Multi-database setup for PostgreSQL
+# Docker entrypoint init script: runs once on empty data dir
 #
-# Requires these .env variables:
-#   POSTGRES_SUPERUSER  - e.g., pgadmin
-#   POSTGRES_SUPERPASS  - superuser password
-#   POSTGRES_DB         - maintenance DB (usually "postgres")
-#   APP_DATABASES       - comma-separated list per format:
-#                         app|dbname|dbuser|dbpass,app2|dbname2|dbuser2|dbpass2
-#
-# Output: Creates DB roles, databases, and hardens privileges
-# ============================================================
-
-# ============================================================
-# Multi-database setup for PostgreSQL (Docker init script)
-# Author: yourname • v2025-08-12-STABLE
-#
-# Reads from .env:
+# Reads from .env inside the container environment:
 #   POSTGRES_SUPERUSER  - e.g. pgadmin
 #   POSTGRES_SUPERPASS  - superuser password
-#   POSTGRES_DB         - maintenance DB, usually 'postgres'
-#   APP_DATABASES       - app|dbname|dbuser|dbpass,app2|dbname2|dbuser2|dbpass2
-#
-# Output: creates roles, DBs, hardens privileges
-# ------------------------------------------------------------
-# Runs only on container init (empty /var/lib/postgresql/data)
+#   POSTGRES_DB         - maintenance DB (usually "postgres")
+#   APP_DATABASES       - comma-separated list in format:
+#                         app|dbname|dbuser|dbpass,app2|dbname2|dbuser2|dbpass2
 # ============================================================
 
 echo "=== [INIT] Multi-database setup START ==="
@@ -82,6 +64,7 @@ MAINT_DB="$POSTGRES_DB"
 
 IFS=',' read -ra DB_ENTRIES <<< "$APP_DATABASES"
 for entry in "${DB_ENTRIES[@]}"; do
+    # Parse APP_DATABASES entry
     IFS='|' read -ra PARTS <<< "$entry"
     APP_NAME="${PARTS[0]}"
     DB_NAME="${PARTS[1]}"
@@ -93,7 +76,9 @@ for entry in "${DB_ENTRIES[@]}"; do
     echo "         DB Name : $DB_NAME"
     echo "         DB User : $DB_USER"
 
+    #
     # 1️⃣ Create role if missing
+    #
     echo "[CHECK] Creating role if missing..."
     PGPASSWORD="$POSTGRES_SUPERPASS" \
     psql -v ON_ERROR_STOP=1 -U "$POSTGRES_SUPERUSER" -d "$MAINT_DB" <<SQL
@@ -103,7 +88,9 @@ WHERE NOT EXISTS (
 )\gexec
 SQL
 
+    #
     # 2️⃣ Create database if missing
+    #
     echo "[CHECK] Creating database if missing..."
     PGPASSWORD="$POSTGRES_SUPERPASS" \
     psql -v ON_ERROR_STOP=1 -U "$POSTGRES_SUPERUSER" -d "$MAINT_DB" <<SQL
@@ -117,7 +104,9 @@ WHERE NOT EXISTS (
 )\gexec
 SQL
 
-    # 3️⃣ Harden schema privileges — FIXED (no TEMP/DATABASES errors)
+    #
+    # 3️⃣ Harden schema privileges
+    #
     echo "[INFO] Hardening privileges for '$DB_NAME'..."
     PGPASSWORD="$POSTGRES_SUPERPASS" \
     psql -v ON_ERROR_STOP=1 -U "$POSTGRES_SUPERUSER" -d "$DB_NAME" <<SQL
