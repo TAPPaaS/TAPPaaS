@@ -29,6 +29,20 @@ set -euo pipefail
 # Prerequisites: environment variables loaded via load-env.sh
 ##
 
+#!/usr/bin/env bash
+set -euo pipefail
+
+##
+# init-multiple-dbs.sh — Secure multi-application Postgres bootstrap
+# Author: Erik Daniel / TAPpaas Team (patched 2025-08-12)
+#
+# Changes:
+#   - FIX: Removed invalid :'VAR' syntax in EXECUTE format — now uses :VAR
+#   - Uses psql --set vars without leaking passwords in process table
+#   - Idempotent: checks user/db existence before creating
+#   - Hardened permissions: revoke PUBLIC access, grant only to owner
+##
+
 echo "=== [INIT] Multi-database setup START ==="
 echo "[INIT] Using APP_DATABASES='$APP_DATABASES'"
 
@@ -39,7 +53,6 @@ echo "[INIT] Using APP_DATABASES='$APP_DATABASES'"
 
 MAINT_DB="${POSTGRES_DB}"
 
-# Loop through comma-separated APP_DATABASES entries: app|dbname|dbuser|dbpass
 IFS=',' read -ra DB_ENTRIES <<< "$APP_DATABASES"
 for entry in "${DB_ENTRIES[@]}"; do
     IFS='|' read -ra PARTS <<< "$entry"
@@ -53,16 +66,18 @@ for entry in "${DB_ENTRIES[@]}"; do
     echo "         DB Name : $DB_NAME"
     echo "         DB User : $DB_USER"
 
-    # 1️⃣ Create role if not exists (password via psql variable for safety)
-    USER_EXISTS=$(psql -U "$POSTGRES_SUPERUSER" -d "$MAINT_DB" -tAc \
+    # 1️⃣ Create role if not exists
+    USER_EXISTS=$(PGPASSWORD="$POSTGRES_SUPERPASS" \
+        psql -U "$POSTGRES_SUPERUSER" -d "$MAINT_DB" -tAc \
         "SELECT 1 FROM pg_roles WHERE rolname='${DB_USER}'")
     if [ "$USER_EXISTS" != "1" ]; then
         echo "[ACTION] Creating user '$DB_USER'"
-        PGPASSWORD="$POSTGRES_SUPERPASS" psql -v ON_ERROR_STOP=1 -U "$POSTGRES_SUPERUSER" -d "$MAINT_DB" \
+        PGPASSWORD="$POSTGRES_SUPERPASS" psql -v ON_ERROR_STOP=1 \
+            -U "$POSTGRES_SUPERUSER" -d "$MAINT_DB" \
             --set=NEWUSER="$DB_USER" --set=NEWPASS="$DB_PASS" <<'SQL'
 DO $$
 BEGIN
-   EXECUTE format('CREATE USER %I WITH PASSWORD %L', :'NEWUSER', :'NEWPASS');
+   EXECUTE format('CREATE USER %I WITH PASSWORD %L', :NEWUSER, :NEWPASS);
 END$$;
 SQL
     else
@@ -70,11 +85,13 @@ SQL
     fi
 
     # 2️⃣ Create database if not exists
-    DB_EXISTS=$(psql -U "$POSTGRES_SUPERUSER" -d "$MAINT_DB" -tAc \
+    DB_EXISTS=$(PGPASSWORD="$POSTGRES_SUPERPASS" \
+        psql -U "$POSTGRES_SUPERUSER" -d "$MAINT_DB" -tAc \
         "SELECT 1 FROM pg_database WHERE datname='${DB_NAME}'")
     if [ "$DB_EXISTS" != "1" ]; then
         echo "[ACTION] Creating database '$DB_NAME' (owner: $DB_USER)"
-        PGPASSWORD="$POSTGRES_SUPERPASS" psql -v ON_ERROR_STOP=1 -U "$POSTGRES_SUPERUSER" -d "$MAINT_DB" \
+        PGPASSWORD="$POSTGRES_SUPERPASS" psql -v ON_ERROR_STOP=1 \
+            -U "$POSTGRES_SUPERUSER" -d "$MAINT_DB" \
             --set=DBNAME="$DB_NAME" --set=DBOWNER="$DB_USER" <<'SQL'
 CREATE DATABASE :"DBNAME"
   OWNER :"DBOWNER"
@@ -88,17 +105,14 @@ SQL
         echo "[SKIP] Database '$DB_NAME' already exists"
     fi
 
-    # 3️⃣ Secure schema privileges for this DB
-    echo "[INFO] Applying schema and privilege restrictions for '$DB_NAME'..."
-    PGPASSWORD="$POSTGRES_SUPERPASS" psql -v ON_ERROR_STOP=1 -U "$POSTGRES_SUPERUSER" -d "$DB_NAME" \
-        --set=DBUSER="$DB_USER" <<'SQL'
+    # 3️⃣ Adjust schema privileges
+    echo "[INFO] Hardening privileges on '$DB_NAME'"
+    PGPASSWORD="$POSTGRES_SUPERPASS" psql -v ON_ERROR_STOP=1 \
+        -U "$POSTGRES_SUPERUSER" -d "$DB_NAME" \
+        --set=DBNAME="$DB_NAME" --set=DBUSER="$DB_USER" <<'SQL'
 REVOKE ALL ON SCHEMA public FROM PUBLIC;
 GRANT ALL ON SCHEMA public TO :"DBUSER";
-
--- Remove CONNECT from all other roles on this DB except owner
 REVOKE CONNECT ON DATABASE :"DBNAME" FROM PUBLIC;
-
--- Prevent default CREATE/TEMP privileges to PUBLIC on this DB
 ALTER DEFAULT PRIVILEGES REVOKE CREATE ON SCHEMAS FROM PUBLIC;
 ALTER DEFAULT PRIVILEGES REVOKE TEMPORARY ON DATABASES FROM PUBLIC;
 SQL

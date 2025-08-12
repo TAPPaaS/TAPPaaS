@@ -40,7 +40,6 @@ x-service-defaults: &defaults
 
 services:
 
-  # --- OpenWebUI frontend ---
   open-webui:
     image: ghcr.io/open-webui/open-webui:latest
     environment:
@@ -61,7 +60,6 @@ services:
       test: ["CMD", "curl", "-f", "http://localhost:8080"]
     <<: *defaults
 
-  # --- SearxNG search ---
   searxng:
     image: searxng/searxng:latest
     ports:
@@ -71,14 +69,13 @@ services:
       SEARXNG_BASE_URL: "http://localhost:${SEARXNG_PORT}/"
       SEARXNG_LIMITER: "false"
     volumes:
-      - ./searxng/admin_config:/etc/searxng/admin:rw
-      - ./searxng/user_config:/etc/searxng/user:rw
+      - ./searxng/admin_config:/etc/searxng:rw
       - ai_searxng_:/var/lib/searxng:rw
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8080"]
+      start_period: 10s
     <<: *defaults
 
-  # --- PostgreSQL multi-DB ---
   postgres:
     image: postgres:15-alpine
     environment:
@@ -99,7 +96,6 @@ services:
       start_period: 10s
     <<: *defaults
 
-  # --- LiteLLM API ---
   litellm:
     image: ghcr.io/berriai/litellm:main-latest
     ports:
@@ -117,7 +113,6 @@ services:
       test: ["CMD", "curl", "-f", "http://localhost:4000/health"]
     <<: *defaults
 
-  # --- Redis cache ---
   redis:
     image: redis:7-alpine
     ports:
