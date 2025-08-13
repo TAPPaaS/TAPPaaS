@@ -56,8 +56,7 @@ services:
     depends_on:
       searxng:
         condition: service_healthy
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8080"]
+    healthcheck: null
     <<: *defaults
 
   searxng:
