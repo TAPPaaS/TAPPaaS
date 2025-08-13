@@ -72,8 +72,11 @@ services:
       - ./searxng/admin_config:/etc/searxng:rw
       - ai_searxng_:/var/lib/searxng:rw
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8080"]
-      start_period: 10s
+      test: ["CMD-SHELL", "wget --quiet --tries=1 --spider http://localhost:8080 || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
     <<: *defaults
 
   postgres:
