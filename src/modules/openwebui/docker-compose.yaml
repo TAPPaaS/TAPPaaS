@@ -94,7 +94,7 @@ services:
       - "${POSTGRES_PORT}:5432"
     volumes:
       - ./postgres/admin_scripts:/docker-entrypoint-initdb.d:rw
-      - ./postgres//var/lib/postgresql/data
+      - ./postgres//var/lib/postgresql/rw
       - ./postgres/logs:/var/log/postgresql:rw
     healthcheck:
       test: ['CMD-SHELL', 'pg_isready -U "$$POSTGRES_SUPERUSER" -d "$$POSTGRES_DB"']
@@ -117,7 +117,7 @@ services:
     volumes:
       - ./litellm/admin_config:/app/config/admin:rw
       - ./litellm/user_config:/app/config/user:rw
-      - ./litellm//app/rw
+      - ./litellm//app/rw:rw
       - ./litellm/logs:/app/logs:rw
     depends_on:
       postgres:
@@ -140,7 +140,7 @@ services:
       - "${REDIS_PORT}:6379"
     command: redis-server --appendonly yes
     volumes:
-      - ./redis//data
+      - ./redis//rw
       - ./redis/logs:/var/log/redis:rw
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]

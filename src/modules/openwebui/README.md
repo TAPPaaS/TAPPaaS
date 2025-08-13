@@ -106,37 +106,20 @@ go to directory: ~/src/modules/openwebui
 
 ---
 
-## **2. Generate & Persist Dynamic Vars**
+## **2. validate if all enviroment parameters are set correctly 
 
-Run:
+./start-stack.sh --dry-run
 
-```
-source ./load-env.sh
-```
 
-This will:
-- Load base `.env`
-- Generate:
-  - `APP_DATABASES`
-  - `LITELLM_DATABASE_URL`
-  - `DATABASE_URL`
-- Export them to shell
-- **Persist** them back into `.env`
+## **3. normal start (load env, validate, run stack)
 
-Example output:
-```
-[INFO] Environment loaded and persisted
-[INFO] APP_DATABASES=litellm|litellm_db|llm_user|...
-[INFO] LITELLM_DATABASE_URL=postgresql://llm_user:...
-```
 
----
+./start-stack.sh
 
-## **3. Start Clean Stack**
 
-```
-docker compose down -v --remove-orphans
-docker compose up -d
+
+
+
 ```
 
 ---

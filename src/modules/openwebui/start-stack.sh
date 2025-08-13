@@ -11,12 +11,13 @@ set -euo pipefail
 #   5. Validate required host directories
 #   6. Update .env with derived values (preserve order/comments)
 #   7. Validate docker-compose config
-#   8. Start stack
+#   8. interactive confirmation before stack launch
+#   9. Start stack
 # Stops on error with concrete remediation instructions.
 ##
 
 STEP=0
-NEXT_STEP() { STEP=$((STEP+1)); echo -e "\n[$STEP/8] $1"; }
+NEXT_STEP() { STEP=$((STEP+1)); echo -e "\n[$STEP/9] $1"; }
 ABORT() { echo -e "❌ ERROR: $1\n💡 Action: $2"; exit 1; }
 
 DRY_RUN=false
@@ -29,8 +30,8 @@ TMP_ENV=".env.tmp"
 NEXT_STEP "Checking prerequisites..."
 command -v docker >/dev/null || ABORT "Docker not installed" "Install Docker first"
 command -v docker compose >/dev/null || ABORT "Docker Compose v2 not installed" "Upgrade Docker to a version with Compose v2"
-
 [[ -f "$ENV_FILE" ]] || ABORT "$ENV_FILE is missing" "Copy from .env.example and adjust values"
+
 [[ ! -f "$LOCAL_ENV" ]] && echo "ℹ️  No $LOCAL_ENV found — secrets will be taken from $ENV_FILE"
 
 load_file() {
@@ -52,7 +53,7 @@ load_file "$ENV_FILE"
 load_file "$LOCAL_ENV"
 
 [[ -n "${POSTGRES_SUPERUSER:-}" ]] || ABORT "POSTGRES_SUPERUSER not set" "Add it to $ENV_FILE"
-[[ -n "${POSTGRES_SUPERPASS:-}" ]]   || ABORT "POSTGRES_SUPERPASS not set" "Store in $LOCAL_ENV"
+[[ -n "${POSTGRES_SUPERPASS:-}" ]]   || ABORT "POSTGRES_SUPERPASS not set" "Store it securely in $LOCAL_ENV"
 
 NEXT_STEP "Aligning Postgres credentials..."
 export POSTGRES_USER="$POSTGRES_SUPERUSER"
@@ -130,6 +131,14 @@ fi
 
 NEXT_STEP "Validating docker-compose configuration..."
 docker compose config >/dev/null || ABORT "docker-compose config validation failed" "Fix invalid syntax or missing variables before retrying"
+
+NEXT_STEP "Confirmation before launching stack"
+read -rp "✅ All checks passed. Start Docker stack now? [y/N]: " CONFIRM
+CONFIRM=${CONFIRM,,}  # lowercase
+if [[ "$CONFIRM" != "y" && "$CONFIRM" != "yes" ]]; then
+  echo "ℹ️  Startup cancelled by user."
+  exit 0
+fi
 
 NEXT_STEP "Starting Docker Compose stack..."
 docker compose up -d || ABORT "Failed to start the Docker stack" "Check: docker compose logs --follow"
