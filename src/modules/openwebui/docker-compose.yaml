@@ -32,11 +32,6 @@ x-service-defaults: &defaults
     interval: 30s
     timeout: 10s
     retries: 3
-  deploy:
-    resources:
-      limits:
-        memory: 512M
-        cpus: '0.50'
 
 services:
 
@@ -58,10 +53,17 @@ services:
         condition: service_healthy
     healthcheck:
       test: ["CMD-SHELL", "curl --silent --fail http://localhost:8080/health | jq -e '.status == true' || exit 1"]
-      start_period: 60s   # wait 60 seconds before starting health checks
-      interval: 30s       # perform healthcheck every 30 seconds
-      timeout: 10s        # timeout if no response within 10 seconds
-      retries: 5          # consider unhealthy after 5 consecutive failures
+      start_period: 60s
+      interval: 30s
+      timeout: 10s
+      retries: 5
+    deploy:
+      resources:
+        limits:
+          memory: 1.5g
+          cpus: '0.50'
+        reservations:
+          memory: 1g
     <<: *defaults
 
   searxng:
@@ -81,6 +83,13 @@ services:
       timeout: 10s
       retries: 5
       start_period: 30s
+    deploy:
+      resources:
+        limits:
+          memory: 512m
+          cpus: '0.50'
+        reservations:
+          memory: 256m
     <<: *defaults
 
   postgres:
@@ -101,6 +110,13 @@ services:
       timeout: 5s
       retries: 5
       start_period: 10s
+    deploy:
+      resources:
+        limits:
+          memory: 1.5g
+          cpus: '0.50'
+        reservations:
+          memory: 1g
     <<: *defaults
 
   litellm:
@@ -122,6 +138,13 @@ services:
       timeout: 10s
       retries: 5
       start_period: 60s
+    deploy:
+      resources:
+        limits:
+          memory: 2g
+          cpus: '0.50'
+        reservations:
+          memory: 1.5g
     <<: *defaults
 
   redis:
@@ -133,4 +156,11 @@ services:
       - ai_redis_:/data
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
+    deploy:
+      resources:
+        limits:
+          memory: 512m
+          cpus: '0.50'
+        reservations:
+          memory: 256m
     <<: *defaults
