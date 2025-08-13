@@ -11,6 +11,7 @@ src/modules/opnsense/tapaas.tfvars
 .vscode/settings.json
 cspell.json
 src/config local
+<<<<<<< HEAD
 dev/tappaas-ai-chat/data/litellm/functional_config/config.yaml
 dev/tappaas-ai-chat/data/postgres/application_config/init-multiple-dbs.sh
 dev/tappaas-ai-chat/data/searxng/admin_config/settings-base.yml
@@ -28,3 +29,6 @@ dev/tappaas-ai-chat/docker/achive/get-db-url.sh
 dev/tappaas-ai-chat/docker/achive/manage-service.sh
 .env.key
 src/modules/openwebui/docker/.env.local
+=======
+dev/
+>>>>>>> d484b0f (update .gitignor)
