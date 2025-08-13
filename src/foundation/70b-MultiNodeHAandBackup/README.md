@@ -25,8 +25,13 @@ See [Examples](../../../docs/Examples/README.md) for description of a 3 node TAP
 (if sufficient hw resources are available then use mirror on boot and tanka1)
 6. run the TAPaaSPostPVEInstall.sh script in the proxmox node shell (via the proxmox management console):
 ```
-curl -fsSL https://raw.githubusercontent.com/TAPPaaS/TAPPaaS/main/src/foundation/00-ProxmoxNodetstrap/TAPPaaSPostPVEInstall.sh | bash
+curl -fsSL https://raw.githubusercontent.com/TAPPaaS/TAPPaaS/main/src/foundation/00-ProxmoxNode/TAPPaaSPostPVEInstall.sh | bash
 ```
+
+### add node to the cluster
+
+### setup ssh between node and tappaas-cicd VM
+
 
 
 ## Hight Availability setup

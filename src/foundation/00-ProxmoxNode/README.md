@@ -29,7 +29,7 @@ After initial 3 stems of bootstrapping then all management is done inside the TA
 (if sufficient hw resources are available then use mirror on boot and tanka1)
 - run the TAPaaSPostPVEInstall.sh script in the proxmox node shell (via the proxmox management console):
 ```
-curl -fsSL https://raw.githubusercontent.com/TAPPaaS/TAPPaaS/main/src/foundation/00-ProxmoxNodetstrap/TAPPaaSPostPVEInstall.sh | bash
+curl -fsSL https://raw.githubusercontent.com/TAPPaaS/TAPPaaS/main/src/foundation/00-ProxmoxNode/TAPPaaSPostPVEInstall.sh | bash
 ```
 
 - after reboot check that it all looks fine!!
