@@ -23,6 +23,7 @@ x-service-defaults: &defaults
     - ai_network
   env_file:
     - .env
+    - .env.local
   healthcheck:
     interval: 30s
     timeout: 10s
@@ -50,13 +51,6 @@ services:
     healthcheck:
       test: ["CMD-SHELL", "curl --silent --fail http://localhost:8080/health | jq -e '.status == true' || exit 1"]
       start_period: 60s
-    deploy:
-      resources:
-        limits:
-          memory: 1.5g
-          cpus: '0.50'
-        reservations:
-          memory: 1g
     <<: *defaults
 
   searxng:
@@ -74,13 +68,6 @@ services:
     healthcheck:
       test: ["CMD-SHELL", "wget --quiet --tries=1 --spider http://localhost:8080 || exit 1"]
       start_period: 30s
-    deploy:
-      resources:
-        limits:
-          memory: 512m
-          cpus: '0.50'
-        reservations:
-          memory: 256m
     <<: *defaults
 
   postgres:
@@ -98,14 +85,7 @@ services:
       - ./postgres/logs:/var/log/postgresql:rw
     healthcheck:
       test: ['CMD-SHELL', 'pg_isready -U "$$POSTGRES_SUPERUSER" -d "$$POSTGRES_DB"']
-      start_period: 10s
-    deploy:
-      resources:
-        limits:
-          memory: 1.5g
-          cpus: '0.50'
-        reservations:
-          memory: 1g
+      start_period: 60s
     <<: *defaults
 
   litellm:
@@ -117,7 +97,7 @@ services:
     volumes:
       - ./litellm/admin_config:/app/config/admin:rw
       - ./litellm/user_config:/app/config/user:rw
-      - ./litellm//app/rw:rw
+      - ./litellm//app/rw
       - ./litellm/logs:/app/logs:rw
     depends_on:
       postgres:
@@ -125,13 +105,6 @@ services:
     healthcheck:
       test: ["CMD-SHELL", "wget -q -O- http://localhost:4000/health/readiness | grep '\"status\":\"connected\"' || exit 1"]
       start_period: 60s
-    deploy:
-      resources:
-        limits:
-          memory: 2g
-          cpus: '0.50'
-        reservations:
-          memory: 1.5g
     <<: *defaults
 
   redis:
@@ -144,11 +117,4 @@ services:
       - ./redis/logs:/var/log/redis:rw
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
-    deploy:
-      resources:
-        limits:
-          memory: 512m
-          cpus: '0.50'
-        reservations:
-          memory: 256m
     <<: *defaults
