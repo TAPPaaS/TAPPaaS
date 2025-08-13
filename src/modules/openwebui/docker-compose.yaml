@@ -12,12 +12,7 @@
 #   - Cross-platform (macOS/Linux/WSL)
 # ============================================================================
 
-volumes:
-  ai_openwebui_: {}
-  ai_searxng_: {}
-  ai_litellm_: {}
-  ai_postgres_: {}
-  ai_redis_: {}
+version: "3.9"
 
 networks:
   ai_network:
@@ -47,16 +42,14 @@ services:
     volumes:
       - ./openwebui/admin_config:/app/config/admin:rw
       - ./openwebui/user_config:/app/config/user:rw
-      - ai_openwebui_:/app/backend:rw
+      - ./openwebui//app/backend:rw
+      - ./openwebui/logs:/app/logs:rw
     depends_on:
       searxng:
         condition: service_healthy
     healthcheck:
       test: ["CMD-SHELL", "curl --silent --fail http://localhost:8080/health | jq -e '.status == true' || exit 1"]
       start_period: 60s
-      interval: 30s
-      timeout: 10s
-      retries: 5
     deploy:
       resources:
         limits:
@@ -76,12 +69,10 @@ services:
       SEARXNG_LIMITER: "false"
     volumes:
       - ./searxng/admin_config:/etc/searxng:rw
-      - ai_searxng_:/var/lib/searxng:rw
+      - ./searxng//var/lib/searxng:rw
+      - ./searxng/logs:/var/log/searxng:rw
     healthcheck:
       test: ["CMD-SHELL", "wget --quiet --tries=1 --spider http://localhost:8080 || exit 1"]
-      interval: 30s
-      timeout: 10s
-      retries: 5
       start_period: 30s
     deploy:
       resources:
@@ -102,13 +93,11 @@ services:
     ports:
       - "${POSTGRES_PORT}:5432"
     volumes:
-      - ai_postgres_:/var/lib/postgresql/data
       - ./postgres/admin_scripts:/docker-entrypoint-initdb.d:rw
+      - ./postgres//var/lib/postgresql/data
+      - ./postgres/logs:/var/log/postgresql:rw
     healthcheck:
       test: ['CMD-SHELL', 'pg_isready -U "$$POSTGRES_SUPERUSER" -d "$$POSTGRES_DB"']
-      interval: 10s
-      timeout: 5s
-      retries: 5
       start_period: 10s
     deploy:
       resources:
@@ -128,15 +117,13 @@ services:
     volumes:
       - ./litellm/admin_config:/app/config/admin:rw
       - ./litellm/user_config:/app/config/user:rw
-      - ai_litellm_:/app/rw
+      - ./litellm//app/rw
+      - ./litellm/logs:/app/logs:rw
     depends_on:
       postgres:
         condition: service_healthy
     healthcheck:
       test: ["CMD-SHELL", "wget -q -O- http://localhost:4000/health/readiness | grep '\"status\":\"connected\"' || exit 1"]
-      interval: 30s
-      timeout: 10s
-      retries: 5
       start_period: 60s
     deploy:
       resources:
@@ -153,7 +140,8 @@ services:
       - "${REDIS_PORT}:6379"
     command: redis-server --appendonly yes
     volumes:
-      - ai_redis_:/data
+      - ./redis//data
+      - ./redis/logs:/var/log/redis:rw
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
     deploy:
