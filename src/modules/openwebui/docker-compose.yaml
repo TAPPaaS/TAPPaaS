@@ -11,7 +11,7 @@
 #   - Modular setup with health checks and explicit dependencies
 #   - Cross-platform (macOS/Linux/WSL)
 # ============================================================================
-
+#
 # version: "3.9"
 
 networks:
