@@ -11,3 +11,18 @@ src/modules/opnsense/tapaas.tfvars
 .vscode/settings.json
 cspell.json
 src/config local
+dev/tappaas-ai-chat/data/litellm/functional_config/config.yaml
+dev/tappaas-ai-chat/data/postgres/application_config/init-multiple-dbs.sh
+dev/tappaas-ai-chat/data/searxng/admin_config/settings-base.yml
+dev/tappaas-ai-chat/data/searxng/admin_config/settings.yml
+dev/tappaas-ai-chat/data/searxng/admin_config/settings.yml.new
+dev/tappaas-ai-chat/data/searxng/admin_config/uwsgi.ini
+dev/tappaas-ai-chat/docker/.env
+dev/tappaas-ai-chat/docker/.env.local
+dev/tappaas-ai-chat/docker/docker-compose.override.yml
+dev/tappaas-ai-chat/docker/docker-compose.yaml
+dev/tappaas-ai-chat/docker/init-data-dirs.sh
+dev/tappaas-ai-chat/docker/load-env.sh
+dev/tappaas-ai-chat/docker/start-stack.sh
+dev/tappaas-ai-chat/docker/achive/get-db-url.sh
+dev/tappaas-ai-chat/docker/achive/manage-service.sh
