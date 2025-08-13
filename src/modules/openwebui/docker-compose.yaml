@@ -57,8 +57,13 @@ services:
       searxng:
         condition: service_healthy
     healthcheck:
-      disable: true
+      test: ["CMD-SHELL", "curl --silent --fail http://localhost:8080/health | jq -e '.status == true' || exit 1"]
+      start_period: 60s   # wait 60 seconds before starting health checks
+      interval: 30s       # perform healthcheck every 30 seconds
+      timeout: 10s        # timeout if no response within 10 seconds
+      retries: 5          # consider unhealthy after 5 consecutive failures
     <<: *defaults
+
 
   searxng:
     image: searxng/searxng:latest
@@ -99,22 +104,27 @@ services:
       start_period: 10s
     <<: *defaults
 
-  litellm:
-    image: ghcr.io/berriai/litellm:main-latest
-    ports:
-      - "${LITELLM_PORT}:4000"
-    environment:
-      LITELLM_DATABASE_URL: ${LITELLM_DATABASE_URL}
-    volumes:
-      - ./litellm/admin_config:/app/config/admin:rw
-      - ./litellm/user_config:/app/config/user:rw
-      - ai_litellm_:/app/rw
-    depends_on:
-      postgres:
-        condition: service_healthy
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:4000/health"]
-    <<: *defaults
+litellm:
+  image: ghcr.io/berriai/litellm:main-latest
+  ports:
+    - "${LITELLM_PORT}:4000"
+  environment:
+    LITELLM_DATABASE_URL: ${LITELLM_DATABASE_URL}
+  volumes:
+    - ./litellm/admin_config:/app/config/admin:rw
+    - ./litellm/user_config:/app/config/user:rw
+    - ai_litellm_:/app/rw
+  depends_on:
+    postgres:
+      condition: service_healthy
+  healthcheck:
+    test: ["CMD-SHELL", "wget --quiet --tries=1 --spider http://localhost:4000/health/readiness || exit 1"]
+    interval: 30s
+    timeout: 10s
+    retries: 5
+    start_period: 60s
+  <<: *defaults
+
 
   redis:
     image: redis:7-alpine
