@@ -2,16 +2,16 @@
 # Docker Compose Configuration
 # Project: Local AI Platform (OpenWebUI, SearxNG, LiteLLM, Postgres, n8n, Ollama, etc.)
 # Author: Erik van Busschbach
-# Last updated: 2025-08-12
-# Version: 250812v10-STABLE
+# Last updated: 2025-08-13
+# Version: 250813v11-STABLE
 # Description:
 #   - DRY environment variable management
 #   - Secure DB initialization
-#   - Correct data volume mounts for Postgres & Redis
+#   - Correct bind mounts for Postgres & Redis
 #   - Modular setup with health checks and explicit dependencies
 #   - Cross-platform (macOS/Linux/WSL)
 # ============================================================================
-#
+
 # version: "3.9"
 
 networks:
@@ -41,10 +41,10 @@ services:
     ports:
       - "${OPENWEBUI_PORT}:8080"
     volumes:
-      - ./openwebui/admin_config:/app/config/admin:rw
-      - ./openwebui/user_config:/app/config/user:rw
-      - ./openwebui//app/backend:rw
-      - ./openwebui/logs:/app/logs:rw
+      - ./volumes/open-webui/admin_config:/app/config/admin:rw
+      - ./volumes/open-webui/user_config:/app/config/user:rw
+      - ./volumes/open-webui/backend:/app/backend:rw
+      - ./volumes/open-webui/logs:/app/logs:rw
     depends_on:
       searxng:
         condition: service_healthy
@@ -62,9 +62,9 @@ services:
       SEARXNG_BASE_URL: "http://localhost:${SEARXNG_PORT}/"
       SEARXNG_LIMITER: "false"
     volumes:
-      - ./searxng/admin_config:/etc/searxng:rw
-      - ./searxng//var/lib/searxng:rw
-      - ./searxng/logs:/var/log/searxng:rw
+      - ./volumes/searxng/admin_config:/etc/searxng:rw
+      - ./volumes/searxng/var_lib_searxng:/var/lib/searxng:rw
+      - ./volumes/searxng/logs:/var/log/searxng:rw
     healthcheck:
       test: ["CMD-SHELL", "wget --quiet --tries=1 --spider http://localhost:8080 || exit 1"]
       start_period: 30s
@@ -80,9 +80,9 @@ services:
     ports:
       - "${POSTGRES_PORT}:5432"
     volumes:
-      - ./postgres/admin_scripts:/docker-entrypoint-initdb.d:rw
-      - ./postgres//var/lib/postgresql/rw
-      - ./postgres/logs:/var/log/postgresql:rw
+      - ./volumes/postgres/admin_scripts:/docker-entrypoint-initdb.d:rw
+      - ./volumes/postgres//var/lib/postgresql/rw
+      - ./volumes/postgres/logs:/var/log/postgresql:rw
     healthcheck:
       test: ['CMD-SHELL', 'pg_isready -U "$$POSTGRES_SUPERUSER" -d "$$POSTGRES_DB"']
       start_period: 60s
@@ -95,10 +95,10 @@ services:
     environment:
       LITELLM_DATABASE_URL: ${LITELLM_DATABASE_URL}
     volumes:
-      - ./litellm/admin_config:/app/config/admin:rw
-      - ./litellm/user_config:/app/config/user:rw
-      - ./litellm//app/rw
-      - ./litellm/logs:/app/logs:rw
+      - ./volumes/litellm/admin_config:/app/config/admin:rw
+      - ./volumes/litellm/user_config:/app/config/user:rw
+      - ./volumes/litellm/app:/app:rw
+      - ./volumes/litellm/logs:/app/logs:rw
     depends_on:
       postgres:
         condition: service_healthy
@@ -113,8 +113,8 @@ services:
       - "${REDIS_PORT}:6379"
     command: redis-server --appendonly yes
     volumes:
-      - ./redis//rw
-      - ./redis/logs:/var/log/redis:rw
+      - ./volumes/redis//rw
+      - ./volumes/redis/logs:/var/log/redis:rw
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
     <<: *defaults
