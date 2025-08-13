@@ -1,49 +1,40 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Creates the /data/<service>/<subdir> structure for all services
-# Sets ownership to tappaas:tappaas
-# Safe to re-run if directories already exist.
+# ------------------------------------------------------------------------------
+# init-data-dirs.sh
+# Create /data/<service>/<subdir> directories for persistent container volumes.
+# Subdirs: application_config, functional_config, user_data, logs
+# Ownership forced to tappaas:tappaas
+# ------------------------------------------------------------------------------
 
 OWNER="tappaas"
 GROUP="tappaas"
 
-# All required directories by service and subdir
+# Map of services to their required subdirectories
 declare -A DIRS
-
-# open-webui
 DIRS["open-webui"]="application_config functional_config user_data logs"
-
-# searxng
 DIRS["searxng"]="application_config user_data logs"
-
-# postgres
 DIRS["postgres"]="application_config user_data logs"
-
-# litellm
 DIRS["litellm"]="application_config functional_config user_data logs"
-
-# redis
 DIRS["redis"]="user_data logs"
 
-# Function to create directories safely
 create_dir() {
-    local dir="$1"
-    if [[ ! -d "$dir" ]]; then
-        echo "📁 Creating $dir"
-        mkdir -p "$dir"
+    local path="$1"
+    if [[ ! -d "$path" ]]; then
+        echo "📁 Creating: $path"
+        mkdir -p "$path"
     else
-        echo "✅ Exists: $dir"
+        echo "✅ Exists  : $path"
     fi
-    chown "$OWNER:$GROUP" "$dir"
+    chown "$OWNER:$GROUP" "$path"
 }
 
-echo "🚀 Initializing /data directory structure..."
+echo "🚀 Initializing /data persistent volume directories..."
 for service in "${!DIRS[@]}"; do
-    subs=${DIRS[$service]}
-    for sub in $subs; do
+    for sub in ${DIRS[$service]}; do
         create_dir "/data/$service/$sub"
     done
 done
 
-echo "🎯 All directories created/verified with ownership $OWNER:$GROUP"
+echo "🎯 All /data directories verified with ownership $OWNER:$GROUP"
