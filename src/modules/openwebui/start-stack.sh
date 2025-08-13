@@ -79,10 +79,10 @@ NEXT_STEP "Validating required host directories..."
 
 # Define directories exactly as in the compose volume host paths (relative to compose file)
 declare -A SERVICE_DIRS=(
-  ["open-webui"]="application_config functional_config user_data logs"
+  ["open-webui"]="user_data logs"
   ["searxng"]="application_config user_data logs"
   ["postgres"]="application_config user_data logs"
-  ["litellm"]="application_config functional_config user_data logs"
+  ["litellm"]="functional_config user_data logs"
   ["redis"]="user_data logs"
 )
 
