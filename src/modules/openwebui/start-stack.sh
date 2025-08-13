@@ -8,7 +8,7 @@ set -euo pipefail
 #   2. Load .env + .env.local (for secrets/overrides)
 #   3. Validate mandatory variables
 #   4. Generate derived settings (DB URLs, APP_DATABASES, ports)
-#   5. Validate required host directories
+#   5. Validate required host directories under ./volumes/
 #   6. Update .env with derived values (preserve order/comments)
 #   7. Validate docker-compose config
 #   8. interactive confirmation before stack launch
@@ -76,11 +76,13 @@ NEXT_STEP "Ensuring service ports are set..."
 export OPENWEBUI_PORT SEARXNG_PORT POSTGRES_PORT LITELLM_PORT REDIS_PORT
 
 NEXT_STEP "Validating required host directories..."
-for svc in openwebui litellm searxng postgres redis; do
+for svc in open-webui litellm searxng postgres redis; do
   for sub in admin_config user_config data logs; do
+    # Skip postgres user_config as per original logic
     if [[ "$svc" == "postgres" && "$sub" == "user_config" ]]; then continue; fi
+    # Rename postgres admin_config to admin_scripts matching Compose volume path
     if [[ "$svc" == "postgres" && "$sub" == "admin_config" ]]; then sub="admin_scripts"; fi
-    dir="$svc/$sub"
+    dir="volumes/$svc/$sub"
     [[ -d "$dir" ]] || ABORT "Missing directory: $dir" "Run: mkdir -p $dir && chown $(id -u):$(id -g) $dir"
   done
 done
