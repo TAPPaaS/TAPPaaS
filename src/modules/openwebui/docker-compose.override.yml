@@ -1,4 +1,0 @@
-services:
-  open-webui:
-    # Temporarily disable healthcheck for debugging startup
-    healthcheck: null
