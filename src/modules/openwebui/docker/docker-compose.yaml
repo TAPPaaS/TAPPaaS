@@ -34,6 +34,7 @@ services:
   open-webui:
     image: ghcr.io/open-webui/open-webui:latest
     environment:
+      DATABASE_URL: "postgresql://${POSTGRES_SUPERUSER}:${POSTGRES_SUPERPASS}@postgres:5432/${POSTGRES_DB}"
       ENABLE_RAG_WEB_SEARCH: "true"
       RAG_WEB_SEARCH_ENGINE: searxng
       RAG_WEB_SEARCH_RESULT_COUNT: "3"
@@ -95,6 +96,8 @@ services:
       - "${LITELLM_PORT}:4000"
     environment:
       LITELLM_DATABASE_URL: ${LITELLM_DATABASE_URL}
+      LITELLM_HOST: "0.0.0.0"
+      PORT: "4000"
     volumes:
       - ../data/litellm/functional_config/config.yaml:/app/config.yaml:rw
       - ../data/litellm/user_data:/app/user_data:rw
