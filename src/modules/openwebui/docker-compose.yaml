@@ -56,7 +56,8 @@ services:
     depends_on:
       searxng:
         condition: service_healthy
-    healthcheck: null
+    healthcheck:
+      disable: true
     <<: *defaults
 
   searxng:
