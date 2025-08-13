@@ -23,13 +23,13 @@ After initial 3 stems of bootstrapping then all management is done inside the TA
 - prepare physical hardware. see [Examples](../../Documentation/Examples/README.md) or [Hardware](../../Documentation/Architecture/Hardware.md)
 - ensure you designed your basic setup [Design](../../Documentation/Installation/README.md)
 - download a Proxmox VE iso installer image from: [Official Proxmox Download site](https://www.proxmox.com/en/downloads)
-- create a boot USB (on windows we recommend to use [Rufus](https://rufus.ie/en/))
-- boot the machine from the USB and do an install: use ZFS for the boot disk.
+- create a boot USB (on windows we recommend to use [Rufus](https://rufus.ie/en/), on Linux Mint right click on .iso and select make bootable usb stick)
+- boot the machine from the USB and do an install: use ZFS for the boot disk if you are having boot disk mirror.
 - once it is rebooted go to management console and create the "tanks" as zfs pools (minimum is to have a tanka1)
 (if sufficient hw resources are available then use mirror on boot and tanka1)
 - run the TAPaaSPostPVEInstall.sh script in the proxmox node shell (via the proxmox management console):
 ```
-curl -fsSL https://raw.githubusercontent.com/TAPPaaS/TAPPaaS/main/src/boofoundation/00-ProxmoxNodetstrap/TAPPaaSPostPVEInstall.sh | bash
+curl -fsSL https://raw.githubusercontent.com/TAPPaaS/TAPPaaS/main/src/foundation/00-ProxmoxNodetstrap/TAPPaaSPostPVEInstall.sh | bash
 ```
 
 - after reboot check that it all looks fine!!
