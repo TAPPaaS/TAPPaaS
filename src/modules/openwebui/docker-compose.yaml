@@ -41,10 +41,10 @@ services:
     ports:
       - "${OPENWEBUI_PORT}:8080"
     volumes:
-      - ./volumes/open-webui/admin_config:/app/config/admin:rw
-      - ./volumes/open-webui/user_config:/app/config/user:rw
-      - ./volumes/open-webui/backend:/app/backend:rw
-      - ./volumes/open-webui/logs:/app/logs:rw
+      - ../data/open-webui/application_config:/app/config/admin:rw
+      - ../data/open-webui/functional_config:/app/config/user:rw
+      - ../data/open-webui/user_data:/app/backend:rw
+      - ../data/open-webui/logs:/app/logs:rw
     depends_on:
       searxng:
         condition: service_healthy
@@ -62,9 +62,10 @@ services:
       SEARXNG_BASE_URL: "http://localhost:${SEARXNG_PORT}/"
       SEARXNG_LIMITER: "false"
     volumes:
-      - ./volumes/searxng/admin_config:/etc/searxng:rw
-      - ./volumes/searxng/var_lib_searxng:/var/lib/searxng:rw
-      - ./volumes/searxng/logs:/var/log/searxng:rw
+      - ../data/searxng/application_config:/etc/searxng:rw
+      # No functional_config mount defined currently for searxng
+      - ../data/searxng/user_data:/var/lib/searxng:rw
+      - ../data/searxng/logs:/var/log/searxng:rw
     healthcheck:
       test: ["CMD-SHELL", "wget --quiet --tries=1 --spider http://localhost:8080 || exit 1"]
       start_period: 30s
@@ -80,9 +81,9 @@ services:
     ports:
       - "${POSTGRES_PORT}:5432"
     volumes:
-      - ./volumes/postgres/admin_scripts:/docker-entrypoint-initdb.d:rw
-      - ./volumes/postgres//var/lib/postgresql/rw
-      - ./volumes/postgres/logs:/var/log/postgresql:rw
+      - ../data/postgres/application_config:/docker-entrypoint-initdb.d:rw
+      - ../data/postgres/user_data:/var/lib/postgresql:rw
+      - ../data/postgres/logs:/var/log/postgresql:rw
     healthcheck:
       test: ['CMD-SHELL', 'pg_isready -U "$$POSTGRES_SUPERUSER" -d "$$POSTGRES_DB"']
       start_period: 60s
@@ -95,10 +96,10 @@ services:
     environment:
       LITELLM_DATABASE_URL: ${LITELLM_DATABASE_URL}
     volumes:
-      - ./volumes/litellm/admin_config:/app/config/admin:rw
-      - ./volumes/litellm/user_config:/app/config/user:rw
-      - ./volumes/litellm/app:/app:rw
-      - ./volumes/litellm/logs:/app/logs:rw
+#      - ../data/litellm/application_config:/app:rw
+      - ../data/litellm/application_config/config.yaml:/app/config.yaml:rw
+#      - ../data/litellm/user_data:/app:rw
+#      - ../data/litellm/logs:/app/logs:rw
     depends_on:
       postgres:
         condition: service_healthy
@@ -113,8 +114,8 @@ services:
       - "${REDIS_PORT}:6379"
     command: redis-server --appendonly yes
     volumes:
-      - ./volumes/redis//rw
-      - ./volumes/redis/logs:/var/log/redis:rw
+      - ../data/redis/user_data:/data:rw
+      - ../data/redis/logs:/var/log/redis:rw
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
     <<: *defaults

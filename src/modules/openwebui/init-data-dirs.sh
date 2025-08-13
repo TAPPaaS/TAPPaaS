@@ -33,7 +33,7 @@ create_dir() {
 echo "🚀 Initializing /data persistent volume directories..."
 for service in "${!DIRS[@]}"; do
     for sub in ${DIRS[$service]}; do
-        create_dir "/data/$service/$sub"
+        create_dir ~/data/$service/$sub
     done
 done
 

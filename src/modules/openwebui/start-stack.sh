@@ -8,7 +8,7 @@ set -euo pipefail
 #   2. Load .env + .env.local (for secrets/overrides)
 #   3. Validate mandatory variables
 #   4. Generate derived settings (DB URLs, APP_DATABASES, ports)
-#   5. Validate required host directories under ./volumes/
+#   5. Validate required host directories under ../data/
 #   6. Update .env with derived values (preserve order/comments)
 #   7. Validate docker-compose config
 #   8. interactive confirmation before stack launch
@@ -76,13 +76,19 @@ NEXT_STEP "Ensuring service ports are set..."
 export OPENWEBUI_PORT SEARXNG_PORT POSTGRES_PORT LITELLM_PORT REDIS_PORT
 
 NEXT_STEP "Validating required host directories..."
-for svc in open-webui litellm searxng postgres redis; do
-  for sub in admin_config user_config data logs; do
-    # Skip postgres user_config as per original logic
-    if [[ "$svc" == "postgres" && "$sub" == "user_config" ]]; then continue; fi
-    # Rename postgres admin_config to admin_scripts matching Compose volume path
-    if [[ "$svc" == "postgres" && "$sub" == "admin_config" ]]; then sub="admin_scripts"; fi
-    dir="volumes/$svc/$sub"
+
+# Define directories exactly as in the compose volume host paths (relative to compose file)
+declare -A SERVICE_DIRS=(
+  ["open-webui"]="application_config functional_config user_data logs"
+  ["searxng"]="application_config user_data logs"
+  ["postgres"]="application_config user_data logs"
+  ["litellm"]="application_config functional_config user_data logs"
+  ["redis"]="user_data logs"
+)
+
+for svc in "${!SERVICE_DIRS[@]}"; do
+  for sub in ${SERVICE_DIRS[$svc]}; do
+    dir="../data/$svc/$sub"
     [[ -d "$dir" ]] || ABORT "Missing directory: $dir" "Run: mkdir -p $dir && chown $(id -u):$(id -g) $dir"
   done
 done
