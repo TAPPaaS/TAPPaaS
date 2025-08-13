@@ -96,10 +96,9 @@ services:
     environment:
       LITELLM_DATABASE_URL: ${LITELLM_DATABASE_URL}
     volumes:
-#      - ../data/litellm/application_config:/app:rw
-      - ../data/litellm/application_config/config.yaml:/app/config.yaml:rw
-#      - ../data/litellm/user_data:/app:rw
-#      - ../data/litellm/logs:/app/logs:rw
+      - ../data/litellm/functional_config/config.yaml:/app/config.yaml:rw
+      - ../data/litellm/user_data:/app/user_data:rw
+      - ../data/litellm/logs:/app/logs:rw
     depends_on:
       postgres:
         condition: service_healthy
