@@ -26,3 +26,5 @@ dev/tappaas-ai-chat/docker/load-env.sh
 dev/tappaas-ai-chat/docker/start-stack.sh
 dev/tappaas-ai-chat/docker/achive/get-db-url.sh
 dev/tappaas-ai-chat/docker/achive/manage-service.sh
+.env.key
+src/modules/openwebui/docker/.env.local
