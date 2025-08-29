@@ -62,7 +62,7 @@ Now Do:
 - Log into TAPPaaS CICD VM using ssh from a host terminal: ssh tappaas@<insert ip of CICD VM>
 - In the shell of the TAPPaaS CICD VM do:
   - create ssh keys: ssh-keygen -t ed25519
-  - add ssh keys to your github: copy and paste the output of cat ~/.ssh/id_ed25519.pub (not needed when TAPPaaS is public)
+  - add ssh keys to your github: copy and paste the output of cat ~/.ssh/id_ed25519.pub
   - test that the key authentication works: ssh -T git@github.com
     - it will ask if if you want to continue connecting: answer yes
     - it will hopefully then state that you authenticated but that github does not provide shell access. That is OK

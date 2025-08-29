@@ -340,7 +340,7 @@ echo -e "${CREATING}${BOLD}${DGN}** Congratulation ** You are almost done bootst
 echo -e "${CREATING}${BOLD}${DGN} 1) Log into TAPPaaS CICD VM using ssh from a host teminal: ssh tappaas@<insert ip of CICD VM>${CL}"
 echo -e "${CREATING}${BOLD}${DGN} 2) In the shell of the TAPPaaS CICD VM do:${CL}:"
 echo -e "${CREATING}${BOLD}${DGN}   2a) create ssh keys: ssh-keygen -t ed25519 ${CL}"
-echo -e "${CREATING}${BOLD}${DGN}   2b) add ssh keys to your github: cat ~/.ssh/id_rsa${CL} (not needed when TAPPaas is public)${CL}"
+echo -e "${CREATING}${BOLD}${DGN}   2b) add ssh keys to your github: cat ~/.ssh/id_rsa${CL}${CL}"
 echo -e "${CREATING}${BOLD}${DGN}       test that the key authentication works: ssh -T git@github.com${CL}"
 echo -e "${CREATING}${BOLD}${DGN}   2c) clone the tappaas repository: git clone git@github.com:TAPpaas/TAPpaas.git${CL}"
 echo -e "${CREATING}${BOLD}${DGN}   2d) run the final bootstrap code: ./TAPPaaS/src/bootstrap/TAPPaaS-CICD-bootstrap.sh${CL}"
