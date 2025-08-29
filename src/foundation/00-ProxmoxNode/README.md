@@ -75,7 +75,7 @@ Now Do:
   ```
   - run the final bootstrap code: 
   ```
-  ./TAPPaaS/src/bootstrap/TAPPaaS-CICD-bootstrap.sh
+  ./TAPPaaS/src/foundation/00-ProxmoxNode/TAPPaaS-CICD-bootstrap.sh
   ```
   - set the git user name (from the tappaas-cicd command prompt): git config --global user.name <your name> 
   - set the git user email: git config --global user.email <your email>
