@@ -129,16 +129,6 @@ function check_root() {
   fi
 }
 
-function pve_check() {
-  if ! pveversion | grep -Eq "pve-manager/8\.[1-4](\.[0-9]+)*"; then
-    msg_error "${CROSS}${RD}This version of Proxmox Virtual Environment is not supported"
-    echo -e "Requires Proxmox Virtual Environment Version 8.1 or later."
-    echo -e "Exiting..."
-    sleep 2
-    exit
-  fi
-}
-
 function arch_check() {
   if [ "$(dpkg --print-architecture)" != "amd64" ]; then
     echo -e "\n ${INFO}${YWB}This script will not work with PiMox! \n"
@@ -289,7 +279,6 @@ echo -e "     - ${DISKSIZE}${BOLD}${DGN}URL of Distribution Image: ${BGN}${URL}$
 msg_info "Doing sanity check of Proxmox PVE."
 check_root
 arch_check
-pve_check
 ssh_check
 msg_ok "Done sanity check of Proxmox PVE. Everything is OK to proceed"
 
