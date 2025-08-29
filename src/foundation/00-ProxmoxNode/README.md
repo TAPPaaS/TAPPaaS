@@ -27,10 +27,16 @@ After initial 3 stems of bootstrapping then all management is done inside the TA
 - boot the machine from the USB and do an install: use ZFS for the boot disk if you are having boot disk mirror.
 - once it is rebooted go to management console and create the "tanks" as zfs pools (minimum is to have a tanka1)
 (if sufficient hw resources are available then use mirror on boot and tanka1)
-- run the TAPaaSPostPVEInstall.sh script in the proxmox node shell (via the proxmox management console):
+- run the Proxmox helper post PVE install script (to be replaced with a dedicated script) TAPaaSPostPVEInstall.sh script in the proxmox node shell (via the proxmox management console): Answer Yes to all questions:
+```
+bash -c "$(curl -fsSL https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/tools/pve/post-pve-install.sh)"
+```
+
+PS: This proxmox helper script should be replaced with a fully automatic script:
 ```
 curl -fsSL https://raw.githubusercontent.com/TAPPaaS/TAPPaaS/main/src/foundation/00-ProxmoxNode/TAPPaaSPostPVEInstall.sh | bash
 ```
+BUT this does not work yet
 
 - after reboot check that it all looks fine!!
 - run the TAPaaSBootstrap script from the root console
