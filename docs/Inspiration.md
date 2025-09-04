@@ -57,6 +57,7 @@ There seems to be some interesting core ideas in Hexos that is overlapping with 
 * [Apalrd's Adventures](https://www.youtube.com/@apalrdsadventures)
 * [Lawrence Systems](https://www.youtube.com/@LAWRENCESYSTEMS)
 * [NASCompares](https://www.youtube.com/@nascompares)
+* [Wolfgang's Channel](https://www.youtube.com/@WolfgangsChannel)
 
 
 # relevant videos to consider
