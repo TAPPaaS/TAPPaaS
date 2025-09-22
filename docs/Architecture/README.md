@@ -8,7 +8,6 @@ THe capabilities and software stack includes platform and infrastructure service
 
 For some of the selected applications/module we have a dedicated design documents as the implementation is not straight forward, and design decisions needs to be made. for the rest of the open source module the outline the configuration in the README file of the module installation source code under ../src/module.
 
-
 The complicated designs are:
 
 - The [Security](./SecurityDesign.md) design: Related topic are the Single Sign On and Network Design (and to a smaller extend the backup design)
@@ -18,5 +17,5 @@ The complicated designs are:
 - The [Backup](./BackupDesign.md) design
 - The [AI](./AIDesign.md)
 
-
+TAPPaaS also have naming conventions described in [Naming](Naming.md)
 
