@@ -19,6 +19,10 @@ Generally these names are kept in lowercase but if readability is easier then ca
 
 no rule without exceptions: If a service is implemented in several instances, then the name can have a prefix indicating the variant
 
+## note on tappaas itself
+
+The tappaas system itself is controlled and monitored by a set of services served by a single VM. this VM is named "tappaas" and there is a service "tappaas.example.org" that allow an administrator to see the status of the system.
+
 # Node names
 
 The TAPPaaS system is implement on one or several physical machines each running Proxmox Virtual Environment (PVE) or running Proxmox Backup server (PBS). each of these machines are named: tappaasXY
