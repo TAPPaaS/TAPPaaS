@@ -181,7 +181,7 @@ function default_settings() {
   GEN_MAC=02:$(openssl rand -hex 5 | awk '{print toupper($0)}' | sed 's/\(..\)/\1:/g; s/.$//')
   DISK_SIZE="8G"
   TEMPLATEVMID="8000"
-  VMID=$(get_valid_nextid)
+  VMID="110"
   VMNAME="tappaas-cicd"
   TEMPLATEVMNAME="tappaas-ubuntu"
   FORMAT=",efitype=4m"
