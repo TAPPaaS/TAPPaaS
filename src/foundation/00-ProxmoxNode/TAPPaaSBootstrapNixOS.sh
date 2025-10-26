@@ -127,7 +127,7 @@ function create_vm_descriptions_html() {
     <img src='https://www.tappaas.org/taapaas.png' alt='Logo' style='width:81px;height:112px;'/>
   </a>
 
-  <h2 style='font-size: 24px; margin: 20px 0;'>TAPPaaS Ubuntu Template</h2>
+  <h2 style='font-size: 24px; margin: 20px 0;'>TAPPaaS NixOS Template</h2>
 
   <span style='margin: 0 10px;'>
     <i class="fa fa-github fa-fw" style="color: #f5f5f5;"></i>
@@ -236,15 +236,6 @@ echo -en "\e[1A\e[0K"
 FILE=$(basename $NIXURL)
 msg_ok "Step 2 Done: Downloaded NixO Image-ISO: ${CL}${BL}${FILE}${CL}"
 
-# msg_info "Step 3: Adding Docker and Docker Compose Plugin to Ubuntu Nobel Numbat (24.04 LTS) Disk Image"
-# virt-customize -q -a "${FILE}" --install qemu-guest-agent,apt-transport-https,ca-certificates,curl,gnupg,software-properties-common,lsb-release >/dev/null &&
-#  virt-customize -q -a "${FILE}" --run-command "mkdir -p /etc/apt/keyrings && curl -fsSL https://download.docker.com/linux/debian/gpg | gpg --dearmor -o /etc/apt/keyrings/docker.gpg" >/dev/null &&
-#  virt-customize -q -a "${FILE}" --run-command "echo 'deb [arch=amd64 signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/debian bookworm stable' > /etc/apt/sources.list.d/docker.list" >/dev/null &&
-#  virt-customize -q -a "${FILE}" --run-command "apt-get update -qq && apt-get install -y docker-ce docker-ce-cli containerd.io docker-compose-plugin" >/dev/null &&
-#  virt-customize -q -a "${FILE}" --run-command "systemctl enable docker" >/dev/null &&
-#  virt-customize -q -a "${FILE}" --run-command "echo -n > /etc/machine-id" >/dev/null
-#msg_ok "Step 3 Done: Added Docker and Docker Compose Plugin to Ubuntu Nobel Numbat (24.04 LTS) Disk Image successfully"
-
 msg_info "Step 3: Creating the TAPPaaS NixOS VM template"
 qm create $TEMPLATEVMID -agent 1${MACHINE} -tablet 0 -localtime 1 -bios ovmf${CPU_TYPE} -cores $CORE_COUNT -memory $RAM_SIZE \
   -name $TEMPLATEVMNAME -net0 virtio,bridge=$BRG,macaddr=$MAC$VLAN$MTU -onboot 1 -ostype l26 -scsihw virtio-scsi-pci
@@ -260,21 +251,21 @@ qm set $TEMPLATEVMID \
   -boot order=scsi0 \
   -serial0 socket # >/dev/null
 msg_info " - Set VM disks and cloudinit"
-qm resize $TEMPLATEVMID scsi0 8G >/dev/null
+# qm resize $TEMPLATEVMID scsi0 8G >/dev/null
+qm set $TEMPLATEVMID --tags TAPPaaS >/dev/null
+qm set $TEMPLATEVMID --description "$TEMPLATEDESCRIPTION" >/dev/null
 qm set $TEMPLATEVMID --agent enabled=1 >/dev/null
 qm set $TEMPLATEVMID --ciuser tappaas >/dev/null
-qm set $TEMPLATEVMID --Tag TAPPaaS >/dev/null
 qm set $TEMPLATEVMID --ipconfig0 ip=dhcp >/dev/null
 qm set $TEMPLATEVMID --sshkey ~/.ssh/id_rsa.pub >/dev/null
-qm set $TEMPLATEVMID -description "$TEMPLATEDESCRIPTION" >/dev/null
 qm resize $TEMPLATEVMID scsi0 ${DISK_SIZE} >/dev/null
 qm template $TEMPLATEVMID >/dev/null
 msg_ok "Step 3 Done: Created the TAPPaaS NixOS VM template"
 
 msg_info "Step 4: Creating a TAPPaaS CICD VM"
 qm clone $TEMPLATEVMID $VMID --name $VMNAME --full 1 >/dev/null
-qm set $VMID --Tag TAPPaaS,CICD >/dev/null
-qm set $VMID -description "$DESCRIPTION" >/dev/null
+qm set $VMID --tags TAPPaaS,CICD >/dev/null
+qm set $VMID --description "$DESCRIPTION" >/dev/null
 qm start $VMID >/dev/null
 msg_ok "Step 4 Done: Created a TAPPaaS CICD VM" 
 
@@ -282,15 +273,6 @@ msg_info "Bonus Step: set up a few configurations on PVE node to support terrafo
 apt-get install -y sudo >/dev/null
 msg_ok "Bonus Step Done: Installed sudo on PVE node"
 
-echo -e "${CREATING}${BOLD}${DGN}** Congratulation ** You are almost done bootstraping. Please do the following:${CL}"
-echo -e "${CREATING}${BOLD}${DGN} 1) Log into TAPPaaS CICD VM using ssh from a host teminal: ssh tappaas@<insert ip of CICD VM>${CL}"
-echo -e "${CREATING}${BOLD}${DGN} 2) In the shell of the TAPPaaS CICD VM do:${CL}:"
-echo -e "${CREATING}${BOLD}${DGN}   2a) create ssh keys: ssh-keygen -t ed25519 ${CL}"
-echo -e "${CREATING}${BOLD}${DGN}   2b) add ssh keys to your github: cat ~/.ssh/id_rsa${CL}${CL}"
-echo -e "${CREATING}${BOLD}${DGN}       test that the key authentication works: ssh -T git@github.com${CL}"
-echo -e "${CREATING}${BOLD}${DGN}   2c) clone the tappaas repository: git clone git@github.com:TAPpaas/TAPpaas.git${CL}"
-echo -e "${CREATING}${BOLD}${DGN}   2d) run the final bootstrap code: ./TAPPaaS/src/bootstrap/TAPPaaS-CICD-bootstrap.sh${CL}"
-echo -e "${CREATING}${BOLD}${DGN}   2e) set the git user name: git config --global user.name <your name> ${CL}" 
-echo -e "${CREATING}${BOLD}${DGN}   2f) set the git user email: git config --global user.email <your email> ${CL}"
-echo -e "${CREATING}${BOLD}${DGN} You might want to consult the bootstrap information in TAPPaaS/Documentation/Bootstrap.md${CL}"
+
+echo -e "${CREATING}${BOLD}${DGN}** Congratulation ** You are almost done bootstraping. PLease follwo readme file for next step:${CL}"
 
