@@ -186,7 +186,6 @@ function default_settings() {
   TEMPLATEVMNAME="tappaas-ubuntu"
   FORMAT=",efitype=4m"
   MACHINE=""
-  DISK_CACHE=""
   DISK_SIZE="8G"
   CPU_TYPE=""
   CORE_COUNT="2"
@@ -198,11 +197,10 @@ function default_settings() {
   STORAGE="tanka1"
   NIXURL=https://channels.nixos.org/nixos-25.05/latest-nixos-minimal-x86_64-linux.iso
   # TODO: clean up this code
-  for i in {0,1}; do
-    disk="DISK$i"
-    eval DISK${i}=vm-${TEMPLATEVMID}-disk-${i}${DISK_EXT:-}
-    eval DISK${i}_REF=${STORAGE}:${DISK_REF:-}${!disk}
-  done
+  DISK0="vm-${TEMPLATEVMID}-disk-0"
+  DISK0_REF=${STORAGE}:${DISK0}
+  DISK1="vm-${TEMPLATEVMID}-disk-1"
+  DISK1_REF=${STORAGE}:${DISK1}
 }
 
 #
@@ -247,17 +245,21 @@ msg_ok "Step 2 Done: Downloaded NixO Image-ISO: ${CL}${BL}${FILE}${CL}"
 #  virt-customize -q -a "${FILE}" --run-command "echo -n > /etc/machine-id" >/dev/null
 #msg_ok "Step 3 Done: Added Docker and Docker Compose Plugin to Ubuntu Nobel Numbat (24.04 LTS) Disk Image successfully"
 
-msg_info "Step 3: Creating the TAPPaaS Unbuntu with Docker VM template"
+msg_info "Step 3: Creating the TAPPaaS NixOS VM template"
 qm create $TEMPLATEVMID -agent 1${MACHINE} -tablet 0 -localtime 1 -bios ovmf${CPU_TYPE} -cores $CORE_COUNT -memory $RAM_SIZE \
   -name $TEMPLATEVMNAME -net0 virtio,bridge=$BRG,macaddr=$MAC$VLAN$MTU -onboot 1 -ostype l26 -scsihw virtio-scsi-pci
+msg_info " - Created base VM configuration"
 pvesm alloc $STORAGE $TEMPLATEVMID $DISK0 4M # 1>&/dev/null
+msg_info " - Created EFI disk"
 qm importdisk $TEMPLATEVMID ${FILE} $STORAGE ${DISK_IMPORT:-} # 1>&/dev/null
+msg_info " - Imported NixOS disk image"
 qm set $TEMPLATEVMID \
   -efidisk0 ${DISK0_REF}${FORMAT} \
-  -scsi0 ${DISK1_REF},${DISK_CACHE} discard=on,ssd=1,size=${DISK_SIZE} \
+  -scsi0 ${DISK1_REF},discard=on,ssd=1,size=${DISK_SIZE} \
   -ide2 ${STORAGE}:cloudinit \
   -boot order=scsi0 \
   -serial0 socket # >/dev/null
+msg_info " - Set VM disks and cloudinit"
 qm resize $TEMPLATEVMID scsi0 8G >/dev/null
 qm set $TEMPLATEVMID --agent enabled=1 >/dev/null
 qm set $TEMPLATEVMID --ciuser tappaas >/dev/null
@@ -267,7 +269,7 @@ qm set $TEMPLATEVMID --sshkey ~/.ssh/id_rsa.pub >/dev/null
 qm set $TEMPLATEVMID -description "$TEMPLATEDESCRIPTION" >/dev/null
 qm resize $TEMPLATEVMID scsi0 ${DISK_SIZE} >/dev/null
 qm template $TEMPLATEVMID >/dev/null
-msg_ok "Step 3 Done: Created the TAPPaaS Unbuntu with Docker VM template"
+msg_ok "Step 3 Done: Created the TAPPaaS NixOS VM template"
 
 msg_info "Step 4: Creating a TAPPaaS CICD VM"
 qm clone $TEMPLATEVMID $VMID --name $VMNAME --full 1 >/dev/null
