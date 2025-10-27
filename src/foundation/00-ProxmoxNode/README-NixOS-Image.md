@@ -41,8 +41,10 @@ curl -fsSL  https://raw.githubusercontent.com/TAPPaaS/TAPPaaS/main/src/foundatio
 ## generate an image
 
 ```
-nixos-generate -f proxmox -c ./TAPPaaS-Base-NixOS.nix
+nixos-generate -f proxmox -c ./TAPPaaS-Base-NixOS.nix -o result
 ```
 
 ## store the image on tanka1
 
+```
+sudo mv result/iso/nixos*.iso /
