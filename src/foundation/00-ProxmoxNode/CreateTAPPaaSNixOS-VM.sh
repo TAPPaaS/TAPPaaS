@@ -16,8 +16,6 @@ function init_print_variables() {
   GN=$(echo "\033[1;92m")
   DGN=$(echo "\033[32m")
   CL=$(echo "\033[m")
-
-  CL=$(echo "\033[m")
   BOLD=$(echo "\033[1m")
   BFR="\\r\\033[K"
   HOLD=" "
@@ -34,6 +32,12 @@ function error_handler() {
      qm stop $VMID &>/dev/null
      qm destroy $VMID &>/dev/null
   fi
+  if zfs list $STORAGE/vm-$VMID-disk-0 &>/dev/null; then
+    zfs destroy $STORAGE/vm-$VMID-disk-0
+  fi
+   if zfs list $STORAGE/vm-$VMID-disk-1 &>/dev/null; then
+    zfs destroy $STORAGE/vm-$VMID-disk-1
+  fi
 }
 
 function cleanup() {
@@ -43,7 +47,7 @@ function cleanup() {
 
 function msg_info() {
   local msg="$1"
-  echo -ne "${TAB}${YW}${HOLD}${msg}${HOLD}"
+  echo -ne "${TAB}${YW}${HOLD}${msg}${HOLD}${CL}"
 }
 
 function msg_ok() {
@@ -145,7 +149,7 @@ msg_info "Creating the TAPPaaS NixOS VM: $VMID, name: $VMNAME"
 qm create $VMID --agent 1 --tablet 0 --localtime 1 --bios ovmf --cores $CORE_COUNT --memory $RAM_SIZE \
   --name $VMNAME --net0 virtio,bridge=$BRG,macaddr=$MAC$VLAN$MTU --onboot 1 --ostype l26 --scsihw virtio-scsi-pci
 msg_info " - Created base VM configuration"
-pvesm alloc $STORAGE $TEMPLATEVMID $DISK0 4M # 1>&/dev/null
+pvesm alloc $STORAGE $VMID $DISK0 4M # 1>&/dev/null
 msg_info " - Created EFI disk"
 qm importdisk $VMID ${FILE} $STORAGE ${DISK_IMPORT:-} # 1>&/dev/null
 msg_info " - Imported NixOS disk image"
