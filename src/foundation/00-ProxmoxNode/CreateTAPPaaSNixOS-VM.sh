@@ -106,12 +106,8 @@ EOF
 function default_settings() {
   GEN_MAC=02:$(openssl rand -hex 5 | awk '{print toupper($0)}' | sed 's/\(..\)/\1:/g; s/.$//')
   DISK_SIZE="8G"
-  VMID=$1
-  VMNAME=$2
   FORMAT=",efitype=4m"
-  MACHINE=""
   DISK_SIZE="8G"
-  CPU_TYPE=""
   CORE_COUNT="2"
   RAM_SIZE="4096"
   BRG="vmbr0"
@@ -119,7 +115,6 @@ function default_settings() {
   VLAN=""
   MTU=""
   STORAGE="tanka1"
-  FILE=$3
 #  NIXURL=https://channels.nixos.org/nixos-25.05/latest-nixos-minimal-x86_64-linux.iso
   # TODO: clean up this code
   DISK0="vm-${VMID}-disk-0"
@@ -137,16 +132,18 @@ trap cleanup EXIT
 TEMP_DIR=$(mktemp -d)
 pushd $TEMP_DIR >/dev/null
 
-header_info
 init_print_variables
+VMID=$1
+VMNAME=$2
+FILE=$3
 default_settings
 create_vm_descriptions_html
 check_root
 
 msg_info "Using NixOS ISO file: $FILE"
 msg_info "Creating the TAPPaaS NixOS VM: $VMID, name: $VMNAME"
-qm create $VMID -agent 1${MACHINE} -tablet 0 -localtime 1 -bios ovmf${CPU_TYPE} -cores $CORE_COUNT -memory $RAM_SIZE \
-  -name $VMNAME -net0 virtio,bridge=$BRG,macaddr=$MAC$VLAN$MTU -onboot 1 -ostype l26 -scsihw virtio-scsi-pci
+qm create $VMID --agent 1 --tablet 0 --localtime 1 --bios ovmf --cores $CORE_COUNT --memory $RAM_SIZE \
+  --name $VMNAME --net0 virtio,bridge=$BRG,macaddr=$MAC$VLAN$MTU --onboot 1 --ostype l26 --scsihw virtio-scsi-pci
 msg_info " - Created base VM configuration"
 pvesm alloc $STORAGE $TEMPLATEVMID $DISK0 4M # 1>&/dev/null
 msg_info " - Created EFI disk"

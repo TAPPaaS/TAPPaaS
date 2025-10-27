@@ -47,4 +47,5 @@ nixos-generate -f proxmox -c ./TAPPaaS-Base-NixOS.nix -o result
 ## store the image on tanka1
 
 ```
-sudo mv result/iso/nixos*.iso /
+sudo mv result/iso/nixos*.iso /root/nixos-tappaas.iso
+```
