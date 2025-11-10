@@ -36,7 +36,7 @@
   boot.loader.grub.devices = [ "nodev" ];
 
   # Network
-  networking.hostName = lib.mkDefault "tappaas-cicd; # Define your hostname.
+  networking.hostName = lib.mkDefault "tappaas-cicd"; # Define your hostname.
   networking.networkmanager.enable = true;  # Easiest to use and most distros use this by default.
 
   # Set your time zone.
