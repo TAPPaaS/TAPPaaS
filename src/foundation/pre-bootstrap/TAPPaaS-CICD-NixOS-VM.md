@@ -41,3 +41,13 @@ curl -fsSL  https://raw.githubusercontent.com/TAPPaaS/TAPPaaS/main/src/foundatio
 nixos-generate -f proxmox -o ./TAPPaaS-NixOS -c ./TAPPaaS-Base-NixOS.nix
 ```
 
+now save/upload the TAPPaaS-NixOS/vzdump-qemu-nixos-xxxxxxxxx.vma.zst to some cloud storage that can be accessed by the tappaas installers 
+
+## test image
+
+from a proxmox console download the image (you can scp from the NixOS VM) then do the following restore command:
+
+```
+unzstd vzdump*.vma.zst
+qmrestore vzdump*.vma 345 --storage local-zfs
+```
