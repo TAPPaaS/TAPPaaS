@@ -18,7 +18,6 @@ function init_print_variables() {
   CL=$(echo "\033[m")
   BOLD=$(echo "\033[1m")
   BFR="\\r\\033[K"
-  HOLD=" "
   TAB="  "
 }
 
@@ -47,7 +46,7 @@ function cleanup() {
 
 function msg_info() {
   local msg="$1"
-  echo -ne "${TAB}${YW}${HOLD}${msg}${HOLD}${CL}"
+  echo -ne "${TAB}${YW}${msg}${CL}"
 }
 
 function msg_ok() {

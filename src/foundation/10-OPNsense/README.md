@@ -1,10 +1,10 @@
 This directory contain automation and instructions for installing the OPNsense software
 
-TODO: recode to be automated directly using opentufu and ansible.
+TODO: No finished in redoing in NixOS setup
 
 The steps are:
 
-1) Validate and configure proxmox and underpinning hardware for pci passthrough
+1) Validate and configure proxmox and underpinning hardware 
 2) download Iso and create VM
 3) start VM and configure OPNsense
 4) perform updates to OPNsense via GUI

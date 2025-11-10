@@ -23,24 +23,24 @@
 #
 # ----------------------------------------
 
-{ config, lib, pkgs, ... }:
+{ config, lib, pkgs, modulesPath, system, ... }:
 
 {
   imports =
-    [ # Include the results of the hardware scan.
-      ./hardware-configuration.nix
+    [ # Note we are not doing hardware includes
+      (modulesPath + "/profiles/qemu-guest.nix")
     ];
 
   # Use the systemd-boot EFI boot loader.
-  boot.loader.systemd-boot.enable = true;
-  boot.loader.efi.canTouchEfiVariables = true;
+  boot.loader.grub.enable = lib.mkDefault true; # Use the boot drive for GRUB
+  boot.loader.grub.devices = [ "nodev" ];
 
   # Network
-  networking.hostName = "nixos-template"; # Define your hostname.
+  networking.hostName = lib.mkDefault "tappaas-cicd; # Define your hostname.
   networking.networkmanager.enable = true;  # Easiest to use and most distros use this by default.
 
   # Set your time zone.
-  time.timeZone = "Europe/Amsterdam";
+  time.timeZone = lib.mkDefault "Europe/Amsterdam";
 
   # Users
   users.users.tappaas = {
@@ -62,6 +62,18 @@
                 PermitRootLogin = "no";
         };
   };
+  programs.ssh.startAgent = true;
+
+
+  # 
+  nix.settings.trusted-users = [ "root" "@wheel" ]; # Allow remote updates
+  nix.settings.experimental-features = [ "nix-command" "flakes" ]; # Enable flakes
+
+  fileSystems."/" = lib.mkDefault {
+    device = "/dev/disk/by-label/nixos";
+    autoResize = true;
+    fsType = "ext4";
+  };
 
   # QEMU Guest Agent
   services.qemuGuest.enable = true;
@@ -73,7 +85,7 @@
   };
 
   # Auto-grow root partition
-  boot.growPartition = true;
+  boot.growPartition = lib.mkDefault true;
 
   # System packages
   environment.systemPackages = with pkgs; [
