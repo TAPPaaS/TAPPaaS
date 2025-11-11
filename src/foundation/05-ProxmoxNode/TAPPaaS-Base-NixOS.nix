@@ -28,8 +28,13 @@
 {
   imports =
     [ # Note we are not doing hardware includes
-      (modulesPath + "/profiles/qemu-guest.nix")
+      (modulesPath + "/virtualisation/proxmox-image.nix")
     ];
+
+  proxmox.qemuConf = {
+      cores = 2;
+      memory = 4096;
+  };
 
   # Use the systemd-boot EFI boot loader.
   boot.loader.grub.enable = lib.mkDefault true; # Use the boot drive for GRUB

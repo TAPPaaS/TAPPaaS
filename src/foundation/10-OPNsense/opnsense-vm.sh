@@ -12,11 +12,10 @@
 #
 # This script is heavily based on the Proxmox Helper Script: Docker VM
 #
-
-function header_info {
+ 
   # generated with https://patorjk.com/software/taag/#p=display&f=Big&t=TAPPaaS%20Bootstrap
-  clear
-  cat <<"EOF"
+clear
+cat <<"EOF"
    ____  ____  _   __                        
   / __ \/ __ \/ | / /_______  ____  ________ 
  / / / / /_/ /  |/ / ___/ _ \/ __ \/ ___/ _ \
@@ -24,19 +23,6 @@ function header_info {
 \____/_/   /_/ |_/____/\___/_/ /_/____/\___/ 
                                                                          
 EOF
-}
-
-header_info
-echo -e "Loading..."
-#API VARIABLES
-RANDOM_UUID="$(cat /proc/sys/kernel/random/uuid)"
-METHOD=""
-NSAPP="opnsense-vm"
-var_os="opnsense"
-var_version="25.1"
-#
-GEN_MAC=02:$(openssl rand -hex 5 | awk '{print toupper($0)}' | sed 's/\(..\)/\1:/g; s/.$//')
-GEN_MAC_LAN=02:$(openssl rand -hex 5 | awk '{print toupper($0)}' | sed 's/\(..\)/\1:/g; s/.$//')
 
 YW=$(echo "\033[33m")
 BL=$(echo "\033[36m")
@@ -53,6 +39,9 @@ CROSS="${RD}✗${CL}"
 set -Eeo pipefail
 trap 'error_handler $LINENO "$BASH_COMMAND"' ERR
 trap cleanup EXIT
+TEMP_DIR=$(mktemp -d)
+pushd $TEMP_DIR >/dev/null
+
 function error_handler() {
   local exit_code="$?"
   local line_number="$1"
@@ -60,23 +49,6 @@ function error_handler() {
   local error_message="${RD}[ERROR]${CL} in line ${RD}$line_number${CL}: exit code ${RD}$exit_code${CL}: while executing command ${YW}$command${CL}"
   echo -e "\n$error_message\n"
   cleanup_vmid
-}
-
-function get_valid_nextid() {
-  local try_id
-  try_id=$(pvesh get /cluster/nextid)
-  while true; do
-    if [ -f "/etc/pve/qemu-server/${try_id}.conf" ] || [ -f "/etc/pve/lxc/${try_id}.conf" ]; then
-      try_id=$((try_id + 1))
-      continue
-    fi
-    if lvs --noheadings -o lv_name | grep -qE "(^|[-_])${try_id}($|[-_])"; then
-      try_id=$((try_id + 1))
-      continue
-    fi
-    break
-  done
-  echo "$try_id"
 }
 
 function cleanup_vmid() {
@@ -89,83 +61,6 @@ function cleanup_vmid() {
 function cleanup() {
   popd >/dev/null
   rm -rf $TEMP_DIR
-}
-
-TEMP_DIR=$(mktemp -d)
-pushd $TEMP_DIR >/dev/null
-function send_line_to_vm() {
-  echo -e "${DGN}Sending line: ${YW}$1${CL}"
-  for ((i = 0; i < ${#1}; i++)); do
-    character=${1:i:1}
-    case $character in
-    " ") character="spc" ;;
-    "-") character="minus" ;;
-    "=") character="equal" ;;
-    ",") character="comma" ;;
-    ".") character="dot" ;;
-    "/") character="slash" ;;
-    "'") character="apostrophe" ;;
-    ";") character="semicolon" ;;
-    '\') character="backslash" ;;
-    '`') character="grave_accent" ;;
-    "[") character="bracket_left" ;;
-    "]") character="bracket_right" ;;
-    "_") character="shift-minus" ;;
-    "+") character="shift-equal" ;;
-    "?") character="shift-slash" ;;
-    "<") character="shift-comma" ;;
-    ">") character="shift-dot" ;;
-    '"') character="shift-apostrophe" ;;
-    ":") character="shift-semicolon" ;;
-    "|") character="shift-backslash" ;;
-    "~") character="shift-grave_accent" ;;
-    "{") character="shift-bracket_left" ;;
-    "}") character="shift-bracket_right" ;;
-    "A") character="shift-a" ;;
-    "B") character="shift-b" ;;
-    "C") character="shift-c" ;;
-    "D") character="shift-d" ;;
-    "E") character="shift-e" ;;
-    "F") character="shift-f" ;;
-    "G") character="shift-g" ;;
-    "H") character="shift-h" ;;
-    "I") character="shift-i" ;;
-    "J") character="shift-j" ;;
-    "K") character="shift-k" ;;
-    "L") character="shift-l" ;;
-    "M") character="shift-m" ;;
-    "N") character="shift-n" ;;
-    "O") character="shift-o" ;;
-    "P") character="shift-p" ;;
-    "Q") character="shift-q" ;;
-    "R") character="shift-r" ;;
-    "S") character="shift-s" ;;
-    "T") character="shift-t" ;;
-    "U") character="shift-u" ;;
-    "V") character="shift-v" ;;
-    "W") character="shift-w" ;;
-    "X") character="shift=x" ;;
-    "Y") character="shift-y" ;;
-    "Z") character="shift-z" ;;
-    "!") character="shift-1" ;;
-    "@") character="shift-2" ;;
-    "#") character="shift-3" ;;
-    '$') character="shift-4" ;;
-    "%") character="shift-5" ;;
-    "^") character="shift-6" ;;
-    "&") character="shift-7" ;;
-    "*") character="shift-8" ;;
-    "(") character="shift-9" ;;
-    ")") character="shift-0" ;;
-    esac
-    qm sendkey $VMID "$character"
-  done
-  qm sendkey $VMID ret
-}
-
-function msg_info() {
-  local msg="$1"
-  echo -ne " ${HOLD} ${YW}${msg}..."
 }
 
 function msg_ok() {
@@ -184,77 +79,50 @@ function exit-script() {
   exit
 }
 
-function default_settings() {
-  VMID=$(get_valid_nextid)
-  FORMAT=",efitype=4m"
-  MACHINE=""
-  DISK_CACHE=""
-  HN="opnsense"
-  CPU_TYPE=""
-  CORE_COUNT="4"
-  RAM_SIZE="8192"
-  STORAGE="tank1"
-  BRG=""
-  IP_ADDR=""
-  WAN_IP_ADDR=""
-  LAN_GW=""
-  WAN_GW=""
-  NETMASK=""
-  WAN_NETMASK=""
-  VLAN=""
-  MAC=$GEN_MAC
-  WAN_MAC=$GEN_MAC_LAN
-  WAN_BRG=""
-  MTU=""
-  START_VM="yes"
-  METHOD="default"
 
-  # TODO optimize this
-  for i in {0,1}; do
-    disk="DISK$i"
-    eval DISK${i}=vm-${VMID}-disk-${i}${DISK_EXT:-}
-    eval DISK${i}_REF=${STORAGE}:${DISK_REF:-}${!disk}
-  done
+VMID=888
+FORMAT=",efitype=4m"
+HN="opnsense"
+CORE_COUNT="4"
+RAM_SIZE="8192"
+STORAGE="tanka1"
+START_VM="yes"
+  
+DISK0="vm-${VMID}-disk-0"
+DISK0_REF=${STORAGE}:${DISK0}
+DISK1="vm-${VMID}-disk-1"
+DISK1_REF=${STORAGE}:${DISK1}
 
-  echo -e "${DGN}Using Virtual Machine ID: ${BGN}${VMID}${CL}"
-  echo -e "${DGN}Using Hostname: ${BGN}${HN}${CL}"
-  echo -e "${DGN}Allocated Cores: ${BGN}${CORE_COUNT}${CL}"
-  echo -e "${DGN}Using WAN MAC Address: ${BGN}${WAN_MAC}${CL}"
-  echo -e "${DGN}Using Interface MTU Size: ${BGN}Default${CL}"
-  echo -e "${DGN}Using Storage Location: ${BGN}${STORAGE}${CL}"
-  echo -e "${BL}Creating a OPNsense VM using the above default settings${CL}"
-}
+echo -e "${DGN}Using Virtual Machine ID: ${BGN}${VMID}${CL}"
+echo -e "${DGN}Using Hostname: ${BGN}${HN}${CL}"
+echo -e "${DGN}Allocated Cores: ${BGN}${CORE_COUNT}${CL}"
+echo -e "${DGN}Using WAN MAC Address: ${BGN}${WAN_MAC}${CL}"
+echo -e "${DGN}Using Storage Location: ${BGN}${STORAGE}${CL}"
+echo -e "${BL}Creating a OPNsense VM using the above default settings${CL}"
 
-
-header_info
-echo -e "${BL}Using Default Settings${CL}"
-default_settings
-
-
-msg_ok "Virtual Machine ID is ${CL}${BL}$VMID${CL}."
-msg_info "Retrieving the URL for the OPNsense Qcow2 Disk Image"
-URL=https://download.freebsd.org/releases/VM-IMAGES/14.2-RELEASE/amd64/Latest/FreeBSD-14.2-RELEASE-amd64.qcow2.xz
+msg_ok "Retrieving the URL for the OPNsense nano Disk Image"
+URL=https://pkg.opnsense.org/releases/25.7/OPNsense-25.7-nano-amd64.img.bz2
 sleep 2
 msg_ok "${CL}${BL}${URL}${CL}"
 curl -f#SL -o "$(basename "$URL")" "$URL"
-echo -en "\e[1A\e[0K"
-FILE=Fressbsd.qcow2
-unxz -cv $(basename $URL) >${FILE}
+FILE=opnsense-vm-disk1.img
+bzip2 -dcv $(basename $URL) >${FILE}
 msg_ok "Downloaded ${CL}${BL}${FILE}${CL}"
 
 
-msg_info "Creating a OPNsense VM"
-qm create $VMID -agent 1${MACHINE} -tablet 0 -localtime 1 -bios ovmf${CPU_TYPE} -cores $CORE_COUNT -memory $RAM_SIZE \
-  -name $HN -tags proxmox-helper-scripts -net0 virtio,bridge=$BRG,macaddr=$MAC$VLAN$MTU -onboot 1 -ostype l26 -scsihw virtio-scsi-pci
-pvesm alloc $STORAGE $VMID $DISK0 4M 1>&/dev/null
-qm importdisk $VMID ${FILE} $STORAGE ${DISK_IMPORT:-} 1>&/dev/null
+msg_ok "Creating a OPNsense VM"
+qm create $VMID -agent 1 -tablet 0 -localtime 1 -bios ovmf -cores $CORE_COUNT -memory $RAM_SIZE \
+  -name $HN -tags tappaas -net0 virtio,bridge=wan -net1 virtio,bridge=lan -onboot 1 -ostype l26 -scsihw virtio-scsi-pci
+pvesm alloc $STORAGE $VMID $DISK0 4M # 1>&/dev/null
+qm importdisk $VMID ${FILE} $STORAGE ${DISK_IMPORT:-} # 1>&/dev/null
 qm set $VMID \
   -efidisk0 ${DISK0_REF}${FORMAT} \
-  -scsi0 ${DISK1_REF},${DISK_CACHE}${THIN}size=2G \
+  -scsi0 ${DISK1_REF},size=10G \
   -boot order=scsi0 \
   -serial0 socket \
-  -tags community-script >/dev/null
-qm resize $VMID scsi0 10G >/dev/null
+  -tags community-script  # >/dev/null
+# qm resize $VMID scsi0 10G  >/dev/null
+
 DESCRIPTION=$(
   cat <<EOF
 <div align='center'>
@@ -266,24 +134,23 @@ DESCRIPTION=$(
 
   <span style='margin: 0 10px;'>
     <i class="fa fa-github fa-fw" style="color: #f5f5f5;"></i>
-    <a href='https://github.com/TAPpaas/TAPpaas' target='_blank' rel='noopener noreferrer' style='text-decoration: none; color: #00617f;'>GitHub</a>
+    <a href='https://github.com/TAPPaaS/TAPPaaS' target='_blank' rel='noopener noreferrer' style='text-decoration: none; color: #00617f;'>GitHub</a>
   </span>
   <span style='margin: 0 10px;'>
     <i class="fa fa-comments fa-fw" style="color: #f5f5f5;"></i>
-    <a href='https://github.com/TAPpaas/TAPpaas/discussions' target='_blank' rel='noopener noreferrer' style='text-decoration: none; color: #00617f;'>Discussions</a>
+    <a href='https://github.com/TAPPaaS/TAPPaaS/discussions' target='_blank' rel='noopener noreferrer' style='text-decoration: none; color: #00617f;'>Discussions</a>
   </span>
   <span style='margin: 0 10px;'>
     <i class="fa fa-exclamation-circle fa-fw" style="color: #f5f5f5;"></i>
-    <a href='https://github.com/TAPpaas/TAPpaas/issues' target='_blank' rel='noopener noreferrer' style='text-decoration: none; color: #00617f;'>Issues</a>
+    <a href='https://github.com/TAPPaaS/TAPPaaS/issues' target='_blank' rel='noopener noreferrer' style='text-decoration: none; color: #00617f;'>Issues</a>
   </span>
   <br>
   <br>
-  This is the OPNsense Firewall/Router for TAPPaaS.
+  This is the OPNSense Firewall/Router for TAPPaaS.
 </div>
 EOF
 )
-qm set "$VMID" -description "$DESCRIPTION" >/dev/null
-
+qm set "$VMID" -description "$DESCRIPTION" # >/dev/null
 
 
 msg_ok "Created a OPNsense VM ${CL}${BL}(${HN})"

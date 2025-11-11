@@ -1,18 +1,57 @@
-This directory contain automation and instructions for installing the OPNsense software
+# OPNSense Installation
 
-TODO: No finished in redoing in NixOS setup
+# Introduction
 
-The steps are:
+There are two ways of installing OPNSense:
 
-1) Validate and configure proxmox and underpinning hardware 
-2) download Iso and create VM
-3) start VM and configure OPNsense
-4) perform updates to OPNsense via GUI
-5) SWitch out firewall
+1. Installation of an OPNSense image, with manual configuration of OPNsense WAN and LAN ports from the console
+2. Restore a vanilla OPNSense proxmox backup of a minimum install
 
-## PCI passthrough
+In both case we need to prepare the proxmox environment 
 
-Run ./validate.sh
+# Preparation
+
+The TAPPaaS OPNSense firewall will have two interfaces: WAN and LAN, bot interfaces will be virtio bridges in Proxmox.
+
+It is assumed that Proxmox is connected to an existing firewall/router on vmbr0 via an ethernet port on the physical server.
+It is further assumed that the IP domain for this connection is NOT a 10.x.y.z domain as it will conflict with the OPNSense setup (if it is it will stil be possible to set up TAPPaaS but will need more elaborate bootstrap process)
+
+As preparation we need to set up another bridge on proxmox: vmbr1: this will connect to a secondary ethernet port on the physical server. This will eventually become the LAN interface
+
+in the Proxmox GUI do:
+
+- go to node: tappass1
+- select the Network page under system
+- take note of the free ethernet ports, and select the one that will be the new lan port. note down the Name
+- click "create"
+- in the pop up full in
+-- Name: lan
+-- IPv4/CIDR: 10.0.0.10/24
+-- Gateway, ipv6 and ipv6 gateway: leave blank
+-- Autostart is checked and VLAN aware is un checked
+-- Bridgeport: the name of the chosen ethernet port
+- now click create adn click apply Configuration
+
+now create the OPNSense VM: from the command prompt/console of tappaas1:
+```
+
+```
+
+## Install OPNsense software
+
+### Method 1: install from image
+
+### Method 2: Restore backup
+
+TODO
+
+## Test and switch
+
+We are now ready to do basic testing of OPNsense and to switch the primary proxmox bridge as well as primary firewall
+
+
+
+
 
 ## downaload iso and create VM
 
