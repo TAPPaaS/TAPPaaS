@@ -2,12 +2,14 @@
 
 # Introduction
 
-There are two ways of installing OPNSense:
+the basic macro steps:
 
-1. Installation of an OPNSense image, with manual configuration of OPNsense WAN and LAN ports from the console
-2. Restore a vanilla OPNSense proxmox backup of a minimum install
+- prepare the proxmox environment with the right virthal bridges
+- install a basic OPNSense in a VM
+- swap cables and default gateway in proxmox after basic testing
+- swap firewall if relevant
 
-In both case we need to prepare the proxmox environment 
+note detailed VLAN configuration is a later step in foundation setup, after tappaas-cicd VM is running
 
 # Preparation
 
@@ -30,20 +32,48 @@ in the Proxmox GUI do:
 -- Gateway, ipv6 and ipv6 gateway: leave blank
 -- Autostart is checked and VLAN aware is un checked
 -- Bridgeport: the name of the chosen ethernet port
-- now click create adn click apply Configuration
+- now click create and click "apply configuration"
 
-now create the OPNSense VM: from the command prompt/console of tappaas1:
-```
+Rename the vmbr0 bridge to wan:
+in the command line/console of tappas1 do the following:
+edit the /etc/network/interfaces
+replace all occurrences of "vmbr0" with the string "wan" (there should be two instances)
+save file
 
-```
+Reboot the proxmox system
+
+attach a new switch to the ethernet port associated with the lan bridge port
+
+you will now have a setup looking like this
+
+TODO: make drawing
 
 ## Install OPNsense software
 
+There are two ways of installing OPNSense:
+
+1. Installation of an OPNSense image, with manual configuration of OPNsense WAN and LAN ports from the console
+2. Restore a vanilla OPNSense proxmox backup of a minimum install
+
 ### Method 1: install from image
+
+now create the OPNSense VM: from the command prompt/console of tappaas1:
+
+```
+curl -fsSL  https://raw.githubusercontent.com/TAPPaaS/TAPPaaS/main/src/foundation/10-OPNsense/opnsense-vm.sh| bash
+```
+
+boot up the VM and configure the opnsense
+
+
+
 
 ### Method 2: Restore backup
 
-TODO
+This method relies on a proxmox backup image taken just at the end of the steps in "method 1"
+
+- Download backup image
+- do a qmrestore on the image
 
 ## Test and switch
 
