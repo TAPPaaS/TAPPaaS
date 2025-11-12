@@ -87,14 +87,13 @@ RAM_SIZE="8192"
 STORAGE="tanka1"
 START_VM="yes"
   
-DISK0="vm-${VMID}-disk-0"
-DISK0_REF=${STORAGE}:${DISK0}
-DISK1="vm-${VMID}-disk-1"
-DISK1_REF=${STORAGE}:${DISK1}
+DISK="vm-${VMID}-disk-0"
+DISK_REF=${STORAGE}:${DISK0}
 
 echo -e "${DGN}Using Virtual Machine ID: ${BGN}${VMID}${CL}"
 echo -e "${DGN}Using Hostname: ${BGN}${HN}${CL}"
 echo -e "${DGN}Allocated Cores: ${BGN}${CORE_COUNT}${CL}"
+echo -e "${DGN}Allocated RAM Size: ${BGN}${RAM_SIZE}MB${CL}"
 echo -e "${DGN}Using WAN MAC Address: ${BGN}${WAN_MAC}${CL}"
 echo -e "${DGN}Using Storage Location: ${BGN}${STORAGE}${CL}"
 echo -e "${BL}Creating a OPNsense VM using the above default settings${CL}"
@@ -114,7 +113,7 @@ qm create $VMID -agent 1 -tablet 0 -localtime 1 -bios ovmf -cores $CORE_COUNT -m
   -name $HN -tags tappaas -net0 virtio,bridge=lan -net1 virtio,bridge=wan -onboot 1 -ostype l26 -scsihw virtio-scsi-pci
 qm importdisk $VMID ${FILE} $STORAGE  # 1>&/dev/null
 qm set $VMID \
-  -scsi0 ${DISK1_REF},size=10G \
+  -scsi0 ${DISK_REF},size=10G \
   -boot order=scsi0 \
   -serial0 socket \
   -tags community-script  # >/dev/null
