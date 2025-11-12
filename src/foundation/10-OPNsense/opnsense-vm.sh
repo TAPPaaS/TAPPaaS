@@ -81,7 +81,6 @@ function exit-script() {
 
 
 VMID=888
-FORMAT=",efitype=4m"
 HN="opnsense"
 CORE_COUNT="4"
 RAM_SIZE="8192"
@@ -102,32 +101,30 @@ echo -e "${BL}Creating a OPNsense VM using the above default settings${CL}"
 
 msg_ok "Retrieving the URL for the OPNsense nano Disk Image"
 URL=https://pkg.opnsense.org/releases/25.7/OPNsense-25.7-nano-amd64.img.bz2
-sleep 2
 msg_ok "${CL}${BL}${URL}${CL}"
 curl -f#SL -o "$(basename "$URL")" "$URL"
 FILE=opnsense-vm-disk1.img
 bzip2 -dcv $(basename $URL) >${FILE}
 msg_ok "Downloaded ${CL}${BL}${FILE}${CL}"
+qemu-img resize ${FILE} 10G
 
 
 msg_ok "Creating a OPNsense VM"
 qm create $VMID -agent 1 -tablet 0 -localtime 1 -bios ovmf -cores $CORE_COUNT -memory $RAM_SIZE \
-  -name $HN -tags tappaas -net0 virtio,bridge=wan -net1 virtio,bridge=lan -onboot 1 -ostype l26 -scsihw virtio-scsi-pci
-pvesm alloc $STORAGE $VMID $DISK0 4M # 1>&/dev/null
-qm importdisk $VMID ${FILE} $STORAGE ${DISK_IMPORT:-} # 1>&/dev/null
+  -name $HN -tags tappaas -net0 virtio,bridge=lan -net1 virtio,bridge=wan -onboot 1 -ostype l26 -scsihw virtio-scsi-pci
+qm importdisk $VMID ${FILE} $STORAGE  # 1>&/dev/null
 qm set $VMID \
-  -efidisk0 ${DISK0_REF}${FORMAT} \
   -scsi0 ${DISK1_REF},size=10G \
   -boot order=scsi0 \
   -serial0 socket \
   -tags community-script  # >/dev/null
-# qm resize $VMID scsi0 10G  >/dev/null
+#qm resize $VMID scsi0 10G # >/dev/null
 
 DESCRIPTION=$(
   cat <<EOF
 <div align='center'>
   <a href='https://tappaas.org' target='_blank' rel='noopener noreferrer'>
-    <img src='https://www.tappaas.org/taapaas.png' alt='Logo' style='width:81px;height:112px;'/>
+    <img src='https://tappaas.org/TAPPaaS.png' alt='TAPPaaS Logo' style='width:81px;height:112px;'/>
   </a>
 
   <h2 style='font-size: 24px; margin: 20px 0;'>TAPPaaS Firewall</h2>
