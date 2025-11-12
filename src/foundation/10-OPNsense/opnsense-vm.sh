@@ -88,7 +88,7 @@ STORAGE="tanka1"
 START_VM="yes"
   
 DISK="vm-${VMID}-disk-0"
-DISK_REF=${STORAGE}:${DISK0}
+DISK_REF=${STORAGE}:${DISK}
 
 echo -e "${DGN}Using Virtual Machine ID: ${BGN}${VMID}${CL}"
 echo -e "${DGN}Using Hostname: ${BGN}${HN}${CL}"
