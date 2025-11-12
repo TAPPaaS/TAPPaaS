@@ -110,12 +110,11 @@ msg_ok "Downloaded ${CL}${BL}${FILE}${CL}"
 
 msg_ok "Creating a OPNsense VM"
 qm create $VMID -agent 1 -tablet 0 -localtime 1 -bios ovmf -cores $CORE_COUNT -memory $RAM_SIZE \
-  -name $HN -tags tappaas,foundation -net0 virtio,bridge=lan -net1 virtio,bridge=wan -onboot 1 -ostype l26 -scsihw virtio-scsi-pci
+  -name $HN -tags tappaas,foundation -net0 virtio,bridge=lan -net1 virtio,bridge=wan -onboot 1 -bios seabios -ostype other -scsihw virtio-scsi-single
 qm importdisk $VMID ${FILE} $STORAGE  # 1>&/dev/null
 qm set $VMID \
   -scsi0 ${DISK_REF} \
-  -boot order=scsi0 \
-  -serial0 socket   # >/dev/null
+  -boot order=scsi0  # >/dev/null
 qm resize $VMID scsi0 10G # >/dev/null
 
 DESCRIPTION=$(

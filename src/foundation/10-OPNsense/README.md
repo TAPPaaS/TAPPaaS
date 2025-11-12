@@ -65,8 +65,16 @@ curl -fsSL  https://raw.githubusercontent.com/TAPPaaS/TAPPaaS/main/src/foundatio
 
 boot up the VM and configure the opnsense
 
+after boot you look in as root/opnsense
+
+option 2) set the lan ip range to 10.0.0.1/24
+exit to a shell (option 8)
 
 
+
+Take a proxmox backup of the VM to be used as Method 2: 
+
+change the root password: passwd
 
 ### Method 2: Restore backup
 
@@ -74,6 +82,11 @@ This method relies on a proxmox backup image taken just at the end of the steps 
 
 - Download backup image
 - do a qmrestore on the image
+
+start the vm 
+after boot you look in as root/opnsense
+change the root password: passwd
+
 
 ## Test and switch
 
@@ -85,25 +98,7 @@ We are now ready to do basic testing of OPNsense and to switch the primary proxm
 
 ## downaload iso and create VM
 
-- do google search for opnsense download. on download site select and download dvd image
-- in proxmox gui: select local disk and upload iso (you need to decompress it from bz2 if it is compressed)
 
-- create new VM with 8G RAM and 4-8 cores, and HD of 16G to 32G on tank1. use Name OPNsense and UID 666
-- attach the ISO as a dvd
-- do PCI passthrough of the LAN and WAN ethernet ports
-  - use "PVE_NODE=<ip of proxmox server> ./ethernetPCI.sh" to find and configure the PCI pass through
-+ set start on boot to true in the proxmox gui
-+ set boot order to 1
-
-# Start VM and configure OPNsense
-
-now Start the VM and in the console install OPNsense on the virtual HD
-then detach the CD/DVD device after reboot
-
-attach the WAN port to an internet connection (can be you current lan, if you do not have an extra internet connection)
-attach a client machine with a web browser to the LAN port and go to the indicated OPNsense configuration web GUI 
-
-## create updates to OPNSense via GUI
 
 ### Create VLANs
 
