@@ -6,8 +6,9 @@ The foundation modules are modules that must be installed for TAPPaaS to work. T
 The modules in Foundation should be installed and configured in the numbered order of the module
 
 - [Proxmox](./00-ProxmoxNode/README.md)
-- [OPNsense](./10-OPNsense/README.md)
-- [Switching](./20-Switching/README)
+- [OPNsense basis](./10-OPNsense/README.md)
+- [TAPPaaS-CICD](./15-TAPPaaS-CICD/README.md)
+- [VLNA and Switching](./20-VLans/README)
 - [Pangolin](./30-Pangolin/README.md)
 - [Backup Single Node](./70a-SingleNodeBackup/README.md)
 - [HA and Backup with Multi TAPPaaS nodes](./70b-MultiNodeHAandBackup/README.md)
