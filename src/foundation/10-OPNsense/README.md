@@ -46,7 +46,17 @@ attach a new switch to the ethernet port associated with the lan bridge port
 
 you will now have a setup looking like this
 
-TODO: make drawing
+```mermaid
+graph LR;
+    I(Internet)-->F(Firewall)
+    F -- 192.168.0.xx -->C(you computer);
+    F -- 192.168.0.1/24 -->W((Wan));
+    S(Switch)-- 10.0.0.1/24 --> L((Lan));
+    W -- 192.168.0.230--> Pr[Tappaas1 Node];
+    L -- 10.0.0.10 --> Pr
+```
+where Wan is the only port on the Proxmox box that is used by the hypervisor
+
 
 ## Install OPNsense software
 
@@ -65,16 +75,35 @@ curl -fsSL  https://raw.githubusercontent.com/TAPPaaS/TAPPaaS/main/src/foundatio
 
 boot up the VM and configure the opnsense
 
-after boot you look in as root/opnsense
+after boot you login as root with password opnsense
 
-option 2) set the lan ip range to 10.0.0.1/24
-exit to a shell (option 8)
+change lan ip through option 2:
+- configure lan 
+- use ip range to 10.0.0.1/24
+- enable DHCP, with a range of 10.0.0.100 - 10.0.0.254
+
+jump into a shell (option 8) and test that you can ping external adresses
+
+connect a pc to the LAN port of the proxmox box (can be via a switch)
+- check that you get an ip in the 10.0.0x range
+- connect to the management console of opnsense: 10.0.0.1
 
 
+#### DNS setup
+
+- Enable services -> dnsmask DNS ->general
+  - Listen port: use port 53053
+  Enable service -> Unbound DNS -> general
+- register dnsmask with unbound DNS for lan.internal domain
+  - Service -> Unbound DNS -> Query Forwarding
+    - register lan.internal to query 127.0.0.1 port 53053
+    - register 10.in-addr.arpa to query 127.0.0.1 port 53053
+    - press apply
+  - 
 
 Take a proxmox backup of the VM to be used as Method 2: 
 
-change the root password: passwd
+change the root password
 
 ### Method 2: Restore backup
 
@@ -84,97 +113,49 @@ This method relies on a proxmox backup image taken just at the end of the steps 
 - do a qmrestore on the image
 
 start the vm 
-after boot you look in as root/opnsense
-change the root password: passwd
+after boot you login as root/opnsense
+change the root password
 
 
 ## Test and switch
 
 We are now ready to do basic testing of OPNsense and to switch the primary proxmox bridge as well as primary firewall
 
+We are going to replace the firewall with OPNSense. We are going to do that in two steps. 
+
+### Step one
+
+First we switch tappaas node 1 to be working **only** on the Lan port 
+so in the Proxmox console edit the network bridge "Wan": remove the IP IP assignment.
+in the shell prompt: edit the follwing files:
+/etc/hosts: ensure the host IP is the new 10.0.0.10
+/etc/resolv.conf: ensure the resolver is 10.0.0.1
+
+You should now have a setup looking like:
+
+```mermaid
+graph LR;
+    I(Internet)-->F(Firewall)
+    S-->C(you computer);
+    F-->W((Wan));
+    L((Lan)) --> S(Switch);
+    O[OPNsense] --> L
+    L -- 10.0.0.10 --> Pr[Tappaas1 Node];
+    W --> O
+```
+
+(where OPNsense is a VM on the TAppaas1 node)
+
+reboot proxmox and see that you have access to the internt from both the pc connected to the LAN switch and from the proxmox console. ensure you have access to the OPNsense GUI at 10.0.0.1
 
 
-
-
-## downaload iso and create VM
-
-
-
-### Create VLANs
-
-- go to Interfaces -> Devices -> VLAN and add vlans
-- go to the created VLAN as interfaces and configure static IP according to VLAN specs
-- go to Services -> ISC DHCPv4 -> <Vlan> and configure IP range for DHCP
-
-### DNS setup
-
-- Enable services -> dnsmask DNS
-  - use port 53053
-  - Register DHCP Lease enables
-- Enable service -> Unbound DNS -> general
-- register dnsmask with unbound DNS for lan.internal domain
-  - Service -> Unbound DNS -> Query Forwarding
-    - register lan.internal to query 127.0.0.1 port 53053
-    - register 10.in-addr.arpa to query 102.0.0.1 port 53053
-    - press apply
-  - 
-
-## IPv6 setup
-
-- create gateway: System -> Gateways -> Configuration
-  - add a gateway, on the WAN port, protocol IPv6 give it the gateway address assigned by the ISP
-- Interface -> WAN: 
-  - IPv6 COnfiguration Type = Static IP
-  - IPv6 address: the assigned IP address of you router by the provider it WAN connectivity
-  - select gateway: IPv6 gateway rule: select the created gateway
-  - SAve and apply changes
-- Each of the LAN/VLAN interfaces
-  - IPv6 Configuration type = Static IPv6
-  - IPv6 address: The assigned IPv6 range potentially subdivided into sub ranges ending in ::1 and handed out as a 64 bit network range
-  - save and apply
-- create Router advertisement on each local interface LAN/VLAN: Services -> Router advisement -: (V)LAN
-  - Router Advertisements = Managed
-  - DNS Options, tick the Use the DNS configuration of the DHCPv6 server
-
-## create firewall rules
-
-general for each interface some firewall rules needs to be configured
-
-- WAN: there should be a default rule to NOT pass any traffic. keep that
-- DMZ: allow DMZ to communicate to internet, but not locally
-  - block LAN, and other VLANs
-  - create a pass rule for the rest
-- Remaining LAN/VLANs: add rule to allow/pass any to any traffic
-- for Guest/client: add first rule to block/reject traffic to LAN (management)
-  - for "true guests" block access to other vlans except DMZ
-
-Note: all rules are for both IPv4 and IPv6
-
-## Switch firewall
-
-This is the scary step: There are two parts to this
-
-- move proxmox tappaas node 1 in under the OPNsense firewall
-- disable the existing legacy firewall and hook OPNsense directly to the ISP
-
-### Move proxmox node
-
-First change the IP number of proxmox tappaas1 node
-
-- edit: /etc/network/interfaces
-- edit: /etc/hosts
-- change the DNS resolver, edit: /etc/resolv.conf
-
-now reboot the proxmox tappaas1 node
-
-while rebooting move the network connection of the proxmox node from your exiting network to the lan network of the OPNsense LAN network (you likely need a separate switch for your new lan, see example documentation)
-
-### Replace firewall
+### Step Two: switch firewall
 
 There are 3 scenarios for this step:
 
 - Stay with TAPPaaS as a subsystem of existing ISP provided and configured network 
-  - in this case there is nothing further to do
+  - in this case there is nothing further to do at this stage
+  - Eventually you will need to make a pass through pinhole in the existing firewall to the Wan port on OPNsense. See Pangolin setup
 - Reconfigure existing ISP provided firewall to be in bridge mode
   - consult ISP on how to do this. once done check OPNSense have the right connection.
   - Potentially you need to reconfigure IPv6
@@ -182,4 +163,23 @@ There are 3 scenarios for this step:
 - Replace the ISP provided firewall: this assumes the ISP is having an ethernet termination for WAN
   - plug in OPNsense wan port instead of legacy firewall
   - see notes above on Wifi and IPv6
+
+Redo test
+
+# TODO
+
+
+### IPv6 setup
+
+- create gateway: System -> Gateways -> Configuration
+  - add a gateway, on the WAN port, protocol IPv6 give it the gateway address assigned by the ISP
+- Interface -> WAN: 
+  - IPv6 Configuration Type = Static IP
+  - IPv6 address: the assigned IP address of you router by the provider it WAN connectivity
+  - select gateway: IPv6 gateway rule: select the created gateway
+  - Save and apply changes
+
+
+
+
 
