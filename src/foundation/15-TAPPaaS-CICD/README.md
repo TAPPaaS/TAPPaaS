@@ -3,10 +3,14 @@
 
 This setup assume that there is a bootstrap NixOS based TAPPaaS CICD backup image
 
-do the following on the Proxmox termina
-QM restore ....
+from a proxmox console download the image (you can scp from the NixOS VM) then do the following restore command:
 
-test that is work
+```
+unzstd vzdump*.vma.zst
+qmrestore vzdump*.vma 100 --storage local-zfs
+```
+
+test that it work
 
 
 

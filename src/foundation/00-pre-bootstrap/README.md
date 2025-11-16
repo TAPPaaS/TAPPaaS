@@ -17,9 +17,9 @@ This ensure you can recreate TAPPaaS from source, even if you do not have access
 
 ## generating a TAPPaaS-CICD VM
 
-On a bare bone proxmox system install a NixOS
-on the NixOS VM configure a NixOS generator
-using said generator create TAPPaaS VM image
+- On a bare bone proxmox system install a NixOS
+- on the NixOS VM configure a NixOS generator
+- using said generator create TAPPaaS VM image
 
 ### details
 
@@ -38,22 +38,24 @@ ip a
 ```
 
 the IP command gives you the IP number and from a terminal you can ssh into this IP.
-This way you can use cut and pase commands in the ssh terminal
-Add the following code to the config file in /etc/nixos
+This way you can use cut and paste commands in the ssh terminal
+Add the following code to the config file /etc/nixos/configuration.nix
 
 ```
-
+# nothing to add
 ```
- now run the commands
+ now install the nixos generator:
 
 ```
 nix-env -f https://github.com/nix-community/nixos-generators/archive/master.tar.gz -i
 cd
 ```
 
+fetch the TAPPaaS-CICD configuraiton file
+
 ```
-curl -fsSL  https://raw.githubusercontent.com/TAPPaaS/TAPPaaS/main/src/foundation/00-ProxmoxNode/TAPPaaS-Base-NixOS.nix  >TAPPaaS-Base-NixOS.nix
-nixos-generate -f proxmox -o ./TAPPaaS-NixOS -c ./TAPPaaS-Base-NixOS.nix
+curl -fsSL  https://raw.githubusercontent.com/TAPPaaS/TAPPaaS/main/src/foundation/15-TAPPaaS-CICD/TAPPaaS-CICD.nix  >TAPPaaS-CICD.nix
+nixos-generate -f proxmox -o ./TAPPaaS-NixOS -c ./TAPPaaS-CICD.nix
 ```
 
 now save/upload the TAPPaaS-NixOS/vzdump-qemu-nixos-xxxxxxxxx.vma.zst to some cloud storage that can be accessed by the tappaas installers 
