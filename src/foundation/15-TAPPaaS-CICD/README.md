@@ -1,48 +1,17 @@
 
-# Proxmox node and TAPPaaS CICD setup
+# TAPPaaS CICD setup
 
-## Overview
+This setup assume that there is a bootstrap NixOS based TAPPaaS CICD backup image
+
+do the following on the Proxmox termina
+QM restore ....
+
+test that is work
 
 
-Bootstrapping TAPPaaS has not been fully automated. However some steps are scripted.
 
-you need to do the following activities (next sections give exact instructions)
+# Old setuup Ignore
 
-1) Install proxmox on the first TAPPaaS node
-2) TAPaaSPostPVEInstall.sh: Do basic household activities on Proxmox after initial install
-3) TAPaaSBootstrap.sh: this create and install a self management VM (called TAPPaaS-CICD) with all the needed tooling
-4) TAPPaaS-CICD-bootstrap.sh: a script to be run inside the CICD VM
-It you configuration have more than one node then you need to do sept 1 and 2 on the other nodes and join them into a cluster. (TODO: instructions for clustering)
-
-After initial 3 stems of bootstrapping then all management is done inside the TAPPaaS-CICD VM
-
-## how to bootstrap
-
-### Proxmox install:
-
-- prepare physical hardware. see [Examples](../../Documentation/Examples/README.md) or [Hardware](../../Documentation/Architecture/Hardware.md)
-- ensure you designed your basic setup [Design](../../Documentation/Installation/README.md)
-- download a Proxmox VE iso installer image from: [Official Proxmox Download site](https://www.proxmox.com/en/downloads)
-- create a boot USB (on windows we recommend to use [Rufus](https://rufus.ie/en/), on Linux Mint right click on .iso and select make bootable usb stick)
-- boot the machine from the USB and do an install: use ZFS for the boot disk if you are having boot disk mirror.
-- once it is rebooted go to management console and create the "tanks" as zfs pools (minimum is to have a tanka1)
-(if sufficient hw resources are available then use mirror on boot and tanka1)
-- run the Proxmox helper post PVE install script (to be replaced with a dedicated script) TAPaaSPostPVEInstall.sh script in the proxmox node shell (via the proxmox management console): 
-    - Answer Yes to all questions:
-    - disable enterprise and Cept repositories
-    - enable HA
-    - Do reboot
-```
-bash -c "$(curl -fsSL https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/tools/pve/post-pve-install.sh)"
-```
-
-PS: This proxmox helper script should be replaced with a fully automatic script:
-curl -fsSL https://raw.githubusercontent.com/TAPPaaS/TAPPaaS/main/src/foundation/00-ProxmoxNode/TAPPaaSPostPVEInstall.sh | bash
-
-BUT this does not work yet
-
-Now after reboot:
-- check that it all looks fine!! (TODO check setup)
 - run the TAPaaSBootstrap script from the root console
 ```
 curl -fsSL  https://raw.githubusercontent.com/TAPPaaS/TAPPaaS/main/src/foundation/00-ProxmoxNode/TAPPaaSBootstrap.sh | bash
