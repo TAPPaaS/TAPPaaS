@@ -34,6 +34,11 @@
   proxmox.qemuConf = {
       cores = 2;
       memory = 4096;
+      name="tappaas-cicd";
+      net0="virtio=12:34:56:AA:AC:CD,bridge=lan";
+      serial0="/dev/ttyS0";
+      virtio0="local-zfs:vm-tappaas-disk-0";
+      defaultStorage="local-zfs";
   };
 
   # Use the systemd-boot EFI boot loader.

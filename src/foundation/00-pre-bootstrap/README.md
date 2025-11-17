@@ -60,6 +60,8 @@ nixos-generate -f proxmox -o ./TAPPaaS-NixOS -c ./TAPPaaS-CICD.nix
 
 now save/upload the TAPPaaS-NixOS/vzdump-qemu-nixos-xxxxxxxxx.vma.zst to some cloud storage that can be accessed by the tappaas installers 
 
+as a shortcut, copy the image to the root account of the proxmox account using the "scp" command from the proxmox console
+
 ## test image
 
 from a proxmox console download the image (you can scp from the NixOS VM) then do the following restore command:
