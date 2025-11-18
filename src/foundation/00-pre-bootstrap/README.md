@@ -27,6 +27,7 @@ This ensure you can recreate TAPPaaS from source, even if you do not have access
 - Upload the iso to proxmox
 - Create a VM under proxmox: 4G memory, two cores, 32G disk, attach the iso
 - boot the system and do a basic NixOS install
+  - as part of the initial setup you register a user name and password. Note this NixOS is temporary so this account is only used during the generation of the tappaas-cicd image
 
 In the console do the following
 ```
@@ -55,10 +56,10 @@ fetch the TAPPaaS-CICD configuraiton file
 
 ```
 curl -fsSL  https://raw.githubusercontent.com/TAPPaaS/TAPPaaS/main/src/foundation/15-TAPPaaS-CICD/TAPPaaS-CICD.nix  >TAPPaaS-CICD.nix
-nixos-generate -f proxmox -o ./TAPPaaS-NixOS -c ./TAPPaaS-CICD.nix
+nixos-generate -f proxmox -o ./TAPPaaS -c ./TAPPaaS-CICD.nix
 ```
 
-now save/upload the TAPPaaS-NixOS/vzdump-qemu-nixos-xxxxxxxxx.vma.zst to some cloud storage that can be accessed by the tappaas installers 
+now save/upload the TAPPaaS/vzdump-qemu-tappaas-cicd.vma.zst to some cloud storage that can be accessed by the tappaas installers 
 
 as a shortcut, copy the image to the root account of the proxmox account using the "scp" command from the proxmox console
 

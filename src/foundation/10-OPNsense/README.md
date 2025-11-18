@@ -91,6 +91,9 @@ connect a pc to the LAN port of the proxmox box (can be via a switch)
 
 #### DNS setup
 
+From: [DHCP with DNS](https://docs.opnsense.org/manual/dnsmasq.html#dhcpv4-with-dns-registration)
+
+- Enable services -> Unbound DNS - general and ensure it listen to port 53
 - Enable services -> dnsmask DNS ->general
   - Listen port: use port 53053
   Enable service -> Unbound DNS -> general
@@ -99,7 +102,12 @@ connect a pc to the LAN port of the proxmox box (can be via a switch)
     - register lan.internal to query 127.0.0.1 port 53053
     - register 10.in-addr.arpa to query 127.0.0.1 port 53053
     - press apply
-  - 
+  - enable 
+    - Do not forward to system defined DNS servers
+    - DHCP fqdn
+    - DHCP register firewall rules
+  - default domain: internal
+	
 
 Take a proxmox backup of the VM to be used as Method 2: 
 

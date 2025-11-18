@@ -8,6 +8,11 @@ from a proxmox console download the image (you can scp from the NixOS VM) then d
 ```
 unzstd vzdump*.vma.zst
 qmrestore vzdump*.vma 100 --storage local-zfs
+qm set 100 --user="tappaas"
+qm set 100 --
+
+qm set 100 --sshkey ~/.ssh/id_rsa.pub
+qm start 100
 ```
 
 test that it work
