@@ -56,7 +56,8 @@ fetch the TAPPaaS-CICD configuraiton file
 
 ```
 curl -fsSL  https://raw.githubusercontent.com/TAPPaaS/TAPPaaS/main/src/foundation/15-TAPPaaS-CICD/TAPPaaS-CICD.nix  >TAPPaaS-CICD.nix
-nixos-generate -f proxmox -o ./TAPPaaS -c ./TAPPaaS-CICD.nix
+curl -fsSL  https://raw.githubusercontent.com/TAPPaaS/TAPPaaS/main/src/foundation/15-TAPPaaS-CICD/TAPPaaS-Base.nix  >TAPPaaS-Base.nix
+nixos-generate -f proxmox -o ./TAPPaaS-CICD -c ./TAPPaaS-CICD.nix
 ```
 
 now save/upload the TAPPaaS/vzdump-qemu-tappaas-cicd.vma.zst to some cloud storage that can be accessed by the tappaas installers 
