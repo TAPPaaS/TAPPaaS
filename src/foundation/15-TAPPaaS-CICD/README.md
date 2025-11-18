@@ -15,11 +15,20 @@ qm set 100 --sshkey ~/.ssh/id_rsa.pub
 qm start 100
 ```
 
-test that it work
+test that it work by looking at the proxmox gui and then
+logging into the tappaas-cicd frmo the root console of tappaas1 node:
+```
+ssh tappaas@tappaas-cicd
+```
+
+from the logged in account run the follwong setup
+```
+# setup ssh keys for tappaas user
 
 
 
-# Old setuup Ignore
+
+# Old setup Ignore
 
 - run the TAPaaSBootstrap script from the root console
 ```

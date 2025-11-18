@@ -62,6 +62,9 @@ nixos-generate -f proxmox -o ./TAPPaaS -c ./TAPPaaS-CICD.nix
 now save/upload the TAPPaaS/vzdump-qemu-tappaas-cicd.vma.zst to some cloud storage that can be accessed by the tappaas installers 
 
 as a shortcut, copy the image to the root account of the proxmox account using the "scp" command from the proxmox console
+```
+scp <username>@<IP of nixos vm>:TAPPaaS-NixOS/vzdump-qemu-tappaas-cicd.vma.zst .
+```
 
 ## test image
 
