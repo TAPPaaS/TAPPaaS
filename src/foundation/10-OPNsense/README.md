@@ -205,9 +205,18 @@ Note: all rules are for both IPv4 and IPv6
 
 # 7. Configure public DNS
 
-
+configure the dns to have caddy.example.com point to your public IP address
 
 # 8. Configure proxy
+
+we use the OPNsense os-caddy plugin for https proxy
+
+in the opnsense console, use option 8 to get a command line shell and install caddy
+```
+pkg install os-caddy
+```
+
+follow the OPNsense manual to configure Caddy: [Caddy Install](https://docs.opnsense.org/manual/how-tos/caddy.html#installation)
 
 # 9. Test
 
