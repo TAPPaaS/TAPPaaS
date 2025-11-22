@@ -4,16 +4,37 @@
 
 the basic macro steps:
 
-- prepare the proxmox environment with the right virthal bridges
-- install a basic OPNSense in a VM
-- swap cables and default gateway in proxmox after basic testing
-- swap firewall if relevant
+1. prepare the proxmox environment with the right virtual bridges
+2. install a basic OPNSense in a VM
+3. swap cables and default gateway in proxmox after basic testing
+4. swap firewall if relevant
+5. test
+6. setup VLANS and firewall rules
+7. configure public DNS
+8. setup reverse proxy
+9. tests
+10. Make a backup image
 
-note detailed VLAN configuration is a later step in foundation setup, after tappaas-cicd VM is running
+step 2-6 and 8-10 can be replaced with
+2. Restore Backup image
+3. swap firewall
+4. Reconfigure domain names inrestored image
+5. configure public DNS
+6. test
 
-# Preparation
+# Prerequisite
 
-The TAPPaaS OPNSense firewall will have two interfaces: WAN and LAN, bot interfaces will be virtio bridges in Proxmox.
+The assumption for TAPPaaS to work is external access via public IP. Either directly exposed or through a NAT pinhole for port 80 and 443
+Further the assumption is that there is a registered domain name associated with the tappaas installation: <example.tlc>
+Finally it is assumed that the installer have access to editing the DNS records of the domain.
+
+So have the following ready:
+- Domain: example.tld
+- Public IP assigned by ISP: 1.2.3.4
+
+# 1. Preparation
+
+The TAPPaaS OPNSense firewall will have two interfaces: WAN and LAN, both interfaces will be virtio bridges in Proxmox.
 
 It is assumed that Proxmox is connected to an existing firewall/router on vmbr0 via an ethernet port on the physical server.
 It is further assumed that the IP domain for this connection is NOT a 10.x.y.z domain as it will conflict with the OPNSense setup (if it is it will stil be possible to set up TAPPaaS but will need more elaborate bootstrap process)
@@ -30,7 +51,7 @@ in the Proxmox GUI do:
 -- Name: lan
 -- IPv4/CIDR: 10.0.0.10/24
 -- Gateway, ipv6 and ipv6 gateway: leave blank
--- Autostart is checked and VLAN aware is un checked
+-- Autostart is checked and VLAN aware is unchecked
 -- Bridgeport: the name of the chosen ethernet port
 - now click create and click "apply configuration"
 
@@ -58,14 +79,8 @@ graph LR;
 where Wan is the only port on the Proxmox box that is used by the hypervisor
 
 
-## Install OPNsense software
+# 2. Install OPNsense software
 
-There are two ways of installing OPNSense:
-
-1. Installation of an OPNSense image, with manual configuration of OPNsense WAN and LAN ports from the console
-2. Restore a vanilla OPNSense proxmox backup of a minimum install
-
-### Method 1: install from image
 
 now create the OPNSense VM: from the command prompt/console of tappaas1:
 
@@ -82,16 +97,16 @@ change lan ip through option 2:
 - use ip range to 10.0.0.1/24
 - enable DHCP, with a range of 10.0.0.100 - 10.0.0.254
 
-jump into a shell (option 8) and test that you can ping external adresses
+jump into a shell (option 8) and test that you can ping external addresses
 
 connect a pc to the LAN port of the proxmox box (can be via a switch)
 - check that you get an ip in the 10.0.0x range
 - connect to the management console of opnsense: 10.0.0.1
 
 
-#### DNS setup
+## DNS setup
 
-From: [DHCP with DNS](https://docs.opnsense.org/manual/dnsmasq.html#dhcpv4-with-dns-registration)
+From: [OPNsense DHCP with DNS](https://docs.opnsense.org/manual/dnsmasq.html#dhcpv4-with-dns-registration)
 
 - Enable services -> Unbound DNS - general and ensure it listen to port 53
 - Enable services -> dnsmask DNS ->general
@@ -107,31 +122,11 @@ From: [DHCP with DNS](https://docs.opnsense.org/manual/dnsmasq.html#dhcpv4-with-
     - DHCP fqdn
     - DHCP register firewall rules
   - default domain: internal
-	
-
-Take a proxmox backup of the VM to be used as Method 2: 
-
-change the root password
-
-### Method 2: Restore backup
-
-This method relies on a proxmox backup image taken just at the end of the steps in "method 1"
-
-- Download backup image
-- do a qmrestore on the image
-
-start the vm 
-after boot you login as root/opnsense
-change the root password
 
 
-## Test and switch
 
-We are now ready to do basic testing of OPNsense and to switch the primary proxmox bridge as well as primary firewall
 
-We are going to replace the firewall with OPNSense. We are going to do that in two steps. 
-
-### Step one
+# 3. Swap cables Step
 
 First we switch tappaas node 1 to be working **only** on the Lan port 
 so in the Proxmox console edit the network bridge "Wan": remove the IP IP assignment.
@@ -152,12 +147,12 @@ graph LR;
     W --> O
 ```
 
-(where OPNsense is a VM on the TAppaas1 node)
+(where OPNsense is a VM on the tappaas1 node)
 
-reboot proxmox and see that you have access to the internt from both the pc connected to the LAN switch and from the proxmox console. ensure you have access to the OPNsense GUI at 10.0.0.1
+reboot proxmox and see that you have access to the internet from both the pc connected to the LAN switch and from the proxmox console. ensure you have access to the OPNsense GUI at 10.0.0.1
 
 
-### Step Two: switch firewall
+# 4. Switch firewall
 
 There are 3 scenarios for this step:
 
@@ -173,6 +168,69 @@ There are 3 scenarios for this step:
   - see notes above on Wifi and IPv6
 
 Redo test
+
+# 5. Test
+
+# 6. VLAN and Firewalls
+
+TODO: create automation script
+
+- go to Interfaces -> Devices -> VLAN and add vlans
+- go to the created VLAN as interfaces and configure static IP according to VLAN specs
+- go to Services -> ISC DHCPv4 -> <Vlan> and configure IP range for DHCP
+
+- Each of the LAN/VLAN interfaces
+  - IPv6 Configuration type = Static IPv6
+  - IPv6 address: The assigned IPv6 range potentially subdivided into sub ranges ending in ::1 and handed out as a 64 bit network range
+  - save and apply
+- create Router advertisement on each local interface LAN/VLAN: Services -> Router advisement -: (V)LAN
+  - Router Advertisements = Managed
+  - DNS Options, tick the Use the DNS configuration of the DHCPv6 server
+
+### create VLAN firewall rules
+
+general for each interface some firewall rules needs to be configured
+
+- WAN: there should be a default rule to NOT pass any traffic. keep that
+- DMZ: allow DMZ to communicate to internet, but not locally
+  - block LAN, and other VLANs
+  - create a pass rule for the rest
+- Remaining LAN/VLANs: add rule to allow/pass any to any traffic
+- for Guest/client: add first rule to block/reject traffic to LAN (management)
+  - for "true guests" block access to other vlans except DMZ
+
+
+Note: all rules are for both IPv4 and IPv6
+
+
+# 7. Configure public DNS
+
+
+
+# 8. Configure proxy
+
+# 9. Test
+
+# 10. Backup and Cleanup
+
+make a proxmox backup of the VM
+change the root password to something different
+
+# Method 2: Restore backup
+
+This method relies on a proxmox backup image taken just at the end of the steps in "method 1"
+
+- Download backup image
+- do a qmrestore on the image
+
+start the vm 
+after boot you login as root/opnsense
+change the root password
+change domain name
+swap firewall
+test
+configure DNS
+test
 
 # TODO
 

@@ -10,22 +10,11 @@ you need to do the following activities (next sections give exact instructions)
 
 1) Install proxmox on the first TAPPaaS node
 2) TAPaaSPostPVEInstall.sh: Do basic household activities on Proxmox after initial install
-3) install firewall (OPNSense )
-4) Bootstrap TAPPaaS CICD VM based on NixOS
-5) configure switching and VLANs
-6) setup secrets system (VaultWarden)
-8) setup Identity manager (Authentic)
-9) Setup Reverse proxy (Pangolin)
-10) create secondary nodes, PBS and setup HA/Backup
 
-The Readme describe step 1 and 2
 continue with [OPNSense](../10-OPNsense/README.md) and [TAPaaS CICD](../15-TAPPaaS-CICD/README.md) setup in
 
-After initial 3 stems of bootstrapping then all management is done inside the TAPPaaS-CICD VM
 
-## how to bootstrap
-
-### Proxmox install:
+## Proxmox install:
 
 - prepare physical hardware. see [Examples](../../Documentation/Examples/README.md) or [Hardware](../../Documentation/Architecture/Hardware.md)
 - ensure you designed your basic setup [Design](../../Documentation/Installation/README.md)
@@ -49,6 +38,6 @@ curl -fsSL https://raw.githubusercontent.com/TAPPaaS/TAPPaaS/main/src/foundation
 BUT this does not work yet
 
 Now after reboot:
-- check that it all looks fine!! (TODO check setup)
+- check that it all looks fine!! (TODO automate check setup)
 
 
