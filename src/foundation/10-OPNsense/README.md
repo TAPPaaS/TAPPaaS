@@ -122,6 +122,14 @@ From: [OPNsense DHCP with DNS](https://docs.opnsense.org/manual/dnsmasq.html#dhc
     - press apply
     - 
 
+finally register the static hosts on the internal network: tappaas1
+
+- go to Service -> Dnsmasq DNS & DHCP -> Hosts
+  - add a host:
+    - name tappaas1
+    - domain: internal
+    - ip: 10.0.0.10
+
 Check that you can lookup you your local machines using .internal domain
 
 
@@ -169,7 +177,7 @@ There are 3 scenarios for this step:
 
 # 5. Test
 
-# 6. Configure proxy
+# 6. Configure Reverse Proxy
 
 we use the OPNsense os-caddy plugin for https proxy
 
