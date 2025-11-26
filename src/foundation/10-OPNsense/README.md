@@ -9,11 +9,10 @@ the basic macro steps:
 3. swap cables and default gateway in proxmox after basic testing
 4. swap firewall if relevant
 5. test
-6. setup VLANS and firewall rules
-7. configure public DNS
-8. setup reverse proxy
-9. tests
-10. Make a backup image
+6. setup reverse proxy
+7. setup VLANS and firewall rules
+8. tests
+9. Make a backup image
 
 step 2-6 and 8-10 can be replaced with
 2. Restore Backup image
@@ -111,19 +110,19 @@ From: [OPNsense DHCP with DNS](https://docs.opnsense.org/manual/dnsmasq.html#dhc
 - Enable services -> Unbound DNS - general and ensure it listen to port 53
 - Enable services -> dnsmask DNS ->general
   - Listen port: use port 53053
+  - Do not forward to system defined DNS servers
+  - DHCP fqdn
+  - dhcp default domain: internal
+  - DHCP register firewall rules
   Enable service -> Unbound DNS -> general
 - register dnsmask with unbound DNS for lan.internal domain
   - Service -> Unbound DNS -> Query Forwarding
-    - register lan.internal to query 127.0.0.1 port 53053
+    - register internal to query 127.0.0.1 port 53053
     - register 10.in-addr.arpa to query 127.0.0.1 port 53053
     - press apply
-  - enable 
-    - Do not forward to system defined DNS servers
-    - DHCP fqdn
-    - DHCP register firewall rules
-  - default domain: internal
+    - 
 
-
+Check that you can lookup you your local machines using .internal domain
 
 
 # 3. Swap cables Step
@@ -167,11 +166,27 @@ There are 3 scenarios for this step:
   - plug in OPNsense wan port instead of legacy firewall
   - see notes above on Wifi and IPv6
 
-Redo test
 
 # 5. Test
 
-# 6. VLAN and Firewalls
+# 6. Configure proxy
+
+we use the OPNsense os-caddy plugin for https proxy
+
+In the opnsense console, use option 8 to get a command line shell and install caddy
+```
+pkg install os-caddy
+```
+
+follow the OPNsense manual to configure Caddy: [Caddy Install](https://docs.opnsense.org/manual/how-tos/caddy.html#installation)
+Only do the "Prepare OPNsense for Caddy After Installation":
+- re configure opensense gui to 8443
+- Create http and https firewall rules for wan and lan to caddy
+- then configure enmail adress and enable caddy
+
+note as we create VLANs we need to create firewall rules as well
+
+# 7. VLAN and Firewalls
 
 TODO: create automation script
 
@@ -202,25 +217,9 @@ general for each interface some firewall rules needs to be configured
 
 Note: all rules are for both IPv4 and IPv6
 
+# 8. Test
 
-# 7. Configure public DNS
-
-configure the dns to have caddy.example.com point to your public IP address
-
-# 8. Configure proxy
-
-we use the OPNsense os-caddy plugin for https proxy
-
-in the opnsense console, use option 8 to get a command line shell and install caddy
-```
-pkg install os-caddy
-```
-
-follow the OPNsense manual to configure Caddy: [Caddy Install](https://docs.opnsense.org/manual/how-tos/caddy.html#installation)
-
-# 9. Test
-
-# 10. Backup and Cleanup
+# 9. Backup and Cleanup
 
 make a proxmox backup of the VM
 change the root password to something different
@@ -236,9 +235,8 @@ start the vm
 after boot you login as root/opnsense
 change the root password
 change domain name
+configure caddy email address
 swap firewall
-test
-configure DNS
 test
 
 # TODO
