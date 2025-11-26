@@ -54,21 +54,23 @@ This leads to the following setup of assignments in TAPPaaS:
 
 | Segment         | VLAN | IPv4 Subnet  | IPv6 Subnet    | Description |
 |-----------------|------|--------------|----------------|-------------|
-| Management      | none | 10.0.0.0/24  | \<ipv6-prefix\>:0::/64 | not tagged traffic is considered management traffic |
-| DMZ             | 100  | 10.1.0.0/24  | \<ipv6-prefix\>:1::/64 | Demilitarized zone |
-| Home/Business   | 200  | 10.2.0.0/24  | \<ipv6-prefix\>:2::/64 | This is where services for consumption lives |
-| Guest           | 300  | 10.3.0.0/24  | \<ipv6-prefix\>:3::/64 | unconnected client network |
-| IoT             | 400  | 10.4.0.0/24  | \<ipv6-prefix\>:4::/64 | unsecure devices and systems |
+| Management      | none | 10.0.0.0/24  | \<ipv6-prefix\>:000::/64 | not tagged traffic is considered management traffic |
+| DMZ             | 100  | 10.1.0.0/24  | \<ipv6-prefix\>:100::/64 | Demilitarized zone |
+| Service         | 200  | 10.2.0.0/24  | \<ipv6-prefix\>:200::/64 | This is where services for consumption lives |
+| Client          | 300  | 10.3.0.0/24  | \<ipv6-prefix\>:300::/64 | unconnected client network |
+| IoT             | 400  | 10.4.0.0/24  | \<ipv6-prefix\>:400::/64 | unsecure devices and systems |
 
 
 Notes:
 
 - Management is generally untagged traffic. We might introduce dedicated isolated segments that are tagged. this will be in the 2-99 range (we will never use VLAN 1)
-- Home/Business: is where services lives. if we cover several homes we can sub segment for each home, or for a business we might want sub segments for test, pre production and production workloads. 
+- Service: is where services lives. if we cover several homes we can sub segment for each home, or for a business we might want sub segments for dev/test, pre production and production workloads. 
   - subsegments will use vlan tags 201 to 299. the associated IPv4 will be 10.2.xx.0/24 for VLAN 2xx
-- Guest: often you will only need one. But in a home it might be relevant to have one "guest" segment for friends and family, and another to use for working from home devices, so that hacking a work computer becomes more difficult.
+- Client: often you will only need one. But in a home it might be relevant to have one "guest" segment for friends and family, and another to use for working from home devices, so that hacking a work computer becomes more difficult. vlan tag 301 to 399 can be used for this
 - IoT: it is advisable to further subdivide IoT segments and for instance have all Cameras on a separate network from other IoT devices
 - IPv6-prefix: this is the prefix handed out by your ISP, padded with 0 to be a /54 length
+
+General a VLAN tag is translated into an IP number as follows: let x,y,z,w be single digits of the VLAN tag "xyzw" the corresponding ipv4 range is: 10.xy.zw.0/24 
 
 
 

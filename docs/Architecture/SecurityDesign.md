@@ -33,7 +33,7 @@ General setup is:
 
 - every management is done either from the root account of the tappass node itself
 - or it is done from the tappass account on the tappaas-cicd vm
-- every vm has a "tappaas" user with "sudu" rights. 
+- every vm has a "tappaas" user with "sudo" rights. 
 - the tappaas user defined in cloud-init will have no password login access
 - root will not have password login
 - there will be an SSH Authorized list configured to allow login from the tappaas@tappaas-cicd user and from root at the tappaas node

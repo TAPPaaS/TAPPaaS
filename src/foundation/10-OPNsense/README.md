@@ -196,6 +196,15 @@ note as we create VLANs we need to create firewall rules as well
 
 # 7. VLAN and Firewalls
 
+we are creating 4 VLANS: See [Networkdesign](../../../docs/Architecture/NetworkDesign.md)
+
+| Segment         | VLAN | IPv4 Subnet  | IPv6 Subnet    | Firewall  notes  |
+|-----------------|------|--------------|----------------|-------------|
+| DMZ             | 100  | 10.1.0.0/24  | \<ipv6-prefix\>:100::/64 | unlimited access TO the Internet/WAN. Per service create pinhole |
+| Service         | 200  | 10.2.0.0/24  | \<ipv6-prefix\>:200::/64 | This is where services for consumption lives |
+| Client          | 300  | 10.3.0.0/24  | \<ipv6-prefix\>:300::/64 | unconnected client network |
+| IoT             | 400  | 10.4.0.0/24  | \<ipv6-prefix\>:400::/64 | unsecure devices and systems |
+
 TODO: create automation script
 
 - go to Interfaces -> Devices -> VLAN and add vlans
@@ -210,18 +219,10 @@ TODO: create automation script
   - Router Advertisements = Managed
   - DNS Options, tick the Use the DNS configuration of the DHCPv6 server
 
-### create VLAN firewall rules
-
-general for each interface some firewall rules needs to be configured
-
-- WAN: there should be a default rule to NOT pass any traffic. keep that
-- DMZ: allow DMZ to communicate to internet, but not locally
-  - block LAN, and other VLANs
-  - create a pass rule for the rest
-- Remaining LAN/VLANs: add rule to allow/pass any to any traffic
-- for Guest/client: add first rule to block/reject traffic to LAN (management)
-  - for "true guests" block access to other vlans except DMZ
-
+Generally for all VLANs
+- create rule to allow access to from VLAN to the Internet
+- create rule to allow http and https access to Firewall (accessing the reverse proxy)
+- Create rule to prevent access to all other internal networks
 
 Note: all rules are for both IPv4 and IPv6
 
