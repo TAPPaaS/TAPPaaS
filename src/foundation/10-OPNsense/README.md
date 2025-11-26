@@ -188,7 +188,7 @@ pkg install os-caddy
 
 follow the OPNsense manual to configure Caddy: [Caddy Install](https://docs.opnsense.org/manual/how-tos/caddy.html#installation)
 Only do the "Prepare OPNsense for Caddy After Installation":
-- re configure opensense gui to 8443
+- re configure opnsense gui to 8443
 - Create http and https firewall rules for wan and lan to caddy
 - then configure enmail adress and enable caddy
 
@@ -205,7 +205,7 @@ we are creating 4 VLANS: See [Networkdesign](../../../docs/Architecture/NetworkD
 | Client          | 300  | 10.3.0.0/24  | \<ipv6-prefix\>:300::/64 | unconnected client network |
 | IoT             | 400  | 10.4.0.0/24  | \<ipv6-prefix\>:400::/64 | unsecure devices and systems |
 
-TODO: create automation script
+TODO: create automation script, see: https://docs.opnsense.org/development/api/core/firewall.html
 
 - go to Interfaces -> Devices -> VLAN and add vlans
 - go to the created VLAN as interfaces and configure static IP according to VLAN specs
