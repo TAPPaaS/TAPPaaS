@@ -7,6 +7,9 @@
 # file, You can obtain one at https://mozilla.org/MPL/2.0/.
 #
 
+# This script create a NixOS VM on Proxmox for TAPPaaS usage.
+
+
 function init_print_variables() {
   YW=$(echo "\033[33m")
   BL=$(echo "\033[36m")
@@ -100,7 +103,7 @@ function create_vm_descriptions_html() {
   </span>
   <br>
   <br>
-  This is a TAPPaaS NixOS VM.
+  This is a TAPPaaS NixOS VM template.
 </div>
 EOF
   )
@@ -118,9 +121,10 @@ function default_settings() {
   VLAN=""
   MTU=""
   STORAGE="tanka1"
-#  NIXURL=https://channels.nixos.org/nixos-25.05/latest-nixos-minimal-x86_64-linux.iso
-  # TODO: clean up this code
-  DISK0="vm-${VMID}-disk-0"
+  NIXURL=https://channels.nixos.org/nixos-25.05/latest-nixos-minimal-x86_64-linux.iso
+  FILE=latest-nixos-minimal-x86_64-linux.iso
+  VMID=900
+  VMNAME=tappaas-nixos  DISK0="vm-${VMID}-disk-0"
   DISK0_REF=${STORAGE}:${DISK0}
   DISK1="vm-${VMID}-disk-1"
   DISK1_REF=${STORAGE}:${DISK1}
@@ -136,9 +140,6 @@ TEMP_DIR=$(mktemp -d)
 pushd $TEMP_DIR >/dev/null
 
 init_print_variables
-VMID=$1
-VMNAME=$2
-FILE=$3
 default_settings
 create_vm_descriptions_html
 check_root

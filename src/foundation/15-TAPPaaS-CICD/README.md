@@ -1,6 +1,51 @@
 
 # TAPPaaS CICD setup
 
+## Introduction
+
+Setup runs in these macro steps:
+
+- set up a minimal NixOS with cloud-init support 
+- convert/create a NixOS template from this
+- create a tappaas-cicd VM based on the template 
+- update the tappaas-cicd with the git clon and rebuild with right nixos configuration
+
+## Create a minimum NixOS
+
+- Download the minimum NixOS ISO image from to the proxmox environment 
+  - go to tappas1 local disk and select iso images and download from URL: https://channels.nixos.org/nixos-25.05/latest-nixos-minimal-x86_64-linux.iso
+
+run the following script from the tappas1 node console
+```
+curl -fsSL  https://raw.githubusercontent.com/TAPPaaS/TAPPaaS/main/src/foundation/15-TAPPaaS-CICD/CreateTAPPaaSNixOS-VM.sh | bash
+
+```
+you should now have a running NixOS VM.
+In the console of this VM do an install of NixOS
+  - as part of the initial setup you register a user name and password. Note this NixOS is temporary so this account is only used during the generation of the tappaas-cicd image
+
+After install,shut down, in proxmox detach the iso from the vm image and reboot. Now in the NixOS console do the following
+```
+curl -fsSL  https://raw.githubusercontent.com/TAPPaaS/TAPPaaS/main/src/foundation/15-TAPPaaS-CICD/TAPPaaS-Base.nix  >TAPPaaS-Base.nix
+nixos-rebuild switch  -I TAPPaaS-Base.nix
+
+```
+## convert to template
+
+reboot the VM and test it still work
+then from the Proxmox tappaas1 console do a template generation from the VM. 
+```
+qm ...
+```
+
+
+## create tappaas-cicd
+
+
+
+
+# Old Setup
+
 This setup assume that there is a bootstrap NixOS based TAPPaaS CICD backup image
 
 from a proxmox console download the image (you can scp from the NixOS VM) then do the following restore command:
@@ -19,13 +64,14 @@ ssh tappaas@tappaas-cicd
 ```
 
 from the logged in account run the follwong setup
-```
+
+
 # setup ssh keys for tappaas user
 
 
 
 
-# Old setup Ignore
+# Old  Old setup Ignore
 
 - run the TAPaaSBootstrap script from the root console
 ```
