@@ -116,7 +116,7 @@ function default_settings() {
   DISK_SIZE="8G"
   CORE_COUNT="2"
   RAM_SIZE="4096"
-  BRG="vmbr0"
+  BRG="lan"
   MAC="$GEN_MAC"
   VLAN=""
   MTU=""
@@ -156,15 +156,13 @@ msg_ok " - Created EFI disk"
 # qm importdisk $VMID ${FILE} $STORAGE ${DISK_IMPORT:-} # 1>&/dev/null
 # msg_ok " - Imported NixOS disk image"
 qm set $VMID \
-  -cdrom local:iso/${FILE} \
+  -ide3 local:iso/${FILE},media=cdrom\
   -efidisk0 ${DISK0_REF}${FORMAT} \
   -scsi0 ${DISK1_REF},discard=on,ssd=1,size=${DISK_SIZE} \
-  -ide2 ${STORAGE}:cloudinit 
-qm set $VMID \
-  -boot order=cdrom,scsi0 \
-  -serial0 socket # >/dev/null
+  -ide2 ${STORAGE}:cloudinit \
+  -boot order='ide3;scsi0' 
 msg_ok " - Set VM disks and cloudinit"
-qm resize $VMID scsi0 8G >/dev/null
+qm set $VMID -serial0 socket >/dev/null
 qm set $VMID --tags TAPPaaS >/dev/null
 qm set $VMID --description "$DESCRIPTION" >/dev/null
 qm set $VMID --agent enabled=1 >/dev/null
