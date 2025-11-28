@@ -112,7 +112,7 @@ EOF
 function default_settings() {
   GEN_MAC=02:$(openssl rand -hex 5 | awk '{print toupper($0)}' | sed 's/\(..\)/\1:/g; s/.$//')
   FORMAT=",efitype=4m"
-  DISK_SIZE="16G"
+  DISK_SIZE="32G"
   CORE_COUNT="2"
   RAM_SIZE="4096"
   BRG="lan"

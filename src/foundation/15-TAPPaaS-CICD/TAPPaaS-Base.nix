@@ -40,18 +40,20 @@
   services.cloud-init = {
         enable = true;
         network.enable = true;
-        config = ''
-          system_info:
-            distro: nixos
-            default_user:
-              name: tappaas
-          users:
-              - default
+#        config = ''
+#          system_info:
+#            distro: nixos
+#            default_user:
+#              name: tappaas
+#          users:
+#              - default
   };
 
   # Use the systemd-boot EFI boot loader.
-  boot.loader.grub.enable = lib.mkDefault true; # Use the boot drive for GRUB
-  boot.loader.grub.devices = [ "nodev" ];
+  # boot.loader.grub.enable = lib.mkDefault true; # Use the boot drive for GRUB
+  # boot.loader.grub.devices = [ "nodev" ];
+  boot.loader.systemd-boot.enable = lib.mkDefault true;
+  boot.loader.efi.canTouchEfiVariables = lib.mkDefault true;
 
   # Network
   networking.hostName = lib.mkDefault "tappaas-cicd"; # Define your hostname.
@@ -65,9 +67,9 @@
         isNormalUser = true;
   #      password = "tappaas"; # uncomment only for testing ssh connections
         extraGroups = [ "wheel" "networkmanager" ];
-        openssh.authorizedKeys.keys = [
-            "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAACAQDhNBiriC5vajtn1xvVuVJ9uvyfZ/DOTkCoREDaSWs1UYOhYBhwu4oH3Gqect1dlKO4zfVuOfK0eE5CgwHlc77/aZLLn6LpJeo0raIX3H4G3bKMQxj2O3F3aq54IxzROg+qZ5RD/VXW1havkbOiXOjvJEMc6asUjH33PdQLJyjbOdCjQTKDbPiZ+TNBbkz3jaKJImLhDsYEdubVUJ+MemCRspEXvzuWGFUoQ+cltHvBMeF7oSY6CGkY35dMWRV53J54P1D3/Xj9/R82ZHClXQWsO+IuWlqPEF0ZfJJtwKGqBJ3Ap91nNr3UhAqorYvzjhCAdTj9UvB2RMkNdub6RAIg383ujcMN62gfMqvxS9bQmKHDVPBaFPX0wWBtFkPWazmVG4gIypuwz7fAB2oIRpGCEhyMBrdW006fD/+F1BejjinC3SCje1+NIuRA42fjzna6kSAQGqeXqbvyJGRU0Y0HKi4vjfXp+gjaCQtvdJ7WJXYnbLMH3b7d+8FeOYQBHA5vktLDx1EXnd1EbHfMcZ73e4Hn+HomsZR4XyGTgbKzg5IjBPpIpXFk+4KnEPqei+03XsDhN0nwpngbIT3rJkVPkTgUZ58Fs30ucsvgqM5XI5YeRenys46IUcTqTOFh0faS1KwWV3de18AbZZY95WJpxjpFGxNIax1uuDGepJ9nZQ== root@tappaas1"
-        ];
+  #      openssh.authorizedKeys.keys = [
+  #          "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAACAQDhNBiriC5vajtn1xvVuVJ9uvyfZ/DOTkCoREDaSWs1UYOhYBhwu4oH3Gqect1dlKO4zfVuOfK0eE5CgwHlc77/aZLLn6LpJeo0raIX3H4G3bKMQxj2O3F3aq54IxzROg+qZ5RD/VXW1havkbOiXOjvJEMc6asUjH33PdQLJyjbOdCjQTKDbPiZ+TNBbkz3jaKJImLhDsYEdubVUJ+MemCRspEXvzuWGFUoQ+cltHvBMeF7oSY6CGkY35dMWRV53J54P1D3/Xj9/R82ZHClXQWsO+IuWlqPEF0ZfJJtwKGqBJ3Ap91nNr3UhAqorYvzjhCAdTj9UvB2RMkNdub6RAIg383ujcMN62gfMqvxS9bQmKHDVPBaFPX0wWBtFkPWazmVG4gIypuwz7fAB2oIRpGCEhyMBrdW006fD/+F1BejjinC3SCje1+NIuRA42fjzna6kSAQGqeXqbvyJGRU0Y0HKi4vjfXp+gjaCQtvdJ7WJXYnbLMH3b7d+8FeOYQBHA5vktLDx1EXnd1EbHfMcZ73e4Hn+HomsZR4XyGTgbKzg5IjBPpIpXFk+4KnEPqei+03XsDhN0nwpngbIT3rJkVPkTgUZ58Fs30ucsvgqM5XI5YeRenys46IUcTqTOFh0faS1KwWV3de18AbZZY95WJpxjpFGxNIax1uuDGepJ9nZQ== root@tappaas1"
+  #      ];
   };
 
   # Enable passwordless sudo for tappaas

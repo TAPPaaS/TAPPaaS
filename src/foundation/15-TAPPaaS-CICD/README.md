@@ -12,14 +12,20 @@ Setup runs in these macro steps:
 
 ## Create a minimum NixOS
 
-- Download the minimum NixOS ISO image from to the proxmox environment 
-  - go to tappas1 local disk and select iso images and download from URL: https://channels.nixos.org/nixos-25.05/latest-nixos-graphical-x86_64-linux.iso
+run the following script as root from the proxmox console
 
-- Create a VM under proxmox: 4G memory, two cores, 32G disk, attach the iso
-  - boot the system and do a basic NixOS install. use the username "tappaas", give it a strong password, preferably the same as root on the tappass1 node. same password for root
+```
+sudo curl -fsSL  https://raw.githubusercontent.com/TAPPaaS/TAPPaaS/main/src/foundation/15-TAPPaaS-CICD/CreateTAPPaaSNixOS-VM.sh  | bash
+
+```
+
+in the console of VM 8080 set install nixos
+  - use the username "tappaas", give it a strong password, preferably the same as root on the tappass1 node. same password for root
   - do not select a graphical desktop
+  - allow use of unfree software
   - select erase disk and no swap in disk partition menu
   - start the install it will take some time and likely look stalled at 46% for many minutes, toggle log to see detailed progress
+  - finish the install but do NOT reboot
 
 stop the system, detach the iso in the proxmox console and reboot VM
 
@@ -36,12 +42,21 @@ sudo nixos-rebuild switch  -I nixos-config=TAPPaaS-Base.nix
 reboot the VM and test it still work
 then from the Proxmox tappaas1 console do a template generation from the VM. 
 ```
+qm stop 8080
 qm template 8080
 ```
+or do it from the proxmox gui
 
 
 ## create tappaas-cicd
 
+clone the tappass-nixos to tappaas-cicd 
+configure the cloud-init
+start the VM
+ssh into vm and
+- clone the git repository
+- rebuild the nixos for tappaas cicd
+- create ssh keys for tappass@tappass-cicd
 
 
 
