@@ -28,14 +28,15 @@
 {
   imports =
     [ # Note we are not doing hardware includes
-      (modulesPath + "/virtualisation/proxmox-image.nix")
+    ./hardware-configuration.nix
+  #    (modulesPath + "/virtualisation/proxmox-image.nix")
     ];
 
   # Cloud-init
-  proxmox.cloudInit = {
-      enable = true;
-      defaultStorage="local-zfs";
-  };
+  # proxmox.cloudInit = {
+  #    enable = true;
+  #    defaultStorage="local-zfs";
+  # };
 
   services.cloud-init = {
         enable = true;
@@ -56,7 +57,7 @@
   boot.loader.efi.canTouchEfiVariables = lib.mkDefault true;
 
   # Network
-  networking.hostName = lib.mkDefault "tappaas-cicd"; # Define your hostname.
+  networking.hostName = lib.mkDefault "tappaas-nixos"; # Define your hostname.
   networking.networkmanager.enable = true;  # Easiest to use and most distros use this by default.
 
   # Set your time zone.
@@ -85,16 +86,15 @@
   };
   programs.ssh.startAgent = true;
 
-
-  # 
   nix.settings.trusted-users = [ "root" "@wheel" ]; # Allow remote updates
   nix.settings.experimental-features = [ "nix-command" "flakes" ]; # Enable flakes
+  Nixpkgs.config.allowUnfree = true; # Allow unfree packages
 
-  fileSystems."/" = lib.mkDefault {
-    device = "/dev/disk/by-label/nixos";
-    autoResize = true;
-    fsType = "ext4";
-  };
+  # fileSystems."/" = lib.mkDefault {
+  #  device = "/dev/disk/by-label/nixos";
+  #  autoResize = true;
+  #  fsType = "ext4";
+  #};
 
   # QEMU Guest Agent
   services.qemuGuest.enable = true;
