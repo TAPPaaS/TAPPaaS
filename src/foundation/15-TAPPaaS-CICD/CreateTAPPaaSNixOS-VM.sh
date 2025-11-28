@@ -124,7 +124,8 @@ function default_settings() {
   NIXURL=https://channels.nixos.org/nixos-25.05/latest-nixos-minimal-x86_64-linux.iso
   FILE=latest-nixos-minimal-x86_64-linux.iso
   VMID=8080
-  VMNAME=tappaas-nixos  DISK0="vm-${VMID}-disk-0"
+  VMNAME=tappaas-nixos  
+  DISK0="vm-${VMID}-disk-0"
   DISK0_REF=${STORAGE}:${DISK0}
   DISK1="vm-${VMID}-disk-1"
   DISK1_REF=${STORAGE}:${DISK1}
@@ -144,23 +145,25 @@ default_settings
 create_vm_descriptions_html
 check_root
 
-msg_info "Using NixOS ISO file: $FILE"
-msg_info "Creating the TAPPaaS NixOS VM: $VMID, name: $VMNAME"
+msg_ok "Using NixOS ISO file: $FILE"
+msg_ok "Creating the TAPPaaS NixOS VM: $VMID, name: $VMNAME"
 qm create $VMID --agent 1 --tablet 0 --localtime 1 --bios ovmf --cores $CORE_COUNT --memory $RAM_SIZE \
   --name $VMNAME --net0 virtio,bridge=$BRG,macaddr=$MAC$VLAN$MTU --onboot 1 --ostype l26 --scsihw virtio-scsi-pci
-msg_info " - Created base VM configuration"
+msg_ok " - Created base VM configuration"
 pvesm alloc $STORAGE $VMID $DISK0 4M # 1>&/dev/null
-msg_info " - Created EFI disk"
+pvesm alloc $STORAGE $VMID $DISK1 $DISK_SIZE # 1>&/dev/null
+msg_ok " - Created EFI disk"
 # qm importdisk $VMID ${FILE} $STORAGE ${DISK_IMPORT:-} # 1>&/dev/null
-msg_info " - Imported NixOS disk image"
+# msg_ok " - Imported NixOS disk image"
 qm set $VMID \
-  -cdrom /var/lib/vz/template/iso/${FILE} \
+  -cdrom local:iso/${FILE} \
   -efidisk0 ${DISK0_REF}${FORMAT} \
   -scsi0 ${DISK1_REF},discard=on,ssd=1,size=${DISK_SIZE} \
-  -ide2 ${STORAGE}:cloudinit \
-  -boot order=scsi0 \
+  -ide2 ${STORAGE}:cloudinit 
+qm set $VMID \
+  -boot order=cdrom,scsi0 \
   -serial0 socket # >/dev/null
-msg_info " - Set VM disks and cloudinit"
+msg_ok " - Set VM disks and cloudinit"
 qm resize $VMID scsi0 8G >/dev/null
 qm set $VMID --tags TAPPaaS >/dev/null
 qm set $VMID --description "$DESCRIPTION" >/dev/null
@@ -168,7 +171,7 @@ qm set $VMID --agent enabled=1 >/dev/null
 qm set $VMID --ciuser tappaas >/dev/null
 qm set $VMID --ipconfig0 ip=dhcp >/dev/null
 qm set $VMID --sshkey ~/.ssh/id_rsa.pub >/dev/null
-qm resize $VMID scsi0 ${DISK_SIZE} >/dev/null
+# qm resize $VMID scsi0 ${DISK_SIZE} >/dev/null
 msg_ok "Created the TAPPaaS NixOS VM"
 
 qm start $VMID >/dev/null
