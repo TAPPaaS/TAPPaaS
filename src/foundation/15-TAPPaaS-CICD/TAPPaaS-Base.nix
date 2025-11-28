@@ -31,17 +31,23 @@
       (modulesPath + "/virtualisation/proxmox-image.nix")
     ];
 
+  # Cloud-init
   proxmox.cloudInit = {
-      enable = false;
+      enable = true;
       defaultStorage="local-zfs";
   };
 
-  # Cloud-init
-  # services.cloud-init = {
-  #       enable = true;
-  #       network.enable = true;
-  #
-  # };
+  services.cloud-init = {
+        enable = true;
+        network.enable = true;
+        config = ''
+          system_info:
+            distro: nixos
+            default_user:
+              name: tappaas
+          users:
+              - default
+  };
 
   # Use the systemd-boot EFI boot loader.
   boot.loader.grub.enable = lib.mkDefault true; # Use the boot drive for GRUB

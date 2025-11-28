@@ -123,7 +123,7 @@ function default_settings() {
   STORAGE="tanka1"
   NIXURL=https://channels.nixos.org/nixos-25.05/latest-nixos-minimal-x86_64-linux.iso
   FILE=latest-nixos-minimal-x86_64-linux.iso
-  VMID=900
+  VMID=8080
   VMNAME=tappaas-nixos  DISK0="vm-${VMID}-disk-0"
   DISK0_REF=${STORAGE}:${DISK0}
   DISK1="vm-${VMID}-disk-1"
@@ -151,9 +151,10 @@ qm create $VMID --agent 1 --tablet 0 --localtime 1 --bios ovmf --cores $CORE_COU
 msg_info " - Created base VM configuration"
 pvesm alloc $STORAGE $VMID $DISK0 4M # 1>&/dev/null
 msg_info " - Created EFI disk"
-qm importdisk $VMID ${FILE} $STORAGE ${DISK_IMPORT:-} # 1>&/dev/null
+# qm importdisk $VMID ${FILE} $STORAGE ${DISK_IMPORT:-} # 1>&/dev/null
 msg_info " - Imported NixOS disk image"
 qm set $VMID \
+  -cdrom /var/lib/vz/template/iso/${FILE} \
   -efidisk0 ${DISK0_REF}${FORMAT} \
   -scsi0 ${DISK1_REF},discard=on,ssd=1,size=${DISK_SIZE} \
   -ide2 ${STORAGE}:cloudinit \
@@ -168,9 +169,9 @@ qm set $VMID --ciuser tappaas >/dev/null
 qm set $VMID --ipconfig0 ip=dhcp >/dev/null
 qm set $VMID --sshkey ~/.ssh/id_rsa.pub >/dev/null
 qm resize $VMID scsi0 ${DISK_SIZE} >/dev/null
-msg_ok "Step 3 Done: Created the TAPPaaS NixOS VM"
+msg_ok "Created the TAPPaaS NixOS VM"
 
 qm start $VMID >/dev/null
-msg_ok "Step 4 Done: Started the TAPPaaS VM" 
+msg_ok "Started the TAPPaaS VM" 
 
 

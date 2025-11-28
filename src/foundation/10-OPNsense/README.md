@@ -205,7 +205,7 @@ we are creating 4 VLANS: See [Networkdesign](../../../docs/Architecture/NetworkD
 | Client          | 300  | 10.3.0.0/24  | \<ipv6-prefix\>:300::/64 | unconnected client network |
 | IoT             | 400  | 10.4.0.0/24  | \<ipv6-prefix\>:400::/64 | unsecure devices and systems |
 
-TODO: create automation script, see: https://docs.opnsense.org/development/api/core/firewall.html
+TODO: create automation script, see: https://docs.opnsense.org/development/api/core/firewall.html, https://github.com/andreas-stuerz/opn-cli
 
 - go to Interfaces -> Devices -> VLAN and add vlans
 - go to the created VLAN as interfaces and configure static IP according to VLAN specs
