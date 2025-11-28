@@ -111,9 +111,8 @@ EOF
 
 function default_settings() {
   GEN_MAC=02:$(openssl rand -hex 5 | awk '{print toupper($0)}' | sed 's/\(..\)/\1:/g; s/.$//')
-  DISK_SIZE="8G"
   FORMAT=",efitype=4m"
-  DISK_SIZE="8G"
+  DISK_SIZE="16G"
   CORE_COUNT="2"
   RAM_SIZE="4096"
   BRG="lan"
@@ -150,10 +149,10 @@ msg_ok "downlaoding NixOS ISO file: $NIXURL"
 curl -fsSL $NIXURL -o /var/lib/vz/template/iso/$FILE
 msg_ok "Creating the TAPPaaS NixOS VM: $VMID, name: $VMNAME"
 qm create $VMID --agent 1 --tablet 0 --localtime 1 --bios ovmf --cores $CORE_COUNT --memory $RAM_SIZE \
-  --name $VMNAME --net0 virtio,bridge=$BRG,macaddr=$MAC$VLAN$MTU --onboot 1 --ostype l26 --scsihw virtio-scsi-pci
+  --name $VMNAME --net0 virtio,bridge=$BRG,macaddr=$MAC$VLAN$MTU --onboot 1 --ostype l26 --scsihw virtio-scsi-pci >/dev/null
 msg_ok " - Created base VM configuration"
-pvesm alloc $STORAGE $VMID $DISK0 4M # 1>&/dev/null
-pvesm alloc $STORAGE $VMID $DISK1 $DISK_SIZE # 1>&/dev/null
+pvesm alloc $STORAGE $VMID $DISK0 4M  1>&/dev/null
+pvesm alloc $STORAGE $VMID $DISK1 $DISK_SIZE  1>&/dev/null
 msg_ok " - Created EFI disk"
 # qm importdisk $VMID ${FILE} $STORAGE ${DISK_IMPORT:-} # 1>&/dev/null
 # msg_ok " - Imported NixOS disk image"
@@ -162,7 +161,7 @@ qm set $VMID \
   -efidisk0 ${DISK0_REF}${FORMAT} \
   -scsi0 ${DISK1_REF},discard=on,ssd=1,size=${DISK_SIZE} \
   -ide2 ${STORAGE}:cloudinit \
-  -boot order='ide3;scsi0' 
+  -boot order='ide3;scsi0' >/dev/null
 msg_ok " - Set VM disks and cloudinit"
 qm set $VMID -serial0 socket >/dev/null
 qm set $VMID --tags TAPPaaS >/dev/null
