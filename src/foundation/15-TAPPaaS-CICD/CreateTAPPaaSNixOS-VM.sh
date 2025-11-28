@@ -121,8 +121,9 @@ function default_settings() {
   VLAN=""
   MTU=""
   STORAGE="tanka1"
-  NIXURL=https://channels.nixos.org/nixos-25.05/latest-nixos-minimal-x86_64-linux.iso
-  FILE=latest-nixos-minimal-x86_64-linux.iso
+  # FILE=latest-nixos-minimal-x86_64-linux.iso
+  FILE=latest-nixos-graphical-x86_64-linux.iso
+  NIXURL=https://channels.nixos.org/nixos-25.05/$FILE
   VMID=8080
   VMNAME=tappaas-nixos  
   DISK0="vm-${VMID}-disk-0"
@@ -145,7 +146,8 @@ default_settings
 create_vm_descriptions_html
 check_root
 
-msg_ok "Using NixOS ISO file: $FILE"
+msg_ok "downlaoding NixOS ISO file: $NIXURL"
+curl -fsSL $NIXURL -o /var/lib/vz/template/iso/$FILE
 msg_ok "Creating the TAPPaaS NixOS VM: $VMID, name: $VMNAME"
 qm create $VMID --agent 1 --tablet 0 --localtime 1 --bios ovmf --cores $CORE_COUNT --memory $RAM_SIZE \
   --name $VMNAME --net0 virtio,bridge=$BRG,macaddr=$MAC$VLAN$MTU --onboot 1 --ostype l26 --scsihw virtio-scsi-pci
