@@ -29,30 +29,14 @@
   imports =
     [ # Note we are not doing hardware includes
     ./hardware-configuration.nix
-  #    (modulesPath + "/virtualisation/proxmox-image.nix")
     ];
-
-  # Cloud-init
-  # proxmox.cloudInit = {
-  #    enable = true;
-  #    defaultStorage="local-zfs";
-  # };
 
   services.cloud-init = {
         enable = true;
-        network.enable = true;
-#        config = ''
-#          system_info:
-#            distro: nixos
-#            default_user:
-#              name: tappaas
-#          users:
-#              - default
+        network.enable = false; # We handle networking ourselves with DHCP
   };
 
   # Use the systemd-boot EFI boot loader.
-  # boot.loader.grub.enable = lib.mkDefault true; # Use the boot drive for GRUB
-  # boot.loader.grub.devices = [ "nodev" ];
   boot.loader.systemd-boot.enable = lib.mkDefault true;
   boot.loader.efi.canTouchEfiVariables = lib.mkDefault true;
 
@@ -66,11 +50,7 @@
   # Users
   users.users.tappaas = {
         isNormalUser = true;
-  #      password = "tappaas"; # uncomment only for testing ssh connections
         extraGroups = [ "wheel" "networkmanager" ];
-  #      openssh.authorizedKeys.keys = [
-  #          "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAACAQDhNBiriC5vajtn1xvVuVJ9uvyfZ/DOTkCoREDaSWs1UYOhYBhwu4oH3Gqect1dlKO4zfVuOfK0eE5CgwHlc77/aZLLn6LpJeo0raIX3H4G3bKMQxj2O3F3aq54IxzROg+qZ5RD/VXW1havkbOiXOjvJEMc6asUjH33PdQLJyjbOdCjQTKDbPiZ+TNBbkz3jaKJImLhDsYEdubVUJ+MemCRspEXvzuWGFUoQ+cltHvBMeF7oSY6CGkY35dMWRV53J54P1D3/Xj9/R82ZHClXQWsO+IuWlqPEF0ZfJJtwKGqBJ3Ap91nNr3UhAqorYvzjhCAdTj9UvB2RMkNdub6RAIg383ujcMN62gfMqvxS9bQmKHDVPBaFPX0wWBtFkPWazmVG4gIypuwz7fAB2oIRpGCEhyMBrdW006fD/+F1BejjinC3SCje1+NIuRA42fjzna6kSAQGqeXqbvyJGRU0Y0HKi4vjfXp+gjaCQtvdJ7WJXYnbLMH3b7d+8FeOYQBHA5vktLDx1EXnd1EbHfMcZ73e4Hn+HomsZR4XyGTgbKzg5IjBPpIpXFk+4KnEPqei+03XsDhN0nwpngbIT3rJkVPkTgUZ58Fs30ucsvgqM5XI5YeRenys46IUcTqTOFh0faS1KwWV3de18AbZZY95WJpxjpFGxNIax1uuDGepJ9nZQ== root@tappaas1"
-  #      ];
   };
 
   # Enable passwordless sudo for tappaas
@@ -88,13 +68,8 @@
 
   nix.settings.trusted-users = [ "root" "@wheel" ]; # Allow remote updates
   nix.settings.experimental-features = [ "nix-command" "flakes" ]; # Enable flakes
-  Nixpkgs.config.allowUnfree = true; # Allow unfree packages
+  nixpkgs.config.allowUnfree = true; # Allow unfree packages
 
-  # fileSystems."/" = lib.mkDefault {
-  #  device = "/dev/disk/by-label/nixos";
-  #  autoResize = true;
-  #  fsType = "ext4";
-  #};
 
   # QEMU Guest Agent
   services.qemuGuest.enable = true;
@@ -118,19 +93,7 @@
         options = "--delete-older-than 30d";
   };
 
-
-
-  # Some programs need SUID wrappers, can be configured further or are
-  # started in user sessions.
-  # programs.mtr.enable = true;
-  # programs.gnupg.agent = {
-  #   enable = true;
-  #   enableSSHSupport = true;
-  # };
-
-  # List services that you want to enable:
-
-
+  # Firewall configuration
   # Open ports in the firewall.
   # networking.firewall.allowedTCPPorts = [ ... ];
   # networking.firewall.allowedUDPPorts = [ ... ];
