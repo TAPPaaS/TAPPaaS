@@ -63,7 +63,8 @@ function exit-script() {
   BOLD=$(echo "\033[1m")
   BFR="\\r\\033[K"
   TAB="  "
-}
+
+  
   GEN_MAC=02:$(openssl rand -hex 5 | awk '{print toupper($0)}' | sed 's/\(..\)/\1:/g; s/.$//')
   DISK_SIZE="8G"
   TEMPLATEVMID="8080"
