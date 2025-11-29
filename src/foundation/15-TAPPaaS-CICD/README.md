@@ -33,7 +33,8 @@ In the console of the VM do the following
 
 ```
 sudo curl -fsSL  https://raw.githubusercontent.com/TAPPaaS/TAPPaaS/main/src/foundation/15-TAPPaaS-CICD/TAPPaaS-Base.nix  >TAPPaaS-Base.nix
-sudo nixos-rebuild switch  -I nixos-config=TAPPaaS-Base.nix
+sudo cp TAPPAaS-Base.nix /etc/nixos/configuration.nix
+sudo nixos-rebuild switch
 
 ```
 

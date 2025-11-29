@@ -71,6 +71,14 @@
   nixpkgs.config.allowUnfree = true; # Allow unfree packages
 
 
+  # start tty0 on serial console
+  systemd.services."serial-getty@ttyS0" = {
+    enable = true;
+    wantedBy = [ "getty.target" ]; # to start at boot
+    serviceConfig.Restart = "always"; # restart when session is closed
+  };
+
+
   # QEMU Guest Agent
   services.qemuGuest.enable = true;
 
