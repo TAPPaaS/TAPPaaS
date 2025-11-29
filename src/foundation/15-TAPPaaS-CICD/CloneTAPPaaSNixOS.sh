@@ -16,20 +16,7 @@
 # This script create a NixOS VM on Proxmox for TAPPaaS usage.
 #
 # usage: bash TAPPaaS-NixOS-Cloning.sh VMID NEWVMNAME CORECount RAMSIZE DISKSIZE VLANTAG "description" 
-
-function init_print_variables() {
-  YW=$(echo "\033[33m")
-  BL=$(echo "\033[36m")
-  HA=$(echo "\033[1;34m")
-  RD=$(echo "\033[01;31m")
-  BGN=$(echo "\033[4;92m")
-  GN=$(echo "\033[1;92m")
-  DGN=$(echo "\033[32m")
-  CL=$(echo "\033[m")
-  BOLD=$(echo "\033[1m")
-  BFR="\\r\\033[K"
-  TAB="  "
-}
+ 
 
 function error_handler() {
   local exit_code="$?"
@@ -65,8 +52,18 @@ function exit-script() {
   exit
 }
 
-
-function default_settings() {
+  YW=$(echo "\033[33m")
+  BL=$(echo "\033[36m")
+  HA=$(echo "\033[1;34m")
+  RD=$(echo "\033[01;31m")
+  BGN=$(echo "\033[4;92m")
+  GN=$(echo "\033[1;92m")
+  DGN=$(echo "\033[32m")
+  CL=$(echo "\033[m")
+  BOLD=$(echo "\033[1m")
+  BFR="\\r\\033[K"
+  TAB="  "
+}
   GEN_MAC=02:$(openssl rand -hex 5 | awk '{print toupper($0)}' | sed 's/\(..\)/\1:/g; s/.$//')
   DISK_SIZE="8G"
   TEMPLATEVMID="8080"
@@ -85,12 +82,11 @@ function default_settings() {
   MAC="$GEN_MAC"
   MTU=""
   STORAGE="tanka1"
-}
+
 
 #
 # ok here we go
 #
-init_print_variables
 
 # Sanity checks for input args
 if [ -z "$1" ] || [ -z "$2" ] || [ -z "$3" ] || [ -z "$4" ] || [ -z "$5" ] || [ -z "$6" ]; then
@@ -108,7 +104,8 @@ pushd $TEMP_DIR >/dev/null
 default_settings
 
 echo -e "${CREATING}${BOLD}${DGN}Creating TAPPaaS NixOS VM from proxmox vm template using the following settings:${CL}"
-echo -e "     - ${BOLD}${DGN}VM ID: ${BGN}${VMID}${CL}, VM Name: ${BGN}${TVMNAME}${CL}"
+echo -e "     - ${BOLD}${DGN}VM ID: ${BGN}${VMID}${CL}"
+echo -e "     - ${BOLD}${DGN}VM Name: ${BGN}${VMNAME}${CL}"
 echo -e "     - ${BOLD}${DGN}Cloned from template: ${BGN}${TEMPLATEVMID}${CL}"
 echo -e "     - ${BOLD}${DGN}Disk Size: ${BGN}${DISK_SIZE}${CL}"
 echo -e "     - ${BOLD}${DGN}Disk/Storage Location: ${BGN}${STORAGE}${CL}"
