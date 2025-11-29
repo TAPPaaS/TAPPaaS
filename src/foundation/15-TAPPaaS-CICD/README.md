@@ -53,9 +53,11 @@ or do it from the proxmox gui
 
 Install cloning script: on the proxmox command prompt, then run the command to create the tappaas-cicd clone
 ```
-sudo curl -fsSL  https://raw.githubusercontent.com/TAPPaaS/TAPPaaS/main/src/foundation/15-TAPPaaS-CICD/CloneTAPPaaSNixOS.sh >~/bin/CloneTAPPaaSNixOS.sh
-chmod 744 bin/loneTAPPaaSNixOS.sh
-CloneTAPPaaSNixOS.sh 101 tappaas-cicd 4 16G 32G "The TAPPaaS mothership VM"
+cd
+mkdir bin
+curl -fsSL  https://raw.githubusercontent.com/TAPPaaS/TAPPaaS/main/src/foundation/15-TAPPaaS-CICD/CloneTAPPaaSNixOS.sh >~/bin/CloneTAPPaaSNixOS.sh
+chmod 744 bin/CloneTAPPaaSNixOS.sh
+bin/CloneTAPPaaSNixOS.sh 101 tappaas-cicd 4 16G 32G "The TAPPaaS mothership VM"
 ```
 
 ssh into vm and
