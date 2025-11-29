@@ -64,17 +64,17 @@ function exit-script() {
   BFR="\\r\\033[K"
   TAB="  "
 
-  
+
   GEN_MAC=02:$(openssl rand -hex 5 | awk '{print toupper($0)}' | sed 's/\(..\)/\1:/g; s/.$//')
   DISK_SIZE="8G"
   TEMPLATEVMID="8080"
   VMID=$1
   VMNAME=$2
-  DESCRIPTION=$3
   CORE_COUNT=$3
   RAM_SIZE=$4
   DISK_SIZE=$5
   VLANTAG=$6
+  DESCRIPTION=$7
   BRG="lan"
   FORMAT=",efitype=4m"
   MACHINE=""
@@ -102,8 +102,6 @@ trap cleanup EXIT
 TEMP_DIR=$(mktemp -d)
 pushd $TEMP_DIR >/dev/null
 
-default_settings
-
 echo -e "${CREATING}${BOLD}${DGN}Creating TAPPaaS NixOS VM from proxmox vm template using the following settings:${CL}"
 echo -e "     - ${BOLD}${DGN}VM ID: ${BGN}${VMID}${CL}"
 echo -e "     - ${BOLD}${DGN}VM Name: ${BGN}${VMNAME}${CL}"
@@ -114,7 +112,7 @@ echo -e "     - ${BOLD}${DGN}CPU Cores: ${BGN}${CORE_COUNT}${CL}"
 echo -e "     - ${BOLD}${DGN}RAM Size: ${BGN}${RAM_SIZE}${CL}"
 echo -e "     - ${BOLD}${DGN}Bridge: ${BGN}${BRG}${CL}"
 echo -e "     - ${BOLD}${DGN}MAC Address: ${BGN}${MAC}${CL}"
-echo -e "     - ${BOLD}${DGN}VLAN: ${BGN}Default${CL}"
+echo -e "     - ${BOLD}${DGN}VLAN Tag: ${BGN}${VLANTAG}${CL}"
 echo -e "     - ${BOLD}${DGN}Description: ${BGN}${DESCRIPTION}${CL}"
 
 echo -e "\n${CREATING}${BOLD}${DGN}Starting the TAPPaaS NixOS VM creation process...${CL}\n"

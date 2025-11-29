@@ -57,14 +57,13 @@ cd
 mkdir bin
 curl -fsSL  https://raw.githubusercontent.com/TAPPaaS/TAPPaaS/main/src/foundation/15-TAPPaaS-CICD/CloneTAPPaaSNixOS.sh >~/bin/CloneTAPPaaSNixOS.sh
 chmod 744 bin/CloneTAPPaaSNixOS.sh
-bin/CloneTAPPaaSNixOS.sh 101 tappaas-cicd 4 16G 32G "The TAPPaaS mothership VM"
+bin/CloneTAPPaaSNixOS.sh 101 tappaas-cicd 4 16G 32G 0 "The TAPPaaS mothership VM"
 ```
 
-ssh into vm and
-- clone the git repository
-- rebuild the nixos for tappaas cicd
-- create ssh keys for tappass@tappass-cicd
-
+on the tappaas-cicd console do:
+```
+curl -fsSL  https://raw.githubusercontent.com/TAPPaaS/TAPPaaS/main/src/foundation/15-TAPPaaS-CICD/install.sh
+```
 
 
 # Old Setup
