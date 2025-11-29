@@ -52,6 +52,7 @@ or do it from the proxmox gui
 ## create tappaas-cicd
 
 clone the tappass-nixos to tappaas-cicd 
+
 configure the cloud-init
 start the VM
 ssh into vm and
