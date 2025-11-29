@@ -51,10 +51,13 @@ or do it from the proxmox gui
 
 ## create tappaas-cicd
 
-clone the tappass-nixos to tappaas-cicd 
+Install cloning script: on the proxmox command prompt, then run the command to create the tappaas-cicd clone
+```
+sudo curl -fsSL  https://raw.githubusercontent.com/TAPPaaS/TAPPaaS/main/src/foundation/15-TAPPaaS-CICD/CreateTAPPaaSNixOs-VM.sh >~/bin/CreateTAPPaaSNixOS-VM.sh
+chmod 744 bin/CreateTAPPaaSNixOS-VM.sh
+CreateTAPPaaSNixOS-VM.sh 101 tappaas-cicd 4 16G 32G "The TAPPaaS mothership VM"
+```
 
-configure the cloud-init
-start the VM
 ssh into vm and
 - clone the git repository
 - rebuild the nixos for tappaas cicd
