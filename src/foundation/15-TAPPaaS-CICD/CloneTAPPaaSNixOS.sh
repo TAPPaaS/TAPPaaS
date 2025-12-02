@@ -15,7 +15,7 @@
 
 # This script create a NixOS VM on Proxmox for TAPPaaS usage.
 #
-# usage: bash TAPPaaS-NixOS-Cloning.sh VMID NEWVMNAME CORECount RAMSIZE DISKSIZE VLANTAG "description" 
+# usage: bash TAPPaaS-NixOS-Cloning.sh namOfVM  (name of VM will be used to reference the json config file in ~/tappaas/)
  
 
 function error_handler() {
@@ -64,25 +64,42 @@ function exit-script() {
   BFR="\\r\\033[K"
   TAB="  "
 
+#
+# ok here we go
+#
 
-  GEN_MAC=02:$(openssl rand -hex 5 | awk '{print toupper($0)}' | sed 's/\(..\)/\1:/g; s/.$//')
-  DISK_SIZE="8G"
-  TEMPLATEVMID="8080"
-  VMID=$1
-  VMNAME=$2
-  CORE_COUNT=$3
-  RAM_SIZE=$4
-  DISK_SIZE=$5
-  VLANTAG=$6
-  DESCRIPTION=$7
-  BRG="lan"
-  FORMAT=",efitype=4m"
-  MACHINE=""
-  DISK_CACHE=""
-  CPU_TYPE=""
-  MAC="$GEN_MAC"
-  MTU=""
-  STORAGE="tanka1"
+# Sanity checks for input args
+
+  echo -e "Usage: bash TAPPaaS-NixOS-Cloning.sh VMID NEWVMNAME CORECount RAMSIZE DISKSIZE VLANTAG\n"
+
+set -e
+trap 'error_handler $LINENO "$BASH_COMMAND"' ERR
+trap cleanup EXIT
+TEMP_DIR=$(mktemp -d)
+pushd $TEMP_DIR >/dev/null
+
+# test to see if the json config file exist
+JSON_CONFIG="~/tappaas/$1.json"
+if [ -z "$JSON_CONFIG" ]; then
+  echo -e "\n${RD}[ERROR]${CL} Missing required argument VMNAME."
+  echo -e "Usage: bash TAPPaaS-NixOS-Cloning.sh VMNAME\n"
+  exit 1
+fi
+JSON=$(cat JSON_CONFIG)
+
+GEN_MAC=02:$(openssl rand -hex 5 | awk '{print toupper($0)}' | sed 's/\(..\)/\1:/g; s/.$//')
+DISK_SIZE="8G"
+TEMPLATEVMID="8080"
+VMID=$(echo $JSON | jq -r '.vmid')
+VMNAME=$(echo $JSON | jq -r '.hostname')
+CORE_COUNT=$(echo $JSON | jq -r '.cores')
+RAM_SIZE=$(echo $JSON | jq -r '.memory')
+DISK_SIZE=$(echo $JSON | jq -r '.diskSize')
+VLANTAG=$(echo $JSON | jq -r '.vlantag')
+DESCRIPTION=$(echo $JSON | jq -r '.description')
+BRG="lan"
+MAC="$GEN_MAC"
+STORAGE=$(echo $JSON | jq -r '.storage')
 
 
 #
@@ -119,8 +136,30 @@ echo -e "\n${CREATING}${BOLD}${DGN}Starting the TAPPaaS NixOS VM creation proces
 
 qm clone $TEMPLATEVMID $VMID --name $VMNAME --full 1 >/dev/null
 qm set $VMID --Tag TAPPaaS >/dev/null
-qm set $VMID -description "$DESCRIPTION" >/dev/null
+qm set $VMID --description "$DESCRIPTION" >/dev/null
+qm set $VMID --serial0 socket >/dev/null
+qm set $VMID --tags TAPPaaS >/dev/null
+qm set $VMID --agent enabled=1 >/dev/null
+qm set $VMID --ciuser tappaas >/dev/null
+qm set $VMID --ipconfig0 ip=dhcp >/dev/null
+qm set $VMID --cores $CORE_COUNT --memory $RAM_SIZE >/dev/null
+if [ -n "$VLANTAG" ] && [ "$VLANTAG" != "0" ]; then
+  qm set $VMID --net0 virtio,bridge=$BRG,tag=$VLANTAG,macaddr=$MAC >/dev/null
+else
+  qm set $VMID --net0 virtio,bridge=$BRG,macaddr=$MAC >/dev/null
+fi
+if [ "VMNAME" == "tappaas-cicd" ]; then
+  qm set $VMID --sshkey ~/.ssh/id_rsa.pub >/dev/null
+else
+  qm set $VMID --sshkey ~/tappaas-cicd.pub >/dev/null
+fi
+qm resize $VMID scsi0 ${DISK_SIZE} >/dev/null
+
 qm start $VMID >/dev/null
-echo -e "\n${OK}${BOLD}${GN}TAPPaaS NixOS VM creation completed successfully!${CL}\n"
+echo -e "\n${OK}${BOLD}${GN}TAPPaaS NixOS VM creation completed successfully, if diskzise changed then log in and resize disk!${CL}\n"
+echo -e "${TAB}${BOLD}parted /dev/vda (fix followed by resizepart 3 100% then quit), followed resize2f /dev/vda3 ${CL}"
+
+sleep 10
+ssh 
 
 

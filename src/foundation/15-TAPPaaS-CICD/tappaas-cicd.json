@@ -1,0 +1,11 @@
+{
+    "vmid": 101,
+    "vmtag": "TAPPaaS,Foundation",
+    "hostname": "tappaas-cicd",
+    "cores": 4,
+    "memory": "16G",
+    "diskSize": "32G",
+    "vlantag": 0,
+    "storrage": "tanka1",
+    "description": "The TAPPaaS mothership VM"  
+}

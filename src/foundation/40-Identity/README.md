@@ -9,5 +9,6 @@ do the following steps
 - configure caddy to pass through the authentik service to identity.intern port 80
 - configure caddy to pass through the vaultwarden service to identity.intenral port 8080
 - run the install.sh script from the tappaas-cicd command line to create the identity VM
+- create firewall rule to allow access from caddy to identity.internal TCP port 80 and 8080
 
 #Test the identity and secrets solution

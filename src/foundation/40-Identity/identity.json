@@ -1,0 +1,11 @@
+{
+    "vmid": 102,
+    "vmtag": "TAPPaaS,Foundation",
+    "hostname": "identity",
+    "cores": 2,
+    "memory": "8G",
+    "diskSize": "32G",
+    "vlantag": 0,
+    "storrage": "tanka1",
+    "description": "Identity VM for TAPPaaS"  
+}

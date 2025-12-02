@@ -91,6 +91,7 @@
         wget
         curl
         htop
+        jq
         git
   ];
 

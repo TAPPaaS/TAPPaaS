@@ -55,7 +55,7 @@ in the Proxmox GUI do:
 - now click create and click "apply configuration"
 
 Rename the vmbr0 bridge to wan:
-in the command line/console of tappas1 do the following:
+in the command line/console of tappaas1 do the following:
 edit the /etc/network/interfaces
 replace all occurrences of "vmbr0" with the string "wan" (there should be two instances)
 save file

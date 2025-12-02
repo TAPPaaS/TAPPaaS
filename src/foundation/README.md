@@ -12,3 +12,5 @@ The modules in Foundation should be installed and configured in the numbered ord
 5. Single Node: setup Proxmox backup: [Backup Single Node](./70a-SingleNodeBackup/README.md)
 6. Multi node: Add additional proxmos nodes, configure hight availability and setup backup server [HA and Backup with Multi TAPPaaS nodes](./70b-MultiNodeHAandBackup/README.md)
 
+As part of foundation there is a general configuration.json that will be installed locally in the tappass account on the cicd "mothership" VM under ~tappaas/configuration/foundation.json
+This file must be modified to reflect the local installation.

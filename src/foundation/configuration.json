@@ -1,0 +1,12 @@
+{
+    "-comment1": "configuration for TAPPaaS feel free to change any defaults",
+    "-comment2": "you must change the fields had have a value that start with CHANGE",  
+
+    "tappaas": {
+        "domain": "CHANGE-mytappaas.dev",
+        "email": "CHANGE-tappaas@mytappaas.dev",
+        "nodeCount": 1,
+        "nodeNamePrefix": "tappaas",
+
+        "UpstreamGit": "github.com/TAPPaaS/TAPPaaS",
+}

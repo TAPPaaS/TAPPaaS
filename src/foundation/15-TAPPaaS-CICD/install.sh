@@ -21,6 +21,13 @@ ssh-keygen -t ed25519 -f /home/tappaas/.ssh/id_ed25519 -N "" -C "tappaas-cicd"
 sudo chown tappaas:tappaas /home/tappaas/.ssh/id_ed25519*
 sudo chmod 600 /home/tappaas/.ssh/id_ed25519
 
+# copy the public key to the root account of the proxmox host
+ssh-copy-id -i /home/tappaas/.ssh/id_ed25519.pub root@tappaas1.internal
+also make the key availabel for the tappaas script that configure cloud-init on the vms
+ssh root@tappaas1.internal "mkdir -p /root/tappaas"
+scp /home/tappaas/.ssh/id_ed25519.pub root@tappaas1.internal:/root/tappaas/tappaas-cicd.pub
+
+
 echo "TODO install public key on proxmox node for tappaas user"
 
 echo "\nTAPPaaS-CICD installation completed successfully."

@@ -8,10 +8,10 @@ if [ "$(hostname)" != "tappaas-cicd" ]; then
 fi      
 
 # clone the nixos template
-ssh root@tappaas.internal "bash -s" < bin/CloneTAPPaaSNixOS.sh 102 identity 2 8G 16G 0 "Identity VM for TAPPaaS"
+ssh root@tappaas1.internal "bash -s" < bin/CloneTAPPaaSNixOS.sh identity
 
 # rebuild the nixos configuration
-nixos-rebuild switch -I nixos-config=./identity.nix
+nixos-rebuild --target-host tappaas@identity.internal --use-remote-sudo switch -I nixos-config=./identity.nix
 
 
 echo "\nIdentity VM installation completed successfully."
