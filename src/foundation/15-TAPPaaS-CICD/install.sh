@@ -27,7 +27,4 @@ also make the key availabel for the tappaas script that configure cloud-init on 
 ssh root@tappaas1.internal "mkdir -p /root/tappaas"
 scp /home/tappaas/.ssh/id_ed25519.pub root@tappaas1.internal:/root/tappaas/tappaas-cicd.pub
 
-
-echo "TODO install public key on proxmox node for tappaas user"
-
 echo "\nTAPPaaS-CICD installation completed successfully."
