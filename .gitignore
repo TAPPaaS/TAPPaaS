@@ -12,3 +12,8 @@ src/modules/opnsense/tapaas.tfvars
 cspell.json
 src/config local
 dev/
+.env.key
+setup.sh
+tmp/litellm.sql
+tmp/litellm_data_only.sql
+.gitignore
