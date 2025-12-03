@@ -3,9 +3,9 @@
     "vmtag": "TAPPaaS,Foundation",
     "hostname": "tappaas-cicd",
     "cores": 4,
-    "memory": "16G",
-    "diskSize": "32G",
+    "memory": "16384",
+    "diskSize": "32GB",
     "vlantag": 0,
-    "storrage": "tanka1",
+    "storage": "tanka1",
     "description": "The TAPPaaS mothership VM"  
 }

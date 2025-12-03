@@ -3,9 +3,9 @@
     "vmtag": "TAPPaaS,Foundation",
     "hostname": "identity",
     "cores": 2,
-    "memory": "8G",
-    "diskSize": "32G",
+    "memory": "8192",
+    "diskSize": "32GB",
     "vlantag": 0,
-    "storrage": "tanka1",
+    "storage": "tanka1",
     "description": "Identity VM for TAPPaaS"  
 }

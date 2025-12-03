@@ -65,6 +65,6 @@ chmod 744 ~/tappaas/CloneTAPPaaSNixOS.sh
 There should now be a running tappaas-cicd VM.
 on the tappaas-cicd console do:
 ```
-curl -fsSL  https://raw.githubusercontent.com/TAPPaaS/TAPPaaS/main/src/foundation/15-TAPPaaS-CICD/install.sh
+curl -fsSL  https://raw.githubusercontent.com/TAPPaaS/TAPPaaS/main/src/foundation/15-TAPPaaS-CICD/install.sh | bash
 ```
 

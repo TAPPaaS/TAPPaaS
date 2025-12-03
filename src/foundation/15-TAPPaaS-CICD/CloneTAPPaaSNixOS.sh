@@ -70,8 +70,6 @@ function exit-script() {
 
 # Sanity checks for input args
 
-  echo -e "Usage: bash TAPPaaS-NixOS-Cloning.sh VMID NEWVMNAME CORECount RAMSIZE DISKSIZE VLANTAG\n"
-
 set -e
 trap 'error_handler $LINENO "$BASH_COMMAND"' ERR
 trap cleanup EXIT
@@ -81,11 +79,11 @@ pushd $TEMP_DIR >/dev/null
 # test to see if the json config file exist
 JSON_CONFIG="~/tappaas/$1.json"
 if [ -z "$JSON_CONFIG" ]; then
-  echo -e "\n${RD}[ERROR]${CL} Missing required argument VMNAME."
+  echo -e "\n${RD}[ERROR]${CL} Missing or mispelled required argument VMNAME. Current value: '$1'"
   echo -e "Usage: bash TAPPaaS-NixOS-Cloning.sh VMNAME\n"
   exit 1
 fi
-JSON=$(cat JSON_CONFIG)
+JSON=$(cat $JSON_CONFIG)
 
 GEN_MAC=02:$(openssl rand -hex 5 | awk '{print toupper($0)}' | sed 's/\(..\)/\1:/g; s/.$//')
 DISK_SIZE="8G"
@@ -100,24 +98,11 @@ DESCRIPTION=$(echo $JSON | jq -r '.description')
 BRG="lan"
 MAC="$GEN_MAC"
 STORAGE=$(echo $JSON | jq -r '.storage')
-
+#TODO add VM tag support
 
 #
 # ok here we go
 #
-
-# Sanity checks for input args
-if [ -z "$1" ] || [ -z "$2" ] || [ -z "$3" ] || [ -z "$4" ] || [ -z "$5" ] || [ -z "$6" ]; then
-  echo -e "\n${RD}[ERROR]${CL} Missing required arguments."
-  echo -e "Usage: bash TAPPaaS-NixOS-Cloning.sh VMID NEWVMNAME CORECount RAMSIZE DISKSIZE VLANTAG\n"
-  exit 1
-fi
-
-set -e
-trap 'error_handler $LINENO "$BASH_COMMAND"' ERR
-trap cleanup EXIT
-TEMP_DIR=$(mktemp -d)
-pushd $TEMP_DIR >/dev/null
 
 echo -e "${CREATING}${BOLD}${DGN}Creating TAPPaaS NixOS VM from proxmox vm template using the following settings:${CL}"
 echo -e "     - ${BOLD}${DGN}VM ID: ${BGN}${VMID}${CL}"
@@ -135,7 +120,7 @@ echo -e "     - ${BOLD}${DGN}Description: ${BGN}${DESCRIPTION}${CL}"
 echo -e "\n${CREATING}${BOLD}${DGN}Starting the TAPPaaS NixOS VM creation process...${CL}\n"
 
 qm clone $TEMPLATEVMID $VMID --name $VMNAME --full 1 >/dev/null
-qm set $VMID --Tag TAPPaaS >/dev/null
+qm set $VMID --Tag TAPPaaS >/dev/null  #TODO update to take tags from json
 qm set $VMID --description "$DESCRIPTION" >/dev/null
 qm set $VMID --serial0 socket >/dev/null
 qm set $VMID --tags TAPPaaS >/dev/null
@@ -148,18 +133,18 @@ if [ -n "$VLANTAG" ] && [ "$VLANTAG" != "0" ]; then
 else
   qm set $VMID --net0 virtio,bridge=$BRG,macaddr=$MAC >/dev/null
 fi
-if [ "VMNAME" == "tappaas-cicd" ]; then
+if [ "$VMNAME" == "tappaas-cicd" ]; then
   qm set $VMID --sshkey ~/.ssh/id_rsa.pub >/dev/null
 else
   qm set $VMID --sshkey ~/tappaas-cicd.pub >/dev/null
 fi
-qm resize $VMID scsi0 ${DISK_SIZE} >/dev/null
+# TODO fix disk resize
+# qm resize $VMID scsi0 ${DISK_SIZE} >/dev/null  
 
 qm start $VMID >/dev/null
-echo -e "\n${OK}${BOLD}${GN}TAPPaaS NixOS VM creation completed successfully, if diskzise changed then log in and resize disk!${CL}\n"
-echo -e "${TAB}${BOLD}parted /dev/vda (fix followed by resizepart 3 100% then quit), followed resize2f /dev/vda3 ${CL}"
+echo -e "\n${OK}${BOLD}${GN}TAPPaaS NixOS VM creation completed successfully" 
+# echo -e "if disksize changed then log in and resize disk!${CL}\n"
+# echo -e "${TAB}${BOLD}parted /dev/vda (fix followed by resizepart 3 100% then quit), followed resize2f /dev/vda3 ${CL}"
 
-sleep 10
-ssh 
 
 
