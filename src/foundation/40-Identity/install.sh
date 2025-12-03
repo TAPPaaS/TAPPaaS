@@ -7,8 +7,12 @@ if [ "$(hostname)" != "tappaas-cicd" ]; then
   exit 1
 fi      
 
+# make sure we have the latest version of the configuration files
+git pull
+
 # clone the nixos template
-ssh root@tappaas1.internal "bash -s" < bin/CloneTAPPaaSNixOS.sh identity
+scp identity.json root@tappaas1.internal:/root/tappaas/identity.json
+ssh root@tappaas1.internal "/root/tappaas/CloneTAPPaaSNixOS.sh identity"
 
 # rebuild the nixos configuration
 nixos-rebuild --target-host tappaas@identity.internal --use-remote-sudo switch -I nixos-config=./identity.nix

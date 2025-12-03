@@ -62,9 +62,13 @@ chmod 744 ~/tappaas/CloneTAPPaaSNixOS.sh
 ~/tappaas/CloneTAPPaaSNixOS.sh tappaas-cicd
 ```
 
-There should now be a running tappaas-cicd VM.
+There should now be a running tappaas-cicd VM. you can ssh into the VM from the proxmox console
+```
+ssh tappaas@tappaas-cicd.intenal
+```
+
 on the tappaas-cicd console do:
 ```
 curl -fsSL  https://raw.githubusercontent.com/TAPPaaS/TAPPaaS/main/src/foundation/15-TAPPaaS-CICD/install.sh | bash
 ```
-
+You might be asked for password for root at proxmox node tappaas1

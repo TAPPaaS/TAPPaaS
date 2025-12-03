@@ -1,3 +1,5 @@
+#!/bin/env bash
+#
 # install tappass-cicd foundation in a barebone nixos vm
 
 # check that hostname is tappaas-cicd
@@ -7,15 +9,18 @@ if [ "$(hostname)" != "tappaas-cicd" ]; then
 fi      
 
 # clone the tappaas-cicd repo
+echo -e "\nCloning TAPPaaS repository..."
 git clone   https://github.com/TAPPaaS/TAPPaaS.git
 
 # go to the tappaas-cicd folder
+echo -e "\nChanging to TAPPaaS-CICD directory and rebuilding the NixOS configuration..."
 cd TAPPaaS/src/foundation/15-TAPPaaS-CICD
 
 # rebuild the nixos configuration
 sudo nixos-rebuild switch -I nixos-config=./tappaas-cicd.nix
 
 # create ssh keys for the tappaas user
+echo -e "\nCreating SSH keys for the tappaas user and installing them for the proxmox host..."
 ssh-keygen -t ed25519 -f /home/tappaas/.ssh/id_ed25519 -N "" -C "tappaas-cicd"
 # enforce secure permissions on the private key
 sudo chown tappaas:users /home/tappaas/.ssh/id_ed25519*
