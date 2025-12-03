@@ -77,7 +77,7 @@ TEMP_DIR=$(mktemp -d)
 pushd $TEMP_DIR >/dev/null
 
 # test to see if the json config file exist
-JSON_CONFIG="~/tappaas/$1.json"
+JSON_CONFIG="/root/tappaas/$1.json"
 if [ -z "$JSON_CONFIG" ]; then
   echo -e "\n${RD}[ERROR]${CL} Missing or mispelled required argument VMNAME. Current value: '$1'"
   echo -e "Usage: bash TAPPaaS-NixOS-Cloning.sh VMNAME\n"

@@ -8,5 +8,6 @@
         "nodeCount": 1,
         "nodeNamePrefix": "tappaas",
 
-        "UpstreamGit": "github.com/TAPPaaS/TAPPaaS",
+        "UpstreamGit": "github.com/TAPPaaS/TAPPaaS"
+    }
 }

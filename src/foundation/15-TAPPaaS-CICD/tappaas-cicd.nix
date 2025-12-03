@@ -27,8 +27,8 @@
 
 {
   imports =
-    [ # Note we are not doing hardware includes
-    ./hardware-configuration.nix
+    [ 
+      /etc/nixos/hardware-configuration.nix
     ];
 
   services.cloud-init = {
