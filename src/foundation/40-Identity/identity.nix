@@ -133,7 +133,6 @@ services.vaultwarden = {
 };
 
   # Identity Management - Authentik
-  {
     services.authentik = {
       enable = true;
       # The environmentFile needs to be on the target host!
@@ -152,7 +151,7 @@ services.vaultwarden = {
         avatars = "initials";
       };
     };
-  }
+
 
 
   # Firewall configuration

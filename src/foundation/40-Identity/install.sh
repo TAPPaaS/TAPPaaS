@@ -8,7 +8,7 @@ if [ "$(hostname)" != "tappaas-cicd" ]; then
 fi      
 
 # make sure we have the latest version of the configuration files
-git pull
+# git pull
 
 # clone the nixos template
 scp identity.json root@tappaas1.internal:/root/tappaas/identity.json
