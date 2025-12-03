@@ -136,8 +136,9 @@ fi
 if [ "$VMNAME" == "tappaas-cicd" ]; then
   qm set $VMID --sshkey ~/.ssh/id_rsa.pub >/dev/null
 else
-  qm set $VMID --sshkey ~/tappaas-cicd.pub >/dev/null
+  qm set $VMID --sshkey ~/tappaas/tappaas-cicd.pub >/dev/null
 fi
+qm cloudinit update $VMID >/dev/null
 # TODO fix disk resize
 # qm resize $VMID scsi0 ${DISK_SIZE} >/dev/null  
 
