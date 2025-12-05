@@ -6,7 +6,10 @@
     "cores": 4,
     "memory": "16384",
     "diskSize": "32GB",
-    "vlantag": 0,
     "storage": "tanka1",
+    "imageType": "clone",
+    "image": "8080",
+    "bridge": "lan",
+    "vlantag": 0,
     "description": "The TAPPaaS mothership VM"  
 }

@@ -6,7 +6,10 @@
     "cores": 2,
     "memory": "8192",
     "diskSize": "32GB",
-    "vlantag": 0,
     "storage": "tanka1",
+    "imageType": "clone",
+    "image": "8080",
+    "bridge": "lan",
+    "vlantag": 0,
     "description": "Identity VM for TAPPaaS"  
 }

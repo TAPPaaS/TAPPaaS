@@ -84,7 +84,9 @@ where Wan is the only port on the Proxmox box that is used by the hypervisor
 now create the OPNSense VM: from the command prompt/console of tappaas1:
 
 ```
-curl -fsSL  https://raw.githubusercontent.com/TAPPaaS/TAPPaaS/main/src/foundation/10-OPNsense/opnsense-vm.sh| bash
+curl -fsSL  https://raw.githubusercontent.com/TAPPaaS/TAPPaaS/main/src/foundation/10-OPNsense/firewall.json > /root/tappaas/firewall.json
+~/tappaas/Create-TAPPaas-VM.sh firewall
+
 ```
 
 boot up the VM and configure the opnsense

@@ -1,0 +1,16 @@
+{
+    "version": "0.5",
+    "vmid": 888,
+    "vmtag": "TAPPaaS,Foundation",
+    "hostname": "firewall",
+    "cores": 4,
+    "memory": "8192",
+    "diskSize": "16GB",
+    "storage": "tanka1",
+    "imageType": "img",
+    "image": "OPNsense-25.7-nano-amd64.img.bz2",
+    "imageLocation": "https://pkg.opnsense.org/releases/25.7/",
+    "bridge": "lan",
+    "vlantag": 0,
+    "description": "The TAPPaaS Firewall VM (OPNsense)"  
+}
