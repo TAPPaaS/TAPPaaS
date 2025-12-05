@@ -117,7 +117,8 @@ function get_config_value() {
   return $(echo $JSON | jq -r --arg KEY "$key" '.[$KEY]')
 }
 
-GEN_MAC=02:$(openssl rand -hex 5 | awk '{print toupper($0)}' | sed 's/\(..\)/\1:/g; s/.$//')
+GEN_MAC0=02:$(openssl rand -hex 5 | awk '{print toupper($0)}' | sed 's/\(..\)/\1:/g; s/.$//')
+GEN_MAC1=02:$(openssl rand -hex 5 | awk '{print toupper($0)}' | sed 's/\(..\)/\1:/g; s/.$//')
 DISK_SIZE="8G"
 TEMPLATEVMID="8080"
 VMID=$(echo $JSON | jq -r '.vmid')
@@ -128,10 +129,11 @@ DISK_SIZE=$(echo $JSON | jq -r '.diskSize')
 VLANTAG=$(echo $JSON | jq -r '.vlantag')
 DESCRIPTION=$(echo $JSON | jq -r '.description')
 BRIDGE0=$(echo $JSON | jq -r '.bridge0')
+MAC0=get_config_value("mac0","$GEN_MAC0")
 BRIDGE1=get_config_value("bridge2","NONE")
+MAC1=get_config_value("mac1","$GEN_MAC1")
 BIOS=get_config_value("bios","ovmf")
 OSTYPE=get_config_value("ostype","l26")
-MAC="$GEN_MAC"
 STORAGE=$(echo $JSON | jq -r '.storage')
 VMTAG=$(echo $JSON | jq -r '.vmtag')
 IMAGETYPE=$(echo $JSON | jq -r '.imageType')
@@ -177,6 +179,9 @@ info "     - MAC Address: ${BGN}${MAC}"
 info "     - VLAN Tag: ${BGN}${VLANTAG}"
 info "     - Description: ${BGN}${DESCRIPTION}" 
 info "     - VM Tags: ${BGN}${VMTAG}"
+info "     - Image Type: ${BGN}${IMAGETYPE}"
+info "     - Image: ${BGN}${IMAGE}" 
+
 
 create_vm_descriptions_html "$DESCRIPTION"
 
@@ -227,9 +232,9 @@ qm set $VMID --ciuser tappaas >/dev/null
 qm set $VMID --ipconfig0 ip=dhcp >/dev/null
 qm set $VMID --cores $CORE_COUNT --memory $RAM_SIZE >/dev/null
 if [ -n "$VLANTAG" ] && [ "$VLANTAG" != "0" ]; then
-  qm set $VMID --net0 virtio,bridge=$BRIDGE0,tag=$VLANTAG,macaddr=$MAC >/dev/null
+  qm set $VMID --net0 virtio,bridge=$BRIDGE0,tag=$VLANTAG,macaddr=$MAC0 >/dev/null
 else
-  qm set $VMID --net0 virtio,bridge=$BRIDGE0,macaddr=$MAC >/dev/null
+  qm set $VMID --net0 virtio,bridge=$BRIDGE0,macaddr=$MAC0 >/dev/null
 fi
 if [ "$VMNAME" == "tappaas-cicd" ]; then
   qm set $VMID --sshkey ~/.ssh/id_rsa.pub >/dev/null
@@ -239,8 +244,7 @@ fi
 it [$BRIDGE1 == "NONE" ]; then
   info "No second bridge configured"
 else
-  GEN_MAC2=02:$(openssl rand -hex 5 | awk '{print toupper($0)}' | sed 's/\(..\)/\1:/g; s/.$//')
-  qm set $VMID --net1 virtio,bridge=$BRIDGE1,macaddr=$GEN_MAC2 >/dev/null
+  qm set $VMID --net1 virtio,bridge=$BRIDGE1,macaddr=$MAC1 >/dev/null
   info "Configured second bridge on $BRIDGE1"
 fi
 
