@@ -10,7 +10,10 @@
     "imageType": "img",
     "image": "OPNsense-25.7-nano-amd64.img.bz2",
     "imageLocation": "https://pkg.opnsense.org/releases/25.7/",
-    "bridge": "lan",
+    "bridge0": "lan",
+    "bridge1": "wan",
     "vlantag": 0,
+    "bios": "seabios",
+    "ostype": "other",
     "description": "The TAPPaaS Firewall VM (OPNsense)"  
 }

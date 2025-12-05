@@ -9,7 +9,7 @@
     "storage": "tanka1",
     "imageType": "clone",
     "image": "8080",
-    "bridge": "lan",
+    "bridge0": "lan",
     "vlantag": 0,
     "description": "The TAPPaaS mothership VM"  
 }

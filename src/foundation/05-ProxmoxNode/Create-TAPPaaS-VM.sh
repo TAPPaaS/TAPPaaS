@@ -102,6 +102,21 @@ if [ -z "$JSON_CONFIG" ]; then
 fi
 JSON=$(cat $JSON_CONFIG)
 
+function get_config_value() {
+  local key="$1"
+  local default = $2
+  # test if key exist in json
+  if ! [ echo $JSON | jq -- arg K="$key" 'has($k)' == true || $mdefault == ""]; then
+    echo -e "\n${RD}[ERROR]${CL} Missing required key '${YW}$key${CL}' in JSON configuration."
+    exit 1
+  else
+    if ! [ echo $JSON | jq --arg K "$key" 'has($k)' == true ]; then
+      return $default
+    fi
+  fi
+  return $(echo $JSON | jq -r --arg KEY "$key" '.[$KEY]')
+}
+
 GEN_MAC=02:$(openssl rand -hex 5 | awk '{print toupper($0)}' | sed 's/\(..\)/\1:/g; s/.$//')
 DISK_SIZE="8G"
 TEMPLATEVMID="8080"
@@ -110,10 +125,12 @@ VMNAME=$(echo $JSON | jq -r '.hostname')
 CORE_COUNT=$(echo $JSON | jq -r '.cores')
 RAM_SIZE=$(echo $JSON | jq -r '.memory')
 DISK_SIZE=$(echo $JSON | jq -r '.diskSize')
-BRG=$(echo $JSON | jq -r '.bridge')
 VLANTAG=$(echo $JSON | jq -r '.vlantag')
 DESCRIPTION=$(echo $JSON | jq -r '.description')
-BRIDGE=$(echo $JSON | jq -r '.bridge')
+BRIDGE0=$(echo $JSON | jq -r '.bridge0')
+BRIDGE1=get_config_value("bridge2","NONE")
+BIOS=get_config_value("bios","ovmf")
+OSTYPE=get_config_value("ostype","l26")
 MAC="$GEN_MAC"
 STORAGE=$(echo $JSON | jq -r '.storage')
 VMTAG=$(echo $JSON | jq -r '.vmtag')
@@ -134,11 +151,17 @@ if ! [ $IMAGETYPE == "clone"] then
       bzip2 -dcv $IMAGE
       info "Downloaded and decompressed IMG: ${CL}${BL}${IMAGE}${CL}"
     else
-      info "inknow image type: ${IMAGETYPE}, exiting"
+      info "unknown image type: ${IMAGETYPE}, exiting"
       exit 1 
     fi
   fi
 fi
+
+# not needed if clone, but no harm either
+DISK0="vm-${VMID}-disk-0"
+DISK0_REF=${STORAGE}:${DISK0}
+DISK1="vm-${VMID}-disk-1"
+DISK1_REF=${STORAGE}:${DISK1}
 
 info "${BOLD}$Creating TAPPaaS NixOS VM from proxmox vm template using the following settings:"
 info "     - VM ID: ${BGN}${VMID}"
@@ -148,9 +171,9 @@ info "     - Disk Size: ${BGN}${DISK_SIZE}"
 info "     - Disk/Storage Location: ${BGN}${STORAGE}"
 info "     - CPU Cores: ${BGN}${CORE_COUNT}"
 info "     - RAM Size: ${BGN}${RAM_SIZE}"
-info "     - Bridge: ${BGN}${BRIDGE}"
+info "     - Bridge 0: ${BGN}${BRIDGE0}"
+info "     - Bridge 1: ${BGN}${BRIDGE1}"
 info "     - MAC Address: ${BGN}${MAC}"
-info "     - Bridge: ${BGN}${BRG}"
 info "     - VLAN Tag: ${BGN}${VLANTAG}"
 info "     - Description: ${BGN}${DESCRIPTION}" 
 info "     - VM Tags: ${BGN}${VMTAG}"
@@ -159,49 +182,42 @@ create_vm_descriptions_html "$DESCRIPTION"
 
 info "\n${BOLD}Starting the $VMNAME VM creation process...\n"
 
-if [ "$IMAGETYPE" == "img" ]; then
+if [ "$IMAGETYPE" == "img" ]; then  # First use: this is used to stand up a firewall vm from a disk image
   info "Creating a Image based VM"
-  qm create $VMID -agent 1 -tablet 0 -localtime 1 -bios ovmf -cores $CORE_COUNT -memory $RAM_SIZE \
-    -name $HN -tags tappaas,foundation -net0 virtio,bridge=lan -net1 virtio,bridge=wan -onboot 1 -bios seabios -ostype other -scsihw virtio-scsi-single
+  qm create $VMID -agent 1 -tablet 0 -localtime 1 \
+    -name $VMNAME  -onboot 1 -bios $BIOS -ostype ot$OSTYPEher -scsihw virtio-scsi-single
   qm importdisk $VMID ${IMAGE} $STORAGE  # 1>&/dev/null
   qm set $VMID \
     -scsi0 ${DISK_REF} \
     -boot order=scsi0  # >/dev/null
-  qm resize $VMID scsi0 10G # >/dev/null
+  qm resize $VMID scsi0 $DISKSIZE # >/dev/null
 fi
 
-it [ "$IMAGETYPE" == "iso" ]; then
+it [ "$IMAGETYPE" == "iso" ]; then # First use: this is used to stand up a nixos template vm from an iso image
   info "Creating an ISO based VM"
-  qm create $VMID --agent 1 --tablet 0 --localtime 1 --bios ovmf --cores $CORE_COUNT --memory $RAM_SIZE \
-    --name $VMNAME --net0 virtio,bridge=$BRG,macaddr=$MAC$VLAN$MTU --onboot 1 --ostype l26 --scsihw virtio-scsi-pci >/dev/null
+  qm create $VMID --agent 1 --tablet 0 --localtime 1 --bios $BIOS \
+    --name $VMNAME --onboot 1 --ostype $OSTYPE --scsihw virtio-scsi-pci >/dev/null
   info " - Created base VM configuration"
   pvesm alloc $STORAGE $VMID $DISK0 4M  1>&/dev/null
   pvesm alloc $STORAGE $VMID $DISK1 $DISK_SIZE  1>&/dev/null
   info " - Created EFI disk"
 # qm importdisk $VMID ${FILE} $STORAGE ${DISK_IMPORT:-} # 1>&/dev/null
-# msg_ok " - Imported NixOS disk image"
   qm set $VMID \
     -ide3 local:iso/${FILE},media=cdrom\
     -efidisk0 ${DISK0_REF}${FORMAT} \
     -scsi0 ${DISK1_REF},discard=on,ssd=1,size=${DISK_SIZE} \
     -ide2 ${STORAGE}:cloudinit \
     -boot order='ide3;scsi0' >/dev/null
-  msg_ok "Created the TAPPaaS NixOS VM"
 fi
-msg_ok "Creating the TAPPaaS NixOS VM: $VMID, name: $VMNAME"
 
 # qm resize $VMID scsi0 ${DISK_SIZE} >/dev/null
-
-
-  DISK0="vm-${VMID}-disk-0"
-  DISK0_REF=${STORAGE}:${DISK0}
-  DISK1="vm-${VMID}-disk-1"
-  DISK1_REF=${STORAGE}:${DISK1}
 
 if [ "$IMAGETYPE" == "clone" ]; then
   info "Creating a Clone based VM"
   qm clone $TEMPLATEVMID $VMID --name $VMNAME --full 1 >/dev/null
 fi
+
+info "\n${BOLD}Configuring the $VMNAME VM settings...\n"
 
 qm set $VMID --description "$DESCRIPTION_HTML" >/dev/null
 qm set $VMID --serial0 socket >/dev/null
@@ -211,15 +227,24 @@ qm set $VMID --ciuser tappaas >/dev/null
 qm set $VMID --ipconfig0 ip=dhcp >/dev/null
 qm set $VMID --cores $CORE_COUNT --memory $RAM_SIZE >/dev/null
 if [ -n "$VLANTAG" ] && [ "$VLANTAG" != "0" ]; then
-  qm set $VMID --net0 virtio,bridge=$BRIDGE,tag=$VLANTAG,macaddr=$MAC >/dev/null
+  qm set $VMID --net0 virtio,bridge=$BRIDGE0,tag=$VLANTAG,macaddr=$MAC >/dev/null
 else
-  qm set $VMID --net0 virtio,bridge=$BRIDGE,macaddr=$MAC >/dev/null
+  qm set $VMID --net0 virtio,bridge=$BRIDGE0,macaddr=$MAC >/dev/null
 fi
 if [ "$VMNAME" == "tappaas-cicd" ]; then
   qm set $VMID --sshkey ~/.ssh/id_rsa.pub >/dev/null
 else
   qm set $VMID --sshkey ~/tappaas/tappaas-cicd.pub >/dev/null
 fi
+it [$BRIDGE1 == "NONE" ]; then
+  info "No second bridge configured"
+else
+  GEN_MAC2=02:$(openssl rand -hex 5 | awk '{print toupper($0)}' | sed 's/\(..\)/\1:/g; s/.$//')
+  qm set $VMID --net1 virtio,bridge=$BRIDGE1,macaddr=$GEN_MAC2 >/dev/null
+  info "Configured second bridge on $BRIDGE1"
+fi
+
+
 qm cloudinit update $VMID >/dev/null
 # TODO fix disk resize
 # qm resize $VMID scsi0 ${DISK_SIZE} >/dev/null  

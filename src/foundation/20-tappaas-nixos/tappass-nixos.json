@@ -10,7 +10,7 @@
     "imageType": "iso",
     "image": "latest-nixos-graphical-x86_64-linux.iso",
     "imageLocation": "https://channels.nixos.org/nixos-25.05/",
-    "bridge": "lan",
+    "bridge0": "lan",
     "vlantag": 0,
     "description": "The TAPPaaS CICD VM (The Mother Ship)"  
 }
