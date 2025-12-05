@@ -1,4 +1,5 @@
 {
+    "version": "0.5",
     "vmid": 102,
     "vmtag": "TAPPaaS,Foundation",
     "hostname": "identity",

@@ -3,11 +3,11 @@
     "-comment2": "you must change the fields had have a value that start with CHANGE",  
 
     "tappaas": {
+        "version": "0.5",
         "domain": "CHANGE-mytappaas.dev",
         "email": "CHANGE-tappaas@mytappaas.dev",
         "nodeCount": 1,
         "nodeNamePrefix": "tappaas",
-
         "UpstreamGit": "github.com/TAPPaaS/TAPPaaS"
     }
 }

@@ -10,12 +10,10 @@
 # Copyright (c) 2021-2025 community-scripts ORG
 # License: MIT | https://github.com/community-scripts/ProxmoxVE/raw/main/LICENSE
 #
-# This script is heavily based on the Proxmox Helper Script: Docker VM
-#
 
 # This script create a NixOS VM on Proxmox for TAPPaaS usage.
 #
-# usage: bash TAPPaaS-NixOS-Cloning.sh namOfVM  (name of VM will be used to reference the json config file in ~/tappaas/)
+# Usage: bash TAPPaaS-NixOS-Cloning.sh name-of-VM  (name of VM will be used to reference the json config file in ~/tappaas/)
  
 
 function error_handler() {
@@ -41,34 +39,22 @@ function cleanup() {
   rm -rf $TEMP_DIR
 }
 
-function msg_error() {
+function info() {
   local msg="$1"
-  echo -e "${BFR}${CROSS}${RD}${msg}${CL}"
+  echo -e "${DGN}${msg}${CL}"
 }
 
-function exit-script() {
-  clear
-  echo -e "\n${CROSS}${RD}User exited script${CL}\n"
-  exit
-}
-
-  YW=$(echo "\033[33m")
-  BL=$(echo "\033[36m")
-  HA=$(echo "\033[1;34m")
-  RD=$(echo "\033[01;31m")
-  BGN=$(echo "\033[4;92m")
-  GN=$(echo "\033[1;92m")
-  DGN=$(echo "\033[32m")
-  CL=$(echo "\033[m")
-  BOLD=$(echo "\033[1m")
-  BFR="\\r\\033[K"
-  TAB="  "
-
+  YW=$(echo "\033[33m")    # Yellow
+  BL=$(echo "\033[36m")    # Cyan
+  RD=$(echo "\033[01;31m") # Red
+  BGN=$(echo "\033[4;92m") # Bright Green with underline
+  GN=$(echo "\033[1;92m")  # Green with bold
+  DGN=$(echo "\033[32m")   # Green
+  CL=$(echo "\033[m")      # Clear
+  BOLD=$(echo "\033[1m")   # Bold
 #
 # ok here we go
 #
-
-# Sanity checks for input args
 
 set -e
 trap 'error_handler $LINENO "$BASH_COMMAND"' ERR
@@ -98,32 +84,26 @@ DESCRIPTION=$(echo $JSON | jq -r '.description')
 BRG="lan"
 MAC="$GEN_MAC"
 STORAGE=$(echo $JSON | jq -r '.storage')
-#TODO add VM tag support
 
-#
-# ok here we go
-#
+info "${BOLD}$Creating TAPPaaS NixOS VM from proxmox vm template using the following settings:"
+info "     - VM ID: ${BGN}${VMID}"
+info "     - VM Name: ${BGN}${VMNAME}"
+info "     - Cloned from template: ${BGN}${TEMPLATEVMID}"
+info "     - Disk Size: ${BGN}${DISK_SIZE}"
+info "     - Disk/Storage Location: ${BGN}${STORAGE}"
+info "     - CPU Cores: ${BGN}${CORE_COUNT}"
+info "     - RAM Size: ${BGN}${RAM_SIZE}"
+info "     - Bridge: ${BGN}${BRG}"
+info "     - MAC Address: ${BGN}${MAC}"
+info "     - VLAN Tag: ${BGN}${VLANTAG}"
+info "     - Description: ${BGN}${DESCRIPTION}"
 
-echo -e "${CREATING}${BOLD}${DGN}Creating TAPPaaS NixOS VM from proxmox vm template using the following settings:${CL}"
-echo -e "     - ${BOLD}${DGN}VM ID: ${BGN}${VMID}${CL}"
-echo -e "     - ${BOLD}${DGN}VM Name: ${BGN}${VMNAME}${CL}"
-echo -e "     - ${BOLD}${DGN}Cloned from template: ${BGN}${TEMPLATEVMID}${CL}"
-echo -e "     - ${BOLD}${DGN}Disk Size: ${BGN}${DISK_SIZE}${CL}"
-echo -e "     - ${BOLD}${DGN}Disk/Storage Location: ${BGN}${STORAGE}${CL}"
-echo -e "     - ${BOLD}${DGN}CPU Cores: ${BGN}${CORE_COUNT}${CL}"
-echo -e "     - ${BOLD}${DGN}RAM Size: ${BGN}${RAM_SIZE}${CL}"
-echo -e "     - ${BOLD}${DGN}Bridge: ${BGN}${BRG}${CL}"
-echo -e "     - ${BOLD}${DGN}MAC Address: ${BGN}${MAC}${CL}"
-echo -e "     - ${BOLD}${DGN}VLAN Tag: ${BGN}${VLANTAG}${CL}"
-echo -e "     - ${BOLD}${DGN}Description: ${BGN}${DESCRIPTION}${CL}"
-
-echo -e "\n${CREATING}${BOLD}${DGN}Starting the TAPPaaS NixOS VM creation process...${CL}\n"
+info "\n${BOLD}$Starting the TAPPaaS NixOS VM creation process...\n"
 
 qm clone $TEMPLATEVMID $VMID --name $VMNAME --full 1 >/dev/null
-qm set $VMID --Tag TAPPaaS >/dev/null  #TODO update to take tags from json
 qm set $VMID --description "$DESCRIPTION" >/dev/null
 qm set $VMID --serial0 socket >/dev/null
-qm set $VMID --tags TAPPaaS >/dev/null
+qm set $VMID --tags $VMTAG >/dev/null
 qm set $VMID --agent enabled=1 >/dev/null
 qm set $VMID --ciuser tappaas >/dev/null
 qm set $VMID --ipconfig0 ip=dhcp >/dev/null
@@ -143,7 +123,7 @@ qm cloudinit update $VMID >/dev/null
 # qm resize $VMID scsi0 ${DISK_SIZE} >/dev/null  
 
 qm start $VMID >/dev/null
-echo -e "\n${OK}${BOLD}${GN}TAPPaaS NixOS VM creation completed successfully" 
+info "\n${BOLD}TAPPaaS NixOS VM creation completed successfully" 
 # echo -e "if disksize changed then log in and resize disk!${CL}\n"
 # echo -e "${TAB}${BOLD}parted /dev/vda (fix followed by resizepart 3 100% then quit), followed resize2f /dev/vda3 ${CL}"
 
