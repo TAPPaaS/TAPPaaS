@@ -12,11 +12,11 @@ Setup runs in these macro steps:
 run the following script as root from the proxmox console
 
 ```
-sudo curl -fsSL  https://raw.githubusercontent.com/TAPPaaS/TAPPaaS/main/src/foundation/15-TAPPaaS-CICD/CreateTAPPaaSNixOS-VM.sh  | bash
-
+curl -fsSL  https://raw.githubusercontent.com/TAPPaaS/TAPPaaS/main/src/foundation/30-tappaas-cicd/tappaas-nixos.json >~/tappaas/tappaas-nixos.json
+~/tappaas/Create-TAPPaas-VM.sh tappaas-nixos
 ```
 
-in the console of VM 8080 set install nixos
+in the console of VM 8080 install nixos
   - use the username "tappaas", give it a strong password, preferably the same as root on the tappass1 node. same password for root
   - do not select a graphical desktop
   - allow use of unfree software
