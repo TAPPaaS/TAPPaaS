@@ -110,11 +110,11 @@ function get_config_value() {
     echo -e "\n${RD}[ERROR]${CL} Missing required key '${YW}$key${CL}' in JSON configuration."
     exit 1
   else
-    if ! [ echo $JSON | jq --arg K "$key" 'has($k)' == true ]; then
-      return $default
+    if ! jq -e --arg K "$key" 'has($K)' <<<"$JSON" >/dev/null; then
+      echo "$default"
     fi
   fi
-  return $(echo $JSON | jq -r --arg KEY "$key" '.[$KEY]')
+  echo $(echo $JSON | jq -r --arg KEY "$key" '.[$KEY]')
 }
 
 GEN_MAC0=02:$(openssl rand -hex 5 | awk '{print toupper($0)}' | sed 's/\(..\)/\1:/g; s/.$//')
@@ -129,7 +129,7 @@ DISK_SIZE=$(echo $JSON | jq -r '.diskSize')
 VLANTAG=$(echo $JSON | jq -r '.vlantag')
 DESCRIPTION=$(echo $JSON | jq -r '.description')
 BRIDGE0=$(echo $JSON | jq -r '.bridge0')
-MAC0=$(get_config_value"mac0" "$GEN_MAC0")
+MAC0=$(get_config_value "mac0" "$GEN_MAC0")
 BRIDGE1=$(get_config_value "bridge2" "NONE")
 MAC1=$(get_config_value "mac1" "$GEN_MAC1")
 BIOS=$(get_config_value "bios" "ovmf")
@@ -138,24 +138,30 @@ STORAGE=$(echo $JSON | jq -r '.storage')
 VMTAG=$(echo $JSON | jq -r '.vmtag')
 IMAGETYPE=$(echo $JSON | jq -r '.imageType')
 IMAGE=$(echo $JSON | jq -r '.image')
-if ! [ $IMAGETYPE == "clone"] then
-  IMAGELOCATION=$(echo $JSON | jq -r '.imageLocation')  
-  URL=${IMAGELOCATION}${IMAGE}
-  if [ "$IMAGETYPE" == "iso" ]; then
-    info "Downlaoding ISO file: $URL"
-    curl -fsSL $URL -o /var/lib/vz/template/iso/$IMAGE
+
+if [ "${IMAGETYPE:-}" != "clone" ]; then
+  IMAGELOCATION=$(jq -r '.imageLocation' <<<"$JSON")
+  # ensure exactly one slash between location and image name
+  URL="${IMAGELOCATION%/}/${IMAGE#/}"
+  if [ "$IMAGETYPE" = "iso" ]; then
+    info "Downloading ISO file: $URL"
+    mkdir -p /var/lib/vz/template/iso
+    curl -fSLo "/var/lib/vz/template/iso/$IMAGE" "$URL"
     info "Downloaded ISO file to /var/lib/vz/template/iso/${IMAGE}"
-  fi
-  else
-    if [ "$IMAGETYPE" == "img" ]; then
-      info "Retrieving the Disk Image: $URL"
-      curl -f#SL -o "$(basename "$URL")" "$URL"
-      bzip2 -dcv $IMAGE
-      info "Downloaded and decompressed IMG: ${CL}${BL}${IMAGE}${CL}"
+  elif [ "$IMAGETYPE" = "img" ]; then
+    info "Retrieving the Disk Image: $URL"
+    OUTFILE="$(basename "$URL")"
+    curl -fSLo "$OUTFILE" "$URL"
+    # if the downloaded file is bzip2 compressed, decompress to target name
+    if file --mime-type -b "$OUTFILE" | grep -qi 'x-bzip2'; then
+      bzip2 -dc "$OUTFILE" > "$IMAGE"
     else
-      info "unknown image type: ${IMAGETYPE}, exiting"
-      exit 1 
+      mv -- "$OUTFILE" "$IMAGE"
     fi
+    info "Downloaded and prepared IMG: ${CL}${BL}${IMAGE}${CL}"
+  else
+    info "unknown image type: ${IMAGETYPE}, exiting"
+    exit 1
   fi
 fi
 
