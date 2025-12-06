@@ -111,15 +111,13 @@ function get_config_value() {
     exit 1
   else
     if ! jq -e --arg K "$key" 'has($K)' <<<"$JSON" >/dev/null; then
-      echo -n "DEfault value for $key: ##$default##" >&1
       echo -n "$default"
+      return  0
     fi
   fi
   echo -n $(echo $JSON | jq -r --arg KEY "$key" '.[$KEY]')
 }
-# ...existing code...
-GEN_MAC0="02:$(hexdump -n5 -v -e '/1 "%02X"' /dev/urandom | sed 's/../&:/g; s/:$//')"
-# ...existing code...
+
 # generate some MAC addresses
 GEN_MAC0=02:$(openssl rand -hex 5 | awk '{print toupper($0)}' | sed 's/\(..\)/\1:/g; s/.$//')
 GEN_MAC1=02:$(openssl rand -hex 5 | awk '{print toupper($0)}' | sed 's/\(..\)/\1:/g; s/.$//')
@@ -133,11 +131,11 @@ DISK_SIZE=$(echo $JSON | jq -r '.diskSize')
 VLANTAG=$(echo $JSON | jq -r '.vlantag')
 DESCRIPTION=$(echo $JSON | jq -r '.description')
 BRIDGE0=$(echo $JSON | jq -r '.bridge0')
-MAC0=$(get_config_value "mac0" "$GEN_MAC0")
-BRIDGE1=$(get_config_value "bridge2" "NONE")
-MAC1=$(get_config_value "mac1" "$GEN_MAC1")
-BIOS=$(get_config_value "bios" "ovmf")
-OSTYPE=$(get_config_value "ostype" "l26")
+MAC0="$(get_config_value 'mac0' $GEN_MAC0)"
+BRIDGE1="$(get_config_value 'bridge2' 'NONE')"
+MAC1="$(get_config_value 'mac1' $GEN_MAC1)"
+BIOS="$(get_config_value 'bios' "ovmf")"
+VM_OSTYPE="$(get_config_value 'ostype' 'l26')"
 STORAGE=$(echo $JSON | jq -r '.storage')
 VMTAG=$(echo $JSON | jq -r '.vmtag')
 IMAGETYPE=$(echo $JSON | jq -r '.imageType')
@@ -192,15 +190,17 @@ info "     - Description: ${BGN}${DESCRIPTION}"
 info "     - VM Tags: ${BGN}${VMTAG}"
 info "     - Image Type: ${BGN}${IMAGETYPE}"
 info "     - Image: ${BGN}${IMAGE}" 
+info "     - BIOS Type: ${BGN}${BIOS}"
+info "     - OS Type: ${BGN}${VM_OSTYPE}"
 
 create_vm_descriptions_html "$DESCRIPTION"
 
-info "\n${BOLD}Starting the $VMNAME VM creation process...\n"
+info "\n${BOLD}Starting the $VMNAME VM creation process..."
 
 if [ "$IMAGETYPE" == "img" ]; then  # First use: this is used to stand up a firewall vm from a disk image
-  info "Creating a Image based VM"
+  info "${BOLD}Creating a Image based VM"
   qm create $VMID -agent 1 -tablet 0 -localtime 1 \
-    -name $VMNAME  -onboot 1 -bios $BIOS -ostype ot$OSTYPEher -scsihw virtio-scsi-single
+    -name $VMNAME  -onboot 1 -bios $BIOS -ostype $VM_OSTYPE -scsihw virtio-scsi-single
   qm importdisk $VMID ${IMAGE} $STORAGE  # 1>&/dev/null
   qm set $VMID \
     -scsi0 ${DISK_REF} \
@@ -209,9 +209,9 @@ if [ "$IMAGETYPE" == "img" ]; then  # First use: this is used to stand up a fire
 fi
 
 if [ "$IMAGETYPE" == "iso" ]; then # First use: this is used to stand up a nixos template vm from an iso image
-  info "Creating an ISO based VM"
+  info "${BOLD}Creating an ISO based VM"
   qm create $VMID --agent 1 --tablet 0 --localtime 1 --bios $BIOS \
-    --name $VMNAME --onboot 1 --ostype $OSTYPE --scsihw virtio-scsi-pci >/dev/null
+    --name $VMNAME --onboot 1 --ostype $VM_OSTYPE --scsihw virtio-scsi-pci >/dev/null
   info " - Created base VM configuration"
   pvesm alloc $STORAGE $VMID $DISK0 4M  1>&/dev/null
   pvesm alloc $STORAGE $VMID $DISK1 $DISK_SIZE  1>&/dev/null
@@ -228,7 +228,7 @@ fi
 # qm resize $VMID scsi0 ${DISK_SIZE} >/dev/null
 
 if [ "$IMAGETYPE" == "clone" ]; then
-  info "Creating a Clone based VM"
+  info "${BOLD}Creating a Clone based VM"
   qm clone $TEMPLATEVMID $VMID --name $VMNAME --full 1 >/dev/null
 fi
 
@@ -251,10 +251,10 @@ if [ "$VMNAME" == "tappaas-cicd" ]; then
 else
   qm set $VMID --sshkey ~/tappaas/tappaas-cicd.pub >/dev/null
 fi
-if [$BRIDGE1 == "NONE" ]; then
+if ["$BRIDGE1" == "NONE" ]; then
   info "No second bridge configured"
 else
-  qm set $VMID --net1 virtio,bridge=$BRIDGE1,macaddr=$MAC1 >/dev/null
+  qm set $VMID --net1 "virtio,bridge=$BRIDGE1,macaddr=$MAC1" >/dev/null
   info "Configured second bridge on $BRIDGE1"
 fi
 
