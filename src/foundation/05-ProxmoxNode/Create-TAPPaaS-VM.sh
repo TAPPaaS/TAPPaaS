@@ -104,9 +104,9 @@ JSON=$(cat $JSON_CONFIG)
 
 function get_config_value() {
   local key="$1"
-  local default = $2
-  # test if key exist in json
-  if ! [ echo $JSON | jq -- arg K="$key" 'has($k)' == true || $mdefault == ""]; then
+  local default="$2"
+  # If JSON lacks the key and default is empty -> enter then-branch
+  if ! echo "$JSON" | jq -e --arg K "$key" 'has($K)' >/dev/null && [ -z "$default" ]; then
     echo -e "\n${RD}[ERROR]${CL} Missing required key '${YW}$key${CL}' in JSON configuration."
     exit 1
   else
@@ -129,11 +129,11 @@ DISK_SIZE=$(echo $JSON | jq -r '.diskSize')
 VLANTAG=$(echo $JSON | jq -r '.vlantag')
 DESCRIPTION=$(echo $JSON | jq -r '.description')
 BRIDGE0=$(echo $JSON | jq -r '.bridge0')
-MAC0=get_config_value("mac0","$GEN_MAC0")
-BRIDGE1=get_config_value("bridge2","NONE")
-MAC1=get_config_value("mac1","$GEN_MAC1")
-BIOS=get_config_value("bios","ovmf")
-OSTYPE=get_config_value("ostype","l26")
+MAC0=$(get_config_value"mac0" "$GEN_MAC0")
+BRIDGE1=$(get_config_value "bridge2" "NONE")
+MAC1=$(get_config_value "mac1" "$GEN_MAC1")
+BIOS=$(get_config_value "bios" "ovmf")
+OSTYPE=$(get_config_value "ostype" "l26")
 STORAGE=$(echo $JSON | jq -r '.storage')
 VMTAG=$(echo $JSON | jq -r '.vmtag')
 IMAGETYPE=$(echo $JSON | jq -r '.imageType')
@@ -254,7 +254,7 @@ qm cloudinit update $VMID >/dev/null
 # qm resize $VMID scsi0 ${DISK_SIZE} >/dev/null  
 
 qm start $VMID >/dev/null
-info "\n${BOLD}TAPPaaS NixOS VM creation completed successfully" 
+info "\n${BOLD}TAPPaaS VM creation completed successfully" 
 # echo -e "if disksize changed then log in and resize disk!${CL}\n"
 # echo -e "${TAB}${BOLD}parted /dev/vda (fix followed by resizepart 3 100% then quit), followed resize2f /dev/vda3 ${CL}"
 

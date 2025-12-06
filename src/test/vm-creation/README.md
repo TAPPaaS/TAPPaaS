@@ -6,7 +6,8 @@ run the commands from the tappass-cicd command prompt (assuming that you are tes
 ```
 cd
 cd TAPPaaS
-git pull experiment
+git switch experiment
+git pull
 scp src/foundation/05-ProxmoxNode/Create-TAPPaaS-VM.sh root@tappaas1.internal:/root/tappaas/Create-TAPPaaS-VM.sh
 cd src/test/vm-creation
 chmod 755 install.sh

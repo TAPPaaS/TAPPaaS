@@ -11,11 +11,11 @@ fi
 # git pull
 
 # clone the nixos template
-scp identity.json root@tappaas1.internal:/root/tappaas/testvm1.json
+scp testvm1.json root@tappaas1.internal:/root/tappaas/testvm1.json
 ssh root@tappaas1.internal "/root/tappaas/Create-TAPPaaS-VM.sh testvm1"
 
 # rebuild the nixos configuration
 # nixos-rebuild --target-host tappaas@identity.internal --use-remote-sudo switch -I nixos-config=./test.nix
 
 
-echo "\nIdentity VM installation completed successfully."
+echo "Identity VM installation completed successfully."
