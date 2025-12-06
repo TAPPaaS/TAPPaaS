@@ -107,16 +107,20 @@ function get_config_value() {
   local default="$2"
   # If JSON lacks the key and default is empty -> enter then-branch
   if ! echo "$JSON" | jq -e --arg K "$key" 'has($K)' >/dev/null && [ -z "$default" ]; then
-    echo -e "\n${RD}[ERROR]${CL} Missing required key '${YW}$key${CL}' in JSON configuration."
+    echo -e "\n${RD}[ERROR]${CL} Missing required key '${YW}$key${CL}' in JSON configuration." >&2
     exit 1
   else
     if ! jq -e --arg K "$key" 'has($K)' <<<"$JSON" >/dev/null; then
-      echo "$default"
+      echo -n "DEfault value for $key: ##$default##" >&1
+      echo -n "$default"
     fi
   fi
-  echo $(echo $JSON | jq -r --arg KEY "$key" '.[$KEY]')
+  echo -n $(echo $JSON | jq -r --arg KEY "$key" '.[$KEY]')
 }
-
+# ...existing code...
+GEN_MAC0="02:$(hexdump -n5 -v -e '/1 "%02X"' /dev/urandom | sed 's/../&:/g; s/:$//')"
+# ...existing code...
+# generate some MAC addresses
 GEN_MAC0=02:$(openssl rand -hex 5 | awk '{print toupper($0)}' | sed 's/\(..\)/\1:/g; s/.$//')
 GEN_MAC1=02:$(openssl rand -hex 5 | awk '{print toupper($0)}' | sed 's/\(..\)/\1:/g; s/.$//')
 DISK_SIZE="8G"
@@ -240,7 +244,6 @@ qm set $VMID --cores $CORE_COUNT --memory $RAM_SIZE >/dev/null
 if [ -n "$VLANTAG" ] && [ "$VLANTAG" != "0" ]; then
   qm set $VMID --net0 "virtio,bridge=${BRIDGE0},tag=$VLANTAG,macaddr=${MAC0}" # >/dev/null
 else
-  echo "##virtio,bridge=${BRIDGE0},macaddr=${MAC0}##"
   qm set $VMID --net0 "virtio,bridge=${BRIDGE0},macaddr=${MAC0}" # >/dev/null
 fi
 if [ "$VMNAME" == "tappaas-cicd" ]; then
@@ -248,7 +251,7 @@ if [ "$VMNAME" == "tappaas-cicd" ]; then
 else
   qm set $VMID --sshkey ~/tappaas/tappaas-cicd.pub >/dev/null
 fi
-it [$BRIDGE1 == "NONE" ]; then
+if [$BRIDGE1 == "NONE" ]; then
   info "No second bridge configured"
 else
   qm set $VMID --net1 virtio,bridge=$BRIDGE1,macaddr=$MAC1 >/dev/null
@@ -266,11 +269,6 @@ info "\n${BOLD}TAPPaaS VM creation completed successfully"
 # echo -e "${TAB}${BOLD}parted /dev/vda (fix followed by resizepart 3 100% then quit), followed resize2f /dev/vda3 ${CL}"
 
 
-
-
-
-
-
 qm start $VMID >/dev/null
-msg_ok "Started the TAPPaaS VM" 
+info "Started the TAPPaaS VM" 
 
