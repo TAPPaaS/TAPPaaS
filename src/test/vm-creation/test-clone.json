@@ -11,5 +11,5 @@
     "image": "8080",
     "bridge0": "lan",
     "vlantag": 0,
-    "description": "Identity VM for TAPPaaS"  
+    "description": "TAPPaaS Cloning test VM"  
 }

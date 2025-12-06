@@ -1,0 +1,15 @@
+{
+    "version": "0.5",
+    "vmid": 601,
+    "vmtag": "TAPPaaS,Test",
+    "hostname": "template",
+    "cores": 2,
+    "memory": "8192",
+    "diskSize": "32GB",
+    "storage": "tanka1",
+    "imageType": "clone",
+    "image": "8080",
+    "bridge0": "lan",
+    "vlantag": 0,
+    "description": "TAPPaaS template VM"  
+}

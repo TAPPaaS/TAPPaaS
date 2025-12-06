@@ -52,7 +52,7 @@ function create_vm_descriptions_html() {
     <img src='https://www.tappaas.org/taapaas.png' alt='Logo' style='width:81px;height:112px;'/>
   </a>
 
-  <h2 style='font-size: 24px; margin: 20px 0;'>TAPPaaS NixOS VM</h2>
+  <h2 style='font-size: 24px; margin: 20px 0;'>$TEXT</h2>
 
   <span style='margin: 0 10px;'>
     <i class="fa fa-github fa-fw" style="color: #f5f5f5;"></i>
@@ -68,7 +68,7 @@ function create_vm_descriptions_html() {
   </span>
   <br>
   <br>
-  $TEXT
+  A TAPPaaS configured VM
 </div>
 EOF
   )
@@ -242,16 +242,16 @@ qm set $VMID --ciuser tappaas >/dev/null
 qm set $VMID --ipconfig0 ip=dhcp >/dev/null
 qm set $VMID --cores $CORE_COUNT --memory $RAM_SIZE >/dev/null
 if [ -n "$VLANTAG" ] && [ "$VLANTAG" != "0" ]; then
-  qm set $VMID --net0 "virtio,bridge=${BRIDGE0},tag=$VLANTAG,macaddr=${MAC0}" # >/dev/null
+  qm set $VMID --net0 "virtio,bridge=${BRIDGE0},tag=$VLANTAG,macaddr=${MAC0}" >/dev/null
 else
-  qm set $VMID --net0 "virtio,bridge=${BRIDGE0},macaddr=${MAC0}" # >/dev/null
+  qm set $VMID --net0 "virtio,bridge=${BRIDGE0},macaddr=${MAC0}" >/dev/null
 fi
-if [ "$VMNAME" == "tappaas-cicd" ]; then
+if [[ "$VMNAME" == "tappaas-cicd" ]]; then
   qm set $VMID --sshkey ~/.ssh/id_rsa.pub >/dev/null
 else
   qm set $VMID --sshkey ~/tappaas/tappaas-cicd.pub >/dev/null
 fi
-if ["$BRIDGE1" == "NONE" ]; then
+if [[ "$BRIDGE1" == "NONE" ]]; then
   info "No second bridge configured"
 else
   qm set $VMID --net1 "virtio,bridge=$BRIDGE1,macaddr=$MAC1" >/dev/null
@@ -267,8 +267,5 @@ qm start $VMID >/dev/null
 info "\n${BOLD}TAPPaaS VM creation completed successfully" 
 # echo -e "if disksize changed then log in and resize disk!${CL}\n"
 # echo -e "${TAB}${BOLD}parted /dev/vda (fix followed by resizepart 3 100% then quit), followed resize2f /dev/vda3 ${CL}"
-
-
-qm start $VMID >/dev/null
 info "Started the TAPPaaS VM" 
 
