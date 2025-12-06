@@ -181,13 +181,13 @@ info "     - CPU Cores: ${BGN}${CORE_COUNT}"
 info "     - RAM Size: ${BGN}${RAM_SIZE}"
 info "     - Bridge 0: ${BGN}${BRIDGE0}"
 info "     - Bridge 1: ${BGN}${BRIDGE1}"
-info "     - MAC Address: ${BGN}${MAC}"
+info "     - MAC0 Address: ${BGN}${MAC0}"
+info "     - MAC1 Address: ${BGN}${MAC1}"
 info "     - VLAN Tag: ${BGN}${VLANTAG}"
 info "     - Description: ${BGN}${DESCRIPTION}" 
 info "     - VM Tags: ${BGN}${VMTAG}"
 info "     - Image Type: ${BGN}${IMAGETYPE}"
 info "     - Image: ${BGN}${IMAGE}" 
-
 
 create_vm_descriptions_html "$DESCRIPTION"
 
@@ -204,7 +204,7 @@ if [ "$IMAGETYPE" == "img" ]; then  # First use: this is used to stand up a fire
   qm resize $VMID scsi0 $DISKSIZE # >/dev/null
 fi
 
-it [ "$IMAGETYPE" == "iso" ]; then # First use: this is used to stand up a nixos template vm from an iso image
+if [ "$IMAGETYPE" == "iso" ]; then # First use: this is used to stand up a nixos template vm from an iso image
   info "Creating an ISO based VM"
   qm create $VMID --agent 1 --tablet 0 --localtime 1 --bios $BIOS \
     --name $VMNAME --onboot 1 --ostype $OSTYPE --scsihw virtio-scsi-pci >/dev/null
@@ -238,9 +238,10 @@ qm set $VMID --ciuser tappaas >/dev/null
 qm set $VMID --ipconfig0 ip=dhcp >/dev/null
 qm set $VMID --cores $CORE_COUNT --memory $RAM_SIZE >/dev/null
 if [ -n "$VLANTAG" ] && [ "$VLANTAG" != "0" ]; then
-  qm set $VMID --net0 virtio,bridge=$BRIDGE0,tag=$VLANTAG,macaddr=$MAC0 >/dev/null
+  qm set $VMID --net0 "virtio,bridge=${BRIDGE0},tag=$VLANTAG,macaddr=${MAC0}" # >/dev/null
 else
-  qm set $VMID --net0 virtio,bridge=$BRIDGE0,macaddr=$MAC0 >/dev/null
+  echo "##virtio,bridge=${BRIDGE0},macaddr=${MAC0}##"
+  qm set $VMID --net0 "virtio,bridge=${BRIDGE0},macaddr=${MAC0}" # >/dev/null
 fi
 if [ "$VMNAME" == "tappaas-cicd" ]; then
   qm set $VMID --sshkey ~/.ssh/id_rsa.pub >/dev/null
