@@ -2,7 +2,7 @@
     "version": "0.5",
     "vmid": 690,
     "vmtag": "TAPPaaS,Test",
-    "hostname": "tappaas-cicd",
+    "hostname": "test-iso",
     "cores": 2,
     "memory": "4096",
     "diskSize": "16GB",

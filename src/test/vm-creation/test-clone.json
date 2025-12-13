@@ -1,8 +1,8 @@
 {
     "version": "0.5",
-    "vmid": 601,
+    "vmid": 605,
     "vmtag": "TAPPaaS,Test",
-    "hostname": "testvm1",
+    "hostname": "test-clone",
     "cores": 2,
     "memory": "8192",
     "diskSize": "32GB",

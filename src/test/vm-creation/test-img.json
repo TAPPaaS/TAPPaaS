@@ -1,0 +1,19 @@
+{
+    "version": "0.5",
+    "vmid": 610,
+    "vmtag": "TAPPaaS,Test",
+    "hostname": "test-img",
+    "cores": 4,
+    "memory": "8192",
+    "diskSize": "16GB",
+    "storage": "tanka1",
+    "imageType": "img",
+    "image": "OPNsense-25.7-nano-amd64.img.bz2",
+    "imageLocation": "https://pkg.opnsense.org/releases/25.7/",
+    "bridge0": "lan",
+    "bridge1": "wan",
+    "vlantag": 0,
+    "bios": "seabios",
+    "ostype": "other",
+    "description": "TAPPaaS img based test VM"  
+}
