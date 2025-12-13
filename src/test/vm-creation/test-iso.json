@@ -2,15 +2,15 @@
     "version": "0.5",
     "vmid": 690,
     "vmtag": "TAPPaaS,Test",
-    "hostname": "test-iso",
+    "vmname": "test-iso",
     "cores": 2,
     "memory": "4096",
-    "diskSize": "16GB",
+    "diskSize": "16G",
     "storage": "tanka1",
     "imageType": "iso",
     "image": "latest-nixos-graphical-x86_64-linux.iso",
     "imageLocation": "https://channels.nixos.org/nixos-25.05/",
     "bridge0": "lan",
-    "vlantag": 0,
+    "vlantag0": 0,
     "description": "TAPPaaS iso testVM"  
 }

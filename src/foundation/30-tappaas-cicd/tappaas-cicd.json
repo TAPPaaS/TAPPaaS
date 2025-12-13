@@ -2,14 +2,12 @@
     "version": "0.5",
     "vmid": 101,
     "vmtag": "TAPPaaS,Foundation",
-    "hostname": "tappaas-cicd",
+    "vmname": "tappaas-cicd",
     "cores": 4,
     "memory": "16384",
-    "diskSize": "32GB",
+    "diskSize": "32G",
     "storage": "tanka1",
     "imageType": "clone",
     "image": "8080",
-    "bridge0": "lan",
-    "vlantag": 0,
     "description": "The TAPPaaS mothership VM"  
 }

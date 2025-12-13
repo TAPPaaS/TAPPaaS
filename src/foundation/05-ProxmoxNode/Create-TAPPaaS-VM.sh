@@ -119,31 +119,65 @@ function get_config_value() {
 }
 
 # generate some MAC addresses
-GEN_MAC0=02:$(openssl rand -hex 5 | awk '{print toupper($0)}' | sed 's/\(..\)/\1:/g; s/.$//')
-GEN_MAC1=02:$(openssl rand -hex 5 | awk '{print toupper($0)}' | sed 's/\(..\)/\1:/g; s/.$//')
-DISK_SIZE="8G"
-TEMPLATEVMID="8080"
-VMID=$(echo $JSON | jq -r '.vmid')
-VMNAME=$(echo $JSON | jq -r '.hostname')
-CORE_COUNT=$(echo $JSON | jq -r '.cores')
-RAM_SIZE=$(echo $JSON | jq -r '.memory')
-DISK_SIZE=$(echo $JSON | jq -r '.diskSize')
-VLANTAG=$(echo $JSON | jq -r '.vlantag')
-DESCRIPTION=$(echo $JSON | jq -r '.description')
-BRIDGE0=$(echo $JSON | jq -r '.bridge0')
-MAC0="$(get_config_value 'mac0' $GEN_MAC0)"
-BRIDGE1="$(get_config_value 'bridge2' 'NONE')"
-MAC1="$(get_config_value 'mac1' $GEN_MAC1)"
-BIOS="$(get_config_value 'bios' "ovmf")"
+info "${BOLD}$Creating TAPPaaS NixOS VM from proxmox vm template using the following settings:"
+NODE="$(get_config_value 'node' 'tappaas1')"
+info "     - Proxmox Node: ${BGN}${NODE}" 
+VMID="$(get_config_value 'vmid')"
+info "     - VM ID: ${BGN}${VMID}"
+VMNAME="$(get_config_value 'vmname' "$1")"
+info "     - VM Name: ${BGN}${VMNAME}"
+VMTAG="$(get_config_value 'vmtag')"
+info "     - VM Tags: ${BGN}${VMTAG}"
+BIOS="$(get_config_value 'bios' 'ovmf')"
+info "     - BIOS Type: ${BGN}${BIOS}"
+CORE_COUNT="$(get_config_value 'cores' '2')"
+info "     - CPU Cores: ${BGN}${CORE_COUNT}"
 VM_OSTYPE="$(get_config_value 'ostype' 'l26')"
-STORAGE=$(echo $JSON | jq -r '.storage')
-VMTAG=$(echo $JSON | jq -r '.vmtag')
-IMAGETYPE=$(echo $JSON | jq -r '.imageType')
-IMAGE=$(echo $JSON | jq -r '.image')
+info "     - OS Type: ${BGN}${VM_OSTYPE}"
+RAM_SIZE="$(get_config_value 'memory' '4096')"
+info "     - RAM Size: ${BGN}${RAM_SIZE}"
+DISK_SIZE="$(get_config_value 'diskSize' '8G')"
+info "     - Disk Size: ${BGN}${DISK_SIZE}"
+STORAGE="$(get_config_value 'storage' 'tanka1')"
+info "     - Disk/Storage Location: ${BGN}${STORAGE}"
+IMAGETYPE="$(get_config_value 'imageType')"
+info "     - Image Type: ${BGN}${IMAGETYPE}"
+IMAGE="$(get_config_value 'image' '8080')"
+info "     - Image: ${BGN}${IMAGE}" 
+if [ "${IMAGETYPE:-}" != "clone" ]; then
+  IMAGELOCATION="$(get_config_value '.imageLocation' )"
+  info "     - Image Location: ${BGN}${IMAGELOCATION}"
+fi
+BRIDGE0="$(get_config_value 'bridge0' 'lan')"
+info "     - Bridge 0: ${BGN}${BRIDGE0}"
+GEN_MAC0=02:$(openssl rand -hex 5 | awk '{print toupper($0)}' | sed 's/\(..\)/\1:/g; s/.$//')
+MAC0="$(get_config_value 'mac0' "$GEN_MAC0")"
+info "     - MAC0 Address: ${BGN}${MAC0}"
+VLANTAG0="$(get_config_value 'vlantag0' '0')"
+info "     - VLAN0 Tag: ${BGN}${VLANTAG0}"
+BRIDGE1="$(get_config_value 'bridge2' 'NONE')"
+if [[ "$BRIDGE1" != "NONE" ]]; then
+  info "     - Bridge 1: ${BGN}${BRIDGE1}"
+  GEN_MAC1=02:$(openssl rand -hex 5 | awk '{print toupper($0)}' | sed 's/\(..\)/\1:/g; s/.$//')
+  MAC1="$(get_config_value 'mac1' "$GEN_MAC1")"
+  info "     - MAC1 Address: ${BGN}${MAC1}"
+  VLANTAG1="$(get_config_value 'vlantag1' '0')"
+  info "     - VLAN1 Tag: ${BGN}${VLANTAG1}"
+elif
+  info "     - No second bridge configured"
+fi
+DESCRIPTION="$(get_config_value 'description')"
+info "     - Description: ${BGN}${DESCRIPTION}"
+
+# not needed if clone, but no harm either
+DISK0="vm-${VMID}-disk-0"
+DISK0_REF=${STORAGE}:${DISK0}
+DISK1="vm-${VMID}-disk-1"
+DISK1_REF=${STORAGE}:${DISK1}
+
+create_vm_descriptions_html "$DESCRIPTION"
 
 if [ "${IMAGETYPE:-}" != "clone" ]; then
-  IMAGELOCATION=$(jq -r '.imageLocation' <<<"$JSON")
-  # ensure exactly one slash between location and image name
   URL="${IMAGELOCATION%/}/${IMAGE#/}"
   if [ "$IMAGETYPE" = "iso" ]; then
     info "Downloading ISO file: $URL"
@@ -152,58 +186,29 @@ if [ "${IMAGETYPE:-}" != "clone" ]; then
     info "Downloaded ISO file to /var/lib/vz/template/iso/${IMAGE}"
   elif [ "$IMAGETYPE" = "img" ]; then
     info "Retrieving the Disk Image: $URL"
-    OUTFILE="$(basename "$URL")"
-    curl -fSLo "$OUTFILE" "$URL"
-    # if the downloaded file is bzip2 compressed, decompress to target name
-    if file --mime-type -b "$OUTFILE" | grep -qi 'x-bzip2'; then
-      bzip2 -dc "$OUTFILE" > "$IMAGE"
-    else
-      mv -- "$OUTFILE" "$IMAGE"
-    fi
-    info "Downloaded and prepared IMG: ${CL}${BL}${IMAGE}${CL}"
+    curl -fSLo "$IMAGE" "$URL"
+    if [[ "$IMAGE" == *.bz2 ]]; then
+      TARGET_IMAGE="${IMAGE%.bz2}"
+      info "Decompressing $TARGET_IMAGE after download, have patience"
+      bzip2 -dc "$IMAGE" > "$TARGET_IMAGE"
+    elif
+      TARGET_IMAGE="$IMAGE"
+    fi  
+    info "Downloaded and prepared IMG: ${CL}${BL}${TARGET_IMAGE}${CL}"
   else
     info "unknown image type: ${IMAGETYPE}, exiting"
     exit 1
   fi
 fi
 
-# not needed if clone, but no harm either
-DISK0="vm-${VMID}-disk-0"
-DISK0_REF=${STORAGE}:${DISK0}
-DISK1="vm-${VMID}-disk-1"
-DISK1_REF=${STORAGE}:${DISK1}
-
-info "${BOLD}$Creating TAPPaaS NixOS VM from proxmox vm template using the following settings:"
-info "     - VM ID: ${BGN}${VMID}"
-info "     - VM Name: ${BGN}${VMNAME}"
-info "     - Cloned from template: ${BGN}${TEMPLATEVMID}"
-info "     - Disk Size: ${BGN}${DISK_SIZE}"
-info "     - Disk/Storage Location: ${BGN}${STORAGE}"
-info "     - CPU Cores: ${BGN}${CORE_COUNT}"
-info "     - RAM Size: ${BGN}${RAM_SIZE}"
-info "     - Bridge 0: ${BGN}${BRIDGE0}"
-info "     - Bridge 1: ${BGN}${BRIDGE1}"
-info "     - MAC0 Address: ${BGN}${MAC0}"
-info "     - MAC1 Address: ${BGN}${MAC1}"
-info "     - VLAN Tag: ${BGN}${VLANTAG}"
-info "     - Description: ${BGN}${DESCRIPTION}" 
-info "     - VM Tags: ${BGN}${VMTAG}"
-info "     - Image Type: ${BGN}${IMAGETYPE}"
-info "     - Image: ${BGN}${IMAGE}" 
-info "     - BIOS Type: ${BGN}${BIOS}"
-info "     - OS Type: ${BGN}${VM_OSTYPE}"
-
-create_vm_descriptions_html "$DESCRIPTION"
-
 info "\n${BOLD}Starting the $VMNAME VM creation process..."
-
 if [ "$IMAGETYPE" == "img" ]; then  # First use: this is used to stand up a firewall vm from a disk image
   info "${BOLD}Creating a Image based VM"
   qm create $VMID -agent 1 -tablet 0 -localtime 1 \
-    -name $VMNAME  -onboot 1 -bios $BIOS -ostype $VM_OSTYPE -scsihw virtio-scsi-single
-  qm importdisk $VMID ${IMAGE} $STORAGE  # 1>&/dev/null
+    -name $VMNAME  -onboot 1 -bios $BIOS -ostype $VM_OSTYPE -scsihw virtio-scsi-single 1>&/dev/null
+  qm importdisk $VMID ${TARGET_IMAGE} $STORAGE  1>&/dev/null
   qm set $VMID \
-    -scsi0 ${DISK_REF} \
+    -scsi0 ${DISK0_REF} \
     -boot order=scsi0  # >/dev/null
   qm resize $VMID scsi0 $DISKSIZE # >/dev/null
 fi
@@ -218,7 +223,7 @@ if [ "$IMAGETYPE" == "iso" ]; then # First use: this is used to stand up a nixos
   info " - Created EFI disk"
 # qm importdisk $VMID ${FILE} $STORAGE ${DISK_IMPORT:-} # 1>&/dev/null
   qm set $VMID \
-    -ide3 local:iso/${FILE},media=cdrom\
+    -ide3 local:iso/${IMAGE},media=cdrom\
     -efidisk0 ${DISK0_REF}${FORMAT} \
     -scsi0 ${DISK1_REF},discard=on,ssd=1,size=${DISK_SIZE} \
     -ide2 ${STORAGE}:cloudinit \
@@ -229,7 +234,7 @@ fi
 
 if [ "$IMAGETYPE" == "clone" ]; then
   info "${BOLD}Creating a Clone based VM"
-  qm clone $TEMPLATEVMID $VMID --name $VMNAME --full 1 >/dev/null
+  qm clone $IMAGE $VMID --name $VMNAME --full 1 >/dev/null
 fi
 
 info "\n${BOLD}Configuring the $VMNAME VM settings...\n"

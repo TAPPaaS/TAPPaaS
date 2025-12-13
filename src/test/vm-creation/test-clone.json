@@ -2,14 +2,14 @@
     "version": "0.5",
     "vmid": 605,
     "vmtag": "TAPPaaS,Test",
-    "hostname": "test-clone",
+    "vmname": "test-clone",
     "cores": 2,
     "memory": "8192",
-    "diskSize": "32GB",
+    "diskSize": "32G",
     "storage": "tanka1",
     "imageType": "clone",
     "image": "8080",
     "bridge0": "lan",
-    "vlantag": 0,
+    "vlantag0": 0,
     "description": "TAPPaaS Cloning test VM"  
 }
