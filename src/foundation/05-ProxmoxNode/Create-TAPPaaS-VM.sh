@@ -205,8 +205,8 @@ info "\n${BOLD}Starting the $VMNAME VM creation process..."
 if [ "$IMAGETYPE" == "img" ]; then  # First use: this is used to stand up a firewall vm from a disk image
   info "${BOLD}Creating a Image based VM"
   qm create $VMID -agent 1 -tablet 0 -localtime 1 \
-    -name $VMNAME  -onboot 1 -bios $BIOS -ostype $VM_OSTYPE -scsihw virtio-scsi-single 1>&/dev/null
-  qm importdisk $VMID ${TARGET_IMAGE} $STORAGE  1>&/dev/null
+    -name $VMNAME  -onboot 1 -bios $BIOS -ostype $VM_OSTYPE -scsihw virtio-scsi-single 1>/dev/null
+  qm importdisk $VMID ${TARGET_IMAGE} $STORAGE  1>/dev/null
   qm set $VMID \
     -scsi0 ${DISK0_REF} \
     -boot order=scsi0  # >/dev/null
@@ -218,10 +218,10 @@ if [ "$IMAGETYPE" == "iso" ]; then # First use: this is used to stand up a nixos
   qm create $VMID --agent 1 --tablet 0 --localtime 1 --bios $BIOS \
     --name $VMNAME --onboot 1 --ostype $VM_OSTYPE --scsihw virtio-scsi-pci >/dev/null
   info " - Created base VM configuration"
-  pvesm alloc $STORAGE $VMID $DISK0 4M  1>&/dev/null
-  pvesm alloc $STORAGE $VMID $DISK1 $DISK_SIZE  1>&/dev/null
+  pvesm alloc $STORAGE $VMID $DISK0 4M  1>/dev/null
+  pvesm alloc $STORAGE $VMID $DISK1 $DISK_SIZE  1>/dev/null
   info " - Created EFI disk"
-# qm importdisk $VMID ${FILE} $STORAGE ${DISK_IMPORT:-} # 1>&/dev/null
+# qm importdisk $VMID ${FILE} $STORAGE ${DISK_IMPORT:-} # 1>/dev/null
   qm set $VMID \
     -ide3 local:iso/${IMAGE},media=cdrom\
     -efidisk0 ${DISK0_REF}${FORMAT} \
