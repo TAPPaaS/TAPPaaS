@@ -143,7 +143,7 @@ BRIDGE0="$(get_config_value 'bridge0' 'lan')"
 GEN_MAC0=02:$(openssl rand -hex 5 | awk '{print toupper($0)}' | sed 's/\(..\)/\1:/g; s/.$//')
 MAC0="$(get_config_value 'mac0' "$GEN_MAC0")"
 VLANTAG0="$(get_config_value 'vlantag0' '0')"
-BRIDGE1="$(get_config_value 'bridge2' 'NONE')"
+BRIDGE1="$(get_config_value 'bridge1' 'NONE')"
 if [[ "$BRIDGE1" != "NONE" ]]; then
   GEN_MAC1=02:$(openssl rand -hex 5 | awk '{print toupper($0)}' | sed 's/\(..\)/\1:/g; s/.$//')
   MAC1="$(get_config_value 'mac1' "$GEN_MAC1")"
@@ -194,7 +194,7 @@ if [ "$IMAGETYPE" == "img" ]; then  # First use: this is used to stand up a fire
   qm set $VMID \
     -scsi0 ${DISK0_REF} \
     -boot order=scsi0  # >/dev/null
-  qm resize $VMID scsi0 $DISKSIZE # >/dev/null
+  qm resize $VMID scsi0 $DISK_SIZE # >/dev/null
 fi
 
 if [ "$IMAGETYPE" == "iso" ]; then # First use: this is used to stand up a nixos template vm from an iso image
