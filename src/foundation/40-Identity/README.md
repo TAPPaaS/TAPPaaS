@@ -1,7 +1,7 @@
 # Identity and secrets VM for TAPPaaS
 
-The Identity module is Authentic and the secrets module is valutwarden
-The identity.nix file contain the configurations
+The Identity module is Authentic and the secrets module is VaultWarden
+The identity.nix file contain the configuration
 
 do the following steps
 

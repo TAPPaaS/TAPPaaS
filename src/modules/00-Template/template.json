@@ -1,8 +1,8 @@
 {
     "version": "0.5",
-    "vmid": 102,
-    "vmtag": "TAPPaaS,Foundation",
-    "vmname": "identity",
+    "vmid": 999,
+    "vmtag": "TAPPaaS,Test",
+    "vmname": "template",
     "cores": 2,
     "memory": "8192",
     "diskSize": "32G",
@@ -10,6 +10,6 @@
     "imageType": "clone",
     "image": "8080",
     "bridge0": "lan",
-    "vlantag0": 0,
-    "description": "Identity VM for TAPPaaS"  
+    "vlantag0": 100,
+    "description": "TAPPaaS template VM"  
 }

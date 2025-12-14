@@ -6,15 +6,14 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at https://mozilla.org/MPL/2.0/.
 #
+# This script is heavily based on the Proxmox Helper Script: Proxmox PVE post Install
 # This file incorporates work covered by the following copyright and permission notice:
 # Copyright (c) 2021-2025 community-scripts ORG
 # License: MIT | https://github.com/community-scripts/ProxmoxVE/raw/main/LICENSE
 
 #
-# This script is heavily based on the Proxmox Helper Script: Proxmox PVE post Install
-#
 # TODO: Display final HW config, 
-# TODO: Throw warning is no mirror on zpools and boot. Configure power management
+# TODO: Throw warning if no mirror on zpools and boot. Configure power management
 
 
 header_info() {
@@ -64,9 +63,9 @@ msg_error() {
 
 header_info
 
-if ! pveversion | grep -Eq "pve-manager/[8-9]\.[0-4](\.[0-9]+)*"; then
+if ! pveversion | grep -Eq "pve-manager/9\.[0-4](\.[0-9]+)*"; then
   msg_error "This version of Proxmox Virtual Environment is not supported"
-  echo -e "Requires Proxmox Virtual Environment Version 8 or 9"
+  echo -e "Requires Proxmox Virtual Environment Version 9"
   echo -e "Exiting..."
   sleep 2
   exit
@@ -74,10 +73,7 @@ fi
 
 msg_info "Checking for \"tanka1\" zfspool"
 if ! pvesm status -content images | grep zfspool | grep -q tanka1; then
-  msg_error "did not find a \"tanka1\" zfspool"
-  echo -e "Exiting..."
-  sleep 2
-  exit
+  msg_ok "did not find a \"tanka1\" zfspool. This system will likely only work as a backup server"
 fi
 msg_ok "Found \"tanka1\" zfspool"
 
@@ -90,59 +86,34 @@ fi
 #
 # Check it this have already been run, in which case skip all the repository and other updates
 #
+if [ -f /var/log/tappaas.step1 ]; then
+  msg_ok "The TAPPaaS post proxmox install script has already been run: Only updating proxmox libraries"
+  msg_ok "If you want to run it again, please delete /var/log/tappaas.step1"
+  msg_ok "and run the script again"
+  exit 0
+fi
 
-if ! [ -f /var/log/tappaas.step1 ]; then
-#
-# 
-msg_info "Correcting Proxmox VE Sources"
-  cat <<EOF >/etc/apt/sources.list
-deb http://deb.debian.org/debian bookworm main contrib
-deb http://deb.debian.org/debian bookworm-updates main contrib
-deb http://security.debian.org/debian-security bookworm-security main contrib
-EOF
-  echo 'APT::Get::Update::SourceListWarnings::NonFreeFirmware "false";' >/etc/apt/apt.conf.d/no-bookworm-firmware.conf
-msg_ok "Corrected Proxmox VE Sources"
-#
-msg_info "Disabling 'pve-enterprise' repository"
-  cat <<EOF >/etc/apt/sources.list.d/pve-enterprise.list
-# deb https://enterprise.proxmox.com/debian/pve bookworm pve-enterprise
-EOF
-msg_ok "Disabled 'pve-enterprise' repository"
-#
-msg_info "Enabling 'pve-no-subscription' repository"
-  cat <<EOF >/etc/apt/sources.list.d/pve-install-repo.list
-deb http://download.proxmox.com/debian/pve bookworm pve-no-subscription
-EOF
-msg_ok "Enabled 'pve-no-subscription' repository"
-#
-msg_info "Correcting 'ceph package repositories'"
-  cat <<EOF >/etc/apt/sources.list.d/ceph.list
-# deb https://enterprise.proxmox.com/debian/ceph-quincy bookworm enterprise
-# deb http://download.proxmox.com/debian/ceph-quincy bookworm no-subscription
-# deb https://enterprise.proxmox.com/debian/ceph-reef bookworm enterprise
-# deb http://download.proxmox.com/debian/ceph-reef bookworm no-subscription
-EOF
-msg_ok "Corrected 'ceph package repositories'"
-#
-msg_info "Disabling subscription nag"
-  echo "DPkg::Post-Invoke { \"dpkg -V proxmox-widget-toolkit | grep -q '/proxmoxlib\.js$'; if [ \$? -eq 1 ]; then { echo 'Removing subscription nag from UI...'; sed -i '/.*data\.status.*{/{s/\!//;s/active/NoMoreNagging/}' /usr/share/javascript/proxmox-widget-toolkit/proxmoxlib.js; }; fi\"; };" >/etc/apt/apt.conf.d/no-nag-script
-  apt --reinstall install proxmox-widget-toolkit &>/dev/null
-msg_ok "Disabled subscription nag (Delete browser cache)"
-#
+
 msg_info "Enabling high availability"
   systemctl enable -q --now pve-ha-lrm
   systemctl enable -q --now pve-ha-crm
   systemctl enable -q --now corosync
 msg_ok "Enabled high availability"
-#
+
+msg_info "install TAPPaaS helper script"
+cd
+mkdir tappaas
+apt install jq
+curl -fsSL  https://raw.githubusercontent.com/TAPPaaS/TAPPaaS/main/src/foundation/05-ProxmoxNode/Create-TAPPaaS-VM.sh >~/tappaas/Create-TAPPaaS-VM.sh
+chmod 744 ~/tappaas/Create-TAPPaaS-VM.sh
+msg_ok "install TAPPaaS helper script"
+
+msg_info "copy configuration.json"
+curl -fsSL  https://raw.githubusercontent.com/TAPPaaS/TAPPaaS/main/src/foundation/configuration.json >~/tappaas/configuration.json
+msg_ok "copy configuration.json"
+
 echo "The TAPPaaS post proxmox install script have been run" `date` >/var/log/tappaas.step1
-#
-else
-  msg_ok "The TAPPaaS post proxmox install script has already been run: Only updating proxmox libraries"
-  msg_ok "If you want to run it again, please delete /var/log/tappaas.step1"
-  msg_ok "and run the script again"
-fi
-#  
+
 msg_info "Updating Proxmox VE (Patience)"
 apt-get update &>/dev/null
 apt-get -y dist-upgrade &>/dev/null

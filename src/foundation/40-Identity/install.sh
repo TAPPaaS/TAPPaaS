@@ -12,7 +12,7 @@ fi
 
 # clone the nixos template
 scp identity.json root@tappaas1.internal:/root/tappaas/identity.json
-ssh root@tappaas1.internal "/root/tappaas/CloneTAPPaaSNixOS.sh identity"
+ssh root@tappaas1.internal "/root/tappaas/Create-TAPPaaS-VM.sh identity"
 
 # rebuild the nixos configuration
 nixos-rebuild --target-host tappaas@identity.internal --use-remote-sudo switch -I nixos-config=./identity.nix

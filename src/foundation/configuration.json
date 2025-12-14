@@ -1,13 +1,15 @@
 {
     "-comment1": "configuration for TAPPaaS feel free to change any defaults",
     "-comment2": "you must change the fields had have a value that start with CHANGE",  
+    "-comment3": "this file is installed as /root/tappaas/configuration.json on the cicd mothership VM. Only edit the installed file. not the original in git",
 
     "tappaas": {
+        "version": "0.5",
         "domain": "CHANGE-mytappaas.dev",
         "email": "CHANGE-tappaas@mytappaas.dev",
         "nodeCount": 1,
         "nodeNamePrefix": "tappaas",
-
-        "UpstreamGit": "github.com/TAPPaaS/TAPPaaS"
+        "upstreamGit": "github.com/TAPPaaS/TAPPaaS",
+        "branch": "main"
     }
 }

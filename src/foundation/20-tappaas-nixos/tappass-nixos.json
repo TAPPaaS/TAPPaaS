@@ -1,0 +1,16 @@
+{
+    "version": "0.5",
+    "vmid": 101,
+    "vmtag": "TAPPaaS,Foundation",
+    "vmname": "tappaas-cicd",
+    "cores": 2,
+    "memory": "4096",
+    "diskSize": "16G",
+    "storage": "tanka1",
+    "imageType": "iso",
+    "image": "latest-nixos-graphical-x86_64-linux.iso",
+    "imageLocation": "https://channels.nixos.org/nixos-25.05/",
+    "bridge0": "lan",
+    "vlantag0": 0,
+    "description": "The TAPPaaS CICD VM (The Mother Ship)"  
+}
