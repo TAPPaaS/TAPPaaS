@@ -117,7 +117,7 @@ function get_config_value() {
   else
     value=$(echo $JSON | jq -r --arg KEY "$key" '.[$KEY]')
   fi
-  info "     - $key has value: ${BGN}${value}" 
+  info "     - $key has value: ${BGN}${value}" >&2 #TODO, this is a hack using std error for info logging
   echo -n "${value}"
   return 0
 }
@@ -137,7 +137,7 @@ STORAGE="$(get_config_value 'storage' 'tanka1')"
 IMAGETYPE="$(get_config_value 'imageType')"
 IMAGE="$(get_config_value 'image' '8080')"
 if [ "${IMAGETYPE:-}" != "clone" ]; then
-  IMAGELOCATION="$(get_config_value '.imageLocation' )"
+  IMAGELOCATION="$(get_config_value 'imageLocation')"
 fi
 BRIDGE0="$(get_config_value 'bridge0' 'lan')"
 GEN_MAC0=02:$(openssl rand -hex 5 | awk '{print toupper($0)}' | sed 's/\(..\)/\1:/g; s/.$//')
@@ -175,7 +175,7 @@ if [ "${IMAGETYPE:-}" != "clone" ]; then
       TARGET_IMAGE="${IMAGE%.bz2}"
       info "Decompressing $TARGET_IMAGE after download, have patience"
       bzip2 -dc "$IMAGE" > "$TARGET_IMAGE"
-    elif
+    else
       TARGET_IMAGE="$IMAGE"
     fi  
     info "Downloaded and prepared IMG: ${CL}${BL}${TARGET_IMAGE}${CL}"
