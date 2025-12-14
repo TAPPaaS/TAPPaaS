@@ -97,7 +97,8 @@ pushd $TEMP_DIR >/dev/null
 JSON_CONFIG="/root/tappaas/$1.json"
 if [ -z "$JSON_CONFIG" ]; then
   echo -e "\n${RD}[ERROR]${CL} Missing or mispelled required argument VMNAME. Current value: '$1'"
-  echo -e "Usage: bash TAPPaaS-NixOS-Cloning.sh VMNAME\n"
+  echo -e "Usage: bash TAPPaaS-NixOS-Cloning.sh <VMNAME>\n"
+  echo -e "A JSON configuration file is expected to be located at: /root/tappaas/<VMNAME>.json"
   exit 1
 fi
 JSON=$(cat $JSON_CONFIG)
@@ -105,69 +106,52 @@ JSON=$(cat $JSON_CONFIG)
 function get_config_value() {
   local key="$1"
   local default="$2"
-  # If JSON lacks the key and default is empty -> enter then-branch
-  if ! echo "$JSON" | jq -e --arg K "$key" 'has($K)' >/dev/null && [ -z "$default" ]; then
-    echo -e "\n${RD}[ERROR]${CL} Missing required key '${YW}$key${CL}' in JSON configuration." >&2
-    exit 1
-  else
-    if ! jq -e --arg K "$key" 'has($K)' <<<"$JSON" >/dev/null; then
-      echo -n "$default"
-      return  0
+  if ! echo "$JSON" | jq -e --arg K "$key" 'has($K)' >/dev/null ; then
+  # JSON lacks the key 
+    if [ -z "$default" ]; then
+      echo -e "\n${RD}[ERROR]${CL} Missing required key '${YW}$key${CL}' in JSON configuration." >&2
+      exit 1
+    else
+      value="$default"
     fi
+  else
+    value=$(echo $JSON | jq -r --arg KEY "$key" '.[$KEY]')
   fi
-  echo -n $(echo $JSON | jq -r --arg KEY "$key" '.[$KEY]')
+  info "     - $key has value: ${BGN}${value}" 
+  echo -n "${value}"
+  return 0
 }
 
 # generate some MAC addresses
 info "${BOLD}$Creating TAPPaaS NixOS VM from proxmox vm template using the following settings:"
 NODE="$(get_config_value 'node' 'tappaas1')"
-info "     - Proxmox Node: ${BGN}${NODE}" 
 VMID="$(get_config_value 'vmid')"
-info "     - VM ID: ${BGN}${VMID}"
 VMNAME="$(get_config_value 'vmname' "$1")"
-info "     - VM Name: ${BGN}${VMNAME}"
 VMTAG="$(get_config_value 'vmtag')"
-info "     - VM Tags: ${BGN}${VMTAG}"
 BIOS="$(get_config_value 'bios' 'ovmf')"
-info "     - BIOS Type: ${BGN}${BIOS}"
 CORE_COUNT="$(get_config_value 'cores' '2')"
-info "     - CPU Cores: ${BGN}${CORE_COUNT}"
 VM_OSTYPE="$(get_config_value 'ostype' 'l26')"
-info "     - OS Type: ${BGN}${VM_OSTYPE}"
 RAM_SIZE="$(get_config_value 'memory' '4096')"
-info "     - RAM Size: ${BGN}${RAM_SIZE}"
 DISK_SIZE="$(get_config_value 'diskSize' '8G')"
-info "     - Disk Size: ${BGN}${DISK_SIZE}"
 STORAGE="$(get_config_value 'storage' 'tanka1')"
-info "     - Disk/Storage Location: ${BGN}${STORAGE}"
 IMAGETYPE="$(get_config_value 'imageType')"
-info "     - Image Type: ${BGN}${IMAGETYPE}"
 IMAGE="$(get_config_value 'image' '8080')"
-info "     - Image: ${BGN}${IMAGE}" 
 if [ "${IMAGETYPE:-}" != "clone" ]; then
   IMAGELOCATION="$(get_config_value '.imageLocation' )"
-  info "     - Image Location: ${BGN}${IMAGELOCATION}"
 fi
 BRIDGE0="$(get_config_value 'bridge0' 'lan')"
-info "     - Bridge 0: ${BGN}${BRIDGE0}"
 GEN_MAC0=02:$(openssl rand -hex 5 | awk '{print toupper($0)}' | sed 's/\(..\)/\1:/g; s/.$//')
 MAC0="$(get_config_value 'mac0' "$GEN_MAC0")"
-info "     - MAC0 Address: ${BGN}${MAC0}"
 VLANTAG0="$(get_config_value 'vlantag0' '0')"
-info "     - VLAN0 Tag: ${BGN}${VLANTAG0}"
 BRIDGE1="$(get_config_value 'bridge2' 'NONE')"
 if [[ "$BRIDGE1" != "NONE" ]]; then
-  info "     - Bridge 1: ${BGN}${BRIDGE1}"
   GEN_MAC1=02:$(openssl rand -hex 5 | awk '{print toupper($0)}' | sed 's/\(..\)/\1:/g; s/.$//')
   MAC1="$(get_config_value 'mac1' "$GEN_MAC1")"
-  info "     - MAC1 Address: ${BGN}${MAC1}"
   VLANTAG1="$(get_config_value 'vlantag1' '0')"
-  info "     - VLAN1 Tag: ${BGN}${VLANTAG1}"
-elif
+else
   info "     - No second bridge configured"
 fi
 DESCRIPTION="$(get_config_value 'description')"
-info "     - Description: ${BGN}${DESCRIPTION}"
 
 # not needed if clone, but no harm either
 DISK0="vm-${VMID}-disk-0"
