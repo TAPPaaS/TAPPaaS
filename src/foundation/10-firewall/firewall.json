@@ -1,6 +1,6 @@
 {
     "version": "0.5",
-    "vmid": 888,
+    "vmid": 110,
     "vmtag": "TAPPaaS,Foundation",
     "hostname": "firewall",
     "bios": "seabios",
