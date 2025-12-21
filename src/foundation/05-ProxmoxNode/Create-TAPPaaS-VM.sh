@@ -258,7 +258,7 @@ fi
 # qm resize $VMID scsi0 ${DISK_SIZE} >/dev/null  
 
 qm start $VMID >/dev/null
-info "\n${BOLD}TAPPaaS $VMNAME VM creation completed successfully" 
+info "\n${BOLD}TAPPaaS $VMNAME VM creation completed successfully\n" 
 # echo -e "if disksize changed then log in and resize disk!${CL}\n"
 # echo -e "${TAB}${BOLD}parted /dev/vda (fix followed by resizepart 3 100% then quit), followed resize2f /dev/vda3 ${CL}"
 

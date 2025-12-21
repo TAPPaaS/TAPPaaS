@@ -93,10 +93,14 @@ boot up the VM and configure the opnsense
 
 after boot you login as root with password opnsense
 
+change the root password. Option 3
+
 change lan ip through option 2:
 - configure lan 
-- use ip range to 10.0.0.1/24
-- enable DHCP, with a range of 10.0.0.100 - 10.0.0.254
+  - option 2, followed by 1 for Lan, and N for not using DHCP
+  - use ip range to 10.0.0.1/24
+  - no IPv6 config (TODO, enable IPv6)
+  - enable DHCP, with a range of 10.0.0.100 - 10.0.0.254
 
 jump into a shell (option 8) and test that you can ping external addresses
 

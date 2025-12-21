@@ -11,28 +11,35 @@
   - ...
 use the same root password as the tappaas1 node
 
+## preparation
+
+if this is the second node to add then we need to create the cluster on tappaas1 so that we can add this node to a cluster later on
+on the cole of tappaas1:
+```
+pvecm create TAPPaaS
+```
+
 ## Install proxmox PVE
 
-use the same image on usb stick as with node 1
-do run the post install scrip as with node 1
+Use the same image on usb stick as with node 1
 
-## add node to cluster
+Do run the post install scrip as with node 1
 
-First set up ssh on the node: on the console of the new node:
+Register the hosts on the internal network: tappaas2,3,...
 
-```
-TODO
-```
+log into the firewall:
+- go to Service -> Dnsmasq DNS & DHCP -> Hosts
+  - add a host:
+    - name tappaas2
+    - domain: internal
+    - ip: 10.0.0.11
 
-then add the node to the cluster
-```
-pvecm add 10.0.0.10
-pvecm status
-```
 
-Finally copy the configuration.json from tappas1
+Finally copy the configuration.json from tappas1.
+On the tappaas2,3,.. console:
 ```
-scp 10.0.0.10:/tappaas/configuraiton.json tappaas
+cd
+scp 10.0.0.10:/root/tappaas/configuration.json tappaas
 ```
 
 ## Repeat this for each additional node in the cluster

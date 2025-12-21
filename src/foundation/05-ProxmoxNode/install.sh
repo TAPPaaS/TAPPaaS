@@ -270,9 +270,9 @@ apt -y dist-upgrade &>/dev/null || msg_error "apt dist-upgrade failed"
 msg_ok "Updated Proxmox VE"
 
 if [ "$(hostname)" = "tappaas1" ]; then
-  msg_info "Creating TAPPaaS cluster"
-  pvecm create TAPPaaS
-  msg_ok "Created TAPPaaS cluster"
+#  msg_info "Creating TAPPaaS cluster"
+#  pvecm create TAPPaaS
+  msg_ok "This is the first TAPPaaS cluster node. we only start the cluster when adding the second node, and when the IP assignments of lan is complete"
 else
   msg_info "Adding node to TAPPaaS cluster"
   pvecm add 10.0.0.10
