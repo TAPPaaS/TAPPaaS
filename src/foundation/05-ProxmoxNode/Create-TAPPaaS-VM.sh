@@ -222,7 +222,7 @@ if [ "$IMAGETYPE" == "clone" ]; then
   qm clone $IMAGE $VMID --name $VMNAME --full 1 >/dev/null
 fi
 
-info "\n${BOLD}Configuring the $VMNAME VM settings...\n"
+info "${BOLD}Configuring the $VMNAME VM settings..."
 
 qm set $VMID --description "$DESCRIPTION_HTML" >/dev/null
 qm set $VMID --serial0 socket >/dev/null
@@ -248,26 +248,17 @@ if [ "$CLOUDINIT" == "true" ]; then
   else
     qm set $VMID --sshkey ~/tappaas/tappaas-cicd.pub >/dev/null
   fi
+  qm cloudinit update $VMID >/dev/null
 else
   info "Cloud-init configuration skipped as per JSON configuration"
 fi
 
-qm set $VMID --ciuser tappaas >/dev/null
-qm set $VMID --ipconfig0 ip=dhcp >/dev/null
-if [[ "$VMNAME" == "tappaas-cicd" ]]; then
-  qm set $VMID --sshkey ~/.ssh/id_rsa.pub >/dev/null
-else
-  qm set $VMID --sshkey ~/tappaas/tappaas-cicd.pub >/dev/null
-fi
 
-
-qm cloudinit update $VMID >/dev/null
 # TODO fix disk resize
 # qm resize $VMID scsi0 ${DISK_SIZE} >/dev/null  
 
 qm start $VMID >/dev/null
-info "\n${BOLD}TAPPaaS VM creation completed successfully" 
+info "\n${BOLD}TAPPaaS $VMNAME VM creation completed successfully" 
 # echo -e "if disksize changed then log in and resize disk!${CL}\n"
 # echo -e "${TAB}${BOLD}parted /dev/vda (fix followed by resizepart 3 100% then quit), followed resize2f /dev/vda3 ${CL}"
-info "Started the TAPPaaS VM" 
 
