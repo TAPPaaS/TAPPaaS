@@ -17,7 +17,7 @@ the basic macro steps:
 step 2-6 and 8-10 can be replaced with
 2. Restore Backup image
 3. swap firewall
-4. Reconfigure domain names inrestored image
+4. Reconfigure domain names in the restored image
 5. configure public DNS
 6. test
 
@@ -36,7 +36,7 @@ So have the following ready:
 The TAPPaaS OPNSense firewall will have two interfaces: WAN and LAN, both interfaces will be virtio bridges in Proxmox.
 
 It is assumed that Proxmox is connected to an existing firewall/router on vmbr0 via an ethernet port on the physical server.
-It is further assumed that the IP domain for this connection is NOT a 10.x.y.z domain as it will conflict with the OPNSense setup (if it is it will stil be possible to set up TAPPaaS but will need more elaborate bootstrap process)
+It is further assumed that the IP range for this connection is NOT a 10.x.y.z/8 range as it will conflict with the OPNSense setup (if it is it will still be possible to set up TAPPaaS but will need more elaborate bootstrap process)
 
 As preparation we need to set up another bridge on proxmox: vmbr1: this will connect to a secondary ethernet port on the physical server. This will eventually become the LAN interface
 

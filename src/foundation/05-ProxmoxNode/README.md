@@ -3,10 +3,11 @@
 
 ## Overview
 
+Note: PVE is an acronym for Proxmox Virtual Environment. what we are setting up in this README file is a PVE node, which we also call a TAPPaaS node. first node will have the name tappaas1
 
 Bootstrapping TAPPaaS foundation has not been fully automated. However some steps are scripted.
 
-you need to do the following activities (next sections give exact instructions)
+You need to do the following activities (next sections give exact instructions)
 
 1) **Prepare** the install
 2) **Install** proxmox on the first TAPPaaS node
@@ -22,6 +23,9 @@ followed by the rest of foundation, in number order.
 - prepare physical hardware. see [Examples](../../Documentation/Examples/README.md) or [Hardware](../../Documentation/Architecture/Hardware.md)
 - ensure you designed your basic setup [Design](../../Documentation/Installation/README.md)
   - you have a domain name for the installation: <mytappaas.net>
+  - when the installer ask for a FQDM for the machine useÆ tappaas1.internal  (do not use the external recognized domain for your installation, that is for the firewall)
+    - if this is not the first node then replace the tappaas1 with the appropiate tappaas2,3,4, ...
+    - Note that the current installation do not support a different name for the PVE nodes
   - The hardware is plugged into a local network with internet connection. you have a local IP number for the node (will later be changed when the firewall is installed)
   - You will be asked for a password for root. Select a strong password and remember it :-)
 - download a Proxmox VE iso installer image from: [Official Proxmox Download site](https://www.proxmox.com/en/downloads)
@@ -29,9 +33,21 @@ followed by the rest of foundation, in number order.
 
 ## Install Proxmox
 
-- boot the machine from the USB and do an install: use ZFS for the boot disk if you are having boot disk mirror.
-- once it is rebooted go to management console and create the "tanks" as zfs pools (minimum is to have a tanka1). further info in [pools](./Proxmox-VE-Installer.md)
-(if sufficient hw resources are available then use mirror on boot and tanka1)
+- boot the machine from the USB and do an install: 
+  - use ZFS for the boot disk if you are having boot disk mirror.
+  - further info in [PVE instaler](./PVE-Installer.md) 
+- once it is rebooted go to management console and create the "tanks" as zfs pools (minimum is to have a tanka1). 
+  - Use the GUI of the newly installed node (web browser to <ip of node>:8006)
+    - under the tappaas1 node in the datacenter panel go to the disk section. 
+    - take note of the disks you have
+    - In oder to "reuse" a Hard disk (SSD or HDD), you might need to delete old partitions for zfs to accept it into a new pool
+      - you can do that by selecting the disk and click on the "wipe" button
+    - select add zfs under the zfs menu
+      - select type of zfs redundancy (recomend is mirror for tanka1, and single disk for tankb1)
+      - add the disk and click create
+    - alternative you can create the pool from the command line. 
+      - This gives the option to stripe disks together without reduancy (raid0), to create ssd disk cache (L2ARC) and log (ZIL)
+  - If sufficient hw resources are available then use mirror on tanka1
 
 ## Post Install
 

@@ -21,6 +21,13 @@ The .json have the following parameter:
      -    if Major numner is less than 1, then the module is not ready for production use 
 -    "node": The name of the proxmox/tappaas node the module should be installed on.
      -    Default is "tappaas1" 
+-    "HANode": 
+     -    Default "NONE"
+     -    if present it must name a TAPPaaS node different from "node". This node must have the same storage defined as "storage"
+     -    if present then install scrip will set up High Availability for the VM
+-    "replicationSchedule"
+     -    Default "*/15" # every 15 minutes
+     -    define the replication interval for HA node
 -    "vmid": unique across the tappaas nodes. 
      -    Mandatory: Must be present
 -    "vmname": the name of the VM, also the name of the module and the hostname of the OS. 
@@ -57,4 +64,5 @@ The .json have the following parameter:
 -    "mac1": as mac0 for bridge1 and -net1
 -    "vlantag1": See firewall setup for VLAN tags
      -    Default value is "0" which is the management lan (non tagged traffic)
--    "description": descriptive text that will end up in the proxmox summary  page for the VM  
+-    "description": descriptive text that will end up in the proxmox summary  page for the VM
+-    

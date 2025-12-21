@@ -315,7 +315,7 @@ msg_ok "Enabled high availability"
 msg_info "install TAPPaaS helper script"
 cd
 mkdir tappaas
-apt install jq
+apt -y install jq
 curl -fsSL  https://raw.githubusercontent.com/TAPPaaS/TAPPaaS/main/src/foundation/05-ProxmoxNode/Create-TAPPaaS-VM.sh >~/tappaas/Create-TAPPaaS-VM.sh
 chmod 744 ~/tappaas/Create-TAPPaaS-VM.sh
 msg_ok "install TAPPaaS helper script"
@@ -330,6 +330,11 @@ msg_info "Updating Proxmox VE (Patience)"
 apt update &>/dev/null || msg_error "apt update failed"
 apt -y dist-upgrade &>/dev/null || msg_error "apt dist-upgrade failed"
 msg_ok "Updated Proxmox VE"
+
+msg_info "install and measure baseline power usage:"
+apt -y install powertop
+msg_ok "installed and measure baseline power usage:
+
 
 msg_info "Rebooting Proxmox VE"
 msg_info "please press any key to continue or press ctrl-c to cancel"

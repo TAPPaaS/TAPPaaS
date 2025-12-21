@@ -34,38 +34,6 @@ Target Harddisk
         Select Next
 
 
-
-post install (power saving optimization)
-
-    measure baseline power usage:
-    apt install powertop
-
-    Let it idle for a few minutes. Run: 
-    powertop --time=60
-
-    check powerconsumption and idle state.
-
-   install power management, activate powersave profile:
-    apt install tuned
-    tuned-adm profile powersave
-
-
-Let it idle for a few minutes. Run: 
-    powertop --time=60
-
-    re-check powerconsumption and idle state
-   
-
-
-
-    
-
-
-
-
-
-
-
 Recommended ZFS Parameters for Proxmox Boot on SSDs
 Parameter	Recommended Value	Explanation
 ashift	12	Sets block size to 4K (2^12). Ideal for SSDs which use 4K internally.
@@ -78,27 +46,3 @@ sync	standard	Default is safest. Only change if you know what you're doing.
 copies	1	No need for extra copies on mirrored SSDs.
 zfs_arc_max	~50% of RAM	Limit ARC size to avoid starving Proxmox and VMs of memory. Set in /etc/modprobe.d/zfs.conf.
 
-
-
-
-Use Case	Recommended Compression
-    Boot pool only  zstd or zstd-3
-    VM storage pool lz4 (for speed) or zstd (for space savings)
-    Backups/archive zstd-6 or higher
-
-
-
-Analysis of your configuration:
-	•	Total disk capacity per SSD: 480.10 GB
-	•	ZFS partition size per SSD: 428.42 GB
-	•	Unpartitioned space: 480.10 GB - (1.03 MB + 1.07 GB + 428.42 GB) ≈ 49.6 GB
-What does this mean?
-	•	You are leaving about 49 GB per SSD unused, which is roughly 10% of the total capacity.
-	•	This amount of free space is exactly the recommended overprovisioning for a small business environment.
-	•	The other partitions (BIOS boot and EFI) are minimal and standard for a modern Proxmox installation with ZFS.
-Conclusion:
-	•	This layout is correct and optimal:
-Your SSDs are well configured for both reliability and longevity, with sufficient overprovisioning according to best practices.
-	•	You are utilizing most of the disk space for ZFS, while consciously reserving a significant portion for wear leveling.
-In short:
-This configuration is perfectly suitable for your Proxmox boot drives in a small business setting.
