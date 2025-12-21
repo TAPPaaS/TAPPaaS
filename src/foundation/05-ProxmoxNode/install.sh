@@ -99,7 +99,7 @@ msg_ok "Found \"tanka1\" zfspool"
 
 msg_info "Checking for \"tankb1\" zfspool"
 if ! pvesm status -content images | grep zfspool | grep -q tankb1 ; then
-  msg_ok "did not find a \"tankb1\" zfspool. Some modules of TAPPaaS will not work"
+  msg_ok "did not find a \"tankb1\" zfspool. Some modules of TAPPaaS might not work on this node"
 else
 msg_ok "Found \"tankb1\" zfspool"
 fi
@@ -113,136 +113,72 @@ if [ -f /var/log/tappaas.step1 ]; then
   exit 0
 fi
 
-  # check if deb822 Sources (*.sources) exist
-  if find /etc/apt/sources.list.d/ -maxdepth 1 -name '*.sources' | grep -q .; then
-    msg_info "Modern deb822 sources (*.sources) already exist.\n\nNo changes to sources format required.\n\nYou may still have legacy sources.list or .list files, which you can disable in the next step." 12 65 || true
-  else
-    check_and_disable_legacy_sources() {
-      local LEGACY_COUNT=0
-      local listfile="/etc/apt/sources.list"
-
-      # Check sources.list
-      if [[ -f "$listfile" ]] && grep -qE '^\s*deb ' "$listfile"; then
-        ((++LEGACY_COUNT))
-      fi
-
-      # Check .list files
-      local list_files
-      list_files=$(find /etc/apt/sources.list.d/ -type f -name "*.list" 2>/dev/null)
-      if [[ -n "$list_files" ]]; then
-        LEGACY_COUNT=$((LEGACY_COUNT + $(echo "$list_files" | wc -l)))
-      fi
-
-      if ((LEGACY_COUNT > 0)); then
-        # Show summary to user
-        local MSG="Legacy APT sources found:\n"
-        [[ -f "$listfile" ]] && MSG+=" - /etc/apt/sources.list\n"
-        [[ -n "$list_files" ]] && MSG+="$(echo "$list_files" | sed 's|^| - |')\n"
-        MSG+="\nDo you want to disable (comment out/rename) all legacy sources and use ONLY deb822 .sources format?\n\nRecommended for Proxmox VE 9."
-
-        whiptail --backtitle "Proxmox VE Helper Scripts" --title "Disable legacy sources?" \
-          --yesno "$MSG" 18 80
-        if [[ $? -eq 0 ]]; then
-          # Backup and disable sources.list
-          if [[ -f "$listfile" ]] && grep -qE '^\s*deb ' "$listfile"; then
-            cp "$listfile" "$listfile.bak"
-            sed -i '/^\s*deb /s/^/# Disabled by Proxmox Helper Script /' "$listfile"
-            msg_ok "Disabled entries in sources.list (backup: sources.list.bak)"
-          fi
-          # Rename all .list files to .list.bak
-          if [[ -n "$list_files" ]]; then
-            while IFS= read -r f; do
-              mv "$f" "$f.bak"
-            done <<<"$list_files"
-            msg_ok "Renamed legacy .list files to .bak"
-          fi
+# disable PVE-ENTERPRISE repositories
+if component_exists_in_sources "pve-enterprise"; then
+    msg_info "Disabling 'pve-enterprise' repository"
+    # Use Enabled: false instead of commenting to avoid malformed entry
+    for file in /etc/apt/sources.list.d/*.sources; do
+      if grep -q "Components:.*pve-enterprise" "$file"; then
+        if grep -q "^Enabled:" "$file"; then
+          sed -i 's/^Enabled:.*/Enabled: false/' "$file"
         else
-          msg_error "Kept legacy sources as-is (may cause APT warnings)"
-        fi
+          echo "Enabled: false" >>"$file"
+         fi
       fi
-    }
-
-    check_and_disable_legacy_sources
-
-    # === Trixie/9.x: deb822 .sources ===
-      msg_info "Correcting Proxmox VE Sources (deb822)"
-      # remove all existing .list files
-      rm -f /etc/apt/sources.list.d/*.list
-      # remove bookworm and proxmox entries from sources.list
-      sed -i '/proxmox/d;/bookworm/d' /etc/apt/sources.list || true
-      # Create new deb822 sources
-      cat >/etc/apt/sources.list.d/debian.sources <<EOF
-Types: deb
-URIs: http://deb.debian.org/debian
-Suites: trixie
-Components: main contrib
-Signed-By: /usr/share/keyrings/debian-archive-keyring.gpg
-
-Types: deb
-URIs: http://security.debian.org/debian-security
-Suites: trixie-security
-Components: main contrib
-Signed-By: /usr/share/keyrings/debian-archive-keyring.gpg
-
-Types: deb
-URIs: http://deb.debian.org/debian
-Suites: trixie-updates
-Components: main contrib
-Signed-By: /usr/share/keyrings/debian-archive-keyring.gpg
-EOF
-      msg_ok "Corrected Proxmox VE 9 (Trixie) Sources"
-  fi
-
-  # ---- PVE-ENTERPRISE ----
-  if component_exists_in_sources "pve-enterprise"; then
-      msg_info "Disabling 'pve-enterprise' repository"
-      # Use Enabled: false instead of commenting to avoid malformed entry
-      for file in /etc/apt/sources.list.d/*.sources; do
-        if grep -q "Components:.*pve-enterprise" "$file"; then
-          if grep -q "^Enabled:" "$file"; then
-            sed -i 's/^Enabled:.*/Enabled: false/' "$file"
-          else
-            echo "Enabled: false" >>"$file"
-          fi
-        fi
-      done
-      msg_ok "Disabled 'pve-enterprise' repository"
-  fi
+    done
+    msg_ok "Disabled 'pve-enterprise' repository"
+fi
 
 
-  # ---- PVE-NO-SUBSCRIPTION ----
-  REPO_FILE=""
-  REPO_ACTIVE=0
-  REPO_COMMENTED=0
-  for file in /etc/apt/sources.list.d/*.sources; do
-    if grep -q "Components:.*pve-no-subscription" "$file"; then
-      REPO_FILE="$file"
-      if grep -E '^[^#]*Components:.*pve-no-subscription' "$file" >/dev/null; then
-        REPO_ACTIVE=1
-      elif grep -E '^#.*Components:.*pve-no-subscription' "$file" >/dev/null; then
-        REPO_COMMENTED=1
-      fi
-      break
+# add PVE-NO-SUBSCRIPTION repositories
+REPO_FILE=""
+REPO_ACTIVE=0
+REPO_COMMENTED=0
+for file in /etc/apt/sources.list.d/*.sources; do
+  if grep -q "Components:.*pve-no-subscription" "$file"; then
+    REPO_FILE="$file"
+    if grep -E '^[^#]*Components:.*pve-no-subscription' "$file" >/dev/null; then
+      REPO_ACTIVE=1
+    elif grep -E '^#.*Components:.*pve-no-subscription' "$file" >/dev/null; then
+      REPO_COMMENTED=1
     fi
-  done
+    break
+  fi
+done
 
-  if [[ "$REPO_ACTIVE" -eq 1 ]]; then
-      msg_ok "Kept 'pve-no-subscription' repository"
-    elif [[ "$REPO_COMMENTED" -eq 1 ]]; then
-      msg_info "Enabling (uncommenting) 'pve-no-subscription' repository"
-      sed -i '/^#\s*Types:/,/^$/s/^#\s*//' "$REPO_FILE"
-      msg_ok "Enabled 'pve-no-subscription' repository"
-  else
-      msg_info "Adding 'pve-no-subscription' repository (deb822)"
-      cat >/etc/apt/sources.list.d/proxmox.sources <<EOF
+if [[ "$REPO_ACTIVE" -eq 1 ]]; then
+    msg_ok "Kept 'pve-no-subscription' repository"
+  elif [[ "$REPO_COMMENTED" -eq 1 ]]; then
+    msg_info "Enabling (uncommenting) 'pve-no-subscription' repository"
+    sed -i '/^#\s*Types:/,/^$/s/^#\s*//' "$REPO_FILE"
+    msg_ok "Enabled 'pve-no-subscription' repository"
+else
+    msg_info "Adding 'pve-no-subscription' repository (deb822)"
+    cat >/etc/apt/sources.list.d/proxmox.sources <<EOF
 Types: deb
 URIs: http://download.proxmox.com/debian/pve
 Suites: trixie
 Components: pve-no-subscription
 Signed-By: /usr/share/keyrings/proxmox-archive-keyring.gpg
 EOF
-      msg_ok "Added 'pve-no-subscription' repository"
-  fi
+    msg_ok "Added 'pve-no-subscription' repository"
+fi
+
+# disable CEPH-ENTERPRISE repositories
+if grep -q "enterprise.proxmox.com.*ceph" /etc/apt/sources.list.d/*.sources 2>/dev/null; then
+  msg_info "Disabling 'ceph enterprise' repository"
+  # Use Enabled: false instead of commenting to avoid malformed entry
+  for file in /etc/apt/sources.list.d/*.sources; do
+    if grep -q "enterprise.proxmox.com.*ceph" "$file"; then
+      if grep -q "^Enabled:" "$file"; then
+        sed -i 's/^Enabled:.*/Enabled: false/' "$file"
+      else
+        echo "Enabled: false" >>"$file"
+      fi
+    fi
+  done
+  msg_ok "Disabled 'ceph enterprise' repository"
+fi
 
 
 msg_info "Disabling subscription nag"
@@ -315,26 +251,36 @@ msg_ok "Enabled high availability"
 msg_info "install TAPPaaS helper script"
 cd
 mkdir tappaas
-apt -y install jq
+apt -y install jq &>/dev/null || msg_error "apt update failed"
 curl -fsSL  https://raw.githubusercontent.com/TAPPaaS/TAPPaaS/main/src/foundation/05-ProxmoxNode/Create-TAPPaaS-VM.sh >~/tappaas/Create-TAPPaaS-VM.sh
 chmod 744 ~/tappaas/Create-TAPPaaS-VM.sh
-msg_ok "install TAPPaaS helper script"
+msg_ok "installed TAPPaaS helper script"
 
 msg_info "copy configuration.json"
 curl -fsSL  https://raw.githubusercontent.com/TAPPaaS/TAPPaaS/main/src/foundation/configuration.json >~/tappaas/configuration.json
-msg_ok "copy configuration.json"
+msg_ok "copied configuration.json"
 
-echo "The TAPPaaS post proxmox install script have been run" `date` >/var/log/tappaas.step1
+msg_info "install power top:"
+apt -y install powertop &>/dev/null || msg_error "apt update failed"
+msg_ok "installed power top"
 
 msg_info "Updating Proxmox VE (Patience)"
 apt update &>/dev/null || msg_error "apt update failed"
 apt -y dist-upgrade &>/dev/null || msg_error "apt dist-upgrade failed"
 msg_ok "Updated Proxmox VE"
 
-msg_info "install and measure baseline power usage:"
-apt -y install powertop
-msg_ok "installed and measure baseline power usage:
+if [ "$(hostname)" = "tappaas1" ]; then
+  msg_info "Creating TAPPaaS cluster"
+  pvecm create TAPPaaS
+  msg_ok "Created TAPPaaS cluster"
+else
+  msg_info "Adding node to TAPPaaS cluster"
+  pvecm add 10.0.0.10
+  msg_ok "Added node to TAPPaaS cluster"
+fi
+#  pvecm status
 
+echo "The TAPPaaS post proxmox install script have been run" `date` >/var/log/tappaas.step1
 
 msg_info "Rebooting Proxmox VE"
 msg_info "please press any key to continue or press ctrl-c to cancel"

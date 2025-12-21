@@ -15,4 +15,5 @@ Steps after installing the PBS
 3) configure retension policies
 
 TODO: code or document these steps in more details
+TODO remember encryption
 

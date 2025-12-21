@@ -53,18 +53,12 @@ followed by the rest of foundation, in number order.
 
 - run post install script
 ```
-curl -fsSL https://raw.githubusercontent.com/TAPPaaS/TAPPaaS/main/src/foundation/00-ProxmoxNode/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/TAPPaaS/TAPPaaS/main/src/foundation/05-ProxmoxNode/install.sh | bash
 ```
 
 
 Now after reboot:
 - check that it all looks fine!! (TODO automate check setup)
 - Edit the /root/tappaas/configuration.json to reflect choices in this install.
-
-and finally convert the PVE DAtacenter into a 'TAPPaaS' cluster (with only one node initially)
-```
-pvecm create TAPPaaS
-pvecm status
-```
 
 
