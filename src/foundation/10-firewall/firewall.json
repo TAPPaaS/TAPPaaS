@@ -16,5 +16,6 @@
     "vlantag0": 0,
     "bridge1": "wan",
     "vlantag1": 0,
+    "cloudInit": "false",
     "description": "The TAPPaaS Firewall VM (OPNsense)"  
 }

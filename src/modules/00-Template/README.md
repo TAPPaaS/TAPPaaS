@@ -64,5 +64,7 @@ The .json have the following parameter:
 -    "mac1": as mac0 for bridge1 and -net1
 -    "vlantag1": See firewall setup for VLAN tags
      -    Default value is "0" which is the management lan (non tagged traffic)
+-    "cloudInit": boolean "true"/"false", indicate if VM support cloud-init
+     -    Default to "true"
 -    "description": descriptive text that will end up in the proxmox summary  page for the VM
 -    

@@ -42,23 +42,23 @@ As preparation we need to set up another bridge on proxmox: vmbr1: this will con
 
 in the Proxmox GUI do:
 
-- go to node: tappass1
+- go to node: tappaas1
 - select the Network page under system
 - take note of the free ethernet ports, and select the one that will be the new lan port. note down the Name
-- click "create"
-- in the pop up full in
--- Name: lan
--- IPv4/CIDR: 10.0.0.10/24
--- Gateway, ipv6 and ipv6 gateway: leave blank
--- Autostart is checked and VLAN aware is unchecked
--- Bridgeport: the name of the chosen ethernet port
+- click "create" select "linux bridge"
+- in the pop up fill in
+  - Name: lan
+  - IPv4/CIDR: 10.0.0.10/24
+  - Gateway:blank (as we have a gateway on the other bridge)
+  - ipv6 and ipv6 gateway: leave blank
+  - Autostart is checked and VLAN aware is unchecked
+  - Bridgeport: the name of the chosen ethernet port
 - now click create and click "apply configuration"
 
-Rename the vmbr0 bridge to wan:
-in the command line/console of tappaas1 do the following:
-edit the /etc/network/interfaces
-replace all occurrences of "vmbr0" with the string "wan" (there should be two instances)
-save file
+Rename the vmbr0 bridge to "wan" using the command line/console of tappaas1:
+- edit the /etc/network/interfaces
+- replace all occurrences of "vmbr0" with the string "wan" (there should be two instances)
+- save file
 
 Reboot the proxmox system
 
@@ -84,8 +84,8 @@ where Wan is the only port on the Proxmox box that is used by the hypervisor
 now create the OPNSense VM: from the command prompt/console of tappaas1:
 
 ```
-curl -fsSL  https://raw.githubusercontent.com/TAPPaaS/TAPPaaS/main/src/foundation/10-OPNsense/firewall.json > /root/tappaas/firewall.json
-~/tappaas/Create-TAPPaas-VM.sh firewall
+curl -fsSL  https://raw.githubusercontent.com/TAPPaaS/TAPPaaS/main/src/foundation/10-firewall/firewall.json > /root/tappaas/firewall.json
+~/tappaas/Create-TAPPaaS-VM.sh firewall
 
 ```
 

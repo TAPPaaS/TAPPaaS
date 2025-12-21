@@ -151,6 +151,7 @@ if [[ "$BRIDGE1" != "NONE" ]]; then
 else
   info "     - No second bridge configured"
 fi
+CLOUDINIT="$(get_config_value 'cloudInit' 'true')"
 DESCRIPTION="$(get_config_value 'description')"
 
 # not needed if clone, but no harm either
@@ -193,8 +194,8 @@ if [ "$IMAGETYPE" == "img" ]; then  # First use: this is used to stand up a fire
   qm importdisk $VMID ${TARGET_IMAGE} $STORAGE  1>/dev/null
   qm set $VMID \
     -scsi0 ${DISK0_REF} \
-    -boot order=scsi0  # >/dev/null
-  qm resize $VMID scsi0 $DISK_SIZE # >/dev/null
+    -boot order=scsi0   >/dev/null
+  qm resize $VMID scsi0 $DISK_SIZE  >/dev/null
 fi
 
 if [ "$IMAGETYPE" == "iso" ]; then # First use: this is used to stand up a nixos template vm from an iso image
@@ -227,24 +228,36 @@ qm set $VMID --description "$DESCRIPTION_HTML" >/dev/null
 qm set $VMID --serial0 socket >/dev/null
 qm set $VMID --tags $VMTAG >/dev/null
 qm set $VMID --agent enabled=1 >/dev/null
-qm set $VMID --ciuser tappaas >/dev/null
-qm set $VMID --ipconfig0 ip=dhcp >/dev/null
 qm set $VMID --cores $CORE_COUNT --memory $RAM_SIZE >/dev/null
 if [ -n "$VLANTAG" ] && [ "$VLANTAG" != "0" ]; then
   qm set $VMID --net0 "virtio,bridge=${BRIDGE0},tag=$VLANTAG,macaddr=${MAC0}" >/dev/null
 else
   qm set $VMID --net0 "virtio,bridge=${BRIDGE0},macaddr=${MAC0}" >/dev/null
 fi
-if [[ "$VMNAME" == "tappaas-cicd" ]]; then
-  qm set $VMID --sshkey ~/.ssh/id_rsa.pub >/dev/null
-else
-  qm set $VMID --sshkey ~/tappaas/tappaas-cicd.pub >/dev/null
-fi
 if [[ "$BRIDGE1" == "NONE" ]]; then
   info "No second bridge configured"
 else
   qm set $VMID --net1 "virtio,bridge=$BRIDGE1,macaddr=$MAC1" >/dev/null
   info "Configured second bridge on $BRIDGE1"
+fi
+if [ "$CLOUDINIT" == "true" ]; then
+  qm set $VMID --ciuser tappaas >/dev/null
+  qm set $VMID --ipconfig0 ip=dhcp >/dev/null
+  if [[ "$VMNAME" == "tappaas-cicd" ]]; then
+    qm set $VMID --sshkey ~/.ssh/id_rsa.pub >/dev/null
+  else
+    qm set $VMID --sshkey ~/tappaas/tappaas-cicd.pub >/dev/null
+  fi
+else
+  info "Cloud-init configuration skipped as per JSON configuration"
+fi
+
+qm set $VMID --ciuser tappaas >/dev/null
+qm set $VMID --ipconfig0 ip=dhcp >/dev/null
+if [[ "$VMNAME" == "tappaas-cicd" ]]; then
+  qm set $VMID --sshkey ~/.ssh/id_rsa.pub >/dev/null
+else
+  qm set $VMID --sshkey ~/tappaas/tappaas-cicd.pub >/dev/null
 fi
 
 
