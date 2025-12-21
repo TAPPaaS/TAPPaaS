@@ -23,7 +23,7 @@ followed by the rest of foundation, in number order.
 - prepare physical hardware. see [Examples](../../Documentation/Examples/README.md) or [Hardware](../../Documentation/Architecture/Hardware.md)
 - ensure you designed your basic setup [Design](../../Documentation/Installation/README.md)
   - you have a domain name for the installation: <mytappaas.net>
-  - when the installer ask for a FQDM for the machine useÆ tappaas1.internal  (do not use the external recognized domain for your installation, that is for the firewall)
+  - when the installer ask for a FQDM for the machine use: tappaas1.internal  (do not use the external recognized domain for your installation, that is for the firewall)
     - if this is not the first node then replace the tappaas1 with the appropiate tappaas2,3,4, ...
     - Note that the current installation do not support a different name for the PVE nodes
   - The hardware is plugged into a local network with internet connection. you have a local IP number for the node (will later be changed when the firewall is installed)
@@ -51,7 +51,7 @@ followed by the rest of foundation, in number order.
 
 ## Post Install
 
-- run post install script
+Run the post install script:
 ```
 curl -fsSL https://raw.githubusercontent.com/TAPPaaS/TAPPaaS/main/src/foundation/05-ProxmoxNode/install.sh | bash
 ```

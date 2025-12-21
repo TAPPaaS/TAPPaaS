@@ -248,43 +248,31 @@ msg_info "Enabling high availability"
   systemctl enable -q --now corosync
 msg_ok "Enabled high availability"
 
-msg_info "install TAPPaaS helper script"
+msg_info "Install TAPPaaS helper script"
 cd
 mkdir tappaas
 apt -y install jq &>/dev/null || msg_error "apt update failed"
 curl -fsSL  https://raw.githubusercontent.com/TAPPaaS/TAPPaaS/main/src/foundation/05-ProxmoxNode/Create-TAPPaaS-VM.sh >~/tappaas/Create-TAPPaaS-VM.sh
 chmod 744 ~/tappaas/Create-TAPPaaS-VM.sh
-msg_ok "installed TAPPaaS helper script"
+msg_ok "Installed TAPPaaS helper script"
 
-msg_info "copy configuration.json"
+msg_info "Copy configuration.json"
 curl -fsSL  https://raw.githubusercontent.com/TAPPaaS/TAPPaaS/main/src/foundation/configuration.json >~/tappaas/configuration.json
-msg_ok "copied configuration.json"
+msg_ok "Copied configuration.json"
 
-msg_info "install power top:"
+msg_info "Install power top:"
 apt -y install powertop &>/dev/null || msg_error "apt update failed"
-msg_ok "installed power top"
+msg_ok "Installed power top"
 
 msg_info "Updating Proxmox VE (Patience)"
 apt update &>/dev/null || msg_error "apt update failed"
 apt -y dist-upgrade &>/dev/null || msg_error "apt dist-upgrade failed"
 msg_ok "Updated Proxmox VE"
 
-if [ "$(hostname)" = "tappaas1" ]; then
-#  msg_info "Creating TAPPaaS cluster"
-#  pvecm create TAPPaaS
-  msg_ok "This is the first TAPPaaS cluster node. we only start the cluster when adding the second node, and when the IP assignments of lan is complete"
-else
-  msg_info "Adding node to TAPPaaS cluster"
-  pvecm add 10.0.0.10
-  msg_ok "Added node to TAPPaaS cluster"
-fi
-#  pvecm status
+echo "The TAPPaaS post proxmox install script was run" `date` >/var/log/tappaas.step1
 
-echo "The TAPPaaS post proxmox install script have been run" `date` >/var/log/tappaas.step1
-
-msg_info "Rebooting Proxmox VE"
-msg_info "please press any key to continue or press ctrl-c to cancel"
-read -n 1 -s
+msg_ok "Rebooting Proxmox VE"
+read -n 1 -s -p "Press any key to continue or Ctrl-C to cancel..."
 msg_ok "Rebooting Proxmox VE in 5 seconds"
 sleep 5
 reboot

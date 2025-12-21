@@ -34,6 +34,10 @@ log into the firewall:
     - domain: internal
     - ip: 10.0.0.11
 
+join the node to the TAPPaaS cluster:
+- on the tappass1 node: go to datacenter and click Cluster: click Join information, and copy information
+- on the new tappaas node: go to datacenter and click Cluster and then join cluster: paste inforamtion and enter root password for tappaas1
+
 
 Finally copy the configuration.json from tappas1.
 On the tappaas2,3,.. console:

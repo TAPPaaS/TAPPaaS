@@ -59,8 +59,7 @@ Rename the vmbr0 bridge to "wan" using the command line/console of tappaas1:
 - edit the /etc/network/interfaces
 - replace all occurrences of "vmbr0" with the string "wan" (there should be two instances)
 - save file
-
-Reboot the proxmox system
+- reboot the tappaas1 node (or PVE will not discover the new wan correctly)
 
 attach a new switch to the ethernet port associated with the lan bridge port
 
@@ -86,21 +85,20 @@ now create the OPNSense VM: from the command prompt/console of tappaas1:
 ```
 curl -fsSL  https://raw.githubusercontent.com/TAPPaaS/TAPPaaS/main/src/foundation/10-firewall/firewall.json > /root/tappaas/firewall.json
 ~/tappaas/Create-TAPPaaS-VM.sh firewall
-
 ```
 
 boot up the VM and configure the opnsense
 
 after boot you login as root with password opnsense
 
-change the root password. Option 3
+change the root password; option 3
 
-change lan ip through option 2:
-- configure lan 
-  - option 2, followed by 1 for Lan, and N for not using DHCP
+change lan ip; option 2:
+  - followed by 1 for Lan, and N for not using DHCP
   - use ip range to 10.0.0.1/24
   - no IPv6 config (TODO, enable IPv6)
   - enable DHCP, with a range of 10.0.0.100 - 10.0.0.254
+  - default "N" answers to the rest
 
 jump into a shell (option 8) and test that you can ping external addresses
 
@@ -120,10 +118,10 @@ From: [OPNsense DHCP with DNS](https://docs.opnsense.org/manual/dnsmasq.html#dhc
   - DHCP fqdn
   - dhcp default domain: internal
   - DHCP register firewall rules
-  Enable service -> Unbound DNS -> general
+  - Click Apply 
 - register dnsmask with unbound DNS for lan.internal domain
   - Service -> Unbound DNS -> Query Forwarding
-    - register internal to query 127.0.0.1 port 53053
+    - register lan.internal to query 127.0.0.1 port 53053
     - register 10.in-addr.arpa to query 127.0.0.1 port 53053
     - press apply
     - 
@@ -141,11 +139,11 @@ Check that you can lookup you your local machines using .internal domain
 
 # 3. Swap cables Step
 
-First we switch tappaas node 1 to be working **only** on the Lan port 
-so in the Proxmox console edit the network bridge "Wan": remove the IP IP assignment.
-in the shell prompt: edit the follwing files:
-/etc/hosts: ensure the host IP is the new 10.0.0.10
-/etc/resolv.conf: ensure the resolver is 10.0.0.1
+First we switch tappaas1 node to be working **only** on the Lan port:
+- in the Proxmox console edit the network bridge "Wan": remove the IP IP assignment.
+- in the shell prompt: edit the follwing files:
+  - /etc/hosts: ensure the host IP is the new 10.0.0.10
+  - /etc/resolv.conf: ensure the resolver is 10.0.0.1
 
 You should now have a setup looking like:
 
