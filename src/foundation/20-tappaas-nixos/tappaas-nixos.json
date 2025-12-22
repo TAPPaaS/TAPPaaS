@@ -1,8 +1,8 @@
 {
     "version": "0.5",
-    "vmid": 101,
+    "vmid": 8080,
     "vmtag": "TAPPaaS,Foundation",
-    "vmname": "tappaas-cicd",
+    "vmname": "tappaas-nixos",
     "cores": 2,
     "memory": "4096",
     "diskSize": "16G",

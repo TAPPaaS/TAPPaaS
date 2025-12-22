@@ -141,7 +141,8 @@ Check that you can lookup you your local machines using .internal domain
 
 First we switch tappaas1 node to be working **only** on the Lan port:
 - in the Proxmox console edit the network bridge "Wan": remove the IP IP assignment.
-- in the shell prompt: edit the follwing files:
+- in the lan network update the gateway to be 10.0.0.1
+- in the shell prompt: edit the following files:
   - /etc/hosts: ensure the host IP is the new 10.0.0.10
   - /etc/resolv.conf: ensure the resolver is 10.0.0.1
 
