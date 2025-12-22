@@ -245,7 +245,7 @@ if [ "$CLOUDINIT" == "true" ]; then
   qm set $VMID --ipconfig0 ip=dhcp >/dev/null
   if [[ "$VMNAME" == "tappaas-cicd" ]]; then
     qm set $VMID --sshkey ~/.ssh/id_rsa.pub >/dev/null
-  else
+  elif [[ -f ~/tappaas/tappaas-cicd.pub ]]; then
     qm set $VMID --sshkey ~/tappaas/tappaas-cicd.pub >/dev/null
   fi
   qm cloudinit update $VMID >/dev/null
