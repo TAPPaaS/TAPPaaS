@@ -12,7 +12,7 @@ Setup runs in these macro steps:
 run the following script as root from the proxmox console
 
 ```
-curl -fsSL  https://raw.githubusercontent.com/TAPPaaS/TAPPaaS/main/src/foundation/30-tappaas-cicd/tappaas-nixos.json >~/tappaas/tappaas-nixos.json
+curl -fsSL  https://raw.githubusercontent.com/TAPPaaS/TAPPaaS/main/src/foundation/20-tappaas-nixos/tappaas-nixos.json >~/tappaas/tappaas-nixos.json
 ~/tappaas/Create-TAPPaas-VM.sh tappaas-nixos
 ```
 

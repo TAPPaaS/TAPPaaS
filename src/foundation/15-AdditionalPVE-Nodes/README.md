@@ -27,20 +27,19 @@ Do run the post install scrip as with node 1
 
 Register the hosts on the internal network: tappaas2,3,...
 
-log into the firewall:
+- log into the firewall:
 - go to Service -> Dnsmasq DNS & DHCP -> Hosts
   - add a host:
     - name tappaas2
     - domain: internal
     - ip: 10.0.0.11
 
-join the node to the TAPPaaS cluster:
+Join the node to the TAPPaaS cluster:
 - on the tappass1 node: go to datacenter and click Cluster: click Join information, and copy information
 - on the new tappaas node: go to datacenter and click Cluster and then join cluster: paste inforamtion and enter root password for tappaas1
 
 
-Finally copy the configuration.json from tappas1.
-On the tappaas2,3,.. console:
+Finally copy the configuration.json from tappas1: On the tappaas2,3,.. console:
 ```
 cd
 scp 10.0.0.10:/root/tappaas/configuration.json tappaas

@@ -271,10 +271,12 @@ msg_ok "Updated Proxmox VE"
 
 echo "The TAPPaaS post proxmox install script was run" `date` >/var/log/tappaas.step1
 
-msg_ok "Rebooting Proxmox VE"
-read -n 1 -s -p "Press any key to continue or Ctrl-C to cancel..."
-msg_ok "Rebooting Proxmox VE in 5 seconds"
-sleep 5
-reboot
+msg_ok "Completed TAPPaaS post Proxmox VE install script"
+msg_ok "Please reboot node"
+
+# read -n 1 -s -p "Press any key to continue or Ctrl-C to cancel..."
+# msg_ok "Rebooting Proxmox VE in 5 seconds"
+# sleep 5
+# reboot
 
 
