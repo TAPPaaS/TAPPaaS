@@ -6,6 +6,6 @@
     "storage": "tankc1",
     "imageType": "apt",
     "image": "pbs",
-    "imageLocation": "https://enterprise.proxmox.com/iso/",
+    "imageLocation": "http://download.proxmox.com/debian/pbs",
     "description": "TAPPaaS Proxmox Backup Server configuration"  
 }
