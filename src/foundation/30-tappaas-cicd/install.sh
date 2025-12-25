@@ -14,7 +14,7 @@ git clone   https://github.com/TAPPaaS/TAPPaaS.git
 
 # go to the tappaas-cicd folder
 echo -e "\nChanging to TAPPaaS-CICD directory and rebuilding the NixOS configuration..."
-cd TAPPaaS/src/foundation/15-TAPPaaS-CICD
+cd TAPPaaS/src/foundation/30-tappaas-cicd
 
 # rebuild the nixos configuration
 sudo nixos-rebuild switch -I nixos-config=./tappaas-cicd.nix

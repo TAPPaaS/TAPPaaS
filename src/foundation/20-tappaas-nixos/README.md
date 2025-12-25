@@ -18,7 +18,7 @@ curl -fsSL  https://raw.githubusercontent.com/TAPPaaS/TAPPaaS/main/src/foundatio
 
 in the console of VM 8080 install nixos
   - use the username "tappaas", give it a strong password, preferably the same as root on the tappass1 node. same password for root
-  - do not select a graphical desktop
+  - for graphical desktop select: no desktop
   - allow use of unfree software
   - select erase disk and no swap in disk partition menu
   - start the install it will take some time and likely look stalled at 46% for many minutes, toggle log to see detailed progress
@@ -26,10 +26,10 @@ in the console of VM 8080 install nixos
 
 stop the system, detach the iso in the proxmox console and reboot VM
 
-In the console of the VM do the following
+In the console of the VM do the following (and sorry, nixos do not support cut and paste and ssh ot of the box, so some typing is required)
 
 ```
-sudo curl -fsSL  https://raw.githubusercontent.com/TAPPaaS/TAPPaaS/main/src/foundation/15-TAPPaaS-CICD/tappaas-nixos.nix  >tappaas-nixos.nix
+sudo curl -fsSL  https://raw.githubusercontent.com/TAPPaaS/TAPPaaS/main/src/foundation/20-tappaas-nixos/tappaas-nixos.nix  >tappaas-nixos.nix
 sudo cp tappaas-nixos.nix /etc/nixos/configuration.nix
 sudo nixos-rebuild switch
 

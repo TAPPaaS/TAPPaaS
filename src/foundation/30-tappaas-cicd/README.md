@@ -14,12 +14,12 @@ Setup runs in these macro steps:
 Install cloning config: on the proxmox command prompt, then run the command to create the tappaas-cicd clone
 ```
 curl -fsSL  https://raw.githubusercontent.com/TAPPaaS/TAPPaaS/main/src/foundation/30-tappaas-cicd/tappaas-cicd.json >~/tappaas/tappaas-cicd.json
-~/tappaas/Create-TAPPaas-VM.sh tappaas-cicd
+~/tappaas/Create-TAPPaaS-VM.sh tappaas-cicd
 ```
 
 There should now be a running tappaas-cicd VM. you can ssh into the VM from the proxmox console
 ```
-ssh tappaas@tappaas-cicd.intenal
+ssh tappaas@tappaas-cicd.internal
 ```
 
 on the tappaas-cicd console do:

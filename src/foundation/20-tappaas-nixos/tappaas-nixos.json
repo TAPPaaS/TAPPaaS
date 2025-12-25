@@ -12,5 +12,5 @@
     "imageLocation": "https://channels.nixos.org/nixos-25.05/",
     "bridge0": "lan",
     "vlantag0": 0,
-    "description": "The TAPPaaS CICD VM (The Mother Ship)"  
+    "description": "The TAPPaaS NixOS VM Template"  
 }
