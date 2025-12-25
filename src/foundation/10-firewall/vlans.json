@@ -1,0 +1,71 @@
+{
+    "lan": {
+        "type": "management",
+        "bridge": "lan",
+        "vlantag": 0,
+        "access-to": ["internet", "dmz", "srv", "client", "guest", "iot"],
+        "pinhole-allowed-from": [],
+        "description": "Internal self management network, untagged traffic"
+    },
+    "dmz": {
+        "type": "dmz",
+        "bridge": "lan",
+        "vlantag": 100,
+        "access-to": ["internet"],
+        "pinhole-allowed-from": ["internet"],
+        "description": "Demilitarized zone network, it is the only internal network that allow pinhole access to service through the firewall from the internet"
+    },
+    "srv": {
+        "type": "service",
+        "bridge": "lan",
+        "vlantag": 200,
+        "access-to": ["internet"],
+        "pinhole-allowed-from": ["dmz"],
+        "description": "Service network, this is where TAPPaaS services are placed"
+    },
+    "client": {
+        "type": "client",
+        "bridge": "lan",
+        "vlantag": 300,
+        "SSID": "TAPPaaS-Clients",
+        "access-to": ["internet", "iot", "iot-isolated"],
+        "pinhole-allowed-from": [],
+        "description": "This is where regular users of TAPPaaS services connect."
+    },
+    "guest": {
+
+        "bridge": "lan",
+        "vlantag": 400,
+        "SSID": "TAPPaaS-Guests",
+        "access-to": ["internet"],
+        "pinhole-allowed-from": [],
+        "description": "guest network"
+    },
+    "iot": {
+        "type": "iot",
+        "bridge": "lan",
+        "vlantag": 500,
+        "SSID": "TAPPaaS-IoT",
+        "access-to": ["internet"],
+        "pinhole-allowed-from": ["srv", "client"],
+        "description": "IoT network, this is where IoT devices connect to the TAPPaaS services."
+    },
+    "iot-isolated": {
+        "type": "iot",
+        "bridge": "lan",
+        "vlantag": 501,
+        "SSID": "TAPPaaS-IoT-Isolated",
+        "access-to": [],
+        "pinhole-allowed-from": [],
+        "description": "IoT network, this is where IoT devices that should NOT access the internet resides"
+    },
+    "iot-camera": {
+        "type": "iot",
+        "bridge": "lan",
+        "vlantag": 502,
+        "access-to": [],
+        "pinhole-allowed-from": ["srv"],
+        "description": "IoT network, for cameras"
+    }
+
+}
