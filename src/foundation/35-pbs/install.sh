@@ -10,8 +10,5 @@ if [ "$(hostname)" != "tappaas-cicd" ]; then
   exit 1
 fi      
 
-# copy the VM template
-scp pbs.json root@tappaas1.internal:/root/tappaas/pbs.json
-ssh root@tappaas1.internal "/root/tappaas/Create-TAPPaaS-VM.sh pbs"
 
-echo "VM create go to console to complete PBS installation"
+

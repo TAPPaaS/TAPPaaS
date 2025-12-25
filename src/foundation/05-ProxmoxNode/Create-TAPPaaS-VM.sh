@@ -123,7 +123,7 @@ function get_config_value() {
 }
 
 # generate some MAC addresses
-info "${BOLD}$Creating TAPPaaS NixOS VM from proxmox vm template using the following settings:"
+info "${BOLD}$Creating TAPPaaS VM in proxmox using the following settings:"
 NODE="$(get_config_value 'node' 'tappaas1')"
 VMID="$(get_config_value 'vmid')"
 VMNAME="$(get_config_value 'vmname' "$1")"

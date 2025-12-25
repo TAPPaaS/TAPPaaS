@@ -1,15 +1,11 @@
 {
     "version": "0.5",
-    "vmid": 135,
+    "node": "tappaas3",
     "vmtag": "TAPPaaS,Foundation",
     "vmname": "pbs",
-    "cores": 2,
-    "memory": "4096",
-    "diskSize": "16G",
-    "storage": "tanka1",
-    "imageType": "iso",
-    "image": "proxmox-backup-server-4.1-1.iso",
+    "storage": "tankc1",
+    "imageType": "apt",
+    "image": "pbs",
     "imageLocation": "https://enterprise.proxmox.com/iso/",
-    "bridge0": "lan",
-    "description": "TAPPaaS Proxmox Backup Server VM"  
+    "description": "TAPPaaS Proxmox Backup Server configuration"  
 }
