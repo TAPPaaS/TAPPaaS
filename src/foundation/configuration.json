@@ -7,7 +7,7 @@
         "version": "0.5",
         "domain": "CHANGE-mytappaas.dev",
         "email": "CHANGE-tappaas@mytappaas.dev",
-        "nodeCount": 1,
+        "nodeCount": 3,
         "nodeNamePrefix": "tappaas",
         "upstreamGit": "github.com/TAPPaaS/TAPPaaS",
         "branch": "main"
