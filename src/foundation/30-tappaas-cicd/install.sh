@@ -29,7 +29,7 @@ sudo chmod 600 /home/tappaas/.ssh/id_ed25519
 # copy the public key to the root account of every proxmox host
 while read -r node; do
   echo -e "\nInstalling SSH public key on proxmox node: $node"
-  ssh-copy-id -i /home/tappaas/.ssh/id_ed25519.pub root@"$node".lan.internal
+  ssh-copy-id -i /home/tappaas/.ssh/id_ed25519.pub root@"$node".lan.internal || echo "SSH key copy to $node failed or key already installed."
   # also make the key available for the tappaas script that configure cloud-init on the vms
   ssh root@"$node".lan.internal "mkdir -p /root/tappaas"
   scp /home/tappaas/.ssh/id_ed25519.pub root@"$node".lan.internal:/root/tappaas/tappaas-cicd.pub
