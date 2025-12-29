@@ -11,8 +11,12 @@ To install simply run the install.sh from the tappaas-cicd vm
 after running the script you need to configure the PBS installation by logging into the PBS gui
 
 1) attach the tankc1 for backups
-2) create a pbs backup of the backup through a "friendly TAPPaaS" service 
-3) configure retention policies
+2) create a backup user tappaas, and give it rights to do backup (admin privileges)
+3) on the tappaas1 node, configure the backup system for use in the datacenter" by adding a PBS node to storage
+4) create a pbs backup of the backup through a "friendly TAPPaaS" service 
+5) configure retention policies
+
+
 
 TODO: code or document these steps in more details
 TODO remember encryption
