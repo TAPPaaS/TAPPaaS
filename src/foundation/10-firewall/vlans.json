@@ -1,71 +1,106 @@
 {
-    "lan": {
-        "type": "management",
-        "bridge": "lan",
+    "tappaas": {
+        "zone": "Management",
+        "zoneId": "0",
+        "subzone": "0",
         "vlantag": 0,
+        "ip": "10.0.0.0/24",
+        "bridge": "lan",
         "access-to": ["internet", "dmz", "srv", "client", "guest", "iot"],
         "pinhole-allowed-from": [],
         "description": "Internal self management network, untagged traffic"
     },
-    "dmz": {
-        "type": "dmz",
+    "business": {
+        "zone": "Service",
+        "zoneId": "2",
+        "subzone": "10",
+        "vlantag": 210,
+        "ip": "10.2.10.0/24",
         "bridge": "lan",
-        "vlantag": 100,
-        "access-to": ["internet"],
-        "pinhole-allowed-from": ["internet"],
-        "description": "Demilitarized zone network, it is the only internal network that allow pinhole access to service through the firewall from the internet"
-    },
-    "srv": {
-        "type": "service",
-        "bridge": "lan",
-        "vlantag": 200,
         "access-to": ["internet"],
         "pinhole-allowed-from": ["dmz"],
-        "description": "Service network, this is where TAPPaaS services are placed"
+        "description": "Service network, this is where TAPPaaS Business services are placed"
     },
-    "client": {
-        "type": "client",
+    "home": {
+        "zone": "Service",
+        "zoneId": "2",
+        "subzone": "20",
+        "vlantag": 220,
+        "ip": "10.2.20.0/24",
         "bridge": "lan",
-        "vlantag": 300,
-        "SSID": "TAPPaaS-Clients",
+        "access-to": ["internet"],
+        "pinhole-allowed-from": ["dmz"],
+        "description": "Service network, this is where TAPPaaS home services are placed"
+    },
+    "private": {
+        "zone": "Client",
+        "zoneId": "3",
+        "subzone": "10",
+        "vlantag": 310,
+        "SSID": "Private",
+        "ip": "10.3.10.0/24",
+        "bridge": "lan",
         "access-to": ["internet", "iot", "iot-isolated"],
         "pinhole-allowed-from": [],
         "description": "This is where regular users of TAPPaaS services connect."
     },
-    "guest": {
-
-        "bridge": "lan",
-        "vlantag": 400,
-        "SSID": "TAPPaaS-Guests",
-        "access-to": ["internet"],
-        "pinhole-allowed-from": [],
-        "description": "guest network"
-    },
     "iot": {
-        "type": "iot",
-        "bridge": "lan",
-        "vlantag": 500,
+        "zone": "IoT",
+        "zoneId": "4",
+        "subzone": "10",
+        "vlantag": 410,
         "SSID": "TAPPaaS-IoT",
+        "ip": "10.4.10.0/24",
+        "bridge": "lan",
         "access-to": ["internet"],
         "pinhole-allowed-from": ["srv", "client"],
         "description": "IoT network, this is where IoT devices connect to the TAPPaaS services."
     },
     "iot-isolated": {
-        "type": "iot",
-        "bridge": "lan",
-        "vlantag": 501,
+        "zone": "IoT",
+        "zoneId": "4",
+        "subzone": "20",
+        "vlantag": 420,
         "SSID": "TAPPaaS-IoT-Isolated",
+        "ip": "10.4.20.0/24",
+        "bridge": "lan",
         "access-to": [],
         "pinhole-allowed-from": [],
         "description": "IoT network, this is where IoT devices that should NOT access the internet resides"
     },
     "iot-camera": {
-        "type": "iot",
+        "zone": "IoT",
+        "zoneId": "4",
+        "subzone": "30",
+        "vlantag": 430,
+        "SSID": "TAPPaaS-IoT-Camera",
+        "ip": "10.4.30.0/24",
         "bridge": "lan",
-        "vlantag": 502,
         "access-to": [],
         "pinhole-allowed-from": ["srv"],
         "description": "IoT network, for cameras"
+    },
+    "guest": {
+        "zone": "Guest",
+        "zoneId": "5",
+        "subzone": "10",
+        "vlantag": 510,
+        "SSID": "TAPPaaS-Guests",
+        "ip": "10.50.10.0/24",
+        "bridge": "lan",
+        "access-to": ["internet"],
+        "pinhole-allowed-from": [],
+        "description": "guest network"
+    },
+    "dmz": {
+        "zone": "DMZ",
+        "zoneId": "6",
+        "bridge": "lan",
+        "vlantag": 600,
+        "ip": "10.6.0.0/24",
+        "access-to": ["internet"],
+        "pinhole-allowed-from": ["internet"],
+        "description": "Demilitarized zone network, it is the only internal network that allow pinhole access to service through the firewall from the internet"
     }
 
 }
