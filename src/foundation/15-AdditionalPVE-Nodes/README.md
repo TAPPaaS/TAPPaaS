@@ -11,19 +11,12 @@
   - ...
 use the same root password as the tappaas1 node
 
-## preparation
-
-if this is the second node to add then we need to create the cluster on tappaas1 so that we can add this node to a cluster later on
-on the cole of tappaas1:
-```
-pvecm create TAPPaaS
-```
 
 ## Install proxmox PVE
 
 Use the same image on usb stick as with node 1
 
-Do run the post install scrip as with node 1
+Do run the post install scrip as with node 1: [README](../05-ProxmoxNode/README.md)
 
 Register the hosts on the internal network: tappaas2,3,...
 
@@ -43,17 +36,6 @@ Rename the network bridge from "vmbr0" to "lan" using the command line/console o
 If this node is to be used as fall over node for the firewall then create a "wan" bridge attached to a secondary physical ethernet port
 (this can be done from the gui of the tappaas node)
 
-Join the node to the TAPPaaS cluster:
-- on the tappass1 node: go to datacenter and click Cluster: click Join information, and copy information
-- on the new tappaas node: go to datacenter and click Cluster and then join cluster: paste information and enter root password for tappaas1
-
-
-Finally copy the configuration.json from tappas1: On the tappaas2,3,.. console:
-(note that if you ahve not modified the configuration.json, then the original github version will already be on the new node and this step can be skipped)
-```
-cd
-scp 10.0.0.10:/root/tappaas/configuration.json tappaas
-```
 
 ## Repeat this for each additional node in the cluster
 
