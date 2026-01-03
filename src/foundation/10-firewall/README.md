@@ -24,7 +24,7 @@ step 2-6 and 8-10 can be replaced with
 # Prerequisite
 
 The assumption for TAPPaaS to work is external access via public IP. Either directly exposed or through a NAT pinhole for port 80 and 443
-Further the assumption is that there is a registered domain name associated with the tappaas installation: <example.tlc>
+Further the assumption is that there is a registered domain name associated with the tappaas installation: <example.tld>
 Finally it is assumed that the installer have access to editing the DNS records of the domain.
 
 So have the following ready:

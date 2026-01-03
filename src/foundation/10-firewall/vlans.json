@@ -66,7 +66,7 @@
         "bridge": "lan",
         "access-to": [],
         "pinhole-allowed-from": [],
-        "description": "IoT network, this is where IoT devices that should NOT access the internet resides"
+        "description": "IoT network, this is where IoT devices that should NOT access the internet"
     },
     "iot-camera": {
         "zone": "IoT",
@@ -95,9 +95,10 @@
     "dmz": {
         "zone": "DMZ",
         "zoneId": "6",
-        "bridge": "lan",
-        "vlantag": 600,
+        "subzone": "10",
+        "vlantag": 610,
         "ip": "10.6.0.0/24",
+        "bridge": "lan",
         "access-to": ["internet"],
         "pinhole-allowed-from": ["internet"],
         "description": "Demilitarized zone network, it is the only internal network that allow pinhole access to service through the firewall from the internet"
