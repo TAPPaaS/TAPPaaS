@@ -18,11 +18,15 @@ curl -fsSL  https://raw.githubusercontent.com/TAPPaaS/TAPPaaS/$BRANCH/src/founda
 ```
 
 in the console of VM 8080 install nixos
-  - use the username "tappaas", give it a strong password, preferably the same as root on the tappass1 node. same password for root
+  - use the username "tappaas", give it a strong password, preferably same pwd as root on the tappaas node.
   - for graphical desktop select: no desktop
   - allow use of unfree software
   - select erase disk and no swap in disk partition menu
-  - start the install it will take some time and likely look stalled at 46% for many minutes, toggle log to see detailed progress
+  - keep 'encrypt disk' unselected
+  - review summary and select install on lower right side (maximize window)
+  - start the install it will take some time
+    - it may appear to be stalled at 46% for minutes - be patient!
+    - toggle log to see detailed progress
   - finish the install but do NOT reboot
 
 stop the system, detach the iso in the proxmox console and reboot VM
