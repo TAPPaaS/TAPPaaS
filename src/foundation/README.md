@@ -5,7 +5,7 @@ The foundation modules are modules that must be installed for TAPPaaS to work. T
 
 The modules in Foundation should be installed and configured in the numbered order of the modules
 
-1. Get the hyper visor installed on the first proxmox node [Proxmox](./00-ProxmoxNode/README.md)
+1. Get the hyper visor installed on the first proxmox node [Proxmox](./05-ProxmoxNode/README.md)
 2. Get a firewall installed and configured [OPNsense](./10-OPNsense/README.md)
 3. Create a TAPPaaS NixOS VM template [tappaas-nixos](./20-tappaas-nixos/README.md)
 4. Install the "mothership" that is the VM that will control the entire TAPPaaS system through it life [TAPPaaS-CICD](./30-tappaas-cicd/README.md)
