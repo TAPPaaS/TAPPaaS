@@ -102,6 +102,7 @@ if [ -z "$JSON_CONFIG" ]; then
   exit 1
 fi
 JSON=$(cat $JSON_CONFIG)
+VLAN=$(cat /root/tappaas/vlans.json)
 
 function get_config_value() {
   local key="$1"
@@ -117,6 +118,19 @@ function get_config_value() {
   else
     value=$(echo $JSON | jq -r --arg KEY "$key" '.[$KEY]')
   fi
+  info "     - $key has value: ${BGN}${value}" >&2 #TODO, this is a hack using std error for info logging
+  echo -n "${value}"
+  return 0
+}
+
+function get_vlan_value() {
+  local key="$1"
+  if ! echo "$VLAN" | jq -e --arg K "$key" 'has($K)' >/dev/null ; then
+  # VLAN lacks the key 
+    echo -e "\n${RD}[ERROR]${CL} Missing required vlan '${YW}$key${CL}' in \"vlan.json\" configuration." >&2
+    exit 1
+  fi
+  value=$(echo $VLAN | jq -r --arg KEY "$key" '.[$KEY].vlantag')
   info "     - $key has value: ${BGN}${value}" >&2 #TODO, this is a hack using std error for info logging
   echo -n "${value}"
   return 0
@@ -142,12 +156,14 @@ fi
 BRIDGE0="$(get_config_value 'bridge0' 'lan')"
 GEN_MAC0=02:$(openssl rand -hex 5 | awk '{print toupper($0)}' | sed 's/\(..\)/\1:/g; s/.$//')
 MAC0="$(get_config_value 'mac0' "$GEN_MAC0")"
-VLANTAG0="$(get_config_value 'vlantag0' '0')"
+VLANTAG0NAME="$(get_config_value 'vlantag0' 'tappaas')"
+VLANTAG0="$(get_vlan_value '$VLANTAG0NAME')"
 BRIDGE1="$(get_config_value 'bridge1' 'NONE')"
 if [[ "$BRIDGE1" != "NONE" ]]; then
   GEN_MAC1=02:$(openssl rand -hex 5 | awk '{print toupper($0)}' | sed 's/\(..\)/\1:/g; s/.$//')
   MAC1="$(get_config_value 'mac1' "$GEN_MAC1")"
-  VLANTAG1="$(get_config_value 'vlantag1' '0')"
+  VLANTAG1NAME="$(get_config_value 'vlantag1' 'tappaas')"
+  VLANTAG1="$(get_vlan_value '$VLANTAG1NAME')"
 else
   info "     - No second bridge configured"
 fi

@@ -10,6 +10,6 @@
     "imageType": "clone",
     "image": "8080",
     "bridge0": "lan",
-    "vlantag0": 0,
+    "vlantag0": "tappaas",
     "description": "Identity VM for TAPPaaS"  
 }

@@ -253,7 +253,7 @@ msg_ok "Installed TAPPaaS helper script"
 
 msg_info "Copy configuration.json and vlan.json"
 curl -fsSL  https://raw.githubusercontent.com/TAPPaaS/TAPPaaS/main/src/foundation/configuration.json >~/tappaas/configuration.json
-curl -fsSL  https://raw.githubusercontent.com/TAPPaaS/TAPPaaS/main/src/foundation/vlan.json >~/tappaas/vlan.json
+curl -fsSL  https://raw.githubusercontent.com/TAPPaaS/TAPPaaS/main/src/foundation/vlans.json >~/tappaas/vlans.json
 msg_ok "Copied configuration.json and vlan.json"
 
 msg_info "Install power top:"

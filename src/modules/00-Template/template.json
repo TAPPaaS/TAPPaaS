@@ -11,6 +11,6 @@
     "imageType": "clone",
     "image": "8080",
     "bridge0": "lan",
-    "vlantag0": 100,
+    "vlantag0": "home",
     "description": "TAPPaaS template VM"  
 }

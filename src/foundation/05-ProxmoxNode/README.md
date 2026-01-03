@@ -86,7 +86,7 @@ If this is a secondary node then copy what you modified on tappaas1. On the new 
 ```
 cd
 scp tappaas1.tappaas.internal:/root/tappaas/configuration.json tappaas
-scp tappaas1.tappaas.internal:/root/tappaas/vlan.json tappaas
+scp tappaas1.tappaas.internal:/root/tappaas/vlans.json tappaas
 ```
 
 ## After reboot:
