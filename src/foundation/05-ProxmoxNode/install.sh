@@ -91,18 +91,13 @@ if ! pveversion | grep -Eq "pve-manager/9\.[0-4](\.[0-9]+)*"; then
   exit
 fi
 
-msg_info "Checking for \"tanka1\" zfspool"
-if ! pvesm status -content images | grep zfspool | grep -q tanka1; then
-  msg_ok "did not find a \"tanka1\" zfspool. This system will likely only work as a backup server"
-fi
-msg_ok "Found \"tanka1\" zfspool"
-
-msg_info "Checking for \"tankb1\" zfspool"
-if ! pvesm status -content images | grep zfspool | grep -q tankb1 ; then
-  msg_ok "did not find a \"tankb1\" zfspool. Some modules of TAPPaaS might not work on this node"
+msg_info "Checking for \"tank\"s in zfspool"
+if pvesm status -content images | grep zfspool | grep -q tank; then
+  msg_ok "did  find a \"tank\" in zfspool. this is fine if it is the first node to be configured, But if it is a secondary node then tanks must be configured AFTER joining the cluster"
 else
-msg_ok "Found \"tankb1\" zfspool"
+  msg_ok "Found no \"tank\" in zfspool, remember to configure tanks after this script has run. See README file"
 fi
+
 #
 # Check it this have already been run, in which case skip all the repository and other updates
 #
@@ -256,9 +251,10 @@ curl -fsSL  https://raw.githubusercontent.com/TAPPaaS/TAPPaaS/main/src/foundatio
 chmod 744 ~/tappaas/Create-TAPPaaS-VM.sh
 msg_ok "Installed TAPPaaS helper script"
 
-msg_info "Copy configuration.json"
+msg_info "Copy configuration.json and vlan.json"
 curl -fsSL  https://raw.githubusercontent.com/TAPPaaS/TAPPaaS/main/src/foundation/configuration.json >~/tappaas/configuration.json
-msg_ok "Copied configuration.json"
+curl -fsSL  https://raw.githubusercontent.com/TAPPaaS/TAPPaaS/main/src/foundation/vlan.json >~/tappaas/vlan.json
+msg_ok "Copied configuration.json and vlan.json"
 
 msg_info "Install power top:"
 apt -y install powertop &>/dev/null || msg_error "apt update failed"

@@ -75,9 +75,9 @@ Create the "tanks" as zfs pools (normally you will as a minimum is a tanka1).
     - This gives the option to stripe disks together without reduancy (raid0), to create ssd disk cache (L2ARC) and log (ZIL)
 - If sufficient hw resources are available then use mirror on tanka1
 
-## adjust the local copy of the configuration.json
+## adjust the local copy of the configuration.json and vlan.json
 
-The json is stored under /root/tappaas/configuration.json
+The json is stored under /root/tappaas/configuration.json /root/tappaas/vlan.json
 
 if this is the first node then modify it to reflect your local installation
 
@@ -85,7 +85,8 @@ If this is a secondary node then copy what you modified on tappaas1. On the new 
 (note that if you have not modified the configuration.json, then the original github version will already be on the new node and this step can be skipped)
 ```
 cd
-scp 10.0.0.10:/root/tappaas/configuration.json tappaas
+scp tappaas1.tappaas.internal:/root/tappaas/configuration.json tappaas
+scp tappaas1.tappaas.internal:/root/tappaas/vlan.json tappaas
 ```
 
 ## After reboot:
