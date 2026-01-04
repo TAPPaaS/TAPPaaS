@@ -1,19 +1,24 @@
 # Template module configuration
 
-a standard module will:
+A standard module will:
 
 - Create a VM based on a clone of a NixOS base system. 
   - This is driven by the <template>.json
-  - the same methog can be used for generic iso or img type os VMs
+  - the same method can be used for generic iso or img type VMs
 - Reconfigure the cloned or installed VM
 
-The "install.sh" must be present and will be called by Tappaas-cicd at install time
+The "install.sh" must be present and will be called by tappaas-cicd at install time. The script should expect one argument and that is the name of the vm.
+
 The "update.sh" must also be present, it will be called at regular intervals to update/patch a runnnig installation
-The template.json (rename to be the <vmname>.json)
-The template.nix (rename to <vmname>.nix) is the configuration of the Nixos (if the VM is NixOS based): TODO change to flake structure
+
+The <vmname>.json (rename and edit the template.json). Note:
+- the git supplied .json will potentially need local tappaas instance modification (like choosing a different local node than the default tappaas1, or adjusting HA parameters)
+- For that reason the tappaas-cicd install process will copy the json to a local tappaass-cicd configuration directory, and local modifications can be done from there
+
+The <vmname>.nix (rename and edit the template.nix) is the configuration of the NixOS (if the VM is NixOS based): TODO change to flake structure
+
 
 The .json have the following parameter:
-
 -    "version": Must be present.
      -    This is the version of the module, not the TAPPaaS System. use to keep track of running version of modules when reporting errors
      -    This should be incremented if the module is update
@@ -24,14 +29,14 @@ The .json have the following parameter:
 -    "HANode": 
      -    Default: "NONE"
      -    if present it must name a TAPPaaS node different from "node". This node must have the same storage defined as "storage"
-     -    if present then install scrip will set up High Availability for the VM
+     -    if present then install script will set up High Availability for the VM
 -    "replicationSchedule"
      -    Default: "*/15" # every 15 minutes
      -    define the replication interval for HA node
 -    "vmid": unique across the tappaas nodes. 
      -    Mandatory: Must be present
 -    "vmname": the name of the VM, also the name of the module and the hostname of the OS. 
-     -    Default value: The name of the configfile sans .json
+     -    Default value: The name of the config file sans .json
 -    "vmtag": proxmox tags. Default is "TAPPaaS", must be a comma separate list, no spaces
      -    Default: "TAPPaaS"
      -    Typical tags is "TAPPaaS,FOundation" and "TAPPaaS,Test"

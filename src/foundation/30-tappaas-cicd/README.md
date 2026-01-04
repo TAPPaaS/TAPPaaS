@@ -19,10 +19,10 @@ curl -fsSL  https://raw.githubusercontent.com/TAPPaaS/TAPPaaS/main/src/foundatio
 
 There should now be a running tappaas-cicd VM. you can ssh into the VM from the proxmox console
 ```
-ssh tappaas@tappaas-cicd.internal
+ssh tappaas@tappaas-cicd.tappaas.internal
 ```
 
-on the tappaas-cicd console do:
+on the tappaas-cicd console (via ssh, logged in as tappaas user) do:
 ```
 curl -fsSL  https://raw.githubusercontent.com/TAPPaaS/TAPPaaS/main/src/foundation/30-tappaas-cicd/install.sh | bash
 ```

@@ -1,21 +1,17 @@
 # install the identity foundation: create VM, run nixos-rebuil, for vm
 # It assume that you are in the install directoy
 
-# check that hostname is tappaas-cicd
-if [ "$(hostname)" != "tappaas-cicd" ]; then
-  echo "This script must be run on the TAPPaaS-CICD host (hostname tappaas-cicd)."
-  exit 1
-fi      
+. /home/tappaas/bin/common-install-rutines.sh
 
-# make sure we have the latest version of the configuration files
-# git pull
+VMNAME="$(get_config_value 'vmname' "$1")"
+NODE="$(get_config_value 'node' 'tappaas1')"
+VLANTAG0NAME="$(get_config_value 'vlantag0' 'tappaas')"
 
 # clone the nixos template
-scp identity.json root@tappaas1.internal:/root/tappaas/identity.json
-ssh root@tappaas1.internal "/root/tappaas/Create-TAPPaaS-VM.sh identity"
+scp $VMNAME.json root@${NODE}.tappaas.internal:/root/tappaas/$VMNAME.json
+ssh root@${NODE}.tappaas.internal "/root/tappaas/Create-TAPPaaS-VM.sh $VMNAME"
 
 # rebuild the nixos configuration
-nixos-rebuild --target-host tappaas@identity.internal --use-remote-sudo switch -I nixos-config=./identity.nix
-
+nixos-rebuild --target-host tappaas@$VMNAME.$VLANTAG0NAME.internal --use-remote-sudo switch -I nixos-config=./$VMNAME.nix
 
 echo "\nIdentity VM installation completed successfully."
