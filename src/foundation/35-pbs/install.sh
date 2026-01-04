@@ -50,6 +50,7 @@ IMAGE_TYPE="$(get_config_value 'imageType' 'apt')"
 IMAGE="$(get_config_value 'image' 'pbs')"
 IMAGE_LOCATION="$(get_config_value 'imageLocation' 'http://download.proxmox.com/debian/pbs')"
 DESCRIPTION="$(get_config_value 'description' 'TAPPaaS APT installation')"
+ZONE="$(get_config_value 'zone0' 'mgmt')"
 
 # update the apt sources and install pbs
 
@@ -59,7 +60,7 @@ then
   echo "Proxmox PBS apt repository already registered."
 else
   echo "Proxmox PBS apt repository not found, adding it ..."
-  ssh root@${NODE}.tappaas.internal "cat >> /etc/apt/sources.list.d/proxmox.sources" << EOF
+  ssh root@${NODE}.$ZONE.internal "cat >> /etc/apt/sources.list.d/proxmox.sources" << EOF
 Types: deb
 URIs: ${IMAGE_LOCATION}
 Suites: trixie
@@ -69,12 +70,12 @@ EOF
 fi
 
 info "${BOLD}$Installing ${DESCIPTION} on node ${BGN}${NODE}${CL} ..."
-ssh root@${NODE}.tappaas.internal bash -c "'
+ssh root@${NODE}.$ZONE.internal bash -c "'
   set -e
   apt update
   apt install -y proxmox-backup-server
 '"  
 # copy the config file to the tappass pbs service to keep a record of what has been installed
-scp $JSON_CONFIG root@${NODE}.tappaas.internal:/root/tappaas/$JSON_CONFIG
+scp $JSON_CONFIG root@${NODE}.$ZONE.internal:/root/tappaas/$JSON_CONFIG
 
 info "\n${GN}TAPPaaS PBS installation completed successfully.${CL}"

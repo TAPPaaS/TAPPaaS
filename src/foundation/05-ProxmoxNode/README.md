@@ -22,14 +22,14 @@ followed by the rest of foundation, in number order.
 
 - prepare physical hardware. see [Examples](../../Documentation/Examples/README.md) or [Hardware](../../Documentation/Architecture/Hardware.md)
 - ensure you designed your basic setup [Design](../../Documentation/Installation/README.md)
-  - you have a domain name for the installation: <mytappaas.net>
+  - you have a domain name for the installation: <mytappaas.tld>
   - when the installer ask for a FQDM for the machine use: tappaas1.internal  (do not use the external recognized domain for your installation, that is for the firewall)
     - if this is not the first node then replace the tappaas1 with the appropiate tappaas2,3,4, ...
     - Note that the current installation do not support a different name for the PVE nodes
   - The hardware is plugged into a local network with internet connection. you have a local IP number for the node (will later be changed when the firewall is installed)
   - You will be asked for a password for root. Select a strong password and remember it :-)
 - download a Proxmox VE iso installer image from: [Official Proxmox Download site](https://www.proxmox.com/en/downloads)
-- create a boot USB (on windows we recommend to use [Rufus](https://rufus.ie/en/), on Linux Mint right click on .iso and select make bootable usb stick)
+- create a boot USB (on windows we recommend to use [Rufus](https://rufus.ie/en/), on Linux Mint right click on .iso and select make boot-able usb stick)
 
 ## Install Proxmox
 
@@ -50,7 +50,7 @@ chmod +x install-PVE.sh
 
 ## Creating or joining a cluster
 
-If this is the first node then create athe TAPPaaS cluster (even if you only run one machine in TAPPaaS you can create the cluster to make it ready for expansion)
+If this is the first node then create the TAPPaaS cluster (even if you only run one machine in TAPPaaS you can create the cluster to make it ready for expansion)
 In the console of tappaas1:
 ```
 pvecm create TAPPaaS
@@ -89,8 +89,8 @@ If this is a secondary node then copy what you modified on tappaas1. On the new 
 (note that if you have not modified the configuration.json, then the original github version will already be on the new node and this step can be skipped)
 ```
 cd
-scp tappaas1.tappaas.internal:/root/tappaas/configuration.json tappaas
-scp tappaas1.tappaas.internal:/root/tappaas/vlans.json tappaas
+scp tappaas1.mgmt.internal:/root/tappaas/configuration.json tappaas
+scp tappaas1.mgmt.internal:/root/tappaas/zones.json tappaas
 ```
 
 ## After reboot:

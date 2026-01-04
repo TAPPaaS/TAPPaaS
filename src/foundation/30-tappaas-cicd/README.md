@@ -20,7 +20,7 @@ curl -fsSL  https://raw.githubusercontent.com/TAPPaaS/TAPPaaS/$BRANCH/src/founda
 
 There should now be a running tappaas-cicd VM. you can ssh into the VM from the proxmox console
 ```
-ssh tappaas@tappaas-cicd.tappaas.internal
+ssh tappaas@tappaas-cicd.mgmt.internal
 ```
 
 on the tappaas-cicd console (via ssh, logged in as tappaas user) do:

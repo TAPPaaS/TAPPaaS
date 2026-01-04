@@ -260,10 +260,10 @@ curl -fsSL  https://raw.githubusercontent.com/TAPPaaS/TAPPaaS/$BRANCH/src/founda
 chmod 744 ~/tappaas/Create-TAPPaaS-VM.sh
 msg_ok "Installed TAPPaaS helper script"
 
-msg_info "Copy configuration.json and vlan.json"
+msg_info "Copy configuration.json and zones.json"
 curl -fsSL  https://raw.githubusercontent.com/TAPPaaS/TAPPaaS/$BRANCH/src/foundation/configuration.json >~/tappaas/configuration.json
-curl -fsSL  https://raw.githubusercontent.com/TAPPaaS/TAPPaaS/$BRANCH/src/foundation/vlans.json >~/tappaas/vlans.json
-msg_ok "Copied configuration.json and vlan.json"
+curl -fsSL  https://raw.githubusercontent.com/TAPPaaS/TAPPaaS/$BRANCH/src/foundation/zones.json >~/tappaas/zones.json
+msg_ok "Copied configuration.json and zones.json"
 
 msg_info "Install power top:"
 apt -y install powertop &>/dev/null || msg_error "apt update failed"

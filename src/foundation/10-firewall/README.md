@@ -121,9 +121,9 @@ From: [OPNsense DHCP with DNS](https://docs.opnsense.org/manual/dnsmasq.html#dhc
   - dhcp default domain: internal
   - DHCP register firewall rules
   - Click Apply 
-- register dnsmask with unbound DNS for tappaas.internal domain
+- register dnsmask with unbound DNS for mgmt.internal domain
   - Service -> Unbound DNS -> Query Forwarding
-    - register tappaas.internal to query 127.0.0.1 port 53053
+    - register mgmt.internal to query 127.0.0.1 port 53053
     - register 10.in-addr.arpa to query 127.0.0.1 port 53053
     - press apply
     - 
@@ -133,7 +133,7 @@ finally register the static hosts on the internal network: tappaas1
 - go to Service -> Dnsmasq DNS & DHCP -> Hosts
   - add a host:
     - name tappaas1
-    - domain: internal
+    - domain: mgmt.internal
     - ip: 10.0.0.10
 
 Check that you can lookup you your local machines using .internal domain
@@ -203,14 +203,9 @@ note as we create VLANs we need to create firewall rules as well
 
 # 7. VLAN and Firewalls
 
-we are creating 4 VLANS: See [Networkdesign](../../../docs/Architecture/NetworkDesign.md)
+we are creating VLANS: See [Networkdesign](../../../docs/Architecture/NetworkDesign.md)
 
-| Segment         | VLAN | IPv4 Subnet  | IPv6 Subnet    | Firewall  notes  |
-|-----------------|------|--------------|----------------|-------------|
-| DMZ             | 100  | 10.1.0.0/24  | \<ipv6-prefix\>:100::/64 | unlimited access TO the Internet/WAN. Per service create pinhole |
-| Service         | 200  | 10.2.0.0/24  | \<ipv6-prefix\>:200::/64 | This is where services for consumption lives |
-| Client          | 300  | 10.3.0.0/24  | \<ipv6-prefix\>:300::/64 | unconnected client network |
-| IoT             | 400  | 10.4.0.0/24  | \<ipv6-prefix\>:400::/64 | unsecure devices and systems |
+
 
 TODO: create automation script, see: https://docs.opnsense.org/development/api/core/firewall.html, https://github.com/andreas-stuerz/opn-cli
 

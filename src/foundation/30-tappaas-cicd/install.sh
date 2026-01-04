@@ -28,7 +28,7 @@ cd TAPPaaS/src/foundation/30-tappaas-cicd
 sudo nixos-rebuild switch -I nixos-config=./tappaas-cicd.nix
 
 # creatae a fully qualified node hostname for tappaas1
-MGMTVLAN="tappaas"
+MGMTVLAN="mgmt"
 NODE1_FQDN="tappaas1.$MGMTVLAN.internal"
 
 # create ssh keys for the tappaas user

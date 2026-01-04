@@ -10,6 +10,6 @@
     "imageType": "clone",
     "image": "8080",
     "bridge0": "lan",
-    "vlantag0": "tappaas",
+    "zone0": "mgmt",
     "description": "The TAPPaaS mothership VM"  
 }

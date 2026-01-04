@@ -102,7 +102,7 @@ if [ -z "$JSON_CONFIG" ]; then
   exit 1
 fi
 JSON=$(cat $JSON_CONFIG)
-VLAN=$(cat /root/tappaas/vlans.json)
+ZONES=$(cat /root/tappaas/zones.json)
 
 function get_config_value() {
   local key="$1"
@@ -125,13 +125,18 @@ function get_config_value() {
 
 function get_vlan_value() {
   local key="$1"
-  if ! echo "$VLAN" | jq -e --arg K "$key" 'has($K)' >/dev/null ; then
+  if ! echo "$ZONES" | jq -e --arg K "$key" 'has($K)' >/dev/null ; then
   # VLAN lacks the key 
-    echo -e "\n${RD}[ERROR]${CL} Missing required vlan '${YW}$key${CL}' in \"vlan.json\" configuration." >&2
+    echo -e "\n${RD}[ERROR]${CL} Missing required zone '${YW}$key${CL}' in \"zones.json\" configuration." >&2
     exit 1
   fi
-  value=$(echo $VLAN | jq -r --arg KEY "$key" '.[$KEY].vlantag')
-  info "     - $key has value: ${BGN}${value}" >&2 #TODO, this is a hack using std error for info logging
+  state=$(echo $ZONES | jq -r --arg KEY "$key" '.[$KEY].state')
+  value=$(echo $ZONES | jq -r --arg KEY "$key" '.[$KEY].vlantag')
+  if [ "$state" == "Inactive" ]; then
+    echo -e "\n${RD}[ERROR]${CL} Zone '${YW}$key${CL}' in \"zones.json\" is not active. Current state: '${YW}$state${CL}'." >&2
+    exit 1
+  fi
+  info "     - $key has vlan value: ${BGN}${value}" >&2 #TODO, this is a hack using std error for info logging
   echo -n "${value}"
   return 0
 }
@@ -156,14 +161,14 @@ fi
 BRIDGE0="$(get_config_value 'bridge0' 'lan')"
 GEN_MAC0=02:$(openssl rand -hex 5 | awk '{print toupper($0)}' | sed 's/\(..\)/\1:/g; s/.$//')
 MAC0="$(get_config_value 'mac0' "$GEN_MAC0")"
-VLANTAG0NAME="$(get_config_value 'vlantag0' 'tappaas')"
-VLANTAG0="$(get_vlan_value '$VLANTAG0NAME')"
+ZONE0="$(get_config_value 'zone0' 'mgmt')"
+VLANTAG0="$(get_vlan_value '$ZONE0')"
 BRIDGE1="$(get_config_value 'bridge1' 'NONE')"
 if [[ "$BRIDGE1" != "NONE" ]]; then
   GEN_MAC1=02:$(openssl rand -hex 5 | awk '{print toupper($0)}' | sed 's/\(..\)/\1:/g; s/.$//')
   MAC1="$(get_config_value 'mac1' "$GEN_MAC1")"
-  VLANTAG1NAME="$(get_config_value 'vlantag1' 'tappaas')"
-  VLANTAG1="$(get_vlan_value '$VLANTAG1NAME')"
+  ZONE1="$(get_config_value 'zone1' 'mgmt')"
+  VLANTAG1="$(get_vlan_value '$ZONE1')"
 else
   info "     - No second bridge configured"
 fi
@@ -245,7 +250,7 @@ qm set $VMID --serial0 socket >/dev/null
 qm set $VMID --tags $VMTAG >/dev/null
 qm set $VMID --agent enabled=1 >/dev/null
 qm set $VMID --cores $CORE_COUNT --memory $RAM_SIZE >/dev/null
-if [ -n "$VLANTAG" ] && [ "$VLANTAG" != "0" ]; then
+if [ "$VLANTAG0" != "0" ]; then
   qm set $VMID --net0 "virtio,bridge=${BRIDGE0},tag=$VLANTAG,macaddr=${MAC0}" >/dev/null
 else
   qm set $VMID --net0 "virtio,bridge=${BRIDGE0},macaddr=${MAC0}" >/dev/null
@@ -253,7 +258,11 @@ fi
 if [[ "$BRIDGE1" == "NONE" ]]; then
   info "No second bridge configured"
 else
-  qm set $VMID --net1 "virtio,bridge=$BRIDGE1,macaddr=$MAC1" >/dev/null
+  if [ "$VLANTAG1" != "0" ]; then
+    qm set $VMID --net1 "virtio,bridge=${BRIDGE1},tag=$VLANTAG1,macaddr=${MAC1}" >/dev/null
+  else
+    qm set $VMID --net1 "virtio,bridge=${BRIDGE1},macaddr=${MAC1}" >/dev/null
+  fi
   info "Configured second bridge on $BRIDGE1"
 fi
 if [ "$CLOUDINIT" == "true" ]; then

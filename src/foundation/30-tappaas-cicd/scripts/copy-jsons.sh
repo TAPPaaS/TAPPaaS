@@ -3,7 +3,7 @@
 # Copy config files to nodes.
 
 # creatae a fully qualified node hostname for tappaas1
-MGMTVLAN="tappaas"
+MGMTVLAN="mgmt"
 NODE1_FQDN="tappaas1.$MGMTVLAN.internal"
 
 # itterate over every proxmox host
