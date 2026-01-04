@@ -13,7 +13,8 @@ Setup runs in these macro steps:
 
 Install cloning config: on the proxmox command prompt, then run the command to create the tappaas-cicd clone
 ```
-curl -fsSL  https://raw.githubusercontent.com/TAPPaaS/TAPPaaS/main/src/foundation/30-tappaas-cicd/tappaas-cicd.json >~/tappaas/tappaas-cicd.json
+BRANCH="main"
+curl -fsSL  https://raw.githubusercontent.com/TAPPaaS/TAPPaaS/$BRANCH/src/foundation/30-tappaas-cicd/tappaas-cicd.json >~/tappaas/tappaas-cicd.json
 ~/tappaas/Create-TAPPaaS-VM.sh tappaas-cicd
 ```
 
@@ -24,6 +25,7 @@ ssh tappaas@tappaas-cicd.tappaas.internal
 
 on the tappaas-cicd console (via ssh, logged in as tappaas user) do:
 ```
-curl -fsSL  https://raw.githubusercontent.com/TAPPaaS/TAPPaaS/main/src/foundation/30-tappaas-cicd/install.sh | bash
+export BRANCH="main"
+curl -fsSL  https://raw.githubusercontent.com/TAPPaaS/TAPPaaS/$BRANCH/src/foundation/30-tappaas-cicd/install.sh | bash
 ```
 You might be asked for password for root at proxmox node tappaas1

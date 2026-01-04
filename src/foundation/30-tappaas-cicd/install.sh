@@ -8,9 +8,17 @@ if [ "$(hostname)" != "tappaas-cicd" ]; then
   exit 1
 fi      
 
+# Find the branch version of TAPPaaS to use
+if [ -z $BRANCH]; then
+  BRANCH="main"
+fi
+
 # clone the tappaas-cicd repo
 echo -e "\nCloning TAPPaaS repository..."
 git clone   https://github.com/TAPPaaS/TAPPaaS.git
+echo -e "\nswitching to branch $BRANCH..."
+cd TAPPaaS
+git checkout $BRANCH
 
 # go to the tappaas-cicd folder
 echo -e "\nChanging to TAPPaaS-CICD directory and rebuilding the NixOS configuration..."

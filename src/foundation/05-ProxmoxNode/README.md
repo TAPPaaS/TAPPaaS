@@ -39,9 +39,13 @@ followed by the rest of foundation, in number order.
 
 ## Post Install
 
-Run the post install script:
+Run the post install script (if you are not using the "main" branch for the install then then change the assignment in the first line):
 ```
-curl -fsSL https://raw.githubusercontent.com/TAPPaaS/TAPPaaS/main/src/foundation/05-ProxmoxNode/install.sh | bash
+BRANCH="main"
+curl -fsSL https://raw.githubusercontent.com/TAPPaaS/TAPPaaS/$BRANCH/src/foundation/05-ProxmoxNode/install.sh >install-PVE.sh
+chmod +x install-PVE.sh
+./install_PVE.sh $BRANCH
+
 ```
 
 ## Creating or joining a cluster

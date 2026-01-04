@@ -12,7 +12,8 @@ Setup runs in these macro steps:
 run the following script as root from the proxmox console
 
 ```
-curl -fsSL  https://raw.githubusercontent.com/TAPPaaS/TAPPaaS/main/src/foundation/20-tappaas-nixos/tappaas-nixos.json >~/tappaas/tappaas-nixos.json
+BRANCH="main"
+curl -fsSL  https://raw.githubusercontent.com/TAPPaaS/TAPPaaS/$BRANCH/src/foundation/20-tappaas-nixos/tappaas-nixos.json >~/tappaas/tappaas-nixos.json
 ~/tappaas/Create-TAPPaaS-VM.sh tappaas-nixos
 ```
 
@@ -29,7 +30,8 @@ stop the system, detach the iso in the proxmox console and reboot VM
 In the console of the VM do the following (and sorry, nixos do not support cut and paste and ssh ot of the box, so some typing is required)
 
 ```
-sudo curl -fsSL  https://raw.githubusercontent.com/TAPPaaS/TAPPaaS/main/src/foundation/20-tappaas-nixos/tappaas-nixos.nix  >tappaas-nixos.nix
+BRANCH="main"
+sudo curl -fsSL  https://raw.githubusercontent.com/TAPPaaS/TAPPaaS/$BRANCH/src/foundation/20-tappaas-nixos/tappaas-nixos.nix  >tappaas-nixos.nix
 sudo cp tappaas-nixos.nix /etc/nixos/configuration.nix
 sudo nixos-rebuild switch
 
