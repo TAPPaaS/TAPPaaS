@@ -121,9 +121,9 @@ From: [OPNsense DHCP with DNS](https://docs.opnsense.org/manual/dnsmasq.html#dhc
   - dhcp default domain: internal
   - DHCP register firewall rules
   - Click Apply 
-- register dnsmask with unbound DNS for lan.internal domain
+- register dnsmask with unbound DNS for tappaas.internal domain
   - Service -> Unbound DNS -> Query Forwarding
-    - register lan.internal to query 127.0.0.1 port 53053
+    - register tappaas.internal to query 127.0.0.1 port 53053
     - register 10.in-addr.arpa to query 127.0.0.1 port 53053
     - press apply
     - 
