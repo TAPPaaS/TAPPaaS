@@ -1,0 +1,20 @@
+[build-system]
+requires = ["setuptools >= 61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "opnsense-vlan-manager"
+version = "0.1.0"
+description = "VLAN management example using OPNsense API client"
+readme = "README.md"
+requires-python = ">=3.10"
+license = "MIT"
+dependencies = [
+    "oxl-opnsense-client",
+]
+
+[project.scripts]
+opnsense-vlan-manager = "opnsense_vlan_manager.main:main"
+
+[tool.setuptools.packages.find]
+where = ["."]
