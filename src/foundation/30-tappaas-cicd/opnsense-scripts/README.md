@@ -22,7 +22,7 @@ nix-shell -A shell default.nix
 ### Option 1: Environment Variables
 
 ```bash
-export OPNSENSE_HOST="192.168.1.1"
+export OPNSENSE_HOST="10.0.0.1"
 export OPNSENSE_TOKEN="your-api-token"
 export OPNSENSE_SECRET="your-api-secret"
 ```
@@ -34,7 +34,7 @@ cp credentials.example.txt ~/.opnsense-credentials.txt
 chmod 600 ~/.opnsense-credentials.txt
 # Edit with your token (line 1) and secret (line 2)
 
-export OPNSENSE_HOST="192.168.1.1"
+export OPNSENSE_HOST="10.0.0.1"
 export OPNSENSE_CREDENTIAL_FILE="$HOME/.opnsense-credentials.txt"
 ```
 
