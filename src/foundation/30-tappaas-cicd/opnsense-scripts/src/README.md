@@ -23,7 +23,7 @@ chmod 600 ~/.opnsense-credentials.txt
 
 Option B: Using environment variables:
 ```bash
-export OPNSENSE_HOST="192.168.1.1"
+export OPNSENSE_HOST="10.0.0.1"
 export OPNSENSE_TOKEN="your-api-token"
 export OPNSENSE_SECRET="your-api-secret"
 ```
