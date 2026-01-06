@@ -65,6 +65,8 @@ scp root@"$NODE1_FQDN":/root/tappaas/*.json /home/tappaas/config/
 echo -en "\nBuilding the opnsense-controller project"
 cd opnsense-controller
 nix-build -A default default.nix 2>&1 | sed 's/.*/./g' | tr -d '\n'
+cp credentials.example.txt ~/.opnsense-credentials.txt
+chmod 600 ~/.opnsense-credentials.txt
 echo -e "\nopnsense-controller build completed."
 cd ..
 
