@@ -1,8 +1,17 @@
 """Configuration management for OPNsense connection."""
 
 import os
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
+
+DEFAULT_CREDENTIAL_FILE = Path.home() / ".opnsense-credentials.txt"
+
+
+def _default_credential_file() -> str | None:
+    """Return the default credential file path if it exists."""
+    if DEFAULT_CREDENTIAL_FILE.exists():
+        return str(DEFAULT_CREDENTIAL_FILE)
+    return None
 
 
 @dataclass
@@ -12,7 +21,7 @@ class Config:
     firewall: str
     token: str | None = None
     secret: str | None = None
-    credential_file: str | None = None
+    credential_file: str | None = field(default_factory=_default_credential_file)
     ssl_verify: bool = True
     ssl_ca_file: str | None = None
     debug: bool = False
@@ -34,11 +43,15 @@ class Config:
         if not firewall:
             raise ValueError("OPNSENSE_HOST environment variable is required")
 
+        credential_file = os.environ.get("OPNSENSE_CREDENTIAL_FILE")
+        if credential_file is None:
+            credential_file = _default_credential_file()
+
         return cls(
             firewall=firewall,
             token=os.environ.get("OPNSENSE_TOKEN"),
             secret=os.environ.get("OPNSENSE_SECRET"),
-            credential_file=os.environ.get("OPNSENSE_CREDENTIAL_FILE"),
+            credential_file=credential_file,
             ssl_verify=os.environ.get("OPNSENSE_SSL_VERIFY", "true").lower() != "false",
             ssl_ca_file=os.environ.get("OPNSENSE_SSL_CA_FILE"),
             debug=os.environ.get("OPNSENSE_DEBUG", "false").lower() == "true",

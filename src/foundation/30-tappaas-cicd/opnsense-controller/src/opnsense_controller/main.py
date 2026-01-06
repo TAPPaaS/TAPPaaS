@@ -15,9 +15,12 @@ Usage:
     export OPNSENSE_HOST="10.0.0.1"
     python -m opnsense_controller.main
 
-    # Set credentials via file or environment
-    export OPNSENSE_CREDENTIAL_FILE="/path/to/credentials.txt"
-    # Or use token/secret directly
+    # Credentials are loaded from (in order of priority):
+    # 1. --credential-file CLI option
+    # 2. OPNSENSE_CREDENTIAL_FILE environment variable
+    # 3. $HOME/.opnsense-credentials.txt (default)
+    #
+    # Or use token/secret directly via environment:
     export OPNSENSE_TOKEN="your-api-token"
     export OPNSENSE_SECRET="your-api-secret"
 """
@@ -168,12 +171,16 @@ def main():
         if args.firewall != "firewall.mgmt.internal":
             firewall = args.firewall
 
-        config = Config(
-            firewall=firewall,
-            credential_file=args.credential_file,
-            ssl_verify=not args.no_ssl_verify,
-            debug=args.debug,
-        )
+        # Build config kwargs, only including credential_file if explicitly provided
+        config_kwargs = {
+            "firewall": firewall,
+            "ssl_verify": not args.no_ssl_verify,
+            "debug": args.debug,
+        }
+        if args.credential_file:
+            config_kwargs["credential_file"] = args.credential_file
+
+        config = Config(**config_kwargs)
     except ValueError as e:
         print(f"Configuration error: {e}")
         print("\nSet environment variables or use command line arguments.")
