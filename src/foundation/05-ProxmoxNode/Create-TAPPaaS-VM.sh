@@ -94,14 +94,18 @@ TEMP_DIR=$(mktemp -d)
 pushd $TEMP_DIR >/dev/null
 
 # test to see if the json config file exist
-JSON_CONFIG="/root/tappaas/$1.json"
-if [ -z "$JSON_CONFIG" ]; then
-  echo -e "\n${RD}[ERROR]${CL} Missing or mispelled required argument VMNAME. Current value: '$1'"
+if [ -z "$1" ]; then
+  echo -e "\n${RD}[ERROR]${CL} Missing required argument VMNAME."
   echo -e "Usage: bash TAPPaaS-NixOS-Cloning.sh <VMNAME>\n"
   echo -e "A JSON configuration file is expected to be located at: /root/tappaas/<VMNAME>.json"
   exit 1
 fi
-JSON=$(cat $JSON_CONFIG)
+JSON_CONFIG="/root/tappaas/$1.json"
+if [ ! -f "$JSON_CONFIG" ]; then
+  echo -e "\n${RD}[ERROR]${CL} JSON configuration file not found: ${YW}$JSON_CONFIG${CL}"
+  exit 1
+fi
+JSON=$(cat "$JSON_CONFIG")
 ZONES=$(cat /root/tappaas/zones.json)
 
 function get_config_value() {
@@ -162,13 +166,13 @@ BRIDGE0="$(get_config_value 'bridge0' 'lan')"
 GEN_MAC0=02:$(openssl rand -hex 5 | awk '{print toupper($0)}' | sed 's/\(..\)/\1:/g; s/.$//')
 MAC0="$(get_config_value 'mac0' "$GEN_MAC0")"
 ZONE0="$(get_config_value 'zone0' 'mgmt')"
-VLANTAG0="$(get_vlan_value '$ZONE0')"
+VLANTAG0=$(get_vlan_value "$ZONE0")
 BRIDGE1="$(get_config_value 'bridge1' 'NONE')"
 if [[ "$BRIDGE1" != "NONE" ]]; then
   GEN_MAC1=02:$(openssl rand -hex 5 | awk '{print toupper($0)}' | sed 's/\(..\)/\1:/g; s/.$//')
   MAC1="$(get_config_value 'mac1' "$GEN_MAC1")"
   ZONE1="$(get_config_value 'zone1' 'mgmt')"
-  VLANTAG1="$(get_vlan_value '$ZONE1')"
+  VLANTAG1=$(get_vlan_value "$ZONE1")
 else
   info "     - No second bridge configured"
 fi
@@ -230,7 +234,7 @@ if [ "$IMAGETYPE" == "iso" ]; then # First use: this is used to stand up a nixos
 # qm importdisk $VMID ${FILE} $STORAGE ${DISK_IMPORT:-} # 1>/dev/null
   qm set $VMID \
     -ide3 local:iso/${IMAGE},media=cdrom\
-    -efidisk0 ${DISK0_REF}${FORMAT} \
+    -efidisk0 ${DISK0_REF} \
     -scsi0 ${DISK1_REF},discard=on,ssd=1,size=${DISK_SIZE} \
     -ide2 ${STORAGE}:cloudinit \
     -boot order='ide3;scsi0' >/dev/null
@@ -251,7 +255,7 @@ qm set $VMID --tags $VMTAG >/dev/null
 qm set $VMID --agent enabled=1 >/dev/null
 qm set $VMID --cores $CORE_COUNT --memory $RAM_SIZE >/dev/null
 if [ "$VLANTAG0" != "0" ]; then
-  qm set $VMID --net0 "virtio,bridge=${BRIDGE0},tag=$VLANTAG,macaddr=${MAC0}" >/dev/null
+  qm set $VMID --net0 "virtio,bridge=${BRIDGE0},tag=${VLANTAG0},macaddr=${MAC0}" >/dev/null
 else
   qm set $VMID --net0 "virtio,bridge=${BRIDGE0},macaddr=${MAC0}" >/dev/null
 fi
