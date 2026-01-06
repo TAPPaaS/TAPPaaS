@@ -5,20 +5,25 @@ This script demonstrates how to use the oxl-opnsense-client library
 to manage VLANs on an OPNsense firewall.
 
 Usage:
-    # Set environment variables
-    export OPNSENSE_HOST="10.0.0.1"
-    export OPNSENSE_CREDENTIAL_FILE="/path/to/credentials.txt"
+    # Run with default firewall (firewall.mgmt.internal)
+    python -m opnsense_controller.main
 
-    # Or use token/secret directly
+    # Specify a different firewall
+    python -m opnsense_controller.main --firewall 10.0.0.1
+
+    # Or override via environment variable
     export OPNSENSE_HOST="10.0.0.1"
+    python -m opnsense_controller.main
+
+    # Set credentials via file or environment
+    export OPNSENSE_CREDENTIAL_FILE="/path/to/credentials.txt"
+    # Or use token/secret directly
     export OPNSENSE_TOKEN="your-api-token"
     export OPNSENSE_SECRET="your-api-secret"
-
-    # Run the examples
-    python -m opnsense_controller.main
 """
 
 import argparse
+import os
 import sys
 
 from .config import Config
@@ -122,7 +127,8 @@ def main():
     )
     parser.add_argument(
         "--firewall",
-        help="Firewall IP/hostname (overrides OPNSENSE_HOST env var)",
+        default="firewall.mgmt.internal",
+        help="Firewall IP/hostname (default: firewall.mgmt.internal, overrides OPNSENSE_HOST env var)",
     )
     parser.add_argument(
         "--credential-file",
@@ -155,20 +161,19 @@ def main():
         print("=" * 60)
 
     # Build configuration
+    # Priority: CLI --firewall > OPNSENSE_HOST env var > default
     try:
-        if args.firewall:
-            config = Config(
-                firewall=args.firewall,
-                credential_file=args.credential_file,
-                ssl_verify=not args.no_ssl_verify,
-                debug=args.debug,
-            )
-        else:
-            config = Config.from_env()
-            if args.no_ssl_verify:
-                config.ssl_verify = False
-            if args.debug:
-                config.debug = True
+        firewall = os.environ.get("OPNSENSE_HOST", args.firewall)
+        # If user explicitly passed --firewall, use that over env var
+        if args.firewall != "firewall.mgmt.internal":
+            firewall = args.firewall
+
+        config = Config(
+            firewall=firewall,
+            credential_file=args.credential_file,
+            ssl_verify=not args.no_ssl_verify,
+            debug=args.debug,
+        )
     except ValueError as e:
         print(f"Configuration error: {e}")
         print("\nSet environment variables or use command line arguments.")

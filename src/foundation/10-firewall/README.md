@@ -115,23 +115,33 @@ From: [OPNsense DHCP with DNS](https://docs.opnsense.org/manual/dnsmasq.html#dhc
 
 - Enable services -> Unbound DNS - general and ensure it listen to port 53
 - Enable services -> dnsmask DNS ->general
+  - Interface LAN
   - Listen port: use port 53053
-  - Do not forward to system defined DNS servers
-  - DHCP fqdn
-  - dhcp default domain: internal
-  - DHCP register firewall rules
+  - DNS Query Forwarding
+    - enable: Require doamin, Do not forward to system ..., Do not forward private reverse ...
+  - DHCP: 
+    - enable: DHCP fqdn, DHCP authoritative, DHCP register firewall rules
+    - DHCP default domain: internal
   - Click Apply 
-- register dnsmask with unbound DNS for mgmt.internal domain
+- register dnsmask with unbound DNS for internal domain
   - Service -> Unbound DNS -> Query Forwarding
-    - register mgmt.internal to query 127.0.0.1 port 53053
-    - register 10.in-addr.arpa to query 127.0.0.1 port 53053
+    - register "internal" to query 127.0.0.1 port 53053
+    - register "10.in-addr.arpa" to query 127.0.0.1 port 53053
     - press apply
     - 
+- edit the DHCP doman for LAN interface
+  - go to Services -> Dnsmasq & DHCP -> DHCP ranges
+    - edit LAN interface and change domain to mgmt.internal
 
-finally register the static hosts on the internal network: tappaas1
+
+finally register the static hosts on the internal network: firewall and tappaas1
 
 - go to Service -> Dnsmasq DNS & DHCP -> Hosts
-  - add a host:
+  - add host:
+    - name firewall
+    - domain: mgmt.internal
+    - ip: 10.0.0.1
+  - add host:
     - name tappaas1
     - domain: mgmt.internal
     - ip: 10.0.0.10
