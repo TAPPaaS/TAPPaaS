@@ -3,9 +3,9 @@ requires = ["setuptools >= 61.0"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "opnsense-vlan-manager"
+name = "opnsense-controller"
 version = "0.1.0"
-description = "VLAN management example using OPNsense API client"
+description = "OPNsense controller for TAPPaaS using OPNsense API client"
 readme = "README.md"
 requires-python = ">=3.10"
 license = "MIT"
@@ -14,7 +14,7 @@ dependencies = [
 ]
 
 [project.scripts]
-opnsense-vlan-manager = "opnsense_vlan_manager.main:main"
+opnsense-controller = "opnsense_controller.main:main"
 
 [tool.setuptools.packages.find]
 where = ["."]

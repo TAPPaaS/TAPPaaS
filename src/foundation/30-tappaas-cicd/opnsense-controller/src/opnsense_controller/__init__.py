@@ -1,4 +1,4 @@
-"""OPNsense VLAN Manager - Example project using oxl-opnsense-client."""
+"""OPNsense Controller for TAPPaaS using oxl-opnsense-client."""
 
 from .config import Config
 from .vlan_manager import Vlan, VlanManager

@@ -1,6 +1,6 @@
-# OPNsense VLAN Manager
+# OPNsense Controller
 
-A Nix-packaged Python project demonstrating VLAN management using the `oxl-opnsense-client` library.
+OPNsense controller for TAPPaaS using the `oxl-opnsense-client` library.
 
 ## Requirements
 
@@ -50,22 +50,22 @@ export OPNSENSE_CREDENTIAL_FILE="$HOME/.opnsense-credentials.txt"
 
 ```bash
 # Show help
-./result/bin/python -m opnsense_vlan_manager.main --help
+./result/bin/python -m opnsense_controller.main --help
 
 # Test connection
-./result/bin/python -m opnsense_vlan_manager.main --example test
+./result/bin/python -m opnsense_controller.main --example test
 
 # List interface modules
-./result/bin/python -m opnsense_vlan_manager.main --example list
+./result/bin/python -m opnsense_controller.main --example list
 
 # Create multiple VLANs (dry-run)
-./result/bin/python -m opnsense_vlan_manager.main --example create-multi
+./result/bin/python -m opnsense_controller.main --example create-multi
 
 # Create multiple VLANs (actually execute)
-./result/bin/python -m opnsense_vlan_manager.main --example create-multi --execute
+./result/bin/python -m opnsense_controller.main --example create-multi --execute
 
 # Disable SSL verification (for self-signed certs)
-./result/bin/python -m opnsense_vlan_manager.main --no-ssl-verify --example test
+./result/bin/python -m opnsense_controller.main --no-ssl-verify --example test
 ```
 
 ## Examples Included
@@ -91,7 +91,7 @@ export OPNSENSE_CREDENTIAL_FILE="$HOME/.opnsense-credentials.txt"
 └── src/
     ├── pyproject.toml
     ├── README.md
-    └── opnsense_vlan_manager/
+    └── opnsense_controller/
         ├── __init__.py
         ├── config.py              # Connection configuration
         ├── vlan_manager.py        # VLAN CRUD operations
@@ -110,14 +110,14 @@ nix-shell -A shell default.nix
 # Just the opnsense-api-client package
 nix-build -A opnsense-api-client default.nix
 
-# Just the vlan-manager package
-nix-build -A opnsense-vlan-manager default.nix
+# Just the opnsense-controller package
+nix-build -A opnsense-controller default.nix
 ```
 
 ## Programmatic Usage
 
 ```python
-from opnsense_vlan_manager import Config, Vlan, VlanManager
+from opnsense_controller import Config, Vlan, VlanManager
 
 config = Config(
     firewall="192.168.1.1",

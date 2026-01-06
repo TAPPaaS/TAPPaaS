@@ -1,6 +1,6 @@
-# OPNsense VLAN Manager
+# OPNsense Controller
 
-Example Python project demonstrating VLAN management using the `oxl-opnsense-client` library.
+OPNsense controller for TAPPaaS using the `oxl-opnsense-client` library.
 
 ## Setup
 
@@ -36,38 +36,38 @@ nix-shell -A shell default.nix
 
 # Or build and run directly
 nix-build -A default default.nix
-./result/bin/python -m opnsense_vlan_manager.main --help
+./result/bin/python -m opnsense_controller.main --help
 ```
 
 ## Examples
 
 ```bash
 # Test connection (dry-run mode by default)
-python -m opnsense_vlan_manager.main --example test
+python -m opnsense_controller.main --example test
 
 # List interface modules
-python -m opnsense_vlan_manager.main --example list
+python -m opnsense_controller.main --example list
 
 # Show VLAN module specification
-python -m opnsense_vlan_manager.main --example spec
+python -m opnsense_controller.main --example spec
 
 # Create a single VLAN (dry-run)
-python -m opnsense_vlan_manager.main --example create
+python -m opnsense_controller.main --example create
 
 # Create multiple VLANs (dry-run)
-python -m opnsense_vlan_manager.main --example create-multi
+python -m opnsense_controller.main --example create-multi
 
 # Actually execute changes (removes dry-run mode)
-python -m opnsense_vlan_manager.main --example create --execute
+python -m opnsense_controller.main --example create --execute
 
 # Run all examples
-python -m opnsense_vlan_manager.main
+python -m opnsense_controller.main
 
 # Disable SSL verification (for self-signed certs)
-python -m opnsense_vlan_manager.main --no-ssl-verify
+python -m opnsense_controller.main --no-ssl-verify
 
 # Enable debug logging
-python -m opnsense_vlan_manager.main --debug
+python -m opnsense_controller.main --debug
 ```
 
 ## Project Structure
@@ -78,7 +78,7 @@ python -m opnsense_vlan_manager.main --debug
 ├── credentials.example.txt        # Example credentials file
 └── src/
     ├── pyproject.toml
-    └── opnsense_vlan_manager/
+    └── opnsense_controller/
         ├── __init__.py
         ├── config.py              # Configuration management
         ├── vlan_manager.py        # VLAN operations

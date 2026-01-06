@@ -1,21 +1,21 @@
 #!/usr/bin/env python3
-"""Example usage of OPNsense VLAN Manager.
+"""OPNsense Controller for TAPPaaS.
 
 This script demonstrates how to use the oxl-opnsense-client library
 to manage VLANs on an OPNsense firewall.
 
 Usage:
     # Set environment variables
-    export OPNSENSE_HOST="192.168.1.1"
+    export OPNSENSE_HOST="10.0.0.1"
     export OPNSENSE_CREDENTIAL_FILE="/path/to/credentials.txt"
 
     # Or use token/secret directly
-    export OPNSENSE_HOST="192.168.1.1"
+    export OPNSENSE_HOST="10.0.0.1"
     export OPNSENSE_TOKEN="your-api-token"
     export OPNSENSE_SECRET="your-api-secret"
 
     # Run the examples
-    python -m opnsense_vlan_manager.main
+    python -m opnsense_controller.main
 """
 
 import argparse
@@ -109,9 +109,9 @@ def example_delete_vlan(manager: VlanManager, check_mode: bool = True) -> None:
 
 
 def main():
-    """Run the VLAN manager examples."""
+    """Run the OPNsense controller examples."""
     parser = argparse.ArgumentParser(
-        description="OPNsense VLAN Manager Examples",
+        description="OPNsense Controller for TAPPaaS",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog=__doc__,
     )

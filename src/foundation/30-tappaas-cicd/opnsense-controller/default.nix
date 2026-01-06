@@ -40,9 +40,9 @@ let
     };
   };
 
-  # Our VLAN manager project
-  opnsense-vlan-manager = pkgs.python3Packages.buildPythonPackage {
-    pname = "opnsense-vlan-manager";
+  # OPNsense controller for TAPPaaS
+  opnsense-controller = pkgs.python3Packages.buildPythonPackage {
+    pname = "opnsense-controller";
     version = "0.1.0";
     pyproject = true;
 
@@ -52,10 +52,10 @@ let
 
     dependencies = [ opnsense-api-client ];
 
-    pythonImportsCheck = [ "opnsense_vlan_manager" ];
+    pythonImportsCheck = [ "opnsense_controller" ];
 
     meta = {
-      description = "VLAN management example using OPNsense API client";
+      description = "OPNsense controller for TAPPaaS using OPNsense API client";
       license = pkgs.lib.licenses.mit;
     };
   };
@@ -67,15 +67,15 @@ in
     packages = [
       (pkgs.python3.withPackages (ps: [
         opnsense-api-client
-        opnsense-vlan-manager
+        opnsense-controller
       ]))
     ];
 
     shellHook = ''
-      echo "OPNsense VLAN Manager Development Shell"
+      echo "OPNsense Controller Development Shell"
       echo ""
       echo "Usage:"
-      echo "  python -m opnsense_vlan_manager.main --help"
+      echo "  python -m opnsense_controller.main --help"
       echo ""
       echo "Environment variables:"
       echo "  OPNSENSE_HOST           - Firewall IP/hostname"
@@ -87,11 +87,11 @@ in
   };
 
   # The packages
-  inherit opnsense-api-client opnsense-vlan-manager;
+  inherit opnsense-api-client opnsense-controller;
 
   # Default: Python environment with both packages
   default = pkgs.python3.withPackages (ps: [
     opnsense-api-client
-    opnsense-vlan-manager
+    opnsense-controller
   ]);
 }
