@@ -38,7 +38,7 @@ Each module contains:
 - `img` - Import from disk image
 
 ### Module Installation
-Install scripts source common routines from `src/foundation/30-tappaas-cicd/scripts/common-install-rutines.sh` which provides:
+Install scripts source common routines from `src/foundation/30-tappaas-cicd/scripts/common-install-routines.sh` which provides:
 - `get_config_value()` - Extract values from module JSON configs
 - JSON validation and error handling
 

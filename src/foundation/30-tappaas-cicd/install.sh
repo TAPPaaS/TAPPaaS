@@ -1,4 +1,4 @@
-#!/bin/env bash
+#!/usr/bin/env bash
 #
 # install tappass-cicd foundation in a barebone nixos vm
 
@@ -9,7 +9,7 @@ if [ "$(hostname)" != "tappaas-cicd" ]; then
 fi      
 
 # Find the branch version of TAPPaaS to use
-if [ -z $BRANCH]; then
+if [ -z "$BRANCH" ]; then
   BRANCH="main"
 fi
 
@@ -22,7 +22,7 @@ git checkout $BRANCH
 
 # go to the tappaas-cicd folder
 echo -e "\nChanging to TAPPaaS-CICD directory and rebuilding the NixOS configuration..."
-cd TAPPaaS/src/foundation/30-tappaas-cicd
+cd src/foundation/30-tappaas-cicd
 
 # rebuild the nixos configuration
 sudo nixos-rebuild switch -I nixos-config=./tappaas-cicd.nix
@@ -52,13 +52,21 @@ done < <(ssh root@"$NODE1_FQDN" pvesh get /cluster/resources --type node --outpu
 # create tappaas binary director and config directory
 mkdir -p /home/tappaas/bin
 mkdir -p /home/tappaas/config
-cp TAPPaaS/src/foundation/30-tappaas-cicd/scripts/*.sh /home/tappaas/bin/
+cp scripts/*.sh /home/tappaas/bin/
 chmod +x /home/tappaas/bin/*.sh
-cp TAPPaaS/src/foundation/*/*.json /home/tappaas/config/
+cp ../*/*.json /home/tappaas/config/
 # copy the potentially modified configuration.json and vlans.json files from tappaas1
 scp root@"$NODE1_FQDN":/root/tappaas/*.json /home/tappaas/config/
 
 # copy the jsons to all nodes
-/users/tappaas/bin/copy-jsons.sh 
+/home/tappaas/bin/copy-jsons.sh 
 
-echo "\nTAPPaaS-CICD installation completed successfully."
+# Build the opnsense-controller project (formerly opnsense-scripts)
+echo -en "\nBuilding the opnsense-controller project"
+cd opnsense-controller
+nix-build -A default default.nix 2>&1 | sed 's/.*/./g' | tr -d '\n'
+echo -e "\nopnsense-controller build completed."
+cd ..
+
+
+echo -e "\nTAPPaaS-CICD installation completed successfully."
