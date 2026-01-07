@@ -8,7 +8,7 @@ the basic macro steps:
 2. install a basic OPNSense in a VM
 3. swap cables and default gateway in proxmox after basic testing
 4. swap firewall if relevant
-5. test
+5. set up ssh and test
 6. setup reverse proxy
 7. setup VLANS and firewall rules
 8. tests
@@ -192,7 +192,17 @@ There are 3 scenarios for this step:
   - see notes above on Wifi and IPv6
 
 
-# 5. Test
+# 5. setup ssh and Test
+
+in the OPNsense gui: got to System->Settings->Administration
+- under secure shell do:
+  - enable secure shell
+  - permit root user login
+  - (Do NOT allow password login)
+  - Listen Interafce is LAN
+- click SAVE
+
+## test
 
 # 6. Configure Reverse Proxy
 

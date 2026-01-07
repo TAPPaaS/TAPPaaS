@@ -30,6 +30,7 @@ sudo nixos-rebuild switch -I nixos-config=./tappaas-cicd.nix
 # creatae a fully qualified node hostname for tappaas1
 MGMTVLAN="mgmt"
 NODE1_FQDN="tappaas1.$MGMTVLAN.internal"
+FIREWALL_FQDN="firewall.$MGMTVLAN.internal"
 
 # create ssh keys for the tappaas user
 echo -e "\nCreating SSH keys for the tappaas user and installing them for the proxmox host..."
@@ -64,12 +65,15 @@ scp root@"$NODE1_FQDN":/root/tappaas/*.json /home/tappaas/config/
 # Build the opnsense-controller project (formerly opnsense-scripts)
 echo -en "\nBuilding the opnsense-controller project"
 cd opnsense-controller
-stdbuf -oL nix-build -A default default.nix 2>&1 | while IFS= read -r line; do printf "."; done
+stdbuf -oL nix-build -A default default.nix 2>&1 | tee /tmp/opnsense-controller-build.log | while IFS= read -r line; do printf "."; done
 ln -s /home/tappaas/TAPPaaS/src/foundation/30-tappaas-cicd/opnsense-controller/result/bin/opnsense-controller /home/tappaas/bin/opnsense-controller
 # create a default credentials file
 cp credentials.example.txt ~/.opnsense-credentials.txt
 chmod 600 ~/.opnsense-credentials.txt
-echo -e "\nopnsense-controller build completed."
+echo -e "\nopnsense-controller binary installed to /home/tappaas/bin/opnsense-controller"
+echo -e "Copying the AssignSettingsController.php to the OPNsense controller node..."
+echo -e "you will be asked for the root password of the firewall node $FIREWALL_FQDN"
+scp opnsense-patch/AssignSettingsController.php root@"$FIREWALL_FQDN":/usr/local/opnsense/mvc/app/controllers/OPNsense/Interfaces/Api/AssignSettingsController.php
 cd ..
 
 

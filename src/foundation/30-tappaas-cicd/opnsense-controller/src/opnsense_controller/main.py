@@ -59,52 +59,86 @@ def example_show_vlan_spec(manager: VlanManager) -> None:
     print(f"  {spec}")
 
 
-def example_create_single_vlan(manager: VlanManager, check_mode: bool = True) -> None:
-    """Create a single VLAN."""
-    print(f"\nCreating single VLAN (check_mode={check_mode})...")
+def example_show_assigned_vlans(manager: VlanManager) -> None:
+    """Show VLANs that are assigned to interfaces."""
+    print("\nAssigned VLANs:")
+    vlans = manager.get_assigned_vlans()
+    if not vlans:
+        print("  No VLANs are currently assigned to interfaces")
+    else:
+        for vlan in vlans:
+            status = "enabled" if vlan["enabled"] else "disabled"
+            print(
+                f"  VLAN {vlan['vlan_tag']}: {vlan['device']} -> "
+                f"{vlan['identifier']} ({vlan['description']}) [{status}]"
+            )
+
+
+def example_create_single_vlan(
+    manager: VlanManager,
+    check_mode: bool = True,
+    interface: str = "vtnet0",
+    assign: bool = False,
+) -> None:
+    """Create a single VLAN device and optionally assign it."""
+    print(f"\nCreating single VLAN (check_mode={check_mode}, interface={interface}, assign={assign})...")
 
     vlan = Vlan(
         description="Management VLAN",
         tag=10,
-        interface="igb0",  # Change to your interface
+        interface=interface,
         priority=0,
     )
 
-    result = manager.create_vlan(vlan, check_mode=check_mode)
-    print(f"  Result: {result}")
+    result = manager.create_vlan(vlan, check_mode=check_mode, assign=assign)
+    changed = result.get("result", {}).get("diff", {}).get("before") is None
+    if changed and not check_mode:
+        print("  VLAN device created successfully")
+        if assign and result.get("ifname"):
+            print(f"  Assigned to interface: {result['ifname']}")
+    else:
+        print(f"  Result: {result}")
 
 
-def example_create_multiple_vlans(manager: VlanManager, check_mode: bool = True) -> None:
+def example_create_multiple_vlans(
+    manager: VlanManager,
+    check_mode: bool = True,
+    interface: str = "vtnet0",
+    assign: bool = False,
+) -> None:
     """Create multiple VLANs for a typical network setup."""
-    print(f"\nCreating multiple VLANs (check_mode={check_mode})...")
+    print(f"\nCreating multiple VLANs (check_mode={check_mode}, interface={interface}, assign={assign})...")
 
     vlans = [
-        Vlan(description="Management", tag=10, interface="igb0"),
-        Vlan(description="Servers", tag=20, interface="igb0"),
-        Vlan(description="Workstations", tag=30, interface="igb0"),
-        Vlan(description="IoT Devices", tag=40, interface="igb0"),
-        Vlan(description="Guest Network", tag=50, interface="igb0"),
-        Vlan(description="DMZ", tag=100, interface="igb0"),
+        Vlan(description="Management", tag=10, interface=interface),
+        Vlan(description="Servers", tag=20, interface=interface),
+        Vlan(description="Workstations", tag=30, interface=interface),
+        Vlan(description="IoT Devices", tag=40, interface=interface),
+        Vlan(description="Guest Network", tag=50, interface=interface),
+        Vlan(description="DMZ", tag=100, interface=interface),
     ]
 
-    results = manager.create_multiple_vlans(vlans, check_mode=check_mode)
+    results = manager.create_multiple_vlans(vlans, check_mode=check_mode, assign=assign)
     for vlan, result in zip(vlans, results):
-        print(f"  VLAN {vlan.tag} ({vlan.description}): {result}")
+        ifname = result.get("ifname", "not assigned")
+        print(f"  VLAN {vlan.tag} ({vlan.description}): ifname={ifname}")
 
 
-def example_update_vlan(manager: VlanManager, check_mode: bool = True) -> None:
+def example_update_vlan(
+    manager: VlanManager, check_mode: bool = True, interface: str = "vtnet0"
+) -> None:
     """Update an existing VLAN."""
-    print(f"\nUpdating VLAN (check_mode={check_mode})...")
+    print(f"\nUpdating VLAN (check_mode={check_mode}, interface={interface})...")
 
     # Update the Management VLAN to use priority 7 (highest)
     vlan = Vlan(
         description="Management",
         tag=10,
-        interface="igb0",
+        interface=interface,
         priority=7,  # Changed from default 0
     )
 
-    result = manager.update_vlan(vlan, match_fields=["description"], check_mode=check_mode)
+    result = manager.update_vlan(vlan, check_mode=check_mode)
     print(f"  Result: {result}")
 
 
@@ -149,9 +183,19 @@ def main():
     )
     parser.add_argument(
         "--example",
-        choices=["all", "test", "list", "spec", "create", "create-multi", "update", "delete"],
+        choices=["all", "test", "list", "spec", "assigned", "create", "create-multi", "update", "delete"],
         default="all",
         help="Which example to run (default: all)",
+    )
+    parser.add_argument(
+        "--interface",
+        default="vtnet0",
+        help="Parent interface for VLAN examples (default: vtnet0). Use actual interface name, not OPNsense label.",
+    )
+    parser.add_argument(
+        "--assign",
+        action="store_true",
+        help="Assign created VLANs to interfaces and enable them (requires custom PHP extension)",
     )
 
     args = parser.parse_args()
@@ -189,13 +233,16 @@ def main():
 
     # Run examples
     with VlanManager(config) as manager:
+        interface = args.interface
+        assign = args.assign
         examples = {
             "test": lambda: example_test_connection(manager),
             "list": lambda: example_list_modules(manager),
             "spec": lambda: example_show_vlan_spec(manager),
-            "create": lambda: example_create_single_vlan(manager, check_mode),
-            "create-multi": lambda: example_create_multiple_vlans(manager, check_mode),
-            "update": lambda: example_update_vlan(manager, check_mode),
+            "assigned": lambda: example_show_assigned_vlans(manager),
+            "create": lambda: example_create_single_vlan(manager, check_mode, interface, assign),
+            "create-multi": lambda: example_create_multiple_vlans(manager, check_mode, interface, assign),
+            "update": lambda: example_update_vlan(manager, check_mode, interface),
             "delete": lambda: example_delete_vlan(manager, check_mode),
         }
 

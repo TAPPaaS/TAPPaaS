@@ -1,4 +1,9 @@
-"""VLAN management operations for OPNsense."""
+"""VLAN management operations for OPNsense.
+
+Interface assignment requires a custom PHP extension to be installed on OPNsense.
+See: https://github.com/opnsense/core/issues/7324#issuecomment-2830694222
+Install: https://gist.github.com/szymczag/df152a82e86aff67b984ed3786b027ba
+"""
 
 from dataclasses import dataclass
 from oxl_opnsense_client import Client
@@ -12,9 +17,9 @@ class Vlan:
 
     description: str
     tag: int
-    interface: str
+    interface: str  # Parent interface (e.g., vtnet0)
     priority: int = 0
-    device: str | None = None
+    device: str | None = None  # VLAN device name (e.g., vlan0.100)
 
 
 class VlanManager:
@@ -50,9 +55,7 @@ class VlanManager:
 
     def disconnect(self):
         """Close connection to OPNsense."""
-        if self._client:
-            self._client.close()
-            self._client = None
+        self._client = None
 
     def __enter__(self) -> "VlanManager":
         return self.connect()
@@ -79,12 +82,132 @@ class VlanManager:
         """Get the specification for the interface_vlan module."""
         return self.client.module_specs("interface_vlan")
 
-    def create_vlan(self, vlan: Vlan, check_mode: bool = False) -> dict:
-        """Create a new VLAN.
+    def get_interfaces_info(self) -> dict:
+        """Get information about all interfaces.
+
+        Returns a dict with interface details including:
+        - device: Physical device name (e.g., vtnet0, vlan0.100)
+        - identifier: OPNsense interface name (e.g., lan, wan, opt1)
+        - description: Human-readable description
+        - enabled: Whether the interface is enabled
+        - vlan_tag: VLAN tag if this is a VLAN interface
+        """
+        result = self.client.run_module(
+            "raw",
+            params={
+                "module": "interfaces",
+                "controller": "overview",
+                "command": "interfacesInfo",
+                "action": "get",
+            },
+        )
+        return result.get("result", {}).get("response", {})
+
+    def get_assigned_vlans(self) -> list[dict]:
+        """Get list of VLANs that are assigned to interfaces.
+
+        Returns list of dicts with vlan_tag, device, identifier, description, enabled.
+        """
+        info = self.get_interfaces_info()
+        vlans = []
+        for iface in info.get("rows", []):
+            if iface.get("vlan_tag"):
+                vlans.append({
+                    "vlan_tag": iface["vlan_tag"],
+                    "device": iface.get("device"),
+                    "identifier": iface.get("identifier"),
+                    "description": iface.get("description"),
+                    "enabled": iface.get("enabled", False),
+                })
+        return vlans
+
+    def assign_interface(
+        self,
+        device: str,
+        description: str,
+        enable: bool = True,
+        ipv4_type: str | None = None,
+        ipv4_address: str | None = None,
+        ipv4_subnet: int | None = None,
+    ) -> dict:
+        """Assign a device to a new OPNsense interface and optionally enable it.
+
+        Requires the custom AssignSettingsController PHP extension to be installed.
+        See: https://gist.github.com/szymczag/df152a82e86aff67b984ed3786b027ba
+
+        Args:
+            device: Device name to assign (e.g., 'vlan0.100')
+            description: Interface description
+            enable: Whether to enable the interface (default: True)
+            ipv4_type: IPv4 configuration type ('static', 'dhcp', or None)
+            ipv4_address: IPv4 address (required if ipv4_type is 'static')
+            ipv4_subnet: IPv4 subnet mask (required if ipv4_type is 'static')
+
+        Returns:
+            Result dictionary with 'ifname' (e.g., 'opt1') on success
+        """
+        data = {
+            "assign": {
+                "device": device,
+                "description": description,
+                "enable": enable,
+            }
+        }
+
+        if ipv4_type:
+            data["assign"]["ipv4Type"] = ipv4_type
+            if ipv4_type == "static":
+                if ipv4_address:
+                    data["assign"]["ipv4Address"] = ipv4_address
+                if ipv4_subnet:
+                    data["assign"]["ipv4Subnet"] = ipv4_subnet
+
+        result = self.client.run_module(
+            "raw",
+            params={
+                "module": "interfaces",
+                "controller": "assign_settings",
+                "command": "addItem",
+                "action": "post",
+                "data": data,
+            },
+        )
+        return result
+
+    def unassign_interface(self, identifier: str) -> dict:
+        """Remove an interface assignment.
+
+        Args:
+            identifier: Interface identifier (e.g., 'opt1')
+
+        Returns:
+            Result dictionary
+        """
+        result = self.client.run_module(
+            "raw",
+            params={
+                "module": "interfaces",
+                "controller": "assign_settings",
+                "command": f"delItem/{identifier}",
+                "action": "post",  # DELETE method via POST
+            },
+        )
+        return result
+
+    def create_vlan(
+        self,
+        vlan: Vlan,
+        check_mode: bool = False,
+        assign: bool = False,
+        enable: bool = True,
+    ) -> dict:
+        """Create a new VLAN device and optionally assign it to an interface.
 
         Args:
             vlan: VLAN configuration
             check_mode: If True, perform dry-run without making changes
+            assign: If True, also assign the VLAN to an interface and enable it
+            enable: If True and assign=True, enable the interface (default: True)
 
         Returns:
             Result dictionary from the API
@@ -96,40 +219,49 @@ class VlanManager:
             "priority": vlan.priority,
         }
 
+        device_name = vlan.device or f"vlan0.{vlan.tag}"
         if vlan.device:
             params["device"] = vlan.device
 
-        return self.client.run_module(
+        result = self.client.run_module(
             "interface_vlan",
             check_mode=check_mode,
             params=params,
         )
 
+        # If assign is requested and not in check mode, assign the interface
+        if assign and not check_mode:
+            assign_result = self.assign_interface(
+                device=device_name,
+                description=vlan.description,
+                enable=enable,
+            )
+            result["assign_result"] = assign_result
+            response = assign_result.get("result", {}).get("response", {})
+            if response.get("result") == "saved":
+                result["ifname"] = response.get("ifname")
+
+        return result
+
     def update_vlan(
         self,
         vlan: Vlan,
-        match_fields: list[str] | None = None,
         check_mode: bool = False,
     ) -> dict:
-        """Update an existing VLAN.
+        """Update an existing VLAN (matched by description).
 
         Args:
             vlan: VLAN configuration with updated values
-            match_fields: Fields to match on (default: ["description"])
             check_mode: If True, perform dry-run without making changes
 
         Returns:
             Result dictionary from the API
         """
-        if match_fields is None:
-            match_fields = ["description"]
-
         params = {
             "description": vlan.description,
             "vlan": vlan.tag,
             "interface": vlan.interface,
             "priority": vlan.priority,
-            "match_fields": match_fields,
         }
 
         if vlan.device:
@@ -144,26 +276,20 @@ class VlanManager:
     def delete_vlan(
         self,
         description: str,
-        match_fields: list[str] | None = None,
         check_mode: bool = False,
     ) -> dict:
-        """Delete a VLAN.
+        """Delete a VLAN by description.
 
         Args:
             description: Description of the VLAN to delete
-            match_fields: Fields to match on (default: ["description"])
             check_mode: If True, perform dry-run without making changes
 
         Returns:
             Result dictionary from the API
         """
-        if match_fields is None:
-            match_fields = ["description"]
-
         params = {
             "description": description,
             "state": "absent",
-            "match_fields": match_fields,
         }
 
         return self.client.run_module(
@@ -176,18 +302,22 @@ class VlanManager:
         self,
         vlans: list[Vlan],
         check_mode: bool = False,
+        assign: bool = False,
+        enable: bool = True,
     ) -> list[dict]:
-        """Create multiple VLANs.
+        """Create multiple VLANs and optionally assign them to interfaces.
 
         Args:
             vlans: List of VLAN configurations
             check_mode: If True, perform dry-run without making changes
+            assign: If True, also assign VLANs to interfaces and enable them
+            enable: If True and assign=True, enable the interfaces (default: True)
 
         Returns:
             List of result dictionaries from the API
         """
         results = []
         for vlan in vlans:
-            result = self.create_vlan(vlan, check_mode=check_mode)
+            result = self.create_vlan(vlan, check_mode=check_mode, assign=assign, enable=enable)
             results.append(result)
         return results
