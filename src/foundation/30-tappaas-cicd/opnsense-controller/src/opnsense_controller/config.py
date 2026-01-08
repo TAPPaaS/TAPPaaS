@@ -25,6 +25,8 @@ class Config:
     ssl_verify: bool = True
     ssl_ca_file: str | None = None
     debug: bool = False
+    api_timeout: float = 30.0  # Default 30 seconds (upstream default is 2.0)
+    api_retries: int = 3  # Retry failed requests (upstream default is 0)
 
     @classmethod
     def from_env(cls) -> "Config":
@@ -38,6 +40,8 @@ class Config:
             OPNSENSE_SSL_VERIFY: Set to 'false' to disable SSL verification
             OPNSENSE_SSL_CA_FILE: Path to custom CA certificate
             OPNSENSE_DEBUG: Set to 'true' to enable debug logging
+            OPNSENSE_API_TIMEOUT: API timeout in seconds (default: 30)
+            OPNSENSE_API_RETRIES: Number of retries for failed requests (default: 3)
         """
         firewall = os.environ.get("OPNSENSE_HOST")
         if not firewall:
@@ -55,6 +59,8 @@ class Config:
             ssl_verify=os.environ.get("OPNSENSE_SSL_VERIFY", "true").lower() != "false",
             ssl_ca_file=os.environ.get("OPNSENSE_SSL_CA_FILE"),
             debug=os.environ.get("OPNSENSE_DEBUG", "false").lower() == "true",
+            api_timeout=float(os.environ.get("OPNSENSE_API_TIMEOUT", "30.0")),
+            api_retries=int(os.environ.get("OPNSENSE_API_RETRIES", "3")),
         )
 
     @classmethod

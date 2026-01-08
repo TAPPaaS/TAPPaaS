@@ -66,6 +66,7 @@ scp root@"$NODE1_FQDN":/root/tappaas/*.json /home/tappaas/config/
 echo -en "\nBuilding the opnsense-controller project"
 cd opnsense-controller
 stdbuf -oL nix-build -A default default.nix 2>&1 | tee /tmp/opnsense-controller-build.log | while IFS= read -r line; do printf "."; done
+rm /home/tappaas/bin/opnsense-controller 2>/dev/null || true
 ln -s /home/tappaas/TAPPaaS/src/foundation/30-tappaas-cicd/opnsense-controller/result/bin/opnsense-controller /home/tappaas/bin/opnsense-controller
 # create a default credentials file
 cp credentials.example.txt ~/.opnsense-credentials.txt

@@ -35,6 +35,8 @@ class VlanManager:
             "firewall": self.config.firewall,
             "ssl_verify": self.config.ssl_verify,
             "debug": self.config.debug,
+            "api_timeout": self.config.api_timeout,
+            "api_retries": self.config.api_retries,
         }
 
         if self.config.credential_file:

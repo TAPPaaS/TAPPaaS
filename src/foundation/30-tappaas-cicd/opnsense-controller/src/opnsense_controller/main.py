@@ -30,6 +30,7 @@ import os
 import sys
 
 from .config import Config
+from .dhcp_manager import DhcpHost, DhcpManager, DhcpRange
 from .vlan_manager import Vlan, VlanManager
 
 
@@ -150,6 +151,174 @@ def example_delete_vlan(manager: VlanManager, check_mode: bool = True) -> None:
     print(f"  Result: {result}")
 
 
+# =========================================================================
+# DHCP Examples
+# =========================================================================
+
+
+def example_dhcp_test_connection(manager: DhcpManager) -> None:
+    """Test the DHCP manager connection to OPNsense."""
+    print("Testing DHCP manager connection...")
+    if manager.test_connection():
+        print("  Connection successful!")
+    else:
+        print("  Connection failed!")
+        sys.exit(1)
+
+
+def example_dhcp_show_specs(manager: DhcpManager) -> None:
+    """Show DHCP-related module specifications."""
+    print("\nDHCP module specifications:")
+    print(f"  Range spec: {manager.get_range_spec()}")
+    print(f"  Host spec: {manager.get_host_spec()}")
+    print(f"  General spec: {manager.get_general_spec()}")
+
+
+def example_dhcp_create_range(
+    manager: DhcpManager,
+    check_mode: bool = True,
+    interface: str | None = None,
+) -> None:
+    """Create a DHCP range."""
+    print(f"\nCreating DHCP range (check_mode={check_mode})...")
+
+    dhcp_range = DhcpRange(
+        description="Server Network DHCP",
+        start_addr="10.21.0.100",
+        end_addr="10.21.0.200",
+        interface=interface,
+        lease_time=86400,
+        domain="srv.internal",
+    )
+
+    result = manager.create_range(dhcp_range, check_mode=check_mode)
+    print(f"  Result: {result}")
+
+
+def example_dhcp_create_multiple_ranges(
+    manager: DhcpManager,
+    check_mode: bool = True,
+) -> None:
+    """Create multiple DHCP ranges for typical TAPPaaS zones."""
+    print(f"\nCreating multiple DHCP ranges (check_mode={check_mode})...")
+
+    ranges = [
+        DhcpRange(
+            description="Private Network DHCP",
+            start_addr="10.31.0.100",
+            end_addr="10.31.0.250",
+            domain="private.internal",
+        ),
+        DhcpRange(
+            description="IoT Network DHCP",
+            start_addr="10.41.0.100",
+            end_addr="10.41.0.250",
+            domain="iot.internal",
+        ),
+        DhcpRange(
+            description="DMZ Network DHCP",
+            start_addr="10.61.0.100",
+            end_addr="10.61.0.200",
+            domain="dmz.internal",
+        ),
+    ]
+
+    results = manager.create_multiple_ranges(ranges, check_mode=check_mode)
+    for dhcp_range, result in zip(ranges, results):
+        print(f"  {dhcp_range.description}: {result}")
+
+
+def example_dhcp_create_host(manager: DhcpManager, check_mode: bool = True) -> None:
+    """Create a static DHCP host reservation."""
+    print(f"\nCreating static DHCP host (check_mode={check_mode})...")
+
+    host = DhcpHost(
+        description="Nextcloud Server",
+        host="nextcloud",
+        ip=["10.21.0.10"],
+        hardware_addr=["00:11:22:33:44:55"],
+        domain="srv.internal",
+    )
+
+    result = manager.create_host(host, check_mode=check_mode)
+    print(f"  Result: {result}")
+
+
+def example_dhcp_create_multiple_hosts(
+    manager: DhcpManager,
+    check_mode: bool = True,
+) -> None:
+    """Create multiple static DHCP host reservations."""
+    print(f"\nCreating multiple static DHCP hosts (check_mode={check_mode})...")
+
+    hosts = [
+        DhcpHost(
+            description="Gitea Server",
+            host="gitea",
+            ip=["10.21.0.11"],
+            domain="srv.internal",
+        ),
+        DhcpHost(
+            description="Matrix Server",
+            host="matrix",
+            ip=["10.21.0.12"],
+            domain="srv.internal",
+        ),
+        DhcpHost(
+            description="HomeAssistant",
+            host="homeassistant",
+            ip=["10.41.0.10"],
+            domain="iot.internal",
+        ),
+    ]
+
+    results = manager.create_multiple_hosts(hosts, check_mode=check_mode)
+    for host, result in zip(hosts, results):
+        print(f"  {host.description}: {result}")
+
+
+def example_dhcp_delete_host(manager: DhcpManager, check_mode: bool = True) -> None:
+    """Delete a DHCP host reservation."""
+    print(f"\nDeleting DHCP host (check_mode={check_mode})...")
+
+    result = manager.delete_host("Matrix Server", check_mode=check_mode)
+    print(f"  Result: {result}")
+
+
+def example_dhcp_enable_service(
+    manager: DhcpManager,
+    check_mode: bool = True,
+    interfaces: list[str] | None = None,
+) -> None:
+    """Enable and configure the Dnsmasq DHCP service."""
+    print(f"\nEnabling Dnsmasq service (check_mode={check_mode})...")
+
+    result = manager.enable_service(
+        interfaces=interfaces,
+        dhcp_authoritative=True,
+        check_mode=check_mode,
+    )
+    print(f"  Result: {result}")
+
+
+def example_dhcp_configure_general(
+    manager: DhcpManager,
+    check_mode: bool = True,
+) -> None:
+    """Configure general Dnsmasq settings."""
+    print(f"\nConfiguring Dnsmasq general settings (check_mode={check_mode})...")
+
+    result = manager.configure_general(
+        enabled=True,
+        dhcp_authoritative=True,
+        dhcp_fqdn=True,
+        regdhcp=True,
+        regdhcpstatic=True,
+        check_mode=check_mode,
+    )
+    print(f"  Result: {result}")
+
+
 def main():
     """Run the OPNsense controller examples."""
     parser = argparse.ArgumentParser(
@@ -182,10 +351,15 @@ def main():
         help="Enable debug logging",
     )
     parser.add_argument(
+        "--mode",
+        choices=["vlan", "dhcp"],
+        default="vlan",
+        help="Which manager to use: vlan or dhcp (default: vlan)",
+    )
+    parser.add_argument(
         "--example",
-        choices=["all", "test", "list", "spec", "assigned", "create", "create-multi", "update", "delete"],
         default="all",
-        help="Which example to run (default: all)",
+        help="Which example to run (default: all). For vlan: all, test, list, spec, assigned, create, create-multi, update, delete. For dhcp: all, test, spec, range, range-multi, host, host-multi, delete-host, enable, config",
     )
     parser.add_argument(
         "--interface",
@@ -231,29 +405,61 @@ def main():
         print("See --help for details.")
         sys.exit(1)
 
-    # Run examples
-    with VlanManager(config) as manager:
-        interface = args.interface
-        assign = args.assign
-        examples = {
-            "test": lambda: example_test_connection(manager),
-            "list": lambda: example_list_modules(manager),
-            "spec": lambda: example_show_vlan_spec(manager),
-            "assigned": lambda: example_show_assigned_vlans(manager),
-            "create": lambda: example_create_single_vlan(manager, check_mode, interface, assign),
-            "create-multi": lambda: example_create_multiple_vlans(manager, check_mode, interface, assign),
-            "update": lambda: example_update_vlan(manager, check_mode, interface),
-            "delete": lambda: example_delete_vlan(manager, check_mode),
-        }
+    # Run examples based on mode
+    if args.mode == "vlan":
+        with VlanManager(config) as manager:
+            interface = args.interface
+            assign = args.assign
+            examples = {
+                "test": lambda: example_test_connection(manager),
+                "list": lambda: example_list_modules(manager),
+                "spec": lambda: example_show_vlan_spec(manager),
+                "assigned": lambda: example_show_assigned_vlans(manager),
+                "create": lambda: example_create_single_vlan(manager, check_mode, interface, assign),
+                "create-multi": lambda: example_create_multiple_vlans(manager, check_mode, interface, assign),
+                "update": lambda: example_update_vlan(manager, check_mode, interface),
+                "delete": lambda: example_delete_vlan(manager, check_mode),
+            }
 
-        if args.example == "all":
-            for name, func in examples.items():
-                try:
-                    func()
-                except Exception as e:
-                    print(f"  Error in {name}: {e}")
-        else:
-            examples[args.example]()
+            if args.example == "all":
+                for name, func in examples.items():
+                    try:
+                        func()
+                    except Exception as e:
+                        print(f"  Error in {name}: {e}")
+            elif args.example in examples:
+                examples[args.example]()
+            else:
+                print(f"Unknown VLAN example: {args.example}")
+                print(f"Available: {', '.join(examples.keys())}")
+                sys.exit(1)
+
+    elif args.mode == "dhcp":
+        with DhcpManager(config) as manager:
+            examples = {
+                "test": lambda: example_dhcp_test_connection(manager),
+                "spec": lambda: example_dhcp_show_specs(manager),
+                "range": lambda: example_dhcp_create_range(manager, check_mode),
+                "range-multi": lambda: example_dhcp_create_multiple_ranges(manager, check_mode),
+                "host": lambda: example_dhcp_create_host(manager, check_mode),
+                "host-multi": lambda: example_dhcp_create_multiple_hosts(manager, check_mode),
+                "delete-host": lambda: example_dhcp_delete_host(manager, check_mode),
+                "enable": lambda: example_dhcp_enable_service(manager, check_mode),
+                "config": lambda: example_dhcp_configure_general(manager, check_mode),
+            }
+
+            if args.example == "all":
+                for name, func in examples.items():
+                    try:
+                        func()
+                    except Exception as e:
+                        print(f"  Error in {name}: {e}")
+            elif args.example in examples:
+                examples[args.example]()
+            else:
+                print(f"Unknown DHCP example: {args.example}")
+                print(f"Available: {', '.join(examples.keys())}")
+                sys.exit(1)
 
 
 if __name__ == "__main__":

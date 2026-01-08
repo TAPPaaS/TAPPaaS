@@ -61,6 +61,8 @@ your-api-secret
 
 ## CLI Usage
 
+### VLAN Examples
+
 ```bash
 # Show help
 ./result/bin/opnsense-controller --help
@@ -90,6 +92,34 @@ your-api-secret
 ./result/bin/opnsense-controller --debug --no-ssl-verify --example test
 ```
 
+### DHCP Examples
+
+```bash
+# Test DHCP manager connection
+./result/bin/opnsense-controller --mode dhcp --no-ssl-verify --example test
+
+# Show DHCP module specifications
+./result/bin/opnsense-controller --mode dhcp --no-ssl-verify --example spec
+
+# Create a DHCP range (dry-run)
+./result/bin/opnsense-controller --mode dhcp --no-ssl-verify --example range
+
+# Create multiple DHCP ranges (execute)
+./result/bin/opnsense-controller --mode dhcp --no-ssl-verify --execute --example range-multi
+
+# Create a static DHCP host reservation
+./result/bin/opnsense-controller --mode dhcp --no-ssl-verify --execute --example host
+
+# Create multiple static DHCP hosts
+./result/bin/opnsense-controller --mode dhcp --no-ssl-verify --execute --example host-multi
+
+# Enable Dnsmasq DHCP service
+./result/bin/opnsense-controller --mode dhcp --no-ssl-verify --execute --example enable
+
+# Configure general Dnsmasq settings
+./result/bin/opnsense-controller --mode dhcp --no-ssl-verify --execute --example config
+```
+
 ## CLI Options
 
 | Option | Description |
@@ -99,11 +129,14 @@ your-api-secret
 | `--no-ssl-verify` | Disable SSL certificate verification |
 | `--debug` | Enable debug logging |
 | `--execute` | Actually execute changes (default is dry-run mode) |
+| `--mode MODE` | Which manager to use: `vlan` or `dhcp` (default: `vlan`) |
 | `--assign` | Assign created VLANs to interfaces and enable them |
 | `--interface NAME` | Parent interface for VLAN examples (default: `vtnet0`) |
 | `--example NAME` | Which example to run (default: `all`) |
 
 ## Examples
+
+### VLAN Examples (`--mode vlan`, default)
 
 | Example | Description |
 |---------|-------------|
@@ -116,6 +149,21 @@ your-api-secret
 | `update` | Update VLAN priority |
 | `delete` | Delete a VLAN |
 | `all` | Run all examples (default) |
+
+### DHCP Examples (`--mode dhcp`)
+
+| Example | Description |
+|---------|-------------|
+| `test` | Test connection to firewall |
+| `spec` | Show Dnsmasq DHCP module specifications |
+| `range` | Create single DHCP range (Server Network) |
+| `range-multi` | Create multiple DHCP ranges (Private, IoT, DMZ networks) |
+| `host` | Create single static DHCP host reservation |
+| `host-multi` | Create multiple static DHCP host reservations |
+| `delete-host` | Delete a DHCP host reservation |
+| `enable` | Enable Dnsmasq DHCP service |
+| `config` | Configure general Dnsmasq settings |
+| `all` | Run all DHCP examples (default) |
 
 ## Interface Assignment
 
@@ -144,6 +192,7 @@ See: https://github.com/opnsense/core/issues/7324#issuecomment-2830694222
         ├── __init__.py
         ├── config.py              # Connection configuration
         ├── vlan_manager.py        # VLAN and interface operations
+        ├── dhcp_manager.py        # DHCP/Dnsmasq operations
         └── main.py                # CLI entry point
 ```
 
@@ -164,6 +213,8 @@ nix-build -A opnsense-controller default.nix
 ```
 
 ## Programmatic Usage
+
+### VLAN Management
 
 ```python
 from opnsense_controller import Config, Vlan, VlanManager
@@ -246,6 +297,134 @@ with VlanManager(config) as manager:
 | `create_multiple_vlans(vlans, check_mode, assign, enable)` | Create multiple VLANs |
 | `assign_interface(device, description, enable, ipv4_type, ipv4_address, ipv4_subnet)` | Assign device to interface |
 | `unassign_interface(identifier)` | Remove interface assignment |
+
+### DHCP Management
+
+```python
+from opnsense_controller import Config, DhcpHost, DhcpManager, DhcpRange
+
+config = Config(
+    firewall="firewall.mgmt.internal",
+    ssl_verify=False,
+)
+
+with DhcpManager(config) as manager:
+    # Test connection
+    if manager.test_connection():
+        print("Connected!")
+
+    # Create a DHCP range for a network
+    dhcp_range = DhcpRange(
+        description="Server Network DHCP",
+        start_addr="10.21.0.100",
+        end_addr="10.21.0.200",
+        interface="opt1",  # OPNsense interface name
+        lease_time=86400,  # 24 hours
+        domain="srv.internal",
+    )
+    result = manager.create_range(dhcp_range)
+
+    # Create multiple DHCP ranges
+    ranges = [
+        DhcpRange(
+            description="Private Network",
+            start_addr="10.31.0.100",
+            end_addr="10.31.0.250",
+            domain="private.internal",
+        ),
+        DhcpRange(
+            description="IoT Network",
+            start_addr="10.41.0.100",
+            end_addr="10.41.0.250",
+            domain="iot.internal",
+        ),
+    ]
+    manager.create_multiple_ranges(ranges)
+
+    # Create a static DHCP host reservation
+    host = DhcpHost(
+        description="Nextcloud Server",
+        host="nextcloud",
+        ip=["10.21.0.10"],
+        hardware_addr=["00:11:22:33:44:55"],
+        domain="srv.internal",
+    )
+    manager.create_host(host)
+
+    # Create multiple static host reservations
+    hosts = [
+        DhcpHost(description="Gitea", host="gitea", ip=["10.21.0.11"]),
+        DhcpHost(description="Matrix", host="matrix", ip=["10.21.0.12"]),
+    ]
+    manager.create_multiple_hosts(hosts)
+
+    # Delete a host reservation
+    manager.delete_host("Matrix")
+
+    # Delete a DHCP range
+    manager.delete_range("IoT Network")
+
+    # Enable Dnsmasq service
+    manager.enable_service(
+        interfaces=["opt1", "opt2"],
+        dhcp_authoritative=True,
+    )
+
+    # Configure general settings
+    manager.configure_general(
+        enabled=True,
+        dhcp_authoritative=True,
+        dhcp_fqdn=True,
+        regdhcp=True,
+        regdhcpstatic=True,
+    )
+```
+
+### DhcpManager Methods
+
+| Method | Description |
+|--------|-------------|
+| `test_connection()` | Test connection to OPNsense |
+| `get_range_spec()` | Get DHCP range module specification |
+| `get_host_spec()` | Get DHCP host module specification |
+| `get_general_spec()` | Get Dnsmasq general settings specification |
+| `create_range(dhcp_range, check_mode)` | Create a DHCP range |
+| `update_range(dhcp_range, check_mode)` | Update an existing DHCP range |
+| `delete_range(description, check_mode)` | Delete a DHCP range by description |
+| `create_multiple_ranges(ranges, check_mode)` | Create multiple DHCP ranges |
+| `create_host(host, check_mode)` | Create a static DHCP host reservation |
+| `update_host(host, check_mode)` | Update an existing host reservation |
+| `delete_host(description, check_mode)` | Delete a host reservation by description |
+| `create_multiple_hosts(hosts, check_mode)` | Create multiple host reservations |
+| `enable_service(interfaces, dhcp_authoritative, check_mode)` | Enable Dnsmasq service |
+| `disable_service(check_mode)` | Disable Dnsmasq service |
+| `configure_general(...)` | Configure general Dnsmasq settings |
+
+### DhcpRange Fields
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `description` | str | Unique description for the range (required) |
+| `start_addr` | str | Start IP address of the range (required) |
+| `end_addr` | str | End IP address of the range (required) |
+| `interface` | str | OPNsense interface to serve (e.g., `opt1`) |
+| `subnet_mask` | str | Subnet mask (auto-calculated if not specified) |
+| `lease_time` | int | Lease time in seconds (default: 86400) |
+| `domain` | str | Domain to offer to DHCP clients |
+| `set_tag` | str | Tag to set for matching requests |
+
+### DhcpHost Fields
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `description` | str | Unique description for the host (required) |
+| `host` | str | Hostname without domain (required) |
+| `ip` | list[str] | IP addresses to assign |
+| `hardware_addr` | list[str] | MAC addresses to match |
+| `domain` | str | Domain of the host |
+| `lease_time` | int | Lease time in seconds |
+| `set_tag` | str | Tag to set for matching requests |
+| `ignore` | bool | Ignore DHCP packets from this host |
 
 ## License
 
