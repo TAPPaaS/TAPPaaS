@@ -15,6 +15,7 @@ dependencies = [
 
 [project.scripts]
 opnsense-controller = "opnsense_controller.main:main"
+zone-manager = "opnsense_controller.zone_manager:main"
 
 [tool.setuptools.packages.find]
 where = ["."]

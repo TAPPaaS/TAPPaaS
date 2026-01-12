@@ -190,32 +190,71 @@ class FirewallManager:
         Returns:
             List of FirewallRuleInfo objects
         """
-        # The searchRule endpoint uses POST with data in request body
+        # Use the /api/firewall/filter/get endpoint which shows the full config
         result = self.client.run_module(
             "raw",
             params={
                 "module": "firewall",
                 "controller": "filter",
-                "command": "searchRule",
-                "action": "post",
-                "data": {
-                    "current": 1,
-                    "rowCount": -1,  # -1 means all rows
-                    "searchPhrase": search_pattern,
-                },
+                "command": "get",
+                "action": "get",
             },
         )
 
         response = result.get("result", {}).get("response", {})
-        rows = response.get("rows", [])
+        filter_config = response.get("filter", {})
+        rules_config = filter_config.get("rules", {}).get("rule", {})
 
         rules = []
-        for row in rows:
-            rule_uuid = row.get("uuid")
-            if rule_uuid:
-                rules.append(FirewallRuleInfo.from_api_response(rule_uuid, row))
+        for rule_uuid, rule_data in rules_config.items():
+            # Extract selected values from the OPNsense API format
+            rule_info = self._parse_rule_from_get(rule_uuid, rule_data)
+            if rule_info:
+                # Apply search filter if provided
+                if not search_pattern or search_pattern.lower() in rule_info.description.lower():
+                    rules.append(rule_info)
 
         return rules
+
+    def _parse_rule_from_get(self, uuid: str, data: dict) -> FirewallRuleInfo | None:
+        """Parse a rule from the /api/firewall/filter/get response format.
+
+        The get endpoint returns each field as a dict of options with 'selected' flags.
+        """
+        def get_selected_value(field_data: dict | str) -> str:
+            """Extract the selected value from an OPNsense field dict."""
+            if isinstance(field_data, str):
+                return field_data
+            for key, info in field_data.items():
+                if isinstance(info, dict) and info.get("selected") == 1:
+                    return key
+            return ""
+
+        def get_selected_interface(field_data: dict) -> str:
+            """Extract selected interface(s)."""
+            if isinstance(field_data, str):
+                return field_data
+            selected = []
+            for key, info in field_data.items():
+                if isinstance(info, dict) and info.get("selected") == 1:
+                    selected.append(key)
+            return ",".join(selected) if selected else ""
+
+        return FirewallRuleInfo(
+            uuid=uuid,
+            description=data.get("description", ""),
+            enabled=data.get("enabled") == "1",
+            action=get_selected_value(data.get("action", {})),
+            interface=get_selected_interface(data.get("interface", {})),
+            direction=get_selected_value(data.get("direction", {})),
+            protocol=get_selected_value(data.get("protocol", {})),
+            source_net=data.get("source_net", ""),
+            source_port=data.get("source_port") or None,
+            destination_net=data.get("destination_net", ""),
+            destination_port=data.get("destination_port") or None,
+            log=data.get("log") == "1",
+            sequence=int(data["sequence"]) if data.get("sequence") else None,
+        )
 
     def get_rule(self, uuid: str) -> dict:
         """Get details of a specific firewall rule.
@@ -267,13 +306,17 @@ class FirewallManager:
             "description": rule.description,
             "action": rule.action.value if isinstance(rule.action, RuleAction) else rule.action,
             "direction": rule.direction.value if isinstance(rule.direction, RuleDirection) else rule.direction,
-            "ipprotocol": rule.ip_protocol.value if isinstance(rule.ip_protocol, IpProtocol) else rule.ip_protocol,
+            "ip_protocol": rule.ip_protocol.value if isinstance(rule.ip_protocol, IpProtocol) else rule.ip_protocol,
             "protocol": rule.protocol.value if isinstance(rule.protocol, Protocol) else rule.protocol,
             "source_net": rule.source_net,
             "destination_net": rule.destination_net,
-            "log": "1" if rule.log else "0",
-            "quick": "1" if rule.quick else "0",
-            "enabled": "1" if rule.enabled else "0",
+            "log": rule.log,
+            "quick": rule.quick,
+            "enabled": rule.enabled,
+            # match_fields determines how to identify existing rules for updates
+            "match_fields": ["description"],
+            # Don't reload after each rule, we'll call apply_changes manually
+            "reload": False,
         }
 
         # Handle interface (can be single or multiple)
@@ -342,6 +385,8 @@ class FirewallManager:
             params={
                 "description": description,
                 "state": "absent",
+                "match_fields": ["description"],
+                "reload": False,
             },
         )
 

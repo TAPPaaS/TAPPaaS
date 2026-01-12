@@ -12,6 +12,7 @@ from .firewall_manager import (
     RuleDirection,
 )
 from .vlan_manager import Vlan, VlanManager
+from .zone_manager import Zone, ZoneManager
 
 __all__ = [
     "Config",
@@ -27,4 +28,6 @@ __all__ = [
     "RuleDirection",
     "Vlan",
     "VlanManager",
+    "Zone",
+    "ZoneManager",
 ]

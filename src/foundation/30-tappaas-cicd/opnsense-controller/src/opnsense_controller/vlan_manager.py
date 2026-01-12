@@ -123,6 +123,63 @@ class VlanManager:
                 })
         return vlans
 
+    def list_vlans(self) -> list[dict]:
+        """List all configured VLAN devices (including unassigned ones).
+
+        Returns list of dicts with uuid, device, tag, interface, description, priority.
+        """
+        result = self.client.run_module(
+            "raw",
+            params={
+                "module": "interfaces",
+                "controller": "vlan_settings",
+                "command": "searchItem",
+                "action": "get",
+            },
+        )
+        rows = result.get("result", {}).get("response", {}).get("rows", [])
+        vlans = []
+        for row in rows:
+            vlans.append({
+                "uuid": row.get("uuid"),
+                "device": row.get("vlanif"),
+                "tag": int(row.get("tag", 0)),
+                "interface": row.get("if"),
+                "description": row.get("descr"),
+                "priority": int(row.get("pcp", 0)),
+            })
+        return vlans
+
+    def get_vlan_by_tag(self, tag: int) -> dict | None:
+        """Get a VLAN by its tag number.
+
+        Args:
+            tag: VLAN tag to search for
+
+        Returns:
+            VLAN dict if found, None otherwise
+        """
+        vlans = self.list_vlans()
+        for vlan in vlans:
+            if vlan["tag"] == tag:
+                return vlan
+        return None
+
+    def get_vlan_by_description(self, description: str) -> dict | None:
+        """Get a VLAN by its description.
+
+        Args:
+            description: Description to search for
+
+        Returns:
+            VLAN dict if found, None otherwise
+        """
+        vlans = self.list_vlans()
+        for vlan in vlans:
+            if vlan["description"] == description:
+                return vlan
+        return None
+
     def assign_interface(
         self,
         device: str,
@@ -202,6 +259,7 @@ class VlanManager:
         check_mode: bool = False,
         assign: bool = False,
         enable: bool = True,
+        interface_name: str | None = None,
     ) -> dict:
         """Create a new VLAN device and optionally assign it to an interface.
 
@@ -210,6 +268,7 @@ class VlanManager:
             check_mode: If True, perform dry-run without making changes
             assign: If True, also assign the VLAN to an interface and enable it
             enable: If True and assign=True, enable the interface (default: True)
+            interface_name: Name for the assigned interface (default: use VLAN description)
 
         Returns:
             Result dictionary from the API
@@ -233,9 +292,11 @@ class VlanManager:
 
         # If assign is requested and not in check mode, assign the interface
         if assign and not check_mode:
+            # Use interface_name if provided, otherwise fall back to VLAN description
+            iface_desc = interface_name or vlan.description
             assign_result = self.assign_interface(
                 device=device_name,
-                description=vlan.description,
+                description=iface_desc,
                 enable=enable,
             )
             result["assign_result"] = assign_result

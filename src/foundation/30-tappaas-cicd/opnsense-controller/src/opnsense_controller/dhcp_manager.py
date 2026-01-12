@@ -100,6 +100,92 @@ class DhcpManager:
         """Get the specification for the dnsmasq_general module."""
         return self.client.module_specs("dnsmasq_general")
 
+    def list_ranges(self) -> list[dict]:
+        """List all configured DHCP ranges.
+
+        Returns list of dicts with uuid, description, start_addr, end_addr, interface, domain, etc.
+        """
+        result = self.client.run_module(
+            "raw",
+            params={
+                "module": "dnsmasq",
+                "controller": "settings",
+                "command": "searchRange",
+                "action": "get",
+            },
+        )
+        rows = result.get("result", {}).get("response", {}).get("rows", [])
+        ranges = []
+        for row in rows:
+            ranges.append({
+                "uuid": row.get("uuid"),
+                "description": row.get("description"),
+                "start_addr": row.get("start_addr"),
+                "end_addr": row.get("end_addr"),
+                "interface": row.get("interface"),
+                "domain": row.get("domain"),
+                "lease_time": row.get("lease_time"),
+                "set_tag": row.get("set_tag"),
+            })
+        return ranges
+
+    def get_range_by_description(self, description: str) -> dict | None:
+        """Get a DHCP range by its description.
+
+        Args:
+            description: Description to search for
+
+        Returns:
+            DHCP range dict if found, None otherwise
+        """
+        ranges = self.list_ranges()
+        for dhcp_range in ranges:
+            if dhcp_range["description"] == description:
+                return dhcp_range
+        return None
+
+    def list_hosts(self) -> list[dict]:
+        """List all configured DHCP host reservations.
+
+        Returns list of dicts with uuid, description, host, ip, hardware_addr, domain, etc.
+        """
+        result = self.client.run_module(
+            "raw",
+            params={
+                "module": "dnsmasq",
+                "controller": "settings",
+                "command": "searchHost",
+                "action": "get",
+            },
+        )
+        rows = result.get("result", {}).get("response", {}).get("rows", [])
+        hosts = []
+        for row in rows:
+            hosts.append({
+                "uuid": row.get("uuid"),
+                "description": row.get("description"),
+                "host": row.get("host"),
+                "ip": row.get("ip"),
+                "hardware_addr": row.get("hardware_addr"),
+                "domain": row.get("domain"),
+            })
+        return hosts
+
+    def get_host_by_description(self, description: str) -> dict | None:
+        """Get a DHCP host by its description.
+
+        Args:
+            description: Description to search for
+
+        Returns:
+            DHCP host dict if found, None otherwise
+        """
+        hosts = self.list_hosts()
+        for host in hosts:
+            if host["description"] == description:
+                return host
+        return None
+
     # =========================================================================
     # DHCP Range Operations
     # =========================================================================

@@ -631,7 +631,9 @@ def main():
 
     elif args.mode == "firewall":
         with FirewallManager(config) as manager:
-            interface = args.interface
+            # For firewall rules, use logical interface names (lan, wan, opt1)
+            # not physical interface names (vtnet0)
+            interface = args.interface if args.interface != "vtnet0" else "lan"
             examples = {
                 "test": lambda: example_firewall_test_connection(manager),
                 "spec": lambda: example_firewall_show_spec(manager),

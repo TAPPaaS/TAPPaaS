@@ -212,6 +212,179 @@ your-api-secret
 | `block` | Create block rule using convenience method |
 | `all` | Run all firewall examples (default) |
 
+### Zone Manager (`zone-manager` command)
+
+The Zone Manager reads TAPPaaS zone definitions from `zones.json` and automatically configures VLANs and DHCP ranges for each enabled zone.
+
+#### CLI Usage
+
+```bash
+# Show zone summary (dry-run, no changes)
+./result/bin/zone-manager --no-ssl-verify --summary
+
+# List current OPNsense VLAN and DHCP configuration
+./result/bin/zone-manager --no-ssl-verify --list-config
+
+# Configure all zones (VLANs + DHCP) in dry-run mode
+./result/bin/zone-manager --no-ssl-verify
+
+# Execute changes
+./result/bin/zone-manager --no-ssl-verify --execute
+
+# Configure only VLANs
+./result/bin/zone-manager --no-ssl-verify --execute --vlans-only
+
+# Configure only DHCP
+./result/bin/zone-manager --no-ssl-verify --execute --dhcp-only
+
+# Skip assigning VLANs to interfaces (by default VLANs are assigned)
+./result/bin/zone-manager --no-ssl-verify --execute --no-assign
+
+# Use a specific zones.json file
+./result/bin/zone-manager --zones-file /path/to/zones.json --execute
+```
+
+#### CLI Options
+
+| Option | Description |
+|--------|-------------|
+| `--zones-file PATH` | Path to zones.json file (auto-detected if not specified) |
+| `--firewall HOST` | Firewall IP/hostname (default: `firewall.mgmt.internal`) |
+| `--credential-file PATH` | Path to credential file |
+| `--no-ssl-verify` | Disable SSL certificate verification |
+| `--debug` | Enable debug logging |
+| `--execute` | Actually execute changes (default is dry-run mode) |
+| `--interface NAME` | Physical interface for VLANs (default: `vtnet1`) |
+| `--no-assign` | Do not assign VLANs to interfaces (by default VLANs are assigned) |
+| `--vlans-only` | Only configure VLANs, skip DHCP |
+| `--dhcp-only` | Only configure DHCP, skip VLANs |
+| `--summary` | Only show zone summary, don't configure anything |
+| `--list-config` | List current OPNsense VLAN and DHCP configuration |
+
+#### Programmatic Usage
+
+```python
+from opnsense_controller import Config, Zone, ZoneManager
+
+config = Config(
+    firewall="firewall.mgmt.internal",
+    ssl_verify=False,
+)
+
+manager = ZoneManager(
+    config=config,
+    zones_file="/path/to/zones.json",
+    interface="vtnet1",
+)
+
+# Load zones from JSON file
+zones = manager.load_zones()
+
+# Print zone summary
+manager.print_zone_summary()
+
+# List current OPNsense configuration
+manager.print_current_config()
+
+# Get enabled zones
+enabled = manager.get_enabled_zones()
+for zone in enabled:
+    print(f"{zone.name}: {zone.ip_network} (VLAN {zone.vlan_tag})")
+
+# Get zones that need VLANs (tag > 0)
+vlan_zones = manager.get_vlan_zones()
+
+# Configure VLANs only (dry-run)
+vlan_results = manager.configure_vlans(check_mode=True)
+
+# Configure VLANs (VLANs are assigned to interfaces by default)
+vlan_results = manager.configure_vlans(check_mode=False)
+
+# Configure DHCP ranges only
+dhcp_results = manager.configure_dhcp(check_mode=False)
+
+# Configure both VLANs and DHCP
+results = manager.configure_all(check_mode=False)
+print(f"VLANs: {len(results['vlans'])} zones configured")
+print(f"DHCP: {len(results['dhcp'])} zones configured")
+```
+
+#### ZoneManager Methods
+
+| Method | Description |
+|--------|-------------|
+| `load_zones()` | Load zones from the JSON file |
+| `get_enabled_zones()` | Get all enabled zones (Active or Mandatory state) |
+| `get_disabled_zones()` | Get all disabled zones |
+| `get_vlan_zones()` | Get enabled zones that need VLANs (tag > 0) |
+| `configure_vlans(check_mode, assign)` | Configure VLANs for all enabled zones (assign=True by default) |
+| `configure_dhcp(check_mode)` | Configure DHCP ranges for all enabled zones |
+| `configure_all(check_mode, assign_vlans)` | Configure both VLANs and DHCP |
+| `list_current_config()` | Get current OPNsense VLAN and DHCP configuration |
+| `print_current_config()` | Print current OPNsense configuration |
+| `print_zone_summary()` | Print a summary table of all zones |
+
+#### Zone Properties
+
+The `Zone` class provides these properties for each zone loaded from `zones.json`:
+
+| Property | Description |
+|----------|-------------|
+| `name` | Zone name (e.g., `srv`, `dmz`, `private`) |
+| `zone_type` | Zone type from config |
+| `state` | Zone state (`Active`, `Mandatory`, `Disabled`) |
+| `vlan_tag` | VLAN tag number (0 for untagged) |
+| `ip_network` | IP network in CIDR notation (e.g., `10.21.0.0/16`) |
+| `bridge` | Bridge interface name |
+| `description` | Human-readable description |
+| `is_enabled` | True if zone is Active or Mandatory |
+| `needs_vlan` | True if zone has VLAN tag > 0 |
+| `gateway_ip` | Gateway IP address (first host in network) |
+| `dhcp_start` | DHCP range start (.50 in the network) |
+| `dhcp_end` | DHCP range end (.250 in the network) |
+| `domain` | Zone domain name (e.g., `srv.internal`) |
+
+#### zones.json Format
+
+The Zone Manager expects zones.json in the following format:
+
+```json
+{
+  "mgmt": {
+    "type": "management",
+    "state": "Mandatory",
+    "typeId": "0",
+    "subId": "0",
+    "vlantag": 0,
+    "ip": "10.0.0.0/16",
+    "bridge": "lan",
+    "description": "Management network"
+  },
+  "srv": {
+    "type": "service",
+    "state": "Active",
+    "typeId": "2",
+    "subId": "1",
+    "vlantag": 210,
+    "ip": "10.21.0.0/16",
+    "bridge": "lan",
+    "description": "Service network",
+    "access-to": ["mgmt", "dmz"]
+  },
+  "dmz": {
+    "type": "dmz",
+    "state": "Active",
+    "typeId": "6",
+    "subId": "1",
+    "vlantag": 610,
+    "ip": "10.61.0.0/16",
+    "bridge": "lan",
+    "description": "DMZ network",
+    "pinhole-allowed-from": ["srv"]
+  }
+}
+```
+
 ## Interface Assignment
 
 By default, OPNsense API does not support interface assignment. To enable automatic interface assignment when creating VLANs, install the custom PHP extension:
@@ -241,6 +414,7 @@ See: https://github.com/opnsense/core/issues/7324#issuecomment-2830694222
         ├── vlan_manager.py        # VLAN and interface operations
         ├── dhcp_manager.py        # DHCP/Dnsmasq operations
         ├── firewall_manager.py    # Firewall rule operations
+        ├── zone_manager.py        # Zone configuration from zones.json
         └── main.py                # CLI entry point
 ```
 
