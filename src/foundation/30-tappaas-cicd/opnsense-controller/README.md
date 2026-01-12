@@ -50,6 +50,8 @@ your-api-secret
 | `OPNSENSE_SSL_VERIFY` | Set to `false` to disable SSL verification | `true` |
 | `OPNSENSE_SSL_CA_FILE` | Path to custom CA certificate | - |
 | `OPNSENSE_DEBUG` | Set to `true` to enable debug logging | `false` |
+| `OPNSENSE_API_TIMEOUT` | API timeout in seconds | `30` |
+| `OPNSENSE_API_RETRIES` | Number of retries for failed requests | `3` |
 
 ### Creating API Credentials in OPNsense
 
@@ -120,6 +122,37 @@ your-api-secret
 ./result/bin/opnsense-controller --mode dhcp --no-ssl-verify --execute --example config
 ```
 
+### Firewall Examples
+
+```bash
+# Test firewall manager connection
+./result/bin/opnsense-controller --mode firewall --no-ssl-verify --example test
+
+# Show firewall rule module specification
+./result/bin/opnsense-controller --mode firewall --no-ssl-verify --example spec
+
+# List all firewall rules
+./result/bin/opnsense-controller --mode firewall --no-ssl-verify --example list
+
+# Create a firewall rule (dry-run)
+./result/bin/opnsense-controller --mode firewall --no-ssl-verify --example create
+
+# Create a firewall rule (execute)
+./result/bin/opnsense-controller --mode firewall --no-ssl-verify --execute --example create
+
+# Create multiple firewall rules
+./result/bin/opnsense-controller --mode firewall --no-ssl-verify --execute --example create-multi
+
+# Delete a firewall rule
+./result/bin/opnsense-controller --mode firewall --no-ssl-verify --execute --example delete
+
+# Create allow rule (convenience method)
+./result/bin/opnsense-controller --mode firewall --no-ssl-verify --execute --example allow
+
+# Create block rule (convenience method)
+./result/bin/opnsense-controller --mode firewall --no-ssl-verify --execute --example block
+```
+
 ## CLI Options
 
 | Option | Description |
@@ -129,7 +162,7 @@ your-api-secret
 | `--no-ssl-verify` | Disable SSL certificate verification |
 | `--debug` | Enable debug logging |
 | `--execute` | Actually execute changes (default is dry-run mode) |
-| `--mode MODE` | Which manager to use: `vlan` or `dhcp` (default: `vlan`) |
+| `--mode MODE` | Which manager to use: `vlan`, `dhcp`, or `firewall` (default: `vlan`) |
 | `--assign` | Assign created VLANs to interfaces and enable them |
 | `--interface NAME` | Parent interface for VLAN examples (default: `vtnet0`) |
 | `--example NAME` | Which example to run (default: `all`) |
@@ -165,6 +198,20 @@ your-api-secret
 | `config` | Configure general Dnsmasq settings |
 | `all` | Run all DHCP examples (default) |
 
+### Firewall Examples (`--mode firewall`)
+
+| Example | Description |
+|---------|-------------|
+| `test` | Test connection to firewall |
+| `spec` | Show firewall rule module specification |
+| `list` | List all firewall rules |
+| `create` | Create single firewall rule (Allow SSH) |
+| `create-multi` | Create multiple firewall rules (DNS, HTTP, HTTPS, Block) |
+| `delete` | Delete a firewall rule |
+| `allow` | Create allow rule using convenience method |
+| `block` | Create block rule using convenience method |
+| `all` | Run all firewall examples (default) |
+
 ## Interface Assignment
 
 By default, OPNsense API does not support interface assignment. To enable automatic interface assignment when creating VLANs, install the custom PHP extension:
@@ -193,6 +240,7 @@ See: https://github.com/opnsense/core/issues/7324#issuecomment-2830694222
         ├── config.py              # Connection configuration
         ├── vlan_manager.py        # VLAN and interface operations
         ├── dhcp_manager.py        # DHCP/Dnsmasq operations
+        ├── firewall_manager.py    # Firewall rule operations
         └── main.py                # CLI entry point
 ```
 
@@ -425,6 +473,172 @@ with DhcpManager(config) as manager:
 | `lease_time` | int | Lease time in seconds |
 | `set_tag` | str | Tag to set for matching requests |
 | `ignore` | bool | Ignore DHCP packets from this host |
+
+### Firewall Management
+
+```python
+from opnsense_controller import (
+    Config,
+    FirewallManager,
+    FirewallRule,
+    Protocol,
+    RuleAction,
+    RuleDirection,
+    IpProtocol,
+)
+
+config = Config(
+    firewall="firewall.mgmt.internal",
+    ssl_verify=False,
+)
+
+with FirewallManager(config) as manager:
+    # Test connection
+    if manager.test_connection():
+        print("Connected!")
+
+    # List all firewall rules
+    rules = manager.list_rules()
+    for rule in rules:
+        print(f"{rule.action} {rule.protocol} {rule.source_net} -> {rule.destination_net}")
+
+    # Get a specific rule by description
+    rule_info = manager.get_rule_by_description("Allow SSH")
+    if rule_info:
+        print(f"Found rule: {rule_info.uuid}")
+
+    # Create a firewall rule
+    rule = FirewallRule(
+        description="Allow SSH from management",
+        action=RuleAction.PASS,
+        interface="lan",
+        direction=RuleDirection.IN,
+        protocol=Protocol.TCP,
+        source_net="10.0.0.0/24",
+        destination_port="22",
+        log=True,
+    )
+    result = manager.create_rule(rule)
+
+    # Create multiple rules (applies changes once at the end)
+    rules = [
+        FirewallRule(
+            description="Allow DNS",
+            action=RuleAction.PASS,
+            interface="lan",
+            protocol=Protocol.UDP,
+            destination_port="53",
+        ),
+        FirewallRule(
+            description="Allow HTTPS",
+            action=RuleAction.PASS,
+            interface="lan",
+            protocol=Protocol.TCP,
+            destination_port="443",
+        ),
+        FirewallRule(
+            description="Block all other",
+            action=RuleAction.BLOCK,
+            interface="lan",
+            sequence=65000,  # Low priority (processed last)
+        ),
+    ]
+    manager.create_multiple_rules(rules)
+
+    # Convenience methods for common rules
+    manager.create_allow_rule(
+        description="Allow ICMP ping",
+        interface="lan",
+        protocol=Protocol.ICMP,
+    )
+
+    manager.create_block_rule(
+        description="Block Telnet",
+        interface="lan",
+        protocol=Protocol.TCP,
+        destination_port="23",
+    )
+
+    # Toggle a rule on/off
+    manager.toggle_rule(uuid="some-uuid", enabled=False)
+
+    # Delete a rule by description
+    manager.delete_rule("Block Telnet")
+
+    # Delete a rule by UUID
+    manager.delete_rule_by_uuid("some-uuid")
+
+    # Create a savepoint before bulk changes
+    savepoint = manager.create_savepoint()
+
+    # Revert to savepoint if needed
+    # manager.revert_changes(savepoint["revision"])
+
+    # Manually apply changes (if apply=False was used)
+    manager.apply_changes()
+```
+
+### FirewallManager Methods
+
+| Method | Description |
+|--------|-------------|
+| `test_connection()` | Test connection to OPNsense |
+| `get_rule_spec()` | Get firewall rule module specification |
+| `list_rules(search_pattern)` | List all firewall rules |
+| `get_rule(uuid)` | Get details of a specific rule |
+| `get_rule_by_description(description)` | Find a rule by description |
+| `create_rule(rule, apply)` | Create a new firewall rule |
+| `update_rule(rule, apply)` | Update an existing rule |
+| `delete_rule(description, apply)` | Delete rule by description |
+| `delete_rule_by_uuid(uuid, apply)` | Delete rule by UUID |
+| `toggle_rule(uuid, enabled, apply)` | Enable/disable a rule |
+| `apply_changes()` | Apply firewall configuration |
+| `create_savepoint()` | Create a rollback point |
+| `revert_changes(revision)` | Revert to a previous configuration |
+| `create_allow_rule(...)` | Convenience method for allow rules |
+| `create_block_rule(...)` | Convenience method for block rules |
+| `create_multiple_rules(rules, apply)` | Create multiple rules at once |
+
+### FirewallRule Fields
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `description` | str | Unique description for the rule (required) |
+| `action` | RuleAction | `PASS`, `BLOCK`, or `REJECT` (default: `PASS`) |
+| `interface` | str \| list[str] | Interface name(s) to apply rule on (default: `lan`) |
+| `direction` | RuleDirection | `IN` or `OUT` (default: `IN`) |
+| `ip_protocol` | IpProtocol | `IPV4`, `IPV6`, or `BOTH` (default: `IPV4`) |
+| `protocol` | Protocol | `ANY`, `TCP`, `UDP`, `ICMP`, etc. (default: `ANY`) |
+| `source_net` | str | Source IP/network/alias or `any` (default: `any`) |
+| `source_port` | str | Source port, range, or alias (default: any) |
+| `source_invert` | bool | Negate source matching (default: `False`) |
+| `destination_net` | str | Destination IP/network/alias or `any` (default: `any`) |
+| `destination_port` | str | Destination port, range, or alias (default: any) |
+| `destination_invert` | bool | Negate destination matching (default: `False`) |
+| `gateway` | str | Gateway name for policy routing |
+| `log` | bool | Log matching packets (default: `True`) |
+| `quick` | bool | Stop processing on match (default: `True`) |
+| `enabled` | bool | Enable the rule (default: `True`) |
+| `sequence` | int | Rule order (lower = higher priority) |
+
+### Protocol Enum
+
+| Value | Description |
+|-------|-------------|
+| `Protocol.ANY` | Any protocol |
+| `Protocol.TCP` | TCP |
+| `Protocol.UDP` | UDP |
+| `Protocol.TCP_UDP` | TCP and UDP |
+| `Protocol.ICMP` | ICMP (IPv4) |
+| `Protocol.ICMPV6` | ICMPv6 |
+| `Protocol.ESP` | ESP (IPsec) |
+| `Protocol.AH` | AH (IPsec) |
+| `Protocol.GRE` | GRE tunneling |
+| `Protocol.IGMP` | IGMP multicast |
+| `Protocol.OSPF` | OSPF routing |
+| `Protocol.PIM` | PIM multicast |
+| `Protocol.CARP` | CARP failover |
+| `Protocol.PFSYNC` | pfsync state sync |
 
 ## License
 

@@ -31,6 +31,7 @@ import sys
 
 from .config import Config
 from .dhcp_manager import DhcpHost, DhcpManager, DhcpRange
+from .firewall_manager import FirewallManager, FirewallRule, Protocol, RuleAction
 from .vlan_manager import Vlan, VlanManager
 
 
@@ -319,6 +320,170 @@ def example_dhcp_configure_general(
     print(f"  Result: {result}")
 
 
+# =========================================================================
+# Firewall Examples
+# =========================================================================
+
+
+def example_firewall_test_connection(manager: FirewallManager) -> None:
+    """Test the firewall manager connection to OPNsense."""
+    print("Testing firewall manager connection...")
+    if manager.test_connection():
+        print("  Connection successful!")
+    else:
+        print("  Connection failed!")
+        sys.exit(1)
+
+
+def example_firewall_show_spec(manager: FirewallManager) -> None:
+    """Show firewall rule module specification."""
+    print("\nFirewall rule module specification:")
+    print(f"  {manager.get_rule_spec()}")
+
+
+def example_firewall_list_rules(manager: FirewallManager) -> None:
+    """List all firewall rules."""
+    print("\nFirewall rules:")
+    rules = manager.list_rules()
+    if not rules:
+        print("  No firewall rules found")
+    else:
+        for rule in rules:
+            status = "enabled" if rule.enabled else "disabled"
+            action = rule.action.upper()
+            print(
+                f"  [{status}] {action} {rule.protocol} "
+                f"{rule.source_net}:{rule.source_port or '*'} -> "
+                f"{rule.destination_net}:{rule.destination_port or '*'} "
+                f"on {rule.interface} ({rule.description})"
+            )
+
+
+def example_firewall_create_rule(
+    manager: FirewallManager,
+    check_mode: bool = True,
+    interface: str = "lan",
+) -> None:
+    """Create a single firewall rule."""
+    print(f"\nCreating firewall rule (check_mode={check_mode})...")
+
+    rule = FirewallRule(
+        description="Allow SSH from management",
+        action=RuleAction.PASS,
+        interface=interface,
+        protocol=Protocol.TCP,
+        source_net="10.0.0.0/24",
+        destination_port="22",
+        log=True,
+    )
+
+    if check_mode:
+        print(f"  Would create rule: {rule}")
+    else:
+        result = manager.create_rule(rule)
+        print(f"  Result: {result}")
+
+
+def example_firewall_create_multiple_rules(
+    manager: FirewallManager,
+    check_mode: bool = True,
+    interface: str = "lan",
+) -> None:
+    """Create multiple firewall rules for typical TAPPaaS setup."""
+    print(f"\nCreating multiple firewall rules (check_mode={check_mode})...")
+
+    rules = [
+        FirewallRule(
+            description="Allow DNS",
+            action=RuleAction.PASS,
+            interface=interface,
+            protocol=Protocol.UDP,
+            destination_port="53",
+        ),
+        FirewallRule(
+            description="Allow HTTP",
+            action=RuleAction.PASS,
+            interface=interface,
+            protocol=Protocol.TCP,
+            destination_port="80",
+        ),
+        FirewallRule(
+            description="Allow HTTPS",
+            action=RuleAction.PASS,
+            interface=interface,
+            protocol=Protocol.TCP,
+            destination_port="443",
+        ),
+        FirewallRule(
+            description="Block all other outbound",
+            action=RuleAction.BLOCK,
+            interface=interface,
+            sequence=65000,  # Low priority
+        ),
+    ]
+
+    if check_mode:
+        for rule in rules:
+            print(f"  Would create: {rule.description} ({rule.action.value})")
+    else:
+        results = manager.create_multiple_rules(rules)
+        for rule, result in zip(rules, results):
+            print(f"  {rule.description}: {result}")
+
+
+def example_firewall_delete_rule(
+    manager: FirewallManager,
+    check_mode: bool = True,
+) -> None:
+    """Delete a firewall rule."""
+    print(f"\nDeleting firewall rule (check_mode={check_mode})...")
+
+    if check_mode:
+        print("  Would delete rule: 'Block all other outbound'")
+    else:
+        result = manager.delete_rule("Block all other outbound")
+        print(f"  Result: {result}")
+
+
+def example_firewall_allow_rule(
+    manager: FirewallManager,
+    check_mode: bool = True,
+    interface: str = "lan",
+) -> None:
+    """Create a simple allow rule using convenience method."""
+    print(f"\nCreating allow rule (check_mode={check_mode})...")
+
+    if check_mode:
+        print(f"  Would create allow rule for ICMP on {interface}")
+    else:
+        result = manager.create_allow_rule(
+            description="Allow ICMP ping",
+            interface=interface,
+            protocol=Protocol.ICMP,
+        )
+        print(f"  Result: {result}")
+
+
+def example_firewall_block_rule(
+    manager: FirewallManager,
+    check_mode: bool = True,
+    interface: str = "lan",
+) -> None:
+    """Create a simple block rule using convenience method."""
+    print(f"\nCreating block rule (check_mode={check_mode})...")
+
+    if check_mode:
+        print(f"  Would create block rule for Telnet on {interface}")
+    else:
+        result = manager.create_block_rule(
+            description="Block Telnet",
+            interface=interface,
+            protocol=Protocol.TCP,
+            destination_port="23",
+        )
+        print(f"  Result: {result}")
+
+
 def main():
     """Run the OPNsense controller examples."""
     parser = argparse.ArgumentParser(
@@ -352,14 +517,17 @@ def main():
     )
     parser.add_argument(
         "--mode",
-        choices=["vlan", "dhcp"],
+        choices=["vlan", "dhcp", "firewall"],
         default="vlan",
-        help="Which manager to use: vlan or dhcp (default: vlan)",
+        help="Which manager to use: vlan, dhcp, or firewall (default: vlan)",
     )
     parser.add_argument(
         "--example",
         default="all",
-        help="Which example to run (default: all). For vlan: all, test, list, spec, assigned, create, create-multi, update, delete. For dhcp: all, test, spec, range, range-multi, host, host-multi, delete-host, enable, config",
+        help="Which example to run (default: all). "
+        "For vlan: all, test, list, spec, assigned, create, create-multi, update, delete. "
+        "For dhcp: all, test, spec, range, range-multi, host, host-multi, delete-host, enable, config. "
+        "For firewall: all, test, spec, list, create, create-multi, delete, allow, block",
     )
     parser.add_argument(
         "--interface",
@@ -458,6 +626,33 @@ def main():
                 examples[args.example]()
             else:
                 print(f"Unknown DHCP example: {args.example}")
+                print(f"Available: {', '.join(examples.keys())}")
+                sys.exit(1)
+
+    elif args.mode == "firewall":
+        with FirewallManager(config) as manager:
+            interface = args.interface
+            examples = {
+                "test": lambda: example_firewall_test_connection(manager),
+                "spec": lambda: example_firewall_show_spec(manager),
+                "list": lambda: example_firewall_list_rules(manager),
+                "create": lambda: example_firewall_create_rule(manager, check_mode, interface),
+                "create-multi": lambda: example_firewall_create_multiple_rules(manager, check_mode, interface),
+                "delete": lambda: example_firewall_delete_rule(manager, check_mode),
+                "allow": lambda: example_firewall_allow_rule(manager, check_mode, interface),
+                "block": lambda: example_firewall_block_rule(manager, check_mode, interface),
+            }
+
+            if args.example == "all":
+                for name, func in examples.items():
+                    try:
+                        func()
+                    except Exception as e:
+                        print(f"  Error in {name}: {e}")
+            elif args.example in examples:
+                examples[args.example]()
+            else:
+                print(f"Unknown firewall example: {args.example}")
                 print(f"Available: {', '.join(examples.keys())}")
                 sys.exit(1)
 
