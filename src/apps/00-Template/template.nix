@@ -1,7 +1,4 @@
 # ----------------------------------------
-# Version: 1.0.0 – tappaas PVE VM Template
-# State: Released
-# Date: 2025-10-16
 # Author: Erik, Lars (Tappaas)
 # Purpose: 
 #     Declarative common baseline NIXOS VM Template for all tappaas pve-nixos-vm 
@@ -9,17 +6,6 @@
 #     Edit this configuration file to define what should be installed on
 #     your system. Help is available in the configuration.nix(5) man page, on
 #     https://search.nixos.org/options and in the NixOS manual (`nixos-help`).
-#
-# ✅ **Automated provisioning** via cloud-init
-# ✅ **Consistent base system** across all clones  
-# ✅ **CICD integration** with SSH key authentication
-# ✅ **Scalable resources** post-deployment
-# ✅ **QEMU integration** for proper Proxmox management
-# ✅ **Security hardening** with minimal attack surface
-#
-# Modules:
-#     openssh  
-#     QEMU   
 #
 # ----------------------------------------
 
