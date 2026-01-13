@@ -3,7 +3,7 @@
 
 This module reads zone definitions from zones.json and configures:
 - VLANs for each enabled zone
-- DHCP ranges for each enabled zone (IP range .50 to .250)
+- DHCP ranges for each enabled zone (configurable via DHCP-start/DHCP-end, defaults: .50 to .250)
 
 Usage:
     zone-manager --zones-file /path/to/zones.json --execute
@@ -38,6 +38,8 @@ class Zone:
     access_to: list[str]
     pinhole_allowed_from: list[str]
     ssid: str | None = None
+    dhcp_start_offset: int = 50
+    dhcp_end_offset: int = 250
 
     @classmethod
     def from_json(cls, name: str, data: dict) -> "Zone":
@@ -55,12 +57,19 @@ class Zone:
             access_to=data.get("access-to", []),
             pinhole_allowed_from=data.get("pinhole-allowed-from", []),
             ssid=data.get("SSID"),
+            dhcp_start_offset=data.get("DHCP-start", 50),
+            dhcp_end_offset=data.get("DHCP-end", 250),
         )
 
     @property
     def is_enabled(self) -> bool:
         """Check if zone is enabled (Active or Mandatory)."""
         return self.state.lower() in ("active", "mandatory", "manadatory")
+
+    @property
+    def is_manual(self) -> bool:
+        """Check if zone is manually managed (neither created nor removed)."""
+        return self.state.lower() == "manual"
 
     @property
     def needs_vlan(self) -> bool:
@@ -79,15 +88,15 @@ class Zone:
 
     @property
     def dhcp_start(self) -> str:
-        """Get DHCP range start IP (.50)."""
+        """Get DHCP range start IP (default .50, configurable via DHCP-start)."""
         network = self.network
-        return str(network.network_address + 50)
+        return str(network.network_address + self.dhcp_start_offset)
 
     @property
     def dhcp_end(self) -> str:
-        """Get DHCP range end IP (.250)."""
+        """Get DHCP range end IP (default .250, configurable via DHCP-end)."""
         network = self.network
-        return str(network.network_address + 250)
+        return str(network.network_address + self.dhcp_end_offset)
 
     @property
     def domain(self) -> str:
@@ -164,15 +173,27 @@ class ZoneManager:
         return [z for z in self.zones if z.is_enabled]
 
     def get_disabled_zones(self) -> list[Zone]:
-        """Get all disabled zones."""
-        return [z for z in self.zones if not z.is_enabled]
+        """Get all disabled zones (excludes manual zones)."""
+        return [z for z in self.zones if not z.is_enabled and not z.is_manual]
+
+    def get_manual_zones(self) -> list[Zone]:
+        """Get all manually managed zones."""
+        return [z for z in self.zones if z.is_manual]
 
     def get_vlan_zones(self) -> list[Zone]:
         """Get enabled zones that need VLANs (tag > 0)."""
         return [z for z in self.get_enabled_zones() if z.needs_vlan]
 
     def get_disabled_vlan_zones(self) -> list[Zone]:
-        """Get disabled zones that have VLANs (tag > 0)."""
+        """Get disabled zones that have VLANs (tag > 0, excludes manual zones)."""
+        return [z for z in self.get_disabled_zones() if z.needs_vlan]
+
+    def get_dhcp_zones(self) -> list[Zone]:
+        """Get enabled zones that need DHCP (tag > 0, excludes untagged zones)."""
+        return [z for z in self.get_enabled_zones() if z.needs_vlan]
+
+    def get_disabled_dhcp_zones(self) -> list[Zone]:
+        """Get disabled zones that have DHCP (tag > 0, excludes manual and untagged zones)."""
         return [z for z in self.get_disabled_zones() if z.needs_vlan]
 
     def configure_vlans(
@@ -196,10 +217,14 @@ class ZoneManager:
         results = {}
         vlan_zones = self.get_vlan_zones()
         disabled_zones = self.get_disabled_vlan_zones()
+        manual_zones = [z for z in self.get_manual_zones() if z.needs_vlan]
+        untagged_zones = [z for z in self.get_enabled_zones() if not z.needs_vlan]
 
         print(f"\nConfiguring VLANs...")
         print(f"  Enabled zones requiring VLANs: {len(vlan_zones)}")
         print(f"  Disabled zones with VLANs to remove: {len(disabled_zones)}")
+        print(f"  Manual zones (skipped): {len(manual_zones)}")
+        print(f"  Untagged zones (skipped, vlantag=0): {len(untagged_zones)}")
 
         with VlanManager(self.config) as manager:
             # Get existing VLANs once for efficiency
@@ -276,6 +301,16 @@ class ZoneManager:
                         results[zone.name] = {"status": "error", "error": str(e)}
                         print(f"    Error: {e}")
 
+            # Report on manual zones (not created or deleted)
+            for zone in manual_zones:
+                print(f"  {zone.name}: VLAN {zone.vlan_tag} skipped (manual zone)")
+                results[zone.name] = {"status": "skipped_manual", "vlan": zone.vlan_tag}
+
+            # Report on untagged zones (vlantag=0, not managed by zone-manager)
+            for zone in untagged_zones:
+                print(f"  {zone.name}: VLAN skipped (untagged zone, vlantag=0)")
+                results[zone.name] = {"status": "skipped_untagged", "reason": "vlantag=0"}
+
         return results
 
     def configure_dhcp(self, check_mode: bool = True) -> dict[str, dict]:
@@ -292,12 +327,16 @@ class ZoneManager:
             Dictionary mapping zone names to results
         """
         results = {}
-        enabled_zones = self.get_enabled_zones()
-        disabled_zones = self.get_disabled_zones()
+        dhcp_zones = self.get_dhcp_zones()
+        disabled_zones = self.get_disabled_dhcp_zones()
+        manual_zones = [z for z in self.get_manual_zones() if z.needs_vlan]
+        untagged_zones = [z for z in self.get_enabled_zones() if not z.needs_vlan]
 
         print(f"\nConfiguring DHCP...")
-        print(f"  Enabled zones: {len(enabled_zones)}")
+        print(f"  Enabled zones requiring DHCP: {len(dhcp_zones)}")
         print(f"  Disabled zones with DHCP to remove: {len(disabled_zones)}")
+        print(f"  Manual zones (skipped): {len(manual_zones)}")
+        print(f"  Untagged zones (skipped, vlantag=0): {len(untagged_zones)}")
 
         with DhcpManager(self.config) as manager:
             # Get existing DHCP ranges once for efficiency
@@ -327,8 +366,8 @@ class ZoneManager:
                     print(f"  {zone.name}: DHCP range not found (nothing to delete)")
                     results[zone.name] = {"status": "not_found"}
 
-            # Then, create DHCP ranges for enabled zones
-            for zone in enabled_zones:
+            # Then, create DHCP ranges for enabled zones with VLANs
+            for zone in dhcp_zones:
                 dhcp_desc = zone.dhcp_description
                 existing = existing_by_desc.get(dhcp_desc)
 
@@ -413,6 +452,22 @@ class ZoneManager:
                         else:
                             results[zone.name] = {"status": "error", "error": error_str}
                             print(f"    Error: {e}")
+
+            # Report on manual zones (not created or deleted)
+            for zone in manual_zones:
+                print(f"  {zone.name}: DHCP skipped (manual zone)")
+                results[zone.name] = {
+                    "status": "skipped_manual",
+                    "range": f"{zone.dhcp_start}-{zone.dhcp_end}",
+                }
+
+            # Report on untagged zones (vlantag=0, not managed by zone-manager)
+            for zone in untagged_zones:
+                print(f"  {zone.name}: DHCP skipped (untagged zone, vlantag=0)")
+                results[zone.name] = {
+                    "status": "skipped_untagged",
+                    "reason": "vlantag=0",
+                }
 
         return results
 
@@ -510,7 +565,12 @@ class ZoneManager:
         print("-" * 80)
 
         for zone in self.zones:
-            status = "enabled" if zone.is_enabled else "disabled"
+            if zone.is_enabled:
+                status = "enabled"
+            elif zone.is_manual:
+                status = "manual"
+            else:
+                status = "disabled"
             vlan = str(zone.vlan_tag) if zone.vlan_tag > 0 else "-"
             dhcp_range = f"{zone.dhcp_start}-{zone.dhcp_end}" if zone.is_enabled else "-"
 
@@ -519,8 +579,9 @@ class ZoneManager:
         print("-" * 80)
         enabled = len(self.get_enabled_zones())
         disabled = len(self.get_disabled_zones())
+        manual = len(self.get_manual_zones())
         vlan_zones = len(self.get_vlan_zones())
-        print(f"Total: {len(self.zones)} zones, {enabled} enabled, {disabled} disabled, {vlan_zones} with VLANs")
+        print(f"Total: {len(self.zones)} zones, {enabled} enabled, {disabled} disabled, {manual} manual, {vlan_zones} with VLANs")
 
 
 def main():

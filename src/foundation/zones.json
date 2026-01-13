@@ -1,7 +1,7 @@
 {
     "tappaas": {
         "type": "Management",
-        "state": "Manadatory",
+        "state": "Manual",
         "typeId": "0",
         "subId": "0",
         "vlantag": 0,
