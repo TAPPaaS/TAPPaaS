@@ -4,9 +4,12 @@
 This module reads zone definitions from zones.json and configures:
 - VLANs for each enabled zone
 - DHCP ranges for each enabled zone (configurable via DHCP-start/DHCP-end, defaults: .50 to .250)
+- Firewall rules based on access-to field (optional, use --firewall-rules)
 
 Usage:
     zone-manager --zones-file /path/to/zones.json --execute
+    zone-manager --zones-file /path/to/zones.json --execute --firewall-rules
+    zone-manager --firewall-rules-only --execute
 """
 
 import argparse
@@ -19,6 +22,7 @@ from pathlib import Path
 
 from .config import Config
 from .dhcp_manager import DhcpManager, DhcpRange
+from .firewall_manager import FirewallManager, FirewallRule, RuleAction
 from .vlan_manager import Vlan, VlanManager
 
 
@@ -195,6 +199,87 @@ class ZoneManager:
     def get_disabled_dhcp_zones(self) -> list[Zone]:
         """Get disabled zones that have DHCP (tag > 0, excludes manual and untagged zones)."""
         return [z for z in self.get_disabled_zones() if z.needs_vlan]
+
+    def get_firewall_zones(self) -> list[Zone]:
+        """Get enabled zones that need firewall rules (have access-to defined)."""
+        return [z for z in self.get_enabled_zones() if z.access_to]
+
+    def get_zone_by_name(self, name: str) -> Zone | None:
+        """Find a zone by its name.
+
+        Args:
+            name: Zone name to search for
+
+        Returns:
+            Zone if found, None otherwise
+        """
+        for zone in self.zones:
+            if zone.name.lower() == name.lower():
+                return zone
+        return None
+
+    def get_zone_interface(self, zone: Zone) -> str | None:
+        """Get the OPNsense interface identifier for a zone.
+
+        For VLAN zones, this looks up the assigned interface.
+        For untagged zones, returns the bridge name (lan/wan).
+
+        Args:
+            zone: Zone to get interface for
+
+        Returns:
+            Interface identifier (e.g., 'lan', 'srv', 'opt1') or None if not found
+        """
+        if zone.needs_vlan:
+            # For VLAN zones, find the assigned interface by zone name
+            with VlanManager(self.config) as vlan_mgr:
+                assigned = vlan_mgr.get_assigned_vlans()
+                for v in assigned:
+                    # Check by VLAN tag or by interface description/name
+                    if v["vlan_tag"] == str(zone.vlan_tag):
+                        return v["identifier"]
+                    # Also check if the interface name matches the zone name
+                    if v.get("description", "").lower() == zone.name.lower():
+                        return v["identifier"]
+            return None
+        else:
+            # For untagged zones, use the bridge directly
+            return zone.bridge.lower()
+
+    def get_destination_for_target(self, target: str) -> str:
+        """Get the destination network for a firewall rule target.
+
+        Args:
+            target: Target zone name, 'internet', or 'all'
+
+        Returns:
+            Destination network string for firewall rule
+        """
+        if target.lower() == "all":
+            return "any"
+        elif target.lower() == "internet":
+            # For internet access, destination is 'any' but rule is on WAN direction
+            # Actually, for outbound internet access, we allow to 'any' from the zone
+            return "any"
+        else:
+            # Look up the zone's network
+            target_zone = self.get_zone_by_name(target)
+            if target_zone:
+                return target_zone.ip_network
+            # If zone not found, return the name as-is (might be an alias)
+            return target
+
+    def get_firewall_rule_description(self, source_zone: Zone, target: str) -> str:
+        """Generate a standard description for a zone access rule.
+
+        Args:
+            source_zone: Source zone
+            target: Target zone name or special value
+
+        Returns:
+            Rule description string
+        """
+        return f"Zone {source_zone.name} -> {target}"
 
     def configure_vlans(
         self,
@@ -471,25 +556,151 @@ class ZoneManager:
 
         return results
 
+    def configure_firewall_rules(self, check_mode: bool = True) -> dict[str, dict]:
+        """Configure firewall rules based on zone access-to definitions.
+
+        Creates pass rules for each zone allowing traffic to destinations
+        specified in the access-to field. Special values:
+        - 'all': Creates a wildcard pass rule (destination: any)
+        - 'internet': Allows traffic to any destination (outbound internet)
+        - <zone_name>: Allows traffic to that zone's network
+
+        Args:
+            check_mode: If True, don't make changes (dry-run)
+
+        Returns:
+            Dictionary mapping zone names to results
+        """
+        results = {}
+        firewall_zones = self.get_firewall_zones()
+        manual_zones = self.get_manual_zones()
+
+        print(f"\nConfiguring Firewall Rules...")
+        print(f"  Zones with access-to rules: {len(firewall_zones)}")
+        print(f"  Manual zones (skipped): {len(manual_zones)}")
+
+        # Count total rules to be created
+        total_rules = sum(len(z.access_to) for z in firewall_zones)
+        print(f"  Total rules to create: {total_rules}")
+
+        with FirewallManager(self.config) as manager:
+            # Get existing rules for comparison
+            existing_rules = manager.list_rules()
+            existing_by_desc = {r.description: r for r in existing_rules}
+
+            for zone in firewall_zones:
+                zone_results = []
+                zone_interface = self.get_zone_interface(zone)
+
+                if not zone_interface:
+                    print(f"  {zone.name}: Cannot find interface (skipping)")
+                    results[zone.name] = {
+                        "status": "error",
+                        "error": "Interface not found",
+                        "rules": [],
+                    }
+                    continue
+
+                print(f"  {zone.name} (interface: {zone_interface}):")
+
+                for target in zone.access_to:
+                    rule_desc = self.get_firewall_rule_description(zone, target)
+                    destination = self.get_destination_for_target(target)
+
+                    # Check if rule already exists
+                    existing = existing_by_desc.get(rule_desc)
+                    if existing:
+                        print(f"    -> {target}: Rule exists (skipping)")
+                        zone_results.append({
+                            "target": target,
+                            "status": "exists",
+                            "destination": destination,
+                        })
+                        continue
+
+                    print(f"    -> {target}: Creating pass rule to {destination}")
+
+                    if check_mode:
+                        zone_results.append({
+                            "target": target,
+                            "status": "would_create",
+                            "destination": destination,
+                        })
+                    else:
+                        try:
+                            # Create the firewall rule
+                            rule = FirewallRule(
+                                description=rule_desc,
+                                action=RuleAction.PASS,
+                                interface=zone_interface,
+                                source_net=zone.ip_network,
+                                destination_net=destination,
+                                log=True,
+                            )
+                            # Don't apply after each rule, batch them
+                            result = manager.create_rule(rule, apply=False)
+                            zone_results.append({
+                                "target": target,
+                                "status": "created",
+                                "destination": destination,
+                                "result": result,
+                            })
+                        except Exception as e:
+                            zone_results.append({
+                                "target": target,
+                                "status": "error",
+                                "error": str(e),
+                            })
+                            print(f"      Error: {e}")
+
+                results[zone.name] = {
+                    "status": "processed",
+                    "interface": zone_interface,
+                    "rules": zone_results,
+                }
+
+            # Apply all changes at once if not in check mode
+            if not check_mode:
+                print("\n  Applying firewall changes...")
+                try:
+                    manager.apply_changes()
+                    print("  Changes applied successfully")
+                except Exception as e:
+                    print(f"  Error applying changes: {e}")
+
+            # Report on manual zones
+            for zone in manual_zones:
+                if zone.access_to:
+                    print(f"  {zone.name}: Firewall rules skipped (manual zone)")
+                    results[zone.name] = {
+                        "status": "skipped_manual",
+                        "access_to": zone.access_to,
+                    }
+
+        return results
+
     def configure_all(
         self,
         check_mode: bool = True,
         assign_vlans: bool = True,
+        firewall_rules: bool = False,
     ) -> dict:
-        """Configure both VLANs and DHCP for all zones.
+        """Configure VLANs, DHCP, and optionally firewall rules for all zones.
 
         VLANs are always configured before DHCP ranges to ensure
         the network infrastructure is in place.
+        Firewall rules are configured last, after all zones are created.
         By default, VLANs are assigned to OPNsense interfaces.
 
         Args:
             check_mode: If True, don't make changes (dry-run)
             assign_vlans: If True (default), also assign VLANs to interfaces
+            firewall_rules: If True, also configure firewall rules based on access-to
 
         Returns:
-            Dictionary with 'vlans' and 'dhcp' results
+            Dictionary with 'vlans', 'dhcp', and optionally 'firewall' results
         """
-        # Configure VLANs first, then DHCP
+        # Configure VLANs first, then DHCP, then firewall rules
         print("\n" + "=" * 60)
         print("Step 1: Configuring VLANs")
         print("=" * 60)
@@ -500,10 +711,19 @@ class ZoneManager:
         print("=" * 60)
         dhcp_results = self.configure_dhcp(check_mode=check_mode)
 
-        return {
+        result = {
             "vlans": vlan_results,
             "dhcp": dhcp_results,
         }
+
+        if firewall_rules:
+            print("\n" + "=" * 60)
+            print("Step 3: Configuring Firewall Rules")
+            print("=" * 60)
+            firewall_results = self.configure_firewall_rules(check_mode=check_mode)
+            result["firewall"] = firewall_results
+
+        return result
 
     def list_current_config(self) -> dict:
         """List current VLAN and DHCP configuration from OPNsense.
@@ -633,12 +853,22 @@ def main():
     parser.add_argument(
         "--vlans-only",
         action="store_true",
-        help="Only configure VLANs, skip DHCP",
+        help="Only configure VLANs, skip DHCP and firewall rules",
     )
     parser.add_argument(
         "--dhcp-only",
         action="store_true",
-        help="Only configure DHCP, skip VLANs",
+        help="Only configure DHCP, skip VLANs and firewall rules",
+    )
+    parser.add_argument(
+        "--firewall-rules",
+        action="store_true",
+        help="Configure firewall rules based on access-to field in zones.json",
+    )
+    parser.add_argument(
+        "--firewall-rules-only",
+        action="store_true",
+        help="Only configure firewall rules, skip VLANs and DHCP",
     )
     parser.add_argument(
         "--summary",
@@ -731,8 +961,14 @@ def main():
         results = {"vlans": manager.configure_vlans(check_mode=check_mode, assign=assign_vlans)}
     elif args.dhcp_only:
         results = {"dhcp": manager.configure_dhcp(check_mode=check_mode)}
+    elif args.firewall_rules_only:
+        results = {"firewall": manager.configure_firewall_rules(check_mode=check_mode)}
     else:
-        results = manager.configure_all(check_mode=check_mode, assign_vlans=assign_vlans)
+        results = manager.configure_all(
+            check_mode=check_mode,
+            assign_vlans=assign_vlans,
+            firewall_rules=args.firewall_rules,
+        )
 
     # Print results summary
     print("\n" + "=" * 60)
@@ -751,6 +987,18 @@ def main():
             status = result.get("status", "unknown")
             range_info = result.get("range", "")
             print(f"  {zone_name}: {status}" + (f" ({range_info})" if range_info else ""))
+
+    if "firewall" in results:
+        print(f"\nFirewall Rules: {len(results['firewall'])} zones processed")
+        for zone_name, result in results["firewall"].items():
+            status = result.get("status", "unknown")
+            rules = result.get("rules", [])
+            if rules:
+                created = sum(1 for r in rules if r.get("status") in ("created", "would_create"))
+                exists = sum(1 for r in rules if r.get("status") == "exists")
+                print(f"  {zone_name}: {len(rules)} rules ({created} new, {exists} existing)")
+            else:
+                print(f"  {zone_name}: {status}")
 
     # Show current config after changes (if not in check mode)
     if not check_mode:

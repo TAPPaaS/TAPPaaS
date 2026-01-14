@@ -79,5 +79,13 @@ echo -e "you will be asked for the root password of the firewall node $FIREWALL_
 scp opnsense-patch/AssignSettingsController.php root@"$FIREWALL_FQDN":/usr/local/opnsense/mvc/app/controllers/OPNsense/Interfaces/Api/AssignSettingsController.php
 cd ..
 
+# Build the update-tappaas project
+echo -en "\nBuilding the update-tappaas project"
+cd update-tappaas
+stdbuf -oL nix-build -A default default.nix 2>&1 | tee /tmp/update-tappaas-build.log | while IFS= read -r line; do printf "."; done
+rm /home/tappaas/bin/update-tappaas 2>/dev/null || true
+ln -s /home/tappaas/TAPPaaS/src/foundation/30-tappaas-cicd/update-tappaas/result/bin/update-tappaas /home/tappaas/bin/update-tappaas
+echo -e "\nupdate-tappaas binary installed to /home/tappaas/bin/update-tappaas"
+cd ..
 
 echo -e "\nTAPPaaS-CICD installation completed successfully."

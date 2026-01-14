@@ -1,0 +1,16 @@
+[build-system]
+requires = ["setuptools >= 61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "update-tappaas"
+version = "0.1.0"
+description = "TAPPaaS update utility"
+requires-python = ">=3.10"
+license = "MIT"
+
+[project.scripts]
+update-tappaas = "update_tappaas.main:main"
+
+[tool.setuptools.packages.find]
+where = ["."]

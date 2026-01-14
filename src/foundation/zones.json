@@ -7,7 +7,7 @@
         "vlantag": 0,
         "ip": "10.0.0.0/24",
         "bridge": "lan",
-        "access-to": ["internet", "dmz", "srv", "client", "guest", "iot"],
+        "access-to": ["all"],
         "pinhole-allowed-from": [],
         "description": "Internal self management network, untagged traffic"
     },

@@ -33,7 +33,11 @@ as part of installing the firewall and the tappaas-cicd modules the administrato
 - "ip": the ip range associated with the zone
     - can be computed as 10.typeId.subId.0/24
 - "bridge": the interface the zone is associated with (the trunk forthe vlan), typically lan or wan
-- "access-to": a list of zones that this zone can connect to. used to validate firewall rules
+- "access-to": a list of zones that this zone can connect to. When zone-manager is run with --firewall-rules, pass rules are created for each target.
+    - Special values:
+        - "internet": allows traffic to any destination (outbound internet access)
+        - "all": creates a wildcard pass rule (destination: any)
+    - Zone names: allows traffic to that zone's network (e.g., "srv", "dmz")
 - "pinhole-allowed-from": a list of zones that would allow to have a connection on to a dedicated port inside this zone. It is used to check module specific firewall rules to be validated against zone policies
 - "DHCP-start": (optional) the starting offset for DHCP range within the subnet. Default: 50 (e.g., .50)
 - "DHCP-end": (optional) the ending offset for DHCP range within the subnet. Default: 250 (e.g., .250)
