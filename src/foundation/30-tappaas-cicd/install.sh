@@ -85,7 +85,9 @@ cd update-tappaas
 stdbuf -oL nix-build -A default default.nix 2>&1 | tee /tmp/update-tappaas-build.log | while IFS= read -r line; do printf "."; done
 rm /home/tappaas/bin/update-tappaas 2>/dev/null || true
 ln -s /home/tappaas/TAPPaaS/src/foundation/30-tappaas-cicd/update-tappaas/result/bin/update-tappaas /home/tappaas/bin/update-tappaas
-echo -e "\nupdate-tappaas binary installed to /home/tappaas/bin/update-tappaas"
+rm /home/tappaas/bin/update-node 2>/dev/null || true
+ln -s /home/tappaas/TAPPaaS/src/foundation/30-tappaas-cicd/update-tappaas/result/bin/update-node /home/tappaas/bin/update-node
+echo -e "\nupdate-tappaas and update-node binaries installed to /home/tappaas/bin/"
 cd ..
 
 echo -e "\nTAPPaaS-CICD installation completed successfully."

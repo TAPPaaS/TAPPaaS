@@ -8,8 +8,21 @@
         "domain": "CHANGE-mytappaas.dev",
         "email": "CHANGE-tappaas@mytappaas.dev",
         "nodeCount": 3,
-        "nodeNamePrefix": "tappaas",
         "upstreamGit": "github.com/TAPPaaS/TAPPaaS",
         "branch": "main"
-    }
+    },
+    "tappaas-nodes": [
+        {
+            "hostname": "tappaas1",
+            "ip": "192.168.1.10"
+        },
+        {
+            "hostname": "tappaas2",
+            "ip": "192.168.1.11"
+        },
+        {
+            "hostname": "tappaas3",
+            "ip": "192.168.1.12"
+        }
+    ]
 }

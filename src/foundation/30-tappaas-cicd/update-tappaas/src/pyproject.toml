@@ -11,6 +11,7 @@ license = "MIT"
 
 [project.scripts]
 update-tappaas = "update_tappaas.main:main"
+update-node = "update_tappaas.update_node:main"
 
 [tool.setuptools.packages.find]
 where = ["."]
