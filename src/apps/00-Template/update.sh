@@ -7,7 +7,7 @@
 
 set -e
 
-. /home/tappaas/bin/common-update-routines.sh
+. /home/tappaas/bin/common-install-routines.sh
 
 VMNAME="$(get_config_value 'vmname' "$1")"
 NODE="$(get_config_value 'node' 'tappaas1')"

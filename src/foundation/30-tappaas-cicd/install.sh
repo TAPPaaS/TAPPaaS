@@ -51,43 +51,20 @@ while read -r node; do
 done < <(ssh root@"$NODE1_FQDN" pvesh get /cluster/resources --type node --output-format json | jq --raw-output ".[].node" )
 
 # create tappaas binary director and config directory
-mkdir -p /home/tappaas/bin
 mkdir -p /home/tappaas/config
+cp /home/tappaas/TAPPaaS/src/foundation/*.json /home/tappaas/config/
+cp ../*/*.json /home/tappaas/config/
+mkdir -p /home/tappaas/bin
 cp scripts/*.sh /home/tappaas/bin/
 chmod +x /home/tappaas/bin/*.sh
-cp ../*/*.json /home/tappaas/config/
 # copy the potentially modified configuration.json and vlans.json files from tappaas1
 scp root@"$NODE1_FQDN":/root/tappaas/*.json /home/tappaas/config/
 
 # copy the jsons to all nodes
 /home/tappaas/bin/copy-jsons.sh 
 
-# Build the opnsense-controller project (formerly opnsense-scripts)
-echo -en "\nBuilding the opnsense-controller project"
-cd opnsense-controller
-stdbuf -oL nix-build -A default default.nix 2>&1 | tee /tmp/opnsense-controller-build.log | while IFS= read -r line; do printf "."; done
-rm /home/tappaas/bin/opnsense-controller 2>/dev/null || true
-ln -s /home/tappaas/TAPPaaS/src/foundation/30-tappaas-cicd/opnsense-controller/result/bin/opnsense-controller /home/tappaas/bin/opnsense-controller
-rm /home/tappaas/bin/zone-manager 2>/dev/null || true
-ln -s /home/tappaas/TAPPaaS/src/foundation/30-tappaas-cicd/opnsense-controller/result/bin/zone-manager /home/tappaas/bin/zone-manager
-# create a default credentials file
-cp credentials.example.txt ~/.opnsense-credentials.txt
-chmod 600 ~/.opnsense-credentials.txt
-echo -e "\nopnsense-controller binary installed to /home/tappaas/bin/opnsense-controller"
-echo -e "Copying the AssignSettingsController.php to the OPNsense controller node..."
-echo -e "you will be asked for the root password of the firewall node $FIREWALL_FQDN"
-scp opnsense-patch/AssignSettingsController.php root@"$FIREWALL_FQDN":/usr/local/opnsense/mvc/app/controllers/OPNsense/Interfaces/Api/AssignSettingsController.php
-cd ..
 
-# Build the update-tappaas project
-echo -en "\nBuilding the update-tappaas project"
-cd update-tappaas
-stdbuf -oL nix-build -A default default.nix 2>&1 | tee /tmp/update-tappaas-build.log | while IFS= read -r line; do printf "."; done
-rm /home/tappaas/bin/update-tappaas 2>/dev/null || true
-ln -s /home/tappaas/TAPPaaS/src/foundation/30-tappaas-cicd/update-tappaas/result/bin/update-tappaas /home/tappaas/bin/update-tappaas
-rm /home/tappaas/bin/update-node 2>/dev/null || true
-ln -s /home/tappaas/TAPPaaS/src/foundation/30-tappaas-cicd/update-tappaas/result/bin/update-node /home/tappaas/bin/update-node
-echo -e "\nupdate-tappaas and update-node binaries installed to /home/tappaas/bin/"
-cd ..
+# run the update script as all update actions is also needed at install time
+. ./update.sh
 
 echo -e "\nTAPPaaS-CICD installation completed successfully."
