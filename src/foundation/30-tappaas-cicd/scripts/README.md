@@ -93,7 +93,7 @@ update-cron.sh
 
 ### update-json.sh
 
-Checks if a module's JSON configuration file needs updating.
+Updates a module's JSON configuration file if the source differs from the installed version.
 
 **Usage:**
 ```bash
@@ -101,7 +101,7 @@ update-json.sh <module-name>
 ```
 
 **Returns:**
-- Exit 0 (true) - JSON needs updating
+- Exit 0 (true) - JSON was updated (source copied to installed)
 - Exit 1 (false) - No update needed or user customizations exist
 
 **Logic:**
@@ -112,14 +112,13 @@ update-json.sh <module-name>
 
 2. If no `.orig` file exists:
    - Compares source `./<module>.json` with `/home/tappaas/config/<module>.json`
-   - Returns true if files differ (update needed)
-   - Returns false if files are identical
+   - If files differ: copies source to installed location and returns true
+   - If files are identical: returns false
 
 **Example usage in scripts:**
 ```bash
 if update-json.sh mymodule; then
-    echo "Updating mymodule.json..."
-    cp mymodule.json /home/tappaas/config/
+    echo "mymodule.json was updated"
 fi
 ```
 

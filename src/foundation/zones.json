@@ -35,7 +35,7 @@
         "pinhole-allowed-from": ["dmz"],
         "description": "Service network, this is where TAPPaaS Business services are placed"
     },
-    "home": {
+    "dev-srv": {
         "type": "Service",
         "state": "Inactive",
         "typeId": "2",
@@ -45,7 +45,7 @@
         "bridge": "lan",
         "access-to": ["internet"],
         "pinhole-allowed-from": ["dmz"],
-        "description": "Service network, this is where TAPPaaS home services are placed"
+        "description": "Zone for development services"
     },
     "private": {
         "type": "Client",

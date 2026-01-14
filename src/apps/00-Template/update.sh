@@ -7,9 +7,12 @@
 
 set -e
 
+if update-json.sh $1; then
+    # TODO update the VM and firewall/proxy config based on any changes
+fi
 . /home/tappaas/bin/common-install-routines.sh
 
-VMNAME="$(get_config_value 'vmname' "$1")"
+VMNAME="$(get_config_value 'vmname' '$1')"
 NODE="$(get_config_value 'node' 'tappaas1')"
 ZONE0NAME="$(get_config_value 'zone0' 'srv')"
 

@@ -22,6 +22,18 @@ cd src/foundation/30-tappaas-cicd || { echo "TAPPaaS-CICD directory not found!";
 cp scripts/*.sh /home/tappaas/bin/
 chmod +x /home/tappaas/bin/*.sh
 
+# Update the configuration.json, zones.json and tappaas-cicd.json if there are changes
+echo -e "\nChecking for updates to mymodule.json..."
+cd ..
+update-json.sh configuration
+if update-json.sh zones; then
+    /home/tappaas/bin/update-zones.sh --file /home/tappaas/config/zones.json
+fi
+cd 30-tappaas-cicd
+if update-json.sh tappaas-cicd; then
+    # TODO update the VM and firewall/proxy config based on any changes
+fi
+
 # Build the opnsense-controller project (formerly opnsense-scripts)
 echo -en "\nBuilding the opnsense-controller project"
 cd opnsense-controller
