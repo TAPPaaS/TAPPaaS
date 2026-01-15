@@ -11,7 +11,6 @@
   - ...
 use the same root password as the tappaas1 node
 
-
 ## Install proxmox PVE
 
 Use the same image on usb stick as with node 1
@@ -36,10 +35,9 @@ Rename the network bridge from "vmbr0" to "lan" using the command line/console o
 If this node is to be used as fall over node for the firewall then create a "wan" bridge attached to a secondary physical ethernet port
 (this can be done from the gui of the tappaas node)
 
-
 ## Repeat this for each additional node in the cluster
 
-# Notes
+## Notes
 
 If you want to remove a node from the cluster, then on console of one of the other nodes in the cluster:
 

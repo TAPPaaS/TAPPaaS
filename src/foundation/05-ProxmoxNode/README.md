@@ -52,21 +52,23 @@ chmod +x install-PVE.sh
 
 If this is the first node then create the TAPPaaS cluster (even if you only run one machine in TAPPaaS you can create the cluster to make it ready for expansion)
 In the console of tappaas1:
-```
+
+```bash
 pvecm create TAPPaaS
 ```
 
 If this is not the first node (and note that adding nodes after the first one should be done AFTER the firewall is configured)
 Join the node to the TAPPaaS cluster:
+
 - on the tappass1 node GUI: go to datacenter and click Cluster: click Join information, and copy information
 - on the new tappaas node GUI: go to datacenter and click Cluster and then join cluster: paste information and enter root password for tappaas1
-
 
 ## Add the storage tanks (that is adding data disks to the node configuration)
 
 It is important to create the data "tanks" AFTER the cluster is created, or PVE will have problems recognizing them when joining the cluster (PVE bug?)
 
 Create the "tanks" as zfs pools (normally, as a minimum, you will create a tanka1). 
+
 - Use the GUI of the newly installed node (web browser to <ip of node>:8006)
   - under the tappaas1 node in the datacenter panel go to the disk section. 
   - take note of the disks you have
@@ -87,13 +89,13 @@ if this is the first node then modify it to reflect your local installation
 
 If this is a secondary node then copy what you modified on tappaas1. On the new nodes console:
 (note that if you have not modified the configuration.json, then the original github version will already be on the new node and this step can be skipped)
-```
+
+```bash
 cd
 scp tappaas1.mgmt.internal:/root/tappaas/configuration.json tappaas
 scp tappaas1.mgmt.internal:/root/tappaas/zones.json tappaas
 ```
 
 ## After reboot:
+
 - check that it all looks fine!! (TODO automate check setup)
-
-

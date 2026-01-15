@@ -1,7 +1,5 @@
+# TAPPaaS code
 
+TAPPaaS is a set of interlinked foundational infrastructure modules and a set of platform and service modules that are all bould and configured to work together
 
-"bootstrap" is instruction and code for bootstrapping first TAPPaaS node with a working copy of the CI/CD pipelines
-
-"modules" contain the OpenTufu scripts, Ansible playbooks and CI/CD pipelines for each TAPPaaS service
-
-"configuration" contain the overall configuration files. you want to branch and edit this for each installation
+To install TAPPaaS follow the README.md guides in the modules, starting with installing the foundation modules as described in [README](./foundation/README.md)

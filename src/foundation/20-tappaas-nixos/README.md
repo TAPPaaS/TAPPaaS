@@ -11,36 +11,37 @@ Setup runs in these macro steps:
 
 run the following script as root from the proxmox console
 
-```
+```bash
 BRANCH="main"
 curl -fsSL  https://raw.githubusercontent.com/TAPPaaS/TAPPaaS/$BRANCH/src/foundation/20-tappaas-nixos/tappaas-nixos.json >~/tappaas/tappaas-nixos.json
 ~/tappaas/Create-TAPPaaS-VM.sh tappaas-nixos
 ```
 
 in the console of VM 8080 install nixos
-  - use the username "tappaas", give it a strong password, preferably same pwd as root on the tappaas node.
-  - for graphical desktop select: no desktop
-  - allow use of unfree software
-  - select erase disk and no swap in disk partition menu
-  - keep 'encrypt disk' unselected
-  - review summary and select install on lower right bottom (maximize window)
-  - start the install it will take some time
-    - it may appear to be stalled at 46% for minutes - be patient!
-    - toggle log to see detailed progress
-  - wait for the message: "all done"
-  - keep 'Restart now' UNchecked
-  - select Done at lower right bottom to finish installation without reboot
-  - Shutdown the VM8080 by selecting and confirm 'VM8080 (tappaas-nixos) - Shutdown' in PVE GUI
-  - in PVE console, select Hardware -> CD/DVD Drive (IDE3)
-    - Edit --> select 'Do not use any media' to detach the iso
-  - select >_ Console, start the VM
-  - when the VM is booted:
-    - nixos login: tappaas
-    - Password: the password you created in step 1 (tappaas node root pwd?!] 
+
+- use the username "tappaas", give it a strong password, preferably same pwd as root on the tappaas node.
+- for graphical desktop select: no desktop
+- allow use of unfree software
+- select erase disk and no swap in disk partition menu
+- keep 'encrypt disk' unselected
+- review summary and select install on lower right bottom (maximize window)
+- start the install it will take some time
+  - it may appear to be stalled at 46% for minutes - be patient!
+  - toggle log to see detailed progress
+- wait for the message: "all done"
+- keep 'Restart now' UNchecked
+- select Done at lower right bottom to finish installation without reboot
+- Shutdown the VM8080 by selecting and confirm 'VM8080 (tappaas-nixos) - Shutdown' in PVE GUI
+- in PVE console, select Hardware -> CD/DVD Drive (IDE3)
+  - Edit --> select 'Do not use any media' to detach the iso
+- select >_ Console, start the VM
+- when the VM is booted:
+  - nixos login: tappaas
+  - Password: the password you created in step 1 (tappaas node root pwd?!] 
 
 In the console of the VM do the following (and sorry, nixos do not support cut and paste and ssh ot of the box, so some typing is required)
 
-```
+```bash
 BRANCH="main"
 sudo curl -fsSL  https://raw.githubusercontent.com/TAPPaaS/TAPPaaS/$BRANCH/src/foundation/20-tappaas-nixos/tappaas-nixos.nix  >tappaas-nixos.nix
 sudo cp tappaas-nixos.nix /etc/nixos/configuration.nix
@@ -58,7 +59,7 @@ PWD = the password you created in step 1 (same as tappaas node root pwd?!]
 
 you should see: [root@tappaas-nixos:~] 
 
-```
+```bash
 sudo sh -eux <<'CLEAN'
 # Repeat safe cleanup (ensure minimal store size)
 for u in $(awk -F: '$3>=1000 && $3<60000 {print $1}' /etc/passwd); do
@@ -96,10 +97,10 @@ CLEAN
 [optional] reboot the VM and test it still work
 
 then from the Proxmox tappaas console do a template generation from the VM. 
-```
+
+```bash
 qm stop 8080
 qm template 8080
 ```
+
 or do it from the proxmox gui
-
-

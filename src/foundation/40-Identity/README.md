@@ -11,4 +11,4 @@ do the following steps
 - run the install.sh script from the tappaas-cicd command line to create the identity VM
 - create firewall rule to allow access from caddy to identity.internal TCP port 80 and 8080
 
-#Test the identity and secrets solution
+Test the identity and secrets solution
