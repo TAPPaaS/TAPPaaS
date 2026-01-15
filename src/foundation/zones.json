@@ -1,5 +1,5 @@
 {
-    "tappaas": {
+    "mgmt": {
         "type": "Management",
         "state": "Manual",
         "typeId": "0",
