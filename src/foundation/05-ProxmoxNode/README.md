@@ -44,7 +44,7 @@ Run the post install script (if you are not using the "main" branch for the inst
 BRANCH="main"
 curl -fsSL https://raw.githubusercontent.com/TAPPaaS/TAPPaaS/$BRANCH/src/foundation/05-ProxmoxNode/install.sh >install-PVE.sh
 chmod +x install-PVE.sh
-./install_PVE.sh $BRANCH
+./install-PVE.sh $BRANCH
 
 ```
 
@@ -66,7 +66,7 @@ Join the node to the TAPPaaS cluster:
 
 It is important to create the data "tanks" AFTER the cluster is created, or PVE will have problems recognizing them when joining the cluster (PVE bug?)
 
-Create the "tanks" as zfs pools (normally you will as a minimum is a tanka1). 
+Create the "tanks" as zfs pools (normally, as a minimum, you will create a tanka1). 
 - Use the GUI of the newly installed node (web browser to <ip of node>:8006)
   - under the tappaas1 node in the datacenter panel go to the disk section. 
   - take note of the disks you have
