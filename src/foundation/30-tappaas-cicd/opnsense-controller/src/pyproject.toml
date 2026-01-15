@@ -1,0 +1,21 @@
+[build-system]
+requires = ["setuptools >= 61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "opnsense-controller"
+version = "0.1.0"
+description = "OPNsense controller for TAPPaaS using OPNsense API client"
+readme = "README.md"
+requires-python = ">=3.10"
+license = "MIT"
+dependencies = [
+    "oxl-opnsense-client",
+]
+
+[project.scripts]
+opnsense-controller = "opnsense_controller.main:main"
+zone-manager = "opnsense_controller.zone_manager:main"
+
+[tool.setuptools.packages.find]
+where = ["."]

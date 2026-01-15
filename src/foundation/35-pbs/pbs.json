@@ -4,6 +4,7 @@
     "vmtag": "TAPPaaS,Foundation",
     "vmname": "pbs",
     "storage": "tankc1",
+    "zone0": "mgmt",
     "imageType": "apt",
     "image": "pbs",
     "imageLocation": "http://download.proxmox.com/debian/pbs",

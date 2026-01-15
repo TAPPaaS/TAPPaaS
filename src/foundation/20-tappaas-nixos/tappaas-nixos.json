@@ -11,6 +11,6 @@
     "image": "latest-nixos-graphical-x86_64-linux.iso",
     "imageLocation": "https://channels.nixos.org/nixos-25.05/",
     "bridge0": "lan",
-    "vlantag0": 0,
+    "zone0": "mgmt",
     "description": "The TAPPaaS NixOS VM Template"  
 }

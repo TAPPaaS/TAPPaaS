@@ -8,7 +8,7 @@ the basic macro steps:
 2. install a basic OPNSense in a VM
 3. swap cables and default gateway in proxmox after basic testing
 4. swap firewall if relevant
-5. test
+5. set up ssh and test
 6. setup reverse proxy
 7. setup VLANS and firewall rules
 8. tests
@@ -81,9 +81,11 @@ where Wan is the only port on the Proxmox box that is used by the hypervisor
 
 
 now create the OPNSense VM: from the command prompt/console of tappaas1:
+(Note if you are not using the main branch then replace "main" with branch name in the command below)
 
 ```
-curl -fsSL  https://raw.githubusercontent.com/TAPPaaS/TAPPaaS/main/src/foundation/10-firewall/firewall.json > /root/tappaas/firewall.json
+BRANCH="main"
+curl -fsSL  https://raw.githubusercontent.com/TAPPaaS/TAPPaaS/$BRANCH/src/foundation/10-firewall/firewall.json > /root/tappaas/firewall.json
 ~/tappaas/Create-TAPPaaS-VM.sh firewall
 ```
 
@@ -95,7 +97,7 @@ change the root password; option 3
 
 change lan ip; option 2:
   - followed by 1 for Lan, and N for not using DHCP
-  - use ip range to 10.0.0.1/24
+  - use ip 10.0.0.1, and  range: 24
   - no IPv6 config (TODO, enable IPv6)
   - enable DHCP, with a range of 10.0.0.100 - 10.0.0.254
   - default "N" answers to the rest
@@ -113,25 +115,35 @@ From: [OPNsense DHCP with DNS](https://docs.opnsense.org/manual/dnsmasq.html#dhc
 
 - Enable services -> Unbound DNS - general and ensure it listen to port 53
 - Enable services -> dnsmask DNS ->general
+  - Interface LAN
   - Listen port: use port 53053
-  - Do not forward to system defined DNS servers
-  - DHCP fqdn
-  - dhcp default domain: internal
-  - DHCP register firewall rules
+  - DNS Query Forwarding
+    - enable: Require doamin, Do not forward to system ..., Do not forward private reverse ...
+  - DHCP: 
+    - enable: DHCP fqdn, DHCP authoritative, DHCP register firewall rules
+    - DHCP default domain: internal
   - Click Apply 
-- register dnsmask with unbound DNS for lan.internal domain
+- register dnsmask with unbound DNS for internal domain
   - Service -> Unbound DNS -> Query Forwarding
-    - register lan.internal to query 127.0.0.1 port 53053
-    - register 10.in-addr.arpa to query 127.0.0.1 port 53053
+    - register "internal" to query 127.0.0.1 port 53053
+    - register "10.in-addr.arpa" to query 127.0.0.1 port 53053
     - press apply
     - 
+- edit the DHCP doman for LAN interface
+  - go to Services -> Dnsmasq & DHCP -> DHCP ranges
+    - edit LAN interface and change domain to mgmt.internal
 
-finally register the static hosts on the internal network: tappaas1
+
+finally register the static hosts on the internal network: firewall and tappaas1
 
 - go to Service -> Dnsmasq DNS & DHCP -> Hosts
-  - add a host:
+  - add host:
+    - name firewall
+    - domain: mgmt.internal
+    - ip: 10.0.0.1
+  - add host:
     - name tappaas1
-    - domain: internal
+    - domain: mgmt.internal
     - ip: 10.0.0.10
 
 Check that you can lookup you your local machines using .internal domain
@@ -180,7 +192,17 @@ There are 3 scenarios for this step:
   - see notes above on Wifi and IPv6
 
 
-# 5. Test
+# 5. setup ssh and Test
+
+in the OPNsense gui: got to System->Settings->Administration
+- under secure shell do:
+  - enable secure shell
+  - permit root user login
+  - (Do NOT allow password login)
+  - Listen Interafce is LAN
+- click SAVE
+
+## test
 
 # 6. Configure Reverse Proxy
 
@@ -201,14 +223,9 @@ note as we create VLANs we need to create firewall rules as well
 
 # 7. VLAN and Firewalls
 
-we are creating 4 VLANS: See [Networkdesign](../../../docs/Architecture/NetworkDesign.md)
+we are creating VLANS: See [Networkdesign](../../../docs/Architecture/NetworkDesign.md)
 
-| Segment         | VLAN | IPv4 Subnet  | IPv6 Subnet    | Firewall  notes  |
-|-----------------|------|--------------|----------------|-------------|
-| DMZ             | 100  | 10.1.0.0/24  | \<ipv6-prefix\>:100::/64 | unlimited access TO the Internet/WAN. Per service create pinhole |
-| Service         | 200  | 10.2.0.0/24  | \<ipv6-prefix\>:200::/64 | This is where services for consumption lives |
-| Client          | 300  | 10.3.0.0/24  | \<ipv6-prefix\>:300::/64 | unconnected client network |
-| IoT             | 400  | 10.4.0.0/24  | \<ipv6-prefix\>:400::/64 | unsecure devices and systems |
+
 
 TODO: create automation script, see: https://docs.opnsense.org/development/api/core/firewall.html, https://github.com/andreas-stuerz/opn-cli
 

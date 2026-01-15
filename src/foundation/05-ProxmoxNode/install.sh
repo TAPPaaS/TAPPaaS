@@ -91,18 +91,13 @@ if ! pveversion | grep -Eq "pve-manager/9\.[0-4](\.[0-9]+)*"; then
   exit
 fi
 
-msg_info "Checking for \"tanka1\" zfspool"
-if ! pvesm status -content images | grep zfspool | grep -q tanka1; then
-  msg_ok "did not find a \"tanka1\" zfspool. This system will likely only work as a backup server"
-fi
-msg_ok "Found \"tanka1\" zfspool"
-
-msg_info "Checking for \"tankb1\" zfspool"
-if ! pvesm status -content images | grep zfspool | grep -q tankb1 ; then
-  msg_ok "did not find a \"tankb1\" zfspool. Some modules of TAPPaaS might not work on this node"
+msg_info "Checking for \"tank\"s in zfspool"
+if pvesm status -content images | grep zfspool | grep -q tank; then
+  msg_ok "did  find a \"tank\" in zfspool. this is fine if it is the first node to be configured, But if it is a secondary node then tanks must be configured AFTER joining the cluster"
 else
-msg_ok "Found \"tankb1\" zfspool"
+  msg_ok "Found no \"tank\" in zfspool, remember to configure tanks after this script has run. See README file"
 fi
+
 #
 # Check it this have already been run, in which case skip all the repository and other updates
 #
@@ -248,17 +243,27 @@ msg_info "Enabling high availability"
   systemctl enable -q --now corosync
 msg_ok "Enabled high availability"
 
+# Find the branch version of TAPPaaS to use
+msg_info "Determining TAPPaaS branch to use"
+if [ -z $1]; then
+  BRANCH="main"
+else
+  BRANCH="$1"
+fi
+msg_ok "Determined TAPPaaS branch to use: ${BRANCH}"
+
 msg_info "Install TAPPaaS helper script"
 cd
 mkdir tappaas
 apt -y install jq &>/dev/null || msg_error "apt update failed"
-curl -fsSL  https://raw.githubusercontent.com/TAPPaaS/TAPPaaS/main/src/foundation/05-ProxmoxNode/Create-TAPPaaS-VM.sh >~/tappaas/Create-TAPPaaS-VM.sh
+curl -fsSL  https://raw.githubusercontent.com/TAPPaaS/TAPPaaS/$BRANCH/src/foundation/05-ProxmoxNode/Create-TAPPaaS-VM.sh >~/tappaas/Create-TAPPaaS-VM.sh
 chmod 744 ~/tappaas/Create-TAPPaaS-VM.sh
 msg_ok "Installed TAPPaaS helper script"
 
-msg_info "Copy configuration.json"
-curl -fsSL  https://raw.githubusercontent.com/TAPPaaS/TAPPaaS/main/src/foundation/configuration.json >~/tappaas/configuration.json
-msg_ok "Copied configuration.json"
+msg_info "Copy configuration.json and zones.json"
+curl -fsSL  https://raw.githubusercontent.com/TAPPaaS/TAPPaaS/$BRANCH/src/foundation/configuration.json >~/tappaas/configuration.json
+curl -fsSL  https://raw.githubusercontent.com/TAPPaaS/TAPPaaS/$BRANCH/src/foundation/zones.json >~/tappaas/zones.json
+msg_ok "Copied configuration.json and zones.json"
 
 msg_info "Install power top:"
 apt -y install powertop &>/dev/null || msg_error "apt update failed"

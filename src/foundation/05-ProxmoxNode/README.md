@@ -22,14 +22,14 @@ followed by the rest of foundation, in number order.
 
 - prepare physical hardware. see [Examples](../../Documentation/Examples/README.md) or [Hardware](../../Documentation/Architecture/Hardware.md)
 - ensure you designed your basic setup [Design](../../Documentation/Installation/README.md)
-  - you have a domain name for the installation: <mytappaas.net>
+  - you have a domain name for the installation: <mytappaas.tld>
   - when the installer ask for a FQDM for the machine use: tappaas1.internal  (do not use the external recognized domain for your installation, that is for the firewall)
     - if this is not the first node then replace the tappaas1 with the appropiate tappaas2,3,4, ...
     - Note that the current installation do not support a different name for the PVE nodes
   - The hardware is plugged into a local network with internet connection. you have a local IP number for the node (will later be changed when the firewall is installed)
   - You will be asked for a password for root. Select a strong password and remember it :-)
 - download a Proxmox VE iso installer image from: [Official Proxmox Download site](https://www.proxmox.com/en/downloads)
-- create a boot USB (on windows we recommend to use [Rufus](https://rufus.ie/en/), on Linux Mint right click on .iso and select make bootable usb stick)
+- create a boot USB (on windows we recommend to use [Rufus](https://rufus.ie/en/), on Linux Mint right click on .iso and select make boot-able usb stick)
 
 ## Install Proxmox
 
@@ -39,14 +39,18 @@ followed by the rest of foundation, in number order.
 
 ## Post Install
 
-Run the post install script:
+Run the post install script (if you are not using the "main" branch for the install then then change the assignment in the first line):
 ```
-curl -fsSL https://raw.githubusercontent.com/TAPPaaS/TAPPaaS/main/src/foundation/05-ProxmoxNode/install.sh | bash
+BRANCH="main"
+curl -fsSL https://raw.githubusercontent.com/TAPPaaS/TAPPaaS/$BRANCH/src/foundation/05-ProxmoxNode/install.sh >install-PVE.sh
+chmod +x install-PVE.sh
+./install-PVE.sh $BRANCH
+
 ```
 
 ## Creating or joining a cluster
 
-If this is the first node then create athe TAPPaaS cluster (even if you only run one machine in TAPPaaS you can create the cluster to make it ready for expansion)
+If this is the first node then create the TAPPaaS cluster (even if you only run one machine in TAPPaaS you can create the cluster to make it ready for expansion)
 In the console of tappaas1:
 ```
 pvecm create TAPPaaS
@@ -62,7 +66,7 @@ Join the node to the TAPPaaS cluster:
 
 It is important to create the data "tanks" AFTER the cluster is created, or PVE will have problems recognizing them when joining the cluster (PVE bug?)
 
-Create the "tanks" as zfs pools (normally you will as a minimum is a tanka1). 
+Create the "tanks" as zfs pools (normally, as a minimum, you will create a tanka1). 
 - Use the GUI of the newly installed node (web browser to <ip of node>:8006)
   - under the tappaas1 node in the datacenter panel go to the disk section. 
   - take note of the disks you have
@@ -75,9 +79,9 @@ Create the "tanks" as zfs pools (normally you will as a minimum is a tanka1).
     - This gives the option to stripe disks together without reduancy (raid0), to create ssd disk cache (L2ARC) and log (ZIL)
 - If sufficient hw resources are available then use mirror on tanka1
 
-## adjust the local copy of the configuration.json
+## adjust the local copy of the configuration.json and vlan.json
 
-The json is stored under /root/tappaas/configuration.json
+The json is stored under /root/tappaas/configuration.json /root/tappaas/vlan.json
 
 if this is the first node then modify it to reflect your local installation
 
@@ -85,7 +89,8 @@ If this is a secondary node then copy what you modified on tappaas1. On the new 
 (note that if you have not modified the configuration.json, then the original github version will already be on the new node and this step can be skipped)
 ```
 cd
-scp 10.0.0.10:/root/tappaas/configuration.json tappaas
+scp tappaas1.mgmt.internal:/root/tappaas/configuration.json tappaas
+scp tappaas1.mgmt.internal:/root/tappaas/zones.json tappaas
 ```
 
 ## After reboot:
