@@ -3,7 +3,6 @@
 
 import argparse
 import json
-import re
 import subprocess
 import sys
 from datetime import datetime
@@ -11,6 +10,16 @@ from pathlib import Path
 
 CONFIG_PATH = Path("/home/tappaas/config/configuration.json")
 UPDATE_NODE_CMD = "/home/tappaas/bin/update-node"
+
+WEEKDAYS = {
+    "monday": 0,
+    "tuesday": 1,
+    "wednesday": 2,
+    "thursday": 3,
+    "friday": 4,
+    "saturday": 5,
+    "sunday": 6,
+}
 
 
 def load_config() -> dict:
@@ -23,66 +32,99 @@ def load_config() -> dict:
         return {}
 
 
-def get_nodes_from_config(config: dict) -> list[str]:
-    """Get list of node hostnames from configuration."""
-    nodes = config.get("tappaas-nodes", [])
-    return [node.get("hostname") for node in nodes if node.get("hostname")]
+def get_nodes_from_config(config: dict) -> list[dict]:
+    """Get list of node configurations from configuration."""
+    return config.get("tappaas-nodes", [])
 
 
-def get_node_number(node: str) -> int | None:
-    """Extract the node number from the node name (e.g., tappaas1 -> 1)."""
-    match = re.search(r"(\d+)$", node)
-    if match:
-        return int(match.group(1))
-    return None
+def parse_schedule(schedule: list) -> tuple[str, int | None, int]:
+    """Parse updateSchedule list into (frequency, weekday, hour).
 
+    Args:
+        schedule: List of [frequency, weekday, hour]
 
-def should_update_node(node: str, branch: str) -> bool:
-    """Determine if a node should be updated based on node number and branch.
-
-    Rules:
-    - If branch is "main" or "stable": update first week of month only
-      - Even numbered nodes: Tuesday
-      - Odd numbered nodes: Thursday
-    - Otherwise (development branches): update daily
+    Returns:
+        Tuple of (frequency, weekday_number, hour)
+        weekday_number is None for daily frequency
     """
+    if not schedule or len(schedule) < 3:
+        # Default: daily at 2am
+        return ("daily", None, 2)
+
+    frequency = schedule[0].lower()
+    weekday_str = schedule[1].lower() if schedule[1] else None
+    hour = int(schedule[2]) if schedule[2] is not None else 2
+
+    weekday = WEEKDAYS.get(weekday_str) if weekday_str else None
+
+    return (frequency, weekday, hour)
+
+
+def should_update_node(node_config: dict, current_hour: int) -> bool:
+    """Determine if a node should be updated based on its updateSchedule.
+
+    Args:
+        node_config: Node configuration dict containing hostname and updateSchedule
+        current_hour: Current hour of the day (0-23)
+
+    Returns:
+        True if the node should be updated now, False otherwise
+    """
+    hostname = node_config.get("hostname", "unknown")
+    schedule = node_config.get("updateSchedule", [])
+
+    frequency, scheduled_weekday, scheduled_hour = parse_schedule(schedule)
+
     today = datetime.now()
+    current_weekday = today.weekday()  # 0=Monday, 1=Tuesday, ..., 6=Sunday
     day_of_month = today.day
-    weekday = today.weekday()  # 0=Monday, 1=Tuesday, ..., 6=Sunday
 
-    # For non-stable branches, always run
-    if branch not in ("main", "stable"):
-        print(f"  {node}: Branch '{branch}' is not main/stable, scheduled for update")
-        return True
-
-    # For main/stable: only first week (days 1-7)
-    if day_of_month > 7:
-        print(f"  {node}: Day {day_of_month} is not in first week, skipping")
+    # Check hour first - must match for all frequencies
+    if current_hour != scheduled_hour:
+        print(f"  {hostname}: Scheduled for hour {scheduled_hour}, current hour is {current_hour}, skipping")
         return False
 
-    node_number = get_node_number(node)
-    if node_number is None:
-        print(f"  {node}: Could not determine node number, scheduled for update")
+    if frequency == "daily":
+        print(f"  {hostname}: Daily schedule at hour {scheduled_hour}, running update")
         return True
 
-    is_even = node_number % 2 == 0
+    elif frequency == "weekly":
+        if scheduled_weekday is None:
+            print(f"  {hostname}: Weekly schedule but no weekday specified, skipping")
+            return False
 
-    # Even nodes: Tuesday (weekday 1)
-    # Odd nodes: Thursday (weekday 3)
-    if is_even:
-        if weekday == 1:  # Tuesday
-            print(f"  {node}: Even node scheduled for Tuesday, running update")
+        weekday_name = list(WEEKDAYS.keys())[scheduled_weekday].capitalize()
+        if current_weekday == scheduled_weekday:
+            print(f"  {hostname}: Weekly schedule on {weekday_name}, running update")
             return True
         else:
-            print(f"  {node}: Even node scheduled for Tuesday, today is not Tuesday, skipping")
+            current_day_name = list(WEEKDAYS.keys())[current_weekday].capitalize()
+            print(f"  {hostname}: Weekly schedule on {weekday_name}, today is {current_day_name}, skipping")
             return False
+
+    elif frequency == "monthly":
+        # Monthly: first week of month (days 1-7) on specified weekday
+        if scheduled_weekday is None:
+            print(f"  {hostname}: Monthly schedule but no weekday specified, skipping")
+            return False
+
+        weekday_name = list(WEEKDAYS.keys())[scheduled_weekday].capitalize()
+
+        if day_of_month > 7:
+            print(f"  {hostname}: Monthly schedule, day {day_of_month} is not in first week, skipping")
+            return False
+
+        if current_weekday == scheduled_weekday:
+            print(f"  {hostname}: Monthly schedule on first {weekday_name}, running update")
+            return True
+        else:
+            current_day_name = list(WEEKDAYS.keys())[current_weekday].capitalize()
+            print(f"  {hostname}: Monthly schedule on {weekday_name}, today is {current_day_name}, skipping")
+            return False
+
     else:
-        if weekday == 3:  # Thursday
-            print(f"  {node}: Odd node scheduled for Thursday, running update")
-            return True
-        else:
-            print(f"  {node}: Odd node scheduled for Thursday, today is not Thursday, skipping")
-            return False
+        print(f"  {hostname}: Unknown frequency '{frequency}', skipping")
+        return False
 
 
 def update_node(node: str) -> bool:
@@ -114,7 +156,9 @@ def main():
     )
     args = parser.parse_args()
 
-    start_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    now = datetime.now()
+    current_hour = now.hour
+    start_time = now.strftime("%Y-%m-%d %H:%M:%S")
     print(f"update-tappaas started: {start_time}")
 
     # Load configuration
@@ -123,33 +167,40 @@ def main():
         print("Error: Could not load configuration")
         sys.exit(1)
 
-    branch = config.get("tappaas", {}).get("branch", "main")
-    print(f"Branch: {branch}")
-
     # Get nodes to process
+    all_nodes = get_nodes_from_config(config)
+
     if args.node:
-        nodes = [args.node]
+        # Filter to specific node
+        nodes = [n for n in all_nodes if n.get("hostname") == args.node]
+        if not nodes:
+            print(f"Error: Node '{args.node}' not found in configuration")
+            sys.exit(1)
     else:
-        nodes = get_nodes_from_config(config)
+        nodes = all_nodes
 
     if not nodes:
         print("Error: No nodes found in configuration")
         sys.exit(1)
 
-    print(f"Nodes to check: {', '.join(nodes)}")
+    node_names = [n.get("hostname", "unknown") for n in nodes]
+    print(f"Nodes to check: {', '.join(node_names)}")
     print("")
 
     # Determine which nodes to update
     print("Checking update schedule:")
     nodes_to_update = []
-    for node in nodes:
-        if args.force or should_update_node(node, branch):
-            nodes_to_update.append(node)
+    for node_config in nodes:
+        hostname = node_config.get("hostname")
+        if not hostname:
+            continue
+        if args.force or should_update_node(node_config, current_hour):
+            nodes_to_update.append(hostname)
 
     print("")
 
     if not nodes_to_update:
-        print("No nodes scheduled for update today")
+        print("No nodes scheduled for update at this time")
         sys.exit(0)
 
     print(f"Nodes to update: {', '.join(nodes_to_update)}")
