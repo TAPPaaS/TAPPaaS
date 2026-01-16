@@ -33,6 +33,41 @@ ssh tappaas@tappaas-cicd.mgmt.internal
 5. copy the key
 6. Save the key and secret in ~/.opnsense-credentials.txt using you vi or nano
 
+### Setting up SSH Access to OPNsense Firewall
+
+The tappaas-cicd VM needs SSH access to the firewall for automated updates. Follow these steps to configure SSH key authentication:
+
+1. **Generate SSH key on tappaas-cicd** (if not already done during install):
+   ```bash
+   ssh-keygen -t ed25519 -f ~/.ssh/id_ed25519 -N "" -C "tappaas-cicd"
+   ```
+
+2. **Enable SSH on OPNsense**:
+   - Log into OPNsense web interface
+   - Go to **System > Settings > Administration**
+   - Under **Secure Shell**, check **Enable Secure Shell**
+   - Check **Permit root user login**
+   - Check **Permit password login** (temporarily, for key setup)
+   - Save and Apply
+
+3. **Copy the SSH public key to OPNsense**:
+   ```bash
+   ssh-copy-id -i ~/.ssh/id_ed25519.pub root@firewall.mgmt.internal
+   ```
+   Enter the root password when prompted.
+
+4. **Test SSH access**:
+   ```bash
+   ssh root@firewall.mgmt.internal "echo 'SSH access configured successfully'"
+   ```
+
+5. **Disable password authentication** (recommended for security):
+   - Go back to **System > Settings > Administration**
+   - Uncheck **Permit password login**
+   - Save and Apply
+
+   SSH key authentication will continue to work after disabling password login.
+
 ### install the tappaas-cicd programs
 
 on the tappaas-cicd console (via ssh, logged in as tappaas user) do:
