@@ -6,7 +6,7 @@ TAPPaaS node update utilities for managing system updates across Proxmox nodes.
 
 ### update-tappaas
 
-Scheduler that determines which nodes to update based on configuration and scheduling rules.
+Scheduler that determines which nodes to update based on per-node scheduling configuration.
 
 ```bash
 update-tappaas [--force] [--node NODE]
@@ -29,17 +29,42 @@ update-node <node-name>
 update-node tappaas1
 ```
 
-## Scheduling Logic
+## Scheduling
 
-The update schedule is determined by the `branch` setting in `/home/tappaas/config/configuration.json`:
+Each node has an `updateSchedule` field in the configuration that controls when updates run.
 
-### Stable branches (main, stable)
-Updates run only during the **first week of each month** (days 1-7):
-- **Even numbered nodes** (tappaas2, tappaas4, ...): Tuesday
-- **Odd numbered nodes** (tappaas1, tappaas3, ...): Thursday
+### updateSchedule Format
 
-### Development branches (all other branch names)
-Updates run **daily**.
+```json
+"updateSchedule": ["frequency", "weekday", hour]
+```
+
+**Fields:**
+1. **frequency** - One of:
+   - `"daily"` - Run every day at the specified hour
+   - `"weekly"` - Run once per week on the specified weekday
+   - `"monthly"` - Run once per month on the first occurrence of the specified weekday (days 1-7)
+
+2. **weekday** - Day of week (ignored for daily):
+   - `"Monday"`, `"Tuesday"`, `"Wednesday"`, `"Thursday"`, `"Friday"`, `"Saturday"`, `"Sunday"`
+
+3. **hour** - Hour of day (0-23) when the update should run
+
+### Examples
+
+```json
+// Daily at 2am
+"updateSchedule": ["daily", null, 2]
+
+// Weekly on Wednesday at 3am
+"updateSchedule": ["weekly", "Wednesday", 3]
+
+// Monthly on first Tuesday at 2am
+"updateSchedule": ["monthly", "Tuesday", 2]
+
+// Monthly on first Thursday at 2am
+"updateSchedule": ["monthly", "Thursday", 2]
+```
 
 ## Configuration
 
@@ -48,12 +73,25 @@ Reads from `/home/tappaas/config/configuration.json`:
 ```json
 {
     "tappaas": {
-        "branch": "main"
+        "version": "0.5",
+        "domain": "mytappaas.dev"
     },
     "tappaas-nodes": [
-        { "hostname": "tappaas1", "ip": "192.168.1.10" },
-        { "hostname": "tappaas2", "ip": "192.168.1.11" },
-        { "hostname": "tappaas3", "ip": "192.168.1.12" }
+        {
+            "hostname": "tappaas1",
+            "ip": "192.168.1.10",
+            "updateSchedule": ["monthly", "Thursday", 2]
+        },
+        {
+            "hostname": "tappaas2",
+            "ip": "192.168.1.11",
+            "updateSchedule": ["monthly", "Tuesday", 2]
+        },
+        {
+            "hostname": "tappaas3",
+            "ip": "192.168.1.12",
+            "updateSchedule": ["monthly", "Thursday", 2]
+        }
     ]
 }
 ```
@@ -66,7 +104,7 @@ Use `update-cron.sh` to install the daily cron job:
 /home/tappaas/bin/update-cron.sh
 ```
 
-This creates a cron entry that runs `update-tappaas` daily at 2:00 AM. The scheduling logic within `update-tappaas` determines which nodes actually get updated.
+This creates a cron entry that runs `update-tappaas` daily at 2:00 AM. The `update-tappaas` command checks each node's `updateSchedule` to determine if it should be updated at that time.
 
 ## What Gets Updated
 
