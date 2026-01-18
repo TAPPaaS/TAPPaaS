@@ -79,25 +79,62 @@ curl -fsSL  https://raw.githubusercontent.com/TAPPaaS/TAPPaaS/$BRANCH/src/founda
 
 You might be asked for password for root at proxmox node tappaas1
 
-## TODO
+## Configure Reverse Proxy (Caddy)
 
-automate setting up caddy
+The install script automatically installs the os-caddy package and creates firewall rules for HTTP/HTTPS traffic. However, some manual configuration is required via the OPNsense web UI.
 
-## Configure Reverse Proxy
+### Automated Steps (done by install.sh)
 
-we use the OPNsense os-caddy plugin for https proxy
+The `setup-caddy.sh` script performs:
+- Installs os-caddy package on the firewall
+- Creates firewall rules for HTTP (port 80) and HTTPS (port 443) on WAN interface
 
-In the opnsense console, use option 8 to get a command line shell and install caddy
+### Manual Configuration Steps
 
-```bash
-pkg install os-caddy
-```
+Complete the following steps in the OPNsense web UI (https://firewall.mgmt.internal or https://firewall.mgmt.internal:8443):
 
-follow the OPNsense manual to configure Caddy: [Caddy Install](https://docs.opnsense.org/manual/how-tos/caddy.html#installation)
-Only do the "Prepare OPNsense for Caddy After Installation":
+#### 1. Move OPNsense Web GUI to Port 8443
 
-- re configure opnsense gui to 8443
-- Create http and https firewall rules for wan and lan to caddy
-- then configure email address and enable caddy
+This frees up ports 80/443 for Caddy to handle.
 
-note as we create VLANs we need to create firewall rules as well
+1. Go to **System > Settings > Administration**
+2. Under **Web GUI**, set **TCP Port** to `8443`
+3. Click **Save**
+4. Reconnect to OPNsense at https://firewall.mgmt.internal:8443
+
+#### 2. Enable Caddy Service
+
+1. Go to **Services > Caddy Web Server > General**
+2. Check **Enable Caddy**
+3. Set **ACME Email** to your email address (from configuration.json)
+   - This is required for Let's Encrypt SSL certificates
+4. Click **Save** then **Apply**
+
+#### 3. Add Your Domain
+
+1. Go to **Services > Caddy Web Server > Reverse Proxy > Domains**
+2. Click **+** to add a new domain
+3. Configure:
+   - **Domain**: Your domain (e.g., `mytappaas.dev`)
+   - **Description**: `TAPPaaS Main Domain`
+4. Click **Save** then **Apply**
+
+#### 4. Add Reverse Proxy Handlers
+
+For each service you want to expose, add a handler:
+
+1. Go to **Services > Caddy Web Server > Reverse Proxy > Handlers**
+2. Click **+** to add a new handler
+3. Configure:
+   - **Domain**: Select your domain
+   - **Upstream Domain**: The internal service address (e.g., `nextcloud.srv.internal`)
+   - **Upstream Port**: The service port (e.g., `80` or `443`)
+   - **Description**: Service name
+4. Click **Save** then **Apply**
+
+### Reference
+
+For more details, see the OPNsense Caddy documentation:
+[Caddy Install Guide](https://docs.opnsense.org/manual/how-tos/caddy.html#installation)
+
+Note: As VLANs are created, additional firewall rules may be needed to allow traffic between zones.

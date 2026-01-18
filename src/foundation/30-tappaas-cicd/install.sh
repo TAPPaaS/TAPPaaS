@@ -67,4 +67,10 @@ scp root@"$NODE1_FQDN":/root/tappaas/*.json /home/tappaas/config/
 # run the update script as all update actions is also needed at install time
 . ./update.sh
 
+# Setup Caddy reverse proxy on the firewall
+echo -e "\nSetting up Caddy reverse proxy..."
+/home/tappaas/bin/setup-caddy.sh || {
+    echo "Warning: Caddy setup encountered issues. Please review and complete manually."
+}
+
 echo -e "\nTAPPaaS-CICD installation completed successfully."
