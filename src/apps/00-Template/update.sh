@@ -21,4 +21,7 @@ ZONE0NAME="$(get_config_value 'zone0' 'srv')"
 # rebuild the nixos configuration
 nixos-rebuild --target-host "tappaas@${VMNAME}.${ZONE0NAME}.internal" --use-remote-sudo switch -I "nixos-config=./${VMNAME}.nix"
 
+# Update HA configuration (creates/updates/removes based on HANode field)
+/home/tappaas/bin/update-HA.sh $1
+
 echo -e "\nVM update completed successfully."

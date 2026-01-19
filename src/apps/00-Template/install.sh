@@ -17,8 +17,7 @@ ZONE0NAME="$(get_config_value 'zone0' 'srv')"
 scp "$1.json" "root@${NODE}.${ZONE0NAME}.internal:/root/tappaas/$1.json"
 ssh "root@${NODE}.${ZONE0NAME}.internal" "/root/tappaas/Create-TAPPaaS-VM.sh $1"
 
-# rebuild the nixos configuration
-# TODO remove if module is not a NixOS VM
-nixos-rebuild --target-host "tappaas@${VMNAME}.${ZONE0NAME}.internal" --use-remote-sudo switch -I "nixos-config=./${VMNAME}.nix"
+# run the update script as all update actions is also needed at install time
+. ./update.sh
 
 echo -e "\nVM installation completed successfully."

@@ -33,8 +33,10 @@ cd 30-tappaas-cicd
 if update-json.sh tappaas-cicd; then
     echo "tappaas-cicd.json updated, applying HA configuration..."
 fi
+
 # Update HA configuration (creates/updates/removes based on HANode field)
 /home/tappaas/bin/update-HA.sh tappaas-cicd
+/home/tappaas/bin/update-HA.sh firewall
 
 # Build the opnsense-controller project (formerly opnsense-scripts)
 echo -en "\nBuilding the opnsense-controller project"
