@@ -1,0 +1,175 @@
+{
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "$id": "zones-fields.json",
+    "title": "TAPPaaS Zone Field Definitions",
+    "description": "Defines the structure and valid values for zone definitions in zones.json",
+
+    "fields": {
+        "type": {
+            "description": "The security zone type classification",
+            "type": "string",
+            "required": true,
+            "values": {
+                "Management": {
+                    "description": "TAPPaaS nodes and self-management zone. Must be locked down with no access from other zones or the Internet. Typically only one zone named 'mgmt'.",
+                    "typeId": 0
+                },
+                "Service": {
+                    "description": "Zone where service modules live. Multiple service zones can exist to serve different user bases (e.g., separate business units or home/business separation).",
+                    "typeId": 2
+                },
+                "Client": {
+                    "description": "Zone for client devices. Multiple client zones can exist for different user populations.",
+                    "typeId": 3
+                },
+                "IoT": {
+                    "description": "Zone for IoT devices. Typically multiple zones for different types of (often insecure) devices.",
+                    "typeId": 4
+                },
+                "Guest": {
+                    "description": "Security zone for unauthorized or guest clients.",
+                    "typeId": 5
+                },
+                "DMZ": {
+                    "description": "Demilitarized zone for services that need controlled exposure.",
+                    "typeId": 6
+                }
+            }
+        },
+
+        "state": {
+            "description": "The activation state of the zone in a TAPPaaS instance",
+            "type": "string",
+            "required": true,
+            "default": "Inactive",
+            "values": {
+                "Active": {
+                    "description": "Zone is created and configured by zone-manager (VLANs, DHCP)"
+                },
+                "Mandatory": {
+                    "description": "Same as Active; zone must exist and cannot be disabled"
+                },
+                "Inactive": {
+                    "description": "Zone is not created; if it exists it will be removed by zone-manager"
+                },
+                "Disabled": {
+                    "description": "Same as Inactive"
+                },
+                "Manual": {
+                    "description": "Zone is managed manually; zone-manager will neither create nor remove it"
+                }
+            }
+        },
+
+        "typeId": {
+            "description": "Unique number identifying the zone type category",
+            "type": "integer",
+            "required": true,
+            "values": {
+                "0": "Management",
+                "2": "Service",
+                "3": "Client",
+                "4": "IoT",
+                "5": "Guest",
+                "6": "DMZ"
+            },
+            "note": "Should match the typeId from the 'type' field"
+        },
+
+        "subId": {
+            "description": "Unique number (0-99) identifying the zone within its type category",
+            "type": "integer",
+            "required": true,
+            "minimum": 0,
+            "maximum": 99,
+            "default": 0
+        },
+
+        "vlantag": {
+            "description": "Unique VLAN tag for the zone",
+            "type": "integer",
+            "required": true,
+            "minimum": 0,
+            "maximum": 4094,
+            "computed": "typeId * 100 + subId",
+            "note": "Value 0 means untagged traffic"
+        },
+
+        "ip": {
+            "description": "IP range associated with the zone in CIDR notation",
+            "type": "string",
+            "required": true,
+            "format": "cidr",
+            "computed": "10.typeId.subId.0/24",
+            "example": "10.2.10.0/24"
+        },
+
+        "bridge": {
+            "description": "Network interface the zone is associated with (VLAN trunk)",
+            "type": "string",
+            "required": true,
+            "default": "lan",
+            "values": {
+                "lan": "Local area network interface",
+                "wan": "Wide area network interface",
+                "opt1": "Optional interface 1",
+                "opt2": "Optional interface 2"
+            }
+        },
+
+        "access-to": {
+            "description": "List of zones this zone can connect to. Used by zone-manager with --firewall-rules to create pass rules.",
+            "type": "array",
+            "required": false,
+            "default": [],
+            "items": "string",
+            "special_values": {
+                "internet": "Allows traffic to any destination (outbound internet access)",
+                "all": "Creates a wildcard pass rule (destination: any)"
+            },
+            "note": "Zone names (e.g., 'srv', 'dmz') allow traffic to that zone's network"
+        },
+
+        "pinhole-allowed-from": {
+            "description": "List of zones that can have pinhole connections to specific ports in this zone. Used to validate module-specific firewall rules against zone policies.",
+            "type": "array",
+            "required": false,
+            "default": [],
+            "items": "string"
+        },
+
+        "DHCP-start": {
+            "description": "Starting offset for DHCP range within the subnet",
+            "type": "integer",
+            "required": false,
+            "default": 50,
+            "minimum": 1,
+            "maximum": 254,
+            "example": "50 means .50 address in the subnet"
+        },
+
+        "DHCP-end": {
+            "description": "Ending offset for DHCP range within the subnet",
+            "type": "integer",
+            "required": false,
+            "default": 250,
+            "minimum": 1,
+            "maximum": 254,
+            "example": "250 means .250 address in the subnet"
+        },
+
+        "description": {
+            "description": "Human-readable description of the zone's purpose",
+            "type": "string",
+            "required": false,
+            "default": ""
+        }
+    },
+
+    "zone_key": {
+        "description": "The key for each zone entry in zones.json",
+        "type": "string",
+        "pattern": "^[a-z][a-z0-9-]*$",
+        "examples": ["mgmt", "srv", "dmz", "client", "guest", "iot-cameras"]
+    }
+}

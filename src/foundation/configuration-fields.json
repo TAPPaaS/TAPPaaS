@@ -1,0 +1,168 @@
+{
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "$id": "configuration-fields.json",
+    "title": "TAPPaaS Configuration Field Definitions",
+    "description": "Defines the structure and valid values for the main TAPPaaS configuration.json file",
+
+    "sections": {
+        "tappaas": {
+            "description": "Global TAPPaaS system configuration",
+            "type": "object",
+            "required": true,
+            "fields": {
+                "version": {
+                    "description": "TAPPaaS version identifier",
+                    "type": "string",
+                    "required": true,
+                    "example": "0.5"
+                },
+                "domain": {
+                    "description": "Primary domain name for the TAPPaaS installation. Used for SSL certificates and service URLs.",
+                    "type": "string",
+                    "required": true,
+                    "must_change": true,
+                    "default": "CHANGE-mytappaas.dev",
+                    "example": "mytappaas.dev",
+                    "note": "Values starting with 'CHANGE' must be updated before deployment"
+                },
+                "email": {
+                    "description": "Administrator email address. Used for Let's Encrypt SSL certificate registration and system notifications.",
+                    "type": "string",
+                    "required": true,
+                    "must_change": true,
+                    "format": "email",
+                    "default": "CHANGE-tappaas@mytappaas.dev",
+                    "example": "admin@mytappaas.dev",
+                    "note": "Values starting with 'CHANGE' must be updated before deployment"
+                },
+                "nodeCount": {
+                    "description": "Number of Proxmox nodes in the TAPPaaS cluster",
+                    "type": "integer",
+                    "required": true,
+                    "minimum": 1,
+                    "maximum": 32,
+                    "default": 3,
+                    "example": 3
+                },
+                "upstreamGit": {
+                    "description": "Git repository URL for TAPPaaS source code (without https:// prefix)",
+                    "type": "string",
+                    "required": true,
+                    "default": "github.com/TAPPaaS/TAPPaaS",
+                    "example": "github.com/TAPPaaS/TAPPaaS"
+                },
+                "branch": {
+                    "description": "Git branch to use for TAPPaaS installation and updates. Affects update scheduling behavior.",
+                    "type": "string",
+                    "required": true,
+                    "default": "main",
+                    "values": {
+                        "main": {
+                            "description": "Stable production branch. Updates run monthly on first week only."
+                        },
+                        "stable": {
+                            "description": "Stable branch. Updates run monthly on first week only."
+                        },
+                        "develop": {
+                            "description": "Development branch. Updates run daily."
+                        },
+                        "<other>": {
+                            "description": "Any other branch name. Updates run daily."
+                        }
+                    }
+                }
+            }
+        },
+
+        "tappaas-nodes": {
+            "description": "Array of Proxmox node configurations",
+            "type": "array",
+            "required": true,
+            "items": {
+                "type": "object",
+                "fields": {
+                    "hostname": {
+                        "description": "Hostname of the Proxmox node. Must follow naming convention: tappaasN where N is a sequence number.",
+                        "type": "string",
+                        "required": true,
+                        "pattern": "^tappaas[0-9]+$",
+                        "example": "tappaas1"
+                    },
+                    "ip": {
+                        "description": "Management IP address of the Proxmox node",
+                        "type": "string",
+                        "required": true,
+                        "format": "ipv4",
+                        "example": "192.168.1.10"
+                    },
+                    "updateSchedule": {
+                        "description": "Update schedule for this node. Controls when system updates are applied.",
+                        "type": "array",
+                        "required": false,
+                        "default": ["monthly", "Thursday", 2],
+                        "items": [
+                            {
+                                "name": "frequency",
+                                "description": "How often updates should run",
+                                "type": "string",
+                                "values": {
+                                    "daily": "Run every day at the specified hour",
+                                    "weekly": "Run once per week on the specified weekday",
+                                    "monthly": "Run once per month on the first occurrence of the specified weekday (days 1-7)"
+                                }
+                            },
+                            {
+                                "name": "weekday",
+                                "description": "Day of week for updates (ignored for daily frequency)",
+                                "type": "string",
+                                "values": ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"],
+                                "note": "For monthly, updates run on first occurrence of this day (days 1-7 of month)"
+                            },
+                            {
+                                "name": "hour",
+                                "description": "Hour of day (0-23) when updates should run",
+                                "type": "integer",
+                                "minimum": 0,
+                                "maximum": 23,
+                                "default": 2,
+                                "example": 2,
+                                "note": "Recommended to use off-peak hours (e.g., 2-5 AM)"
+                            }
+                        ],
+                        "examples": [
+                            {
+                                "value": ["daily", null, 2],
+                                "description": "Daily at 2 AM"
+                            },
+                            {
+                                "value": ["weekly", "Wednesday", 3],
+                                "description": "Weekly on Wednesday at 3 AM"
+                            },
+                            {
+                                "value": ["monthly", "Tuesday", 2],
+                                "description": "Monthly on first Tuesday at 2 AM"
+                            },
+                            {
+                                "value": ["monthly", "Thursday", 2],
+                                "description": "Monthly on first Thursday at 2 AM"
+                            }
+                        ]
+                    }
+                }
+            }
+        }
+    },
+
+    "comments": {
+        "description": "Comment fields are prefixed with '-' and ignored by parsers",
+        "pattern": "^-comment[0-9]*$",
+        "note": "Used to provide inline documentation in the JSON file"
+    },
+
+    "file_locations": {
+        "source": "src/foundation/configuration.json",
+        "installed": "/home/tappaas/config/configuration.json",
+        "proxmox_nodes": "/root/tappaas/configuration.json",
+        "note": "Edit the installed copy, not the git source. Changes are distributed to nodes via copy-jsons.sh"
+    }
+}

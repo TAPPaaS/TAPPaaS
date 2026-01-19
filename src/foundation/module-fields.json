@@ -1,0 +1,296 @@
+{
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "$id": "module-fields.json",
+    "title": "TAPPaaS Module Field Definitions",
+    "description": "Defines the structure and valid values for module configuration JSON files (e.g., myModule.json)",
+
+    "fields": {
+        "version": {
+            "description": "Version of the module (not the TAPPaaS system). Used for tracking running versions and determining if upgrades exist.",
+            "type": "string",
+            "required": true,
+            "format": "Major.Minor.Minorminor",
+            "example": "0.5.3",
+            "note": "Major < 1 indicates module is not production-ready"
+        },
+
+        "description": {
+            "description": "Descriptive text that appears on the Proxmox summary page for the VM",
+            "type": "string",
+            "required": false,
+            "default": "",
+            "example": "Nextcloud file sharing and collaboration platform"
+        },
+
+        "node": {
+            "description": "Name of the Proxmox/TAPPaaS node where the module should be installed",
+            "type": "string",
+            "required": false,
+            "default": "tappaas1",
+            "pattern": "^tappaas[0-9]+$",
+            "example": "tappaas1"
+        },
+
+        "HANode": {
+            "description": "Secondary node for High Availability. Must be different from 'node' and have the same storage defined.",
+            "type": "string",
+            "required": false,
+            "default": "NONE",
+            "pattern": "^(NONE|tappaas[0-9]+)$",
+            "note": "If present and not 'NONE', install script will set up HA for the VM"
+        },
+
+        "replicationSchedule": {
+            "description": "Cron-style schedule for HA replication interval",
+            "type": "string",
+            "required": false,
+            "default": "*/15",
+            "example": "*/15",
+            "note": "Default is every 15 minutes"
+        },
+
+        "vmid": {
+            "description": "Unique VM ID across all TAPPaaS nodes",
+            "type": "integer",
+            "required": true,
+            "minimum": 100,
+            "maximum": 999999,
+            "example": 200
+        },
+
+        "vmname": {
+            "description": "Name of the VM, also used as module name and OS hostname",
+            "type": "string",
+            "required": false,
+            "default": "<config filename without .json>",
+            "pattern": "^[a-zA-Z][a-zA-Z0-9-]*$",
+            "example": "nextcloud"
+        },
+
+        "vmtag": {
+            "description": "Proxmox tags for the VM. Comma-separated list, no spaces.",
+            "type": "string",
+            "required": false,
+            "default": "TAPPaaS",
+            "example": "TAPPaaS,Foundation",
+            "common_values": {
+                "TAPPaaS": "Standard TAPPaaS module",
+                "TAPPaaS,Foundation": "Core infrastructure module",
+                "TAPPaaS,Test": "Test/development module"
+            }
+        },
+
+        "bios": {
+            "description": "BIOS type for VM creation",
+            "type": "string",
+            "required": false,
+            "default": "ovmf",
+            "values": {
+                "ovmf": "UEFI firmware (recommended for modern OSes)",
+                "seabios": "Legacy BIOS (for older OSes or special cases)"
+            }
+        },
+
+        "ostype": {
+            "description": "Proxmox VM option for hypervisor optimization",
+            "type": "string",
+            "required": false,
+            "default": "l26",
+            "values": {
+                "l26": "Linux kernel 2.6+ (modern Linux)",
+                "l24": "Linux kernel 2.4",
+                "win10": "Windows 10/11",
+                "win11": "Windows 11",
+                "other": "Other/generic OS"
+            }
+        },
+
+        "cores": {
+            "description": "Number of CPU cores allocated to the VM",
+            "type": "integer",
+            "required": false,
+            "default": 2,
+            "minimum": 1,
+            "maximum": 128,
+            "example": 4
+        },
+
+        "memory": {
+            "description": "RAM allocation in megabytes",
+            "type": "integer",
+            "required": false,
+            "default": 4096,
+            "minimum": 512,
+            "example": 8192,
+            "note": "Value in MB (e.g., 4096 = 4GB)"
+        },
+
+        "diskSize": {
+            "description": "Disk size with unit suffix",
+            "type": "string",
+            "required": false,
+            "default": "8G",
+            "pattern": "^[0-9]+[GMK]$",
+            "example": "32G",
+            "note": "G=gigabytes, M=megabytes, K=kilobytes"
+        },
+
+        "storage": {
+            "description": "Name of the storage pool for the module",
+            "type": "string",
+            "required": false,
+            "default": "tanka1",
+            "example": "tanka1",
+            "note": "Storage pool must exist on the target node"
+        },
+
+        "imageType": {
+            "description": "Type of image source for VM creation",
+            "type": "string",
+            "required": false,
+            "default": "clone",
+            "values": {
+                "clone": {
+                    "description": "VM is created as a clone of an existing Proxmox template",
+                    "image_field": "VMID of the template to clone"
+                },
+                "iso": {
+                    "description": "VM is created with a CD-ROM drive attached to the ISO. ISO is downloaded and placed in local:iso",
+                    "image_field": "Name of the ISO file",
+                    "requires": "imageLocation"
+                },
+                "img": {
+                    "description": "VM disk imports the image (downloaded and unzipped if compressed). Image is discarded after import",
+                    "image_field": "Name of the image file",
+                    "requires": "imageLocation"
+                },
+                "apt": {
+                    "description": "Package is a simple apt package to be installed",
+                    "image_field": "Name of the apt package(s) to install"
+                }
+            }
+        },
+
+        "image": {
+            "description": "Image identifier. Interpretation depends on imageType.",
+            "type": "string",
+            "required": true,
+            "by_imageType": {
+                "clone": "VMID of the Proxmox template to clone",
+                "iso": "Filename of the ISO image",
+                "img": "Filename of the disk image",
+                "apt": "Name of apt package(s) to install"
+            },
+            "examples": {
+                "clone": "9000",
+                "iso": "ubuntu-24.04-live-server-amd64.iso",
+                "img": "OPNsense-25.7-nano-amd64.img.bz2",
+                "apt": "nginx"
+            }
+        },
+
+        "imageLocation": {
+            "description": "URL where the image file is located",
+            "type": "string",
+            "required": "if imageType is 'iso' or 'img'",
+            "format": "url",
+            "example": "https://releases.ubuntu.com/24.04/",
+            "note": "For apt, if present, names an additional package repository to load"
+        },
+
+        "cloudInit": {
+            "description": "Whether the VM supports cloud-init for initial configuration",
+            "type": "string",
+            "required": false,
+            "default": "true",
+            "values": {
+                "true": "VM supports cloud-init (SSH keys, hostname, etc.)",
+                "false": "VM does not use cloud-init"
+            }
+        },
+
+        "bridge0": {
+            "description": "Proxmox bridge for the VM's first network interface (net0)",
+            "type": "string",
+            "required": false,
+            "default": "lan",
+            "example": "lan"
+        },
+
+        "mac0": {
+            "description": "MAC address for the net0 network port",
+            "type": "string",
+            "required": false,
+            "default": "<randomly generated>",
+            "format": "mac-address",
+            "example": "BC:24:11:00:01:10"
+        },
+
+        "zone0": {
+            "description": "Security zone for net0. Must exist in zones.json.",
+            "type": "string",
+            "required": false,
+            "default": "mgmt",
+            "example": "srv",
+            "note": "Zone determines VLAN tag. 'mgmt' is untagged traffic."
+        },
+
+        "bridge1": {
+            "description": "Proxmox bridge for the VM's second network interface (net1). If not present, only one NIC is configured.",
+            "type": "string",
+            "required": false,
+            "default": "lan",
+            "example": "lan",
+            "note": "Only used if a second network interface is needed"
+        },
+
+        "mac1": {
+            "description": "MAC address for the net1 network port",
+            "type": "string",
+            "required": false,
+            "default": "<randomly generated>",
+            "format": "mac-address"
+        },
+
+        "zone1": {
+            "description": "Security zone for net1. Must exist in zones.json.",
+            "type": "string",
+            "required": false,
+            "default": "mgmt",
+            "note": "Only used if bridge1 is defined"
+        }
+    },
+
+    "module_structure": {
+        "description": "Standard files in a TAPPaaS module directory",
+        "files": {
+            "<module>.json": {
+                "description": "Module configuration file",
+                "required": true
+            },
+            "install.sh": {
+                "description": "Installation script called with module name as argument",
+                "required": true
+            },
+            "update.sh": {
+                "description": "Update script called periodically to keep module updated",
+                "required": true
+            },
+            "<module>.nix": {
+                "description": "NixOS configuration for NixOS-based modules",
+                "required": false
+            },
+            "README.md": {
+                "description": "Module documentation",
+                "required": true
+            }
+        }
+    },
+
+    "naming_conventions": {
+        "module_name": "Typically the main software product or capability being delivered",
+        "vm_name": "Same as module name by default",
+        "hostname": "Same as module name by default",
+        "config_file": "<module>.json"
+    }
+}
