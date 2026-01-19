@@ -133,6 +133,72 @@ vim /home/tappaas/config/module.json
 
 ---
 
+### update-HA.sh
+
+Manages Proxmox High Availability (HA) and ZFS replication for a TAPPaaS module based on its JSON configuration.
+
+**Usage:**
+```bash
+update-HA.sh <module-name>
+```
+
+**What it does:**
+Based on the module's `HANode` field in `<module>.json`:
+
+1. **If HANode is "NONE" or not present:**
+   - Removes VM from any HA group
+   - Deletes any existing replication jobs
+
+2. **If HANode is set to a valid node (e.g., "tappaas2"):**
+   - Validates the HA node is reachable
+   - Verifies storage exists on both nodes
+   - Creates/updates HA group with both nodes
+   - Adds VM to HA group with automatic failover
+   - Sets up ZFS replication using `replicationSchedule` (default: `*/15`)
+
+**JSON fields used:**
+| Field | Description | Default |
+|-------|-------------|---------|
+| `vmid` | VM ID (required) | - |
+| `node` | Primary node | `tappaas1` |
+| `HANode` | Secondary node for HA | `NONE` |
+| `replicationSchedule` | Cron-style replication interval | `*/15` |
+| `storage` | ZFS storage pool | `tanka1` |
+
+**Example:**
+```bash
+# Configure HA for nextcloud module
+update-HA.sh nextcloud
+
+# After removing HANode from JSON, remove HA config
+update-HA.sh nextcloud
+```
+
+**Requirements:**
+- SSH access to all Proxmox nodes as root
+- Same storage pool must exist on both primary and HA nodes
+- Proxmox HA services must be enabled (pve-ha-lrm, pve-ha-crm, corosync)
+
+---
+
+### setup-caddy.sh
+
+Installs and configures the Caddy reverse proxy on the OPNsense firewall.
+
+**Usage:**
+```bash
+setup-caddy.sh
+```
+
+**What it does:**
+- Installs the os-caddy package on the firewall
+- Creates firewall rules for HTTP (port 80) and HTTPS (port 443)
+- Prints manual configuration steps for completing setup in OPNsense GUI
+
+**Note:** Additional manual configuration is required. See the tappaas-cicd README.md for details.
+
+---
+
 ## Installation
 
 These scripts are automatically installed by `install.sh`:
@@ -148,7 +214,9 @@ scripts/
 ├── README.md                    # This file
 ├── common-install-routines.sh   # Shared library for install scripts
 ├── copy-jsons.sh                # Distribute configs to nodes
+├── setup-caddy.sh               # Install Caddy reverse proxy on firewall
 ├── test-config.sh               # Validate installation
 ├── update-cron.sh               # Set up daily update cron job
+├── update-HA.sh                 # Manage HA and replication for modules
 └── update-json.sh               # Check if JSON configs need updating
 ```

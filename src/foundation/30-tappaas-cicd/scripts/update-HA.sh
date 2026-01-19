@@ -1,0 +1,250 @@
+#!/usr/bin/env bash
+#
+# Update HA (High Availability) configuration for a TAPPaaS module.
+# This script manages Proxmox HA rules and ZFS replication based on the module's JSON config.
+#
+# Usage: update-HA.sh <module-name>
+#
+# Based on the module's HANode field:
+#   - If HANode is "NONE" or not present: Remove any existing HA/replication config
+#   - If HANode is set to a valid node: Create/update HA rule and replication
+#
+# The script uses the replicationSchedule field (default: */15) for replication interval.
+#
+# Note: Proxmox 8.x uses rules-based HA (node-affinity rules) instead of groups.
+
+# Color definitions
+YW=$(echo "\033[33m")    # Yellow
+BL=$(echo "\033[36m")    # Cyan
+RD=$(echo "\033[01;31m") # Red
+BGN=$(echo "\033[4;92m") # Bright Green with underline
+GN=$(echo "\033[1;92m")  # Green with bold
+DGN=$(echo "\033[32m")   # Green
+CL=$(echo "\033[m")      # Clear
+BOLD=$(echo "\033[1m")   # Bold
+
+function info() {
+  local msg="$1"
+  echo -e "${DGN}${msg}${CL}"
+}
+
+function error() {
+  local msg="$1"
+  echo -e "${RD}[ERROR]${CL} ${msg}"
+}
+
+function warn() {
+  local msg="$1"
+  echo -e "${YW}[WARN]${CL} ${msg}"
+}
+
+# check that hostname is tappaas-cicd
+if [ "$(hostname)" != "tappaas-cicd" ]; then
+  error "This script must be run on the TAPPaaS-CICD host (hostname tappaas-cicd)."
+  exit 1
+fi
+
+# validate argument
+if [ -z "$1" ]; then
+  echo "Usage: $0 <module-name>"
+  echo ""
+  echo "Manages Proxmox HA and ZFS replication for a TAPPaaS module."
+  echo "Configuration is read from /home/tappaas/config/<module-name>.json"
+  exit 1
+fi
+
+MODULE_NAME="$1"
+MGMTVLAN="mgmt"
+
+# load JSON configuration
+JSON_CONFIG="/home/tappaas/config/${MODULE_NAME}.json"
+if [ ! -f "$JSON_CONFIG" ]; then
+  error "Configuration file not found: ${YW}$JSON_CONFIG${CL}"
+  exit 1
+fi
+JSON=$(cat "$JSON_CONFIG")
+
+function get_config_value() {
+  local key="$1"
+  local default="$2"
+  if ! echo "$JSON" | jq -e --arg K "$key" 'has($K)' >/dev/null ; then
+    if [ -z "$default" ]; then
+      echo -e "\n${RD}[ERROR]${CL} Missing required key '${YW}$key${CL}' in JSON configuration." >&2
+      exit 1
+    else
+      value="$default"
+    fi
+  else
+    value=$(echo "$JSON" | jq -r --arg KEY "$key" '.[$KEY]')
+  fi
+  echo -n "${value}"
+  return 0
+}
+
+# Get required values from JSON
+VMID=$(get_config_value 'vmid')
+NODE=$(get_config_value 'node' 'tappaas1')
+HANODE=$(get_config_value 'HANode' 'NONE')
+REPLICATION_SCHEDULE=$(get_config_value 'replicationSchedule' '*/15')
+STORAGE=$(get_config_value 'storage' 'tanka1')
+
+info "${BOLD}Updating HA configuration for module: ${BGN}${MODULE_NAME}${CL}"
+info "  VMID: $VMID"
+info "  Primary Node: $NODE"
+info "  HA Node: $HANODE"
+info "  Replication Schedule: $REPLICATION_SCHEDULE"
+info "  Storage: $STORAGE"
+
+# Build FQDN for primary node
+NODE_FQDN="${NODE}.${MGMTVLAN}.internal"
+
+# HA rule name follows pattern: ha-<module-name>
+HA_RULE_NAME="ha-${MODULE_NAME}"
+
+# Check if VM exists
+info "\nChecking if VM $VMID exists on node $NODE..."
+if ! ssh root@"$NODE_FQDN" "qm status $VMID" &>/dev/null; then
+  error "VM $VMID does not exist on node $NODE"
+  exit 1
+fi
+info "  VM $VMID found"
+
+# Function to remove HA configuration
+remove_ha_config() {
+  info "\n${BOLD}Removing HA configuration for VM $VMID..."
+
+  # Check if VM is in HA resources
+  if ssh root@"$NODE_FQDN" "ha-manager config" 2>/dev/null | grep -q "^vm:$VMID"; then
+    info "  Removing VM from HA resources..."
+    ssh root@"$NODE_FQDN" "ha-manager remove vm:$VMID" 2>/dev/null || true
+    info "  HA resource removed"
+  else
+    info "  VM not in HA resources, nothing to remove"
+  fi
+
+  # Check for and remove HA rule
+  info "\nChecking for HA rules..."
+  if ssh root@"$NODE_FQDN" "ha-manager rules list" 2>/dev/null | grep -q "^node-affinity.*${HA_RULE_NAME}"; then
+    info "  Removing HA rule: $HA_RULE_NAME"
+    ssh root@"$NODE_FQDN" "ha-manager rules remove $HA_RULE_NAME" 2>/dev/null || warn "Could not remove HA rule $HA_RULE_NAME"
+  else
+    info "  No HA rule found for this module"
+  fi
+
+  # Check for and remove replication jobs
+  info "\nChecking for replication jobs..."
+  REPL_JOBS=$(ssh root@"$NODE_FQDN" "pvesh get /cluster/replication --output-format json" 2>/dev/null | jq -r ".[] | select(.guest == $VMID) | .id" 2>/dev/null || echo "")
+  if [ -n "$REPL_JOBS" ]; then
+    for job_id in $REPL_JOBS; do
+      info "  Removing replication job: $job_id"
+      ssh root@"$NODE_FQDN" "pvesr delete $job_id --force 1" 2>/dev/null || warn "Could not remove replication job $job_id"
+    done
+    info "  Replication jobs removed"
+  else
+    info "  No replication jobs found"
+  fi
+}
+
+# Function to create/update HA configuration
+create_ha_config() {
+  local ha_node="$1"
+
+  info "\n${BOLD}Configuring HA for VM $VMID with secondary node: ${BGN}${ha_node}${CL}"
+
+  # Validate HA node is different from primary
+  if [ "$ha_node" == "$NODE" ]; then
+    error "HANode ($ha_node) must be different from primary node ($NODE)"
+    exit 1
+  fi
+
+  # Check HA node is reachable
+  HA_NODE_FQDN="${ha_node}.${MGMTVLAN}.internal"
+  info "  Checking HA node $ha_node is reachable..."
+  if ! ssh root@"$HA_NODE_FQDN" "hostname" &>/dev/null; then
+    error "Cannot reach HA node: $HA_NODE_FQDN"
+    exit 1
+  fi
+  info "  HA node is reachable"
+
+  # Check storage exists on HA node
+  info "  Checking storage $STORAGE exists on $ha_node..."
+  if ! ssh root@"$HA_NODE_FQDN" "pvesm status --storage $STORAGE" &>/dev/null; then
+    error "Storage $STORAGE does not exist on node $ha_node"
+    exit 1
+  fi
+  info "  Storage verified on HA node"
+
+  # Add VM to HA if not already present
+  info "\n  Adding VM $VMID to HA resources..."
+  if ssh root@"$NODE_FQDN" "ha-manager config" 2>/dev/null | grep -q "^vm:$VMID"; then
+    info "  VM already in HA resources, updating..."
+    ssh root@"$NODE_FQDN" "ha-manager set vm:$VMID --state started" 2>/dev/null || {
+      error "Failed to update HA resource"
+      exit 1
+    }
+  else
+    ssh root@"$NODE_FQDN" "ha-manager add vm:$VMID --state started" 2>/dev/null || {
+      error "Failed to add VM to HA"
+      exit 1
+    }
+  fi
+  info "  VM added to HA resources"
+
+  # Create or update node-affinity rule
+  # Priority: primary node gets priority 2, HA node gets priority 1
+  info "\n  Setting up node-affinity rule: $HA_RULE_NAME..."
+
+  # Check if rule exists
+  if ssh root@"$NODE_FQDN" "ha-manager rules list" 2>/dev/null | grep -q "node-affinity.*${HA_RULE_NAME}"; then
+    info "  Updating existing HA rule..."
+    ssh root@"$NODE_FQDN" "ha-manager rules set node-affinity $HA_RULE_NAME --nodes ${NODE}:2,${ha_node}:1 --resources vm:$VMID" 2>/dev/null || {
+      error "Failed to update HA rule"
+      exit 1
+    }
+  else
+    info "  Creating new HA rule..."
+    ssh root@"$NODE_FQDN" "ha-manager rules add node-affinity $HA_RULE_NAME --nodes ${NODE}:2,${ha_node}:1 --resources vm:$VMID" 2>/dev/null || {
+      error "Failed to create HA rule"
+      exit 1
+    }
+  fi
+  info "  Node-affinity rule configured: primary=$NODE (priority 2), failover=$ha_node (priority 1)"
+
+  # Setup replication
+  info "\n  Setting up ZFS replication to $ha_node..."
+
+  # Check for existing replication job
+  EXISTING_REPL=$(ssh root@"$NODE_FQDN" "pvesh get /cluster/replication --output-format json" 2>/dev/null | jq -r ".[] | select(.guest == $VMID) | .id" 2>/dev/null || echo "")
+
+  if [ -n "$EXISTING_REPL" ]; then
+    info "  Updating existing replication job: $EXISTING_REPL"
+    ssh root@"$NODE_FQDN" "pvesr update $EXISTING_REPL --schedule '$REPLICATION_SCHEDULE'" 2>/dev/null || {
+      warn "Could not update replication schedule, removing and recreating..."
+      ssh root@"$NODE_FQDN" "pvesr delete $EXISTING_REPL" 2>/dev/null || true
+      EXISTING_REPL=""
+    }
+  fi
+
+  if [ -z "$EXISTING_REPL" ]; then
+    # Create new replication job
+    # Job ID format: <vmid>-<index>
+    # Syntax: pvesr create-local-job <id> <target> [OPTIONS]
+    JOB_ID="${VMID}-0"
+    info "  Creating replication job: $JOB_ID"
+    ssh root@"$NODE_FQDN" "pvesr create-local-job $JOB_ID $ha_node --schedule '$REPLICATION_SCHEDULE'" 2>/dev/null || {
+      error "Failed to create replication job"
+      exit 1
+    }
+  fi
+  info "  Replication configured with schedule: $REPLICATION_SCHEDULE"
+}
+
+# Main logic
+if [ "$HANODE" == "NONE" ] || [ -z "$HANODE" ]; then
+  info "\n${BOLD}HANode is 'NONE' - removing any existing HA configuration"
+  remove_ha_config
+else
+  create_ha_config "$HANODE"
+fi
+
+info "\n${GN}${BOLD}HA configuration update completed for ${MODULE_NAME}${CL}"
