@@ -124,7 +124,8 @@ remove_ha_config() {
 
   # Check for and remove HA rule
   info "\nChecking for HA rules..."
-  if ssh root@"$NODE_FQDN" "ha-manager rules list" 2>/dev/null | grep -q "^node-affinity.*${HA_RULE_NAME}"; then
+  # ha-manager rules list outputs a table with rule names - grep for the rule name
+  if ssh root@"$NODE_FQDN" "ha-manager rules list" 2>/dev/null | grep -q "${HA_RULE_NAME}"; then
     info "  Removing HA rule: $HA_RULE_NAME"
     ssh root@"$NODE_FQDN" "ha-manager rules remove $HA_RULE_NAME" 2>/dev/null || warn "Could not remove HA rule $HA_RULE_NAME"
   else
@@ -194,8 +195,8 @@ create_ha_config() {
   # Priority: primary node gets priority 2, HA node gets priority 1
   info "\n  Setting up node-affinity rule: $HA_RULE_NAME..."
 
-  # Check if rule exists
-  if ssh root@"$NODE_FQDN" "ha-manager rules list" 2>/dev/null | grep -q "node-affinity.*${HA_RULE_NAME}"; then
+  # Check if rule exists - ha-manager rules list outputs a table with rule names
+  if ssh root@"$NODE_FQDN" "ha-manager rules list" 2>/dev/null | grep -q "${HA_RULE_NAME}"; then
     info "  Updating existing HA rule..."
     ssh root@"$NODE_FQDN" "ha-manager rules set node-affinity $HA_RULE_NAME --nodes ${NODE}:2,${ha_node}:1 --resources vm:$VMID" 2>/dev/null || {
       error "Failed to update HA rule"
