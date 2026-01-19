@@ -3,6 +3,8 @@
     "vmid": 130,
     "vmtag": "TAPPaaS,Foundation",
     "vmname": "tappaas-cicd",
+    "node": "tappaas1",
+    "HANode": "tappaas2",
     "cores": 4,
     "memory": "16384",
     "diskSize": "32G",
@@ -11,7 +13,6 @@
     "image": "8080",
     "bridge0": "lan",
     "zone0": "mgmt",
-    "HANode": "tappaas2",
     "replicationSchedule": "*/15",
     "description": "The TAPPaaS mothership VM"
 }

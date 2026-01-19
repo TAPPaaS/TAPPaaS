@@ -3,6 +3,8 @@
     "vmid": 110,
     "vmtag": "TAPPaaS,Foundation",
     "hostname": "firewall",
+    "node": "tappaas1",
+    "HANode": "tappaas2",
     "bios": "seabios",
     "ostype": "other",
     "cores": 4,

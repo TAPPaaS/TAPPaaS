@@ -1,4 +1,4 @@
-#!/bin/env bash
+#!/usr/bin/env bash
 #
 # Create a cron entry to run update-tappaas daily at 2am.
 # The update-tappaas script handles all scheduling logic internally.

@@ -52,12 +52,23 @@ done < <(ssh root@"$NODE1_FQDN" pvesh get /cluster/resources --type node --outpu
 
 # create tappaas binary director and config directory
 mkdir -p /home/tappaas/config
+mkdir -p /home/tappaas/bin
+
+# Add /home/tappaas/bin to PATH
+# On NixOS, .profile is sourced for login shells, and we also add to .bashrc
+# for interactive non-login shells that explicitly source it
+TAPPAAS_PATH_EXPORT='export PATH="/home/tappaas/bin:$PATH"'
+for rcfile in /home/tappaas/.profile /home/tappaas/.bashrc; do
+    if ! grep -q '/home/tappaas/bin' "$rcfile" 2>/dev/null; then
+        echo -e '\n# TAPPaaS bin directory' >> "$rcfile"
+        echo "$TAPPAAS_PATH_EXPORT" >> "$rcfile"
+        echo "Added /home/tappaas/bin to PATH in $rcfile"
+    fi
+done
+# copy the json configuration files 
 cp /home/tappaas/TAPPaaS/src/foundation/*.json /home/tappaas/config/
 cp ../*/*.json /home/tappaas/config/
-mkdir -p /home/tappaas/bin
-cp scripts/*.sh /home/tappaas/bin/
-chmod +x /home/tappaas/bin/*.sh
-# copy the potentially modified configuration.json and vlans.json files from tappaas1
+# copy the potentially modified configuration.json and vlans.json files from tappaas1 (potentially modified during bootstrap)
 scp root@"$NODE1_FQDN":/root/tappaas/*.json /home/tappaas/config/
 
 # copy the jsons to all nodes

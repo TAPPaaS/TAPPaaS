@@ -12,6 +12,15 @@ FIREWALL_FQDN="firewall.mgmt.internal"
 
 echo "Updating OPNsense firewall..."
 
+if update-json.sh firewall; then
+    echo "firewall.json updated, applying configuration..."
+    # TODO
+fi
+
+# Update HA configuration (creates/updates/removes based on HANode field)
+/home/tappaas/bin/update-HA.sh firewall
+
+
 # Check SSH access
 echo "Checking SSH access to firewall..."
 if ! ssh -o ConnectTimeout=5 -o BatchMode=yes root@"$FIREWALL_FQDN" echo "ok" >/dev/null 2>&1; then
