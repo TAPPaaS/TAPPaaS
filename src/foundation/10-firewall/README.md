@@ -83,7 +83,7 @@ boot up the VM and configure the opnsense
 
 after boot you login as root with password opnsense
 
-change the root password; option 3
+change the root password; option 3, followed by answer "y"
 
 change lan ip; option 2:
 
@@ -96,6 +96,7 @@ change lan ip; option 2:
 ### Test
 
 jump into a shell (option 8) and test that you can ping external addresses
+(you might need to reboot opnsense for routing to work)
 
 connect a pc to the LAN port of the proxmox box (can be via a switch)
 
@@ -106,8 +107,10 @@ connect a pc to the LAN port of the proxmox box (can be via a switch)
 
 From: [OPNsense DHCP with DNS](https://docs.opnsense.org/manual/dnsmasq.html#dhcpv4-with-dns-registration)
 
-- Enable services -> Unbound DNS - general and ensure it listen to port 53
-- Enable services -> dnsmask DNS ->general
+Log into OPNsense on 10.0.0.10
+
+- Enable services -> Unbound DNS -> General and ensure it listen to port 53
+- Enable services -> dnsmask DNS -> General
   - Interface LAN
   - Listen port: use port 53053
   - DNS Query Forwarding
@@ -116,16 +119,15 @@ From: [OPNsense DHCP with DNS](https://docs.opnsense.org/manual/dnsmasq.html#dhc
     - enable: DHCP fqdn, DHCP authoritative, DHCP register firewall rules
     - DHCP default domain: internal
   - Click Apply
-- register dnsmask with unbound DNS for internal domain
-  - Service -> Unbound DNS -> Query Forwarding
-    - register "internal" to query 127.0.0.1 port 53053
-    - register "10.in-addr.arpa" to query 127.0.0.1 port 53053
-    - press apply
-- edit the DHCP domain for LAN interface
-  - go to Services -> Dnsmasq & DHCP -> DHCP ranges
-    - edit LAN interface and change domain to mgmt.internal
+- Service -> Unbound DNS -> Query Forwarding
+  - register "internal" to query 127.0.0.1 port 53053
+  - register "10.in-addr.arpa" to query 127.0.0.1 port 53053
+  - press apply
+- go to Services -> Dnsmasq & DHCP -> DHCP ranges
+  - edit LAN interface and change domain to mgmt.internal
+  - press apply
 
-finally register the static hosts on the internal network: firewall and tappaas1
+Finally register the static hosts on the internal network: firewall and tappaas1
 
 - go to Service -> Dnsmasq DNS & DHCP -> Hosts
   - add host:
@@ -136,16 +138,20 @@ finally register the static hosts on the internal network: firewall and tappaas1
     - name tappaas1
     - domain: mgmt.internal
     - ip: 10.0.0.10
+  - press apply
 
-Check that you can lookup you your local machines using .internal domain
+Check that you can lookup you your tappaas1 and firewall hosts using .mgmt.internal domain
 
 ## 3. Swap cables Step
 
 First we switch tappaas1 node to be working **only** on the Lan port:
 
 - in the Proxmox console edit the network bridge "Wan": remove the IP IP assignment.
-- in the lan network update the gateway to be 10.0.0.1
-- in the shell prompt: edit the following files:
+  - Note that you should connect to tappaas1 proxmox node via 10.0.0.10:8006
+  - first remove the ip and gateway assignment by editing the "wan" bridge under network for tappaas1
+  - then add 10.0.01 as gateway for the "wan" bridge
+  - press apply
+- in the console fo the tappaas1 node (via the proxmox gui): edit the following files:
   - /etc/hosts: ensure the host IP is the new 10.0.0.10
   - /etc/resolv.conf: ensure the resolver is 10.0.0.1
 
@@ -192,7 +198,7 @@ In the OPNsense gui: got to System->Settings->Administration
   - Listen interface is LAN
 - click SAVE
 
-### test
+## Reboot and Test
 
 ## TODO
 

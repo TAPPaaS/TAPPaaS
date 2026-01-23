@@ -23,11 +23,12 @@ followed by the rest of foundation, in number order.
 - prepare physical hardware. see [Examples](../../Documentation/Examples/README.md) or [Hardware](../../Documentation/Architecture/Hardware.md)
 - ensure you designed your basic setup [Design](../../Documentation/Installation/README.md)
   - you have a domain name for the installation: <mytappaas.tld>
-  - when the installer ask for a FQDM for the machine use: tappaas1.internal  (do not use the external recognized domain for your installation, that is for the firewall)
+  - when the installer ask for a FQDM for the machine use: tappaas1.mgmt.internal  (do not use the external recognized domain for your installation, that is for the firewall)
     - if this is not the first node then replace the tappaas1 with the appropiate tappaas2,3,4, ...
     - Note that the current installation do not support a different name for the PVE nodes
   - The hardware is plugged into a local network with internet connection. you have a local IP number for the node (will later be changed when the firewall is installed)
   - You will be asked for a password for root. Select a strong password and remember it :-)
+  - You will be asked for an email: Use an email that can be accessed by the administrator of the TAPPaaS installation
 - download a Proxmox VE iso installer image from: [Official Proxmox Download site](https://www.proxmox.com/en/downloads)
 - create a boot USB (on windows we recommend to use [Rufus](https://rufus.ie/en/), on Linux Mint right click on .iso and select make boot-able usb stick)
 
@@ -38,6 +39,10 @@ followed by the rest of foundation, in number order.
   - further info in [PVE instaler](./PVE-Installer.md) 
 
 ## Post Install
+
+After reboot, log into the Proxmox GUI on the web address displayed on the console of the tappass maschine
+
+When accessing the gui you likely need to accept that it is an unsecure connection. and after loging in as root do a page refresh to get rid of the subscription popup
 
 Run the post install script (if you are not using the "main" branch for the install then then change the assignment in the first line):
 ```
@@ -62,6 +67,7 @@ Join the node to the TAPPaaS cluster:
 
 - on the tappass1 node GUI: go to datacenter and click Cluster: click Join information, and copy information
 - on the new tappaas node GUI: go to datacenter and click Cluster and then join cluster: paste information and enter root password for tappaas1
+  - after you joined, you need to reload the tappaas2 web gui as it changes fingerprint for login after joining a cluster
 
 ## Add the storage tanks (that is adding data disks to the node configuration)
 
@@ -69,7 +75,7 @@ It is important to create the data "tanks" AFTER the cluster is created, or PVE 
 
 Create the "tanks" as zfs pools (normally, as a minimum, you will create a tanka1). 
 
-- Use the GUI of the newly installed node (web browser to <ip of node>:8006)
+- Use the GUI of the newly installed node
   - under the tappaas1 node in the datacenter panel go to the disk section. 
   - take note of the disks you have
   - In order to "reuse" a Hard disk (SSD or HDD), you might need to delete old partitions for zfs to accept it into a new pool
@@ -79,7 +85,6 @@ Create the "tanks" as zfs pools (normally, as a minimum, you will create a tanka
     - add the disk and click create
   - alternative you can create the pool from the command line. 
     - This gives the option to stripe disks together without reduancy (raid0), to create ssd disk cache (L2ARC) and log (ZIL)
-- If sufficient hw resources are available then use mirror on tanka1
 
 ## adjust the local copy of the configuration.json and vlan.json
 
@@ -96,6 +101,7 @@ scp tappaas1.mgmt.internal:/root/tappaas/configuration.json tappaas
 scp tappaas1.mgmt.internal:/root/tappaas/zones.json tappaas
 ```
 
-## After reboot:
+## Cleanup
 
-- check that it all looks fine!! (TODO automate check setup)
+if this is the fist node then proceed to firewall setup, where there is a reboot step after bridge reconfiguration
+if this is not the first node, then reboot at this step.

@@ -25,6 +25,7 @@ Register the hosts on the internal network: tappaas2,3,...
     - name tappaas2
     - domain: mgmt.internal
     - ip: 10.0.0.11
+  - press apply
 
 Rename the network bridge from "vmbr0" to "lan" using the command line/console of tappaas node:
 - edit the /etc/network/interfaces
