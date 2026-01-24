@@ -328,8 +328,8 @@ class ZoneManager:
 
             # First, delete VLANs for disabled zones
             for zone in disabled_zones:
-                vlan_desc = zone.vlan_description
-                existing = existing_descriptions.get(vlan_desc) or existing_tags.get(zone.vlan_tag)
+                # Only use tag-based lookup for deletion to avoid matching wrong VLANs with duplicate descriptions
+                existing = existing_tags.get(zone.vlan_tag)
 
                 if existing:
                     print(f"  {zone.name}: Deleting VLAN {zone.vlan_tag} (zone disabled)")
@@ -373,7 +373,8 @@ class ZoneManager:
             # Then, create VLANs for enabled zones
             for zone in vlan_zones:
                 vlan_desc = zone.vlan_description
-                existing = existing_descriptions.get(vlan_desc) or existing_tags.get(zone.vlan_tag)
+                # Prioritize tag-based lookup to avoid matching wrong VLANs with duplicate descriptions
+                existing = existing_tags.get(zone.vlan_tag) or existing_descriptions.get(vlan_desc)
 
                 if existing:
                     print(f"  {zone.name}: VLAN {zone.vlan_tag} already exists (skipping)")
