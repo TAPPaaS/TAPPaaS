@@ -23,12 +23,12 @@ FIREWALL_FQDN="firewall.$MGMTVLAN.internal"
 while read -r node; do
   echo -e "\nInstalling SSH public key on proxmox node: $node"
   NODE_FQDN="$node.$MGMTVLAN.internal"
-  ssh-copy-id -i /home/tappaas/.ssh/id_ed25519.pub root@"$NODE_FQDN" || echo "SSH key copy to $node failed or key already installed."
+  ssh-copy-id -i /home/tappaas/.ssh/id_ed25519.pub root@"$NODE_FQDN" < /dev/null || echo "SSH key copy to $node failed or key already installed."
   # also make the key available for the tappaas script that configure cloud-init on the vms
-  ssh root@"$NODE_FQDN" "mkdir -p /root/tappaas"
-  scp /home/tappaas/.ssh/id_ed25519.pub root@"$NODE_FQDN":/root/tappaas/tappaas-cicd.pub
-  scp /home/tappaas/.ssh/id_ed25519 root@"$NODE_FQDN":/root/tappaas/tappaas-cicd.key
-done < <(ssh root@"$NODE1_FQDN" pvesh get /cluster/resources --type node --output-format json | jq --raw-output ".[].node" )
+  ssh -n root@"$NODE_FQDN" "mkdir -p /root/tappaas"
+  scp /home/tappaas/.ssh/id_ed25519.pub root@"$NODE_FQDN":/root/tappaas/tappaas-cicd.pub < /dev/null
+  scp /home/tappaas/.ssh/id_ed25519 root@"$NODE_FQDN":/root/tappaas/tappaas-cicd.key < /dev/null
+done < <(ssh -n root@"$NODE1_FQDN" pvesh get /cluster/resources --type node --output-format json | jq --raw-output ".[].node" )
 
 # create tappaas binary director and config directory
 mkdir -p /home/tappaas/config
