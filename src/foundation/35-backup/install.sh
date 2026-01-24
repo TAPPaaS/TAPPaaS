@@ -54,8 +54,8 @@ ZONE="$(get_config_value 'zone0' 'mgmt')"
 
 # update the apt sources and install pbs
 
-info "${BOLD}$Test if apt $IMAGE_LOCATION repositories are registered ..."
-if [[ ssh root@${NODE}.tappaas.internal "cat  /etc/apt/sources.list.d/proxmox.sources" | grep "$IMAGE_LOCATION" >/dev/null 2>&1 ]]
+info "${BOLD}Test if apt $IMAGE_LOCATION repositories are registered ..."
+if ssh root@${NODE}.$ZONE.internal "cat /etc/apt/sources.list.d/proxmox.sources 2>/dev/null" | grep -q "$IMAGE_LOCATION"
 then
   echo "Proxmox PBS apt repository already registered."
 else
@@ -69,7 +69,7 @@ Signed-By: /usr/share/keyrings/proxmox-archive-keyring.gpg
 EOF
 fi
 
-info "${BOLD}$Installing ${DESCIPTION} on node ${BGN}${NODE}${CL} ..."
+info "${BOLD}Installing ${DESCRIPTION} on node ${BGN}${NODE}${CL} ..."
 ssh root@${NODE}.$ZONE.internal bash -c "'
   set -e
   apt update
