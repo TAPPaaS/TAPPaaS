@@ -66,6 +66,9 @@
   };
   programs.ssh.startAgent = true;
 
+  # Enable cron for scheduled tasks
+  services.cron.enable = true;
+
   nix.settings.trusted-users = [ "root" "@wheel" ]; # Allow remote updates
   nix.settings.experimental-features = [ "nix-command" "flakes" ]; # Enable flakes
   nixpkgs.config.allowUnfree = true; # Allow unfree packages

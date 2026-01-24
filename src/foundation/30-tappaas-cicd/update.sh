@@ -9,6 +9,10 @@ set -e
 VMNAME="$(get_config_value 'vmname' "$1")"
 NODE="$(get_config_value 'node' 'tappaas1')"
 ZONE0NAME="$(get_config_value 'zone0' 'mgmt')"
+MGMTVLAN="mgmt"
+NODE1_FQDN="tappaas1.$MGMTVLAN.internal"
+FIREWALL_FQDN="firewall.$MGMTVLAN.internal"
+echo -e "\nStarting TAPPaaS-CICD module update for VM: $VMNAME on node: $NODE"
 
 # TODO: check if branch has changed and if so checkout the branch before pulling
 cd
@@ -22,23 +26,7 @@ cd src/foundation/30-tappaas-cicd || { echo "TAPPaaS-CICD directory not found!";
 cp scripts/*.sh /home/tappaas/bin/
 chmod +x /home/tappaas/bin/*.sh
 
-# Update the configuration.json, zones.json and tappaas-cicd.json if there are changes
-echo -e "\nChecking for updates to mymodule.json..."
-cd ..
-update-json.sh configuration
-if update-json.sh zones; then
-    /home/tappaas/bin/update-zones.sh --file /home/tappaas/config/zones.json
-fi
-cd 30-tappaas-cicd
-if update-json.sh tappaas-cicd; then
-    echo "tappaas-cicd.json updated, applying configuration..."
-    # TODO
-fi
-
-# Update HA configuration (creates/updates/removes based on HANode field)
-/home/tappaas/bin/update-HA.sh tappaas-cicd
-
-# Build the opnsense-controller project (formerly opnsense-scripts)
+# (re)Build the opnsense-controller project (formerly opnsense-scripts)
 echo -en "\nBuilding the opnsense-controller project"
 cd opnsense-controller
 stdbuf -oL nix-build -A default default.nix 2>&1 | tee /tmp/opnsense-controller-build.log | while IFS= read -r line; do printf "."; done
@@ -46,14 +34,14 @@ rm /home/tappaas/bin/opnsense-controller 2>/dev/null || true
 ln -s /home/tappaas/TAPPaaS/src/foundation/30-tappaas-cicd/opnsense-controller/result/bin/opnsense-controller /home/tappaas/bin/opnsense-controller
 rm /home/tappaas/bin/zone-manager 2>/dev/null || true
 ln -s /home/tappaas/TAPPaaS/src/foundation/30-tappaas-cicd/opnsense-controller/result/bin/zone-manager /home/tappaas/bin/zone-manager
-# create a default credentials file
-cp credentials.example.txt ~/.opnsense-credentials.txt
+# TODO check if credentials file exist and if not write the example file and give warning
+# For now just set the permissions
+# cp credentials.example.txt ~/.opnsense-credentials.txt
 chmod 600 ~/.opnsense-credentials.txt
 echo -e "\nopnsense-controller binary installed to /home/tappaas/bin/opnsense-controller"
 echo -e "Copying the AssignSettingsController.php to the OPNsense controller node..."
-echo -e "you will be asked for the root password of the firewall node $FIREWALL_FQDN"
-scp opnsense-patch/AssignSettingsController.php root@"$FIREWALL_FQDN":/usr/local/opnsense/mvc/app/controllers/OPNsense/Interfaces/Api/AssignSettingsController.php
 cd ..
+scp opnsense-patch/AssignSettingsController.php root@"$FIREWALL_FQDN":/usr/local/opnsense/mvc/app/controllers/OPNsense/Interfaces/Api/AssignSettingsController.php
 
 # Build the update-tappaas project
 echo -en "\nBuilding the update-tappaas project"
@@ -67,6 +55,29 @@ echo -e "\nupdate-tappaas and update-node binaries installed to /home/tappaas/bi
 /home/tappaas/bin/update-cron.sh
 echo -e "\nupdate-tappaas cron job updated."
 cd ..
+
+# Update the configuration.json, zones.json and tappaas-cicd.json if there are changes
+echo -e "\nChecking for updates to configuration.json..."
+cd ..
+if update-json.sh configuration ; then
+    echo "configuration.json updated"
+fi
+echo -e "\nChecking for updates to zones.json..."
+if update-json.sh zones ; then
+    echo "zones.json updated"
+fi
+echo "Applying zone configuration..."
+# always re-run zones update in case firewall logic is changed
+/home/tappaas/bin/zone-manager --no-ssl-verify --zones-file /home/tappaas/config/zones.json --execute
+echo -e "\nChecking for updates to tappaas.json..."
+cd 30-tappaas-cicd
+if update-json.sh tappaas-cicd; then
+    echo "tappaas-cicd.json updated, applying configuration..."
+    # TODO
+fi
+
+# Update HA configuration (creates/updates/removes based on HANode field)
+/home/tappaas/bin/update-HA.sh tappaas-cicd
 
 # rebuild the nixos configuration
 nixos-rebuild --target-host "tappaas@${VMNAME}.${ZONE0NAME}.internal" --use-remote-sudo switch -I "nixos-config=./${VMNAME}.nix"

@@ -34,10 +34,18 @@ done < <(ssh -n root@"$NODE1_FQDN" pvesh get /cluster/resources --type node --ou
 mkdir -p /home/tappaas/config
 mkdir -p /home/tappaas/bin
 
+# install scripts
+cp /home/tappaas/TAPPaaS/src/foundation/30-tappaas-cicd/scripts/*.sh /home/tappaas/bin/
+chmod +x /home/tappaas/bin/*.sh
+
 # Add /home/tappaas/bin to PATH
 # On NixOS, .profile is sourced for login shells, and we also add to .bashrc
 # for interactive non-login shells that explicitly source it
 TAPPAAS_PATH_EXPORT='export PATH="/home/tappaas/bin:$PATH"'
+
+# Export PATH for the current script execution
+export PATH="/home/tappaas/bin:$PATH"
+
 for rcfile in /home/tappaas/.profile /home/tappaas/.bashrc; do
     if ! grep -q '/home/tappaas/bin' "$rcfile" 2>/dev/null; then
         echo -e '\n# TAPPaaS bin directory' >> "$rcfile"
@@ -47,7 +55,7 @@ for rcfile in /home/tappaas/.profile /home/tappaas/.bashrc; do
 done
 # copy the json configuration files 
 cp /home/tappaas/TAPPaaS/src/foundation/*.json /home/tappaas/config/
-cp ../*/*.json /home/tappaas/config/
+cp /home/tappaas/TAPPaaS/src/foundation/*/*.json /home/tappaas/config/
 # copy the potentially modified configuration.json and vlans.json files from tappaas1 (potentially modified during bootstrap)
 scp root@"$NODE1_FQDN":/root/tappaas/*.json /home/tappaas/config/
 
@@ -56,7 +64,7 @@ scp root@"$NODE1_FQDN":/root/tappaas/*.json /home/tappaas/config/
 
 
 # run the update script as all update actions is also needed at install time
-. ./update.sh
+. /home/tappaas/TAPPaaS/src/foundation/30-tappaas-cicd/update.sh
 
 # Setup Caddy reverse proxy on the firewall
 echo -e "\nSetting up Caddy reverse proxy..."
