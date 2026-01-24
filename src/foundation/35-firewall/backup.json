@@ -2,7 +2,7 @@
     "version": "0.5",
     "node": "tappaas3",
     "vmtag": "TAPPaaS,Foundation",
-    "vmname": "pbs",
+    "vmname": "backup",
     "storage": "tankc1",
     "zone0": "mgmt",
     "imageType": "apt",

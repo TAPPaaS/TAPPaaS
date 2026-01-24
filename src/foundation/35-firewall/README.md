@@ -1,12 +1,20 @@
-# TAPPaaS Proxmox Backup Server
-
+# TAPPaaS Proxmox Backup Server (PBS) 
 
 This module install PBS from official apt repository onto an existing TAPPaaS node.
 the pbs.json define which node, and define the actual apt package to install
 
 Consider editing the json before installing
 
+## Install
+
 To install simply run the install.sh from the tappaas-cicd vm
+
+```bash
+cd
+cd TAPPaaS/src/Foundation/35-backup
+chmod -x install.sh
+./install.sh
+```
 
 after running the script you need to configure the PBS installation by logging into the PBS gui
 

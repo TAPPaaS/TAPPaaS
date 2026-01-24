@@ -10,7 +10,7 @@ The modules in Foundation should be installed and configured in the numbered ord
 3. Add additional nodes to the cluster [Add Nodes](./15-AdditionalPVE-Nodes/README.md)
 4. Create a TAPPaaS NixOS VM template [tappaas-nixos](./20-tappaas-nixos/README.md)
 5. Install the "mothership" that is the VM that will control the entire TAPPaaS system through it life [TAPPaaS-CICD](./30-tappaas-cicd/README.md)
-6. Install the Proxmox Backup software [PBS](./35-pbs/README.md)
+6. Install the Proxmox Backup software [Backup](./35-backup/README.md)
 7. Install secrets and identity management solution [Identity](./40-Identity/README.md)
 
 As part of foundation there is a general configuration.json that will be installed locally in the tappass account on the cicd "mothership" VM under /root/tappaas/configuration.json
