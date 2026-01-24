@@ -37,15 +37,6 @@ Reboot the tappaas-cicd VM and check that you can login using domain name
 ssh tappaas@tappaas-cicd.mgmt.internal
 ```
 
-### Creating API Credentials in OPNsense and install them in ~/.opnsense-credentials
-
-1. Log into OPNsense web interface
-2. Go to **System > Access > Users**
-3. add a user "tappaas", add all priviliges and accces, save
-4. Under **API keys**, click **+** to generate a key (in the screen with a line for each user)
-5. copy the key
-6. Save the key and secret in ~/.opnsense-credentials.txt using you vi or nano
-
 ### Setting up SSH Access to OPNsense Firewall
 
 The tappaas-cicd VM needs SSH access to the firewall for automated updates. Follow these steps to configure SSH key authentication:
@@ -56,7 +47,7 @@ The tappaas-cicd VM needs SSH access to the firewall for automated updates. Foll
    - Under **Secure Shell**, check **Enable Secure Shell**
    - Check **Permit root user login**
    - Check **Permit password login** (temporarily, for key setup)
-   - Save and Apply
+   - Press Save to apply
 
 2. **Copy the SSH public key to OPNsense**:
 
@@ -75,9 +66,27 @@ ssh root@firewall.mgmt.internal "echo 'SSH access configured successfully'"
 4. **Disable password authentication** (recommended for security):
    - Go back to **System > Settings > Administration**
    - Uncheck **Permit password login**
-   - Save and Apply
+   - press Save to apply
 
    SSH key authentication will continue to work after disabling password login.
+
+### Creating API Credentials in OPNsense and install them in ~/.opnsense-credentials
+
+1. Log into OPNsense web interface
+2. Go to **System > Access > Users**
+3. add a user "tappaas"
+   - username is tappaas, password use the same as for the root account of opnsense (or something random you are not going to log in)
+   - Group membership: Admin
+   - Privileges: "all pages"
+   - Save
+4. On the same page, in the new user line tappaas, look at the commands section to the rigth. There is a "create and download API keys" button
+   - press that and create a key.
+   - open the downloaded txt file and copy the two key lines 
+5. in a terminal window ssh into the tappaas-cicd and:
+   - create a file ~/.opnsense-credentials.txt using you vi or nano. 
+   - insert the copied two API key lines
+   - save
+6. Delete the downloaded key file from your browser pc.
 
 ### install the tappaas-cicd programs
 
