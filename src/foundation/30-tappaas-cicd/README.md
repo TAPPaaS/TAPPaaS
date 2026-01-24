@@ -18,8 +18,21 @@ curl -fsSL  https://raw.githubusercontent.com/TAPPaaS/TAPPaaS/$BRANCH/src/founda
 ~/tappaas/Create-TAPPaaS-VM.sh tappaas-cicd
 ```
 
-There should now be a running tappaas-cicd VM. you can ssh into the VM from the proxmox console
+There should now be a running tappaas-cicd VM. you can ssh into the VM from the proxmox console. However note that the hostname of the machine has not been changed yet, so you need to use the ip number of the machine.
 
+you can see the IP number in the "summary" page of the tappaas-cicd VM in the tappaas1 proxmox GUI
+
+```bash
+ssh tappaas@10.0.0.xxx
+```
+
+when logged in run the install1.sh script
+```bash
+BRANCH="main"
+curl -fsSL  https://raw.githubusercontent.com/TAPPaaS/TAPPaaS/$BRANCH/src/foundation/30-tappaas-cicd/install1.sh | bash
+```
+
+Reboot the tappaas-cicd VM and check that you can login using domain name
 ```bash
 ssh tappaas@tappaas-cicd.mgmt.internal
 ```
@@ -37,12 +50,7 @@ ssh tappaas@tappaas-cicd.mgmt.internal
 
 The tappaas-cicd VM needs SSH access to the firewall for automated updates. Follow these steps to configure SSH key authentication:
 
-1. **Generate SSH key on tappaas-cicd** (if not already done during install):
-   ```bash
-   ssh-keygen -t ed25519 -f ~/.ssh/id_ed25519 -N "" -C "tappaas-cicd"
-   ```
-
-2. **Enable SSH on OPNsense**:
+1. **Enable SSH on OPNsense**:
    - Log into OPNsense web interface
    - Go to **System > Settings > Administration**
    - Under **Secure Shell**, check **Enable Secure Shell**
@@ -50,18 +58,21 @@ The tappaas-cicd VM needs SSH access to the firewall for automated updates. Foll
    - Check **Permit password login** (temporarily, for key setup)
    - Save and Apply
 
-3. **Copy the SSH public key to OPNsense**:
-   ```bash
-   ssh-copy-id -i ~/.ssh/id_ed25519.pub root@firewall.mgmt.internal
-   ```
-   Enter the root password when prompted.
+2. **Copy the SSH public key to OPNsense**:
 
-4. **Test SSH access**:
-   ```bash
-   ssh root@firewall.mgmt.internal "echo 'SSH access configured successfully'"
-   ```
+```bash
+ssh-copy-id -i ~/.ssh/id_ed25519.pub root@firewall.mgmt.internal
+```
 
-5. **Disable password authentication** (recommended for security):
+Enter the root password when prompted.
+
+3. **Test SSH access**:
+
+```bash
+ssh root@firewall.mgmt.internal "echo 'SSH access configured successfully'"
+```
+
+4. **Disable password authentication** (recommended for security):
    - Go back to **System > Settings > Administration**
    - Uncheck **Permit password login**
    - Save and Apply
@@ -74,7 +85,7 @@ on the tappaas-cicd console (via ssh, logged in as tappaas user) do:
 
 ```bash
 export BRANCH="main"
-curl -fsSL  https://raw.githubusercontent.com/TAPPaaS/TAPPaaS/$BRANCH/src/foundation/30-tappaas-cicd/install.sh | bash
+curl -fsSL  https://raw.githubusercontent.com/TAPPaaS/TAPPaaS/$BRANCH/src/foundation/30-tappaas-cicd/install2.sh | bash
 ```
 
 You might be asked for password for root at proxmox node tappaas1

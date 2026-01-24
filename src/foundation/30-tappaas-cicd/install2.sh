@@ -13,31 +13,11 @@ if [ -z "$BRANCH" ]; then
   BRANCH="main"
 fi
 
-# clone the tappaas-cicd repo
-echo -e "\nCloning TAPPaaS repository..."
-git clone   https://github.com/TAPPaaS/TAPPaaS.git
-echo -e "\nswitching to branch $BRANCH..."
-cd TAPPaaS
-git checkout $BRANCH
-
-# go to the tappaas-cicd folder
-echo -e "\nChanging to TAPPaaS-CICD directory and rebuilding the NixOS configuration..."
-cd src/foundation/30-tappaas-cicd
-
-# rebuild the nixos configuration
-sudo nixos-rebuild switch -I nixos-config=./tappaas-cicd.nix
 
 # creatae a fully qualified node hostname for tappaas1
 MGMTVLAN="mgmt"
 NODE1_FQDN="tappaas1.$MGMTVLAN.internal"
 FIREWALL_FQDN="firewall.$MGMTVLAN.internal"
-
-# create ssh keys for the tappaas user
-echo -e "\nCreating SSH keys for the tappaas user and installing them for the proxmox host..."
-ssh-keygen -t ed25519 -f /home/tappaas/.ssh/id_ed25519 -N "" -C "tappaas-cicd"
-# enforce secure permissions on the private key
-sudo chown tappaas:users /home/tappaas/.ssh/id_ed25519*
-sudo chmod 600 /home/tappaas/.ssh/id_ed25519
 
 # copy the public keys to the root account of every proxmox host
 while read -r node; do

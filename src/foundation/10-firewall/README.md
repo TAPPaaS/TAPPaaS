@@ -154,6 +154,7 @@ First we switch tappaas1 node to be working **only** on the Lan port:
 - in the console fo the tappaas1 node (via the proxmox gui): edit the following files:
   - /etc/hosts: ensure the host IP is the new 10.0.0.10
   - /etc/resolv.conf: ensure the resolver is 10.0.0.1
+  - /etc/pve/corosync.conf: the old IP number to be replaced with 10.0.0.10
 
 You should now have a setup looking like:
 
