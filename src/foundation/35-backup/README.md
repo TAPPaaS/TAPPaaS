@@ -12,7 +12,7 @@ To install simply run the install.sh from the tappaas-cicd vm
 ```bash
 cd
 cd TAPPaaS/src/foundation/35-backup
-chmod -x install.sh
+chmod +x install.sh
 ./install.sh
 ```
 

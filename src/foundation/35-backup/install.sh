@@ -62,7 +62,7 @@ else
   echo "Proxmox PBS apt repository not found, adding it ..."
   ssh root@${NODE}.$ZONE.internal "cat >> /etc/apt/sources.list.d/proxmox.sources" << EOF
 Types: deb
-URIs: ${IMAGE_LOCATION}
+URIs: ${IMAGE_LOCATION
 Suites: trixie
 Components: pbs-no-subscription
 Signed-By: /usr/share/keyrings/proxmox-archive-keyring.gpg
@@ -76,6 +76,6 @@ ssh root@${NODE}.$ZONE.internal bash -c "'
   apt install -y proxmox-backup-server
 '"  
 # copy the config file to the tappass pbs service to keep a record of what has been installed
-scp $JSON_CONFIG root@${NODE}.$ZONE.internal:/root/tappaas/$JSON_CONFIG
+scp $JSON_CONFIG root@${NODE}.$ZONE.internal:/root/tappaas/$1.json
 
 info "\n${GN}TAPPaaS PBS installation completed successfully.${CL}"
