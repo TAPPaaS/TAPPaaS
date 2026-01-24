@@ -76,6 +76,11 @@ class Zone:
         return self.state.lower() == "manual"
 
     @property
+    def is_inactive(self) -> bool:
+        """Check if zone is inactive (defined but not managed)."""
+        return self.state.lower() == "inactive"
+
+    @property
     def needs_vlan(self) -> bool:
         """Check if zone needs a VLAN (tag > 0)."""
         return self.vlan_tag > 0
@@ -333,7 +338,17 @@ class ZoneManager:
                     else:
                         try:
                             # Check if VLAN is assigned to an interface
-                            assigned = assigned_by_tag.get(str(zone.vlan_tag))
+                            # Try both string and int lookups for robustness
+                            assigned = assigned_by_tag.get(str(zone.vlan_tag)) or assigned_by_tag.get(zone.vlan_tag)
+
+                            # If not found in assigned_by_tag, search manually by description or device
+                            if not assigned:
+                                vlan_device = existing.get("device")
+                                for v in assigned_vlans:
+                                    if v.get("device") == vlan_device or v.get("description", "").lower() == zone.name.lower():
+                                        assigned = v
+                                        break
+
                             if assigned:
                                 iface_id = assigned.get("identifier")
                                 print(f"    Unassigning interface {iface_id} first...")
@@ -343,8 +358,14 @@ class ZoneManager:
                             result = manager.delete_vlan(existing["description"], check_mode=False)
                             results[zone.name] = {"status": "deleted", "result": result}
                         except Exception as e:
-                            results[zone.name] = {"status": "error", "error": str(e)}
-                            print(f"    Error: {e}")
+                            error_msg = str(e)
+                            # If deletion fails because interface is still assigned, provide helpful error
+                            if "assigned as an interface" in error_msg.lower():
+                                print(f"    Error: VLAN is assigned to an interface but could not be unassigned automatically.")
+                                print(f"    Please manually delete the interface in OPNsense first, then re-run zone-manager.")
+                            else:
+                                print(f"    Error: {e}")
+                            results[zone.name] = {"status": "error", "error": error_msg}
                 else:
                     print(f"  {zone.name}: VLAN {zone.vlan_tag} not found (nothing to delete)")
                     results[zone.name] = {"status": "not_found", "vlan": zone.vlan_tag}
