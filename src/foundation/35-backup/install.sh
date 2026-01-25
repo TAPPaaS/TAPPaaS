@@ -74,8 +74,12 @@ ssh root@${NODE}.$ZONE.internal bash -c "'
   set -e
   apt update
   apt install -y proxmox-backup-server
+  rm -f /etc/apt/sources.list.d/pbs-enterprise.sources
 '"  
 # copy the config file to the tappass pbs service to keep a record of what has been installed
 scp $JSON_CONFIG root@${NODE}.$ZONE.internal:/root/tappaas/$1.json
+
+# Create a backup directory on the storage tank
+mkdir -p /${STORAGE}/tappaas_backups
 
 info "\n${GN}TAPPaaS PBS installation completed successfully.${CL}"
