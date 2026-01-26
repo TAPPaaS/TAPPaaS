@@ -48,8 +48,17 @@ After running the script you need to configure the PBS installation by logging i
     - Schedule: 21:00
     - selection: all
     - click OK
-4) create a pbs backup of the backup through a "friendly TAPPaaS" service 
-5) configure retention policies
+6) Configure retention policy: on PBS GUI
+    - go to Datastore and select the tab "Prune & GC Jobs"
+    - edit the "default" prne job for datastore "tappaas_backup"
+    - set 
+        - Keep Last to 4
+        - Keep Daily to 14
+        - Keep Weekly to 8
+        - Kepp Monthly to 12
+        - Keep Yearly to 6
+7) create a pbs backup of the backup through a "friendly TAPPaaS" service 
+    - this is configured on the remote PBS system. the remote PBS will "pull" the backup from your TAPPaaS PBS.
 
 # TODO
 add Encryption
