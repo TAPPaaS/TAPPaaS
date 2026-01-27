@@ -34,6 +34,8 @@ rm /home/tappaas/bin/opnsense-controller 2>/dev/null || true
 ln -s /home/tappaas/TAPPaaS/src/foundation/30-tappaas-cicd/opnsense-controller/result/bin/opnsense-controller /home/tappaas/bin/opnsense-controller
 rm /home/tappaas/bin/zone-manager 2>/dev/null || true
 ln -s /home/tappaas/TAPPaaS/src/foundation/30-tappaas-cicd/opnsense-controller/result/bin/zone-manager /home/tappaas/bin/zone-manager
+rm /home/tappaas/bin/dns-manager 2>/dev/null || true
+ln -s /home/tappaas/TAPPaaS/src/foundation/30-tappaas-cicd/opnsense-controller/result/bin/dns-manager /home/tappaas/bin/dns-manager
 # TODO check if credentials file exist and if not write the example file and give warning
 # For now just set the permissions
 # cp credentials.example.txt ~/.opnsense-credentials.txt

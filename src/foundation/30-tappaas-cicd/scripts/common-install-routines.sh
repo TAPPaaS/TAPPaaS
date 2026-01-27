@@ -18,6 +18,11 @@ function info() {
   echo -e "${DGN}${msg}${CL}"
 }
 
+function warn() {
+  local msg="$1"
+  echo -e "${YW}${msg}${CL}"
+}
+
 # check that hostname is tappaas-cicd
 if [ "$(hostname)" != "tappaas-cicd" ]; then
   echo "This script must be run on the TAPPaaS-CICD host (hostname tappaas-cicd)."

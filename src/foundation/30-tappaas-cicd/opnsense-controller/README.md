@@ -212,6 +212,50 @@ your-api-secret
 | `block` | Create block rule using convenience method |
 | `all` | Run all firewall examples (default) |
 
+### DNS Manager (`dns-manager` command)
+
+The DNS Manager provides a dedicated CLI for managing DNS host entries in OPNsense's Dnsmasq service. This is useful for creating static DNS records for VMs and services.
+
+#### CLI Usage
+
+```bash
+# Add a DNS host entry
+./result/bin/dns-manager --no-ssl-verify add backup mgmt.internal 10.0.0.12
+
+# Add with custom description
+./result/bin/dns-manager --no-ssl-verify add backup mgmt.internal 10.0.0.12 --description "PBS Backup Server"
+
+# Delete a DNS entry (by hostname and domain)
+./result/bin/dns-manager --no-ssl-verify delete backup mgmt.internal
+
+# List all DNS entries
+./result/bin/dns-manager --no-ssl-verify list
+
+# Dry-run mode (don't make changes)
+./result/bin/dns-manager --no-ssl-verify --check-mode add backup mgmt.internal 10.0.0.12
+
+# Show help
+./result/bin/dns-manager --help
+```
+
+#### CLI Options
+
+| Option | Description |
+|--------|-------------|
+| `--firewall HOST` | Firewall IP/hostname (default: `firewall.mgmt.internal`) |
+| `--credential-file PATH` | Path to credential file |
+| `--no-ssl-verify` | Disable SSL certificate verification |
+| `--debug` | Enable debug logging |
+| `--check-mode` | Dry-run mode (don't make actual changes) |
+
+#### Commands
+
+| Command | Description |
+|---------|-------------|
+| `add <hostname> <domain> <ip>` | Add or update a DNS host entry |
+| `delete <hostname> <domain>` | Delete a DNS host entry by hostname and domain (ignores description) |
+| `list` | List all DNS host entries |
+
 ### Zone Manager (`zone-manager` command)
 
 The Zone Manager reads TAPPaaS zone definitions from `zones.json` and automatically configures VLANs and DHCP ranges for each enabled zone.

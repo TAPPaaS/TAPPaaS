@@ -39,12 +39,17 @@ trap cleanup EXIT
 TEMP_DIR=$(mktemp -d)
 pushd $TEMP_DIR >/dev/null
 
+# Set module name to "backup" if not provided
+MODULE_NAME="${1:-backup}"
+set -- "$MODULE_NAME"
+
+# Source common routines (expects $1 to be module name)
 . /home/tappaas/bin/common-install-routines.sh
 
 
 info "${BOLD}Creating TAPPaaS Proxmox Backup Server (PBS) installation using the following settings:"
 NODE="$(get_config_value 'node' 'tappaas1')"
-VMNAME="$(get_config_value 'vmname' "$1")"
+VMNAME="$(get_config_value 'vmname' "$MODULE_NAME")"
 STORAGE="$(get_config_value 'storage' 'tankc1')"
 IMAGE_TYPE="$(get_config_value 'imageType' 'apt')"
 IMAGE="$(get_config_value 'image' 'pbs')"
@@ -62,7 +67,7 @@ else
   echo "Proxmox PBS apt repository not found, adding it ..."
   ssh root@${NODE}.$ZONE.internal "cat >> /etc/apt/sources.list.d/proxmox.sources" << EOF
 Types: deb
-URIs: ${IMAGE_LOCATION
+URIs: ${IMAGE_LOCATION}
 Suites: trixie
 Components: pbs-no-subscription
 Signed-By: /usr/share/keyrings/proxmox-archive-keyring.gpg
@@ -73,13 +78,45 @@ info "${BOLD}Installing ${DESCRIPTION} on node ${BGN}${NODE}${CL} ..."
 ssh root@${NODE}.$ZONE.internal bash -c "'
   set -e
   apt update
-  apt install -y proxmox-backup-server
+  apt install -y proxmox-backup-server proxmox-backup-client
   rm -f /etc/apt/sources.list.d/pbs-enterprise.sources
-'"  
-# copy the config file to the tappass pbs service to keep a record of what has been installed
-scp $JSON_CONFIG root@${NODE}.$ZONE.internal:/root/tappaas/$1.json
+'"
+# copy the config file to the tappaas pbs service to keep a record of what has been installed
+scp $JSON_CONFIG root@${NODE}.$ZONE.internal:/root/tappaas/$MODULE_NAME.json
 
 # Create a backup directory on the storage tank
-mkdir -p /${STORAGE}/tappaas_backups
+sudo mkdir -p /${STORAGE}/tappaas_backups
+
+# Install proxmox-backup-client on all Proxmox VE nodes
+info "${BOLD}Installing proxmox-backup-client on all Proxmox VE nodes...${CL}"
+
+# Get list of all cluster nodes
+CLUSTER_NODES=$(ssh root@${NODE}.${ZONE}.internal "pvesh get /nodes --output-format json" | jq -r '.[].node')
+
+for PVE_NODE in $CLUSTER_NODES; do
+  info "Installing proxmox-backup-client on ${PVE_NODE}..."
+  ssh root@${PVE_NODE}.${ZONE}.internal bash -c "'
+    set -e
+    # Check if PBS repository is configured
+    if ! grep -q \"${IMAGE_LOCATION}\" /etc/apt/sources.list.d/proxmox.sources 2>/dev/null; then
+      # Add PBS repository
+      cat >> /etc/apt/sources.list.d/proxmox.sources <<EOFPBS
+Types: deb
+URIs: ${IMAGE_LOCATION}
+Suites: trixie
+Components: pbs-no-subscription
+Signed-By: /usr/share/keyrings/proxmox-archive-keyring.gpg
+EOFPBS
+    fi
+
+    # Install proxmox-backup-client
+    apt update
+    apt install -y proxmox-backup-client
+  '" || warn "Failed to install proxmox-backup-client on ${PVE_NODE}"
+done
 
 info "\n${GN}TAPPaaS PBS installation completed successfully.${CL}"
+echo
+echo "Proxmox Backup Server and client tools installed on:"
+echo "  - PBS Server: ${NODE}.${ZONE}.internal"
+echo "  - PBS Client: All Proxmox VE nodes"

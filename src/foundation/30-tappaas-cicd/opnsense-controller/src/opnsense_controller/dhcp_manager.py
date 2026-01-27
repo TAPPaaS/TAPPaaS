@@ -163,7 +163,7 @@ class DhcpManager:
         for row in rows:
             hosts.append({
                 "uuid": row.get("uuid"),
-                "description": row.get("description"),
+                "description": row.get("descr"),  # API field is 'descr' not 'description'
                 "host": row.get("host"),
                 "ip": row.get("ip"),
                 "hardware_addr": row.get("hardware_addr"),
@@ -326,12 +326,14 @@ class DhcpManager:
         """
         return self.create_host(host, check_mode=check_mode)
 
-    def delete_host(self, description: str, check_mode: bool = False) -> dict:
+    def delete_host(self, description: str, check_mode: bool = False, host: str = None, domain: str = None) -> dict:
         """Delete a DHCP host reservation by description.
 
         Args:
             description: Description of the DHCP host to delete
             check_mode: If True, perform dry-run without making changes
+            host: Optional hostname for matching entries without description
+            domain: Optional domain for matching entries without description
 
         Returns:
             Result dictionary from the API
@@ -341,11 +343,57 @@ class DhcpManager:
             "state": "absent",
         }
 
+        # If host and domain are provided, include them to help match entries
+        if host:
+            params["host"] = host
+        if domain:
+            params["domain"] = domain
+
         return self.client.run_module(
             "dnsmasq_host",
             check_mode=check_mode,
             params=params,
         )
+
+    def delete_host_by_uuid(self, uuid: str, check_mode: bool = False) -> dict:
+        """Delete a DHCP host reservation by UUID using the raw API.
+
+        Args:
+            uuid: UUID of the DHCP host to delete
+            check_mode: If True, perform dry-run without making changes
+
+        Returns:
+            Result dictionary from the API
+        """
+        if check_mode:
+            return {"changed": True, "uuid": uuid, "check_mode": True}
+
+        # Use raw API to delete by UUID
+        result = self.client.run_module(
+            "raw",
+            params={
+                "module": "dnsmasq",
+                "controller": "settings",
+                "command": "delHost",
+                "params": [uuid],
+                "action": "post",
+            },
+        )
+
+        # Apply configuration after deletion
+        if result.get("result", {}).get("response", {}).get("result") == "deleted":
+            self.client.run_module(
+                "raw",
+                params={
+                    "module": "dnsmasq",
+                    "controller": "service",
+                    "command": "reconfigure",
+                    "action": "post",
+                },
+            )
+            return {"changed": True, "uuid": uuid}
+
+        return {"changed": False, "error": result}
 
     def create_multiple_hosts(
         self,

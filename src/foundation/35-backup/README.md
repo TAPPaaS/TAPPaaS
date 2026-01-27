@@ -7,61 +7,136 @@ Consider editing the json before installing
 
 ## Install
 
-To install simply run the install.sh from the tappaas-cicd vm
+### Step 1: Install PBS
+Run the install script from the tappaas-cicd vm as the tappaas user:
 
 ```bash
-cd
-cd TAPPaaS/src/foundation/35-backup
+cd ~/TAPPaaS/src/foundation/35-backup
 chmod +x install.sh
 ./install.sh
 ```
 
-Register the backup server as a permanent dns record in opnsense:
-- in Opnsense go to Services -> Dnsmasq DNS & DHCP -> Hosts
-    - add a host (plus sign)
-    - hostname: backup
-    - domain: mgmt.internal
-    - IP address: the ip of the host. if it is tappaas3 then 10.0.0.12
-    - click apply
+### Step 2: Automated Configuration
+After installation completes, run the automated configuration script:
 
-After running the script you need to configure the PBS installation by logging into the PBS gui using root and the password you have for the tappaas node. note you must select "Linux PAM standard authentication"
+```bash
+chmod +x configure.sh
+./configure.sh
+```
 
-1) Add a datastore to the backup server. assuming the configured datastore for backup is tankc1 then create the datastore:
-    - name: tappaas_backup 
-    - Backup PAth: /tankc1/tappaas_backup
-2) Create a backup user tappaas (under configuration -> Access controll, User Management tab)
-3) go to "permission" tab and add User  Permission
-    - path /datastore/tappaas_backup
-    - user: tappaas@pam
-    - role: Admin
-4) on the tappaas1 node, configure the backup system for use in the datacenter": Under Storage do an "add"
-    - select "proxmox Backup Server"
-        - ID: tappaas_backup
-        - Server: backup.mgmt.internal
-        - username: tappaas@pbs
-        - password: your tappaas password
-        - datastore: tappaas_backup
-        - Fingerprint: cut and paste the fingerprint you get from PBS GUIDashboard "Show Fingerprint"
-    - click "Add"
-5) Add a backup job: Datacenter -> Backup: "Add"
-    - Storage: tappaas_backup
-    - Schedule: 21:00
-    - selection: all
-    - click OK
-6) Configure retention policy: on PBS GUI
-    - go to Datastore and select the tab "Prune & GC Jobs"
-    - edit the "default" prne job for datastore "tappaas_backup"
-    - set 
-        - Keep Last to 4
-        - Keep Daily to 14
-        - Keep Weekly to 8
-        - Kepp Monthly to 12
-        - Keep Yearly to 6
-7) create a pbs backup of the backup through a "friendly TAPPaaS" service 
-    - this is configured on the remote PBS system. the remote PBS will "pull" the backup from your TAPPaaS PBS.
+This script will automatically:
+1. Create the PBS datastore (tappaas_backup)
+2. Create the tappaas@pbs user
+3. Set permissions for the user on the datastore
+4. Configure retention policy (4 last, 14 daily, 8 weekly, 12 monthly, 6 yearly)
+5. Get the PBS fingerprint
+6. Add PBS storage to Proxmox datacenter
+7. Create a daily backup job at 21:00 for all VMs
+8. Register DNS entry in OPNsense (backup.mgmt.internal)
+
+**All configuration is now automated!** No manual steps required.
+
+### Step 3 (Optional): Backup of Backup
+Configure a remote PBS system to pull backups from your TAPPaaS PBS for off-site redundancy.
+
+## Restore VMs from Backup
+
+### List Available Backups
+```bash
+# List all backups
+./restore.sh --list-all
+
+# List backups for specific VM
+./restore.sh --vmid 101 --list
+```
+
+### Restore a VM
+```bash
+# Restore latest backup of VMID 101
+chmod +x restore.sh
+./restore.sh --vmid 101
+
+# Restore to specific node
+./restore.sh --vmid 101 --node tappaas2
+
+# Restore to different storage
+./restore.sh --vmid 101 --storage tanka2
+
+# Restore specific backup version
+./restore.sh --vmid 101 --backup-id "tappaas_backup:backup/vm/101/2025-01-26T21:00:00Z"
+```
+
+The restore script will:
+- Find the latest backup (or use specified backup)
+- Check if VM exists and confirm overwrite if needed
+- Restore the VM to the target node
+- Optionally start the VM after restore
+
+## Backup Management
+
+Use the backup management script for common operations:
+
+```bash
+chmod +x backup-manage.sh
+
+# Show backup status
+./backup-manage.sh status
+
+# List configured backup jobs
+./backup-manage.sh list-jobs
+
+# Run immediate backup for a specific VM
+./backup-manage.sh run-now 101
+
+# Backup all VMs immediately
+./backup-manage.sh run-now-all
+
+# Run prune operation (remove old backups per retention policy)
+./backup-manage.sh prune
+
+# Run garbage collection (free up disk space)
+./backup-manage.sh gc
+
+# Show retention policy
+./backup-manage.sh retention
+```
+
+## Scripts Overview
+
+All scripts should be run from tappaas-cicd as the tappaas user:
+
+- [install.sh](install.sh) - Installs PBS on the designated node
+- [configure.sh](configure.sh) - Automates PBS configuration (datastore, user, permissions, backup jobs, DNS)
+- [restore.sh](restore.sh) - Automates VM restoration from backups with various options
+- [backup-manage.sh](backup-manage.sh) - Common backup management operations
+
+The DNS management is handled by the `dns-manager` command from the [OPNsense controller](../30-tappaas-cicd/opnsense-controller/).
+
+## Accessing PBS GUI
+
+Access the PBS web interface at: `https://<pbs-node-ip>:8007` or `https://backup.mgmt.internal:8007`
+- Username: root@pam (for full admin) or tappaas@pbs (for backup operations)
+- Password: Your tappaas node password
+- Select "Linux PAM standard authentication" for root@pam
+
+## Retention Policy
+
+The default retention policy configured by [configure.sh](configure.sh):
+- Keep Last: 4 (last 4 backups regardless of age)
+- Keep Daily: 14 (one backup per day for 14 days)
+- Keep Weekly: 8 (one backup per week for 8 weeks)
+- Keep Monthly: 12 (one backup per month for 12 months)
+- Keep Yearly: 6 (one backup per year for 6 years)
+
+This provides approximately:
+- Short-term: 2 weeks of daily backups
+- Medium-term: 2 months of weekly backups
+- Long-term: 1 year of monthly backups + 6 years of yearly backups
+
+Adjust these values in [configure.sh](configure.sh) if needed before running.
 
 # TODO
-add Encryption
-more details on backup of backup
-more details on retention
-automate creation of backup based on jsons
+- Add encryption to backups
+- Restrict backup user tappaas to only push and pull backups (currently has Admin role)
+- Use API keys instead of passwords for authentication
+- Add detailed documentation for backup-of-backup configuration
