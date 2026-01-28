@@ -269,6 +269,10 @@ msg_info "Install power top:"
 apt -y install powertop &>/dev/null || msg_error "apt update failed"
 msg_ok "Installed power top"
 
+msg_info "Install netbird client:"
+curl -fsSL https://pkgs.netbird.io/install.sh | sh
+msg_ok "Installed netbird client"
+
 msg_info "Updating Proxmox VE (Patience)"
 apt update &>/dev/null || msg_error "apt update failed"
 apt -y dist-upgrade &>/dev/null || msg_error "apt dist-upgrade failed"
