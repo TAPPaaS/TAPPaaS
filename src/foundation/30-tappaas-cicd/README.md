@@ -100,6 +100,13 @@ TAPPaaS/src/foundation/30-tappaas-cicd/install2.sh tappaas-cicd
 
 You might be asked for password for root at proxmox node tappaas1
 
+## Setup Netbird management VPN access and development setup
+
+This step is optional. IT will enable a VPN service into the management zone of TAPPaaS so that further management can be done without having direct access to the mgmt Zone on the local LAN
+This step also install ssh keys on you management pc as well as conenct a visual studio installation to the tappaas-cicd git repository
+
+The instruction is in [management access](./VPN-Access.md)
+
 ## Configure Reverse Proxy (Caddy)
 
 The install script automatically installs the os-caddy package and creates firewall rules for HTTP/HTTPS traffic. However, some manual configuration is required via the OPNsense web UI.
