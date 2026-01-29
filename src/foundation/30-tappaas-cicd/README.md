@@ -94,6 +94,7 @@ ssh root@firewall.mgmt.internal "echo 'SSH access configured successfully'"
 on the tappaas-cicd console (via ssh, logged in as tappaas user) do:
 
 ```bash
+cd
 TAPPaaS/src/foundation/30-tappaas-cicd/install2.sh tappaas-cicd
 ```
 
