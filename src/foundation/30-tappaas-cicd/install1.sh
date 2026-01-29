@@ -31,6 +31,8 @@ sudo chmod 600 /home/tappaas/.ssh/id_ed25519
 # add the public key to authorized_keys so that tappaas user can ssh to itself
 cat /home/tappaas/.ssh/id_ed25519.pub >> /home/tappaas/.ssh/authorized_keys && chmod 600 /home/tappaas/.ssh/authorized_keys
 
-chmod -x /home/tappaas/TAPPaaS/src/foundation/30-tappaas-cicd/install2.sh
+chmod +x /home/tappaas/TAPPaaS/src/foundation/30-tappaas-cicd/install1.sh
+chmod +x /home/tappaas/TAPPaaS/src/foundation/30-tappaas-cicd/install2.sh
+chmod +x /home/tappaas/TAPPaaS/src/foundation/30-tappaas-cicd/update.sh
 
 echo -e "\nPlease reboot tappaas-cicd VM."
