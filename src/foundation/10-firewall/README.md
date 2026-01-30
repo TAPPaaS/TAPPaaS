@@ -149,7 +149,7 @@ First we switch tappaas1 node to be working **only** on the Lan port:
 - in the Proxmox console edit the network bridge "Wan": remove the IP IP assignment.
   - Note that you should connect to tappaas1 proxmox node via 10.0.0.10:8006
   - first remove the ip and gateway assignment by editing the "wan" bridge under network for tappaas1
-  - then add 10.0.01 as gateway for the "wan" bridge
+  - then add 10.0.01 as gateway for the "lan" bridge
   - press apply
 - in the console fo the tappaas1 node (via the proxmox gui): edit the following files:
   - /etc/hosts: ensure the host IP is the new 10.0.0.10
