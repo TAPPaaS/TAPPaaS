@@ -23,7 +23,7 @@ Let us get foundation out of the way first. Everything is running on top of the 
 | Compute    | Mandatory  | Proxmox | provide excellent compute cluster capability |
 | Storage    | Mandatory  | Proxmox-ZFS | ZFS gives a lot of flexibility. and is build into proxmox, making it well aligned with Cluster management |
 | Connectivity | Mandatory | OPNsense | Virtualized and combined with a layer 3 switch and proxmox bridging and vlan support |
-| User Mgmt. | Mandatory | ?? | | 
+| User Mgmt. | Mandatory | Authentik | | 
 
 ### Base Cloud Infrastructure platform: Proxmox
 
@@ -33,7 +33,7 @@ Alternatives:
 
 - XCP-ng: seems less polished and with less features. 
   - But it also seems more "free"
-- FreeNAS, TrueNAS: good for storage, but not really a cloud platform
+- FreeNAS, TrueNAS: good for storage, but not really a cloud platform, they do not have clustering and HA as Proxmox. Uses the same underpinning zfs file system
 
 ### Persistent Storage layer
 
@@ -41,10 +41,9 @@ proxmox with ZFS gives: RAID, Snapshotting, Replication, NFS, iSCSI,
 Problem with proxmox is a limited GUI for management, and further the choice explosion zfs gives makes it hard to design a solution
 TAPPaaS will address this with recommended setup and automation
 
-Note that proxmox and zfs do not give Hight Available storage. in that case we need to look into Object Storage and other distributed storage solutions.
+Note that proxmox and zfs do not give Hight Available storage. 
+For this we plan on using CEPHT and Garage S3
 We do not consider this a Foundation. but something that goes in to the business layer of TAPPaaS together with a HA implementation of a relational database
-
-The alternative to Proxmox ZFS is FreeeNAS, but we consider the benefits compared to what we can do with automation in proxmox to not being worth the effort to run FreeNAS in parallel with proxmox.
 
 ## Physical Home
 
@@ -53,14 +52,14 @@ The alternative to Proxmox ZFS is FreeeNAS, but we consider the benefits compare
 | Smart Lighting | High | Home Assistant | Will be the main interface to TAPPaaS for a home/community installation |
 | Smart heating | Low | Home Assistant | |
 | Smart Sprinkler | Low | Home Assistant + OpenSprinkler | |
-| SMART AVR | Medium | ?? | This is the player system. to replace AppleTV, HEOS, etc |
+| SMART AVR | Medium | Jellyfin | This is the player system. to replace AppleTV, HEOS, etc |
 | Home Butler | Medium | HA + LLM | lots of experimentation ongoing |
 
 ## Household Member
 
 | Capability | Priority | Software | Comments |
 |------------|-----------|----------|----------|
-| email | High | PostIO | Very difficult to run autonomously, maintenance is high|
+| email | medium | PostIO | Very difficult to run autonomously, maintenance is high|
 | Address book | High | NextCloud | need to be integrated into many other applications |
 | Calendering | High | NextCloud | |
 | Note Taking | Medium | ?? | Could simply be files in NextCloud, but need to be investigated |
@@ -68,12 +67,12 @@ The alternative to Proxmox ZFS is FreeeNAS, but we consider the benefits compare
 | Music | High | Jellyfin | |
 | Video | High | Jellyfin| |
 | Podcasts | medium | [audiobookshelf](https://www.audiobookshelf.org/)?? | |
-| Document | high | CryptPad | consider Nextcloud, but not as FOSS as we would prefer |
+| Document | high | NextCloud Office / Libraoffice / OnlyOffice | consider Nextcloud, but not as FOSS as we would prefer |
 | File synching | high | NextCloud | also function as document backup |
-| Offline Web | low | Karakeep | self-hosted open source version of Pocket |
-| Virtual Assistant | medium | ?? | |
-| Bookshelf | low | CAlibra?? | |
-| chat and video | High | <none> | encourage use of Signal. need a solution for resiliency
+| Offline Web | medium | Karakeep | self-hosted open source version of Pocket |
+| Virtual Assistant | medium | litellm, olama + Home Assistant | |
+| Bookshelf | low | Calibra?? | |
+| chat and video | High | Nextcloud ? | encourage use of Signal. need a solution for resiliency
 
 ## Small Community
 
@@ -82,32 +81,31 @@ The alternative to Proxmox ZFS is FreeeNAS, but we consider the benefits compare
 | WiFi Rooming | medium | R.O.B.I.N. ?? | |
 | Internet Sharing | High | OPNsense | |
 | Public Bookshelf | Medium | Calibra, wikipedia hosting, ... ?? | |
-| Community Social | High | Mastedont | |
-| Video Conferencing | low | ?? | |
+| Community Social | High | Mastedont? | |
+| Video Conferencing | low | Nextcloud? | |
 
 ## SMB
 
 | Capability | Priority | Software | Comments |
 |------------|-----------|----------|----------|
 | Email | High | | | 
-| Office Suite | High | CryptPad | |
+| Office Suite | High | OnlyOffice/Nextcloud Office | |
 | Corporate website | High | | |
 | ERP System | Medium |||
 | Office Wifi | Medium | | |
-| Corporate VPN | High | TailScale/HeadScale | |
-| Video Conferencing | Medium | ?? | |
-| Chat | Medium | ?? | |
+| Corporate VPN | High | NetBird | |
+| Video Conferencing | Medium | NextCloud | |
+| Chat | Medium | NextCloud? | |
 
 ## Software Development
 
 | Capability | Priority | Software | Comments |
 |------------|-----------|----------|----------|
-| Git | High | Gitea | |
-| CICD | High | Gitea, Terraform, Ansible | |
-| Chat | Medium | ?? | |
+| Git | High | CodeBerg | |
+| CICD | High | Terraform, Ansible | |
 | Backlog | High | ?? | |
 | Application platform | High | K3S, Garage, PostGreSQL | |
-| Reverse Proxy | High | Pangolin | for development the requirement is easy access to a reverse proxy in a secure manner |
+| Reverse Proxy | High | Caddy | for development the requirement is easy access to a reverse proxy in a secure manner |
 
 
 ### Object storage: Garage
@@ -127,15 +125,15 @@ alternatives:
 
 | Capability | Priority | Software | Comments |
 |------------|-----------|----------|----------|
-| User and Access mgmt. | Mandatory | ?? | Authentik, Keycloak, Pangoling native, proxmox, opnsense??  |
-| Password mgmt. | High | Bitwarden |  |
-| Backup/Restore | Mandatory | proxmox Backup Manager |complement with personal backup (to be designed) |
+| User and Access mgmt. | Mandatory | Authentik | |
+| Password mgmt. | High | waltwarden | using bitwarden clients |
+| Backup/Restore | Mandatory | Proxmox Backup Manager |complement with personal backup (to be designed) |
 | Firewall | High | OPNsense  |  |
-| Remote Access | High | Netbird | potentially replace with Pangolin and/or wiregard natively |
+| Remote Access | High | Netbird | |
 | Thread detection | High | ?? | CrowdSec? |
 | Thread monitoring | High | ?? |  |
-| DMZ | Mandatory | Pangolin |  |
-
+| DMZ | Mandatory | Caddy controlled and VLANS |  |
+| Log Management | Mandatory | Loki | |
 
 ## Firewall: OPNSense
 
@@ -165,8 +163,7 @@ We will consider znapzend, used to snapshot and replicate zfs volumes across ser
 
 ## Self Management
 - undecided on dashboard, but Grafana is part of it
-- Portainer
-- Kuma uptime monitoring
+- Kuma uptime monitoring?
 
 ## Security
 
