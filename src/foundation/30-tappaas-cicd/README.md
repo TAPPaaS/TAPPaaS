@@ -57,11 +57,12 @@ In a shell on tappaas@tappaas-cicd
 cat ~/.ssh/id_ed25519.pub
 ```
 
-copy the output and enter it in the OPNsense gui under:
-   - System->Access->Users
-   - click edit command on the "root" account
-   - croll down to the bottom and enter the key 
-   - press save
+Copy the output and enter it in the OPNsense gui under:
+
+- System->Access->Users
+- click edit command on the "root" account
+- croll down to the bottom and enter the key 
+- press save
 
 Enter the root password when prompted.
 
@@ -114,6 +115,7 @@ The install script automatically installs the os-caddy package and creates firew
 ### Automated Steps (done by install.sh)
 
 The `setup-caddy.sh` script performs:
+
 - Installs os-caddy package on the firewall
 - Creates firewall rules for HTTP (port 80) and HTTPS (port 443) on WAN interface
 

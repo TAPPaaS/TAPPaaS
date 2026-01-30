@@ -17,6 +17,7 @@ Step 3: configure a TAPPaaS netbird overlay network
 The setup is a variation of this setup [Netbird Home to Network Access](https://docs.netbird.io/manage/networks/homelab/access-home-network)
 
 also install Netbird on your machine you will be using to access the TAPPaaS installation:
+
 - go to netbird.io
 - select install menu
 - follow the install instructions
@@ -78,6 +79,32 @@ Test that from a terminal on the management PC you can ping tappaas1.mgmt.intern
 
 ## SSH setup for tappaas-cicd access
 
+On your development machine: generate ssh keys if not already generated
+
+```bash
+ssh-keygen -t ed25519
+```
+
+copy to the clip board the output of:
+```bash
+cat ~/.ssh/id_ed25519.pub
+```
+
+logon to a shell on tappaas@tappaas-cicd.mgmt.internal
+
+append the public key to the authorized_keys
+
+```bash
+cat >> authurized_keys
+```
+do a paste into the terminal, followed by a return and a ctrl-D
+
+Test the connection from your development pc
+
+```bash
+ssh tappaas@tappaas-cicd.mgmt.internal
+```
+
 ## Visual studio remote access setup
 
-
+TODO
