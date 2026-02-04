@@ -1,4 +1,3 @@
-
 # Root Cause Analysis Report
 # Author: Erik (tappaas)
 # Incident: VLAN 210 DHCP Failure
@@ -46,6 +45,119 @@ bridge vlan show dev tap999i0
 
 ---
 
+## Deeper Root Cause Discovery (2026-02-04)
+
+Further investigation during ADR-001 implementation revealed the **actual trigger** affecting all VMs regardless of access/trunk mode configuration:
+
+### The Real Culprit: bridge-vids Auto-Configuration
+
+**Proxmox bridge configuration in `/etc/network/interfaces`:**
+```
+iface lan inet static
+  bridge-vlan-aware yes
+  bridge-vids 2-4094  # ← AUTOMATICALLY ADDS ALL VLANs TO ALL TAP INTERFACES
+```
+
+**What this does:**
+- Automatically adds VLANs 2-4094 to EVERY tap interface created on the bridge
+- Each VLAN configured with default "PVID Egress Untagged"
+- Creates 4093 VLAN entries per VM interface (massive overhead)
+- **Triggers the VLAN filtering bug even in trunk mode**
+
+**Verification:**
+```bash
+bridge vlan show dev tap999i0
+# Output shows 4093 VLANs:
+# tap999i0  1 PVID Egress Untagged
+#           2
+#           3
+#           ...
+#           210  ← Our VLAN, but with WRONG "Egress Untagged" config
+#           ...
+#           4094
+```
+
+### Why Trunk Mode Alone Doesn't Fix It
+
+**Expected trunk mode behavior:**
+1. VM sends VLAN 210 tagged frames
+2. Bridge forwards tagged frames unchanged
+3. VM receives VLAN 210 tagged frames
+
+**Actual behavior with bridge-vids present:**
+1. VM sends VLAN 210 tagged frames ✓
+2. Bridge sees tap999i0 has VLAN 210 membership with "Egress Untagged" flag
+3. Bridge strips VLAN tag before forwarding to VM ✗
+4. VM's VLAN interface (eth0.210) receives untagged frames ✗  
+5. Packets dropped by VM (wrong interface) ✗
+
+**Root cause chain:**
+```
+bridge-vids 2-4094
+  └─> Auto-adds VLAN 210 to tap999i0
+      └─> With "PVID Egress Untagged" flag
+          └─> Triggers Linux bridge VLAN filtering bug
+              └─> Broadcast frames not forwarded correctly
+```
+
+### Complete Solution Requirements
+
+**The original RCA correctly identified the Linux kernel limitation, but missed the configuration trigger. Complete fix requires:**
+
+1. **Remove bridge-vids** from `/etc/network/interfaces` on all Proxmox nodes
+2. **Use trunk mode** (no `tag` parameter in VM config)
+3. **Manually configure tap interfaces** with only required VLAN:
+   ```bash
+   bridge vlan del vid 1 dev tap999i0 pvid untagged
+   bridge vlan add vid 210 dev tap999i0  # Tagged, no Egress Untagged
+   ```
+4. **Hook script for persistence** across VM restarts
+
+**Without step 1 (removing bridge-vids), steps 2-4 will still fail.**
+
+### Evidence from Implementation
+
+**Test sequence on 2026-02-04:**
+
+```bash
+# Step 1: Configured trunk mode (no tag parameter)
+qm set 999 --net0 virtio,bridge=lan,macaddr=XX  # ✓ Correct
+
+# Step 2: VM configured with VLAN interface
+# /etc/nixos/configuration.nix has eth0.210  # ✓ Correct
+
+# Step 3: Started VM
+qm start 999  # VM boots
+
+# Step 4: Checked bridge config
+bridge vlan show dev tap999i0
+# Result: 4093 VLANs present including VLAN 210 with "Egress Untagged"  # ✗ Problem!
+
+# Step 5: Removed bridge-vids from /etc/network/interfaces
+sed -i '/bridge-vids 2-4094/d' /etc/network/interfaces
+ifreload -a
+
+# Step 6: Restarted VM and manually configured tap interface
+qm stop 999
+qm start 999
+bridge vlan del vid 1 dev tap999i0 pvid untagged
+bridge vlan add vid 210 dev tap999i0
+
+# Step 7: Verified
+bridge vlan show dev tap999i0
+# tap999i0  210  # ✓ Clean config, no Egress Untagged
+
+# Result: DHCP immediately successful, VM got IP 192.168.210.159  # ✓✓✓
+```
+
+**Timeline of understanding:**
+- 2025-02-03: Identified Linux bridge VLAN filtering limitation
+- 2026-02-03: Proposed trunk mode as solution (ADR-001)
+- 2026-02-04: Discovered bridge-vids prevents trunk mode from working
+- 2026-02-04: Confirmed complete solution requires both trunk mode AND bridge-vids removal
+
+---
+
 ## Evidence
 
 ### Observed Behavior
@@ -56,12 +168,12 @@ bridge vlan show dev tap999i0
 
 | Layer | Direction | Result | Evidence |
 |-------|-----------|--------|----------|
-| VM → tap999i0 | Egress (out) | ✓ Success | tcpdump on tappaas2 shows DHCP Discover |
-| tap999i0 → lan bridge | Internal | ✓ Success | Bridge FDB shows MAC learned on VLAN 210 |
-| lan bridge → pve | Forward | ✓ Success | tcpdump on pve shows tagged VLAN 210 |
-| pve → pfSense | Forward | ✓ Success | pfSense receives DHCP Discover |
-| pfSense → pve | Response | ✓ Success | pfSense sends DHCP Offer (confirmed) |
-| pve → lan bridge | Forward | ✓ Success | tcpdump on tappaas2 shows DHCP Offer arriving |
+| VM → tap999i0 | Egress (out) | ✔ Success | tcpdump on tappaas2 shows DHCP Discover |
+| tap999i0 → lan bridge | Internal | ✔ Success | Bridge FDB shows MAC learned on VLAN 210 |
+| lan bridge → pve | Forward | ✔ Success | tcpdump on pve shows tagged VLAN 210 |
+| pve → pfSense | Forward | ✔ Success | pfSense receives DHCP Discover |
+| pfSense → pve | Response | ✔ Success | pfSense sends DHCP Offer (confirmed) |
+| pve → lan bridge | Forward | ✔ Success | tcpdump on tappaas2 shows DHCP Offer arriving |
 | lan bridge → tap999i0 | Internal | **✗ FAIL** | tcpdump on tap999i0 shows NO DHCP Offer |
 | tap999i0 → VM | Ingress (in) | **✗ FAIL** | VM never receives DHCP Offer |
 
@@ -78,7 +190,7 @@ qm set 999 --net0 bridge=lan  # No tag parameter
 qm start 999
 ```
 
-**Result:** VM immediately obtained IP 192.168.2.110 via DHCP ✓
+**Result:** VM immediately obtained IP 192.168.2.110 via DHCP ✔
 
 **Test 2:** Rebuild NIC with tag=210
 
@@ -255,7 +367,7 @@ networking.vlans."ens18.210" = {
 - No "Egress Untagged" configuration required
 - No broadcast forwarding bug triggered
 
-**Result:** DHCP, ARP, and all broadcast protocols work correctly ✓
+**Result:** DHCP, ARP, and all broadcast protocols work correctly ✔
 
 **Full implementation details:** See ADR-001
 

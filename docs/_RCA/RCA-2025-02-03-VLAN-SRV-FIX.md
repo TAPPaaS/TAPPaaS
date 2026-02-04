@@ -1,4 +1,4 @@
-
+```markdown
 # Root Cause Analysis Report - VM Bootstrap Sequence Analysis
 # Author: Erik (tappaas)
 # Incident: VLAN 210 DHCP Failure
@@ -358,6 +358,131 @@ qm set 999 --net0 "virtio,bridge=lan,tag=210,macaddr=$MAC0"
 
 ## Required Changes to Fix
 
+### Change 0: Fix Proxmox Bridge Configuration (CRITICAL - Must be done FIRST)
+
+**Discovered 2026-02-04:** The `bridge-vids 2-4094` parameter in `/etc/network/interfaces` automatically adds all VLANs to every tap interface with "PVID Egress Untagged" configuration, which triggers the VLAN filtering bug even in trunk mode. This must be fixed on all Proxmox nodes BEFORE implementing Changes 1-3.
+
+**On each Proxmox node (tappaas2, pve, etc.):**
+
+**Edit `/etc/network/interfaces`:**
+```bash
+nano /etc/network/interfaces
+```
+
+**Remove the bridge-vids line:**
+```diff
+  iface lan inet static
+    address 192.168.2.220/24
+    gateway 192.168.2.254
+    bridge-ports enp97s0
+    bridge-stp off
+    bridge-fd 0
+    bridge-vlan-aware yes
+-   bridge-vids 2-4094
+```
+
+**Apply changes:**
+```bash
+ifreload -a
+```
+
+**Verify no existing VMs are affected:**
+```bash
+# Check each running VM's tap interface
+for vm in $(qm list | awk 'NR>1 {print $1}'); do
+  tap=$(qm config $vm | grep -oP 'tap\d+i\d+' | head -1)
+  if [ -n "$tap" ]; then
+    echo "VM $vm ($tap):"
+    bridge vlan show dev $tap | wc -l
+  fi
+done
+```
+
+**Create VM network hook script for automatic VLAN configuration:**
+
+```bash
+cat > /etc/qemu-server/vm-network-hook.sh <<'HOOKEOF'
+#!/bin/bash
+# Configure tap interface VLANs on VM start
+# Called by qm with: <vmid> <phase>
+
+if [ "$2" = "post-start" ]; then
+    VMID=$1
+    
+    # Get tap interface name
+    TAP=$(qm config $VMID | grep -oP 'tap\d+i\d+' | head -1)
+    [ -z "$TAP" ] && exit 0
+    
+    # Get VLAN from VM config
+    CONFIG_FILE="/root/tappaas/${VMID}.json"
+    if [ ! -f "$CONFIG_FILE" ]; then
+        # Fallback: use VMNAME.json
+        VMNAME=$(qm config $VMID | grep -oP 'name: \K.*')
+        CONFIG_FILE="/root/tappaas/${VMNAME}.json"
+    fi
+    
+    if [ -f "$CONFIG_FILE" ]; then
+        # Parse zone from VM config
+        ZONE=$(jq -r '.zone0 // empty' "$CONFIG_FILE")
+        
+        if [ -n "$ZONE" ] && [ "$ZONE" != "null" ]; then
+            # Get VLAN tag from zones.json
+            VLAN=$(jq -r ".\"$ZONE\".vlantag // empty" /root/tappaas/zones.json)
+            
+            if [ -n "$VLAN" ] && [ "$VLAN" != "null" ] && [ "$VLAN" != "0" ]; then
+                # Remove PVID Egress Untagged from VLAN 1
+                bridge vlan del vid 1 dev $TAP pvid untagged 2>/dev/null || true
+                
+                # Add only required VLAN (tagged, no Egress Untagged)
+                bridge vlan add vid $VLAN dev $TAP 2>/dev/null || true
+                
+                logger -t vm-network-hook "Configured $TAP for VM $VMID: VLAN $VLAN"
+            fi
+        fi
+    fi
+fi
+HOOKEOF
+
+chmod +x /etc/qemu-server/vm-network-hook.sh
+```
+
+**Configure Proxmox to call hook script:**
+
+```bash
+# Add to /etc/pve/qemu-server/hookscript.pl or create wrapper
+cat > /var/lib/vz/snippets/vm-network-hook.pl <<'PERLEOF'
+#!/usr/bin/perl
+use strict;
+use warnings;
+
+my ($vmid, $phase) = @ARGV;
+system("/etc/qemu-server/vm-network-hook.sh", $vmid, $phase);
+PERLEOF
+
+chmod +x /var/lib/vz/snippets/vm-network-hook.pl
+```
+
+**For existing VMs, manually trigger configuration:**
+```bash
+# After restarting VM
+VMID=999
+TAP=$(qm config $VMID | grep -oP 'tap\d+i\d+' | head -1)
+bridge vlan del vid 1 dev $TAP pvid untagged
+bridge vlan add vid 210 dev $TAP
+
+# Verify
+bridge vlan show dev $TAP
+# Expected: tap999i0  210  (no PVID, no Egress Untagged)
+```
+
+**Why this is critical:**
+- Without this fix, Changes 1-3 will still fail
+- `bridge-vids 2-4094` overrides trunk mode configuration
+- Creates 4093 VLAN memberships per VM (performance impact)
+- Triggers Linux bridge VLAN filtering bug on all non-native VLANs
+
+---
+
 ### Change 1: Enable Trunk Mode (Line 216-220)
 
 **Replace:**
@@ -470,8 +595,10 @@ in {
 5. ❌ **BUG:** Configures network with access mode (`tag=210`)
 6. ❌ **MISSING:** Cloud-init user-data with VLAN configuration
 7. ❌ **MISSING:** Template with dynamic VLAN support
-8. ❌ VM boots but DHCP fails due to bridge VLAN filtering bug
+8. ❌ **CRITICAL:** `bridge-vids 2-4094` in /etc/network/interfaces sabotages even trunk mode
+9. ❌ VM boots but DHCP fails due to bridge VLAN filtering bug
 
 **To fix VM 999 now:** Use manual workaround (already provided).
 
-**To fix Create-TAPPaaS-VM.sh:** Apply 3 changes above (implements ADR-001 + ADR-002).
+**To fix Create-TAPPaaS-VM.sh:** Apply 4 changes above (implements ADR-001 + ADR-002 + bridge fix).
+```
