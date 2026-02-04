@@ -1,4 +1,4 @@
-# OpenWebUI Installation Guide
+# OpenWebUI on TAPPaaS - Installation Guide
 
 **Version:** 0.9.0  
 **Author:** Erik Daniel
