@@ -16,6 +16,7 @@
     "imageLocation": "https://pkg.opnsense.org/releases/25.7/",
     "bridge0": "lan",
     "zone0": "mgmt",
+    "trunks0": "srv;private;iot;dmz",
     "bridge1": "wan",
     "zone1": "mgmt",
     "cloudInit": "false",

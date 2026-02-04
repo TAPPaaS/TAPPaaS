@@ -260,6 +260,9 @@ class VlanManager:
         assign: bool = False,
         enable: bool = True,
         interface_name: str | None = None,
+        ipv4_type: str | None = None,
+        ipv4_address: str | None = None,
+        ipv4_subnet: int | None = None,
     ) -> dict:
         """Create a new VLAN device and optionally assign it to an interface.
 
@@ -269,6 +272,9 @@ class VlanManager:
             assign: If True, also assign the VLAN to an interface and enable it
             enable: If True and assign=True, enable the interface (default: True)
             interface_name: Name for the assigned interface (default: use VLAN description)
+            ipv4_type: IPv4 configuration type ('static', 'dhcp', or None)
+            ipv4_address: IPv4 address (required if ipv4_type is 'static')
+            ipv4_subnet: IPv4 subnet mask (required if ipv4_type is 'static')
 
         Returns:
             Result dictionary from the API
@@ -298,6 +304,9 @@ class VlanManager:
                 device=device_name,
                 description=iface_desc,
                 enable=enable,
+                ipv4_type=ipv4_type,
+                ipv4_address=ipv4_address,
+                ipv4_subnet=ipv4_subnet,
             )
             result["assign_result"] = assign_result
             response = assign_result.get("result", {}).get("response", {})

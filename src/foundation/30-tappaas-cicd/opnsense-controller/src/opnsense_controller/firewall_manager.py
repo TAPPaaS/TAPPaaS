@@ -205,6 +205,10 @@ class FirewallManager:
         filter_config = response.get("filter", {})
         rules_config = filter_config.get("rules", {}).get("rule", {})
 
+        # API may return an empty list instead of dict when no rules exist
+        if isinstance(rules_config, list):
+            return []
+
         rules = []
         for rule_uuid, rule_data in rules_config.items():
             # Extract selected values from the OPNsense API format

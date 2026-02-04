@@ -22,7 +22,7 @@ from pathlib import Path
 
 from .config import Config
 from .dhcp_manager import DhcpManager, DhcpRange
-from .firewall_manager import FirewallManager, FirewallRule, RuleAction
+from .firewall_manager import FirewallManager, FirewallRule, FirewallRuleInfo, RuleAction
 from .vlan_manager import Vlan, VlanManager
 
 
@@ -131,6 +131,14 @@ class ZoneManager:
         "lan": "vtnet0",
         "wan": "vtnet1",
     }
+
+    # RFC1918 private address ranges used to block inter-zone traffic
+    # when a zone only has internet access (not access to all internal zones)
+    RFC1918_NETWORKS = [
+        ("10.0.0.0/8", "rfc1918-10"),
+        ("172.16.0.0/12", "rfc1918-172"),
+        ("192.168.0.0/16", "rfc1918-192"),
+    ]
 
     def __init__(
         self,
@@ -393,15 +401,25 @@ class ZoneManager:
                     interface=vlan_interface,
                 )
 
-                print(f"  {zone.name}: Creating VLAN {zone.vlan_tag} on {vlan_interface} (bridge: {zone.bridge})")
+                # Calculate gateway IP and subnet for static assignment
+                gateway_ip = zone.gateway_ip
+                subnet_bits = zone.network.prefixlen
+                print(f"  {zone.name}: Creating VLAN {zone.vlan_tag} on {vlan_interface} (bridge: {zone.bridge}, gateway: {gateway_ip}/{subnet_bits})")
 
                 if check_mode:
                     results[zone.name] = {"status": "would_create", "vlan": zone.vlan_tag}
                 else:
                     try:
                         # Pass zone.name as interface_name so the assigned interface is named after the zone
+                        # Also assign the gateway IP as a static address on the interface
                         result = manager.create_vlan(
-                            vlan, check_mode=False, assign=assign, interface_name=zone.name
+                            vlan,
+                            check_mode=False,
+                            assign=assign,
+                            interface_name=zone.name,
+                            ipv4_type="static",
+                            ipv4_address=gateway_ip,
+                            ipv4_subnet=subnet_bits,
                         )
                         results[zone.name] = {"status": "created", "result": result}
                     except Exception as e:
@@ -578,14 +596,101 @@ class ZoneManager:
 
         return results
 
+    def _create_or_skip_rule(
+        self,
+        manager: FirewallManager,
+        existing_by_desc: dict[str, FirewallRuleInfo],
+        description: str,
+        interface: str,
+        source_net: str,
+        destination_net: str,
+        action: RuleAction,
+        sequence: int,
+        check_mode: bool,
+        results_list: list[dict],
+    ) -> None:
+        """Create a firewall rule or skip if it already exists.
+
+        Args:
+            manager: Connected FirewallManager instance
+            existing_by_desc: Dict of existing rules keyed by description
+            description: Rule description (used for matching)
+            interface: OPNsense interface identifier
+            source_net: Source network CIDR
+            destination_net: Destination network CIDR or 'any'
+            action: Rule action (PASS or BLOCK)
+            sequence: Rule sequence number for ordering
+            check_mode: If True, don't make changes
+            results_list: List to append result dicts to
+        """
+        action_str = "pass" if action == RuleAction.PASS else "block"
+
+        existing = existing_by_desc.get(description)
+        if existing:
+            print(f"    {action_str}: {description} (exists, skipping)")
+            results_list.append({
+                "description": description,
+                "status": "exists",
+                "action": action_str,
+                "destination": destination_net,
+            })
+            return
+
+        print(f"    {action_str}: {description}")
+
+        if check_mode:
+            results_list.append({
+                "description": description,
+                "status": "would_create",
+                "action": action_str,
+                "destination": destination_net,
+            })
+        else:
+            try:
+                rule = FirewallRule(
+                    description=description,
+                    action=action,
+                    interface=interface,
+                    source_net=source_net,
+                    destination_net=destination_net,
+                    log=True,
+                    sequence=sequence,
+                )
+                result = manager.create_rule(rule, apply=False)
+                results_list.append({
+                    "description": description,
+                    "status": "created",
+                    "action": action_str,
+                    "destination": destination_net,
+                    "result": result,
+                })
+            except Exception as e:
+                results_list.append({
+                    "description": description,
+                    "status": "error",
+                    "error": str(e),
+                })
+                print(f"      Error: {e}")
+
     def configure_firewall_rules(self, check_mode: bool = True) -> dict[str, dict]:
         """Configure firewall rules based on zone access-to definitions.
 
-        Creates pass rules for each zone allowing traffic to destinations
-        specified in the access-to field. Special values:
-        - 'all': Creates a wildcard pass rule (destination: any)
-        - 'internet': Allows traffic to any destination (outbound internet)
-        - <zone_name>: Allows traffic to that zone's network
+        Implements zone isolation with the following semantics:
+        - 'all': Single pass rule to any destination (full access)
+        - 'internet': Allows outbound internet but blocks other internal zones.
+          Creates: pass to gateway, block RFC1918, pass to any.
+        - <zone_name>: Allows traffic to that specific zone's network only.
+
+        When 'internet' is combined with specific zones (e.g. ["internet", "iot"]),
+        pass rules for the named zones are inserted before the RFC1918 block so
+        that traffic to those zones is allowed while all other internal traffic
+        is blocked.
+
+        Rule ordering per zone (using sequence numbers):
+        1. Pass to own gateway (DNS/NTP access)
+        2. Pass to each explicitly allowed zone network
+        3. Block RFC1918 private ranges (zone isolation)
+        4. Pass to any (internet access)
 
         Args:
             check_mode: If True, don't make changes (dry-run)
@@ -596,20 +701,41 @@ class ZoneManager:
         results = {}
         firewall_zones = self.get_firewall_zones()
         manual_zones = self.get_manual_zones()
+        isolated_zones = [
+            z for z in self.get_enabled_zones()
+            if not z.access_to and not z.is_manual
+        ]
+        disabled_zones = self.get_disabled_zones()
 
         print(f"\nConfiguring Firewall Rules...")
         print(f"  Zones with access-to rules: {len(firewall_zones)}")
+        print(f"  Isolated zones (empty access-to): {len(isolated_zones)}")
+        print(f"  Disabled zones (rules to clean up): {len(disabled_zones)}")
         print(f"  Manual zones (skipped): {len(manual_zones)}")
-
-        # Count total rules to be created
-        total_rules = sum(len(z.access_to) for z in firewall_zones)
-        print(f"  Total rules to create: {total_rules}")
 
         with FirewallManager(self.config) as manager:
             # Get existing rules for comparison
             existing_rules = manager.list_rules()
             existing_by_desc = {r.description: r for r in existing_rules}
 
+            # Delete firewall rules for disabled zones
+            for zone in disabled_zones:
+                zone_prefix = f"Zone {zone.name} "
+                matching = [r for r in existing_rules if r.description.startswith(zone_prefix)]
+                if matching:
+                    print(f"  {zone.name}: Deleting {len(matching)} rules (zone disabled)")
+                    if not check_mode:
+                        for rule_info in matching:
+                            try:
+                                manager.delete_rule(rule_info.description, apply=False)
+                            except Exception as e:
+                                print(f"    Error deleting '{rule_info.description}': {e}")
+                    results[zone.name] = {
+                        "status": "would_delete" if check_mode else "deleted",
+                        "rules_deleted": len(matching),
+                    }
+
+            # Create rules for enabled zones
             for zone in firewall_zones:
                 zone_results = []
                 zone_interface = self.get_zone_interface(zone)
@@ -625,55 +751,68 @@ class ZoneManager:
 
                 print(f"  {zone.name} (interface: {zone_interface}):")
 
-                for target in zone.access_to:
-                    rule_desc = self.get_firewall_rule_description(zone, target)
-                    destination = self.get_destination_for_target(target)
+                # Categorise targets
+                targets_lower = [t.lower() for t in zone.access_to]
+                has_all = "all" in targets_lower
+                has_internet = "internet" in targets_lower
+                specific_targets = [t for t in zone.access_to if t.lower() not in ("all", "internet")]
 
-                    # Check if rule already exists
-                    existing = existing_by_desc.get(rule_desc)
-                    if existing:
-                        print(f"    -> {target}: Rule exists (skipping)")
-                        zone_results.append({
-                            "target": target,
-                            "status": "exists",
-                            "destination": destination,
-                        })
-                        continue
+                # Base sequence derived from VLAN tag (gives room for ~10 rules per zone)
+                base_seq = zone.vlan_tag * 10 if zone.vlan_tag > 0 else 100
+                seq = base_seq
 
-                    print(f"    -> {target}: Creating pass rule to {destination}")
+                if has_all:
+                    # Full access — single pass rule to any
+                    self._create_or_skip_rule(
+                        manager, existing_by_desc,
+                        f"Zone {zone.name} -> all",
+                        zone_interface, zone.ip_network, "any",
+                        RuleAction.PASS, seq, check_mode, zone_results,
+                    )
+                else:
+                    # Step 1: Allow access to own gateway (DNS, NTP)
+                    self._create_or_skip_rule(
+                        manager, existing_by_desc,
+                        f"Zone {zone.name} -> gateway",
+                        zone_interface, zone.ip_network, f"{zone.gateway_ip}/32",
+                        RuleAction.PASS, seq, check_mode, zone_results,
+                    )
+                    seq += 1
 
-                    if check_mode:
-                        zone_results.append({
-                            "target": target,
-                            "status": "would_create",
-                            "destination": destination,
-                        })
-                    else:
-                        try:
-                            # Create the firewall rule
-                            rule = FirewallRule(
-                                description=rule_desc,
-                                action=RuleAction.PASS,
-                                interface=zone_interface,
-                                source_net=zone.ip_network,
-                                destination_net=destination,
-                                log=True,
+                    # Step 2: Allow access to each explicitly named zone
+                    for target in specific_targets:
+                        target_zone = self.get_zone_by_name(target)
+                        if target_zone:
+                            dest = target_zone.ip_network
+                        else:
+                            print(f"    Warning: target zone '{target}' not found in zones.json, using name as alias")
+                            dest = target
+                        self._create_or_skip_rule(
+                            manager, existing_by_desc,
+                            f"Zone {zone.name} -> {target}",
+                            zone_interface, zone.ip_network, dest,
+                            RuleAction.PASS, seq, check_mode, zone_results,
+                        )
+                        seq += 1
+
+                    if has_internet:
+                        # Step 3: Block RFC1918 to prevent reaching unlisted internal zones
+                        for network, label in self.RFC1918_NETWORKS:
+                            self._create_or_skip_rule(
+                                manager, existing_by_desc,
+                                f"Zone {zone.name} block {label}",
+                                zone_interface, zone.ip_network, network,
+                                RuleAction.BLOCK, seq, check_mode, zone_results,
                             )
-                            # Don't apply after each rule, batch them
-                            result = manager.create_rule(rule, apply=False)
-                            zone_results.append({
-                                "target": target,
-                                "status": "created",
-                                "destination": destination,
-                                "result": result,
-                            })
-                        except Exception as e:
-                            zone_results.append({
-                                "target": target,
-                                "status": "error",
-                                "error": str(e),
-                            })
-                            print(f"      Error: {e}")
+                            seq += 1
+
+                        # Step 4: Allow internet (pass to any — only non-RFC1918 reaches here)
+                        self._create_or_skip_rule(
+                            manager, existing_by_desc,
+                            f"Zone {zone.name} -> internet",
+                            zone_interface, zone.ip_network, "any",
+                            RuleAction.PASS, seq, check_mode, zone_results,
+                        )
 
                 results[zone.name] = {
                     "status": "processed",
@@ -690,6 +829,11 @@ class ZoneManager:
                 except Exception as e:
                     print(f"  Error applying changes: {e}")
 
+            # Report on isolated zones (enabled but empty access-to)
+            for zone in isolated_zones:
+                print(f"  {zone.name}: No rules (fully isolated, default block)")
+                results[zone.name] = {"status": "isolated", "access_to": []}
+
             # Report on manual zones
             for zone in manual_zones:
                 if zone.access_to:
@@ -700,6 +844,45 @@ class ZoneManager:
                     }
 
         return results
+
+    def update_dnsmasq_interfaces(self, check_mode: bool = True) -> dict:
+        """Update dnsmasq to listen on all enabled VLAN interfaces.
+
+        Builds a list of all interfaces that need DHCP (LAN + VLAN zones)
+        and updates the dnsmasq general configuration.
+
+        Args:
+            check_mode: If True, don't make changes (dry-run)
+
+        Returns:
+            Result dictionary
+        """
+        # Start with the base LAN interface
+        interfaces = ["lan"]
+
+        # Add all enabled VLAN zone interfaces
+        for zone in self.get_vlan_zones():
+            iface = self.get_zone_interface(zone)
+            if iface and iface not in interfaces:
+                interfaces.append(iface)
+
+        print(f"  Dnsmasq interfaces: {', '.join(interfaces)}")
+
+        if check_mode:
+            return {"status": "would_update", "interfaces": interfaces}
+
+        try:
+            with DhcpManager(self.config) as manager:
+                result = manager.enable_service(
+                    interfaces=interfaces,
+                    dhcp_authoritative=True,
+                    check_mode=False,
+                )
+                print(f"  Updated dnsmasq to listen on {len(interfaces)} interfaces")
+                return {"status": "updated", "interfaces": interfaces, "result": result}
+        except Exception as e:
+            print(f"  Error updating dnsmasq interfaces: {e}")
+            return {"status": "error", "error": str(e)}
 
     def configure_all(
         self,
@@ -733,9 +916,16 @@ class ZoneManager:
         print("=" * 60)
         dhcp_results = self.configure_dhcp(check_mode=check_mode)
 
+        # Update dnsmasq to listen on all VLAN interfaces
+        print("\n" + "=" * 60)
+        print("Step 2b: Updating dnsmasq interface bindings")
+        print("=" * 60)
+        dnsmasq_result = self.update_dnsmasq_interfaces(check_mode=check_mode)
+
         result = {
             "vlans": vlan_results,
             "dhcp": dhcp_results,
+            "dnsmasq_interfaces": dnsmasq_result,
         }
 
         if firewall_rules:
@@ -1018,7 +1208,18 @@ def main():
             if rules:
                 created = sum(1 for r in rules if r.get("status") in ("created", "would_create"))
                 exists = sum(1 for r in rules if r.get("status") == "exists")
-                print(f"  {zone_name}: {len(rules)} rules ({created} new, {exists} existing)")
+                errors = sum(1 for r in rules if r.get("status") == "error")
+                parts = []
+                if created:
+                    parts.append(f"{created} new")
+                if exists:
+                    parts.append(f"{exists} existing")
+                if errors:
+                    parts.append(f"{errors} errors")
+                print(f"  {zone_name}: {len(rules)} rules ({', '.join(parts)})")
+            elif status in ("deleted", "would_delete"):
+                count = result.get("rules_deleted", 0)
+                print(f"  {zone_name}: {status} ({count} rules removed)")
             else:
                 print(f"  {zone_name}: {status}")
 

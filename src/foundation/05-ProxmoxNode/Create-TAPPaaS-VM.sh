@@ -130,7 +130,7 @@ function get_config_value() {
 function get_vlan_value() {
   local key="$1"
   if ! echo "$ZONES" | jq -e --arg K "$key" 'has($K)' >/dev/null ; then
-  # VLAN lacks the key 
+  # VLAN lacks the key
     echo -e "\n${RD}[ERROR]${CL} Missing required zone '${YW}$key${CL}' in \"zones.json\" configuration." >&2
     exit 1
   fi
@@ -143,6 +143,36 @@ function get_vlan_value() {
   info "     - $key has vlan value: ${BGN}${value}" >&2 #TODO, this is a hack using std error for info logging
   echo -n "${value}"
   return 0
+}
+
+function resolve_trunks() {
+  # Converts a semicolon-separated list of zone names to their VLAN tags
+  # e.g. "srv;private;iot;dmz" -> "210;310;410;610"
+  # Fails if a zone is not defined in zones.json, but only warns and skips if inactive.
+  local zone_list="$1"
+  local result=""
+  IFS=';' read -ra zone_names <<< "$zone_list"
+  for zone_name in "${zone_names[@]}"; do
+    if ! echo "$ZONES" | jq -e --arg K "$zone_name" 'has($K)' >/dev/null ; then
+      echo -e "\n${RD}[ERROR]${CL} Trunk zone '${YW}$zone_name${CL}' is not defined in \"zones.json\"." >&2
+      exit 1
+    fi
+    local state
+    state=$(echo $ZONES | jq -r --arg KEY "$zone_name" '.[$KEY].state')
+    if [ "$state" == "Inactive" ]; then
+      echo -e "${YW}[WARN]${CL} Trunk zone '${YW}$zone_name${CL}' is inactive (state: '${YW}$state${CL}'), skipping." >&2
+      continue
+    fi
+    local tag
+    tag=$(echo $ZONES | jq -r --arg KEY "$zone_name" '.[$KEY].vlantag')
+    info "     - trunk $zone_name has vlan value: ${BGN}${tag}" >&2
+    if [ -n "$result" ]; then
+      result="${result};${tag}"
+    else
+      result="${tag}"
+    fi
+  done
+  echo -n "${result}"
 }
 
 # generate some MAC addresses
@@ -167,12 +197,20 @@ GEN_MAC0=02:$(openssl rand -hex 5 | awk '{print toupper($0)}' | sed 's/\(..\)/\1
 MAC0="$(get_config_value 'mac0' "$GEN_MAC0")"
 ZONE0="$(get_config_value 'zone0' 'mgmt')"
 VLANTAG0=$(get_vlan_value "$ZONE0")
+TRUNKS0="$(get_config_value 'trunks0' 'NONE')"
+if [[ "$TRUNKS0" != "NONE" ]]; then
+  TRUNKS0=$(resolve_trunks "$TRUNKS0")
+fi
 BRIDGE1="$(get_config_value 'bridge1' 'NONE')"
 if [[ "$BRIDGE1" != "NONE" ]]; then
   GEN_MAC1=02:$(openssl rand -hex 5 | awk '{print toupper($0)}' | sed 's/\(..\)/\1:/g; s/.$//')
   MAC1="$(get_config_value 'mac1' "$GEN_MAC1")"
   ZONE1="$(get_config_value 'zone1' 'mgmt')"
   VLANTAG1=$(get_vlan_value "$ZONE1")
+  TRUNKS1="$(get_config_value 'trunks1' 'NONE')"
+  if [[ "$TRUNKS1" != "NONE" ]]; then
+    TRUNKS1=$(resolve_trunks "$TRUNKS1")
+  fi
 else
   info "     - No second bridge configured"
 fi
@@ -251,19 +289,25 @@ qm set $VMID --serial0 socket >/dev/null
 qm set $VMID --tags $VMTAG >/dev/null
 qm set $VMID --agent enabled=1 >/dev/null
 qm set $VMID --cores $CORE_COUNT --memory $RAM_SIZE >/dev/null
+NET0_OPTS="virtio,bridge=${BRIDGE0},macaddr=${MAC0}"
 if [ "$VLANTAG0" != "0" ]; then
-  qm set $VMID --net0 "virtio,bridge=${BRIDGE0},tag=${VLANTAG0},macaddr=${MAC0}" >/dev/null
-else
-  qm set $VMID --net0 "virtio,bridge=${BRIDGE0},macaddr=${MAC0}" >/dev/null
+  NET0_OPTS="${NET0_OPTS},tag=${VLANTAG0}"
 fi
+if [ "$TRUNKS0" != "NONE" ]; then
+  NET0_OPTS="${NET0_OPTS},trunks=${TRUNKS0}"
+fi
+qm set $VMID --net0 "${NET0_OPTS}" >/dev/null
 if [[ "$BRIDGE1" == "NONE" ]]; then
   info "No second bridge configured"
 else
+  NET1_OPTS="virtio,bridge=${BRIDGE1},macaddr=${MAC1}"
   if [ "$VLANTAG1" != "0" ]; then
-    qm set $VMID --net1 "virtio,bridge=${BRIDGE1},tag=$VLANTAG1,macaddr=${MAC1}" >/dev/null
-  else
-    qm set $VMID --net1 "virtio,bridge=${BRIDGE1},macaddr=${MAC1}" >/dev/null
+    NET1_OPTS="${NET1_OPTS},tag=${VLANTAG1}"
   fi
+  if [ "$TRUNKS1" != "NONE" ]; then
+    NET1_OPTS="${NET1_OPTS},trunks=${TRUNKS1}"
+  fi
+  qm set $VMID --net1 "${NET1_OPTS}" >/dev/null
   info "Configured second bridge on $BRIDGE1"
 fi
 if [ "$CLOUDINIT" == "true" ]; then
