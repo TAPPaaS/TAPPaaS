@@ -13,6 +13,7 @@ This guide shows how to install OpenWebUI on TAPPaaS infrastructure with Postgre
 Steps 2-4 will be replaced by ./install.sh openwebui - when the trunk issue is resolved!
 pfSense router --> OPNsense
 192.168 range --> 10. range
+configuration.nix not modular --> flake based structure
 
 
 **Target Setup:**
