@@ -1,10 +1,9 @@
 # ADR-002: Dynamic VLAN Configuration for TAPPaaS VM Deployment
+
 **Author** Erik Daniel (tappaas)
-**Status:** Proposed  
+**Status:** proposed - ready for review 
 **Date:** 2025-02-03  
-**Deciders:** TAPPaaS Core Module Owner  
-**Technical Story:** RCA-2025-02-03-VLAN-SRV 
-**Technical Story:** Depends on RCA-2025-02-03-VLAN-SRV and ADR-001 (Trunk Mode)
+**Deciders:** @LarsRossen + @ErikDaniel 
 
 ---
 

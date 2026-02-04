@@ -1,10 +1,10 @@
 ```markdown
 # ADR-001: Use Trunk Mode for TAPPaaS VM VLAN Connectivity
 
-**Status:** Accepted  
+**Status:** proposed - ready for review 
 **Date:** 2026-02-03  
 **Updated:** 2026-02-04 (Added bridge-vids requirement)  
-**Deciders:** Erik (tappaas)  
+**Deciders:** @LarsRossen + @ErikDaniel
 **Related:** RCA-2025-02-03-VLAN-SRV.md, RCA-2025-02-03-VLAN-SRV-FIX.md
 
 ---
