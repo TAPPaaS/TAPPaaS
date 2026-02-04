@@ -41,16 +41,46 @@ in
   # ----------------------------------------
   # System Identity
   # ----------------------------------------
-  networking.hostName = "openwebui";
   system.stateVersion = "25.05";
 
   # ----------------------------------------
-  # Networking
+  # Network Configuration - VLAN Trunk Mode
   # ----------------------------------------
-  networking.networkmanager.enable = true;
+  networking = {
+    hostName = lib.mkDefault "openwebui";
+    
+    # Disable NetworkManager (conflicts with declarative VLAN config)
+    networkmanager.enable = false;
+    
+    # Disable default DHCP
+    useDHCP = false;
+    
+    # Main trunk interface (no IP, no DHCP)
+    interfaces.ens18.useDHCP = false;
+    
+    # VLAN 210 subinterface (srv zone)
+    vlans."ens18.210" = {
+      id = 210;
+      interface = "ens18";
+    };
+    
+    # VLAN interface gets DHCP
+    interfaces."ens18.210".useDHCP = true;
+    
+    # Default gateway via VLAN
+    defaultGateway = {
+      address = "192.168.210.1";
+      interface = "ens18.210";
+    };
+    
+    nameservers = [ "192.168.210.1" ];
+
+    firewall.allowedTCPPorts = [ 22 8080 ];
+  };
+
+  # Disable systemd-networkd (conflicts with NetworkManager/declarative)
   systemd.network.enable = lib.mkForce false;
   systemd.network.wait-online.enable = lib.mkForce false;
-  networking.firewall.allowedTCPPorts = [ 22 8080 ];
 
   # ----------------------------------------
   # Timezone
@@ -99,7 +129,7 @@ in
 
   services.cloud-init = {
     enable = true;
-    network.enable = true;
+    network.enable = false; # modified - should stay false!
   };
 
   # ----------------------------------------
