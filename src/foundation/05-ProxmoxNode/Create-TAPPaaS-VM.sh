@@ -231,9 +231,12 @@ if [ "$IMAGETYPE" == "iso" ]; then # First use: this is used to stand up a nixos
   pvesm alloc $STORAGE $VMID $DISK0 4M  1>/dev/null
   pvesm alloc $STORAGE $VMID $DISK1 $DISK_SIZE  1>/dev/null
   info " - Created EFI disk"
-# qm importdisk $VMID ${FILE} $STORAGE ${DISK_IMPORT:-} # 1>/dev/null
+  qm set $VMID \
+    -ide3 local:iso/${IMAGE},media=cdrom\
+    -efidisk0 ${DISK0_REF} \
+    -scsi0 ${DISK1_REF},discard=on,ssd=1,size=${DISK_SIZE} \
+    -boot order='ide3;scsi0' >/dev/null
 fi
-
 # qm resize $VMID scsi0 ${DISK_SIZE} >/dev/null
 
 if [ "$IMAGETYPE" == "clone" ]; then
@@ -265,12 +268,7 @@ else
 fi
 if [ "$CLOUDINIT" == "true" ]; then
   info "Configuring Cloud-init for VM $VMNAME"
-  qm set $VMID \
-    -ide3 local:iso/${IMAGE},media=cdrom\
-    -efidisk0 ${DISK0_REF} \
-    -scsi0 ${DISK1_REF},discard=on,ssd=1,size=${DISK_SIZE} \
-    -ide2 ${STORAGE}:cloudinit \
-    -boot order='ide3;scsi0' >/dev/null
+  qm set $VMID -ide2 ${STORAGE}:cloudinit >/dev/null
   qm set $VMID --ciuser tappaas >/dev/null
   qm set $VMID --ipconfig0 ip=dhcp >/dev/null
   if [[ "$VMNAME" == "tappaas-cicd" ]]; then

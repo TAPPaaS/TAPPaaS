@@ -1,27 +1,23 @@
-# install the identity foundation: create VM
-# It assume that you are in the install directoy
+#!/usr/bin/env bash
+# TAPPaaS Module Installation Template
+#
+# < Update the following lines to match your project, current code is generic example code that works for many modules >
+# install and configure a Module
+# It assumes that you are in the install directory
 
-# check that hostname is tappaas-cicd
-if [ "$(hostname)" != "tappaas-cicd" ]; then
-  echo "This script must be run on the TAPPaaS-CICD host (hostname tappaas-cicd)."
-  exit 1
-fi      
+set -e
 
-# make sure we have the latest version of the configuration files
-# git pull
+. /home/tappaas/bin/common-install-routines.sh
 
-# clone the nixos template
-scp test-clone.json root@tappaas1.mgmt.internal:/root/tappaas/test-clone.json
-scp test-clone-vlan.json root@tappaas1.mgmt.internal:/root/tappaas/test-clone-vlan.json
-scp test-iso.json root@tappaas1.mgmt.internal:/root/tappaas/test-iso.json
-scp test-img.json root@tappaas1.mgmt.internal:/root/tappaas/test-img.json
-ssh root@tappaas1.mgmt.internal "/root/tappaas/Create-TAPPaaS-VM.sh test-clone"
-ssh root@tappaas1.mgmt.internal "/root/tappaas/Create-TAPPaaS-VM.sh test-clone-vlan"
-ssh root@tappaas1.mgmt.internal "/root/tappaas/Create-TAPPaaS-VM.sh test-iso"
-ssh root@tappaas1.mgmt.internal "/root/tappaas/Create-TAPPaaS-VM.sh test-img"
+VMNAME="$(get_config_value 'vmname' "$1")"
+NODE="$(get_config_value 'node' 'tappaas1')"
+MGMT="mgmt"
 
-# rebuild the nixos configuration
-# nixos-rebuild --target-host tappaas@identity.internal --use-remote-sudo switch -I nixos-config=./test.nix
+# copy the VM template
+scp "$1.json" "root@${NODE}.${MGMT}.internal:/root/tappaas/$1.json"
+ssh "root@${NODE}.${MGMT}.internal" "/root/tappaas/Create-TAPPaaS-VM.sh $1"
 
+# run the update script as all update actions is also needed at install time
+# . ./update.sh
 
-echo "Identity VM installation completed successfully."
+echo -e "\nVM installation completed successfully."
