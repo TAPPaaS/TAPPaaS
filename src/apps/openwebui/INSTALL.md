@@ -1,0 +1,14 @@
+# Installation notes for <module name>
+
+<edit as appropiate for this module>
+
+look at ./openwebui.json. If this file is not correctly reflecting how you want this module to be installed in your environments. For instance if:
+- you want to have the module to run on a different node than the default "tappaas1" 
+- you want the VM to e on a different storage node than "tanka1"
+- you want to make it a member of a different LAN zone (VLAN)
+Then copy the json to /home/tappaas/config and edit the file to reflect your choices
+
+Then as tappaas use on the tappaas-cicd: run the command:
+```
+./install.sh <modulename>
+```
