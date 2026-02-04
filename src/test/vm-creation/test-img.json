@@ -12,7 +12,7 @@
     "imageLocation": "https://pkg.opnsense.org/releases/25.7/",
     "bridge0": "lan",
     "bridge1": "wan",
-    "vlantag0": 0,
+    "zone0": "mgmt",
     "bios": "seabios",
     "ostype": "other",
     "description": "TAPPaaS img based test VM"  

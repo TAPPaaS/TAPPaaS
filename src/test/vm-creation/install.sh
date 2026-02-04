@@ -11,12 +11,14 @@ fi
 # git pull
 
 # clone the nixos template
-scp test-clone.json root@tappaas1.internal:/root/tappaas/test-clone.json
-scp test-iso.json root@tappaas1.internal:/root/tappaas/test-iso.json
-scp test-img.json root@tappaas1.internal:/root/tappaas/test-img.json
-ssh root@tappaas1.internal "/root/tappaas/Create-TAPPaaS-VM.sh test-clone"
-ssh root@tappaas1.internal "/root/tappaas/Create-TAPPaaS-VM.sh test-iso"
-ssh root@tappaas1.internal "/root/tappaas/Create-TAPPaaS-VM.sh test-img"
+scp test-clone.json root@tappaas1.mgmt.internal:/root/tappaas/test-clone.json
+scp test-clone-vlan.json root@tappaas1.mgmt.internal:/root/tappaas/test-clone-vlan.json
+scp test-iso.json root@tappaas1.mgmt.internal:/root/tappaas/test-iso.json
+scp test-img.json root@tappaas1.mgmt.internal:/root/tappaas/test-img.json
+ssh root@tappaas1.mgmt.internal "/root/tappaas/Create-TAPPaaS-VM.sh test-clone"
+ssh root@tappaas1.mgmt.internal "/root/tappaas/Create-TAPPaaS-VM.sh test-clone-vlan"
+ssh root@tappaas1.mgmt.internal "/root/tappaas/Create-TAPPaaS-VM.sh test-iso"
+ssh root@tappaas1.mgmt.internal "/root/tappaas/Create-TAPPaaS-VM.sh test-img"
 
 # rebuild the nixos configuration
 # nixos-rebuild --target-host tappaas@identity.internal --use-remote-sudo switch -I nixos-config=./test.nix

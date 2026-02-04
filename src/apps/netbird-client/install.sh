@@ -19,7 +19,7 @@ scp "$1.json" "root@${NODE}.${ZONENAME}.internal:/root/tappaas/$1.json"
 ssh "root@${NODE}.${ZONENAME}.internal" "/root/tappaas/Create-TAPPaaS-VM.sh $1"
 
 ssh "root@${VMNAME}.${ZONENAME}.internal" "apt update && apt upgrade -y && apt install curl -y"
-ssh "root@${VMNAME}.${ZONENAME}.internal" "curl -fsSL https://pkgs.netbird.io/install.sh | sh"
+# ssh "root@${VMNAME}.${ZONENAME}.internal" "curl -fsSL https://pkgs.netbird.io/install.sh | sh"
 
 /home/tappaas/bin/update-HA.sh $1
 

@@ -1,8 +1,8 @@
 {
     "version": "0.5",
-    "vmid": 605,
+    "vmid": 640,
     "vmtag": "TAPPaaS,Test",
-    "vmname": "test-clone",
+    "vmname": "test-clone-vlan",
     "cores": 2,
     "memory": "8192",
     "diskSize": "32G",
@@ -10,6 +10,6 @@
     "imageType": "clone",
     "image": "8080",
     "bridge0": "lan",
-    "zone0": "mgmt",
+    "zone0": "srv",
     "description": "TAPPaaS Cloning test VM"  
 }
