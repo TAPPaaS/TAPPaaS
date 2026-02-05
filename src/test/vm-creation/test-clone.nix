@@ -27,8 +27,8 @@
 
 {
   imports =
-    [ # Note we are not doing hardware includes
-    ./hardware-configuration.nix
+    [ 
+      /etc/nixos/hardware-configuration.nix
     ];
 
   services.cloud-init = {
@@ -41,7 +41,7 @@
   boot.loader.efi.canTouchEfiVariables = lib.mkDefault true;
 
   # Network
-  networking.hostName = lib.mkDefault "tappaas-nixos"; # Define your hostname.
+  networking.hostName = lib.mkDefault "test-clone"; # Define your hostname.
   networking.networkmanager.enable = true;  # Easiest to use and most distros use this by default.
 
   # Set your time zone.
@@ -66,6 +66,9 @@
   };
   programs.ssh.startAgent = true;
 
+  # Enable cron for scheduled tasks
+  services.cron.enable = true;
+
   nix.settings.trusted-users = [ "root" "@wheel" ]; # Allow remote updates
   nix.settings.experimental-features = [ "nix-command" "flakes" ]; # Enable flakes
   nixpkgs.config.allowUnfree = true; # Allow unfree packages
@@ -78,6 +81,11 @@
     serviceConfig.Restart = "always"; # restart when session is closed
   };
 
+  programs.nix-ld.enable = true;
+  programs.nix-ld.libraries = with pkgs; [
+    # Add any missing dynamic libraries for unpackaged programs
+    # here, NOT in environment.systemPackages
+  ];
 
   # QEMU Guest Agent
   services.qemuGuest.enable = true;
@@ -91,6 +99,7 @@
         wget
         curl
         htop
+        jq
         git
   ];
 

@@ -179,6 +179,15 @@ function resolve_trunks() {
 info "${BOLD}Creating TAPPaaS VM in proxmox using the following settings:"
 NODE="$(get_config_value 'node' 'tappaas1')"
 VMID="$(get_config_value 'vmid')"
+
+# Check if VMID already exists - exit without destroying the existing VM
+if qm status $VMID &>/dev/null; then
+  echo -e "\n${RD}[ERROR]${CL} VM with VMID ${YW}$VMID${CL} already exists on this node."
+  echo -e "Please choose a different VMID or manually remove the existing VM if intended.\n"
+  trap - ERR  # Disable error handler to prevent cleanup of existing VM
+  exit 1
+fi
+
 VMNAME="$(get_config_value 'vmname' "$1")"
 VMTAG="$(get_config_value 'vmtag')"
 BIOS="$(get_config_value 'bios' 'ovmf')"
