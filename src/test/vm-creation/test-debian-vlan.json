@@ -1,9 +1,9 @@
 {
     "version": "0.5",
     "node": "tappaas1",
-    "vmid": 821,
+    "vmid": 602,
     "vmtag": "TAPPaaS,Test",
-    "vmname": "debian-test",
+    "vmname": "test-debian-vlan",
     "cores": 1,
     "memory": "1024",
     "diskSize": "4G",
@@ -13,6 +13,6 @@
     "image": "debian-13-generic-amd64-20260112-2355.qcow2",
     "imageLocation": "https://cdimage.debian.org/cdimage/cloud/trixie/20260112-2355",
     "bridge0": "lan",
-    "zone0": "mgmt",
-    "description": "TAPPaaS Test - Debian image on mgmt zone (hostname test)"
+    "zone0": "srv",
+    "description": "Test: Debian image on srv VLAN (node tappaas1)"
 }

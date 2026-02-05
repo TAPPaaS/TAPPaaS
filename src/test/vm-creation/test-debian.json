@@ -1,0 +1,18 @@
+{
+    "version": "0.5",
+    "node": "tappaas1",
+    "vmid": 601,
+    "vmtag": "TAPPaaS,Test",
+    "vmname": "test-debian",
+    "cores": 1,
+    "memory": "1024",
+    "diskSize": "4G",
+    "storage": "tanka1",
+    "cloudInit": "true",
+    "imageType": "img",
+    "image": "debian-13-generic-amd64-20260112-2355.qcow2",
+    "imageLocation": "https://cdimage.debian.org/cdimage/cloud/trixie/20260112-2355",
+    "bridge0": "lan",
+    "zone0": "mgmt",
+    "description": "Test: Debian image on mgmt zone (node tappaas1)"
+}

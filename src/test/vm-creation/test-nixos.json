@@ -1,15 +1,16 @@
 {
     "version": "0.5",
-    "vmid": 610,
+    "node": "tappaas1",
+    "vmid": 604,
     "vmtag": "TAPPaaS,Test",
-    "vmname": "test-clone",
+    "vmname": "test-nixos",
     "cores": 2,
-    "memory": "8192",
-    "diskSize": "32G",
+    "memory": "2048",
+    "diskSize": "16G",
     "storage": "tanka1",
     "imageType": "clone",
     "image": "8080",
     "bridge0": "lan",
     "zone0": "mgmt",
-    "description": "TAPPaaS Cloning test VM"  
+    "description": "Test: NixOS clone on mgmt zone (node tappaas1)"
 }

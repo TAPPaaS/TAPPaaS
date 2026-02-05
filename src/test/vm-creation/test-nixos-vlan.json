@@ -1,17 +1,16 @@
 {
     "version": "0.5",
     "node": "tappaas1",
-    "vmid": 822,
+    "vmid": 605,
     "vmtag": "TAPPaaS,Test",
-    "vmname": "nixos-test",
+    "vmname": "test-nixos-vlan",
     "cores": 2,
-    "memory": "4096",
+    "memory": "2048",
     "diskSize": "16G",
     "storage": "tanka1",
-    "cloudInit": "true",
     "imageType": "clone",
     "image": "8080",
     "bridge0": "lan",
-    "zone0": "private",
-    "description": "TAPPaaS Test - NixOS clone on private/VLAN zone (hostname test)"
+    "zone0": "srv",
+    "description": "Test: NixOS clone on srv VLAN (node tappaas1)"
 }
