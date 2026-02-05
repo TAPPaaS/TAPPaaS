@@ -19,17 +19,38 @@ When cloning a NixOS VM from the template:
 
 4. **DHCP lease caching** - Once the DHCP server has a lease with a hostname, it may not update the hostname on subsequent renewals unless a full release/request cycle occurs.
 
-## Workaround
+## Automated Fix in Install Scripts
 
-The hostname displayed in the DHCP lease is primarily cosmetic for DNS purposes. The VM itself has the correct hostname set by cloud-init. If accurate DHCP hostname registration is required:
+TAPPaaS install scripts use `rebuild-nixos.sh` (located at `src/foundation/30-tappaas-cicd/scripts/rebuild-nixos.sh`) which automatically fixes the DHCP hostname registration after nixos-rebuild by:
 
-1. **Manual DHCP renewal after boot**: SSH into the cloned VM and run:
-   ```bash
-   sudo nmcli connection modify "Wired connection 1" ipv4.dhcp-hostname "$(hostname)"
-   sudo nmcli device reapply eth0
-   ```
+1. Finding the ethernet connection and device using `nmcli`
+2. Setting `ipv4.dhcp-hostname` to the VM's hostname
+3. Reapplying the device configuration to trigger a DHCP renewal
 
-2. **Use static DHCP reservations**: Configure the DHCP server (OPNsense) with static mappings that associate MAC addresses with hostnames.
+This ensures the DHCP lease shows the correct hostname after installation.
+
+Usage:
+
+```bash
+rebuild-nixos.sh <vmname> <vmid> <node> <nix-config-path>
+# Example: rebuild-nixos.sh myvm 610 tappaas1 ./myvm.nix
+```
+
+## Manual Workaround
+
+If you need to fix the DHCP hostname manually (e.g., for VMs created without the install script), SSH into the VM and run:
+
+```bash
+# Find the connection and device names
+ETH_CONNECTION=$(nmcli -t -f NAME,TYPE connection show | grep ethernet | cut -d: -f1 | head -1)
+ETH_DEVICE=$(nmcli -t -f DEVICE,TYPE device status | grep ethernet | cut -d: -f1 | head -1)
+
+# Update DHCP hostname and reapply
+sudo nmcli connection modify "$ETH_CONNECTION" ipv4.dhcp-hostname "$(hostname)"
+sudo nmcli device reapply "$ETH_DEVICE"
+```
+
+Alternatively, use static DHCP reservations on the DHCP server (OPNsense) with static mappings that associate MAC addresses with hostnames.
 
 ## Attempted Solutions
 

@@ -22,14 +22,8 @@ ssh "root@${NODE}.${MGMT}.internal" "/root/tappaas/Create-TAPPaaS-VM.sh $1"
 
 # TODO: insert instructions to update the module here
 
-# rebuild the nixos configuration
-echo "Waiting for VM to get IP address..."
-sleep 30
-VMIP=$(ssh "root@${NODE}.${MGMT}.internal" "qm guest cmd ${VMID} network-get-interfaces" | jq -r '.[] | select(.name == "eth0") | ."ip-addresses"[] | select(."ip-address-type" == "ipv4") | ."ip-address"')
-echo "VM IP address: ${VMIP}"
-
-nixos-rebuild --target-host "tappaas@${VMIP}" --use-remote-sudo switch -I "nixos-config=./${VMNAME}.nix"
-
+# Rebuild NixOS configuration, reboot VM, and fix DHCP hostname
+/home/tappaas/TAPPaaS/src/foundation/30-tappaas-cicd/scripts/rebuild-nixos.sh "${VMNAME}" "${VMID}" "${NODE}" "./${VMNAME}.nix"
 
 # run the update script as all update actions is also needed at install time
 # . ./update.sh
