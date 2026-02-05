@@ -1,2 +1,0 @@
-each directory in "contributions" is work in progress modules for TAPPaaS.
-Feel free to try, and if you experience any issues or have suggestions to improvement then contact the maintainer of the module
