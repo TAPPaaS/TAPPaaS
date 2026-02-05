@@ -23,7 +23,7 @@ ssh "root@${NODE}.${MGMT}.internal" "/root/tappaas/Create-TAPPaaS-VM.sh $1"
 # TODO: insert instructions to update the module here
 
 # Rebuild NixOS configuration, reboot VM, and fix DHCP hostname
-/home/tappaas/TAPPaaS/src/foundation/30-tappaas-cicd/scripts/rebuild-nixos.sh "${VMNAME}" "${VMID}" "${NODE}" "./${VMNAME}.nix"
+/home/tappaas/TAPPaaS/bin/rebuild-nixos.sh "${VMNAME}" "${VMID}" "${NODE}" "./${VMNAME}.nix"
 
 # run the update script as all update actions is also needed at install time
 # . ./update.sh

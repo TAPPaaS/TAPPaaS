@@ -3,7 +3,7 @@
     "node": "tappaas1",
     "vmid": 998,
     "vmtag": "TAPPaaS,App",
-    "vmname": "openwebui",
+    "vmname": "openwebui-srv",
     "cores": 2,
     "memory": "4096",
     "diskSize": "32G",

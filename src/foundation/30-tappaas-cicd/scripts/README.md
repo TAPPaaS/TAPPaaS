@@ -199,6 +199,58 @@ setup-caddy.sh
 
 ---
 
+### rebuild-nixos.sh
+
+Handles the complete NixOS rebuild workflow for a VM, including IP detection, nixos-rebuild, reboot, and DHCP hostname fix.
+
+**Usage:**
+```bash
+rebuild-nixos.sh <vmname> <vmid> <node> <nix-config-path>
+```
+
+**Parameters:**
+
+| Parameter | Description | Example |
+|-----------|-------------|---------|
+| `vmname` | Name of the VM | `nextcloud` |
+| `vmid` | Proxmox VM ID | `610` |
+| `node` | Proxmox node name | `tappaas1` |
+| `nix-config-path` | Path to the .nix configuration file | `./nextcloud.nix` |
+
+**Example:**
+```bash
+# Rebuild a VM from the module directory
+rebuild-nixos.sh myvm 610 tappaas1 ./myvm.nix
+```
+
+**What it does:**
+
+1. **Waits for VM IP** - Polls the Proxmox guest agent for up to 3 minutes until the VM has an IPv4 address
+2. **Updates SSH known_hosts** - Removes old host keys and adds the new one
+3. **Runs nixos-rebuild** - Deploys the NixOS configuration to the VM
+4. **Reboots VM** - Applies the new configuration with a full reboot
+5. **Waits for reboot** - Polls guest agent again until VM is back online
+6. **Fixes DHCP hostname** - Updates NetworkManager's dhcp-hostname setting and triggers a DHCP renewal so the DHCP server registers the correct hostname
+
+**DHCP Hostname Fix:**
+NixOS VMs cloned from the `tappaas-nixos` template initially register with the template's hostname in DHCP. This script automatically fixes this by:
+
+- Finding the ethernet connection via `nmcli connection show`
+- Finding the ethernet device via `nmcli device status`
+- Setting `ipv4.dhcp-hostname` to the VM's actual hostname
+- Running `nmcli device reapply` to trigger a DHCP renewal
+
+See `src/foundation/20-tappaas-nixos/DHCP-README.md` for more details on this known issue.
+
+**Requirements:**
+
+- SSH access to the Proxmox node as root
+- SSH access to the VM as tappaas user with sudo
+- QEMU guest agent running on the VM
+- `jq` installed on tappaas-cicd
+
+---
+
 ## Installation
 
 These scripts are automatically installed by `install.sh`:
@@ -214,6 +266,7 @@ scripts/
 ├── README.md                    # This file
 ├── common-install-routines.sh   # Shared library for install scripts
 ├── copy-jsons.sh                # Distribute configs to nodes
+├── rebuild-nixos.sh             # NixOS rebuild workflow with DHCP fix
 ├── setup-caddy.sh               # Install Caddy reverse proxy on firewall
 ├── test-config.sh               # Validate installation
 ├── update-cron.sh               # Set up daily update cron job

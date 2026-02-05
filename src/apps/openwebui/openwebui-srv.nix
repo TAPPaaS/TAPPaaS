@@ -25,7 +25,7 @@ in
   # ----------------------------------------
   # Imports
   # ----------------------------------------
-  imports = [ ./hardware-configuration.nix ];
+  imports = [ /etc/nixos/hardware-configuration.nix ];
 
   # ----------------------------------------
   # Bootloader
