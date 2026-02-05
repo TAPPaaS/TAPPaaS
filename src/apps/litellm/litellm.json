@@ -1,0 +1,16 @@
+{
+    "version": "0.5",
+    "node": "tappaas2",
+    "vmid": 998,
+    "vmtag": "TAPPaaS,Test",
+    "vmname": "litellm",
+    "cores": 2,
+    "memory": "8192",
+    "diskSize": "32G",
+    "storage": "tanka1",
+    "imageType": "clone",
+    "image": "8080",
+    "bridge0": "lan",
+    "zone0": "srv",
+    "description": "TAPPaaS litellm VM"  
+}
