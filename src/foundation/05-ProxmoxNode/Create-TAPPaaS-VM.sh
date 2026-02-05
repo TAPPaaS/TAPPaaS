@@ -310,9 +310,11 @@ else
   qm set $VMID --net1 "${NET1_OPTS}" >/dev/null
   info "Configured second bridge on $BRIDGE1"
 fi
-if [ "$CLOUDINIT" == "true" ]; then
+if [[ "$CLOUDINIT" == "true" ]]; then
   info "Configuring Cloud-init for VM $VMNAME"
-  qm set $VMID -ide2 ${STORAGE}:cloudinit >/dev/null
+  if [[ "$IMAGETYPE" != "clone" ]]; then
+    qm set $VMID -scsi1 ${STORAGE}:cloudinit >/dev/null
+  fi
   qm set $VMID --ciuser tappaas >/dev/null
   qm set $VMID --ipconfig0 ip=dhcp >/dev/null
   if [[ "$VMNAME" == "tappaas-cicd" ]]; then
@@ -320,6 +322,7 @@ if [ "$CLOUDINIT" == "true" ]; then
   elif [[ -f ~/tappaas/tappaas-cicd.pub ]]; then
     qm set $VMID --sshkey ~/tappaas/tappaas-cicd.pub >/dev/null
   fi
+  info " - Hostname set to $VMNAME via cloud-init"
   qm cloudinit update $VMID >/dev/null
 else
   info "Cloud-init configuration skipped as per JSON configuration"

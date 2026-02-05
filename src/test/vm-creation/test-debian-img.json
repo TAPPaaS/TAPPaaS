@@ -3,16 +3,16 @@
     "node": "tappaas1",
     "vmid": 821,
     "vmtag": "TAPPaaS,Test",
-    "vmname": "debian-test-mgmt",
+    "vmname": "debian-test",
     "cores": 1,
     "memory": "1024",
     "diskSize": "4G",
     "storage": "tanka1",
     "cloudInit": "true",
     "imageType": "img",
-    "image": "debian-13-nocloud-amd64-20260112-2355.qcow2",
+    "image": "debian-13-generic-amd64-20260112-2355.qcow2",
     "imageLocation": "https://cdimage.debian.org/cdimage/cloud/trixie/20260112-2355",
     "bridge0": "lan",
     "zone0": "mgmt",
-    "description": "TAPPaaS Test Client for accessing mgmt zone (so you can operate as if you are local to TAPPaaS)"
+    "description": "TAPPaaS Test - Debian image on mgmt zone (hostname test)"
 }

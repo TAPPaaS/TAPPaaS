@@ -41,7 +41,8 @@ in the Proxmox GUI do:
   - IPv4/CIDR: 10.0.0.10/24
   - Gateway:blank (as we have a gateway on the other bridge)
   - ipv6 and ipv6 gateway: leave blank
-  - Autostart is checked and VLAN aware is unchecked
+  - Autostart is checked
+  - VLAN aware is checked
   - Bridgeport: the name of the chosen ethernet port
 - now click create and click "apply configuration"
 

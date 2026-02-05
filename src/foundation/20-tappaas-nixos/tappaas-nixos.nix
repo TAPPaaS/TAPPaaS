@@ -36,6 +36,48 @@
         network.enable = false; # We handle networking ourselves with DHCP
   };
 
+  # Set hostname from cloud-init ISO before NetworkManager starts.
+  # cloud-init's set_hostname module runs after network, causing a race
+  # where the first DHCP request sends the template hostname.
+  # This service reads hostname directly from the NoCloud ISO (cidata)
+  # and sets it before any network interface comes up.
+  systemd.services.cloud-init-hostname = {
+    description = "Set hostname from cloud-init before network";
+    wantedBy = [ "network-pre.target" ];
+    before = [ "network-pre.target" "NetworkManager.service" ];
+    after = [ "cloud-init-local.service" ];
+    serviceConfig = {
+      Type = "oneshot";
+      RemainAfterExit = true;
+    };
+    path = [ pkgs.util-linux pkgs.gnugrep pkgs.gawk ];
+    script = ''
+      CIDATA_DEV=""
+      for dev in /dev/sr0 /dev/sr1 /dev/sdb; do
+        if ${pkgs.util-linux}/bin/blkid "$dev" 2>/dev/null | ${pkgs.gnugrep}/bin/grep -q 'LABEL="cidata"'; then
+          CIDATA_DEV="$dev"
+          break
+        fi
+      done
+      if [ -z "$CIDATA_DEV" ]; then
+        echo "No cidata device found, skipping"
+        exit 0
+      fi
+      MOUNTPOINT=$(mktemp -d)
+      if mount -o ro "$CIDATA_DEV" "$MOUNTPOINT" 2>/dev/null; then
+        if [ -f "$MOUNTPOINT/user-data" ]; then
+          HOSTNAME=$(${pkgs.gnugrep}/bin/grep '^hostname:' "$MOUNTPOINT/user-data" | ${pkgs.gawk}/bin/awk '{print $2}')
+          if [ -n "$HOSTNAME" ]; then
+            echo "$HOSTNAME" > /proc/sys/kernel/hostname
+            echo "Hostname set to $HOSTNAME"
+          fi
+        fi
+        umount "$MOUNTPOINT"
+      fi
+      rmdir "$MOUNTPOINT" 2>/dev/null
+    '';
+  };
+
   # Use the systemd-boot EFI boot loader.
   boot.loader.systemd-boot.enable = lib.mkDefault true;
   boot.loader.efi.canTouchEfiVariables = lib.mkDefault true;
