@@ -9,17 +9,21 @@ set -e
 
 if update-json.sh $1; then
     # TODO update the VM and firewall/proxy config based on any changes
+    echo "Updated JSON configuration for $1"
 fi
 . /home/tappaas/bin/common-install-routines.sh
 
 VMNAME="$(get_config_value 'vmname' '$1')"
+VMID="$(get_config_value 'vmid')"
 NODE="$(get_config_value 'node' 'tappaas1')"
 ZONE0NAME="$(get_config_value 'zone0' 'srv')"
+MGMT="mgmt"
 
 # TODO: insert instructions to update the module here
 
 # rebuild the nixos configuration
-nixos-rebuild --target-host "tappaas@${VMNAME}.${ZONE0NAME}.internal" --use-remote-sudo switch -I "nixos-config=./${VMNAME}.nix"
+# Rebuild NixOS configuration, reboot VM, and fix DHCP hostname
+/home/tappaas/bin/rebuild-nixos.sh "${VMNAME}" "${VMID}" "${NODE}" "./${VMNAME}.nix"
 
 # Update HA configuration (creates/updates/removes based on HANode field)
 /home/tappaas/bin/update-HA.sh $1
