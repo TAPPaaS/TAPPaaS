@@ -11,7 +11,7 @@ You need to do the following activities (next sections give exact instructions)
 
 1) **Prepare** the install
 2) **Install** proxmox on the first TAPPaaS node
-3) **PostInstall** TAPaaSPostPVEInstall.sh: Do basic household activities on Proxmox after initial install
+3) **PostInstall** install.sh: Do basic household activities on Proxmox after initial install
 
 continue with installing the [Firewall](../10-firewall/README.md) 
 Then install proxmox on remaining TAPPaaS [nodes](../15-AdditionalPVE-Nodes/README.md)
@@ -47,9 +47,9 @@ When accessing the gui you likely need to accept that it is an unsecure connecti
 Run the post install script (if you are not using the "main" branch for the install then then change the assignment in the first line):
 ```
 BRANCH="main"
-curl -fsSL https://raw.githubusercontent.com/TAPPaaS/TAPPaaS/$BRANCH/src/foundation/05-ProxmoxNode/install.sh >install-PVE.sh
-chmod +x install-PVE.sh
-./install-PVE.sh $BRANCH
+curl -fsSL https://raw.githubusercontent.com/TAPPaaS/TAPPaaS/$BRANCH/src/foundation/05-ProxmoxNode/install.sh >install.sh
+chmod +x install.sh
+./install.sh $BRANCH
 
 ```
 
