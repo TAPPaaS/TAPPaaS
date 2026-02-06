@@ -41,7 +41,7 @@
   boot.loader.efi.canTouchEfiVariables = lib.mkDefault true;
 
   # Network
-  networking.hostName = lib.mkDefault "tappaas-nixos"; # Define your hostname.
+  networking.hostName = lib.mkDefault "identity"; # Define your hostname.
   networking.networkmanager.enable = true;  # Easiest to use and most distros use this by default.
 
   # Set your time zone.
@@ -90,6 +90,7 @@
         vim
         wget
         curl
+        micro
         htop
         git
   ];

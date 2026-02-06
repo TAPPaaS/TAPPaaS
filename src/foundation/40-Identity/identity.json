@@ -4,12 +4,12 @@
     "vmtag": "TAPPaaS,Foundation",
     "vmname": "identity",
     "cores": 2,
-    "memory": "8192",
+    "memory": "4096",
     "diskSize": "32G",
     "storage": "tanka1",
     "imageType": "clone",
     "image": "8080",
     "bridge0": "lan",
-    "zone0": "mgmt",
+    "zone0": "srv",
     "description": "Identity VM for TAPPaaS"  
 }
