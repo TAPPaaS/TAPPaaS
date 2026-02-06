@@ -245,7 +245,7 @@ msg_ok "Enabled high availability"
 
 # Find the branch version of TAPPaaS to use
 msg_info "Determining TAPPaaS branch to use"
-if [ -z "$1" ]; then
+if [ -z "${1:-}" ]; then
   BRANCH="main"
 else
   BRANCH="$1"
