@@ -1,9 +1,9 @@
 {
     "version": "0.9.0",
-    "node": "tappaas1",
+    "node": "tappaas2",
     "vmid": 311,
     "vmtag": "TAPPaaS,App",
-    "vmname": "openwebui-srv",
+    "vmname": "openwebui",
     "cores": 2,
     "memory": "4096",
     "diskSize": "32G",
@@ -12,5 +12,5 @@
     "image": "8080",
     "bridge0": "lan",
     "zone0": "srv",
-    "description": "TAPPaaS Open Webui",  
+    "description": "TAPPaaS Open Webui"  
 }
