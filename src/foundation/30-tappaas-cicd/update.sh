@@ -88,12 +88,12 @@ while read -r node; do
     echo -e "\nCopying Create-TAPPaaS-VM.sh to /root/tappaas on node: $node"
     NODE_FQDN="$node.$MGMTVLAN.internal"
     scp /home/tappaas/TAPPaaS/src/foundation/05-ProxmoxNode/Create-TAPPaaS-VM.sh root@"$NODE_FQDN":/root/tappaas/
-done < <(pvesh get /cluster/resources --type node --output-format json | jq --raw-output ".[].node")
+done < <(ssh -o StrictHostKeyChecking=no root@"$NODE1_FQDN" "pvesh get /cluster/resources --type node --output-format json | jq --raw-output \".[].node\"")
 
 # Update HA configuration (creates/updates/removes based on HANode field)
 /home/tappaas/bin/update-HA.sh tappaas-cicd
 
 # rebuild the nixos configuration
-nixos-rebuild --target-host "tappaas@${VMNAME}.${ZONE0NAME}.internal" --use-remote-sudo switch -I "nixos-config=./${VMNAME}.nix"
+nixos-rebuild  switch -I "nixos-config=./${VMNAME}.nix"
 
 echo -e "\nVM update completed successfully."
