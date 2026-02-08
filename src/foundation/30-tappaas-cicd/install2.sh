@@ -30,6 +30,13 @@ while read -r node; do
   scp /home/tappaas/.ssh/id_ed25519 root@"$NODE_FQDN":/root/tappaas/tappaas-cicd.key < /dev/null
 done < <(ssh -n root@"$NODE1_FQDN" pvesh get /cluster/resources --type node --output-format json | jq --raw-output ".[].node" )
 
+# Get the actual nodes configured in the Proxmox system
+while read -r node; do
+    echo -e "\nCopying Create-TAPPaaS-VM.sh to /root/tappaas on node: $node"
+    NODE_FQDN="$node.$MGMTVLAN.internal"
+    scp /home/tappaas/TAPPaaS/src/foundation/05-ProxmoxNode/Create-TAPPaaS-VM.sh root@"$NODE_FQDN":/root/tappaas/
+done < <(pvesh get /cluster/resources --type node --output-format json | jq --raw-output ".[].node")
+
 # create tappaas binary director and config directory
 mkdir -p /home/tappaas/config
 mkdir -p /home/tappaas/bin

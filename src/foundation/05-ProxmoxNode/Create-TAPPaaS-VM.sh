@@ -290,9 +290,21 @@ fi
 if [ "$IMAGETYPE" == "clone" ]; then
   info "${BOLD}Creating a Clone based VM"
 
-  # Templates are stored on tappaas1 (where tappaas-cicd runs by default)
-  TEMPLATE_NODE="tappaas1"
+  # Find the cluster node that has the template
+  TEMPLATE_NODE=""
   CURRENT_NODE=$(hostname)
+  
+  while read -r node; do
+    if ssh -o StrictHostKeyChecking=no root@"${node}.mgmt.internal" "qm status $IMAGE &>/dev/null"; then
+      TEMPLATE_NODE="$node"
+      break
+    fi
+  done < <(pvesh get /cluster/resources --type node --output-format json | jq --raw-output ".[].node")
+  
+  if [ -z "$TEMPLATE_NODE" ]; then
+    error "Template $IMAGE not found on any cluster node"
+    exit 1
+  fi
 
   # Check if we're running on the node that has the template
   if [ "$CURRENT_NODE" == "$TEMPLATE_NODE" ]; then

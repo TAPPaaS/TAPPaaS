@@ -78,6 +78,14 @@ if update-json.sh tappaas-cicd; then
     # TODO
 fi
 
+# Iterate through all TAPPaaS nodes and copy Create-TAPPaaS-VM.sh to /root/tappaas
+# Get the actual nodes configured in the Proxmox system
+while read -r node; do
+    echo -e "\nCopying Create-TAPPaaS-VM.sh to /root/tappaas on node: $node"
+    NODE_FQDN="$node.$MGMTVLAN.internal"
+    scp /home/tappaas/TAPPaaS/src/foundation/05-ProxmoxNode/Create-TAPPaaS-VM.sh root@"$NODE_FQDN":/root/tappaas/
+done < <(pvesh get /cluster/resources --type node --output-format json | jq --raw-output ".[].node")
+
 # Update HA configuration (creates/updates/removes based on HANode field)
 /home/tappaas/bin/update-HA.sh tappaas-cicd
 
