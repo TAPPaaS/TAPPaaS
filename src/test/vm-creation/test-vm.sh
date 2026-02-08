@@ -96,7 +96,7 @@ test_result "Ping VM by IP ($VMIP)" $?
 
 # Test 2: DNS resolution
 echo "2. DNS resolution test..."
-RESOLVED_IP=$(dig +short "$DNS_NAME" 2>/dev/null | head -1)
+RESOLVED_IP=$(getent hosts "$DNS_NAME" 2>/dev/null | awk '{print $1}' | head -1)
 if [ "$RESOLVED_IP" = "$VMIP" ]; then
     test_result "DNS resolves $DNS_NAME to $VMIP" 0
 else
