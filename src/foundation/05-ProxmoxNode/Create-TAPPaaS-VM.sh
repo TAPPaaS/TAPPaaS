@@ -193,6 +193,7 @@ VMTAG="$(get_config_value 'vmtag')"
 BIOS="$(get_config_value 'bios' 'ovmf')"
 CORE_COUNT="$(get_config_value 'cores' '2')"
 VM_OSTYPE="$(get_config_value 'ostype' 'l26')"
+CPU_TYPE="$(get_config_value 'cputype' 'host')"
 RAM_SIZE="$(get_config_value 'memory' '4096')"
 DISK_SIZE="$(get_config_value 'diskSize' '8G')"
 STORAGE="$(get_config_value 'storage' 'tanka1')"
@@ -262,7 +263,7 @@ info "\n${BOLD}Starting the $VMNAME VM creation process..."
 if [ "$IMAGETYPE" == "img" ]; then  # First use: this is used to stand up a firewall vm from a disk image
   info "${BOLD}Creating a Image based VM"
   qm create $VMID -agent 1 -tablet 0 -localtime 1 \
-    -name $VMNAME  -onboot 1 -bios $BIOS -ostype $VM_OSTYPE -scsihw virtio-scsi-single 1>/dev/null
+    -name $VMNAME  -onboot 1 -bios $BIOS -ostype $VM_OSTYPE -cpu "$CPU_TYPE" -scsihw virtio-scsi-single 1>/dev/null
   qm importdisk $VMID ${TARGET_IMAGE} $STORAGE  1>/dev/null
   qm set $VMID \
     -scsi0 ${DISK0_REF} \
@@ -273,7 +274,7 @@ fi
 if [ "$IMAGETYPE" == "iso" ]; then # First use: this is used to stand up a nixos template vm from an iso image
   info "${BOLD}Creating an ISO based VM"
   qm create $VMID --agent 1 --tablet 0 --localtime 1 --bios $BIOS \
-    --name $VMNAME --onboot 1 --ostype $VM_OSTYPE --scsihw virtio-scsi-pci >/dev/null
+    --name $VMNAME --onboot 1 --ostype $VM_OSTYPE --cpu "$CPU_TYPE" --scsihw virtio-scsi-pci >/dev/null
   info " - Created base VM configuration"
   pvesm alloc $STORAGE $VMID $DISK0 4M  1>/dev/null
   pvesm alloc $STORAGE $VMID $DISK1 $DISK_SIZE  1>/dev/null
@@ -288,7 +289,9 @@ fi
 
 if [ "$IMAGETYPE" == "clone" ]; then
   info "${BOLD}Creating a Clone based VM"
-  qm clone $IMAGE $VMID --name $VMNAME --full 1 >/dev/null
+  qm clone "$IMAGE" "$VMID" --name "$VMNAME" --full 1 >/dev/null
+  # Set CPU type after cloning (clone inherits from template)
+  qm set $VMID --cpu "$CPU_TYPE" >/dev/null
 fi
 
 info "${BOLD}Configuring the $VMNAME VM settings..."
