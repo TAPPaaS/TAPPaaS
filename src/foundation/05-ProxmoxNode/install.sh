@@ -271,6 +271,10 @@ msg_ok "Installed power top"
 
 msg_info "Install netbird client:"
 curl -fsSL https://pkgs.netbird.io/install.sh | sh
+if [ -f /etc/resolv.conf.original.netbird ]; then
+  cp /etc/resolv.conf.original.netbird /etc/resolv.conf
+  chattr +i /etc/resolv.conf
+fi
 msg_ok "Installed netbird client"
 
 msg_info "Updating Proxmox VE (Patience)"

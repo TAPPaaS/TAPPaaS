@@ -289,7 +289,30 @@ fi
 
 if [ "$IMAGETYPE" == "clone" ]; then
   info "${BOLD}Creating a Clone based VM"
-  qm clone "$IMAGE" "$VMID" --name "$VMNAME" --full 1 >/dev/null
+
+  # Templates are stored on tappaas1 (where tappaas-cicd runs by default)
+  TEMPLATE_NODE="tappaas1"
+  CURRENT_NODE=$(hostname)
+
+  # Check if we're running on the node that has the template
+  if [ "$CURRENT_NODE" == "$TEMPLATE_NODE" ]; then
+    # Local clone - template is on this node
+    qm clone "$IMAGE" "$VMID" --name "$VMNAME" --full 1 >/dev/null
+  else
+    # Remote clone - need to clone on template node then migrate to current node
+    info "Template is on ${TEMPLATE_NODE}, current node is ${CURRENT_NODE}"
+    info "Cloning on ${TEMPLATE_NODE} and migrating to ${CURRENT_NODE}..."
+
+    # Clone on the template node via SSH
+    ssh -o StrictHostKeyChecking=no root@${TEMPLATE_NODE} "qm clone $IMAGE $VMID --name $VMNAME --full 1" >/dev/null
+    info " - Cloned VM ${VMID} on ${TEMPLATE_NODE}"
+
+    # Migrate the VM to the current node (online=0 means offline migration)
+    info " - Migrating VM ${VMID} from ${TEMPLATE_NODE} to ${CURRENT_NODE}..."
+    ssh -o StrictHostKeyChecking=no root@${TEMPLATE_NODE} "qm migrate $VMID $CURRENT_NODE --online 0" >/dev/null
+    info " - Migration complete"
+  fi
+
   # Set CPU type after cloning (clone inherits from template)
   qm set $VMID --cpu "$CPU_TYPE" >/dev/null
 fi

@@ -1,7 +1,7 @@
 {
     "version": "0.5",
     "node": "tappaas1",
-    "vmid": 605,
+    "vmid": 607,
     "vmtag": "TAPPaaS,Test",
     "vmname": "test-nixos-ha",
     "HANode": "tappaas2",
