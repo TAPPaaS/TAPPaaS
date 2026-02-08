@@ -23,7 +23,7 @@ MGMT="mgmt"
 
 # rebuild the nixos configuration
 # Rebuild NixOS configuration, reboot VM, and fix DHCP hostname
-/home/tappaas/bin/rebuild-nixos.sh "${VMNAME}" "${VMID}" "${NODE}" "./${VMNAME}.nix"
+/home/tappaas/bin/rebuild-nixos.sh "${VMNAME}" "${VMID}" "${NODE}" "./$1.nix"
 
 # Update HA configuration (creates/updates/removes based on HANode field)
 /home/tappaas/bin/update-HA.sh $1

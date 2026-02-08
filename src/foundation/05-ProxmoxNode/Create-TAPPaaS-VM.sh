@@ -292,17 +292,24 @@ if [ "$IMAGETYPE" == "clone" ]; then
 
   # Find the cluster node that has the template
   TEMPLATE_NODE=""
-  CURRENT_NODE=$(hostname)
+  CURRENT_NODE="$(hostname -s)"
   
   while read -r node; do
-    if ssh -o StrictHostKeyChecking=no root@"${node}.mgmt.internal" "qm status $IMAGE &>/dev/null"; then
+    info "Checking for template $IMAGE on node: $node"
+    if ssh -n -o StrictHostKeyChecking=no root@"${node}.mgmt.internal" "qm status $IMAGE" >/dev/null 2>&1; then
       TEMPLATE_NODE="$node"
+      info "Found template $IMAGE on ${node}.mgmt.internal"
       break
+    else
+      info "Template $IMAGE not found on ${node}.mgmt.internal"
     fi
-  done < <(pvesh get /cluster/resources --type node --output-format json | jq --raw-output ".[].node")
+  # Use a management cluster node to list all cluster nodes (pvesh may only
+  # return local node info on some hosts). We default to tappaas1 as the
+  # cluster management host.
+  done < <(ssh -n -o StrictHostKeyChecking=no root@tappaas1.mgmt.internal "pvesh get /cluster/resources --type node --output-format json | jq --raw-output '.[] | select(.type==\"node\") | .node'")
   
   if [ -z "$TEMPLATE_NODE" ]; then
-    error "Template $IMAGE not found on any cluster node"
+    info "Template $IMAGE not found on any cluster node"
     exit 1
   fi
 
@@ -320,8 +327,8 @@ if [ "$IMAGETYPE" == "clone" ]; then
     info " - Cloned VM ${VMID} on ${TEMPLATE_NODE}"
 
     # Migrate the VM to the current node (online=0 means offline migration)
-    info " - Migrating VM ${VMID} from ${TEMPLATE_NODE} to ${CURRENT_NODE}..."
-    ssh -o StrictHostKeyChecking=no root@${TEMPLATE_NODE} "qm migrate $VMID $CURRENT_NODE --online 0" >/dev/null
+    info " - Migrating VM ${VMID} from ${TEMPLATE_NODE} to ${NODE}..."
+    ssh -o StrictHostKeyChecking=no root@${TEMPLATE_NODE} "qm migrate $VMID $NODE --online 0" >/dev/null
     info " - Migration complete"
   fi
 
