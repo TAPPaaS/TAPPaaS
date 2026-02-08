@@ -21,3 +21,17 @@ ssh "root@${NODE}.${MGMT}.internal" "/root/tappaas/Create-TAPPaaS-VM.sh $1"
 
 echo -e "\nDebian VM ${VMNAME} (VMID: ${VMID}) created successfully on ${NODE}."
 echo "Zone: ${ZONE0NAME}"
+
+# Wait for VM to be accessible via SSH
+echo -e "\nWaiting for VM to be ready for SSH..."
+sleep 30
+
+# SSH into the VM and install QEMU guest agent
+echo "Installing QEMU guest agent..."
+ssh "tappaas@${VMNAME}.${ZONE0NAME}.internal" "sudo apt-get update && sudo apt-get install -y qemu-guest-agent"
+
+# Restart the VM
+echo "Restarting VM ${VMNAME}..."
+ssh "root@${NODE}.${MGMT}.internal" "qm restart ${VMID}"
+
+echo -e "\nVM ${VMNAME} restarted with QEMU guest agent installed."
