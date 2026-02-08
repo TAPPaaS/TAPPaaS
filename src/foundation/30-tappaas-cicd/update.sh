@@ -23,7 +23,11 @@ git pull origin
 cd src/foundation/30-tappaas-cicd || { echo "TAPPaaS-CICD directory not found!"; exit 1; }
 
 # in case there are new or updated scripts 
-cp scripts/*.sh /home/tappaas/bin/
+for script in scripts/*.sh; do
+  if [ -f "$script" ]; then
+    cp "$script" /home/tappaas/bin/ 2>/dev/null || true
+  fi
+done
 chmod +x /home/tappaas/bin/*.sh
 
 # (re)Build the opnsense-controller project (formerly opnsense-scripts)
