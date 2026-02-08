@@ -7,7 +7,7 @@
     "cores": 1,
     "memory": "1024",
     "diskSize": "4G",
-    "storage": "tanka2",
+    "storage": "tanka1",
     "cloudInit": "true",
     "imageType": "img",
     "image": "debian-13-generic-amd64-20260112-2355.qcow2",
