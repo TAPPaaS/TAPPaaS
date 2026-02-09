@@ -1,16 +1,16 @@
 {
     "version": "0.5",
-    "node": "tappaas1",
+    "node": "tappaas2",
     "vmid": 999,
     "vmtag": "TAPPaaS,Test",
-    "vmname": "template",
+    "vmname": "unifi",
     "cores": 2,
-    "memory": "8192",
+    "memory": "4096",
     "diskSize": "32G",
     "storage": "tanka1",
     "imageType": "clone",
     "image": "8080",
     "bridge0": "lan",
-    "zone0": "srv",
-    "description": "TAPPaaS template VM"  
+    "zone0": "mgmt",
+    "description": "TAPPaaS Unifi Network Controller"  
 }

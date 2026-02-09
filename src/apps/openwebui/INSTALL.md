@@ -1,4 +1,4 @@
-
+```
 # Copyright (c) 2025 TAPPaaS org
 #
 # This Source Code Form is subject to the terms of the Mozilla Public
@@ -8,7 +8,8 @@
 # This file incorporates work covered by the following copyright and permission notice:
 # Copyright (c) 2021-2025 community-scripts ORG
 # License: MIT | https://github.com/community-scripts/ProxmoxVE/raw/main/LICENSE
-#
+```
+
 # OpenWebUI on TAPPaaS - Installation Guide
 
 **Version:** 0.9.0  
