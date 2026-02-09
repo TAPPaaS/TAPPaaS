@@ -62,23 +62,6 @@ Destination: Any
 Port: Any (Internet access)
 ```
 
-### Bridge Configuration (Critical)
-[ ErikDaniel 260205 - NOTE to be removed --> part of createvm!! ]
-
-Remove `bridge-vids` from Proxmox bridge config:
-```bash
-# On Proxmox host
-nano /etc/network/interfaces
-
-# Find and REMOVE this line:
-# bridge-vids 2-4094
-
-# Apply changes
-ifreload -a
-```
-
-**Why:** `bridge-vids 2-4094` breaks VLAN trunk mode by adding all VLANs with wrong flags.
-
 ## Installation Steps
 
 ### Step 1: Create VM & Deploy Configuration

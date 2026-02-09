@@ -13,7 +13,7 @@
 # Name: Open webui
 # Type: APP
 # Version: 0.9.0 
-# Date: 2026-02-08
+# Date: 2026-02-09
 # Author: Erik Daniel (Tappaas)
 # Products: openwebui, postgres, redis
 # ----------------------------------------
@@ -54,19 +54,17 @@ in
   system.stateVersion = "25.05";
 
   # ----------------------------------------
-  # Network Configuration - VLAN Trunk Mode
+  # Network Configuration
   # ----------------------------------------
   networking = {
     hostName = lib.mkDefault "openwebui";
-    
-    # Disable NetworkManager (conflicts with declarative VLAN config)
-    networkmanager.enable = true;
-    
+    networkmanager.enable = true; 
+    firewall.allowedTCPPorts = [ 22 8080 ];
   };
 
-  # Disable systemd-networkd (conflicts with NetworkManager/declarative)
-  systemd.network.enable = lib.mkForce false;
-  systemd.network.wait-online.enable = lib.mkForce false;
+  # Disable systemd-networkd (conflicts with NetworkManager)
+  systemd.network.enable = lib.mkForce false;               # Avoid conflict
+  systemd.network.wait-online.enable = lib.mkForce false;   # Fast boot
 
   # ----------------------------------------
   # Timezone
