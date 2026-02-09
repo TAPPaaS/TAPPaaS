@@ -32,11 +32,13 @@ chmod +x /home/tappaas/bin/*.sh
 
 # Iterate through all TAPPaaS nodes and copy Create-TAPPaaS-VM.sh to /root/tappaas
 # Get the actual nodes configured in the Proxmox system
+echo -e "\nCopying Create-TAPPaaS-VM.sh to /root/tappaas on all Proxmox nodes..."
 while read -r node; do
     echo -e "\nCopying Create-TAPPaaS-VM.sh to /root/tappaas on node: $node"
     NODE_FQDN="$node.$MGMTVLAN.internal"
     scp /home/tappaas/TAPPaaS/src/foundation/05-ProxmoxNode/Create-TAPPaaS-VM.sh root@"$NODE_FQDN":/root/tappaas/
 done < <(ssh -o StrictHostKeyChecking=no root@"$NODE1_FQDN" "pvesh get /cluster/resources --type node --output-format json | jq --raw-output \".[].node\"")
+echo -e "\nCreate-TAPPaaS-VM.sh copied to all Proxmox nodes. (each node in your cluster should have been listed above)"
 
 # (re)Build the opnsense-controller project (formerly opnsense-scripts)
 echo -en "\nBuilding the opnsense-controller project"
@@ -48,14 +50,33 @@ rm /home/tappaas/bin/zone-manager 2>/dev/null || true
 ln -s /home/tappaas/TAPPaaS/src/foundation/30-tappaas-cicd/opnsense-controller/result/bin/zone-manager /home/tappaas/bin/zone-manager
 rm /home/tappaas/bin/dns-manager 2>/dev/null || true
 ln -s /home/tappaas/TAPPaaS/src/foundation/30-tappaas-cicd/opnsense-controller/result/bin/dns-manager /home/tappaas/bin/dns-manager
-# TODO check if credentials file exist and if not write the example file and give warning
-# For now just set the permissions
-# cp credentials.example.txt ~/.opnsense-credentials.txt
+# Ensure OPNsense credentials file exists; if missing, create a skeleton and warn
+if [ ! -f ~/.opnsense-credentials.txt ]; then
+  echo "Warning: ~/.opnsense-credentials.txt not found; creating skeleton file with empty key/secret. Please populate it with real values."
+  cat > ~/.opnsense-credentials.txt <<'EOF'
+key=
+secret=
+EOF
+fi
 chmod 600 ~/.opnsense-credentials.txt
 echo -e "\nopnsense-controller binary installed to /home/tappaas/bin/opnsense-controller"
 echo -e "Copying the AssignSettingsController.php to the OPNsense controller node..."
+
+# Test whether the firewall host is reachable and export an env var
+if ping -c 1 -W 1 "$FIREWALL_FQDN" >/dev/null 2>&1; then
+  export FIREWALL_EXISTS=1
+  echo "Firewall $FIREWALL_FQDN reachable; will attempt to copy controller patch."
+else
+  export FIREWALL_EXISTS=0
+  echo "Warning: Firewall $FIREWALL_FQDN appears unreachable; skipping controller patch copy."
+fi
+
 cd ..
-scp opnsense-patch/AssignSettingsController.php root@"$FIREWALL_FQDN":/usr/local/opnsense/mvc/app/controllers/OPNsense/Interfaces/Api/AssignSettingsController.php
+if [ "${FIREWALL_EXISTS:-0}" -eq 1 ]; then
+  scp opnsense-patch/AssignSettingsController.php root@"$FIREWALL_FQDN":/usr/local/opnsense/mvc/app/controllers/OPNsense/Interfaces/Api/AssignSettingsController.php
+else
+  echo "Warning: AssignSettingsController.php not copied because firewall is unreachable."
+fi
 
 
 # Build the update-tappaas project
@@ -82,8 +103,13 @@ if update-json.sh zones ; then
     echo "zones.json updated"
 fi
 echo "Applying zone configuration..."
-# always re-run zones update in case firewall logic is changed
-/home/tappaas/bin/zone-manager --no-ssl-verify --zones-file /home/tappaas/config/zones.json --execute
+# only apply zones if the firewall node is reachable
+if [ "${FIREWALL_EXISTS:-0}" -eq 1 ]; then
+  # always re-run zones update in case firewall logic is changed
+  /home/tappaas/bin/zone-manager --no-ssl-verify --zones-file /home/tappaas/config/zones.json --execute
+else
+  echo "Warning: Zones not applied because firewall $FIREWALL_FQDN is unreachable."
+fi
 echo -e "\nChecking for updates to tappaas.json..."
 cd 30-tappaas-cicd
 if update-json.sh tappaas-cicd; then
