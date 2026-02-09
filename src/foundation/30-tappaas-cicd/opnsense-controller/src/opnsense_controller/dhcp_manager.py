@@ -436,8 +436,8 @@ class DhcpManager:
             Result dictionary from the API
         """
         params = {
-            "enabled": True,
-            "dhcp_authoritative": dhcp_authoritative,
+            "enabled": 1,
+            "dhcp_authoritative": 1 if dhcp_authoritative else 0,
         }
 
         if interfaces:
@@ -459,7 +459,7 @@ class DhcpManager:
             Result dictionary from the API
         """
         params = {
-            "enabled": False,
+            "enabled": 0,
         }
 
         return self.client.run_module(
@@ -495,11 +495,11 @@ class DhcpManager:
             Result dictionary from the API
         """
         params = {
-            "enabled": enabled,
-            "dhcp_authoritative": dhcp_authoritative,
-            "dhcp_fqdn": dhcp_fqdn,
-            "regdhcp": regdhcp,
-            "regdhcpstatic": regdhcpstatic,
+            "enabled": 1 if enabled else 0,
+            "dhcp_authoritative": 1 if dhcp_authoritative else 0,
+            "dhcp_fqdn": 1 if dhcp_fqdn else 0,
+            "regdhcp": 1 if regdhcp else 0,
+            "regdhcpstatic": 1 if regdhcpstatic else 0,
         }
 
         if interfaces is not None:
