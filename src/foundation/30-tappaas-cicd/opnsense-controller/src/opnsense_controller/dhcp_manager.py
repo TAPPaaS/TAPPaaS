@@ -6,6 +6,31 @@ from oxl_opnsense_client import Client
 from .config import Config
 
 
+def _convert_bools_to_int(params):
+    """Convert all boolean values in params to 0/1 for OPNsense API.
+
+    OPNsense API expects boolean values as integers (0 or 1), not Python booleans.
+    This recursively converts all boolean values in the params structure.
+
+    Args:
+        params: Dictionary, list, or other value that may contain boolean values
+
+    Returns:
+        Structure with booleans converted to integers
+    """
+    if isinstance(params, bool):
+        return 1 if params else 0
+    elif isinstance(params, dict):
+        result = {}
+        for key, value in params.items():
+            result[key] = _convert_bools_to_int(value)
+        return result
+    elif isinstance(params, list):
+        return [_convert_bools_to_int(item) for item in params]
+    else:
+        return params
+
+
 @dataclass
 class DhcpRange:
     """DHCP range configuration for Dnsmasq."""
@@ -83,6 +108,36 @@ class DhcpManager:
         if not self._client:
             raise RuntimeError("Not connected. Use connect() or context manager.")
         return self._client
+
+    def _run_module_with_bool_conversion(
+        self,
+        module: str,
+        check_mode: bool = False,
+        params: dict | None = None,
+    ) -> dict:
+        """Wrapper around client.run_module that converts all booleans to 0/1.
+
+        The OPNsense API expects boolean values as integers (0 or 1).
+        The oxl-opnsense-client library fetches current settings and merges
+        with our params, but those current settings have Python booleans that
+        need conversion before sending to the API.
+
+        Args:
+            module: Module name to run
+            check_mode: If True, perform dry-run
+            params: Parameters to pass to the module
+
+        Returns:
+            Result dictionary from the API
+        """
+        if params is not None:
+            params = _convert_bools_to_int(params)
+
+        return self.client.run_module(
+            module,
+            check_mode=check_mode,
+            params=params or {},
+        )
 
     def test_connection(self) -> bool:
         """Test the connection to OPNsense."""
@@ -308,6 +363,9 @@ class DhcpManager:
         if host.ignore:
             params["ignore"] = host.ignore
 
+        # Convert booleans to 0/1 for OPNsense API compatibility
+        params = _convert_bools_to_int(params)
+
         return self.client.run_module(
             "dnsmasq_host",
             check_mode=check_mode,
@@ -435,17 +493,22 @@ class DhcpManager:
         Returns:
             Result dictionary from the API
         """
+        if check_mode:
+            return {"changed": True, "check_mode": True}
+
+        # Build minimal params - just what we need to change
         params = {
-            "enabled": 1,
+            "enabled": 1,  # Use 0/1 instead of True/False
             "dhcp_authoritative": 1 if dhcp_authoritative else 0,
         }
 
         if interfaces:
-            params["interfaces"] = interfaces
+            params["interfaces"] = interfaces  # Pass as list, let the client handle it
 
+        # Use dnsmasq_general module
         return self.client.run_module(
             "dnsmasq_general",
-            check_mode=check_mode,
+            check_mode=False,
             params=params,
         )
 
@@ -459,8 +522,11 @@ class DhcpManager:
             Result dictionary from the API
         """
         params = {
-            "enabled": 0,
+            "enabled": False,
         }
+
+        # Convert booleans to 0/1 for OPNsense API compatibility
+        params = _convert_bools_to_int(params)
 
         return self.client.run_module(
             "dnsmasq_general",
@@ -495,17 +561,20 @@ class DhcpManager:
             Result dictionary from the API
         """
         params = {
-            "enabled": 1 if enabled else 0,
-            "dhcp_authoritative": 1 if dhcp_authoritative else 0,
-            "dhcp_fqdn": 1 if dhcp_fqdn else 0,
-            "regdhcp": 1 if regdhcp else 0,
-            "regdhcpstatic": 1 if regdhcpstatic else 0,
+            "enabled": enabled,
+            "dhcp_authoritative": dhcp_authoritative,
+            "dhcp_fqdn": dhcp_fqdn,
+            "regdhcp": regdhcp,
+            "regdhcpstatic": regdhcpstatic,
         }
 
         if interfaces is not None:
             params["interfaces"] = interfaces
         if dhcp_domain:
             params["dhcp_domain"] = dhcp_domain
+
+        # Convert booleans to 0/1 for OPNsense API compatibility
+        params = _convert_bools_to_int(params)
 
         return self.client.run_module(
             "dnsmasq_general",

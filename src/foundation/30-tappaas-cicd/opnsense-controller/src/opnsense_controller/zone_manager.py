@@ -917,10 +917,16 @@ class ZoneManager:
         dhcp_results = self.configure_dhcp(check_mode=check_mode)
 
         # Update dnsmasq to listen on all VLAN interfaces
+        # NOTE: Temporarily disabled due to boolean conversion issue in oxl-opnsense-client
+        # The library fetches current dnsmasq settings which have Python booleans that
+        # need to be converted to 0/1 for the OPNsense API, but this happens inside the library.
+        # TODO: Fix this once oxl-opnsense-client is patched or we implement a workaround
         print("\n" + "=" * 60)
-        print("Step 2b: Updating dnsmasq interface bindings")
+        print("Step 2b: Updating dnsmasq interface bindings (SKIPPED)")
         print("=" * 60)
-        dnsmasq_result = self.update_dnsmasq_interfaces(check_mode=check_mode)
+        print("  NOTE: Dnsmasq interface binding update is currently disabled")
+        print("  Dnsmasq will listen on all interfaces by default")
+        dnsmasq_result = {"status": "skipped", "reason": "boolean conversion issue"}
 
         result = {
             "vlans": vlan_results,
