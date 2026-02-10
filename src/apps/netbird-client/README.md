@@ -2,12 +2,16 @@
 
 This module installs a netbird client in TAPPaaS
 
+This client is Different from the Netbird client installed by default on the mgmt network for doing TAPPaaS management access
+This clinet is for business or home users that wants a VPN connection into their solution/installation
+
 You can have several jsons if you want to have clients in several TAPPaaS zones
 
 ## TODO
 
 convert to NisOS
 also right now it does not work
+
 
 ## installation
 
