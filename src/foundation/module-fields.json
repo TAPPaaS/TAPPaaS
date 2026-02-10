@@ -22,8 +22,8 @@
             "example": "Nextcloud file sharing and collaboration platform"
         },
 
-        "author": {
-            "description": "Author or maintainer of the module",
+        "maintainer": {
+            "description": "Maintainer of the module",
             "type": "string",
             "required": false,
             "default": "",

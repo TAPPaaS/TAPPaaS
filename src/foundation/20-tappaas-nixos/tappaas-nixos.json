@@ -5,7 +5,7 @@
     "vmname": "tappaas-nixos",
     "cores": 2,
     "memory": "4096",
-    "diskSize": "16G",
+    "diskSize": "4G",
     "storage": "tanka1",
     "imageType": "iso",
     "image": "latest-nixos-graphical-x86_64-linux.iso",

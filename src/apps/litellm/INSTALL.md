@@ -33,10 +33,10 @@ cd TAPPaaS/src/apps/litellm
 
 ```bash
 # View in journal
-sudo journalctl -u generate-litellm-secrets.service | grep "sk-"
+ssh tappaas@litellm.srv.internal "sudo journalctl -u generate-litellm-secrets.service | grep sk-"
 
-# OR read from file
-sudo cat /etc/secrets/litellm.env | grep LITELLM_MASTER_KEY
+# OR read from file (output easer to read)
+ssh tappaas@litellm.srv.internal "sudo cat /etc/secrets/litellm.env | grep LITELLM_MASTER_KEY"
 
 # Example output:
 # LITELLM_MASTER_KEY=sk-a3f8b2c1d4e...c7d8e9f0a1
