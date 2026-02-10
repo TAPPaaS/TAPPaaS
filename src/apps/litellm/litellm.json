@@ -1,5 +1,5 @@
 {
-    "version": "0.5",
+    "version": "0.9.0",
     "node": "tappaas2",
     "vmid": 310,
     "vmtag": "TAPPaaS,Test",
@@ -12,5 +12,8 @@
     "image": "8080",
     "bridge0": "lan",
     "zone0": "srv",
-    "description": "TAPPaaS LiteLLM"  
+    "description": "TAPPaaS LiteLLM",  
+    "author": "@ErikDaniel007",
+    "releaseDate": "2026-02-10",
+    "status": "Development"
 }

@@ -22,6 +22,37 @@
             "example": "Nextcloud file sharing and collaboration platform"
         },
 
+        "author": {
+            "description": "Author or maintainer of the module",
+            "type": "string",
+            "required": false,
+            "default": "",
+            "example": "@ErikDaniel007",
+            "note": "Typically a GitHub username prefixed with @"
+        },
+
+        "releaseDate": {
+            "description": "Date when this version of the module was released",
+            "type": "string",
+            "required": false,
+            "format": "YYYY-MM-DD",
+            "example": "2026-02-10"
+        },
+
+        "status": {
+            "description": "Development status of the module",
+            "type": "string",
+            "required": false,
+            "default": "Development",
+            "values": {
+                "Development": "Module is under active development, not ready for production",
+                "Testing": "Module is being tested, may have issues",
+                "Production": "Module is stable and ready for production use",
+                "Deprecated": "Module is no longer maintained"
+            },
+            "example": "Development"
+        },
+
         "node": {
             "description": "Name of the Proxmox/TAPPaaS node where the module should be installed",
             "type": "string",
