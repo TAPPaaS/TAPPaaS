@@ -238,9 +238,16 @@ in
       general_settings:
         master_key: os.environ/LITELLM_MASTER_KEY
         database_url: "postgresql://litellm@localhost:5432/litellm"
-        database_connection_pool_limit: 25  # 100 ÷ 4 workers = 25 (of 50 ÷ 2 = 25)
+        database_connection_pool_limit: 25
         database_connection_timeout: 60
         proxy_batch_write_at: 60
+        disable_spend_logs: false
+        
+        # Public endpoints - no authentication
+        public_routes:
+          - "/health"
+          - "/health/liveliness"
+          - "/health/readiness"
 
       router_settings:
         redis_host: "localhost"
@@ -254,7 +261,7 @@ in
           type: "redis"
           host: "localhost"
           port: 6379
-          max_connections: 100  # Conservative for 100 users
+          max_connections: 100
         load_models_from_db: true
         set_verbose: true
         json_logs: true
@@ -270,7 +277,6 @@ in
     text = ''
       LITELLM_MASTER_KEY=sk-your_master_key_here
       STORE_MODEL_IN_DB=True
-      OPENROUTER_API_KEY=your_openrouter_key_here
     '';
     mode = "0600";
   };
