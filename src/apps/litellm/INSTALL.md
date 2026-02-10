@@ -29,21 +29,7 @@ Step-by-step deployment instructions for TAPPaaS LiteLLM
 
 ## Installation Steps
 
-### 1. Backup Existing Configuration
-
-```bash
-# Create backup directory
-sudo mkdir -p /root/nixos-backups
-
-# Backup current config
-sudo cp /etc/nixos/configuration.nix \
-  /root/nixos-backups/configuration.nix.backup-$(date +%F-%H%M%S)
-
-# Verify backup
-ls -lh /root/nixos-backups/
-```
-
-### 2. Deploy LiteLLM Configuration
+### 1. Confirm LiteLLM Configuration
 
 read the ./readme.md for sizing guidelines
 look at ./litellm.json. 
@@ -53,12 +39,16 @@ If this file is not correctly reflecting how you want this module to be installe
 - you want to make it a member of a different LAN zone (VLAN)
 Then copy the json to /home/tappaas/config and edit the file to reflect your choices
 
-Then as tappaas use on the tappaas-cicd: run the command:
+### 2. Deploy LiteLLM Configuration
+
+
+As tappaas use on the tappaas-cicd: run the command:
 ```
+cd TAPPaaS/src/apps/litellm
 ./install.sh litellm
 ```
-# INSTALL.md
 
+```
 # Expected output:
 # building the system configuration...
 # activating the configuration...
@@ -79,25 +69,24 @@ sudo journalctl -u generate-litellm-secrets.service | grep "sk-"
 sudo cat /etc/secrets/litellm.env | grep LITELLM_MASTER_KEY
 
 # Example output:
-# LITELLM_MASTER_KEY=sk-a3f8b2c1d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0a1
+# LITELLM_MASTER_KEY=sk-a3f8b2c1d4e...c7d8e9f0a1
 ```
 
 **⚠️ CRITICAL:** Save this key in your password manager. You'll need it for API access.
 
-### 5. Add Provider API Keys (Optional)
 
-```bash
-# Edit secrets file
-sudo vim /etc/secrets/litellm.env
+Go to - [http://http://litellm.srv.internal:4000/ui] (http://litellm.srv.internal:4000/ui)
+username = admin
+Password = sk-a3f8b2c1d4e...c7d8e9f0a1
 
-# Add your keys:
-OPENROUTER_API_KEY=sk-or-v1-...
-PERPLEXITY_API_KEY=pplx-...
-ANTHROPIC_API_KEY=sk-ant-...
 
-# Save and restart
-sudo systemctl restart podman-litellm
-```
+Follow the quick start: 
+1) setup (admin) users - https://docs.litellm.ai/docs/proxy/ui
+2) add a model provider API key - https://docs.litellm.ai/docs/proxy/ui_credentials 
+3) select models from provider to make public to internal users https://docs.litellm.ai/docs/proxy/ai_hub 
+4) test is models work - https://docs.litellm.ai/docs/proxy/model_compare_ui
+5) create a virtual key - https://docs.litellm.ai/docs/proxy/access_control
+6) use this virtual key in your AI apps (e.g. TAPPaaS Open WebUI)
 
 ## Verification Tests
 
@@ -270,22 +259,6 @@ sudo -u postgres psql -c "SELECT count(*) FROM pg_stat_activity;"
 ```
 
 ## Post-Installation
-
-### Network Access (Optional)
-
-If you need external access (not just localhost):
-
-```bash
-# Edit firewall in configuration.nix
-sudo vim /etc/nixos/configuration.nix
-
-# Change:
-# networking.firewall.allowedTCPPorts = [ 22 4000 ];
-# To allow external access on your network
-
-# Apply
-sudo nixos-rebuild switch
-```
 
 **⚠️ Security:** Only expose externally behind a reverse proxy (Caddy/Nginx) with TLS.
 
