@@ -15,7 +15,7 @@
 **Version:** 0.9.0  
 **Author:** Erik Daniel
 **Release Date:** 2026-02-04  
-**Status:** Development (Manual Deployment)
+**Status:** Development
 
 ## Overview
 

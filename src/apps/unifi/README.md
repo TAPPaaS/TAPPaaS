@@ -1,6 +1,11 @@
 ```markdown
 # UniFi Network Controller - TAPPaaS
 
+**Version:** 0.9.0  
+**Author:** @ErikDaniel007
+**Release Date:** 2026-02-10 
+**Status:** Development
+
 NixOS-based UniFi Network Controller for managing Ubiquiti network devices.
 
 ## Overview

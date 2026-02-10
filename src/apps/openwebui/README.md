@@ -1,9 +1,9 @@
 # OpenWebUI on TAPPaaS - Release Notes
 
 **Version:** 0.9.0  
-**Author:** Erik Daniel
+**Author:** @ErikDaniel007
 **Release Date:** 2026-02-08  
-**Status:** Development (Manual Deployment)
+**Status:** Development
 
 ## Overview
 
@@ -44,19 +44,6 @@ This release provides a complete OpenWebUI stack on TAPPaaS infrastructure with 
 - Host networking mode
 - Persistent data volumes
 - WebSocket support (Redis-backed)
-
-### ✅ Network Configuration
-
-**VLAN Trunk Mode:**
-- Single physical interface (ens18)
-- VLAN 210 subinterface (ens18.210)
-- DHCP IP assignment
-- Internet access via pfSense
-
-**Cross-VLAN Access:**
-- Firewall rules for service communication
-- LiteLLM integration (VLAN 2 → VLAN 210)
-- DNS resolution via pfSense
 
 ### ✅ Automated Backups
 

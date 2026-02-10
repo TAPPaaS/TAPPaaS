@@ -4,13 +4,13 @@
     "vmid": 310,
     "vmtag": "TAPPaaS,Test",
     "vmname": "litellm",
-    "cores": 2,
-    "memory": "8192",
+    "cores": 4,
+    "memory": "4096",
     "diskSize": "32G",
     "storage": "tanka1",
     "imageType": "clone",
     "image": "8080",
     "bridge0": "lan",
     "zone0": "srv",
-    "description": "TAPPaaS litellm VM"  
+    "description": "TAPPaaS LiteLLM"  
 }

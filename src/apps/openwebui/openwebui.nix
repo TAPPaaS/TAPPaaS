@@ -7,13 +7,14 @@
 # This file incorporates work covered by the following copyright and permission notice:
 # Copyright (c) 2021-2025 community-scripts ORG
 # License: MIT | https://github.com/community-scripts/ProxmoxVE/raw/main/LICENSE
+
 # ----------------------------------------
 # TAPPaaS
 # Name: Open webui
 # Type: APP
 # Version: 0.9.0 
 # Date: 2026-02-09
-# Author: Erik Daniel (Tappaas)
+# Author: @ErikDaniel007 (Tappaas)
 # Products: openwebui, postgres, redis
 # ----------------------------------------
 

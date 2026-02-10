@@ -1,124 +1,262 @@
-# Template Module
+```markdown
+# TAPPaaS LiteLLM - AI proxy
 
-## Introduction
+**Version:** 0.9.0  
+**Author:** @ErikDaniel007
+**Release Date:** 2026-02-10 
+**Status:** Development
 
-This is a template module that serves as a starting point for creating new TAPPaaS modules.
+## Overview
 
-A TAPPaaS module typically runs in its own VM and provides a specific service or capability. The module name becomes the VM name, hostname, and DNS name.
+Production-ready LiteLLM proxy with PostgreSQL and Redis backend on NixOS.
 
-## Creating a New Module
+## Overview
 
-### Step 1: Copy the Template
+This configuration provides a unified API gateway for multiple LLM providers (OpenAI, Anthropic, OpenRouter, Perplexity) with:
 
-Decide on a name for your module. Typically this is the name of the main software product or the capability being delivered.
+- **Caching:** Redis-based response caching (60-80% DB load reduction)
+- **Persistence:** PostgreSQL for model configs, usage tracking, API keys
+- **Security:** Auto-generated master key, passwordless local DB access
+- **Backups:** Automated daily backups (PostgreSQL, Redis, configs)
+- **Monitoring:** Systemd journal integration
+
+## Architecture
+
+```
+┌─────────────┐
+│   Clients   │
+└──────┬──────┘
+       │ :4000
+       ▼
+┌─────────────────┐
+│  LiteLLM Proxy  │ (Podman container, 4 workers)
+└────┬────────┬───┘
+     │        │
+     ▼        ▼
+┌─────────┐ ┌────────┐
+│ Postgres│ │ Redis  │ (localhost only)
+│   :5432 │ │  :6379 │
+└─────────┘ └────────┘
+```
+
+## Specifications
+
+### Sizing Guide
+
+| Users | vCPU | RAM | Workers | DB Pool | Cost/mo |
+|-------|------|-----|---------|---------|---------|
+| 100   | 4    | 4GB | 4       | 25      | €20-30  |
+| 250   | 4-6  | 8GB | 4       | 25      | €40-60  |
+| 500+  | 8    | 16GB| 8       | 20      | €80-120 |
+
+### Current Configuration (8GB VM)
+
+- **PostgreSQL 15:** 2GB shared_buffers, 100 max_connections
+- **Redis 7:** 1GB maxmemory, LRU eviction
+- **LiteLLM:** Dynamic model loading from DB
+- **Firewall:** Ports 22 (SSH), 4000 (API)
+
+## Features
+
+### Dynamic Model Management
+```bash
+# Add models via API (no rebuild required)
+curl -X POST http://localhost:4000/model/new \
+  -H "Authorization: Bearer $LITELLM_MASTER_KEY" \
+  -d '{"model_name": "gpt-4", "litellm_params": {...}}'
+```
+
+### Automated Backups
+- **PostgreSQL:** Daily at 02:00 (gzip compressed)
+- **Redis:** Daily at 02:30 (RDB snapshots)
+- **Configs:** Daily at 02:45 (secrets + config files)
+- **Retention:** 30 days, automatic cleanup
+
+### Security
+- Auto-generated master key on first boot
+- Passwordless PostgreSQL (localhost trust)
+- Read-only config mounts
+- Network isolation (127.0.0.1 binding)
+
+## Quick Start
+
+See [INSTALL.md](INSTALL.md) for detailed deployment instructions.
 
 ```bash
-cp -r 00-Template myModule
-cd myModule
+# 1. Deploy configuration
+sudo nixos-rebuild switch
+
+# 2. Retrieve master key
+sudo cat /etc/secrets/litellm.env | grep LITELLM_MASTER_KEY
+
+# 3. Test API
+curl http://localhost:4000/health
 ```
 
-### Step 2: Rename Files
+## File Structure
 
-Replace template files with your module name:
+```
+/etc/nixos/
+├── configuration.nix          # Main NixOS config
+└── hardware-configuration.nix # Auto-generated
 
+/etc/litellm/
+└── config.yaml                # LiteLLM settings (read-only)
+
+/etc/secrets/
+├── litellm.env                # Runtime secrets (600)
+└── litellm-template.env       # Reference template
+
+/var/backup/
+├── postgresql/                # Daily DB dumps
+├── redis/                     # Daily RDB snapshots
+└── litellm-env/              # Daily config backups
+
+/var/lib/
+├── postgresql/
+│   └── archive/              # WAL archives
+└── redis-litellm/            # Redis persistence
+```
+
+## Management
+
+### Service Control
 ```bash
-mv README-template.md README.md
-mv template.json myModule.json
+# Check status
+systemctl status postgresql redis-litellm podman-litellm
+
+# View logs
+journalctl -u podman-litellm -f
+
+# Restart container
+systemctl restart podman-litellm
 ```
 
-For NixOS-based modules, rename the .nix file:
+### Database Access
 ```bash
-mv template.nix myModule.nix
+# PostgreSQL
+sudo -u postgres psql litellm
+
+# Redis
+redis-cli
 ```
 
-For non-NixOS modules, remove it:
+### Monitoring
 ```bash
-rm template.nix
+# Active DB connections
+sudo -u postgres psql -c "SELECT count(*) FROM pg_stat_activity;"
+
+# Redis info
+redis-cli INFO stats
+
+# Container stats
+podman stats litellm
 ```
 
-### Step 3: Configure the Module
+## Configuration Updates
 
-Edit each file as described below.
-
-## Module Files
-
-### myModule.json
-
-The JSON file defines all external parameters of the module: VM size, ID, name, VLAN membership, etc. The automated create, install, and update scripts of TAPPaaS use this file.
-
-Modify it to set good defaults for your module. Installers can further customize through this file.
-
-#### Example Configuration
-
-```json
-{
-    "version": "1.0.0",
-    "description": "My awesome service module",
-    "vmid": 200,
-    "node": "tappaas1",
-    "cores": 2,
-    "memory": 4096,
-    "diskSize": "16G",
-    "storage": "tanka1",
-    "imageType": "clone",
-    "image": "9000",
-    "zone0": "srv",
-    "cloudInit": "true"
-}
+### Add API Keys
+```bash
+sudo vim /etc/secrets/litellm.env
+# Add: OPENROUTER_API_KEY=...
+sudo systemctl restart podman-litellm
 ```
 
-#### Common Configurations
+### Adjust Resources
+Edit `configuration.nix`:
+```nix
+# Increase shared_buffers for more RAM
+shared_buffers = "4GB";  # Was: 2GB
 
-| Use Case | Key Settings |
-|----------|-------------|
-| NixOS clone | `imageType: "clone"`, `image: "<template-vmid>"` |
-| ISO install | `imageType: "iso"`, `image: "<filename>"`, `imageLocation: "<url>"` |
-| Disk image | `imageType: "img"`, `image: "<filename>"`, `imageLocation: "<url>"` |
-| High Availability | Add `HANode: "tappaas2"`, `replicationSchedule: "*/15"` |
-| Multi-NIC | Add `bridge1`, `zone1` fields |
+# More workers for more CPU
+cmd = [ "--num_workers" "8" ];  # Was: 4
+```
 
-#### Field Reference
+Apply:
+```bash
+sudo nixos-rebuild switch
+```
 
-For complete field definitions including all possible values, defaults, and validation rules, see:
+## Troubleshooting
 
-**[module-fields.json](../../foundation/module-fields.json)**
+### Container won't start
+```bash
+# Check secrets exist
+ls -la /etc/secrets/litellm.env
 
-### install.sh
+# Verify dependencies
+systemctl status postgresql redis-litellm
 
-Installation script called with the module name as an argument when the module is installed.
+# Check logs
+journalctl -u podman-litellm --since "10 minutes ago"
+```
 
-- Called from the `tappaas@tappaas-cicd` account, which has SSH and sudo access to all nodes
-- Default implementation creates a VM based on the JSON spec
-- Clones a template or installs an image per `imageType`
-- Runs `nixos-rebuild` for NixOS-based modules
+### High memory usage
+```bash
+# Check PostgreSQL
+SELECT pg_size_pretty(pg_database_size('litellm'));
 
-If manual steps are required, document them in an `INSTALL.md` file.
+# Check Redis
+redis-cli INFO memory
 
-### update.sh
+# Restart workers (recycle memory)
+systemctl restart podman-litellm
+```
 
-Update script called periodically to keep the module updated.
+### Connection errors
+```bash
+# Test PostgreSQL
+sudo -u postgres psql -c "SELECT 1;"
 
-- Called with module name as argument
-- TAPPaaS calls this script on a periodic basis per the node's `updateSchedule`
-- Should handle incremental updates to the module
+# Test Redis
+redis-cli PING
 
-### myModule.nix
+# Check firewall
+sudo nft list ruleset | grep 4000
+```
 
-NixOS configuration file for NixOS-based modules.
+## Maintenance
 
-- Used by the default `install.sh` to rebuild the VM configuration
-- Remove this file for non-NixOS modules
+### Manual Backup
+```bash
+# PostgreSQL
+sudo -u postgres pg_dump litellm | gzip > backup-$(date +%F).sql.gz
 
-## Module Locations
+# Redis
+redis-cli SAVE
+cp /var/lib/redis-litellm/dump.rdb backup-$(date +%F).rdb
+```
 
-| Type | Directory |
-|------|-----------|
-| Foundation modules | `src/foundation/<NN>-<name>/` |
-| Application modules | `src/apps/<name>/` |
-| Service modules | `src/modules/<name>/` |
+### Restore from Backup
+```bash
+# PostgreSQL
+sudo systemctl stop podman-litellm
+sudo -u postgres psql -c "DROP DATABASE litellm;"
+sudo -u postgres psql -c "CREATE DATABASE litellm OWNER litellm;"
+gunzip -c backup.sql.gz | sudo -u postgres psql litellm
+sudo systemctl start podman-litellm
 
-## Naming Conventions
+# Redis
+sudo systemctl stop redis-litellm
+sudo cp backup.rdb /var/lib/redis-litellm/dump.rdb
+sudo chown redis-litellm:redis-litellm /var/lib/redis-litellm/dump.rdb
+sudo systemctl start redis-litellm
+```
 
-- Module name = VM name = hostname = DNS name
-- Use lowercase, avoid hyphens where possible
-- Use descriptive names (e.g., `nextcloud`, `homeassistant`, `grafana`)
+## Version Information
+
+- **NixOS:** 25.05
+- **PostgreSQL:** 15
+- **Redis:** 7
+- **LiteLLM:** v1.81.3.rc.2
+
+## Support
+
+- **LiteLLM Docs:** https://docs.litellm.ai/
+- **NixOS Manual:** https://nixos.org/manual/nixos/stable/
+- **TAPPaaS:** https://tappaas.org
+
+## License
+
+Mozilla Public License 2.0 (MPL-2.0)
+```
