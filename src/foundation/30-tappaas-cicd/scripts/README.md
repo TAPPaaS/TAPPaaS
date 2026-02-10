@@ -181,6 +181,100 @@ update-HA.sh nextcloud
 
 ---
 
+### check-disk-threshold.sh
+
+Checks if a VM's disk usage exceeds a threshold and automatically expands the disk by 50% if needed.
+
+**Usage:**
+```bash
+check-disk-threshold.sh <vmname> <threshold>
+```
+
+**Parameters:**
+
+| Parameter | Description | Example |
+|-----------|-------------|---------|
+| `vmname` | Name of the VM (must have a JSON config) | `nextcloud` |
+| `threshold` | Disk usage percentage threshold (1-99) | `80` |
+
+**Example:**
+```bash
+# Check if nextcloud disk usage exceeds 80%
+check-disk-threshold.sh nextcloud 80
+```
+
+**What it does:**
+
+1. Connects to the VM via SSH and checks current disk usage with `df`
+2. If usage is below threshold, exits with no action
+3. If usage exceeds threshold:
+   - Retrieves current disk size from Proxmox
+   - Calculates new size (50% increase, minimum 5GB)
+   - Calls `resize-disk.sh` to perform the resize
+   - Logs the resize event to `/home/tappaas/logs/disk-resize.log`
+
+**Cron usage:**
+```bash
+# Check disk usage every hour
+0 * * * * /home/tappaas/bin/check-disk-threshold.sh nextcloud 80
+```
+
+**Requirements:**
+
+- SSH access to the VM as tappaas user
+- SSH access to the Proxmox node as root
+- VM must be running and reachable
+
+---
+
+### resize-disk.sh
+
+Resizes the disk of a VM both in Proxmox and inside the VM filesystem.
+
+**Usage:**
+```bash
+resize-disk.sh <vmname> <new-size>
+```
+
+**Parameters:**
+
+| Parameter | Description | Example |
+|-----------|-------------|---------|
+| `vmname` | Name of the VM (must have a JSON config) | `nextcloud` |
+| `new-size` | New disk size (G, M, T, K suffix) | `50G` |
+
+**Example:**
+```bash
+# Resize nextcloud disk to 50GB
+resize-disk.sh nextcloud 50G
+```
+
+**What it does:**
+
+1. Validates that the new size is larger than the current size (shrinking not supported)
+2. Resizes the disk in Proxmox using `qm resize`
+3. Connects to the VM via SSH and resizes the partition and filesystem:
+   - **NixOS**: Uses `sfdisk` to grow the partition, then `resize2fs` for ext4
+   - **Debian/Ubuntu**: Uses `growpart` to grow the partition, then `resize2fs` for ext4
+4. Verifies the new filesystem size
+5. Updates the `diskSize` field in the VM's JSON configuration
+
+**Supported configurations:**
+
+| OS | Filesystem | Status |
+|----|------------|--------|
+| NixOS | ext4 | ✓ Fully supported |
+| Debian/Ubuntu | ext4 | ✓ Fully supported |
+| Other | Any | Proxmox disk resized, manual filesystem resize required |
+
+**Requirements:**
+
+- SSH access to the VM as tappaas user with sudo
+- SSH access to the Proxmox node as root
+- VM must be running and reachable
+
+---
+
 ### setup-caddy.sh
 
 Installs and configures the Caddy reverse proxy on the OPNsense firewall.
@@ -264,9 +358,11 @@ chmod +x /home/tappaas/bin/*.sh
 ```
 scripts/
 ├── README.md                    # This file
+├── check-disk-threshold.sh      # Auto-expand disks when usage exceeds threshold
 ├── common-install-routines.sh   # Shared library for install scripts
 ├── copy-jsons.sh                # Distribute configs to nodes
 ├── rebuild-nixos.sh             # NixOS rebuild workflow with DHCP fix
+├── resize-disk.sh               # Resize VM disk in Proxmox and filesystem
 ├── setup-caddy.sh               # Install Caddy reverse proxy on firewall
 ├── test-config.sh               # Validate installation
 ├── update-cron.sh               # Set up daily update cron job

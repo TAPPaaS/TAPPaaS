@@ -61,7 +61,7 @@ cd TAPPaaS/src/apps/litellm
 
 ### 4. Retrieve Master Key
 
-```bash
+```bash∏
 # View in journal
 sudo journalctl -u generate-litellm-secrets.service | grep "sk-"
 
