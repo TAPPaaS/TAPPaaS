@@ -165,6 +165,30 @@ else
     test_result "DNS from VM (skipped - no SSH)" 1
 fi
 
+# Test 8: Disk size verification
+echo "8. Disk size verification..."
+EXPECTED_DISK_SIZE="$(get_config_value 'diskSize' '8G')"
+# Extract numeric value and unit (e.g., "24G" -> 24)
+EXPECTED_SIZE_NUM="${EXPECTED_DISK_SIZE%[GMTK]}"
+if [ -n "$SSH_USER" ]; then
+    # Get actual root filesystem size in GB (rounded)
+    ACTUAL_SIZE=$(ssh -o ConnectTimeout=10 "${SSH_USER}@${VMIP}" "df -BG / | tail -1 | awk '{print \$2}'" 2>/dev/null | tr -d 'G')
+    if [ -n "$ACTUAL_SIZE" ]; then
+        # Allow 10% tolerance for filesystem overhead
+        MIN_EXPECTED=$((EXPECTED_SIZE_NUM * 85 / 100))
+        if [ "$ACTUAL_SIZE" -ge "$MIN_EXPECTED" ]; then
+            test_result "Disk size is ~${EXPECTED_DISK_SIZE} (actual: ${ACTUAL_SIZE}G)" 0
+        else
+            echo "  Expected: >= ${MIN_EXPECTED}G (85% of ${EXPECTED_DISK_SIZE}), Got: ${ACTUAL_SIZE}G"
+            test_result "Disk size is ~${EXPECTED_DISK_SIZE} (actual: ${ACTUAL_SIZE}G)" 1
+        fi
+    else
+        test_result "Disk size verification (could not get size)" 1
+    fi
+else
+    test_result "Disk size verification (skipped - no SSH)" 1
+fi
+
 # Summary
 echo ""
 echo "=============================================="

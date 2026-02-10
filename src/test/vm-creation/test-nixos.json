@@ -6,7 +6,7 @@
     "vmname": "test-nixos",
     "cores": 2,
     "memory": "2048",
-    "diskSize": "16G",
+    "diskSize": "24G",
     "storage": "tanka1",
     "imageType": "clone",
     "image": "8080",

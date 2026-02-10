@@ -383,11 +383,141 @@ else
 fi
 
 
-# TODO fix disk resize
-# qm resize $VMID scsi0 ${DISK_SIZE} >/dev/null  
+function resize_disk_in_vm() {
+  # Resize the filesystem inside the VM after Proxmox disk resize
+  # Supports NixOS and Debian-based systems with ext4 filesystems
+  local vm_hostname="$1"
+  local zone="$2"
+  local target="${vm_hostname}.${zone}.internal"
+  local max_wait=60
+  local waited=0
+
+  info "Waiting for VM $vm_hostname to become reachable via SSH..."
+  while ! ssh -o StrictHostKeyChecking=no -o ConnectTimeout=2 -o BatchMode=yes tappaas@${target} "exit 0" &>/dev/null; do
+    sleep 2
+    waited=$((waited + 2))
+    if [ $waited -ge $max_wait ]; then
+      info "${YW}[WARN]${CL} VM $vm_hostname not reachable after ${max_wait}s, skipping filesystem resize"
+      return 1
+    fi
+  done
+  info "VM $vm_hostname is reachable, detecting OS and filesystem..."
+
+  # Detect OS type
+  local os_id
+  os_id=$(ssh -o StrictHostKeyChecking=no tappaas@${target} "grep '^ID=' /etc/os-release | cut -d= -f2 | tr -d '\"'" 2>/dev/null)
+  info "Detected OS: $os_id"
+
+  # Find the root partition device (resolve UUID/LABEL symlinks to actual device)
+  local root_dev
+  root_dev=$(ssh -o StrictHostKeyChecking=no tappaas@${target} "
+    dev=\$(findmnt -n -o SOURCE /)
+    if [[ \"\$dev\" == /dev/disk/by-* ]]; then
+      readlink -f \"\$dev\"
+    else
+      echo \"\$dev\"
+    fi
+  " 2>/dev/null)
+  info "Root device: $root_dev"
+
+  # Extract disk and partition number (e.g., /dev/sda2 -> disk=/dev/sda, partnum=2)
+  local disk partnum
+  if [[ "$root_dev" =~ ^(/dev/[a-z]+)([0-9]+)$ ]]; then
+    disk="${BASH_REMATCH[1]}"
+    partnum="${BASH_REMATCH[2]}"
+  elif [[ "$root_dev" =~ ^(/dev/nvme[0-9]+n[0-9]+)p([0-9]+)$ ]]; then
+    disk="${BASH_REMATCH[1]}"
+    partnum="${BASH_REMATCH[2]}"
+  else
+    info "${YW}[WARN]${CL} Cannot parse root device $root_dev, skipping filesystem resize"
+    return 1
+  fi
+  info "Disk: $disk, Partition: $partnum"
+
+  # Detect filesystem type
+  local fstype
+  fstype=$(ssh -o StrictHostKeyChecking=no tappaas@${target} "findmnt -n -o FSTYPE /" 2>/dev/null)
+  info "Filesystem type: $fstype"
+
+  case "$os_id" in
+    nixos)
+      # NixOS: use sfdisk to resize partition, then resize2fs for ext4
+      info "Resizing partition on NixOS using sfdisk..."
+      ssh -o StrictHostKeyChecking=no tappaas@${target} "
+        echo ', +' | sudo sfdisk --no-reread -N ${partnum} ${disk} 2>/dev/null || true
+        sudo partprobe ${disk} 2>/dev/null || sudo partx -u ${disk} 2>/dev/null || true
+      " 2>/dev/null
+      if [ "$fstype" == "ext4" ]; then
+        info "Resizing ext4 filesystem on NixOS..."
+        ssh -o StrictHostKeyChecking=no tappaas@${target} "sudo resize2fs ${root_dev}" 2>/dev/null
+      else
+        info "${YW}[WARN]${CL} Unsupported filesystem $fstype for NixOS, skipping resize"
+        return 1
+      fi
+      ;;
+    debian|ubuntu)
+      # Debian/Ubuntu: use growpart then resize2fs
+      info "Resizing partition on Debian/Ubuntu using growpart..."
+      ssh -o StrictHostKeyChecking=no tappaas@${target} "
+        sudo growpart ${disk} ${partnum} 2>/dev/null || true
+      " 2>/dev/null
+      if [ "$fstype" == "ext4" ]; then
+        info "Resizing ext4 filesystem on Debian/Ubuntu..."
+        ssh -o StrictHostKeyChecking=no tappaas@${target} "sudo resize2fs ${root_dev}" 2>/dev/null
+      else
+        info "${YW}[WARN]${CL} Unsupported filesystem $fstype for Debian/Ubuntu, skipping resize"
+        return 1
+      fi
+      ;;
+    *)
+      info "${YW}[WARN]${CL} Unsupported OS '$os_id', skipping filesystem resize"
+      return 1
+      ;;
+  esac
+
+  info "Filesystem resize completed for $vm_hostname"
+  return 0
+}
+
+# Resize disk if this is a clone and target size is larger than current
+NEEDS_RESIZE=false
+if [ "$IMAGETYPE" == "clone" ]; then
+  # Get current disk size from VM config (e.g., "size=16G" -> "16G")
+  CURRENT_SIZE=$(qm config $VMID | grep -oP 'scsi0:.*size=\K[0-9]+[GMTK]?' || echo "0")
+  # Convert both sizes to bytes for comparison
+  size_to_bytes() {
+    local size="$1"
+    local num="${size%[GMTK]}"
+    local unit="${size: -1}"
+    case "$unit" in
+      G) echo $((num * 1024 * 1024 * 1024)) ;;
+      M) echo $((num * 1024 * 1024)) ;;
+      T) echo $((num * 1024 * 1024 * 1024 * 1024)) ;;
+      K) echo $((num * 1024)) ;;
+      *) echo "$num" ;;  # Assume bytes if no unit
+    esac
+  }
+  CURRENT_BYTES=$(size_to_bytes "$CURRENT_SIZE")
+  TARGET_BYTES=$(size_to_bytes "$DISK_SIZE")
+
+  if [ "$TARGET_BYTES" -gt "$CURRENT_BYTES" ]; then
+    info "Resizing disk from $CURRENT_SIZE to $DISK_SIZE..."
+    qm resize $VMID scsi0 ${DISK_SIZE} >/dev/null
+    NEEDS_RESIZE=true
+  elif [ "$TARGET_BYTES" -lt "$CURRENT_BYTES" ]; then
+    info "${YW}[WARN]${CL} Target size $DISK_SIZE is smaller than current $CURRENT_SIZE - disk shrinking not supported"
+  else
+    info "Disk already at target size $DISK_SIZE"
+  fi
+fi
 
 qm start $VMID >/dev/null
-info "\n${BOLD}TAPPaaS $VMNAME VM creation completed successfully\n" 
-# echo -e "if disksize changed then log in and resize disk!${CL}\n"
-# echo -e "${TAB}${BOLD}parted /dev/vda (fix followed by resizepart 3 100% then quit), followed resize2f /dev/vda3 ${CL}"
+info "\n${BOLD}TAPPaaS $VMNAME VM started successfully"
+
+# Resize filesystem inside VM if disk was expanded
+if [ "$NEEDS_RESIZE" == "true" ]; then
+  resize_disk_in_vm "$VMNAME" "$ZONE0" || info "Filesystem resize skipped or failed"
+fi
+
+info "${BOLD}TAPPaaS $VMNAME VM creation completed successfully\n"
 
