@@ -12,5 +12,8 @@
     "image": "8080",
     "bridge0": "lan",
     "zone0": "mgmt",
-    "description": "TAPPaaS Unifi Network Controller"  
+    "description": "TAPPaaS Unifi Network Controller",
+    "author": "@ErikDaniel007",
+    "releaseDate": "2026-02-10",
+    "status": "Development"  
 }

@@ -12,5 +12,8 @@
     "image": "8080",
     "bridge0": "lan",
     "zone0": "srv",
-    "description": "TAPPaaS Open Webui"  
+    "description": "TAPPaaS Open Webui",
+    "author": "@ErikDaniel007",
+    "releaseDate": "2026-02-10",
+    "status": "Development"    
 }
