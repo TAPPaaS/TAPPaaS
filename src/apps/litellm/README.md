@@ -1,16 +1,8 @@
-```markdown
 # TAPPaaS LiteLLM - AI proxy
-
-**Version:** 0.9.0  
-**Author:** @ErikDaniel007
-**Release Date:** 2026-02-10 
-**Status:** Development
 
 ## Overview
 
 Production-ready LiteLLM proxy with PostgreSQL and Redis backend on NixOS.
-
-## Overview
 
 This configuration provides a unified API gateway for multiple LLM providers (OpenAI, Anthropic, OpenRouter, Perplexity) with:
 
@@ -22,21 +14,21 @@ This configuration provides a unified API gateway for multiple LLM providers (Op
 
 ## Architecture
 
-```
-┌─────────────┐
-│   Clients   │
-└──────┬──────┘
-       │ :4000
-       ▼
-┌─────────────────┐
-│  LiteLLM Proxy  │ (Podman container, 4 workers)
-└────┬────────┬───┘
-     │        │
-     ▼        ▼
-┌─────────┐ ┌────────┐
-│ Postgres│ │ Redis  │ (localhost only)
-│   :5432 │ │  :6379 │
-└─────────┘ └────────┘
+```mermaid
+flowchart TB
+    Clients[Clients]
+    LiteLLM[LiteLLM Proxy<br/>Podman container, 4 workers]
+    Postgres[(PostgreSQL<br/>:5432)]
+    Redis[(Redis<br/>:6379)]
+
+    Clients -->|:4000| LiteLLM
+    LiteLLM --> Postgres
+    LiteLLM --> Redis
+
+    subgraph localhost only
+        Postgres
+        Redis
+    end
 ```
 
 ## Specifications
@@ -59,6 +51,7 @@ This configuration provides a unified API gateway for multiple LLM providers (Op
 ## Features
 
 ### Dynamic Model Management
+
 ```bash
 # Add models via API (no rebuild required)
 curl -X POST http://localhost:4000/model/new \
@@ -67,12 +60,14 @@ curl -X POST http://localhost:4000/model/new \
 ```
 
 ### Automated Backups
+
 - **PostgreSQL:** Daily at 02:00 (gzip compressed)
 - **Redis:** Daily at 02:30 (RDB snapshots)
 - **Configs:** Daily at 02:45 (secrets + config files)
 - **Retention:** 30 days, automatic cleanup
 
 ### Security
+
 - Auto-generated master key on first boot
 - Passwordless PostgreSQL (localhost trust)
 - Read-only config mounts

@@ -1,67 +1,37 @@
-```
-# Copyright (c) 2025 TAPPaaS org
-#
-# This Source Code Form is subject to the terms of the Mozilla Public
-# License, v. 2.0. If a copy of the MPL was not distributed with this
-# file, You can obtain one at https://mozilla.org/MPL/2.0/.
-#
-# This file incorporates work covered by the following copyright and permission notice:
-# Copyright (c) 2021-2025 community-scripts ORG
-# License: MIT | https://github.com/community-scripts/ProxmoxVE/raw/main/LICENSE
-```
-
-```markdown
 # LiteLLM on TAPPaaS - Installation Guide
 
-**Version:** 0.9.0  
-**Author:** Erik Daniel
-**Release Date:** 2026-02-10 
-**Status:** Development
-
 Step-by-step deployment instructions for TAPPaaS LiteLLM
-
-## Prerequisites
-
-- NixOS 25.05 installed
-- Root/sudo access
-- Network connectivity
-- Proxmox VM or bare metal (recommended: 4 vCPU / 8GB RAM / 40GB SSD)
 
 ## Installation Steps
 
 ### 1. Confirm LiteLLM Configuration
 
 read the ./readme.md for sizing guidelines
+
 look at ./litellm.json. 
+
 If this file is not correctly reflecting how you want this module to be installed in your environments. For instance if:
+
 - you want to have the module to run on a different node than the default "tappaass1" 
 - you want the VM to e on a different storage node than "tanka1"
 - you want to make it a member of a different LAN zone (VLAN)
+
 Then copy the json to /home/tappaas/config and edit the file to reflect your choices
 
 ### 2. Deploy LiteLLM Configuration
 
-
 As tappaas use on the tappaas-cicd: run the command:
-```
+```bash
+cd
 cd TAPPaaS/src/apps/litellm
 ./install.sh litellm
-```
-
-```
-# Expected output:
-# building the system configuration...
-# activating the configuration...
-# setting up /etc...
-# reloading the following units: dbus.service
-# starting the following units: generate-litellm-secrets.service, ...
 ```
 
 **Duration:** ~5-10 minutes (first run downloads PostgreSQL, Redis, Podman images)
 
 ### 4. Retrieve Master Key
 
-```bash∏
+```bash
 # View in journal
 sudo journalctl -u generate-litellm-secrets.service | grep "sk-"
 
@@ -75,12 +45,13 @@ sudo cat /etc/secrets/litellm.env | grep LITELLM_MASTER_KEY
 **⚠️ CRITICAL:** Save this key in your password manager. You'll need it for API access.
 
 
-Go to - [http://http://litellm.srv.internal:4000/ui] (http://litellm.srv.internal:4000/ui)
+Go to - [litellm.srv.internal:4000/ui](http://litellm.srv.internal:4000/ui)
 username = admin
 Password = sk-a3f8b2c1d4e...c7d8e9f0a1
 
 
-Follow the quick start: 
+Follow the quick start:
+
 1) setup (admin) users - https://docs.litellm.ai/docs/proxy/ui
 2) add a model provider API key - https://docs.litellm.ai/docs/proxy/ui_credentials 
 3) select models from provider to make public to internal users https://docs.litellm.ai/docs/proxy/ai_hub 
