@@ -29,22 +29,26 @@ if ! ssh -o ConnectTimeout=5 -o BatchMode=yes root@"$FIREWALL_FQDN" echo "ok" >/
 fi
 echo "SSH access confirmed"
 
-# Update OPNsense packages
-# opnsense-update updates the base system and packages
-echo "Running opnsense-update..."
-ssh root@"$FIREWALL_FQDN" "opnsense-update -p" || {
-    echo "Warning: Package update returned non-zero exit code"
+# Update OPNsense using the proper CLI tool
+# opnsense-update requires specific flags to actually perform updates:
+#   -b  Update base system
+#   -k  Update kernel
+#   -p  Update packages
+#   -f  Force update even if up-to-date
+echo "Updating OPNsense (base, kernel, and packages)..."
+ssh root@"$FIREWALL_FQDN" "opnsense-update -bkp" || {
+    echo "Warning: OPNsense update returned non-zero exit code"
 }
 
 # Check if a reboot is required
-echo "Checking if reboot is required..."
-REBOOT_REQUIRED=$(ssh root@"$FIREWALL_FQDN" "if [ -f /var/run/reboot_required ]; then echo 'yes'; else echo 'no'; fi")
-
-if [ "$REBOOT_REQUIRED" = "yes" ]; then
-    echo "Warning: Firewall reboot is required to complete the update"
-    echo "Please schedule a maintenance window to reboot the firewall"
-else
-    echo "No reboot required"
-fi
+# OPNsense uses configctl firmware reboot to check for pending reboots
+# TODO, this code is doing the actual reboot
+# echo "Checking if reboot is required..."
+# if ssh root@"$FIREWALL_FQDN" "configctl firmware reboot" 2>/dev/null | grep -qi "reboot"; then
+#     echo "Warning: Firewall reboot is required to complete the update"
+#     echo "Please schedule a maintenance window to reboot the firewall"
+# else
+#     echo "No reboot required"
+# fi
 
 echo "Firewall update completed"
