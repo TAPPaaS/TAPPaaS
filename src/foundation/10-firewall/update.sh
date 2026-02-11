@@ -40,15 +40,18 @@ ssh root@"$FIREWALL_FQDN" "opnsense-update -bkp" || {
     echo "Warning: OPNsense update returned non-zero exit code"
 }
 
-# Check if a reboot is required
-# OPNsense uses configctl firmware reboot to check for pending reboots
-# TODO, this code is doing the actual reboot
-# echo "Checking if reboot is required..."
-# if ssh root@"$FIREWALL_FQDN" "configctl firmware reboot" 2>/dev/null | grep -qi "reboot"; then
-#     echo "Warning: Firewall reboot is required to complete the update"
-#     echo "Please schedule a maintenance window to reboot the firewall"
-# else
-#     echo "No reboot required"
-# fi
+# Check if a reboot is required by comparing running vs installed kernel
+echo "Checking if reboot is required..."
+RUNNING_KERNEL=$(ssh root@"$FIREWALL_FQDN" "uname -r")
+INSTALLED_KERNEL=$(ssh root@"$FIREWALL_FQDN" "freebsd-version -k")
+
+if [ "$RUNNING_KERNEL" != "$INSTALLED_KERNEL" ]; then
+    echo "Warning: Firewall reboot is required to complete the update"
+    echo "  Running kernel:   $RUNNING_KERNEL"
+    echo "  Installed kernel: $INSTALLED_KERNEL"
+    echo "Please schedule a maintenance window to reboot the firewall"
+else
+    echo "No reboot required"
+fi
 
 echo "Firewall update completed"
