@@ -57,11 +57,13 @@
   security.sudo.wheelNeedsPassword = false;
 
   # Essential Services
+  # we allow root ssh access for the template. all derived NixOS installation will have this disabled
+  # Reason: need access before tappaas-cicd is configured with public ssh keys
   services.openssh = {
         enable = true;
         settings = {
-                PasswordAuthentication = false;
-                PermitRootLogin = "no";
+                PasswordAuthentication = true;
+                PermitRootLogin = "yes";
         };
   };
   programs.ssh.startAgent = true;
