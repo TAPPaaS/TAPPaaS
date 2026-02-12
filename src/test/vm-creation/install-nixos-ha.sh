@@ -9,27 +9,18 @@
 
 set -e
 
-. /home/tappaas/bin/common-install-routines.sh
-
-VMNAME="$(get_config_value 'vmname' "$1")"
-VMID="$(get_config_value 'vmid')"
-NODE="$(get_config_value 'node' 'tappaas1')"
-HANODE="$(get_config_value 'HANode' '')"
-ZONE0NAME="$(get_config_value 'zone0' 'mgmt')"
-MGMT="mgmt"
-
-# Copy the VM config and create VM
-scp "$1.json" "root@${NODE}.${MGMT}.internal:/root/tappaas/$1.json"
-ssh "root@${NODE}.${MGMT}.internal" "/root/tappaas/Create-TAPPaaS-VM.sh $1"
+. /home/tappaas/bin/install-vm.sh
 
 # Rebuild NixOS configuration, reboot VM, and fix DHCP hostname
 /home/tappaas/bin/rebuild-nixos.sh "${VMNAME}" "${VMID}" "${NODE}" "./${VMNAME}.nix"
 
 # Update HA configuration (creates/updates/removes based on HANode field)
-/home/tappaas/bin/update-HA.sh "$1"
-
-echo -e "\nNixOS VM ${VMNAME} (VMID: ${VMID}) created successfully on ${NODE}."
+HANODE="$(get_config_value 'HANode' '')"
 if [ -n "$HANODE" ]; then
-  echo "HA configured on: ${HANODE}"
+  echo -e "\nConfiguring HA for VM ${VMNAME} (VMID: ${VMID}) on HA Node: ${HANODE}..."
+  /home/tappaas/bin/update-HA.sh "$1"
+else
+  echo -e "\nNo HA Node specified for VM ${VMNAME} (VMID: ${VMID}), skipping HA configuration..."
 fi
-echo "Zone: ${ZONE0NAME}"
+
+echo -e "\nNixOS VM ${VMNAME} (VMID: ${VMID}) created successfully on ${NODE}, in Zone: ${ZONE0NAME}"
