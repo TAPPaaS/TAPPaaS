@@ -1,0 +1,18 @@
+{
+    "version": "0.5",
+    "node": "tappaas1",
+    "vmid": 650,
+    "vmtag": "TAPPaaS, Test",
+    "vmname": "test-ubuntu-vlan",
+    "cores": 1,
+    "memory": "4096",
+    "diskSize": "4G",
+    "storage": "tanka1",
+    "cloudInit": "true",
+    "imageType": "img",
+    "image": "ubuntu-24.04-server-cloudimg-amd64.img",
+    "imageLocation": "https://cloud-images.ubuntu.com/releases/24.04/release",
+    "bridge0": "lan",
+    "zone0": "srv",
+    "description": "Test: Ubuntu image on srv VLAN (node tappaas1) - Ubuntu 24.04 LTS"
+}
