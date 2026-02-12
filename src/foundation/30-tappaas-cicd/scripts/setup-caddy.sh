@@ -90,41 +90,128 @@ ssh root@"$FIREWALL_FQDN" 'configctl webgui restart' || {
     echo "Please verify manually at https://$FIREWALL_FQDN:8443"
 }
 
-# Step 3: Create firewall rules for HTTP/HTTPS using opnsense-controller
+# Step 3: Create firewall rules for HTTP/HTTPS using opnsense-firewall CLI
 echo ""
 echo "Step 3: Creating firewall rules for HTTP and HTTPS..."
 
-# Check if opnsense-controller is available
-if [ -x /home/tappaas/bin/opnsense-controller ]; then
-    export OPNSENSE_HOST="$FIREWALL_FQDN"
+# Check if opnsense-firewall CLI is available
+OPNSENSE_FIREWALL="/home/tappaas/bin/opnsense-firewall"
+if [ ! -x "$OPNSENSE_FIREWALL" ]; then
+    # Try to find it in the nix profile
+    OPNSENSE_FIREWALL=$(command -v opnsense-firewall 2>/dev/null || true)
+fi
 
+if [ -x "$OPNSENSE_FIREWALL" ]; then
     # Create HTTP rule (port 80) on WAN interface
     echo "Creating HTTP (port 80) rule on WAN..."
-    /home/tappaas/bin/opnsense-controller firewall create-rule \
+    "$OPNSENSE_FIREWALL" create-rule \
+        --firewall "$FIREWALL_FQDN" \
+        --no-ssl-verify \
         --description "TAPPaaS: Allow HTTP to Caddy" \
         --interface wan \
-        --protocol TCP \
-        --destination-port 80 \
         --action pass \
-        --log true || echo "Warning: HTTP rule creation failed or already exists"
+        --protocol tcp \
+        --destination-port 80 \
+        --log \
+        --no-apply || echo "Warning: HTTP rule creation failed or already exists"
 
     # Create HTTPS rule (port 443) on WAN interface
     echo "Creating HTTPS (port 443) rule on WAN..."
-    /home/tappaas/bin/opnsense-controller firewall create-rule \
+    "$OPNSENSE_FIREWALL" create-rule \
+        --firewall "$FIREWALL_FQDN" \
+        --no-ssl-verify \
         --description "TAPPaaS: Allow HTTPS to Caddy" \
         --interface wan \
-        --protocol TCP \
-        --destination-port 443 \
         --action pass \
-        --log true || echo "Warning: HTTPS rule creation failed or already exists"
+        --protocol tcp \
+        --destination-port 443 \
+        --log \
+        --no-apply || echo "Warning: HTTPS rule creation failed or already exists"
 
     # Apply firewall changes
     echo "Applying firewall changes..."
-    /home/tappaas/bin/opnsense-controller firewall apply || true
+    "$OPNSENSE_FIREWALL" apply \
+        --firewall "$FIREWALL_FQDN" \
+        --no-ssl-verify || echo "Warning: Could not apply firewall changes"
 else
-    echo "Warning: opnsense-controller not found, creating rules via SSH..."
-    # Fallback: use OPNsense API directly via curl
-    echo "Please create HTTP and HTTPS firewall rules manually in OPNsense"
+    echo "Warning: opnsense-firewall CLI not found"
+    echo "Falling back to SSH/PHP method..."
+
+    # Fallback: Create firewall rules using PHP on OPNsense
+    ssh root@"$FIREWALL_FQDN" 'cat > /tmp/create-caddy-rules.php << '\''EOFPHP'\''
+<?php
+require_once("config.inc");
+require_once("filter.inc");
+require_once("util.inc");
+
+global $config;
+
+if (!isset($config["filter"]["rule"])) {
+    $config["filter"]["rule"] = array();
+}
+
+$http_exists = false;
+$https_exists = false;
+foreach ($config["filter"]["rule"] as $rule) {
+    if (isset($rule["descr"]) && strpos($rule["descr"], "TAPPaaS: Allow HTTP to Caddy") !== false) {
+        $http_exists = true;
+    }
+    if (isset($rule["descr"]) && strpos($rule["descr"], "TAPPaaS: Allow HTTPS to Caddy") !== false) {
+        $https_exists = true;
+    }
+}
+
+$changed = false;
+
+if (!$http_exists) {
+    $config["filter"]["rule"][] = array(
+        "type" => "pass",
+        "interface" => "wan",
+        "ipprotocol" => "inet",
+        "protocol" => "tcp",
+        "source" => array("any" => true),
+        "destination" => array("any" => true, "port" => "80"),
+        "descr" => "TAPPaaS: Allow HTTP to Caddy",
+        "log" => true,
+    );
+    echo "Created HTTP (port 80) rule on WAN\n";
+    $changed = true;
+} else {
+    echo "HTTP rule already exists, skipping\n";
+}
+
+if (!$https_exists) {
+    $config["filter"]["rule"][] = array(
+        "type" => "pass",
+        "interface" => "wan",
+        "ipprotocol" => "inet",
+        "protocol" => "tcp",
+        "source" => array("any" => true),
+        "destination" => array("any" => true, "port" => "443"),
+        "descr" => "TAPPaaS: Allow HTTPS to Caddy",
+        "log" => true,
+    );
+    echo "Created HTTPS (port 443) rule on WAN\n";
+    $changed = true;
+} else {
+    echo "HTTPS rule already exists, skipping\n";
+}
+
+if ($changed) {
+    write_config("Added TAPPaaS Caddy HTTP/HTTPS firewall rules");
+    echo "Configuration saved.\n";
+}
+EOFPHP
+php /tmp/create-caddy-rules.php && rm /tmp/create-caddy-rules.php' || {
+        echo "Warning: Could not create firewall rules automatically"
+        echo "Please create HTTP (80) and HTTPS (443) rules manually in OPNsense"
+    }
+
+    # Apply firewall filter rules
+    echo "Applying firewall filter rules..."
+    ssh root@"$FIREWALL_FQDN" 'configctl filter reload' || {
+        echo "Warning: Could not reload filter rules"
+    }
 fi
 
 # Step 4: Enable Caddy service

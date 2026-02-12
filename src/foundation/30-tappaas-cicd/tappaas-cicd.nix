@@ -25,9 +25,13 @@
 
 { config, lib, pkgs, modulesPath, system, ... }:
 
+let
+  # Import opnsense-controller package
+  opnsenseController = import ./opnsense-controller { inherit pkgs; };
+in
 {
   imports =
-    [ 
+    [
       /etc/nixos/hardware-configuration.nix
     ];
 
@@ -101,6 +105,8 @@
         htop
         jq
         git
+        # OPNsense controller tools (opnsense-controller, opnsense-firewall, zone-manager, dns-manager)
+        opnsenseController.default
   ];
 
   # Enable automatic garbage collection

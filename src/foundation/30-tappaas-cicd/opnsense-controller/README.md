@@ -2,6 +2,17 @@
 
 OPNsense controller for TAPPaaS using the `oxl-opnsense-client` library.
 
+## CLI Tools
+
+This package provides four command-line tools:
+
+| Command | Description |
+|---------|-------------|
+| `opnsense-controller` | Main CLI with examples for VLANs, DHCP, and firewall management |
+| `opnsense-firewall` | Standalone firewall rule management (create, list, delete rules) |
+| `dns-manager` | DNS host entry management for Dnsmasq |
+| `zone-manager` | Automated zone configuration from zones.json |
+
 ## Requirements
 
 - Nix package manager
@@ -211,6 +222,152 @@ your-api-secret
 | `allow` | Create allow rule using convenience method |
 | `block` | Create block rule using convenience method |
 | `all` | Run all firewall examples (default) |
+
+### Firewall CLI (`opnsense-firewall` command)
+
+The Firewall CLI provides a dedicated command-line interface for managing firewall rules on OPNsense. This is the recommended tool for scripted firewall management.
+
+#### CLI Usage
+
+```bash
+# Test connection to OPNsense
+opnsense-firewall test --no-ssl-verify
+
+# Create a firewall rule (allow HTTPS on WAN)
+opnsense-firewall create-rule \
+    --no-ssl-verify \
+    --description "Allow HTTPS" \
+    --interface wan \
+    --protocol tcp \
+    --destination-port 443
+
+# Create a rule without applying immediately
+opnsense-firewall create-rule \
+    --no-ssl-verify \
+    --description "Allow HTTP" \
+    --interface wan \
+    --protocol tcp \
+    --destination-port 80 \
+    --no-apply
+
+# List all firewall rules
+opnsense-firewall list-rules --no-ssl-verify
+
+# List rules matching a search pattern
+opnsense-firewall list-rules --no-ssl-verify --search "TAPPaaS"
+
+# List rules in JSON format
+opnsense-firewall list-rules --no-ssl-verify --json
+
+# Delete a rule by description
+opnsense-firewall delete-rule --no-ssl-verify --description "Allow HTTP"
+
+# Delete a rule by UUID
+opnsense-firewall delete-rule --no-ssl-verify --uuid "abc123-def456-..."
+
+# Apply pending firewall changes
+opnsense-firewall apply --no-ssl-verify
+
+# Show help
+opnsense-firewall --help
+opnsense-firewall create-rule --help
+```
+
+#### Commands
+
+| Command | Description |
+|---------|-------------|
+| `create-rule` | Create a new firewall rule |
+| `list-rules` | List all firewall rules (with optional search filter) |
+| `delete-rule` | Delete a firewall rule by description or UUID |
+| `apply` | Apply pending firewall configuration changes |
+| `test` | Test connection to OPNsense firewall |
+
+#### Global Options
+
+| Option | Description |
+|--------|-------------|
+| `--firewall HOST` | Firewall IP/hostname (default: `firewall.mgmt.internal`) |
+| `--credential-file PATH` | Path to credential file |
+| `--no-ssl-verify` | Disable SSL certificate verification |
+| `--debug` | Enable debug logging |
+| `--json` | Output in JSON format |
+
+#### create-rule Options
+
+| Option | Description |
+|--------|-------------|
+| `--description, -d` | Rule description (required, used as identifier) |
+| `--interface, -i` | Interface name, e.g., `wan`, `lan`, `opt1` (required) |
+| `--action, -a` | Rule action: `pass`, `block`, `reject` (default: `pass`) |
+| `--direction` | Traffic direction: `in`, `out` (default: `in`) |
+| `--ip-protocol` | IP version: `inet`, `inet6`, `inet46` (default: `inet`) |
+| `--protocol, -p` | Network protocol: `any`, `tcp`, `udp`, `tcp/udp`, `icmp` (default: `any`) |
+| `--source, -s` | Source network/host (default: `any`) |
+| `--source-port` | Source port or range |
+| `--destination, -D` | Destination network/host (default: `any`) |
+| `--destination-port, -P` | Destination port or range |
+| `--log/--no-log` | Enable/disable logging (default: enabled) |
+| `--disabled` | Create rule in disabled state |
+| `--sequence` | Rule sequence/priority (lower = higher priority) |
+| `--force, -f` | Overwrite existing rule with same description |
+| `--no-apply` | Don't apply changes immediately |
+
+#### list-rules Options
+
+| Option | Description |
+|--------|-------------|
+| `--search` | Filter rules by description (substring match) |
+
+#### delete-rule Options
+
+| Option | Description |
+|--------|-------------|
+| `--description, -d` | Rule description to delete (mutually exclusive with --uuid) |
+| `--uuid` | Rule UUID to delete (mutually exclusive with --description) |
+| `--no-apply` | Don't apply changes immediately |
+
+#### Examples
+
+```bash
+# Allow SSH from management network
+opnsense-firewall create-rule \
+    --no-ssl-verify \
+    --description "Allow SSH from mgmt" \
+    --interface lan \
+    --protocol tcp \
+    --source 10.0.0.0/16 \
+    --destination-port 22
+
+# Block all traffic from specific IP
+opnsense-firewall create-rule \
+    --no-ssl-verify \
+    --description "Block bad actor" \
+    --interface wan \
+    --action block \
+    --source 192.168.100.50
+
+# Create rule with high priority (low sequence number)
+opnsense-firewall create-rule \
+    --no-ssl-verify \
+    --description "Priority rule" \
+    --interface wan \
+    --protocol tcp \
+    --destination-port 443 \
+    --sequence 10
+
+# List all TAPPaaS-created rules
+opnsense-firewall list-rules --no-ssl-verify --search "TAPPaaS"
+
+# Delete rule and apply immediately
+opnsense-firewall delete-rule --no-ssl-verify --description "Block bad actor"
+
+# Batch operations (create multiple rules without applying, then apply once)
+opnsense-firewall create-rule --no-ssl-verify --no-apply -d "Rule 1" -i wan -p tcp -P 80
+opnsense-firewall create-rule --no-ssl-verify --no-apply -d "Rule 2" -i wan -p tcp -P 443
+opnsense-firewall create-rule --no-ssl-verify --no-apply -d "Rule 3" -i wan -p udp -P 53
+opnsense-firewall apply --no-ssl-verify
+```
 
 ### DNS Manager (`dns-manager` command)
 
@@ -458,8 +615,10 @@ See: https://github.com/opnsense/core/issues/7324#issuecomment-2830694222
         ├── vlan_manager.py        # VLAN and interface operations
         ├── dhcp_manager.py        # DHCP/Dnsmasq operations
         ├── firewall_manager.py    # Firewall rule operations
+        ├── firewall_cli.py        # Standalone firewall CLI (opnsense-firewall)
         ├── zone_manager.py        # Zone configuration from zones.json
-        └── main.py                # CLI entry point
+        ├── dns_manager_cli.py     # Standalone DNS CLI (dns-manager)
+        └── main.py                # Main CLI entry point (opnsense-controller)
 ```
 
 ## Nix Outputs
