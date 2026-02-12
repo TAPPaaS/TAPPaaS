@@ -14,5 +14,5 @@
     "imageLocation": "https://cloud-images.ubuntu.com/releases/24.04/release",
     "bridge0": "lan",
     "zone0": "srv",
-    "description": "Test: Ubuntu image on srv VLAN (node tappaas1) - Ubuntu 24.04 LTS"
+    "description": "Test: Ubuntu image on srv VLAN (node tappaas2) - Ubuntu 24.04 LTS"
 }
