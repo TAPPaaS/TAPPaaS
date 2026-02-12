@@ -10,7 +10,7 @@
 #
 # If a <module>.json.orig file exists in /home/tappaas/config, it means
 # the user has customized the JSON. In this case, a warning is printed
-# if the source JSON has changed, and false is returned.
+# if the source JSON has changed since the .orig file was created then false is returned.
 
 set -e
 

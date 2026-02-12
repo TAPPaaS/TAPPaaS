@@ -1,8 +1,8 @@
 {
     "version": "0.5",
-    "node": "tappaas1",
+    "node": "tappaas2",
     "vmid": 650,
-    "vmtag": "TAPPaaS, Test",
+    "vmtag": "TAPPaaS,Test",
     "vmname": "test-ubuntu-vlan",
     "cores": 1,
     "memory": "4096",

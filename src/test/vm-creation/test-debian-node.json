@@ -1,6 +1,6 @@
 {
     "version": "0.5",
-    "node": "tappaas2",
+    "node": "tappaas3",
     "vmid": 603,
     "vmtag": "TAPPaaS,Test",
     "vmname": "test-debian-node",
