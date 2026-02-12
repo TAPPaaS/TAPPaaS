@@ -65,23 +65,29 @@ ssh root@"$FIREWALL_FQDN" "pkg install -y os-caddy" || {
 # Step 2: Reconfigure OPNsense web GUI to port 8443
 echo ""
 echo "Step 2: Reconfiguring OPNsense web GUI to port 8443..."
-# Use PHP to modify config.xml and reload the web GUI
-ssh root@"$FIREWALL_FQDN" "php -r '
-require_once(\"config.inc\");
-require_once(\"system.inc\");
+# Write PHP script to temp file and execute (avoids shell quoting issues on BSD/csh)
+ssh root@"$FIREWALL_FQDN" 'cat > /tmp/set-webgui-port.php << '\''EOFPHP'\''
+<?php
+require_once("config.inc");
+require_once("system.inc");
 
-global \$config;
+global $config;
 
-if (!isset(\$config[\"system\"][\"webgui\"])) {
-    \$config[\"system\"][\"webgui\"] = array();
+if (!isset($config["system"]["webgui"])) {
+    $config["system"]["webgui"] = array();
 }
-\$config[\"system\"][\"webgui\"][\"port\"] = \"8443\";
+$config["system"]["webgui"]["port"] = "8443";
 
-write_config(\"Changed web GUI port to 8443 for Caddy reverse proxy\");
-echo \"Configuration saved. Restarting web GUI...\\n\";
-' && ssh root@\"$FIREWALL_FQDN\" \"configctl webgui restart\"" || {
-    echo "Warning: Could not change web GUI port automatically"
-    echo "Please change it manually in System > Settings > Administration"
+write_config("Changed web GUI port to 8443 for Caddy reverse proxy");
+echo "Configuration saved.\n";
+EOFPHP
+php /tmp/set-webgui-port.php && rm /tmp/set-webgui-port.php'
+
+# Restart web GUI separately (connection may drop during restart)
+echo "Restarting web GUI..."
+ssh root@"$FIREWALL_FQDN" 'configctl webgui restart' || {
+    echo "Warning: Could not restart web GUI (this may be expected if port changed)"
+    echo "Please verify manually at https://$FIREWALL_FQDN:8443"
 }
 
 # Step 3: Create firewall rules for HTTP/HTTPS using opnsense-controller
