@@ -11,8 +11,8 @@
 # ============================================================================
 # TAPPaaS - LiteLLM AI proxy
 # ============================================================================
-# Version: 0.9.0
-# Date: 2026-02-10
+# Version: 0.9.1
+# Date: 2026-02-13
 # Author: @ErikDaniel007 (TAPPaaS)
 # Product: LiteLLM proxy with PostgreSQL + Redis backend
 #
@@ -24,6 +24,11 @@
 # Network: Self-managed DHCP, firewall ports 22 (SSH) + 4000 (LiteLLM API)
 # Secrets: Auto-generated master key on first boot
 # Backups: Daily PostgreSQL/Redis/config backups, 30-day retention
+#
+# Changelog v0.9.1 (2026-02-13):
+# - Fixed Redis backup (was using --rdb replication tool instead of SAVE)
+# - Added filesystem dependency to secrets generation (boot safety)
+# - Removed broken WAL archiving (daily pg_dump already provides recovery)
 # ============================================================================
 
 { config, lib, pkgs, modulesPath, system, ... }:
@@ -192,10 +197,10 @@ in
       random_page_cost = 1.1;  # SSD
       effective_io_concurrency = 200;
 
-      # WAL archiving for point-in-time recovery
+      # WAL archiving disabled - daily pg_dump backups provide sufficient recovery
+      # (Previous WAL archive command was broken due to missing full paths)
       wal_level = "replica";
-      archive_mode = "on";
-      archive_command = "test ! -f /var/lib/postgresql/archive/%f && cp %p /var/lib/postgresql/archive/%f";
+      archive_mode = "off";
     };
   };
 
@@ -288,8 +293,9 @@ in
   systemd.services.generate-litellm-secrets = {
     description = "Generate LiteLLM secrets if missing";
     wantedBy = [ "multi-user.target" ];
+    after = [ "local-fs.target" ];  # Ensure /etc is mounted before writing secrets
     before = [ "podman-litellm.service" ];
-    
+
     # Only run if secrets file doesn't exist
     unitConfig.ConditionPathExists = "!/etc/secrets/litellm.env";
     
@@ -368,7 +374,12 @@ EOF
     serviceConfig = {
       Type = "oneshot";
       ExecStart = pkgs.writeShellScript "redis-backup" ''
-        ${versions.redisPkg}/bin/redis-cli --rdb /var/backup/redis/dump-$(date +%Y%m%d_%H%M%S).rdb
+        # Trigger synchronous save to disk
+        ${versions.redisPkg}/bin/redis-cli SAVE
+
+        # Copy snapshot with timestamp
+        ${pkgs.coreutils}/bin/cp /var/lib/redis-litellm/dump.rdb \
+          /var/backup/redis/dump-$(${pkgs.coreutils}/bin/date +%Y%m%d_%H%M%S).rdb
       '';
       User = "redis-litellm";
       Group = "redis-litellm";
@@ -437,7 +448,6 @@ EOF
     "d /var/backup/postgresql 0700 postgres postgres -"
     "d /var/backup/redis 0755 redis-litellm redis-litellm -"
     "d /var/backup/litellm-env 0755 root root -"
-    "d /var/lib/postgresql/archive 0700 postgres postgres -"
   ];
 
   # ============================================================================
