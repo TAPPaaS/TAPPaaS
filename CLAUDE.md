@@ -48,3 +48,32 @@ Defined in `zones.json` with VLAN tags.
 - Storage pools: `tankXY` where X indicates type and Y a sequence number (e.g., `tanka1`)
 - Hyphens preferred over Capitalization (e.g., `tappaas-cicd`)
 
+# Coding Rules
+
+## General Workflow
+
+1. **Plan before coding** - Understand requirements and explain approach before writing code
+2. **Ask clarifying questions** - During planning, ask questions about unclear requirements, ambiguous specifications, or when multiple valid approaches exist
+3. **Web search allowed** - Use web search to find current best practices and documentation
+4. **Never commit to git** - Do not run `git commit` or `git push` unless explicitly requested
+
+## Testing Requirements
+
+1. **Create testable code** - Add or expand `test.sh` with test cases for new functionality
+2. **Propose tests first** - Describe what you want to test and ask for approval before running
+3. **Use coded tests** - Run tests via `test.sh` rather than ad-hoc manual testing
+
+## Shell Script Standards
+
+When writing or modifying bash scripts for TAPPaaS, **always use** the installed skills:
+
+- `bash-script-generator` - For creating new scripts with proper structure, error handling, and logging
+- `bash-script-validator` - For validating scripts with ShellCheck and security checks
+
+All scripts must follow:
+
+- Strict mode: `set -euo pipefail`
+- Proper logging functions (debug, info, warn, error)
+- Argument validation and help/usage text
+- Cleanup trap handlers for signals
+- Quoted variables and secure input handling
