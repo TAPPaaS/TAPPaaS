@@ -85,14 +85,8 @@ For complete field definitions including all possible values, defaults, and vali
 
 ### install.sh
 
-Installation script called with the module name as an argument when the module is installed.
-
-- Called from the `tappaas@tappaas-cicd` account, which has SSH and sudo access to all nodes
-- Default implementation creates a VM based on the JSON spec
-- Clones a template or installs an image per `imageType`
-- Runs `nixos-rebuild` for NixOS-based modules
-
-If manual steps are required, document them in an `INSTALL.md` file.
+Installation script called with the module name as an argument when the module is installed. 
+See [README-install.md](./README-install.md) for details
 
 ### update.sh
 

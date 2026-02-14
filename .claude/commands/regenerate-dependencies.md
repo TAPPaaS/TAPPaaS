@@ -1,12 +1,3 @@
-# Prompt for Regenerating Dependency Documentation
-
-Use this prompt to instruct Claude to regenerate the DEPENDENCIES.csv and DEPENDENCIES.md files.
-
----
-
-## Prompt
-
-```
 Regenerate the dependency documentation for src/foundation/:
 
 1. **Analyze all files** in src/foundation/ including:
@@ -52,27 +43,3 @@ Regenerate the dependency documentation for src/foundation/:
    - Keep node IDs simple (single letters or short names)
 
 Output both files to src/foundation/.
-```
-
----
-
-## Quick Version
-
-```
-Regenerate src/foundation/DEPENDENCIES.csv and DEPENDENCIES.md by:
-1. Scanning all .sh, .py, .nix, .json, .php files in src/foundation/
-2. Identifying direct dependencies for each file (sources, imports, calls, references)
-3. Creating CSV grouped by directory
-4. Creating MD with summary, entry points, mermaid graphs for 8 main flows, and reference tables
-5. Remember to escape @ as #64; in mermaid node labels
-```
-
----
-
-## When to Regenerate
-
-- After adding new modules to src/foundation/
-- After significant refactoring of install/update scripts
-- After adding new CLI tools to opnsense-controller or update-tappaas
-- After changing dependency relationships between scripts
-- Periodically to ensure documentation stays current
