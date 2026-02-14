@@ -6,13 +6,11 @@ This directory contains test configurations for validating TAPPaaS VM creation a
 
 | Test | VMID | Type | Zone | Node | HA Node | Description |
 |------|------|------|------|------|---------|-------------|
-| test-debian | 601 | Debian img | mgmt | tappaas1 | - | Debian cloud image on management network |
-| test-debian-vlan | 602 | Debian img | srv | tappaas1 | - | Debian cloud image on srv VLAN |
-| test-debian-node | 603 | Debian img | srv | tappaas2 | - | Debian cloud image on different node |
-| test-nixos | 604 | NixOS clone | mgmt | tappaas1 | - | NixOS clone on management network |
-| test-nixos-vlan | 605 | NixOS clone | srv | tappaas1 | - | NixOS clone on srv VLAN |
-| test-nixos-node | 606 | NixOS clone | srv | tappaas2 | - | NixOS clone on different node |
-| test-nixos-ha | 607 | NixOS clone | mgmt | tappaas1 | tappaas2 | NixOS clone with HA replication to tappaas2 |
+| test-debian | 901 | Debian img | mgmt | tappaas1 | - | Debian cloud image on management network |
+| test-debian-vlan-node | 902 | Debian img | srv | tappaas3 | - | Debian cloud image on srv VLAN on different node |
+| test-nixos | 903 | NixOS clone | mgmt | tappaas1 | tappaas2 | NixOS clone on mgmt with HA replication to tappaas2 |
+| test-nixos-vlan-node | 904 | NixOS clone | srv | tappaas2 | - | NixOS clone on srv VLAN on different node |
+| test-ubuntu-vlan | 905 | Ubuntu img | srv | tappaas2 | - | Ubuntu cloud image on srv VLAN |
 
 ## Prerequisites
 
@@ -25,11 +23,12 @@ cd ~/TAPPaaS
 git pull
 scp src/foundation/05-ProxmoxNode/Create-TAPPaaS-VM.sh root@tappaas1.mgmt.internal:/root/tappaas/
 scp src/foundation/05-ProxmoxNode/Create-TAPPaaS-VM.sh root@tappaas2.mgmt.internal:/root/tappaas/
+scp src/foundation/05-ProxmoxNode/Create-TAPPaaS-VM.sh root@tappaas3.mgmt.internal:/root/tappaas/
 ```
 
 ## Running the Full Test Suite
 
-Run all 7 test cases (install + verify each VM):
+Run all 5 test cases (install + verify each VM):
 
 ```bash
 cd ~/TAPPaaS/src/test/vm-creation
@@ -39,14 +38,14 @@ cd ~/TAPPaaS/src/test/vm-creation
 Run a single test case:
 
 ```bash
-./test.sh test-nixos-ha                    # Install and test only test-nixos-ha
-./test.sh test-nixos-ha --skip-install     # Test existing test-nixos-ha VM
-./test.sh test-nixos-ha --skip-test        # Only install test-nixos-ha
+./test.sh test-nixos                    # Install and test only test-nixos
+./test.sh test-nixos --skip-install     # Test existing test-nixos VM
+./test.sh test-nixos --skip-test        # Only install test-nixos
 ```
 
 Options:
 
-- `./test.sh` - Install and test all 7 VMs
+- `./test.sh` - Install and test all 5 VMs
 - `./test.sh [test-name]` - Install and test only the specified VM
 - `./test.sh --skip-install` - Only run tests on existing VMs (skip installation)
 - `./test.sh --skip-test` - Only install VMs (skip testing)
@@ -54,26 +53,26 @@ Options:
 - `./test.sh --skip-install --cleanup` - Test existing VMs and cleanup after
 
 Available test names:
-- `test-debian`, `test-debian-vlan`, `test-debian-node`
-- `test-nixos`, `test-nixos-vlan`, `test-nixos-node`
-- `test-nixos-ha`
+- `test-debian`, `test-debian-vlan-node`
+- `test-nixos`, `test-nixos-vlan-node`
+- `test-ubuntu-vlan`
 
 Example output:
 
 ```text
 ==============================================
 TAPPaaS VM Creation Test Suite
-Started: Wed Feb  8 16:30:00 CET 2026
+Started: Wed Feb  14 12:30:00 CET 2026
 ==============================================
 
 Mode: Install and Test
 Logs: /home/tappaas/logs/
 
 [test-debian] Installing... OK. Testing... PASS
-[test-debian-vlan] Installing... OK. Testing... PARTIAL (4/3)
+[test-debian-vlan-node] Installing... OK. Testing... PASS
 [test-nixos] Installing... OK. Testing... PASS
-[test-nixos-ha] Installing... OK. Testing... PASS
-...
+[test-nixos-vlan-node] Installing... OK. Testing... PASS
+[test-ubuntu-vlan] Installing... OK. Testing... PASS
 
 ==============================================
 Test Results Summary
@@ -82,15 +81,13 @@ Test Results Summary
 Test                 Type       Zone       Install    Test
 ----                 ----       ----       -------    ----
 test-debian          debian     mgmt       PASS       PASS
-test-debian-vlan     debian     srv        PASS       PARTIAL
-test-debian-node     debian     srv        PASS       PARTIAL
-test-nixos           nixos      mgmt       PASS       PASS
-test-nixos-vlan      nixos      srv        PASS       PASS
-test-nixos-node      nixos      srv        PASS       PASS
-test-nixos-ha        nixos-ha   mgmt       PASS       PASS
+test-debian-vlan-node debian    srv        PASS       PASS
+test-nixos           nixos-ha   mgmt       PASS       PASS
+test-nixos-vlan-node nixos      srv        PASS       PASS
+test-ubuntu-vlan     ubuntu     srv        PASS       PASS
 
 ==============================================
-Total: 5 passed, 2 failed
+Total: 5 passed, 0 failed
 Logs saved to: /home/tappaas/logs/
 ==============================================
 ```
@@ -100,17 +97,16 @@ Logs saved to: /home/tappaas/logs/
 ### Install a single VM
 
 ```bash
-./install-debian.sh test-debian      # Debian image VM
-./install-nixos.sh test-nixos        # NixOS clone VM
-./install-nixos-ha.sh test-nixos-ha  # NixOS VM with HA configuration
+./install-debian.sh test-debian           # Debian image VM
+./install-nixos.sh test-nixos             # NixOS clone VM (with HA if HANode specified)
+./install-nixos.sh test-nixos-vlan-node   # NixOS clone VM without HA
 ```
 
 ### Test a single VM
 
 ```bash
 ./test-vm.sh test-debian      # Test the test-debian VM
-./test-vm.sh test-nixos       # Test the test-nixos VM
-./test-ha.sh test-nixos-ha    # Test HA configuration for test-nixos-ha
+./test-vm.sh test-nixos       # Test the test-nixos VM (includes HA tests)
 ```
 
 The test-vm.sh script checks:
@@ -122,29 +118,28 @@ The test-vm.sh script checks:
 5. **Hostname** - VM reports correct hostname
 6. **Internet access** - VM can ping 1.1.1.1
 7. **DNS from VM** - VM can resolve and ping google.com
+8. **Disk size** - VM disk size matches configuration
 
-The test-ha.sh script checks HA configuration:
+When HANode is specified in the VM config, test-vm.sh also runs HA tests:
 
-1. **VM status** - VM exists and is running on primary node
-2. **HA resource** - VM is registered in HA resources
-3. **HA rule** - Node-affinity rule exists for the VM
-4. **Rule priorities** - Primary node has priority 2, HA node has priority 1
-5. **Replication job** - ZFS replication job exists
-6. **Replication target** - Replication target is correct HA node
-7. **Replication schedule** - Schedule matches configuration
-8. **Replication status** - Replication state is OK
-9. **Replicated disks** - VM disks are present on HA node
-10. **HA node reachability** - HA node is accessible
-11. **Storage availability** - Storage pool exists on HA node
-12. **VM connectivity** - Basic ping test to VM
-13. **SSH access** - SSH access to VM works
+9. **HA resource** - VM is registered in HA resources
+10. **HA rule** - Node-affinity rule exists for the VM
+11. **Rule priorities** - Primary node has priority 2, HA node has priority 1
+12. **Replication job** - ZFS replication job exists
+13. **Replication target** - Replication target is correct HA node
+14. **Replication schedule** - Schedule matches configuration
+15. **Replication status** - Replication state is OK
+16. **Replicated disks** - VM disks are present on HA node
+17. **HA node reachability** - HA node is accessible
+18. **Storage availability** - Storage pool exists on HA node
 
 Example output:
 
 ```
 ==============================================
-Testing VM: test-nixos (VMID: 604)
+Testing VM: test-nixos (VMID: 903)
 Node: tappaas1, Zone: mgmt
+HA Node: tappaas2
 ==============================================
 
 Running tests...
@@ -154,10 +149,18 @@ Running tests...
 2. DNS resolution test...
   [PASS] DNS resolves test-nixos.mgmt.internal to 10.0.0.123
 ...
+
+Running HA configuration tests...
+
+9. HA resource test...
+  [PASS] VM 903 is registered in HA resources
+10. HA rule test...
+  [PASS] HA rule 'ha-test-nixos' exists
+...
 ==============================================
 Test Summary for test-nixos
 ==============================================
-  Passed: 7
+  Passed: 18
   Failed: 0
 
 [SUCCESS] All tests passed!
@@ -173,55 +176,46 @@ To remove all test VMs after testing:
 
 # Or manual cleanup
 # On tappaas1
-ssh root@tappaas1.mgmt.internal "qm stop 601; qm destroy 601 --purge"
-ssh root@tappaas1.mgmt.internal "qm stop 602; qm destroy 602 --purge"
-ssh root@tappaas1.mgmt.internal "qm stop 604; qm destroy 604 --purge"
-ssh root@tappaas1.mgmt.internal "qm stop 605; qm destroy 605 --purge"
-
-# For HA VMs, remove HA configuration first
-ssh root@tappaas1.mgmt.internal "ha-manager remove vm:607"
-ssh root@tappaas1.mgmt.internal "ha-manager rules remove ha-test-nixos-ha"
-ssh root@tappaas1.mgmt.internal "pvesr delete 607-0 --force 1"
-ssh root@tappaas1.mgmt.internal "qm stop 607; qm destroy 607 --purge"
+ssh root@tappaas1.mgmt.internal "ha-manager remove vm:903"
+ssh root@tappaas1.mgmt.internal "ha-manager rules remove ha-test-nixos"
+ssh root@tappaas1.mgmt.internal "pvesr delete 903-0 --force 1"
+ssh root@tappaas1.mgmt.internal "qm stop 901; qm destroy 901 --purge"
+ssh root@tappaas1.mgmt.internal "qm stop 903; qm destroy 903 --purge"
 
 # On tappaas2
-ssh root@tappaas2.mgmt.internal "qm stop 603; qm destroy 603 --purge"
-ssh root@tappaas2.mgmt.internal "qm stop 606; qm destroy 606 --purge"
+ssh root@tappaas2.mgmt.internal "qm stop 904; qm destroy 904 --purge"
+ssh root@tappaas2.mgmt.internal "qm stop 905; qm destroy 905 --purge"
+
+# On tappaas3
+ssh root@tappaas3.mgmt.internal "qm stop 902; qm destroy 902 --purge"
 ```
 
 ## Directory Structure
 
 ```text
 vm-creation/
-├── README.md                 # This file
-├── install-debian.sh         # Install script for Debian image VMs
-├── install-nixos.sh          # Install script for NixOS clone VMs
-├── install-nixos-ha.sh       # Install script for NixOS VMs with HA
-├── install.sh                # Legacy install script
-├── test.sh                   # Run full test suite (all 7 VMs)
-├── test-vm.sh                # Test a single VM (basic tests)
-├── test-ha.sh                # Test HA configuration for a VM
-├── logs/                     # Test output logs (not in repo)
-├── test-debian.json          # Debian on mgmt (tappaas1)
-├── test-debian-vlan.json     # Debian on srv VLAN (tappaas1)
-├── test-debian-node.json     # Debian on srv VLAN (tappaas2)
-├── test-nixos.json           # NixOS clone on mgmt (tappaas1)
-├── test-nixos.nix            # NixOS config for test-nixos
-├── test-nixos-vlan.json      # NixOS clone on srv VLAN (tappaas1)
-├── test-nixos-vlan.nix       # NixOS config for test-nixos-vlan
-├── test-nixos-node.json      # NixOS clone on srv VLAN (tappaas2)
-├── test-nixos-node.nix       # NixOS config for test-nixos-node
-├── test-nixos-ha.json        # NixOS clone with HA on mgmt (tappaas1->tappaas2)
-└── test-nixos-ha.nix         # NixOS config for test-nixos-ha
+├── README.md                     # This file
+├── install-debian.sh             # Install script for Debian/Ubuntu image VMs
+├── install-nixos.sh              # Install script for NixOS clone VMs (handles HA if HANode specified)
+├── test.sh                       # Run full test suite (all 5 VMs)
+├── test-vm.sh                    # Test a single VM (basic + HA tests if applicable)
+├── test-debian.json              # Debian on mgmt (tappaas1) - VMID 901
+├── test-debian-vlan-node.json    # Debian on srv VLAN (tappaas3) - VMID 902
+├── test-nixos.json               # NixOS clone on mgmt with HA (tappaas1->tappaas2) - VMID 903
+├── test-nixos.nix                # NixOS config for test-nixos
+├── test-nixos-vlan-node.json     # NixOS clone on srv VLAN (tappaas2) - VMID 904
+├── test-nixos-vlan-node.nix      # NixOS config for test-nixos-vlan-node
+└── test-ubuntu-vlan.json         # Ubuntu on srv VLAN (tappaas2) - VMID 905
 ```
 
 ## Notes
 
-- Debian VMs use cloud-init for initial configuration
+- Debian/Ubuntu VMs use cloud-init for initial configuration
 - NixOS VMs are cloned from template 8080 (tappaas-nixos) and configured via nixos-rebuild
 - The install-nixos.sh script automatically handles DHCP hostname registration
-- Tests on tappaas2 require the tappaas-nixos template to be available on that node
-- The test-nixos-ha test case demonstrates HA configuration with:
+- The install-nixos.sh script automatically configures HA when HANode is specified in the JSON config
+- Tests on tappaas2/tappaas3 require the tappaas-nixos template to be available on those nodes
+- The test-nixos test case demonstrates HA configuration with:
   - Proxmox HA manager resources for automatic failover
   - Node-affinity rules for priority-based VM placement
   - ZFS replication for data synchronization between nodes

@@ -35,14 +35,18 @@ for arg in "$@"; do
 done
 
 # Test cases: name, type, install_script, test_script
+# Optimized test matrix:
+# - test-debian: Debian on mgmt zone (tappaas1)
+# - test-debian-vlan-node: Debian on srv VLAN on different node (tappaas3)
+# - test-nixos: NixOS on mgmt zone with HA (tappaas1 -> tappaas2)
+# - test-nixos-vlan-node: NixOS on srv VLAN on different node (tappaas2)
+# - test-ubuntu-vlan: Ubuntu on srv VLAN (tappaas2) - unchanged per request
 declare -a ALL_TESTS=(
     "test-debian:debian:install-debian.sh:test-vm.sh"
-    "test-debian-vlan:debian:install-debian.sh:test-vm.sh"
-    "test-debian-node:debian:install-debian.sh:test-vm.sh"
-    "test-nixos:nixos:install-nixos.sh:test-vm.sh"
-    "test-nixos-vlan:nixos:install-nixos.sh:test-vm.sh"
-    "test-nixos-node:nixos:install-nixos.sh:test-vm.sh"
-    "test-nixos-ha:nixos-ha:install-nixos-ha.sh:test-ha.sh"
+    "test-debian-vlan-node:debian:install-debian.sh:test-vm.sh"
+    "test-nixos:nixos-ha:install-nixos.sh:test-vm.sh"
+    "test-nixos-vlan-node:nixos:install-nixos.sh:test-vm.sh"
+    "test-ubuntu-vlan:ubuntu:install-debian.sh:test-vm.sh"
 )
 
 # Filter tests if single test specified
@@ -175,12 +179,10 @@ TOTAL_FAIL=0
 
 test_details=(
     "test-debian:debian:mgmt"
-    "test-debian-vlan:debian:srv"
-    "test-debian-node:debian:srv"
-    "test-nixos:nixos:mgmt"
-    "test-nixos-vlan:nixos:srv"
-    "test-nixos-node:nixos:srv"
-    "test-nixos-ha:nixos-ha:mgmt"
+    "test-debian-vlan-node:debian:srv"
+    "test-nixos:nixos-ha:mgmt"
+    "test-nixos-vlan-node:nixos:srv"
+    "test-ubuntu-vlan:ubuntu:srv"
 )
 
 for detail in "${test_details[@]}"; do
@@ -230,7 +232,8 @@ if [ "$CLEANUP" = true ]; then
     echo "Cleaning up test VMs..."
 
     # tappaas1 VMs (including HA VMs)
-    for vmid in 601 602 604 605 607; do
+    # 901: test-debian, 903: test-nixos (with HA)
+    for vmid in 901 903; do
         echo "  Removing VM $vmid from tappaas1..."
         # Remove HA configuration first
         ssh root@tappaas1.mgmt.internal "ha-manager remove vm:$vmid 2>/dev/null" || true
@@ -241,14 +244,22 @@ if [ "$CLEANUP" = true ]; then
     done
 
     # tappaas2 VMs
-    for vmid in 603 606; do
+    # 904: test-nixos-vlan-node, 905: test-ubuntu-vlan
+    for vmid in 904 905; do
         echo "  Removing VM $vmid from tappaas2..."
         ssh root@tappaas2.mgmt.internal "qm stop $vmid 2>/dev/null; qm destroy $vmid --purge 2>/dev/null" || true
     done
 
+    # tappaas3 VMs
+    # 902: test-debian-vlan-node
+    for vmid in 902; do
+        echo "  Removing VM $vmid from tappaas3..."
+        ssh root@tappaas3.mgmt.internal "qm stop $vmid 2>/dev/null; qm destroy $vmid --purge 2>/dev/null" || true
+    done
+
     # Clean up HA rules
     echo "  Cleaning up HA rules..."
-    for rule in ha-test-nixos-ha; do
+    for rule in ha-test-nixos; do
         ssh root@tappaas1.mgmt.internal "ha-manager rules remove $rule 2>/dev/null" || true
     done
 

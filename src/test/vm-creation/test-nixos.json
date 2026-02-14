@@ -1,9 +1,10 @@
 {
     "version": "0.5",
     "node": "tappaas1",
-    "vmid": 604,
+    "vmid": 903,
     "vmtag": "TAPPaaS,Test",
     "vmname": "test-nixos",
+    "HANode": "tappaas2",
     "cores": 2,
     "memory": "2048",
     "diskSize": "24G",
@@ -12,5 +13,6 @@
     "image": "8080",
     "bridge0": "lan",
     "zone0": "mgmt",
-    "description": "Test: NixOS clone on mgmt zone (node tappaas1)"
+    "replicationSchedule": "*/15",
+    "description": "Test: NixOS clone on mgmt zone with HA failover to tappaas2"
 }

@@ -1,5 +1,5 @@
 # Test NixOS VM - srv VLAN on tappaas2
-# This is a minimal test configuration for validating NixOS clone creation on a different node
+# This is a minimal test configuration for validating NixOS clone creation on a VLAN on a different node
 
 { config, lib, pkgs, modulesPath, system, ... }:
 
@@ -16,7 +16,7 @@
   boot.loader.systemd-boot.enable = lib.mkDefault true;
   boot.loader.efi.canTouchEfiVariables = lib.mkDefault true;
 
-  networking.hostName = "test-nixos-node";
+  networking.hostName = "test-nixos-vlan-node";
   networking.networkmanager.enable = true;
 
   time.timeZone = lib.mkDefault "Europe/Amsterdam";

@@ -2,6 +2,7 @@
 # TAPPaaS VM Test Script
 #
 # Tests that a VM is working correctly after installation
+# Includes HA tests when HANode is specified in the VM config
 # Usage: ./test.sh <vmname>
 # Example: ./test.sh test-debian
 
@@ -17,11 +18,17 @@ VMNAME="$(get_config_value 'vmname' "$1")"
 VMID="$(get_config_value 'vmid')"
 NODE="$(get_config_value 'node' 'tappaas1')"
 ZONE0NAME="$(get_config_value 'zone0' 'mgmt')"
+HANODE="$(get_config_value 'HANode' '')"
+REPLICATION_SCHEDULE="$(get_config_value 'replicationSchedule' '*/15')"
+STORAGE="$(get_config_value 'storage' 'tanka1')"
 MGMT="mgmt"
 
 echo "=============================================="
 echo "Testing VM: ${VMNAME} (VMID: ${VMID})"
 echo "Node: ${NODE}, Zone: ${ZONE0NAME}"
+if [ -n "$HANODE" ]; then
+    echo "HA Node: ${HANODE}"
+fi
 echo "=============================================="
 echo ""
 
@@ -187,6 +194,103 @@ if [ -n "$SSH_USER" ]; then
     fi
 else
     test_result "Disk size verification (skipped - no SSH)" 1
+fi
+
+# HA Tests (only if HANode is specified)
+if [ -n "$HANODE" ]; then
+    echo ""
+    echo "Running HA configuration tests..."
+    echo ""
+    HANODE_FQDN="${HANODE}.${MGMT}.internal"
+
+    # HA Test 1: VM is in HA resources
+    echo "9. HA resource test..."
+    HA_RESOURCE=$(ssh "root@${NODE}.${MGMT}.internal" "ha-manager config" 2>/dev/null | grep "^vm:${VMID}")
+    if [ -n "$HA_RESOURCE" ]; then
+        test_result "VM ${VMID} is registered in HA resources" 0
+    else
+        test_result "VM ${VMID} is registered in HA resources" 1
+    fi
+
+    # HA Test 2: HA rule exists
+    echo "10. HA rule test..."
+    HA_RULE_NAME="ha-${VMNAME}"
+    HA_RULE=$(ssh "root@${NODE}.${MGMT}.internal" "ha-manager rules list" 2>/dev/null | grep "${HA_RULE_NAME}")
+    if [ -n "$HA_RULE" ]; then
+        test_result "HA rule '${HA_RULE_NAME}' exists" 0
+    else
+        test_result "HA rule '${HA_RULE_NAME}' exists" 1
+    fi
+
+    # HA Test 3: Node-affinity rule configuration
+    echo "11. Node-affinity rule configuration test..."
+    RULE_CONFIG=$(ssh "root@${NODE}.${MGMT}.internal" "cat /etc/pve/ha/rules.cfg" 2>/dev/null | grep -A 2 "${HA_RULE_NAME}")
+    if echo "$RULE_CONFIG" | grep -q "nodes ${NODE}:2,${HANODE}:1"; then
+        test_result "Node-affinity priorities correct (${NODE}:2, ${HANODE}:1)" 0
+    else
+        test_result "Node-affinity priorities correct (${NODE}:2, ${HANODE}:1)" 1
+    fi
+
+    # HA Test 4: Replication job exists
+    echo "12. Replication job test..."
+    REPL_JOB=$(ssh "root@${NODE}.${MGMT}.internal" "pvesh get /cluster/replication --output-format=json" 2>/dev/null | jq -r ".[] | select(.guest == ${VMID}) | .id" 2>/dev/null)
+    if [ -n "$REPL_JOB" ]; then
+        test_result "Replication job exists (${REPL_JOB})" 0
+    else
+        test_result "Replication job exists" 1
+    fi
+
+    # HA Test 5: Replication target is correct
+    echo "13. Replication target test..."
+    REPL_TARGET=$(ssh "root@${NODE}.${MGMT}.internal" "pvesh get /cluster/replication --output-format=json" 2>/dev/null | jq -r ".[] | select(.guest == ${VMID}) | .target" 2>/dev/null)
+    if [ "$REPL_TARGET" = "$HANODE" ]; then
+        test_result "Replication target is ${HANODE}" 0
+    else
+        test_result "Replication target is ${HANODE} (got: ${REPL_TARGET})" 1
+    fi
+
+    # HA Test 6: Replication schedule is correct
+    echo "14. Replication schedule test..."
+    REPL_SCHED=$(ssh "root@${NODE}.${MGMT}.internal" "pvesh get /cluster/replication --output-format=json" 2>/dev/null | jq -r ".[] | select(.guest == ${VMID}) | .schedule" 2>/dev/null)
+    if [ "$REPL_SCHED" = "$REPLICATION_SCHEDULE" ]; then
+        test_result "Replication schedule is ${REPLICATION_SCHEDULE}" 0
+    else
+        test_result "Replication schedule is ${REPLICATION_SCHEDULE} (got: ${REPL_SCHED})" 1
+    fi
+
+    # HA Test 7: Replication status is OK
+    echo "15. Replication status test..."
+    REPL_STATE=$(ssh "root@${NODE}.${MGMT}.internal" "pvesr status" 2>/dev/null | grep "^${VMID}-" | awk '{print $NF}')
+    if [ "$REPL_STATE" = "OK" ]; then
+        test_result "Replication state is OK" 0
+    else
+        test_result "Replication state is OK (got: ${REPL_STATE})" 1
+    fi
+
+    # HA Test 8: Disks replicated to HA node
+    echo "16. Replicated disks test..."
+    DISK_COUNT=$(ssh "root@${HANODE_FQDN}" "zfs list | grep 'vm-${VMID}-disk' | wc -l" 2>/dev/null)
+    if [ "$DISK_COUNT" -ge 2 ]; then
+        test_result "VM disks replicated to ${HANODE} (${DISK_COUNT} disks found)" 0
+    else
+        test_result "VM disks replicated to ${HANODE} (expected >=2, got: ${DISK_COUNT})" 1
+    fi
+
+    # HA Test 9: HA node is reachable
+    echo "17. HA node reachability test..."
+    if ssh "root@${HANODE_FQDN}" "hostname" >/dev/null 2>&1; then
+        test_result "HA node ${HANODE} is reachable" 0
+    else
+        test_result "HA node ${HANODE} is reachable" 1
+    fi
+
+    # HA Test 10: Storage exists on HA node
+    echo "18. HA node storage test..."
+    if ssh "root@${HANODE_FQDN}" "pvesm status --storage ${STORAGE}" >/dev/null 2>&1; then
+        test_result "Storage ${STORAGE} exists on ${HANODE}" 0
+    else
+        test_result "Storage ${STORAGE} exists on ${HANODE}" 1
+    fi
 fi
 
 # Summary

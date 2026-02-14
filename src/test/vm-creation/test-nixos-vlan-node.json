@@ -1,16 +1,16 @@
 {
     "version": "0.5",
-    "node": "tappaas1",
-    "vmid": 605,
+    "node": "tappaas2",
+    "vmid": 904,
     "vmtag": "TAPPaaS,Test",
-    "vmname": "test-nixos-vlan",
+    "vmname": "test-nixos-vlan-node",
     "cores": 2,
     "memory": "2048",
     "diskSize": "16G",
-    "storage": "tanka1",
+    "storage": "tanka2",
     "imageType": "clone",
     "image": "8080",
     "bridge0": "lan",
     "zone0": "srv",
-    "description": "Test: NixOS clone on srv VLAN (node tappaas1)"
+    "description": "Test: NixOS clone on srv VLAN on a different node (tappaas2)"
 }
