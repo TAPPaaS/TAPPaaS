@@ -13,7 +13,8 @@ run the following script as root from the proxmox console
 
 ```bash
 BRANCH="main"
-curl -fsSL  https://raw.githubusercontent.com/TAPPaaS/TAPPaaS/$BRANCH/src/foundation/20-tappaas-nixos/tappaas-nixos.json >~/tappaas/tappaas-nixos.json
+REPO="https://raw.githubusercontent.com/TAPPaaS/TAPPaaS/"
+curl -fsSL  ${REPO}${BRANCH}/src/foundation/20-tappaas-nixos/tappaas-nixos.json >~/tappaas/tappaas-nixos.json
 ~/tappaas/Create-TAPPaaS-VM.sh tappaas-nixos
 ```
 
