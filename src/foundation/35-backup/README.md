@@ -3,25 +3,18 @@
 This module install PBS from official apt repository onto an existing TAPPaaS node.
 the pbs.json define which node, and define the actual apt package to install
 
-Consider editing the json before installing
+If some backup.json values needs changing then add this as arguments to the install command
+- for example: ./install.sh backup --node tappaas2
 
 ## Install
 
-### Step 1: Install PBS
+### Step 1 : Install and configure PBS
 Run the install script from the tappaas-cicd vm as the tappaas user:
 
 ```bash
 cd ~/TAPPaaS/src/foundation/35-backup
 chmod +x install.sh
-./install.sh
-```
-
-### Step 2: Automated Configuration
-After installation completes, run the automated configuration script:
-
-```bash
-chmod +x configure.sh
-./configure.sh
+./install.sh backup
 ```
 
 This script will automatically:
@@ -34,9 +27,7 @@ This script will automatically:
 7. Create a daily backup job at 21:00 for all VMs
 8. Register DNS entry in OPNsense (backup.mgmt.internal)
 
-**All configuration is now automated!** No manual steps required.
-
-### Step 3 (Optional): Backup of Backup
+### Step 2 (Optional): Backup of Backup
 Configure a remote PBS system to pull backups from your TAPPaaS PBS for off-site redundancy.
 
 ## Restore VMs from Backup
@@ -105,8 +96,7 @@ chmod +x backup-manage.sh
 
 All scripts should be run from tappaas-cicd as the tappaas user:
 
-- [install.sh](install.sh) - Installs PBS on the designated node
-- [configure.sh](configure.sh) - Automates PBS configuration (datastore, user, permissions, backup jobs, DNS)
+- [install.sh](install.sh) - Installs PBS on the designated node and configure (datastore, user, permissions, backup jobs, DNS)
 - [restore.sh](restore.sh) - Automates VM restoration from backups with various options
 - [backup-manage.sh](backup-manage.sh) - Common backup management operations
 

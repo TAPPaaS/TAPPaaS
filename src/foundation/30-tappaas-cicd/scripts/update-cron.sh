@@ -1,14 +1,19 @@
 #!/usr/bin/env bash
 #
-# Create a cron entry to run update-tappaas daily at 2am.
-# The update-tappaas script handles all scheduling logic internally.
+# Create a cron entry to run update-tappaas every hour.
+# The update-tappaas script handles all scheduling logic internally,
+# checking each node's updateSchedule to determine if it should be updated.
+#
+# Running hourly ensures that:
+# - Nodes scheduled for any hour will be updated
+# - If the system misses one hour, it can catch the next
 #
 # Usage: update-cron.sh
 
 set -e
 
 CRON_CMD="/home/tappaas/bin/update-tappaas"
-CRON_ENTRY="0 2 * * * $CRON_CMD"
+CRON_ENTRY="0 * * * * $CRON_CMD"
 
 # Determine crontab command based on current user
 if [ "$(whoami)" = "tappaas" ]; then

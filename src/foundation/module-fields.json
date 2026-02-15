@@ -290,6 +290,14 @@
             "required": false,
             "default": "mgmt",
             "note": "Only used if bridge1 is defined"
+        },
+
+        "location": {
+            "description": "Absolute path to the module directory containing install.sh, update.sh, etc.",
+            "type": "string",
+            "required": false,
+            "example": "/home/tappaas/TAPPaaS/src/apps/nextcloud",
+            "note": "Automatically set by copy-update-json.sh based on the directory where the module JSON resides"
         }
     },
 

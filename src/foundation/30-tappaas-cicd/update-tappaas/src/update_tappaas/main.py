@@ -75,6 +75,11 @@ def should_update_node(node_config: dict, current_hour: int) -> bool:
 
     frequency, scheduled_weekday, scheduled_hour = parse_schedule(schedule)
 
+    # Handle "none" frequency - never update automatically
+    if frequency == "none":
+        print(f"  {hostname}: Updates disabled (frequency=none), skipping")
+        return False
+
     today = datetime.now()
     current_weekday = today.weekday()  # 0=Monday, 1=Tuesday, ..., 6=Sunday
     day_of_month = today.day
@@ -154,6 +159,11 @@ def main():
         "--node",
         help="Update only this specific node (still respects schedule unless --force is used)"
     )
+    parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Show what would be updated without actually running updates"
+    )
     args = parser.parse_args()
 
     now = datetime.now()
@@ -205,6 +215,21 @@ def main():
 
     print(f"Nodes to update: {', '.join(nodes_to_update)}")
     print("")
+
+    # Dry run mode - show what would happen without doing it
+    if args.dry_run:
+        print("=== DRY RUN MODE ===")
+        print("The following updates would be performed:")
+        for node in nodes_to_update:
+            print(f"  - {node}: apt update, apt upgrade, module updates")
+        print("")
+        print("To actually run these updates, use:")
+        if args.force:
+            print(f"  update-tappaas --force --node {nodes_to_update[0]}" if len(nodes_to_update) == 1 else "  update-tappaas --force")
+        else:
+            print("  update-tappaas  (when schedule matches)")
+            print("  update-tappaas --force --node <node>  (to force immediately)")
+        sys.exit(0)
 
     # Update each scheduled node
     failed_nodes = []

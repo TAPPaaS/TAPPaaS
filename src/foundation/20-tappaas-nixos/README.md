@@ -43,14 +43,18 @@ In the console of the VM do the following (and sorry, nixos do not support cut a
 
 ```bash
 BRANCH="main"
-sudo curl -fsSL  https://raw.githubusercontent.com/TAPPaaS/TAPPaaS/$BRANCH/src/foundation/20-tappaas-nixos/tappaas-nixos.nix  >/etc/nixos/configuration.nix
+REPO="https://raw.githubusercontent.com/TAPPaaS/TAPPaaS/"
+sudo curl -fsSL  ${REPO}${BRANCH}/src/foundation/20-tappaas-nixos/tappaas-nixos.nix  >/etc/nixos/configuration.nix
 sudo nixos-rebuild switch
 sudo reboot
 ```
 
 Clean the newly created NIXOS VM before turning it into a template
 
-After reboot, access the VM via the PVE console and login:
+After reboot, access the VM via the PVE console. you can start the xterm.js console from the console dropdown buttom on the PVE GUI. 
+This gives a sepeare console window to tappaas-nixos where cut and paste work on right mouse click
+
+Login as:
 UID = root (note, tappaas user is disables after rebuild!) 
 PWD = the password you created in step 1 (same as tappaas node root pwd?!] 
 
@@ -58,10 +62,6 @@ you should see: [root@tappaas-nixos:~]
 
 ```bash
 sudo sh -eux <<'CLEAN'
-# Repeat safe cleanup (ensure minimal store size)
-for u in $(awk -F: '$3>=1000 && $3<60000 {print $1}' /etc/passwd); do
-  sudo -u "$u" nix profile wipe-history --older-than 30d || true
-done
 nix store gc
 nix store optimise
 

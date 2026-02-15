@@ -243,12 +243,21 @@ msg_info "Enabling high availability"
   systemctl enable -q --now corosync
 msg_ok "Enabled high availability"
 
+# Find the repo version of TAPPaaS to use
+msg_info "Determining TAPPaaS repo to use"
+if [ -z "${1:-}" ]; then
+  REPO="https://raw.githubusercontent.com/TAPPaaS/"
+else
+  REPO="$1"
+fi
+msg_ok "Determined TAPPaaS repo to use: ${REPO}"
+
 # Find the branch version of TAPPaaS to use
 msg_info "Determining TAPPaaS branch to use"
 if [ -z "${1:-}" ]; then
   BRANCH="main"
 else
-  BRANCH="$1"
+  BRANCH="$2"
 fi
 msg_ok "Determined TAPPaaS branch to use: ${BRANCH}"
 
@@ -256,14 +265,13 @@ msg_info "Install TAPPaaS helper script"
 cd
 mkdir tappaas
 apt -y install jq &>/dev/null || msg_error "apt update failed"
-curl -fsSL  https://raw.githubusercontent.com/TAPPaaS/TAPPaaS/$BRANCH/src/foundation/05-ProxmoxNode/Create-TAPPaaS-VM.sh >~/tappaas/Create-TAPPaaS-VM.sh
+curl -fsSL  ${REPO}${BRANCH}/src/foundation/05-ProxmoxNode/Create-TAPPaaS-VM.sh >~/tappaas/Create-TAPPaaS-VM.sh
 chmod 744 ~/tappaas/Create-TAPPaaS-VM.sh
 msg_ok "Installed TAPPaaS helper script"
 
-msg_info "Copy configuration.json and zones.json"
-curl -fsSL  https://raw.githubusercontent.com/TAPPaaS/TAPPaaS/$BRANCH/src/foundation/configuration.json >~/tappaas/configuration.json
-curl -fsSL  https://raw.githubusercontent.com/TAPPaaS/TAPPaaS/$BRANCH/src/foundation/zones.json >~/tappaas/zones.json
-msg_ok "Copied configuration.json and zones.json"
+msg_info "Copy zones.json"
+curl -fsSL  ${REPO}${BRANCH}/src/foundation/zones.json >~/tappaas/zones.json
+msg_ok "Copied zones.json"
 
 msg_info "Install power top:"
 apt -y install powertop &>/dev/null || msg_error "apt update failed"

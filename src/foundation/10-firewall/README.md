@@ -75,8 +75,9 @@ now create the OPNSense VM: from the command prompt/console of tappaas1:
 (Note if you are not using the main branch then replace "main" with branch name in the command below)
 
 ```bash
+REPO="https://raw.githubusercontent.com/TAPPaaS/TAPPaaS/"
 BRANCH="main"
-curl -fsSL  https://raw.githubusercontent.com/TAPPaaS/TAPPaaS/$BRANCH/src/foundation/10-firewall/firewall.json > /root/tappaas/firewall.json
+curl -fsSL  ${REPO}${BRANCH}/src/foundation/10-firewall/firewall.json > /root/tappaas/firewall.json
 ~/tappaas/Create-TAPPaaS-VM.sh firewall
 ```
 

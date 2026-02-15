@@ -18,7 +18,7 @@ VMNAME="$(get_config_value 'vmname' "$1")"
 VMID="$(get_config_value 'vmid')"
 NODE="$(get_config_value 'node' 'tappaas1')"
 ZONE0NAME="$(get_config_value 'zone0' 'mgmt')"
-HANODE="$(get_config_value 'HANode' '')"
+HANODE="$(get_config_value 'HANode' 'NONE')"
 REPLICATION_SCHEDULE="$(get_config_value 'replicationSchedule' '*/15')"
 STORAGE="$(get_config_value 'storage' 'tanka1')"
 MGMT="mgmt"
@@ -26,7 +26,7 @@ MGMT="mgmt"
 echo "=============================================="
 echo "Testing VM: ${VMNAME} (VMID: ${VMID})"
 echo "Node: ${NODE}, Zone: ${ZONE0NAME}"
-if [ -n "$HANODE" ]; then
+if [ -n "$HANODE" ] && [ "$HANODE" != "NONE" ]; then
     echo "HA Node: ${HANODE}"
 fi
 echo "=============================================="
@@ -197,7 +197,7 @@ else
 fi
 
 # HA Tests (only if HANode is specified)
-if [ -n "$HANODE" ]; then
+if [ -n "$HANODE" ] && [ "$HANODE" != "NONE" ]; then
     echo ""
     echo "Running HA configuration tests..."
     echo ""

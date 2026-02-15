@@ -8,12 +8,7 @@ if [ "$(hostname)" != "tappaas-cicd" ]; then
   exit 1
 fi      
 
-# Find the branch version of TAPPaaS to use
-if [ -z "$BRANCH" ]; then
-  BRANCH="main"
-fi
-
-
+#
 # creatae a fully qualified node hostname for tappaas1
 MGMTVLAN="mgmt"
 NODE1_FQDN="tappaas1.$MGMTVLAN.internal"
@@ -30,20 +25,9 @@ while read -r node; do
   scp /home/tappaas/.ssh/id_ed25519 root@"$NODE_FQDN":/root/tappaas/tappaas-cicd.key < /dev/null
 done < <(ssh -n root@"$NODE1_FQDN" pvesh get /cluster/resources --type node --output-format json | jq --raw-output ".[].node" )
 
-# Get the actual nodes configured in the Proxmox system
-while read -r node; do
-    echo -e "\nCopying Create-TAPPaaS-VM.sh to /root/tappaas on node: $node"
-    NODE_FQDN="$node.$MGMTVLAN.internal"
-    scp /home/tappaas/TAPPaaS/src/foundation/05-ProxmoxNode/Create-TAPPaaS-VM.sh root@"$NODE_FQDN":/root/tappaas/
-done < <(pvesh get /cluster/resources --type node --output-format json | jq --raw-output ".[].node")
-
 # create tappaas binary director and config directory
 mkdir -p /home/tappaas/config
 mkdir -p /home/tappaas/bin
-
-# install scripts
-cp /home/tappaas/TAPPaaS/src/foundation/30-tappaas-cicd/scripts/*.sh /home/tappaas/bin/
-chmod +x /home/tappaas/bin/*.sh
 
 # Add /home/tappaas/bin to PATH
 # On NixOS, .profile is sourced for login shells, and we also add to .bashrc
@@ -60,23 +44,20 @@ for rcfile in /home/tappaas/.profile /home/tappaas/.bashrc; do
         echo "Added /home/tappaas/bin to PATH in $rcfile"
     fi
 done
-# copy the json configuration files 
-cp /home/tappaas/TAPPaaS/src/foundation/*.json /home/tappaas/config/
-cp /home/tappaas/TAPPaaS/src/foundation/*/*.json /home/tappaas/config/
+
+# create the configuration.json
+. ./scripts/create-configuration.sh 
+
 # copy the potentially modified configuration.json and vlans.json files from tappaas1 (potentially modified during bootstrap)
 scp root@"$NODE1_FQDN":/root/tappaas/*.json /home/tappaas/config/
-
-# copy the jsons to all nodes
-/home/tappaas/bin/copy-jsons.sh 
-
-
-# run the update script as all update actions is also needed at install time
-. /home/tappaas/TAPPaaS/src/foundation/30-tappaas-cicd/update.sh
 
 # Setup Caddy reverse proxy on the firewall
 echo -e "\nSetting up Caddy reverse proxy..."
 /home/tappaas/bin/setup-caddy.sh || {
     echo "Warning: Caddy setup encountered issues. Please review and complete manually."
 }
+
+# run the update script as all update actions is also needed at install time
+. /home/tappaas/TAPPaaS/src/foundation/30-tappaas-cicd/update.sh
 
 echo -e "\nTAPPaaS-CICD installation completed successfully."

@@ -2,15 +2,26 @@
 #
 # install tappass-cicd foundation in a barebone nixos vm
 
-
-# Find the branch version of TAPPaaS to use
-if [ -z "$BRANCH" ]; then
-  BRANCH="main"
+# Find the repo version of TAPPaaS to use
+msg_info "Determining TAPPaaS repo to use"
+if [ -z "${1:-}" ]; then
+  REPOTOCLONE="https://raw.githubusercontent.com/TAPPaaS/"
+else
+  REPOTOCLONE="$1"
 fi
+msg_ok "Determined TAPPaaS repo to use: ${REPOTOCLONE}"
+# Find the branch version of TAPPaaS to use
+msg_info "Determining TAPPaaS branch to use"
+if [ -z "${1:-}" ]; then
+  BRANCH="main"
+else
+  BRANCH="$2"
+fi
+msg_ok "Determined TAPPaaS branch to use: ${BRANCH}"
 
 # clone the tappaas-cicd repo
 echo -e "\nCloning TAPPaaS repository..."
-git clone   https://github.com/TAPPaaS/TAPPaaS.git
+git clone  $REPOTOCLONE
 echo -e "\nswitching to branch $BRANCH..."
 cd TAPPaaS
 git checkout $BRANCH

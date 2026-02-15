@@ -1,116 +1,62 @@
-File,Location,Direct Dependencies
+Program,Location,TAPPaaS Dependencies,Config Dependencies
 # ==========================================================================================
-# TAPPaaS Foundation Layer - File Dependency Table
-# Generated for src/foundation/
+# TAPPaaS Foundation Layer - Program Dependencies
+# Generated: 2026-02-14
+# Only tracks TAPPaaS programs/scripts - not external tools
 # ==========================================================================================
 
 # ------------------------------------------------------------------------------------------
-# ROOT LEVEL CONFIGURATION FILES
+# Python CLI Tools
 # ------------------------------------------------------------------------------------------
-configuration.json,src/foundation/,Referenced by: setup-caddy.sh; update-tappaas/main.py; copy-jsons.sh; install2.sh
-zones.json,src/foundation/,Referenced by: Create-TAPPaaS-VM.sh; zone-manager; copy-jsons.sh; install2.sh
-configuration-fields.json,src/foundation/,Schema file (documentation only)
-zones-fields.json,src/foundation/,Schema file (documentation only)
-module-fields.json,src/foundation/,Schema file (documentation only)
+opnsense-controller,30-tappaas-cicd/opnsense-controller/,zone-manager; dns-manager; opnsense-firewall (all same package),zones.json
+zone-manager,30-tappaas-cicd/opnsense-controller/,opnsense-controller (same package),zones.json
+dns-manager,30-tappaas-cicd/opnsense-controller/,opnsense-controller (same package),None
+opnsense-firewall,30-tappaas-cicd/opnsense-controller/,opnsense-controller (same package),None
+update-tappaas,30-tappaas-cicd/update-tappaas/,update-node,configuration.json
+update-node,30-tappaas-cicd/update-tappaas/,module update.sh scripts,configuration.json
 
 # ------------------------------------------------------------------------------------------
-# 05-ProxmoxNode - Initial Proxmox node setup
+# Core Shell Scripts (sourced by others)
 # ------------------------------------------------------------------------------------------
-install.sh,src/foundation/05-ProxmoxNode/,External: pveversion; apt; sed; jq; curl; systemctl; Creates: Create-TAPPaaS-VM.sh; configuration.json; zones.json (downloads from GitHub)
-Create-TAPPaaS-VM.sh,src/foundation/05-ProxmoxNode/,Files: <vmname>.json; zones.json; External: jq; qm; pvesm; ssh; openssl; zfs; curl; bzip2
+common-install-routines.sh,30-tappaas-cicd/scripts/,None,module-fields.json; zones.json
+copy-update-json.sh,30-tappaas-cicd/scripts/,None,module-fields.json
+install-vm.sh,30-tappaas-cicd/scripts/,copy-update-json.sh; common-install-routines.sh,None
 
 # ------------------------------------------------------------------------------------------
-# 10-firewall - OPNsense firewall configuration
+# Infrastructure Scripts
 # ------------------------------------------------------------------------------------------
-firewall.json,src/foundation/10-firewall/,Referenced by: update.sh; Create-TAPPaaS-VM.sh
-update.sh,src/foundation/10-firewall/,Scripts: update-json.sh; update-HA.sh; External: ssh; opnsense-update; uname; freebsd-version; Remote: firewall.mgmt.internal
+update-os.sh,30-tappaas-cicd/scripts/,None,None
+update-HA.sh,30-tappaas-cicd/scripts/,None,module JSON files
+create-configuration.sh,30-tappaas-cicd/scripts/,None,None (creates configuration.json)
+setup-caddy.sh,30-tappaas-cicd/scripts/,opnsense-firewall (optional),configuration.json
+update-cron.sh,30-tappaas-cicd/scripts/,update-tappaas,None
+check-disk-threshold.sh,30-tappaas-cicd/scripts/,resize-disk.sh,module JSON files
+resize-disk.sh,30-tappaas-cicd/scripts/,None,module JSON files
+test-config.sh,30-tappaas-cicd/scripts/,None,module-fields.json
 
 # ------------------------------------------------------------------------------------------
-# 20-tappaas-nixos - NixOS VM template
+# Proxmox Node Scripts
 # ------------------------------------------------------------------------------------------
-tappaas-nixos.json,src/foundation/20-tappaas-nixos/,Referenced by: Create-TAPPaaS-VM.sh
-tappaas-nixos.nix,src/foundation/20-tappaas-nixos/,Imports: ./hardware-configuration.nix
-hardware-configuration.nix,src/foundation/20-tappaas-nixos/,Nix modules: modulesPath/profiles/qemu-guest.nix
+Create-TAPPaaS-VM.sh,05-ProxmoxNode/,None,zones.json
+install.sh (05-ProxmoxNode),05-ProxmoxNode/,Create-TAPPaaS-VM.sh (downloads),configuration.json; zones.json
 
 # ------------------------------------------------------------------------------------------
-# 30-tappaas-cicd - CICD mothership VM
+# Module Installation Scripts
 # ------------------------------------------------------------------------------------------
-tappaas-cicd.json,src/foundation/30-tappaas-cicd/,Referenced by: update.sh; Create-TAPPaaS-VM.sh
-tappaas-cicd.nix,src/foundation/30-tappaas-cicd/,Imports: /etc/nixos/hardware-configuration.nix; ./opnsense-controller; Packages: opnsenseController.default
-install1.sh,src/foundation/30-tappaas-cicd/,External: git; nixos-rebuild; ssh-keygen; ssh-copy-id; scp; jq; Sources: install2.sh; update.sh
-install2.sh,src/foundation/30-tappaas-cicd/,Scripts: common-install-routines.sh; copy-jsons.sh; update.sh; setup-caddy.sh; Files: scripts/*.sh; src/foundation/*.json; src/foundation/*/*.json; External: pvesh; jq; scp; ssh
-update.sh,src/foundation/30-tappaas-cicd/,Sources: common-install-routines.sh; Scripts: update-json.sh; zone-manager; update-HA.sh; update-cron.sh; Builds: opnsense-controller; update-tappaas; Files: configuration.json; zones.json; tappaas-cicd.json; AssignSettingsController.php; External: git; nix-build; pvesh; jq; scp; ssh; nixos-rebuild
+install1.sh,30-tappaas-cicd/,None (manual step before reboot),None
+install2.sh,30-tappaas-cicd/,create-configuration.sh; setup-caddy.sh; update.sh,configuration.json; zones.json
+update.sh (30-tappaas-cicd),30-tappaas-cicd/,common-install-routines.sh; zone-manager; update-HA.sh; update-cron.sh,configuration.json; zones.json
+test.sh (30-tappaas-cicd),30-tappaas-cicd/,test-vm-creation/test.sh,None
+
+update.sh (10-firewall),10-firewall/,update-HA.sh,None
+install.sh (35-backup),35-backup/,common-install-routines.sh; install-vm.sh,None
+update.sh (35-backup),35-backup/,None,None
+install.sh (40-Identity),40-Identity/,common-install-routines.sh; install-vm.sh,None
+update.sh (40-Identity),40-Identity/,None,None
 
 # ------------------------------------------------------------------------------------------
-# 30-tappaas-cicd/scripts - Helper scripts
+# Test VM Creation Scripts
 # ------------------------------------------------------------------------------------------
-common-install-routines.sh,src/foundation/30-tappaas-cicd/scripts/,External: jq; hostname; Provides functions: get_config_value; info; warn
-copy-jsons.sh,src/foundation/30-tappaas-cicd/scripts/,Files: /home/tappaas/config/*.json; External: ssh; jq; scp; pvesh
-update-json.sh,src/foundation/30-tappaas-cicd/scripts/,Files: ./<module>.json; /home/tappaas/config/<module>.json; External: diff
-rebuild-nixos.sh,src/foundation/30-tappaas-cicd/scripts/,External: ssh; qm; jq; nixos-rebuild; nmcli; ssh-keygen; ssh-keyscan
-setup-caddy.sh,src/foundation/30-tappaas-cicd/scripts/,Files: /home/tappaas/config/configuration.json; Scripts: opnsense-firewall (optional); External: ssh; jq; python3; pkg; php; configctl
-update-HA.sh,src/foundation/30-tappaas-cicd/scripts/,Files: /home/tappaas/config/<module>.json; External: ssh; ha-manager; pvesr; pvesh; jq
-update-cron.sh,src/foundation/30-tappaas-cicd/scripts/,Scripts: /home/tappaas/bin/update-tappaas; External: crontab
-check-disk-threshold.sh,src/foundation/30-tappaas-cicd/scripts/,Files: /home/tappaas/config/<vmname>.json; Scripts: resize-disk.sh; External: ssh; df; jq
-resize-disk.sh,src/foundation/30-tappaas-cicd/scripts/,Files: /home/tappaas/config/<vmname>.json; External: ssh; qm; jq; findmnt; sfdisk; growpart; resize2fs
-test-config.sh,src/foundation/30-tappaas-cicd/scripts/,Files: JSON configuration files
-
-# ------------------------------------------------------------------------------------------
-# 30-tappaas-cicd/opnsense-controller - OPNsense API controller
-# ------------------------------------------------------------------------------------------
-default.nix,src/foundation/30-tappaas-cicd/opnsense-controller/,Builds: oxl-opnsense-client (GitHub); opnsense-controller; Dependencies: python3Packages.httpx; python3Packages.ansible-core
-pyproject.toml,src/foundation/30-tappaas-cicd/opnsense-controller/src/,Defines scripts: opnsense-controller; opnsense-firewall; zone-manager; dns-manager; Dependencies: oxl-opnsense-client
-__init__.py,src/foundation/30-tappaas-cicd/opnsense-controller/src/opnsense_controller/,Exports: Config; Vlan; VlanManager; DhcpHost; DhcpRange; DhcpManager; FirewallManager; FirewallRule; ZoneManager; Zone
-config.py,src/foundation/30-tappaas-cicd/opnsense-controller/src/opnsense_controller/,External: os; dataclasses; pathlib; Reads: ~/.opnsense-credentials.txt; Env vars: OPNSENSE_*
-main.py,src/foundation/30-tappaas-cicd/opnsense-controller/src/opnsense_controller/,Imports: .config; .dhcp_manager; .firewall_manager; .vlan_manager; External: argparse; os; sys; datetime
-vlan_manager.py,src/foundation/30-tappaas-cicd/opnsense-controller/src/opnsense_controller/,Imports: .config; External: dataclasses; oxl_opnsense_client
-dhcp_manager.py,src/foundation/30-tappaas-cicd/opnsense-controller/src/opnsense_controller/,Imports: .config; External: dataclasses; oxl_opnsense_client
-firewall_manager.py,src/foundation/30-tappaas-cicd/opnsense-controller/src/opnsense_controller/,Imports: .config; External: dataclasses; enum; oxl_opnsense_client
-firewall_cli.py,src/foundation/30-tappaas-cicd/opnsense-controller/src/opnsense_controller/,Imports: .config; .firewall_manager; External: argparse; json; os; sys
-zone_manager.py,src/foundation/30-tappaas-cicd/opnsense-controller/src/opnsense_controller/,Imports: .config; .dhcp_manager; .firewall_manager; .vlan_manager; Files: zones.json; External: argparse; ipaddress; json; os; sys; dataclasses; pathlib
-dns_manager_cli.py,src/foundation/30-tappaas-cicd/opnsense-controller/src/opnsense_controller/,Imports: .config; .dhcp_manager; External: argparse; json; os; sys
-zones.json,src/foundation/30-tappaas-cicd/opnsense-controller/src/test/,Test data for zone-manager
-
-# ------------------------------------------------------------------------------------------
-# 30-tappaas-cicd/update-tappaas - Update scheduler
-# ------------------------------------------------------------------------------------------
-default.nix,src/foundation/30-tappaas-cicd/update-tappaas/,Builds: update-tappaas; update-node; Dependencies: python3
-pyproject.toml,src/foundation/30-tappaas-cicd/update-tappaas/src/,Defines scripts: update-tappaas; update-node
-__init__.py,src/foundation/30-tappaas-cicd/update-tappaas/src/update_tappaas/,Package init
-main.py,src/foundation/30-tappaas-cicd/update-tappaas/src/update_tappaas/,Files: /home/tappaas/config/configuration.json; Scripts: /home/tappaas/bin/update-node; External: argparse; json; subprocess; sys; datetime; pathlib
-update_node.py,src/foundation/30-tappaas-cicd/update-tappaas/src/update_tappaas/,Node update logic
-
-# ------------------------------------------------------------------------------------------
-# 30-tappaas-cicd/opnsense-patch - OPNsense custom controller
-# ------------------------------------------------------------------------------------------
-AssignSettingsController.php,src/foundation/30-tappaas-cicd/opnsense-patch/,Referenced by: update.sh; Destination: /usr/local/opnsense/mvc/app/controllers/OPNsense/Interfaces/Api/
-
-# ------------------------------------------------------------------------------------------
-# 35-backup - Proxmox Backup Server
-# ------------------------------------------------------------------------------------------
-backup.json,src/foundation/35-backup/,Referenced by: install.sh; Create-TAPPaaS-VM.sh
-install.sh,src/foundation/35-backup/,Sources: common-install-routines.sh; External: ssh; jq; apt; scp; pvesh
-update.sh,src/foundation/35-backup/,Update logic for backup module
-configure.sh,src/foundation/35-backup/,Configuration script
-restore.sh,src/foundation/35-backup/,Restore logic
-backup-manage.sh,src/foundation/35-backup/,Backup management script
-
-# ------------------------------------------------------------------------------------------
-# 40-Identity - Identity/secrets management
-# ------------------------------------------------------------------------------------------
-identity.json,src/foundation/40-Identity/,Referenced by: install.sh; Create-TAPPaaS-VM.sh
-identity.nix,src/foundation/40-Identity/,Imports: /etc/nixos/hardware-configuration.nix
-install.sh,src/foundation/40-Identity/,Sources: common-install-routines.sh; Scripts: Create-TAPPaaS-VM.sh; update.sh; External: scp; ssh
-update.sh,src/foundation/40-Identity/,Update logic for identity module
-
-# ------------------------------------------------------------------------------------------
-# Attic - Deprecated/archived files (not actively used)
-# ------------------------------------------------------------------------------------------
-CreatePangolinVM.sh,src/foundation/Attic/50-Pangolin/,Deprecated: Legacy VM creation script
-ethernetPCI.sh,src/foundation/Attic/Attic PCI passtrough/,Deprecated: PCI passthrough configuration
-validate.sh,src/foundation/Attic/Attic PCI passtrough/,Deprecated: PCI validation script
-CreateTAPPaaSNixOS-VM.sh,src/foundation/Attic/,Deprecated: Legacy NixOS VM creation
-TAPPaaS-CICD-bootstrap.sh,src/foundation/Attic/,Deprecated: Legacy CICD bootstrap
-TAPPaaSBootstrap.sh,src/foundation/Attic/,Deprecated: Legacy bootstrap script
-TAPPaaSBootstrapNixOS.sh,src/foundation/Attic/,Deprecated: Legacy NixOS bootstrap
-opnsense-vm.sh,src/foundation/Attic/,Deprecated: Legacy OPNsense VM script
+test.sh (test-vm-creation),30-tappaas-cicd/test-vm-creation/,install.sh; test-vm.sh,None
+install.sh (test-vm-creation),30-tappaas-cicd/test-vm-creation/,install-vm.sh; update-os.sh; update-HA.sh,None
+test-vm.sh,30-tappaas-cicd/test-vm-creation/,common-install-routines.sh,module JSON files

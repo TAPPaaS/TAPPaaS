@@ -45,11 +45,12 @@ After reboot, log into the Proxmox GUI on the web address displayed on the conso
 When accessing the gui you likely need to accept that it is an unsecure connection. and after loging in as root do a page refresh to get rid of the subscription popup
 
 Run the post install script (if you are not using the "main" branch for the install then then change the assignment in the first line):
-```
+```bash
+REPO="https://raw.githubusercontent.com/TAPPaaS/TAPPaaS/"
 BRANCH="main"
-curl -fsSL https://raw.githubusercontent.com/TAPPaaS/TAPPaaS/$BRANCH/src/foundation/05-ProxmoxNode/install.sh >install.sh
+curl -fsSL ${REPO}${BRANCH}/src/foundation/05-ProxmoxNode/install.sh >install.sh
 chmod +x install.sh
-./install.sh $BRANCH
+./install.sh $REPO $BRANCH
 
 ```
 
@@ -97,7 +98,6 @@ If this is a secondary node then copy what you modified on tappaas1. On the new 
 
 ```bash
 cd
-scp tappaas1.mgmt.internal:/root/tappaas/configuration.json tappaas
 scp tappaas1.mgmt.internal:/root/tappaas/zones.json tappaas
 ```
 

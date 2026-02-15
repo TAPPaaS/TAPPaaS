@@ -1,7 +1,7 @@
 {
     "version": "0.5",
-    "node": "tappaas2",
-    "vmid": 904,
+    "node": "tappaas3",
+    "vmid": 912,
     "vmtag": "TAPPaaS,Test",
     "vmname": "test-nixos-vlan-node",
     "cores": 2,

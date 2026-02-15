@@ -12,11 +12,6 @@ FIREWALL_FQDN="firewall.mgmt.internal"
 
 echo "Updating OPNsense firewall..."
 
-if update-json.sh firewall; then
-    echo "firewall.json updated, applying configuration..."
-    # TODO
-fi
-
 # Update HA configuration (creates/updates/removes based on HANode field)
 /home/tappaas/bin/update-HA.sh firewall
 

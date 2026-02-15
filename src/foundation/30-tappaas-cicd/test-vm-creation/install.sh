@@ -1,29 +1,30 @@
 #!/usr/bin/env bash
 #
-# TAPPaaS Identity VM update
+# TAPPaaS Test - VM Installation
 #
-# Update VM and applies module specific updates
+# Creates a VM and applies OS-specific configuration based on imageType.
+# Supports NixOS (clone), Debian/Ubuntu (img), and handles HA if configured.
 #
-# Usage: ./update.sh <vmname>
-# Example: ./update.sh test-nixos
+# Usage: ./install.sh <vmname>
+# Example: ./install.sh test-nixos
 #
 
 set -euo pipefail
 
-. /home/tappaas/bin/common-install-routines.sh
-
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
+# Source install-vm.sh to create the VM and get config values
+# shellcheck source=/dev/null
+. /home/tappaas/bin/install-vm.sh
+
 # Get imageType to determine post-install steps
-VMNAME="$(get_config_value 'vmname' "$1")"
-VMID="$(get_config_value 'vmid')"
-NODE="$(get_config_value 'node' 'tappaas1')"
-ZONE0NAME="$(get_config_value 'zone0' 'mgmt')"
+IMAGE_TYPE="$(get_config_value 'imageType' 'clone')"
 HANODE="$(get_config_value 'HANode' 'NONE')"
 
 echo ""
 echo "=== Post-Install Configuration ==="
 echo "VM: ${VMNAME} (VMID: ${VMID})"
+echo "Image Type: ${IMAGE_TYPE}"
 
 # Run OS-specific post-install using update-os.sh
 # This script auto-detects NixOS vs Debian and applies appropriate updates

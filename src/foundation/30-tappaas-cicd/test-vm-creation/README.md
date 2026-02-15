@@ -96,10 +96,17 @@ Logs saved to: /home/tappaas/logs/
 
 ### Install a single VM
 
+The unified `install.sh` script handles both NixOS and Debian/Ubuntu VMs. It automatically:
+1. Creates the VM using `install-vm.sh`
+2. Detects the OS type (NixOS or Debian/Ubuntu)
+3. Applies OS-specific configuration via `update-os.sh`
+4. Configures HA if `HANode` is specified in the JSON config
+
 ```bash
-./install-debian.sh test-debian           # Debian image VM
-./install-nixos.sh test-nixos             # NixOS clone VM (with HA if HANode specified)
-./install-nixos.sh test-nixos-vlan-node   # NixOS clone VM without HA
+./install.sh test-debian           # Debian image VM
+./install.sh test-nixos            # NixOS clone VM (with HA if HANode specified)
+./install.sh test-nixos-vlan-node  # NixOS clone VM without HA
+./install.sh test-ubuntu-vlan      # Ubuntu image VM
 ```
 
 ### Test a single VM
@@ -193,10 +200,9 @@ ssh root@tappaas3.mgmt.internal "qm stop 902; qm destroy 902 --purge"
 ## Directory Structure
 
 ```text
-vm-creation/
+test-vm-creation/
 ├── README.md                     # This file
-├── install-debian.sh             # Install script for Debian/Ubuntu image VMs
-├── install-nixos.sh              # Install script for NixOS clone VMs (handles HA if HANode specified)
+├── install.sh                    # Unified install script for all VM types
 ├── test.sh                       # Run full test suite (all 5 VMs)
 ├── test-vm.sh                    # Test a single VM (basic + HA tests if applicable)
 ├── test-debian.json              # Debian on mgmt (tappaas1) - VMID 901
@@ -210,10 +216,16 @@ vm-creation/
 
 ## Notes
 
+- The unified `install.sh` script handles all VM types by auto-detecting NixOS vs Debian/Ubuntu
 - Debian/Ubuntu VMs use cloud-init for initial configuration
-- NixOS VMs are cloned from template 8080 (tappaas-nixos) and configured via nixos-rebuild
-- The install-nixos.sh script automatically handles DHCP hostname registration
-- The install-nixos.sh script automatically configures HA when HANode is specified in the JSON config
+- NixOS VMs are cloned from template 9000 (tappaas-nixos) and configured via nixos-rebuild
+- The `update-os.sh` script (called by install.sh) handles:
+  - OS detection (NixOS vs Debian/Ubuntu)
+  - IP address detection (via guest agent or DHCP leases)
+  - NixOS: runs nixos-rebuild with `./<vmname>.nix` and reboots
+  - Debian/Ubuntu: runs apt update/upgrade and installs qemu-guest-agent
+  - DHCP hostname registration fix for both OS types
+- HA is automatically configured when `HANode` is specified in the JSON config
 - Tests on tappaas2/tappaas3 require the tappaas-nixos template to be available on those nodes
 - The test-nixos test case demonstrates HA configuration with:
   - Proxmox HA manager resources for automatic failover

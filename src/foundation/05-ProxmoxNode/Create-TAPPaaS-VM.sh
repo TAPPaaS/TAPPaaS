@@ -178,6 +178,20 @@ function resolve_trunks() {
 # generate some MAC addresses
 info "${BOLD}Creating TAPPaaS VM in proxmox using the following settings:"
 NODE="$(get_config_value 'node' 'tappaas1')"
+
+# Check if the specified node exists in the cluster
+CLUSTER_NODES=$(pvesh get /cluster/resources --type node --output-format json 2>/dev/null | jq -r '.[].node' 2>/dev/null || echo "")
+if [ -n "$CLUSTER_NODES" ]; then
+  if ! echo "$CLUSTER_NODES" | grep -qx "$NODE"; then
+    warn "Node '${NODE}' does not exist in the cluster. Available nodes: $(echo "$CLUSTER_NODES" | tr '\n' ' ')"
+    warn "Falling back to default node 'tappaas1'"
+    NODE="tappaas1"
+  fi
+else
+  # If we can't query cluster nodes (single node or API issue), just continue with specified node
+  info "Could not query cluster nodes, proceeding with node '${NODE}'"
+fi
+
 VMID="$(get_config_value 'vmid')"
 
 # Check if VMID already exists - exit without destroying the existing VM

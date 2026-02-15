@@ -3,15 +3,15 @@
 # It assumes that you are in the install directory of the module being installed.
 #
 
-# Color definitions
-YW=$(echo "\033[33m")    # Yellow
-BL=$(echo "\033[36m")    # Cyan
-RD=$(echo "\033[01;31m") # Red
-BGN=$(echo "\033[4;92m") # Bright Green with underline
-GN=$(echo "\033[1;92m")  # Green with bold
-DGN=$(echo "\033[32m")   # Green
-CL=$(echo "\033[m")      # Clear
-BOLD=$(echo "\033[1m")   # Bold
+# Color definitions (only set if not already defined, to avoid conflicts when sourced after copy-update-json.sh)
+[[ -z "${YW:-}" ]] && YW=$'\033[33m'      # Yellow
+[[ -z "${BL:-}" ]] && BL=$'\033[36m'      # Cyan
+[[ -z "${RD:-}" ]] && RD=$'\033[01;31m'   # Red
+[[ -z "${BGN:-}" ]] && BGN=$'\033[4;92m'  # Bright Green with underline
+[[ -z "${GN:-}" ]] && GN=$'\033[1;92m'    # Green with bold
+[[ -z "${DGN:-}" ]] && DGN=$'\033[32m'    # Green
+[[ -z "${CL:-}" ]] && CL=$'\033[m'        # Clear
+[[ -z "${BOLD:-}" ]] && BOLD=$'\033[1m'   # Bold
 
 function info() {
   local msg="$1"
@@ -56,7 +56,7 @@ JSON=$(cat "$JSON_CONFIG")
 
 function get_config_value() {
   local key="$1"
-  local default="$2"
+  local default="${2:-}"
   if ! echo "$JSON" | jq -e --arg K "$key" 'has($K)' >/dev/null ; then
     # JSON lacks the key
     if [ -z "$default" ]; then
@@ -79,7 +79,7 @@ function get_config_value() {
 # Outputs: Validation messages to stderr
 function check_json() {
   local json_file="$1"
-  local schema_file="${2:-/home/tappaas/config/module-fields.json}"
+  local schema_file="${2:-/home/tappaas/TAPPaaS/src/foundation/module-fields.json}"
   local errors=0
   local warnings=0
 

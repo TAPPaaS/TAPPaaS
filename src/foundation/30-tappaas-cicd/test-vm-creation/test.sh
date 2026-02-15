@@ -42,11 +42,11 @@ done
 # - test-nixos-vlan-node: NixOS on srv VLAN on different node (tappaas2)
 # - test-ubuntu-vlan: Ubuntu on srv VLAN (tappaas2) - unchanged per request
 declare -a ALL_TESTS=(
-    "test-debian:debian:install-debian.sh:test-vm.sh"
-    "test-debian-vlan-node:debian:install-debian.sh:test-vm.sh"
-    "test-nixos:nixos-ha:install-nixos.sh:test-vm.sh"
-    "test-nixos-vlan-node:nixos:install-nixos.sh:test-vm.sh"
-    "test-ubuntu-vlan:ubuntu:install-debian.sh:test-vm.sh"
+    "test-debian:debian:install.sh:test-vm.sh"
+    "test-debian-vlan-node:debian:install.sh:test-vm.sh"
+    "test-nixos:nixos-ha:install.sh:test-vm.sh"
+    "test-nixos-vlan-node:nixos:install.sh:test-vm.sh"
+    "test-ubuntu-vlan:ubuntu:install.sh:test-vm.sh"
 )
 
 # Filter tests if single test specified

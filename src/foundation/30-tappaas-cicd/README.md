@@ -13,8 +13,9 @@ Setup runs in these macro steps:
 Install cloning config: on the proxmox command prompt, then run the command to create the tappaas-cicd clone
 
 ```bash
+REPO="https://raw.githubusercontent.com/TAPPaaS/TAPPaaS/"
 BRANCH="main"
-curl -fsSL  https://raw.githubusercontent.com/TAPPaaS/TAPPaaS/$BRANCH/src/foundation/30-tappaas-cicd/tappaas-cicd.json >~/tappaas/tappaas-cicd.json
+curl -fsSL  ${REPO}${BRANCH}/src/foundation/30-tappaas-cicd/tappaas-cicd.json >~/tappaas/tappaas-cicd.json
 ~/tappaas/Create-TAPPaaS-VM.sh tappaas-cicd
 ```
 
@@ -28,8 +29,10 @@ ssh tappaas@10.0.0.xxx
 
 when logged in run the install1.sh script
 ```bash
+REPO="https://raw.githubusercontent.com/TAPPaaS/TAPPaaS/"
+REPOTOCLONE="https://github.com/TAPPaaS/TAPPaaS.git"
 BRANCH="main"
-curl -fsSL  https://raw.githubusercontent.com/TAPPaaS/TAPPaaS/$BRANCH/src/foundation/30-tappaas-cicd/install1.sh | bash
+curl -fsSL  ${REPO}${BRANCH}/src/foundation/30-tappaas-cicd/install1.sh $REPOTOCLONE $BRANCH | bash
 ```
 
 Reboot the tappaas-cicd VM and check that you can login using domain name
@@ -96,7 +99,13 @@ on the tappaas-cicd console (via ssh, logged in as tappaas user) do:
 
 ```bash
 cd
-TAPPaaS/src/foundation/30-tappaas-cicd/install2.sh tappaas-cicd
+cd TAPPaaS/src/foundation/30-tappaas-cicd
+UPSTREAMGIT="github.com/TAPPaaS/TAPPaaS"
+BRANCH="main"
+DOMAIN="CHANGE-mytappaas.dev"
+EMAIL="CHANGE-tappaas@mytappaas.dev",
+SCHEDULE="weekly" 
+./install2.sh $UPSTERAM $BRANCH $DOMAIN $EMAIL $SCHEDULE
 ```
 
 You might be asked for password for root at proxmox node tappaas1

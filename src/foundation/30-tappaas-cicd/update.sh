@@ -18,24 +18,30 @@ echo -e "\nStarting TAPPaaS-CICD module update for VM: $VMNAME on node: $NODE"
 cd
 cd TAPPaaS || { echo "TAPPaaS directory not found!"; exit 1; }
 echo -e "\nPulling latest changes from TAPPaaS repository..."
-git pull origin
+# git pull origin
 # get to the right directory
 cd src/foundation/30-tappaas-cicd || { echo "TAPPaaS-CICD directory not found!"; exit 1; }
 
-# in case there are new or updated scripts 
+# in case there are new or updated scripts - use symlinks instead of copies
 for script in scripts/*.sh; do
   if [ -f "$script" ]; then
-    cp "$script" /home/tappaas/bin/ 2>/dev/null || true
+    script_name=$(basename "$script")
+    target="/home/tappaas/bin/$script_name"
+    # Remove existing file or symlink if it exists
+    rm -f "$target" 2>/dev/null || true
+    # Create symlink to the script in the repo
+    ln -s "$(realpath "$script")" "$target"
   fi
 done
 chmod +x /home/tappaas/bin/*.sh
 
 # Iterate through all TAPPaaS nodes and copy Create-TAPPaaS-VM.sh to /root/tappaas
 # Get the actual nodes configured in the Proxmox system
-echo -e "\nCopying Create-TAPPaaS-VM.sh to /root/tappaas on all Proxmox nodes..."
+echo -e "\nCopying Zones.json and Create-TAPPaaS-VM.sh to /root/tappaas on all Proxmox nodes..."
 while read -r node; do
-    echo -e "\nCopying Create-TAPPaaS-VM.sh to /root/tappaas on node: $node"
+    echo -e "\nCopying Zones.json and Create-TAPPaaS-VM.sh to /root/tappaas on node: $node"
     NODE_FQDN="$node.$MGMTVLAN.internal"
+    scp /home/tappaas/config/zones.json root@"$NODE_FQDN":/root/tappaas/
     scp /home/tappaas/TAPPaaS/src/foundation/05-ProxmoxNode/Create-TAPPaaS-VM.sh root@"$NODE_FQDN":/root/tappaas/
 done < <(ssh -o StrictHostKeyChecking=no root@"$NODE1_FQDN" "pvesh get /cluster/resources --type node --output-format json | jq --raw-output \".[].node\"")
 echo -e "\nCreate-TAPPaaS-VM.sh copied to all Proxmox nodes. (each node in your cluster should have been listed above)"
@@ -78,7 +84,6 @@ else
   echo "Warning: AssignSettingsController.php not copied because firewall is unreachable."
 fi
 
-
 # Build the update-tappaas project
 echo -en "\nBuilding the update-tappaas project"
 cd update-tappaas
@@ -92,16 +97,6 @@ echo -e "\nupdate-tappaas and update-node binaries installed to /home/tappaas/bi
 echo -e "\nupdate-tappaas cron job updated."
 cd ..
 
-# Update the configuration.json, zones.json and tappaas-cicd.json if there are changes
-echo -e "\nChecking for updates to configuration.json..."
-cd ..
-if update-json.sh configuration ; then
-    echo "configuration.json updated"
-fi
-echo -e "\nChecking for updates to zones.json..."
-if update-json.sh zones ; then
-    echo "zones.json updated"
-fi
 echo "Applying zone configuration..."
 # only apply zones if the firewall node is reachable
 if [ "${FIREWALL_EXISTS:-0}" -eq 1 ]; then
@@ -111,11 +106,6 @@ else
   echo "Warning: Zones not applied because firewall $FIREWALL_FQDN is unreachable."
 fi
 echo -e "\nChecking for updates to tappaas.json..."
-cd 30-tappaas-cicd
-if update-json.sh tappaas-cicd; then
-    echo "tappaas-cicd.json updated, applying configuration..."
-    # TODO
-fi
 
 # Update HA configuration (creates/updates/removes based on HANode field)
 /home/tappaas/bin/update-HA.sh tappaas-cicd

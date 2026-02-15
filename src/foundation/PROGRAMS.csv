@@ -1,0 +1,56 @@
+Program,Install Location,Source Path,Type
+# ==========================================================================================
+# TAPPaaS Foundation Layer - Executable Programs and Scripts
+# Generated: 2026-02-14
+# ==========================================================================================
+
+# ------------------------------------------------------------------------------------------
+# CLI Tools (Built from Python via Nix)
+# ------------------------------------------------------------------------------------------
+opnsense-controller,/home/tappaas/bin/,30-tappaas-cicd/opnsense-controller/src/opnsense_controller/main.py,Python CLI
+zone-manager,/home/tappaas/bin/,30-tappaas-cicd/opnsense-controller/src/opnsense_controller/zone_manager.py,Python CLI
+dns-manager,/home/tappaas/bin/,30-tappaas-cicd/opnsense-controller/src/opnsense_controller/dns_manager_cli.py,Python CLI
+opnsense-firewall,/home/tappaas/bin/,30-tappaas-cicd/opnsense-controller/src/opnsense_controller/firewall_cli.py,Python CLI
+update-tappaas,/home/tappaas/bin/,30-tappaas-cicd/update-tappaas/src/update_tappaas/main.py,Python CLI
+update-node,/home/tappaas/bin/,30-tappaas-cicd/update-tappaas/src/update_tappaas/update_node.py,Python CLI
+
+# ------------------------------------------------------------------------------------------
+# Shell Scripts in /home/tappaas/bin/ (symlinks to scripts/)
+# ------------------------------------------------------------------------------------------
+common-install-routines.sh,/home/tappaas/bin/,30-tappaas-cicd/scripts/common-install-routines.sh,Shell (sourced)
+copy-update-json.sh,/home/tappaas/bin/,30-tappaas-cicd/scripts/copy-update-json.sh,Shell (sourced)
+install-vm.sh,/home/tappaas/bin/,30-tappaas-cicd/scripts/install-vm.sh,Shell (sourced)
+update-os.sh,/home/tappaas/bin/,30-tappaas-cicd/scripts/update-os.sh,Shell
+update-HA.sh,/home/tappaas/bin/,30-tappaas-cicd/scripts/update-HA.sh,Shell
+create-configuration.sh,/home/tappaas/bin/,30-tappaas-cicd/scripts/create-configuration.sh,Shell
+setup-caddy.sh,/home/tappaas/bin/,30-tappaas-cicd/scripts/setup-caddy.sh,Shell
+update-cron.sh,/home/tappaas/bin/,30-tappaas-cicd/scripts/update-cron.sh,Shell
+check-disk-threshold.sh,/home/tappaas/bin/,30-tappaas-cicd/scripts/check-disk-threshold.sh,Shell
+resize-disk.sh,/home/tappaas/bin/,30-tappaas-cicd/scripts/resize-disk.sh,Shell
+test-config.sh,/home/tappaas/bin/,30-tappaas-cicd/scripts/test-config.sh,Shell
+
+# ------------------------------------------------------------------------------------------
+# Scripts on Proxmox Nodes (/root/tappaas/)
+# ------------------------------------------------------------------------------------------
+Create-TAPPaaS-VM.sh,/root/tappaas/ (Proxmox nodes),05-ProxmoxNode/Create-TAPPaaS-VM.sh,Shell
+
+# ------------------------------------------------------------------------------------------
+# Foundation Module Scripts (run from TAPPaaS repository)
+# ------------------------------------------------------------------------------------------
+install.sh (05-ProxmoxNode),Manual (curl from GitHub),05-ProxmoxNode/install.sh,Shell
+update.sh (10-firewall),Called by update-node,10-firewall/update.sh,Shell
+install1.sh (30-tappaas-cicd),Manual (on tappaas-cicd),30-tappaas-cicd/install1.sh,Shell
+install2.sh (30-tappaas-cicd),Called by install1.sh,30-tappaas-cicd/install2.sh,Shell
+update.sh (30-tappaas-cicd),Called by update-node,30-tappaas-cicd/update.sh,Shell
+test.sh (30-tappaas-cicd),Manual/CI,30-tappaas-cicd/test.sh,Shell
+install.sh (35-backup),Manual,35-backup/install.sh,Shell
+update.sh (35-backup),Called by update-node,35-backup/update.sh,Shell
+install.sh (40-Identity),Manual,40-Identity/install.sh,Shell
+update.sh (40-Identity),Called by update-node,40-Identity/update.sh,Shell
+
+# ------------------------------------------------------------------------------------------
+# Test VM Creation Scripts
+# ------------------------------------------------------------------------------------------
+test.sh (test-vm-creation),Called by 30-tappaas-cicd/test.sh,30-tappaas-cicd/test-vm-creation/test.sh,Shell
+install.sh (test-vm-creation),Called by test.sh,30-tappaas-cicd/test-vm-creation/install.sh,Shell
+test-vm.sh,Called by test.sh,30-tappaas-cicd/test-vm-creation/test-vm.sh,Shell

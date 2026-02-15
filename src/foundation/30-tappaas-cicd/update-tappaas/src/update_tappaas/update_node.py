@@ -108,6 +108,12 @@ def run_module_update(module_name: str) -> bool:
         print(f"  Warning: No update.sh found for module '{module_name}' in {module_dir}")
         return False
 
+    # Ensure update.sh is executable
+    try:
+        subprocess.run(["chmod", "+x", str(update_script)], check=True)
+    except subprocess.SubprocessError:
+        pass  # Non-fatal, bash will still run it
+
     print(f"  Running update.sh for {module_name}...")
     try:
         result = subprocess.run(
@@ -233,6 +239,9 @@ def main():
 
     # Filter out tappaas-cicd and firewall as they're already updated
     node_modules = [m for m in node_modules if m not in ("tappaas-cicd", "firewall")]
+
+    # Sort modules alphabetically for consistent update order
+    node_modules.sort()
 
     if node_modules:
         print(f"Found {len(node_modules)} module(s) on {node}: {', '.join(node_modules)}")

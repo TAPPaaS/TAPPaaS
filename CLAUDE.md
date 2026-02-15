@@ -50,6 +50,10 @@ Defined in `zones.json` with VLAN tags.
 
 # Coding Rules
 
+## File Operations
+
+It is always OK to create, update, and delete files within the TAPPaaS project directory. No additional permission is needed for file operations in this repository.
+
 ## General Workflow
 
 1. **Plan before coding** - Understand requirements and explain approach before writing code
