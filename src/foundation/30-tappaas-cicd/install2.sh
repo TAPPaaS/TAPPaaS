@@ -59,13 +59,6 @@ fi
 # copy the potentially modified configuration.json and vlans.json files from tappaas1 (potentially modified during bootstrap)
 scp root@"$NODE1_FQDN":/root/tappaas/*.json /home/tappaas/config/
 
-# Setup Caddy reverse proxy on the firewall
-echo -e "\nSetting up Caddy reverse proxy..."
-chmod +x /home/tappaas/TAPPaaS/src/foundation/30-tappaas-cicd/scripts/setup-caddy.sh
-/home/tappaas/TAPPaaS/src/foundation/30-tappaas-cicd/scripts/setup-caddy.sh || {
-    echo "Warning: Caddy setup encountered issues. Please review and complete manually."
-}
-
 # run the update script as all update actions is also needed at install time
 if [ -f /home/tappaas/TAPPaaS/src/foundation/30-tappaas-cicd/update.sh ]; then
   . /home/tappaas/TAPPaaS/src/foundation/30-tappaas-cicd/update.sh
@@ -73,5 +66,13 @@ else
   echo "Error: /home/tappaas/TAPPaaS/src/foundation/30-tappaas-cicd/update.sh not found"
   exit 1
 fi
+
+# Setup Caddy reverse proxy on the firewall
+# (needds to be after update.sh as it relies on opnsense-controller to be instlalled
+echo -e "\nSetting up Caddy reverse proxy..."
+chmod +x /home/tappaas/TAPPaaS/src/foundation/30-tappaas-cicd/scripts/setup-caddy.sh
+/home/tappaas/TAPPaaS/src/foundation/30-tappaas-cicd/scripts/setup-caddy.sh || {
+    echo "Warning: Caddy setup encountered issues. Please review and complete manually."
+}
 
 echo -e "\nTAPPaaS-CICD installation completed successfully."
