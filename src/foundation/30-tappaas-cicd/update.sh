@@ -4,7 +4,7 @@
 
 set -e
 
-. /home/tappaas/bin/common-install-routines.sh
+. /home/tappaas/TAPPaaS/src/foundation/30-tappaas-cicd/scripts/common-install-routines.sh
 
 VMNAME="$(get_config_value 'vmname' "$1")"
 NODE="$(get_config_value 'node' 'tappaas1')"
