@@ -135,14 +135,14 @@ PRIMARY_NODE="tappaas1.${MGMT}.internal"
 # Get list of cluster nodes via pvecm
 CLUSTER_NODES=""
 if ssh -o ConnectTimeout=5 -o BatchMode=yes "root@${PRIMARY_NODE}" "pvecm nodes" >/dev/null 2>&1; then
-  # Parse pvecm nodes output - extract node names
-  CLUSTER_NODES=$(ssh "root@${PRIMARY_NODE}" "pvecm nodes 2>/dev/null | tail -n +2 | awk '{print \$3}'" 2>/dev/null || true)
+  # Parse pvecm nodes output - extract node names, skip header and empty lines
+  CLUSTER_NODES=$(ssh "root@${PRIMARY_NODE}" "pvecm nodes 2>/dev/null | tail -n +2 | awk 'NF>=3 {print \$3}' | grep -v '^Name$' | grep -v '^-*$'" 2>/dev/null || true)
 fi
 
-# If pvecm failed, try pvesh
+# If pvecm failed, try pvesh with JSON format (more reliable)
 if [ -z "$CLUSTER_NODES" ]; then
   info "  Trying pvesh to list nodes..."
-  CLUSTER_NODES=$(ssh "root@${PRIMARY_NODE}" "pvesh get /nodes --output-format=json 2>/dev/null | jq -r '.[].node'" 2>/dev/null || true)
+  CLUSTER_NODES=$(ssh "root@${PRIMARY_NODE}" "pvesh get /nodes --output-format=json 2>/dev/null | jq -r '.[].node' | grep -v '^null$'" 2>/dev/null || true)
 fi
 
 # If still empty, fall back to just tappaas1
