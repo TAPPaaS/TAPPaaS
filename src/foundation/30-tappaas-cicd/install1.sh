@@ -2,17 +2,30 @@
 #
 # install tappass-cicd foundation in a barebone nixos vm
 
+# Strict mode: exit on error, undefined vars, pipe failures
+set -euo pipefail
+
+# Helper functions for output
+msg_info() {
+  echo "INFO: $*"
+}
+
+msg_ok() {
+  echo "OK: $*"
+}
+
 # Find the repo version of TAPPaaS to use
 msg_info "Determining TAPPaaS repo to use"
 if [ -z "${1:-}" ]; then
-  REPOTOCLONE="https://raw.githubusercontent.com/TAPPaaS/"
+  REPOTOCLONE="https://github.com/TAPPaaS/TAPPaaS.git"
 else
   REPOTOCLONE="$1"
 fi
 msg_ok "Determined TAPPaaS repo to use: ${REPOTOCLONE}"
+
 # Find the branch version of TAPPaaS to use
 msg_info "Determining TAPPaaS branch to use"
-if [ -z "${1:-}" ]; then
+if [ -z "${2:-}" ]; then
   BRANCH="main"
 else
   BRANCH="$2"
@@ -20,15 +33,15 @@ fi
 msg_ok "Determined TAPPaaS branch to use: ${BRANCH}"
 
 # clone the tappaas-cicd repo
-echo -e "\nCloning TAPPaaS repository..."
-git clone  $REPOTOCLONE
+echo -e "\nCloning TAPPaaS repository $REPOTOCLONE ..."
+git clone "$REPOTOCLONE"
 echo -e "\nswitching to branch $BRANCH..."
-cd TAPPaaS
-git checkout $BRANCH
+cd TAPPaaS || exit 1
+git checkout "$BRANCH"
 
 # go to the tappaas-cicd folder
 echo -e "\nChanging to TAPPaaS-CICD directory and rebuilding the NixOS configuration..."
-cd src/foundation/30-tappaas-cicd
+cd src/foundation/30-tappaas-cicd || exit 1
 
 # rebuild the nixos configuration
 sudo nixos-rebuild switch -I nixos-config=./tappaas-cicd.nix

@@ -32,7 +32,8 @@ when logged in run the install1.sh script
 REPO="https://raw.githubusercontent.com/TAPPaaS/TAPPaaS/"
 REPOTOCLONE="https://github.com/TAPPaaS/TAPPaaS.git"
 BRANCH="main"
-curl -fsSL  ${REPO}${BRANCH}/src/foundation/30-tappaas-cicd/install1.sh $REPOTOCLONE $BRANCH | bash
+curl -fsSL "${REPO}${BRANCH}/src/foundation/30-tappaas-cicd/install1.sh" -o /tmp/install1.sh
+bash /tmp/install1.sh "$REPOTOCLONE" "$BRANCH"
 ```
 
 Reboot the tappaas-cicd VM and check that you can login using domain name

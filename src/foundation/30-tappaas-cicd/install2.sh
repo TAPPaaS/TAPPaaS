@@ -2,17 +2,20 @@
 #
 # install tappass-cicd foundation in a barebone nixos vm
 
+# Strict mode: exit on error, undefined vars, pipe failures
+set -euo pipefail
+
 # check that hostname is tappaas-cicd
 if [ "$(hostname)" != "tappaas-cicd" ]; then
   echo "This script must be run on the TAPPaaS-CICD host (hostname tappaas-cicd)."
   exit 1
-fi      
+fi
 
 #
 # creatae a fully qualified node hostname for tappaas1
 MGMTVLAN="mgmt"
 NODE1_FQDN="tappaas1.$MGMTVLAN.internal"
-FIREWALL_FQDN="firewall.$MGMTVLAN.internal"
+export FIREWALL_FQDN="firewall.$MGMTVLAN.internal"  # Used by sourced scripts
 
 # copy the public keys to the root account of every proxmox host
 while read -r node; do
@@ -46,7 +49,12 @@ for rcfile in /home/tappaas/.profile /home/tappaas/.bashrc; do
 done
 
 # create the configuration.json
-. ./scripts/create-configuration.sh 
+if [ -f ./scripts/create-configuration.sh ]; then
+  . ./scripts/create-configuration.sh
+else
+  echo "Error: ./scripts/create-configuration.sh not found"
+  exit 1
+fi 
 
 # copy the potentially modified configuration.json and vlans.json files from tappaas1 (potentially modified during bootstrap)
 scp root@"$NODE1_FQDN":/root/tappaas/*.json /home/tappaas/config/
@@ -58,6 +66,11 @@ echo -e "\nSetting up Caddy reverse proxy..."
 }
 
 # run the update script as all update actions is also needed at install time
-. /home/tappaas/TAPPaaS/src/foundation/30-tappaas-cicd/update.sh
+if [ -f /home/tappaas/TAPPaaS/src/foundation/30-tappaas-cicd/update.sh ]; then
+  . /home/tappaas/TAPPaaS/src/foundation/30-tappaas-cicd/update.sh
+else
+  echo "Error: /home/tappaas/TAPPaaS/src/foundation/30-tappaas-cicd/update.sh not found"
+  exit 1
+fi
 
 echo -e "\nTAPPaaS-CICD installation completed successfully."
