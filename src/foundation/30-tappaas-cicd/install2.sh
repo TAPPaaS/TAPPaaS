@@ -61,7 +61,7 @@ scp root@"$NODE1_FQDN":/root/tappaas/*.json /home/tappaas/config/
 
 # Setup Caddy reverse proxy on the firewall
 echo -e "\nSetting up Caddy reverse proxy..."
-chmod -x /home/tappaas/TAPPaaS/src/foundation/30-tappaas-cicd/scripts/setup-caddy.sh
+chmod +x /home/tappaas/TAPPaaS/src/foundation/30-tappaas-cicd/scripts/setup-caddy.sh
 /home/tappaas/TAPPaaS/src/foundation/30-tappaas-cicd/scripts/setup-caddy.sh || {
     echo "Warning: Caddy setup encountered issues. Please review and complete manually."
 }
