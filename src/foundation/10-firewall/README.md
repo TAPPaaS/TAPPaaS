@@ -81,19 +81,22 @@ curl -fsSL  ${REPO}${BRANCH}/src/foundation/10-firewall/firewall.json > /root/ta
 ~/tappaas/Create-TAPPaaS-VM.sh firewall
 ```
 
-boot up the VM and configure the opnsense
-
-after boot you login as root with password opnsense
+once the script finish the 110 Firewall VM on tappaas1 will start booting
+in the console of the VM you can login after boot as root with password opnsense
 
 change the root password; option 3, followed by answer "y"
 
 change lan ip; option 2:
 
 - followed by 1 for Lan, and N for not using DHCP
-- use ip 10.0.0.1, and  range: 24
+- use ip 10.0.0.1,
+- range: 24
+- Press enter for LAN
 - no IPv6 config (TODO, enable IPv6)
 - enable DHCP, with a range of 10.0.0.100 - 10.0.0.254
 - default "N" answers to the rest
+
+- now reboot option 6
 
 ### Test
 
@@ -109,7 +112,9 @@ connect a pc to the LAN port of the proxmox box (can be via a switch)
 
 From: [OPNsense DHCP with DNS](https://docs.opnsense.org/manual/dnsmasq.html#dhcpv4-with-dns-registration)
 
-Log into OPNsense on 10.0.0.10
+Log into OPNsense on 10.0.0.10 (from the pc connected to the lan port)
+
+Abort the configuration wizard
 
 - Enable services -> Unbound DNS -> General and ensure it listen to port 53
 - Enable services -> dnsmask DNS -> General
@@ -148,14 +153,14 @@ Check that you can lookup you your tappaas1 and firewall hosts using .mgmt.inter
 
 First we switch tappaas1 node to be working **only** on the Lan port:
 
-- in the Proxmox console edit the network bridge "Wan": remove the IP IP assignment.
+- in the Proxmox console for tappaas1 edit the network bridge "Wan": remove the IP assignment.
   - Note that you should connect to tappaas1 proxmox node via 10.0.0.10:8006
   - first remove the ip and gateway assignment by editing the "wan" bridge under network for tappaas1
   - then add 10.0.01 as gateway for the "lan" bridge
   - press apply
 - in the console fo the tappaas1 node (via the proxmox gui): edit the following files:
-  - /etc/hosts: ensure the host IP is the new 10.0.0.10
-  - /etc/resolv.conf: ensure the resolver is 10.0.0.1
+  - /etc/hosts: edit the host IP is the new 10.0.0.10
+  - /etc/resolv.conf: update the resolver to 10.0.0.1
   - /etc/pve/corosync.conf: the old IP number to be replaced with 10.0.0.10
 
 You should now have a setup looking like:
@@ -201,7 +206,7 @@ In the OPNsense gui: got to System->Settings->Administration
   - Listen interface is LAN
 - click SAVE
 
-## Reboot and Test
+## Test
 
 ## TODO
 
