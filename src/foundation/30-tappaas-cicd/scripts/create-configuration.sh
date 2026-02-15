@@ -44,11 +44,6 @@ die() {
   exit 1
 }
 
-# Check that we're running on tappaas-cicd
-if [ "$(hostname)" != "tappaas-cicd" ]; then
-  die "This script must be run on the TAPPaaS-CICD host (hostname tappaas-cicd)."
-fi
-
 # Check for required commands
 command -v jq >/dev/null 2>&1 || die "jq is required but not installed."
 command -v ssh >/dev/null 2>&1 || die "ssh is required but not installed."
