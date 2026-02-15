@@ -8,7 +8,7 @@ the basic macro steps:
 2. install a basic OPNSense in a VM
 3. swap cables and default gateway in proxmox after basic testing
 4. swap firewall if relevant
-5. set up ssh and test
+5. test
 
 ## Prerequisite
 
@@ -195,20 +195,11 @@ There are 3 scenarios for this step:
   - plug in OPNsense wan port instead of legacy firewall
   - see notes above on Wifi and IPv6
 
-## 5. setup ssh and Test
-
-In the OPNsense gui: got to System->Settings->Administration
-
-- under secure shell do:
-  - enable secure shell
-  - permit root user login
-  - (Do NOT allow password login)
-  - Listen interface is LAN
-- click SAVE
-
-## Test
+## 5. Test
 
 ## TODO
+
+The following are just notes, should not be followed for setup
 
 ### IPv6 setup
 
