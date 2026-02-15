@@ -45,9 +45,9 @@ In the console of the VM do the following (and sorry, nixos do not support cut a
 ```bash
 BRANCH="main"
 REPO="https://raw.githubusercontent.com/TAPPaaS/TAPPaaS/"
-sudo curl -fsSL  ${REPO}${BRANCH}/src/foundation/20-tappaas-nixos/tappaas-nixos.nix  >/etc/nixos/configuration.nix
-sudo nixos-rebuild switch
-sudo reboot
+curl -fsSL  ${REPO}${BRANCH}/src/foundation/20-tappaas-nixos/tappaas-nixos.nix  >/etc/nixos/configuration.nix
+nixos-rebuild switch
+reboot
 ```
 
 ## Clean the newly created NIXOS VM before turning it into a template
