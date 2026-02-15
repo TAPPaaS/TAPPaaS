@@ -91,13 +91,6 @@ if ! pveversion | grep -Eq "pve-manager/9\.[0-4](\.[0-9]+)*"; then
   exit
 fi
 
-msg_info "Checking for \"tank\"s in zfspool"
-if pvesm status -content images | grep zfspool | grep -q tank; then
-  msg_ok "did  find a \"tank\" in zfspool. this is fine if it is the first node to be configured, But if it is a secondary node then tanks must be configured AFTER joining the cluster"
-else
-  msg_ok "Found no \"tank\" in zfspool, remember to configure tanks after this script has run. See README file"
-fi
-
 #
 # Check it this have already been run, in which case skip all the repository and other updates
 #
