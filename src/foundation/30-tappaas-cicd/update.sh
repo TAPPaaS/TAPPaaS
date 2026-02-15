@@ -18,7 +18,7 @@ echo -e "\nStarting TAPPaaS-CICD module update for VM: $VMNAME on node: $NODE"
 cd
 cd TAPPaaS || { echo "TAPPaaS directory not found!"; exit 1; }
 echo -e "\nPulling latest changes from TAPPaaS repository..."
-# git pull origin
+git pull origin
 # get to the right directory
 cd src/foundation/30-tappaas-cicd || { echo "TAPPaaS-CICD directory not found!"; exit 1; }
 
