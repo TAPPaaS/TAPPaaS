@@ -89,7 +89,7 @@ Create the "tanks" as zfs pools (normally, as a minimum, you will create a tanka
 
 ## adjust the local copy of the configuration.json and vlan.json
 
-The json is stored under /root/tappaas/configuration.json /root/tappaas/vlan.json
+The json is stored under /root/tappaas/zones.json
 
 if this is the first node then modify it to reflect your local installation
 
