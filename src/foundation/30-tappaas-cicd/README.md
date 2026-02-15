@@ -106,7 +106,7 @@ BRANCH="main"
 DOMAIN="CHANGE-mytappaas.dev"
 EMAIL="CHANGE-tappaas@mytappaas.dev",
 SCHEDULE="weekly" 
-./install2.sh $UPSTREAM $BRANCH $DOMAIN $EMAIL $SCHEDULE
+./install2.sh $UPSTREAMGIT $BRANCH $DOMAIN $EMAIL $SCHEDULE
 ```
 
 You might be asked for password for root at proxmox node tappaas1
