@@ -61,7 +61,9 @@ scp root@"$NODE1_FQDN":/root/tappaas/*.json /home/tappaas/config/
 
 # run the update script as all update actions is also needed at install time
 if [ -f /home/tappaas/TAPPaaS/src/foundation/30-tappaas-cicd/update.sh ]; then
-  . /home/tappaas/TAPPaaS/src/foundation/30-tappaas-cicd/update.sh
+  cd /home/tappaas/TAPPaaS/src/foundation/30-tappaas-cicd
+  chmod +x update.sh
+  ./update.sh tappaas-cicd
 else
   echo "Error: /home/tappaas/TAPPaaS/src/foundation/30-tappaas-cicd/update.sh not found"
   exit 1
