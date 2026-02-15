@@ -34,7 +34,10 @@ followed by the rest of foundation, in number order.
 
 ## Install Proxmox
 
-- boot the machine from the USB and do an install: 
+- boot the machine from the USB and do an install:
+  - make sure it gets an IP number on your local network (if you get an IPv6 then replace with an IPv4 numer)
+  - enter a FQDM of tappaas1.mgmt.internal
+  - use an eamil that will be administrator of the TAPPaaS system
   - use ZFS for the boot disk if you are having boot disk mirror.
   - further info in [PVE instaler](./PVE-Installer.md) 
 
@@ -77,6 +80,7 @@ It is important to create the data "tanks" AFTER the cluster is created, or PVE 
 Create the "tanks" as zfs pools (normally, as a minimum, you will create a tanka1). 
 
 - Use the GUI of the newly installed node
+  - YOU did REMEMBER to create the cluster, right?
   - under the tappaas1 node in the datacenter panel go to the disk section. 
   - take note of the disks you have
   - In order to "reuse" a Hard disk (SSD or HDD), you might need to delete old partitions for zfs to accept it into a new pool
