@@ -50,7 +50,7 @@ sudo nixos-rebuild switch
 sudo reboot
 ```
 
-Clean the newly created NIXOS VM before turning it into a template
+## Clean the newly created NIXOS VM before turning it into a template
 
 After reboot, access the VM via the PVE console. you can start the xterm.js console from the console dropdown buttom on the PVE GUI. 
 This gives a sepeare console window to tappaas-nixos where cut and paste work on right mouse click
