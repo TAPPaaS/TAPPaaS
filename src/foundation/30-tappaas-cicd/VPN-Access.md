@@ -24,13 +24,13 @@ also install Netbird on your machine you will be using to access the TAPPaaS ins
 
 ### Step 1: create a netbird account
 
-TODO: when a tested netbird controll plane module is availalbe in TAPPaaS then change the recipie to use this
+TODO: when a tested netbird control plane module is availalbe in TAPPaaS then change the recipie to use this
 
 On the netbird.io register for an account. For this a free account is enough. Register so that the admin of TAPPaaS have access
 
-As this is giving access to managemetn of TAPPaaS then setting up 2FA is highly recommended
+As this is giving access to management of TAPPaaS then setting up 2FA is highly recommended
 
-in the control plane of the netbird: go to: Setup Keys. Select Create setup Key.
+in the control plane (left plane) of the netbird: go to: Setup Keys. Select Create setup Key.
 - Give it a Name: TAPpaaS-Keys (or the name of your tappaas instance)
 - Make key reusable: yes
 - click create keys

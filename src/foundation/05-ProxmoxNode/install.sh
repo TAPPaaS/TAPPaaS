@@ -272,10 +272,33 @@ msg_ok "Installed power top"
 
 msg_info "Install netbird client:"
 curl -fsSL https://pkgs.netbird.io/install.sh | sh
+
+# Wait for NetBird to finish initial setup and create backup
+sleep 2
+
 if [ -f /etc/resolv.conf.original.netbird ]; then
+  msg_info "Restoring original resolv.conf and preventing NetBird DNS management"
+
+  # Stop NetBird service to prevent it from modifying resolv.conf
+  systemctl stop netbird 2>/dev/null || true
+
+  # Remove immutable flag if it was set by previous runs
+  chattr -i /etc/resolv.conf 2>/dev/null || true
+
+  # Restore original resolv.conf
   cp /etc/resolv.conf.original.netbird /etc/resolv.conf
+
+  # Set immutable flag to prevent any modifications
   chattr +i /etc/resolv.conf
+
+  # Restart NetBird - it will work but won't be able to modify DNS
+  systemctl start netbird 2>/dev/null || true
+
+  msg_ok "Restored original DNS configuration and protected resolv.conf"
+else
+  msg_info "NetBird backup file not found, keeping NetBird DNS settings"
 fi
+
 msg_ok "Installed netbird client"
 
 msg_info "Updating Proxmox VE (Patience)"
