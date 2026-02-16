@@ -73,6 +73,12 @@ in
   
   networking.hostName = lib.mkDefault "litellm";
   networking.networkmanager.enable = true;
+  # Match ethernet by type, not interface name (ens18/eth0/enp0s18 varies)
+  networking.networkmanager.ensureProfiles.profiles.tappaas-ethernet = {
+    connection = { id = "tappaas-ethernet"; type = "ethernet"; autoconnect = "true"; autoconnect-priority = "100"; };
+    ipv4 = { method = "auto"; };
+    ipv6 = { method = "auto"; addr-gen-mode = "default"; };
+  };
   
   # Prevent systemd-networkd conflicts with NetworkManager
   systemd.network.enable = lib.mkForce false;

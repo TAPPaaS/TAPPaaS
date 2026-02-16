@@ -58,7 +58,13 @@ in
   # ----------------------------------------
   networking = {
     hostName = lib.mkDefault "openwebui";
-    networkmanager.enable = true; 
+    networkmanager.enable = true;
+    # Match ethernet by type, not interface name (ens18/eth0/enp0s18 varies)
+    networkmanager.ensureProfiles.profiles.tappaas-ethernet = {
+      connection = { id = "tappaas-ethernet"; type = "ethernet"; autoconnect = "true"; autoconnect-priority = "100"; };
+      ipv4 = { method = "auto"; };
+      ipv6 = { method = "auto"; addr-gen-mode = "default"; };
+    };
     firewall.allowedTCPPorts = [ 22 8080 ];
   };
 

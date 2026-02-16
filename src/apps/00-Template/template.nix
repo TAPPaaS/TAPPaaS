@@ -30,6 +30,28 @@
   networking.hostName = lib.mkDefault "tappaas-nixos"; # Define your hostname.
   networking.networkmanager.enable = true;  # Easiest to use and most distros use this by default.
 
+  # Ensure consistent interface naming across cloned VMs.
+  # Proxmox virtio NICs may appear as ens18, eth0, or enp0s18 depending on
+  # kernel/udev version. Using ensureProfiles with match-by-type guarantees
+  # DHCP works regardless of the actual interface name.
+  networking.networkmanager.ensureProfiles.profiles = {
+    tappaas-ethernet = {
+      connection = {
+        id = "tappaas-ethernet";
+        type = "ethernet";
+        autoconnect = "true";
+        autoconnect-priority = "100";
+      };
+      ipv4 = {
+        method = "auto";
+      };
+      ipv6 = {
+        method = "auto";
+        addr-gen-mode = "default";
+      };
+    };
+  };
+
   # Set your time zone.
   time.timeZone = lib.mkDefault "Europe/Amsterdam";
 

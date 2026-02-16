@@ -874,10 +874,9 @@ class ZoneManager:
 
         try:
             with DhcpManager(self.config) as manager:
-                result = manager.enable_service(
+                result = manager.set_dnsmasq_interfaces(
                     interfaces=interfaces,
-                    dhcp_authoritative=True,
-                    check_mode=False,
+                    check_mode=check_mode,
                 )
                 print(f"  Updated dnsmasq to listen on {len(interfaces)} interfaces")
                 return {"status": "updated", "interfaces": interfaces, "result": result}
@@ -919,16 +918,10 @@ class ZoneManager:
         dhcp_results = self.configure_dhcp(check_mode=check_mode)
 
         # Update dnsmasq to listen on all VLAN interfaces
-        # NOTE: Temporarily disabled due to boolean conversion issue in oxl-opnsense-client
-        # The library fetches current dnsmasq settings which have Python booleans that
-        # need to be converted to 0/1 for the OPNsense API, but this happens inside the library.
-        # TODO: Fix this once oxl-opnsense-client is patched or we implement a workaround
         print("\n" + "=" * 60)
-        print("Step 2b: Updating dnsmasq interface bindings (SKIPPED)")
+        print("Step 2b: Updating dnsmasq interface bindings")
         print("=" * 60)
-        print("  NOTE: Dnsmasq interface binding update is currently disabled")
-        print("  Dnsmasq will listen on all interfaces by default")
-        dnsmasq_result = {"status": "skipped", "reason": "boolean conversion issue"}
+        dnsmasq_result = self.update_dnsmasq_interfaces(check_mode=check_mode)
 
         result = {
             "vlans": vlan_results,

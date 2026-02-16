@@ -233,6 +233,29 @@ class VlanManager:
         )
         return result
 
+    def reload_interface(self, identifier: str) -> dict:
+        """Reload an interface to apply its configuration (IP address, etc).
+
+        After assigning a VLAN to an interface with a static IP, the IP
+        is written to config but not applied until the interface is reloaded.
+
+        Args:
+            identifier: Interface identifier (e.g., 'opt1', 'opt5')
+
+        Returns:
+            Result dictionary from the API
+        """
+        result = self.client.run_module(
+            "raw",
+            params={
+                "module": "interfaces",
+                "controller": "overview",
+                "command": f"reloadInterface/{identifier}",
+                "action": "post",
+            },
+        )
+        return result
+
     def unassign_interface(self, identifier: str) -> dict:
         """Remove an interface assignment.
 
@@ -311,7 +334,12 @@ class VlanManager:
             result["assign_result"] = assign_result
             response = assign_result.get("result", {}).get("response", {})
             if response.get("result") == "saved":
-                result["ifname"] = response.get("ifname")
+                ifname = response.get("ifname")
+                result["ifname"] = ifname
+                # Reload the interface to apply IP configuration
+                if ifname:
+                    reload_result = self.reload_interface(ifname)
+                    result["reload_result"] = reload_result
 
         return result
 

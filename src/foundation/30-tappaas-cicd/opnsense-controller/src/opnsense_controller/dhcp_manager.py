@@ -512,6 +512,59 @@ class DhcpManager:
             params=params,
         )
 
+    def set_dnsmasq_interfaces(
+        self,
+        interfaces: list[str],
+        check_mode: bool = False,
+    ) -> dict:
+        """Set dnsmasq interfaces using direct API call.
+
+        Bypasses the oxl-opnsense-client dnsmasq_general module to avoid
+        boolean conversion issues when the library fetches and merges
+        current settings.
+
+        Args:
+            interfaces: List of interface IDs (e.g. ['lan', 'opt1', 'opt2'])
+            check_mode: If True, perform dry-run without making changes
+
+        Returns:
+            Result dictionary with status
+        """
+        if check_mode:
+            return {"changed": True, "check_mode": True, "interfaces": interfaces}
+
+        iface_str = ",".join(interfaces)
+
+        # Use raw module to call the dnsmasq settings API directly
+        set_result = self.client.run_module(
+            "raw",
+            params={
+                "module": "dnsmasq",
+                "controller": "settings",
+                "command": "set",
+                "action": "post",
+                "data": {"dnsmasq": {"interface": iface_str}},
+            },
+        )
+
+        # Reconfigure the service to apply changes
+        reconfigure_result = self.client.run_module(
+            "raw",
+            params={
+                "module": "dnsmasq",
+                "controller": "service",
+                "command": "reconfigure",
+                "action": "post",
+            },
+        )
+
+        return {
+            "changed": True,
+            "interfaces": interfaces,
+            "set_result": set_result,
+            "reconfigure_result": reconfigure_result,
+        }
+
     def disable_service(self, check_mode: bool = False) -> dict:
         """Disable the Dnsmasq service.
 
