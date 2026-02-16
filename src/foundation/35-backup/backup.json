@@ -3,6 +3,7 @@
     "node": "tappaas3",
     "vmtag": "TAPPaaS,Foundation",
     "vmname": "backup",
+    "vmid": 105,
     "storage": "tankc1",
     "zone0": "mgmt",
     "imageType": "apt",

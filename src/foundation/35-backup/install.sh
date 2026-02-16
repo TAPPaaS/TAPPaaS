@@ -36,14 +36,23 @@ function cleanup() {
 set -e
 trap 'error_handler $LINENO "$BASH_COMMAND"' ERR
 trap cleanup EXIT
+
+# Get the directory where this script resides (the module directory)
+MODULE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+# Copy and update JSON config from module directory
+cd "$MODULE_DIR"
+/home/tappaas/bin/copy-update-json.sh "$@"
+
+# Source common routines (just function definitions, no execution)
+. /home/tappaas/bin/common-install-routines.sh
+
+# Validate the JSON config
+check_json /home/tappaas/config/$1.json || exit 1
+
+# Now change to temp directory for the rest of the installation
 TEMP_DIR=$(mktemp -d)
 pushd $TEMP_DIR >/dev/null
-
-
-# Source common routines (expects $1 to be module name)
-. /home/tappaas/bin/copy-update-json.sh
-. /home/tappaas/bin/common-install-routines.sh
-check_json /home/tappaas/config/$1.json || exit 1
 
 info "${BOLD}Creating TAPPaaS Proxmox Backup Server (PBS) installation using the following settings:"
 NODE="$(get_config_value 'node' 'tappaas1')"
