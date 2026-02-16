@@ -327,12 +327,14 @@ class ZoneManager:
         with VlanManager(self.config) as manager:
             # Get existing VLANs once for efficiency
             existing_vlans = manager.list_vlans()
-            existing_tags = {v["tag"]: v for v in existing_vlans}
+            # Convert tag to int for proper comparison with zone.vlan_tag (which is int)
+            existing_tags = {int(v["tag"]): v for v in existing_vlans}
             existing_descriptions = {v["description"]: v for v in existing_vlans}
 
             # Get assigned VLANs to check if we need to unassign before deleting
             assigned_vlans = manager.get_assigned_vlans()
-            assigned_by_tag = {v["vlan_tag"]: v for v in assigned_vlans}
+            # Convert vlan_tag to int for proper comparison
+            assigned_by_tag = {int(v["vlan_tag"]) if isinstance(v["vlan_tag"], str) else v["vlan_tag"]: v for v in assigned_vlans if v.get("vlan_tag")}
 
             # First, delete VLANs for disabled zones
             for zone in disabled_zones:
@@ -346,8 +348,7 @@ class ZoneManager:
                     else:
                         try:
                             # Check if VLAN is assigned to an interface
-                            # Try both string and int lookups for robustness
-                            assigned = assigned_by_tag.get(str(zone.vlan_tag)) or assigned_by_tag.get(zone.vlan_tag)
+                            assigned = assigned_by_tag.get(zone.vlan_tag)
 
                             # If not found in assigned_by_tag, search manually by description or device
                             if not assigned:

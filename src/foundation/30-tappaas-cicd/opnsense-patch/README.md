@@ -1,50 +1,128 @@
-# Patching OPNsense 
+# OPNsense Custom Controllers
 
-in order to assign interfaces programatically we need to add an MVC
-this is copied from:
-  https://gist.github.com/szymczag/df152a82e86aff67b984ed3786b027ba
+This directory contains custom OPNsense API controllers and ACL configurations required for TAPPaaS automated network management.
 
-## This is a description of usage
+## Files
 
-from https://github.com/szymczag
+### InterfaceAssignController.php
 
+Custom API controller for programmatic interface assignment in OPNsense 26.1+.
 
-Hi there,
+**Installation Path:**
+```
+/usr/local/opnsense/mvc/app/controllers/OPNsense/Interfaces/Api/InterfaceAssignController.php
+```
 
-since I had the same issue (among others), I've put together an endpoint which might be helpful:
+**API Endpoint:**
+```
+/api/interfaces/interface_assign/addItem
+/api/interfaces/interface_assign/delItem/{interface}
+```
 
-https://gist.github.com/szymczag/df152a82e86aff67b984ed3786b027ba
+**Features:**
+- Assign VLAN devices to OPNsense interface slots (OPT1, OPT2, etc.)
+- Configure static IPv4 addresses on interfaces
+- Enable/disable interfaces
+- Delete interface assignments
+- Compatible with OPNsense 26.1+
 
-### Usage
-Installation
+**OPNsense 26.1 Compatibility:**
 
-Just place it in
+This controller was specifically designed for OPNsense 26.1+ after the original `AssignSettingsController` broke during the upgrade from 25.7. Key differences:
 
-/usr/local/opnsense/mvc/app/controllers/OPNsense/Interfaces/Api/AssignSettingsController.php
+1. **Controller naming**: Uses `InterfaceAssignController` instead of `AssignSettingsController`
+   - OPNsense 26.1 reserves the "SettingsController" suffix for Model-based controllers
 
-via SSH.
-### Assign interface
+2. **No sessionClose()**: Removed `$this->sessionClose()` calls
+   - OPNsense 26.1 changed session handling, causing HTTP 500 errors with `sessionClose()`
 
-curl -k -X POST -u "YOUR_API_KEY:YOUR_API_SECRET" \
+3. **Direct Config API**: Uses `Config::getInstance()` and direct XML manipulation
+   - Still extends `ApiControllerBase` (not `ApiMutableModelControllerBase`)
+
+### ACL.xml
+
+Access Control List configuration that grants API access to the interface assignment endpoints.
+
+**Installation Path:**
+```
+/usr/local/opnsense/mvc/app/models/OPNsense/Interfaces/ACL/ACL.xml
+```
+
+**Patterns Included:**
+```xml
+<pattern>api/interfaces/assign_settings/*</pattern>  <!-- Legacy endpoint -->
+<pattern>api/interfaces/interface_assign/*</pattern> <!-- Current endpoint -->
+```
+
+Both patterns are included for backward compatibility.
+
+## Usage
+
+### Assign Interface
+
+```bash
+curl -k -X POST -u "API_KEY:API_SECRET" \
      -H "Content-Type: application/json" \
      -d '{
            "assign": {
-             "device": "vlan0.100",
-             "description": "assigned vlan via api",
+             "device": "vlan0.210",
+             "description": "srv",
              "enable": true,
-             "ipv4Type": "static",
-             "ipv4Address": "192.168.100.1",
+             "ipv4Address": "10.2.10.1",
              "ipv4Subnet": 24
            }
          }' \
-     https://OPNSense/api/interfaces/assign_settings/addItem
+     https://firewall.mgmt.internal/api/interfaces/interface_assign/addItem
+```
 
-### Unassign interface
+**Response:**
+```json
+{"result":"saved","ifname":"opt1"}
+```
 
-curl -k -X DELETE -u "YOUR_API_KEY:YOUR_API_SECRET" \
-     https://OPNSense/api/interfaces/assign_settings/delItem/opt1
+### Delete Interface
 
-Feel free to merge to the main code.
+```bash
+curl -k -X POST -u "API_KEY:API_SECRET" \
+     https://firewall.mgmt.internal/api/interfaces/interface_assign/delItem/opt1
+```
 
-pzdr,
-maciek
+**Response:**
+```json
+{"result":"deleted"}
+```
+
+## Deployment
+
+The `update.sh` script automatically copies these files to the firewall:
+
+```bash
+cd /home/tappaas/TAPPaaS/src/foundation/30-tappaas-cicd
+./update.sh tappaas-cicd
+```
+
+Manual deployment:
+```bash
+scp InterfaceAssignController.php root@firewall:/usr/local/opnsense/mvc/app/controllers/OPNsense/Interfaces/Api/
+scp ACL.xml root@firewall:/usr/local/opnsense/mvc/app/models/OPNsense/Interfaces/ACL/
+ssh root@firewall "configctl webgui restart"
+```
+
+## History
+
+### Original Implementation (OPNsense 25.7)
+- Based on [GitHub Gist by szymczag](https://gist.github.com/szymczag/df152a82e86aff67b984ed3786b027ba)
+- Controller: `AssignSettingsController.php`
+- Endpoint: `/api/interfaces/assign_settings/addItem`
+- Status: ❌ Broken in OPNsense 26.1
+
+### Current Implementation (OPNsense 26.1+)
+- Controller: `InterfaceAssignController.php` (this file)
+- Endpoint: `/api/interfaces/interface_assign/addItem`
+- Status: ✅ Working in OPNsense 26.1
+- Fixed: February 2026
+- See: `ISSUES/opnsense-26.1-interface-assignment.md` for full investigation details
+
+## Credits
+
+Original concept by [szymczag](https://github.com/szymczag), adapted and fixed for OPNsense 26.1 by TAPPaaS Team.

@@ -225,7 +225,7 @@ class VlanManager:
             "raw",
             params={
                 "module": "interfaces",
-                "controller": "assign_settings",
+                "controller": "interface_assign",
                 "command": "addItem",
                 "action": "post",
                 "data": data,
@@ -246,7 +246,7 @@ class VlanManager:
             "raw",
             params={
                 "module": "interfaces",
-                "controller": "assign_settings",
+                "controller": "interface_assign",
                 "command": f"delItem/{identifier}",
                 "action": "post",  # DELETE method via POST
             },

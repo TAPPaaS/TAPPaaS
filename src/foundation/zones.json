@@ -33,7 +33,7 @@
         "bridge": "lan",
         "access-to": ["internet"],
         "pinhole-allowed-from": ["dmz"],
-        "description": "Service network, this is where TAPPaaS Business services are placed"
+        "description": "Business services network for commercial applications"
     },
     "dev-srv": {
         "type": "Service",

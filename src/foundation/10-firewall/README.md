@@ -134,7 +134,14 @@ Abort the configuration wizard
   - edit LAN interface and change domain to mgmt.internal
   - press apply
 
-Finally register the static hosts on the internal network: firewall and tappaas1
+Make untagged LAN trafic belong to domain mgmt.internal
+
+- Enable services -> dnsmask DNS -> DHCP ranges
+  - Edit Interface: LAN
+  - add doamin: mgmt.internal
+  - press Save and then Apply
+
+Register the static hosts on the internal network: firewall and tappaas1
 
 - go to Service -> Dnsmasq DNS & DHCP -> Hosts
   - add host:

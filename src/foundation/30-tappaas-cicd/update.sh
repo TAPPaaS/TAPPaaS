@@ -79,9 +79,11 @@ fi
 
 cd ..
 if [ "${FIREWALL_EXISTS:-0}" -eq 1 ]; then
-  scp opnsense-patch/AssignSettingsController.php root@"$FIREWALL_FQDN":/usr/local/opnsense/mvc/app/controllers/OPNsense/Interfaces/Api/AssignSettingsController.php
+  scp opnsense-patch/InterfaceAssignController.php root@"$FIREWALL_FQDN":/usr/local/opnsense/mvc/app/controllers/OPNsense/Interfaces/Api/InterfaceAssignController.php
+  scp opnsense-patch/ACL.xml root@"$FIREWALL_FQDN":/usr/local/opnsense/mvc/app/models/OPNsense/Interfaces/ACL/ACL.xml
+  echo "OPNsense controller patch (InterfaceAssignController.php) and ACL file copied to firewall."
 else
-  echo "Warning: AssignSettingsController.php not copied because firewall is unreachable."
+  echo "Warning: InterfaceAssignController.php and ACL.xml not copied because firewall is unreachable."
 fi
 
 # Build the update-tappaas project
