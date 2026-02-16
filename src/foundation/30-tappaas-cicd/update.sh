@@ -95,8 +95,6 @@ ln -s /home/tappaas/TAPPaaS/src/foundation/30-tappaas-cicd/update-tappaas/result
 rm /home/tappaas/bin/update-node 2>/dev/null || true
 ln -s /home/tappaas/TAPPaaS/src/foundation/30-tappaas-cicd/update-tappaas/result/bin/update-node /home/tappaas/bin/update-node
 echo -e "\nupdate-tappaas and update-node binaries installed to /home/tappaas/bin/"
-/home/tappaas/bin/update-cron.sh
-echo -e "\nupdate-tappaas cron job updated."
 cd ..
 
 echo "Applying zone configuration..."
@@ -114,5 +112,8 @@ echo -e "\nChecking for updates to tappaas.json..."
 
 # rebuild the nixos configuration
 sudo nixos-rebuild  switch -I "nixos-config=./${VMNAME}.nix"
+
+/home/tappaas/bin/update-cron.sh
+echo -e "\nupdate-tappaas cron job updated."
 
 echo -e "\nVM update completed successfully."
