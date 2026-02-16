@@ -426,10 +426,10 @@ The Zone Manager reads TAPPaaS zone definitions from `zones.json` and automatica
 # List current OPNsense VLAN and DHCP configuration
 ./result/bin/zone-manager --no-ssl-verify --list-config
 
-# Configure all zones (VLANs + DHCP) in dry-run mode
+# Configure all zones (VLANs + DHCP + firewall rules) in dry-run mode
 ./result/bin/zone-manager --no-ssl-verify
 
-# Execute changes
+# Execute changes (creates VLANs, assigns interfaces, configures DHCP, and creates firewall rules)
 ./result/bin/zone-manager --no-ssl-verify --execute
 
 # Configure only VLANs
@@ -437,6 +437,12 @@ The Zone Manager reads TAPPaaS zone definitions from `zones.json` and automatica
 
 # Configure only DHCP
 ./result/bin/zone-manager --no-ssl-verify --execute --dhcp-only
+
+# Configure only firewall rules
+./result/bin/zone-manager --no-ssl-verify --execute --firewall-rules-only
+
+# Skip firewall rules (only VLANs + DHCP)
+./result/bin/zone-manager --no-ssl-verify --execute --no-firewall-rules
 
 # Skip assigning VLANs to interfaces (by default VLANs are assigned)
 ./result/bin/zone-manager --no-ssl-verify --execute --no-assign
@@ -457,8 +463,10 @@ The Zone Manager reads TAPPaaS zone definitions from `zones.json` and automatica
 | `--execute` | Actually execute changes (default is dry-run mode) |
 | `--interface NAME` | Physical interface for VLANs (default: `vtnet1`) |
 | `--no-assign` | Do not assign VLANs to interfaces (by default VLANs are assigned) |
-| `--vlans-only` | Only configure VLANs, skip DHCP |
-| `--dhcp-only` | Only configure DHCP, skip VLANs |
+| `--no-firewall-rules` | Do not configure firewall rules (by default firewall rules are configured based on `access-to` field) |
+| `--vlans-only` | Only configure VLANs, skip DHCP and firewall rules |
+| `--dhcp-only` | Only configure DHCP, skip VLANs and firewall rules |
+| `--firewall-rules-only` | Only configure firewall rules, skip VLANs and DHCP |
 | `--summary` | Only show zone summary, don't configure anything |
 | `--list-config` | List current OPNsense VLAN and DHCP configuration |
 
@@ -504,10 +512,14 @@ vlan_results = manager.configure_vlans(check_mode=False)
 # Configure DHCP ranges only
 dhcp_results = manager.configure_dhcp(check_mode=False)
 
-# Configure both VLANs and DHCP
+# Configure VLANs, DHCP, and firewall rules (default)
 results = manager.configure_all(check_mode=False)
 print(f"VLANs: {len(results['vlans'])} zones configured")
 print(f"DHCP: {len(results['dhcp'])} zones configured")
+print(f"Firewall: {len(results.get('firewall', {}))} rules configured")
+
+# Configure VLANs and DHCP only, skip firewall rules
+results = manager.configure_all(check_mode=False, firewall_rules=False)
 ```
 
 #### ZoneManager Methods
@@ -520,7 +532,8 @@ print(f"DHCP: {len(results['dhcp'])} zones configured")
 | `get_vlan_zones()` | Get enabled zones that need VLANs (tag > 0) |
 | `configure_vlans(check_mode, assign)` | Configure VLANs for all enabled zones (assign=True by default) |
 | `configure_dhcp(check_mode)` | Configure DHCP ranges for all enabled zones |
-| `configure_all(check_mode, assign_vlans)` | Configure both VLANs and DHCP |
+| `configure_firewall_rules(check_mode)` | Configure firewall rules based on access-to field |
+| `configure_all(check_mode, assign_vlans, firewall_rules)` | Configure VLANs, DHCP, and firewall rules (all enabled by default) |
 | `list_current_config()` | Get current OPNsense VLAN and DHCP configuration |
 | `print_current_config()` | Print current OPNsense configuration |
 | `print_zone_summary()` | Print a summary table of all zones |
@@ -588,16 +601,16 @@ The Zone Manager expects zones.json in the following format:
 
 ## Interface Assignment
 
-By default, OPNsense API does not support interface assignment. To enable automatic interface assignment when creating VLANs, install the custom PHP extension:
+By default, OPNsense API does not support interface assignment. TAPPaaS includes a custom PHP controller to enable this. The controller is deployed automatically by `update.sh`.
 
-1. Download from: https://gist.github.com/szymczag/df152a82e86aff67b984ed3786b027ba
-2. Place it on your OPNsense firewall at:
-   ```
-   /usr/local/opnsense/mvc/app/controllers/OPNsense/Interfaces/Api/AssignSettingsController.php
-   ```
-3. Use the `--assign` flag when creating VLANs
+**Manual installation** (if needed):
+```bash
+scp InterfaceAssignController.php root@firewall:/usr/local/opnsense/mvc/app/controllers/OPNsense/Interfaces/Api/
+scp ACL.xml root@firewall:/usr/local/opnsense/mvc/app/models/OPNsense/Interfaces/ACL/
+ssh root@firewall "configctl webgui restart"
+```
 
-See: https://github.com/opnsense/core/issues/7324#issuecomment-2830694222
+See `src/foundation/30-tappaas-cicd/opnsense-patch/README.md` for details on the controller and OPNsense 26.1 compatibility.
 
 ## Project Structure
 

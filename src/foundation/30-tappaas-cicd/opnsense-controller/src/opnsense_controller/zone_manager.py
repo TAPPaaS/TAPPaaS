@@ -889,19 +889,20 @@ class ZoneManager:
         self,
         check_mode: bool = True,
         assign_vlans: bool = True,
-        firewall_rules: bool = False,
+        firewall_rules: bool = True,
     ) -> dict:
-        """Configure VLANs, DHCP, and optionally firewall rules for all zones.
+        """Configure VLANs, DHCP, and firewall rules for all zones.
 
         VLANs are always configured before DHCP ranges to ensure
         the network infrastructure is in place.
         Firewall rules are configured last, after all zones are created.
-        By default, VLANs are assigned to OPNsense interfaces.
+        By default, VLANs are assigned to OPNsense interfaces and
+        firewall rules are created based on the access-to field.
 
         Args:
             check_mode: If True, don't make changes (dry-run)
             assign_vlans: If True (default), also assign VLANs to interfaces
-            firewall_rules: If True, also configure firewall rules based on access-to
+            firewall_rules: If True (default), also configure firewall rules based on access-to
 
         Returns:
             Dictionary with 'vlans', 'dhcp', and optionally 'firewall' results
@@ -1080,9 +1081,9 @@ def main():
         help="Only configure DHCP, skip VLANs and firewall rules",
     )
     parser.add_argument(
-        "--firewall-rules",
+        "--no-firewall-rules",
         action="store_true",
-        help="Configure firewall rules based on access-to field in zones.json",
+        help="Do not configure firewall rules (by default firewall rules are configured based on access-to field in zones.json)",
     )
     parser.add_argument(
         "--firewall-rules-only",
@@ -1175,7 +1176,9 @@ def main():
 
     # Configure based on options
     # By default, VLANs are assigned to interfaces (use --no-assign to disable)
+    # By default, firewall rules are configured (use --no-firewall-rules to disable)
     assign_vlans = not args.no_assign
+    firewall_rules = not args.no_firewall_rules
     if args.vlans_only:
         results = {"vlans": manager.configure_vlans(check_mode=check_mode, assign=assign_vlans)}
     elif args.dhcp_only:
@@ -1186,7 +1189,7 @@ def main():
         results = manager.configure_all(
             check_mode=check_mode,
             assign_vlans=assign_vlans,
-            firewall_rules=args.firewall_rules,
+            firewall_rules=firewall_rules,
         )
 
     # Print results summary
