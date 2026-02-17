@@ -19,7 +19,7 @@
         "vlantag": 210,
         "ip": "10.2.10.0/24",
         "bridge": "lan",
-        "access-to": ["internet"],
+        "access-to": ["internet", "dmz"],
         "pinhole-allowed-from": ["dmz"],
         "description": "Service network, this is where TAPPaaS Business services are placed"
     },
@@ -56,7 +56,7 @@
         "SSID": "Private",
         "ip": "10.3.10.0/24",
         "bridge": "lan",
-        "access-to": ["internet", "iot", "iot-isolated"],
+        "access-to": ["internet", "iot", "iot-isolated", "dmz", "srv"],
         "pinhole-allowed-from": [],
         "description": "This is where regular users of TAPPaaS services connect."
     },

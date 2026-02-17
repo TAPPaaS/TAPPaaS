@@ -1,0 +1,18 @@
+{
+    "version": "0.5.0",
+    "vmid": 610,
+    "vmtag": "TAPPaaS,App",
+    "vmname": "vaultwarden",
+    "cores": 1,
+    "memory": "1024",
+    "diskSize": "8G",
+    "storage": "tanka1",
+    "imageType": "clone",
+    "image": "8080",
+    "bridge0": "lan",
+    "zone0": "dmz",
+    "description": "VaultWarden password manager (Bitwarden-compatible) in DMZ",
+    "maintainer": "@larsrossen",
+    "releaseDate": "2026-02-17",
+    "status": "Development"
+}

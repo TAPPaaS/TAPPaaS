@@ -1,5 +1,5 @@
 {
-    "version": "0.5",
+    "version": "0.5.0",
     "vmid": 140,
     "vmtag": "TAPPaaS,Foundation",
     "vmname": "identity",
@@ -11,5 +11,8 @@
     "image": "8080",
     "bridge0": "lan",
     "zone0": "srv",
-    "description": "Identity VM for TAPPaaS"  
+    "description": "Authentik SSO identity provider for TAPPaaS",
+    "maintainer": "@larsrossen",
+    "releaseDate": "2026-02-17",
+    "status": "Development"
 }
