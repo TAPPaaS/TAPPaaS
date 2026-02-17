@@ -81,3 +81,31 @@ All scripts must follow:
 - Argument validation and help/usage text
 - Cleanup trap handlers for signals
 - Quoted variables and secure input handling
+
+## Development Agent Team
+
+A team of 8 specialized AI agents is configured in `.claude/agents/`. On every non-trivial task, read `.claude/agents/agents.md` for full routing logic and dispatch to the appropriate agent(s) using the Task tool with `subagent_type="general-purpose"`. Each agent's prompt template is in its definition file.
+
+### Agent Roster
+| Slug | Role | Invoked For |
+|------|------|-------------|
+| `pm` | Project Manager | Multi-step tasks, coordination, planning |
+| `architect` | Solution Architect | Module JSON design, zone placement, resource sizing |
+| `bash-dev` | Bash Script Developer | install.sh, update.sh, helper scripts |
+| `python-dev` | Python Developer | opnsense-controller, update-tappaas |
+| `nix-dev` | NixOS Developer | .nix VM configurations |
+| `tester` | Tester | test.sh creation, regression testing |
+| `security` | Security Reviewer | Security review of all changes |
+| `infra` | Infrastructure Engineer | Proxmox, Caddy, OPNsense, DNS, DHCP |
+
+### Quick Routing Rules
+- **New module**: pm -> architect -> nix-dev + bash-dev (parallel) -> infra -> tester -> security
+- **Script fix**: bash-dev (+ security if credentials involved)
+- **NixOS config**: nix-dev (+ security if ports/services change)
+- **Python code**: python-dev
+- **Network/firewall**: infra (+ architect if zone design changes)
+- **Testing**: tester
+- **Architecture/design**: architect (+ pm if multi-phase)
+
+### Agent Definitions
+Full role definitions, owned files, and prompt templates are in `.claude/agents/agent-<slug>.md`
