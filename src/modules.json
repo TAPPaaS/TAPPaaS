@@ -1,0 +1,101 @@
+{
+    "description": "TAPPaaS Module Registry - All known modules and their VMID assignments.",
+    "vmidConventions": {
+        "summary": "VMID ranges are allocated by module type. Numbers are assigned in increments of 10, giving each module a block of 10 VMIDs for the local TAPPaaS administrator to create multiple copies of the same module/app.",
+        "ranges": {
+            "100-200": "Foundation modules (core platform infrastructure)",
+            "201-899": "Application modules (services and apps)",
+            "900-999": "Test modules (used for VM creation testing and templates)",
+            "8000-9000": "Proxmox templates (VM templates used for cloning)"
+        },
+        "allocationRule": "VMIDs are allocated in increments of 10. For example, if an application like litellm is assigned VMID 310, then VMIDs 310-319 are reserved for that module. This allows the local administrator to deploy multiple instances of the same module."
+    },
+    "foundationModules": [
+        {
+            "moduleName": "firewall",
+            "vmid": 110,
+            "moduleJson": "src/foundation/10-firewall/firewall.json"
+        },
+        {
+            "moduleName": "tappaas-cicd",
+            "vmid": 130,
+            "moduleJson": "src/foundation/30-tappaas-cicd/tappaas-cicd.json"
+        },
+        {
+            "moduleName": "identity",
+            "vmid": 140,
+            "moduleJson": "src/foundation/40-Identity/identity.json"
+        },
+        {
+            "moduleName": "backup",
+            "vmid": 200,
+            "moduleJson": "src/foundation/35-backup/backup.json"
+        }
+    ],
+    "applicationModules": [
+        {
+            "moduleName": "litellm",
+            "vmid": 310,
+            "moduleJson": "src/apps/litellm/litellm.json"
+        },
+        {
+            "moduleName": "openwebui",
+            "vmid": 311,
+            "moduleJson": "src/apps/openwebui/openwebui.json"
+        },
+        {
+            "moduleName": "vaultwarden",
+            "vmid": 610,
+            "moduleJson": "src/apps/vaultwarden/vaultwarden.json"
+        },
+        {
+            "moduleName": "netbird-client",
+            "vmid": 800,
+            "moduleJson": "src/apps/netbird-client/netbird-client.json"
+        },
+        {
+            "moduleName": "unifi",
+            "vmid": 810,
+            "moduleJson": "src/apps/unifi/unifi.json"
+        }
+    ],
+    "proxmoxTemplates": [
+        {
+            "moduleName": "tappaas-nixos",
+            "vmid": 8080,
+            "moduleJson": "src/foundation/20-tappaas-nixos/tappaas-nixos.json"
+        }
+    ],
+    "testModules": [
+        {
+            "moduleName": "test-debian",
+            "vmid": 901,
+            "moduleJson": "src/foundation/30-tappaas-cicd/test-vm-creation/test-debian.json"
+        },
+        {
+            "moduleName": "test-debian-vlan-node",
+            "vmid": 902,
+            "moduleJson": "src/foundation/30-tappaas-cicd/test-vm-creation/test-debian-vlan-node.json"
+        },
+        {
+            "moduleName": "test-ubuntu-vlan",
+            "vmid": 905,
+            "moduleJson": "src/foundation/30-tappaas-cicd/test-vm-creation/test-ubuntu-vlan.json"
+        },
+        {
+            "moduleName": "test-nixos",
+            "vmid": 911,
+            "moduleJson": "src/foundation/30-tappaas-cicd/test-vm-creation/test-nixos.json"
+        },
+        {
+            "moduleName": "test-nixos-vlan-node",
+            "vmid": 912,
+            "moduleJson": "src/foundation/30-tappaas-cicd/test-vm-creation/test-nixos-vlan-node.json"
+        },
+        {
+            "moduleName": "template",
+            "vmid": 999,
+            "moduleJson": "src/apps/00-Template/template.json"
+        }
+    ]
+}

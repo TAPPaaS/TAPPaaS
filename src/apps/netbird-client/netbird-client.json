@@ -1,9 +1,9 @@
 {
     "version": "0.5",
     "node": "tappaas1",
-    "vmid": 822,
+    "vmid": 800,
     "vmtag": "TAPPaaS,App",
-    "vmname": "netbirdClient",
+    "vmname": "netbird-client",
     "cores": 1,
     "memory": "1024",
     "diskSize": "4G",
