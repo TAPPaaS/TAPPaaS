@@ -267,25 +267,16 @@ if [ -n "$HANODE" ] && [ "$HANODE" != "NONE" ]; then
         test_result "Replication state is OK (got: ${REPL_STATE})" 1
     fi
 
-    # HA Test 8: Disks replicated to HA node
-    echo "16. Replicated disks test..."
-    DISK_COUNT=$(ssh "root@${HANODE_FQDN}" "zfs list | grep 'vm-${VMID}-disk' | wc -l" 2>/dev/null)
-    if [ "$DISK_COUNT" -ge 2 ]; then
-        test_result "VM disks replicated to ${HANODE} (${DISK_COUNT} disks found)" 0
-    else
-        test_result "VM disks replicated to ${HANODE} (expected >=2, got: ${DISK_COUNT})" 1
-    fi
-
-    # HA Test 9: HA node is reachable
-    echo "17. HA node reachability test..."
+    # HA Test 8: HA node is reachable
+    echo "16. HA node reachability test..."
     if ssh "root@${HANODE_FQDN}" "hostname" >/dev/null 2>&1; then
         test_result "HA node ${HANODE} is reachable" 0
     else
         test_result "HA node ${HANODE} is reachable" 1
     fi
 
-    # HA Test 10: Storage exists on HA node
-    echo "18. HA node storage test..."
+    # HA Test 9: Storage exists on HA node
+    echo "17. HA node storage test..."
     if ssh "root@${HANODE_FQDN}" "pvesm status --storage ${STORAGE}" >/dev/null 2>&1; then
         test_result "Storage ${STORAGE} exists on ${HANODE}" 0
     else

@@ -398,88 +398,81 @@ fi
 
 
 function resize_disk_in_vm() {
-  # Resize the filesystem inside the VM after Proxmox disk resize
-  # Supports NixOS and Debian-based systems with ext4 filesystems
+  # Resize the filesystem inside the VM after Proxmox disk resize.
+  # Uses QEMU guest agent for OS detection and IP discovery (no SSH from Proxmox node needed).
+  # For NixOS: skips manual resize (boot.growPartition handles it automatically).
+  # For Debian/Ubuntu: uses guest agent exec for growpart + resize2fs.
   local vm_hostname="$1"
-  local zone="$2"
-  local target="${vm_hostname}.${zone}.internal"
+  local vmid="$2"
   local max_wait=60
   local waited=0
 
-  info "Waiting for VM $vm_hostname to become reachable via SSH..."
-  while ! ssh -o StrictHostKeyChecking=no -o ConnectTimeout=2 -o BatchMode=yes tappaas@${target} "exit 0" &>/dev/null; do
+  info "Waiting for VM $vm_hostname guest agent to become available..."
+
+  # Wait for QEMU guest agent to respond
+  while ! qm guest cmd "$vmid" ping &>/dev/null; do
     sleep 2
     waited=$((waited + 2))
     if [ $waited -ge $max_wait ]; then
-      info "${YW}[WARN]${CL} VM $vm_hostname not reachable after ${max_wait}s, skipping filesystem resize"
+      info "${YW}[WARN]${CL} VM $vm_hostname: guest agent not responding after ${max_wait}s, skipping filesystem resize"
       return 1
     fi
   done
-  info "VM $vm_hostname is reachable, detecting OS and filesystem..."
 
-  # Detect OS type
-  local os_id
-  os_id=$(ssh -o StrictHostKeyChecking=no tappaas@${target} "grep '^ID=' /etc/os-release | cut -d= -f2 | tr -d '\"'" 2>/dev/null)
+  info "VM $vm_hostname guest agent is responding"
+
+  # Detect OS type via guest agent exec (no SSH needed)
+  local os_id=""
+  local exec_result
+  exec_result=$(qm guest exec "$vmid" -- grep '^ID=' /etc/os-release 2>/dev/null) || true
+  os_id=$(echo "$exec_result" | jq -r '."out-data" // ""' 2>/dev/null | cut -d= -f2 | tr -d '"' | tr -d '[:space:]')
   info "Detected OS: $os_id"
-
-  # Find the root partition device (resolve UUID/LABEL symlinks to actual device)
-  local root_dev
-  root_dev=$(ssh -o StrictHostKeyChecking=no tappaas@${target} "
-    dev=\$(findmnt -n -o SOURCE /)
-    if [[ \"\$dev\" == /dev/disk/by-* ]]; then
-      readlink -f \"\$dev\"
-    else
-      echo \"\$dev\"
-    fi
-  " 2>/dev/null)
-  info "Root device: $root_dev"
-
-  # Extract disk and partition number (e.g., /dev/sda2 -> disk=/dev/sda, partnum=2)
-  local disk partnum
-  if [[ "$root_dev" =~ ^(/dev/[a-z]+)([0-9]+)$ ]]; then
-    disk="${BASH_REMATCH[1]}"
-    partnum="${BASH_REMATCH[2]}"
-  elif [[ "$root_dev" =~ ^(/dev/nvme[0-9]+n[0-9]+)p([0-9]+)$ ]]; then
-    disk="${BASH_REMATCH[1]}"
-    partnum="${BASH_REMATCH[2]}"
-  else
-    info "${YW}[WARN]${CL} Cannot parse root device $root_dev, skipping filesystem resize"
-    return 1
-  fi
-  info "Disk: $disk, Partition: $partnum"
-
-  # Detect filesystem type
-  local fstype
-  fstype=$(ssh -o StrictHostKeyChecking=no tappaas@${target} "findmnt -n -o FSTYPE /" 2>/dev/null)
-  info "Filesystem type: $fstype"
 
   case "$os_id" in
     nixos)
-      # NixOS: use sfdisk to resize partition, then resize2fs for ext4
-      info "Resizing partition on NixOS using sfdisk..."
-      ssh -o StrictHostKeyChecking=no tappaas@${target} "
-        echo ', +' | sudo sfdisk --no-reread -N ${partnum} ${disk} 2>/dev/null || true
-        sudo partprobe ${disk} 2>/dev/null || sudo partx -u ${disk} 2>/dev/null || true
-      " 2>/dev/null
-      if [ "$fstype" == "ext4" ]; then
-        info "Resizing ext4 filesystem on NixOS..."
-        ssh -o StrictHostKeyChecking=no tappaas@${target} "sudo resize2fs ${root_dev}" 2>/dev/null
-      else
-        info "${YW}[WARN]${CL} Unsupported filesystem $fstype for NixOS, skipping resize"
-        return 1
-      fi
+      # NixOS handles partition and filesystem growth automatically via boot.growPartition
+      info "NixOS detected — boot.growPartition handles disk resize automatically, skipping manual resize"
+      return 0
       ;;
     debian|ubuntu)
-      # Debian/Ubuntu: use growpart then resize2fs
-      info "Resizing partition on Debian/Ubuntu using growpart..."
-      ssh -o StrictHostKeyChecking=no tappaas@${target} "
-        sudo growpart ${disk} ${partnum} 2>/dev/null || true
-      " 2>/dev/null
-      if [ "$fstype" == "ext4" ]; then
-        info "Resizing ext4 filesystem on Debian/Ubuntu..."
-        ssh -o StrictHostKeyChecking=no tappaas@${target} "sudo resize2fs ${root_dev}" 2>/dev/null
+      # Find the root partition device via guest agent
+      local root_dev
+      root_dev=$(qm guest exec "$vmid" -- bash -c '
+        dev=$(findmnt -n -o SOURCE /)
+        if [[ "$dev" == /dev/disk/by-* ]]; then
+          readlink -f "$dev"
+        else
+          echo "$dev"
+        fi
+      ' 2>/dev/null | jq -r '."out-data" // ""' | tr -d '[:space:]')
+      info "Root device: $root_dev"
+
+      # Extract disk and partition number (e.g., /dev/sda2 -> disk=/dev/sda, partnum=2)
+      local disk partnum
+      if [[ "$root_dev" =~ ^(/dev/[a-z]+)([0-9]+)$ ]]; then
+        disk="${BASH_REMATCH[1]}"
+        partnum="${BASH_REMATCH[2]}"
+      elif [[ "$root_dev" =~ ^(/dev/nvme[0-9]+n[0-9]+)p([0-9]+)$ ]]; then
+        disk="${BASH_REMATCH[1]}"
+        partnum="${BASH_REMATCH[2]}"
       else
-        info "${YW}[WARN]${CL} Unsupported filesystem $fstype for Debian/Ubuntu, skipping resize"
+        info "${YW}[WARN]${CL} Cannot parse root device $root_dev, skipping filesystem resize"
+        return 1
+      fi
+      info "Disk: $disk, Partition: $partnum"
+
+      # Detect filesystem type
+      local fstype
+      fstype=$(qm guest exec "$vmid" -- findmnt -n -o FSTYPE / 2>/dev/null | jq -r '."out-data" // ""' | tr -d '[:space:]')
+      info "Filesystem type: $fstype"
+
+      info "Resizing partition on Debian/Ubuntu using growpart..."
+      qm guest exec "$vmid" -- growpart "${disk}" "${partnum}" &>/dev/null || true
+      if [ "$fstype" == "ext4" ]; then
+        info "Resizing ext4 filesystem..."
+        qm guest exec "$vmid" -- resize2fs "${root_dev}" &>/dev/null || true
+      else
+        info "${YW}[WARN]${CL} Unsupported filesystem $fstype, partition resized but filesystem not expanded"
         return 1
       fi
       ;;
@@ -530,7 +523,7 @@ info "\n${BOLD}TAPPaaS $VMNAME VM started successfully"
 
 # Resize filesystem inside VM if disk was expanded
 if [ "$NEEDS_RESIZE" == "true" ]; then
-  resize_disk_in_vm "$VMNAME" "$ZONE0" || info "Filesystem resize skipped or failed"
+  resize_disk_in_vm "$VMNAME" "$VMID" || info "Filesystem resize skipped or failed"
 fi
 
 info "${BOLD}TAPPaaS $VMNAME VM creation completed successfully\n"

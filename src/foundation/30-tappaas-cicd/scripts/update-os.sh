@@ -139,6 +139,25 @@ update_ssh_known_hosts() {
     ssh-keyscan -H "${ip}" >> ~/.ssh/known_hosts 2>/dev/null
 }
 
+# Wait for SSH to become available (cloud-init may still be setting up keys)
+wait_for_ssh() {
+    local ip="$1"
+    local max_wait="${2:-120}"
+    local waited=0
+
+    info "Waiting for SSH to become available on ${ip}..."
+    while ! ssh -o ConnectTimeout=3 -o StrictHostKeyChecking=accept-new -o BatchMode=yes "tappaas@${ip}" "exit 0" &>/dev/null; do
+        sleep 3
+        waited=$((waited + 3))
+        if [[ $waited -ge $max_wait ]]; then
+            warn "SSH not available on ${ip} after ${max_wait}s"
+            return 1
+        fi
+    done
+    info "SSH is available on ${ip}"
+    return 0
+}
+
 # Detect OS type on the VM
 detect_os_type() {
     local ip="$1"
@@ -257,6 +276,9 @@ main() {
     local vm_ip
     vm_ip=$(wait_for_vm_ip "${node}" "${vmid}" 30) || die "Could not get VM IP address after 5 minutes"
     info "VM IP address: ${vm_ip}"
+
+    # Wait for SSH to become available (cloud-init may still be setting up keys)
+    wait_for_ssh "${vm_ip}" 120 || die "SSH not available on ${vm_ip}"
 
     # Update SSH known_hosts
     update_ssh_known_hosts "${vm_ip}"
