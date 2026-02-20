@@ -172,24 +172,24 @@ echo ""
 printf "%-20s %-10s %-10s %-10s %-10s\n" "Test" "Type" "Zone" "Install" "Test"
 printf "%-20s %-10s %-10s %-10s %-10s\n" "----" "----" "----" "-------" "----"
 
-# Summary with details
+# Summary with details - iterate over the tests that actually ran
 i=0
 TOTAL_PASS=0
 TOTAL_FAIL=0
 
-test_details=(
-    "test-debian:debian:mgmt"
-    "test-debian-vlan-node:debian:srv"
-    "test-nixos:nixos-ha:mgmt"
-    "test-nixos-vlan-node:nixos:srv"
-    "test-ubuntu-vlan:ubuntu:srv"
-)
+for test_entry in "${TESTS[@]}"; do
+    IFS=':' read -r NAME TYPE _ _ <<< "$test_entry"
 
-for detail in "${test_details[@]}"; do
-    IFS=':' read -r NAME TYPE ZONE <<< "$detail"
+    # Get zone from JSON config
+    JSON_FILE="${SCRIPT_DIR}/${NAME}.json"
+    if [ -f "$JSON_FILE" ]; then
+        ZONE=$(python3 -c "import json; print(json.load(open('$JSON_FILE')).get('zone0','?'))" 2>/dev/null || echo "?")
+    else
+        ZONE="?"
+    fi
 
-    INST="${INSTALL_RESULTS[$i]}"
-    TST="${TEST_RESULTS[$i]}"
+    INST="${INSTALL_RESULTS[$i]:-skipped}"
+    TST="${TEST_RESULTS[$i]:-skipped}"
 
     # Format install result
     case $INST in
@@ -231,36 +231,34 @@ if [ "$CLEANUP" = true ]; then
     echo ""
     echo "Cleaning up test VMs..."
 
-    # tappaas1 VMs (including HA VMs)
-    # 901: test-debian, 903: test-nixos (with HA)
-    for vmid in 901 903; do
-        echo "  Removing VM $vmid from tappaas1..."
-        # Remove HA configuration first
-        ssh root@tappaas1.mgmt.internal "ha-manager remove vm:$vmid 2>/dev/null" || true
-        # Remove replication jobs
-        ssh root@tappaas1.mgmt.internal "pvesr delete $vmid-0 --force 1 2>/dev/null" || true
+    # Read VMIDs and nodes from JSON configs for accurate cleanup
+    for test_entry in "${ALL_TESTS[@]}"; do
+        IFS=':' read -r TEST_NAME _ _ _ <<< "$test_entry"
+        JSON_FILE="${SCRIPT_DIR}/${TEST_NAME}.json"
+        if [ ! -f "$JSON_FILE" ]; then
+            continue
+        fi
+
+        VMID=$(python3 -c "import json; print(json.load(open('$JSON_FILE')).get('vmid',''))" 2>/dev/null)
+        NODE=$(python3 -c "import json; print(json.load(open('$JSON_FILE')).get('node',''))" 2>/dev/null)
+        HANODE=$(python3 -c "import json; print(json.load(open('$JSON_FILE')).get('HANode',''))" 2>/dev/null)
+
+        if [ -z "$VMID" ] || [ -z "$NODE" ]; then
+            echo "  Skipping $TEST_NAME (missing vmid or node in JSON)"
+            continue
+        fi
+
+        echo "  Removing VM $VMID ($TEST_NAME) from $NODE..."
+
+        # Remove HA configuration first (if HA was configured)
+        if [ -n "$HANODE" ]; then
+            ssh "root@${NODE}.mgmt.internal" "ha-manager remove vm:$VMID 2>/dev/null" || true
+            ssh "root@${NODE}.mgmt.internal" "ha-manager rules remove ha-${TEST_NAME} 2>/dev/null" || true
+            ssh "root@${NODE}.mgmt.internal" "pvesr delete ${VMID}-0 --force 1 2>/dev/null" || true
+        fi
+
         # Stop and destroy VM
-        ssh root@tappaas1.mgmt.internal "qm stop $vmid 2>/dev/null; qm destroy $vmid --purge 2>/dev/null" || true
-    done
-
-    # tappaas2 VMs
-    # 904: test-nixos-vlan-node, 905: test-ubuntu-vlan
-    for vmid in 904 905; do
-        echo "  Removing VM $vmid from tappaas2..."
-        ssh root@tappaas2.mgmt.internal "qm stop $vmid 2>/dev/null; qm destroy $vmid --purge 2>/dev/null" || true
-    done
-
-    # tappaas3 VMs
-    # 902: test-debian-vlan-node
-    for vmid in 902; do
-        echo "  Removing VM $vmid from tappaas3..."
-        ssh root@tappaas3.mgmt.internal "qm stop $vmid 2>/dev/null; qm destroy $vmid --purge 2>/dev/null" || true
-    done
-
-    # Clean up HA rules
-    echo "  Cleaning up HA rules..."
-    for rule in ha-test-nixos; do
-        ssh root@tappaas1.mgmt.internal "ha-manager rules remove $rule 2>/dev/null" || true
+        ssh "root@${NODE}.mgmt.internal" "qm stop $VMID 2>/dev/null; qm destroy $VMID --purge 2>/dev/null" || true
     done
 
     echo "Cleanup complete."

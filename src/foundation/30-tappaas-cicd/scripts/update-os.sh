@@ -233,6 +233,7 @@ fix_dhcp_hostname() {
 
     info "Fixing DHCP hostname registration..."
 
+    # Method 1: Try NetworkManager (nmcli)
     local eth_connection
     local eth_device
 
@@ -240,14 +241,39 @@ fix_dhcp_hostname() {
     eth_device=$(ssh "tappaas@${vm_ip}" "nmcli -t -f DEVICE,TYPE device status 2>/dev/null" | grep ethernet | cut -d: -f1 | head -1) || true
 
     if [[ -n "${eth_connection}" ]] && [[ -n "${eth_device}" ]]; then
+        info "  Using NetworkManager for DHCP hostname fix"
         info "  Ethernet connection: ${eth_connection}"
         info "  Ethernet device: ${eth_device}"
         ssh "tappaas@${vm_ip}" "sudo nmcli connection modify '${eth_connection}' ipv4.dhcp-hostname \"\$(hostname)\"" || true
         ssh "tappaas@${vm_ip}" "sudo nmcli device reapply '${eth_device}'" || true
         info "  DHCP hostname updated to: ${vmname}"
-    else
-        warn "Could not find ethernet connection/device for DHCP fix"
+        return 0
     fi
+
+    # Method 2: Try systemd-networkd (netplan/networkd)
+    local networkd_active
+    networkd_active=$(ssh "tappaas@${vm_ip}" "systemctl is-active systemd-networkd 2>/dev/null") || true
+
+    if [[ "${networkd_active}" == "active" ]]; then
+        info "  Using systemd-networkd for DHCP hostname fix"
+        # Find the .network file for the primary ethernet interface
+        local network_file
+        network_file=$(ssh "tappaas@${vm_ip}" "ls /run/systemd/network/*.network /etc/systemd/network/*.network 2>/dev/null | head -1") || true
+
+        if [[ -n "${network_file}" ]]; then
+            local network_basename
+            network_basename=$(basename "${network_file}")
+            local dropin_dir="/etc/systemd/network/${network_basename}.d"
+
+            info "  Creating drop-in for ${network_basename}"
+            ssh "tappaas@${vm_ip}" "sudo mkdir -p '${dropin_dir}' && printf '[DHCPv4]\nSendHostname=yes\nHostname=${vmname}\n' | sudo tee '${dropin_dir}/hostname.conf' >/dev/null" || true
+            ssh "tappaas@${vm_ip}" "sudo systemctl restart systemd-networkd" || true
+            info "  DHCP hostname updated to: ${vmname}"
+            return 0
+        fi
+    fi
+
+    warn "Could not find ethernet connection/device for DHCP fix"
 }
 
 # Main function

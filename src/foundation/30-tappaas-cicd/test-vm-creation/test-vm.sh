@@ -258,13 +258,13 @@ if [ -n "$HANODE" ] && [ "$HANODE" != "NONE" ]; then
         test_result "Replication schedule is ${REPLICATION_SCHEDULE} (got: ${REPL_SCHED})" 1
     fi
 
-    # HA Test 7: Replication status is OK
+    # HA Test 7: Replication status is OK or SYNCING (initial sync may still be running)
     echo "15. Replication status test..."
     REPL_STATE=$(ssh "root@${NODE}.${MGMT}.internal" "pvesr status" 2>/dev/null | grep "^${VMID}-" | awk '{print $NF}')
-    if [ "$REPL_STATE" = "OK" ]; then
-        test_result "Replication state is OK" 0
+    if [ "$REPL_STATE" = "OK" ] || [ "$REPL_STATE" = "SYNCING" ]; then
+        test_result "Replication state is ${REPL_STATE}" 0
     else
-        test_result "Replication state is OK (got: ${REPL_STATE})" 1
+        test_result "Replication state is OK or SYNCING (got: ${REPL_STATE})" 1
     fi
 
     # HA Test 8: HA node is reachable
