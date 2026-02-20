@@ -254,6 +254,23 @@ main() {
         fi
     fi
 
+    # Validate that the target node is reachable
+    local node
+    node=$(jq -r '.node // empty' "${dest_json}" 2>/dev/null)
+    if [[ -n "${node}" ]]; then
+        local default_node="tappaas1"
+        if ! ssh -o ConnectTimeout=5 -o BatchMode=yes "root@${node}.mgmt.internal" "true" >/dev/null 2>&1; then
+            warn "Node '${node}' is not reachable - reassigning to '${default_node}'"
+            local tmp_file
+            tmp_file=$(mktemp)
+            if jq --arg n "${default_node}" '.node = $n' "${dest_json}" > "${tmp_file}"; then
+                mv "${tmp_file}" "${dest_json}"
+            else
+                rm -f "${tmp_file}"
+            fi
+        fi
+    fi
+
     # Final validation
     if ! jq empty "${dest_json}" 2>/dev/null; then
         die "Resulting JSON is invalid: ${dest_json}"
