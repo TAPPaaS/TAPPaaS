@@ -50,11 +50,27 @@ your-api-token
 your-api-secret
 ```
 
+### Port Auto-Detection
+
+OPNsense typically runs its web UI and API on port **443**, but in some configurations (e.g., when a reverse proxy occupies port 443) it is moved to port **8443**.
+
+The controller automatically probes ports 443 and 8443 (in that order) on the firewall host and uses the first port that responds. This happens transparently on first connection.
+
+To skip probing and use a specific port:
+```bash
+# Via CLI flag
+opnsense-controller --port 8443 --no-ssl-verify --example test
+
+# Via environment variable
+export OPNSENSE_PORT=8443
+```
+
 ### Environment Variables
 
 | Variable | Description | Default |
 |----------|-------------|---------|
 | `OPNSENSE_HOST` | Firewall IP/hostname | `firewall.mgmt.internal` (via CLI) |
+| `OPNSENSE_PORT` | API port | Auto-detect (probes 443, then 8443) |
 | `OPNSENSE_CREDENTIAL_FILE` | Path to credentials file | `$HOME/.opnsense-credentials.txt` |
 | `OPNSENSE_TOKEN` | API token (alternative to credential file) | - |
 | `OPNSENSE_SECRET` | API secret (alternative to credential file) | - |
@@ -169,6 +185,7 @@ your-api-secret
 | Option | Description |
 |--------|-------------|
 | `--firewall HOST` | Firewall IP/hostname (default: `firewall.mgmt.internal`) |
+| `--port PORT` | API port (default: auto-detect by probing 443, then 8443) |
 | `--credential-file PATH` | Path to credential file |
 | `--no-ssl-verify` | Disable SSL certificate verification |
 | `--debug` | Enable debug logging |
@@ -288,6 +305,7 @@ opnsense-firewall create-rule --help
 | Option | Description |
 |--------|-------------|
 | `--firewall HOST` | Firewall IP/hostname (default: `firewall.mgmt.internal`) |
+| `--port PORT` | API port (default: auto-detect by probing 443, then 8443) |
 | `--credential-file PATH` | Path to credential file |
 | `--no-ssl-verify` | Disable SSL certificate verification |
 | `--debug` | Enable debug logging |
@@ -400,6 +418,7 @@ The DNS Manager provides a dedicated CLI for managing DNS host entries in OPNsen
 | Option | Description |
 |--------|-------------|
 | `--firewall HOST` | Firewall IP/hostname (default: `firewall.mgmt.internal`) |
+| `--port PORT` | API port (default: auto-detect by probing 443, then 8443) |
 | `--credential-file PATH` | Path to credential file |
 | `--no-ssl-verify` | Disable SSL certificate verification |
 | `--debug` | Enable debug logging |
@@ -457,6 +476,7 @@ The Zone Manager reads TAPPaaS zone definitions from `zones.json` and automatica
 |--------|-------------|
 | `--zones-file PATH` | Path to zones.json file (auto-detected if not specified) |
 | `--firewall HOST` | Firewall IP/hostname (default: `firewall.mgmt.internal`) |
+| `--port PORT` | API port (default: auto-detect by probing 443, then 8443) |
 | `--credential-file PATH` | Path to credential file |
 | `--no-ssl-verify` | Disable SSL certificate verification |
 | `--debug` | Enable debug logging |
@@ -658,14 +678,16 @@ nix-build -A opnsense-controller default.nix
 from opnsense_controller import Config, Vlan, VlanManager
 
 # Using default credential file ($HOME/.opnsense-credentials.txt)
+# Port is auto-detected (probes 443, then 8443)
 config = Config(
     firewall="firewall.mgmt.internal",
     ssl_verify=False,
 )
 
-# Or with explicit credentials
+# Or with explicit port and credentials
 config = Config(
     firewall="192.168.1.1",
+    port=8443,
     token="your-token",
     secret="your-secret",
     ssl_verify=False,

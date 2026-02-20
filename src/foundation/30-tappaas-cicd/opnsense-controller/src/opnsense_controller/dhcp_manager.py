@@ -70,6 +70,7 @@ class DhcpManager:
         """Build client connection kwargs from config."""
         kwargs = {
             "firewall": self.config.firewall,
+            "port": self.config.resolve_port(),
             "ssl_verify": self.config.ssl_verify,
             "debug": self.config.debug,
             "api_timeout": self.config.api_timeout,

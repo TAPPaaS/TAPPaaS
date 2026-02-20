@@ -1040,6 +1040,12 @@ def main():
         help="Firewall IP/hostname (default: firewall.mgmt.internal)",
     )
     parser.add_argument(
+        "--port",
+        type=int,
+        default=None,
+        help="API port (default: auto-detect by probing 443, then 8443)",
+    )
+    parser.add_argument(
         "--credential-file",
         help="Path to credential file",
     )
@@ -1132,6 +1138,8 @@ def main():
             "ssl_verify": not args.no_ssl_verify,
             "debug": args.debug,
         }
+        if args.port is not None:
+            config_kwargs["port"] = args.port
         if args.credential_file:
             config_kwargs["credential_file"] = args.credential_file
 

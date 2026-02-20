@@ -506,6 +506,12 @@ def main():
         help="Path to credential file (overrides OPNSENSE_CREDENTIAL_FILE env var)",
     )
     parser.add_argument(
+        "--port",
+        type=int,
+        default=None,
+        help="API port (default: auto-detect by probing 443, then 8443)",
+    )
+    parser.add_argument(
         "--no-ssl-verify",
         action="store_true",
         help="Disable SSL certificate verification",
@@ -563,6 +569,8 @@ def main():
             "ssl_verify": not args.no_ssl_verify,
             "debug": args.debug,
         }
+        if args.port is not None:
+            config_kwargs["port"] = args.port
         if args.credential_file:
             config_kwargs["credential_file"] = args.credential_file
 
