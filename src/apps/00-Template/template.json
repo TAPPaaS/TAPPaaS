@@ -12,5 +12,7 @@
     "image": "8080",
     "bridge0": "lan",
     "zone0": "srv",
-    "description": "TAPPaaS template VM"  
+    "description": "TAPPaaS template VM",
+    "dependsOn": ["cluster:vm"],
+    "provides": []
 }

@@ -298,6 +298,28 @@
             "required": false,
             "example": "/home/tappaas/TAPPaaS/src/apps/nextcloud",
             "note": "Automatically set by copy-update-json.sh based on the directory where the module JSON resides"
+        },
+
+        "dependsOn": {
+            "description": "List of services this module depends on. Each entry is a 'module:service' pair identifying which module delivers the service.",
+            "type": "array",
+            "required": false,
+            "default": [],
+            "items": "string",
+            "format": "^[a-zA-Z][a-zA-Z0-9-]*:[a-zA-Z][a-zA-Z0-9-]*$",
+            "example": ["cluster:vm", "cluster:ha", "firewall:proxy"],
+            "note": "The installer validates that each referenced module is installed and provides the named service"
+        },
+
+        "provides": {
+            "description": "List of services this module provides. Service names only (the module is implicit from the JSON filename).",
+            "type": "array",
+            "required": false,
+            "default": [],
+            "items": "string",
+            "format": "^[a-zA-Z][a-zA-Z0-9-]*$",
+            "example": ["vm", "ha"],
+            "note": "Each listed service must have a corresponding services/<service>/install-service.sh and update-service.sh"
         }
     },
 
@@ -323,6 +345,14 @@
             "README.md": {
                 "description": "Module documentation",
                 "required": true
+            },
+            "services/<service-name>/install-service.sh": {
+                "description": "Script called when a module consuming this service is installed. Called with the consuming module name as argument.",
+                "required": "if module provides services"
+            },
+            "services/<service-name>/update-service.sh": {
+                "description": "Script called when a module consuming this service is updated. Called with the consuming module name as argument.",
+                "required": "if module provides services"
             }
         }
     },
