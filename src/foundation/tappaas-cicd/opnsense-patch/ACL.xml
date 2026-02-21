@@ -1,0 +1,68 @@
+<acl>
+    <page-interfaces-neighbor>
+        <name>Interfaces: Neighbors</name>
+        <patterns>
+            <pattern>ui/interfaces/neighbor</pattern>
+            <pattern>api/interfaces/neighbor/*</pattern>
+        </patterns>
+    </page-interfaces-neighbor>
+    <page-system-advanced-network>
+        <name>Interfaces: Settings</name>
+        <patterns>
+            <pattern>ui/interfaces/settings</pattern>
+            <pattern>api/interfaces/settings/*</pattern>
+        </patterns>
+    </page-system-advanced-network>
+    <page-firewall-virtualipaddress-edit>
+        <name>Interfaces: Virtual IPs: Settings</name>
+        <patterns>
+            <pattern>ui/interfaces/vip</pattern>
+            <pattern>api/interfaces/vip_settings/*</pattern>
+        </patterns>
+    </page-firewall-virtualipaddress-edit>
+    <page-status-carp>
+        <name>Interfaces: Virtual IPs: Status</name>
+        <patterns>
+            <pattern>ui/diagnostics/interface/vip</pattern>
+            <pattern>api/diagnostics/interface/carp_status</pattern>
+            <pattern>api/diagnostics/interface/get_vip_status</pattern>
+            <pattern>api/diagnostics/interface/get_pfsync_nodes</pattern>
+        </patterns>
+    </page-status-carp>
+    <page-interfaces-vxlan>
+        <name>Interfaces: VXLAN</name>
+        <patterns>
+            <pattern>ui/interfaces/vxlan</pattern>
+            <pattern>api/interfaces/vxlan_settings/*</pattern>
+        </patterns>
+    </page-interfaces-vxlan>
+    <page-interfaces-loopback>
+        <name>Interfaces: Loopback</name>
+        <patterns>
+            <pattern>ui/interfaces/loopback</pattern>
+            <pattern>api/interfaces/loopback_settings/*</pattern>
+        </patterns>
+    </page-interfaces-loopback>
+    <page-interfaces-vlan-edit>
+        <name>Interfaces: VLAN</name>
+        <patterns>
+          <pattern>ui/interfaces/vlan</pattern>
+          <pattern>api/interfaces/vlan_settings/*</pattern>
+        </patterns>
+    </page-interfaces-vlan-edit>
+    <page-interfaces-lagg-edit>
+        <name>Interfaces: LAGG: Edit</name>
+        <patterns>
+            <pattern>ui/interfaces/lagg</pattern>
+            <pattern>api/interfaces/lagg_settings/*</pattern>
+        </patterns>
+    </page-interfaces-lagg-edit>
+    <page-interfaces-assign-edit>
+        <name>Interfaces: Assign Settings</name>
+        <patterns>
+            <pattern>ui/interfaces/assign</pattern>
+            <pattern>api/interfaces/assign_settings/*</pattern>
+            <pattern>api/interfaces/interface_assign/*</pattern>
+        </patterns>
+    </page-interfaces-assign-edit>
+</acl>

@@ -1,0 +1,35 @@
+{
+  "test1": {
+    "type": "service",
+    "state": "Active",
+    "typeId": "8",
+    "subId": "1",
+    "vlantag": 802,
+    "ip": "10.80.2.0/24",
+    "bridge": "LAN",
+    "description": "Test zone 1 (enabled)",
+    "access-to": []
+  },
+  "test3": {
+    "type": "service",
+    "state": "Disabled",
+    "typeId": "8",
+    "subId": "3",
+    "vlantag": 800,
+    "ip": "10.80.3.0/24",
+    "bridge": "LAN",
+    "description": "Test zone 3",
+    "access-to": []
+  },
+  "test4": {
+    "type": "service",
+    "state": "Disabled",
+    "typeId": "8",
+    "subId": "4",
+    "vlantag": 804,
+    "ip": "10.80.4.0/24",
+    "bridge": "LAN",
+    "description": "Test zone 4",
+    "access-to": []
+  }
+}

@@ -15,5 +15,7 @@
     "description": "TAPPaaS LiteLLM",  
     "author": "@ErikDaniel007",
     "releaseDate": "2026-02-10",
-    "status": "Development"
+    "status": "Development",
+    "dependsOn": ["cluster:vm"],
+    "provides": []
 }

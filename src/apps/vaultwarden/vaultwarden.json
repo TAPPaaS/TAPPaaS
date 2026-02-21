@@ -14,5 +14,7 @@
     "description": "VaultWarden password manager (Bitwarden-compatible) in DMZ",
     "maintainer": "@larsrossen",
     "releaseDate": "2026-02-17",
-    "status": "Development"
+    "status": "Development",
+    "dependsOn": ["cluster:vm"],
+    "provides": []
 }

@@ -14,5 +14,7 @@
     "imageLocation": "https://cdimage.debian.org/cdimage/cloud/trixie/20260112-2355",
     "bridge0": "lan",
     "zone0": "private",
-    "description": "TAPPaaS NetBird Client for accessing private zone (so you can operate as if you are local to TAPPaaS)"
+    "description": "TAPPaaS NetBird Client for accessing private zone (so you can operate as if you are local to TAPPaaS)",
+    "dependsOn": ["cluster:vm"],
+    "provides": []
 }
