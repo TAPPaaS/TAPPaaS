@@ -14,22 +14,22 @@
         {
             "moduleName": "firewall",
             "vmid": 110,
-            "moduleJson": "src/foundation/10-firewall/firewall.json"
+            "moduleJson": "src/foundation/firewall/firewall.json"
         },
         {
             "moduleName": "tappaas-cicd",
             "vmid": 130,
-            "moduleJson": "src/foundation/30-tappaas-cicd/tappaas-cicd.json"
+            "moduleJson": "src/foundation/tappaas-cicd/tappaas-cicd.json"
         },
         {
             "moduleName": "identity",
             "vmid": 140,
-            "moduleJson": "src/foundation/40-Identity/identity.json"
+            "moduleJson": "src/foundation/identity/identity.json"
         },
         {
             "moduleName": "backup",
             "vmid": 200,
-            "moduleJson": "src/foundation/35-backup/backup.json"
+            "moduleJson": "src/foundation/backup/backup.json"
         }
     ],
     "applicationModules": [
@@ -70,27 +70,27 @@
         {
             "moduleName": "test-debian",
             "vmid": 901,
-            "moduleJson": "src/foundation/30-tappaas-cicd/test-vm-creation/test-debian.json"
+            "moduleJson": "src/foundation/tappaas-cicd/test-vm-creation/test-debian.json"
         },
         {
             "moduleName": "test-debian-vlan-node",
             "vmid": 902,
-            "moduleJson": "src/foundation/30-tappaas-cicd/test-vm-creation/test-debian-vlan-node.json"
+            "moduleJson": "src/foundation/tappaas-cicd/test-vm-creation/test-debian-vlan-node.json"
         },
         {
             "moduleName": "test-ubuntu-vlan",
             "vmid": 905,
-            "moduleJson": "src/foundation/30-tappaas-cicd/test-vm-creation/test-ubuntu-vlan.json"
+            "moduleJson": "src/foundation/tappaas-cicd/test-vm-creation/test-ubuntu-vlan.json"
         },
         {
             "moduleName": "test-nixos",
             "vmid": 911,
-            "moduleJson": "src/foundation/30-tappaas-cicd/test-vm-creation/test-nixos.json"
+            "moduleJson": "src/foundation/tappaas-cicd/test-vm-creation/test-nixos.json"
         },
         {
             "moduleName": "test-nixos-vlan-node",
             "vmid": 912,
-            "moduleJson": "src/foundation/30-tappaas-cicd/test-vm-creation/test-nixos-vlan-node.json"
+            "moduleJson": "src/foundation/tappaas-cicd/test-vm-creation/test-nixos-vlan-node.json"
         },
         {
             "moduleName": "template",

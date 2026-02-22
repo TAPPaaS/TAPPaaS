@@ -1,56 +1,82 @@
 Program,Install Location,Source Path,Type
 # ==========================================================================================
 # TAPPaaS Foundation Layer - Executable Programs and Scripts
-# Generated: 2026-02-14
+# Generated: 2026-02-22
 # ==========================================================================================
 
 # ------------------------------------------------------------------------------------------
 # CLI Tools (Built from Python via Nix)
 # ------------------------------------------------------------------------------------------
-opnsense-controller,/home/tappaas/bin/,30-tappaas-cicd/opnsense-controller/src/opnsense_controller/main.py,Python CLI
-zone-manager,/home/tappaas/bin/,30-tappaas-cicd/opnsense-controller/src/opnsense_controller/zone_manager.py,Python CLI
-dns-manager,/home/tappaas/bin/,30-tappaas-cicd/opnsense-controller/src/opnsense_controller/dns_manager_cli.py,Python CLI
-opnsense-firewall,/home/tappaas/bin/,30-tappaas-cicd/opnsense-controller/src/opnsense_controller/firewall_cli.py,Python CLI
-update-tappaas,/home/tappaas/bin/,30-tappaas-cicd/update-tappaas/src/update_tappaas/main.py,Python CLI
-update-node,/home/tappaas/bin/,30-tappaas-cicd/update-tappaas/src/update_tappaas/update_node.py,Python CLI
+opnsense-controller,/home/tappaas/bin/,tappaas-cicd/opnsense-controller/src/opnsense_controller/main.py,Python CLI
+zone-manager,/home/tappaas/bin/,tappaas-cicd/opnsense-controller/src/opnsense_controller/zone_manager.py,Python CLI
+dns-manager,/home/tappaas/bin/,tappaas-cicd/opnsense-controller/src/opnsense_controller/dns_manager_cli.py,Python CLI
+opnsense-firewall,/home/tappaas/bin/,tappaas-cicd/opnsense-controller/src/opnsense_controller/firewall_cli.py,Python CLI
+update-tappaas,/home/tappaas/bin/,tappaas-cicd/update-tappaas/src/update_tappaas/main.py,Python CLI
+update-node,/home/tappaas/bin/,tappaas-cicd/update-tappaas/src/update_tappaas/update_node.py,Python CLI
 
 # ------------------------------------------------------------------------------------------
-# Shell Scripts in /home/tappaas/bin/ (symlinks to scripts/)
+# Shell Scripts in /home/tappaas/bin/ (symlinks to tappaas-cicd/scripts/)
 # ------------------------------------------------------------------------------------------
-common-install-routines.sh,/home/tappaas/bin/,30-tappaas-cicd/scripts/common-install-routines.sh,Shell (sourced)
-copy-update-json.sh,/home/tappaas/bin/,30-tappaas-cicd/scripts/copy-update-json.sh,Shell (sourced)
-install-vm.sh,/home/tappaas/bin/,30-tappaas-cicd/scripts/install-vm.sh,Shell (sourced)
-update-os.sh,/home/tappaas/bin/,30-tappaas-cicd/scripts/update-os.sh,Shell
-update-HA.sh,/home/tappaas/bin/,30-tappaas-cicd/scripts/update-HA.sh,Shell
-create-configuration.sh,/home/tappaas/bin/,30-tappaas-cicd/scripts/create-configuration.sh,Shell
-setup-caddy.sh,/home/tappaas/bin/,30-tappaas-cicd/scripts/setup-caddy.sh,Shell
-update-cron.sh,/home/tappaas/bin/,30-tappaas-cicd/scripts/update-cron.sh,Shell
-check-disk-threshold.sh,/home/tappaas/bin/,30-tappaas-cicd/scripts/check-disk-threshold.sh,Shell
-resize-disk.sh,/home/tappaas/bin/,30-tappaas-cicd/scripts/resize-disk.sh,Shell
-test-config.sh,/home/tappaas/bin/,30-tappaas-cicd/scripts/test-config.sh,Shell
+common-install-routines.sh,/home/tappaas/bin/,tappaas-cicd/scripts/common-install-routines.sh,Shell (sourced)
+copy-update-json.sh,/home/tappaas/bin/,tappaas-cicd/scripts/copy-update-json.sh,Shell (sourced)
+update-os.sh,/home/tappaas/bin/,tappaas-cicd/scripts/update-os.sh,Shell
+create-configuration.sh,/home/tappaas/bin/,tappaas-cicd/scripts/create-configuration.sh,Shell
+setup-caddy.sh,/home/tappaas/bin/,tappaas-cicd/scripts/setup-caddy.sh,Shell
+update-cron.sh,/home/tappaas/bin/,tappaas-cicd/scripts/update-cron.sh,Shell
+check-disk-threshold.sh,/home/tappaas/bin/,tappaas-cicd/scripts/check-disk-threshold.sh,Shell
+resize-disk.sh,/home/tappaas/bin/,tappaas-cicd/scripts/resize-disk.sh,Shell
+test-config.sh,/home/tappaas/bin/,tappaas-cicd/scripts/test-config.sh,Shell
+install-module.sh,/home/tappaas/bin/,tappaas-cicd/scripts/install-module.sh,Shell
+update-module.sh,/home/tappaas/bin/,tappaas-cicd/scripts/update-module.sh,Shell
 
 # ------------------------------------------------------------------------------------------
 # Scripts on Proxmox Nodes (/root/tappaas/)
 # ------------------------------------------------------------------------------------------
-Create-TAPPaaS-VM.sh,/root/tappaas/ (Proxmox nodes),05-ProxmoxNode/Create-TAPPaaS-VM.sh,Shell
+Create-TAPPaaS-VM.sh,/root/tappaas/ (Proxmox nodes),cluster/Create-TAPPaaS-VM.sh,Shell
 
 # ------------------------------------------------------------------------------------------
 # Foundation Module Scripts (run from TAPPaaS repository)
 # ------------------------------------------------------------------------------------------
-install.sh (05-ProxmoxNode),Manual (curl from GitHub),05-ProxmoxNode/install.sh,Shell
-update.sh (10-firewall),Called by update-node,10-firewall/update.sh,Shell
-install1.sh (30-tappaas-cicd),Manual (on tappaas-cicd),30-tappaas-cicd/install1.sh,Shell
-install2.sh (30-tappaas-cicd),Called by install1.sh,30-tappaas-cicd/install2.sh,Shell
-update.sh (30-tappaas-cicd),Called by update-node,30-tappaas-cicd/update.sh,Shell
-test.sh (30-tappaas-cicd),Manual/CI,30-tappaas-cicd/test.sh,Shell
-install.sh (35-backup),Manual,35-backup/install.sh,Shell
-update.sh (35-backup),Called by update-node,35-backup/update.sh,Shell
-install.sh (40-Identity),Manual,40-Identity/install.sh,Shell
-update.sh (40-Identity),Called by update-node,40-Identity/update.sh,Shell
+install.sh (cluster),Called by install-module.sh,cluster/install.sh,Shell
+update.sh (cluster),Called by update-module.sh,cluster/update.sh,Shell
+update.sh (firewall),Called by update-module.sh,firewall/update.sh,Shell
+install1.sh (tappaas-cicd),Manual (on tappaas-cicd),tappaas-cicd/install1.sh,Shell
+install2.sh (tappaas-cicd),Called by install1.sh,tappaas-cicd/install2.sh,Shell
+pre-update.sh (tappaas-cicd),Called by update-module.sh,tappaas-cicd/pre-update.sh,Shell
+update.sh (tappaas-cicd),Called by update-node,tappaas-cicd/update.sh,Shell
+test.sh (tappaas-cicd),Manual/CI,tappaas-cicd/test.sh,Shell
+install.sh (backup),Called by install-module.sh,backup/install.sh,Shell
+update.sh (backup),Called by update-module.sh,backup/update.sh,Shell
+backup-manage.sh,Called manually,backup/backup-manage.sh,Shell
+restore.sh,Called manually,backup/restore.sh,Shell
+install.sh (identity),Called by install-module.sh,identity/install.sh,Shell
+update.sh (identity),Called by update-module.sh,identity/update.sh,Shell
+
+# ------------------------------------------------------------------------------------------
+# Service Scripts (called by install-module.sh / update-module.sh per service)
+# ------------------------------------------------------------------------------------------
+install-service.sh (cluster/vm),Called by install-module.sh,cluster/services/vm/install-service.sh,Shell
+update-service.sh (cluster/vm),Called by update-module.sh,cluster/services/vm/update-service.sh,Shell
+install-service.sh (cluster/ha),Called by install-module.sh,cluster/services/ha/install-service.sh,Shell
+update-service.sh (cluster/ha),Called by update-module.sh,cluster/services/ha/update-service.sh,Shell
+install-service.sh (firewall/firewall),Called by install-module.sh,firewall/services/firewall/install-service.sh,Shell
+update-service.sh (firewall/firewall),Called by update-module.sh,firewall/services/firewall/update-service.sh,Shell
+install-service.sh (firewall/proxy),Called by install-module.sh,firewall/services/proxy/install-service.sh,Shell
+update-service.sh (firewall/proxy),Called by update-module.sh,firewall/services/proxy/update-service.sh,Shell
+install-service.sh (identity/identity),Called by install-module.sh,identity/services/identity/install-service.sh,Shell
+update-service.sh (identity/identity),Called by update-module.sh,identity/services/identity/update-service.sh,Shell
+install-service.sh (identity/accessControl),Called by install-module.sh,identity/services/accessControl/install-service.sh,Shell
+update-service.sh (identity/accessControl),Called by update-module.sh,identity/services/accessControl/update-service.sh,Shell
+install-service.sh (backup/vm),Called by install-module.sh,backup/services/vm/install-service.sh,Shell
+update-service.sh (backup/vm),Called by update-module.sh,backup/services/vm/update-service.sh,Shell
+install-service.sh (templates/nixos),Called by install-module.sh,templates/services/nixos/install-service.sh,Shell
+update-service.sh (templates/nixos),Called by update-module.sh,templates/services/nixos/update-service.sh,Shell
+install-service.sh (templates/debian),Called by install-module.sh,templates/services/debian/install-service.sh,Shell
+update-service.sh (templates/debian),Called by update-module.sh,templates/services/debian/update-service.sh,Shell
 
 # ------------------------------------------------------------------------------------------
 # Test VM Creation Scripts
 # ------------------------------------------------------------------------------------------
-test.sh (test-vm-creation),Called by 30-tappaas-cicd/test.sh,30-tappaas-cicd/test-vm-creation/test.sh,Shell
-install.sh (test-vm-creation),Called by test.sh,30-tappaas-cicd/test-vm-creation/install.sh,Shell
-test-vm.sh,Called by test.sh,30-tappaas-cicd/test-vm-creation/test-vm.sh,Shell
+test.sh (test-vm-creation),Called by tappaas-cicd/test.sh,tappaas-cicd/test-vm-creation/test.sh,Shell
+install.sh (test-vm-creation),Called by test.sh,tappaas-cicd/test-vm-creation/install.sh,Shell
+test-vm.sh,Called by test.sh,tappaas-cicd/test-vm-creation/test-vm.sh,Shell

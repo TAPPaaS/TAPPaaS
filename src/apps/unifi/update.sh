@@ -25,22 +25,6 @@ echo ""
 echo "=== Post-Install Configuration ==="
 echo "VM: ${VMNAME} (VMID: ${VMID})"
 
-# Run OS-specific post-install using update-os.sh
-# This script auto-detects NixOS vs Debian and applies appropriate updates
-cd "${SCRIPT_DIR}"
-/home/tappaas/bin/update-os.sh "${VMNAME}" "${VMID}" "${NODE}"
-
-# Configure HA if HANode is specified
-if [[ -n "${HANODE}" && "${HANODE}" != "NONE" ]]; then
-    echo ""
-    echo "=== Configuring HA ==="
-    echo "HA Node: ${HANODE}"
-    /home/tappaas/bin/update-HA.sh "${VMNAME}"
-else
-    echo ""
-    echo "No HA Node specified, skipping HA configuration."
-fi
-
 echo ""
 echo "=== Installation Complete ==="
 echo "VM: ${VMNAME} (VMID: ${VMID})"

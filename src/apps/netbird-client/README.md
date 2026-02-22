@@ -1,5 +1,7 @@
 # Netbird client
 
+** Not working **
+
 This module installs a netbird client in TAPPaaS
 
 This client is Different from the Netbird client installed by default on the mgmt network for doing TAPPaaS management access
@@ -9,8 +11,9 @@ You can have several jsons if you want to have clients in several TAPPaaS zones
 
 ## TODO
 
-convert to NisOS
-also right now it does not work
+- convert to NisOS
+- convert to using new install system
+- also right now it does not work
 
 
 ## installation

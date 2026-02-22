@@ -1,62 +1,97 @@
-Program,Location,TAPPaaS Dependencies,Config Dependencies
+File name,Location,Direct dependencies,Config files read
 # ==========================================================================================
-# TAPPaaS Foundation Layer - Program Dependencies
-# Generated: 2026-02-14
-# Only tracks TAPPaaS programs/scripts - not external tools
+# TAPPaaS Foundation Layer - Direct Dependencies
+# Generated: 2026-02-22
 # ==========================================================================================
 
 # ------------------------------------------------------------------------------------------
-# Python CLI Tools
+# Python CLI Tools (installed to /home/tappaas/bin/)
 # ------------------------------------------------------------------------------------------
-opnsense-controller,30-tappaas-cicd/opnsense-controller/,zone-manager; dns-manager; opnsense-firewall (all same package),zones.json
-zone-manager,30-tappaas-cicd/opnsense-controller/,opnsense-controller (same package),zones.json
-dns-manager,30-tappaas-cicd/opnsense-controller/,opnsense-controller (same package),None
-opnsense-firewall,30-tappaas-cicd/opnsense-controller/,opnsense-controller (same package),None
-update-tappaas,30-tappaas-cicd/update-tappaas/,update-node,configuration.json
-update-node,30-tappaas-cicd/update-tappaas/,module update.sh scripts,configuration.json
+opnsense-controller,tappaas-cicd/opnsense-controller/,config.py; dhcp_manager.py; firewall_manager.py; vlan_manager.py,None
+zone-manager,tappaas-cicd/opnsense-controller/,config.py; dhcp_manager.py; firewall_manager.py; vlan_manager.py,zones.json
+dns-manager,tappaas-cicd/opnsense-controller/,config.py; dhcp_manager.py,None
+opnsense-firewall,tappaas-cicd/opnsense-controller/,config.py; firewall_manager.py,None
+update-tappaas,tappaas-cicd/update-tappaas/,update-node (subprocess),configuration.json
+update-node,tappaas-cicd/update-tappaas/,ssh; module update.sh scripts,/home/tappaas/config/*.json
 
 # ------------------------------------------------------------------------------------------
-# Core Shell Scripts (sourced by others)
+# Shell Scripts in /home/tappaas/bin/ (from tappaas-cicd/scripts/)
 # ------------------------------------------------------------------------------------------
-common-install-routines.sh,30-tappaas-cicd/scripts/,None,module-fields.json; zones.json
-copy-update-json.sh,30-tappaas-cicd/scripts/,None,module-fields.json
-install-vm.sh,30-tappaas-cicd/scripts/,copy-update-json.sh; common-install-routines.sh,None
+common-install-routines.sh,tappaas-cicd/scripts/,None (library),<module>.json; zones.json; module-fields.json
+copy-update-json.sh,tappaas-cicd/scripts/,None,module-fields.json; <module>.json
+create-configuration.sh,tappaas-cicd/scripts/,None (creates configuration.json),None (generates configuration.json)
+setup-caddy.sh,tappaas-cicd/scripts/,opnsense-firewall (optional),configuration.json
+update-cron.sh,tappaas-cicd/scripts/,None,None
+update-os.sh,tappaas-cicd/scripts/,None,None
+check-disk-threshold.sh,tappaas-cicd/scripts/,resize-disk.sh,<vmname>.json
+resize-disk.sh,tappaas-cicd/scripts/,None,<vmname>.json
+test-config.sh,tappaas-cicd/scripts/,None,module-fields.json; /home/tappaas/config/*.json
+install-module.sh,tappaas-cicd/scripts/,copy-update-json.sh; common-install-routines.sh; module install.sh; service install-service.sh scripts,<module>.json
+update-module.sh,tappaas-cicd/scripts/,common-install-routines.sh; module pre-update.sh; module update.sh; service update-service.sh scripts,<module>.json
 
 # ------------------------------------------------------------------------------------------
-# Infrastructure Scripts
+# Script on Proxmox Nodes
 # ------------------------------------------------------------------------------------------
-update-os.sh,30-tappaas-cicd/scripts/,None,None
-update-HA.sh,30-tappaas-cicd/scripts/,None,module JSON files
-create-configuration.sh,30-tappaas-cicd/scripts/,None,None (creates configuration.json)
-setup-caddy.sh,30-tappaas-cicd/scripts/,opnsense-firewall (optional),configuration.json
-update-cron.sh,30-tappaas-cicd/scripts/,update-tappaas,None
-check-disk-threshold.sh,30-tappaas-cicd/scripts/,resize-disk.sh,module JSON files
-resize-disk.sh,30-tappaas-cicd/scripts/,None,module JSON files
-test-config.sh,30-tappaas-cicd/scripts/,None,module-fields.json
+Create-TAPPaaS-VM.sh,cluster/,None,<vmname>.json; zones.json
 
 # ------------------------------------------------------------------------------------------
-# Proxmox Node Scripts
+# tappaas-cicd module scripts
 # ------------------------------------------------------------------------------------------
-Create-TAPPaaS-VM.sh,05-ProxmoxNode/,None,zones.json
-install.sh (05-ProxmoxNode),05-ProxmoxNode/,Create-TAPPaaS-VM.sh (downloads),configuration.json; zones.json
+install1.sh,tappaas-cicd/,install2.sh (via nixos-rebuild),None
+install2.sh,tappaas-cicd/,create-configuration.sh; update-module.sh; setup-caddy.sh,None
+pre-update.sh,tappaas-cicd/,common-install-routines.sh,<vmname>.json
+update.sh (tappaas-cicd),tappaas-cicd/,common-install-routines.sh; update-cron.sh,<vmname>.json
+test.sh (tappaas-cicd),tappaas-cicd/,test-vm-creation/test.sh,None
 
 # ------------------------------------------------------------------------------------------
-# Module Installation Scripts
+# cluster module scripts
 # ------------------------------------------------------------------------------------------
-install1.sh,30-tappaas-cicd/,None (manual step before reboot),None
-install2.sh,30-tappaas-cicd/,create-configuration.sh; setup-caddy.sh; update.sh,configuration.json; zones.json
-update.sh (30-tappaas-cicd),30-tappaas-cicd/,common-install-routines.sh; zone-manager; update-HA.sh; update-cron.sh,configuration.json; zones.json
-test.sh (30-tappaas-cicd),30-tappaas-cicd/,test-vm-creation/test.sh,None
-
-update.sh (10-firewall),10-firewall/,update-HA.sh,None
-install.sh (35-backup),35-backup/,common-install-routines.sh; install-vm.sh,None
-update.sh (35-backup),35-backup/,None,None
-install.sh (40-Identity),40-Identity/,common-install-routines.sh; install-vm.sh,None
-update.sh (40-Identity),40-Identity/,None,None
+install.sh (cluster),cluster/,None,None
+update.sh (cluster),cluster/,None,zones.json
 
 # ------------------------------------------------------------------------------------------
-# Test VM Creation Scripts
+# firewall module scripts
 # ------------------------------------------------------------------------------------------
-test.sh (test-vm-creation),30-tappaas-cicd/test-vm-creation/,install.sh; test-vm.sh,None
-install.sh (test-vm-creation),30-tappaas-cicd/test-vm-creation/,install-vm.sh; update-os.sh; update-HA.sh,None
-test-vm.sh,30-tappaas-cicd/test-vm-creation/,common-install-routines.sh,module JSON files
+update.sh (firewall),firewall/,zone-manager,zones.json
+
+# ------------------------------------------------------------------------------------------
+# backup module scripts
+# ------------------------------------------------------------------------------------------
+install.sh (backup),backup/,copy-update-json.sh; common-install-routines.sh,backup.json; zones.json
+update.sh (backup),backup/,None,None
+backup-manage.sh,backup/,common-install-routines.sh,backup.json
+restore.sh,backup/,common-install-routines.sh,backup.json
+
+# ------------------------------------------------------------------------------------------
+# identity module scripts
+# ------------------------------------------------------------------------------------------
+install.sh (identity),identity/,update.sh (identity),None
+update.sh (identity),identity/,common-install-routines.sh,<vmname>.json
+
+# ------------------------------------------------------------------------------------------
+# template service scripts
+# ------------------------------------------------------------------------------------------
+install-service.sh (templates/nixos),templates/services/nixos/,update-service.sh (templates/nixos),None
+update-service.sh (templates/nixos),templates/services/nixos/,common-install-routines.sh; update-os.sh,<module>.json
+install-service.sh (templates/debian),templates/services/debian/,update-service.sh (templates/debian),None
+update-service.sh (templates/debian),templates/services/debian/,common-install-routines.sh; update-os.sh,<module>.json
+
+# ------------------------------------------------------------------------------------------
+# cluster service scripts
+# ------------------------------------------------------------------------------------------
+install-service.sh (cluster/vm),cluster/services/vm/,copy-update-json.sh; common-install-routines.sh; Create-TAPPaaS-VM.sh (remote),<module>.json
+update-service.sh (cluster/vm),cluster/services/vm/,None,None
+install-service.sh (cluster/ha),cluster/services/ha/,update-service.sh (cluster/ha),None
+update-service.sh (cluster/ha),cluster/services/ha/,common-install-routines.sh,<module>.json
+
+# ------------------------------------------------------------------------------------------
+# test-vm-creation scripts
+# ------------------------------------------------------------------------------------------
+test.sh (test-vm-creation),tappaas-cicd/test-vm-creation/,install-module.sh; test-vm.sh,<test>.json
+test-vm.sh,tappaas-cicd/test-vm-creation/,common-install-routines.sh,<vmname>.json
+install.sh (test-vm-creation),tappaas-cicd/test-vm-creation/,None,None
+
+# ------------------------------------------------------------------------------------------
+# PHP files
+# ------------------------------------------------------------------------------------------
+InterfaceAssignController.php,tappaas-cicd/opnsense-patch/,None (OPNsense API patch),None
