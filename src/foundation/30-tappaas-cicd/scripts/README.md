@@ -80,7 +80,7 @@ Creates the `configuration.json` file for the TAPPaaS system by querying the run
 
 **Usage:**
 ```bash
-create-configuration.sh <upstreamGit> <branch> <domain> <email> <updateSchedule>
+create-configuration.sh <upstreamGit> <branch> <domain> <email> <updateSchedule> [weekday] [hour]
 ```
 
 **Parameters:**
@@ -92,23 +92,23 @@ create-configuration.sh <upstreamGit> <branch> <domain> <email> <updateSchedule>
 | `domain` | Primary domain for TAPPaaS | `mytappaas.dev` |
 | `email` | Admin email for SSL and notifications | `admin@mytappaas.dev` |
 | `updateSchedule` | Update frequency | `monthly`, `weekly`, `daily`, `none` |
+| `weekday` | (Optional) Day of week for updates, default: Thursday | `Wednesday` |
+| `hour` | (Optional) Hour of day 0-23, default: 2 | `3` |
 
 **Example:**
 ```bash
 create-configuration.sh github.com/TAPPaaS/TAPPaaS main mytappaas.dev admin@mytappaas.dev monthly
+create-configuration.sh github.com/TAPPaaS/TAPPaaS main mytappaas.dev admin@mytappaas.dev weekly Wednesday 3
 ```
 
 **What it does:**
 1. Queries Proxmox cluster for all nodes via `pvesh`
 2. Lists all VMs and their IP addresses
-3. Generates per-node update schedules:
-   - Even-numbered nodes update Tuesday
-   - Odd-numbered nodes update Thursday
-4. Creates `/home/tappaas/config/configuration.json`
+3. Creates `/home/tappaas/config/configuration.json` with a global `updateSchedule`
 
 **Generated configuration includes:**
-- `upstreamGit`, `branch`, `domain`, `email` from arguments
-- `nodes` array with hostname, IP, and updateSchedule for each node
+- `upstreamGit`, `branch`, `domain`, `email`, `updateSchedule` from arguments (in the `tappaas` section)
+- `nodes` array with hostname and IP for each node
 
 ---
 
@@ -228,14 +228,14 @@ update-cron.sh
 **What it does:**
 - Removes any existing `update-tappaas` cron entries
 - Creates a new cron entry for user `tappaas` to run hourly (at minute 0)
-- The `update-tappaas` command handles all scheduling logic internally, checking each node's `updateSchedule` to determine if updates should run
+- The `update-tappaas` command handles all scheduling logic internally, checking the global `updateSchedule` to determine if updates should run
 
 **Cron entry created:**
 ```
 0 * * * * /home/tappaas/bin/update-tappaas
 ```
 
-**Why hourly?** Running hourly ensures nodes scheduled for any hour will be updated. The `update-tappaas` script only performs updates when the current hour matches the node's configured `updateSchedule` hour.
+**Why hourly?** Running hourly ensures the scheduled hour will be matched. The `update-tappaas` script only performs updates when the current hour matches the global `updateSchedule` hour.
 
 ---
 

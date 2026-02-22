@@ -26,13 +26,13 @@ Global system configuration including:
 - **nodeCount** - Number of Proxmox nodes in the cluster
 - **upstreamGit** - Git repository for TAPPaaS source
 - **branch** - Git branch (affects update scheduling)
+- **updateSchedule** - When to apply system updates (applies to all nodes)
 
 ### tappaas-nodes
 
 Array of Proxmox node configurations, each containing:
 - **hostname** - Node hostname (e.g., `tappaas1`, `tappaas2`)
 - **ip** - Management IP address
-- **updateSchedule** - When to apply system updates
 
 ## Example Configuration
 
@@ -44,23 +44,21 @@ Array of Proxmox node configurations, each containing:
         "email": "admin@mytappaas.dev",
         "nodeCount": 3,
         "upstreamGit": "github.com/TAPPaaS/TAPPaaS",
-        "branch": "main"
+        "branch": "main",
+        "updateSchedule": ["monthly", "Thursday", 2]
     },
     "tappaas-nodes": [
         {
             "hostname": "tappaas1",
-            "ip": "192.168.1.10",
-            "updateSchedule": ["monthly", "Thursday", 2]
+            "ip": "192.168.1.10"
         },
         {
             "hostname": "tappaas2",
-            "ip": "192.168.1.11",
-            "updateSchedule": ["monthly", "Tuesday", 2]
+            "ip": "192.168.1.11"
         },
         {
             "hostname": "tappaas3",
-            "ip": "192.168.1.12",
-            "updateSchedule": ["monthly", "Thursday", 2]
+            "ip": "192.168.1.12"
         }
     ]
 }
@@ -68,7 +66,7 @@ Array of Proxmox node configurations, each containing:
 
 ## Update Scheduling
 
-The `updateSchedule` field controls when system updates are applied to each node. It's an array with three values:
+The `updateSchedule` field in the `tappaas` section controls when system updates are applied to all nodes. It's an array with three values:
 
 | Position | Name | Description |
 |----------|------|-------------|
@@ -95,12 +93,6 @@ The `updateSchedule` field controls when system updates are applied to each node
 // Monthly on first Tuesday at 2 AM
 "updateSchedule": ["monthly", "Tuesday", 2]
 ```
-
-### Staggered Updates
-
-To avoid updating all nodes simultaneously, stagger updates across different days:
-- Odd-numbered nodes (tappaas1, tappaas3): Thursday
-- Even-numbered nodes (tappaas2, tappaas4): Tuesday
 
 ## File Locations
 

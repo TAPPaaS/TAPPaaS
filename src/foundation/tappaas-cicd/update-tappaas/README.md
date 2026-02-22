@@ -41,7 +41,7 @@ update-node tappaas1
 
 ## Scheduling
 
-Each node has an `updateSchedule` field in the configuration that controls when updates run.
+The `updateSchedule` field in the `tappaas` section of the configuration controls when updates run for all nodes.
 
 ### updateSchedule Format
 
@@ -51,6 +51,7 @@ Each node has an `updateSchedule` field in the configuration that controls when 
 
 **Fields:**
 1. **frequency** - One of:
+   - `"none"` - Never update automatically
    - `"daily"` - Run every day at the specified hour
    - `"weekly"` - Run once per week on the specified weekday
    - `"monthly"` - Run once per month on the first occurrence of the specified weekday (days 1-7)
@@ -84,23 +85,21 @@ Reads from `/home/tappaas/config/configuration.json`:
 {
     "tappaas": {
         "version": "0.5",
-        "domain": "mytappaas.dev"
+        "domain": "mytappaas.dev",
+        "updateSchedule": ["monthly", "Thursday", 2]
     },
     "tappaas-nodes": [
         {
             "hostname": "tappaas1",
-            "ip": "192.168.1.10",
-            "updateSchedule": ["monthly", "Thursday", 2]
+            "ip": "192.168.1.10"
         },
         {
             "hostname": "tappaas2",
-            "ip": "192.168.1.11",
-            "updateSchedule": ["monthly", "Tuesday", 2]
+            "ip": "192.168.1.11"
         },
         {
             "hostname": "tappaas3",
-            "ip": "192.168.1.12",
-            "updateSchedule": ["monthly", "Thursday", 2]
+            "ip": "192.168.1.12"
         }
     ]
 }
@@ -114,7 +113,7 @@ Use `update-cron.sh` to install the daily cron job:
 /home/tappaas/bin/update-cron.sh
 ```
 
-This creates a cron entry that runs `update-tappaas` every hour (at minute 0). The `update-tappaas` command checks each node's `updateSchedule` to determine if it should be updated at that time. Running hourly ensures nodes scheduled for any hour will be updated.
+This creates a cron entry that runs `update-tappaas` every hour (at minute 0). The `update-tappaas` command checks the global `updateSchedule` to determine if updates should run at that time. Running hourly ensures the scheduled hour will be matched.
 
 ## What Gets Updated
 

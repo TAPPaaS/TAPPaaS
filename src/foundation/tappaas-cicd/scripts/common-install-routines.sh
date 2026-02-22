@@ -108,13 +108,23 @@ function check_json() {
 
   echo -e "${BL}Validating:${CL} $json_file" >&2
 
-  # Check required fields
+  # Check fields required by dependencies (requiredBy vs dependsOn)
+  local depends_on_json
+  depends_on_json=$(echo "$json_content" | jq -c '.dependsOn // []')
+
   local required_fields
-  required_fields=$(echo "$schema_fields" | jq -r 'to_entries[] | select(.value.required == true) | .key')
+  required_fields=$(echo "$schema_fields" | jq -r --argjson deps "$depends_on_json" '
+    to_entries[] |
+    select((.value.requiredBy // []) as $rb |
+      ($rb | length > 0) and ([$rb[] as $r | $deps[] | select(. == $r)] | length > 0)) |
+    .key')
 
   for field in $required_fields; do
     if ! echo "$json_content" | jq -e --arg F "$field" 'has($F)' >/dev/null 2>&1; then
-      echo -e "  ${RD}[ERROR]${CL} Missing required field: ${YW}$field${CL}" >&2
+      local req_by
+      req_by=$(echo "$schema_fields" | jq -r --arg F "$field" --argjson deps "$depends_on_json" '
+        .[$F].requiredBy as $rb | [$rb[] as $r | $deps[] | select(. == $r)] | join(", ")')
+      echo -e "  ${RD}[ERROR]${CL} Missing field: ${YW}$field${CL} (required by ${req_by})" >&2
       ((errors++))
     fi
   done

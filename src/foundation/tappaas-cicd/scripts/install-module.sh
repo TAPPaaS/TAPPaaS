@@ -108,12 +108,16 @@ ensure_scripts_executable() {
 
     # Root-level .sh files
     for script in "${dir}"/*.sh; do
-        [[ -f "${script}" ]] && chmod +x "${script}"
+        if [[ -f "${script}" ]]; then
+            chmod +x "${script}"
+        fi
     done
 
     # Service scripts
     for script in "${dir}"/services/*/*.sh; do
-        [[ -f "${script}" ]] && chmod +x "${script}"
+        if [[ -f "${script}" ]]; then
+            chmod +x "${script}"
+        fi
     done
 }
 

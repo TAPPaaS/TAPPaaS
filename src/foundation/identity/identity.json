@@ -15,6 +15,6 @@
     "maintainer": "@larsrossen",
     "releaseDate": "2026-02-17",
     "status": "Development",
-    "dependsOn": ["cluster:vm", "cluster:ha", "backup:vm", "firewall:proxy"],
+    "dependsOn": ["cluster:vm", "cluster:ha", "template:nixos", "backup:vm", "firewall:proxy"],
     "provides": ["accessControl", "identity"]
 }

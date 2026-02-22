@@ -18,16 +18,15 @@
 
 set -euo pipefail
 
-SCRIPT_NAME="$(basename "${BASH_SOURCE[0]}")"
-readonly SCRIPT_NAME
-readonly CONFIG_DIR="/home/tappaas/config"
-readonly SCHEMA_FILE="/home/tappaas/TAPPaaS/src/foundation/module-fields.json"
-
-# Color definitions (matching common-install-routines.sh)
-readonly YW=$'\033[33m'
-readonly RD=$'\033[01;31m'
-readonly DGN=$'\033[32m'
-readonly CL=$'\033[m'
+# Use conditional assignment so variables are safe both when run directly
+# and when sourced by another script (e.g., install-module.sh).
+: "${SCRIPT_NAME:=$(basename "${BASH_SOURCE[0]}")}"
+: "${CONFIG_DIR:=/home/tappaas/config}"
+: "${YW:=$'\033[33m'}"
+: "${RD:=$'\033[01;31m'}"
+: "${DGN:=$'\033[32m'}"
+: "${CL:=$'\033[m'}"
+SCHEMA_FILE="/home/tappaas/TAPPaaS/src/foundation/module-fields.json"
 
 info() {
     echo -e "${DGN}$*${CL}"

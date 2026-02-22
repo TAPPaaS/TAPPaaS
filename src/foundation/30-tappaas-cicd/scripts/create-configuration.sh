@@ -2,7 +2,7 @@
 #
 # Create a configuration.json according to the configuration-fields.json for the current running TAPPaaS system
 #
-# Usage: ./create-configuration.sh "upstreamGit" "branch" "domain" "email" "updateSchedule"
+# Usage: ./create-configuration.sh "upstreamGit" "branch" "domain" "email" "updateSchedule" ["weekday"] ["hour"]
 #
 # Where
 #   upstreamGit is the git URL of the upstream repository
@@ -10,11 +10,12 @@
 #   domain is the domain to use for the TAPPaaS system, typically mydomain.com (without www or @)
 #   email is the email to use for reporting system status and issues, typically admin@mydomain
 #   updateSchedule is the schedule for when to run the update script: monthly, weekly, daily, or none
-#       if weekly or monthly then the update is Tuesday for even numbered nodes and thursday for odd numbered nodes.
+#   weekday (optional) is the day of the week for updates (default: Thursday). Ignored for daily frequency.
+#   hour (optional) is the hour of day (0-23) for updates (default: 2)
 #
-# the rest of the values in the configuraiton is derived from the running system. aka by listing the nodes we can determine how many in the cluster and what their names are, by listing the VMs we can determine which modules are installed and IP they have
+# the rest of the values in the configuration is derived from the running system. aka by listing the nodes we can determine how many in the cluster and what their names are, by listing the VMs we can determine which modules are installed and IP they have
 #
-# the generatd configuration.json is stored in /home/tappaas/config
+# the generated configuration.json is stored in /home/tappaas/config
 #
 set -euo pipefail
 
@@ -51,7 +52,7 @@ command -v ssh >/dev/null 2>&1 || die "ssh is required but not installed."
 # Usage function
 usage() {
   cat << EOF
-Usage: $(basename "$0") <upstreamGit> <branch> <domain> <email> <updateSchedule>
+Usage: $(basename "$0") <upstreamGit> <branch> <domain> <email> <updateSchedule> [weekday] [hour]
 
 Arguments:
   upstreamGit     Git URL of the upstream repository (e.g., github.com/TAPPaaS/TAPPaaS)
@@ -59,10 +60,12 @@ Arguments:
   domain          Primary domain for TAPPaaS (e.g., mytappaas.dev, without www or @)
   email           Admin email for SSL certificates and notifications
   updateSchedule  Update frequency: monthly, weekly, daily, or none
-                  - For weekly/monthly: even-numbered nodes update Tuesday, odd on Thursday
+  weekday         (Optional) Day of week for updates (default: Thursday). Ignored for daily.
+  hour            (Optional) Hour of day 0-23 for updates (default: 2)
 
 Examples:
   $(basename "$0") github.com/TAPPaaS/TAPPaaS main mytappaas.dev admin@mytappaas.dev monthly
+  $(basename "$0") github.com/TAPPaaS/TAPPaaS main mytappaas.dev admin@mytappaas.dev weekly Wednesday 3
   $(basename "$0") github.com/myorg/TAPPaaS develop mysite.com ops@mysite.com daily
 EOF
 }
@@ -79,6 +82,8 @@ BRANCH="$2"
 DOMAIN="$3"
 EMAIL="$4"
 UPDATE_SCHEDULE="$5"
+UPDATE_WEEKDAY="${6:-Thursday}"
+UPDATE_HOUR="${7:-2}"
 
 # Validate updateSchedule
 case "$UPDATE_SCHEDULE" in
@@ -88,6 +93,20 @@ case "$UPDATE_SCHEDULE" in
     die "Invalid updateSchedule: '$UPDATE_SCHEDULE'. Must be one of: monthly, weekly, daily, none"
     ;;
 esac
+
+# Validate weekday
+case "$UPDATE_WEEKDAY" in
+  Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday)
+    ;;
+  *)
+    die "Invalid weekday: '$UPDATE_WEEKDAY'. Must be one of: Monday, Tuesday, Wednesday, Thursday, Friday, Saturday, Sunday"
+    ;;
+esac
+
+# Validate hour
+if ! [[ "$UPDATE_HOUR" =~ ^[0-9]+$ ]] || [ "$UPDATE_HOUR" -lt 0 ] || [ "$UPDATE_HOUR" -gt 23 ]; then
+  die "Invalid hour: '$UPDATE_HOUR'. Must be an integer between 0 and 23"
+fi
 
 # Validate email format (basic check)
 if ! [[ "$EMAIL" =~ ^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$ ]]; then
@@ -107,7 +126,7 @@ info "  Upstream Git: ${BGN}${UPSTREAM_GIT}${CL}"
 info "  Branch: ${BGN}${BRANCH}${CL}"
 info "  Domain: ${BGN}${DOMAIN}${CL}"
 info "  Email: ${BGN}${EMAIL}${CL}"
-info "  Update Schedule: ${BGN}${UPDATE_SCHEDULE}${CL}"
+info "  Update Schedule: ${BGN}${UPDATE_SCHEDULE}, ${UPDATE_WEEKDAY}, hour ${UPDATE_HOUR}${CL}"
 echo ""
 
 # Get TAPPaaS version from git
@@ -183,22 +202,6 @@ NODE_COUNT=${#NODES[@]}
 info "Total nodes: ${BGN}${NODE_COUNT}${CL}"
 echo ""
 
-# Function to determine update day based on node number
-# Even-numbered nodes: Tuesday, Odd-numbered nodes: Thursday
-get_update_day() {
-  local node_name="$1"
-  local node_num
-
-  # Extract number from node name (e.g., tappaas1 -> 1, tappaas2 -> 2)
-  node_num=$(echo "$node_name" | grep -oE '[0-9]+$' || echo "1")
-
-  if [ $((node_num % 2)) -eq 0 ]; then
-    echo "Tuesday"
-  else
-    echo "Thursday"
-  fi
-}
-
 # Build the tappaas-nodes array
 info "Building node configuration..."
 NODES_JSON="["
@@ -214,27 +217,10 @@ for i in "${!NODES[@]}"; do
     NODES_JSON+=","
   fi
 
-  # Determine update schedule for this node
-  if [ "$UPDATE_SCHEDULE" = "none" ]; then
-    # No updates scheduled
-    UPDATE_DAY=$(get_update_day "$node")
-    SCHEDULE_JSON="[\"none\", \"$UPDATE_DAY\", 2]"
-  elif [ "$UPDATE_SCHEDULE" = "daily" ]; then
-    # Daily updates at 2 AM
-    SCHEDULE_JSON="[\"daily\", null, 2]"
-  else
-    # Weekly or monthly - use Tuesday/Thursday based on node number
-    UPDATE_DAY=$(get_update_day "$node")
-    SCHEDULE_JSON="[\"$UPDATE_SCHEDULE\", \"$UPDATE_DAY\", 2]"
-  fi
-
-  info "  ${node}: updateSchedule = ${BGN}${SCHEDULE_JSON}${CL}"
-
   NODES_JSON+=$(cat << NODEEOF
     {
       "hostname": "$node",
-      "ip": "$ip",
-      "updateSchedule": $SCHEDULE_JSON
+      "ip": "$ip"
     }
 NODEEOF
 )
@@ -245,6 +231,15 @@ echo ""
 
 # Build the complete configuration JSON
 info "Generating configuration.json..."
+
+# Build the global updateSchedule
+if [ "$UPDATE_SCHEDULE" = "daily" ]; then
+  SCHEDULE_JSON="[\"daily\", null, ${UPDATE_HOUR}]"
+else
+  SCHEDULE_JSON="[\"${UPDATE_SCHEDULE}\", \"${UPDATE_WEEKDAY}\", ${UPDATE_HOUR}]"
+fi
+
+info "Global updateSchedule: ${BGN}${SCHEDULE_JSON}${CL}"
 
 CONFIG_JSON=$(cat << EOF
 {
@@ -257,7 +252,8 @@ CONFIG_JSON=$(cat << EOF
     "email": "${EMAIL}",
     "nodeCount": ${NODE_COUNT},
     "upstreamGit": "${UPSTREAM_GIT}",
-    "branch": "${BRANCH}"
+    "branch": "${BRANCH}",
+    "updateSchedule": ${SCHEDULE_JSON}
   },
 
   "tappaas-nodes": ${NODES_JSON}

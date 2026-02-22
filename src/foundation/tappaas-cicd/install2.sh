@@ -62,6 +62,8 @@ scp root@"$NODE1_FQDN":/root/tappaas/*.json /home/tappaas/config/
 # run the full tappaas-cicd update scripts with all dependencies and checks
 chmod +x /home/tappaas/TAPPaaS/src/foundation/tappaas-cicd/scripts/update-module.sh
 /home/tappaas/TAPPaaS/src/foundation/tappaas-cicd/scripts/update-module.sh tappaas-cicd
+/home/tappaas/TAPPaaS/src/foundation/tappaas-cicd/scripts/update-module.sh cluster
+/home/tappaas/TAPPaaS/src/foundation/tappaas-cicd/scripts/update-module.sh firewall
 
 # Setup Caddy reverse proxy on the firewall
 # (needds to be after update.sh as it relies on opnsense-controller to be instlalled

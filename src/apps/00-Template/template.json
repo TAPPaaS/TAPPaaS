@@ -13,6 +13,6 @@
     "bridge0": "lan",
     "zone0": "srv",
     "description": "TAPPaaS template VM",
-    "dependsOn": ["cluster:vm"],
+    "dependsOn": ["cluster:vm", "cluster:ha", "template:nixos"],
     "provides": []
 }
