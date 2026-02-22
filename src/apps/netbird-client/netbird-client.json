@@ -15,6 +15,6 @@
     "bridge0": "lan",
     "zone0": "private",
     "description": "TAPPaaS NetBird Client for accessing private zone (so you can operate as if you are local to TAPPaaS)",
-    "dependsOn": ["cluster:vm"],
+    "dependsOn": ["cluster:vm", "cluster:ha", "template:debian", "backup:vm", "identity:identity", "firewall:proxy"],
     "provides": []
 }

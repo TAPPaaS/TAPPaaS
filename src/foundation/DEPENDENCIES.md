@@ -6,32 +6,35 @@ This document describes the program dependencies within the `src/foundation/` di
 
 | Directory | Programs | Description |
 |-----------|----------|-------------|
-| 30-tappaas-cicd/scripts/ | 12 | Core helper scripts |
-| 30-tappaas-cicd/opnsense-controller/ | 4 | OPNsense Python CLI tools |
-| 30-tappaas-cicd/update-tappaas/ | 2 | Update scheduler |
-| 30-tappaas-cicd/test-vm-creation/ | 3 | VM creation test suite |
-| 30-tappaas-cicd/ | 4 | Main installation scripts |
-| 05-ProxmoxNode/ | 2 | Node bootstrap scripts |
-| 10-firewall/ | 1 | Firewall update |
-| 35-backup/ | 2 | Backup server scripts |
-| 40-Identity/ | 2 | Identity module scripts |
+| tappaas-cicd/scripts/ | 11 | Core helper scripts |
+| tappaas-cicd/opnsense-controller/ | 4 | OPNsense Python CLI tools |
+| tappaas-cicd/update-tappaas/ | 2 | Update scheduler |
+| tappaas-cicd/test-vm-creation/ | 3 | VM creation test suite |
+| tappaas-cicd/ | 5 | Main installation scripts |
+| cluster/ | 3 | Cluster and VM management |
+| firewall/ | 1 | Firewall update |
+| backup/ | 4 | Backup server scripts |
+| identity/ | 2 | Identity module scripts |
+| templates/ | 4 | OS template service scripts |
 
 ### Key Dependency Chains
 
-1. **Install Chain**: `install1.sh` → `install2.sh` → `create-configuration.sh` + `setup-caddy.sh` + `update.sh`
-2. **Update Chain**: `update-tappaas` → `update-node` → module `update.sh` scripts
-3. **VM Creation Chain**: `install-vm.sh` → `copy-update-json.sh` → `Create-TAPPaaS-VM.sh`
-4. **Zone Management Chain**: `zone-manager` → OPNsense API → firewall configuration
-5. **Test Chain**: `test.sh` → `install.sh` → `test-vm.sh`
+1. **Install Chain**: `install1.sh` → `install2.sh` → `create-configuration.sh` + `setup-caddy.sh` + `update-module.sh`
+2. **Update Chain**: `update-tappaas` → `update-node` → `update-module.sh` → module `update.sh` + service `update-service.sh`
+3. **Module Install Chain**: `install-module.sh` → `copy-update-json.sh` + `common-install-routines.sh` → service `install-service.sh` → `Create-TAPPaaS-VM.sh`
+4. **Zone Management Chain**: `zone-manager` → OPNsense API → firewall/VLAN/DHCP configuration
+5. **Test Chain**: `test.sh` → `install-module.sh` → `test-vm.sh`
 
 ### Most Connected Programs
 
-| Program | Role |
-|---------|------|
-| `common-install-routines.sh` | Sourced by all module scripts |
-| `install-vm.sh` | Called by all module install scripts |
-| `update-tappaas` | Orchestrates all node updates |
-| `zone-manager` | Manages all OPNsense zones |
+| Program | Depended On By |
+|---------|----------------|
+| `common-install-routines.sh` | install-module.sh, update-module.sh, pre-update.sh, update.sh (tappaas-cicd), backup-manage.sh, restore.sh, update.sh (identity), update-service.sh (cluster/ha), update-service.sh (templates/*), test-vm.sh |
+| `copy-update-json.sh` | install-module.sh, install.sh (backup), install-service.sh (cluster/vm) |
+| `update-tappaas` | Orchestrates all node updates (cron) |
+| `install-module.sh` | Entry point for all module installations |
+| `update-module.sh` | Entry point for all module updates |
+| `update-os.sh` | update-service.sh (templates/nixos), update-service.sh (templates/debian) |
 
 ---
 
@@ -41,33 +44,21 @@ These programs are NOT called by other TAPPaaS programs - they are entry points:
 
 | Entry Point | Purpose | Trigger |
 |-------------|---------|---------|
-| `05-ProxmoxNode/install.sh` | Bootstrap first Proxmox node | Manual (curl from GitHub) |
-| `30-tappaas-cicd/install1.sh` | Install CICD mothership | Manual (after VM creation) |
-| `30-tappaas-cicd/test.sh` | Run VM creation test suite | Manual/CI |
-| `update-tappaas` | Scheduled node updates | Cron job |
+| `tappaas-cicd/install1.sh` | Install CICD mothership | Manual (on tappaas-cicd) |
+| `tappaas-cicd/test.sh` | Run VM creation test suite | Manual/CI |
+| `update-tappaas` | Scheduled node updates | Cron job (hourly) |
 | `create-configuration.sh` | Generate system configuration | Manual (initial setup) |
 | `check-disk-threshold.sh` | Monitor disk usage | Cron |
-| `test-config.sh` | Validate configurations | Manual |
+| `test-config.sh` | Validate module JSON configs | Manual |
 | `opnsense-controller` | Direct OPNsense management | Manual |
+| `backup-manage.sh` | Backup operations | Manual |
+| `restore.sh` | Restore from backup | Manual |
 
 ---
 
 ## Dependency Graphs
 
-### 1. Bootstrap Flow: `05-ProxmoxNode/install.sh`
-
-Initial Proxmox node setup - downloads scripts and configuration files.
-
-```mermaid
-graph TD
-    A[05-ProxmoxNode/install.sh] -->|downloads| B[Create-TAPPaaS-VM.sh]
-    A -->|downloads| D[zones.json]
-
-    B -->|reads| D
-    B -->|reads| E["<module>.json"]
-```
-
-### 2. CICD Installation Flow: `install1.sh` then `install2.sh`
+### 1. CICD Installation Flow: `install1.sh` then `install2.sh`
 
 Two-phase installation with reboot in between.
 
@@ -80,10 +71,10 @@ graph TD
         A -->|requires| E[reboot]
     end
 
-    subgraph "Phase 2: install2.sh (after reboot)"
+    subgraph "Phase 2: install2.sh after reboot"
         F[install2.sh] -->|sources| G[create-configuration.sh]
         F -->|calls| H[setup-caddy.sh]
-        F -->|sources| I[update.sh]
+        F -->|sources| I[update-module.sh]
 
         G -->|creates| J[configuration.json]
 
@@ -91,20 +82,14 @@ graph TD
         H -->|calls| K[opnsense-firewall]
 
         I -->|sources| L[common-install-routines.sh]
-        I -->|calls| M[zone-manager]
-        I -->|calls| N[update-HA.sh]
-        I -->|calls| O[update-cron.sh]
+        I -->|calls| M["module update.sh"]
 
         L -->|reads| P[module-fields.json]
         L -->|reads| Q[zones.json]
-
-        M -->|reads| Q
-
-        O -->|schedules| R[update-tappaas]
     end
 ```
 
-### 3. Update Scheduler Flow: `update-tappaas`
+### 2. Update Scheduler Flow: `update-tappaas`
 
 Automated scheduled updates for all TAPPaaS nodes.
 
@@ -113,71 +98,64 @@ graph TD
     A[update-tappaas] -->|reads| B[configuration.json]
     A -->|calls| C[update-node]
 
-    C -->|calls| D[10-firewall/update.sh]
-    C -->|calls| E[30-tappaas-cicd/update.sh]
-    C -->|calls| F[35-backup/update.sh]
-    C -->|calls| G[40-Identity/update.sh]
+    C -->|"ssh + runs"| D["update-module.sh (per module)"]
 
-    D -->|calls| H[update-HA.sh]
+    D -->|sources| E[common-install-routines.sh]
+    D -->|calls| F["module pre-update.sh"]
+    D -->|calls| G["module update.sh"]
+    D -->|calls| H["service update-service.sh"]
 
-    E -->|sources| I[common-install-routines.sh]
-    E -->|calls| J[zone-manager]
-    E -->|calls| H
-    E -->|calls| K[update-cron.sh]
+    H -->|e.g.| I[update-os.sh]
+    H -->|e.g.| J["update-service.sh (cluster/ha)"]
 
-    K -->|schedules| A
+    E -->|reads| K[module-fields.json]
+    E -->|reads| L[zones.json]
 ```
 
-### 4. VM Creation Flow: Module Installation
+### 3. Module Installation Flow: `install-module.sh`
 
-Used by all module install scripts.
+Used by `install2.sh` and test scripts to install modules.
 
 ```mermaid
 graph TD
-    A["module/install.sh"] -->|sources| B[install-vm.sh]
+    A[install-module.sh] -->|sources| B[copy-update-json.sh]
+    A -->|sources| C[common-install-routines.sh]
+    A -->|calls| D["module install.sh"]
+    A -->|calls| E["service install-service.sh"]
 
-    B -->|sources| C[copy-update-json.sh]
-    B -->|sources| D[common-install-routines.sh]
+    B -->|reads| F[module-fields.json]
+    B -->|copies| G["<module>.json to nodes"]
 
-    C -->|reads| E[module-fields.json]
-    C -->|copies| F["<module>.json"]
+    C -->|reads| F
+    C -->|reads| H[zones.json]
 
-    D -->|reads| E
-    D -->|reads| G[zones.json]
+    E -->|e.g. cluster/vm| I["install-service.sh (cluster/vm)"]
+    I -->|ssh calls| J[Create-TAPPaaS-VM.sh]
 
-    B -->|scp to node| H["<module>.json"]
-    B -->|ssh calls| I[Create-TAPPaaS-VM.sh]
-
-    I -->|reads| H
-    I -->|reads| G
-
-    A -->|calls| J[update-os.sh]
-    A -->|calls| K[update-HA.sh]
+    J -->|reads| K["<module>.json"]
+    J -->|reads| H
 ```
 
-### 5. Test Suite Flow: `30-tappaas-cicd/test.sh`
+### 4. Test Suite Flow: `tappaas-cicd/test.sh`
 
 VM creation and validation tests.
 
 ```mermaid
 graph TD
-    A[30-tappaas-cicd/test.sh] -->|calls| B[test-vm-creation/test.sh]
+    A[tappaas-cicd/test.sh] -->|calls| B[test-vm-creation/test.sh]
 
-    B -->|for each test| C[install.sh]
+    B -->|for each test| C[install-module.sh]
     B -->|for each test| D[test-vm.sh]
 
-    C -->|sources| E[install-vm.sh]
-    C -->|calls| F[update-os.sh]
-    C -->|calls| G[update-HA.sh]
+    C -->|sources| E[copy-update-json.sh]
+    C -->|sources| F[common-install-routines.sh]
+    C -->|calls service| G["install-service.sh (cluster/vm)"]
+    G -->|ssh calls| H[Create-TAPPaaS-VM.sh]
 
-    E -->|sources| H[copy-update-json.sh]
-    E -->|sources| I[common-install-routines.sh]
-    E -->|ssh calls| J[Create-TAPPaaS-VM.sh]
-
-    D -->|sources| I
+    D -->|sources| F
 ```
 
-### 6. OPNsense Controller: `opnsense-controller`
+### 5. OPNsense Controller: `opnsense-controller`
 
 Direct management of OPNsense firewall.
 
@@ -197,7 +175,7 @@ graph TD
     D -->|manages| H
 ```
 
-### 7. Disk Management Flow: `check-disk-threshold.sh`
+### 6. Disk Management Flow: `check-disk-threshold.sh`
 
 Automated disk monitoring and resizing.
 
@@ -209,7 +187,7 @@ graph TD
     C -->|reads| B
 ```
 
-### 8. Configuration Generation: `create-configuration.sh`
+### 7. Configuration Generation: `create-configuration.sh`
 
 Creates the main configuration file from cluster state.
 
@@ -220,7 +198,25 @@ graph TD
 
     C -->|used by| D[setup-caddy.sh]
     C -->|used by| E[update-tappaas]
-    C -->|used by| F[update.sh scripts]
+```
+
+### 8. Backup Flow: `backup-manage.sh` and `restore.sh`
+
+Backup and restore operations.
+
+```mermaid
+graph TD
+    A[backup-manage.sh] -->|sources| B[common-install-routines.sh]
+    A -->|reads| C[backup.json]
+    A -->|"ssh to nodes"| D[vzdump / proxmox-backup]
+
+    E[restore.sh] -->|sources| B
+    E -->|reads| C
+    E -->|"ssh to nodes"| F[pvesh / qm restore]
+
+    G[install.sh backup] -->|sources| H[copy-update-json.sh]
+    G -->|sources| B
+    G -->|reads| C
 ```
 
 ---
@@ -229,9 +225,10 @@ graph TD
 
 | Config File | Created By | Used By |
 |-------------|------------|---------|
-| `configuration.json` | create-configuration.sh | update-tappaas; setup-caddy.sh; module update.sh |
-| `zones.json` | Manual/git | zone-manager; Create-TAPPaaS-VM.sh; common-install-routines.sh |
-| `module-fields.json` | Manual/git | common-install-routines.sh; copy-update-json.sh |
+| `configuration.json` | create-configuration.sh | update-tappaas; setup-caddy.sh |
+| `zones.json` | Manual/git | zone-manager; Create-TAPPaaS-VM.sh; common-install-routines.sh; cluster/update.sh; firewall/update.sh |
+| `module-fields.json` | Manual/git | common-install-routines.sh; copy-update-json.sh; test-config.sh |
+| `<module>.json` | Per module (git) | install-module.sh; update-module.sh; Create-TAPPaaS-VM.sh; various service scripts |
 
 ---
 
@@ -239,6 +236,6 @@ graph TD
 
 | Location | Programs |
 |----------|----------|
-| `/home/tappaas/bin/` | All CLI tools and helper scripts (symlinks) |
-| `/root/tappaas/` (Proxmox nodes) | Create-TAPPaaS-VM.sh |
-| `src/foundation/*/` | Module install.sh and update.sh scripts |
+| `/home/tappaas/bin/` | All CLI tools and helper scripts (symlinks from tappaas-cicd/) |
+| `/root/tappaas/` (Proxmox nodes) | Create-TAPPaaS-VM.sh, zones.json |
+| `src/foundation/*/` | Module install.sh, update.sh, and service scripts |

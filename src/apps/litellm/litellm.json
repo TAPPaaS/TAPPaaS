@@ -16,6 +16,6 @@
     "author": "@ErikDaniel007",
     "releaseDate": "2026-02-10",
     "status": "Development",
-    "dependsOn": ["cluster:vm"],
-    "provides": []
+    "dependsOn": ["cluster:vm", "cluster:ha", "template:nixos", "backup:vm", "identity:identity", "firewall:proxy"],
+    "provides": ["models"]
 }
