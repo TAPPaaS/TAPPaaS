@@ -70,6 +70,60 @@
                             "description": "Any other branch name. Updates run daily."
                         }
                     }
+                },
+                "updateSchedule": {
+                    "description": "Global update schedule for all nodes. Controls when system updates are applied.",
+                    "type": "array",
+                    "required": false,
+                    "default": ["monthly", "Thursday", 2],
+                    "items": [
+                        {
+                            "name": "frequency",
+                            "description": "How often updates should run",
+                            "type": "string",
+                            "values": {
+                                "none": "Never update automatically",
+                                "daily": "Run every day at the specified hour",
+                                "weekly": "Run once per week on the specified weekday",
+                                "monthly": "Run once per month on the first occurrence of the specified weekday (days 1-7)"
+                            }
+                        },
+                        {
+                            "name": "weekday",
+                            "description": "Day of week for updates (ignored for daily frequency)",
+                            "type": "string",
+                            "values": ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"],
+                            "note": "For monthly, updates run on first occurrence of this day (days 1-7 of month)"
+                        },
+                        {
+                            "name": "hour",
+                            "description": "Hour of day (0-23) when updates should run",
+                            "type": "integer",
+                            "minimum": 0,
+                            "maximum": 23,
+                            "default": 2,
+                            "example": 2,
+                            "note": "Recommended to use off-peak hours (e.g., 2-5 AM)"
+                        }
+                    ],
+                    "examples": [
+                        {
+                            "value": ["daily", null, 2],
+                            "description": "Daily at 2 AM"
+                        },
+                        {
+                            "value": ["weekly", "Wednesday", 3],
+                            "description": "Weekly on Wednesday at 3 AM"
+                        },
+                        {
+                            "value": ["monthly", "Tuesday", 2],
+                            "description": "Monthly on first Tuesday at 2 AM"
+                        },
+                        {
+                            "value": ["monthly", "Thursday", 2],
+                            "description": "Monthly on first Thursday at 2 AM"
+                        }
+                    ]
                 }
             }
         },
@@ -94,59 +148,6 @@
                         "required": true,
                         "format": "ipv4",
                         "example": "192.168.1.10"
-                    },
-                    "updateSchedule": {
-                        "description": "Update schedule for this node. Controls when system updates are applied.",
-                        "type": "array",
-                        "required": false,
-                        "default": ["monthly", "Thursday", 2],
-                        "items": [
-                            {
-                                "name": "frequency",
-                                "description": "How often updates should run",
-                                "type": "string",
-                                "values": {
-                                    "daily": "Run every day at the specified hour",
-                                    "weekly": "Run once per week on the specified weekday",
-                                    "monthly": "Run once per month on the first occurrence of the specified weekday (days 1-7)"
-                                }
-                            },
-                            {
-                                "name": "weekday",
-                                "description": "Day of week for updates (ignored for daily frequency)",
-                                "type": "string",
-                                "values": ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"],
-                                "note": "For monthly, updates run on first occurrence of this day (days 1-7 of month)"
-                            },
-                            {
-                                "name": "hour",
-                                "description": "Hour of day (0-23) when updates should run",
-                                "type": "integer",
-                                "minimum": 0,
-                                "maximum": 23,
-                                "default": 2,
-                                "example": 2,
-                                "note": "Recommended to use off-peak hours (e.g., 2-5 AM)"
-                            }
-                        ],
-                        "examples": [
-                            {
-                                "value": ["daily", null, 2],
-                                "description": "Daily at 2 AM"
-                            },
-                            {
-                                "value": ["weekly", "Wednesday", 3],
-                                "description": "Weekly on Wednesday at 3 AM"
-                            },
-                            {
-                                "value": ["monthly", "Tuesday", 2],
-                                "description": "Monthly on first Tuesday at 2 AM"
-                            },
-                            {
-                                "value": ["monthly", "Thursday", 2],
-                                "description": "Monthly on first Thursday at 2 AM"
-                            }
-                        ]
                     }
                 }
             }

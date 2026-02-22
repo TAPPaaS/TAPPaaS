@@ -35,6 +35,16 @@ for script in scripts/*.sh; do
 done
 chmod +x /home/tappaas/bin/*.sh
 
+# --- Symlink foundation config files into /home/tappaas/config/ ---
+for config_file in ../module-fields.json ../zones.json; do
+  if [ -f "$config_file" ]; then
+    config_name=$(basename "$config_file")
+    target="/home/tappaas/config/$config_name"
+    rm -f "$target" 2>/dev/null || true
+    ln -s "$(realpath "$config_file")" "$target"
+  fi
+done
+
 # --- Build and install opnsense-controller ---
 echo -en "\nBuilding the opnsense-controller project"
 cd opnsense-controller

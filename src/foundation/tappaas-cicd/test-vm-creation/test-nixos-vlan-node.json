@@ -1,0 +1,17 @@
+{
+    "version": "0.5",
+    "node": "tappaas3",
+    "vmid": 912,
+    "vmtag": "TAPPaaS,Test",
+    "vmname": "test-nixos-vlan-node",
+    "cores": 2,
+    "memory": "2048",
+    "diskSize": "16G",
+    "storage": "tanka1",
+    "imageType": "clone",
+    "image": "8080",
+    "bridge0": "lan",
+    "zone0": "srv",
+    "dependsOn": ["cluster:vm", "template:nixos"],
+    "description": "Test: NixOS clone on srv VLAN on a different node (tappaas2)"
+}

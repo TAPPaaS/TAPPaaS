@@ -2,7 +2,7 @@
 #
 # Create a cron entry to run update-tappaas every hour.
 # The update-tappaas script handles all scheduling logic internally,
-# checking each node's updateSchedule to determine if it should be updated.
+# checking the global updateSchedule to determine if updates should run.
 #
 # Running hourly ensures that:
 # - Nodes scheduled for any hour will be updated

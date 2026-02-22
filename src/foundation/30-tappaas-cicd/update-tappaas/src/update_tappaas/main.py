@@ -60,24 +60,24 @@ def parse_schedule(schedule: list) -> tuple[str, int | None, int]:
     return (frequency, weekday, hour)
 
 
-def should_update_node(node_config: dict, current_hour: int) -> bool:
-    """Determine if a node should be updated based on its updateSchedule.
+def should_update_now(config: dict, current_hour: int) -> bool:
+    """Determine if updates should run based on the global updateSchedule.
 
     Args:
-        node_config: Node configuration dict containing hostname and updateSchedule
+        config: Full TAPPaaS configuration dict
         current_hour: Current hour of the day (0-23)
 
     Returns:
-        True if the node should be updated now, False otherwise
+        True if updates should run now, False otherwise
     """
-    hostname = node_config.get("hostname", "unknown")
-    schedule = node_config.get("updateSchedule", [])
+    tappaas_config = config.get("tappaas", {})
+    schedule = tappaas_config.get("updateSchedule", [])
 
     frequency, scheduled_weekday, scheduled_hour = parse_schedule(schedule)
 
     # Handle "none" frequency - never update automatically
     if frequency == "none":
-        print(f"  {hostname}: Updates disabled (frequency=none), skipping")
+        print("  Updates disabled (frequency=none), skipping")
         return False
 
     today = datetime.now()
@@ -86,49 +86,49 @@ def should_update_node(node_config: dict, current_hour: int) -> bool:
 
     # Check hour first - must match for all frequencies
     if current_hour != scheduled_hour:
-        print(f"  {hostname}: Scheduled for hour {scheduled_hour}, current hour is {current_hour}, skipping")
+        print(f"  Scheduled for hour {scheduled_hour}, current hour is {current_hour}, skipping")
         return False
 
     if frequency == "daily":
-        print(f"  {hostname}: Daily schedule at hour {scheduled_hour}, running update")
+        print(f"  Daily schedule at hour {scheduled_hour}, running updates")
         return True
 
     elif frequency == "weekly":
         if scheduled_weekday is None:
-            print(f"  {hostname}: Weekly schedule but no weekday specified, skipping")
+            print("  Weekly schedule but no weekday specified, skipping")
             return False
 
         weekday_name = list(WEEKDAYS.keys())[scheduled_weekday].capitalize()
         if current_weekday == scheduled_weekday:
-            print(f"  {hostname}: Weekly schedule on {weekday_name}, running update")
+            print(f"  Weekly schedule on {weekday_name}, running updates")
             return True
         else:
             current_day_name = list(WEEKDAYS.keys())[current_weekday].capitalize()
-            print(f"  {hostname}: Weekly schedule on {weekday_name}, today is {current_day_name}, skipping")
+            print(f"  Weekly schedule on {weekday_name}, today is {current_day_name}, skipping")
             return False
 
     elif frequency == "monthly":
         # Monthly: first week of month (days 1-7) on specified weekday
         if scheduled_weekday is None:
-            print(f"  {hostname}: Monthly schedule but no weekday specified, skipping")
+            print("  Monthly schedule but no weekday specified, skipping")
             return False
 
         weekday_name = list(WEEKDAYS.keys())[scheduled_weekday].capitalize()
 
         if day_of_month > 7:
-            print(f"  {hostname}: Monthly schedule, day {day_of_month} is not in first week, skipping")
+            print(f"  Monthly schedule, day {day_of_month} is not in first week, skipping")
             return False
 
         if current_weekday == scheduled_weekday:
-            print(f"  {hostname}: Monthly schedule on first {weekday_name}, running update")
+            print(f"  Monthly schedule on first {weekday_name}, running updates")
             return True
         else:
             current_day_name = list(WEEKDAYS.keys())[current_weekday].capitalize()
-            print(f"  {hostname}: Monthly schedule on {weekday_name}, today is {current_day_name}, skipping")
+            print(f"  Monthly schedule on {weekday_name}, today is {current_day_name}, skipping")
             return False
 
     else:
-        print(f"  {hostname}: Unknown frequency '{frequency}', skipping")
+        print(f"  Unknown frequency '{frequency}', skipping")
         return False
 
 
@@ -197,15 +197,12 @@ def main():
     print(f"Nodes to check: {', '.join(node_names)}")
     print("")
 
-    # Determine which nodes to update
-    print("Checking update schedule:")
-    nodes_to_update = []
-    for node_config in nodes:
-        hostname = node_config.get("hostname")
-        if not hostname:
-            continue
-        if args.force or should_update_node(node_config, current_hour):
-            nodes_to_update.append(hostname)
+    # Determine which nodes to update based on global schedule
+    print("Checking global update schedule:")
+    if args.force or should_update_now(config, current_hour):
+        nodes_to_update = [n.get("hostname") for n in nodes if n.get("hostname")]
+    else:
+        nodes_to_update = []
 
     print("")
 

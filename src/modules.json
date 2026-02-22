@@ -61,9 +61,9 @@
     ],
     "proxmoxTemplates": [
         {
-            "moduleName": "tappaas-nixos",
+            "moduleName": "template",
             "vmid": 8080,
-            "moduleJson": "src/foundation/20-tappaas-nixos/tappaas-nixos.json"
+            "moduleJson": "src/foundation/templates/template.json"
         }
     ],
     "testModules": [

@@ -93,7 +93,7 @@ See [README-install.md](./README-install.md) for details
 Update script called periodically to keep the module updated.
 
 - Called with module name as argument
-- TAPPaaS calls this script on a periodic basis per the node's `updateSchedule`
+- TAPPaaS calls this script on a periodic basis per the global `updateSchedule`
 - Should handle incremental updates to the module
 
 ### myModule.nix

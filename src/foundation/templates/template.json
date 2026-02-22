@@ -12,7 +12,8 @@
     "imageLocation": "https://channels.nixos.org/nixos-25.05/",
     "bridge0": "lan",
     "zone0": "mgmt",
-    "description": "The TAPPaaS NixOS VM Template",
+    "description": "The TAPPaaS VM Template (NixOS and Debian)",
+    "location": "/home/tappaas/TAPPaaS/src/foundation/templates",
     "dependsOn": ["cluster:vm"],
-    "provides": ["nixos"]
+    "provides": ["nixos", "debian"]
 }

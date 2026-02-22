@@ -1,0 +1,19 @@
+{
+    "version": "0.5",
+    "node": "tappaas1",
+    "vmid": 911,
+    "vmtag": "TAPPaaS,Test",
+    "vmname": "test-nixos",
+    "HANode": "tappaas3",
+    "cores": 2,
+    "memory": "2048",
+    "diskSize": "24G",
+    "storage": "tanka1",
+    "imageType": "clone",
+    "image": "8080",
+    "bridge0": "lan",
+    "zone0": "mgmt",
+    "replicationSchedule": "*/15",
+    "dependsOn": ["cluster:vm", "cluster:ha", "template:nixos"],
+    "description": "Test: NixOS clone on mgmt zone with HA failover to tappaas3"
+}
