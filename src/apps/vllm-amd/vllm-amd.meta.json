@@ -1,0 +1,23 @@
+{
+  "version": "0.5.0",
+  "module": "vllm-amd",
+  "gpu": {
+    "apu": "Ryzen AI MAX+ 395",
+    "vram_mb": 65536,
+    "gtt_mb": 31968,
+    "kfd_major": 234,
+    "kfd_minor": 0,
+    "render_node": "renderD128",
+    "render_major": 226,
+    "render_minor": 128
+  },
+  "host_ram_mb": 63937,
+  "lxc_mem_mb": 47104,
+  "rocm_gfx_target": "gfx1151",
+  "vllm_image": "kyuz0/vllm-therock-gfx1151:latest",
+  "models_bind_src": "/mnt/models",
+  "models_bind_dst": "/opt/models",
+  "author": "@ErikDaniel007",
+  "releaseDate": "2026-02-20",
+  "status": "Development"    
+}

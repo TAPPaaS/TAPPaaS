@@ -1,0 +1,18 @@
+{
+  "version": "0.5.0",
+  "node": "tappaas2",
+  "vmid": 312,
+  "vmtag": "TAPPaaS, AI, GPU, vLLM",
+  "vmname": "vllm-amd",
+  "cores": 24,
+  "memory": "47104",
+  "diskSize": "32G",
+  "storage": "tanka1",
+  "ostype": "debian",
+  "bridge0": "lan",
+  "zone0": "srv",
+  "description": "vLLM AMD ROCm inference — Ryzen AI MAX+ 395 (tappaas2)",
+  "author": "@ErikDaniel007",
+  "releaseDate": "2026-02-20",
+  "status": "Development"    
+}

@@ -1,0 +1,38 @@
+# Copyright (c) 2025 TAPPaaS org
+#
+# This Source Code Form is subject to the terms of the Mozilla Public
+# License, v. 2.0. If a copy of the MPL was not distributed with this
+# file, You can obtain one at https://mozilla.org/MPL/2.0/.
+#
+# This file incorporates work covered by the following copyright and permission notice:
+# Copyright (c) 2021-2025 community-scripts ORG
+# License: MIT | https://github.com/community-scripts/ProxmoxVE/raw/main/LICENSE
+
+services:                                                                 
+    vllm:                                                                     
+      image: kyuz0/vllm-therock-gfx1151:latest                                  
+      container_name: vllm                                                             
+      restart: unless-stopped                                                     
+      entrypoint: ["python", "-m", "vllm.entrypoints.openai.api_server"]               
+      devices:                                                                    
+        - /dev/kfd:/dev/kfd                                                                                                                                                                                                                
+        - /dev/dri/renderD128:/dev/dri/renderD128                                                                                                                                               
+      group_add:                                                                                                                                                                                                                           
+        - render                                                                                                                                                                                                                         
+      volumes:                                                                                                                                                                                                                             
+        - /opt/vllm/models:/models                                                                                                                                                                                                       
+      ports:                                                              
+        - "8000:8000"                                                     
+      environment:                                                                                                                                                                                                                         
+        - HSA_OVERRIDE_GFX_VERSION=11.5.1                                                                                                                                                                                                  
+        - PYTORCH_ROCM_ARCH=gfx1151                                                                                                                                                                                                        
+      command: >                                                                                                                                                                                                                           
+        --model /models/qwen2.5-14b                                                                                                                                                                                                        
+        --served-model-name vllm                                                                                                                                                                                                           
+        --dtype auto                                                                                                                                                                                                                       
+        --host 0.0.0.0                                                                                                                                                                                                                     
+        --port 8000                                                                                                                                                                                                                        
+        --gpu-memory-utilization 0.85                                                                                                                                                                                                      
+        --max-model-len 8192                                                                                                                                                                                                               
+        --max-num-seqs 8                                                                                                                                                                                                                   
+        --speculative-config '{"model": "/models/qwen2.5-14b-eagle3", "num_speculative_tokens": 3, "method": "eagle3"}' 

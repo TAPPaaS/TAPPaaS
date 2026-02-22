@@ -1,0 +1,81 @@
+# Copyright (c) 2025 TAPPaaS org
+#
+# This Source Code Form is subject to the terms of the Mozilla Public
+# License, v. 2.0. If a copy of the MPL was not distributed with this
+# file, You can obtain one at https://mozilla.org/MPL/2.0/.
+#
+# This file incorporates work covered by the following copyright and permission notice:
+# Copyright (c) 2021-2025 community-scripts ORG
+# License: MIT | https://github.com/community-scripts/ProxmoxVE/raw/main/LICENSE
+#
+# vLLM AMD iGPU — Fixed docker-compose
+# Deploy to: /opt/vllm/docker-compose.yml inside the LXC container
+#
+# Usage:
+#   Smoke test:  MODEL=Qwen/Qwen2.5-3B-Instruct docker compose up -d
+#   Production:  docker compose up -d  (uses .env defaults)
+#   EAGLE-3:     docker compose --profile eagle up -d
+
+services:
+  vllm:
+    image: kyuz0/vllm-therock-gfx1151:latest
+    container_name: vllm
+    restart: unless-stopped
+    entrypoint: ["python", "-m", "vllm.entrypoints.openai.api_server"]
+    devices:
+      - /dev/kfd:/dev/kfd
+      - /dev/dri/renderD128:/dev/dri/renderD128
+    group_add:
+      - render
+    volumes:
+      - /mnt/models:/models
+      - huggingface-cache:/root/.cache/huggingface
+    ports:
+      - "8000:8000"
+    environment:
+      - HSA_OVERRIDE_GFX_VERSION=11.5.1
+      - PYTORCH_ROCM_ARCH=gfx1151
+      - HF_HOME=/root/.cache/huggingface
+    command: >
+      --model /models/${MODEL:-qwen2.5-14b}
+      --served-model-name ${SERVED_NAME:-vllm}
+      --dtype auto
+      --host 0.0.0.0
+      --port 8000
+      --gpu-memory-utilization ${GPU_MEM_UTIL:-0.85}
+      --max-model-len ${MAX_MODEL_LEN:-8192}
+      --max-num-seqs ${MAX_NUM_SEQS:-8}
+
+  # EAGLE-3 speculative decoding profile — activate with: docker compose --profile eagle up -d
+  vllm-eagle:
+    image: kyuz0/vllm-therock-gfx1151:latest
+    container_name: vllm
+    restart: unless-stopped
+    profiles: ["eagle"]
+    entrypoint: ["python", "-m", "vllm.entrypoints.openai.api_server"]
+    devices:
+      - /dev/kfd:/dev/kfd
+      - /dev/dri/renderD128:/dev/dri/renderD128
+    group_add:
+      - render
+    volumes:
+      - /mnt/models:/models
+      - huggingface-cache:/root/.cache/huggingface
+    ports:
+      - "8000:8000"
+    environment:
+      - HSA_OVERRIDE_GFX_VERSION=11.5.1
+      - PYTORCH_ROCM_ARCH=gfx1151
+      - HF_HOME=/root/.cache/huggingface
+    command: >
+      --model /models/qwen2.5-14b
+      --served-model-name qwen2.5-14b
+      --dtype auto
+      --host 0.0.0.0
+      --port 8000
+      --gpu-memory-utilization 0.85
+      --max-model-len 8192
+      --speculative-config '{"model": "/models/qwen2.5-14b-eagle3", "draft_tensor_parallel_size": 1, "num_speculative_tokens": 5, "method": "eagle3"}'
+
+volumes:
+  huggingface-cache:
