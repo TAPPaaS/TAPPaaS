@@ -59,6 +59,28 @@ fi
 # copy the potentially modified configuration.json and zones.json files from tappaas1 (potentially modified during bootstrap)
 scp root@"$NODE1_FQDN":/root/tappaas/*.json /home/tappaas/config/
 
+# --- Install scripts as symlinks into /home/tappaas/bin/ ---
+echo -e "\nInstalling scripts to /home/tappaas/bin/..."
+cd
+cd TAPPaaS || { echo "TAPPaaS directory not found!"; exit 1; }
+# get to the right directory
+cd src/foundation/tappaas-cicd || { echo "TAPPaaS-CICD directory not found!"; exit 1; }
+for script in scripts/*.sh; do
+  if [ -f "$script" ]; then
+    script_name=$(basename "$script")
+    target="/home/tappaas/bin/$script_name"
+    # Remove existing file or symlink if it exists
+    rm -f "$target" 2>/dev/null || true
+    # Create symlink to the script in the repo
+    ln -s "$(realpath "$script")" "$target"
+  fi
+done
+# chmod only real files/valid symlinks, skip dangling symlinks
+for f in /home/tappaas/bin/*.sh; do
+  [ -e "$f" ] && chmod +x "$f"
+done
+
+
 # run the full tappaas-cicd update scripts with all dependencies and checks
 chmod +x /home/tappaas/TAPPaaS/src/foundation/tappaas-cicd/scripts/update-module.sh
 /home/tappaas/TAPPaaS/src/foundation/tappaas-cicd/scripts/update-module.sh tappaas-cicd
