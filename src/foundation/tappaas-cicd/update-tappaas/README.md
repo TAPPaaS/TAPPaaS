@@ -1,47 +1,56 @@
 # update-tappaas
 
-TAPPaaS node update utilities for managing system updates across Proxmox nodes.
+TAPPaaS update scheduler that updates all foundation modules and app modules across all nodes.
 
-## Components
-
-### update-tappaas
-
-Scheduler that determines which nodes to update based on per-node scheduling configuration.
+## Usage
 
 ```bash
-update-tappaas [--force] [--node NODE] [--dry-run]
+update-tappaas [--force] [--dry-run]
 ```
 
 **Options:**
-- `--force` - Force update of all nodes regardless of schedule
-- `--node NODE` - Update only a specific node (still respects schedule unless `--force` is used)
+- `--force` - Force update regardless of schedule
 - `--dry-run` - Show what would be updated without actually running updates
 
-**Testing a node update:**
+**Examples:**
 ```bash
-# See what would be updated on a specific node (without running)
-update-tappaas --force --node tappaas1 --dry-run
+# See the full update plan (without running)
+update-tappaas --force --dry-run
 
-# Actually run the update on a specific node (bypasses schedule)
-update-tappaas --force --node tappaas1
+# Force an immediate update of everything
+update-tappaas --force
 ```
 
-### update-node
+## How It Works
 
-Performs the actual update of a single node via SSH.
+When triggered (by schedule or `--force`), `update-tappaas` runs two phases:
 
-```bash
-update-node <node-name>
-```
+### Phase 1: Foundation Modules (Fixed Order)
 
-**Example:**
-```bash
-update-node tappaas1
-```
+Foundation modules are updated in this order via `update-module.sh`:
+
+1. **cluster** - Runs `apt update && apt upgrade` on all Proxmox nodes, distributes VM creation scripts and zone definitions
+2. **tappaas-cicd** - Updates the mothership VM (pulls latest code, rebuilds tools)
+3. **template** - Updates NixOS/Debian VM templates
+4. **firewall** - Updates OPNsense firewall configuration
+5. **backup** - Updates Proxmox Backup Server
+6. **identity** - Updates Authentik identity provider
+
+Modules that are not installed (no JSON in `/home/tappaas/config/`) are skipped.
+
+### Phase 2: App Modules (Dependency Order)
+
+All remaining installed modules (discovered from `/home/tappaas/config/*.json`) are updated in dependency order:
+
+- The `dependsOn` field in each module's JSON config is used to build a dependency graph
+- Modules are topologically sorted so that dependencies are updated before their dependents
+- Ties are broken alphabetically for deterministic ordering
+
+Each module is updated via: `update-module.sh <module-name>`
 
 ## Scheduling
 
-The `updateSchedule` field in the `tappaas` section of the configuration controls when updates run for all nodes.
+The `updateSchedule` field in the `tappaas` section of the configuration controls when updates run.
 
 ### updateSchedule Format
 
@@ -72,9 +81,6 @@ The `updateSchedule` field in the `tappaas` section of the configuration control
 
 // Monthly on first Tuesday at 2am
 "updateSchedule": ["monthly", "Tuesday", 2]
-
-// Monthly on first Thursday at 2am
-"updateSchedule": ["monthly", "Thursday", 2]
 ```
 
 ## Configuration
@@ -92,14 +98,6 @@ Reads from `/home/tappaas/config/configuration.json`:
         {
             "hostname": "tappaas1",
             "ip": "192.168.1.10"
-        },
-        {
-            "hostname": "tappaas2",
-            "ip": "192.168.1.11"
-        },
-        {
-            "hostname": "tappaas3",
-            "ip": "192.168.1.12"
         }
     ]
 }
@@ -115,66 +113,10 @@ Use `update-cron.sh` to install the daily cron job:
 
 This creates a cron entry that runs `update-tappaas` every hour (at minute 0). The `update-tappaas` command checks the global `updateSchedule` to determine if updates should run at that time. Running hourly ensures the scheduled hour will be matched.
 
-## What Gets Updated
-
-When a node is updated, the following steps are performed:
-
-### 1. Proxmox Node System Update
-
-First, the Proxmox node itself is updated:
-- SSH connectivity check to `<node>.mgmt.internal`
-- `apt update` - refresh package lists
-- `apt upgrade --assume-yes` - upgrade all packages
-
-### 2. TAPPaaS-CICD Module Update (Always First)
-
-The `tappaas-cicd` module is always updated first, regardless of which node is being updated. This ensures the update infrastructure itself is current before updating other modules.
-
-Runs: `/home/tappaas/TAPPaaS/src/foundation/30-tappaas-cicd/update.sh`
-
-### 3. Firewall Module Update
-
-The `firewall` module is updated second to ensure network configuration is current.
-
-Runs: `/home/tappaas/TAPPaaS/src/foundation/10-firewall/update.sh`
-
-### 4. Node-Specific Module Updates
-
-Finally, all modules installed on the target node are updated in **alphabetical order**.
-
-**How modules are discovered:**
-- Scans all JSON files in `/home/tappaas/config/` (excluding `configuration.json` and `zones.json`)
-- For each JSON, checks if the `node` field matches the target node (defaults to `tappaas1` if not specified)
-- Collects matching module names (JSON filename without `.json` extension)
-- Sorts alphabetically and updates each module
-
-**How module updates are run:**
-- Finds the module directory using the `location` field from the module's JSON config
-- Runs `chmod +x` on `update.sh` if needed
-- Executes: `bash <location>/update.sh`
-- Working directory is set to the module directory
-
-**Example:** If updating `tappaas2` with modules `backup`, `identity`, and `nextcloud`:
-```
-1. tappaas-cicd (always first)
-2. firewall (always second)
-3. backup (alphabetical)
-4. identity (alphabetical)
-5. nextcloud (alphabetical)
-```
-
-### Module Update Script Requirements
-
-Each module's `update.sh` should:
-- Be executable (`chmod +x update.sh`)
-- Accept being run from its own directory
-- Handle idempotent updates (safe to run multiple times)
-- Exit with code 0 on success, non-zero on failure
-
 ## Building
 
 ```bash
-cd /home/tappaas/TAPPaaS/src/foundation/30-tappaas-cicd/update-tappaas
+cd /home/tappaas/TAPPaaS/src/foundation/tappaas-cicd/update-tappaas
 nix-build -A default default.nix
 ```
 

@@ -267,6 +267,16 @@
             "note": "Zone determines VLAN tag. 'mgmt' is untagged traffic."
         },
 
+        "trunks0": {
+            "description": "Semicolon-separated list of additional zone names to trunk on net0. Zone names are resolved to VLAN tags. Used when a VM needs to see traffic from multiple VLANs on a single NIC (e.g., the firewall).",
+            "type": "string",
+            "requiredBy": [],
+            "default": "NONE",
+            "format": "^[a-zA-Z][a-zA-Z0-9-]*(;[a-zA-Z][a-zA-Z0-9-]*)*$",
+            "example": "srv;private;iot;dmz",
+            "note": "Zone names must exist in zones.json. Semicolon-delimited, no spaces."
+        },
+
         "bridge1": {
             "description": "Proxmox bridge for the VM's second network interface (net1). If not present, only one NIC is configured.",
             "type": "string",
@@ -290,6 +300,16 @@
             "requiredBy": [],
             "default": "mgmt",
             "note": "Only used if bridge1 is defined"
+        },
+
+        "trunks1": {
+            "description": "Semicolon-separated list of additional zone names to trunk on net1. Same format as trunks0.",
+            "type": "string",
+            "requiredBy": [],
+            "default": "NONE",
+            "format": "^[a-zA-Z][a-zA-Z0-9-]*(;[a-zA-Z][a-zA-Z0-9-]*)*$",
+            "example": "srv;private;iot;dmz",
+            "note": "Only used if bridge1 is defined. Zone names must exist in zones.json."
         },
 
         "location": {

@@ -232,6 +232,12 @@ main() {
     if [[ -z "${depends_on}" ]]; then
         info "  No dependency services to call"
     else
+        # cd to the module directory so service scripts can find module files
+        # (e.g., update-os.sh looks for ./<vmname>.nix in the cwd)
+        if [[ -n "${module_dir:-}" ]]; then
+            cd "${module_dir}"
+        fi
+
         for dep in ${depends_on}; do
             local provider_module="${dep%%:*}"
             local service_name="${dep##*:}"

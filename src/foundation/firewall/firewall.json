@@ -2,7 +2,7 @@
     "version": "0.5",
     "vmid": 110,
     "vmtag": "TAPPaaS,Foundation",
-    "hostname": "firewall",
+    "vmname": "firewall",
     "node": "tappaas1",
     "HANode": "tappaas2",
     "bios": "seabios",

@@ -33,7 +33,10 @@ for script in scripts/*.sh; do
     ln -s "$(realpath "$script")" "$target"
   fi
 done
-chmod +x /home/tappaas/bin/*.sh
+# chmod only real files/valid symlinks, skip dangling symlinks
+for f in /home/tappaas/bin/*.sh; do
+  [ -e "$f" ] && chmod +x "$f"
+done
 
 # --- Symlink foundation config files into /home/tappaas/config/ ---
 for config_file in ../module-fields.json ../zones.json; do
@@ -73,9 +76,7 @@ cd update-tappaas
 stdbuf -oL nix-build -A default default.nix 2>&1 | tee /tmp/update-tappaas-build.log | while IFS= read -r line; do printf "."; done
 rm /home/tappaas/bin/update-tappaas 2>/dev/null || true
 ln -s /home/tappaas/TAPPaaS/src/foundation/tappaas-cicd/update-tappaas/result/bin/update-tappaas /home/tappaas/bin/update-tappaas
-rm /home/tappaas/bin/update-node 2>/dev/null || true
-ln -s /home/tappaas/TAPPaaS/src/foundation/tappaas-cicd/update-tappaas/result/bin/update-node /home/tappaas/bin/update-node
-echo -e "\nupdate-tappaas and update-node binaries installed to /home/tappaas/bin/"
+echo -e "\nupdate-tappaas binary installed to /home/tappaas/bin/"
 cd ..
 
 # --- Copy OPNsense controller patch to the firewall ---
