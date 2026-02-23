@@ -256,7 +256,7 @@ msg_ok "Determined TAPPaaS branch to use: ${BRANCH}"
 
 msg_info "Install TAPPaaS helper script"
 cd
-mkdir tappaas
+mkdir -p tappaas
 apt -y install jq &>/dev/null || msg_error "apt update failed"
 curl -fsSL  ${REPO}${BRANCH}/src/foundation/cluster/Create-TAPPaaS-VM.sh >~/tappaas/Create-TAPPaaS-VM.sh
 chmod 744 ~/tappaas/Create-TAPPaaS-VM.sh
