@@ -85,12 +85,13 @@ cd ../cluster || { echo "Cluster directory not found!"; exit 1; }
 /home/tappaas/bin/copy-update-json.sh cluster
 cd ../firewall || { echo "Firewall directory not found!"; exit 1; }
 /home/tappaas/bin/copy-update-json.sh firewall
+cd ../tappaas-cicd || { echo "TAPPaaS-CICD directory not found!"; exit 1; }
+/home/tappaas/bin/copy-update-json.sh tappaas-cicd
 
 # run the full tappaas-cicd update scripts with all dependencies and checks
-chmod +x /home/tappaas/TAPPaaS/src/foundation/tappaas-cicd/scripts/update-module.sh
-/home/tappaas/TAPPaaS/src/foundation/tappaas-cicd/scripts/update-module.sh tappaas-cicd
-/home/tappaas/TAPPaaS/src/foundation/tappaas-cicd/scripts/update-module.sh cluster
-/home/tappaas/TAPPaaS/src/foundation/tappaas-cicd/scripts/update-module.sh firewall
+/home/tappaas/bin/update-module.sh tappaas-cicd
+/home/tappaas/bin/update-module.sh cluster
+/home/tappaas/bin/update-module.sh firewall
 
 # Setup Caddy reverse proxy on the firewall
 # (needds to be after update.sh as it relies on opnsense-controller to be instlalled
