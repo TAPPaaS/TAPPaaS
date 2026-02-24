@@ -82,9 +82,9 @@ done
 
 # Install the cluster and firewall jsons
 cd ../cluster || { echo "Cluster directory not found!"; exit 1; }
-~bin/copy-install-jsons.sh cluster
+/home/tappaas/bin/copy-install-json.sh cluster
 cd ../firewall || { echo "Firewall directory not found!"; exit 1; }
-~bin/copy-install-jsons.sh firewall
+/home/tappaas/bin/copy-install-json.sh firewall
 
 # run the full tappaas-cicd update scripts with all dependencies and checks
 chmod +x /home/tappaas/TAPPaaS/src/foundation/tappaas-cicd/scripts/update-module.sh
