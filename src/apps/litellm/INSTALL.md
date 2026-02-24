@@ -24,7 +24,7 @@ As tappaas use on the tappaas-cicd: run the command:
 ```bash
 cd
 cd TAPPaaS/src/apps/litellm
-./install.sh litellm
+install-module.sh litellm
 ```
 
 **Duration:** ~5-10 minutes (first run downloads PostgreSQL, Redis, Podman images)
