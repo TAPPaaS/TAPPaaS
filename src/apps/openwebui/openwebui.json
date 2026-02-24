@@ -13,9 +13,9 @@
     "bridge0": "lan",
     "zone0": "srv",
     "description": "TAPPaaS Open Webui",
-    "author": "@ErikDaniel007",
+    "maintainer": "@ErikDaniel007",
     "releaseDate": "2026-02-10",
     "status": "Development",
-    "dependsOn": ["cluster:vm"],
+    "dependsOn": ["cluster:vm", "templates:nixos", "backup:vm", "identity:identity", "firewall:proxy", "litellm:models"],
     "provides": []
 }
