@@ -84,6 +84,8 @@ done
 cd ../cluster || { echo "Cluster directory not found!"; exit 1; }
 /home/tappaas/bin/copy-update-json.sh cluster
 cd ../firewall || { echo "Firewall directory not found!"; exit 1; }
+/home/tappaas/bin/copy-update-json.sh templates
+cd ../templates || { echo "Templates directory not found!"; exit 1; }
 /home/tappaas/bin/copy-update-json.sh firewall
 cd ../tappaas-cicd || { echo "TAPPaaS-CICD directory not found!"; exit 1; }
 /home/tappaas/bin/copy-update-json.sh tappaas-cicd

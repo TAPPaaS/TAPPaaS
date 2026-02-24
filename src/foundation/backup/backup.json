@@ -10,6 +10,6 @@
     "image": "pbs",
     "imageLocation": "http://download.proxmox.com/debian/pbs",
     "description": "TAPPaaS Proxmox Backup Server configuration",
-    "dependsOn": ["cluster:vm"],
+    "dependsOn": [],
     "provides": ["vm"]
 }
