@@ -19,7 +19,7 @@ This document describes the program dependencies within the `src/foundation/` di
 
 ### Key Dependency Chains
 
-1. **Install Chain**: `install1.sh` → `install2.sh` → `create-configuration.sh` + `setup-caddy.sh` + `update-module.sh`
+1. **Install Chain**: `install1.sh` → `install2.sh` → `create-configuration.sh` + `copy-update-json.sh` + `update-module.sh` + `setup-caddy.sh`
 2. **Update Chain**: `update-tappaas` → `update-node` → `update-module.sh` → module `update.sh` + service `update-service.sh`
 3. **Module Install Chain**: `install-module.sh` → `copy-update-json.sh` + `common-install-routines.sh` → service `install-service.sh` → `Create-TAPPaaS-VM.sh`
 4. **Zone Management Chain**: `zone-manager` → OPNsense API → firewall/VLAN/DHCP configuration
@@ -73,10 +73,14 @@ graph TD
 
     subgraph "Phase 2: install2.sh after reboot"
         F[install2.sh] -->|sources| G[create-configuration.sh]
+        F -->|calls| N[copy-update-json.sh]
         F -->|calls| H[setup-caddy.sh]
-        F -->|sources| I[update-module.sh]
+        F -->|calls| I[update-module.sh]
 
         G -->|creates| J[configuration.json]
+
+        N -->|reads| P[module-fields.json]
+        N -->|copies| R["<module>.json to config/"]
 
         H -->|reads| J
         H -->|calls| K[opnsense-firewall]
@@ -84,7 +88,7 @@ graph TD
         I -->|sources| L[common-install-routines.sh]
         I -->|calls| M["module update.sh"]
 
-        L -->|reads| P[module-fields.json]
+        L -->|reads| P
         L -->|reads| Q[zones.json]
     end
 ```
@@ -216,6 +220,7 @@ graph TD
 
     G[install.sh backup] -->|sources| H[copy-update-json.sh]
     G -->|sources| B
+    G -->|calls| X[dns-manager]
     G -->|reads| C
 ```
 

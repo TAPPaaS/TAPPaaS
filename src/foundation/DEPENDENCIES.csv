@@ -1,7 +1,7 @@
 File name,Location,Direct dependencies,Config files read
 # ==========================================================================================
 # TAPPaaS Foundation Layer - Direct Dependencies
-# Generated: 2026-02-22
+# Generated: 2026-02-25
 # ==========================================================================================
 
 # ------------------------------------------------------------------------------------------
@@ -38,7 +38,7 @@ Create-TAPPaaS-VM.sh,cluster/,None,<vmname>.json; zones.json
 # tappaas-cicd module scripts
 # ------------------------------------------------------------------------------------------
 install1.sh,tappaas-cicd/,install2.sh (via nixos-rebuild),None
-install2.sh,tappaas-cicd/,create-configuration.sh; update-module.sh; setup-caddy.sh,None
+install2.sh,tappaas-cicd/,create-configuration.sh; copy-update-json.sh; update-module.sh; setup-caddy.sh,None
 pre-update.sh,tappaas-cicd/,common-install-routines.sh,<vmname>.json
 update.sh (tappaas-cicd),tappaas-cicd/,common-install-routines.sh; update-cron.sh,<vmname>.json
 test.sh (tappaas-cicd),tappaas-cicd/,test-vm-creation/test.sh,None
@@ -57,7 +57,7 @@ update.sh (firewall),firewall/,zone-manager,zones.json
 # ------------------------------------------------------------------------------------------
 # backup module scripts
 # ------------------------------------------------------------------------------------------
-install.sh (backup),backup/,copy-update-json.sh; common-install-routines.sh,backup.json; zones.json
+install.sh (backup),backup/,copy-update-json.sh; common-install-routines.sh; dns-manager,backup.json; zones.json
 update.sh (backup),backup/,None,None
 backup-manage.sh,backup/,common-install-routines.sh,backup.json
 restore.sh,backup/,common-install-routines.sh,backup.json
