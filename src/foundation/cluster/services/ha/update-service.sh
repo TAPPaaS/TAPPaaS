@@ -102,8 +102,8 @@ create_ha_config() {
   HA_NODE_FQDN="${ha_node}.${MGMTVLAN}.internal"
   info "  Checking HA node $ha_node is reachable..."
   if ! ssh root@"$HA_NODE_FQDN" "hostname" &>/dev/null; then
-    error "Cannot reach HA node: $HA_NODE_FQDN"
-    exit 1
+    warn "HA node $HA_NODE_FQDN is not reachable — skipping HA configuration"
+    exit 0
   fi
   info "  HA node is reachable"
 

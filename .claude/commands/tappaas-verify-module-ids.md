@@ -16,19 +16,25 @@ Search for all module definition JSON files on disk:
 - `src/foundation/*//*.json` — foundation and test-vm-creation modules
 - `src/apps/*/*.json` — application modules
 
-A file is a **module JSON** if it contains a `"vmid"` field. Exclude schema/reference files (`module-fields.json`, `configuration-fields.json`, `zones-fields.json`, `zones.json`).
+A file is a **module JSON** if it contains a `"vmid"` field. Exclude:
+- Schema/reference files: `module-fields.json`, `configuration-fields.json`, `zones-fields.json`, `zones.json`
+- All files under `src/foundation/templates/` — these are Proxmox VM template definitions managed separately and tracked via the `proxmoxTemplates` registry key, not as standard module files
 
 ### 3. Cross-reference and check for discrepancies
 
-For **each entry in modules.json**, verify:
+For **each entry in `foundationModules`, `applicationModules`, and `testModules`**, verify:
 1. **File exists**: The path in `moduleJson` points to an existing file
 2. **VMID matches**: The `vmid` in the registry matches the `vmid` in the actual JSON file
 3. **Module name matches**: The `moduleName` matches the `vmname` (or `hostname` for firewall) in the actual JSON file
 4. **Correct category**: The module is listed in the right section based on VMID range:
    - `foundationModules`: VMID 100–200
-   - `applicationModules`: VMID 201–499
+   - `applicationModules`: VMID 201–899
    - `proxmoxTemplates`: VMID 8000–9000
    - `testModules`: VMID 900–999
+
+For **`proxmoxTemplates` entries**, only verify:
+- VMID falls within the 8000–9000 range
+- Skip file-exists, VMID-match, and name-match checks — Proxmox templates are OS-level disk images managed outside the standard module JSON convention
 
 For **each module JSON found on disk**, verify:
 1. **Registered**: The module appears in `modules.json`

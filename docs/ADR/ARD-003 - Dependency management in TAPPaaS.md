@@ -65,40 +65,14 @@ install-module.sh for a module will iterate through the dependsOn list and call 
 
 #### Module Update
 
+update-module.sh. works similar to install-module.sh
 
 #### System Update
 
-This needs to be reconsidered to ensure updates are done in right order: 
 - The update script that update a full installation will compute the dependency graph and update the lowest level first (modules without any dependencies)
 - tappaas-cicd first, Firewall second
-- probably needs to update all modules regardless of nodes it runs on. 
-NOTE: do not change this yet
+- update all modules regardless of nodes it runs on. 
 
-## Task
+The update script runs at the schedule defined in configuration.json, which is build during initial install.
 
-1) update module-fields.json with the dependsOn and provide fields
-2) create new foundation modules based on the existing ones (do not delete existing ones). do not copy README.md files
-  a. cluster: based on 05-ProxmoxNode
-    - copy Create-TAPPaaS-VM.sh
-    - install.sh will be copied and modified to point to .../cluster/Create-TAPPaaS-VM.sh instead of its old location
-    - install.sh will also refer to zones.json to be located in foundation/firewall instead of directly in foundation 
-    - create an update.sh, that takes the node update section of the current foundation/tappaas-cicd/update.sh script
-    - creaete two services: 
-      - "vm": implement an install-service.sh based on the install-vm.sh script, and an empty update-service.sh
-      - "ha": implement an install-service.sh that calls update-service.sh, which is based on the update-HA.sh
-    - insert an empty dependsOn and a provide: [vm,ha]
-  b. firewall: based on 10-firewall
-    - json extended with a dependsOn that specify it depends on cluster:vm and cluster:ha
-    - also extend with provide: [firewall, proxy]
-    - add empty service install-service.sh and update-service.sh for each of the 2 services
-    - copy zones.json to foundation/firewall. update the update.sh to run the zones creation as per the section in the 30-tapppaas-cicd/update.sh 
-  c. templates: based on 15-tappaas-nixos
-    - make it provide a service template:nixos, with an install-service.sh that calls update-service.sh which is doing an update-os.sh 
-  d. tappaas-cicd: based on 30-tappaas-cicd
-    - depends on cluster:vm and cluster:ha
-  e. backup: based on 35-backup
-  f. identiy: based on 40-identity
-2) create 
-  - "dependsOn"  in all app modules. make them dependent on cluster:vm 
-  - empty "provide"
-
+Noe we moved the update schedule to be a system vide schedule instead of being per module

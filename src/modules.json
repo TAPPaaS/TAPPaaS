@@ -44,6 +44,11 @@
             "moduleJson": "src/apps/openwebui/openwebui.json"
         },
         {
+            "moduleName": "vllm-amd",
+            "vmid": 312,
+            "moduleJson": "src/apps/vllm-amd/vllm-amd.json"
+        },
+        {
             "moduleName": "vaultwarden",
             "vmid": 610,
             "moduleJson": "src/apps/vaultwarden/vaultwarden.json"
