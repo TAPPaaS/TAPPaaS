@@ -44,30 +44,46 @@
                     "default": 3,
                     "example": 3
                 },
-                "upstreamGit": {
-                    "description": "Git repository URL for TAPPaaS source code (without https:// prefix)",
-                    "type": "string",
+                "repositories": {
+                    "description": "Array of module repositories. Each entry tracks a git repository containing TAPPaaS modules. The first entry is the main TAPPaaS repository. Managed by repository.sh add/remove/modify commands.",
+                    "type": "array",
                     "required": true,
-                    "default": "github.com/TAPPaaS/TAPPaaS",
-                    "example": "github.com/TAPPaaS/TAPPaaS"
-                },
-                "branch": {
-                    "description": "Git branch to use for TAPPaaS installation and updates. Affects update scheduling behavior.",
-                    "type": "string",
-                    "required": true,
-                    "default": "main",
-                    "values": {
-                        "main": {
-                            "description": "Stable production branch. Updates run monthly on first week only."
-                        },
-                        "stable": {
-                            "description": "Stable branch. Updates run monthly on first week only."
-                        },
-                        "develop": {
-                            "description": "Development branch. Updates run daily."
-                        },
-                        "<other>": {
-                            "description": "Any other branch name. Updates run daily."
+                    "default": [
+                        {
+                            "name": "TAPPaaS",
+                            "url": "github.com/TAPPaaS/TAPPaaS",
+                            "branch": "main",
+                            "path": "/home/tappaas/TAPPaaS"
+                        }
+                    ],
+                    "items": {
+                        "type": "object",
+                        "fields": {
+                            "name": {
+                                "description": "Short name for the repository, derived from the git clone directory name",
+                                "type": "string",
+                                "required": true,
+                                "example": "TAPPaaS"
+                            },
+                            "url": {
+                                "description": "Git repository URL (without https:// prefix)",
+                                "type": "string",
+                                "required": true,
+                                "example": "github.com/TAPPaaS/TAPPaaS"
+                            },
+                            "branch": {
+                                "description": "Git branch to track",
+                                "type": "string",
+                                "required": true,
+                                "default": "main",
+                                "example": "main"
+                            },
+                            "path": {
+                                "description": "Absolute local path where the repository is cloned",
+                                "type": "string",
+                                "required": true,
+                                "example": "/home/tappaas/TAPPaaS"
+                            }
                         }
                     }
                 },

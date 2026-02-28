@@ -29,6 +29,7 @@ test-config.sh,tappaas-cicd/scripts/,None,module-fields.json; /home/tappaas/conf
 install-module.sh,tappaas-cicd/scripts/,copy-update-json.sh; common-install-routines.sh; module install.sh; service install-service.sh scripts,<module>.json
 update-module.sh,tappaas-cicd/scripts/,common-install-routines.sh; module pre-update.sh; module update.sh; service update-service.sh scripts,<module>.json
 delete-module.sh,tappaas-cicd/scripts/,module delete.sh; service delete-service.sh scripts,<module>.json
+repository.sh,tappaas-cicd/scripts/,None,configuration.json; <repo>/src/modules.json
 
 # ------------------------------------------------------------------------------------------
 # Script on Proxmox Nodes
@@ -40,7 +41,7 @@ Create-TAPPaaS-VM.sh,cluster/,None,<vmname>.json; zones.json
 # ------------------------------------------------------------------------------------------
 install1.sh,tappaas-cicd/,install2.sh (via nixos-rebuild),None
 install2.sh,tappaas-cicd/,create-configuration.sh; copy-update-json.sh; update-module.sh; setup-caddy.sh,None
-pre-update.sh,tappaas-cicd/,common-install-routines.sh,<vmname>.json
+pre-update.sh,tappaas-cicd/,common-install-routines.sh,<vmname>.json; configuration.json
 update.sh (tappaas-cicd),tappaas-cicd/,common-install-routines.sh; update-cron.sh,<vmname>.json
 test.sh (tappaas-cicd),tappaas-cicd/,test-vm-creation/test.sh,None
 

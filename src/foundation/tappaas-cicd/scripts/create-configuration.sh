@@ -251,8 +251,14 @@ CONFIG_JSON=$(cat << EOF
     "domain": "${DOMAIN}",
     "email": "${EMAIL}",
     "nodeCount": ${NODE_COUNT},
-    "upstreamGit": "${UPSTREAM_GIT}",
-    "branch": "${BRANCH}",
+    "repositories": [
+      {
+        "name": "TAPPaaS",
+        "url": "${UPSTREAM_GIT}",
+        "branch": "${BRANCH}",
+        "path": "/home/tappaas/TAPPaaS"
+      }
+    ],
     "updateSchedule": ${SCHEDULE_JSON}
   },
 

@@ -13,13 +13,52 @@ NODE1_FQDN="tappaas1.$MGMTVLAN.internal"
 FIREWALL_FQDN="firewall.$MGMTVLAN.internal"
 echo -e "\nStarting TAPPaaS-CICD module update for VM: $VMNAME on node: $NODE"
 
-# TODO: check if branch has changed and if so checkout the branch before pulling
-cd
-cd TAPPaaS || { echo "TAPPaaS directory not found!"; exit 1; }
-echo -e "\nPulling latest changes from TAPPaaS repository..."
-git pull origin
+# Pull all tracked repositories from configuration.json
+CONFIG_FILE="/home/tappaas/config/configuration.json"
+if [ -f "$CONFIG_FILE" ]; then
+  # Migrate old format: convert upstreamGit+branch to repositories array
+  if jq -e '.tappaas.upstreamGit' "$CONFIG_FILE" >/dev/null 2>&1; then
+    echo -e "\nMigrating configuration.json from upstreamGit/branch to repositories format..."
+    OLD_URL=$(jq -r '.tappaas.upstreamGit' "$CONFIG_FILE")
+    OLD_BRANCH=$(jq -r '.tappaas.branch // "main"' "$CONFIG_FILE")
+    OLD_NAME="${OLD_URL##*/}"
+    OLD_NAME="${OLD_NAME%.git}"
+    tmp_file=$(mktemp)
+    jq --arg name "$OLD_NAME" --arg url "$OLD_URL" --arg branch "$OLD_BRANCH" \
+      --arg path "/home/tappaas/${OLD_NAME}" \
+      '.tappaas.repositories = [{"name": $name, "url": $url, "branch": $branch, "path": $path}] | del(.tappaas.upstreamGit) | del(.tappaas.branch)' \
+      "$CONFIG_FILE" > "$tmp_file" && mv "$tmp_file" "$CONFIG_FILE"
+    echo "  Migrated: upstreamGit=${OLD_URL} branch=${OLD_BRANCH} -> repositories[0]"
+  fi
+
+  REPO_COUNT=$(jq '.tappaas.repositories // [] | length' "$CONFIG_FILE" 2>/dev/null || echo "0")
+  if [ "$REPO_COUNT" -gt 0 ]; then
+    echo -e "\nPulling latest changes from ${REPO_COUNT} repository/repositories..."
+    for i in $(seq 0 $(( REPO_COUNT - 1 ))); do
+      REPO_NAME=$(jq -r ".tappaas.repositories[$i].name" "$CONFIG_FILE")
+      REPO_PATH=$(jq -r ".tappaas.repositories[$i].path" "$CONFIG_FILE")
+      REPO_BRANCH=$(jq -r ".tappaas.repositories[$i].branch" "$CONFIG_FILE")
+      if [ -d "$REPO_PATH" ]; then
+        echo "  Pulling ${REPO_NAME} (branch: ${REPO_BRANCH})..."
+        cd "$REPO_PATH" && git fetch origin && git checkout "$REPO_BRANCH" && git pull origin "$REPO_BRANCH" || echo "  Warning: Failed to pull ${REPO_NAME}"
+      else
+        echo "  Warning: Repository directory not found: ${REPO_PATH} (${REPO_NAME})"
+      fi
+    done
+  else
+    echo -e "\nNo repositories configured — pulling TAPPaaS from default location..."
+    cd
+    cd TAPPaaS || { echo "TAPPaaS directory not found!"; exit 1; }
+    git pull origin
+  fi
+else
+  echo -e "\nConfiguration file not found — pulling TAPPaaS from default location..."
+  cd
+  cd TAPPaaS || { echo "TAPPaaS directory not found!"; exit 1; }
+  git pull origin
+fi
 # get to the right directory
-cd src/foundation/tappaas-cicd || { echo "TAPPaaS-CICD directory not found!"; exit 1; }
+cd /home/tappaas/TAPPaaS/src/foundation/tappaas-cicd || { echo "TAPPaaS-CICD directory not found!"; exit 1; }
 
 # --- Install scripts as symlinks into /home/tappaas/bin/ ---
 echo -e "\nInstalling scripts to /home/tappaas/bin/..."

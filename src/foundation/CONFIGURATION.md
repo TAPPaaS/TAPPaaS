@@ -24,8 +24,7 @@ Global system configuration including:
 - **domain** - Primary domain for SSL certificates and service URLs
 - **email** - Admin email for Let's Encrypt and notifications
 - **nodeCount** - Number of Proxmox nodes in the cluster
-- **upstreamGit** - Git repository for TAPPaaS source
-- **branch** - Git branch (affects update scheduling)
+- **repositories** - Array of module repositories (managed by `repository.sh`)
 - **updateSchedule** - When to apply system updates (applies to all nodes)
 
 ### tappaas-nodes
@@ -43,8 +42,14 @@ Array of Proxmox node configurations, each containing:
         "domain": "mytappaas.dev",
         "email": "admin@mytappaas.dev",
         "nodeCount": 3,
-        "upstreamGit": "github.com/TAPPaaS/TAPPaaS",
-        "branch": "main",
+        "repositories": [
+            {
+                "name": "TAPPaaS",
+                "url": "github.com/TAPPaaS/TAPPaaS",
+                "branch": "main",
+                "path": "/home/tappaas/TAPPaaS"
+            }
+        ],
         "updateSchedule": ["monthly", "Thursday", 2]
     },
     "tappaas-nodes": [
@@ -63,6 +68,36 @@ Array of Proxmox node configurations, each containing:
     ]
 }
 ```
+
+## Repositories
+
+The `repositories` array tracks all module repositories. The first entry is the main TAPPaaS repository that was cloned during initial setup. Additional repositories can be added for community or private modules using `repository.sh`.
+
+Each repository entry contains:
+
+| Field | Description | Example |
+|-------|-------------|---------|
+| `name` | Repository name (derived from URL) | `TAPPaaS` |
+| `url` | Git URL without `https://` prefix | `github.com/TAPPaaS/TAPPaaS` |
+| `branch` | Git branch to track | `main` |
+| `path` | Absolute local clone path | `/home/tappaas/TAPPaaS` |
+
+**Managing repositories:**
+```bash
+# Add a community repository
+repository.sh add github.com/someone/tappaas-community --branch main
+
+# List all tracked repositories
+repository.sh list
+
+# Switch a repository to a different branch
+repository.sh modify tappaas-community --branch develop
+
+# Remove a repository
+repository.sh remove tappaas-community
+```
+
+All repositories are pulled during the update cycle (`pre-update.sh`). Modules from any repository can be installed using `install-module.sh` as usual.
 
 ## Update Scheduling
 
