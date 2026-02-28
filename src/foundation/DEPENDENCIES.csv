@@ -28,6 +28,7 @@ resize-disk.sh,tappaas-cicd/scripts/,None,<vmname>.json
 test-config.sh,tappaas-cicd/scripts/,None,module-fields.json; /home/tappaas/config/*.json
 install-module.sh,tappaas-cicd/scripts/,copy-update-json.sh; common-install-routines.sh; module install.sh; service install-service.sh scripts,<module>.json
 update-module.sh,tappaas-cicd/scripts/,common-install-routines.sh; module pre-update.sh; module update.sh; service update-service.sh scripts,<module>.json
+delete-module.sh,tappaas-cicd/scripts/,module delete.sh; service delete-service.sh scripts,<module>.json
 
 # ------------------------------------------------------------------------------------------
 # Script on Proxmox Nodes
@@ -83,11 +84,13 @@ install-service.sh (cluster/vm),cluster/services/vm/,copy-update-json.sh; common
 update-service.sh (cluster/vm),cluster/services/vm/,None,None
 install-service.sh (cluster/ha),cluster/services/ha/,update-service.sh (cluster/ha),None
 update-service.sh (cluster/ha),cluster/services/ha/,common-install-routines.sh,<module>.json
+delete-service.sh (cluster/vm),cluster/services/vm/,common-install-routines.sh,<module>.json
+delete-service.sh (cluster/ha),cluster/services/ha/,common-install-routines.sh,<module>.json
 
 # ------------------------------------------------------------------------------------------
 # test-vm-creation scripts
 # ------------------------------------------------------------------------------------------
-test.sh (test-vm-creation),tappaas-cicd/test-vm-creation/,install-module.sh; test-vm.sh,<test>.json
+test.sh (test-vm-creation),tappaas-cicd/test-vm-creation/,install-module.sh; delete-module.sh; test-vm.sh,<test>.json
 test-vm.sh,tappaas-cicd/test-vm-creation/,common-install-routines.sh,<vmname>.json
 install.sh (test-vm-creation),tappaas-cicd/test-vm-creation/,None,None
 

@@ -49,8 +49,8 @@ Options:
 - `./test.sh [test-name]` - Install and test only the specified VM
 - `./test.sh --skip-install` - Only run tests on existing VMs (skip installation)
 - `./test.sh --skip-test` - Only install VMs (skip testing)
-- `./test.sh --cleanup` - Destroy all test VMs after testing
-- `./test.sh --skip-install --cleanup` - Test existing VMs and cleanup after
+- `./test.sh --skip-delete` - Keep test VMs after testing (by default, VMs are deleted)
+- `./test.sh --skip-install --skip-delete` - Test existing VMs and keep them
 
 Available test names:
 - `test-debian`, `test-debian-vlan-node`
@@ -175,13 +175,19 @@ Test Summary for test-nixos
 
 ## Cleanup
 
-To remove all test VMs after testing:
+Test VMs are **deleted by default** after testing. Use `--skip-delete` to keep them.
 
 ```bash
-# Automatic cleanup (via test.sh)
-./test.sh --cleanup
+# Default behavior: test.sh installs, tests, and deletes VMs
+./test.sh
 
-# Or manual cleanup
+# Keep VMs after testing
+./test.sh --skip-delete
+
+# Manual deletion of a single module
+/home/tappaas/bin/delete-module.sh test-nixos --force
+
+# Or manual cleanup via SSH
 # On tappaas1
 ssh root@tappaas1.mgmt.internal "ha-manager remove vm:903"
 ssh root@tappaas1.mgmt.internal "ha-manager rules remove ha-test-nixos"

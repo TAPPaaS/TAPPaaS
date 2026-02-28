@@ -398,6 +398,91 @@ setup-caddy.sh
 
 ---
 
+### install-module.sh
+
+Installs a TAPPaaS module with dependency validation and service wiring.
+
+**Usage:**
+```bash
+install-module.sh <module-name> [--<field> <value>]...
+```
+
+**What it does:**
+1. Copies and validates the module JSON config
+2. Checks that every `dependsOn` service is provided by an installed module
+3. Validates that the module has service scripts for each service it provides
+4. Iterates `dependsOn` and calls each provider's `install-service.sh`
+5. Calls the module's own `install.sh` (if present)
+
+**Example:**
+```bash
+install-module.sh vaultwarden
+install-module.sh litellm --node tappaas2
+```
+
+---
+
+### update-module.sh
+
+Updates a TAPPaaS module with dependency-aware service wiring.
+
+**Usage:**
+```bash
+update-module.sh <module-name>
+```
+
+**What it does:**
+1. Validates the module JSON config exists
+2. Checks that every `dependsOn` service is still available
+3. Runs the module's `pre-update.sh` (if present)
+4. Iterates `dependsOn` and calls each provider's `update-service.sh`
+5. Calls the module's own `update.sh`
+
+**Example:**
+```bash
+update-module.sh vaultwarden
+update-module.sh litellm
+```
+
+---
+
+### delete-module.sh
+
+Deletes a TAPPaaS module with dependency-aware service teardown.
+
+**Usage:**
+```bash
+delete-module.sh <module-name> [--force]
+```
+
+**Parameters:**
+
+| Parameter | Description | Example |
+|-----------|-------------|---------|
+| `module-name` | Name of the module to delete | `vaultwarden` |
+| `--force` | Delete even if other modules depend on this module's services | |
+
+**What it does:**
+1. Validates the module JSON config exists in `/home/tappaas/config/`
+2. Checks reverse dependencies — blocks if other modules depend on this module's services (unless `--force`)
+3. Calls the module's own `delete.sh` (if present) while the VM still exists
+4. Iterates `dependsOn` in **reverse** order and calls each provider's `delete-service.sh` (skips if not found)
+5. Removes the module configuration files (`.json` and `.json.orig`)
+
+**Example:**
+```bash
+delete-module.sh vaultwarden
+delete-module.sh litellm --force
+```
+
+**Notes:**
+- The deletion order is reversed compared to installation: the module's own `delete.sh` runs first (while the VM still exists), then services are torn down in reverse dependency order
+- HA/replication is removed before the VM is destroyed to prevent conflicts
+- Missing `delete-service.sh` scripts are skipped (not an error), allowing incremental rollout
+- Service teardown failures produce warnings but do not abort the overall deletion
+
+---
+
 ## Installation
 
 These scripts are automatically installed by `install2.sh`:
@@ -417,11 +502,14 @@ scripts/
 ├── common-install-routines.sh   # Shared library for install scripts
 ├── copy-update-json.sh          # Copy and modify module JSON configs
 ├── create-configuration.sh      # Generate system configuration.json
+├── delete-module.sh             # Delete a module with dependency-aware teardown
+├── install-module.sh            # Install a module with dependency validation
 ├── install-vm.sh                # VM creation library (sourced by install.sh)
 ├── resize-disk.sh               # Resize VM disk in Proxmox and filesystem
 ├── setup-caddy.sh               # Install Caddy reverse proxy on firewall
 ├── test-config.sh               # Validate installation
 ├── update-cron.sh               # Set up hourly update cron job
 ├── update-HA.sh                 # Manage HA and replication for modules
+├── update-module.sh             # Update a module with dependency-aware service wiring
 └── update-os.sh                 # OS-specific update (NixOS/Debian)
 ```

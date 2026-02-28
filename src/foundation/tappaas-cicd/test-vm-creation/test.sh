@@ -2,7 +2,7 @@
 # TAPPaaS VM Creation Test Suite
 #
 # Runs all VM creation test cases and reports results
-# Usage: ./test.sh [test-name] [--skip-install] [--skip-test] [--cleanup]
+# Usage: ./test.sh [test-name] [--skip-install] [--skip-test] [--skip-delete]
 #
 # Arguments:
 #   test-name       Optional: Run only the specified test (e.g., test-nixos-ha)
@@ -10,7 +10,7 @@
 # Options:
 #   --skip-install  Skip VM installation, only run tests on existing VMs
 #   --skip-test     Skip tests, only install VMs
-#   --cleanup       Destroy all test VMs after testing
+#   --skip-delete   Skip VM deletion after testing (by default, test VMs are deleted)
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$SCRIPT_DIR"
@@ -22,13 +22,13 @@ TIMESTAMP=$(date +%Y%m%d_%H%M%S)
 # Parse arguments
 SKIP_INSTALL=false
 SKIP_TEST=false
-CLEANUP=false
+DELETE=true
 SINGLE_TEST=""
 for arg in "$@"; do
     case $arg in
         --skip-install) SKIP_INSTALL=true ;;
         --skip-test) SKIP_TEST=true ;;
-        --cleanup) CLEANUP=true ;;
+        --skip-delete) DELETE=false ;;
         -*) echo "Unknown option: $arg"; exit 1 ;;
         *) SINGLE_TEST="$arg" ;;
     esac
@@ -227,45 +227,30 @@ echo -e "Total: ${GREEN}${TOTAL_PASS} passed${NC}, ${RED}${TOTAL_FAIL} failed${N
 echo "Logs saved to: ${LOG_DIR}/"
 echo "=============================================="
 
-# Cleanup if requested
-if [ "$CLEANUP" = true ]; then
+# Delete test VMs (default behavior unless --skip-delete)
+if [ "$DELETE" = true ]; then
     echo ""
-    echo "Cleaning up test VMs..."
+    echo "Deleting test VMs..."
 
-    # Read VMIDs and nodes from JSON configs for accurate cleanup
-    for test_entry in "${ALL_TESTS[@]}"; do
+    for test_entry in "${TESTS[@]}"; do
         IFS=':' read -r TEST_NAME _ _ <<< "$test_entry"
-        JSON_FILE="${SCRIPT_DIR}/${TEST_NAME}.json"
-        if [ ! -f "$JSON_FILE" ]; then
+
+        # Check if the module config exists (it might not if install was skipped/failed)
+        if [ ! -f "/home/tappaas/config/${TEST_NAME}.json" ]; then
+            echo "  Skipping ${TEST_NAME} (no config found)"
             continue
         fi
 
-        VMID=$(python3 -c "import json; print(json.load(open('$JSON_FILE')).get('vmid',''))" 2>/dev/null)
-        NODE=$(python3 -c "import json; print(json.load(open('$JSON_FILE')).get('node',''))" 2>/dev/null)
-        HANODE=$(python3 -c "import json; print(json.load(open('$JSON_FILE')).get('HANode',''))" 2>/dev/null)
-
-        if [ -z "$VMID" ] || [ -z "$NODE" ]; then
-            echo "  Skipping $TEST_NAME (missing vmid or node in JSON)"
-            continue
+        DELETE_LOG="${LOG_DIR}/${TIMESTAMP}_${TEST_NAME}_delete.log"
+        echo -n "  Deleting ${TEST_NAME}... "
+        if /home/tappaas/bin/delete-module.sh "${TEST_NAME}" --force > "${DELETE_LOG}" 2>&1; then
+            echo "OK"
+        else
+            echo "FAILED (see ${DELETE_LOG})"
         fi
-
-        echo "  Removing VM $VMID ($TEST_NAME) from $NODE..."
-
-        # Remove HA configuration first (if HA was configured)
-        if [ -n "$HANODE" ]; then
-            ssh "root@${NODE}.mgmt.internal" "ha-manager remove vm:$VMID 2>/dev/null" || true
-            ssh "root@${NODE}.mgmt.internal" "ha-manager rules remove ha-${TEST_NAME} 2>/dev/null" || true
-            ssh "root@${NODE}.mgmt.internal" "pvesr delete ${VMID}-0 --force 1 2>/dev/null" || true
-        fi
-
-        # Stop and destroy VM
-        ssh "root@${NODE}.mgmt.internal" "qm stop $VMID 2>/dev/null; qm destroy $VMID --purge 2>/dev/null" || true
-
-        # Remove deployed config JSON
-        rm -f "/home/tappaas/config/${TEST_NAME}.json" "/home/tappaas/config/${TEST_NAME}.json.orig" 2>/dev/null || true
     done
 
-    echo "Cleanup complete."
+    echo "Deletion complete."
 fi
 
 # Exit with appropriate code
