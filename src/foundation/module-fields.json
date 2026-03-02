@@ -340,6 +340,27 @@
             "format": "^[a-zA-Z][a-zA-Z0-9-]*$",
             "example": ["vm", "ha"],
             "note": "Each listed service must have a corresponding services/<service>/install-service.sh and update-service.sh"
+        },
+
+        "proxyDomain": {
+            "description": "Public domain name for the reverse proxy. Caddy obtains a TLS certificate for this domain.",
+            "type": "string",
+            "requiredBy": [],
+            "default": "<vmname>.<tappaas.domain>",
+            "format": "^[a-zA-Z0-9]([a-zA-Z0-9.-]*[a-zA-Z0-9])?$",
+            "example": "vaultwarden.test.tapaas.org",
+            "note": "If not set, defaults to <vmname>.<domain> from configuration.json"
+        },
+
+        "proxyPort": {
+            "description": "Target port on the module VM that the reverse proxy forwards traffic to",
+            "type": "integer",
+            "requiredBy": [],
+            "default": 80,
+            "minimum": 1,
+            "maximum": 65535,
+            "example": 8080,
+            "note": "The port the service listens on inside the VM"
         }
     },
 

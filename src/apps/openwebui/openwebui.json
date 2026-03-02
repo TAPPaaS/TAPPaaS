@@ -16,6 +16,8 @@
     "maintainer": "@ErikDaniel007",
     "releaseDate": "2026-02-10",
     "status": "Development",
+    "proxyDomain": "openwebui.test.tapaas.org",
+    "proxyPort": 8080,
     "dependsOn": ["cluster:vm", "templates:nixos", "backup:vm", "identity:identity", "firewall:proxy", "litellm:models"],
     "provides": []
 }

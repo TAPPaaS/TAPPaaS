@@ -4,7 +4,7 @@ OPNsense controller for TAPPaaS using the `oxl-opnsense-client` library.
 
 ## CLI Tools
 
-This package provides four command-line tools:
+This package provides five command-line tools:
 
 | Command | Description |
 |---------|-------------|
@@ -12,6 +12,7 @@ This package provides four command-line tools:
 | `opnsense-firewall` | Standalone firewall rule management (create, list, delete rules) |
 | `dns-manager` | DNS host entry management for Dnsmasq |
 | `zone-manager` | Automated zone configuration from zones.json |
+| `caddy-manager` | Caddy reverse proxy domain and handler management |
 
 ## Requirements
 
@@ -432,6 +433,116 @@ The DNS Manager provides a dedicated CLI for managing DNS host entries in OPNsen
 | `delete <hostname> <domain>` | Delete a DNS host entry by hostname and domain (ignores description) |
 | `list` | List all DNS host entries |
 
+### Caddy Manager (`caddy-manager` command)
+
+The Caddy Manager provides a dedicated CLI for managing Caddy reverse proxy domains and handlers on OPNsense. It is used by the `firewall:proxy` service scripts to automate proxy setup for TAPPaaS modules.
+
+#### CLI Usage
+
+```bash
+# List all reverse proxy domains and handlers
+caddy-manager list --no-ssl-verify
+
+# Add a domain (Caddy will obtain a TLS certificate for it)
+caddy-manager add-domain app.test.tapaas.org --description "TAPPaaS: myapp" --no-ssl-verify
+
+# Add a handler that routes traffic to an upstream VM
+caddy-manager add-handler app.test.tapaas.org \
+    --upstream myapp.srv.internal \
+    --port 8080 \
+    --description "TAPPaaS: myapp" \
+    --no-ssl-verify
+
+# Delete a handler by description
+caddy-manager delete-handler --description "TAPPaaS: myapp" --no-ssl-verify
+
+# Delete a handler by UUID
+caddy-manager delete-handler --uuid "abc123-def456-..." --no-ssl-verify
+
+# Delete a domain
+caddy-manager delete-domain app.test.tapaas.org --no-ssl-verify
+
+# Reconfigure Caddy (regenerate Caddyfile and reload)
+caddy-manager reconfigure --no-ssl-verify
+
+# Dry-run mode (don't make changes)
+caddy-manager add-domain app.test.tapaas.org --check-mode --no-ssl-verify
+
+# Global options can go before or after the subcommand
+caddy-manager --no-ssl-verify list
+caddy-manager list --no-ssl-verify
+
+# Show help
+caddy-manager --help
+caddy-manager add-handler --help
+```
+
+#### Commands
+
+| Command | Description |
+|---------|-------------|
+| `add-domain <domain>` | Add a reverse proxy domain |
+| `add-handler <domain>` | Add a reverse proxy handler for a domain |
+| `delete-domain <domain>` | Delete a reverse proxy domain |
+| `delete-handler` | Delete a handler by `--description` or `--uuid` |
+| `list` | List all domains and handlers |
+| `reconfigure` | Reconfigure Caddy (apply pending changes) |
+
+#### Global Options
+
+| Option | Description |
+|--------|-------------|
+| `--firewall HOST` | Firewall IP/hostname (default: `firewall.mgmt.internal`) |
+| `--api-port PORT` | OPNsense API port (default: auto-detect by probing 443, then 8443) |
+| `--credential-file PATH` | Path to credential file |
+| `--no-ssl-verify` | Disable SSL certificate verification |
+| `--debug` | Enable debug logging |
+| `--check-mode` | Dry-run mode (don't make actual changes) |
+
+#### add-domain Options
+
+| Option | Description |
+|--------|-------------|
+| `domain` | Domain FQDN, e.g., `app.test.tapaas.org` (positional, required) |
+| `--description` | Description for the domain entry |
+
+#### add-handler Options
+
+| Option | Description |
+|--------|-------------|
+| `domain` | Domain FQDN to attach the handler to (positional, required) |
+| `--upstream` | Upstream server hostname, e.g., `app.srv.internal` (required) |
+| `--port` | Upstream port (default: `80`) |
+| `--description` | Description for the handler entry |
+
+#### delete-handler Options
+
+| Option | Description |
+|--------|-------------|
+| `--description` | Handler description to match (mutually exclusive with `--uuid`) |
+| `--uuid` | Handler UUID to delete directly (mutually exclusive with `--description`) |
+
+#### Examples
+
+```bash
+# Typical module proxy setup (what install-service.sh does)
+caddy-manager add-domain vaultwarden.test.tapaas.org \
+    --description "TAPPaaS: vaultwarden" --no-ssl-verify
+caddy-manager add-handler vaultwarden.test.tapaas.org \
+    --upstream vaultwarden.srv.internal \
+    --port 80 \
+    --description "TAPPaaS: vaultwarden" --no-ssl-verify
+caddy-manager reconfigure --no-ssl-verify
+
+# Cleanup (what delete-service.sh does)
+caddy-manager delete-handler --description "TAPPaaS: vaultwarden" --no-ssl-verify
+caddy-manager delete-domain vaultwarden.test.tapaas.org --no-ssl-verify
+caddy-manager reconfigure --no-ssl-verify
+
+# List all TAPPaaS-managed entries
+caddy-manager list --no-ssl-verify
+```
+
 ### Zone Manager (`zone-manager` command)
 
 The Zone Manager reads TAPPaaS zone definitions from `zones.json` and automatically configures VLANs and DHCP ranges for each enabled zone.
@@ -649,6 +760,8 @@ See `src/foundation/30-tappaas-cicd/opnsense-patch/README.md` for details on the
         ├── dhcp_manager.py        # DHCP/Dnsmasq operations
         ├── firewall_manager.py    # Firewall rule operations
         ├── firewall_cli.py        # Standalone firewall CLI (opnsense-firewall)
+        ├── caddy_manager.py       # Caddy reverse proxy operations
+        ├── caddy_cli.py           # Standalone Caddy CLI (caddy-manager)
         ├── zone_manager.py        # Zone configuration from zones.json
         ├── dns_manager_cli.py     # Standalone DNS CLI (dns-manager)
         └── main.py                # Main CLI entry point (opnsense-controller)
@@ -1010,6 +1123,131 @@ with FirewallManager(config) as manager:
 | `create_allow_rule(...)` | Convenience method for allow rules |
 | `create_block_rule(...)` | Convenience method for block rules |
 | `create_multiple_rules(rules, apply)` | Create multiple rules at once |
+
+### Caddy Reverse Proxy Management
+
+```python
+from opnsense_controller import (
+    Config,
+    CaddyDomain,
+    CaddyHandler,
+    CaddyManager,
+)
+
+config = Config(
+    firewall="firewall.mgmt.internal",
+    ssl_verify=False,
+)
+
+with CaddyManager(config) as manager:
+    # Test connection
+    if manager.test_connection():
+        print("Connected!")
+
+    # List all domains
+    domains = manager.list_domains()
+    for d in domains:
+        print(f"{d.domain} [{d.uuid}] enabled={d.enabled}")
+
+    # List all handlers
+    handlers = manager.list_handlers()
+    for h in handlers:
+        print(f"-> {h.upstream_domain}:{h.upstream_port} [{h.uuid}]")
+
+    # Find a domain by name
+    domain_info = manager.get_domain_by_name("app.test.tapaas.org")
+
+    # Find a domain by description
+    domain_info = manager.get_domain_by_description("TAPPaaS: myapp")
+
+    # Add a domain
+    domain = CaddyDomain(
+        domain="app.test.tapaas.org",
+        description="TAPPaaS: myapp",
+    )
+    result = manager.add_domain(domain)
+
+    # Add a handler (requires the domain UUID)
+    domain_info = manager.get_domain_by_name("app.test.tapaas.org")
+    handler = CaddyHandler(
+        domain_uuid=domain_info.uuid,
+        upstream_domain="myapp.srv.internal",
+        upstream_port="8080",
+        description="TAPPaaS: myapp",
+    )
+    result = manager.add_handler(handler)
+
+    # Reconfigure Caddy (regenerate Caddyfile and reload)
+    manager.reconfigure()
+
+    # Delete a handler by description lookup
+    handler_info = manager.get_handler_by_description("TAPPaaS: myapp")
+    if handler_info:
+        manager.delete_handler(handler_info.uuid)
+
+    # Delete a domain
+    if domain_info:
+        manager.delete_domain(domain_info.uuid)
+
+    # Apply changes
+    manager.reconfigure()
+```
+
+### CaddyManager Methods
+
+| Method | Description |
+|--------|-------------|
+| `test_connection()` | Test connection to OPNsense |
+| `list_domains(search)` | List all Caddy reverse proxy domains |
+| `get_domain_by_name(domain_name)` | Find a domain by FQDN |
+| `get_domain_by_description(description)` | Find a domain by description |
+| `add_domain(domain)` | Add a new reverse proxy domain |
+| `update_domain(uuid, domain)` | Update an existing domain |
+| `delete_domain(uuid)` | Delete a domain by UUID |
+| `list_handlers(search)` | List all Caddy reverse proxy handlers |
+| `get_handler_by_description(description)` | Find a handler by description |
+| `add_handler(handler)` | Add a new reverse proxy handler |
+| `update_handler(uuid, handler)` | Update an existing handler |
+| `delete_handler(uuid)` | Delete a handler by UUID |
+| `reconfigure()` | Reconfigure Caddy (regenerate Caddyfile and reload) |
+
+### CaddyDomain Fields
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `domain` | str | Domain FQDN (e.g., `app.test.tapaas.org`) (required) |
+| `description` | str | Description for the domain entry |
+| `enabled` | bool | Enable the domain (default: `True`) |
+
+### CaddyHandler Fields
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `domain_uuid` | str | UUID of the domain to attach to (required) |
+| `upstream_domain` | str | Upstream server hostname (e.g., `app.srv.internal`) (required) |
+| `upstream_port` | str | Upstream port (default: `"80"`) |
+| `description` | str | Description for the handler entry |
+| `enabled` | bool | Enable the handler (default: `True`) |
+
+### CaddyDomainInfo Fields (read-only)
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `uuid` | str | Domain UUID |
+| `domain` | str | Domain FQDN |
+| `description` | str | Description |
+| `enabled` | bool | Whether the domain is enabled |
+
+### CaddyHandlerInfo Fields (read-only)
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `uuid` | str | Handler UUID |
+| `domain_uuid` | str | UUID of the associated domain |
+| `upstream_domain` | str | Upstream server hostname |
+| `upstream_port` | str | Upstream port |
+| `description` | str | Description |
+| `enabled` | bool | Whether the handler is enabled |
 
 ### FirewallRule Fields
 

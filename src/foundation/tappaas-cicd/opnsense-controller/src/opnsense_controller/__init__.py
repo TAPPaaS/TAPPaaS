@@ -1,5 +1,12 @@
 """OPNsense Controller for TAPPaaS using oxl-opnsense-client."""
 
+from .caddy_manager import (
+    CaddyDomain,
+    CaddyDomainInfo,
+    CaddyHandler,
+    CaddyHandlerInfo,
+    CaddyManager,
+)
 from .config import Config
 from .dhcp_manager import DhcpHost, DhcpManager, DhcpRange
 from .firewall_manager import (
@@ -15,6 +22,11 @@ from .vlan_manager import Vlan, VlanManager
 from .zone_manager import Zone, ZoneManager
 
 __all__ = [
+    "CaddyDomain",
+    "CaddyDomainInfo",
+    "CaddyHandler",
+    "CaddyHandlerInfo",
+    "CaddyManager",
     "Config",
     "DhcpHost",
     "DhcpManager",
