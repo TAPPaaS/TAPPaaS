@@ -62,9 +62,9 @@ ssh root@"$FIREWALL_FQDN" "pkg install -y os-caddy" || {
     echo "Warning: os-caddy may already be installed or pkg returned non-zero"
 }
 
-# Step 2: Reconfigure OPNsense web GUI to port 8443
+# Step 2: Reconfigure OPNsense web GUI to port 8443 and disable HTTP redirect
 echo ""
-echo "Step 2: Reconfiguring OPNsense web GUI to port 8443..."
+echo "Step 2: Reconfiguring OPNsense web GUI to port 8443 and disabling HTTP redirect..."
 # Write PHP script to temp file and execute (avoids shell quoting issues on BSD/csh)
 ssh root@"$FIREWALL_FQDN" 'cat > /tmp/set-webgui-port.php << '\''EOFPHP'\''
 <?php
@@ -77,8 +77,9 @@ if (!isset($config["system"]["webgui"])) {
     $config["system"]["webgui"] = array();
 }
 $config["system"]["webgui"]["port"] = "8443";
+$config["system"]["webgui"]["disablehttpredirect"] = "1";
 
-write_config("Changed web GUI port to 8443 for Caddy reverse proxy");
+write_config("Changed web GUI port to 8443 and disabled HTTP redirect for Caddy reverse proxy");
 echo "Configuration saved.\n";
 EOFPHP
 php /tmp/set-webgui-port.php && rm /tmp/set-webgui-port.php'
@@ -241,6 +242,7 @@ echo ""
 echo "  1. Verify Web GUI Port (System > Settings > Administration)"
 echo "     - Scroll to 'TCP Port' field"
 echo "     - Set to: 8443"
+echo "     - Uncheck 'HTTP Redirect' (disable HTTP->HTTPS redirect to free port 80 for Caddy)"
 echo "     - Click 'Save'"
 echo "     - You will be redirected to the new port"
 echo ""
