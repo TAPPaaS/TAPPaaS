@@ -5,11 +5,14 @@
 
 set -e
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+cd "${SCRIPT_DIR}"
+
 echo "Starting TAPPaaS CI/CD and Foundation System Tests..."
 
 # Test 1: Create VMs and verify installation
 echo -e "\nTest 1: Creating Debian and NixOS VMs..."
 cd test-vm-creation
-./test.sh --cleanup
+./test.sh
 cd ..
 
