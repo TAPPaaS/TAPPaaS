@@ -1,5 +1,7 @@
 # Introducing the TAPPaaS Architecture
 
+**This is OLD architecture see TAppaas.org for current documentaion**
+
 The TAPPaaS architecture has its starting point in defining the [Capabilities](./Capabilities.md) that TAPPaaS will deliver.
 
 We then map the capabilities to a [Software Stack](./TheSoftwareStack.md) of open source applications. each application is called a module in TAPPaaS.
