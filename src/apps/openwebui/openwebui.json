@@ -1,5 +1,5 @@
 {
-    "version": "0.9.0",
+    "version": "0.8.8",
     "node": "tappaas2",
     "vmid": 311,
     "vmtag": "TAPPaaS,App",
@@ -14,7 +14,7 @@
     "zone0": "srv",
     "description": "TAPPaaS Open Webui",
     "maintainer": "@ErikDaniel007",
-    "releaseDate": "2026-02-10",
+    "releaseDate": "2026-03-06",
     "status": "Development",
     "proxyDomain": "openwebui.test.tapaas.org",
     "proxyPort": 8080,
