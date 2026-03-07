@@ -3,6 +3,7 @@
     "vmid": 140,
     "vmtag": "TAPPaaS,Foundation",
     "vmname": "identity",
+    "node": "tappaas1",
     "cores": 2,
     "memory": "4096",
     "diskSize": "32G",
