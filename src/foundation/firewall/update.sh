@@ -3,12 +3,32 @@
 #
 # Updates the OPNsense firewall software via SSH and applies zone configuration.
 #
+# When firewallType is "NONE" (no OPNsense deployed), this script skips all
+# OPNsense-specific operations and prints a reminder.
+#
 # Note: OPNsense presents a menu when logging in interactively (option 8 = shell).
 # When SSH is used with a command argument, it bypasses the menu and runs directly.
 
 set -euo pipefail
 
+readonly CONFIG_DIR="/home/tappaas/config"
+readonly FIREWALL_JSON="${CONFIG_DIR}/firewall.json"
 FIREWALL_FQDN="firewall.mgmt.internal"
+
+# ── Check firewallType ───────────────────────────────────────────────
+
+FIREWALL_TYPE="opnsense"
+if [[ -f "${FIREWALL_JSON}" ]]; then
+    FIREWALL_TYPE=$(jq -r '.firewallType // "opnsense"' "${FIREWALL_JSON}")
+fi
+
+if [[ "${FIREWALL_TYPE}" == "NONE" ]]; then
+    echo -e "\033[33m[WARN]\033[m firewallType=NONE — OPNsense is not managed by TAPPaaS."
+    echo -e "\033[33m[WARN]\033[m Skipping firewall update. Manage your firewall manually."
+    exit 0
+fi
+
+# ── OPNsense update ─────────────────────────────────────────────────
 
 echo "Updating OPNsense firewall..."
 

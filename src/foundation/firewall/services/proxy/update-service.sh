@@ -6,6 +6,8 @@
 # consuming module. If the domain or handler is missing, it creates them.
 # If the handler configuration has changed, it deletes and recreates it.
 #
+# When firewallType is "NONE", prints manual configuration reminder.
+#
 # Usage: update-service.sh <module-name>
 #
 # Arguments:
@@ -22,6 +24,7 @@ readonly GN=$'\033[1;92m'
 readonly DGN=$'\033[32m'
 readonly BL=$'\033[36m'
 readonly CL=$'\033[m'
+readonly BOLD=$'\033[1m'
 
 info()  { echo -e "${DGN}$*${CL}"; }
 warn()  { echo -e "${YW}[WARN]${CL} $*"; }
@@ -39,6 +42,7 @@ fi
 readonly CONFIG_DIR="/home/tappaas/config"
 readonly MODULE_JSON="${CONFIG_DIR}/${MODULE}.json"
 readonly SYSTEM_CONFIG="${CONFIG_DIR}/configuration.json"
+readonly FIREWALL_JSON="${CONFIG_DIR}/firewall.json"
 readonly SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 info "firewall:proxy update-service for module: ${BL}${MODULE}${CL}"
@@ -51,10 +55,6 @@ fi
 
 if [[ ! -f "${SYSTEM_CONFIG}" ]]; then
     die "System configuration not found: ${SYSTEM_CONFIG}"
-fi
-
-if ! command -v caddy-manager &>/dev/null; then
-    die "caddy-manager CLI not found in PATH. Rebuild opnsense-controller package."
 fi
 
 # ── Read expected configuration ─────────────────────────────────────
@@ -82,6 +82,29 @@ DESCRIPTION="TAPPaaS: ${MODULE}"
 
 info "  Expected domain:   ${BL}${PROXY_DOMAIN}${CL}"
 info "  Expected upstream: ${BL}${UPSTREAM}:${PROXY_PORT}${CL}"
+
+# ── Check firewallType ───────────────────────────────────────────────
+
+FIREWALL_TYPE="opnsense"
+if [[ -f "${FIREWALL_JSON}" ]]; then
+    FIREWALL_TYPE=$(jq -r '.firewallType // "opnsense"' "${FIREWALL_JSON}")
+fi
+
+if [[ "${FIREWALL_TYPE}" == "NONE" ]]; then
+    warn "${BOLD}OPNsense firewall is not deployed (firewallType=NONE).${CL}"
+    warn "Ensure your reverse proxy is configured for module '${MODULE}':"
+    warn "  ${BOLD}Domain:${CL}      ${BL}${PROXY_DOMAIN}${CL}"
+    warn "  ${BOLD}Upstream:${CL}    ${BL}${UPSTREAM}${CL}"
+    warn "  ${BOLD}Port:${CL}        ${BL}${PROXY_PORT}${CL}"
+    info "${GN}firewall:proxy update-service completed for ${MODULE} (manual config required)${CL}"
+    exit 0
+fi
+
+# ── OPNsense: validate caddy-manager ────────────────────────────────
+
+if ! command -v caddy-manager &>/dev/null; then
+    die "caddy-manager CLI not found in PATH. Rebuild opnsense-controller package."
+fi
 
 # ── Check current state ─────────────────────────────────────────────
 

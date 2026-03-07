@@ -5,6 +5,10 @@
 # Configures the Caddy reverse proxy on OPNsense for a consuming module.
 # Creates a domain entry and a reverse proxy handler via the caddy-manager CLI.
 #
+# When firewallType is "NONE" (no OPNsense deployed), this script prints
+# the manual reverse proxy configuration the deployer needs to apply on
+# their own firewall/proxy, then exits successfully.
+#
 # Usage: install-service.sh <module-name>
 #
 # Arguments:
@@ -30,6 +34,7 @@ readonly GN=$'\033[1;92m'
 readonly DGN=$'\033[32m'
 readonly BL=$'\033[36m'
 readonly CL=$'\033[m'
+readonly BOLD=$'\033[1m'
 
 info()  { echo -e "${DGN}$*${CL}"; }
 warn()  { echo -e "${YW}[WARN]${CL} $*"; }
@@ -47,6 +52,7 @@ fi
 readonly CONFIG_DIR="/home/tappaas/config"
 readonly MODULE_JSON="${CONFIG_DIR}/${MODULE}.json"
 readonly SYSTEM_CONFIG="${CONFIG_DIR}/configuration.json"
+readonly FIREWALL_JSON="${CONFIG_DIR}/firewall.json"
 
 info "firewall:proxy install-service for module: ${BL}${MODULE}${CL}"
 
@@ -58,10 +64,6 @@ fi
 
 if [[ ! -f "${SYSTEM_CONFIG}" ]]; then
     die "System configuration not found: ${SYSTEM_CONFIG}"
-fi
-
-if ! command -v caddy-manager &>/dev/null; then
-    die "caddy-manager CLI not found in PATH. Rebuild opnsense-controller package."
 fi
 
 # ── Read module configuration ───────────────────────────────────────
@@ -95,6 +97,35 @@ DESCRIPTION="TAPPaaS: ${MODULE}"
 
 info "  Domain:   ${BL}${PROXY_DOMAIN}${CL}"
 info "  Upstream: ${BL}${UPSTREAM}:${PROXY_PORT}${CL}"
+
+# ── Check firewallType ───────────────────────────────────────────────
+
+FIREWALL_TYPE="opnsense"
+if [[ -f "${FIREWALL_JSON}" ]]; then
+    FIREWALL_TYPE=$(jq -r '.firewallType // "opnsense"' "${FIREWALL_JSON}")
+fi
+
+if [[ "${FIREWALL_TYPE}" == "NONE" ]]; then
+    warn "${BOLD}OPNsense firewall is not deployed (firewallType=NONE).${CL}"
+    warn "The module '${MODULE}' requires a reverse proxy configuration."
+    warn ""
+    warn "${BOLD}Please configure the following on your firewall/reverse proxy:${CL}"
+    warn "  ${BOLD}Domain:${CL}      ${BL}${PROXY_DOMAIN}${CL}"
+    warn "  ${BOLD}Upstream:${CL}    ${BL}${UPSTREAM}${CL}"
+    warn "  ${BOLD}Port:${CL}        ${BL}${PROXY_PORT}${CL}"
+    warn "  ${BOLD}TLS:${CL}         Obtain a certificate for ${PROXY_DOMAIN}"
+    warn "  ${BOLD}Rule:${CL}        Forward HTTPS traffic for ${PROXY_DOMAIN} → ${UPSTREAM}:${PROXY_PORT}"
+    warn ""
+    warn "Continuing without automated proxy setup."
+    info "${GN}firewall:proxy install-service completed for ${MODULE} (manual config required)${CL}"
+    exit 0
+fi
+
+# ── OPNsense: validate caddy-manager ────────────────────────────────
+
+if ! command -v caddy-manager &>/dev/null; then
+    die "caddy-manager CLI not found in PATH. Rebuild opnsense-controller package."
+fi
 
 # ── DNS validation (warning only) ───────────────────────────────────
 

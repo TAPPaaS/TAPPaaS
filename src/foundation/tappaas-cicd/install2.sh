@@ -86,7 +86,20 @@ cd ../cluster || { echo "Cluster directory not found!"; exit 1; }
 cd ../templates || { echo "Templates directory not found!"; exit 1; }
 /home/tappaas/bin/copy-update-json.sh templates
 cd ../firewall || { echo "Firewall directory not found!"; exit 1; }
+FIREWALL_AVAILABLE=true
+if ! ping -c 1 -W 2 "$FIREWALL_FQDN" >/dev/null 2>&1; then
+    FIREWALL_AVAILABLE=false
+    echo -e "\n\033[33m[WARN]\033[m OPNsense firewall ($FIREWALL_FQDN) is not reachable."
+    echo -e "\033[33m[WARN]\033[m Deploying firewall module with firewallType=NONE."
+    echo -e "\033[33m[WARN]\033[m You will need to configure reverse proxy and firewall rules manually.\n"
+fi
 /home/tappaas/bin/copy-update-json.sh firewall
+if [[ "$FIREWALL_AVAILABLE" == "false" ]]; then
+    # Override: remove VM dependencies and mark as non-OPNsense deployment
+    tmp_fw=$(mktemp)
+    jq '.dependsOn = [] | .firewallType = "NONE"' /home/tappaas/config/firewall.json > "$tmp_fw" \
+        && mv "$tmp_fw" /home/tappaas/config/firewall.json
+fi
 cd ../tappaas-cicd || { echo "TAPPaaS-CICD directory not found!"; exit 1; }
 /home/tappaas/bin/copy-update-json.sh tappaas-cicd
 
@@ -95,12 +108,18 @@ cd ../tappaas-cicd || { echo "TAPPaaS-CICD directory not found!"; exit 1; }
 /home/tappaas/bin/update-module.sh cluster
 /home/tappaas/bin/update-module.sh firewall
 
-# Setup Caddy reverse proxy on the firewall
-# (needds to be after update.sh as it relies on opnsense-controller to be instlalled
-echo -e "\nSetting up Caddy reverse proxy..."
-chmod +x /home/tappaas/TAPPaaS/src/foundation/tappaas-cicd/scripts/setup-caddy.sh
-/home/tappaas/TAPPaaS/src/foundation/tappaas-cicd/scripts/setup-caddy.sh || {
-    echo "Warning: Caddy setup encountered issues. Please review and complete manually."
-}
+if [[ "$FIREWALL_AVAILABLE" == "true" ]]; then
+    # Setup Caddy reverse proxy on the firewall
+    # (needs to be after update.sh as it relies on opnsense-controller to be installed)
+    echo -e "\nSetting up Caddy reverse proxy..."
+    chmod +x /home/tappaas/TAPPaaS/src/foundation/tappaas-cicd/scripts/setup-caddy.sh
+    /home/tappaas/TAPPaaS/src/foundation/tappaas-cicd/scripts/setup-caddy.sh || {
+        echo "Warning: Caddy setup encountered issues. Please review and complete manually."
+    }
+else
+    echo -e "\n\033[33m[WARN]\033[m Skipping Caddy reverse proxy setup (no OPNsense firewall)."
+    echo -e "\033[33m[WARN]\033[m When modules with firewall:proxy dependency are installed,"
+    echo -e "\033[33m[WARN]\033[m you will see manual configuration instructions for your firewall.\n"
+fi
 
 echo -e "\nTAPPaaS-CICD installation completed successfully."

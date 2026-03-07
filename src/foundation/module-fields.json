@@ -342,6 +342,19 @@
             "note": "Each listed service must have a corresponding services/<service>/install-service.sh and update-service.sh"
         },
 
+        "firewallType": {
+            "description": "Type of firewall in use. Set to 'NONE' when the TAPPaaS OPNsense firewall is not deployed (e.g. using pfSense, UniFi, Cisco, or no firewall).",
+            "type": "string",
+            "requiredBy": [],
+            "default": "opnsense",
+            "values": {
+                "opnsense": "TAPPaaS-managed OPNsense firewall (default)",
+                "NONE": "No TAPPaaS firewall — manual reverse proxy and firewall rule configuration required"
+            },
+            "example": "NONE",
+            "note": "When set to 'NONE', firewall:proxy prints manual configuration instructions instead of calling caddy-manager"
+        },
+
         "proxyDomain": {
             "description": "Public domain name for the reverse proxy. Caddy obtains a TLS certificate for this domain.",
             "type": "string",
