@@ -1,5 +1,5 @@
 {
-    "version": "0.9.1",
+    "version": "1.81.14",
     "node": "tappaas2",
     "vmid": 310,
     "vmtag": "TAPPaaS,Test",
@@ -14,7 +14,7 @@
     "zone0": "srv",
     "description": "TAPPaaS LiteLLM",  
     "maintainer": "@ErikDaniel007",
-    "releaseDate": "2026-02-10",
+    "releaseDate": "2026-03-07",
     "status": "Development",
     "dependsOn": ["cluster:vm", "templates:nixos", "backup:vm", "identity:identity", "firewall:proxy"],
     "provides": ["models"]

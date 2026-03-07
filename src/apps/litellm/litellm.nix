@@ -11,8 +11,8 @@
 # ============================================================================
 # TAPPaaS - LiteLLM AI proxy
 # ============================================================================
-# Version: 0.9.1
-# Date: 2026-02-13
+# Version: 1.81.14
+# Date: 2026-03-07
 # Author: @ErikDaniel007 (TAPPaaS)
 # Product: LiteLLM proxy with PostgreSQL + Redis backend
 #
@@ -36,7 +36,7 @@
 let
   # Version pinning - change versions here only
   versions = {
-    litellm     = "v1.81.3.rc.2";
+    litellm     = "v1.81.14-stable";
     postgresPkg = pkgs.postgresql_15;
     redisPkg    = pkgs.redis;
   };
@@ -318,7 +318,7 @@ in
         # Write secrets file
         cat > /etc/secrets/litellm.env <<EOF
 LITELLM_MASTER_KEY=$MASTER_KEY
-STORE_MODEL_IN_DB=False
+STORE_MODEL_IN_DB=True
 OPENROUTER_API_KEY=
 PERPLEXITY_API_KEY=
 EOF
