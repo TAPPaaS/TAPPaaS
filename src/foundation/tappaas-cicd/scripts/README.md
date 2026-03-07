@@ -513,6 +513,109 @@ repository.sh remove tappaas-community --force
 
 ---
 
+### snapshot-vm.sh
+
+Manages VM snapshots on the Proxmox cluster for an installed module.
+
+**Usage:**
+```bash
+snapshot-vm.sh <module-name> [--list | --cleanup <N> | --restore <N>]
+```
+
+**Parameters:**
+
+| Parameter | Description | Example |
+|-----------|-------------|---------|
+| `module-name` | Name of the module (must have config in ~/config) | `vaultwarden` |
+| `--list` | List all snapshots on the VM | |
+| `--cleanup <N>` | Delete all snapshots except the last N | `--cleanup 3` |
+| `--restore <N>` | Restore snapshot N steps back (1 = most recent) | `--restore 1` |
+
+**Example:**
+```bash
+# Create a new snapshot
+snapshot-vm.sh vaultwarden
+
+# List all snapshots
+snapshot-vm.sh vaultwarden --list
+
+# Keep only the last 3 snapshots
+snapshot-vm.sh vaultwarden --cleanup 3
+
+# Restore to the most recent snapshot
+snapshot-vm.sh vaultwarden --restore 1
+```
+
+**What it does:**
+1. Validates the module has a config in `~/config` with a `vmid`
+2. Verifies the VM exists on the configured Proxmox node
+3. Performs the requested snapshot operation via `qm snapshot`/`qm rollback`/`qm delsnapshot`
+
+**Notes:**
+- Snapshot names follow the format `tappaas-YYYYMMDD-HHMMSS`
+- Restore stops the VM, rolls back, then starts it again
+- Cleanup deletes oldest snapshots first
+
+---
+
+### inspect-cluster.sh
+
+Compares actual running VMs across the Proxmox cluster against module configurations.
+
+**Usage:**
+```bash
+inspect-cluster.sh
+```
+
+**What it does:**
+1. Discovers all reachable Proxmox nodes (tappaas1–tappaas9)
+2. Queries cluster-wide VM list via `pvesh get /cluster/resources`
+3. Reads all `~/config/*.json` files that define a `vmid`
+4. Displays a table of all running VMs with their config status
+5. Lists configured modules whose VMs are not running
+
+**Output:**
+- VMs with a matching config show green "yes"
+- VMs not in any config show yellow "NOT IN CONFIG"
+- Configured modules with no running VM show red "NOT RUNNING"
+
+---
+
+### inspect-vm.sh
+
+Generates a 3-column comparison table for a module's VM showing config, git, and actual values.
+
+**Usage:**
+```bash
+inspect-vm.sh <module-name>
+```
+
+**Parameters:**
+
+| Parameter | Description | Example |
+|-----------|-------------|---------|
+| `module-name` | Name of the module to inspect | `openwebui` |
+
+**Example:**
+```bash
+inspect-vm.sh openwebui
+inspect-vm.sh vaultwarden
+```
+
+**What it does:**
+1. Reads deployed config from `~/config/<module>.json`
+2. Reads git source JSON from the module's `location` directory
+3. Queries actual VM config from Proxmox via `qm config`
+4. Displays a comparison table with color-coded differences
+
+**Color coding:**
+- **Yellow** — config value differs from git value (config drift from source)
+- **Red** — actual VM value differs from config value (VM out of sync)
+
+**Fields compared:** vmname, vmid, node, cores, memory, diskSize, storage, bios, cputype, bridge0, zone0 (with VLAN resolution), mac0, HANode, description, vmtag
+
+---
+
 ### delete-module.sh
 
 Deletes a TAPPaaS module with dependency-aware service teardown.
@@ -570,11 +673,14 @@ scripts/
 ├── copy-update-json.sh          # Copy and modify module JSON configs
 ├── create-configuration.sh      # Generate system configuration.json
 ├── delete-module.sh             # Delete a module with dependency-aware teardown
+├── inspect-cluster.sh           # Compare running VMs against module configs
+├── inspect-vm.sh                # 3-column config/git/actual VM comparison
 ├── install-module.sh            # Install a module with dependency validation
 ├── install-vm.sh                # VM creation library (sourced by install.sh)
 ├── repository.sh                # Manage module repositories (add/remove/modify/list)
 ├── resize-disk.sh               # Resize VM disk in Proxmox and filesystem
 ├── setup-caddy.sh               # Install Caddy reverse proxy on firewall
+├── snapshot-vm.sh               # VM snapshot management (create/list/cleanup/restore)
 ├── test-config.sh               # Validate installation
 ├── update-cron.sh               # Set up hourly update cron job
 ├── update-HA.sh                 # Manage HA and replication for modules
