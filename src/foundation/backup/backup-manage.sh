@@ -65,19 +65,10 @@ function error_handler() {
 set -e
 trap 'error_handler $LINENO "$BASH_COMMAND"' ERR
 
-# Save original arguments and set $1 to module name for common-install-routines.sh
-ORIGINAL_ARGS=("$@")
-set -- "backup" "$@"
-
-# Source common routines (expects $1 to be module name)
+# Source common routines and load backup module config
 . /home/tappaas/bin/common-install-routines.sh
-
-# Restore original arguments
-set -- "${ORIGINAL_ARGS[@]}"
-
-# Load configuration
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-JSON_CONFIG="$SCRIPT_DIR/backup.json"
+JSON_CONFIG="${CONFIG_DIR}/backup.json"
+JSON=$(cat "${JSON_CONFIG}")
 
 PBS_NODE="$(get_config_value 'node' 'tappaas1')"
 ZONE="$(get_config_value 'zone0' 'mgmt')"

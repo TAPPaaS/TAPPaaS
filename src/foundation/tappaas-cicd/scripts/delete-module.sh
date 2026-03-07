@@ -34,21 +34,8 @@ SCRIPT_NAME="$(basename "${BASH_SOURCE[0]}")"
 readonly SCRIPT_NAME
 readonly CONFIG_DIR="/home/tappaas/config"
 
-# ── Logging ──────────────────────────────────────────────────────────
-
-# Color definitions
-readonly YW=$'\033[33m'
-readonly RD=$'\033[01;31m'
-readonly GN=$'\033[1;92m'
-readonly DGN=$'\033[32m'
-readonly BL=$'\033[36m'
-readonly CL=$'\033[m'
-readonly BOLD=$'\033[1m'
-
-info()  { echo -e "${DGN}$*${CL}"; }
-warn()  { echo -e "${YW}[WARN]${CL} $*"; }
-error() { echo -e "${RD}[ERROR]${CL} $*" >&2; }
-die()   { error "$@"; exit 1; }
+# shellcheck source=common-install-routines.sh
+. /home/tappaas/bin/common-install-routines.sh
 
 # ── Usage ────────────────────────────────────────────────────────────
 
@@ -71,54 +58,7 @@ Examples:
 EOF
 }
 
-# ── Helpers ──────────────────────────────────────────────────────────
-
-# Get the module directory from the .location field in its deployed config JSON.
-# Arguments: <module-name>
-# Outputs the absolute directory path or returns 1 if not found.
-get_module_dir() {
-    local module="$1"
-    local module_json="${CONFIG_DIR}/${module}.json"
-
-    if [[ ! -f "${module_json}" ]]; then
-        return 1
-    fi
-
-    local location
-    location=$(jq -r '.location // empty' "${module_json}" 2>/dev/null)
-
-    if [[ -z "${location}" ]]; then
-        return 1
-    fi
-
-    echo "${location}"
-    return 0
-}
-
-# Make all .sh scripts in a module directory executable.
-# Handles: root-level scripts (install.sh, update.sh, delete.sh, etc.)
-# and service scripts (services/*/install-service.sh, delete-service.sh, etc.).
-ensure_scripts_executable() {
-    local dir="$1"
-
-    if [[ ! -d "${dir}" ]]; then
-        return 0
-    fi
-
-    # Root-level .sh files
-    for script in "${dir}"/*.sh; do
-        if [[ -f "${script}" ]]; then
-            chmod +x "${script}"
-        fi
-    done
-
-    # Service scripts
-    for script in "${dir}"/services/*/*.sh; do
-        if [[ -f "${script}" ]]; then
-            chmod +x "${script}"
-        fi
-    done
-}
+# ── Helpers (delete-specific) ────────────────────────────────────────
 
 # Check if any installed module depends on a service provided by this module.
 # Arguments: <module-name>

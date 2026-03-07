@@ -1,59 +1,194 @@
-# This file contains common installation routines for TAPPaaS-CICD related install scripts.
-# It should be sourced (.) into the install scripts.
-# It assumes that you are in the install directory of the module being installed.
+# common-install-routines.sh — Shared library for TAPPaaS-CICD scripts.
 #
+# This file should be sourced (.) into other scripts.
+#
+# Provides: color definitions, logging functions (info, warn, error, die),
+# helper functions (get_module_dir, ensure_scripts_executable,
+# check_service_available, validate_provided_services), JSON config loading
+# (get_config_value, check_json).
+#
+# JSON auto-loading: If $1 is set when this file is sourced, the module
+# JSON config is loaded automatically (from CONFIG_DIR or cwd) into the
+# $JSON variable for use with get_config_value.  If $1 is empty or the
+# config file does not exist, loading is silently skipped.
 
-# Color definitions (only set if not already defined, to avoid conflicts when sourced after copy-update-json.sh)
-[[ -z "${YW:-}" ]] && YW=$'\033[33m'      # Yellow
-[[ -z "${BL:-}" ]] && BL=$'\033[36m'      # Cyan
-[[ -z "${RD:-}" ]] && RD=$'\033[01;31m'   # Red
-[[ -z "${BGN:-}" ]] && BGN=$'\033[4;92m'  # Bright Green with underline
-[[ -z "${GN:-}" ]] && GN=$'\033[1;92m'    # Green with bold
-[[ -z "${DGN:-}" ]] && DGN=$'\033[32m'    # Green
-[[ -z "${CL:-}" ]] && CL=$'\033[m'        # Clear
-[[ -z "${BOLD:-}" ]] && BOLD=$'\033[1m'   # Bold
+# ── Color definitions (only set if not already defined) ──────────────
 
-function info() {
-  local msg="$1"
-  echo -e "${DGN}${msg}${CL}"
+[[ -z "${YW:-}" ]]   && YW=$'\033[33m'      # Yellow
+[[ -z "${BL:-}" ]]   && BL=$'\033[36m'      # Cyan
+[[ -z "${RD:-}" ]]   && RD=$'\033[01;31m'   # Red
+[[ -z "${BGN:-}" ]]  && BGN=$'\033[4;92m'   # Bright Green with underline
+[[ -z "${GN:-}" ]]   && GN=$'\033[1;92m'    # Green with bold
+[[ -z "${DGN:-}" ]]  && DGN=$'\033[32m'     # Green
+[[ -z "${CL:-}" ]]   && CL=$'\033[m'        # Clear
+[[ -z "${BOLD:-}" ]] && BOLD=$'\033[1m'     # Bold
+
+# ── Standard config directory ────────────────────────────────────────
+
+[[ -z "${CONFIG_DIR:-}" ]] && CONFIG_DIR="/home/tappaas/config"
+
+# ── Logging functions ────────────────────────────────────────────────
+
+info()  { echo -e "${DGN}$*${CL}"; }
+warn()  { echo -e "${YW}[WARN]${CL} $*"; }
+error() { echo -e "${RD}[ERROR]${CL} $*" >&2; }
+die()   { error "$@"; exit 1; }
+
+# ── Shared helper functions ──────────────────────────────────────────
+
+# Get the module directory from the .location field in its deployed config JSON.
+# Arguments: <module-name>
+# Outputs the absolute directory path or returns 1 if not found.
+get_module_dir() {
+    local module="$1"
+    local module_json="${CONFIG_DIR}/${module}.json"
+
+    if [[ ! -f "${module_json}" ]]; then
+        return 1
+    fi
+
+    local location
+    location=$(jq -r '.location // empty' "${module_json}" 2>/dev/null)
+
+    if [[ -z "${location}" ]]; then
+        return 1
+    fi
+
+    echo "${location}"
+    return 0
 }
 
-function warn() {
-  local msg="$1"
-  echo -e "${YW}${msg}${CL}"
+# Make all .sh scripts in a module directory executable.
+# Handles: root-level scripts (install.sh, update.sh, pre-update.sh, etc.)
+# and service scripts (services/*/install-service.sh, update-service.sh, etc.).
+ensure_scripts_executable() {
+    local dir="$1"
+
+    if [[ ! -d "${dir}" ]]; then
+        return 0
+    fi
+
+    # Root-level .sh files
+    for script in "${dir}"/*.sh; do
+        if [[ -f "${script}" ]]; then
+            chmod +x "${script}"
+        fi
+    done
+
+    # Service scripts
+    for script in "${dir}"/services/*/*.sh; do
+        if [[ -f "${script}" ]]; then
+            chmod +x "${script}"
+        fi
+    done
 }
 
-function error() {
-  local msg="$1"
-  echo -e "${RD}[ERROR]${CL} ${msg}"
+# Check whether a dependency service is available from an installed provider.
+# Validates: provider installed, service declared in provides, service directory
+# exists, and the required script is present and executable.
+#
+# Arguments:
+#   $1  Dependency reference in "module:service" format (e.g. "cluster:vm")
+#   $2  (optional) Script name to check for (default: "install-service.sh")
+#
+# Returns 0 if the service is available, 1 otherwise.
+check_service_available() {
+    local dep="$1"
+    local required_script="${2:-install-service.sh}"
+    local provider_module="${dep%%:*}"
+    local service_name="${dep##*:}"
+    local provider_json="${CONFIG_DIR}/${provider_module}.json"
+
+    # Check the provider module is installed (JSON in config dir)
+    if [[ ! -f "${provider_json}" ]]; then
+        error "Dependency '${dep}': provider module '${provider_module}' is not installed"
+        error "  Expected config: ${provider_json}"
+        return 1
+    fi
+
+    # Check the provider declares this service in its provides array
+    if ! jq -e --arg svc "${service_name}" '.provides // [] | index($svc) != null' "${provider_json}" >/dev/null 2>&1; then
+        error "Dependency '${dep}': module '${provider_module}' does not provide service '${service_name}'"
+        return 1
+    fi
+
+    # Check the provider has the service directory and scripts
+    local provider_dir
+    if ! provider_dir=$(get_module_dir "${provider_module}"); then
+        error "Dependency '${dep}': cannot find location for '${provider_module}' (missing .location in config)"
+        return 1
+    fi
+
+    local svc_dir="${provider_dir}/services/${service_name}"
+    if [[ ! -d "${svc_dir}" ]]; then
+        error "Dependency '${dep}': service directory not found: ${svc_dir}"
+        return 1
+    fi
+
+    if [[ ! -x "${svc_dir}/${required_script}" ]]; then
+        error "Dependency '${dep}': missing or non-executable ${required_script} in ${svc_dir}"
+        return 1
+    fi
+
+    return 0
 }
 
-# check that hostname is tappaas-cicd
-if [ "$(hostname)" != "tappaas-cicd" ]; then
-  echo "This script must be run on the TAPPaaS-CICD host (hostname tappaas-cicd)."
-  exit 1
+# Validate that the module has service scripts for every service it provides.
+# Arguments:
+#   $1  Module directory (absolute path)
+#   $2  Module JSON config file path
+# Returns the number of errors found (0 = valid).
+validate_provided_services() {
+    local module_dir="$1"
+    local module_json="$2"
+    local errors=0
+
+    local provides
+    provides=$(jq -r '.provides // [] | .[]' "${module_json}" 2>/dev/null)
+
+    for service in ${provides}; do
+        local svc_dir="${module_dir}/services/${service}"
+
+        if [[ ! -d "${svc_dir}" ]]; then
+            error "Module provides '${service}' but directory not found: ${svc_dir}"
+            ((errors++))
+            continue
+        fi
+
+        if [[ ! -x "${svc_dir}/install-service.sh" ]]; then
+            error "Module provides '${service}' but missing install-service.sh in ${svc_dir}"
+            ((errors++))
+        fi
+
+        if [[ ! -x "${svc_dir}/update-service.sh" ]]; then
+            error "Module provides '${service}' but missing update-service.sh in ${svc_dir}"
+            ((errors++))
+        fi
+    done
+
+    return "${errors}"
+}
+
+# ── Auto-load JSON configuration ─────────────────────────────────────
+# If $1 (module/vm name) is provided, attempt to load its JSON config
+# into the $JSON variable.  Silently skipped when $1 is empty or the
+# config file does not exist (callers that need get_config_value but
+# don't pass a module name via $1 can load JSON themselves after sourcing).
+
+if [[ -n "${1:-}" ]]; then
+    JSON_CONFIG="${CONFIG_DIR}/${1}.json"
+    if [[ -f "${JSON_CONFIG}" ]]; then
+        JSON=$(cat "${JSON_CONFIG}")
+    elif [[ -f "${1}.json" ]]; then
+        cp "${1}.json" "${JSON_CONFIG}"
+        JSON=$(cat "${JSON_CONFIG}")
+    fi
 fi
 
-# validate argument
-if [ -z "$1" ]; then
-  echo "Usage: $0 <vmname>"
-  echo "A JSON configuration file is expected at: /home/tappaas/config/<vmname>.json or in current directory as ./<vmname>.json"
-  exit 1
-fi
+# ── Config access ────────────────────────────────────────────────────
 
-# load JSON configuration
-JSON_CONFIG="/home/tappaas/config/$1.json"
-if [ ! -f "$JSON_CONFIG" ]; then
-  # use the file in the current directory as fallback
-  if [ ! -f "$1.json" ]; then
-    echo -e "\n${RD}[ERROR]${CL} Configuration file not found: ${YW}$JSON_CONFIG${CL}"
-    echo -e "Also checked: ${YW}$1.json${CL} in current directory"
-    exit 1
-  fi
-  cp "$1.json" "$JSON_CONFIG"
-fi
-JSON=$(cat "$JSON_CONFIG")
-
+# Read a value from the loaded JSON config (requires $JSON to be set).
+# Arguments: <key> [default-value]
 function get_config_value() {
   local key="$1"
   local default="${2:-}"
