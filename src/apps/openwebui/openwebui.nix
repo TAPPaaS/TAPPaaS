@@ -378,6 +378,7 @@ in
   # ----------------------------------------
   # Nix CLI and garbage collection
   # ----------------------------------------
+  nix.settings.trusted-users = [ "root" "@wheel" ];
   nix.settings.experimental-features = [ "nix-command" "flakes" ];
   nix.gc = { automatic = true; dates = "daily"; options = "--delete-older-than 7d"; };
   nix.optimise = { automatic = true; dates = [ "weekly" ]; };
