@@ -105,6 +105,7 @@ in
         htop
         jq
         git
+        dig
         # OPNsense controller tools (opnsense-controller, opnsense-firewall, zone-manager, dns-manager)
         opnsenseController.default
   ];
