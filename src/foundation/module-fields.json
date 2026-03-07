@@ -39,6 +39,24 @@
             "example": "2026-02-10"
         },
 
+        "installTime": {
+            "description": "Timestamp when the module was installed, automatically set by copy-update-json.sh",
+            "type": "string",
+            "requiredBy": [],
+            "format": "^[0-9]{8}-[0-9]{2}:[0-9]{2}:[0-9]{2}$",
+            "example": "20260307-14:30:45",
+            "note": "Automatically set during install. Format: YYYYMMDD-HH:MM:SS (local time)"
+        },
+
+        "updateTime": {
+            "description": "Timestamp when the module was last updated, automatically set by update-module.sh",
+            "type": "string",
+            "requiredBy": [],
+            "format": "^[0-9]{8}-[0-9]{2}:[0-9]{2}:[0-9]{2}$",
+            "example": "20260307-14:30:45",
+            "note": "Automatically set on each update. Format: YYYYMMDD-HH:MM:SS (local time)"
+        },
+
         "status": {
             "description": "Development status of the module",
             "type": "string",

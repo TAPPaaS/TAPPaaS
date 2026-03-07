@@ -191,6 +191,17 @@ main() {
     mv "${tmp_file}" "${dest_json}"
     info "  Set location = ${module_dir}"
 
+    # Automatically set installTime (local time, YYYYMMDD-HH:MM:SS)
+    local install_time
+    install_time=$(date +'%Y%m%d-%H:%M:%S')
+    tmp_file=$(mktemp)
+    if ! jq --arg t "${install_time}" '.installTime = $t' "${dest_json}" > "${tmp_file}"; then
+        rm -f "${tmp_file}"
+        die "Failed to set installTime field"
+    fi
+    mv "${tmp_file}" "${dest_json}"
+    info "  Set installTime = ${install_time}"
+
     # Parse and apply field modifications
     local has_modifications=true
 

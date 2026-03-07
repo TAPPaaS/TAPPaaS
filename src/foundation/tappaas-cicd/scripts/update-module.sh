@@ -88,6 +88,18 @@ main() {
 
     check_json "${module_json}" || die "JSON validation failed for ${module}"
 
+    # Set updateTime (local time, YYYYMMDD-HH:MM:SS)
+    local update_time tmp_file
+    update_time=$(date +'%Y%m%d-%H:%M:%S')
+    tmp_file=$(mktemp)
+    if jq --arg t "${update_time}" '.updateTime = $t' "${module_json}" > "${tmp_file}"; then
+        mv "${tmp_file}" "${module_json}"
+        info "  Set updateTime = ${update_time}"
+    else
+        rm -f "${tmp_file}"
+        warn "Could not set updateTime"
+    fi
+
     # ── Step 2: Validate dependencies ────────────────────────────────
     info "\n${BOLD}Step 2: Validate dependencies${CL}"
 
