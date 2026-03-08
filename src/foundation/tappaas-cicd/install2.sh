@@ -57,7 +57,9 @@ else
 fi 
 
 # copy the potentially modified configuration.json and zones.json files from tappaas1 (potentially modified during bootstrap)
-scp root@"$NODE1_FQDN":/root/tappaas/*.json /home/tappaas/config/
+# Only copy specific files — avoid pulling unrelated JSONs (e.g., module-fields.json)
+scp root@"$NODE1_FQDN":/root/tappaas/configuration.json /home/tappaas/config/ 2>/dev/null || true
+scp root@"$NODE1_FQDN":/root/tappaas/zones.json /home/tappaas/config/ 2>/dev/null || true
 
 # --- Install scripts as symlinks into /home/tappaas/bin/ ---
 echo -e "\nInstalling scripts to /home/tappaas/bin/..."
