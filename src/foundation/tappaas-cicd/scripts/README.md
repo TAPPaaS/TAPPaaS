@@ -616,6 +616,122 @@ inspect-vm.sh vaultwarden
 
 ---
 
+### migrate-vm.sh
+
+Migrates VMs between Proxmox cluster nodes. Attempts live migration first; if it fails, automatically falls back to offline migration (shutdown → migrate → start).
+
+**Usage:**
+```bash
+migrate-vm.sh <module-name>
+migrate-vm.sh --node <node-name>
+```
+
+**Parameters:**
+
+| Parameter | Description | Example |
+|-----------|-------------|---------|
+| `module-name` | Name of the module to migrate | `identity` |
+| `--node <name>` | Target node — migrate all its VMs back | `--node tappaas1` |
+| `--offline` | Skip live migration attempt | |
+
+**Modes:**
+
+1. **Single module** (`migrate-vm.sh identity`):
+   - If the VM is on its primary node (`node`), migrates to the HA node (`HANode`)
+   - If the VM is on its HA node, migrates back to the primary node
+   - If the VM is on any other node, migrates to the primary node
+
+2. **Node mode** (`migrate-vm.sh --node tappaas1`):
+   - Finds all modules whose configured `node` is `tappaas1`
+   - For each VM not currently on that node, migrates it there
+   - Useful for returning VMs after maintenance or failover
+
+**Example:**
+```bash
+# Migrate identity to its HA node
+migrate-vm.sh identity
+
+# Force offline migration (no live attempt)
+migrate-vm.sh --offline identity
+
+# Return all VMs to tappaas1 after maintenance
+migrate-vm.sh --node tappaas1
+```
+
+**What it does:**
+1. Reads module config to determine VMID, primary node, and HA node
+2. Queries the cluster to find where the VM is currently running
+3. Saves HA state (resource + affinity rule) before migration
+4. Attempts live migration (unless `--offline`)
+5. Falls back to offline migration if live fails
+6. Restores HA resource and affinity rule after migration
+7. Replication direction is automatically updated by Proxmox
+
+**Notes:**
+- Live migration may fail on clusters with different CPU architectures (e.g., Intel + AMD). The script handles this gracefully by falling back to offline migration
+- HA affinity rules are saved and restored automatically
+- The `--node` mode shows a summary of migrated/skipped/failed VMs
+
+---
+
+### migrate-node.sh
+
+Evacuates all VMs from a Proxmox node (for maintenance) or returns them afterwards. Uses `migrate-vm.sh` for each individual migration.
+
+**Usage:**
+```bash
+migrate-node.sh <node-name>
+migrate-node.sh --return <node-name>
+migrate-node.sh --list <node-name>
+```
+
+**Parameters:**
+
+| Parameter | Description | Example |
+|-----------|-------------|---------|
+| `node-name` | Proxmox node to evacuate | `tappaas1` |
+| `--return <name>` | Return VMs that belong on this node | `--return tappaas1` |
+| `--list <name>` | Dry run — show what would happen | `--list tappaas1` |
+| `--offline` | Skip live migration attempts | |
+
+**Modes:**
+
+1. **Evacuate** (`migrate-node.sh tappaas1`):
+   - Finds all VMs currently running on the node
+   - Migrates each to its configured HANode
+   - VMs without an HANode are skipped with a warning
+
+2. **Return** (`migrate-node.sh --return tappaas1`):
+   - Finds all modules whose configured `node` is `tappaas1`
+   - For each VM currently running elsewhere, migrates it back
+   - VMs already on the correct node are skipped
+
+3. **List** (`migrate-node.sh --list tappaas1`):
+   - Shows both evacuate and return views without migrating
+   - Color-coded: green = would migrate, yellow = no target/skipped
+
+**Example workflow — planned maintenance:**
+```bash
+# 1. Check what would happen
+migrate-node.sh --list tappaas1
+
+# 2. Evacuate the node
+migrate-node.sh --offline tappaas1
+
+# 3. Perform maintenance on tappaas1
+# ...
+
+# 4. Return all VMs
+migrate-node.sh --return --offline tappaas1
+```
+
+**Notes:**
+- Each VM migration is delegated to `migrate-vm.sh`, which handles HA save/restore
+- VMs without an HANode cannot be evacuated (requires manual migration)
+- The summary shows migrated/skipped/failed counts
+
+---
+
 ### delete-module.sh
 
 Deletes a TAPPaaS module with dependency-aware service teardown.
@@ -677,6 +793,8 @@ scripts/
 ├── inspect-vm.sh                # 3-column config/git/actual VM comparison
 ├── install-module.sh            # Install a module with dependency validation
 ├── install-vm.sh                # VM creation library (sourced by install.sh)
+├── migrate-node.sh              # Evacuate or return all VMs on a node
+├── migrate-vm.sh                # Migrate VMs between nodes (live or offline)
 ├── repository.sh                # Manage module repositories (add/remove/modify/list)
 ├── resize-disk.sh               # Resize VM disk in Proxmox and filesystem
 ├── setup-caddy.sh               # Install Caddy reverse proxy on firewall
