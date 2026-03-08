@@ -77,15 +77,16 @@ for f in /home/tappaas/bin/*.sh; do
   [ -e "$f" ] && chmod +x "$f"
 done
 
-# --- Symlink foundation config files into /home/tappaas/config/ ---
-for config_file in ../module-fields.json ../zones.json; do
-  if [ -f "$config_file" ]; then
-    config_name=$(basename "$config_file")
-    target="/home/tappaas/config/$config_name"
-    rm -f "$target" 2>/dev/null || true
-    ln -s "$(realpath "$config_file")" "$target"
-  fi
-done
+# --- Install foundation config files into /home/tappaas/config/ ---
+# module-fields.json: symlink (read-only schema, always tracks git)
+if [ -f "../module-fields.json" ]; then
+  rm -f /home/tappaas/config/module-fields.json 2>/dev/null || true
+  ln -s "$(realpath ../module-fields.json)" /home/tappaas/config/module-fields.json
+fi
+# zones.json: copy (may be modified locally by the user)
+if [ -f "../zones.json" ]; then
+  cp "../zones.json" /home/tappaas/config/zones.json
+fi
 
 # --- Build and install opnsense-controller ---
 echo -en "\nBuilding the opnsense-controller project"
