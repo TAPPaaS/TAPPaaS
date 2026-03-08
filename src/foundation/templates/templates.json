@@ -1,6 +1,9 @@
 {
-    "version": "0.5",
-    "description": "The TAPPaaS VM Template (NixOS and Debian)",
-    "location": "/home/tappaas/TAPPaaS/src/foundation/templates",
-    "provides": ["nixos", "debian"]
+  "description": "The TAPPaaS VM Template (NixOS and Debian)",
+  "version": "0.5",
+  "location": "/home/tappaas/TAPPaaS/src/foundation/templates",
+  "provides": [
+    "nixos",
+    "debian"
+  ]
 }

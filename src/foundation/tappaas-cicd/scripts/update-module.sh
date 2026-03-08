@@ -100,6 +100,34 @@ main() {
         warn "Could not set updateTime"
     fi
 
+    # Reorder fields according to the standard field order from module-fields.json
+    local schema_file="/home/tappaas/TAPPaaS/src/foundation/module-fields.json"
+    if [[ -f "${schema_file}" ]]; then
+        local order_json
+        order_json=$(jq -c '.fieldOrder // empty' "${schema_file}" 2>/dev/null)
+        if [[ -n "${order_json}" ]]; then
+            tmp_file=$(mktemp)
+            local jq_filter
+            jq_filter=$(mktemp)
+            cat > "${jq_filter}" << 'JQEOF'
+. as $orig |
+reduce $order[] as $key (
+  {};
+  if ($orig | has($key)) then . + {($key): $orig[$key]} else . end
+) |
+. + ($orig | to_entries | map(select(.key as $k | $order | index($k) | not)) | from_entries)
+JQEOF
+            if jq --argjson order "${order_json}" -f "${jq_filter}" "${module_json}" > "${tmp_file}"; then
+                mv "${tmp_file}" "${module_json}"
+                info "  Reordered fields to standard order"
+            else
+                rm -f "${tmp_file}"
+                warn "Could not reorder fields — keeping current order"
+            fi
+            rm -f "${jq_filter}"
+        fi
+    fi
+
     # ── Step 2: Validate dependencies ────────────────────────────────
     info "\n${BOLD}Step 2: Validate dependencies${CL}"
 

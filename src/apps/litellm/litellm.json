@@ -1,21 +1,29 @@
 {
-    "version": "1.81.14",
-    "node": "tappaas2",
-    "vmid": 310,
-    "vmtag": "TAPPaaS,Test",
-    "vmname": "litellm",
-    "cores": 4,
-    "memory": "4096",
-    "diskSize": "32G",
-    "storage": "tanka1",
-    "imageType": "clone",
-    "image": "8080",
-    "bridge0": "lan",
-    "zone0": "srv",
-    "description": "TAPPaaS LiteLLM",  
-    "maintainer": "@ErikDaniel007",
-    "releaseDate": "2026-03-07",
-    "status": "Development",
-    "dependsOn": ["cluster:vm", "templates:nixos", "backup:vm", "identity:identity", "firewall:proxy"],
-    "provides": ["models"]
+  "description": "TAPPaaS LiteLLM",
+  "version": "1.81.14",
+  "releaseDate": "2026-03-07",
+  "maintainer": "@ErikDaniel007",
+  "status": "Development",
+  "vmname": "litellm",
+  "vmid": 310,
+  "vmtag": "TAPPaaS,Test",
+  "node": "tappaas2",
+  "cores": 4,
+  "memory": "4096",
+  "diskSize": "32G",
+  "storage": "tanka1",
+  "imageType": "clone",
+  "image": "8080",
+  "bridge0": "lan",
+  "zone0": "srv",
+  "dependsOn": [
+    "cluster:vm",
+    "templates:nixos",
+    "backup:vm",
+    "identity:identity",
+    "firewall:proxy"
+  ],
+  "provides": [
+    "models"
+  ]
 }

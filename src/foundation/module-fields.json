@@ -4,45 +4,54 @@
     "title": "TAPPaaS Module Field Definitions",
     "description": "Defines the structure and valid values for module configuration JSON files (e.g., myModule.json)",
 
-    "fields": {
-        "version": {
-            "description": "Version of the module (not the TAPPaaS system). Used for tracking running versions and determining if upgrades exist.",
-            "type": "string",
-            "requiredBy": [],
-            "format": "^[0-9]+\\.[0-9]+(\\.[0-9]+)?$",
-            "example": "0.5.3",
-            "note": "Major < 1 indicates module is not production-ready"
-        },
+    "fieldOrder": [
+        "description", "version", "releaseDate", "installTime", "updateTime",
+        "maintainer", "status", "location",
+        "vmname", "vmid", "vmtag", "node",
+        "bios", "ostype", "cputype", "cores", "memory", "diskSize", "storage",
+        "imageType", "image", "imageLocation", "cloudInit",
+        "HANode", "replicationSchedule",
+        "bridge0", "mac0", "zone0", "trunks0",
+        "bridge1", "mac1", "zone1", "trunks1",
+        "firewallType", "proxyDomain", "proxyPort",
+        "dependsOn", "provides"
+    ],
 
+    "fields": {
         "description": {
             "description": "Descriptive text that appears on the Proxmox summary page for the VM",
             "type": "string",
             "requiredBy": [],
+            "usedBy": "general",
             "default": "",
             "example": "Nextcloud file sharing and collaboration platform"
         },
 
-        "maintainer": {
-            "description": "Maintainer of the module",
+        "version": {
+            "description": "Version of the module (not the TAPPaaS system). Used for tracking running versions and determining if upgrades exist.",
             "type": "string",
             "requiredBy": [],
-            "default": "",
-            "example": "@ErikDaniel007",
-            "note": "Typically a GitHub username prefixed with @"
+            "usedBy": "general",
+            "format": "^[0-9]+\\.[0-9]+(\\.[0-9]+)?$",
+            "example": "0.5.3",
+            "note": "Major < 1 indicates module is not production-ready"
         },
 
         "releaseDate": {
             "description": "Date when this version of the module was released",
             "type": "string",
             "requiredBy": [],
+            "usedBy": "general",
             "format": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$",
-            "example": "2026-02-10"
+            "example": "2026-02-10",
+            "note": "Automatically set to today's date by copy-update-json.sh if not present in source JSON"
         },
 
         "installTime": {
             "description": "Timestamp when the module was installed, automatically set by copy-update-json.sh",
             "type": "string",
             "requiredBy": [],
+            "usedBy": "general",
             "format": "^[0-9]{8}-[0-9]{2}:[0-9]{2}:[0-9]{2}$",
             "example": "20260307-14:30:45",
             "note": "Automatically set during install. Format: YYYYMMDD-HH:MM:SS (local time)"
@@ -52,15 +61,27 @@
             "description": "Timestamp when the module was last updated, automatically set by update-module.sh",
             "type": "string",
             "requiredBy": [],
+            "usedBy": "general",
             "format": "^[0-9]{8}-[0-9]{2}:[0-9]{2}:[0-9]{2}$",
             "example": "20260307-14:30:45",
             "note": "Automatically set on each update. Format: YYYYMMDD-HH:MM:SS (local time)"
+        },
+
+        "maintainer": {
+            "description": "Maintainer of the module",
+            "type": "string",
+            "requiredBy": [],
+            "usedBy": "general",
+            "default": "",
+            "example": "@ErikDaniel007",
+            "note": "Typically a GitHub username prefixed with @"
         },
 
         "status": {
             "description": "Development status of the module",
             "type": "string",
             "requiredBy": [],
+            "usedBy": "general",
             "default": "Development",
             "values": {
                 "Development": "Module is under active development, not ready for production",
@@ -71,55 +92,40 @@
             "example": "Development"
         },
 
-        "node": {
-            "description": "Name of the Proxmox/TAPPaaS node where the module should be installed",
+        "location": {
+            "description": "Absolute path to the module directory containing install.sh, update.sh, etc.",
             "type": "string",
             "requiredBy": [],
-            "default": "tappaas1",
-            "pattern": "^tappaas[0-9]+$",
-            "example": "tappaas1"
-        },
-
-        "HANode": {
-            "description": "Secondary node for High Availability. Must be different from 'node' and have the same storage defined.",
-            "type": "string",
-            "requiredBy": ["cluster:ha"],
-            "default": "NONE",
-            "pattern": "^(NONE|tappaas[0-9]+)$",
-            "note": "If present and not 'NONE', install script will set up HA for the VM"
-        },
-
-        "replicationSchedule": {
-            "description": "Cron-style schedule for HA replication interval",
-            "type": "string",
-            "requiredBy": [],
-            "default": "*/15",
-            "example": "*/15",
-            "note": "Default is every 15 minutes"
-        },
-
-        "vmid": {
-            "description": "Unique VM ID across all TAPPaaS nodes",
-            "type": "integer",
-            "requiredBy": ["cluster:vm"],
-            "minimum": 100,
-            "maximum": 999999,
-            "example": 200
+            "usedBy": "general",
+            "example": "/home/tappaas/TAPPaaS/src/apps/nextcloud",
+            "note": "Automatically set by copy-update-json.sh based on the directory where the module JSON resides"
         },
 
         "vmname": {
             "description": "Name of the VM, also used as module name and OS hostname",
             "type": "string",
             "requiredBy": [],
+            "usedBy": "cluster:vm",
             "default": "<config filename without .json>",
             "pattern": "^[a-zA-Z][a-zA-Z0-9-]*$",
             "example": "nextcloud"
+        },
+
+        "vmid": {
+            "description": "Unique VM ID across all TAPPaaS nodes",
+            "type": "integer",
+            "requiredBy": ["cluster:vm"],
+            "usedBy": "cluster:vm",
+            "minimum": 100,
+            "maximum": 999999,
+            "example": 200
         },
 
         "vmtag": {
             "description": "Proxmox tags for the VM. Comma-separated list, no spaces.",
             "type": "string",
             "requiredBy": [],
+            "usedBy": "cluster:vm",
             "default": "TAPPaaS",
             "format": "^[a-zA-Z0-9]+(,[a-zA-Z0-9]+)*$",
             "example": "TAPPaaS,Foundation",
@@ -130,10 +136,21 @@
             }
         },
 
+        "node": {
+            "description": "Name of the Proxmox/TAPPaaS node where the module should be installed",
+            "type": "string",
+            "requiredBy": [],
+            "usedBy": "cluster:vm",
+            "default": "tappaas1",
+            "pattern": "^tappaas[0-9]+$",
+            "example": "tappaas1"
+        },
+
         "bios": {
             "description": "BIOS type for VM creation",
             "type": "string",
             "requiredBy": [],
+            "usedBy": "cluster:vm",
             "default": "ovmf",
             "values": {
                 "ovmf": "UEFI firmware (recommended for modern OSes)",
@@ -145,6 +162,7 @@
             "description": "Proxmox VM option for hypervisor optimization",
             "type": "string",
             "requiredBy": [],
+            "usedBy": "cluster:vm",
             "default": "l26",
             "values": {
                 "l26": "Linux kernel 2.6+ (modern Linux)",
@@ -155,10 +173,21 @@
             }
         },
 
+        "cputype": {
+            "description": "CPU type emulation for the VM",
+            "type": "string",
+            "requiredBy": [],
+            "usedBy": "cluster:vm",
+            "default": "host",
+            "example": "host",
+            "note": "Use 'host' for best performance, or a specific CPU model for migration compatibility"
+        },
+
         "cores": {
             "description": "Number of CPU cores allocated to the VM",
             "type": "integer",
             "requiredBy": [],
+            "usedBy": "cluster:vm",
             "default": 2,
             "minimum": 1,
             "maximum": 128,
@@ -169,6 +198,7 @@
             "description": "RAM allocation in megabytes",
             "type": "integer",
             "requiredBy": [],
+            "usedBy": "cluster:vm",
             "default": 4096,
             "minimum": 512,
             "example": 8192,
@@ -179,6 +209,7 @@
             "description": "Disk size with unit suffix",
             "type": "string",
             "requiredBy": [],
+            "usedBy": "cluster:vm",
             "default": "8G",
             "pattern": "^[0-9]+[GMK]$",
             "example": "32G",
@@ -189,6 +220,7 @@
             "description": "Name of the storage pool for the module",
             "type": "string",
             "requiredBy": [],
+            "usedBy": "cluster:vm",
             "default": "tanka1",
             "example": "tanka1",
             "note": "Storage pool must exist on the target node"
@@ -198,6 +230,7 @@
             "description": "Type of image source for VM creation",
             "type": "string",
             "requiredBy": ["cluster:vm"],
+            "usedBy": "cluster:vm",
             "default": "clone",
             "values": {
                 "clone": {
@@ -225,6 +258,7 @@
             "description": "Image identifier. Interpretation depends on imageType.",
             "type": "string",
             "requiredBy": ["cluster:vm"],
+            "usedBy": "cluster:vm",
             "by_imageType": {
                 "clone": "VMID of the Proxmox template to clone",
                 "iso": "Filename of the ISO image",
@@ -243,6 +277,7 @@
             "description": "URL where the image file is located",
             "type": "string",
             "requiredBy": [],
+            "usedBy": "cluster:vm",
             "format": "^https?://.+$",
             "example": "https://releases.ubuntu.com/24.04/",
             "note": "For apt, if present, names an additional package repository to load"
@@ -252,6 +287,7 @@
             "description": "Whether the VM supports cloud-init for initial configuration",
             "type": "string",
             "requiredBy": [],
+            "usedBy": "cluster:vm",
             "default": "true",
             "values": {
                 "true": "VM supports cloud-init (SSH keys, hostname, etc.)",
@@ -259,10 +295,31 @@
             }
         },
 
+        "HANode": {
+            "description": "Secondary node for High Availability. Must be different from 'node' and have the same storage defined.",
+            "type": "string",
+            "requiredBy": ["cluster:ha"],
+            "usedBy": "cluster:ha",
+            "default": "NONE",
+            "pattern": "^(NONE|tappaas[0-9]+)$",
+            "note": "If present and not 'NONE', install script will set up HA for the VM"
+        },
+
+        "replicationSchedule": {
+            "description": "Cron-style schedule for HA replication interval",
+            "type": "string",
+            "requiredBy": [],
+            "usedBy": "cluster:ha",
+            "default": "*/15",
+            "example": "*/15",
+            "note": "Default is every 15 minutes"
+        },
+
         "bridge0": {
             "description": "Proxmox bridge for the VM's first network interface (net0)",
             "type": "string",
             "requiredBy": [],
+            "usedBy": "cluster:vm",
             "default": "lan",
             "example": "lan"
         },
@@ -271,6 +328,7 @@
             "description": "MAC address for the net0 network port",
             "type": "string",
             "requiredBy": [],
+            "usedBy": "cluster:vm",
             "default": "<randomly generated>",
             "format": "^([0-9A-Fa-f]{2}:){5}[0-9A-Fa-f]{2}$",
             "example": "BC:24:11:00:01:10"
@@ -280,6 +338,7 @@
             "description": "Security zone for net0. Must exist in zones.json.",
             "type": "string",
             "requiredBy": [],
+            "usedBy": "cluster:vm",
             "default": "mgmt",
             "example": "srv",
             "note": "Zone determines VLAN tag. 'mgmt' is untagged traffic."
@@ -289,6 +348,7 @@
             "description": "Semicolon-separated list of additional zone names to trunk on net0. Zone names are resolved to VLAN tags. Used when a VM needs to see traffic from multiple VLANs on a single NIC (e.g., the firewall).",
             "type": "string",
             "requiredBy": [],
+            "usedBy": "cluster:vm",
             "default": "NONE",
             "format": "^[a-zA-Z][a-zA-Z0-9-]*(;[a-zA-Z][a-zA-Z0-9-]*)*$",
             "example": "srv;private;iot;dmz",
@@ -299,6 +359,7 @@
             "description": "Proxmox bridge for the VM's second network interface (net1). If not present, only one NIC is configured.",
             "type": "string",
             "requiredBy": [],
+            "usedBy": "cluster:vm",
             "default": "lan",
             "example": "lan",
             "note": "Only used if a second network interface is needed"
@@ -308,6 +369,7 @@
             "description": "MAC address for the net1 network port",
             "type": "string",
             "requiredBy": [],
+            "usedBy": "cluster:vm",
             "default": "<randomly generated>",
             "format": "^([0-9A-Fa-f]{2}:){5}[0-9A-Fa-f]{2}$"
         },
@@ -316,6 +378,7 @@
             "description": "Security zone for net1. Must exist in zones.json.",
             "type": "string",
             "requiredBy": [],
+            "usedBy": "cluster:vm",
             "default": "mgmt",
             "note": "Only used if bridge1 is defined"
         },
@@ -324,46 +387,18 @@
             "description": "Semicolon-separated list of additional zone names to trunk on net1. Same format as trunks0.",
             "type": "string",
             "requiredBy": [],
+            "usedBy": "cluster:vm",
             "default": "NONE",
             "format": "^[a-zA-Z][a-zA-Z0-9-]*(;[a-zA-Z][a-zA-Z0-9-]*)*$",
             "example": "srv;private;iot;dmz",
             "note": "Only used if bridge1 is defined. Zone names must exist in zones.json."
         },
 
-        "location": {
-            "description": "Absolute path to the module directory containing install.sh, update.sh, etc.",
-            "type": "string",
-            "requiredBy": [],
-            "example": "/home/tappaas/TAPPaaS/src/apps/nextcloud",
-            "note": "Automatically set by copy-update-json.sh based on the directory where the module JSON resides"
-        },
-
-        "dependsOn": {
-            "description": "List of services this module depends on. Each entry is a 'module:service' pair identifying which module delivers the service.",
-            "type": "array",
-            "requiredBy": [],
-            "default": [],
-            "items": "string",
-            "format": "^[a-zA-Z][a-zA-Z0-9-]*:[a-zA-Z][a-zA-Z0-9-]*$",
-            "example": ["cluster:vm", "cluster:ha", "firewall:proxy"],
-            "note": "The installer validates that each referenced module is installed and provides the named service"
-        },
-
-        "provides": {
-            "description": "List of services this module provides. Service names only (the module is implicit from the JSON filename).",
-            "type": "array",
-            "requiredBy": [],
-            "default": [],
-            "items": "string",
-            "format": "^[a-zA-Z][a-zA-Z0-9-]*$",
-            "example": ["vm", "ha"],
-            "note": "Each listed service must have a corresponding services/<service>/install-service.sh and update-service.sh"
-        },
-
         "firewallType": {
             "description": "Type of firewall in use. Set to 'NONE' when the TAPPaaS OPNsense firewall is not deployed (e.g. using pfSense, UniFi, Cisco, or no firewall).",
             "type": "string",
             "requiredBy": [],
+            "usedBy": "firewall:proxy",
             "default": "opnsense",
             "values": {
                 "opnsense": "TAPPaaS-managed OPNsense firewall (default)",
@@ -377,6 +412,7 @@
             "description": "Public domain name for the reverse proxy. Caddy obtains a TLS certificate for this domain.",
             "type": "string",
             "requiredBy": [],
+            "usedBy": "firewall:proxy",
             "default": "<vmname>.<tappaas.domain>",
             "format": "^[a-zA-Z0-9]([a-zA-Z0-9.-]*[a-zA-Z0-9])?$",
             "example": "vaultwarden.test.tapaas.org",
@@ -387,11 +423,36 @@
             "description": "Target port on the module VM that the reverse proxy forwards traffic to",
             "type": "integer",
             "requiredBy": [],
+            "usedBy": "firewall:proxy",
             "default": 80,
             "minimum": 1,
             "maximum": 65535,
             "example": 8080,
             "note": "The port the service listens on inside the VM"
+        },
+
+        "dependsOn": {
+            "description": "List of services this module depends on. Each entry is a 'module:service' pair identifying which module delivers the service.",
+            "type": "array",
+            "requiredBy": [],
+            "usedBy": "general",
+            "default": [],
+            "items": "string",
+            "format": "^[a-zA-Z][a-zA-Z0-9-]*:[a-zA-Z][a-zA-Z0-9-]*$",
+            "example": ["cluster:vm", "cluster:ha", "firewall:proxy"],
+            "note": "The installer validates that each referenced module is installed and provides the named service"
+        },
+
+        "provides": {
+            "description": "List of services this module provides. Service names only (the module is implicit from the JSON filename).",
+            "type": "array",
+            "requiredBy": [],
+            "usedBy": "general",
+            "default": [],
+            "items": "string",
+            "format": "^[a-zA-Z][a-zA-Z0-9-]*$",
+            "example": ["vm", "ha"],
+            "note": "Each listed service must have a corresponding services/<service>/install-service.sh and update-service.sh"
         }
     },
 

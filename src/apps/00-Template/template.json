@@ -1,18 +1,22 @@
 {
-    "version": "0.5",
-    "node": "tappaas1",
-    "vmid": 999,
-    "vmtag": "TAPPaaS,Test",
-    "vmname": "template",
-    "cores": 2,
-    "memory": "8192",
-    "diskSize": "32G",
-    "storage": "tanka1",
-    "imageType": "clone",
-    "image": "8080",
-    "bridge0": "lan",
-    "zone0": "srv",
-    "description": "TAPPaaS template VM",
-    "dependsOn": ["cluster:vm", "cluster:ha", "template:nixos"],
-    "provides": []
+  "description": "TAPPaaS template VM",
+  "version": "0.5",
+  "vmname": "template",
+  "vmid": 999,
+  "vmtag": "TAPPaaS,Test",
+  "node": "tappaas1",
+  "cores": 2,
+  "memory": "8192",
+  "diskSize": "32G",
+  "storage": "tanka1",
+  "imageType": "clone",
+  "image": "8080",
+  "bridge0": "lan",
+  "zone0": "srv",
+  "dependsOn": [
+    "cluster:vm",
+    "cluster:ha",
+    "template:nixos"
+  ],
+  "provides": []
 }

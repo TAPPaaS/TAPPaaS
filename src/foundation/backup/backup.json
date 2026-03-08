@@ -1,15 +1,17 @@
 {
-    "version": "0.5",
-    "node": "tappaas3",
-    "vmtag": "TAPPaaS,Foundation",
-    "vmname": "backup",
-    "vmid": 200,
-    "storage": "tankc1",
-    "zone0": "mgmt",
-    "imageType": "apt",
-    "image": "pbs",
-    "imageLocation": "http://download.proxmox.com/debian/pbs",
-    "description": "TAPPaaS Proxmox Backup Server configuration",
-    "dependsOn": [],
-    "provides": ["vm"]
+  "description": "TAPPaaS Proxmox Backup Server configuration",
+  "version": "0.5",
+  "vmname": "backup",
+  "vmid": 200,
+  "vmtag": "TAPPaaS,Foundation",
+  "node": "tappaas3",
+  "storage": "tankc1",
+  "imageType": "apt",
+  "image": "pbs",
+  "imageLocation": "http://download.proxmox.com/debian/pbs",
+  "zone0": "mgmt",
+  "dependsOn": [],
+  "provides": [
+    "vm"
+  ]
 }

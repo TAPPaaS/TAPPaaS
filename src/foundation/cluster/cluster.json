@@ -1,8 +1,11 @@
 {
-    "version": "0.5",
-    "description": "TAPPaaS Proxmox Cluster - provides VM creation and HA services",
-    "maintainer": "@TAPPaaS",
-    "status": "Development",
-    "dependsOn": [],
-    "provides": ["vm", "ha"]
+  "description": "TAPPaaS Proxmox Cluster - provides VM creation and HA services",
+  "version": "0.5",
+  "maintainer": "@TAPPaaS",
+  "status": "Development",
+  "dependsOn": [],
+  "provides": [
+    "vm",
+    "ha"
+  ]
 }

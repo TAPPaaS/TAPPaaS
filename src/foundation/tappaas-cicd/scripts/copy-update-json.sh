@@ -181,26 +181,26 @@ main() {
     local module_dir
     module_dir="$(cd "$(dirname "${source_json}")" && pwd)"
 
-    # Automatically set the 'location' field
-    local tmp_file
+    # Automatically set location, installTime, and releaseDate (if missing)
+    local tmp_file install_time release_date
+    install_time=$(date +'%Y%m%d-%H:%M:%S')
+    release_date=$(date +'%Y-%m-%d')
     tmp_file=$(mktemp)
-    if ! jq --arg loc "${module_dir}" '.location = $loc' "${dest_json}" > "${tmp_file}"; then
+    if ! jq --arg loc "${module_dir}" \
+            --arg t "${install_time}" \
+            --arg rd "${release_date}" \
+            '.location = $loc | .installTime = $t | if .releaseDate == null or .releaseDate == "" then .releaseDate = $rd else . end' \
+            "${dest_json}" > "${tmp_file}"; then
         rm -f "${tmp_file}"
-        die "Failed to set location field"
+        die "Failed to set auto-populated fields"
     fi
     mv "${tmp_file}" "${dest_json}"
     info "  Set location = ${module_dir}"
-
-    # Automatically set installTime (local time, YYYYMMDD-HH:MM:SS)
-    local install_time
-    install_time=$(date +'%Y%m%d-%H:%M:%S')
-    tmp_file=$(mktemp)
-    if ! jq --arg t "${install_time}" '.installTime = $t' "${dest_json}" > "${tmp_file}"; then
-        rm -f "${tmp_file}"
-        die "Failed to set installTime field"
-    fi
-    mv "${tmp_file}" "${dest_json}"
     info "  Set installTime = ${install_time}"
+    # Check if releaseDate was auto-populated
+    if ! jq -e '.releaseDate' "${source_json}" >/dev/null 2>&1; then
+        info "  Set releaseDate = ${release_date} (auto-populated)"
+    fi
 
     # Parse and apply field modifications
     local has_modifications=true
@@ -278,6 +278,32 @@ main() {
             else
                 rm -f "${tmp_file}"
             fi
+        fi
+    fi
+
+    # Reorder fields according to the standard field order from module-fields.json
+    if [[ -f "${SCHEMA_FILE}" ]]; then
+        local order_json
+        order_json=$(jq -c '.fieldOrder // empty' "${SCHEMA_FILE}" 2>/dev/null)
+        if [[ -n "${order_json}" ]]; then
+            tmp_file=$(mktemp)
+            local jq_filter
+            jq_filter=$(mktemp)
+            cat > "${jq_filter}" << 'JQEOF'
+. as $orig |
+reduce $order[] as $key (
+  {};
+  if ($orig | has($key)) then . + {($key): $orig[$key]} else . end
+) |
+. + ($orig | to_entries | map(select(.key as $k | $order | index($k) | not)) | from_entries)
+JQEOF
+            if jq --argjson order "${order_json}" -f "${jq_filter}" "${dest_json}" > "${tmp_file}"; then
+                mv "${tmp_file}" "${dest_json}"
+            else
+                rm -f "${tmp_file}"
+                warn "Could not reorder fields — keeping original order"
+            fi
+            rm -f "${jq_filter}"
         fi
     fi
 
