@@ -12,8 +12,8 @@
 # TAPPaaS
 # Name: Open webui
 # Type: APP
-# Version: 0.8.8 
-# Date: 2026-03-06
+# Version: 0.8.10 
+# Date: 2026-03-09
 # Author: @ErikDaniel007 (Tappaas)
 # Products: openwebui, postgres, redis
 # ----------------------------------------
@@ -26,7 +26,7 @@ let
   # Change versions in one place only
   # ----------------------------------------
   versions = {
-    openwebui   = "v0.8.8";             # OpenWebUI container version (upgrade later)
+    openwebui   = "v0.8.10";             # OpenWebUI container version (upgrade later)
     postgresPkg = pkgs.postgresql_15;   # PostgreSQL version
     redisPkg    = pkgs.redis;           # Redis version
   };

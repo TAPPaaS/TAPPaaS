@@ -1,6 +1,6 @@
 # OpenWebUI on TAPPaaS
 
-**Version:** 0.8.8
+**Version:** 0.8.10
 **Author:** @ErikDaniel007
 **Release Date:** 2026-03-09
 **Status:** Development
@@ -13,7 +13,7 @@ OpenWebUI is an AI chat interface running on TAPPaaS infrastructure with Postgre
 
 | Component | Version | Purpose |
 |-----------|---------|---------|
-| OpenWebUI | v0.8.8 | AI chat interface (Podman container) |
+| OpenWebUI | v0.8.10 | AI chat interface (Podman container) |
 | PostgreSQL | 15 | User accounts, chat history, settings |
 | Redis | 7.x | Session state, WebSocket coordination, caching |
 | Podman | 5.x | Container runtime |
