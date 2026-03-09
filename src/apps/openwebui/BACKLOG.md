@@ -11,8 +11,8 @@
 
 # OpenWebUI TAPPaaS Backlog [ action: to be refined & migrated to the github issuelist ]
 
-**Last Updated:** 2026-02-04  
-**Current Version:** 0.9.0
+**Last Updated:** 2026-03-09  
+**Current Version:** 0.8.8
 **Author:** Erik Daniel
 
 ## Story Format
@@ -34,7 +34,12 @@ Stories use MoSCoW prioritization:
 | AUTO-003 | Update Create-TAPPaaS-VM.sh with cloud-init support | tappaas-cicd | Must | Todo | AUTO-002 |
 | AUTO-004 | Fix openwebui.nix in repository (ens18, cloud-init disabled) | nix-modules | Must | Todo | - |
 | AUTO-005 | Create hook script for tap interface VLAN configuration | tappaas-core | Must | Todo | - |
-| AUTO-006 | Test end-to-end automated deployment | tappaas-cicd | Must | Todo | AUTO-001,002,003 |
+| AUTO-006 | Test end-to-end automated deployment | tappaas-cicd | Must | In Progress | AUTO-001,002,003 |
+| OPS-006 | Fix backup services: gzip not in PATH on NixOS | nix-modules | Must | Done | - |
+| OPS-007 | Bootstrap trusted-users on target VM for nixos-rebuild | nix-modules | Must | Done | - |
+| OPS-008 | Create test.sh health checks (SSH, container, HTTP, PG, Redis) | openwebui | Must | Done | - |
+| OPS-009 | Add post-upgrade podman image prune to update.sh | openwebui | Must | Done | - |
+| OPS-010 | Clean up disk: remove old container images | openwebui | Must | Done | - |
 
 ### Should Have Stories
 
@@ -62,8 +67,6 @@ Stories use MoSCoW prioritization:
 
 | ID | Story | Module | Priority | Status | Reason |
 |----|-------|--------|----------|--------|--------|
-| FEAT-004 | High-availability cluster setup | tappaas-core | Won't | Blocked | Requires multi-node architecture |
-| FEAT-005 | Multi-region deployment support | tappaas-core | Won't | Blocked | Not in current scope |
 | SEC-004 | LDAP/Active Directory integration | nix-modules | Won't | Deferred | Q2 2026 priority |
 
 ## Story Details
@@ -205,6 +208,66 @@ Test complete automated deployment flow from install.sh to running OpenWebUI app
 
 **Related:**
 - All AUTO stories (dependencies)
+
+---
+
+### OPS-006: Fix Backup Services gzip PATH (Done)
+
+**Description:**  
+Both `openwebui-container-backup` and `openwebui-env-backup` systemd services failed because `tar -czf` invokes `gzip` via PATH, but gzip is not in the service PATH on NixOS.
+
+**Root Cause:** NixOS systemd services run in a sandboxed environment without standard PATH entries. The PostgreSQL backup already used explicit `${pkgs.gzip}/bin/gzip`, but the tar backups relied on implicit gzip invocation.
+
+**Fix:** Changed `tar -czf` to `tar -cf - | ${pkgs.gzip}/bin/gzip >` in both backup services in `openwebui.nix`.
+
+**Date Completed:** 2026-03-09
+
+---
+
+### OPS-007: Bootstrap trusted-users for nixos-rebuild (Done)
+
+**Description:**  
+`nixos-rebuild --target-host` from tappaas-cicd failed with "lacks a signature by a trusted key" because the target VM's Nix daemon rejected unsigned store paths. The `.nix` config had `trusted-users = [ "root" "@wheel" ]` but it had never been applied (chicken-and-egg).
+
+**Fix:** One-time bootstrap: added `@wheel` to `/etc/nix/nix.conf` on the running VM and restarted nix-daemon. The declarative config in `openwebui.nix` maintains it going forward.
+
+**Date Completed:** 2026-03-09
+
+---
+
+### OPS-008: Create test.sh Health Checks (Done)
+
+**Description:**  
+Created `test.sh` for the openwebui module with 5 health/regression checks run remotely from tappaas-cicd via SSH:
+1. SSH connectivity
+2. OpenWebUI container running (podman)
+3. HTTP health check (port 8080)
+4. PostgreSQL accepting connections
+5. Redis responding
+
+Includes robust SSH options (`StrictHostKeyChecking=accept-new`, `UserKnownHostsFile=/dev/null`) to handle changed host keys after VM reboot.
+
+**Date Completed:** 2026-03-09
+
+---
+
+### OPS-009: Post-upgrade Podman Image Prune (Done)
+
+**Description:**  
+Updated `update.sh` to run health checks (`test.sh`) after nixos-rebuild, then prune unused container images only if all checks pass. Old images are preserved for rollback if health checks fail.
+
+**Flow:** `nixos-rebuild switch` → reboot → `test.sh` (5 checks) → `podman image prune -a -f` (only on success)
+
+**Date Completed:** 2026-03-09
+
+---
+
+### OPS-010: Disk Cleanup - Remove Old Container Images (Done)
+
+**Description:**  
+Root disk was at 95% (845 MB free on 15G). Old container image `open-webui:v0.7.2` (4.46 GB) was consuming space alongside the current `v0.8.8`. Removed the old image, bringing disk usage down to 64% (5.2 GB free).
+
+**Date Completed:** 2026-03-09
 
 ---
 
@@ -492,6 +555,6 @@ SEC-001 (Passwords) ──> SEC-002 (Secrets) ──> SEC-003 (Docs)
 
 ---
 
-**Backlog Version:** 1.0  
-**Last Review:** 2026-02-04  
-**Next Review:** 2026-02-11
+**Backlog Version:** 1.1  
+**Last Review:** 2026-03-09  
+**Next Review:** 2026-03-16

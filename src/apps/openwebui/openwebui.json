@@ -1,7 +1,7 @@
 {
   "description": "TAPPaaS Open Webui",
   "version": "0.8.8",
-  "releaseDate": "2026-03-06",
+  "releaseDate": "2026-03-09",
   "maintainer": "@ErikDaniel007",
   "status": "Development",
   "vmname": "openwebui",

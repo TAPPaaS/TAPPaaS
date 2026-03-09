@@ -303,8 +303,9 @@ in
       Type = "oneshot";
       ExecStartPre = "${pkgs.coreutils}/bin/mkdir -p /var/backup/openwebui-data";
       ExecStart = pkgs.writeShellScript "openwebui-data-backup" ''
-        ${pkgs.gnutar}/bin/tar -czf /var/backup/openwebui-data/openwebui-data-$(date +%F).tar.gz \
-          -C / var/lib/openwebui/data var/lib/openwebui/models
+        ${pkgs.gnutar}/bin/tar -cf - \
+          -C / var/lib/openwebui/data var/lib/openwebui/models \
+          | ${pkgs.gzip}/bin/gzip > /var/backup/openwebui-data/openwebui-data-$(date +%F).tar.gz
       '';
       User = "root";
       Group = "root";
@@ -327,8 +328,9 @@ in
       Type = "oneshot";
       ExecStartPre = "${pkgs.coreutils}/bin/mkdir -p /var/backup/openwebui-env";
       ExecStart = pkgs.writeShellScript "openwebui-env-backup" ''
-        ${pkgs.gnutar}/bin/tar -czf /var/backup/openwebui-env/openwebui-env-$(date +%F).tar.gz \
-          -C / etc/secrets
+        ${pkgs.gnutar}/bin/tar -cf - \
+          -C / etc/secrets \
+          | ${pkgs.gzip}/bin/gzip > /var/backup/openwebui-env/openwebui-env-$(date +%F).tar.gz
       '';
       User = "root";
       Group = "root";
