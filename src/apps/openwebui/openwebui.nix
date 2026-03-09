@@ -259,7 +259,7 @@ in
     serviceConfig = {
       Type = "oneshot";
       ExecStart = pkgs.writeShellScript "pg-backup" ''
-        ${versions.postgresPkg}/bin/pg_dump -U openwebui openwebui | ${pkgs.gzip}/bin/gzip > /var/backup/postgresql/openwebui-$(date +%F).sql.gz
+        ${versions.postgresPkg}/bin/pg_dump -U openwebui openwebui | ${pkgs.gzip}/bin/gzip > /var/backup/postgresql/openwebui-pg-$(date +%F).sql.gz
       '';
       User = "postgres";
     };
@@ -280,7 +280,7 @@ in
     serviceConfig = {
       Type = "oneshot";
       ExecStart = pkgs.writeShellScript "redis-backup" ''
-        ${versions.redisPkg}/bin/redis-cli --rdb /var/backup/redis/dump-$(date +%Y%m%d_%H%M%S).rdb
+        ${versions.redisPkg}/bin/redis-cli --rdb /var/backup/redis/openwebui-redis-$(date +%F).rdb
       '';
       User = "redis";
       Group = "redis";

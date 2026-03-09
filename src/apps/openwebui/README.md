@@ -1,270 +1,161 @@
-# OpenWebUI on TAPPaaS - Release Notes
+# OpenWebUI on TAPPaaS
 
-**Version:** 0.9.0  
+**Version:** 0.8.8
 **Author:** @ErikDaniel007
-**Release Date:** 2026-02-08  
+**Release Date:** 2026-03-09
 **Status:** Development
 
 ## Overview
 
-This release provides a complete OpenWebUI stack on TAPPaaS infrastructure with PostgreSQL database, Redis caching, and automated backups. The system runs on NixOS with declarative configuration and VLAN trunk mode networking.
+OpenWebUI is an AI chat interface running on TAPPaaS infrastructure with PostgreSQL, Redis, and automated backups. The system is fully declarative on NixOS, managed by `tappaas-cicd`, and deployed via `update-module.sh`.
 
-## Key Products
+## Stack
 
-### Core Stack
-- **OpenWebUI:** v0.7.2 (AI interface)
-- **PostgreSQL:** 15.14 (persistent database)
-- **Redis:** 7.x (resource coordination)
-- **Podman:** 5.4.1 (container runtime)
-- **NixOS:** 25.05 (operating system)
+| Component | Version | Purpose |
+|-----------|---------|---------|
+| OpenWebUI | v0.8.8 | AI chat interface (Podman container) |
+| PostgreSQL | 15 | User accounts, chat history, settings |
+| Redis | 7.x | Session state, WebSocket coordination, caching |
+| Podman | 5.x | Container runtime |
+| NixOS | 25.05 | Operating system (declarative configuration) |
 
-### Infrastructure
-- **Proxmox VE:** Virtualization platform
-- **pfSense:** Network firewall/router
-- **VLAN 210:** Service network zone
+## Infrastructure
 
-## Key Features
+| Setting | Value |
+|---------|-------|
+| VM name | `openwebui` |
+| VMID | 311 |
+| Node | `tappaas2` |
+| Network zone | `srv` (VLAN 210) |
+| Proxy domain | `openwebui.test.tapaas.org` |
+| Proxy port | 8080 |
+| CPU | 2 cores |
+| Memory | 4096 MB |
+| Disk | 32 GB |
 
-### ✅ Multi-Service Architecture
+## Module Files
 
-**Database Layer:**
-- PostgreSQL with 31 tables
-- Trust authentication for localhost
-- Automatic database initialization
-- Daily automated backups
+| File | Purpose |
+|------|---------|
+| `openwebui.json` | Module configuration (VM specs, dependencies, network) |
+| `openwebui.nix` | NixOS configuration (services, backups, users, container) |
+| `install.sh` | Initial module installation (called by `tappaas-cicd`) |
+| `update.sh` | Post-rebuild steps: health checks, container image prune |
+| `test.sh` | Health and regression checks (SSH, container, HTTP, PostgreSQL, Redis) |
+| `restore.sh` | Application data restore from another instance or backup files |
+| `BACKLOG.md` | Product backlog and sprint tracking |
+| `RESTORE.md` | Restore documentation for automated and manual procedures |
 
-**Caching Layer:**
-- Redis for resource management
-- Distributed locking support
-- Usage tracking and rate limiting
-- Ephemeral key management (60s TTL)
+## Automated Backups
 
-**Application Layer:**
-- OpenWebUI container via Podman
-- Host networking mode
-- Persistent data volumes
-- WebSocket support (Redis-backed)
+Four backup services run daily via systemd timers:
 
-### ✅ Automated Backups
+| Component | File pattern | Schedule | Directory |
+|-----------|-------------|----------|-----------|
+| PostgreSQL | `openwebui-pg-YYYY-MM-DD.sql.gz` | 02:00 | `/var/backup/postgresql/` |
+| Redis | `openwebui-redis-YYYY-MM-DD.rdb` | 02:30 | `/var/backup/redis/` |
+| Container data | `openwebui-data-YYYY-MM-DD.tar.gz` | 02:45 | `/var/backup/openwebui-data/` |
+| Env secrets | `openwebui-env-YYYY-MM-DD.tar.gz` | 02:50 | `/var/backup/openwebui-env/` |
 
-**5 Backup Services:**
-| Component | Schedule | Location |
-|-----------|----------|----------|
-| PostgreSQL | Daily 02:00 | /var/backup/postgresql/ |
-| Redis | Daily 02:30 | /var/backup/redis/ |
-| Container data | Daily 02:45 | /var/backup/openwebui-data/ |
-| Environment files | Daily 02:50 | /var/backup/openwebui-env/ |
-| Cleanup old backups | Monthly | All backup dirs |
+Retention: 30 days (automatic cleanup via monthly timer).
 
-**Retention:** 30 days (automatic cleanup)
+## Restore
 
-### ✅ System Integration
+Restore application data from another TAPPaaS instance or from manual backup files:
 
-**NixOS Features:**
-- Declarative configuration
-- Atomic updates
-- Automatic rollback support
-- Package version pinning
+```bash
+# From another TAPPaaS instance
+./restore.sh --from-instance 192.168.2.235 --date 2026-03-09
 
-**Systemd Services:**
-- PostgreSQL server
-- Redis server  
-- OpenWebUI wrapper
-- Backup timers (5 services)
-
-## What Works
-
-### ✅ Fully Operational
-
-- VM deployment on Proxmox
-- VLAN trunk mode networking
-- DHCP IP assignment (192.168.210.x)
-- Internet connectivity
-- PostgreSQL database (31 tables, active connections)
-- Redis cache (4+ connections, resource tracking)
-- OpenWebUI container (HTTP 200)
-- Web interface access (port 8080)
-- LiteLLM integration (cross-VLAN)
-- Automated daily backups
-- Log management (journald)
-
-### ✅ Verified Components
-
-**Database:**
-```
-- 31 PostgreSQL tables created
-- Active connections: 4-6 concurrent
-- Commands processed: 2600+
-- Data persistence confirmed
+# From local backup files
+./restore.sh --from-path /tmp/openwebui-backups/
 ```
 
-**Cache:**
-```
-- Redis clients: 4 connected
-- Memory usage: 1.37MB
-- Command throughput: 2600+
-- Lock coordination active
-```
+See [RESTORE.md](RESTORE.md) for full documentation, including manual backup creation from non-TAPPaaS sources.
 
-**Container:**
-```
-- Status: Up 60+ minutes
-- Image: ghcr.io/open-webui/open-webui:v0.7.2
-- Network: Host mode (port 8080)
-- Logs: No errors
+## Deployment
+
+### Install
+
+```bash
+install-module.sh openwebui
 ```
 
-## Known Limitations
+### Update
 
-### ⚠️ Manual Deployment Required
+```bash
+update-module.sh openwebui
+```
 
-**Current State:**
-- No automated VM creation
-- Manual configuration file deployment
-- Manual NixOS rebuild step
-- Manual network verification
+This runs `nixos-rebuild switch` on the target, reboots if needed, then executes `update.sh` which:
+1. Runs health checks via `test.sh`
+2. Prunes unused container images (only if health checks pass)
 
-**Workaround:** Follow INSTALL.md step-by-step
+### Health Check
 
-**Future:** See Roadmap (cloud-init automation)
+```bash
+cd ~/TAPPaaS/src/apps/openwebui
+./test.sh openwebui
+```
 
-### ⚠️ Configuration Requirements
+Validates:
+1. SSH connectivity to `openwebui.srv.internal`
+2. OpenWebUI container is running (Podman)
+3. HTTP endpoint responding on port 8080
+4. PostgreSQL accepting connections
+5. Redis responding to ping
 
-**Critical Settings:**
+### Version Upgrade
 
-These settings are REQUIRED and must not be changed:
+Edit the version in `openwebui.nix`:
+
 ```nix
-# Cloud-init network MUST be disabled
-services.cloud-init.network.enable = false;
-
-# NetworkManager MUST be disabled  
-networking.networkmanager.enable = false;
-
-# Interface name MUST be ens18 (not eth0)
-networking.vlans."ens18.210" = { ... };
+versions = {
+    openwebui = "v0.8.9";  # Change version here
+};
 ```
 
-**Why:** Cloud-init network autoconfiguration conflicts with VLAN trunk mode and causes:
-- Interface rename failures
-- NetworkManager override
-- Wrong IP assignment (192.168.2.x instead of 192.168.210.x)
+Then run `update-module.sh openwebui`. The update flow handles the rebuild, reboot, health check, and old image cleanup automatically.
 
-### ⚠️ Security Notes
+## Dependencies
 
-**Current Setup:**
-- PostgreSQL: Trust authentication (no password)
-- Secrets: Placeholder passwords
-- Network: VLAN isolation only
+Defined in `openwebui.json`:
 
-**Acceptable For:**
-- Development environments
-- Internal/private networks
-- Demo/testing systems
+| Dependency | Purpose |
+|------------|---------|
+| `cluster:vm` | Proxmox VM provisioning |
+| `templates:nixos` | NixOS template and `nixos-rebuild switch` |
+| `backup:vm` | Proxmox Backup Server integration |
+| `identity:identity` | Secrets and identity management |
+| `firewall:proxy` | HAProxy and firewall rules |
+| `litellm:models` | LLM model routing (cross-VLAN) |
 
-**Not Recommended For:**
-- Public-facing deployments
-- Multi-tenant systems
-- Compliance-sensitive environments
+## NixOS Services
 
-**Hardening Required:** See INSTALL.md Security Notes
+| Service | systemd unit |
+|---------|-------------|
+| PostgreSQL | `postgresql.service` |
+| Redis | `redis-openwebui.service` |
+| OpenWebUI container | `openwebui-wrapper.service` |
+| PG backup | `postgresqlBackup.service` / `.timer` |
+| Redis backup | `redis-backup.service` / `.timer` |
+| Data backup | `openwebui-container-backup.service` / `.timer` |
+| Env backup | `openwebui-env-backup.service` / `.timer` |
+| Cleanup | `backup-cleanup.service` / `.timer` |
 
-### ⚠️ Template VM Not Updated
+## Security Notes
 
-**Issue:** Template VM 8080 still has hardcoded configuration
+- PostgreSQL uses trust authentication for localhost connections
+- Secrets are stored in `/etc/secrets/` (managed by the identity module)
+- Network isolation via VLAN 210 (srv zone)
+- HAProxy terminates TLS; internal traffic is HTTP on port 8080
+- `nix.settings.trusted-users` includes `@wheel` for remote `nixos-rebuild`
 
-**Impact:**
-- Cannot use template directly
-- Must manually deploy openwebui.nix
-- No dynamic VLAN support yet
+## Resource Usage
 
-**Workaround:** Use complete openwebui.nix replacement
-
-**Future:** Template will support dynamic cloud-init config
-
-## Breaking Changes
-
-### From Previous Setup
-
-**Interface Name Change:**
-- Old: eth0, eth0.210
-- New: ens18, ens18.210
-- Reason: NixOS systemd predictable naming
-
-**Cloud-Init Behavior:**
-- Old: network.enable = true (default)
-- New: network.enable = false (required)
-- Reason: Conflicts with VLAN trunk mode
-
-**Container Runtime:**
-- Old: Docker
-- New: Podman
-- Reason: Better systemd integration, rootless support
-
-## Upgrade Notes
-
-### From Development Version
-
-No upgrade path available. This is the first production-ready release.
-
-### Future Upgrades
-
-OpenWebUI version updates:
-```nix
-# Edit /etc/nixos/configuration.nix
-let
-  versions = {
-    openwebui = "v0.7.3";  # Change version here
-    ...
-  };
-```
-
-Then: `sudo nixos-rebuild switch && sudo systemctl restart openwebui-wrapper`
-
-## Performance
-
-### Resource Usage
-
-**VM Specifications:**
-- CPU: 2-4 vCPU recommended
-- Memory: 4GB minimum (8GB recommended)
-- Disk: 20GB minimum (50GB recommended)
-
-**Actual Usage (Idle):**
-- Memory: ~800MB (OpenWebUI) + 60MB (PostgreSQL) + 12MB (Redis)
-- CPU: <5% idle, varies with usage
-- Disk I/O: Low (mostly container data)
-
-### Scaling Notes
-
-**Single VM Limits:**
-- Users: 10-50 concurrent (depends on AI backend)
-- Requests: Limited by backend capacity
-- Storage: Grows with conversations and files
-
-**Not Suitable For:**
-- High-availability requirements
-- Multi-region deployments
-- >100 concurrent users
-
-## Testing
-
-### Validation Tests
-
-All tests passed:
-```
-✅ Network connectivity (VLAN 210)
-✅ Internet access (8.8.8.8)
-✅ PostgreSQL active (31 tables)
-✅ Redis active (4 connections)
-✅ Container running (60+ min uptime)
-✅ Web interface (HTTP 200)
-✅ LiteLLM connectivity (cross-VLAN)
-✅ Backup services (5 timers configured)
-```
-
-### Test Environment
-
-- Proxmox VE 9.x
-- pfSense firewall
-- NixOS 25.05
-- VLAN 210 network
+| Component | Memory | Notes |
+|-----------|--------|-------|
+| OpenWebUI | ~800 MB | Varies with concurrent users |
+| PostgreSQL | ~60 MB | Grows with chat history |
+| Redis | ~12 MB | Session and cache data |
+| **Total** | **~900 MB** | Idle baseline |
