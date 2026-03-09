@@ -4,9 +4,9 @@
 #
 # This script:
 # 1. Installs the os-caddy package on OPNsense
-# 2. Creates firewall rules to allow HTTP/HTTPS traffic to Caddy
-# 3. Configures Caddy with the domain from configuration.json
-# 4. Reconfigures OPNsense web GUI to port 8443
+# 2. Reconfigures OPNsense web GUI to port 8443 (frees 443 for Caddy)
+# 3. Creates firewall rules to allow HTTP/HTTPS traffic to Caddy
+# 4. Enables Caddy, sets ACME email, and configures Auto HTTPS
 
 set -e
 
@@ -215,73 +215,39 @@ php /tmp/create-caddy-rules.php && rm /tmp/create-caddy-rules.php' || {
     }
 fi
 
-# Step 4: Enable Caddy service
+# Step 4: Enable Caddy, set ACME email, and configure Auto HTTPS
 echo ""
-echo "Step 4: Enabling Caddy service..."
-ssh root@"$FIREWALL_FQDN" "/usr/local/etc/rc.d/caddy enable" || {
-    echo "Warning: Could not enable Caddy service via rc.d"
+echo "Step 4: Enabling Caddy and configuring ACME settings..."
+
+# Use PHP to set Caddy plugin general settings in config.xml
+# Config path: caddy > general (fields: enabled, TlsEmail, TlsAutoHttps)
+ssh root@"$FIREWALL_FQDN" 'cat > /tmp/configure-caddy-general.php << '\''EOFPHP'\''
+<?php
+require_once("config.inc");
+
+global $config;
+
+if (!isset($config["caddy"])) {
+    $config["caddy"] = array();
+}
+if (!isset($config["caddy"]["general"])) {
+    $config["caddy"]["general"] = array();
 }
 
-# Step 5: Print manual configuration steps
+$config["caddy"]["general"]["enabled"] = "1";
+$config["caddy"]["general"]["TlsEmail"] = $argv[1];
+
+write_config("Enabled Caddy reverse proxy and set ACME email");
+echo "Caddy enabled with ACME email: " . $argv[1] . "\n";
+EOFPHP
+php /tmp/configure-caddy-general.php "'"$EMAIL"'" && rm /tmp/configure-caddy-general.php'
+
+# Reconfigure Caddy to apply settings
+echo "Applying Caddy configuration..."
+ssh root@"$FIREWALL_FQDN" 'configctl caddy reload' || {
+    echo "Warning: Could not reload Caddy service"
+}
+
 echo ""
-echo "=============================================="
-echo "Caddy Setup - Manual Configuration Required"
-echo "=============================================="
-echo ""
-echo "Automated steps completed:"
-echo "  [x] Installed os-caddy package"
-echo "  [x] Configured web GUI to use port 8443"
-echo "  [x] Created firewall rules for HTTP (80) and HTTPS (443)"
-echo "  [x] Enabled Caddy service"
-echo ""
-echo "Manual steps required in OPNsense web UI:"
-echo ""
-echo "  Access OPNsense at: https://$FIREWALL_FQDN:8443"
-echo "  (If port 8443 doesn't work, try the original port and complete step 1)"
-echo ""
-echo "  1. Verify Web GUI Port (System > Settings > Administration)"
-echo "     - Scroll to 'TCP Port' field"
-echo "     - Set to: 8443"
-echo "     - Uncheck 'HTTP Redirect' (disable HTTP->HTTPS redirect to free port 80 for Caddy)"
-echo "     - Click 'Save'"
-echo "     - You will be redirected to the new port"
-echo ""
-echo "  2. Enable Caddy (Services > Caddy Web Server > General)"
-echo "     - Check 'Enable Caddy'"
-echo "     - Set 'ACME Email' to: $EMAIL"
-echo "     - Set 'Auto HTTPS' to: On (default)"
-echo "     - Click 'Save'"
-echo "     - Click 'Apply'"
-echo ""
-echo "  3. Add Domain (Services > Caddy Web Server > Reverse Proxy > Domains)"
-echo "     - Click '+' button to add new domain"
-echo "     - Set 'Domain' to: $DOMAIN"
-echo "     - Set 'Description' to: TAPPaaS Main Domain"
-echo "     - Leave 'Access List' empty for public access"
-echo "     - Click 'Save'"
-echo "     - Click 'Apply'"
-echo ""
-echo "  4. Add Wildcard Domain (Services > Caddy Web Server > Reverse Proxy > Domains)"
-echo "     - Click '+' button to add new domain"
-echo "     - Set 'Domain' to: *.$DOMAIN"
-echo "     - Set 'Description' to: TAPPaaS Wildcard"
-echo "     - Enable 'DNS-01 Challenge' (required for wildcards)"
-echo "     - Configure your DNS provider credentials"
-echo "     - Click 'Save'"
-echo "     - Click 'Apply'"
-echo ""
-echo "  5. Add Handlers (Services > Caddy Web Server > Reverse Proxy > Handlers)"
-echo "     - Click '+' to add a new handler for each service"
-echo "     - Example handler for a service:"
-echo "       - Domain: Select '$DOMAIN' or '*.$DOMAIN'"
-echo "       - Upstream Domain: <service>.srv.internal"
-echo "       - Upstream Port: <service port>"
-echo "       - Description: <service name>"
-echo "     - Click 'Save' after each handler"
-echo "     - Click 'Apply' when all handlers are added"
-echo ""
-echo "  6. Verify Certificates (Services > Caddy Web Server > Log File)"
-echo "     - Check that ACME certificates are being issued"
-echo "     - Look for 'certificate obtained successfully' messages"
-echo ""
-echo "Caddy setup script completed."
+echo "Caddy setup completed successfully."
+echo "  OPNsense web UI: https://$FIREWALL_FQDN:8443"
