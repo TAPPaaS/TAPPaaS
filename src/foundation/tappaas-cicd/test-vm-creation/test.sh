@@ -203,22 +203,22 @@ for test_entry in "${TESTS[@]}"; do
     case $TST in
         pass)
             TST_FMT="${GREEN}PASS${NC}"
-            ((TOTAL_PASS++))
+            TOTAL_PASS=$((TOTAL_PASS + 1))
             ;;
         fail)
             TST_FMT="${YELLOW}PARTIAL${NC}"
-            ((TOTAL_FAIL++))
+            TOTAL_FAIL=$((TOTAL_FAIL + 1))
             ;;
         *)
             TST_FMT="${RED}SKIP${NC}"
-            ((TOTAL_FAIL++))
+            TOTAL_FAIL=$((TOTAL_FAIL + 1))
             ;;
     esac
 
     printf "%-20s %-10s %-10s " "$NAME" "$TYPE" "$ZONE"
     echo -e "${INST_FMT}      ${TST_FMT}"
 
-    ((i++))
+    i=$((i + 1))
 done
 
 echo ""

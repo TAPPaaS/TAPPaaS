@@ -27,11 +27,24 @@
 
 [[ -z "${CONFIG_DIR:-}" ]] && CONFIG_DIR="/home/tappaas/config"
 
+# ── Output control (can be overridden by environment or callers) ────
+
+[[ -z "${OPT_SILENT:-}" ]] && OPT_SILENT="${TAPPAAS_SILENT:-0}"
+[[ -z "${OPT_DEBUG:-}"  ]] && OPT_DEBUG="${TAPPAAS_DEBUG:-0}"
+
 # ── Logging functions ────────────────────────────────────────────────
 
-info()  { echo -e "${DGN}$*${CL}"; }
-warn()  { echo -e "${YW}[WARN]${CL} $*"; }
-error() { echo -e "${RD}[ERROR]${CL} $*" >&2; }
+info() {
+    if [[ "${OPT_SILENT}" -eq 1 ]]; then return; fi
+    echo -e "${DGN}[Info]${CL} $*";
+}
+debug() {
+    if [[ "${OPT_DEBUG}" -ne 1 ]]; then return; fi
+    echo -e "${BL}[Debug]${CL} $*";
+}
+warn()  { echo -e "${YW}[Warning]${CL} $*"; }
+error() { echo -e "${RD}[Error]${CL} $*" >&2; }
+fatal() { echo -e "${RD}${BOLD}[Fatal]${CL} $*" >&2; }
 die()   { error "$@"; exit 1; }
 
 # ── Shared helper functions ──────────────────────────────────────────
@@ -151,18 +164,18 @@ validate_provided_services() {
 
         if [[ ! -d "${svc_dir}" ]]; then
             error "Module provides '${service}' but directory not found: ${svc_dir}"
-            ((errors++))
+            errors=$((errors + 1))
             continue
         fi
 
         if [[ ! -x "${svc_dir}/install-service.sh" ]]; then
             error "Module provides '${service}' but missing install-service.sh in ${svc_dir}"
-            ((errors++))
+            errors=$((errors + 1))
         fi
 
         if [[ ! -x "${svc_dir}/update-service.sh" ]]; then
             error "Module provides '${service}' but missing update-service.sh in ${svc_dir}"
-            ((errors++))
+            errors=$((errors + 1))
         fi
     done
 
@@ -195,7 +208,7 @@ function get_config_value() {
   if ! echo "$JSON" | jq -e --arg K "$key" 'has($K)' >/dev/null ; then
     # JSON lacks the key
     if [ -z "$default" ]; then
-      echo -e "\n${RD}[ERROR]${CL} Missing required key '${YW}$key${CL}' in JSON configuration." >&2
+      error "Missing required key '${YW}$key${CL}' in JSON configuration."
       exit 1
     else
       value="$default"
@@ -203,7 +216,7 @@ function get_config_value() {
   else
     value=$(echo "$JSON" | jq -r --arg KEY "$key" '.[$KEY]')
   fi
-  info "     - $key has value: ${BGN}${value}" >&2
+  debug "     - $key has value: ${BGN}${value}${CL}" >&2
   echo -n "${value}"
   return 0
 }
@@ -220,20 +233,20 @@ function check_json() {
 
   # Check if files exist
   if [ ! -f "$json_file" ]; then
-    echo -e "${RD}[ERROR]${CL} JSON file not found: ${YW}$json_file${CL}" >&2
+    error "JSON file not found: ${YW}$json_file${CL}"
     return 1
   fi
 
   if [ ! -f "$schema_file" ]; then
-    echo -e "${RD}[ERROR]${CL} Schema file not found: ${YW}$schema_file${CL}" >&2
+    error "Schema file not found: ${YW}$schema_file${CL}"
     return 1
   fi
 
   # Parse the JSON file
   local json_content
   if ! json_content=$(jq '.' "$json_file" 2>&1); then
-    echo -e "${RD}[ERROR]${CL} Invalid JSON syntax in ${YW}$json_file${CL}" >&2
-    echo -e "       ${json_content}" >&2
+    error "Invalid JSON syntax in ${YW}$json_file${CL}"
+    error "       ${json_content}"
     return 1
   fi
 
@@ -241,7 +254,7 @@ function check_json() {
   local schema_fields
   schema_fields=$(jq '.fields' "$schema_file")
 
-  echo -e "${BL}Validating:${CL} $json_file" >&2
+  debug "Validating: $json_file"
 
   # Check fields required by dependencies (requiredBy vs dependsOn)
   local depends_on_json
@@ -259,8 +272,8 @@ function check_json() {
       local req_by
       req_by=$(echo "$schema_fields" | jq -r --arg F "$field" --argjson deps "$depends_on_json" '
         .[$F].requiredBy as $rb | [$rb[] as $r | $deps[] | select(. == $r)] | join(", ")')
-      echo -e "  ${RD}[ERROR]${CL} Missing field: ${YW}$field${CL} (required by ${req_by})" >&2
-      ((errors++))
+      error "  Missing field: ${YW}$field${CL} (required by ${req_by})"
+      errors=$((errors + 1))
     fi
   done
 
@@ -276,8 +289,8 @@ function check_json() {
 
     # Check if field is defined in schema
     if ! echo "$schema_fields" | jq -e --arg K "$key" 'has($K)' >/dev/null 2>&1; then
-      echo -e "  ${YW}[WARN]${CL} Unknown field: ${YW}$key${CL} (not in schema)" >&2
-      ((warnings++))
+      warn "  Unknown field: ${YW}$key${CL} (not in schema)"
+      warnings=$((warnings + 1))
       continue
     fi
 
@@ -293,22 +306,22 @@ function check_json() {
     case "$field_type" in
       "integer")
         if ! [[ "$value" =~ ^-?[0-9]+$ ]]; then
-          echo -e "  ${RD}[ERROR]${CL} Field ${YW}$key${CL}: expected integer, got '${value}'" >&2
-          ((errors++))
+          error "  Field ${YW}$key${CL}: expected integer, got '${value}'"
+          errors=$((errors + 1))
         else
           # Check minimum
           local min
           min=$(echo "$field_schema" | jq -r '.minimum // empty')
           if [ -n "$min" ] && [ "$value" -lt "$min" ]; then
-            echo -e "  ${RD}[ERROR]${CL} Field ${YW}$key${CL}: value $value is below minimum $min" >&2
-            ((errors++))
+            error "  Field ${YW}$key${CL}: value $value is below minimum $min"
+            errors=$((errors + 1))
           fi
           # Check maximum
           local max
           max=$(echo "$field_schema" | jq -r '.maximum // empty')
           if [ -n "$max" ] && [ "$value" -gt "$max" ]; then
-            echo -e "  ${RD}[ERROR]${CL} Field ${YW}$key${CL}: value $value exceeds maximum $max" >&2
-            ((errors++))
+            error "  Field ${YW}$key${CL}: value $value exceeds maximum $max"
+            errors=$((errors + 1))
           fi
         fi
         ;;
@@ -319,8 +332,8 @@ function check_json() {
         pattern=$(echo "$field_schema" | jq -r '.pattern // empty')
         if [ -n "$pattern" ]; then
           if ! [[ "$value" =~ $pattern ]]; then
-            echo -e "  ${RD}[ERROR]${CL} Field ${YW}$key${CL}: value '${value}' does not match pattern '${pattern}'" >&2
-            ((errors++))
+            error "  Field ${YW}$key${CL}: value '${value}' does not match pattern '${pattern}'"
+            errors=$((errors + 1))
           fi
         fi
 
@@ -329,8 +342,8 @@ function check_json() {
         format=$(echo "$field_schema" | jq -r '.format // empty')
         if [ -n "$format" ]; then
           if ! [[ "$value" =~ $format ]]; then
-            echo -e "  ${RD}[ERROR]${CL} Field ${YW}$key${CL}: value '${value}' does not match format '${format}'" >&2
-            ((errors++))
+            error "  Field ${YW}$key${CL}: value '${value}' does not match format '${format}'"
+            errors=$((errors + 1))
           fi
         fi
 
@@ -348,9 +361,9 @@ function check_json() {
             fi
           done
           if [ $is_valid -eq 0 ]; then
-            echo -e "  ${RD}[ERROR]${CL} Field ${YW}$key${CL}: invalid value '${value}'" >&2
-            echo -e "           Allowed values: ${valid_values//$'\n'/, }" >&2
-            ((errors++))
+            error "  Field ${YW}$key${CL}: invalid value '${value}'"
+            error "           Allowed values: ${valid_values//$'\n'/, }"
+            errors=$((errors + 1))
           fi
         fi
         ;;
@@ -364,8 +377,8 @@ function check_json() {
   # Check imageLocation is present for iso/img types
   if [[ "$image_type" == "iso" || "$image_type" == "img" ]]; then
     if ! echo "$json_content" | jq -e 'has("imageLocation")' >/dev/null 2>&1; then
-      echo -e "  ${RD}[ERROR]${CL} Field ${YW}imageLocation${CL} is required when imageType is '${image_type}'" >&2
-      ((errors++))
+      error "  Field ${YW}imageLocation${CL} is required when imageType is '${image_type}'"
+      errors=$((errors + 1))
     fi
   fi
 
@@ -375,8 +388,8 @@ function check_json() {
   local node
   node=$(echo "$json_content" | jq -r '.node // "tappaas1"')
   if [ "$ha_node" != "NONE" ] && [ "$ha_node" == "$node" ]; then
-    echo -e "  ${RD}[ERROR]${CL} HANode (${ha_node}) must be different from node (${node})" >&2
-    ((errors++))
+    error "  HANode (${ha_node}) must be different from node (${node})"
+    errors=$((errors + 1))
   fi
 
   # Check zone references exist in zones.json
@@ -387,23 +400,22 @@ function check_json() {
       zone_value=$(echo "$json_content" | jq -r --arg Z "$zone_field" '.[$Z] // empty')
       if [ -n "$zone_value" ]; then
         if ! jq -e --arg Z "$zone_value" 'has($Z)' "$zones_file" >/dev/null 2>&1; then
-          echo -e "  ${RD}[ERROR]${CL} Field ${YW}$zone_field${CL}: zone '${zone_value}' not found in zones.json" >&2
-          ((errors++))
+          error "  Field ${YW}$zone_field${CL}: zone '${zone_value}' not found in zones.json"
+          errors=$((errors + 1))
         fi
       fi
     done
   fi
 
   # Summary
-  echo "" >&2
   if [ $errors -gt 0 ]; then
-    echo -e "${RD}Validation failed:${CL} $errors error(s), $warnings warning(s)" >&2
+    error "Validation failed: $errors error(s), $warnings warning(s)"
     return 1
   elif [ $warnings -gt 0 ]; then
-    echo -e "${YW}Validation passed with warnings:${CL} $warnings warning(s)" >&2
+    warn "Validation passed with warnings: $warnings warning(s)"
     return 0
   else
-    echo -e "${GN}Validation passed:${CL} No errors or warnings" >&2
+    info "Validation passed: No errors or warnings"
     return 0
   fi
 }

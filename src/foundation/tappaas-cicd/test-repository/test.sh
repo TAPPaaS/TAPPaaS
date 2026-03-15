@@ -61,11 +61,11 @@ run_test() {
 
     if [[ "${expected}" == "pass" && "${exit_code}" -eq 0 ]]; then
         echo -e "${GREEN}PASS${NC}"
-        ((PASS++))
+        PASS=$((PASS + 1))
         return 0
     elif [[ "${expected}" == "fail" && "${exit_code}" -ne 0 ]]; then
         echo -e "${GREEN}PASS${NC} (expected failure)"
-        ((PASS++))
+        PASS=$((PASS + 1))
         return 0
     else
         if [[ "${expected}" == "pass" ]]; then
@@ -74,7 +74,7 @@ run_test() {
             echo -e "${RED}FAIL${NC} (expected failure, got exit code 0)"
         fi
         echo "    Output: $(echo "${output}" | tail -3 | sed 's/^/    /')"
-        ((FAIL++))
+        FAIL=$((FAIL + 1))
         return 1
     fi
 }
@@ -89,10 +89,10 @@ check_condition() {
     echo -n "  [${test_name}] ${description}... "
     if eval "$3"; then
         echo -e "${GREEN}PASS${NC}"
-        ((PASS++))
+        PASS=$((PASS + 1))
     else
         echo -e "${RED}FAIL${NC}"
-        ((FAIL++))
+        FAIL=$((FAIL + 1))
     fi
 }
 
@@ -151,7 +151,7 @@ echo "Test Group 2: List Command"
 run_test "list-repos" "pass" "${REPO_SCRIPT}" list
 
 check_condition "list-shows-tappaas" "TAPPaaS repo in list" \
-    "'${REPO_SCRIPT}' list 2>&1 | grep -q 'TAPPaaS'"
+    "'${REPO_SCRIPT}' list 2>&1 | grep -c 'TAPPaaS' >/dev/null"
 echo ""
 
 # ── Test 3: Add command validation ───────────────────────────────────
