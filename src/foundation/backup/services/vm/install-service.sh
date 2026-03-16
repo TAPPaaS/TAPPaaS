@@ -9,5 +9,7 @@
 
 set -euo pipefail
 
-echo "backup:vm install-service called for module: ${1:-unknown} (not yet implemented)"
+. /home/tappaas/bin/common-install-routines.sh
+
+debug "backup:vm install-service called for module: ${1:-unknown} (not yet implemented)"
 exit 0

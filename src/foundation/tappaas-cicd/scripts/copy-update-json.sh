@@ -28,22 +28,18 @@ set -euo pipefail
 : "${CL:=$'\033[m'}"
 SCHEMA_FILE="/home/tappaas/TAPPaaS/src/foundation/module-fields.json"
 
-info() {
-    echo -e "${DGN}$*${CL}"
-}
-
-warn() {
-    echo -e "${YW}[WARN]${CL} $*"
-}
-
-error() {
-    echo -e "${RD}[ERROR]${CL} $*" >&2
-}
-
-die() {
-    error "$@"
-    exit 1
-}
+# Source common-install-routines.sh if not already loaded (provides info, warn, error, die)
+if ! declare -F info &>/dev/null; then
+    if [[ -f /home/tappaas/bin/common-install-routines.sh ]]; then
+        . /home/tappaas/bin/common-install-routines.sh
+    else
+        # Minimal fallback for bootstrap before common-install-routines.sh exists
+        info()  { echo -e "${DGN}[Info]${CL} $*"; }
+        warn()  { echo -e "${YW}[Warning]${CL} $*"; }
+        error() { echo -e "${RD}[Error]${CL} $*" >&2; }
+        die()   { error "$@"; exit 1; }
+    fi
+fi
 
 usage() {
     cat << EOF

@@ -82,7 +82,8 @@ main() {
     info "${BOLD}╚══════════════════════════════════════════════╝${CL}"
 
     # ── Step 1: Copy JSON config and validate ────────────────────────
-    info "\n${BOLD}Step 1: Copy and validate module configuration${CL}"
+    echo ""
+    info "${BOLD}Step 1: Copy and validate module configuration${CL}"
 
     . /home/tappaas/bin/copy-update-json.sh
     check_json "${CONFIG_DIR}/${module}.json" || die "JSON validation failed for ${module}"
@@ -90,7 +91,8 @@ main() {
     local module_json="${CONFIG_DIR}/${module}.json"
 
     # ── Step 2: Validate dependencies ────────────────────────────────
-    info "\n${BOLD}Step 2: Validate dependencies${CL}"
+    echo ""
+    info "${BOLD}Step 2: Validate dependencies${CL}"
 
     local depends_on
     depends_on=$(jq -r '.dependsOn // [] | .[]' "${module_json}" 2>/dev/null)
@@ -103,7 +105,7 @@ main() {
             if check_service_available "${dep}" "install-service.sh"; then
                 info "  ${GN}✓${CL} ${dep}"
             else
-                ((dep_errors++))
+                dep_errors=$((dep_errors + 1))
             fi
         done
     fi
@@ -113,7 +115,8 @@ main() {
     fi
 
     # ── Step 3: Validate provided services ───────────────────────────
-    info "\n${BOLD}Step 3: Validate service scripts${CL}"
+    echo ""
+    info "${BOLD}Step 3: Validate service scripts${CL}"
 
     local module_dir
     module_dir="$(pwd)"
@@ -134,7 +137,8 @@ main() {
     fi
 
     # ── Step 4: Call dependency install-service.sh scripts ───────────
-    info "\n${BOLD}Step 4: Call dependency service installers${CL}"
+    echo ""
+    info "${BOLD}Step 4: Call dependency service installers${CL}"
 
     if [[ -z "${depends_on}" ]]; then
         info "  No dependency services to call"
@@ -155,7 +159,8 @@ main() {
     fi
 
     # ── Step 5: Call the module's own install.sh ─────────────────────
-    info "\n${BOLD}Step 5: Run module install.sh${CL}"
+    echo ""
+    info "${BOLD}Step 5: Run module install.sh${CL}"
 
     if [[ -x "./install.sh" ]]; then
         info "  Running ${module}/install.sh..."

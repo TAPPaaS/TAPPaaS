@@ -23,6 +23,7 @@ from pathlib import Path
 from .config import Config
 from .dhcp_manager import DhcpManager, DhcpRange
 from .firewall_manager import FirewallManager, FirewallRule, FirewallRuleInfo, RuleAction
+from .log import debug, error, info, warn
 from .vlan_manager import Vlan, VlanManager
 
 
@@ -318,11 +319,10 @@ class ZoneManager:
         manual_zones = [z for z in self.get_manual_zones() if z.needs_vlan]
         untagged_zones = [z for z in self.get_enabled_zones() if not z.needs_vlan]
 
-        print(f"\nConfiguring VLANs...")
-        print(f"  Enabled zones requiring VLANs: {len(vlan_zones)}")
-        print(f"  Disabled zones with VLANs to remove: {len(disabled_zones)}")
-        print(f"  Manual zones (skipped): {len(manual_zones)}")
-        print(f"  Untagged zones (skipped, vlantag=0): {len(untagged_zones)}")
+        debug(f"  Enabled zones requiring VLANs: {len(vlan_zones)}")
+        debug(f"  Disabled zones with VLANs to remove: {len(disabled_zones)}")
+        debug(f"  Manual zones (skipped): {len(manual_zones)}")
+        debug(f"  Untagged zones (skipped, vlantag=0): {len(untagged_zones)}")
 
         with VlanManager(self.config) as manager:
             # Get existing VLANs once for efficiency
@@ -342,7 +342,7 @@ class ZoneManager:
                 existing = existing_tags.get(zone.vlan_tag)
 
                 if existing:
-                    print(f"  {zone.name}: Deleting VLAN {zone.vlan_tag} (zone disabled)")
+                    debug(f"  {zone.name}: Deleting VLAN {zone.vlan_tag} (zone disabled)")
                     if check_mode:
                         results[zone.name] = {"status": "would_delete", "vlan": zone.vlan_tag}
                     else:
@@ -360,7 +360,7 @@ class ZoneManager:
 
                             if assigned:
                                 iface_id = assigned.get("identifier")
-                                print(f"    Unassigning interface {iface_id} first...")
+                                debug(f"    Unassigning interface {iface_id} first...")
                                 manager.unassign_interface(iface_id)
 
                             # Now delete the VLAN
@@ -370,13 +370,13 @@ class ZoneManager:
                             error_msg = str(e)
                             # If deletion fails because interface is still assigned, provide helpful error
                             if "assigned as an interface" in error_msg.lower():
-                                print(f"    Error: VLAN is assigned to an interface but could not be unassigned automatically.")
-                                print(f"    Please manually delete the interface in OPNsense first, then re-run zone-manager.")
+                                error(f"VLAN is assigned to an interface but could not be unassigned automatically.")
+                                error(f"Please manually delete the interface in OPNsense first, then re-run zone-manager.")
                             else:
-                                print(f"    Error: {e}")
+                                error(f"{zone.name}: {e}")
                             results[zone.name] = {"status": "error", "error": error_msg}
                 else:
-                    print(f"  {zone.name}: VLAN {zone.vlan_tag} not found (nothing to delete)")
+                    debug(f"  {zone.name}: VLAN {zone.vlan_tag} not found (nothing to delete)")
                     results[zone.name] = {"status": "not_found", "vlan": zone.vlan_tag}
 
             # Then, create VLANs for enabled zones
@@ -386,7 +386,7 @@ class ZoneManager:
                 existing = existing_tags.get(zone.vlan_tag) or existing_descriptions.get(vlan_desc)
 
                 if existing:
-                    print(f"  {zone.name}: VLAN {zone.vlan_tag} already exists (skipping)")
+                    debug(f"  {zone.name}: VLAN {zone.vlan_tag} already exists (skipping)")
                     results[zone.name] = {
                         "status": "exists",
                         "vlan": zone.vlan_tag,
@@ -405,7 +405,7 @@ class ZoneManager:
                 # Calculate gateway IP and subnet for static assignment
                 gateway_ip = zone.gateway_ip
                 subnet_bits = zone.network.prefixlen
-                print(f"  {zone.name}: Creating VLAN {zone.vlan_tag} on {vlan_interface} (bridge: {zone.bridge}, gateway: {gateway_ip}/{subnet_bits})")
+                debug(f"  {zone.name}: Creating VLAN {zone.vlan_tag} on {vlan_interface} (bridge: {zone.bridge}, gateway: {gateway_ip}/{subnet_bits})")
 
                 if check_mode:
                     results[zone.name] = {"status": "would_create", "vlan": zone.vlan_tag}
@@ -425,16 +425,16 @@ class ZoneManager:
                         results[zone.name] = {"status": "created", "result": result}
                     except Exception as e:
                         results[zone.name] = {"status": "error", "error": str(e)}
-                        print(f"    Error: {e}")
+                        error(f"{zone.name}: {e}")
 
             # Report on manual zones (not created or deleted)
             for zone in manual_zones:
-                print(f"  {zone.name}: VLAN {zone.vlan_tag} skipped (manual zone)")
+                debug(f"  {zone.name}: VLAN {zone.vlan_tag} skipped (manual zone)")
                 results[zone.name] = {"status": "skipped_manual", "vlan": zone.vlan_tag}
 
             # Report on untagged zones (vlantag=0, not managed by zone-manager)
             for zone in untagged_zones:
-                print(f"  {zone.name}: VLAN skipped (untagged zone, vlantag=0)")
+                debug(f"  {zone.name}: VLAN skipped (untagged zone, vlantag=0)")
                 results[zone.name] = {"status": "skipped_untagged", "reason": "vlantag=0"}
 
         return results
@@ -458,11 +458,10 @@ class ZoneManager:
         manual_zones = [z for z in self.get_manual_zones() if z.needs_vlan]
         untagged_zones = [z for z in self.get_enabled_zones() if not z.needs_vlan]
 
-        print(f"\nConfiguring DHCP...")
-        print(f"  Enabled zones requiring DHCP: {len(dhcp_zones)}")
-        print(f"  Disabled zones with DHCP to remove: {len(disabled_zones)}")
-        print(f"  Manual zones (skipped): {len(manual_zones)}")
-        print(f"  Untagged zones (skipped, vlantag=0): {len(untagged_zones)}")
+        debug(f"  Enabled zones requiring DHCP: {len(dhcp_zones)}")
+        debug(f"  Disabled zones with DHCP to remove: {len(disabled_zones)}")
+        debug(f"  Manual zones (skipped): {len(manual_zones)}")
+        debug(f"  Untagged zones (skipped, vlantag=0): {len(untagged_zones)}")
 
         with DhcpManager(self.config) as manager:
             # Get existing DHCP ranges once for efficiency
@@ -475,7 +474,7 @@ class ZoneManager:
                 existing = existing_by_desc.get(dhcp_desc)
 
                 if existing:
-                    print(f"  {zone.name}: Deleting DHCP range (zone disabled)")
+                    debug(f"  {zone.name}: Deleting DHCP range (zone disabled)")
                     if check_mode:
                         results[zone.name] = {
                             "status": "would_delete",
@@ -487,9 +486,9 @@ class ZoneManager:
                             results[zone.name] = {"status": "deleted", "result": result}
                         except Exception as e:
                             results[zone.name] = {"status": "error", "error": str(e)}
-                            print(f"    Error: {e}")
+                            error(f"{zone.name}: {e}")
                 else:
-                    print(f"  {zone.name}: DHCP range not found (nothing to delete)")
+                    debug(f"  {zone.name}: DHCP range not found (nothing to delete)")
                     results[zone.name] = {"status": "not_found"}
 
             # Then, create DHCP ranges for enabled zones with VLANs
@@ -498,7 +497,7 @@ class ZoneManager:
                 existing = existing_by_desc.get(dhcp_desc)
 
                 if existing:
-                    print(f"  {zone.name}: DHCP range already exists (skipping)")
+                    debug(f"  {zone.name}: DHCP range already exists (skipping)")
                     results[zone.name] = {
                         "status": "exists",
                         "range": f"{existing.get('start_addr')}-{existing.get('end_addr')}",
@@ -537,7 +536,7 @@ class ZoneManager:
                 )
 
                 interface_info = dhcp_interface or "any"
-                print(f"  {zone.name}: {zone.dhcp_start} - {zone.dhcp_end} ({zone.domain}) on {interface_info}")
+                debug(f"  {zone.name}: {zone.dhcp_start} - {zone.dhcp_end} ({zone.domain}) on {interface_info}")
 
                 if check_mode:
                     results[zone.name] = {
@@ -555,7 +554,7 @@ class ZoneManager:
                         # If the interface isn't found by dnsmasq (e.g., newly created VLAN),
                         # retry without interface binding (use "any")
                         if "was not found" in error_str and dhcp_interface:
-                            print(f"    Interface '{dhcp_interface}' not recognized by dnsmasq, retrying without interface binding...")
+                            warn(f"Interface '{dhcp_interface}' not recognized by dnsmasq, retrying without interface binding...")
                             dhcp_range_any = DhcpRange(
                                 description=dhcp_desc,
                                 start_addr=zone.dhcp_start,
@@ -571,17 +570,17 @@ class ZoneManager:
                                     "result": result,
                                     "note": f"Interface '{dhcp_interface}' not found, created without interface binding",
                                 }
-                                print(f"    Created DHCP range on 'any' interface")
+                                debug(f"    Created DHCP range on 'any' interface")
                             except Exception as e2:
                                 results[zone.name] = {"status": "error", "error": str(e2)}
-                                print(f"    Error: {e2}")
+                                error(f"{zone.name}: {e2}")
                         else:
                             results[zone.name] = {"status": "error", "error": error_str}
-                            print(f"    Error: {e}")
+                            error(f"{zone.name}: {e}")
 
             # Report on manual zones (not created or deleted)
             for zone in manual_zones:
-                print(f"  {zone.name}: DHCP skipped (manual zone)")
+                debug(f"  {zone.name}: DHCP skipped (manual zone)")
                 results[zone.name] = {
                     "status": "skipped_manual",
                     "range": f"{zone.dhcp_start}-{zone.dhcp_end}",
@@ -589,7 +588,7 @@ class ZoneManager:
 
             # Report on untagged zones (vlantag=0, not managed by zone-manager)
             for zone in untagged_zones:
-                print(f"  {zone.name}: DHCP skipped (untagged zone, vlantag=0)")
+                debug(f"  {zone.name}: DHCP skipped (untagged zone, vlantag=0)")
                 results[zone.name] = {
                     "status": "skipped_untagged",
                     "reason": "vlantag=0",
@@ -628,7 +627,7 @@ class ZoneManager:
 
         existing = existing_by_desc.get(description)
         if existing:
-            print(f"    {action_str}: {description} (exists, skipping)")
+            debug(f"    {action_str}: {description} (exists, skipping)")
             results_list.append({
                 "description": description,
                 "status": "exists",
@@ -637,7 +636,7 @@ class ZoneManager:
             })
             return
 
-        print(f"    {action_str}: {description}")
+        debug(f"    {action_str}: {description}")
 
         if check_mode:
             results_list.append({
@@ -671,7 +670,7 @@ class ZoneManager:
                     "status": "error",
                     "error": str(e),
                 })
-                print(f"      Error: {e}")
+                error(f"Firewall rule '{description}': {e}")
 
     def configure_firewall_rules(self, check_mode: bool = True) -> dict[str, dict]:
         """Configure firewall rules based on zone access-to definitions.
@@ -708,11 +707,10 @@ class ZoneManager:
         ]
         disabled_zones = self.get_disabled_zones()
 
-        print(f"\nConfiguring Firewall Rules...")
-        print(f"  Zones with access-to rules: {len(firewall_zones)}")
-        print(f"  Isolated zones (empty access-to): {len(isolated_zones)}")
-        print(f"  Disabled zones (rules to clean up): {len(disabled_zones)}")
-        print(f"  Manual zones (skipped): {len(manual_zones)}")
+        debug(f"  Zones with access-to rules: {len(firewall_zones)}")
+        debug(f"  Isolated zones (empty access-to): {len(isolated_zones)}")
+        debug(f"  Disabled zones (rules to clean up): {len(disabled_zones)}")
+        debug(f"  Manual zones (skipped): {len(manual_zones)}")
 
         with FirewallManager(self.config) as manager:
             # Get existing rules for comparison
@@ -724,13 +722,13 @@ class ZoneManager:
                 zone_prefix = f"Zone {zone.name} "
                 matching = [r for r in existing_rules if r.description.startswith(zone_prefix)]
                 if matching:
-                    print(f"  {zone.name}: Deleting {len(matching)} rules (zone disabled)")
+                    debug(f"  {zone.name}: Deleting {len(matching)} rules (zone disabled)")
                     if not check_mode:
                         for rule_info in matching:
                             try:
                                 manager.delete_rule(rule_info.description, apply=False)
                             except Exception as e:
-                                print(f"    Error deleting '{rule_info.description}': {e}")
+                                error(f"Deleting '{rule_info.description}': {e}")
                     results[zone.name] = {
                         "status": "would_delete" if check_mode else "deleted",
                         "rules_deleted": len(matching),
@@ -742,7 +740,7 @@ class ZoneManager:
                 zone_interface = self.get_zone_interface(zone)
 
                 if not zone_interface:
-                    print(f"  {zone.name}: Cannot find interface (skipping)")
+                    warn(f"{zone.name}: Cannot find interface (skipping)")
                     results[zone.name] = {
                         "status": "error",
                         "error": "Interface not found",
@@ -750,7 +748,7 @@ class ZoneManager:
                     }
                     continue
 
-                print(f"  {zone.name} (interface: {zone_interface}):")
+                debug(f"  {zone.name} (interface: {zone_interface}):")
 
                 # Categorise targets
                 targets_lower = [t.lower() for t in zone.access_to]
@@ -786,7 +784,7 @@ class ZoneManager:
                         if target_zone:
                             dest = target_zone.ip_network
                         else:
-                            print(f"    Warning: target zone '{target}' not found in zones.json, using name as alias")
+                            warn(f"target zone '{target}' not found in zones.json, using name as alias")
                             dest = target
                         self._create_or_skip_rule(
                             manager, existing_by_desc,
@@ -823,22 +821,22 @@ class ZoneManager:
 
             # Apply all changes at once if not in check mode
             if not check_mode:
-                print("\n  Applying firewall changes...")
+                debug("  Applying firewall changes...")
                 try:
                     manager.apply_changes()
-                    print("  Changes applied successfully")
+                    debug("  Changes applied successfully")
                 except Exception as e:
-                    print(f"  Error applying changes: {e}")
+                    error(f"Applying firewall changes: {e}")
 
             # Report on isolated zones (enabled but empty access-to)
             for zone in isolated_zones:
-                print(f"  {zone.name}: No rules (fully isolated, default block)")
+                debug(f"  {zone.name}: No rules (fully isolated, default block)")
                 results[zone.name] = {"status": "isolated", "access_to": []}
 
             # Report on manual zones
             for zone in manual_zones:
                 if zone.access_to:
-                    print(f"  {zone.name}: Firewall rules skipped (manual zone)")
+                    debug(f"  {zone.name}: Firewall rules skipped (manual zone)")
                     results[zone.name] = {
                         "status": "skipped_manual",
                         "access_to": zone.access_to,
@@ -867,7 +865,7 @@ class ZoneManager:
             if iface and iface not in interfaces:
                 interfaces.append(iface)
 
-        print(f"  Dnsmasq interfaces: {', '.join(interfaces)}")
+        debug(f"  Dnsmasq interfaces: {', '.join(interfaces)}")
 
         if check_mode:
             return {"status": "would_update", "interfaces": interfaces}
@@ -878,10 +876,10 @@ class ZoneManager:
                     interfaces=interfaces,
                     check_mode=check_mode,
                 )
-                print(f"  Updated dnsmasq to listen on {len(interfaces)} interfaces")
+                debug(f"  Updated dnsmasq to listen on {len(interfaces)} interfaces")
                 return {"status": "updated", "interfaces": interfaces, "result": result}
         except Exception as e:
-            print(f"  Error updating dnsmasq interfaces: {e}")
+            error(f"Updating dnsmasq interfaces: {e}")
             return {"status": "error", "error": str(e)}
 
     def configure_all(
@@ -907,20 +905,14 @@ class ZoneManager:
             Dictionary with 'vlans', 'dhcp', and optionally 'firewall' results
         """
         # Configure VLANs first, then DHCP, then firewall rules
-        print("\n" + "=" * 60)
-        print("Step 1: Configuring VLANs")
-        print("=" * 60)
+        info("Step 1: Configuring VLANs")
         vlan_results = self.configure_vlans(check_mode=check_mode, assign=assign_vlans)
 
-        print("\n" + "=" * 60)
-        print("Step 2: Configuring DHCP ranges")
-        print("=" * 60)
+        info("Step 2: Configuring DHCP ranges")
         dhcp_results = self.configure_dhcp(check_mode=check_mode)
 
         # Update dnsmasq to listen on all VLAN interfaces
-        print("\n" + "=" * 60)
-        print("Step 2b: Updating dnsmasq interface bindings")
-        print("=" * 60)
+        info("Step 2b: Updating dnsmasq interface bindings")
         dnsmasq_result = self.update_dnsmasq_interfaces(check_mode=check_mode)
 
         result = {
@@ -930,9 +922,7 @@ class ZoneManager:
         }
 
         if firewall_rules:
-            print("\n" + "=" * 60)
-            print("Step 3: Configuring Firewall Rules")
-            print("=" * 60)
+            info("Step 3: Configuring Firewall Rules")
             firewall_results = self.configure_firewall_rules(check_mode=check_mode)
             result["firewall"] = firewall_results
 
@@ -962,40 +952,40 @@ class ZoneManager:
         """Print the current VLAN and DHCP configuration from OPNsense."""
         config = self.list_current_config()
 
-        print("\nCurrent OPNsense Configuration:")
-        print("=" * 80)
+        debug("Current OPNsense Configuration:")
+        debug("=" * 80)
 
-        print("\nVLANs:")
-        print("-" * 80)
+        debug("VLANs:")
+        debug("-" * 80)
         if not config["vlans"]:
-            print("  No VLANs configured")
+            debug("  No VLANs configured")
         else:
-            print(f"  {'Tag':<6} {'Device':<15} {'Interface':<12} {'Description'}")
-            print("  " + "-" * 70)
+            debug(f"  {'Tag':<6} {'Device':<15} {'Interface':<12} {'Description'}")
+            debug("  " + "-" * 70)
             for vlan in config["vlans"]:
-                print(f"  {vlan['tag']:<6} {vlan['device'] or '-':<15} {vlan['interface']:<12} {vlan['description']}")
+                debug(f"  {vlan['tag']:<6} {vlan['device'] or '-':<15} {vlan['interface']:<12} {vlan['description']}")
 
-        print("\nDHCP Ranges:")
-        print("-" * 80)
+        debug("DHCP Ranges:")
+        debug("-" * 80)
         if not config["dhcp_ranges"]:
-            print("  No DHCP ranges configured")
+            debug("  No DHCP ranges configured")
         else:
-            print(f"  {'Description':<20} {'Start':<16} {'End':<16} {'Interface':<10} {'Domain'}")
-            print("  " + "-" * 75)
+            debug(f"  {'Description':<20} {'Start':<16} {'End':<16} {'Interface':<10} {'Domain'}")
+            debug("  " + "-" * 75)
             for r in config["dhcp_ranges"]:
-                print(
+                debug(
                     f"  {r['description'] or '-':<20} {r['start_addr'] or '-':<16} "
                     f"{r['end_addr'] or '-':<16} {r['interface'] or 'any':<10} {r['domain'] or '-'}"
                 )
 
-        print("=" * 80)
+        debug("=" * 80)
 
     def print_zone_summary(self):
         """Print a summary of all zones."""
-        print("\nZone Summary:")
-        print("-" * 80)
-        print(f"{'Name':<15} {'Type':<12} {'State':<10} {'VLAN':<6} {'IP Network':<18} {'DHCP Range'}")
-        print("-" * 80)
+        info("Zone Summary:")
+        info("-" * 80)
+        info(f"{'Name':<15} {'Type':<12} {'State':<10} {'VLAN':<6} {'IP Network':<18} {'DHCP Range'}")
+        info("-" * 80)
 
         for zone in self.zones:
             if zone.is_enabled:
@@ -1007,14 +997,14 @@ class ZoneManager:
             vlan = str(zone.vlan_tag) if zone.vlan_tag > 0 else "-"
             dhcp_range = f"{zone.dhcp_start}-{zone.dhcp_end}" if zone.is_enabled else "-"
 
-            print(f"{zone.name:<15} {zone.zone_type:<12} {status:<10} {vlan:<6} {zone.ip_network:<18} {dhcp_range}")
+            info(f"{zone.name:<15} {zone.zone_type:<12} {status:<10} {vlan:<6} {zone.ip_network:<18} {dhcp_range}")
 
-        print("-" * 80)
+        info("-" * 80)
         enabled = len(self.get_enabled_zones())
         disabled = len(self.get_disabled_zones())
         manual = len(self.get_manual_zones())
         vlan_zones = len(self.get_vlan_zones())
-        print(f"Total: {len(self.zones)} zones, {enabled} enabled, {disabled} disabled, {manual} manual, {vlan_zones} with VLANs")
+        info(f"Total: {len(self.zones)} zones, {enabled} enabled, {disabled} disabled, {manual} manual, {vlan_zones} with VLANs")
 
 
 def main():
@@ -1118,14 +1108,15 @@ def main():
                 break
 
     if not zones_file:
-        print("Error: Could not find zones.json. Use --zones-file to specify the path.")
+        error("Could not find zones.json. Use --zones-file to specify the path.")
         sys.exit(1)
 
+    # Map --debug flag to environment variable so log module picks it up
+    if args.debug:
+        os.environ["TAPPAAS_DEBUG"] = "1"
+
     if check_mode and not args.summary and not args.list_config:
-        print("=" * 60)
-        print("RUNNING IN CHECK MODE (dry-run) - no changes will be made")
-        print("Use --execute to actually make changes")
-        print("=" * 60)
+        warn("RUNNING IN CHECK MODE (dry-run) - no changes will be made. Use --execute to actually make changes.")
 
     # Build configuration
     try:
@@ -1145,7 +1136,7 @@ def main():
 
         config = Config(**config_kwargs)
     except ValueError as e:
-        print(f"Configuration error: {e}")
+        error(f"Configuration error: {e}")
         sys.exit(1)
 
     # Create manager and load zones
@@ -1158,10 +1149,10 @@ def main():
     try:
         manager.load_zones()
     except FileNotFoundError as e:
-        print(f"Error: {e}")
+        error(str(e))
         sys.exit(1)
     except json.JSONDecodeError as e:
-        print(f"Error parsing zones.json: {e}")
+        error(f"Parsing zones.json: {e}")
         sys.exit(1)
 
     # Show zone summary
@@ -1194,25 +1185,23 @@ def main():
         )
 
     # Print results summary
-    print("\n" + "=" * 60)
-    print("Results Summary")
-    print("=" * 60)
+    info("Results Summary")
     if "vlans" in results:
-        print(f"\nVLANs: {len(results['vlans'])} zones processed")
+        info(f"  VLANs: {len(results['vlans'])} zones processed")
         for zone_name, result in results["vlans"].items():
             status = result.get("status", "unknown")
             vlan_tag = result.get("vlan", "")
-            print(f"  {zone_name}: {status}" + (f" (VLAN {vlan_tag})" if vlan_tag else ""))
+            debug(f"    {zone_name}: {status}" + (f" (VLAN {vlan_tag})" if vlan_tag else ""))
 
     if "dhcp" in results:
-        print(f"\nDHCP: {len(results['dhcp'])} zones processed")
+        info(f"  DHCP: {len(results['dhcp'])} zones processed")
         for zone_name, result in results["dhcp"].items():
             status = result.get("status", "unknown")
             range_info = result.get("range", "")
-            print(f"  {zone_name}: {status}" + (f" ({range_info})" if range_info else ""))
+            debug(f"    {zone_name}: {status}" + (f" ({range_info})" if range_info else ""))
 
     if "firewall" in results:
-        print(f"\nFirewall Rules: {len(results['firewall'])} zones processed")
+        info(f"  Firewall Rules: {len(results['firewall'])} zones processed")
         for zone_name, result in results["firewall"].items():
             status = result.get("status", "unknown")
             rules = result.get("rules", [])
@@ -1227,18 +1216,16 @@ def main():
                     parts.append(f"{exists} existing")
                 if errors:
                     parts.append(f"{errors} errors")
-                print(f"  {zone_name}: {len(rules)} rules ({', '.join(parts)})")
+                debug(f"    {zone_name}: {len(rules)} rules ({', '.join(parts)})")
             elif status in ("deleted", "would_delete"):
                 count = result.get("rules_deleted", 0)
-                print(f"  {zone_name}: {status} ({count} rules removed)")
+                debug(f"    {zone_name}: {status} ({count} rules removed)")
             else:
-                print(f"  {zone_name}: {status}")
+                debug(f"    {zone_name}: {status}")
 
     # Show current config after changes (if not in check mode)
     if not check_mode:
-        print("\n" + "=" * 60)
-        print("Verifying configuration...")
-        print("=" * 60)
+        debug("Verifying configuration...")
         manager.print_current_config()
 
 

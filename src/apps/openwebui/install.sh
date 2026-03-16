@@ -10,4 +10,5 @@
 # run the update script as all update actions is also needed at install time
 . ./update.sh
 
-echo -e "\nVM installation completed successfully."
+echo ""
+info "${GN}✓${CL} VM installation completed successfully."

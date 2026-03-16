@@ -42,7 +42,8 @@ NODE_FQDN="${NODE}.${MGMTVLAN}.internal"
 HA_RULE_NAME="ha-${MODULE_NAME}"
 
 # Check if VM exists
-info "\nChecking if VM $VMID exists on node $NODE..."
+echo ""
+info "Checking if VM $VMID exists on node $NODE..."
 if ! ssh root@"$NODE_FQDN" "qm status $VMID" &>/dev/null; then
   error "VM $VMID does not exist on node $NODE"
   exit 1
@@ -51,7 +52,8 @@ info "  VM $VMID found"
 
 # Function to remove HA configuration
 remove_ha_config() {
-  info "\n${BOLD}Removing HA configuration for VM $VMID..."
+  echo ""
+info "${BOLD}Removing HA configuration for VM $VMID..."
 
   # Check if VM is in HA resources
   if ssh root@"$NODE_FQDN" "ha-manager config" 2>/dev/null | grep -q "^vm:$VMID"; then
@@ -63,7 +65,8 @@ remove_ha_config() {
   fi
 
   # Check for and remove HA rule
-  info "\nChecking for HA rules..."
+  echo ""
+info "Checking for HA rules..."
   # ha-manager rules list outputs a table with rule names - grep for the rule name
   if ssh root@"$NODE_FQDN" "ha-manager rules list" 2>/dev/null | grep -q "${HA_RULE_NAME}"; then
     info "  Removing HA rule: $HA_RULE_NAME"
@@ -73,7 +76,8 @@ remove_ha_config() {
   fi
 
   # Check for and remove replication jobs
-  info "\nChecking for replication jobs..."
+  echo ""
+info "Checking for replication jobs..."
   REPL_JOBS=$(ssh root@"$NODE_FQDN" "pvesh get /cluster/replication --output-format json" 2>/dev/null | jq -r ".[] | select(.guest == $VMID) | .id" 2>/dev/null || echo "")
   if [ -n "$REPL_JOBS" ]; then
     for job_id in $REPL_JOBS; do
@@ -90,7 +94,8 @@ remove_ha_config() {
 create_ha_config() {
   local ha_node="$1"
 
-  info "\n${BOLD}Configuring HA for VM $VMID with secondary node: ${BGN}${ha_node}${CL}"
+  echo ""
+info "${BOLD}Configuring HA for VM $VMID with secondary node: ${BGN}${ha_node}${CL}"
 
   # Validate HA node is different from primary
   if [ "$ha_node" == "$NODE" ]; then
@@ -116,7 +121,8 @@ create_ha_config() {
   info "  Storage verified on HA node"
 
   # Add VM to HA if not already present
-  info "\n  Adding VM $VMID to HA resources..."
+  echo ""
+info "  Adding VM $VMID to HA resources..."
   if ssh root@"$NODE_FQDN" "ha-manager config" 2>/dev/null | grep -q "^vm:$VMID"; then
     info "  VM already in HA resources, updating..."
     ssh root@"$NODE_FQDN" "ha-manager set vm:$VMID --state started" 2>/dev/null || {
@@ -133,7 +139,8 @@ create_ha_config() {
 
   # Create or update node-affinity rule
   # Priority: primary node gets priority 2, HA node gets priority 1
-  info "\n  Setting up node-affinity rule: $HA_RULE_NAME..."
+  echo ""
+info "  Setting up node-affinity rule: $HA_RULE_NAME..."
 
   # Check if rule exists - ha-manager rules list outputs a table with rule names
   if ssh root@"$NODE_FQDN" "ha-manager rules list" 2>/dev/null | grep -q "${HA_RULE_NAME}"; then
@@ -152,7 +159,8 @@ create_ha_config() {
   info "  Node-affinity rule configured: primary=$NODE (priority 2), failover=$ha_node (priority 1)"
 
   # Setup replication
-  info "\n  Setting up ZFS replication to $ha_node..."
+  echo ""
+info "  Setting up ZFS replication to $ha_node..."
 
   # Check for existing replication job
   EXISTING_REPL=$(ssh root@"$NODE_FQDN" "pvesh get /cluster/replication --output-format json" 2>/dev/null | jq -r ".[] | select(.guest == $VMID) | .id" 2>/dev/null || echo "")
@@ -182,10 +190,12 @@ create_ha_config() {
 
 # Main logic
 if [ "$HANODE" == "NONE" ] || [ -z "$HANODE" ]; then
-  info "\n${BOLD}HANode is 'NONE' - removing any existing HA configuration"
+  echo ""
+info "${BOLD}HANode is 'NONE' - removing any existing HA configuration"
   remove_ha_config
 else
   create_ha_config "$HANODE"
 fi
 
-info "\n${GN}${BOLD}HA configuration update completed for ${MODULE_NAME}${CL}"
+echo ""
+info "${GN}${BOLD}HA configuration update completed for ${MODULE_NAME}${CL}"

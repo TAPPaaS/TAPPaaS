@@ -40,7 +40,12 @@ function cleanup() {
 
 function info() {
   local msg="$1"
-  echo -e "${DGN}${msg}${CL}"
+  echo -e "${DGN}[Info]${CL} ${msg}"
+}
+
+function warn() {
+  local msg="$1"
+  echo -e "${YW}[Warning]${CL} ${msg}"
 }
 
 function create_vm_descriptions_html() {
@@ -273,7 +278,8 @@ if [ "${IMAGETYPE:-}" != "clone" ]; then
   fi
 fi
 
-info "\n${BOLD}Starting the $VMNAME VM creation process..."
+echo ""
+info "${BOLD}Starting the $VMNAME VM creation process..."
 if [ "$IMAGETYPE" == "img" ]; then  # First use: this is used to stand up a firewall vm from a disk image
   info "${BOLD}Creating a Image based VM"
   qm create $VMID -agent 1 -tablet 0 -localtime 1 \
@@ -414,7 +420,7 @@ function resize_disk_in_vm() {
     sleep 2
     waited=$((waited + 2))
     if [ $waited -ge $max_wait ]; then
-      info "${YW}[WARN]${CL} VM $vm_hostname: guest agent not responding after ${max_wait}s, skipping filesystem resize"
+      warn "VM $vm_hostname: guest agent not responding after ${max_wait}s, skipping filesystem resize"
       return 1
     fi
   done
@@ -456,7 +462,7 @@ function resize_disk_in_vm() {
         disk="${BASH_REMATCH[1]}"
         partnum="${BASH_REMATCH[2]}"
       else
-        info "${YW}[WARN]${CL} Cannot parse root device $root_dev, skipping filesystem resize"
+        warn "Cannot parse root device $root_dev, skipping filesystem resize"
         return 1
       fi
       info "Disk: $disk, Partition: $partnum"
@@ -472,12 +478,12 @@ function resize_disk_in_vm() {
         info "Resizing ext4 filesystem..."
         qm guest exec "$vmid" -- resize2fs "${root_dev}" &>/dev/null || true
       else
-        info "${YW}[WARN]${CL} Unsupported filesystem $fstype, partition resized but filesystem not expanded"
+        warn "Unsupported filesystem $fstype, partition resized but filesystem not expanded"
         return 1
       fi
       ;;
     *)
-      info "${YW}[WARN]${CL} Unsupported OS '$os_id', skipping filesystem resize"
+      warn "Unsupported OS '$os_id', skipping filesystem resize"
       return 1
       ;;
   esac
@@ -512,19 +518,20 @@ if [ "$IMAGETYPE" == "clone" ]; then
     qm resize $VMID scsi0 ${DISK_SIZE} >/dev/null
     NEEDS_RESIZE=true
   elif [ "$TARGET_BYTES" -lt "$CURRENT_BYTES" ]; then
-    info "${YW}[WARN]${CL} Target size $DISK_SIZE is smaller than current $CURRENT_SIZE - disk shrinking not supported"
+    warn "Target size $DISK_SIZE is smaller than current $CURRENT_SIZE - disk shrinking not supported"
   else
     info "Disk already at target size $DISK_SIZE"
   fi
 fi
 
 qm start $VMID >/dev/null
-info "\n${BOLD}TAPPaaS $VMNAME VM started successfully"
+echo ""
+info "${BOLD}TAPPaaS $VMNAME VM started successfully"
 
 # Resize filesystem inside VM if disk was expanded
 if [ "$NEEDS_RESIZE" == "true" ]; then
   resize_disk_in_vm "$VMNAME" "$VMID" || info "Filesystem resize skipped or failed"
 fi
 
-info "${BOLD}TAPPaaS $VMNAME VM creation completed successfully\n"
+info "${BOLD}TAPPaaS $VMNAME VM creation completed successfully"
 

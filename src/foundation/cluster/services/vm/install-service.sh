@@ -19,9 +19,8 @@ if [[ -z "${1:-}" ]]; then
     exit 1
 fi
 
-. /home/tappaas/bin/copy-update-json.sh
 . /home/tappaas/bin/common-install-routines.sh
-check_json /home/tappaas/config/$1.json || exit 1
+check_json "/home/tappaas/config/$1.json" || exit 1
 
 VMNAME="$(get_config_value 'vmname' "$1")"
 VMID="$(get_config_value 'vmid')"
@@ -34,4 +33,5 @@ scp "/home/tappaas/config/$1.json" "root@${NODE}.${MGMT}.internal:/root/tappaas/
 ssh "root@${NODE}.${MGMT}.internal" "/root/tappaas/Create-TAPPaaS-VM.sh $1"
 ssh "root@${NODE}.${MGMT}.internal" "rm /root/tappaas/$1.json"
 
-echo -e "\nVM ${VMNAME} (VMID: ${VMID}) created successfully on ${NODE}, in Zone: ${ZONE0NAME}"
+echo ""
+info "VM ${VMNAME} (VMID: ${VMID}) created successfully on ${NODE}, in Zone: ${ZONE0NAME}"

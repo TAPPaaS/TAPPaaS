@@ -424,24 +424,40 @@ install-module.sh litellm --node tappaas2
 
 ### update-module.sh
 
-Updates a TAPPaaS module with dependency-aware service wiring.
+Updates a TAPPaaS module safely with snapshot, testing, and automatic rollback.
 
 **Usage:**
 ```bash
-update-module.sh <module-name>
+update-module.sh [options] <module-name>
 ```
 
+**Options:**
+| Option | Description |
+|--------|-------------|
+| `--force` | Proceed even if pre-update test fails |
+| `--debug` | Show Debug-level messages |
+| `--silent` | Suppress Info-level messages |
+
 **What it does:**
-1. Validates the module JSON config exists
-2. Checks that every `dependsOn` service is still available
-3. Runs the module's `pre-update.sh` (if present)
+1. Creates a pre-update VM snapshot (rollback safety net)
+2. Runs `test-module.sh` pre-update — aborts if tests fail (unless `--force`)
+3. Runs the module's `pre-update.sh` hook (if present)
 4. Iterates `dependsOn` and calls each provider's `update-service.sh`
 5. Calls the module's own `update.sh`
+6. Runs `test-module.sh` post-update — rolls back on fatal failure
+
+**Exit codes:**
+| Code | Meaning |
+|------|---------|
+| `0` | Update succeeded, all tests passed |
+| `1` | Update completed but post-update test failed (non-fatal) |
+| `2` | Fatal error (rollback attempted if snapshot exists) |
 
 **Example:**
 ```bash
 update-module.sh vaultwarden
-update-module.sh litellm
+update-module.sh --force litellm
+update-module.sh --debug openwebui
 ```
 
 ---
@@ -864,6 +880,6 @@ scripts/
 ├── test-module.sh               # Test a module with dependency-recursive service testing
 ├── update-cron.sh               # Set up hourly update cron job
 ├── update-HA.sh                 # Manage HA and replication for modules
-├── update-module.sh             # Update a module with dependency-aware service wiring
+├── update-module.sh             # Update a module with snapshot, testing, and rollback
 └── update-os.sh                 # OS-specific update (NixOS/Debian)
 ```

@@ -24,20 +24,10 @@
 
 set -euo pipefail
 
-# ── Logging ──────────────────────────────────────────────────────────
+# ── Shared library ────────────────────────────────────────────────────
 
-readonly YW=$'\033[33m'
-readonly RD=$'\033[01;31m'
-readonly GN=$'\033[1;92m'
-readonly DGN=$'\033[32m'
-readonly BL=$'\033[36m'
-readonly CL=$'\033[m'
-readonly BOLD=$'\033[1m'
-
-info()  { echo -e "${DGN}$*${CL}"; }
-warn()  { echo -e "${YW}[WARN]${CL} $*"; }
-error() { echo -e "${RD}[ERROR]${CL} $*" >&2; }
-die()   { error "$@"; exit 1; }
+# shellcheck source=common-install-routines.sh
+. /home/tappaas/bin/common-install-routines.sh
 
 # ── Usage ────────────────────────────────────────────────────────────
 
@@ -64,8 +54,7 @@ fi
 MODULE="$1"
 shift
 
-readonly CONFIG_DIR="/home/tappaas/config"
-readonly MODULE_JSON="${CONFIG_DIR}/${MODULE}.json"
+MODULE_JSON="${CONFIG_DIR}/${MODULE}.json"
 readonly MGMT="mgmt"
 
 # ── Validate module config ───────────────────────────────────────────

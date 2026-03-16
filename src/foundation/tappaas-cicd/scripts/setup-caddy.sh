@@ -10,61 +10,60 @@
 
 set -e
 
+. /home/tappaas/bin/common-install-routines.sh
+
 FIREWALL_FQDN="firewall.mgmt.internal"
 CONFIG_FILE="/home/tappaas/config/configuration.json"
 
-echo "Setting up Caddy reverse proxy on OPNsense firewall..."
+info "Setting up Caddy reverse proxy on OPNsense firewall..."
 
 # Check if configuration file exists
-if [ ! -f "$CONFIG_FILE" ]; then
-    echo "Error: Configuration file not found: $CONFIG_FILE"
-    exit 1
+if [[ ! -f "$CONFIG_FILE" ]]; then
+    die "Configuration file not found: $CONFIG_FILE"
 fi
 
 # Extract domain and email from configuration.json
-if command -v jq &>/dev/null; then
-    DOMAIN=$(jq -r '.tappaas.domain' "$CONFIG_FILE")
-    EMAIL=$(jq -r '.tappaas.email' "$CONFIG_FILE")
-else
-    DOMAIN=$(python3 -c "import json; print(json.load(open('$CONFIG_FILE'))['tappaas']['domain'])")
-    EMAIL=$(python3 -c "import json; print(json.load(open('$CONFIG_FILE'))['tappaas']['email'])")
+DOMAIN=$(jq -r '.tappaas.domain' "$CONFIG_FILE")
+EMAIL=$(jq -r '.tappaas.email' "$CONFIG_FILE")
+
+if [[ -z "$DOMAIN" || "$DOMAIN" == "null" || "$DOMAIN" == CHANGE* ]]; then
+    die "Domain not configured in configuration.json. Please set tappaas.domain to your actual domain."
 fi
 
-if [ -z "$DOMAIN" ] || [ "$DOMAIN" = "null" ] || [[ "$DOMAIN" == CHANGE* ]]; then
-    echo "Error: Domain not configured in configuration.json"
-    echo "Please set tappaas.domain to your actual domain"
-    exit 1
+if [[ -z "$EMAIL" || "$EMAIL" == "null" || "$EMAIL" == CHANGE* ]]; then
+    die "Email not configured in configuration.json. Please set tappaas.email for Let's Encrypt."
 fi
 
-if [ -z "$EMAIL" ] || [ "$EMAIL" = "null" ] || [[ "$EMAIL" == CHANGE* ]]; then
-    echo "Error: Email not configured in configuration.json"
-    echo "Please set tappaas.email to your actual email for Let's Encrypt"
-    exit 1
-fi
-
-echo "Domain: $DOMAIN"
-echo "Email: $EMAIL"
+debug "Domain: $DOMAIN"
+debug "Email: $EMAIL"
 
 # Check SSH access to firewall
-echo ""
-echo "Checking SSH access to firewall..."
+debug "Checking SSH access to firewall..."
 if ! ssh -o ConnectTimeout=5 -o BatchMode=yes root@"$FIREWALL_FQDN" echo "ok" >/dev/null 2>&1; then
-    echo "Error: Cannot connect to firewall via SSH"
-    echo "Please ensure SSH is enabled and keys are configured"
-    exit 1
+    die "Cannot connect to firewall via SSH. Please ensure SSH is enabled and keys are configured."
 fi
-echo "SSH access confirmed"
+debug "SSH access confirmed"
 
 # Step 1: Install os-caddy package
-echo ""
-echo "Step 1: Installing os-caddy package..."
-ssh root@"$FIREWALL_FQDN" "pkg install -y os-caddy" || {
-    echo "Warning: os-caddy may already be installed or pkg returned non-zero"
-}
+info "Step 1: Installing os-caddy package..."
+if ssh root@"$FIREWALL_FQDN" "/bin/sh -c 'pkg info os-caddy'" &>/dev/null; then
+    debug "  os-caddy already installed"
+else
+    if [[ "${OPT_DEBUG:-0}" -eq 1 ]]; then
+        ssh root@"$FIREWALL_FQDN" "/bin/sh -c 'pkg install -y os-caddy'" || {
+            warn "os-caddy installation failed or returned non-zero"
+        }
+    else
+        ssh root@"$FIREWALL_FQDN" "/bin/sh -c 'pkg install -y os-caddy'" 2>&1 | while IFS= read -r _; do printf "."; done || {
+            echo ""
+            warn "os-caddy installation failed or returned non-zero"
+        }
+        echo ""
+    fi
+fi
 
 # Step 2: Reconfigure OPNsense web GUI to port 8443 and disable HTTP redirect
-echo ""
-echo "Step 2: Reconfiguring OPNsense web GUI to port 8443 and disabling HTTP redirect..."
+info "Step 2: Reconfiguring OPNsense web GUI to port 8443..."
 # Write PHP script to temp file and execute (avoids shell quoting issues on BSD/csh)
 ssh root@"$FIREWALL_FQDN" 'cat > /tmp/set-webgui-port.php << '\''EOFPHP'\''
 <?php
@@ -85,26 +84,25 @@ EOFPHP
 php /tmp/set-webgui-port.php && rm /tmp/set-webgui-port.php'
 
 # Restart web GUI separately (connection may drop during restart)
-echo "Restarting web GUI..."
+debug "Restarting web GUI..."
 ssh root@"$FIREWALL_FQDN" 'configctl webgui restart' || {
-    echo "Warning: Could not restart web GUI (this may be expected if port changed)"
-    echo "Please verify manually at https://$FIREWALL_FQDN:8443"
+    warn "Could not restart web GUI (this may be expected if port changed)"
+    warn "Please verify manually at https://$FIREWALL_FQDN:8443"
 }
 
 # Step 3: Create firewall rules for HTTP/HTTPS using opnsense-firewall CLI
-echo ""
-echo "Step 3: Creating firewall rules for HTTP and HTTPS..."
+info "Step 3: Creating firewall rules for HTTP and HTTPS..."
 
 # Check if opnsense-firewall CLI is available
 OPNSENSE_FIREWALL="/home/tappaas/bin/opnsense-firewall"
-if [ ! -x "$OPNSENSE_FIREWALL" ]; then
+if [[ ! -x "$OPNSENSE_FIREWALL" ]]; then
     # Try to find it in the nix profile
     OPNSENSE_FIREWALL=$(command -v opnsense-firewall 2>/dev/null || true)
 fi
 
-if [ -x "$OPNSENSE_FIREWALL" ]; then
+if [[ -x "$OPNSENSE_FIREWALL" ]]; then
     # Create HTTP rule (port 80) on WAN interface
-    echo "Creating HTTP (port 80) rule on WAN..."
+    debug "Creating HTTP (port 80) rule on WAN..."
     "$OPNSENSE_FIREWALL" create-rule \
         --firewall "$FIREWALL_FQDN" \
         --no-ssl-verify \
@@ -114,10 +112,10 @@ if [ -x "$OPNSENSE_FIREWALL" ]; then
         --protocol tcp \
         --destination-port 80 \
         --log \
-        --no-apply || echo "Warning: HTTP rule creation failed or already exists"
+        --no-apply || warn "HTTP rule creation failed or already exists"
 
     # Create HTTPS rule (port 443) on WAN interface
-    echo "Creating HTTPS (port 443) rule on WAN..."
+    debug "Creating HTTPS (port 443) rule on WAN..."
     "$OPNSENSE_FIREWALL" create-rule \
         --firewall "$FIREWALL_FQDN" \
         --no-ssl-verify \
@@ -127,16 +125,15 @@ if [ -x "$OPNSENSE_FIREWALL" ]; then
         --protocol tcp \
         --destination-port 443 \
         --log \
-        --no-apply || echo "Warning: HTTPS rule creation failed or already exists"
+        --no-apply || warn "HTTPS rule creation failed or already exists"
 
     # Apply firewall changes
-    echo "Applying firewall changes..."
+    debug "Applying firewall changes..."
     "$OPNSENSE_FIREWALL" apply \
         --firewall "$FIREWALL_FQDN" \
-        --no-ssl-verify || echo "Warning: Could not apply firewall changes"
+        --no-ssl-verify || warn "Could not apply firewall changes"
 else
-    echo "Warning: opnsense-firewall CLI not found"
-    echo "Falling back to SSH/PHP method..."
+    warn "opnsense-firewall CLI not found, falling back to SSH/PHP method..."
 
     # Fallback: Create firewall rules using PHP on OPNsense
     ssh root@"$FIREWALL_FQDN" 'cat > /tmp/create-caddy-rules.php << '\''EOFPHP'\''
@@ -204,20 +201,19 @@ if ($changed) {
 }
 EOFPHP
 php /tmp/create-caddy-rules.php && rm /tmp/create-caddy-rules.php' || {
-        echo "Warning: Could not create firewall rules automatically"
-        echo "Please create HTTP (80) and HTTPS (443) rules manually in OPNsense"
+        warn "Could not create firewall rules automatically"
+        warn "Please create HTTP (80) and HTTPS (443) rules manually in OPNsense"
     }
 
     # Apply firewall filter rules
-    echo "Applying firewall filter rules..."
+    debug "Applying firewall filter rules..."
     ssh root@"$FIREWALL_FQDN" 'configctl filter reload' || {
-        echo "Warning: Could not reload filter rules"
+        warn "Could not reload filter rules"
     }
 fi
 
 # Step 4: Enable Caddy, set ACME email, and configure Auto HTTPS
-echo ""
-echo "Step 4: Enabling Caddy and configuring ACME settings..."
+info "Step 4: Enabling Caddy and configuring ACME settings..."
 
 # Use PHP to set Caddy plugin general settings in config.xml
 # Config path: caddy > general (fields: enabled, TlsEmail, TlsAutoHttps)
@@ -243,11 +239,11 @@ EOFPHP
 php /tmp/configure-caddy-general.php "'"$EMAIL"'" && rm /tmp/configure-caddy-general.php'
 
 # Reconfigure Caddy to apply settings
-echo "Applying Caddy configuration..."
+debug "Applying Caddy configuration..."
 ssh root@"$FIREWALL_FQDN" 'configctl caddy reload' || {
-    echo "Warning: Could not reload Caddy service"
+    warn "Could not reload Caddy service"
 }
 
 echo ""
-echo "Caddy setup completed successfully."
-echo "  OPNsense web UI: https://$FIREWALL_FQDN:8443"
+info "${GN}✓${CL} Caddy setup completed"
+info "  OPNsense web UI: https://$FIREWALL_FQDN:8443"

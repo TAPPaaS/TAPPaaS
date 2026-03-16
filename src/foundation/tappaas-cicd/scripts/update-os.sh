@@ -24,30 +24,8 @@ SCRIPT_NAME="$(basename "${BASH_SOURCE[0]}")"
 readonly SCRIPT_NAME
 readonly MGMT="mgmt"
 
-# Color definitions
-readonly YW=$'\033[33m'
-readonly RD=$'\033[01;31m'
-readonly GN=$'\033[1;92m'
-readonly DGN=$'\033[32m'
-readonly BL=$'\033[36m'
-readonly CL=$'\033[m'
-
-info() {
-    echo -e "${DGN}$*${CL}"
-}
-
-warn() {
-    echo -e "${YW}[WARN]${CL} $*"
-}
-
-error() {
-    echo -e "${RD}[ERROR]${CL} $*" >&2
-}
-
-die() {
-    error "$@"
-    exit 1
-}
+# shellcheck source=common-install-routines.sh
+. /home/tappaas/bin/common-install-routines.sh
 
 usage() {
     cat << EOF
@@ -201,7 +179,14 @@ update_nixos() {
 
     info "Using NixOS config: ${nix_config}"
     info "Running nixos-rebuild..."
-    nixos-rebuild --target-host "tappaas@${vm_ip}" --use-remote-sudo switch -I "nixos-config=${nix_config}"
+    if [[ "${OPT_DEBUG:-0}" -eq 1 ]]; then
+        nixos-rebuild --target-host "tappaas@${vm_ip}" --use-remote-sudo switch -I "nixos-config=${nix_config}"
+    else
+        nixos-rebuild --target-host "tappaas@${vm_ip}" --use-remote-sudo switch -I "nixos-config=${nix_config}" 2>&1 | while IFS= read -r _; do
+            printf "."
+        done
+        echo ""
+    fi
 
     info "Rebooting VM to apply configuration..."
     ssh "root@${node}.${MGMT}.internal" "qm reboot ${vmid}"
@@ -217,13 +202,28 @@ update_debian() {
     wait_for_cloud_init "${vm_ip}"
 
     info "Updating package lists..."
-    ssh "tappaas@${vm_ip}" "sudo apt-get update"
+    if [[ "${OPT_DEBUG:-0}" -eq 1 ]]; then
+        ssh "tappaas@${vm_ip}" "sudo apt-get update"
+    else
+        ssh "tappaas@${vm_ip}" "sudo apt-get update" 2>&1 | while IFS= read -r _; do printf "."; done
+        echo ""
+    fi
 
     info "Upgrading packages..."
-    ssh "tappaas@${vm_ip}" "sudo DEBIAN_FRONTEND=noninteractive apt-get upgrade -y"
+    if [[ "${OPT_DEBUG:-0}" -eq 1 ]]; then
+        ssh "tappaas@${vm_ip}" "sudo DEBIAN_FRONTEND=noninteractive apt-get upgrade -y"
+    else
+        ssh "tappaas@${vm_ip}" "sudo DEBIAN_FRONTEND=noninteractive apt-get upgrade -y" 2>&1 | while IFS= read -r _; do printf "."; done
+        echo ""
+    fi
 
     info "Installing/updating QEMU guest agent..."
-    ssh "tappaas@${vm_ip}" "sudo apt-get install -y qemu-guest-agent && sudo systemctl enable --now qemu-guest-agent"
+    if [[ "${OPT_DEBUG:-0}" -eq 1 ]]; then
+        ssh "tappaas@${vm_ip}" "sudo apt-get install -y qemu-guest-agent && sudo systemctl enable --now qemu-guest-agent"
+    else
+        ssh "tappaas@${vm_ip}" "sudo apt-get install -y qemu-guest-agent && sudo systemctl enable --now qemu-guest-agent" 2>&1 | while IFS= read -r _; do printf "."; done
+        echo ""
+    fi
 }
 
 # Fix DHCP hostname registration

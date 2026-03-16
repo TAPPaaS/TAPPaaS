@@ -22,14 +22,14 @@ ZONE0NAME="$(get_config_value 'zone0' 'mgmt')"
 HANODE="$(get_config_value 'HANode' 'NONE')"
 
 echo ""
-echo "=== Post-Install Configuration ==="
-echo "VM: ${VMNAME} (VMID: ${VMID})"
+info "${BOLD}Post-Install Configuration${CL}"
+info "  VM: ${VMNAME} (VMID: ${VMID})"
 
 echo ""
-echo "=== Installation Complete ==="
-echo "VM: ${VMNAME} (VMID: ${VMID})"
-echo "Node: ${NODE}"
-echo "Zone: ${ZONE0NAME}"
+info "${BOLD}Installation Complete${CL}"
+info "  VM: ${VMNAME} (VMID: ${VMID})"
+info "  Node: ${NODE}"
+info "  Zone: ${ZONE0NAME}"
 if [[ -n "${HANODE}" && "${HANODE}" != "NONE" ]]; then
-    echo "HA Node: ${HANODE}"
+    info "  HA Node: ${HANODE}"
 fi

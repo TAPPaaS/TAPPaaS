@@ -19,31 +19,26 @@
 #
 set -euo pipefail
 
-# Color definitions
-YW=$(echo "\033[33m")    # Yellow
-BL=$(echo "\033[36m")    # Cyan
-RD=$(echo "\033[01;31m") # Red
-BGN=$(echo "\033[4;92m") # Bright Green with underline
-GN=$(echo "\033[1;92m")  # Green with bold
-DGN=$(echo "\033[32m")   # Green
-CL=$(echo "\033[m")      # Clear
-# Logging functions
-info() {
-  echo -e "${DGN}$*${CL}"
-}
-
-warn() {
-  echo -e "${YW}[WARN]${CL} $*"
-}
-
-error() {
-  echo -e "${RD}[ERROR]${CL} $*" >&2
-}
-
-die() {
-  error "$*"
-  exit 1
-}
+# Source common-install-routines.sh if not already loaded (provides info, warn, error, die, colors)
+if ! declare -F info &>/dev/null; then
+    if [[ -f /home/tappaas/bin/common-install-routines.sh ]]; then
+        . /home/tappaas/bin/common-install-routines.sh
+    else
+        # Minimal fallback for bootstrap before common-install-routines.sh exists
+        : "${YW:=$'\033[33m'}"
+        : "${BL:=$'\033[36m'}"
+        : "${RD:=$'\033[01;31m'}"
+        : "${BGN:=$'\033[4;92m'}"
+        : "${GN:=$'\033[1;92m'}"
+        : "${DGN:=$'\033[32m'}"
+        : "${CL:=$'\033[m'}"
+        info()  { echo -e "${DGN}[Info]${CL} $*"; }
+        debug() { :; }  # no-op unless TAPPAAS_DEBUG is set
+        warn()  { echo -e "${YW}[Warning]${CL} $*"; }
+        error() { echo -e "${RD}[Error]${CL} $*" >&2; }
+        die()   { error "$*"; exit 1; }
+    fi
+fi
 
 # Check for required commands
 command -v jq >/dev/null 2>&1 || die "jq is required but not installed."
@@ -122,12 +117,11 @@ MGMT="mgmt"
 mkdir -p "$CONFIG_DIR"
 
 info "Creating TAPPaaS configuration..."
-info "  Upstream Git: ${BGN}${UPSTREAM_GIT}${CL}"
-info "  Branch: ${BGN}${BRANCH}${CL}"
-info "  Domain: ${BGN}${DOMAIN}${CL}"
-info "  Email: ${BGN}${EMAIL}${CL}"
-info "  Update Schedule: ${BGN}${UPDATE_SCHEDULE}, ${UPDATE_WEEKDAY}, hour ${UPDATE_HOUR}${CL}"
-echo ""
+debug "  Upstream Git: ${BGN}${UPSTREAM_GIT}${CL}"
+debug "  Branch: ${BGN}${BRANCH}${CL}"
+debug "  Domain: ${BGN}${DOMAIN}${CL}"
+debug "  Email: ${BGN}${EMAIL}${CL}"
+debug "  Update Schedule: ${BGN}${UPDATE_SCHEDULE}, ${UPDATE_WEEKDAY}, hour ${UPDATE_HOUR}${CL}"
 
 # Get TAPPaaS version from git
 TAPPAAS_VERSION="0.5"
@@ -139,7 +133,7 @@ if [ -f "/home/tappaas/TAPPaaS/.git/HEAD" ]; then
   fi
   cd - >/dev/null
 fi
-info "TAPPaaS Version: ${BGN}${TAPPAAS_VERSION}${CL}"
+debug "TAPPaaS Version: ${BGN}${TAPPAAS_VERSION}${CL}"
 
 # Discover Proxmox cluster nodes
 info "Discovering Proxmox cluster nodes..."
@@ -160,7 +154,7 @@ fi
 
 # If pvecm failed, try pvesh with JSON format (more reliable)
 if [ -z "$CLUSTER_NODES" ]; then
-  info "  Trying pvesh to list nodes..."
+  debug "  Trying pvesh to list nodes..."
   CLUSTER_NODES=$(ssh "root@${PRIMARY_NODE}" "pvesh get /nodes --output-format=json 2>/dev/null | jq -r '.[].node' | grep -v '^null$'" 2>/dev/null || true)
 fi
 
@@ -170,7 +164,7 @@ if [ -z "$CLUSTER_NODES" ]; then
   CLUSTER_NODES="tappaas1"
 fi
 
-info "  Found nodes: ${BGN}${CLUSTER_NODES}${CL}"
+info "  Found nodes: ${CLUSTER_NODES}"
 
 # Get IP addresses for each node
 for node in $CLUSTER_NODES; do
@@ -195,15 +189,14 @@ for node in $CLUSTER_NODES; do
   fi
 
   NODE_IPS+=("$NODE_IP")
-  info "  ${node}: ${BGN}${NODE_IP}${CL}"
+  debug "  ${node}: ${NODE_IP}"
 done
 
 NODE_COUNT=${#NODES[@]}
-info "Total nodes: ${BGN}${NODE_COUNT}${CL}"
-echo ""
+info "  Total nodes: ${NODE_COUNT}"
 
 # Build the tappaas-nodes array
-info "Building node configuration..."
+debug "Building node configuration..."
 NODES_JSON="["
 FIRST_NODE=true
 
@@ -227,7 +220,6 @@ NODEEOF
 done
 
 NODES_JSON+="]"
-echo ""
 
 # Build the complete configuration JSON
 info "Generating configuration.json..."
@@ -239,7 +231,7 @@ else
   SCHEDULE_JSON="[\"${UPDATE_SCHEDULE}\", \"${UPDATE_WEEKDAY}\", ${UPDATE_HOUR}]"
 fi
 
-info "Global updateSchedule: ${BGN}${SCHEDULE_JSON}${CL}"
+debug "Global updateSchedule: ${SCHEDULE_JSON}"
 
 CONFIG_JSON=$(cat << EOF
 {
@@ -275,16 +267,14 @@ fi
 # Pretty-print and save the configuration
 echo "$CONFIG_JSON" | jq '.' > "$CONFIG_FILE"
 
-info ""
-info "${GN}Configuration saved to:${CL} ${BGN}${CONFIG_FILE}${CL}"
 echo ""
+info "${GN}Configuration saved to:${CL} ${BGN}${CONFIG_FILE}${CL}"
 
 # Display summary
-echo -e "${BL}=== Configuration Summary ===${CL}"
-echo "$CONFIG_JSON" | jq '.'
+info "Configuration Summary:"
+debug "$(echo "$CONFIG_JSON" | jq '.')"
 echo ""
-echo -e "${GN}Configuration created successfully!${CL}"
-echo ""
-echo "Next steps:"
-echo "  1. Review the configuration: cat ${CONFIG_FILE}"
-echo "  2. The configuration will be distributed to nodes during module installation/update"
+info "${GN}✓${CL} Configuration created successfully"
+info "Next steps:"
+info "  1. Review the configuration: cat ${CONFIG_FILE}"
+info "  2. The configuration will be distributed to nodes during module installation/update"

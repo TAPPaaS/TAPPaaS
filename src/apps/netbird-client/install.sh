@@ -13,4 +13,5 @@ ssh "root@${VMNAME}.${ZONENAME}.internal" "apt update && apt upgrade -y && apt i
 
 /home/tappaas/bin/update-HA.sh $1
 
-echo -e "\nVM installation completed successfully."
+echo ""
+info "${GN}✓${CL} VM installation completed successfully."

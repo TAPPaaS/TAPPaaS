@@ -6,10 +6,15 @@
 # When firewallType is "NONE" (no OPNsense deployed), this script skips all
 # OPNsense-specific operations and prints a reminder.
 #
+# Note: Connectivity checks (ping, SSH) are handled by update-module.sh
+# via the pre-update test-module.sh call before this script runs.
+#
 # Note: OPNsense presents a menu when logging in interactively (option 8 = shell).
 # When SSH is used with a command argument, it bypasses the menu and runs directly.
 
 set -euo pipefail
+
+. /home/tappaas/bin/common-install-routines.sh
 
 readonly CONFIG_DIR="/home/tappaas/config"
 readonly FIREWALL_JSON="${CONFIG_DIR}/firewall.json"
@@ -23,54 +28,46 @@ if [[ -f "${FIREWALL_JSON}" ]]; then
 fi
 
 if [[ "${FIREWALL_TYPE}" == "NONE" ]]; then
-    echo -e "\033[33m[WARN]\033[m firewallType=NONE — OPNsense is not managed by TAPPaaS."
-    echo -e "\033[33m[WARN]\033[m Skipping firewall update. Manage your firewall manually."
+    warn "firewallType=NONE — OPNsense is not managed by TAPPaaS."
+    warn "Skipping firewall update. Manage your firewall manually."
     exit 0
 fi
 
+# ── Apply zone configuration ────────────────────────────────────────
+
+info "Applying zone configuration..."
+/home/tappaas/bin/zone-manager --no-ssl-verify --zones-file /home/tappaas/config/zones.json --execute
+
 # ── OPNsense update ─────────────────────────────────────────────────
 
-echo "Updating OPNsense firewall..."
-
-# Apply zone configuration if the firewall is reachable
-echo "Applying zone configuration..."
-if ping -c 1 -W 1 "$FIREWALL_FQDN" >/dev/null 2>&1; then
-    /home/tappaas/bin/zone-manager --no-ssl-verify --zones-file /home/tappaas/config/zones.json --execute
-
-    # Check SSH access
-    echo "Checking SSH access to firewall..."
-    if ! ssh -o ConnectTimeout=5 -o BatchMode=yes root@"$FIREWALL_FQDN" echo "ok" >/dev/null 2>&1; then
-        echo "Error: Cannot connect to firewall via SSH"
-        exit 1
-    fi
-    echo "SSH access confirmed"
-
-    # Update OPNsense using the proper CLI tool
-    # opnsense-update requires specific flags to actually perform updates:
-    #   -b  Update base system
-    #   -k  Update kernel
-    #   -p  Update packages
-    echo "Updating OPNsense (base, kernel, and packages)..."
+info "Updating OPNsense (base, kernel, and packages)..."
+if [[ "${OPT_DEBUG:-0}" -eq 1 ]]; then
     ssh root@"$FIREWALL_FQDN" "opnsense-update -bkp" || {
-        echo "Warning: OPNsense update returned non-zero exit code"
+        warn "OPNsense update returned non-zero exit code"
     }
-
-    # Check if a reboot is required by comparing running vs installed kernel
-    echo "Checking if reboot is required..."
-    RUNNING_KERNEL=$(ssh root@"$FIREWALL_FQDN" "uname -r")
-    INSTALLED_KERNEL=$(ssh root@"$FIREWALL_FQDN" "freebsd-version -k")
-
-    if [ "$RUNNING_KERNEL" != "$INSTALLED_KERNEL" ]; then
-        echo "Warning: Firewall reboot is required to complete the update"
-        echo "  Running kernel:   $RUNNING_KERNEL"
-        echo "  Installed kernel: $INSTALLED_KERNEL"
-        echo "Please schedule a maintenance window to reboot the firewall"
-    else
-        echo "No reboot required"
-    fi
-
-    echo "Firewall update completed"
-
 else
-    echo "Warning: Zones not applied because firewall $FIREWALL_FQDN is unreachable."
+    ssh root@"$FIREWALL_FQDN" "opnsense-update -bkp" 2>&1 | while IFS= read -r _; do
+        printf "."
+    done || {
+        echo ""
+        warn "OPNsense update returned non-zero exit code"
+    }
+    echo ""
 fi
+
+# ── Check if reboot is required ─────────────────────────────────────
+
+info "Checking if reboot is required..."
+RUNNING_KERNEL=$(ssh root@"$FIREWALL_FQDN" "uname -r")
+INSTALLED_KERNEL=$(ssh root@"$FIREWALL_FQDN" "freebsd-version -k")
+
+if [[ "$RUNNING_KERNEL" != "$INSTALLED_KERNEL" ]]; then
+    warn "Firewall reboot is required to complete the update"
+    warn "  Running kernel:   $RUNNING_KERNEL"
+    warn "  Installed kernel: $INSTALLED_KERNEL"
+    warn "Please schedule a maintenance window to reboot the firewall"
+else
+    info "No reboot required"
+fi
+
+info "${GN}✓${CL} Firewall update completed"

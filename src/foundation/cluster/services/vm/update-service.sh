@@ -10,5 +10,7 @@
 
 set -euo pipefail
 
-echo "cluster:vm update-service called for module: ${1:-unknown} (no action needed)"
+. /home/tappaas/bin/common-install-routines.sh
+
+debug "cluster:vm update-service called for module: ${1:-unknown} (no action needed)"
 exit 0

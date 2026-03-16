@@ -5,27 +5,35 @@
 # Strict mode: exit on error, undefined vars, pipe failures
 set -euo pipefail
 
+# Minimal logging before common-install-routines.sh is available
+_info()  { echo -e "\033[32m[Info]\033[m $*"; }
+_warn()  { echo -e "\033[33m[Warning]\033[m $*"; }
+_error() { echo -e "\033[01;31m[Error]\033[m $*" >&2; }
+
 # check that hostname is tappaas-cicd
 if [ "$(hostname)" != "tappaas-cicd" ]; then
-  echo "This script must be run on the TAPPaaS-CICD host (hostname tappaas-cicd)."
+  _error "This script must be run on the TAPPaaS-CICD host (hostname tappaas-cicd)."
   exit 1
 fi
 
 #
-# creatae a fully qualified node hostname for tappaas1
+# create a fully qualified node hostname for tappaas1
 MGMTVLAN="mgmt"
 NODE1_FQDN="tappaas1.$MGMTVLAN.internal"
 export FIREWALL_FQDN="firewall.$MGMTVLAN.internal"  # Used by sourced scripts
 
 # copy the public keys to the root account of every proxmox host
+echo ""
+_info "Installing SSH keys on Proxmox nodes..."
 while read -r node; do
-  echo -e "\nInstalling SSH public key on proxmox node: $node"
   NODE_FQDN="$node.$MGMTVLAN.internal"
-  ssh-copy-id -i /home/tappaas/.ssh/id_ed25519.pub root@"$NODE_FQDN" < /dev/null || echo "SSH key copy to $node failed or key already installed."
+  printf "  %s " "$node"
+  ssh-copy-id -i /home/tappaas/.ssh/id_ed25519.pub root@"$NODE_FQDN" < /dev/null 2>&1 | while IFS= read -r _; do printf "."; done || echo " (failed or already installed)"
   # also make the key available for the tappaas script that configure cloud-init on the vms
-  ssh -n root@"$NODE_FQDN" "mkdir -p /root/tappaas"
-  scp /home/tappaas/.ssh/id_ed25519.pub root@"$NODE_FQDN":/root/tappaas/tappaas-cicd.pub < /dev/null
-  scp /home/tappaas/.ssh/id_ed25519 root@"$NODE_FQDN":/root/tappaas/tappaas-cicd.key < /dev/null
+  ssh -n root@"$NODE_FQDN" "mkdir -p /root/tappaas" 2>/dev/null
+  scp /home/tappaas/.ssh/id_ed25519.pub root@"$NODE_FQDN":/root/tappaas/tappaas-cicd.pub < /dev/null 2>/dev/null
+  scp /home/tappaas/.ssh/id_ed25519 root@"$NODE_FQDN":/root/tappaas/tappaas-cicd.key < /dev/null 2>/dev/null
+  echo " done"
 done < <(ssh -n root@"$NODE1_FQDN" pvesh get /cluster/resources --type node --output-format json | jq --raw-output ".[].node" )
 
 # create tappaas binary director and config directory
@@ -44,7 +52,7 @@ for rcfile in /home/tappaas/.profile /home/tappaas/.bashrc; do
     if ! grep -q '/home/tappaas/bin' "$rcfile" 2>/dev/null; then
         echo -e '\n# TAPPaaS bin directory' >> "$rcfile"
         echo "$TAPPAAS_PATH_EXPORT" >> "$rcfile"
-        echo "Added /home/tappaas/bin to PATH in $rcfile"
+        _info "Added /home/tappaas/bin to PATH in $rcfile"
     fi
 done
 
@@ -52,9 +60,9 @@ done
 if [ -f ./scripts/create-configuration.sh ]; then
   . ./scripts/create-configuration.sh
 else
-  echo "Error: ./scripts/create-configuration.sh not found"
+  _error "./scripts/create-configuration.sh not found"
   exit 1
-fi 
+fi
 
 # copy the potentially modified configuration.json and zones.json files from tappaas1 (potentially modified during bootstrap)
 # Only copy specific files — avoid pulling unrelated JSONs (e.g., module-fields.json)
@@ -62,11 +70,12 @@ scp root@"$NODE1_FQDN":/root/tappaas/configuration.json /home/tappaas/config/ 2>
 scp root@"$NODE1_FQDN":/root/tappaas/zones.json /home/tappaas/config/ 2>/dev/null || true
 
 # --- Install scripts as symlinks into /home/tappaas/bin/ ---
-echo -e "\nInstalling scripts to /home/tappaas/bin/..."
+echo ""
+_info "Installing scripts to /home/tappaas/bin/..."
 cd
-cd TAPPaaS || { echo "TAPPaaS directory not found!"; exit 1; }
+cd TAPPaaS || { _error "TAPPaaS directory not found!"; exit 1; }
 # get to the right directory
-cd src/foundation/tappaas-cicd || { echo "TAPPaaS-CICD directory not found!"; exit 1; }
+cd src/foundation/tappaas-cicd || { _error "TAPPaaS-CICD directory not found!"; exit 1; }
 for script in scripts/*.sh; do
   if [ -f "$script" ]; then
     script_name=$(basename "$script")
@@ -83,17 +92,18 @@ for f in /home/tappaas/bin/*.sh; do
 done
 
 # Install the cluster and firewall jsons
-cd ../cluster || { echo "Cluster directory not found!"; exit 1; }
+cd ../cluster || { _error "Cluster directory not found!"; exit 1; }
 /home/tappaas/bin/copy-update-json.sh cluster
-cd ../templates || { echo "Templates directory not found!"; exit 1; }
+cd ../templates || { _error "Templates directory not found!"; exit 1; }
 /home/tappaas/bin/copy-update-json.sh templates
-cd ../firewall || { echo "Firewall directory not found!"; exit 1; }
+cd ../firewall || { _error "Firewall directory not found!"; exit 1; }
 FIREWALL_AVAILABLE=true
 if ! ping -c 1 -W 2 "$FIREWALL_FQDN" >/dev/null 2>&1; then
     FIREWALL_AVAILABLE=false
-    echo -e "\n\033[33m[WARN]\033[m OPNsense firewall ($FIREWALL_FQDN) is not reachable."
-    echo -e "\033[33m[WARN]\033[m Deploying firewall module with firewallType=NONE."
-    echo -e "\033[33m[WARN]\033[m You will need to configure reverse proxy and firewall rules manually.\n"
+    echo ""
+    _warn "OPNsense firewall ($FIREWALL_FQDN) is not reachable."
+    _warn "Deploying firewall module with firewallType=NONE."
+    _warn "You will need to configure reverse proxy and firewall rules manually."
 fi
 /home/tappaas/bin/copy-update-json.sh firewall
 if [[ "$FIREWALL_AVAILABLE" == "false" ]]; then
@@ -102,26 +112,51 @@ if [[ "$FIREWALL_AVAILABLE" == "false" ]]; then
     jq '.dependsOn = [] | .firewallType = "NONE"' /home/tappaas/config/firewall.json > "$tmp_fw" \
         && mv "$tmp_fw" /home/tappaas/config/firewall.json
 fi
-cd ../tappaas-cicd || { echo "TAPPaaS-CICD directory not found!"; exit 1; }
+cd ../tappaas-cicd || { _error "TAPPaaS-CICD directory not found!"; exit 1; }
 /home/tappaas/bin/copy-update-json.sh tappaas-cicd
 
 # run the full tappaas-cicd update scripts with all dependencies and checks
 /home/tappaas/bin/update-module.sh tappaas-cicd
 /home/tappaas/bin/update-module.sh cluster
-/home/tappaas/bin/update-module.sh firewall
+
+# Source common-install-routines.sh to replace the minimal _info/_warn/_error with full versions
+. /home/tappaas/bin/common-install-routines.sh
 
 if [[ "$FIREWALL_AVAILABLE" == "true" ]]; then
+    # Install and enable QEMU guest agent on OPNsense (FreeBSD)
+    # This allows Proxmox to communicate with the firewall VM via the guest agent
+    echo ""
+    info "Installing QEMU guest agent on OPNsense..."
+    if ssh root@"$FIREWALL_FQDN" "/bin/sh -c 'pkg info os-qemu-guest-agent'" &>/dev/null; then
+        info "  QEMU guest agent already installed"
+    else
+        ssh root@"$FIREWALL_FQDN" "/bin/sh -c 'pkg install -y os-qemu-guest-agent'" || {
+            warn "QEMU guest agent installation failed. Install manually via OPNsense UI."
+        }
+    fi
+    info "Enabling QEMU guest agent service..."
+    ssh root@"$FIREWALL_FQDN" "/bin/sh -c 'sysrc qemu_guest_agent_enable=YES && service qemu-guest-agent start'" 2>/dev/null || {
+        warn "QEMU guest agent service could not be started. Enable manually in OPNsense."
+    }
+
+    # Update the firewall module
+    /home/tappaas/bin/update-module.sh firewall
+
     # Setup Caddy reverse proxy on the firewall
     # (needs to be after update.sh as it relies on opnsense-controller to be installed)
-    echo -e "\nSetting up Caddy reverse proxy..."
+    echo ""
+    info "Setting up Caddy reverse proxy..."
     chmod +x /home/tappaas/TAPPaaS/src/foundation/tappaas-cicd/scripts/setup-caddy.sh
     /home/tappaas/TAPPaaS/src/foundation/tappaas-cicd/scripts/setup-caddy.sh || {
-        echo "Warning: Caddy setup encountered issues. Please review and complete manually."
+        warn "Caddy setup encountered issues. Please review and complete manually."
     }
 else
-    echo -e "\n\033[33m[WARN]\033[m Skipping Caddy reverse proxy setup (no OPNsense firewall)."
-    echo -e "\033[33m[WARN]\033[m When modules with firewall:proxy dependency are installed,"
-    echo -e "\033[33m[WARN]\033[m you will see manual configuration instructions for your firewall.\n"
+    echo ""
+    warn "Skipping firewall update (no OPNsense firewall)."
+    warn "Skipping Caddy reverse proxy setup (no OPNsense firewall)."
+    warn "When modules with firewall:proxy dependency are installed,"
+    warn "you will see manual configuration instructions for your firewall."
 fi
 
-echo -e "\nTAPPaaS-CICD installation completed successfully."
+echo ""
+info "${GN}✓${CL} TAPPaaS-CICD installation completed successfully."

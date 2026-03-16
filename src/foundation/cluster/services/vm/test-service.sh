@@ -41,6 +41,13 @@ MGMT="mgmt"
 
 VM_HOST="${VMNAME}.${ZONE0NAME}.internal"
 
+# Firewall VM only supports root access (no tappaas user)
+if [[ "${VMNAME}" == "firewall" ]]; then
+    SSH_USER="root"
+else
+    SSH_USER="tappaas"
+fi
+
 readonly SSH_OPTS="-o ConnectTimeout=10 -o StrictHostKeyChecking=accept-new -o UserKnownHostsFile=/dev/null -o LogLevel=ERROR -o BatchMode=yes"
 
 DEEP="${TAPPAAS_TEST_DEEP:-0}"
@@ -94,10 +101,10 @@ fi
 
 info "  Check 3: SSH connectivity"
 # shellcheck disable=SC2086
-if ssh ${SSH_OPTS} "tappaas@${VM_HOST}" "exit 0" &>/dev/null; then
+if ssh ${SSH_OPTS} "${SSH_USER}@${VM_HOST}" "exit 0" &>/dev/null; then
     pass "SSH connection successful"
 else
-    fail "SSH connection failed to tappaas@${VM_HOST}"
+    fail "SSH connection failed to ${SSH_USER}@${VM_HOST}"
     info "  Results: ${GN}${PASS} passed${CL}, ${RD}${FAIL} failed${CL}"
     exit 2
 fi
@@ -107,10 +114,11 @@ fi
 if [[ "${DEEP}" -eq 1 ]]; then
 
     # Test 4: Disk space
+    # Use POSIX-compatible df (FreeBSD/OPNsense lacks GNU --output=pcent)
     info "  Check 4: Root filesystem usage"
     # shellcheck disable=SC2086
-    disk_pct=$(ssh ${SSH_OPTS} "tappaas@${VM_HOST}" \
-        "df --output=pcent / 2>/dev/null | tail -1 | tr -d ' %'" 2>/dev/null) || true
+    disk_pct=$(ssh ${SSH_OPTS} "${SSH_USER}@${VM_HOST}" \
+        "df / | tail -1 | awk '{gsub(/%/,\"\",\$5); print \$5}'" 2>/dev/null) || true
     if [[ -n "${disk_pct}" && "${disk_pct}" -lt 95 ]]; then
         pass "Disk usage at ${disk_pct}% (below 95%)"
     else
@@ -118,10 +126,17 @@ if [[ "${DEEP}" -eq 1 ]]; then
     fi
 
     # Test 5: Available memory
+    # FreeBSD/OPNsense has no /proc/meminfo; use sysctl for free+inactive pages
     info "  Check 5: Available memory"
     # shellcheck disable=SC2086
-    mem_avail_mb=$(ssh ${SSH_OPTS} "tappaas@${VM_HOST}" \
-        "awk '/MemAvailable/ {printf \"%d\", \$2/1024}' /proc/meminfo" 2>/dev/null) || true
+    if [[ "${VMNAME}" == "firewall" ]]; then
+        # OPNsense default shell is opnsense-shell; must invoke /bin/sh explicitly
+        mem_avail_mb=$(ssh ${SSH_OPTS} "${SSH_USER}@${VM_HOST}" \
+            "/bin/sh -c 'expr \( \$(sysctl -n vm.stats.vm.v_free_count) + \$(sysctl -n vm.stats.vm.v_inactive_count) \) \* \$(sysctl -n hw.pagesize) / 1048576'" 2>/dev/null) || true
+    else
+        mem_avail_mb=$(ssh ${SSH_OPTS} "${SSH_USER}@${VM_HOST}" \
+            "awk '/MemAvailable/ {printf \"%d\", \$2/1024}' /proc/meminfo" 2>/dev/null) || true
+    fi
     if [[ -n "${mem_avail_mb}" && "${mem_avail_mb}" -gt 50 ]]; then
         pass "Available memory: ${mem_avail_mb}MB"
     else
