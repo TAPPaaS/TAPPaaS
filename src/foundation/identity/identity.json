@@ -17,6 +17,7 @@
   "HANode": "tappaas2",
   "bridge0": "lan",
   "zone0": "srv",
+  "proxyPort": 9000,
   "dependsOn": [
     "cluster:vm",
     "cluster:ha",
