@@ -431,9 +431,9 @@ EOF
     "d /var/backup/redis 0700 redis-authentik redis-authentik -"
     "d /var/backup/authentik-env 0700 root root -"
     "d /var/lib/authentik 0755 root root -"
-    "d /var/lib/authentik/media 0755 root root -"
-    "d /var/lib/authentik/templates 0755 root root -"
-    "d /var/lib/authentik/certs 0755 root root -"
+    "d /var/lib/authentik/media 0755 1000 1000 -"
+    "d /var/lib/authentik/templates 0755 1000 1000 -"
+    "d /var/lib/authentik/certs 0755 1000 1000 -"
   ];
 
   # ============================================================================
