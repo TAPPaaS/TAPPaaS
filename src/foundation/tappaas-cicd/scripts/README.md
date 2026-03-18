@@ -112,46 +112,6 @@ create-configuration.sh github.com/TAPPaaS/TAPPaaS main mytappaas.dev admin@myta
 
 ---
 
-### install-vm.sh
-
-Creates a VM on Proxmox using a module's JSON configuration. This is a library script meant to be sourced by module install scripts.
-
-**Usage:** Source this file in module install scripts:
-```bash
-. /home/tappaas/bin/install-vm.sh
-```
-
-**What it does:**
-1. Sources `copy-update-json.sh` to copy the module JSON to config
-2. Sources `common-install-routines.sh` to load config functions
-3. Validates the JSON configuration
-4. Copies the JSON to the target Proxmox node
-5. Calls `Create-TAPPaaS-VM.sh` on the node to create the VM
-6. Cleans up the temporary JSON file on the node
-
-**Exported variables after sourcing:**
-- `VMNAME` - VM name from configuration
-- `VMID` - VM ID from configuration
-- `NODE` - Proxmox node where VM is created
-- `ZONE0NAME` - Primary network zone
-
-**Example module install.sh:**
-```bash
-#!/usr/bin/env bash
-set -euo pipefail
-
-# Create the VM
-. /home/tappaas/bin/install-vm.sh
-
-# Get additional config values
-IMAGE_TYPE="$(get_config_value 'imageType' 'clone')"
-
-# Run post-install steps
-/home/tappaas/bin/update-os.sh "${VMNAME}" "${VMID}" "${NODE}"
-```
-
----
-
 ### update-os.sh
 
 Updates a VM's operating system based on its type (NixOS or Debian/Ubuntu).
@@ -236,53 +196,6 @@ update-cron.sh
 ```
 
 **Why hourly?** Running hourly ensures the scheduled hour will be matched. The `update-tappaas` script only performs updates when the current hour matches the global `updateSchedule` hour.
-
----
-
-### update-HA.sh
-
-Manages Proxmox High Availability (HA) and ZFS replication for a TAPPaaS module based on its JSON configuration.
-
-**Usage:**
-```bash
-update-HA.sh <module-name>
-```
-
-**What it does:**
-Based on the module's `HANode` field in `<module>.json`:
-
-1. **If HANode is "NONE" or not present:**
-   - Removes VM from any HA group
-   - Deletes any existing replication jobs
-
-2. **If HANode is set to a valid node (e.g., "tappaas2"):**
-   - Validates the HA node is reachable
-   - Verifies storage exists on both nodes
-   - Adds VM to HA resources with node-affinity rule
-   - Sets up ZFS replication using `replicationSchedule` (default: `*/15`)
-
-**JSON fields used:**
-| Field | Description | Default |
-|-------|-------------|---------|
-| `vmid` | VM ID (required) | - |
-| `node` | Primary node | `tappaas1` |
-| `HANode` | Secondary node for HA | `NONE` |
-| `replicationSchedule` | Cron-style replication interval | `*/15` |
-| `storage` | ZFS storage pool | `tanka1` |
-
-**Example:**
-```bash
-# Configure HA for nextcloud module
-update-HA.sh nextcloud
-
-# After removing HANode from JSON, remove HA config
-update-HA.sh nextcloud
-```
-
-**Requirements:**
-- SSH access to all Proxmox nodes as root
-- Same storage pool must exist on both primary and HA nodes
-- Proxmox HA services must be enabled (pve-ha-lrm, pve-ha-crm, corosync)
 
 ---
 
@@ -869,7 +782,6 @@ scripts/
 ├── inspect-cluster.sh           # Compare running VMs against module configs
 ├── inspect-vm.sh                # 3-column config/git/actual VM comparison
 ├── install-module.sh            # Install a module with dependency validation
-├── install-vm.sh                # VM creation library (sourced by install.sh)
 ├── migrate-node.sh              # Evacuate or return all VMs on a node
 ├── migrate-vm.sh                # Migrate VMs between nodes (live or offline)
 ├── repository.sh                # Manage module repositories (add/remove/modify/list)
@@ -879,7 +791,6 @@ scripts/
 ├── test-config.sh               # Validate installation
 ├── test-module.sh               # Test a module with dependency-recursive service testing
 ├── update-cron.sh               # Set up hourly update cron job
-├── update-HA.sh                 # Manage HA and replication for modules
 ├── update-module.sh             # Update a module with snapshot, testing, and rollback
 └── update-os.sh                 # OS-specific update (NixOS/Debian)
 ```
