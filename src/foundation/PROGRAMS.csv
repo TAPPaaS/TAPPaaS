@@ -1,7 +1,7 @@
 Program,Install Location,Source Path,Type
 # ==========================================================================================
 # TAPPaaS Foundation Layer - Executable Programs and Scripts
-# Generated: 2026-02-25
+# Generated: 2026-03-18
 # ==========================================================================================
 
 # ------------------------------------------------------------------------------------------
@@ -11,8 +11,8 @@ opnsense-controller,/home/tappaas/bin/,tappaas-cicd/opnsense-controller/src/opns
 zone-manager,/home/tappaas/bin/,tappaas-cicd/opnsense-controller/src/opnsense_controller/zone_manager.py,Python CLI
 dns-manager,/home/tappaas/bin/,tappaas-cicd/opnsense-controller/src/opnsense_controller/dns_manager_cli.py,Python CLI
 opnsense-firewall,/home/tappaas/bin/,tappaas-cicd/opnsense-controller/src/opnsense_controller/firewall_cli.py,Python CLI
+caddy-manager,/home/tappaas/bin/,tappaas-cicd/opnsense-controller/src/opnsense_controller/caddy_cli.py,Python CLI
 update-tappaas,/home/tappaas/bin/,tappaas-cicd/update-tappaas/src/update_tappaas/main.py,Python CLI
-update-node,/home/tappaas/bin/,tappaas-cicd/update-tappaas/src/update_tappaas/update_node.py,Python CLI
 
 # ------------------------------------------------------------------------------------------
 # Shell Scripts in /home/tappaas/bin/ (symlinks to tappaas-cicd/scripts/)
@@ -28,6 +28,14 @@ resize-disk.sh,/home/tappaas/bin/,tappaas-cicd/scripts/resize-disk.sh,Shell
 test-config.sh,/home/tappaas/bin/,tappaas-cicd/scripts/test-config.sh,Shell
 install-module.sh,/home/tappaas/bin/,tappaas-cicd/scripts/install-module.sh,Shell
 update-module.sh,/home/tappaas/bin/,tappaas-cicd/scripts/update-module.sh,Shell
+delete-module.sh,/home/tappaas/bin/,tappaas-cicd/scripts/delete-module.sh,Shell
+test-module.sh,/home/tappaas/bin/,tappaas-cicd/scripts/test-module.sh,Shell
+repository.sh,/home/tappaas/bin/,tappaas-cicd/scripts/repository.sh,Shell
+inspect-cluster.sh,/home/tappaas/bin/,tappaas-cicd/scripts/inspect-cluster.sh,Shell
+inspect-vm.sh,/home/tappaas/bin/,tappaas-cicd/scripts/inspect-vm.sh,Shell
+migrate-node.sh,/home/tappaas/bin/,tappaas-cicd/scripts/migrate-node.sh,Shell
+migrate-vm.sh,/home/tappaas/bin/,tappaas-cicd/scripts/migrate-vm.sh,Shell
+snapshot-vm.sh,/home/tappaas/bin/,tappaas-cicd/scripts/snapshot-vm.sh,Shell
 
 # ------------------------------------------------------------------------------------------
 # Scripts on Proxmox Nodes (/root/tappaas/)
@@ -43,7 +51,7 @@ update.sh (firewall),Called by update-module.sh,firewall/update.sh,Shell
 install1.sh (tappaas-cicd),Manual (on tappaas-cicd),tappaas-cicd/install1.sh,Shell
 install2.sh (tappaas-cicd),Called by install1.sh,tappaas-cicd/install2.sh,Shell
 pre-update.sh (tappaas-cicd),Called by update-module.sh,tappaas-cicd/pre-update.sh,Shell
-update.sh (tappaas-cicd),Called by update-node,tappaas-cicd/update.sh,Shell
+update.sh (tappaas-cicd),Called by update-module.sh,tappaas-cicd/update.sh,Shell
 test.sh (tappaas-cicd),Manual/CI,tappaas-cicd/test.sh,Shell
 install.sh (backup),Called by install-module.sh,backup/install.sh,Shell
 update.sh (backup),Called by update-module.sh,backup/update.sh,Shell
@@ -53,30 +61,46 @@ install.sh (identity),Called by install-module.sh,identity/install.sh,Shell
 update.sh (identity),Called by update-module.sh,identity/update.sh,Shell
 
 # ------------------------------------------------------------------------------------------
-# Service Scripts (called by install-module.sh / update-module.sh per service)
+# Service Scripts (called by install/update/delete/test-module.sh per service)
 # ------------------------------------------------------------------------------------------
 install-service.sh (cluster/vm),Called by install-module.sh,cluster/services/vm/install-service.sh,Shell
 update-service.sh (cluster/vm),Called by update-module.sh,cluster/services/vm/update-service.sh,Shell
+delete-service.sh (cluster/vm),Called by delete-module.sh,cluster/services/vm/delete-service.sh,Shell
+test-service.sh (cluster/vm),Called by test-module.sh,cluster/services/vm/test-service.sh,Shell
 install-service.sh (cluster/ha),Called by install-module.sh,cluster/services/ha/install-service.sh,Shell
 update-service.sh (cluster/ha),Called by update-module.sh,cluster/services/ha/update-service.sh,Shell
+delete-service.sh (cluster/ha),Called by delete-module.sh,cluster/services/ha/delete-service.sh,Shell
+test-service.sh (cluster/ha),Called by test-module.sh,cluster/services/ha/test-service.sh,Shell
 install-service.sh (firewall/firewall),Called by install-module.sh,firewall/services/firewall/install-service.sh,Shell
 update-service.sh (firewall/firewall),Called by update-module.sh,firewall/services/firewall/update-service.sh,Shell
+delete-service.sh (firewall/firewall),Called by delete-module.sh,firewall/services/firewall/delete-service.sh,Shell
 install-service.sh (firewall/proxy),Called by install-module.sh,firewall/services/proxy/install-service.sh,Shell
 update-service.sh (firewall/proxy),Called by update-module.sh,firewall/services/proxy/update-service.sh,Shell
+delete-service.sh (firewall/proxy),Called by delete-module.sh,firewall/services/proxy/delete-service.sh,Shell
+test-service.sh (firewall/proxy),Called by test-module.sh,firewall/services/proxy/test-service.sh,Shell
 install-service.sh (identity/identity),Called by install-module.sh,identity/services/identity/install-service.sh,Shell
 update-service.sh (identity/identity),Called by update-module.sh,identity/services/identity/update-service.sh,Shell
+delete-service.sh (identity/identity),Called by delete-module.sh,identity/services/identity/delete-service.sh,Shell
+test-service.sh (identity/identity),Called by test-module.sh,identity/services/identity/test-service.sh,Shell
 install-service.sh (identity/accessControl),Called by install-module.sh,identity/services/accessControl/install-service.sh,Shell
 update-service.sh (identity/accessControl),Called by update-module.sh,identity/services/accessControl/update-service.sh,Shell
+delete-service.sh (identity/accessControl),Called by delete-module.sh,identity/services/accessControl/delete-service.sh,Shell
 install-service.sh (backup/vm),Called by install-module.sh,backup/services/vm/install-service.sh,Shell
 update-service.sh (backup/vm),Called by update-module.sh,backup/services/vm/update-service.sh,Shell
+delete-service.sh (backup/vm),Called by delete-module.sh,backup/services/vm/delete-service.sh,Shell
+test-service.sh (backup/vm),Called by test-module.sh,backup/services/vm/test-service.sh,Shell
 install-service.sh (templates/nixos),Called by install-module.sh,templates/services/nixos/install-service.sh,Shell
 update-service.sh (templates/nixos),Called by update-module.sh,templates/services/nixos/update-service.sh,Shell
+delete-service.sh (templates/nixos),Called by delete-module.sh,templates/services/nixos/delete-service.sh,Shell
+test-service.sh (templates/nixos),Called by test-module.sh,templates/services/nixos/test-service.sh,Shell
 install-service.sh (templates/debian),Called by install-module.sh,templates/services/debian/install-service.sh,Shell
 update-service.sh (templates/debian),Called by update-module.sh,templates/services/debian/update-service.sh,Shell
+delete-service.sh (templates/debian),Called by delete-module.sh,templates/services/debian/delete-service.sh,Shell
 
 # ------------------------------------------------------------------------------------------
-# Test VM Creation Scripts
+# Test Scripts
 # ------------------------------------------------------------------------------------------
 test.sh (test-vm-creation),Called by tappaas-cicd/test.sh,tappaas-cicd/test-vm-creation/test.sh,Shell
 install.sh (test-vm-creation),Called by test.sh,tappaas-cicd/test-vm-creation/install.sh,Shell
 test-vm.sh,Called by test.sh,tappaas-cicd/test-vm-creation/test-vm.sh,Shell
+test.sh (test-repository),Called by tappaas-cicd/test.sh,tappaas-cicd/test-repository/test.sh,Shell

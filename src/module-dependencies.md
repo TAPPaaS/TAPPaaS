@@ -3,7 +3,7 @@
 This document shows the service dependencies between TAPPaaS foundation and application modules.
 Each arrow points from a **consumer** module to the **provider** module it depends on, labeled with the service name.
 
-Generated: 2026-02-25
+Generated: 2026-03-18
 
 ## Dependency Graph
 
@@ -12,6 +12,7 @@ graph TD
     subgraph Applications
         litellm[litellm]
         openwebui[openwebui]
+        vllm-amd[vllm-amd]
         vaultwarden[vaultwarden]
         netbird-client[netbird-client]
         unifi[unifi]
@@ -90,6 +91,7 @@ graph TD
 | identity | Foundation | accessControl, identity | cluster:vm, cluster:ha, templates:nixos, backup:vm, firewall:proxy |
 | litellm | Application | models | cluster:vm, templates:nixos, backup:vm, identity:identity, firewall:proxy |
 | openwebui | Application | _(none)_ | cluster:vm, templates:nixos, backup:vm, identity:identity, firewall:proxy, litellm:models |
+| vllm-amd | Application | _(none)_ | _(none)_ |
 | vaultwarden | Application | _(none)_ | cluster:vm, cluster:ha, templates:nixos, backup:vm, identity:identity, firewall:proxy |
 | netbird-client | Application | _(none)_ | cluster:vm, cluster:ha, templates:debian, backup:vm, identity:identity, firewall:proxy |
 | unifi | Application | _(none)_ | cluster:vm, templates:nixos, backup:vm |
