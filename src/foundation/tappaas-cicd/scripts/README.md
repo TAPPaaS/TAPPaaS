@@ -35,11 +35,11 @@ check_json /home/tappaas/config/mymodule.json || exit 1
 
 ### copy-update-json.sh
 
-Copies a module JSON file to the config directory and optionally updates fields.
+Copies a module JSON file to the config directory and optionally updates fields. Supports creating module variants with `--variant`.
 
 **Usage:**
 ```bash
-copy-update-json.sh <module-name> [--<field> <value>]...
+copy-update-json.sh <module-name> [--variant <name>] [--<field> <value>]...
 ```
 
 **Parameters:**
@@ -47,6 +47,7 @@ copy-update-json.sh <module-name> [--<field> <value>]...
 | Parameter | Description | Example |
 |-----------|-------------|---------|
 | `module-name` | Name of the module | `identity` |
+| `--variant <name>` | Create a variant (output: `<module>-<name>.json`) | `--variant staging` |
 | `--<field> <value>` | Set JSON field to value (repeatable) | `--node "tappaas2"` |
 
 **Example:**
@@ -57,20 +58,39 @@ copy-update-json.sh identity
 # Copy and modify fields
 copy-update-json.sh identity --node "tappaas2" --cores 4
 copy-update-json.sh nextcloud --memory 4096 --zone0 "trusted"
+
+# Create a variant of openwebui (auto-derives vmname, vmid, zone0, proxyDomain)
+copy-update-json.sh openwebui --variant staging
+
+# Create a variant with explicit overrides
+copy-update-json.sh openwebui --variant dev --zone0 dev-srv --vmid 315
 ```
 
 **What it does:**
-1. Copies `./<module>.json` from current directory to `/home/tappaas/config/`
+1. Copies `./<module>.json` from current directory to `/home/tappaas/config/` (or `<module>-<variant>.json` in variant mode)
 2. Automatically sets the `location` field to the module directory
 3. Validates field names against `module-fields.json` schema
-4. Applies `--<field> <value>` modifications to the copied JSON
-5. Creates a `.orig` backup if modifications are made
-6. Validates the resulting JSON is valid
+4. In variant mode, applies automatic field derivation (see below)
+5. Applies `--<field> <value>` modifications to the copied JSON
+6. Creates a `.orig` backup if modifications are made
+7. Validates the resulting JSON is valid
+
+**Variant mode (`--variant <name>`):**
+
+When `--variant` is used, the following fields are derived automatically unless explicitly overridden with `--<field>`:
+
+| Field | Derivation | Example (variant=staging) |
+|-------|-----------|--------------------------|
+| `vmname` | `<source vmname>-<variant>` | `openwebui-staging` |
+| `vmid` | Next available VMID after source | `312` (if 311 is source) |
+| `zone0` | `<variant>` if it matches a zone in `zones.json`, else unchanged | `srv` (unchanged) |
+| `proxyDomain` | Insert `<variant>` after first segment | `openwebui.staging.test.tapaas.org` |
 
 **Notes:**
 - Integer fields (per schema) are stored as JSON numbers
 - String fields are stored as JSON strings
 - Unknown field names will cause an error
+- In variant mode, `EFFECTIVE_MODULE` is exported for scripts that source this file
 
 ---
 
@@ -313,15 +333,23 @@ setup-caddy.sh
 
 ### install-module.sh
 
-Installs a TAPPaaS module with dependency validation and service wiring.
+Installs a TAPPaaS module with dependency validation and service wiring. Supports installing module variants with `--variant`.
 
 **Usage:**
 ```bash
-install-module.sh <module-name> [--<field> <value>]...
+install-module.sh <module-name> [--variant <name>] [--<field> <value>]...
 ```
 
+**Parameters:**
+
+| Parameter | Description | Example |
+|-----------|-------------|---------|
+| `module-name` | Name of the module to install | `openwebui` |
+| `--variant <name>` | Install a variant of the module | `--variant staging` |
+| `--<field> <value>` | Override a JSON field (passed to `copy-update-json.sh`) | `--node tappaas2` |
+
 **What it does:**
-1. Copies and validates the module JSON config
+1. Copies and validates the module JSON config (variant-aware via `copy-update-json.sh`)
 2. Checks that every `dependsOn` service is provided by an installed module
 3. Validates that the module has service scripts for each service it provides
 4. Iterates `dependsOn` and calls each provider's `install-service.sh`
@@ -331,7 +359,17 @@ install-module.sh <module-name> [--<field> <value>]...
 ```bash
 install-module.sh vaultwarden
 install-module.sh litellm --node tappaas2
+
+# Install a staging variant of openwebui (auto-derives vmname, vmid, proxyDomain)
+install-module.sh openwebui --variant staging
+
+# Install a dev variant with explicit zone and vmid overrides
+install-module.sh openwebui --variant dev --zone0 dev-srv --vmid 315
 ```
+
+**Variant mode:**
+
+When `--variant <name>` is used, the source module's JSON is used as a base, but the output config is named `<module>-<variant>.json`. Fields like `vmname`, `vmid`, `zone0`, and `proxyDomain` are automatically derived unless explicitly overridden. See `copy-update-json.sh` for full variant field derivation rules.
 
 ---
 

@@ -2,18 +2,30 @@
 #
 # Copy a module JSON file to config directory and update fields.
 #
-# Usage: copy-update-json.sh <module-name> [--<field> <value>]...
+# Usage: copy-update-json.sh <module-name> [--variant <name>] [--<field> <value>]...
 #
 # Example:
 #   copy-update-json.sh identity --node "tappaas2" --cores 4
+#   copy-update-json.sh openwebui --variant staging
+#   copy-update-json.sh openwebui --variant dev --zone0 dev-srv --vmid 315
 #
 # This script:
 #   1. Copies <module>.json from current directory to /home/tappaas/config/
+#      (or <module>-<variant>.json when --variant is used)
 #   2. Automatically sets the 'location' field to the module directory
 #   3. Validates field names against module-fields.json schema
-#   4. Modifies the copied JSON based on --<field> <value> arguments
-#   5. Creates a .orig backup if modifications are made
-#   6. Validates the resulting JSON
+#   4. When --variant is used, applies variant defaults (see below)
+#   5. Modifies the copied JSON based on --<field> <value> arguments
+#   6. Creates a .orig backup if modifications are made
+#   7. Validates the resulting JSON
+#
+# Variant mode (--variant <name>):
+#   Output JSON is named <module>-<variant>.json. Fields are derived
+#   automatically unless explicitly overridden with --<field>:
+#     vmname       → <source vmname>-<variant>
+#     vmid         → next available VMID after the source VMID
+#     zone0        → <variant> if it matches a zone in zones.json, else unchanged
+#     proxyDomain  → "name.<variant>.domain" (inserts variant after first segment)
 #
 
 set -euo pipefail
@@ -43,14 +55,15 @@ fi
 
 usage() {
     cat << EOF
-Usage: ${SCRIPT_NAME} <module-name> [--<field> <value>]...
+Usage: ${SCRIPT_NAME} <module-name> [--variant <name>] [--<field> <value>]...
 
 Copy a module JSON file to the config directory and optionally update fields.
 
 Arguments:
-    module-name     Name of the module (expects ./<module-name>.json to exist)
+    module-name         Name of the module (expects ./<module-name>.json to exist)
 
 Options:
+    --variant <name>    Create a variant of the module (output: <module>-<name>.json)
     --<field> <value>   Set JSON field to value (can be repeated)
     -h, --help          Show this help message
 
@@ -58,6 +71,16 @@ Examples:
     ${SCRIPT_NAME} identity
     ${SCRIPT_NAME} identity --node "tappaas2" --cores 4
     ${SCRIPT_NAME} nextcloud --memory 4096 --zone0 "trusted"
+    ${SCRIPT_NAME} openwebui --variant staging
+    ${SCRIPT_NAME} openwebui --variant dev --zone0 dev-srv --vmid 315
+
+Variant mode:
+    When --variant is used, the output JSON is named <module>-<variant>.json.
+    The following fields are derived automatically unless explicitly overridden:
+      vmname       → <source vmname>-<variant>
+      vmid         → next available VMID after the source module's VMID
+      zone0        → <variant> if it matches a zone name in zones.json, else unchanged
+      proxyDomain  → inserts <variant> after first segment (e.g. app.example.com → app.<variant>.example.com)
 
 Notes:
     - Source file must exist as ./<module-name>.json in current directory
@@ -132,6 +155,105 @@ should_be_number() {
     [[ "$value" =~ ^-?[0-9]+$ ]]
 }
 
+# Find the next available VMID after source_vmid by scanning config and modules.json
+find_next_vmid() {
+    local source_vmid="$1"
+    local used_vmids=""
+
+    # Collect VMIDs from config directory
+    local f
+    for f in "${CONFIG_DIR}"/*.json; do
+        [[ -f "$f" ]] || continue
+        local vid
+        vid=$(jq -r '.vmid // empty' "$f" 2>/dev/null)
+        [[ -n "$vid" ]] && used_vmids="${used_vmids} ${vid}"
+    done
+
+    # Collect VMIDs from modules.json
+    local modules_json="/home/tappaas/TAPPaaS/src/modules.json"
+    if [[ -f "${modules_json}" ]]; then
+        local vid
+        for vid in $(jq -r '.. | .vmid? // empty' "${modules_json}" 2>/dev/null); do
+            used_vmids="${used_vmids} ${vid}"
+        done
+    fi
+
+    # Find next available starting from source_vmid + 1
+    local candidate=$((source_vmid + 1))
+    while echo " ${used_vmids} " | grep -q " ${candidate} "; do
+        candidate=$((candidate + 1))
+    done
+
+    echo "${candidate}"
+}
+
+# Apply variant defaults for fields not explicitly overridden
+apply_variant_defaults() {
+    local variant="$1"
+    local dest_json="$2"
+    local has_vmname="$3"
+    local has_vmid="$4"
+    local has_zone0="$5"
+    local has_proxydomain="$6"
+
+    local tmp_file
+
+    # 1. vmname: append -<variant> to source vmname
+    if [[ "${has_vmname}" == "false" ]]; then
+        local src_vmname
+        src_vmname=$(jq -r '.vmname // empty' "${dest_json}")
+        if [[ -n "${src_vmname}" ]]; then
+            local new_vmname="${src_vmname}-${variant}"
+            tmp_file=$(mktemp)
+            jq --arg v "${new_vmname}" '.vmname = $v' "${dest_json}" > "${tmp_file}"
+            mv "${tmp_file}" "${dest_json}"
+            info "  Variant: vmname = ${new_vmname}"
+        fi
+    fi
+
+    # 2. vmid: auto-increment to next available
+    if [[ "${has_vmid}" == "false" ]]; then
+        local src_vmid
+        src_vmid=$(jq -r '.vmid // empty' "${dest_json}")
+        if [[ -n "${src_vmid}" ]]; then
+            local next_vmid
+            next_vmid=$(find_next_vmid "${src_vmid}")
+            tmp_file=$(mktemp)
+            jq --argjson v "${next_vmid}" '.vmid = $v' "${dest_json}" > "${tmp_file}"
+            mv "${tmp_file}" "${dest_json}"
+            info "  Variant: vmid = ${next_vmid}"
+        fi
+    fi
+
+    # 3. zone0: use variant name if it matches a zone in zones.json
+    if [[ "${has_zone0}" == "false" ]]; then
+        local zones_file="/home/tappaas/TAPPaaS/src/foundation/zones.json"
+        # Also check deployed copy
+        [[ ! -f "${zones_file}" ]] && zones_file="/home/tappaas/config/zones.json"
+        if [[ -f "${zones_file}" ]] && jq -e --arg z "${variant}" 'has($z)' "${zones_file}" >/dev/null 2>&1; then
+            tmp_file=$(mktemp)
+            jq --arg v "${variant}" '.zone0 = $v' "${dest_json}" > "${tmp_file}"
+            mv "${tmp_file}" "${dest_json}"
+            info "  Variant: zone0 = ${variant} (matched zone name)"
+        fi
+    fi
+
+    # 4. proxyDomain: transform "name.domain" to "name.<variant>.domain"
+    if [[ "${has_proxydomain}" == "false" ]]; then
+        local src_domain
+        src_domain=$(jq -r '.proxyDomain // empty' "${dest_json}")
+        if [[ -n "${src_domain}" && "${src_domain}" == *.* ]]; then
+            local name="${src_domain%%.*}"
+            local domain="${src_domain#*.}"
+            local new_domain="${name}.${variant}.${domain}"
+            tmp_file=$(mktemp)
+            jq --arg v "${new_domain}" '.proxyDomain = $v' "${dest_json}" > "${tmp_file}"
+            mv "${tmp_file}" "${dest_json}"
+            info "  Variant: proxyDomain = ${new_domain}"
+        fi
+    fi
+}
+
 # Main function
 main() {
     check_dependencies
@@ -152,9 +274,68 @@ main() {
     local module="$1"
     shift
 
+    # ── Pre-scan arguments for --variant and track explicit overrides ──
+    local variant=""
+    local has_explicit_vmname=false
+    local has_explicit_vmid=false
+    local has_explicit_zone0=false
+    local has_explicit_proxydomain=false
+    local filtered_args=()
+
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+            --variant)
+                [[ -z "${2:-}" ]] && die "Option --variant requires a value"
+                variant="$2"
+                shift 2
+                ;;
+            --vmname)
+                has_explicit_vmname=true
+                filtered_args+=("$1" "$2")
+                shift 2
+                ;;
+            --vmid)
+                has_explicit_vmid=true
+                filtered_args+=("$1" "$2")
+                shift 2
+                ;;
+            --zone0)
+                has_explicit_zone0=true
+                filtered_args+=("$1" "$2")
+                shift 2
+                ;;
+            --proxyDomain)
+                has_explicit_proxydomain=true
+                filtered_args+=("$1" "$2")
+                shift 2
+                ;;
+            --*)
+                [[ -z "${2:-}" ]] && die "Option $1 requires a value"
+                filtered_args+=("$1" "$2")
+                shift 2
+                ;;
+            *)
+                die "Unknown argument: $1"
+                ;;
+        esac
+    done
+
+    # Restore filtered args (without --variant)
+    set -- "${filtered_args[@]+${filtered_args[@]}}"
+
+    # Determine effective module name
+    local effective_module="${module}"
+    if [[ -n "${variant}" ]]; then
+        effective_module="${module}-${variant}"
+        info "Variant mode: ${module} → ${effective_module}"
+    fi
+
+    # Export for callers that source this script (e.g., install-module.sh)
+    EFFECTIVE_MODULE="${effective_module}"
+
     local source_json="./${module}.json"
-    local dest_json="${CONFIG_DIR}/${module}.json"
-    local orig_json="${CONFIG_DIR}/${module}.json.orig"
+    local dest_json="${CONFIG_DIR}/${effective_module}.json"
+    local orig_json="${CONFIG_DIR}/${effective_module}.json.orig"
 
     # Validate source file exists
     if [[ ! -f "${source_json}" ]]; then
@@ -196,6 +377,14 @@ main() {
     # Check if releaseDate was auto-populated
     if ! jq -e '.releaseDate' "${source_json}" >/dev/null 2>&1; then
         info "  Set releaseDate = ${release_date} (auto-populated)"
+    fi
+
+    # ── Apply variant defaults (before explicit overrides) ───────────
+    if [[ -n "${variant}" ]]; then
+        info "Applying variant defaults..."
+        apply_variant_defaults "${variant}" "${dest_json}" \
+            "${has_explicit_vmname}" "${has_explicit_vmid}" \
+            "${has_explicit_zone0}" "${has_explicit_proxydomain}"
     fi
 
     # Parse and apply field modifications
