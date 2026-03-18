@@ -175,27 +175,6 @@ update-os.sh myvm 610 tappaas1
 
 ---
 
-### test-config.sh
-
-Validates the TAPPaaS-CICD installation by running a series of checks.
-
-**Usage:**
-```bash
-test-config.sh
-```
-
-**Checks performed:**
-- tappaas user exists
-- SSH keys exist for tappaas user
-- TAPPaaS repository is cloned
-- NixOS configuration is applied
-
-**Output:**
-- Color-coded status messages (green=OK, red=error, blue=warning)
-- Detailed log written to `/home/tappaas/logs/test-config.log`
-
----
-
 ### update-cron.sh
 
 Creates a cron entry to run the TAPPaaS update scheduler every hour.
@@ -826,7 +805,6 @@ scripts/
 ├── resize-disk.sh               # Resize VM disk in Proxmox and filesystem
 ├── setup-caddy.sh               # Install Caddy reverse proxy on firewall
 ├── snapshot-vm.sh               # VM snapshot management (create/list/cleanup/restore)
-├── test-config.sh               # Validate installation
 ├── test-module.sh               # Test a module with dependency-recursive service testing
 ├── update-cron.sh               # Set up hourly update cron job
 ├── update-module.sh             # Update a module with snapshot, testing, and rollback
