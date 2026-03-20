@@ -1,6 +1,6 @@
 # TAPPaaS Source Statistics
 
-Generated: 2026-03-18
+Generated: 2026-03-19
 
 ## Foundation (`src/foundation/`)
 
@@ -8,11 +8,11 @@ Generated: 2026-03-18
 
 | File Type           | Files | Lines  |
 |---------------------|------:|-------:|
-| Bash (.sh)          |    71 | 10,918 |
+| Bash (.sh)          |    72 | 12,077 |
 | Python (.py)        |    14 |  5,811 |
 | NixOS (.nix)        |     7 |  1,014 |
-| Documentation (.md) |    12 |  3,533 |
-| **Total**           |**104**|**21,276** |
+| Documentation (.md) |    12 |  3,505 |
+| **Total**           |**105**|**22,407** |
 
 ## Apps (`src/apps/`)
 
@@ -30,6 +30,6 @@ Generated: 2026-03-18
 
 | Area            | Files  |   Lines  |
 |-----------------|-------:|---------:|
-| Foundation      |    104 |   21,276 |
+| Foundation      |    105 |   22,407 |
 | Apps            |     47 |    6,847 |
-| **Total**       |**151** |**28,123**|
+| **Total**       |**152** |**29,254**|

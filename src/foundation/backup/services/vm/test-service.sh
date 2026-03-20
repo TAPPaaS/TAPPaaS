@@ -34,7 +34,7 @@ check_json "/home/tappaas/config/${MODULE}.json" || exit 2
 
 VMID="$(get_config_value 'vmid')"
 VMNAME="$(get_config_value 'vmname' "${MODULE}")"
-NODE="$(get_config_value 'node' 'tappaas1')"
+NODE="$(get_config_value 'node' "$(get_node_hostname 0)")"
 MGMT="mgmt"
 
 readonly STORAGE_NAME="tappaas_backup"
@@ -52,7 +52,7 @@ info "  ${BOLD}backup:vm tests for ${BL}${VMNAME}${CL} (VMID ${VMID} on ${NODE})
 
 # Find a reachable Proxmox node to query
 QUERY_NODE=""
-for candidate in "${NODE}" tappaas1 tappaas2 tappaas3; do
+for candidate in "${NODE}" $(get_all_node_hostnames); do
     candidate_fqdn="${candidate}.${MGMT}.internal"
     if ssh -o ConnectTimeout=5 -o BatchMode=yes -o LogLevel=ERROR \
         "root@${candidate_fqdn}" "true" &>/dev/null; then

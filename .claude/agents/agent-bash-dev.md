@@ -76,7 +76,7 @@ update.sh pattern:
   . /home/tappaas/bin/common-install-routines.sh
   VMNAME="$(get_config_value 'vmname' "$1")"
   VMID="$(get_config_value 'vmid')"
-  NODE="$(get_config_value 'node' 'tappaas1')"
+  NODE="$(get_config_value 'node' "$(get_node_hostname 0)")"
   /home/tappaas/bin/update-os.sh "${VMNAME}" "${VMID}" "${NODE}"
 
 ## Available Functions (from common-install-routines.sh)

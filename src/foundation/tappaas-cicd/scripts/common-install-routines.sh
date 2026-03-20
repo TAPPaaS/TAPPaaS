@@ -49,6 +49,72 @@ die()   { error "$@"; exit 1; }
 
 # ── Shared helper functions ──────────────────────────────────────────
 
+# ── Node lookup helpers (read from configuration.json) ───────────────
+# These functions resolve node hostnames from configuration.json, replacing
+# hardcoded "tappaas1" assumptions. They fall back to "tappaas1" when
+# configuration.json is not yet available (e.g., during initial bootstrap).
+
+# Get the FQDN of the primary (first) Proxmox node.
+# Uses dns-hostname if set, otherwise hostname.
+# Returns: <dns-hostname>.mgmt.internal (e.g., tappaas1.mgmt.internal)
+get_primary_node_fqdn() {
+    local config="${CONFIG_DIR}/configuration.json"
+    local mgmt="mgmt"
+    if [[ -f "$config" ]]; then
+        local dns_host
+        dns_host=$(jq -r '."tappaas-nodes"[0]."dns-hostname" // ."tappaas-nodes"[0].hostname // "tappaas1"' "$config" 2>/dev/null) || dns_host="tappaas1"
+        echo "${dns_host}.${mgmt}.internal"
+    else
+        echo "tappaas1.${mgmt}.internal"
+    fi
+}
+
+# Get the actual system hostname of the Nth node (0-indexed).
+# Arguments: [index] (default: 0)
+get_node_hostname() {
+    local index="${1:-0}"
+    local config="${CONFIG_DIR}/configuration.json"
+    if [[ -f "$config" ]]; then
+        jq -r --argjson i "$index" '."tappaas-nodes"[$i].hostname // "tappaas1"' "$config" 2>/dev/null || echo "tappaas1"
+    else
+        echo "tappaas1"
+    fi
+}
+
+# Get the dns-hostname of the Nth node (0-indexed), falling back to hostname.
+# Arguments: [index] (default: 0)
+get_node_dns_hostname() {
+    local index="${1:-0}"
+    local config="${CONFIG_DIR}/configuration.json"
+    if [[ -f "$config" ]]; then
+        jq -r --argjson i "$index" '."tappaas-nodes"[$i]."dns-hostname" // ."tappaas-nodes"[$i].hostname // "tappaas1"' "$config" 2>/dev/null || echo "tappaas1"
+    else
+        echo "tappaas1"
+    fi
+}
+
+# Get all node hostnames from configuration.json, one per line.
+get_all_node_hostnames() {
+    local config="${CONFIG_DIR}/configuration.json"
+    if [[ -f "$config" ]]; then
+        jq -r '."tappaas-nodes"[].hostname' "$config" 2>/dev/null || echo "tappaas1"
+    else
+        echo "tappaas1"
+    fi
+}
+
+# Get the FQDN of the Nth node (0-indexed), using dns-hostname if available.
+# Arguments: [index] (default: 0)
+get_node_fqdn() {
+    local index="${1:-0}"
+    local mgmt="mgmt"
+    local dns_host
+    dns_host=$(get_node_dns_hostname "$index")
+    echo "${dns_host}.${mgmt}.internal"
+}
+
+# ── Module helper functions ──────────────────────────────────────────
+
 # Get the module directory from the .location field in its deployed config JSON.
 # Arguments: <module-name>
 # Outputs the absolute directory path or returns 1 if not found.

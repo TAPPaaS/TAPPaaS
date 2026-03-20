@@ -55,7 +55,7 @@ TEMP_DIR=$(mktemp -d)
 pushd $TEMP_DIR >/dev/null
 
 info "${BOLD}Creating TAPPaaS Proxmox Backup Server (PBS) installation using the following settings:"
-NODE="$(get_config_value 'node' 'tappaas1')"
+NODE="$(get_config_value 'node' "$(get_node_hostname 0)")"
 VMNAME="$(get_config_value 'vmname' "$1")"
 STORAGE="$(get_config_value 'storage' 'tankc1')"
 IMAGE_TYPE="$(get_config_value 'imageType' 'apt')"
@@ -228,9 +228,10 @@ if [ -z "$PBS_FINGERPRINT" ]; then
 fi
 echo "PBS Fingerprint: ${PBS_FINGERPRINT}"
 
-# Step 6: Add PBS storage to Proxmox datacenter (on tappaas1)
-info "Adding PBS storage to Proxmox datacenter on tappaas1..."
-ssh root@tappaas1.${ZONE}.internal "bash -s" <<EOF
+# Step 6: Add PBS storage to Proxmox datacenter (on primary node)
+MGMT_NODE="$(get_node_hostname 0)"
+info "Adding PBS storage to Proxmox datacenter on ${MGMT_NODE}..."
+ssh "root@${MGMT_NODE}.${ZONE}.internal" "bash -s" <<EOF
 set -e
 
 # Create password file temporarily (without trailing newline)
@@ -250,7 +251,7 @@ EOF
 
 # Step 7: Create backup job in Proxmox
 info "Creating backup job in Proxmox..."
-ssh root@tappaas1.${ZONE}.internal "bash -s" <<EOF
+ssh "root@${MGMT_NODE}.${ZONE}.internal" "bash -s" <<EOF
 set -e
 
 # Check if backup job exists using API

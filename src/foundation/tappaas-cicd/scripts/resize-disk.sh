@@ -90,7 +90,7 @@ size_to_bytes() {
 
 # Get VM configuration
 VMID="$(get_config_value 'vmid')"
-NODE="$(get_config_value 'node' 'tappaas1')"
+NODE="$(get_config_value 'node' "$(get_node_hostname 0)")"
 ZONE0="$(get_config_value 'zone0' 'mgmt')"
 CURRENT_SIZE="$(get_config_value 'diskSize' '8G')"
 

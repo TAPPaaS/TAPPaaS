@@ -7,9 +7,9 @@ set -euo pipefail
 . /home/tappaas/TAPPaaS/src/foundation/tappaas-cicd/scripts/common-install-routines.sh
 
 VMNAME="$(get_config_value 'vmname' "$1")"
-NODE="$(get_config_value 'node' 'tappaas1')"
+NODE="$(get_config_value 'node' "$(get_node_hostname 0)")"
 MGMTVLAN="mgmt"
-NODE1_FQDN="tappaas1.$MGMTVLAN.internal"
+NODE1_FQDN="$(get_primary_node_fqdn)"
 FIREWALL_FQDN="firewall.$MGMTVLAN.internal"
 info "Starting TAPPaaS-CICD module update for VM: $VMNAME on node: $NODE"
 
@@ -65,6 +65,8 @@ fi
 cd /home/tappaas/TAPPaaS/src/foundation/tappaas-cicd || die "TAPPaaS-CICD directory not found!"
 
 # --- Install scripts as symlinks into /home/tappaas/bin/ ---
+# NOTE: symlinks must be installed BEFORE refreshing config, so that
+# create-configuration.sh in ~/bin/ points to the updated repo version.
 echo ""
 info "Installing scripts to /home/tappaas/bin/..."
 for script in scripts/*.sh; do
@@ -81,6 +83,15 @@ done
 for f in /home/tappaas/bin/*.sh; do
   [ -e "$f" ] && chmod +x "$f"
 done
+
+# --- Refresh configuration.json (re-discover nodes, validate) ---
+if [[ -x /home/tappaas/bin/create-configuration.sh ]]; then
+    echo ""
+    info "Refreshing configuration.json..."
+    /home/tappaas/bin/create-configuration.sh --update || {
+        warn "Configuration refresh failed. Using existing configuration.json."
+    }
+fi
 
 # --- Install foundation config files into /home/tappaas/config/ ---
 # module-fields.json: symlink (read-only schema, always tracks git)

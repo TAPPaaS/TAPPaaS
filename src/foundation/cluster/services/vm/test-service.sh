@@ -35,7 +35,7 @@ check_json "/home/tappaas/config/${MODULE}.json" || exit 2
 
 VMNAME="$(get_config_value 'vmname' "${MODULE}")"
 VMID="$(get_config_value 'vmid')"
-NODE="$(get_config_value 'node' 'tappaas1')"
+NODE="$(get_config_value 'node' "$(get_node_hostname 0)")"
 ZONE0NAME="$(get_config_value 'zone0' 'mgmt')"
 MGMT="mgmt"
 
@@ -65,7 +65,7 @@ info "  Check 1: VM status in Proxmox"
 
 # Query cluster API to find VM status regardless of which node it's on
 vm_status=""
-for node_candidate in "${NODE}" tappaas1 tappaas2 tappaas3; do
+for node_candidate in "${NODE}" $(get_all_node_hostnames); do
     candidate_fqdn="${node_candidate}.${MGMT}.internal"
     vm_status=$(ssh -o ConnectTimeout=5 -o BatchMode=yes -o LogLevel=ERROR \
         "root@${candidate_fqdn}" \

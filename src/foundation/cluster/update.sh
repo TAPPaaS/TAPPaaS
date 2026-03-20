@@ -17,12 +17,20 @@ set -euo pipefail
 . /home/tappaas/bin/common-install-routines.sh
 
 MGMTVLAN="mgmt"
-NODE1_FQDN="tappaas1.$MGMTVLAN.internal"
+NODE1_FQDN="$(get_primary_node_fqdn)"
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 echo ""
 info "Starting TAPPaaS Cluster module update..."
+
+# Step 0: Validate configuration.json
+if [[ -x /home/tappaas/bin/validate-configuration.sh ]]; then
+    info "Validating configuration.json..."
+    /home/tappaas/bin/validate-configuration.sh --quiet || {
+        warn "Configuration validation reported issues. Run: validate-configuration.sh"
+    }
+fi
 
 # Get list of all cluster nodes
 echo ""

@@ -23,7 +23,7 @@ MGMTVLAN="mgmt"
 
 # Get required values from JSON
 VMID=$(get_config_value 'vmid')
-NODE=$(get_config_value 'node' 'tappaas1')
+NODE=$(get_config_value 'node' "$(get_node_hostname 0)")
 HANODE=$(get_config_value 'HANode' 'NONE')
 REPLICATION_SCHEDULE=$(get_config_value 'replicationSchedule' '*/15')
 STORAGE=$(get_config_value 'storage' 'tanka1')

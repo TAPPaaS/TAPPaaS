@@ -10,7 +10,7 @@ set -e
 . /home/tappaas/bin/common-install-routines.sh
 
 VMNAME="$(get_config_value 'vmname' "$1")"
-NODE="$(get_config_value 'node' 'tappaas1')"
+NODE="$(get_config_value 'node' "$(get_node_hostname 0)")"
 ZONE0NAME="$(get_config_value 'zone0' 'srv')"
 
 # copy the VM template

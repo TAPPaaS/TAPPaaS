@@ -11,7 +11,7 @@
 #
 # Usage: ./restore.sh [options]
 #   -v, --vmid <vmid>           VMID to restore (required)
-#   -n, --node <node>           Target Proxmox node (default: tappaas1)
+#   -n, --node <node>           Target Proxmox node (default: first node from configuration.json)
 #   -s, --storage <storage>     Target storage for VM (default: original)
 #   -b, --backup-id <id>        Specific backup ID to restore (default: latest)
 #   -l, --list                  List available backups for a VMID
@@ -26,7 +26,7 @@ Usage: $0 [options]
 
 Options:
   -v, --vmid <vmid>           VMID to restore (required for restore)
-  -n, --node <node>           Target Proxmox node (default: tappaas1)
+  -n, --node <node>           Target Proxmox node (default: first node from configuration.json)
   -s, --storage <storage>     Target storage for VM (default: original)
   -b, --backup-id <id>        Specific backup ID to restore (default: latest)
   -l, --list                  List available backups for a VMID (requires -v)
@@ -40,7 +40,7 @@ Examples:
   # List backups for specific VM
   $0 --vmid 101 --list
 
-  # Restore latest backup of VMID 101 to tappaas1
+  # Restore latest backup of VMID 101 to primary node
   $0 --vmid 101
 
   # Restore specific backup to tappaas2
@@ -75,12 +75,12 @@ trap cleanup EXIT
 JSON_CONFIG="${CONFIG_DIR}/backup.json"
 JSON=$(cat "${JSON_CONFIG}")
 
-PBS_NODE="$(get_config_value 'node' 'tappaas1')"
+PBS_NODE="$(get_config_value 'node' "$(get_node_hostname 0)")"
 ZONE="$(get_config_value 'zone0' 'mgmt')"
 STORAGE_NAME="tappaas_backup"
 
 # Default values
-TARGET_NODE="tappaas1"
+TARGET_NODE="$(get_node_hostname 0)"
 VMID=""
 TARGET_STORAGE=""
 BACKUP_ID=""

@@ -70,11 +70,11 @@ trap 'error_handler $LINENO "$BASH_COMMAND"' ERR
 JSON_CONFIG="${CONFIG_DIR}/backup.json"
 JSON=$(cat "${JSON_CONFIG}")
 
-PBS_NODE="$(get_config_value 'node' 'tappaas1')"
+PBS_NODE="$(get_config_value 'node' "$(get_node_hostname 0)")"
 ZONE="$(get_config_value 'zone0' 'mgmt')"
 STORAGE_NAME="tappaas_backup"
 DATASTORE_NAME="tappaas_backup"
-MGMT_NODE="tappaas1"
+MGMT_NODE="$(get_node_hostname 0)"
 
 COMMAND="${1:-help}"
 

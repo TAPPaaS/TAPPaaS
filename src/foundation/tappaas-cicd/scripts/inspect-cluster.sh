@@ -12,6 +12,12 @@
 
 set -euo pipefail
 
+# ── Source common library ────────────────────────────────────────────
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=common-install-routines.sh
+source "${SCRIPT_DIR}/common-install-routines.sh"
+
 # ── Logging ──────────────────────────────────────────────────────────
 
 readonly YW=$'\033[33m'
@@ -37,14 +43,28 @@ echo ""
 
 # ── Discover cluster nodes ───────────────────────────────────────────
 
-# Find reachable nodes by checking tappaas1..tappaas9
+# Find reachable nodes from configuration.json (or fall back to scanning tappaas1..9)
 NODES=()
-for i in 1 2 3 4 5 6 7 8 9; do
-    node="tappaas${i}"
-    if ping -c 1 -W 1 "${node}.${MGMT}.internal" &>/dev/null; then
-        NODES+=("${node}")
-    fi
-done
+CONFIG_NODES=$(get_all_node_hostnames 2>/dev/null || true)
+if [[ -n "$CONFIG_NODES" ]]; then
+    while IFS= read -r node; do
+        local_dns=$(get_node_dns_hostname 0 2>/dev/null || echo "$node")
+        # Use dns-hostname for FQDN lookup if available
+        node_fqdn="${node}.${MGMT}.internal"
+        if ping -c 1 -W 1 "${node_fqdn}" &>/dev/null; then
+            NODES+=("${node}")
+        fi
+    done <<< "$CONFIG_NODES"
+fi
+# Fallback: scan tappaas1..9 if no nodes found from config
+if [[ ${#NODES[@]} -eq 0 ]]; then
+    for i in 1 2 3 4 5 6 7 8 9; do
+        node="tappaas${i}"
+        if ping -c 1 -W 1 "${node}.${MGMT}.internal" &>/dev/null; then
+            NODES+=("${node}")
+        fi
+    done
+fi
 
 if [[ ${#NODES[@]} -eq 0 ]]; then
     die "No Proxmox nodes reachable"
@@ -96,7 +116,7 @@ for json_file in "${CONFIG_DIR}"/*.json; do
     [[ -z "${vmid}" ]] && continue
 
     module_name="${basename_file}"
-    node=$(jq -r '.node // "tappaas1"' "${json_file}" 2>/dev/null)
+    node=$(jq -r ".node // \"$(get_node_hostname 0)\"" "${json_file}" 2>/dev/null)
 
     CONFIG_VMIDS+=("${vmid}")
     CONFIG_MODULE_MAP["${vmid}"]="${module_name}"

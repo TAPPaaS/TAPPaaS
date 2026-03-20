@@ -2,7 +2,6 @@
   "description": "TAPPaaS Proxmox Backup Server configuration",
   "version": "0.5",
   "vmname": "backup",
-  "vmid": 200,
   "vmtag": "TAPPaaS,Foundation",
   "node": "tappaas3",
   "storage": "tankc1",

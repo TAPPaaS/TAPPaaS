@@ -91,7 +91,13 @@ done
 
 info "${BOLD}Test 3: Configuration files${CL}"
 
-if [[ -f /home/tappaas/config/configuration.json ]]; then
+if [[ -x /home/tappaas/bin/validate-configuration.sh ]]; then
+    if /home/tappaas/bin/validate-configuration.sh --quiet 2>/dev/null; then
+        pass "configuration.json passes all validation checks"
+    else
+        fail "configuration.json validation failed (run: validate-configuration.sh)"
+    fi
+elif [[ -f /home/tappaas/config/configuration.json ]]; then
     if jq empty /home/tappaas/config/configuration.json 2>/dev/null; then
         pass "configuration.json exists and is valid JSON"
     else
@@ -143,7 +149,7 @@ info "${BOLD}Test 5: SSH connectivity to Proxmox nodes${CL}"
 readonly SSH_OPTS="-o ConnectTimeout=5 -o StrictHostKeyChecking=accept-new -o UserKnownHostsFile=/dev/null -o LogLevel=ERROR -o BatchMode=yes"
 
 nodes_reachable=0
-for node in tappaas1 tappaas2 tappaas3; do
+for node in $(get_all_node_hostnames); do
     fqdn="${node}.mgmt.internal"
     # shellcheck disable=SC2086
     if ssh ${SSH_OPTS} "root@${fqdn}" "true" &>/dev/null; then

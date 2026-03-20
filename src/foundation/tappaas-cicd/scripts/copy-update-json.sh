@@ -453,7 +453,8 @@ main() {
     local node
     node=$(jq -r '.node // empty' "${dest_json}" 2>/dev/null)
     if [[ -n "${node}" ]]; then
-        local default_node="tappaas1"
+        local default_node
+        default_node="$(get_node_hostname 0)"
         if ! ssh -o ConnectTimeout=5 -o BatchMode=yes "root@${node}.mgmt.internal" "true" >/dev/null 2>&1; then
             warn "Node '${node}' is not reachable - reassigning to '${default_node}'"
             local tmp_file

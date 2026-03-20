@@ -17,9 +17,11 @@ if [ "$(hostname)" != "tappaas-cicd" ]; then
 fi
 
 #
-# create a fully qualified node hostname for tappaas1
+# Bootstrap default: use tappaas1 as the primary node for initial cluster discovery.
+# Once configuration.json exists, scripts use get_primary_node_fqdn() instead.
+# For legacy systems with different hostnames, pass --primary-node to create-configuration.sh.
 MGMTVLAN="mgmt"
-NODE1_FQDN="tappaas1.$MGMTVLAN.internal"
+NODE1_FQDN="${TAPPAAS_PRIMARY_NODE:-tappaas1}.$MGMTVLAN.internal"
 export FIREWALL_FQDN="firewall.$MGMTVLAN.internal"  # Used by sourced scripts
 
 # copy the public keys to the root account of every proxmox host
@@ -64,9 +66,9 @@ else
   exit 1
 fi
 
-# copy the potentially modified configuration.json and zones.json files from tappaas1 (potentially modified during bootstrap)
-# Only copy specific files — avoid pulling unrelated JSONs (e.g., module-fields.json)
-scp root@"$NODE1_FQDN":/root/tappaas/configuration.json /home/tappaas/config/ 2>/dev/null || true
+# Copy zones.json from node1 (may have been modified during bootstrap)
+# Note: configuration.json is NOT copied from nodes — it is generated fresh by
+# create-configuration.sh above and lives only on tappaas-cicd (fixes #106)
 scp root@"$NODE1_FQDN":/root/tappaas/zones.json /home/tappaas/config/ 2>/dev/null || true
 
 # --- Install scripts as symlinks into /home/tappaas/bin/ ---

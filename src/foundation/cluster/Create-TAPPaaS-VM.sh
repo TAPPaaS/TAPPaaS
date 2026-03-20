@@ -182,15 +182,16 @@ function resolve_trunks() {
 
 # generate some MAC addresses
 info "${BOLD}Creating TAPPaaS VM in proxmox using the following settings:"
-NODE="$(get_config_value 'node' 'tappaas1')"
+NODE="$(get_config_value 'node' "$(hostname)")"
 
 # Check if the specified node exists in the cluster
 CLUSTER_NODES=$(pvesh get /cluster/resources --type node --output-format json 2>/dev/null | jq -r '.[].node' 2>/dev/null || echo "")
 if [ -n "$CLUSTER_NODES" ]; then
   if ! echo "$CLUSTER_NODES" | grep -qx "$NODE"; then
+    FALLBACK_NODE=$(echo "$CLUSTER_NODES" | head -1)
     warn "Node '${NODE}' does not exist in the cluster. Available nodes: $(echo "$CLUSTER_NODES" | tr '\n' ' ')"
-    warn "Falling back to default node 'tappaas1'"
-    NODE="tappaas1"
+    warn "Falling back to first cluster node '${FALLBACK_NODE}'"
+    NODE="$FALLBACK_NODE"
   fi
 else
   # If we can't query cluster nodes (single node or API issue), just continue with specified node
@@ -324,9 +325,9 @@ if [ "$IMAGETYPE" == "clone" ]; then
       info "Template $IMAGE not found on ${node}.mgmt.internal"
     fi
   # Use a management cluster node to list all cluster nodes (pvesh may only
-  # return local node info on some hosts). We default to tappaas1 as the
-  # cluster management host.
-  done < <(ssh -n -o StrictHostKeyChecking=no root@tappaas1.mgmt.internal "pvesh get /cluster/resources --type node --output-format json | jq --raw-output '.[] | select(.type==\"node\") | .node'")
+  # return local node info on some hosts). We use the current node's hostname
+  # to query the cluster via pvesh.
+  done < <(ssh -n -o StrictHostKeyChecking=no "root@$(hostname).mgmt.internal" "pvesh get /cluster/resources --type node --output-format json | jq --raw-output '.[] | select(.type==\"node\") | .node'")
   
   if [ -z "$TEMPLATE_NODE" ]; then
     info "Template $IMAGE not found on any cluster node"

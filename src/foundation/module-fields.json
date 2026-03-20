@@ -137,12 +137,11 @@
         },
 
         "node": {
-            "description": "Name of the Proxmox/TAPPaaS node where the module should be installed",
+            "description": "Name of the Proxmox/TAPPaaS node where the module should be installed. If null, defaults to the first node in configuration.json.",
             "type": "string",
             "requiredBy": [],
             "usedBy": "cluster:vm",
-            "default": "tappaas1",
-            "pattern": "^tappaas[0-9]+$",
+            "default": null,
             "example": "tappaas1"
         },
 

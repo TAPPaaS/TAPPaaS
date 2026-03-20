@@ -64,7 +64,8 @@ if [[ ! -f "${MODULE_JSON}" ]]; then
 fi
 
 VMID=$(jq -r '.vmid // empty' "${MODULE_JSON}")
-NODE=$(jq -r '.node // "tappaas1"' "${MODULE_JSON}")
+NODE=$(jq -r '.node // empty' "${MODULE_JSON}")
+[[ -z "${NODE}" ]] && NODE="$(get_node_hostname 0)"
 VMNAME=$(jq -r '.vmname // empty' "${MODULE_JSON}")
 [[ -z "${VMNAME}" ]] && VMNAME="${MODULE}"
 

@@ -4,9 +4,9 @@
 
 The `configuration.json` file is the central configuration file for a TAPPaaS installation. It defines global system settings, the domain and email for SSL certificates, and the list of Proxmox nodes in the cluster.
 
-This file is installed to `/home/tappaas/config/configuration.json` on the tappaas-cicd VM and distributed to all Proxmox nodes at `/root/tappaas/configuration.json`.
+This file is installed to `/home/tappaas/config/configuration.json` on the tappaas-cicd VM. It resides only on tappaas-cicd and is not distributed to Proxmox nodes.
 
-**Important**: Always edit the installed copy, not the source file in git. Use `copy-jsons.sh` to distribute changes to all nodes.
+**Important**: Always edit the installed copy, not the source file in git.
 
 ## Required Changes
 
@@ -30,7 +30,8 @@ Global system configuration including:
 ### tappaas-nodes
 
 Array of Proxmox node configurations, each containing:
-- **hostname** - Node hostname (e.g., `tappaas1`, `tappaas2`)
+- **hostname** - Actual system hostname of the Proxmox node (no naming convention enforced)
+- **dns-hostname** - *(optional)* DNS hostname for FQDN construction (e.g., `<dns-hostname>.mgmt.internal`). Defaults to `hostname` if not set. Useful for legacy systems where the PVE hostname differs from the desired DNS name.
 - **ip** - Management IP address
 
 ## Example Configuration
@@ -62,7 +63,8 @@ Array of Proxmox node configurations, each containing:
             "ip": "192.168.1.11"
         },
         {
-            "hostname": "tappaas3",
+            "hostname": "pve3",
+            "dns-hostname": "tappaas3",
             "ip": "192.168.1.12"
         }
     ]
@@ -129,13 +131,43 @@ The `updateSchedule` field in the `tappaas` section controls when system updates
 "updateSchedule": ["monthly", "Tuesday", 2]
 ```
 
+## Validation
+
+Use `validate-configuration.sh` to check `configuration.json` for correctness:
+
+```bash
+# Basic validation (file structure, field values, uniqueness)
+validate-configuration.sh
+
+# Full validation with connectivity and cluster checks
+validate-configuration.sh --check-connectivity --check-cluster --check-repos
+
+# Validate a specific file
+validate-configuration.sh --config /path/to/configuration.json
+```
+
+Validation runs automatically during the update cycle (`pre-update.sh` and `cluster/update.sh`).
+
+## Legacy Systems (dns-hostname)
+
+For legacy Proxmox systems where nodes don't follow the `tappaasN` naming convention, use `dns-hostname` to specify the DNS name used for FQDN construction while keeping the actual system hostname in `hostname`:
+
+```json
+{
+    "hostname": "pve1",
+    "dns-hostname": "tappaas1",
+    "ip": "10.0.0.10"
+}
+```
+
+This allows `pve1` to be addressed as `tappaas1.mgmt.internal` without renaming the node. If `dns-hostname` is not set, `hostname` is used for DNS.
+
 ## File Locations
 
 | Location | Purpose |
 |----------|---------|
 | `src/foundation/configuration.json` | Git source (template) |
 | `/home/tappaas/config/configuration.json` | Installed copy on tappaas-cicd |
-| `/root/tappaas/configuration.json` | Copy on each Proxmox node |
 
 ## Field Reference
 

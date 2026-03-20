@@ -24,7 +24,7 @@ MODULE_NAME="$1"
 MGMTVLAN="mgmt"
 
 VMID=$(get_config_value 'vmid')
-NODE=$(get_config_value 'node' 'tappaas1')
+NODE=$(get_config_value 'node' "$(get_node_hostname 0)")
 VMNAME=$(get_config_value 'vmname' "${MODULE_NAME}")
 
 NODE_FQDN="${NODE}.${MGMTVLAN}.internal"

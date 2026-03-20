@@ -22,7 +22,7 @@ MODULE_NAME="$1"
 
 VMNAME="$(get_config_value 'vmname' "$MODULE_NAME")"
 VMID="$(get_config_value 'vmid')"
-NODE="$(get_config_value 'node' 'tappaas1')"
+NODE="$(get_config_value 'node' "$(get_node_hostname 0)")"
 
 # Run OS-specific update (auto-detects NixOS vs Debian)
 /home/tappaas/bin/update-os.sh "${VMNAME}" "${VMID}" "${NODE}"

@@ -21,7 +21,7 @@
                     "type": "string",
                     "required": true,
                     "must_change": true,
-                    "default": "CHANGE-mytappaas.dev",
+                    "default": "CHANGE-domain.tld",
                     "example": "mytappaas.dev",
                     "note": "Values starting with 'CHANGE' must be updated before deployment"
                 },
@@ -31,7 +31,7 @@
                     "required": true,
                     "must_change": true,
                     "format": "email",
-                    "default": "CHANGE-tappaas@mytappaas.dev",
+                    "default": "CHANGE-admin@domain.tld",
                     "example": "admin@mytappaas.dev",
                     "note": "Values starting with 'CHANGE' must be updated before deployment"
                 },
@@ -152,10 +152,15 @@
                 "type": "object",
                 "fields": {
                     "hostname": {
-                        "description": "Hostname of the Proxmox node. Must follow naming convention: tappaasN where N is a sequence number.",
+                        "description": "Actual system hostname of the Proxmox node as reported by the OS. No naming convention enforced — supports legacy systems with non-standard hostnames.",
                         "type": "string",
                         "required": true,
-                        "pattern": "^tappaas[0-9]+$",
+                        "example": "tappaas1"
+                    },
+                    "dns-hostname": {
+                        "description": "DNS hostname used for FQDN construction (e.g., <dns-hostname>.mgmt.internal). Defaults to hostname if not set. Useful for legacy systems where the PVE hostname differs from the desired DNS name.",
+                        "type": "string",
+                        "required": false,
                         "example": "tappaas1"
                     },
                     "ip": {
@@ -179,7 +184,6 @@
     "file_locations": {
         "source": "src/foundation/configuration.json",
         "installed": "/home/tappaas/config/configuration.json",
-        "proxmox_nodes": "/root/tappaas/configuration.json",
-        "note": "Edit the installed copy, not the git source. Changes are distributed to nodes via copy-jsons.sh"
+        "note": "Edit the installed copy, not the git source. configuration.json resides only on tappaas-cicd."
     }
 }

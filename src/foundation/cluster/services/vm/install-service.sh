@@ -24,7 +24,7 @@ check_json "/home/tappaas/config/$1.json" || exit 1
 
 VMNAME="$(get_config_value 'vmname' "$1")"
 VMID="$(get_config_value 'vmid')"
-NODE="$(get_config_value 'node' 'tappaas1')"
+NODE="$(get_config_value 'node' "$(get_node_hostname 0)")"
 ZONE0NAME="$(get_config_value 'zone0' 'mgmt')"
 MGMT="mgmt"
 

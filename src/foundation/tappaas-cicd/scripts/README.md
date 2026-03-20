@@ -15,12 +15,15 @@ Shared library of functions and utilities for module installation scripts.
 
 **Features:**
 - Color definitions for terminal output (YW, BL, RD, GN, etc.)
-- `info()` - Print informational messages in green
-- `warn()` - Print warning messages in yellow
-- `error()` - Print error messages in red
-- `get_config_value()` - Extract values from module JSON configuration
-- `check_json()` - Validate a module JSON file against module-fields.json schema
-- Validates that script runs on tappaas-cicd host
+- `info()` / `warn()` / `error()` / `debug()` / `die()` — Logging functions
+- `get_config_value()` — Extract values from module JSON configuration
+- `check_json()` — Validate a module JSON file against module-fields.json schema
+- Node lookup helpers (read from `configuration.json`):
+  - `get_primary_node_fqdn()` — FQDN of the first node (e.g., `tappaas1.mgmt.internal`)
+  - `get_node_hostname [index]` — Actual system hostname of the Nth node
+  - `get_node_dns_hostname [index]` — DNS hostname (falls back to system hostname)
+  - `get_all_node_hostnames` — All node hostnames, one per line
+  - `get_node_fqdn [index]` — Full FQDN of the Nth node
 - Loads JSON configuration from `/home/tappaas/config/<vmname>.json`
 
 **Example:**
@@ -29,6 +32,11 @@ Shared library of functions and utilities for module installation scripts.
 vmid=$(get_config_value "vmid")
 cores=$(get_config_value "cores" "2")  # with default value
 check_json /home/tappaas/config/mymodule.json || exit 1
+
+# Node lookup (no module JSON needed)
+primary=$(get_primary_node_fqdn)       # tappaas1.mgmt.internal
+first_host=$(get_node_hostname 0)      # tappaas1
+all_nodes=$(get_all_node_hostnames)    # tappaas1\ntappaas2\ntappaas3
 ```
 
 ---
@@ -96,39 +104,126 @@ When `--variant` is used, the following fields are derived automatically unless 
 
 ### create-configuration.sh
 
-Creates the `configuration.json` file for the TAPPaaS system by querying the running cluster.
+Creates or updates the `configuration.json` file for the TAPPaaS system by querying the running cluster. Supports two argument styles: positional (backwards compatible) and named arguments with defaults.
 
 **Usage:**
 ```bash
-create-configuration.sh <upstreamGit> <branch> <domain> <email> <updateSchedule> [weekday] [hour]
+# Named arguments (all optional — defaults are discovered from the Proxmox node)
+create-configuration.sh [--upstream-git URL] [--branch NAME] [--domain DOMAIN]
+                        [--email EMAIL] [--schedule FREQ] [--weekday DAY] [--hour H]
+                        [--primary-node FQDN] [--update]
+
+# Positional arguments (backwards compatible)
+create-configuration.sh <upstreamGit> <branch> <domain> <email> <schedule> [weekday] [hour]
 ```
 
-**Parameters:**
+**Named Arguments:**
 
-| Parameter | Description | Example |
-|-----------|-------------|---------|
-| `upstreamGit` | Git URL of the upstream repository | `github.com/TAPPaaS/TAPPaaS` |
-| `branch` | Branch to use for updates | `main` |
-| `domain` | Primary domain for TAPPaaS | `mytappaas.dev` |
-| `email` | Admin email for SSL and notifications | `admin@mytappaas.dev` |
-| `updateSchedule` | Update frequency | `monthly`, `weekly`, `daily`, `none` |
-| `weekday` | (Optional) Day of week for updates, default: Thursday | `Wednesday` |
-| `hour` | (Optional) Hour of day 0-23, default: 2 | `3` |
+| Argument | Description | Default |
+|----------|-------------|---------|
+| `--upstream-git` | Git repository URL | `github.com/TAPPaaS/TAPPaaS` |
+| `--branch` | Git branch to track | `main` |
+| `--domain` | Primary domain for TAPPaaS | From Proxmox node FQDN, or existing config |
+| `--email` | Admin email for SSL and notifications | From Proxmox `root@pam` user, or existing config |
+| `--schedule` | Update frequency: `monthly`, `weekly`, `daily`, `none` | `weekly` |
+| `--weekday` | Day of week for updates | `Tuesday` |
+| `--hour` | Hour of day 0-23 | `2` |
+| `--primary-node` | Primary node FQDN for cluster discovery | Auto-detect from config or `tappaas1.mgmt.internal` |
+| `--update` | Update mode: preserve existing config, overlay provided args | *(flag)* |
 
-**Example:**
+**Default Discovery:**
+
+When `--domain` or `--email` are not explicitly provided, the script SSHs to the primary Proxmox node and discovers:
+- **Domain**: from the node's FQDN (`hostname --fqdn`), extracting the domain part (e.g., `node1.mydomain.com` → `mydomain.com`)
+- **Email**: from `/etc/pve/user.cfg`, reading the `root@pam` user's email address
+
+If the node is unreachable, falls back to `CHANGE-mytappaas.dev` / `CHANGE-tappaas@mytappaas.dev` (which must be updated before deployment).
+
+**Examples:**
 ```bash
-create-configuration.sh github.com/TAPPaaS/TAPPaaS main mytappaas.dev admin@mytappaas.dev monthly
-create-configuration.sh github.com/TAPPaaS/TAPPaaS main mytappaas.dev admin@mytappaas.dev weekly Wednesday 3
+# Create with all defaults (discovers domain/email from Proxmox node)
+create-configuration.sh
+
+# Create with specific domain and email
+create-configuration.sh --domain mytappaas.dev --email admin@mytappaas.dev
+
+# Update existing config — only change the domain
+create-configuration.sh --update --domain newdomain.com
+
+# Update mode — re-discover nodes and validate
+create-configuration.sh --update
+
+# Legacy positional syntax
+create-configuration.sh github.com/TAPPaaS/TAPPaaS main my.dev admin@my.dev weekly
 ```
 
 **What it does:**
-1. Queries Proxmox cluster for all nodes via `pvesh`
-2. Lists all VMs and their IP addresses
-3. Creates `/home/tappaas/config/configuration.json` with a global `updateSchedule`
+1. Discovers domain and email from the primary Proxmox node's installer settings
+2. Queries Proxmox cluster for all nodes via `pvecm` or `pvesh`
+3. Gets IP addresses for each node via DNS or SSH
+4. Creates or updates `/home/tappaas/config/configuration.json`
+5. In update mode: preserves existing values, repositories, and `dns-hostname` mappings
+6. Runs `validate-configuration.sh` on the result
 
 **Generated configuration includes:**
-- `repositories` array (initialized with the upstream repo and branch from arguments), `domain`, `email`, `updateSchedule` (in the `tappaas` section)
-- `nodes` array with hostname and IP for each node
+- `tappaas` section: `version`, `domain`, `email`, `nodeCount`, `repositories[]`, `updateSchedule`
+- `tappaas-nodes` array: `hostname`, `dns-hostname` (optional), and `ip` for each node
+
+---
+
+### validate-configuration.sh
+
+Validates `/home/tappaas/config/configuration.json` for correctness and consistency.
+
+**Usage:**
+```bash
+validate-configuration.sh [OPTIONS]
+```
+
+**Options:**
+
+| Option | Description |
+|--------|-------------|
+| `--config <path>` | Path to configuration.json (default: `/home/tappaas/config/configuration.json`) |
+| `--check-connectivity` | Ping each node IP to verify reachability |
+| `--check-cluster` | SSH to first node, verify cluster nodes match configuration |
+| `--check-repos` | Verify repository URLs are accessible via `git ls-remote` |
+| `--quiet` | Only output errors, suppress info messages |
+
+**Checks performed (always):**
+- File exists and is valid JSON
+- `domain` and `email` not starting with `CHANGE` (placeholder values)
+- Email format validation
+- `nodeCount` matches length of `tappaas-nodes` array
+- No duplicate IPs or hostnames in `tappaas-nodes`
+- Valid `updateSchedule` values (frequency, weekday, hour)
+- All required fields present (`version`, `domain`, `email`, `nodeCount`, `repositories`, `tappaas-nodes`)
+- `dns-hostname` fields are non-empty if set
+- IP addresses are valid IPv4 format
+
+**Examples:**
+```bash
+# Basic validation
+validate-configuration.sh
+
+# Full validation with connectivity and cluster checks
+validate-configuration.sh --check-connectivity --check-cluster --check-repos
+
+# Validate a specific file quietly
+validate-configuration.sh --config /tmp/test-config.json --quiet
+```
+
+**Exit codes:**
+
+| Code | Meaning |
+|------|---------|
+| `0` | All checks passed (may have warnings) |
+| `1` | One or more validation errors found |
+
+**Integration:** This script is called automatically by:
+- `create-configuration.sh` (after generating config)
+- `cluster/update.sh` (Step 0, warn-only)
+- `tappaas-cicd/test.sh` (Test 3: Configuration files)
 
 ---
 
@@ -514,7 +609,7 @@ inspect-cluster.sh
 ```
 
 **What it does:**
-1. Discovers all reachable Proxmox nodes (tappaas1–tappaas9)
+1. Discovers reachable Proxmox nodes from `configuration.json` (falls back to scanning tappaas1–9)
 2. Queries cluster-wide VM list via `pvesh get /cluster/resources`
 3. Reads all `~/config/*.json` files that define a `vmid`
 4. Displays a table of all running VMs with their config status
@@ -794,7 +889,7 @@ scripts/
 ├── check-disk-threshold.sh      # Auto-expand disks when usage exceeds threshold
 ├── common-install-routines.sh   # Shared library for install scripts
 ├── copy-update-json.sh          # Copy and modify module JSON configs
-├── create-configuration.sh      # Generate system configuration.json
+├── create-configuration.sh      # Create or update system configuration.json
 ├── delete-module.sh             # Delete a module with dependency-aware teardown
 ├── inspect-cluster.sh           # Compare running VMs against module configs
 ├── inspect-vm.sh                # 3-column config/git/actual VM comparison
@@ -808,5 +903,6 @@ scripts/
 ├── test-module.sh               # Test a module with dependency-recursive service testing
 ├── update-cron.sh               # Set up hourly update cron job
 ├── update-module.sh             # Update a module with snapshot, testing, and rollback
-└── update-os.sh                 # OS-specific update (NixOS/Debian)
+├── update-os.sh                 # OS-specific update (NixOS/Debian)
+└── validate-configuration.sh    # Validate configuration.json for correctness
 ```

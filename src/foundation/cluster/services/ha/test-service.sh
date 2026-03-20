@@ -33,7 +33,7 @@ fi
 check_json "/home/tappaas/config/${MODULE}.json" || exit 2
 
 VMID="$(get_config_value 'vmid')"
-NODE="$(get_config_value 'node' 'tappaas1')"
+NODE="$(get_config_value 'node' "$(get_node_hostname 0)")"
 HANODE="$(get_config_value 'HANode' 'NONE')"
 MGMT="mgmt"
 
@@ -58,7 +58,7 @@ info "    Primary: ${NODE}, HA: ${HANODE}"
 
 # Find a reachable Proxmox node to query
 QUERY_NODE=""
-for candidate in "${NODE}" "${HANODE}" tappaas1 tappaas2 tappaas3; do
+for candidate in "${NODE}" "${HANODE}" $(get_all_node_hostnames); do
     candidate_fqdn="${candidate}.${MGMT}.internal"
     if ssh -o ConnectTimeout=5 -o BatchMode=yes -o LogLevel=ERROR \
         "root@${candidate_fqdn}" "true" &>/dev/null; then

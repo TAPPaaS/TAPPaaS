@@ -3,9 +3,9 @@
 # TAPPaaS Cluster VM Service - Inspect VM
 #
 # Generates a 3-column comparison table for a module's VM showing:
-#   1. Config value  — from ~/config/<module>.json (deployed config)
-#   2. Git value     — from the source module JSON (in git repo)
-#   3. Actual value  — from the running VM via Proxmox API
+#   1. Released (Git) — from the source module JSON (in git repo)
+#   2. Desired (~/config) — from ~/config/<module>.json (deployed config)
+#   3. Actual value   — from the running VM via Proxmox API
 #
 # Color coding:
 #   Yellow — config value differs from git value (config drift)
@@ -146,14 +146,14 @@ print_row() {
 
     printf "  %-18s  %b%-20s%b  %b%-20s%b  %b%-20s%b\n" \
         "${field}" \
-        "${cfg_color}" "${config_val:--}" "${CL}" \
         "${git_color}" "${git_val:--}" "${CL}" \
+        "${cfg_color}" "${config_val:--}" "${CL}" \
         "${act_color}" "${actual_val:--}" "${CL}"
 }
 
 # ── Print table header ───────────────────────────────────────────────
 
-printf "  ${BOLD}%-18s  %-20s  %-20s  %-20s${CL}\n" "Field" "Config" "Git" "Actual"
+printf "  ${BOLD}%-18s  %-20s  %-20s  %-20s${CL}\n" "Field" "Released (Git)" "Desired (~/config)" "Actual"
 printf "  %-18s  %-20s  %-20s  %-20s\n" "------------------" "--------------------" "--------------------" "--------------------"
 
 # ── Compare fields ───────────────────────────────────────────────────
@@ -238,9 +238,9 @@ git_desc=$(get_git description)
 printf "  %-18s  %b%-20s%b  %b%-20s%b  %-20s\n" \
     "description" \
     "$( [[ -n "${git_desc}" && "${config_desc}" != "${git_desc}" ]] && echo -n "${YW}" || echo -n "${CL}" )" \
-    "${config_desc:--}" "${CL}" \
-    "$( [[ -n "${git_desc}" && "${config_desc}" != "${git_desc}" ]] && echo -n "${YW}" || echo -n "${CL}" )" \
     "${git_desc:--}" "${CL}" \
+    "$( [[ -n "${git_desc}" && "${config_desc}" != "${git_desc}" ]] && echo -n "${YW}" || echo -n "${CL}" )" \
+    "${config_desc:--}" "${CL}" \
     "(see Proxmox UI)"
 if [[ -n "${git_desc}" && "${config_desc}" != "${git_desc}" ]]; then
     WARNINGS=$((WARNINGS + 1))
