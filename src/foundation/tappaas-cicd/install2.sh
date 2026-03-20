@@ -137,9 +137,14 @@ if [[ "$FIREWALL_AVAILABLE" == "true" ]]; then
         }
     fi
     info "Enabling QEMU guest agent service..."
-    ssh root@"$FIREWALL_FQDN" "/bin/sh -c 'sysrc qemu_guest_agent_enable=YES && service qemu-guest-agent start'" 2>/dev/null || {
-        warn "QEMU guest agent service could not be started. Enable manually in OPNsense."
-    }
+    ssh root@"$FIREWALL_FQDN" "/bin/sh -c 'sysrc qemu_guest_agent_enable=YES'" 2>/dev/null || true
+    if ssh root@"$FIREWALL_FQDN" "/bin/sh -c 'service qemu-guest-agent status'" &>/dev/null; then
+        info "  QEMU guest agent service is already running"
+    else
+        ssh root@"$FIREWALL_FQDN" "/bin/sh -c 'service qemu-guest-agent start'" 2>/dev/null || {
+            warn "QEMU guest agent service could not be started. Enable manually in OPNsense."
+        }
+    fi
 
     # Update the firewall module
     /home/tappaas/bin/update-module.sh firewall

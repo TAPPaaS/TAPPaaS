@@ -104,7 +104,6 @@ def cmd_create_rule(args) -> int:
             # Check if rule already exists
             existing = manager.get_rule_by_description(args.description)
             if existing and not args.force:
-                print(f"Rule already exists: {args.description}")
                 if args.json:
                     print(json.dumps({"status": "exists", "uuid": existing.uuid}))
                 return 0
