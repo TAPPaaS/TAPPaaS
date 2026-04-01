@@ -295,9 +295,13 @@ discover_cluster_nodes() {
     debug "  Primary node for discovery: ${BGN}${primary_node}${CL}"
 
     # Get list of cluster nodes via pvecm
+    # Note: When a Qdevice is configured, pvecm nodes outputs extra columns
+    # (e.g., "Qdevice" row and shifted Name column). We print the last
+    # whitespace-delimited field, strip " (local)", and filter out non-node rows.
     local cluster_nodes=""
     if ssh -o ConnectTimeout=5 -o BatchMode=yes "root@${primary_node}" "pvecm nodes" >/dev/null 2>&1; then
-        cluster_nodes=$(ssh "root@${primary_node}" "pvecm nodes 2>/dev/null | tail -n +2 | awk 'NF>=3 {print \$3}' | grep -v '^Name$' | grep -v '^-*$'" 2>/dev/null || true)
+        cluster_nodes=$(ssh "root@${primary_node}" \
+            "pvecm nodes 2>/dev/null | tail -n +2 | awk 'NF>=3 {print \$NF}' | sed 's/ (local)//' | grep -v '^Name$' | grep -v '^Qdevice$' | grep -v '^-*$'" 2>/dev/null || true)
     fi
 
     # If pvecm failed, try pvesh with JSON format (more reliable)
@@ -319,6 +323,11 @@ discover_cluster_nodes() {
 
     # Get IP addresses for each node
     for node in $cluster_nodes; do
+        # Validate node name looks like a hostname (alphanumeric + hyphens)
+        if [[ ! "$node" =~ ^[a-zA-Z0-9]([a-zA-Z0-9-]*[a-zA-Z0-9])?$ ]]; then
+            warn "Skipping invalid node name: '$node'"
+            continue
+        fi
         NODES+=("$node")
 
         local node_ip=""
