@@ -60,6 +60,11 @@ else
         }
         echo ""
     fi
+
+    # Verify the package actually got installed
+    if ! ssh root@"$FIREWALL_FQDN" "/bin/sh -c 'pkg info os-caddy'" &>/dev/null; then
+        die "os-caddy package installation failed — package is not present on the firewall."
+    fi
 fi
 
 # Step 2: Reconfigure OPNsense web GUI to port 8443 and disable HTTP redirect
@@ -81,7 +86,9 @@ $config["system"]["webgui"]["disablehttpredirect"] = "1";
 write_config("Changed web GUI port to 8443 and disabled HTTP redirect for Caddy reverse proxy");
 echo "Configuration saved.\n";
 EOFPHP
-php /tmp/set-webgui-port.php && rm /tmp/set-webgui-port.php'
+php /tmp/set-webgui-port.php && rm /tmp/set-webgui-port.php' || {
+    die "Failed to reconfigure OPNsense web GUI port. Check SSH access and PHP on the firewall."
+}
 
 # Restart web GUI separately (connection may drop during restart)
 debug "Restarting web GUI..."
@@ -236,13 +243,25 @@ $config["caddy"]["general"]["TlsEmail"] = $argv[1];
 write_config("Enabled Caddy reverse proxy and set ACME email");
 echo "Caddy enabled with ACME email: " . $argv[1] . "\n";
 EOFPHP
-php /tmp/configure-caddy-general.php "'"$EMAIL"'" && rm /tmp/configure-caddy-general.php'
+php /tmp/configure-caddy-general.php "'"$EMAIL"'" && rm /tmp/configure-caddy-general.php' || {
+    die "Failed to enable Caddy and set ACME email on the firewall."
+}
 
 # Reconfigure Caddy to apply settings
 debug "Applying Caddy configuration..."
 ssh root@"$FIREWALL_FQDN" 'configctl caddy reload' || {
     warn "Could not reload Caddy service"
 }
+
+# Step 5: Verify Caddy is running
+info "Step 5: Verifying Caddy service..."
+sleep 2
+if ssh root@"$FIREWALL_FQDN" 'configctl caddy status' 2>/dev/null | grep -qi "running"; then
+    debug "  Caddy service is running"
+else
+    warn "Caddy service does not appear to be running."
+    warn "Please check Caddy status in the OPNsense GUI (Services > Caddy)."
+fi
 
 echo ""
 info "${GN}✓${CL} Caddy setup completed"
