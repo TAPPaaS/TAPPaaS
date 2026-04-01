@@ -85,6 +85,23 @@ class Config:
     api_timeout: float = 30.0  # Default 30 seconds (upstream default is 2.0)
     api_retries: int = 3  # Retry failed requests (upstream default is 0)
 
+    def __post_init__(self):
+        """Validate that credentials are available from at least one source."""
+        has_token_secret = self.token and self.secret
+        has_env_token = os.environ.get("OPNSENSE_TOKEN") and os.environ.get("OPNSENSE_SECRET")
+        has_credential_file = self.credential_file and Path(self.credential_file).exists()
+
+        if not has_token_secret and not has_env_token and not has_credential_file:
+            sources = [
+                f"  - Credential file: {DEFAULT_CREDENTIAL_FILE} (not found)",
+                "  - Environment variables: OPNSENSE_TOKEN / OPNSENSE_SECRET (not set)",
+                "  - CLI options: --token / --secret (not provided)",
+            ]
+            raise ValueError(
+                "No OPNsense API credentials found. Provide credentials via one of:\n"
+                + "\n".join(sources)
+            )
+
     def resolve_port(self) -> int:
         """Resolve the API port, probing if not explicitly set.
 

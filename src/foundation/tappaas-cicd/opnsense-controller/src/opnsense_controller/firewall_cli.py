@@ -43,7 +43,11 @@ def get_config(args) -> Config:
     if args.credential_file:
         config_kwargs["credential_file"] = args.credential_file
 
-    return Config(**config_kwargs)
+    try:
+        return Config(**config_kwargs)
+    except ValueError as e:
+        print(f"Configuration error: {e}", file=sys.stderr)
+        sys.exit(1)
 
 
 def cmd_create_rule(args) -> int:

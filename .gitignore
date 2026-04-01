@@ -1,4 +1,6 @@
 .DS_Store
+__pycache__/
+*.pyc
 src/configuration/globalvariables
 src/modules/opnsense/tapaas.tfvars
 .vscode/settings.json
