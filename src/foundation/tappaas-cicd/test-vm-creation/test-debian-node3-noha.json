@@ -2,7 +2,7 @@
   "description": "Test: Debian on tappaas3 with no HANode (no cluster:ha in dependsOn)",
   "version": "0.5",
   "vmname": "test-debian-node3-noha",
-  "vmid": 906,
+  "vmid": 904,
   "vmtag": "TAPPaaS,Test",
   "cores": 1,
   "memory": "1024",

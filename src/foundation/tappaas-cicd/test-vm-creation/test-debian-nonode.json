@@ -2,7 +2,7 @@
   "description": "Test: Debian with no explicit node or HANode (defaults from configuration.json)",
   "version": "0.5",
   "vmname": "test-debian-nonode",
-  "vmid": 905,
+  "vmid": 903,
   "vmtag": "TAPPaaS,Test",
   "cores": 1,
   "memory": "1024",

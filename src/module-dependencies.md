@@ -1,9 +1,9 @@
 # TAPPaaS Module Dependency Graph
 
-This document shows the service dependencies between TAPPaaS foundation and application modules.
-Each arrow points from a **consumer** module to the **provider** module it depends on, labeled with the service name.
+Arrows point **from consumer to provider**, labeled with the service consumed.
+A module at the top of the graph depends on modules below it.
 
-Generated: 2026-03-18
+Generated: 2026-04-02
 
 ## Dependency Graph
 
@@ -85,9 +85,9 @@ graph TD
 |--------|----------|----------|------------|
 | cluster | Foundation (provider-only) | vm, ha | _(none)_ |
 | templates | Foundation (provider-only) | nixos, debian | _(none)_ |
+| backup | Foundation | vm | _(none)_ |
 | firewall | Foundation | firewall, proxy | cluster:vm, cluster:ha |
 | tappaas-cicd | Foundation | _(none)_ | cluster:vm, cluster:ha |
-| backup | Foundation | vm | _(none)_ |
 | identity | Foundation | accessControl, identity | cluster:vm, cluster:ha, templates:nixos, backup:vm, firewall:proxy |
 | litellm | Application | models | cluster:vm, templates:nixos, backup:vm, identity:identity, firewall:proxy |
 | openwebui | Application | _(none)_ | cluster:vm, templates:nixos, backup:vm, identity:identity, firewall:proxy, litellm:models |

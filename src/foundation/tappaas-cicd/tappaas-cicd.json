@@ -1,6 +1,6 @@
 {
   "description": "The TAPPaaS mothership VM",
-  "version": "0.5",
+  "version": "1.0",
   "vmname": "tappaas-cicd",
   "vmid": 130,
   "vmtag": "TAPPaaS,Foundation",

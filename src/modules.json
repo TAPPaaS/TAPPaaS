@@ -28,7 +28,7 @@
         },
         {
             "moduleName": "backup",
-            "vmid": 200,
+            "vmid": 0,
             "moduleJson": "src/foundation/backup/backup.json"
         }
     ],
@@ -81,6 +81,16 @@
             "moduleName": "test-debian-vlan-node",
             "vmid": 902,
             "moduleJson": "src/foundation/tappaas-cicd/test-vm-creation/test-debian-vlan-node.json"
+        },
+        {
+            "moduleName": "test-debian-nonode",
+            "vmid": 903,
+            "moduleJson": "src/foundation/tappaas-cicd/test-vm-creation/test-debian-nonode.json"
+        },
+        {
+            "moduleName": "test-debian-node3-noha",
+            "vmid": 904,
+            "moduleJson": "src/foundation/tappaas-cicd/test-vm-creation/test-debian-node3-noha.json"
         },
         {
             "moduleName": "test-ubuntu-vlan",

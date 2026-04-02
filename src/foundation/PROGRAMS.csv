@@ -1,7 +1,7 @@
 Program,Install Location,Source Path,Type
 # ==========================================================================================
 # TAPPaaS Foundation Layer - Executable Programs and Scripts
-# Generated: 2026-03-19
+# Generated: 2026-04-02
 # ==========================================================================================
 #
 # --- Shell Scripts (installed as symlinks in /home/tappaas/bin/) -------------------------
@@ -37,5 +37,73 @@ update-tappaas,/home/tappaas/bin/update-tappaas,tappaas-cicd/update-tappaas/src/
 Create-TAPPaaS-VM.sh,/root/tappaas/Create-TAPPaaS-VM.sh,cluster/Create-TAPPaaS-VM.sh,script
 #
 # --- Module Lifecycle Scripts (not in bin; called via module directories) ----------------
-# Each module has: install.sh update.sh test.sh in its directory
-# Each service has: install-service.sh update-service.sh test-service.sh delete-service.sh
+# tappaas-cicd module
+install1.sh,(run in place),tappaas-cicd/install1.sh,script
+install2.sh,(run in place),tappaas-cicd/install2.sh,script
+update.sh,(run in place),tappaas-cicd/update.sh,script
+pre-update.sh,(run in place),tappaas-cicd/pre-update.sh,script
+test.sh,(run in place),tappaas-cicd/test.sh,script
+# cluster module
+install.sh,(run in place),cluster/install.sh,script
+update.sh,(run in place),cluster/update.sh,script
+# firewall module
+update.sh,(run in place),firewall/update.sh,script
+# backup module
+install.sh,(run in place),backup/install.sh,script
+update.sh,(run in place),backup/update.sh,script
+backup-manage.sh,(run in place),backup/backup-manage.sh,script
+restore.sh,(run in place),backup/restore.sh,script
+# identity module
+install.sh,(run in place),identity/install.sh,script
+update.sh,(run in place),identity/update.sh,script
+#
+# --- Service Scripts (called by module lifecycle orchestrators) --------------------------
+# cluster:vm
+install-service.sh,(run in place),cluster/services/vm/install-service.sh,service
+update-service.sh,(run in place),cluster/services/vm/update-service.sh,service
+test-service.sh,(run in place),cluster/services/vm/test-service.sh,service
+delete-service.sh,(run in place),cluster/services/vm/delete-service.sh,service
+# cluster:ha
+install-service.sh,(run in place),cluster/services/ha/install-service.sh,service
+update-service.sh,(run in place),cluster/services/ha/update-service.sh,service
+test-service.sh,(run in place),cluster/services/ha/test-service.sh,service
+delete-service.sh,(run in place),cluster/services/ha/delete-service.sh,service
+# firewall:firewall
+install-service.sh,(run in place),firewall/services/firewall/install-service.sh,service
+update-service.sh,(run in place),firewall/services/firewall/update-service.sh,service
+delete-service.sh,(run in place),firewall/services/firewall/delete-service.sh,service
+# firewall:proxy
+install-service.sh,(run in place),firewall/services/proxy/install-service.sh,service
+update-service.sh,(run in place),firewall/services/proxy/update-service.sh,service
+test-service.sh,(run in place),firewall/services/proxy/test-service.sh,service
+delete-service.sh,(run in place),firewall/services/proxy/delete-service.sh,service
+# templates:nixos
+install-service.sh,(run in place),templates/services/nixos/install-service.sh,service
+update-service.sh,(run in place),templates/services/nixos/update-service.sh,service
+test-service.sh,(run in place),templates/services/nixos/test-service.sh,service
+delete-service.sh,(run in place),templates/services/nixos/delete-service.sh,service
+# templates:debian
+install-service.sh,(run in place),templates/services/debian/install-service.sh,service
+update-service.sh,(run in place),templates/services/debian/update-service.sh,service
+delete-service.sh,(run in place),templates/services/debian/delete-service.sh,service
+# backup:vm
+install-service.sh,(run in place),backup/services/vm/install-service.sh,service
+update-service.sh,(run in place),backup/services/vm/update-service.sh,service
+test-service.sh,(run in place),backup/services/vm/test-service.sh,service
+delete-service.sh,(run in place),backup/services/vm/delete-service.sh,service
+# identity:identity
+install-service.sh,(run in place),identity/services/identity/install-service.sh,service
+update-service.sh,(run in place),identity/services/identity/update-service.sh,service
+test-service.sh,(run in place),identity/services/identity/test-service.sh,service
+delete-service.sh,(run in place),identity/services/identity/delete-service.sh,service
+# identity:accessControl
+install-service.sh,(run in place),identity/services/accessControl/install-service.sh,service
+update-service.sh,(run in place),identity/services/accessControl/update-service.sh,service
+delete-service.sh,(run in place),identity/services/accessControl/delete-service.sh,service
+#
+# --- Test Scripts -----------------------------------------------------------------------
+test.sh,(run in place),tappaas-cicd/test-repository/test.sh,test
+install.sh,(run in place),tappaas-cicd/test-vm-creation/install.sh,test
+test.sh,(run in place),tappaas-cicd/test-vm-creation/test.sh,test
+test-variant.sh,(run in place),tappaas-cicd/test-vm-creation/test-variant.sh,test
+test-vm.sh,(run in place),tappaas-cicd/test-vm-creation/test-vm.sh,test
