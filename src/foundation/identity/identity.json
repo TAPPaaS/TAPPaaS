@@ -14,7 +14,7 @@
   "imageType": "clone",
   "image": "8080",
   "bridge0": "lan",
-  "zone0": "srv",
+  "zone0": "mgmt",
   "proxyPort": 9000,
   "dependsOn": [
     "cluster:vm",
