@@ -1,0 +1,19 @@
+{
+  "description": "Test: Debian on tappaas3 with no HANode (no cluster:ha in dependsOn)",
+  "version": "0.5",
+  "vmname": "test-debian-node3-noha",
+  "vmid": 906,
+  "vmtag": "TAPPaaS,Test",
+  "cores": 1,
+  "memory": "1024",
+  "diskSize": "4G",
+  "storage": "tanka1",
+  "imageType": "img",
+  "image": "debian-13-generic-amd64-20260112-2355.qcow2",
+  "imageLocation": "https://cdimage.debian.org/cdimage/cloud/trixie/20260112-2355",
+  "cloudInit": "true",
+  "bridge0": "lan",
+  "zone0": "mgmt",
+  "node": "tappaas3",
+  "dependsOn": ["cluster:vm", "templates:debian"]
+}

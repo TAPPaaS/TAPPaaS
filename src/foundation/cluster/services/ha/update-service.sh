@@ -3,9 +3,8 @@
 # TAPPaaS Cluster HA Service - Update
 #
 # Manages Proxmox HA rules and ZFS replication for a consuming module.
-# Based on the module's HANode field:
-#   - If HANode is "NONE" or not present: Remove any existing HA/replication config
-#   - If HANode is set to a valid node: Create/update HA rule and replication
+# This script is called when cluster:ha is in dependsOn. HANode defaults to
+# the first node in configuration.json that differs from the primary node.
 #
 # The script uses the replicationSchedule field (default: */15) for replication interval.
 #
@@ -24,7 +23,7 @@ MGMTVLAN="mgmt"
 # Get required values from JSON
 VMID=$(get_config_value 'vmid')
 NODE=$(get_config_value 'node' "$(get_node_hostname 0)")
-HANODE=$(get_config_value 'HANode' 'NONE')
+HANODE=$(get_config_value 'HANode' "$(get_default_ha_node "$NODE")")
 REPLICATION_SCHEDULE=$(get_config_value 'replicationSchedule' '*/15')
 STORAGE=$(get_config_value 'storage' 'tanka1')
 
@@ -189,13 +188,12 @@ info "  Setting up ZFS replication to $ha_node..."
 }
 
 # Main logic
-if [ "$HANODE" == "NONE" ] || [ -z "$HANODE" ]; then
-  echo ""
-info "${BOLD}HANode is 'NONE' - removing any existing HA configuration"
-  remove_ha_config
+if [[ -z "$HANODE" ]]; then
+  warn "No second node available for HA — single-node cluster. Skipping HA configuration."
+elif [[ "$HANODE" == "$NODE" ]]; then
+  error "HANode (${HANODE}) is the same as node (${NODE}). HA requires two different nodes."
 else
   create_ha_config "$HANODE"
+  echo ""
+  info "${GN}${BOLD}HA configuration update completed for ${MODULE_NAME}${CL}"
 fi
-
-echo ""
-info "${GN}${BOLD}HA configuration update completed for ${MODULE_NAME}${CL}"

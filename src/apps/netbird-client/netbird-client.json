@@ -4,7 +4,6 @@
   "vmname": "netbird-client",
   "vmid": 800,
   "vmtag": "TAPPaaS,App",
-  "node": "tappaas1",
   "cores": 1,
   "memory": "1024",
   "diskSize": "4G",

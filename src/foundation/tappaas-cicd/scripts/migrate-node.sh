@@ -160,7 +160,7 @@ do_list() {
             if [[ "${current_node}" == "${target_node}" ]]; then
                 # Determine where it would go
                 local migrate_to=""
-                if [[ -n "${ha_node}" && "${ha_node}" != "NONE" ]]; then
+                if [[ -n "${ha_node}" ]]; then
                     migrate_to="${ha_node}"
                 else
                     migrate_to="(no HANode)"
@@ -233,7 +233,7 @@ do_evacuate() {
             continue
         fi
 
-        if [[ -z "${ha_node}" || "${ha_node}" == "NONE" ]]; then
+        if [[ -z "${ha_node}" ]]; then
             warn "${vmname} (VMID ${vmid}) has no HANode configured — skipping"
             skipped=$((skipped + 1))
             continue

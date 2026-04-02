@@ -26,18 +26,12 @@ MGMTVLAN="mgmt"
 
 VMID=$(get_config_value 'vmid')
 NODE=$(get_config_value 'node' "$(get_node_hostname 0)")
-HANODE=$(get_config_value 'HANode' 'NONE')
+HANODE=$(get_config_value 'HANode' "$(get_default_ha_node "$NODE")")
 
 NODE_FQDN="${NODE}.${MGMTVLAN}.internal"
 HA_RULE_NAME="ha-${MODULE_NAME}"
 
 info "Removing HA configuration for module: ${MODULE_NAME} (VMID: ${VMID})"
-
-# If no HA was configured, nothing to do
-if [[ "${HANODE}" == "NONE" || -z "${HANODE}" ]]; then
-    info "  No HANode configured — nothing to remove"
-    exit 0
-fi
 
 # Remove VM from HA resources
 if ssh root@"${NODE_FQDN}" "ha-manager config" 2>/dev/null | grep -q "^vm:${VMID}"; then

@@ -295,13 +295,11 @@
         },
 
         "HANode": {
-            "description": "Secondary node for High Availability. Must be different from 'node' and have the same storage defined.",
+            "description": "Secondary node for High Availability. Defaults to the first node in configuration.json that differs from 'node'. Must be different from 'node' and have the same storage defined. HA is only active when 'cluster:ha' is in dependsOn.",
             "type": "string",
             "requiredBy": ["cluster:ha"],
             "usedBy": "cluster:ha",
-            "default": "NONE",
-            "pattern": "^(NONE|tappaas[0-9]+)$",
-            "note": "If present and not 'NONE', install script will set up HA for the VM"
+            "default": null
         },
 
         "replicationSchedule": {

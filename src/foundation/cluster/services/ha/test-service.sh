@@ -15,7 +15,7 @@
 # Usage: test-service.sh <module-name>
 #
 # Exit codes:
-#   0  All checks passed (or HANode=NONE → skip)
+#   0  All checks passed (or HANode unresolvable on single-node cluster → skip)
 #   1  One or more checks failed
 #   2  Fatal error
 #
@@ -34,7 +34,7 @@ check_json "/home/tappaas/config/${MODULE}.json" || exit 2
 
 VMID="$(get_config_value 'vmid')"
 NODE="$(get_config_value 'node' "$(get_node_hostname 0)")"
-HANODE="$(get_config_value 'HANode' 'NONE')"
+HANODE="$(get_config_value 'HANode' "$(get_default_ha_node "$NODE")")"
 MGMT="mgmt"
 
 HA_RULE_NAME="ha-${MODULE}"
@@ -48,9 +48,9 @@ fail() { error "    ✗ $1"; FAIL=$((FAIL + 1)); }
 
 info "  ${BOLD}cluster:ha tests for ${BL}${MODULE}${CL} (VMID ${VMID})"
 
-# If HANode is NONE, HA is intentionally not configured — nothing to test
-if [[ "${HANODE}" == "NONE" || -z "${HANODE}" ]]; then
-    info "    HANode is NONE — HA not configured, skipping tests"
+# If HANode could not be resolved (single-node cluster), warn and skip
+if [[ -z "${HANODE}" ]]; then
+    warn "    HANode could not be resolved — single-node cluster? Skipping HA tests"
     exit 0
 fi
 

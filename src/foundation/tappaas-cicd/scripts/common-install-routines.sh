@@ -113,6 +113,17 @@ get_node_fqdn() {
     echo "${dns_host}.${mgmt}.internal"
 }
 
+# Get the first node from configuration.json whose hostname differs from the given primary node.
+# Used to resolve a default HANode when none is explicitly set.
+# Arguments: [primary-node-hostname] (default: first node in config)
+get_default_ha_node() {
+    local primary="${1:-$(get_node_hostname 0)}"
+    local config="${CONFIG_DIR}/configuration.json"
+    if [[ -f "$config" ]]; then
+        jq -r --arg p "$primary" '."tappaas-nodes"[] | select(.hostname != $p) | .hostname' "$config" 2>/dev/null | head -1
+    fi
+}
+
 # ── Module helper functions ──────────────────────────────────────────
 
 # Get the module directory from the .location field in its deployed config JSON.
@@ -450,12 +461,22 @@ function check_json() {
 
   # Check HANode is different from node if specified
   local ha_node
-  ha_node=$(echo "$json_content" | jq -r '.HANode // "NONE"')
+  ha_node=$(echo "$json_content" | jq -r '.HANode // empty')
   local node
-  node=$(echo "$json_content" | jq -r '.node // "tappaas1"')
-  if [ "$ha_node" != "NONE" ] && [ "$ha_node" == "$node" ]; then
+  node=$(echo "$json_content" | jq -r '.node // empty')
+  [[ -z "$node" ]] && node="$(get_node_hostname 0)"
+  if [[ -n "$ha_node" ]] && [[ "$ha_node" == "$node" ]]; then
     error "  HANode (${ha_node}) must be different from node (${node})"
     errors=$((errors + 1))
+  fi
+  # Validate HANode exists in configuration.json if set
+  if [[ -n "$ha_node" ]] && [[ -f "${CONFIG_DIR}/configuration.json" ]]; then
+    local known_nodes
+    known_nodes=$(jq -r '."tappaas-nodes"[].hostname' "${CONFIG_DIR}/configuration.json" 2>/dev/null)
+    if ! echo "$known_nodes" | grep -qx "$ha_node"; then
+      warn "  HANode '${ha_node}' not found in configuration.json tappaas-nodes"
+      warnings=$((warnings + 1))
+    fi
   fi
 
   # Check zone references exist in zones.json

@@ -4,7 +4,6 @@
   "vmname": "template",
   "vmid": 999,
   "vmtag": "TAPPaaS,Test",
-  "node": "tappaas1",
   "cores": 2,
   "memory": "8192",
   "diskSize": "32G",

@@ -18,7 +18,7 @@ VMNAME="$(get_config_value 'vmname' "$1")"
 VMID="$(get_config_value 'vmid')"
 NODE="$(get_config_value 'node' "$(get_node_hostname 0)")"
 ZONE0NAME="$(get_config_value 'zone0' 'mgmt')"
-HANODE="$(get_config_value 'HANode' 'NONE')"
+HANODE="$(get_config_value 'HANode' "$(get_default_ha_node "$NODE")")"
 REPLICATION_SCHEDULE="$(get_config_value 'replicationSchedule' '*/15')"
 STORAGE="$(get_config_value 'storage' 'tanka1')"
 MGMT="mgmt"
@@ -26,7 +26,7 @@ MGMT="mgmt"
 echo "=============================================="
 echo "Testing VM: ${VMNAME} (VMID: ${VMID})"
 echo "Node: ${NODE}, Zone: ${ZONE0NAME}"
-if [ -n "$HANODE" ] && [ "$HANODE" != "NONE" ]; then
+if [ -n "$HANODE" ]; then
     echo "HA Node: ${HANODE}"
 fi
 echo "=============================================="
@@ -196,8 +196,9 @@ else
     test_result "Disk size verification (skipped - no SSH)" 1
 fi
 
-# HA Tests (only if HANode is specified)
-if [ -n "$HANODE" ] && [ "$HANODE" != "NONE" ]; then
+# HA Tests (only if cluster:ha is in dependsOn)
+HAS_HA=$(echo "$JSON" | jq -r '.dependsOn // [] | if index("cluster:ha") then "true" else "false" end')
+if [ "$HAS_HA" = "true" ] && [ -n "$HANODE" ]; then
     echo ""
     echo "Running HA configuration tests..."
     echo ""

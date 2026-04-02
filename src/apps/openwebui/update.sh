@@ -29,7 +29,7 @@ VMNAME="$(get_config_value 'vmname' "${1:-}")"
 VMID="$(get_config_value 'vmid')"
 NODE="$(get_config_value 'node' "$(get_node_hostname 0)")"
 ZONE0NAME="$(get_config_value 'zone0' 'mgmt')"
-HANODE="$(get_config_value 'HANode' 'NONE')"
+HANODE="$(get_config_value 'HANode' "$(get_default_ha_node "$NODE")")"
 readonly VMNAME VMID NODE ZONE0NAME HANODE
 
 VM_HOST="${VMNAME}.${ZONE0NAME}.internal"
@@ -108,7 +108,7 @@ main() {
     info "VM: ${VMNAME} (VMID: ${VMID})"
     info "Node: ${NODE}"
     info "Zone: ${ZONE0NAME}"
-    if [[ -n "${HANODE}" && "${HANODE}" != "NONE" ]]; then
+    if [[ -n "${HANODE}" ]]; then
         info "HA Node: ${HANODE}"
     fi
 }
