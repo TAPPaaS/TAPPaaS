@@ -173,7 +173,7 @@ else
     # Use a known small public repo for testing
     # We use the TAPPaaS repo itself but to a different directory
     TEST_URL="github.com/TAPPaaS/TAPPaaS"
-    TEST_BRANCH="main"
+    TEST_BRANCH="stable"
     # We need a different name since TAPPaaS is already tracked
     # Create a small local bare repo for testing instead
     TEST_BARE_DIR=$(mktemp -d)

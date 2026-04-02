@@ -21,7 +21,7 @@ if [ -f "$CONFIG_FILE" ]; then
     echo ""
     info "Migrating configuration.json from upstreamGit/branch to repositories format..."
     OLD_URL=$(jq -r '.tappaas.upstreamGit' "$CONFIG_FILE")
-    OLD_BRANCH=$(jq -r '.tappaas.branch // "main"' "$CONFIG_FILE")
+    OLD_BRANCH=$(jq -r '.tappaas.branch // "stable"' "$CONFIG_FILE")
     OLD_NAME="${OLD_URL##*/}"
     OLD_NAME="${OLD_NAME%.git}"
     tmp_file=$(mktemp)

@@ -60,7 +60,7 @@ Create or update TAPPaaS configuration.json by discovering the running cluster.
 
 Named Arguments (all optional, defaults apply):
     --upstream-git URL    Git repository URL (default: github.com/TAPPaaS/TAPPaaS)
-    --branch NAME         Git branch to track (default: main)
+    --branch NAME         Git branch to track (default: stable)
     --domain DOMAIN       Primary domain for TAPPaaS (default: from existing config or CHANGE-domain.tld)
     --email EMAIL         Admin email address (default: from Proxmox root@pam user or existing config)
     --schedule FREQ       Update frequency: monthly, weekly, daily, none (default: weekly)
@@ -145,7 +145,7 @@ parse_args() {
     if [[ $# -eq 0 ]] || [[ "${1:-}" == --* ]] || [[ "${1:-}" == -h ]]; then
         # Named argument mode — start with defaults
         UPSTREAM_GIT="github.com/TAPPaaS/TAPPaaS"
-        BRANCH="main"
+        BRANCH="stable"
         DOMAIN="CHANGE-domain.tld"
         EMAIL="${DISCOVERED_EMAIL:-CHANGE-admin@domain.tld}"
         UPDATE_SCHEDULE="weekly"

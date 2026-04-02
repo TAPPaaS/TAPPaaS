@@ -248,7 +248,7 @@ msg_ok "Determined TAPPaaS repo to use: ${REPO}"
 # Find the branch version of TAPPaaS to use
 msg_info "Determining TAPPaaS branch to use"
 if [ -z "${1:-}" ]; then
-  BRANCH="main"
+  BRANCH="stable"
 else
   BRANCH="$2"
 fi

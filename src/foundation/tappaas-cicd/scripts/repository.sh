@@ -58,7 +58,7 @@ Commands:
     add <url> [--branch <branch>]
         Add a new module repository. The repository is cloned into
         ${CLONE_DIR}/<name>/ where <name> is derived from the URL.
-        Default branch: main.
+        Default branch: stable.
 
     remove <name> [--force]
         Remove a module repository. Blocked if installed modules
@@ -226,7 +226,7 @@ update_config() {
 # Add a new repository
 cmd_add() {
     local url=""
-    local branch="main"
+    local branch="stable"
 
     # Parse arguments
     while [[ $# -gt 0 ]]; do

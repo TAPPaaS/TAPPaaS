@@ -47,7 +47,7 @@ Array of Proxmox node configurations, each containing:
             {
                 "name": "TAPPaaS",
                 "url": "github.com/TAPPaaS/TAPPaaS",
-                "branch": "main",
+                "branch": "stable",
                 "path": "/home/tappaas/TAPPaaS"
             }
         ],
@@ -81,13 +81,13 @@ Each repository entry contains:
 |-------|-------------|---------|
 | `name` | Repository name (derived from URL) | `TAPPaaS` |
 | `url` | Git URL without `https://` prefix | `github.com/TAPPaaS/TAPPaaS` |
-| `branch` | Git branch to track | `main` |
+| `branch` | Git branch to track | `stable` |
 | `path` | Absolute local clone path | `/home/tappaas/TAPPaaS` |
 
 **Managing repositories:**
 ```bash
 # Add a community repository
-repository.sh add github.com/someone/tappaas-community --branch main
+repository.sh add github.com/someone/tappaas-community --branch stable
 
 # List all tracked repositories
 repository.sh list
