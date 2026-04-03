@@ -109,6 +109,7 @@ echo ""
 info "Building the opnsense-controller project..."
 cd opnsense-controller
 stdbuf -oL nix-build -A default default.nix 2>&1 | tee /tmp/opnsense-controller-build.log | while IFS= read -r line; do printf "."; done
+echo ""
 rm /home/tappaas/bin/opnsense-controller 2>/dev/null || true
 ln -s /home/tappaas/TAPPaaS/src/foundation/tappaas-cicd/opnsense-controller/result/bin/opnsense-controller /home/tappaas/bin/opnsense-controller
 rm /home/tappaas/bin/zone-manager 2>/dev/null || true
@@ -132,6 +133,7 @@ echo ""
 info "Building the update-tappaas project..."
 cd update-tappaas
 stdbuf -oL nix-build -A default default.nix 2>&1 | tee /tmp/update-tappaas-build.log | while IFS= read -r line; do printf "."; done
+echo ""
 rm /home/tappaas/bin/update-tappaas 2>/dev/null || true
 ln -s /home/tappaas/TAPPaaS/src/foundation/tappaas-cicd/update-tappaas/result/bin/update-tappaas /home/tappaas/bin/update-tappaas
 info "  update-tappaas binary installed to /home/tappaas/bin/"

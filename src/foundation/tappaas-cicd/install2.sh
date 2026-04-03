@@ -24,19 +24,22 @@ MGMTVLAN="mgmt"
 NODE1_FQDN="${TAPPAAS_PRIMARY_NODE:-tappaas1}.$MGMTVLAN.internal"
 export FIREWALL_FQDN="firewall.$MGMTVLAN.internal"  # Used by sourced scripts
 
+# Accept SSH host keys on first connection (but still reject changed keys)
+SSH_ACCEPT="-o StrictHostKeyChecking=accept-new"
+
 # copy the public keys to the root account of every proxmox host
 echo ""
 _info "Installing SSH keys on Proxmox nodes..."
 while read -r node; do
   NODE_FQDN="$node.$MGMTVLAN.internal"
   printf "  %s " "$node"
-  ssh-copy-id -i /home/tappaas/.ssh/id_ed25519.pub root@"$NODE_FQDN" < /dev/null 2>&1 | while IFS= read -r _; do printf "."; done || echo " (failed or already installed)"
+  ssh-copy-id $SSH_ACCEPT -i /home/tappaas/.ssh/id_ed25519.pub root@"$NODE_FQDN" < /dev/null 2>&1 | while IFS= read -r _; do printf "."; done || echo " (failed or already installed)"
   # also make the key available for the tappaas script that configure cloud-init on the vms
-  ssh -n root@"$NODE_FQDN" "mkdir -p /root/tappaas" 2>/dev/null
-  scp /home/tappaas/.ssh/id_ed25519.pub root@"$NODE_FQDN":/root/tappaas/tappaas-cicd.pub < /dev/null 2>/dev/null
-  scp /home/tappaas/.ssh/id_ed25519 root@"$NODE_FQDN":/root/tappaas/tappaas-cicd.key < /dev/null 2>/dev/null
+  ssh -n $SSH_ACCEPT root@"$NODE_FQDN" "mkdir -p /root/tappaas" 2>/dev/null
+  scp $SSH_ACCEPT /home/tappaas/.ssh/id_ed25519.pub root@"$NODE_FQDN":/root/tappaas/tappaas-cicd.pub < /dev/null 2>/dev/null
+  scp $SSH_ACCEPT /home/tappaas/.ssh/id_ed25519 root@"$NODE_FQDN":/root/tappaas/tappaas-cicd.key < /dev/null 2>/dev/null
   echo " done"
-done < <(ssh -n root@"$NODE1_FQDN" pvesh get /cluster/resources --type node --output-format json | jq --raw-output ".[].node" )
+done < <(ssh -n $SSH_ACCEPT root@"$NODE1_FQDN" pvesh get /cluster/resources --type node --output-format json | jq --raw-output ".[].node" )
 
 # create tappaas binary director and config directory
 mkdir -p /home/tappaas/config
@@ -69,7 +72,7 @@ fi
 # Copy zones.json from node1 (may have been modified during bootstrap)
 # Note: configuration.json is NOT copied from nodes — it is generated fresh by
 # create-configuration.sh above and lives only on tappaas-cicd (fixes #106)
-scp root@"$NODE1_FQDN":/root/tappaas/zones.json /home/tappaas/config/ 2>/dev/null || true
+scp $SSH_ACCEPT root@"$NODE1_FQDN":/root/tappaas/zones.json /home/tappaas/config/ 2>/dev/null || true
 
 # --- Install scripts as symlinks into /home/tappaas/bin/ ---
 echo ""
@@ -118,7 +121,7 @@ cd ../tappaas-cicd || { _error "TAPPaaS-CICD directory not found!"; exit 1; }
 /home/tappaas/bin/copy-update-json.sh tappaas-cicd
 
 # run the full tappaas-cicd update scripts with all dependencies and checks
-/home/tappaas/bin/update-module.sh tappaas-cicd
+/home/tappaas/bin/update-module.sh tappaas-cicd --force
 /home/tappaas/bin/update-module.sh cluster
 
 # Source common-install-routines.sh to replace the minimal _info/_warn/_error with full versions
@@ -129,25 +132,25 @@ if [[ "$FIREWALL_AVAILABLE" == "true" ]]; then
     # This allows Proxmox to communicate with the firewall VM via the guest agent
     echo ""
     info "Installing QEMU guest agent on OPNsense..."
-    if ssh root@"$FIREWALL_FQDN" "/bin/sh -c 'pkg info os-qemu-guest-agent'" &>/dev/null; then
+    if ssh $SSH_ACCEPT root@"$FIREWALL_FQDN" "/bin/sh -c 'pkg info os-qemu-guest-agent'" &>/dev/null; then
         info "  QEMU guest agent already installed"
     else
-        ssh root@"$FIREWALL_FQDN" "/bin/sh -c 'pkg install -y os-qemu-guest-agent'" || {
+        ssh $SSH_ACCEPT root@"$FIREWALL_FQDN" "/bin/sh -c 'pkg install -y os-qemu-guest-agent'" || {
             warn "QEMU guest agent installation failed. Install manually via OPNsense UI."
         }
     fi
     info "Enabling QEMU guest agent service..."
-    ssh root@"$FIREWALL_FQDN" "/bin/sh -c 'sysrc qemu_guest_agent_enable=YES'" 2>/dev/null || true
-    if ssh root@"$FIREWALL_FQDN" "/bin/sh -c 'service qemu-guest-agent status'" &>/dev/null; then
+    ssh $SSH_ACCEPT root@"$FIREWALL_FQDN" "/bin/sh -c 'sysrc qemu_guest_agent_enable=YES'" 2>/dev/null || true
+    if ssh $SSH_ACCEPT root@"$FIREWALL_FQDN" "/bin/sh -c 'service qemu-guest-agent status'" &>/dev/null; then
         info "  QEMU guest agent service is already running"
     else
-        ssh root@"$FIREWALL_FQDN" "/bin/sh -c 'service qemu-guest-agent start'" 2>/dev/null || {
+        ssh $SSH_ACCEPT root@"$FIREWALL_FQDN" "/bin/sh -c 'service qemu-guest-agent start'" 2>/dev/null || {
             warn "QEMU guest agent service could not be started. Enable manually in OPNsense."
         }
     fi
 
     # Update the firewall module
-    /home/tappaas/bin/update-module.sh firewall
+    /home/tappaas/bin/update-module.sh firewall --force
 
     # Setup Caddy reverse proxy on the firewall
     # (needs to be after update.sh as it relies on opnsense-controller to be installed)

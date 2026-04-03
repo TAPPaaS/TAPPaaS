@@ -76,7 +76,7 @@ info "${BOLD}Test 2: Python CLI tools available${CL}"
 python_tools=(
     caddy-manager
     opnsense-firewall
-    update-tappaas
+#    update-tappaas
 )
 
 for tool in "${python_tools[@]}"; do

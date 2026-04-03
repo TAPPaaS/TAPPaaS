@@ -120,7 +120,7 @@ discover_node_defaults() {
     # Try to get the admin email from /etc/pve/user.cfg (root@pam entry)
     # Format: user:root@pam:1:0:::email@domain.com:::
     local user_cfg
-    user_cfg=$(ssh -o ConnectTimeout=5 -o BatchMode=yes "root@${primary_node}" \
+    user_cfg=$(ssh -o ConnectTimeout=5 -o BatchMode=yes -o StrictHostKeyChecking=accept-new "root@${primary_node}" \
         "grep '^user:root@pam:' /etc/pve/user.cfg 2>/dev/null" 2>/dev/null || true)
 
     if [[ -n "$user_cfg" ]]; then
@@ -297,8 +297,8 @@ discover_cluster_nodes() {
     # Get list of cluster nodes via pvesh JSON API (most reliable method)
     local cluster_nodes=""
     debug "  Trying pvesh JSON API to list nodes..."
-    cluster_nodes=$(ssh -o ConnectTimeout=5 -o BatchMode=yes "root@${primary_node}" \
-        "pvesh get /nodes --output-format=json 2>/dev/null | jq -r '.[].node' | grep -v '^null$'" 2>/dev/null || true)
+    cluster_nodes=$(ssh -o ConnectTimeout=5 -o BatchMode=yes -o StrictHostKeyChecking=accept-new "root@${primary_node}" \
+        "pvesh get /cluster/status --output-format=json 2>/dev/null | jq -r '[.[] | select(.type==\"node\")] | sort_by(.nodeid) | .[].name' | grep -v '^null$'" 2>/dev/null || true)
 
     # Fallback: try pvecm nodes (text parsing)
     # Note: pvecm output varies — with Qdevice the Name column shifts, and the
@@ -306,7 +306,7 @@ discover_cluster_nodes() {
     # by finding its position from the header, which handles both layouts.
     if [[ -z "$cluster_nodes" ]]; then
         debug "  Falling back to pvecm nodes..."
-        cluster_nodes=$(ssh -o ConnectTimeout=5 -o BatchMode=yes "root@${primary_node}" \
+        cluster_nodes=$(ssh -o ConnectTimeout=5 -o BatchMode=yes -o StrictHostKeyChecking=accept-new "root@${primary_node}" \
             "pvecm nodes 2>/dev/null" 2>/dev/null | awk '
                 /Name/ { for (i=1; i<=NF; i++) if ($i == "Name") name_col=i; next }
                 /^[[:space:]]*[0-9]/ && name_col { print $name_col }
@@ -349,7 +349,7 @@ discover_cluster_nodes() {
 
         # Method 2: Query the node directly
         if [[ -z "$node_ip" ]]; then
-            node_ip=$(ssh -o ConnectTimeout=5 -o BatchMode=yes "root@${node_fqdn}" \
+            node_ip=$(ssh -o ConnectTimeout=5 -o BatchMode=yes -o StrictHostKeyChecking=accept-new "root@${node_fqdn}" \
                 "ip -4 addr show | grep -oP '(?<=inet\\s)10\\.0\\.0\\.[0-9]+' | head -1" 2>/dev/null || true)
         fi
 
