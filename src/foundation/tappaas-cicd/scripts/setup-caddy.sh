@@ -118,6 +118,7 @@ if [[ -x "$OPNSENSE_FIREWALL" ]]; then
         --interface wan \
         --action pass \
         --protocol tcp \
+        --destination wanip \
         --destination-port 80 \
         --log \
         --no-apply || warn "HTTP rule creation failed or already exists"
@@ -131,6 +132,7 @@ if [[ -x "$OPNSENSE_FIREWALL" ]]; then
         --interface wan \
         --action pass \
         --protocol tcp \
+        --destination wanip \
         --destination-port 443 \
         --log \
         --no-apply || warn "HTTPS rule creation failed or already exists"
@@ -176,7 +178,7 @@ if (!$http_exists) {
         "ipprotocol" => "inet",
         "protocol" => "tcp",
         "source" => array("any" => true),
-        "destination" => array("any" => true, "port" => "80"),
+        "destination" => array("network" => "wanip", "port" => "80"),
         "descr" => "TAPPaaS: Allow HTTP to Caddy",
         "log" => true,
     );
@@ -193,7 +195,7 @@ if (!$https_exists) {
         "ipprotocol" => "inet",
         "protocol" => "tcp",
         "source" => array("any" => true),
-        "destination" => array("any" => true, "port" => "443"),
+        "destination" => array("network" => "wanip", "port" => "443"),
         "descr" => "TAPPaaS: Allow HTTPS to Caddy",
         "log" => true,
     );
