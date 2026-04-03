@@ -294,21 +294,23 @@ discover_cluster_nodes() {
 
     debug "  Primary node for discovery: ${BGN}${primary_node}${CL}"
 
-    # Get list of cluster nodes via pvecm
-    # Note: When a Qdevice is configured, pvecm nodes outputs extra columns
-    # (e.g., "Qdevice" row and shifted Name column). We print the last
-    # whitespace-delimited field, strip " (local)", and filter out non-node rows.
+    # Get list of cluster nodes via pvesh JSON API (most reliable method)
     local cluster_nodes=""
-    if ssh -o ConnectTimeout=5 -o BatchMode=yes "root@${primary_node}" "pvecm nodes" >/dev/null 2>&1; then
-        cluster_nodes=$(ssh "root@${primary_node}" \
-            "pvecm nodes 2>/dev/null | tail -n +2 | awk 'NF>=3 {print \$NF}' | sed 's/ (local)//' | grep -v '^Name$' | grep -v '^Qdevice$' | grep -v '^-*$'" 2>/dev/null || true)
-    fi
+    debug "  Trying pvesh JSON API to list nodes..."
+    cluster_nodes=$(ssh -o ConnectTimeout=5 -o BatchMode=yes "root@${primary_node}" \
+        "pvesh get /nodes --output-format=json 2>/dev/null | jq -r '.[].node' | grep -v '^null$'" 2>/dev/null || true)
 
-    # If pvecm failed, try pvesh with JSON format (more reliable)
+    # Fallback: try pvecm nodes (text parsing)
+    # Note: pvecm output varies — with Qdevice the Name column shifts, and the
+    # local node is shown as "name (local)". We use awk to grab the Name column
+    # by finding its position from the header, which handles both layouts.
     if [[ -z "$cluster_nodes" ]]; then
-        debug "  Trying pvesh to list nodes..."
+        debug "  Falling back to pvecm nodes..."
         cluster_nodes=$(ssh -o ConnectTimeout=5 -o BatchMode=yes "root@${primary_node}" \
-            "pvesh get /nodes --output-format=json 2>/dev/null | jq -r '.[].node' | grep -v '^null$'" 2>/dev/null || true)
+            "pvecm nodes 2>/dev/null" 2>/dev/null | awk '
+                /Name/ { for (i=1; i<=NF; i++) if ($i == "Name") name_col=i; next }
+                /^[[:space:]]*[0-9]/ && name_col { print $name_col }
+            ' | sed 's/ *(local)$//' || true)
     fi
 
     # If still empty, extract hostname from the primary FQDN

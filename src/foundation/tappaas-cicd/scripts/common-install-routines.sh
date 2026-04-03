@@ -337,11 +337,18 @@ function check_json() {
   local depends_on_json
   depends_on_json=$(echo "$json_content" | jq -c '.dependsOn // []')
 
+  # Fields with a "default" in the schema are never strictly required — the
+  # installer can fall back to the default, so only flag fields that have
+  # requiredBy but NO default.
   local required_fields
   required_fields=$(echo "$schema_fields" | jq -r --argjson deps "$depends_on_json" '
     to_entries[] |
-    select((.value.requiredBy // []) as $rb |
-      ($rb | length > 0) and ([$rb[] as $r | $deps[] | select(. == $r)] | length > 0)) |
+    select(
+      (.value.requiredBy // []) as $rb |
+      ($rb | length > 0) and
+      ([$rb[] as $r | $deps[] | select(. == $r)] | length > 0) and
+      (.value | has("default") | not)
+    ) |
     .key')
 
   for field in $required_fields; do

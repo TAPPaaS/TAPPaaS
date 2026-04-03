@@ -297,7 +297,6 @@
         "HANode": {
             "description": "Secondary node for High Availability. Defaults to the first node in configuration.json that differs from 'node'. Must be different from 'node' and have the same storage defined. HA is only active when 'cluster:ha' is in dependsOn.",
             "type": "string",
-            "requiredBy": ["cluster:ha"],
             "usedBy": "cluster:ha",
             "default": null
         },
