@@ -69,11 +69,11 @@ fi
 
 # Step 2: Reconfigure OPNsense web GUI to port 8443 and disable HTTP redirect
 info "Step 2: Reconfiguring OPNsense web GUI to port 8443..."
-# Write PHP script to temp file and execute (avoids shell quoting issues on BSD/csh)
-ssh root@"$FIREWALL_FQDN" 'cat > /tmp/set-webgui-port.php << '\''EOFPHP'\''
+# Pipe PHP script via stdin to avoid csh heredoc issues on OPNsense (csh)
+ssh root@"$FIREWALL_FQDN" /bin/sh -c 'php /dev/stdin' << 'EOFPHP'
 <?php
 require_once("config.inc");
-require_once("system.inc");
+require_once("util.inc");
 
 global $config;
 
@@ -84,19 +84,15 @@ $config["system"]["webgui"]["port"] = "8443";
 $config["system"]["webgui"]["disablehttpredirect"] = "1";
 
 write_config("Changed web GUI port to 8443 and disabled HTTP redirect for Caddy reverse proxy");
-echo "Configuration saved.\n";
+echo "OK\n";
 EOFPHP
-php /tmp/set-webgui-port.php && rm /tmp/set-webgui-port.php' || {
-    die "Failed to reconfigure OPNsense web GUI port. Check SSH access and PHP on the firewall."
-}
 
-# Reconfigure web GUI so lighttpd picks up the new port from config.xml
-# (a plain restart would re-read the old generated config)
-debug "Reconfiguring web GUI..."
-ssh root@"$FIREWALL_FQDN" 'configctl webgui reconfigure' || {
-    warn "Could not reconfigure web GUI (this may be expected if port changed)"
-    warn "Please verify manually at https://$FIREWALL_FQDN:8443"
-}
+# Restart web GUI to pick up the new port from config.xml
+# (the connection may drop as lighttpd restarts on a different port)
+debug "Restarting web GUI on port 8443..."
+ssh root@"$FIREWALL_FQDN" 'configctl webgui restart' 2>/dev/null || true
+# Wait for the web GUI to come back up on the new port
+sleep 3
 
 # Step 3: Create firewall rules for HTTP/HTTPS using opnsense-firewall CLI
 info "Step 3: Creating firewall rules for HTTP and HTTPS..."
@@ -146,7 +142,7 @@ else
     warn "opnsense-firewall CLI not found, falling back to SSH/PHP method..."
 
     # Fallback: Create firewall rules using PHP on OPNsense
-    ssh root@"$FIREWALL_FQDN" 'cat > /tmp/create-caddy-rules.php << '\''EOFPHP'\''
+    ssh root@"$FIREWALL_FQDN" /bin/sh -c 'php /dev/stdin' << 'EOFPHP' || {
 <?php
 require_once("config.inc");
 require_once("filter.inc");
@@ -210,7 +206,6 @@ if ($changed) {
     echo "Configuration saved.\n";
 }
 EOFPHP
-php /tmp/create-caddy-rules.php && rm /tmp/create-caddy-rules.php' || {
         warn "Could not create firewall rules automatically"
         warn "Please create HTTP (80) and HTTPS (443) rules manually in OPNsense"
     }
@@ -225,43 +220,50 @@ fi
 # Step 4: Enable Caddy, set ACME email, and configure Auto HTTPS
 info "Step 4: Enabling Caddy and configuring ACME settings..."
 
-# Use PHP to set Caddy plugin general settings in config.xml
-# Config path: caddy > general (fields: enabled, TlsEmail, TlsAutoHttps)
-ssh root@"$FIREWALL_FQDN" 'cat > /tmp/configure-caddy-general.php << '\''EOFPHP'\''
-<?php
-require_once("config.inc");
+# Use OPNsense API to enable Caddy and set ACME email.
+# The MVC model (OPNsense.Caddy) requires API calls — raw config.xml writes
+# don't update the model, so rc.conf.d/caddy won't be regenerated.
+CRED_FILE="/home/tappaas/.opnsense-credentials.txt"
+if [[ ! -f "$CRED_FILE" ]]; then
+    die "OPNsense credentials not found: $CRED_FILE"
+fi
+API_KEY=$(grep '^key=' "$CRED_FILE" | cut -d= -f2-)
+API_SECRET=$(grep '^secret=' "$CRED_FILE" | cut -d= -f2-)
+API_BASE="https://${FIREWALL_FQDN}:8443/api"
 
-global $config;
-
-if (!isset($config["caddy"])) {
-    $config["caddy"] = array();
+# Set Caddy general settings via API
+debug "Enabling Caddy via API..."
+api_result=$(curl -sk -u "${API_KEY}:${API_SECRET}" \
+    -X POST "${API_BASE}/caddy/general/set" \
+    -H "Content-Type: application/json" \
+    -d "{\"caddy\":{\"general\":{\"enabled\":\"1\",\"TlsEmail\":\"${EMAIL}\"}}}" 2>&1) || {
+    # If port 8443 isn't ready yet, try default port 443
+    debug "Retrying API on port 443..."
+    API_BASE="https://${FIREWALL_FQDN}/api"
+    api_result=$(curl -sk -u "${API_KEY}:${API_SECRET}" \
+        -X POST "${API_BASE}/caddy/general/set" \
+        -H "Content-Type: application/json" \
+        -d "{\"caddy\":{\"general\":{\"enabled\":\"1\",\"TlsEmail\":\"${EMAIL}\"}}}" 2>&1) || {
+        die "Failed to enable Caddy via API: ${api_result}"
+    }
 }
-if (!isset($config["caddy"]["general"])) {
-    $config["caddy"]["general"] = array();
+debug "API response: ${api_result}"
+
+# Apply Caddy settings — reconfigures rc.conf.d, generates Caddyfile, starts service
+debug "Applying Caddy configuration via API..."
+curl -sk -u "${API_KEY}:${API_SECRET}" \
+    -X POST "${API_BASE}/caddy/service/reconfigure" 2>&1 || {
+    warn "Could not apply Caddy configuration via API"
 }
 
-$config["caddy"]["general"]["enabled"] = "1";
-$config["caddy"]["general"]["TlsEmail"] = $argv[1];
-
-write_config("Enabled Caddy reverse proxy and set ACME email");
-echo "Caddy enabled with ACME email: " . $argv[1] . "\n";
-EOFPHP
-php /tmp/configure-caddy-general.php "'"$EMAIL"'" && rm /tmp/configure-caddy-general.php' || {
-    die "Failed to enable Caddy and set ACME email on the firewall."
-}
-
-# Start/restart Caddy to apply settings (reload won't work on first setup
-# because the service hasn't been started yet)
-debug "Starting Caddy service..."
-ssh root@"$FIREWALL_FQDN" 'configctl caddy restart' || {
-    warn "Could not start Caddy service"
-}
+# Give Caddy a moment to start
+sleep 3
 
 # Step 5: Verify Caddy is running
 info "Step 5: Verifying Caddy service..."
 sleep 2
 if ssh root@"$FIREWALL_FQDN" 'configctl caddy status' 2>/dev/null | grep -qi "running"; then
-    debug "  Caddy service is running"
+    info "  ${GN}✓${CL} Caddy service is running"
 else
     warn "Caddy service does not appear to be running."
     warn "Please check Caddy status in the OPNsense GUI (Services > Caddy)."
