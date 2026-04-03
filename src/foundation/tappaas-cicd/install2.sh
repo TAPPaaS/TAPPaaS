@@ -121,7 +121,7 @@ cd ../tappaas-cicd || { _error "TAPPaaS-CICD directory not found!"; exit 1; }
 /home/tappaas/bin/copy-update-json.sh tappaas-cicd
 
 # run the full tappaas-cicd update scripts with all dependencies and checks
-/home/tappaas/bin/update-module.sh tappaas-cicd --force
+/home/tappaas/bin/update-module.sh tappaas-cicd --no-snapshot
 /home/tappaas/bin/update-module.sh cluster
 
 # Source common-install-routines.sh to replace the minimal _info/_warn/_error with full versions
@@ -150,7 +150,7 @@ if [[ "$FIREWALL_AVAILABLE" == "true" ]]; then
     fi
 
     # Update the firewall module
-    /home/tappaas/bin/update-module.sh firewall --force
+    /home/tappaas/bin/update-module.sh firewall --no-snapshot
 
     # Setup Caddy reverse proxy on the firewall
     # (needs to be after update.sh as it relies on opnsense-controller to be installed)

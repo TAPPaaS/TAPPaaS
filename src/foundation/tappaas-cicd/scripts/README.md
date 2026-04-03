@@ -460,16 +460,17 @@ update-module.sh [options] <module-name>
 | Option | Description |
 |--------|-------------|
 | `--force` | Proceed even if pre-update test fails |
+| `--no-snapshot` | Skip pre-update test, snapshot, and rollback on failure |
 | `--debug` | Show Debug-level messages |
 | `--silent` | Suppress Info-level messages |
 
 **What it does:**
-1. Creates a pre-update VM snapshot (rollback safety net)
-2. Runs `test-module.sh` pre-update — aborts if tests fail (unless `--force`)
+1. Creates a pre-update VM snapshot (rollback safety net) — skipped with `--no-snapshot`
+2. Runs `test-module.sh` pre-update — aborts if tests fail (unless `--force`) — skipped with `--no-snapshot`
 3. Runs the module's `pre-update.sh` hook (if present)
 4. Iterates `dependsOn` and calls each provider's `update-service.sh`
 5. Calls the module's own `update.sh`
-6. Runs `test-module.sh` post-update — rolls back on fatal failure
+6. Runs `test-module.sh` post-update — rolls back on fatal failure (warns only with `--no-snapshot`)
 
 **Exit codes:**
 | Code | Meaning |
@@ -482,6 +483,7 @@ update-module.sh [options] <module-name>
 ```bash
 update-module.sh vaultwarden
 update-module.sh --force litellm
+update-module.sh --no-snapshot nextcloud
 update-module.sh --debug openwebui
 ```
 

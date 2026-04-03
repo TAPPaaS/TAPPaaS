@@ -904,16 +904,19 @@ class ZoneManager:
         Returns:
             Dictionary with 'vlans', 'dhcp', and optionally 'firewall' results
         """
-        # Configure VLANs first, then DHCP, then firewall rules
+        # Configure VLANs first, then update dnsmasq bindings so it
+        # recognises the new interfaces, then create DHCP ranges.
         info("Step 1: Configuring VLANs")
         vlan_results = self.configure_vlans(check_mode=check_mode, assign=assign_vlans)
 
-        info("Step 2: Configuring DHCP ranges")
-        dhcp_results = self.configure_dhcp(check_mode=check_mode)
-
-        # Update dnsmasq to listen on all VLAN interfaces
-        info("Step 2b: Updating dnsmasq interface bindings")
+        # Update dnsmasq to listen on all VLAN interfaces *before* creating
+        # DHCP ranges — otherwise dnsmasq rejects the interface identifiers
+        # (opt1, opt2, …) because it doesn't know about them yet.
+        info("Step 2: Updating dnsmasq interface bindings")
         dnsmasq_result = self.update_dnsmasq_interfaces(check_mode=check_mode)
+
+        info("Step 3: Configuring DHCP ranges")
+        dhcp_results = self.configure_dhcp(check_mode=check_mode)
 
         result = {
             "vlans": vlan_results,
@@ -922,7 +925,7 @@ class ZoneManager:
         }
 
         if firewall_rules:
-            info("Step 3: Configuring Firewall Rules")
+            info("Step 4: Configuring Firewall Rules")
             firewall_results = self.configure_firewall_rules(check_mode=check_mode)
             result["firewall"] = firewall_results
 

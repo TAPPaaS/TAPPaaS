@@ -13,10 +13,11 @@
 #                 <module-name>.json in /home/tappaas/config/)
 #
 # Options:
-#   -h, --help    Show this help message
-#   --force       Proceed even if pre-update test fails
-#   --debug       Show Debug-level messages
-#   --silent      Suppress Info-level messages
+#   -h, --help       Show this help message
+#   --force          Proceed even if pre-update test fails
+#   --no-snapshot    Skip pre-update test, snapshot, and rollback
+#   --debug          Show Debug-level messages
+#   --silent         Suppress Info-level messages
 #
 # Exit codes:
 #   0  Update succeeded, all tests passed
@@ -26,6 +27,7 @@
 # Examples:
 #   update-module.sh vaultwarden
 #   update-module.sh --force litellm
+#   update-module.sh --no-snapshot nextcloud
 #   update-module.sh --debug openwebui
 #
 # The script performs these steps:
@@ -49,6 +51,7 @@ readonly CONFIG_DIR="/home/tappaas/config"
 # ── Options ──────────────────────────────────────────────────────────
 
 OPT_FORCE=0
+OPT_NO_SNAPSHOT=0
 
 # ── Usage ────────────────────────────────────────────────────────────
 
@@ -62,10 +65,11 @@ Arguments:
     module-name    Name of the module (must have config in ${CONFIG_DIR}/)
 
 Options:
-    -h, --help     Show this help message
-    --force        Proceed even if pre-update test fails
-    --debug        Show Debug-level messages
-    --silent       Suppress Info-level messages
+    -h, --help        Show this help message
+    --force           Proceed even if pre-update test fails
+    --no-snapshot     Skip pre-update test, snapshot, and rollback
+    --debug           Show Debug-level messages
+    --silent          Suppress Info-level messages
 
 Exit codes:
     0  Update succeeded, all tests passed
@@ -75,6 +79,7 @@ Exit codes:
 Examples:
     ${SCRIPT_NAME} vaultwarden
     ${SCRIPT_NAME} --force litellm
+    ${SCRIPT_NAME} --no-snapshot nextcloud
     ${SCRIPT_NAME} --debug openwebui
 EOF
 }
@@ -135,8 +140,9 @@ main() {
     while [[ $# -gt 0 ]]; do
         case "$1" in
             -h|--help)   usage; exit 0 ;;
-            --force)     OPT_FORCE=1; shift ;;
-            --debug)     OPT_DEBUG=1; export TAPPAAS_DEBUG=1; shift ;;
+            --force)        OPT_FORCE=1; shift ;;
+            --no-snapshot)  OPT_NO_SNAPSHOT=1; shift ;;
+            --debug)        OPT_DEBUG=1; export TAPPAAS_DEBUG=1; shift ;;
             --silent)    OPT_SILENT=1; export TAPPAAS_SILENT=1; shift ;;
             -*)          fatal "Unknown option: $1"; usage; exit 2 ;;
             *)
@@ -171,6 +177,9 @@ main() {
     if [[ "${OPT_FORCE}" -eq 1 ]]; then
         info "${BOLD}║  Mode: ${YW}--force${CL}"
     fi
+    if [[ "${OPT_NO_SNAPSHOT}" -eq 1 ]]; then
+        info "${BOLD}║  Mode: ${YW}--no-snapshot${CL}"
+    fi
     info "${BOLD}╚══════════════════════════════════════════════╝${CL}"
 
     # ── Step 1: Pre-update snapshot (only for modules with a VM) ─────
@@ -183,7 +192,9 @@ main() {
         has_vm=true
     fi
 
-    if [[ "${has_vm}" == true ]]; then
+    if [[ "${OPT_NO_SNAPSHOT}" -eq 1 ]]; then
+        info "  Skipped (--no-snapshot)"
+    elif [[ "${has_vm}" == true ]]; then
         if /home/tappaas/bin/snapshot-vm.sh "${module}"; then
             info "  ${GN}✓${CL} Snapshot created"
             snapshot_created=true
@@ -198,17 +209,21 @@ main() {
     echo ""
     info "${BOLD}Step 2: Run pre-update tests${CL}"
 
-    local pre_test_exit=0
-    /home/tappaas/bin/test-module.sh "${module}" || pre_test_exit=$?
-
-    if [[ "${pre_test_exit}" -eq 0 ]]; then
-        info "  ${GN}✓${CL} Pre-update tests passed"
-    elif [[ "${OPT_FORCE}" -eq 1 ]]; then
-        warn "Pre-update tests failed (exit ${pre_test_exit}) — continuing due to --force"
+    if [[ "${OPT_NO_SNAPSHOT}" -eq 1 ]]; then
+        info "  Skipped (--no-snapshot)"
     else
-        fatal "Pre-update tests failed (exit ${pre_test_exit}) — aborting update"
-        error "  Use --force to override"
-        exit 2
+        local pre_test_exit=0
+        /home/tappaas/bin/test-module.sh "${module}" || pre_test_exit=$?
+
+        if [[ "${pre_test_exit}" -eq 0 ]]; then
+            info "  ${GN}✓${CL} Pre-update tests passed"
+        elif [[ "${OPT_FORCE}" -eq 1 ]]; then
+            warn "Pre-update tests failed (exit ${pre_test_exit}) — continuing due to --force"
+        else
+            fatal "Pre-update tests failed (exit ${pre_test_exit}) — aborting update"
+            error "  Use --force to override"
+            exit 2
+        fi
     fi
 
     # ── Step 3: Run pre-update.sh if present ─────────────────────────
@@ -308,9 +323,13 @@ main() {
     if [[ "${post_test_exit}" -eq 0 ]]; then
         info "  ${GN}✓${CL} Post-update tests passed"
     elif [[ "${post_test_exit}" -eq 2 ]]; then
-        # Fatal test failure — attempt rollback
+        # Fatal test failure — attempt rollback (unless --no-snapshot)
         fatal "Post-update tests reported a fatal error"
-        if [[ "${snapshot_created}" == true ]]; then
+        if [[ "${OPT_NO_SNAPSHOT}" -eq 1 ]]; then
+            warn "Rollback skipped (--no-snapshot) — manual intervention required"
+            finalize_config "${module_json}"
+            exit 2
+        elif [[ "${snapshot_created}" == true ]]; then
             echo ""
             warn "Attempting rollback to pre-update snapshot..."
             if /home/tappaas/bin/snapshot-vm.sh "${module}" --restore 1; then

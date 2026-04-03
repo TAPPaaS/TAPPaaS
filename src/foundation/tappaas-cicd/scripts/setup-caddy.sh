@@ -90,10 +90,11 @@ php /tmp/set-webgui-port.php && rm /tmp/set-webgui-port.php' || {
     die "Failed to reconfigure OPNsense web GUI port. Check SSH access and PHP on the firewall."
 }
 
-# Restart web GUI separately (connection may drop during restart)
-debug "Restarting web GUI..."
-ssh root@"$FIREWALL_FQDN" 'configctl webgui restart' || {
-    warn "Could not restart web GUI (this may be expected if port changed)"
+# Reconfigure web GUI so lighttpd picks up the new port from config.xml
+# (a plain restart would re-read the old generated config)
+debug "Reconfiguring web GUI..."
+ssh root@"$FIREWALL_FQDN" 'configctl webgui reconfigure' || {
+    warn "Could not reconfigure web GUI (this may be expected if port changed)"
     warn "Please verify manually at https://$FIREWALL_FQDN:8443"
 }
 
@@ -247,10 +248,11 @@ php /tmp/configure-caddy-general.php "'"$EMAIL"'" && rm /tmp/configure-caddy-gen
     die "Failed to enable Caddy and set ACME email on the firewall."
 }
 
-# Reconfigure Caddy to apply settings
-debug "Applying Caddy configuration..."
-ssh root@"$FIREWALL_FQDN" 'configctl caddy reload' || {
-    warn "Could not reload Caddy service"
+# Start/restart Caddy to apply settings (reload won't work on first setup
+# because the service hasn't been started yet)
+debug "Starting Caddy service..."
+ssh root@"$FIREWALL_FQDN" 'configctl caddy restart' || {
+    warn "Could not start Caddy service"
 }
 
 # Step 5: Verify Caddy is running
