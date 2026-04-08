@@ -106,7 +106,7 @@
         "subId": "10",
         "vlantag": 510,
         "SSID": "TAPPaaS-Guests",
-        "ip": "10.50.10.0/24",
+        "ip": "10.5.10.0/24",
         "bridge": "lan",
         "access-to": ["internet"],
         "pinhole-allowed-from": [],
