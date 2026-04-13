@@ -101,72 +101,61 @@ if [ -f /var/log/tappaas.step1 ]; then
   exit 0
 fi
 
-# disable PVE-ENTERPRISE repositories
-if component_exists_in_sources "pve-enterprise"; then
-    msg_info "Disabling 'pve-enterprise' repository"
-    # Use Enabled: false instead of commenting to avoid malformed entry
-    for file in /etc/apt/sources.list.d/*.sources; do
-      if grep -q "Components:.*pve-enterprise" "$file"; then
-        if grep -q "^Enabled:" "$file"; then
-          sed -i 's/^Enabled:.*/Enabled: false/' "$file"
-        else
-          echo "Enabled: false" >>"$file"
-         fi
-      fi
-    done
-    msg_ok "Disabled 'pve-enterprise' repository"
-fi
+# Disable any existing PVE enterprise / Ceph enterprise repo files by
+# replacing them with a single, canonical disabled stanza. This avoids
+# fragile in-place edits of multi-stanza deb822 files where appended
+# `Enabled: false` lines can land in the wrong stanza.
+msg_info "Disabling 'pve-enterprise' repository"
+cat >/etc/apt/sources.list.d/pve-enterprise.sources <<EOF
+Types: deb
+URIs: https://enterprise.proxmox.com/debian/pve
+Suites: trixie
+Components: pve-enterprise
+Signed-By: /usr/share/keyrings/proxmox-archive-keyring.gpg
+Enabled: false
+EOF
+# Remove any legacy .list variant
+rm -f /etc/apt/sources.list.d/pve-enterprise.list
+msg_ok "Disabled 'pve-enterprise' repository"
 
+msg_info "Disabling 'ceph enterprise' repository"
+cat >/etc/apt/sources.list.d/ceph.sources <<EOF
+Types: deb
+URIs: https://enterprise.proxmox.com/debian/ceph-squid
+Suites: trixie
+Components: enterprise
+Signed-By: /usr/share/keyrings/proxmox-archive-keyring.gpg
+Enabled: false
 
-# add PVE-NO-SUBSCRIPTION repositories
-REPO_FILE=""
-REPO_ACTIVE=0
-REPO_COMMENTED=0
-for file in /etc/apt/sources.list.d/*.sources; do
-  if grep -q "Components:.*pve-no-subscription" "$file"; then
-    REPO_FILE="$file"
-    if grep -E '^[^#]*Components:.*pve-no-subscription' "$file" >/dev/null; then
-      REPO_ACTIVE=1
-    elif grep -E '^#.*Components:.*pve-no-subscription' "$file" >/dev/null; then
-      REPO_COMMENTED=1
-    fi
-    break
+Types: deb
+URIs: http://download.proxmox.com/debian/ceph-squid
+Suites: trixie
+Components: no-subscription
+Signed-By: /usr/share/keyrings/proxmox-archive-keyring.gpg
+Enabled: false
+EOF
+msg_ok "Disabled 'ceph enterprise' repository"
+
+# Write canonical pve-no-subscription file (enabled). Remove any other
+# .sources / .list files that reference pve-no-subscription to prevent
+# a stale disabled entry elsewhere from confusing PVE.
+msg_info "Adding 'pve-no-subscription' repository (deb822)"
+for file in /etc/apt/sources.list.d/*.sources /etc/apt/sources.list.d/*.list; do
+  [ -e "$file" ] || continue
+  [ "$file" = "/etc/apt/sources.list.d/proxmox.sources" ] && continue
+  if grep -q "pve-no-subscription" "$file"; then
+    rm -f "$file"
   fi
 done
-
-if [[ "$REPO_ACTIVE" -eq 1 ]]; then
-    msg_ok "Kept 'pve-no-subscription' repository"
-  elif [[ "$REPO_COMMENTED" -eq 1 ]]; then
-    msg_info "Enabling (uncommenting) 'pve-no-subscription' repository"
-    sed -i '/^#\s*Types:/,/^$/s/^#\s*//' "$REPO_FILE"
-    msg_ok "Enabled 'pve-no-subscription' repository"
-else
-    msg_info "Adding 'pve-no-subscription' repository (deb822)"
-    cat >/etc/apt/sources.list.d/proxmox.sources <<EOF
+cat >/etc/apt/sources.list.d/proxmox.sources <<EOF
 Types: deb
 URIs: http://download.proxmox.com/debian/pve
 Suites: trixie
 Components: pve-no-subscription
 Signed-By: /usr/share/keyrings/proxmox-archive-keyring.gpg
+Enabled: true
 EOF
-    msg_ok "Added 'pve-no-subscription' repository"
-fi
-
-# disable CEPH-ENTERPRISE repositories
-if grep -q "enterprise.proxmox.com.*ceph" /etc/apt/sources.list.d/*.sources 2>/dev/null; then
-  msg_info "Disabling 'ceph enterprise' repository"
-  # Use Enabled: false instead of commenting to avoid malformed entry
-  for file in /etc/apt/sources.list.d/*.sources; do
-    if grep -q "enterprise.proxmox.com.*ceph" "$file"; then
-      if grep -q "^Enabled:" "$file"; then
-        sed -i 's/^Enabled:.*/Enabled: false/' "$file"
-      else
-        echo "Enabled: false" >>"$file"
-      fi
-    fi
-  done
-  msg_ok "Disabled 'ceph enterprise' repository"
-fi
+msg_ok "Added 'pve-no-subscription' repository"
 
 
 msg_info "Disabling subscription nag"
@@ -247,7 +236,7 @@ msg_ok "Determined TAPPaaS repo to use: ${REPO}"
 
 # Find the branch version of TAPPaaS to use
 msg_info "Determining TAPPaaS branch to use"
-if [ -z "${1:-}" ]; then
+if [ -z "${2:-}" ]; then
   BRANCH="stable"
 else
   BRANCH="$2"
