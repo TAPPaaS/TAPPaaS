@@ -350,7 +350,7 @@ discover_cluster_nodes() {
         # Method 2: Query the node directly
         if [[ -z "$node_ip" ]]; then
             node_ip=$(ssh -o ConnectTimeout=5 -o BatchMode=yes -o StrictHostKeyChecking=accept-new "root@${node_fqdn}" \
-                "ip -4 addr show | grep -oP '(?<=inet\\s)10\\.0\\.0\\.[0-9]+' | head -1" 2>/dev/null || true)
+                "ip -4 addr show | grep -oP '(?<=inet\\s)[0-9]+\\.[0-9]+\\.[0-9]+\\.[0-9]+(?=/)' | grep -Ev '^(127\\.|169\\.254\\.)' | head -1" 2>/dev/null || true)
         fi
 
         if [[ -z "$node_ip" ]]; then

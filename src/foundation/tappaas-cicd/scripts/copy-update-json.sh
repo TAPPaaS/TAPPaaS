@@ -227,7 +227,7 @@ apply_variant_defaults() {
 
     # 3. zone0: use variant name if it matches a zone in zones.json
     if [[ "${has_zone0}" == "false" ]]; then
-        local zones_file="/home/tappaas/TAPPaaS/src/foundation/zones.json"
+        local zones_file="/home/tappaas/TAPPaaS/src/foundation/firewall/zones.json"
         # Also check deployed copy
         [[ ! -f "${zones_file}" ]] && zones_file="/home/tappaas/config/zones.json"
         if [[ -f "${zones_file}" ]] && jq -e --arg z "${variant}" 'has($z)' "${zones_file}" >/dev/null 2>&1; then
