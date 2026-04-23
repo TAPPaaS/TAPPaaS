@@ -1102,8 +1102,8 @@ def main():
         # Try to find it relative to common locations
         possible_paths = [
             Path("zones.json"),
-            Path("src/foundation/zones.json"),
-            Path("/home/tappaas/TAPPaaS/src/foundation/zones.json"),
+            Path("src/foundation/firewall/zones.json"),
+            Path("/home/tappaas/TAPPaaS/src/foundation/firewall/zones.json"),
         ]
         for path in possible_paths:
             if path.exists():

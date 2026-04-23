@@ -99,9 +99,10 @@ if [ -f "../module-fields.json" ]; then
   rm -f /home/tappaas/config/module-fields.json 2>/dev/null || true
   ln -s "$(realpath ../module-fields.json)" /home/tappaas/config/module-fields.json
 fi
-# zones.json: copy (may be modified locally by the user)
-if [ -f "../zones.json" ]; then
-  cp "../zones.json" /home/tappaas/config/zones.json
+# zones.json: copy from firewall module (canonical source of truth)
+# src/foundation/zones.json is a legacy duplicate — always use firewall/zones.json
+if [ -f "../firewall/zones.json" ]; then
+  cp "../firewall/zones.json" /home/tappaas/config/zones.json
 fi
 
 # --- Build and install opnsense-controller ---
