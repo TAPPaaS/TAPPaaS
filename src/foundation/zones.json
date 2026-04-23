@@ -5,7 +5,7 @@
         "typeId": "0",
         "subId": "0",
         "vlantag": 0,
-        "ip": "10.50.0.0/24",
+        "ip": "10.0.0.0/24",
         "bridge": "lan",
         "access-to": ["all"],
         "pinhole-allowed-from": [],
