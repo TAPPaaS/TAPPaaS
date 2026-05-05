@@ -114,7 +114,7 @@ update_ssh_known_hosts() {
     local ip="$1"
 
     ssh-keygen -R "${ip}" 2>/dev/null || true
-    ssh-keyscan -H "${ip}" >> ~/.ssh/known_hosts 2>/dev/null || true
+    ssh-keyscan -H "${ip}" >> ~/.ssh/known_hosts 2>/dev/null
 }
 
 # Wait for SSH to become available (cloud-init may still be setting up keys)
@@ -303,11 +303,11 @@ main() {
     vm_ip=$(wait_for_vm_ip "${node}" "${vmid}" 30) || die "Could not get VM IP address after 5 minutes"
     info "VM IP address: ${vm_ip}"
 
-    # Wait for SSH to become available before scanning keys
-    wait_for_ssh "${vm_ip}" 120 || die "SSH not available on ${vm_ip}"
-
-    # Update SSH known_hosts (SSH is confirmed up, keyscan will succeed)
+    # Update SSH known_hosts
     update_ssh_known_hosts "${vm_ip}"
+
+    # Wait for SSH to become available (cloud-init may still be setting up keys)
+    wait_for_ssh "${vm_ip}" 120 || die "SSH not available on ${vm_ip}"
 
     # Detect OS type
     info "Detecting OS type..."
