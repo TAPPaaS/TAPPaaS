@@ -22,9 +22,7 @@
     "cluster:vm",
     "templates:nixos",
     "backup:vm",
-    "identity:identity",
-    "firewall:proxy",
-    "litellm:models"
+    "identity:identity"
   ],
   "provides": []
 }
