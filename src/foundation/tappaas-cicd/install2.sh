@@ -69,10 +69,10 @@ else
   exit 1
 fi
 
-# Copy zones.json from node1 (may have been modified during bootstrap)
-# Note: configuration.json is NOT copied from nodes — it is generated fresh by
-# create-configuration.sh above and lives only on tappaas-cicd (fixes #106)
-scp $SSH_ACCEPT root@"$NODE1_FQDN":/root/tappaas/zones.json /home/tappaas/config/ 2>/dev/null || true
+# Use zones.json from the TAPPaaS repo — it is the canonical source of truth.
+# Previously this was copied from the Proxmox node, which caused the repo version
+# to be silently overwritten on every install2.sh run.
+cp /home/tappaas/TAPPaaS/src/foundation/firewall/zones.json /home/tappaas/config/zones.json
 
 # --- Install scripts as symlinks into /home/tappaas/bin/ ---
 echo ""
