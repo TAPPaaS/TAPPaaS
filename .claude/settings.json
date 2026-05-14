@@ -1,7 +1,14 @@
 {
   "permissions": {
     "allow": [
-      "WebFetch(domain:pbs.proxmox.com)"
+      "WebFetch(domain:pbs.proxmox.com)",
+      "Bash(ssh -o ConnectTimeout=5 -o BatchMode=yes root@tappaas1.mgmt.internal \"qm status 150 2>&1; echo '---'; qm config 150 2>&1 | head -15\")",
+      "Bash(ssh -o BatchMode=yes root@tappaas1.mgmt.internal \"qm stop 150 2>&1 | head -3; sleep 2; qm destroy 150 --destroy-unreferenced-disks 1 --purge 1 2>&1 | head -3\")",
+      "Bash(ssh -o BatchMode=yes root@tappaas1.mgmt.internal \"qm status 150 2>&1 || echo 'VM destroyed'\")",
+      "Bash(ssh -o BatchMode=yes root@tappaas1.mgmt.internal \"qm status 150\")",
+      "Bash(/home/tappaas/bin/update-os.sh logging *)",
+      "Bash(echo \"=== exit code: $? ===\")",
+      "Bash(grep -n \"logging.nix\\\\|MODULE_NAME\\\\.nix\\\\|\\\\$.*\\\\.nix\\\\|configuration\\\\.nix\\\\|configFile\\\\|NIX_FILE\\\\|nix_file\" /home/tappaas/TAPPaaS/src/foundation/tappaas-cicd/scripts/update-os.sh)"
     ]
   }
 }
