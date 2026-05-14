@@ -42,8 +42,22 @@ VM and for the OPNsense firewall.
 | 22 | TCP | SSH | mgmt admins |
 | 3000 | TCP | Grafana UI | Caddy on the firewall |
 | 3100 | TCP | Loki HTTP push/query | Promtail clients on other VMs |
-| 1514 | TCP | Syslog ingest (RFC 5424) | OPNsense |
-| 9080 | TCP | Promtail metrics (localhost test) | local |
+| 1514 | TCP | Syslog ingest (RFC 5424) → `source=opnsense` | OPNsense firewall |
+| 1515 | TCP | Syslog ingest (RFC 5424) → `source=proxmox` | Proxmox nodes (rsyslog) |
+| 9080 | TCP | Promtail metrics (localhost only) | local |
+
+## Label scheme
+
+Every log line in Loki carries at least these labels:
+
+| Label | Values | Meaning |
+|---|---|---|
+| `job` | `systemd-journal` \| `syslog` | how it was ingested |
+| `host` | `logging`, `tappaas-cicd`, `tappaas1`, `OPNsense.internal`, … | source machine |
+| `source` | `opnsense`, `proxmox` | only on `job=syslog`; identifies the syslog sender |
+| `unit` | `pveproxy.service`, `filterlog`, `sshd`, … | systemd unit or syslog program |
+| `severity` | `info`, `warn`, `err`, `crit`, … | syslog severity |
+| `facility` | `daemon`, `auth`, `kern`, … | syslog facility (only on `job=syslog`) |
 
 ## First-boot secrets
 
@@ -63,13 +77,16 @@ ssh tappaas@logging.mgmt.internal -- sudo rm /root/grafana-admin-password.initia
 Grafana reads the password from `/etc/secrets/grafana-admin-password`
 (`0600 grafana:grafana`).
 
-## OPNsense syslog forwarding
+## Syslog forwarding setup (automatic)
 
-The logging module's `update.sh` calls `syslog-manager add-destination` on
-every install/update, so OPNsense is configured automatically to forward
-syslog to `logging.mgmt.internal:1514` over plain TCP with RFC 5424
-framing. This runs **only when `firewallType=opnsense`** in the module config
-(default); set it to `NONE` to skip and configure your firewall manually.
+`update.sh` configures two syslog forwarders automatically on every
+install/update — both are idempotent:
+
+### OPNsense → `:1514` (source=opnsense)
+
+`syslog-manager add-destination` creates/updates the OPNsense destination
+matching the description `tappaas-logging`. Skipped when `firewallType=NONE`
+in the module config (e.g. you're using pfSense/UniFi/etc.).
 
 The destination is matched by description (`tappaas-logging`) for idempotency
 — re-running the install or update updates the existing entry rather than
@@ -93,12 +110,32 @@ sudo journalctl -u promtail -f
 
 In Grafana, query `{job="syslog"}` or `{job="syslog", source="opnsense"}`.
 
-> **Security note:** OPNsense syslog includes filter logs, VPN auth events,
-> captive-portal credentials, and other sensitive data. Today this is
-> plain TCP, which is acceptable on the `mgmt` zone with no rogue switches.
-> Moving to RFC 5425 over TLS on tcp/6514 is in the v2 backlog (needs a TLS
-> cert on `logging.mgmt.internal` and a `tls_config` block in Promtail's
-> syslog receiver).
+### Proxmox nodes → `:1515` (source=proxmox)
+
+For each node in `tappaas-nodes` from `configuration.json`, `update.sh`:
+
+1. Installs `rsyslog` via `apt-get` if missing (Proxmox 9 / Debian 13 ships
+   journald-only by default — no rsyslog).
+2. Writes `/etc/rsyslog.d/99-tappaas-loki.conf` with an `omfwd` forwarder
+   pointing at `logging.mgmt.internal:1515` (RFC 5424, octet-counted framing).
+3. `systemctl enable --now rsyslog && systemctl restart rsyslog`.
+
+rsyslog's default config wires `imjournal` to read systemd-journal, so all
+journal entries flow through to Loki: PVE services (`pveproxy`, `pve-cluster`,
+`pve-firewall`, `qemu-server`, `watchdog`), kernel messages, sshd, cron, etc.
+
+To remove the rsyslog forwarder from a node (e.g. when retiring it):
+
+```
+ssh root@<node>.mgmt.internal "rm /etc/rsyslog.d/99-tappaas-loki.conf && systemctl restart rsyslog"
+```
+
+> **Security note:** OPNsense and Proxmox syslog streams include filter logs,
+> VPN auth events, sshd auth attempts, and other sensitive data. Today both
+> use plain TCP, which is acceptable inside the `mgmt` zone with no rogue
+> switches. Moving to RFC 5425 over TLS on tcp/6514 is in the v2 backlog
+> (needs a TLS cert on `logging.mgmt.internal` and a `tls_config` block in
+> Promtail's syslog receiver).
 
 ## Setting up a Promtail client on another VM
 
@@ -139,8 +176,12 @@ In Grafana's Explore tab, pick the **Loki** datasource:
 | Everything from one VM | `{host="tappaas-cicd"}` |
 | Last update-tappaas run | `{host="tappaas-cicd", unit="update-tappaas.service"}` |
 | Errors across the cluster | `{job="systemd-journal"} \|= "error"` |
-| OPNsense events | `{job="syslog", source="opnsense"}` |
-| Firewall blocks | `{job="syslog", unit="filterlog"}` |
+| OPNsense events | `{source="opnsense"}` |
+| OPNsense firewall block/pass | `{source="opnsense", unit="filterlog"}` |
+| All Proxmox node activity | `{source="proxmox"}` |
+| One node's PVE web UI access | `{source="proxmox", host="tappaas1", unit="pveproxy"}` |
+| PVE cluster events on all nodes | `{source="proxmox", unit=~"pve-cluster.*\|corosync.*"}` |
+| Auth failures cluster-wide | `{} \|= "Failed password"` |
 
 `logcli` is also installed on the VM if you prefer the CLI.
 
