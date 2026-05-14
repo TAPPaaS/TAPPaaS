@@ -18,10 +18,20 @@ from .firewall_manager import (
     RuleAction,
     RuleDirection,
 )
+from .firewall_rules_manager import (
+    AliasSpec,
+    EgressRule,
+    FirewallRulesManager,
+    IngressRule,
+    ModuleFirewallSpec,
+    PortSpec,
+    ValidationError,
+)
 from .vlan_manager import Vlan, VlanManager
 from .zone_manager import Zone, ZoneManager
 
 __all__ = [
+    "AliasSpec",
     "CaddyDomain",
     "CaddyDomainInfo",
     "CaddyHandler",
@@ -31,13 +41,19 @@ __all__ = [
     "DhcpHost",
     "DhcpManager",
     "DhcpRange",
+    "EgressRule",
     "FirewallManager",
     "FirewallRule",
     "FirewallRuleInfo",
+    "FirewallRulesManager",
+    "IngressRule",
     "IpProtocol",
+    "ModuleFirewallSpec",
+    "PortSpec",
     "Protocol",
     "RuleAction",
     "RuleDirection",
+    "ValidationError",
     "Vlan",
     "VlanManager",
     "Zone",
