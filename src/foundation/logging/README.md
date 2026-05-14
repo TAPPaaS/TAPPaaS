@@ -63,52 +63,42 @@ ssh tappaas@logging.mgmt.internal -- sudo rm /root/grafana-admin-password.initia
 Grafana reads the password from `/etc/secrets/grafana-admin-password`
 (`0600 grafana:grafana`).
 
-## Setting up OPNsense to forward syslog
+## OPNsense syslog forwarding
 
-> **Security note:** OPNsense syslog includes filter logs, VPN auth events,
-> captive-portal credentials, and other sensitive data. **Use RFC 5425 over
-> TLS** (port `6514`) for production. Plain TCP/1514 is provided as a fallback
-> for ops without TLS bootstrap and should only be used inside a trusted L2
-> segment (mgmt zone with no rogue switches).
+The logging module's `update.sh` calls `syslog-manager add-destination` on
+every install/update, so OPNsense is configured automatically to forward
+syslog to `logging.mgmt.internal:1514` over plain TCP with RFC 5424
+framing. This runs **only when `firewallType=opnsense`** in the module config
+(default); set it to `NONE` to skip and configure your firewall manually.
 
-### Option A — RFC 5425 over TLS (recommended)
+The destination is matched by description (`tappaas-logging`) for idempotency
+— re-running the install or update updates the existing entry rather than
+creating duplicates.
 
-1. Provision a TLS cert+key for `logging.mgmt.internal` (TAPPaaS CA or
-   self-signed for the mgmt zone) and place them on the logging VM.
-2. Extend the Promtail syslog scrape with a `tls_config` block referencing
-   those files, and switch `listen_protocol = "tcp"` to TLS-enabled. (Backlog
-   — wire it up when the TAPPaaS CA module lands.)
-3. In **OPNsense → System → Settings → Logging / Targets → +** pick
-   **Transport: TLS (TCP+TLS)**, **Port: 6514**, **Format: RFC 5424**, and the
-   CA cert that signs the logging VM's certificate.
+Inspect or manage the destination:
 
-### Option B — Plain TCP RFC 5424 (current default)
-
-Promtail's syslog receiver expects octet-counted RFC 5425 framing on TCP, which
-OPNsense calls "RFC 5425 framing" even when not using TLS. Configure:
-
-1. **System → Settings → Logging / Targets → +**
-2. Fill in:
-   - **Transport:** `TCP (4)`
-   - **Application:** `(blank — forward everything)` or pick the facilities you want
-   - **Level:** `Informational` (or lower if you want debug)
-   - **Format:** `RFC 5424 (with RFC 5424 timestamps)`
-   - **Hostname:** `logging.mgmt.internal`
-   - **Port:** `1514`
-   - **RFC 5425 framing:** `enabled` (octet-counting; required by Promtail)
-   - **Description:** `logging`
-3. **Save** and **Apply**.
+```
+syslog-manager list --no-ssl-verify
+syslog-manager delete-destination --description tappaas-logging --no-ssl-verify
+syslog-manager reconfigure --no-ssl-verify
+```
 
 To verify, on `logging`:
 
 ```
 sudo journalctl -u promtail -f
-# then trigger an event on OPNsense (e.g. login) — you should see syslog lines flow
+# then trigger an OPNsense event (e.g. ssh into the firewall and `logger -t test hi`)
+# you should see Promtail accept the line and ship it to Loki
 ```
 
 In Grafana, query `{job="syslog"}` or `{job="syslog", source="opnsense"}`.
 
-Automating this through the existing `opnsense-controller` is on the v2 backlog.
+> **Security note:** OPNsense syslog includes filter logs, VPN auth events,
+> captive-portal credentials, and other sensitive data. Today this is
+> plain TCP, which is acceptable on the `mgmt` zone with no rogue switches.
+> Moving to RFC 5425 over TLS on tcp/6514 is in the v2 backlog (needs a TLS
+> cert on `logging.mgmt.internal` and a `tls_config` block in Promtail's
+> syslog receiver).
 
 ## Setting up a Promtail client on another VM
 
@@ -198,7 +188,8 @@ Mitigations in place:
   their TAPPaaS SSO account; remove the local admin user.
 - **Syslog over TLS**: wire Promtail's syslog receiver with `tls_config` and
   expose 6514/tcp; deprecate 1514/tcp once OPNsense is moved over.
-- **Automate OPNsense syslog target**: via `opnsense-controller`.
+- **Automate OPNsense syslog target**: ~~v1 ships `syslog-manager` and wires
+  it into `update.sh` — automated on every install/update.~~ ✅ Done in v1.
 - **No Prometheus / Alertmanager yet**: the same VM can host them when
   metrics-side alerting is added.
 - **`provides` is empty in v1**: the module does not yet expose a consumable

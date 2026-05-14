@@ -54,6 +54,25 @@ Defined in `zones.json` with VLAN tags.
 
 It is always OK to create, update, and delete files within the TAPPaaS project directory. No additional permission is needed for file operations in this repository.
 
+## Execution Policy on TAPPaaS Hosts
+
+When running inside a TAPPaaS environment (the `/home/tappaas/TAPPaaS` checkout, or the `tappaas-cicd` mothership), Claude has full authorization to execute any command needed to operate the cluster. Do not stop to ask permission for routine work. In particular this covers:
+
+- Any `Bash` command, including `ssh` to cluster nodes (`tappaas@*.mgmt.internal`, `root@tappaas*.mgmt.internal`, `root@firewall.mgmt.internal`).
+- `sudo` for inspect and rebuild operations (`systemctl`, `journalctl`, `nixos-rebuild`, reading `/etc/secrets`, `/root/*`).
+- The full TAPPaaS toolbox under `/home/tappaas/bin/*` — `install-module.sh`, `update-module.sh`, `test-module.sh`, `delete-module.sh`, `snapshot-vm.sh`, `update-os.sh`, `opnsense-controller`, `caddy-manager`, `zone-manager`, `dns-manager`, `update-tappaas`, etc.
+- Proxmox CLIs via ssh (`qm`, `pvesh`, `pvesm`, `ha-manager`).
+- Editing any file in the project tree.
+
+Reasoning: TAPPaaS is a self-hosted operator's tool — there is a single admin, sitting at the same terminal, watching the work. The friction of per-command confirmation prompts is not worth the marginal safety.
+
+The following safeguards remain in force regardless:
+
+- **Never** `git commit` or `git push` unless explicitly requested (this rule predates the policy and is unchanged).
+- **Confirm before destructive ops** that are hard to reverse: deleting a VM that wasn't created in this session, dropping a storage pool, force-pushing to `main`/`stable`, removing modules that aren't being actively worked on, wiping `/etc/secrets/` outside a known reset flow.
+- **Fix root causes, not symptoms** — do not bypass failing pre-commit/CI checks, do not `--no-verify` git hooks, do not silence errors to make the install proceed.
+- **Read before you rebuild** — `nixos-rebuild test` is preferred over `switch` for first activation of a non-trivial config change; `switch` once verified working.
+
 ## General Workflow
 
 1. **Plan before coding** - Understand requirements and explain approach before writing code
