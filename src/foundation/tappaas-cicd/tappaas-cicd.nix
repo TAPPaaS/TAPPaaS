@@ -143,6 +143,12 @@ in
     };
   };
 
+  # Promtail's hardened unit declares ReadWritePaths=/var/lib/promtail; that
+  # dir must exist for the systemd mount-namespacing step to succeed.
+  systemd.tmpfiles.rules = [
+    "d /var/lib/promtail 0750 promtail promtail -"
+  ];
+
   nix.settings.trusted-users = [ "root" "@wheel" ]; # Allow remote updates
   nix.settings.experimental-features = [ "nix-command" "flakes" ]; # Enable flakes
   nixpkgs.config.allowUnfree = true; # Allow unfree packages
