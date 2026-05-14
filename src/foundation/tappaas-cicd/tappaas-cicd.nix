@@ -70,7 +70,43 @@ in
   };
   programs.ssh.startAgent = true;
 
-  # Enable cron for scheduled tasks
+  # ----------------------------------------
+  # update-tappaas — systemd timer (replaces the legacy hourly cron entry)
+  # ----------------------------------------
+  # Fires hourly; the script itself reads `tappaas.updateSchedule` from
+  # configuration.json and decides whether to actually do anything. Output
+  # flows through Python's logging module with systemd-priority prefixes,
+  # so journald (and Promtail → Loki) tag entries with the right severity.
+  systemd.services.update-tappaas = {
+    description = "TAPPaaS scheduler — update foundation and app modules";
+    serviceConfig = {
+      Type = "oneshot";
+      User = "tappaas";
+      ExecStart = "/home/tappaas/bin/update-tappaas";
+      # Hardening — update-tappaas only needs to read configs and shell out
+      # to /home/tappaas/bin/update-module.sh (which uses ssh).
+      NoNewPrivileges = true;
+      ProtectSystem = "strict";
+      ReadWritePaths = [ "/home/tappaas/config" ];
+      PrivateTmp = true;
+      ProtectKernelTunables = true;
+      ProtectKernelModules = true;
+      ProtectControlGroups = true;
+    };
+  };
+
+  systemd.timers.update-tappaas = {
+    description = "Hourly trigger for update-tappaas";
+    wantedBy = [ "timers.target" ];
+    timerConfig = {
+      OnCalendar = "hourly";        # *-*-* *:00:00
+      Persistent = true;            # catch up after downtime / reboots
+      RandomizedDelaySec = "5min";  # spread load if multiple things tick on the hour
+    };
+  };
+
+  # Keep cron available for now (some operator scripts may still rely on it),
+  # but update-tappaas is no longer scheduled via crontab — see the timer above.
   services.cron.enable = true;
 
   # ----------------------------------------
