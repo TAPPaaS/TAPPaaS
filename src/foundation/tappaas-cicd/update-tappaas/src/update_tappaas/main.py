@@ -1,8 +1,20 @@
 #!/usr/bin/env python3
-"""TAPPaaS update scheduler - updates all foundation modules then app modules."""
+"""TAPPaaS update scheduler - updates all foundation modules then app modules.
+
+Output goes through Python's `logging` module. When invoked by systemd (timer
+or `systemctl start`), records carry `<N>` priority prefixes that
+systemd-journald maps to syslog severities — Promtail then surfaces them as
+the `severity` label in Loki, so LogQL queries like
+`{unit="update-tappaas.service", severity="err"}` work.
+
+When invoked interactively (no `JOURNAL_STREAM`/`INVOCATION_ID` in env), the
+prefixes are suppressed so `--dry-run` output stays human-readable.
+"""
 
 import argparse
 import json
+import logging
+import os
 import subprocess
 import sys
 from datetime import datetime
@@ -20,6 +32,7 @@ FOUNDATION_MODULES = [
     "firewall",      # OPNsense firewall
     "backup",        # Proxmox Backup Server
     "identity",      # Authentik identity provider
+    "logging",       # Loki/Grafana/Promtail
 ]
 
 # Config JSONs that are not modules
@@ -40,26 +53,60 @@ WEEKDAYS = {
 }
 
 
+# ── Logging setup ────────────────────────────────────────────────────
+
+UNDER_SYSTEMD = bool(os.environ.get("JOURNAL_STREAM") or os.environ.get("INVOCATION_ID"))
+
+
+class SystemdPriorityFormatter(logging.Formatter):
+    """Prefix records with `<N>` codes journald reads as syslog severity.
+
+    Only applied when running under systemd (so interactive `--dry-run` stays
+    readable).
+    """
+
+    PRIORITY = {
+        logging.DEBUG:    "<7>",
+        logging.INFO:     "<6>",
+        logging.WARNING:  "<4>",
+        logging.ERROR:    "<3>",
+        logging.CRITICAL: "<2>",
+    }
+
+    def format(self, record: logging.LogRecord) -> str:
+        body = super().format(record)
+        if UNDER_SYSTEMD:
+            return self.PRIORITY.get(record.levelno, "<6>") + body
+        return body
+
+
+def setup_logging() -> None:
+    handler = logging.StreamHandler(stream=sys.stdout)
+    handler.setFormatter(SystemdPriorityFormatter("%(message)s"))
+    root = logging.getLogger()
+    root.setLevel(logging.INFO)
+    root.handlers.clear()
+    root.addHandler(handler)
+
+
+log = logging.getLogger("update-tappaas")
+
+
+# ── Config / schedule ────────────────────────────────────────────────
+
+
 def load_config() -> dict:
     """Load the TAPPaaS configuration file."""
     try:
         with open(CONFIG_PATH) as f:
             return json.load(f)
     except (FileNotFoundError, json.JSONDecodeError) as e:
-        print(f"Error loading configuration: {e}")
+        log.error("Error loading configuration: %s", e)
         return {}
 
 
 def parse_schedule(schedule: list) -> tuple[str, int | None, int]:
-    """Parse updateSchedule list into (frequency, weekday, hour).
-
-    Args:
-        schedule: List of [frequency, weekday, hour]
-
-    Returns:
-        Tuple of (frequency, weekday_number, hour)
-        weekday_number is None for daily frequency
-    """
+    """Parse updateSchedule list into (frequency, weekday, hour)."""
     if not schedule or len(schedule) < 3:
         return ("daily", None, 2)
 
@@ -73,22 +120,14 @@ def parse_schedule(schedule: list) -> tuple[str, int | None, int]:
 
 
 def should_update_now(config: dict, current_hour: int) -> bool:
-    """Determine if updates should run based on the global updateSchedule.
-
-    Args:
-        config: Full TAPPaaS configuration dict
-        current_hour: Current hour of the day (0-23)
-
-    Returns:
-        True if updates should run now, False otherwise
-    """
+    """Decide whether updates should run based on the global updateSchedule."""
     tappaas_config = config.get("tappaas", {})
     schedule = tappaas_config.get("updateSchedule", [])
 
     frequency, scheduled_weekday, scheduled_hour = parse_schedule(schedule)
 
     if frequency == "none":
-        print("  Updates disabled (frequency=none), skipping")
+        log.info("Updates disabled (frequency=none), skipping")
         return False
 
     today = datetime.now()
@@ -96,60 +135,68 @@ def should_update_now(config: dict, current_hour: int) -> bool:
     day_of_month = today.day
 
     if current_hour != scheduled_hour:
-        print(f"  Scheduled for hour {scheduled_hour}, current hour is {current_hour}, skipping")
+        log.info(
+            "Scheduled for hour %d, current hour is %d, skipping",
+            scheduled_hour, current_hour,
+        )
         return False
 
     if frequency == "daily":
-        print(f"  Daily schedule at hour {scheduled_hour}, running updates")
+        log.info("Daily schedule at hour %d — running updates", scheduled_hour)
         return True
 
-    elif frequency == "weekly":
+    if frequency == "weekly":
         if scheduled_weekday is None:
-            print("  Weekly schedule but no weekday specified, skipping")
+            log.warning("Weekly schedule but no weekday specified, skipping")
             return False
 
         weekday_name = list(WEEKDAYS.keys())[scheduled_weekday].capitalize()
         if current_weekday == scheduled_weekday:
-            print(f"  Weekly schedule on {weekday_name}, running updates")
+            log.info("Weekly schedule on %s — running updates", weekday_name)
             return True
-        else:
-            current_day_name = list(WEEKDAYS.keys())[current_weekday].capitalize()
-            print(f"  Weekly schedule on {weekday_name}, today is {current_day_name}, skipping")
-            return False
+        current_day_name = list(WEEKDAYS.keys())[current_weekday].capitalize()
+        log.info(
+            "Weekly schedule on %s, today is %s, skipping",
+            weekday_name, current_day_name,
+        )
+        return False
 
-    elif frequency == "monthly":
+    if frequency == "monthly":
         if scheduled_weekday is None:
-            print("  Monthly schedule but no weekday specified, skipping")
+            log.warning("Monthly schedule but no weekday specified, skipping")
             return False
 
         weekday_name = list(WEEKDAYS.keys())[scheduled_weekday].capitalize()
 
         if day_of_month > 7:
-            print(f"  Monthly schedule, day {day_of_month} is not in first week, skipping")
+            log.info(
+                "Monthly schedule, day %d is not in the first week, skipping",
+                day_of_month,
+            )
             return False
 
         if current_weekday == scheduled_weekday:
-            print(f"  Monthly schedule on first {weekday_name}, running updates")
+            log.info("Monthly schedule on the first %s — running updates", weekday_name)
             return True
-        else:
-            current_day_name = list(WEEKDAYS.keys())[current_weekday].capitalize()
-            print(f"  Monthly schedule on {weekday_name}, today is {current_day_name}, skipping")
-            return False
 
-    else:
-        print(f"  Unknown frequency '{frequency}', skipping")
+        current_day_name = list(WEEKDAYS.keys())[current_weekday].capitalize()
+        log.info(
+            "Monthly schedule on %s, today is %s, skipping",
+            weekday_name, current_day_name,
+        )
         return False
+
+    log.warning("Unknown frequency %r, skipping", frequency)
+    return False
+
+
+# ── Module discovery / ordering ──────────────────────────────────────
 
 
 def get_installed_apps() -> list[str]:
-    """Get list of installed app modules (non-foundation).
-
-    Reads JSON files in CONFIG_DIR, excluding foundation modules and
-    non-module config files.
-    """
+    """Get list of installed app modules (non-foundation)."""
     foundation_set = set(FOUNDATION_MODULES)
     apps = []
-
     for json_file in CONFIG_DIR.glob("*.json"):
         if json_file.name in NON_MODULE_JSONS:
             continue
@@ -157,15 +204,11 @@ def get_installed_apps() -> list[str]:
         if module_name in foundation_set:
             continue
         apps.append(module_name)
-
     return apps
 
 
 def get_module_dependencies(module_name: str) -> list[str]:
-    """Get provider module names from a module's dependsOn field.
-
-    Parses entries like "cluster:vm" to extract "cluster" as a dependency.
-    """
+    """Get provider module names from a module's dependsOn field."""
     json_path = CONFIG_DIR / f"{module_name}.json"
     try:
         with open(json_path) as f:
@@ -183,21 +226,14 @@ def get_module_dependencies(module_name: str) -> list[str]:
 
 
 def topological_sort(apps: list[str]) -> list[str]:
-    """Sort apps so dependsOn modules are updated before their dependents.
-
-    Only considers dependencies between apps in the list.
-    Foundation dependencies are ignored (already updated in phase 1).
-    Ties are broken alphabetically for deterministic ordering.
-    """
+    """Sort apps so dependsOn modules are updated before their dependents."""
     app_set = set(apps)
 
-    # Build dependency graph: app -> list of apps it depends on (within app_set)
     deps = {}
     for app in apps:
         providers = get_module_dependencies(app)
         deps[app] = [p for p in providers if p in app_set]
 
-    # Kahn's algorithm
     in_degree = {app: len(deps[app]) for app in apps}
     dependents = {app: [] for app in apps}
     for app, app_deps in deps.items():
@@ -216,10 +252,12 @@ def topological_sort(apps: list[str]) -> list[str]:
                 queue.append(dependent)
                 queue.sort()
 
-    # Handle circular dependencies by appending remaining nodes
     remaining = sorted(set(apps) - set(result))
     if remaining:
-        print(f"  Warning: Circular dependencies detected among: {', '.join(remaining)}")
+        log.warning(
+            "Circular dependencies detected among: %s",
+            ", ".join(remaining),
+        )
         result.extend(remaining)
 
     return result
@@ -228,55 +266,50 @@ def topological_sort(apps: list[str]) -> list[str]:
 def update_module(module_name: str) -> bool:
     """Call update-module.sh to update a single module."""
     try:
-        result = subprocess.run(
-            [UPDATE_MODULE_CMD, module_name],
-            text=True
-        )
+        result = subprocess.run([UPDATE_MODULE_CMD, module_name], text=True)
         return result.returncode == 0
     except (subprocess.SubprocessError, FileNotFoundError) as e:
-        print(f"Error running update-module.sh for {module_name}: {e}")
+        log.error("Error running update-module.sh for %s: %s", module_name, e)
         return False
 
 
+# ── Main ─────────────────────────────────────────────────────────────
+
+
 def main():
-    """Main entry point for update-tappaas."""
+    setup_logging()
+
     parser = argparse.ArgumentParser(
         description="TAPPaaS update scheduler - updates foundation and app modules across all nodes"
     )
     parser.add_argument(
-        "--force",
-        action="store_true",
-        help="Force update regardless of schedule"
+        "--force", action="store_true",
+        help="Force update regardless of schedule",
     )
     parser.add_argument(
-        "--dry-run",
-        action="store_true",
-        help="Show what would be updated without actually running updates"
+        "--dry-run", action="store_true",
+        help="Show what would be updated without actually running updates",
     )
     args = parser.parse_args()
 
     now = datetime.now()
     current_hour = now.hour
     start_time = now.strftime("%Y-%m-%d %H:%M:%S")
-    print(f"update-tappaas started: {start_time}")
+    log.info("update-tappaas started: %s", start_time)
 
-    # Load configuration
     config = load_config()
     if not config:
-        print("Error: Could not load configuration")
+        log.error("Could not load configuration — aborting")
         sys.exit(1)
 
-    # Check schedule
-    print("\nChecking update schedule:")
+    log.info("Checking update schedule")
     if not args.force and not should_update_now(config, current_hour):
-        print("\nNot scheduled for update at this time")
+        log.info("Not scheduled for update at this time")
         sys.exit(0)
 
-    # Discover installed apps and sort by dependencies
     apps = get_installed_apps()
     sorted_apps = topological_sort(apps)
 
-    # Determine which foundation modules are installed
     installed_foundation = [
         m for m in FOUNDATION_MODULES
         if (CONFIG_DIR / f"{m}.json").exists()
@@ -284,66 +317,67 @@ def main():
 
     # Dry run: show the update plan
     if args.dry_run:
-        print("\n=== DRY RUN MODE ===")
-        print("\nPhase 1 - Foundation update order:")
+        log.info("=== DRY RUN MODE ===")
+        log.info("Phase 1 - Foundation update order:")
         for i, mod in enumerate(installed_foundation, 1):
-            print(f"  {i}. update-module.sh {mod}")
+            log.info("  %d. update-module.sh %s", i, mod)
         skipped = [m for m in FOUNDATION_MODULES if m not in installed_foundation]
         if skipped:
-            print(f"  (not installed: {', '.join(skipped)})")
-        print(f"\nPhase 2 - App update order ({len(sorted_apps)} module(s)):")
+            log.info("  (not installed: %s)", ", ".join(skipped))
+        log.info("Phase 2 - App update order (%d module(s)):", len(sorted_apps))
         if sorted_apps:
             for i, app in enumerate(sorted_apps, 1):
                 dep_providers = get_module_dependencies(app)
                 dep_str = f" (depends on: {', '.join(dep_providers)})" if dep_providers else ""
-                print(f"  {i}. update-module.sh {app}{dep_str}")
+                log.info("  %d. update-module.sh %s%s", i, app, dep_str)
         else:
-            print("  (no app modules installed)")
-        print("\nTo run these updates:")
-        print("  update-tappaas --force")
+            log.info("  (no app modules installed)")
+        log.info("To run these updates: update-tappaas --force")
         sys.exit(0)
 
     failed_modules = []
 
     # Phase 1: Foundation modules in fixed order
-    print("\n" + "=" * 60)
-    print("Phase 1: Updating foundation modules")
-    print("=" * 60)
+    log.info("=" * 60)
+    log.info("Phase 1: Updating foundation modules")
+    log.info("=" * 60)
 
     for i, module in enumerate(installed_foundation, 1):
-        print(f"\n[{i}/{len(installed_foundation)}] Updating {module}...")
+        log.info("[%d/%d] Updating %s", i, len(installed_foundation), module)
         if not update_module(module):
-            print(f"FAILED: {module}")
+            log.error("FAILED: %s", module)
             failed_modules.append(module)
 
     # Phase 2: App modules in dependency order
-    print("\n" + "=" * 60)
-    print("Phase 2: Updating app modules")
-    print("=" * 60)
+    log.info("=" * 60)
+    log.info("Phase 2: Updating app modules")
+    log.info("=" * 60)
 
     if sorted_apps:
         for i, app in enumerate(sorted_apps, 1):
-            print(f"\n[{i}/{len(sorted_apps)}] Updating {app}...")
+            log.info("[%d/%d] Updating %s", i, len(sorted_apps), app)
             if not update_module(app):
-                print(f"FAILED: {app}")
+                log.error("FAILED: %s", app)
                 failed_modules.append(app)
     else:
-        print("\nNo app modules found to update")
+        log.info("No app modules found to update")
 
     # Summary
     end_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     total = len(installed_foundation) + len(sorted_apps)
     succeeded = total - len(failed_modules)
 
-    print("\n" + "=" * 60)
-    print(f"update-tappaas completed: {end_time}")
-    print(f"  Total modules: {total}  |  Succeeded: {succeeded}  |  Failed: {len(failed_modules)}")
+    log.info("=" * 60)
+    log.info(
+        "update-tappaas completed: %s | total=%d succeeded=%d failed=%d",
+        end_time, total, succeeded, len(failed_modules),
+    )
 
     if failed_modules:
-        print(f"  Failed: {', '.join(failed_modules)}")
+        log.error("Failed modules: %s", ", ".join(failed_modules))
         sys.exit(1)
 
-    print("All modules updated successfully")
+    log.info("All modules updated successfully")
 
 
 if __name__ == "__main__":
