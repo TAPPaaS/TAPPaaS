@@ -412,7 +412,14 @@ in
       security = {
         admin_user = "admin";
         admin_password = "$__file{/etc/secrets/grafana-admin-password}";
-        cookie_secure = true;
+        # cookie_secure = false for v1: this VM is reachable on internal
+        # http://logging.mgmt.internal:3000. With cookie_secure=true the
+        # browser refuses to persist the auth cookie over plain HTTP, so login
+        # appears to succeed then bounces back to /login.
+        # v2 (when HTTPS via Caddy + Let's Encrypt is live for every admin
+        # access path): set cookie_secure = true and access only through Caddy.
+        cookie_secure = false;
+        cookie_samesite = "lax";
       };
 
       "auth.anonymous".enabled = false;
