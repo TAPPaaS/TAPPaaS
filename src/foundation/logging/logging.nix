@@ -15,11 +15,12 @@
 # Architecture:
 # - Loki single-binary mode (log store, filesystem-backed, 30-day retention)
 # - Grafana (web UI, port 3000, behind Caddy)
-# - Promtail (local journal scrape + syslog receiver for OPNsense on tcp/1514)
+# - Promtail (local journal scrape + 2 syslog receivers: 1514 OPNsense, 1515 Proxmox)
 #
 # Ingest paths:
 # - Other TAPPaaS VMs run Promtail clients that push to this VM:3100
-# - OPNsense forwards RFC 5424 syslog over TCP to this VM:1514
+# - OPNsense forwards RFC 5424 syslog over TCP to this VM:1514 (source=opnsense)
+# - Proxmox nodes' rsyslog forwards to this VM:1515 (source=proxmox)
 #
 # Secrets: Grafana admin password auto-generated on first boot
 #   -> /etc/secrets/grafana-admin-password (shown in journal once)
@@ -28,11 +29,12 @@
 { config, lib, pkgs, modulesPath, system, ... }:
 
 let
-  lokiPort     = 3100;
-  grafanaPort  = 3000;
-  syslogPort   = 1514;
-  promtailHttp = 9080;
-  retentionHours = "720h";   # 30 days
+  lokiPort          = 3100;
+  grafanaPort       = 3000;
+  syslogOpnsensePort = 1514;   # OPNsense → Promtail (source=opnsense)
+  syslogProxmoxPort  = 1515;   # Proxmox nodes → Promtail (source=proxmox)
+  promtailHttp      = 9080;
+  retentionHours    = "720h";  # 30 days
 in
 {
   # ============================================================================
@@ -87,7 +89,8 @@ in
       22             # SSH
       grafanaPort    # Grafana web UI (3000) — fronted by Caddy
       lokiPort       # Loki HTTP push/query (3100) — from mgmt zone Promtail clients
-      syslogPort     # Syslog ingest (1514) — from OPNsense
+      syslogOpnsensePort     # Syslog ingest (1514) — from OPNsense
+      syslogProxmoxPort      # Syslog ingest (1515) — from Proxmox nodes
     ];
   };
 
@@ -373,15 +376,34 @@ in
           ];
         }
         {
-          job_name = "syslog";
+          job_name = "syslog-opnsense";
           syslog = {
-            listen_address = "0.0.0.0:${toString syslogPort}";
+            listen_address = "0.0.0.0:${toString syslogOpnsensePort}";
             listen_protocol = "tcp";
             idle_timeout = "60s";
             label_structured_data = true;
             labels = {
               job = "syslog";
               source = "opnsense";
+            };
+          };
+          relabel_configs = [
+            { source_labels = [ "__syslog_message_hostname" ];  target_label = "host"; }
+            { source_labels = [ "__syslog_message_app_name" ];  target_label = "unit"; }
+            { source_labels = [ "__syslog_message_severity" ]; target_label = "severity"; }
+            { source_labels = [ "__syslog_message_facility" ]; target_label = "facility"; }
+          ];
+        }
+        {
+          job_name = "syslog-proxmox";
+          syslog = {
+            listen_address = "0.0.0.0:${toString syslogProxmoxPort}";
+            listen_protocol = "tcp";
+            idle_timeout = "60s";
+            label_structured_data = true;
+            labels = {
+              job = "syslog";
+              source = "proxmox";
             };
           };
           relabel_configs = [
