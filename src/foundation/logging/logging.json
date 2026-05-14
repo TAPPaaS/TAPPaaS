@@ -1,0 +1,26 @@
+{
+  "description": "Centralized log aggregation with Grafana Loki, Promtail and Grafana UI",
+  "version": "0.1.0",
+  "releaseDate": "2026-05-14",
+  "maintainer": "@larsrossen",
+  "status": "Development",
+  "vmname": "logging",
+  "vmid": 150,
+  "vmtag": "TAPPaaS,Foundation",
+  "cores": 2,
+  "memory": "2048",
+  "diskSize": "32G",
+  "storage": "tanka1",
+  "imageType": "clone",
+  "image": "8080",
+  "bridge0": "lan",
+  "zone0": "mgmt",
+  "proxyPort": 3000,
+  "dependsOn": [
+    "cluster:vm",
+    "templates:nixos",
+    "backup:vm",
+    "firewall:proxy"
+  ],
+  "provides": []
+}

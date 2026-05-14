@@ -27,6 +27,11 @@
             "moduleJson": "src/foundation/identity/identity.json"
         },
         {
+            "moduleName": "logging",
+            "vmid": 150,
+            "moduleJson": "src/foundation/logging/logging.json"
+        },
+        {
             "moduleName": "backup",
             "vmid": 0,
             "moduleJson": "src/foundation/backup/backup.json"

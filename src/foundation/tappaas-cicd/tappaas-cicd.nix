@@ -73,6 +73,76 @@ in
   # Enable cron for scheduled tasks
   services.cron.enable = true;
 
+  # ----------------------------------------
+  # Promtail client → ship the mothership's journal to logging
+  # ----------------------------------------
+  # Lets you query update-tappaas / update-module.sh output in Grafana via the
+  # Loki datasource. Safe-if-target-missing: Promtail buffers locally and retries.
+  #
+  # SECURITY: this VM runs opnsense-controller and setup-caddy.sh, which handle
+  # OPNsense API credentials. The pipeline_stages below DROP journal entries
+  # from credential-handling units and SCRUB common secret patterns from
+  # everything else BEFORE the line leaves this host.
+  services.promtail = {
+    enable = true;
+    configuration = {
+      server = {
+        # bind to localhost — Promtail metrics must not leak across mgmt
+        http_listen_address = "127.0.0.1";
+        http_listen_port = 9080;
+        grpc_listen_port = 0;
+      };
+      positions.filename = "/var/lib/promtail/positions.yaml";
+      clients = [{
+        url = "http://logging.mgmt.internal:3100/loki/api/v1/push";
+      }];
+      scrape_configs = [{
+        job_name = "journal";
+        journal = {
+          max_age = "12h";
+          labels = {
+            job = "systemd-journal";
+            host = "tappaas-cicd";
+          };
+        };
+        relabel_configs = [
+          { source_labels = [ "__journal__systemd_unit" ]; target_label = "unit"; }
+          { source_labels = [ "__journal_priority_keyword" ]; target_label = "severity"; }
+        ];
+        pipeline_stages = [
+          # 1. Drop journal entries from units that handle credentials.
+          {
+            match = {
+              selector = ''{unit=~"opnsense-controller.*|setup-caddy.*|generate-.*-secrets.*"}'';
+              action = "drop";
+            };
+          }
+          # 2. Belt-and-braces: scrub common secret assignments anywhere else.
+          {
+            replace = {
+              expression = ''(?i)\b(token|secret|password|passwd|api[_-]?key)\s*[:=]\s*\S+'';
+              replace = "$1=***REDACTED***";
+            };
+          }
+          # 3. Scrub HTTP basic-auth in curl-like lines: -u "user:pass"
+          {
+            replace = {
+              expression = ''(-u[[:space:]]+["']?)[^"' ]+:[^"' ]+(["']?)'';
+              replace = "$1***REDACTED***$2";
+            };
+          }
+          # 4. Scrub Authorization headers
+          {
+            replace = {
+              expression = ''(Authorization:[[:space:]]+(Basic|Bearer)[[:space:]]+)\S+'';
+              replace = "$1***REDACTED***";
+            };
+          }
+        ];
+      }];
+    };
+  };
+
   nix.settings.trusted-users = [ "root" "@wheel" ]; # Allow remote updates
   nix.settings.experimental-features = [ "nix-command" "flakes" ]; # Enable flakes
   nixpkgs.config.allowUnfree = true; # Allow unfree packages
