@@ -413,6 +413,17 @@ else
 
     trap cleanup_deep EXIT
 
+    # Refresh deployed zones.json from the canonical source so test1/test2 are
+    # fully defined (jq stub-injection if they were missing would crash zone-manager).
+    if ! cp "${ZONES_JSON_CANONICAL:-${SCRIPT_DIR}/zones.json}" "${CONFIG_DIR}/zones.json.test-bak"; then
+        :
+    fi
+    if [[ -f "${SCRIPT_DIR}/zones.json" ]]; then
+        cp "${SCRIPT_DIR}/zones.json" "${CONFIG_DIR}/zones.json" \
+            || die "Cannot refresh ${CONFIG_DIR}/zones.json from canonical"
+        info "Refreshed ${CONFIG_DIR}/zones.json from canonical firewall/zones.json"
+    fi
+
     if [[ ! -f "${CONFIG_DIR}/zones.json" ]]; then
         fail "deployed zones.json missing — cannot activate test zones"
     else
@@ -421,7 +432,7 @@ else
             "${CONFIG_DIR}/zones.json" > "${tmp}" \
             && mv "${tmp}" "${CONFIG_DIR}/zones.json"
         info "Activated test1 and test2 in deployed zones.json"
-        if zone-manager --no-ssl-verify --zones-file "${CONFIG_DIR}/zones.json" --execute >/dev/null 2>&1; then
+        if zone-manager --no-ssl-verify --zones-file "${CONFIG_DIR}/zones.json" --execute 2>&1 | tail -5; then
             pass "zone-manager applied test1+test2 (VLAN+DHCP+rules)"
         else
             fail "zone-manager could not apply test1+test2"

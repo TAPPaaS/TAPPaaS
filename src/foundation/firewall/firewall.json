@@ -25,6 +25,7 @@
   ],
   "provides": [
     "firewall",
-    "proxy"
+    "proxy",
+    "rules"
   ]
 }
