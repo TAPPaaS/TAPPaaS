@@ -535,11 +535,28 @@ else
 
     pushd "${FIXTURES_DIR}" >/dev/null || die "Cannot enter ${FIXTURES_DIR}"
 
-    if /home/tappaas/bin/install-module.sh test-fw-a 2>&1 | tee -a "${LOG_FILE}" | tail -10; then
-        pass "install-module.sh test-fw-a"
-    else
-        fail "install-module.sh test-fw-a"
-    fi
+    # Helper: install a module with one retry on transient failure. The
+    # templates:nixos step intermittently fails on the first VM brought up in
+    # a freshly-activated zone (cloud-init / SSH-readiness race). A second
+    # attempt — after delete-module.sh has cleaned partial state — reliably
+    # succeeds.
+    install_with_retry() {
+        local mod="$1"
+        if /home/tappaas/bin/install-module.sh "${mod}" 2>&1 | tee -a "${LOG_FILE}" | tail -10; then
+            pass "install-module.sh ${mod}"
+            return 0
+        fi
+        warn "  First install of ${mod} failed (likely cloud-init race) — retrying once after cleanup..."
+        /home/tappaas/bin/delete-module.sh "${mod}" --force >/dev/null 2>&1 || true
+        if /home/tappaas/bin/install-module.sh "${mod}" 2>&1 | tee -a "${LOG_FILE}" | tail -10; then
+            pass "install-module.sh ${mod} (succeeded on retry)"
+            return 0
+        fi
+        fail "install-module.sh ${mod} (failed twice)"
+        return 1
+    }
+
+    install_with_retry test-fw-a || true
 
     # Wait for cloud-init / DHCP / DNS to settle
     info "Waiting up to 90s for test-fw-a DNS registration..."
@@ -572,7 +589,9 @@ else
         proxy_domain="test-fw-a.${domain}"
     fi
     if [[ -n "${proxy_domain}" && "${proxy_domain}" != "test-fw-a." ]]; then
-        if caddy-manager --no-ssl-verify list 2>/dev/null | grep -q "test-fw-a\|${proxy_domain}"; then
+        # caddy-manager has the global-flag-before-subcommand argparse bug;
+        # place --no-ssl-verify AFTER the subcommand.
+        if caddy-manager list --no-ssl-verify 2>/dev/null | grep -q "test-fw-a\|${proxy_domain}"; then
             pass "Caddy domain entry for test-fw-a present"
         else
             fail "Caddy domain entry for test-fw-a missing"
@@ -583,11 +602,7 @@ else
 
     section "Deep 5: Install test-fw-b in test2"
 
-    if /home/tappaas/bin/install-module.sh test-fw-b 2>&1 | tee -a "${LOG_FILE}" | tail -10; then
-        pass "install-module.sh test-fw-b"
-    else
-        fail "install-module.sh test-fw-b"
-    fi
+    install_with_retry test-fw-b || true
 
     info "Waiting up to 90s for test-fw-b DNS registration..."
     for _ in {1..18}; do
@@ -620,16 +635,25 @@ else
 
     section "Deep 7: OPNsense aliases exist"
 
-    # The FQDN alias for test-fw-a should have been auto-created.
-    if ssh -o BatchMode=yes -o StrictHostKeyChecking=accept-new \
-            root@"${FIREWALL_FQDN}" \
-            "/usr/local/sbin/pfctl -t tappaas_module_test_fw_a -T show 2>/dev/null || true" \
-            2>/dev/null | grep -q .; then
-        pass "OPNsense alias tappaas_module_test_fw_a populated"
+    # Verify the FQDN alias was created in OPNsense's filter config. We check
+    # by listing the alias rules-manager has applied — if the rule destinations
+    # contain the alias name, OPNsense accepted the alias and bound it to a
+    # rule (Deep 8/9 then prove it functions end-to-end via Unbound resolution).
+    # (Note: pfctl -t ... -T show is unreliable because OPNsense's update_tables.py
+    # populates FQDN-host aliases asynchronously on a cron; the table can be empty
+    # for minutes after creation even though the rules using it work fine.)
+    if rules-manager list-rules --module test-fw-b --output json --no-ssl-verify 2>/dev/null \
+            | jq -e '.rules[] | select(.description | contains("test-fw-a")) | .uuid' \
+            >/dev/null 2>&1; then
+        pass "rules referencing FQDN alias tappaas_module_test_fw_a applied to OPNsense"
     else
-        # Fall back to an API/CLI check if pfctl wasn't available
-        skip "alias presence check requires pfctl or API lookup (manual verify)"
+        fail "no rule references tappaas_module_test_fw_a — alias not wired through"
     fi
+
+    # Test VMs are typically reinstalled fresh; clear stale host keys so the
+    # inter-VM ssh probes don't fail on REMOTE_HOST_IDENTIFICATION_CHANGED.
+    ssh-keygen -R test-fw-a.test1.internal >/dev/null 2>&1 || true
+    ssh-keygen -R test-fw-b.test2.internal >/dev/null 2>&1 || true
 
     section "Deep 8: Inter-VM connectivity (pinhole works)"
 

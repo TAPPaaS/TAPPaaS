@@ -43,6 +43,7 @@ from .firewall_manager import (
     RuleDirection,
 )
 from .log import debug, error, info, warn
+from .vlan_manager import VlanManager
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Constants
@@ -301,6 +302,8 @@ class RulesManager:
         self._client: Client | None = None
         # Cache: peer-module zone lookup for FQDN aliases (avoids re-reading JSON)
         self._peer_zone_cache: dict[str, str] = {}
+        # Cache: VLAN-tag → OPNsense interface identifier (lazy-loaded at first use)
+        self._vlan_iface_cache: dict[int, str] | None = None
 
     @property
     def is_none_mode(self) -> bool:
@@ -473,7 +476,11 @@ class RulesManager:
                         info(f"[check] -rule desc='{live_rule.description}'")
             return result
 
-        # 1. Ensure aliases (module-local + peer-module FQDN aliases) exist
+        # 1. Ensure aliases exist in OPNsense before any rule references them:
+        #    a) module-local aliases declared in module.aliases
+        #    b) peer-module FQDN aliases (tappaas_module_<peer>)
+        #    c) global aliases from firewall/aliases.json that are referenced
+        #       via "alias:<name>" in this module's ingress/egress
         for alias_name, alias_def in module.aliases.items():
             self._upsert_alias(
                 alias_name,
@@ -489,6 +496,15 @@ class RulesManager:
                 [peer_fqdn],
                 f"FQDN alias for module '{peer_fqdn.split('.')[0]}' "
                 f"(DHCP IP resolved via Unbound/dnsmasq)",
+            )
+            result.aliases_created += 1
+        for global_name in self._referenced_global_aliases(module):
+            alias_def = self.global_aliases[global_name]
+            self._upsert_alias(
+                global_name,
+                alias_def.get("type", "host"),
+                alias_def.get("addresses", []),
+                alias_def.get("description", ""),
             )
             result.aliases_created += 1
 
@@ -770,6 +786,24 @@ class RulesManager:
                     result[_module_alias_name(peer)] = fqdn
         return result
 
+    def _referenced_global_aliases(self, module: ModuleSpec) -> list[str]:
+        """Return the names of global aliases referenced by this module's rules.
+
+        A rule entry `from: "alias:foo"` or `to: "alias:foo"` references alias
+        `foo`. Module-local aliases override globals (per design), so this only
+        includes names that are in `self.global_aliases` AND NOT in
+        `module.aliases`. The caller upserts these into OPNsense before applying
+        any rule that depends on them.
+        """
+        names: set[str] = set()
+        for entry in (*module.ingress, *module.egress):
+            peer = entry.get("from") or entry.get("to") or ""
+            if peer.startswith("alias:"):
+                alias_name = peer[len("alias:") :]
+                if alias_name in self.global_aliases and alias_name not in module.aliases:
+                    names.add(alias_name)
+        return sorted(names)
+
     def _peer_module_aliases_for(self, module: ModuleSpec) -> list[str]:
         """Return the list of peer-module alias names referenced by `module`."""
         names: list[str] = []
@@ -821,13 +855,44 @@ class RulesManager:
     def _zone_to_interface(self, zone: ZoneSpec) -> str:
         """Map a zone to its OPNsense interface identifier.
 
-        VLAN zones: the zone name is used (zone_manager assigns
-        VLAN interface descriptions matching the zone name).
+        VLAN zones: queries OPNsense for the actual interface ID (opt1, opt5, ...)
+        assigned to the zone's VLAN tag. zone-manager assigns VLAN interfaces
+        with description = zone name, but the OPNsense rule API requires the
+        underlying identifier (opt<n>), not the description.
+
         Non-VLAN zones: the bridge name (lan/wan).
+
+        Falls back to the bridge name if the VLAN→interface lookup fails (the
+        rule API will then reject with a clear error, surfacing the mismatch).
         """
         if zone.vlan_tag > 0:
-            return zone.name
+            iface = self._vlan_interface_for_tag(zone.vlan_tag)
+            if iface:
+                return iface
+            warn(
+                f"Zone '{zone.name}' (VLAN {zone.vlan_tag}) is not assigned to "
+                f"any OPNsense interface — falling back to bridge '{zone.bridge}'"
+            )
         return zone.bridge.lower()
+
+    def _vlan_interface_for_tag(self, vlan_tag: int) -> str | None:
+        """Look up the OPNsense interface identifier (e.g. 'opt5') for a VLAN tag."""
+        if self._vlan_iface_cache is None:
+            self._vlan_iface_cache = {}
+            if not self.is_none_mode:
+                try:
+                    with VlanManager(self.config) as vlan_mgr:
+                        for v in vlan_mgr.get_assigned_vlans():
+                            tag_str = str(v.get("vlan_tag", ""))
+                            ident = v.get("identifier")
+                            if tag_str and ident:
+                                try:
+                                    self._vlan_iface_cache[int(tag_str)] = ident
+                                except ValueError:
+                                    continue
+                except Exception as exc:
+                    warn(f"Could not load VLAN→interface map from OPNsense: {exc}")
+        return self._vlan_iface_cache.get(vlan_tag)
 
     # ── Sequence allocation ──────────────────────────────────────────────
 
@@ -905,13 +970,24 @@ class RulesManager:
         return True
 
     def _revert(self, revision) -> None:
+        # create_savepoint() returns {"result": {"response": {"revision": "..."}}}
+        rev_id = ""
+        if isinstance(revision, dict):
+            rev_id = (
+                revision.get("result", {}).get("response", {}).get("revision")
+                or revision.get("revision")
+                or ""
+            )
+        if not rev_id:
+            warn("Cannot revert: no revision id in savepoint response")
+            return
         try:
             self.fw.client.run_module(
                 "raw",
                 params={
                     "module": "firewall",
                     "controller": "filter",
-                    "command": "revert/" + str(revision.get("revision", "")),
+                    "command": f"revert/{rev_id}",
                     "action": "post",
                 },
             )
@@ -1159,6 +1235,10 @@ def main() -> int:
 
 
 def _dispatch(args: argparse.Namespace, manager: RulesManager) -> int:
+    # When the caller asked for JSON, suppress info() log output so the JSON
+    # document is the only thing on stdout (jq-friendly).
+    if args.output == "json":
+        os.environ["TAPPAAS_SILENT"] = "1"
     cmd = args.command
     if cmd == "add-rules":
         result = manager.add_rules(args.module)
