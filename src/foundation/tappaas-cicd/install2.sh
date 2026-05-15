@@ -69,10 +69,15 @@ else
   exit 1
 fi
 
-# Use zones.json from the TAPPaaS repo — it is the canonical source of truth.
-# Previously this was copied from the Proxmox node, which caused the repo version
-# to be silently overwritten on every install2.sh run.
-cp /home/tappaas/TAPPaaS/src/foundation/firewall/zones.json /home/tappaas/config/zones.json
+# Seed zones.json from the canonical source (firewall module) only on first install.
+# Existing /home/tappaas/config/zones.json may contain operator customizations and
+# must not be overwritten here; ongoing refreshes are handled by pre-update.sh.
+if [ ! -f /home/tappaas/config/zones.json ]; then
+  cp /home/tappaas/TAPPaaS/src/foundation/firewall/zones.json /home/tappaas/config/zones.json
+  _info "Seeded /home/tappaas/config/zones.json from firewall module"
+else
+  _info "Preserving existing /home/tappaas/config/zones.json (not overwriting)"
+fi
 
 # --- Install scripts as symlinks into /home/tappaas/bin/ ---
 echo ""

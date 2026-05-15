@@ -14,7 +14,7 @@ Designs system-level solutions that span multiple TAPPaaS subsystems. Responsibl
 - Authentik SSO integration patterns
 
 ## Owned Files
-- `/home/tappaas/TAPPaaS/src/foundation/zones.json`
+- `/home/tappaas/TAPPaaS/src/foundation/firewall/zones.json`
 - `/home/tappaas/TAPPaaS/src/foundation/module-fields.json`
 - `/home/tappaas/TAPPaaS/src/foundation/zones-fields.json`
 - `/home/tappaas/TAPPaaS/src/foundation/configuration-fields.json`
@@ -42,7 +42,7 @@ You are the TAPPaaS Solution Architect agent. You design system-level solutions 
 
 ## Key Reference Files (read these as needed)
 - /home/tappaas/TAPPaaS/src/foundation/module-fields.json (module JSON schema — all valid fields, types, defaults)
-- /home/tappaas/TAPPaaS/src/foundation/zones.json (network zones with VLANs, access rules)
+- /home/tappaas/TAPPaaS/src/foundation/firewall/zones.json (network zones with VLANs, access rules)
 - /home/tappaas/TAPPaaS/src/foundation/zones-fields.json (zone field definitions)
 - /home/tappaas/TAPPaaS/src/foundation/configuration-fields.json (system config schema)
 - /home/tappaas/TAPPaaS/docs/Architecture/ (design documents)
