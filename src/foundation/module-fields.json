@@ -510,7 +510,7 @@
                 { "from": "srv-work", "ports": [4000], "description": "Intra-zone consumers read the API" },
                 { "from": "dmz", "ports": [4000], "description": "Caddy reverse proxy forwards the public hostname" }
             ],
-            "note": "Module peer (from = another module name): compiler ensures an OPNsense host alias 'tappaas-module-<peer>' exists, populated with the peer's FQDN; the rule references the alias so DHCP IP changes are absorbed by Unbound resolution."
+            "note": "Module peer (from = another module name): compiler ensures an OPNsense host alias 'tappaas_module_<peer>' exists, populated with the peer's FQDN; the rule references the alias so DHCP IP changes are absorbed by Unbound resolution. (Underscores: OPNsense alias names cannot contain hyphens.)"
         },
 
         "egress": {
@@ -557,7 +557,7 @@
                 { "to": "alias:llm_cloud_providers", "ports": [443], "description": "Upstream LLM providers" },
                 { "to": "vllm-amd", "ports": [11434], "description": "Local inference fallback" }
             ],
-            "note": "Module peer (to = another module name): compiler creates a host alias 'tappaas-module-<peer>' from the peer's FQDN. A warning is emitted when 'to' is a zone not in the source zone's access-to list."
+            "note": "Module peer (to = another module name): compiler creates a host alias 'tappaas_module_<peer>' from the peer's FQDN. A warning is emitted when 'to' is a zone not in the source zone's access-to list."
         },
 
         "aliases": {

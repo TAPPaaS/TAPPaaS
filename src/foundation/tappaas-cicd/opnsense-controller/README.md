@@ -735,7 +735,7 @@ The Zone Manager expects zones.json in the following format:
 
 The Rules Manager compiles per-module firewall rules from `module.json` into OPNsense, providing the `firewall:rules` capability. It is a TAPPaaS-aware orchestrator on top of the lower-level `FirewallManager`: it understands `ports`, `ingress`, `egress`, and `aliases` declarations, validates them against zone-level policy from `zones.json`, and applies the resulting rules atomically using description-based idempotent upsert.
 
-Module-named peers in `from`/`to` are resolved by creating an OPNsense host alias `tappaas-module-<peer>` populated with the peer's FQDN (`<peer>.<zone0>.internal`). OPNsense Unbound resolves the FQDN against dnsmasq, so DHCP IP changes flow through transparently without rule rewrites.
+Module-named peers in `from`/`to` are resolved by creating an OPNsense host alias `tappaas_module_<peer>` populated with the peer's FQDN (`<peer>.<zone0>.internal`). Any hyphens in the peer's vmname are normalised to underscores because OPNsense alias names disallow hyphens. OPNsense Unbound resolves the FQDN against dnsmasq, so DHCP IP changes flow through transparently without rule rewrites.
 
 For the full schema and design — including sequence bands, validation layers, and the worked examples — see [`src/foundation/firewall/README.md`](../../firewall/README.md).
 

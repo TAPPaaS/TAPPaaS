@@ -39,7 +39,7 @@ The `from` / `to` fields accept:
 - A **zone name** (must exist in `zones.json`)
 - The literal `"internet"` (resolves to WAN-side `any`)
 - Another **module name** — resolved to an OPNsense host alias
-  `tappaas-module-<vmname>` populated with the peer's FQDN
+  `tappaas_module_<vmname>` populated with the peer's FQDN
   (`<vmname>.<zone0>.internal`). OPNsense's Unbound resolves the FQDN against
   dnsmasq, so DHCP-driven IP changes flow through without rule rewrites.
 - `"alias:<name>"` — references a module-local alias or a global entry in

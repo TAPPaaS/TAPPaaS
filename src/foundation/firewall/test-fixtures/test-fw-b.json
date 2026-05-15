@@ -20,7 +20,7 @@
     {
       "from": "test-fw-a",
       "ports": [9090],
-      "description": "Module-name peer — exercises FQDN host alias (tappaas-module-test-fw-a)"
+      "description": "Module-name peer — exercises FQDN host alias (tappaas_module_test_fw_a)"
     },
     {
       "from": "alias:test_admin_ips",

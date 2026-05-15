@@ -16,7 +16,7 @@
   "cloudInit": "false",
   "bridge0": "lan",
   "zone0": "mgmt",
-  "trunks0": "srv;private;iot;dmz",
+  "trunks0": "srv;business;dev-srv;private;iot;iot-isolated;iot-camera;guest;dmz;test1;test2",
   "bridge1": "wan",
   "zone1": "mgmt",
   "dependsOn": [

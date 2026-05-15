@@ -10,7 +10,8 @@ Description-based identity makes apply operations idempotent:
 
 When a peer is another module's name (rather than a zone, 'internet', or an
 'alias:<name>' reference), the manager creates and references an OPNsense host
-alias `tappaas-module-<peer_vmname>` containing the peer's FQDN
+alias `tappaas_module_<peer_vmname>` (OPNsense aliases use underscores; any
+hyphens in vmname are normalised) containing the peer's FQDN
 (`<vmname>.<zone0>.internal`). OPNsense's Unbound resolver looks up the FQDN
 against dnsmasq, so DHCP-driven IP changes flow through transparently without
 rule rewrites.
@@ -48,7 +49,7 @@ from .log import debug, error, info, warn
 # ─────────────────────────────────────────────────────────────────────────────
 
 DESCRIPTION_PREFIX = "tappaas-module"
-MODULE_ALIAS_PREFIX = "tappaas-module-"
+MODULE_ALIAS_PREFIX = "tappaas_module_"
 DEFAULT_DOMAIN_SUFFIX = "internal"
 
 BAND_INGRESS_BASE = 10000
@@ -196,7 +197,19 @@ def _canonical_description(
 
 
 def _module_alias_name(peer_vmname: str) -> str:
-    return f"{MODULE_ALIAS_PREFIX}{peer_vmname}"
+    """Generate an OPNsense-safe host alias name for a TAPPaaS module.
+
+    OPNsense aliases must match `^[a-zA-Z_][a-zA-Z0-9_]{0,31}$` — only
+    alphanumerics and underscores, max 32 chars. We sanitise the vmname by
+    replacing any non-alphanumeric character with underscore, then truncate
+    the combined name if necessary.
+    """
+    sanitised = "".join(c if c.isalnum() else "_" for c in peer_vmname)
+    name = f"{MODULE_ALIAS_PREFIX}{sanitised}"
+    # OPNsense alias name limit is 32 characters
+    if len(name) > 32:
+        name = name[:32].rstrip("_")
+    return name
 
 
 # ─────────────────────────────────────────────────────────────────────────────

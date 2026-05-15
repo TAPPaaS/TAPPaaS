@@ -113,7 +113,11 @@ class TestHelpers(unittest.TestCase):
         )
 
     def test_module_alias_name(self):
-        self.assertEqual(_module_alias_name("vllm-amd"), "tappaas-module-vllm-amd")
+        # OPNsense aliases disallow hyphens; vmname hyphens get normalised to _
+        self.assertEqual(_module_alias_name("vllm-amd"), "tappaas_module_vllm_amd")
+        self.assertEqual(_module_alias_name("vllm"), "tappaas_module_vllm")
+        # Long vmname truncates to 32-char OPNsense limit
+        self.assertLessEqual(len(_module_alias_name("a" * 50)), 32)
 
     def test_normalize_protocol_default_tcp(self):
         self.assertEqual(_normalize_protocol(None), "TCP")
@@ -314,18 +318,18 @@ class TestCompile(unittest.TestCase):
 
     def test_module_peer_resolved_via_fqdn_alias(self):
         """An egress entry referencing another module's name must point at
-        the FQDN-alias (tappaas-module-<peer>), not a literal IP."""
+        the FQDN-alias (tappaas_module_<peer>), not a literal IP."""
         mod = load_module(self.dir, "litellm")
         rules, _ = self.mgr._compile(mod)
         egress_to_vllm = next(r for r in rules if r.peer == "vllm" and r.direction == "egress")
-        self.assertEqual(egress_to_vllm.destination_net, "tappaas-module-vllm")
+        self.assertEqual(egress_to_vllm.destination_net, "tappaas_module_vllm")
 
     def test_self_destination_is_module_alias(self):
         """Ingress destination is the module's own FQDN alias."""
         mod = load_module(self.dir, "litellm")
         rules, _ = self.mgr._compile(mod)
         ingress = next(r for r in rules if r.direction == "ingress")
-        self.assertEqual(ingress.destination_net, "tappaas-module-litellm")
+        self.assertEqual(ingress.destination_net, "tappaas_module_litellm")
 
     def test_zone_peer_resolved_to_cidr(self):
         mod = load_module(self.dir, "litellm")
@@ -337,9 +341,9 @@ class TestCompile(unittest.TestCase):
         mod = load_module(self.dir, "litellm")
         aliases = self.mgr._peer_module_fqdn_aliases(mod)
         # Self alias
-        self.assertEqual(aliases["tappaas-module-litellm"], "litellm.srv-work.internal")
+        self.assertEqual(aliases["tappaas_module_litellm"], "litellm.srv-work.internal")
         # Peer (egress to vllm)
-        self.assertEqual(aliases["tappaas-module-vllm"], "vllm.srv-work.internal")
+        self.assertEqual(aliases["tappaas_module_vllm"], "vllm.srv-work.internal")
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -395,7 +399,7 @@ class TestPeerResolution(unittest.TestCase):
 
     def test_module_name_resolves_to_alias(self):
         self.assertEqual(self.mgr._resolve_peer_net("some-module", self.module),
-                         "tappaas-module-some-module")
+                         "tappaas_module_some_module")
 
 
 # ─────────────────────────────────────────────────────────────────────────────
