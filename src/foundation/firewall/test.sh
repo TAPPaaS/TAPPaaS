@@ -439,6 +439,28 @@ else
         fi
     fi
 
+    # Distribute the refreshed zones.json to each Proxmox node so
+    # Create-TAPPaaS-VM.sh on the node can resolve test1/test2 zones.
+    nodes_pushed=0
+    if command -v jq >/dev/null 2>&1 && [[ -f "${CONFIG_DIR}/configuration.json" ]]; then
+        mapfile -t pve_nodes < <(jq -r '."tappaas-nodes"[]?.hostname // empty' \
+                                    "${CONFIG_DIR}/configuration.json" 2>/dev/null)
+        for node in "${pve_nodes[@]}"; do
+            [[ -z "${node}" ]] && continue
+            if scp -o StrictHostKeyChecking=accept-new -o ConnectTimeout=5 \
+                    "${CONFIG_DIR}/zones.json" \
+                    "root@${node}.mgmt.internal:/root/tappaas/zones.json" \
+                    >/dev/null 2>&1; then
+                nodes_pushed=$((nodes_pushed + 1))
+            fi
+        done
+    fi
+    if (( nodes_pushed > 0 )); then
+        pass "Distributed zones.json to ${nodes_pushed} Proxmox node(s)"
+    else
+        skip "Could not enumerate/push to Proxmox nodes (test VMs may fail to create)"
+    fi
+
     section "Deep 2: Install test-fw-a in test1"
 
     pushd "${FIXTURES_DIR}" >/dev/null || die "Cannot enter ${FIXTURES_DIR}"
