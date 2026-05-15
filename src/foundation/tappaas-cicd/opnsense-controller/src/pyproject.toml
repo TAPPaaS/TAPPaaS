@@ -20,6 +20,7 @@ zone-manager = "opnsense_controller.zone_manager:main"
 dns-manager = "opnsense_controller.dns_manager_cli:main"
 caddy-manager = "opnsense_controller.caddy_cli:main"
 syslog-manager = "opnsense_controller.syslog_cli:main"
+rules-manager = "opnsense_controller.rules_manager:main"
 
 [tool.setuptools.packages.find]
 where = ["."]

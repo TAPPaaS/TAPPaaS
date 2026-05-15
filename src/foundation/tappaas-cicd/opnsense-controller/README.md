@@ -4,7 +4,7 @@ OPNsense controller for TAPPaaS using the `oxl-opnsense-client` library.
 
 ## CLI Tools
 
-This package provides five command-line tools:
+This package provides six command-line tools:
 
 | Command | Description |
 |---------|-------------|
@@ -13,6 +13,7 @@ This package provides five command-line tools:
 | `dns-manager` | DNS host entry management for Dnsmasq |
 | `zone-manager` | Automated zone configuration from zones.json |
 | `caddy-manager` | Caddy reverse proxy domain and handler management |
+| `rules-manager` | Per-module firewall rules compiled from `module.json` (`firewall:rules` capability) |
 
 ## Requirements
 
@@ -730,6 +731,136 @@ The Zone Manager expects zones.json in the following format:
 }
 ```
 
+### Rules Manager (`rules-manager` command)
+
+The Rules Manager compiles per-module firewall rules from `module.json` into OPNsense, providing the `firewall:rules` capability. It is a TAPPaaS-aware orchestrator on top of the lower-level `FirewallManager`: it understands `ports`, `ingress`, `egress`, and `aliases` declarations, validates them against zone-level policy from `zones.json`, and applies the resulting rules atomically using description-based idempotent upsert.
+
+Module-named peers in `from`/`to` are resolved by creating an OPNsense host alias `tappaas-module-<peer>` populated with the peer's FQDN (`<peer>.<zone0>.internal`). OPNsense Unbound resolves the FQDN against dnsmasq, so DHCP IP changes flow through transparently without rule rewrites.
+
+For the full schema and design — including sequence bands, validation layers, and the worked examples — see [`src/foundation/firewall/README.md`](../../firewall/README.md).
+
+#### CLI Usage
+
+```bash
+# Compile and apply rules for a module
+rules-manager add-rules vaultwarden --no-ssl-verify
+
+# Reconcile: diff live state against module.json, apply changes, prune orphans
+rules-manager reconcile vaultwarden --no-ssl-verify
+
+# Remove all rules and aliases owned by a module
+rules-manager remove-rules vaultwarden --no-ssl-verify
+
+# Verify desired rules exist (returns non-zero on drift)
+rules-manager verify-rules vaultwarden --no-ssl-verify
+rules-manager verify-rules vaultwarden --deep --no-ssl-verify
+
+# List rules currently in OPNsense, optionally filtered or restricted to orphans
+rules-manager list-rules --no-ssl-verify
+rules-manager list-rules --module vaultwarden --no-ssl-verify
+rules-manager list-rules --orphans --no-ssl-verify
+
+# Manage aliases directly (normally handled implicitly by add-rules)
+rules-manager create-alias provider_list \
+    --type host \
+    --addresses api.example.com,api2.example.com \
+    --description "Approved providers" \
+    --no-ssl-verify
+rules-manager remove-alias provider_list --no-ssl-verify
+
+# Dry-run mode (no OPNsense changes — reports intended changes)
+rules-manager add-rules vaultwarden --check-mode --no-ssl-verify
+
+# JSON output for tooling/tests
+rules-manager verify-rules vaultwarden --output json --no-ssl-verify
+
+# firewallType=NONE — print manual rule list, no OPNsense connection
+rules-manager add-rules vaultwarden --firewall-type NONE
+
+# Show help
+rules-manager --help
+rules-manager add-rules --help
+```
+
+#### Commands
+
+| Command | Description |
+|---------|-------------|
+| `add-rules <module>` | Compile and apply rules for a module (idempotent upsert) |
+| `reconcile <module>` | Diff live state against `module.json`; apply changes and delete orphans |
+| `remove-rules <module>` | Remove all rules and aliases owned by the module |
+| `verify-rules <module> [--deep]` | Verify that desired rules exist; `--deep` reserved for connectivity probes |
+| `list-rules [--module <n>] [--orphans]` | List `tappaas-module:` rules in OPNsense |
+| `create-alias <name>` | Create or update an OPNsense alias |
+| `remove-alias <name>` | Delete an OPNsense alias |
+
+#### Global Options
+
+| Option | Description |
+|--------|-------------|
+| `--firewall HOST` | Firewall IP/hostname (default: `firewall.mgmt.internal`) |
+| `--api-port PORT` | OPNsense API port (default: auto-detect) |
+| `--no-ssl-verify` | Disable SSL certificate verification |
+| `--credential-file PATH` | Path to credential file |
+| `--zones-file PATH` | Path to `zones.json` (default: auto-detect from `/home/tappaas/config/` or repo) |
+| `--aliases-file PATH` | Path to global `firewall/aliases.json` |
+| `--modules-dir PATH` | Directory containing `<module>.json` files (default: `/home/tappaas/config`) |
+| `--firewall-type` | `opnsense` (default) applies to OPNsense; `NONE` prints manual instructions and exits 0 |
+| `--check-mode` | Dry-run mode (no OPNsense changes) |
+| `--output {text,json}` | Output format (default: `text`) |
+| `--debug` | Enable debug logging |
+
+#### create-alias Options
+
+| Option | Description |
+|--------|-------------|
+| `name` | Alias name (positional, required) |
+| `--type {host,network,port,url}` | Alias type (default: `host`) |
+| `--addresses` | Comma-separated alias contents (required) |
+| `--description` | Audit description for the alias |
+
+#### Rule Identity
+
+Every compiled rule carries a canonical description used for idempotent upsert and orphan detection:
+
+```
+tappaas-module:<vmname>:<direction>:<peer>:<port>[/<protocol>]
+```
+
+Examples:
+- `tappaas-module:litellm:ingress:srv-work:4000`
+- `tappaas-module:litellm:egress:vllm:11434`
+- `tappaas-module:hassosova:egress:iot-home:5353/UDP`
+
+#### Sequence Allocation
+
+Rules sit in dedicated priority bands. Within each band, each module is assigned a deterministic 100-sequence slot via `stable_hash_index(vmname)`:
+
+| Band | Range | Direction |
+|------|-------|-----------|
+| 3 | 10000–19999 | Ingress |
+| 4 | 20000–29999 | Egress |
+
+After each successful apply, `rules-manager` writes a non-authoritative artifact at `/home/tappaas/config/firewall/sequence-map.json` documenting the live slot allocation for inspection.
+
+#### Examples
+
+```bash
+# Typical consumer-module install (what services/rules/install-service.sh does)
+rules-manager add-rules vaultwarden \
+    --firewall-type "$(jq -r '.firewallType // "opnsense"' /home/tappaas/config/firewall.json)" \
+    --no-ssl-verify
+
+# Typical update (reconcile prunes orphans removed from module.json)
+rules-manager reconcile vaultwarden --no-ssl-verify
+
+# Cleanup (what services/rules/delete-service.sh does)
+rules-manager remove-rules vaultwarden --no-ssl-verify
+
+# Identify stranded rules whose module has been removed from disk
+rules-manager list-rules --orphans --output json --no-ssl-verify
+```
+
 ## Interface Assignment
 
 By default, OPNsense API does not support interface assignment. TAPPaaS includes a custom PHP controller to enable this. The controller is deployed automatically by `update.sh`.
@@ -764,6 +895,7 @@ See `src/foundation/30-tappaas-cicd/opnsense-patch/README.md` for details on the
         ├── caddy_cli.py           # Standalone Caddy CLI (caddy-manager)
         ├── zone_manager.py        # Zone configuration from zones.json
         ├── dns_manager_cli.py     # Standalone DNS CLI (dns-manager)
+        ├── rules_manager.py       # Per-module firewall rules (rules-manager)
         └── main.py                # Main CLI entry point (opnsense-controller)
 ```
 
@@ -1289,6 +1421,95 @@ with CaddyManager(config) as manager:
 | `Protocol.PIM` | PIM multicast |
 | `Protocol.CARP` | CARP failover |
 | `Protocol.PFSYNC` | pfsync state sync |
+
+### Per-Module Firewall Rules
+
+```python
+from pathlib import Path
+from opnsense_controller import Config
+from opnsense_controller.rules_manager import (
+    RulesManager,
+    load_zones,
+    load_global_aliases,
+)
+
+config = Config(firewall="firewall.mgmt.internal", ssl_verify=False)
+zones = load_zones(Path("/home/tappaas/TAPPaaS/src/foundation/firewall/zones.json"))
+global_aliases = load_global_aliases(
+    Path("/home/tappaas/TAPPaaS/src/foundation/firewall/aliases.json")
+)
+
+with RulesManager(
+    config=config,
+    zones=zones,
+    modules_dir=Path("/home/tappaas/config"),
+    global_aliases=global_aliases,
+    firewall_type="opnsense",      # or "NONE" to skip OPNsense entirely
+) as manager:
+
+    # Compile and apply rules for a module (idempotent)
+    result = manager.add_rules("vaultwarden")
+    print(f"applied={result.applied} aliases={result.aliases_created}")
+    for err in result.errors:
+        print(f"  {err}")
+
+    # Reconcile: apply changes and remove orphans
+    result = manager.reconcile("vaultwarden")
+    print(f"applied={result.applied} deleted={result.deleted}")
+
+    # Verify
+    v = manager.verify_rules("vaultwarden")
+    print(f"ok={v.ok} missing={v.missing} extra={v.extra}")
+
+    # Remove all rules and aliases for a module
+    removed = manager.remove_rules("vaultwarden")
+    print(f"deleted={removed.deleted} aliases_removed={removed.aliases_removed}")
+
+    # Manage an alias directly
+    manager.create_alias(
+        "approved_providers",
+        alias_type="host",
+        addresses=["api.example.com", "api2.example.com"],
+        description="Curated upstream providers",
+    )
+    manager.remove_alias("approved_providers")
+```
+
+When `firewall_type="NONE"`, the manager does **not** open a connection to
+OPNsense; `add_rules` instead prints a human-readable manual rule list and
+returns an empty `ApplyResult`.
+
+### RulesManager Methods
+
+| Method | Description |
+|--------|-------------|
+| `add_rules(module)` | Compile and apply rules for a module (idempotent upsert) |
+| `reconcile(module)` | Apply rules and delete orphans matching `tappaas-module:<module>:` |
+| `remove_rules(module)` | Delete every rule and module-owned alias for the module |
+| `verify_rules(module, deep=False)` | Verify desired rules exist in OPNsense |
+| `list_rules(module=None, orphans=False)` | List `tappaas-module:` rules, optionally filtered |
+| `create_alias(name, type, addresses, description)` | Create or update an OPNsense alias |
+| `remove_alias(name)` | Delete an OPNsense alias by name |
+| `is_none_mode` | Property: `True` when `firewall_type == "NONE"` |
+
+### ModuleFirewallRule Fields
+
+The internal compiled-rule representation produced by `_compile()` before
+delegation to `FirewallManager`:
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `module_name` | str | The consumer module's `vmname` |
+| `direction` | `"ingress"` \| `"egress"` | Traffic direction |
+| `peer` | str | Zone, `internet`, module name, or `alias:<name>` (as written in `module.json`) |
+| `port` | int \| str | Destination port (or range) |
+| `protocol` | str | `TCP`, `UDP`, `TCP/UDP`, `ICMP` |
+| `description` | str | Canonical identity: `tappaas-module:<vm>:<dir>:<peer>:<port>[/<proto>]` |
+| `rule_description` | str | Operator-provided audit text (from `ingress.description` / `egress.description`) |
+| `sequence` | int | Band + slot + index (see Sequence Allocation) |
+| `source_net` | str | CIDR, alias name, or `any` |
+| `destination_net` | str | CIDR, alias name, or `any` |
+| `interface` | str | OPNsense interface identifier the rule is bound to |
 
 ## License
 

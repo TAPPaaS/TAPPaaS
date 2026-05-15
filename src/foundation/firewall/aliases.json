@@ -1,0 +1,14 @@
+{
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "$comment": "Global OPNsense aliases shared across TAPPaaS modules. Referenced from module.json via 'alias:<name>'. Module-local aliases (module.json -> aliases) override entries here; collisions are warned.",
+
+    "private_ranges": {
+        "type": "network",
+        "addresses": [
+            "10.0.0.0/8",
+            "172.16.0.0/12",
+            "192.168.0.0/16"
+        ],
+        "description": "RFC1918 private IPv4 ranges (10/8, 172.16/12, 192.168/16). Use when a rule should match any private network rather than a specific zone CIDR."
+    }
+}

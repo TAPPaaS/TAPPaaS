@@ -14,6 +14,7 @@
         "bridge0", "mac0", "zone0", "trunks0",
         "bridge1", "mac1", "zone1", "trunks1",
         "firewallType", "proxyDomain", "proxyPort",
+        "ports", "ingress", "egress", "aliases",
         "dependsOn", "provides"
     ],
 
@@ -425,6 +426,183 @@
             "maximum": 65535,
             "example": 8080,
             "note": "The port the service listens on inside the VM"
+        },
+
+        "ports": {
+            "description": "Network ports this module exposes for inbound traffic. Source of truth for ingress validation.",
+            "type": "array",
+            "requiredBy": [],
+            "usedBy": "firewall:rules",
+            "default": [],
+            "items": {
+                "type": "object",
+                "fields": {
+                    "port": {
+                        "description": "TCP/UDP port number, or port range as a string (e.g. '8000:8010').",
+                        "type": "integer|string",
+                        "required": true,
+                        "minimum": 1,
+                        "maximum": 65535
+                    },
+                    "protocol": {
+                        "description": "Transport protocol for this port.",
+                        "type": "string",
+                        "values": {
+                            "TCP": "TCP only (default)",
+                            "UDP": "UDP only",
+                            "TCP/UDP": "Both TCP and UDP",
+                            "ICMP": "ICMP (port field ignored)"
+                        },
+                        "default": "TCP"
+                    },
+                    "description": {
+                        "description": "Human-readable purpose of this port (audit/documentation).",
+                        "type": "string",
+                        "required": false
+                    }
+                }
+            },
+            "example": [{ "port": 4000, "protocol": "TCP", "description": "Service API" }],
+            "note": "Ingress entries must reference ports declared here. Activated when firewall:rules is in dependsOn."
+        },
+
+        "ingress": {
+            "description": "Inbound traffic permitted to this module's ports. Each entry is compiled into an OPNsense pass rule and validated against the destination zone's pinhole-allowed-from policy at compile time.",
+            "type": "array",
+            "requiredBy": [],
+            "usedBy": "firewall:rules",
+            "default": [],
+            "items": {
+                "type": "object",
+                "fields": {
+                    "from": {
+                        "description": "Traffic source. One of: zone name (in zones.json), another module name (resolved to an OPNsense host alias for the module's FQDN), the literal 'internet', or 'alias:<name>' to reference a module-local or global alias.",
+                        "type": "string",
+                        "required": true,
+                        "example": "srv-work"
+                    },
+                    "ports": {
+                        "description": "Destination ports allowed for this source. Each value must also appear in module.ports[].",
+                        "type": "array",
+                        "items": "integer|string",
+                        "required": true,
+                        "example": [4000]
+                    },
+                    "protocol": {
+                        "description": "Transport protocol.",
+                        "type": "string",
+                        "values": {
+                            "TCP": "TCP only (default)",
+                            "UDP": "UDP only",
+                            "TCP/UDP": "Both TCP and UDP",
+                            "ICMP": "ICMP"
+                        },
+                        "default": "TCP"
+                    },
+                    "description": {
+                        "description": "Audit rationale for permitting this traffic. Required — recorded in the OPNsense rule for traceability.",
+                        "type": "string",
+                        "required": true
+                    }
+                }
+            },
+            "example": [
+                { "from": "srv-work", "ports": [4000], "description": "Intra-zone consumers read the API" },
+                { "from": "dmz", "ports": [4000], "description": "Caddy reverse proxy forwards the public hostname" }
+            ],
+            "note": "Module peer (from = another module name): compiler ensures an OPNsense host alias 'tappaas-module-<peer>' exists, populated with the peer's FQDN; the rule references the alias so DHCP IP changes are absorbed by Unbound resolution."
+        },
+
+        "egress": {
+            "description": "Outbound traffic exceptions beyond what the source zone's access-to already permits. Compiled into OPNsense pass rules on the source-zone interface.",
+            "type": "array",
+            "requiredBy": [],
+            "usedBy": "firewall:rules",
+            "default": [],
+            "items": {
+                "type": "object",
+                "fields": {
+                    "to": {
+                        "description": "Traffic destination. One of: zone name (in zones.json), another module name (resolved to an OPNsense host alias for the module's FQDN), the literal 'internet', or 'alias:<name>'.",
+                        "type": "string",
+                        "required": true,
+                        "example": "iot-home"
+                    },
+                    "ports": {
+                        "description": "Destination ports.",
+                        "type": "array",
+                        "items": "integer|string",
+                        "required": true,
+                        "example": [443]
+                    },
+                    "protocol": {
+                        "description": "Transport protocol.",
+                        "type": "string",
+                        "values": {
+                            "TCP": "TCP only (default)",
+                            "UDP": "UDP only",
+                            "TCP/UDP": "Both TCP and UDP",
+                            "ICMP": "ICMP"
+                        },
+                        "default": "TCP"
+                    },
+                    "description": {
+                        "description": "Audit rationale for permitting this egress. Required.",
+                        "type": "string",
+                        "required": true
+                    }
+                }
+            },
+            "example": [
+                { "to": "alias:llm_cloud_providers", "ports": [443], "description": "Upstream LLM providers" },
+                { "to": "vllm-amd", "ports": [11434], "description": "Local inference fallback" }
+            ],
+            "note": "Module peer (to = another module name): compiler creates a host alias 'tappaas-module-<peer>' from the peer's FQDN. A warning is emitted when 'to' is a zone not in the source zone's access-to list."
+        },
+
+        "aliases": {
+            "description": "Module-local OPNsense aliases that this module's ingress/egress rules reference via 'alias:<name>'. Module-local aliases override identically named entries in firewall/aliases.json (a warning is emitted on collision).",
+            "type": "object",
+            "requiredBy": [],
+            "usedBy": "firewall:rules",
+            "default": {},
+            "patternProperties": {
+                "^[a-zA-Z][a-zA-Z0-9_-]*$": {
+                    "type": "object",
+                    "fields": {
+                        "type": {
+                            "description": "OPNsense alias type.",
+                            "type": "string",
+                            "values": {
+                                "host": "Host alias — IPs or FQDNs (FQDN entries are periodically resolved by Unbound)",
+                                "network": "Network alias — CIDR blocks",
+                                "port": "Port alias — single ports or ranges",
+                                "url": "URL alias — table populated by fetching a URL"
+                            },
+                            "required": true
+                        },
+                        "addresses": {
+                            "description": "Alias contents (IPs, CIDRs, FQDNs, ports, or URLs depending on type).",
+                            "type": "array",
+                            "items": "string",
+                            "required": true
+                        },
+                        "description": {
+                            "description": "Audit rationale for this alias. Required.",
+                            "type": "string",
+                            "required": true
+                        }
+                    }
+                }
+            },
+            "example": {
+                "llm_cloud_providers": {
+                    "type": "host",
+                    "addresses": ["api.anthropic.com", "api.openai.com"],
+                    "description": "Curated whitelist of approved upstream model providers"
+                }
+            },
+            "note": "Aliases are created in OPNsense before referencing rules are applied, and removed on remove-rules unless still referenced by other modules."
         },
 
         "dependsOn": {

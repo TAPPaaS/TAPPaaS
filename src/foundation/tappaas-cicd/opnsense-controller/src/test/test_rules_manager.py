@@ -1,0 +1,433 @@
+"""Unit tests for rules_manager.
+
+Covers the pure-Python pieces — helpers, loaders, validation, compilation,
+sequence allocation, peer resolution — without touching OPNsense.
+
+Run with:
+    cd src && python -m unittest test.test_rules_manager -v
+"""
+
+from __future__ import annotations
+
+import json
+import tempfile
+import unittest
+from pathlib import Path
+from unittest.mock import MagicMock, patch
+
+from opnsense_controller import rules_manager as rm
+from opnsense_controller.config import Config
+from opnsense_controller.rules_manager import (
+    BAND_EGRESS_BASE,
+    BAND_INGRESS_BASE,
+    SLOT_SIZE,
+    ModuleSpec,
+    RulesManager,
+    ValidationError,
+    ZoneSpec,
+    _canonical_description,
+    _module_alias_name,
+    _normalize_protocol,
+    load_global_aliases,
+    load_module,
+    load_zones,
+    stable_hash_index,
+)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Fixtures
+# ─────────────────────────────────────────────────────────────────────────────
+
+ZONES_FIXTURE = {
+    "mgmt": {"type": "mgmt", "state": "Manual", "typeId": "0", "subId": "0",
+              "vlantag": 0, "ip": "10.0.0.0/24", "bridge": "lan",
+              "access-to": [], "pinhole-allowed-from": []},
+    "srv-work": {"type": "service", "state": "Active", "typeId": "2", "subId": "10",
+                  "vlantag": 210, "ip": "10.2.10.0/24", "bridge": "lan",
+                  "access-to": ["internet"],
+                  "pinhole-allowed-from": ["srv-work", "dmz", "home"]},
+    "dmz": {"type": "dmz", "state": "Mandatory", "typeId": "6", "subId": "0",
+             "vlantag": 610, "ip": "10.6.0.0/24", "bridge": "lan",
+             "access-to": ["internet"], "pinhole-allowed-from": ["internet"]},
+    "home": {"type": "client", "state": "Active", "typeId": "3", "subId": "10",
+              "vlantag": 310, "ip": "10.3.10.0/24", "bridge": "lan",
+              "access-to": ["internet"], "pinhole-allowed-from": []},
+}
+
+LITELLM_FIXTURE = {
+    "vmname": "litellm",
+    "zone0": "srv-work",
+    "bridge0": "lan",
+    "ports": [
+        {"port": 4000, "protocol": "TCP", "description": "API"},
+    ],
+    "ingress": [
+        {"from": "srv-work", "ports": [4000], "description": "Intra-zone"},
+        {"from": "dmz", "ports": [4000], "description": "Reverse proxy"},
+    ],
+    "egress": [
+        {"to": "alias:llm_providers", "ports": [443], "description": "Upstream"},
+        {"to": "vllm", "ports": [11434], "description": "Local inference"},
+    ],
+    "aliases": {
+        "llm_providers": {
+            "type": "host",
+            "addresses": ["api.example.com"],
+            "description": "Whitelist",
+        }
+    },
+}
+
+VLLM_FIXTURE = {
+    "vmname": "vllm",
+    "zone0": "srv-work",
+    "bridge0": "lan",
+    "ports": [{"port": 11434, "protocol": "TCP"}],
+}
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Helpers under test
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+class TestHelpers(unittest.TestCase):
+    def test_stable_hash_index_deterministic(self):
+        self.assertEqual(stable_hash_index("litellm"), stable_hash_index("litellm"))
+
+    def test_stable_hash_index_range(self):
+        for name in ["a", "vaultwarden", "hassosova", "x-y-z"]:
+            self.assertTrue(0 <= stable_hash_index(name) < 100)
+
+    def test_canonical_description_tcp_omits_protocol(self):
+        self.assertEqual(
+            _canonical_description("litellm", "ingress", "srv-work", 4000, "TCP"),
+            "tappaas-module:litellm:ingress:srv-work:4000",
+        )
+
+    def test_canonical_description_non_tcp_includes_protocol(self):
+        self.assertEqual(
+            _canonical_description("hassosova", "egress", "iot-home", 5353, "UDP"),
+            "tappaas-module:hassosova:egress:iot-home:5353/UDP",
+        )
+
+    def test_module_alias_name(self):
+        self.assertEqual(_module_alias_name("vllm-amd"), "tappaas-module-vllm-amd")
+
+    def test_normalize_protocol_default_tcp(self):
+        self.assertEqual(_normalize_protocol(None), "TCP")
+        self.assertEqual(_normalize_protocol(""), "TCP")
+
+    def test_normalize_protocol_passthrough(self):
+        self.assertEqual(_normalize_protocol("udp"), "UDP")
+        self.assertEqual(_normalize_protocol("ICMP"), "ICMP")
+
+    def test_normalize_protocol_tcp_udp_canonical(self):
+        for value in ["tcp/udp", "TCP-UDP", "both"]:
+            self.assertEqual(_normalize_protocol(value), "TCP/UDP")
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Loaders
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+class TestLoaders(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.dir = Path(self.tmp.name)
+        (self.dir / "zones.json").write_text(json.dumps(ZONES_FIXTURE))
+        (self.dir / "litellm.json").write_text(json.dumps(LITELLM_FIXTURE))
+        (self.dir / "aliases.json").write_text(json.dumps({
+            "private_ranges": {
+                "type": "network",
+                "addresses": ["10.0.0.0/8"],
+                "description": "RFC1918",
+            },
+            "_comment": "ignored",
+        }))
+
+    def tearDown(self):
+        self.tmp.cleanup()
+
+    def test_load_zones(self):
+        zones = load_zones(self.dir / "zones.json")
+        self.assertIn("srv-work", zones)
+        self.assertEqual(zones["srv-work"].ip_network, "10.2.10.0/24")
+        self.assertEqual(zones["srv-work"].vlan_tag, 210)
+        self.assertIn("dmz", zones["srv-work"].pinhole_allowed_from)
+
+    def test_load_module(self):
+        mod = load_module(self.dir, "litellm")
+        self.assertEqual(mod.vmname, "litellm")
+        self.assertEqual(mod.zone0, "srv-work")
+        self.assertEqual(len(mod.ingress), 2)
+        self.assertIn("llm_providers", mod.aliases)
+
+    def test_load_module_missing(self):
+        with self.assertRaises(FileNotFoundError):
+            load_module(self.dir, "does-not-exist")
+
+    def test_load_global_aliases_filters_non_dict(self):
+        aliases = load_global_aliases(self.dir / "aliases.json")
+        self.assertIn("private_ranges", aliases)
+        self.assertNotIn("_comment", aliases)
+
+    def test_load_global_aliases_missing(self):
+        self.assertEqual(load_global_aliases(self.dir / "nope.json"), {})
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Validation
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+def _make_manager(zones=None, modules_dir=None, global_aliases=None, firewall_type="opnsense"):
+    """Build a RulesManager without connecting."""
+    config = Config(firewall="example.invalid", ssl_verify=False)
+    mgr = RulesManager(
+        config=config,
+        zones=zones or {n: ZoneSpec(name=n, ip_network=z.get("ip", ""),
+                                      bridge=z.get("bridge", "lan"),
+                                      vlan_tag=z.get("vlantag", 0),
+                                      access_to=z.get("access-to", []),
+                                      pinhole_allowed_from=z.get("pinhole-allowed-from", []))
+                          for n, z in ZONES_FIXTURE.items()},
+        modules_dir=modules_dir or Path("/tmp"),
+        global_aliases=global_aliases or {},
+        sequence_map_file=None,
+        firewall_type=firewall_type,
+    )
+    return mgr
+
+
+class TestValidation(unittest.TestCase):
+    def _module(self, **overrides) -> ModuleSpec:
+        base = dict(
+            vmname="litellm", zone0="srv-work", bridge0="lan",
+            ports=[{"port": 4000, "protocol": "TCP"}],
+            ingress=[], egress=[], aliases={}, firewall_type="opnsense",
+        )
+        base.update(overrides)
+        return ModuleSpec(**base)
+
+    def test_valid_module_has_no_errors(self):
+        mgr = _make_manager()
+        mod = self._module(ingress=[{"from": "srv-work", "ports": [4000], "description": "ok"}])
+        self.assertEqual(mgr._validate(mod), [])
+
+    def test_policy_violation_rejected(self):
+        # iot-cams not in srv-work.pinhole-allowed-from
+        zones = ZONES_FIXTURE.copy()
+        zones["iot-cams"] = {
+            **ZONES_FIXTURE["home"], "ip": "10.4.30.0/24",
+            "access-to": [], "pinhole-allowed-from": []
+        }
+        mgr = _make_manager(zones={
+            n: ZoneSpec(name=n, ip_network=z.get("ip", ""),
+                          bridge=z.get("bridge", "lan"),
+                          vlan_tag=z.get("vlantag", 0),
+                          access_to=z.get("access-to", []),
+                          pinhole_allowed_from=z.get("pinhole-allowed-from", []))
+            for n, z in zones.items()
+        })
+        mod = self._module(ingress=[{"from": "iot-cams", "ports": [4000], "description": "x"}])
+        errors = mgr._validate(mod)
+        self.assertTrue(any("violates policy" in e.message for e in errors), errors)
+
+    def test_port_consistency_required(self):
+        mgr = _make_manager()
+        # Ingress declares port 5000 not in module.ports[]
+        mod = self._module(ingress=[{"from": "srv-work", "ports": [5000], "description": "x"}])
+        errors = mgr._validate(mod)
+        self.assertTrue(any("not declared in module.ports" in e.message for e in errors), errors)
+
+    def test_missing_description_rejected(self):
+        mgr = _make_manager()
+        mod = self._module(ingress=[{"from": "srv-work", "ports": [4000]}])
+        errors = mgr._validate(mod)
+        self.assertTrue(any("missing 'description'" in e.message for e in errors), errors)
+
+    def test_unknown_peer_rejected(self):
+        # tmp dir does not contain hypothetical-module.json
+        with tempfile.TemporaryDirectory() as tmp:
+            mgr = _make_manager(modules_dir=Path(tmp))
+            mod = self._module(ingress=[
+                {"from": "ghost-module", "ports": [4000], "description": "x"}
+            ])
+            errors = mgr._validate(mod)
+            self.assertTrue(any("not a known zone, alias, or module" in e.message
+                                  for e in errors), errors)
+
+    def test_alias_peer_accepted_when_module_local(self):
+        mgr = _make_manager()
+        mod = self._module(
+            aliases={"providers": {"type": "host", "addresses": ["x"], "description": "y"}},
+            egress=[{"to": "alias:providers", "ports": [443], "description": "x"}],
+        )
+        self.assertEqual(mgr._validate(mod), [])
+
+    def test_alias_peer_rejected_when_undefined(self):
+        mgr = _make_manager()
+        mod = self._module(egress=[
+            {"to": "alias:missing", "ports": [443], "description": "x"}
+        ])
+        errors = mgr._validate(mod)
+        self.assertTrue(any("alias 'missing' not found" in e.message for e in errors), errors)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Compilation
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+class TestCompile(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.dir = Path(self.tmp.name)
+        (self.dir / "litellm.json").write_text(json.dumps(LITELLM_FIXTURE))
+        (self.dir / "vllm.json").write_text(json.dumps(VLLM_FIXTURE))
+        self.mgr = _make_manager(modules_dir=self.dir)
+
+    def tearDown(self):
+        self.tmp.cleanup()
+
+    def test_compile_produces_correct_descriptions(self):
+        mod = load_module(self.dir, "litellm")
+        rules, errors = self.mgr._compile(mod)
+        self.assertEqual(errors, [])
+        descs = {r.description for r in rules}
+        self.assertIn("tappaas-module:litellm:ingress:srv-work:4000", descs)
+        self.assertIn("tappaas-module:litellm:ingress:dmz:4000", descs)
+        self.assertIn("tappaas-module:litellm:egress:alias:llm_providers:443", descs)
+        self.assertIn("tappaas-module:litellm:egress:vllm:11434", descs)
+
+    def test_compile_is_idempotent(self):
+        mod = load_module(self.dir, "litellm")
+        rules1, _ = self.mgr._compile(mod)
+        rules2, _ = self.mgr._compile(mod)
+        self.assertEqual([r.description for r in rules1],
+                         [r.description for r in rules2])
+        self.assertEqual([r.sequence for r in rules1],
+                         [r.sequence for r in rules2])
+
+    def test_module_peer_resolved_via_fqdn_alias(self):
+        """An egress entry referencing another module's name must point at
+        the FQDN-alias (tappaas-module-<peer>), not a literal IP."""
+        mod = load_module(self.dir, "litellm")
+        rules, _ = self.mgr._compile(mod)
+        egress_to_vllm = next(r for r in rules if r.peer == "vllm" and r.direction == "egress")
+        self.assertEqual(egress_to_vllm.destination_net, "tappaas-module-vllm")
+
+    def test_self_destination_is_module_alias(self):
+        """Ingress destination is the module's own FQDN alias."""
+        mod = load_module(self.dir, "litellm")
+        rules, _ = self.mgr._compile(mod)
+        ingress = next(r for r in rules if r.direction == "ingress")
+        self.assertEqual(ingress.destination_net, "tappaas-module-litellm")
+
+    def test_zone_peer_resolved_to_cidr(self):
+        mod = load_module(self.dir, "litellm")
+        rules, _ = self.mgr._compile(mod)
+        ingress_srv = next(r for r in rules if r.peer == "srv-work")
+        self.assertEqual(ingress_srv.source_net, "10.2.10.0/24")
+
+    def test_peer_module_fqdn_alias_generated(self):
+        mod = load_module(self.dir, "litellm")
+        aliases = self.mgr._peer_module_fqdn_aliases(mod)
+        # Self alias
+        self.assertEqual(aliases["tappaas-module-litellm"], "litellm.srv-work.internal")
+        # Peer (egress to vllm)
+        self.assertEqual(aliases["tappaas-module-vllm"], "vllm.srv-work.internal")
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Sequence allocation
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+class TestSequenceAllocation(unittest.TestCase):
+    def test_ingress_band(self):
+        mgr = _make_manager()
+        slot = stable_hash_index("litellm")
+        seq = mgr._assign_sequence("ingress", slot, 0)
+        self.assertEqual(seq, BAND_INGRESS_BASE + slot * SLOT_SIZE)
+
+    def test_egress_band(self):
+        mgr = _make_manager()
+        slot = stable_hash_index("hassosova")
+        seq = mgr._assign_sequence("egress", slot, 3)
+        self.assertEqual(seq, BAND_EGRESS_BASE + slot * SLOT_SIZE + 3)
+
+    def test_slot_exhaustion_returns_none(self):
+        mgr = _make_manager()
+        self.assertIsNone(mgr._assign_sequence("ingress", 0, SLOT_SIZE))
+
+    def test_different_modules_get_different_slots_likely(self):
+        # Not a strict guarantee, but should hold for common names
+        slots = {stable_hash_index(n) for n in
+                 ["vaultwarden", "litellm", "hassosova", "nextcloud", "openwebui"]}
+        self.assertTrue(len(slots) >= 4, slots)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Peer resolution edge cases
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+class TestPeerResolution(unittest.TestCase):
+    def setUp(self):
+        self.mgr = _make_manager()
+        self.module = ModuleSpec(
+            vmname="litellm", zone0="srv-work", bridge0="lan",
+            ports=[], ingress=[], egress=[], aliases={}, firewall_type="opnsense",
+        )
+
+    def test_internet_resolves_to_any(self):
+        self.assertEqual(self.mgr._resolve_peer_net("internet", self.module), "any")
+
+    def test_alias_prefix_stripped(self):
+        self.assertEqual(self.mgr._resolve_peer_net("alias:foo", self.module), "foo")
+
+    def test_zone_resolves_to_cidr(self):
+        self.assertEqual(self.mgr._resolve_peer_net("dmz", self.module), "10.6.0.0/24")
+
+    def test_module_name_resolves_to_alias(self):
+        self.assertEqual(self.mgr._resolve_peer_net("some-module", self.module),
+                         "tappaas-module-some-module")
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# NONE firewall type — no connection, no errors
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+class TestNoneFirewallType(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.dir = Path(self.tmp.name)
+        (self.dir / "litellm.json").write_text(json.dumps(LITELLM_FIXTURE))
+        (self.dir / "vllm.json").write_text(json.dumps(VLLM_FIXTURE))
+
+    def tearDown(self):
+        self.tmp.cleanup()
+
+    def test_add_rules_in_none_mode_does_not_connect(self):
+        mgr = _make_manager(modules_dir=self.dir, firewall_type="NONE")
+        # No connect() called — no FirewallManager interactions expected
+        result = mgr.add_rules("litellm")
+        self.assertEqual(result.applied, 0)
+        self.assertEqual(result.errors, [])
+
+    def test_is_none_mode_true(self):
+        mgr = _make_manager(firewall_type="NONE")
+        self.assertTrue(mgr.is_none_mode)
+
+    def test_is_none_mode_default_false(self):
+        mgr = _make_manager(firewall_type="opnsense")
+        self.assertFalse(mgr.is_none_mode)
+
+
+if __name__ == "__main__":
+    unittest.main()

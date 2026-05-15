@@ -87,3 +87,19 @@ This JSON schema file documents:
 - Default values
 - Computed field formulas
 - Special values for access control lists
+
+## Per-Module Firewall Rules
+
+Zone-level rules govern coarse access between zones. **Per-module** rules
+(`firewall:rules` capability) declare each module's ingress/egress contract in
+its own JSON and are validated against the zone-level policy:
+
+- Every `ingress.from` zone must be in the destination zone's `pinhole-allowed-from`.
+- Egress to a zone not in the source zone's `access-to` is permitted but warned.
+
+A peer that is **another module's name** is resolved via an OPNsense host alias
+populated with the peer's FQDN (`<vmname>.<zone0>.internal`), kept fresh by
+OPNsense Unbound against dnsmasq — DHCP IP changes do not require rule rewrites.
+
+See [`firewall/README.md`](firewall/README.md) for the full schema, sequence
+bands, and CLI reference.
