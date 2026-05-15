@@ -123,6 +123,30 @@
         "access-to": ["internet"],
         "pinhole-allowed-from": ["internet"],
         "description": "Demilitarized type network, it is the only internal network that allow pinhole access to service through the firewall from the internet"
+    },
+    "test1": {
+        "type": "Test",
+        "state": "Inactive",
+        "typeId": "8",
+        "subId": "10",
+        "vlantag": 810,
+        "ip": "10.80.10.0/24",
+        "bridge": "lan",
+        "access-to": ["internet", "test2", "dmz"],
+        "pinhole-allowed-from": ["test2", "dmz"],
+        "description": "Test zone 1 — Inactive by default; activated by firewall test.sh --deep to validate end-to-end inter-zone rules"
+    },
+    "test2": {
+        "type": "Test",
+        "state": "Inactive",
+        "typeId": "8",
+        "subId": "20",
+        "vlantag": 820,
+        "ip": "10.80.20.0/24",
+        "bridge": "lan",
+        "access-to": ["internet", "test1", "dmz"],
+        "pinhole-allowed-from": ["test1", "dmz"],
+        "description": "Test zone 2 — Inactive by default; activated by firewall test.sh --deep to validate end-to-end inter-zone rules"
     }
 
 }

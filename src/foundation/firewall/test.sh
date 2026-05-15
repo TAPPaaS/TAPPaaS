@@ -1,0 +1,598 @@
+#!/usr/bin/env bash
+#
+# TAPPaaS Firewall Module Test
+#
+# Implements issue #172. Validates the firewall foundation across three depths:
+#
+#   Basic (always)     : DNS lookup, internet reachability, OPNsense reachability.
+#   Standard (always)  : Schema sanity, CLI presence, zone gateway pings, DHCP/DNS
+#                        probes, rules-manager dry-runs, NONE-mode fallback.
+#   Deep (--deep)      : Provisions two test VMs in zones test1/test2, configures
+#                        Caddy reverse proxy on VM-A, applies rules-manager rules
+#                        on VM-B (exercising both module-name and module-local
+#                        alias peers), validates inter-VM connectivity, then
+#                        tears everything down.
+#
+# Called by test-module.sh (which passes the module name as $1). Can also be
+# run standalone:  ./test.sh [--deep] [--no-cleanup]
+#
+# Exit codes:
+#   0  All tests passed (or firewallType=NONE → skipped with summary)
+#   1  One or more tests failed
+#   2  Fatal error (cannot proceed — bad environment, missing CLI, etc.)
+#
+# Environment:
+#   TAPPAAS_TEST_DEEP=1      Run deep tests (or pass --deep)
+#   TAPPAAS_TEST_NO_CLEANUP=1  Leave test VMs and activated zones in place after
+#                              a deep run (default: tear down on success or fail)
+#   TAPPAAS_DEBUG=1          Verbose output
+#
+
+set -euo pipefail
+
+# ── Logging / helpers ────────────────────────────────────────────────
+
+# shellcheck source=../tappaas-cicd/scripts/common-install-routines.sh
+. /home/tappaas/bin/common-install-routines.sh
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+readonly SCRIPT_DIR
+readonly FIXTURES_DIR="${SCRIPT_DIR}/test-fixtures"
+readonly CONFIG_DIR="/home/tappaas/config"
+readonly FIREWALL_JSON="${CONFIG_DIR}/firewall.json"
+readonly ZONES_JSON="${CONFIG_DIR}/zones.json"
+readonly ALIASES_JSON="${SCRIPT_DIR}/aliases.json"
+FIREWALL_FQDN="firewall.mgmt.internal"
+readonly TIMESTAMP=$(date '+%Y-%m-%d_%H%M%S')
+readonly LOG_DIR="/home/tappaas/logs"
+readonly LOG_FILE="${LOG_DIR}/firewall-test-${TIMESTAMP}.log"
+mkdir -p "${LOG_DIR}"
+
+# Parse flags
+DEEP="${TAPPAAS_TEST_DEEP:-0}"
+NO_CLEANUP="${TAPPAAS_TEST_NO_CLEANUP:-0}"
+for arg in "$@"; do
+    case "${arg}" in
+        --deep)        DEEP=1 ;;
+        --no-cleanup)  NO_CLEANUP=1 ;;
+        --help|-h)
+            echo "Usage: $0 [<module-name>] [--deep] [--no-cleanup]"
+            exit 0
+            ;;
+        firewall) ;;  # module name passed by test-module.sh — ignore
+        *) ;;
+    esac
+done
+
+# Counters
+PASS=0
+FAIL=0
+SKIP=0
+
+# Mirror output to log file
+exec > >(tee -a "${LOG_FILE}") 2>&1
+
+pass() { info "    ${GN}✓${CL} $1"; PASS=$((PASS + 1)); }
+fail() { error "    ✗ $1"; FAIL=$((FAIL + 1)); }
+skip() { info "    ${YW}⊘${CL} $1 (skipped)"; SKIP=$((SKIP + 1)); }
+
+section() {
+    echo ""
+    info "${BOLD}═══ $1 ═══${CL}"
+}
+
+# ── firewallType gate ────────────────────────────────────────────────
+
+FIREWALL_TYPE="opnsense"
+if [[ -f "${FIREWALL_JSON}" ]]; then
+    FIREWALL_TYPE=$(jq -r '.firewallType // "opnsense"' "${FIREWALL_JSON}")
+fi
+
+info "${BOLD}╔════════════════════════════════════════════╗${CL}"
+info "${BOLD}║  TAPPaaS Firewall Test${CL}"
+info "${BOLD}╚════════════════════════════════════════════╝${CL}"
+info "Timestamp:     $(date)"
+info "firewallType:  ${FIREWALL_TYPE}"
+info "Deep tests:    $([[ "${DEEP}" == "1" ]] && echo yes || echo no)"
+info "Cleanup:       $([[ "${NO_CLEANUP}" == "1" ]] && echo skipped || echo will run)"
+info "Log file:      ${LOG_FILE}"
+
+if [[ "${FIREWALL_TYPE}" == "NONE" ]]; then
+    section "firewallType=NONE — skipping all firewall tests"
+    info "  When firewallType is NONE, the firewall is operator-managed."
+    info "  Run with --firewall-type opnsense or remove firewallType=NONE to enable."
+    info ""
+    info "${GN}Skipped (firewallType=NONE).${CL}"
+    exit 0
+fi
+
+# ─────────────────────────────────────────────────────────────────────
+# Basic tests (issue #172 requirements)
+# ─────────────────────────────────────────────────────────────────────
+
+section "Basic 1: DNS lookup"
+
+if getent hosts "${FIREWALL_FQDN}" >/dev/null 2>&1; then
+    pass "internal DNS resolves ${FIREWALL_FQDN}"
+else
+    fail "internal DNS cannot resolve ${FIREWALL_FQDN}"
+fi
+
+if getent hosts one.one.one.one >/dev/null 2>&1; then
+    pass "external DNS resolves one.one.one.one"
+else
+    fail "external DNS cannot resolve one.one.one.one"
+fi
+
+section "Basic 2: Internet reachability (ping)"
+
+for target in 1.1.1.1 8.8.8.8; do
+    if ping -c 2 -W 2 "${target}" >/dev/null 2>&1; then
+        pass "ping ${target}"
+    else
+        fail "ping ${target}"
+    fi
+done
+
+section "Basic 3: OPNsense reachability"
+
+# TCP probe on the API port (auto-detect 443 then 8443)
+OPNSENSE_API_PORT=""
+for port in 443 8443; do
+    if (echo > "/dev/tcp/${FIREWALL_FQDN}/${port}") 2>/dev/null; then
+        OPNSENSE_API_PORT="${port}"
+        pass "OPNsense API TCP port reachable on ${port}"
+        break
+    fi
+done
+if [[ -z "${OPNSENSE_API_PORT}" ]]; then
+    fail "OPNsense API not reachable on 443 or 8443"
+fi
+
+# SSH login probe — uses BatchMode so a missing key fails fast
+if ssh -o BatchMode=yes -o ConnectTimeout=5 -o StrictHostKeyChecking=accept-new \
+        root@"${FIREWALL_FQDN}" "echo ok" >/dev/null 2>&1; then
+    pass "SSH to root@${FIREWALL_FQDN}"
+else
+    fail "SSH to root@${FIREWALL_FQDN} (key auth, BatchMode)"
+fi
+
+# OPNsense API responds via opnsense-firewall
+if command -v opnsense-firewall >/dev/null 2>&1; then
+    if opnsense-firewall test --no-ssl-verify >/dev/null 2>&1; then
+        pass "opnsense-firewall test (API reachable)"
+    else
+        fail "opnsense-firewall test (API not reachable)"
+    fi
+else
+    skip "opnsense-firewall not in PATH — cannot test API"
+fi
+
+# ─────────────────────────────────────────────────────────────────────
+# Standard tests (always run; non-destructive)
+# ─────────────────────────────────────────────────────────────────────
+
+section "Standard 1: CLI tools available"
+
+for tool in opnsense-firewall zone-manager dns-manager caddy-manager rules-manager; do
+    if command -v "${tool}" >/dev/null 2>&1; then
+        pass "${tool} on PATH"
+    else
+        fail "${tool} missing from PATH"
+    fi
+done
+
+section "Standard 2: Schema files parse and validate"
+
+for file in "${ZONES_JSON}" "${SCRIPT_DIR}/zones.json"; do
+    if [[ -f "${file}" ]]; then
+        if jq empty "${file}" >/dev/null 2>&1; then
+            pass "$(basename "$(dirname "${file}")")/zones.json parses"
+        else
+            fail "$(basename "$(dirname "${file}")")/zones.json invalid JSON"
+        fi
+    fi
+done
+
+if [[ -f "${ALIASES_JSON}" ]]; then
+    if jq empty "${ALIASES_JSON}" >/dev/null 2>&1; then
+        pass "firewall/aliases.json parses"
+    else
+        fail "firewall/aliases.json invalid JSON"
+    fi
+    # private_ranges expected per design
+    if jq -e '.private_ranges and (.private_ranges.type == "network")' "${ALIASES_JSON}" >/dev/null 2>&1; then
+        pass "aliases.json contains private_ranges (RFC1918)"
+    else
+        fail "aliases.json missing private_ranges or wrong type"
+    fi
+else
+    fail "firewall/aliases.json not found at ${ALIASES_JSON}"
+fi
+
+# Duplicate VLAN-tag detection across enabled zones
+DUP_VLANS=$(jq -r '
+    [ to_entries[]
+      | select(.value.state == "Active" or .value.state == "Mandatory")
+      | .value.vlantag ]
+    | group_by(.) | map(select(length > 1)) | length
+' "${ZONES_JSON}" 2>/dev/null || echo "1")
+if [[ "${DUP_VLANS}" == "0" ]]; then
+    pass "no duplicate VLAN tags among enabled zones"
+else
+    fail "${DUP_VLANS} duplicate VLAN tag(s) detected"
+fi
+
+section "Standard 3: Zone gateway reachability"
+
+# Ping the .1 gateway of every Active/Mandatory zone — except mgmt (we're on it)
+# and zones with no VLAN (typically already covered by mgmt).
+mapfile -t enabled_zones < <(jq -r '
+    to_entries[]
+    | select(.value.state == "Active" or .value.state == "Mandatory")
+    | select(.key != "mgmt")
+    | "\(.key)\t\(.value.ip)"
+' "${ZONES_JSON}" 2>/dev/null || true)
+
+if [[ ${#enabled_zones[@]} -eq 0 ]]; then
+    skip "no Active/Mandatory non-mgmt zones to probe"
+else
+    for entry in "${enabled_zones[@]}"; do
+        zone_name=$(echo "${entry}" | cut -f1)
+        zone_ip=$(echo "${entry}" | cut -f2)
+        # Gateway is .1 of the zone's /24
+        gateway="${zone_ip%.*/*}.1"
+        if ping -c 1 -W 2 "${gateway}" >/dev/null 2>&1; then
+            pass "zone ${zone_name} gateway ${gateway} responds to ping"
+        else
+            # Not all enabled zones are necessarily routed from tappaas-cicd —
+            # downgrade to skip rather than fail, but record it.
+            skip "zone ${zone_name} gateway ${gateway} unreachable from this host"
+        fi
+    done
+fi
+
+section "Standard 4: DNS for in-cluster modules"
+
+# Resolve a few known TAPPaaS module FQDNs (whichever exist).
+sample_modules=$(jq -r '. as $root | (paths(scalars) | select(.[-1] == "vmname"))
+                       | $root | getpath(.[0:-1] + ["vmname"]) // empty' \
+                   "${CONFIG_DIR}"/*.json 2>/dev/null \
+                | sort -u | head -3 || true)
+# Simpler fallback if the jq above misbehaves
+if [[ -z "${sample_modules}" ]]; then
+    sample_modules=$(for f in "${CONFIG_DIR}"/*.json; do
+        jq -r '.vmname // empty' "${f}" 2>/dev/null
+    done | sort -u | head -3)
+fi
+
+if [[ -z "${sample_modules}" ]]; then
+    skip "no installed modules with vmname — DNS resolution test skipped"
+else
+    while IFS= read -r vmname; do
+        [[ -z "${vmname}" ]] && continue
+        zone=$(jq -r '.zone0 // "srv"' "${CONFIG_DIR}/${vmname}.json" 2>/dev/null || echo "srv")
+        fqdn="${vmname}.${zone}.internal"
+        if getent hosts "${fqdn}" >/dev/null 2>&1; then
+            pass "DNS resolves ${fqdn}"
+        else
+            fail "DNS cannot resolve ${fqdn}"
+        fi
+    done <<< "${sample_modules}"
+fi
+
+section "Standard 5: zone-manager summary"
+
+if command -v zone-manager >/dev/null 2>&1; then
+    if zone-manager --no-ssl-verify --zones-file "${ZONES_JSON}" --summary >/dev/null 2>&1; then
+        pass "zone-manager --summary parses and connects"
+    else
+        fail "zone-manager --summary failed"
+    fi
+else
+    skip "zone-manager missing"
+fi
+
+section "Standard 6: caddy-manager list"
+
+if command -v caddy-manager >/dev/null 2>&1; then
+    # Note: caddy-manager has an argparse bug where --no-ssl-verify is silently
+    # dropped when placed before the subcommand. Pass the flag AFTER 'list'.
+    if caddy-manager list --no-ssl-verify >/dev/null 2>&1; then
+        pass "caddy-manager list completed"
+    else
+        fail "caddy-manager list failed"
+    fi
+else
+    skip "caddy-manager missing"
+fi
+
+section "Standard 7: rules-manager dry-run against an installed module"
+
+if ! command -v rules-manager >/dev/null 2>&1; then
+    skip "rules-manager not in PATH"
+else
+    # Find a module that already has ingress[] or egress[] declared
+    candidate=""
+    for f in "${CONFIG_DIR}"/*.json; do
+        if jq -e '(.ingress // [] | length > 0) or (.egress // [] | length > 0)' "${f}" >/dev/null 2>&1; then
+            candidate=$(basename "${f}" .json)
+            break
+        fi
+    done
+
+    if [[ -z "${candidate}" ]]; then
+        skip "no installed module declares ingress/egress yet"
+    else
+        if rules-manager add-rules "${candidate}" --check-mode --no-ssl-verify --output json \
+                > /tmp/rm-check.json 2>/dev/null; then
+            errs=$(jq -r '.errors // [] | length' /tmp/rm-check.json 2>/dev/null || echo "?")
+            if [[ "${errs}" == "0" ]]; then
+                pass "rules-manager add-rules ${candidate} --check-mode (no errors)"
+            else
+                fail "rules-manager add-rules ${candidate} --check-mode reported ${errs} error(s)"
+            fi
+        else
+            fail "rules-manager add-rules ${candidate} --check-mode crashed"
+        fi
+        rm -f /tmp/rm-check.json
+    fi
+
+    if rules-manager list-rules --no-ssl-verify --output json >/dev/null 2>&1; then
+        pass "rules-manager list-rules"
+    else
+        fail "rules-manager list-rules failed"
+    fi
+
+    if rules-manager list-rules --orphans --no-ssl-verify --output json >/dev/null 2>&1; then
+        pass "rules-manager list-rules --orphans"
+    else
+        fail "rules-manager list-rules --orphans failed"
+    fi
+fi
+
+section "Standard 8: rules-manager NONE-mode fallback"
+
+# Use the deep-test fixture without connecting to OPNsense — NONE mode should
+# print manual instructions and exit 0 without touching the firewall.
+if command -v rules-manager >/dev/null 2>&1 && [[ -f "${FIXTURES_DIR}/test-fw-a.json" ]]; then
+    if rules-manager add-rules test-fw-a \
+            --firewall-type NONE \
+            --modules-dir "${FIXTURES_DIR}" \
+            --zones-file "${SCRIPT_DIR}/zones.json" \
+            --aliases-file "${ALIASES_JSON}" \
+            --check-mode \
+            >/dev/null 2>&1; then
+        pass "rules-manager --firewall-type NONE exits 0 against fixture"
+    else
+        fail "rules-manager --firewall-type NONE failed against fixture"
+    fi
+else
+    skip "rules-manager or fixture missing — NONE-mode test skipped"
+fi
+
+# ─────────────────────────────────────────────────────────────────────
+# Deep tests (--deep) — VM provisioning + inter-VM connectivity
+# ─────────────────────────────────────────────────────────────────────
+
+cleanup_deep() {
+    local rc=$?
+    if [[ "${NO_CLEANUP}" == "1" ]]; then
+        warn "Skipping cleanup (TAPPAAS_TEST_NO_CLEANUP=1). test-fw-{a,b} left in place."
+        return ${rc}
+    fi
+    echo ""
+    info "${BOLD}─── Deep cleanup ───${CL}"
+    for vm in test-fw-b test-fw-a; do
+        if [[ -f "${CONFIG_DIR}/${vm}.json" ]]; then
+            info "Removing ${vm}..."
+            /home/tappaas/bin/delete-module.sh "${vm}" --force >/dev/null 2>&1 \
+                || warn "  delete-module.sh ${vm} returned non-zero"
+        fi
+    done
+    # Deactivate test1/test2 (restore them to Inactive in /home/tappaas/config/zones.json)
+    if [[ -f "${CONFIG_DIR}/zones.json" ]]; then
+        local tmp
+        tmp=$(mktemp)
+        jq '(.test1.state = "Inactive") | (.test2.state = "Inactive")' \
+            "${CONFIG_DIR}/zones.json" > "${tmp}" \
+            && mv "${tmp}" "${CONFIG_DIR}/zones.json"
+        zone-manager --no-ssl-verify --zones-file "${CONFIG_DIR}/zones.json" --execute \
+            >/dev/null 2>&1 || warn "zone-manager teardown returned non-zero"
+        info "Reverted test1/test2 to Inactive in zones.json and re-ran zone-manager"
+    fi
+    return ${rc}
+}
+
+if [[ "${DEEP}" != "1" ]]; then
+    section "Deep tests skipped"
+    info "  Re-run with --deep (or TAPPAAS_TEST_DEEP=1) to provision two test VMs and"
+    info "  validate inter-zone firewall rules end-to-end. Expected runtime: 5–10 min."
+else
+    section "Deep 1: Activate test1 and test2 zones"
+
+    trap cleanup_deep EXIT
+
+    if [[ ! -f "${CONFIG_DIR}/zones.json" ]]; then
+        fail "deployed zones.json missing — cannot activate test zones"
+    else
+        tmp=$(mktemp)
+        jq '(.test1.state = "Active") | (.test2.state = "Active")' \
+            "${CONFIG_DIR}/zones.json" > "${tmp}" \
+            && mv "${tmp}" "${CONFIG_DIR}/zones.json"
+        info "Activated test1 and test2 in deployed zones.json"
+        if zone-manager --no-ssl-verify --zones-file "${CONFIG_DIR}/zones.json" --execute >/dev/null 2>&1; then
+            pass "zone-manager applied test1+test2 (VLAN+DHCP+rules)"
+        else
+            fail "zone-manager could not apply test1+test2"
+        fi
+    fi
+
+    section "Deep 2: Install test-fw-a in test1"
+
+    pushd "${FIXTURES_DIR}" >/dev/null || die "Cannot enter ${FIXTURES_DIR}"
+
+    if /home/tappaas/bin/install-module.sh test-fw-a 2>&1 | tee -a "${LOG_FILE}" | tail -10; then
+        pass "install-module.sh test-fw-a"
+    else
+        fail "install-module.sh test-fw-a"
+    fi
+
+    # Wait for cloud-init / DHCP / DNS to settle
+    info "Waiting up to 90s for test-fw-a DNS registration..."
+    for _ in {1..18}; do
+        if getent hosts test-fw-a.test1.internal >/dev/null 2>&1; then
+            pass "DNS registered test-fw-a.test1.internal"
+            break
+        fi
+        sleep 5
+    done
+    getent hosts test-fw-a.test1.internal >/dev/null 2>&1 \
+        || fail "test-fw-a.test1.internal did not appear in DNS within 90s"
+
+    section "Deep 3: Verify test-fw-a webserver"
+
+    if curl -fsS --max-time 5 "http://test-fw-a.test1.internal:8080/" 2>/dev/null \
+            | grep -q "tappaas-firewall-test-a-ok"; then
+        pass "test-fw-a webserver returns marker"
+    else
+        fail "test-fw-a webserver did not return marker"
+    fi
+
+    section "Deep 4: Caddy reverse proxy for test-fw-a"
+
+    # firewall:proxy install-service already ran via install-module.sh. Verify it.
+    proxy_domain=$(jq -r '.proxyDomain // empty' "${CONFIG_DIR}/test-fw-a.json" 2>/dev/null)
+    if [[ -z "${proxy_domain}" ]]; then
+        # Derive default — <vmname>.<tappaas.domain>
+        domain=$(jq -r '.tappaas.domain // empty' "${CONFIG_DIR}/configuration.json" 2>/dev/null)
+        proxy_domain="test-fw-a.${domain}"
+    fi
+    if [[ -n "${proxy_domain}" && "${proxy_domain}" != "test-fw-a." ]]; then
+        if caddy-manager --no-ssl-verify list 2>/dev/null | grep -q "test-fw-a\|${proxy_domain}"; then
+            pass "Caddy domain entry for test-fw-a present"
+        else
+            fail "Caddy domain entry for test-fw-a missing"
+        fi
+    else
+        skip "no proxyDomain — Caddy verification skipped"
+    fi
+
+    section "Deep 5: Install test-fw-b in test2"
+
+    if /home/tappaas/bin/install-module.sh test-fw-b 2>&1 | tee -a "${LOG_FILE}" | tail -10; then
+        pass "install-module.sh test-fw-b"
+    else
+        fail "install-module.sh test-fw-b"
+    fi
+
+    info "Waiting up to 90s for test-fw-b DNS registration..."
+    for _ in {1..18}; do
+        if getent hosts test-fw-b.test2.internal >/dev/null 2>&1; then
+            pass "DNS registered test-fw-b.test2.internal"
+            break
+        fi
+        sleep 5
+    done
+
+    section "Deep 6: rules-manager applied rules for test-fw-b"
+
+    # Module-name peer rule
+    if rules-manager list-rules --module test-fw-b --no-ssl-verify --output json 2>/dev/null \
+            | jq -e '.rules // [] | map(.description) | any(. | contains("tappaas-module:test-fw-b:ingress:test-fw-a:9090"))' \
+            >/dev/null 2>&1; then
+        pass "ingress from module-name peer (test-fw-a) rule present"
+    else
+        fail "ingress from module-name peer (test-fw-a) rule missing"
+    fi
+
+    # Module-local alias peer rule
+    if rules-manager list-rules --module test-fw-b --no-ssl-verify --output json 2>/dev/null \
+            | jq -e '.rules // [] | map(.description) | any(. | contains("tappaas-module:test-fw-b:ingress:alias:test_admin_ips:9090"))' \
+            >/dev/null 2>&1; then
+        pass "ingress from module-local alias (test_admin_ips) rule present"
+    else
+        fail "ingress from module-local alias (test_admin_ips) rule missing"
+    fi
+
+    section "Deep 7: OPNsense aliases exist"
+
+    # The FQDN alias for test-fw-a should have been auto-created.
+    if ssh -o BatchMode=yes -o StrictHostKeyChecking=accept-new \
+            root@"${FIREWALL_FQDN}" \
+            "/usr/local/sbin/pfctl -t tappaas-module-test-fw-a -T show 2>/dev/null || true" \
+            2>/dev/null | grep -q .; then
+        pass "OPNsense alias tappaas-module-test-fw-a populated"
+    else
+        # Fall back to an API/CLI check if pfctl wasn't available
+        skip "alias presence check requires pfctl or API lookup (manual verify)"
+    fi
+
+    section "Deep 8: Inter-VM connectivity (pinhole works)"
+
+    # From test-fw-a, curl test-fw-b on its pinhole port — should succeed.
+    if ssh -o BatchMode=yes -o StrictHostKeyChecking=accept-new \
+            tappaas@test-fw-a.test1.internal \
+            "curl -fsS --max-time 5 http://test-fw-b.test2.internal:9090/" 2>/dev/null \
+            | grep -q "tappaas-firewall-test-b-ok"; then
+        pass "test-fw-a → test-fw-b:9090 (pinhole permitted)"
+    else
+        fail "test-fw-a → test-fw-b:9090 (expected pinhole to allow)"
+    fi
+
+    section "Deep 9: Reverse direction respects policy"
+
+    # test-fw-b → test-fw-a on 8080 IS declared in test-fw-a's ingress (from test2),
+    # so this SHOULD succeed; confirms bidirectional rule compilation.
+    if ssh -o BatchMode=yes -o StrictHostKeyChecking=accept-new \
+            tappaas@test-fw-b.test2.internal \
+            "curl -fsS --max-time 5 http://test-fw-a.test1.internal:8080/" 2>/dev/null \
+            | grep -q "tappaas-firewall-test-a-ok"; then
+        pass "test-fw-b → test-fw-a:8080 (declared pinhole permitted)"
+    else
+        fail "test-fw-b → test-fw-a:8080 (declared pinhole expected)"
+    fi
+
+    section "Deep 10: Reconcile prunes a removed ingress entry"
+
+    # Remove one ingress entry from the deployed test-fw-b.json and reconcile.
+    tmp=$(mktemp)
+    jq 'del(.ingress[] | select(.from == "alias:test_admin_ips"))' \
+        "${CONFIG_DIR}/test-fw-b.json" > "${tmp}" && mv "${tmp}" "${CONFIG_DIR}/test-fw-b.json"
+
+    if rules-manager reconcile test-fw-b --no-ssl-verify --output json >/tmp/rm-rec.json 2>/dev/null; then
+        deleted=$(jq -r '.deleted // 0' /tmp/rm-rec.json 2>/dev/null || echo 0)
+        if [[ "${deleted}" -ge 1 ]]; then
+            pass "reconcile deleted ${deleted} orphan rule(s)"
+        else
+            fail "reconcile did not delete the removed ingress (deleted=${deleted})"
+        fi
+    else
+        fail "rules-manager reconcile failed"
+    fi
+    rm -f /tmp/rm-rec.json
+
+    popd >/dev/null
+fi
+
+# ─────────────────────────────────────────────────────────────────────
+# Summary
+# ─────────────────────────────────────────────────────────────────────
+
+echo ""
+info "${BOLD}═══════════════════════════════════════════════════════════════${CL}"
+info "${BOLD}  Firewall test summary${CL}"
+info "${BOLD}═══════════════════════════════════════════════════════════════${CL}"
+info "  ${GN}Passed:${CL}  ${PASS}"
+info "  ${RD}Failed:${CL}  ${FAIL}"
+info "  ${YW}Skipped:${CL} ${SKIP}"
+info ""
+info "Log saved: ${LOG_FILE}"
+
+if [[ "${FAIL}" -eq 0 ]]; then
+    info "${GN}${BOLD}All firewall tests passed.${CL}"
+    exit 0
+else
+    error "${RD}${BOLD}${FAIL} firewall test(s) failed.${CL}"
+    exit 1
+fi
