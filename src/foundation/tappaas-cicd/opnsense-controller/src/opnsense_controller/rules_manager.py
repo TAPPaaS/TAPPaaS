@@ -50,6 +50,12 @@ from .vlan_manager import VlanManager
 # ─────────────────────────────────────────────────────────────────────────────
 
 DESCRIPTION_PREFIX = "tappaas-module"
+# Auto-pinhole rules synthesised from <consumer>.dependsOn + <provider>/services/<svc>/pinhole.json
+# (issue #173). Same shape as manual ingress rules but distinct prefix so the
+# reconcile/teardown paths can tell them apart from manually-authored entries.
+DESCRIPTION_PREFIX_SVCDEP = "tappaas-svcdep"
+# All per-module rule prefixes recognised by remove/list/verify scans.
+MODULE_RULE_PREFIXES: tuple[str, ...] = (DESCRIPTION_PREFIX, DESCRIPTION_PREFIX_SVCDEP)
 MODULE_ALIAS_PREFIX = "tappaas_module_"
 DEFAULT_DOMAIN_SUFFIX = "internal"
 
@@ -95,6 +101,12 @@ class ModuleSpec:
     egress: list[dict]
     aliases: dict[str, dict]
     firewall_type: str  # "opnsense" | "NONE"
+    # `dependsOn` and `location` are needed by the auto-pinhole pass (issue #173).
+    # `location` is the absolute path of the module directory in the source tree
+    # (set by copy-update-json.sh); auto-pinhole reads
+    # <provider.location>/services/<service>/pinhole.json for each dependency.
+    depends_on: list[str] = field(default_factory=list)
+    location: str = ""
 
 
 @dataclass
@@ -197,6 +209,55 @@ def _canonical_description(
     return base
 
 
+def _canonical_description_svcdep(
+    consumer: str, service: str, provider: str, port: int | str, protocol: str
+) -> str:
+    """Canonical description for an auto-pinhole rule (issue #173).
+
+    Format: ``tappaas-svcdep:<consumer>:<service>:<provider>:<port>[/<proto>]``
+
+    The owner-module (position 1, the part `_extract_module` returns) is the
+    *consumer* — auto-pinholes are created when a consumer's install runs and
+    removed when the consumer is deleted, regardless of provider state.
+    """
+    proto = protocol.upper()
+    base = f"{DESCRIPTION_PREFIX_SVCDEP}:{consumer}:{service}:{provider}:{port}"
+    if proto and proto != Protocol.TCP.value:
+        base += f"/{proto}"
+    return base
+
+
+def _parse_dependency(dep: str) -> tuple[str, str] | None:
+    """Parse a ``"<module>:<service>"`` dependsOn entry; return (module, service) or None."""
+    if not dep or ":" not in dep:
+        return None
+    parts = dep.split(":", 1)
+    provider, service = parts[0].strip(), parts[1].strip()
+    if not provider or not service:
+        return None
+    return provider, service
+
+
+def load_pinhole_ports(provider_location: str, service: str) -> list[dict] | None:
+    """Load <provider.location>/services/<service>/pinhole.json (issue #173).
+
+    Returns the list of port specs (``{port, protocol, description}``), or
+    ``None`` when the file is absent (which is the normal case for services
+    that don't expose network ports, e.g. ``cluster:vm``).
+    """
+    if not provider_location:
+        return None
+    path = Path(provider_location) / "services" / service / "pinhole.json"
+    if not path.is_file():
+        return None
+    with open(path) as f:
+        data = json.load(f)
+    ports = data.get("ports", []) or []
+    if not isinstance(ports, list):
+        return None
+    return ports
+
+
 def _module_alias_name(peer_vmname: str) -> str:
     """Generate an OPNsense-safe host alias name for a TAPPaaS module.
 
@@ -253,6 +314,8 @@ def load_module(modules_dir: Path, name: str) -> ModuleSpec:
         egress=data.get("egress", []) or [],
         aliases=data.get("aliases", {}) or {},
         firewall_type=data.get("firewallType", "opnsense"),
+        depends_on=data.get("dependsOn", []) or [],
+        location=data.get("location", "") or "",
     )
 
 
@@ -356,16 +419,20 @@ class RulesManager:
             info(f"firewallType=NONE for {module.vmname}: nothing to remove on firewall")
             return result
 
-        prefix = f"{DESCRIPTION_PREFIX}:{module.vmname}:"
-        existing = self.fw.list_rules(search_pattern=prefix)
+        # Pick up both manual rules (tappaas-module:...) and auto-pinholes
+        # (tappaas-svcdep:...) owned by this module.
+        existing = self._list_owned_rules(module.vmname)
         if self.check_mode:
             info(f"[check] would delete {len(existing)} rule(s) for {module.vmname}")
             return result
 
+        owned_prefixes = tuple(
+            f"{p}:{module.vmname}:" for p in MODULE_RULE_PREFIXES
+        )
         revision = self.fw.create_savepoint()
         try:
             for rule in existing:
-                if rule.description.startswith(prefix):
+                if rule.description.startswith(owned_prefixes):
                     self.fw.delete_rule_by_uuid(rule.uuid, apply=False)
                     result.deleted += 1
             self.fw.apply_changes()
@@ -397,16 +464,41 @@ class RulesManager:
     def list_rules(
         self, module_name: str | None = None, orphans: bool = False
     ) -> list[FirewallRuleInfo]:
-        """List rules currently in OPNsense, optionally filtered."""
+        """List rules currently in OPNsense, optionally filtered.
+
+        Covers both manual rules (``tappaas-module:``) and auto-pinholes
+        (``tappaas-svcdep:``).
+        """
         if module_name:
-            return self.fw.list_rules(
-                search_pattern=f"{DESCRIPTION_PREFIX}:{module_name}:"
-            )
-        rules = self.fw.list_rules(search_pattern=f"{DESCRIPTION_PREFIX}:")
+            return self._list_owned_rules(module_name)
+        rules: list[FirewallRuleInfo] = []
+        seen: set[str] = set()
+        for prefix in MODULE_RULE_PREFIXES:
+            for r in self.fw.list_rules(search_pattern=f"{prefix}:"):
+                key = getattr(r, "uuid", None) or r.description
+                if key in seen:
+                    continue
+                seen.add(key)
+                rules.append(r)
         if not orphans:
             return rules
         known = set(discover_modules(self.modules_dir))
         return [r for r in rules if _extract_module(r.description) not in known]
+
+    def _list_owned_rules(self, module_name: str) -> list[FirewallRuleInfo]:
+        """Return every rule (manual + auto-pinhole) owned by ``module_name``."""
+        rules: list[FirewallRuleInfo] = []
+        seen: set[str] = set()
+        for prefix in MODULE_RULE_PREFIXES:
+            for r in self.fw.list_rules(
+                search_pattern=f"{prefix}:{module_name}:"
+            ):
+                key = getattr(r, "uuid", None) or r.description
+                if key in seen:
+                    continue
+                seen.add(key)
+                rules.append(r)
+        return rules
 
     def verify_rules(self, module_name: str, deep: bool = False) -> VerifyResult:
         """Verify that desired rules exist in OPNsense."""
@@ -424,9 +516,7 @@ class RulesManager:
 
         result.desired = len(desired)
         desired_descs = {r.description for r in desired}
-        existing = self.fw.list_rules(
-            search_pattern=f"{DESCRIPTION_PREFIX}:{module.vmname}:"
-        )
+        existing = self._list_owned_rules(module.vmname)
         existing_descs = {r.description for r in existing}
 
         result.present = len(existing_descs & desired_descs)
@@ -468,8 +558,7 @@ class RulesManager:
             for r in rules:
                 info(f"[check] +rule seq={r.sequence} desc='{r.description}'")
             if prune:
-                prefix = f"{DESCRIPTION_PREFIX}:{module.vmname}:"
-                live = self.fw.list_rules(search_pattern=prefix)
+                live = self._list_owned_rules(module.vmname)
                 desired_descs = {r.description for r in rules}
                 for live_rule in live:
                     if live_rule.description not in desired_descs:
@@ -511,8 +600,7 @@ class RulesManager:
         # 2. Apply rules atomically with a savepoint
         revision = self.fw.create_savepoint()
         try:
-            prefix = f"{DESCRIPTION_PREFIX}:{module.vmname}:"
-            existing = self.fw.list_rules(search_pattern=prefix) if prune else []
+            existing = self._list_owned_rules(module.vmname) if prune else []
             desired_descs = {r.description for r in rules}
 
             for r in rules:
@@ -619,7 +707,133 @@ class RulesManager:
                     )
                 )
 
+        # Auto-pinholes from dependsOn + provider's pinhole.json (issue #173).
+        # Auto-pinholes are ingress-shaped rules; they share the consumer's
+        # ingress slot, so seed the sequence allocator with the count of
+        # manual ingress rules already compiled.
+        manual_ingress_count = sum(1 for r in rules if r.direction == "ingress")
+        rules.extend(self._compile_auto_pinholes(module, slot, manual_ingress_count))
+
         return rules, errors
+
+    def _compile_auto_pinholes(
+        self,
+        module: ModuleSpec,
+        slot: int,
+        ingress_count_so_far: int,
+    ) -> list[ModuleFirewallRule]:
+        """Synthesise ingress pinhole rules from cross-zone service dependencies.
+
+        For each ``<provider>:<service>`` in ``module.dependsOn`` where the
+        provider ships a ``services/<service>/pinhole.json``: if the consumer's
+        zone differs from the provider's zone AND the consumer's zone is not
+        already in ``provider_zone.access-to``, emit one pinhole rule per port.
+
+        Auto-pinholes share the consumer's ingress slot (band 3); the
+        ``ingress_count_so_far`` argument is the number of manual ingress rules
+        already compiled, so sequence numbers continue without collision.
+
+        Policy: when the consumer's zone is missing from the provider zone's
+        ``pinhole-allowed-from``, the pinhole is skipped with a warning
+        (per #173 design choice — warn-and-skip rather than hard-error).
+        """
+        rules: list[ModuleFirewallRule] = []
+        if not module.depends_on:
+            return rules
+
+        consumer_zone = self.zones.get(module.zone0)
+        if not consumer_zone:
+            return rules
+        # Same convention as manual ingress: rules permitting "A -> B" sit on
+        # A's zone interface (where the traffic enters the firewall).
+        interface = self._zone_to_interface(consumer_zone)
+        consumer_self_alias = _module_alias_name(module.vmname)
+
+        for dep in module.depends_on:
+            parsed = _parse_dependency(dep)
+            if not parsed:
+                continue
+            provider_name, service = parsed
+
+            # Load the provider's manifest. If it's missing, install-module.sh
+            # has already failed validation upstream — skip silently here.
+            try:
+                provider = load_module(self.modules_dir, provider_name)
+            except FileNotFoundError:
+                continue
+
+            # Most services don't expose network ports (e.g. cluster:vm).
+            # No pinhole.json -> nothing to do.
+            port_specs = load_pinhole_ports(provider.location, service)
+            if not port_specs:
+                continue
+
+            # Intra-zone traffic already flows freely.
+            if module.zone0 == provider.zone0:
+                continue
+
+            provider_zone = self.zones.get(provider.zone0)
+            if not provider_zone:
+                continue
+
+            # Zone-level access-to already covers it.
+            if module.zone0 in provider_zone.access_to:
+                continue
+
+            # Policy gate.
+            if module.zone0 not in provider_zone.pinhole_allowed_from:
+                warn(
+                    f"{module.vmname}: dependsOn '{dep}' would need a pinhole "
+                    f"from zone '{module.zone0}' into '{provider.zone0}', but "
+                    f"'{module.zone0}' is not in "
+                    f"{provider.zone0}.pinhole-allowed-from = "
+                    f"{provider_zone.pinhole_allowed_from}. "
+                    f"Auto-pinhole skipped; add '{module.zone0}' to "
+                    f"{provider.zone0}.pinhole-allowed-from in zones.json "
+                    f"to enable it."
+                )
+                continue
+
+            dst_alias = _module_alias_name(provider.vmname)
+
+            for spec in port_specs:
+                port = spec.get("port")
+                if port is None:
+                    continue
+                protocol = _normalize_protocol(spec.get("protocol"))
+                human_desc = (
+                    spec.get("description")
+                    or f"auto-pinhole: {module.vmname} -> {provider.vmname}:{service}"
+                )
+
+                seq = self._assign_sequence("ingress", slot, ingress_count_so_far)
+                if seq is None:
+                    warn(
+                        f"{module.vmname}: ingress slot exhausted; "
+                        f"auto-pinhole for {dep}:{port} skipped"
+                    )
+                    continue
+                ingress_count_so_far += 1
+
+                rules.append(
+                    ModuleFirewallRule(
+                        module_name=module.vmname,
+                        direction="ingress",
+                        peer=provider.vmname,
+                        port=port,
+                        protocol=protocol,
+                        description=_canonical_description_svcdep(
+                            module.vmname, service, provider.vmname, port, protocol
+                        ),
+                        rule_description=human_desc,
+                        sequence=seq,
+                        source_net=consumer_self_alias,
+                        destination_net=dst_alias,
+                        interface=interface,
+                    )
+                )
+
+        return rules
 
     # ── Validation ───────────────────────────────────────────────────────
 
@@ -764,9 +978,15 @@ class RulesManager:
         return _module_alias_name(module.vmname)
 
     def _peer_module_fqdn_aliases(self, module: ModuleSpec) -> dict[str, str]:
-        """Return {alias_name: fqdn} for the module itself and every module-named peer."""
+        """Return {alias_name: fqdn} for the module itself and every module-named peer.
+
+        Walks manual ingress/egress entries plus auto-pinhole providers
+        (issue #173) so that every alias referenced by a compiled rule has
+        a corresponding OPNsense host alias before the rule is applied.
+        """
         result: dict[str, str] = {}
-        # Self alias — destination for ingress, source for egress
+        # Self alias — destination for ingress, source for egress (and for
+        # auto-pinhole rules, which use the self alias as the source).
         if module.zone0:
             result[_module_alias_name(module.vmname)] = (
                 f"{module.vmname}.{module.zone0}.{DEFAULT_DOMAIN_SUFFIX}"
@@ -784,6 +1004,13 @@ class RulesManager:
                 fqdn = self._peer_fqdn(peer)
                 if fqdn:
                     result[_module_alias_name(peer)] = fqdn
+        # Auto-pinhole peers: every provider whose pinhole.json would emit a
+        # cross-zone rule. We re-derive the same predicate the compile step
+        # uses (cross-zone, not covered by zone access-to, and policy-allowed).
+        for provider_name in self._auto_pinhole_provider_names(module):
+            fqdn = self._peer_fqdn(provider_name)
+            if fqdn:
+                result[_module_alias_name(provider_name)] = fqdn
         return result
 
     def _referenced_global_aliases(self, module: ModuleSpec) -> list[str]:
@@ -805,12 +1032,52 @@ class RulesManager:
         return sorted(names)
 
     def _peer_module_aliases_for(self, module: ModuleSpec) -> list[str]:
-        """Return the list of peer-module alias names referenced by `module`."""
+        """Return the list of peer-module alias names referenced by `module`.
+
+        Includes peers from auto-pinhole rules (issue #173) so removal also
+        considers them for orphan checking.
+        """
         names: list[str] = []
         for entry in (*module.ingress, *module.egress):
             peer = entry.get("from") or entry.get("to")
             if peer and peer != "internet" and not peer.startswith("alias:") and peer not in self.zones:
                 names.append(_module_alias_name(peer))
+        for provider_name in self._auto_pinhole_provider_names(module):
+            names.append(_module_alias_name(provider_name))
+        return names
+
+    def _auto_pinhole_provider_names(self, module: ModuleSpec) -> list[str]:
+        """Return providers whose dependsOn entry would emit an auto-pinhole.
+
+        Applies the same predicate as ``_compile_auto_pinholes`` (cross-zone,
+        not already in ``access-to``, in ``pinhole-allowed-from``, pinhole.json
+        present) so callers — alias provisioning, orphan checks — see the
+        same peer set the compile pass sees.
+        """
+        if not module.depends_on:
+            return []
+        names: list[str] = []
+        for dep in module.depends_on:
+            parsed = _parse_dependency(dep)
+            if not parsed:
+                continue
+            provider_name, service = parsed
+            try:
+                provider = load_module(self.modules_dir, provider_name)
+            except FileNotFoundError:
+                continue
+            if not load_pinhole_ports(provider.location, service):
+                continue
+            if module.zone0 == provider.zone0:
+                continue
+            provider_zone = self.zones.get(provider.zone0)
+            if not provider_zone:
+                continue
+            if module.zone0 in provider_zone.access_to:
+                continue
+            if module.zone0 not in provider_zone.pinhole_allowed_from:
+                continue
+            names.append(provider.vmname)
         return names
 
     def _peer_fqdn(self, peer_vmname: str) -> str | None:
@@ -959,14 +1226,25 @@ class RulesManager:
             return False
 
     def _alias_is_orphan(self, alias_name: str, exclude_module: str) -> bool:
-        """Return True if no rule outside `exclude_module` references `alias_name`."""
-        rules = self.fw.list_rules(search_pattern=DESCRIPTION_PREFIX + ":")
-        exclude_prefix = f"{DESCRIPTION_PREFIX}:{exclude_module}:"
-        for r in rules:
-            if r.description.startswith(exclude_prefix):
-                continue
-            if alias_name in (r.source_net or "") or alias_name in (r.destination_net or ""):
-                return False
+        """Return True if no rule outside `exclude_module` references `alias_name`.
+
+        Scans both manual rules (``tappaas-module:``) and auto-pinholes
+        (``tappaas-svcdep:``).
+        """
+        exclude_prefixes = tuple(
+            f"{p}:{exclude_module}:" for p in MODULE_RULE_PREFIXES
+        )
+        seen: set[str] = set()
+        for prefix in MODULE_RULE_PREFIXES:
+            for r in self.fw.list_rules(search_pattern=f"{prefix}:"):
+                key = getattr(r, "uuid", None) or r.description
+                if key in seen:
+                    continue
+                seen.add(key)
+                if r.description.startswith(exclude_prefixes):
+                    continue
+                if alias_name in (r.source_net or "") or alias_name in (r.destination_net or ""):
+                    return False
         return True
 
     def _revert(self, revision) -> None:
@@ -1023,6 +1301,52 @@ class RulesManager:
                     f"  PASS  → {dst:30s} :{ports}/{proto}   "
                     f"\"{entry.get('description', '')}\""
                 )
+
+        # Auto-pinholes from dependsOn + provider's pinhole.json (issue #173).
+        # Apply the same predicate as _compile_auto_pinholes so NONE-mode
+        # output stays consistent with what would actually be installed.
+        auto_descriptions: list[str] = []
+        for dep in module.depends_on:
+            parsed = _parse_dependency(dep)
+            if not parsed:
+                continue
+            provider_name, service = parsed
+            try:
+                provider = load_module(self.modules_dir, provider_name)
+            except FileNotFoundError:
+                continue
+            port_specs = load_pinhole_ports(provider.location, service)
+            if not port_specs:
+                continue
+            if module.zone0 == provider.zone0:
+                continue
+            provider_zone = self.zones.get(provider.zone0)
+            if not provider_zone:
+                continue
+            if module.zone0 in provider_zone.access_to:
+                continue
+            if module.zone0 not in provider_zone.pinhole_allowed_from:
+                warn(
+                    f"{module.vmname}: dependsOn '{dep}' would need a pinhole "
+                    f"from zone '{module.zone0}' into '{provider.zone0}', but "
+                    f"'{module.zone0}' is not in "
+                    f"{provider.zone0}.pinhole-allowed-from = "
+                    f"{provider_zone.pinhole_allowed_from}. Skipped."
+                )
+                continue
+            for spec in port_specs:
+                port = spec.get("port")
+                proto = _normalize_protocol(spec.get("protocol"))
+                desc = spec.get("description") or service
+                auto_descriptions.append(
+                    f"  PASS  {module.vmname:20s} → "
+                    f"{provider.vmname:20s}:{port}/{proto}   \"{desc}\""
+                )
+        if auto_descriptions:
+            info("")
+            info(f"AUTO-PINHOLES (dependsOn-derived, issue #173) for {module.vmname}:")
+            for line in auto_descriptions:
+                info(line)
         info("")
         info("No automated changes were made.")
 

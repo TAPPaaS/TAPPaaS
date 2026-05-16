@@ -676,6 +676,47 @@
             "services/<service-name>/update-service.sh": {
                 "description": "Script called when a module consuming this service is updated. Called with the consuming module name as argument.",
                 "required": "if module provides services"
+            },
+            "services/<service-name>/pinhole.json": {
+                "description": "Declares the network ports a service exposes. When a consumer module depends on this service across zones, firewall:rules synthesises an auto-pinhole rule per declared port (subject to the destination zone's pinhole-allowed-from policy). Issue #173.",
+                "required": false,
+                "schema": {
+                    "ports": {
+                        "description": "Network ports this service exposes for consumers in other zones.",
+                        "type": "array",
+                        "items": {
+                            "type": "object",
+                            "fields": {
+                                "port": {
+                                    "description": "TCP/UDP port number, or port range as a string (e.g. '8000:8010').",
+                                    "type": "integer|string",
+                                    "required": true,
+                                    "minimum": 1,
+                                    "maximum": 65535
+                                },
+                                "protocol": {
+                                    "description": "Transport protocol.",
+                                    "type": "string",
+                                    "values": {
+                                        "TCP": "TCP only (default)",
+                                        "UDP": "UDP only",
+                                        "TCP/UDP": "Both TCP and UDP",
+                                        "ICMP": "ICMP (port field ignored)"
+                                    },
+                                    "default": "TCP"
+                                },
+                                "description": {
+                                    "description": "Human-readable purpose of this port (audit/documentation).",
+                                    "type": "string",
+                                    "required": false
+                                }
+                            }
+                        },
+                        "example": [
+                            { "port": 4000, "protocol": "TCP", "description": "LiteLLM API" }
+                        ]
+                    }
+                }
             }
         }
     },

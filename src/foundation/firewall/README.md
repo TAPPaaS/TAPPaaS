@@ -76,16 +76,74 @@ The `from` / `to` fields accept:
 ### Rule identity
 
 Every compiled rule carries a canonical description used for idempotent upsert
-and orphan detection:
+and orphan detection. There are two prefixes:
 
 ```
-tappaas-module:<vmname>:<direction>:<peer>:<port>[/<protocol>]
+tappaas-module:<vmname>:<direction>:<peer>:<port>[/<protocol>]   # manual rules (#151)
+tappaas-svcdep:<consumer>:<service>:<provider>:<port>[/<protocol>]  # auto-pinholes (#173)
 ```
 
 Examples:
 - `tappaas-module:litellm:ingress:srv-work:4000`
 - `tappaas-module:litellm:egress:vllm:11434`
 - `tappaas-module:hassosova:egress:iot-home:5353/UDP`
+- `tappaas-svcdep:hassosova:mqtt:mosquitto:1883`  ← auto-pinhole
+
+The owner-module is always position 1; that's the consumer for `tappaas-svcdep`
+and the rule-owning module for `tappaas-module`. `list-rules`, `verify-rules`,
+`reconcile`, and `remove-rules` recognise both prefixes.
+
+### Auto-pinholes from service dependencies (issue #173)
+
+Manual `ingress` / `egress` entries cover bespoke firewall policy. For the
+common case — "this module just needs to talk to the service it depends on" —
+the firewall:rules service can synthesise the pinhole automatically.
+
+A **service provider** opts in by dropping a `pinhole.json` in its service
+directory declaring the ports the service answers on:
+
+```jsonc
+// <provider-module>/services/<service>/pinhole.json
+{
+  "ports": [
+    { "port": 4000, "protocol": "TCP", "description": "LiteLLM API" },
+    { "port": 4001, "protocol": "TCP", "description": "Prometheus scrape" }
+  ]
+}
+```
+
+A **consumer module** triggers the auto-pinhole simply by depending on the
+service and declaring `firewall:rules` in its own dependsOn:
+
+```jsonc
+{
+  "vmname": "translation-agent",
+  "zone0": "srv-work",
+  "dependsOn": [
+    "cluster:vm",
+    "firewall:rules",          // opt into per-module firewall
+    "litellm:llm-proxy"        // provider:service with a pinhole.json
+  ]
+}
+```
+
+When the consumer's install runs, `rules-manager` walks `dependsOn`, finds
+each provider's `pinhole.json`, and emits one auto-pinhole per declared port —
+**only** when:
+
+1. The two modules are in different zones (intra-zone traffic flows freely).
+2. The consumer's zone is **not already** in the provider zone's `access-to`
+   (zone-level rule covers it).
+3. The consumer's zone **is** in the provider zone's `pinhole-allowed-from`
+   (policy gate).
+
+If condition 3 fails, the auto-pinhole is **skipped with a warning** — the
+operator chose this trade-off on the original ticket: a missing zone policy
+should not block an install, just be loud about what wasn't done.
+
+Auto-pinholes are owned by the **consumer**: they're created when the consumer
+is installed, recomputed on `reconcile` (so a changed dependsOn re-applies),
+and removed on the consumer's teardown — regardless of the provider's state.
 
 ### Sequence bands
 

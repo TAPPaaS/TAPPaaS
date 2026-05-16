@@ -347,6 +347,243 @@ class TestCompile(unittest.TestCase):
 
 
 # ─────────────────────────────────────────────────────────────────────────────
+# Auto-pinholes (issue #173)
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+class TestAutoPinholes(unittest.TestCase):
+    """End-to-end-ish tests for the dependsOn-driven auto-pinhole compile path.
+
+    Each test builds a temp modules dir with a consumer+provider pair, optionally
+    drops a pinhole.json under the provider's `location`, and exercises
+    ``_compile`` directly (no OPNsense connection needed).
+    """
+
+    def _make_zones(self, **overrides):
+        """Default zone topology: srv-work, dmz, home — see ZONES_FIXTURE.
+
+        Overrides let individual tests tweak access-to / pinhole-allowed-from
+        without redefining the whole map.
+        """
+        zones = {}
+        for n, z in ZONES_FIXTURE.items():
+            zones[n] = ZoneSpec(
+                name=n,
+                ip_network=z.get("ip", ""),
+                bridge=z.get("bridge", "lan"),
+                vlan_tag=z.get("vlantag", 0),
+                access_to=list(z.get("access-to", [])),
+                pinhole_allowed_from=list(z.get("pinhole-allowed-from", [])),
+            )
+        for name, attrs in overrides.items():
+            existing = zones.get(name)
+            if not existing:
+                continue
+            for k, v in attrs.items():
+                setattr(existing, k, list(v))
+        return zones
+
+    def _write_provider(
+        self,
+        dir_: Path,
+        *,
+        vmname: str,
+        zone0: str,
+        pinhole_ports: list[dict] | None,
+        service: str = "api",
+    ):
+        """Create <vmname>.json + (optionally) services/<service>/pinhole.json."""
+        location = dir_ / f"{vmname}-src"
+        location.mkdir(parents=True, exist_ok=True)
+        (dir_ / f"{vmname}.json").write_text(json.dumps({
+            "vmname": vmname,
+            "zone0": zone0,
+            "bridge0": "lan",
+            "location": str(location),
+            "ports": [{"port": p["port"], "protocol": p.get("protocol", "TCP")}
+                      for p in (pinhole_ports or [])],
+        }))
+        if pinhole_ports is not None:
+            svc_dir = location / "services" / service
+            svc_dir.mkdir(parents=True, exist_ok=True)
+            (svc_dir / "pinhole.json").write_text(json.dumps({"ports": pinhole_ports}))
+        return location
+
+    def _write_consumer(
+        self,
+        dir_: Path,
+        *,
+        vmname: str,
+        zone0: str,
+        depends_on: list[str],
+    ):
+        (dir_ / f"{vmname}.json").write_text(json.dumps({
+            "vmname": vmname,
+            "zone0": zone0,
+            "bridge0": "lan",
+            "dependsOn": depends_on,
+        }))
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.dir = Path(self.tmp.name)
+
+    def tearDown(self):
+        self.tmp.cleanup()
+
+    # ── happy path ───────────────────────────────────────────────────────
+
+    def test_cross_zone_dependency_emits_auto_pinhole(self):
+        # dmz -> srv-work: dmz IS in srv-work.pinhole-allowed-from
+        # dmz is NOT in srv-work.access-to → policy permits, no zone shortcut
+        # → auto-pinhole expected.
+        self._write_provider(
+            self.dir, vmname="api", zone0="srv-work",
+            pinhole_ports=[{"port": 4000, "protocol": "TCP", "description": "API"}],
+            service="rest",
+        )
+        self._write_consumer(
+            self.dir, vmname="ui", zone0="dmz",
+            depends_on=["api:rest", "cluster:vm"],
+        )
+        mgr = _make_manager(zones=self._make_zones(), modules_dir=self.dir)
+        rules, errors = mgr._compile(load_module(self.dir, "ui"))
+        self.assertEqual(errors, [])
+        descs = [r.description for r in rules]
+        self.assertIn("tappaas-svcdep:ui:rest:api:4000", descs)
+        rule = next(r for r in rules if r.description.startswith("tappaas-svcdep:"))
+        # Owner is the consumer
+        self.assertEqual(rule.module_name, "ui")
+        # Source is consumer's self alias, destination is provider's alias
+        self.assertEqual(rule.source_net, "tappaas_module_ui")
+        self.assertEqual(rule.destination_net, "tappaas_module_api")
+        # Sequence is in ingress band, in ui's slot
+        self.assertGreaterEqual(rule.sequence, BAND_INGRESS_BASE)
+        self.assertLess(rule.sequence, BAND_EGRESS_BASE)
+        slot = stable_hash_index("ui")
+        self.assertEqual(rule.sequence, BAND_INGRESS_BASE + slot * SLOT_SIZE)
+
+    def test_multiple_ports_emit_multiple_rules(self):
+        self._write_provider(
+            self.dir, vmname="api", zone0="srv-work",
+            pinhole_ports=[
+                {"port": 80,  "protocol": "TCP", "description": "HTTP"},
+                {"port": 443, "protocol": "TCP", "description": "HTTPS"},
+            ],
+            service="web",
+        )
+        self._write_consumer(
+            self.dir, vmname="ui", zone0="dmz",
+            depends_on=["api:web"],
+        )
+        mgr = _make_manager(zones=self._make_zones(), modules_dir=self.dir)
+        rules, _ = mgr._compile(load_module(self.dir, "ui"))
+        descs = {r.description for r in rules}
+        self.assertIn("tappaas-svcdep:ui:web:api:80", descs)
+        self.assertIn("tappaas-svcdep:ui:web:api:443", descs)
+
+    def test_non_tcp_protocol_appears_in_description(self):
+        self._write_provider(
+            self.dir, vmname="dns", zone0="srv-work",
+            pinhole_ports=[{"port": 53, "protocol": "UDP"}], service="resolver",
+        )
+        self._write_consumer(
+            self.dir, vmname="ui", zone0="dmz",
+            depends_on=["dns:resolver"],
+        )
+        mgr = _make_manager(zones=self._make_zones(), modules_dir=self.dir)
+        rules, _ = mgr._compile(load_module(self.dir, "ui"))
+        descs = {r.description for r in rules}
+        self.assertIn("tappaas-svcdep:ui:resolver:dns:53/UDP", descs)
+
+    # ── skip predicates ──────────────────────────────────────────────────
+
+    def test_intra_zone_dependency_emits_no_pinhole(self):
+        self._write_provider(
+            self.dir, vmname="api", zone0="srv-work",
+            pinhole_ports=[{"port": 4000}], service="rest",
+        )
+        self._write_consumer(
+            self.dir, vmname="ui", zone0="srv-work",  # same zone!
+            depends_on=["api:rest"],
+        )
+        mgr = _make_manager(zones=self._make_zones(), modules_dir=self.dir)
+        rules, _ = mgr._compile(load_module(self.dir, "ui"))
+        self.assertFalse(any(r.description.startswith("tappaas-svcdep:") for r in rules))
+
+    def test_access_to_covers_traffic_so_no_pinhole_needed(self):
+        # Make dmz appear in srv-work.access-to → zone-level rule already
+        # permits the traffic; the per-module pinhole is redundant.
+        zones = self._make_zones(**{"srv-work": {"access_to": ["internet", "dmz"]}})
+        self._write_provider(
+            self.dir, vmname="api", zone0="srv-work",
+            pinhole_ports=[{"port": 4000}], service="rest",
+        )
+        self._write_consumer(
+            self.dir, vmname="ui", zone0="dmz",
+            depends_on=["api:rest"],
+        )
+        mgr = _make_manager(zones=zones, modules_dir=self.dir)
+        rules, _ = mgr._compile(load_module(self.dir, "ui"))
+        self.assertFalse(any(r.description.startswith("tappaas-svcdep:") for r in rules))
+
+    def test_pinhole_allowed_from_violation_warns_and_skips(self):
+        # Override srv-work.pinhole-allowed-from to NOT include 'home',
+        # so the consumer (home) can't pinhole into srv-work.
+        # Per #173 design: skip with a warning, do not hard-error.
+        zones = self._make_zones(**{
+            "srv-work": {"pinhole_allowed_from": ["srv-work", "dmz"]},
+        })
+        self._write_provider(
+            self.dir, vmname="api", zone0="srv-work",
+            pinhole_ports=[{"port": 4000}], service="rest",
+        )
+        self._write_consumer(
+            self.dir, vmname="ui", zone0="home",
+            depends_on=["api:rest"],
+        )
+        mgr = _make_manager(zones=zones, modules_dir=self.dir)
+        rules, errors = mgr._compile(load_module(self.dir, "ui"))
+        # No errors — it's a warning, not an error
+        self.assertEqual(errors, [])
+        self.assertFalse(any(r.description.startswith("tappaas-svcdep:") for r in rules))
+
+    def test_service_without_pinhole_json_is_a_noop(self):
+        # Provider has no pinhole.json for the 'metrics' service → no rule.
+        self._write_provider(
+            self.dir, vmname="api", zone0="srv-work",
+            pinhole_ports=None, service="metrics",  # no pinhole.json written
+        )
+        self._write_consumer(
+            self.dir, vmname="ui", zone0="dmz",
+            depends_on=["api:metrics"],
+        )
+        mgr = _make_manager(zones=self._make_zones(), modules_dir=self.dir)
+        rules, _ = mgr._compile(load_module(self.dir, "ui"))
+        self.assertFalse(any(r.description.startswith("tappaas-svcdep:") for r in rules))
+
+    # ── alias provisioning ───────────────────────────────────────────────
+
+    def test_auto_pinhole_provider_alias_is_provisioned(self):
+        # The provider must show up in _peer_module_fqdn_aliases so that
+        # OPNsense gets its FQDN alias before any rule references it.
+        self._write_provider(
+            self.dir, vmname="api", zone0="srv-work",
+            pinhole_ports=[{"port": 4000}], service="rest",
+        )
+        self._write_consumer(
+            self.dir, vmname="ui", zone0="dmz",
+            depends_on=["api:rest"],
+        )
+        mgr = _make_manager(zones=self._make_zones(), modules_dir=self.dir)
+        consumer = load_module(self.dir, "ui")
+        aliases = mgr._peer_module_fqdn_aliases(consumer)
+        self.assertEqual(aliases["tappaas_module_api"], "api.srv-work.internal")
+        # And self alias is still emitted
+        self.assertEqual(aliases["tappaas_module_ui"], "ui.dmz.internal")
+
+
+# ─────────────────────────────────────────────────────────────────────────────
 # Sequence allocation
 # ─────────────────────────────────────────────────────────────────────────────
 

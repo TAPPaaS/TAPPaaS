@@ -56,8 +56,28 @@ INGRESS_COUNT=$(jq -r '(.ingress // []) | length' "${MODULE_JSON}")
 EGRESS_COUNT=$(jq -r '(.egress // []) | length' "${MODULE_JSON}")
 ALIAS_COUNT=$(jq -r '(.aliases // {}) | length' "${MODULE_JSON}")
 
-if (( INGRESS_COUNT == 0 && EGRESS_COUNT == 0 && ALIAS_COUNT == 0 )); then
-    info "  No ports/ingress/egress/aliases declared — nothing to apply."
+# Auto-pinholes (issue #173): even if the module has no manual ingress/egress/
+# aliases, rules-manager may still need to run when a dependsOn entry points
+# to a provider that ships a services/<svc>/pinhole.json. Detect that here so
+# we don't skip the apply step in the dependsOn-only case.
+HAS_AUTO_PINHOLE=0
+while read -r dep; do
+    [[ -z "$dep" ]] && continue
+    provider="${dep%%:*}"
+    service="${dep#*:}"
+    [[ -z "$provider" || -z "$service" || "$provider" == "$service" ]] && continue
+    PROVIDER_JSON="${CONFIG_DIR}/${provider}.json"
+    [[ -f "$PROVIDER_JSON" ]] || continue
+    location=$(jq -r '.location // empty' "$PROVIDER_JSON")
+    [[ -n "$location" ]] || continue
+    if [[ -f "${location}/services/${service}/pinhole.json" ]]; then
+        HAS_AUTO_PINHOLE=1
+        break
+    fi
+done < <(jq -r '(.dependsOn // [])[]' "${MODULE_JSON}")
+
+if (( INGRESS_COUNT == 0 && EGRESS_COUNT == 0 && ALIAS_COUNT == 0 && HAS_AUTO_PINHOLE == 0 )); then
+    info "  No ports/ingress/egress/aliases declared and no dependsOn pinholes — nothing to apply."
     info "${GN}firewall:rules install-service completed for ${MODULE} (no-op)${CL}"
     exit 0
 fi
