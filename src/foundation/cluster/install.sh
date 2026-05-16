@@ -259,6 +259,18 @@ msg_info "Install power top:"
 apt -y install powertop &>/dev/null || msg_error "apt update failed"
 msg_ok "Installed power top"
 
+msg_info "Install smartmontools:"
+apt -y install smartmontools &>/dev/null || msg_error "smartmontools install failed"
+msg_ok "Installed smartmontools"
+
+msg_info "Configuring SSD lifecycle management (autotrim + cron jobs)"
+curl -fsSL "${REPO}${BRANCH}/src/foundation/cluster/setup-ssd-lifecycle.sh" \
+    >/root/tappaas/setup-ssd-lifecycle.sh
+chmod 755 /root/tappaas/setup-ssd-lifecycle.sh
+/root/tappaas/setup-ssd-lifecycle.sh >/dev/null \
+    || msg_error "SSD lifecycle setup failed"
+msg_ok "Configured SSD lifecycle management"
+
 # msg_info "Install netbird client:"
 # curl -fsSL https://pkgs.netbird.io/install.sh | sh
 

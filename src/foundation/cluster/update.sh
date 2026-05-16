@@ -91,5 +91,27 @@ done <<< "$NODES"
 echo ""
 info "Files distributed to all Proxmox nodes."
 
+# Step 3: Refresh SSD lifecycle config on all nodes (issue #152).
+#   - re-asserts autotrim=on on any pools added since bootstrap
+#   - redeploys /etc/cron.weekly/tappaas-zpool-trim and
+#     /etc/cron.monthly/tappaas-ssd-health
+# smartmontools is ensured here so existing pre-#152 nodes get it too.
+echo ""
+info "${BOLD}Step 3: Refreshing SSD lifecycle configuration${CL}"
+while read -r node; do
+    NODE_FQDN="$node.$MGMTVLAN.internal"
+    echo ""
+    info "Deploying SSD lifecycle setup to $node..."
+    scp "${SCRIPT_DIR}/setup-ssd-lifecycle.sh" root@"$NODE_FQDN":/root/tappaas/
+    if ! ssh -n -o StrictHostKeyChecking=no root@"$NODE_FQDN" \
+        "apt -y install smartmontools >/dev/null 2>&1 && /root/tappaas/setup-ssd-lifecycle.sh"; then
+        warn "SSD lifecycle setup failed on $node"
+        continue
+    fi
+    info "$node SSD lifecycle setup complete."
+done <<< "$NODES"
+echo ""
+info "SSD lifecycle configuration refreshed on all Proxmox nodes."
+
 echo ""
 info "${GN}✓${CL} Cluster module update completed successfully."
