@@ -11,7 +11,7 @@ This package provides six command-line tools:
 | `opnsense-controller` | Main CLI with examples for VLANs, DHCP, and firewall management |
 | `opnsense-firewall` | Standalone firewall rule management (create, list, delete rules) |
 | `dns-manager` | DNS host entry management for Dnsmasq |
-| `zone-manager` | Automated zone configuration from zones.json |
+| `zone-manager` | Automated zone configuration from zones.json + static pinhole-allowed-from policy validator (issue #163) |
 | `caddy-manager` | Caddy reverse proxy domain and handler management |
 | `rules-manager` | Per-module firewall rules compiled from `module.json` (`firewall:rules` capability) |
 
@@ -546,13 +546,17 @@ caddy-manager list --no-ssl-verify
 
 ### Zone Manager (`zone-manager` command)
 
-The Zone Manager reads TAPPaaS zone definitions from `zones.json` and automatically configures VLANs and DHCP ranges for each enabled zone.
+The Zone Manager reads TAPPaaS zone definitions from `zones.json` and automatically configures VLANs and DHCP ranges for each enabled zone. `--summary` additionally runs the per-module **pinhole-allowed-from policy validator** (issue #163) — see [Pinhole-allowed-from validator](#pinhole-allowed-from-validator-issue-163) below.
 
 #### CLI Usage
 
 ```bash
-# Show zone summary (dry-run, no changes)
+# Show zone summary AND run the pinhole-allowed-from policy validator (dry-run)
+# Exits 2 if any module has a schema error, 0 otherwise (warnings allowed)
 ./result/bin/zone-manager --no-ssl-verify --summary
+
+# Summary with a custom modules directory (useful for CI / testing)
+./result/bin/zone-manager --no-ssl-verify --summary --modules-dir /tmp/test-modules
 
 # List current OPNsense VLAN and DHCP configuration
 ./result/bin/zone-manager --no-ssl-verify --list-config
@@ -599,8 +603,9 @@ The Zone Manager reads TAPPaaS zone definitions from `zones.json` and automatica
 | `--vlans-only` | Only configure VLANs, skip DHCP and firewall rules |
 | `--dhcp-only` | Only configure DHCP, skip VLANs and firewall rules |
 | `--firewall-rules-only` | Only configure firewall rules, skip VLANs and DHCP |
-| `--summary` | Only show zone summary, don't configure anything |
+| `--summary` | Show the zone summary AND run the pinhole-allowed-from policy validator (issue #163); don't configure anything. Exit 0 if at most warnings; exit 2 on any schema error. |
 | `--list-config` | List current OPNsense VLAN and DHCP configuration |
+| `--modules-dir PATH` | Directory containing `<module>.json` files used by the `--summary` validator (default: `/home/tappaas/config`) |
 
 #### Programmatic Usage
 
@@ -730,6 +735,87 @@ The Zone Manager expects zones.json in the following format:
   }
 }
 ```
+
+#### Pinhole-allowed-from validator (issue #163)
+
+`zones.json` declares — per zone — which **other** zones are allowed to open
+per-module pinholes **into** it via the `"pinhole-allowed-from"` list. The
+`rules-manager` already enforces this at install time when a consumer module's
+ingress rules are compiled; `zone-manager --summary` now runs the **same**
+check **statically** across every `module.json` on disk, so an operator can
+spot every policy mismatch in the deployed module set without having to
+install anything.
+
+For each module config in `--modules-dir` the validator:
+
+1. Parses the JSON. **Malformed JSON, ingress not an array, an ingress entry
+   without a `from` field, or an ingress `from` value that resolves to neither
+   a known zone nor a module on disk → schema error → exit code 2.**
+2. Resolves each `ingress[].from`:
+   - `"internet"` and `"alias:<name>"` are out of scope (no pinhole policy applies).
+   - A zone name resolves to itself as the source zone.
+   - A module name resolves to that module's `zone0` (peer's source zone).
+3. Walks the consumer module's `dependsOn` looking for `<provider>:<service>`
+   entries whose provider ships a `services/<service>/pinhole.json` — these
+   would trigger an auto-pinhole (issue #173) and the same policy gate applies.
+4. For every cross-zone case, checks whether the source zone is in the
+   destination zone's `pinhole-allowed-from`. **Policy mismatch → warning →
+   exit code 0** (the operator decides whether to amend `zones.json` or
+   the module).
+
+Each warning carries a `file:line` reference pointing at the offending entry
+in the source `.json` (best-effort, brace-counted; precise on pretty-printed
+JSON), the resolved source zone, the destination zone, the offending
+`pinhole-allowed-from` list, and a one-line remediation hint.
+
+Sample output:
+
+```text
+$ zone-manager --no-ssl-verify --summary
+Zone Summary:
+…  (zone table)  …
+Pinhole policy validation:
+--------------------------------------------------------------------------------
+[Warning]  /home/tappaas/config/bad-policy.json:6: [warn]  bad-policy:
+  ingress[0].from = 'private' (source zone 'private') would pinhole into 'srv',
+  but 'srv'.pinhole-allowed-from = ['dmz'] — policy denies. Add 'private' to
+  srv.pinhole-allowed-from in zones.json, or remove this entry.
+--------------------------------------------------------------------------------
+  Validation summary: 0 error(s), 1 warning(s)
+$ echo $?
+0
+```
+
+When everything complies the validator prints a one-line all-clear and exits 0.
+
+#### Programmatic validator usage
+
+```python
+from pathlib import Path
+from opnsense_controller.zone_manager import (
+    Zone,
+    ZoneManager,
+    validate_pinhole_allowed_from,
+    print_validation_report,
+)
+
+mgr = ZoneManager(config=None, zones_file="/path/to/zones.json", interface="vtnet1")
+mgr.load_zones()
+zones_map = {z.name: z for z in mgr.zones}
+
+warnings, errors = validate_pinhole_allowed_from(
+    zones_map, Path("/home/tappaas/config"),
+)
+print_validation_report(warnings, errors)
+
+# Or use it programmatically:
+for msg in warnings:
+    print(f"{msg.file_path}:{msg.line}  {msg.module}  {msg.text}")
+```
+
+Each `ValidationMessage` is `(severity, module, file_path, line, text)` —
+`severity` is `"warning"` or `"error"`, the former allowing exit 0 and the
+latter forcing exit 2.
 
 ### Rules Manager (`rules-manager` command)
 
