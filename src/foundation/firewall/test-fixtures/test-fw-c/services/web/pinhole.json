@@ -1,0 +1,6 @@
+{
+  "_comment": "Auto-pinhole declaration (#173) for the 'web' service exposed by test-fw-c. When a consumer in a different zone declares dependsOn ['test-fw-c:web'] and the zone-policy permits a pinhole, rules-manager synthesises an ingress rule for each port listed below.",
+  "ports": [
+    { "port": 9091, "protocol": "TCP", "description": "test-fw-c webserver — pinhole target for auto-pinhole live test" }
+  ]
+}

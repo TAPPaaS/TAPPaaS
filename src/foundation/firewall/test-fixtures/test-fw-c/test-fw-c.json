@@ -1,0 +1,24 @@
+{
+  "description": "Firewall test VM C — webserver in test3 zone (used by firewall/test.sh --deep). Provider for the auto-pinhole (#173) live test: consumer test-fw-a in test1 depends on test-fw-c:web, which triggers a cross-zone pinhole into test3 because test1 is in test3.pinhole-allowed-from but NOT in test3.access-to.",
+  "version": "0.1",
+  "vmname": "test-fw-c",
+  "vmid": 923,
+  "vmtag": "TAPPaaS,Test,Firewall",
+  "node": "tappaas1",
+  "cores": 1,
+  "memory": "1024",
+  "diskSize": "16G",
+  "storage": "tanka1",
+  "imageType": "clone",
+  "image": "8080",
+  "bridge0": "lan",
+  "zone0": "test3",
+  "ports": [
+    { "port": 9091, "protocol": "TCP", "description": "Test webserver, exposed via services/web/pinhole.json" }
+  ],
+  "provides": ["web"],
+  "dependsOn": [
+    "cluster:vm",
+    "templates:nixos"
+  ]
+}

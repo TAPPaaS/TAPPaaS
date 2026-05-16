@@ -147,6 +147,18 @@
         "access-to": ["internet", "test1", "dmz"],
         "pinhole-allowed-from": ["test1", "dmz"],
         "description": "Test zone 2 — Inactive by default; activated by firewall test.sh --deep to validate end-to-end inter-zone rules"
+    },
+    "test3": {
+        "type": "Test",
+        "state": "Inactive",
+        "typeId": "8",
+        "subId": "30",
+        "vlantag": 830,
+        "ip": "10.80.30.0/24",
+        "bridge": "lan",
+        "access-to": ["internet"],
+        "pinhole-allowed-from": ["test1"],
+        "description": "Test zone 3 — Inactive by default; activated by firewall test.sh --deep. Deliberately has 'test1' only in pinhole-allowed-from and NOT in access-to so a consumer in test1 must rely on an auto-pinhole (issue #173) to reach a provider in test3."
     }
 
 }

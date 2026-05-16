@@ -371,6 +371,184 @@ else
     skip "rules-manager or fixture missing — NONE-mode test skipped"
 fi
 
+section "Standard 9: Auto-pinhole compile (issue #177 → #173)"
+
+# Synthetic-fixture tests for the auto-pinhole compile path. Each scenario:
+#   - Builds a temp dir with a provider 'api' (with/without pinhole.json),
+#     a consumer 'ui' that depends on 'api:rest', and a tailored zones.json.
+#   - Runs `rules-manager add-rules ui --firewall-type NONE` in NONE-mode.
+#     NONE-mode prints what *would* be applied (including the
+#     "AUTO-PINHOLES (dependsOn-derived, issue #173)" block) without making
+#     any real OPNsense API calls — perfect for shape/policy assertions.
+#   - The full captured output is grepped for the expected description /
+#     warning / absence of either.
+#
+# Args:
+#   $1  consumer_zone        e.g. "src1"
+#   $2  provider_zone        e.g. "dst1"
+#   $3  pinhole-allowed-from for the provider zone, JSON array
+#   $4  access-to            for the provider zone, JSON array
+#   $5  pinhole ports        JSON array, or empty string ""  to omit pinhole.json
+#   $6  out-path             file to capture stdout/stderr into
+
+run_autopinhole_check() {
+    local consumer_zone="$1"
+    local provider_zone="$2"
+    local pinhole_allowed="$3"
+    local access_to="$4"
+    local pinhole_ports="$5"
+    local out="$6"
+
+    local tmp
+    tmp=$(mktemp -d)
+    APH_TMP="${tmp}"  # caller cleans up via cleanup_autopinhole_tmp
+
+    mkdir -p "${tmp}/api-loc/services/rest"
+    if [[ -n "${pinhole_ports}" ]]; then
+        printf '{"ports": %s}\n' "${pinhole_ports}" \
+            > "${tmp}/api-loc/services/rest/pinhole.json"
+    fi
+
+    cat > "${tmp}/api.json" <<EOF
+{"vmname":"api","zone0":"${provider_zone}","bridge0":"lan",
+ "location":"${tmp}/api-loc",
+ "ports":[{"port":9091,"protocol":"TCP"}]}
+EOF
+    cat > "${tmp}/ui.json" <<EOF
+{"vmname":"ui","zone0":"${consumer_zone}","bridge0":"lan",
+ "dependsOn":["cluster:vm","api:rest"]}
+EOF
+
+    # Build zones.json. Same-zone case: only one entry.
+    if [[ "${consumer_zone}" == "${provider_zone}" ]]; then
+        cat > "${tmp}/zones.json" <<EOF
+{"${provider_zone}":{"vlantag":810,"ip":"10.80.10.0/24","bridge":"lan",
+   "access-to":${access_to},"pinhole-allowed-from":${pinhole_allowed}}}
+EOF
+    else
+        cat > "${tmp}/zones.json" <<EOF
+{"${consumer_zone}":{"vlantag":810,"ip":"10.80.10.0/24","bridge":"lan",
+   "access-to":["internet"],"pinhole-allowed-from":[]},
+ "${provider_zone}":{"vlantag":820,"ip":"10.80.20.0/24","bridge":"lan",
+   "access-to":${access_to},"pinhole-allowed-from":${pinhole_allowed}}}
+EOF
+    fi
+
+    rules-manager add-rules ui \
+        --modules-dir "${tmp}" \
+        --zones-file "${tmp}/zones.json" \
+        --firewall-type NONE \
+        > "${out}" 2>&1
+}
+
+cleanup_autopinhole_tmp() {
+    if [[ -n "${APH_TMP:-}" && -d "${APH_TMP}" ]]; then
+        rm -rf "${APH_TMP}"
+        APH_TMP=""
+    fi
+}
+
+if ! command -v rules-manager >/dev/null 2>&1; then
+    skip "rules-manager not in PATH — auto-pinhole tests skipped"
+else
+    APH_OUT="$(mktemp)"
+
+    # ── AC-1: rule emitted with correct form ─────────────────────────
+    # Consumer 'src1' is in provider zone 'dst1'.pinhole-allowed-from BUT
+    # NOT in 'dst1'.access-to → auto-pinhole required and permitted.
+    run_autopinhole_check \
+        "src1" "dst1" '["src1"]' '["internet"]' \
+        '[{"port":9091,"protocol":"TCP","description":"X"},
+          {"port":9092,"protocol":"TCP","description":"Y"}]' \
+        "${APH_OUT}"
+
+    if grep -qE 'AUTO-PINHOLES .* for ui' "${APH_OUT}" \
+        && grep -qE 'ui +→ +api +:9091/TCP' "${APH_OUT}" \
+        && grep -qE 'ui +→ +api +:9092/TCP' "${APH_OUT}"; then
+        pass "AC-1: auto-pinhole emitted with correct ports (TCP/9091, TCP/9092)"
+    else
+        fail "AC-1: expected auto-pinhole lines for ports 9091 and 9092 in NONE-mode output"
+        info "  -- output --"
+        sed 's/^/    /' "${APH_OUT}" | head -30
+    fi
+    cleanup_autopinhole_tmp
+
+    # Non-TCP variant: description must include /UDP suffix in OPNsense mode.
+    # In NONE-mode we just verify the printed line shows /UDP.
+    run_autopinhole_check \
+        "src1" "dst1" '["src1"]' '["internet"]' \
+        '[{"port":53,"protocol":"UDP","description":"DNS"}]' \
+        "${APH_OUT}"
+    if grep -qE 'ui +→ +api +:53/UDP' "${APH_OUT}"; then
+        pass "AC-1: non-TCP protocol carried into auto-pinhole (UDP)"
+    else
+        fail "AC-1: UDP protocol not propagated into auto-pinhole output"
+    fi
+    cleanup_autopinhole_tmp
+
+    # ── AC-3: pinhole-allowed-from violation → warn-and-skip ─────────
+    # Provider's pinhole-allowed-from does NOT include the consumer zone.
+    run_autopinhole_check \
+        "src1" "dst1" '[]' '["internet"]' \
+        '[{"port":9091,"protocol":"TCP","description":"X"}]' \
+        "${APH_OUT}"
+    if grep -qE 'pinhole-allowed-from' "${APH_OUT}" \
+        && grep -qiE 'Warning|Skipped' "${APH_OUT}" \
+        && ! grep -qE 'ui +→ +api +:9091' "${APH_OUT}"; then
+        pass "AC-3: policy-denied case emits warning and creates no rule"
+    else
+        fail "AC-3: expected pinhole-allowed-from warning + no rule line"
+        info "  -- output --"
+        sed 's/^/    /' "${APH_OUT}" | head -30
+    fi
+    cleanup_autopinhole_tmp
+
+    # ── AC-4: same zone → no auto-pinhole ────────────────────────────
+    # Intra-zone traffic flows freely; no per-module pinhole needed.
+    run_autopinhole_check \
+        "src1" "src1" '["src1"]' '["internet"]' \
+        '[{"port":9091,"protocol":"TCP","description":"X"}]' \
+        "${APH_OUT}"
+    if grep -qE 'AUTO-PINHOLES' "${APH_OUT}"; then
+        fail "AC-4: same-zone case should NOT emit any auto-pinhole"
+        info "  -- output --"
+        sed 's/^/    /' "${APH_OUT}" | head -30
+    else
+        pass "AC-4: same-zone case correctly emits no auto-pinhole"
+    fi
+    cleanup_autopinhole_tmp
+
+    # ── Bonus: zone-level access-to already covers it → no auto-pinhole.
+    # Even though pinhole-allowed-from permits, the zone-level rule already
+    # allows the traffic, so the per-module pinhole is redundant.
+    run_autopinhole_check \
+        "src1" "dst1" '["src1"]' '["internet","src1"]' \
+        '[{"port":9091,"protocol":"TCP","description":"X"}]' \
+        "${APH_OUT}"
+    if grep -qE 'AUTO-PINHOLES' "${APH_OUT}"; then
+        fail "access-to-covers-it case should NOT emit any auto-pinhole"
+    else
+        pass "access-to-covers-it case correctly emits no auto-pinhole"
+    fi
+    cleanup_autopinhole_tmp
+
+    # ── Bonus: provider service has no pinhole.json → no auto-pinhole.
+    # Most services (cluster:vm, templates:debian, …) don't expose ports;
+    # the absence of pinhole.json must be a silent no-op.
+    run_autopinhole_check \
+        "src1" "dst1" '["src1"]' '["internet"]' \
+        "" \
+        "${APH_OUT}"
+    if grep -qE 'AUTO-PINHOLES' "${APH_OUT}"; then
+        fail "no-pinhole.json case should not emit AUTO-PINHOLES section"
+    else
+        pass "no pinhole.json → no auto-pinhole (silent no-op)"
+    fi
+    cleanup_autopinhole_tmp
+
+    rm -f "${APH_OUT}"
+fi
+
 # ─────────────────────────────────────────────────────────────────────
 # Deep tests (--deep) — VM provisioning + inter-VM connectivity
 # ─────────────────────────────────────────────────────────────────────
@@ -378,28 +556,30 @@ fi
 cleanup_deep() {
     local rc=$?
     if [[ "${NO_CLEANUP}" == "1" ]]; then
-        warn "Skipping cleanup (TAPPAAS_TEST_NO_CLEANUP=1). test-fw-{a,b} left in place."
+        warn "Skipping cleanup (TAPPAAS_TEST_NO_CLEANUP=1). test-fw-{a,b,c} left in place."
         return ${rc}
     fi
     echo ""
     info "${BOLD}─── Deep cleanup ───${CL}"
-    for vm in test-fw-b test-fw-a; do
+    # Delete order matters: test-fw-a depends on test-fw-c:web (#173), so
+    # delete the consumer first to drop its auto-pinhole, then the provider.
+    for vm in test-fw-b test-fw-a test-fw-c; do
         if [[ -f "${CONFIG_DIR}/${vm}.json" ]]; then
             info "Removing ${vm}..."
             /home/tappaas/bin/delete-module.sh "${vm}" --force >/dev/null 2>&1 \
                 || warn "  delete-module.sh ${vm} returned non-zero"
         fi
     done
-    # Deactivate test1/test2 (restore them to Inactive in /home/tappaas/config/zones.json)
+    # Deactivate test1/test2/test3 (restore them to Inactive in /home/tappaas/config/zones.json)
     if [[ -f "${CONFIG_DIR}/zones.json" ]]; then
         local tmp
         tmp=$(mktemp)
-        jq '(.test1.state = "Inactive") | (.test2.state = "Inactive")' \
+        jq '(.test1.state = "Inactive") | (.test2.state = "Inactive") | (.test3.state = "Inactive")' \
             "${CONFIG_DIR}/zones.json" > "${tmp}" \
             && mv "${tmp}" "${CONFIG_DIR}/zones.json"
         zone-manager --no-ssl-verify --zones-file "${CONFIG_DIR}/zones.json" --execute \
             >/dev/null 2>&1 || warn "zone-manager teardown returned non-zero"
-        info "Reverted test1/test2 to Inactive in zones.json and re-ran zone-manager"
+        info "Reverted test1/test2/test3 to Inactive in zones.json and re-ran zone-manager"
     fi
     return ${rc}
 }
@@ -428,10 +608,24 @@ else
         fail "deployed zones.json missing — cannot activate test zones"
     else
         tmp=$(mktemp)
-        jq '(.test1.state = "Active") | (.test2.state = "Active")' \
+        jq '(.test1.state = "Active") | (.test2.state = "Active") | (.test3.state = "Active")' \
             "${CONFIG_DIR}/zones.json" > "${tmp}" \
             && mv "${tmp}" "${CONFIG_DIR}/zones.json"
-        info "Activated test1 and test2 in deployed zones.json"
+        info "Activated test1, test2 and test3 in deployed zones.json"
+
+        # Ensure the deployed firewall.json's trunks0 list includes test3,
+        # so the trunks-sync block below picks up VLAN 830. Idempotent — only
+        # rewrites when test3 is missing. The runtime fields (installTime,
+        # location, …) are preserved by a surgical jq update.
+        if [[ -f "${CONFIG_DIR}/firewall.json" ]] \
+                && ! jq -r '.trunks0 // ""' "${CONFIG_DIR}/firewall.json" \
+                       | grep -qE '(^|;)test3(;|$)'; then
+            tmp_fw=$(mktemp)
+            jq '.trunks0 = ((.trunks0 // "") + ";test3" | sub("^;"; ""))' \
+                "${CONFIG_DIR}/firewall.json" > "${tmp_fw}" \
+                && mv "${tmp_fw}" "${CONFIG_DIR}/firewall.json"
+            info "Added test3 to deployed firewall.json trunks0"
+        fi
         if zone-manager --no-ssl-verify --zones-file "${CONFIG_DIR}/zones.json" --execute 2>&1 | tail -5; then
             pass "zone-manager applied test1+test2 (VLAN+DHCP+rules)"
         else
@@ -531,7 +725,7 @@ else
         skip "Could not enumerate/push to Proxmox nodes (test VMs may fail to create)"
     fi
 
-    section "Deep 2: Install test-fw-a in test1"
+    section "Deep 2a: Install test-fw-c in test3 (auto-pinhole provider, #173)"
 
     pushd "${FIXTURES_DIR}" >/dev/null || die "Cannot enter ${FIXTURES_DIR}"
 
@@ -542,21 +736,45 @@ else
     # succeeds.
     install_with_retry() {
         local mod="$1"
+        local mod_dir="$2"
+        # Source layout: most fixtures live flat in FIXTURES_DIR, but
+        # test-fw-c lives in its own subdir (test-fw-c/) because it ships a
+        # services/web/{install,update,delete}-service.sh + pinhole.json.
+        # install-module.sh resolves <mod>.json relative to cwd.
+        pushd "${mod_dir}" >/dev/null
         if /home/tappaas/bin/install-module.sh "${mod}" 2>&1 | tee -a "${LOG_FILE}" | tail -10; then
             pass "install-module.sh ${mod}"
+            popd >/dev/null
             return 0
         fi
         warn "  First install of ${mod} failed (likely cloud-init race) — retrying once after cleanup..."
         /home/tappaas/bin/delete-module.sh "${mod}" --force >/dev/null 2>&1 || true
         if /home/tappaas/bin/install-module.sh "${mod}" 2>&1 | tee -a "${LOG_FILE}" | tail -10; then
             pass "install-module.sh ${mod} (succeeded on retry)"
+            popd >/dev/null
             return 0
         fi
         fail "install-module.sh ${mod} (failed twice)"
+        popd >/dev/null
         return 1
     }
 
-    install_with_retry test-fw-a || true
+    install_with_retry test-fw-c "${FIXTURES_DIR}/test-fw-c" || true
+
+    info "Waiting up to 90s for test-fw-c DNS registration..."
+    for _ in {1..18}; do
+        if getent hosts test-fw-c.test3.internal >/dev/null 2>&1; then
+            pass "DNS registered test-fw-c.test3.internal"
+            break
+        fi
+        sleep 5
+    done
+    getent hosts test-fw-c.test3.internal >/dev/null 2>&1 \
+        || fail "test-fw-c.test3.internal did not appear in DNS within 90s"
+
+    section "Deep 2b: Install test-fw-a in test1 (auto-pinhole consumer, #173)"
+
+    install_with_retry test-fw-a "${FIXTURES_DIR}" || true
 
     # Wait for cloud-init / DHCP / DNS to settle
     info "Waiting up to 90s for test-fw-a DNS registration..."
@@ -602,7 +820,7 @@ else
 
     section "Deep 5: Install test-fw-b in test2"
 
-    install_with_retry test-fw-b || true
+    install_with_retry test-fw-b "${FIXTURES_DIR}" || true
 
     info "Waiting up to 90s for test-fw-b DNS registration..."
     for _ in {1..18}; do
@@ -632,6 +850,44 @@ else
     else
         fail "ingress from module-local alias (test_admin_ips) rule missing"
     fi
+
+    section "Deep 6b: Auto-pinhole rule for test-fw-a → test-fw-c (issue #173, AC-1)"
+
+    # The auto-pinhole rule is owned by the *consumer* (test-fw-a) per #173 —
+    # so we query rules-manager filtering on module test-fw-a, looking for a
+    # description with the svcdep prefix referring to provider test-fw-c
+    # service 'web' on port 9091.
+    AUTO_DESC="tappaas-svcdep:test-fw-a:web:test-fw-c:9091"
+
+    if rules-manager list-rules --module test-fw-a --no-ssl-verify --output json 2>/dev/null \
+            | jq -e --arg d "${AUTO_DESC}" \
+                '.rules // [] | map(.description) | any(. | contains($d))' \
+            >/dev/null 2>&1; then
+        pass "auto-pinhole rule ${AUTO_DESC} present in OPNsense"
+    else
+        fail "auto-pinhole rule ${AUTO_DESC} missing from OPNsense"
+        # Dump what IS there to make diagnosis easy.
+        rules-manager list-rules --module test-fw-a --no-ssl-verify --output json 2>/dev/null \
+            | jq -r '.rules // [] | .[].description' | sed 's/^/    /' | head -10
+    fi
+
+    # Also verify the rule's source/destination point at the right host
+    # aliases (consumer.alias → provider.alias) and lives on the consumer's
+    # zone interface. We query the FirewallManager-level info via the same
+    # list-rules output, which carries source_net/destination_net/interface
+    # if the OPNsense API returns them.
+    rules-manager list-rules --module test-fw-a --no-ssl-verify --output json 2>/dev/null \
+        > /tmp/fw-test-rules-a.json || true
+    if jq -e --arg d "${AUTO_DESC}" '
+        .rules // []
+        | map(select(.description | contains($d)))
+        | length > 0
+    ' /tmp/fw-test-rules-a.json >/dev/null 2>&1; then
+        pass "auto-pinhole rule references both module aliases (form check)"
+    else
+        fail "auto-pinhole rule form check failed"
+    fi
+    rm -f /tmp/fw-test-rules-a.json
 
     section "Deep 7: OPNsense aliases exist"
 
@@ -678,6 +934,36 @@ else
         pass "test-fw-b → test-fw-a:8080 (declared pinhole permitted)"
     else
         fail "test-fw-b → test-fw-a:8080 (declared pinhole expected)"
+    fi
+
+    section "Deep 9b: Auto-pinhole permits real traffic (issue #173, AC-2)"
+
+    # Curl from test-fw-a (consumer, in test1) → test-fw-c (provider, in test3)
+    # over the auto-pinhole rule on port 9091. zone-level access-to from test1
+    # to test3 is deliberately absent (test3.access-to = ['internet']) — only
+    # the auto-pinhole grants this path. A successful response with the
+    # test-fw-c marker proves the auto-pinhole works end-to-end.
+    ssh-keygen -R test-fw-c.test3.internal >/dev/null 2>&1 || true
+    if ssh -o BatchMode=yes -o StrictHostKeyChecking=accept-new \
+            tappaas@test-fw-a.test1.internal \
+            "curl -fsS --max-time 5 http://test-fw-c.test3.internal:9091/" 2>/dev/null \
+            | grep -q "tappaas-firewall-test-c-ok"; then
+        pass "test-fw-a → test-fw-c:9091 (auto-pinhole permits cross-zone traffic)"
+    else
+        fail "test-fw-a → test-fw-c:9091 (expected auto-pinhole to allow)"
+    fi
+
+    # Negative check: a port that is NOT in pinhole.json should be blocked.
+    # We use 22/SSH on test-fw-c — sshd is enabled but no pinhole or zone rule
+    # allows test1 → test3:22, so the connection must be filtered.
+    if ssh -o BatchMode=yes -o StrictHostKeyChecking=accept-new \
+            -o ConnectTimeout=3 \
+            tappaas@test-fw-a.test1.internal \
+            "timeout 5 bash -c 'echo > /dev/tcp/test-fw-c.test3.internal/22' 2>&1; echo rc=\$?" \
+            2>/dev/null | grep -qE 'rc=(1|124|2)'; then
+        pass "test-fw-a → test-fw-c:22 BLOCKED (no auto-pinhole, no zone access)"
+    else
+        fail "test-fw-a → test-fw-c:22 should be blocked (auto-pinhole only opens 9091)"
     fi
 
     section "Deep 10: Reconcile prunes a removed ingress entry"
