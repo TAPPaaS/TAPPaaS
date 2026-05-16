@@ -1,5 +1,31 @@
 # Issue: test-debian-srv-lan2 toont geen IP in PVE (geen guest-agent)
 
+> **Status: RESOLVED (2026-05-16) — fix shipped as part of issue #147.**
+> Optie B is gekozen: een cloud-init vendor-data snippet
+> ([src/foundation/cluster/snippets/tappaas-debian-vendor.yaml](../../cluster/snippets/tappaas-debian-vendor.yaml))
+> wordt voor Debian/Ubuntu VMs aan `qm set --cicustom vendor=...` gehangen door
+> [Create-TAPPaaS-VM.sh](../../cluster/Create-TAPPaaS-VM.sh), zodat
+> `qemu-guest-agent` al bij de eerste boot draait. `update-os.sh`
+> hoeft niet meer terug te vallen op het lezen van `dnsmasq.leases` op de
+> mgmt-firewall — `get_vm_ip_guest_agent` werkt nu meteen voor elke zone.
+>
+> **Validatie** (srv-zone, vlan 210, pfSense DHCP, test uitgevoerd op tappaas3
+> omdat tappaas2 op dat moment vastzit op een D-state `zfs recv` voor
+> vm-110-disk-0 — zie aparte ticket):
+> - VM krijgt IP `10.2.10.185` (srv-subnet) via guest-agent na **93s**
+>   post-`qm start`.
+> - `wait_for_vm_ip` slaagt op Attempt 1/30 (was hangen).
+> - Hostname, SSH-keys, en `tappaas`-user werken zoals beoogd.
+>
+> De originele kip-en-ei is dus structureel opgelost. De DHCP-fallback in
+> `get_vm_ip_dhcp` (mgmt-firewall only) blijft als veiligheidsnet bestaan,
+> maar wordt onder normale omstandigheden niet meer geraakt.
+
+---
+
+## Originele analyse (historisch)
+
+
 ## Symptoom
 `test-debian-srv-lan2.json` heeft `"dependsOn": ["cluster:vm", "templates:debian"]` — identiek aan het werkende `test-debian.json`. De VM krijgt wél een IP (pfSense dient DHCP op `lan2`), maar:
 - Proxmox toont geen IP in de GUI-kolom.

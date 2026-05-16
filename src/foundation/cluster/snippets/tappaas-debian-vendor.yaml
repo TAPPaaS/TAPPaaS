@@ -1,0 +1,20 @@
+#cloud-config
+# TAPPaaS Debian/Ubuntu vendor-data (issue #147)
+#
+# Attached via `qm set <vmid> --cicustom vendor=local:snippets/tappaas-debian-vendor.yaml`
+# by Create-TAPPaaS-VM.sh for VMs whose `os` is debian or ubuntu (or whose image
+# filename matches debian-*/ubuntu-* when `os` is unset).
+#
+# Solves the bootstrap chicken-and-egg: vanilla Debian cloud images ship without
+# qemu-guest-agent, so Proxmox cannot read the VM IP, so the installer cannot
+# SSH in to install the agent. This snippet installs it on first boot.
+#
+# Idempotent: safe to attach even to images that already have qemu-guest-agent
+# baked in (e.g. future Packer-built tappaas-debian image) — apt is a no-op and
+# `systemctl enable --now` on an already-running unit is a no-op.
+
+package_update: true
+packages:
+  - qemu-guest-agent
+runcmd:
+  - [ systemctl, enable, --now, qemu-guest-agent ]

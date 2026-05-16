@@ -9,7 +9,7 @@
         "maintainer", "status", "location",
         "vmname", "vmid", "vmtag", "node",
         "bios", "ostype", "cputype", "cores", "memory", "diskSize", "storage",
-        "imageType", "image", "imageLocation", "cloudInit",
+        "imageType", "image", "imageLocation", "os", "cloudInit",
         "HANode", "replicationSchedule",
         "bridge0", "mac0", "zone0", "trunks0",
         "bridge1", "mac1", "zone1", "trunks1",
@@ -281,6 +281,22 @@
             "format": "^https?://.+$",
             "example": "https://releases.ubuntu.com/24.04/",
             "note": "For apt, if present, names an additional package repository to load"
+        },
+
+        "os": {
+            "description": "Operating system family of the VM. Drives OS-specific cloud-init bootstrapping (e.g. attaching the Debian vendor-data snippet that pre-installs qemu-guest-agent).",
+            "type": "string",
+            "requiredBy": [],
+            "usedBy": "cluster:vm",
+            "default": "<auto-detected from image filename: debian-*, ubuntu-*, *nixos* -> matching value; else unknown>",
+            "values": {
+                "debian": "Debian-family cloud image (apt). Receives the tappaas-debian vendor-data snippet.",
+                "ubuntu": "Ubuntu-family cloud image (apt). Receives the tappaas-debian vendor-data snippet.",
+                "nixos": "NixOS template VM. No vendor-data snippet.",
+                "unknown": "OS family is unknown. No vendor-data snippet."
+            },
+            "example": "debian",
+            "note": "Optional. If omitted, Create-TAPPaaS-VM.sh falls back to sniffing the 'image' filename. Set explicitly to override the sniff."
         },
 
         "cloudInit": {

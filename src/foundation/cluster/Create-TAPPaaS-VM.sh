@@ -247,6 +247,22 @@ fi
 CLOUDINIT="$(get_config_value 'cloudInit' 'true')"
 DESCRIPTION="$(get_config_value 'description')"
 
+# OS family (issue #147): drives OS-specific cloud-init bootstrapping (Debian
+# vendor-data snippet to pre-install qemu-guest-agent). Read explicit `os`
+# manifest field if present; otherwise sniff the image filename for
+# backwards-compat with all existing module JSONs.
+# get_config_value treats an empty default as "required field" and errors out,
+# so use a sentinel that cannot collide with a real value.
+OS_FAMILY="$(get_config_value 'os' '__auto__')"
+if [[ "$OS_FAMILY" == "__auto__" ]]; then
+  case "${IMAGE,,}" in
+    debian-*)          OS_FAMILY="debian" ;;
+    ubuntu-*)          OS_FAMILY="ubuntu" ;;
+    *nixos*)           OS_FAMILY="nixos" ;;
+    *)                 OS_FAMILY="unknown" ;;
+  esac
+fi
+
 # not needed if clone, but no harm either
 DISK0="vm-${VMID}-disk-0"
 DISK0_REF=${STORAGE}:${DISK0}
@@ -443,6 +459,19 @@ if [[ "$CLOUDINIT" == "true" ]]; then
     qm set $VMID --sshkey ~/.ssh/id_rsa.pub >/dev/null
   elif [[ -f ~/tappaas/tappaas-cicd.pub ]]; then
     qm set $VMID --sshkey ~/tappaas/tappaas-cicd.pub >/dev/null
+  fi
+  # Debian/Ubuntu vendor-data snippet (issue #147): pre-installs
+  # qemu-guest-agent so Proxmox can see the VM IP before SSH bootstrap.
+  # Vendor-data layers on top of Proxmox's generated user-data; ciuser,
+  # sshkey, hostname and ipconfig0 above still apply.
+  if [[ "$OS_FAMILY" == "debian" || "$OS_FAMILY" == "ubuntu" ]]; then
+    if [[ -f /var/lib/vz/snippets/tappaas-debian-vendor.yaml ]]; then
+      qm set $VMID --cicustom "vendor=local:snippets/tappaas-debian-vendor.yaml" >/dev/null
+      info " - Attached Debian vendor-data snippet (qemu-guest-agent on first boot)"
+    else
+      info " - WARNING: $OS_FAMILY VM but vendor-data snippet not present on this node;"
+      info "   guest-agent will not be pre-installed (run cluster update.sh to deploy it)"
+    fi
   fi
   info " - Hostname set to $VMNAME via cloud-init"
   qm cloudinit update $VMID >/dev/null

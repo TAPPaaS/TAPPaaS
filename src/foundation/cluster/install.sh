@@ -255,6 +255,29 @@ msg_info "Copy zones.json"
 curl -fsSL  ${REPO}${BRANCH}/src/foundation/firewall/zones.json >~/tappaas/zones.json
 msg_ok "Copied zones.json"
 
+# Debian/Ubuntu cloud-init vendor-data snippet (issue #147).
+# Pre-installs qemu-guest-agent on first boot so Proxmox can see the VM IP
+# before SSH bootstrap. /etc/pve/storage.cfg is cluster-wide; the pvesm set
+# only takes effect on the first node to run it, the others see it via PVE.
+msg_info "Enabling 'snippets' content type on 'local' storage"
+# Parse the current content list from storage.cfg (there is no `pvesm config`
+# subcommand). pvesm set --content REPLACES the list, so we must preserve it.
+current_content="$(awk '/^dir: local$/{f=1; next} f && /^[a-z]+:/{f=0} f && /^[[:space:]]*content[[:space:]]/{print $2; exit}' /etc/pve/storage.cfg)"
+if [[ -z "$current_content" ]]; then
+  msg_error "Could not read content list for 'local' storage from /etc/pve/storage.cfg"
+elif ! echo "$current_content" | grep -qw snippets; then
+  pvesm set local --content "${current_content},snippets" >/dev/null \
+    || msg_error "Failed to enable snippets on local storage"
+fi
+msg_ok "Enabled 'snippets' content type on 'local' storage"
+
+msg_info "Copy Debian vendor-data snippet"
+mkdir -p /var/lib/vz/snippets
+curl -fsSL ${REPO}${BRANCH}/src/foundation/cluster/snippets/tappaas-debian-vendor.yaml \
+  >/var/lib/vz/snippets/tappaas-debian-vendor.yaml
+chmod 644 /var/lib/vz/snippets/tappaas-debian-vendor.yaml
+msg_ok "Copied Debian vendor-data snippet"
+
 msg_info "Install power top:"
 apt -y install powertop &>/dev/null || msg_error "apt update failed"
 msg_ok "Installed power top"

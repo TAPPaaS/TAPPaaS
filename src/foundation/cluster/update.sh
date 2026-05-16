@@ -87,6 +87,24 @@ while read -r node; do
     info "Copying zones.json and Create-TAPPaaS-VM.sh to $node..."
     scp /home/tappaas/config/zones.json root@"$NODE_FQDN":/root/tappaas/
     scp "${SCRIPT_DIR}/Create-TAPPaaS-VM.sh" root@"$NODE_FQDN":/root/tappaas/
+
+    # Debian/Ubuntu cloud-init vendor-data snippet (issue #147). Must live at
+    # /var/lib/vz/snippets/ to be referenced as 'local:snippets/...' in qm.
+    info "Deploying Debian vendor-data snippet to $node..."
+    ssh -n -o StrictHostKeyChecking=no root@"$NODE_FQDN" "mkdir -p /var/lib/vz/snippets"
+    scp "${SCRIPT_DIR}/snippets/tappaas-debian-vendor.yaml" \
+        root@"$NODE_FQDN":/var/lib/vz/snippets/tappaas-debian-vendor.yaml
+    # Ensure 'snippets' is in local storage content types (idempotent;
+    # /etc/pve/storage.cfg is cluster-wide so only the first node matters).
+    # Parse storage.cfg directly: there is no `pvesm config` subcommand, and
+    # `pvesm set --content` REPLACES the list, so we must preserve it.
+    ssh -n -o StrictHostKeyChecking=no root@"$NODE_FQDN" "\
+        current=\$(awk '/^dir: local\$/{f=1; next} f && /^[a-z]+:/{f=0} f && /^[[:space:]]*content[[:space:]]/{print \$2; exit}' /etc/pve/storage.cfg); \
+        if [ -z \"\$current\" ]; then \
+            echo 'WARN: could not read content list for local storage'; \
+        elif ! echo \"\$current\" | grep -qw snippets; then \
+            pvesm set local --content \"\${current},snippets\" >/dev/null; \
+        fi" || warn "Failed to enable snippets on local storage on $node"
 done <<< "$NODES"
 echo ""
 info "Files distributed to all Proxmox nodes."
