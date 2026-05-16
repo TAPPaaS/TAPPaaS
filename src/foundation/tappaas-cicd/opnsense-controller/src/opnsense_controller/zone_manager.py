@@ -26,6 +26,13 @@ from .firewall_manager import FirewallManager, FirewallRule, FirewallRuleInfo, R
 from .log import debug, error, info, warn
 from .vlan_manager import Vlan, VlanManager
 
+# Modules whose JSON files exist in the config directory but are NOT consumer
+# modules — never apply per-module firewall validation to these.
+_NON_MODULE_STEMS: frozenset[str] = frozenset(
+    {"configuration", "firewall", "zones", "aliases",
+     "sequence-map", "module-fields"}
+)
+
 
 @dataclass
 class Zone:
@@ -122,6 +129,337 @@ class Zone:
     def dhcp_description(self) -> str:
         """Get the standard DHCP range description for this zone."""
         return f"{self.name} DHCP"
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# pinhole-allowed-from validator (issue #163)
+#
+# zones.json declares, per zone, which OTHER zones may open per-module pinholes
+# INTO it via the "pinhole-allowed-from" list. The rules_manager enforces this
+# at compile time when a module is installed; this validator does the same
+# check statically — without touching OPNsense — across every module.json on
+# disk, so an operator can run `zone-manager --summary` and immediately see
+# every policy mismatch in the deployed module set.
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+@dataclass
+class ValidationMessage:
+    """A single warning or schema error emitted by the validator."""
+
+    severity: str        # "error" | "warning"
+    module: str          # module's vmname (or filename stem if vmname missing)
+    file_path: str
+    line: int            # 1-based; 1 when no precise location is available
+    text: str
+
+
+def discover_module_files(modules_dir: Path) -> list[Path]:
+    """Return module.json file paths from `modules_dir`, sorted by name.
+
+    Skips well-known non-module JSON files (configuration.json, zones.json,
+    firewall.json, etc.) and `.orig` backup files.
+    """
+    if not modules_dir.is_dir():
+        return []
+    return sorted(
+        p for p in modules_dir.glob("*.json")
+        if p.stem not in _NON_MODULE_STEMS and not p.name.endswith(".orig")
+    )
+
+
+def _find_field_line(text: str, search: str) -> int:
+    """Best-effort 1-based line lookup for a substring; returns 1 if not found."""
+    for i, line in enumerate(text.splitlines(), start=1):
+        if search in line:
+            return i
+    return 1
+
+
+def _find_ingress_line(text: str, idx: int, field_value: str | None = None) -> int:
+    """Locate the line of the idx-th ingress entry in raw module.json text.
+
+    Walks lines after `"ingress"` and counts opening `{` braces. When
+    `field_value` is supplied we additionally try to find a line containing
+    `"<field_value>"` within the matched entry; falls back to the entry's
+    opening line. Best-effort — meant to give an operator a clickable line
+    reference, not perfect AST-level positions.
+    """
+    lines = text.splitlines()
+    in_ingress = False
+    bracket_depth = 0
+    entry_open_line: int | None = None
+    seen_entry = -1
+    for i, line in enumerate(lines, start=1):
+        stripped = line.strip()
+        if not in_ingress:
+            if '"ingress"' in line:
+                in_ingress = True
+            continue
+        if not entry_open_line and "{" in stripped and bracket_depth == 0:
+            seen_entry += 1
+            entry_open_line = i
+            bracket_depth = 1
+            # Honour fields on the same line (e.g. inline brace)
+            if "}" in stripped:
+                if field_value and f'"{field_value}"' in line and seen_entry == idx:
+                    return i
+                bracket_depth = 0
+                if seen_entry == idx:
+                    return entry_open_line
+                entry_open_line = None
+            continue
+        if entry_open_line:
+            bracket_depth += stripped.count("{") - stripped.count("}")
+            if seen_entry == idx and field_value and f'"{field_value}"' in line:
+                return i
+            if bracket_depth <= 0:
+                if seen_entry == idx:
+                    return entry_open_line
+                entry_open_line = None
+                bracket_depth = 0
+        # End of ingress array — stop walking
+        if in_ingress and entry_open_line is None and stripped.startswith("]"):
+            break
+    return entry_open_line or 1
+
+
+def _load_pinhole_ports(provider_location: str, service: str) -> list[dict] | None:
+    """Mirror of rules_manager.load_pinhole_ports (kept local to avoid a circular import).
+
+    Returns the ports list, or None when the provider has no pinhole.json for
+    that service (which is the normal case for most services).
+    """
+    if not provider_location:
+        return None
+    path = Path(provider_location) / "services" / service / "pinhole.json"
+    if not path.is_file():
+        return None
+    try:
+        data = json.loads(path.read_text())
+    except Exception:
+        return None
+    ports = data.get("ports", []) or []
+    return ports if isinstance(ports, list) else None
+
+
+def validate_pinhole_allowed_from(
+    zones: dict[str, "Zone"],
+    modules_dir: Path,
+) -> tuple[list[ValidationMessage], list[ValidationMessage]]:
+    """Cross-check every module's ingress entries against zone policy.
+
+    Returns ``(warnings, errors)``.
+
+    Warnings cover policy mismatches (an ingress entry — or a dependsOn-driven
+    auto-pinhole, see issue #173 — would open a pinhole into a destination
+    zone whose pinhole-allowed-from does NOT list the source zone). Errors
+    cover schema problems that prevent meaningful evaluation (malformed JSON,
+    `ingress` not an array, ingress entry without a `from` field, `from`
+    references a non-existent peer or zone, …).
+
+    By contract: errors → CLI exit code 2; warnings alone → exit 0.
+    """
+    warnings: list[ValidationMessage] = []
+    errors: list[ValidationMessage] = []
+
+    for mod_file in discover_module_files(modules_dir):
+        try:
+            raw = mod_file.read_text()
+            data = json.loads(raw)
+        except json.JSONDecodeError as e:
+            errors.append(ValidationMessage(
+                severity="error",
+                module=mod_file.stem,
+                file_path=str(mod_file),
+                line=getattr(e, "lineno", 1) or 1,
+                text=f"invalid JSON: {e.msg}",
+            ))
+            continue
+        except OSError as e:
+            errors.append(ValidationMessage(
+                severity="error",
+                module=mod_file.stem,
+                file_path=str(mod_file),
+                line=1,
+                text=f"cannot read: {e}",
+            ))
+            continue
+        if not isinstance(data, dict):
+            errors.append(ValidationMessage(
+                severity="error",
+                module=mod_file.stem,
+                file_path=str(mod_file),
+                line=1,
+                text="top-level JSON value is not an object",
+            ))
+            continue
+
+        vmname = data.get("vmname", mod_file.stem)
+        dest_zone_name = data.get("zone0", "")
+
+        # Manual ingress entries -------------------------------------------------
+        ingress_entries = data.get("ingress", []) or []
+        if not isinstance(ingress_entries, list):
+            errors.append(ValidationMessage(
+                severity="error",
+                module=vmname,
+                file_path=str(mod_file),
+                line=_find_field_line(raw, '"ingress"'),
+                text="'ingress' is not an array",
+            ))
+            ingress_entries = []
+
+        for idx, entry in enumerate(ingress_entries):
+            if not isinstance(entry, dict):
+                errors.append(ValidationMessage(
+                    severity="error",
+                    module=vmname,
+                    file_path=str(mod_file),
+                    line=_find_ingress_line(raw, idx),
+                    text=f"ingress[{idx}] is not an object",
+                ))
+                continue
+            from_value = entry.get("from")
+            if not isinstance(from_value, str) or not from_value:
+                errors.append(ValidationMessage(
+                    severity="error",
+                    module=vmname,
+                    file_path=str(mod_file),
+                    line=_find_ingress_line(raw, idx),
+                    text=f"ingress[{idx}] missing required 'from' field",
+                ))
+                continue
+
+            # 'internet' and alias references are out of scope for the pinhole
+            # policy gate.
+            if from_value == "internet" or from_value.startswith("alias:"):
+                continue
+
+            # Resolve from_value to a source zone. It is either a zone name
+            # directly, or a peer module's vmname (in which case we look up
+            # that peer's zone0).
+            if from_value in zones:
+                src_zone_name = from_value
+            else:
+                peer_file = modules_dir / f"{from_value}.json"
+                if not peer_file.is_file():
+                    errors.append(ValidationMessage(
+                        severity="error",
+                        module=vmname,
+                        file_path=str(mod_file),
+                        line=_find_ingress_line(raw, idx, from_value),
+                        text=(f"ingress[{idx}].from = '{from_value}' is not a "
+                              f"known zone, 'internet', alias:..., or peer "
+                              f"module on disk"),
+                    ))
+                    continue
+                try:
+                    peer_data = json.loads(peer_file.read_text())
+                except Exception:
+                    continue
+                src_zone_name = peer_data.get("zone0", "") if isinstance(peer_data, dict) else ""
+
+            if not src_zone_name or not dest_zone_name:
+                continue
+            if src_zone_name == dest_zone_name:
+                continue  # intra-zone traffic doesn't need a pinhole
+            dest_zone = zones.get(dest_zone_name)
+            if dest_zone is None:
+                continue  # surfaced by other checks; not our job
+            if src_zone_name in dest_zone.pinhole_allowed_from:
+                continue  # policy permits — happy path
+
+            warnings.append(ValidationMessage(
+                severity="warning",
+                module=vmname,
+                file_path=str(mod_file),
+                line=_find_ingress_line(raw, idx, from_value),
+                text=(f"ingress[{idx}].from = '{from_value}' "
+                      f"(source zone '{src_zone_name}') would pinhole into "
+                      f"'{dest_zone_name}', but "
+                      f"'{dest_zone_name}'.pinhole-allowed-from = "
+                      f"{dest_zone.pinhole_allowed_from} — policy denies. "
+                      f"Add '{src_zone_name}' to "
+                      f"{dest_zone_name}.pinhole-allowed-from in zones.json, "
+                      f"or remove this entry."),
+            ))
+
+        # Auto-pinholes from dependsOn (issue #173) ----------------------------
+        # If a module depends on `<provider>:<service>` and the provider ships
+        # a services/<service>/pinhole.json, the rules_manager will (or won't)
+        # emit a synthesised pinhole — same policy gate. Report violations
+        # here so the operator catches them before install time.
+        deps = data.get("dependsOn", []) or []
+        if not isinstance(deps, list):
+            continue
+        for dep in deps:
+            if not isinstance(dep, str) or ":" not in dep:
+                continue
+            provider_name, _, service = dep.partition(":")
+            provider_name = provider_name.strip()
+            service = service.strip()
+            if not provider_name or not service:
+                continue
+            peer_file = modules_dir / f"{provider_name}.json"
+            if not peer_file.is_file():
+                continue  # provider not installed yet; install-time will catch
+            try:
+                peer_data = json.loads(peer_file.read_text())
+            except Exception:
+                continue
+            if not isinstance(peer_data, dict):
+                continue
+            provider_location = peer_data.get("location", "")
+            ports = _load_pinhole_ports(provider_location, service)
+            if not ports:
+                continue
+            provider_zone_name = peer_data.get("zone0", "")
+            if not provider_zone_name or not dest_zone_name:
+                continue
+            if provider_zone_name == dest_zone_name:
+                continue  # intra-zone — no pinhole
+            provider_zone = zones.get(provider_zone_name)
+            if provider_zone is None:
+                continue
+            if dest_zone_name in provider_zone.access_to:
+                continue  # zone-level access-to already permits
+            if dest_zone_name in provider_zone.pinhole_allowed_from:
+                continue  # policy permits the auto-pinhole
+
+            warnings.append(ValidationMessage(
+                severity="warning",
+                module=vmname,
+                file_path=str(mod_file),
+                line=_find_field_line(raw, f'"{dep}"'),
+                text=(f"dependsOn '{dep}' would create an auto-pinhole from "
+                      f"'{dest_zone_name}' into '{provider_zone_name}', but "
+                      f"'{provider_zone_name}'.pinhole-allowed-from = "
+                      f"{provider_zone.pinhole_allowed_from} — policy denies. "
+                      f"Auto-pinhole will be silently skipped at install time."),
+            ))
+
+    return warnings, errors
+
+
+def print_validation_report(
+    warnings: list[ValidationMessage],
+    errors: list[ValidationMessage],
+) -> None:
+    """Render the validator's findings via the standard log functions."""
+    info("Pinhole policy validation:")
+    info("-" * 80)
+    if not warnings and not errors:
+        info("  All ingress and dependsOn entries comply with destination "
+             "zones' pinhole-allowed-from.")
+        info("-" * 80)
+        return
+    for m in errors:
+        error(f"  {m.file_path}:{m.line}: [error] {m.module}: {m.text}")
+    for m in warnings:
+        warn(f"  {m.file_path}:{m.line}: [warn]  {m.module}: {m.text}")
+    info("-" * 80)
+    info(f"  Validation summary: {len(errors)} error(s), {len(warnings)} warning(s)")
 
 
 class ZoneManager:
@@ -1085,12 +1423,19 @@ def main():
     parser.add_argument(
         "--summary",
         action="store_true",
-        help="Only show zone summary, don't configure anything",
+        help=("Only show zone summary and run the pinhole-allowed-from "
+              "policy validator (issue #163); don't configure anything"),
     )
     parser.add_argument(
         "--list-config",
         action="store_true",
         help="List current OPNsense VLAN and DHCP configuration",
+    )
+    parser.add_argument(
+        "--modules-dir",
+        default="/home/tappaas/config",
+        help=("Directory containing module.json files used by --summary's "
+              "pinhole-allowed-from validator (default: /home/tappaas/config)"),
     )
 
     args = parser.parse_args()
@@ -1167,7 +1512,15 @@ def main():
         sys.exit(0)
 
     if args.summary:
-        sys.exit(0)
+        # Pinhole-allowed-from validator (issue #163): cross-check every
+        # module.json's ingress + dependsOn against the policy in zones.json.
+        # Exit code: 0 if at most warnings; 2 if any schema error.
+        zones_map = {z.name: z for z in manager.zones}
+        warnings, errors = validate_pinhole_allowed_from(
+            zones_map, Path(args.modules_dir),
+        )
+        print_validation_report(warnings, errors)
+        sys.exit(2 if errors else 0)
 
     # Configure based on options
     # By default, VLANs are assigned to interfaces (use --no-assign to disable)
