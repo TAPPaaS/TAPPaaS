@@ -587,8 +587,11 @@ class ZoneManager:
             with VlanManager(self.config) as vlan_mgr:
                 assigned = vlan_mgr.get_assigned_vlans()
                 for v in assigned:
-                    # Check by VLAN tag or by interface description/name
-                    if v["vlan_tag"] == str(zone.vlan_tag):
+                    # Check by VLAN tag or by interface description/name.
+                    # Normalise both sides — the OPNsense interfacesInfo endpoint
+                    # has been observed returning vlan_tag as either int or str
+                    # depending on version (issue #179).
+                    if str(v["vlan_tag"]) == str(zone.vlan_tag):
                         return v["identifier"]
                     # Also check if the interface name matches the zone name
                     if v.get("description", "").lower() == zone.name.lower():
@@ -853,7 +856,8 @@ class ZoneManager:
                     with VlanManager(self.config) as vlan_mgr:
                         assigned = vlan_mgr.get_assigned_vlans()
                         for v in assigned:
-                            if v["vlan_tag"] == str(zone.vlan_tag):
+                            # Normalise both sides — see issue #179.
+                            if str(v["vlan_tag"]) == str(zone.vlan_tag):
                                 dhcp_interface = v["identifier"]
                                 break
                 else:

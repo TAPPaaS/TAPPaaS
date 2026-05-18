@@ -12,10 +12,12 @@ import json
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import MagicMock, patch
 
 from opnsense_controller.zone_manager import (
     Zone,
     ValidationMessage,
+    ZoneManager,
     discover_module_files,
     validate_pinhole_allowed_from,
 )
@@ -345,6 +347,73 @@ class TestSchemaErrors(unittest.TestCase):
         })
         warnings, errors = validate_pinhole_allowed_from(self.zones, self.dir)
         self.assertTrue(any("not a known zone" in e.text for e in errors))
+
+
+class TestGetZoneInterfaceVlanTagType(unittest.TestCase):
+    """Regression test for issue #179.
+
+    get_zone_interface() must resolve a VLAN zone to its assigned OPNsense
+    interface regardless of whether the upstream API returns vlan_tag as int
+    or str. Both cases have been observed in the wild across OPNsense versions.
+    """
+
+    def _make_manager(self) -> ZoneManager:
+        with tempfile.NamedTemporaryFile(
+            mode="w", suffix=".json", delete=False
+        ) as f:
+            json.dump(
+                {
+                    "srv": {
+                        "type": "Service",
+                        "state": "Active",
+                        "typeId": "2",
+                        "subId": "10",
+                        "vlantag": 210,
+                        "ip": "10.2.10.0/24",
+                        "bridge": "lan",
+                        "access-to": [],
+                        "pinhole-allowed-from": [],
+                        "description": "srv zone",
+                    },
+                },
+                f,
+            )
+            zones_file = f.name
+        zm = ZoneManager(config=MagicMock(), zones_file=zones_file)
+        zm.load_zones()
+        return zm
+
+    def _resolve(self, assigned_vlan_tag) -> str | None:
+        """Stub VlanManager to return a single assigned VLAN, then resolve."""
+        zm = self._make_manager()
+        srv = next(z for z in zm.zones if z.name == "srv")
+
+        fake_vlan_mgr = MagicMock()
+        fake_vlan_mgr.get_assigned_vlans.return_value = [{
+            "vlan_tag": assigned_vlan_tag,
+            "device": "vlan0.210",
+            "identifier": "opt1",
+            "description": "srv zone",
+            "enabled": True,
+        }]
+        fake_ctx = MagicMock()
+        fake_ctx.__enter__ = MagicMock(return_value=fake_vlan_mgr)
+        fake_ctx.__exit__ = MagicMock(return_value=False)
+
+        with patch(
+            "opnsense_controller.zone_manager.VlanManager",
+            return_value=fake_ctx,
+        ):
+            return zm.get_zone_interface(srv)
+
+    def test_resolves_when_api_returns_str(self):
+        # OPNsense 26.x interfacesInfo returns vlan_tag as str.
+        self.assertEqual(self._resolve("210"), "opt1")
+
+    def test_resolves_when_api_returns_int(self):
+        # Some OPNsense versions / endpoints return vlan_tag as int.
+        # This is the case the original issue #179 was filed against.
+        self.assertEqual(self._resolve(210), "opt1")
 
 
 if __name__ == "__main__":
