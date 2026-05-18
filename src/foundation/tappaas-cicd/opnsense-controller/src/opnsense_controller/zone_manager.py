@@ -1294,36 +1294,41 @@ class ZoneManager:
         }
 
     def print_current_config(self):
-        """Print the current VLAN and DHCP configuration from OPNsense."""
+        """Print the current VLAN and DHCP configuration from OPNsense.
+
+        Uses info() — this is the explicitly requested output of --list-config
+        and the post-execute verification step (issue #180). Was previously
+        emitted via debug() and therefore invisible without --debug.
+        """
         config = self.list_current_config()
 
-        debug("Current OPNsense Configuration:")
-        debug("=" * 80)
+        info("Current OPNsense Configuration:")
+        info("=" * 80)
 
-        debug("VLANs:")
-        debug("-" * 80)
+        info("VLANs:")
+        info("-" * 80)
         if not config["vlans"]:
-            debug("  No VLANs configured")
+            info("  No VLANs configured")
         else:
-            debug(f"  {'Tag':<6} {'Device':<15} {'Interface':<12} {'Description'}")
-            debug("  " + "-" * 70)
+            info(f"  {'Tag':<6} {'Device':<15} {'Interface':<12} {'Description'}")
+            info("  " + "-" * 70)
             for vlan in config["vlans"]:
-                debug(f"  {vlan['tag']:<6} {vlan['device'] or '-':<15} {vlan['interface']:<12} {vlan['description']}")
+                info(f"  {vlan['tag']:<6} {vlan['device'] or '-':<15} {vlan['interface']:<12} {vlan['description']}")
 
-        debug("DHCP Ranges:")
-        debug("-" * 80)
+        info("DHCP Ranges:")
+        info("-" * 80)
         if not config["dhcp_ranges"]:
-            debug("  No DHCP ranges configured")
+            info("  No DHCP ranges configured")
         else:
-            debug(f"  {'Description':<20} {'Start':<16} {'End':<16} {'Interface':<10} {'Domain'}")
-            debug("  " + "-" * 75)
+            info(f"  {'Description':<20} {'Start':<16} {'End':<16} {'Interface':<10} {'Domain'}")
+            info("  " + "-" * 75)
             for r in config["dhcp_ranges"]:
-                debug(
+                info(
                     f"  {r['description'] or '-':<20} {r['start_addr'] or '-':<16} "
                     f"{r['end_addr'] or '-':<16} {r['interface'] or 'any':<10} {r['domain'] or '-'}"
                 )
 
-        debug("=" * 80)
+        info("=" * 80)
 
     def print_zone_summary(self):
         """Print a summary of all zones."""
@@ -1512,7 +1517,14 @@ def main():
 
     # List current config if requested
     if args.list_config:
-        manager.print_current_config()
+        # Surface API/auth/reachability failures clearly with a non-zero exit
+        # rather than silently leaving the operator with only the local zone
+        # summary (issue #180).
+        try:
+            manager.print_current_config()
+        except Exception as e:
+            error(f"Failed to fetch live OPNsense configuration: {e}")
+            sys.exit(1)
         sys.exit(0)
 
     if args.summary:
@@ -1585,7 +1597,7 @@ def main():
 
     # Show current config after changes (if not in check mode)
     if not check_mode:
-        debug("Verifying configuration...")
+        info("Verifying configuration...")
         manager.print_current_config()
 
 
