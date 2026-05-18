@@ -73,15 +73,17 @@ for script in scripts/*.sh; do
   if [ -f "$script" ]; then
     script_name=$(basename "$script")
     target="/home/tappaas/bin/$script_name"
-    # Remove existing file or symlink if it exists
+    # Remove the existing entry first — on NixOS it may be a symlink into a
+    # read-only /etc/static/ path (issue #184), which would otherwise make
+    # the subsequent chmod fail with EROFS.
     rm -f "$target" 2>/dev/null || true
-    # Create symlink to the script in the repo
-    ln -s "$(realpath "$script")" "$target"
+    src="$(realpath "$script")"
+    # chmod the resolved source, not the symlink: chmod follows symlinks,
+    # so chmod'ing a /home/tappaas/bin/*.sh symlink that points into
+    # /etc/static would still fail. The source lives in the writable repo.
+    chmod +x "$src"
+    ln -s "$src" "$target"
   fi
-done
-# chmod only real files/valid symlinks, skip dangling symlinks
-for f in /home/tappaas/bin/*.sh; do
-  [ -e "$f" ] && chmod +x "$f"
 done
 
 # --- Refresh configuration.json (re-discover nodes, validate) ---
