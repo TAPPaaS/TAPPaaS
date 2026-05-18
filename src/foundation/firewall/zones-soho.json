@@ -1,12 +1,171 @@
 {
-    "mgmt": { "type": "Management", "state": "Manual", "typeId": "0", "subId": "0", "vlantag": 0, "ip": "10.0.0.0/24", "bridge": "lan", "access-to": ["internet","srv-home","srv-work","srv-cust","home","iot-home","iot-util","iot-cams","guest","dmz"], "pinhole-allowed-from": [], "description": "Infrastructure: PVE nodes, PBS, OPNsense, UniFi, tappaas-cicd, identity" },
-    "srv-home": { "type": "Service", "state": "Active", "typeId": "2", "subId": "10", "vlantag": 210, "ip": "10.2.10.0/24", "bridge": "lan", "access-to": ["internet"], "pinhole-allowed-from": ["home","iot-home"], "description": "Personal services: Home Stack (incl. Assistant), printer" },
-    "srv-work": { "type": "Service", "state": "Active", "typeId": "2", "subId": "20", "vlantag": 220, "ip": "10.2.20.0/24", "bridge": "lan", "access-to": ["internet"], "pinhole-allowed-from": ["home","dmz"], "description": "Business services: AI stack, Productivity Stack" },
-    "srv-cust": { "type": "Service", "state": "Active", "typeId": "2", "subId": "30", "vlantag": 230, "ip": "10.2.30.0/24", "bridge": "lan", "access-to": ["internet"], "pinhole-allowed-from": ["dmz"], "description": "Customer sandboxes (isolated)" },
-    "home": { "type": "Client", "state": "Active", "typeId": "3", "subId": "10", "vlantag": 310, "SSID": "VRV951", "ip": "10.3.10.0/24", "bridge": "lan", "access-to": ["internet","srv-home","srv-work"], "pinhole-allowed-from": [], "description": "Family devices: laptops, phones, tablets" },
-    "iot-home": { "type": "IoT", "state": "Active", "typeId": "4", "subId": "10", "vlantag": 410, "SSID": "VRV951I", "ip": "10.4.10.0/24", "bridge": "lan", "access-to": [], "pinhole-allowed-from": ["mgmt"], "description": "Trusted IoT: Zigbee, Hue, Busch-Jaeger SAP, speakers" },
-    "iot-util": { "type": "IoT", "state": "Active", "typeId": "4", "subId": "20", "vlantag": 420, "ip": "10.4.20.0/24", "bridge": "lan", "access-to": ["internet"], "pinhole-allowed-from": ["mgmt"], "description": "Utility IoT: solar inverter, boiler, BMS (wired)" },
-    "iot-cams": { "type": "IoT", "state": "Active", "typeId": "4", "subId": "30", "vlantag": 430, "ip": "10.4.30.0/24", "bridge": "lan", "access-to": [], "pinhole-allowed-from": ["mgmt"], "description": "Cameras + NVR (wired PoE)" },
-    "guest": { "type": "Guest", "state": "Active", "typeId": "5", "subId": "10", "vlantag": 510, "SSID": "VRV951G", "ip": "10.5.10.0/24", "bridge": "lan", "access-to": ["internet"], "pinhole-allowed-from": [], "description": "Visitors, internet only" },
-    "dmz": { "type": "DMZ", "state": "Mandatory", "typeId": "6", "subId": "10", "vlantag": 610, "ip": "10.6.0.0/24", "bridge": "lan", "access-to": ["srv-work","srv-cust"], "pinhole-allowed-from": ["internet"], "description": "Caddy reverse proxy, public-facing services" }
+    "mgmt": {
+        "type": "Management",
+        "state": "Manual",
+        "typeId": "0",
+        "subId": "0",
+        "vlantag": 0,
+        "ip": "10.0.0.0/24",
+        "bridge": "lan",
+        "access-to": ["internet", "srv-home", "srv-work", "srv-cust", "home", "work", "guest", "iot-local", "iot-cloud", "iot-cams", "iot-untrust", "dmz"],
+        "pinhole-allowed-from": [],
+        "description": "Infrastructure & control plane: hypervisors, backup, firewall, controllers, identity, cicd"
+    },
+
+    "srv-home": {
+        "type": "Service",
+        "state": "Active",
+        "typeId": "2",
+        "subId": "10",
+        "vlantag": 210,
+        "ip": "10.2.10.0/24",
+        "bridge": "lan",
+        "access-to": ["internet"],
+        "pinhole-allowed-from": [],
+        "_comment": "Personal/household services (Home Assistant, personal stack). home/work reach this via their own access-to; mgmt via its access-to.",
+        "description": "Personal services: home automation, personal apps"
+    },
+
+    "srv-work": {
+        "type": "Service",
+        "state": "Active",
+        "typeId": "2",
+        "subId": "20",
+        "vlantag": 220,
+        "ip": "10.2.20.0/24",
+        "bridge": "lan",
+        "access-to": ["internet"],
+        "pinhole-allowed-from": ["dmz"],
+        "_comment": "Business/internal services. dmz pinhole = reverse-proxied public apps. work/home reach via their access-to.",
+        "description": "Business services: internal apps, AI/productivity stack"
+    },
+
+    "srv-cust": {
+        "type": "Service",
+        "state": "Active",
+        "typeId": "2",
+        "subId": "30",
+        "vlantag": 230,
+        "ip": "10.2.30.0/24",
+        "bridge": "lan",
+        "access-to": ["internet"],
+        "pinhole-allowed-from": ["dmz"],
+        "description": "Customer/tenant sandboxes — mutually isolated, public via dmz only"
+    },
+
+    "home": {
+        "type": "Client",
+        "state": "Active",
+        "typeId": "3",
+        "subId": "10",
+        "vlantag": 310,
+        "SSID": "<HOME_SSID>",
+        "ip": "10.3.10.0/24",
+        "bridge": "lan",
+        "access-to": ["internet", "srv-home", "srv-work"],
+        "pinhole-allowed-from": [],
+        "description": "Trusted personal/staff-personal devices: laptops, phones, tablets"
+    },
+
+    "work": {
+        "type": "Client",
+        "state": "Active",
+        "typeId": "3",
+        "subId": "20",
+        "vlantag": 320,
+        "SSID": "<WORK_SSID>",
+        "ip": "10.3.20.0/24",
+        "bridge": "lan",
+        "access-to": ["internet", "srv-work"],
+        "pinhole-allowed-from": [],
+        "_comment": "Managed/corporate workstations. Set state=Disabled for pure-home deployments.",
+        "description": "Managed corporate devices / workstation isolation"
+    },
+
+    "guest": {
+        "type": "Guest",
+        "state": "Active",
+        "typeId": "5",
+        "subId": "10",
+        "vlantag": 510,
+        "SSID": "<GUEST_SSID>",
+        "ip": "10.5.10.0/24",
+        "bridge": "lan",
+        "access-to": ["internet"],
+        "pinhole-allowed-from": [],
+        "description": "Visitors — internet only, full client isolation"
+    },
+
+    "iot-local": {
+        "type": "IoT",
+        "state": "Active",
+        "typeId": "4",
+        "subId": "10",
+        "vlantag": 410,
+        "SSID": "<IOT_LOCAL_SSID>",
+        "ip": "10.4.10.0/24",
+        "bridge": "lan",
+        "access-to": [],
+        "pinhole-allowed-from": ["srv-home"],
+        "_comment": "Trusted local automation: NO internet, NO LAN. Zigbee/Hue/KNX/SAP/Shelly. Controller (HA in srv-home) reaches it via pinhole; mgmt via its access-to. (= The Hook Up's 'NoT'.)",
+        "description": "Local-only IoT: no internet, HA-controlled automation"
+    },
+
+    "iot-cloud": {
+        "type": "IoT",
+        "state": "Active",
+        "typeId": "4",
+        "subId": "20",
+        "vlantag": 420,
+        "SSID": "<IOT_CLOUD_SSID>",
+        "ip": "10.4.20.0/24",
+        "bridge": "lan",
+        "access-to": ["internet"],
+        "pinhole-allowed-from": ["srv-home", "home"],
+        "_comment": "Internet-required AND trusted (HA-controlled or in a dependency): Smart home appliances (e.g. Siemens, Bosch, Miele, etc), media (Chromecast/Sonos), solar/HVAC/BMS cloud monitoring. Sonos/SSDP also needs udpbroadcastrelay 1900 (see _README.mdns_policy).",
+        "description": "Internet-dependent trusted IoT: cloud-monitored utilities, media, voice"
+    },
+
+    "iot-cams": {
+        "type": "IoT",
+        "state": "Active",
+        "typeId": "4",
+        "subId": "30",
+        "vlantag": 430,
+        "ip": "10.4.30.0/24",
+        "bridge": "lan",
+        "access-to": [],
+        "pinhole-allowed-from": ["srv-home"],
+        "_comment": "Cameras + NVR. No internet, no LAN. Only NVR/viewer (run as a srv module) reaches feeds via pinhole. Replace srv-home with the zone hosting the NVR if different. Usually wired PoE (no SSID).",
+        "description": "Surveillance: cameras + NVR, fully isolated"
+    },
+
+    "iot-untrust": {
+        "type": "IoT",
+        "state": "Disabled",
+        "typeId": "4",
+        "subId": "40",
+        "vlantag": 440,
+        "SSID": "<IOT_UNTRUST_SSID>",
+        "ip": "10.4.40.0/24",
+        "bridge": "lan",
+        "access-to": ["internet"],
+        "pinhole-allowed-from": [],
+        "_comment": "OPTIONAL — set state=Active when you own internet-required devices with NO trust relationship (random cheap gadgets, untrusted vendor/firmware). Internet only; no LAN; no inter-device; isolated from iot-cloud so a compromise cannot move laterally to trusted devices. See _README.iot_classification.split_policy_3_questions.",
+        "description": "Untrusted internet IoT — quarantine: internet only, fully isolated"
+    },
+
+    "dmz": {
+        "type": "DMZ",
+        "state": "Mandatory",
+        "typeId": "6",
+        "subId": "10",
+        "vlantag": 610,
+        "ip": "10.6.0.0/24",
+        "bridge": "lan",
+        "access-to": ["internet"],
+        "pinhole-allowed-from": ["internet"],
+        "_comment": "Reverse proxy + public-facing. access-to internet ONLY (Lars rule). Backends (srv-work/srv-cust) declare 'dmz' in their pinhole-allowed-from.",
+        "description": "Public-facing: reverse proxy (Caddy), internet-exposed services"
+    }
 }
