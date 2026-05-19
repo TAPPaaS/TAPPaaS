@@ -10,7 +10,11 @@
 #    VM 130's 12-zone zones-soho.json × geverifieerde opt-binding
 #    (interfaces/overview/export). Bij wijziging van zones-soho.json
 #    (zone toevoegen/hernoemen/subnet wijzigen) MOET de Z-array hieronder
-#    handmatig mee. Laatst geverifieerd: 2026-05-19 (VM 130 @ 9ccec98).
+#    handmatig mee.
+# ⚠️ OPT-NUMMERS KUNNEN WIJZIGEN na een herinstallatie (OPNsense wijst vrije
+#    opt-nummers toe). Na standaard-install 2026-05-19: opt2-8 hernummerd
+#    naar opt12-16. Altijd verifiëren via overview/export voor draaien.
+#    Laatst geverifieerd: 2026-05-19 post-reinstall (VM 130 @ main).
 # ⚠️ Zolang dit script de DHCP-binding beheert: NOOIT `zone-manager --execute`
 #    zonder `--*-only` (configure_all-DHCP overschrijft binding met interface='').
 set -euo pipefail
@@ -24,16 +28,17 @@ F="https://10.0.0.1:8443/api/dnsmasq/settings"
 AUTH="-u $OPNSENSE_TOKEN:$OPNSENSE_SECRET"
 
 # opt -> "name|start|end"  (uit zones-soho.json x geverifieerde opt-binding)
+# Post-reinstall 2026-05-19: opt2/3/6/7/8 hernummerd naar opt12/13/14/15/16
 declare -A Z=(
   [opt1]="srv-home|10.2.10.50|10.2.10.250"
-  [opt2]="srv-work|10.2.20.50|10.2.20.250"
-  [opt3]="srv-cust|10.2.30.50|10.2.30.250"
+  [opt12]="srv-work|10.2.20.50|10.2.20.250"
+  [opt13]="srv-cust|10.2.30.50|10.2.30.250"
   [opt4]="home|10.3.10.50|10.3.10.250"
   [opt10]="work|10.3.20.50|10.3.20.250"
   [opt5]="iot-local|10.4.10.50|10.4.10.250"
-  [opt6]="iot-cloud|10.4.20.50|10.4.20.250"
-  [opt7]="iot-cams|10.4.30.50|10.4.30.250"
-  [opt8]="guest|10.5.10.50|10.5.10.250"
+  [opt14]="iot-cloud|10.4.20.50|10.4.20.250"
+  [opt15]="iot-cams|10.4.30.50|10.4.30.250"
+  [opt16]="guest|10.5.10.50|10.5.10.250"
   [opt9]="dmz|10.6.0.50|10.6.0.250"
 )
 
@@ -62,9 +67,9 @@ for r in json.load(sys.stdin)['rows']:
   echo "  $name -> $opt : $resp"
 done
 
-# service herladen
+# service herladen (werkende endpoint: dnsmasq/service/reconfigure, NIET settings/service/reconfigure)
 echo -n "reconfigure: "
-curl -sk $AUTH -X POST "$F/service/reconfigure" | head -c 40; echo
+curl -sk $AUTH -X POST "https://10.0.0.1:8443/api/dnsmasq/service/reconfigure" | head -c 40; echo
 
 # DIRECTE-API-VERIFICATIE (de waarheid, niet tool-output)
 echo "--- verificatie ---"
