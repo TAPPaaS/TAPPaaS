@@ -82,20 +82,6 @@
         "description": "Managed corporate devices / workstation isolation"
     },
 
-    "guest": {
-        "type": "Guest",
-        "state": "Active",
-        "typeId": "5",
-        "subId": "10",
-        "vlantag": 510,
-        "SSID": "<GUEST_SSID>",
-        "ip": "10.5.10.0/24",
-        "bridge": "lan",
-        "access-to": ["internet"],
-        "pinhole-allowed-from": [],
-        "description": "Visitors — internet only, full client isolation"
-    },
-
     "iot-local": {
         "type": "IoT",
         "state": "Active",
@@ -153,6 +139,20 @@
         "pinhole-allowed-from": [],
         "_comment": "OPTIONAL — set state=Active when you own internet-required devices with NO trust relationship (random cheap gadgets, untrusted vendor/firmware). Internet only; no LAN; no inter-device; isolated from iot-cloud so a compromise cannot move laterally to trusted devices. See _README.iot_classification.split_policy_3_questions.",
         "description": "Untrusted internet IoT — quarantine: internet only, fully isolated"
+    },
+
+    "guest": {
+        "type": "Guest",
+        "state": "Active",
+        "typeId": "5",
+        "subId": "10",
+        "vlantag": 510,
+        "SSID": "<GUEST_SSID>",
+        "ip": "10.5.10.0/24",
+        "bridge": "lan",
+        "access-to": ["internet"],
+        "pinhole-allowed-from": [],
+        "description": "Visitors — internet only, full client isolation"
     },
 
     "dmz": {
