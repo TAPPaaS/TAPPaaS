@@ -15,6 +15,8 @@
 #
 # Options:
 #   --variant <name>   Install a variant of the module (see copy-update-json.sh)
+#   --force            Re-run the installer even if the module is already
+#                      installed (alias: --reinstall)
 #   --<field> <value>  Override a JSON field (passed to copy-update-json.sh)
 #   -h, --help         Show this help message
 #
@@ -25,11 +27,12 @@
 #   install-module.sh openwebui --variant dev --zone0 dev-srv --vmid 315
 #
 # The script performs these steps:
-#   1. Copies and validates the module JSON config (variant-aware)
-#   2. Checks that every dependsOn service is provided by an installed module
-#   3. Validates that the module has service scripts for each service it provides
-#   4. Iterates dependsOn and calls each provider's install-service.sh
-#   5. Calls the module's own install.sh (if present in the module directory)
+#   1. Checks the module is not already installed (unless --force is given)
+#   2. Copies and validates the module JSON config (variant-aware)
+#   3. Checks that every dependsOn service is provided by an installed module
+#   4. Validates that the module has service scripts for each service it provides
+#   5. Iterates dependsOn and calls each provider's install-service.sh
+#   6. Calls the module's own install.sh (if present in the module directory)
 #
 
 set -euo pipefail
@@ -54,6 +57,7 @@ Arguments:
 
 Options:
     --variant <name>         Install a variant (output: <module>-<name>.json)
+    --force, --reinstall     Install even if the module already exists
     --<field> <value>        Override a JSON field value
     -h, --help               Show this help message
 
@@ -62,6 +66,7 @@ Examples:
     ${SCRIPT_NAME} litellm --node tappaas2
     ${SCRIPT_NAME} openwebui --variant staging
     ${SCRIPT_NAME} openwebui --variant dev --zone0 dev-srv --vmid 315
+    ${SCRIPT_NAME} identity --force
 EOF
 }
 
@@ -87,9 +92,54 @@ main() {
     info "${BOLD}║  TAPPaaS Module Install: ${BL}${module}${CL}"
     info "${BOLD}╚══════════════════════════════════════════════╝${CL}"
 
-    # ── Step 1: Copy JSON config and validate ────────────────────────
+    # Parse options: extract --force (consumed here) and capture --variant
+    # (needed for the early existence check). All other arguments are passed
+    # through unchanged to copy-update-json.sh, which reads "$@" when sourced.
+    local force=false
+    local variant=""
+    local -a passthru=()
+    shift  # drop the module name; re-added below
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+            --force|--reinstall)
+                force=true
+                ;;
+            --variant)
+                variant="${2:-}"
+                passthru+=("$1")
+                if [[ $# -ge 2 ]]; then passthru+=("$2"); shift; fi
+                ;;
+            *)
+                passthru+=("$1")
+                ;;
+        esac
+        shift
+    done
+    set -- "${module}" ${passthru[@]+"${passthru[@]}"}
+
+    # ── Step 1: Check module not already installed ───────────────────
     echo ""
-    info "${BOLD}Step 1: Copy and validate module configuration${CL}"
+    info "${BOLD}Step 1: Check module not already installed${CL}"
+
+    # The installed-marker is the config JSON in CONFIG_DIR, which Step 2
+    # overwrites — so check before copying. Variant builds use the suffixed
+    # name (matching copy-update-json.sh's <module>-<variant>.json naming).
+    local precheck_module="${module}"
+    [[ -n "${variant}" ]] && precheck_module="${module}-${variant}"
+
+    if module_exists "${precheck_module}"; then
+        if [[ "${force}" == true ]]; then
+            warn "  '${precheck_module}' is already installed — continuing anyway (--force)"
+        else
+            die "Module '${precheck_module}' is already installed. Run 'delete-module.sh ${precheck_module}' first, or pass --force to re-run the installer against the existing deployment."
+        fi
+    else
+        info "  ${GN}✓${CL} '${precheck_module}' is not yet installed"
+    fi
+
+    # ── Step 2: Copy JSON config and validate ────────────────────────
+    echo ""
+    info "${BOLD}Step 2: Copy and validate module configuration${CL}"
 
     . /home/tappaas/bin/copy-update-json.sh
 
@@ -103,9 +153,9 @@ main() {
 
     local module_json="${CONFIG_DIR}/${effective_module}.json"
 
-    # ── Step 2: Validate dependencies ────────────────────────────────
+    # ── Step 3: Validate dependencies ────────────────────────────────
     echo ""
-    info "${BOLD}Step 2: Validate dependencies${CL}"
+    info "${BOLD}Step 3: Validate dependencies${CL}"
 
     local depends_on
     depends_on=$(jq -r '.dependsOn // [] | .[]' "${module_json}" 2>/dev/null)
@@ -127,9 +177,9 @@ main() {
         die "${dep_errors} dependency check(s) failed — cannot install ${module}"
     fi
 
-    # ── Step 3: Validate provided services ───────────────────────────
+    # ── Step 4: Validate provided services ───────────────────────────
     echo ""
-    info "${BOLD}Step 3: Validate service scripts${CL}"
+    info "${BOLD}Step 4: Validate service scripts${CL}"
 
     local module_dir
     module_dir="$(pwd)"
@@ -149,9 +199,9 @@ main() {
         done
     fi
 
-    # ── Step 4: Call dependency install-service.sh scripts ───────────
+    # ── Step 5: Call dependency install-service.sh scripts ───────────
     echo ""
-    info "${BOLD}Step 4: Call dependency service installers${CL}"
+    info "${BOLD}Step 5: Call dependency service installers${CL}"
 
     if [[ -z "${depends_on}" ]]; then
         info "  No dependency services to call"
@@ -171,9 +221,9 @@ main() {
         done
     fi
 
-    # ── Step 5: Call the module's own install.sh ─────────────────────
+    # ── Step 6: Call the module's own install.sh ─────────────────────
     echo ""
-    info "${BOLD}Step 5: Run module install.sh${CL}"
+    info "${BOLD}Step 6: Run module install.sh${CL}"
 
     if [[ -x "./install.sh" ]]; then
         info "  Running ${module}/install.sh for '${effective_module}'..."

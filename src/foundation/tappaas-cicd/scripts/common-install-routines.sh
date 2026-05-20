@@ -223,6 +223,79 @@ check_service_available() {
     return 0
 }
 
+# Check whether a VM with the given VMID exists anywhere in the Proxmox cluster.
+# VMIDs are cluster-wide, so a VM created on any node makes the ID unavailable —
+# this queries /cluster/resources rather than a single node's `qm status`.
+#
+# Arguments:
+#   $1  VMID to look for
+#   $2  FQDN of any reachable cluster node (used only to enter the cluster)
+#
+# On success (VM found) echoes the node the VM lives on and returns 0.
+# Returns 1 if no such VMID is found in the cluster.
+vm_exists_on_cluster() {
+    local vmid="$1"
+    local node_fqdn="$2"
+    local found_node
+
+    found_node=$(ssh -o ConnectTimeout=5 root@"${node_fqdn}" \
+        "pvesh get /cluster/resources --type vm --output-format json 2>/dev/null" \
+        | jq -r --argjson id "${vmid}" '.[] | select(.vmid == $id) | .node // empty' 2>/dev/null) \
+        || found_node=""
+
+    if [[ -n "${found_node}" ]]; then
+        echo "${found_node}"
+        return 0
+    fi
+    return 1
+}
+
+# Determine whether a module already appears to be installed on the cluster.
+#
+# A module is considered installed when its config JSON is present in CONFIG_DIR
+# (this is the marker dropped by Step 1 of a previous install). For VM-backed
+# modules (those declaring a "cluster:vm" dependency) the config alone is not
+# trusted: the VM is probed cluster-wide, so a leftover config whose VM is gone
+# is treated as NOT installed (stale), allowing a clean re-install.
+#
+# Arguments:
+#   $1  Effective module name (e.g. "identity" or "openwebui-dev")
+#
+# Returns 0 if the module appears installed, 1 otherwise.
+module_exists() {
+    local module="$1"
+    local cfg="${CONFIG_DIR}/${module}.json"
+
+    # No config in CONFIG_DIR => never installed.
+    [[ -f "${cfg}" ]] || return 1
+
+    # Non-VM module (no cluster:vm dependency): config presence is the only
+    # signal we have, so treat it as installed.
+    if ! jq -e '(.dependsOn // []) | index("cluster:vm") != null' "${cfg}" >/dev/null 2>&1; then
+        return 0
+    fi
+
+    # VM-backed module: confirm the VM is actually present on the cluster.
+    local vmid node node_fqdn found_node
+    vmid=$(jq -r '.vmid // empty' "${cfg}" 2>/dev/null)
+    node=$(jq -r '.node // empty' "${cfg}" 2>/dev/null)
+    [[ -z "${node}" ]] && node="$(get_node_hostname 0)"
+    node_fqdn="${node}.mgmt.internal"
+
+    # Config declares cluster:vm but has no vmid — can't probe; trust the config.
+    if [[ -z "${vmid}" ]]; then
+        return 0
+    fi
+
+    if found_node=$(vm_exists_on_cluster "${vmid}" "${node_fqdn}"); then
+        info "  Found VM ${BL}${vmid}${CL} (${module}) on node ${BL}${found_node}${CL}"
+        return 0
+    fi
+
+    warn "  Config ${cfg} exists but VM ${vmid} not found on the cluster — treating '${module}' as not installed (stale config)"
+    return 1
+}
+
 # Validate that the module has service scripts for every service it provides.
 # Arguments:
 #   $1  Module directory (absolute path)

@@ -189,6 +189,60 @@ else
     skip "test-repository/test.sh not found"
 fi
 
+# ── Test 8: module_exists / install guard (Issue #187) ──────────────
+
+info "${BOLD}Test 8: module_exists installed-detection logic${CL}"
+
+# Unit-test module_exists in isolation: a temp CONFIG_DIR holds fixture
+# configs and vm_exists_on_cluster is stubbed, so no cluster is contacted.
+me_tmp=$(mktemp -d)
+trap 'rm -rf "${me_tmp}"' EXIT
+
+# Fixtures
+printf '{"dependsOn":["cluster:vm","backup:vm"],"vmid":140}\n' > "${me_tmp}/vmmod.json"
+printf '{"dependsOn":["firewall:proxy"]}\n'                    > "${me_tmp}/svcmod.json"
+printf '{"dependsOn":["cluster:vm"]}\n'                        > "${me_tmp}/novmid.json"
+
+# Helper: run module_exists in a subshell with overridden CONFIG_DIR and a
+# stubbed vm_exists_on_cluster ($2 = "found" | "gone"). Echoes the exit code.
+me_run() {
+    local module="$1" vm_state="$2"
+    (
+        CONFIG_DIR="${me_tmp}"
+        if [[ "${vm_state}" == "found" ]]; then
+            vm_exists_on_cluster() { echo "tappaas1"; return 0; }
+        else
+            vm_exists_on_cluster() { return 1; }
+        fi
+        module_exists "${module}" >/dev/null 2>&1
+    )
+}
+
+# (a) No config in CONFIG_DIR => not installed (rc 1)
+if ! me_run "ghost" found; then pass "absent config -> not installed"; else fail "absent config should be not installed"; fi
+
+# (b) VM module + VM present on cluster => installed (rc 0)
+if me_run "vmmod" found; then pass "vm module + live VM -> installed"; else fail "vm module + live VM should be installed"; fi
+
+# (c) VM module + VM gone => not installed / stale (rc 1)
+if ! me_run "vmmod" gone; then pass "vm module + missing VM -> not installed (stale)"; else fail "vm module + missing VM should be not installed"; fi
+
+# (d) Non-VM module + config present => installed (rc 0), never probes cluster
+if me_run "svcmod" gone; then pass "non-VM module + config -> installed"; else fail "non-VM module + config should be installed"; fi
+
+# (e) cluster:vm declared but no vmid => trust config, installed (rc 0)
+if me_run "novmid" gone; then pass "cluster:vm without vmid -> installed (trust config)"; else fail "cluster:vm without vmid should be installed"; fi
+
+rm -rf "${me_tmp}"
+trap - EXIT
+
+# install-module.sh advertises the --force escape hatch
+if /home/tappaas/bin/install-module.sh --help 2>&1 | grep -q -- '--force'; then
+    pass "install-module.sh --help documents --force"
+else
+    fail "install-module.sh --help missing --force"
+fi
+
 # ── Deep Test: VM creation suite ────────────────────────────────────
 
 if [[ "${DEEP}" -eq 1 ]]; then
