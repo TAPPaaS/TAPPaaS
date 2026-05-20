@@ -374,6 +374,60 @@ class VlanManager:
             params=params,
         )
 
+    def update_vlan_description(
+        self,
+        uuid: str,
+        interface: str,
+        tag: int,
+        description: str,
+        priority: int = 0,
+        check_mode: bool = False,
+    ) -> dict:
+        """Reconcile an existing VLAN's description in place, by UUID (issue #186).
+
+        Uses the raw vlan_settings setItem API rather than the oxl
+        ``interface_vlan`` module: that module matches the existing record by
+        description, so changing the description would fail to find it and
+        create a duplicate. Matching by UUID is safe. A description change is
+        cosmetic (it does not alter the running VLAN device), so no interface
+        reconfigure/reload is performed.
+
+        Args:
+            uuid: UUID of the existing vlan_settings record
+            interface: Parent interface (e.g. 'vtnet0')
+            tag: VLAN tag
+            description: New description to set
+            priority: 802.1p priority (pcp), preserved from the existing record
+            check_mode: If True, perform dry-run without making changes
+
+        Returns:
+            Result dictionary with changed/uuid keys.
+        """
+        if check_mode:
+            return {"changed": True, "check_mode": True}
+
+        result = self.client.run_module(
+            "raw",
+            params={
+                "module": "interfaces",
+                "controller": "vlan_settings",
+                "command": f"setItem/{uuid}",
+                "action": "post",
+                "data": {
+                    "vlan": {
+                        "if": interface,
+                        "tag": str(tag),
+                        "pcp": str(priority),
+                        "descr": description,
+                    }
+                },
+            },
+        )
+        response = result.get("result", {}).get("response", {})
+        if response.get("result") not in ("saved", "ok"):
+            raise RuntimeError(f"vlan setItem failed for tag {tag}: {response}")
+        return {"changed": True, "uuid": uuid}
+
     def delete_vlan(
         self,
         description: str,

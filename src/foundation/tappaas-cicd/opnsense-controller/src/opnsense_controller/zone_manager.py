@@ -727,12 +727,61 @@ class ZoneManager:
                 existing = existing_tags.get(zone.vlan_tag) or existing_descriptions.get(vlan_desc)
 
                 if existing:
-                    debug(f"  {zone.name}: VLAN {zone.vlan_tag} already exists (skipping)")
-                    results[zone.name] = {
-                        "status": "exists",
-                        "vlan": zone.vlan_tag,
-                        "device": existing.get("device"),
-                    }
+                    # Reconcile a drifted VLAN description in place (issue #186).
+                    # Renaming/redescribing a zone in zones.json must update the
+                    # existing VLAN's description rather than leave it stale.
+                    existing_descr = existing.get("description") or ""
+                    if existing_descr != vlan_desc:
+                        if check_mode:
+                            debug(f"  {zone.name}: VLAN {zone.vlan_tag} description drift "
+                                  f"({existing_descr!r} → {vlan_desc!r})")
+                            results[zone.name] = {
+                                "status": "would_update_description",
+                                "vlan": zone.vlan_tag,
+                                "from": existing_descr,
+                                "to": vlan_desc,
+                            }
+                        else:
+                            try:
+                                manager.update_vlan_description(
+                                    uuid=existing["uuid"],
+                                    interface=existing["interface"],
+                                    tag=zone.vlan_tag,
+                                    description=vlan_desc,
+                                    priority=existing.get("priority", 0),
+                                    check_mode=False,
+                                )
+                                debug(f"  {zone.name}: VLAN {zone.vlan_tag} description updated "
+                                      f"({existing_descr!r} → {vlan_desc!r})")
+                                results[zone.name] = {
+                                    "status": "updated_description",
+                                    "vlan": zone.vlan_tag,
+                                    "from": existing_descr,
+                                    "to": vlan_desc,
+                                }
+                            except Exception as e:
+                                results[zone.name] = {"status": "error", "error": str(e)}
+                                error(f"{zone.name}: {e}")
+                    else:
+                        debug(f"  {zone.name}: VLAN {zone.vlan_tag} already exists (skipping)")
+                        results[zone.name] = {
+                            "status": "exists",
+                            "vlan": zone.vlan_tag,
+                            "device": existing.get("device"),
+                        }
+
+                    # The assigned-interface label (the "[name]" shown in the GUI)
+                    # is the interface-assignment description, set to the zone name
+                    # at creation. OPNsense has no safe in-place update for it
+                    # (only delItem+addItem, which is disruptive), so warn on drift
+                    # rather than auto-reassign. See issue #186.
+                    assigned = assigned_by_tag.get(zone.vlan_tag)
+                    if assigned:
+                        label = (assigned.get("description") or "")
+                        if label and label.lower() != zone.name.lower():
+                            warn(f"  {zone.name}: VLAN {zone.vlan_tag} interface label is "
+                                 f"'{label}' (stale). Re-assigning to rename is disruptive; "
+                                 f"update it manually in OPNsense (Interfaces > Assignments).")
                     continue
 
                 # Use the zone's bridge to determine the physical interface
