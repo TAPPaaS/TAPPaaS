@@ -11,14 +11,14 @@
 # ============================================================================
 # TAPPaaS - LiteLLM AI proxy
 # ============================================================================
-# Version: 1.81.14
-# Date: 2026-03-07
+# Version: 1.85.0
+# Date: 2026-05-20
 # Author: @ErikDaniel007 (TAPPaaS)
 # Product: LiteLLM proxy with PostgreSQL + Redis backend
 #
 # Architecture:
-# - PostgreSQL 15 (model configs + usage tracking)
-# - Redis 7 (response caching)
+# - PostgreSQL 17 (model configs + usage tracking)
+# - Redis 7 (response caching + AOF persistence)
 # - LiteLLM container (unified API gateway)
 #
 # Network: Self-managed DHCP, firewall ports 22 (SSH) + 4000 (LiteLLM API)
@@ -29,6 +29,11 @@
 # - Fixed Redis backup (was using --rdb replication tool instead of SAVE)
 # - Added filesystem dependency to secrets generation (boot safety)
 # - Removed broken WAL archiving (daily pg_dump already provides recovery)
+#
+# Changelog v1.85.0 (2026-05-20):
+# - Upgraded LiteLLM 1.81.14 → 1.85.0; switched registry GHCR → Docker Hub
+# - Upgraded PostgreSQL 15 → 17 (fresh DB, no migration needed)
+# - Added Redis AOF persistence (appendonly + appendfsync everysec)
 # ============================================================================
 
 { config, lib, pkgs, modulesPath, system, ... }:
@@ -36,8 +41,8 @@
 let
   # Version pinning - change versions here only
   versions = {
-    litellm     = "v1.81.14-stable";
-    postgresPkg = pkgs.postgresql_15;
+    litellm     = "v1.85.0";
+    postgresPkg = pkgs.postgresql_17;
     redisPkg    = pkgs.redis;
   };
 in
@@ -170,7 +175,7 @@ in
   programs.ssh.startAgent = true;
 
   # ============================================================================
-  # DATABASE - PostgreSQL 15
+  # DATABASE - PostgreSQL 17
   # ============================================================================
   
   services.postgresql = {
@@ -219,11 +224,13 @@ in
     port = 6379;
     bind = "127.0.0.1";  # Localhost only
     settings = {
-      maxmemory = "512mb";  # Kleiner dan 8GB setup
+      maxmemory = "512mb";
       maxmemory-policy = "allkeys-lru";
       maxclients = 10000;
       timeout = 300;
       tcp-keepalive = 60;
+      appendonly = "yes";
+      appendfsync = "everysec";
     };
     save = [
       [900 1]      # Save after 900s if ≥1 key changed
@@ -283,11 +290,10 @@ in
     mode = "0644";
   };
 
-  # Secrets template - reference for manual setup
+  # Secrets template - bootstrap secret only; provider keys go via UI/API → DB
   environment.etc."secrets/litellm-template.env" = {
     text = ''
       LITELLM_MASTER_KEY=sk-your_master_key_here
-      STORE_MODEL_IN_DB=True
     '';
     mode = "0600";
   };
@@ -315,12 +321,9 @@ in
         # Create secrets directory
         mkdir -p /etc/secrets
         
-        # Write secrets file
+        # Write secrets file — bootstrap secret only; provider keys go via UI/API
         cat > /etc/secrets/litellm.env <<EOF
 LITELLM_MASTER_KEY=$MASTER_KEY
-STORE_MODEL_IN_DB=True
-OPENROUTER_API_KEY=
-PERPLEXITY_API_KEY=
 EOF
         chmod 600 /etc/secrets/litellm.env
         
@@ -340,8 +343,11 @@ EOF
   # ============================================================================
   
   virtualisation.oci-containers.containers.litellm = {
-    image = "ghcr.io/berriai/litellm:${versions.litellm}";
+    image = "docker.io/litellm/litellm:${versions.litellm}";
     volumes = [ "/etc/litellm/config.yaml:/app/config.yaml:ro" ];
+    environment = {
+      STORE_MODEL_IN_DB = "True";
+    };
     environmentFiles = [ "/etc/secrets/litellm.env" ];
     extraOptions = [ 
       "--network=host"           # Access localhost PostgreSQL/Redis

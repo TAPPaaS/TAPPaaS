@@ -1,7 +1,7 @@
 {
   "description": "TAPPaaS LiteLLM",
-  "version": "1.81.14",
-  "releaseDate": "2026-03-07",
+  "version": "1.85.0",
+  "releaseDate": "2026-05-20",
   "maintainer": "@ErikDaniel007",
   "status": "Development",
   "vmname": "litellm",
