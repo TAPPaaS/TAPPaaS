@@ -71,7 +71,7 @@ for node_candidate in "${NODE}" $(get_all_node_hostnames); do
         "root@${candidate_fqdn}" \
         "pvesh get /cluster/resources --type vm --output-format json" 2>/dev/null \
         | jq -r --argjson id "${VMID}" \
-            '.[] | select(.vmid == $id and .type == "qemu") | .status // empty' 2>/dev/null) || true
+            '.[] | select(.vmid == $id and (.type == "qemu" or .type == "lxc")) | .status // empty' 2>/dev/null) || true
     if [[ -n "${vm_status}" ]]; then
         break
     fi
