@@ -250,6 +250,10 @@
                 "apt": {
                     "description": "Package is a simple apt package to be installed",
                     "image_field": "Name of the apt package(s) to install"
+                },
+                "lxc": {
+                    "description": "Proxmox LXC container created from a CT template (pct create). Used for GPU passthrough containers and non-VM workloads.",
+                    "image_field": "Filename of the CT template (e.g. debian-12-standard_12.12-1_amd64.tar.zst)"
                 }
             }
         },
@@ -263,13 +267,15 @@
                 "clone": "VMID of the Proxmox template to clone",
                 "iso": "Filename of the ISO image",
                 "img": "Filename of the disk image",
-                "apt": "Name of apt package(s) to install"
+                "apt": "Name of apt package(s) to install",
+                "lxc": "Filename of the CT template (downloaded via pveam if absent)"
             },
             "examples": {
                 "clone": "9000",
                 "iso": "ubuntu-24.04-live-server-amd64.iso",
                 "img": "OPNsense-25.7-nano-amd64.img.bz2",
-                "apt": "nginx"
+                "apt": "nginx",
+                "lxc": "debian-12-standard_12.12-1_amd64.tar.zst"
             }
         },
 
