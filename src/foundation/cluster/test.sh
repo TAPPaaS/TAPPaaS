@@ -138,7 +138,7 @@ fi
 deep_cleanup() {
     # Remove DNS records the reconciler may have registered (delete-module
     # does not touch DNS). Harmless if absent.
-    dns-manager --no-ssl-verify delete test-vmdrift srv.internal  >/dev/null 2>&1 || true
+    dns-manager --no-ssl-verify delete test-vmdrift srv-home.internal  >/dev/null 2>&1 || true
     dns-manager --no-ssl-verify delete test-vmdrift mgmt.internal >/dev/null 2>&1 || true
     [[ -f "${CONFIG_DIR}/test-vmdrift.json" ]] || return 0
     info "  Cleaning up test VM (delete-module test-vmdrift)..."
@@ -174,11 +174,11 @@ if [[ "${DEEP}" -eq 1 ]]; then
         fi
     fi
 
-    # 3. Induce zone drift mgmt -> srv (active, VLAN 210, has DHCP).
+    # 3. Induce zone drift mgmt -> srv-home (active, VLAN 210, has DHCP).
     if [[ "${deep_ok}" -eq 1 ]]; then
         tmp=$(mktemp)
-        if jq '.zone0 = "srv"' "${CONFIG_DIR}/${TVM}.json" > "${tmp}" && mv "${tmp}" "${CONFIG_DIR}/${TVM}.json"; then
-            pass "induced drift: zone0 mgmt→srv in config"
+        if jq '.zone0 = "srv-home"' "${CONFIG_DIR}/${TVM}.json" > "${tmp}" && mv "${tmp}" "${CONFIG_DIR}/${TVM}.json"; then
+            pass "induced drift: zone0 mgmt→srv-home in config"
         else
             fail "could not edit test config"; deep_ok=0
         fi
@@ -213,7 +213,7 @@ if [[ "${DEEP}" -eq 1 ]]; then
             # shellcheck disable=SC2086
             net0=$(ssh ${SSH_OPTS} "root@${vmnode}.${MGMT}.internal" "qm config 920 | grep '^net0'" 2>/dev/null) || true
             if grep -q "tag=210" <<< "${net0}"; then
-                pass "live net0 bound to srv VLAN (tag=210)"
+                pass "live net0 bound to srv-home VLAN (tag=210)"
             else
                 fail "live net0 not tagged 210 (got: ${net0:-none})"
             fi
@@ -227,11 +227,11 @@ if [[ "${DEEP}" -eq 1 ]]; then
         # shellcheck disable=SC2001  # regex ANSI strip not expressible as ${//}
         new_ip=$(sed 's/\x1b\[[0-9;]*m//g' <<< "${reconcile_out}" \
                  | grep -oE 'came up with IP [0-9.]+' | grep -oE '[0-9.]+$')
-        dns_line=$(dns-manager --no-ssl-verify list 2>/dev/null | grep -i "test-vmdrift" | grep "srv.internal" || true)
+        dns_line=$(dns-manager --no-ssl-verify list 2>/dev/null | grep -i "test-vmdrift" | grep "srv-home.internal" || true)
         if [[ -n "${dns_line}" ]] && { [[ -z "${new_ip}" ]] || grep -q "${new_ip}" <<< "${dns_line}"; }; then
-            pass "DNS record test-vmdrift.srv.internal registered (${new_ip:-ip unknown})"
+            pass "DNS record test-vmdrift.srv-home.internal registered (${new_ip:-ip unknown})"
         else
-            fail "DNS record for test-vmdrift.srv.internal (${new_ip:-?}) not found"
+            fail "DNS record for test-vmdrift.srv-home.internal (${new_ip:-?}) not found"
         fi
     fi
 

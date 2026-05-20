@@ -13,7 +13,7 @@
     "image": "ubuntu-24.04-server-cloudimg-amd64.img",
     "imageLocation": "https://cloud-images.ubuntu.com/releases/24.04/release",
     "bridge0": "lan",
-    "zone0": "srv",
+    "zone0": "srv-home",
     "dependsOn": ["cluster:vm", "templates:debian"],
     "description": "Test: Ubuntu image on srv VLAN (node tappaas3) - Ubuntu 24.04 LTS"
 }

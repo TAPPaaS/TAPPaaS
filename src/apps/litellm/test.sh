@@ -9,7 +9,7 @@
 # Results are displayed on screen and logged to ~/logs/litellm-test-<timestamp>.log
 
 # Configuration
-TARGET="litellm.srv.internal"
+TARGET="litellm.srv-work.internal"
 SSH_CMD="ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 -o BatchMode=yes tappaas@${TARGET}"
 TIMESTAMP=$(date '+%Y-%m-%d_%H%M%S')
 LOG_DIR="/home/tappaas/logs"

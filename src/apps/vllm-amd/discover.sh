@@ -146,7 +146,7 @@ cat > "$OUT_JSON" <<EOF
   "storage": "local-lvm",
   "ostype": "debian",
   "bridge0": "lan",
-  "zone0": "srv",
+  "zone0": "srv-work",
   "description": "vLLM AMD ROCm inference — Ryzen AI MAX+ 395 (${NODE})"
 }
 EOF

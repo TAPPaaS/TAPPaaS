@@ -77,7 +77,7 @@ cat > "${MODULE_DIR}/testmod.json" << 'EOF'
   "imageType": "clone",
   "image": "8080",
   "bridge0": "lan",
-  "zone0": "srv",
+  "zone0": "srv-home",
   "proxyDomain": "testmod.test.tapaas.org",
   "proxyPort": 8080,
   "dependsOn": [],
@@ -131,7 +131,7 @@ if [[ -f "${RESULT}" ]]; then
 
     # zone0 should be unchanged (no "staging" zone in zones.json)
     actual_zone=$(jq -r '.zone0' "${RESULT}")
-    assert_eq "zone0 = srv (unchanged, no staging zone)" "srv" "${actual_zone}"
+    assert_eq "zone0 = srv-home (unchanged, no staging zone)" "srv-home" "${actual_zone}"
 
     # Other fields should be preserved
     actual_cores=$(jq -r '.cores' "${RESULT}")

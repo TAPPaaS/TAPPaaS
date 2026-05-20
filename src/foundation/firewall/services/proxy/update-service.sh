@@ -64,7 +64,7 @@ if [[ -z "${VMNAME}" ]]; then
     VMNAME="${MODULE}"
 fi
 
-ZONE=$(jq -r '.zone0 // "srv"' "${MODULE_JSON}")
+ZONE=$(jq -r '.zone0 // "srv-home"' "${MODULE_JSON}")
 TAPPAAS_DOMAIN=$(jq -r '.tappaas.domain // empty' "${SYSTEM_CONFIG}")
 
 if [[ -z "${TAPPAAS_DOMAIN}" ]]; then

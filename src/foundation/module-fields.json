@@ -353,7 +353,7 @@
             "requiredBy": [],
             "usedBy": "cluster:vm",
             "default": "mgmt",
-            "example": "srv",
+            "example": "srv-home",
             "note": "Zone determines VLAN tag. 'mgmt' is untagged traffic."
         },
 

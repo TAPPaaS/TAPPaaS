@@ -12,7 +12,7 @@
   "imageType": "clone",
   "image": "8080",
   "bridge0": "lan",
-  "zone0": "srv",
+  "zone0": "srv-home",
   "dependsOn": [
     "cluster:vm",
     "templates:nixos"
