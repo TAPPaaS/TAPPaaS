@@ -1,130 +1,117 @@
 # Netbird Setup — TAPPaaS Network Access
 
-Netbird is a WireGuard-based mesh VPN. Rather than a traditional hub-and-spoke VPN,
-each peer establishes encrypted tunnels directly to other peers. For TAPPaaS, we use
-Netbird to give administrators secure remote access to all TAPPaaS zones and automatic
-DNS resolution of `*.internal` hostnames — without any manual configuration on the
-admin's machine.
+Netbird is a WireGuard-based mesh VPN. Each peer establishes encrypted
+tunnels directly to other peers. For TAPPaaS, Netbird gives administrators
+secure remote access to all TAPPaaS zones and automatic DNS resolution of
+`*.internal` hostnames.
 
-OPNsense acts as the **routing peer**: as the TAPPaaS firewall and router, it has
-an interface on every zone. It forwards traffic from Netbird peers into whichever
-zone they need to reach. Think of it as a single secure gateway through which all
-internal zones are accessible.
+OPNsense acts as the **routing peer**: it has an interface on every zone
+and forwards traffic from Netbird peers into any zone they need to reach.
 
-All TAPPaaS zones use `10.0.0.0/8` address space by default, so a single Netbird
-Network resource covers every zone simultaneously. OPNsense already knows how to
-route to each zone — Netbird just needs to know to send all `10.x.x.x` traffic
-through OPNsense.
+All TAPPaaS zones use `10.0.0.0/8` address space, so a single Netbird
+network resource covers every zone. OPNsense already routes to each zone —
+Netbird only needs to send all `10.x.x.x` traffic through OPNsense.
 
-> Zone subnets and DNS suffixes are defined in `src/foundation/firewall/zones.json`.
+> Zone subnets and DNS suffixes are defined in `zones.json`.
+
+> **Note:** OPNsense has a native Netbird plugin (`os-netbird`) that can
+> replace the manual peer setup. DNS sync from `zones.json` via
+> `opnsense-controller` is planned. See tracking issue.
 
 ---
 
 ## 1. Groups
 
-Groups are the foundation for both routing and access control. Create these once —
-they are reused for everything.
+Create these groups once — they are reused for everything.
 
 **TAPPaaS Gateways**
-Add the OPNsense peer to this group. It must contain only peers, not network
-resources.
+Add the OPNsense peer. Must contain only peers, not network resources.
 
 **Admins**
-Add all administrator laptops/desktops to this group.
+Add all administrator laptops and desktops.
 
 ---
 
 ## 2. TAPPaaS Internal Network
 
-A single Network resource covering `10.0.0.0/8` routes all TAPPaaS zone traffic
-through OPNsense. When an admin connects, Netbird installs this route on their
-machine automatically.
-
 In **app.netbird.io → Networks**:
 
-- Create a network named `TAPPaaS Internal`
-- Add a resource with address `10.0.0.0/8`
-- Set the **Routing Peer** to the OPNsense peer (masquerade enabled)
-- Set the **Access Groups** to `Admins`
+- Name: `TAPPaaS Internal`
+- Resource address: `10.0.0.0/8`
+- Routing Peer: OPNsense peer (masquerade: **on**)
+- Access Groups: `Admins`
 
-> Masquerade ensures that hosts in every zone see traffic as coming from OPNsense's
-> own IP on that zone's interface, so no return routes need to be configured on any
-> host.
+> Masquerade ensures hosts in every zone see traffic from OPNsense's own
+> IP on that interface — no return routes needed on any host.
 
 ---
 
 ## 3. DNS Nameserver
 
-A single nameserver handles DNS for all TAPPaaS zones. OPNsense's Unbound resolver
-is authoritative for every `*.internal` zone.
-
-Netbird automatically configures split DNS on admin machines: queries matching a
-registered domain are routed to OPNsense, while all other queries use the system
-default. No manual configuration is needed on the client.
-
 In **app.netbird.io → DNS → Nameservers**:
 
-- Create a nameserver named `TAPPaaS OPNsense DNS`
-- Add nameserver: OPNsense management IP (default: `10.0.0.1`), port `53`
+- Name: `TAPPaaS OPNsense DNS`
+- Nameserver: `10.0.0.1`, port `53`
 - Distribution Groups: `Admins`
 
-Add a **Match Domain** for each active zone:
+Add a **Match Domain** for each active zone. Keep this list in sync with
+`zones.json` — add a domain when a zone is activated, remove it when
+a zone is disabled.
 
-| Zone | Match Domain |
-|------|-------------|
-| Management | `mgmt.internal` |
-| Service | `srv.internal` |
-| DMZ | `dmz.internal` |
-| Private | `private.internal` |
-| IoT | `iot.internal` |
-
-Only add domains for zones that are active in `zones.json`. When a new zone is
-activated, add its domain here — no other Netbird changes are needed.
+| Zone | Match Domain | State |
+|------|-------------|-------|
+| Management | `mgmt.internal` | Manual |
+| Service (home) | `srv-home.internal` | Active |
+| Service (work) | `srv-work.internal` | Active |
+| Service (customer) | `srv-cust.internal` | Active |
+| Client (home) | `home.internal` | Active |
+| Client (work) | `work.internal` | Active |
+| IoT (local) | `iot-local.internal` | Active |
+| IoT (cloud) | `iot-cloud.internal` | Active |
+| IoT (cameras) | `iot-cams.internal` | Active |
+| Guest | `guest.internal` | Active |
+| DMZ | `dmz.internal` | Mandatory |
 
 > Port `53` is used — not the Netbird default of `53053`.
+> OPNsense uses Dnsmasq (not Unbound) as the DNS resolver.
 
 ---
 
 ## 4. Access Control Policies
 
-Two policies are required. They serve distinct purposes and cannot be merged.
+Two policies are required. They cannot be merged.
 
 ### TAPPaaS Admin ↔ Gateway
 
-OPNsense must be able to reply directly back to admin peers — for DNS responses and
-for return traffic from hosts in any zone. This bidirectional peer-to-peer policy
-enables that.
+Allows OPNsense to reply to admin peers — for DNS responses and return
+traffic from any zone.
 
 - Source: `Admins`
 - Destination: `TAPPaaS Gateways`
 - Bidirectional: **on**
 - Protocol: All
 
-This policy is created once and never needs to change.
-
-> Without this policy, DNS probes time out — OPNsense receives the query but its
-> reply is blocked. Netbird marks the nameserver as unavailable and does not
-> configure split DNS on the client.
+> Without this policy, DNS probes time out. Netbird marks the nameserver
+> as unavailable and does not configure split DNS on the client.
 
 ### TAPPaaS Internal Access
 
-This policy permits admin peers to use the `TAPPaaS Internal` network route.
+Allows admin peers to use the `TAPPaaS Internal` network route.
 
 - Source: `Admins`
-- Destination: `TAPPaaS Internal` resource (`10.0.0.0/8`)
-- Bidirectional: off (network resources cannot initiate connections)
+- Destination: `TAPPaaS Internal` (`10.0.0.0/8`)
+- Bidirectional: **off**
 - Protocol: All
 
 ---
 
 ## Result
 
-Once configured, an admin peer connecting to Netbird will automatically receive:
+After setup, an admin peer connecting to Netbird automatically receives:
 
-- A single route for `10.0.0.0/8` via OPNsense, covering all TAPPaaS zones
-- Split DNS for each registered `*.internal` domain pointing to OPNsense
-- Full access to all hosts in all active zones by hostname or IP
+- A route for `10.0.0.0/8` via OPNsense (all TAPPaaS zones)
+- Split DNS for each `*.internal` domain pointing to OPNsense
+- Full access to all hosts by hostname or IP
 
-When a new zone is activated, only the DNS nameserver needs updating — add the new
-domain and nothing else changes.
-
+When a new zone is activated in `zones.json`, add its domain to the
+Netbird nameserver. No other Netbird changes are needed.
