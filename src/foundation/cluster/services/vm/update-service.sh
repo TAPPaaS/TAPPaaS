@@ -13,7 +13,9 @@
 # is (re)registered as <vmname>.<zone0>.internal. Resolves issue #192.
 #
 # Handled (auto-applied):
-#   net0/net1 (bridge,zone->tag,trunks; MAC preserved) -> qm set + reboot + DNS
+#   net0/net1 (bridge,zone->tag,trunks; MAC preserved) -> qm set; a bridge/tag
+#     change additionally reboots + waits for IP + updates DNS (trunk/MAC-only
+#     changes apply live, no reboot)
 #   cores, memory, cputype, vmtag, vmname               -> qm set
 #   diskSize (grow only)                                -> resize-disk.sh
 #   node (only if module does NOT dependOn cluster:ha)  -> qm migrate
@@ -152,7 +154,7 @@ normalize_tags() {
 
 declare -a QM_SET_ARGS=()   # args appended to a single `qm set`
 declare -a CHANGES=()       # human-readable summary
-NET_CHANGED=0               # triggers reboot + IP wait + DNS
+REBOOT_NEEDED=0             # bridge/tag change (new subnet) → reboot + IP + DNS
 ZONE_CHANGED=0              # triggers stale-DNS cleanup
 FATAL=0
 QM_DELETE_NET1=0
@@ -168,6 +170,7 @@ live_bridge0="$(vmnet_parse "${live_net0}" bridge)"
 live_tag0="$(vmnet_parse "${live_net0}" tag)"
 live_trunks0="$(vmnet_parse "${live_net0}" trunks)"
 live_mac0="$(vmnet_parse "${live_net0}" mac)"
+live_queues0="$(vmnet_parse "${live_net0}" queues)"
 OLD_TAG0="${live_tag0:-0}"
 
 # Preserve the live MAC unless the module explicitly pins mac0.
@@ -178,10 +181,16 @@ if [[ "${live_bridge0}" != "${BRIDGE0}" \
    || "${live_tag0:-0}" != "${DESIRED_TAG0:-0}" \
    || "${live_trunks0}" != "${DESIRED_TRUNKS0}" \
    || ( "${MAC0_CFG}" != "__none__" && "${live_mac0}" != "${MAC0_CFG}" ) ]]; then
-    netopts="$(vmnet_build_netopts "${BRIDGE0}" "${desired_mac0}" "${DESIRED_TAG0}" "${DESIRED_TRUNKS0}")"
+    # Preserve the live queues value — never change queues on a running NIC
+    # (it forces a disruptive hot-replug; see issue #194).
+    netopts="$(vmnet_build_netopts "${BRIDGE0}" "${desired_mac0}" "${DESIRED_TAG0}" "${DESIRED_TRUNKS0}" "${live_queues0}")"
     plan_set "--net0" "${netopts}" \
         "net0: bridge=${live_bridge0}→${BRIDGE0}, tag=${live_tag0:-0}→${DESIRED_TAG0:-0} (zone ${ZONE0})"
-    NET_CHANGED=1
+    # Only a bridge or tag change moves the VM to a new subnet (needs reboot to
+    # renew DHCP). A trunk- or MAC-only change applies live on the bridge.
+    if [[ "${live_bridge0}" != "${BRIDGE0}" || "${live_tag0:-0}" != "${DESIRED_TAG0:-0}" ]]; then
+        REBOOT_NEEDED=1
+    fi
     [[ "${live_tag0:-0}" != "${DESIRED_TAG0:-0}" ]] && ZONE_CHANGED=1
 fi
 
@@ -196,6 +205,7 @@ if [[ "${BRIDGE1}" != "NONE" ]]; then
     live_tag1="$(vmnet_parse "${live_net1}" tag)"
     live_trunks1="$(vmnet_parse "${live_net1}" trunks)"
     live_mac1="$(vmnet_parse "${live_net1}" mac)"
+    live_queues1="$(vmnet_parse "${live_net1}" queues)"
     desired_mac1="${live_mac1}"
     [[ "${MAC1_CFG}" != "__none__" ]] && desired_mac1="${MAC1_CFG}"
     if [[ -z "${live_net1}" \
@@ -203,15 +213,21 @@ if [[ "${BRIDGE1}" != "NONE" ]]; then
        || "${live_tag1:-0}" != "${desired_tag1:-0}" \
        || "${live_trunks1}" != "${desired_trunks1}" \
        || ( "${MAC1_CFG}" != "__none__" && "${live_mac1}" != "${MAC1_CFG}" ) ]]; then
-        netopts1="$(vmnet_build_netopts "${BRIDGE1}" "${desired_mac1}" "${desired_tag1}" "${desired_trunks1}")"
+        # Preserve live queues (see issue #194 — never hot-change queues).
+        netopts1="$(vmnet_build_netopts "${BRIDGE1}" "${desired_mac1}" "${desired_tag1}" "${desired_trunks1}" "${live_queues1}")"
         plan_set "--net1" "${netopts1}" \
             "net1: bridge=${live_bridge1:-none}→${BRIDGE1}, tag=${live_tag1:-0}→${desired_tag1:-0} (zone ${ZONE1})"
-        NET_CHANGED=1
+        # Adding the NIC, or changing its bridge/tag, needs a reboot; a
+        # trunk/MAC-only change applies live.
+        if [[ -z "${live_net1}" || "${live_bridge1}" != "${BRIDGE1}" \
+           || "${live_tag1:-0}" != "${desired_tag1:-0}" ]]; then
+            REBOOT_NEEDED=1
+        fi
     fi
 elif [[ -n "${live_net1}" ]]; then
     # Module no longer declares a second NIC but the VM has one → remove it.
     CHANGES+=("net1: removing (no bridge1 in config)")
-    NET_CHANGED=1
+    REBOOT_NEEDED=1
     QM_DELETE_NET1=1
 fi
 
@@ -326,9 +342,11 @@ if [[ ${NODE_MIGRATE} -eq 1 ]]; then
     NODE_FQDN="${actual_node}.${MGMT}.internal"
 fi
 
-# ── Network change: reboot so the guest renews DHCP in the new subnet ─
+# ── Subnet change: reboot so the guest renews DHCP in the new subnet ─
+# Only bridge/tag changes get here; trunk- and MAC-only net changes were
+# already applied above via qm set and need no reboot.
 
-if [[ ${NET_CHANGED} -eq 1 ]]; then
+if [[ ${REBOOT_NEEDED} -eq 1 ]]; then
     if [[ "${vm_status}" != "running" ]]; then
         warn "  VM not running — network change applied to config; DNS will register on next boot"
         info "  ${GN}✓${CL} cluster:vm update-service completed"

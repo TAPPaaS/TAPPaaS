@@ -48,15 +48,39 @@ vmnet_zone_for_tag() {
         "$zones_file" 2>/dev/null
 }
 
+# Print the VLAN tags of every active zone, sorted and ';'-joined.
+#   vmnet_all_active_tags [zones_file]
+# "Active" here means state Active or Mandatory, with a non-zero tag (the
+# untagged mgmt zone is excluded). This is the complete trunk list the firewall
+# VM must carry so every routed VLAN reaches OPNsense. See issue #194.
+vmnet_all_active_tags() {
+    local zones_file="${1:-$VMNET_ZONES_FILE_DEFAULT}"
+    jq -r '
+        [ to_entries[]
+          | select((.value.state == "Active" or .value.state == "Mandatory")
+                   and ((.value.vlantag // 0) > 0))
+          | .value.vlantag ]
+        | sort | unique | map(tostring) | join(";")
+    ' "$zones_file" 2>/dev/null
+}
+
 # Convert a ';'-separated list of trunk zone names to their VLAN tags.
 #   vmnet_resolve_trunks "<z1;z2;...>" [zones_file]
-# Prints "tag1;tag2;...". Undefined zone → error (return 1); inactive → skipped
-# with a warning (matching Create-TAPPaaS-VM.sh's resolve_trunks).
+# Prints "tag1;tag2;...". The sentinel "ALL" (or "*") expands to every active
+# zone tag (vmnet_all_active_tags) — used so the firewall VM auto-trunks new
+# zones without editing its config (issue #194). Undefined zone → error
+# (return 1); inactive → skipped with a warning (matching resolve_trunks).
 vmnet_resolve_trunks() {
     local zone_list="$1"
     local zones_file="${2:-$VMNET_ZONES_FILE_DEFAULT}"
     local result="" zone_name state tag
     local -a zone_names
+
+    if [[ "$zone_list" == "ALL" || "$zone_list" == "*" ]]; then
+        vmnet_all_active_tags "$zones_file"
+        return 0
+    fi
+
     IFS=';' read -ra zone_names <<< "$zone_list"
     for zone_name in "${zone_names[@]}"; do
         [[ -z "$zone_name" ]] && continue
@@ -76,23 +100,24 @@ vmnet_resolve_trunks() {
 }
 
 # Build a Proxmox `--netN` option string.
-#   vmnet_build_netopts <bridge> <mac> <vlantag> <trunks>
+#   vmnet_build_netopts <bridge> <mac> <vlantag> <trunks> [queues]
 # <mac> empty → omit macaddr (Proxmox keeps/generates one). <vlantag> 0/empty →
-# no tag. <trunks> empty/NONE → no trunks.
+# no tag. <trunks> empty/NONE → no trunks. <queues> empty/0 → no queues.
 vmnet_build_netopts() {
-    local bridge="$1" mac="$2" tag="$3" trunks="$4"
+    local bridge="$1" mac="$2" tag="$3" trunks="$4" queues="${5:-}"
     local opts="virtio,bridge=${bridge}"
     [[ -n "$mac" ]] && opts="${opts},macaddr=${mac}"
     [[ -n "$tag" && "$tag" != "0" ]] && opts="${opts},tag=${tag}"
     [[ -n "$trunks" && "$trunks" != "NONE" ]] && opts="${opts},trunks=${trunks}"
+    [[ -n "$queues" && "$queues" != "0" ]] && opts="${opts},queues=${queues}"
     echo -n "${opts}"
 }
 
 # Extract one field from a live `qm config` net line.
 #   vmnet_parse "<netline>" <field>
 # <netline> is the value after "netN:" e.g. "virtio=02:..,bridge=lan,tag=210".
-# <field> is one of: mac | bridge | tag | trunks. Prints the value (empty if
-# absent). The model=MAC token (e.g. virtio=02:..) yields the mac.
+# <field> is one of: mac | bridge | tag | trunks | queues. Prints the value
+# (empty if absent). The model=MAC token (e.g. virtio=02:..) yields the mac.
 vmnet_parse() {
     local line="$1" field="$2"
     local -a parts
@@ -111,6 +136,7 @@ vmnet_parse() {
             bridge) [[ "$k" == "bridge" ]] && { echo -n "$v"; return 0; } ;;
             tag)    [[ "$k" == "tag" ]]    && { echo -n "$v"; return 0; } ;;
             trunks) [[ "$k" == "trunks" ]] && { echo -n "$v"; return 0; } ;;
+            queues) [[ "$k" == "queues" ]] && { echo -n "$v"; return 0; } ;;
         esac
     done
     echo -n ""

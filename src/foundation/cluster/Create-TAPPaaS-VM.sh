@@ -427,6 +427,10 @@ qm set $VMID --serial0 socket >/dev/null
 qm set $VMID --tags $VMTAG >/dev/null
 qm set $VMID --agent enabled=1 >/dev/null
 qm set $VMID --cores $CORE_COUNT --memory $RAM_SIZE >/dev/null
+# queues=<vcpus> enables virtio multi-queue for throughput. Set at creation
+# only: changing queues on a running VM forces a NIC hot-replug that drops the
+# guest's interfaces until reboot (see issue #194), so it is never altered by
+# update flows — only baked in here when the NIC is first created.
 NET0_OPTS="virtio,bridge=${BRIDGE0},macaddr=${MAC0}"
 if [ "$VLANTAG0" != "0" ]; then
   NET0_OPTS="${NET0_OPTS},tag=${VLANTAG0}"
@@ -434,6 +438,7 @@ fi
 if [ "$TRUNKS0" != "NONE" ]; then
   NET0_OPTS="${NET0_OPTS},trunks=${TRUNKS0}"
 fi
+NET0_OPTS="${NET0_OPTS},queues=${CORE_COUNT}"
 qm set $VMID --net0 "${NET0_OPTS}" >/dev/null
 if [[ "$BRIDGE1" == "NONE" ]]; then
   info "No second bridge configured"
@@ -445,6 +450,7 @@ else
   if [ "$TRUNKS1" != "NONE" ]; then
     NET1_OPTS="${NET1_OPTS},trunks=${TRUNKS1}"
   fi
+  NET1_OPTS="${NET1_OPTS},queues=${CORE_COUNT}"
   qm set $VMID --net1 "${NET1_OPTS}" >/dev/null
   info "Configured second bridge on $BRIDGE1"
 fi

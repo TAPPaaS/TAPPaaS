@@ -47,91 +47,77 @@ info "Reloading OPNsense filter to regenerate auto-rules for any new interfaces.
 ssh root@"$FIREWALL_FQDN" "configctl filter reload" >/dev/null 2>&1 \
     || warn "configctl filter reload returned non-zero (continuing)"
 
-# ── Sync OPNsense VM trunks with active VLAN zones ──────────────────
+# ── Sync OPNsense VM net0 trunks with active VLAN zones ─────────────
 #
 # The OPNsense VM's Proxmox net0 trunks list controls which VLAN tags the
-# host's vlan-aware bridge will forward to the VM. The list is set ONCE at
-# VM creation from firewall.json's trunks0 field — never updated. Activating
-# a new zone afterwards (e.g. test1/test2 for regression testing) requires
-# the OPNsense VM to also receive that VLAN. Without this step:
-#   - The new VLAN interface (vlan0.<tag>) exists on OPNsense and dnsmasq
-#     happily listens, but Proxmox's bridge drops the VM's tagged frames
-#     because the VLAN isn't in the OPNsense NIC's trunk allowlist.
-#   - DHCP DISCOVER never reaches OPNsense; VMs in the new zone get no IP.
-# This re-resolves the trunks0 list against the current zones.json (skipping
-# Inactive zones, same logic as Create-TAPPaaS-VM.sh::resolve_trunks) and
-# applies the result via `qm set` on the node hosting the firewall VM.
+# host's vlan-aware bridge forwards to the VM. It is set ONCE at VM creation
+# and never updated, so a zone activated afterwards is unreachable: the
+# vlan0.<tag> interface exists on OPNsense and dnsmasq listens, but Proxmox's
+# bridge drops the VM's tagged frames (the VLAN isn't in the NIC's trunk
+# allowlist) and DHCP DISCOVER never arrives. See #194.
+#
+# The trunk list is derived from ALL active zones in zones.json (firewall.json
+# carries trunks0="ALL"), so new zones are picked up with no config edit. A
+# trunks-only `qm set --net0` updates the bridge VLAN filter live, without
+# recreating the NIC — safe on the running firewall.
+#
+# IMPORTANT: we deliberately do NOT change `queues` here. Changing queues on a
+# running VM forces QEMU to hot-replug the virtio NIC, which drops OPNsense's
+# LAN + all VLAN parent interfaces until a reboot (observed outage). queues is
+# therefore set only at VM creation (Create-TAPPaaS-VM.sh); here we PRESERVE
+# whatever queues value the live NIC already has.
 
-info "Syncing OPNsense VM trunks with active VLAN zones..."
+info "Syncing OPNsense VM net0 trunks with active VLAN zones..."
+
+# shellcheck source=../cluster/lib/vm-net.sh disable=SC1091
+. /home/tappaas/TAPPaaS/src/foundation/cluster/lib/vm-net.sh
 
 FIREWALL_VMID=$(jq -r '.vmid // empty' "${FIREWALL_JSON}")
-FIREWALL_MAC=$(jq -r '.mac0 // empty' "${FIREWALL_JSON}")
 FIREWALL_BRIDGE=$(jq -r '.bridge0 // "lan"' "${FIREWALL_JSON}")
-TRUNK_ZONES=$(jq -r '.trunks0 // ""' "${FIREWALL_JSON}")
+FIREWALL_TRUNKS0=$(jq -r '.trunks0 // "ALL"' "${FIREWALL_JSON}")
 
-# Find the cluster node currently hosting the firewall VM (firewall.json has
-# no static .node field — its location can change via HA migration).
+# Find the cluster node currently hosting the firewall VM (its location can
+# change via HA migration).
 PRIMARY_NODE=$(get_primary_node_fqdn 2>/dev/null || echo "tappaas1.mgmt.internal")
 FIREWALL_NODE=$(ssh -o BatchMode=yes -o StrictHostKeyChecking=accept-new \
                     root@"${PRIMARY_NODE}" \
                     "pvesh get /cluster/resources --type vm --output-format json 2>/dev/null \
                      | jq -r --arg vmid \"${FIREWALL_VMID}\" '.[] | select(.vmid==(\$vmid|tonumber)) | .node'" \
                     2>/dev/null | head -1)
-# If MAC is not in firewall.json, read it live from the running VM
-if [[ -z "${FIREWALL_MAC}" && -n "${FIREWALL_NODE}" && -n "${FIREWALL_VMID}" ]]; then
-    FIREWALL_MAC=$(ssh -o BatchMode=yes root@"${FIREWALL_NODE}.mgmt.internal" \
-                    "qm config ${FIREWALL_VMID}" 2>/dev/null \
-                    | grep -E '^net0:' \
-                    | grep -oE '[0-9A-Fa-f]{2}(:[0-9A-Fa-f]{2}){5}' \
-                    | head -1)
-fi
 
-if [[ -z "${FIREWALL_NODE}" || -z "${FIREWALL_VMID}" || -z "${TRUNK_ZONES}" || -z "${FIREWALL_MAC}" ]]; then
-    warn "  Missing node/vmid/mac/trunks0 — skipping trunk sync (node=${FIREWALL_NODE}, vmid=${FIREWALL_VMID}, mac=${FIREWALL_MAC})"
+DESIRED_TRUNKS=$(vmnet_resolve_trunks "${FIREWALL_TRUNKS0}" "${CONFIG_DIR}/zones.json")
+
+if [[ -z "${FIREWALL_NODE}" || -z "${FIREWALL_VMID}" ]]; then
+    warn "  Could not locate firewall VM (node=${FIREWALL_NODE}, vmid=${FIREWALL_VMID}) — skipping net0 sync"
+elif [[ -z "${DESIRED_TRUNKS}" ]]; then
+    warn "  No active VLAN trunks resolved from zones.json — skipping net0 sync"
 else
-    # Resolve zone names → comma-separated VLAN tags, skipping Inactive zones
-    TRUNK_TAGS=$(jq -r --arg zlist "${TRUNK_ZONES}" '
-        ($zlist | split(";")) as $names
-        | [ $names[]
-            | . as $n
-            | (.. | select(type == "object")) as $zones | empty
-          ]
-        ' "${CONFIG_DIR}/zones.json" 2>/dev/null || true)
-    # Simpler, more robust extraction:
-    TRUNK_TAGS=""
-    IFS=';' read -ra _names <<< "${TRUNK_ZONES}"
-    for zone_name in "${_names[@]}"; do
-        state=$(jq -r --arg n "${zone_name}" '.[$n].state // empty' "${CONFIG_DIR}/zones.json")
-        if [[ "${state}" == "Active" || "${state}" == "Mandatory" ]]; then
-            tag=$(jq -r --arg n "${zone_name}" '.[$n].vlantag // empty' "${CONFIG_DIR}/zones.json")
-            if [[ -n "${tag}" && "${tag}" != "0" ]]; then
-                if [[ -z "${TRUNK_TAGS}" ]]; then
-                    TRUNK_TAGS="${tag}"
-                else
-                    TRUNK_TAGS="${TRUNK_TAGS};${tag}"
-                fi
-            fi
-        elif [[ -n "${state}" ]]; then
-            info "  Skipping trunk zone '${zone_name}' (state=${state})"
-        else
-            warn "  Trunk zone '${zone_name}' not found in zones.json — skipping"
-        fi
-    done
+    FIREWALL_NODE_FQDN="${FIREWALL_NODE}.mgmt.internal"
+    LIVE_NET0=$(ssh -o BatchMode=yes root@"${FIREWALL_NODE_FQDN}" \
+                    "qm config ${FIREWALL_VMID}" 2>/dev/null | awk -F': ' '/^net0:/ {print $2; exit}')
 
-    if [[ -z "${TRUNK_TAGS}" ]]; then
-        warn "  No active VLAN trunks to configure on OPNsense VM"
+    LIVE_MAC=$(vmnet_parse "${LIVE_NET0}" mac)
+    LIVE_TRUNKS=$(vmnet_parse "${LIVE_NET0}" trunks)
+    LIVE_TAG=$(vmnet_parse "${LIVE_NET0}" tag)
+    LIVE_QUEUES=$(vmnet_parse "${LIVE_NET0}" queues)
+
+    if [[ -z "${LIVE_MAC}" ]]; then
+        warn "  Could not read firewall net0 MAC — skipping net0 sync"
+    elif [[ "${LIVE_TRUNKS}" == "${DESIRED_TRUNKS}" ]]; then
+        info "  ${GN}✓${CL} net0 trunks already in sync (${DESIRED_TRUNKS})"
     else
-        FIREWALL_NODE_FQDN="${FIREWALL_NODE}.mgmt.internal"
-        NET0_OPTS="virtio=${FIREWALL_MAC},bridge=${FIREWALL_BRIDGE},trunks=${TRUNK_TAGS}"
-        info "  Setting net0 on VM ${FIREWALL_VMID} (node ${FIREWALL_NODE}): trunks=${TRUNK_TAGS}"
-        # Single-quote the value so semicolons in trunks=... aren't interpreted
-        # as command separators by the remote shell.
+        # Refresh trunks only; preserve MAC, tag and the existing queues value
+        # (changing queues live would recreate the NIC — see note above).
+        NET0_OPTS=$(vmnet_build_netopts "${FIREWALL_BRIDGE}" "${LIVE_MAC}" "${LIVE_TAG}" "${DESIRED_TRUNKS}" "${LIVE_QUEUES}")
+        info "  Updating net0 trunks on VM ${FIREWALL_VMID} (node ${FIREWALL_NODE}):"
+        info "    trunks: ${LIVE_TRUNKS:-none} → ${DESIRED_TRUNKS} (queues preserved: ${LIVE_QUEUES:-none})"
+        # Single-quote the value so ';' in trunks=... is not a command separator.
         if ssh -o BatchMode=yes -o StrictHostKeyChecking=accept-new \
                 root@"${FIREWALL_NODE_FQDN}" \
                 "qm set ${FIREWALL_VMID} --net0 '${NET0_OPTS}'" >/dev/null 2>&1; then
-            info "  ${GN}✓${CL} OPNsense VM trunks synced"
+            info "  ${GN}✓${CL} OPNsense VM net0 trunks synced"
         else
-            warn "  Failed to update OPNsense VM trunks — new VLANs may not receive traffic"
+            warn "  Failed to update OPNsense VM net0 trunks — new VLANs may not receive traffic"
         fi
     fi
 fi

@@ -21,7 +21,7 @@
 
 set -uo pipefail
 
-# shellcheck source=services/vm/../../../tappaas-cicd/scripts/common-install-routines.sh
+# shellcheck source=/home/tappaas/bin/common-install-routines.sh disable=SC1091
 . /home/tappaas/bin/common-install-routines.sh
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
