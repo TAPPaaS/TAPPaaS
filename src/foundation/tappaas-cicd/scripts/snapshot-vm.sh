@@ -75,10 +75,19 @@ fi
 
 NODE_FQDN="${NODE}.${MGMT}.internal"
 
-# Verify VM exists
-if ! ssh -o ConnectTimeout=5 root@"${NODE_FQDN}" "qm status ${VMID}" &>/dev/null; then
+# Detect whether VMID is a QEMU VM or LXC container
+VM_TYPE=$(ssh -o ConnectTimeout=5 -o BatchMode=yes -o LogLevel=ERROR root@"${NODE_FQDN}" \
+    "pvesh get /cluster/resources --type vm --output-format json" 2>/dev/null \
+    | jq -r --argjson id "${VMID}" \
+        '.[] | select(.vmid == $id) | .type // empty' 2>/dev/null || true)
+
+if [[ -z "${VM_TYPE}" ]]; then
     die "VM ${VMID} (${VMNAME}) not found on node ${NODE}"
 fi
+
+# qm for QEMU VMs, pct for LXC containers
+CMD="qm"
+[[ "${VM_TYPE}" == "lxc" ]] && CMD="pct"
 
 # ── Parse action ─────────────────────────────────────────────────────
 
@@ -115,10 +124,10 @@ info "snapshot-vm for ${BL}${VMNAME}${CL} (VMID: ${VMID}) on ${NODE} — action:
 # ── Helper: get sorted snapshot names ────────────────────────────────
 
 get_snapshot_names() {
-    # qm listsnapshot outputs lines like:
+    # qm/pct listsnapshot outputs lines like:
     #   `-> snapname   date   description
     # Filter out "current" which is not a real snapshot
-    ssh root@"${NODE_FQDN}" "qm listsnapshot ${VMID}" 2>/dev/null \
+    ssh root@"${NODE_FQDN}" "${CMD} listsnapshot ${VMID}" 2>/dev/null \
         | grep -v '^\s*$' \
         | sed 's/^[[:space:]`|>+\-]*//g' \
         | awk '{print $1}' \
@@ -134,7 +143,7 @@ case "${ACTION}" in
         SNAP_NAME="tappaas-$(date +'%Y%m%d-%H%M%S')"
         SNAP_DESC="TAPPaaS snapshot for ${MODULE}"
         info "  Creating snapshot: ${BL}${SNAP_NAME}${CL}"
-        ssh root@"${NODE_FQDN}" "qm snapshot ${VMID} '${SNAP_NAME}' --description '${SNAP_DESC}'" \
+        ssh root@"${NODE_FQDN}" "${CMD} snapshot ${VMID} '${SNAP_NAME}' --description '${SNAP_DESC}'" \
             || die "Failed to create snapshot"
         info "${GN}Snapshot '${SNAP_NAME}' created successfully${CL}"
         ;;
@@ -142,7 +151,7 @@ case "${ACTION}" in
     list)
         info "  Snapshots for VM ${VMNAME} (${VMID}):"
         echo ""
-        ssh root@"${NODE_FQDN}" "qm listsnapshot ${VMID}" 2>/dev/null || die "Failed to list snapshots"
+        ssh root@"${NODE_FQDN}" "${CMD} listsnapshot ${VMID}" 2>/dev/null || die "Failed to list snapshots"
         echo ""
         ;;
 
@@ -164,7 +173,7 @@ case "${ACTION}" in
         while IFS= read -r snap; do
             [[ -z "${snap}" ]] && continue
             info "  Deleting snapshot: ${BL}${snap}${CL}"
-            ssh root@"${NODE_FQDN}" "qm delsnapshot ${VMID} '${snap}'" \
+            ssh root@"${NODE_FQDN}" "${CMD} delsnapshot ${VMID} '${snap}'" \
                 || warn "Failed to delete snapshot '${snap}'"
         done <<< "${TO_DELETE}"
 
@@ -196,15 +205,15 @@ case "${ACTION}" in
 
         # Stop VM before rollback
         info "  Stopping VM ${VMID}..."
-        ssh root@"${NODE_FQDN}" "qm stop ${VMID}" 2>/dev/null || true
+        ssh root@"${NODE_FQDN}" "${CMD} stop ${VMID}" 2>/dev/null || true
         sleep 3
 
         info "  Rolling back to snapshot: ${BL}${TARGET}${CL}"
-        ssh root@"${NODE_FQDN}" "qm rollback ${VMID} '${TARGET}'" \
+        ssh root@"${NODE_FQDN}" "${CMD} rollback ${VMID} '${TARGET}'" \
             || die "Failed to rollback to snapshot '${TARGET}'"
 
         info "  Starting VM ${VMID}..."
-        ssh root@"${NODE_FQDN}" "qm start ${VMID}" \
+        ssh root@"${NODE_FQDN}" "${CMD} start ${VMID}" \
             || die "Failed to start VM after rollback"
 
         info "${GN}VM ${VMNAME} restored to snapshot '${TARGET}' and started${CL}"
