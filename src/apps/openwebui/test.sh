@@ -14,14 +14,29 @@ set -euo pipefail
 SCRIPT_NAME="$(basename "${BASH_SOURCE[0]}")"
 readonly SCRIPT_NAME
 
+# ── Parse arguments ───────────────────────────────────────────────────
+# Usage: ./test.sh [vmname] [--vmid <id>] [--zone0 <zone>]
+_MODULE="${1:-openwebui}"
+_OVERRIDE_VMID=""
+_OVERRIDE_ZONE=""
+
+shift 2>/dev/null || true
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --vmid)  _OVERRIDE_VMID="$2"; shift 2 ;;
+    --zone0) _OVERRIDE_ZONE="$2"; shift 2 ;;
+    *) shift ;;
+  esac
+done
+
 # shellcheck source=../../foundation/tappaas-cicd/scripts/common-install-routines.sh
-. /home/tappaas/bin/common-install-routines.sh
+. /home/tappaas/bin/common-install-routines.sh "${_MODULE}" 2>/dev/null || true
 
 # ── Configuration ─────────────────────────────────────────────────────
 
-VMNAME="$(get_config_value 'vmname' "${1:-}")"
-VMID="$(get_config_value 'vmid')"
-ZONE0NAME="$(get_config_value 'zone0' 'mgmt')"
+VMNAME="$(get_config_value 'vmname' "${_MODULE}")"
+VMID="${_OVERRIDE_VMID:-$(get_config_value 'vmid')}"
+ZONE0NAME="${_OVERRIDE_ZONE:-$(get_config_value 'zone0' 'srv-work')}"
 readonly VMNAME VMID ZONE0NAME
 
 VM_HOST="${VMNAME}.${ZONE0NAME}.internal"
@@ -37,15 +52,18 @@ FAIL_COUNT=0
 
 usage() {
     cat << EOF
-Usage: ${SCRIPT_NAME} <vmname>
+Usage: ${SCRIPT_NAME} [vmname] [--vmid <id>] [--zone0 <zone>]
 
-Run health and regression checks for the OpenWebUI module.
+Run health checks for the OpenWebUI module. Defaults to config in /home/tappaas/config/openwebui.json.
 
-Arguments:
-    vmname    Name of the VM (must have config in /home/tappaas/config/)
+Options:
+    --vmid <id>     Override VMID from config
+    --zone0 <zone>  Override zone from config
 
 Examples:
+    ${SCRIPT_NAME}
     ${SCRIPT_NAME} openwebui
+    ${SCRIPT_NAME} openwebui --vmid 313 --zone0 srv-cust
 EOF
 }
 
@@ -129,11 +147,7 @@ main() {
         exit 0
     fi
 
-    if [[ -z "${1:-}" ]]; then
-        error "Module name is required"
-        usage
-        exit 1
-    fi
+    # vmname is optional — defaults to 'openwebui' from config
 
     info "=== OpenWebUI Health Check ==="
     info "VM: ${VMNAME} (VMID: ${VMID}) at ${VM_HOST}"
