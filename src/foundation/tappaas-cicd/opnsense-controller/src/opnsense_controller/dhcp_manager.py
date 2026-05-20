@@ -246,37 +246,100 @@ class DhcpManager:
     # DHCP Range Operations
     # =========================================================================
 
-    def create_range(self, dhcp_range: DhcpRange, check_mode: bool = False) -> dict:
-        """Create a new DHCP range.
+    def reconfigure(self) -> dict:
+        """Apply staged dnsmasq changes by reconfiguring the service.
+
+        Range create/delete via the raw settings API only stage changes; the
+        service must be reconfigured for them to take effect. Callers that
+        make several changes should stage them all (reconfigure=False) and
+        call this once at the end to avoid restarting dnsmasq repeatedly.
+        """
+        return self.client.run_module(
+            "raw",
+            params={
+                "module": "dnsmasq",
+                "controller": "service",
+                "command": "reconfigure",
+                "action": "post",
+            },
+        )
+
+    def create_range(
+        self,
+        dhcp_range: DhcpRange,
+        check_mode: bool = False,
+        reconfigure: bool = True,
+    ) -> dict:
+        """Create (or rebind) a DHCP range via the raw OPNsense API.
+
+        This bypasses the oxl-opnsense-client ``dnsmasq_range`` module, which
+        does not pass the ``interface`` parameter through to OPNsense — every
+        range created via that module is written unbound (``interface=''``).
+        The raw ``addRange`` endpoint binds the interface correctly (proven by
+        direct-API testing). See GitHub issue #179.
+
+        Idempotent: any existing range with the same description is deleted
+        first, so re-running rebinds a previously-unbound range cleanly.
 
         Args:
             dhcp_range: DHCP range configuration
             check_mode: If True, perform dry-run without making changes
+            reconfigure: If True, reconfigure dnsmasq to apply immediately.
+                Pass False when staging several changes for a single apply.
 
         Returns:
-            Result dictionary from the API
+            Result dictionary with changed/uuid/interface keys.
         """
-        params = {
+        if check_mode:
+            return {
+                "changed": True,
+                "check_mode": True,
+                "interface": dhcp_range.interface,
+            }
+
+        range_payload = {
             "description": dhcp_range.description,
             "start_addr": dhcp_range.start_addr,
             "end_addr": dhcp_range.end_addr,
-            "lease_time": dhcp_range.lease_time,
+            "lease_time": str(dhcp_range.lease_time),
         }
-
         if dhcp_range.interface:
-            params["interface"] = dhcp_range.interface
+            range_payload["interface"] = dhcp_range.interface
         if dhcp_range.subnet_mask:
-            params["subnet_mask"] = dhcp_range.subnet_mask
+            range_payload["subnet_mask"] = dhcp_range.subnet_mask
         if dhcp_range.domain:
-            params["domain"] = dhcp_range.domain
+            range_payload["domain"] = dhcp_range.domain
         if dhcp_range.set_tag:
-            params["set_tag"] = dhcp_range.set_tag
+            range_payload["set_tag"] = dhcp_range.set_tag
 
-        return self.client.run_module(
-            "dnsmasq_range",
-            check_mode=check_mode,
-            params=params,
+        # Idempotency: drop any existing range with this description first.
+        self.delete_range(dhcp_range.description, reconfigure=False)
+
+        result = self.client.run_module(
+            "raw",
+            params={
+                "module": "dnsmasq",
+                "controller": "settings",
+                "command": "addRange",
+                "action": "post",
+                "data": {"range": range_payload},
+            },
         )
+        response = result.get("result", {}).get("response", {})
+        if response.get("result") != "saved":
+            raise RuntimeError(
+                f"addRange failed for '{dhcp_range.description}': {response}"
+            )
+
+        if reconfigure:
+            self.reconfigure()
+
+        return {
+            "changed": True,
+            "uuid": response.get("uuid"),
+            "interface": dhcp_range.interface,
+            "result": response,
+        }
 
     def update_range(self, dhcp_range: DhcpRange, check_mode: bool = False) -> dict:
         """Update an existing DHCP range (matched by description).
@@ -288,36 +351,60 @@ class DhcpManager:
         Returns:
             Result dictionary from the API
         """
-        # Same as create - the module handles updates by matching description
+        # create_range is idempotent (delete-by-description then add).
         return self.create_range(dhcp_range, check_mode=check_mode)
 
-    def delete_range(self, description: str, check_mode: bool = False) -> dict:
-        """Delete a DHCP range by description.
+    def delete_range(
+        self,
+        description: str,
+        check_mode: bool = False,
+        reconfigure: bool = True,
+    ) -> dict:
+        """Delete a DHCP range by description via the raw OPNsense API.
+
+        Uses raw ``delRange`` (matched by UUID) rather than the
+        ``dnsmasq_range`` module, consistent with create_range. See #179.
 
         Args:
             description: Description of the DHCP range to delete
             check_mode: If True, perform dry-run without making changes
+            reconfigure: If True, reconfigure dnsmasq to apply immediately.
 
         Returns:
-            Result dictionary from the API
+            Result dictionary with changed/uuid keys.
         """
-        params = {
-            "description": description,
-            "state": "absent",
-        }
+        if check_mode:
+            return {"changed": True, "check_mode": True}
 
-        return self.client.run_module(
-            "dnsmasq_range",
-            check_mode=check_mode,
-            params=params,
+        existing = self.get_range_by_description(description)
+        if not existing or not existing.get("uuid"):
+            return {"changed": False, "note": "range not found"}
+
+        result = self.client.run_module(
+            "raw",
+            params={
+                "module": "dnsmasq",
+                "controller": "settings",
+                "command": "delRange",
+                "params": [existing["uuid"]],
+                "action": "post",
+            },
         )
+        response = result.get("result", {}).get("response", {})
+        if response.get("result") != "deleted":
+            raise RuntimeError(f"delRange failed for '{description}': {response}")
+
+        if reconfigure:
+            self.reconfigure()
+
+        return {"changed": True, "uuid": existing["uuid"]}
 
     def create_multiple_ranges(
         self,
         ranges: list[DhcpRange],
         check_mode: bool = False,
     ) -> list[dict]:
-        """Create multiple DHCP ranges.
+        """Create multiple DHCP ranges, applying once at the end.
 
         Args:
             ranges: List of DHCP range configurations
@@ -328,8 +415,13 @@ class DhcpManager:
         """
         results = []
         for dhcp_range in ranges:
-            result = self.create_range(dhcp_range, check_mode=check_mode)
+            # Stage each change; reconfigure once after the batch.
+            result = self.create_range(
+                dhcp_range, check_mode=check_mode, reconfigure=False
+            )
             results.append(result)
+        if not check_mode and results:
+            self.reconfigure()
         return results
 
     # =========================================================================

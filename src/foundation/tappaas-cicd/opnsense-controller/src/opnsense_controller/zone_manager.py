@@ -809,6 +809,9 @@ class ZoneManager:
             existing_ranges = manager.list_ranges()
             existing_by_desc = {r["description"]: r for r in existing_ranges}
 
+            # Stage all create/delete changes, then reconfigure dnsmasq once.
+            changed = False
+
             # First, delete DHCP ranges for disabled zones
             for zone in disabled_zones:
                 dhcp_desc = zone.dhcp_description
@@ -823,7 +826,10 @@ class ZoneManager:
                         }
                     else:
                         try:
-                            result = manager.delete_range(dhcp_desc, check_mode=False)
+                            result = manager.delete_range(
+                                dhcp_desc, check_mode=False, reconfigure=False
+                            )
+                            changed = True
                             results[zone.name] = {"status": "deleted", "result": result}
                         except Exception as e:
                             results[zone.name] = {"status": "error", "error": str(e)}
@@ -832,27 +838,18 @@ class ZoneManager:
                     debug(f"  {zone.name}: DHCP range not found (nothing to delete)")
                     results[zone.name] = {"status": "not_found"}
 
-            # Then, create DHCP ranges for enabled zones with VLANs
+            # Then, create (or rebind) DHCP ranges for enabled zones with VLANs
             for zone in dhcp_zones:
                 dhcp_desc = zone.dhcp_description
-                existing = existing_by_desc.get(dhcp_desc)
 
-                if existing:
-                    debug(f"  {zone.name}: DHCP range already exists (skipping)")
-                    results[zone.name] = {
-                        "status": "exists",
-                        "range": f"{existing.get('start_addr')}-{existing.get('end_addr')}",
-                    }
-                    continue
-
-                # Determine the interface for DHCP
-                # The bridge field from zones.json may be 'lan', 'wan', or a logical name
-                # OPNsense dnsmasq accepts interface identifiers like 'lan', 'wan', 'opt1', etc.
-                # If the zone has a VLAN, we need to find its assigned interface identifier
+                # Determine the interface for DHCP first — it is needed both to
+                # create the range and to detect an existing-but-unbound range
+                # (the issue #179 failure mode) that must be rebound.
+                # The bridge field may be 'lan', 'wan', or a logical name;
+                # OPNsense dnsmasq accepts identifiers like 'lan'/'wan'/'opt1'.
                 dhcp_interface = None
                 if zone.needs_vlan:
-                    # For VLAN zones, try to find the assigned interface
-                    # by looking for the VLAN in assigned interfaces
+                    # For VLAN zones, look up the assigned interface identifier.
                     with VlanManager(self.config) as vlan_mgr:
                         assigned = vlan_mgr.get_assigned_vlans()
                         for v in assigned:
@@ -861,13 +858,26 @@ class ZoneManager:
                                 dhcp_interface = v["identifier"]
                                 break
                 else:
-                    # For non-VLAN zones, use the bridge directly if it's a valid identifier
-                    # Valid identifiers are: lan, wan, opt1, opt2, etc. (case-insensitive)
                     bridge_lower = zone.bridge.lower()
                     if bridge_lower in ("lan", "wan") or bridge_lower.startswith("opt"):
                         dhcp_interface = zone.bridge
 
-                # Create DHCP range
+                existing = existing_by_desc.get(dhcp_desc)
+                existing_iface = (existing.get("interface") or "") if existing else ""
+
+                # Skip when the range is already present AND correctly bound
+                # (or when no binding is expected). Otherwise fall through to
+                # (re)create — create_range is idempotent and rebinds a range
+                # that was previously written unbound (interface='').
+                if existing and (existing_iface or not dhcp_interface):
+                    debug(f"  {zone.name}: DHCP range already correct (skipping)")
+                    results[zone.name] = {
+                        "status": "exists",
+                        "range": f"{existing.get('start_addr')}-{existing.get('end_addr')}",
+                        "interface": existing_iface or "any",
+                    }
+                    continue
+
                 dhcp_range = DhcpRange(
                     description=dhcp_desc,
                     start_addr=zone.dhcp_start,
@@ -878,47 +888,39 @@ class ZoneManager:
                 )
 
                 interface_info = dhcp_interface or "any"
+                will_rebind = existing is not None
                 debug(f"  {zone.name}: {zone.dhcp_start} - {zone.dhcp_end} ({zone.domain}) on {interface_info}")
 
                 if check_mode:
                     results[zone.name] = {
-                        "status": "would_create",
+                        "status": "would_rebind" if will_rebind else "would_create",
                         "range": f"{zone.dhcp_start}-{zone.dhcp_end}",
                         "domain": zone.domain,
                         "interface": interface_info,
                     }
                 else:
                     try:
-                        result = manager.create_range(dhcp_range, check_mode=False)
-                        results[zone.name] = {"status": "created", "result": result}
+                        # Stage the change; reconfigure once after the loop.
+                        result = manager.create_range(
+                            dhcp_range, check_mode=False, reconfigure=False
+                        )
+                        changed = True
+                        results[zone.name] = {
+                            "status": "rebound" if will_rebind else "created",
+                            "interface": interface_info,
+                            "result": result,
+                        }
                     except Exception as e:
-                        error_str = str(e)
-                        # If the interface isn't found by dnsmasq (e.g., newly created VLAN),
-                        # retry without interface binding (use "any")
-                        if "was not found" in error_str and dhcp_interface:
-                            warn(f"Interface '{dhcp_interface}' not recognized by dnsmasq, retrying without interface binding...")
-                            dhcp_range_any = DhcpRange(
-                                description=dhcp_desc,
-                                start_addr=zone.dhcp_start,
-                                end_addr=zone.dhcp_end,
-                                interface=None,  # Use "any"
-                                domain=zone.domain,
-                                lease_time=86400,
-                            )
-                            try:
-                                result = manager.create_range(dhcp_range_any, check_mode=False)
-                                results[zone.name] = {
-                                    "status": "created",
-                                    "result": result,
-                                    "note": f"Interface '{dhcp_interface}' not found, created without interface binding",
-                                }
-                                debug(f"    Created DHCP range on 'any' interface")
-                            except Exception as e2:
-                                results[zone.name] = {"status": "error", "error": str(e2)}
-                                error(f"{zone.name}: {e2}")
-                        else:
-                            results[zone.name] = {"status": "error", "error": error_str}
-                            error(f"{zone.name}: {e}")
+                        # Surface binding failures instead of silently
+                        # downgrading to an unbound range (the old fallback
+                        # masked issue #179).
+                        results[zone.name] = {"status": "error", "error": str(e)}
+                        error(f"{zone.name}: {e}")
+
+            # Apply all staged DHCP changes in a single reconfigure.
+            if changed and not check_mode:
+                debug("  Reconfiguring dnsmasq to apply DHCP changes...")
+                manager.reconfigure()
 
             # Report on manual zones (not created or deleted)
             for zone in manual_zones:
