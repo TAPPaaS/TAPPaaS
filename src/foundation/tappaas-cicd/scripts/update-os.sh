@@ -27,6 +27,24 @@ readonly MGMT="mgmt"
 # shellcheck source=common-install-routines.sh
 . /home/tappaas/bin/common-install-routines.sh
 
+# Run a command quietly (progress dots in place of its output) while preserving
+# its REAL exit code, and die on failure. A bare `cmd 2>&1 | while read; do
+# printf .; done` pipeline reports the while-loop's exit status (always 0), so
+# a failure of <cmd> is silently swallowed — which let a failed nixos-rebuild
+# look like success (issue #201). PIPESTATUS[0] recovers the true code; `set
+# +e` keeps the pipeline from aborting before we can read it.
+#   run_quiet <description> <command> [args...]
+run_quiet() {
+    local desc="$1" rc
+    shift
+    set +e
+    "$@" 2>&1 | while IFS= read -r _; do printf "."; done
+    rc=${PIPESTATUS[0]}
+    set -e
+    echo ""
+    [[ "${rc}" -eq 0 ]] || die "${desc} failed (exit ${rc})"
+}
+
 usage() {
     cat << EOF
 Usage: ${SCRIPT_NAME} <vmname> <vmid> <node>
@@ -180,12 +198,11 @@ update_nixos() {
     info "Using NixOS config: ${nix_config}"
     info "Running nixos-rebuild..."
     if [[ "${OPT_DEBUG:-0}" -eq 1 ]]; then
-        nixos-rebuild --target-host "tappaas@${vm_ip}" --use-remote-sudo switch -I "nixos-config=${nix_config}"
+        nixos-rebuild --target-host "tappaas@${vm_ip}" --use-remote-sudo switch -I "nixos-config=${nix_config}" \
+            || die "nixos-rebuild failed"
     else
-        nixos-rebuild --target-host "tappaas@${vm_ip}" --use-remote-sudo switch -I "nixos-config=${nix_config}" 2>&1 | while IFS= read -r _; do
-            printf "."
-        done
-        echo ""
+        run_quiet "nixos-rebuild" \
+            nixos-rebuild --target-host "tappaas@${vm_ip}" --use-remote-sudo switch -I "nixos-config=${nix_config}"
     fi
 
     info "Rebooting VM to apply configuration..."
@@ -203,26 +220,23 @@ update_debian() {
 
     info "Updating package lists..."
     if [[ "${OPT_DEBUG:-0}" -eq 1 ]]; then
-        ssh "tappaas@${vm_ip}" "sudo apt-get update"
+        ssh "tappaas@${vm_ip}" "sudo apt-get update" || die "apt-get update failed"
     else
-        ssh "tappaas@${vm_ip}" "sudo apt-get update" 2>&1 | while IFS= read -r _; do printf "."; done
-        echo ""
+        run_quiet "apt-get update" ssh "tappaas@${vm_ip}" "sudo apt-get update"
     fi
 
     info "Upgrading packages..."
     if [[ "${OPT_DEBUG:-0}" -eq 1 ]]; then
-        ssh "tappaas@${vm_ip}" "sudo DEBIAN_FRONTEND=noninteractive apt-get upgrade -y"
+        ssh "tappaas@${vm_ip}" "sudo DEBIAN_FRONTEND=noninteractive apt-get upgrade -y" || die "apt-get upgrade failed"
     else
-        ssh "tappaas@${vm_ip}" "sudo DEBIAN_FRONTEND=noninteractive apt-get upgrade -y" 2>&1 | while IFS= read -r _; do printf "."; done
-        echo ""
+        run_quiet "apt-get upgrade" ssh "tappaas@${vm_ip}" "sudo DEBIAN_FRONTEND=noninteractive apt-get upgrade -y"
     fi
 
     info "Installing/updating QEMU guest agent..."
     if [[ "${OPT_DEBUG:-0}" -eq 1 ]]; then
-        ssh "tappaas@${vm_ip}" "sudo apt-get install -y qemu-guest-agent && sudo systemctl enable --now qemu-guest-agent"
+        ssh "tappaas@${vm_ip}" "sudo apt-get install -y qemu-guest-agent && sudo systemctl enable --now qemu-guest-agent" || die "qemu-guest-agent install failed"
     else
-        ssh "tappaas@${vm_ip}" "sudo apt-get install -y qemu-guest-agent && sudo systemctl enable --now qemu-guest-agent" 2>&1 | while IFS= read -r _; do printf "."; done
-        echo ""
+        run_quiet "qemu-guest-agent install" ssh "tappaas@${vm_ip}" "sudo apt-get install -y qemu-guest-agent && sudo systemctl enable --now qemu-guest-agent"
     fi
 }
 
