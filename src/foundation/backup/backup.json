@@ -5,6 +5,7 @@
   "vmtag": "TAPPaaS,Foundation",
   "node": "tappaas3",
   "storage": "tankc1",
+  "pbsStorageName": "tappaas_backup",
   "imageType": "apt",
   "image": "pbs",
   "imageLocation": "http://download.proxmox.com/debian/pbs",

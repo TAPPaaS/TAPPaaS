@@ -77,7 +77,7 @@ JSON=$(cat "${JSON_CONFIG}")
 
 PBS_NODE="$(get_config_value 'node' "$(get_node_hostname 0)")"
 ZONE="$(get_config_value 'zone0' 'mgmt')"
-STORAGE_NAME="tappaas_backup"
+STORAGE_NAME="$(get_config_value 'pbsStorageName' 'tappaas_backup')"  # configurable, issue #199
 
 # Default values
 TARGET_NODE="$(get_node_hostname 0)"

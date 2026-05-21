@@ -129,8 +129,9 @@ echo "  - PBS Client: All Proxmox VE nodes"
 # Get the PBS node IP address
 PBS_NODE_IP=$(ssh root@${NODE}.${ZONE}.internal "hostname -I | awk '{print \$1}'")
 PBS_HOSTNAME="${VMNAME}.${ZONE}.internal"
-DATASTORE_NAME="tappaas_backup"
-DATASTORE_PATH="/${STORAGE}/tappaas_backup"
+# PBS datastore / Proxmox storage name — configurable via backup.json (issue #199)
+DATASTORE_NAME="$(get_config_value 'pbsStorageName' 'tappaas_backup')"
+DATASTORE_PATH="/${STORAGE}/${DATASTORE_NAME}"
 PBS_USER="tappaas@pbs"
 
 info "${BOLD}Configuring Proxmox Backup Server...${CL}"

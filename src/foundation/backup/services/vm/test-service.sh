@@ -37,7 +37,11 @@ VMNAME="$(get_config_value 'vmname' "${MODULE}")"
 NODE="$(get_config_value 'node' "$(get_node_hostname 0)")"
 MGMT="mgmt"
 
-readonly STORAGE_NAME="tappaas_backup"
+# PBS storage name belongs to the backup module, not the module under test
+# (whose config is loaded into $JSON above), so read it straight from
+# backup.json. Default keeps backward compatibility. Issue #199.
+STORAGE_NAME="$(jq -r '.pbsStorageName // "tappaas_backup"' /home/tappaas/config/backup.json 2>/dev/null || echo "tappaas_backup")"
+readonly STORAGE_NAME
 
 DEEP="${TAPPAAS_TEST_DEEP:-0}"
 PASS=0

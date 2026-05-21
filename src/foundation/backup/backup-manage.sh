@@ -72,8 +72,9 @@ JSON=$(cat "${JSON_CONFIG}")
 
 PBS_NODE="$(get_config_value 'node' "$(get_node_hostname 0)")"
 ZONE="$(get_config_value 'zone0' 'mgmt')"
-STORAGE_NAME="tappaas_backup"
-DATASTORE_NAME="tappaas_backup"
+# PBS datastore / Proxmox storage name — configurable via backup.json (issue #199)
+STORAGE_NAME="$(get_config_value 'pbsStorageName' 'tappaas_backup')"
+DATASTORE_NAME="${STORAGE_NAME}"
 MGMT_NODE="$(get_node_hostname 0)"
 
 COMMAND="${1:-help}"
