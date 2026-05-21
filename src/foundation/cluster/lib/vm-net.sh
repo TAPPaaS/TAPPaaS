@@ -101,12 +101,20 @@ vmnet_resolve_trunks() {
 
 # Build a Proxmox `--netN` option string.
 #   vmnet_build_netopts <bridge> <mac> <vlantag> <trunks> [queues]
-# <mac> empty → omit macaddr (Proxmox keeps/generates one). <vlantag> 0/empty →
-# no tag. <trunks> empty/NONE → no trunks. <queues> empty/0 → no queues.
+# When a MAC is given, the model carries it inline as `virtio=<MAC>` — the
+# canonical form Proxmox emits in `qm config` and round-trips cleanly. This is
+# preferred over the bare-model + `macaddr=<MAC>` form, which some PVE versions
+# reject as a duplicate `model` key on `qm set` (issue #204). <mac> empty →
+# bare `virtio` (Proxmox keeps/generates a MAC). <vlantag> 0/empty → no tag.
+# <trunks> empty/NONE → no trunks. <queues> empty/0 → no queues.
 vmnet_build_netopts() {
     local bridge="$1" mac="$2" tag="$3" trunks="$4" queues="${5:-}"
-    local opts="virtio,bridge=${bridge}"
-    [[ -n "$mac" ]] && opts="${opts},macaddr=${mac}"
+    local opts
+    if [[ -n "$mac" ]]; then
+        opts="virtio=${mac},bridge=${bridge}"
+    else
+        opts="virtio,bridge=${bridge}"
+    fi
     [[ -n "$tag" && "$tag" != "0" ]] && opts="${opts},tag=${tag}"
     [[ -n "$trunks" && "$trunks" != "NONE" ]] && opts="${opts},trunks=${trunks}"
     [[ -n "$queues" && "$queues" != "0" ]] && opts="${opts},queues=${queues}"

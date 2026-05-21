@@ -30,10 +30,10 @@ if [[ ! -f "${ZONES}" ]]; then
     TMP_ZONES="$(mktemp)"
     cat > "${TMP_ZONES}" <<'JSON'
 {
-  "mgmt": { "state": "Manual",   "vlantag": 0,   "bridge": "lan" },
-  "srv":  { "state": "Active",   "vlantag": 210, "bridge": "lan" },
-  "dmz":  { "state": "Mandatory","vlantag": 610, "bridge": "lan" },
-  "old":  { "state": "Inactive", "vlantag": 999, "bridge": "lan" }
+  "mgmt":     { "state": "Manual",   "vlantag": 0,   "bridge": "lan" },
+  "srv-home": { "state": "Active",   "vlantag": 210, "bridge": "lan" },
+  "dmz":      { "state": "Mandatory","vlantag": 610, "bridge": "lan" },
+  "old":      { "state": "Inactive", "vlantag": 999, "bridge": "lan" }
 }
 JSON
     ZONES="${TMP_ZONES}"
@@ -51,9 +51,9 @@ ck() {
     fi
 }
 
-# zone → tag
-ck "zone srv → 210"  "210" "$(vmnet_zone_vlantag srv "${ZONES}")"
-ck "zone mgmt → 0"   "0"   "$(vmnet_zone_vlantag mgmt "${ZONES}")"
+# zone → tag (srv-home is the Active 210 zone post-#178)
+ck "zone srv-home → 210"  "210" "$(vmnet_zone_vlantag srv-home "${ZONES}")"
+ck "zone mgmt → 0"        "0"   "$(vmnet_zone_vlantag mgmt "${ZONES}")"
 # undefined / inactive zones fail (return non-zero)
 if vmnet_zone_vlantag nope "${ZONES}" >/dev/null 2>&1; then
     ck "undefined zone fails" "nonzero" "zero"
@@ -62,8 +62,8 @@ else
 fi
 
 # tag → zone (reverse)
-ck "tag 210 → srv"  "srv"  "$(vmnet_zone_for_tag 210 "${ZONES}")"
-ck "tag 0 → mgmt"   "mgmt" "$(vmnet_zone_for_tag 0 "${ZONES}")"
+ck "tag 210 → srv-home"  "srv-home"  "$(vmnet_zone_for_tag 210 "${ZONES}")"
+ck "tag 0 → mgmt"        "mgmt"      "$(vmnet_zone_for_tag 0 "${ZONES}")"
 
 # all-active tags + "ALL" sentinel (issue #194). Compare to an independent jq
 # computation from the same zones file so it works for any zones.json.
@@ -75,9 +75,9 @@ ck "all_active_tags matches zones" "${expected_active}" "$(vmnet_all_active_tags
 ck "ALL sentinel → all active"     "${expected_active}" "$(vmnet_resolve_trunks ALL "${ZONES}")"
 ck "* sentinel → all active"       "${expected_active}" "$(vmnet_resolve_trunks '*' "${ZONES}")"
 
-# net option string builder
-ck "netopts tagged+mac"   "virtio,bridge=lan,macaddr=AA:BB,tag=210" "$(vmnet_build_netopts lan AA:BB 210 '')"
-ck "netopts untagged"     "virtio,bridge=lan,macaddr=AA:BB"          "$(vmnet_build_netopts lan AA:BB 0 '')"
+# net option string builder — MAC carried inline as virtio=<MAC> (issue #204)
+ck "netopts tagged+mac"   "virtio=AA:BB,bridge=lan,tag=210"          "$(vmnet_build_netopts lan AA:BB 210 '')"
+ck "netopts untagged"     "virtio=AA:BB,bridge=lan"                  "$(vmnet_build_netopts lan AA:BB 0 '')"
 ck "netopts no-mac"       "virtio,bridge=lan,tag=210"                "$(vmnet_build_netopts lan '' 210 '')"
 ck "netopts trunks"       "virtio,bridge=lan,tag=210,trunks=310;410" "$(vmnet_build_netopts lan '' 210 '310;410')"
 ck "netopts queues"       "virtio,bridge=lan,trunks=210;610,queues=4" "$(vmnet_build_netopts lan '' 0 '210;610' 4)"
