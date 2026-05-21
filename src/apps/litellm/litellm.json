@@ -20,7 +20,7 @@
     "cluster:vm",
     "templates:nixos",
     "backup:vm",
-    "identity:identity",
+    "identity:identity"
   ],
   "provides": [
     "models"

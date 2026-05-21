@@ -1,19 +1,26 @@
-  {                                                                                                                                                                                          
-      "version": "0.5.0",                                                   
-      "node": "tappaas2",                                                                                                                                                                    
-      "vmid": 909,                                                                                                                                                                           
-      "vmtag": "TAPPaaS,Test",                                                                                                                                                               
-      "vmname": "test-debian-srv-lan2",                                                                                                                                                      
-      "cores": 1,                                                           
-      "memory": "1024",                                                                                                                                                                      
-      "diskSize": "4G",                                                                                                                                                                      
-      "storage": "tanka1",                                                
-      "cloudInit": "true",                                                                                                                                                                   
-      "imageType": "img",                                                   
-      "image": "debian-13-generic-amd64-20260112-2355.qcow2",                                                                                                                                
-      "imageLocation": "https://cdimage.debian.org/cdimage/cloud/trixie/20260112-2355",                                                                                                      
-      "bridge0": "lan2",                                                                                                                                                                     
-      "zone0": "srv-home",                                                                                                                                                                        
-      "dependsOn": ["cluster:vm", "templates:debian"],                                                                                                                                       
-      "description": "Smoke test: Debian img on lan2/srv bridge"                                                                                                                             
-  }                                                                                                                                                                                          
+{
+  "version": "0.5.0",
+  "node": "tappaas2",
+  "vmid": 909,
+  "vmtag": "TAPPaaS,Test",
+  "vmname": "test-debian-srv-lan2",
+  "zone0": "srv-home",
+  "dependsOn": [
+    "cluster:vm",
+    "templates:debian"
+  ],
+  "description": "Smoke test: Debian img on lan2/srv bridge",
+  "config": {
+    "cluster:vm": {
+      "bridge0": "lan2",
+      "cloudInit": "true",
+      "cores": 1,
+      "diskSize": "4G",
+      "image": "debian-13-generic-amd64-20260112-2355.qcow2",
+      "imageLocation": "https://cdimage.debian.org/cdimage/cloud/trixie/20260112-2355",
+      "imageType": "img",
+      "memory": "1024",
+      "storage": "tanka1"
+    }
+  }
+}

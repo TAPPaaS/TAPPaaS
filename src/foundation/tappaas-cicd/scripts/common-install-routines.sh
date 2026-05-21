@@ -384,6 +384,22 @@ function get_config_value() {
   return 0
 }
 
+# Normalize a module JSON to the flat internal representation (#161 Pattern C).
+#
+# A module may group per-service configuration under a Pattern-A `config` block
+# keyed by the "<module>:<service>" dependency coordinate, e.g.
+#   { "dependsOn": ["cluster:vm"], "config": { "cluster:vm": { "cores": 4 } } }
+# All TAPPaaS tooling reads flat top-level fields, so this flattens every
+# config block up to the top level and drops `config`. Flat modules pass
+# through unchanged. Reads JSON on stdin, emits normalized JSON on stdout.
+function normalize_module_config() {
+  jq '
+    if (.config | type) == "object"
+    then reduce (.config | to_entries[]) as $s (.; . * $s.value) | del(.config)
+    else . end
+  '
+}
+
 # Validate a module JSON file against module-fields.json schema
 # Usage: check_json <json_file> [schema_file]
 # Returns: 0 if valid, 1 if errors found
@@ -411,6 +427,39 @@ function check_json() {
     error "Invalid JSON syntax in ${YW}$json_file${CL}"
     error "       ${json_content}"
     return 1
+  fi
+
+  # Pattern C (#161): accept a Pattern-A `config` block (per-service config
+  # keyed by the "<module>:<service>" dependency coordinate). Validate its
+  # structure, then flatten to the flat internal representation so the rest of
+  # validation (field names/types/requiredBy) runs unchanged.
+  if echo "$json_content" | jq -e '(.config | type) == "object"' >/dev/null 2>&1; then
+    # 1. Every config key must be a declared dependency.
+    local undeclared
+    undeclared=$(echo "$json_content" | jq -r '
+      (.dependsOn // []) as $d | .config | keys[] | select(. as $k | ($d | index($k)) | not)')
+    if [[ -n "$undeclared" ]]; then
+      while IFS= read -r k; do
+        [[ -z "$k" ]] && continue
+        error "  config block '${YW}${k}${CL}' is not a declared dependency — add it to dependsOn (#161)"
+        errors=$((errors + 1))
+      done <<< "$undeclared"
+    fi
+    # 2. No field may appear in both the header and a config block, or in two
+    #    config blocks (ambiguous after flattening — the drift #161 prevents).
+    local collisions
+    collisions=$(echo "$json_content" | jq -r '
+      [ (del(.config) | keys[]), ((.config // {}) | .[] | keys[]) ]
+      | group_by(.) | map(select(length > 1) | .[0]) | .[]' 2>/dev/null)
+    if [[ -n "$collisions" ]]; then
+      while IFS= read -r f; do
+        [[ -z "$f" ]] && continue
+        error "  field '${YW}${f}${CL}' is set in both the header and a config block (or in two config blocks) — ambiguous (#161)"
+        errors=$((errors + 1))
+      done <<< "$collisions"
+    fi
+    # 3. Flatten for the remaining validation.
+    json_content=$(echo "$json_content" | normalize_module_config)
   fi
 
   # Load schema fields

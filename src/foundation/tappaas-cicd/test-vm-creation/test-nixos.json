@@ -5,19 +5,25 @@
   "vmid": 911,
   "vmtag": "TAPPaaS,Test",
   "node": "tappaas1",
-  "cores": 2,
-  "memory": "2048",
-  "diskSize": "24G",
-  "storage": "tanka1",
-  "imageType": "clone",
-  "image": "8080",
-  "HANode": "tappaas3",
-  "replicationSchedule": "*/15",
-  "bridge0": "lan",
   "zone0": "mgmt",
   "dependsOn": [
     "cluster:vm",
     "cluster:ha",
     "templates:nixos"
-  ]
+  ],
+  "config": {
+    "cluster:ha": {
+      "HANode": "tappaas3",
+      "replicationSchedule": "*/15"
+    },
+    "cluster:vm": {
+      "bridge0": "lan",
+      "cores": 2,
+      "diskSize": "24G",
+      "image": "8080",
+      "imageType": "clone",
+      "memory": "2048",
+      "storage": "tanka1"
+    }
+  }
 }

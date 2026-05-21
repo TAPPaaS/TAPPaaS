@@ -5,16 +5,20 @@
   "vmid": 912,
   "vmtag": "TAPPaaS,Test",
   "node": "tappaas3",
-  "cores": 2,
-  "memory": "2048",
-  "diskSize": "16G",
-  "storage": "tanka1",
-  "imageType": "clone",
-  "image": "8080",
-  "bridge0": "lan",
   "zone0": "srv-home",
   "dependsOn": [
     "cluster:vm",
     "templates:nixos"
-  ]
+  ],
+  "config": {
+    "cluster:vm": {
+      "bridge0": "lan",
+      "cores": 2,
+      "diskSize": "16G",
+      "image": "8080",
+      "imageType": "clone",
+      "memory": "2048",
+      "storage": "tanka1"
+    }
+  }
 }

@@ -4,18 +4,22 @@
   "vmname": "template",
   "vmid": 999,
   "vmtag": "TAPPaaS,Test",
-  "cores": 2,
-  "memory": "8192",
-  "diskSize": "32G",
-  "storage": "tanka1",
-  "imageType": "clone",
-  "image": "8080",
-  "bridge0": "lan",
   "zone0": "srv-home",
   "dependsOn": [
     "cluster:vm",
     "cluster:ha",
-    "template:nixos"
+    "templates:nixos"
   ],
-  "provides": []
+  "provides": [],
+  "config": {
+    "cluster:vm": {
+      "bridge0": "lan",
+      "cores": 2,
+      "diskSize": "32G",
+      "image": "8080",
+      "imageType": "clone",
+      "memory": "8192",
+      "storage": "tanka1"
+    }
+  }
 }

@@ -354,6 +354,23 @@ main() {
     info "Copying ${source_json} to ${dest_json}"
     cp "${source_json}" "${dest_json}"
 
+    # Pattern C (#161): if the source uses a Pattern-A `config` block, flatten it
+    # to the flat internal representation now, so the deployed config and all
+    # downstream tooling (install-module, service scripts, get_config_value)
+    # read flat top-level fields exactly as before. Flat sources are unchanged.
+    if declare -F normalize_module_config >/dev/null 2>&1 \
+       && jq -e '(.config | type) == "object"' "${dest_json}" >/dev/null 2>&1; then
+        info "  Normalizing Pattern-A config block to flat fields (#161)"
+        local norm_tmp
+        norm_tmp=$(mktemp)
+        if normalize_module_config < "${dest_json}" > "${norm_tmp}" && jq empty "${norm_tmp}" 2>/dev/null; then
+            mv "${norm_tmp}" "${dest_json}"
+        else
+            rm -f "${norm_tmp}"
+            die "Failed to normalize Pattern-A config block in ${source_json}"
+        fi
+    fi
+
     # Copy the optional <module>.meta.json alongside it (cluster:lxc reads this
     # for GPU passthrough / bind-mounts; not schema-validated). Issue #203.
     local source_meta="./${module}.meta.json"

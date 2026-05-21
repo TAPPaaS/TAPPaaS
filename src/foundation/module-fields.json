@@ -666,6 +666,29 @@
             "format": "^[a-zA-Z][a-zA-Z0-9-]*$",
             "example": ["vm", "ha"],
             "note": "Each listed service must have a corresponding services/<service>/install-service.sh and update-service.sh"
+        },
+
+        "config": {
+            "description": "Optional Pattern-A nesting (issue #161, Pattern C hybrid). Groups per-service configuration under the '<module>:<service>' dependency coordinate instead of (or alongside) flat top-level fields. Purely a readability/authoring convenience: TAPPaaS NORMALIZES it to the flat form at deploy (copy-update-json.sh) and at validation (check_json), so all tooling still reads flat top-level fields. A module may be written fully flat (current form), fully Pattern-A, or mixed.",
+            "type": "object",
+            "requiredBy": [],
+            "usedBy": ["general"],
+            "patternProperties": {
+                "^[a-zA-Z][a-zA-Z0-9-]*:[a-zA-Z][a-zA-Z0-9-]*$": {
+                    "type": "object",
+                    "description": "Configuration for one declared dependency. The fields inside are ordinary module fields (cores, proxyDomain, …) scoped to that service."
+                }
+            },
+            "rules": [
+                "Every key in 'config' must also appear in 'dependsOn' (a config block for an undeclared dependency is an error).",
+                "A field must not appear in both the header and a config block, nor in two config blocks (ambiguous after flattening — rejected).",
+                "Multi-service header fields (e.g. zone0, vmname, vmid) stay at the top level — they are owned by the module, not a single service."
+            ],
+            "example": {
+                "cluster:vm": { "cores": 4, "memory": "4096", "diskSize": "32G" },
+                "firewall:proxy": { "proxyDomain": "app.example.com", "proxyPort": 8080 }
+            },
+            "note": "Convert between forms with module-format.sh (to-flat | to-config). Backward compatible: flat modules are untouched."
         }
     },
 
