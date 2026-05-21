@@ -269,13 +269,18 @@ module_exists() {
     # No config in CONFIG_DIR => never installed.
     [[ -f "${cfg}" ]] || return 1
 
-    # Non-VM module (no cluster:vm dependency): config presence is the only
-    # signal we have, so treat it as installed.
-    if ! jq -e '(.dependsOn // []) | index("cluster:vm") != null' "${cfg}" >/dev/null 2>&1; then
+    # Guest-backed module (cluster:vm or cluster:lxc): verify the guest below.
+    # Any other module (service-only): config presence is the only signal we
+    # have, so treat it as installed. (Note: install-module sources this file
+    # from the module dir, which auto-copies <module>.json into CONFIG_DIR — so
+    # config presence alone cannot distinguish "installed" from "about to
+    # install" for guest-backed modules; we must probe the cluster. Issue #203.)
+    if ! jq -e '(.dependsOn // []) | (index("cluster:vm") != null) or (index("cluster:lxc") != null)' "${cfg}" >/dev/null 2>&1; then
         return 0
     fi
 
-    # VM-backed module: confirm the VM is actually present on the cluster.
+    # Guest-backed module: confirm the VM/container is actually on the cluster
+    # (pvesh --type vm returns both qemu and lxc guests).
     local vmid node node_fqdn found_node
     vmid=$(jq -r '.vmid // empty' "${cfg}" 2>/dev/null)
     node=$(jq -r '.node // empty' "${cfg}" 2>/dev/null)
@@ -417,6 +422,12 @@ function check_json() {
   # Check fields required by dependencies (requiredBy vs dependsOn)
   local depends_on_json
   depends_on_json=$(echo "$json_content" | jq -c '.dependsOn // []')
+
+  # A module is either VM-backed or container-backed, never both (issue #203).
+  if echo "$depends_on_json" | jq -e 'index("cluster:vm") != null and index("cluster:lxc") != null' >/dev/null 2>&1; then
+    error "  dependsOn declares both ${YW}cluster:vm${CL} and ${YW}cluster:lxc${CL} — a guest is a VM or a container, not both"
+    errors=$((errors + 1))
+  fi
 
   # Fields with a "default" in the schema are never strictly required — the
   # installer can fall back to the default, so only flag fields that have

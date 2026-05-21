@@ -160,6 +160,14 @@ main() {
     local depends_on
     depends_on=$(jq -r '.dependsOn // [] | .[]' "${module_json}" 2>/dev/null)
 
+    # A module is either VM-backed or container-backed, never both (issue #203).
+    if jq -e '(.dependsOn // []) as $d
+              | (($d | index("cluster:vm")) != null)
+                and (($d | index("cluster:lxc")) != null)' \
+            "${module_json}" >/dev/null 2>&1; then
+        die "Module '${module}' declares both cluster:vm and cluster:lxc in dependsOn — choose one (a guest is a VM or a container, not both)"
+    fi
+
     local dep_errors=0
     if [[ -z "${depends_on}" ]]; then
         info "  No dependencies declared"

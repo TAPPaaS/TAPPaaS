@@ -2,18 +2,20 @@
 #
 # TAPPaaS Cluster Module Test
 #
-# Validates the cluster foundation module: VM lifecycle scripts, the
+# Validates the cluster foundation module: VM/LXC lifecycle scripts, the
 # vm-net.sh network helpers, the cluster:vm drift reconciler (services/vm/
-# update-service.sh, issue #192), and the cluster:ha drift reconciler
-# (services/ha/update-service.sh, issue #193).
+# update-service.sh, #192), the cluster:ha drift reconciler (services/ha/
+# update-service.sh, #193), and the cluster:lxc provisioner + reconciler
+# (services/lxc/, #203).
 #
 # Standard mode: quick checks (~seconds) — file presence, vm-net.sh unit
 #                tests, and a read-only drift --check against installed VMs.
-# Deep mode:     additionally stands up disposable test VMs and verifies the
+# Deep mode:     additionally stands up disposable test guests and verifies the
 #                reconcilers correct induced drift:
-#                  #192 — a zone change (net0 VLAN tag + DNS)
+#                  #192 — VM zone change (net0 VLAN tag + DNS)
 #                  #193 — replication-schedule + HA-rule node drift
-#                Creates and deletes real VMs (~minutes).
+#                  #203 — LXC create on srv-home/210 + DNS + cores drift
+#                Creates and deletes real VMs/containers (~minutes).
 #
 # Usage: ./test.sh [module-name]
 #
@@ -45,6 +47,7 @@ indent() { while IFS= read -r _l; do printf '      %s\n' "${_l}"; done; }
 readonly SSH_OPTS="-o ConnectTimeout=5 -o StrictHostKeyChecking=accept-new -o UserKnownHostsFile=/dev/null -o LogLevel=ERROR -o BatchMode=yes"
 
 # Find the node a VMID lives on (cluster-wide); echoes "<node> <status>".
+# Matches both qemu VMs and lxc containers (vmid is unique cluster-wide).
 find_vm() {
     local vmid="$1" node row
     for node in $(get_all_node_hostnames); do
@@ -52,7 +55,7 @@ find_vm() {
         row=$(ssh ${SSH_OPTS} "root@${node}.${MGMT}.internal" \
             "pvesh get /cluster/resources --type vm --output-format json" 2>/dev/null \
             | jq -r --argjson id "${vmid}" \
-                '.[] | select(.vmid == $id and .type == "qemu") | "\(.node) \(.status)"' 2>/dev/null) || true
+                '.[] | select(.vmid == $id and (.type == "qemu" or .type == "lxc")) | "\(.node) \(.status)"' 2>/dev/null) || true
         if [[ -n "${row}" ]]; then echo "${row}"; return 0; fi
     done
     return 1
@@ -64,6 +67,7 @@ info "${BOLD}Test 1: Cluster scripts present${CL}"
 
 required=(
     Create-TAPPaaS-VM.sh
+    Create-TAPPaaS-LXC.sh
     lib/vm-net.sh
     lib/test-vm-net.sh
     services/vm/install-service.sh
@@ -74,6 +78,10 @@ required=(
     services/ha/update-service.sh
     services/ha/delete-service.sh
     services/ha/test-service.sh
+    services/lxc/install-service.sh
+    services/lxc/update-service.sh
+    services/lxc/delete-service.sh
+    services/lxc/test-service.sh
 )
 missing=0
 for f in "${required[@]}"; do
@@ -126,7 +134,7 @@ else
     target=""
     for j in "${CONFIG_DIR}"/*.json; do
         m=$(basename "$j" .json)
-        [[ "$m" == "test-vmdrift" || "$m" == "test-hadrift" ]] && continue
+        [[ "$m" == "test-vmdrift" || "$m" == "test-hadrift" || "$m" == "test-lxcdrift" ]] && continue
         if jq -e '(.dependsOn // []) | index("cluster:vm") != null' "$j" >/dev/null 2>&1; then
             target="$m"; break
         fi
@@ -377,6 +385,106 @@ if [[ "${DEEP}" -eq 1 ]]; then
 else
     info "${BOLD}Deep Test: cluster:ha drift reconcile${CL}"
     skip "HA VM creation + drift test (use TAPPAAS_TEST_DEEP=1 to run)"
+fi
+
+# ── Deep Test: create an LXC, verify net/DNS, induce drift, reconcile ─
+
+deep_cleanup_lxc() {
+    dns-manager --no-ssl-verify delete test-lxcdrift srv-home.internal >/dev/null 2>&1 || true
+    [[ -f "${CONFIG_DIR}/test-lxcdrift.json" ]] || return 0
+    info "  Cleaning up LXC test container (delete-module test-lxcdrift)..."
+    /home/tappaas/bin/delete-module.sh test-lxcdrift --force >/dev/null 2>&1 || true
+}
+
+if [[ "${DEEP}" -eq 1 ]]; then
+    info "${BOLD}Deep Test: cluster:lxc provisioner + drift reconcile (issue #203)${CL}"
+    trap deep_cleanup_lxc EXIT
+
+    TLVM="test-lxcdrift"
+    LFIX="${SCRIPT_DIR}/test-lxcdrift"
+    LUPSVC="${SCRIPT_DIR}/services/lxc/update-service.sh"
+    LVMID=922
+    ldeep_ok=1
+
+    # 1. Install the disposable plain-Debian container (no GPU/meta) on
+    #    srv-home / VLAN 210 (the only test VLAN this switch trunks cross-node).
+    info "  Installing ${TLVM} (Debian CT on srv-home/210; first run downloads the template)..."
+    if ( cd "${LFIX}" && /home/tappaas/bin/install-module.sh "${TLVM}" ) >/dev/null 2>&1; then
+        pass "LXC container installed via cluster:lxc"
+    else
+        fail "LXC install failed — aborting deep test"
+        ldeep_ok=0
+    fi
+
+    # Locate the node hosting CT 922.
+    if [[ "${ldeep_ok}" -eq 1 ]]; then
+        lrow=$(find_vm "${LVMID}") || true
+        LNODE="${lrow%% *}"
+        [[ -z "${LNODE}" ]] && { fail "could not locate ${TLVM} (VMID ${LVMID}) after install"; ldeep_ok=0; }
+    fi
+
+    # 2. net0 must be on the srv-home VLAN tag (210) — proves zone→tag for LXC.
+    if [[ "${ldeep_ok}" -eq 1 ]]; then
+        # shellcheck disable=SC2086,SC2029
+        lnet0=$(ssh ${SSH_OPTS} "root@${LNODE}.${MGMT}.internal" "pct config ${LVMID} | grep '^net0'" 2>/dev/null) || true
+        if grep -q "tag=210" <<< "${lnet0}"; then
+            pass "container net0 bound to srv-home VLAN (tag=210)"
+        else
+            fail "container net0 not tagged 210 (got: ${lnet0:-none})"
+        fi
+    fi
+
+    # 3. post-install reconciler reports in sync.
+    if [[ "${ldeep_ok}" -eq 1 ]]; then
+        if "${LUPSVC}" --check "${TLVM}" 2>&1 | grep -q "in sync"; then
+            pass "post-install: LXC reconciler reports in sync"
+        else
+            fail "post-install: expected 'in sync'"
+        fi
+    fi
+
+    # 4. DNS registered in srv-home.
+    if [[ "${ldeep_ok}" -eq 1 ]]; then
+        if dns-manager --no-ssl-verify list 2>/dev/null | grep -i "test-lxcdrift" | grep -q "srv-home.internal"; then
+            pass "DNS record test-lxcdrift.srv-home.internal registered"
+        else
+            fail "DNS record test-lxcdrift.srv-home.internal not found"
+        fi
+    fi
+
+    # 5. Induce cores drift (1→2) in config; detect; apply; verify live.
+    if [[ "${ldeep_ok}" -eq 1 ]]; then
+        tmp=$(mktemp)
+        if jq '.cores = 2' "${CONFIG_DIR}/${TLVM}.json" > "${tmp}" && mv "${tmp}" "${CONFIG_DIR}/${TLVM}.json"; then
+            pass "induced drift: cores 1→2 in config"
+        else
+            fail "could not edit test config"; ldeep_ok=0
+        fi
+    fi
+    if [[ "${ldeep_ok}" -eq 1 ]]; then
+        if "${LUPSVC}" --check "${TLVM}" 2>&1 | grep -q "cores:"; then
+            pass "reconciler detects cores drift"
+        else
+            fail "reconciler did not detect cores drift"
+        fi
+    fi
+    if [[ "${ldeep_ok}" -eq 1 ]]; then
+        info "  Applying LXC reconcile (cores)..."
+        "${LUPSVC}" "${TLVM}" 2>&1 | indent
+        # shellcheck disable=SC2086,SC2029
+        live_cores=$(ssh ${SSH_OPTS} "root@${LNODE}.${MGMT}.internal" "pct config ${LVMID} | awk -F': ' '/^cores/{print \$2}'" 2>/dev/null) || true
+        if [[ "${live_cores}" == "2" ]]; then
+            pass "live container reconciled to cores=2"
+        else
+            fail "live container cores not 2 (got: ${live_cores:-none})"
+        fi
+    fi
+
+    deep_cleanup_lxc
+    trap - EXIT
+else
+    info "${BOLD}Deep Test: cluster:lxc provisioner + drift reconcile${CL}"
+    skip "LXC creation + drift test (use TAPPAAS_TEST_DEEP=1 to run)"
 fi
 
 # ── Summary ─────────────────────────────────────────────────────────

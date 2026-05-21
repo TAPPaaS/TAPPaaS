@@ -1,10 +1,6 @@
 #!/usr/bin/env bash
 # patch-host-gpu.sh — TAPPaaS host GPU preparation
-<<<<<<< HEAD
 # Repo: ErikDaniel007/private_tappaas
-=======
-# Repo: ErikDaniel007/
->>>>>>> addaf18 (fix: merge Erik's vllm-amd scripts + patch entrypoint bug)
 # Path: src/apps/vllm-amd/patch-host-gpu.sh
 #
 # Run ON the Proxmox host (tappaas2) via SSH from install.sh
@@ -35,16 +31,12 @@ KFD_MINOR=$(jq -r '.gpu.kfd_minor'     "$META")
 RENDER_NODE=$(jq -r '.gpu.render_node' "$META")
 RENDER_MAJOR=$(jq -r '.gpu.render_major' "$META")
 RENDER_MINOR=$(jq -r '.gpu.render_minor' "$META")
-MODELS_SRC=$(jq -r '.models_bind_src'  "$META")
+# Host models directory comes from the first bind-mount (see <module>.meta.json
+# bindMounts[]); falls back to legacy models_bind_src for older meta files.
+MODELS_SRC=$(jq -r '.bindMounts[0].src // .models_bind_src // empty' "$META")
 
 # --- Step 1: Check amdgpu kernel module ---
-<<<<<<< HEAD
-
-AMDGPU_LOADED=$(lsmod | grep -c "^amdgpu" || true)
-if [ "$AMDGPU_LOADED" -gt 0 ]; then
-=======
 if lsmod | grep -q amdgpu; then
->>>>>>> addaf18 (fix: merge Erik's vllm-amd scripts + patch entrypoint bug)
   ok "amdgpu kernel module loaded"
 else
   err "amdgpu module" "not loaded — check dmesg"

@@ -1,82 +1,67 @@
 #!/usr/bin/env bash
-# install.sh — TAPPaaS vllm-amd module installer
+# install.sh — TAPPaaS vllm-amd module installer (post-create steps only)
 # Repo: ErikDaniel007/private_tappaas
 # Path: src/apps/vllm-amd/install.sh
 #
-# Run FROM tappaas-cicd AFTER running discover.sh
-# Reads node, vmname, zone0 from <module>.json
-# Usage: ./install.sh <module>  (e.g. ./install.sh vllm-amd)
+# Run FROM tappaas-cicd by install-module.sh AFTER the cluster:lxc service has
+# created the container (issue #203). Container creation, networking and DNS are
+# now owned by cluster:lxc (Create-TAPPaaS-LXC.sh + install-service.sh); this
+# script only does the module-specific work that is NOT shared:
+#   1. patch-host-gpu.sh  — prepare GPU devices/permissions on the host
+#   2. update.sh          — install Docker + vLLM inside the container
+#
+# Run discover.sh first to (re)generate <module>.meta.json for this host's GPU.
+# Usage: ./install.sh <module>   (e.g. ./install.sh vllm-amd)
 
+# Remote ssh commands embed locally-computed values that expand client-side.
+# shellcheck disable=SC2029
 set -euo pipefail
 
-# --- Color codes ---
 GN="\033[1;92m"; RD="\033[01;31m"; CL="\033[m"
 ok()  { printf "${GN}  ✅ %-30s${CL}\n" "$1"; }
 die() { printf "${RD}  ❌ FATAL: %s${CL}\n" "$1"; exit 1; }
 
-# --- Check argument and JSON files ---
-[ -z "${1:-}" ]      && die "Usage: ./install.sh <module>  (e.g. ./install.sh vllm-amd)"
-[ -f "${1}.json" ]   || die "Not found: ${1}.json — run discover.sh first"
+[ -z "${1:-}" ]         && die "Usage: ./install.sh <module>  (e.g. ./install.sh vllm-amd)"
+[ -f "${1}.json" ]      || die "Not found: ${1}.json"
 [ -f "${1}.meta.json" ] || die "Not found: ${1}.meta.json — run discover.sh first"
 
 MODULE="$1"
-
-# --- Read node and hostname info from JSON ---
 NODE=$(jq -r '.node'   "${MODULE}.json")
 VMNAME=$(jq -r '.vmname' "${MODULE}.json")
 ZONE=$(jq -r '.zone0'  "${MODULE}.json")
 TARGET="root@${NODE}.mgmt.internal"
 TAPPAAS_DIR="/root/tappaas"
-
-# --- Find scripts (same dir first, then ../bin) ---
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
-find_script() {
-  local name="$1"
-  local found=""
-  [ -f "${SCRIPT_DIR}/${name}" ]                       && found="${SCRIPT_DIR}/${name}"
-  [ -z "$found" ] && [ -f "${SCRIPT_DIR}/../../bin/${name}" ] && found="${SCRIPT_DIR}/../../bin/${name}"
-  [ -n "$found" ] || die "Script not found: ${name} (checked ${SCRIPT_DIR} and ../../bin)"
-  echo "$found"
-}
-
-LXC_SCRIPT=$(find_script "Create-TAPPaaS-LXC.sh")
-PATCH_SCRIPT=$(find_script "patch-host-gpu.sh")
-UPDATE_SCRIPT=$(find_script "update.sh")
-
 echo ""
-echo "=== TAPPaaS install: $MODULE ==="
+echo "=== TAPPaaS install (post-create): $MODULE ==="
 echo "    node      : $NODE"
 echo "    container : ${VMNAME}.${ZONE}.internal"
 echo ""
 
-# --- Copy JSON and scripts to node ---
-ok "copying config and scripts to $NODE"
+# cluster:lxc has already created the container; ship the module-specific
+# helpers + meta/config the post-create steps need (cluster:lxc removes the
+# meta after creation, so re-ship it here).
+ok "copying meta + module scripts to $NODE"
 ssh "$TARGET" "mkdir -p $TAPPAAS_DIR"
-scp "${MODULE}.json"         "${TARGET}:${TAPPAAS_DIR}/${MODULE}.json"
-scp "${MODULE}.meta.json"    "${TARGET}:${TAPPAAS_DIR}/${MODULE}.meta.json"
-scp "$PATCH_SCRIPT"          "${TARGET}:${TAPPAAS_DIR}/patch-host-gpu.sh"
-scp "$LXC_SCRIPT"            "${TARGET}:${TAPPAAS_DIR}/Create-TAPPaaS-LXC.sh"
-scp "$UPDATE_SCRIPT"         "${TARGET}:${TAPPAAS_DIR}/update.sh"
+scp "${MODULE}.json"                        "${TARGET}:${TAPPAAS_DIR}/${MODULE}.json"
+scp "${MODULE}.meta.json"                   "${TARGET}:${TAPPAAS_DIR}/${MODULE}.meta.json"
+scp "${SCRIPT_DIR}/patch-host-gpu.sh"       "${TARGET}:${TAPPAAS_DIR}/patch-host-gpu.sh"
+scp "${SCRIPT_DIR}/update.sh"               "${TARGET}:${TAPPAAS_DIR}/update.sh"
 
-# --- Step 1: Patch host GPU permissions ---
-echo "  [1/3] Patching host GPU on $NODE..."
+# Step 1: Prepare host GPU (devices, render group, permissions, models dir).
+echo "  [1/2] Patching host GPU on $NODE..."
 ssh "$TARGET" "bash ${TAPPAAS_DIR}/patch-host-gpu.sh ${MODULE}"
 
-# --- Step 2: Create LXC container ---
-echo "  [2/3] Creating LXC container on $NODE..."
-ssh "$TARGET" "bash ${TAPPAAS_DIR}/Create-TAPPaaS-LXC.sh ${MODULE}"
-
-# --- Step 3: Install Docker + vLLM inside LXC ---
-echo "  [3/3] Installing Docker + vLLM inside LXC..."
+# Step 2: Install Docker + vLLM inside the (already created) container.
+echo "  [2/2] Installing Docker + vLLM inside the container..."
 ssh "$TARGET" "bash ${TAPPAAS_DIR}/update.sh ${MODULE}"
 
-# --- Cleanup ---
+# Cleanup shipped files.
 ssh "$TARGET" "rm -f \
   ${TAPPAAS_DIR}/${MODULE}.json \
   ${TAPPAAS_DIR}/${MODULE}.meta.json \
   ${TAPPAAS_DIR}/patch-host-gpu.sh \
-  ${TAPPAAS_DIR}/Create-TAPPaaS-LXC.sh \
   ${TAPPAAS_DIR}/update.sh"
 ok "cleanup done on $NODE"
 

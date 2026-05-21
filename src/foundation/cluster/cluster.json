@@ -1,11 +1,12 @@
 {
-  "description": "TAPPaaS Proxmox Cluster - provides VM creation and HA services",
-  "version": "0.7",
+  "description": "TAPPaaS Proxmox Cluster - provides VM, LXC and HA services",
+  "version": "0.8",
   "maintainer": "@TAPPaaS",
   "status": "Development",
   "dependsOn": [],
   "provides": [
     "vm",
+    "lxc",
     "ha"
   ]
 }

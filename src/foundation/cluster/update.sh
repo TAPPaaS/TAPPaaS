@@ -84,9 +84,10 @@ info "${BOLD}Step 2: Distributing files to all Proxmox nodes${CL}"
 while read -r node; do
     NODE_FQDN="$node.$MGMTVLAN.internal"
     echo ""
-    info "Copying zones.json and Create-TAPPaaS-VM.sh to $node..."
+    info "Copying zones.json and the VM/LXC provisioners to $node..."
     scp /home/tappaas/config/zones.json root@"$NODE_FQDN":/root/tappaas/
     scp "${SCRIPT_DIR}/Create-TAPPaaS-VM.sh" root@"$NODE_FQDN":/root/tappaas/
+    scp "${SCRIPT_DIR}/Create-TAPPaaS-LXC.sh" root@"$NODE_FQDN":/root/tappaas/
 
     # Debian/Ubuntu cloud-init vendor-data snippet (issue #147). Must live at
     # /var/lib/vz/snippets/ to be referenced as 'local:snippets/...' in qm.
