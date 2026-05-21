@@ -21,7 +21,6 @@
     "templates:nixos",
     "backup:vm",
     "identity:identity",
-    "firewall:proxy"
   ],
   "provides": [
     "models"
