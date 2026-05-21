@@ -441,7 +441,7 @@ qm set $VMID --cores $CORE_COUNT --memory $RAM_SIZE >/dev/null
 # only: changing queues on a running VM forces a NIC hot-replug that drops the
 # guest's interfaces until reboot (see issue #194), so it is never altered by
 # update flows — only baked in here when the NIC is first created.
-NET0_OPTS="virtio,bridge=${BRIDGE0},macaddr=${MAC0}"
+NET0_OPTS="virtio=${MAC0},bridge=${BRIDGE0}"
 if [ "$VLANTAG0" != "0" ]; then
   NET0_OPTS="${NET0_OPTS},tag=${VLANTAG0}"
 fi
@@ -453,7 +453,7 @@ qm set $VMID --net0 "${NET0_OPTS}" >/dev/null
 if [[ "$BRIDGE1" == "NONE" ]]; then
   info "No second bridge configured"
 else
-  NET1_OPTS="virtio,bridge=${BRIDGE1},macaddr=${MAC1}"
+  NET1_OPTS="virtio=${MAC1},bridge=${BRIDGE1}"
   if [ "$VLANTAG1" != "0" ]; then
     NET1_OPTS="${NET1_OPTS},tag=${VLANTAG1}"
   fi
