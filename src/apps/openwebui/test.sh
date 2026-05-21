@@ -17,8 +17,10 @@ readonly SCRIPT_NAME
 # ── Parse arguments ───────────────────────────────────────────────────
 # Usage: ./test.sh [vmname] [--vmid <id>] [--zone0 <zone>]
 _MODULE="${1:-openwebui}"
-_OVERRIDE_VMID=""
-_OVERRIDE_ZONE=""
+# Seed overrides from the env vars exported by test-module.sh (issue #196);
+# explicit --vmid/--zone0 args below take precedence.
+_OVERRIDE_VMID="${TAPPAAS_VMID_OVERRIDE:-}"
+_OVERRIDE_ZONE="${TAPPAAS_ZONE0_OVERRIDE:-}"
 
 shift 2>/dev/null || true
 while [[ $# -gt 0 ]]; do

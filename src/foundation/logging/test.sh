@@ -20,8 +20,9 @@ readonly SCRIPT_NAME
 # ── Configuration ─────────────────────────────────────────────────────
 
 VMNAME="$(get_config_value 'vmname' "${1:-}")"
-VMID="$(get_config_value 'vmid')"
-ZONE0NAME="$(get_config_value 'zone0' 'mgmt')"
+# vmid/zone0 may be overridden to test a non-default instance (issue #196).
+VMID="${TAPPAAS_VMID_OVERRIDE:-$(get_config_value 'vmid')}"
+ZONE0NAME="${TAPPAAS_ZONE0_OVERRIDE:-$(get_config_value 'zone0' 'mgmt')}"
 readonly VMNAME VMID ZONE0NAME
 
 VM_HOST="${VMNAME}.${ZONE0NAME}.internal"

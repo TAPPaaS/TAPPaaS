@@ -10,7 +10,8 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 VMNAME="${1:-vllm-amd}"
 CONFIG_FILE="${SCRIPT_DIR}/${VMNAME}.json"
-VMID=$(jq -r '.vmid' "$CONFIG_FILE")
+# vmid may be overridden to test a non-default instance (issue #196).
+VMID="${TAPPAAS_VMID_OVERRIDE:-$(jq -r '.vmid' "$CONFIG_FILE")}"
 
 PASS=0
 FAIL=0

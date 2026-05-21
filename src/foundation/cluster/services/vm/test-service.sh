@@ -34,9 +34,10 @@ fi
 check_json "/home/tappaas/config/${MODULE}.json" || exit 2
 
 VMNAME="$(get_config_value 'vmname' "${MODULE}")"
-VMID="$(get_config_value 'vmid')"
+# vmid/zone0 may be overridden to test a non-default instance (issue #196).
+VMID="${TAPPAAS_VMID_OVERRIDE:-$(get_config_value 'vmid')}"
 NODE="$(get_config_value 'node' "$(get_node_hostname 0)")"
-ZONE0NAME="$(get_config_value 'zone0' 'mgmt')"
+ZONE0NAME="${TAPPAAS_ZONE0_OVERRIDE:-$(get_config_value 'zone0' 'mgmt')}"
 MGMT="mgmt"
 
 VM_HOST="${VMNAME}.${ZONE0NAME}.internal"

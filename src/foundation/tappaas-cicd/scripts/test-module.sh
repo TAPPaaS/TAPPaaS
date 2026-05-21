@@ -14,10 +14,19 @@
 #                 <module-name>.json in /home/tappaas/config/)
 #
 # Options:
-#   -h, --help    Show this help message
-#   --deep        Run extended/heavy tests (exports TAPPAAS_TEST_DEEP=1)
-#   --debug       Show Debug-level messages (also set via TAPPAAS_DEBUG=1)
-#   --silent      Suppress Info-level messages
+#   -h, --help        Show this help message
+#   --deep            Run extended/heavy tests (exports TAPPAAS_TEST_DEEP=1)
+#   --vmid <id>       Test a non-default VM instance (exports
+#                     TAPPAAS_VMID_OVERRIDE; consistent with install-module.sh)
+#   --zone0 <zone>    Test against a non-default zone (exports
+#                     TAPPAAS_ZONE0_OVERRIDE)
+#   --debug           Show Debug-level messages (also set via TAPPAAS_DEBUG=1)
+#   --silent          Suppress Info-level messages
+#
+# The --vmid/--zone0 overrides flow to the dependency test-service.sh scripts
+# and the module's own test.sh (which read TAPPAAS_VMID_OVERRIDE /
+# TAPPAAS_ZONE0_OVERRIDE, falling back to the module config). The config file
+# itself is not modified.
 #
 # Exit codes:
 #   0  All tests passed
@@ -27,7 +36,7 @@
 # Examples:
 #   test-module.sh openwebui
 #   test-module.sh --deep litellm
-#   test-module.sh --silent --deep vaultwarden
+#   test-module.sh openwebui --vmid 313 --zone0 srv-cust
 #
 # The script performs these steps:
 #   1. Validates the module JSON config
@@ -87,10 +96,12 @@ Arguments:
     module-name    Name of the module (must have config in ${CONFIG_DIR}/)
 
 Options:
-    -h, --help     Show this help message
-    --deep         Run extended/heavy tests (exports TAPPAAS_TEST_DEEP=1)
-    --debug        Show Debug-level messages (also via TAPPAAS_DEBUG=1)
-    --silent       Suppress Info-level messages
+    -h, --help        Show this help message
+    --deep            Run extended/heavy tests (exports TAPPAAS_TEST_DEEP=1)
+    --vmid <id>       Test a non-default VM instance (override config vmid)
+    --zone0 <zone>    Test against a non-default zone (override config zone0)
+    --debug           Show Debug-level messages (also via TAPPAAS_DEBUG=1)
+    --silent          Suppress Info-level messages
 
 Exit codes:
     0  All tests passed
@@ -100,7 +111,7 @@ Exit codes:
 Examples:
     ${SCRIPT_NAME} openwebui
     ${SCRIPT_NAME} --deep litellm
-    ${SCRIPT_NAME} --silent --deep vaultwarden
+    ${SCRIPT_NAME} openwebui --vmid 313 --zone0 srv-cust
 EOF
 }
 
@@ -108,12 +119,15 @@ EOF
 
 main() {
     local module=""
+    local opt_vmid="" opt_zone0=""
 
     # Parse arguments
     while [[ $# -gt 0 ]]; do
         case "$1" in
             -h|--help)   usage; exit 0 ;;
             --deep)      OPT_DEEP=1; shift ;;
+            --vmid)      [[ -n "${2:-}" ]] || { fatal "--vmid requires a value"; exit 2; }; opt_vmid="$2"; shift 2 ;;
+            --zone0)     [[ -n "${2:-}" ]] || { fatal "--zone0 requires a value"; exit 2; }; opt_zone0="$2"; shift 2 ;;
             --debug)     OPT_DEBUG=1; shift ;;
             --silent)    OPT_SILENT=1; shift ;;
             -*)          fatal "Unknown option: $1"; usage; exit 2 ;;
@@ -136,9 +150,18 @@ main() {
         exit 2
     fi
 
-    # Export options so child test scripts can read them
+    if [[ -n "${opt_vmid}" && ! "${opt_vmid}" =~ ^[0-9]+$ ]]; then
+        fatal "--vmid must be numeric (got '${opt_vmid}')"
+        exit 2
+    fi
+
+    # Export options so child test scripts (dependency test-service.sh and the
+    # module's own test.sh) can read them. The --vmid/--zone0 overrides let a
+    # non-default instance be tested without editing the module config.
     export TAPPAAS_TEST_DEEP="${OPT_DEEP}"
     export TAPPAAS_DEBUG="${OPT_DEBUG}"
+    [[ -n "${opt_vmid}" ]] && export TAPPAAS_VMID_OVERRIDE="${opt_vmid}"
+    [[ -n "${opt_zone0}" ]] && export TAPPAAS_ZONE0_OVERRIDE="${opt_zone0}"
 
     local module_json="${CONFIG_DIR}/${module}.json"
 
@@ -147,6 +170,8 @@ main() {
     if [[ "${OPT_DEEP}" -eq 1 ]]; then
         info "${BOLD}║  Mode: ${YW}deep${CL}"
     fi
+    [[ -n "${opt_vmid}" ]]  && info "${BOLD}║  Override: ${YW}vmid=${opt_vmid}${CL}"
+    [[ -n "${opt_zone0}" ]] && info "${BOLD}║  Override: ${YW}zone0=${opt_zone0}${CL}"
     info "${BOLD}╚══════════════════════════════════════════════╝${CL}"
 
     # ── Step 1: Validate module config ───────────────────────────────

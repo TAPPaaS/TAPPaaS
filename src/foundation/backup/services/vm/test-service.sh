@@ -32,7 +32,7 @@ fi
 
 check_json "/home/tappaas/config/${MODULE}.json" || exit 2
 
-VMID="$(get_config_value 'vmid')"
+VMID="${TAPPAAS_VMID_OVERRIDE:-$(get_config_value 'vmid')}"  # override: issue #196
 VMNAME="$(get_config_value 'vmname' "${MODULE}")"
 NODE="$(get_config_value 'node' "$(get_node_hostname 0)")"
 MGMT="mgmt"

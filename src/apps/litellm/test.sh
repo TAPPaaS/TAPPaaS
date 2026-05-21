@@ -11,7 +11,8 @@
 # Configuration — derive hostname from module config if available
 . /home/tappaas/bin/common-install-routines.sh "${1:-litellm}" 2>/dev/null || true
 _VMNAME="$(get_config_value 'vmname' 'litellm' 2>/dev/null || echo 'litellm')"
-_ZONE="$(get_config_value 'zone0' 'srv' 2>/dev/null || echo 'srv')"
+# zone0 may be overridden to test a non-default instance (issue #196).
+_ZONE="${TAPPAAS_ZONE0_OVERRIDE:-$(get_config_value 'zone0' 'srv' 2>/dev/null || echo 'srv')}"
 TARGET="${_VMNAME}.${_ZONE}.internal"
 SSH_CMD="ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 -o BatchMode=yes tappaas@${TARGET}"
 TIMESTAMP=$(date '+%Y-%m-%d_%H%M%S')
