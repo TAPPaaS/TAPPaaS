@@ -102,7 +102,7 @@ info "${BOLD}cluster:ha update-service: reconciling ${BL}${MODULE}${CL} (VMID ${
 # ── Single-node / no-failover guard ──────────────────────────────────
 
 if [[ -z "${HANODE}" ]]; then
-    info "  ${GN}✓${CL} no distinct failover node (single-node cluster) — nothing to reconcile"
+    warn "  single-node cluster — HA not applicable, skipping (no failover node)"
     exit 0
 fi
 if [[ "${HANODE}" == "${DESIRED_PRIMARY}" ]]; then

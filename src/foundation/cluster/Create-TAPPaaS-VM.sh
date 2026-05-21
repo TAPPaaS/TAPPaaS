@@ -310,7 +310,10 @@ fi
 
 if [ "$IMAGETYPE" == "iso" ]; then # First use: this is used to stand up a nixos template vm from an iso image
   info "${BOLD}Creating an ISO based VM"
-  qm create $VMID --agent 1 --tablet 0 --localtime 1 --bios $BIOS \
+  # --localtime 0: NixOS keeps the RTC in UTC (boot.hardwareClockInLocalTime
+  # defaults to false). localtime 1 makes the guest read the clock as TZ-local
+  # and boot ahead of real time until NTP corrects it (issue #166 fix #4).
+  qm create $VMID --agent 1 --tablet 0 --localtime 0 --bios $BIOS \
     --name $VMNAME --onboot 1 --ostype $VM_OSTYPE --cpu "$CPU_TYPE" --scsihw virtio-scsi-pci >/dev/null
   info " - Created base VM configuration"
   pvesm alloc $STORAGE $VMID $DISK0 4M  1>/dev/null
@@ -418,6 +421,13 @@ if [ "$IMAGETYPE" == "clone" ]; then
 
   # Set CPU type after cloning (clone inherits from template)
   qm set $VMID --cpu "$CPU_TYPE" >/dev/null
+
+  # Force RTC to UTC for NixOS clones. The clone inherits the template's RTC
+  # mode, and existing TAPPaaS NixOS templates were built with localtime 1,
+  # which makes fresh guests boot ahead of real time until NTP corrects them
+  # (e.g. journald emits future-dated entries that Loki then rejects). NixOS
+  # keeps the hardware clock in UTC, so pin localtime 0 here (issue #166 fix #4).
+  qm set $VMID --localtime 0 >/dev/null
 fi
 
 info "${BOLD}Configuring the $VMNAME VM settings..."

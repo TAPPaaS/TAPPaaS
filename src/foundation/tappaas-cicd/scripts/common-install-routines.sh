@@ -352,12 +352,20 @@ fi
 
 # Read a value from the loaded JSON config (requires $JSON to be set).
 # Arguments: <key> [default-value]
+#
+# A default is considered "provided" when a second argument is passed at all —
+# even an empty string. This lets callers mark a key as optional-with-empty
+# default, e.g. get_config_value 'HANode' "$(get_default_ha_node "$NODE")",
+# which yields "" on a single-node cluster instead of aborting (issues #1/#5
+# of #166). Omitting the second argument entirely still means "required".
 function get_config_value() {
   local key="$1"
-  local default="${2:-}"
+  local has_default=0
+  local default=""
+  if [[ $# -ge 2 ]]; then has_default=1; default="$2"; fi
   if ! echo "$JSON" | jq -e --arg K "$key" 'has($K)' >/dev/null ; then
     # JSON lacks the key
-    if [ -z "$default" ]; then
+    if [[ "${has_default}" -eq 0 ]]; then
       error "Missing required key '${YW}$key${CL}' in JSON configuration."
       exit 1
     else
