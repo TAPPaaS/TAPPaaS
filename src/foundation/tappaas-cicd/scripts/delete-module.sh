@@ -6,26 +6,35 @@
 # calling each dependency's delete-service.sh script in reverse order,
 # and then removing the module's configuration files.
 #
-# Usage: delete-module.sh <module-name> [--force]
+# Usage: delete-module.sh <module-name> [--vmid <id>] [--yes] [--force]
 #
 # Arguments:
 #   module-name   Name of the module to delete (must have a
 #                 <module-name>.json in /home/tappaas/config/)
 #
 # Options:
-#   --force        Delete even if other modules depend on this module's services
+#   --vmid <id>    Target a specific VM instance by VMID (required when more
+#                  than one VM in the cluster shares the module's name). When
+#                  the VMID differs from the module config, ONLY that VM is
+#                  destroyed and the module config is left intact.
+#   --yes, -y      Skip the destroy confirmation prompt (for automation)
+#   --force        Delete even if other modules depend on this module's
+#                  services; also implies --yes
 #   -h, --help     Show this help message
 #
 # Examples:
 #   delete-module.sh vaultwarden
 #   delete-module.sh litellm --force
+#   delete-module.sh openwebui --vmid 313     # destroy the stray instance only
 #
 # The script performs these steps:
 #   1. Validates the module JSON config exists
-#   2. Checks that no other modules depend on this module's services
-#   3. Calls the module's own delete.sh (if present)
-#   4. Iterates dependsOn in reverse and calls each provider's delete-service.sh
-#   5. Removes the module configuration files
+#   2. Resolves and CONFIRMS the target VM (detects duplicate names, requires
+#      --vmid to disambiguate; prompts before destroying — issue #195)
+#   3. Checks that no other modules depend on this module's services
+#   4. Calls the module's own delete.sh (if present)
+#   5. Iterates dependsOn in reverse and calls each provider's delete-service.sh
+#   6. Removes the module configuration files
 #
 
 set -euo pipefail
@@ -34,14 +43,19 @@ SCRIPT_NAME="$(basename "${BASH_SOURCE[0]}")"
 readonly SCRIPT_NAME
 readonly CONFIG_DIR="/home/tappaas/config"
 
-# shellcheck source=common-install-routines.sh
+# Options (set by main; globals so helper functions can read them)
+OPT_FORCE=false
+OPT_YES=false
+OPT_VMID=""
+
+# shellcheck source=common-install-routines.sh disable=SC1091
 . /home/tappaas/bin/common-install-routines.sh
 
 # ── Usage ────────────────────────────────────────────────────────────
 
 usage() {
     cat << EOF
-Usage: ${SCRIPT_NAME} <module-name> [--force]
+Usage: ${SCRIPT_NAME} <module-name> [--vmid <id>] [--yes] [--force]
 
 Delete a TAPPaaS module with dependency-aware service teardown.
 
@@ -49,12 +63,17 @@ Arguments:
     module-name    Name of the module (must have config in ${CONFIG_DIR}/)
 
 Options:
-    --force        Delete even if other modules depend on this module's services
+    --vmid <id>    Target a specific VM instance by VMID (required when several
+                   VMs share the module name). If it differs from the config
+                   VMID, only that VM is destroyed and the config is kept.
+    --yes, -y      Skip the destroy confirmation prompt (for automation)
+    --force        Delete despite dependent modules; also implies --yes
     -h, --help     Show this help message
 
 Examples:
     ${SCRIPT_NAME} vaultwarden
     ${SCRIPT_NAME} litellm --force
+    ${SCRIPT_NAME} openwebui --vmid 313
 EOF
 }
 
@@ -105,25 +124,65 @@ check_reverse_dependencies() {
     return "${dependents_found}"
 }
 
+readonly SSH_OPTS_DM="-o ConnectTimeout=5 -o StrictHostKeyChecking=accept-new -o UserKnownHostsFile=/dev/null -o LogLevel=ERROR -o BatchMode=yes"
+
+# List every qemu VM in the cluster whose name matches $1.
+# Emits one line per match: "<vmid> <node> <status>". Empty if none/unreachable.
+find_vms_by_name() {
+    local name="$1" node row
+    # shellcheck disable=SC2086  # word-splitting of hostnames is intended
+    for node in $(get_all_node_hostnames); do
+        row=$(ssh ${SSH_OPTS_DM} "root@${node}.mgmt.internal" \
+            "pvesh get /cluster/resources --type vm --output-format json" 2>/dev/null \
+            | jq -r --arg n "${name}" \
+                '.[] | select(.type=="qemu" and .name==$n) | "\(.vmid) \(.node) \(.status)"' 2>/dev/null) || true
+        if [[ -n "${row}" ]]; then echo "${row}"; return 0; fi
+    done
+    return 0
+}
+
+# Prompt the operator before an irreversible VM destroy (skipped by --yes/--force).
+# Refuses to proceed in a non-interactive shell unless --yes/--force is given.
+confirm_destroy() {
+    local name="$1" vmid="$2" node="$3"
+    if [[ "${OPT_YES}" == true || "${OPT_FORCE}" == true ]]; then
+        return 0
+    fi
+    if [[ ! -t 0 ]]; then
+        die "Refusing to destroy VM ${vmid} (${name}) without confirmation in a non-interactive shell. Pass --yes (or --force)."
+    fi
+    warn "About to PERMANENTLY destroy VM ${BL}${name}${CL} (VMID: ${RD}${vmid}${CL}) on node ${BL}${node}${CL}."
+    local reply
+    read -r -p "  Confirm destroy of VM ${vmid}? [y/N] " reply
+    case "${reply}" in
+        y|Y|yes|Yes|YES) return 0 ;;
+        *) die "Aborted by operator (no destroy performed)" ;;
+    esac
+}
+
 # ── Main ─────────────────────────────────────────────────────────────
 
 main() {
-    local force=false
     local module=""
 
     # Parse arguments
-    for arg in "$@"; do
-        case "${arg}" in
+    while [[ $# -gt 0 ]]; do
+        case "${1}" in
             -h|--help) usage; exit 0 ;;
-            --force) force=true ;;
-            -*) die "Unknown option: ${arg}" ;;
+            --force) OPT_FORCE=true; OPT_YES=true ;;
+            -y|--yes) OPT_YES=true ;;
+            --vmid)
+                [[ -n "${2:-}" ]] || die "--vmid requires a value"
+                OPT_VMID="${2}"; shift ;;
+            -*) die "Unknown option: ${1}" ;;
             *)
                 if [[ -n "${module}" ]]; then
-                    die "Unexpected argument: ${arg} (module already set to '${module}')"
+                    die "Unexpected argument: ${1} (module already set to '${module}')"
                 fi
-                module="${arg}"
+                module="${1}"
                 ;;
         esac
+        shift
     done
 
     # Validate module name argument
@@ -131,6 +190,10 @@ main() {
         error "Module name is required"
         usage
         exit 1
+    fi
+
+    if [[ -n "${OPT_VMID}" && ! "${OPT_VMID}" =~ ^[0-9]+$ ]]; then
+        die "--vmid must be numeric (got '${OPT_VMID}')"
     fi
 
     local module_json="${CONFIG_DIR}/${module}.json"
@@ -148,8 +211,83 @@ main() {
 
     info "  ${GN}✓${CL} Module config found: ${module_json}"
 
-    # ── Step 2: Check reverse dependencies ───────────────────────────
-    info "\n${BOLD}Step 2: Check reverse dependencies${CL}"
+    # ── Step 2: Resolve & confirm target VM (issue #195) ─────────────
+    info "\n${BOLD}Step 2: Resolve and confirm target VM${CL}"
+
+    local config_vmid vmname target_vmid="" target_node="" vm_only=false
+    config_vmid=$(jq -r '.vmid // empty' "${module_json}" 2>/dev/null)
+    vmname=$(jq -r '.vmname // empty' "${module_json}" 2>/dev/null)
+    [[ -z "${vmname}" ]] && vmname="${module}"
+
+    if [[ -z "${config_vmid}" && -z "${OPT_VMID}" ]]; then
+        info "  Module declares no VMID — no VM to destroy (config-only delete)"
+    else
+        # Discover every cluster VM sharing this module's name.
+        local matches match_count
+        matches=$(find_vms_by_name "${vmname}")
+        match_count=$(grep -c . <<< "${matches}" 2>/dev/null || echo 0)
+        [[ -z "${matches}" ]] && match_count=0
+
+        if [[ -n "${matches}" ]]; then
+            info "  VM(s) named '${vmname}' in cluster:"
+            while read -r mv mn ms; do
+                [[ -z "${mv}" ]] && continue
+                info "    • VMID ${BL}${mv}${CL} on ${mn} (${ms})"
+            done <<< "${matches}"
+        fi
+
+        if [[ -n "${OPT_VMID}" ]]; then
+            target_vmid="${OPT_VMID}"
+        elif [[ "${match_count}" -gt 1 ]]; then
+            die "Multiple VMs named '${vmname}' exist — refusing to guess. Re-run with --vmid <id> to choose the instance to destroy."
+        else
+            target_vmid="${config_vmid}"
+        fi
+
+        # Resolve the node for the target VMID from the cluster listing.
+        target_node=$(awk -v id="${target_vmid}" '$1==id {print $2; exit}' <<< "${matches}")
+        if [[ -z "${target_node}" ]]; then
+            warn "  VMID ${target_vmid} not found in the cluster (already gone?) — will still attempt cleanup"
+            target_node=$(jq -r '.node // empty' "${module_json}" 2>/dev/null)
+            [[ -z "${target_node}" || "${target_node}" == "null" ]] && target_node="$(get_node_hostname 0)"
+        fi
+
+        # If the operator targeted a VMID other than the module's own, destroy
+        # ONLY that VM and leave the module config (it describes a different VM).
+        if [[ -n "${config_vmid}" && "${target_vmid}" != "${config_vmid}" ]]; then
+            vm_only=true
+            warn "  Target VMID ${target_vmid} differs from config VMID ${config_vmid}:"
+            warn "  destroying ONLY VM ${target_vmid}; module config '${module}' will be kept."
+        fi
+
+        confirm_destroy "${vmname}" "${target_vmid}" "${target_node}"
+
+        # Hand the resolved target to the cluster:vm delete-service.
+        export TAPPAAS_VMID_OVERRIDE="${target_vmid}"
+        export TAPPAAS_NODE_OVERRIDE="${target_node}"
+
+        # VM-only path: destroy the targeted VM and stop (no teardown, keep config).
+        if [[ "${vm_only}" == true ]]; then
+            local cluster_dir svc
+            if cluster_dir=$(get_module_dir "cluster"); then
+                svc="${cluster_dir}/services/vm/delete-service.sh"
+                ensure_scripts_executable "${cluster_dir}"
+                if [[ -x "${svc}" ]]; then
+                    info "\n${BOLD}Destroying VM ${target_vmid} only (config preserved)${CL}"
+                    "${svc}" "${module}" || die "VM destroy failed for VMID ${target_vmid}"
+                else
+                    die "cluster:vm delete-service.sh not found at ${svc}"
+                fi
+            else
+                die "Cannot locate cluster module to destroy VM ${target_vmid}"
+            fi
+            info "${GN}${BOLD}VM ${target_vmid} destroyed; module '${module}' config left intact.${CL}"
+            return 0
+        fi
+    fi
+
+    # ── Step 3: Check reverse dependencies ───────────────────────────
+    info "\n${BOLD}Step 3: Check reverse dependencies${CL}"
 
     local provides
     provides=$(jq -r '.provides // [] | .[]' "${module_json}" 2>/dev/null)
@@ -161,7 +299,7 @@ main() {
         check_reverse_dependencies "${module}" || rev_dep_count=$?
 
         if [[ "${rev_dep_count}" -gt 0 ]]; then
-            if [[ "${force}" == "true" ]]; then
+            if [[ "${OPT_FORCE}" == "true" ]]; then
                 warn "Proceeding with deletion despite ${rev_dep_count} dependent module(s) (--force)"
             else
                 die "${rev_dep_count} module(s) depend on services from '${module}' — use --force to override"
@@ -171,8 +309,8 @@ main() {
         fi
     fi
 
-    # ── Step 3: Run the module's own delete.sh ───────────────────────
-    info "\n${BOLD}Step 3: Run module delete.sh${CL}"
+    # ── Step 4: Run the module's own delete.sh ───────────────────────
+    info "\n${BOLD}Step 4: Run module delete.sh${CL}"
 
     local module_dir
     if module_dir=$(get_module_dir "${module}"); then
@@ -189,8 +327,8 @@ main() {
         warn "Cannot find module directory (missing .location in config) — skipping delete.sh"
     fi
 
-    # ── Step 4: Call dependency delete-service.sh scripts (reverse) ──
-    info "\n${BOLD}Step 4: Call dependency service deleters (reverse order)${CL}"
+    # ── Step 5: Call dependency delete-service.sh scripts (reverse) ──
+    info "\n${BOLD}Step 5: Call dependency service deleters (reverse order)${CL}"
 
     local depends_on
     depends_on=$(jq -r '.dependsOn // [] | .[]' "${module_json}" 2>/dev/null)
@@ -229,8 +367,8 @@ main() {
         done
     fi
 
-    # ── Step 5: Remove config files ──────────────────────────────────
-    info "\n${BOLD}Step 5: Remove module configuration${CL}"
+    # ── Step 6: Remove config files ──────────────────────────────────
+    info "\n${BOLD}Step 6: Remove module configuration${CL}"
 
     if [[ -f "${module_json}" ]]; then
         rm -f "${module_json}"

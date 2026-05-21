@@ -23,8 +23,11 @@ fi
 MODULE_NAME="$1"
 MGMTVLAN="mgmt"
 
-VMID=$(get_config_value 'vmid')
-NODE=$(get_config_value 'node' "$(get_node_hostname 0)")
+# VMID/NODE may be overridden by delete-module.sh after it has resolved the
+# exact target VM (handles multiple instances of the same module and a stale
+# .node after HA migration). Falls back to the module config. See issue #195.
+VMID="${TAPPAAS_VMID_OVERRIDE:-$(get_config_value 'vmid')}"
+NODE="${TAPPAAS_NODE_OVERRIDE:-$(get_config_value 'node' "$(get_node_hostname 0)")}"
 VMNAME=$(get_config_value 'vmname' "${MODULE_NAME}")
 
 NODE_FQDN="${NODE}.${MGMTVLAN}.internal"

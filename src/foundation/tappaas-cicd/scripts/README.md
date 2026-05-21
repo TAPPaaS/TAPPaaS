@@ -411,7 +411,7 @@ Installs a TAPPaaS module with dependency validation and service wiring. Support
 
 **Usage:**
 ```bash
-install-module.sh <module-name> [--variant <name>] [--<field> <value>]...
+install-module.sh <module-name> [--variant <name>] [--force] [--<field> <value>]...
 ```
 
 **Parameters:**
@@ -420,14 +420,16 @@ install-module.sh <module-name> [--variant <name>] [--<field> <value>]...
 |-----------|-------------|---------|
 | `module-name` | Name of the module to install | `openwebui` |
 | `--variant <name>` | Install a variant of the module | `--variant staging` |
+| `--force`, `--reinstall` | Install even if the module already exists (re-runs `install.sh` against the existing deployment) | |
 | `--<field> <value>` | Override a JSON field (passed to `copy-update-json.sh`) | `--node tappaas2` |
 
 **What it does:**
-1. Copies and validates the module JSON config (variant-aware via `copy-update-json.sh`)
-2. Checks that every `dependsOn` service is provided by an installed module
-3. Validates that the module has service scripts for each service it provides
-4. Iterates `dependsOn` and calls each provider's `install-service.sh`
-5. Calls the module's own `install.sh` (if present)
+1. Checks the module is not already installed — aborts early otherwise (unless `--force`). Detects an existing install by its config in `~/config`; for VM-backed modules (those that `dependsOn cluster:vm`) it also confirms the VM exists on the cluster, so a leftover config whose VM is gone is treated as not-installed.
+2. Copies and validates the module JSON config (variant-aware via `copy-update-json.sh`)
+3. Checks that every `dependsOn` service is provided by an installed module
+4. Validates that the module has service scripts for each service it provides
+5. Iterates `dependsOn` and calls each provider's `install-service.sh`
+6. Calls the module's own `install.sh` (if present)
 
 **Example:**
 ```bash
@@ -439,6 +441,9 @@ install-module.sh openwebui --variant staging
 
 # Install a dev variant with explicit zone and vmid overrides
 install-module.sh openwebui --variant dev --zone0 srv-dev --vmid 315
+
+# Re-run the installer against an already-installed module
+install-module.sh identity --force
 ```
 
 **Variant mode:**
@@ -838,11 +843,13 @@ test-module.sh --silent openwebui
 
 ### delete-module.sh
 
-Deletes a TAPPaaS module with dependency-aware service teardown.
+Deletes a TAPPaaS module with dependency-aware service teardown. Before any VM
+is destroyed it resolves and **confirms the exact target VM**, refusing to guess
+when multiple instances share a name (issue #195).
 
 **Usage:**
 ```bash
-delete-module.sh <module-name> [--force]
+delete-module.sh <module-name> [--vmid <id>] [--yes] [--force]
 ```
 
 **Parameters:**
@@ -850,26 +857,40 @@ delete-module.sh <module-name> [--force]
 | Parameter | Description | Example |
 |-----------|-------------|---------|
 | `module-name` | Name of the module to delete | `vaultwarden` |
-| `--force` | Delete even if other modules depend on this module's services | |
+| `--vmid <id>` | Target a specific VM instance by VMID. **Required** when more than one cluster VM shares the module's name. If it differs from the config VMID, only that VM is destroyed and the module config is left intact (see notes). | `--vmid 313` |
+| `--yes`, `-y` | Skip the destroy confirmation prompt (for automation) | |
+| `--force` | Delete even if other modules depend on this module's services; **also implies `--yes`** | |
 
 **What it does:**
 1. Validates the module JSON config exists in `/home/tappaas/config/`
-2. Checks reverse dependencies — blocks if other modules depend on this module's services (unless `--force`)
-3. Calls the module's own `delete.sh` (if present) while the VM still exists
-4. Iterates `dependsOn` in **reverse** order and calls each provider's `delete-service.sh` (skips if not found)
-5. Removes the module configuration files (`.json` and `.json.orig`)
+2. **Resolves and confirms the target VM**: lists every cluster VM sharing the module's name; if more than one exists it aborts and requires `--vmid`; otherwise prompts `Confirm destroy of VM <id>? [y/N]` before proceeding (skipped by `--yes`/`--force`; refuses in a non-interactive shell without them)
+3. Checks reverse dependencies — blocks if other modules depend on this module's services (unless `--force`)
+4. Calls the module's own `delete.sh` (if present) while the VM still exists
+5. Iterates `dependsOn` in **reverse** order and calls each provider's `delete-service.sh` (skips if not found)
+6. Removes the module configuration files (`.json` and `.json.orig`)
 
 **Example:**
 ```bash
+# Delete a module (prompts for confirmation before destroying its VM)
 delete-module.sh vaultwarden
+
+# Non-interactive delete (CI / scripted)
 delete-module.sh litellm --force
+
+# Two VMs named "openwebui" exist — destroy only the stray test instance,
+# leaving the configured (prod) VM and its config untouched
+delete-module.sh openwebui --vmid 313
 ```
 
 **Notes:**
-- The deletion order is reversed compared to installation: the module's own `delete.sh` runs first (while the VM still exists), then services are torn down in reverse dependency order
-- HA/replication is removed before the VM is destroyed to prevent conflicts
-- Missing `delete-service.sh` scripts are skipped (not an error), allowing incremental rollout
-- Service teardown failures produce warnings but do not abort the overall deletion
+- **Confirmation is mandatory by default.** In a non-interactive shell (no TTY) the script refuses unless `--yes` or `--force` is passed, so a buggy script can never silently destroy a VM. The resolved name, VMID and node are shown before the prompt.
+- **Multiple instances:** if the cluster has more than one VM with the module's name (e.g. prod + a stray test VM), deletion aborts with the list and requires `--vmid <id>` to pick the instance — preventing the "destroyed the wrong VM" class of incident.
+- **VM-only mode:** when `--vmid` names a VM other than the module config's own VMID, *only* that VM is destroyed; the module's `delete.sh`, reverse-dependency check, service teardown and config removal are all skipped (the config still describes a different, live VM).
+- The resolved VMID **and node** are handed to `cluster:vm delete-service.sh` (via `TAPPAAS_VMID_OVERRIDE`/`TAPPAAS_NODE_OVERRIDE`), which also corrects a stale `.node` after an HA migration.
+- The deletion order is reversed compared to installation: the module's own `delete.sh` runs first (while the VM still exists), then services are torn down in reverse dependency order.
+- HA/replication is removed before the VM is destroyed to prevent conflicts.
+- Missing `delete-service.sh` scripts are skipped (not an error), allowing incremental rollout.
+- Service teardown failures produce warnings but do not abort the overall deletion.
 
 ---
 
