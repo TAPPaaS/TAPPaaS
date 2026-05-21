@@ -873,11 +873,12 @@ class ZoneManager:
                                     check_mode, results,
                                 )
                             else:
-                                warn(f"  {zone.name}: VLAN {zone.vlan_tag} interface label "
-                                     f"'{label}' drifted. Re-run with "
-                                     f"--force-rename-labels (disruptive), or rename it "
-                                     f"manually in OPNsense (Interfaces > Assignments) using "
-                                     f"underscores: '{desired_label}' (the GUI strips hyphens).")
+                                # Drift is surfaced inline in the unified summary
+                                # table (print_zone_summary computes it from the
+                                # live label), so just trace it here — no detached
+                                # warning (issues #212/#213).
+                                debug(f"  {zone.name}: interface label '{label}' "
+                                      f"drifted (desired '{desired_label}')")
                     continue
 
                 # Use the zone's bridge to determine the physical interface
@@ -1011,11 +1012,15 @@ class ZoneManager:
                 existing = existing_by_desc.get(dhcp_desc)
                 existing_iface = (existing.get("interface") or "") if existing else ""
 
-                # Skip when the range is already present AND correctly bound
-                # (or when no binding is expected). Otherwise fall through to
-                # (re)create — create_range is idempotent and rebinds a range
-                # that was previously written unbound (interface='').
-                if existing and (existing_iface or not dhcp_interface):
+                # Skip only when the range is already present AND bound to the
+                # CURRENT interface (or when no binding is expected). If it is
+                # bound to a different identifier — e.g. left orphaned after an
+                # interface-label rename churned opt1→opt11 (issue #213) — fall
+                # through to (re)create so create_range rebinds it. create_range
+                # is idempotent and also rebinds a previously-unbound (interface
+                # = '') range.
+                iface_ok = (not dhcp_interface) or (existing_iface == dhcp_interface)
+                if existing and iface_ok:
                     debug(f"  {zone.name}: DHCP range already correct (skipping)")
                     results[zone.name] = {
                         "status": "exists",
@@ -1482,31 +1487,139 @@ class ZoneManager:
 
         info("=" * 80)
 
-    def print_zone_summary(self):
-        """Print a summary of all zones."""
+    def print_zone_summary(self, results: dict | None = None) -> None:
+        """Print one VLAN-tag-sorted table of all zones (issue #212).
+
+        Replaces the previously separate VLAN, DHCP and warnings tables with a
+        single table keyed on the zone name and sorted by VLAN tag. A trailing
+        Flags column carries the per-zone change summary (created/updated/
+        renamed) and warnings (label drift) inline, so a warning is never
+        detached from the zone it describes. Rows with a warning flag are
+        emitted via warn(); all others via info().
+
+        Args:
+            results: optional dict returned by configure_* (configure_all's
+                {"vlans":..,"dhcp":..} or a bare vlan-results dict). When given,
+                change/warning flags are derived from it.
+        """
+        vlan_results = (results or {}).get("vlans", results or {})
+        if not isinstance(vlan_results, dict):
+            vlan_results = {}
+
+        # Query live OPNsense once (best-effort). Two sources:
+        #   • assigned interfaces (get_assigned_vlans): tag → identifier (opt1)
+        #     and the assignment label (for drift detection — issue #213).
+        #   • DHCP ranges: domain → range and the lan/opt id for untagged zones.
+        assigned_by_tag: dict[int, dict] = {}
+        iface_by_domain: dict[str, str] = {}
+        dhcp_by_domain: dict[str, tuple[str, str]] = {}
+        try:
+            with VlanManager(self.config) as _vm:
+                for a in _vm.get_assigned_vlans():
+                    try:
+                        assigned_by_tag[int(a["vlan_tag"])] = a
+                    except (TypeError, ValueError, KeyError):
+                        continue
+            live = self.list_current_config()
+            for r in live.get("dhcp_ranges", []):
+                dom = r.get("domain") or ""
+                if dom:
+                    iface_by_domain[dom] = r.get("interface") or ""
+                    dhcp_by_domain[dom] = (r.get("start_addr") or "", r.get("end_addr") or "")
+        except Exception as e:  # noqa: BLE001 - summary degrades gracefully offline
+            debug(f"  (live OPNsense config unavailable for summary: {e})")
+
+        def _last_octet(addr: str) -> str:
+            return f".{addr.rsplit('.', 1)[1]}" if addr and "." in addr else addr
+
+        def _flag_for(zone: "Zone") -> tuple[str, bool]:
+            """Return (flag_text, is_warning): live label drift takes priority,
+            then the change status from a configure run (if any)."""
+            # Live label drift (issue #213) — computed from the assigned label so
+            # it shows in read-only --list too, not just after a configure run.
+            if zone.needs_vlan:
+                a = assigned_by_tag.get(zone.vlan_tag)
+                live_label = (a or {}).get("description") or ""
+                desired = normalize_iface_label(zone.name)
+                if live_label and live_label.lower() != desired.lower():
+                    return (f"label drift '{live_label}' → rename to '{desired}' "
+                            f"(--force-rename-labels; GUI strips hyphens)", True)
+            res = vlan_results.get(zone.name, {})
+            status = res.get("status", "")
+            if status == "error":
+                return (f"ERROR: {res.get('error', 'see log')}", True)
+            if status in ("created", "would_create"):
+                return ("created", False)
+            if status in ("updated_description", "would_update_description"):
+                return ("updated", False)
+            if status in ("renamed_label", "would_rename_label"):
+                return ("renamed label", False)
+            return ("—", False)
+
         info("Zone Summary:")
-        info("-" * 80)
-        info(f"{'Name':<15} {'Type':<12} {'State':<10} {'VLAN':<6} {'IP Network':<18} {'DHCP Range'}")
-        info("-" * 80)
+        sep = "─" * 150
+        info(sep)
+        info(f"  {'VLAN':>4}  {'Zone':<13} {'Type':<11} {'State':<9} {'IF':<7} "
+             f"{'Network':<19} {'DHCP':<11} {'Domain':<22} {'Flags':<10} Description")
+        info(sep)
 
-        for zone in self.zones:
+        warn_count = created_count = 0
+        for zone in sorted(self.zones, key=lambda z: z.vlan_tag):
             if zone.is_enabled:
-                status = "enabled"
+                state = "enabled"
             elif zone.is_manual:
-                status = "manual"
+                state = "manual"
             else:
-                status = "disabled"
-            vlan = str(zone.vlan_tag) if zone.vlan_tag > 0 else "-"
-            dhcp_range = f"{zone.dhcp_start}-{zone.dhcp_end}" if zone.is_enabled else "-"
+                state = "disabled"
 
-            info(f"{zone.name:<15} {zone.zone_type:<12} {status:<10} {vlan:<6} {zone.ip_network:<18} {dhcp_range}")
+            vlan = str(zone.vlan_tag) if zone.vlan_tag > 0 else "0"
+            network = zone.ip_network or "—"
+            domain = zone.domain or "—"
 
-        info("-" * 80)
+            # IF: assigned identifier for tagged zones; untagged/manual fall back
+            # to the DHCP-range interface (e.g. mgmt → lan) then the bridge.
+            if zone.needs_vlan and zone.vlan_tag in assigned_by_tag:
+                iface = assigned_by_tag[zone.vlan_tag].get("identifier") or "—"
+            else:
+                iface = iface_by_domain.get(domain) or (
+                    zone.bridge if (not zone.needs_vlan or zone.is_manual) else "") or "—"
+
+            rng = dhcp_by_domain.get(domain)
+            if rng and rng[0]:
+                dhcp = f"{_last_octet(rng[0])}-{_last_octet(rng[1])}"
+            elif zone.is_enabled and zone.needs_vlan:
+                dhcp = f"{_last_octet(zone.dhcp_start)}-{_last_octet(zone.dhcp_end)}"
+            else:
+                dhcp = "—"
+
+            flag, is_warn = _flag_for(zone)
+            if is_warn:
+                warn_count += 1
+            elif flag == "created":
+                created_count += 1
+
+            description = zone.description or "—"
+            row = (f"  {vlan:>4}  {zone.name:<13} {zone.zone_type:<11} {state:<9} "
+                   f"{iface:<7} {network:<19} {dhcp:<11} {domain:<22} {flag:<10} {description}")
+            if is_warn:
+                warn(row)
+            else:
+                info(row)
+
+        info(sep)
         enabled = len(self.get_enabled_zones())
         disabled = len(self.get_disabled_zones())
         manual = len(self.get_manual_zones())
-        vlan_zones = len(self.get_vlan_zones())
-        info(f"Total: {len(self.zones)} zones, {enabled} enabled, {disabled} disabled, {manual} manual, {vlan_zones} with VLANs")
+        footer = (f"  {len(self.zones)} zones · {enabled} enabled · {disabled} disabled · "
+                  f"{manual} manual")
+        if warn_count or created_count:
+            extras = []
+            if warn_count:
+                extras.append(f"{warn_count} warning{'s' if warn_count != 1 else ''}")
+            if created_count:
+                extras.append(f"{created_count} created")
+            footer += " — " + " · ".join(extras)
+        info(footer)
 
 
 def main():
@@ -1595,9 +1708,11 @@ def main():
               "policy validator (issue #163); don't configure anything"),
     )
     parser.add_argument(
-        "--list-config",
+        "--list-config", "--list",
         action="store_true",
-        help="List current OPNsense VLAN and DHCP configuration",
+        dest="list_config",
+        help="List the current zone configuration as the unified zone summary "
+             "table (live interface IDs, DHCP ranges, drift flags)",
     )
     parser.add_argument(
         "--modules-dir",
@@ -1671,16 +1786,18 @@ def main():
         error(f"Parsing zones.json: {e}")
         sys.exit(1)
 
-    # Show zone summary
-    manager.print_zone_summary()
+    # The unified zone summary (issue #212) is printed once AFTER configuration
+    # so its Flags column can carry the change/warning outcome. (--list-config
+    # and --summary below have their own dedicated output and exit early.)
 
-    # List current config if requested
+    # List current config if requested — same unified table as the configure
+    # run (issue #212), read-only (no results → flags reflect live drift only).
     if args.list_config:
         # Surface API/auth/reachability failures clearly with a non-zero exit
         # rather than silently leaving the operator with only the local zone
         # summary (issue #180).
         try:
-            manager.print_current_config()
+            manager.print_zone_summary()
         except Exception as e:
             error(f"Failed to fetch live OPNsense configuration: {e}")
             sys.exit(1)
@@ -1719,49 +1836,19 @@ def main():
             force_rename_labels=args.force_rename_labels,
         )
 
-    # Print results summary
-    info("Results Summary")
-    if "vlans" in results:
-        info(f"  VLANs: {len(results['vlans'])} zones processed")
-        for zone_name, result in results["vlans"].items():
-            status = result.get("status", "unknown")
-            vlan_tag = result.get("vlan", "")
-            debug(f"    {zone_name}: {status}" + (f" (VLAN {vlan_tag})" if vlan_tag else ""))
+    # One unified, VLAN-tag-sorted summary with inline change/warning flags
+    # (issue #212). It queries the live OPNsense config for interface IDs and
+    # DHCP ranges, so it doubles as the post-execute verification — replacing
+    # the former separate VLAN/DHCP/warnings tables.
+    manager.print_zone_summary(results)
 
-    if "dhcp" in results:
-        info(f"  DHCP: {len(results['dhcp'])} zones processed")
-        for zone_name, result in results["dhcp"].items():
-            status = result.get("status", "unknown")
-            range_info = result.get("range", "")
-            debug(f"    {zone_name}: {status}" + (f" ({range_info})" if range_info else ""))
-
+    # Firewall rules are not a per-zone column in the table; keep a concise
+    # processed-count line (per-zone detail at --debug).
     if "firewall" in results:
-        info(f"  Firewall Rules: {len(results['firewall'])} zones processed")
-        for zone_name, result in results["firewall"].items():
-            status = result.get("status", "unknown")
-            rules = result.get("rules", [])
-            if rules:
-                created = sum(1 for r in rules if r.get("status") in ("created", "would_create"))
-                exists = sum(1 for r in rules if r.get("status") == "exists")
-                errors = sum(1 for r in rules if r.get("status") == "error")
-                parts = []
-                if created:
-                    parts.append(f"{created} new")
-                if exists:
-                    parts.append(f"{exists} existing")
-                if errors:
-                    parts.append(f"{errors} errors")
-                debug(f"    {zone_name}: {len(rules)} rules ({', '.join(parts)})")
-            elif status in ("deleted", "would_delete"):
-                count = result.get("rules_deleted", 0)
-                debug(f"    {zone_name}: {status} ({count} rules removed)")
-            else:
-                debug(f"    {zone_name}: {status}")
-
-    # Show current config after changes (if not in check mode)
-    if not check_mode:
-        info("Verifying configuration...")
-        manager.print_current_config()
+        fw = results["firewall"]
+        info(f"  Firewall rules: {len(fw)} zones processed")
+        for zone_name, result in fw.items():
+            debug(f"    {zone_name}: {result.get('status', 'unknown')}")
 
 
 if __name__ == "__main__":
