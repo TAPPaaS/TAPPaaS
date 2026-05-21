@@ -46,6 +46,8 @@ cd "$MODULE_DIR"
 
 # Source common routines (just function definitions, no execution)
 . /home/tappaas/bin/common-install-routines.sh
+# shellcheck source=lib/pbs-job.sh disable=SC1091
+. "${MODULE_DIR}/lib/pbs-job.sh"
 
 # Validate the JSON config
 check_json /home/tappaas/config/$1.json || exit 1
@@ -250,27 +252,25 @@ fi
 rm -f /tmp/pbs_password.tmp
 EOF
 
-# Step 7: Create backup job in Proxmox
-info "Creating backup job in Proxmox..."
-ssh "root@${MGMT_NODE}.${ZONE}.internal" "bash -s" <<EOF
-set -e
+# Step 7: Backup job — managed per-module, dependsOn-driven (issue #200)
+#
+# We deliberately do NOT create an "--all" job here. The cluster backup job is
+# now owned by the backup:vm service: each module that declares
+# "dependsOn": ["backup:vm"] adds its VMID to a single shared, marker-tagged
+# job via backup/services/vm/install-service.sh (and removes it on delete).
+# This backs up only the VMs that opt in (data-bearing modules); foundation
+# VMs that are reproducible from git are intentionally not auto-backed-up.
+#
+# A pre-existing legacy "--all" job (from earlier installs) is migrated in
+# place to the managed vmid-list model the first time any backup:vm module is
+# installed or updated (see lib/pbs-job.sh::pbs_migrate_all_job).
+info "Backup job is managed per-module via backup:vm (no --all job created)."
 
-# Check if backup job exists using API
-if ! pvesh get /cluster/backup --output-format=json | grep -q '"storage":"${DATASTORE_NAME}"'; then
-  # Create backup job using pvesh API
-  pvesh create /cluster/backup \
-    --storage ${DATASTORE_NAME} \
-    --all 1 \
-    --mode snapshot \
-    --compress zstd \
-    --starttime 21:00 \
-    --enabled 1 \
-    --mailnotification always
-  echo "Backup job created (runs daily at 21:00)"
-else
-  echo "Backup job already exists for ${DATASTORE_NAME}"
-fi
-EOF
+# Register the alwaysBackup foundation VMs (firewall, tappaas-cicd) — they
+# bootstrap before this backup server so cannot dependsOn backup:vm, but should
+# still be backed up. Also migrates any legacy --all job. (issue #200)
+info "Registering alwaysBackup VMs in the managed backup job..."
+pbs_ensure_always || warn "Could not register some alwaysBackup VMs (check backup job)"
 
 info "\n${GN}PBS configuration completed successfully!${CL}"
 echo

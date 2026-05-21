@@ -6,6 +6,7 @@
   "node": "tappaas3",
   "storage": "tankc1",
   "pbsStorageName": "tappaas_backup",
+  "alwaysBackup": ["firewall", "tappaas-cicd"],
   "imageType": "apt",
   "image": "pbs",
   "imageLocation": "http://download.proxmox.com/debian/pbs",

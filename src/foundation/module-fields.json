@@ -9,7 +9,7 @@
         "maintainer", "status", "location",
         "vmname", "vmid", "vmtag", "node",
         "bios", "ostype", "cputype", "cores", "memory", "diskSize", "storage",
-        "pbsStorageName",
+        "pbsStorageName", "alwaysBackup",
         "imageType", "image", "imageLocation", "os", "cloudInit",
         "HANode", "replicationSchedule",
         "bridge0", "mac0", "zone0", "trunks0",
@@ -235,6 +235,16 @@
             "default": "tappaas_backup",
             "example": "tappaas_backup",
             "note": "Allows environments whose PBS storage uses a different name (e.g. 'pbs') to override the default. Used as both the PBS datastore name and the Proxmox storage name."
+        },
+
+        "alwaysBackup": {
+            "description": "Set only on the backup module. List of module names whose VMs are always added to the PBS backup job, even though they do not (and cannot) declare dependsOn backup:vm — typically foundation VMs that bootstrap before the backup server (firewall, tappaas-cicd).",
+            "type": "array",
+            "requiredBy": [],
+            "usedBy": "backup:vm",
+            "default": [],
+            "example": ["firewall", "tappaas-cicd"],
+            "note": "Each entry is a module/VM name resolved to its VMID via /home/tappaas/config/<name>.json. Registered when the backup module installs/updates."
         },
 
         "imageType": {
