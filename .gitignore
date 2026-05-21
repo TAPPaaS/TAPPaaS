@@ -12,9 +12,9 @@ setup.sh
 tmp/litellm.sql
 tmp/litellm_data_only.sql
 .gitignore
-src/foundation/30-tappaas-cicd/opnsense-controller/result
-src/foundation/30-tappaas-cicd/opnsense-controller/result-2
-src/foundation/30-tappaas-cicd/opnsense-controller/result-3
-src/foundation/30-tappaas-cicd/opnsense-controller/result-4
+src/foundation/tappaas-cicd/opnsense-controller/result
+src/foundation/tappaas-cicd/opnsense-controller/result-2
+src/foundation/tappaas-cicd/opnsense-controller/result-3
+src/foundation/tappaas-cicd/opnsense-controller/result-4
 result
 
