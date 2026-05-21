@@ -1,0 +1,22 @@
+{
+  "description": "Test fixture: cluster:ha drift reconciler (issue #193). Disposable NixOS clone used by ../test.sh --deep; safe to delete. zone0=srv-home (VLAN 210) so it stays reachable on either node — the only test VLAN this switch trunks cross-node.",
+  "version": "0.1",
+  "vmname": "test-hadrift",
+  "vmid": 921,
+  "vmtag": "TAPPaaS,Test",
+  "node": "tappaas1",
+  "HANode": "tappaas2",
+  "replicationSchedule": "*/15",
+  "cores": 2,
+  "memory": "2048",
+  "diskSize": "24G",
+  "storage": "tanka1",
+  "imageType": "clone",
+  "image": "8080",
+  "bridge0": "lan",
+  "zone0": "srv-home",
+  "dependsOn": [
+    "cluster:vm",
+    "cluster:ha"
+  ]
+}

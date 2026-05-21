@@ -17,4 +17,4 @@ src/foundation/tappaas-cicd/opnsense-controller/result-2
 src/foundation/tappaas-cicd/opnsense-controller/result-3
 src/foundation/tappaas-cicd/opnsense-controller/result-4
 result
-
+.claude/scheduled_tasks.lock

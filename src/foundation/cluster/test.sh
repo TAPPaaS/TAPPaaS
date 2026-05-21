@@ -3,14 +3,17 @@
 # TAPPaaS Cluster Module Test
 #
 # Validates the cluster foundation module: VM lifecycle scripts, the
-# vm-net.sh network helpers, and the cluster:vm drift reconciler
-# (update-service.sh, issue #192).
+# vm-net.sh network helpers, the cluster:vm drift reconciler (services/vm/
+# update-service.sh, issue #192), and the cluster:ha drift reconciler
+# (services/ha/update-service.sh, issue #193).
 #
 # Standard mode: quick checks (~seconds) — file presence, vm-net.sh unit
-#                tests, and a read-only drift --check against an installed VM.
-# Deep mode:     additionally stands up a disposable test VM, induces a
-#                zone change, and verifies update-service.sh reconciles it
-#                (net0 VLAN tag + DNS). Creates and deletes a real VM (~minutes).
+#                tests, and a read-only drift --check against installed VMs.
+# Deep mode:     additionally stands up disposable test VMs and verifies the
+#                reconcilers correct induced drift:
+#                  #192 — a zone change (net0 VLAN tag + DNS)
+#                  #193 — replication-schedule + HA-rule node drift
+#                Creates and deletes real VMs (~minutes).
 #
 # Usage: ./test.sh [module-name]
 #
@@ -67,6 +70,10 @@ required=(
     services/vm/update-service.sh
     services/vm/delete-service.sh
     services/vm/test-service.sh
+    services/ha/install-service.sh
+    services/ha/update-service.sh
+    services/ha/delete-service.sh
+    services/ha/test-service.sh
 )
 missing=0
 for f in "${required[@]}"; do
@@ -76,11 +83,12 @@ for f in "${required[@]}"; do
 done
 [[ "${missing}" -eq 0 ]] && pass "All ${#required[@]} cluster scripts present"
 
-# update-service.sh must be executable (called by update-module.sh)
-if [[ -x "${SCRIPT_DIR}/services/vm/update-service.sh" ]]; then
-    pass "update-service.sh is executable"
+# Both update-service.sh reconcilers must be executable (called by update-module.sh)
+if [[ -x "${SCRIPT_DIR}/services/vm/update-service.sh" \
+   && -x "${SCRIPT_DIR}/services/ha/update-service.sh" ]]; then
+    pass "vm + ha update-service.sh are executable"
 else
-    fail "update-service.sh is not executable"
+    fail "an update-service.sh is not executable"
 fi
 
 # ── Test 2: vm-net.sh helper unit tests ─────────────────────────────
@@ -118,7 +126,7 @@ else
     target=""
     for j in "${CONFIG_DIR}"/*.json; do
         m=$(basename "$j" .json)
-        [[ "$m" == "test-vmdrift" ]] && continue
+        [[ "$m" == "test-vmdrift" || "$m" == "test-hadrift" ]] && continue
         if jq -e '(.dependsOn // []) | index("cluster:vm") != null' "$j" >/dev/null 2>&1; then
             target="$m"; break
         fi
@@ -240,6 +248,135 @@ if [[ "${DEEP}" -eq 1 ]]; then
 else
     info "${BOLD}Deep Test: cluster:vm drift reconcile${CL}"
     skip "VM creation + drift test (use TAPPAAS_TEST_DEEP=1 to run)"
+fi
+
+# ── Deep Test: create an HA VM, induce HA drift, verify reconcile ───
+
+deep_cleanup_ha() {
+    dns-manager --no-ssl-verify delete test-hadrift srv-home.internal >/dev/null 2>&1 || true
+    [[ -f "${CONFIG_DIR}/test-hadrift.json" ]] || return 0
+    info "  Cleaning up HA test VM (delete-module test-hadrift)..."
+    /home/tappaas/bin/delete-module.sh test-hadrift --force >/dev/null 2>&1 || true
+}
+
+if [[ "${DEEP}" -eq 1 ]]; then
+    info "${BOLD}Deep Test: cluster:ha drift reconcile (issue #193)${CL}"
+    trap deep_cleanup_ha EXIT
+
+    THVM="test-hadrift"
+    HFIX="${SCRIPT_DIR}/test-hadrift"
+    HUPSVC="${SCRIPT_DIR}/services/ha/update-service.sh"
+    HVMID=921
+    hdeep_ok=1
+
+    # 1. Install the disposable HA-managed test VM. The cluster:vm service
+    #    creates the VM (zone0=srv-home / VLAN 210 so it stays reachable on
+    #    either node); the cluster:ha service configures the rule + replication.
+    info "  Installing ${THVM} (NixOS clone, HA-managed on srv-home/210)..."
+    if ( cd "${HFIX}" && /home/tappaas/bin/install-module.sh "${THVM}" ) >/dev/null 2>&1; then
+        pass "HA test VM installed + HA configured"
+    else
+        fail "HA test VM install failed — aborting deep test"
+        hdeep_ok=0
+    fi
+
+    # Locate the node hosting VM 921 for live state queries.
+    if [[ "${hdeep_ok}" -eq 1 ]]; then
+        hrow=$(find_vm "${HVMID}") || true
+        HNODE="${hrow%% *}"
+        if [[ -z "${HNODE}" ]]; then
+            fail "could not locate ${THVM} (VMID ${HVMID}) after install"; hdeep_ok=0
+        fi
+    fi
+
+    # 2. Right after install, the reconciler should report no drift.
+    if [[ "${hdeep_ok}" -eq 1 ]]; then
+        info "  Waiting for HA + replication to register..."
+        sleep 20
+        if "${HUPSVC}" --check "${THVM}" 2>&1 | grep -q "in sync"; then
+            pass "post-install: HA reconciler reports in sync"
+        else
+            fail "post-install: expected 'in sync'"
+        fi
+    fi
+
+    # 3. Induce replication-schedule drift (*/15 → */30) in config.
+    if [[ "${hdeep_ok}" -eq 1 ]]; then
+        tmp=$(mktemp)
+        if jq '.replicationSchedule = "*/30"' "${CONFIG_DIR}/${THVM}.json" > "${tmp}" \
+           && mv "${tmp}" "${CONFIG_DIR}/${THVM}.json"; then
+            pass "induced drift: replicationSchedule */15→*/30 in config"
+        else
+            fail "could not edit test config"; hdeep_ok=0
+        fi
+    fi
+
+    # 4. --check detects schedule drift; apply; verify the live job changed.
+    if [[ "${hdeep_ok}" -eq 1 ]]; then
+        if "${HUPSVC}" --check "${THVM}" 2>&1 | grep -q "replication schedule"; then
+            pass "reconciler detects replication-schedule drift"
+        else
+            fail "reconciler did not detect replication-schedule drift"
+        fi
+    fi
+    if [[ "${hdeep_ok}" -eq 1 ]]; then
+        info "  Applying HA reconcile (replication schedule)..."
+        "${HUPSVC}" "${THVM}" 2>&1 | indent
+        # shellcheck disable=SC2086
+        live_sched=$(ssh ${SSH_OPTS} "root@${HNODE}.${MGMT}.internal" \
+            "pvesh get /cluster/replication --output-format json" 2>/dev/null \
+            | jq -r --argjson id "${HVMID}" '.[] | select(.guest==$id) | .schedule' 2>/dev/null) || true
+        if [[ "${live_sched}" == "*/30" ]]; then
+            pass "live replication schedule reconciled to */30"
+        else
+            fail "live replication schedule not */30 (got: ${live_sched:-none})"
+        fi
+    fi
+
+    # 5. Induce HA-rule node drift directly in the live cluster (config-vs-
+    #    reality). A spurious low-priority tappaas3 is added; primary stays
+    #    tappaas1 so this does NOT trigger a live migration. (The placement-
+    #    migrate path is logic-only here to keep the test from doing a slow
+    #    online migration.)
+    if [[ "${hdeep_ok}" -eq 1 ]]; then
+        # shellcheck disable=SC2086,SC2029
+        if ssh ${SSH_OPTS} "root@${HNODE}.${MGMT}.internal" \
+            "ha-manager rules set node-affinity ha-${THVM} --nodes tappaas1:2,tappaas2:1,tappaas3:1 --resources vm:${HVMID}" \
+            >/dev/null 2>&1; then
+            pass "induced drift: HA rule nodes mangled in live state"
+        else
+            fail "could not mangle live HA rule"; hdeep_ok=0
+        fi
+    fi
+
+    # 6. --check detects rule-nodes drift; apply; verify normalized back.
+    if [[ "${hdeep_ok}" -eq 1 ]]; then
+        if "${HUPSVC}" --check "${THVM}" 2>&1 | grep -q "ha-rule nodes"; then
+            pass "reconciler detects HA-rule node drift"
+        else
+            fail "reconciler did not detect HA-rule node drift"
+        fi
+    fi
+    if [[ "${hdeep_ok}" -eq 1 ]]; then
+        info "  Applying HA reconcile (rule nodes)..."
+        "${HUPSVC}" "${THVM}" 2>&1 | indent
+        # shellcheck disable=SC2086
+        live_nodes=$(ssh ${SSH_OPTS} "root@${HNODE}.${MGMT}.internal" \
+            "pvesh get /cluster/ha/rules --output-format json" 2>/dev/null \
+            | jq -r --arg res "vm:${HVMID}" '.[] | select(.resources==$res) | .nodes' 2>/dev/null) || true
+        norm=$(tr ', ' '\n' <<< "${live_nodes}" | sed '/^$/d' | sort | paste -sd',' -)
+        if [[ "${norm}" == "tappaas1:2,tappaas2:1" ]]; then
+            pass "live HA rule reconciled to tappaas1:2,tappaas2:1"
+        else
+            fail "live HA rule not reconciled (got: ${live_nodes:-none})"
+        fi
+    fi
+
+    deep_cleanup_ha
+    trap - EXIT
+else
+    info "${BOLD}Deep Test: cluster:ha drift reconcile${CL}"
+    skip "HA VM creation + drift test (use TAPPAAS_TEST_DEEP=1 to run)"
 fi
 
 # ── Summary ─────────────────────────────────────────────────────────
