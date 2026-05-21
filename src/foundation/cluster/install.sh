@@ -249,7 +249,9 @@ mkdir -p tappaas
 apt -y install jq &>/dev/null || msg_error "apt update failed"
 curl -fsSL  ${REPO}${BRANCH}/src/foundation/cluster/Create-TAPPaaS-VM.sh >~/tappaas/Create-TAPPaaS-VM.sh
 chmod 744 ~/tappaas/Create-TAPPaaS-VM.sh
-msg_ok "Installed TAPPaaS helper script"
+curl -fsSL  ${REPO}${BRANCH}/src/foundation/cluster/Create-TAPPaaS-LXC.sh >~/tappaas/Create-TAPPaaS-LXC.sh
+chmod 744 ~/tappaas/Create-TAPPaaS-LXC.sh
+msg_ok "Installed TAPPaaS helper scripts (VM + LXC)"
 
 msg_info "Copy zones.json"
 curl -fsSL  ${REPO}${BRANCH}/src/foundation/firewall/zones.json >~/tappaas/zones.json

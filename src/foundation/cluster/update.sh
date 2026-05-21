@@ -4,7 +4,7 @@
 #
 # Updates all Proxmox nodes in the cluster:
 #   1. Runs apt update && apt upgrade on each node
-#   2. Distributes Create-TAPPaaS-VM.sh and zones.json to each node
+#   2. Distributes Create-TAPPaaS-VM.sh, Create-TAPPaaS-LXC.sh and zones.json to each node
 #
 # Usage: ./update.sh [module-name]
 #
