@@ -34,6 +34,20 @@ _NON_MODULE_STEMS: frozenset[str] = frozenset(
 )
 
 
+def normalize_iface_label(name: str) -> str:
+    """Canonical OPNsense interface-assignment label for a zone (issue #213).
+
+    The OPNsense GUI strips hyphens from interface labels on save (typing
+    'iot-local' yields 'iotlocal'), while the API preserves them — so a label
+    written with hyphens drifts the moment an operator edits it in the GUI.
+    Underscores survive both the API and the GUI, so TAPPaaS writes and
+    compares interface labels with hyphens normalized to underscores
+    ('iot-local' -> 'iot_local'). Operators can therefore correct drift by hand
+    using the underscore form without needing zone-manager.
+    """
+    return name.replace("-", "_")
+
+
 @dataclass
 class Zone:
     """Represents a TAPPaaS network zone."""
@@ -593,8 +607,12 @@ class ZoneManager:
                     # depending on version (issue #179).
                     if str(v["vlan_tag"]) == str(zone.vlan_tag):
                         return v["identifier"]
-                    # Also check if the interface name matches the zone name
-                    if v.get("description", "").lower() == zone.name.lower():
+                    # Also check if the interface label matches the zone name.
+                    # Treat hyphens and underscores as equivalent so both legacy
+                    # ('iot-local') and normalized ('iot_local') labels match
+                    # (issue #213).
+                    if (normalize_iface_label(v.get("description", "").lower())
+                            == normalize_iface_label(zone.name.lower())):
                         return v["identifier"]
             return None
         else:
@@ -636,10 +654,70 @@ class ZoneManager:
         """
         return f"Zone {source_zone.name} -> {target}"
 
+    def _rename_interface_label(
+        self, manager, zone, assigned, desired_label, check_mode, results,
+    ) -> None:
+        """Disruptively rename a drifted interface label to ``desired_label``.
+
+        OPNsense has no in-place update for an interface-assignment label, so
+        this is an unassign + reassign (delItem+addItem) that briefly tears the
+        interface down and re-applies the zone's static gateway IP. Anything
+        bound to the interface (firewall rules, DHCP) may need a reconcile run
+        afterwards. Opt-in via --force-rename-labels (issue #213).
+        """
+        label = assigned.get("description") or ""
+        iface_id = assigned.get("identifier")
+        device = assigned.get("device")
+
+        if check_mode:
+            warn(f"  {zone.name}: would force-rename interface label "
+                 f"'{label}' -> '{desired_label}' (disruptive)")
+            results[zone.name] = {
+                "status": "would_rename_label", "from": label,
+                "to": desired_label, "vlan": zone.vlan_tag,
+            }
+            return
+
+        if not iface_id or not device:
+            error(f"  {zone.name}: cannot force-rename label — missing interface "
+                  f"identifier/device")
+            results[zone.name] = {"status": "error",
+                                  "error": "missing identifier/device for label rename"}
+            return
+
+        warn(f"  {zone.name}: force-renaming interface label '{label}' -> "
+             f"'{desired_label}' (disruptive unassign+reassign)")
+        try:
+            manager.unassign_interface(iface_id)
+            res = manager.assign_interface(
+                device=device,
+                description=desired_label,
+                enable=True,
+                ipv4_type="static",
+                ipv4_address=zone.gateway_ip,
+                ipv4_subnet=zone.network.prefixlen,
+            )
+            new_id = res.get("ifname") if isinstance(res, dict) else None
+            if new_id:
+                try:
+                    manager.reload_interface(new_id)
+                except Exception:  # noqa: BLE001 - reload is best-effort
+                    pass
+            info(f"  {zone.name}: interface label renamed to '{desired_label}' "
+                 f"(re-run zone-manager --firewall-rules to refresh bound rules)")
+            results[zone.name] = {
+                "status": "renamed_label", "from": label,
+                "to": desired_label, "vlan": zone.vlan_tag,
+            }
+        except Exception as e:  # noqa: BLE001 - surface the API error
+            error(f"  {zone.name}: force-rename failed: {e}")
+            results[zone.name] = {"status": "error", "error": f"label rename failed: {e}"}
+
     def configure_vlans(
         self,
         check_mode: bool = True,
         assign: bool = True,
+        force_rename_labels: bool = False,
     ) -> dict[str, dict]:
         """Configure VLANs for all enabled zones.
 
@@ -650,6 +728,9 @@ class ZoneManager:
         Args:
             check_mode: If True, don't make changes (dry-run)
             assign: If True (default), also assign VLANs to interfaces
+            force_rename_labels: If True, reconcile a drifted interface label to
+                the normalized (underscore) zone name via a disruptive
+                unassign+reassign API call (issue #213). Default warns only.
 
         Returns:
             Dictionary mapping zone names to results
@@ -691,11 +772,14 @@ class ZoneManager:
                             # Check if VLAN is assigned to an interface
                             assigned = assigned_by_tag.get(zone.vlan_tag)
 
-                            # If not found in assigned_by_tag, search manually by description or device
+                            # If not found in assigned_by_tag, search manually by device
+                            # or label (hyphen/underscore-tolerant — issue #213).
                             if not assigned:
                                 vlan_device = existing.get("device")
+                                zname = normalize_iface_label(zone.name.lower())
                                 for v in assigned_vlans:
-                                    if v.get("device") == vlan_device or v.get("description", "").lower() == zone.name.lower():
+                                    if (v.get("device") == vlan_device
+                                            or normalize_iface_label(v.get("description", "").lower()) == zname):
                                         assigned = v
                                         break
 
@@ -771,17 +855,29 @@ class ZoneManager:
                         }
 
                     # The assigned-interface label (the "[name]" shown in the GUI)
-                    # is the interface-assignment description, set to the zone name
-                    # at creation. OPNsense has no safe in-place update for it
-                    # (only delItem+addItem, which is disruptive), so warn on drift
-                    # rather than auto-reassign. See issue #186.
+                    # is the interface-assignment description, set at creation to
+                    # the zone name with hyphens normalized to underscores
+                    # (issue #213 — the GUI strips hyphens, so underscores are the
+                    # only form that survives manual edits). OPNsense has no safe
+                    # in-place update for it (only delItem+addItem, which is
+                    # disruptive), so by default we warn on drift. Pass
+                    # --force-rename-labels to opt into the disruptive rename.
                     assigned = assigned_by_tag.get(zone.vlan_tag)
                     if assigned:
                         label = (assigned.get("description") or "")
-                        if label and label.lower() != zone.name.lower():
-                            warn(f"  {zone.name}: VLAN {zone.vlan_tag} interface label is "
-                                 f"'{label}' (stale). Re-assigning to rename is disruptive; "
-                                 f"update it manually in OPNsense (Interfaces > Assignments).")
+                        desired_label = normalize_iface_label(zone.name)
+                        if label and label.lower() != desired_label.lower():
+                            if force_rename_labels:
+                                self._rename_interface_label(
+                                    manager, zone, assigned, desired_label,
+                                    check_mode, results,
+                                )
+                            else:
+                                warn(f"  {zone.name}: VLAN {zone.vlan_tag} interface label "
+                                     f"'{label}' drifted. Re-run with "
+                                     f"--force-rename-labels (disruptive), or rename it "
+                                     f"manually in OPNsense (Interfaces > Assignments) using "
+                                     f"underscores: '{desired_label}' (the GUI strips hyphens).")
                     continue
 
                 # Use the zone's bridge to determine the physical interface
@@ -801,13 +897,14 @@ class ZoneManager:
                     results[zone.name] = {"status": "would_create", "vlan": zone.vlan_tag}
                 else:
                     try:
-                        # Pass zone.name as interface_name so the assigned interface is named after the zone
-                        # Also assign the gateway IP as a static address on the interface
+                        # Name the assigned interface after the zone, with
+                        # hyphens normalized to underscores so GUI edits survive
+                        # (issue #213). Also assign the gateway IP statically.
                         result = manager.create_vlan(
                             vlan,
                             check_mode=False,
                             assign=assign,
-                            interface_name=zone.name,
+                            interface_name=normalize_iface_label(zone.name),
                             ipv4_type="static",
                             ipv4_address=gateway_ip,
                             ipv4_subnet=subnet_bits,
@@ -1280,6 +1377,7 @@ class ZoneManager:
         check_mode: bool = True,
         assign_vlans: bool = True,
         firewall_rules: bool = True,
+        force_rename_labels: bool = False,
     ) -> dict:
         """Configure VLANs, DHCP, and firewall rules for all zones.
 
@@ -1300,7 +1398,10 @@ class ZoneManager:
         # Configure VLANs first, then update dnsmasq bindings so it
         # recognises the new interfaces, then create DHCP ranges.
         info("Step 1: Configuring VLANs")
-        vlan_results = self.configure_vlans(check_mode=check_mode, assign=assign_vlans)
+        vlan_results = self.configure_vlans(
+            check_mode=check_mode, assign=assign_vlans,
+            force_rename_labels=force_rename_labels,
+        )
 
         # Update dnsmasq to listen on all VLAN interfaces *before* creating
         # DHCP ranges — otherwise dnsmasq rejects the interface identifiers
@@ -1461,6 +1562,13 @@ def main():
         help="Do not assign VLANs to interfaces (by default VLANs are assigned)",
     )
     parser.add_argument(
+        "--force-rename-labels",
+        action="store_true",
+        help="Reconcile a drifted interface label to the normalized (underscore) "
+             "zone name via a DISRUPTIVE unassign+reassign API call (issue #213). "
+             "Default warns only. Re-run zone-manager --firewall-rules afterwards.",
+    )
+    parser.add_argument(
         "--vlans-only",
         action="store_true",
         help="Only configure VLANs, skip DHCP and firewall rules",
@@ -1595,7 +1703,10 @@ def main():
     assign_vlans = not args.no_assign
     firewall_rules = not args.no_firewall_rules
     if args.vlans_only:
-        results = {"vlans": manager.configure_vlans(check_mode=check_mode, assign=assign_vlans)}
+        results = {"vlans": manager.configure_vlans(
+            check_mode=check_mode, assign=assign_vlans,
+            force_rename_labels=args.force_rename_labels,
+        )}
     elif args.dhcp_only:
         results = {"dhcp": manager.configure_dhcp(check_mode=check_mode)}
     elif args.firewall_rules_only:
@@ -1605,6 +1716,7 @@ def main():
             check_mode=check_mode,
             assign_vlans=assign_vlans,
             firewall_rules=firewall_rules,
+            force_rename_labels=args.force_rename_labels,
         )
 
     # Print results summary
