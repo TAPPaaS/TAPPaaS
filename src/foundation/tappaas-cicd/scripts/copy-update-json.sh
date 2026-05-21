@@ -354,6 +354,15 @@ main() {
     info "Copying ${source_json} to ${dest_json}"
     cp "${source_json}" "${dest_json}"
 
+    # Copy the optional <module>.meta.json alongside it (cluster:lxc reads this
+    # for GPU passthrough / bind-mounts; not schema-validated). Issue #203.
+    local source_meta="./${module}.meta.json"
+    if [[ -f "${source_meta}" ]]; then
+        local dest_meta="${CONFIG_DIR}/${effective_module}.meta.json"
+        info "Copying ${source_meta} to ${dest_meta}"
+        cp "${source_meta}" "${dest_meta}"
+    fi
+
     # Get the absolute path of the module directory (where the source JSON resides)
     local module_dir
     module_dir="$(cd "$(dirname "${source_json}")" && pwd)"

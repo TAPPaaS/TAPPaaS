@@ -19,8 +19,5 @@
   "dependsOn": [
     "cluster:lxc",
     "backup:vm"
-  ],
-  "provides": [
-    "inference"
   ]
 }

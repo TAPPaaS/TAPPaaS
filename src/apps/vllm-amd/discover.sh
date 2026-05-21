@@ -9,7 +9,8 @@ set -euo pipefail
 NODE="${1:-tappaas2}"
 MGMT="mgmt.internal"
 TARGET="root@${NODE}.${MGMT}"
-OUT_JSON="vllm-amd.json"
+# discover only updates the meta (GPU majors are boot-dynamic); the curated
+# cluster:lxc <module>.json is left untouched (issue #203).
 OUT_META="vllm-amd.meta.json"
 
 REQUIRED_CPU_PATTERN="Ryzen AI MAX\+ 395"
@@ -86,8 +87,12 @@ echo "[CPU]  $CPU_MODEL"
 ERRORS=()
 echo "$CPU_MODEL" | grep -qiE "$REQUIRED_CPU_PATTERN" \
   || ERRORS+=("CPU mismatch: got '$CPU_MODEL'")
-[ "${VRAM_MB:-0}" -ge "$REQUIRED_VRAM_MIN_MB" ] \
-  || ERRORS+=("VRAM too low: ${VRAM_MB}M, need >= ${REQUIRED_VRAM_MIN_MB}M")
+# Strix Halo is a unified-memory APU: a small dedicated VRAM carveout (BIOS UMA)
+# plus a large GTT pool that ROCm/vLLM actually use. Validate total GPU-
+# addressable memory (VRAM + GTT), not the dedicated VRAM alone.
+GPU_TOTAL_MB=$(( ${VRAM_MB:-0} + ${GTT_MB:-0} ))
+[ "${GPU_TOTAL_MB}" -ge "$REQUIRED_VRAM_MIN_MB" ] \
+  || ERRORS+=("GPU memory too low: VRAM ${VRAM_MB}M + GTT ${GTT_MB}M = ${GPU_TOTAL_MB}M, need >= ${REQUIRED_VRAM_MIN_MB}M")
 [ "${KFD_MAJOR:-0}" -gt 0 ] \
   || ERRORS+=("ROCm: /dev/kfd not found on $NODE")
 [ -n "${RENDER_NODE:-}" ] \
@@ -117,7 +122,8 @@ chk() {
 
 echo ""
 echo "  === sizing summary ==="
-chk "VRAM (BIOS)"      "${VRAM_MB}MB / $(( VRAM_MB / 1024 ))GB"         "$VRAM_MB"      32768
+ok "VRAM (BIOS carveout)" "${VRAM_MB}MB / $(( VRAM_MB / 1024 ))GB (dedicated)"
+chk "GPU memory (unified)" "VRAM+GTT $(( GPU_TOTAL_MB / 1024 ))GB"      "$GPU_TOTAL_MB" 32768
 chk "GTT buffer"       "${GTT_MB}MB / $(( GTT_MB / 1024 ))GB"           "$GTT_MB"       16384
 chk "Linux RAM"        "${RAM_MB}MB / $(( RAM_MB / 1024 ))GB"           "$RAM_MB"       16384
 chk "LXC memory"       "${LXC_MEM_MB}MB / $(( LXC_MEM_MB / 1024 ))GB"  "$LXC_MEM_MB"  16384
@@ -132,47 +138,30 @@ chk "LXC memory"       "${LXC_MEM_MB}MB / $(( LXC_MEM_MB / 1024 ))GB"  "$LXC_MEM
   || err "GPU render node" "not found" "required for GPU passthrough"
 echo ""
 
-# --- Write JSON ---
-cat > "$OUT_JSON" <<EOF
-{
-  "version": "0.5.0",
-  "node": "${NODE}",
-  "vmid": 200,
-  "vmtag": "TAPPaaS, AI, GPU, vLLM",
-  "vmname": "vllm-amd",
-  "cores": ${LXC_CORES},
-  "memory": "${LXC_MEM_MB}",
-  "diskSize": "32G",
-  "storage": "local-lvm",
-  "ostype": "debian",
-  "bridge0": "lan",
-  "zone0": "srv-work",
-  "description": "vLLM AMD ROCm inference — Ryzen AI MAX+ 395 (${NODE})"
-}
-EOF
-
-cat > "$OUT_META" <<EOF
-{
-  "module": "vllm-amd",
-  "gpu": {
-    "apu": "Ryzen AI MAX+ 395",
-    "vram_mb": ${VRAM_MB},
-    "gtt_mb": ${GTT_MB},
-    "kfd_major": ${KFD_MAJOR},
-    "kfd_minor": ${KFD_MINOR},
-    "render_node": "${RENDER_NODE}",
-    "render_major": ${RENDER_MAJOR},
-    "render_minor": ${RENDER_MINOR}
-  },
-  "host_ram_mb": ${RAM_MB},
-  "lxc_mem_mb": ${LXC_MEM_MB},
-  "rocm_gfx_target": "gfx1151",
-  "vllm_image": "kyuz0/vllm-therock-gfx1151:latest",
-  "models_bind_src": "/mnt/models",
-  "models_bind_dst": "/opt/models"
-}
-EOF
+# --- Merge discovered values into the existing meta.json (issue #203) ---
+# /dev/kfd's major is assigned dynamically at boot and changes across reboots,
+# so it MUST be (re)discovered before each install. We MERGE into the existing
+# <module>.meta.json to preserve the cluster:lxc structure (bindMounts,
+# lxcOptions, vllm_image, ...) rather than overwriting with a flat blob, and we
+# do NOT touch <module>.json (it is the curated cluster:lxc module config).
+[ -f "$OUT_META" ] || { echo "❌ ${OUT_META} not found — cannot merge discovery into it"; exit 1; }
+tmp=$(mktemp)
+jq --argjson vram "${VRAM_MB}" --argjson gtt "${GTT_MB}" \
+   --argjson kfdmaj "${KFD_MAJOR}" --argjson kfdmin "${KFD_MINOR}" \
+   --arg rnode "${RENDER_NODE}" --argjson rmaj "${RENDER_MAJOR}" --argjson rmin "${RENDER_MINOR}" \
+   --argjson ram "${RAM_MB}" \
+   '.gpu.vram_mb = $vram
+    | .gpu.gtt_mb = $gtt
+    | .gpu.kfd_major = $kfdmaj
+    | .gpu.kfd_minor = $kfdmin
+    | .gpu.render_node = $rnode
+    | .gpu.render_major = $rmaj
+    | .gpu.render_minor = $rmin
+    | .host_ram_mb = $ram' \
+   "$OUT_META" > "$tmp" && mv "$tmp" "$OUT_META"
 
 echo ""
-echo "✅ Hardware OK — written: $OUT_JSON + $OUT_META"
-echo "Next: run ./install.sh"
+echo "✅ Hardware OK — merged GPU discovery into: $OUT_META"
+echo "   /dev/kfd ${KFD_MAJOR}:${KFD_MINOR}, ${RENDER_NODE} ${RENDER_MAJOR}:${RENDER_MINOR}"
+echo "   (LXC sizing reference: ${LXC_CORES} vCPUs, ${LXC_MEM_MB}MB; set in vllm-amd.json)"
+echo "Next: run install-module.sh vllm-amd"

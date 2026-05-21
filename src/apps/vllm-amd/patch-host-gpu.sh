@@ -36,7 +36,11 @@ RENDER_MINOR=$(jq -r '.gpu.render_minor' "$META")
 MODELS_SRC=$(jq -r '.bindMounts[0].src // .models_bind_src // empty' "$META")
 
 # --- Step 1: Check amdgpu kernel module ---
-if lsmod | grep -q amdgpu; then
+# Capture lsmod first: 'lsmod | grep -q' is a false negative under set -o
+# pipefail because grep -q exits on first match, lsmod gets SIGPIPE (141),
+# and pipefail propagates that as a pipeline failure.
+LOADED_MODS="$(lsmod)"
+if grep -q '^amdgpu' <<< "$LOADED_MODS"; then
   ok "amdgpu kernel module loaded"
 else
   err "amdgpu module" "not loaded — check dmesg"
