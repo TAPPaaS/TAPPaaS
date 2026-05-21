@@ -7,7 +7,7 @@
 # Example:
 #   copy-update-json.sh identity --node "tappaas2" --cores 4
 #   copy-update-json.sh openwebui --variant staging
-#   copy-update-json.sh openwebui --variant dev --zone0 dev-srv --vmid 315
+#   copy-update-json.sh openwebui --variant dev --zone0 srv-dev --vmid 315
 #
 # This script:
 #   1. Copies <module>.json from current directory to /home/tappaas/config/
@@ -72,7 +72,7 @@ Examples:
     ${SCRIPT_NAME} identity --node "tappaas2" --cores 4
     ${SCRIPT_NAME} nextcloud --memory 4096 --zone0 "trusted"
     ${SCRIPT_NAME} openwebui --variant staging
-    ${SCRIPT_NAME} openwebui --variant dev --zone0 dev-srv --vmid 315
+    ${SCRIPT_NAME} openwebui --variant dev --zone0 srv-dev --vmid 315
 
 Variant mode:
     When --variant is used, the output JSON is named <module>-<variant>.json.

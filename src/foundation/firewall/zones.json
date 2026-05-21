@@ -67,7 +67,7 @@
         "description": "Customer/tenant sandboxes — mutually isolated, public via dmz only"
     },
 
-    "dev-srv": {
+    "srv-dev": {
         "type": "Service",
         "state": "Inactive",
         "typeId": "2",

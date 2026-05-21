@@ -71,7 +71,7 @@ copy-update-json.sh nextcloud --memory 4096 --zone0 "trusted"
 copy-update-json.sh openwebui --variant staging
 
 # Create a variant with explicit overrides
-copy-update-json.sh openwebui --variant dev --zone0 dev-srv --vmid 315
+copy-update-json.sh openwebui --variant dev --zone0 srv-dev --vmid 315
 ```
 
 **What it does:**
@@ -438,7 +438,7 @@ install-module.sh litellm --node tappaas2
 install-module.sh openwebui --variant staging
 
 # Install a dev variant with explicit zone and vmid overrides
-install-module.sh openwebui --variant dev --zone0 dev-srv --vmid 315
+install-module.sh openwebui --variant dev --zone0 srv-dev --vmid 315
 ```
 
 **Variant mode:**

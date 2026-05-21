@@ -24,7 +24,7 @@
 #   install-module.sh vaultwarden
 #   install-module.sh litellm --node tappaas2
 #   install-module.sh openwebui --variant staging
-#   install-module.sh openwebui --variant dev --zone0 dev-srv --vmid 315
+#   install-module.sh openwebui --variant dev --zone0 srv-dev --vmid 315
 #
 # The script performs these steps:
 #   1. Checks the module is not already installed (unless --force is given)
@@ -65,7 +65,7 @@ Examples:
     ${SCRIPT_NAME} vaultwarden
     ${SCRIPT_NAME} litellm --node tappaas2
     ${SCRIPT_NAME} openwebui --variant staging
-    ${SCRIPT_NAME} openwebui --variant dev --zone0 dev-srv --vmid 315
+    ${SCRIPT_NAME} openwebui --variant dev --zone0 srv-dev --vmid 315
     ${SCRIPT_NAME} identity --force
 EOF
 }
