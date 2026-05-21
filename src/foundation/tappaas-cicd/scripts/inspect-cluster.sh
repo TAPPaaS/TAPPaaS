@@ -149,7 +149,13 @@ while IFS= read -r vmid; do
     gtype="${VM_TYPE_MAP[${vmid}]/qemu/vm}"
 
     if [[ -n "${CONFIG_MODULE_MAP[${vmid}]:-}" ]]; then
-        config_status="${GN}yes${CL}"
+        # An external module (status=external, issue #216) is a known-but-
+        # unmanaged guest — show [external] rather than a plain "yes".
+        if [[ "${CONFIG_STATUS_MAP[${vmid}]:-}" == "external" ]]; then
+            config_status="${BL}[external]${CL}"
+        else
+            config_status="${GN}yes${CL}"
+        fi
     else
         config_status="${YW}NOT IN CONFIG${CL}"
         WARNINGS=$((WARNINGS + 1))
@@ -161,11 +167,13 @@ done <<< "${SORTED_RUNNING}"
 echo ""
 
 # ── Compare: configured modules not running ──────────────────────────
-# Archived modules (status=archived, issue #215) are intentionally not running
-# — report them as [archived] (informational), not as a missing-VM error.
+# Archived modules (status=archived, #215) and external guests (status=external,
+# #216) are intentionally not TAPPaaS-running — report them informationally,
+# not as a missing-VM error.
 
 MISSING=0
 ARCHIVED=0
+EXTERNAL_DOWN=0
 
 for vmid in "${CONFIG_VMIDS[@]}"; do
     found=false
@@ -179,20 +187,24 @@ for vmid in "${CONFIG_VMIDS[@]}"; do
     if [[ "${found}" == "false" ]]; then
         module="${CONFIG_MODULE_MAP[${vmid}]}"
         node="${CONFIG_NODE_MAP[${vmid}]}"
-        if [[ "${CONFIG_STATUS_MAP[${vmid}]:-}" == "archived" ]]; then
-            ARCHIVED=$((ARCHIVED + 1))
-            echo -e "  ${YW}VMID ${vmid}  ${module}  [archived]  — VM removed, config + backups retained${CL}"
-        else
-            MISSING=$((MISSING + 1))
-            echo -e "  ${RD}VMID ${vmid}  ${module}  (expected on ${node})  — NOT RUNNING${CL}"
-        fi
+        case "${CONFIG_STATUS_MAP[${vmid}]:-}" in
+            archived)
+                ARCHIVED=$((ARCHIVED + 1))
+                echo -e "  ${YW}VMID ${vmid}  ${module}  [archived]  — VM removed, config + backups retained${CL}" ;;
+            external)
+                EXTERNAL_DOWN=$((EXTERNAL_DOWN + 1))
+                echo -e "  ${BL}VMID ${vmid}  ${module}  [external]  — externally managed, not currently running${CL}" ;;
+            *)
+                MISSING=$((MISSING + 1))
+                echo -e "  ${RD}VMID ${vmid}  ${module}  (expected on ${node})  — NOT RUNNING${CL}" ;;
+        esac
     fi
 done
 
-if [[ "${MISSING}" -eq 0 && "${ARCHIVED}" -eq 0 ]]; then
+if [[ "${MISSING}" -eq 0 && "${ARCHIVED}" -eq 0 && "${EXTERNAL_DOWN}" -eq 0 ]]; then
     info "  All configured modules have running VMs"
 elif [[ "${MISSING}" -eq 0 ]]; then
-    info "  All non-archived configured modules have running VMs (${ARCHIVED} archived)"
+    info "  All managed configured modules have running VMs (${ARCHIVED} archived, ${EXTERNAL_DOWN} external down)"
 fi
 
 echo ""

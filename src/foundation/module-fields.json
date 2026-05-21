@@ -90,7 +90,8 @@
                 "Testing": "Module is being tested, may have issues",
                 "Production": "Module is stable and ready for production use",
                 "Deprecated": "Module is no longer maintained",
-                "archived": "Module's VM was removed via 'delete-module.sh --archive' but its config and PBS backups are kept for restore (issue #215). Set automatically on archive; inspect-cluster.sh shows it as [archived] rather than NOT RUNNING."
+                "archived": "Module's VM was removed via 'delete-module.sh --archive' but its config and PBS backups are kept for restore (issue #215). Set automatically on archive; inspect-cluster.sh shows it as [archived] rather than NOT RUNNING.",
+                "external": "VM/guest that exists on the cluster but is managed OUTSIDE TAPPaaS (e.g. pfsense, hassosova). A minimal config ({vmid, vmname, status:external, description}) registers it as known-but-unmanaged: no install/update/test/delete lifecycle applies, backup:vm ignores it unless explicitly added, and inspect-cluster.sh shows it as [external] rather than NOT IN CONFIG. Mirrors zones.json state=Manual (issue #216)."
             },
             "example": "Development"
         },
