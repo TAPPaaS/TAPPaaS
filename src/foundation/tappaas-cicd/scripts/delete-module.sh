@@ -6,11 +6,21 @@
 # calling each dependency's delete-service.sh script in reverse order,
 # and then removing the module's configuration files.
 #
-# Usage: delete-module.sh <module-name> [--vmid <id>] [--yes] [--force]
+# Usage: delete-module.sh <module-name> [--archive|--remove] [--vmid <id>] [--yes] [--force]
 #
 # Arguments:
 #   module-name   Name of the module to delete (must have a
 #                 <module-name>.json in /home/tappaas/config/)
+#
+# Lifecycle mode (issue #215):
+#   --archive      (DEFAULT, safe) Remove the VM from the cluster but KEEP the
+#                  module config (marked "status": "archived") and KEEP its PBS
+#                  backup entry — the module is restorable and inspect-cluster.sh
+#                  shows it as [archived] rather than NOT RUNNING.
+#   --remove       (destructive) Remove the VM, remove its VMID from the PBS
+#                  backup job, AND delete the module config. Requires
+#                  confirmation (unless --yes/--force). Intended for test VMs and
+#                  decommissioned modules. NOTE: --force implies --remove.
 #
 # Options:
 #   --vmid <id>    Target a specific VM instance by VMID (required when more
@@ -19,13 +29,14 @@
 #                  destroyed and the module config is left intact.
 #   --yes, -y      Skip the destroy confirmation prompt (for automation)
 #   --force        Delete even if other modules depend on this module's
-#                  services; also implies --yes
+#                  services; also implies --yes AND --remove
 #   -h, --help     Show this help message
 #
 # Examples:
-#   delete-module.sh vaultwarden
-#   delete-module.sh litellm --force
-#   delete-module.sh openwebui --vmid 313     # destroy the stray instance only
+#   delete-module.sh vaultwarden                 # archive (VM gone, config kept)
+#   delete-module.sh litellm --remove            # full removal (prompts)
+#   delete-module.sh test-vmdrift --force        # full removal, no prompt
+#   delete-module.sh openwebui --vmid 313        # destroy the stray instance only
 #
 # The script performs these steps:
 #   1. Validates the module JSON config exists
@@ -34,7 +45,8 @@
 #   3. Checks that no other modules depend on this module's services
 #   4. Calls the module's own delete.sh (if present)
 #   5. Iterates dependsOn in reverse and calls each provider's delete-service.sh
-#   6. Removes the module configuration files
+#      (--archive keeps the backup:vm registration; --remove drops it)
+#   6. Archive: marks config "status":"archived". Remove: deletes the config.
 #
 
 set -euo pipefail
@@ -47,6 +59,8 @@ readonly CONFIG_DIR="/home/tappaas/config"
 OPT_FORCE=false
 OPT_YES=false
 OPT_VMID=""
+OPT_MODE="archive"        # archive (default, safe) | remove (destructive)
+OPT_MODE_EXPLICIT=false   # true once --archive/--remove is seen
 
 # shellcheck source=common-install-routines.sh disable=SC1091
 . /home/tappaas/bin/common-install-routines.sh
@@ -55,24 +69,32 @@ OPT_VMID=""
 
 usage() {
     cat << EOF
-Usage: ${SCRIPT_NAME} <module-name> [--vmid <id>] [--yes] [--force]
+Usage: ${SCRIPT_NAME} <module-name> [--archive|--remove] [--vmid <id>] [--yes] [--force]
 
 Delete a TAPPaaS module with dependency-aware service teardown.
 
 Arguments:
     module-name    Name of the module (must have config in ${CONFIG_DIR}/)
 
+Lifecycle mode (default: --archive):
+    --archive      Remove the VM but KEEP the config (status=archived) and its
+                   PBS backup entry — restorable; shown as [archived] by
+                   inspect-cluster.sh.
+    --remove       Remove the VM, drop its PBS backup entry, and DELETE the
+                   config. Requires confirmation (unless --yes/--force).
+
 Options:
     --vmid <id>    Target a specific VM instance by VMID (required when several
                    VMs share the module name). If it differs from the config
                    VMID, only that VM is destroyed and the config is kept.
     --yes, -y      Skip the destroy confirmation prompt (for automation)
-    --force        Delete despite dependent modules; also implies --yes
+    --force        Delete despite dependent modules; also implies --yes AND --remove
     -h, --help     Show this help message
 
 Examples:
-    ${SCRIPT_NAME} vaultwarden
-    ${SCRIPT_NAME} litellm --force
+    ${SCRIPT_NAME} vaultwarden               # archive (default)
+    ${SCRIPT_NAME} litellm --remove          # full removal (prompts)
+    ${SCRIPT_NAME} test-vmdrift --force      # full removal, no prompt
     ${SCRIPT_NAME} openwebui --vmid 313
 EOF
 }
@@ -152,6 +174,11 @@ confirm_destroy() {
         die "Refusing to destroy VM ${vmid} (${name}) without confirmation in a non-interactive shell. Pass --yes (or --force)."
     fi
     warn "About to PERMANENTLY destroy VM ${BL}${name}${CL} (VMID: ${RD}${vmid}${CL}) on node ${BL}${node}${CL}."
+    if [[ "${OPT_MODE}" == "remove" ]]; then
+        warn "  Mode ${RD}--remove${CL}: the module config AND its PBS backup entry will ALSO be deleted (irreversible)."
+    else
+        warn "  Mode ${GN}--archive${CL}: config and PBS backups are kept — the module stays restorable."
+    fi
     local reply
     read -r -p "  Confirm destroy of VM ${vmid}? [y/N] " reply
     case "${reply}" in
@@ -171,6 +198,8 @@ main() {
             -h|--help) usage; exit 0 ;;
             --force) OPT_FORCE=true; OPT_YES=true ;;
             -y|--yes) OPT_YES=true ;;
+            --archive) OPT_MODE="archive"; OPT_MODE_EXPLICIT=true ;;
+            --remove)  OPT_MODE="remove";  OPT_MODE_EXPLICIT=true ;;
             --vmid)
                 [[ -n "${2:-}" ]] || die "--vmid requires a value"
                 OPT_VMID="${2}"; shift ;;
@@ -194,6 +223,12 @@ main() {
 
     if [[ -n "${OPT_VMID}" && ! "${OPT_VMID}" =~ ^[0-9]+$ ]]; then
         die "--vmid must be numeric (got '${OPT_VMID}')"
+    fi
+
+    # --force implies full removal (preserves the historical --force behaviour
+    # and keeps test-cleanup callers working) unless --archive was explicit.
+    if [[ "${OPT_FORCE}" == true && "${OPT_MODE_EXPLICIT}" == false ]]; then
+        OPT_MODE="remove"
     fi
 
     local module_json="${CONFIG_DIR}/${module}.json"
@@ -345,6 +380,13 @@ main() {
             local service_name="${dep##*:}"
             local provider_dir
 
+            # Archive keeps the PBS backup so the module stays restorable —
+            # skip the backup:vm deregistration (issue #215).
+            if [[ "${OPT_MODE}" == "archive" && "${dep}" == "backup:vm" ]]; then
+                info "  ${dep}: keeping PBS backup entry (--archive)"
+                continue
+            fi
+
             if ! provider_dir=$(get_module_dir "${provider_module}"); then
                 warn "  Cannot find provider '${provider_module}' location — skipping ${dep}"
                 continue
@@ -367,7 +409,27 @@ main() {
         done
     fi
 
-    # ── Step 6: Remove config files ──────────────────────────────────
+    # ── Step 6: Archive (keep config) or Remove (delete config) ──────
+    local config_orig="${CONFIG_DIR}/${module}.json.orig"
+
+    if [[ "${OPT_MODE}" == "archive" ]]; then
+        info "\n${BOLD}Step 6: Archive module configuration${CL}"
+        local tmp
+        tmp=$(mktemp)
+        if jq '.status = "archived"' "${module_json}" > "${tmp}" && mv "${tmp}" "${module_json}"; then
+            info "  ${GN}✓${CL} Marked ${module_json} as ${BL}status=archived${CL} (config + PBS backup kept)"
+        else
+            rm -f "${tmp}"
+            warn "  Could not set status=archived on ${module_json} (config left as-is)"
+        fi
+
+        echo ""
+        info "${GN}${BOLD}╔══════════════════════════════════════════════╗${CL}"
+        info "${GN}${BOLD}║  Module '${module}' archived (VM removed, restorable)${CL}"
+        info "${GN}${BOLD}╚══════════════════════════════════════════════╝${CL}"
+        return 0
+    fi
+
     info "\n${BOLD}Step 6: Remove module configuration${CL}"
 
     if [[ -f "${module_json}" ]]; then
@@ -375,7 +437,6 @@ main() {
         info "  Removed ${module_json}"
     fi
 
-    local config_orig="${CONFIG_DIR}/${module}.json.orig"
     if [[ -f "${config_orig}" ]]; then
         rm -f "${config_orig}"
         info "  Removed ${config_orig}"

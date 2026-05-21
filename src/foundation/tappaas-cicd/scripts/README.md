@@ -845,37 +845,55 @@ test-module.sh --silent openwebui
 
 Deletes a TAPPaaS module with dependency-aware service teardown. Before any VM
 is destroyed it resolves and **confirms the exact target VM**, refusing to guess
-when multiple instances share a name (issue #195).
+when multiple instances share a name (issue #195). Two lifecycle modes control
+what happens to the config and backups (issue #215).
 
 **Usage:**
 ```bash
-delete-module.sh <module-name> [--vmid <id>] [--yes] [--force]
+delete-module.sh <module-name> [--archive|--remove] [--vmid <id>] [--yes] [--force]
 ```
+
+**Lifecycle modes (issue #215):**
+
+| Mode | VM | Config | PBS backup | inspect-cluster |
+|------|----|--------|-----------|-----------------|
+| `--archive` *(default, safe)* | removed | kept, `status: "archived"` | **kept** (restorable) | shows `[archived]` |
+| `--remove` *(destructive)* | removed | **deleted** | **dropped** | no longer listed |
+
+The default is `--archive` so an accidental delete never loses the config or
+backups. `--remove` requires confirmation (unless `--yes`/`--force`), and
+**`--force` implies `--remove`** (preserving its historical full-teardown
+behaviour for scripted/CI cleanup).
 
 **Parameters:**
 
 | Parameter | Description | Example |
 |-----------|-------------|---------|
 | `module-name` | Name of the module to delete | `vaultwarden` |
+| `--archive` | Keep config (marked `archived`) and PBS backup; just remove the VM (default) | |
+| `--remove` | Remove VM **and** delete config **and** drop PBS backup entry (destructive) | |
 | `--vmid <id>` | Target a specific VM instance by VMID. **Required** when more than one cluster VM shares the module's name. If it differs from the config VMID, only that VM is destroyed and the module config is left intact (see notes). | `--vmid 313` |
 | `--yes`, `-y` | Skip the destroy confirmation prompt (for automation) | |
-| `--force` | Delete even if other modules depend on this module's services; **also implies `--yes`** | |
+| `--force` | Delete even if other modules depend on this module's services; **also implies `--yes` and `--remove`** | |
 
 **What it does:**
 1. Validates the module JSON config exists in `/home/tappaas/config/`
-2. **Resolves and confirms the target VM**: lists every cluster VM sharing the module's name; if more than one exists it aborts and requires `--vmid`; otherwise prompts `Confirm destroy of VM <id>? [y/N]` before proceeding (skipped by `--yes`/`--force`; refuses in a non-interactive shell without them)
+2. **Resolves and confirms the target VM**: lists every cluster VM sharing the module's name; if more than one exists it aborts and requires `--vmid`; otherwise prompts `Confirm destroy of VM <id>? [y/N]` before proceeding (skipped by `--yes`/`--force`; refuses in a non-interactive shell without them). The prompt states whether the config/backups will be kept (`--archive`) or deleted (`--remove`).
 3. Checks reverse dependencies — blocks if other modules depend on this module's services (unless `--force`)
 4. Calls the module's own `delete.sh` (if present) while the VM still exists
-5. Iterates `dependsOn` in **reverse** order and calls each provider's `delete-service.sh` (skips if not found)
-6. Removes the module configuration files (`.json` and `.json.orig`)
+5. Iterates `dependsOn` in **reverse** order and calls each provider's `delete-service.sh` (skips if not found). Under `--archive`, the `backup:vm` deregistration is **skipped** so the PBS entry is retained.
+6. **Archive:** marks the config `"status": "archived"` (config + `.orig` kept). **Remove:** deletes the config files (`.json` and `.json.orig`).
 
 **Example:**
 ```bash
-# Delete a module (prompts for confirmation before destroying its VM)
+# Archive a module — removes its VM but keeps config + backups (default, prompts)
 delete-module.sh vaultwarden
 
-# Non-interactive delete (CI / scripted)
-delete-module.sh litellm --force
+# Full removal (prompts for confirmation)
+delete-module.sh litellm --remove
+
+# Non-interactive full removal (CI / test cleanup) — --force implies --remove
+delete-module.sh test-vmdrift --force
 
 # Two VMs named "openwebui" exist — destroy only the stray test instance,
 # leaving the configured (prod) VM and its config untouched
@@ -883,6 +901,7 @@ delete-module.sh openwebui --vmid 313
 ```
 
 **Notes:**
+- **An archived module is re-installable:** `install-module.sh` treats it as not-installed (VM gone) and re-deploys it, overwriting `status=archived` with the module's real status.
 - **Confirmation is mandatory by default.** In a non-interactive shell (no TTY) the script refuses unless `--yes` or `--force` is passed, so a buggy script can never silently destroy a VM. The resolved name, VMID and node are shown before the prompt.
 - **Multiple instances:** if the cluster has more than one VM with the module's name (e.g. prod + a stray test VM), deletion aborts with the list and requires `--vmid <id>` to pick the instance — preventing the "destroyed the wrong VM" class of incident.
 - **VM-only mode:** when `--vmid` names a VM other than the module config's own VMID, *only* that VM is destroyed; the module's `delete.sh`, reverse-dependency check, service teardown and config removal are all skipped (the config still describes a different, live VM).

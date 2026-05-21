@@ -80,10 +80,11 @@ CLUSTER_VMS=$(ssh root@"${FIRST_NODE}.${MGMT}.internal" \
     "pvesh get /cluster/resources --type vm --output-format json" 2>/dev/null) \
     || die "Failed to query cluster resources"
 
-# Build arrays of running VM info: vmid, name, node, status
-# Filter to qemu VMs only (exclude LXC containers)
+# Build arrays of running guest info: vmid, name, node, status, type.
+# Include both qemu VMs and lxc containers so cluster:lxc modules (issue #203)
+# are not falsely reported as NOT RUNNING.
 RUNNING_VMIDS=()
-declare -A VM_NAME_MAP VM_NODE_MAP VM_STATUS_MAP
+declare -A VM_NAME_MAP VM_NODE_MAP VM_STATUS_MAP VM_TYPE_MAP
 
 while IFS= read -r line; do
     vmid=$(echo "${line}" | jq -r '.vmid')
@@ -92,20 +93,21 @@ while IFS= read -r line; do
     status=$(echo "${line}" | jq -r '.status // "unknown"')
     vmtype=$(echo "${line}" | jq -r '.type // "unknown"')
 
-    [[ "${vmtype}" != "qemu" ]] && continue
+    [[ "${vmtype}" != "qemu" && "${vmtype}" != "lxc" ]] && continue
 
     RUNNING_VMIDS+=("${vmid}")
     VM_NAME_MAP["${vmid}"]="${name}"
     VM_NODE_MAP["${vmid}"]="${node}"
     VM_STATUS_MAP["${vmid}"]="${status}"
+    VM_TYPE_MAP["${vmid}"]="${vmtype}"
 done < <(echo "${CLUSTER_VMS}" | jq -c '.[]')
 
-info "  Found ${BL}${#RUNNING_VMIDS[@]}${CL} QEMU VMs in cluster"
+info "  Found ${BL}${#RUNNING_VMIDS[@]}${CL} guests (VMs + containers) in cluster"
 
 # ── Collect configured modules ───────────────────────────────────────
 
 CONFIG_VMIDS=()
-declare -A CONFIG_MODULE_MAP CONFIG_NODE_MAP
+declare -A CONFIG_MODULE_MAP CONFIG_NODE_MAP CONFIG_STATUS_MAP
 
 for json_file in "${CONFIG_DIR}"/*.json; do
     [[ ! -f "${json_file}" ]] && continue
@@ -117,10 +119,12 @@ for json_file in "${CONFIG_DIR}"/*.json; do
 
     module_name="${basename_file}"
     node=$(jq -r ".node // \"$(get_node_hostname 0)\"" "${json_file}" 2>/dev/null)
+    mstatus=$(jq -r '.status // empty' "${json_file}" 2>/dev/null)
 
     CONFIG_VMIDS+=("${vmid}")
     CONFIG_MODULE_MAP["${vmid}"]="${module_name}"
     CONFIG_NODE_MAP["${vmid}"]="${node}"
+    CONFIG_STATUS_MAP["${vmid}"]="${mstatus}"
 done
 
 info "  Found ${BL}${#CONFIG_VMIDS[@]}${CL} configured modules with VMIDs"
@@ -128,9 +132,9 @@ echo ""
 
 # ── Compare: running VMs table ───────────────────────────────────────
 
-info "${BOLD}Cluster VM Status:${CL}"
-printf "  ${BOLD}%-8s  %-20s  %-12s  %-10s  %-10s${CL}\n" "VMID" "Name" "Node" "Status" "Config"
-printf "  %-8s  %-20s  %-12s  %-10s  %-10s\n" "--------" "--------------------" "------------" "----------" "----------"
+info "${BOLD}Cluster Guest Status:${CL}"
+printf "  ${BOLD}%-8s  %-20s  %-12s  %-6s  %-10s  %-10s${CL}\n" "VMID" "Name" "Node" "Type" "Status" "Config"
+printf "  %-8s  %-20s  %-12s  %-6s  %-10s  %-10s\n" "--------" "--------------------" "------------" "------" "----------" "----------"
 
 WARNINGS=0
 
@@ -142,6 +146,7 @@ while IFS= read -r vmid; do
     name="${VM_NAME_MAP[${vmid}]}"
     node="${VM_NODE_MAP[${vmid}]}"
     status="${VM_STATUS_MAP[${vmid}]}"
+    gtype="${VM_TYPE_MAP[${vmid}]/qemu/vm}"
 
     if [[ -n "${CONFIG_MODULE_MAP[${vmid}]:-}" ]]; then
         config_status="${GN}yes${CL}"
@@ -150,15 +155,17 @@ while IFS= read -r vmid; do
         WARNINGS=$((WARNINGS + 1))
     fi
 
-    printf "  %-8s  %-20s  %-12s  %-10s  %b\n" "${vmid}" "${name}" "${node}" "${status}" "${config_status}"
+    printf "  %-8s  %-20s  %-12s  %-6s  %-10s  %b\n" "${vmid}" "${name}" "${node}" "${gtype}" "${status}" "${config_status}"
 done <<< "${SORTED_RUNNING}"
 
 echo ""
 
 # ── Compare: configured modules not running ──────────────────────────
+# Archived modules (status=archived, issue #215) are intentionally not running
+# — report them as [archived] (informational), not as a missing-VM error.
 
 MISSING=0
-MISSING_LIST=""
+ARCHIVED=0
 
 for vmid in "${CONFIG_VMIDS[@]}"; do
     found=false
@@ -172,15 +179,20 @@ for vmid in "${CONFIG_VMIDS[@]}"; do
     if [[ "${found}" == "false" ]]; then
         module="${CONFIG_MODULE_MAP[${vmid}]}"
         node="${CONFIG_NODE_MAP[${vmid}]}"
-        MISSING=$((MISSING + 1))
-        MISSING_LIST="${MISSING_LIST}  ${RD}%-8s  %-20s  %-12s  NOT RUNNING${CL}\n"
-        # Can't use printf with color in the accumulated string cleanly, so print inline
-        echo -e "  ${RD}VMID ${vmid}  ${module}  (expected on ${node})  — NOT RUNNING${CL}"
+        if [[ "${CONFIG_STATUS_MAP[${vmid}]:-}" == "archived" ]]; then
+            ARCHIVED=$((ARCHIVED + 1))
+            echo -e "  ${YW}VMID ${vmid}  ${module}  [archived]  — VM removed, config + backups retained${CL}"
+        else
+            MISSING=$((MISSING + 1))
+            echo -e "  ${RD}VMID ${vmid}  ${module}  (expected on ${node})  — NOT RUNNING${CL}"
+        fi
     fi
 done
 
-if [[ "${MISSING}" -eq 0 ]]; then
+if [[ "${MISSING}" -eq 0 && "${ARCHIVED}" -eq 0 ]]; then
     info "  All configured modules have running VMs"
+elif [[ "${MISSING}" -eq 0 ]]; then
+    info "  All non-archived configured modules have running VMs (${ARCHIVED} archived)"
 fi
 
 echo ""

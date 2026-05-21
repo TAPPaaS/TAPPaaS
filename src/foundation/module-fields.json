@@ -89,7 +89,8 @@
                 "Development": "Module is under active development, not ready for production",
                 "Testing": "Module is being tested, may have issues",
                 "Production": "Module is stable and ready for production use",
-                "Deprecated": "Module is no longer maintained"
+                "Deprecated": "Module is no longer maintained",
+                "archived": "Module's VM was removed via 'delete-module.sh --archive' but its config and PBS backups are kept for restore (issue #215). Set automatically on archive; inspect-cluster.sh shows it as [archived] rather than NOT RUNNING."
             },
             "example": "Development"
         },
