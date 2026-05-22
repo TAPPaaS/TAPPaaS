@@ -43,7 +43,11 @@ readonly CONFIG_DIR="/home/tappaas/config"
 readonly MODULE_JSON="${CONFIG_DIR}/${MODULE}.json"
 readonly SYSTEM_CONFIG="${CONFIG_DIR}/configuration.json"
 readonly FIREWALL_JSON="${CONFIG_DIR}/firewall.json"
-readonly SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+readonly ZONES_FILE="${CONFIG_DIR}/zones.json"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+readonly SCRIPT_DIR
+# shellcheck source=access-list.sh disable=SC1091
+. "${SCRIPT_DIR}/access-list.sh"
 
 info "firewall:proxy update-service for module: ${BL}${MODULE}${CL}"
 
@@ -124,34 +128,23 @@ else
     CHANGES_MADE=true
 fi
 
-# Check if handler exists with correct description
-if echo "${LIST_OUTPUT}" | grep -q "${DESCRIPTION}"; then
-    info "  Handler '${DESCRIPTION}' exists"
-
-    # Verify upstream and port match expected values
-    if echo "${LIST_OUTPUT}" | grep "${DESCRIPTION}" | grep -q "${UPSTREAM}:${PROXY_PORT}"; then
-        info "  Handler configuration matches — no changes needed"
-    else
-        warn "Handler configuration differs — recreating..."
-        caddy-manager delete-handler \
-            --description "${DESCRIPTION}" \
-            --no-ssl-verify || warn "Could not delete old handler"
-        caddy-manager add-handler "${PROXY_DOMAIN}" \
-            --upstream "${UPSTREAM}" \
-            --port "${PROXY_PORT}" \
-            --description "${DESCRIPTION}" \
-            --no-ssl-verify || die "Failed to create Caddy handler"
-        CHANGES_MADE=true
-    fi
-else
-    warn "Handler '${DESCRIPTION}' missing — creating..."
-    caddy-manager add-handler "${PROXY_DOMAIN}" \
-        --upstream "${UPSTREAM}" \
-        --port "${PROXY_PORT}" \
-        --description "${DESCRIPTION}" \
-        --no-ssl-verify || die "Failed to create Caddy handler"
-    CHANGES_MADE=true
+# Resolve the zone restriction → access list (issue #206), then reconcile the
+# handler. add-handler updates an existing handler in place, so this also
+# (re)applies the access list and any upstream/port change in one step.
+ACL_ARGS=()
+if ! ACL_NAME=$(proxy_resolve_access_list "${MODULE}" "${MODULE_JSON}" "${ZONES_FILE}" "${DESCRIPTION}"); then
+    die "Failed to resolve proxy access list for ${MODULE}"
 fi
+[[ -n "${ACL_NAME}" ]] && ACL_ARGS=(--access-list "${ACL_NAME}")
+
+info "  Reconciling handler (upstream ${UPSTREAM}:${PROXY_PORT}, access=${ACL_NAME:-public})..."
+caddy-manager add-handler "${PROXY_DOMAIN}" \
+    --upstream "${UPSTREAM}" \
+    --port "${PROXY_PORT}" \
+    --description "${DESCRIPTION}" \
+    "${ACL_ARGS[@]+"${ACL_ARGS[@]}"}" \
+    --no-ssl-verify || die "Failed to reconcile Caddy handler"
+CHANGES_MADE=true
 
 # ── Reconfigure if changes were made ────────────────────────────────
 

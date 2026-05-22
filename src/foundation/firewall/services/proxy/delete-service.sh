@@ -114,6 +114,12 @@ caddy-manager delete-handler \
     --description "${DESCRIPTION}" \
     --no-ssl-verify || warn "Could not delete handler for ${MODULE}"
 
+# ── Delete access list (issue #206) ─────────────────────────────────
+# Remove the handler first so nothing references the access list, then drop it.
+info "  Deleting Caddy access list (if any)..."
+caddy-manager delete-accesslist "tappaas-${MODULE}" \
+    --no-ssl-verify >/dev/null 2>&1 || true
+
 # ── Delete domain ───────────────────────────────────────────────────
 
 if [[ -n "${PROXY_DOMAIN}" ]]; then

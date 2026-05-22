@@ -14,7 +14,7 @@
         "HANode", "replicationSchedule",
         "bridge0", "mac0", "zone0", "trunks0",
         "bridge1", "mac1", "zone1", "trunks1",
-        "firewallType", "proxyDomain", "proxyPort",
+        "firewallType", "proxyDomain", "proxyPort", "proxyAllowedZones",
         "ports", "ingress", "egress", "aliases",
         "dependsOn", "provides"
     ],
@@ -465,6 +465,17 @@
             "maximum": 65535,
             "example": 8080,
             "note": "The port the service listens on inside the VM"
+        },
+
+        "proxyAllowedZones": {
+            "description": "Zones (and the literal 'internet') permitted to reach this service through the reverse proxy (issue #206). firewall:proxy compiles this into an os-caddy access list (allow-list by client subnet) attached to the handler; non-matching clients get HTTP 403.",
+            "type": "array",
+            "requiredBy": [],
+            "usedBy": ["firewall:proxy"],
+            "default": "<internal default: every Active 'Service' zone plus home, work and mgmt — NOT the internet>",
+            "items": "string",
+            "example": ["mgmt", "home", "work", "srv-home", "srv-work"],
+            "note": "Zero-trust by default: when omitted, a service is reachable only from the internal trusted zones, never the internet. Add 'internet' to publish it publicly (no restriction). Zone names are resolved to subnets via zones.json. Changing this re-applies on the next install/update of the module."
         },
 
         "ports": {

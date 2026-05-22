@@ -108,12 +108,18 @@ info "Building the opnsense-controller project..."
 cd opnsense-controller
 stdbuf -oL nix-build -A default default.nix 2>&1 | tee /tmp/opnsense-controller-build.log | while IFS= read -r line; do printf "."; done
 echo ""
-rm /home/tappaas/bin/opnsense-controller 2>/dev/null || true
-ln -s /home/tappaas/TAPPaaS/src/foundation/tappaas-cicd/opnsense-controller/result/bin/opnsense-controller /home/tappaas/bin/opnsense-controller
-rm /home/tappaas/bin/zone-manager 2>/dev/null || true
-ln -s /home/tappaas/TAPPaaS/src/foundation/tappaas-cicd/opnsense-controller/result/bin/zone-manager /home/tappaas/bin/zone-manager
-rm /home/tappaas/bin/dns-manager 2>/dev/null || true
-ln -s /home/tappaas/TAPPaaS/src/foundation/tappaas-cicd/opnsense-controller/result/bin/dns-manager /home/tappaas/bin/dns-manager
+# Symlink every opnsense-controller CLI from the freshly-built result into
+# ~/bin (which precedes the system profile in PATH), so they all track the repo
+# build via update-tappaas rather than needing a nixos-rebuild. caddy-manager,
+# opnsense-firewall, rules-manager and syslog-manager were previously only in
+# the system env, so their changes didn't propagate on update (issue #206).
+for _oc_tool in opnsense-controller zone-manager dns-manager caddy-manager opnsense-firewall rules-manager syslog-manager; do
+  _oc_src="/home/tappaas/TAPPaaS/src/foundation/tappaas-cicd/opnsense-controller/result/bin/${_oc_tool}"
+  if [ -e "${_oc_src}" ]; then
+    rm -f "/home/tappaas/bin/${_oc_tool}" 2>/dev/null || true
+    ln -s "${_oc_src}" "/home/tappaas/bin/${_oc_tool}"
+  fi
+done
 # Ensure OPNsense credentials file exists; if missing, create a skeleton and warn
 if [ ! -f ~/.opnsense-credentials.txt ]; then
   warn "~/.opnsense-credentials.txt not found; creating skeleton file with empty key/secret. Please populate it with real values."

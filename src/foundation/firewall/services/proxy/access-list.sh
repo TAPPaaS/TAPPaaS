@@ -1,0 +1,88 @@
+#!/usr/bin/env bash
+#
+# TAPPaaS firewall:proxy — shared access-list helper (issue #206)
+#
+# Sourced by install-service.sh and update-service.sh. Resolves a module's
+# `proxyAllowedZones` to an os-caddy access list that restricts which client
+# networks may reach the proxied service, and (de)provisions it via
+# caddy-manager. The caller attaches the result to its handler with
+#   caddy-manager add-handler ... --access-list "<name>"
+#
+# proxyAllowedZones semantics:
+#   - absent  → internal default: every Active "Service" zone plus home, work
+#               and mgmt (NOT the internet) — zero-trust-by-default.
+#   - a list  → exactly those zones. Include the literal "internet" to publish
+#               the service publicly (no restriction).
+#
+# Expects the caller to provide info()/warn()/error() and have caddy-manager in
+# PATH. All progress output goes to stderr so stdout carries only the resolved
+# access-list name (empty = unrestricted/public).
+
+# proxy_resolve_access_list <module> <module_json> <zones_file> <description>
+# Echoes the access-list name to attach (empty string when public). Returns
+# non-zero on a hard error (caller should die).
+proxy_resolve_access_list() {
+    local module="$1" module_json="$2" zones_file="$3" description="$4"
+    local al_name="tappaas-${module}"
+    local -a zones=()
+
+    mapfile -t zones < <(jq -r '.proxyAllowedZones // [] | .[]' "${module_json}" 2>/dev/null)
+
+    if [[ ${#zones[@]} -eq 0 ]]; then
+        if [[ -f "${zones_file}" ]]; then
+            # mgmt is always included (it is state=Manual, not Active); plus
+            # every Active Service zone and the home/work client zones.
+            mapfile -t zones < <(jq -r '
+                to_entries[]
+                | select(
+                    .key == "mgmt"
+                    or (.value.state == "Active"
+                        and (.value.type == "Service" or .key == "home" or .key == "work"))
+                  )
+                | .key' "${zones_file}" 2>/dev/null)
+        fi
+        info "  Access: ${BL}default internal zones${CL} (${zones[*]:-none})" >&2
+    else
+        info "  Access: ${BL}${zones[*]}${CL}" >&2
+    fi
+
+    # Internet exposure → no restriction; drop any prior allow-list.
+    local z
+    for z in "${zones[@]}"; do
+        if [[ "${z}" == "internet" ]]; then
+            info "  '${module}' is exposed to the ${BL}internet${CL} — no access restriction" >&2
+            caddy-manager delete-accesslist "${al_name}" --no-ssl-verify >/dev/null 2>&1 || true
+            printf ''
+            return 0
+        fi
+    done
+
+    # Resolve zone names → CIDRs from zones.json.
+    local cidrs="" cidr
+    for z in "${zones[@]}"; do
+        cidr=$(jq -r --arg z "${z}" '.[$z].ip // empty' "${zones_file}" 2>/dev/null)
+        if [[ -z "${cidr}" ]]; then
+            warn "  zone '${z}' not found in zones.json — skipping" >&2
+            continue
+        fi
+        cidrs="${cidrs:+${cidrs},}${cidr}"
+    done
+
+    if [[ -z "${cidrs}" ]]; then
+        error "proxyAllowedZones for '${module}' resolved to no networks — refusing to create an empty allow-list (it would block everything)" >&2
+        return 1
+    fi
+
+    info "  Access list ${BL}${al_name}${CL}: allow only ${BL}${cidrs}${CL}" >&2
+    if ! caddy-manager add-accesslist "${al_name}" \
+            --clients "${cidrs}" \
+            --matcher remote_ip \
+            --response-code 403 \
+            --description "${description} (allowed zones)" \
+            --no-ssl-verify >&2; then
+        error "Failed to create/update Caddy access list ${al_name}" >&2
+        return 1
+    fi
+
+    printf '%s' "${al_name}"
+}

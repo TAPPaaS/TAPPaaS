@@ -43,6 +43,11 @@ readonly CONFIG_DIR="/home/tappaas/config"
 readonly MODULE_JSON="${CONFIG_DIR}/${MODULE}.json"
 readonly SYSTEM_CONFIG="${CONFIG_DIR}/configuration.json"
 readonly FIREWALL_JSON="${CONFIG_DIR}/firewall.json"
+readonly ZONES_FILE="${CONFIG_DIR}/zones.json"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+readonly SCRIPT_DIR
+# shellcheck source=access-list.sh disable=SC1091
+. "${SCRIPT_DIR}/access-list.sh"
 
 info "firewall:proxy install-service for module: ${BL}${MODULE}${CL}"
 
@@ -138,6 +143,14 @@ caddy-manager add-domain "${PROXY_DOMAIN}" \
     --description "${DESCRIPTION}" \
     --no-ssl-verify || die "Failed to create Caddy domain"
 
+# ── Resolve zone restriction → access list (issue #206) ─────────────
+
+ACL_ARGS=()
+if ! ACL_NAME=$(proxy_resolve_access_list "${MODULE}" "${MODULE_JSON}" "${ZONES_FILE}" "${DESCRIPTION}"); then
+    die "Failed to resolve proxy access list for ${MODULE}"
+fi
+[[ -n "${ACL_NAME}" ]] && ACL_ARGS=(--access-list "${ACL_NAME}")
+
 # ── Create handler ──────────────────────────────────────────────────
 
 info "  Creating Caddy handler..."
@@ -145,6 +158,7 @@ caddy-manager add-handler "${PROXY_DOMAIN}" \
     --upstream "${UPSTREAM}" \
     --port "${PROXY_PORT}" \
     --description "${DESCRIPTION}" \
+    "${ACL_ARGS[@]+"${ACL_ARGS[@]}"}" \
     --no-ssl-verify || die "Failed to create Caddy handler"
 
 # ── Reconfigure Caddy ───────────────────────────────────────────────

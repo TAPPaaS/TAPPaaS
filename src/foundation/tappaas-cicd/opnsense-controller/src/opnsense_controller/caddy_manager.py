@@ -24,6 +24,26 @@ class CaddyHandler:
     upstream_port: str = "80"
     description: str = ""
     enabled: bool = True
+    # UUID of an os-caddy access list to attach (issue #206). Empty = unrestricted.
+    access_list_uuid: str = ""
+
+
+@dataclass
+class CaddyAccessList:
+    """Caddy reverse-proxy access list (client-IP allow/deny, issue #206).
+
+    With invert=False (default) os-caddy renders 'not <matcher> <clientIps>' →
+    only the listed networks pass; every other source is aborted (allow-list).
+    With invert=True the listed networks are blocked (deny-list).
+    """
+
+    name: str
+    client_ips: list[str]
+    invert: bool = False
+    matcher: str = "remote_ip"          # remote_ip (direct peer) | client_ip
+    response_code: int | None = None    # None → 'abort'; else 'respond <code>'
+    response_message: str = ""
+    description: str = ""
 
 
 @dataclass
@@ -67,6 +87,24 @@ class CaddyHandlerInfo:
             upstream_port=data.get("ToPort", ""),
             description=data.get("description", ""),
             enabled=data.get("enabled") == "1",
+        )
+
+
+@dataclass
+class CaddyAccessListInfo:
+    """Information about an existing Caddy access list (issue #206)."""
+
+    uuid: str
+    name: str
+    description: str
+
+    @classmethod
+    def from_api_response(cls, data: dict) -> "CaddyAccessListInfo":
+        """Create from OPNsense API search response row."""
+        return cls(
+            uuid=data.get("uuid", ""),
+            name=data.get("accesslistName", ""),
+            description=data.get("description", ""),
         )
 
 
@@ -325,6 +363,7 @@ class CaddyManager:
                 "HandleDirective": "reverse_proxy",
                 "ToDomain": handler.upstream_domain,
                 "ToPort": str(handler.upstream_port),
+                "accesslist": handler.access_list_uuid,
                 "description": handler.description,
             }
         }
@@ -348,6 +387,7 @@ class CaddyManager:
                 "HandleDirective": "reverse_proxy",
                 "ToDomain": handler.upstream_domain,
                 "ToPort": str(handler.upstream_port),
+                "accesslist": handler.access_list_uuid,
                 "description": handler.description,
             }
         }
@@ -363,6 +403,48 @@ class CaddyManager:
             API response dict.
         """
         return self._api_post("ReverseProxy", "delHandle", url_params=[uuid])
+
+    # =========================================================================
+    # Access List Operations (issue #206)
+    # =========================================================================
+
+    def list_access_lists(self) -> list[CaddyAccessListInfo]:
+        """List all Caddy reverse-proxy access lists."""
+        response = self._api_get("ReverseProxy", "searchAccessList")
+        rows = response.get("rows", [])
+        return [CaddyAccessListInfo.from_api_response(row) for row in rows]
+
+    def get_access_list_by_name(self, name: str) -> CaddyAccessListInfo | None:
+        """Find an access list by its name (exact match)."""
+        for al in self.list_access_lists():
+            if al.name == name:
+                return al
+        return None
+
+    def _access_list_data(self, al: CaddyAccessList) -> dict:
+        return {
+            "accesslist": {
+                "accesslistName": al.name,
+                "clientIps": ",".join(al.client_ips),
+                "accesslistInvert": "1" if al.invert else "0",
+                "RequestMatcher": al.matcher,
+                "HttpResponseCode": str(al.response_code) if al.response_code else "",
+                "HttpResponseMessage": al.response_message,
+                "description": al.description,
+            }
+        }
+
+    def add_access_list(self, al: CaddyAccessList) -> dict:
+        """Create a new access list. Returns API response (contains 'uuid')."""
+        return self._api_post("ReverseProxy", "addAccessList", self._access_list_data(al))
+
+    def update_access_list(self, uuid: str, al: CaddyAccessList) -> dict:
+        """Update an existing access list."""
+        return self._api_post("ReverseProxy", "setAccessList", self._access_list_data(al), url_params=[uuid])
+
+    def delete_access_list(self, uuid: str) -> dict:
+        """Delete an access list by UUID."""
+        return self._api_post("ReverseProxy", "delAccessList", url_params=[uuid])
 
     # =========================================================================
     # Service Operations

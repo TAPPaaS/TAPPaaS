@@ -62,9 +62,10 @@ def add_handler(
     upstream: str,
     port: str = "80",
     description: str = "",
+    access_list: str = "",
     check_mode: bool = False,
 ) -> bool:
-    """Add a reverse proxy handler for a domain.
+    """Add (or reconcile) a reverse proxy handler for a domain.
 
     Args:
         manager: CaddyManager instance.
@@ -72,6 +73,8 @@ def add_handler(
         upstream: Upstream server hostname (e.g., "app.srv.internal").
         port: Upstream port.
         description: Description for the handler.
+        access_list: Optional access-list NAME to attach (issue #206). Restricts
+            which client networks may reach the service. Empty = unrestricted.
         check_mode: If True, perform dry-run.
 
     Returns:
@@ -83,37 +86,134 @@ def add_handler(
         print(f"ERROR: Domain '{domain_name}' not found. Add it first.", file=sys.stderr)
         return False
 
-    # Check if handler already exists
-    if description:
-        existing = manager.get_handler_by_description(description)
-        if existing:
-            print(f"Handler '{description}' already exists (uuid={existing.uuid})")
-            print(f"  Upstream: {existing.upstream_domain}:{existing.upstream_port}")
-            return True
+    # Resolve the access-list name to a UUID, if requested.
+    access_list_uuid = ""
+    if access_list:
+        al = manager.get_access_list_by_name(access_list)
+        if not al:
+            print(f"ERROR: Access list '{access_list}' not found. Add it first.", file=sys.stderr)
+            return False
+        access_list_uuid = al.uuid
 
-    if check_mode:
-        print(f"Would create handler: {domain_name} -> {upstream}:{port} (dry-run)")
-        return True
-
-    print(f"Creating handler: {domain_name} -> {upstream}:{port}")
     handler = CaddyHandler(
         domain_uuid=domain_info.uuid,
         upstream_domain=upstream,
         upstream_port=str(port),
         description=description,
+        access_list_uuid=access_list_uuid,
     )
+
+    # Reconcile an existing handler (so the access list / upstream stay current)
+    # rather than skipping — important for applying #206 restriction changes.
+    existing = manager.get_handler_by_description(description) if description else None
+    if existing:
+        if check_mode:
+            print(f"Would update handler: {domain_name} -> {upstream}:{port} "
+                  f"(access_list={access_list or 'none'}) (dry-run)")
+            return True
+        print(f"Updating handler: {domain_name} -> {upstream}:{port} "
+              f"(access_list={access_list or 'none'})")
+        result = manager.update_handler(existing.uuid, handler)
+        if result.get("result") in ("saved", "ok") or result.get("uuid"):
+            print("  Handler updated successfully")
+            return True
+        print(f"ERROR: Failed to update handler: {result}", file=sys.stderr)
+        return False
+
+    if check_mode:
+        print(f"Would create handler: {domain_name} -> {upstream}:{port} "
+              f"(access_list={access_list or 'none'}) (dry-run)")
+        return True
+
+    print(f"Creating handler: {domain_name} -> {upstream}:{port} "
+          f"(access_list={access_list or 'none'})")
     result = manager.add_handler(handler)
 
     uuid = result.get("uuid")
     if uuid:
         print(f"  Handler created successfully (uuid={uuid})")
         return True
-
     if result.get("result") == "saved":
-        print(f"  Handler created successfully")
+        print("  Handler created successfully")
         return True
 
     print(f"ERROR: Failed to create handler: {result}", file=sys.stderr)
+    return False
+
+
+def add_access_list_cmd(
+    manager: CaddyManager,
+    name: str,
+    clients: str,
+    matcher: str = "remote_ip",
+    invert: bool = False,
+    response_code: int | None = None,
+    description: str = "",
+    check_mode: bool = False,
+) -> bool:
+    """Create or update a Caddy access list (issue #206).
+
+    Args:
+        manager: CaddyManager instance.
+        name: Access-list name (unique key).
+        clients: Comma-separated client IPs/CIDRs (e.g. "10.0.0.0/24,10.2.10.0/24").
+        matcher: 'remote_ip' (direct peer) or 'client_ip' (honours trusted proxies).
+        invert: False (default) = allow-list (only these pass); True = deny-list.
+        response_code: HTTP code to return to blocked clients (None → abort).
+        description: Description for the access list.
+        check_mode: If True, perform dry-run.
+    """
+    from .caddy_manager import CaddyAccessList
+
+    client_ips = [c.strip() for c in clients.split(",") if c.strip()]
+    if not client_ips:
+        print("ERROR: --clients must contain at least one IP/CIDR", file=sys.stderr)
+        return False
+
+    al = CaddyAccessList(
+        name=name, client_ips=client_ips, invert=invert, matcher=matcher,
+        response_code=response_code, description=description,
+    )
+
+    existing = manager.get_access_list_by_name(name)
+    verb = "update" if existing else "create"
+    if check_mode:
+        print(f"Would {verb} access list '{name}': {('block' if invert else 'allow')} "
+              f"{matcher} {client_ips} (dry-run)")
+        return True
+
+    print(f"{verb.capitalize()} access list '{name}': "
+          f"{('block' if invert else 'allow only')} {matcher} {client_ips}")
+    if existing:
+        result = manager.update_access_list(existing.uuid, al)
+    else:
+        result = manager.add_access_list(al)
+
+    if result.get("uuid") or result.get("result") in ("saved", "ok"):
+        print(f"  Access list '{name}' {verb}d successfully")
+        return True
+    print(f"ERROR: Failed to {verb} access list: {result}", file=sys.stderr)
+    return False
+
+
+def delete_access_list_cmd(
+    manager: CaddyManager,
+    name: str,
+    check_mode: bool = False,
+) -> bool:
+    """Delete a Caddy access list by name (issue #206)."""
+    existing = manager.get_access_list_by_name(name)
+    if not existing:
+        print(f"Access list '{name}' not found — nothing to delete")
+        return True
+    if check_mode:
+        print(f"Would delete access list '{name}' (uuid={existing.uuid}) (dry-run)")
+        return True
+    result = manager.delete_access_list(existing.uuid)
+    if result.get("result") in ("deleted", "ok"):
+        print(f"  Access list '{name}' deleted")
+        return True
+    print(f"ERROR: Failed to delete access list: {result}", file=sys.stderr)
     return False
 
 
@@ -345,6 +445,20 @@ Examples:
     add_handler_parser.add_argument("--upstream", required=True, help="Upstream server (e.g., app.srv.internal)")
     add_handler_parser.add_argument("--port", default="80", help="Upstream port (default: 80)")
     add_handler_parser.add_argument("--description", default="", help="Description for the handler")
+    add_handler_parser.add_argument("--access-list", default="", help="Name of an access list to attach (issue #206) — restrict client networks")
+
+    # add-accesslist (issue #206)
+    add_al_parser = subparsers.add_parser("add-accesslist", parents=[global_parser], help="Create/update an access list (client-IP allow/deny)")
+    add_al_parser.add_argument("name", help="Access list name (unique key)")
+    add_al_parser.add_argument("--clients", required=True, help="Comma-separated IPs/CIDRs, e.g. 10.0.0.0/24,10.2.10.0/24")
+    add_al_parser.add_argument("--matcher", default="remote_ip", choices=["remote_ip", "client_ip"], help="Match the direct peer (remote_ip, default) or honour trusted proxies (client_ip)")
+    add_al_parser.add_argument("--invert", action="store_true", help="Make it a deny-list (block the listed networks) instead of an allow-list")
+    add_al_parser.add_argument("--response-code", type=int, default=None, help="HTTP code returned to blocked clients (default: abort the connection)")
+    add_al_parser.add_argument("--description", default="", help="Description for the access list")
+
+    # delete-accesslist (issue #206)
+    del_al_parser = subparsers.add_parser("delete-accesslist", parents=[global_parser], help="Delete an access list by name")
+    del_al_parser.add_argument("name", help="Access list name to delete")
 
     # delete-domain
     delete_domain_parser = subparsers.add_parser("delete-domain", parents=[global_parser], help="Delete a reverse proxy domain")
@@ -401,8 +515,15 @@ Examples:
             elif args.command == "add-handler":
                 success = add_handler(
                     manager, args.domain, args.upstream, args.port,
-                    args.description, args.check_mode,
+                    args.description, args.access_list, args.check_mode,
                 )
+            elif args.command == "add-accesslist":
+                success = add_access_list_cmd(
+                    manager, args.name, args.clients, args.matcher,
+                    args.invert, args.response_code, args.description, args.check_mode,
+                )
+            elif args.command == "delete-accesslist":
+                success = delete_access_list_cmd(manager, args.name, args.check_mode)
             elif args.command == "delete-domain":
                 success = delete_domain_cmd(manager, args.domain, args.check_mode)
             elif args.command == "delete-handler":
