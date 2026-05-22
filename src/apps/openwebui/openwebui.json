@@ -24,7 +24,8 @@
     "backup:vm",
     "identity:identity",
     "firewall:proxy",
-    "litellm:models"
+    "litellm:models",
+    "firewall:rules"
   ],
   "provides": []
 }
