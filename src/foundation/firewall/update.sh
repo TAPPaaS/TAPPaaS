@@ -19,6 +19,8 @@ set -euo pipefail
 readonly CONFIG_DIR="/home/tappaas/config"
 readonly FIREWALL_JSON="${CONFIG_DIR}/firewall.json"
 FIREWALL_FQDN="firewall.mgmt.internal"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+readonly SCRIPT_DIR
 
 # ── Check firewallType ───────────────────────────────────────────────
 
@@ -46,6 +48,31 @@ info "Applying zone configuration..."
 info "Reloading OPNsense filter to regenerate auto-rules for any new interfaces..."
 ssh root@"$FIREWALL_FQDN" "configctl filter reload" >/dev/null 2>&1 \
     || warn "configctl filter reload returned non-zero (continuing)"
+
+# ── Reconcile the firewall's own reverse-proxy entry ────────────────
+#
+# The firewall is installed in two phases: a bare OPNsense install, then a
+# full update once tappaas-cicd exists. The proxy entry that exposes the
+# OPNsense GUI (e.g. firewall.<domain>, mgmt-restricted, DNS-01 cert) can only
+# be created in the second phase, because it needs caddy-manager and the
+# os-caddy plugin — neither present during the bare install. We therefore
+# reconcile it here on every update: firewall:proxy update-service is
+# idempotent (creates the domain + handler if missing, re-applies the access
+# list / upstream / TLS strategy otherwise), so this is a no-op once converged.
+#
+# Guarded on the firewall declaring firewall:proxy in its own dependsOn — i.e.
+# the operator has opted the GUI in to the reverse proxy. The proxy details
+# (proxyDomain, proxyPort, proxyUpstreamTls, proxyTls, proxyAllowedZones) are
+# read from firewall.json by the service script itself.
+if jq -e '(.dependsOn // []) | index("firewall:proxy")' "${FIREWALL_JSON}" >/dev/null 2>&1; then
+    info "Reconciling the firewall's own reverse-proxy entry (firewall:proxy)..."
+    if [[ -x "${SCRIPT_DIR}/services/proxy/update-service.sh" ]]; then
+        "${SCRIPT_DIR}/services/proxy/update-service.sh" firewall \
+            || warn "firewall:proxy update-service for the firewall returned non-zero (continuing)"
+    else
+        warn "  firewall:proxy update-service.sh not found — skipping self-proxy reconcile"
+    fi
+fi
 
 # ── Sync OPNsense VM net0 trunks with active VLAN zones ─────────────
 #
