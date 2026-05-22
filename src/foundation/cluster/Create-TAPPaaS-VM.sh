@@ -303,18 +303,21 @@ echo ""
 info "${BOLD}Starting the $VMNAME VM creation process..."
 if [ "$IMAGETYPE" == "img" ]; then  # First use: this is used to stand up a firewall vm from a disk image
   info "${BOLD}Creating a Image based VM"
-  qm importdisk $VMID ${TARGET_IMAGE} $STORAGE  1>/dev/null
   if [ "$BIOS" == "ovmf" ]; then
     # UEFI images (e.g. HAOS) require SATA and an EFI disk
+    # qm create must precede importdisk — Proxmox requires the VM to exist first
     qm create $VMID -agent 1 -tablet 0 -localtime 1 \
       -name $VMNAME -onboot 1 -bios $BIOS -ostype $VM_OSTYPE -cpu "$CPU_TYPE" 1>/dev/null
+    qm importdisk $VMID ${TARGET_IMAGE} $STORAGE  1>/dev/null
     qm set $VMID -sata0 ${DISK0_REF} -boot order=sata0 -bootdisk sata0 >/dev/null
     qm set $VMID -efidisk0 ${STORAGE}:0,efitype=4m,pre-enrolled-keys=0 >/dev/null
     qm resize $VMID sata0 $DISK_SIZE >/dev/null
   else
     # Legacy BIOS images (e.g. OPNsense) use SCSI
+    # qm create must precede importdisk — Proxmox requires the VM to exist first
     qm create $VMID -agent 1 -tablet 0 -localtime 1 \
       -name $VMNAME -onboot 1 -bios $BIOS -ostype $VM_OSTYPE -cpu "$CPU_TYPE" -scsihw virtio-scsi-single 1>/dev/null
+    qm importdisk $VMID ${TARGET_IMAGE} $STORAGE  1>/dev/null
     qm set $VMID -scsi0 ${DISK0_REF} -boot order=scsi0 >/dev/null
     qm resize $VMID scsi0 $DISK_SIZE >/dev/null
   fi

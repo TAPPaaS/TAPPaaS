@@ -29,7 +29,6 @@ To update to a newer HAOS release at deploy time, change `image` and `imageLocat
 ## VMID Scheme
 
 VMID 210 starts the **2XX range for srv-home apps** (VLAN 210):
-- 200–209: reserved / externally managed
 - 210+: TAPPaaS-managed srv-home apps
 
 ## USB Pass-through (Zigbee/Z-Wave)

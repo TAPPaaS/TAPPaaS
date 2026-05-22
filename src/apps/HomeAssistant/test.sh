@@ -58,7 +58,7 @@ for i in ifaces:
 \"" 2>/dev/null || echo "")"
 
 if [[ -n "${VM_IP}" ]]; then
-    HTTP_CODE="$(curl -s -o /dev/null -w "%{http_code}" --max-time 10 "http://${VM_IP}:8123" 2>/dev/null || echo "000")"
+    HTTP_CODE="$(curl -s -o /dev/null -w "%{http_code}" --max-time 10 "http://${VM_IP}:8123" 2>/dev/null; true)"
     if [[ "${HTTP_CODE}" == "200" ]] || [[ "${HTTP_CODE}" == "302" ]]; then
         run_test "HAOS web UI reachable at http://${VM_IP}:8123 (HTTP ${HTTP_CODE})" "pass"
     else
