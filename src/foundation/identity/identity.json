@@ -26,5 +26,8 @@
   "provides": [
     "accessControl",
     "identity"
+  ],
+  "proxyAllowedZones": [
+    "internet"
   ]
 }

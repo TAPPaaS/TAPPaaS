@@ -22,5 +22,8 @@
     "backup:vm",
     "firewall:proxy"
   ],
-  "provides": []
+  "provides": [],
+  "proxyAllowedZones": [
+    "mgmt"
+  ]
 }

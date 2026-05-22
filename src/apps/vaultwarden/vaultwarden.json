@@ -23,5 +23,8 @@
     "identity:identity",
     "firewall:proxy"
   ],
-  "provides": []
+  "provides": [],
+  "proxyAllowedZones": [
+    "internet"
+  ]
 }

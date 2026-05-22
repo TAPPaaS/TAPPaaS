@@ -27,5 +27,8 @@
     "litellm:models",
     "firewall:rules"
   ],
-  "provides": []
+  "provides": [],
+  "proxyAllowedZones": [
+    "internet"
+  ]
 }
