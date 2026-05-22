@@ -22,9 +22,12 @@
   "ports": [
     { "port": 8123, "protocol": "TCP", "description": "Home Assistant web UI" }
   ],
+  "proxyPort": 8123,
+  "proxyAllowedZones": ["mgmt", "home", "work", "srv-home", "srv-work", "srv-cust"],
   "dependsOn": [
     "cluster:vm",
-    "backup:vm"
+    "backup:vm",
+    "firewall:proxy"
   ],
   "provides": []
 }

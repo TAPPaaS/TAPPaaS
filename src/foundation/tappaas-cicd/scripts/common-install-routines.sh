@@ -342,14 +342,21 @@ validate_provided_services() {
 # into the $JSON variable.  Silently skipped when $1 is empty or the
 # config file does not exist (callers that need get_config_value but
 # don't pass a module name via $1 can load JSON themselves after sourcing).
+#
+# IMPORTANT: this only *reads* JSON into $JSON; it must never copy the file
+# into CONFIG_DIR. A sourced script inherits the caller's positional args, so
+# `install-module.sh <mod>` sourcing this file would otherwise plant
+# CONFIG_DIR/<mod>.json before Step 1's "already installed?" check runs —
+# producing a spurious "stale config" warning and bypassing the validated copy
+# that copy-update-json.sh performs in Step 2. The CONFIG_DIR copy is the sole
+# responsibility of copy-update-json.sh.
 
 if [[ -n "${1:-}" ]]; then
     JSON_CONFIG="${CONFIG_DIR}/${1}.json"
     if [[ -f "${JSON_CONFIG}" ]]; then
         JSON=$(cat "${JSON_CONFIG}")
     elif [[ -f "${1}.json" ]]; then
-        cp "${1}.json" "${JSON_CONFIG}"
-        JSON=$(cat "${JSON_CONFIG}")
+        JSON=$(cat "${1}.json")
     fi
 fi
 
