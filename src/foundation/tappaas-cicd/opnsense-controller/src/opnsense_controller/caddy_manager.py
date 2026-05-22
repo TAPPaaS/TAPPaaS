@@ -13,6 +13,10 @@ class CaddyDomain:
     domain: str
     description: str = ""
     enabled: bool = True
+    # Use the ACME DNS-01 challenge (needs a global os-caddy DNS provider + key).
+    # Lets an internal/access-restricted domain obtain a trusted cert without any
+    # inbound HTTP/TLS-ALPN validation. False = default ACME (HTTP-01/TLS-ALPN).
+    dns_challenge: bool = False
 
 
 @dataclass
@@ -26,6 +30,10 @@ class CaddyHandler:
     enabled: bool = True
     # UUID of an os-caddy access list to attach (issue #206). Empty = unrestricted.
     access_list_uuid: str = ""
+    # Reverse-proxy to an HTTPS upstream (e.g. the OPNsense GUI on :8443).
+    upstream_tls: bool = False
+    # Skip verification of the upstream's TLS cert (internal/self-signed backends).
+    upstream_tls_skip_verify: bool = True
 
 
 @dataclass
@@ -270,6 +278,7 @@ class CaddyManager:
                 "enabled": "1" if domain.enabled else "0",
                 "FromDomain": domain.domain,
                 "description": domain.description,
+                "DnsChallenge": "1" if domain.dns_challenge else "0",
             }
         }
         return self._api_post("ReverseProxy", "addReverseProxy", data)
@@ -289,6 +298,7 @@ class CaddyManager:
                 "enabled": "1" if domain.enabled else "0",
                 "FromDomain": domain.domain,
                 "description": domain.description,
+                "DnsChallenge": "1" if domain.dns_challenge else "0",
             }
         }
         return self._api_post("ReverseProxy", "setReverseProxy", data, url_params=[uuid])
@@ -363,6 +373,8 @@ class CaddyManager:
                 "HandleDirective": "reverse_proxy",
                 "ToDomain": handler.upstream_domain,
                 "ToPort": str(handler.upstream_port),
+                "HttpTls": "1" if handler.upstream_tls else "0",
+                "HttpTlsInsecureSkipVerify": "1" if (handler.upstream_tls and handler.upstream_tls_skip_verify) else "0",
                 "accesslist": handler.access_list_uuid,
                 "description": handler.description,
             }
@@ -387,6 +399,8 @@ class CaddyManager:
                 "HandleDirective": "reverse_proxy",
                 "ToDomain": handler.upstream_domain,
                 "ToPort": str(handler.upstream_port),
+                "HttpTls": "1" if handler.upstream_tls else "0",
+                "HttpTlsInsecureSkipVerify": "1" if (handler.upstream_tls and handler.upstream_tls_skip_verify) else "0",
                 "accesslist": handler.access_list_uuid,
                 "description": handler.description,
             }

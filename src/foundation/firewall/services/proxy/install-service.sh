@@ -136,11 +136,26 @@ else
     warn "dig not available — skipping DNS validation"
 fi
 
+# ── TLS certificate strategy (proxyTls, default dns01) ──────────────
+
+# DNS-01 needs no inbound validation traffic, so it is the only strategy
+# that works for mgmt-restricted / non-public domains. Requires the global
+# os-caddy TLS DNS provider + API key to be configured.
+PROXY_TLS=$(jq -r '.proxyTls // "dns01"' "${MODULE_JSON}")
+DNS_ARGS=()
+if [[ "${PROXY_TLS}" == "dns01" ]]; then
+    info "  TLS: ACME DNS-01 (proxyTls=dns01)"
+    DNS_ARGS=(--dns-challenge)
+else
+    info "  TLS: ACME HTTP-01 (proxyTls=${PROXY_TLS})"
+fi
+
 # ── Create domain ───────────────────────────────────────────────────
 
 info "  Creating Caddy domain..."
 caddy-manager add-domain "${PROXY_DOMAIN}" \
     --description "${DESCRIPTION}" \
+    "${DNS_ARGS[@]+"${DNS_ARGS[@]}"}" \
     --no-ssl-verify || die "Failed to create Caddy domain"
 
 # ── Resolve zone restriction → access list (issue #206) ─────────────
@@ -151,6 +166,13 @@ if ! ACL_NAME=$(proxy_resolve_access_list "${MODULE}" "${MODULE_JSON}" "${ZONES_
 fi
 [[ -n "${ACL_NAME}" ]] && ACL_ARGS=(--access-list "${ACL_NAME}")
 
+# HTTPS upstream (e.g. the OPNsense GUI on :8443).
+TLS_ARGS=()
+if [[ "$(jq -r '.proxyUpstreamTls // "false"' "${MODULE_JSON}")" == "true" ]]; then
+    info "  Upstream is HTTPS (proxyUpstreamTls=true)"
+    TLS_ARGS=(--upstream-tls)
+fi
+
 # ── Create handler ──────────────────────────────────────────────────
 
 info "  Creating Caddy handler..."
@@ -159,6 +181,7 @@ caddy-manager add-handler "${PROXY_DOMAIN}" \
     --port "${PROXY_PORT}" \
     --description "${DESCRIPTION}" \
     "${ACL_ARGS[@]+"${ACL_ARGS[@]}"}" \
+    "${TLS_ARGS[@]+"${TLS_ARGS[@]}"}" \
     --no-ssl-verify || die "Failed to create Caddy handler"
 
 # ── Reconfigure Caddy ───────────────────────────────────────────────

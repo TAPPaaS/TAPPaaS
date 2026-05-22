@@ -14,7 +14,7 @@
         "HANode", "replicationSchedule",
         "bridge0", "mac0", "zone0", "trunks0",
         "bridge1", "mac1", "zone1", "trunks1",
-        "firewallType", "proxyDomain", "proxyPort", "proxyAllowedZones",
+        "firewallType", "proxyDomain", "proxyPort", "proxyUpstreamTls", "proxyTls", "proxyAllowedZones",
         "ports", "ingress", "egress", "aliases",
         "dependsOn", "provides"
     ],
@@ -465,6 +465,30 @@
             "maximum": 65535,
             "example": 8080,
             "note": "The port the service listens on inside the VM"
+        },
+
+        "proxyUpstreamTls": {
+            "description": "Reverse-proxy to an HTTPS upstream instead of plain HTTP. Set true for backends that only speak TLS — e.g. the OPNsense GUI on :8443. firewall:proxy renders the Caddy upstream as https:// with upstream certificate verification skipped (internal/self-signed backends).",
+            "type": "string",
+            "requiredBy": [],
+            "usedBy": ["firewall:proxy"],
+            "default": "false",
+            "values": {
+                "true": "Upstream is HTTPS (skip upstream cert verification)",
+                "false": "Upstream is plain HTTP (default)"
+            }
+        },
+
+        "proxyTls": {
+            "description": "How firewall:proxy obtains the TLS certificate for this domain. 'dns01' (default) uses ACME DNS-01 validation — the certificate is issued by writing a DNS TXT record, so no inbound HTTP-01 validation traffic is required (the only option that works for mgmt-restricted or otherwise non-public domains). 'http01' uses classic ACME HTTP-01 validation, which requires the domain to be reachable from the internet on port 80. DNS-01 requires the global os-caddy TLS DNS provider and API key to be configured (e.g. Cloudflare).",
+            "type": "string",
+            "requiredBy": [],
+            "usedBy": ["firewall:proxy"],
+            "default": "dns01",
+            "values": {
+                "dns01": "ACME DNS-01 validation (no inbound traffic; needs global DNS provider + API key)",
+                "http01": "ACME HTTP-01 validation (domain must be publicly reachable on :80)"
+            }
         },
 
         "proxyAllowedZones": {

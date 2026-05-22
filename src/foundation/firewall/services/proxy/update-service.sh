@@ -117,16 +117,22 @@ LIST_OUTPUT=$(caddy-manager list --no-ssl-verify 2>&1) || true
 
 CHANGES_MADE=false
 
-# Check if domain exists (by looking for it in the list output)
-if echo "${LIST_OUTPUT}" | grep -q "${PROXY_DOMAIN}"; then
-    info "  Domain ${PROXY_DOMAIN} exists"
-else
-    warn "Domain ${PROXY_DOMAIN} missing — creating..."
-    caddy-manager add-domain "${PROXY_DOMAIN}" \
-        --description "${DESCRIPTION}" \
-        --no-ssl-verify || die "Failed to create Caddy domain"
-    CHANGES_MADE=true
+# TLS certificate strategy (proxyTls, default dns01). DNS-01 needs no inbound
+# validation, so it is the only strategy that works for mgmt-restricted /
+# non-public domains. add-domain reconciles the setting on an existing domain.
+PROXY_TLS=$(jq -r '.proxyTls // "dns01"' "${MODULE_JSON}")
+DNS_ARGS=()
+if [[ "${PROXY_TLS}" == "dns01" ]]; then
+    DNS_ARGS=(--dns-challenge)
 fi
+
+# Reconcile the domain (creates if missing, applies the TLS strategy either way)
+info "  Reconciling domain ${PROXY_DOMAIN} (TLS=${PROXY_TLS})..."
+caddy-manager add-domain "${PROXY_DOMAIN}" \
+    --description "${DESCRIPTION}" \
+    "${DNS_ARGS[@]+"${DNS_ARGS[@]}"}" \
+    --no-ssl-verify || die "Failed to reconcile Caddy domain"
+CHANGES_MADE=true
 
 # Resolve the zone restriction → access list (issue #206), then reconcile the
 # handler. add-handler updates an existing handler in place, so this also
@@ -137,12 +143,18 @@ if ! ACL_NAME=$(proxy_resolve_access_list "${MODULE}" "${MODULE_JSON}" "${ZONES_
 fi
 [[ -n "${ACL_NAME}" ]] && ACL_ARGS=(--access-list "${ACL_NAME}")
 
+TLS_ARGS=()
+if [[ "$(jq -r '.proxyUpstreamTls // "false"' "${MODULE_JSON}")" == "true" ]]; then
+    TLS_ARGS=(--upstream-tls)
+fi
+
 info "  Reconciling handler (upstream ${UPSTREAM}:${PROXY_PORT}, access=${ACL_NAME:-public})..."
 caddy-manager add-handler "${PROXY_DOMAIN}" \
     --upstream "${UPSTREAM}" \
     --port "${PROXY_PORT}" \
     --description "${DESCRIPTION}" \
     "${ACL_ARGS[@]+"${ACL_ARGS[@]}"}" \
+    "${TLS_ARGS[@]+"${TLS_ARGS[@]}"}" \
     --no-ssl-verify || die "Failed to reconcile Caddy handler"
 CHANGES_MADE=true
 

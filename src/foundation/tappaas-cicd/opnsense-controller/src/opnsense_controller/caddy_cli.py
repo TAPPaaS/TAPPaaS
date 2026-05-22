@@ -16,14 +16,18 @@ def add_domain(
     manager: CaddyManager,
     domain_name: str,
     description: str = "",
+    dns_challenge: bool = False,
     check_mode: bool = False,
 ) -> bool:
-    """Add a reverse proxy domain.
+    """Add (or reconcile) a reverse proxy domain.
 
     Args:
         manager: CaddyManager instance.
         domain_name: Domain FQDN (e.g., "app.test.tapaas.org").
         description: Description for the entry.
+        dns_challenge: If True, issue the certificate via ACME DNS-01
+            (no inbound HTTP-01 validation needed). Requires the global
+            os-caddy TLS DNS provider/API key to be configured.
         check_mode: If True, perform dry-run.
 
     Returns:
@@ -31,15 +35,29 @@ def add_domain(
     """
     existing = manager.get_domain_by_name(domain_name)
     if existing:
-        print(f"Domain '{domain_name}' already exists (uuid={existing.uuid})")
-        return True
+        if check_mode:
+            print(f"Domain '{domain_name}' exists; would reconcile (dns_challenge={dns_challenge}) (dry-run)")
+            return True
+        # Reconcile the DNS-01 setting on the existing domain.
+        domain = CaddyDomain(
+            domain=domain_name,
+            description=description or existing.description,
+            enabled=existing.enabled,
+            dns_challenge=dns_challenge,
+        )
+        result = manager.update_domain(existing.uuid, domain)
+        if result.get("result") in ("saved", None) or result.get("uuid"):
+            print(f"Domain '{domain_name}' reconciled (uuid={existing.uuid}, dns_challenge={dns_challenge})")
+            return True
+        print(f"ERROR: Failed to reconcile domain: {result}", file=sys.stderr)
+        return False
 
     if check_mode:
-        print(f"Would create domain: {domain_name} (dry-run)")
+        print(f"Would create domain: {domain_name} (dns_challenge={dns_challenge}) (dry-run)")
         return True
 
     print(f"Creating domain: {domain_name}")
-    domain = CaddyDomain(domain=domain_name, description=description)
+    domain = CaddyDomain(domain=domain_name, description=description, dns_challenge=dns_challenge)
     result = manager.add_domain(domain)
 
     uuid = result.get("uuid")
@@ -63,6 +81,7 @@ def add_handler(
     port: str = "80",
     description: str = "",
     access_list: str = "",
+    upstream_tls: bool = False,
     check_mode: bool = False,
 ) -> bool:
     """Add (or reconcile) a reverse proxy handler for a domain.
@@ -101,6 +120,7 @@ def add_handler(
         upstream_port=str(port),
         description=description,
         access_list_uuid=access_list_uuid,
+        upstream_tls=upstream_tls,
     )
 
     # Reconcile an existing handler (so the access list / upstream stay current)
@@ -438,6 +458,12 @@ Examples:
     add_domain_parser = subparsers.add_parser("add-domain", parents=[global_parser], help="Add a reverse proxy domain")
     add_domain_parser.add_argument("domain", help="Domain FQDN (e.g., app.test.tapaas.org)")
     add_domain_parser.add_argument("--description", default="", help="Description for the domain")
+    add_domain_parser.add_argument(
+        "--dns-challenge",
+        action="store_true",
+        help="Issue the TLS certificate via ACME DNS-01 (no inbound validation; "
+        "requires the global os-caddy TLS DNS provider/API key)",
+    )
 
     # add-handler
     add_handler_parser = subparsers.add_parser("add-handler", parents=[global_parser], help="Add a reverse proxy handler")
@@ -446,6 +472,7 @@ Examples:
     add_handler_parser.add_argument("--port", default="80", help="Upstream port (default: 80)")
     add_handler_parser.add_argument("--description", default="", help="Description for the handler")
     add_handler_parser.add_argument("--access-list", default="", help="Name of an access list to attach (issue #206) — restrict client networks")
+    add_handler_parser.add_argument("--upstream-tls", action="store_true", help="Reverse-proxy to an HTTPS upstream (e.g. the OPNsense GUI on :8443); skips upstream cert verification")
 
     # add-accesslist (issue #206)
     add_al_parser = subparsers.add_parser("add-accesslist", parents=[global_parser], help="Create/update an access list (client-IP allow/deny)")
@@ -511,11 +538,11 @@ Examples:
 
             success = False
             if args.command == "add-domain":
-                success = add_domain(manager, args.domain, args.description, args.check_mode)
+                success = add_domain(manager, args.domain, args.description, args.dns_challenge, args.check_mode)
             elif args.command == "add-handler":
                 success = add_handler(
                     manager, args.domain, args.upstream, args.port,
-                    args.description, args.access_list, args.check_mode,
+                    args.description, args.access_list, args.upstream_tls, args.check_mode,
                 )
             elif args.command == "add-accesslist":
                 success = add_access_list_cmd(

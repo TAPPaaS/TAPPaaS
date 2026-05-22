@@ -19,9 +19,14 @@
   "trunks0": "ALL",
   "bridge1": "wan",
   "zone1": "mgmt",
+  "proxyPort": 8443,
+  "proxyUpstreamTls": "true",
+  "proxyTls": "dns01",
+  "proxyAllowedZones": ["mgmt"],
   "dependsOn": [
     "cluster:vm",
-    "cluster:ha"
+    "cluster:ha",
+    "firewall:proxy"
   ],
   "provides": [
     "firewall",
