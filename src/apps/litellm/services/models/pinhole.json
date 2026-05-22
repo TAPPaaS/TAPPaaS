@@ -1,0 +1,6 @@
+{
+  "_comment": "Auto-On oinhole for litellm. When a consumer in a different zone declares dependsOn ['litellm'] and the zone-policy permits a pinhole, rules-manager synthesises an ingress rule for each port listed below.",
+  "ports": [
+    { "port": 4000, "protocol": "TCP", "description": "model web service in litellm" }
+  ]
+}
