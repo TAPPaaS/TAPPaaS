@@ -42,6 +42,13 @@ MGMT="mgmt"
 
 VM_HOST="${VMNAME}.${ZONE0NAME}.internal"
 
+# Some guests are sealed appliances that TAPPaaS does not manage over SSH —
+# e.g. Home Assistant OS, which exposes no shell/login user at all. They opt
+# out via "sshAccess": false; the SSH-based checks (connectivity, disk, memory)
+# are then skipped and the guest's own test.sh is relied on for app-level
+# health. Defaults to true so ordinary NixOS VMs are unaffected.
+SSH_ACCESS="$(get_config_value 'sshAccess' 'true')"
+
 # Firewall VM only supports root access (no tappaas user)
 if [[ "${VMNAME}" == "firewall" ]]; then
     SSH_USER="root"
@@ -99,6 +106,12 @@ else
 fi
 
 # ── Test 3: SSH connectivity ────────────────────────────────────────
+
+if [[ "${SSH_ACCESS}" == "false" ]]; then
+    info "  Check 3: SSH connectivity — ${YW}skipped${CL} (sshAccess=false: unmanaged appliance, relying on guest test.sh)"
+    info "  Results: ${GN}${PASS} passed${CL}, ${RD}${FAIL} failed${CL}"
+    exit 0
+fi
 
 info "  Check 3: SSH connectivity"
 # shellcheck disable=SC2086

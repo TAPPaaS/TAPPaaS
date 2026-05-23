@@ -17,6 +17,7 @@
   "bios": "ovmf",
   "ostype": "l26",
   "cloudInit": false,
+  "sshAccess": false,
   "bridge0": "lan",
   "zone0": "srv-home",
   "ports": [

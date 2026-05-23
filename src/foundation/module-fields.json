@@ -10,7 +10,7 @@
         "vmname", "vmid", "vmtag", "node",
         "bios", "ostype", "cputype", "cores", "memory", "diskSize", "storage",
         "pbsStorageName", "alwaysBackup",
-        "imageType", "image", "imageLocation", "os", "cloudInit",
+        "imageType", "image", "imageLocation", "os", "cloudInit", "sshAccess",
         "HANode", "replicationSchedule",
         "bridge0", "mac0", "zone0", "trunks0",
         "bridge1", "mac1", "zone1", "trunks1",
@@ -331,6 +331,18 @@
             "values": {
                 "true": "VM supports cloud-init (SSH keys, hostname, etc.)",
                 "false": "VM does not use cloud-init"
+            }
+        },
+
+        "sshAccess": {
+            "description": "Whether TAPPaaS can manage this guest over SSH. Set false for sealed appliance images that expose no login shell (e.g. Home Assistant OS). When false, cluster:vm test-service skips its SSH-based health checks (connectivity, disk, memory) and relies on the module's own test.sh for app-level health — so a working appliance is not falsely reported as failing (which would otherwise abort updates).",
+            "type": "string",
+            "requiredBy": [],
+            "usedBy": ["cluster:vm"],
+            "default": "true",
+            "values": {
+                "true": "TAPPaaS manages the guest over SSH (NixOS VMs, OPNsense as root)",
+                "false": "Unmanaged appliance — no SSH; skip SSH-based cluster:vm tests"
             }
         },
 
