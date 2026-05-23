@@ -29,7 +29,7 @@ import ipaddress
 
 from .config import Config
 from .dhcp_manager import DhcpManager, DhcpRange
-from .firewall_manager import FirewallManager, Protocol, RuleAction
+from .firewall_manager import FirewallManager, FirewallRule, RuleAction
 from .log import debug, info, warn
 from .vlan_manager import VlanManager
 
@@ -215,16 +215,23 @@ class TestNetworkManager:
                     if fw.get_rule_by_description(desc):
                         debug(f"  rule exists, skipping: {desc}")
                         continue
-                    if action is RuleAction.PASS:
-                        fw.create_allow_rule(
-                            description=desc, interface=interface,
-                            source=src, destination=dst, apply=False,
-                        )
-                    else:
-                        fw.create_block_rule(
-                            description=desc, interface=interface,
-                            source=src, destination=dst, apply=False,
-                        )
+                    # Build the rule with an explicit sequence. The
+                    # create_allow_rule/create_block_rule helpers do NOT accept
+                    # a sequence, so using them would leave ordering undefined —
+                    # and ordering is load-bearing here (rules are quick=True, so
+                    # a 'pass internet' evaluated before the RFC1918 blocks would
+                    # let the test net reach mgmt). Mirror zone_manager, which
+                    # passes sequence into FirewallRule(...).create_rule().
+                    rule = FirewallRule(
+                        description=desc,
+                        action=action,
+                        interface=interface,
+                        source_net=src,
+                        destination_net=dst,
+                        sequence=seq,
+                        log=True,
+                    )
+                    fw.create_rule(rule, apply=False)
                 fw.apply_changes()
 
         result["status"] = "would_create" if check_mode else "created"

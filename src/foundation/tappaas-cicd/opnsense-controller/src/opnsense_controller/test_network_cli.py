@@ -22,7 +22,7 @@ import os
 import sys
 
 from .config import Config
-from .test_network_manager import TestNetworkError, TestNetworkManager
+from .test_network_manager import TestNetworkManager
 
 
 def get_config(args) -> Config:
@@ -74,7 +74,7 @@ def cmd_create(args) -> int:
     try:
         mgr = _build_manager(args)
         return _emit(args, mgr.create(check_mode=args.check_mode))
-    except (TestNetworkError, Exception) as e:  # noqa: BLE001 - surface to CLI
+    except Exception as e:  # noqa: BLE001 - surface to CLI
         if args.json:
             print(json.dumps({"error": str(e)}))
         else:

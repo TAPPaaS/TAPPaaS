@@ -83,6 +83,19 @@ while [[ $# -gt 0 ]]; do
 done
 debug "Action=${ACTION} bridge=${BRIDGE} subnet=${SUBNET} debug=${OPT_DEBUG}"
 
+# ── Validate operator-supplied input ─────────────────────────────────
+# These values are interpolated into `ssh root@node "bash -s"` heredocs and
+# `qm set` commands. Validate them against strict allowlists so a stray
+# character cannot turn into arbitrary code execution as root on the node.
+[[ "${BRIDGE}" =~ ^[a-zA-Z0-9._-]+$ ]] \
+    || die "Invalid --bridge '${BRIDGE}' (allowed: letters, digits, . _ -)"
+[[ -z "${PORT}" || "${PORT}" =~ ^[a-zA-Z0-9._-]+$ ]] \
+    || die "Invalid --port '${PORT}' (allowed: letters, digits, . _ -)"
+[[ "${VMID}" =~ ^[0-9]*$ ]] \
+    || die "Invalid --vmid '${VMID}' (digits only)"
+[[ "${SUBNET}" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+/[0-9]+$ ]] \
+    || die "Invalid --subnet '${SUBNET}' (expected CIDR, e.g. 172.17.3.1/24)"
+
 # Optional --check-mode flag passed through to the controller, as an array so
 # it expands to nothing when unset (avoids unquoted word-splitting hacks).
 CHECK_FLAG=()
@@ -275,6 +288,14 @@ if [[ "${CHECK_MODE}" -eq 0 ]]; then
         || { info "Aborted."; exit 0; }
 fi
 
+# Create is not transactional: once the bridge/NIC exist, a later failure
+# (e.g. OPNsense unreachable) leaves partial state. Surface the recovery path.
+partial_create_hint() {
+    error "Create failed partway through — node bridge and/or firewall NIC may exist."
+    error "Clean up with:  test-network.sh --delete --bridge ${BRIDGE}"
+}
+trap partial_create_hint ERR
+
 # 2. Create the node bridge (idempotent, persisted, backed up)
 info "Creating bridge ${BRIDGE} (port ${PORT}) on ${NODE_FQDN}"
 if [[ "${CHECK_MODE}" -eq 0 ]]; then
@@ -284,6 +305,17 @@ if [[ "${CHECK_MODE}" -eq 0 ]]; then
     ssh -o BatchMode=yes root@"${NODE_FQDN}" "bash -s" <<REMOTE || die "Bridge creation failed"
 set -euo pipefail
 [[ -e "/sys/class/net/${PORT}/device" ]] || { echo "Port ${PORT} is not a physical NIC" >&2; exit 1; }
+# Refuse a port that is in use — guards against enslaving the node's mgmt NIC
+# and locking it out (no auto-rollback timer here, unlike config-network.sh).
+if ip -o link show "${PORT}" 2>/dev/null | grep -qoE 'master [^ ]+'; then
+    echo "Port ${PORT} is already enslaved to a bridge/bond — refusing" >&2; exit 1
+fi
+if ip -o -4 addr show "${PORT}" 2>/dev/null | grep -q 'inet '; then
+    echo "Port ${PORT} has an IPv4 address configured — refusing" >&2; exit 1
+fi
+if ip route show default 2>/dev/null | grep -qE "dev ${PORT}( |\$)"; then
+    echo "Port ${PORT} carries the default route — refusing" >&2; exit 1
+fi
 if ! grep -qF "${MARK_BEGIN}" "${INTERFACES}"; then
     cp -a "${INTERFACES}" "${INTERFACES}.tappaas.\$(date +%Y%m%d-%H%M%S).bak"
     {
@@ -335,6 +367,8 @@ if [[ "${CHECK_MODE}" -eq 0 ]]; then
     ssh -o BatchMode=yes root@"${FIREWALL_FQDN}" "configctl filter reload" >/dev/null 2>&1 \
         || warn "configctl filter reload returned non-zero (continuing)"
 fi
+
+trap - ERR   # past the point where partial state can be created
 
 info "${GN}✓${CL} Test network ${BL}${SUBNET}${CL} ready on ${NODE}:${PORT} (firewall ${DEVICE})."
 info "  Tear down with: test-network.sh --delete --bridge ${BRIDGE}"

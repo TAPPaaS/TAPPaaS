@@ -614,6 +614,12 @@ assert any(r[4] == "10.0.0.0/8" for r in blocks), "mgmt net must be blocked from
 # mgmt-access rule is on the mgmt interface, sourced from mgmt net
 mgmt = [r for r in rules if "mgmt-access" in r[0]][0]
 assert mgmt[2] == "lan" and mgmt[3] == "10.0.0.0/24" and mgmt[4] == "172.17.3.0/24"
+# Ordering is load-bearing (rules are quick=True): internet-pass MUST be
+# sequenced after every RFC1918 block, else the test net could reach mgmt.
+seqs = [r[5] for r in rules]
+assert len(set(seqs)) == len(seqs), "rule sequences must be unique"
+internet_seq = [r[5] for r in rules if r[0].endswith("internet")][0]
+assert internet_seq > max(r[5] for r in blocks), "internet pass must follow RFC1918 blocks"
 PY
     then
         pass "test-network rule model: test→internet + mgmt→test, internal blocked"
