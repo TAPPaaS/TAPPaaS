@@ -1122,16 +1122,52 @@ class ZoneManager:
 
         existing = existing_by_desc.get(description)
         if existing:
-            debug(f"    {action_str}: {description} (exists, skipping)")
-            results_list.append({
-                "description": description,
-                "status": "exists",
-                "action": action_str,
-                "destination": destination_net,
-            })
-            return
+            # A rule with this description already exists. Rules are keyed by
+            # description, but the *bound interface* (and other match fields) can
+            # drift out from under a description — most notably after an
+            # interface label rename (issue #213) reassigns a zone's opt-id
+            # (e.g. srv-home opt1 -> opt11). A stale interface points the rule at
+            # a now-nonexistent opt-id, which makes the whole os-firewall
+            # ruleset fail to compile and silently load *zero* automation rules
+            # into pf. So reconcile drift instead of blindly skipping.
+            drifted = (
+                existing.interface != interface
+                or (existing.action or "").lower() != action_str
+                or existing.destination_net != destination_net
+                or existing.source_net != source_net
+            )
+            if not drifted:
+                debug(f"    {action_str}: {description} (exists, in sync, skipping)")
+                results_list.append({
+                    "description": description,
+                    "status": "exists",
+                    "action": action_str,
+                    "destination": destination_net,
+                })
+                return
 
-        debug(f"    {action_str}: {description}")
+            debug(f"    {action_str}: {description} (drift: iface "
+                  f"{existing.interface!r}->{interface!r}; reconciling)")
+            if check_mode:
+                results_list.append({
+                    "description": description,
+                    "status": "would_update",
+                    "action": action_str,
+                    "destination": destination_net,
+                    "from_interface": existing.interface,
+                    "to_interface": interface,
+                })
+                return
+            # Delete the stale rule, then fall through to recreate it cleanly
+            # with the correct interface (delete+create is reliable regardless
+            # of the oxl rule module's upsert semantics — see oxl-client notes).
+            try:
+                manager.delete_rule(existing.description, apply=False)
+            except Exception as e:  # noqa: BLE001 - surface but continue to recreate
+                error(f"Reconciling '{description}': delete of stale rule failed: {e}")
+
+        else:
+            debug(f"    {action_str}: {description}")
 
         if check_mode:
             results_list.append({
