@@ -60,11 +60,19 @@ raw layout could not be grown and caused disk-full update failures.
    It prompts for a root password (or generates one) and writes the API
    credentials to `~/.opnsense-credentials.txt` for cicd.
 3. **Complete the OPNsense installer in the Proxmox console** (the only manual
-   step — OPNsense has no unattended install):
-   - At *“Press any key to start the configuration importer”* → select the
-     **OPNCONFIG** FAT drive → it imports `config.xml`.
+   step — OPNsense has no unattended install). **Open the noVNC console before
+   powering on** (`config-firewall.sh` waits for you), because the importer
+   prompt is brief and ~20s in:
+   - Boot runs ~20s; a `Root mount waiting for: CAM` pause is **normal**, not a
+     hang.
+   - Then *“Press any key to start the configuration importer”* appears for
+     **~8s** — press a key promptly. At *“Select device to import from”*, type
+     the name of the small **16M** disk (the `OPNCONFIG` seed, usually `da1`)
+     and Enter → it imports `config.xml` (you'll see *“Setting hostname:
+     firewall”*). (Miss the window and it boots the default config — just reset
+     the VM and watch again.)
    - Log in as `installer` / `opnsense`, choose **Install (UFS)**, target = the
-     32G disk, finish and reboot.
+     32G disk (`da0`), finish and reboot.
 4. **Confirm** at the script's prompt; it flips boot order to the disk, detaches
    the installer CD + importer drive, and verifies `10.0.0.1` is reachable.
 5. **Swap cables** — point the node at the firewall for routing + DNS:

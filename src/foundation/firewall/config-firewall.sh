@@ -42,6 +42,7 @@ WORKDIR=""
 cleanup() {
   [[ -n "$WORKDIR" && -d "$WORKDIR" ]] || return 0
   mountpoint -q "$WORKDIR/mnt" 2>/dev/null && umount "$WORKDIR/mnt" 2>/dev/null || true
+  [[ -n "${IMPORT_LOOP:-}" ]] && losetup -d "$IMPORT_LOOP" 2>/dev/null || true
   rm -rf "$WORKDIR" 2>/dev/null || true
 }
 trap cleanup EXIT INT TERM
@@ -124,6 +125,13 @@ fi
 # OPNsense verifies local passwords via crypt() too; sha512 is accepted.
 ROOT_PW_HASH="$(openssl passwd -6 "$ROOT_PW")"
 
+# Sanity-check the hashes: `openssl passwd -6 ""` emits the literal "<NULL>",
+# which would inject a bogus tag and break the config.xml. Real creds are never
+# empty, but fail loudly rather than ship a broken seed.
+for _h in "$API_SECRET_HASH" "$ROOT_PW_HASH"; do
+  case "$_h" in '$6$'*) ;; *) die "Generated hash is invalid ('${_h}') — refusing to build a broken config.xml" ;; esac
+done
+
 # ── 2. Render config.xml ─────────────────────────────────────────────
 WORKDIR="$(mktemp -d)"
 CONFIG_XML="${WORKDIR}/config.xml"
@@ -139,21 +147,43 @@ grep -qE '@[A-Z_]+@' "$CONFIG_XML" && warn "Unsubstituted @PLACEHOLDER@ remains 
 info "Rendered config.xml ($(wc -l <"$CONFIG_XML") lines)"
 
 # ── 3. Build the FAT importer drive (/conf/config.xml) ──────────────
+# CRITICAL: the OPNsense importer only mounts the config as FAT (msdos) when it
+# lives on a *partition* (da1s1 / da1p1). A whole-disk FAT (no partition table)
+# falls through to its last branch and is mounted as cd9660 → fails. So we lay
+# down an MBR with one FAT partition, not mkfs.vfat on the raw image.
 command -v mkfs.vfat >/dev/null || { info "Installing dosfstools"; apt-get -y install dosfstools >/dev/null 2>&1 || die "could not install dosfstools"; }
+command -v parted   >/dev/null || { info "Installing parted";    apt-get -y install parted    >/dev/null 2>&1 || die "could not install parted"; }
 IMPORT_IMG="${WORKDIR}/importer.img"
-info "Building importer drive"
-dd if=/dev/zero of="$IMPORT_IMG" bs=1M count=16 status=none
-mkfs.vfat -F 16 -n OPNCONFIG "$IMPORT_IMG" >/dev/null
+IMPORT_LOOP=""
+info "Building importer drive (MBR + FAT partition)"
+dd if=/dev/zero of="$IMPORT_IMG" bs=1M count=32 status=none
+parted -s "$IMPORT_IMG" mklabel msdos
+parted -s "$IMPORT_IMG" mkpart primary fat16 1MiB 100%
+IMPORT_LOOP="$(losetup -P --show -f "$IMPORT_IMG")"
+for _ in 1 2 3 4 5 6; do [[ -e "${IMPORT_LOOP}p1" ]] && break; sleep 0.3; done
+[[ -e "${IMPORT_LOOP}p1" ]] || die "partition node ${IMPORT_LOOP}p1 did not appear"
+mkfs.vfat -F 16 -n OPNCONFIG "${IMPORT_LOOP}p1" >/dev/null
 mkdir -p "${WORKDIR}/mnt"
-mount -o loop "$IMPORT_IMG" "${WORKDIR}/mnt"
+mount "${IMPORT_LOOP}p1" "${WORKDIR}/mnt"
 mkdir -p "${WORKDIR}/mnt/conf"
 cp "$CONFIG_XML" "${WORKDIR}/mnt/conf/config.xml"
 umount "${WORKDIR}/mnt"
+losetup -d "$IMPORT_LOOP"; IMPORT_LOOP=""
 
 # ── 4. Create the VM + attach the importer drive ────────────────────
 info "Creating the firewall VM (installer ISO + UFS disk + lan/wan NICs)..."
 cp "$FW_JSON" "${CONFIG_DIR}/firewall.json" 2>/dev/null || true
 "$CREATE_VM" "$VMNAME"
+
+# Create-TAPPaaS-VM.sh powers the VM on at the end. Stop it: the importer drive
+# isn't attached yet, and the importer prompt is a brief (~8s) window ~20s into
+# boot — the operator must attach-then-watch, not have it boot unattended.
+info "Stopping VM to attach the importer drive (it must not boot unattended)..."
+qm stop "$VMID" >/dev/null 2>&1 || true
+for _ in $(seq 1 20); do
+  qm status "$VMID" 2>/dev/null | grep -q stopped && break
+  sleep 1
+done
 
 info "Attaching the importer drive (config seed)..."
 qm importdisk "$VMID" "$IMPORT_IMG" "$STORAGE" >/dev/null
@@ -162,22 +192,33 @@ IMPORTED_VOL="$(qm config "$VMID" | awk -F': ' '/^unused[0-9]+:/{v=$2} END{print
 [[ -n "$IMPORTED_VOL" ]] || die "Could not find the imported config volume"
 qm set "$VMID" --scsi1 "$IMPORTED_VOL" >/dev/null
 
-info "Starting the firewall VM..."
-qm start "$VMID" >/dev/null
-
 # ── 5. Guide the installer + finalize ───────────────────────────────
+# IMPORTANT: open the console BEFORE powering on — the importer prompt appears
+# only ~20s into boot and lasts ~8s, so you must be watching from the start.
 cat <<EOF
 
-${BOLD}=== Complete the OPNsense install in the Proxmox console (VM ${VMID}) ===${CL}
-  Open: Datacenter → ${VMNAME} → Console
+${BOLD}=== OPNsense install for VM ${VMID} (${VMNAME}) ===${CL}
+  FIRST: open the console now → Datacenter → ${VMNAME} → Console (noVNC).
+EOF
+if [[ "$INTERACTIVE" == "1" ]]; then
+  read -r -p "  With the console open, press ENTER here to power on the VM... " _
+fi
+info "Starting the firewall VM..."
+qm start "$VMID" >/dev/null
+cat <<EOF
 
-  1. At "${BOLD}Press any key to start the configuration importer${CL}", press a key
-     and select the ${BOLD}OPNCONFIG${CL} device (the small FAT disk) → imports config.xml.
-  2. Log in as ${BOLD}installer / opnsense${CL} (or root / your new password).
-  3. Choose ${BOLD}Install (UFS)${CL}, target disk = the ${BL}$(jq -r '.diskSize' "$FW_JSON")${CL} disk (da0/vtbd0).
-  4. Finish and ${BOLD}reboot${CL}; remove no cables — networking is preconfigured.
+  ${BOLD}Watch the console:${CL}
+  1. Boot runs ~20s; a "${BL}Root mount waiting for: CAM${CL}" pause is NORMAL (not a hang).
+  2. Then "${BOLD}Press any key to start the configuration importer${CL}" appears for
+     ~8s — ${BOLD}press a key promptly${CL}. At "${BOLD}Select device to import from${CL}", type the
+     name of the small ${BOLD}16M${CL} disk (the OPNCONFIG seed, usually ${BOLD}da1${CL}) and Enter →
+     it imports config.xml (you'll see "Setting hostname: firewall").
+     (If you miss the ~8s window it boots the default config — just reset the VM
+      and watch again.)
+  3. Log in as ${BOLD}installer / opnsense${CL}; choose ${BOLD}Install (UFS)${CL}, target = the
+     ${BL}$(jq -r '.diskSize' "$FW_JSON")${CL} disk (da0). Finish and ${BOLD}reboot${CL} (no cable changes).
 
-The firewall will come up at ${BL}10.0.0.1${CL} with DNS/DHCP and the API enabled.
+The firewall then comes up at ${BL}10.0.0.1${CL} with DNS/DHCP and the API enabled.
 EOF
 
 if [[ "$INTERACTIVE" == "1" ]]; then
