@@ -153,9 +153,21 @@ function get_vlan_value() {
 function resolve_trunks() {
   # Converts a semicolon-separated list of zone names to their VLAN tags
   # e.g. "srv;private;iot;dmz" -> "210;310;410;610"
+  # The sentinel "ALL" (or "*") expands to every Active/Mandatory zone that has
+  # a VLAN tag — the firewall trunk uses this so new zones are picked up with no
+  # config edit (matches vmnet_resolve_trunks used by the update flow).
   # Fails if a zone is not defined in zones.json, but only warns and skips if inactive.
   local zone_list="$1"
   local result=""
+  if [[ "$zone_list" == "ALL" || "$zone_list" == "*" ]]; then
+    echo "$ZONES" | jq -r '
+      [ to_entries[]
+        | select((.value.state == "Active" or .value.state == "Mandatory")
+                 and ((.value.vlantag // 0) > 0))
+        | .value.vlantag ]
+      | sort | unique | map(tostring) | join(";")'
+    return 0
+  fi
   IFS=';' read -ra zone_names <<< "$zone_list"
   for zone_name in "${zone_names[@]}"; do
     if ! echo "$ZONES" | jq -e --arg K "$zone_name" 'has($K)' >/dev/null ; then
