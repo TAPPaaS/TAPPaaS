@@ -276,8 +276,25 @@ if [ "${IMAGETYPE:-}" != "clone" ]; then
   if [ "$IMAGETYPE" = "iso" ]; then
     info "Downloading ISO file: $URL"
     mkdir -p /var/lib/vz/template/iso
-    curl -fSLo "/var/lib/vz/template/iso/$IMAGE" "$URL"
-    info "Downloaded ISO file to /var/lib/vz/template/iso/${IMAGE}"
+    # Support compressed installer ISOs (e.g. the OPNsense dvd .iso.bz2).
+    # Decompress to a plain .iso under template/iso; ISO_NAME is what qm attaches.
+    if [[ "$IMAGE" == *.bz2 ]]; then
+      ISO_NAME="$(basename "${IMAGE%.bz2}")"
+      curl -fSLo "/tmp/${IMAGE##*/}" "$URL"
+      info "Decompressing ISO, have patience"
+      bzip2 -dc "/tmp/${IMAGE##*/}" > "/var/lib/vz/template/iso/${ISO_NAME}"
+      rm -f "/tmp/${IMAGE##*/}"
+    elif [[ "$IMAGE" == *.xz ]]; then
+      ISO_NAME="$(basename "${IMAGE%.xz}")"
+      curl -fSLo "/tmp/${IMAGE##*/}" "$URL"
+      info "Decompressing ISO, have patience"
+      xz -dc "/tmp/${IMAGE##*/}" > "/var/lib/vz/template/iso/${ISO_NAME}"
+      rm -f "/tmp/${IMAGE##*/}"
+    else
+      ISO_NAME="$(basename "$IMAGE")"
+      curl -fSLo "/var/lib/vz/template/iso/${ISO_NAME}" "$URL"
+    fi
+    info "Downloaded ISO file to /var/lib/vz/template/iso/${ISO_NAME}"
   elif [ "$IMAGETYPE" = "img" ]; then
     info "Retrieving the Disk Image: $URL"
     curl -fSLo "$IMAGE" "$URL"
@@ -323,22 +340,36 @@ if [ "$IMAGETYPE" == "img" ]; then  # First use: this is used to stand up a fire
   fi
 fi
 
-if [ "$IMAGETYPE" == "iso" ]; then # First use: this is used to stand up a nixos template vm from an iso image
+if [ "$IMAGETYPE" == "iso" ]; then
   info "${BOLD}Creating an ISO based VM"
-  # --localtime 0: NixOS keeps the RTC in UTC (boot.hardwareClockInLocalTime
-  # defaults to false). localtime 1 makes the guest read the clock as TZ-local
-  # and boot ahead of real time until NTP corrects it (issue #166 fix #4).
-  qm create $VMID --agent 1 --tablet 0 --localtime 0 --bios $BIOS \
-    --name $VMNAME --onboot 1 --ostype $VM_OSTYPE --cpu "$CPU_TYPE" --scsihw virtio-scsi-pci >/dev/null
-  info " - Created base VM configuration"
-  pvesm alloc $STORAGE $VMID $DISK0 4M  1>/dev/null
-  pvesm alloc $STORAGE $VMID $DISK1 $DISK_SIZE  1>/dev/null
-  info " - Created EFI disk"
-  qm set $VMID \
-    -ide3 local:iso/${IMAGE},media=cdrom\
-    -efidisk0 ${DISK0_REF} \
-    -scsi0 ${DISK1_REF},discard=on,ssd=1,size=${DISK_SIZE} \
-    -boot order='ide3;scsi0' >/dev/null
+  if [ "$BIOS" == "seabios" ]; then
+    # BIOS install-from-ISO (e.g. the OPNsense firewall, issue #182): a blank
+    # expandable target disk plus the installer CD. The operator runs the short
+    # OPNsense installer once (UFS, pick disk); config-firewall.sh then seeds
+    # the config via the importer drive and flips the boot order to the disk.
+    qm create $VMID --agent 1 --tablet 0 --localtime 1 --bios seabios \
+      --name $VMNAME --onboot 1 --ostype $VM_OSTYPE --cpu "$CPU_TYPE" --scsihw virtio-scsi-single >/dev/null
+    qm set $VMID --scsi0 ${STORAGE}:${DISK_SIZE%G},discard=on,ssd=1 >/dev/null
+    qm set $VMID --ide2 local:iso/${ISO_NAME},media=cdrom >/dev/null
+    qm set $VMID --boot order='ide2;scsi0' >/dev/null
+    info " - Created BIOS install VM (target disk ${DISK_SIZE}, installer ${ISO_NAME})"
+  else
+    # UEFI install-from-ISO (NixOS template): EFI disk + installer CD.
+    # --localtime 0: NixOS keeps the RTC in UTC (boot.hardwareClockInLocalTime
+    # defaults to false). localtime 1 makes the guest read the clock as TZ-local
+    # and boot ahead of real time until NTP corrects it (issue #166 fix #4).
+    qm create $VMID --agent 1 --tablet 0 --localtime 0 --bios $BIOS \
+      --name $VMNAME --onboot 1 --ostype $VM_OSTYPE --cpu "$CPU_TYPE" --scsihw virtio-scsi-pci >/dev/null
+    info " - Created base VM configuration"
+    pvesm alloc $STORAGE $VMID $DISK0 4M  1>/dev/null
+    pvesm alloc $STORAGE $VMID $DISK1 $DISK_SIZE  1>/dev/null
+    info " - Created EFI disk"
+    qm set $VMID \
+      -ide3 local:iso/${ISO_NAME},media=cdrom\
+      -efidisk0 ${DISK0_REF} \
+      -scsi0 ${DISK1_REF},discard=on,ssd=1,size=${DISK_SIZE} \
+      -boot order='ide3;scsi0' >/dev/null
+  fi
 fi
 # qm resize $VMID scsi0 ${DISK_SIZE} >/dev/null
 

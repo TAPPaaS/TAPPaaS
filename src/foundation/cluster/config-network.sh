@@ -49,6 +49,7 @@ usage() { sed -n '2,/^set -euo/p' "$0" | sed 's/^# \{0,1\}//; /^set -euo/d'; }
 # ── Arguments ────────────────────────────────────────────────────────
 LAN_PORT="" WAN_PORT="" MGMT_IP="" GATEWAY=""
 DO_ROLLBACK=1 INTERACTIVE=1 DRY_RUN=0 ROLLBACK_SECS=90
+SWAP_CABLES=0 FW_IP="10.0.0.1"
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -56,6 +57,8 @@ while [[ $# -gt 0 ]]; do
     --wan-port)        WAN_PORT="${2:-}"; shift 2 ;;
     --mgmt-ip)         MGMT_IP="${2:-}"; shift 2 ;;
     --gateway)         GATEWAY="${2:-}"; shift 2 ;;
+    --swap-cables)     SWAP_CABLES=1; shift ;;
+    --fw-ip)           FW_IP="${2:-}"; shift 2 ;;
     --no-rollback)     DO_ROLLBACK=0; shift ;;
     --dry-run)         DRY_RUN=1; shift ;;
     --apply)           DRY_RUN=0; shift ;;
@@ -69,6 +72,53 @@ done
 command -v ifreload >/dev/null || warn "ifreload not found — will fall back to 'systemctl restart networking'."
 HAVE_WHIPTAIL=0; command -v whiptail >/dev/null && HAVE_WHIPTAIL=1
 [[ -t 0 && -t 1 ]] || INTERACTIVE=0
+
+# ── Swap-cables: post-firewall node transition (issue #141) ─────────
+# Once the OPNsense firewall is up at FW_IP, point this node at it for routing
+# and DNS. Changing only the default route + resolver + /etc/hosts does not drop
+# the node's own lan IP, so a management session on the lan subnet is unaffected
+# (no rollback needed). corosync is advised, never auto-edited on a live cluster.
+swap_cables() {
+  local lan_ip host
+  lan_ip="$(ip -o -4 addr show lan 2>/dev/null | awk '{print $4}' | cut -d/ -f1)"
+  host="$(hostname -s)"
+  info "Swap-cables: routing + DNS via the firewall (${BL}${FW_IP}${CL})"
+
+  info "  /etc/resolv.conf → nameserver ${FW_IP}"
+  cp -a /etc/resolv.conf "/etc/resolv.conf.tappaas.$(date +%Y%m%d-%H%M%S).bak" 2>/dev/null || true
+  printf 'search internal mgmt.internal\nnameserver %s\n' "$FW_IP" > /etc/resolv.conf
+
+  if [[ -n "$lan_ip" ]]; then
+    info "  /etc/hosts → ${lan_ip} ${host}.mgmt.internal ${host}"
+    sed -i -E "/[[:space:]]${host}([[:space:]]|\$)/d" /etc/hosts 2>/dev/null || true
+    printf '%s %s.mgmt.internal %s\n' "$lan_ip" "$host" "$host" >> /etc/hosts
+  fi
+
+  cp -a "$INTERFACES" "${INTERFACES}.tappaas.$(date +%Y%m%d-%H%M%S).bak"
+  if grep -qE '^[[:space:]]*gateway[[:space:]]' "$INTERFACES"; then
+    sed -i -E "s|^([[:space:]]*gateway[[:space:]]+).*|\1${FW_IP}|" "$INTERFACES"
+  else
+    sed -i -E "/^iface lan inet static/,/^[[:space:]]*\$/ s|^([[:space:]]*address[[:space:]].*)|\1\n\tgateway ${FW_IP}|" "$INTERFACES"
+  fi
+  info "  default gateway → ${FW_IP}; reloading network..."
+  ifreload -a 2>/dev/null || systemctl restart networking || warn "network reload returned non-zero"
+
+  if [[ -f /etc/pve/corosync.conf ]]; then
+    if [[ -n "$lan_ip" ]] && grep -q "$lan_ip" /etc/pve/corosync.conf 2>/dev/null; then
+      info "  ${GN}✓${CL} corosync.conf already references ${lan_ip}"
+    else
+      warn "  If this node's mgmt IP changed, update ring0_addr in /etc/pve/corosync.conf"
+      warn "  to ${lan_ip:-<lan ip>}, bump config_version, then: systemctl restart corosync"
+    fi
+  fi
+
+  info "${GN}Swap-cables complete.${CL} Verify: ping ${FW_IP}; ping 8.8.8.8; nslookup firewall.mgmt.internal"
+}
+
+if [[ "$SWAP_CABLES" == "1" ]]; then
+  swap_cables
+  exit 0
+fi
 
 # ── Physical port inventory ──────────────────────────────────────────
 # A physical port has a backing device under /sys/class/net/<n>/device,

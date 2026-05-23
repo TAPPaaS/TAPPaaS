@@ -19,6 +19,70 @@ A consumer module opts in by adding the capability to its `dependsOn`, e.g.:
 "dependsOn": ["cluster:vm", "firewall:proxy", "firewall:rules"]
 ```
 
+## Installing the firewall (bootstrap)
+
+The firewall is installed **during foundation bootstrap, before tappaas-cicd
+exists**. `config-firewall.sh` stands up the OPNsense VM and seeds a complete
+management-network config via the OPNsense **importer**, so it comes up fully
+functional (LAN, DNS/DHCP, static hosts, hostname, API key) with **no GUI
+clicking** — replacing the long manual GUI procedure. The VLAN/zone/proxy/rule
+setup is layered on later by the opnsense-controller (`zone-manager`,
+`caddy-manager`, `rules-manager`) inside cicd, which connects with the API key
+seeded here.
+
+### Image (issue #182)
+
+The firewall installs from the OPNsense **dvd installer ISO** onto an
+**expandable UFS disk** (32G). It no longer uses the `nano` image, whose fixed
+raw layout could not be grown and caused disk-full update failures.
+
+### Files
+
+| File | Role |
+|------|------|
+| `config-firewall.sh` | Bootstrap orchestrator — run on a PVE node; creates the VM, seeds config, guides the installer. |
+| `firewall-config.xml.template` | Parameterized OPNsense `config.xml` (placeholders `@APIKEYS@`, `@ROOT_PW_HASH@`). Other values are TAPPaaS conventions (mgmt `10.0.0.0/24`, `internal`/`mgmt.internal`, static hosts). No private keys/certs are committed; OPNsense regenerates the GUI cert on first boot. |
+
+### Procedure
+
+1. **Prerequisite — node networking.** Build the `lan`/`wan` bridges first (the
+   OPNsense VM attaches `net0→lan`, `net1→wan`):
+   ```bash
+   ~/tappaas/config-network.sh --lan-port <ifX> --wan-port <ifY>
+   ```
+2. **Bootstrap the firewall** (downloads + decompresses the dvd ISO, generates
+   an API key, builds the importer drive, creates and starts the VM):
+   ```bash
+   curl -fsSL https://raw.githubusercontent.com/TAPPaaS/TAPPaaS/main/src/foundation/firewall/config-firewall.sh >/root/tappaas/config-firewall.sh
+   chmod +x /root/tappaas/config-firewall.sh
+   /root/tappaas/config-firewall.sh
+   ```
+   It prompts for a root password (or generates one) and writes the API
+   credentials to `~/.opnsense-credentials.txt` for cicd.
+3. **Complete the OPNsense installer in the Proxmox console** (the only manual
+   step — OPNsense has no unattended install):
+   - At *“Press any key to start the configuration importer”* → select the
+     **OPNCONFIG** FAT drive → it imports `config.xml`.
+   - Log in as `installer` / `opnsense`, choose **Install (UFS)**, target = the
+     32G disk, finish and reboot.
+4. **Confirm** at the script's prompt; it flips boot order to the disk, detaches
+   the installer CD + importer drive, and verifies `10.0.0.1` is reachable.
+5. **Swap cables** — point the node at the firewall for routing + DNS:
+   ```bash
+   ~/tappaas/config-network.sh --swap-cables
+   ```
+
+### Bootstrap vs cicd
+
+| Stage | Configures | Tooling |
+|------|------------|---------|
+| Bootstrap | VM + expandable UFS disk; LAN `10.0.0.1`; DHCP; Unbound+Dnsmasq DNS; mgmt static hosts; hostname; **API key enabled** | `config-firewall.sh` + seeded `config.xml` (no cicd) |
+| Later | VLANs/zones, per-module reverse proxy, firewall rules, ACME certs | opnsense-controller (`zone-manager`/`caddy-manager`/`rules-manager`) in tappaas-cicd |
+
+> **Maintenance note:** `firewall-config.xml.template` must track the OPNsense
+> version in `firewall.json` — OPNsense's `config.xml` format can change across
+> releases.
+
 ## Per-Module Firewall Rules
 
 The `firewall:rules` capability lets each module declare its inbound and
