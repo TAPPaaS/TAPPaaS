@@ -190,7 +190,12 @@ class TestNetworkManager:
         info(f"Configuring DHCP on {ifname}: {self.dhcp_start}–{self.dhcp_end}")
         if not check_mode:
             with DhcpManager(self.config) as dhcp:
-                dhcp.enable_service(dhcp_authoritative=True)
+                # Do NOT call enable_service(): the dnsmasq_general module
+                # re-validates every setting and fails on this firewall (bool
+                # coercion + "Unbound is using port 53"). dnsmasq is already
+                # enabled on a TAPPaaS firewall (it serves every zone's DHCP);
+                # we only add our interface to the listen set and create the
+                # range, exactly as zone_manager does.
                 interfaces = self._get_dnsmasq_interfaces(dhcp)
                 if ifname not in interfaces:
                     dhcp.set_dnsmasq_interfaces(interfaces + [ifname])

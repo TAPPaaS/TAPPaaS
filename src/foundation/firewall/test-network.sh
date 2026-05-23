@@ -106,6 +106,7 @@ TMP_FILES=()
 cleanup() {
     local f
     for f in "${TMP_FILES[@]:-}"; do [[ -n "$f" && -f "$f" ]] && rm -f "$f"; done
+    return 0   # never let the EXIT trap override the script's real exit code
 }
 trap cleanup EXIT INT TERM
 
@@ -134,7 +135,7 @@ resolve_controller() {
 resolve_firewall_node() {
     local primary
     primary=$(get_primary_node_fqdn 2>/dev/null || echo "tappaas1.mgmt.internal")
-    ssh -o BatchMode=yes -o StrictHostKeyChecking=accept-new \
+    ssh -n -o BatchMode=yes -o StrictHostKeyChecking=accept-new \
         root@"${primary}" \
         "pvesh get /cluster/resources --type vm --output-format json 2>/dev/null \
          | jq -r --arg vmid \"${VMID}\" '.[] | select(.vmid==(\$vmid|tonumber)) | .node'" \
@@ -152,7 +153,9 @@ used="$(grep -hoE 'bridge-ports[[:space:]]+.*' /etc/network/interfaces 2>/dev/nu
 for path in /sys/class/net/*; do
     n="${path##*/}"
     [[ -e "${path}/device" ]] || continue            # physical only
-    master="$(ip -o link show "$n" 2>/dev/null | grep -oE 'master [^ ]+' | awk '{print $2}')"
+    # `|| true`: a vacant NIC has no "master", so grep exits 1; without this,
+    # pipefail+set -e would abort the loop at the first vacant port.
+    master="$(ip -o link show "$n" 2>/dev/null | grep -oE 'master [^ ]+' | awk '{print $2}' || true)"
     [[ -n "$master" ]] && continue                   # already enslaved
     case " $used " in *" $n "*) continue;; esac      # listed as a bridge-port
     mac="$(cat "$path/address" 2>/dev/null || echo '??')"
@@ -168,7 +171,7 @@ REMOTE
 next_free_net_index() {
     local node_fqdn="$1" i
     for i in $(seq 0 15); do
-        if ! ssh -o BatchMode=yes root@"${node_fqdn}" "qm config ${VMID}" 2>/dev/null \
+        if ! ssh -n -o BatchMode=yes root@"${node_fqdn}" "qm config ${VMID}" 2>/dev/null \
                 | grep -q "^net${i}:"; then
             echo "$i"; return 0
         fi
@@ -179,7 +182,7 @@ next_free_net_index() {
 # netN index whose NIC is bridged to $BRIDGE on the firewall VM (for teardown).
 net_index_for_bridge() {
     local node_fqdn="$1"
-    ssh -o BatchMode=yes root@"${node_fqdn}" "qm config ${VMID}" 2>/dev/null \
+    ssh -n -o BatchMode=yes root@"${node_fqdn}" "qm config ${VMID}" 2>/dev/null \
         | awk -F: -v b="bridge=${BRIDGE}" '/^net[0-9]+:/ && index($0,b){sub(/^net/,"",$1); print $1; exit}'
 }
 
@@ -237,7 +240,7 @@ if [[ "${ACTION}" == "delete" ]]; then
     # 2. Detach the NIC from the firewall VM
     if [[ -n "${NIDX}" && "${CHECK_MODE}" -eq 0 ]]; then
         info "Detaching net${NIDX} from firewall VM ${VMID}"
-        ssh -o BatchMode=yes root@"${NODE_FQDN}" "qm set ${VMID} --delete net${NIDX}" >/dev/null \
+        ssh -n -o BatchMode=yes root@"${NODE_FQDN}" "qm set ${VMID} --delete net${NIDX}" >/dev/null \
             || warn "qm set --delete net${NIDX} returned non-zero"
     fi
 
@@ -343,7 +346,7 @@ if [[ -z "${NIDX}" ]]; then
     NIDX=$(next_free_net_index "${NODE_FQDN}") || die "No free netN slot on firewall VM"
     info "Attaching bridge ${BRIDGE} to firewall VM ${VMID} as net${NIDX} (→ vtnet${NIDX})"
     if [[ "${CHECK_MODE}" -eq 0 ]]; then
-        ssh -o BatchMode=yes root@"${NODE_FQDN}" \
+        ssh -n -o BatchMode=yes root@"${NODE_FQDN}" \
             "qm set ${VMID} --net${NIDX} virtio,bridge=${BRIDGE}" >/dev/null \
             || die "qm set --net${NIDX} failed"
     fi
@@ -364,7 +367,7 @@ ${CONTROLLER} create --device "${DEVICE}" --cidr "${SUBNET}" \
 #    re-render anti-lockout/bootp pass rules for freshly assigned interfaces).
 if [[ "${CHECK_MODE}" -eq 0 ]]; then
     info "Reloading OPNsense filter to regenerate auto-rules for ${DEVICE}"
-    ssh -o BatchMode=yes root@"${FIREWALL_FQDN}" "configctl filter reload" >/dev/null 2>&1 \
+    ssh -n -o BatchMode=yes root@"${FIREWALL_FQDN}" "configctl filter reload" >/dev/null 2>&1 \
         || warn "configctl filter reload returned non-zero (continuing)"
 fi
 
