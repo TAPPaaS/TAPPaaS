@@ -18,7 +18,9 @@
 
 header_info() {
   # generated with https://patorjk.com/software/taag/#p=display&f=Big&t=TAPPaaS%20Post%20PVE%20Install
-  clear
+  # `clear` needs a terminal/$TERM; never let its absence (e.g. a non-TTY or
+  # piped run) abort the whole script under `set -e`.
+  clear 2>/dev/null || true
   cat <<"EOF"
   _______       _____  _____             _____   _____          _     _______      ________   _____           _        _ _ 
  |__   __|/\   |  __ \|  __ \           / ____| |  __ \        | |   |  __ \ \    / /  ____| |_   _|         | |      | | |

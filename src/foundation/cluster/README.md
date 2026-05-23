@@ -53,7 +53,7 @@ the network phase may reconfigure the interface your SSH session uses):
 
 ```bash
 REPO="https://raw.githubusercontent.com/TAPPaaS/TAPPaaS/"
-BRANCH="stable"
+BRANCH="main"
 curl -fsSL ${REPO}${BRANCH}/src/foundation/cluster/install.sh >install.sh
 chmod +x install.sh
 ./install.sh $REPO $BRANCH
@@ -180,7 +180,7 @@ config-storage.sh [--pool <name>=<topology>:<disk>[,<disk>...]] [--list]
 | Flag | Effect |
 |------|--------|
 | `--list` | Print the selectable disks (with pool tags) and exit. |
-| `--pool name=topology:disks` | Define a pool non-interactively (repeatable). `topology` ∈ `single`, `mirror`, `raidz`, `raidz2`. e.g. `--pool tanka1=mirror:nvme0n1,nvme1n1`. |
+| `--pool name=topology:disks` | Define a pool non-interactively (repeatable). `topology` ∈ `single` (1 disk), `stripe` (2+ disks, no redundancy), `mirror`, `raidz`, `raidz2`. e.g. `--pool tanka1=mirror:nvme0n1,nvme1n1` or `--pool tankc2=stripe:sdc,sdd`. |
 | `--yes` | Assume "yes" to wipe confirmations — **destructive**; unattended use only. |
 | `--non-interactive` | Fail rather than prompt (requires `--pool`). |
 | `--no-pve-register` | Create the pools but do not add them to PVE storage. |

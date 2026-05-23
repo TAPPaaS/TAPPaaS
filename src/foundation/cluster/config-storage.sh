@@ -25,7 +25,8 @@
 # Options:
 #   --pool <name>=<topology>:<disk>[,<disk>...]
 #                     Define a pool non-interactively. May be repeated.
-#                     topology ∈ { single, mirror, raidz, raidz2 }.
+#                     topology ∈ { single, stripe, mirror, raidz, raidz2 }.
+#                     single=1 disk; stripe=2+ disks, no redundancy.
 #                     disks are kernel names (sdb) or by-id paths.
 #                     e.g. --pool tanka1=mirror:sdb,sdc --pool tankb1=single:sdd
 #   --yes             Assume "yes" to wipe confirmations (DANGEROUS; for
@@ -233,10 +234,13 @@ create_pool() {
     return 0
   fi
 
-  # Map topology → zpool vdev keyword
+  # Map topology → zpool vdev keyword. 'single' (1 disk) and 'stripe' (2+ disks
+  # concatenated with NO redundancy) both use an empty vdev keyword — ZFS
+  # stripes across all top-level vdevs.
   local vdev=""
   case "$topo" in
     single) vdev="" ;;
+    stripe) vdev="" ;;
     mirror) vdev="mirror" ;;
     raidz)  vdev="raidz" ;;
     raidz2) vdev="raidz2" ;;
@@ -245,8 +249,14 @@ create_pool() {
   if [[ "$topo" == "single" && ${#disks[@]} -ne 1 ]]; then
     error "topology 'single' needs exactly 1 disk (got ${#disks[@]})"; return 1
   fi
+  if [[ "$topo" == "stripe" && ${#disks[@]} -lt 2 ]]; then
+    error "topology 'stripe' needs at least 2 disks (got ${#disks[@]})"; return 1
+  fi
   if [[ "$topo" == "mirror" && ${#disks[@]} -lt 2 ]]; then
     error "topology 'mirror' needs at least 2 disks"; return 1
+  fi
+  if [[ "$topo" == "stripe" ]]; then
+    warn "Pool '${name}' is a STRIPE (${#disks[@]} disks) — NO redundancy; a single disk failure loses the pool."
   fi
 
   # Confirm + wipe each disk that carries data.
@@ -369,14 +379,15 @@ interactive_topology() {
   if [[ "$n" -eq 1 ]]; then echo "single"; return; fi
   if [[ "$HAVE_WHIPTAIL" == "1" ]]; then
     whiptail --title "TAPPaaS storage" --menu \
-      "Topology for ${n} disks:" 15 70 4 \
+      "Topology for ${n} disks:" 16 70 5 \
       mirror "Mirror (recommended; n-way redundancy)" \
       raidz  "RAIDZ (single parity)" \
       raidz2 "RAIDZ2 (double parity)" \
-      single "Stripe/single (NO redundancy)" \
+      stripe "Stripe (NO redundancy; capacity = sum)" \
       3>&1 1>&2 2>&3
   else
-    read -r -p "Topology [mirror/raidz/raidz2/single] (default mirror): " t >&2
+    local t
+    read -r -p "Topology [mirror/raidz/raidz2/stripe] (default mirror): " t >&2
     echo "${t:-mirror}"
   fi
 }
