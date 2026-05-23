@@ -202,6 +202,52 @@ rules-manager remove-alias <name>
 The CLI is normally invoked by the `services/rules/*.sh` capability scripts on
 the consumer module's lifecycle hooks, but can be run directly for debugging.
 
+## Test network on a dedicated physical port (issue #225)
+
+`test-network.sh` stands up a throwaway, isolated test network served on a
+**spare physical NIC** of the node running the firewall VM — separate from the
+VLAN trunk that carries the production zones. Plug a switch or AP into the spare
+port and you get an isolated, internet-connected sandbox without touching
+`zones.json` or the trunk.
+
+```bash
+test-network.sh                       # interactive: pick a vacant port, default 172.17.3.1/24
+test-network.sh --port enp3s0         # non-interactive port choice
+test-network.sh --subnet 172.17.9.1/24 --bridge testbr2
+test-network.sh --status              # show current state
+test-network.sh --delete              # tear down in reverse order
+test-network.sh --check-mode ...      # dry run, no changes
+```
+
+What it does, in order (and reverses on `--delete`):
+
+1. Finds the node hosting the firewall VM (`pvesh`), discovers vacant physical
+   ports, and prompts for one.
+2. Creates a Linux bridge on that node and enslaves the port, persisted in
+   `/etc/network/interfaces` (backed up first) and applied with `ifreload`.
+3. Attaches the bridge to the firewall VM as a new virtio NIC (`qm set --netN`),
+   which appears in OPNsense as `vtnetN`.
+4. Drives the OPNsense side via `test-network-manager` (a new
+   `opnsense-controller` entry point): assigns the interface with a static
+   gateway IP, enables DHCP, and installs the routing/firewall policy.
+
+**Routing policy** (asymmetric, per the issue):
+
+| From → To | Action | Notes |
+|-----------|--------|-------|
+| test → internet | allow | OPNsense automatic outbound NAT covers `172.16/12` |
+| test → internal (RFC1918, incl. mgmt) | block | isolation |
+| mgmt → test | allow | return traffic is stateful, so test→mgmt stays blocked |
+
+All OPNsense artefacts (interface, DHCP range, rules) carry a `test-net`
+description so teardown removes exactly what setup created.
+
+> **Note:** `test-network-manager` is a new console-script entry point in the
+> `opnsense-controller` package. Rebuild that package (e.g. via
+> `update-tappaas` / `nixos-rebuild`) so the wrapper lands in `PATH`;
+> `test-network.sh` falls back to `python3 -m opnsense_controller.test_network_cli`
+> when the wrapper is not yet present.
+
 ## Related files
 
 - [`zones.json`](zones.json) — canonical zone definitions (referenced from `from`/`to`)
