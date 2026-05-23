@@ -248,6 +248,9 @@ description so teardown removes exactly what setup created.
 > `test-network.sh` falls back to `python3 -m opnsense_controller.test_network_cli`
 > when the wrapper is not yet present.
 
+See [`docs/test-network-setup.md`](docs/test-network-setup.md) for the full
+setup/teardown runbook, options, verification, and troubleshooting.
+
 ## Related files
 
 - [`zones.json`](zones.json) — canonical zone definitions (referenced from `from`/`to`)
