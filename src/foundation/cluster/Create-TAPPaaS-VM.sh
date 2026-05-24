@@ -259,15 +259,35 @@ create_vm_descriptions_html "$DESCRIPTION"
 if [ "${IMAGETYPE:-}" != "clone" ]; then
   if [ "$IMAGETYPE" = "iso" ]; then
     if [ -f "/var/lib/vz/template/iso/$IMAGE" ]; then
+      # ISO already present locally (pre-placed or previously downloaded) — skip download.
+      # Still derive ISO_NAME so the VM creation section below can reference it consistently.
+      ISO_NAME="$(basename "$IMAGE")"
       info "ISO already present locally: /var/lib/vz/template/iso/${IMAGE} — skipping download"
     elif [ -n "${IMAGELOCATION:-}" ]; then
       URL="${IMAGELOCATION%/}/${IMAGE#/}"
       info "Downloading ISO file: $URL"
       mkdir -p /var/lib/vz/template/iso
-      curl -fSLo "/var/lib/vz/template/iso/$IMAGE" "$URL"
-      info "Downloaded ISO file to /var/lib/vz/template/iso/${IMAGE}"
+      # Support compressed installer ISOs (e.g. the OPNsense dvd .iso.bz2).
+      # Decompress to a plain .iso under template/iso; ISO_NAME is what qm attaches.
+      if [[ "$IMAGE" == *.bz2 ]]; then
+        ISO_NAME="$(basename "${IMAGE%.bz2}")"
+        curl -fSLo "/tmp/${IMAGE##*/}" "$URL"
+        info "Decompressing ISO, have patience"
+        bzip2 -dc "/tmp/${IMAGE##*/}" > "/var/lib/vz/template/iso/${ISO_NAME}"
+        rm -f "/tmp/${IMAGE##*/}"
+      elif [[ "$IMAGE" == *.xz ]]; then
+        ISO_NAME="$(basename "${IMAGE%.xz}")"
+        curl -fSLo "/tmp/${IMAGE##*/}" "$URL"
+        info "Decompressing ISO, have patience"
+        xz -dc "/tmp/${IMAGE##*/}" > "/var/lib/vz/template/iso/${ISO_NAME}"
+        rm -f "/tmp/${IMAGE##*/}"
+      else
+        ISO_NAME="$(basename "$IMAGE")"
+        curl -fSLo "/var/lib/vz/template/iso/${ISO_NAME}" "$URL"
+      fi
+      info "Downloaded ISO file to /var/lib/vz/template/iso/${ISO_NAME}"
     else
-      error "ISO '${IMAGE}' not found at /var/lib/vz/template/iso/ and no imageLocation set to download from"
+      echo -e "\n${RD}[ERROR]${CL} ISO '${IMAGE}' not found at /var/lib/vz/template/iso/ and no imageLocation set to download from"
       exit 1
     fi
   elif [ "$IMAGETYPE" = "img" ]; then
@@ -278,9 +298,19 @@ if [ "${IMAGETYPE:-}" != "clone" ]; then
       TARGET_IMAGE="${IMAGE%.bz2}"
       info "Decompressing $TARGET_IMAGE after download, have patience"
       bzip2 -dc "$IMAGE" > "$TARGET_IMAGE"
+    elif [[ "$IMAGE" == *.xz ]]; then
+      TARGET_IMAGE="${IMAGE%.xz}"
+      info "Decompressing $TARGET_IMAGE after download, have patience"
+      xz -d "$IMAGE"
+    elif [[ "$IMAGE" == *.zst ]]; then
+      # The prebuilt tappaas-nixos image ships as .qcow2.zst (zstd is fast to
+      # decompress and present on every Proxmox node).
+      TARGET_IMAGE="${IMAGE%.zst}"
+      info "Decompressing $TARGET_IMAGE after download, have patience"
+      zstd -d --long=27 -f "$IMAGE" -o "$TARGET_IMAGE"
     else
       TARGET_IMAGE="$IMAGE"
-    fi  
+    fi
     info "Downloaded and prepared IMG: ${CL}${BL}${TARGET_IMAGE}${CL}"
   else
     info "unknown image type: ${IMAGETYPE}, exiting"
@@ -386,16 +416,30 @@ STARTUP_NSH
       qm set $VMID -ide1 local:iso/tappaas-winconfig.iso,media=cdrom >/dev/null
       info " - Mounted unattended config ISO (ide1)"
     fi
+  elif [ "$BIOS" == "seabios" ]; then
+    # BIOS install-from-ISO (e.g. the OPNsense firewall, issue #182): a blank
+    # expandable target disk plus the installer CD. The operator runs the short
+    # OPNsense installer once (UFS, pick disk); config-firewall.sh then seeds
+    # the config via the importer drive and flips the boot order to the disk.
+    qm create $VMID --agent 1 --tablet 0 --localtime 1 --bios seabios \
+      --name $VMNAME --onboot 1 --ostype $VM_OSTYPE --cpu "$CPU_TYPE" --scsihw virtio-scsi-single >/dev/null
+    qm set $VMID --scsi0 ${STORAGE}:${DISK_SIZE%G},discard=on,ssd=1 >/dev/null
+    qm set $VMID --ide2 local:iso/${ISO_NAME},media=cdrom >/dev/null
+    qm set $VMID --boot order='ide2;scsi0' >/dev/null
+    info " - Created BIOS install VM (target disk ${DISK_SIZE}, installer ${ISO_NAME})"
   else
-    # Linux VM: standard setup
-    qm create $VMID --agent 1 --tablet 0 --localtime 1 --bios $BIOS \
+    # UEFI install-from-ISO (NixOS template): EFI disk + installer CD.
+    # --localtime 0: NixOS keeps the RTC in UTC (boot.hardwareClockInLocalTime
+    # defaults to false). localtime 1 makes the guest read the clock as TZ-local
+    # and boot ahead of real time until NTP corrects it (issue #166 fix #4).
+    qm create $VMID --agent 1 --tablet 0 --localtime 0 --bios $BIOS \
       --name $VMNAME --onboot 1 --ostype $VM_OSTYPE --cpu "$CPU_TYPE" --scsihw virtio-scsi-pci >/dev/null
     info " - Created base VM configuration"
     pvesm alloc $STORAGE $VMID $DISK0 4M  1>/dev/null
     pvesm alloc $STORAGE $VMID $DISK1 $DISK_SIZE  1>/dev/null
     info " - Created EFI disk"
     qm set $VMID \
-      -ide3 local:iso/${IMAGE},media=cdrom\
+      -ide3 local:iso/${ISO_NAME},media=cdrom\
       -efidisk0 ${DISK0_REF} \
       -scsi0 ${DISK1_REF},discard=on,ssd=1,size=${DISK_SIZE} \
       -boot order='ide3;scsi0' >/dev/null
