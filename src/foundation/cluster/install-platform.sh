@@ -69,6 +69,10 @@ vm_exists() { qm status "$1" >/dev/null 2>&1; }
 is_template() { qm config "$1" 2>/dev/null | grep -q '^template:\s*1'; }
 
 # ── Phase A: NixOS VM template (vmid 8080) ──────────────────────────
+# Imports the PREBUILT, pre-configured NixOS image (built by GitHub Actions and
+# published as a Release asset; see .github/workflows/build-nixos-template-image.yml)
+# and converts it straight to a Proxmox template. No manual NixOS install — the
+# TAPPaaS baseline (tappaas-common.nix) is already baked into the image.
 build_template() {
   local nixid; nixid="$(jq -r '.vmid' "${TAPPAAS_DIR}/tappaas-nixos.json" 2>/dev/null || echo 8080)"
   echo -e "\n${GN}${BOLD}=== A. NixOS VM template (vmid ${nixid}) ===${CL}"
@@ -78,32 +82,18 @@ build_template() {
     return 0
   fi
   if vm_exists "$nixid"; then
-    warn "VM ${nixid} exists but is not a template. Finish/convert it, or destroy it to rebuild."
-    confirm_enter "Press ENTER to (re)finalise it into a template, or Ctrl-C to abort... "
+    warn "VM ${nixid} exists but is not a template."
+    confirm_enter "Press ENTER to finalise it into a template, or Ctrl-C to abort... "
   else
     [[ -f "${TAPPAAS_DIR}/tappaas-nixos.json" ]] || { info "Fetching tappaas-nixos.json"; fetch "${REPO}${BRANCH}/src/foundation/templates/tappaas-nixos.json" "${TAPPAAS_DIR}/tappaas-nixos.json"; }
-    info "Creating the NixOS VM (${nixid}) from the installer ISO..."
+    info "Creating VM ${nixid} from the prebuilt NixOS image (downloads + imports a"
+    info "~700 MB compressed disk image — no manual install needed)..."
     "$CREATE_VM" tappaas-nixos
   fi
 
-  cat <<EOF
-
-  ${BOLD}Build the NixOS template in the Proxmox console (VM ${nixid}):${CL}
-  1. Open Datacenter → tappaas-nixos → Console.
-  2. Install NixOS with the graphical installer (defaults are fine; set a user +
-     root password; install to the disk; reboot).
-  3. Apply the TAPPaaS template configuration inside the VM:
-        ${BL}sudo curl -fsSL ${REPO}${BRANCH}/src/foundation/templates/tappaas-nixos.nix \\
-             -o /etc/nixos/configuration.nix${CL}
-        ${BL}sudo nixos-rebuild switch${CL}
-  4. Optimise + power off (so the template is clean):
-        ${BL}sudo nix-collect-garbage -d && sudo poweroff${CL}
-EOF
-  confirm_enter "Press ENTER once the NixOS VM is configured and powered off... "
-
   info "Finalising: stopping VM ${nixid} and converting it to a template..."
   qm stop "$nixid" >/dev/null 2>&1 || true
-  for _ in $(seq 1 20); do qm status "$nixid" 2>/dev/null | grep -q stopped && break; sleep 1; done
+  for _ in $(seq 1 30); do qm status "$nixid" 2>/dev/null | grep -q stopped && break; sleep 1; done
   if qm template "$nixid" >/dev/null 2>&1; then
     info "${GN}✓${CL} VM ${nixid} converted to a template."
   else

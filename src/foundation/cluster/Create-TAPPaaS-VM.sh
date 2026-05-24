@@ -318,6 +318,12 @@ if [ "${IMAGETYPE:-}" != "clone" ]; then
       TARGET_IMAGE="${IMAGE%.xz}"
       info "Decompressing $TARGET_IMAGE after download, have patience"
       xz -d "$IMAGE"
+    elif [[ "$IMAGE" == *.zst ]]; then
+      # The prebuilt tappaas-nixos image ships as .qcow2.zst (zstd is fast to
+      # decompress and present on every Proxmox node).
+      TARGET_IMAGE="${IMAGE%.zst}"
+      info "Decompressing $TARGET_IMAGE after download, have patience"
+      zstd -d --long=27 -f "$IMAGE" -o "$TARGET_IMAGE"
     else
       TARGET_IMAGE="$IMAGE"
     fi
