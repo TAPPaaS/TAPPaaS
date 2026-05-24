@@ -96,6 +96,13 @@ build_template() {
   for _ in $(seq 1 30); do qm status "$nixid" 2>/dev/null | grep -q stopped && break; sleep 1; done
   if qm template "$nixid" >/dev/null 2>&1; then
     info "${GN}✓${CL} VM ${nixid} converted to a template."
+    # Record which release this template was built from, so templates/update.sh
+    # can later tell — with a cheap API call, no image download — whether a newer
+    # release exists. Best-effort: a missing marker just makes the first update
+    # run rebuild once.
+    local latest_tag
+    latest_tag="$(curl -fsSL "https://api.github.com/repos/TAPPaaS/TAPPaaS/releases/latest" 2>/dev/null | jq -r '.tag_name // empty')"
+    [[ -n "$latest_tag" ]] && printf '%s\n' "$latest_tag" > "${TAPPAAS_DIR}/nixos-template.version"
   else
     warn "Could not convert VM ${nixid} to a template (already one? still running?). Check 'qm config ${nixid}'."
   fi
