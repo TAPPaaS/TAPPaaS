@@ -79,9 +79,13 @@ jobs:
               gsub(/@ROOT_PW_HASH@/, ENVIRON["ROOT_PW_HASH"]);
               print }
           ' src/foundation/firewall/firewall-config.xml.template > config.xml
-          test "$(grep -c '@' config.xml)" -eq 0 || true   # placeholders may legitimately remain elsewhere
-          echo "Rendered config.xml ($(wc -c <config.xml) bytes); LAN/hostname:"
-          grep -E '<ipaddr>10.0.0.1|<hostname>firewall' config.xml || true
+          # Enable SSH in the BOOTSTRAP image only (not the shared template), so
+          # config-firewall.sh can scp the per-deploy unique config in. The
+          # deployed firewall gets the plain template (SSH off) pushed over it.
+          # Syntax verified empirically: sshd comes up after rc.reload_all.
+          sed -i 's#<ssh>#<ssh><enabled>enabled</enabled><permitrootlogin>1</permitrootlogin><passwordauth>1</passwordauth>#' config.xml
+          echo "Rendered config.xml ($(wc -c <config.xml) bytes); LAN/hostname/ssh:"
+          grep -E '<ipaddr>10.0.0.1|<hostname>firewall|<ssh><enabled>' config.xml || true
 
       # Inject /conf/config.xml inside a FreeBSD VM — Linux cannot write UFS2.
       # All the heavy image work happens here so we don't sync multi-GB files in
@@ -102,15 +106,20 @@ jobs:
             echo "Downloading base image..."
             curl -fSL "${OPNSENSE_BASE_URL}" -o base.qcow2.bz2
             bunzip2 -f base.qcow2.bz2
-            echo "Converting to raw..."
+            echo "Converting to raw + extending to 16G (avoids the #182 disk-full trap)..."
             qemu-img convert -O raw base.qcow2 base.raw
             rm -f base.qcow2
+            truncate -s 16G base.raw
             md=$(mdconfig -a -t vnode -f base.raw)
-            echo "Attached ${md}; partitions:"; gpart show "${md}" || true
-            # part3 is the freebsd-ufs rootfs (EFISYS, bootfs, rootfs).
+            echo "Attached ${md}; partitions before grow:"; gpart show "${md}" || true
+            # The rootfs is GPT partition 3 (EFISYS, bootfs, rootfs). Recover the
+            # secondary GPT after extending the file, grow part3 + the UFS offline.
+            gpart recover "${md}" || true
+            gpart resize -i 3 "${md}"
+            growfs -y "/dev/${md}p3"
+            echo "Injecting /conf/config.xml..."
             mount -t ufs "/dev/${md}p3" /mnt
             test -d /mnt/conf || { echo "ERROR: /conf not found on ${md}p3"; umount /mnt; mdconfig -d -u "${md#md}"; exit 1; }
-            echo "Injecting /conf/config.xml..."
             cp config.xml /mnt/conf/config.xml
             sync
             umount /mnt
