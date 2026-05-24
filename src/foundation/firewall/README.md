@@ -60,19 +60,22 @@ raw layout could not be grown and caused disk-full update failures.
    It prompts for a root password (or generates one) and writes the API
    credentials to `~/.opnsense-credentials.txt` for cicd.
 3. **Complete the OPNsense installer in the Proxmox console** (the only manual
-   step — OPNsense has no unattended install). **Open the noVNC console before
-   powering on** (`config-firewall.sh` waits for you), because the importer
-   prompt is brief and ~20s in:
+   step — OPNsense has no unattended install). Open the noVNC console before
+   powering on (`config-firewall.sh` waits for you):
    - Boot runs ~20s; a `Root mount waiting for: CAM` pause is **normal**, not a
-     hang.
-   - Then *“Press any key to start the configuration importer”* appears for
-     **~8s** — press a key promptly. At *“Select device to import from”*, type
-     the name of the small **16M** disk (the `OPNCONFIG` seed, usually `da1`)
-     and Enter → it imports `config.xml` (you'll see *“Setting hostname:
-     firewall”*). (Miss the window and it boots the default config — just reset
-     the VM and watch again.)
-   - Log in as `installer` / `opnsense`, choose **Install (UFS)**, target = the
-     32G disk (`da0`), finish and reboot.
+     hang. **Ignore** the brief "Press any key … importer" prompt — we import
+     inside the installer instead (this is what actually carries onto the disk;
+     the boot-time importer only seeds the live environment).
+   - Log in as `installer` / `opnsense` (the default password).
+   - In the installer menu, **first choose `Import Config`** → select the
+     `OPNCONFIG` disk (the small 16M one, usually `da1`) → "Configuration import
+     completed".
+   - Then choose **Install (UFS)**: accept the keymap, select the 32G target
+     disk (`da0`), confirm the **erase/overwrite**, then **Complete install** →
+     reboot.
+   - The installed firewall comes up as `firewall` / LAN `10.0.0.1` (root
+     password = the one you set). **If LAN shows `192.168.1.1`, the import was
+     skipped** — reinstall and be sure to run `Import Config` *before* Install.
 4. **Confirm** at the script's prompt; it flips boot order to the disk, detaches
    the installer CD + importer drive, and verifies `10.0.0.1` is reachable.
 5. **Swap cables** — point the node at the firewall for routing + DNS:

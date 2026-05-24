@@ -208,17 +208,19 @@ qm start "$VMID" >/dev/null
 cat <<EOF
 
   ${BOLD}Watch the console:${CL}
-  1. Boot runs ~20s; a "${BL}Root mount waiting for: CAM${CL}" pause is NORMAL (not a hang).
-  2. Then "${BOLD}Press any key to start the configuration importer${CL}" appears for
-     ~8s — ${BOLD}press a key promptly${CL}. At "${BOLD}Select device to import from${CL}", type the
-     name of the small ${BOLD}16M${CL} disk (the OPNCONFIG seed, usually ${BOLD}da1${CL}) and Enter →
-     it imports config.xml (you'll see "Setting hostname: firewall").
-     (If you miss the ~8s window it boots the default config — just reset the VM
-      and watch again.)
-  3. Log in as ${BOLD}installer / opnsense${CL}; choose ${BOLD}Install (UFS)${CL}, target = the
-     ${BL}$(jq -r '.diskSize' "$FW_JSON")${CL} disk (da0). Finish and ${BOLD}reboot${CL} (no cable changes).
+  1. Boot runs ~20s ("${BL}Root mount waiting for: CAM${CL}" pause is NORMAL). You can
+     ${BOLD}ignore${CL} the brief "Press any key … importer" prompt — we import inside the
+     installer instead (more reliable, and it's what carries onto the disk).
+  2. Log in as ${BOLD}installer / opnsense${CL} (the default password).
+  3. In the installer menu, FIRST choose ${BOLD}Import Config${CL} → select the ${BOLD}OPNCONFIG${CL}
+     disk (the small 16M one, usually ${BOLD}da1${CL}) → "Configuration import completed".
+  4. Then choose ${BOLD}Install (UFS)${CL}: accept the keymap, select the ${BL}$(jq -r '.diskSize' "$FW_JSON")${CL}
+     target disk (${BOLD}da0${CL}), confirm the ${BOLD}erase/overwrite${CL}, then ${BOLD}Complete install${CL} →
+     reboot (no cable changes).
 
-The firewall then comes up at ${BL}10.0.0.1${CL} with DNS/DHCP and the API enabled.
+The installed firewall comes up as ${BL}firewall${CL} / LAN ${BL}10.0.0.1${CL} (root password = the one
+you set), with DNS/DHCP and the API enabled. If LAN shows 192.168.1.1, the import
+was skipped — reinstall and be sure to run ${BOLD}Import Config${CL} before Install.
 EOF
 
 if [[ "$INTERACTIVE" == "1" ]]; then
@@ -227,11 +229,18 @@ else
   info "Non-interactive: finalize later by re-running with --non-interactive after install, or run the qm steps below."
 fi
 
-# Flip boot to the installed disk and detach the installer CD + importer drive.
-info "Finalizing VM (boot from disk, detach installer media)..."
-qm set "$VMID" --boot order='scsi0' >/dev/null 2>&1 || true
+# Finalize: with the CD still attached and CD-first boot order, the post-install
+# reboot lands back in the live installer. Stop the VM, detach the installer CD
+# + importer drive, set boot to the installed disk, and start it — so it boots
+# the real installed firewall (and the verify below checks that, not the CD).
+info "Finalizing VM (detach installer media, boot from disk)..."
+qm stop "$VMID" >/dev/null 2>&1 || true
+for _ in $(seq 1 20); do qm status "$VMID" 2>/dev/null | grep -q stopped && break; sleep 1; done
 qm set "$VMID" --delete ide2 >/dev/null 2>&1 || true   # installer CD
 qm set "$VMID" --delete scsi1 >/dev/null 2>&1 || true  # importer drive (config already applied)
+qm set "$VMID" --boot order='scsi0' >/dev/null 2>&1 || true
+qm start "$VMID" >/dev/null 2>&1 || true
+info "Booting the installed firewall..."
 
 # ── 6. Write credentials for cicd + verify ──────────────────────────
 umask 077
