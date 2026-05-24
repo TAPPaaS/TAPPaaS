@@ -43,8 +43,9 @@ git checkout "$BRANCH"
 echo -e "\nChanging to TAPPaaS-CICD directory and rebuilding the NixOS configuration..."
 cd src/foundation/tappaas-cicd || exit 1
 
-# rebuild the nixos configuration
-sudo nixos-rebuild switch -I nixos-config=./tappaas-cicd.nix
+# rebuild the nixos configuration. NixOS version is pinned in ./flake.lock
+# (declared in git); --impure only to read /etc/nixos/hardware-configuration.nix.
+sudo nixos-rebuild switch --flake .#tappaas-cicd --impure
 
 # create ssh keys for the tappaas user
 echo -e "\nCreating SSH keys for the tappaas user and installing them for the proxmox host..."
