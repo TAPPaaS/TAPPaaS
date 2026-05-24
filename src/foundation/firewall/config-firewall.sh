@@ -262,5 +262,40 @@ else
   warn "Firewall not yet answering at 10.0.0.1 — give it a moment, then verify the install/console."
 fi
 
-info "${GN}Firewall bootstrap complete.${CL}"
-info "Next: run config-network.sh --swap-cables, bring up tappaas-cicd, then zone-manager/caddy-manager."
+cat <<EOF
+
+${GN}${BOLD}========================  Firewall bootstrap complete  ========================${CL}
+
+Next steps to finish the TAPPaaS foundation (run on this node unless noted):
+
+  ${BOLD}1. Swap cables.${CL}
+     Put the firewall inline: WAN uplink → the firewall's WAN, and the
+     management switch/trunk → the firewall's LAN. Then point this node's
+     routing + DNS at the firewall:
+        ${BL}~/tappaas/config-network.sh --swap-cables${CL}
+
+  ${BOLD}2. Move your management PC to the local network.${CL}
+     Connect your admin workstation to the TAPPaaS management LAN; it gets a
+     ${BL}10.0.0.x${CL} lease from the firewall. The firewall GUI is at
+     ${BL}https://10.0.0.1${CL} (root + the password you set).
+
+  ${BOLD}3. Run the sanity checks.${CL}
+        ${BL}~/tappaas/sanity-check.sh${CL}
+     Confirms gateway, internal/external DNS and internet all work before you
+     build on top. Fix anything red before continuing.
+
+  ${BOLD}4. Install additional cluster nodes${CL}  ${YW}(optional — skip for a single node).${CL}
+     On each extra node, run the same node bootstrap (cluster install.sh); it
+     auto-joins this cluster.
+
+  ${BOLD}5. Build the management platform${CL} (once all nodes are up). One script
+     creates the NixOS template, guides its config + finalises it, and starts
+     the tappaas-cicd mothership:
+        ${BL}~/tappaas/install-platform.sh${CL}
+     cicd then takes over VLANs, reverse proxy and firewall rules (via the API
+     key in ${BL}${CREDS_FILE}${CL}), then backup (35) and identity (40) follow.
+
+(The scripts/configs for steps 1, 3 and 5 were pre-staged in ~/tappaas/ by the
+ node bootstrap. See https://tappaas.org/installation/foundation/ for detail.)
+${GN}${BOLD}==============================================================================${CL}
+EOF

@@ -22,9 +22,11 @@ A guest is **either** a VM **or** a container, never both.
 
 | File | Role |
 |------|------|
-| `install.sh` | Node bootstrap — run once per node from the Proxmox shell. Orchestrates the post-install + the three config phases below. |
-| `config-network.sh` | Phase 2 — build the `lan`/`wan` bridges from the physical ports (issue #141). |
+| `install.sh` | Node bootstrap — run once per node from the Proxmox shell. Orchestrates the post-install + the three config phases below, and (on the first node) pre-stages the firewall/platform installers. |
+| `config-network.sh` | Phase 2 — build the `lan`/`wan` bridges from the physical ports (issue #141); also `--swap-cables`. |
 | `config-storage.sh` | Phase 3 — build the `tankXY` ZFS pools from the disks. |
+| `sanity-check.sh` | Post-firewall health checks (gateway, DNS, internet) once the node is on the management network. |
+| `install-platform.sh` | Run once on the first node after all nodes + firewall are up — builds the NixOS template (vmid 8080) and the `tappaas-cicd` mothership (vmid 130). |
 | `Create-TAPPaaS-VM.sh` / `Create-TAPPaaS-LXC.sh` | Guest provisioners, distributed to every node and invoked by the `cluster:vm` / `cluster:lxc` services. |
 | `setup-ssd-lifecycle.sh` | Autotrim + TRIM/SMART cron jobs (#152). |
 | `update.sh` | Cluster module update — apt upgrade on all nodes and re-distribute the provisioners + `zones.json`. |
@@ -72,6 +74,10 @@ chmod +x install.sh
 3. **Cluster phase** (create or join)
 4. **Storage phase** → `config-storage.sh`
 5. A **summary** of bridges, pools (with redundancy warnings) and cluster state.
+6. **First node only** — if this node just *created* the cluster (not joined),
+   it offers to continue straight into the OPNsense firewall bootstrap
+   ([firewall/config-firewall.sh](../firewall/config-firewall.sh)). Joining
+   nodes skip this.
 
 The base step is skipped on re-runs (delete `/var/log/tappaas.step1` to force
 it); the three config phases run every time and are individually idempotent, so

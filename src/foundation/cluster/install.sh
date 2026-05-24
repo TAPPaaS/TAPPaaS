@@ -129,6 +129,9 @@ NONINT_ARG=""; [ "$NONINTERACTIVE" = 1 ] && NONINT_ARG="--non-interactive"
 # to drive pvecm add's password prompt).
 INTERACTIVE_TTY=0
 [ "$NONINTERACTIVE" = 0 ] && [ -t 0 ] && INTERACTIVE_TTY=1
+# Records what the cluster phase did: created | joined | member | standalone.
+# Only "created" (this is the first node) triggers the optional firewall install.
+CLUSTER_ROLE=""
 
 # ── Cluster (issue #140) ─────────────────────────────────────────────
 # auto: first node (tappaas1) creates the cluster; every other node joins it.
@@ -142,6 +145,7 @@ configure_cluster() {
   if pvecm status >/dev/null 2>&1; then
     msg_ok "Node is already a cluster member"
     pvecm status 2>/dev/null | grep -E 'Name:|Nodes:|Quorate:' || true
+    CLUSTER_ROLE="member"
     return 0
   fi
 
@@ -155,6 +159,7 @@ configure_cluster() {
       msg_info "Creating Proxmox cluster 'TAPPaaS' (first node: ${host})"
       if pvecm create TAPPaaS >/dev/null 2>&1; then
         msg_ok "Created cluster 'TAPPaaS'"
+        CLUSTER_ROLE="created"
       else
         msg_error "pvecm create TAPPaaS failed (already clustered? check 'pvecm status')"
       fi
@@ -173,12 +178,42 @@ configure_cluster() {
       # pvecm add is interactive (password + SSH fingerprint); run on the TTY.
       if pvecm add "$peer"; then
         msg_ok "Joined cluster via ${peer}"
+        CLUSTER_ROLE="joined"
       else
         msg_error "pvecm add ${peer} failed — fix connectivity and re-run, or: pvecm add ${peer}"
       fi
       ;;
     none)
       msg_ok "Cluster step skipped (--no-cluster); node stays standalone."
+      CLUSTER_ROLE="standalone"
+      ;;
+  esac
+}
+
+# ── Optional chained firewall install (first node only) ──────────────
+# When this node CREATED the cluster (i.e. it's the first node, not joining),
+# offer to continue straight into the OPNsense firewall bootstrap. The network
+# and storage phases have already run, so the lan/wan bridges and tank pools
+# the firewall VM needs are in place.
+maybe_install_firewall() {
+  [ "$CLUSTER_ROLE" = "created" ] || return 0
+  echo ""
+  if [ "$INTERACTIVE_TTY" != 1 ]; then
+    msg_ok "First node: install the firewall next with  ~/tappaas/config-firewall.sh"
+    return 0
+  fi
+  local ans
+  read -r -p "This is the first node. Install the OPNsense firewall now? [y/N] " ans
+  case "$ans" in
+    y|Y|yes|YES)
+      msg_info "Fetching config-firewall.sh"
+      fetch "${REPO}${BRANCH}/src/foundation/firewall/config-firewall.sh" ~/tappaas/config-firewall.sh 755
+      msg_ok "Fetched config-firewall.sh — starting firewall bootstrap"
+      ~/tappaas/config-firewall.sh --repo "$REPO" --branch "$BRANCH" \
+        || msg_error "config-firewall.sh did not complete — re-run ~/tappaas/config-firewall.sh"
+      ;;
+    *)
+      msg_ok "Skipping firewall install. Run later: ~/tappaas/config-firewall.sh"
       ;;
   esac
 }
@@ -375,7 +410,18 @@ mkdir -p tappaas
 apt -y install jq &>/dev/null || { msg_error "apt install jq failed"; exit 1; }
 fetch "${REPO}${BRANCH}/src/foundation/cluster/Create-TAPPaaS-VM.sh"  ~/tappaas/Create-TAPPaaS-VM.sh  744
 fetch "${REPO}${BRANCH}/src/foundation/cluster/Create-TAPPaaS-LXC.sh" ~/tappaas/Create-TAPPaaS-LXC.sh 744
-msg_ok "Installed TAPPaaS helper scripts (VM + LXC)"
+fetch "${REPO}${BRANCH}/src/foundation/cluster/sanity-check.sh"       ~/tappaas/sanity-check.sh       744
+msg_ok "Installed TAPPaaS helper scripts (VM + LXC + sanity-check)"
+
+# Pre-stage the scripts/configs for the subsequent foundation steps so the whole
+# install can proceed on this node without re-fetching: the firewall bootstrap,
+# the NixOS VM template, and the tappaas-cicd mothership.
+msg_info "Staging firewall / platform installers + template/cicd configs"
+fetch "${REPO}${BRANCH}/src/foundation/firewall/config-firewall.sh"    ~/tappaas/config-firewall.sh    744
+fetch "${REPO}${BRANCH}/src/foundation/cluster/install-platform.sh"    ~/tappaas/install-platform.sh   744
+fetch "${REPO}${BRANCH}/src/foundation/templates/tappaas-nixos.json"   ~/tappaas/tappaas-nixos.json    644
+fetch "${REPO}${BRANCH}/src/foundation/tappaas-cicd/tappaas-cicd.json"  ~/tappaas/tappaas-cicd.json     644
+msg_ok "Staged config-firewall.sh, install-platform.sh, tappaas-nixos.json, tappaas-cicd.json"
 
 msg_info "Copy zones.json"
 fetch "${REPO}${BRANCH}/src/foundation/firewall/zones.json" ~/tappaas/zones.json 644
@@ -471,6 +517,9 @@ else
 fi
 
 print_summary
+
+# First node only: offer to continue into the firewall bootstrap.
+maybe_install_firewall
 
 msg_ok "Completed TAPPaaS post Proxmox VE install script"
 
