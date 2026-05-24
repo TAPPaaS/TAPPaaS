@@ -92,6 +92,9 @@ jobs:
         with:
           usesh: true
           copyback: true
+          # Forward the runner env vars into the VM (vmactions runs the script in
+          # a fresh SSH shell that does not inherit the job `env:`).
+          envs: "OPNSENSE_BASE_URL ASSET"
           prepare: |
             pkg install -y qemu-tools curl zstd
           run: |
