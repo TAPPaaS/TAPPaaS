@@ -4,7 +4,10 @@
         "summary": "VMID ranges are allocated by module type. Numbers are assigned in increments of 10, giving each module a block of 10 VMIDs for the local TAPPaaS administrator to create multiple copies of the same module/app.",
         "ranges": {
             "100-200": "Foundation modules (core platform infrastructure)",
-            "201-899": "Application modules (services and apps)",
+            "201-499": "Application modules — NixOS/Linux-based services",
+            "500-599": "Application modules — Windows Server-based services",
+            "600-799": "Application modules — general services",
+            "800-899": "Application modules — network and infrastructure",
             "900-999": "Test modules (used for VM creation testing and templates)",
             "8000-9000": "Proxmox templates (VM templates used for cloning)"
         },
@@ -59,6 +62,11 @@
             "moduleJson": "src/apps/vaultwarden/vaultwarden.json"
         },
         {
+            "moduleName": "windows-server",
+            "vmid": 500,
+            "moduleJson": "src/apps/windows-server/windows-server.json"
+        },
+        {
             "moduleName": "netbird-client",
             "vmid": 800,
             "moduleJson": "src/apps/netbird-client/netbird-client.json"
@@ -74,6 +82,11 @@
             "moduleName": "template",
             "vmid": 8080,
             "moduleJson": "src/foundation/templates/template.json"
+        },
+        {
+            "moduleName": "tappaas-winserver",
+            "vmid": 8081,
+            "moduleJson": "src/foundation/templates/tappaas-winserver.json"
         }
     ],
     "testModules": [

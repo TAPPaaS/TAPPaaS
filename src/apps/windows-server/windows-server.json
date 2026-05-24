@@ -1,0 +1,26 @@
+{
+    "vmname": "windows-server",
+    "vmid": 500,
+    "os": "windows",
+    "ostype": "win11",
+    "imageType": "clone",
+    "image": "8081",
+    "cores": 4,
+    "memory": "4096",
+    "diskSize": "64G",
+    "node": "tappaas1",
+    "zone0": "srv",
+    "mac0": "02:57:4E:A6:B2:10",
+    "windows": {
+        "enableRDP": false
+    },
+    "dependsOn": [
+        "cluster:vm",
+        "templates:windows",
+        "backup:vm",
+        "firewall:proxy"
+    ],
+    "vmtag": "TAPPaaS",
+    "maintainer": "TAPPaaS",
+    "description": "Barebone Windows Server 2025 VM. No roles or application software — a clean starting point for any Windows-based service."
+}

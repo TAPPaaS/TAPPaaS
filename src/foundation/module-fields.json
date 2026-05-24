@@ -162,17 +162,24 @@
         },
 
         "ostype": {
-            "description": "Proxmox VM option for hypervisor optimization",
+            "description": "Proxmox guest OS profile. Controls QEMU clock, ACPI, and balloon-driver behaviour — it does NOT install the OS. The letter in 'l26' is a lowercase L (Linux), not the digit 1.",
             "type": "string",
             "requiredBy": [],
             "usedBy": ["cluster:vm"],
             "default": "l26",
+            "note": "Pick the value that matches your guest OS. Wrong ostype causes clock drift or incorrect power-management behaviour but does not prevent the VM from booting.",
             "values": {
-                "l26": "Linux kernel 2.6+ (modern Linux)",
-                "l24": "Linux kernel 2.4",
-                "win10": "Windows 10/11",
-                "win11": "Windows 11",
-                "other": "Other/generic OS"
+                "l26": "Linux kernel 2.6 and later — NixOS, Debian, Ubuntu, and any modern Linux distro. Enables KVM paravirtual clock, assumes UTC hardware clock. USE THIS for all TAPPaaS NixOS and Debian/Ubuntu VMs.",
+                "l24": "Linux kernel 2.4 — legacy, rarely needed.",
+                "win11": "Windows 11 / Windows Server 2022 / Windows Server 2025. Enables Windows-specific ACPI, local-time hardware clock, Hyper-V enlightenments, and TPM 2.0 support. USE THIS for all Windows Server 2025 VMs.",
+                "win10": "Windows 10 / Windows Server 2016 / Windows Server 2019. Same Windows treatment as win11 but with an earlier ACPI profile.",
+                "win8": "Windows 8.x / Windows Server 2012 / Server 2012 R2.",
+                "win7": "Windows 7 / Windows Server 2008 R2.",
+                "win2k25": "Explicit alias for Windows Server 2025. Equivalent to win11 in Proxmox — win11 is preferred.",
+                "win2k22": "Explicit alias for Windows Server 2022. Equivalent to win11 in Proxmox — win11 is preferred.",
+                "win2k19": "Explicit alias for Windows Server 2019. Equivalent to win10 in Proxmox — win10 is preferred.",
+                "other": "Generic / unknown OS — minimal hypervisor optimisation.",
+                "solaris": "Solaris / OpenSolaris / OpenIndiana."
             }
         },
 
@@ -297,13 +304,13 @@
         },
 
         "imageLocation": {
-            "description": "URL where the image file is located",
+            "description": "URL or local path where the image file is located. For images already on the Proxmox node use the local directory path (e.g. '/var/lib/vz/template/iso/'). For remote images use an https:// URL.",
             "type": "string",
             "requiredBy": [],
             "usedBy": ["cluster:vm"],
-            "format": "^https?://.+$",
+            "format": "^(https?://.+|/.+)$",
             "example": "https://releases.ubuntu.com/24.04/",
-            "note": "For apt, if present, names an additional package repository to load"
+            "note": "For apt, if present, names an additional package repository to add"
         },
 
         "os": {
@@ -316,10 +323,27 @@
                 "debian": "Debian-family cloud image (apt). Receives the tappaas-debian vendor-data snippet.",
                 "ubuntu": "Ubuntu-family cloud image (apt). Receives the tappaas-debian vendor-data snippet.",
                 "nixos": "NixOS template VM. No vendor-data snippet.",
+                "windows": "Windows Server clone VM. Create-TAPPaaS-VM.sh builds and attaches a per-VM OOBE answer ISO. No cloud-init.",
                 "unknown": "OS family is unknown. No vendor-data snippet."
             },
             "example": "debian",
             "note": "Optional. If omitted, Create-TAPPaaS-VM.sh falls back to sniffing the 'image' filename. Set explicitly to override the sniff."
+        },
+
+        "windows": {
+            "description": "Windows-specific configuration options for Windows Server clone VMs.",
+            "type": "object",
+            "requiredBy": [],
+            "usedBy": ["templates:windows"],
+            "default": null,
+            "fields": {
+                "enableRDP": {
+                    "description": "Enable Remote Desktop Protocol. SSH over OpenSSH is always the primary access method.",
+                    "type": "boolean",
+                    "default": false
+                }
+            },
+            "example": { "enableRDP": false }
         },
 
         "cloudInit": {

@@ -11,9 +11,10 @@
 # License: MIT | https://github.com/community-scripts/ProxmoxVE/raw/main/LICENSE
 #
 
-# This script create a NixOS VM on Proxmox for TAPPaaS usage.
+# This script creates a VM on Proxmox for TAPPaaS usage.
+# Supports NixOS, Debian/Ubuntu and Windows Server VMs.
 #
-# Usage: bash TAPPaaS-NixOS-Cloning.sh name-of-VM  (name of VM will be used to reference the json config file in ~/tappaas/)
+# Usage: bash Create-TAPPaaS-VM.sh name-of-VM  (name of VM will be used to reference the json config file in ~/tappaas/)
 
 function error_handler() {
   local exit_code="$?"
@@ -220,7 +221,7 @@ STORAGE="$(get_config_value 'storage' 'tanka1')"
 IMAGETYPE="$(get_config_value 'imageType')"
 IMAGE="$(get_config_value 'image' '8080')"
 if [ "${IMAGETYPE:-}" != "clone" ]; then
-  IMAGELOCATION="$(get_config_value 'imageLocation')"
+  IMAGELOCATION="$(get_config_value 'imageLocation' '')"
 fi
 BRIDGE0="$(get_config_value 'bridge0' 'lan')"
 GEN_MAC0=02:$(openssl rand -hex 5 | awk '{print toupper($0)}' | sed 's/\(..\)/\1:/g; s/.$//')
@@ -247,22 +248,6 @@ fi
 CLOUDINIT="$(get_config_value 'cloudInit' 'true')"
 DESCRIPTION="$(get_config_value 'description')"
 
-# OS family (issue #147): drives OS-specific cloud-init bootstrapping (Debian
-# vendor-data snippet to pre-install qemu-guest-agent). Read explicit `os`
-# manifest field if present; otherwise sniff the image filename for
-# backwards-compat with all existing module JSONs.
-# get_config_value treats an empty default as "required field" and errors out,
-# so use a sentinel that cannot collide with a real value.
-OS_FAMILY="$(get_config_value 'os' '__auto__')"
-if [[ "$OS_FAMILY" == "__auto__" ]]; then
-  case "${IMAGE,,}" in
-    debian-*)          OS_FAMILY="debian" ;;
-    ubuntu-*)          OS_FAMILY="ubuntu" ;;
-    *nixos*)           OS_FAMILY="nixos" ;;
-    *)                 OS_FAMILY="unknown" ;;
-  esac
-fi
-
 # not needed if clone, but no harm either
 DISK0="vm-${VMID}-disk-0"
 DISK0_REF=${STORAGE}:${DISK0}
@@ -272,26 +257,30 @@ DISK1_REF=${STORAGE}:${DISK1}
 create_vm_descriptions_html "$DESCRIPTION"
 
 if [ "${IMAGETYPE:-}" != "clone" ]; then
-  URL="${IMAGELOCATION%/}/${IMAGE#/}"
   if [ "$IMAGETYPE" = "iso" ]; then
-    info "Downloading ISO file: $URL"
-    mkdir -p /var/lib/vz/template/iso
-    curl -fSLo "/var/lib/vz/template/iso/$IMAGE" "$URL"
-    info "Downloaded ISO file to /var/lib/vz/template/iso/${IMAGE}"
+    if [ -f "/var/lib/vz/template/iso/$IMAGE" ]; then
+      info "ISO already present locally: /var/lib/vz/template/iso/${IMAGE} — skipping download"
+    elif [ -n "${IMAGELOCATION:-}" ]; then
+      URL="${IMAGELOCATION%/}/${IMAGE#/}"
+      info "Downloading ISO file: $URL"
+      mkdir -p /var/lib/vz/template/iso
+      curl -fSLo "/var/lib/vz/template/iso/$IMAGE" "$URL"
+      info "Downloaded ISO file to /var/lib/vz/template/iso/${IMAGE}"
+    else
+      error "ISO '${IMAGE}' not found at /var/lib/vz/template/iso/ and no imageLocation set to download from"
+      exit 1
+    fi
   elif [ "$IMAGETYPE" = "img" ]; then
+    URL="${IMAGELOCATION%/}/${IMAGE#/}"
     info "Retrieving the Disk Image: $URL"
     curl -fSLo "$IMAGE" "$URL"
     if [[ "$IMAGE" == *.bz2 ]]; then
       TARGET_IMAGE="${IMAGE%.bz2}"
       info "Decompressing $TARGET_IMAGE after download, have patience"
       bzip2 -dc "$IMAGE" > "$TARGET_IMAGE"
-    elif [[ "$IMAGE" == *.xz ]]; then
-      TARGET_IMAGE="${IMAGE%.xz}"
-      info "Decompressing $TARGET_IMAGE after download, have patience"
-      xz -d "$IMAGE"
     else
       TARGET_IMAGE="$IMAGE"
-    fi
+    fi  
     info "Downloaded and prepared IMG: ${CL}${BL}${TARGET_IMAGE}${CL}"
   else
     info "unknown image type: ${IMAGETYPE}, exiting"
@@ -303,42 +292,114 @@ echo ""
 info "${BOLD}Starting the $VMNAME VM creation process..."
 if [ "$IMAGETYPE" == "img" ]; then  # First use: this is used to stand up a firewall vm from a disk image
   info "${BOLD}Creating a Image based VM"
-  if [ "$BIOS" == "ovmf" ]; then
-    # UEFI images (e.g. HAOS) require SATA and an EFI disk
-    # qm create must precede importdisk — Proxmox requires the VM to exist first
-    qm create $VMID -agent 1 -tablet 0 -localtime 1 \
-      -name $VMNAME -onboot 1 -bios $BIOS -ostype $VM_OSTYPE -cpu "$CPU_TYPE" 1>/dev/null
-    qm importdisk $VMID ${TARGET_IMAGE} $STORAGE  1>/dev/null
-    qm set $VMID -sata0 ${DISK0_REF} -boot order=sata0 -bootdisk sata0 >/dev/null
-    qm set $VMID -efidisk0 ${STORAGE}:0,efitype=4m,pre-enrolled-keys=0 >/dev/null
-    qm resize $VMID sata0 $DISK_SIZE >/dev/null
-  else
-    # Legacy BIOS images (e.g. OPNsense) use SCSI
-    # qm create must precede importdisk — Proxmox requires the VM to exist first
-    qm create $VMID -agent 1 -tablet 0 -localtime 1 \
-      -name $VMNAME -onboot 1 -bios $BIOS -ostype $VM_OSTYPE -cpu "$CPU_TYPE" -scsihw virtio-scsi-single 1>/dev/null
-    qm importdisk $VMID ${TARGET_IMAGE} $STORAGE  1>/dev/null
-    qm set $VMID -scsi0 ${DISK0_REF} -boot order=scsi0 >/dev/null
-    qm resize $VMID scsi0 $DISK_SIZE >/dev/null
-  fi
+  qm create $VMID -agent 1 -tablet 0 -localtime 1 \
+    -name $VMNAME  -onboot 1 -bios $BIOS -ostype $VM_OSTYPE -cpu "$CPU_TYPE" -scsihw virtio-scsi-single 1>/dev/null
+  qm importdisk $VMID ${TARGET_IMAGE} $STORAGE  1>/dev/null
+  qm set $VMID \
+    -scsi0 ${DISK0_REF} \
+    -boot order=scsi0   >/dev/null
+  qm resize $VMID scsi0 $DISK_SIZE  >/dev/null
 fi
 
-if [ "$IMAGETYPE" == "iso" ]; then # First use: this is used to stand up a nixos template vm from an iso image
+if [ "$IMAGETYPE" == "iso" ]; then # First use: this is used to stand up a template vm from an iso image
   info "${BOLD}Creating an ISO based VM"
-  # --localtime 0: NixOS keeps the RTC in UTC (boot.hardwareClockInLocalTime
-  # defaults to false). localtime 1 makes the guest read the clock as TZ-local
-  # and boot ahead of real time until NTP corrects it (issue #166 fix #4).
-  qm create $VMID --agent 1 --tablet 0 --localtime 0 --bios $BIOS \
-    --name $VMNAME --onboot 1 --ostype $VM_OSTYPE --cpu "$CPU_TYPE" --scsihw virtio-scsi-pci >/dev/null
-  info " - Created base VM configuration"
-  pvesm alloc $STORAGE $VMID $DISK0 4M  1>/dev/null
-  pvesm alloc $STORAGE $VMID $DISK1 $DISK_SIZE  1>/dev/null
-  info " - Created EFI disk"
-  qm set $VMID \
-    -ide3 local:iso/${IMAGE},media=cdrom\
-    -efidisk0 ${DISK0_REF} \
-    -scsi0 ${DISK1_REF},discard=on,ssd=1,size=${DISK_SIZE} \
-    -boot order='ide3;scsi0' >/dev/null
+
+  # Detect Windows OS types for special handling
+  IS_WINDOWS=false
+  case "$VM_OSTYPE" in
+    win10|win11|win2k19|win2k22|win2k25) IS_WINDOWS=true ;;
+  esac
+
+  if [ "$IS_WINDOWS" == "true" ]; then
+    # Windows VM: use q35 machine type, add TPM 2.0, mount VirtIO drivers ISO
+    info " - Windows OS detected ($VM_OSTYPE) — using q35 machine type with TPM"
+
+    # Remove any leftover VM or disk from a previous failed run.
+    # Use --purge so all disks on all storage pools are cleaned up cleanly.
+    if qm status $VMID >/dev/null 2>&1; then
+      warn " - VMID ${VMID} already exists — destroying before recreating"
+      qm stop $VMID --skiplock 2>/dev/null || true
+      qm destroy $VMID --destroy-unreferenced-disks 1 --purge 1 2>/dev/null || true
+    fi
+    for _stale_disk in 0 1 2 3; do
+      pvesm free "${STORAGE}:vm-${VMID}-disk-${_stale_disk}" 2>/dev/null || true
+    done
+
+    qm create $VMID --agent 1 --tablet 1 --localtime 1 --bios $BIOS \
+      --machine q35 --vga std \
+      --name $VMNAME --onboot 1 --ostype $VM_OSTYPE --cpu "$CPU_TYPE" --scsihw virtio-scsi-pci >/dev/null
+    info " - Created base VM configuration (q35)"
+
+    pvesm alloc $STORAGE $VMID $DISK0 4M  1>/dev/null
+    pvesm alloc $STORAGE $VMID $DISK1 $DISK_SIZE  1>/dev/null
+    # Proxmox 9/QEMU 10.x does not auto-populate the EFI NVRAM disk even when
+    # pre-enrolled-keys=1 is set — the ZFS volume stays all-zeros, causing OVMF
+    # to hang with no display.  Copy the MS vars template explicitly so OVMF gets
+    # valid NVRAM with SecureBoot keys on first boot.
+    dd if=/usr/share/pve-edk2-firmware/OVMF_VARS_4M.ms.fd \
+       of=/dev/zvol/${STORAGE}/vm-${VMID}-disk-0 bs=1M 2>/dev/null || true
+    info " - Created EFI disk (NVRAM initialised from OVMF_VARS_4M.ms.fd)"
+
+    # Add TPM 2.0 (required for Windows Server 2025 / Windows 11)
+    # TPM on local-zfs: vTPM state is cryptographically node-bound; keep on fast local storage.
+    qm set $VMID --tpmstate0 local-zfs:1,version=v2.0 >/dev/null
+    info " - Added TPM 2.0"
+
+    qm set $VMID \
+      -ide2 local:iso/${IMAGE},media=cdrom \
+      -efidisk0 ${DISK0_REF},efitype=4m,ms-cert=2023k,pre-enrolled-keys=1 \
+      -scsi0 ${DISK1_REF},discard=on,ssd=1,size=${DISK_SIZE} \
+      -boot order='scsi0;ide2' >/dev/null
+
+    # Mount VirtIO drivers ISO as secondary CD-ROM (if available)
+    VIRTIO_ISO=$(ls /var/lib/vz/template/iso/virtio-win*.iso 2>/dev/null | sort -V | tail -1)
+    if [ -n "$VIRTIO_ISO" ]; then
+      VIRTIO_ISO_NAME=$(basename "$VIRTIO_ISO")
+      qm set $VMID -ide3 local:iso/${VIRTIO_ISO_NAME},media=cdrom >/dev/null
+      info " - Mounted VirtIO drivers ISO: ${VIRTIO_ISO_NAME}"
+    else
+      warn "VirtIO drivers ISO not found in /var/lib/vz/template/iso/ — Windows will need drivers during install"
+      warn "Download from: https://fedorapeople.org/groups/virt/virtio-win/direct-downloads/stable-virtio/virtio-win.iso"
+    fi
+
+    # Attach unattended config ISO if provided — enables fully automated install.
+    # Also includes startup.nsh so the OVMF EFI Shell auto-launches the Windows
+    # bootloader: with a zeroed NVRAM the shell runs startup.nsh instead of the
+    # "Please select boot device" menu.
+    if [[ -f "/root/tappaas/autounattend.xml" ]]; then
+      apt-get install -y -q genisoimage 2>/dev/null || true
+      mkdir -p /tmp/tappaas-winconfig
+      cp /root/tappaas/autounattend.xml /tmp/tappaas-winconfig/
+      # startup.nsh: refresh device map, then scan FS0-FS9 for the Windows bootloader
+      cat > /tmp/tappaas-winconfig/startup.nsh <<'STARTUP_NSH'
+@echo -off
+map -r
+for %f run (0 9)
+  if exist FS%f:\EFI\BOOT\BOOTX64.EFI then
+    FS%f:\EFI\BOOT\BOOTX64.EFI
+  endif
+endfor
+STARTUP_NSH
+      genisoimage -quiet -J -o /var/lib/vz/template/iso/tappaas-winconfig.iso \
+          /tmp/tappaas-winconfig/ 2>/dev/null
+      rm -rf /tmp/tappaas-winconfig /root/tappaas/autounattend.xml
+      qm set $VMID -ide1 local:iso/tappaas-winconfig.iso,media=cdrom >/dev/null
+      info " - Mounted unattended config ISO (ide1)"
+    fi
+  else
+    # Linux VM: standard setup
+    qm create $VMID --agent 1 --tablet 0 --localtime 1 --bios $BIOS \
+      --name $VMNAME --onboot 1 --ostype $VM_OSTYPE --cpu "$CPU_TYPE" --scsihw virtio-scsi-pci >/dev/null
+    info " - Created base VM configuration"
+    pvesm alloc $STORAGE $VMID $DISK0 4M  1>/dev/null
+    pvesm alloc $STORAGE $VMID $DISK1 $DISK_SIZE  1>/dev/null
+    info " - Created EFI disk"
+    qm set $VMID \
+      -ide3 local:iso/${IMAGE},media=cdrom\
+      -efidisk0 ${DISK0_REF} \
+      -scsi0 ${DISK1_REF},discard=on,ssd=1,size=${DISK_SIZE} \
+      -boot order='ide3;scsi0' >/dev/null
+  fi
 fi
 # qm resize $VMID scsi0 ${DISK_SIZE} >/dev/null
 
@@ -368,10 +429,38 @@ if [ "$IMAGETYPE" == "clone" ]; then
     exit 1
   fi
 
+  # Helper: clone with live progress output via pvesh task log
+  # Usage: _clone_with_progress <node> <src-vmid> <new-vmid> <name> [via-ssh]
+  _clone_with_progress() {
+    local _node="$1" _src="$2" _new="$3" _name="$4" _via_ssh="${5:-}"
+    local _pvesh_cmd="pvesh create /nodes/${_node}/qemu/${_src}/clone --newid ${_new} --name '${_name}' --full 1 2>&1"
+    info "  Cloning template ${_src} → VM ${_new} on ${_node}..."
+    if [[ -n "$_via_ssh" ]]; then
+      # shellcheck disable=SC2029
+      ssh -o StrictHostKeyChecking=no "root@${_node}.mgmt.internal" "${_pvesh_cmd}" \
+        | while IFS= read -r _line; do
+            [[ "$_line" =~ ^UPID: ]] && continue
+            [[ -n "$_line" ]] && info "  ${_line}"
+          done
+    else
+      eval "${_pvesh_cmd}" \
+        | while IFS= read -r _line; do
+            [[ "$_line" =~ ^UPID: ]] && continue
+            [[ -n "$_line" ]] && info "  ${_line}"
+          done
+    fi
+    _clone_rc=${PIPESTATUS[0]}
+    if [[ $_clone_rc -ne 0 ]]; then
+      error "Clone failed (exit ${_clone_rc})"
+      exit 1
+    fi
+    info "  ${GN}✓${CL} Clone complete"
+  }
+
   # Check if we're running on the node that has the template
   if [ "$CURRENT_NODE" == "$TEMPLATE_NODE" ]; then
     # Local clone - template is on this node
-    qm clone "$IMAGE" "$VMID" --name "$VMNAME" --full 1 >/dev/null
+    _clone_with_progress "${CURRENT_NODE}" "${IMAGE}" "${VMID}" "${VMNAME}"
   else
     # Remote clone - need to clone on template node then migrate to current node
     info "Template is on ${TEMPLATE_NODE}, current node is ${CURRENT_NODE}"
@@ -424,58 +513,43 @@ if [ "$IMAGETYPE" == "clone" ]; then
 
     info "Cloning on ${TEMPLATE_NODE} and migrating to ${CURRENT_NODE}..."
 
-    # Clone on the template node via SSH
-    ssh -o StrictHostKeyChecking=no root@${TEMPLATE_NODE} "qm clone $IMAGE $VMID --name $VMNAME --full 1" >/dev/null
-    info " - Cloned VM ${VMID} on ${TEMPLATE_NODE}"
+    # Clone on the template node via SSH (with live progress)
+    _clone_with_progress "${TEMPLATE_NODE}" "${IMAGE}" "${VMID}" "${VMNAME}" "ssh"
 
     # Migrate the VM to the current node (online=0 means offline migration)
     info " - Migrating VM ${VMID} from ${TEMPLATE_NODE} to ${NODE}..."
-    ssh -o StrictHostKeyChecking=no root@${TEMPLATE_NODE} "qm migrate $VMID $NODE --online 0" >/dev/null
+    ssh -o StrictHostKeyChecking=no root@${TEMPLATE_NODE}.mgmt.internal "qm migrate $VMID $NODE --online 0" >/dev/null
     info " - Migration complete"
   fi
 
   # Set CPU type after cloning (clone inherits from template)
   qm set $VMID --cpu "$CPU_TYPE" >/dev/null
-
-  # Force RTC to UTC for NixOS clones. The clone inherits the template's RTC
-  # mode, and existing TAPPaaS NixOS templates were built with localtime 1,
-  # which makes fresh guests boot ahead of real time until NTP corrects them
-  # (e.g. journald emits future-dated entries that Loki then rejects). NixOS
-  # keeps the hardware clock in UTC, so pin localtime 0 here (issue #166 fix #4).
-  qm set $VMID --localtime 0 >/dev/null
 fi
 
 info "${BOLD}Configuring the $VMNAME VM settings..."
 
 qm set $VMID --description "$DESCRIPTION_HTML" >/dev/null
-qm set $VMID --serial0 socket >/dev/null
 qm set $VMID --tags $VMTAG >/dev/null
 qm set $VMID --agent enabled=1 >/dev/null
 qm set $VMID --cores $CORE_COUNT --memory $RAM_SIZE >/dev/null
-# queues=<vcpus> enables virtio multi-queue for throughput. Set at creation
-# only: changing queues on a running VM forces a NIC hot-replug that drops the
-# guest's interfaces until reboot (see issue #194), so it is never altered by
-# update flows — only baked in here when the NIC is first created.
-NET0_OPTS="virtio=${MAC0},bridge=${BRIDGE0}"
+NET0_OPTS="virtio,bridge=${BRIDGE0},macaddr=${MAC0}"
 if [ "$VLANTAG0" != "0" ]; then
   NET0_OPTS="${NET0_OPTS},tag=${VLANTAG0}"
 fi
 if [ "$TRUNKS0" != "NONE" ]; then
   NET0_OPTS="${NET0_OPTS},trunks=${TRUNKS0}"
 fi
-NET0_OPTS="${NET0_OPTS},queues=${CORE_COUNT}"
 qm set $VMID --net0 "${NET0_OPTS}" >/dev/null
 if [[ "$BRIDGE1" == "NONE" ]]; then
   info "No second bridge configured"
 else
-  NET1_OPTS="virtio=${MAC1},bridge=${BRIDGE1}"
+  NET1_OPTS="virtio,bridge=${BRIDGE1},macaddr=${MAC1}"
   if [ "$VLANTAG1" != "0" ]; then
     NET1_OPTS="${NET1_OPTS},tag=${VLANTAG1}"
   fi
   if [ "$TRUNKS1" != "NONE" ]; then
     NET1_OPTS="${NET1_OPTS},trunks=${TRUNKS1}"
   fi
-  NET1_OPTS="${NET1_OPTS},queues=${CORE_COUNT}"
   qm set $VMID --net1 "${NET1_OPTS}" >/dev/null
   info "Configured second bridge on $BRIDGE1"
 fi
@@ -490,19 +564,6 @@ if [[ "$CLOUDINIT" == "true" ]]; then
     qm set $VMID --sshkey ~/.ssh/id_rsa.pub >/dev/null
   elif [[ -f ~/tappaas/tappaas-cicd.pub ]]; then
     qm set $VMID --sshkey ~/tappaas/tappaas-cicd.pub >/dev/null
-  fi
-  # Debian/Ubuntu vendor-data snippet (issue #147): pre-installs
-  # qemu-guest-agent so Proxmox can see the VM IP before SSH bootstrap.
-  # Vendor-data layers on top of Proxmox's generated user-data; ciuser,
-  # sshkey, hostname and ipconfig0 above still apply.
-  if [[ "$OS_FAMILY" == "debian" || "$OS_FAMILY" == "ubuntu" ]]; then
-    if [[ -f /var/lib/vz/snippets/tappaas-debian-vendor.yaml ]]; then
-      qm set $VMID --cicustom "vendor=local:snippets/tappaas-debian-vendor.yaml" >/dev/null
-      info " - Attached Debian vendor-data snippet (qemu-guest-agent on first boot)"
-    else
-      info " - WARNING: $OS_FAMILY VM but vendor-data snippet not present on this node;"
-      info "   guest-agent will not be pre-installed (run cluster update.sh to deploy it)"
-    fi
   fi
   info " - Hostname set to $VMNAME via cloud-init"
   qm cloudinit update $VMID >/dev/null
@@ -590,6 +651,23 @@ function resize_disk_in_vm() {
         return 1
       fi
       ;;
+        "")
+      # Empty os_id may indicate Windows (no /etc/os-release)
+      # Try Windows resize via guest agent
+      info "No Linux OS detected — attempting Windows disk extend via guest agent"
+      qm guest exec "$vmid" -- powershell -NoProfile -Command "
+        \$partition = Get-Partition -DriveLetter C -ErrorAction SilentlyContinue
+        if (\$partition) {
+          \$maxSize = (Get-PartitionSupportedSize -DriveLetter C).SizeMax
+          if (\$partition.Size -lt \$maxSize) {
+            Resize-Partition -DriveLetter C -Size \$maxSize
+            Write-Output 'Partition C: extended'
+          } else {
+            Write-Output 'Partition C: already at maximum size'
+          }
+        }
+      " &>/dev/null || true
+      ;;
     *)
       warn "Unsupported OS '$os_id', skipping filesystem resize"
       return 1
@@ -632,9 +710,16 @@ if [ "$IMAGETYPE" == "clone" ]; then
   fi
 fi
 
-qm start $VMID >/dev/null
-echo ""
-info "${BOLD}TAPPaaS $VMNAME VM started successfully"
+# Windows clone VMs: OOBE setup is handled via QEMU guest agent in
+# cluster/services/vm/install-service.sh after this script returns.
+# Windows post-sysprep ignores CDROMs for answer files (only reads
+# C:\Windows\Panther\unattend.xml), so the old ISO approach is not used.
+
+if [[ "${IMAGETYPE}" != "iso" ]]; then
+    qm start $VMID >/dev/null
+    echo ""
+    info "${BOLD}TAPPaaS $VMNAME VM started successfully"
+fi
 
 # Resize filesystem inside VM if disk was expanded
 if [ "$NEEDS_RESIZE" == "true" ]; then
