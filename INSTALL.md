@@ -38,9 +38,18 @@ That's it. Everything else is created by the install.
 
 1. **Install Proxmox VE 9.1** on the first machine — download the ISO and create
    a bootable USB per the official guide:
-   <https://pve.proxmox.com/wiki/Installation>. Set hostname `tappaas1` and give
-   it the free IP from your existing network (the installer's normal network
-   screen). *(Hostnames/subnet are defaults — see appendix.)*
+   <https://pve.proxmox.com/wiki/Installation>. On the installer screens:
+   - **Hostname (FQDN):** `tappaas1.mgmt.internal` — TAPPaaS uses the internal
+     management domain `mgmt.internal`, **not** your public domain. (The public
+     domain is supplied later, in 2.3.)
+   - **Email:** a **working** address you actually monitor — Proxmox sends
+     system/health notifications here, and TAPPaaS reuses it as the admin email.
+   - **Management interface / IP / netmask / gateway / DNS:** must be **valid for
+     your existing network** — use the free IP, and the real gateway and DNS
+     server of the network this node currently sits on (so it has internet for
+     the bootstrap).
+
+   *(Hostnames/subnet are defaults — see appendix.)*
 
 2. **Run the bootstrap** from the Proxmox **node console/shell** (not SSH — the
    network step may move the interface):
@@ -75,33 +84,35 @@ first — see the network section.)*
 
 ### 2.3 Build the platform (NixOS template + CICD mothership)
 
-Once all nodes + the firewall are up, on `tappaas1`:
+Once all nodes + the firewall are up, on `tappaas1` run a **single command**:
 
 ```bash
-~/tappaas/install-platform.sh
+~/tappaas/install-platform.sh --domain "yourdomain.com"
 ```
 
-This imports the **prebuilt NixOS VM template** (no manual NixOS install) and
-clones it into the **`tappaas-cicd` mothership** VM. It does **not** finish the
-mothership for you — `install-platform.sh` prints the cicd's address; SSH in (the
-node's root key is already authorized on it) and run the two installers:
+This is fully automated end-to-end:
 
-```bash
-ssh tappaas@tappaas-cicd          # (or the DHCP address the script prints)
+1. Imports the **prebuilt NixOS VM template** (no manual NixOS install) and
+   finalises it into a Proxmox template.
+2. Clones it into the **`tappaas-cicd` mothership** VM.
+3. SSHes into the mothership (the node's root key is already authorized on it)
+   and runs the two installers itself — `install1.sh` (clone + `nixos-rebuild`),
+   **reboots** the VM, then `install2.sh` (platform tooling + reverse proxy) —
+   including wiring up cicd→node SSH **with no password prompts** (the node
+   pre-authorizes cicd's key on every node).
 
-BRANCH="main"                     # the branch you're installing from
-curl -fsSL "https://raw.githubusercontent.com/TAPPaaS/TAPPaaS/${BRANCH}/src/foundation/tappaas-cicd/install1.sh" -o /tmp/install1.sh
-bash /tmp/install1.sh "https://github.com/TAPPaaS/TAPPaaS.git" "$BRANCH"   # clone + nixos-rebuild
-sudo reboot                       # install1 asks for this; reconnect afterwards
+After it finishes, cicd owns the platform (VLANs, reverse proxy, firewall rules)
+and is where you install everything else.
 
-cd TAPPaaS/src/foundation/tappaas-cicd
-./install2.sh --domain "yourdomain.com"   # platform tooling + reverse proxy
-```
-
-`install2.sh` runs `ssh-copy-id` to each node, so it will **prompt for each
-node's root password** (to set up cicd→node SSH). After this, cicd owns the
-platform (VLANs, reverse proxy, firewall rules) and is where you install
-everything else. *(The domain is set here, once.)*
+> **Domain:** pass `--domain` to set the public TLS domain once. (It can't be
+> auto-detected — the Proxmox FQDN is the internal `mgmt.internal` domain; the
+> admin **email** *is* read from the node automatically.) If you omit it, a
+> placeholder is used that you set later with
+> `create-configuration.sh --update --domain <yourdomain>`.
+>
+> Use a non-`main` branch with `--branch <name>`, or `--manual-cicd` to perform
+> the in-VM `install1`/`install2` steps by hand instead — see
+> [Appendix: install options](#appendix-install-options).
 
 ---
 
@@ -218,6 +229,8 @@ Defaults are chosen so the commands above "just work". Override as needed:
 | Hostnames `tappaas1/2/3` | Set during the Proxmox install; the **first** node must be `tappaas1` (it creates the cluster). |
 | Management subnet `10.0.0.0/24`, gateway/firewall `10.0.0.1` | `config-network.sh --mgmt-ip <CIDR> --gateway <ip>`; firewall LAN lives in `firewall/firewall-config.xml.template`. |
 | Auto cluster create/join | `install.sh --cluster` / `--join` / `--no-cluster`. |
+| Platform install branch / domain | `install-platform.sh --branch <name> --domain <domain>`. |
+| Automated vs. manual cicd install | `install-platform.sh` automates the in-VM install over SSH; pass `--manual-cicd` to run `install1.sh`/`install2.sh` by hand inside the VM instead. |
 | ZFS pools (`tankXY`, topology) | `config-storage.sh --pool name=topology:disks` (interactive by default). |
 | Firewall root password | `config-firewall.sh --root-pw <pw>` (otherwise prompted/generated; the API key is always unique per deploy). |
 | VM sizing, storage, network zone per module | edit the module's `<name>.json` (cores, memory, diskSize, storage, zone0/bridge0). |
