@@ -19,6 +19,81 @@ A consumer module opts in by adding the capability to its `dependsOn`, e.g.:
 "dependsOn": ["cluster:vm", "firewall:proxy", "firewall:rules"]
 ```
 
+## Installing the firewall (bootstrap)
+
+The firewall is installed **during foundation bootstrap, before tappaas-cicd
+exists**. `config-firewall.sh` stands up the OPNsense VM and seeds a complete
+management-network config via the OPNsense **importer**, so it comes up fully
+functional (LAN, DNS/DHCP, static hosts, hostname, API key) with **no GUI
+clicking** — replacing the long manual GUI procedure. The VLAN/zone/proxy/rule
+setup is layered on later by the opnsense-controller (`zone-manager`,
+`caddy-manager`, `rules-manager`) inside cicd, which connects with the API key
+seeded here.
+
+### Image (issue #182)
+
+The firewall installs from the OPNsense **dvd installer ISO** onto an
+**expandable UFS disk** (32G). It no longer uses the `nano` image, whose fixed
+raw layout could not be grown and caused disk-full update failures.
+
+### Files
+
+| File | Role |
+|------|------|
+| `config-firewall.sh` | Bootstrap orchestrator — run on a PVE node; creates the VM, seeds config, guides the installer. |
+| `firewall-config.xml.template` | Parameterized OPNsense `config.xml` (placeholders `@APIKEYS@`, `@ROOT_PW_HASH@`). Other values are TAPPaaS conventions (mgmt `10.0.0.0/24`, `internal`/`mgmt.internal`, static hosts). No private keys/certs are committed; OPNsense regenerates the GUI cert on first boot. |
+
+### Procedure
+
+1. **Prerequisite — node networking.** Build the `lan`/`wan` bridges first (the
+   OPNsense VM attaches `net0→lan`, `net1→wan`):
+   ```bash
+   ~/tappaas/config-network.sh --lan-port <ifX> --wan-port <ifY>
+   ```
+2. **Bootstrap the firewall** (downloads + decompresses the dvd ISO, generates
+   an API key, builds the importer drive, creates and starts the VM):
+   ```bash
+   curl -fsSL https://raw.githubusercontent.com/TAPPaaS/TAPPaaS/main/src/foundation/firewall/config-firewall.sh >/root/tappaas/config-firewall.sh
+   chmod +x /root/tappaas/config-firewall.sh
+   /root/tappaas/config-firewall.sh
+   ```
+   It prompts for a root password (or generates one) and writes the API
+   credentials to `~/.opnsense-credentials.txt` for cicd.
+3. **Complete the OPNsense installer in the Proxmox console** (the only manual
+   step — OPNsense has no unattended install). Open the noVNC console before
+   powering on (`config-firewall.sh` waits for you):
+   - Boot runs ~20s; a `Root mount waiting for: CAM` pause is **normal**, not a
+     hang. **Ignore** the brief "Press any key … importer" prompt — we import
+     inside the installer instead (this is what actually carries onto the disk;
+     the boot-time importer only seeds the live environment).
+   - Log in as `installer` / `opnsense` (the default password).
+   - In the installer menu, **first choose `Import Config`** → select the
+     `OPNCONFIG` disk (the small 16M one, usually `da1`) → "Configuration import
+     completed".
+   - Then choose **Install (UFS)**: accept the keymap, select the 32G target
+     disk (`da0`), confirm the **erase/overwrite**, then **Complete install** →
+     reboot.
+   - The installed firewall comes up as `firewall` / LAN `10.0.0.1` (root
+     password = the one you set). **If LAN shows `192.168.1.1`, the import was
+     skipped** — reinstall and be sure to run `Import Config` *before* Install.
+4. **Confirm** at the script's prompt; it flips boot order to the disk, detaches
+   the installer CD + importer drive, and verifies `10.0.0.1` is reachable.
+5. **Swap cables** — point the node at the firewall for routing + DNS:
+   ```bash
+   ~/tappaas/config-network.sh --swap-cables
+   ```
+
+### Bootstrap vs cicd
+
+| Stage | Configures | Tooling |
+|------|------------|---------|
+| Bootstrap | VM + expandable UFS disk; LAN `10.0.0.1`; DHCP; Unbound+Dnsmasq DNS; mgmt static hosts; hostname; **API key enabled** | `config-firewall.sh` + seeded `config.xml` (no cicd) |
+| Later | VLANs/zones, per-module reverse proxy, firewall rules, ACME certs | opnsense-controller (`zone-manager`/`caddy-manager`/`rules-manager`) in tappaas-cicd |
+
+> **Maintenance note:** `firewall-config.xml.template` must track the OPNsense
+> version in `firewall.json` — OPNsense's `config.xml` format can change across
+> releases.
+
 ## Per-Module Firewall Rules
 
 The `firewall:rules` capability lets each module declare its inbound and
@@ -201,6 +276,55 @@ rules-manager remove-alias <name>
 
 The CLI is normally invoked by the `services/rules/*.sh` capability scripts on
 the consumer module's lifecycle hooks, but can be run directly for debugging.
+
+## Test network on a dedicated physical port (issue #225)
+
+`test-network.sh` stands up a throwaway, isolated test network served on a
+**spare physical NIC** of the node running the firewall VM — separate from the
+VLAN trunk that carries the production zones. Plug a switch or AP into the spare
+port and you get an isolated, internet-connected sandbox without touching
+`zones.json` or the trunk.
+
+```bash
+test-network.sh                       # interactive: pick a vacant port, default 172.17.3.1/24
+test-network.sh --port enp3s0         # non-interactive port choice
+test-network.sh --subnet 172.17.9.1/24 --bridge testbr2
+test-network.sh --status              # show current state
+test-network.sh --delete              # tear down in reverse order
+test-network.sh --check-mode ...      # dry run, no changes
+```
+
+What it does, in order (and reverses on `--delete`):
+
+1. Finds the node hosting the firewall VM (`pvesh`), discovers vacant physical
+   ports, and prompts for one.
+2. Creates a Linux bridge on that node and enslaves the port, persisted in
+   `/etc/network/interfaces` (backed up first) and applied with `ifreload`.
+3. Attaches the bridge to the firewall VM as a new virtio NIC (`qm set --netN`),
+   which appears in OPNsense as `vtnetN`.
+4. Drives the OPNsense side via `test-network-manager` (a new
+   `opnsense-controller` entry point): assigns the interface with a static
+   gateway IP, enables DHCP, and installs the routing/firewall policy.
+
+**Routing policy** (asymmetric, per the issue):
+
+| From → To | Action | Notes |
+|-----------|--------|-------|
+| test → internet | allow | OPNsense automatic outbound NAT covers `172.16/12` |
+| test → internal (RFC1918, incl. mgmt) | block | isolation |
+| mgmt → test | allow | return traffic is stateful, so test→mgmt stays blocked |
+
+All OPNsense artefacts (interface, DHCP range, rules) carry a `test-net`
+description so teardown removes exactly what setup created.
+
+> **Note:** `test-network-manager` is a new console-script entry point in the
+> `opnsense-controller` package. Rebuild that package (e.g. via
+> `update-tappaas` / `nixos-rebuild`) so the wrapper lands in `PATH`;
+> `test-network.sh` falls back to `python3 -m opnsense_controller.test_network_cli`
+> when the wrapper is not yet present.
+
+See [`docs/test-network-setup.md`](docs/test-network-setup.md) for the full
+setup/teardown runbook, options, verification, and troubleshooting.
 
 ## Related files
 

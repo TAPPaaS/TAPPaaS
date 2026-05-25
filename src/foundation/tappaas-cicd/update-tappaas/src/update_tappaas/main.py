@@ -28,7 +28,7 @@ UPDATE_MODULE_CMD = "/home/tappaas/bin/update-module.sh"
 FOUNDATION_MODULES = [
     "cluster",       # Proxmox nodes (apt update/upgrade + file distribution)
     "tappaas-cicd",  # Mothership VM
-    "template",      # NixOS/Debian VM templates
+    "templates",     # NixOS/Debian VM templates (config: templates.json)
     "firewall",      # OPNsense firewall
     "backup",        # Proxmox Backup Server
     "identity",      # Authentik identity provider

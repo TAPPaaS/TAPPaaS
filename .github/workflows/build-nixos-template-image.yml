@@ -1,0 +1,102 @@
+# Build the prebuilt TAPPaaS NixOS VM template image and publish it as a
+# GitHub Release asset, so the foundation install can import a ready-made,
+# fully-configured qcow2 instead of doing a manual NixOS install.
+#
+# The image is built from src/foundation/templates/flake.nix (which bakes in
+# tappaas-common.nix). It is an EFI qcow2 — Proxmox imports it with
+# `qm importdisk` and boots it under OVMF (see install-platform.sh).
+#
+# Trigger: push a tag of the form `nixos-template-v<version>` (e.g.
+# `nixos-template-v1.0`), or run the workflow manually (workflow_dispatch).
+# Open-source repo ⇒ Actions minutes and Release hosting/bandwidth are free.
+name: Build NixOS template image
+
+on:
+  push:
+    tags:
+      - "nixos-template-v*"
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version label for the release (e.g. 1.0). Used when run manually."
+        required: true
+        default: "0.0-dev"
+
+# The auto-injected GITHUB_TOKEN needs write access to create the release and
+# upload the asset. No personal access token is required.
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@v4
+
+      # The image is ~6 GB raw; the hosted runner's root disk is tight, so
+      # reclaim the space taken by toolchains we do not need.
+      - name: Free up disk space
+        run: |
+          sudo rm -rf /usr/share/dotnet /opt/ghc /usr/local/lib/android \
+                      /usr/local/share/boost "$AGENT_TOOLSDIRECTORY" || true
+          df -h /
+
+      - name: Install Nix
+        uses: DeterminateSystems/nix-installer-action@main
+        with:
+          extra-conf: |
+            experimental-features = nix-command flakes
+
+      - name: Determine version
+        id: ver
+        run: |
+          if [ "${{ github.event_name }}" = "push" ]; then
+            v="${GITHUB_REF_NAME#nixos-template-v}"
+          else
+            v="${{ github.event.inputs.version }}"
+          fi
+          echo "version=${v}" >>"$GITHUB_OUTPUT"
+          echo "tag=nixos-template-v${v}" >>"$GITHUB_OUTPUT"
+          echo "Building tappaas-nixos image version ${v}"
+
+      - name: Build the EFI qcow2 image
+        run: |
+          nix build --print-build-logs --no-write-lock-file \
+            'path:./src/foundation/templates#packages.x86_64-linux.image' \
+            -o result-image
+
+      - name: Compress the image
+        id: pack
+        run: |
+          src="$(ls result-image/*.qcow2)"
+          # Stable, unversioned asset name so consumers can always fetch
+          # .../releases/latest/download/tappaas-nixos.qcow2.zst — the release
+          # TAG carries the version. tappaas-nixos.json points at exactly this.
+          out="tappaas-nixos.qcow2.zst"
+          # readlink: dereference the Nix store path so we compress real bytes.
+          zstd -T0 -19 --long=27 "$(readlink -f "$src")" -o "$out"
+          ls -lh "$out"
+          # Record the uncompressed disk size for the consumer (diskSize sanity).
+          echo "asset=${out}" >>"$GITHUB_OUTPUT"
+          {
+            echo "## tappaas-nixos ${{ steps.ver.outputs.version }}"
+            echo ""
+            echo "Prebuilt, pre-configured NixOS VM template image (EFI qcow2, zstd-compressed)."
+            echo ""
+            echo "Import on a Proxmox node:"
+            echo '```'
+            echo "zstd -d ${out} -o tappaas-nixos.qcow2"
+            echo "qm importdisk <vmid> tappaas-nixos.qcow2 <storage>"
+            echo '```'
+            echo ""
+            echo "Or just run \`install-platform.sh\` on the first node, which does this for you."
+          } >release-notes.md
+
+      - name: Publish the Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.ver.outputs.tag }}
+          name: NixOS template ${{ steps.ver.outputs.version }}
+          body_path: release-notes.md
+          files: ${{ steps.pack.outputs.asset }}

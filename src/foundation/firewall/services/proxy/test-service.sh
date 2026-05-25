@@ -71,6 +71,16 @@ fi
 PROXY_PORT=$(jq -r '.proxyPort // 80' "${MODULE_JSON}")
 UPSTREAM="${VMNAME}.${ZONE}.internal"
 
+# Is this service exposed to the internet, or internal-only? proxyAllowedZones
+# containing "internet" means public. An internal-only service may legitimately
+# have no working public TLS cert yet (e.g. the DNS-01 provider credentials are
+# not configured), so a failing HTTPS check is a warning for it — not a hard
+# failure that should block the install.
+PROXY_PUBLIC=0
+if jq -e '(.proxyAllowedZones // []) | index("internet")' "${MODULE_JSON}" >/dev/null 2>&1; then
+    PROXY_PUBLIC=1
+fi
+
 info "  ${BOLD}firewall:proxy tests for ${BL}${MODULE}${CL}"
 info "    Domain: ${PROXY_DOMAIN:-unknown}"
 
@@ -109,20 +119,34 @@ fi
 # ── Test 3: HTTPS endpoint responds ─────────────────────────────────
 
 info "  Check 3: HTTPS endpoint"
-if [[ -n "${PROXY_DOMAIN}" ]]; then
-    http_code=$(curl -sk -o /dev/null -w '%{http_code}' \
-        --max-time 10 --resolve "${PROXY_DOMAIN}:443:$(dig +short A "${PROXY_DOMAIN}" 2>/dev/null | head -1)" \
-        "https://${PROXY_DOMAIN}/" 2>/dev/null) || true
-    if [[ "${http_code}" =~ ^(200|301|302|303|307|308)$ ]]; then
-        pass "HTTPS responding (status ${http_code})"
-    elif [[ -n "${http_code}" && "${http_code}" != "000" ]]; then
-        # Got a response but not a redirect/success — warn but pass
-        pass "HTTPS responding (status ${http_code} — may require auth)"
-    else
-        fail "HTTPS not responding (status: ${http_code:-timeout})"
-    fi
-else
+if [[ -z "${PROXY_DOMAIN}" ]]; then
     fail "Cannot determine proxy domain"
+else
+    resolved_ip="$(dig +short A "${PROXY_DOMAIN}" 2>/dev/null | head -1)"
+    if [[ -z "${resolved_ip}" ]]; then
+        # The public domain is not in DNS yet — e.g. a test/placeholder domain, or
+        # before the operator adds the public record / the DNS-01 cert issues. We
+        # cannot meaningfully test HTTPS for a host that does not resolve, so SKIP
+        # rather than fail (cf. the cluster:ha single-node skip). A real, published
+        # domain still gets the full check below.
+        warn "    ${PROXY_DOMAIN} does not resolve in public DNS — skipping HTTPS check (domain not published yet)"
+    else
+        http_code=$(curl -sk -o /dev/null -w '%{http_code}' \
+            --max-time 10 --resolve "${PROXY_DOMAIN}:443:${resolved_ip}" \
+            "https://${PROXY_DOMAIN}/" 2>/dev/null) || true
+        if [[ "${http_code}" =~ ^(200|301|302|303|307|308)$ ]]; then
+            pass "HTTPS responding (status ${http_code})"
+        elif [[ -n "${http_code}" && "${http_code}" != "000" ]]; then
+            # Got a response but not a redirect/success — warn but pass
+            pass "HTTPS responding (status ${http_code} — may require auth)"
+        elif [[ "${PROXY_PUBLIC}" -eq 1 ]]; then
+            fail "HTTPS not responding (status: ${http_code:-timeout})"
+        else
+            # Internal-only service: a missing/invalid public cert (e.g. DNS-01
+            # provider creds not set up yet) must not block the install.
+            warn "    HTTPS not responding (status: ${http_code:-timeout}) — internal-only service; public TLS cert/DNS-01 not configured yet (warning, not a failure)"
+        fi
+    fi
 fi
 
 # ── Deep mode tests ─────────────────────────────────────────────────

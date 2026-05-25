@@ -156,17 +156,22 @@ if [[ "$FIREWALL_AVAILABLE" == "true" ]]; then
         }
     fi
 
-    # Update the firewall module
-    /home/tappaas/bin/update-module.sh firewall --no-snapshot
-
-    # Setup Caddy reverse proxy on the firewall
-    # (needs to be after update.sh as it relies on opnsense-controller to be installed)
+    # Set up Caddy on the firewall BEFORE updating the firewall module. The
+    # firewall module's firewall:proxy update-service calls the OPNsense Caddy
+    # API (/api/caddy/...), which 404s until the os-caddy plugin is installed —
+    # and installing it is setup-caddy.sh's job. (It relies on opnsense-controller,
+    # which the tappaas-cicd update above already installed.) On a long-lived
+    # firewall os-caddy was already present, masking the ordering; the prebuilt
+    # image has no plugins, so it must run first.
     echo ""
-    info "Setting up Caddy reverse proxy..."
+    info "Setting up Caddy reverse proxy (installs os-caddy)..."
     chmod +x /home/tappaas/TAPPaaS/src/foundation/tappaas-cicd/scripts/setup-caddy.sh
     /home/tappaas/TAPPaaS/src/foundation/tappaas-cicd/scripts/setup-caddy.sh || {
         warn "Caddy setup encountered issues. Please review and complete manually."
     }
+
+    # Update the firewall module (now that os-caddy/the Caddy API is available).
+    /home/tappaas/bin/update-module.sh firewall --no-snapshot
 else
     echo ""
     warn "Skipping firewall update (no OPNsense firewall)."
@@ -174,6 +179,12 @@ else
     warn "When modules with firewall:proxy dependency are installed,"
     warn "you will see manual configuration instructions for your firewall."
 fi
+
+# Completion marker. Written ONLY here, at the very end, so a re-run can tell a
+# finished install from one that wrote configuration.json early then failed later
+# (install-platform.sh Phase B keys its idempotent skip off this file).
+mkdir -p /home/tappaas/config
+touch /home/tappaas/config/.tappaas-cicd-installed
 
 echo ""
 info "${GN}✓${CL} TAPPaaS-CICD installation completed successfully."
