@@ -49,6 +49,8 @@ function warn() {
   echo -e "${YW}[Warning]${CL} ${msg}"
 }
 
+function error() { echo -e "${RD}[Error]${CL} $*" >&2; }
+
 function create_vm_descriptions_html() {
   local TEXT="$1"
   DESCRIPTION_HTML=$(

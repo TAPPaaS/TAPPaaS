@@ -11,6 +11,7 @@
     "node": "tappaas1",
     "zone0": "srv",
     "mac0": "02:57:4E:A6:B2:10",
+    "cloudInit": false,
     "windows": {
         "enableRDP": false
     },

@@ -163,6 +163,17 @@ if [[ "$_is_windows" == "true" && "$IMAGETYPE" == "clone" ]]; then
 
     info "Injecting Windows OOBE setup via guest agent (hostname: ${VMNAME})..."
 
+    info "Waiting for QEMU guest agent on ${VMNAME}..."
+    _ga_elapsed=0; _ga_max=300
+    while [[ $_ga_elapsed -lt $_ga_max ]]; do
+        if ssh -n -o BatchMode=yes -o ConnectTimeout=5 "root@${NODE}.${MGMT}.internal" \
+            "qm guest cmd ${VMID} ping >/dev/null 2>&1"; then
+            info "  Guest agent ready"
+            break
+        fi
+        sleep 10; _ga_elapsed=$((_ga_elapsed + 10))
+    done
+
     # Build a PowerShell here-string and encode it as UTF-16LE base64.
     # Using -EncodedCommand avoids ALL shell quoting issues with passwords/keys.
     #
@@ -212,6 +223,16 @@ if [[ "$_is_windows" == "true" && "$IMAGETYPE" == "clone" ]]; then
     # Wait for the VM to come back up (reboot: running → stopped → running)
     info "Waiting for VM ${VMNAME} to reboot after OOBE setup..."
     _rb_elapsed=0; _rb_max=180
+    # Wait for stopped first (VM shutting down for reboot)
+    while [[ $_rb_elapsed -lt $_rb_max ]]; do
+        _rb_state=$(ssh -n -o BatchMode=yes -o ConnectTimeout=5 \
+            "root@${NODE}.${MGMT}.internal" \
+            "qm status ${VMID} 2>/dev/null | awk '{print \$2}'" 2>/dev/null) || _rb_state=""
+        [[ "$_rb_state" == "stopped" ]] && break
+        sleep 5; _rb_elapsed=$((_rb_elapsed + 5))
+    done
+    # Then wait for running again
+    _rb_elapsed=0
     while [[ $_rb_elapsed -lt $_rb_max ]]; do
         _rb_state=$(ssh -n -o BatchMode=yes -o ConnectTimeout=5 \
             "root@${NODE}.${MGMT}.internal" \
@@ -219,7 +240,7 @@ if [[ "$_is_windows" == "true" && "$IMAGETYPE" == "clone" ]]; then
         [[ "$_rb_state" == "running" ]] && break
         sleep 5; _rb_elapsed=$((_rb_elapsed + 5))
     done
-    info "  ${GN}✓${CL} VM ${VMNAME} is back up — SSH will be available once Windows finishes booting"
+    info "  VM ${VMNAME} is back up — SSH will be available once Windows finishes booting"
 
     # Register DNS: get current IP from guest agent and update the DNS entry.
     # Without this, the hostname resolves to a stale IP after re-installs with a new MAC.

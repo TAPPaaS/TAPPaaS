@@ -1,6 +1,6 @@
 {
   "description": "The TAPPaaS NixOS VM Template",
-  "version": "1.0",
+  "version": "1.1",
   "location": "/home/tappaas/TAPPaaS/src/foundation/templates",
   "vmname": "tappaas-nixos",
   "vmid": 8080,
@@ -9,9 +9,10 @@
   "memory": "4096",
   "diskSize": "16G",
   "storage": "tanka1",
-  "imageType": "iso",
-  "image": "latest-nixos-graphical-x86_64-linux.iso",
-  "imageLocation": "https://channels.nixos.org/nixos-25.05/",
+  "bios": "ovmf",
+  "imageType": "img",
+  "image": "tappaas-nixos.qcow2.zst",
+  "imageLocation": "https://github.com/TAPPaaS/TAPPaaS/releases/download/nixos-template-v1.1/",
   "bridge0": "lan",
   "zone0": "mgmt",
   "dependsOn": [
