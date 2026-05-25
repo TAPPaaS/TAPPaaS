@@ -173,18 +173,43 @@ for _h in "$API_SECRET_HASH" "$ROOT_PW_HASH"; do
   case "$_h" in '$6$'*) ;; *) die "Generated hash is invalid ('${_h}') — refusing to build a broken config.xml" ;; esac
 done
 
-# ── 2. Render the unique config.xml (SSH off — deployed posture) ─────
+# ── 2. Render the unique config.xml (SSH KEY-ONLY — deployed posture) ─
+# The deployed firewall enables SSH but ONLY for key auth (no password login),
+# with the TAPPaaS control plane's key authorized. The cicd mothership manages
+# the firewall over SSH (the VLAN-assign PHP patch, the QEMU guest agent) in
+# addition to the API — so SSH must be reachable, but key-only keeps it hardened
+# (the bootstrap image's password login is replaced by this push).
 WORKDIR="$(mktemp -d)"
 CONFIG_XML="${WORKDIR}/config.xml"
 APIKEYS_VALUE="${API_KEY}|${API_SECRET_HASH}"
+
+# Control-plane public key to authorize for root SSH on the firewall. This node
+# (and, via Phase B of install-platform, the cicd) uses it to reach the firewall.
+NODE_PUBKEY_FILE=""
+for _k in /root/.ssh/id_rsa.pub /root/.ssh/id_ed25519.pub; do
+  [[ -f "$_k" ]] && { NODE_PUBKEY_FILE="$_k"; break; }
+done
+[[ -n "$NODE_PUBKEY_FILE" ]] || die "No node root SSH public key (/root/.ssh/id_rsa.pub) — cannot authorize control-plane SSH to the firewall."
+# OPNsense stores <authorizedkeys> as base64 of the authorized_keys file content.
+ROOT_AUTHKEYS_B64="$(base64 -w0 "$NODE_PUBKEY_FILE")"
+
 export APIKEYS_VALUE ROOT_PW_HASH
 awk '
   { gsub(/@APIKEYS@/, ENVIRON["APIKEYS_VALUE"]);
     gsub(/@ROOT_PW_HASH@/, ENVIRON["ROOT_PW_HASH"]);
     print }
 ' "$TEMPLATE" > "$CONFIG_XML"
+
+# Enable SSH KEY-ONLY (add <enabled>/<permitrootlogin>, but NOT <passwordauth>),
+# and authorize the control-plane key on root. Done here (not in the template) so
+# the shared template + the password-login bootstrap image are unaffected.
+# base64 uses only [A-Za-z0-9+/=], none of which clash with the '#' sed delimiter.
+sed -i 's#<ssh>#<ssh><enabled>enabled</enabled><permitrootlogin>1</permitrootlogin>#' "$CONFIG_XML"
+sed -i "s#<authorizedkeys/>#<authorizedkeys>${ROOT_AUTHKEYS_B64}</authorizedkeys>#" "$CONFIG_XML"
+
 grep -qE '@[A-Z_]+@' "$CONFIG_XML" && warn "Unsubstituted @PLACEHOLDER@ remains in config.xml — check the template."
-info "Rendered unique config.xml ($(wc -l <"$CONFIG_XML") lines)"
+grep -q '<enabled>enabled</enabled>' "$CONFIG_XML" || warn "SSH enable not applied to config.xml — check the <ssh> block."
+info "Rendered unique config.xml ($(wc -l <"$CONFIG_XML") lines; SSH key-only, control-plane key authorized)"
 
 # ── 3. Create + boot the firewall VM from the prebuilt image ─────────
 info "Creating the firewall VM from the prebuilt image (downloads + imports)..."

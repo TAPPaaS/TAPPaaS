@@ -175,5 +175,11 @@ else
     warn "you will see manual configuration instructions for your firewall."
 fi
 
+# Completion marker. Written ONLY here, at the very end, so a re-run can tell a
+# finished install from one that wrote configuration.json early then failed later
+# (install-platform.sh Phase B keys its idempotent skip off this file).
+mkdir -p /home/tappaas/config
+touch /home/tappaas/config/.tappaas-cicd-installed
+
 echo ""
 info "${GN}✓${CL} TAPPaaS-CICD installation completed successfully."

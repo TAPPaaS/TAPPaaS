@@ -142,6 +142,42 @@ distribute_cicd_key() {
   done < <(pvesh get /cluster/resources --type node --output-format json 2>/dev/null | jq -r '.[].node')
 }
 
+# Propagate the firewall API credentials to the cicd. config-firewall.sh wrote
+# them to THIS node's /root/.opnsense-credentials.txt; the cicd's
+# opnsense-controller / setup-caddy read /home/tappaas/.opnsense-credentials.txt.
+propagate_fw_credentials() {
+  local creds="/root/.opnsense-credentials.txt"
+  if [[ ! -s "$creds" ]]; then
+    warn "No ${creds} on this node — cicd will lack firewall API credentials (firewall mgmt will fail)."
+    return 0
+  fi
+  info "Copying firewall API credentials to cicd..."
+  if cicd_ssh "umask 077; cat > /home/tappaas/.opnsense-credentials.txt && chmod 600 /home/tappaas/.opnsense-credentials.txt" < "$creds"; then
+    info "  ${GN}✓${CL} API credentials copied to cicd"
+  else
+    warn "  could not copy API credentials to cicd"
+  fi
+}
+
+# Give the cicd SSH access to the firewall. config-firewall.sh authorized THIS
+# node's control-plane key on the firewall (key-only SSH); the cicd reaches the
+# firewall over SSH for the VLAN-assign PHP patch (pre-update.sh) and the QEMU
+# guest agent (install2.sh). Rather than mutate the firewall config to add a
+# second key, the cicd reuses the node's already-authorized key: copy it over and
+# point firewall SSH at it via ~/.ssh/config. (Single-operator control plane —
+# the node already injects its key into cicd and cicd's key onto the nodes.)
+grant_cicd_firewall_access() {
+  local nodekey=""
+  for _k in /root/.ssh/id_rsa /root/.ssh/id_ed25519; do [[ -f "$_k" ]] && { nodekey="$_k"; break; }; done
+  [[ -n "$nodekey" ]] || { warn "No node private key found — cicd cannot SSH the firewall."; return 0; }
+  info "Granting cicd SSH access to the firewall (via the control-plane key)..."
+  cicd_ssh "umask 077; mkdir -p /home/tappaas/.ssh && cat > /home/tappaas/.ssh/tappaas-fw && chmod 600 /home/tappaas/.ssh/tappaas-fw" < "$nodekey" || {
+    warn "  could not copy the firewall access key to cicd"; return 0; }
+  cicd_ssh 'k=/home/tappaas/.ssh/config; touch "$k"; chmod 600 "$k"; grep -q "Host firewall" "$k" 2>/dev/null || printf "Host firewall.mgmt.internal firewall.internal 10.0.0.1\n  User root\n  IdentityFile /home/tappaas/.ssh/tappaas-fw\n  StrictHostKeyChecking accept-new\n" >> "$k"' \
+    && info "  ${GN}✓${CL} cicd can now SSH root@firewall (control-plane key)" \
+    || warn "  could not write cicd ~/.ssh/config for the firewall"
+}
+
 # Fallback: print the manual in-VM install steps (old behaviour / --manual-cicd).
 print_manual_cicd() { # print_manual_cicd <vmid> <domain>
   local cicdid="$1" dom="$2"
@@ -234,8 +270,8 @@ build_cicd() {
   fi
 
   # Skip if cicd already looks installed (idempotent re-runs).
-  if cicd_ssh 'test -f /home/tappaas/config/configuration.json' 2>/dev/null; then
-    info "cicd already appears installed (configuration.json present) — skipping in-VM install."
+  if cicd_ssh 'test -f /home/tappaas/config/.tappaas-cicd-installed' 2>/dev/null; then
+    info "cicd already fully installed (completion marker present) — skipping in-VM install."
     return 0
   fi
 
@@ -260,6 +296,12 @@ build_cicd() {
     print_manual_cicd "$cicdid" "$dom"
     return 0
   fi
+
+  # B.3.5 — hand the cicd what it needs to manage the firewall: the API
+  #          credentials (for opnsense-controller / caddy) and SSH access (for the
+  #          VLAN-assign PHP patch + guest agent that install2/pre-update use).
+  propagate_fw_credentials
+  grant_cicd_firewall_access
 
   # B.4 — platform tooling + reverse proxy (install2.sh). Pass --domain only when
   #        one was supplied; otherwise install2 keeps its placeholder default.
