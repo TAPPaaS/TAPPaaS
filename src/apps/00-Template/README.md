@@ -80,6 +80,17 @@ Modify it to set good defaults for your module. Installers can further customize
 | High Availability | Add `HANode: "tappaas2"`, `replicationSchedule: "*/15"` |
 | Multi-NIC | Add `bridge1`, `zone1` fields |
 
+#### Template dependencies and `autoInstall`
+
+Some modules clone from a **VM template** rather than downloading an image directly (e.g. `windows-server` clones from `tappaas-winserver`, VMID 8081). If the template doesn't exist when you run `install-module.sh`, TAPPaaS checks the template JSON for the `autoInstall` flag:
+
+| `autoInstall` | What happens |
+|---------------|-------------|
+| `true` | Template is built automatically before the clone proceeds — no operator input needed (e.g. `tappaas-winserver` uses `autounattend.xml`) |
+| `false` | Install stops with an actionable error — operator must build the template manually first (e.g. `tappaas-nixos` requires completing the graphical installer) |
+
+This flag lives in the **template's** JSON (`src/foundation/templates/tappaas-winserver.json`), not in the consuming module's JSON. If you are building a new template module, set `autoInstall: true` only if the entire install can run without anyone at the console.
+
 #### Choosing `ostype` and `os`
 
 These two fields serve different purposes and are both needed for non-default OS types:

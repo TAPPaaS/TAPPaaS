@@ -10,7 +10,7 @@
         "vmname", "vmid", "vmtag", "node",
         "bios", "ostype", "cputype", "cores", "memory", "diskSize", "storage",
         "pbsStorageName", "alwaysBackup",
-        "imageType", "image", "imageLocation", "os", "cloudInit", "sshAccess",
+        "imageType", "image", "imageLocation", "os", "cloudInit", "sshAccess", "autoInstall",
         "HANode", "replicationSchedule",
         "bridge0", "mac0", "zone0", "trunks0",
         "bridge1", "mac1", "zone1", "trunks1",
@@ -355,6 +355,18 @@
             "values": {
                 "true": "VM supports cloud-init (SSH keys, hostname, etc.)",
                 "false": "VM does not use cloud-init"
+            }
+        },
+
+        "autoInstall": {
+            "description": "Whether this template can be built fully automatically without operator input. Used by cluster:vm/install-service.sh when a required template is missing — if true, the template is auto-built before the clone proceeds; if false, the operator must build it manually first.",
+            "type": "boolean",
+            "requiredBy": [],
+            "usedBy": ["cluster:vm"],
+            "default": false,
+            "values": {
+                "true": "Fully unattended build — no console interaction required (e.g. tappaas-winserver with autounattend.xml)",
+                "false": "Requires manual installation — operator must run install-module.sh and complete the setup (e.g. tappaas-nixos graphical installer)"
             }
         },
 

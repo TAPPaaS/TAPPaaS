@@ -118,4 +118,3 @@ If the Proxmox console shows a **blank screen for more than 5 minutes** and `cap
 | `autounattend.xml` | Windows Setup answer file — fully unattended install, VirtIO drivers, OpenSSH, sysprep |
 | `oobe-unattend.xml` | Legacy reference — kept for documentation. **Not deployed to clones.** OOBE configuration (tappaas account, SSH key, hostname) is now injected via QEMU guest agent by `cluster:vm/install-service.sh`, which is more reliable than CDROMs post-sysprep. |
 | `build-template.sh` | Deprecated manual build script — kept as reference only |
-| `deploy-vms.sh` | Helper for deploying multiple clones |

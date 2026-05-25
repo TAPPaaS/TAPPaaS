@@ -254,7 +254,7 @@ Two fields must be set correctly in every Windows module JSON — they are not o
 |-------|---------------|-----|
 | `ostype` | `"win11"` | Tells the hypervisor to use the Windows hardware profile: local-time clock, Windows ACPI, Hyper-V enlightenments, TPM 2.0. Windows Server 2025 requires this — using `l26` (the Linux default) breaks the clock and disables TPM. |
 | `os` | `"windows"` | Tells TAPPaaS the OS family. `cluster:vm` injects OOBE configuration (tappaas account, SSH key, firewall rule) via QEMU guest agent after cloning. Without this, OOBE requires manual intervention. |
-| `cloudInit` | omit | Windows does not use cloud-init in the traditional sense. `Create-TAPPaaS-VM.sh` defaults to `true` to record the hostname in the VM config, but no cloud-init drive is mounted inside Windows. Omitting the field from your module JSON is fine. |
+| `cloudInit` | `false` | **Required.** Windows does not use cloud-init. Without this, `Create-TAPPaaS-VM.sh` runs `qm cloudinit update` on a VM with no cloud-init drive, which exits non-zero and aborts the entire install. |
 
 **`l26` is for Linux** — it is the letter L (Linux kernel), not the digit 1. Setting `ostype: "l26"` on a Windows VM is the most common mistake and causes clock drift and broken power management.
 
