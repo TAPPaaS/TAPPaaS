@@ -21,7 +21,7 @@ add more nodes later). You need:
 
 - **Hardware:** 1 node (single) or 3 nodes (cluster) capable of running Proxmox
   VE 9, each with **two NICs** (one WAN, one LAN). A 3-node cluster also needs a
-  **managed switch** that supports VLAN trunking (see [the network section](#network--the-cable-swap-the-only-fiddly-part)).
+  **managed switch** that supports VLAN trunking (see [the network section](#network--cutting-over-to-the-firewall)).
 - **An existing network** (your home/office LAN) with a **free IP** for the first
   node and a working DHCP server + internet. After the firewall is switched in,
   that same network hands the firewall's WAN an address via **DHCP**.
@@ -70,24 +70,22 @@ Notes:
    at `10.0.0.1`, and self-configures with unique credentials — no GUI, no
    installer.
 
-3. **Swap cables + move your PC** (the only manual networking — see
-   [the network section](#network--the-cable-swap-the-only-fiddly-part)). On the node:
+3. **Cut over to the firewall** (the only manual networking — see
+   [the network section](#network--cutting-over-to-the-firewall)). This does
+   **not** move cables: it renumbers the node to `10.0.0.10` and routes it via the
+   firewall. Run it on the node, then **move your admin laptop to the downstream
+   switch** (you'll reconnect at `10.0.0.10`):
 
    ```bash
-   ~/tappaas/config-network.sh --swap-cables   # node now routes via the firewall
+   ~/tappaas/config-network.sh --swap-cables   # renumbers node → 10.0.0.10, gateway → firewall
    ~/tappaas/sanity-check.sh                    # gateway, DNS, internet must pass
    ```
 
-### 2.2 Additional nodes (3-node only — skip for single-node)
+### 2.2 Build the platform (NixOS template + CICD mothership)
 
-On each extra machine: install Proxmox VE (`tappaas2`, `tappaas3`), then run the
-**same bootstrap** (the command in 2.1 step 2). It auto-joins the existing
-cluster. *(For VLANs to work across nodes, the switch trunk must be in place
-first — see the network section.)*
-
-### 2.3 Build the platform (NixOS template + CICD mothership)
-
-Once all nodes + the firewall are up, on `tappaas1` run a **single command**:
+Build the mothership on **`tappaas1` alone** — a single node is fine; you add the
+other nodes next (§2.3), and HA is simply skipped until they exist. Run **one
+command**:
 
 ```bash
 ~/tappaas/install-platform.sh --domain "yourdomain.com"
@@ -117,18 +115,34 @@ and is where you install everything else.
 > the in-VM `install1`/`install2` steps by hand instead — see
 > [Appendix: install options](#appendix-install-options).
 
-### 2.4 Before the rest of the foundation
+### 2.3 Add additional nodes (3-node only — skip for single-node)
 
-With the mothership up, do these two before §3:
+**Do this *after* the mothership is installed (§2.2), not before.**
 
-1. **Add the other cluster nodes** (3-node cluster only). Run the same bootstrap
-   (2.2) on each remaining node; they auto-join. cicd configures **HA +
-   replication automatically** on the next update — on a single node HA is simply
-   skipped until more nodes exist.
-2. **Configure the Caddy DNS-01 provider credentials** (e.g. your **Cloudflare API
-   token**) so public TLS certificates can be issued for your domain. Until this
-   is set, internal-only services still work (reachable on the LAN), but their
-   public HTTPS endpoint has no certificate.
+1. **Reboot `tappaas1` first.** The cable-swap renumbered it to `10.0.0.10` and
+   rewrote the cluster (corosync) config; a reboot is required for the cluster to
+   load the new config — **a second node cannot join until `tappaas1` has been
+   rebooted**:
+
+   ```bash
+   reboot          # on tappaas1; reconnect at 10.0.0.10 afterwards
+   ```
+
+2. On each extra machine: install Proxmox VE (`tappaas2`, `tappaas3`) and run the
+   **same bootstrap** (the command in 2.1 step 2). It auto-joins the existing
+   cluster. *(For VLANs to work across nodes, the managed-switch trunk must be in
+   place first — see [the network section](#network--cutting-over-to-the-firewall).)*
+
+3. Back on the mothership, run an update so cicd reconciles the new topology:
+   `update-tappaas` (or `update-module tappaas-cicd`) — it now configures **HA +
+   replication automatically** across the nodes.
+
+### 2.4 Set up TLS certificates
+
+**Configure the Caddy DNS-01 provider credentials** (e.g. your **Cloudflare API
+token**) so public TLS certificates can be issued for your domain. Until this is
+set, internal-only services still work (reachable on the LAN), but their public
+HTTPS endpoint has no certificate.
 
 ---
 
@@ -178,49 +192,42 @@ proxy + firewall rules registered automatically. Install others the same way
 
 ---
 
-## Network — the cable swap (the only fiddly part)
+## Network — cutting over to the firewall
 
-The firewall starts as a VM on `tappaas1`, reachable at `10.0.0.1`. The "swap" is
-the one-time step that puts it inline as the gateway. Each node has **two NICs**:
-`wan` (firewall uplink) and `lan` (VLAN-aware bridge → managed switch).
+This is the one-time step that puts the firewall (a VM on `tappaas1`, at
+`10.0.0.1`) inline as the gateway. **Despite the command name `--swap-cables`,
+you normally don't move any cables** — the cutover is a *logical* IP change plus
+moving your admin laptop. Each node has **two NICs**: `wan` (the firewall's
+upstream/internet uplink) and `lan` (a VLAN-aware bridge → the downstream managed
+switch). You wire both at install time and they stay put.
 
-**BEFORE the swap** — you still reach everything through your existing network;
-the firewall VM is up but not yet the gateway:
+What actually changes:
 
-```
-  Existing LAN (your router + DHCP, e.g. 192.168.0.0/24)  ── admin PC
-        │
-   [tappaas1 WAN NIC]
-   ┌──────────────────────────────────────────┐
-   │  tappaas1 (Proxmox)                        │
-   │    OPNsense VM:  wan → 192.168.0.x (DHCP)  │
-   │                  lan → 10.0.0.1            │
-   │    node mgmt:    lan → 10.0.0.10           │
-   └──[tappaas1 LAN NIC]────────────────────────┘
-        │
-   [ managed switch ]        (3-node only; single-node: any switch / direct)
-```
-
-**AFTER the swap** (`config-network.sh --swap-cables`) — the firewall is the
-gateway and everything sits behind it:
+- **The node's IP** — `config-network.sh --swap-cables` renumbers `tappaas1` from
+  its install address to **`10.0.0.10`** and points its default gateway + DNS at
+  the firewall (`10.0.0.1`). No cable is touched.
+- **Your admin laptop** — move it onto the **downstream switch** (the firewall's
+  LAN side), where it gets a `10.0.0.x` lease from the firewall.
 
 ```
-   ISP / upstream
+   internet / upstream router
         │
-   [tappaas1 WAN NIC] ───────────────► OPNsense WAN (DHCP from upstream)
-   ┌──────────────────────────────────────────┐
-   │  tappaas1 (Proxmox)                        │
-   │    OPNsense VM:  lan → 10.0.0.1 (gateway)  │
-   │    node mgmt:    lan → 10.0.0.10  (wan IP removed)
-   └──[tappaas1 LAN NIC]────────────────────────┘
+   [tappaas1 WAN NIC] ─────────────► OPNsense WAN  (DHCP from upstream)
+   ┌───────────────────────────────────────────────┐
+   │  tappaas1 (Proxmox)                             │
+   │    OPNsense VM:   lan → 10.0.0.1  (the gateway) │
+   │    node mgmt:     lan → 10.0.0.10               │   ← renumbered by --swap-cables
+   └──[tappaas1 LAN NIC]──────────────────────────────┘
         │
-   [ managed switch ] ── admin PC (now gets 10.0.0.x by DHCP)
+   [ downstream managed switch ] ── admin laptop  (now 10.0.0.x by DHCP)
 ```
 
-To do it: move the **WAN NIC cable** from your existing LAN to the **upstream/ISP**,
-make sure the **LAN NIC** goes to the **managed switch**, run
-`~/tappaas/config-network.sh --swap-cables`, then move your admin PC onto the
-switch/LAN. The firewall GUI is then at `https://10.0.0.1`.
+So the procedure is: make sure the **WAN NIC** reaches your upstream/internet and
+the **LAN NIC** reaches the **downstream switch** (you cabled both at install —
+nothing to move now), run `~/tappaas/config-network.sh --swap-cables` on the
+node, then **move your admin laptop to the downstream switch**. The firewall GUI
+is then at `https://10.0.0.1`. *(The `--swap-cables` flag name is historical; it
+renumbers IPs, it does not move cables.)*
 
 **The switch (3-node clusters):** the `lan` bridge is **VLAN-aware** — it carries
 the **management network untagged** (10.0.0.0/24) plus **every TAPPaaS VLAN

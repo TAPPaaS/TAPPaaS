@@ -147,7 +147,12 @@ swap_cables() {
   info "  reloading network (node moves to ${new_ip})..."
   ifreload -a 2>/dev/null || systemctl restart networking || warn "network reload returned non-zero"
 
-  info "${GN}Swap-cables complete.${CL} Node is now ${BL}${new_ip}${CL}. Verify: ping ${FW_IP}; ping 8.8.8.8; nslookup firewall.mgmt.internal"
+  info "${GN}Cutover complete.${CL} Node is now ${BL}${new_ip}${CL}, routing via the firewall."
+  info "  (No cables moved — this only renumbered IPs. Move your admin laptop to the"
+  info "   downstream switch to reconnect; it gets a 10.0.0.x lease from the firewall.)"
+  info "  Verify: ping ${FW_IP}; ping 8.8.8.8; nslookup firewall.mgmt.internal"
+  info "  ${YW}Before adding more cluster nodes, reboot this node${CL} so the renumbered"
+  info "  corosync config loads (a second node cannot join until then)."
 }
 
 if [[ "$SWAP_CABLES" == "1" ]]; then

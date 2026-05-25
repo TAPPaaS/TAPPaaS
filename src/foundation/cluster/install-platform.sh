@@ -336,8 +336,9 @@ if [[ "$SKIP_CICD" == "1" ]];     then info "Skipping tappaas-cicd (--skip-cicd)
 
 echo ""
 info "${GN}${BOLD}Platform install steps complete.${CL} Next steps (from the cicd mothership):"
-info "  ${BOLD}1.${CL} Add the other cluster nodes (3-node cluster): run the node bootstrap on"
-info "     each; they auto-join. cicd then configures HA + replication on the next update."
+info "  ${BOLD}1.${CL} Add the other cluster nodes (3-node cluster): FIRST ${BOLD}reboot this node${CL} so the"
+info "     renumbered corosync config loads (a node cannot join until then), then run the"
+info "     node bootstrap on each; they auto-join. cicd configures HA + replication on update."
 info "  ${BOLD}2.${CL} Configure the Caddy ${BOLD}DNS-01 provider credentials${CL} (e.g. your Cloudflare API"
 info "     token) so public TLS certificates can be issued for app domains."
 info "  ${BOLD}3.${CL} Install the rest of the foundation — backup (35), identity (40), logging —"
