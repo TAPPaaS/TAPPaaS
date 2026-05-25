@@ -1,0 +1,152 @@
+# Build a PRECONFIGURED OPNsense firewall image and publish it as a GitHub
+# Release asset (issue #231) — the OPNsense analog of the NixOS template
+# pipeline. A base installed OPNsense qcow2 (from maurice-w/opnsense-vm-images)
+# has the TAPPaaS management config (firewall-config.xml.template) injected into
+# /conf/config.xml, so the firewall boots fully configured (LAN 10.0.0.1, DNS,
+# DHCP, hostname, API) with NO installer/GUI/Import-Config interaction.
+#
+# Proven feasible by the #231 spike: dropping our config.xml into /conf of an
+# installed image makes it boot configured + persistent. Because Linux cannot
+# WRITE UFS2, the injection runs inside a FreeBSD VM (vmactions/freebsd-vm).
+#
+# SECRETS MODEL — bootstrap-then-rotate: the image bakes a KNOWN bootstrap API
+# key + default root password (public, see env below). On first deploy,
+# config-firewall.sh uses the bootstrap key over the API to set a UNIQUE api key
+# + root password and then deletes the bootstrap key. The bootstrap creds are
+# only ever usable on the isolated bootstrap LAN during install.
+#
+# Trigger: push a tag `opnsense-firewall-v<version>`, or run manually.
+name: Build OPNsense firewall image
+
+on:
+  push:
+    tags:
+      - "opnsense-firewall-v*"
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version label for the release (e.g. 1.0)."
+        required: true
+        default: "0.0-dev"
+
+permissions:
+  contents: write
+
+env:
+  # Pinned base image (installed OPNsense on UFS, EFI console). Bump to upgrade
+  # OPNsense; keep in sync with firewall.json's OPNsense major version.
+  OPNSENSE_BASE_URL: "https://github.com/maurice-w/opnsense-vm-images/releases/download/26.1.2/OPNsense-26.1.2-ufs-efi-vm-amd64.qcow2.bz2"
+  # Bootstrap credentials baked into the PUBLIC image — intentionally well-known.
+  # config-firewall.sh rotates these to unique values on first boot, then deletes
+  # the bootstrap api key. Never leave a deployed firewall on these.
+  BOOTSTRAP_API_KEY: "tappaas-bootstrap"
+  BOOTSTRAP_API_SECRET: "tappaas-bootstrap-rotate-me"
+  BOOTSTRAP_ROOT_PW: "opnsense"
+  ASSET: "tappaas-firewall.qcow2.zst"
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@v4
+
+      - name: Free up disk space
+        run: |
+          sudo rm -rf /usr/share/dotnet /opt/ghc /usr/local/lib/android \
+                      /usr/local/share/boost "$AGENT_TOOLSDIRECTORY" || true
+          df -h /
+
+      - name: Determine version
+        id: ver
+        run: |
+          if [ "${{ github.event_name }}" = "push" ]; then
+            v="${GITHUB_REF_NAME#opnsense-firewall-v}"
+          else
+            v="${{ github.event.inputs.version }}"
+          fi
+          echo "version=${v}" >>"$GITHUB_OUTPUT"
+          echo "tag=opnsense-firewall-v${v}" >>"$GITHUB_OUTPUT"
+
+      - name: Render the baked config.xml (non-secret config + bootstrap creds)
+        run: |
+          set -euo pipefail
+          APIKEYS_VALUE="${BOOTSTRAP_API_KEY}|$(openssl passwd -6 "$BOOTSTRAP_API_SECRET")"
+          ROOT_PW_HASH="$(openssl passwd -6 "$BOOTSTRAP_ROOT_PW")"
+          export APIKEYS_VALUE ROOT_PW_HASH
+          awk '
+            { gsub(/@APIKEYS@/,     ENVIRON["APIKEYS_VALUE"]);
+              gsub(/@ROOT_PW_HASH@/, ENVIRON["ROOT_PW_HASH"]);
+              print }
+          ' src/foundation/firewall/firewall-config.xml.template > config.xml
+          # Enable SSH in the BOOTSTRAP image only (not the shared template), so
+          # config-firewall.sh can scp the per-deploy unique config in. The
+          # deployed firewall gets the plain template (SSH off) pushed over it.
+          # Syntax verified empirically: sshd comes up after rc.reload_all.
+          sed -i 's#<ssh>#<ssh><enabled>enabled</enabled><permitrootlogin>1</permitrootlogin><passwordauth>1</passwordauth>#' config.xml
+          echo "Rendered config.xml ($(wc -c <config.xml) bytes); LAN/hostname/ssh:"
+          grep -E '<ipaddr>10.0.0.1|<hostname>firewall|<ssh><enabled>' config.xml || true
+
+      # Inject /conf/config.xml inside a FreeBSD VM — Linux cannot write UFS2.
+      # All the heavy image work happens here so we don't sync multi-GB files in
+      # and out of the VM; only config.xml goes in and the compressed asset comes
+      # back (copyback).
+      - name: Inject config into the OPNsense image (FreeBSD)
+        uses: vmactions/freebsd-vm@v1
+        with:
+          usesh: true
+          copyback: true
+          # Forward the runner env vars into the VM (vmactions runs the script in
+          # a fresh SSH shell that does not inherit the job `env:`).
+          envs: "OPNSENSE_BASE_URL ASSET"
+          prepare: |
+            pkg install -y qemu-tools curl zstd
+          run: |
+            set -e
+            echo "Downloading base image..."
+            curl -fSL "${OPNSENSE_BASE_URL}" -o base.qcow2.bz2
+            bunzip2 -f base.qcow2.bz2
+            echo "Converting to raw + extending to 16G (avoids the #182 disk-full trap)..."
+            qemu-img convert -O raw base.qcow2 base.raw
+            rm -f base.qcow2
+            truncate -s 16G base.raw
+            md=$(mdconfig -a -t vnode -f base.raw)
+            echo "Attached ${md}; partitions before grow:"; gpart show "${md}" || true
+            # The rootfs is GPT partition 3 (EFISYS, bootfs, rootfs). Recover the
+            # secondary GPT after extending the file, grow part3 + the UFS offline.
+            gpart recover "${md}" || true
+            gpart resize -i 3 "${md}"
+            growfs -y "/dev/${md}p3"
+            echo "Injecting /conf/config.xml..."
+            mount -t ufs "/dev/${md}p3" /mnt
+            test -d /mnt/conf || { echo "ERROR: /conf not found on ${md}p3"; umount /mnt; mdconfig -d -u "${md#md}"; exit 1; }
+            cp config.xml /mnt/conf/config.xml
+            sync
+            umount /mnt
+            mdconfig -d -u "${md#md}"
+            echo "Repacking to qcow2 + compressing..."
+            qemu-img convert -O qcow2 base.raw out.qcow2
+            rm -f base.raw
+            zstd -T0 -19 --long=27 out.qcow2 -o "${ASSET}"
+            rm -f out.qcow2
+            ls -lh "${ASSET}"
+
+      - name: Release notes
+        run: |
+          {
+            echo "## tappaas-firewall ${{ steps.ver.outputs.version }}"
+            echo ""
+            echo "Preconfigured OPNsense firewall image (EFI qcow2, zstd-compressed)."
+            echo "Boots fully configured (LAN 10.0.0.1, DNS/DHCP, hostname \`firewall\`)."
+            echo "Ships bootstrap API key \`${BOOTSTRAP_API_KEY}\` + default root password;"
+            echo "config-firewall.sh rotates both to unique values on first deploy and"
+            echo "deletes the bootstrap key. Do not expose a firewall left on bootstrap creds."
+          } >release-notes.md
+
+      - name: Publish the Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.ver.outputs.tag }}
+          name: OPNsense firewall ${{ steps.ver.outputs.version }}
+          body_path: release-notes.md
+          files: ${{ env.ASSET }}

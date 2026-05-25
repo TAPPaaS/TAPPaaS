@@ -550,6 +550,87 @@ else
 fi
 
 # ─────────────────────────────────────────────────────────────────────
+# Standard 10: test-network tooling (issue #225) — non-destructive
+# ─────────────────────────────────────────────────────────────────────
+
+section "Standard 10: test-network tooling (issue #225)"
+
+TESTNET_SH="${SCRIPT_DIR}/test-network.sh"
+
+if [[ -x "${TESTNET_SH}" ]]; then
+    pass "test-network.sh present and executable"
+else
+    fail "test-network.sh missing or not executable"
+fi
+
+# Syntax + help (no privileged access required)
+if bash -n "${TESTNET_SH}" >/dev/null 2>&1; then
+    pass "test-network.sh syntax OK (bash -n)"
+else
+    fail "test-network.sh has syntax errors"
+fi
+if bash "${TESTNET_SH}" --help 2>/dev/null | grep -q -- "--delete"; then
+    pass "test-network.sh --help advertises --delete"
+else
+    fail "test-network.sh --help missing or incomplete"
+fi
+
+# OPNsense-side CLI: prefer the installed wrapper, fall back to the module.
+TESTNET_CLI=""
+if command -v test-network-manager >/dev/null 2>&1; then
+    TESTNET_CLI="test-network-manager"
+    pass "test-network-manager on PATH"
+elif python3 -c "import opnsense_controller.test_network_cli" >/dev/null 2>&1; then
+    TESTNET_CLI="python3 -m opnsense_controller.test_network_cli"
+    pass "opnsense_controller.test_network_cli importable (wrapper not yet built)"
+else
+    skip "test-network-manager not available (rebuild opnsense-controller to expose it)"
+fi
+
+if [[ -n "${TESTNET_CLI}" ]]; then
+    if ${TESTNET_CLI} --help 2>/dev/null | grep -q "create"; then
+        pass "test-network CLI exposes create/delete/status"
+    else
+        fail "test-network CLI help missing subcommands"
+    fi
+fi
+
+# Offline logic check: addressing + asymmetric rule set, no API calls.
+if python3 -c "import opnsense_controller.test_network_manager" >/dev/null 2>&1; then
+    if python3 - <<'PY' >/dev/null 2>&1
+from unittest.mock import MagicMock
+from opnsense_controller.test_network_manager import TestNetworkManager, RuleAction
+m = TestNetworkManager(config=MagicMock(), device="vtnet9")
+assert m.gateway_ip == "172.17.3.1", m.gateway_ip
+assert m.network_cidr == "172.17.3.0/24", m.network_cidr
+assert m.dhcp_start == "172.17.3.50" and m.dhcp_end == "172.17.3.250"
+rules = m._build_rules("opt9")
+descs = [r[0] for r in rules]
+# test->internet allowed, mgmt->test allowed, internal RFC1918 blocked
+assert any("internet" in d for d in descs)
+assert any("mgmt-access" in d for d in descs)
+blocks = [r for r in rules if r[1] is RuleAction.BLOCK]
+assert any(r[4] == "10.0.0.0/8" for r in blocks), "mgmt net must be blocked from test"
+# mgmt-access rule is on the mgmt interface, sourced from mgmt net
+mgmt = [r for r in rules if "mgmt-access" in r[0]][0]
+assert mgmt[2] == "lan" and mgmt[3] == "10.0.0.0/24" and mgmt[4] == "172.17.3.0/24"
+# Ordering is load-bearing (rules are quick=True): internet-pass MUST be
+# sequenced after every RFC1918 block, else the test net could reach mgmt.
+seqs = [r[5] for r in rules]
+assert len(set(seqs)) == len(seqs), "rule sequences must be unique"
+internet_seq = [r[5] for r in rules if r[0].endswith("internet")][0]
+assert internet_seq > max(r[5] for r in blocks), "internet pass must follow RFC1918 blocks"
+PY
+    then
+        pass "test-network rule model: test→internet + mgmt→test, internal blocked"
+    else
+        fail "test-network rule model assertions failed"
+    fi
+else
+    skip "opnsense_controller.test_network_manager not importable — skipping rule-model check"
+fi
+
+# ─────────────────────────────────────────────────────────────────────
 # Deep tests (--deep) — VM provisioning + inter-VM connectivity
 # ─────────────────────────────────────────────────────────────────────
 

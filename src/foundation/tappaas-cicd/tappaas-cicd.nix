@@ -217,6 +217,7 @@ in
         htop
         jq
         git
+        gh          # GitHub CLI
         dig
         # OPNsense controller tools (opnsense-controller, opnsense-firewall, zone-manager, dns-manager)
         opnsenseController.default

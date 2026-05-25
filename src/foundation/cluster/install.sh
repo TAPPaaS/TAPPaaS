@@ -18,7 +18,9 @@
 
 header_info() {
   # generated with https://patorjk.com/software/taag/#p=display&f=Big&t=TAPPaaS%20Post%20PVE%20Install
-  clear
+  # `clear` needs a terminal/$TERM; never let its absence (e.g. a non-TTY or
+  # piped run) abort the whole script under `set -e`.
+  clear 2>/dev/null || true
   cat <<"EOF"
   _______       _____  _____             _____   _____          _     _______      ________   _____           _        _ _ 
  |__   __|/\   |  __ \|  __ \           / ____| |  __ \        | |   |  __ \ \    / /  ____| |_   _|         | |      | | |
@@ -57,11 +59,182 @@ msg_error() {
   echo -e "${BFR} ${CROSS} ${RD}${msg}${CL}"
 }
 
+# fetch <url> <dest> [mode]
+#
+# Robust download used for every remote file in this bootstrap (issue #175).
+# The naive `curl ... >dest` pattern is structurally unable to detect a failed
+# download: the shell truncates dest to 0 bytes *before* curl runs, so an
+# HTTP 404 leaves an empty file behind and the script marches on reporting
+# success. fetch() instead:
+#   - downloads to a temp file (dest is never left partial/empty),
+#   - tests curl's own exit status,
+#   - verifies the result is non-empty,
+#   - and treats any failure as FATAL (exit 1) so a broken node is never
+#     reported as a good one.
+fetch() {
+  local url="$1" dest="$2" mode="${3:-644}" tmp
+  tmp="$(mktemp)" || { msg_error "mktemp failed"; exit 1; }
+  if ! curl -fsSL "$url" -o "$tmp"; then
+    rm -f "$tmp"
+    msg_error "Download failed for ${url}"
+    exit 1
+  fi
+  if [ ! -s "$tmp" ]; then
+    rm -f "$tmp"
+    msg_error "Download produced an empty file: ${url}"
+    exit 1
+  fi
+  mkdir -p "$(dirname "$dest")"
+  mv "$tmp" "$dest"
+  chmod "$mode" "$dest"
+}
+
 #
 # here we go: Check that the PVE is right version and have two zfs pools
 #
 
 header_info
+
+# ── Arguments ────────────────────────────────────────────────────────
+# Backward-compatible with the documented `install.sh <REPO> <BRANCH>`:
+# REPO/BRANCH remain positional. New optional flags drive the config phases.
+REPO="https://raw.githubusercontent.com/TAPPaaS/"
+BRANCH="stable"
+CLUSTER_MODE="auto"        # auto | create | join | none
+SKIP_NETWORK=0
+SKIP_STORAGE=0
+NONINTERACTIVE=0
+_pos=()
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --cluster)         CLUSTER_MODE="create" ;;
+    --join)            CLUSTER_MODE="join" ;;
+    --no-cluster)      CLUSTER_MODE="none" ;;
+    --skip-network)    SKIP_NETWORK=1 ;;
+    --skip-storage)    SKIP_STORAGE=1 ;;
+    --non-interactive) NONINTERACTIVE=1 ;;
+    -h|--help)
+      echo "Usage: install.sh [REPO] [BRANCH] [--cluster|--join|--no-cluster]"
+      echo "                  [--skip-network] [--skip-storage] [--non-interactive]"
+      exit 0 ;;
+    --*) msg_error "Unknown option: $1"; exit 2 ;;
+    *)   _pos+=("$1") ;;
+  esac
+  shift
+done
+[ "${#_pos[@]}" -ge 1 ] && REPO="${_pos[0]}"
+[ "${#_pos[@]}" -ge 2 ] && BRANCH="${_pos[1]}"
+NONINT_ARG=""; [ "$NONINTERACTIVE" = 1 ] && NONINT_ARG="--non-interactive"
+# Interactive when not told otherwise AND we actually have a terminal (needed
+# to drive pvecm add's password prompt).
+INTERACTIVE_TTY=0
+[ "$NONINTERACTIVE" = 0 ] && [ -t 0 ] && INTERACTIVE_TTY=1
+# Records what the cluster phase did: created | joined | member | standalone.
+# Only "created" (this is the first node) triggers the optional firewall install.
+CLUSTER_ROLE=""
+
+# ── Cluster (issue #140) ─────────────────────────────────────────────
+# auto: first node (tappaas1) creates the cluster; every other node joins it.
+# Join is interactive — we prompt for an existing node's address and run
+# `pvecm add`, which then prompts for that node's root password. This must
+# complete before the storage phase so the tank pools are created while the
+# node is already a cluster member (PVE HA-failover requirement).
+configure_cluster() {
+  local host mode peer; host="$(hostname -s)"
+  echo -e "\n${GN}=== Cluster configuration ===${CL}"
+  if pvecm status >/dev/null 2>&1; then
+    msg_ok "Node is already a cluster member"
+    pvecm status 2>/dev/null | grep -E 'Name:|Nodes:|Quorate:' || true
+    CLUSTER_ROLE="member"
+    return 0
+  fi
+
+  mode="$CLUSTER_MODE"
+  if [ "$mode" = "auto" ]; then
+    if [ "$host" = "tappaas1" ]; then mode="create"; else mode="join"; fi
+  fi
+
+  case "$mode" in
+    create)
+      msg_info "Creating Proxmox cluster 'TAPPaaS' (first node: ${host})"
+      if pvecm create TAPPaaS >/dev/null 2>&1; then
+        msg_ok "Created cluster 'TAPPaaS'"
+        CLUSTER_ROLE="created"
+      else
+        msg_error "pvecm create TAPPaaS failed (already clustered? check 'pvecm status')"
+      fi
+      ;;
+    join)
+      if [ "$INTERACTIVE_TTY" != 1 ]; then
+        msg_ok "Non-interactive: not joining automatically. Run on this node:"
+        echo "      pvecm add tappaas1.mgmt.internal"
+        return 0
+      fi
+      echo "  This node ('${host}') will JOIN the existing TAPPaaS cluster."
+      read -r -p "  Existing cluster node address [tappaas1.mgmt.internal]: " peer
+      peer="${peer:-tappaas1.mgmt.internal}"
+      msg_info "Joining cluster via ${peer} — you'll be prompted for that node's root password"
+      echo ""
+      # pvecm add is interactive (password + SSH fingerprint); run on the TTY.
+      if pvecm add "$peer"; then
+        msg_ok "Joined cluster via ${peer}"
+        CLUSTER_ROLE="joined"
+      else
+        msg_error "pvecm add ${peer} failed — fix connectivity and re-run, or: pvecm add ${peer}"
+      fi
+      ;;
+    none)
+      msg_ok "Cluster step skipped (--no-cluster); node stays standalone."
+      CLUSTER_ROLE="standalone"
+      ;;
+  esac
+}
+
+# ── Optional chained firewall install (first node only) ──────────────
+# When this node CREATED the cluster (i.e. it's the first node, not joining),
+# offer to continue straight into the OPNsense firewall bootstrap. The network
+# and storage phases have already run, so the lan/wan bridges and tank pools
+# the firewall VM needs are in place.
+maybe_install_firewall() {
+  [ "$CLUSTER_ROLE" = "created" ] || return 0
+  echo ""
+  if [ "$INTERACTIVE_TTY" != 1 ]; then
+    msg_ok "First node: install the firewall next with  ~/tappaas/config-firewall.sh"
+    return 0
+  fi
+  local ans
+  read -r -p "This is the first node. Install the OPNsense firewall now? [y/N] " ans
+  case "$ans" in
+    y|Y|yes|YES)
+      msg_info "Fetching config-firewall.sh"
+      fetch "${REPO}${BRANCH}/src/foundation/firewall/config-firewall.sh" ~/tappaas/config-firewall.sh 755
+      msg_ok "Fetched config-firewall.sh — starting firewall bootstrap"
+      ~/tappaas/config-firewall.sh --repo "$REPO" --branch "$BRANCH" \
+        || msg_error "config-firewall.sh did not complete — re-run ~/tappaas/config-firewall.sh"
+      ;;
+    *)
+      msg_ok "Skipping firewall install. Run later: ~/tappaas/config-firewall.sh"
+      ;;
+  esac
+}
+
+# ── Final summary (addresses the long-standing TODO at top of file) ──
+print_summary() {
+  local p
+  echo -e "\n${GN}========== TAPPaaS node summary ==========${CL}"
+  echo "  Host: $(hostname -f 2>/dev/null || hostname)"
+  echo "  --- Network (bridges) ---"
+  ip -br addr show type bridge 2>/dev/null | sed 's/^/    /' || true
+  echo "  --- ZFS pools ---"
+  zpool list 2>/dev/null | sed 's/^/    /' || echo "    (none)"
+  for p in $(zpool list -H -o name 2>/dev/null); do
+    zpool status "$p" 2>/dev/null | grep -qE 'mirror|raidz' \
+      || echo -e "    ${YW}WARN: pool '$p' has no mirror/raidz redundancy${CL}"
+  done
+  echo "  --- Cluster ---"
+  pvecm status 2>/dev/null | grep -E 'Name:|Nodes:|Quorate:' | sed 's/^/    /' || echo "    (standalone)"
+  echo -e "${GN}==========================================${CL}"
+}
 
 get_pve_version() {
   local pve_ver
@@ -92,14 +265,18 @@ if ! pveversion | grep -Eq "pve-manager/9\.[0-4](\.[0-9]+)*"; then
 fi
 
 #
-# Check it this have already been run, in which case skip all the repository and other updates
+# If the base post-install (repos, nag, packages, helper scripts, dist-upgrade)
+# has already run, skip it but STILL run the config phases below — they are
+# idempotent and may have been added/changed since the first run.
 #
+RUN_BASE=1
 if [ -f /var/log/tappaas.step1 ]; then
-  msg_ok "The TAPPaaS post proxmox install script has already been run: Only updating proxmox libraries"
-  msg_ok "If you want to run it again, please delete /var/log/tappaas.step1"
-  msg_ok "and run the script again"
-  exit 0
+  msg_ok "Base post-install already done — skipping repos/apt; running config phases only"
+  msg_ok "(delete /var/log/tappaas.step1 to re-run the base install)"
+  RUN_BASE=0
 fi
+
+if [ "$RUN_BASE" = 1 ]; then
 
 # Disable any existing PVE enterprise / Ceph enterprise repo files by
 # replacing them with a single, canonical disabled stanza. This avoids
@@ -156,6 +333,15 @@ Signed-By: /usr/share/keyrings/proxmox-archive-keyring.gpg
 Enabled: true
 EOF
 msg_ok "Added 'pve-no-subscription' repository"
+
+# Refresh the package lists now that the repo set has changed (enterprise off,
+# no-subscription on). Without this, a fresh node has no package list that
+# contains community packages (jq, powertop, …) and the first `apt install`
+# below fails with "Unable to locate package". Fatal: nothing after this works
+# without it.
+msg_info "Refreshing apt package lists"
+apt-get update &>/dev/null || { msg_error "apt update failed"; exit 1; }
+msg_ok "Refreshed apt package lists"
 
 
 msg_info "Disabling subscription nag"
@@ -225,36 +411,29 @@ msg_info "Enabling high availability"
   systemctl enable -q --now corosync
 msg_ok "Enabled high availability"
 
-# Find the repo version of TAPPaaS to use
-msg_info "Determining TAPPaaS repo to use"
-if [ -z "${1:-}" ]; then
-  REPO="https://raw.githubusercontent.com/TAPPaaS/"
-else
-  REPO="$1"
-fi
-msg_ok "Determined TAPPaaS repo to use: ${REPO}"
-
-# Find the branch version of TAPPaaS to use
-msg_info "Determining TAPPaaS branch to use"
-if [ -z "${2:-}" ]; then
-  BRANCH="stable"
-else
-  BRANCH="$2"
-fi
-msg_ok "Determined TAPPaaS branch to use: ${BRANCH}"
+msg_ok "Using TAPPaaS repo ${REPO} branch ${BRANCH}"
 
 msg_info "Install TAPPaaS helper script"
 cd
 mkdir -p tappaas
-apt -y install jq &>/dev/null || msg_error "apt update failed"
-curl -fsSL  ${REPO}${BRANCH}/src/foundation/cluster/Create-TAPPaaS-VM.sh >~/tappaas/Create-TAPPaaS-VM.sh
-chmod 744 ~/tappaas/Create-TAPPaaS-VM.sh
-curl -fsSL  ${REPO}${BRANCH}/src/foundation/cluster/Create-TAPPaaS-LXC.sh >~/tappaas/Create-TAPPaaS-LXC.sh
-chmod 744 ~/tappaas/Create-TAPPaaS-LXC.sh
-msg_ok "Installed TAPPaaS helper scripts (VM + LXC)"
+apt -y install jq &>/dev/null || { msg_error "apt install jq failed"; exit 1; }
+fetch "${REPO}${BRANCH}/src/foundation/cluster/Create-TAPPaaS-VM.sh"  ~/tappaas/Create-TAPPaaS-VM.sh  744
+fetch "${REPO}${BRANCH}/src/foundation/cluster/Create-TAPPaaS-LXC.sh" ~/tappaas/Create-TAPPaaS-LXC.sh 744
+fetch "${REPO}${BRANCH}/src/foundation/cluster/sanity-check.sh"       ~/tappaas/sanity-check.sh       744
+msg_ok "Installed TAPPaaS helper scripts (VM + LXC + sanity-check)"
+
+# Pre-stage the scripts/configs for the subsequent foundation steps so the whole
+# install can proceed on this node without re-fetching: the firewall bootstrap,
+# the NixOS VM template, and the tappaas-cicd mothership.
+msg_info "Staging firewall / platform installers + template/cicd configs"
+fetch "${REPO}${BRANCH}/src/foundation/firewall/config-firewall.sh"    ~/tappaas/config-firewall.sh    744
+fetch "${REPO}${BRANCH}/src/foundation/cluster/install-platform.sh"    ~/tappaas/install-platform.sh   744
+fetch "${REPO}${BRANCH}/src/foundation/templates/tappaas-nixos.json"   ~/tappaas/tappaas-nixos.json    644
+fetch "${REPO}${BRANCH}/src/foundation/tappaas-cicd/tappaas-cicd.json"  ~/tappaas/tappaas-cicd.json     644
+msg_ok "Staged config-firewall.sh, install-platform.sh, tappaas-nixos.json, tappaas-cicd.json"
 
 msg_info "Copy zones.json"
-curl -fsSL  ${REPO}${BRANCH}/src/foundation/firewall/zones.json >~/tappaas/zones.json
+fetch "${REPO}${BRANCH}/src/foundation/firewall/zones.json" ~/tappaas/zones.json 644
 msg_ok "Copied zones.json"
 
 # Debian/Ubuntu cloud-init vendor-data snippet (issue #147).
@@ -274,10 +453,8 @@ fi
 msg_ok "Enabled 'snippets' content type on 'local' storage"
 
 msg_info "Copy Debian vendor-data snippet"
-mkdir -p /var/lib/vz/snippets
-curl -fsSL ${REPO}${BRANCH}/src/foundation/cluster/snippets/tappaas-debian-vendor.yaml \
-  >/var/lib/vz/snippets/tappaas-debian-vendor.yaml
-chmod 644 /var/lib/vz/snippets/tappaas-debian-vendor.yaml
+fetch "${REPO}${BRANCH}/src/foundation/cluster/snippets/tappaas-debian-vendor.yaml" \
+  /var/lib/vz/snippets/tappaas-debian-vendor.yaml 644
 msg_ok "Copied Debian vendor-data snippet"
 
 msg_info "Install power top:"
@@ -289,11 +466,14 @@ apt -y install smartmontools &>/dev/null || msg_error "smartmontools install fai
 msg_ok "Installed smartmontools"
 
 msg_info "Configuring SSD lifecycle management (autotrim + cron jobs)"
-curl -fsSL "${REPO}${BRANCH}/src/foundation/cluster/setup-ssd-lifecycle.sh" \
-    >/root/tappaas/setup-ssd-lifecycle.sh
-chmod 755 /root/tappaas/setup-ssd-lifecycle.sh
-/root/tappaas/setup-ssd-lifecycle.sh >/dev/null \
-    || msg_error "SSD lifecycle setup failed"
+# Download is fatal-on-failure via fetch() (issue #175); the runtime result is
+# then checked explicitly so a 0-byte/broken script can never report success.
+fetch "${REPO}${BRANCH}/src/foundation/cluster/setup-ssd-lifecycle.sh" \
+    /root/tappaas/setup-ssd-lifecycle.sh 755
+if ! /root/tappaas/setup-ssd-lifecycle.sh >/dev/null; then
+    msg_error "SSD lifecycle setup failed at runtime"
+    exit 1
+fi
 msg_ok "Configured SSD lifecycle management"
 
 # msg_info "Install netbird client:"
@@ -305,7 +485,50 @@ apt update &>/dev/null || msg_error "apt update failed"
 apt -y dist-upgrade &>/dev/null || msg_error "apt dist-upgrade failed"
 msg_ok "Updated Proxmox VE"
 
-echo "The TAPPaaS post proxmox install script was run" `date` >/var/log/tappaas.step1
+echo "The TAPPaaS post proxmox install script was run" "$(date)" >/var/log/tappaas.step1
+msg_ok "Completed TAPPaaS base post-install"
+
+fi   # ── end RUN_BASE ────────────────────────────────────────────────
+
+# ──────────────────────────────────────────────────────────────────────
+# Config phases — run on every invocation, each individually idempotent.
+# Order: network first (operator is at the console; corosync needs the mgmt
+# IP), THEN cluster, THEN storage. Storage MUST come after the cluster is
+# created: a ZFS pool created on a standalone node before it joins/forms the
+# cluster is not usable as HA failover storage in Proxmox, so the tank pools
+# have to be defined while the node is already a cluster member.
+# ──────────────────────────────────────────────────────────────────────
+mkdir -p ~/tappaas
+
+# Phase 2 — Network: lan/wan bridges (issue #141)
+if [ "$SKIP_NETWORK" = 1 ]; then
+  msg_ok "Skipping network configuration (--skip-network)"
+else
+  msg_info "Fetching config-network.sh"
+  fetch "${REPO}${BRANCH}/src/foundation/cluster/config-network.sh" ~/tappaas/config-network.sh 755
+  msg_ok "Fetched config-network.sh"
+  ~/tappaas/config-network.sh ${NONINT_ARG} \
+    || msg_error "config-network.sh did not complete — re-run ~/tappaas/config-network.sh"
+fi
+
+# Phase 1 — Cluster (issue #140). Must run BEFORE storage (see note above).
+configure_cluster
+
+# Phase 3 — Storage: ZFS pools tanka1/tankb1/tankc1 (after cluster membership)
+if [ "$SKIP_STORAGE" = 1 ]; then
+  msg_ok "Skipping storage configuration (--skip-storage)"
+else
+  msg_info "Fetching config-storage.sh"
+  fetch "${REPO}${BRANCH}/src/foundation/cluster/config-storage.sh" ~/tappaas/config-storage.sh 755
+  msg_ok "Fetched config-storage.sh"
+  ~/tappaas/config-storage.sh ${NONINT_ARG} \
+    || msg_error "config-storage.sh did not complete — re-run ~/tappaas/config-storage.sh"
+fi
+
+print_summary
+
+# First node only: offer to continue into the firewall bootstrap.
+maybe_install_firewall
 
 msg_ok "Completed TAPPaaS post Proxmox VE install script"
 
