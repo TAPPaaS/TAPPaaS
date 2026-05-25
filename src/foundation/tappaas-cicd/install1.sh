@@ -32,29 +32,54 @@ else
 fi
 msg_ok "Determined TAPPaaS branch to use: ${BRANCH}"
 
-# clone the tappaas-cicd repo
-echo -e "\nCloning TAPPaaS repository $REPOTOCLONE ..."
-git clone "$REPOTOCLONE"
+# clone the tappaas-cicd repo (idempotent: reuse an existing checkout so this
+# script can be safely re-run, e.g. by install-platform.sh's Phase B retry).
+if [ -d TAPPaaS/.git ]; then
+  msg_info "TAPPaaS already cloned — reusing existing checkout"
+else
+  echo -e "\nCloning TAPPaaS repository $REPOTOCLONE ..."
+  git clone "$REPOTOCLONE"
+fi
 echo -e "\nswitching to branch $BRANCH..."
 cd TAPPaaS || exit 1
 git checkout "$BRANCH"
+git pull --ff-only 2>/dev/null || true
 
 # go to the tappaas-cicd folder
 echo -e "\nChanging to TAPPaaS-CICD directory and rebuilding the NixOS configuration..."
 cd src/foundation/tappaas-cicd || exit 1
 
+# The cicd VM is cloned from the PREBUILT NixOS template image, which has no
+# /etc/nixos/hardware-configuration.nix (the image was built declaratively, not
+# via the NixOS installer). tappaas-cicd.nix imports that file for the machine's
+# real disk/boot layout, so generate it now from the running hardware. (Use
+# --show-hardware-config so we write only hardware-configuration.nix and never
+# touch configuration.nix — the system is built from the flake regardless.)
+if [ ! -f /etc/nixos/hardware-configuration.nix ]; then
+  msg_info "Generating /etc/nixos/hardware-configuration.nix from running hardware"
+  sudo mkdir -p /etc/nixos
+  sudo nixos-generate-config --show-hardware-config | sudo tee /etc/nixos/hardware-configuration.nix >/dev/null
+  msg_ok "Generated /etc/nixos/hardware-configuration.nix"
+fi
+
 # rebuild the nixos configuration. NixOS version is pinned in ./flake.lock
 # (declared in git); --impure only to read /etc/nixos/hardware-configuration.nix.
 sudo nixos-rebuild switch --flake .#tappaas-cicd --impure
 
-# create ssh keys for the tappaas user
+# create ssh keys for the tappaas user (idempotent: keep an existing keypair).
 echo -e "\nCreating SSH keys for the tappaas user and installing them for the proxmox host..."
-ssh-keygen -t ed25519 -f /home/tappaas/.ssh/id_ed25519 -N "" -C "tappaas-cicd"
+if [ ! -f /home/tappaas/.ssh/id_ed25519 ]; then
+  ssh-keygen -t ed25519 -f /home/tappaas/.ssh/id_ed25519 -N "" -C "tappaas-cicd"
+fi
 # enforce secure permissions on the private key
 sudo chown tappaas:users /home/tappaas/.ssh/id_ed25519*
 sudo chmod 600 /home/tappaas/.ssh/id_ed25519
 # add the public key to authorized_keys so that tappaas user can ssh to itself
-cat /home/tappaas/.ssh/id_ed25519.pub >> /home/tappaas/.ssh/authorized_keys && chmod 600 /home/tappaas/.ssh/authorized_keys
+# (idempotent: only append if not already present).
+touch /home/tappaas/.ssh/authorized_keys
+grep -qxF "$(cat /home/tappaas/.ssh/id_ed25519.pub)" /home/tappaas/.ssh/authorized_keys \
+  || cat /home/tappaas/.ssh/id_ed25519.pub >> /home/tappaas/.ssh/authorized_keys
+chmod 600 /home/tappaas/.ssh/authorized_keys
 
 chmod +x /home/tappaas/TAPPaaS/src/foundation/tappaas-cicd/install1.sh
 chmod +x /home/tappaas/TAPPaaS/src/foundation/tappaas-cicd/install2.sh
