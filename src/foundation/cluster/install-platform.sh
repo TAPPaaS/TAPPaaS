@@ -191,7 +191,7 @@ print_manual_cicd() { # print_manual_cicd <vmid> <domain>
         ${BL}sudo reboot${CL}   (then reconnect)
   3. Install the platform tooling:
         ${BL}cd TAPPaaS/src/foundation/tappaas-cicd${CL}
-        ${BL}./install2.sh --domain "${dom}"${CL}
+        ${BL}./install2.sh --branch "${BRANCH}" --domain "${dom}"${CL}
 
 Once cicd is up it owns the platform: zone-manager / caddy-manager / rules-manager
 configure VLANs, the reverse proxy and firewall rules (using the firewall API key
@@ -303,9 +303,13 @@ build_cicd() {
   propagate_fw_credentials
   grant_cicd_firewall_access
 
-  # B.4 — platform tooling + reverse proxy (install2.sh). Pass --domain only when
-  #        one was supplied; otherwise install2 keeps its placeholder default.
-  local install2_cmd="cd TAPPaaS/src/foundation/tappaas-cicd && ./install2.sh"
+  # B.4 — platform tooling + reverse proxy (install2.sh). Pass --branch so the
+  #        cicd tracks the SAME branch we installed from: create-configuration.sh
+  #        defaults to 'stable', which would make pre-update.sh check out stale
+  #        stable code (e.g. predating the single-node HA guard) even on a main
+  #        install. Pass --domain only when supplied (else install2 keeps its
+  #        placeholder default).
+  local install2_cmd="cd TAPPaaS/src/foundation/tappaas-cicd && ./install2.sh --branch '${BRANCH}'"
   if [[ -n "$DOMAIN" ]]; then
     install2_cmd+=" --domain '${DOMAIN}'"
   else
