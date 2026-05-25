@@ -166,7 +166,9 @@ done
 info "${GN}✓${CL} Bootstrap SSH reachable. Pushing this deployment's unique config..."
 bscp "$CONFIG_XML" "root@${FW_IP}:/conf/config.xml" || die "Failed to scp config.xml to the firewall."
 info "Rebooting the firewall into the deployed config (unique creds, SSH off)..."
-bssh reboot >/dev/null 2>&1 || true   # connection drops as it reboots — expected
+# Full path: the OPNsense root shell is csh with a minimal PATH, so a bare
+# `reboot` is not found. The reboot drops the SSH connection — expected.
+bssh /sbin/reboot >/dev/null 2>&1 || true
 
 # ── 5. Verify + write credentials for cicd ───────────────────────────
 umask 077
