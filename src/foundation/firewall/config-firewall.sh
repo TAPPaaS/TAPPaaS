@@ -46,7 +46,16 @@ die()   { error "$*"; exit 1; }
 
 # ── Cleanup ──────────────────────────────────────────────────────────
 WORKDIR=""
-cleanup() { [[ -n "$WORKDIR" && -d "$WORKDIR" ]] && rm -rf "$WORKDIR" 2>/dev/null || true; }
+TEMP_FW_ADDED=0   # 1 if we added a temporary host route to reach the firewall
+TEMP_FW_SRC=""    # the /32 source address we added (for cleanup)
+TEMP_FW_DEV=""    # the bridge it was added on
+cleanup() {
+  [[ -n "$WORKDIR" && -d "$WORKDIR" ]] && rm -rf "$WORKDIR" 2>/dev/null || true
+  if [[ "$TEMP_FW_ADDED" == "1" ]]; then
+    ip route del "${FW_IP}/32" dev "$TEMP_FW_DEV" 2>/dev/null || true
+    ip addr  del "${TEMP_FW_SRC}/32" dev "$TEMP_FW_DEV" 2>/dev/null || true
+  fi
+}
 trap cleanup EXIT INT TERM
 
 usage() { sed -n '2,/^set -euo/p' "$0" | sed 's/^# \{0,1\}//; /^set -euo/d'; }
@@ -88,6 +97,33 @@ readonly SSH_OPTS=(-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -
 
 bssh() { sshpass -p "$BOOTSTRAP_PW" ssh "${SSH_OPTS[@]}" "root@${FW_IP}" "$@"; }
 bscp() { sshpass -p "$BOOTSTRAP_PW" scp "${SSH_OPTS[@]}" "$@"; }
+
+# ── Ensure the node can reach the firewall's bootstrap LAN ───────────
+# During install the node's lan IP is still on the pre-existing network, so it
+# has NO L3 path to FW_IP (10.0.0.1) even though node and firewall share the lan
+# bridge at L2 (issue: bootstrap SSH wait times out). Add a SURGICAL host route:
+# a /32 source address plus a /32 route to FW_IP only.
+#
+# NOT a /24 alias: a /24 makes the node treat all of 10.0.0.0/24 as link-local
+# and can blackhole an admin session arriving from a client that itself lives in
+# 10.0.0.0/24 (observed: it captured the cicd VM's 10.0.0.x address and dropped
+# the operator's SSH). The /32 route reaches only the firewall and is removed on
+# exit. (Persistent node connectivity to the 10.0.0.0/24 mgmt net is a separate
+# concern handled by the node's management IP, not here.)
+ensure_fw_reachable() {
+  local net="${FW_IP%.*}"   # e.g. "10.0.0"
+  if ip -o -4 addr show "$LAN_BRIDGE" 2>/dev/null | grep -qE "inet ${net//./\\.}\."; then
+    info "Node already has a ${net}.x address on ${LAN_BRIDGE} — using it to reach the firewall."
+    return 0
+  fi
+  TEMP_FW_SRC="${net}.9"
+  TEMP_FW_DEV="$LAN_BRIDGE"
+  info "Node has no ${net}.x address; adding a temporary host route ${BL}${TEMP_FW_SRC} → ${FW_IP}${CL} on ${LAN_BRIDGE}."
+  ip addr add "${TEMP_FW_SRC}/32" dev "$LAN_BRIDGE" 2>/dev/null || true
+  ip route replace "${FW_IP}/32" dev "$LAN_BRIDGE" src "${TEMP_FW_SRC}" \
+    || die "Could not add a host route to ${FW_IP} on ${LAN_BRIDGE}."
+  TEMP_FW_ADDED=1
+}
 
 # ── Fetch firewall.json + template if not present ───────────────────
 mkdir -p "$TAPPAAS_DIR"
@@ -156,6 +192,7 @@ cp "$FW_JSON" "${CONFIG_DIR}/firewall.json" 2>/dev/null || true
 "$CREATE_VM" "$VMNAME"   # imageType img → download, import, boot (bootstrap config: 10.0.0.1, SSH on)
 
 # ── 4. Wait for the firewall to FULLY boot, then swap config + reboot ─
+ensure_fw_reachable
 info "Waiting for the firewall's bootstrap SSH at ${FW_IP} (first boot ~90s)..."
 ok=0
 for _ in $(seq 1 40); do

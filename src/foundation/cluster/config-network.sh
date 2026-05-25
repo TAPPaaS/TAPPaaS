@@ -74,45 +74,80 @@ HAVE_WHIPTAIL=0; command -v whiptail >/dev/null && HAVE_WHIPTAIL=1
 [[ -t 0 && -t 1 ]] || INTERACTIVE=0
 
 # ── Swap-cables: post-firewall node transition (issue #141) ─────────
-# Once the OPNsense firewall is up at FW_IP, point this node at it for routing
-# and DNS. Changing only the default route + resolver + /etc/hosts does not drop
-# the node's own lan IP, so a management session on the lan subnet is unaffected
-# (no rollback needed). corosync is advised, never auto-edited on a live cluster.
+# Once the OPNsense firewall is up at FW_IP, move this node fully behind it: the
+# node RENUMBERS onto the management network (10.0.0.0/24) and routes + resolves
+# via the firewall. The node's mgmt IP follows the firewall's static map
+# (tappaas1→10.0.0.10, tappaas2→.11, tappaas3→.12 — see firewall-config.xml.template),
+# i.e. 10.0.0.(9+N) for tappaasN, overridable with --mgmt-ip.
+#
+# Because the node's IP changes, this DROPS any session on the old address —
+# reconnect at the new mgmt IP afterwards. Run from the node CONSOLE (as the
+# install guide says), so the script survives the network reload. All four
+# touchpoints are updated: /etc/network/interfaces, /etc/hosts, /etc/resolv.conf,
+# and the cluster's /etc/pve/corosync.conf (ring0_addr + config_version bump;
+# pmxcfs regenerates /etc/corosync/corosync.conf from it).
 swap_cables() {
-  local lan_ip host
-  lan_ip="$(ip -o -4 addr show lan 2>/dev/null | awk '{print $4}' | cut -d/ -f1)"
+  local old_ip host node_n new_cidr new_ip
+  old_ip="$(ip -o -4 addr show lan 2>/dev/null | awk '{print $4}' | cut -d/ -f1)"
   host="$(hostname -s)"
-  info "Swap-cables: routing + DNS via the firewall (${BL}${FW_IP}${CL})"
 
-  info "  /etc/resolv.conf → nameserver ${FW_IP}"
-  cp -a /etc/resolv.conf "/etc/resolv.conf.tappaas.$(date +%Y%m%d-%H%M%S).bak" 2>/dev/null || true
-  printf 'search internal mgmt.internal\nnameserver %s\n' "$FW_IP" > /etc/resolv.conf
-
-  if [[ -n "$lan_ip" ]]; then
-    info "  /etc/hosts → ${lan_ip} ${host}.mgmt.internal ${host}"
-    sed -i -E "/[[:space:]]${host}([[:space:]]|\$)/d" /etc/hosts 2>/dev/null || true
-    printf '%s %s.mgmt.internal %s\n' "$lan_ip" "$host" "$host" >> /etc/hosts
+  # Target mgmt IP: explicit --mgmt-ip wins; else derive from the node number.
+  if [[ -n "${MGMT_IP:-}" ]]; then
+    new_cidr="$MGMT_IP"; [[ "$new_cidr" == */* ]] || new_cidr="${new_cidr}/24"
+  else
+    node_n="$(printf '%s' "$host" | grep -oE '[0-9]+$' || true)"
+    if [[ -n "$node_n" ]]; then new_cidr="10.0.0.$((9 + node_n))/24"; else new_cidr="10.0.0.10/24"; fi
   fi
+  new_ip="${new_cidr%/*}"
 
+  info "Swap-cables: renumbering ${BL}${host}${CL} ${old_ip:-?} → ${BL}${new_ip}${CL}, routing/DNS via the firewall (${BL}${FW_IP}${CL})"
+  warn "  This changes the node's IP — a session on ${old_ip:-the old IP} will drop; reconnect at ${BL}${new_ip}${CL}."
+
+  # 1. /etc/network/interfaces — lan address + gateway.
   cp -a "$INTERFACES" "${INTERFACES}.tappaas.$(date +%Y%m%d-%H%M%S).bak"
+  sed -i -E "/^iface lan inet static/,/^[[:space:]]*\$/ s|^([[:space:]]*address[[:space:]]+).*|\1${new_cidr}|" "$INTERFACES"
   if grep -qE '^[[:space:]]*gateway[[:space:]]' "$INTERFACES"; then
     sed -i -E "s|^([[:space:]]*gateway[[:space:]]+).*|\1${FW_IP}|" "$INTERFACES"
   else
     sed -i -E "/^iface lan inet static/,/^[[:space:]]*\$/ s|^([[:space:]]*address[[:space:]].*)|\1\n\tgateway ${FW_IP}|" "$INTERFACES"
   fi
-  info "  default gateway → ${FW_IP}; reloading network..."
-  ifreload -a 2>/dev/null || systemctl restart networking || warn "network reload returned non-zero"
+  info "  /etc/network/interfaces → address ${new_cidr}, gateway ${FW_IP}"
 
+  # 2. /etc/hosts — node's own record at the new IP.
+  info "  /etc/hosts → ${new_ip} ${host}.mgmt.internal ${host}"
+  sed -i -E "/[[:space:]]${host}([[:space:]]|\$)/d" /etc/hosts 2>/dev/null || true
+  printf '%s %s.mgmt.internal %s\n' "$new_ip" "$host" "$host" >> /etc/hosts
+
+  # 3. /etc/resolv.conf — resolve via the firewall.
+  info "  /etc/resolv.conf → nameserver ${FW_IP}"
+  cp -a /etc/resolv.conf "/etc/resolv.conf.tappaas.$(date +%Y%m%d-%H%M%S).bak" 2>/dev/null || true
+  printf 'search internal mgmt.internal\nnameserver %s\n' "$FW_IP" > /etc/resolv.conf
+
+  # 4. /etc/pve/corosync.conf — ring0_addr + config_version (cluster-wide source;
+  #    pmxcfs regenerates /etc/corosync/corosync.conf). Only when this node's old
+  #    IP is actually referenced (i.e. ring0_addr is an IP, not a hostname).
   if [[ -f /etc/pve/corosync.conf ]]; then
-    if [[ -n "$lan_ip" ]] && grep -q "$lan_ip" /etc/pve/corosync.conf 2>/dev/null; then
-      info "  ${GN}✓${CL} corosync.conf already references ${lan_ip}"
+    if [[ -n "$old_ip" ]] && grep -qF "$old_ip" /etc/pve/corosync.conf 2>/dev/null; then
+      local cv tmp esc_old
+      cv="$(grep -oE 'config_version:[[:space:]]*[0-9]+' /etc/pve/corosync.conf | grep -oE '[0-9]+' | head -1)"
+      esc_old="${old_ip//./\\.}"
+      tmp="$(mktemp)"
+      sed -E -e "s/(ring0_addr:[[:space:]]*)${esc_old}([[:space:]]|\$)/\1${new_ip}\2/" \
+             -e "s/\b${esc_old}\b/${new_ip}/g" \
+             -e "s/(config_version:[[:space:]]*)[0-9]+/\1$(( ${cv:-1} + 1 ))/" \
+             /etc/pve/corosync.conf > "$tmp"
+      cat "$tmp" > /etc/pve/corosync.conf && rm -f "$tmp"
+      info "  /etc/pve/corosync.conf → ring0_addr ${new_ip}, config_version $(( ${cv:-1} + 1 ))"
     else
-      warn "  If this node's mgmt IP changed, update ring0_addr in /etc/pve/corosync.conf"
-      warn "  to ${lan_ip:-<lan ip>}, bump config_version, then: systemctl restart corosync"
+      info "  ${GN}✓${CL} corosync.conf has no address reference to ${old_ip:-the old IP} — no change."
     fi
   fi
 
-  info "${GN}Swap-cables complete.${CL} Verify: ping ${FW_IP}; ping 8.8.8.8; nslookup firewall.mgmt.internal"
+  # Apply: bring up the new address (this is where an old-IP session drops).
+  info "  reloading network (node moves to ${new_ip})..."
+  ifreload -a 2>/dev/null || systemctl restart networking || warn "network reload returned non-zero"
+
+  info "${GN}Swap-cables complete.${CL} Node is now ${BL}${new_ip}${CL}. Verify: ping ${FW_IP}; ping 8.8.8.8; nslookup firewall.mgmt.internal"
 }
 
 if [[ "$SWAP_CABLES" == "1" ]]; then
