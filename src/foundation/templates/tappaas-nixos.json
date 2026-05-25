@@ -12,7 +12,7 @@
   "bios": "ovmf",
   "imageType": "img",
   "image": "tappaas-nixos.qcow2.zst",
-  "imageLocation": "https://github.com/TAPPaaS/TAPPaaS/releases/latest/download/",
+  "imageLocation": "https://github.com/TAPPaaS/TAPPaaS/releases/download/nixos-template-v1.1/",
   "bridge0": "lan",
   "zone0": "mgmt",
   "dependsOn": [

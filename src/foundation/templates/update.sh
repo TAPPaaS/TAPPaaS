@@ -28,7 +28,11 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 readonly GH_REPO="TAPPaaS/TAPPaaS"
-readonly RELEASE_API="https://api.github.com/repos/${GH_REPO}/releases/latest"
+# This module's release STREAM. The repo publishes multiple streams (e.g.
+# opnsense-firewall-v*), so /releases/latest (repo-wide) is NOT reliable — we
+# resolve the newest release whose tag starts with this prefix.
+readonly TAG_PREFIX="nixos-template-v"
+readonly RELEASES_API="https://api.github.com/repos/${GH_REPO}/releases"
 readonly NIX_JSON="${SCRIPT_DIR}/tappaas-nixos.json"
 readonly CREATE_VM="${SCRIPT_DIR}/../cluster/Create-TAPPaaS-VM.sh"
 readonly MARKER="/root/tappaas/nixos-template.version"   # lives on the template's node
@@ -52,11 +56,15 @@ info "${BOLD}TAPPaaS NixOS template update${CL} (${VMNAME}, VM ${VMID})"
 # ── 1. Latest available release tag (cheap). Fail-soft on a network hiccup so a
 #       transient GitHub outage does not fail the whole hourly update run. ──────
 info "Checking latest published template release..."
-latest_tag="$(curl -fsSL "$RELEASE_API" 2>/dev/null | jq -r '.tag_name // empty')"
+latest_tag="$(curl -fsSL "$RELEASES_API" 2>/dev/null \
+  | jq -r --arg p "$TAG_PREFIX" '[.[] | select(.tag_name | startswith($p))] | sort_by(.published_at) | reverse | .[0].tag_name // empty')"
 if [[ -z "$latest_tag" ]]; then
-  warn "Could not reach the GitHub releases API — skipping template update this run."
+  warn "No ${TAG_PREFIX}* release found (or GitHub unreachable) — skipping template update this run."
   exit 0
 fi
+# Download URL for THIS release tag specifically (not /releases/latest/download,
+# which would resolve to whatever stream published most recently).
+readonly TAG_URL="https://github.com/${GH_REPO}/releases/download/${latest_tag}"
 
 # ── 2. Locate the template in the cluster (empty if it does not exist yet). ────
 NODE="$(vm_exists_on_cluster "$VMID" "$NODE1_FQDN" || true)"
@@ -84,7 +92,7 @@ info "Update available: ${YW}${installed_tag:-<none>}${CL} -> ${GN}${latest_tag}
 
 # ── 4. Pre-flight: confirm the release asset is fetchable BEFORE we destroy the
 #       existing template, so a bad/missing release leaves us untouched. ────────
-asset_url="${IMAGELOCATION%/}/${IMAGE#/}"
+asset_url="${TAG_URL}/${IMAGE#/}"
 info "Verifying release asset is reachable: ${asset_url}"
 http_code="$(curl -fsIL -o /dev/null -w '%{http_code}' "$asset_url" 2>/dev/null || echo 000)"
 [[ "$http_code" == "200" ]] || die "Release asset not reachable (HTTP ${http_code}): ${asset_url}"
@@ -92,7 +100,12 @@ http_code="$(curl -fsIL -o /dev/null -w '%{http_code}' "$asset_url" 2>/dev/null 
 # ── 5. Stage the current provisioner + module JSON on the node. ────────────────
 info "Staging provisioner files to ${NODE}..."
 node_run "mkdir -p /root/tappaas"
-scp -q "${SSH_OPTS[@]}" "$NIX_JSON"   "root@${NODE}.mgmt.internal:/root/tappaas/"
+# Stage the module JSON with imageLocation pinned to the resolved release tag, so
+# Create-TAPPaaS-VM.sh downloads THIS stream's asset (not the repo-wide latest).
+staged_json="$(mktemp)"
+jq --arg loc "${TAG_URL}/" '.imageLocation = $loc' "$NIX_JSON" > "$staged_json"
+scp -q "${SSH_OPTS[@]}" "$staged_json"  "root@${NODE}.mgmt.internal:/root/tappaas/tappaas-nixos.json"
+rm -f "$staged_json"
 scp -q "${SSH_OPTS[@]}" "$CREATE_VM"  "root@${NODE}.mgmt.internal:/root/tappaas/Create-TAPPaaS-VM.sh"
 node_run "chmod +x /root/tappaas/Create-TAPPaaS-VM.sh"
 # zones.json is normally already distributed by the cluster update; push if absent.
