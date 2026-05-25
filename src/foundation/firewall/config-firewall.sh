@@ -155,7 +155,7 @@ info "Creating the firewall VM from the prebuilt image (downloads + imports)..."
 cp "$FW_JSON" "${CONFIG_DIR}/firewall.json" 2>/dev/null || true
 "$CREATE_VM" "$VMNAME"   # imageType img → download, import, boot (bootstrap config: 10.0.0.1, SSH on)
 
-# ── 4. Wait for bootstrap SSH, push the unique config, reboot ────────
+# ── 4. Wait for the firewall to FULLY boot, then swap config + reboot ─
 info "Waiting for the firewall's bootstrap SSH at ${FW_IP} (first boot ~90s)..."
 ok=0
 for _ in $(seq 1 40); do
@@ -163,12 +163,44 @@ for _ in $(seq 1 40); do
   sleep 5
 done
 [[ "$ok" == "1" ]] || die "Bootstrap SSH on ${FW_IP} never came up — check the VM console (is it the prebuilt image with SSH enabled?)."
-info "${GN}✓${CL} Bootstrap SSH reachable. Pushing this deployment's unique config..."
-bscp "$CONFIG_XML" "root@${FW_IP}:/conf/config.xml" || die "Failed to scp config.xml to the firewall."
-info "Rebooting the firewall into the deployed config (unique creds, SSH off)..."
-# Full path: the OPNsense root shell is csh with a minimal PATH, so a bare
-# `reboot` is not found. The reboot drops the SSH connection — expected.
-bssh /sbin/reboot >/dev/null 2>&1 || true
+# Wait until OPNsense has FULLY finished first boot (GUI answering on 443).
+# OPNsense rewrites /conf/config.xml during first-boot settling; scp'ing before
+# that races and is overwritten. The GUI answering means settling is done.
+info "${GN}✓${CL} Bootstrap SSH up. Waiting for OPNsense to finish booting (GUI)..."
+for _ in $(seq 1 30); do
+  curl -ksS -o /dev/null --max-time 5 "https://${FW_IP}/" 2>/dev/null && break
+  sleep 5
+done
+sleep 8   # small extra settle margin
+
+info "Applying this deployment's unique config..."
+# Upload to a TEMP path first: this does NOT change /conf/config.xml, so the
+# bootstrap root password stays valid for the SSH auth below.
+bscp "$CONFIG_XML" "root@${FW_IP}:/tmp/tappaas-deploy-config.xml" || die "Failed to upload config.xml to the firewall."
+# Apply in two deterministic stages (subtleties learned on the test bench):
+#   1. cp the config into place + rc.reload_all. rc.reload_all re-reads
+#      /conf/config.xml into memory and rotates the API key + root password live,
+#      so in-memory == deployed. (It does NOT reliably stop a running sshd, and a
+#      reboot chained after it gets killed when the reload restarts sshd — so we
+#      don't chain it.) Run detached + piped to /bin/sh (the OPNsense root shell
+#      is csh and would mangle the redirects).
+printf '%s\n' \
+  'cp /tmp/tappaas-deploy-config.xml /conf/config.xml' \
+  'rm -f /tmp/config.cache' \
+  'nohup /usr/local/etc/rc.reload_all >/tmp/tappaas-apply.log 2>&1 &' \
+  'sleep 1' \
+  | bssh /bin/sh >/dev/null 2>&1 || true
+info "Reloading firewall config (rotating credentials)..."
+# Wait for the rotation to take effect: the UNIQUE API key must authenticate.
+for _ in $(seq 1 30); do
+  curl -ksS --max-time 6 -u "${API_KEY}:${API_SECRET}" "https://${FW_IP}/api/core/firmware/status" 2>/dev/null | grep -q '"product' && break
+  sleep 5
+done
+#   2. Reboot the VM from the NODE (qm) — deterministic and independent of the
+#      firewall's SSH (which the deployed config disables). Because in-memory is
+#      now the deployed config, the clean boot persists it and brings sshd down.
+info "Rebooting the firewall (clean boot into the hardened deployed config)..."
+qm reboot "$VMID" >/dev/null 2>&1 || qm stop "$VMID" >/dev/null 2>&1 && qm start "$VMID" >/dev/null 2>&1 || true
 
 # ── 5. Verify + write credentials for cicd ───────────────────────────
 umask 077
@@ -187,6 +219,18 @@ for _ in $(seq 1 24); do
 done
 if [[ "$ok" == "1" ]]; then
   info "${GN}✓${CL} Firewall reachable at ${FW_IP}"
+  # Confirm the DEPLOYED config is live: the unique API key must authenticate
+  # (proves rotation succeeded, not the bootstrap config). Give the GUI a moment.
+  api_ok=0
+  for _ in $(seq 1 18); do
+    if curl -ksS --max-time 6 -u "${API_KEY}:${API_SECRET}" "https://${FW_IP}/api/core/firmware/status" 2>/dev/null | grep -q '"product'; then api_ok=1; break; fi
+    sleep 5
+  done
+  if [[ "$api_ok" == "1" ]]; then
+    info "${GN}✓${CL} Unique API key authenticates — deployed config is live."
+  else
+    warn "Unique API key did not authenticate yet — the rotation may not have applied; check the console."
+  fi
 else
   warn "Firewall not yet answering at ${FW_IP} — give it a moment, then verify the console."
 fi
