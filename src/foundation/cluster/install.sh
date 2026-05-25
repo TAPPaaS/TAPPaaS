@@ -334,6 +334,15 @@ Enabled: true
 EOF
 msg_ok "Added 'pve-no-subscription' repository"
 
+# Refresh the package lists now that the repo set has changed (enterprise off,
+# no-subscription on). Without this, a fresh node has no package list that
+# contains community packages (jq, powertop, …) and the first `apt install`
+# below fails with "Unable to locate package". Fatal: nothing after this works
+# without it.
+msg_info "Refreshing apt package lists"
+apt-get update &>/dev/null || { msg_error "apt update failed"; exit 1; }
+msg_ok "Refreshed apt package lists"
+
 
 msg_info "Disabling subscription nag"
 # Create external script, this is needed because DPkg::Post-Invoke is fidly with quote interpretation

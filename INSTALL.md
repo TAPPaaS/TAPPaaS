@@ -51,8 +51,11 @@ That's it. Everything else is created by the install.
 
    *(Hostnames/subnet are defaults — see appendix.)*
 
-2. **Run the bootstrap** from the Proxmox **node console/shell** (not SSH — the
-   network step may move the interface):
+2. **Run the bootstrap** from the Proxmox **node console/shell**
+
+Notes:
+- Do not usen SSH — the network step may move the interfaceit has not been testet
+- It is recomended to use the xterm.js shell option in the tappaas1 menu, this gives some more scroll and percistency on the output from installing
 
    ```bash
    REPO="https://raw.githubusercontent.com/TAPPaaS/TAPPaaS/"; BRANCH="main"
