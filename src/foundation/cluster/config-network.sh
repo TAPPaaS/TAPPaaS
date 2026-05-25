@@ -162,7 +162,7 @@ fi
 
 # ── Port selection ───────────────────────────────────────────────────
 pick_port() {
-  local title="$1" exclude="${2:-}"
+  local title="$1" exclude="${2:-}" default="${3:-}"
   local -a wt=()
   local x
   for x in "${!PORTS[@]}"; do
@@ -170,23 +170,70 @@ pick_port() {
     wt+=("${PORTS[$x]}" "${PORT_DESCS[$x]}")
   done
   if [[ "$HAVE_WHIPTAIL" == "1" ]]; then
-    whiptail --title "TAPPaaS network" --menu "$title" 20 78 10 "${wt[@]}" 3>&1 1>&2 2>&3
+    local -a dflt=(); [[ -n "$default" ]] && dflt=(--default-item "$default")
+    whiptail --title "TAPPaaS network" "${dflt[@]}" --menu "$title" 20 78 10 "${wt[@]}" 3>&1 1>&2 2>&3
   else
     echo "$title" >&2
     for x in "${!PORTS[@]}"; do [[ "${PORTS[$x]}" == "$exclude" ]] || echo "  ${PORTS[$x]} — ${PORT_DESCS[$x]}" >&2; done
-    local ans; read -r -p "port: " ans >&2; echo "$ans"
+    local ans prompt="port: "
+    [[ -n "$default" ]] && prompt="port [${default}]: "
+    read -r -p "$prompt" ans >&2; echo "${ans:-$default}"
   fi
 }
 
+# ── Auto-detect sensible LAN/WAN defaults ────────────────────────────
+# LAN = the physical NIC that currently carries the management IP, i.e. the
+# member of the bridge that owns the default route (vmbr0 on a fresh PVE
+# install). Keeping the mgmt IP on this port preserves the operator's session
+# across the bridge rebuild — so it is the safe default.
+detect_lan_port() {
+  local defbr member m
+  defbr="$(ip -o -4 route show default 2>/dev/null | grep -oE 'dev [^ ]+' | awk '{print $2; exit}')"
+  [[ -n "$defbr" ]] || defbr="vmbr0"
+  for member in "${PORTS[@]}"; do
+    m="$(ip -o link show "$member" 2>/dev/null | grep -oE 'master [^ ]+' | awk '{print $2}')"
+    [[ "$m" == "$defbr" ]] && { echo "$member"; return 0; }
+  done
+  # Fallback: first physical port whose link is up.
+  for member in "${PORTS[@]}"; do
+    [[ "$(cat "/sys/class/net/${member}/operstate" 2>/dev/null)" == "up" ]] && { echo "$member"; return 0; }
+  done
+  return 1
+}
+
+# WAN = the sole remaining physical NIC (only unambiguous with exactly two).
+detect_wan_port() {
+  local lan="$1" only="" cnt=0 p
+  for p in "${PORTS[@]}"; do
+    [[ "$p" == "$lan" ]] && continue
+    only="$p"; cnt=$((cnt + 1))
+  done
+  [[ "$cnt" == "1" ]] && { echo "$only"; return 0; }
+  return 1
+}
+
+DEFAULT_LAN="$(detect_lan_port || true)"
+[[ -n "$DEFAULT_LAN" ]] && info "Detected management NIC (default LAN port): ${BL}${DEFAULT_LAN}${CL}"
+
 if [[ -z "$LAN_PORT" ]]; then
-  [[ "$INTERACTIVE" == "1" ]] || die "No --lan-port given and not interactive."
-  LAN_PORT="$(pick_port "Select the LAN port (VLAN trunk + management IP ${MGMT_IP}).\nThis connects to the managed switch.")"
+  if [[ "$INTERACTIVE" == "1" ]]; then
+    LAN_PORT="$(pick_port "Select the LAN port (VLAN trunk + management IP ${MGMT_IP}).\nThis connects to the managed switch." "" "$DEFAULT_LAN")"
+  else
+    LAN_PORT="$DEFAULT_LAN"
+    [[ -n "$LAN_PORT" ]] || die "No --lan-port given, not interactive, and could not auto-detect the management NIC."
+    info "Auto-selected LAN port ${BL}${LAN_PORT}${CL} (member of the management bridge)."
+  fi
 fi
 valid_port "$LAN_PORT" || die "LAN port '${LAN_PORT}' is not a physical port."
 
+DEFAULT_WAN="$(detect_wan_port "$LAN_PORT" || true)"
+
 if [[ -z "$WAN_PORT" ]]; then
   if [[ "$INTERACTIVE" == "1" ]]; then
-    WAN_PORT="$(pick_port "Select the WAN port (upstream/ISP uplink for the firewall).\nMust differ from LAN (${LAN_PORT})." "$LAN_PORT")"
+    WAN_PORT="$(pick_port "Select the WAN port (upstream/ISP uplink for the firewall).\nMust differ from LAN (${LAN_PORT})." "$LAN_PORT" "$DEFAULT_WAN")"
+  elif [[ -n "$DEFAULT_WAN" ]]; then
+    WAN_PORT="$DEFAULT_WAN"
+    info "Auto-selected WAN port ${BL}${WAN_PORT}${CL} (sole remaining NIC)."
   else
     warn "No --wan-port given — creating 'wan' bridge with no port (attach later)."
   fi
