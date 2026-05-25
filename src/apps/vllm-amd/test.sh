@@ -13,6 +13,17 @@ CONFIG_FILE="${SCRIPT_DIR}/${VMNAME}.json"
 # vmid may be overridden to test a non-default instance (issue #196).
 VMID="${TAPPAAS_VMID_OVERRIDE:-$(jq -r '.vmid' "$CONFIG_FILE")}"
 
+# `pct` only exists on PVE nodes, but this test is invoked on tappaas-cicd.
+# Resolve the node hosting the LXC and route every `pct` call there over ssh.
+_PRIMARY="tappaas1.mgmt.internal"
+LXC_NODE="$(ssh -o ConnectTimeout=8 -o StrictHostKeyChecking=accept-new "root@${_PRIMARY}" \
+    "pvesh get /cluster/resources --type vm --output-format json 2>/dev/null" \
+    | jq -r --argjson id "${VMID}" '.[] | select(.vmid==$id) | .node' 2>/dev/null)"
+[[ -n "${LXC_NODE:-}" ]] || { echo "ERROR: cannot resolve the node hosting LXC ${VMID}"; exit 1; }
+# -n: do not read the script's stdin (otherwise ssh consumes it and derails the
+# remaining test, and breaks any `... | while read` loops below).
+pct() { ssh -n -o ConnectTimeout=8 -o StrictHostKeyChecking=accept-new "root@${LXC_NODE}.mgmt.internal" pct "$@"; }
+
 PASS=0
 FAIL=0
 WARN=0
@@ -22,17 +33,17 @@ check() {
     local result="$2"
     if [[ "$result" == "0" ]]; then
         echo "  PASS: $desc"
-        ((PASS++))
+        PASS=$((PASS + 1))
     else
         echo "  FAIL: $desc"
-        ((FAIL++))
+        FAIL=$((FAIL + 1))
     fi
 }
 
 warn() {
     local desc="$1"
     echo "  WARN: $desc"
-    ((WARN++))
+    WARN=$((WARN + 1))
 }
 
 echo ""
@@ -77,49 +88,46 @@ fi
 # Test 6: vLLM API responding
 echo ""
 echo "--- API Health ---"
-CONTAINER_IP=$(pct exec "${VMID}" -- hostname -I 2>/dev/null | awk '{print $1}')
+# Query the vLLM API from INSIDE the container (127.0.0.1) via pct exec, so the
+# test does not depend on cicd→LXC network reachability.
+api() { pct exec "${VMID}" -- curl -s --connect-timeout 5 "$@" 2>/dev/null; }
+HTTP_CODE=$(pct exec "${VMID}" -- curl -s -o /dev/null -w "%{http_code}" --connect-timeout 5 "http://127.0.0.1:8000/v1/models" 2>/dev/null || echo "000")
+if [[ "$HTTP_CODE" == "200" ]]; then
+    check "vLLM API responding (127.0.0.1:8000)" "0"
 
-if [[ -n "$CONTAINER_IP" ]]; then
-    HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" --connect-timeout 5 "http://${CONTAINER_IP}:8000/v1/models" 2>/dev/null || echo "000")
-    if [[ "$HTTP_CODE" == "200" ]]; then
-        check "vLLM API responding (http://${CONTAINER_IP}:8000)" "0"
+    # Show loaded models
+    echo ""
+    echo "  Loaded models:"
+    api "http://127.0.0.1:8000/v1/models" | jq -r '.data[].id' 2>/dev/null | while read -r model; do
+        echo "    - $model"
+    done
 
-        # Show loaded models
-        echo ""
-        echo "  Loaded models:"
-        curl -s "http://${CONTAINER_IP}:8000/v1/models" 2>/dev/null | jq -r '.data[].id' 2>/dev/null | while read -r model; do
-            echo "    - $model"
-        done
-
-        # Test 7: Inference test
-        echo ""
-        echo "--- Inference Test ---"
-        MODEL=$(curl -s "http://${CONTAINER_IP}:8000/v1/models" 2>/dev/null | jq -r '.data[0].id' 2>/dev/null || echo "")
-        if [[ -n "$MODEL" ]]; then
-            RESPONSE=$(curl -s --connect-timeout 30 --max-time 60 \
-                -X POST "http://${CONTAINER_IP}:8000/v1/chat/completions" \
-                -H "Content-Type: application/json" \
-                -d "{\"model\":\"${MODEL}\",\"messages\":[{\"role\":\"user\",\"content\":\"Say hello in exactly 3 words.\"}],\"max_tokens\":20}" \
-                2>/dev/null)
-            if echo "$RESPONSE" | jq -e '.choices[0].message.content' > /dev/null 2>&1; then
-                check "Inference working (model: ${MODEL})" "0"
-                ANSWER=$(echo "$RESPONSE" | jq -r '.choices[0].message.content')
-                echo "  Response: ${ANSWER}"
-            else
-                check "Inference working" "1"
-            fi
+    # Test 7: Inference test
+    echo ""
+    echo "--- Inference Test ---"
+    MODEL=$(api "http://127.0.0.1:8000/v1/models" | jq -r '.data[0].id' 2>/dev/null || echo "")
+    if [[ -n "$MODEL" ]]; then
+        RESPONSE=$(pct exec "${VMID}" -- curl -s --connect-timeout 30 --max-time 60 \
+            -X POST "http://127.0.0.1:8000/v1/chat/completions" \
+            -H "Content-Type: application/json" \
+            -d "{\"model\":\"${MODEL}\",\"messages\":[{\"role\":\"user\",\"content\":\"Say hello in exactly 3 words.\"}],\"max_tokens\":20}" \
+            2>/dev/null)
+        if echo "$RESPONSE" | jq -e '.choices[0].message.content' > /dev/null 2>&1; then
+            check "Inference working (model: ${MODEL})" "0"
+            ANSWER=$(echo "$RESPONSE" | jq -r '.choices[0].message.content')
+            echo "  Response: ${ANSWER}"
         else
-            warn "No model loaded — skip inference test"
+            check "Inference working" "1"
         fi
     else
-        check "vLLM API responding (HTTP ${HTTP_CODE})" "1"
-        if [[ "$VLLM_RUNNING" == *"Up"* ]]; then
-            echo "  (Container running but API not ready — model may still be loading)"
-            echo "  (Check logs: pct exec ${VMID} -- docker logs -f vllm)"
-        fi
+        warn "No model loaded — skip inference test"
     fi
 else
-    check "Container has IP address" "1"
+    check "vLLM API responding (HTTP ${HTTP_CODE})" "1"
+    if [[ "$VLLM_RUNNING" == *"Up"* ]]; then
+        echo "  (Container running but API not ready — model may still be loading)"
+        echo "  (Check logs: pct exec ${VMID} -- docker logs -f vllm)"
+    fi
 fi
 
 # Summary
