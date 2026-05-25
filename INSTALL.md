@@ -117,6 +117,19 @@ and is where you install everything else.
 > the in-VM `install1`/`install2` steps by hand instead — see
 > [Appendix: install options](#appendix-install-options).
 
+### 2.4 Before the rest of the foundation
+
+With the mothership up, do these two before §3:
+
+1. **Add the other cluster nodes** (3-node cluster only). Run the same bootstrap
+   (2.2) on each remaining node; they auto-join. cicd configures **HA +
+   replication automatically** on the next update — on a single node HA is simply
+   skipped until more nodes exist.
+2. **Configure the Caddy DNS-01 provider credentials** (e.g. your **Cloudflare API
+   token**) so public TLS certificates can be issued for your domain. Until this
+   is set, internal-only services still work (reachable on the LAN), but their
+   public HTTPS endpoint has no certificate.
+
 ---
 
 ## 3. Install the rest of the foundation

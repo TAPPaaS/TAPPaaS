@@ -335,5 +335,10 @@ if [[ "$SKIP_TEMPLATE" == "1" ]]; then info "Skipping NixOS template (--skip-tem
 if [[ "$SKIP_CICD" == "1" ]];     then info "Skipping tappaas-cicd (--skip-cicd)";      else build_cicd;     fi
 
 echo ""
-info "${GN}${BOLD}Platform install steps complete.${CL}"
-info "Continue with backup (35-backup) and identity (40-Identity) — see https://tappaas.org/installation/foundation/"
+info "${GN}${BOLD}Platform install steps complete.${CL} Next steps (from the cicd mothership):"
+info "  ${BOLD}1.${CL} Add the other cluster nodes (3-node cluster): run the node bootstrap on"
+info "     each; they auto-join. cicd then configures HA + replication on the next update."
+info "  ${BOLD}2.${CL} Configure the Caddy ${BOLD}DNS-01 provider credentials${CL} (e.g. your Cloudflare API"
+info "     token) so public TLS certificates can be issued for app domains."
+info "  ${BOLD}3.${CL} Install the rest of the foundation — backup (35), identity (40), logging —"
+info "     then add app/community stacks. See https://tappaas.org/installation/foundation/"
