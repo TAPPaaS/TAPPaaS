@@ -225,6 +225,96 @@
       <comments/>
       <aliases/>
     </hosts>
+    <hosts uuid="9f089d26-485f-4f02-9c64-083600f0f531">
+      <host>tappaas4</host>
+      <domain>mgmt.internal</domain>
+      <local>0</local>
+      <ip>10.0.0.13</ip>
+      <cnames/>
+      <client_id/>
+      <hwaddr/>
+      <lease_time/>
+      <ignore>0</ignore>
+      <set_tag/>
+      <descr/>
+      <comments/>
+      <aliases/>
+    </hosts>
+    <hosts uuid="89b99d6c-a05b-46c2-aae1-459e79e52d91">
+      <host>tappaas5</host>
+      <domain>mgmt.internal</domain>
+      <local>0</local>
+      <ip>10.0.0.14</ip>
+      <cnames/>
+      <client_id/>
+      <hwaddr/>
+      <lease_time/>
+      <ignore>0</ignore>
+      <set_tag/>
+      <descr/>
+      <comments/>
+      <aliases/>
+    </hosts>
+    <hosts uuid="6362e073-bcaf-4aac-8fff-1718df893cc7">
+      <host>tappaas6</host>
+      <domain>mgmt.internal</domain>
+      <local>0</local>
+      <ip>10.0.0.15</ip>
+      <cnames/>
+      <client_id/>
+      <hwaddr/>
+      <lease_time/>
+      <ignore>0</ignore>
+      <set_tag/>
+      <descr/>
+      <comments/>
+      <aliases/>
+    </hosts>
+    <hosts uuid="e2db4caf-b86c-4bfa-be60-b5d332e47005">
+      <host>tappaas7</host>
+      <domain>mgmt.internal</domain>
+      <local>0</local>
+      <ip>10.0.0.16</ip>
+      <cnames/>
+      <client_id/>
+      <hwaddr/>
+      <lease_time/>
+      <ignore>0</ignore>
+      <set_tag/>
+      <descr/>
+      <comments/>
+      <aliases/>
+    </hosts>
+    <hosts uuid="b0d1fbac-71e7-4601-bde9-2ffca48378db">
+      <host>tappaas8</host>
+      <domain>mgmt.internal</domain>
+      <local>0</local>
+      <ip>10.0.0.17</ip>
+      <cnames/>
+      <client_id/>
+      <hwaddr/>
+      <lease_time/>
+      <ignore>0</ignore>
+      <set_tag/>
+      <descr/>
+      <comments/>
+      <aliases/>
+    </hosts>
+    <hosts uuid="2f3905d2-bd02-4f0d-898e-23f1179f85fb">
+      <host>tappaas9</host>
+      <domain>mgmt.internal</domain>
+      <local>0</local>
+      <ip>10.0.0.18</ip>
+      <cnames/>
+      <client_id/>
+      <hwaddr/>
+      <lease_time/>
+      <ignore>0</ignore>
+      <set_tag/>
+      <descr/>
+      <comments/>
+      <aliases/>
+    </hosts>
     <dhcp_ranges uuid="48056157-7ae8-4e05-a220-ecdbe2f213f5">
       <interface>lan</interface>
       <set_tag/>

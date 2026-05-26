@@ -96,9 +96,15 @@ HAVE_WHIPTAIL=0; command -v whiptail >/dev/null && HAVE_WHIPTAIL=1
 # ── Shared helpers ────────────────────────────────────────────────────
 
 # This node's management IP on the lan bridge: 10.0.0.<9+N> for tappaasN.
+# TAPPaaS reserves 10.0.0.10-18 for tappaas1-9 (the firewall ships DNS host
+# entries + static reservations for exactly those nine). A 10th+ node has no
+# reserved mgmt IP / DNS name, so refuse rather than silently mis-assign.
 node_mgmt_ip() {
   if [[ -n "$MGMT_IP" ]]; then echo "${MGMT_IP%/*}"; return; fi
   local n; n="$(hostname -s | grep -oE '[0-9]+$' || true)"
+  if [[ -n "$n" && "$n" -gt 9 ]]; then
+    die "Node number ${n} (tappaas${n}) exceeds the supported 9 nodes (tappaas1-9 → 10.0.0.10-18). Assign manually with --mgmt-ip and add a firewall DNS host entry."
+  fi
   if [[ -n "$n" ]]; then echo "${MGMT_SUBNET}.$((9 + n))"; else echo "${MGMT_SUBNET}.10"; fi
 }
 

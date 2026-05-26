@@ -153,6 +153,11 @@ CLUSTER_ROLE=""
 # mgmt network from the start — then the gateway cutover needs no reboot.
 node_mgmt_ip() {
   local n; n="$(hostname -s | grep -oE '[0-9]+$' || true)"
+  if [ -n "$n" ] && [ "$n" -gt 9 ]; then
+    msg_error "Node number ${n} (tappaas${n}) exceeds the supported 9 nodes (tappaas1-9 → 10.0.0.10-18)."
+    msg_error "The firewall reserves DNS + static IPs only for nine nodes. Aborting."
+    exit 1
+  fi
   if [ -n "$n" ]; then echo "10.0.0.$((9 + n))"; else echo "10.0.0.10"; fi
 }
 

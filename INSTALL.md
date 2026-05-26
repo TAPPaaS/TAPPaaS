@@ -15,8 +15,9 @@ boot preconfigured, and the bootstrap scripts chain together — so most steps a
 
 ## 1. Prerequisites
 
-You are installing **either a single-node system or a 3-node cluster** (you can
-add as many nodes as you like). You need:
+You are installing **either a single-node system or a cluster** (you can add
+nodes later, **up to 9** — `tappaas1`…`tappaas9`, which the firewall reserves
+`10.0.0.10`–`10.0.0.18` and DNS names for). You need:
 
 - **Hardware:** 1 node (or 3) capable of running Proxmox VE 9, each with **two
   NICs** (one WAN, one LAN). A 3-node cluster also needs a switch between the
