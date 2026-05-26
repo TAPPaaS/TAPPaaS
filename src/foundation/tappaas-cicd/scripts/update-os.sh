@@ -197,13 +197,29 @@ update_nixos() {
 
     info "Using NixOS config: ${nix_config}"
     info "Running nixos-rebuild..."
-    if [[ "${OPT_DEBUG:-0}" -eq 1 ]]; then
-        nixos-rebuild --target-host "tappaas@${vm_ip}" --use-remote-sudo switch -I "nixos-config=${nix_config}" \
-            || die "nixos-rebuild failed"
-    else
-        run_quiet "nixos-rebuild" \
-            nixos-rebuild --target-host "tappaas@${vm_ip}" --use-remote-sudo switch -I "nixos-config=${nix_config}"
-    fi
+    # Retry: the FIRST rebuild on a freshly-cloned VM copies hundreds of store
+    # paths over SSH (minutes) while the VM is still settling (cloud-init, a
+    # host-key change after our keyscan, growPartition) — a transient SSH hiccup
+    # there fails the whole build. The rebuild is idempotent and resumable (copied
+    # paths are skipped), so re-trying after re-syncing the host key reliably
+    # recovers (issue: identity/logging install failed on first try, succeeded on
+    # a manual re-run).
+    local attempt rebuilt=0
+    for attempt in 1 2 3; do
+        if [[ "${OPT_DEBUG:-0}" -eq 1 ]]; then
+            nixos-rebuild --target-host "tappaas@${vm_ip}" --use-remote-sudo switch -I "nixos-config=${nix_config}" \
+                && { rebuilt=1; break; }
+        else
+            run_quiet "nixos-rebuild (attempt ${attempt}/3)" \
+                nixos-rebuild --target-host "tappaas@${vm_ip}" --use-remote-sudo switch -I "nixos-config=${nix_config}" \
+                && { rebuilt=1; break; }
+        fi
+        [[ "$attempt" -lt 3 ]] || break
+        warn "nixos-rebuild attempt ${attempt} failed (VM may still be settling) — re-syncing host key, retrying in 15s..."
+        update_ssh_known_hosts "${vm_ip}"
+        sleep 15
+    done
+    [[ "$rebuilt" == "1" ]] || die "nixos-rebuild failed after 3 attempts"
 
     info "Rebooting VM to apply configuration..."
     ssh "root@${node}.${MGMT}.internal" "qm reboot ${vmid}"
