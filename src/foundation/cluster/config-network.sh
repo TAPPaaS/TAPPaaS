@@ -27,6 +27,10 @@
 #                    (10.0.0.1) and ensure corosync uses the mgmt IP. ADDITIVE — it
 #                    does NOT remove the upstream IP, so connectivity is preserved
 #                    (formerly "--swap-cables"). No cables are moved.
+#   --admin-route N  With --swap-gateway: keep a static route to management network
+#                    N (CIDR/IP) via the OLD upstream gateway, so an admin client
+#                    reached that way (e.g. a jump LAN) stays connected after the
+#                    default route moves to the firewall. Prompted if interactive.
 #   --drop-upstream  Hardening (run later): remove the node's upstream (wan-side)
 #                    host IP so Proxmox is reachable only on the mgmt net / via the
 #                    firewall (or netbird).
@@ -34,7 +38,7 @@
 # Usage:
 #   config-network.sh [--lan-port <ifname>] [--wan-port <ifname>]
 #                     [--mgmt-ip <CIDR>] [--gateway <ip>] [--fw-ip <ip>]
-#                     [--swap-gateway | --drop-upstream]
+#                     [--swap-gateway [--admin-route <CIDR>] | --drop-upstream]
 #                     [--no-rollback] [--apply|--dry-run] [--non-interactive]
 #                     [-h|--help]
 #
@@ -61,7 +65,7 @@ readonly MGMT_SUBNET="10.0.0"   # /24 management network prefix
 usage() { sed -n '2,/^set -euo/p' "$0" | sed 's/^# \{0,1\}//; /^set -euo/d'; }
 
 # ── Arguments ────────────────────────────────────────────────────────
-LAN_PORT="" WAN_PORT="" MGMT_IP="" GATEWAY=""
+LAN_PORT="" WAN_PORT="" MGMT_IP="" GATEWAY="" ADMIN_ROUTE=""
 DO_ROLLBACK=1 INTERACTIVE=1 DRY_RUN=0 ROLLBACK_SECS=90
 SWAP_GATEWAY=0 DROP_UPSTREAM=0 FW_IP="${MGMT_SUBNET}.1"
 
@@ -72,6 +76,7 @@ while [[ $# -gt 0 ]]; do
     --mgmt-ip)         MGMT_IP="${2:-}"; shift 2 ;;
     --gateway)         GATEWAY="${2:-}"; shift 2 ;;
     --swap-gateway)    SWAP_GATEWAY=1; shift ;;
+    --admin-route)     ADMIN_ROUTE="${2:-}"; shift 2 ;;
     --drop-upstream)   DROP_UPSTREAM=1; shift ;;
     --fw-ip)           FW_IP="${2:-}"; shift 2 ;;
     --no-rollback)     DO_ROLLBACK=0; shift ;;
@@ -102,10 +107,13 @@ bridge_ip() { ip -o -4 addr show "$1" 2>/dev/null | awk '{print $4; exit}'; }
 
 # ── Mode: gateway cutover (additive — preserves the upstream IP) ──────
 swap_gateway() {
-  local host mgmt_ip old_ip
+  local host mgmt_ip old_ip old_gw
   host="$(hostname -s)"
   mgmt_ip="$(node_mgmt_ip)"
   old_ip="$(bridge_ip wan | cut -d/ -f1)"
+  # Capture the CURRENT upstream gateway BEFORE we move the default route to the
+  # firewall — used to keep a route to the operator's management network reachable.
+  old_gw="$(ip -o -4 route show default 2>/dev/null | awk '{print $3; exit}')"
 
   info "${BOLD}Gateway cutover${CL}: default route + DNS → firewall (${BL}${FW_IP}${CL}); node mgmt IP ${BL}${mgmt_ip}${CL}."
   info "  Additive — the upstream IP${old_ip:+ (${old_ip})} is kept, so your current session stays up."
@@ -143,6 +151,33 @@ swap_gateway() {
   sed -i -E "/[[:space:]]${host}([[:space:]]|\$)/d" /etc/hosts 2>/dev/null || true
   printf '%s %s.mgmt.internal %s\n' "$mgmt_ip" "$host" "$host" >> /etc/hosts
   info "  /etc/hosts → ${mgmt_ip} ${host}.mgmt.internal ${host}"
+
+  # 4.5 Optional admin route: after the default route moves to the firewall, a
+  #     management client reached via the OLD upstream gateway (e.g. an admin
+  #     laptop on a jump network) would lose its return path. Keep a static route
+  #     to that network via the upstream gateway so the operator stays connected.
+  if [[ -z "$ADMIN_ROUTE" && "$INTERACTIVE" == "1" && -n "$old_gw" ]]; then
+    echo "" >&2
+    info "Your default route is moving to the firewall (${FW_IP})."
+    info "If you manage this node from a network reached via the current upstream"
+    info "gateway (${old_gw}) — e.g. an admin/jump LAN — enter it to keep a route to it."
+    read -r -p "  Management network/IP to keep via ${old_gw} (CIDR, or blank for none): " ADMIN_ROUTE
+  fi
+  if [[ -n "$ADMIN_ROUTE" ]]; then
+    if [[ -z "$old_gw" ]]; then
+      warn "  No upstream gateway detected — cannot add admin route ${ADMIN_ROUTE}."
+    elif [[ ! "$ADMIN_ROUTE" =~ ^[0-9]{1,3}(\.[0-9]{1,3}){3}(/[0-9]{1,2})?$ ]]; then
+      warn "  '${ADMIN_ROUTE}' is not a valid IP/CIDR — skipping admin route."
+    else
+      [[ "$ADMIN_ROUTE" == */* ]] || ADMIN_ROUTE="${ADMIN_ROUTE}/32"
+      info "  admin route: ${ADMIN_ROUTE} via ${old_gw} (kept reachable across the cutover)"
+      ip route replace "$ADMIN_ROUTE" via "$old_gw" 2>/dev/null || warn "  runtime 'ip route' add failed (will still persist)"
+      # Persist as a post-up on the wan stanza (the upstream-side bridge).
+      if ! grep -qF "ip route add ${ADMIN_ROUTE} via ${old_gw}" "$INTERFACES"; then
+        sed -i -E "/^iface wan inet/,/^[[:space:]]*\$/ s|^([[:space:]]*bridge-ports[[:space:]].*)|\1\n\tpost-up ip route add ${ADMIN_ROUTE} via ${old_gw} || true|" "$INTERFACES"
+      fi
+    fi
+  fi
 
   # 5. corosync — ensure this node's ring0_addr is the mgmt IP, then RESTART the
   #    daemon so it rebinds (a config-file change alone needed a reboot before).
