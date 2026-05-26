@@ -105,6 +105,7 @@ SKIP_NETWORK=0
 SKIP_STORAGE=0
 SKIP_FIREWALL=0            # first node: skip the chained firewall bootstrap
 SKIP_PLATFORM=0           # first node: skip the chained template + cicd install
+DOMAIN=""                 # first node: public domain for the platform (Caddy/TLS)
 NONINTERACTIVE=0
 _pos=()
 while [ $# -gt 0 ]; do
@@ -116,15 +117,18 @@ while [ $# -gt 0 ]; do
     --skip-storage)    SKIP_STORAGE=1 ;;
     --skip-firewall)   SKIP_FIREWALL=1 ;;
     --skip-platform)   SKIP_PLATFORM=1 ;;
+    --domain)          DOMAIN="${2:-}"; shift ;;
     --non-interactive) NONINTERACTIVE=1 ;;
     -h|--help)
       echo "Usage: install.sh [REPO] [BRANCH] [--cluster|--join|--no-cluster]"
       echo "                  [--skip-network] [--skip-storage] [--skip-firewall]"
-      echo "                  [--skip-platform] [--non-interactive]"
+      echo "                  [--skip-platform] [--domain <yourdomain>] [--non-interactive]"
       echo ""
       echo "On the FIRST node the install chains end-to-end by default: bridges →"
       echo "cluster → storage → firewall → gateway cutover → platform (template +"
-      echo "tappaas-cicd). Use --skip-firewall / --skip-platform to stop earlier."
+      echo "tappaas-cicd). The platform needs a public --domain (for the Caddy"
+      echo "reverse proxy); if omitted it is prompted for. Use --skip-firewall /"
+      echo "--skip-platform to stop earlier."
       exit 0 ;;
     --*) msg_error "Unknown option: $1"; exit 2 ;;
     *)   _pos+=("$1") ;;
@@ -260,9 +264,12 @@ do_first_node_platform() {
   fi
   echo -e "\n${GN}=== [chain 4/4] Platform (NixOS template + tappaas-cicd) ===${CL}"
   fetch "${REPO}${BRANCH}/src/foundation/cluster/install-platform.sh" ~/tappaas/install-platform.sh 755
-  # Default (placeholder) domain — set the real one later in step 2.4.
-  if ! ~/tappaas/install-platform.sh --repo "$REPO" --branch "$BRANCH" ${NONINT_ARG}; then
-    msg_error "install-platform.sh did not complete — re-run ~/tappaas/install-platform.sh."
+  # The platform needs a real domain (Caddy reverse proxy). Pass it through if the
+  # operator supplied --domain; otherwise install-platform.sh prompts for it
+  # (interactive) or errors (--non-interactive).
+  local dom_arg=(); [ -n "$DOMAIN" ] && dom_arg=(--domain "$DOMAIN")
+  if ! ~/tappaas/install-platform.sh --repo "$REPO" --branch "$BRANCH" "${dom_arg[@]}" ${NONINT_ARG}; then
+    msg_error "install-platform.sh did not complete — re-run ~/tappaas/install-platform.sh --domain <yourdomain>."
     return 1
   fi
 }

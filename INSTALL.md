@@ -47,8 +47,8 @@ That's it. Everything else is created by the install.
     On the installer screens:
    - **Network Nic** select the one you have connected to the upstream router. Initially this is the Lan port but it will eventually become the "wan" port of the TAPPaaS firewall. For secondary TAPPaaS nodes this is will stay lan port, as these nodes wil connect directly via the switch to the lan side of the firewall we create in the first node.
    - **Hostname (FQDN):** `tappaas1.mgmt.internal` — TAPPaaS uses the internal
-     management domain `mgmt.internal`, **not** your public domain. (The public
-     domain is supplied later, in 2.3.)
+     management domain `mgmt.internal`, **not** your public domain. (Your public
+     domain is supplied with `--domain` in step 2.)
    - **Email:** a **working** address you actually monitor — Proxmox sends
      system/health notifications here, and TAPPaaS reuses it as the admin email.
    - **Management interface / IP / netmask / gateway / DNS:** must be **valid for
@@ -71,8 +71,13 @@ That's it. Everything else is created by the install.
    ```bash
    REPO="https://raw.githubusercontent.com/TAPPaaS/TAPPaaS/"; BRANCH="main"
    curl -fsSL ${REPO}${BRANCH}/src/foundation/cluster/install.sh >install.sh
-   chmod +x install.sh && ./install.sh "$REPO" "$BRANCH"
+   chmod +x install.sh && ./install.sh "$REPO" "$BRANCH" --domain "yourdomain.com"
    ```
+
+   Pass your **public domain** with `--domain` — the platform's reverse proxy is
+   configured for `<service>.yourdomain.com`, so it's needed up front (if you omit
+   it you'll be prompted). You don't need the domain's DNS-01 API token yet — that
+   comes in §2.3.
 
    On the **first node** this runs the whole foundation bring-up **end-to-end** —
    you run it once and watch:
@@ -91,7 +96,7 @@ That's it. Everything else is created by the install.
       **`tappaas-cicd` mothership** (clone → `install1` → reboot → `install2`),
       which then owns VLANs, the reverse proxy and firewall rules.
 
-   It uses a **placeholder domain**; set the real one in §2.3. To stop earlier,
+   The domain you passed is used to configure the reverse proxy. To stop earlier,
    pass `--skip-firewall` or `--skip-platform`; to drive the in-VM cicd install by
    hand, see [Appendix: install options](#appendix-install-options).
 
@@ -122,21 +127,21 @@ Do this **after** the first node's bootstrap has finished (cicd is up).
 3. Back on the mothership, run `update-tappaas` so cicd reconciles the new
    topology — it then configures **HA + replication automatically** across nodes.
 
-### 2.3 Set the domain + TLS certificates
+### 2.3 Set up TLS certificates
 
-On the mothership (`ssh tappaas@tappaas-cicd`):
+Your domain is already configured (you passed `--domain` in §2.1). To get **public
+TLS certificates**, configure the Caddy **DNS-01 provider credentials** on the
+mothership — e.g. your **Cloudflare / DNS-provider API token** for ACME DNS-01:
 
-1. **Set your real domain** (the bootstrap used a placeholder):
+```bash
+ssh tappaas@tappaas-cicd      # or its 10.0.0.x address
+# configure the DNS-01 token (provider-specific) so Caddy can issue certs
+```
 
-   ```bash
-   create-configuration.sh --update --domain <yourdomain>
-   ```
-
-2. **Configure the Caddy DNS-01 provider credentials** (e.g. your **Cloudflare /
-   DNS-provider API token** for ACME DNS-01) so public TLS certificates can be
-   issued. Until this is set, internal-only services still work (reachable on the
-   LAN), but their public HTTPS endpoint has no certificate. *(This step is
-   optional if you only use TAPPaaS internally.)*
+Until this is set, internal-only services still work (reachable on the LAN), but
+their public HTTPS endpoint has no certificate. *(Optional if you only use TAPPaaS
+internally. To change the domain later: `create-configuration.sh --update --domain
+<yourdomain>`.)*
 
 ---
 

@@ -206,9 +206,15 @@ parse_args() {
         # Read existing config (needed for dns-hostname preservation in all modes)
         read_existing_config || true
 
-        # In update mode, preserve existing config values for fields not explicitly provided
-        if [[ "$UPDATE_MODE" == "true" && -n "${EXISTING_DOMAIN:-}" ]]; then
-            info "Update mode: preserving existing configuration values..."
+        # Preserve existing config values for fields not explicitly provided
+        # WHENEVER a configuration already exists — not only in explicit --update
+        # mode. This makes create-configuration idempotent: re-running it (e.g.
+        # install2 on a platform re-run, which sources this without --update) keeps
+        # the already-set domain/branch/email/etc. instead of resetting them to the
+        # defaults (which would clobber the real domain with CHANGE-domain.tld).
+        # Explicitly-passed flags still override.
+        if [[ -n "${EXISTING_DOMAIN:-}" ]]; then
+            info "Existing configuration found — preserving values not explicitly overridden..."
             [[ "$_set_upstream" == "true" ]] || UPSTREAM_GIT="${EXISTING_UPSTREAM_GIT:-$UPSTREAM_GIT}"
             [[ "$_set_branch" == "true" ]]   || BRANCH="${EXISTING_BRANCH:-$BRANCH}"
             [[ "$_set_domain" == "true" ]]   || DOMAIN="${EXISTING_DOMAIN:-$DOMAIN}"

@@ -23,10 +23,11 @@
 #                       [--non-interactive]
 #
 # Notes:
-#   --domain  Public TLS domain for the platform. NOT derivable from the node
-#             (the Proxmox FQDN is the internal mgmt.internal domain); the admin
-#             email IS auto-discovered from the node. If omitted, install2 keeps
-#             its CHANGE-domain.tld placeholder for you to set later.
+#   --domain  REQUIRED (the platform's Caddy reverse proxy is configured for
+#             <service>.<domain>, so it cannot be set up without a real domain).
+#             Prompted if omitted interactively; an error in --non-interactive.
+#             NOT derivable from the node (the Proxmox FQDN is mgmt.internal); the
+#             admin email IS auto-discovered. Only the DNS-01 token is set later.
 #
 # Exit codes: 0 ok, 1 error, 2 usage.
 
@@ -61,6 +62,19 @@ done
 [[ $EUID -eq 0 ]] || die "Must run as root on the first PVE node."
 [[ -t 0 && -t 1 ]] || INTERACTIVE=0
 command -v qm >/dev/null || die "qm not found — run this on a Proxmox node."
+
+# The domain is foundational: cicd's Caddy reverse proxy is configured for
+# <service>.<domain>, so the platform cannot be set up without a real one.
+# Require it (prompt interactively; refuse the placeholder); no silent default.
+if [[ "$SKIP_CICD" != "1" ]]; then
+  while [[ -z "$DOMAIN" || "$DOMAIN" == CHANGE* ]]; do
+    if [[ "$INTERACTIVE" == "1" ]]; then
+      read -r -p "  Enter your public domain for TAPPaaS (e.g. example.com): " DOMAIN
+    else
+      die "--domain is required (the platform's reverse proxy needs a real domain). Re-run with --domain <yourdomain>."
+    fi
+  done
+fi
 
 readonly TAPPAAS_DIR="/root/tappaas"
 readonly CREATE_VM="${TAPPAAS_DIR}/Create-TAPPaaS-VM.sh"
@@ -252,7 +266,7 @@ build_cicd() {
     "$CREATE_VM" tappaas-cicd
   fi
 
-  local dom="${DOMAIN:-CHANGE-domain.tld}"
+  local dom="${DOMAIN}"   # required + validated above (never a placeholder)
 
   # --manual-cicd: keep the old behaviour — just print the in-VM steps.
   if [[ "$MANUAL_CICD" == "1" ]]; then
@@ -304,19 +318,11 @@ build_cicd() {
   grant_cicd_firewall_access
 
   # B.4 — platform tooling + reverse proxy (install2.sh). Pass --branch so the
-  #        cicd tracks the SAME branch we installed from: create-configuration.sh
-  #        defaults to 'stable', which would make pre-update.sh check out stale
-  #        stable code (e.g. predating the single-node HA guard) even on a main
-  #        install. Pass --domain only when supplied (else install2 keeps its
-  #        placeholder default).
-  local install2_cmd="cd TAPPaaS/src/foundation/tappaas-cicd && ./install2.sh --branch '${BRANCH}'"
-  if [[ -n "$DOMAIN" ]]; then
-    install2_cmd+=" --domain '${DOMAIN}'"
-  else
-    warn "No --domain given; install2 will use the CHANGE-domain.tld placeholder."
-    warn "Set it later with: create-configuration.sh --update --domain <yourdomain>"
-  fi
-  info "Running install2.sh on cicd${DOMAIN:+ (domain ${DOMAIN})}..."
+  #        cicd tracks the SAME branch we installed from (create-configuration.sh
+  #        otherwise defaults to 'stable', running stale code), and --domain (the
+  #        platform's Caddy reverse proxy needs a real domain; required above).
+  local install2_cmd="cd TAPPaaS/src/foundation/tappaas-cicd && ./install2.sh --branch '${BRANCH}' --domain '${DOMAIN}'"
+  info "Running install2.sh on cicd (domain ${DOMAIN})..."
   if ! cicd_ssh "$install2_cmd"; then
     warn "install2.sh reported errors — review on cicd (ssh tappaas@${CICD_IP})."
     return 1
