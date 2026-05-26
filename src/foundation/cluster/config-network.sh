@@ -438,25 +438,33 @@ info "Applying network configuration ..."
 apply_network || warn "Apply returned non-zero — connectivity may have changed."
 
 if [[ "$DO_ROLLBACK" == "1" ]]; then
+  # Confirm by an automatic connectivity self-check, NOT an interactive prompt.
+  # The bridge rebuild briefly blips the network, which drops a web (xterm.js)
+  # console — so a "type keep" prompt is unreliable (the operator can't answer in
+  # time and the node wrongly reverts). Instead the node pings its own gateway,
+  # retrying through the blip: reachable → keep; unreachable → the armed timer
+  # reverts (e.g. genuinely mis-detected ports).
+  selfcheck_gw="$INSTALL_GW"
+  [[ "$ROLE" == "secondary" ]] && selfcheck_gw="$FW_IP"
   echo ""
-  warn "${BOLD}Verify you still have connectivity to this node NOW.${CL}"
-  warn "If you do nothing, the node auto-reverts in ~${ROLLBACK_SECS}s."
-  CONFIRM=""
-  if [[ "$INTERACTIVE" == "1" ]]; then
-    read -r -t "$((ROLLBACK_SECS - 10))" -p "Type 'keep' to make the change permanent: " CONFIRM || true
-  fi
-  if [[ "$CONFIRM" == "keep" ]]; then
+  if [[ -z "$selfcheck_gw" ]]; then
     touch "$ROLLBACK_OK"
-    info "${GN}✓${CL} Network change confirmed and made permanent."
+    info "${GN}✓${CL} No gateway to self-check against — keeping the change."
   else
-    if [[ "$INTERACTIVE" == "1" ]]; then
-      warn "Not confirmed — the node will auto-revert to ${BACKUP}."
-      exit 1
-    else
-      # Non-interactive (chained install): the change is non-disruptive for the
-      # first node (install IP kept on wan), so confirm automatically.
+    info "Verifying connectivity after the change (ping gateway ${BL}${selfcheck_gw}${CL}, ~40s window)..."
+    ok=0
+    for _i in $(seq 1 20); do
+      ping -c1 -W2 "$selfcheck_gw" >/dev/null 2>&1 && { ok=1; break; }
+      sleep 2
+    done
+    if [[ "$ok" == "1" ]]; then
       touch "$ROLLBACK_OK"
-      info "${GN}✓${CL} Non-interactive: change confirmed automatically."
+      info "${GN}✓${CL} Gateway reachable — change confirmed and made permanent."
+    else
+      warn "Gateway ${selfcheck_gw} not reachable after the change."
+      warn "The node will auto-revert to ${BACKUP} in ~${ROLLBACK_SECS}s (safety rollback)."
+      warn "If the LAN/WAN ports were mis-detected, re-run with --lan-port/--wan-port."
+      exit 1
     fi
   fi
 fi
