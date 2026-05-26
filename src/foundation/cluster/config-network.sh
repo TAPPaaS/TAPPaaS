@@ -395,7 +395,7 @@ fi
 # session freezes (the gateway self-check still passes, so it would NOT revert).
 # Run the cutover from a client on the install/upstream network, or a console.
 mgmt_prefix="${LAN_MGMT_IP%/*}"; mgmt_prefix="${mgmt_prefix%.*}"   # e.g. 10.0.0
-ssh_src="${SSH_CLIENT%% *}"
+ssh_src="${SSH_CLIENT:-}"; ssh_src="${ssh_src%% *}"               # empty when not over SSH (set -u safe)
 if [[ -n "$ssh_src" && "$ssh_src" == "${mgmt_prefix}".* ]]; then
   echo ""
   warn "${BOLD}⚠  Your SSH client ${ssh_src} is inside the management subnet ${mgmt_prefix}.0/24.${CL}"
