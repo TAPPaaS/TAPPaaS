@@ -23,6 +23,13 @@
   "proxyUpstreamTls": "true",
   "proxyTls": "dns01",
   "proxyAllowedZones": ["mgmt"],
+  "ports": [
+    { "port": 80,  "protocol": "TCP", "description": "Caddy HTTP (ACME challenges + redirect to HTTPS)" },
+    { "port": 443, "protocol": "TCP", "description": "Caddy HTTPS (reverse-proxy entry for all published services)" }
+  ],
+  "ingress": [
+    { "from": "internet", "ports": [80, 443], "description": "Caddy reverse-proxy entry — public HTTPS for proxyAllowedZones=['internet'] services" }
+  ],
   "dependsOn": [
     "cluster:vm",
     "cluster:ha",
