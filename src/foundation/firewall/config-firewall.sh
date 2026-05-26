@@ -157,14 +157,21 @@ API_SECRET="$(openssl rand -base64 60 | tr -d '\n')"
 API_SECRET_HASH="$(openssl passwd -6 "$API_SECRET")"
 
 # Root password for the DEPLOYED firewall (replaces the bootstrap password).
-if [[ -z "$ROOT_PW" ]]; then
-  if [[ "$INTERACTIVE" == "1" ]]; then
+# Prompt twice and require a match (standard practice — a typo here would set an
+# unknown root password on the firewall). Blank = generate a random one.
+if [[ -z "$ROOT_PW" && "$INTERACTIVE" == "1" ]]; then
+  while true; do
     read -r -s -p "  Set OPNsense root password (blank = generate one): " ROOT_PW; echo
-  fi
-  if [[ -z "$ROOT_PW" ]]; then
-    ROOT_PW="$(openssl rand -base64 18 | tr -d '/+=' | cut -c1-20)"
-    info "  Generated root password: ${BOLD}${ROOT_PW}${CL}  (save this!)"
-  fi
+    [[ -z "$ROOT_PW" ]] && break                       # blank → generate below
+    read -r -s -p "  Re-enter password to confirm: " _ROOT_PW2; echo
+    [[ "$ROOT_PW" == "$_ROOT_PW2" ]] && break
+    warn "  Passwords did not match — please try again."
+  done
+  unset _ROOT_PW2
+fi
+if [[ -z "$ROOT_PW" ]]; then
+  ROOT_PW="$(openssl rand -base64 18 | tr -d '/+=' | cut -c1-20)"
+  info "  Generated root password: ${BOLD}${ROOT_PW}${CL}  (save this!)"
 fi
 ROOT_PW_HASH="$(openssl passwd -6 "$ROOT_PW")"
 
