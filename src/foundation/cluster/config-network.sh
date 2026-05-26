@@ -388,6 +388,26 @@ if [[ "$DRY_RUN" == "1" ]]; then
   exit 0
 fi
 
+# ── Guard: management client inside the new lan subnet ───────────────
+# If you are connected over SSH from a host INSIDE the management subnet (the one
+# about to go on `lan`), bringing `lan` up makes the node treat that subnet as
+# link-local: its replies to you leave via `lan` instead of the gateway, and your
+# session freezes (the gateway self-check still passes, so it would NOT revert).
+# Run the cutover from a client on the install/upstream network, or a console.
+mgmt_prefix="${LAN_MGMT_IP%/*}"; mgmt_prefix="${mgmt_prefix%.*}"   # e.g. 10.0.0
+ssh_src="${SSH_CLIENT%% *}"
+if [[ -n "$ssh_src" && "$ssh_src" == "${mgmt_prefix}".* ]]; then
+  echo ""
+  warn "${BOLD}⚠  Your SSH client ${ssh_src} is inside the management subnet ${mgmt_prefix}.0/24.${CL}"
+  warn "   When 'lan' comes up the node routes that subnet out 'lan', so THIS SSH"
+  warn "   session will freeze (and the gateway self-check won't revert it)."
+  warn "   Run from the install/upstream network or the node console instead."
+  if [[ "$INTERACTIVE" == "1" ]]; then
+    read -r -p "   Continue anyway and risk losing this session? [y/N]: " _cap
+    [[ "${_cap,,}" == "y" ]] || { info "Aborted (safe choice)."; exit 0; }
+  fi
+fi
+
 if [[ "$INTERACTIVE" == "1" ]]; then
   if [[ "$HAVE_WHIPTAIL" == "1" ]]; then
     whiptail --title "TAPPaaS network" --yesno \

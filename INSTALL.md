@@ -60,6 +60,12 @@ That's it. Everything else is created by the install.
    Notes:
    - Do not use SSH — the network setup steps may move its interface and it has not been tested over SSH.
    - Use the **xterm.js** shell option in the tappaas1 menu; it gives more scrollback and persistence on the install output.
+   - **⚠ Run from a client that is NOT on `10.0.0.0/24`.** The cutover puts the
+     management network (`10.0.0.0/24`) on the node, so a browser/SSH client that
+     sits in that subnet loses its return path to the node and freezes. Drive the
+     install from a client on your **install/upstream network**, or from a true
+     **out-of-band console** (IPMI/iKVM) — not from a `10.0.0.x` laptop. (The node
+     keeps its install IP throughout, so such a client never loses it.)
 
    ```bash
    REPO="https://raw.githubusercontent.com/TAPPaaS/TAPPaaS/"; BRANCH="main"
