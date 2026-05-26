@@ -180,12 +180,16 @@ check_must_change_fields() {
     domain=$(jq -r '.tappaas.domain // ""' "$CONFIG_FILE")
     email=$(jq -r '.tappaas.email // ""' "$CONFIG_FILE")
 
+    # Placeholder domain/email are WARNINGS, not errors: the automated install
+    # intentionally starts with a placeholder domain and sets the real one later
+    # (create-configuration.sh --update --domain ...). The platform installs fine
+    # with the placeholder; only public TLS for app services needs a real domain.
     if [[ "$domain" == CHANGE* ]]; then
-        validation_error "tappaas.domain still has placeholder value: '$domain' — must be updated before deployment"
+        validation_warn "tappaas.domain still has the placeholder '$domain' — set it before installing public services (create-configuration.sh --update --domain <yourdomain>)"
     fi
 
     if [[ "$email" == CHANGE* ]]; then
-        validation_error "tappaas.email still has placeholder value: '$email' — must be updated before deployment"
+        validation_warn "tappaas.email still has the placeholder '$email' — set it before TLS issuance (create-configuration.sh --update --email <you@domain>)"
     fi
 
     # Basic email format validation
