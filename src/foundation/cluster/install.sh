@@ -103,6 +103,8 @@ BRANCH="stable"
 CLUSTER_MODE="auto"        # auto | create | join | none
 SKIP_NETWORK=0
 SKIP_STORAGE=0
+SKIP_FIREWALL=0            # first node: skip the chained firewall bootstrap
+SKIP_PLATFORM=0           # first node: skip the chained template + cicd install
 NONINTERACTIVE=0
 _pos=()
 while [ $# -gt 0 ]; do
@@ -112,10 +114,17 @@ while [ $# -gt 0 ]; do
     --no-cluster)      CLUSTER_MODE="none" ;;
     --skip-network)    SKIP_NETWORK=1 ;;
     --skip-storage)    SKIP_STORAGE=1 ;;
+    --skip-firewall)   SKIP_FIREWALL=1 ;;
+    --skip-platform)   SKIP_PLATFORM=1 ;;
     --non-interactive) NONINTERACTIVE=1 ;;
     -h|--help)
       echo "Usage: install.sh [REPO] [BRANCH] [--cluster|--join|--no-cluster]"
-      echo "                  [--skip-network] [--skip-storage] [--non-interactive]"
+      echo "                  [--skip-network] [--skip-storage] [--skip-firewall]"
+      echo "                  [--skip-platform] [--non-interactive]"
+      echo ""
+      echo "On the FIRST node the install chains end-to-end by default: bridges →"
+      echo "cluster → storage → firewall → gateway cutover → platform (template +"
+      echo "tappaas-cicd). Use --skip-firewall / --skip-platform to stop earlier."
       exit 0 ;;
     --*) msg_error "Unknown option: $1"; exit 2 ;;
     *)   _pos+=("$1") ;;
@@ -139,8 +148,16 @@ CLUSTER_ROLE=""
 # `pvecm add`, which then prompts for that node's root password. This must
 # complete before the storage phase so the tank pools are created while the
 # node is already a cluster member (PVE HA-failover requirement).
+# This node's management IP on the lan bridge (10.0.0.<9+N> for tappaasN). Must
+# match what config-network.sh placed on `lan`, so corosync binds to the stable
+# mgmt network from the start — then the gateway cutover needs no reboot.
+node_mgmt_ip() {
+  local n; n="$(hostname -s | grep -oE '[0-9]+$' || true)"
+  if [ -n "$n" ]; then echo "10.0.0.$((9 + n))"; else echo "10.0.0.10"; fi
+}
+
 configure_cluster() {
-  local host mode peer; host="$(hostname -s)"
+  local host mode peer mgmt; host="$(hostname -s)"; mgmt="$(node_mgmt_ip)"
   echo -e "\n${GN}=== Cluster configuration ===${CL}"
   if pvecm status >/dev/null 2>&1; then
     msg_ok "Node is already a cluster member"
@@ -156,8 +173,11 @@ configure_cluster() {
 
   case "$mode" in
     create)
-      msg_info "Creating Proxmox cluster 'TAPPaaS' (first node: ${host})"
-      if pvecm create TAPPaaS >/dev/null 2>&1; then
+      # Bind corosync ring0 to the mgmt IP (10.0.0.10) — present on `lan` from the
+      # network phase — so the later gateway cutover does not have to renumber the
+      # ring (which previously forced a reboot before a second node could join).
+      msg_info "Creating Proxmox cluster 'TAPPaaS' (first node: ${host}, ring0 ${mgmt})"
+      if pvecm create TAPPaaS --link0 "$mgmt" >/dev/null 2>&1 || pvecm create TAPPaaS >/dev/null 2>&1; then
         msg_ok "Created cluster 'TAPPaaS'"
         CLUSTER_ROLE="created"
       else
@@ -173,10 +193,11 @@ configure_cluster() {
       echo "  This node ('${host}') will JOIN the existing TAPPaaS cluster."
       read -r -p "  Existing cluster node address [tappaas1.mgmt.internal]: " peer
       peer="${peer:-tappaas1.mgmt.internal}"
-      msg_info "Joining cluster via ${peer} — you'll be prompted for that node's root password"
+      msg_info "Joining cluster via ${peer} (ring0 ${mgmt}) — you'll be prompted for that node's root password"
       echo ""
       # pvecm add is interactive (password + SSH fingerprint); run on the TTY.
-      if pvecm add "$peer"; then
+      # --link0 binds this node's ring to its mgmt IP (already on `lan`).
+      if pvecm add "$peer" --link0 "$mgmt" || pvecm add "$peer"; then
         msg_ok "Joined cluster via ${peer}"
         CLUSTER_ROLE="joined"
       else
@@ -195,27 +216,50 @@ configure_cluster() {
 # offer to continue straight into the OPNsense firewall bootstrap. The network
 # and storage phases have already run, so the lan/wan bridges and tank pools
 # the firewall VM needs are in place.
-maybe_install_firewall() {
+# First node only: chain the rest of the bring-up end-to-end. Because the gateway
+# cutover is now ADDITIVE (keeps the upstream IP, no session break), the whole
+# sequence can run unattended from the one bootstrap command:
+#   firewall  →  gateway cutover  →  sanity check  →  platform (template + cicd)
+# Each sub-step is idempotent and can be re-run on its own if something fails.
+do_first_node_platform() {
   [ "$CLUSTER_ROLE" = "created" ] || return 0
-  echo ""
-  if [ "$INTERACTIVE_TTY" != 1 ]; then
-    msg_ok "First node: install the firewall next with  ~/tappaas/config-firewall.sh"
+
+  # ── Firewall ──────────────────────────────────────────────────────
+  if [ "$SKIP_FIREWALL" = 1 ]; then
+    msg_ok "Skipping firewall (--skip-firewall). Run later: ~/tappaas/config-firewall.sh"
     return 0
   fi
-  local ans
-  read -r -p "This is the first node. Install the OPNsense firewall now? [y/N] " ans
-  case "$ans" in
-    y|Y|yes|YES)
-      msg_info "Fetching config-firewall.sh"
-      fetch "${REPO}${BRANCH}/src/foundation/firewall/config-firewall.sh" ~/tappaas/config-firewall.sh 755
-      msg_ok "Fetched config-firewall.sh — starting firewall bootstrap"
-      ~/tappaas/config-firewall.sh --repo "$REPO" --branch "$BRANCH" \
-        || msg_error "config-firewall.sh did not complete — re-run ~/tappaas/config-firewall.sh"
-      ;;
-    *)
-      msg_ok "Skipping firewall install. Run later: ~/tappaas/config-firewall.sh"
-      ;;
-  esac
+  echo -e "\n${GN}=== [chain 1/4] OPNsense firewall ===${CL}"
+  fetch "${REPO}${BRANCH}/src/foundation/firewall/config-firewall.sh" ~/tappaas/config-firewall.sh 755
+  if ! ~/tappaas/config-firewall.sh --repo "$REPO" --branch "$BRANCH" ${NONINT_ARG}; then
+    msg_error "config-firewall.sh did not complete — fix it, then re-run ~/tappaas/config-firewall.sh and continue manually."
+    return 1
+  fi
+
+  # ── Gateway cutover (additive — no connectivity break) ────────────
+  echo -e "\n${GN}=== [chain 2/4] Gateway cutover (route via the firewall) ===${CL}"
+  if ! ~/tappaas/config-network.sh --swap-gateway ${NONINT_ARG}; then
+    msg_error "Gateway cutover failed — re-run ~/tappaas/config-network.sh --swap-gateway, then continue manually."
+    return 1
+  fi
+
+  # ── Sanity check ──────────────────────────────────────────────────
+  echo -e "\n${GN}=== [chain 3/4] Sanity check ===${CL}"
+  fetch "${REPO}${BRANCH}/src/foundation/cluster/sanity-check.sh" ~/tappaas/sanity-check.sh 755
+  ~/tappaas/sanity-check.sh || msg_error "sanity-check reported problems — review above (continuing)."
+
+  # ── Platform: NixOS template + tappaas-cicd ───────────────────────
+  if [ "$SKIP_PLATFORM" = 1 ]; then
+    msg_ok "Skipping platform (--skip-platform). Run later: ~/tappaas/install-platform.sh"
+    return 0
+  fi
+  echo -e "\n${GN}=== [chain 4/4] Platform (NixOS template + tappaas-cicd) ===${CL}"
+  fetch "${REPO}${BRANCH}/src/foundation/cluster/install-platform.sh" ~/tappaas/install-platform.sh 755
+  # Default (placeholder) domain — set the real one later in step 2.4.
+  if ! ~/tappaas/install-platform.sh --repo "$REPO" --branch "$BRANCH" ${NONINT_ARG}; then
+    msg_error "install-platform.sh did not complete — re-run ~/tappaas/install-platform.sh."
+    return 1
+  fi
 }
 
 # ── Final summary (addresses the long-standing TODO at top of file) ──
@@ -527,10 +571,20 @@ fi
 
 print_summary
 
-# First node only: offer to continue into the firewall bootstrap.
-maybe_install_firewall
+# First node only: chain firewall → cutover → sanity → platform end-to-end.
+do_first_node_platform
 
-msg_ok "Completed TAPPaaS post Proxmox VE install script"
+echo ""
+if [ "$CLUSTER_ROLE" = "created" ] && [ "$SKIP_PLATFORM" != 1 ] && [ "$SKIP_FIREWALL" != 1 ]; then
+  msg_ok "First node fully bootstrapped (firewall + platform). Next:"
+  echo "      • 3-node cluster: reboot is NOT required for join now; install the"
+  echo "        other nodes (they auto-join on the mgmt net), then run update-tappaas."
+  echo "      • Set your real domain + TLS: on tappaas-cicd, create-configuration.sh"
+  echo "        --update --domain <yourdomain>, and add the DNS-01 provider token."
+  echo "      • Install the rest of the foundation: rest-of-foundation.sh (on cicd)."
+else
+  msg_ok "Completed TAPPaaS post Proxmox VE install script"
+fi
 
 
 
