@@ -57,8 +57,8 @@ Manual checks:
 Verify VM is running: `test-module.sh homeassistant`. Check DNS override is present.
 
 **Sonos speakers not discovered**
-Verify mDNS relay: `test-module.sh firewall` should show discovery service active.
-Run `update-module.sh homeassistant` to re-apply firewall pinholes.
+Verify mDNS relay: `test-service.sh firewall:discovery homeassistant` should show relay present.
+If pinholes are missing, run `install-module.sh homeassistant --force`.
 
 **Alfen integration unavailable**
 Confirm HACS is installed and `alfen_wallbox` integration is added.

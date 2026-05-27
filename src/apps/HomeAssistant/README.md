@@ -43,7 +43,12 @@ used at deploy time; HAOS self-updates from there.
 | `firewall:proxy` | HTTPS reverse proxy — `homeassistant.gridtefy.com` |
 | `identity:identity` | SSO integration (optional) |
 | `firewall:rules` | Firewall pinholes to IoT modules |
-| `alfen:ui` `alfen:discovery` `alfen:modbus` | Cross-zone access to Alfen EV charger |
-| `sonos:audio` `sonos:airplay` | Cross-zone access to Sonos speakers |
+
+**IoT module integrations** (optional — only when the module is deployed):
+
+| Module | Purpose | Docs |
+|--------|---------|------|
+| `alfen` | EV charger — web UI, discovery, Modbus TCP | [alfen →](https://github.com/TAPPaaS/Community/blob/main/src/ErikDaniel007/energy/alfen/README.md) |
+| `sonos` | Multi-room audio — control API, AirPlay | [sonos →](https://github.com/TAPPaaS/Community/blob/main/src/ErikDaniel007/entertainment/sonos/README.md) · [HA integration docs](https://www.home-assistant.io/integrations/sonos/) |
 
 For installation steps see [INSTALL.md](./INSTALL.md).
