@@ -35,9 +35,21 @@ info "firewall:discovery install-service for module: ${BL}${MODULE}${CL}"
 
 # ── Read discovery config ────────────────────────────────────────────
 
-HAS_MDNS=$(jq -r '.discoveryMdns // false' "${MODULE_JSON}")
 ZONE0=$(jq -r '.zone0 // empty' "${MODULE_JSON}")
 UDP_RELAY_COUNT=$(jq -r '(.discoveryUdpRelay // []) | length' "${MODULE_JSON}")
+
+# discoveryMdns accepts an array of consumer zone names (e.g. ["home","srv-home"]).
+# Legacy boolean true is still accepted but deprecated — emit a warning and treat as
+# empty consumer list (zone0 is still added; run update-service to migrate).
+MDNS_RAW=$(jq -r '.discoveryMdns // "false"' "${MODULE_JSON}")
+MDNS_ZONES_COUNT=0
+if [[ "${MDNS_RAW}" == "true" ]]; then
+    warn "  discoveryMdns: true is deprecated. Use an array of consumer zones, e.g. [\"home\",\"srv-home\"]."
+    MDNS_ZONES_COUNT=0
+elif [[ "${MDNS_RAW}" != "false" ]]; then
+    MDNS_ZONES_COUNT=$(jq -r '.discoveryMdns | length' "${MODULE_JSON}")
+fi
+HAS_MDNS=$([[ "${MDNS_RAW}" != "false" ]] && echo "true" || echo "false")
 
 if [[ "${HAS_MDNS}" == "false" && "${UDP_RELAY_COUNT}" == "0" ]]; then
     info "  No discoveryMdns or discoveryUdpRelay declared — nothing to apply."
@@ -101,18 +113,25 @@ resolve_iface() {
 # ── mDNS repeater ────────────────────────────────────────────────────
 
 if [[ "${HAS_MDNS}" == "true" ]]; then
-    [[ -z "${ZONE0}" ]] && die "discoveryMdns=true but zone0 not set in ${MODULE_JSON}"
-    info "  Configuring mDNS repeater (zone0=${ZONE0} + home + srv-home)..."
+    [[ -z "${ZONE0}" ]] && die "discoveryMdns set but zone0 not set in ${MODULE_JSON}"
+    info "  Configuring mDNS repeater (zone0=${ZONE0}, consumer zones: ${MDNS_ZONES_COUNT})..."
 
     ZONE0_IFACE=$(resolve_iface "${ZONE0}")
-    HOME_IFACE=$(resolve_iface "home")
-    SRVHOME_IFACE=$(resolve_iface "srv-home")
     [[ -z "${ZONE0_IFACE}" ]] && die "Cannot resolve OPNsense interface for zone: ${ZONE0}"
 
-    # Union current selected interfaces with the new ones (deduplicate)
+    # Resolve each consumer zone declared in discoveryMdns[]
+    CONSUMER_IFACES=""
+    if (( MDNS_ZONES_COUNT > 0 )); then
+        while IFS= read -r zone; do
+            iface=$(resolve_iface "${zone}")
+            [[ -n "${iface}" ]] && CONSUMER_IFACES="${CONSUMER_IFACES} ${iface}"
+        done < <(jq -r '.discoveryMdns[]' "${MODULE_JSON}")
+    fi
+
+    # Union current selected interfaces with zone0 + consumer zones (deduplicate)
     CURRENT=$(echo "${MDNS_RESP}" | jq -r \
         '.mdnsrepeater.interfaces | to_entries[] | select(.value.selected == 1) | .key')
-    ALL_IFACES=$(printf '%s\n' ${CURRENT} "${ZONE0_IFACE}" "${HOME_IFACE}" "${SRVHOME_IFACE}" \
+    ALL_IFACES=$(printf '%s\n' ${CURRENT} "${ZONE0_IFACE}" ${CONSUMER_IFACES} \
         | grep -v '^$' | sort -u | tr '\n' ',' | sed 's/,$//')
 
     info "  mDNS interfaces set: ${BL}${ALL_IFACES}${CL}"

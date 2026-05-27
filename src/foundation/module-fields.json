@@ -566,13 +566,14 @@
         },
 
         "discoveryMdns": {
-            "description": "Bridge zone0 into the global mDNS repeater (os-mdns-repeater). home and srv-home are always included as consumer zones.",
-            "type": "boolean",
+            "description": "Consumer zones to bridge with zone0 in the mDNS repeater (os-mdns-repeater). zone0 is always included as the provider zone.",
+            "type": "array",
+            "items": "string",
             "requiredBy": [],
             "usedBy": ["firewall:discovery"],
-            "default": false,
-            "example": true,
-            "note": "Requires firewall:discovery in dependsOn. Installs os-mdns-repeater if absent and idempotently unions zone0+home+srv-home into the repeater interface list."
+            "default": [],
+            "example": ["home", "srv-home"],
+            "note": "Requires firewall:discovery in dependsOn. Idempotently unions zone0 + declared consumer zones into the repeater interface list. Boolean true is deprecated."
         },
 
         "discoveryUdpRelay": {
