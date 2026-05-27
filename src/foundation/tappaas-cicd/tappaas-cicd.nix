@@ -225,6 +225,7 @@ in
         wget
         curl
         htop
+        tmux        # persistent sessions for long-running ops over SSH
         jq
         git
         gh          # GitHub CLI
