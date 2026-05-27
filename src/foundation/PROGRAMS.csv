@@ -68,10 +68,6 @@ install-service.sh,(run in place),cluster/services/ha/install-service.sh,service
 update-service.sh,(run in place),cluster/services/ha/update-service.sh,service
 test-service.sh,(run in place),cluster/services/ha/test-service.sh,service
 delete-service.sh,(run in place),cluster/services/ha/delete-service.sh,service
-# firewall:firewall
-install-service.sh,(run in place),firewall/services/firewall/install-service.sh,service
-update-service.sh,(run in place),firewall/services/firewall/update-service.sh,service
-delete-service.sh,(run in place),firewall/services/firewall/delete-service.sh,service
 # firewall:proxy
 install-service.sh,(run in place),firewall/services/proxy/install-service.sh,service
 update-service.sh,(run in place),firewall/services/proxy/update-service.sh,service
