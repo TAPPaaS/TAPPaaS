@@ -16,7 +16,7 @@
   "image": "26100.32230.260111-0550.lt_release_svc_refresh_SERVER_EVAL_x64FRE_en-us.iso",
   "imageLocation": "/var/lib/vz/template/iso/",
   "bridge0": "lan",
-  "zone0": "srv",
+  "zone0": "mgmt",
   "cloudInit": "false",
   "dependsOn": [
     "cluster:vm"
