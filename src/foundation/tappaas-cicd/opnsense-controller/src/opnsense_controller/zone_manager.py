@@ -13,6 +13,7 @@ Usage:
 """
 
 import argparse
+import hashlib
 import ipaddress
 import json
 import os
@@ -492,6 +493,38 @@ class ZoneManager:
         ("172.16.0.0/12", "rfc1918-172"),
         ("192.168.0.0/16", "rfc1918-192"),
     ]
+
+    # Zone-level access-to rules live in band 5 (30000-39999) per the firewall
+    # sequence-band architecture (see src/foundation/firewall/README.md). This is
+    # ABOVE the rules-manager module bands (3: 10000-19999 ingress, 4: 20000-29999
+    # egress), so — under first-match-quick — per-module pinholes are evaluated
+    # before a zone's rfc1918 catch-all block and are no longer shadowed (#243).
+    #
+    # Each zone gets a deterministic 100-sequence slot; within a slot the offsets
+    # are FIXED (independent of how many access-to entries a zone has) so adding a
+    # zone to access-to fills the next pass offset without shifting — and thus
+    # never colliding with — the block/internet rules (#243):
+    #   base+0          gateway pass (DNS/NTP to own gateway)
+    #   base+1 .. +N    one pass per explicitly allowed zone (N capped below)
+    #   base+90/91/92   rfc1918 block (zone isolation catch-all)
+    #   base+99         internet pass (only non-RFC1918 reaches here)
+    # Slots are derived from a stable hash of the zone name; collisions across
+    # zones are harmless because every zone's rules are bound to its own
+    # interface (pf only matches a rule against its own interface).
+    ZONE_RULE_BAND_BASE = 30000
+    ZONE_RULE_SLOT_SIZE = 100
+    ZONE_RULE_SLOT_COUNT = 100
+    ZONE_RULE_GATEWAY_OFFSET = 0
+    ZONE_RULE_PASS_OFFSET = 1          # first access-to pass
+    ZONE_RULE_PASS_MAX = 88            # access-to passes occupy base+1 .. base+89
+    ZONE_RULE_BLOCK_OFFSET = 90        # rfc1918 blocks at base+90/91/92
+    ZONE_RULE_INTERNET_OFFSET = 99     # internet pass last (lowest priority)
+
+    def _zone_rule_base(self, zone: "Zone") -> int:
+        """Deterministic band-5 base sequence for a zone's access-to rules."""
+        digest = hashlib.sha256(zone.name.encode("utf-8")).digest()
+        slot = int.from_bytes(digest[:8], "big") % self.ZONE_RULE_SLOT_COUNT
+        return self.ZONE_RULE_BAND_BASE + slot * self.ZONE_RULE_SLOT_SIZE
 
     def __init__(
         self,
@@ -1130,11 +1163,17 @@ class ZoneManager:
             # a now-nonexistent opt-id, which makes the whole os-firewall
             # ruleset fail to compile and silently load *zero* automation rules
             # into pf. So reconcile drift instead of blindly skipping.
+            # Sequence is part of the desired state: a rule left at a stale
+            # sequence (e.g. carried over from the old vlan*10 numbering, or
+            # from before an access-to zone was added) must be renumbered or it
+            # collides with / mis-orders against the other zone rules (#243).
+            seq_drift = existing.sequence is None or int(existing.sequence) != sequence
             drifted = (
                 existing.interface != interface
                 or (existing.action or "").lower() != action_str
                 or existing.destination_net != destination_net
                 or existing.source_net != source_net
+                or seq_drift
             )
             if not drifted:
                 debug(f"    {action_str}: {description} (exists, in sync, skipping)")
@@ -1147,7 +1186,8 @@ class ZoneManager:
                 return
 
             debug(f"    {action_str}: {description} (drift: iface "
-                  f"{existing.interface!r}->{interface!r}; reconciling)")
+                  f"{existing.interface!r}->{interface!r}, seq "
+                  f"{existing.sequence!r}->{sequence!r}; reconciling)")
             if check_mode:
                 results_list.append({
                     "description": description,
@@ -1217,11 +1257,15 @@ class ZoneManager:
         that traffic to those zones is allowed while all other internal traffic
         is blocked.
 
-        Rule ordering per zone (using sequence numbers):
-        1. Pass to own gateway (DNS/NTP access)
-        2. Pass to each explicitly allowed zone network
-        3. Block RFC1918 private ranges (zone isolation)
-        4. Pass to any (internet access)
+        Rule ordering per zone (using sequence numbers, band 5 = 30000-39999 so
+        the rfc1918 block trails the rules-manager module pinhole bands and no
+        longer shadows them — #243):
+        1. Pass to own gateway (DNS/NTP access)        — base+0
+        2. Pass to each explicitly allowed zone network — base+1 .. base+89
+        3. Block RFC1918 private ranges (zone isolation)— base+90/91/92
+        4. Pass to any (internet access)               — base+99
+        Offsets are fixed regardless of how many zones are in access-to, so
+        adding a zone never renumbers (or collides with) the block/internet rules.
 
         Args:
             check_mode: If True, don't make changes (dry-run)
@@ -1287,9 +1331,10 @@ class ZoneManager:
                 has_internet = "internet" in targets_lower
                 specific_targets = [t for t in zone.access_to if t.lower() not in ("all", "internet")]
 
-                # Base sequence derived from VLAN tag (gives room for ~10 rules per zone)
-                base_seq = zone.vlan_tag * 10 if zone.vlan_tag > 0 else 100
-                seq = base_seq
+                # Deterministic band-5 base for this zone (#243). Intra-zone
+                # offsets are FIXED so adding an access-to zone never shifts the
+                # block/internet rules into a colliding sequence.
+                base = self._zone_rule_base(zone)
 
                 if has_all:
                     # Full access — single pass rule to any
@@ -1297,7 +1342,8 @@ class ZoneManager:
                         manager, existing_by_desc,
                         f"Zone {zone.name} -> all",
                         zone_interface, zone.ip_network, "any",
-                        RuleAction.PASS, seq, check_mode, zone_results,
+                        RuleAction.PASS, base + self.ZONE_RULE_GATEWAY_OFFSET,
+                        check_mode, zone_results,
                     )
                 else:
                     # Step 1: Allow access to own gateway (DNS, NTP)
@@ -1305,12 +1351,22 @@ class ZoneManager:
                         manager, existing_by_desc,
                         f"Zone {zone.name} -> gateway",
                         zone_interface, zone.ip_network, f"{zone.gateway_ip}/32",
-                        RuleAction.PASS, seq, check_mode, zone_results,
+                        RuleAction.PASS, base + self.ZONE_RULE_GATEWAY_OFFSET,
+                        check_mode, zone_results,
                     )
-                    seq += 1
 
-                    # Step 2: Allow access to each explicitly named zone
-                    for target in specific_targets:
+                    # Step 2: Allow access to each explicitly named zone. These
+                    # occupy fixed offsets base+1 .. base+89, so the block band
+                    # below stays put regardless of how many zones are listed.
+                    if len(specific_targets) > self.ZONE_RULE_PASS_MAX:
+                        error(
+                            f"{zone.name}: {len(specific_targets)} access-to zones "
+                            f"exceeds the {self.ZONE_RULE_PASS_MAX}-slot pass band; "
+                            f"rules beyond that would collide with the block band"
+                        )
+                    for offset, target in enumerate(
+                        specific_targets[: self.ZONE_RULE_PASS_MAX]
+                    ):
                         target_zone = self.get_zone_by_name(target)
                         if target_zone:
                             dest = target_zone.ip_network
@@ -1321,27 +1377,31 @@ class ZoneManager:
                             manager, existing_by_desc,
                             f"Zone {zone.name} -> {target}",
                             zone_interface, zone.ip_network, dest,
-                            RuleAction.PASS, seq, check_mode, zone_results,
+                            RuleAction.PASS, base + self.ZONE_RULE_PASS_OFFSET + offset,
+                            check_mode, zone_results,
                         )
-                        seq += 1
 
                     if has_internet:
-                        # Step 3: Block RFC1918 to prevent reaching unlisted internal zones
-                        for network, label in self.RFC1918_NETWORKS:
+                        # Step 3: Block RFC1918 to prevent reaching unlisted internal
+                        # zones — fixed offsets base+90/91/92, always trailing the
+                        # access-to passes above.
+                        for offset, (network, label) in enumerate(self.RFC1918_NETWORKS):
                             self._create_or_skip_rule(
                                 manager, existing_by_desc,
                                 f"Zone {zone.name} block {label}",
                                 zone_interface, zone.ip_network, network,
-                                RuleAction.BLOCK, seq, check_mode, zone_results,
+                                RuleAction.BLOCK,
+                                base + self.ZONE_RULE_BLOCK_OFFSET + offset,
+                                check_mode, zone_results,
                             )
-                            seq += 1
 
                         # Step 4: Allow internet (pass to any — only non-RFC1918 reaches here)
                         self._create_or_skip_rule(
                             manager, existing_by_desc,
                             f"Zone {zone.name} -> internet",
                             zone_interface, zone.ip_network, "any",
-                            RuleAction.PASS, seq, check_mode, zone_results,
+                            RuleAction.PASS, base + self.ZONE_RULE_INTERNET_OFFSET,
+                            check_mode, zone_results,
                         )
 
                 results[zone.name] = {

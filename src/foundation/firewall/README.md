@@ -229,12 +229,23 @@ and removed on the consumer's teardown — regardless of the provider's state.
 | 2 | 1000–9999 | `zone-manager` | Foundation deny defaults |
 | **3** | **10000–19999** | **`rules-manager` ingress** | Per-module pinholes |
 | **4** | **20000–29999** | **`rules-manager` egress** | Per-module egress exceptions |
-| 5 | 30000–39999 | `zone-manager` | Zone-level `access-to` allows |
+| 5 | 30000–39999 | `zone-manager` | Zone-level rules: gateway + `access-to` allows, then rfc1918 block + internet |
 | 6 | 40000–49999 | Manual | Logging-only |
 | 7 | 50000–59999 | Manual | Administrator overrides |
 
 Within bands 3 and 4, each module receives a deterministic 100-slot range based
 on a stable hash of its `vmname`. Slot collisions are detected at compile time.
+
+Rules use `quick` (first match wins; **lower sequence = higher priority**). Band 5
+sits *above* the module bands so a zone's rfc1918 catch-all block (which isolates a
+zone from unlisted internal networks) is evaluated *after* per-module pinholes —
+otherwise it would shadow them and silently break cross-zone module connectivity
+(#243). Within band 5 each zone gets a deterministic 100-slot range (stable hash of
+the zone name; cross-zone slot collisions are harmless since each zone's rules bind
+to its own interface). The intra-slot offsets are fixed — `base+0` gateway,
+`base+1..+89` one pass per `access-to` zone, `base+90..+92` rfc1918 block,
+`base+99` internet — so adding a zone to `access-to` never renumbers or collides
+with the block/internet rules.
 
 ### Validation
 

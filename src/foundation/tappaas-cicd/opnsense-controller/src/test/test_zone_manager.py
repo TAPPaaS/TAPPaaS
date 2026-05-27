@@ -14,6 +14,10 @@ import unittest
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
+from opnsense_controller.firewall_manager import (
+    FirewallRuleInfo,
+    RuleAction,
+)
 from opnsense_controller.zone_manager import (
     Zone,
     ValidationMessage,
@@ -436,6 +440,171 @@ class TestGetZoneInterfaceVlanTagType(unittest.TestCase):
         # Some OPNsense versions / endpoints return vlan_tag as int.
         # This is the case the original issue #179 was filed against.
         self.assertEqual(self._resolve(210), "opt1")
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# configure_firewall_rules — sequence layout / collision regression (issue #243)
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+def _to_info(rule, uuid="u") -> FirewallRuleInfo:
+    """Convert a created FirewallRule into the FirewallRuleInfo a later run sees."""
+    iface = rule.interface if isinstance(rule.interface, str) else rule.interface[0]
+    return FirewallRuleInfo(
+        uuid=uuid,
+        description=rule.description,
+        enabled=True,
+        action="pass" if rule.action == RuleAction.PASS else "block",
+        interface=iface,
+        direction="in",
+        protocol="any",
+        source_net=rule.source_net,
+        source_port=None,
+        destination_net=rule.destination_net,
+        destination_port=None,
+        log=True,
+        sequence=rule.sequence,
+    )
+
+
+class _FakeFirewall:
+    """Records create/delete calls instead of touching OPNsense."""
+
+    def __init__(self, existing=None):
+        self._existing = list(existing or [])
+        self.created = []   # list[FirewallRule]
+        self.deleted = []   # list[str] (descriptions)
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *exc):
+        return False
+
+    def list_rules(self):
+        return list(self._existing)
+
+    def create_rule(self, rule, apply=False):
+        self.created.append(rule)
+        return {"uuid": f"new-{len(self.created)}"}
+
+    def delete_rule(self, description, apply=False):
+        self.deleted.append(description)
+
+    def apply_changes(self):
+        pass
+
+
+class TestConfigureFirewallRulesSequencing(unittest.TestCase):
+    """Zone firewall rules land in band 5 with a fixed, collision-free layout."""
+
+    def _manager(self, zones: dict[str, Zone]) -> ZoneManager:
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f:
+            json.dump({}, f)
+            zones_file = f.name
+        zm = ZoneManager(config=MagicMock(), zones_file=zones_file)
+        zm.zones = list(zones.values())
+        # Each zone on its own interface (real resolution needs OPNsense).
+        zm.get_zone_interface = lambda zone: f"opt_{zone.name}"
+        return zm
+
+    def _run(self, zones, existing=None) -> _FakeFirewall:
+        zm = self._manager(zones)
+        fake = _FakeFirewall(existing)
+        with patch(
+            "opnsense_controller.zone_manager.FirewallManager",
+            return_value=fake,
+        ):
+            zm.configure_firewall_rules(check_mode=False)
+        return fake
+
+    def _seqs_by_desc(self, fake) -> dict[str, int]:
+        return {r.description: r.sequence for r in fake.created}
+
+    def test_all_zone_rules_in_band_5(self):
+        fake = self._run(_build_zones())
+        self.assertTrue(fake.created)
+        for rule in fake.created:
+            self.assertGreaterEqual(rule.sequence, 30000)
+            self.assertLessEqual(rule.sequence, 39999)
+
+    def test_zone_rules_sit_above_module_bands(self):
+        # Band 5 must exceed the rules-manager pinhole/egress bands (10000-29999)
+        # so a zone's rfc1918 block no longer shadows module pinholes (#243).
+        fake = self._run(_build_zones())
+        for rule in fake.created:
+            self.assertGreater(rule.sequence, 29999)
+
+    def test_block_and_internet_trail_passes(self):
+        # srv: access-to=[internet, dmz] → gateway, pass dmz, 3 blocks, internet.
+        fake = self._run(_build_zones())
+        s = self._seqs_by_desc(fake)
+        gateway = s["Zone srv -> gateway"]
+        passes = s["Zone srv -> dmz"]
+        block10 = s["Zone srv block rfc1918-10"]
+        internet = s["Zone srv -> internet"]
+        self.assertLess(gateway, passes)
+        self.assertLess(passes, block10)
+        self.assertLess(block10, internet)
+
+    def test_no_duplicate_sequence_per_interface(self):
+        fake = self._run(_build_zones())
+        by_iface: dict[str, list[int]] = {}
+        for rule in fake.created:
+            iface = rule.interface
+            by_iface.setdefault(iface, []).append(rule.sequence)
+        for iface, seqs in by_iface.items():
+            self.assertEqual(len(seqs), len(set(seqs)), f"dup sequence on {iface}")
+
+    def test_adding_access_to_zone_does_not_collide_with_blocks(self):
+        # The core regression: 'home' grows its access-to; the new pass rules
+        # must never reuse a block/internet rule's sequence.
+        zones1 = _build_zones(home={"access_to": ["internet", "srv", "dmz"]})
+        first = self._run(zones1)
+        existing = [_to_info(r, uuid=f"u{i}") for i, r in enumerate(first.created)]
+
+        zones2 = _build_zones(
+            home={"access_to": ["internet", "srv", "dmz", "locked-srv"]}
+        )
+        second = self._run(zones2, existing=existing)
+
+        # Final desired state = whatever was already in sync + whatever was (re)created.
+        in_sync = {
+            r.description: r for r in existing
+            if r.description not in second.deleted
+        }
+        final: dict[str, int] = {d: r.sequence for d, r in in_sync.items()}
+        for r in second.created:
+            final[r.description] = r.sequence
+
+        home_seqs = [seq for desc, seq in final.items() if desc.startswith("Zone home ")]
+        self.assertEqual(len(home_seqs), len(set(home_seqs)),
+                         f"home sequence collision: {final}")
+        # The new pass rule exists and sits below the block band.
+        new_pass = final["Zone home -> locked-srv"]
+        block10 = final["Zone home block rfc1918-10"]
+        self.assertLess(new_pass, block10)
+
+    def test_idempotent_rerun_creates_nothing(self):
+        first = self._run(_build_zones())
+        existing = [_to_info(r, uuid=f"u{i}") for i, r in enumerate(first.created)]
+        second = self._run(_build_zones(), existing=existing)
+        self.assertEqual(second.created, [])
+        self.assertEqual(second.deleted, [])
+
+    def test_stale_sequence_is_reconciled(self):
+        # A rule carried over at the OLD vlan*10 sequence (~3100) must be
+        # detected as drift and renumbered into band 5.
+        fake = self._run(_build_zones())
+        gw = next(r for r in fake.created if r.description == "Zone srv -> gateway")
+        stale = _to_info(gw)
+        stale.sequence = 3100  # legacy numbering
+        second = self._run(_build_zones(), existing=[stale])
+        self.assertIn("Zone srv -> gateway", second.deleted)
+        recreated = next(
+            r for r in second.created if r.description == "Zone srv -> gateway"
+        )
+        self.assertGreaterEqual(recreated.sequence, 30000)
 
 
 if __name__ == "__main__":
