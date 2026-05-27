@@ -1,0 +1,12 @@
+{
+    "_comment": "Class B external client (issue #227): a non-TAPPaaS device (Synology, TrueNAS, MacBook, ...) that PUSHES backups into an isolated namespace. Copy to /home/tappaas/config/external-<name>.json, edit, then: backup-manage.sh add-external <name>. The client authenticates as <name>@pbs (DatastoreBackup role = write, no delete). Client-side encryption is the client's responsibility.",
+    "name": "synology",
+    "type": "external",
+    "namespace": "external/synology",
+    "encryptionRequired": true,
+    "retention": {
+        "keepDaily": 7,
+        "keepWeekly": 4,
+        "keepMonthly": 3
+    }
+}

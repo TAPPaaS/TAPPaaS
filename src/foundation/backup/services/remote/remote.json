@@ -1,0 +1,19 @@
+{
+    "_comment": "Class A buddy (issue #227): another TAPPaaS PBS this server PULLS from. Copy to /home/tappaas/config/remote-<name>.json, edit, then: backup-manage.sh add-remote <name>. API credentials are NOT stored here — they are prompted at onboarding.",
+    "name": "lars",
+    "type": "tappaas",
+    "remoteHost": "backup.example.internal",
+    "remoteStore": "tappaas_backup",
+    "remoteNamespace": "",
+    "namespace": "remote/lars",
+    "pullSchedule": "04:00",
+    "removeVanished": false,
+    "encryptionRequired": true,
+    "readAuthId": "",
+    "retention": {
+        "keepLast": 4,
+        "keepDaily": 14,
+        "keepWeekly": 8,
+        "keepMonthly": 12
+    }
+}

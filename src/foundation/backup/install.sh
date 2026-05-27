@@ -48,6 +48,8 @@ cd "$MODULE_DIR"
 . /home/tappaas/bin/common-install-routines.sh
 # shellcheck source=lib/pbs-job.sh disable=SC1091
 . "${MODULE_DIR}/lib/pbs-job.sh"
+# shellcheck source=lib/pbs-namespace.sh disable=SC1091
+. "${MODULE_DIR}/lib/pbs-namespace.sh"
 
 # Validate the JSON config
 check_json /home/tappaas/config/$1.json || exit 1
@@ -228,6 +230,15 @@ EOF
 # Configure datastore integrity verification: daily verify-job (04:00) + auto-
 # verify new backups, so silent bit-rot is caught early (issue #228).
 pbs_ensure_verify
+
+# Create the top-level namespaces that isolate other backup sources from the
+# local VM backups (which stay in the root namespace): remote/<buddy> for
+# TAPPaaS buddies (pull) and external/<client> for third parties (push).
+# Per-source child namespaces are created on demand by backup-manage.sh
+# add-remote / add-external (issue #227).
+info "${BOLD}Ensuring multi-source backup namespaces (issue #227)${CL}"
+pbs_ns_ensure remote
+pbs_ns_ensure external
 
 # Step 5: Get PBS fingerprint
 info "Getting PBS fingerprint..."

@@ -35,6 +35,14 @@ Commands:
   gc                          Run garbage collection on datastore
   status                      Show PBS datastore status
   retention                   Show current retention policy
+
+Multi-source datastore (issue #227):
+  list-sources                List namespaces, buddies (remotes) and sync jobs
+  add-remote <name>           Onboard a TAPPaaS buddy (pull) from remote-<name>.json
+  remove-remote <name> [--purge]   Offboard a buddy (--purge also deletes its data)
+  add-external <name>         Onboard a third-party push client from external-<name>.json
+  remove-external <name> [--purge]  Offboard an external client (--purge deletes its data)
+
   help                        Show this help message
 
 Examples:
@@ -66,6 +74,7 @@ set -e
 trap 'error_handler $LINENO "$BASH_COMMAND"' ERR
 
 # Source common routines and load backup module config
+SCRIPT_DIR="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")" && pwd)"
 . /home/tappaas/bin/common-install-routines.sh
 JSON_CONFIG="${CONFIG_DIR}/backup.json"
 JSON=$(cat "${JSON_CONFIG}")
@@ -143,6 +152,38 @@ case "$COMMAND" in
   retention)
     info "${BOLD}Current Retention Policy for ${DATASTORE_NAME}:${CL}"
     ssh root@${PBS_NODE}.${ZONE}.internal "proxmox-backup-manager datastore list" | grep -A 10 "${DATASTORE_NAME}"
+    ;;
+
+  list-sources)
+    info "${BOLD}Namespaces in ${DATASTORE_NAME}:${CL}"
+    ssh root@${PBS_NODE}.${ZONE}.internal "proxmox-backup-debug api get /admin/datastore/${DATASTORE_NAME}/namespace --output-format json" 2>/dev/null \
+      | jq -r '.[].ns | if . == "" then "(root — local VM backups)" else . end'
+    echo
+    info "${BOLD}Buddies (remotes):${CL}"
+    ssh root@${PBS_NODE}.${ZONE}.internal "proxmox-backup-manager remote list" 2>/dev/null || true
+    echo
+    info "${BOLD}Sync jobs:${CL}"
+    ssh root@${PBS_NODE}.${ZONE}.internal "proxmox-backup-manager sync-job list" 2>/dev/null || true
+    ;;
+
+  add-remote)
+    [[ -n "${2:-}" ]] || die "Usage: $0 add-remote <name>"
+    "${SCRIPT_DIR}/services/remote/install-service.sh" "$2"
+    ;;
+
+  remove-remote)
+    [[ -n "${2:-}" ]] || die "Usage: $0 remove-remote <name> [--purge]"
+    "${SCRIPT_DIR}/services/remote/delete-service.sh" "$2" "${3:-}"
+    ;;
+
+  add-external)
+    [[ -n "${2:-}" ]] || die "Usage: $0 add-external <name>"
+    "${SCRIPT_DIR}/services/external/install-service.sh" "$2"
+    ;;
+
+  remove-external)
+    [[ -n "${2:-}" ]] || die "Usage: $0 remove-external <name> [--purge]"
+    "${SCRIPT_DIR}/services/external/delete-service.sh" "$2" "${3:-}"
     ;;
 
   help|--help|-h)

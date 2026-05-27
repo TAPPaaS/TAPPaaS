@@ -142,6 +142,55 @@ Login options:
 - 12 monthly backups (1 year)
 - 6 yearly backups
 
+## Multi-source backups (namespaces, issue #227)
+
+The single PBS datastore is partitioned into namespaces so it can safely hold
+more than just local VM backups:
+
+```
+<datastore>/                 root      → local TAPPaaS VM backups (unchanged)
+<datastore>/remote/<name>    Class A   → a TAPPaaS buddy's PBS, PULLED here
+<datastore>/external/<name>  Class B   → a third-party client, PUSHED here
+```
+
+`remote` and `external` parent namespaces are created by `install.sh`; per-source
+child namespaces are created on demand by the commands below.
+
+### Class A — TAPPaaS buddy (pull)
+This PBS pulls another cluster's PBS into `remote/<name>` (`--remove-vanished
+false`, so a source compromise can't erase our copy; encryption preserved
+end-to-end; admin-owned sync + prune).
+
+```bash
+cp services/remote/remote.json ~/config/remote-lars.json   # edit host/store/namespace/retention
+./backup-manage.sh add-remote lars        # prompts for the buddy's API auth-id + password
+./backup-manage.sh list-sources
+./backup-manage.sh remove-remote lars            # keeps the synced data
+./backup-manage.sh remove-remote lars --purge    # also deletes remote/lars
+```
+
+### Class B — external client (push)
+A non-TAPPaaS device writes into `external/<name>`. The client authenticates as
+`<name>@pbs` with the **DatastoreBackup** role on that namespace only (write, no
+delete); an admin prune-job controls retention; datastore-wide `verify-new`
+flags key-swap anomalies. **The client encrypts with its own key** — the
+operator cannot read the data.
+
+```bash
+cp services/external/external.json ~/config/external-synology.json   # edit namespace/retention
+./backup-manage.sh add-external synology   # prompts for the client password (blank = auto-generate)
+./backup-manage.sh remove-external synology [--purge]
+```
+
+Client side (encrypt with the **client's** key):
+```bash
+# Synology Hyper Backup → rsync target, or proxmox-backup-client on TrueNAS Scale / MacBook:
+proxmox-backup-client backup data.pxar:/path \
+  --repository 'synology@pbs@<pbs-host>:<datastore>' --ns 'external/synology' \
+  --keyfile /path/to/client.key
+# Fingerprint: ssh root@backup.mgmt.internal "proxmox-backup-manager cert info | grep Fingerprint"
+```
+
 ## Automated Schedule
 
 Configured by `install.sh` (and kept current by `update.sh`). All times are
