@@ -23,7 +23,6 @@ resize-disk.sh,/home/tappaas/bin/resize-disk.sh,tappaas-cicd/scripts/resize-disk
 check-disk-threshold.sh,/home/tappaas/bin/check-disk-threshold.sh,tappaas-cicd/scripts/check-disk-threshold.sh,script
 setup-caddy.sh,/home/tappaas/bin/setup-caddy.sh,tappaas-cicd/scripts/setup-caddy.sh,script
 repository.sh,/home/tappaas/bin/repository.sh,tappaas-cicd/scripts/repository.sh,script
-update-cron.sh,/home/tappaas/bin/update-cron.sh,tappaas-cicd/scripts/update-cron.sh,script
 #
 # --- Python Programs (installed as symlinks in /home/tappaas/bin/) -----------------------
 opnsense-controller,/home/tappaas/bin/opnsense-controller,tappaas-cicd/opnsense-controller/src/opnsense_controller/main.py,python

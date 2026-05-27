@@ -103,15 +103,18 @@ Reads from `/home/tappaas/config/configuration.json`:
 }
 ```
 
-## Cron Setup
+## Scheduling
 
-Use `update-cron.sh` to install the daily cron job:
+`update-tappaas` is scheduled by a **systemd timer** declared in
+`tappaas-cicd.nix` (`systemd.timers.update-tappaas`, `OnCalendar=hourly`).
+cron was retired in issue #150. The timer fires hourly; `update-tappaas` then
+checks the global `updateSchedule` to decide whether to actually run at that
+hour. Output flows through journald → Promtail → Loki for Grafana.
 
 ```bash
-/home/tappaas/bin/update-cron.sh
+systemctl status update-tappaas.timer
+journalctl -u update-tappaas.service
 ```
-
-This creates a cron entry that runs `update-tappaas` every hour (at minute 0). The `update-tappaas` command checks the global `updateSchedule` to determine if updates should run at that time. Running hourly ensures the scheduled hour will be matched.
 
 ## Building
 

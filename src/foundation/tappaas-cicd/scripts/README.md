@@ -270,26 +270,24 @@ update-os.sh myvm 610 tappaas1
 
 ---
 
-### update-cron.sh
+### update-tappaas scheduling (no script — systemd timer)
 
-Creates a cron entry to run the TAPPaaS update scheduler every hour.
+cron was retired in issue #150. The update scheduler is now driven by a
+**systemd timer** declared in `tappaas-cicd.nix`
+(`systemd.timers.update-tappaas`, `OnCalendar=hourly`, `Persistent=true`).
+There is no `update-cron.sh` anymore.
 
-**Usage:**
+**Inspect:**
 ```bash
-update-cron.sh
+systemctl status update-tappaas.timer
+systemctl list-timers update-tappaas.timer
+journalctl -u update-tappaas.service
 ```
 
-**What it does:**
-- Removes any existing `update-tappaas` cron entries
-- Creates a new cron entry for user `tappaas` to run hourly (at minute 0)
-- The `update-tappaas` command handles all scheduling logic internally, checking the global `updateSchedule` to determine if updates should run
-
-**Cron entry created:**
-```
-0 * * * * /home/tappaas/bin/update-tappaas
-```
-
-**Why hourly?** Running hourly ensures the scheduled hour will be matched. The `update-tappaas` script only performs updates when the current hour matches the global `updateSchedule` hour.
+**Why hourly?** The timer fires every hour; `update-tappaas` only performs
+updates when the current hour matches the global `updateSchedule`, so an
+hourly tick guarantees the scheduled hour is hit. Output → journald →
+Promtail → Loki.
 
 ---
 
@@ -943,7 +941,6 @@ scripts/
 ├── setup-caddy.sh               # Install Caddy reverse proxy on firewall
 ├── snapshot-vm.sh               # VM snapshot management (create/list/cleanup/restore)
 ├── test-module.sh               # Test a module with dependency-recursive service testing
-├── update-cron.sh               # Set up hourly update cron job
 ├── update-module.sh             # Update a module with snapshot, testing, and rollback
 ├── update-os.sh                 # OS-specific update (NixOS/Debian)
 └── validate-configuration.sh    # Validate configuration.json for correctness

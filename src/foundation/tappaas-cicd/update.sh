@@ -27,7 +27,10 @@ else
     [[ "${rc}" -eq 0 ]] || die "nixos-rebuild failed (exit ${rc})"
 fi
 
-info "  Updating cron job..."
-/home/tappaas/bin/update-cron.sh
+# update-tappaas is scheduled declaratively via systemd.timers.update-tappaas
+# in tappaas-cicd.nix (output → journald → Promtail → Loki). The legacy hourly
+# crontab entry was retired — re-adding it here caused a dual scheduler where
+# both the cron and the timer fired hourly (issue: weekly timer run failed with
+# "env: 'bash'" while the cron run masked it). Do NOT call update-cron.sh.
 
 info "  ${GN}✓${CL} VM update completed successfully"

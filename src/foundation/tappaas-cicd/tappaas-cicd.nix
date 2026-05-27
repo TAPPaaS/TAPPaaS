@@ -71,7 +71,7 @@ in
   programs.ssh.startAgent = true;
 
   # ----------------------------------------
-  # update-tappaas — systemd timer (replaces the legacy hourly cron entry)
+  # update-tappaas — systemd timer (cron was retired in issue #150)
   # ----------------------------------------
   # Fires hourly; the script itself reads `tappaas.updateSchedule` from
   # configuration.json and decides whether to actually do anything. Output
@@ -83,6 +83,16 @@ in
       Type = "oneshot";
       User = "tappaas";
       ExecStart = "/home/tappaas/bin/update-tappaas";
+      # Mirror the operator's login PATH. Without this the service runs with
+      # NixOS's minimal default service PATH (no bash), so update-module.sh's
+      # `#!/usr/bin/env bash` shebang fails with "env: 'bash': No such file or
+      # directory" and every module update dies instantly. update-module.sh
+      # also needs ssh, jq, git, nixos-rebuild, nix and curl — all on this PATH.
+      Environment = [
+        ("PATH=/home/tappaas/bin:/run/wrappers/bin:/home/tappaas/.nix-profile/bin"
+          + ":/etc/profiles/per-user/tappaas/bin:/nix/var/nix/profiles/default/bin"
+          + ":/run/current-system/sw/bin")
+      ];
       # Hardening — update-tappaas only needs to read configs and shell out
       # to /home/tappaas/bin/update-module.sh (which uses ssh).
       NoNewPrivileges = true;
@@ -105,9 +115,9 @@ in
     };
   };
 
-  # Keep cron available for now (some operator scripts may still rely on it),
-  # but update-tappaas is no longer scheduled via crontab — see the timer above.
-  services.cron.enable = true;
+  # cron was replaced by the systemd timer above (issue #150). Disable it
+  # explicitly so a stale crontab entry can never resurrect a dual scheduler.
+  services.cron.enable = false;
 
   # ----------------------------------------
   # Promtail client → ship the mothership's journal to logging

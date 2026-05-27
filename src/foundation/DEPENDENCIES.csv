@@ -23,13 +23,12 @@ resize-disk.sh,tappaas-cicd/scripts/,
 check-disk-threshold.sh,tappaas-cicd/scripts/,resize-disk.sh
 setup-caddy.sh,tappaas-cicd/scripts/,common-install-routines.sh; opnsense-firewall; configuration.json
 repository.sh,tappaas-cicd/scripts/,configuration.json
-update-cron.sh,tappaas-cicd/scripts/,
 #
 # --- tappaas-cicd/ (module lifecycle) ---------------------------------------------------
 install1.sh,tappaas-cicd/,
 install2.sh,tappaas-cicd/,create-configuration.sh; copy-update-json.sh; update-module.sh; common-install-routines.sh; setup-caddy.sh; zones.json
 pre-update.sh,tappaas-cicd/,common-install-routines.sh; create-configuration.sh; configuration.json
-update.sh,tappaas-cicd/,common-install-routines.sh; update-cron.sh
+update.sh,tappaas-cicd/,common-install-routines.sh
 test.sh,tappaas-cicd/,common-install-routines.sh; validate-configuration.sh; repository.sh (via test-repository/test.sh); configuration.json
 #
 # --- tappaas-cicd/test-vm-creation/ -----------------------------------------------------

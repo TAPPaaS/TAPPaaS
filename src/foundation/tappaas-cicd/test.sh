@@ -55,7 +55,6 @@ required_scripts=(
     setup-caddy.sh
     repository.sh
     create-configuration.sh
-    update-cron.sh
 )
 
 missing=0
@@ -166,12 +165,21 @@ fi
 
 # ── Test 6: Cron job ────────────────────────────────────────────────
 
-info "${BOLD}Test 6: Update cron job${CL}"
+info "${BOLD}Test 6: Update scheduler (systemd timer)${CL}"
+
+# cron was retired in issue #150; update-tappaas is scheduled by a systemd
+# timer declared in tappaas-cicd.nix. Confirm the timer is active and that no
+# stale crontab entry survives to re-create a dual scheduler.
+if systemctl is-active --quiet update-tappaas.timer; then
+    pass "update-tappaas.timer is active"
+else
+    fail "update-tappaas.timer not active (check tappaas-cicd.nix / nixos-rebuild)"
+fi
 
 if crontab -l 2>/dev/null | grep -q "update-tappaas"; then
-    pass "update-tappaas cron entry present"
+    fail "stale update-tappaas crontab entry present (cron retired in #150; remove it)"
 else
-    fail "update-tappaas cron entry missing (run update-cron.sh)"
+    pass "no legacy update-tappaas cron entry"
 fi
 
 # ── Test 7: Repository management ───────────────────────────────────
