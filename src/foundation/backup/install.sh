@@ -91,6 +91,10 @@ ssh root@${NODE}.$ZONE.internal bash -c "'
   rm -f /etc/apt/sources.list.d/pbs-enterprise.sources
 '"
 
+# The PBS datastore lives on a ZFS pool; make the services wait for the mount
+# so they don't open the chunk store before ZFS is up on boot (issue #230).
+pbs_ensure_zfs_ordering
+
 # Create a backup directory on the storage tank
 sudo mkdir -p /${STORAGE}/tappaas_backups
 

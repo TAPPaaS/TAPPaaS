@@ -21,4 +21,9 @@ readonly MODULE_DIR
 
 info "${BOLD}Ensuring alwaysBackup VMs are registered in the managed backup job${CL}"
 pbs_ensure_always
+
+# Retrofit the ZFS-mount ordering on already-deployed PBS servers (issue #230);
+# idempotent, so this is a no-op once the drop-ins are in place.
+pbs_ensure_zfs_ordering
+
 info "  ${GN}✓${CL} Backup module update completed"

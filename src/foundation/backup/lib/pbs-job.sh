@@ -20,6 +20,50 @@ pbs_storage_name() {
     jq -r '.pbsStorageName // "tappaas_backup"' "${PBS_CONFIG_DIR}/backup.json" 2>/dev/null || echo "tappaas_backup"
 }
 
+# Hostname of the node PBS is installed on (backup.json's `node`). The PBS
+# datastore + services live here; fall back to the first mgmt node.
+pbs_node() {
+    local node
+    node="$(jq -r '.node // empty' "${PBS_CONFIG_DIR}/backup.json" 2>/dev/null)"
+    [[ -n "$node" ]] && printf '%s\n' "$node" || get_node_hostname 0
+}
+
+# Order proxmox-backup{,-proxy}.service After/Requires zfs-mount.service so PBS
+# never opens the (ZFS-backed) chunk store before the datastore is mounted on
+# boot (issue #230 — "unable to open chunk store - No such file or directory").
+# Covers BOTH units (the proxy is the one that actually serves the datastore).
+# Idempotent: only writes a drop-in / reloads when missing or stale. Runs on the
+# PBS node itself. No `ssh -n` here — the remote heredoc needs stdin.
+pbs_ensure_zfs_ordering() {
+    local node
+    node="$(pbs_node)"
+    info "${BOLD}Ensuring PBS waits for ZFS mount on ${node} (issue #230)${CL}"
+    ssh -o ConnectTimeout=10 -o BatchMode=yes -o StrictHostKeyChecking=accept-new \
+        "root@${node}.mgmt.internal" 'bash -s' <<'REMOTE'
+set -euo pipefail
+want='[Unit]
+After=zfs-mount.service
+Requires=zfs-mount.service'
+changed=0
+for unit in proxmox-backup.service proxmox-backup-proxy.service; do
+    dir="/etc/systemd/system/${unit}.d"
+    conf="${dir}/zfs-wait.conf"
+    if [[ -f "$conf" ]] && [[ "$(cat "$conf")" == "$want" ]]; then
+        echo "  ${conf} already current"
+        continue
+    fi
+    mkdir -p "$dir"
+    printf '%s\n' "$want" > "$conf"
+    echo "  wrote ${conf}"
+    changed=1
+done
+if [[ "$changed" -eq 1 ]]; then
+    systemctl daemon-reload
+    echo "  systemctl daemon-reload done"
+fi
+REMOTE
+}
+
 # Run a command on a reachable mgmt node (where pvesh talks to the cluster).
 # -n (stdin from /dev/null) is essential: these run inside `while read` loops,
 # and without it ssh would swallow the loop's remaining input.
