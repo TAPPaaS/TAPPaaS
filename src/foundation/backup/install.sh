@@ -225,6 +225,10 @@ proxmox-backup-manager datastore update ${DATASTORE_NAME} --gc-schedule '03:00'
 echo "Garbage collection configured for ${DATASTORE_NAME} (runs at 03:00)"
 EOF
 
+# Configure datastore integrity verification: daily verify-job (04:00) + auto-
+# verify new backups, so silent bit-rot is caught early (issue #228).
+pbs_ensure_verify
+
 # Step 5: Get PBS fingerprint
 info "Getting PBS fingerprint..."
 PBS_FINGERPRINT=$(ssh root@${NODE}.${ZONE}.internal "proxmox-backup-manager cert info | grep 'Fingerprint (sha256)' | sed 's/^Fingerprint (sha256): //'")

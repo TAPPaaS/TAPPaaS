@@ -26,4 +26,8 @@ pbs_ensure_always
 # idempotent, so this is a no-op once the drop-ins are in place.
 pbs_ensure_zfs_ordering
 
+# Retrofit datastore integrity verification (verify-job + verify-new, issue #228)
+# on already-deployed PBS servers; idempotent.
+pbs_ensure_verify
+
 info "  ${GN}✓${CL} Backup module update completed"

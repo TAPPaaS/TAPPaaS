@@ -64,6 +64,40 @@ fi
 REMOTE
 }
 
+# Ensure the datastore has integrity checking configured (issue #228): a daily
+# verify-job and verify-new. Without these, silent ZFS bit-rot in the chunk
+# store goes undetected until a restore fails. The verify-job re-verifies a
+# backup only when its last verification is older than 30 days
+# (--ignore-verified true + --outdated-after 30), so the nightly 04:00 run
+# spreads load instead of rescanning the whole datastore every night; verify-new
+# checks each backup as it arrives. Runs on the PBS node; idempotent.
+pbs_ensure_verify() {
+    local node store
+    node="$(pbs_node)"
+    store="$(pbs_storage_name)"
+    info "${BOLD}Ensuring PBS datastore verification on ${node} (issue #228)${CL}"
+    ssh -o ConnectTimeout=10 -o BatchMode=yes -o StrictHostKeyChecking=accept-new \
+        "root@${node}.mgmt.internal" "bash -s -- '${store}'" <<'REMOTE'
+set -euo pipefail
+store="$1"
+job="verify-${store}"
+# Verify-job — daily at 04:00 (after GC at 03:00, before business hours).
+if proxmox-backup-manager verify-job list 2>/dev/null | grep -q "${job}"; then
+    echo "  verify-job ${job} already exists"
+else
+    proxmox-backup-manager verify-job create "${job}" \
+        --store "${store}" \
+        --schedule '04:00' \
+        --ignore-verified true \
+        --outdated-after 30
+    echo "  created verify-job ${job} (daily 04:00, re-verify backups older than 30 days)"
+fi
+# Auto-verify each new backup on arrival (idempotent — just sets the flag).
+proxmox-backup-manager datastore update "${store}" --verify-new true
+echo "  verify-new enabled on ${store}"
+REMOTE
+}
+
 # Run a command on a reachable mgmt node (where pvesh talks to the cluster).
 # -n (stdin from /dev/null) is essential: these run inside `while read` loops,
 # and without it ssh would swallow the loop's remaining input.
