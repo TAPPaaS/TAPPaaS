@@ -34,7 +34,7 @@
         "vlantag": 210,
         "ip": "10.2.10.0/24",
         "bridge": "lan",
-        "access-to": ["internet"],
+        "access-to": ["internet", "iot-cloud", "iot-local"],
         "pinhole-allowed-from": [],
         "_comment": "Personal/household services (Home Assistant, personal stack). home/work reach this via their own access-to; mgmt via its access-to.",
         "description": "Personal services: home automation, personal apps"
@@ -90,7 +90,7 @@
         "SSID": "<HOME_SSID>",
         "ip": "10.3.10.0/24",
         "bridge": "lan",
-        "access-to": ["internet", "srv-home", "srv-work"],
+        "access-to": ["internet", "srv-home", "srv-work", "iot-cloud", "iot-local"],
         "pinhole-allowed-from": [],
         "description": "Trusted personal/staff-personal devices: laptops, phones, tablets"
     },

@@ -38,6 +38,7 @@
   "provides": [
     "firewall",
     "proxy",
-    "rules"
+    "rules",
+    "discovery"
   ]
 }
