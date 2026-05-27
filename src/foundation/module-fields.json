@@ -15,6 +15,7 @@
         "bridge0", "mac0", "zone0", "trunks0",
         "bridge1", "mac1", "zone1", "trunks1",
         "firewallType", "aliasType", "proxyDomain", "proxyPort", "proxyUpstreamTls", "proxyTls", "proxyAllowedZones",
+        "discoveryMdns", "discoveryUdpRelay",
         "ports", "ingress", "egress", "aliases",
         "dependsOn", "provides"
     ],
@@ -562,6 +563,42 @@
             "items": "string",
             "example": ["mgmt", "home", "work", "srv-home", "srv-work"],
             "note": "Zero-trust by default: when omitted, a service is reachable only from the internal trusted zones, never the internet. Add 'internet' to publish it publicly (no restriction). Zone names are resolved to subnets via zones.json. Changing this re-applies on the next install/update of the module."
+        },
+
+        "discoveryMdns": {
+            "description": "Bridge zone0 into the global mDNS repeater (os-mdns-repeater). home and srv-home are always included as consumer zones.",
+            "type": "boolean",
+            "requiredBy": [],
+            "usedBy": ["firewall:discovery"],
+            "default": false,
+            "example": true,
+            "note": "Requires firewall:discovery in dependsOn. Installs os-mdns-repeater if absent and idempotently unions zone0+home+srv-home into the repeater interface list."
+        },
+
+        "discoveryUdpRelay": {
+            "description": "UDP broadcast relay instances via os-udpbroadcastrelay. Each entry creates one relay identified by 'tappaas:<module>:<port>'.",
+            "type": "array",
+            "requiredBy": [],
+            "usedBy": ["firewall:discovery"],
+            "default": [],
+            "items": {
+                "type": "object",
+                "fields": {
+                    "port": {
+                        "description": "UDP port to relay (e.g. 36549 for Alfen Nucleus discovery).",
+                        "type": "integer",
+                        "required": true
+                    },
+                    "zones": {
+                        "description": "Zone names whose interfaces receive the relayed broadcast.",
+                        "type": "array",
+                        "items": "string",
+                        "required": true
+                    }
+                }
+            },
+            "example": [{"port": 36549, "zones": ["home", "iot-cloud"]}],
+            "note": "Requires firewall:discovery in dependsOn. Idempotent: checks description before adding. Reload is triggered only when new entries are added."
         },
 
         "ports": {

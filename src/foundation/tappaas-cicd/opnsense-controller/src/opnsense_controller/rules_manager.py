@@ -220,7 +220,7 @@ def _normalize_protocol(value: str | None) -> str:
 
 
 def _port_to_str(value: int | str) -> str:
-    return str(value)
+    return str(value).replace(":", "-")
 
 
 def _canonical_description(
@@ -863,7 +863,7 @@ class RulesManager:
 
     def _validate(self, module: ModuleSpec) -> list[ValidationError]:
         errors: list[ValidationError] = []
-        declared_ports = {str(p.get("port")) for p in module.ports}
+        declared_ports = {str(p.get("port")).replace(":", "-") for p in module.ports}
 
         # aliasType must be a recognised value, and "network" needs a zone0 subnet
         # to derive the alias content from (#241).
@@ -939,7 +939,7 @@ class RulesManager:
             # Port consistency: every ingress.ports must be in module.ports[]
             if declared_ports:
                 for port in entry.get("ports", []):
-                    if str(port) not in declared_ports:
+                    if str(port).replace(":", "-") not in declared_ports:
                         errors.append(
                             ValidationError(
                                 module.vmname,
