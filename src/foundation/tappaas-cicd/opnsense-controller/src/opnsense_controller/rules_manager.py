@@ -542,7 +542,9 @@ class RulesManager:
         result.desired = len(desired)
         desired_descs = {r.description for r in desired}
         existing = self._list_owned_rules(module.vmname)
-        existing_descs = {r.description for r in existing}
+        # Strip the " | <freetext>" suffix _to_firewall_rule stored, so a live
+        # rule matches its compiled canonical description (#246).
+        existing_descs = {_canonical_part(r.description) for r in existing}
 
         result.present = len(existing_descs & desired_descs)
         result.missing = sorted(desired_descs - existing_descs)
@@ -586,7 +588,7 @@ class RulesManager:
                 live = self._list_owned_rules(module.vmname)
                 desired_descs = {r.description for r in rules}
                 for live_rule in live:
-                    if live_rule.description not in desired_descs:
+                    if _canonical_part(live_rule.description) not in desired_descs:
                         info(f"[check] -rule desc='{live_rule.description}'")
             return result
 
@@ -633,7 +635,9 @@ class RulesManager:
 
             if prune:
                 for live_rule in existing:
-                    if live_rule.description not in desired_descs:
+                    # Compare on canonical identity — the live description carries
+                    # a " | <freetext>" suffix the desired set doesn't (#246).
+                    if _canonical_part(live_rule.description) not in desired_descs:
                         self.fw.delete_rule_by_uuid(live_rule.uuid, apply=False)
                         result.deleted += 1
 
@@ -1492,6 +1496,19 @@ class RulesManager:
 def _extract_module(description: str) -> str:
     parts = description.split(":")
     return parts[1] if len(parts) >= 2 else ""
+
+
+def _canonical_part(description: str) -> str:
+    """Canonical ``tappaas-…`` identity of a stored rule description.
+
+    ``_to_firewall_rule`` records OPNsense rule descriptions as
+    ``"{canonical} | {freetext}"`` (e.g. the human ingress description), but the
+    compile step keys rules by the bare canonical form. Comparisons (verify and
+    reconcile-prune) must therefore strip the ``" | <freetext>"`` suffix from the
+    live description, or every described rule reads as simultaneously missing and
+    extra — and reconcile prunes rules it just (re)created (#246).
+    """
+    return description.split("|", 1)[0].strip()
 
 
 # ─────────────────────────────────────────────────────────────────────────────

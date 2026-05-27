@@ -17,6 +17,7 @@ from unittest.mock import MagicMock, patch
 
 from opnsense_controller import rules_manager as rm
 from opnsense_controller.config import Config
+from opnsense_controller.firewall_manager import FirewallRuleInfo
 from opnsense_controller.rules_manager import (
     BAND_EGRESS_BASE,
     BAND_INGRESS_BASE,
@@ -26,6 +27,7 @@ from opnsense_controller.rules_manager import (
     ValidationError,
     ZoneSpec,
     _canonical_description,
+    _canonical_part,
     _module_alias_name,
     _normalize_protocol,
     load_global_aliases,
@@ -430,6 +432,108 @@ class TestAliasType(unittest.TestCase):
         mod = self._module(alias_type="bogus")
         errors = mgr._validate(mod)
         self.assertTrue(any(e.path == "aliasType" for e in errors), errors)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Description suffix: verify + reconcile-prune match on canonical part (#246)
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+def _live_from_compiled(mgr, rules) -> list[FirewallRuleInfo]:
+    """Build the FirewallRuleInfo a fresh add-rules would leave in OPNsense:
+    descriptions carry the ' | <freetext>' suffix from _to_firewall_rule."""
+    live = []
+    for i, r in enumerate(rules):
+        fw_rule = mgr._to_firewall_rule(r)
+        live.append(FirewallRuleInfo(
+            uuid=f"U{i}", description=fw_rule.description, enabled=True,
+            action="pass", interface=fw_rule.interface, direction="in",
+            protocol="TCP", source_net=fw_rule.source_net, source_port=None,
+            destination_net=fw_rule.destination_net, destination_port=None,
+            log=True, sequence=fw_rule.sequence,
+        ))
+    return live
+
+
+class TestCanonicalPart(unittest.TestCase):
+    def test_strips_freetext_suffix(self):
+        self.assertEqual(
+            _canonical_part("tappaas-module:alfen:ingress:home:80 | Alfen web UI"),
+            "tappaas-module:alfen:ingress:home:80",
+        )
+
+    def test_no_suffix_unchanged(self):
+        self.assertEqual(
+            _canonical_part("tappaas-module:alfen:ingress:home:80"),
+            "tappaas-module:alfen:ingress:home:80",
+        )
+
+    def test_freetext_with_pipe_only_splits_once(self):
+        self.assertEqual(
+            _canonical_part("tappaas-module:x:egress:y:443 | note | extra"),
+            "tappaas-module:x:egress:y:443",
+        )
+
+
+class TestVerifyAndPruneSuffix(unittest.TestCase):
+    """A described rule (freetext suffix) must verify clean and survive reconcile."""
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.dir = Path(self.tmp.name)
+        (self.dir / "litellm.json").write_text(json.dumps(LITELLM_FIXTURE))
+        (self.dir / "vllm.json").write_text(json.dumps(VLLM_FIXTURE))
+        self.mgr = _make_manager(modules_dir=self.dir)
+
+    def tearDown(self):
+        self.tmp.cleanup()
+
+    def test_verify_reports_described_rules_present(self):
+        desired, _ = self.mgr._compile(load_module(self.dir, "litellm"))
+        live = _live_from_compiled(self.mgr, desired)
+        self.mgr._list_owned_rules = lambda name: live
+        result = self.mgr.verify_rules("litellm")
+        self.assertEqual(result.desired, len(desired))
+        self.assertEqual(result.present, len(desired))
+        self.assertEqual(result.missing, [])
+        self.assertEqual(result.extra, [])
+        self.assertTrue(result.ok)
+
+    def test_reconcile_keeps_valid_described_rules(self):
+        desired, _ = self.mgr._compile(load_module(self.dir, "litellm"))
+        live = _live_from_compiled(self.mgr, desired)
+        self.mgr._list_owned_rules = lambda name: live
+        self.mgr._write_sequence_map = lambda *a, **k: None
+        fw = MagicMock()
+        fw.create_savepoint.return_value = "rev"
+        deleted = []
+        fw.delete_rule_by_uuid.side_effect = lambda uuid, apply=False: deleted.append(uuid)
+        self.mgr._fw = fw
+        result = self.mgr._apply("litellm", prune=True)
+        self.assertEqual(result.applied, len(desired))
+        self.assertEqual(deleted, [])          # nothing pruned
+        self.assertEqual(result.deleted, 0)
+
+    def test_reconcile_prunes_a_truly_removed_rule(self):
+        desired, _ = self.mgr._compile(load_module(self.dir, "litellm"))
+        live = _live_from_compiled(self.mgr, desired)
+        # An orphan that is NOT in the desired set must still be pruned.
+        live.append(FirewallRuleInfo(
+            uuid="ORPHAN", description="tappaas-module:litellm:ingress:home:9999 | stale",
+            enabled=True, action="pass", interface="opt1", direction="in",
+            protocol="TCP", source_net="x", source_port=None,
+            destination_net="y", destination_port=None, log=True, sequence=10099,
+        ))
+        self.mgr._list_owned_rules = lambda name: live
+        self.mgr._write_sequence_map = lambda *a, **k: None
+        fw = MagicMock()
+        fw.create_savepoint.return_value = "rev"
+        deleted = []
+        fw.delete_rule_by_uuid.side_effect = lambda uuid, apply=False: deleted.append(uuid)
+        self.mgr._fw = fw
+        result = self.mgr._apply("litellm", prune=True)
+        self.assertEqual(deleted, ["ORPHAN"])
+        self.assertEqual(result.deleted, 1)
 
 
 # ─────────────────────────────────────────────────────────────────────────────
