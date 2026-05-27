@@ -28,7 +28,16 @@
   "dependsOn": [
     "cluster:vm",
     "backup:vm",
-    "firewall:proxy"
+    "firewall:proxy",
+    "identity:identity",
+    "firewall:rules",
+
+    "alfen:ui",
+    "alfen:discovery",
+    "alfen:modbus",
+
+    "sonos:audio",
+    "sonos:airplay"
   ],
   "provides": []
 }
