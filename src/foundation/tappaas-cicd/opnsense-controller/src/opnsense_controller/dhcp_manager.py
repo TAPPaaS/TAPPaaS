@@ -242,6 +242,46 @@ class DhcpManager:
                 return host
         return None
 
+    def list_leases(self) -> list[dict]:
+        """List active DHCP leases handed out by dnsmasq (issue #235).
+
+        TAPPaaS runs dnsmasq for DHCP/DNS, so leases come from the dnsmasq
+        ``leases/search`` controller (not the ISC ``dhcpv4`` plugin). Returns a
+        list of dicts with ip, hostname, mac, zone (the OPNsense interface
+        description, which is the TAPPaaS zone label), interface, and the raw
+        ``expire`` unix timestamp (0/None for a static/never-expiring lease).
+        """
+        result = self.client.run_module(
+            "raw",
+            params={
+                "module": "dnsmasq",
+                "controller": "leases",
+                "command": "search",
+                "action": "get",
+            },
+        )
+        rows = result.get("result", {}).get("response", {}).get("rows", [])
+        leases = []
+        for row in rows:
+            leases.append({
+                "ip": row.get("address"),
+                "hostname": row.get("hostname") or "",
+                "mac": row.get("hwaddr"),
+                # if_descr is the interface description = the (normalised) zone
+                # label; fall back to the opt-id if a description is missing.
+                "zone": row.get("if_descr") or row.get("if_name") or "",
+                "interface": row.get("if_name") or "",
+                "expire": row.get("expire"),
+            })
+        # Stable, human-friendly ordering: by zone, then numeric IP.
+        def _ip_key(ip: str) -> tuple:
+            try:
+                return tuple(int(o) for o in (ip or "").split("."))
+            except ValueError:
+                return (0,)
+        leases.sort(key=lambda r: (r["zone"], _ip_key(r["ip"])))
+        return leases
+
     # =========================================================================
     # DHCP Range Operations
     # =========================================================================

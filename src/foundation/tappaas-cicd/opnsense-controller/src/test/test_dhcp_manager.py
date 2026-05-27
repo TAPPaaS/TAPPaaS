@@ -197,5 +197,59 @@ class TestDeleteRange(unittest.TestCase):
         self.assertEqual(_calls_for(manager, "delRange"), [])
 
 
+class TestListLeases(unittest.TestCase):
+    """list_leases queries the dnsmasq leases controller and maps fields (#235)."""
+
+    def _manager_with_leases(self, rows):
+        def run_module(module, **kwargs):
+            params = kwargs.get("params", {})
+            if params.get("controller") == "leases" and params.get("command") == "search":
+                return {"result": {"response": {"rows": rows}}}
+            return {"result": {"response": {}}}
+
+        manager = DhcpManager(config=MagicMock())
+        manager._client = MagicMock()
+        manager._client.run_module.side_effect = run_module
+        return manager
+
+    def test_maps_api_fields_to_lease_dict(self):
+        rows = [{
+            "address": "10.2.10.217", "hostname": "litellm",
+            "hwaddr": "02:f4:59:9a:2d:ba", "if_name": "opt11",
+            "if_descr": "srv_home", "expire": 1779954626,
+        }]
+        manager = self._manager_with_leases(rows)
+        leases = manager.list_leases()
+        self.assertEqual(len(leases), 1)
+        self.assertEqual(leases[0], {
+            "ip": "10.2.10.217", "hostname": "litellm",
+            "mac": "02:f4:59:9a:2d:ba", "zone": "srv_home",
+            "interface": "opt11", "expire": 1779954626,
+        })
+
+    def test_queries_dnsmasq_leases_controller(self):
+        manager = self._manager_with_leases([])
+        manager.list_leases()
+        params = manager.client.run_module.call_args.kwargs["params"]
+        self.assertEqual(params["module"], "dnsmasq")
+        self.assertEqual(params["controller"], "leases")
+        self.assertEqual(params["command"], "search")
+
+    def test_sorted_by_zone_then_numeric_ip(self):
+        rows = [
+            {"address": "10.0.0.134", "hostname": "cicd", "hwaddr": "a", "if_descr": "LAN", "if_name": "lan", "expire": 1},
+            {"address": "10.2.10.217", "hostname": "litellm", "hwaddr": "b", "if_descr": "srv_home", "if_name": "opt11", "expire": 2},
+            {"address": "10.2.10.9", "hostname": "early", "hwaddr": "c", "if_descr": "srv_home", "if_name": "opt11", "expire": 3},
+        ]
+        leases = self._manager_with_leases(rows).list_leases()
+        # LAN before srv_home; within srv_home .9 sorts before .217 numerically.
+        self.assertEqual([l["hostname"] for l in leases], ["cicd", "early", "litellm"])
+
+    def test_missing_hostname_becomes_empty(self):
+        rows = [{"address": "10.0.0.5", "hwaddr": "x", "if_descr": "LAN", "if_name": "lan", "expire": 0}]
+        leases = self._manager_with_leases(rows).list_leases()
+        self.assertEqual(leases[0]["hostname"], "")
+
+
 if __name__ == "__main__":
     unittest.main()

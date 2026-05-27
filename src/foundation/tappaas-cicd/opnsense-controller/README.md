@@ -132,6 +132,9 @@ export OPNSENSE_PORT=8443
 # Show DHCP module specifications
 ./result/bin/opnsense-controller --mode dhcp --no-ssl-verify --example spec
 
+# List active DHCP leases as a table (IP, hostname, MAC, zone, expiry)
+./result/bin/opnsense-controller --mode dhcp --no-ssl-verify --example list-leases
+
 # Create a DHCP range (dry-run)
 ./result/bin/opnsense-controller --mode dhcp --no-ssl-verify --example range
 
@@ -219,6 +222,7 @@ export OPNSENSE_PORT=8443
 |---------|-------------|
 | `test` | Test connection to firewall |
 | `spec` | Show Dnsmasq DHCP module specifications |
+| `list-leases` | List active DHCP leases as a table: IP, hostname, MAC, zone, expiry (read-only) |
 | `range` | Create single DHCP range (Server Network) |
 | `range-multi` | Create multiple DHCP ranges (Private, IoT, DMZ networks) |
 | `host` | Create single static DHCP host reservation |

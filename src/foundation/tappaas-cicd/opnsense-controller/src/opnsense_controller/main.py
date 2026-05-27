@@ -28,6 +28,7 @@ Usage:
 import argparse
 import os
 import sys
+from datetime import datetime
 
 from .config import Config
 from .dhcp_manager import DhcpHost, DhcpManager, DhcpRange
@@ -173,6 +174,39 @@ def example_dhcp_show_specs(manager: DhcpManager) -> None:
     print(f"  Range spec: {manager.get_range_spec()}")
     print(f"  Host spec: {manager.get_host_spec()}")
     print(f"  General spec: {manager.get_general_spec()}")
+
+
+def example_dhcp_list_leases(manager: DhcpManager) -> None:
+    """List active DHCP leases as a table: IP, hostname, MAC, zone (issue #235)."""
+    leases = manager.list_leases()
+    if not leases:
+        print("No active DHCP leases found.")
+        return
+
+    def _expires(ts) -> str:
+        if not ts:
+            return "static"
+        try:
+            return datetime.fromtimestamp(int(ts)).strftime("%Y-%m-%d %H:%M")
+        except (ValueError, OverflowError, OSError):
+            return str(ts)
+
+    rows = [
+        (lease["ip"] or "", lease["hostname"] or "-", lease["mac"] or "",
+         lease["zone"] or "", _expires(lease["expire"]))
+        for lease in leases
+    ]
+    headers = ("IP", "Hostname", "MAC", "Zone", "Expires")
+    widths = [
+        max(len(headers[i]), *(len(r[i]) for r in rows))
+        for i in range(len(headers))
+    ]
+    line = "  ".join(h.ljust(widths[i]) for i, h in enumerate(headers))
+    print(f"\n{line}")
+    print("  ".join("-" * widths[i] for i in range(len(headers))))
+    for r in rows:
+        print("  ".join(str(r[i]).ljust(widths[i]) for i in range(len(headers))))
+    print(f"\n{len(leases)} active lease(s).")
 
 
 def example_dhcp_create_range(
@@ -532,7 +566,7 @@ def main():
         default="all",
         help="Which example to run (default: all). "
         "For vlan: all, test, list, spec, assigned, create, create-multi, update, delete. "
-        "For dhcp: all, test, spec, range, range-multi, host, host-multi, delete-host, enable, config. "
+        "For dhcp: all, test, spec, list-leases, range, range-multi, host, host-multi, delete-host, enable, config. "
         "For firewall: all, test, spec, list, create, create-multi, delete, allow, block",
     )
     parser.add_argument(
@@ -615,6 +649,7 @@ def main():
             examples = {
                 "test": lambda: example_dhcp_test_connection(manager),
                 "spec": lambda: example_dhcp_show_specs(manager),
+                "list-leases": lambda: example_dhcp_list_leases(manager),
                 "range": lambda: example_dhcp_create_range(manager, check_mode),
                 "range-multi": lambda: example_dhcp_create_multiple_ranges(manager, check_mode),
                 "host": lambda: example_dhcp_create_host(manager, check_mode),
