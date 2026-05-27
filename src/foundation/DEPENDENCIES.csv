@@ -82,11 +82,6 @@ delete-service.sh,backup/services/vm/,
 # --- firewall/ --------------------------------------------------------------------------
 update.sh,firewall/,common-install-routines.sh; zone-manager; zones.json
 #
-# --- firewall/services/firewall/ --------------------------------------------------------
-install-service.sh,firewall/services/firewall/,
-update-service.sh,firewall/services/firewall/,
-delete-service.sh,firewall/services/firewall/,
-#
 # --- firewall/services/proxy/ -----------------------------------------------------------
 install-service.sh,firewall/services/proxy/,common-install-routines.sh; caddy-manager; configuration.json
 update-service.sh,firewall/services/proxy/,caddy-manager; configuration.json
