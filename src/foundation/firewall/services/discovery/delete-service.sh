@@ -2,13 +2,10 @@
 #
 # TAPPaaS Discovery Service - Delete
 #
-# Removes UDP broadcast relay entries owned by a module (identified by
-# description prefix "tappaas:<module>:"). Reloads the relay service if
-# any entries were removed.
-#
-# mDNS repeater interfaces are NOT automatically cleaned up: they are shared
-# across all modules and removing one module's zone0 could break others.
-# If cleanup is needed, update os-mdns-repeater manually via OPNsense UI.
+# Removes discovery config owned by a module:
+#   - discoveryUdpRelay: deletes relay entries with prefix "tappaas_<module>_"
+#   - discoveryMdns: removes zone0 + consumer zones from os-mdns-repeater,
+#     but only if no other installed module still needs them (shared-interface safety).
 #
 # Usage: delete-service.sh <module-name>
 #
@@ -36,7 +33,7 @@ FIREWALL_TYPE="opnsense"
 [[ -f "${FIREWALL_JSON}" ]] && FIREWALL_TYPE=$(jq -r '.firewallType // "opnsense"' "${FIREWALL_JSON}")
 
 if [[ "${FIREWALL_TYPE}" == "NONE" ]]; then
-    warn "firewallType=NONE — please manually remove any discovery relay configuration for ${MODULE}."
+    warn "firewallType=NONE — please manually remove any discovery configuration for ${MODULE}."
     info "${GN}firewall:discovery delete-service completed for ${MODULE} (manual cleanup required)${CL}"
     exit 0
 fi
@@ -55,7 +52,6 @@ CURL=(-sk -u "${KEY}:${SECRET}")
 
 # ── Remove UDP relay entries owned by this module ────────────────────
 
-# Description format uses underscores (OPNsense DescriptionField rejects hyphens)
 MODULE_SAFE="${MODULE//-/_}"
 DESC_PREFIX="tappaas_${MODULE_SAFE}_"
 
@@ -81,15 +77,137 @@ else
     info "  No UDP relay entries found for module '${MODULE}'."
 fi
 
-# ── mDNS: warn if module used mDNS ──────────────────────────────────
+# ── Remove mDNS repeater interfaces no longer needed ────────────────
+# Only removes interfaces that no other installed module still needs.
 
-HAS_MDNS="false"
-[[ -f "${MODULE_JSON}" ]] && HAS_MDNS=$(jq -r '.discoveryMdns // false' "${MODULE_JSON}")
-if [[ "${HAS_MDNS}" == "true" ]]; then
-    ZONE0=$(jq -r '.zone0 // "unknown"' "${MODULE_JSON}")
-    warn "  mDNS repeater interfaces are shared and NOT automatically removed."
-    warn "  If '${MODULE}' was the last module using zone '${ZONE0}' for mDNS,"
-    warn "  remove it manually: OPNsense → Services → mDNS Repeater."
+if [[ ! -f "${MODULE_JSON}" ]]; then
+    info "  Module config not found — skipping mDNS cleanup."
+    info "${GN}firewall:discovery delete-service completed for ${MODULE}${CL}"
+    exit 0
 fi
+
+MDNS_RAW=$(jq -r '.discoveryMdns // "false"' "${MODULE_JSON}")
+
+if [[ "${MDNS_RAW}" == "false" ]]; then
+    info "  No discoveryMdns declared — skipping mDNS cleanup."
+    info "${GN}firewall:discovery delete-service completed for ${MODULE}${CL}"
+    exit 0
+fi
+
+info "  Checking mDNS repeater cleanup..."
+
+# Collect zones contributed by this module (zone0 + consumer zones)
+THIS_ZONES=()
+ZONE0=$(jq -r '.zone0 // empty' "${MODULE_JSON}")
+[[ -n "${ZONE0}" ]] && THIS_ZONES+=("${ZONE0}")
+if [[ "${MDNS_RAW}" != "true" ]]; then
+    while IFS= read -r zone; do
+        THIS_ZONES+=("${zone}")
+    done < <(jq -r '.discoveryMdns[]' "${MODULE_JSON}")
+fi
+
+if [[ "${#THIS_ZONES[@]}" -eq 0 ]]; then
+    info "  No mDNS zones to clean up."
+    info "${GN}firewall:discovery delete-service completed for ${MODULE}${CL}"
+    exit 0
+fi
+
+# Collect zones still needed by other installed modules
+OTHER_ZONES=()
+for config_file in "${CONFIG_DIR}"/*.json; do
+    other_module=$(basename "${config_file}" .json)
+    [[ "${other_module}" == "${MODULE}" ]] && continue
+
+    other_mdns=$(jq -r '.discoveryMdns // "false"' "${config_file}" 2>/dev/null) || continue
+    [[ "${other_mdns}" == "false" ]] && continue
+
+    other_zone0=$(jq -r '.zone0 // empty' "${config_file}")
+    [[ -n "${other_zone0}" ]] && OTHER_ZONES+=("${other_zone0}")
+
+    if [[ "${other_mdns}" != "true" ]]; then
+        while IFS= read -r zone; do
+            OTHER_ZONES+=("${zone}")
+        done < <(jq -r '.discoveryMdns[]' "${config_file}")
+    fi
+done
+
+# Compute which of this module's zones are safe to remove
+SAFE_TO_REMOVE=()
+for zone in "${THIS_ZONES[@]}"; do
+    needed=false
+    for other_zone in "${OTHER_ZONES[@]}"; do
+        [[ "${zone}" == "${other_zone}" ]] && { needed=true; break; }
+    done
+    if [[ "${needed}" == "false" ]]; then
+        SAFE_TO_REMOVE+=("${zone}")
+    else
+        info "  Zone '${zone}' still needed by another module — keeping."
+    fi
+done
+
+if [[ "${#SAFE_TO_REMOVE[@]}" -eq 0 ]]; then
+    info "  All mDNS zones still needed by other modules — nothing removed."
+    info "${GN}firewall:discovery delete-service completed for ${MODULE}${CL}"
+    exit 0
+fi
+
+# Resolve zone names → OPNsense interface identifiers
+MDNS_RESP=$(curl "${CURL[@]}" "${API}/mdnsrepeater/settings/get")
+if ! echo "${MDNS_RESP}" | jq -e '.mdnsrepeater.interfaces' >/dev/null 2>&1; then
+    warn "  os-mdns-repeater not available — skipping mDNS cleanup."
+    info "${GN}firewall:discovery delete-service completed for ${MODULE}${CL}"
+    exit 0
+fi
+IFACE_JSON=$(echo "${MDNS_RESP}" | jq '.mdnsrepeater.interfaces')
+
+resolve_iface() {
+    local zone="$1"
+    echo "${IFACE_JSON}" | jq -r --arg z "${zone}" \
+        'to_entries[]
+         | select(.value.value | ascii_downcase | startswith(($z | gsub("-";"_") | ascii_downcase)))
+         | .key' \
+        | head -1
+}
+
+REMOVE_IFACES=()
+for zone in "${SAFE_TO_REMOVE[@]}"; do
+    iface=$(resolve_iface "${zone}")
+    if [[ -z "${iface}" ]]; then
+        warn "  Cannot resolve interface for zone '${zone}' — skipping."
+    else
+        REMOVE_IFACES+=("${iface}")
+        info "  Will remove mDNS interface: ${zone} → ${iface}"
+    fi
+done
+
+if [[ "${#REMOVE_IFACES[@]}" -eq 0 ]]; then
+    info "  No mDNS interfaces resolved for removal."
+    info "${GN}firewall:discovery delete-service completed for ${MODULE}${CL}"
+    exit 0
+fi
+
+# Build new interface set: current selected minus the ones to remove
+CURRENT=$(echo "${MDNS_RESP}" | jq -r \
+    '.mdnsrepeater.interfaces | to_entries[] | select(.value.selected == 1) | .key')
+
+NEW_IFACES=""
+while IFS= read -r iface; do
+    [[ -z "${iface}" ]] && continue
+    skip=false
+    for rm_iface in "${REMOVE_IFACES[@]}"; do
+        [[ "${iface}" == "${rm_iface}" ]] && { skip=true; break; }
+    done
+    [[ "${skip}" == "false" ]] && NEW_IFACES="${NEW_IFACES},${iface}"
+done <<< "${CURRENT}"
+NEW_IFACES="${NEW_IFACES#,}"
+
+SAVE_RESP=$(curl "${CURL[@]}" -X POST -H "Content-Type: application/json" \
+    -d "{\"mdnsrepeater\":{\"enabled\":\"1\",\"interfaces\":\"${NEW_IFACES}\"}}" \
+    "${API}/mdnsrepeater/settings/set")
+echo "${SAVE_RESP}" | jq -e '.result == "saved"' >/dev/null \
+    || die "mDNS settings/set failed: ${SAVE_RESP}"
+
+curl "${CURL[@]}" -X POST "${API}/mdnsrepeater/service/reconfigure" >/dev/null
+info "  mDNS repeater updated: removed ${#REMOVE_IFACES[@]} interface(s), reconfigured."
 
 info "${GN}firewall:discovery delete-service completed for ${MODULE}${CL}"
