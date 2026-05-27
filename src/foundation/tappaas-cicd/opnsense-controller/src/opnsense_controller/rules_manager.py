@@ -9,12 +9,19 @@ Description-based identity makes apply operations idempotent:
     tappaas-module:<vmname>:<direction>:<peer>:<port>[/<protocol>]
 
 When a peer is another module's name (rather than a zone, 'internet', or an
-'alias:<name>' reference), the manager creates and references an OPNsense host
-alias `tappaas_module_<peer_vmname>` (OPNsense aliases use underscores; any
-hyphens in vmname are normalised) containing the peer's FQDN
-(`<vmname>.<zone0>.internal`). OPNsense's Unbound resolver looks up the FQDN
-against dnsmasq, so DHCP-driven IP changes flow through transparently without
-rule rewrites.
+'alias:<name>' reference), the manager creates and references an OPNsense alias
+`tappaas_module_<peer_vmname>` (OPNsense aliases use underscores; any hyphens in
+vmname are normalised). The alias content depends on the module's `aliasType`:
+
+  - "host" (default): a host alias of the peer's FQDN `<vmname>.<zone0>.internal`.
+    OPNsense's Unbound resolver looks up the FQDN against dnsmasq, so DHCP-driven
+    IP changes flow through transparently without rule rewrites.
+  - "network": a network alias of the peer's zone0 subnet CIDR (from zones.json).
+    Used for modules that represent multiple devices with no single resolvable
+    hostname — IoT device fleets, sets of physical appliances (#241).
+
+Rules reference the alias by name, so the same compiled rule works regardless of
+the alias's type.
 
 CLI: rules-manager <subcommand> [--module <name>] ...
 """
@@ -101,12 +108,29 @@ class ModuleSpec:
     egress: list[dict]
     aliases: dict[str, dict]
     firewall_type: str  # "opnsense" | "NONE"
+    # OPNsense alias type for tappaas_module_<vmname>: "host" (FQDN, default) or
+    # "network" (zone0 subnet, for multi-device modules with no single FQDN — #241).
+    alias_type: str = "host"
     # `dependsOn` and `location` are needed by the auto-pinhole pass (issue #173).
     # `location` is the absolute path of the module directory in the source tree
     # (set by copy-update-json.sh); auto-pinhole reads
     # <provider.location>/services/<service>/pinhole.json for each dependency.
     depends_on: list[str] = field(default_factory=list)
     location: str = ""
+
+
+@dataclass
+class AliasTarget:
+    """The OPNsense alias to provision for a tappaas_module_<name> reference.
+
+    `alias_type` is "host" (content = the module FQDN) or "network" (content =
+    the module's zone0 subnet CIDR). Rules reference the alias by name, so the
+    same rule works regardless of which target the alias resolves to (#241).
+    """
+
+    alias_type: str
+    content: list[str]
+    description: str
 
 
 @dataclass
@@ -314,6 +338,7 @@ def load_module(modules_dir: Path, name: str) -> ModuleSpec:
         egress=data.get("egress", []) or [],
         aliases=data.get("aliases", {}) or {},
         firewall_type=data.get("firewallType", "opnsense"),
+        alias_type=data.get("aliasType", "host") or "host",
         depends_on=data.get("dependsOn", []) or [],
         location=data.get("location", "") or "",
     )
@@ -363,8 +388,8 @@ class RulesManager:
         self.firewall_type = firewall_type.upper() if firewall_type else "OPNSENSE"
         self._fw: FirewallManager | None = None
         self._client: Client | None = None
-        # Cache: peer-module zone lookup for FQDN aliases (avoids re-reading JSON)
-        self._peer_zone_cache: dict[str, str] = {}
+        # Cache: peer-module spec lookup for alias targets (avoids re-reading JSON)
+        self._peer_module_cache: dict[str, ModuleSpec | None] = {}
         # Cache: VLAN-tag → OPNsense interface identifier (lazy-loaded at first use)
         self._vlan_iface_cache: dict[int, str] | None = None
 
@@ -578,13 +603,12 @@ class RulesManager:
                 alias_def.get("description", ""),
             )
             result.aliases_created += 1
-        for peer_alias_name, peer_fqdn in self._peer_module_fqdn_aliases(module).items():
+        for alias_name, target in self._module_aliases_to_provision(module).items():
             self._upsert_alias(
-                peer_alias_name,
-                "host",
-                [peer_fqdn],
-                f"FQDN alias for module '{peer_fqdn.split('.')[0]}' "
-                f"(DHCP IP resolved via Unbound/dnsmasq)",
+                alias_name,
+                target.alias_type,
+                target.content,
+                target.description,
             )
             result.aliases_created += 1
         for global_name in self._referenced_global_aliases(module):
@@ -841,6 +865,28 @@ class RulesManager:
         errors: list[ValidationError] = []
         declared_ports = {str(p.get("port")) for p in module.ports}
 
+        # aliasType must be a recognised value, and "network" needs a zone0 subnet
+        # to derive the alias content from (#241).
+        if module.alias_type not in ("host", "network"):
+            errors.append(
+                ValidationError(
+                    module.vmname,
+                    "aliasType",
+                    f"must be 'host' or 'network', got '{module.alias_type}'",
+                )
+            )
+        elif module.alias_type == "network":
+            subnet = self.zones[module.zone0].ip_network if module.zone0 in self.zones else ""
+            if not subnet:
+                errors.append(
+                    ValidationError(
+                        module.vmname,
+                        "aliasType",
+                        f"aliasType 'network' requires zone0 '{module.zone0}' to "
+                        f"define a subnet ('ip') in zones.json",
+                    )
+                )
+
         # Module-local aliases must declare type+addresses+description
         for name, alias in module.aliases.items():
             if not isinstance(alias, dict):
@@ -977,40 +1023,39 @@ class RulesManager:
         """Resolve self (the module itself) for rules destined to/from this module."""
         return _module_alias_name(module.vmname)
 
-    def _peer_module_fqdn_aliases(self, module: ModuleSpec) -> dict[str, str]:
-        """Return {alias_name: fqdn} for the module itself and every module-named peer.
+    def _module_aliases_to_provision(self, module: ModuleSpec) -> dict[str, AliasTarget]:
+        """Return {alias_name: AliasTarget} for the module itself and every peer.
 
         Walks manual ingress/egress entries plus auto-pinhole providers
-        (issue #173) so that every alias referenced by a compiled rule has
-        a corresponding OPNsense host alias before the rule is applied.
+        (issue #173) so that every alias referenced by a compiled rule has a
+        corresponding OPNsense alias before the rule is applied. Each target is
+        a "host" alias (the module FQDN) or, when the module declares
+        ``aliasType: network``, a "network" alias of its zone0 subnet (#241).
         """
-        result: dict[str, str] = {}
+        result: dict[str, AliasTarget] = {}
         # Self alias — destination for ingress, source for egress (and for
         # auto-pinhole rules, which use the self alias as the source).
-        if module.zone0:
-            result[_module_alias_name(module.vmname)] = (
-                f"{module.vmname}.{module.zone0}.{DEFAULT_DOMAIN_SUFFIX}"
-            )
+        self_target = self._alias_target_for(
+            module.vmname, module.zone0, module.alias_type
+        )
+        if self_target:
+            result[_module_alias_name(module.vmname)] = self_target
         # Peer aliases (module-name peers in ingress.from and egress.to)
+        peers: list[str] = []
         for entry in module.ingress:
-            peer = entry.get("from")
-            if peer and peer != "internet" and not peer.startswith("alias:") and peer not in self.zones:
-                fqdn = self._peer_fqdn(peer)
-                if fqdn:
-                    result[_module_alias_name(peer)] = fqdn
+            peers.append(entry.get("from"))
         for entry in module.egress:
-            peer = entry.get("to")
-            if peer and peer != "internet" and not peer.startswith("alias:") and peer not in self.zones:
-                fqdn = self._peer_fqdn(peer)
-                if fqdn:
-                    result[_module_alias_name(peer)] = fqdn
+            peers.append(entry.get("to"))
         # Auto-pinhole peers: every provider whose pinhole.json would emit a
         # cross-zone rule. We re-derive the same predicate the compile step
         # uses (cross-zone, not covered by zone access-to, and policy-allowed).
-        for provider_name in self._auto_pinhole_provider_names(module):
-            fqdn = self._peer_fqdn(provider_name)
-            if fqdn:
-                result[_module_alias_name(provider_name)] = fqdn
+        peers.extend(self._auto_pinhole_provider_names(module))
+        for peer in peers:
+            if not peer or peer == "internet" or peer.startswith("alias:") or peer in self.zones:
+                continue
+            target = self._peer_alias_target(peer)
+            if target:
+                result[_module_alias_name(peer)] = target
         return result
 
     def _referenced_global_aliases(self, module: ModuleSpec) -> list[str]:
@@ -1080,20 +1125,59 @@ class RulesManager:
             names.append(provider.vmname)
         return names
 
-    def _peer_fqdn(self, peer_vmname: str) -> str | None:
-        """Resolve <peer_vmname>.<zone>.internal by reading the peer's module.json."""
-        if peer_vmname in self._peer_zone_cache:
-            zone = self._peer_zone_cache[peer_vmname]
-            return f"{peer_vmname}.{zone}.{DEFAULT_DOMAIN_SUFFIX}" if zone else None
+    def _alias_target_for(
+        self, vmname: str, zone0: str, alias_type: str
+    ) -> AliasTarget | None:
+        """Build the AliasTarget for tappaas_module_<vmname> from its alias type.
+
+        "host" → the module FQDN (resolved via Unbound/dnsmasq). "network" →
+        the zone0 subnet CIDR from zones.json, for multi-device modules with no
+        single resolvable hostname (#241). Returns None if the module has no
+        zone0 (host) or its zone0 has no subnet (network) — the caller / the
+        validation pass surfaces that.
+        """
+        if not zone0:
+            return None
+        if alias_type == "network":
+            subnet = self.zones[zone0].ip_network if zone0 in self.zones else ""
+            if not subnet:
+                return None
+            return AliasTarget(
+                "network",
+                [subnet],
+                f"Network alias for module '{vmname}' (zone '{zone0}' subnet) "
+                f"— multi-device module, no single FQDN",
+            )
+        fqdn = f"{vmname}.{zone0}.{DEFAULT_DOMAIN_SUFFIX}"
+        return AliasTarget(
+            "host",
+            [fqdn],
+            f"FQDN alias for module '{vmname}' (DHCP IP resolved via Unbound/dnsmasq)",
+        )
+
+    def _peer_alias_target(self, peer_vmname: str) -> AliasTarget | None:
+        """Resolve a peer module's AliasTarget by reading its module.json.
+
+        Honors the peer's own ``aliasType`` so a module that references e.g. a
+        multi-device peer gets a network alias just like the peer's self alias.
+        """
+        peer_module = self._load_peer_cached(peer_vmname)
+        if peer_module is None:
+            return None
+        return self._alias_target_for(
+            peer_module.vmname, peer_module.zone0, peer_module.alias_type
+        )
+
+    def _load_peer_cached(self, peer_vmname: str) -> ModuleSpec | None:
+        """Load (and cache) a peer module spec; None if its JSON is missing."""
+        if peer_vmname in self._peer_module_cache:
+            return self._peer_module_cache[peer_vmname]
         try:
-            peer_module = load_module(self.modules_dir, peer_vmname)
+            peer_module: ModuleSpec | None = load_module(self.modules_dir, peer_vmname)
         except FileNotFoundError:
-            return None
-        zone = peer_module.zone0 or ""
-        self._peer_zone_cache[peer_vmname] = zone
-        if not zone:
-            return None
-        return f"{peer_vmname}.{zone}.{DEFAULT_DOMAIN_SUFFIX}"
+            peer_module = None
+        self._peer_module_cache[peer_vmname] = peer_module
+        return peer_module
 
     def _ingress_interface(self, peer: str) -> str:
         """Return the OPNsense interface a rule for inbound traffic from `peer` lives on."""

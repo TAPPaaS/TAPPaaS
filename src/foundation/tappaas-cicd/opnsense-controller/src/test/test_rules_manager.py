@@ -339,11 +339,97 @@ class TestCompile(unittest.TestCase):
 
     def test_peer_module_fqdn_alias_generated(self):
         mod = load_module(self.dir, "litellm")
-        aliases = self.mgr._peer_module_fqdn_aliases(mod)
-        # Self alias
-        self.assertEqual(aliases["tappaas_module_litellm"], "litellm.srv-work.internal")
+        aliases = self.mgr._module_aliases_to_provision(mod)
+        # Self alias — host type, FQDN content
+        self_alias = aliases["tappaas_module_litellm"]
+        self.assertEqual(self_alias.alias_type, "host")
+        self.assertEqual(self_alias.content, ["litellm.srv-work.internal"])
         # Peer (egress to vllm)
-        self.assertEqual(aliases["tappaas_module_vllm"], "vllm.srv-work.internal")
+        peer_alias = aliases["tappaas_module_vllm"]
+        self.assertEqual(peer_alias.alias_type, "host")
+        self.assertEqual(peer_alias.content, ["vllm.srv-work.internal"])
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# aliasType: host vs network (issue #241)
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+class TestAliasType(unittest.TestCase):
+    def _module(self, **overrides) -> ModuleSpec:
+        base = dict(
+            vmname="sonos-fleet", zone0="srv-work", bridge0="lan",
+            ports=[], ingress=[], egress=[], aliases={}, firewall_type="opnsense",
+        )
+        base.update(overrides)
+        return ModuleSpec(**base)
+
+    def test_load_module_defaults_alias_type_host(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            d = Path(tmp)
+            (d / "vllm.json").write_text(json.dumps(VLLM_FIXTURE))
+            self.assertEqual(load_module(d, "vllm").alias_type, "host")
+
+    def test_load_module_reads_alias_type_network(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            d = Path(tmp)
+            (d / "sonos.json").write_text(json.dumps(
+                {"vmname": "sonos", "zone0": "srv-work", "aliasType": "network"}
+            ))
+            self.assertEqual(load_module(d, "sonos").alias_type, "network")
+
+    def test_self_alias_network_targets_zone_subnet(self):
+        mgr = _make_manager()
+        mod = self._module(alias_type="network")
+        aliases = mgr._module_aliases_to_provision(mod)
+        target = aliases["tappaas_module_sonos_fleet"]
+        self.assertEqual(target.alias_type, "network")
+        self.assertEqual(target.content, ["10.2.10.0/24"])
+
+    def test_self_alias_host_unchanged(self):
+        mgr = _make_manager()
+        target = mgr._module_aliases_to_provision(self._module())["tappaas_module_sonos_fleet"]
+        self.assertEqual(target.alias_type, "host")
+        self.assertEqual(target.content, ["sonos-fleet.srv-work.internal"])
+
+    def test_peer_alias_honors_peer_network_type(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            d = Path(tmp)
+            (d / "sonos-fleet.json").write_text(json.dumps(
+                {"vmname": "sonos-fleet", "zone0": "srv-work", "aliasType": "network"}
+            ))
+            mgr = _make_manager(modules_dir=d)
+            consumer = self._module(
+                vmname="hass", egress=[{"to": "sonos-fleet", "ports": [1400], "description": "x"}]
+            )
+            aliases = mgr._module_aliases_to_provision(consumer)
+            peer = aliases["tappaas_module_sonos_fleet"]
+            self.assertEqual(peer.alias_type, "network")
+            self.assertEqual(peer.content, ["10.2.10.0/24"])
+
+    def test_validate_network_requires_zone_subnet(self):
+        # A zone present in the map but with an empty subnet → error.
+        zones = {n: ZoneSpec(name=n, ip_network=z.get("ip", ""), bridge="lan",
+                             vlan_tag=z.get("vlantag", 0), access_to=z.get("access-to", []),
+                             pinhole_allowed_from=z.get("pinhole-allowed-from", []))
+                 for n, z in ZONES_FIXTURE.items()}
+        zones["nosubnet"] = ZoneSpec(name="nosubnet", ip_network="", bridge="lan",
+                                     vlan_tag=0, access_to=[], pinhole_allowed_from=[])
+        mgr = _make_manager(zones=zones)
+        mod = self._module(zone0="nosubnet", alias_type="network")
+        errors = mgr._validate(mod)
+        self.assertTrue(any("requires zone0" in e.message for e in errors), errors)
+
+    def test_validate_network_ok_with_subnet(self):
+        mgr = _make_manager()
+        mod = self._module(alias_type="network")
+        self.assertFalse(any(e.path == "aliasType" for e in mgr._validate(mod)))
+
+    def test_validate_unknown_alias_type_rejected(self):
+        mgr = _make_manager()
+        mod = self._module(alias_type="bogus")
+        errors = mgr._validate(mod)
+        self.assertTrue(any(e.path == "aliasType" for e in errors), errors)
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -565,7 +651,7 @@ class TestAutoPinholes(unittest.TestCase):
     # ── alias provisioning ───────────────────────────────────────────────
 
     def test_auto_pinhole_provider_alias_is_provisioned(self):
-        # The provider must show up in _peer_module_fqdn_aliases so that
+        # The provider must show up in _module_aliases_to_provision so that
         # OPNsense gets its FQDN alias before any rule references it.
         self._write_provider(
             self.dir, vmname="api", zone0="srv-work",
@@ -577,10 +663,10 @@ class TestAutoPinholes(unittest.TestCase):
         )
         mgr = _make_manager(zones=self._make_zones(), modules_dir=self.dir)
         consumer = load_module(self.dir, "ui")
-        aliases = mgr._peer_module_fqdn_aliases(consumer)
-        self.assertEqual(aliases["tappaas_module_api"], "api.srv-work.internal")
+        aliases = mgr._module_aliases_to_provision(consumer)
+        self.assertEqual(aliases["tappaas_module_api"].content, ["api.srv-work.internal"])
         # And self alias is still emitted
-        self.assertEqual(aliases["tappaas_module_ui"], "ui.dmz.internal")
+        self.assertEqual(aliases["tappaas_module_ui"].content, ["ui.dmz.internal"])
 
 
 # ─────────────────────────────────────────────────────────────────────────────

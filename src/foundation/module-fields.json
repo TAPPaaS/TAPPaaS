@@ -14,7 +14,7 @@
         "HANode", "replicationSchedule",
         "bridge0", "mac0", "zone0", "trunks0",
         "bridge1", "mac1", "zone1", "trunks1",
-        "firewallType", "proxyDomain", "proxyPort", "proxyUpstreamTls", "proxyTls", "proxyAllowedZones",
+        "firewallType", "aliasType", "proxyDomain", "proxyPort", "proxyUpstreamTls", "proxyTls", "proxyAllowedZones",
         "ports", "ingress", "egress", "aliases",
         "dependsOn", "provides"
     ],
@@ -490,6 +490,20 @@
             },
             "example": "NONE",
             "note": "When set to 'NONE', firewall:proxy prints manual configuration instructions instead of calling caddy-manager"
+        },
+
+        "aliasType": {
+            "description": "OPNsense alias type for the module's firewall alias (tappaas_module_<vmname>). 'host' (default) targets the FQDN <vmname>.<zone0>.internal resolved via Unbound/dnsmasq. 'network' targets the entire zone0 subnet from zones.json — use for modules representing multiple devices with no single resolvable hostname (e.g. an IoT speaker fleet, a set of physical appliances).",
+            "type": "string",
+            "requiredBy": [],
+            "usedBy": ["firewall:proxy"],
+            "default": "host",
+            "values": {
+                "host": "Host alias → <vmname>.<zone0>.internal FQDN (default, single-VM modules)",
+                "network": "Network alias → zone0 subnet CIDR from zones.json (multi-device modules)"
+            },
+            "example": "network",
+            "note": "When 'network', the alias content is derived from the zone0 subnet — no separate field is needed. The module's zone0 must define an 'ip' (subnet) in zones.json."
         },
 
         "proxyDomain": {
