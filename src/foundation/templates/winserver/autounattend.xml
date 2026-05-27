@@ -1,0 +1,241 @@
+<?xml version="1.0" encoding="utf-8"?>
+<unattend xmlns="urn:schemas-microsoft-com:unattend">
+
+  <!-- WindowsPE pass: locale + VirtIO SCSI driver + partition disk + select image -->
+  <settings pass="windowsPE">
+    <component name="Microsoft-Windows-International-Core-WinPE"
+               processorArchitecture="amd64"
+               publicKeyToken="31bf3856ad364e35"
+               language="neutral" versionScope="nonSxS"
+               xmlns:wcm="http://schemas.microsoft.com/WMIConfig/2002/State">
+      <SetupUILanguage>
+        <UILanguage>en-US</UILanguage>
+      </SetupUILanguage>
+      <InputLocale>en-US</InputLocale>
+      <SystemLocale>en-US</SystemLocale>
+      <UILanguage>en-US</UILanguage>
+      <UserLocale>en-US</UserLocale>
+    </component>
+
+    <component name="Microsoft-Windows-PnpCustomizationsWinPE"
+               processorArchitecture="amd64"
+               publicKeyToken="31bf3856ad364e35"
+               language="neutral" versionScope="nonSxS"
+               xmlns:wcm="http://schemas.microsoft.com/WMIConfig/2002/State">
+      <!-- Try D:–G: — whichever one is the VirtIO ISO in Proxmox -->
+      <DriverPaths>
+        <PathAndCredentials wcm:action="add" wcm:keyValue="D">
+          <Path>D:\amd64\2k25</Path>
+        </PathAndCredentials>
+        <PathAndCredentials wcm:action="add" wcm:keyValue="E">
+          <Path>E:\amd64\2k25</Path>
+        </PathAndCredentials>
+        <PathAndCredentials wcm:action="add" wcm:keyValue="F">
+          <Path>F:\amd64\2k25</Path>
+        </PathAndCredentials>
+        <PathAndCredentials wcm:action="add" wcm:keyValue="G">
+          <Path>G:\amd64\2k25</Path>
+        </PathAndCredentials>
+      </DriverPaths>
+    </component>
+
+    <component name="Microsoft-Windows-Setup"
+               processorArchitecture="amd64"
+               publicKeyToken="31bf3856ad364e35"
+               language="neutral" versionScope="nonSxS"
+               xmlns:wcm="http://schemas.microsoft.com/WMIConfig/2002/State">
+
+      <DiskConfiguration>
+        <WillShowUI>OnError</WillShowUI>
+        <Disk wcm:action="add">
+          <DiskID>0</DiskID>
+          <WillWipeDisk>true</WillWipeDisk>
+          <CreatePartitions>
+            <CreatePartition wcm:action="add">
+              <Order>1</Order>
+              <Type>EFI</Type>
+              <Size>260</Size>
+            </CreatePartition>
+            <CreatePartition wcm:action="add">
+              <Order>2</Order>
+              <Type>MSR</Type>
+              <Size>128</Size>
+            </CreatePartition>
+            <CreatePartition wcm:action="add">
+              <Order>3</Order>
+              <Type>Primary</Type>
+              <Extend>true</Extend>
+            </CreatePartition>
+          </CreatePartitions>
+          <ModifyPartitions>
+            <ModifyPartition wcm:action="add">
+              <Order>1</Order>
+              <PartitionID>1</PartitionID>
+              <Format>FAT32</Format>
+            </ModifyPartition>
+            <ModifyPartition wcm:action="add">
+              <Order>2</Order>
+              <PartitionID>3</PartitionID>
+              <Format>NTFS</Format>
+              <Label>Windows</Label>
+              <Letter>C</Letter>
+            </ModifyPartition>
+          </ModifyPartitions>
+        </Disk>
+      </DiskConfiguration>
+
+      <ImageInstall>
+        <OSImage>
+          <WillShowUI>OnError</WillShowUI>
+          <InstallTo>
+            <DiskID>0</DiskID>
+            <PartitionID>3</PartitionID>
+          </InstallTo>
+          <!-- Index 2 = Windows Server 2025 Standard Evaluation (Desktop Experience) -->
+          <InstallFrom>
+            <MetaData wcm:action="add"
+                      xmlns:wcm="http://schemas.microsoft.com/WMIConfig/2002/State">
+              <Key>/IMAGE/INDEX</Key>
+              <Value>2</Value>
+            </MetaData>
+          </InstallFrom>
+        </OSImage>
+      </ImageInstall>
+
+      <UserData>
+        <AcceptEula>true</AcceptEula>
+        <FullName>TAPPaaS</FullName>
+        <Organization>TAPPaaS</Organization>
+      </UserData>
+    </component>
+  </settings>
+
+  <!-- Specialize pass: hostname + timezone -->
+  <settings pass="specialize">
+    <component name="Microsoft-Windows-Shell-Setup"
+               processorArchitecture="amd64"
+               publicKeyToken="31bf3856ad364e35"
+               language="neutral" versionScope="nonSxS">
+      <ComputerName>*</ComputerName>
+      <TimeZone>UTC</TimeZone>
+    </component>
+  </settings>
+
+  <!-- oobeSystem pass: admin password, auto-logon once, post-install commands -->
+  <settings pass="oobeSystem">
+    <component name="Microsoft-Windows-International-Core"
+               processorArchitecture="amd64"
+               publicKeyToken="31bf3856ad364e35"
+               language="neutral" versionScope="nonSxS">
+      <InputLocale>en-US</InputLocale>
+      <SystemLocale>en-US</SystemLocale>
+      <UILanguage>en-US</UILanguage>
+      <UserLocale>en-US</UserLocale>
+    </component>
+
+    <component name="Microsoft-Windows-Shell-Setup"
+               processorArchitecture="amd64"
+               publicKeyToken="31bf3856ad364e35"
+               language="neutral" versionScope="nonSxS"
+               xmlns:wcm="http://schemas.microsoft.com/WMIConfig/2002/State">
+      <OOBE>
+        <!-- SkipMachineOOBE and SkipUserOOBE are removed from the Server 2025 schema
+             and must NOT be included — they cause OOBE to abort immediately. -->
+        <HideEULAPage>true</HideEULAPage>
+        <HideOEMRegistrationScreen>true</HideOEMRegistrationScreen>
+        <HideOnlineAccountScreens>true</HideOnlineAccountScreens>
+        <HideWirelessSetupInOOBE>true</HideWirelessSetupInOOBE>
+        <NetworkLocation>Work</NetworkLocation>
+        <ProtectYourPC>3</ProtectYourPC>
+      </OOBE>
+
+      <!-- Auto-logon once so FirstLogonCommands run without interaction -->
+      <AutoLogon>
+        <Enabled>true</Enabled>
+        <LogonCount>1</LogonCount>
+        <Username>Administrator</Username>
+        <Password>
+          <Value>TAPPaaSTemp!</Value>
+          <PlainText>true</PlainText>
+        </Password>
+      </AutoLogon>
+
+      <UserAccounts>
+        <!-- Temporary password — wiped by sysprep, never persists to cloned VMs -->
+        <AdministratorPassword>
+          <Value>TAPPaaSTemp!</Value>
+          <PlainText>true</PlainText>
+        </AdministratorPassword>
+      </UserAccounts>
+
+      <FirstLogonCommands>
+        <!-- 1. Log setup start -->
+        <SynchronousCommand wcm:action="add">
+          <Order>1</Order>
+          <RequiresUserInput>false</RequiresUserInput>
+          <CommandLine>powershell.exe -ExecutionPolicy Bypass -NonInteractive -Command "Add-Content C:/tappaas-setup.log ('[{0}] TAPPaaS first-logon setup starting' -f (Get-Date -f 'HH:mm:ss'))"</CommandLine>
+        </SynchronousCommand>
+
+        <!-- 2. Install VirtIO guest tools + log result -->
+        <SynchronousCommand wcm:action="add">
+          <Order>2</Order>
+          <RequiresUserInput>false</RequiresUserInput>
+          <CommandLine>powershell.exe -ExecutionPolicy Bypass -NonInteractive -Command "$d=(Get-CimInstance Win32_CDROMDrive|Where-Object{Test-Path ($_.Drive+'virtio-win-guest-tools.exe')}|Select-Object -First 1).Drive; Add-Content C:/tappaas-setup.log ('[{0}] VirtIO: {1}' -f (Get-Date -f 'HH:mm:ss'),(if($d){'installing from '+$d}else{'ISO not found - skipping'})); if($d){Start-Process ($d+'virtio-win-guest-tools.exe') -ArgumentList '/install','/quiet','/norestart' -Wait; Add-Content C:/tappaas-setup.log ('[{0}] VirtIO tools installed' -f (Get-Date -f 'HH:mm:ss'))}"</CommandLine>
+        </SynchronousCommand>
+
+        <!-- 3. Start QEMU guest agent (installed by VirtIO tools) — enables qm guest exec -->
+        <SynchronousCommand wcm:action="add">
+          <Order>3</Order>
+          <RequiresUserInput>false</RequiresUserInput>
+          <CommandLine>powershell.exe -ExecutionPolicy Bypass -NonInteractive -Command "Start-Service QEMU-GA -ErrorAction SilentlyContinue; $s=(Get-Service QEMU-GA -ErrorAction SilentlyContinue).Status; Add-Content C:/tappaas-setup.log ('[{0}] QEMU Guest Agent: {1}' -f (Get-Date -f 'HH:mm:ss'),$s)"</CommandLine>
+        </SynchronousCommand>
+
+        <!-- 4. OpenSSH — install from Windows ISO source if available -->
+        <SynchronousCommand wcm:action="add">
+          <Order>4</Order>
+          <RequiresUserInput>false</RequiresUserInput>
+          <CommandLine>powershell.exe -ExecutionPolicy Bypass -NonInteractive -Command "$iso=(Get-CimInstance Win32_CDROMDrive|Where-Object{Test-Path ($_.Drive+'sources\install.wim')}|Select-Object -First 1).Drive; Add-Content C:/tappaas-setup.log ('[{0}] OpenSSH: installing (ISO={1})' -f (Get-Date -f 'HH:mm:ss'),$iso); if($iso){Add-WindowsCapability -Online -Name OpenSSH.Server~~~~0.0.1.0 -Source ($iso+'sources') -ErrorAction SilentlyContinue}"</CommandLine>
+        </SynchronousCommand>
+
+        <!-- 5. OpenSSH — fall back to Windows Update if ISO install did not provide sshd -->
+        <SynchronousCommand wcm:action="add">
+          <Order>5</Order>
+          <RequiresUserInput>false</RequiresUserInput>
+          <CommandLine>powershell.exe -ExecutionPolicy Bypass -NonInteractive -Command "if(-not(Get-Service sshd -EA SilentlyContinue)){Add-Content C:/tappaas-setup.log ('[{0}] OpenSSH: trying WU (60s)' -f (Get-Date -f 'HH:mm:ss')); $j=Start-Job{Add-WindowsCapability -Online -Name OpenSSH.Server~~~~0.0.1.0}; if(-not(Wait-Job $j -Timeout 60)){Stop-Job $j}}"</CommandLine>
+        </SynchronousCommand>
+
+        <!-- 6. OpenSSH — enable and start sshd if available -->
+        <SynchronousCommand wcm:action="add">
+          <Order>6</Order>
+          <RequiresUserInput>false</RequiresUserInput>
+          <CommandLine>powershell.exe -ExecutionPolicy Bypass -NonInteractive -Command "if(Get-Service sshd -EA SilentlyContinue){Set-Service sshd -StartupType Automatic; Start-Service sshd; Add-Content C:/tappaas-setup.log ('[{0}] OpenSSH started' -f (Get-Date -f 'HH:mm:ss'))}else{Add-Content C:/tappaas-setup.log ('[{0}] OpenSSH not available' -f (Get-Date -f 'HH:mm:ss'))}"</CommandLine>
+        </SynchronousCommand>
+
+        <!-- 7. Disable OOBE privacy experience wizard for all future clones.
+             HKLM\SOFTWARE\Policies\Microsoft\Windows\OOBE\DisablePrivacyExperience=1
+             is a Group Policy key that survives sysprep /generalize and suppresses
+             the "Hi there" language/region picker on every VM cloned from this template. -->
+        <SynchronousCommand wcm:action="add">
+          <Order>7</Order>
+          <RequiresUserInput>false</RequiresUserInput>
+          <CommandLine>powershell.exe -ExecutionPolicy Bypass -NonInteractive -Command "$p='HKLM:\SOFTWARE\Policies\Microsoft\Windows\OOBE'; New-Item -Path $p -Force|Out-Null; New-ItemProperty -Path $p -Name DisablePrivacyExperience -Value 1 -PropertyType DWord -Force|Out-Null; Add-Content C:/tappaas-setup.log ('[{0}] OOBE privacy policy set (suppresses Hi-there on clones)' -f (Get-Date -f 'HH:mm:ss'))"</CommandLine>
+        </SynchronousCommand>
+
+        <!-- 8. Log sysprep start -->
+        <SynchronousCommand wcm:action="add">
+          <Order>8</Order>
+          <RequiresUserInput>false</RequiresUserInput>
+          <CommandLine>powershell.exe -ExecutionPolicy Bypass -NonInteractive -Command "Add-Content C:/tappaas-setup.log ('[{0}] Sysprep: starting /generalize /oobe /shutdown' -f (Get-Date -f 'HH:mm:ss'))"</CommandLine>
+        </SynchronousCommand>
+
+        <!-- 9. Sysprep: generalize + OOBE + shutdown — VM powers off -->
+        <SynchronousCommand wcm:action="add">
+          <Order>9</Order>
+          <RequiresUserInput>false</RequiresUserInput>
+          <CommandLine>C:\Windows\System32\Sysprep\sysprep.exe /generalize /oobe /shutdown /quiet</CommandLine>
+        </SynchronousCommand>
+      </FirstLogonCommands>
+    </component>
+  </settings>
+
+</unattend>

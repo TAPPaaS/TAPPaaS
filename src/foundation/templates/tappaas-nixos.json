@@ -18,6 +18,7 @@
   "dependsOn": [
     "cluster:vm"
   ],
+  "autoInstall": false,
   "provides": [
     "nixos"
   ]

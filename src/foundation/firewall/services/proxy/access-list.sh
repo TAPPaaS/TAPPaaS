@@ -74,6 +74,24 @@ proxy_resolve_access_list() {
     fi
 
     info "  Access list ${BL}${al_name}${CL}: allow only ${BL}${cidrs}${CL}" >&2
+
+    # Guard 1: caddy-manager binary must be present — if it's missing entirely
+    # that is a hard error (the whole proxy service is broken, not just access lists).
+    if ! command -v caddy-manager >/dev/null 2>&1; then
+        error "  caddy-manager not found in PATH — cannot create access list" >&2
+        return 1
+    fi
+
+    # Guard 2: add-accesslist is only available in caddy-manager >= 2.x.
+    # If the subcommand is absent, degrade gracefully: warn and skip the
+    # restriction rather than aborting the entire proxy install.
+    if ! caddy-manager add-accesslist --help >/dev/null 2>&1; then
+        warn "  caddy-manager does not support 'add-accesslist' — zone restriction skipped." >&2
+        warn "  Update caddy-manager to enable per-domain IP allow-lists." >&2
+        printf ''
+        return 0
+    fi
+
     if ! caddy-manager add-accesslist "${al_name}" \
             --clients "${cidrs}" \
             --matcher remote_ip \

@@ -1,0 +1,159 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  oobe-unattend.xml — answer file for Windows Server 2025 clones (sysprep /generalize /oobe).
+
+  With sysprep /generalize, the clone runs BOTH the specialize pass (new SID)
+  AND the oobeSystem pass on first boot. The specialize pass runs first and is
+  used here to set registry keys that suppress the interactive "Hi there" wizard
+  before oobeSystem starts.
+
+  Create-TAPPaaS-VM.sh substitutes:
+    __TAPPAAS_PASSWORD__   — tappaas account password (from /home/tappaas/secrets/<module>.env)
+    __TAPPAAS_SSH_PUBKEY__ — SSH public key (from ~/tappaas/tappaas-cicd.pub on the node)
+  and packages the result into /var/lib/vz/template/iso/tappaas-oobe-<VMID>.iso.
+-->
+<unattend xmlns="urn:schemas-microsoft-com:unattend">
+
+  <!-- specialize runs before oobeSystem — set registry keys to skip the "Hi there" wizard -->
+  <settings pass="specialize">
+    <component name="Microsoft-Windows-Shell-Setup"
+               processorArchitecture="amd64"
+               publicKeyToken="31bf3856ad364e35"
+               language="neutral" versionScope="nonSxS">
+      <RunSynchronous>
+        <RunSynchronousCommand wcm:action="add"
+          xmlns:wcm="http://schemas.microsoft.com/WMIConfig/2002/State">
+          <Order>1</Order>
+          <Path>powershell.exe -ExecutionPolicy Bypass -NonInteractive -Command "
+            $p = 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\OOBE';
+            if (-not (Test-Path $p)) { New-Item -Path $p -Force | Out-Null }
+            New-ItemProperty -Path $p -Name SkipMachineOOBE -Value 1 -PropertyType DWord -Force | Out-Null;
+            New-ItemProperty -Path $p -Name SkipUserOOBE   -Value 1 -PropertyType DWord -Force | Out-Null"
+          </Path>
+        </RunSynchronousCommand>
+      </RunSynchronous>
+    </component>
+  </settings>
+
+  <settings pass="oobeSystem">
+
+    <!-- Suppress the "Hi there" language/region/keyboard picker -->
+    <component name="Microsoft-Windows-International-Core"
+               processorArchitecture="amd64"
+               publicKeyToken="31bf3856ad364e35"
+               language="neutral" versionScope="nonSxS">
+      <InputLocale>en-US</InputLocale>
+      <SystemLocale>en-US</SystemLocale>
+      <UILanguage>en-US</UILanguage>
+      <UserLocale>en-US</UserLocale>
+    </component>
+
+    <component name="Microsoft-Windows-Shell-Setup"
+               processorArchitecture="amd64"
+               publicKeyToken="31bf3856ad364e35"
+               language="neutral" versionScope="nonSxS"
+               xmlns:wcm="http://schemas.microsoft.com/WMIConfig/2002/State">
+
+      <!-- Belt-and-suspenders: hide flags in case the specialize registry bypass didn't apply -->
+      <OOBE>
+        <HideEULAPage>true</HideEULAPage>
+        <HideLocalAccountScreen>true</HideLocalAccountScreen>
+        <HideOEMRegistrationScreen>true</HideOEMRegistrationScreen>
+        <HideOnlineAccountScreens>true</HideOnlineAccountScreens>
+        <HideWirelessSetupInOOBE>true</HideWirelessSetupInOOBE>
+        <NetworkLocation>Work</NetworkLocation>
+        <ProtectYourPC>3</ProtectYourPC>
+      </OOBE>
+
+      <TimeZone>Central Europe Standard Time</TimeZone>
+
+      <UserAccounts>
+        <!-- Bootstrap admin password (14+ chars required by Server 2025 policy) -->
+        <AdministratorPassword>
+          <Value>__TAPPAAS_PASSWORD__</Value>
+          <PlainText>true</PlainText>
+        </AdministratorPassword>
+        <!-- tappaas: local admin used by all install-service.sh scripts via SSH key auth -->
+        <LocalAccounts>
+          <LocalAccount wcm:action="add">
+            <Name>tappaas</Name>
+            <DisplayName>TAPPaaS Automation</DisplayName>
+            <Description>TAPPaaS automation account — SSH key auth only</Description>
+            <Group>Administrators</Group>
+            <Password>
+              <Value>__TAPPAAS_PASSWORD__</Value>
+              <PlainText>true</PlainText>
+            </Password>
+          </LocalAccount>
+        </LocalAccounts>
+      </UserAccounts>
+
+      <!-- Auto-logon once so FirstLogonCommands can configure SSH keys -->
+      <AutoLogon>
+        <Enabled>true</Enabled>
+        <LogonCount>1</LogonCount>
+        <Username>tappaas</Username>
+        <Password>
+          <Value>__TAPPAAS_PASSWORD__</Value>
+          <PlainText>true</PlainText>
+        </Password>
+      </AutoLogon>
+
+      <FirstLogonCommands>
+
+        <!-- 1. Log setup start -->
+        <SynchronousCommand wcm:action="add">
+          <Order>1</Order>
+          <RequiresUserInput>false</RequiresUserInput>
+          <CommandLine>powershell.exe -ExecutionPolicy Bypass -NonInteractive -Command "Add-Content C:\tappaas-setup.log ('[{0}] TAPPaaS OOBE first-logon starting' -f (Get-Date -f 'HH:mm:ss'))"</CommandLine>
+        </SynchronousCommand>
+
+        <!-- 2. Create C:\ProgramData\ssh and write the tappaas public key -->
+        <SynchronousCommand wcm:action="add">
+          <Order>2</Order>
+          <RequiresUserInput>false</RequiresUserInput>
+          <CommandLine>powershell.exe -ExecutionPolicy Bypass -NonInteractive -Command "$d='C:\ProgramData\ssh'; [System.IO.Directory]::CreateDirectory($d)|Out-Null; Set-Content -Path ($d+'\administrators_authorized_keys') -Value '__TAPPAAS_SSH_PUBKEY__' -Encoding ASCII; Add-Content C:\tappaas-setup.log ('[{0}] SSH key written' -f (Get-Date -f 'HH:mm:ss'))"</CommandLine>
+        </SynchronousCommand>
+
+        <!-- 3. Lock down key file permissions (sshd refuses the file if others can read it) -->
+        <SynchronousCommand wcm:action="add">
+          <Order>3</Order>
+          <RequiresUserInput>false</RequiresUserInput>
+          <CommandLine>powershell.exe -ExecutionPolicy Bypass -NonInteractive -Command "$f='C:\ProgramData\ssh\administrators_authorized_keys'; icacls $f /inheritance:r /grant 'SYSTEM:(F)' /grant 'Administrators:(F)'|Out-Null; Add-Content C:\tappaas-setup.log ('[{0}] SSH key permissions set' -f (Get-Date -f 'HH:mm:ss'))"</CommandLine>
+        </SynchronousCommand>
+
+        <!-- 4. Set PowerShell as the default SSH shell for all users -->
+        <SynchronousCommand wcm:action="add">
+          <Order>4</Order>
+          <RequiresUserInput>false</RequiresUserInput>
+          <CommandLine>powershell.exe -ExecutionPolicy Bypass -NonInteractive -Command "if(-not(Test-Path 'HKLM:\SOFTWARE\OpenSSH')){New-Item -Path 'HKLM:\SOFTWARE\OpenSSH' -Force|Out-Null}; New-ItemProperty -Path 'HKLM:\SOFTWARE\OpenSSH' -Name DefaultShell -Value 'C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe' -PropertyType String -Force|Out-Null; Add-Content C:\tappaas-setup.log ('[{0}] PowerShell set as default SSH shell' -f (Get-Date -f 'HH:mm:ss'))"</CommandLine>
+        </SynchronousCommand>
+
+        <!-- 5. Enable and start sshd (installed by template FirstLogonCommands, may be stopped after sysprep) -->
+        <SynchronousCommand wcm:action="add">
+          <Order>5</Order>
+          <RequiresUserInput>false</RequiresUserInput>
+          <CommandLine>powershell.exe -ExecutionPolicy Bypass -NonInteractive -Command "Set-Service sshd -StartupType Automatic -ErrorAction SilentlyContinue; Start-Service sshd -ErrorAction SilentlyContinue; $s=(Get-Service sshd -ErrorAction SilentlyContinue).Status; Add-Content C:\tappaas-setup.log ('[{0}] sshd: {1}' -f (Get-Date -f 'HH:mm:ss'),$s)"</CommandLine>
+        </SynchronousCommand>
+
+        <!-- 6. Set network profile to Private and ensure SSH firewall rule covers all profiles.
+             Windows classifies new unrecognised networks as Public, which blocks the default
+             OpenSSH rule (Private/Domain only) and makes port 22 unreachable from outside. -->
+        <SynchronousCommand wcm:action="add">
+          <Order>6</Order>
+          <RequiresUserInput>false</RequiresUserInput>
+          <CommandLine>powershell.exe -ExecutionPolicy Bypass -NonInteractive -Command "Get-NetConnectionProfile|ForEach-Object{Set-NetConnectionProfile -InterfaceIndex $_.InterfaceIndex -NetworkCategory Private}; Set-NetFirewallRule -DisplayName 'OpenSSH SSH Server (sshd)' -Profile Any -ErrorAction SilentlyContinue; if(-not(Get-NetFirewallRule -Name 'OpenSSH-Server-In-TCP' -ErrorAction SilentlyContinue)){New-NetFirewallRule -Name 'OpenSSH-Server-In-TCP' -DisplayName 'OpenSSH SSH Server (sshd)' -Enabled True -Direction Inbound -Protocol TCP -Action Allow -LocalPort 22 -Profile Any|Out-Null}; Add-Content C:\tappaas-setup.log ('[{0}] Network=Private, SSH firewall=Any profile' -f (Get-Date -f 'HH:mm:ss'))"</CommandLine>
+        </SynchronousCommand>
+
+        <!-- 7. Log completion -->
+        <SynchronousCommand wcm:action="add">
+          <Order>7</Order>
+          <RequiresUserInput>false</RequiresUserInput>
+          <CommandLine>powershell.exe -ExecutionPolicy Bypass -NonInteractive -Command "Add-Content C:\tappaas-setup.log ('[{0}] TAPPaaS OOBE setup complete — SSH ready' -f (Get-Date -f 'HH:mm:ss'))"</CommandLine>
+        </SynchronousCommand>
+
+      </FirstLogonCommands>
+    </component>
+  </settings>
+
+</unattend>

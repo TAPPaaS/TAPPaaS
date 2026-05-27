@@ -1,0 +1,28 @@
+{
+  "description": "The TAPPaaS Windows Server 2025 VM Template",
+  "version": "0.1",
+  "location": "/home/tappaas/TAPPaaS/src/foundation/templates",
+  "vmname": "tappaas-winserver",
+  "vmid": 8081,
+  "vmtag": "TAPPaaS,Foundation",
+  "bios": "ovmf",
+  "ostype": "win11",
+  "cputype": "x86-64-v2-AES",
+  "cores": 4,
+  "memory": "8192",
+  "diskSize": "32G",
+  "storage": "tanka1",
+  "imageType": "iso",
+  "image": "26100.32230.260111-0550.lt_release_svc_refresh_SERVER_EVAL_x64FRE_en-us.iso",
+  "imageLocation": "/var/lib/vz/template/iso/",
+  "bridge0": "lan",
+  "zone0": "srv",
+  "cloudInit": "false",
+  "dependsOn": [
+    "cluster:vm"
+  ],
+  "autoInstall": true,
+  "provides": [
+    "windows"
+  ]
+}

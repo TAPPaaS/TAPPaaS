@@ -142,10 +142,10 @@ fi
 # that works for mgmt-restricted / non-public domains. Requires the global
 # os-caddy TLS DNS provider + API key to be configured.
 PROXY_TLS=$(jq -r '.proxyTls // "dns01"' "${MODULE_JSON}")
-DNS_ARGS=()
+# Note: DNS-01 vs HTTP-01 is a global Caddy/OPNsense setting — not configurable
+# per domain in caddy-manager. Log the intended strategy for reference only.
 if [[ "${PROXY_TLS}" == "dns01" ]]; then
-    info "  TLS: ACME DNS-01 (proxyTls=dns01)"
-    DNS_ARGS=(--dns-challenge)
+    info "  TLS: ACME DNS-01 (proxyTls=dns01, configured globally in OPNsense)"
 else
     info "  TLS: ACME HTTP-01 (proxyTls=${PROXY_TLS})"
 fi
@@ -155,7 +155,6 @@ fi
 info "  Creating Caddy domain..."
 caddy-manager add-domain "${PROXY_DOMAIN}" \
     --description "${DESCRIPTION}" \
-    "${DNS_ARGS[@]+"${DNS_ARGS[@]}"}" \
     --no-ssl-verify || die "Failed to create Caddy domain"
 
 # ── Resolve zone restriction → access list (issue #206) ─────────────
