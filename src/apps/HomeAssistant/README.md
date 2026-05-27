@@ -1,53 +1,49 @@
-# HomeAssistant
+# Home Assistant — Home Automation Platform
 
-Home Assistant OS (HAOS) home automation platform, running as a dedicated VM in the `srv-home` zone.
+Primary audience: home user, household administrator.
 
-## About
+Central hub for all smart home integrations. Control lights, energy,
+security, EV charging and audio from one interface — locally, without
+cloud dependency.
 
-Deploys the official [Home Assistant Operating System](https://www.home-assistant.io/installation/linux/) image (HAOS) as a Proxmox KVM VM. HAOS includes:
-- Home Assistant Core + Supervisor
-- Full add-ons support (Zigbee, Z-Wave, HACS, SSH terminal, etc.)
-- Built-in update management via the HA web UI
+## What you get
 
-## Access
+| Capability | Access from | How |
+|------------|-------------|-----|
+| Home Assistant web UI | Home WiFi, work | `https://homeassistant.gridtefy.com` |
+| Mobile app | Home WiFi, internet (via proxy) | Home Assistant companion app |
+| Alfen EV charger integration | Home Assistant | Modbus TCP — auto-discovered |
+| Sonos audio control | Home Assistant | Sonos built-in integration — auto-discovered |
+| Add-ons (HACS, SSH, Zigbee…) | Home Assistant | HA Supervisor add-on store |
 
-After install: `http://homeassistant:8123` (or via IP in the `srv-home` 10.2.10.x range)
+## What is not included
 
-## Image
+- Cloud account or Nabu Casa subscription (fully local by default)
+- Zigbee/Z-Wave hardware integration — requires USB pass-through configured in Proxmox after VM creation
+- Voice assistant setup (Google Home, Alexa) — optional, configured in HA
 
-| Field         | Value |
-|---------------|-------|
-| imageType     | `img` (HAOS qcow2 disk image) |
-| Current image | `haos_ova-17.3.qcow2.xz` |
-| Source        | https://github.com/home-assistant/operating-system/releases |
-| BIOS          | OVMF (UEFI — required by HAOS) |
+## Requirements
 
-To update to a newer HAOS release at deploy time, change `image` and `imageLocation` in `homeassistant.json`.
+- Proxmox node with storage pool `tanka1`
+- UEFI boot support (OVMF — included in Proxmox)
+- `srv-home` network zone (VLAN 210)
 
-**Note:** HAOS handles runtime updates itself via the web UI — no TAPPaaS intervention needed.
+## Known limitation
 
-## VMID Scheme
+HAOS manages its own runtime updates via the web UI — do not update via
+TAPPaaS `update-module.sh`. The module version tracks the initial image
+used at deploy time; HAOS self-updates from there.
 
-VMID 210 starts the **2XX range for srv-home apps** (VLAN 210):
-- 210+: TAPPaaS-managed srv-home apps
+## Dependencies
 
-## USB Pass-through (Zigbee/Z-Wave)
+| Depends on | Purpose |
+|------------|---------|
+| `cluster:vm` | VM provisioning |
+| `backup:vm` | Scheduled VM snapshots |
+| `firewall:proxy` | HTTPS reverse proxy — `homeassistant.gridtefy.com` |
+| `identity:identity` | SSO integration (optional) |
+| `firewall:rules` | Firewall pinholes to IoT modules |
+| `alfen:ui` `alfen:discovery` `alfen:modbus` | Cross-zone access to Alfen EV charger |
+| `sonos:audio` `sonos:airplay` | Cross-zone access to Sonos speakers |
 
-For hardware integrations (Zigbee stick, Z-Wave dongle), add USB pass-through in Proxmox after VM creation:
-
-1. Identify the USB device on the node: `lsusb`
-2. In Proxmox GUI: VM → Hardware → Add → USB Device
-3. In HA: Settings → Integrations → add the integration
-
-## Install
-
-```bash
-cd /home/tappaas/TAPPaaS/src/apps/HomeAssistant
-./install.sh homeassistant
-```
-
-## Test
-
-```bash
-./test.sh homeassistant
-```
+For installation steps see [INSTALL.md](./INSTALL.md).
