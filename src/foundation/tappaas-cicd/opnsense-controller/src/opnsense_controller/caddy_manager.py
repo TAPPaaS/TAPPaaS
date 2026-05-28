@@ -16,7 +16,15 @@ class CaddyDomain:
     # Use the ACME DNS-01 challenge (needs a global os-caddy DNS provider + key).
     # Lets an internal/access-restricted domain obtain a trusted cert without any
     # inbound HTTP/TLS-ALPN validation. False = default ACME (HTTP-01/TLS-ALPN).
+    # NOTE: os-caddy >= 2.0.0 only ships the Cloudflare provider, so this path is
+    # of limited use. The TAPPaaS pattern (issue #254) is to use ``custom_certificate``
+    # below to bind a refid from os-acme-client → OPNsense Trust, bypassing Caddy's
+    # built-in ACME entirely for the DNS-01 case.
     dns_challenge: bool = False
+    # Refid of an existing OPNsense Trust certificate (e.g. the wildcard issued by
+    # os-acme-client) to use for this domain instead of letting Caddy fetch one.
+    # Empty = Caddy auto-fetches via its built-in ACME (HTTP-01 path).
+    custom_certificate: str = ""
 
 
 @dataclass
@@ -279,6 +287,7 @@ class CaddyManager:
                 "FromDomain": domain.domain,
                 "description": domain.description,
                 "DnsChallenge": "1" if domain.dns_challenge else "0",
+                "CustomCertificate": domain.custom_certificate,
             }
         }
         return self._api_post("ReverseProxy", "addReverseProxy", data)
@@ -299,6 +308,7 @@ class CaddyManager:
                 "FromDomain": domain.domain,
                 "description": domain.description,
                 "DnsChallenge": "1" if domain.dns_challenge else "0",
+                "CustomCertificate": domain.custom_certificate,
             }
         }
         return self._api_post("ReverseProxy", "setReverseProxy", data, url_params=[uuid])

@@ -4,9 +4,13 @@
 #
 # This script:
 # 1. Installs the os-caddy package on OPNsense
-# 2. Reconfigures OPNsense web GUI to port 8443 (frees 443 for Caddy)
-# 3. Creates firewall rules to allow HTTP/HTTPS traffic to Caddy
-# 4. Enables Caddy, sets ACME email, and configures Auto HTTPS
+# 2. Installs os-acme-client + os-ddclient (issue #254 — needed for DNS-01
+#    wildcard certificates and DynDNS; both additive, non-disruptive)
+# 3. Reconfigures OPNsense web GUI to port 8443 (frees 443 for Caddy)
+# 4. Creates firewall rules to allow HTTP/HTTPS traffic to Caddy
+# 5. Enables Caddy, sets ACME email — DOES NOT configure Caddy's built-in
+#    DNS provider (os-caddy >= 2.0.0 stripped all providers except Cloudflare;
+#    operators get their wildcard via `acme-setup.sh` instead, see #254)
 
 set -e
 
@@ -66,6 +70,27 @@ else
         die "os-caddy package installation failed — package is not present on the firewall."
     fi
 fi
+
+# Step 1b: Install os-acme-client + os-ddclient (issue #254).
+# These give us wildcard DNS-01 certs via any acme.sh-supported DNS provider
+# (os-caddy >= 2.0.0 ships only the Cloudflare provider, so this is how a
+# TAPPaaS operator with another DNS provider — or anyone who wants a single
+# wildcard for internal services — actually gets a public cert). Both are
+# additive: no impact on the running Caddy or webgui.
+for pkg in os-acme-client os-ddclient; do
+    if ssh root@"$FIREWALL_FQDN" "/bin/sh -c 'pkg info $pkg'" &>/dev/null; then
+        debug "  $pkg already installed"
+    else
+        info "Step 1b: Installing $pkg..."
+        ssh root@"$FIREWALL_FQDN" "/bin/sh -c 'pkg install -y $pkg'" 2>&1 \
+            | while IFS= read -r _; do printf "."; done || \
+            warn "$pkg installation returned non-zero"
+        echo ""
+        if ! ssh root@"$FIREWALL_FQDN" "/bin/sh -c 'pkg info $pkg'" &>/dev/null; then
+            die "$pkg installation failed"
+        fi
+    fi
+done
 
 # Step 2: Reconfigure OPNsense web GUI to port 8443 and disable HTTP redirect
 info "Step 2: Reconfiguring OPNsense web GUI to port 8443..."
@@ -272,3 +297,7 @@ fi
 echo ""
 info "${GN}✓${CL} Caddy setup completed"
 info "  OPNsense web UI: https://$FIREWALL_FQDN:8443"
+echo ""
+info "${BOLD}Next step (TLS):${CL} run ${BL}acme-setup.sh${CL} to obtain a wildcard certificate"
+info "  for ${BL}*.${DOMAIN}${CL} via your DNS provider — see INSTALL.md §2.3 (issue #254)."
+info "  Without it, modules with proxyTls=dns01 stay reachable on LAN but have no public TLS."

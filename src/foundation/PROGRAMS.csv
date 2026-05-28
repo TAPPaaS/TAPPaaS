@@ -22,6 +22,7 @@ update-os.sh,/home/tappaas/bin/update-os.sh,tappaas-cicd/scripts/update-os.sh,sc
 resize-disk.sh,/home/tappaas/bin/resize-disk.sh,tappaas-cicd/scripts/resize-disk.sh,script
 check-disk-threshold.sh,/home/tappaas/bin/check-disk-threshold.sh,tappaas-cicd/scripts/check-disk-threshold.sh,script
 setup-caddy.sh,/home/tappaas/bin/setup-caddy.sh,tappaas-cicd/scripts/setup-caddy.sh,script
+acme-setup.sh,/home/tappaas/bin/acme-setup.sh,tappaas-cicd/scripts/acme-setup.sh,script
 repository.sh,/home/tappaas/bin/repository.sh,tappaas-cicd/scripts/repository.sh,script
 #
 # --- Python Programs (installed as symlinks in /home/tappaas/bin/) -----------------------
@@ -30,6 +31,7 @@ opnsense-firewall,/home/tappaas/bin/opnsense-firewall,tappaas-cicd/opnsense-cont
 zone-manager,/home/tappaas/bin/zone-manager,tappaas-cicd/opnsense-controller/src/opnsense_controller/zone_manager.py,python
 dns-manager,/home/tappaas/bin/dns-manager,tappaas-cicd/opnsense-controller/src/opnsense_controller/dns_manager_cli.py,python
 caddy-manager,/home/tappaas/bin/caddy-manager,tappaas-cicd/opnsense-controller/src/opnsense_controller/caddy_cli.py,python
+acme-manager,/home/tappaas/bin/acme-manager,tappaas-cicd/opnsense-controller/src/opnsense_controller/acme_cli.py,python
 update-tappaas,/home/tappaas/bin/update-tappaas,tappaas-cicd/update-tappaas/src/update_tappaas/main.py,python
 #
 # --- Proxmox Node Scripts (installed in /root/tappaas/ on each PVE node) ----------------

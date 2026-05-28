@@ -22,6 +22,7 @@ update-os.sh,tappaas-cicd/scripts/,common-install-routines.sh
 resize-disk.sh,tappaas-cicd/scripts/,
 check-disk-threshold.sh,tappaas-cicd/scripts/,resize-disk.sh
 setup-caddy.sh,tappaas-cicd/scripts/,common-install-routines.sh; opnsense-firewall; configuration.json
+acme-setup.sh,tappaas-cicd/scripts/,common-install-routines.sh; acme-manager; configuration.json
 repository.sh,tappaas-cicd/scripts/,configuration.json
 #
 # --- tappaas-cicd/ (module lifecycle) ---------------------------------------------------
@@ -46,6 +47,7 @@ opnsense-firewall (firewall_cli.py),tappaas-cicd/opnsense-controller/,config.py;
 zone-manager (zone_manager.py),tappaas-cicd/opnsense-controller/,config.py; vlan_manager.py; dhcp_manager.py; firewall_manager.py; zones.json
 dns-manager (dns_manager_cli.py),tappaas-cicd/opnsense-controller/,config.py
 caddy-manager (caddy_cli.py),tappaas-cicd/opnsense-controller/,config.py; caddy_manager.py
+acme-manager (acme_cli.py),tappaas-cicd/opnsense-controller/,config.py; acme_manager.py
 #
 # --- Python: update-tappaas ------------------------------------------------------------
 update-tappaas (main.py),tappaas-cicd/update-tappaas/,update-module.sh; configuration.json

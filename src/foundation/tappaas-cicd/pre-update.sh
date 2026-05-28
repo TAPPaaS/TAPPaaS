@@ -113,7 +113,7 @@ echo ""
 # build via update-tappaas rather than needing a nixos-rebuild. caddy-manager,
 # opnsense-firewall, rules-manager and syslog-manager were previously only in
 # the system env, so their changes didn't propagate on update (issue #206).
-for _oc_tool in opnsense-controller zone-manager dns-manager caddy-manager opnsense-firewall rules-manager syslog-manager test-network-manager; do
+for _oc_tool in opnsense-controller zone-manager dns-manager caddy-manager opnsense-firewall rules-manager syslog-manager test-network-manager acme-manager; do
   _oc_src="/home/tappaas/TAPPaaS/src/foundation/tappaas-cicd/opnsense-controller/result/bin/${_oc_tool}"
   if [ -e "${_oc_src}" ]; then
     rm -f "/home/tappaas/bin/${_oc_tool}" 2>/dev/null || true

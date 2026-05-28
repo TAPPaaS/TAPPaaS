@@ -138,16 +138,28 @@ fi
 
 # ── TLS certificate strategy (proxyTls, default dns01) ──────────────
 
-# DNS-01 needs no inbound validation traffic, so it is the only strategy
-# that works for mgmt-restricted / non-public domains. Requires the global
-# os-caddy TLS DNS provider + API key to be configured.
+# proxyTls selects how this domain gets its public TLS cert (issue #254):
+#   dns01 → bind the wildcard cert issued by os-acme-client (see acme-setup.sh)
+#           via Caddy's per-domain CustomCertificate. Works for internal-only
+#           services (no inbound HTTP-01 traffic needed) and shares one cert
+#           across all dns01 modules. tappaas.tlsCertRefid must be populated
+#           in configuration.json (acme-setup.sh does this).
+#   http01 → Caddy issues a per-domain cert via ACME HTTP-01; the domain MUST
+#            be reachable from the internet on :80. No DNS API needed.
 PROXY_TLS=$(jq -r '.proxyTls // "dns01"' "${MODULE_JSON}")
-# Note: DNS-01 vs HTTP-01 is a global Caddy/OPNsense setting — not configurable
-# per domain in caddy-manager. Log the intended strategy for reference only.
+CADDY_DOMAIN_ARGS=()
 if [[ "${PROXY_TLS}" == "dns01" ]]; then
-    info "  TLS: ACME DNS-01 (proxyTls=dns01, configured globally in OPNsense)"
+    TLS_CERT_REFID=$(jq -r '.tappaas.tlsCertRefid // ""' "${CONFIG_DIR}/configuration.json" 2>/dev/null)
+    if [[ -n "${TLS_CERT_REFID}" ]]; then
+        info "  TLS: DNS-01 wildcard (proxyTls=dns01) — refid ${TLS_CERT_REFID}"
+        CADDY_DOMAIN_ARGS=(--custom-certificate "${TLS_CERT_REFID}")
+    else
+        warn "  TLS: proxyTls=dns01 but tappaas.tlsCertRefid is not set yet."
+        warn "       The domain entry will be created; until acme-setup.sh runs,"
+        warn "       the public HTTPS endpoint has no certificate (internal LAN access still works)."
+    fi
 else
-    info "  TLS: ACME HTTP-01 (proxyTls=${PROXY_TLS})"
+    info "  TLS: HTTP-01 per-domain (proxyTls=${PROXY_TLS}) — Caddy will issue via ACME on :80"
 fi
 
 # ── Create domain ───────────────────────────────────────────────────
@@ -155,6 +167,7 @@ fi
 info "  Creating Caddy domain..."
 caddy-manager add-domain "${PROXY_DOMAIN}" \
     --description "${DESCRIPTION}" \
+    "${CADDY_DOMAIN_ARGS[@]+"${CADDY_DOMAIN_ARGS[@]}"}" \
     --no-ssl-verify || die "Failed to create Caddy domain"
 
 # ── Resolve zone restriction → access list (issue #206) ─────────────

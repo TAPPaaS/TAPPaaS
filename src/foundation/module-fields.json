@@ -543,14 +543,14 @@
         },
 
         "proxyTls": {
-            "description": "How firewall:proxy obtains the TLS certificate for this domain. 'dns01' (default) uses ACME DNS-01 validation — the certificate is issued by writing a DNS TXT record, so no inbound HTTP-01 validation traffic is required (the only option that works for mgmt-restricted or otherwise non-public domains). 'http01' uses classic ACME HTTP-01 validation, which requires the domain to be reachable from the internet on port 80. DNS-01 requires the global os-caddy TLS DNS provider and API key to be configured (e.g. Cloudflare).",
+            "description": "How firewall:proxy obtains the public TLS certificate for this domain. 'dns01' (default) binds the TAPPaaS-wide wildcard certificate issued by os-acme-client (see acme-setup.sh, issue #254) to this domain via Caddy's per-domain CustomCertificate — no inbound HTTP-01 validation, no per-module DNS API call (one wildcard serves every dns01 module). 'http01' uses classic ACME HTTP-01: Caddy obtains a per-domain cert via the :80 challenge, so the domain MUST be reachable from the internet on port 80 — useful for genuinely public services where DNS-API access is not available. For dns01 to deliver a certificate, the wildcard must already be in OPNsense Trust (run acme-setup.sh on the cicd at INSTALL.md §2.3); until then the module's LAN endpoint still works but the public HTTPS endpoint has no cert.",
             "type": "string",
             "requiredBy": [],
             "usedBy": ["firewall:proxy"],
             "default": "dns01",
             "values": {
-                "dns01": "ACME DNS-01 validation (no inbound traffic; needs global DNS provider + API key)",
-                "http01": "ACME HTTP-01 validation (domain must be publicly reachable on :80)"
+                "dns01": "Wildcard certificate via os-acme-client; bound by refid through Caddy CustomCertificate (no per-module ACME, works for internal-only services)",
+                "http01": "Per-domain ACME HTTP-01 via Caddy itself (no DNS-API needed, but the domain must be reachable from the internet on :80)"
             }
         },
 

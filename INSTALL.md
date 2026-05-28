@@ -129,19 +129,68 @@ Do this **after** the first node's bootstrap has finished (cicd is up).
 
 ### 2.3 Set up TLS certificates
 
-Your domain is already configured (you passed `--domain` in §2.1). To get **public
-TLS certificates**, configure the Caddy **DNS-01 provider credentials** on the
-mothership — e.g. your **Cloudflare / DNS-provider API token** for ACME DNS-01:
+Your domain is already configured (you passed `--domain` in §2.1). The default
+TLS strategy (`proxyTls: dns01`) issues **one wildcard certificate per TAPPaaS
+domain** via ACME **DNS-01**, then binds it to every module's reverse-proxy
+entry through Caddy's `CustomCertificate` (issue #254). DNS-01 needs no
+inbound :80 traffic, so internal-only services get a public cert too.
+
+> **Why not Caddy's own DNS-01?** Since os-caddy 2.0.0 the OPNsense build only
+> ships the Cloudflare DNS provider. TAPPaaS uses **os-acme-client** (which
+> wraps acme.sh) so you can pick any of the 120 DNS APIs it supports —
+> Cloudflare, deSEC, Hetzner, OVH, Route 53, Namecheap, etc.
+
+Run the operator-driven setup on the mothership:
 
 ```bash
 ssh tappaas@tappaas-cicd      # or its 10.0.0.x address
-# configure the DNS-01 token (provider-specific) so Caddy can issue certs
+acme-setup.sh                 # interactive: picks up domain/email, prompts for token
 ```
 
-Until this is set, internal-only services still work (reachable on the LAN), but
-their public HTTPS endpoint has no certificate. *(Optional if you only use TAPPaaS
-internally. To change the domain later: `create-configuration.sh --update --domain
-<yourdomain>`.)*
+The script:
+1. Reads `tappaas.domain` and `tappaas.email` from `configuration.json`.
+2. Prompts for your **DNS provider** (default `cloudflare`) and its **API token**
+   (offers to save them to `~/.acme-dns-credentials.txt`, mode 600, for re-runs).
+3. Provisions an ACME account, a DNS-01 validation, a `caddy-reload` automation
+   action, and a wildcard certificate (`*.<domain>` + bare apex) on the
+   firewall — then signs it and waits for issuance (~10–30 s).
+4. Stores the issued cert's OPNsense Trust refid as `tappaas.tlsCertRefid` in
+   `configuration.json`. Every later `proxyTls: dns01` module install reads
+   this refid and binds the wildcard via `CustomCertificate` automatically.
+
+**Cloudflare token scope** (recommended): create a custom token at
+<https://dash.cloudflare.com/profile/api-tokens> with permissions `Zone → Zone →
+Read` and `Zone → DNS → Edit`, restricted to your domain. Optionally allow only
+the firewall WAN IPv4 *and* IPv6 (or skip the IP filter — the token is already
+zone-scoped).
+
+```bash
+# Non-Cloudflare? Pass the provider name; the script asks for that provider's fields:
+acme-setup.sh --provider hetzner          # deSEC, hetzner, ovh, route53, ...
+# Or seed creds non-interactively (chmod 600):
+cat >~/.acme-dns-credentials.txt <<EOF
+provider=cloudflare
+dns_cf_token=YOUR-TOKEN-HERE
+EOF
+chmod 600 ~/.acme-dns-credentials.txt
+acme-setup.sh
+```
+
+To **test before going live**, add `--staging` once (Let's Encrypt staging =
+untrusted certs, no rate limits); then re-run without `--staging` for the
+trusted prod cert (the script swaps the cert in place — Caddy picks up the new
+one automatically via the registered `caddy-reload` action).
+
+If you'd rather **not** use the wildcard for a particular service (e.g. you
+want a per-domain cert via HTTP-01 because the service is publicly reachable on
+:80 and you don't want it to share the wildcard), set `proxyTls: http01` on
+that module. The two strategies coexist per-module.
+
+Skipping §2.3 is fine if you only use TAPPaaS internally — every service stays
+reachable on the LAN; only the public HTTPS endpoint of `dns01` modules will
+lack a certificate until you run `acme-setup.sh`. *(To change the domain later:
+`create-configuration.sh --update --domain <yourdomain>`, then re-run
+`acme-setup.sh`.)*
 
 ---
 

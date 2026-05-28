@@ -117,20 +117,25 @@ LIST_OUTPUT=$(caddy-manager list --no-ssl-verify 2>&1) || true
 
 CHANGES_MADE=false
 
-# TLS certificate strategy (proxyTls, default dns01). DNS-01 needs no inbound
-# validation, so it is the only strategy that works for mgmt-restricted /
-# non-public domains. add-domain reconciles the setting on an existing domain.
+# proxyTls (issue #254): dns01 = bind the os-acme-client wildcard via Caddy's
+# CustomCertificate refid; http01 = let Caddy issue per-domain via ACME HTTP-01
+# (requires the domain be publicly reachable on :80). Either reconciles in place.
 PROXY_TLS=$(jq -r '.proxyTls // "dns01"' "${MODULE_JSON}")
-DNS_ARGS=()
+CADDY_DOMAIN_ARGS=()
 if [[ "${PROXY_TLS}" == "dns01" ]]; then
-    DNS_ARGS=(--dns-challenge)
+    TLS_CERT_REFID=$(jq -r '.tappaas.tlsCertRefid // ""' "${CONFIG_DIR}/configuration.json" 2>/dev/null)
+    if [[ -n "${TLS_CERT_REFID}" ]]; then
+        CADDY_DOMAIN_ARGS=(--custom-certificate "${TLS_CERT_REFID}")
+    else
+        warn "  proxyTls=dns01 but tappaas.tlsCertRefid not set (run acme-setup.sh) — public TLS unavailable until then"
+    fi
 fi
 
 # Reconcile the domain (creates if missing, applies the TLS strategy either way)
 info "  Reconciling domain ${PROXY_DOMAIN} (TLS=${PROXY_TLS})..."
 caddy-manager add-domain "${PROXY_DOMAIN}" \
     --description "${DESCRIPTION}" \
-    "${DNS_ARGS[@]+"${DNS_ARGS[@]}"}" \
+    "${CADDY_DOMAIN_ARGS[@]+"${CADDY_DOMAIN_ARGS[@]}"}" \
     --no-ssl-verify || die "Failed to reconcile Caddy domain"
 CHANGES_MADE=true
 

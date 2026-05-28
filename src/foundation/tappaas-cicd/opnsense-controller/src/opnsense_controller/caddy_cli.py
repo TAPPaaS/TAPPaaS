@@ -17,6 +17,7 @@ def add_domain(
     domain_name: str,
     description: str = "",
     dns_challenge: bool = False,
+    custom_certificate: str = "",
     check_mode: bool = False,
 ) -> bool:
     """Add (or reconcile) a reverse proxy domain.
@@ -28,6 +29,10 @@ def add_domain(
         dns_challenge: If True, issue the certificate via ACME DNS-01
             (no inbound HTTP-01 validation needed). Requires the global
             os-caddy TLS DNS provider/API key to be configured.
+        custom_certificate: Refid of an OPNsense Trust certificate to use
+            (issue #254 — typically the wildcard issued by os-acme-client).
+            When set, Caddy serves this cert and skips its own ACME for
+            the domain. Mutually exclusive with ``dns_challenge``.
         check_mode: If True, perform dry-run.
 
     Returns:
@@ -36,7 +41,7 @@ def add_domain(
     existing = manager.get_domain_by_name(domain_name)
     if existing:
         if check_mode:
-            print(f"Domain '{domain_name}' exists; would reconcile (dns_challenge={dns_challenge}) (dry-run)")
+            print(f"Domain '{domain_name}' exists; would reconcile (dns_challenge={dns_challenge}, custom_certificate={custom_certificate!r}) (dry-run)")
             return True
         # Reconcile the DNS-01 setting on the existing domain.
         domain = CaddyDomain(
@@ -44,20 +49,26 @@ def add_domain(
             description=description or existing.description,
             enabled=existing.enabled,
             dns_challenge=dns_challenge,
+            custom_certificate=custom_certificate,
         )
         result = manager.update_domain(existing.uuid, domain)
         if result.get("result") in ("saved", None) or result.get("uuid"):
-            print(f"Domain '{domain_name}' reconciled (uuid={existing.uuid}, dns_challenge={dns_challenge})")
+            print(f"Domain '{domain_name}' reconciled (uuid={existing.uuid}, dns_challenge={dns_challenge}, custom_certificate={custom_certificate!r})")
             return True
         print(f"ERROR: Failed to reconcile domain: {result}", file=sys.stderr)
         return False
 
     if check_mode:
-        print(f"Would create domain: {domain_name} (dns_challenge={dns_challenge}) (dry-run)")
+        print(f"Would create domain: {domain_name} (dns_challenge={dns_challenge}, custom_certificate={custom_certificate!r}) (dry-run)")
         return True
 
     print(f"Creating domain: {domain_name}")
-    domain = CaddyDomain(domain=domain_name, description=description, dns_challenge=dns_challenge)
+    domain = CaddyDomain(
+        domain=domain_name,
+        description=description,
+        dns_challenge=dns_challenge,
+        custom_certificate=custom_certificate,
+    )
     result = manager.add_domain(domain)
 
     uuid = result.get("uuid")
@@ -464,6 +475,14 @@ Examples:
         help="Issue the TLS certificate via ACME DNS-01 (no inbound validation; "
         "requires the global os-caddy TLS DNS provider/API key)",
     )
+    add_domain_parser.add_argument(
+        "--custom-certificate",
+        default="",
+        metavar="REFID",
+        help="Use an existing OPNsense Trust certificate (refid) instead of "
+        "letting Caddy fetch one via ACME. Typically the wildcard refid issued "
+        "by os-acme-client (issue #254). Mutually exclusive with --dns-challenge.",
+    )
 
     # add-handler
     add_handler_parser = subparsers.add_parser("add-handler", parents=[global_parser], help="Add a reverse proxy handler")
@@ -538,7 +557,10 @@ Examples:
 
             success = False
             if args.command == "add-domain":
-                success = add_domain(manager, args.domain, args.description, args.dns_challenge, args.check_mode)
+                success = add_domain(
+                    manager, args.domain, args.description,
+                    args.dns_challenge, args.custom_certificate, args.check_mode,
+                )
             elif args.command == "add-handler":
                 success = add_handler(
                     manager, args.domain, args.upstream, args.port,
