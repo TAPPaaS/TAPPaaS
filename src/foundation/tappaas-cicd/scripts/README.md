@@ -387,7 +387,9 @@ resize-disk.sh nextcloud 50G
 
 ### setup-caddy.sh
 
-Installs and configures the Caddy reverse proxy on the OPNsense firewall.
+Installs and configures the Caddy reverse proxy stack on the OPNsense firewall.
+Called automatically by `install2.sh` during initial cicd install; safe to
+re-run (every step is idempotent).
 
 **Usage:**
 ```bash
@@ -395,11 +397,83 @@ setup-caddy.sh
 ```
 
 **What it does:**
-- Installs the os-caddy package on the firewall
-- Creates firewall rules for HTTP (port 80) and HTTPS (port 443)
-- Prints manual configuration steps for completing setup in OPNsense GUI
+1. Installs the **os-caddy** package on the firewall
+2. Installs **os-acme-client** and **os-ddclient** (issue #254) — needed for
+   wildcard TLS via any of acme.sh's 120 DNS providers (os-caddy ≥ 2.0.0 only
+   ships the Cloudflare provider, so this is how non-Cloudflare operators —
+   and anyone who wants a single wildcard for internal services — actually get
+   a public cert) and for dynamic-WAN DNS updates
+3. Moves the OPNsense web GUI from port 443 to **8443** (frees 443 for Caddy)
+4. Creates firewall rules for HTTP (port 80) and HTTPS (port 443) on the WAN
+5. Enables Caddy and sets the global ACME email from `configuration.json`
 
-**Note:** Additional manual configuration is required. See the tappaas-cicd README.md for details.
+**What it does NOT do:** issue a TLS certificate. After `setup-caddy.sh`
+completes, the operator runs `acme-setup.sh` (next section) to obtain the
+wildcard certificate — that step needs a DNS-API token which can't be
+provisioned automatically. Until then, services are reachable on the LAN but
+their public HTTPS endpoint has no certificate.
+
+---
+
+### acme-setup.sh
+
+Operator-driven, idempotent setup of the TAPPaaS wildcard TLS certificate via
+**os-acme-client** (issue #254). Run once at INSTALL.md §2.3, after the
+install chain has finished but before `rest-of-foundation.sh`.
+
+**Usage:**
+```bash
+acme-setup.sh                       # interactive; uses Let's Encrypt PROD
+acme-setup.sh --staging             # use Let's Encrypt staging CA (no rate limits, untrusted certs)
+acme-setup.sh --provider hetzner    # pick a different DNS provider
+acme-setup.sh --no-save-creds       # don't offer to save creds to ~/.acme-dns-credentials.txt
+```
+
+**What it does (idempotent — re-run any time):**
+1. Reads `tappaas.domain` and `tappaas.email` from `configuration.json`
+2. Sources DNS-API credentials from `~/.acme-dns-credentials.txt` (mode 600) if
+   present, otherwise prompts interactively (Cloudflare token by default; for
+   other providers it asks you to seed the file with the right
+   `dns_<provider>_<field>=<value>` keys — see the os-acme-client GUI for the
+   field names)
+3. Calls `acme-manager setup` to provision, on the firewall:
+   - ACME account (Let's Encrypt — prod by default, staging with `--staging`)
+   - DNS-01 validation with the chosen provider
+   - `caddy-reload` automation (type `configd_reload_caddy`) that fires on
+     every renewal so Caddy serves the new cert without manual intervention
+   - Wildcard certificate `*.<domain>` (+ bare apex)
+   - Triggers issuance and waits (~10–30 s)
+4. Writes the issued certificate's OPNsense Trust **refid** back into
+   `configuration.json` as `tappaas.tlsCertRefid`. Every subsequent
+   `proxyTls: dns01` module install reads this refid and binds the wildcard
+   via Caddy's per-domain `CustomCertificate` — no per-module ACME, no
+   DNS-API call at module install time, one cert serves every dns01 module.
+
+**DNS provider support:** any of the **120** providers os-acme-client ships
+(Cloudflare, deSEC, Hetzner, OVH, Route 53, Namecheap, GoDaddy, PowerDNS,
+Njalla, INWX, Gandi, HE, AWS, …). The script knows 14 friendly aliases; for
+anything else, pass the raw `dns_<provider>` key as `--provider` and use the
+matching field names from the os-acme-client GUI.
+
+**Cloudflare credentials file template** (chmod 600):
+```ini
+provider=cloudflare
+dns_cf_token=YOUR-CLOUDFLARE-API-TOKEN
+# dns_cf_account_id=...     # optional
+```
+
+Token scope: create a custom token at
+<https://dash.cloudflare.com/profile/api-tokens> with permissions
+`Zone → Zone → Read` and `Zone → DNS → Edit` for your domain.
+
+**Switching staging → prod:** run with `--staging` first to validate the
+plumbing without burning the prod LE rate limit, then re-run without
+`--staging`. The script swaps the cert in place; the `caddy-reload`
+automation makes Caddy pick up the new cert within ~10 s, no operator action.
+
+**Renewal:** acme.sh handles it. The `caddy-reload` automation registered by
+this script ensures Caddy starts serving the renewed cert automatically — no
+manual reload needed.
 
 ---
 
@@ -938,7 +1012,8 @@ scripts/
 ├── migrate-vm.sh                # Migrate VMs between nodes (live or offline)
 ├── repository.sh                # Manage module repositories (add/remove/modify/list)
 ├── resize-disk.sh               # Resize VM disk in Proxmox and filesystem
-├── setup-caddy.sh               # Install Caddy reverse proxy on firewall
+├── setup-caddy.sh               # Install Caddy reverse proxy + os-acme-client + os-ddclient
+├── acme-setup.sh                # Issue the TAPPaaS wildcard TLS cert via os-acme-client (#254)
 ├── snapshot-vm.sh               # VM snapshot management (create/list/cleanup/restore)
 ├── test-module.sh               # Test a module with dependency-recursive service testing
 ├── update-module.sh             # Update a module with snapshot, testing, and rollback
