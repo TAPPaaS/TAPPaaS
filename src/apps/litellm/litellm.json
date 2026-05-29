@@ -1,12 +1,13 @@
 {
   "description": "TAPPaaS LiteLLM",
-  "version": "1.85.0",
+  "version": "0.1.0",
+  "appVersion": "1.85.0",
   "releaseDate": "2026-05-20",
   "maintainer": "@ErikDaniel007",
   "status": "Development",
   "vmname": "litellm",
   "vmid": 310,
-  "vmtag": "TAPPaaS,Test",
+  "vmtag": "TAPPaaS,App,AI",
   "node": "tappaas2",
   "cores": 4,
   "memory": "4096",
@@ -20,7 +21,9 @@
     "cluster:vm",
     "templates:nixos",
     "backup:vm",
-    "identity:identity"
+    "identity:identity",
+    "firewall:proxy",
+    "firewall:rules"
   ],
   "provides": [
     "models"

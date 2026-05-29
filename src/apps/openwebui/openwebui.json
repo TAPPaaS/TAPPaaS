@@ -16,7 +16,6 @@
   "image": "8080",
   "bridge0": "lan",
   "zone0": "srv-work",
-  "proxyDomain": "openwebui.test.tapaas.org",
   "proxyPort": 8080,
   "dependsOn": [
     "cluster:vm",
@@ -29,6 +28,6 @@
   ],
   "provides": [],
   "proxyAllowedZones": [
-    "internet"
+    "home"
   ]
 }

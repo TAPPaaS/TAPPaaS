@@ -1,7 +1,5 @@
 # Home Assistant — Home Automation Platform
 
-Primary audience: home user, household administrator.
-
 Central hub for all smart home integrations. Control lights, energy,
 security, EV charging and audio from one interface — locally, without
 cloud dependency.
@@ -49,6 +47,7 @@ used at deploy time; HAOS self-updates from there.
 | Module | Purpose | Docs |
 |--------|---------|------|
 | `alfen` | EV charger — web UI, discovery, Modbus TCP | [alfen →](https://github.com/TAPPaaS/Community/blob/main/src/ErikDaniel007/energy/alfen/README.md) |
-| `sonos` | Multi-room audio — control API, AirPlay | [sonos →](https://github.com/TAPPaaS/Community/blob/main/src/ErikDaniel007/entertainment/sonos/README.md) · [HA integration docs](https://www.home-assistant.io/integrations/sonos/) |
+| `sonos` | Multi-room audio — control API, AirPlay | [sonos →](https://github.com/TAPPaaS/Community/blob/main/src/ErikDaniel007/entertainment/sonos/README.md) |
+| `reolink` | Surveillance cameras — RTSP streaming, motion events | [reolink →](https://github.com/TAPPaaS/Community/blob/main/src/ErikDaniel007/surveillance/reolink/README.md) |
 
 For installation steps see [INSTALL.md](./INSTALL.md).

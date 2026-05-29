@@ -1,6 +1,6 @@
 # Home Assistant — Installation
 
-Primary audience: TAPPaaS admin. Manual steps that cannot be automated.
+Only manual steps are listed here. Scripts handle everything else automatically.
 
 ## Prerequisites
 
@@ -20,7 +20,7 @@ install-module.sh homeassistant
 
 This creates the VM, imports the HAOS disk image, and configures:
 - Firewall proxy (`homeassistant.gridtefy.com`)
-- Firewall pinholes to IoT modules (alfen, sonos)
+- Firewall pinholes to IoT modules (alfen, sonos, reolink)
 
 ## Post-install
 

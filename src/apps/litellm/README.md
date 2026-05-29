@@ -2,88 +2,54 @@
 
 Unified AI API gateway — routes requests to multiple LLM providers with usage tracking, caching, and access control.
 
-See `litellm.json` for current version and VM configuration. Upgrading from an older version? See [UPGRADE.md](UPGRADE.md).
+## What you get
+
+| Capability | Access from | How |
+|---|---|---|
+| Unified LLM API | Any internal zone | OpenAI-compatible endpoint on port 4000 |
+| Web UI | Internal network | `http://litellm.srv-work.internal:4000/ui` |
+| Usage tracking | Admin UI | Per-key request counts, cost, latency |
+| Response caching | Automatic | Redis-backed; reduces provider API costs |
+| Virtual API keys | Admin UI | Scope per user or application |
 
 ## Architecture
 
 ```
-Clients → LiteLLM :4000 → PostgreSQL (models, usage, keys)
-                        → Redis (response cache)
-                        → LLM Providers (OpenRouter, Anthropic, ...)
+Clients → LiteLLM :4000 → LLM Providers (OpenRouter, Anthropic, …)
+                        → PostgreSQL  (model config, usage, keys)
+                        → Redis       (response cache)
 ```
 
-## What the install does automatically
+## What is not included
 
-- Provisions VM, installs NixOS, starts PostgreSQL + Redis + LiteLLM container
-- Generates a random master key on first boot (`/etc/secrets/litellm.env`)
-- Configures daily backups: PostgreSQL dump (02:00), Redis snapshot (02:30), secrets (02:45)
-- 30-day backup retention
+- Provider API keys (added via UI post-install — see INSTALL.md)
+- Model selection (configured in UI after install)
+- External access — internal zones only; expose via dmz if needed
 
-## What an admin must do after install
+## Requirements
 
-### 1. Get the master key
-
-```bash
-ssh tappaas@<vmname>.<zone0>.internal "sudo cat /etc/secrets/litellm.env"
-```
-
-Save this key — it is the admin password for the UI and API.
-
-### 2. Open the UI
-
-`http://<vmname>.<zone0>.internal:4000/ui`
-
-Login with the master key as password.
-
-### 3. Add provider credentials
-
-Settings → Credentials — add API keys for OpenRouter, Anthropic, Perplexity, etc.
-No secrets file editing needed; credentials are stored in the database.
-
-Reference: https://docs.litellm.ai/docs/proxy/ui_credentials
-
-### 4. Add models and create user keys
-
-- Add models: https://docs.litellm.ai/docs/proxy/ai_hub
-- Create virtual keys for users: https://docs.litellm.ai/docs/proxy/access_control
+- `srv-work` zone (VLAN 220)
+- NixOS template (`templates:nixos`)
+- 4 vCPU, 4GB RAM minimum (see sizing below)
 
 ## Sizing
 
-| Users | vCPU | RAM  | Workers |
-|-------|------|------|---------|
-| ≤100  | 4    | 4GB  | 4       |
-| ≤250  | 4-6  | 8GB  | 4       |
-| 500+  | 8    | 16GB | 8       |
+| Users | vCPU | RAM |
+|---|---|---|
+| ≤100 | 4 | 4 GB |
+| ≤250 | 6 | 8 GB |
+| 500+ | 8 | 16 GB |
 
-## Troubleshooting
+## Dependencies
 
-```bash
-# Service status
-systemctl status postgresql redis-litellm podman-litellm
+| Depends on | Purpose |
+|---|---|
+| `cluster:vm` | VM provisioning |
+| `templates:nixos` | NixOS base image |
+| `backup:vm` | Daily backups |
+| `identity:identity` | Secrets management |
+| `firewall:proxy` | HTTPS reverse proxy |
+| `firewall:rules` | Internal firewall pinholes |
 
-# Container logs
-journalctl -u podman-litellm -f
-
-# Restart container
-systemctl restart podman-litellm
-
-# Regenerate master key (only if lost — destroys existing key)
-sudo rm /etc/secrets/litellm.env
-sudo systemctl restart generate-litellm-secrets podman-litellm
-```
-
-## Backup / restore
-
-```bash
-# Manual PostgreSQL backup
-sudo -u postgres pg_dump litellm | gzip > backup-$(date +%F).sql.gz
-
-# Restore
-sudo systemctl stop podman-litellm
-gunzip -c backup.sql.gz | sudo -u postgres psql litellm
-sudo systemctl start podman-litellm
-```
-
-## License
-
-Mozilla Public License 2.0 (MPL-2.0)
+For installation steps see [INSTALL.md](./INSTALL.md).
+Upgrading? See [UPGRADE.md](./UPGRADE.md).

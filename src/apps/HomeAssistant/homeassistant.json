@@ -37,7 +37,9 @@
     "alfen:modbus",
 
     "sonos:audio",
-    "sonos:airplay"
+    "sonos:airplay",
+
+    "reolink:rtsp"
   ],
   "provides": []
 }

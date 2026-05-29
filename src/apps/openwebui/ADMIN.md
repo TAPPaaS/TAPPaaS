@@ -1,101 +1,108 @@
-# Copyright (c) 2025 TAPPaaS org
-#
-# This Source Code Form is subject to the terms of the Mozilla Public
-# License, v. 2.0. If a copy of the MPL was not distributed with this
-# file, You can obtain one at https://mozilla.org/MPL/2.0/.
-
 # OpenWebUI — Admin Guide
 
-**Version:** 0.9.5
-**Maintainer:** @ErikDaniel007
-**Updated:** 2026-05-21
+**Maintainer:** @ErikDaniel007 | **Updated:** 2026-05-29
 
 ## Quick reference
 
 | Item | Value |
 |---|---|
-| VM | openwebui (VMID 311) on tappaas2 |
-| Zone | srv-work |
-| Host | openwebui.srv-work.internal |
+| VM | `openwebui` (VMID 311) on tappaas2 |
+| Zone | srv-work (10.2.20.0/24, VLAN 220) |
+| Internal host | `openwebui.srv-work.internal` |
 | Port | 8080 |
-| Proxy | openwebui.test.tapaas.org |
+| Proxy | see `openwebui.json proxyDomain` |
 
 ---
 
 ## Operations
 
-### Update
-```bash
-/home/tappaas/bin/update-module.sh openwebui
-```
-Handles: nixos-rebuild, PostgreSQL version migration, image prune.
-
 ### Health check
 ```bash
-cd TAPPaaS/src/apps/openwebui && ./test.sh
+cd /home/tappaas/TAPPaaS/src/apps/openwebui && ./test.sh openwebui
 ```
 Checks (in order): SSH, container running, HTTP :8080, PostgreSQL, Redis.
 
-### Manual install / reinstall
+### Update
 ```bash
-/home/tappaas/bin/install-module.sh openwebui
+update-module.sh openwebui
+```
+Handles: nixos-rebuild, container image update, health check, image prune.
+
+### Reinstall
+```bash
+install-module.sh openwebui --force
 ```
 
 ---
 
-## Troubleshooting
+## Troubleshooting — Infrastructure
 
-Work through checks in order. Stop at the first failure.
+Work through in order. Stop at first failure.
 
-### 1. VM reachable?
+### 1. VM not reachable
 ```bash
 ssh tappaas@openwebui.srv-work.internal
 ```
-If not: check Proxmox — is VM running on tappaas2?
+If unreachable: verify VM is running in Proxmox (`qm status 311` on tappaas2).
 
-### 2. Wrong IP (192.168.2.x instead of 192.168.210.x)?
-Cloud-init or NetworkManager overriding VLAN config.
+### 2. Container not running
 ```bash
-grep -E "cloud-init.network|networkmanager" /etc/nixos/configuration.nix
-# Must show:
-# services.cloud-init.network.enable = false;
-# networking.networkmanager.enable = false;
-```
-Fix, then `sudo nixos-rebuild switch`.
-
-### 3. No internet on the VM?
-```bash
-ip addr show ens18.210   # must have 192.168.210.x/24
-ip route                 # must show default via 192.168.210.1
-cat /etc/resolv.conf     # must show nameserver 192.168.210.1
-ping 8.8.8.8
-```
-
-### 4. Container not running?
-```bash
-sudo podman ps                          # use sudo — container runs as root
+ssh tappaas@openwebui.srv-work.internal
+sudo podman ps
 sudo journalctl -u openwebui-wrapper -n 50
 ```
-Common cause: DNS failure during image pull (check internet first).
+Common causes: DNS failure during first image pull; secrets not generated yet.
 
-### 5. PostgreSQL not responding?
+### 3. PostgreSQL not responding
 ```bash
+ssh tappaas@openwebui.srv-work.internal
 systemctl status postgresql
 pg_isready -h 127.0.0.1 -p 5432 -U openwebui -d openwebui
-sudo -u postgres psql openwebui -c "\dt"
 ```
 
-### 6. Redis not responding?
+### 4. Redis not responding
 ```bash
+ssh tappaas@openwebui.srv-work.internal
 systemctl status redis-openwebui
-redis-cli -h 127.0.0.1 -p 6379 ping    # expect PONG
+redis-cli -h 127.0.0.1 -p 6379 ping    # expect: PONG
 ```
 
-### 7. HTTP not responding (port 8080)?
+### 5. HTTP not responding on port 8080
 ```bash
+ssh tappaas@openwebui.srv-work.internal
 curl -v http://localhost:8080/
 sudo podman logs openwebui --tail 50
 ```
+
+---
+
+## Troubleshooting — Application
+
+Issues with the OpenWebUI application itself after infrastructure is confirmed healthy.
+
+### Models not available in chat
+1. Verify LiteLLM is running: `nc -zv -w 5 litellm.srv-work.internal 4000`
+2. In OpenWebUI: Settings → Connections → confirm OpenAI API base URL and key
+3. In LiteLLM UI: verify at least one model is configured and provider key is set
+4. Check the connection: Settings → Connections → click the refresh/test icon
+
+### LiteLLM connection failing ("connection refused")
+Firewall pinhole may be missing. Run from tappaas-cicd:
+```bash
+rules-manager verify-rules openwebui --no-ssl-verify
+```
+If rules missing: `install-module.sh openwebui --force` to re-apply.
+
+### Chat history missing after reinstall
+Restore from backup — see [RESTORE.md](./RESTORE.md).
+Automated backups run daily; check `/var/backup/openwebui-data/` for available restore points.
+
+### User cannot log in
+Check if SSO (identity:identity) is configured and Authentik is reachable.
+For local accounts: admin can reset password via Settings → Admin → Users.
+
+### Response streaming not working
+Verify Redis is running (step 4 above). Redis handles WebSocket session state.
 
 ---
 
@@ -103,29 +110,14 @@ sudo podman logs openwebui --tail 50
 
 ### View logs
 ```bash
+ssh tappaas@openwebui.srv-work.internal
 sudo podman logs -f openwebui
-sudo journalctl -u openwebui-wrapper
 sudo journalctl -u postgresql
 ```
 
-### Manual database backup
+### Manual backup
 ```bash
+ssh tappaas@openwebui.srv-work.internal
 sudo -u postgres pg_dump openwebui > openwebui-$(date +%Y%m%d).sql
 ```
-Automated backups run daily; backups are at `/var/backup/openwebui` (7-day rotation).
-
-### Manual database restore
-```bash
-sudo -u postgres psql openwebui < openwebui-<date>.sql
-```
-
----
-
-## Known issues
-
-- **MongoDB CVE-2025-14847** — temporarily permitted via `permittedInsecurePackages`. Monitor upstream.
-- **PBS backup** — VM not yet included in PBS backup jobs (`backup:vm` not implemented). See tracking issue.
-
----
-
-**Tested on:** NixOS 25.05, Proxmox VE 9.x, PostgreSQL 17, Redis with AOF
+Automated backups: `/var/backup/openwebui-*/` — 30-day retention.
