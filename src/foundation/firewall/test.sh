@@ -254,20 +254,29 @@ fi
 
 section "Standard 4: DNS for in-cluster modules"
 
-# Resolve a few known TAPPaaS module FQDNs (whichever exist).
-sample_modules=$(jq -r '. as $root | (paths(scalars) | select(.[-1] == "vmname"))
-                       | $root | getpath(.[0:-1] + ["vmname"]) // empty' \
-                   "${CONFIG_DIR}"/*.json 2>/dev/null \
-                | sort -u | head -3 || true)
-# Simpler fallback if the jq above misbehaves
-if [[ -z "${sample_modules}" ]]; then
-    sample_modules=$(for f in "${CONFIG_DIR}"/*.json; do
-        jq -r '.vmname // empty' "${f}" 2>/dev/null
-    done | sort -u | head -3)
+# Collect installed modules that have a single resolvable host. Modules with
+# aliasType=network (#241) represent a set of devices and have no <vmname>
+# DHCP/DNS record by design, so they must be excluded here (#255).
+sample_modules=""
+network_alias_count=0
+for f in "${CONFIG_DIR}"/*.json; do
+    vmname=$(jq -r '.vmname // empty' "${f}" 2>/dev/null)
+    [[ -z "${vmname}" ]] && continue
+    alias_type=$(jq -r '.aliasType // "host"' "${f}" 2>/dev/null)
+    if [[ "${alias_type}" == "network" ]]; then
+        network_alias_count=$((network_alias_count + 1))
+        continue
+    fi
+    sample_modules+="${vmname}"$'\n'
+done
+sample_modules=$(printf '%s' "${sample_modules}" | sort -u | head -3)
+
+if [[ "${network_alias_count}" -gt 0 ]]; then
+    skip "${network_alias_count} module(s) excluded — aliasType=network has no DNS record by design"
 fi
 
 if [[ -z "${sample_modules}" ]]; then
-    skip "no installed modules with vmname — DNS resolution test skipped"
+    skip "no installed modules with a resolvable vmname — DNS resolution test skipped"
 else
     while IFS= read -r vmname; do
         [[ -z "${vmname}" ]] && continue
