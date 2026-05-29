@@ -1,6 +1,7 @@
 {
   "description": "TAPPaaS Open Webui",
-  "version": "0.9.5",
+  "version": "0.6.0",
+  "appVersion": "0.9.5",
   "releaseDate": "2026-05-20",
   "maintainer": "@ErikDaniel007",
   "status": "Development",
