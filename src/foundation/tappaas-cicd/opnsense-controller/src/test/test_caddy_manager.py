@@ -69,5 +69,35 @@ class TestAddDomainCustomCertificate(unittest.TestCase):
         self.assertEqual(captured[-1]["data"]["reverse"]["CustomCertificate"], "NEWREFID")
 
 
+class TestAddHandlerForwardAuth(unittest.TestCase):
+    """The forward_auth flag must land on the handle body as ForwardAuth (issue #45)."""
+
+    def test_forward_auth_true_lands_on_body(self):
+        captured: list = []
+        mgr = _make_manager(captured)
+        from opnsense_controller.caddy_manager import CaddyHandler  # noqa: PLC0415
+        mgr.add_handler(CaddyHandler(
+            domain_uuid="DOMAIN-UUID",
+            upstream_domain="openwebui.srv-work.internal",
+            upstream_port="8080",
+            description="TAPPaaS: openwebui",
+            forward_auth=True,
+        ))
+        body = captured[-1]["data"]["handle"]
+        self.assertEqual(body["ForwardAuth"], "1")
+        self.assertEqual(captured[-1]["command"], "addHandle")
+
+    def test_forward_auth_default_off(self):
+        captured: list = []
+        mgr = _make_manager(captured)
+        from opnsense_controller.caddy_manager import CaddyHandler  # noqa: PLC0415
+        mgr.add_handler(CaddyHandler(
+            domain_uuid="D",
+            upstream_domain="x", upstream_port="80",
+            description="Plain handler",
+        ))
+        self.assertEqual(captured[-1]["data"]["handle"]["ForwardAuth"], "0")
+
+
 if __name__ == "__main__":
     unittest.main()

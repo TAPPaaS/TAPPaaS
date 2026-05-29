@@ -22,8 +22,8 @@
     "cluster:vm",
     "templates:nixos",
     "backup:vm",
-    "identity:identity",
     "firewall:proxy",
+    "identity:accessControl",
     "litellm:models",
     "firewall:rules"
   ],

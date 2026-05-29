@@ -48,6 +48,7 @@ zone-manager (zone_manager.py),tappaas-cicd/opnsense-controller/,config.py; vlan
 dns-manager (dns_manager_cli.py),tappaas-cicd/opnsense-controller/,config.py
 caddy-manager (caddy_cli.py),tappaas-cicd/opnsense-controller/,config.py; caddy_manager.py
 acme-manager (acme_cli.py),tappaas-cicd/opnsense-controller/,config.py; acme_manager.py
+authentik-manager (authentik_cli.py),tappaas-cicd/opnsense-controller/,authentik_manager.py
 #
 # --- Python: update-tappaas ------------------------------------------------------------
 update-tappaas (main.py),tappaas-cicd/update-tappaas/,update-module.sh; configuration.json

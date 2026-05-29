@@ -246,11 +246,22 @@ in
       RemainAfterExit = true;
       ExecStart = pkgs.writeShellScript "generate-authentik-secrets" ''
         SECRET_KEY="$(${pkgs.openssl}/bin/openssl rand -base64 60 | tr -d '\n')"
+        # AUTHENTIK_BOOTSTRAP_TOKEN binds an API token to akadmin on first
+        # boot (issue #45) — TAPPaaS reads it back from /etc/secrets/authentik.env
+        # to drive every Authentik admin-API call (proxy app / outpost / etc.).
+        # Without it the cicd has no programmatic way to talk to Authentik.
+        BOOTSTRAP_TOKEN="$(${pkgs.openssl}/bin/openssl rand -hex 32)"
+        # AUTHENTIK_BOOTSTRAP_PASSWORD lets a human log in as akadmin too —
+        # used for the UI walk-through during E2E setup; rotateable later.
+        BOOTSTRAP_PASSWORD="$(${pkgs.openssl}/bin/openssl rand -base64 24 | tr -d '\n')"
 
         mkdir -p /etc/secrets
 
         cat > /etc/secrets/authentik.env <<EOF
 AUTHENTIK_SECRET_KEY=$SECRET_KEY
+AUTHENTIK_BOOTSTRAP_TOKEN=$BOOTSTRAP_TOKEN
+AUTHENTIK_BOOTSTRAP_PASSWORD=$BOOTSTRAP_PASSWORD
+AUTHENTIK_BOOTSTRAP_EMAIL=admin@localhost
 AUTHENTIK_POSTGRESQL__HOST=localhost
 AUTHENTIK_POSTGRESQL__PORT=5432
 AUTHENTIK_POSTGRESQL__USER=authentik
@@ -263,8 +274,11 @@ EOF
         chmod 600 /etc/secrets/authentik.env
 
         echo "================================================"
-        echo "AUTHENTIK SECRET KEY generated and saved to:"
+        echo "AUTHENTIK SECRETS generated and saved to:"
         echo "/etc/secrets/authentik.env"
+        echo "  AUTHENTIK_SECRET_KEY (server signing key)"
+        echo "  AUTHENTIK_BOOTSTRAP_TOKEN (admin API token for TAPPaaS — #45)"
+        echo "  AUTHENTIK_BOOTSTRAP_PASSWORD (akadmin web-UI password)"
         echo "================================================"
       '';
     };

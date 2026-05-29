@@ -42,6 +42,11 @@ class CaddyHandler:
     upstream_tls: bool = False
     # Skip verification of the upstream's TLS cert (internal/self-signed backends).
     upstream_tls_skip_verify: bool = True
+    # Enable Caddy's per-handle forward_auth (issue #45). When the global
+    # AuthProvider is set to Authentik (via identity install at Phase B), this
+    # makes Caddy redirect unauthenticated requests through the Authentik
+    # outpost before reverse-proxying to the upstream.
+    forward_auth: bool = False
 
 
 @dataclass
@@ -387,6 +392,7 @@ class CaddyManager:
                 "HttpTlsInsecureSkipVerify": "1" if (handler.upstream_tls and handler.upstream_tls_skip_verify) else "0",
                 "accesslist": handler.access_list_uuid,
                 "description": handler.description,
+                "ForwardAuth": "1" if handler.forward_auth else "0",
             }
         }
         return self._api_post("ReverseProxy", "addHandle", data)
@@ -413,6 +419,7 @@ class CaddyManager:
                 "HttpTlsInsecureSkipVerify": "1" if (handler.upstream_tls and handler.upstream_tls_skip_verify) else "0",
                 "accesslist": handler.access_list_uuid,
                 "description": handler.description,
+                "ForwardAuth": "1" if handler.forward_auth else "0",
             }
         }
         return self._api_post("ReverseProxy", "setHandle", data, url_params=[uuid])

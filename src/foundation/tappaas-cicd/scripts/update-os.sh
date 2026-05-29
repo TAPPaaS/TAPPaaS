@@ -132,7 +132,10 @@ update_ssh_known_hosts() {
     local ip="$1"
 
     ssh-keygen -R "${ip}" 2>/dev/null || true
-    ssh-keyscan -H "${ip}" >> ~/.ssh/known_hosts 2>/dev/null
+    # Best-effort: if the VM's sshd is mid-restart, ssh-keyscan returns non-zero
+    # and the next wait_for_ssh/rebuild attempt will retry. Don't let a transient
+    # failure here trip set -e and abort the retry loop.
+    ssh-keyscan -H "${ip}" >> ~/.ssh/known_hosts 2>/dev/null || true
 }
 
 # Wait for SSH to become available (cloud-init may still be setting up keys)
@@ -196,28 +199,64 @@ update_nixos() {
     fi
 
     info "Using NixOS config: ${nix_config}"
-    info "Running nixos-rebuild..."
-    # Retry: the FIRST rebuild on a freshly-cloned VM copies hundreds of store
-    # paths over SSH (minutes) while the VM is still settling (cloud-init, a
-    # host-key change after our keyscan, growPartition) — a transient SSH hiccup
-    # there fails the whole build. The rebuild is idempotent and resumable (copied
-    # paths are skipped), so re-trying after re-syncing the host key reliably
-    # recovers (issue: identity/logging install failed on first try, succeeded on
-    # a manual re-run).
-    local attempt rebuilt=0
+    info "Running nixos-rebuild ON the target VM (not --target-host)..."
+    # Build LOCALLY on the target VM so the module's
+    # `imports = [ /etc/nixos/hardware-configuration.nix ]` resolves to the
+    # VM's OWN hw-config (right disk UUIDs / boot device), not the cicd's.
+    # The previous --target-host path built locally on cicd → wrong hw-config
+    # → activation broke sshd/qemu-agent on the target every time. See the
+    # automated-install-state memory note ("Latent issue NOT yet fixed").
+    #
+    # Mechanics: scp the .nix into /etc/nixos/<vmname>.nix on the VM, then
+    # ssh in and run `nixos-rebuild switch` locally. nixos-rebuild on the VM
+    # uses its own nixpkgs channel + can pull from cache.nixos.org via the
+    # firewall — no closure-copying over the slow ssh path.
+    local nix_basename remote_nix_path
+    nix_basename="$(basename "${nix_config}")"
+    remote_nix_path="/etc/nixos/${nix_basename}"
+
+    info "Copying ${nix_config} to ${vm_ip}:${remote_nix_path}"
+    scp -o StrictHostKeyChecking=accept-new -o BatchMode=yes "${nix_config}" "tappaas@${vm_ip}:/tmp/${nix_basename}" \
+        || die "failed to scp ${nix_config} to ${vm_ip}"
+    ssh -o BatchMode=yes "tappaas@${vm_ip}" "sudo install -m 0644 /tmp/${nix_basename} ${remote_nix_path} && rm -f /tmp/${nix_basename}" \
+        || die "failed to install ${remote_nix_path} on ${vm_ip}"
+
+    # The prebuilt NixOS template ships without /etc/nixos/hardware-configuration.nix
+    # — generate it on-demand so the module's `imports = [ /etc/nixos/hardware-configuration.nix ]`
+    # resolves on the FIRST rebuild. Idempotent: install1.sh follows the same
+    # pattern for tappaas-cicd; we extend the convention to every module install.
+    info "Ensuring /etc/nixos/hardware-configuration.nix exists on ${vm_ip}"
+    ssh -o BatchMode=yes "tappaas@${vm_ip}" '
+        test -f /etc/nixos/hardware-configuration.nix && exit 0
+        sudo nixos-generate-config --show-hardware-config 2>/dev/null \
+          | sudo tee /etc/nixos/hardware-configuration.nix >/dev/null
+    ' || die "failed to generate /etc/nixos/hardware-configuration.nix on ${vm_ip}"
+
+    # Retry: even with local builds, a freshly-cloned VM can hiccup on its
+    # first activation (services restart while sshd reloads, cloud-init
+    # finishing, growPartition). The build itself is idempotent (resumable
+    # via the nix store), so re-trying after a settle window recovers.
+    local attempt rebuilt=0 rc
     for attempt in 1 2 3; do
+        rc=0
+        # Wrap in a subshell so run_quiet's die() (exit 1) only kills the
+        # subshell — set -e in the parent would otherwise terminate before we
+        # reach the retry. Capture rc with || so set -e doesn't fire here.
         if [[ "${OPT_DEBUG:-0}" -eq 1 ]]; then
-            nixos-rebuild --target-host "tappaas@${vm_ip}" --use-remote-sudo switch -I "nixos-config=${nix_config}" \
-                && { rebuilt=1; break; }
+            ( ssh -o BatchMode=yes "tappaas@${vm_ip}" "sudo nixos-rebuild switch -I nixos-config=${remote_nix_path}" ) || rc=$?
         else
-            run_quiet "nixos-rebuild (attempt ${attempt}/3)" \
-                nixos-rebuild --target-host "tappaas@${vm_ip}" --use-remote-sudo switch -I "nixos-config=${nix_config}" \
-                && { rebuilt=1; break; }
+            ( run_quiet "nixos-rebuild on ${vm_ip} (attempt ${attempt}/3)" \
+                ssh -o BatchMode=yes "tappaas@${vm_ip}" "sudo nixos-rebuild switch -I nixos-config=${remote_nix_path}" ) || rc=$?
+        fi
+        if [[ "$rc" -eq 0 ]]; then
+            rebuilt=1; break
         fi
         [[ "$attempt" -lt 3 ]] || break
-        warn "nixos-rebuild attempt ${attempt} failed (VM may still be settling) — re-syncing host key, retrying in 15s..."
+        warn "nixos-rebuild attempt ${attempt} failed (exit ${rc}) — re-syncing host key and waiting for sshd..."
+        sleep 15  # let any in-flight reboot settle
         update_ssh_known_hosts "${vm_ip}"
-        sleep 15
+        # Give sshd up to 90 s to come back before attempting the next rebuild.
+        wait_for_ssh "${vm_ip}" 90 || warn "ssh still unreachable after 90 s — trying nixos-rebuild anyway"
     done
     [[ "$rebuilt" == "1" ]] || die "nixos-rebuild failed after 3 attempts"
 

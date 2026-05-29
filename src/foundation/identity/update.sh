@@ -1,35 +1,173 @@
 #!/usr/bin/env bash
 #
-# TAPPaaS Identity VM update
+# TAPPaaS Identity VM update / install (idempotent).
 #
-# Update VM and applies module specific updates
+# Beyond reading config, this script does Phase B of issue #45 — the one-time
+# Authentik+Caddy "global" wiring needed before any module's identity:
+# accessControl can attach a forward-auth app to the embedded outpost:
+#
+#   1. Wait for Authentik's API to come up on the identity VM
+#   2. Read AUTHENTIK_BOOTSTRAP_TOKEN from /etc/secrets/authentik.env (created
+#      on first boot by identity.nix's generate-authentik-secrets service)
+#   3. Persist it to ~/.authentik-credentials.txt on the cicd (mode 600) so
+#      authentik-manager can talk to Authentik
+#   4. Configure Caddy's global AuthProvider = Authentik, point it at the
+#      identity outpost, and register the 12 X-Authentik-* copy-headers
+#      operators previously added by hand in the GUI
+#   5. Set the embedded outpost's authentik_host to the public identity URL
+#   6. Create/update the identity self-application + Proxy Provider and attach
+#      it to the embedded outpost (so https://identity.<domain>/outpost.* works)
+#
+# Re-running is safe: every step is reconcile-in-place.
 #
 # Usage: ./update.sh <vmname>
-# Example: ./update.sh test-nixos
 #
 
 set -euo pipefail
 
 . /home/tappaas/bin/common-install-routines.sh
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-
-# Get imageType to determine post-install steps
 VMNAME="$(get_config_value 'vmname' "$1")"
 VMID="$(get_config_value 'vmid')"
 NODE="$(get_config_value 'node' "$(get_node_hostname 0)")"
 ZONE0NAME="$(get_config_value 'zone0' 'mgmt')"
 HANODE="$(get_config_value 'HANode' "$(get_default_ha_node "$NODE")")"
 
-echo ""
-info "${BOLD}Post-Install Configuration${CL}"
-info "  VM: ${VMNAME} (VMID: ${VMID})"
+CONFIG_FILE="${CONFIG_DIR}/configuration.json"
+DOMAIN="$(jq -r '.tappaas.domain // empty' "$CONFIG_FILE" 2>/dev/null)"
+[[ -n "$DOMAIN" && "$DOMAIN" != CHANGE* ]] || die "tappaas.domain not set in ${CONFIG_FILE}"
 
-echo ""
+IDENTITY_FQDN="${VMNAME}.${ZONE0NAME}.internal"
+IDENTITY_PUBLIC="https://identity.${DOMAIN}"
+IDENTITY_API="http://${IDENTITY_FQDN}:9000"
+CRED_FILE="${HOME}/.authentik-credentials.txt"
+FIREWALL_FQDN="firewall.mgmt.internal"
+OPNSENSE_CREDS="${HOME}/.opnsense-credentials.txt"
+
+info "${BOLD}Post-Install / Update Configuration${CL}"
+info "  VM: ${VMNAME} (VMID: ${VMID})  Node: ${NODE}  Zone: ${ZONE0NAME}"
+[[ -n "${HANODE}" ]] && info "  HA Node: ${HANODE}"
+
+# ── Phase B step 1: wait for Authentik API ──────────────────────────────────
+
+info "${BOLD}Waiting for Authentik API at ${IDENTITY_API}/api/v3/ (up to 5 min)...${CL}"
+for i in $(seq 1 60); do
+    if curl -fsS -o /dev/null --max-time 4 "${IDENTITY_API}/api/v3/" 2>/dev/null; then
+        info "  ${GN}✓${CL} Authentik API responding"
+        break
+    fi
+    [[ $i -eq 60 ]] && die "Authentik API never came up at ${IDENTITY_API}"
+    sleep 5
+done
+
+# ── Phase B step 2-3: fetch the bootstrap token, persist on cicd ─────────────
+
+info "${BOLD}Fetching AUTHENTIK_BOOTSTRAP_TOKEN from ${IDENTITY_FQDN}${CL}"
+# Clear any stale host key (the VM was re-created with a new ed25519 key) so
+# StrictHostKeyChecking=accept-new actually accepts the current key.
+ssh-keygen -R "${IDENTITY_FQDN}" 2>/dev/null || true
+TOKEN="$(ssh -o BatchMode=yes -o StrictHostKeyChecking=accept-new -o UserKnownHostsFile=/home/tappaas/.ssh/known_hosts \
+    "tappaas@${IDENTITY_FQDN}" \
+    "sudo grep '^AUTHENTIK_BOOTSTRAP_TOKEN=' /etc/secrets/authentik.env | cut -d= -f2-" 2>/dev/null || true)"
+[[ -n "$TOKEN" ]] || die "could not read AUTHENTIK_BOOTSTRAP_TOKEN from ${IDENTITY_FQDN}:/etc/secrets/authentik.env (is the identity VM finished its first boot?)"
+
+(umask 077
+ printf 'url=%s\ntoken=%s\n' "$IDENTITY_API" "$TOKEN" > "$CRED_FILE")
+chmod 600 "$CRED_FILE"
+info "  ${GN}✓${CL} ${CRED_FILE} written (mode 600)"
+
+# ── Phase B step 4: verify the token via authentik-manager ──────────────────
+
+command -v authentik-manager >/dev/null || die "authentik-manager not in PATH (rebuild opnsense-controller)"
+# Authentik's worker binds AUTHENTIK_BOOTSTRAP_TOKEN to akadmin asynchronously
+# on first boot — the API may be up before the token is valid. Poll up to 3 min.
+info "${BOLD}Waiting for the bootstrap token to be accepted by Authentik...${CL}"
+for i in $(seq 1 36); do
+    if authentik-manager test >/dev/null 2>&1; then
+        info "  ${GN}✓${CL} token accepted"
+        break
+    fi
+    [[ $i -eq 36 ]] && die "authentik-manager test never succeeded after 3 min — token not bound to akadmin"
+    sleep 5
+done
+
+# ── Phase B step 5-6: Caddy global AuthProvider + 12 X-Authentik-* headers ──
+
+[[ -f "$OPNSENSE_CREDS" ]] || die "OPNsense credentials file missing: $OPNSENSE_CREDS"
+OPNSENSE_KEY="$(grep '^key=' "$OPNSENSE_CREDS" | cut -d= -f2-)"
+OPNSENSE_SECRET="$(grep '^secret=' "$OPNSENSE_CREDS" | cut -d= -f2-)"
+OPNSENSE_AUTH="${OPNSENSE_KEY}:${OPNSENSE_SECRET}"
+OPNSENSE_API="https://${FIREWALL_FQDN}:8443/api/caddy"
+
+info "${BOLD}Configuring Caddy global AuthProvider = Authentik${CL}"
+# NB: AuthToTls (OptionField) rejects every value form I tried — "http://",
+# "http", "1" all → "Option [] not in list" (caddy/general/set bug?). The
+# default is "http://" which is what we want for the Authentik outpost on the
+# internal mgmt network anyway. Skip it; leave the default.
+# `general/set` is partial-replace (doesn't wipe missing fields), so a second
+# call below for CopyHeaders won't clobber what we set here.
+curl -ksS -u "$OPNSENSE_AUTH" -X POST "${OPNSENSE_API}/general/set" \
+    -H 'Content-Type: application/json' \
+    -d "{\"caddy\":{\"general\":{\
+\"AuthProvider\":\"authentik\",\
+\"AuthToDomain\":\"${IDENTITY_FQDN}\",\
+\"AuthToPort\":\"9000\",\
+\"AuthToUri\":\"/outpost.goauthentik.io/auth/caddy\"\
+}}}" | jq -r .result >/dev/null || die "Failed to set Caddy AuthProvider"
+info "  ${GN}✓${CL} AuthProvider set → ${IDENTITY_FQDN}:9000 /outpost.goauthentik.io/auth/caddy"
+
+# The 12 X-Authentik-* headers per the issue. We add each only if absent
+# (HeaderType is the natural key — case-sensitive, must match Authentik's).
+AUTHENTIK_HEADERS=(
+    X-Authentik-Username X-Authentik-Groups X-Authentik-Entitlements
+    X-Authentik-Email X-Authentik-Name X-Authentik-Uid X-Authentik-Jwt
+    X-Authentik-Meta-Jwks X-Authentik-Meta-Outpost X-Authentik-Meta-Provider
+    X-Authentik-Meta-App X-Authentik-Meta-Version
+)
+info "${BOLD}Ensuring 12 X-Authentik-* copy-headers (Caddy header model)${CL}"
+# Snapshot existing rows once
+EXISTING_HEADERS="$(curl -ksS -u "$OPNSENSE_AUTH" "${OPNSENSE_API}/ReverseProxy/searchHeader")"
+declare -a HEADER_UUIDS=()
+for h in "${AUTHENTIK_HEADERS[@]}"; do
+    uuid="$(echo "$EXISTING_HEADERS" | jq -r --arg h "$h" '.rows[] | select(.HeaderType==$h) | .uuid' | head -1)"
+    if [[ -z "$uuid" || "$uuid" == "null" ]]; then
+        body="$(printf '{"header":{"enabled":"1","HeaderUpDown":"header_up","HeaderType":"%s","HeaderValue":"","HeaderReplace":"","description":"TAPPaaS forward-auth header (#45)"}}' "$h")"
+        uuid="$(curl -ksS -u "$OPNSENSE_AUTH" -X POST "${OPNSENSE_API}/ReverseProxy/addHeader" \
+            -H 'Content-Type: application/json' -d "$body" | jq -r '.uuid // empty')"
+        [[ -n "$uuid" ]] || die "Failed to create Caddy header ${h}"
+        info "    + ${h} (new uuid=${uuid:0:8})"
+    fi
+    HEADER_UUIDS+=("$uuid")
+done
+
+# Attach all 12 UUIDs to general.CopyHeaders (comma-separated; idempotent set).
+COPY_HEADERS_CSV="$(IFS=,; echo "${HEADER_UUIDS[*]}")"
+curl -ksS -u "$OPNSENSE_AUTH" -X POST "${OPNSENSE_API}/general/set" \
+    -H 'Content-Type: application/json' \
+    -d "{\"caddy\":{\"general\":{\"CopyHeaders\":\"${COPY_HEADERS_CSV}\"}}}" | jq -r .result >/dev/null \
+    || die "Failed to attach CopyHeaders"
+info "  ${GN}✓${CL} CopyHeaders attached (${#HEADER_UUIDS[@]} headers)"
+
+info "${BOLD}Applying Caddy config${CL}"
+curl -ksS -u "$OPNSENSE_AUTH" -X POST "${OPNSENSE_API}/service/reconfigure" | jq -r .status >/dev/null
+ssh -o StrictHostKeyChecking=accept-new "root@${FIREWALL_FQDN}" "/bin/sh -c 'configctl caddy reload'" >/dev/null 2>&1 || true
+
+# ── Phase B step 7-8: outpost + identity self-app ───────────────────────────
+
+info "${BOLD}Configuring the Authentik embedded outpost (authentik_host=${IDENTITY_PUBLIC})${CL}"
+authentik-manager outpost-set-authentik-host "${IDENTITY_PUBLIC}"
+
+info "${BOLD}Registering the identity self-app (so the outpost endpoint works on identity.<domain>)${CL}"
+authentik-manager proxy-app-ensure identity \
+    --name identity \
+    --external-host "${IDENTITY_PUBLIC}" \
+    --description "TAPPaaS identity self-app (#45)" \
+    --attach-outpost
+
+echo
 info "${BOLD}Installation Complete${CL}"
-info "  VM: ${VMNAME} (VMID: ${VMID})"
-info "  Node: ${NODE}"
-info "  Zone: ${ZONE0NAME}"
-if [[ -n "${HANODE}" ]]; then
-    info "  HA Node: ${HANODE}"
-fi
+info "  VM: ${VMNAME} (VMID: ${VMID})  Node: ${NODE}  Zone: ${ZONE0NAME}"
+[[ -n "${HANODE}" ]] && info "  HA Node: ${HANODE}"
+info "  Authentik UI : ${IDENTITY_PUBLIC}"
+info "  Admin login  : akadmin / (see /etc/secrets/authentik.env on ${IDENTITY_FQDN}: AUTHENTIK_BOOTSTRAP_PASSWORD)"
+info "  Per-app SSO  : every consumer with dependsOn: identity:accessControl gets forward-auth wired automatically"

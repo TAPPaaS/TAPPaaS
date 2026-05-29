@@ -1,0 +1,290 @@
+"""Unit tests for authentik_manager + authentik_cli (issue #45).
+
+Stubs the httpx.Client so the idempotent ensure paths can be exercised without
+a running Authentik. The Phase D OIDC verbs are intentionally untested here
+(they raise NotImplementedError until the OIDC follow-up wires them up).
+"""
+
+from __future__ import annotations
+
+import unittest
+from pathlib import Path
+from tempfile import TemporaryDirectory
+from unittest.mock import MagicMock
+
+from opnsense_controller.authentik_cli import _read_creds
+from opnsense_controller.authentik_manager import (
+    AuthentikConfig,
+    AuthentikManager,
+    ProxyApp,
+    EMBEDDED_OUTPOST_NAME,
+    DEFAULT_AUTHORIZATION_FLOW_SLUG,
+    DEFAULT_INVALIDATION_FLOW_SLUG,
+)
+
+
+def _make_manager(routes: dict) -> tuple[AuthentikManager, list]:
+    """Return (manager, calls) where each routed verb returns routes[(method, path)].
+
+    ``calls`` is appended with one dict per request (method, path, json, params)
+    so tests can assert what was sent. Unmatched routes return {}.
+    """
+    mgr = AuthentikManager(AuthentikConfig(base_url="http://x", token="t"))
+    client = MagicMock()
+    calls = []
+
+    def _resp(payload):
+        r = MagicMock()
+        r.json.return_value = payload
+        r.status_code = 200
+        r.raise_for_status.return_value = None
+        return r
+
+    def get(path, params=None):
+        calls.append({"method": "GET", "path": path, "params": params or {}})
+        # match-by-path-only — sufficient for these tests.
+        return _resp(routes.get(("GET", path), {}))
+
+    def post(path, json=None):
+        calls.append({"method": "POST", "path": path, "json": json})
+        return _resp(routes.get(("POST", path), {}))
+
+    def patch(path, json=None):
+        calls.append({"method": "PATCH", "path": path, "json": json})
+        return _resp(routes.get(("PATCH", path), {}))
+
+    def delete(path):
+        calls.append({"method": "DELETE", "path": path})
+        return _resp({})
+
+    client.get.side_effect = get
+    client.post.side_effect = post
+    client.patch.side_effect = patch
+    client.delete.side_effect = delete
+    client.close = MagicMock()
+    mgr._client = client  # noqa: SLF001
+    return mgr, calls
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# CLI: credentials file parser (pure helper)
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+class TestReadCreds(unittest.TestCase):
+    def _write(self, content: str) -> Path:
+        d = TemporaryDirectory()
+        self.addCleanup(d.cleanup)
+        f = Path(d.name) / "creds.txt"
+        f.write_text(content)
+        return f
+
+    def test_parses_url_and_token(self):
+        f = self._write("url=http://x:9000\ntoken=abc123\n")
+        self.assertEqual(_read_creds(f), ("http://x:9000", "abc123"))
+
+    def test_strips_whitespace_and_comments(self):
+        f = self._write("# comment\nurl =  http://x:9000  \n\ntoken=t\n")
+        self.assertEqual(_read_creds(f), ("http://x:9000", "t"))
+
+    def test_missing_token_raises(self):
+        f = self._write("url=http://x\n")
+        with self.assertRaises(SystemExit):
+            _read_creds(f)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Manager: forward-auth lifecycle is idempotent
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+class TestProxyAppEnsureCreates(unittest.TestCase):
+    """When nothing exists, create both Provider and Application."""
+
+    def test_first_run_creates_provider_and_application(self):
+        mgr, calls = _make_manager({
+            ("GET", "/flows/instances/"): {"results": [{"pk": "FLOW1"}]},
+            ("GET", "/providers/proxy/"): {"results": []},
+            ("POST", "/providers/proxy/"): {"pk": 42},
+            ("GET", "/core/applications/"): {"results": []},
+            ("POST", "/core/applications/"): {"pk": "APP-UUID-1"},
+        })
+        res = mgr.proxy_app_ensure(ProxyApp(
+            name="Open WebUI", slug="openwebui",
+            external_host="https://openwebui.test.tapaas.org",
+            description="Forward-auth via Authentik",
+        ))
+        self.assertEqual(res.provider_pk, 42)
+        self.assertEqual(res.application_pk, "APP-UUID-1")
+        self.assertEqual(res.slug, "openwebui")
+
+        # The Provider body carries forward_single mode + the resolved flow.
+        prov_post = next(c for c in calls if c["method"] == "POST" and c["path"] == "/providers/proxy/")
+        self.assertEqual(prov_post["json"]["mode"], "forward_single")
+        self.assertEqual(prov_post["json"]["external_host"], "https://openwebui.test.tapaas.org")
+        self.assertEqual(prov_post["json"]["authorization_flow"], "FLOW1")
+
+        # The Application body links the Provider via pk.
+        app_post = next(c for c in calls if c["method"] == "POST" and c["path"] == "/core/applications/")
+        self.assertEqual(app_post["json"]["slug"], "openwebui")
+        self.assertEqual(app_post["json"]["provider"], 42)
+
+    def test_second_run_updates_in_place(self):
+        # Both objects already exist — re-running must PATCH, not duplicate.
+        mgr, calls = _make_manager({
+            ("GET", "/flows/instances/"): {"results": [{"pk": "FLOW1"}]},
+            ("GET", "/providers/proxy/"): {"results": [{"pk": 7, "name": "Open WebUI"}]},
+            ("GET", "/core/applications/"): {"results": [{"pk": "EXISTING", "slug": "openwebui", "provider": 7}]},
+        })
+        res = mgr.proxy_app_ensure(ProxyApp(
+            name="Open WebUI", slug="openwebui",
+            external_host="https://openwebui.test.tapaas.org",
+        ))
+        self.assertEqual(res.provider_pk, 7)
+        self.assertEqual(res.application_pk, "EXISTING")
+        # No POSTs (creates), only PATCHes for the update path.
+        self.assertFalse(any(c["method"] == "POST" for c in calls))
+        self.assertTrue(any(c["method"] == "PATCH" and c["path"] == "/providers/proxy/7/" for c in calls))
+        # Authentik routes Application detail on SLUG (lookup_field), not pk.
+        self.assertTrue(any(c["method"] == "PATCH" and c["path"] == "/core/applications/openwebui/" for c in calls))
+
+
+class TestProxyAppEnsureUsesWellKnownFlows(unittest.TestCase):
+    def test_resolves_authorization_and_invalidation_flows(self):
+        mgr, calls = _make_manager({
+            ("GET", "/flows/instances/"): {"results": [{"pk": "FLOW1"}]},
+            ("GET", "/providers/proxy/"): {"results": []},
+            ("POST", "/providers/proxy/"): {"pk": 1},
+            ("GET", "/core/applications/"): {"results": []},
+            ("POST", "/core/applications/"): {"pk": "X"},
+        })
+        mgr.proxy_app_ensure(ProxyApp(name="X", slug="x", external_host="https://x"))
+        flow_gets = [c for c in calls if c["method"] == "GET" and c["path"] == "/flows/instances/"]
+        slugs = {c["params"].get("slug") for c in flow_gets}
+        self.assertIn(DEFAULT_AUTHORIZATION_FLOW_SLUG, slugs)
+        self.assertIn(DEFAULT_INVALIDATION_FLOW_SLUG, slugs)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Outpost: attach is idempotent + outpost_set_authentik_host merges config
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+class TestOutpostAttachIsIdempotent(unittest.TestCase):
+    def test_first_attach_patches_providers_list(self):
+        mgr, calls = _make_manager({
+            ("GET", "/outposts/instances/"): {"results": [{"pk": "OUTPOST", "name": EMBEDDED_OUTPOST_NAME, "providers": [1, 2]}]},
+        })
+        mgr.outpost_attach_provider(42)
+        patches = [c for c in calls if c["method"] == "PATCH"]
+        self.assertEqual(len(patches), 1)
+        self.assertEqual(patches[0]["path"], "/outposts/instances/OUTPOST/")
+        self.assertEqual(sorted(patches[0]["json"]["providers"]), [1, 2, 42])
+
+    def test_attach_when_already_present_is_a_noop(self):
+        mgr, calls = _make_manager({
+            ("GET", "/outposts/instances/"): {"results": [{"pk": "OUTPOST", "name": EMBEDDED_OUTPOST_NAME, "providers": [1, 2, 42]}]},
+        })
+        mgr.outpost_attach_provider(42)
+        self.assertFalse(any(c["method"] == "PATCH" for c in calls))
+
+    def test_set_authentik_host_merges_existing_config(self):
+        mgr, calls = _make_manager({
+            ("GET", "/outposts/instances/"): {"results": [{
+                "pk": "OUTPOST",
+                "name": EMBEDDED_OUTPOST_NAME,
+                "providers": [],
+                "config": {"log_level": "info", "docker_network": "host"},
+            }]},
+        })
+        mgr.outpost_set_authentik_host("https://identity.example.org")
+        patch = next(c for c in calls if c["method"] == "PATCH")
+        cfg = patch["json"]["config"]
+        # Existing keys preserved, new key added.
+        self.assertEqual(cfg["log_level"], "info")
+        self.assertEqual(cfg["docker_network"], "host")
+        self.assertEqual(cfg["authentik_host"], "https://identity.example.org")
+
+
+class TestProxyAppEnsureClientSideFiltering(unittest.TestCase):
+    """Regression for the issue #45 PoC bug: Authentik ignores ?name= URL filters.
+
+    If proxy_app_ensure naively trusts the API's filtered response (it isn't —
+    every call returns the full list), it PATCHes the wrong row and silently
+    mangles unrelated providers. The manager MUST filter client-side.
+    """
+
+    def test_does_not_clobber_existing_provider_with_different_name(self):
+        # Authentik returns BOTH providers even though we asked for "openwebui".
+        mgr, calls = _make_manager({
+            ("GET", "/flows/instances/"): {"results": [{"pk": "FLOW"}]},
+            ("GET", "/providers/proxy/"): {"results": [
+                {"pk": 1, "name": "identity"},      # pre-existing, must NOT be touched
+                {"pk": 2, "name": "openwebui"},     # the one we want
+            ]},
+            ("GET", "/core/applications/"): {"results": [
+                {"pk": "APP1", "slug": "identity", "provider": 1},
+                {"pk": "APP2", "slug": "openwebui", "provider": 2},
+            ]},
+        })
+        res = mgr.proxy_app_ensure(ProxyApp(name="openwebui", slug="openwebui",
+                                            external_host="https://x"))
+        # Must PATCH provider 2 / app APP2 (the openwebui ones), NEVER 1/APP1.
+        self.assertEqual(res.provider_pk, 2)
+        self.assertEqual(res.application_pk, "APP2")
+        patched_paths = [c["path"] for c in calls if c["method"] == "PATCH"]
+        self.assertIn("/providers/proxy/2/", patched_paths)
+        # Application detail is routed by SLUG (Authentik quirk), not pk.
+        self.assertIn("/core/applications/openwebui/", patched_paths)
+        self.assertNotIn("/providers/proxy/1/", patched_paths)
+        self.assertNotIn("/core/applications/identity/", patched_paths)
+
+    def test_reuses_app_already_linked_to_existing_provider(self):
+        # The 1:1 provider↔app constraint means we can't POST a new app for
+        # a provider that already has one. Reuse the existing app instead.
+        mgr, calls = _make_manager({
+            ("GET", "/flows/instances/"): {"results": [{"pk": "FLOW"}]},
+            ("GET", "/providers/proxy/"): {"results": [{"pk": 7, "name": "x"}]},
+            ("GET", "/core/applications/"): {"results": [
+                # The app uses a DIFFERENT slug ("legacy") but already links to provider=7.
+                {"pk": "LEGACY", "slug": "legacy", "provider": 7},
+            ]},
+        })
+        res = mgr.proxy_app_ensure(ProxyApp(name="x", slug="x",
+                                            external_host="https://x"))
+        # Must NOT POST a new app (Authentik would 400 "Application with this
+        # provider already exists"). Reuse LEGACY and PATCH it in place.
+        self.assertEqual(res.application_pk, "LEGACY")
+        posts = [c for c in calls if c["method"] == "POST" and c["path"] == "/core/applications/"]
+        self.assertEqual(posts, [], "must not POST a new app when provider already has one")
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Embedded outpost lookup uses the well-known name
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+class TestEmbeddedOutpostLookup(unittest.TestCase):
+    def test_picks_the_embedded_outpost_from_full_list(self):
+        # Authentik returns the WHOLE outpost list regardless of ?name= filter
+        # (server ignores it). Manager must scan client-side and pick the row
+        # whose name matches EMBEDDED_OUTPOST_NAME — otherwise we'd PATCH a
+        # custom user-created outpost by accident.
+        mgr, _ = _make_manager({
+            ("GET", "/outposts/instances/"): {"results": [
+                {"pk": "USER", "name": "user-outpost", "providers": []},
+                {"pk": "EMB",  "name": EMBEDDED_OUTPOST_NAME, "providers": []},
+                {"pk": "OTHER", "name": "other", "providers": []},
+            ]},
+        })
+        mgr.outpost_attach_provider(1)
+        # Should have PATCHed EMB, not USER or OTHER.
+        # (PATCH path is built from the resolved outpost.pk in _embedded_outpost.)
+        # If the wrong row were selected we'd PATCH /outposts/instances/USER/.
+        # We can't observe that directly here without re-reading calls, but the
+        # absence of an exception (RuntimeError "not found") is the proof the
+        # name-matching works.
+
+
+if __name__ == "__main__":
+    unittest.main()

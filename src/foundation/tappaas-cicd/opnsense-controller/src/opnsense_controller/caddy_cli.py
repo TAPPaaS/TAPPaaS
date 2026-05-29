@@ -93,6 +93,7 @@ def add_handler(
     description: str = "",
     access_list: str = "",
     upstream_tls: bool = False,
+    forward_auth: bool = False,
     check_mode: bool = False,
 ) -> bool:
     """Add (or reconcile) a reverse proxy handler for a domain.
@@ -132,6 +133,7 @@ def add_handler(
         description=description,
         access_list_uuid=access_list_uuid,
         upstream_tls=upstream_tls,
+        forward_auth=forward_auth,
     )
 
     # Reconcile an existing handler (so the access list / upstream stay current)
@@ -492,6 +494,10 @@ Examples:
     add_handler_parser.add_argument("--description", default="", help="Description for the handler")
     add_handler_parser.add_argument("--access-list", default="", help="Name of an access list to attach (issue #206) — restrict client networks")
     add_handler_parser.add_argument("--upstream-tls", action="store_true", help="Reverse-proxy to an HTTPS upstream (e.g. the OPNsense GUI on :8443); skips upstream cert verification")
+    add_handler_parser.add_argument("--forward-auth", action="store_true",
+                                    help="Enable Caddy per-handle forward_auth — redirects unauthenticated "
+                                    "requests through the global Authentik outpost (issue #45). Requires "
+                                    "the global AuthProvider to be configured (done by identity install).")
 
     # add-accesslist (issue #206)
     add_al_parser = subparsers.add_parser("add-accesslist", parents=[global_parser], help="Create/update an access list (client-IP allow/deny)")
@@ -564,7 +570,8 @@ Examples:
             elif args.command == "add-handler":
                 success = add_handler(
                     manager, args.domain, args.upstream, args.port,
-                    args.description, args.access_list, args.upstream_tls, args.check_mode,
+                    args.description, args.access_list, args.upstream_tls,
+                    args.forward_auth, args.check_mode,
                 )
             elif args.command == "add-accesslist":
                 success = add_access_list_cmd(

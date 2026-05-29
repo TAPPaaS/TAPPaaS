@@ -32,6 +32,7 @@ zone-manager,/home/tappaas/bin/zone-manager,tappaas-cicd/opnsense-controller/src
 dns-manager,/home/tappaas/bin/dns-manager,tappaas-cicd/opnsense-controller/src/opnsense_controller/dns_manager_cli.py,python
 caddy-manager,/home/tappaas/bin/caddy-manager,tappaas-cicd/opnsense-controller/src/opnsense_controller/caddy_cli.py,python
 acme-manager,/home/tappaas/bin/acme-manager,tappaas-cicd/opnsense-controller/src/opnsense_controller/acme_cli.py,python
+authentik-manager,/home/tappaas/bin/authentik-manager,tappaas-cicd/opnsense-controller/src/opnsense_controller/authentik_cli.py,python
 update-tappaas,/home/tappaas/bin/update-tappaas,tappaas-cicd/update-tappaas/src/update_tappaas/main.py,python
 #
 # --- Proxmox Node Scripts (installed in /root/tappaas/ on each PVE node) ----------------

@@ -11,6 +11,7 @@ requires-python = ">=3.10"
 license = "MIT"
 dependencies = [
     "oxl-opnsense-client",
+    "httpx",
 ]
 
 [project.scripts]
@@ -20,6 +21,7 @@ zone-manager = "opnsense_controller.zone_manager:main"
 dns-manager = "opnsense_controller.dns_manager_cli:main"
 caddy-manager = "opnsense_controller.caddy_cli:main"
 acme-manager = "opnsense_controller.acme_cli:main"
+authentik-manager = "opnsense_controller.authentik_cli:main"
 syslog-manager = "opnsense_controller.syslog_cli:main"
 rules-manager = "opnsense_controller.rules_manager:main"
 test-network-manager = "opnsense_controller.test_network_cli:main"
