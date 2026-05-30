@@ -38,6 +38,11 @@ In **app.netbird.io → Networks**:
 
 - Name: `TAPPaaS Internal`
 - Resource address: `10.0.0.0/8`
+
+> **Note:** For standard TAPPaaS deployments where services are exposed
+> via Caddy, `10.0.0.0/24` (mgmt only) is sufficient. Use `10.0.0.0/8`
+> only if direct IP access to non-mgmt zones is required.
+
 - Routing Peer: OPNsense peer (masquerade: **on**)
 - Access Groups: `Admins`
 
@@ -54,23 +59,10 @@ In **app.netbird.io → DNS → Nameservers**:
 - Nameserver: `10.0.0.1`, port `53`
 - Distribution Groups: `Admins`
 
-Add a **Match Domain** for each active zone. Keep this list in sync with
-`zones.json` — add a domain when a zone is activated, remove it when
-a zone is disabled.
+Add a single **Match Domain**: `internal`
 
-| Zone | Match Domain | State |
-|------|-------------|-------|
-| Management | `mgmt.internal` | Manual |
-| Service (home) | `srv-home.internal` | Active |
-| Service (work) | `srv-work.internal` | Active |
-| Service (customer) | `srv-cust.internal` | Active |
-| Client (home) | `home.internal` | Active |
-| Client (work) | `work.internal` | Active |
-| IoT (local) | `iot-local.internal` | Active |
-| IoT (cloud) | `iot-cloud.internal` | Active |
-| IoT (cameras) | `iot-cams.internal` | Active |
-| Guest | `guest.internal` | Active |
-| DMZ | `dmz.internal` | Mandatory |
+> This covers all TAPPaaS zones now and future.
+> No manual sync with `zones.json` needed when zones are added.
 
 > Port `53` is used — not the Netbird default of `53053`.
 > OPNsense uses Dnsmasq (not Unbound) as the DNS resolver.
