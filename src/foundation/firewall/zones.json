@@ -7,9 +7,10 @@
         "vlantag": 0,
         "ip": "10.0.0.0/24",
         "bridge": "lan",
-        "access-to": ["internet", "srv-home", "srv-work", "srv-cust", "home", "work", "guest", "iot-local", "iot-cloud", "iot-cams", "iot-untrust", "dmz"],
+        "access-to": ["internet", "srv", "srv-home", "srv-work", "srv-cust", "home", "work", "guest", "iot", "iot-local", "iot-cloud", "iot-cams", "iot-untrust", "dmz"],
         "pinhole-allowed-from": [],
-        "description": "Infrastructure & control plane: hypervisors, backup, firewall, controllers, identity, cicd"
+        "_comment": "Always-on control plane. Full access to all zones for operational control. No inbound pinholes — mgmt initiates only.",
+        "description": "Control plane: hypervisors, backup, firewall, identity, cicd"
     },
 
     "srv": {
@@ -22,8 +23,8 @@
         "bridge": "lan",
         "access-to": ["internet"],
         "pinhole-allowed-from": ["dmz"],
-        "_comment": "Generic single-zone service network for simple deployments. Use srv-home/srv-work/srv-cust instead for SOHO multi-zone setup.",
-        "description": "Generic service zone — activate for simple single-zone deployments"
+        "_comment": "Flat-topology alternative to srv-home/srv-work/srv-cust. Use only when zone segmentation is not required. Set state=Active to enable.",
+        "description": "Generic service zone — single-zone deployments only"
     },
 
     "srv-home": {
@@ -36,7 +37,7 @@
         "bridge": "lan",
         "access-to": ["internet", "iot-cloud", "iot-local"],
         "pinhole-allowed-from": [],
-        "_comment": "Personal/household services (Home Assistant, personal stack). home/work reach this via their own access-to; mgmt via its access-to.",
+        "_comment": "Personal-tier services: Home Assistant, household apps. home reaches zone-wide via its access-to; mgmt via its access-to.",
         "description": "Personal services: home automation, personal apps"
     },
 
@@ -50,8 +51,8 @@
         "bridge": "lan",
         "access-to": ["internet"],
         "pinhole-allowed-from": ["dmz"],
-        "_comment": "Business/internal services. dmz pinhole = reverse-proxied public apps. work/home reach via their access-to.",
-        "description": "Business services: internal apps, AI/productivity stack"
+        "_comment": "Business-tier services: internal apps, productivity stack. work reaches zone-wide via its access-to. Public exposure via dmz pinholes declared by hosted modules; mgmt via its access-to.",
+        "description": "Business services: internal apps, productivity stack"
     },
 
     "srv-cust": {
@@ -64,7 +65,8 @@
         "bridge": "lan",
         "access-to": ["internet"],
         "pinhole-allowed-from": ["dmz"],
-        "description": "Customer/tenant sandboxes — mutually isolated, public via dmz only"
+        "_comment": "Customer and tenant sandboxes. No client zone has default access. Public exposure via dmz pinholes only. Tenants are mutually isolated by subnet.",
+        "description": "Customer/tenant sandboxes: mutually isolated, internet-only egress"
     },
 
     "srv-dev": {
@@ -77,8 +79,8 @@
         "bridge": "lan",
         "access-to": ["internet"],
         "pinhole-allowed-from": [],
-        "_comment": "Development services zone — internal only, not public-facing. Set state=Active when development workloads are deployed.",
-        "description": "Development services: internal dev/test workloads"
+        "_comment": "Development and test workloads. No dmz pinhole — not publicly reachable. Set state=Active when dev workloads are deployed.",
+        "description": "Development services: internal workloads, not public-facing"
     },
 
     "home": {
@@ -90,9 +92,10 @@
         "SSID": "<HOME_SSID>",
         "ip": "10.3.10.0/24",
         "bridge": "lan",
-        "access-to": ["internet", "srv-home", "srv-work", "iot-cloud", "iot-local"],
+        "access-to": ["internet", "srv-home", "iot-cloud", "iot-local"],
         "pinhole-allowed-from": [],
-        "description": "Trusted personal/staff-personal devices: laptops, phones, tablets"
+        "_comment": "Trusted personal devices on the home network. Reaches srv-home and iot-local/iot-cloud zone-wide for consumer app compatibility (Hue, Shelly, Sonos). Does not reach srv-work — use the work zone for managed corporate access.",
+        "description": "Trusted personal devices: laptops, phones, tablets"
     },
 
     "work": {
@@ -106,8 +109,8 @@
         "bridge": "lan",
         "access-to": ["internet", "srv-work"],
         "pinhole-allowed-from": [],
-        "_comment": "Managed/corporate workstations. Set state=Disabled for pure-home deployments.",
-        "description": "Managed corporate devices / workstation isolation"
+        "_comment": "Managed corporate devices. Reaches srv-work only. Set state=Disabled for pure-home deployments. For MSP/consultant deployments, srv-cust access is opt-in via deployment config.",
+        "description": "Managed corporate devices: laptops, phones, tablets"
     },
 
     "iot": {
@@ -120,8 +123,8 @@
         "bridge": "lan",
         "access-to": ["internet"],
         "pinhole-allowed-from": ["srv"],
-        "_comment": "Generic single-zone IoT network for simple deployments. Use iot-local/iot-cloud/iot-cams instead for SOHO multi-zone setup.",
-        "description": "Generic IoT zone — activate for simple single-zone deployments"
+        "_comment": "Flat-topology alternative to iot-local/iot-cloud/iot-cams. Use only when IoT sub-zone segmentation is not required. Set state=Active to enable.",
+        "description": "Generic IoT zone — single-zone deployments only"
     },
 
     "iot-local": {
@@ -135,8 +138,8 @@
         "bridge": "lan",
         "access-to": [],
         "pinhole-allowed-from": ["srv-home"],
-        "_comment": "Trusted local automation: NO internet, NO LAN. Zigbee/Hue/KNX/SAP/Shelly. Controller (HA in srv-home) reaches it via pinhole; mgmt via its access-to. (= The Hook Up's 'NoT'.)",
-        "description": "Local-only IoT: no internet, HA-controlled automation"
+        "_comment": "Local automation devices: no internet, no LAN egress. Zigbee/Hue/KNX/Shelly. srv-home and home reach zone-wide via access-to; srv-home modules may create VM-specific pinholes via pinhole-allowed-from. mgmt via its access-to. (= The Hook Up's 'NoT'.)",
+        "description": "Local-only IoT: no internet, automation devices"
     },
 
     "iot-cloud": {
@@ -150,8 +153,8 @@
         "bridge": "lan",
         "access-to": ["internet"],
         "pinhole-allowed-from": ["srv-home", "home"],
-        "_comment": "Internet-required AND trusted (HA-controlled or in a dependency): Smart home appliances (e.g. Siemens, Bosch, Miele, etc), media (Chromecast/Sonos), solar/HVAC/BMS cloud monitoring. Sonos/SSDP also needs udpbroadcastrelay 1900 (see _README.mdns_policy).",
-        "description": "Internet-dependent trusted IoT: cloud-monitored utilities, media, voice"
+        "_comment": "Cloud-connected trusted devices: smart appliances, media (Sonos, Chromecast), HVAC/solar monitoring. srv-home and home reach zone-wide via access-to. Sonos/SSDP needs udpbroadcastrelay port 1900 (see _README.mdns_policy).",
+        "description": "Internet-dependent trusted IoT: smart appliances, media, monitoring"
     },
 
     "iot-cams": {
@@ -163,8 +166,8 @@
         "ip": "10.4.30.0/24",
         "bridge": "lan",
         "access-to": [],
-        "pinhole-allowed-from": ["srv-home"],
-        "_comment": "Cameras + NVR. No internet, no LAN. Only NVR/viewer (run as a srv module) reaches feeds via pinhole. Replace srv-home with the zone hosting the NVR if different. Usually wired PoE (no SSID).",
+        "pinhole-allowed-from": ["srv-home", "srv-work"],
+        "_comment": "Cameras and NVR. No internet, no LAN egress. NVR module in srv-home or srv-work reaches via explicit pinhole only — never zone-wide access-to (GDPR: access is purpose-limited). Usually wired PoE; no SSID.",
         "description": "Surveillance: cameras + NVR, fully isolated"
     },
 
@@ -179,8 +182,8 @@
         "bridge": "lan",
         "access-to": ["internet"],
         "pinhole-allowed-from": [],
-        "_comment": "OPTIONAL — set state=Active when you own internet-required devices with NO trust relationship (random cheap gadgets, untrusted vendor/firmware). Internet only; no LAN; no inter-device; isolated from iot-cloud so a compromise cannot move laterally to trusted devices. See _README.iot_classification.split_policy_3_questions.",
-        "description": "Untrusted internet IoT — quarantine: internet only, fully isolated"
+        "_comment": "Untrusted internet-required devices (cheap gadgets, unknown firmware). Internet-only; no LAN access; no inbound pinholes. Isolated from iot-cloud to prevent lateral movement on compromise. Set state=Active to enable. See _README.iot_classification.split_policy_3_questions.",
+        "description": "Untrusted IoT: internet-only, fully quarantined"
     },
 
     "guest": {
@@ -194,7 +197,8 @@
         "bridge": "lan",
         "access-to": ["internet"],
         "pinhole-allowed-from": [],
-        "description": "Visitors — internet only, full client isolation"
+        "_comment": "Untrusted visitor devices. Internet-only; no service or device zone access; no inbound pinholes.",
+        "description": "Visitors: internet only, fully isolated"
     },
 
     "dmz": {
@@ -207,7 +211,7 @@
         "bridge": "lan",
         "access-to": ["internet"],
         "pinhole-allowed-from": ["internet"],
-        "_comment": "Reverse proxy + public-facing. access-to internet ONLY (Lars rule). Backends (srv-work/srv-cust) declare 'dmz' in their pinhole-allowed-from.",
+        "_comment": "Reverse proxy and internet-exposed services. Internet-only egress (ACME, upstream calls). Internet inbound via pinhole-allowed-from. Backends (srv-work, srv-cust) expose themselves inbound via their own pinhole-allowed-from declarations.",
         "description": "Public-facing: reverse proxy (Caddy), internet-exposed services"
     },
 
@@ -221,7 +225,8 @@
         "bridge": "lan",
         "access-to": ["internet", "test2", "dmz"],
         "pinhole-allowed-from": ["test2", "dmz"],
-        "description": "Test zone 1 — Inactive by default; activated by firewall test.sh --deep to validate end-to-end inter-zone rules"
+        "_comment": "Activated by firewall test.sh --deep. Bidirectional access with test2 and dmz validates inter-zone allow rules.",
+        "description": "Test zone 1: inter-zone rule validation (inactive)"
     },
 
     "test2": {
@@ -234,7 +239,8 @@
         "bridge": "lan",
         "access-to": ["internet", "test1", "dmz"],
         "pinhole-allowed-from": ["test1", "dmz"],
-        "description": "Test zone 2 — Inactive by default; activated by firewall test.sh --deep to validate end-to-end inter-zone rules"
+        "_comment": "Activated by firewall test.sh --deep. Bidirectional access with test1 and dmz validates inter-zone allow rules.",
+        "description": "Test zone 2: inter-zone rule validation (inactive)"
     },
 
     "test3": {
@@ -247,6 +253,7 @@
         "bridge": "lan",
         "access-to": ["internet"],
         "pinhole-allowed-from": ["test1"],
-        "description": "Test zone 3 — Inactive by default; activated by firewall test.sh --deep. Deliberately has 'test1' only in pinhole-allowed-from and NOT in access-to so a consumer in test1 must rely on an auto-pinhole (issue #173) to reach a provider in test3."
+        "_comment": "Activated by firewall test.sh --deep. Only test1 in pinhole-allowed-from, not in access-to — validates auto-pinhole path (see issue #173).",
+        "description": "Test zone 3: pinhole-only path validation (inactive)"
     }
 }
