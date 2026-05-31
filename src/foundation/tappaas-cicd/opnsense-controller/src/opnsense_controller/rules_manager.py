@@ -1639,6 +1639,15 @@ def main() -> int:
                                    help="Remove an OPNsense alias")
     p_da.add_argument("name", help="Alias name")
 
+    # Global flags are attached (via parents=[global_parser]) to both the
+    # top-level parser and every subparser, so each subparser carries its own
+    # copy with the original default. argparse applies the chosen subparser's
+    # defaults after the top-level namespace, which silently clobbers any
+    # global flag placed *before* the subcommand token. Pre-parse the global
+    # flags from anywhere on the command line and make them the authoritative
+    # defaults so position no longer matters (#253).
+    global_args, _ = global_parser.parse_known_args()
+    parser.set_defaults(**vars(global_args))
     args = parser.parse_args()
 
     try:

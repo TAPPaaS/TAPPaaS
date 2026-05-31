@@ -860,5 +860,49 @@ class TestNoneFirewallType(unittest.TestCase):
         self.assertFalse(mgr.is_none_mode)
 
 
+# ─────────────────────────────────────────────────────────────────────────────
+# Global flag position (#253): flags must be honored both before and after the
+# subcommand token, not silently reset to the subparser's default.
+# ─────────────────────────────────────────────────────────────────────────────
+class TestGlobalFlagPosition(unittest.TestCase):
+    def _parse(self, argv):
+        """Run main() with a fake argv, capturing the parsed namespace.
+
+        _build_manager and _dispatch are stubbed so nothing touches OPNsense;
+        we only care about how the argument parser populated the namespace.
+        """
+        captured = {}
+
+        def fake_build(args):
+            captured["args"] = args
+            return MagicMock(__enter__=lambda s: s, __exit__=lambda *a: False)
+
+        with patch.object(rm.sys, "argv", ["rules-manager", *argv]), \
+                patch.object(rm, "_build_manager", side_effect=fake_build), \
+                patch.object(rm, "_dispatch", return_value=0):
+            rm.main()
+        return captured["args"]
+
+    def test_no_ssl_verify_before_subcommand(self):
+        args = self._parse(["--no-ssl-verify", "reconcile", "homeassistant"])
+        self.assertTrue(args.no_ssl_verify)
+
+    def test_no_ssl_verify_after_subcommand(self):
+        args = self._parse(["reconcile", "--no-ssl-verify", "homeassistant"])
+        self.assertTrue(args.no_ssl_verify)
+
+    def test_no_ssl_verify_default_false(self):
+        args = self._parse(["reconcile", "homeassistant"])
+        self.assertFalse(args.no_ssl_verify)
+
+    def test_firewall_value_before_subcommand(self):
+        args = self._parse(["--firewall", "fw.example", "reconcile", "homeassistant"])
+        self.assertEqual(args.firewall, "fw.example")
+
+    def test_firewall_value_after_subcommand(self):
+        args = self._parse(["reconcile", "--firewall", "fw.example", "homeassistant"])
+        self.assertEqual(args.firewall, "fw.example")
+
+
 if __name__ == "__main__":
     unittest.main()
