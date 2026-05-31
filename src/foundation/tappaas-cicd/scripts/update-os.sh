@@ -232,6 +232,25 @@ update_nixos() {
           | sudo tee /etc/nixos/hardware-configuration.nix >/dev/null
     ' || die "failed to generate /etc/nixos/hardware-configuration.nix on ${vm_ip}"
 
+    # Reproducible nixpkgs pin: build every module VM against the EXACT nixpkgs
+    # revision pinned for the NixOS template (templates/flake.lock), overriding
+    # whatever channel the VM happens to carry in its imperative `nix-channel`.
+    # This makes module rebuilds deterministic and version-controlled in git, and
+    # keeps every TAPPaaS NixOS VM on the same release as the template (currently
+    # 25.11) regardless of when the VM was provisioned. -I nixpkgs=<tarball> takes
+    # precedence over NIX_PATH, so the VM's channel no longer determines the build.
+    local flake_lock="/home/tappaas/TAPPaaS/src/foundation/templates/flake.lock"
+    local nixpkgs_arg="" pinned_rev=""
+    if [[ -f "${flake_lock}" ]]; then
+        pinned_rev="$(jq -r '.nodes.nixpkgs.locked.rev // empty' "${flake_lock}" 2>/dev/null)"
+    fi
+    if [[ -n "${pinned_rev}" ]]; then
+        nixpkgs_arg="-I nixpkgs=https://github.com/NixOS/nixpkgs/archive/${pinned_rev}.tar.gz"
+        info "Pinning nixpkgs to template rev ${pinned_rev:0:12} (reproducible — not the VM's channel)"
+    else
+        warn "Could not read pinned nixpkgs rev from ${flake_lock} — falling back to the VM's nix-channel"
+    fi
+
     # Retry: even with local builds, a freshly-cloned VM can hiccup on its
     # first activation (services restart while sshd reloads, cloud-init
     # finishing, growPartition). The build itself is idempotent (resumable
@@ -243,10 +262,10 @@ update_nixos() {
         # subshell — set -e in the parent would otherwise terminate before we
         # reach the retry. Capture rc with || so set -e doesn't fire here.
         if [[ "${OPT_DEBUG:-0}" -eq 1 ]]; then
-            ( ssh -o BatchMode=yes "tappaas@${vm_ip}" "sudo nixos-rebuild switch -I nixos-config=${remote_nix_path}" ) || rc=$?
+            ( ssh -o BatchMode=yes "tappaas@${vm_ip}" "sudo nixos-rebuild switch ${nixpkgs_arg} -I nixos-config=${remote_nix_path}" ) || rc=$?
         else
             ( run_quiet "nixos-rebuild on ${vm_ip} (attempt ${attempt}/3)" \
-                ssh -o BatchMode=yes "tappaas@${vm_ip}" "sudo nixos-rebuild switch -I nixos-config=${remote_nix_path}" ) || rc=$?
+                ssh -o BatchMode=yes "tappaas@${vm_ip}" "sudo nixos-rebuild switch ${nixpkgs_arg} -I nixos-config=${remote_nix_path}" ) || rc=$?
         fi
         if [[ "$rc" -eq 0 ]]; then
             rebuilt=1; break
