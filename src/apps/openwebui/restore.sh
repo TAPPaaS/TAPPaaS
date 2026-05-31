@@ -12,7 +12,7 @@
 # See RESTORE.md for full documentation.
 #
 # Usage: ./restore.sh --from-instance <host> | --from-path <dir> [--date YYYY-MM-DD]
-# Example: ./restore.sh --from-instance openwebui-old.srv-work.internal
+# Example: ./restore.sh --from-instance openwebui-old.srv_work.internal
 #          ./restore.sh --from-path /tmp/openwebui-backups
 #
 
@@ -86,13 +86,13 @@ Expected files in --from-path directory:
 
 Examples:
     # Restore from another TAPPaaS instance
-    ${SCRIPT_NAME} --from-instance openwebui-old.srv-work.internal
+    ${SCRIPT_NAME} --from-instance openwebui-old.srv_work.internal
 
     # Restore from local backup files
     ${SCRIPT_NAME} --from-path /tmp/openwebui-backups
 
     # Restore specific date from another instance
-    ${SCRIPT_NAME} --from-instance openwebui-old.srv-work.internal --date 2026-03-09
+    ${SCRIPT_NAME} --from-instance openwebui-old.srv_work.internal --date 2026-03-09
 EOF
 }
 

@@ -8,8 +8,8 @@ Only manual steps are listed here. Scripts handle everything else automatically.
    [HA OS releases page](https://github.com/home-assistant/operating-system/releases/tag/17.3)
    and place it in the Proxmox ISO storage on `tappaas1`.
 2. **Static DHCP reservation** — assign a fixed IP to the HA VM's MAC address
-   on the `srv-home` network (10.2.10.x range).
-3. **DNS host override** — `homeassistant.srv-home.internal → <ip>` via `dns-manager`.
+   on the `srv_home` network (10.2.10.x range).
+3. **DNS host override** — `homeassistant.srv_home.internal → <ip>` via `dns-manager`.
 
 ## Install
 
@@ -25,13 +25,13 @@ This creates the VM, imports the HAOS disk image, and configures:
 ## Post-install
 
 **First boot — HA onboarding** (one-time):
-1. Open `http://homeassistant.srv-home.internal:8123` from home WiFi
+1. Open `http://homeassistant.srv_home.internal:8123` from home WiFi
 2. Complete the onboarding wizard (create admin account, home location)
 3. HA will auto-discover Sonos speakers and prompt to add the integration
 
 **Alfen EV charger** (if deployed):
 - Settings → Devices & Services → Add integration → `alfen_wallbox` (via HACS)
-- Host: `alfen.iot-cloud.internal`, port: `502`
+- Host: `alfen.iot_cloud.internal`, port: `502`
 
 **Zigbee/Z-Wave hardware** (optional):
 - Add USB pass-through in Proxmox: VM → Hardware → Add → USB Device
@@ -48,7 +48,7 @@ Manual checks:
 | Check | Expected |
 |-------|----------|
 | `https://homeassistant.gridtefy.com` from home browser | HA login page loads |
-| `http://homeassistant.srv-home.internal:8123` from home WiFi | HA login page loads |
+| `http://homeassistant.srv_home.internal:8123` from home WiFi | HA login page loads |
 | Home Assistant → Settings → Devices → Sonos | Speakers visible |
 
 ## Troubleshooting

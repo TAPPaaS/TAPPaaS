@@ -78,7 +78,7 @@ class TestAddHandlerForwardAuth(unittest.TestCase):
         from opnsense_controller.caddy_manager import CaddyHandler  # noqa: PLC0415
         mgr.add_handler(CaddyHandler(
             domain_uuid="DOMAIN-UUID",
-            upstream_domain="openwebui.srv-work.internal",
+            upstream_domain="openwebui.srv_work.internal",
             upstream_port="8080",
             description="TAPPaaS: openwebui",
             forward_auth=True,

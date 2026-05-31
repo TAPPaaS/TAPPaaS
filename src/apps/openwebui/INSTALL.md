@@ -21,12 +21,12 @@ Duration: ~10–20 minutes on first run (NixOS rebuild + container pull ~1 GB).
 Override any JSON field at install time:
 
 ```bash
-install-module.sh openwebui --node tappaas1 --zone0 srv-dev --vmid 399
+install-module.sh openwebui --node tappaas1 --zone0 srv_dev --vmid 399
 ```
 
 | Flag | Default | Controls |
 |---|---|---|
-| `--zone0` | `srv-work` | Network zone (VLAN) |
+| `--zone0` | `srv_work` | Network zone (VLAN) |
 | `--vmid` | `311` | Proxmox VM ID |
 | `--node` | `tappaas2` | Proxmox node |
 | `--memory` | `4096` | RAM in MB |
@@ -35,10 +35,10 @@ install-module.sh openwebui --node tappaas1 --zone0 srv-dev --vmid 399
 ## Post-install
 
 **First login (one-time):**
-1. Open `http://openwebui.srv-work.internal:8080`
+1. Open `http://openwebui.srv_work.internal:8080`
 2. Create admin account
 3. Settings → Connections → OpenAI API:
-   - Base URL: `http://litellm.srv-work.internal:4000/v1`
+   - Base URL: `http://litellm.srv_work.internal:4000/v1`
    - API Key: your LiteLLM virtual key
 4. Test: start a conversation, select a model
 
@@ -90,7 +90,7 @@ Install the missing module first, then retry.
 **Container fails to start on first boot**
 DNS or image pull failed during NixOS activation. Check from inside the VM:
 ```bash
-ssh tappaas@openwebui.srv-work.internal "sudo journalctl -u openwebui-wrapper -n 30"
+ssh tappaas@openwebui.srv_work.internal "sudo journalctl -u openwebui-wrapper -n 30"
 ```
 Common fix: wait 2–3 minutes for NixOS first-boot to complete, then run `./test.sh openwebui`.
 

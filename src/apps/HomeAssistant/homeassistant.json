@@ -7,7 +7,7 @@
   "vmname": "homeassistant",
   "vmid": 210,
   "vmtag": "TAPPaaS,App,HomeAutomation",
-  "zone0": "srv-home",
+  "zone0": "srv_home",
   "dependsOn": [
     "cluster:vm",
     "backup:vm",
@@ -52,9 +52,9 @@
         "mgmt",
         "home",
         "work",
-        "srv-home",
-        "srv-work",
-        "srv-cust"
+        "srv_home",
+        "srv_work",
+        "srv_cust"
       ]
     }
   }

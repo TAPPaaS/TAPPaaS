@@ -125,13 +125,13 @@ The `from` / `to` fields accept:
 ```json
 {
   "vmname": "litellm",
-  "zone0": "srv-work",
+  "zone0": "srv_work",
   "dependsOn": ["cluster:vm", "firewall:proxy", "firewall:rules"],
   "ports": [
     { "port": 4000, "protocol": "TCP", "description": "LiteLLM API" }
   ],
   "ingress": [
-    { "from": "srv-work", "ports": [4000], "description": "Intra-zone consumers" },
+    { "from": "srv_work", "ports": [4000], "description": "Intra-zone consumers" },
     { "from": "dmz",      "ports": [4000], "description": "Reverse proxy" }
   ],
   "egress": [
@@ -159,7 +159,7 @@ tappaas-svcdep:<consumer>:<service>:<provider>:<port>[/<protocol>]  # auto-pinho
 ```
 
 Examples:
-- `tappaas-module:litellm:ingress:srv-work:4000`
+- `tappaas-module:litellm:ingress:srv_work:4000`
 - `tappaas-module:litellm:egress:vllm:11434`
 - `tappaas-module:hassosova:egress:iot-home:5353/UDP`
 - `tappaas-svcdep:hassosova:mqtt:mosquitto:1883`  ← auto-pinhole
@@ -193,7 +193,7 @@ service and declaring `firewall:rules` in its own dependsOn:
 ```jsonc
 {
   "vmname": "translation-agent",
-  "zone0": "srv-work",
+  "zone0": "srv_work",
   "dependsOn": [
     "cluster:vm",
     "firewall:rules",          // opt into per-module firewall

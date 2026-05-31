@@ -12,7 +12,7 @@
   "imageType": "clone",
   "image": "debian-12-standard_12.12-1_amd64.tar.zst",
   "bridge0": "lan",
-  "zone0": "srv-home",
+  "zone0": "srv_home",
   "dependsOn": [
     "cluster:lxc"
   ]

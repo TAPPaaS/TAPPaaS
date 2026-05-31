@@ -23,15 +23,22 @@ error() { echo "ERR: $*" >&2; }
 # shellcheck source=vm-net.sh disable=SC1091
 . "${SCRIPT_DIR}/vm-net.sh"
 
-# Use the deployed zones.json if available; else a temp fixture.
-ZONES="/home/tappaas/config/zones.json"
+# Prefer the source-tree zones.json (canonical, always in-tree with this test).
+# Falls back to the deployed config, then a bundled fixture. This decouples the
+# unit test from the live operator state (#237).
+ZONES_REPO_SRC="$(cd "${SCRIPT_DIR}/../.." && pwd)/firewall/zones.json"
+ZONES_DEPLOYED="/home/tappaas/config/zones.json"
 TMP_ZONES=""
-if [[ ! -f "${ZONES}" ]]; then
+if [[ -f "${ZONES_REPO_SRC}" ]]; then
+    ZONES="${ZONES_REPO_SRC}"
+elif [[ -f "${ZONES_DEPLOYED}" ]]; then
+    ZONES="${ZONES_DEPLOYED}"
+else
     TMP_ZONES="$(mktemp)"
     cat > "${TMP_ZONES}" <<'JSON'
 {
   "mgmt":     { "state": "Manual",   "vlantag": 0,   "bridge": "lan" },
-  "srv-home": { "state": "Active",   "vlantag": 210, "bridge": "lan" },
+  "srv_home": { "state": "Active",   "vlantag": 210, "bridge": "lan" },
   "dmz":      { "state": "Mandatory","vlantag": 610, "bridge": "lan" },
   "old":      { "state": "Inactive", "vlantag": 999, "bridge": "lan" }
 }
@@ -51,8 +58,8 @@ ck() {
     fi
 }
 
-# zone → tag (srv-home is the Active 210 zone post-#178)
-ck "zone srv-home → 210"  "210" "$(vmnet_zone_vlantag srv-home "${ZONES}")"
+# zone → tag (srv_home is the Active 210 zone post-#178)
+ck "zone srv_home → 210"  "210" "$(vmnet_zone_vlantag srv_home "${ZONES}")"
 ck "zone mgmt → 0"        "0"   "$(vmnet_zone_vlantag mgmt "${ZONES}")"
 # undefined / inactive zones fail (return non-zero)
 if vmnet_zone_vlantag nope "${ZONES}" >/dev/null 2>&1; then
@@ -62,7 +69,7 @@ else
 fi
 
 # tag → zone (reverse)
-ck "tag 210 → srv-home"  "srv-home"  "$(vmnet_zone_for_tag 210 "${ZONES}")"
+ck "tag 210 → srv_home"  "srv_home"  "$(vmnet_zone_for_tag 210 "${ZONES}")"
 ck "tag 0 → mgmt"        "mgmt"      "$(vmnet_zone_for_tag 0 "${ZONES}")"
 
 # all-active tags + "ALL" sentinel (issue #194). Compare to an independent jq
@@ -94,7 +101,7 @@ cat > "${EXPLICIT_FIXTURE}" <<'JSON'
 {
   "mgmt":     { "state": "Manual",    "vlantag": 0,   "bridge": "lan" },
   "srv":      { "state": "Active",    "vlantag": 200, "bridge": "lan" },
-  "srv-home": { "state": "Active",    "vlantag": 210, "bridge": "lan" },
+  "srv_home": { "state": "Active",    "vlantag": 210, "bridge": "lan" },
   "dmz":      { "state": "Mandatory", "vlantag": 610, "bridge": "lan" },
   "manual-z": { "state": "Manual",    "vlantag": 700, "bridge": "lan" },
   "iot-off":  { "state": "Disabled",  "vlantag": 440, "bridge": "lan" },

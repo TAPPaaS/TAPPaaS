@@ -6,7 +6,7 @@
   "vmtag": "TAPPaaS",
   "node": "tappaas1",
   "mac0": "02:57:4E:A6:B2:10",
-  "zone0": "srv-work",
+  "zone0": "srv_work",
   "dependsOn": [
     "cluster:vm",
     "templates:windows",

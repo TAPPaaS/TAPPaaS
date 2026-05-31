@@ -14,7 +14,7 @@
 #                reconcilers correct induced drift:
 #                  #192 — VM zone change (net0 VLAN tag + DNS)
 #                  #193 — replication-schedule + HA-rule node drift
-#                  #203 — LXC create on srv-home/210 + DNS + cores drift
+#                  #203 — LXC create on srv_home/210 + DNS + cores drift
 #                Creates and deletes real VMs/containers (~minutes).
 #
 # Usage: ./test.sh [module-name]
@@ -154,7 +154,7 @@ fi
 deep_cleanup() {
     # Remove DNS records the reconciler may have registered (delete-module
     # does not touch DNS). Harmless if absent.
-    dns-manager --no-ssl-verify delete test-vmdrift srv-home.internal  >/dev/null 2>&1 || true
+    dns-manager --no-ssl-verify delete test-vmdrift srv_home.internal  >/dev/null 2>&1 || true
     dns-manager --no-ssl-verify delete test-vmdrift mgmt.internal >/dev/null 2>&1 || true
     [[ -f "${CONFIG_DIR}/test-vmdrift.json" ]] || return 0
     info "  Cleaning up test VM (delete-module test-vmdrift)..."
@@ -190,11 +190,11 @@ if [[ "${DEEP}" -eq 1 ]]; then
         fi
     fi
 
-    # 3. Induce zone drift mgmt -> srv-home (active, VLAN 210, has DHCP).
+    # 3. Induce zone drift mgmt -> srv_home (active, VLAN 210, has DHCP).
     if [[ "${deep_ok}" -eq 1 ]]; then
         # Pattern A-aware write (#207).
-        if jq_module_write "${TVM}" '.zone0 = "srv-home"'; then
-            pass "induced drift: zone0 mgmt→srv-home in config"
+        if jq_module_write "${TVM}" '.zone0 = "srv_home"'; then
+            pass "induced drift: zone0 mgmt→srv_home in config"
         else
             fail "could not edit test config"; deep_ok=0
         fi
@@ -229,7 +229,7 @@ if [[ "${DEEP}" -eq 1 ]]; then
             # shellcheck disable=SC2086
             net0=$(ssh ${SSH_OPTS} "root@${vmnode}.${MGMT}.internal" "qm config 920 | grep '^net0'" 2>/dev/null) || true
             if grep -q "tag=210" <<< "${net0}"; then
-                pass "live net0 bound to srv-home VLAN (tag=210)"
+                pass "live net0 bound to srv_home VLAN (tag=210)"
             else
                 fail "live net0 not tagged 210 (got: ${net0:-none})"
             fi
@@ -243,11 +243,11 @@ if [[ "${DEEP}" -eq 1 ]]; then
         # shellcheck disable=SC2001  # regex ANSI strip not expressible as ${//}
         new_ip=$(sed 's/\x1b\[[0-9;]*m//g' <<< "${reconcile_out}" \
                  | grep -oE 'came up with IP [0-9.]+' | grep -oE '[0-9.]+$')
-        dns_line=$(dns-manager --no-ssl-verify list 2>/dev/null | grep -i "test-vmdrift" | grep "srv-home.internal" || true)
+        dns_line=$(dns-manager --no-ssl-verify list 2>/dev/null | grep -i "test-vmdrift" | grep "srv_home.internal" || true)
         if [[ -n "${dns_line}" ]] && { [[ -z "${new_ip}" ]] || grep -q "${new_ip}" <<< "${dns_line}"; }; then
-            pass "DNS record test-vmdrift.srv-home.internal registered (${new_ip:-ip unknown})"
+            pass "DNS record test-vmdrift.srv_home.internal registered (${new_ip:-ip unknown})"
         else
-            fail "DNS record for test-vmdrift.srv-home.internal (${new_ip:-?}) not found"
+            fail "DNS record for test-vmdrift.srv_home.internal (${new_ip:-?}) not found"
         fi
     fi
 
@@ -261,7 +261,7 @@ fi
 # ── Deep Test: create an HA VM, induce HA drift, verify reconcile ───
 
 deep_cleanup_ha() {
-    dns-manager --no-ssl-verify delete test-hadrift srv-home.internal >/dev/null 2>&1 || true
+    dns-manager --no-ssl-verify delete test-hadrift srv_home.internal >/dev/null 2>&1 || true
     [[ -f "${CONFIG_DIR}/test-hadrift.json" ]] || return 0
     info "  Cleaning up HA test VM (delete-module test-hadrift)..."
     /home/tappaas/bin/delete-module.sh test-hadrift --force >/dev/null 2>&1 || true
@@ -278,9 +278,9 @@ if [[ "${DEEP}" -eq 1 ]]; then
     hdeep_ok=1
 
     # 1. Install the disposable HA-managed test VM. The cluster:vm service
-    #    creates the VM (zone0=srv-home / VLAN 210 so it stays reachable on
+    #    creates the VM (zone0=srv_home / VLAN 210 so it stays reachable on
     #    either node); the cluster:ha service configures the rule + replication.
-    info "  Installing ${THVM} (NixOS clone, HA-managed on srv-home/210)..."
+    info "  Installing ${THVM} (NixOS clone, HA-managed on srv_home/210)..."
     if ( cd "${HFIX}" && /home/tappaas/bin/install-module.sh "${THVM}" ) >/dev/null 2>&1; then
         pass "HA test VM installed + HA configured"
     else
@@ -389,7 +389,7 @@ fi
 # ── Deep Test: create an LXC, verify net/DNS, induce drift, reconcile ─
 
 deep_cleanup_lxc() {
-    dns-manager --no-ssl-verify delete test-lxcdrift srv-home.internal >/dev/null 2>&1 || true
+    dns-manager --no-ssl-verify delete test-lxcdrift srv_home.internal >/dev/null 2>&1 || true
     [[ -f "${CONFIG_DIR}/test-lxcdrift.json" ]] || return 0
     info "  Cleaning up LXC test container (delete-module test-lxcdrift)..."
     /home/tappaas/bin/delete-module.sh test-lxcdrift --force >/dev/null 2>&1 || true
@@ -406,8 +406,8 @@ if [[ "${DEEP}" -eq 1 ]]; then
     ldeep_ok=1
 
     # 1. Install the disposable plain-Debian container (no GPU/meta) on
-    #    srv-home / VLAN 210 (the only test VLAN this switch trunks cross-node).
-    info "  Installing ${TLVM} (Debian CT on srv-home/210; first run downloads the template)..."
+    #    srv_home / VLAN 210 (the only test VLAN this switch trunks cross-node).
+    info "  Installing ${TLVM} (Debian CT on srv_home/210; first run downloads the template)..."
     if ( cd "${LFIX}" && /home/tappaas/bin/install-module.sh "${TLVM}" ) >/dev/null 2>&1; then
         pass "LXC container installed via cluster:lxc"
     else
@@ -422,12 +422,12 @@ if [[ "${DEEP}" -eq 1 ]]; then
         [[ -z "${LNODE}" ]] && { fail "could not locate ${TLVM} (VMID ${LVMID}) after install"; ldeep_ok=0; }
     fi
 
-    # 2. net0 must be on the srv-home VLAN tag (210) — proves zone→tag for LXC.
+    # 2. net0 must be on the srv_home VLAN tag (210) — proves zone→tag for LXC.
     if [[ "${ldeep_ok}" -eq 1 ]]; then
         # shellcheck disable=SC2086,SC2029
         lnet0=$(ssh ${SSH_OPTS} "root@${LNODE}.${MGMT}.internal" "pct config ${LVMID} | grep '^net0'" 2>/dev/null) || true
         if grep -q "tag=210" <<< "${lnet0}"; then
-            pass "container net0 bound to srv-home VLAN (tag=210)"
+            pass "container net0 bound to srv_home VLAN (tag=210)"
         else
             fail "container net0 not tagged 210 (got: ${lnet0:-none})"
         fi
@@ -442,12 +442,12 @@ if [[ "${DEEP}" -eq 1 ]]; then
         fi
     fi
 
-    # 4. DNS registered in srv-home.
+    # 4. DNS registered in srv_home.
     if [[ "${ldeep_ok}" -eq 1 ]]; then
-        if dns-manager --no-ssl-verify list 2>/dev/null | grep -i "test-lxcdrift" | grep -q "srv-home.internal"; then
-            pass "DNS record test-lxcdrift.srv-home.internal registered"
+        if dns-manager --no-ssl-verify list 2>/dev/null | grep -i "test-lxcdrift" | grep -q "srv_home.internal"; then
+            pass "DNS record test-lxcdrift.srv_home.internal registered"
         else
-            fail "DNS record test-lxcdrift.srv-home.internal not found"
+            fail "DNS record test-lxcdrift.srv_home.internal not found"
         fi
     fi
 

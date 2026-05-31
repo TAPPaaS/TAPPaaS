@@ -280,7 +280,7 @@ if [[ -z "${sample_modules}" ]]; then
 else
     while IFS= read -r vmname; do
         [[ -z "${vmname}" ]] && continue
-        zone=$(read_module_config "${vmname}" 2>/dev/null | jq -r '.zone0 // "srv-home"' 2>/dev/null || echo "srv-home")
+        zone=$(read_module_config "${vmname}" 2>/dev/null | jq -r '.zone0 // "srv_home"' 2>/dev/null || echo "srv_home")
         fqdn="${vmname}.${zone}.internal"
         if getent hosts "${fqdn}" >/dev/null 2>&1; then
             pass "DNS resolves ${fqdn}"

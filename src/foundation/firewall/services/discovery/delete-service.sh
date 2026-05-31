@@ -161,10 +161,11 @@ fi
 IFACE_JSON=$(echo "${MDNS_RESP}" | jq '.mdnsrepeater.interfaces')
 
 resolve_iface() {
+    # Zone names and OPNsense interface labels are both underscore (#237).
     local zone="$1"
     echo "${IFACE_JSON}" | jq -r --arg z "${zone}" \
         'to_entries[]
-         | select(.value.value | ascii_downcase | startswith(($z | gsub("-";"_") | ascii_downcase)))
+         | select(.value.value | ascii_downcase | startswith(($z | ascii_downcase)))
          | .key' \
         | head -1
 }

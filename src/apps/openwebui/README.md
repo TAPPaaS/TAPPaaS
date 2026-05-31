@@ -6,7 +6,7 @@ AI chat interface — multi-model conversations with persistent history, user ma
 
 | Capability | Access from | How |
 |---|---|---|
-| AI chat (all configured models) | Home network, work | `https://openwebui.srv-work.internal:8080` (internal) |
+| AI chat (all configured models) | Home network, work | `https://openwebui.srv_work.internal:8080` (internal) |
 | Model switching | Chat UI | Select any model configured in LiteLLM |
 | Chat history | All sessions | PostgreSQL — survives restarts |
 | User accounts | Admin UI | Per-user API keys and usage limits |
@@ -20,7 +20,7 @@ AI chat interface — multi-model conversations with persistent history, user ma
 
 ## Requirements
 
-- `srv-work` zone (VLAN 220)
+- `srv_work` zone (VLAN 220)
 - LiteLLM deployed and accessible (`litellm:models` dependency)
 - NixOS template
 

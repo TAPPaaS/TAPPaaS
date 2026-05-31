@@ -35,20 +35,6 @@ _NON_MODULE_STEMS: frozenset[str] = frozenset(
 )
 
 
-def normalize_iface_label(name: str) -> str:
-    """Canonical OPNsense interface-assignment label for a zone (issue #213).
-
-    The OPNsense GUI strips hyphens from interface labels on save (typing
-    'iot-local' yields 'iotlocal'), while the API preserves them — so a label
-    written with hyphens drifts the moment an operator edits it in the GUI.
-    Underscores survive both the API and the GUI, so TAPPaaS writes and
-    compares interface labels with hyphens normalized to underscores
-    ('iot-local' -> 'iot_local'). Operators can therefore correct drift by hand
-    using the underscore form without needing zone-manager.
-    """
-    return name.replace("-", "_")
-
-
 @dataclass
 class Zone:
     """Represents a TAPPaaS network zone."""
@@ -641,11 +627,9 @@ class ZoneManager:
                     if str(v["vlan_tag"]) == str(zone.vlan_tag):
                         return v["identifier"]
                     # Also check if the interface label matches the zone name.
-                    # Treat hyphens and underscores as equivalent so both legacy
-                    # ('iot-local') and normalized ('iot_local') labels match
-                    # (issue #213).
-                    if (normalize_iface_label(v.get("description", "").lower())
-                            == normalize_iface_label(zone.name.lower())):
+                    # Post-#237 the SSOT is underscore-aligned so labels and
+                    # zone keys match directly with no transformation.
+                    if v.get("description", "").lower() == zone.name.lower():
                         return v["identifier"]
             return None
         else:
@@ -806,13 +790,14 @@ class ZoneManager:
                             assigned = assigned_by_tag.get(zone.vlan_tag)
 
                             # If not found in assigned_by_tag, search manually by device
-                            # or label (hyphen/underscore-tolerant — issue #213).
+                            # or label (post-#237 the SSOT is underscore so labels
+                            # and zone keys compare directly).
                             if not assigned:
                                 vlan_device = existing.get("device")
-                                zname = normalize_iface_label(zone.name.lower())
+                                zname = zone.name.lower()
                                 for v in assigned_vlans:
                                     if (v.get("device") == vlan_device
-                                            or normalize_iface_label(v.get("description", "").lower()) == zname):
+                                            or v.get("description", "").lower() == zname):
                                         assigned = v
                                         break
 
@@ -898,7 +883,7 @@ class ZoneManager:
                     assigned = assigned_by_tag.get(zone.vlan_tag)
                     if assigned:
                         label = (assigned.get("description") or "")
-                        desired_label = normalize_iface_label(zone.name)
+                        desired_label = zone.name
                         if label and label.lower() != desired_label.lower():
                             if force_rename_labels:
                                 self._rename_interface_label(
@@ -932,13 +917,14 @@ class ZoneManager:
                 else:
                     try:
                         # Name the assigned interface after the zone, with
-                        # hyphens normalized to underscores so GUI edits survive
-                        # (issue #213). Also assign the gateway IP statically.
+                        # zone keys are already underscore-aligned with OPNsense
+                        # interface labels (#237). Also assign the gateway IP
+                        # statically.
                         result = manager.create_vlan(
                             vlan,
                             check_mode=False,
                             assign=assign,
-                            interface_name=normalize_iface_label(zone.name),
+                            interface_name=zone.name,
                             ipv4_type="static",
                             ipv4_address=gateway_ip,
                             ipv4_subnet=subnet_bits,
@@ -1631,15 +1617,16 @@ class ZoneManager:
         def _flag_for(zone: "Zone") -> tuple[str, bool]:
             """Return (flag_text, is_warning): live label drift takes priority,
             then the change status from a configure run (if any)."""
-            # Live label drift (issue #213) — computed from the assigned label so
-            # it shows in read-only --list too, not just after a configure run.
+            # Live label drift — computed from the assigned label so it shows in
+            # read-only --list too, not just after a configure run. Post-#237 the
+            # SSOT zone key IS the desired OPNsense label (no transformation).
             if zone.needs_vlan:
                 a = assigned_by_tag.get(zone.vlan_tag)
                 live_label = (a or {}).get("description") or ""
-                desired = normalize_iface_label(zone.name)
+                desired = zone.name
                 if live_label and live_label.lower() != desired.lower():
                     return (f"label drift '{live_label}' → rename to '{desired}' "
-                            f"(--force-rename-labels; GUI strips hyphens)", True)
+                            f"(--force-rename-labels)", True)
             res = vlan_results.get(zone.name, {})
             status = res.get("status", "")
             if status == "error":

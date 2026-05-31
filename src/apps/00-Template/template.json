@@ -4,7 +4,7 @@
   "vmname": "template",
   "vmid": 999,
   "vmtag": "TAPPaaS,Test",
-  "zone0": "srv-home",
+  "zone0": "srv_home",
   "dependsOn": [
     "cluster:vm",
     "cluster:ha",

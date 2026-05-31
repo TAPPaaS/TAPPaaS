@@ -102,6 +102,17 @@ if [ -f "../module-fields.json" ]; then
   ln -s "$(realpath ../module-fields.json)" /home/tappaas/config/module-fields.json
 fi
 
+# --- One-shot rename: zone keys hyphen → underscore (issue #237) ---
+# Marker-gated; runs exactly once per cluster, then becomes a no-op. Must run
+# BEFORE apply-zones-merge.sh — otherwise the merge would see srv-home (current)
+# vs srv_home (source) as a possible-rename and flag both for review instead of
+# resolving them automatically.
+if [ -f /home/tappaas/bin/migrate-zone-keys-to-underscore.sh ] \
+   && [ -f /home/tappaas/config/zones.json ]; then
+  /home/tappaas/bin/migrate-zone-keys-to-underscore.sh \
+      || warn "  #237 zone-key migration reported issues — continuing"
+fi
+
 # --- Reconcile zones.json against upstream (3-way merge; issue #209) ---
 # install2.sh seeds /home/tappaas/config/zones.json on first install but never
 # revisits it. apply-zones-merge.sh closes that gap: every update-tappaas run

@@ -23,30 +23,8 @@ from opnsense_controller.zone_manager import (
     ValidationMessage,
     ZoneManager,
     discover_module_files,
-    normalize_iface_label,
     validate_pinhole_allowed_from,
 )
-
-
-class TestNormalizeIfaceLabel(unittest.TestCase):
-    """Interface labels normalize hyphens to underscores (issue #213)."""
-
-    def test_hyphen_becomes_underscore(self):
-        self.assertEqual(normalize_iface_label("iot-local"), "iot_local")
-
-    def test_multiple_hyphens(self):
-        self.assertEqual(normalize_iface_label("srv-cust-test"), "srv_cust_test")
-
-    def test_no_hyphen_unchanged(self):
-        self.assertEqual(normalize_iface_label("mgmt"), "mgmt")
-
-    def test_already_underscore_unchanged(self):
-        self.assertEqual(normalize_iface_label("iot_local"), "iot_local")
-
-    def test_gui_stripped_label_differs_from_desired(self):
-        # GUI strips hyphens -> 'iotlocal', which must NOT equal the desired
-        # underscore label, so drift is still detected.
-        self.assertNotEqual("iotlocal", normalize_iface_label("iot-local"))
 
 
 # ─────────────────────────────────────────────────────────────────────────────
