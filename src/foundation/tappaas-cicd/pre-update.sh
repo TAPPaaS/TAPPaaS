@@ -102,6 +102,19 @@ if [ -f "../module-fields.json" ]; then
   ln -s "$(realpath ../module-fields.json)" /home/tappaas/config/module-fields.json
 fi
 
+# --- Reconcile zones.json against upstream (3-way merge; issue #209) ---
+# install2.sh seeds /home/tappaas/config/zones.json on first install but never
+# revisits it. apply-zones-merge.sh closes that gap: every update-tappaas run
+# adopts release changes for zones the operator hasn't touched, preserves
+# operator customizations (always pins `state`), reports new/orphan/renamed
+# zones, and advances zones.json.orig to the new release baseline.
+if [ -f /home/tappaas/bin/apply-zones-merge.sh ] \
+   && [ -f /home/tappaas/config/zones.json ]; then
+  echo ""
+  info "Reconciling zones.json against upstream (3-way merge)..."
+  /home/tappaas/bin/apply-zones-merge.sh || warn "  zones.json merge reported an error — continuing"
+fi
+
 # --- Build and install opnsense-controller ---
 echo ""
 info "Building the opnsense-controller project..."

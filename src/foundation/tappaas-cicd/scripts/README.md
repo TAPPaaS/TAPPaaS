@@ -24,6 +24,10 @@ A TAPPaaS module's JSON has two equivalent shapes:
 
 The merge-on-update flow (3-way merge of `current`, `.orig`, and the new release `source`) is described under [`apply-json-merge.sh`](#apply-json-mergesh).
 
+## Zone configuration (#209)
+
+The global `${CONFIG_DIR}/zones.json` follows the same drift-detection / merge model. The upstream template at [`../../firewall/zones.json`](../../firewall/zones.json) is seeded once on first install by [`install2.sh`](../install2.sh); thereafter [`apply-zones-merge.sh`](#apply-zones-mergesh) — invoked from [`pre-update.sh`](../pre-update.sh) on every `update-tappaas` cycle — does the 3-way reconciliation against `zones.json.orig`. Only `state` is operator-pinned (operators flip it via [`zone-state.sh`](#zone-statesh)); everything else follows the standard pin-vs-adopt rule.
+
 ## Scripts
 
 ### common-install-routines.sh
@@ -208,14 +212,105 @@ A clean audit (count = 0) means every reader goes through `read_module_config` /
 
 ---
 
+### zone-state.sh
+
+Atomic state-change helper for [`zones.json`](../../firewall/zones.json) (#209). Replaces the manual `jq '.<zone>.state = "…"' zones.json > tmp && mv …` ritual with one command that validates the zone exists, refuses bogus transitions, and prints the next-step `zone-manager --execute` command. Does **not** push to OPNsense itself — the operator runs zone-manager when ready.
+
+**Usage:**
+```bash
+zone-state.sh enable  <zone-name>
+zone-state.sh disable <zone-name>
+zone-state.sh manual  <zone-name>
+zone-state.sh enable dmz --force    # Mandatory zones refused otherwise
+```
+
+**Verb → state mapping:**
+
+| Verb | `state` written | zone-manager behavior |
+|------|-----------------|------------------------|
+| `enable` | `Active` | creates VLAN + DHCP + rules |
+| `disable` | `Inactive` | defined but not deployed |
+| `manual` | `Manual` | operator-managed, zone-manager leaves alone |
+
+**Behavior:**
+
+- Refuses an unknown zone name (lists known zones for convenience).
+- No-op (exit 0) when the zone is already in the requested state.
+- Refuses to leave `Mandatory` (e.g., `dmz`) without `--force`.
+- Writes atomically via `jq` + `mv`; the file is left unchanged if the new JSON would be invalid.
+- The `Mandatory` and `Disabled` states are intentionally not exposed as verbs — `Mandatory` is for platform-required zones (security model), `Disabled` is reserved for the zone-manager removal flow. Use `--force` if you really need to leave Mandatory.
+
+**Exit codes:**
+
+| Code | Meaning |
+|------|---------|
+| `0` | state changed (or already in target state) |
+| `1` | zone not found / file IO failure / Mandatory without `--force` |
+| `2` | bad arguments / unknown verb |
+
+---
+
+### apply-zones-merge.sh
+
+3-way merge for `${CONFIG_DIR}/zones.json` against the upstream source at `src/foundation/firewall/zones.json` (#209). The same machinery as [`apply-json-merge.sh`](#apply-json-mergesh), tailored to the single global zones file:
+
+- Per-leaf merge within each shared zone:
+  - **AUTO_FIELDS** (`["state"]`) — operator-pinned, never adopted from source. `zone-state.sh` is the only path that should change `state`.
+  - Otherwise: `current == orig` → adopt source; else → pin current.
+- Zone-level rules:
+  - Zone in source, absent in current → **add** with release defaults.
+  - Zone in current, absent in source → **keep** + warning (operator-added, or release-removed but operator still wants it).
+  - Same `vlantag` in both but different zone names → **flag as possible rename**; do not auto-rename.
+- If `zones.json.orig` is missing on first run, `cp source → orig` (same backfill decision as #207 — preserves operator customizations on the first post-#209 cycle).
+
+The merge runs **automatically as part of every `update-tappaas` cycle**, wired into [`pre-update.sh`](../pre-update.sh). The standalone CLI is for ad-hoc preview / drift checks.
+
+**Usage:**
+```bash
+apply-zones-merge.sh           # run merge; write current + advance .orig
+apply-zones-merge.sh --diff    # show what would change; do not write
+```
+
+**Report (sample):**
+```
+Merge: 7 adopted, 30 pinned, 1 added, 0 kept (orphan), 0 possible rename(s)
+  added (new in release): srv-cust
+  pinned (operator customizations preserved):
+    home: access-to, description
+    mgmt: access-to
+  adopted (release changes applied):
+    home: _comment
+  possible rename(s) — same vlantag, different zone name:
+    vlantag=830: source=lab vs current=test3
+```
+
+**Override the source location** for testing via `TAPPAAS_ZONES_SOURCE=/path/to/zones.json`. By default it reads the upstream `firewall/zones.json` from the TAPPaaS repo path declared in `configuration.json` (or `/home/tappaas/TAPPaaS` as fallback).
+
+**Exit codes:**
+
+| Code | Meaning |
+|------|---------|
+| `0` | success (zero or more changes applied) |
+| `1` | source missing / IO failure |
+| `2` | bad arguments |
+
+After a merge that actually changed anything, push to OPNsense:
+```bash
+zone-manager --no-ssl-verify --zones-file /home/tappaas/config/zones.json --execute
+```
+
+---
+
 ### test/ — tabletop tests for the storage-model tooling
 
-Three runnable test scripts under [`test/`](test/) exercise the #207 plumbing without touching any VM or live config. Each writes its fixtures into a temp dir and tears down on exit. Run them individually or in sequence:
+Five runnable test scripts under [`test/`](test/) exercise the #207 + #209 plumbing without touching any VM or live config. Each writes its fixtures into a temp dir and tears down on exit. Run them individually or in sequence:
 
 ```bash
-scripts/test/test-convert-to-config.sh    # 9 cases — converter rules + idempotency + round-trip
-scripts/test/test-json-merge.sh           # 11 cases — 3-way merge: pin/adopt/orphan/auto + Pattern A inputs
+scripts/test/test-convert-to-config.sh    #  9 cases — converter rules + idempotency + round-trip
+scripts/test/test-json-merge.sh           # 11 cases — module 3-way merge: pin/adopt/orphan/auto + Pattern A inputs
 scripts/test/test-read-module-config.sh   #  4 cases — read funnel + jq_module_write Pattern A render
+scripts/test/test-zones-merge.sh          # 11 cases — zones 3-way merge: pin state, adopt vlantag, rename detection, backfill
+scripts/test/test-zone-state.sh           #  9 cases — verbs, no-op, Mandatory refusal, --force, missing zone, invalid verb
 ```
 
 Each script exits with the failure count (0 on success). They have no network or filesystem dependencies beyond `jq` and the schema file (`module-fields.json`), so they're suitable for CI.
