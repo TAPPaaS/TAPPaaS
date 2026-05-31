@@ -8,16 +8,20 @@
   "vmid": 312,
   "vmtag": "TAPPaaS,AI,GPU,vLLM",
   "node": "tappaas2",
-  "cores": 24,
-  "memory": "47104",
-  "diskSize": "32G",
-  "storage": "tanka1",
-  "imageType": "clone",
-  "image": "debian-12-standard_12.12-1_amd64.tar.zst",
-  "bridge0": "lan",
   "zone0": "srv-work",
   "dependsOn": [
     "cluster:lxc",
     "backup:vm"
-  ]
+  ],
+  "config": {
+    "cluster:lxc": {
+      "cores": 24,
+      "memory": "47104",
+      "diskSize": "32G",
+      "storage": "tanka1",
+      "imageType": "clone",
+      "image": "debian-12-standard_12.12-1_amd64.tar.zst",
+      "bridge0": "lan"
+    }
+  }
 }

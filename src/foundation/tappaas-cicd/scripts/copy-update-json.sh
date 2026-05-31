@@ -354,20 +354,21 @@ main() {
     info "Copying ${source_json} to ${dest_json}"
     cp "${source_json}" "${dest_json}"
 
-    # Pattern C (#161): if the source uses a Pattern-A `config` block, flatten it
-    # to the flat internal representation now, so the deployed config and all
-    # downstream tooling (install-module, service scripts, get_config_value)
-    # read flat top-level fields exactly as before. Flat sources are unchanged.
+    # Internal pipeline (#207): work on the flat representation throughout this
+    # function so overrides land cleanly. The dest_json is re-rendered in the
+    # canonical Pattern A shape as the very last step (see the regroup block
+    # at the end of this function). If the source uses a Pattern-A config
+    # block, flatten it up to top now.
     if declare -F normalize_module_config >/dev/null 2>&1 \
        && jq -e '(.config | type) == "object"' "${dest_json}" >/dev/null 2>&1; then
-        info "  Normalizing Pattern-A config block to flat fields (#161)"
+        info "  Flattening Pattern-A config block for internal processing"
         local norm_tmp
         norm_tmp=$(mktemp)
         if normalize_module_config < "${dest_json}" > "${norm_tmp}" && jq empty "${norm_tmp}" 2>/dev/null; then
             mv "${norm_tmp}" "${dest_json}"
         else
             rm -f "${norm_tmp}"
-            die "Failed to normalize Pattern-A config block in ${source_json}"
+            die "Failed to flatten Pattern-A config block in ${source_json}"
         fi
     fi
 
@@ -411,6 +412,18 @@ main() {
         apply_variant_defaults "${variant}" "${dest_json}" \
             "${has_explicit_vmname}" "${has_explicit_vmid}" \
             "${has_explicit_zone0}" "${has_explicit_proxydomain}"
+        # Persist the variant name on the installed config so update-module.sh
+        # can resolve the correct source file (#207). The variant field is
+        # treated as auto-managed by the 3-way merge — never adopted from
+        # the release source.
+        tmp_file=$(mktemp)
+        if jq --arg v "${variant}" '.variant = $v' "${dest_json}" > "${tmp_file}"; then
+            mv "${tmp_file}" "${dest_json}"
+            info "  Persisted variant = ${variant}"
+        else
+            rm -f "${tmp_file}"
+            warn "  Could not persist variant field"
+        fi
     fi
 
     # Parse and apply field modifications
@@ -493,30 +506,26 @@ main() {
         fi
     fi
 
-    # Reorder fields according to the standard field order from module-fields.json
-    if [[ -f "${SCHEMA_FILE}" ]]; then
-        local order_json
-        order_json=$(jq -c '.fieldOrder // empty' "${SCHEMA_FILE}" 2>/dev/null)
-        if [[ -n "${order_json}" ]]; then
-            tmp_file=$(mktemp)
-            local jq_filter
-            jq_filter=$(mktemp)
-            cat > "${jq_filter}" << 'JQEOF'
-. as $orig |
-reduce $order[] as $key (
-  {};
-  if ($orig | has($key)) then . + {($key): $orig[$key]} else . end
-) |
-. + ($orig | to_entries | map(select(.key as $k | $order | index($k) | not)) | from_entries)
-JQEOF
-            if jq --argjson order "${order_json}" -f "${jq_filter}" "${dest_json}" > "${tmp_file}"; then
-                mv "${tmp_file}" "${dest_json}"
-            else
-                rm -f "${tmp_file}"
-                warn "Could not reorder fields — keeping original order"
-            fi
-            rm -f "${jq_filter}"
+    # Render in canonical Pattern A on disk (#207). The converter also reorders
+    # top-level keys per .fieldOrder and reorders config sub-blocks, so the
+    # explicit reorder step that used to live here is no longer needed.
+    local convert_cli=""
+    for _cv in /home/tappaas/bin/convert-json-to-config.sh \
+               "$(dirname "${BASH_SOURCE[0]}")/convert-json-to-config.sh"; do
+        [[ -f "$_cv" ]] && { convert_cli="$_cv"; break; }
+    done
+    if [[ -n "${convert_cli}" ]]; then
+        info "  Rendering canonical Pattern A on disk (#207)"
+        local pa_tmp
+        pa_tmp=$(mktemp)
+        if "${convert_cli}" "${dest_json}" > "${pa_tmp}" 2>/dev/null && jq empty "${pa_tmp}" 2>/dev/null; then
+            mv "${pa_tmp}" "${dest_json}"
+        else
+            rm -f "${pa_tmp}"
+            die "Failed to render canonical Pattern A for ${source_json}"
         fi
+    else
+        warn "convert-json-to-config.sh not found — installed config will retain flat shape"
     fi
 
     # Final validation

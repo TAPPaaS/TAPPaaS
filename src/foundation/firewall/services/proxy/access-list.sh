@@ -26,7 +26,8 @@ proxy_resolve_access_list() {
     local al_name="tappaas-${module}"
     local -a zones=()
 
-    mapfile -t zones < <(jq -r '.proxyAllowedZones // [] | .[]' "${module_json}" 2>/dev/null)
+    # Normalize to flat form so this works whether module_json is flat or Pattern A (#207).
+    mapfile -t zones < <(normalize_module_config < "${module_json}" 2>/dev/null | jq -r '.proxyAllowedZones // [] | .[]' 2>/dev/null)
 
     if [[ ${#zones[@]} -eq 0 ]]; then
         if [[ -f "${zones_file}" ]]; then

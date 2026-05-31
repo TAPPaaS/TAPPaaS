@@ -17,18 +17,8 @@ set -euo pipefail
 
 # ── Logging ──────────────────────────────────────────────────────────
 
-readonly YW=$'\033[33m'
-readonly RD=$'\033[01;31m'
-readonly GN=$'\033[1;92m'
-readonly DGN=$'\033[32m'
-readonly BL=$'\033[36m'
-readonly CL=$'\033[m'
-readonly BOLD=$'\033[1m'
-
-info()  { echo -e "${DGN}$*${CL}"; }
-warn()  { echo -e "${YW}[WARN]${CL} $*"; }
-error() { echo -e "${RD}[ERROR]${CL} $*" >&2; }
-die()   { error "$@"; exit 1; }
+# shellcheck source=common-install-routines.sh disable=SC1091
+. /home/tappaas/bin/common-install-routines.sh
 
 # ── Arguments ────────────────────────────────────────────────────────
 
@@ -38,7 +28,7 @@ if [[ -z "${MODULE}" ]]; then
     exit 1
 fi
 
-readonly CONFIG_DIR="/home/tappaas/config"
+# CONFIG_DIR provided by common-install-routines.sh.
 readonly MODULE_JSON="${CONFIG_DIR}/${MODULE}.json"
 readonly SYSTEM_CONFIG="${CONFIG_DIR}/configuration.json"
 readonly FIREWALL_JSON="${CONFIG_DIR}/firewall.json"
@@ -56,9 +46,9 @@ if [[ "${FIREWALL_TYPE}" == "NONE" ]]; then
     # Resolve proxy domain for the reminder message
     PROXY_DOMAIN=""
     if [[ -f "${MODULE_JSON}" ]] && [[ -f "${SYSTEM_CONFIG}" ]]; then
-        VMNAME=$(jq -r '.vmname // empty' "${MODULE_JSON}")
+        VMNAME=$(get_config_value 'vmname' '')
         [[ -z "${VMNAME}" ]] && VMNAME="${MODULE}"
-        PROXY_DOMAIN=$(jq -r '.proxyDomain // empty' "${MODULE_JSON}")
+        PROXY_DOMAIN=$(get_config_value 'proxyDomain' '')
         if [[ -z "${PROXY_DOMAIN}" ]]; then
             TAPPAAS_DOMAIN=$(jq -r '.tappaas.domain // empty' "${SYSTEM_CONFIG}")
             [[ -n "${TAPPAAS_DOMAIN}" ]] && PROXY_DOMAIN="${VMNAME}.${TAPPAAS_DOMAIN}"
@@ -91,12 +81,12 @@ fi
 
 PROXY_DOMAIN=""
 if [[ -f "${MODULE_JSON}" ]]; then
-    VMNAME=$(jq -r '.vmname // empty' "${MODULE_JSON}")
+    VMNAME=$(get_config_value 'vmname' '')
     if [[ -z "${VMNAME}" ]]; then
         VMNAME="${MODULE}"
     fi
 
-    PROXY_DOMAIN=$(jq -r '.proxyDomain // empty' "${MODULE_JSON}")
+    PROXY_DOMAIN=$(get_config_value 'proxyDomain' '')
     if [[ -z "${PROXY_DOMAIN}" ]] && [[ -f "${SYSTEM_CONFIG}" ]]; then
         TAPPAAS_DOMAIN=$(jq -r '.tappaas.domain // empty' "${SYSTEM_CONFIG}")
         if [[ -n "${TAPPAAS_DOMAIN}" ]]; then

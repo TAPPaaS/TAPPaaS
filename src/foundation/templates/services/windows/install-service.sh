@@ -44,7 +44,7 @@ readonly VM_HOST
 readonly CONFIG_DIR="/home/tappaas/config"
 readonly MODULE_JSON="${CONFIG_DIR}/${VMNAME}.json"
 
-ENABLE_RDP="$(jq -r '.windows.enableRDP // false' "${MODULE_JSON}")"
+ENABLE_RDP="$(read_module_config "${VMNAME}" | jq -r '.windows.enableRDP // false')"
 readonly ENABLE_RDP
 
 readonly SSH_OPTS="-o ConnectTimeout=30 -o StrictHostKeyChecking=accept-new -o UserKnownHostsFile=/dev/null -o LogLevel=ERROR -o BatchMode=yes"

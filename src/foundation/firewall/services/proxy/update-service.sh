@@ -18,18 +18,8 @@ set -euo pipefail
 
 # ── Logging ──────────────────────────────────────────────────────────
 
-readonly YW=$'\033[33m'
-readonly RD=$'\033[01;31m'
-readonly GN=$'\033[1;92m'
-readonly DGN=$'\033[32m'
-readonly BL=$'\033[36m'
-readonly CL=$'\033[m'
-readonly BOLD=$'\033[1m'
-
-info()  { echo -e "${DGN}$*${CL}"; }
-warn()  { echo -e "${YW}[WARN]${CL} $*"; }
-error() { echo -e "${RD}[ERROR]${CL} $*" >&2; }
-die()   { error "$@"; exit 1; }
+# shellcheck source=common-install-routines.sh disable=SC1091
+. /home/tappaas/bin/common-install-routines.sh
 
 # ── Arguments ────────────────────────────────────────────────────────
 
@@ -39,7 +29,7 @@ if [[ -z "${MODULE}" ]]; then
     exit 1
 fi
 
-readonly CONFIG_DIR="/home/tappaas/config"
+# CONFIG_DIR provided by common-install-routines.sh.
 readonly MODULE_JSON="${CONFIG_DIR}/${MODULE}.json"
 readonly SYSTEM_CONFIG="${CONFIG_DIR}/configuration.json"
 readonly FIREWALL_JSON="${CONFIG_DIR}/firewall.json"
@@ -63,24 +53,24 @@ fi
 
 # ── Read expected configuration ─────────────────────────────────────
 
-VMNAME=$(jq -r '.vmname // empty' "${MODULE_JSON}")
+VMNAME=$(get_config_value 'vmname' '')
 if [[ -z "${VMNAME}" ]]; then
     VMNAME="${MODULE}"
 fi
 
-ZONE=$(jq -r '.zone0 // "srv-home"' "${MODULE_JSON}")
+ZONE=$(get_config_value 'zone0' 'srv-home')
 TAPPAAS_DOMAIN=$(jq -r '.tappaas.domain // empty' "${SYSTEM_CONFIG}")
 
 if [[ -z "${TAPPAAS_DOMAIN}" ]]; then
     die "tappaas.domain not set in ${SYSTEM_CONFIG}"
 fi
 
-PROXY_DOMAIN=$(jq -r '.proxyDomain // empty' "${MODULE_JSON}")
+PROXY_DOMAIN=$(get_config_value 'proxyDomain' '')
 if [[ -z "${PROXY_DOMAIN}" ]]; then
     PROXY_DOMAIN="${VMNAME}.${TAPPAAS_DOMAIN}"
 fi
 
-PROXY_PORT=$(jq -r '.proxyPort // 80' "${MODULE_JSON}")
+PROXY_PORT=$(get_config_value 'proxyPort' '80')
 UPSTREAM="${VMNAME}.${ZONE}.internal"
 DESCRIPTION="TAPPaaS: ${MODULE}"
 
@@ -120,7 +110,7 @@ CHANGES_MADE=false
 # proxyTls (issue #254): dns01 = bind the os-acme-client wildcard via Caddy's
 # CustomCertificate refid; http01 = let Caddy issue per-domain via ACME HTTP-01
 # (requires the domain be publicly reachable on :80). Either reconciles in place.
-PROXY_TLS=$(jq -r '.proxyTls // "dns01"' "${MODULE_JSON}")
+PROXY_TLS=$(get_config_value 'proxyTls' 'dns01')
 CADDY_DOMAIN_ARGS=()
 if [[ "${PROXY_TLS}" == "dns01" ]]; then
     TLS_CERT_REFID=$(jq -r '.tappaas.tlsCertRefid // ""' "${CONFIG_DIR}/configuration.json" 2>/dev/null)
@@ -149,7 +139,7 @@ fi
 [[ -n "${ACL_NAME}" ]] && ACL_ARGS=(--access-list "${ACL_NAME}")
 
 TLS_ARGS=()
-if [[ "$(jq -r '.proxyUpstreamTls // "false"' "${MODULE_JSON}")" == "true" ]]; then
+if [[ "$(get_config_value 'proxyUpstreamTls' 'false')" == "true" ]]; then
     TLS_ARGS=(--upstream-tls)
 fi
 

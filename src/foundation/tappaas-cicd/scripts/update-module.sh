@@ -86,48 +86,19 @@ EOF
 
 # ── Helpers ──────────────────────────────────────────────────────────
 
-# Update the module JSON: set updateTime and reorder fields
+# Update the module JSON: set updateTime and re-render in canonical Pattern A.
+# Field reordering is now handled by regroup_to_pattern_a (called inside
+# jq_module_write), so the explicit reorder step is no longer needed (#207).
 finalize_config() {
-    local module_json="$1"
+    local module="$1"
 
-    # Set updateTime (local time, YYYYMMDD-HH:MM:SS)
-    local update_time tmp_file
+    # Set updateTime (local time, YYYYMMDD-HH:MM:SS). Pattern A-aware write.
+    local update_time
     update_time=$(date +'%Y%m%d-%H:%M:%S')
-    tmp_file=$(mktemp)
-    if jq --arg t "${update_time}" '.updateTime = $t' "${module_json}" > "${tmp_file}"; then
-        mv "${tmp_file}" "${module_json}"
+    if jq_module_write "${module}" '.updateTime = $t' --arg t "${update_time}"; then
         info "  Set updateTime = ${update_time}"
     else
-        rm -f "${tmp_file}"
         warn "Could not set updateTime"
-    fi
-
-    # Reorder fields according to the standard field order from module-fields.json
-    local schema_file="/home/tappaas/TAPPaaS/src/foundation/module-fields.json"
-    if [[ -f "${schema_file}" ]]; then
-        local order_json
-        order_json=$(jq -c '.fieldOrder // empty' "${schema_file}" 2>/dev/null)
-        if [[ -n "${order_json}" ]]; then
-            tmp_file=$(mktemp)
-            local jq_filter
-            jq_filter=$(mktemp)
-            cat > "${jq_filter}" << 'JQEOF'
-. as $orig |
-reduce $order[] as $key (
-  {};
-  if ($orig | has($key)) then . + {($key): $orig[$key]} else . end
-) |
-. + ($orig | to_entries | map(select(.key as $k | $order | index($k) | not)) | from_entries)
-JQEOF
-            if jq --argjson order "${order_json}" -f "${jq_filter}" "${module_json}" > "${tmp_file}"; then
-                mv "${tmp_file}" "${module_json}"
-                debug "  Reordered fields to standard order"
-            else
-                rm -f "${tmp_file}"
-                warn "Could not reorder fields — keeping current order"
-            fi
-            rm -f "${jq_filter}"
-        fi
     fi
 }
 
@@ -182,13 +153,38 @@ main() {
     fi
     info "${BOLD}╚══════════════════════════════════════════════╝${CL}"
 
+    # ── Step 0: 3-way merge module config against new release source (#207) ──
+    # Reconciles operator customizations with release updates BEFORE we
+    # snapshot or run hooks, so the snapshot and all hooks see the merged
+    # config. Per-leaf rule: adopt release for fields the operator hasn't
+    # touched; pin fields the operator has customized. .orig advances to the
+    # current release. If .orig is missing (pre-#207 install) we backfill it
+    # from source so existing customizations remain pinned.
+    echo ""
+    info "${BOLD}Step 0: Reconcile module config (3-way merge)${CL}"
+    if module_dir_pre=$(get_module_dir "${module}" 2>/dev/null); then
+        if [[ -f /home/tappaas/bin/apply-json-merge.sh ]]; then
+            # shellcheck disable=SC1091
+            . /home/tappaas/bin/apply-json-merge.sh
+            if apply_three_way_merge "${module}" "${module_dir_pre}"; then
+                info "  ${GN}✓${CL} Config reconciliation complete"
+            else
+                warn "  3-way merge reported an error — continuing with current config unchanged"
+            fi
+        else
+            warn "  apply-json-merge.sh not available — skipping 3-way merge"
+        fi
+    else
+        info "  Module location not resolved — skipping (first-update before location was set)"
+    fi
+
     # ── Step 1: Pre-update snapshot (only for modules with a VM) ─────
     echo ""
     info "${BOLD}Step 1: Create pre-update snapshot${CL}"
 
     local snapshot_created=false
     local has_vm=false
-    if jq -e '.dependsOn // [] | index("cluster:vm")' "${module_json}" &>/dev/null; then
+    if read_module_config "${module}" | jq -e '.dependsOn // [] | index("cluster:vm")' &>/dev/null; then
         has_vm=true
     fi
 
@@ -254,7 +250,7 @@ main() {
     info "${BOLD}Step 4: Call dependency service updaters${CL}"
 
     local depends_on
-    depends_on=$(jq -r '.dependsOn // [] | .[]' "${module_json}" 2>/dev/null)
+    depends_on=$(read_module_config "${module}" | jq -r '.dependsOn // [] | .[]' 2>/dev/null)
 
     if [[ -z "${depends_on}" ]]; then
         info "  No dependency services to call"
@@ -327,7 +323,7 @@ main() {
         fatal "Post-update tests reported a fatal error"
         if [[ "${OPT_NO_SNAPSHOT}" -eq 1 ]]; then
             warn "Rollback skipped (--no-snapshot) — manual intervention required"
-            finalize_config "${module_json}"
+            finalize_config "${module}"
             exit 2
         elif [[ "${snapshot_created}" == true ]]; then
             echo ""
@@ -353,12 +349,12 @@ main() {
     else
         # Non-fatal test failure — warn but don't rollback
         warn "Post-update tests failed (exit ${post_test_exit}) — update completed but module may have issues"
-        finalize_config "${module_json}"
+        finalize_config "${module}"
         exit 1
     fi
 
     # ── Success ───────────────────────────────────────────────────────
-    finalize_config "${module_json}"
+    finalize_config "${module}"
 
     echo ""
     info "${GN}${BOLD}Module '${module}' updated successfully${CL}"

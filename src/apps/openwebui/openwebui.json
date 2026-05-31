@@ -1,7 +1,6 @@
 {
   "description": "TAPPaaS Open Webui",
   "version": "0.6.0",
-  "appVersion": "0.9.5",
   "releaseDate": "2026-05-20",
   "maintainer": "@ErikDaniel007",
   "status": "Development",
@@ -9,15 +8,7 @@
   "vmid": 311,
   "vmtag": "TAPPaaS,App",
   "node": "tappaas2",
-  "cores": 2,
-  "memory": "4096",
-  "diskSize": "32G",
-  "storage": "tanka1",
-  "imageType": "clone",
-  "image": "8080",
-  "bridge0": "lan",
   "zone0": "srv-work",
-  "proxyPort": 8080,
   "dependsOn": [
     "cluster:vm",
     "templates:nixos",
@@ -28,7 +19,22 @@
     "firewall:rules"
   ],
   "provides": [],
-  "proxyAllowedZones": [
-    "home"
-  ]
+  "appVersion": "0.9.5",
+  "config": {
+    "cluster:vm": {
+      "cores": 2,
+      "memory": "4096",
+      "diskSize": "32G",
+      "storage": "tanka1",
+      "imageType": "clone",
+      "image": "8080",
+      "bridge0": "lan"
+    },
+    "firewall:proxy": {
+      "proxyPort": 8080,
+      "proxyAllowedZones": [
+        "home"
+      ]
+    }
+  }
 }

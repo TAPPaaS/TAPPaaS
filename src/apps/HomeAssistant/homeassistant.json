@@ -7,39 +7,55 @@
   "vmname": "homeassistant",
   "vmid": 210,
   "vmtag": "TAPPaaS,App,HomeAutomation",
-  "cores": 2,
-  "memory": "4096",
-  "diskSize": "32G",
-  "storage": "tanka1",
-  "imageType": "img",
-  "image": "haos_ova-17.3.qcow2.xz",
-  "imageLocation": "https://github.com/home-assistant/operating-system/releases/download/17.3/",
-  "bios": "ovmf",
-  "ostype": "l26",
-  "cloudInit": false,
-  "sshAccess": false,
-  "bridge0": "lan",
   "zone0": "srv-home",
-  "ports": [
-    { "port": 8123, "protocol": "TCP", "description": "Home Assistant web UI" }
-  ],
-  "proxyPort": 8123,
-  "proxyAllowedZones": ["mgmt", "home", "work", "srv-home", "srv-work", "srv-cust"],
   "dependsOn": [
     "cluster:vm",
     "backup:vm",
     "firewall:proxy",
     "identity:identity",
     "firewall:rules",
-
     "alfen:ui",
     "alfen:discovery",
     "alfen:modbus",
-
     "sonos:audio",
     "sonos:airplay",
-
     "reolink:rtsp"
   ],
-  "provides": []
+  "provides": [],
+  "config": {
+    "cluster:vm": {
+      "bios": "ovmf",
+      "ostype": "l26",
+      "cores": 2,
+      "memory": "4096",
+      "diskSize": "32G",
+      "storage": "tanka1",
+      "imageType": "img",
+      "image": "haos_ova-17.3.qcow2.xz",
+      "imageLocation": "https://github.com/home-assistant/operating-system/releases/download/17.3/",
+      "cloudInit": false,
+      "sshAccess": false,
+      "bridge0": "lan"
+    },
+    "firewall:rules": {
+      "ports": [
+        {
+          "port": 8123,
+          "protocol": "TCP",
+          "description": "Home Assistant web UI"
+        }
+      ]
+    },
+    "firewall:proxy": {
+      "proxyPort": 8123,
+      "proxyAllowedZones": [
+        "mgmt",
+        "home",
+        "work",
+        "srv-home",
+        "srv-work",
+        "srv-cust"
+      ]
+    }
+  }
 }

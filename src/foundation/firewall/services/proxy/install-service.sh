@@ -63,12 +63,12 @@ fi
 
 # ── Read module configuration ───────────────────────────────────────
 
-VMNAME=$(jq -r '.vmname // empty' "${MODULE_JSON}")
+VMNAME=$(get_config_value 'vmname' '')
 if [[ -z "${VMNAME}" ]]; then
     VMNAME="${MODULE}"
 fi
 
-ZONE=$(jq -r '.zone0 // "srv-home"' "${MODULE_JSON}")
+ZONE=$(get_config_value 'zone0' 'srv-home')
 TAPPAAS_DOMAIN=$(jq -r '.tappaas.domain // empty' "${SYSTEM_CONFIG}")
 
 if [[ -z "${TAPPAAS_DOMAIN}" ]]; then
@@ -76,13 +76,13 @@ if [[ -z "${TAPPAAS_DOMAIN}" ]]; then
 fi
 
 # Resolve proxyDomain: explicit in module JSON, or default to <vmname>.<domain>
-PROXY_DOMAIN=$(jq -r '.proxyDomain // empty' "${MODULE_JSON}")
+PROXY_DOMAIN=$(get_config_value 'proxyDomain' '')
 if [[ -z "${PROXY_DOMAIN}" ]]; then
     PROXY_DOMAIN="${VMNAME}.${TAPPAAS_DOMAIN}"
 fi
 
 # Resolve proxyPort: explicit in module JSON, or default to 80
-PROXY_PORT=$(jq -r '.proxyPort // 80' "${MODULE_JSON}")
+PROXY_PORT=$(get_config_value 'proxyPort' '80')
 
 # Build upstream target
 UPSTREAM="${VMNAME}.${ZONE}.internal"
@@ -146,7 +146,7 @@ fi
 #           in configuration.json (acme-setup.sh does this).
 #   http01 → Caddy issues a per-domain cert via ACME HTTP-01; the domain MUST
 #            be reachable from the internet on :80. No DNS API needed.
-PROXY_TLS=$(jq -r '.proxyTls // "dns01"' "${MODULE_JSON}")
+PROXY_TLS=$(get_config_value 'proxyTls' 'dns01')
 CADDY_DOMAIN_ARGS=()
 if [[ "${PROXY_TLS}" == "dns01" ]]; then
     TLS_CERT_REFID=$(jq -r '.tappaas.tlsCertRefid // ""' "${CONFIG_DIR}/configuration.json" 2>/dev/null)
@@ -180,7 +180,7 @@ fi
 
 # HTTPS upstream (e.g. the OPNsense GUI on :8443).
 TLS_ARGS=()
-if [[ "$(jq -r '.proxyUpstreamTls // "false"' "${MODULE_JSON}")" == "true" ]]; then
+if [[ "$(get_config_value 'proxyUpstreamTls' 'false')" == "true" ]]; then
     info "  Upstream is HTTPS (proxyUpstreamTls=true)"
     TLS_ARGS=(--upstream-tls)
 fi

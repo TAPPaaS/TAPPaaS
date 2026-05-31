@@ -7,13 +7,6 @@
   "vmname": "vaultwarden",
   "vmid": 610,
   "vmtag": "TAPPaaS,App",
-  "cores": 1,
-  "memory": "1024",
-  "diskSize": "8G",
-  "storage": "tanka1",
-  "imageType": "clone",
-  "image": "8080",
-  "bridge0": "lan",
   "zone0": "dmz",
   "dependsOn": [
     "cluster:vm",
@@ -24,7 +17,20 @@
     "firewall:proxy"
   ],
   "provides": [],
-  "proxyAllowedZones": [
-    "internet"
-  ]
+  "config": {
+    "cluster:vm": {
+      "cores": 1,
+      "memory": "1024",
+      "diskSize": "8G",
+      "storage": "tanka1",
+      "imageType": "clone",
+      "image": "8080",
+      "bridge0": "lan"
+    },
+    "firewall:proxy": {
+      "proxyAllowedZones": [
+        "internet"
+      ]
+    }
+  }
 }

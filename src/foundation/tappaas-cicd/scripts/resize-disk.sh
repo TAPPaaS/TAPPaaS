@@ -11,30 +11,10 @@
 
 set -e
 
-# Color definitions
-YW=$(echo "\033[33m")    # Yellow
-RD=$(echo "\033[01;31m") # Red
-BGN=$(echo "\033[4;92m") # Bright Green with underline
-DGN=$(echo "\033[32m")   # Green
-CL=$(echo "\033[m")      # Clear
-BOLD=$(echo "\033[1m")   # Bold
-
-function info() {
-  echo -e "${DGN}${1}${CL}"
-}
-
-function warn() {
-  echo -e "${YW}[WARN]${CL} ${1}"
-}
-
-function error() {
-  echo -e "${RD}[ERROR]${CL} ${1}" >&2
-  exit 1
-}
-
 # Check hostname
 if [ "$(hostname)" != "tappaas-cicd" ]; then
-  error "This script must be run on the TAPPaaS-CICD host (hostname tappaas-cicd)."
+  echo "This script must be run on the TAPPaaS-CICD host (hostname tappaas-cicd)." >&2
+  exit 1
 fi
 
 # Validate arguments
@@ -47,32 +27,22 @@ fi
 VMNAME="$1"
 NEW_SIZE="$2"
 
+# Load common helpers (provides get_config_value, normalize_module_config,
+# read_module_config, jq_module_write — all Pattern A / flat agnostic). #207
+# shellcheck source=common-install-routines.sh disable=SC1091
+. /home/tappaas/bin/common-install-routines.sh
+
 # Validate size format
 if ! [[ "$NEW_SIZE" =~ ^[0-9]+[GMTK]$ ]]; then
-  error "Invalid size format: $NEW_SIZE. Use format like 50G, 100G, 1T"
+  die "Invalid size format: $NEW_SIZE. Use format like 50G, 100G, 1T"
 fi
 
 # Load JSON configuration
 JSON_CONFIG="/home/tappaas/config/${VMNAME}.json"
 if [ ! -f "$JSON_CONFIG" ]; then
-  error "Configuration file not found: $JSON_CONFIG"
+  die "Configuration file not found: $JSON_CONFIG"
 fi
-JSON=$(cat "$JSON_CONFIG")
-
-function get_config_value() {
-  local key="$1"
-  local default="$2"
-  local value
-  if ! echo "$JSON" | jq -e --arg K "$key" 'has($K)' >/dev/null; then
-    if [ -z "$default" ]; then
-      error "Missing required key '$key' in JSON configuration."
-    fi
-    value="$default"
-  else
-    value=$(echo "$JSON" | jq -r --arg KEY "$key" '.[$KEY]')
-  fi
-  echo -n "$value"
-}
+# $JSON is auto-loaded normalized by common-install-routines.sh from $1=VMNAME.
 
 # Convert size to bytes for comparison
 size_to_bytes() {
@@ -109,7 +79,7 @@ CURRENT_BYTES=$(size_to_bytes "$ACTUAL_SIZE")
 NEW_BYTES=$(size_to_bytes "$NEW_SIZE")
 
 if [ "$NEW_BYTES" -le "$CURRENT_BYTES" ]; then
-  error "New size ($NEW_SIZE) must be larger than current size ($ACTUAL_SIZE). Disk shrinking is not supported."
+  die "New size ($NEW_SIZE) must be larger than current size ($ACTUAL_SIZE). Disk shrinking is not supported."
 fi
 
 # Resize disk in Proxmox
@@ -209,10 +179,9 @@ esac
 NEW_FS_SIZE=$(ssh -o StrictHostKeyChecking=no "tappaas@${TARGET}" "df -BG / | tail -1 | awk '{print \$2}'" 2>/dev/null | tr -d 'G')
 info "New filesystem size: ${NEW_FS_SIZE}G"
 
-# Update JSON configuration with new size
+# Update JSON configuration with new size (Pattern A-aware write; #207)
 info "Updating JSON configuration..."
-jq --arg size "$NEW_SIZE" '.diskSize = $size' "$JSON_CONFIG" > "${JSON_CONFIG}.tmp" && \
-  mv "${JSON_CONFIG}.tmp" "$JSON_CONFIG"
+jq_module_write "$VMNAME" '.diskSize = $size' --arg size "$NEW_SIZE"
 
 info "${BOLD}Disk resize completed successfully!${CL}"
 info "VM $VMNAME disk resized from $ACTUAL_SIZE to $NEW_SIZE"

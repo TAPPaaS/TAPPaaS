@@ -7,15 +7,7 @@
   "vmname": "identity",
   "vmid": 140,
   "vmtag": "TAPPaaS,Foundation",
-  "cores": 2,
-  "memory": "4096",
-  "diskSize": "32G",
-  "storage": "tanka1",
-  "imageType": "clone",
-  "image": "8080",
-  "bridge0": "lan",
   "zone0": "mgmt",
-  "proxyPort": 9000,
   "dependsOn": [
     "cluster:vm",
     "cluster:ha",
@@ -27,7 +19,21 @@
     "accessControl",
     "identity"
   ],
-  "proxyAllowedZones": [
-    "internet"
-  ]
+  "config": {
+    "cluster:vm": {
+      "cores": 2,
+      "memory": "4096",
+      "diskSize": "32G",
+      "storage": "tanka1",
+      "imageType": "clone",
+      "image": "8080",
+      "bridge0": "lan"
+    },
+    "firewall:proxy": {
+      "proxyPort": 9000,
+      "proxyAllowedZones": [
+        "internet"
+      ]
+    }
+  }
 }

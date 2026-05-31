@@ -52,9 +52,9 @@ fi
 
 # ── Short-circuit when the module has no firewall:rules content ─────
 
-INGRESS_COUNT=$(jq -r '(.ingress // []) | length' "${MODULE_JSON}")
-EGRESS_COUNT=$(jq -r '(.egress // []) | length' "${MODULE_JSON}")
-ALIAS_COUNT=$(jq -r '(.aliases // {}) | length' "${MODULE_JSON}")
+INGRESS_COUNT=$(read_module_config "${MODULE}" | jq -r '(.ingress // []) | length')
+EGRESS_COUNT=$(read_module_config "${MODULE}" | jq -r '(.egress // []) | length')
+ALIAS_COUNT=$(read_module_config "${MODULE}" | jq -r '(.aliases // {}) | length')
 
 # Auto-pinholes (issue #173): even if the module has no manual ingress/egress/
 # aliases, rules-manager may still need to run when a dependsOn entry points
@@ -74,7 +74,7 @@ while read -r dep; do
         HAS_AUTO_PINHOLE=1
         break
     fi
-done < <(jq -r '(.dependsOn // [])[]' "${MODULE_JSON}")
+done < <(read_module_config "${MODULE}" | jq -r '(.dependsOn // [])[]')
 
 if (( INGRESS_COUNT == 0 && EGRESS_COUNT == 0 && ALIAS_COUNT == 0 && HAS_AUTO_PINHOLE == 0 )); then
     info "  No ports/ingress/egress/aliases declared and no dependsOn pinholes — nothing to apply."

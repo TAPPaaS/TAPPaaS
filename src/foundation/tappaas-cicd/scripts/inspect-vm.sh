@@ -18,18 +18,8 @@ set -euo pipefail
 
 # ── Logging ──────────────────────────────────────────────────────────
 
-readonly YW=$'\033[33m'
-readonly RD=$'\033[01;31m'
-readonly GN=$'\033[1;92m'
-readonly DGN=$'\033[32m'
-readonly BL=$'\033[36m'
-readonly CL=$'\033[m'
-readonly BOLD=$'\033[1m'
-
-info()  { echo -e "${DGN}$*${CL}"; }
-warn()  { echo -e "${YW}[WARN]${CL} $*"; }
-error() { echo -e "${RD}[ERROR]${CL} $*" >&2; }
-die()   { error "$@"; exit 1; }
+# shellcheck source=common-install-routines.sh disable=SC1091
+. /home/tappaas/bin/common-install-routines.sh
 
 # ── Arguments ────────────────────────────────────────────────────────
 
@@ -41,7 +31,7 @@ fi
 
 MODULE="$1"
 
-readonly CONFIG_DIR="/home/tappaas/config"
+# CONFIG_DIR provided by common-install-routines.sh
 readonly MODULE_JSON="${CONFIG_DIR}/${MODULE}.json"
 readonly MGMT="mgmt"
 
@@ -51,9 +41,9 @@ if [[ ! -f "${MODULE_JSON}" ]]; then
     die "Module config not found: ${MODULE_JSON} — is '${MODULE}' installed?"
 fi
 
-VMID=$(jq -r '.vmid // empty' "${MODULE_JSON}")
-NODE=$(jq -r '.node // "tappaas1"' "${MODULE_JSON}")
-VMNAME=$(jq -r '.vmname // empty' "${MODULE_JSON}")
+VMID=$(get_config_value 'vmid' '')
+NODE=$(get_config_value 'node' 'tappaas1')
+VMNAME=$(get_config_value 'vmname' '')
 [[ -z "${VMNAME}" ]] && VMNAME="${MODULE}"
 
 if [[ -z "${VMID}" ]]; then
@@ -64,7 +54,7 @@ NODE_FQDN="${NODE}.${MGMT}.internal"
 
 # ── Locate git source JSON ───────────────────────────────────────────
 
-LOCATION=$(jq -r '.location // empty' "${MODULE_JSON}")
+LOCATION=$(get_config_value 'location' '')
 GIT_JSON=""
 
 if [[ -n "${LOCATION}" && -f "${LOCATION}/${MODULE}.json" ]]; then
@@ -105,12 +95,13 @@ ACTUAL_NODE=$(ssh root@"${NODE_FQDN}" \
 # ── Helper: get config value ─────────────────────────────────────────
 
 get_cfg() {
-    jq -r --arg k "$1" '.[$k] // empty' "${MODULE_JSON}" 2>/dev/null
+    # Normalize Pattern A → flat so .<key> resolves the same regardless of on-disk shape.
+    normalize_module_config < "${MODULE_JSON}" 2>/dev/null | jq -r --arg k "$1" '.[$k] // empty' 2>/dev/null
 }
 
 get_git() {
     if [[ -n "${GIT_JSON}" ]]; then
-        jq -r --arg k "$1" '.[$k] // empty' "${GIT_JSON}" 2>/dev/null
+        normalize_module_config < "${GIT_JSON}" 2>/dev/null | jq -r --arg k "$1" '.[$k] // empty' 2>/dev/null
     fi
 }
 

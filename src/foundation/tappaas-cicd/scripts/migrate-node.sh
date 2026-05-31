@@ -25,6 +25,11 @@ set -euo pipefail
 
 # ── Logging ──────────────────────────────────────────────────────────
 
+# Source for read_module_config (#207); local logging defs below override
+# common's so output style is unchanged.
+# shellcheck source=common-install-routines.sh disable=SC1091
+. /home/tappaas/bin/common-install-routines.sh
+
 readonly YW=$'\033[33m'
 readonly RD=$'\033[01;31m'
 readonly GN=$'\033[1;92m'
@@ -101,13 +106,15 @@ get_module_configs() {
         local basename
         basename=$(basename "${module_json}" .json)
 
-        local vmid config_node ha_node vmname
-        vmid=$(jq -r '.vmid // empty' "${module_json}" 2>/dev/null)
+        local cfg vmid config_node ha_node vmname
+        # Read normalized once (Pattern A or flat agnostic; #207).
+        cfg=$(read_module_config "${basename}" 2>/dev/null) || continue
+        vmid=$(echo "${cfg}" | jq -r '.vmid // empty')
         [[ -n "${vmid}" ]] || continue
 
-        config_node=$(jq -r '.node // empty' "${module_json}" 2>/dev/null)
-        ha_node=$(jq -r '.HANode // empty' "${module_json}" 2>/dev/null)
-        vmname=$(jq -r '.vmname // empty' "${module_json}" 2>/dev/null)
+        config_node=$(echo "${cfg}" | jq -r '.node // empty')
+        ha_node=$(echo "${cfg}" | jq -r '.HANode // empty')
+        vmname=$(echo "${cfg}" | jq -r '.vmname // empty')
         vmname="${vmname:-${basename}}"
 
         printf '%s|%s|%s|%s|%s\n' "${basename}" "${vmid}" "${config_node:-NONE}" "${ha_node:-NONE}" "${vmname}"

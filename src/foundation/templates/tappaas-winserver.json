@@ -5,24 +5,28 @@
   "vmname": "tappaas-winserver",
   "vmid": 8081,
   "vmtag": "TAPPaaS,Foundation",
-  "bios": "ovmf",
-  "ostype": "win11",
-  "cputype": "x86-64-v2-AES",
-  "cores": 4,
-  "memory": "8192",
-  "diskSize": "32G",
-  "storage": "tanka1",
-  "imageType": "iso",
-  "image": "26100.32230.260111-0550.lt_release_svc_refresh_SERVER_EVAL_x64FRE_en-us.iso",
-  "imageLocation": "/var/lib/vz/template/iso/",
-  "bridge0": "lan",
   "zone0": "mgmt",
-  "cloudInit": "false",
   "dependsOn": [
     "cluster:vm"
   ],
-  "autoInstall": true,
   "provides": [
     "windows"
-  ]
+  ],
+  "config": {
+    "cluster:vm": {
+      "bios": "ovmf",
+      "ostype": "win11",
+      "cputype": "x86-64-v2-AES",
+      "cores": 4,
+      "memory": "8192",
+      "diskSize": "32G",
+      "storage": "tanka1",
+      "imageType": "iso",
+      "image": "26100.32230.260111-0550.lt_release_svc_refresh_SERVER_EVAL_x64FRE_en-us.iso",
+      "imageLocation": "/var/lib/vz/template/iso/",
+      "cloudInit": "false",
+      "autoInstall": true,
+      "bridge0": "lan"
+    }
+  }
 }

@@ -5,21 +5,25 @@
   "vmname": "tappaas-nixos",
   "vmid": 8080,
   "vmtag": "TAPPaaS,Foundation",
-  "cores": 2,
-  "memory": "4096",
-  "diskSize": "16G",
-  "storage": "tanka1",
-  "bios": "ovmf",
-  "imageType": "img",
-  "image": "tappaas-nixos.qcow2.zst",
-  "imageLocation": "https://github.com/TAPPaaS/TAPPaaS/releases/download/nixos-template-v1.1/",
-  "bridge0": "lan",
   "zone0": "mgmt",
   "dependsOn": [
     "cluster:vm"
   ],
-  "autoInstall": false,
   "provides": [
     "nixos"
-  ]
+  ],
+  "config": {
+    "cluster:vm": {
+      "bios": "ovmf",
+      "cores": 2,
+      "memory": "4096",
+      "diskSize": "16G",
+      "storage": "tanka1",
+      "imageType": "img",
+      "image": "tappaas-nixos.qcow2.zst",
+      "imageLocation": "https://github.com/TAPPaaS/TAPPaaS/releases/download/nixos-template-v1.1/",
+      "autoInstall": false,
+      "bridge0": "lan"
+    }
+  }
 }

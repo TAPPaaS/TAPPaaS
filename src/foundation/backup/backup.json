@@ -1,23 +1,23 @@
 {
-    "description": "TAPPaaS Proxmox Backup Server configuration",
-    "version": "1.0",
-    "vmname": "backup",
-    "vmtag": "TAPPaaS,Foundation",
-    "node": "tappaas3",
-    "storage": "tankc1",
-    "pbsStorageName": "tappaas_backup",
-    "alwaysBackup": [
-        "firewall",
-        "tappaas-cicd"
-    ],
-    "imageType": "apt",
-    "image": "pbs",
-    "imageLocation": "http://download.proxmox.com/debian/pbs",
-    "zone0": "mgmt",
-    "dependsOn": [],
-    "provides": [
-        "vm",
-        "remote",
-        "external"
-    ]
+  "description": "TAPPaaS Proxmox Backup Server configuration",
+  "version": "1.0",
+  "vmname": "backup",
+  "vmtag": "TAPPaaS,Foundation",
+  "node": "tappaas3",
+  "storage": "tankc1",
+  "pbsStorageName": "tappaas_backup",
+  "alwaysBackup": [
+    "firewall",
+    "tappaas-cicd"
+  ],
+  "imageType": "apt",
+  "image": "pbs",
+  "imageLocation": "http://download.proxmox.com/debian/pbs",
+  "zone0": "mgmt",
+  "dependsOn": [],
+  "provides": [
+    "vm",
+    "remote",
+    "external"
+  ]
 }

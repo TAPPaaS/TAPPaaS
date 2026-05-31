@@ -270,7 +270,7 @@ fi
 
 # For ISO-based Windows template builds: start VM, wait for sysprep shutdown,
 # delete ISOs, and convert to a Proxmox template.
-_PROVIDES=$(jq -r '.provides // [] | .[]' "/home/tappaas/config/$1.json" 2>/dev/null) || _PROVIDES=""
+_PROVIDES=$(read_module_config "$1" 2>/dev/null | jq -r '.provides // [] | .[]' 2>/dev/null) || _PROVIDES=""
 if [[ "$IMAGETYPE" == "iso" && "$_is_windows" == "true" ]] && echo "$_PROVIDES" | grep -q "^windows$"; then
     info "Windows template build: starting VM ${VMID} for unattended install (~30 min)..."
     ssh "root@${NODE}.${MGMT}.internal" "qm start ${VMID}" >/dev/null

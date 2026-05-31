@@ -55,20 +55,20 @@ pass() { info "    ${GN}✓${CL} $1"; PASS=$((PASS + 1)); }
 fail() { error "    ✗ $1"; FAIL=$((FAIL + 1)); }
 
 # Resolve proxy domain and upstream
-VMNAME=$(jq -r '.vmname // empty' "${MODULE_JSON}")
+VMNAME=$(get_config_value 'vmname' '')
 if [[ -z "${VMNAME}" ]]; then
     VMNAME="${MODULE}"
 fi
 
-ZONE="${TAPPAAS_ZONE0_OVERRIDE:-$(jq -r '.zone0 // "srv-home"' "${MODULE_JSON}")}"  # override: issue #196
+ZONE="${TAPPAAS_ZONE0_OVERRIDE:-$(get_config_value 'zone0' 'srv-home')}"  # override: issue #196
 TAPPAAS_DOMAIN=$(jq -r '.tappaas.domain // empty' "${SYSTEM_CONFIG}" 2>/dev/null)
 
-PROXY_DOMAIN=$(jq -r '.proxyDomain // empty' "${MODULE_JSON}")
+PROXY_DOMAIN=$(get_config_value 'proxyDomain' '')
 if [[ -z "${PROXY_DOMAIN}" && -n "${TAPPAAS_DOMAIN}" ]]; then
     PROXY_DOMAIN="${VMNAME}.${TAPPAAS_DOMAIN}"
 fi
 
-PROXY_PORT=$(jq -r '.proxyPort // 80' "${MODULE_JSON}")
+PROXY_PORT=$(get_config_value 'proxyPort' '80')
 UPSTREAM="${VMNAME}.${ZONE}.internal"
 
 # Is this service exposed to the internet, or internal-only? proxyAllowedZones
@@ -77,7 +77,7 @@ UPSTREAM="${VMNAME}.${ZONE}.internal"
 # not configured), so a failing HTTPS check is a warning for it — not a hard
 # failure that should block the install.
 PROXY_PUBLIC=0
-if jq -e '(.proxyAllowedZones // []) | index("internet")' "${MODULE_JSON}" >/dev/null 2>&1; then
+if read_module_config "${MODULE}" | jq -e '(.proxyAllowedZones // []) | index("internet")' >/dev/null 2>&1; then
     PROXY_PUBLIC=1
 fi
 

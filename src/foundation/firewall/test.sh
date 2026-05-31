@@ -280,7 +280,7 @@ if [[ -z "${sample_modules}" ]]; then
 else
     while IFS= read -r vmname; do
         [[ -z "${vmname}" ]] && continue
-        zone=$(jq -r '.zone0 // "srv-home"' "${CONFIG_DIR}/${vmname}.json" 2>/dev/null || echo "srv-home")
+        zone=$(read_module_config "${vmname}" 2>/dev/null | jq -r '.zone0 // "srv-home"' 2>/dev/null || echo "srv-home")
         fqdn="${vmname}.${zone}.internal"
         if getent hosts "${fqdn}" >/dev/null 2>&1; then
             pass "DNS resolves ${fqdn}"
@@ -708,12 +708,11 @@ else
         # rewrites when test3 is missing. The runtime fields (installTime,
         # location, …) are preserved by a surgical jq update.
         if [[ -f "${CONFIG_DIR}/firewall.json" ]] \
-                && ! jq -r '.trunks0 // ""' "${CONFIG_DIR}/firewall.json" \
+                && ! read_module_config "firewall" 2>/dev/null \
+                       | jq -r '.trunks0 // ""' \
                        | grep -qE '(^|;)test3(;|$)'; then
-            tmp_fw=$(mktemp)
-            jq '.trunks0 = ((.trunks0 // "") + ";test3" | sub("^;"; ""))' \
-                "${CONFIG_DIR}/firewall.json" > "${tmp_fw}" \
-                && mv "${tmp_fw}" "${CONFIG_DIR}/firewall.json"
+            # Pattern A-aware write (#207): trunks0 routes under config.cluster:vm.
+            jq_module_write "firewall" '.trunks0 = ((.trunks0 // "") + ";test3" | sub("^;"; ""))'
             info "Added test3 to deployed firewall.json trunks0"
         fi
         if zone-manager --no-ssl-verify --zones-file "${CONFIG_DIR}/zones.json" --execute 2>&1 | tail -5; then
@@ -740,10 +739,12 @@ else
         # Proxmox vlan-aware bridge only forwards VLAN tags listed in the OPNsense
         # NIC's trunks=... allowlist. New zones (test1=810, test2=820) need that
         # list updated or their traffic is dropped before reaching OPNsense.
-        FIREWALL_VMID=$(jq -r '.vmid // 110' "${CONFIG_DIR}/firewall.json")
-        FIREWALL_MAC=$(jq -r '.mac0 // empty' "${CONFIG_DIR}/firewall.json")
-        FIREWALL_BRIDGE=$(jq -r '.bridge0 // "lan"' "${CONFIG_DIR}/firewall.json")
-        TRUNK_ZONES=$(jq -r '.trunks0 // ""' "${CONFIG_DIR}/firewall.json")
+        local _fw_cfg
+        _fw_cfg=$(read_module_config "firewall" 2>/dev/null)
+        FIREWALL_VMID=$(echo "${_fw_cfg}" | jq -r '.vmid // 110')
+        FIREWALL_MAC=$(echo "${_fw_cfg}" | jq -r '.mac0 // empty')
+        FIREWALL_BRIDGE=$(echo "${_fw_cfg}" | jq -r '.bridge0 // "lan"')
+        TRUNK_ZONES=$(echo "${_fw_cfg}" | jq -r '.trunks0 // ""')
 
         # Locate the node currently hosting the firewall VM (may have HA-migrated)
         primary_node=$(jq -r '."tappaas-nodes"[0].hostname // "tappaas1"' \
@@ -890,7 +891,7 @@ else
     section "Deep 4: Caddy reverse proxy for test-fw-a"
 
     # firewall:proxy install-service already ran via install-module.sh. Verify it.
-    proxy_domain=$(jq -r '.proxyDomain // empty' "${CONFIG_DIR}/test-fw-a.json" 2>/dev/null)
+    proxy_domain=$(read_module_config "test-fw-a" 2>/dev/null | jq -r '.proxyDomain // empty' 2>/dev/null)
     if [[ -z "${proxy_domain}" ]]; then
         # Derive default — <vmname>.<tappaas.domain>
         domain=$(jq -r '.tappaas.domain // empty' "${CONFIG_DIR}/configuration.json" 2>/dev/null)

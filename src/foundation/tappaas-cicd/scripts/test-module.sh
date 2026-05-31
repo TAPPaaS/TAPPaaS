@@ -197,7 +197,7 @@ main() {
     info "${BOLD}Step 2: Check dependency test availability${CL}"
 
     local depends_on
-    depends_on=$(jq -r '.dependsOn // [] | .[]' "${module_json}" 2>/dev/null)
+    depends_on=$(read_module_config "${module}" 2>/dev/null | jq -r '.dependsOn // [] | .[]' 2>/dev/null)
 
     if [[ -z "${depends_on}" ]]; then
         info "  No dependencies declared"

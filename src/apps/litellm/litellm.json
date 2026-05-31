@@ -1,7 +1,6 @@
 {
   "description": "TAPPaaS LiteLLM",
   "version": "0.5.0",
-  "appVersion": "1.85.0",
   "releaseDate": "2026-05-20",
   "maintainer": "@ErikDaniel007",
   "status": "Development",
@@ -9,13 +8,6 @@
   "vmid": 310,
   "vmtag": "TAPPaaS,App,AI",
   "node": "tappaas2",
-  "cores": 4,
-  "memory": "4096",
-  "diskSize": "32G",
-  "storage": "tanka1",
-  "imageType": "clone",
-  "image": "8080",
-  "bridge0": "lan",
   "zone0": "srv-work",
   "dependsOn": [
     "cluster:vm",
@@ -27,5 +19,17 @@
   ],
   "provides": [
     "models"
-  ]
+  ],
+  "appVersion": "1.85.0",
+  "config": {
+    "cluster:vm": {
+      "cores": 4,
+      "memory": "4096",
+      "diskSize": "32G",
+      "storage": "tanka1",
+      "imageType": "clone",
+      "image": "8080",
+      "bridge0": "lan"
+    }
+  }
 }

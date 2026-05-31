@@ -337,6 +337,21 @@ validate_provided_services() {
     return "${errors}"
 }
 
+# ── Module-config normalization (#161 / #207) ────────────────────────
+# Defined here (before auto-load) so the auto-load block below can call it.
+# A module JSON may group per-service configuration under a Pattern-A `config`
+# block keyed by the "<module>:<service>" dependency coordinate. Normalize
+# flattens every config block up to the top level so all downstream tooling
+# reads flat top-level fields. Pattern-C (already-flat) modules pass through
+# unchanged. Reads JSON on stdin, emits normalized JSON on stdout.
+function normalize_module_config() {
+  jq '
+    if (.config | type) == "object"
+    then reduce (.config | to_entries[]) as $s (.; . * $s.value) | del(.config)
+    else . end
+  '
+}
+
 # ── Auto-load JSON configuration ─────────────────────────────────────
 # If $1 (module/vm name) is provided, attempt to load its JSON config
 # into the $JSON variable.  Silently skipped when $1 is empty or the
@@ -354,9 +369,11 @@ validate_provided_services() {
 if [[ -n "${1:-}" ]]; then
     JSON_CONFIG="${CONFIG_DIR}/${1}.json"
     if [[ -f "${JSON_CONFIG}" ]]; then
-        JSON=$(cat "${JSON_CONFIG}")
+        # Always present $JSON in flat (normalized) form so get_config_value
+        # works regardless of whether the on-disk shape is flat or Pattern A (#207).
+        JSON=$(normalize_module_config < "${JSON_CONFIG}")
     elif [[ -f "${1}.json" ]]; then
-        JSON=$(cat "${1}.json")
+        JSON=$(normalize_module_config < "${1}.json")
     fi
 fi
 
@@ -391,20 +408,58 @@ function get_config_value() {
   return 0
 }
 
-# Normalize a module JSON to the flat internal representation (#161 Pattern C).
-#
-# A module may group per-service configuration under a Pattern-A `config` block
-# keyed by the "<module>:<service>" dependency coordinate, e.g.
-#   { "dependsOn": ["cluster:vm"], "config": { "cluster:vm": { "cores": 4 } } }
-# All TAPPaaS tooling reads flat top-level fields, so this flattens every
-# config block up to the top level and drops `config`. Flat modules pass
-# through unchanged. Reads JSON on stdin, emits normalized JSON on stdout.
-function normalize_module_config() {
-  jq '
-    if (.config | type) == "object"
-    then reduce (.config | to_entries[]) as $s (.; . * $s.value) | del(.config)
-    else . end
-  '
+# Read a module's installed config in normalized flat form (#207).
+# Usage: read_module_config <module-name>
+# Output: flat JSON on stdout. Accepts either Pattern A or flat on disk; output is always flat.
+# All consumers should use this helper instead of `jq … "${CONFIG_DIR}/<m>.json"` so the
+# on-disk format can evolve without breaking readers.
+function read_module_config() {
+  local m="$1"
+  local p="${CONFIG_DIR}/${m}.json"
+  if [[ ! -f "$p" ]]; then
+    error "Module config not found: $p" >&2
+    return 1
+  fi
+  normalize_module_config < "$p"
+}
+
+# Apply a jq filter against a module's installed config and write the result
+# back atomically (#207). Always reads in Pattern A or flat, writes in the
+# canonical Pattern A form via convert-json-to-config.sh (sourced on demand).
+# Usage: jq_module_write <module> <jq-filter> [jq-args...]
+function jq_module_write() {
+  local m="$1"; shift
+  local filter="$1"; shift
+  local p="${CONFIG_DIR}/${m}.json"
+  if [[ ! -f "$p" ]]; then
+    error "Module config not found: $p" >&2
+    return 1
+  fi
+  # Source the converter the first time we need it. Prefer the live ~/bin
+  # symlink (refreshed by pre-update.sh) and fall back to the repo path.
+  if ! declare -F regroup_to_pattern_a >/dev/null 2>&1; then
+    local _cv
+    for _cv in /home/tappaas/bin/convert-json-to-config.sh \
+               /home/tappaas/TAPPaaS/src/foundation/tappaas-cicd/scripts/convert-json-to-config.sh; do
+      if [[ -f "$_cv" ]]; then
+        # shellcheck disable=SC1090
+        . "$_cv" && break
+      fi
+    done
+    declare -F regroup_to_pattern_a >/dev/null 2>&1 \
+      || { error "convert-json-to-config.sh not found — required for Pattern A writes" >&2; return 1; }
+  fi
+  local tmp; tmp="$(mktemp)"
+  if normalize_module_config < "$p" \
+     | jq "$@" "$filter" \
+     | regroup_to_pattern_a > "$tmp" 2>/dev/null \
+     && jq empty "$tmp" 2>/dev/null; then
+    mv "$tmp" "$p"
+  else
+    rm -f "$tmp"
+    error "jq_module_write failed for $m with filter: $filter" >&2
+    return 1
+  fi
 }
 
 # Validate a module JSON file against module-fields.json schema

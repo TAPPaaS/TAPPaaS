@@ -6,7 +6,7 @@
 
     "fieldOrder": [
         "description", "version", "releaseDate", "installTime", "updateTime",
-        "maintainer", "status", "location",
+        "maintainer", "status", "location", "variant",
         "vmname", "vmid", "vmtag", "node",
         "bios", "ostype", "cputype", "cores", "memory", "diskSize", "storage",
         "pbsStorageName", "alwaysBackup",
@@ -68,6 +68,15 @@
             "format": "^[0-9]{8}-[0-9]{2}:[0-9]{2}:[0-9]{2}$",
             "example": "20260307-14:30:45",
             "note": "Automatically set on each update. Format: YYYYMMDD-HH:MM:SS (local time)"
+        },
+
+        "variant": {
+            "description": "Variant name when this module was installed as a variant (e.g., 'staging'). Persisted by copy-update-json.sh so update-module.sh can resolve the source module file. Not present for vanilla installs.",
+            "type": "string",
+            "requiredBy": [],
+            "usedBy": ["general"],
+            "example": "staging",
+            "note": "Set automatically when --variant <name> is used at install time (#207). Treated as an auto-managed field by the 3-way merge — never adopted from the release source."
         },
 
         "maintainer": {

@@ -192,8 +192,8 @@ if [[ "${DEEP}" -eq 1 ]]; then
 
     # 3. Induce zone drift mgmt -> srv-home (active, VLAN 210, has DHCP).
     if [[ "${deep_ok}" -eq 1 ]]; then
-        tmp=$(mktemp)
-        if jq '.zone0 = "srv-home"' "${CONFIG_DIR}/${TVM}.json" > "${tmp}" && mv "${tmp}" "${CONFIG_DIR}/${TVM}.json"; then
+        # Pattern A-aware write (#207).
+        if jq_module_write "${TVM}" '.zone0 = "srv-home"'; then
             pass "induced drift: zone0 mgmt→srv-home in config"
         else
             fail "could not edit test config"; deep_ok=0
@@ -310,9 +310,8 @@ if [[ "${DEEP}" -eq 1 ]]; then
 
     # 3. Induce replication-schedule drift (*/15 → */30) in config.
     if [[ "${hdeep_ok}" -eq 1 ]]; then
-        tmp=$(mktemp)
-        if jq '.replicationSchedule = "*/30"' "${CONFIG_DIR}/${THVM}.json" > "${tmp}" \
-           && mv "${tmp}" "${CONFIG_DIR}/${THVM}.json"; then
+        # Pattern A-aware write (#207).
+        if jq_module_write "${THVM}" '.replicationSchedule = "*/30"'; then
             pass "induced drift: replicationSchedule */15→*/30 in config"
         else
             fail "could not edit test config"; hdeep_ok=0
@@ -454,8 +453,8 @@ if [[ "${DEEP}" -eq 1 ]]; then
 
     # 5. Induce cores drift (1→2) in config; detect; apply; verify live.
     if [[ "${ldeep_ok}" -eq 1 ]]; then
-        tmp=$(mktemp)
-        if jq '.cores = 2' "${CONFIG_DIR}/${TLVM}.json" > "${tmp}" && mv "${tmp}" "${CONFIG_DIR}/${TLVM}.json"; then
+        # Pattern A-aware write (#207).
+        if jq_module_write "${TLVM}" '.cores = 2'; then
             pass "induced drift: cores 1→2 in config"
         else
             fail "could not edit test config"; ldeep_ok=0

@@ -4,15 +4,6 @@
   "vmname": "netbird-client",
   "vmid": 800,
   "vmtag": "TAPPaaS,App",
-  "cores": 1,
-  "memory": "1024",
-  "diskSize": "4G",
-  "storage": "tanka1",
-  "imageType": "img",
-  "image": "debian-13-generic-amd64-20260112-2355.qcow2",
-  "imageLocation": "https://cdimage.debian.org/cdimage/cloud/trixie/20260112-2355",
-  "cloudInit": "true",
-  "bridge0": "lan",
   "zone0": "home",
   "dependsOn": [
     "cluster:vm",
@@ -23,7 +14,22 @@
     "firewall:proxy"
   ],
   "provides": [],
-  "proxyAllowedZones": [
-    "internet"
-  ]
+  "config": {
+    "cluster:vm": {
+      "cores": 1,
+      "memory": "1024",
+      "diskSize": "4G",
+      "storage": "tanka1",
+      "imageType": "img",
+      "image": "debian-13-generic-amd64-20260112-2355.qcow2",
+      "imageLocation": "https://cdimage.debian.org/cdimage/cloud/trixie/20260112-2355",
+      "cloudInit": "true",
+      "bridge0": "lan"
+    },
+    "firewall:proxy": {
+      "proxyAllowedZones": [
+        "internet"
+      ]
+    }
+  }
 }

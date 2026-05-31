@@ -63,10 +63,10 @@ if [[ ! -f "${MODULE_JSON}" ]]; then
     die "Module config not found: ${MODULE_JSON} — is '${MODULE}' installed?"
 fi
 
-VMID=$(jq -r '.vmid // empty' "${MODULE_JSON}")
-NODE=$(jq -r '.node // empty' "${MODULE_JSON}")
+VMID=$(get_config_value 'vmid' '')
+NODE=$(get_config_value 'node' '')
 [[ -z "${NODE}" ]] && NODE="$(get_node_hostname 0)"
-VMNAME=$(jq -r '.vmname // empty' "${MODULE_JSON}")
+VMNAME=$(get_config_value 'vmname' '')
 [[ -z "${VMNAME}" ]] && VMNAME="${MODULE}"
 
 if [[ -z "${VMID}" ]]; then

@@ -7,15 +7,7 @@
   "vmname": "logging",
   "vmid": 150,
   "vmtag": "TAPPaaS,Foundation",
-  "cores": 2,
-  "memory": "2048",
-  "diskSize": "32G",
-  "storage": "tanka1",
-  "imageType": "clone",
-  "image": "8080",
-  "bridge0": "lan",
   "zone0": "mgmt",
-  "proxyPort": 3000,
   "dependsOn": [
     "cluster:vm",
     "templates:nixos",
@@ -23,7 +15,21 @@
     "firewall:proxy"
   ],
   "provides": [],
-  "proxyAllowedZones": [
-    "mgmt"
-  ]
+  "config": {
+    "cluster:vm": {
+      "cores": 2,
+      "memory": "2048",
+      "diskSize": "32G",
+      "storage": "tanka1",
+      "imageType": "clone",
+      "image": "8080",
+      "bridge0": "lan"
+    },
+    "firewall:proxy": {
+      "proxyPort": 3000,
+      "proxyAllowedZones": [
+        "mgmt"
+      ]
+    }
+  }
 }

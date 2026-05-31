@@ -31,10 +31,10 @@ MODULE="${1:-}"
 MODULE_JSON="${CONFIG_DIR}/${MODULE}.json"
 [[ -f "${MODULE_JSON}" ]] || die "module config not found: ${MODULE_JSON}"
 
-VMNAME="$(jq -r '.vmname // empty' "${MODULE_JSON}")"
-ZONE0="$(jq -r '.zone0 // empty' "${MODULE_JSON}")"
-PROXY_DOMAIN="$(jq -r '.proxyDomain // empty' "${MODULE_JSON}")"
-PROXY_PORT="$(jq -r '.proxyPort // empty' "${MODULE_JSON}")"
+VMNAME="$(get_config_value 'vmname' '')"
+ZONE0="$(get_config_value 'zone0' '')"
+PROXY_DOMAIN="$(get_config_value 'proxyDomain' '')"
+PROXY_PORT="$(get_config_value 'proxyPort' '')"
 # Must match the description firewall:proxy/install-service.sh sets on the
 # handler — that's the natural key we use to locate the row.
 DESCRIPTION="TAPPaaS: ${MODULE}"

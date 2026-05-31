@@ -4,31 +4,29 @@
   "vmname": "firewall",
   "vmid": 110,
   "vmtag": "TAPPaaS,Foundation",
-  "bios": "ovmf",
-  "ostype": "other",
-  "cores": 4,
-  "memory": "8192",
-  "diskSize": "32G",
-  "storage": "tanka1",
-  "imageType": "img",
-  "image": "tappaas-firewall.qcow2.zst",
-  "imageLocation": "https://github.com/TAPPaaS/TAPPaaS/releases/download/opnsense-firewall-v1.0/",
-  "cloudInit": "false",
-  "bridge0": "lan",
   "zone0": "mgmt",
-  "trunks0": "ALL",
-  "bridge1": "wan",
   "zone1": "mgmt",
-  "proxyPort": 8443,
-  "proxyUpstreamTls": "true",
-  "proxyTls": "dns01",
-  "proxyAllowedZones": ["mgmt"],
   "ports": [
-    { "port": 80,  "protocol": "TCP", "description": "Caddy HTTP (ACME challenges + redirect to HTTPS)" },
-    { "port": 443, "protocol": "TCP", "description": "Caddy HTTPS (reverse-proxy entry for all published services)" }
+    {
+      "port": 80,
+      "protocol": "TCP",
+      "description": "Caddy HTTP (ACME challenges + redirect to HTTPS)"
+    },
+    {
+      "port": 443,
+      "protocol": "TCP",
+      "description": "Caddy HTTPS (reverse-proxy entry for all published services)"
+    }
   ],
   "ingress": [
-    { "from": "internet", "ports": [80, 443], "description": "Caddy reverse-proxy entry — public HTTPS for proxyAllowedZones=['internet'] services" }
+    {
+      "from": "internet",
+      "ports": [
+        80,
+        443
+      ],
+      "description": "Caddy reverse-proxy entry — public HTTPS for proxyAllowedZones=['internet'] services"
+    }
   ],
   "dependsOn": [
     "cluster:vm",
@@ -40,5 +38,30 @@
     "proxy",
     "rules",
     "discovery"
-  ]
+  ],
+  "config": {
+    "cluster:vm": {
+      "bios": "ovmf",
+      "ostype": "other",
+      "cores": 4,
+      "memory": "8192",
+      "diskSize": "32G",
+      "storage": "tanka1",
+      "imageType": "img",
+      "image": "tappaas-firewall.qcow2.zst",
+      "imageLocation": "https://github.com/TAPPaaS/TAPPaaS/releases/download/opnsense-firewall-v1.0/",
+      "cloudInit": "false",
+      "bridge0": "lan",
+      "trunks0": "ALL",
+      "bridge1": "wan"
+    },
+    "firewall:proxy": {
+      "proxyPort": 8443,
+      "proxyUpstreamTls": "true",
+      "proxyTls": "dns01",
+      "proxyAllowedZones": [
+        "mgmt"
+      ]
+    }
+  }
 }

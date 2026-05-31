@@ -2,6 +2,28 @@
 
 Utility scripts for TAPPaaS-CICD operations. These scripts are installed to `/home/tappaas/bin/` during setup.
 
+## Module-config storage model (#207)
+
+A TAPPaaS module's JSON has two equivalent shapes:
+
+- **Flat** — every field at the top level: `{ "vmname": "x", "cores": 2, ... }`. Older sources used this; deprecated for new modules but still accepted everywhere.
+- **Pattern A (canonical)** — module identity / general fields stay at the top; service-owned fields move under `config["<module>:<service>"]` per the field's `usedBy` metadata in [`../../module-fields.json`](../../module-fields.json):
+  ```json
+  {
+    "vmname": "x", "dependsOn": ["cluster:vm","firewall:proxy"],
+    "config": {
+      "cluster:vm":    { "cores": 2, "memory": "4096" },
+      "firewall:proxy": { "proxyDomain": "x.test", "proxyPort": 80 }
+    }
+  }
+  ```
+
+**On disk**, installed configs in `${CONFIG_DIR}` are written in canonical Pattern A by `copy-update-json.sh` (install) and `apply-json-merge.sh` (update). The repo's source JSONs in `src/foundation/*/*.json` and `src/apps/*/*.json` are also Pattern A; the [`convert-json-to-config.sh`](#convert-json-to-configsh) tool can migrate any straggling flat module.
+
+**In scripts**, all reads go through `read_module_config <m>` (or `get_config_value <field>` when `$JSON` is auto-loaded). Both helpers normalize Pattern A → flat on the fly, so script code keeps reading top-level fields like `.cores` regardless of how the file is stored. Writes go through `jq_module_write <m> <jq-filter>` which re-renders canonical Pattern A on the way out. The [`audit-jq-readers.sh`](#audit-jq-readerssh) tool greps for any direct `jq … "${MODULE_JSON}"` reads that bypass this funnel — it must report **0** on the foundation tree.
+
+The merge-on-update flow (3-way merge of `current`, `.orig`, and the new release `source`) is described under [`apply-json-merge.sh`](#apply-json-mergesh).
+
 ## Scripts
 
 ### common-install-routines.sh
@@ -16,7 +38,10 @@ Shared library of functions and utilities for module installation scripts.
 **Features:**
 - Color definitions for terminal output (YW, BL, RD, GN, etc.)
 - `info()` / `warn()` / `error()` / `debug()` / `die()` — Logging functions
-- `get_config_value()` — Extract values from module JSON configuration
+- `get_config_value()` — Extract values from module JSON configuration (reads `$JSON`, which is auto-loaded in normalized flat form regardless of the on-disk shape — see #207)
+- `normalize_module_config()` — Flatten a Pattern A `config` block to top-level fields. Stdin → stdout. Used internally by the readers.
+- `read_module_config <module>` — Read a module's installed config and emit it in normalized flat form on stdout. Use this in place of `jq … "${CONFIG_DIR}/<m>.json"` so the on-disk shape can evolve without breaking readers (#207).
+- `jq_module_write <module> <jq-filter> [jq-args…]` — Apply a jq filter to a module's installed config and write the result back atomically in canonical Pattern A form. Use in place of `jq … > tmp; mv tmp ${MODULE_JSON}` (#207).
 - `check_json()` — Validate a module JSON file against module-fields.json schema
 - Node lookup helpers (read from `configuration.json`):
   - `get_primary_node_fqdn()` — FQDN of the first node (e.g., `tappaas1.mgmt.internal`)
@@ -99,6 +124,101 @@ When `--variant` is used, the following fields are derived automatically unless 
 - String fields are stored as JSON strings
 - Unknown field names will cause an error
 - In variant mode, `EFFECTIVE_MODULE` is exported for scripts that source this file
+- The installed `.json` is written in canonical Pattern A form on disk (#207): module identity / general header fields stay at the top, service-owned fields move under `config["<module>:<service>"]`. Downstream tooling reads through `read_module_config` / `get_config_value` which normalize to flat on the fly, so callers see a flat view regardless of on-disk shape.
+- The `--<field>` CLI overrides are applied to the flat internal form and then re-rendered in canonical Pattern A as the very last step, so an override like `--cores 16` lands under `config["cluster:vm"].cores`, not at the top.
+
+---
+
+### convert-json-to-config.sh
+
+Converts a flat module JSON into the canonical Pattern A form (config block grouping per `dependsOn` coordinate). Used both as a one-shot migration tool for source files in the repo and as a sourceable library called by `apply-json-merge.sh` and `copy-update-json.sh` to render the canonical on-disk shape (#207).
+
+**Usage (CLI):**
+```bash
+convert-json-to-config.sh <module-json>            # to stdout
+convert-json-to-config.sh --in-place <module-json> # overwrite
+convert-json-to-config.sh --dry-run <module-json>  # show diff
+```
+
+**Usage (sourceable):**
+```bash
+. /home/tappaas/bin/convert-json-to-config.sh
+regroup_to_pattern_a < flat.json > patternA.json
+```
+
+**Grouping rules** (per `usedBy` metadata in `module-fields.json`):
+1. Header-pinned fields (`vmname`, `vmid`, `vmtag`, `node`, `zone*`, `mac*`, `dependsOn`, `provides`, `config`, `variant`) — stay at top.
+2. `usedBy == ["general"]` (e.g. `description`, `version`, `releaseDate`, `installTime`, …) — stay at top.
+3. Field not present in the schema — stay at top, warning emitted.
+4. `usedBy ∩ dependsOn == ∅` (orphan — module has a field for a dep it doesn't declare) — stay at top, warning emitted.
+5. `usedBy ∩ dependsOn` has ≥1 match — move under `config["<first-match-in-dependsOn-order>"]`. Documented multi-match tiebreak: **first dep in `dependsOn` order wins**.
+
+Output is reordered per `.fieldOrder` in `module-fields.json`, both at the top level and within each `config["<coord>"]` block. The conversion is idempotent (re-running on Pattern A input is a no-op) and lossless (`normalize_module_config(regroup_to_pattern_a(X)) == normalize_module_config(X)`).
+
+---
+
+### apply-json-merge.sh
+
+3-way reconciliation of a module's installed config against a new release source (#207). Called automatically as **Step 0** of `update-module.sh`, before the snapshot and any hooks, so the snapshot and all subsequent steps see the merged config.
+
+**Usage:**
+```bash
+apply-json-merge.sh <effective-module>
+```
+
+**Sourceable:**
+```bash
+. /home/tappaas/bin/apply-json-merge.sh
+apply_three_way_merge <effective-module> <module-dir>
+```
+
+**Inputs:**
+- `current = ${CONFIG_DIR}/<eff>.json` — live config; may have operator edits.
+- `orig = ${CONFIG_DIR}/<eff>.json.orig` — snapshot of the source at last install / upgrade.
+- `source = <module_dir>/<base>.json` — new release source.
+
+**Per-leaf rule:**
+1. If the path's top-level key is in **AUTO_FIELDS** (`location`, `installTime`, `updateTime`, `releaseDate`, `variant`) → keep `current`.
+2. Else if path absent in `source`, present in `current` → keep `current` (operator-added).
+3. Else if path absent in `current` → adopt `source` (new release field).
+4. Else if `current == orig` → adopt `source` (operator untouched → follow release).
+5. Else → keep `current` (operator-pinned).
+
+**Notes:**
+- All three inputs are normalized to flat form before per-leaf comparison, so the merge is invariant under refactors that move fields between the top level and the `config` block. Output is rendered in canonical Pattern A via `regroup_to_pattern_a`.
+- Arrays are compared whole — if the operator touched the array at all, the whole array is pinned. (Documented limitation; revisit when a real module needs path-level array merge.)
+- The `variant` field (persisted by `copy-update-json.sh` when `--variant` is used) tells the merge which source file to read; falls back to a filename heuristic for pre-#207 installs.
+- If `.orig` does not exist (pre-#207 install), it is backfilled as `cp source → orig` so existing operator customizations remain pinned. The alternative (`cp current → orig`) would silently drop all customizations on the first update post-#207.
+- After a successful merge, `.orig` is advanced to the new `source`.
+
+---
+
+### audit-jq-readers.sh
+
+Greps the foundation + apps tree for direct `jq … "${CONFIG_DIR}/<m>.json"` (or `${MODULE_JSON}` etc.) reads on installed module configs (#207). Such reads bypass normalization and return `null` for any field that has moved under a `config` block, so they are a regression hazard.
+
+**Usage:**
+```bash
+audit-jq-readers.sh             # report all direct readers
+audit-jq-readers.sh --quiet     # print count only
+audit-jq-readers.sh --strict    # exit non-zero if any are found (for CI)
+```
+
+A clean audit (count = 0) means every reader goes through `read_module_config` / `get_config_value` and is therefore agnostic to the on-disk shape.
+
+---
+
+### test/ — tabletop tests for the storage-model tooling
+
+Three runnable test scripts under [`test/`](test/) exercise the #207 plumbing without touching any VM or live config. Each writes its fixtures into a temp dir and tears down on exit. Run them individually or in sequence:
+
+```bash
+scripts/test/test-convert-to-config.sh    # 9 cases — converter rules + idempotency + round-trip
+scripts/test/test-json-merge.sh           # 11 cases — 3-way merge: pin/adopt/orphan/auto + Pattern A inputs
+scripts/test/test-read-module-config.sh   #  4 cases — read funnel + jq_module_write Pattern A render
+```
+
+Each script exits with the failure count (0 on success). They have no network or filesystem dependencies beyond `jq` and the schema file (`module-fields.json`), so they're suitable for CI.
 
 ---
 
@@ -367,7 +487,7 @@ resize-disk.sh nextcloud 50G
    - **NixOS**: Uses `sfdisk` to grow the partition, then `resize2fs` for ext4
    - **Debian/Ubuntu**: Uses `growpart` to grow the partition, then `resize2fs` for ext4
 4. Verifies the new filesystem size
-5. Updates the `diskSize` field in the VM's JSON configuration
+5. Updates the `diskSize` field in the VM's JSON configuration (via `jq_module_write`, so the canonical Pattern A on-disk shape is preserved; `diskSize` lands under `config["cluster:vm"]`)
 
 **Supported configurations:**
 
@@ -542,6 +662,7 @@ update-module.sh [options] <module-name>
 | `--silent` | Suppress Info-level messages |
 
 **What it does:**
+0. Runs `apply-json-merge.sh` to reconcile the installed config against the new release source (#207). Adopts release changes for fields the operator hasn't touched; preserves operator customizations for fields where `current != .orig`. Advances `.orig` to the new release. Runs before the snapshot so the snapshot reflects the merged config.
 1. Creates a pre-update VM snapshot (rollback safety net) — skipped with `--no-snapshot`
 2. Runs `test-module.sh` pre-update — aborts if tests fail (unless `--force`) — skipped with `--no-snapshot`
 3. Runs the module's `pre-update.sh` hook (if present)
@@ -723,8 +844,8 @@ inspect-vm.sh vaultwarden
 ```
 
 **What it does:**
-1. Reads deployed config from `~/config/<module>.json`
-2. Reads git source JSON from the module's `location` directory
+1. Reads deployed config from `~/config/<module>.json` (normalized to flat regardless of Pattern A / flat on-disk shape; #207)
+2. Reads git source JSON from the module's `location` directory (also normalized)
 3. Queries actual VM config from Proxmox via `qm config`
 4. Displays a comparison table with color-coded differences
 
@@ -954,7 +1075,7 @@ behaviour for scripted/CI cleanup).
 3. Checks reverse dependencies — blocks if other modules depend on this module's services (unless `--force`)
 4. Calls the module's own `delete.sh` (if present) while the VM still exists
 5. Iterates `dependsOn` in **reverse** order and calls each provider's `delete-service.sh` (skips if not found). Under `--archive`, the `backup:vm` deregistration is **skipped** so the PBS entry is retained.
-6. **Archive:** marks the config `"status": "archived"` (config + `.orig` kept). **Remove:** deletes the config files (`.json` and `.json.orig`).
+6. **Archive:** marks the config `"status": "archived"` (config + `.orig` kept; written via `jq_module_write` so the canonical Pattern A on-disk shape is preserved). **Remove:** deletes the config files (`.json` and `.json.orig`).
 
 **Example:**
 ```bash

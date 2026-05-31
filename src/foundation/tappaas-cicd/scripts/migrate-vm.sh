@@ -29,6 +29,11 @@ set -euo pipefail
 
 # ── Logging ──────────────────────────────────────────────────────────
 
+# Source for read_module_config (#207); local logging defs below override
+# common's so output style is unchanged.
+# shellcheck source=common-install-routines.sh disable=SC1091
+. /home/tappaas/bin/common-install-routines.sh
+
 readonly YW=$'\033[33m'
 readonly RD=$'\033[01;31m'
 readonly GN=$'\033[1;92m'
@@ -338,11 +343,12 @@ migrate_module() {
         die "Module config not found: ${module_json}"
     fi
 
-    local vmid vmname ha_node config_node
-    vmid=$(jq -r '.vmid // empty' "${module_json}")
-    vmname=$(jq -r '.vmname // empty' "${module_json}")
-    ha_node=$(jq -r '.HANode // empty' "${module_json}")
-    config_node=$(jq -r '.node // empty' "${module_json}")
+    local cfg vmid vmname ha_node config_node
+    cfg=$(read_module_config "${module}")
+    vmid=$(echo "${cfg}" | jq -r '.vmid // empty')
+    vmname=$(echo "${cfg}" | jq -r '.vmname // empty')
+    ha_node=$(echo "${cfg}" | jq -r '.HANode // empty')
+    config_node=$(echo "${cfg}" | jq -r '.node // empty')
 
     if [[ -z "${vmid}" ]]; then
         die "Module '${module}' has no vmid configured"
@@ -428,14 +434,16 @@ migrate_to_node() {
         basename=$(basename "${module_json}" .json)
 
         # Skip non-module configs (configuration.json, zones.json, etc.)
-        local vmid
-        vmid=$(jq -r '.vmid // empty' "${module_json}" 2>/dev/null)
+        # Read normalized once per module (Pattern A / flat agnostic; #207).
+        local cfg vmid
+        cfg=$(read_module_config "${basename}" 2>/dev/null) || continue
+        vmid=$(echo "${cfg}" | jq -r '.vmid // empty')
         if [[ -z "${vmid}" ]]; then
             continue
         fi
 
         local config_node
-        config_node=$(jq -r '.node // empty' "${module_json}" 2>/dev/null)
+        config_node=$(echo "${cfg}" | jq -r '.node // empty')
 
         if [[ "${config_node}" != "${target_node}" ]]; then
             continue
@@ -459,7 +467,7 @@ migrate_to_node() {
 
         # This VM needs migration
         local vmname
-        vmname=$(jq -r '.vmname // empty' "${module_json}" 2>/dev/null)
+        vmname=$(echo "${cfg}" | jq -r '.vmname // empty')
         vmname="${vmname:-${basename}}"
 
         echo ""

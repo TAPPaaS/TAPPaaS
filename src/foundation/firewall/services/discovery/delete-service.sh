@@ -86,7 +86,7 @@ if [[ ! -f "${MODULE_JSON}" ]]; then
     exit 0
 fi
 
-MDNS_RAW=$(jq -r '.discoveryMdns // "false"' "${MODULE_JSON}")
+MDNS_RAW=$(read_module_config "${MODULE}" | jq -r '.discoveryMdns // "false"')
 
 if [[ "${MDNS_RAW}" == "false" ]]; then
     info "  No discoveryMdns declared — skipping mDNS cleanup."
@@ -98,12 +98,12 @@ info "  Checking mDNS repeater cleanup..."
 
 # Collect zones contributed by this module (zone0 + consumer zones)
 THIS_ZONES=()
-ZONE0=$(jq -r '.zone0 // empty' "${MODULE_JSON}")
+ZONE0=$(get_config_value 'zone0' '')
 [[ -n "${ZONE0}" ]] && THIS_ZONES+=("${ZONE0}")
 if [[ "${MDNS_RAW}" != "true" ]]; then
     while IFS= read -r zone; do
         THIS_ZONES+=("${zone}")
-    done < <(jq -r '.discoveryMdns[]' "${MODULE_JSON}")
+    done < <(read_module_config "${MODULE}" | jq -r '.discoveryMdns[]')
 fi
 
 if [[ "${#THIS_ZONES[@]}" -eq 0 ]]; then

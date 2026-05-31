@@ -35,19 +35,19 @@ info "firewall:discovery install-service for module: ${BL}${MODULE}${CL}"
 
 # ── Read discovery config ────────────────────────────────────────────
 
-ZONE0=$(jq -r '.zone0 // empty' "${MODULE_JSON}")
-UDP_RELAY_COUNT=$(jq -r '(.discoveryUdpRelay // []) | length' "${MODULE_JSON}")
+ZONE0=$(get_config_value 'zone0' '')
+UDP_RELAY_COUNT=$(read_module_config "${MODULE}" | jq -r '(.discoveryUdpRelay // []) | length')
 
 # discoveryMdns accepts an array of consumer zone names (e.g. ["home","srv-home"]).
 # Legacy boolean true is still accepted but deprecated — emit a warning and treat as
 # empty consumer list (zone0 is still added; run update-service to migrate).
-MDNS_RAW=$(jq -r '.discoveryMdns // "false"' "${MODULE_JSON}")
+MDNS_RAW=$(read_module_config "${MODULE}" | jq -r '.discoveryMdns // "false"')
 MDNS_ZONES_COUNT=0
 if [[ "${MDNS_RAW}" == "true" ]]; then
     warn "  discoveryMdns: true is deprecated. Use an array of consumer zones, e.g. [\"home\",\"srv-home\"]."
     MDNS_ZONES_COUNT=0
 elif [[ "${MDNS_RAW}" != "false" ]]; then
-    MDNS_ZONES_COUNT=$(jq -r '.discoveryMdns | length' "${MODULE_JSON}")
+    MDNS_ZONES_COUNT=$(read_module_config "${MODULE}" | jq -r '.discoveryMdns | length')
 fi
 HAS_MDNS=$([[ "${MDNS_RAW}" != "false" ]] && echo "true" || echo "false")
 
@@ -68,9 +68,8 @@ if [[ "${FIREWALL_TYPE}" == "NONE" ]]; then
         warn "  Install os-mdns-repeater; add interfaces for zones: ${ZONE0}, home, srv-home"
     fi
     if (( UDP_RELAY_COUNT > 0 )); then
-        jq -r '.discoveryUdpRelay[]? |
-            "  Install os-udpbroadcastrelay; UDP relay port \(.port) for zones: \(.zones | join(", "))"' \
-            "${MODULE_JSON}"
+        read_module_config "${MODULE}" | jq -r '.discoveryUdpRelay[]? |
+            "  Install os-udpbroadcastrelay; UDP relay port \(.port) for zones: \(.zones | join(", "))"'
     fi
     info "${GN}firewall:discovery install-service completed for ${MODULE} (manual config required)${CL}"
     exit 0
@@ -125,7 +124,7 @@ if [[ "${HAS_MDNS}" == "true" ]]; then
         while IFS= read -r zone; do
             iface=$(resolve_iface "${zone}")
             [[ -n "${iface}" ]] && CONSUMER_IFACES="${CONSUMER_IFACES} ${iface}"
-        done < <(jq -r '.discoveryMdns[]' "${MODULE_JSON}")
+        done < <(read_module_config "${MODULE}" | jq -r '.discoveryMdns[]')
     fi
 
     # Union current selected interfaces with zone0 + consumer zones (deduplicate)
@@ -209,7 +208,7 @@ if (( UDP_RELAY_COUNT > 0 )); then
         # Update RELAY_SEARCH to reflect the new entry for next_instance_id
         RELAY_SEARCH=$(curl "${CURL[@]}" "${API}/udpbroadcastrelay/settings/searchRelay")
         (( RELAY_ADDED++ )) || true
-    done < <(jq -c '.discoveryUdpRelay[]' "${MODULE_JSON}")
+    done < <(read_module_config "${MODULE}" | jq -c '.discoveryUdpRelay[]')
 
     if (( RELAY_ADDED > 0 )); then
         info "  UDP broadcast relay reloaded (${RELAY_ADDED} new entries added)."

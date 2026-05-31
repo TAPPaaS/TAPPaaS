@@ -37,10 +37,10 @@ if [[ ! -f "${MODULE_JSON}" ]]; then
     exit 2
 fi
 
-VMNAME=$(jq -r '.vmname // empty' "${MODULE_JSON}")
-ZONE0=$(jq -r '.zone0 // "srv"' "${MODULE_JSON}")
+VMNAME=$(get_config_value 'vmname' '')
+ZONE0=$(get_config_value 'zone0' 'srv')
 VM_HOST="${VMNAME}.${ZONE0}.internal"
-ENABLE_RDP=$(jq -r '.windows.enableRDP // false' "${MODULE_JSON}")
+ENABLE_RDP=$(read_module_config "${MODULE}" | jq -r '.windows.enableRDP // false')
 
 PASS=0
 FAIL=0

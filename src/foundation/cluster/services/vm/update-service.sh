@@ -289,7 +289,7 @@ fi
 # ── node (HA-aware) ──────────────────────────────────────────────────
 
 if [[ "${DESIRED_NODE}" != "${actual_node}" ]]; then
-    if jq -e '(.dependsOn // []) | index("cluster:ha") != null' "${CONFIG_DIR}/${MODULE}.json" >/dev/null 2>&1; then
+    if read_module_config "${MODULE}" | jq -e '(.dependsOn // []) | index("cluster:ha") != null' >/dev/null 2>&1; then
         warn "  node drift (${actual_node}→${DESIRED_NODE}) deferred to cluster:ha drift handling"
     else
         CHANGES+=("node: ${actual_node}→${DESIRED_NODE} (qm migrate)")

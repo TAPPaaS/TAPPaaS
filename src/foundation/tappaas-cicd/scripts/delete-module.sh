@@ -112,7 +112,7 @@ check_reverse_dependencies() {
 
     # Get the services this module provides
     local provides
-    provides=$(jq -r '.provides // [] | .[]' "${module_json}" 2>/dev/null)
+    provides=$(read_module_config "${module}" 2>/dev/null | jq -r '.provides // [] | .[]' 2>/dev/null)
 
     if [[ -z "${provides}" ]]; then
         return 0
@@ -250,8 +250,10 @@ main() {
     info "\n${BOLD}Step 2: Resolve and confirm target VM${CL}"
 
     local config_vmid vmname target_vmid="" target_node="" vm_only=false
-    config_vmid=$(jq -r '.vmid // empty' "${module_json}" 2>/dev/null)
-    vmname=$(jq -r '.vmname // empty' "${module_json}" 2>/dev/null)
+    local _cfg
+    _cfg=$(read_module_config "${module}" 2>/dev/null) || _cfg=""
+    config_vmid=$(echo "${_cfg}" | jq -r '.vmid // empty')
+    vmname=$(echo "${_cfg}" | jq -r '.vmname // empty')
     [[ -z "${vmname}" ]] && vmname="${module}"
 
     if [[ -z "${config_vmid}" && -z "${OPT_VMID}" ]]; then
@@ -283,7 +285,7 @@ main() {
         target_node=$(awk -v id="${target_vmid}" '$1==id {print $2; exit}' <<< "${matches}")
         if [[ -z "${target_node}" ]]; then
             warn "  VMID ${target_vmid} not found in the cluster (already gone?) — will still attempt cleanup"
-            target_node=$(jq -r '.node // empty' "${module_json}" 2>/dev/null)
+            target_node=$(echo "${_cfg}" | jq -r '.node // empty')
             [[ -z "${target_node}" || "${target_node}" == "null" ]] && target_node="$(get_node_hostname 0)"
         fi
 
@@ -325,7 +327,7 @@ main() {
     info "\n${BOLD}Step 3: Check reverse dependencies${CL}"
 
     local provides
-    provides=$(jq -r '.provides // [] | .[]' "${module_json}" 2>/dev/null)
+    provides=$(read_module_config "${module}" 2>/dev/null | jq -r '.provides // [] | .[]' 2>/dev/null)
 
     if [[ -z "${provides}" ]]; then
         info "  Module provides no services — no reverse dependency check needed"
@@ -366,7 +368,7 @@ main() {
     info "\n${BOLD}Step 5: Call dependency service deleters (reverse order)${CL}"
 
     local depends_on
-    depends_on=$(jq -r '.dependsOn // [] | .[]' "${module_json}" 2>/dev/null)
+    depends_on=$(read_module_config "${module}" 2>/dev/null | jq -r '.dependsOn // [] | .[]' 2>/dev/null)
 
     if [[ -z "${depends_on}" ]]; then
         info "  No dependency services to call"
@@ -414,12 +416,10 @@ main() {
 
     if [[ "${OPT_MODE}" == "archive" ]]; then
         info "\n${BOLD}Step 6: Archive module configuration${CL}"
-        local tmp
-        tmp=$(mktemp)
-        if jq '.status = "archived"' "${module_json}" > "${tmp}" && mv "${tmp}" "${module_json}"; then
+        # Pattern A-aware write (#207): status is a header field, stays at top.
+        if jq_module_write "${module}" '.status = "archived"'; then
             info "  ${GN}✓${CL} Marked ${module_json} as ${BL}status=archived${CL} (config + PBS backup kept)"
         else
-            rm -f "${tmp}"
             warn "  Could not set status=archived on ${module_json} (config left as-is)"
         fi
 

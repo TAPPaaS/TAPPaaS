@@ -33,10 +33,10 @@ info "firewall:discovery test-service for module: ${BL}${MODULE}${CL}"
 
 # ── Read discovery config ────────────────────────────────────────────
 
-ZONE0=$(jq -r '.zone0 // empty' "${MODULE_JSON}")
-UDP_RELAY_COUNT=$(jq -r '(.discoveryUdpRelay // []) | length' "${MODULE_JSON}")
+ZONE0=$(get_config_value 'zone0' '')
+UDP_RELAY_COUNT=$(read_module_config "${MODULE}" | jq -r '(.discoveryUdpRelay // []) | length')
 
-MDNS_RAW=$(jq -r '.discoveryMdns // "false"' "${MODULE_JSON}")
+MDNS_RAW=$(read_module_config "${MODULE}" | jq -r '.discoveryMdns // "false"')
 HAS_MDNS="false"
 MDNS_ZONES_COUNT=0
 if [[ "${MDNS_RAW}" == "true" ]]; then
@@ -44,7 +44,7 @@ if [[ "${MDNS_RAW}" == "true" ]]; then
     MDNS_ZONES_COUNT=0
 elif [[ "${MDNS_RAW}" != "false" ]]; then
     HAS_MDNS="true"
-    MDNS_ZONES_COUNT=$(jq -r '.discoveryMdns | length' "${MODULE_JSON}")
+    MDNS_ZONES_COUNT=$(read_module_config "${MODULE}" | jq -r '.discoveryMdns | length')
 fi
 
 if [[ "${HAS_MDNS}" == "false" && "${UDP_RELAY_COUNT}" == "0" ]]; then
@@ -136,7 +136,7 @@ if [[ "${HAS_MDNS}" == "true" ]]; then
                     error "  mDNS consumer zone (${zone} → ${iface}): ${RD}MISSING${CL}"
                     (( FAILURES++ )) || true
                 fi
-            done < <(jq -r '.discoveryMdns[]' "${MODULE_JSON}")
+            done < <(read_module_config "${MODULE}" | jq -r '.discoveryMdns[]')
         fi
     fi
 fi
@@ -159,7 +159,7 @@ if (( UDP_RELAY_COUNT > 0 )); then
             error "  UDP relay port ${PORT} (${DESC}): ${RD}MISSING${CL}"
             (( FAILURES++ )) || true
         fi
-    done < <(jq -c '.discoveryUdpRelay[]' "${MODULE_JSON}")
+    done < <(read_module_config "${MODULE}" | jq -c '.discoveryUdpRelay[]')
 fi
 
 # ── Result ───────────────────────────────────────────────────────────
