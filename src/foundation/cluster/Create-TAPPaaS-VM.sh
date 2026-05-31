@@ -179,12 +179,24 @@ function resolve_trunks() {
     fi
     local state
     state=$(echo $ZONES | jq -r --arg KEY "$zone_name" '.[$KEY].state')
-    if [ "$state" == "Inactive" ]; then
-      echo -e "${YW}[WARN]${CL} Trunk zone '${YW}$zone_name${CL}' is inactive (state: '${YW}$state${CL}'), skipping." >&2
-      continue
-    fi
+    # Allowlist (#211): only Active/Mandatory/Manual zones go on the trunk;
+    # Inactive/Disabled and any future state are skipped. Manual zones are
+    # kept on explicit lists (operator intent) but excluded from the ALL
+    # sentinel above.
+    case "$state" in
+      Active|Mandatory|Manual) ;;
+      *)
+        echo -e "${YW}[WARN]${CL} Trunk zone '${YW}$zone_name${CL}' (state: '${YW}$state${CL}') is not trunkable, skipping." >&2
+        continue
+        ;;
+    esac
     local tag
     tag=$(echo $ZONES | jq -r --arg KEY "$zone_name" '.[$KEY].vlantag')
+    # Reject vlantag=0 (untagged is meaningless on a trunk list).
+    if [ -z "$tag" ] || [ "$tag" -le 0 ] 2>/dev/null; then
+      echo -e "${YW}[WARN]${CL} Trunk zone '${YW}$zone_name${CL}' has vlantag=${tag} (untagged), skipping." >&2
+      continue
+    fi
     info "     - trunk $zone_name has vlan value: ${BGN}${tag}" >&2
     if [ -n "$result" ]; then
       result="${result};${tag}"

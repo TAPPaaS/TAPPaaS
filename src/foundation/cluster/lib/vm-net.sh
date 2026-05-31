@@ -89,11 +89,26 @@ vmnet_resolve_trunks() {
             return 1
         fi
         state=$(jq -r --arg z "$zone_name" '.[$z].state // empty' "$zones_file")
-        if [[ "$state" == "Inactive" ]]; then
-            warn "Trunk zone '${zone_name}' is inactive, skipping"
+        # Allowlist (#211): only Active, Mandatory, and Manual zones go on the
+        # trunk. Inactive/Disabled and any future state are skipped with a
+        # warning, mirroring what zone-manager actually pushes to OPNsense.
+        # Manual zones are kept (operator-managed VLAN on OPNsense, but the VM
+        # still needs the trunk to reach it) — the ALL sentinel excludes
+        # Manual, but explicit lists respect operator intent.
+        case "$state" in
+            Active|Mandatory|Manual) ;;
+            *)
+                warn "Trunk zone '${zone_name}' (state: ${state:-<unset>}) is not trunkable, skipping"
+                continue
+                ;;
+        esac
+        tag=$(jq -r --arg z "$zone_name" '.[$z].vlantag // 0' "$zones_file")
+        # Reject vlantag=0 — Proxmox tag=0 means untagged, which is meaningless
+        # on a trunk list (would silently coalesce with the access port).
+        if [[ "$tag" -le 0 ]]; then
+            warn "Trunk zone '${zone_name}' has vlantag=${tag} (untagged), skipping"
             continue
         fi
-        tag=$(jq -r --arg z "$zone_name" '.[$z].vlantag // 0' "$zones_file")
         result="${result:+${result};}${tag}"
     done
     echo -n "${result}"

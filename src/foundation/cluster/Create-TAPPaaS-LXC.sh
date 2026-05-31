@@ -110,8 +110,18 @@ resolve_trunks() {
       errln "Trunk zone '${z}' is not defined in zones.json"; exit 1
     fi
     state=$(echo "${ZONES}" | jq -r --arg K "${z}" '.[$K].state')
-    [[ "${state}" == "Inactive" ]] && { warn "Trunk zone '${z}' inactive, skipping"; continue; }
+    # Allowlist (#211): only Active/Mandatory/Manual zones go on the trunk.
+    # Inactive/Disabled and any future state are skipped with a warning.
+    case "${state}" in
+      Active|Mandatory|Manual) ;;
+      *) warn "Trunk zone '${z}' (state: ${state}) is not trunkable, skipping"; continue ;;
+    esac
     tag=$(echo "${ZONES}" | jq -r --arg K "${z}" '.[$K].vlantag')
+    # Reject vlantag=0 (untagged is meaningless on a trunk list).
+    if [[ -z "${tag}" || "${tag}" -le 0 ]]; then
+      warn "Trunk zone '${z}' has vlantag=${tag} (untagged), skipping"
+      continue
+    fi
     result="${result:+${result};}${tag}"
   done
   echo -n "${result}"

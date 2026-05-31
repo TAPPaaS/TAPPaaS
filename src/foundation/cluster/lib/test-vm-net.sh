@@ -83,6 +83,53 @@ ck "netopts trunks"       "virtio,bridge=lan,tag=210,trunks=310;410" "$(vmnet_bu
 ck "netopts queues"       "virtio,bridge=lan,trunks=210;610,queues=4" "$(vmnet_build_netopts lan '' 0 '210;610' 4)"
 ck "netopts queues=0 off" "virtio,bridge=lan"                         "$(vmnet_build_netopts lan '' 0 '' 0)"
 
+# ── #211: explicit-list state allowlist + vlantag=0 guard ────────────
+# vmnet_resolve_trunks must skip Inactive *and* Disabled zones, and reject
+# vlantag=0 (untagged) entries — the ALL sentinel already does this, but the
+# explicit-list path previously only skipped Inactive. We need a deterministic
+# fixture for these assertions (the live zones.json content varies).
+
+EXPLICIT_FIXTURE="$(mktemp)"
+cat > "${EXPLICIT_FIXTURE}" <<'JSON'
+{
+  "mgmt":     { "state": "Manual",    "vlantag": 0,   "bridge": "lan" },
+  "srv":      { "state": "Active",    "vlantag": 200, "bridge": "lan" },
+  "srv-home": { "state": "Active",    "vlantag": 210, "bridge": "lan" },
+  "dmz":      { "state": "Mandatory", "vlantag": 610, "bridge": "lan" },
+  "manual-z": { "state": "Manual",    "vlantag": 700, "bridge": "lan" },
+  "iot-off":  { "state": "Disabled",  "vlantag": 440, "bridge": "lan" },
+  "old":      { "state": "Inactive",  "vlantag": 999, "bridge": "lan" }
+}
+JSON
+
+# Active and Mandatory included as before.
+ck "#211 explicit: Active+Mandatory" "200;610" \
+    "$(vmnet_resolve_trunks 'srv;dmz' "${EXPLICIT_FIXTURE}" 2>/dev/null)"
+
+# Manual zone with a real vlantag is included on an explicit list (operator
+# intent — they typed it). ALL sentinel still excludes Manual; that asymmetry
+# is intentional per the issue resolution.
+ck "#211 explicit: Manual trunkable" "200;700" \
+    "$(vmnet_resolve_trunks 'srv;manual-z' "${EXPLICIT_FIXTURE}" 2>/dev/null)"
+
+# Disabled is skipped (the original bug — previously included).
+ck "#211 explicit: Disabled skipped" "200;610" \
+    "$(vmnet_resolve_trunks 'srv;iot-off;dmz' "${EXPLICIT_FIXTURE}" 2>/dev/null)"
+
+# Inactive is still skipped (pre-existing behavior preserved).
+ck "#211 explicit: Inactive skipped" "200;610" \
+    "$(vmnet_resolve_trunks 'srv;old;dmz' "${EXPLICIT_FIXTURE}" 2>/dev/null)"
+
+# vlantag=0 (Manual mgmt) is skipped — untagged is meaningless on a trunk.
+ck "#211 explicit: vlantag=0 skipped" "200" \
+    "$(vmnet_resolve_trunks 'mgmt;srv' "${EXPLICIT_FIXTURE}" 2>/dev/null)"
+
+# A list that is ALL bad → empty result, no error.
+ck "#211 explicit: all-bad → empty" "" \
+    "$(vmnet_resolve_trunks 'mgmt;iot-off;old' "${EXPLICIT_FIXTURE}" 2>/dev/null)"
+
+rm -f "${EXPLICIT_FIXTURE}"
+
 # live net line parsing
 NET="virtio=02:7A:7E:D3:24:D0,bridge=lan,tag=210"
 ck "parse bridge"      "lan"               "$(vmnet_parse "${NET}" bridge)"
