@@ -30,6 +30,9 @@
       "imageType": "clone",
       "image": "8080",
       "bridge0": "lan"
+    },
+    "firewall:proxy": {
+      "proxyPort": 4000
     }
   }
 }

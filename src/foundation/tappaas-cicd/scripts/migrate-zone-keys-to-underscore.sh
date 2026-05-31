@@ -314,33 +314,53 @@ if [[ "${OPT_DRY_RUN}" -eq 0 && "${#TOUCHED_MODULES[@]}" -gt 0 ]]; then
                 continue
             fi
 
-            info "  ${new_vmname}: ${BL}${new_vmname}.${old_zone}.internal${CL} → ${ip} (compat alias)"
+            info "  ${new_vmname}: registering both ${BL}${new_vmname}.${new_zone}.internal${CL} (canonical) and ${new_vmname}.${old_zone}.internal (compat alias) → ${ip}"
+            # New canonical underscored — needed by Caddy upstreams and any new
+            # internal hostname references. We can't rely on DHCP-lease DNS for
+            # this because not every VM renews its lease promptly after the
+            # zone domain rename (observed: litellm + homeassistant never
+            # picked up *.srv_home.internal via DHCP after the migration).
+            dns-manager --no-ssl-verify add "${new_vmname}" "${new_zone}.internal" "${ip}" \
+                2>&1 | indent || warn "    dns-manager add (new) failed"
+            # Old hyphenated kept resolving so operator bookmarks / external
+            # references and any pre-migration Caddy handlers keep working.
             dns-manager --no-ssl-verify add "${new_vmname}" "${old_zone}.internal" "${ip}" \
-                2>&1 | indent || warn "    dns-manager add failed"
+                2>&1 | indent || warn "    dns-manager add (compat) failed"
         done
     fi
 fi
 
-# ── Stage 5: Caddy reverse-proxy upstreams ───────────────────────────
+# ── Stage 5: refresh Caddy reverse-proxy handlers ────────────────────
 #
-# DO NOT auto-rewrite the Caddy handlers. OPNsense's os-caddy plugin rejects
-# underscored hostnames in the `ToDomain` field validator (it returns
-# {'handle.ToDomain': 'Please enter one or multiple valid IP addresses,
-# hostnames or FQDNs.'}). Until that upstream limitation is lifted, existing
-# Caddy handlers that point at *.srv-home.internal must keep doing so —
-# Stage 4 above ensures those DNS names continue to resolve.
+# Each affected module's firewall:proxy update-service regenerates its Caddy
+# handler upstream from the new zone0 — e.g. litellm's upstream becomes
+# litellm.srv_home.internal:4000 (underscored).
 #
-# An operator who wants to re-create handlers explicitly can run
-# `firewall:proxy/update-service.sh <module>` per module; that command
-# regenerates the upstream from the new zone0 and will fail with a clear
-# OPNsense validation error if/when this limitation still applies.
+# This relies on the os-caddy ToDomain underscore patch in
+# opnsense-patch/apply-caddy-isdnsname.sh, which pre-update.sh applies earlier
+# in the same cycle. Without that patch OPNsense's HostnameField validator
+# rejects underscored hostnames and this stage fails per-module with a clear
+# validation error (which is recoverable — Stage 4's DNS aliases keep the
+# old hyphenated upstreams resolving until the patch lands).
 
 if [[ "${OPT_DRY_RUN}" -eq 0 && "${#TOUCHED_MODULES[@]}" -gt 0 ]]; then
-    info "${BOLD}Stage 5: Caddy handler refresh (skipped — see note)${CL}"
-    info "  Caddy upstream rewrite is deliberately skipped. OPNsense's os-caddy"
-    info "  plugin rejects underscored hostnames in the ToDomain validator, so"
-    info "  existing handlers must continue to point at the hyphenated form."
-    info "  Stage 4 added DNS aliases that keep those upstreams resolving."
+    info "${BOLD}Stage 5: refreshing Caddy reverse-proxy upstreams${CL}"
+    proxy_update="/home/tappaas/TAPPaaS/src/foundation/firewall/services/proxy/update-service.sh"
+    if [[ ! -x "${proxy_update}" ]]; then
+        warn "  firewall:proxy update-service.sh not found at ${proxy_update}"
+    else
+        for m in "${TOUCHED_MODULES[@]}"; do
+            deps=$(read_module_config "$m" 2>/dev/null | jq -r '(.dependsOn // []) | join(",")')
+            if [[ ",${deps}," == *",firewall:proxy,"* ]]; then
+                info "  ${m}: re-running firewall:proxy update-service to regenerate handler..."
+                if "${proxy_update}" "$m" 2>&1 | indent; then
+                    info "  ${GN}✓${CL} ${m}: Caddy handler refreshed"
+                else
+                    warn "  ${m}: Caddy handler refresh failed (likely OPNsense ToDomain validator — Stage 4 DNS aliases still keep the old upstream resolving)"
+                fi
+            fi
+        done
+    fi
 fi
 
 # ── Write marker ─────────────────────────────────────────────────────

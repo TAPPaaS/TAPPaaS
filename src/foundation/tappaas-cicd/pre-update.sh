@@ -102,6 +102,23 @@ if [ -f "../module-fields.json" ]; then
   ln -s "$(realpath ../module-fields.json)" /home/tappaas/config/module-fields.json
 fi
 
+# --- Apply OPNsense os-caddy ToDomain underscore patch (issue #237 follow-up) ---
+# Caddy's HostnameField rejects underscored hostnames by default; the patch
+# adds <IsDNSName>Y</IsDNSName> so internal DNS labels like
+# litellm.srv_home.internal can be used as reverse-proxy upstreams.
+# Applied BEFORE the zone-key migration so the migration's Stage 5
+# (firewall:proxy update-service per affected module) can write the
+# underscored upstream without OPNsense validation failures.
+FIREWALL_FQDN_EARLY="firewall.mgmt.internal"
+if [ -f opnsense-patch/apply-caddy-isdnsname.sh ] \
+   && ping -c 1 -W 1 "${FIREWALL_FQDN_EARLY}" >/dev/null 2>&1; then
+  info "Applying os-caddy ToDomain underscore patch..."
+  scp opnsense-patch/apply-caddy-isdnsname.sh root@"${FIREWALL_FQDN_EARLY}":/tmp/apply-caddy-isdnsname.sh
+  ssh root@"${FIREWALL_FQDN_EARLY}" 'sh /tmp/apply-caddy-isdnsname.sh' \
+    | while IFS= read -r line; do info "  $line"; done \
+    || warn "  os-caddy patch reported an error — continuing"
+fi
+
 # --- One-shot rename: zone keys hyphen → underscore (issue #237) ---
 # Marker-gated; runs exactly once per cluster, then becomes a no-op. Must run
 # BEFORE apply-zones-merge.sh — otherwise the merge would see srv-home (current)
@@ -168,6 +185,8 @@ info "  update-tappaas binary installed to /home/tappaas/bin/"
 cd ..
 
 # --- Copy OPNsense controller patch to the firewall ---
+# The os-caddy patch is already applied earlier in pre-update.sh (#237) so the
+# zone-key migration's Stage 5 can write underscored upstreams.
 info "Copying the AssignSettingsController.php to the OPNsense controller node..."
 if ping -c 1 -W 1 "$FIREWALL_FQDN" >/dev/null 2>&1; then
   info "  Firewall $FIREWALL_FQDN reachable; will attempt to copy controller patch."

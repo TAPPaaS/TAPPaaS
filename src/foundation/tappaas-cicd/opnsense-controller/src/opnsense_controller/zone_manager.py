@@ -944,6 +944,18 @@ class ZoneManager:
                 debug(f"  {zone.name}: VLAN skipped (untagged zone, vlantag=0)")
                 results[zone.name] = {"status": "skipped_untagged", "reason": "vlantag=0"}
 
+            # Belt-and-suspenders: force OPNsense to reconcile every VLAN
+            # interface from /conf/config.xml. The custom InterfaceAssign
+            # controller already does this after each addItem; this extra call
+            # catches drift where an interface exists in config but its kernel
+            # IP fell out of sync (observed in the #237 verification after a
+            # configd restart). Cheap and idempotent.
+            if not check_mode:
+                try:
+                    manager.apply_vlan_settings()
+                except Exception as e:
+                    debug(f"  apply_vlan_settings: {e}")
+
         return results
 
     def configure_dhcp(self, check_mode: bool = True) -> dict[str, dict]:

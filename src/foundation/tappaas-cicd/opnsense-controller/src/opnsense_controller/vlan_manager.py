@@ -257,6 +257,34 @@ class VlanManager:
         )
         return result
 
+    def apply_vlan_settings(self) -> dict:
+        """Apply staged VLAN/interface changes to the running config.
+
+        OPNsense's vlan_settings/reconfigure endpoint forces the firewall to
+        re-create kernel-level VLAN devices from /conf/config.xml. The custom
+        InterfaceAssignController.php's addItemAction already runs
+        ``interface reconfigure all`` via configd after each assignment, so
+        this is a belt-and-suspenders extra call we make at the end of
+        configure_vlans to make sure stragglers (existing assignments whose
+        runtime state drifted) come back in sync.
+
+        Observed in #237 verification: after a `configctl configd restart`
+        the srv_home VLAN 210 was still in /conf/config.xml (opt20 →
+        vlan0.210 → 10.2.10.1/24) but the FreeBSD interface had no IP. A
+        manual `configctl interface reconfigure` brought it back. This
+        endpoint achieves the same via the API.
+        """
+        result = self.client.run_module(
+            "raw",
+            params={
+                "module": "interfaces",
+                "controller": "vlan_settings",
+                "command": "reconfigure",
+                "action": "post",
+            },
+        )
+        return result
+
     def unassign_interface(self, identifier: str) -> dict:
         """Remove an interface assignment.
 
@@ -337,6 +365,7 @@ class VlanManager:
             if response.get("result") == "saved":
                 ifname = response.get("ifname")
                 result["ifname"] = ifname
+
                 # Reload the interface to apply IP configuration
                 if ifname:
                     reload_result = self.reload_interface(ifname)
