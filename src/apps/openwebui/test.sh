@@ -106,15 +106,23 @@ check_container() {
 
 check_http() {
     info "Check 3: HTTP health check on port 8080"
-    local http_code
-    # shellcheck disable=SC2086
-    http_code=$(ssh ${SSH_OPTS} "tappaas@${VM_HOST}" \
-        "curl -s -o /dev/null -w '%{http_code}' --max-time 10 http://localhost:8080/" 2>/dev/null) || true
-    if [[ "${http_code}" =~ ^(200|301|302)$ ]]; then
-        check_pass "HTTP responding (status ${http_code})"
-    else
-        check_fail "HTTP not responding (status: ${http_code:-timeout})"
-    fi
+    # After a NixOS rebuild + reboot the OpenWebUI container takes a few seconds
+    # to start serving HTTP, so the very first probe can miss it (#138). Retry up
+    # to 6 times over ~10s before declaring failure.
+    local http_code attempt max_attempts=6
+    for (( attempt = 1; attempt <= max_attempts; attempt++ )); do
+        # shellcheck disable=SC2086
+        http_code=$(ssh ${SSH_OPTS} "tappaas@${VM_HOST}" \
+            "curl -s -o /dev/null -w '%{http_code}' --max-time 10 http://localhost:8080/" 2>/dev/null) || true
+        if [[ "${http_code}" =~ ^(200|301|302)$ ]]; then
+            check_pass "HTTP responding (status ${http_code}, attempt ${attempt}/${max_attempts})"
+            return
+        fi
+        if (( attempt < max_attempts )); then
+            sleep 2
+        fi
+    done
+    check_fail "HTTP not responding after ${max_attempts} attempts (last status: ${http_code:-timeout})"
 }
 
 check_postgresql() {

@@ -71,6 +71,18 @@ fi
 PROXY_PORT=$(get_config_value 'proxyPort' '80')
 UPSTREAM="${VMNAME}.${ZONE}.internal"
 
+# Caddy runs on the OPNsense firewall and listens on *:443 (all interfaces).
+# tappaas-cicd sits on the internal mgmt zone (10.0.0.0/24); the module's public
+# domain resolves to the firewall's WAN IP, but OPNsense does not NAT-hairpin by
+# default, so connecting to the WAN IP from inside times out (#138). Pin HTTPS
+# checks to the firewall's internal address (with --resolve, preserving SNI so
+# Caddy serves the correct vhost) instead of relying on public DNS.
+FIREWALL_FQDN="firewall.mgmt.internal"
+FIREWALL_IP=$(getent hosts "${FIREWALL_FQDN}" 2>/dev/null | awk '{print $1}' | head -1)
+if [[ -z "${FIREWALL_IP}" ]]; then
+    FIREWALL_IP=$(dig +short A "${FIREWALL_FQDN}" 2>/dev/null | head -1)
+fi
+
 # Is this service exposed to the internet, or internal-only? proxyAllowedZones
 # containing "internet" means public. An internal-only service may legitimately
 # have no working public TLS cert yet (e.g. the DNS-01 provider credentials are
@@ -121,31 +133,27 @@ fi
 info "  Check 3: HTTPS endpoint"
 if [[ -z "${PROXY_DOMAIN}" ]]; then
     fail "Cannot determine proxy domain"
+elif [[ -z "${FIREWALL_IP}" ]]; then
+    # Without the firewall's internal IP we cannot reach Caddy without hitting
+    # the un-hairpinned WAN IP, so skip rather than report a false failure.
+    warn "    Cannot determine ${FIREWALL_FQDN} internal IP — skipping HTTPS check"
 else
-    resolved_ip="$(dig +short A "${PROXY_DOMAIN}" 2>/dev/null | head -1)"
-    if [[ -z "${resolved_ip}" ]]; then
-        # The public domain is not in DNS yet — e.g. a test/placeholder domain, or
-        # before the operator adds the public record / the DNS-01 cert issues. We
-        # cannot meaningfully test HTTPS for a host that does not resolve, so SKIP
-        # rather than fail (cf. the cluster:ha single-node skip). A real, published
-        # domain still gets the full check below.
-        warn "    ${PROXY_DOMAIN} does not resolve in public DNS — skipping HTTPS check (domain not published yet)"
+    # Connect to Caddy on the firewall's internal interface; --resolve keeps the
+    # SNI/Host as the public domain so Caddy selects the right vhost and cert.
+    http_code=$(curl -sk -o /dev/null -w '%{http_code}' \
+        --max-time 10 --resolve "${PROXY_DOMAIN}:443:${FIREWALL_IP}" \
+        "https://${PROXY_DOMAIN}/" 2>/dev/null) || true
+    if [[ "${http_code}" =~ ^(200|301|302|303|307|308)$ ]]; then
+        pass "HTTPS responding (status ${http_code})"
+    elif [[ -n "${http_code}" && "${http_code}" != "000" ]]; then
+        # Got a response but not a redirect/success — warn but pass
+        pass "HTTPS responding (status ${http_code} — may require auth)"
+    elif [[ "${PROXY_PUBLIC}" -eq 1 ]]; then
+        fail "HTTPS not responding (status: ${http_code:-timeout})"
     else
-        http_code=$(curl -sk -o /dev/null -w '%{http_code}' \
-            --max-time 10 --resolve "${PROXY_DOMAIN}:443:${resolved_ip}" \
-            "https://${PROXY_DOMAIN}/" 2>/dev/null) || true
-        if [[ "${http_code}" =~ ^(200|301|302|303|307|308)$ ]]; then
-            pass "HTTPS responding (status ${http_code})"
-        elif [[ -n "${http_code}" && "${http_code}" != "000" ]]; then
-            # Got a response but not a redirect/success — warn but pass
-            pass "HTTPS responding (status ${http_code} — may require auth)"
-        elif [[ "${PROXY_PUBLIC}" -eq 1 ]]; then
-            fail "HTTPS not responding (status: ${http_code:-timeout})"
-        else
-            # Internal-only service: a missing/invalid public cert (e.g. DNS-01
-            # provider creds not set up yet) must not block the install.
-            warn "    HTTPS not responding (status: ${http_code:-timeout}) — internal-only service; public TLS cert/DNS-01 not configured yet (warning, not a failure)"
-        fi
+        # Internal-only service: a missing/invalid public cert (e.g. DNS-01
+        # provider creds not set up yet) must not block the install.
+        warn "    HTTPS not responding (status: ${http_code:-timeout}) — internal-only service; public TLS cert/DNS-01 not configured yet (warning, not a failure)"
     fi
 fi
 
@@ -154,12 +162,22 @@ fi
 if [[ "${DEEP}" -eq 1 ]]; then
 
     # Test 4: TLS certificate validity
+    #
+    # openssl is not installed on the minimal NixOS cicd (#138), so use curl's
+    # %{certs} writeout (curl >= 7.88) to obtain the leaf certificate's expiry.
+    # Connect via the firewall's internal IP for the same NAT-hairpin reason as
+    # Check 3, keeping the public domain as SNI.
     info "  Check 4: TLS certificate"
-    if [[ -n "${PROXY_DOMAIN}" ]]; then
-        cert_expiry=$(echo | openssl s_client -servername "${PROXY_DOMAIN}" \
-            -connect "${PROXY_DOMAIN}:443" 2>/dev/null \
-            | openssl x509 -noout -enddate 2>/dev/null \
-            | sed 's/notAfter=//') || true
+    if [[ -z "${PROXY_DOMAIN}" ]]; then
+        fail "Cannot check TLS — no proxy domain"
+    elif [[ -z "${FIREWALL_IP}" ]]; then
+        warn "    Cannot determine ${FIREWALL_FQDN} internal IP — skipping TLS check"
+    else
+        cert_info=$(curl -sk --max-time 10 \
+            --resolve "${PROXY_DOMAIN}:443:${FIREWALL_IP}" \
+            -w '%{certs}' -o /dev/null "https://${PROXY_DOMAIN}/" 2>/dev/null) || true
+        # First "Expire date:" line is the leaf certificate.
+        cert_expiry=$(echo "${cert_info}" | sed -n 's/^Expire date:[[:space:]]*//p' | head -1)
 
         if [[ -n "${cert_expiry}" ]]; then
             expiry_epoch=$(date -d "${cert_expiry}" +%s 2>/dev/null) || true
@@ -170,16 +188,15 @@ if [[ "${DEEP}" -eq 1 ]]; then
             else
                 fail "TLS certificate expired or expiry unparseable"
             fi
-        else
+        elif [[ "${PROXY_PUBLIC}" -eq 1 ]]; then
             fail "Could not retrieve TLS certificate"
+        else
+            warn "    Could not retrieve TLS certificate — internal-only service; public TLS cert/DNS-01 not configured yet (warning, not a failure)"
         fi
-    else
-        fail "Cannot check TLS — no proxy domain"
     fi
 
     # Test 5: Upstream reachable from firewall
     info "  Check 5: Upstream reachability"
-    FIREWALL_FQDN="firewall.mgmt.internal"
     upstream_code=$(ssh -o ConnectTimeout=10 -o BatchMode=yes -o LogLevel=ERROR \
         "root@${FIREWALL_FQDN}" \
         "curl -sk -o /dev/null -w '%{http_code}' --max-time 10 http://${UPSTREAM}:${PROXY_PORT}/" \
