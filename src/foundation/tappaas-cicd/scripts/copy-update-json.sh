@@ -139,6 +139,40 @@ list_valid_fields() {
     jq -r '.fields | keys[]' "${SCHEMA_FILE}" 2>/dev/null
 }
 
+# Compute the canonical Pattern A destination for a field — same rules used
+# by regroup_to_pattern_a (#207). Returns a human-readable hint like:
+#   top-level                          (header-pinned, general, or orphan)
+#   config["cluster:vm"].cores         (usedBy ∩ dependsOn, first match wins)
+#   top-level (orphan)                 (usedBy matches no declared dependency)
+#   top-level (unknown)                (field not in schema)
+field_destination() {
+    local field="$1"
+    local dest_json="$2"
+    [[ -f "${SCHEMA_FILE}" ]] || { echo "top-level"; return; }
+    jq -nr \
+        --slurpfile schema "${SCHEMA_FILE}" \
+        --slurpfile mod "${dest_json}" \
+        --arg f "${field}" \
+        --argjson pinned '["vmname","vmid","vmtag","node","zone0","zone1","mac0","mac1","dependsOn","provides","config","variant"]' '
+        ($schema[0].fields[$f]) as $fdef
+        | (($mod[0].dependsOn // [])) as $deps
+        | if $fdef == null then
+            "top-level (unknown)"
+          elif ($pinned | index($f)) != null then
+            "top-level"
+          elif (($fdef.usedBy // []) | index("general")) != null then
+            "top-level"
+          else
+            [ $deps[] | select(. as $d | ($fdef.usedBy // []) | index($d)) ] as $m
+            | if ($m | length) == 0 then
+                "top-level (orphan)"
+              else
+                "config[\"" + $m[0] + "\"]." + $f
+              end
+          end
+    '
+}
+
 # Determine if a value should be treated as a number based on schema type
 should_be_number() {
     local field="$1"
@@ -471,7 +505,11 @@ main() {
                 fi
 
                 mv "${tmp_file}" "${dest_json}"
-                info "  Set ${field} = ${value}"
+                # Tell the operator where this field will land in the
+                # canonical on-disk Pattern A shape (#264).
+                local dest_hint
+                dest_hint=$(field_destination "${field}" "${dest_json}")
+                info "  Set ${field} = ${value} → ${dest_hint}"
                 has_modifications=true
                 ;;
             *)

@@ -39,12 +39,19 @@ vmnet_zone_vlantag() {
 #   vmnet_zone_for_tag <tag> [zones_file]
 # Prints the zone name (empty if none). Used to derive the *old* zone for DNS
 # cleanup after a zone change. An empty/0 tag maps to the first untagged zone.
+#
+# Keys beginning with '_' (e.g. _README) are documentation blocks per the
+# zones.json convention and are skipped — they have no vlantag and would
+# otherwise alphabetically beat real zones at tag=0.
 vmnet_zone_for_tag() {
     local tag="${1:-0}"
     local zones_file="${2:-$VMNET_ZONES_FILE_DEFAULT}"
     [[ -z "$tag" ]] && tag=0
     jq -r --argjson t "$tag" \
-        'to_entries | map(select((.value.vlantag // 0) == $t)) | .[0].key // empty' \
+        'to_entries
+         | map(select((.key | startswith("_") | not)
+                      and ((.value.vlantag // 0) == $t)))
+         | .[0].key // empty' \
         "$zones_file" 2>/dev/null
 }
 

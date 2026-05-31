@@ -129,7 +129,15 @@ When `--variant` is used, the following fields are derived automatically unless 
 - Unknown field names will cause an error
 - In variant mode, `EFFECTIVE_MODULE` is exported for scripts that source this file
 - The installed `.json` is written in canonical Pattern A form on disk (#207): module identity / general header fields stay at the top, service-owned fields move under `config["<module>:<service>"]`. Downstream tooling reads through `read_module_config` / `get_config_value` which normalize to flat on the fly, so callers see a flat view regardless of on-disk shape.
-- The `--<field>` CLI overrides are applied to the flat internal form and then re-rendered in canonical Pattern A as the very last step, so an override like `--cores 16` lands under `config["cluster:vm"].cores`, not at the top.
+- The `--<field>` CLI overrides are applied to the flat internal form and then re-rendered in canonical Pattern A as the very last step, so an override like `--cores 16` lands under `config["cluster:vm"].cores`, not at the top. The override log line tells you exactly where each field will land in the canonical shape (#264):
+  ```
+    Set cores = 16 → config["cluster:vm"].cores
+    Set proxyDomain = test.example.com → config["firewall:proxy"].proxyDomain
+    Set vmid = 12345 → top-level
+    Set HANode = tappaas2 → top-level (orphan)
+  ```
+  `top-level (orphan)` means the field's `usedBy` lists a dep the module hasn't declared, so it stays at top until the operator either adds the dep or removes the field.
+- Override behavior is covered end-to-end by [`scripts/test/test-install-overrides.sh`](test/test-install-overrides.sh) (43 cases — flat + Pattern A + variant + multi-dep tiebreak; #264). Run it alongside the other tabletop suites.
 
 ---
 
@@ -303,14 +311,17 @@ zone-manager --no-ssl-verify --zones-file /home/tappaas/config/zones.json --exec
 
 ### test/ — tabletop tests for the storage-model tooling
 
-Five runnable test scripts under [`test/`](test/) exercise the #207 + #209 plumbing without touching any VM or live config. Each writes its fixtures into a temp dir and tears down on exit. Run them individually or in sequence:
+Runnable test scripts under [`test/`](test/) exercise the #207 + #209 + #237 + #264 plumbing without touching any VM or live config. Each writes its fixtures into a temp dir and tears down on exit. Run them individually or in sequence:
 
 ```bash
-scripts/test/test-convert-to-config.sh    #  9 cases — converter rules + idempotency + round-trip
-scripts/test/test-json-merge.sh           # 11 cases — module 3-way merge: pin/adopt/orphan/auto + Pattern A inputs
-scripts/test/test-read-module-config.sh   #  4 cases — read funnel + jq_module_write Pattern A render
-scripts/test/test-zones-merge.sh          # 11 cases — zones 3-way merge: pin state, adopt vlantag, rename detection, backfill
-scripts/test/test-zone-state.sh           #  9 cases — verbs, no-op, Mandatory refusal, --force, missing zone, invalid verb
+scripts/test/test-convert-to-config.sh      #  9 cases — converter rules + idempotency + round-trip
+scripts/test/test-json-merge.sh             # 11 cases — module 3-way merge: pin/adopt/orphan/auto + Pattern A inputs
+scripts/test/test-read-module-config.sh     #  4 cases — read funnel + jq_module_write Pattern A render
+scripts/test/test-zones-merge.sh            # 11 cases — zones 3-way merge: pin state, adopt vlantag, rename detection, backfill
+scripts/test/test-zone-state.sh             #  9 cases — verbs, no-op, Mandatory refusal, --force, missing zone, invalid verb
+scripts/test/test-zone-name-validation.sh   #  6 cases — module-fields regex rejects hyphens in zone names (#237)
+scripts/test/test-migrate-zone-keys.sh      # 11 cases — zone-key migration: zones+modules rewrite, marker, backup, idempotency
+scripts/test/test-install-overrides.sh      # 43 cases — install-time --<field> overrides (flat + Pattern A + variant + multi-dep; #264)
 ```
 
 Each script exits with the failure count (0 on success). They have no network or filesystem dependencies beyond `jq` and the schema file (`module-fields.json`), so they're suitable for CI.
