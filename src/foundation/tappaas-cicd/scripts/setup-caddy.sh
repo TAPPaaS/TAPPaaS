@@ -295,6 +295,27 @@ else
 fi
 
 echo ""
+
+# Apply the os-caddy ToDomain underscore patch (#237). os-caddy's HostnameField
+# default rejects underscored hostnames; the patch adds <IsDNSName>Y</IsDNSName>
+# so internal DNS labels like litellm.srv_home.internal work as reverse-proxy
+# upstreams. Idempotent; safe to re-run. Must happen NOW (after os-caddy is
+# installed) — pre-update.sh also tries to apply it on every update-tappaas,
+# but on a FRESH install pre-update.sh runs BEFORE os-caddy exists (Caddy.xml
+# doesn't yet) and silently skips. Without this call here, the very first
+# firewall:proxy install of an underscored-zone module (which install2.sh runs
+# right after this script) would hit the OPNsense ToDomain validator.
+PATCH_SCRIPT="/home/tappaas/TAPPaaS/src/foundation/tappaas-cicd/opnsense-patch/apply-caddy-isdnsname.sh"
+if [[ -f "${PATCH_SCRIPT}" ]]; then
+    info "Applying os-caddy ToDomain underscore patch..."
+    scp "${PATCH_SCRIPT}" root@"$FIREWALL_FQDN":/tmp/apply-caddy-isdnsname.sh
+    ssh root@"$FIREWALL_FQDN" 'sh /tmp/apply-caddy-isdnsname.sh' \
+        | while IFS= read -r line; do info "  $line"; done \
+        || warn "  os-caddy patch reported an error"
+else
+    warn "os-caddy patch script not found at ${PATCH_SCRIPT} — underscored upstreams will be rejected by OPNsense"
+fi
+
 info "${GN}✓${CL} Caddy setup completed"
 info "  OPNsense web UI: https://$FIREWALL_FQDN:8443"
 echo ""
