@@ -200,6 +200,45 @@ class DhcpManager:
                 return dhcp_range
         return None
 
+    def ip_in_any_range(self, ip_address: str) -> dict | None:
+        """Check whether an IP falls inside any configured DHCP pool.
+
+        Used by ``dns-manager check-range`` to warn when a host being given a
+        static DNS override sits inside a dynamic DHCP pool (issue #251). A
+        static reservation should live OUTSIDE the pool so dnsmasq never hands
+        the same address to another client.
+
+        Args:
+            ip_address: IPv4 address to test (e.g. "10.2.20.25")
+
+        Returns:
+            The first matching range dict (with start_addr/end_addr/
+            description/interface) if the IP is within a pool, else None.
+            A range whose start/end cannot be parsed is skipped.
+        """
+        import ipaddress
+
+        try:
+            candidate = ipaddress.ip_address(ip_address)
+        except ValueError:
+            # Not a valid IP — caller decides how to treat this; we cannot
+            # claim it is inside a range, so report "not in range".
+            return None
+
+        for dhcp_range in self.list_ranges():
+            start_raw = dhcp_range.get("start_addr")
+            end_raw = dhcp_range.get("end_addr")
+            if not start_raw or not end_raw:
+                continue
+            try:
+                start = ipaddress.ip_address(start_raw)
+                end = ipaddress.ip_address(end_raw)
+            except ValueError:
+                continue
+            if start <= candidate <= end:
+                return dhcp_range
+        return None
+
     def list_hosts(self) -> list[dict]:
         """List all configured DHCP host reservations.
 

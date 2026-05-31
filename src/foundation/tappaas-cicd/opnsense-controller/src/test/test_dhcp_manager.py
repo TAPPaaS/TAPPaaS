@@ -197,6 +197,51 @@ class TestDeleteRange(unittest.TestCase):
         self.assertEqual(_calls_for(manager, "delRange"), [])
 
 
+class TestIpInAnyRange(unittest.TestCase):
+    """ip_in_any_range detects whether a static IP sits inside a DHCP pool (#251).
+
+    Reuses the _make_manager fake, whose searchRange rows back list_ranges().
+    """
+
+    _ROWS = [{
+        "uuid": "u1",
+        "description": "srv_home",
+        "start_addr": "10.2.10.100",
+        "end_addr": "10.2.10.200",
+        "interface": "opt1",
+    }]
+
+    def test_ip_inside_pool_returns_range(self):
+        manager = _make_manager(existing_rows=self._ROWS)
+        match = manager.ip_in_any_range("10.2.10.150")
+        self.assertIsNotNone(match)
+        self.assertEqual(match["description"], "srv_home")
+
+    def test_ip_outside_pool_returns_none(self):
+        manager = _make_manager(existing_rows=self._ROWS)
+        # .25 is below the pool start, .250 is above the pool end.
+        self.assertIsNone(manager.ip_in_any_range("10.2.10.25"))
+        self.assertIsNone(manager.ip_in_any_range("10.2.10.250"))
+
+    def test_pool_boundaries_are_inclusive(self):
+        manager = _make_manager(existing_rows=self._ROWS)
+        self.assertIsNotNone(manager.ip_in_any_range("10.2.10.100"))
+        self.assertIsNotNone(manager.ip_in_any_range("10.2.10.200"))
+
+    def test_no_ranges_returns_none(self):
+        manager = _make_manager(existing_rows=[])
+        self.assertIsNone(manager.ip_in_any_range("10.2.10.150"))
+
+    def test_invalid_ip_returns_none(self):
+        manager = _make_manager(existing_rows=self._ROWS)
+        self.assertIsNone(manager.ip_in_any_range("not-an-ip"))
+
+    def test_range_with_unparseable_bounds_is_skipped(self):
+        rows = [{"uuid": "x", "description": "broken", "start_addr": "", "end_addr": ""}]
+        manager = _make_manager(existing_rows=rows)
+        self.assertIsNone(manager.ip_in_any_range("10.2.10.150"))
+
+
 class TestListLeases(unittest.TestCase):
     """list_leases queries the dnsmasq leases controller and maps fields (#235)."""
 

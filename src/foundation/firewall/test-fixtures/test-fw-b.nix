@@ -1,4 +1,4 @@
-# Firewall test VM B — client/server in test2 zone.
+# Firewall test VM B — client/server in test_allow_b zone.
 #
 # Imports the test-fw-webserver overlay (shared with test-fw-a) and pins the
 # port to 9090 to match test-fw-b.json's ports[] declaration.

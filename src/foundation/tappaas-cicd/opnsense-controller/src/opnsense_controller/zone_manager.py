@@ -554,7 +554,13 @@ class ZoneManager:
         with open(self.zones_file) as f:
             data = json.load(f)
 
-        self.zones = [Zone.from_json(name, zone_data) for name, zone_data in data.items()]
+        # Keys beginning with '_' (e.g. _README) are documentation blocks, not
+        # zones — skip them so they never become inert Zone objects.
+        self.zones = [
+            Zone.from_json(name, zone_data)
+            for name, zone_data in data.items()
+            if not name.startswith("_")
+        ]
         return self.zones
 
     def get_enabled_zones(self) -> list[Zone]:

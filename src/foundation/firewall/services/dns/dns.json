@@ -1,0 +1,7 @@
+{
+  "_comment": "firewall:dns service (issue #251). Creates an OPNsense DNS host override resolving <vmname>.<zone0>.internal to a static IP, so hardware modules (no VM - firewall rules + a known static device IP only) can provision their DNS entry at install time instead of as a manual prerequisite. Consumers add 'firewall:dns' to dependsOn and set the static IP via the module's 'ip' field (placed under config.\"firewall:dns\".ip, overridable at install time with --ip <addr>). The hostname is always <vmname>.<zone0>.internal (derived, not configurable - Lars, #251). The IP must be a static reservation OUTSIDE the zone's DHCP pool; install-service warns (does not fail) if it is inside.",
+  "service": "dns",
+  "consumes": {
+    "ip": "Static IPv4 address the host override resolves to. Required, no default. Override per-deploy with --ip <addr>."
+  }
+}

@@ -45,6 +45,7 @@
     "trunks1",
     "firewallType",
     "aliasType",
+    "ip",
     "proxyDomain",
     "proxyPort",
     "proxyUpstreamTls",
@@ -630,6 +631,19 @@
       },
       "example": "network",
       "note": "When 'network', the alias content is derived from the zone0 subnet — no separate field is needed. The module's zone0 must define an 'ip' (subnet) in zones.json."
+    },
+    "ip": {
+      "description": "Static IPv4 address of the device this module represents. Used by firewall:dns to create the DNS host override <vmname>.<zone0>.internal -> <ip>. Must be a static reservation OUTSIDE the zone's DHCP pool; firewall:dns install-service warns (does not fail) if the IP falls inside a configured pool. No default — supply it in the module JSON (typically under config.\"firewall:dns\".ip) or override at install time with --ip <addr>.",
+      "type": "string",
+      "requiredBy": [
+        "firewall:dns"
+      ],
+      "usedBy": [
+        "firewall:dns"
+      ],
+      "format": "^([0-9]{1,3}\\.){3}[0-9]{1,3}$",
+      "example": "10.4.20.25",
+      "note": "Hardware modules (no VM) declare this so their DNS entry is provisioned automatically at install time (issue #251). The matching static DHCP reservation (MAC-based) remains a manual prerequisite."
     },
     "proxyDomain": {
       "description": "Public domain name for the reverse proxy. Caddy obtains a TLS certificate for this domain.",

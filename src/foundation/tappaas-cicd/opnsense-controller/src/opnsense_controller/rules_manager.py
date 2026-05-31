@@ -309,7 +309,8 @@ def load_zones(path: Path) -> dict[str, ZoneSpec]:
         data = json.load(f)
     result: dict[str, ZoneSpec] = {}
     for name, entry in data.items():
-        if not isinstance(entry, dict):
+        # Keys beginning with '_' (e.g. _README) are documentation, not zones.
+        if name.startswith("_") or not isinstance(entry, dict):
             continue
         result[name] = ZoneSpec(
             name=name,

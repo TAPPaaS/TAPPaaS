@@ -37,7 +37,8 @@
     "firewall",
     "proxy",
     "rules",
-    "discovery"
+    "discovery",
+    "dns"
   ],
   "config": {
     "cluster:vm": {

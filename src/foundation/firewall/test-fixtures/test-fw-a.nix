@@ -1,4 +1,4 @@
-# Firewall test VM A — webserver in test1 zone.
+# Firewall test VM A — webserver in test_allow_a zone.
 #
 # Imports the test-fw-webserver overlay (shared with test-fw-b) and pins the
 # port to 8080 to match test-fw-a.json's ports[] declaration.

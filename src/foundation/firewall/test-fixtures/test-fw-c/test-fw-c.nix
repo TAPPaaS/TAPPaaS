@@ -1,4 +1,4 @@
-# Firewall test VM C — webserver in test3 zone.
+# Firewall test VM C — webserver in test_pinhole zone.
 #
 # Mirrors test-fw-a but listens on 9091 and serves a different marker so the
 # auto-pinhole (#173) live test can distinguish reaching test-fw-c from any

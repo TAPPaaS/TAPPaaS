@@ -24,49 +24,99 @@ TAPPaaS defines six zone types, each with a specific security purpose:
 | Guest | 5 | Untrusted guest access |
 | DMZ | 6 | Demilitarized zone for exposed services |
 
+> Zone keys use underscores, not hyphens (`srv_home`, `iot_cams`) — they are the
+> single source of truth and must match their downstream consumers verbatim
+> (OPNsense interface labels, UniFi VLAN/port-profile names). See issue #237.
+
+## Access Model: Tiers and the Isolation Invariant
+
+Two independent mechanisms control reachability between zones:
+
+| Mechanism | Scope | Set by |
+|---|---|---|
+| `access-to` | Entire source subnet → entire target subnet | Zone designer, in `zones.json` (baseline) |
+| `pinhole-allowed-from` + module `install.sh` | Specific source VM IP → specific port | Module author (runtime) |
+
+Zones are organised into trust tiers:
+
+| Tier | Zones | Default egress | Ingress mechanism |
+|---|---|---|---|
+| 0 — Control plane | `mgmt` | All zones | No inbound pinholes |
+| 1 — Service backends | `srv_home` `srv_work` `srv_cust` `srv_dev` `srv_test` `dmz` | Internet (+ declared IoT) | Module pinholes via `pinhole-allowed-from` |
+| 2 — Trusted clients | `home` `work` | Internet + own service zone | Direct |
+| 3 — IoT controlled | `iot_local` `iot_cloud` | `iot_cloud`: internet; `iot_local`: none | Zone-wide from `srv_home`/`home` |
+| **4 — IoT isolated** | **`iot_cams` `iot_untrust`** | **`iot_cams`: none; `iot_untrust`: internet** | **Pinhole-only — no exceptions** |
+| 5 — Untrusted clients | `guest` | Internet only | No inbound pinholes |
+
+**Isolation invariant.** Tier-4 zones (`iot_cams`, `iot_untrust`) have
+`"access-to": []` and **must never appear in any zone's `access-to`**. Access
+into them is granted only by per-module pinhole declaration. Adding an isolation
+zone to a non-`mgmt` `access-to` would nullify the pinhole mechanism — every host
+in the source subnet would gain unconditional zone-wide reach. `iot_cams` in
+particular must stay purpose-limited (GDPR Art. 25). The sole exception is
+`mgmt` (Tier-0 control plane), which reaches all zones for operational visibility.
+
+Access matrix (`✅` access-to · `🔓` pinhole-only · `❌` deny):
+
+| → | internet | srv_home | srv_work | srv_cust | iot_local | iot_cloud | iot_cams | iot_untrust |
+|---|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|
+| `mgmt` | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| `srv_home` | ✅ | — | ❌ | ❌ | ✅ | ✅ | 🔓 | ❌ |
+| `srv_work` | ✅ | ❌ | — | ❌ | ❌ | ❌ | 🔓 | ❌ |
+| `home` | ✅ | ✅ | ❌ | ❌ | ✅ | ✅ | ❌ | ❌ |
+| `work` | ✅ | ❌ | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ |
+| `guest` | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ |
+
+The canonical, machine-adjacent version of this model — including the PR review
+checklist, mDNS policy, and IoT classification decision aid — lives in the
+`_README` block at the top of [`firewall/zones.json`](firewall/zones.json). Keys
+beginning with `_` are documentation and are ignored by all consumers.
+
 ## Example Configuration
 
 ```json
 {
     "mgmt": {
         "type": "Management",
-        "state": "Mandatory",
-        "typeId": 0,
-        "subId": 0,
+        "state": "Manual",
+        "typeId": "0",
+        "subId": "0",
         "vlantag": 0,
         "ip": "10.0.0.0/24",
         "bridge": "lan",
-        "access-to": ["internet", "dmz", "srv", "client", "guest", "iot"],
-        "description": "Internal self-management network, untagged traffic"
+        "access-to": ["internet", "srv_home", "srv_work", "home", "dmz"],
+        "pinhole-allowed-from": [],
+        "description": "Control plane: hypervisors, backup, firewall, identity, cicd"
     },
-    "srv": {
+    "srv_home": {
         "type": "Service",
         "state": "Active",
-        "typeId": 2,
-        "subId": 10,
+        "typeId": "2",
+        "subId": "10",
         "vlantag": 210,
         "ip": "10.2.10.0/24",
         "bridge": "lan",
-        "access-to": ["internet", "mgmt"],
-        "pinhole-allowed-from": ["dmz", "client"],
-        "DHCP-start": 50,
-        "DHCP-end": 250,
-        "description": "Primary service zone for business applications"
+        "access-to": ["internet", "iot_cloud", "iot_local"],
+        "pinhole-allowed-from": [],
+        "description": "Personal services: home automation, personal apps"
     },
-    "dmz": {
-        "type": "DMZ",
+    "iot_cams": {
+        "type": "IoT",
         "state": "Active",
-        "typeId": 6,
-        "subId": 10,
-        "vlantag": 610,
-        "ip": "10.6.10.0/24",
+        "typeId": "4",
+        "subId": "30",
+        "vlantag": 430,
+        "ip": "10.4.30.0/24",
         "bridge": "lan",
-        "access-to": ["srv"],
-        "pinhole-allowed-from": ["internet"],
-        "description": "Demilitarized zone for internet-facing services"
+        "access-to": [],
+        "pinhole-allowed-from": ["srv_home", "srv_work"],
+        "description": "Surveillance: cameras + NVR, fully isolated"
     }
 }
 ```
+
+Note `iot_cams.access-to` is `[]`: an NVR in `srv_home`/`srv_work` reaches the
+cameras only through an explicit per-module pinhole, never via `access-to`.
 
 ## Computed Values
 

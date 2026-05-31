@@ -201,6 +201,41 @@ def list_dns_hosts(manager: DhcpManager) -> bool:
         return False
 
 
+def check_dns_range(manager: DhcpManager, ip_address: str) -> bool:
+    """Check whether an IP falls inside a configured DHCP pool (issue #251).
+
+    Prints the matching range if the IP is inside a DHCP pool and returns
+    False (so the shell sees a non-zero exit); returns True when the IP is
+    clear of every pool. Callers (e.g. firewall:dns install-service) treat a
+    non-zero exit as a warning, not a hard failure — a static reservation
+    inside the pool still works, it is just risky.
+
+    Args:
+        manager: DhcpManager instance
+        ip_address: IPv4 address to test
+
+    Returns:
+        True if the IP is NOT inside any DHCP pool, False if it is inside one.
+    """
+    try:
+        match = manager.ip_in_any_range(ip_address)
+    except Exception as e:
+        print(f"ERROR: Failed to query DHCP ranges: {e}", file=sys.stderr)
+        # Unknown — do not block the caller; report "clear".
+        return True
+
+    if match:
+        desc = match.get("description") or match.get("interface") or "?"
+        print(
+            f"IP {ip_address} is INSIDE DHCP pool "
+            f"'{desc}' ({match.get('start_addr')}-{match.get('end_addr')})"
+        )
+        return False
+
+    print(f"IP {ip_address} is not inside any DHCP pool")
+    return True
+
+
 def main():
     """Main entry point for DNS manager CLI."""
     parser = argparse.ArgumentParser(
@@ -219,6 +254,9 @@ Examples:
 
   # List all DNS entries
   dns-manager list
+
+  # Check whether an IP is inside a DHCP pool (non-zero exit if it is)
+  dns-manager check-range 10.2.20.25
 
   # Dry-run mode (don't make changes)
   dns-manager add backup mgmt.internal 10.0.0.12 --check-mode
@@ -279,6 +317,13 @@ Examples:
     # List command
     subparsers.add_parser("list", help="List all DNS host entries")
 
+    # Check-range command (issue #251)
+    check_range_parser = subparsers.add_parser(
+        "check-range",
+        help="Check whether an IP is inside a DHCP pool (exit 1 if it is)",
+    )
+    check_range_parser.add_argument("ip", help="IP address to check")
+
     args = parser.parse_args()
 
     if not args.command:
@@ -333,6 +378,8 @@ Examples:
                 )
             elif args.command == "list":
                 success = list_dns_hosts(manager)
+            elif args.command == "check-range":
+                success = check_dns_range(manager, args.ip)
 
             sys.exit(0 if success else 1)
 
