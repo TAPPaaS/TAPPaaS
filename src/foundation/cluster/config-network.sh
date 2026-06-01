@@ -461,10 +461,12 @@ if [[ "$INTERACTIVE" == "1" ]]; then
 fi
 
 # ── Backup + write ───────────────────────────────────────────────────
-# Check if the new config is identical to the current one (skip apply if unchanged).
-CURRENT_CONFIG="$(cat "$INTERFACES" 2>/dev/null || true)"
-if [[ "$NEW_CONFIG" == "$CURRENT_CONFIG" ]]; then
-  info "${GN}✓${CL} Network configuration already matches desired state — skipping apply."
+# Check if the network is already configured correctly (skip apply if so).
+# We check if the lan bridge exists with the correct IP rather than comparing
+# config files, since role detection can change between runs.
+CURRENT_LAN_IP="$(ip -o -4 addr show lan 2>/dev/null | awk '{print $4}' | head -1)"
+if [[ "$CURRENT_LAN_IP" == "$LAN_MGMT_IP" ]] && ip link show lan &>/dev/null && ip link show wan &>/dev/null; then
+  info "${GN}✓${CL} Network already configured (lan=${CURRENT_LAN_IP}, bridges exist) — skipping apply."
   info "  role=${ROLE}  lan=${LAN_PORT} (${LAN_MGMT_IP})  wan=${WAN_PORT:-none}"
   exit 0
 fi
