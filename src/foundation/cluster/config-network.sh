@@ -464,11 +464,13 @@ fi
 # Check if the network is already configured correctly (skip apply if so).
 # We check if the lan bridge exists with the correct IP rather than comparing
 # config files, since role detection can change between runs.
-CURRENT_LAN_IP="$(ip -o -4 addr show lan 2>/dev/null | awk '{print $4}' | head -1)"
-if [[ "$CURRENT_LAN_IP" == "$LAN_MGMT_IP" ]] && ip link show lan &>/dev/null && ip link show wan &>/dev/null; then
-  info "${GN}✓${CL} Network already configured (lan=${CURRENT_LAN_IP}, bridges exist) — skipping apply."
-  info "  role=${ROLE}  lan=${LAN_PORT} (${LAN_MGMT_IP})  wan=${WAN_PORT:-none}"
-  exit 0
+if ip link show lan &>/dev/null && ip link show wan &>/dev/null; then
+  CURRENT_LAN_IP="$(ip -o -4 addr show lan 2>/dev/null | awk '{print $4}' | head -1 || true)"
+  if [[ "$CURRENT_LAN_IP" == "$LAN_MGMT_IP" ]]; then
+    info "${GN}✓${CL} Network already configured (lan=${CURRENT_LAN_IP}, bridges exist) — skipping apply."
+    info "  role=${ROLE}  lan=${LAN_PORT} (${LAN_MGMT_IP})  wan=${WAN_PORT:-none}"
+    exit 0
+  fi
 fi
 
 BACKUP="${INTERFACES}.tappaas.$(date +%Y%m%d-%H%M%S).bak"
