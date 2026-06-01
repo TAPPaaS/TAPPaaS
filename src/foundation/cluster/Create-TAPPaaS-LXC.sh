@@ -59,17 +59,23 @@ META="{}"
 ZONES=$(cat /root/tappaas/zones.json)
 
 # get_config_value <key> [default]  — mirrors Create-TAPPaaS-VM.sh.
+# Supports both flat (top-level) and Pattern-A (nested under .config."<module>:<service>") layouts.
 get_config_value() {
   local key="$1"
-  local value
-  if ! echo "${JSON}" | jq -e --arg K "${key}" 'has($K)' >/dev/null; then
+  local value=""
+  if echo "${JSON}" | jq -e --arg K "${key}" 'has($K)' >/dev/null; then
+    # Found at top level
+    value=$(echo "${JSON}" | jq -r --arg KEY "${key}" '.[$KEY]')
+  elif echo "${JSON}" | jq -e --arg K "${key}" '.config // {} | to_entries[] | select(.value | has($K))' >/dev/null 2>&1; then
+    # Found in a nested config block (Pattern-A)
+    value=$(echo "${JSON}" | jq -r --arg K "${key}" '[.config // {} | to_entries[] | select(.value | has($K)) | .value[$K]][0]')
+  else
+    # Key not found anywhere
     if [[ $# -lt 2 ]]; then
       errln "Missing required key '${key}' in ${JSON_CONFIG}"
       exit 1
     fi
     value="$2"
-  else
-    value=$(echo "${JSON}" | jq -r --arg KEY "${key}" '.[$KEY]')
   fi
   info "     - ${key} has value: ${BGN}${value}${CL}" >&2
   echo -n "${value}"

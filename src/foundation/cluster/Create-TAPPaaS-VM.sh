@@ -117,18 +117,26 @@ JSON=$(cat "$JSON_CONFIG")
 ZONES=$(cat /root/tappaas/zones.json)
 
 function get_config_value() {
+  # Retrieves a configuration value from the module JSON.
+  # Supports both flat (top-level) and Pattern-A (nested under .config."<module>:<service>") layouts.
+  # Search order: top-level key first, then any nested config block.
   local key="$1"
   local default="$2"
-  if ! echo "$JSON" | jq -e --arg K "$key" 'has($K)' >/dev/null ; then
-  # JSON lacks the key 
+  local value=""
+  if echo "$JSON" | jq -e --arg K "$key" 'has($K)' >/dev/null ; then
+    # Found at top level
+    value=$(echo "$JSON" | jq -r --arg KEY "$key" '.[$KEY]')
+  elif echo "$JSON" | jq -e --arg K "$key" '.config // {} | to_entries[] | select(.value | has($K))' >/dev/null 2>&1; then
+    # Found in a nested config block (Pattern-A)
+    value=$(echo "$JSON" | jq -r --arg K "$key" '[.config // {} | to_entries[] | select(.value | has($K)) | .value[$K]][0]')
+  else
+    # Key not found anywhere
     if [ -z "$default" ]; then
       echo -e "\n${RD}[ERROR]${CL} Missing required key '${YW}$key${CL}' in JSON configuration." >&2
       exit 1
     else
       value="$default"
     fi
-  else
-    value=$(echo $JSON | jq -r --arg KEY "$key" '.[$KEY]')
   fi
   info "     - $key has value: ${BGN}${value}" >&2 #TODO, this is a hack using std error for info logging
   echo -n "${value}"
