@@ -330,14 +330,17 @@ def load_module(modules_dir: Path, name: str) -> ModuleSpec:
         raise FileNotFoundError(f"module config not found: {path}")
     with open(path) as f:
         data = json.load(f)
+    # Pattern A (#207) nests firewall:rules fields under config."firewall:rules".
+    # Fall back to nested form when the top-level key is absent or empty.
+    fr = data.get("config", {}).get("firewall:rules", {})
     return ModuleSpec(
         vmname=data.get("vmname", name),
         zone0=data.get("zone0", ""),
         bridge0=data.get("bridge0", "lan"),
-        ports=data.get("ports", []) or [],
-        ingress=data.get("ingress", []) or [],
-        egress=data.get("egress", []) or [],
-        aliases=data.get("aliases", {}) or {},
+        ports=data.get("ports") or fr.get("ports") or [],
+        ingress=data.get("ingress") or fr.get("ingress") or [],
+        egress=data.get("egress") or fr.get("egress") or [],
+        aliases=data.get("aliases") or fr.get("aliases") or {},
         firewall_type=data.get("firewallType", "opnsense"),
         alias_type=data.get("aliasType", "host") or "host",
         depends_on=data.get("dependsOn", []) or [],
