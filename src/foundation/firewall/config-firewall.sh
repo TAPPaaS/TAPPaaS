@@ -68,6 +68,7 @@ ROOT_PW=""
 # only if you changed it in the workflow.
 BOOTSTRAP_PW="opnsense"
 INTERACTIVE=1
+CHAINED=0  # Set to 1 when called from install.sh (suppresses end-of-script instructions)
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --repo)            REPO="${2:-}"; shift 2 ;;
@@ -75,6 +76,7 @@ while [[ $# -gt 0 ]]; do
     --root-pw)         ROOT_PW="${2:-}"; shift 2 ;;
     --bootstrap-pw)    BOOTSTRAP_PW="${2:-}"; shift 2 ;;
     --non-interactive) INTERACTIVE=0; shift ;;
+    --chained)         CHAINED=1; shift ;;
     -h|--help)         usage; exit 0 ;;
     *) error "Unknown argument: $1"; usage; exit 2 ;;
   esac
@@ -304,35 +306,35 @@ else
   warn "Firewall not yet answering at ${FW_IP} — give it a moment, then verify the console."
 fi
 
+info "${GN}✓${CL} Firewall bootstrap complete."
+
+# Only show manual next-steps when running standalone (not chained from install.sh).
+# When called with --chained, the install.sh chain continues automatically.
+if [[ "$CHAINED" == "0" ]]; then
 cat <<EOF
 
 ${GN}${BOLD}========================  Firewall bootstrap complete  ========================${CL}
 
 Next steps to finish the TAPPaaS foundation (run on this node unless noted):
 
-  ${BOLD}1. Swap cables.${CL}
-     Put the firewall inline: WAN uplink → the firewall's WAN, and the
-     management switch/trunk → the firewall's LAN. Then point this node's
-     routing + DNS at the firewall:
-        ${BL}~/tappaas/config-network.sh --swap-cables${CL}
+  ${BOLD}1. Gateway cutover.${CL}
+     Point this node's routing + DNS at the firewall (additive — keeps upstream
+     connectivity, no cable swapping needed):
+        ${BL}~/tappaas/config-network.sh --swap-gateway${CL}
 
-  ${BOLD}2. Move your management PC to the local network.${CL}
-     Connect your admin workstation to the TAPPaaS management LAN; it gets a
-     ${BL}10.0.0.x${CL} lease from the firewall. The firewall GUI is at
-     ${BL}https://${FW_IP}${CL} (root + the password you set).
-
-  ${BOLD}3. Run the sanity checks.${CL}
+  ${BOLD}2. Run the sanity checks.${CL}
         ${BL}~/tappaas/sanity-check.sh${CL}
      Confirms gateway, internal/external DNS and internet all work before you
      build on top. Fix anything red before continuing.
 
-  ${BOLD}4. Install additional cluster nodes${CL}  ${YW}(optional — skip for a single node).${CL}
+  ${BOLD}3. Install additional cluster nodes${CL}  ${YW}(optional — skip for a single node).${CL}
      On each extra node, run the same node bootstrap (cluster install.sh); it
      auto-joins this cluster.
 
-  ${BOLD}5. Build the management platform${CL} (once all nodes are up):
+  ${BOLD}4. Build the management platform${CL} (once all nodes are up):
         ${BL}~/tappaas/install-platform.sh${CL}
-     cicd then takes over VLANs, reverse proxy and firewall rules (via the API
-     key in ${BL}${CREDS_FILE}${CL}), then backup (35) and identity (40) follow.
+     Creates the NixOS template + tappaas-cicd VM. cicd then takes over VLANs,
+     reverse proxy and firewall rules (via the API key in ${BL}${CREDS_FILE}${CL}).
 ${GN}${BOLD}==============================================================================${CL}
 EOF
+fi

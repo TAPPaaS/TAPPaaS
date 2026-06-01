@@ -240,7 +240,7 @@ do_first_node_platform() {
   fi
   echo -e "\n${GN}=== [chain 1/4] OPNsense firewall ===${CL}"
   fetch "${REPO}${BRANCH}/src/foundation/firewall/config-firewall.sh" ~/tappaas/config-firewall.sh 755
-  if ! ~/tappaas/config-firewall.sh --repo "$REPO" --branch "$BRANCH" ${NONINT_ARG}; then
+  if ! ~/tappaas/config-firewall.sh --repo "$REPO" --branch "$BRANCH" --chained ${NONINT_ARG}; then
     msg_error "config-firewall.sh did not complete — fix it, then re-run ~/tappaas/config-firewall.sh and continue manually."
     return 1
   fi
