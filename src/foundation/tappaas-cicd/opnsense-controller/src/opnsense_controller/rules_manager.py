@@ -1153,7 +1153,7 @@ class RulesManager:
                 f"Network alias for module '{vmname}' (zone '{zone0}' subnet) "
                 f"— multi-device module, no single FQDN",
             )
-        fqdn = f"{vmname}.{zone0}.{DEFAULT_DOMAIN_SUFFIX}"
+        fqdn = f"{vmname}.{zone0.replace('_', '-')}.{DEFAULT_DOMAIN_SUFFIX}"
         return AliasTarget(
             "host",
             [fqdn],
@@ -1370,7 +1370,7 @@ class RulesManager:
         )
         info("")
         if module.ingress:
-            info(f"INGRESS to {module.vmname} ({module.vmname}.{module.zone0}.{DEFAULT_DOMAIN_SUFFIX}):")
+            info(f"INGRESS to {module.vmname} ({module.vmname}.{module.zone0.replace('_', '-')}.{DEFAULT_DOMAIN_SUFFIX}):")
             for entry in module.ingress:
                 src = self._render_peer(entry.get("from", ""))
                 proto = _normalize_protocol(entry.get("protocol"))

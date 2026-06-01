@@ -145,8 +145,13 @@ if [[ "$IMAGETYPE" == "clone" ]]; then
     fi
 fi
 
-# Copy the VM config and create VM hardware
-scp "/home/tappaas/config/$1.json" "root@${NODE}.${MGMT}.internal:/root/tappaas/$1.json"
+# Copy the VM config (flat) and create VM hardware.
+# Normalize Pattern A → flat so Create-TAPPaaS-VM.sh (install-vm.sh) can read
+# top-level fields like imageType, cores, memory from any config format.
+_flat_cfg=$(mktemp)
+normalize_module_config < "/home/tappaas/config/$1.json" > "${_flat_cfg}"
+scp "${_flat_cfg}" "root@${NODE}.${MGMT}.internal:/root/tappaas/$1.json"
+rm -f "${_flat_cfg}"
 ssh "root@${NODE}.${MGMT}.internal" "/root/tappaas/Create-TAPPaaS-VM.sh $1"
 ssh "root@${NODE}.${MGMT}.internal" "rm /root/tappaas/$1.json"
 
@@ -262,9 +267,10 @@ except Exception:
 " 2>/dev/null) || _vm_ip=""
 
     if [[ -n "$_vm_ip" && -x "$(command -v dns-manager)" ]]; then
-        dns-manager --no-ssl-verify delete "${VMNAME}" "${ZONE0NAME}.internal" >/dev/null 2>&1 || true
-        dns-manager --no-ssl-verify add    "${VMNAME}" "${ZONE0NAME}.internal" "${_vm_ip}" >/dev/null 2>&1 || true
-        info "  ${GN}✓${CL} DNS: ${VMNAME}.${ZONE0NAME}.internal → ${_vm_ip}"
+        _DNS_ZONE="${ZONE0NAME//_/-}"
+        dns-manager --no-ssl-verify delete "${VMNAME}" "${_DNS_ZONE}.internal" >/dev/null 2>&1 || true
+        dns-manager --no-ssl-verify add    "${VMNAME}" "${_DNS_ZONE}.internal" "${_vm_ip}" >/dev/null 2>&1 || true
+        info "  ${GN}✓${CL} DNS: ${VMNAME}.${_DNS_ZONE}.internal → ${_vm_ip}"
     fi
 fi
 
