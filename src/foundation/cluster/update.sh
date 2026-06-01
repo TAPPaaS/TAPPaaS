@@ -74,6 +74,21 @@ while read -r node; do
         echo ""
     fi
     info "$node package update completed."
+
+    # Detect pending kernel reboot — Proxmox does not create /var/run/reboot-required.
+    # Compare running kernel with latest installed pve-kernel package.
+    _running=$(ssh -n -o StrictHostKeyChecking=no root@"$NODE_FQDN" "uname -r" 2>/dev/null || true)
+    _latest=$(ssh -n -o StrictHostKeyChecking=no root@"$NODE_FQDN" \
+        "dpkg -l 'pve-kernel-*' 2>/dev/null | awk '/^ii/{print \$3}' | sort -V | tail -1 | sed 's/+.*//'" \
+        2>/dev/null || true)
+    if [[ -n "$_running" && -n "$_latest" && "$_running" != *"$_latest"* ]]; then
+        warn "Node ${node}: kernel ${_latest} installed, ${_running} running — reboot required"
+        warn "  Kernel modules (e.g. amdgpu, network drivers) are stale until reboot."
+        warn "  Schedule a maintenance window and run:"
+        warn "    reboot-node.sh --dry-run ${node}    # preview impact"
+        warn "    reboot-node.sh --execute ${node}    # execute (HITL)"
+    fi
+
 done <<< "$NODES"
 echo ""
 info "All Proxmox nodes package update completed."
