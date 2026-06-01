@@ -337,6 +337,44 @@ validate_provided_services() {
     return "${errors}"
 }
 
+# Validate that the module's zone0 is Active in zones.json.
+# Early-exit guard: called before any provisioning action in install-module.sh.
+# Arguments:
+#   $1  zone name (e.g. srv_work)
+# Returns 1 if zone is missing or not Active; 0 if Active or zones.json absent.
+validate_zone_active() {
+    local zone="$1"
+    local zones_file="${CONFIG_DIR}/zones.json"
+    local state
+
+    if [[ ! -f "$zones_file" ]]; then
+        warn "zones.json not found at $zones_file — skipping zone state check"
+        return 0
+    fi
+
+    if ! jq -e --arg z "$zone" 'has($z)' "$zones_file" > /dev/null 2>&1; then
+        error "Zone '${YW}${zone}${CL}' not found in zones.json"
+        return 1
+    fi
+
+    state=$(jq -r --arg z "$zone" '.[$z].state // "unknown"' "$zones_file")
+
+    if [[ "$state" != "Active" ]]; then
+        error "Zone '${YW}${zone}${CL}' is ${YW}${state}${CL} — cannot deploy module before zone is activated"
+        error ""
+        error "  Options:"
+        error "    1. Activate the zone (upstream PR + Lars review required):"
+        error "         zone-state.sh ${zone} Active"
+        error "         zone-manager --execute"
+        error "    2. Redeploy to an already-active zone:"
+        error "         install-module.sh <module> --zone0 <active-zone>"
+        return 1
+    fi
+
+    info "  ${GN}✓${CL} Zone '${zone}' is Active"
+    return 0
+}
+
 # ── Module-config normalization (#161 / #207) ────────────────────────
 # Defined here (before auto-load) so the auto-load block below can call it.
 # A module JSON may group per-service configuration under a Pattern-A `config`
