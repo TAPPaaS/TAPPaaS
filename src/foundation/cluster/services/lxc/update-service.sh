@@ -51,7 +51,8 @@ done
 [[ -z "${MODULE}" ]] && { echo "Usage: $0 [--check] <module-name>"; exit 1; }
 
 check_json "${CONFIG_DIR}/${MODULE}.json" || exit 1
-JSON="$(cat "${CONFIG_DIR}/${MODULE}.json")"
+# Normalize Pattern-A configs (nested under .config."<module>:<service>") to flat form.
+JSON="$(normalize_module_config < "${CONFIG_DIR}/${MODULE}.json")"
 cfg() { get_config_value "$1" "$2"; }
 
 # ── Desired state ────────────────────────────────────────────────────

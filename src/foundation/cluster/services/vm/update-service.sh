@@ -76,7 +76,8 @@ check_json "${CONFIG_DIR}/${MODULE}.json" || exit 1
 # Load the module config into $JSON for get_config_value. The library's
 # source-time auto-loader keys off the script's first arg, which may be a flag
 # (e.g. --check), so set it explicitly now that the module name is known.
-JSON="$(cat "${CONFIG_DIR}/${MODULE}.json")"
+# Normalize Pattern-A configs (nested under .config."<module>:<service>") to flat form.
+JSON="$(normalize_module_config < "${CONFIG_DIR}/${MODULE}.json")"
 
 # get_config_value exits when a required (empty-default) key is missing, so all
 # optional reads pass an explicit default (sentinel "__none__" = unset).
