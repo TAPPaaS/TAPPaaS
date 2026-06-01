@@ -461,6 +461,14 @@ if [[ "$INTERACTIVE" == "1" ]]; then
 fi
 
 # ── Backup + write ───────────────────────────────────────────────────
+# Check if the new config is identical to the current one (skip apply if unchanged).
+CURRENT_CONFIG="$(cat "$INTERFACES" 2>/dev/null || true)"
+if [[ "$NEW_CONFIG" == "$CURRENT_CONFIG" ]]; then
+  info "${GN}✓${CL} Network configuration already matches desired state — skipping apply."
+  info "  role=${ROLE}  lan=${LAN_PORT} (${LAN_MGMT_IP})  wan=${WAN_PORT:-none}"
+  exit 0
+fi
+
 BACKUP="${INTERFACES}.tappaas.$(date +%Y%m%d-%H%M%S).bak"
 cp -a "$INTERFACES" "$BACKUP"
 info "Backed up current config → ${BACKUP}"
