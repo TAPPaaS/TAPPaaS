@@ -153,18 +153,24 @@ main() {
 
     local module_json="${CONFIG_DIR}/${effective_module}.json"
 
+    local zone0
+    zone0=$(jq -r '.zone0 // empty' "${module_json}")
+    if [[ -n "$zone0" ]]; then
+        validate_zone_active "$zone0" || die "Zone validation failed — install aborted before any resources were created"
+    fi
+
     # ── Step 3: Validate dependencies ────────────────────────────────
     echo ""
     info "${BOLD}Step 3: Validate dependencies${CL}"
 
     local depends_on
-    depends_on=$(read_module_config "${module}" | jq -r '.dependsOn // [] | .[]' 2>/dev/null)
+    depends_on=$(read_module_config "${effective_module}" | jq -r '.dependsOn // [] | .[]' 2>/dev/null)
 
     # A module is either VM-backed or container-backed, never both (issue #203).
-    if read_module_config "${module}" | jq -e '(.dependsOn // []) as $d
+    if read_module_config "${effective_module}" | jq -e '(.dependsOn // []) as $d
               | (($d | index("cluster:vm")) != null)
                 and (($d | index("cluster:lxc")) != null)' >/dev/null 2>&1; then
-        die "Module '${module}' declares both cluster:vm and cluster:lxc in dependsOn — choose one (a guest is a VM or a container, not both)"
+        die "Module '${effective_module}' declares both cluster:vm and cluster:lxc in dependsOn — choose one (a guest is a VM or a container, not both)"
     fi
 
     local dep_errors=0
@@ -197,7 +203,7 @@ main() {
     fi
 
     local provides
-    provides=$(read_module_config "${module}" | jq -r '.provides // [] | .[]' 2>/dev/null)
+    provides=$(read_module_config "${effective_module}" | jq -r '.provides // [] | .[]' 2>/dev/null)
     if [[ -z "${provides}" ]]; then
         info "  Module does not provide any services"
     else
