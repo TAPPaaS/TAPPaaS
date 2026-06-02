@@ -12,10 +12,15 @@
 # TAPPaaS
 # Name: Open webui
 # Type: APP
-# Version: 0.9.5
-# Date: 2026-05-20
+# Version: 0.9.6
+# Date: 2026-06-02
 # Author: @ErikDaniel007 (Tappaas)
 # Products: openwebui, postgres, redis
+#
+# Changelog v0.9.6 (2026-06-02):
+# - Upgraded OpenWebUI 0.9.5 → 0.9.6
+# - Fixed registry inconsistency: ExecStartPre now uses docker.io (was ghcr.io)
+# - Fixed backup: exclude cache/ (embedding models are regeneratable, not user data)
 #
 # Changelog v0.9.5 (2026-05-20):
 # - Upgraded OpenWebUI 0.8.10 → 0.9.5; registry GHCR → Docker Hub
@@ -33,7 +38,7 @@ let
   # Change versions in one place only
   # ----------------------------------------
   versions = {
-    openwebui   = "0.9.5";               # OpenWebUI container version (Docker Hub, no v-prefix)
+    openwebui   = "0.9.6";               # OpenWebUI container version (Docker Hub, no v-prefix)
     postgresPkg = pkgs.postgresql_17;   # PostgreSQL version
     redisPkg    = pkgs.redis;           # Redis version
   };
@@ -196,7 +201,7 @@ in
       ExecStart = "${startScript}";
       ExecStop = "${pkgs.podman}/bin/podman stop openwebui";
       ExecStartPre = pkgs.writeShellScript "openwebui-prestart" ''
-        IMAGE="ghcr.io/open-webui/open-webui:${versions.openwebui}"
+        IMAGE="docker.io/openwebui/open-webui:${versions.openwebui}"
         if ! ${pkgs.podman}/bin/podman image exists "$IMAGE"; then
           echo "Image $IMAGE not found locally, pulling..."
           ${pkgs.podman}/bin/podman pull "$IMAGE"
@@ -337,7 +342,9 @@ EOF
       ExecStartPre = "${pkgs.coreutils}/bin/mkdir -p /var/backup/openwebui-data";
       ExecStart = pkgs.writeShellScript "openwebui-data-backup" ''
         ${pkgs.gnutar}/bin/tar -cf - \
-          -C / var/lib/openwebui/data var/lib/openwebui/models \
+          --exclude='./cache' \
+          -C /var/lib/openwebui/data \
+          . \
           | ${pkgs.gzip}/bin/gzip > /var/backup/openwebui-data/openwebui-data-$(date +%F).tar.gz
         ${pkgs.findutils}/bin/find /var/backup/openwebui-data -name "*.tar.gz" -mtime +7 -delete
       '';

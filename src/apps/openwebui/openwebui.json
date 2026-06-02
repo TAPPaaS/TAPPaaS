@@ -1,7 +1,7 @@
 {
   "description": "TAPPaaS Open Webui",
   "version": "0.6.0",
-  "releaseDate": "2026-05-20",
+  "releaseDate": "2026-06-02",
   "maintainer": "@ErikDaniel007",
   "status": "Development",
   "vmname": "openwebui",
@@ -19,7 +19,7 @@
     "firewall:rules"
   ],
   "provides": [],
-  "appVersion": "0.9.5",
+  "appVersion": "0.9.6",
   "config": {
     "cluster:vm": {
       "cores": 2,
