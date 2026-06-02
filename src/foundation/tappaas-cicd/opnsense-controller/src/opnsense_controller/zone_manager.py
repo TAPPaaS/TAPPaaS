@@ -17,11 +17,58 @@ import hashlib
 import ipaddress
 import json
 import os
+import socket
 import sys
 from dataclasses import dataclass
 from pathlib import Path
 
 from .config import Config
+
+
+def _check_unbound_dns(label: str = "") -> bool:
+    """Check if Unbound DNS at 10.0.0.1 is responding.
+
+    Debug instrumentation to track when Unbound breaks during zone-manager
+    operations. Returns True if DNS is working, False otherwise.
+    """
+    try:
+        # Create a UDP socket for DNS query
+        sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        sock.settimeout(2.0)
+
+        # Simple DNS query for "firewall.mgmt.internal" (A record)
+        # DNS header: ID=0x1234, flags=0x0100 (standard query), 1 question
+        query = (
+            b'\x12\x34'  # Transaction ID
+            b'\x01\x00'  # Flags: standard query
+            b'\x00\x01'  # Questions: 1
+            b'\x00\x00'  # Answer RRs: 0
+            b'\x00\x00'  # Authority RRs: 0
+            b'\x00\x00'  # Additional RRs: 0
+            # Query: firewall.mgmt.internal
+            b'\x08firewall\x04mgmt\x08internal\x00'
+            b'\x00\x01'  # Type: A
+            b'\x00\x01'  # Class: IN
+        )
+
+        sock.sendto(query, ("10.0.0.1", 53))
+        response, _ = sock.recvfrom(512)
+        sock.close()
+
+        # Check if we got a valid response (at least header + some data)
+        if len(response) >= 12:
+            prefix = f"[UNBOUND-CHECK {label}] " if label else "[UNBOUND-CHECK] "
+            info(f"{prefix}DNS OK - Unbound responding on 10.0.0.1:53")
+            return True
+        return False
+    except socket.timeout:
+        prefix = f"[UNBOUND-CHECK {label}] " if label else "[UNBOUND-CHECK] "
+        warn(f"{prefix}DNS FAILED - Unbound NOT responding on 10.0.0.1:53 (timeout)")
+        return False
+    except Exception as e:
+        prefix = f"[UNBOUND-CHECK {label}] " if label else "[UNBOUND-CHECK] "
+        warn(f"{prefix}DNS FAILED - Unbound check error: {e}")
+        return False
 from .dhcp_manager import DhcpManager, DhcpRange
 from .firewall_manager import FirewallManager, FirewallRule, FirewallRuleInfo, RuleAction
 from .log import debug, error, info, warn
@@ -921,6 +968,9 @@ class ZoneManager:
                 if check_mode:
                     results[zone.name] = {"status": "would_create", "vlan": zone.vlan_tag}
                 else:
+                    # DEBUG: Check Unbound before VLAN creation
+                    _check_unbound_dns(f"BEFORE create_vlan {zone.name}")
+
                     try:
                         # Name the assigned interface after the zone, with
                         # zone keys are already underscore-aligned with OPNsense
@@ -936,6 +986,10 @@ class ZoneManager:
                             ipv4_subnet=subnet_bits,
                         )
                         results[zone.name] = {"status": "created", "result": result}
+
+                        # DEBUG: Check Unbound after VLAN creation
+                        _check_unbound_dns(f"AFTER create_vlan {zone.name}")
+
                     except Exception as e:
                         results[zone.name] = {"status": "error", "error": str(e)}
                         error(f"{zone.name}: {e}")
@@ -957,10 +1011,16 @@ class ZoneManager:
             # IP fell out of sync (observed in the #237 verification after a
             # configd restart). Cheap and idempotent.
             if not check_mode:
+                # DEBUG: Check Unbound before apply_vlan_settings
+                _check_unbound_dns("BEFORE apply_vlan_settings")
+
                 try:
                     manager.apply_vlan_settings()
                 except Exception as e:
                     debug(f"  apply_vlan_settings: {e}")
+
+                # DEBUG: Check Unbound after apply_vlan_settings
+                _check_unbound_dns("AFTER apply_vlan_settings")
 
         return results
 
@@ -1107,8 +1167,14 @@ class ZoneManager:
 
             # Apply all staged DHCP changes in a single reconfigure.
             if changed and not check_mode:
+                # DEBUG: Check Unbound before dnsmasq reconfigure
+                _check_unbound_dns("BEFORE dnsmasq reconfigure")
+
                 debug("  Reconfiguring dnsmasq to apply DHCP changes...")
                 manager.reconfigure()
+
+                # DEBUG: Check Unbound after dnsmasq reconfigure
+                _check_unbound_dns("AFTER dnsmasq reconfigure")
 
             # Report on manual zones (not created or deleted)
             for zone in manual_zones:
@@ -1465,6 +1531,9 @@ class ZoneManager:
         if check_mode:
             return {"status": "would_update", "interfaces": interfaces}
 
+        # DEBUG: Check Unbound before set_dnsmasq_interfaces
+        _check_unbound_dns("BEFORE set_dnsmasq_interfaces")
+
         try:
             with DhcpManager(self.config) as manager:
                 result = manager.set_dnsmasq_interfaces(
@@ -1472,6 +1541,10 @@ class ZoneManager:
                     check_mode=check_mode,
                 )
                 debug(f"  Updated dnsmasq to listen on {len(interfaces)} interfaces")
+
+                # DEBUG: Check Unbound after set_dnsmasq_interfaces
+                _check_unbound_dns("AFTER set_dnsmasq_interfaces")
+
                 return {"status": "updated", "interfaces": interfaces, "result": result}
         except Exception as e:
             error(f"Updating dnsmasq interfaces: {e}")
