@@ -11,7 +11,8 @@ NixOS .nix create/modify      -> nix-dev
 Python code create/modify     -> python-dev
 Create/update tests           -> tester
 Security audit/review         -> security
-Network/firewall/DNS/DHCP     -> infra
+OPNsense/firewall planning    -> opnsense (for feature planning, debugging, zone/rule design)
+Network/infrastructure ops    -> infra (for Proxmox, Caddy setup, DNS/DHCP config)
 Architecture/design question  -> architect
 ```
 
@@ -32,8 +33,14 @@ Module with web interface + SSO:
   - nix-dev configures forward-auth or OIDC client
 
 Bug investigation:
-  1. Route to relevant specialist (bash-dev/nix-dev/python-dev/infra)
+  1. Route to relevant specialist (bash-dev/nix-dev/python-dev/infra/opnsense)
   2. tester creates regression test after fix
+
+Firewall/zone feature planning:
+  1. opnsense    (design zones, rules, pinholes, plan CLI changes)
+  2. python-dev  (implement opnsense-controller changes if needed)
+  3. tester      (update test.sh with new test cases)
+  4. security    (review firewall rule changes)
 
 Foundation change:
   1. architect   (assess impact on dependency chain)
@@ -60,7 +67,7 @@ When dispatching sequential agents, pass prior outputs as context:
 Each agent's full definition and prompt template is in:
 - `agent-pm.md`, `agent-architect.md`, `agent-bash-dev.md`
 - `agent-python-dev.md`, `agent-nix-dev.md`, `agent-tester.md`
-- `agent-security.md`, `agent-infra.md`
+- `agent-security.md`, `agent-infra.md`, `agent-opnsense.md`
 
 ## Invoking Agents
 
