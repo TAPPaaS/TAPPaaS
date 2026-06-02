@@ -330,7 +330,12 @@ pick_port() {
 
 if [[ -z "$WAN_PORT" ]]; then
   if [[ "$INTERACTIVE" == "1" ]]; then
-    WAN_PORT="$(pick_port "Select the WAN port (upstream/ISP uplink for the firewall).\nFirst node: the NIC connected to your router. Secondary: spare NIC for firewall HA." "" "$DEFAULT_WAN")"
+    if [[ "$ROLE" == "first" ]]; then
+      WAN_TEXT="This is the PRIMARY node.\n\nSelect the WAN port — the NIC connected to your upstream router/switch (internet uplink). The TAPPaaS firewall VM will use this port for outbound traffic."
+    else
+      WAN_TEXT="This is a SECONDARY node.\n\nSelect the WAN port — a spare NIC reserved for firewall HA failover. This port will remain idle until firewall HA is activated."
+    fi
+    WAN_PORT="$(pick_port "$WAN_TEXT" "" "$DEFAULT_WAN")"
   else
     WAN_PORT="$DEFAULT_WAN"
     [[ -n "$WAN_PORT" ]] && info "Auto-selected WAN port ${BL}${WAN_PORT}${CL}." \
@@ -341,7 +346,12 @@ fi
 
 if [[ -z "$LAN_PORT" ]]; then
   if [[ "$INTERACTIVE" == "1" ]]; then
-    LAN_PORT="$(pick_port "Select the LAN port (VLAN trunk + management IP, → downstream switch)." "$WAN_PORT" "$DEFAULT_LAN")"
+    if [[ "$ROLE" == "first" ]]; then
+      LAN_TEXT="This is the PRIMARY node.\n\nSelect the LAN port — the NIC connected to your switch for interconnecting LAN of TAPPaaS systems. This port carries VLAN trunks and hosts the management IP."
+    else
+      LAN_TEXT="This is a SECONDARY node.\n\nSelect the LAN port — the NIC connected to your switch for interconnecting LAN of TAPPaaS systems. This is typically the port you used to reach this node during installation."
+    fi
+    LAN_PORT="$(pick_port "$LAN_TEXT" "$WAN_PORT" "$DEFAULT_LAN")"
   else
     LAN_PORT="$DEFAULT_LAN"
     [[ -n "$LAN_PORT" ]] || die "No --lan-port given, not interactive, and could not auto-detect the LAN NIC."

@@ -55,6 +55,7 @@ usage() { sed -n '2,/^set -euo/p' "$0" | sed 's/^# \{0,1\}//; /^set -euo/d'; }
 
 # ── Arguments ────────────────────────────────────────────────────────
 declare -a POOL_SPECS=()
+declare -a SESSION_SELECTED_DISKS=()  # Track disks selected in this session (issue #271)
 ASSUME_YES=0
 INTERACTIVE=1
 PVE_REGISTER=1
@@ -155,6 +156,15 @@ disk_zpool() {
 }
 
 declare -a CAND_NAME CAND_DESC
+# Check if a disk was selected earlier in this session (issue #271)
+is_session_selected() {
+  local d="$1" sd
+  for sd in "${SESSION_SELECTED_DISKS[@]+"${SESSION_SELECTED_DISKS[@]}"}"; do
+    [[ "$d" == "$sd" ]] && return 0
+  done
+  return 1
+}
+
 build_inventory() {
   CAND_NAME=(); CAND_DESC=()
   local name type size model rota spin tag pool
@@ -164,6 +174,7 @@ build_inventory() {
     [[ "$type" == "disk" ]] || continue
     is_real_disk "$name" || continue          # skip zvols (zd*), dm-*, loop*
     is_boot_disk "$name"  && continue
+    is_session_selected "$name" && continue   # skip disks selected earlier in this session (#271)
     size="$(lsblk -dno SIZE  "/dev/$name" 2>/dev/null | tr -d ' ')"
     model="$(lsblk -dno MODEL "/dev/$name" 2>/dev/null | sed 's/[[:space:]]*$//')"
     rota="$(lsblk -dno ROTA  "/dev/$name" 2>/dev/null | tr -d ' ')"
@@ -392,16 +403,29 @@ interactive_topology() {
   fi
 }
 
+# Pool descriptions for the interactive dialogs (issue #271)
+pool_description() {
+  case "$1" in
+    tanka1) echo "Primary VM storage pool. VMs are placed here by default and VM data resides here. Recommended: fast and redundant disk setup (SSD mirror)." ;;
+    tankb1) echo "Secondary storage pool for less important services and data. Optional. Typically not using disk redundancy and not participating in HA replication." ;;
+    tankc1) echo "Backup storage pool. Where backups are stored. Typically configured on only one node (tappaas1 for single machine, tappaas3 for 3-node cluster)." ;;
+    *)      echo "Additional storage tier." ;;
+  esac
+}
+
 for POOL in tanka1 tankb1 tankc1; do
   if pool_exists "$POOL"; then
     info "Pool '${POOL}' already exists — skipping (use a fresh disk set to rebuild)."
     continue
   fi
+  POOL_DESC="$(pool_description "$POOL")"
   if [[ "$HAVE_WHIPTAIL" == "1" ]]; then
     whiptail --title "TAPPaaS storage" --yesno \
-      "Configure pool '${POOL}'?\n\n(${POOL} = $( [[ $POOL == tanka1 ]] && echo 'primary/fast tier' || echo 'additional tier' ))" 12 70 \
+      "Configure pool '${POOL}'?\n\n${POOL_DESC}" 14 78 \
       || { info "Skipping ${POOL}."; continue; }
   else
+    echo ""
+    echo "${POOL}: ${POOL_DESC}"
     read -r -p "Configure pool '${POOL}'? [y/N]: " yn
     [[ "${yn,,}" == "y" ]] || { info "Skipping ${POOL}."; continue; }
   fi
@@ -410,6 +434,8 @@ for POOL in tanka1 tankb1 tankc1; do
   TOPO="$(interactive_topology "${#SEL[@]}" || true)"
   [[ -z "$TOPO" ]] && { info "No topology chosen — skipping ${POOL}."; continue; }
   create_pool "$POOL" "$TOPO" "${SEL[@]}"
+  # Track selected disks so they won't appear in subsequent pool selections (issue #271)
+  SESSION_SELECTED_DISKS+=("${SEL[@]}")
   build_inventory   # refresh so used disks show their new pool / are not re-picked
 done
 
