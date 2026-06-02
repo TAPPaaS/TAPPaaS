@@ -50,7 +50,7 @@
       "storage": "tanka1",
       "imageType": "img",
       "image": "tappaas-firewall.qcow2.zst",
-      "imageLocation": "https://github.com/TAPPaaS/TAPPaaS/releases/download/opnsense-firewall-v1.0/",
+      "imageLocation": "https://github.com/TAPPaaS/TAPPaaS/releases/download/opnsense-firewall-v1.1/",
       "cloudInit": "false",
       "bridge0": "lan",
       "trunks0": "ALL",
