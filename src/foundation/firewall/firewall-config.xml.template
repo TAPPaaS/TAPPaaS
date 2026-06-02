@@ -464,7 +464,6 @@
       <acls>
         <default_action>allow</default_action>
       </acls>
-      <dnsbl/>
       <forwarding>
         <enabled>0</enabled>
       </forwarding>
