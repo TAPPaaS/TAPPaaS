@@ -67,7 +67,7 @@
   },
   "srv": {
     "type": "Service",
-    "state": "Active",
+    "state": "Inactive",
     "typeId": "2",
     "subId": "0",
     "vlantag": 200,

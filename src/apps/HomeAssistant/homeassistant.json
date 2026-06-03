@@ -7,7 +7,7 @@
   "vmname": "homeassistant",
   "vmid": 210,
   "vmtag": "TAPPaaS,App,HomeAutomation",
-  "zone0": "srv",
+  "zone0": "srv_home",
   "dependsOn": [
     "cluster:vm",
     "backup:vm",
@@ -57,6 +57,5 @@
         "srv_cust"
       ]
     }
-  },
-  "_zone_note": "zone0=srv (no underscore) until #277 is resolved. Override to srv_home after PR #278 is merged."
+  }
 }
