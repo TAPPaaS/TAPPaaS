@@ -12,7 +12,6 @@
     "cluster:vm",
     "backup:vm",
     "firewall:proxy",
-    "homeassistant:config",
     "identity:identity",
     "firewall:rules",
     "alfen:ui",
