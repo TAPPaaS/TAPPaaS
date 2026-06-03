@@ -4,12 +4,10 @@ Only manual steps are listed here. Scripts handle everything else automatically.
 
 ## Prerequisites
 
-1. **HAOS image** — download `haos_ova-17.3.qcow2.xz` from the
-   [HA OS releases page](https://github.com/home-assistant/operating-system/releases/tag/17.3)
-   and place it in the Proxmox ISO storage on `tappaas1`.
-2. **Static DHCP reservation** — assign a fixed IP to the HA VM's MAC address
-   on the `srv_home` network (10.2.10.x range).
-3. **DNS host override** — `homeassistant.srv_home.internal → <ip>` via `dns-manager`.
+1. **Active network zone** — the target zone must be active in `zones.json` and configured
+   in OPNsense. See `homeassistant.json` for the configured `zone0`.
+2. **HAOS image** — downloaded automatically by `install-module.sh` from the URL in
+   `homeassistant.json` (`config.cluster:vm.imageLocation`). No manual download needed.
 
 ## Install
 
@@ -18,20 +16,31 @@ cd /home/tappaas/TAPPaaS/src/apps/HomeAssistant
 install-module.sh homeassistant
 ```
 
-This creates the VM, imports the HAOS disk image, and configures:
-- Firewall proxy (`homeassistant.gridtefy.com`)
+Override zone and VMID if needed (e.g. test deployment):
+
+```bash
+install-module.sh homeassistant --zone0 work --vmid 211
+```
+
+This creates the VM, imports the HAOS disk image, and configures automatically:
+- Firewall proxy (HTTPS reverse proxy for the configured domain)
 - Firewall pinholes to IoT modules (alfen, sonos, reolink)
+- HAOS trusted_proxies, external_url and LLAT bootstrap (`homeassistant:config` service)
 
 ## Post-install
 
-**First boot — HA onboarding** (one-time):
-1. Open `http://homeassistant.srv_home.internal:8123` from home WiFi
-2. Complete the onboarding wizard (create admin account, home location)
-3. HA will auto-discover Sonos speakers and prompt to add the integration
+**Onboarding is automated.** The `homeassistant:config` service:
+- Creates admin user `tappaas` with a generated password
+- Stores credentials in `/etc/secrets/homeassistant.env` on the Proxmox node
+- Writes `trusted_proxies` + `use_x_forwarded_for` to `configuration.yaml`
+- Sets `external_url` to the configured proxy domain
+- Restarts HA Core
+
+**After first login:** change the `tappaas` user password in HA → Profile → Security.
 
 **Alfen EV charger** (if deployed):
 - Settings → Devices & Services → Add integration → `alfen_wallbox` (via HACS)
-- Host: `alfen.iot_cloud.internal`, port: `502`
+- Host: `alfen.<iot-zone>.internal`, port: `502`
 
 **Zigbee/Z-Wave hardware** (optional):
 - Add USB pass-through in Proxmox: VM → Hardware → Add → USB Device
@@ -47,19 +56,22 @@ Manual checks:
 
 | Check | Expected |
 |-------|----------|
-| `https://homeassistant.gridtefy.com` from home browser | HA login page loads |
-| `http://homeassistant.srv_home.internal:8123` from home WiFi | HA login page loads |
-| Home Assistant → Settings → Devices → Sonos | Speakers visible |
+| `https://<vmname>.<tappaas.domain>` from configured zones | HA login page (302) |
+| `http://<ha-ip>:8123` direct | HA login page |
+| `/etc/secrets/homeassistant.env` on Proxmox node | `HA_TOKEN` present |
 
 ## Troubleshooting
 
-**Onboarding page not loading**
-Verify VM is running: `test-module.sh homeassistant`. Check DNS override is present.
+**firewall:rules fails during install**
+Zone name contains an underscore (e.g. `srv_home`). See PR #278. Workaround:
+deploy with `--zone0 work` or another zone without underscores.
+
+**Proxy returns 400 Bad Request**
+`trusted_proxies` not applied. Re-run `homeassistant:config` service:
+```bash
+bash services/config/install-service.sh homeassistant
+```
 
 **Sonos speakers not discovered**
-Verify mDNS relay: `test-service.sh firewall:discovery homeassistant` should show relay present.
+Verify mDNS relay: `test-service.sh firewall:discovery homeassistant`.
 If pinholes are missing, run `install-module.sh homeassistant --force`.
-
-**Alfen integration unavailable**
-Confirm HACS is installed and `alfen_wallbox` integration is added.
-Verify Modbus TCP is enabled on the charger (port 502).
