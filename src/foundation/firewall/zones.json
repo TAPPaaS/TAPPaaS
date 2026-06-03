@@ -1,393 +1,393 @@
 {
-    "_README": {
-        "_comment": "Documentation block, NOT a zone. Keys beginning with '_' are ignored by every consumer: zone-manager and rules-manager skip them on load, and the jq-based bash tooling selects only entries with a state/vlantag. Do not add network fields here.",
-        "isolation_invariant": {
-            "rule": "Tier-4 isolation zones (iot_cams, iot_untrust) are defined with 'access-to': [] and MUST NEVER appear in any zone's 'access-to'. Inbound access is granted exclusively per-module, by listing the source zone in the target's 'pinhole-allowed-from' and declaring the specific VM-IP-to-port rule in that module's install.sh.",
-            "mgmt_exception": "mgmt (Tier-0 control plane) is the sole exception: it lists every standard service/client/IoT/DMZ zone, including the Tier-4 zones, in its 'access-to' for full operational visibility. No other zone may.",
-            "rationale": "Adding an isolation zone to a non-mgmt 'access-to' nullifies the pinhole mechanism: every host in the source subnet would gain unconditional, zone-wide reach regardless of any module declaration. iot_cams must stay purpose-limited (GDPR Art. 25 - privacy by design); iot_untrust must stay quarantined to prevent lateral movement on compromise.",
-            "review_note": "Three working-tree additions violating this invariant (iot_untrust added to srv_home/home access-to; srv_cust added to work access-to) were caught and reverted pre-commit. With the rule written here, a reviewer can distinguish an accidental violation from an intentional design change."
-        },
-        "access_mechanisms": {
-            "access-to": "Baseline reachability set by the zone designer in this file. Grants the ENTIRE source subnet access to the ENTIRE target subnet.",
-            "pinhole-allowed-from": "Lists the zones that MAY open per-module pinholes into this zone. The actual narrow rule (specific source VM IP -> specific port) is declared at install time by the module's install.sh, not here."
-        },
-        "tier_model": [
-            "Tier 0 - Control plane: mgmt. Egress: all zones. Ingress: no inbound pinholes.",
-            "Tier 1 - Service backends: srv_home, srv_work, srv_cust, srv_dev, srv_test, dmz. Egress: internet (+ declared IoT). Ingress: module pinholes via pinhole-allowed-from.",
-            "Tier 2 - Trusted clients: home, work. Egress: internet + own service zone. Ingress: direct.",
-            "Tier 3 - IoT controlled: iot_local, iot_cloud. Egress: iot_cloud=internet, iot_local=none. Ingress: zone-wide from srv_home/home via access-to.",
-            "Tier 4 - IoT isolated: iot_cams, iot_untrust. Egress: iot_cams=none, iot_untrust=internet. Ingress: pinhole-only, no exceptions (see isolation_invariant).",
-            "Tier 5 - Untrusted clients: guest. Egress: internet only. Ingress: no inbound pinholes."
-        ],
-        "mdns_policy": "Multicast service discovery (Sonos/SSDP, Chromecast) does not cross VLAN boundaries on its own. Where a trusted client or service zone must discover devices in iot_cloud, run udpbroadcastrelay to forward UDP port 1900 (SSDP) between the relevant interfaces. Referenced by iot_cloud._comment.",
-        "iot_classification": {
-            "_comment": "Decision aid for placing a new IoT device into iot_local / iot_cloud / iot_cams / iot_untrust. Referenced by iot_untrust._comment.",
-            "split_policy_3_questions": [
-                "1. Does the device require internet to function? No -> iot_local (no egress). Yes -> continue.",
-                "2. Is the firmware/vendor trusted and kept updated? No -> iot_untrust (internet-only, quarantined). Yes -> continue.",
-                "3. Does it capture personal or sensitive data (e.g. cameras)? Yes -> iot_cams (no egress, pinhole-only access). No -> iot_cloud."
-            ]
-        },
-        "pr_review_checklist": [
-            "No Tier-4 zone (iot_cams, iot_untrust) appears in any non-mgmt zone's access-to.",
-            "Every new non-internet access-to entry is justified with a named use case in the PR.",
-            "Isolation-zone access is declared per-module in install.sh (pinhole-allowed-from), not via access-to here.",
-            "Every zone has both _comment and description; operational instructions live in _comment only."
-        ]
+  "_README": {
+    "_comment": "Documentation block, NOT a zone. Keys beginning with '_' are ignored by every consumer: zone-manager and rules-manager skip them on load, and the jq-based bash tooling selects only entries with a state/vlantag. Do not add network fields here.",
+    "isolation_invariant": {
+      "rule": "Tier-4 isolation zones (iot_cams, iot_untrust) are defined with 'access-to': [] and MUST NEVER appear in any zone's 'access-to'. Inbound access is granted exclusively per-module, by listing the source zone in the target's 'pinhole-allowed-from' and declaring the specific VM-IP-to-port rule in that module's install.sh.",
+      "mgmt_exception": "mgmt (Tier-0 control plane) is the sole exception: it lists every standard service/client/IoT/DMZ zone, including the Tier-4 zones, in its 'access-to' for full operational visibility. No other zone may.",
+      "rationale": "Adding an isolation zone to a non-mgmt 'access-to' nullifies the pinhole mechanism: every host in the source subnet would gain unconditional, zone-wide reach regardless of any module declaration. iot_cams must stay purpose-limited (GDPR Art. 25 - privacy by design); iot_untrust must stay quarantined to prevent lateral movement on compromise.",
+      "review_note": "Three working-tree additions violating this invariant (iot_untrust added to srv_home/home access-to; srv_cust added to work access-to) were caught and reverted pre-commit. With the rule written here, a reviewer can distinguish an accidental violation from an intentional design change."
     },
-    "mgmt": {
-        "type": "Management",
-        "state": "Manual",
-        "typeId": "0",
-        "subId": "0",
-        "vlantag": 0,
-        "ip": "10.0.0.0/24",
-        "bridge": "lan",
-        "access-to": [
-            "internet",
-            "srv",
-            "srv_home",
-            "srv_work",
-            "srv_cust",
-            "srv_dev",
-            "srv_test",
-            "home",
-            "work",
-            "guest",
-            "iot",
-            "iot_local",
-            "iot_cloud",
-            "iot_cams",
-            "iot_untrust",
-            "dmz"
-        ],
-        "pinhole-allowed-from": [],
-        "_comment": "Always-on control plane. Full access to all zones for operational control. No inbound pinholes — mgmt initiates only.",
-        "description": "Control plane: hypervisors, backup, firewall, identity, cicd"
+    "access_mechanisms": {
+      "access-to": "Baseline reachability set by the zone designer in this file. Grants the ENTIRE source subnet access to the ENTIRE target subnet.",
+      "pinhole-allowed-from": "Lists the zones that MAY open per-module pinholes into this zone. The actual narrow rule (specific source VM IP -> specific port) is declared at install time by the module's install.sh, not here."
     },
-    "srv": {
-        "type": "Service",
-        "state": "Inactive",
-        "typeId": "2",
-        "subId": "0",
-        "vlantag": 200,
-        "ip": "10.2.0.0/24",
-        "bridge": "lan",
-        "access-to": [
-            "internet"
-        ],
-        "pinhole-allowed-from": [
-            "dmz"
-        ],
-        "_comment": "Flat-topology alternative to srv_home/srv_work/srv_cust. Use only when zone segmentation is not required. Set state=Active to enable.",
-        "description": "Generic service zone — single-zone deployments only"
+    "tier_model": [
+      "Tier 0 - Control plane: mgmt. Egress: all zones. Ingress: no inbound pinholes.",
+      "Tier 1 - Service backends: srv_home, srv_work, srv_cust, srv_dev, srv_test, dmz. Egress: internet (+ declared IoT). Ingress: module pinholes via pinhole-allowed-from.",
+      "Tier 2 - Trusted clients: home, work. Egress: internet + own service zone. Ingress: direct.",
+      "Tier 3 - IoT controlled: iot_local, iot_cloud. Egress: iot_cloud=internet, iot_local=none. Ingress: zone-wide from srv_home/home via access-to.",
+      "Tier 4 - IoT isolated: iot_cams, iot_untrust. Egress: iot_cams=none, iot_untrust=internet. Ingress: pinhole-only, no exceptions (see isolation_invariant).",
+      "Tier 5 - Untrusted clients: guest. Egress: internet only. Ingress: no inbound pinholes."
+    ],
+    "mdns_policy": "Multicast service discovery (Sonos/SSDP, Chromecast) does not cross VLAN boundaries on its own. Where a trusted client or service zone must discover devices in iot_cloud, run udpbroadcastrelay to forward UDP port 1900 (SSDP) between the relevant interfaces. Referenced by iot_cloud._comment.",
+    "iot_classification": {
+      "_comment": "Decision aid for placing a new IoT device into iot_local / iot_cloud / iot_cams / iot_untrust. Referenced by iot_untrust._comment.",
+      "split_policy_3_questions": [
+        "1. Does the device require internet to function? No -> iot_local (no egress). Yes -> continue.",
+        "2. Is the firmware/vendor trusted and kept updated? No -> iot_untrust (internet-only, quarantined). Yes -> continue.",
+        "3. Does it capture personal or sensitive data (e.g. cameras)? Yes -> iot_cams (no egress, pinhole-only access). No -> iot_cloud."
+      ]
     },
-    "srv_home": {
-        "type": "Service",
-        "state": "Active",
-        "typeId": "2",
-        "subId": "10",
-        "vlantag": 210,
-        "ip": "10.2.10.0/24",
-        "bridge": "lan",
-        "access-to": [
-            "internet",
-            "iot_cloud",
-            "iot_local"
-        ],
-        "pinhole-allowed-from": [],
-        "_comment": "Personal-tier services: Home Assistant, household apps. home reaches zone-wide via its access-to; mgmt via its access-to.",
-        "description": "Personal services: home automation, personal apps"
-    },
-    "srv_work": {
-        "type": "Service",
-        "state": "Active",
-        "typeId": "2",
-        "subId": "20",
-        "vlantag": 220,
-        "ip": "10.2.20.0/24",
-        "bridge": "lan",
-        "access-to": [
-            "internet"
-        ],
-        "pinhole-allowed-from": [
-            "dmz"
-        ],
-        "_comment": "Business-tier services: internal apps, productivity stack. work reaches zone-wide via its access-to. Public exposure via dmz pinholes declared by hosted modules; mgmt via its access-to.",
-        "description": "Business services: internal apps, productivity stack"
-    },
-    "srv_cust": {
-        "type": "Service",
-        "state": "Active",
-        "typeId": "2",
-        "subId": "30",
-        "vlantag": 230,
-        "ip": "10.2.30.0/24",
-        "bridge": "lan",
-        "access-to": [
-            "internet"
-        ],
-        "pinhole-allowed-from": [
-            "dmz"
-        ],
-        "_comment": "Customer and tenant sandboxes. No client zone has default access. Public exposure via dmz pinholes only. Tenants are mutually isolated by subnet.",
-        "description": "Customer/tenant sandboxes: mutually isolated, internet-only egress"
-    },
-    "srv_dev": {
-        "type": "Service",
-        "state": "Inactive",
-        "typeId": "2",
-        "subId": "40",
-        "vlantag": 240,
-        "ip": "10.2.40.0/24",
-        "bridge": "lan",
-        "access-to": [
-            "internet"
-        ],
-        "pinhole-allowed-from": [],
-        "_comment": "Development environment. Combined dev+test for small teams (<10, no compliance requirement). For ISO 27001 A.8.31 or teams >10, use srv_test separately. No dmz pinhole — not publicly reachable.",
-        "description": "Development services: internal workloads, not public-facing"
-    },
-    "srv_test": {
-        "type": "Service",
-        "state": "Inactive",
-        "typeId": "2",
-        "subId": "50",
-        "vlantag": 250,
-        "ip": "10.2.50.0/24",
-        "bridge": "lan",
-        "access-to": [
-            "internet"
-        ],
-        "pinhole-allowed-from": [
-            "dmz"
-        ],
-        "_comment": "QA and acceptance test environment. Separate from srv_dev to enforce dev/test isolation per ISO 27001 A.8.31. No client zone has default access. Set state=Active when a dedicated test phase is required.",
-        "description": "Test/QA services: pre-production acceptance testing"
-    },
-    "home": {
-        "type": "Client",
-        "state": "Active",
-        "typeId": "3",
-        "subId": "10",
-        "vlantag": 310,
-        "SSID": "<HOME_SSID>",
-        "ip": "10.3.10.0/24",
-        "bridge": "lan",
-        "access-to": [
-            "internet",
-            "srv_home",
-            "iot_cloud",
-            "iot_local"
-        ],
-        "pinhole-allowed-from": [],
-        "_comment": "Trusted personal devices on the home network. Reaches srv_home and iot_local/iot_cloud zone-wide for consumer app compatibility (Hue, Shelly, Sonos). Does not reach srv_work — use the work zone for managed corporate access.",
-        "description": "Trusted personal devices: laptops, phones, tablets"
-    },
-    "work": {
-        "type": "Client",
-        "state": "Active",
-        "typeId": "3",
-        "subId": "20",
-        "vlantag": 320,
-        "SSID": "<WORK_SSID>",
-        "ip": "10.3.20.0/24",
-        "bridge": "lan",
-        "access-to": [
-            "internet",
-            "srv_work"
-        ],
-        "pinhole-allowed-from": [],
-        "_comment": "Managed corporate devices. Reaches srv_work only. Set state=Disabled for pure-home deployments. For MSP/consultant deployments, srv_cust access is opt-in via deployment config.",
-        "description": "Managed corporate devices: laptops, phones, tablets"
-    },
-    "iot": {
-        "type": "IoT",
-        "state": "Inactive",
-        "typeId": "4",
-        "subId": "0",
-        "vlantag": 400,
-        "ip": "10.4.0.0/24",
-        "bridge": "lan",
-        "access-to": [
-            "internet"
-        ],
-        "pinhole-allowed-from": [
-            "srv"
-        ],
-        "_comment": "Flat-topology alternative to iot_local/iot_cloud/iot_cams. Use only when IoT sub-zone segmentation is not required. Set state=Active to enable.",
-        "description": "Generic IoT zone — single-zone deployments only"
-    },
-    "iot_local": {
-        "type": "IoT",
-        "state": "Active",
-        "typeId": "4",
-        "subId": "10",
-        "vlantag": 410,
-        "SSID": "<IOT_LOCAL_SSID>",
-        "ip": "10.4.10.0/24",
-        "bridge": "lan",
-        "access-to": [],
-        "pinhole-allowed-from": [
-            "srv_home"
-        ],
-        "_comment": "Local automation devices: no internet, no LAN egress. Zigbee/Hue/KNX/Shelly. srv_home and home reach zone-wide via access-to; srv_home modules may create VM-specific pinholes via pinhole-allowed-from. mgmt via its access-to. (= The Hook Up's 'NoT'.)",
-        "description": "Local-only IoT: no internet, automation devices"
-    },
-    "iot_cloud": {
-        "type": "IoT",
-        "state": "Active",
-        "typeId": "4",
-        "subId": "20",
-        "vlantag": 420,
-        "SSID": "<IOT_CLOUD_SSID>",
-        "ip": "10.4.20.0/24",
-        "bridge": "lan",
-        "access-to": [
-            "internet"
-        ],
-        "pinhole-allowed-from": [
-            "srv_home",
-            "home"
-        ],
-        "_comment": "Cloud-connected trusted devices: smart appliances, media (Sonos, Chromecast), HVAC/solar monitoring. srv_home and home reach zone-wide via access-to. Sonos/SSDP needs udpbroadcastrelay port 1900 (see _README.mdns_policy).",
-        "description": "Internet-dependent trusted IoT: smart appliances, media, monitoring"
-    },
-    "iot_cams": {
-        "type": "IoT",
-        "state": "Active",
-        "typeId": "4",
-        "subId": "30",
-        "vlantag": 430,
-        "ip": "10.4.30.0/24",
-        "bridge": "lan",
-        "access-to": [],
-        "pinhole-allowed-from": [
-            "srv_home",
-            "srv_work"
-        ],
-        "_comment": "Cameras and NVR. No internet, no LAN egress. NVR module in srv_home or srv_work reaches via explicit pinhole only — never zone-wide access-to (GDPR: access is purpose-limited). Usually wired PoE; no SSID.",
-        "description": "Surveillance: cameras + NVR, fully isolated"
-    },
-    "iot_untrust": {
-        "type": "IoT",
-        "state": "Disabled",
-        "typeId": "4",
-        "subId": "40",
-        "vlantag": 440,
-        "SSID": "<IOT_UNTRUST_SSID>",
-        "ip": "10.4.40.0/24",
-        "bridge": "lan",
-        "access-to": [
-            "internet"
-        ],
-        "pinhole-allowed-from": [],
-        "_comment": "Untrusted internet-required devices (cheap gadgets, unknown firmware). Internet-only; no LAN access; no inbound pinholes. Isolated from iot_cloud to prevent lateral movement on compromise. Set state=Active to enable. See _README.iot_classification.split_policy_3_questions.",
-        "description": "Untrusted IoT: internet-only, fully quarantined"
-    },
-    "guest": {
-        "type": "Guest",
-        "state": "Active",
-        "typeId": "5",
-        "subId": "10",
-        "vlantag": 510,
-        "SSID": "<GUEST_SSID>",
-        "ip": "10.5.10.0/24",
-        "bridge": "lan",
-        "access-to": [
-            "internet"
-        ],
-        "pinhole-allowed-from": [],
-        "_comment": "Untrusted visitor devices. Internet-only; no service or device zone access; no inbound pinholes.",
-        "description": "Visitors: internet only, fully isolated"
-    },
-    "dmz": {
-        "type": "DMZ",
-        "state": "Mandatory",
-        "typeId": "6",
-        "subId": "10",
-        "vlantag": 610,
-        "ip": "10.6.0.0/24",
-        "bridge": "lan",
-        "access-to": [
-            "internet"
-        ],
-        "pinhole-allowed-from": [
-            "internet"
-        ],
-        "_comment": "Reverse proxy and internet-exposed services. Internet-only egress (ACME, upstream calls). Internet inbound via pinhole-allowed-from. Backends (srv_work, srv_cust) expose themselves inbound via their own pinhole-allowed-from declarations.",
-        "description": "Public-facing: reverse proxy (Caddy), internet-exposed services"
-    },
-    "test": {
-        "type": "Test",
-        "state": "Inactive",
-        "typeId": "8",
-        "subId": "0",
-        "vlantag": 800,
-        "ip": "10.80.0.0/24",
-        "bridge": "lan",
-        "access-to": [
-            "internet"
-        ],
-        "pinhole-allowed-from": [],
-        "_comment": "Generic network probe for basic connectivity validation. Activate to verify routing and internet egress from an isolated subnet. For inter-zone rule validation use test_allow_a/test_allow_b and test_pinhole instead.",
-        "description": "Generic test zone — basic connectivity probe (inactive)"
-    },
-    "test_allow_a": {
-        "type": "Test",
-        "state": "Inactive",
-        "typeId": "8",
-        "subId": "10",
-        "vlantag": 810,
-        "ip": "10.80.10.0/24",
-        "bridge": "lan",
-        "access-to": [
-            "internet",
-            "test_allow_b",
-            "dmz"
-        ],
-        "pinhole-allowed-from": [
-            "test_allow_b",
-            "dmz"
-        ],
-        "_comment": "Activated by firewall test.sh --deep. Bidirectional access with test_allow_b and dmz validates inter-zone allow rules.",
-        "description": "Test zone A: bidirectional allow validation (inactive)"
-    },
-    "test_allow_b": {
-        "type": "Test",
-        "state": "Inactive",
-        "typeId": "8",
-        "subId": "20",
-        "vlantag": 820,
-        "ip": "10.80.20.0/24",
-        "bridge": "lan",
-        "access-to": [
-            "internet",
-            "test_allow_a",
-            "dmz"
-        ],
-        "pinhole-allowed-from": [
-            "test_allow_a",
-            "dmz"
-        ],
-        "_comment": "Activated by firewall test.sh --deep. Bidirectional access with test_allow_a and dmz validates inter-zone allow rules.",
-        "description": "Test zone B: bidirectional allow validation (inactive)"
-    },
-    "test_pinhole": {
-        "type": "Test",
-        "state": "Inactive",
-        "typeId": "8",
-        "subId": "30",
-        "vlantag": 830,
-        "ip": "10.80.30.0/24",
-        "bridge": "lan",
-        "access-to": [
-            "internet"
-        ],
-        "pinhole-allowed-from": [
-            "test_allow_a"
-        ],
-        "_comment": "Activated by firewall test.sh --deep. Only test_allow_a in pinhole-allowed-from, not in access-to — validates auto-pinhole path (see issue #173).",
-        "description": "Test zone: pinhole-only path validation (inactive)"
-    }
+    "pr_review_checklist": [
+      "No Tier-4 zone (iot_cams, iot_untrust) appears in any non-mgmt zone's access-to.",
+      "Every new non-internet access-to entry is justified with a named use case in the PR.",
+      "Isolation-zone access is declared per-module in install.sh (pinhole-allowed-from), not via access-to here.",
+      "Every zone has both _comment and description; operational instructions live in _comment only."
+    ]
+  },
+  "mgmt": {
+    "type": "Management",
+    "state": "Manual",
+    "typeId": "0",
+    "subId": "0",
+    "vlantag": 0,
+    "ip": "10.0.0.0/24",
+    "bridge": "lan",
+    "access-to": [
+      "internet",
+      "srv",
+      "srv_home",
+      "srv_work",
+      "srv_cust",
+      "srv_dev",
+      "srv_test",
+      "home",
+      "work",
+      "guest",
+      "iot",
+      "iot_local",
+      "iot_cloud",
+      "iot_cams",
+      "iot_untrust",
+      "dmz"
+    ],
+    "pinhole-allowed-from": [],
+    "_comment": "Always-on control plane. Full access to all zones for operational control. No inbound pinholes \u2014 mgmt initiates only.",
+    "description": "Control plane: hypervisors, backup, firewall, identity, cicd"
+  },
+  "srv": {
+    "type": "Service",
+    "state": "Active",
+    "typeId": "2",
+    "subId": "0",
+    "vlantag": 200,
+    "ip": "10.2.0.0/24",
+    "bridge": "lan",
+    "access-to": [
+      "internet"
+    ],
+    "pinhole-allowed-from": [
+      "dmz"
+    ],
+    "_comment": "Flat-topology alternative to srv_home/srv_work/srv_cust. Use only when zone segmentation is not required. Set state=Active to enable.",
+    "description": "Generic service zone \u2014 single-zone deployments only"
+  },
+  "srv_home": {
+    "type": "Service",
+    "state": "Active",
+    "typeId": "2",
+    "subId": "10",
+    "vlantag": 210,
+    "ip": "10.2.10.0/24",
+    "bridge": "lan",
+    "access-to": [
+      "internet",
+      "iot_cloud",
+      "iot_local"
+    ],
+    "pinhole-allowed-from": [],
+    "_comment": "Personal-tier services: Home Assistant, household apps. home reaches zone-wide via its access-to; mgmt via its access-to.",
+    "description": "Personal services: home automation, personal apps"
+  },
+  "srv_work": {
+    "type": "Service",
+    "state": "Active",
+    "typeId": "2",
+    "subId": "20",
+    "vlantag": 220,
+    "ip": "10.2.20.0/24",
+    "bridge": "lan",
+    "access-to": [
+      "internet"
+    ],
+    "pinhole-allowed-from": [
+      "dmz"
+    ],
+    "_comment": "Business-tier services: internal apps, productivity stack. work reaches zone-wide via its access-to. Public exposure via dmz pinholes declared by hosted modules; mgmt via its access-to.",
+    "description": "Business services: internal apps, productivity stack"
+  },
+  "srv_cust": {
+    "type": "Service",
+    "state": "Active",
+    "typeId": "2",
+    "subId": "30",
+    "vlantag": 230,
+    "ip": "10.2.30.0/24",
+    "bridge": "lan",
+    "access-to": [
+      "internet"
+    ],
+    "pinhole-allowed-from": [
+      "dmz"
+    ],
+    "_comment": "Customer and tenant sandboxes. No client zone has default access. Public exposure via dmz pinholes only. Tenants are mutually isolated by subnet.",
+    "description": "Customer/tenant sandboxes: mutually isolated, internet-only egress"
+  },
+  "srv_dev": {
+    "type": "Service",
+    "state": "Inactive",
+    "typeId": "2",
+    "subId": "40",
+    "vlantag": 240,
+    "ip": "10.2.40.0/24",
+    "bridge": "lan",
+    "access-to": [
+      "internet"
+    ],
+    "pinhole-allowed-from": [],
+    "_comment": "Development environment. Combined dev+test for small teams (<10, no compliance requirement). For ISO 27001 A.8.31 or teams >10, use srv_test separately. No dmz pinhole \u2014 not publicly reachable.",
+    "description": "Development services: internal workloads, not public-facing"
+  },
+  "srv_test": {
+    "type": "Service",
+    "state": "Inactive",
+    "typeId": "2",
+    "subId": "50",
+    "vlantag": 250,
+    "ip": "10.2.50.0/24",
+    "bridge": "lan",
+    "access-to": [
+      "internet"
+    ],
+    "pinhole-allowed-from": [
+      "dmz"
+    ],
+    "_comment": "QA and acceptance test environment. Separate from srv_dev to enforce dev/test isolation per ISO 27001 A.8.31. No client zone has default access. Set state=Active when a dedicated test phase is required.",
+    "description": "Test/QA services: pre-production acceptance testing"
+  },
+  "home": {
+    "type": "Client",
+    "state": "Active",
+    "typeId": "3",
+    "subId": "10",
+    "vlantag": 310,
+    "SSID": "<HOME_SSID>",
+    "ip": "10.3.10.0/24",
+    "bridge": "lan",
+    "access-to": [
+      "internet",
+      "srv_home",
+      "iot_cloud",
+      "iot_local"
+    ],
+    "pinhole-allowed-from": [],
+    "_comment": "Trusted personal devices on the home network. Reaches srv_home and iot_local/iot_cloud zone-wide for consumer app compatibility (Hue, Shelly, Sonos). Does not reach srv_work \u2014 use the work zone for managed corporate access.",
+    "description": "Trusted personal devices: laptops, phones, tablets"
+  },
+  "work": {
+    "type": "Client",
+    "state": "Active",
+    "typeId": "3",
+    "subId": "20",
+    "vlantag": 320,
+    "SSID": "<WORK_SSID>",
+    "ip": "10.3.20.0/24",
+    "bridge": "lan",
+    "access-to": [
+      "internet",
+      "srv_work"
+    ],
+    "pinhole-allowed-from": [],
+    "_comment": "Managed corporate devices. Reaches srv_work only. Set state=Disabled for pure-home deployments. For MSP/consultant deployments, srv_cust access is opt-in via deployment config.",
+    "description": "Managed corporate devices: laptops, phones, tablets"
+  },
+  "iot": {
+    "type": "IoT",
+    "state": "Inactive",
+    "typeId": "4",
+    "subId": "0",
+    "vlantag": 400,
+    "ip": "10.4.0.0/24",
+    "bridge": "lan",
+    "access-to": [
+      "internet"
+    ],
+    "pinhole-allowed-from": [
+      "srv"
+    ],
+    "_comment": "Flat-topology alternative to iot_local/iot_cloud/iot_cams. Use only when IoT sub-zone segmentation is not required. Set state=Active to enable.",
+    "description": "Generic IoT zone \u2014 single-zone deployments only"
+  },
+  "iot_local": {
+    "type": "IoT",
+    "state": "Active",
+    "typeId": "4",
+    "subId": "10",
+    "vlantag": 410,
+    "SSID": "<IOT_LOCAL_SSID>",
+    "ip": "10.4.10.0/24",
+    "bridge": "lan",
+    "access-to": [],
+    "pinhole-allowed-from": [
+      "srv_home"
+    ],
+    "_comment": "Local automation devices: no internet, no LAN egress. Zigbee/Hue/KNX/Shelly. srv_home and home reach zone-wide via access-to; srv_home modules may create VM-specific pinholes via pinhole-allowed-from. mgmt via its access-to. (= The Hook Up's 'NoT'.)",
+    "description": "Local-only IoT: no internet, automation devices"
+  },
+  "iot_cloud": {
+    "type": "IoT",
+    "state": "Active",
+    "typeId": "4",
+    "subId": "20",
+    "vlantag": 420,
+    "SSID": "<IOT_CLOUD_SSID>",
+    "ip": "10.4.20.0/24",
+    "bridge": "lan",
+    "access-to": [
+      "internet"
+    ],
+    "pinhole-allowed-from": [
+      "srv_home",
+      "home"
+    ],
+    "_comment": "Cloud-connected trusted devices: smart appliances, media (Sonos, Chromecast), HVAC/solar monitoring. srv_home and home reach zone-wide via access-to. Sonos/SSDP needs udpbroadcastrelay port 1900 (see _README.mdns_policy).",
+    "description": "Internet-dependent trusted IoT: smart appliances, media, monitoring"
+  },
+  "iot_cams": {
+    "type": "IoT",
+    "state": "Active",
+    "typeId": "4",
+    "subId": "30",
+    "vlantag": 430,
+    "ip": "10.4.30.0/24",
+    "bridge": "lan",
+    "access-to": [],
+    "pinhole-allowed-from": [
+      "srv_home",
+      "srv_work"
+    ],
+    "_comment": "Cameras and NVR. No internet, no LAN egress. NVR module in srv_home or srv_work reaches via explicit pinhole only \u2014 never zone-wide access-to (GDPR: access is purpose-limited). Usually wired PoE; no SSID.",
+    "description": "Surveillance: cameras + NVR, fully isolated"
+  },
+  "iot_untrust": {
+    "type": "IoT",
+    "state": "Disabled",
+    "typeId": "4",
+    "subId": "40",
+    "vlantag": 440,
+    "SSID": "<IOT_UNTRUST_SSID>",
+    "ip": "10.4.40.0/24",
+    "bridge": "lan",
+    "access-to": [
+      "internet"
+    ],
+    "pinhole-allowed-from": [],
+    "_comment": "Untrusted internet-required devices (cheap gadgets, unknown firmware). Internet-only; no LAN access; no inbound pinholes. Isolated from iot_cloud to prevent lateral movement on compromise. Set state=Active to enable. See _README.iot_classification.split_policy_3_questions.",
+    "description": "Untrusted IoT: internet-only, fully quarantined"
+  },
+  "guest": {
+    "type": "Guest",
+    "state": "Active",
+    "typeId": "5",
+    "subId": "10",
+    "vlantag": 510,
+    "SSID": "<GUEST_SSID>",
+    "ip": "10.5.10.0/24",
+    "bridge": "lan",
+    "access-to": [
+      "internet"
+    ],
+    "pinhole-allowed-from": [],
+    "_comment": "Untrusted visitor devices. Internet-only; no service or device zone access; no inbound pinholes.",
+    "description": "Visitors: internet only, fully isolated"
+  },
+  "dmz": {
+    "type": "DMZ",
+    "state": "Mandatory",
+    "typeId": "6",
+    "subId": "10",
+    "vlantag": 610,
+    "ip": "10.6.0.0/24",
+    "bridge": "lan",
+    "access-to": [
+      "internet"
+    ],
+    "pinhole-allowed-from": [
+      "internet"
+    ],
+    "_comment": "Reverse proxy and internet-exposed services. Internet-only egress (ACME, upstream calls). Internet inbound via pinhole-allowed-from. Backends (srv_work, srv_cust) expose themselves inbound via their own pinhole-allowed-from declarations.",
+    "description": "Public-facing: reverse proxy (Caddy), internet-exposed services"
+  },
+  "test": {
+    "type": "Test",
+    "state": "Inactive",
+    "typeId": "8",
+    "subId": "0",
+    "vlantag": 800,
+    "ip": "10.80.0.0/24",
+    "bridge": "lan",
+    "access-to": [
+      "internet"
+    ],
+    "pinhole-allowed-from": [],
+    "_comment": "Generic network probe for basic connectivity validation. Activate to verify routing and internet egress from an isolated subnet. For inter-zone rule validation use test_allow_a/test_allow_b and test_pinhole instead.",
+    "description": "Generic test zone \u2014 basic connectivity probe (inactive)"
+  },
+  "test_allow_a": {
+    "type": "Test",
+    "state": "Inactive",
+    "typeId": "8",
+    "subId": "10",
+    "vlantag": 810,
+    "ip": "10.80.10.0/24",
+    "bridge": "lan",
+    "access-to": [
+      "internet",
+      "test_allow_b",
+      "dmz"
+    ],
+    "pinhole-allowed-from": [
+      "test_allow_b",
+      "dmz"
+    ],
+    "_comment": "Activated by firewall test.sh --deep. Bidirectional access with test_allow_b and dmz validates inter-zone allow rules.",
+    "description": "Test zone A: bidirectional allow validation (inactive)"
+  },
+  "test_allow_b": {
+    "type": "Test",
+    "state": "Inactive",
+    "typeId": "8",
+    "subId": "20",
+    "vlantag": 820,
+    "ip": "10.80.20.0/24",
+    "bridge": "lan",
+    "access-to": [
+      "internet",
+      "test_allow_a",
+      "dmz"
+    ],
+    "pinhole-allowed-from": [
+      "test_allow_a",
+      "dmz"
+    ],
+    "_comment": "Activated by firewall test.sh --deep. Bidirectional access with test_allow_a and dmz validates inter-zone allow rules.",
+    "description": "Test zone B: bidirectional allow validation (inactive)"
+  },
+  "test_pinhole": {
+    "type": "Test",
+    "state": "Inactive",
+    "typeId": "8",
+    "subId": "30",
+    "vlantag": 830,
+    "ip": "10.80.30.0/24",
+    "bridge": "lan",
+    "access-to": [
+      "internet"
+    ],
+    "pinhole-allowed-from": [
+      "test_allow_a"
+    ],
+    "_comment": "Activated by firewall test.sh --deep. Only test_allow_a in pinhole-allowed-from, not in access-to \u2014 validates auto-pinhole path (see issue #173).",
+    "description": "Test zone: pinhole-only path validation (inactive)"
+  }
 }
