@@ -82,6 +82,16 @@
       "example": "0.5.3",
       "note": "Major < 1 indicates module is not production-ready"
     },
+    "appVersion": {
+      "description": "Upstream application version deployed by this module. Optional but recommended. Distinct from 'version' (module semver). Treated as an informational string — no format enforced.",
+      "type": "string",
+      "requiredBy": [],
+      "usedBy": [
+        "general"
+      ],
+      "example": "33.0.3",
+      "note": "Use the upstream project's own version string: semver, date-based, or tag (e.g. '33.0.3', '1.85.0', 'nightly')"
+    },
     "releaseDate": {
       "description": "Date when this version of the module was released",
       "type": "string",
