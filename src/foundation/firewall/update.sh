@@ -3,6 +3,17 @@
 #
 # Updates the OPNsense firewall software via SSH and applies zone configuration.
 #
+# Order of operations:
+# 1. OPNsense software update (base, kernel, packages)
+# 2. Unconditional reboot to apply updates and regenerate configs
+# 3. Wait for firewall to come back online
+# 4. Verify DNS is working (Unbound health check)
+# 5. Apply zone configuration via zone-manager
+# 6. Remaining configuration (proxy, net0 trunks, etc.)
+#
+# This order ensures OPNsense updates are applied BEFORE zone-manager runs,
+# which triggers Unbound config regeneration. See ISSUES.md for background.
+#
 # When firewallType is "NONE" (no OPNsense deployed), this script skips all
 # OPNsense-specific operations and prints a reminder.
 #
@@ -33,6 +44,86 @@ if [[ "${FIREWALL_TYPE}" == "NONE" ]]; then
     warn "firewallType=NONE — OPNsense is not managed by TAPPaaS."
     warn "Skipping firewall update. Manage your firewall manually."
     exit 0
+fi
+
+# ── OPNsense update ─────────────────────────────────────────────────
+#
+# Run OPNsense update FIRST, before zone-manager. This ensures any
+# package updates (including potential dnspython/unbound fixes) are
+# applied before we trigger config regeneration via zone-manager.
+
+info "Updating OPNsense (base, kernel, and packages)..."
+if [[ "${OPT_DEBUG:-0}" -eq 1 ]]; then
+    ssh root@"$FIREWALL_FQDN" "opnsense-update -bkp" || {
+        warn "OPNsense update returned non-zero exit code"
+    }
+else
+    ssh root@"$FIREWALL_FQDN" "opnsense-update -bkp" 2>&1 | while IFS= read -r _; do
+        printf "."
+    done || {
+        echo ""
+        warn "OPNsense update returned non-zero exit code"
+    }
+    echo ""
+fi
+
+# ── Reboot firewall (unconditional) ─────────────────────────────────
+#
+# Always reboot after OPNsense update during the install/update phase.
+# This ensures:
+# - Any kernel updates are applied
+# - Unbound config is regenerated with current OPNsense state
+# - We catch any Unbound/DNSBL issues BEFORE zone-manager runs
+#
+# The reboot also serves as a clean slate for zone configuration.
+
+info "Rebooting firewall to apply updates..."
+ssh root@"$FIREWALL_FQDN" "shutdown -r now" 2>/dev/null || true
+
+# Wait for SSH to go down (firewall is rebooting)
+info "Waiting for firewall to reboot..."
+sleep 10
+
+# Wait for SSH to come back (max 5 minutes)
+WAIT_MAX=300
+WAIT_COUNT=0
+while ! ssh -o ConnectTimeout=5 -o BatchMode=yes -o StrictHostKeyChecking=accept-new \
+        root@"$FIREWALL_FQDN" "echo ok" >/dev/null 2>&1; do
+    sleep 5
+    WAIT_COUNT=$((WAIT_COUNT + 5))
+    if [[ $WAIT_COUNT -ge $WAIT_MAX ]]; then
+        error "Firewall did not come back after reboot within ${WAIT_MAX}s"
+        exit 1
+    fi
+    printf "."
+done
+echo ""
+info "${GN}✓${CL} Firewall is back online"
+
+# ── Verify Unbound DNS is working ────────────────────────────────────
+#
+# After reboot, OPNsense regenerates Unbound config. If there's a
+# Python/dnspython version mismatch (see ISSUES.md), Unbound may fail
+# to start. We check DNS here to catch the problem early.
+
+info "Verifying Unbound DNS is responding..."
+DNS_CHECK_RETRIES=6
+DNS_CHECK_COUNT=0
+while ! dig @10.0.0.1 firewall.mgmt.internal +short +timeout=5 >/dev/null 2>&1; do
+    DNS_CHECK_COUNT=$((DNS_CHECK_COUNT + 1))
+    if [[ $DNS_CHECK_COUNT -ge $DNS_CHECK_RETRIES ]]; then
+        warn "Unbound DNS not responding on 10.0.0.1 after ${DNS_CHECK_RETRIES} attempts"
+        warn "This may indicate a Python/dnspython version mismatch in OPNsense."
+        warn "See src/foundation/firewall/ISSUES.md for recovery steps."
+        warn "Attempting to continue, but zone-manager may fail..."
+        break
+    fi
+    sleep 5
+    printf "."
+done
+if [[ $DNS_CHECK_COUNT -lt $DNS_CHECK_RETRIES ]]; then
+    echo ""
+    info "${GN}✓${CL} Unbound DNS is responding"
 fi
 
 # ── Apply zone configuration ────────────────────────────────────────
@@ -147,38 +238,6 @@ else
             warn "  Failed to update OPNsense VM net0 trunks — new VLANs may not receive traffic"
         fi
     fi
-fi
-
-# ── OPNsense update ─────────────────────────────────────────────────
-
-info "Updating OPNsense (base, kernel, and packages)..."
-if [[ "${OPT_DEBUG:-0}" -eq 1 ]]; then
-    ssh root@"$FIREWALL_FQDN" "opnsense-update -bkp" || {
-        warn "OPNsense update returned non-zero exit code"
-    }
-else
-    ssh root@"$FIREWALL_FQDN" "opnsense-update -bkp" 2>&1 | while IFS= read -r _; do
-        printf "."
-    done || {
-        echo ""
-        warn "OPNsense update returned non-zero exit code"
-    }
-    echo ""
-fi
-
-# ── Check if reboot is required ─────────────────────────────────────
-
-info "Checking if reboot is required..."
-RUNNING_KERNEL=$(ssh root@"$FIREWALL_FQDN" "uname -r")
-INSTALLED_KERNEL=$(ssh root@"$FIREWALL_FQDN" "freebsd-version -k")
-
-if [[ "$RUNNING_KERNEL" != "$INSTALLED_KERNEL" ]]; then
-    warn "Firewall reboot is required to complete the update"
-    warn "  Running kernel:   $RUNNING_KERNEL"
-    warn "  Installed kernel: $INSTALLED_KERNEL"
-    warn "Please schedule a maintenance window to reboot the firewall"
-else
-    info "No reboot required"
 fi
 
 info "${GN}✓${CL} Firewall update completed"

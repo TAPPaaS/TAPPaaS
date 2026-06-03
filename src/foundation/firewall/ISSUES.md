@@ -2,29 +2,58 @@
 
 ## Unbound DNS Failure During Zone Configuration
 
-**Issue ID:** UNBOUND-DNSBL-PATH
-**Status:** Understood / Workaround Available
+**Issue ID:** UNBOUND-DNSBL-PYTHON
+**Status:** Mitigated (update.sh reorders operations)
 **Date Identified:** 2026-06-02
+**Date Updated:** 2026-06-03
 
 ### Symptoms
 
 - DNS resolution fails on the 10.0.0.0/24 management network
 - Clients cannot resolve hostnames via the firewall at 10.0.0.1
 - Issue surfaces during `zone-manager --execute` when creating new VLAN zones
-- May also occur after manual `service unbound restart` commands
+- Error in Unbound logs: `ModuleNotFoundError: No module named 'dns'`
 
 ### Root Cause
 
-OPNsense Unbound is configured with DNSBL (DNS Blocklist) which requires a Python module. The configuration contains:
+OPNsense 25.x has a **Python version mismatch** between Unbound and dnspython:
+
+- **Unbound** is compiled against **Python 3.11** (`libpython3.11.so.1.0`)
+- **dnspython** is installed for **Python 3.13** (`py313-dnspython`)
+- **py311-dnspython does not exist** in OPNsense package repositories
+
+The `unbound.inc` PHP plugin **unconditionally** adds `python iterator` to the module-config (line 207) and includes the DNSBL python script (lines 388-389). When Unbound config is regenerated (via zone-manager API calls or OPNsense update), it fails to load the Python module:
 
 ```
-module-config: "python iterator"
-python-script: unbound-dnsbl/dnsbl_module.py
+Traceback (most recent call last):
+  File "unbound-dnsbl/dnsbl_module.py", line 37, in <module>
+    import dns
+ModuleNotFoundError: No module named 'dns'
 ```
 
-The `dnsbl_module.py` path is **relative**, requiring Unbound to run from `/var/unbound/` for the path to resolve correctly.
+### Why the Prebuilt Image Works
 
-**Two different code paths exist for starting Unbound:**
+The prebuilt OPNsense image includes a pre-generated `/var/unbound/unbound.conf` that works. Unbound starts successfully from this config. The problem occurs when **any operation regenerates the config**, because OPNsense always includes the Python module.
+
+### Mitigation in update.sh
+
+The `update.sh` script has been reordered to run OPNsense update and reboot **before** zone-manager:
+
+1. `opnsense-update -bkp` - Update OPNsense packages
+2. **Unconditional reboot** - Apply updates and regenerate configs
+3. **Wait for firewall** - Ensure SSH is accessible
+4. **DNS health check** - Verify Unbound is responding on 10.0.0.1
+5. `zone-manager --execute` - Now runs after reboot
+
+This ensures:
+
+- OPNsense updates (which might fix the Python mismatch) are applied first
+- Config regeneration happens during update/reboot, not during zone creation
+- DNS failures are detected early, before zones are configured
+
+### Additional Root Cause (Path Issue)
+
+There's also a **relative path issue** with the DNSBL module. Two different code paths exist for starting Unbound:
 
 | Method | Script | Has `cd /var/unbound/` | Result |
 |--------|--------|------------------------|--------|
@@ -74,11 +103,13 @@ cd /var/unbound && /usr/local/sbin/unbound-checkconf /var/unbound/unbound.conf &
 
 ### Permanent Fix Options
 
-1. **Patch `/usr/local/etc/rc.d/unbound`** - Add `cd /var/unbound` before the checkconf calls (lines 68 and 86). Note: This may be overwritten by OPNsense updates.
+1. **Patch `unbound.inc` to remove Python module** - Change line 207 from `$module_config = 'python ';` to `$module_config = '';` and remove lines 388-389 (python: section). This disables the DNSBL Python integration. Note: This will be overwritten by OPNsense updates.
 
-2. **Disable DNSBL** - Remove the blocklist from OPNsense configuration so the Python module isn't needed. This removes DNS-level ad/malware blocking.
+2. **Wait for OPNsense to fix the version mismatch** - Future OPNsense updates may ship py311-dnspython or recompile Unbound against Python 3.13.
 
-3. **Use absolute path in unbound.conf** - Would require patching `unbound.inc` PHP code that generates the config.
+3. **Patch `/usr/local/etc/rc.d/unbound`** - Add `cd /var/unbound` before the checkconf calls (lines 68 and 86). This fixes the path issue but not the Python version mismatch.
+
+4. **Disable DNSBL entirely** - Remove the blocklist from OPNsense configuration so the Python module isn't needed. This removes DNS-level ad/malware blocking.
 
 ### Debug Instrumentation
 
