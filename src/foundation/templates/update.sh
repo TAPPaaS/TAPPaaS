@@ -39,11 +39,15 @@ readonly MARKER="/root/tappaas/nixos-template.version"   # lives on the template
 readonly SSH_OPTS=(-o StrictHostKeyChecking=accept-new -o ConnectTimeout=10)
 
 [[ -f "$NIX_JSON" ]] || die "tappaas-nixos.json not found at ${NIX_JSON}"
-VMID="$(jq -r '.vmid' "$NIX_JSON")"
-VMNAME="$(jq -r '.vmname' "$NIX_JSON")"
-IMAGE="$(jq -r '.image' "$NIX_JSON")"
-IMAGELOCATION="$(jq -r '.imageLocation' "$NIX_JSON")"
+# tappaas-nixos.json is stored in Pattern-A form (image/vmid/... nested under
+# .config."cluster:vm"); flatten it before reading so the asset pre-flight below
+# resolves a real filename instead of "null" (Pattern-A migration fix).
+NIX_JSON_FLAT="$(normalize_module_config < "$NIX_JSON")"
+VMID="$(jq -r '.vmid' <<< "$NIX_JSON_FLAT")"
+VMNAME="$(jq -r '.vmname' <<< "$NIX_JSON_FLAT")"
+IMAGE="$(jq -r '.image' <<< "$NIX_JSON_FLAT")"
 [[ -n "$VMID" && "$VMID" != "null" ]] || die "vmid missing from ${NIX_JSON}"
+[[ -n "$IMAGE" && "$IMAGE" != "null" ]] || die "image missing from ${NIX_JSON}"
 
 NODE1_FQDN="$(get_primary_node_fqdn)"
 

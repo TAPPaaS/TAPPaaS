@@ -42,9 +42,15 @@ HA_RULE_NAME="ha-${MODULE}"
 DEEP="${TAPPAAS_TEST_DEEP:-0}"
 PASS=0
 FAIL=0
+WARN=0
 
 pass() { info "    ${GN}✓${CL} $1"; PASS=$((PASS + 1)); }
 fail() { error "    ✗ $1"; FAIL=$((FAIL + 1)); }
+# HA-not-yet-configured is not a failure: it is the expected state for a VM
+# installed before its failover node existed, and update-module.sh Step 4 calls
+# the cluster:ha reconciler which enrols it. Warn so the operator sees it, but do
+# not block the update that fixes it. A misconfigured (vs absent) HA still fails.
+not_setup() { warn "    ${YW}⊘${CL} $1 — run 'update-module.sh ${MODULE}' to enrol it"; WARN=$((WARN + 1)); }
 
 info "  ${BOLD}cluster:ha tests for ${BL}${MODULE}${CL} (VMID ${VMID})"
 
@@ -77,6 +83,7 @@ QUERY_FQDN="${QUERY_NODE}.${MGMT}.internal"
 # ── Test 1: HA resource exists and is started ───────────────────────
 
 info "  Check 1: HA resource status"
+HA_ABSENT=0
 ha_output=$(ssh -o ConnectTimeout=10 -o BatchMode=yes -o LogLevel=ERROR \
     "root@${QUERY_FQDN}" "ha-manager status" 2>/dev/null) || true
 
@@ -91,7 +98,8 @@ if [[ -n "${ha_line}" ]]; then
         fail "HA resource vm:${VMID} state is '${ha_state}' (expected 'started')"
     fi
 else
-    fail "VM ${VMID} is not in HA resources"
+    not_setup "VM ${VMID} is not in HA resources (HA not configured yet)"
+    HA_ABSENT=1
 fi
 
 # ── Test 2: Node-affinity rule ──────────────────────────────────────
@@ -115,12 +123,14 @@ if [[ -n "${rule_nodes}" ]]; then
         fail "HA rule '${HA_RULE_NAME}' missing expected nodes (want: ${NODE}, ${HANODE}, got: ${rule_nodes})"
     fi
 else
-    fail "HA rule '${HA_RULE_NAME}' not found"
+    not_setup "HA rule '${HA_RULE_NAME}' not found (HA not configured yet)"
 fi
 
 # ── Deep mode tests ─────────────────────────────────────────────────
 
-if [[ "${DEEP}" -eq 1 ]]; then
+if [[ "${DEEP}" -eq 1 && "${HA_ABSENT}" -eq 1 ]]; then
+    not_setup "Replication not checked — HA not configured yet"
+elif [[ "${DEEP}" -eq 1 ]]; then
 
     # Test 3: Replication job exists
     info "  Check 3: Replication job"
@@ -156,9 +166,12 @@ fi
 
 # ── Summary ─────────────────────────────────────────────────────────
 
-info "  Results: ${GN}${PASS} passed${CL}, ${RD}${FAIL} failed${CL}"
+info "  Results: ${GN}${PASS} passed${CL}, ${RD}${FAIL} failed${CL}, ${YW}${WARN} not-configured${CL}"
 
 if [[ "${FAIL}" -gt 0 ]]; then
     exit 1
+fi
+if [[ "${WARN}" -gt 0 ]]; then
+    warn "  HA is not configured for ${MODULE} yet — not a failure; it will be reconciled on update"
 fi
 exit 0
