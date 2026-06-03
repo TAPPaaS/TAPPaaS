@@ -59,8 +59,8 @@ That's it. Everything else is created by the install.
 2. **Run the one-shot bootstrap** from the Proxmox **node console/shell**.
 
    Notes:
-   - Do not use SSH — the network setup steps may move its interface and it has not been tested over SSH.
-   - Use the **xterm.js** shell option in the tappaas1 menu; it gives more scrollback and persistence on the install output.
+   - **Prefer the console** — use the **xterm.js** shell option in the tappaas1 menu; it gives more scrollback and persistence on the install output.
+   - **SSH works too** — see [Appendix: Installing via SSH](#appendix-installing-via-ssh) for setup steps (known_hosts, locale, tmux).
    - **⚠ Run from a client that is NOT on `10.0.0.0/24`.** The cutover puts the
      management network (`10.0.0.0/24`) on the node, so a browser/SSH client that
      sits in that subnet loses its return path to the node and freezes. Drive the
@@ -352,7 +352,17 @@ If you don't already have an SSH key pair:
 ```bash
 # Generate a new key (accept defaults, optionally set a passphrase)
 ssh-keygen -t ed25519 -C "your-email@example.com"
+```
 
+**Reinstalling?** If you previously installed TAPPaaS on the same IP, SSH will
+refuse to connect due to a changed host key (`WARNING: REMOTE HOST IDENTIFICATION
+HAS CHANGED!`). Remove the old entry first:
+
+```bash
+ssh-keygen -R <proxmox-ip>
+```
+
+```bash
 # Copy the public key to the Proxmox node (use the node's current IP)
 ssh-copy-id root@<proxmox-ip>
 ```
@@ -363,17 +373,27 @@ Now you can SSH without a password:
 ssh root@<proxmox-ip>
 ```
 
-### 2. Install and start tmux
+### 2. Fix locale warnings
 
-`tmux` keeps your session alive even if SSH disconnects. On the Proxmox node:
+Fresh Proxmox installs may show Perl locale warnings. Fix them:
+
+```bash
+# Quick fix for current session
+export LC_ALL=en_US.UTF-8
+export LANGUAGE=en_US.UTF-8
+
+# Permanent fix (then start a new shell)
+echo "en_US.UTF-8 UTF-8" >> /etc/locale.gen && locale-gen && \
+  update-locale LC_ALL=en_US.UTF-8 LANGUAGE=en_US.UTF-8
+```
+
+### 3. (Optional) Use tmux for session persistence
+
+`tmux` keeps your session alive if SSH disconnects during network
+reconfiguration. This is optional but recommended:
 
 ```bash
 apt update && apt install -y tmux
-```
-
-Start a named session for the install:
-
-```bash
 tmux new -s install
 ```
 
@@ -389,23 +409,9 @@ tmux attach -t install
 - `Ctrl+b d` — Detach (leave session running in background)
 - `Ctrl+b [` — Scroll mode (arrow keys to scroll, `q` to exit)
 
-### 3. Fix locale warnings (optional)
-
-Fresh Proxmox installs may show Perl locale warnings. Fix them:
-
-```bash
-# Quick fix for current session
-export LC_ALL=en_US.UTF-8
-export LANGUAGE=en_US.UTF-8
-
-# Permanent fix (then start a new shell)
-echo "en_US.UTF-8 UTF-8" >> /etc/locale.gen && locale-gen && \
-  update-locale LC_ALL=en_US.UTF-8 LANGUAGE=en_US.UTF-8
-```
-
 ### 4. Run the install
 
-Inside your tmux session, run the bootstrap command from §2.1:
+Run the bootstrap command from §2.1:
 
 ```bash
 REPO="https://raw.githubusercontent.com/TAPPaaS/TAPPaaS/"; BRANCH="main"
