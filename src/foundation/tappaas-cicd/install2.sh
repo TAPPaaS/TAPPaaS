@@ -1,6 +1,11 @@
 #!/usr/bin/env bash
 #
 # install tappass-cicd foundation in a barebone nixos vm
+#
+# Usage:
+#   install2.sh [--branch NAME] [--domain DOMAIN]
+#
+# Arguments passed from install-platform.sh are forwarded to create-configuration.sh.
 
 # Strict mode: exit on error, undefined vars, pipe failures
 set -euo pipefail
@@ -15,6 +20,19 @@ if [ "$(hostname)" != "tappaas-cicd" ]; then
   _error "This script must be run on the TAPPaaS-CICD host (hostname tappaas-cicd)."
   exit 1
 fi
+
+# ── Argument parsing ─────────────────────────────────────────────────
+# These are passed through to create-configuration.sh
+DOMAIN=""
+BRANCH=""
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --domain)  DOMAIN="${2:-}"; shift 2 ;;
+    --branch)  BRANCH="${2:-}"; shift 2 ;;
+    *)         shift ;;  # Ignore unknown args
+  esac
+done
 
 #
 # Bootstrap default: use tappaas1 as the primary node for initial cluster discovery.
@@ -62,8 +80,13 @@ for rcfile in /home/tappaas/.profile /home/tappaas/.bashrc; do
 done
 
 # create the configuration.json
+# Pass --domain and --branch if provided by install-platform.sh
+CREATE_CONFIG_ARGS=()
+[[ -n "$DOMAIN" ]] && CREATE_CONFIG_ARGS+=(--domain "$DOMAIN")
+[[ -n "$BRANCH" ]] && CREATE_CONFIG_ARGS+=(--branch "$BRANCH")
+
 if [ -f ./scripts/create-configuration.sh ]; then
-  . ./scripts/create-configuration.sh
+  ./scripts/create-configuration.sh "${CREATE_CONFIG_ARGS[@]}"
 else
   _error "./scripts/create-configuration.sh not found"
   exit 1
