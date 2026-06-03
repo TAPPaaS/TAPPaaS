@@ -129,3 +129,104 @@ Look for `[UNBOUND-CHECK]` messages in zone-manager output to identify exactly w
 - `/usr/local/opnsense/scripts/unbound/start.sh` - Working startup script (has `cd /var/unbound`)
 - `/usr/local/etc/rc.d/unbound` - RC script (missing `cd /var/unbound`)
 - `/usr/local/etc/inc/plugins.inc.d/unbound.inc` - PHP plugin that generates config
+
+---
+
+## Interface Assignment API 404 Errors
+
+**Issue ID:** INTERFACE-ASSIGN-404
+**Status:** Expected on fresh installs (controller patch required)
+**Date Identified:** 2026-06-03
+
+### Symptoms
+
+During `zone-manager --execute`, interface assignment fails with:
+
+```
+ERROR: API call failed | Response: {'status_code': 404, ...
+'_content': b'{"errorMessage":"Endpoint not found"}'}
+```
+
+The error occurs when calling `/api/interfaces/interface_assign/addItem`.
+
+### Root Cause
+
+OPNsense does **not** include an API endpoint for programmatic interface assignment. The endpoint `/api/interfaces/interface_assign/addItem` is provided by a **custom TAPPaaS controller** (`InterfaceAssignController.php`) that must be deployed to the firewall.
+
+On a fresh OPNsense install from the prebuilt image, this controller does not exist. It is deployed during the **tappaas-cicd update** phase by `pre-update.sh`.
+
+### Order of Operations
+
+The standard TAPPaaS bootstrap (`install.sh`) handles this automatically:
+
+1. `config-firewall.sh` - Creates OPNsense VM with prebuilt image
+2. `install-platform.sh` - Creates tappaas-cicd VM, runs `update-module.sh tappaas-cicd`
+3. tappaas-cicd's `pre-update.sh` deploys controller patch to firewall
+4. `update-module.sh firewall` - zone-manager now works
+
+The 404 errors only occur when:
+- Running `update-module.sh firewall` **before** `update-module.sh tappaas-cicd`
+- Deleting/reinstalling the firewall VM without re-running tappaas-cicd update
+- Manual testing with a fresh firewall that bypassed the standard install
+
+### Files Involved
+
+| File | Location | Purpose |
+|------|----------|---------|
+| `InterfaceAssignController.php` | `/usr/local/opnsense/mvc/app/controllers/OPNsense/Interfaces/Api/` | Custom API controller |
+| `ACL.xml` | `/usr/local/opnsense/mvc/app/models/OPNsense/Interfaces/ACL/` | ACL granting API access |
+
+Source files in TAPPaaS:
+- `src/foundation/tappaas-cicd/opnsense-patch/InterfaceAssignController.php`
+- `src/foundation/tappaas-cicd/opnsense-patch/ACL.xml`
+- `src/foundation/tappaas-cicd/opnsense-patch/README.md`
+
+### Manual Deployment
+
+If the controller is missing, deploy it manually:
+
+```bash
+# From tappaas-cicd
+cd /home/tappaas/TAPPaaS/src/foundation/tappaas-cicd
+
+scp opnsense-patch/InterfaceAssignController.php \
+    root@firewall.mgmt.internal:/usr/local/opnsense/mvc/app/controllers/OPNsense/Interfaces/Api/
+
+scp opnsense-patch/ACL.xml \
+    root@firewall.mgmt.internal:/usr/local/opnsense/mvc/app/models/OPNsense/Interfaces/ACL/
+
+ssh root@firewall.mgmt.internal "configctl webgui restart"
+```
+
+Then re-run `update-module.sh firewall`.
+
+### API Endpoints
+
+Once deployed, the controller provides:
+
+| Method | Endpoint | Purpose |
+|--------|----------|---------|
+| POST | `/api/interfaces/interface_assign/addItem` | Assign VLAN to interface slot |
+| POST | `/api/interfaces/interface_assign/delItem/{interface}` | Remove interface assignment |
+
+### Why Not Use Standard OPNsense API?
+
+OPNsense provides no standard API for interface assignment. The GUI uses direct config.xml manipulation via JavaScript. Options considered:
+
+1. **os-api plugin** - Does not expose interface assignment
+2. **Direct config.xml via SSH** - Fragile, no atomic apply
+3. **Custom controller** - Chosen approach, integrates with OPNsense properly
+
+### History
+
+- **OPNsense 25.7**: Original `AssignSettingsController.php` worked
+- **OPNsense 26.1**: Controller broke (naming conflict with Model-based controllers)
+- **2026-02**: Rewritten as `InterfaceAssignController.php` for 26.1+
+
+See `ISSUES/opnsense-26.1-interface-assignment.md` for full investigation.
+
+### Related Issues
+
+- This is **separate** from the Unbound DNS issue (UNBOUND-DNSBL-PYTHON)
+- The 404 errors do not affect DNS or basic firewall operation
+- Zones will show "enabled" but without firewall interfaces until controller is deployed
