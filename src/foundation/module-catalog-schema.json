@@ -1,0 +1,82 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "module-catalog-schema.json",
+  "title": "TAPPaaS Module Catalog Schema",
+  "description": "Validates module-catalog.json (currently modules.json). Defines the structure of the TAPPaaS module registry used for VMID allocation, catalog browsing, and tooling.",
+
+  "type": "object",
+  "required": ["foundationModules", "applicationModules"],
+  "additionalProperties": true,
+
+  "properties": {
+    "description": { "type": "string" },
+    "vmidConventions": { "type": "object" },
+
+    "foundationModules": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/catalogEntry" }
+    },
+    "applicationModules": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/catalogEntry" }
+    },
+    "proxmoxTemplates": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/catalogEntry" }
+    },
+    "testModules": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/catalogEntry" }
+    }
+  },
+
+  "$defs": {
+    "catalogEntry": {
+      "type": "object",
+      "required": ["moduleName", "vmid", "moduleJson"],
+      "additionalProperties": false,
+      "properties": {
+        "moduleName": {
+          "type": "string",
+          "pattern": "^[a-zA-Z][a-zA-Z0-9-]*$",
+          "description": "Unique module identifier. Matches vmname in module.json."
+        },
+        "repo": {
+          "type": "string",
+          "enum": ["foundation", "application", "community"],
+          "description": "Source repository tier. foundation=TAPPaaS core, application=TAPPaaS apps, community=Community repo."
+        },
+        "moduleJson": {
+          "type": "string",
+          "description": "Relative path from repo root to the module's JSON declaration file."
+        },
+        "vmid": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Proxmox VM ID. Must be unique across all catalog entries in this repo."
+        },
+        "stack": {
+          "type": "string",
+          "enum": [
+            "foundation",
+            "security",
+            "productivity",
+            "ai",
+            "home-automation",
+            "infrastructure",
+            "storage",
+            "entertainment",
+            "development",
+            "application"
+          ],
+          "description": "Deployment stack. Groups modules by functional domain for catalog browsing."
+        },
+        "category": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9-]*$",
+          "description": "Category within the stack. Free-form lowercase string."
+        }
+      }
+    }
+  }
+}
