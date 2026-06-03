@@ -359,20 +359,31 @@ validate_zone_active() {
 
     state=$(jq -r --arg z "$zone" '.[$z].state // "unknown"' "$zones_file")
 
-    if [[ "$state" != "Active" ]]; then
-        error "Zone '${YW}${zone}${CL}' is ${YW}${state}${CL} — cannot deploy module before zone is activated"
-        error ""
-        error "  Options:"
-        error "    1. Activate the zone (upstream PR + Lars review required):"
-        error "         zone-state.sh ${zone} Active"
-        error "         zone-manager --execute"
-        error "    2. Redeploy to an already-active zone:"
-        error "         install-module.sh <module> --zone0 <active-zone>"
-        return 1
-    fi
+    # Deployable states — the zone's network actually exists, so a module placed
+    # in it will have connectivity:
+    #   Active     zone-manager-managed (VLAN + DHCP + rules created in OPNsense)
+    #   Manual     operator-managed; zone-manager leaves it alone. The mgmt
+    #              control plane (VLAN 0) is Manual by design and hosts the
+    #              foundation modules (firewall, cicd, backup, identity, logging).
+    #   Mandatory  always-on, cannot be disabled (e.g. dmz)
+    # Non-deployable: Inactive (defined but not yet created) and Disabled (being
+    # torn down) — provisioning there would leave the module without a network.
+    case "$state" in
+        Active|Manual|Mandatory)
+            info "  ${GN}✓${CL} Zone '${zone}' is ${state} (deployable)"
+            return 0
+            ;;
+    esac
 
-    info "  ${GN}✓${CL} Zone '${zone}' is Active"
-    return 0
+    error "Zone '${YW}${zone}${CL}' is ${YW}${state}${CL} — cannot deploy module before zone is activated"
+    error ""
+    error "  Options:"
+    error "    1. Activate the zone (upstream PR + Lars review required):"
+    error "         zone-state.sh enable ${zone}"
+    error "         zone-manager --execute"
+    error "    2. Redeploy to an already-active zone:"
+    error "         install-module.sh <module> --zone0 <active-zone>"
+    return 1
 }
 
 # ── Module-config normalization (#161 / #207) ────────────────────────
