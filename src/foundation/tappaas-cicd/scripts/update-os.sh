@@ -191,11 +191,31 @@ update_nixos() {
     local node="$3"
     local vm_ip="$4"
 
-    # Default to ./<vmname>.nix in current directory
+    # Resolve NixOS config. For plain deploys: ./<vmname>.nix.
+    # For variant deploys (<vmname> = <source>-<variant>): the source module
+    # only ships <source>.nix. When <vmname>.nix is absent, read the "variant"
+    # field from the installed config and fall back to <source>.nix. Fixes #286.
     local nix_config="./${vmname}.nix"
+    local _source_vmname="${vmname}"
 
     if [[ ! -f "${nix_config}" ]]; then
-        die "NixOS configuration file not found: ${nix_config}"
+        local _cfg="${CONFIG_DIR}/${vmname}.json"
+        if [[ -f "${_cfg}" ]]; then
+            local _variant
+            _variant=$(jq -r '.variant // empty' "${_cfg}" 2>/dev/null)
+            if [[ -n "${_variant}" ]]; then
+                _source_vmname="${vmname%-"${_variant}"}"
+                local _fallback_nix="./${_source_vmname}.nix"
+                if [[ -f "${_fallback_nix}" ]]; then
+                    info "Variant '${_variant}': using ${_fallback_nix} for ${vmname}"
+                    nix_config="${_fallback_nix}"
+                fi
+            fi
+        fi
+    fi
+
+    if [[ ! -f "${nix_config}" ]]; then
+        die "NixOS configuration file not found: ${nix_config} (tried variant fallback)"
     fi
 
     info "Using NixOS config: ${nix_config}"
@@ -220,6 +240,44 @@ update_nixos() {
         || die "failed to scp ${nix_config} to ${vm_ip}"
     ssh -o BatchMode=yes "tappaas@${vm_ip}" "sudo install -m 0644 /tmp/${nix_basename} ${remote_nix_path} && rm -f /tmp/${nix_basename}" \
         || die "failed to install ${remote_nix_path} on ${vm_ip}"
+
+    # Copy sibling .nix helpers the main .nix imports via pkgs.callPackage.
+    # Skips the already-copied main file. Failure is non-fatal. Fixes #286.
+    for _sib in ./*.nix; do
+        [[ -f "${_sib}" ]] || continue
+        local _sib_base
+        _sib_base="$(basename "${_sib}")"
+        [[ "${_sib_base}" == "${nix_basename}" ]] && continue
+        local _sib_remote="/etc/nixos/${_sib_base}"
+        scp -o StrictHostKeyChecking=accept-new -o BatchMode=yes "${_sib}" "tappaas@${vm_ip}:/tmp/${_sib_base}" \
+            || { warn "failed to scp sibling ${_sib} — continuing"; continue; }
+        ssh -o BatchMode=yes "tappaas@${vm_ip}" "sudo install -m 0644 /tmp/${_sib_base} ${_sib_remote} && rm -f /tmp/${_sib_base}" \
+            || warn "failed to install sibling ${_sib_remote} — continuing"
+    done
+
+    # Copy companion JSON (<source_vmname>.json) to the VM so modules using
+    # builtins.readFile ./module.json can evaluate. For variants the installed
+    # config (carrying variant-specific values) is normalized to flat format
+    # and deployed under the source module's JSON name. Fixes #286.
+    local _companion_local="./${_source_vmname}.json"
+    local _companion_remote="/etc/nixos/${_source_vmname}.json"
+    if [[ -f "${_companion_local}" ]]; then
+        local _flat_tmp
+        _flat_tmp=$(mktemp)
+        local _installed_cfg="${CONFIG_DIR}/${vmname}.json"
+        if [[ -f "${_installed_cfg}" ]] && declare -F normalize_module_config >/dev/null 2>&1; then
+            normalize_module_config < "${_installed_cfg}" > "${_flat_tmp}" \
+                || cp "${_companion_local}" "${_flat_tmp}"
+        else
+            cp "${_companion_local}" "${_flat_tmp}"
+        fi
+        info "Copying JSON config to ${vm_ip}:${_companion_remote}"
+        scp -o StrictHostKeyChecking=accept-new -o BatchMode=yes "${_flat_tmp}" "tappaas@${vm_ip}:/tmp/${_source_vmname}.json" \
+            || { rm -f "${_flat_tmp}"; die "failed to scp JSON config to ${vm_ip}"; }
+        ssh -o BatchMode=yes "tappaas@${vm_ip}" "sudo install -m 0644 /tmp/${_source_vmname}.json ${_companion_remote} && rm -f /tmp/${_source_vmname}.json" \
+            || { rm -f "${_flat_tmp}"; die "failed to install JSON config on ${vm_ip}"; }
+        rm -f "${_flat_tmp}"
+    fi
 
     # The prebuilt NixOS template ships without /etc/nixos/hardware-configuration.nix
     # — generate it on-demand so the module's `imports = [ /etc/nixos/hardware-configuration.nix ]`
