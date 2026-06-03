@@ -189,11 +189,28 @@ check_service_available() {
     local service_name="${dep##*:}"
     local provider_json="${CONFIG_DIR}/${provider_module}.json"
 
-    # Check the provider module is installed (JSON in config dir)
+    # Check the provider module is installed (JSON in config dir).
+    # Variant fallback: if <provider>.json is absent, accept any installed
+    # <provider>-<variant>.json that provides the required service. Fixes #292.
     if [[ ! -f "${provider_json}" ]]; then
-        error "Dependency '${dep}': provider module '${provider_module}' is not installed"
-        error "  Expected config: ${provider_json}"
-        return 1
+        local _variant_match=""
+        for _vj in "${CONFIG_DIR}/${provider_module}"-*.json; do
+            [[ -f "${_vj}" ]] || continue
+            if jq -e --arg svc "${service_name}" \
+                '.provides // [] | index($svc) != null' "${_vj}" >/dev/null 2>&1; then
+                _variant_match="${_vj}"
+                break
+            fi
+        done
+        if [[ -n "${_variant_match}" ]]; then
+            provider_json="${_variant_match}"
+            provider_module="$(basename "${_variant_match}" .json)"
+            info "  Variant match: '${dep}' satisfied by '${provider_module}'"
+        else
+            error "Dependency '${dep}': provider module '${provider_module}' is not installed"
+            error "  Expected config: ${CONFIG_DIR}/${provider_module}.json"
+            return 1
+        fi
     fi
 
     # Check the provider declares this service in its provides array
