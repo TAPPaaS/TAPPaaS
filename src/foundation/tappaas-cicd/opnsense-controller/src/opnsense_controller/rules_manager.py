@@ -1156,7 +1156,9 @@ class RulesManager:
                 f"Network alias for module '{vmname}' (zone '{zone0}' subnet) "
                 f"— multi-device module, no single FQDN",
             )
-        fqdn = f"{vmname}.{zone0}.{DEFAULT_DOMAIN_SUFFIX}"
+        # OPNsense alias validation rejects underscores in hostnames (#277).
+        # Use the hyphen-compat form (zone rename kept both compat aliases).
+        fqdn = f"{vmname}.{zone0.replace('_', '-')}.{DEFAULT_DOMAIN_SUFFIX}"
         return AliasTarget(
             "host",
             [fqdn],
