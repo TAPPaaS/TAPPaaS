@@ -74,9 +74,9 @@ info "  HA zone GW    : ${HA_ZONE_GW}"
 
 info "  Waiting for HA to be reachable..."
 local_wait=0
-until curl -sf --max-time 5 "${HA_URL}/api/" -o /dev/null 2>/dev/null; do
+until curl -s --max-time 5 -o /dev/null -w "%{http_code}" "${HA_URL}" 2>/dev/null | grep -qE "^(200|302|401)"; do
     sleep 5; (( local_wait += 5 ))
-    [[ $local_wait -lt 120 ]] || die "HA did not become reachable after 120s"
+    [[ $local_wait -lt 180 ]] || die "HA did not become reachable after 180s"
 done
 info "  ${GN}✓${CL} HA is reachable"
 
@@ -98,15 +98,24 @@ if ! ssh -o BatchMode=yes root@"${NODE_FQDN}" "test -f ${SECRETS_FILE} && grep -
 
     if [[ "${ONBOARD_DONE}" == "pending" ]]; then
         # First run: create admin user via onboarding API
-        ADMIN_PASS="$(openssl rand -base64 24 | tr -dc 'A-Za-z0-9' | head -c 20)"
+        # Flow: POST /api/onboarding/users → auth_code
+        #       POST /auth/token (grant_type=authorization_code) → access_token
+        ADMIN_PASS="$(python3 -c "import secrets,string; print(''.join(secrets.choice(string.ascii_letters+string.digits) for _ in range(20)))")"
         ONBOARD_RESP=$(curl -sf --max-time 30 -X POST \
             -H "Content-Type: application/json" \
             -d "{\"client_id\":\"http://homeassistant.local/\",\"name\":\"TAPPaaS Admin\",\"username\":\"tappaas\",\"password\":\"${ADMIN_PASS}\",\"language\":\"en\"}" \
-            "${HA_URL}/api/onboarding/user" 2>/dev/null)
+            "${HA_URL}/api/onboarding/users" 2>/dev/null)
 
-        ACCESS_TOKEN=$(echo "${ONBOARD_RESP}" | python3 -c \
-            "import sys,json; print(json.load(sys.stdin).get('access_token',''))" 2>/dev/null)
-        [[ -n "${ACCESS_TOKEN}" ]] || die "Onboarding failed — could not obtain access token"
+        AUTH_CODE=$(echo "${ONBOARD_RESP}" | python3 -c \
+            "import sys,json; print(json.load(sys.stdin).get('auth_code',''))" 2>/dev/null)
+        [[ -n "${AUTH_CODE}" ]] || die "Onboarding failed — no auth_code in response"
+
+        ACCESS_TOKEN=$(curl -sf --max-time 10 -X POST \
+            -H "Content-Type: application/x-www-form-urlencoded" \
+            -d "grant_type=authorization_code&code=${AUTH_CODE}&client_id=http%3A%2F%2Fhomeassistant.local%2F" \
+            "${HA_URL}/auth/token" 2>/dev/null \
+            | python3 -c "import sys,json; print(json.load(sys.stdin).get('access_token',''))" 2>/dev/null)
+        [[ -n "${ACCESS_TOKEN}" ]] || die "Could not exchange auth_code for access_token"
 
         # Create LLAT from bootstrap token
         LLAT=$(curl -sf --max-time 10 -X POST \
