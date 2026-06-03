@@ -319,11 +319,21 @@ update_nixos() {
         # Wrap in a subshell so run_quiet's die() (exit 1) only kills the
         # subshell — set -e in the parent would otherwise terminate before we
         # reach the retry. Capture rc with || so set -e doesn't fire here.
+        # run_quiet calls die() on non-zero, which exits the subshell with 1
+        # and loses the original exit code. For nixos-rebuild we need to
+        # distinguish exit 4 (activation warnings) from real failures, so we
+        # pipe output manually and capture PIPESTATUS directly.
         if [[ "${OPT_DEBUG:-0}" -eq 1 ]]; then
-            ( ssh -o BatchMode=yes "tappaas@${vm_ip}" "sudo nixos-rebuild switch ${nixpkgs_arg} -I nixos-config=${remote_nix_path}" ) || rc=$?
+            ssh -o BatchMode=yes "tappaas@${vm_ip}" "sudo nixos-rebuild switch ${nixpkgs_arg} -I nixos-config=${remote_nix_path}" || rc=$?
         else
-            ( run_quiet "nixos-rebuild on ${vm_ip} (attempt ${attempt}/3)" \
-                ssh -o BatchMode=yes "tappaas@${vm_ip}" "sudo nixos-rebuild switch ${nixpkgs_arg} -I nixos-config=${remote_nix_path}" ) || rc=$?
+            set +e
+            ssh -o BatchMode=yes "tappaas@${vm_ip}" \
+                "sudo nixos-rebuild switch ${nixpkgs_arg} -I nixos-config=${remote_nix_path}" \
+                2>&1 | while IFS= read -r _; do printf "."; done
+            rc=${PIPESTATUS[0]}
+            set -e
+            echo ""
+            info "nixos-rebuild on ${vm_ip} (attempt ${attempt}/3): exit ${rc}"
         fi
         # Exit code 4 means switch-to-configuration reported service activation
         # failures but the build itself succeeded. This is expected on first
