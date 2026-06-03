@@ -440,6 +440,30 @@ main() {
         info "  Set releaseDate = ${release_date} (auto-populated)"
     fi
 
+    # Auto-derive proxyDomain = vmname.tappaas-domain when field is absent.
+    # Mirrors the default logic in firewall:proxy/install-service.sh so that
+    # modules work out-of-the-box without requiring --proxyDomain at deploy time.
+    local _proxy_domain
+    _proxy_domain=$(jq -r '.proxyDomain // empty' "${dest_json}" 2>/dev/null)
+    if [[ -z "${_proxy_domain}" ]]; then
+        local _tappaas_domain _vmname
+        _tappaas_domain=$(jq -r '.tappaas.domain // empty' \
+            "${CONFIG_DIR}/configuration.json" 2>/dev/null)
+        _vmname=$(jq -r '.vmname // empty' "${dest_json}" 2>/dev/null)
+        if [[ -n "${_tappaas_domain}" && -n "${_vmname}" ]]; then
+            local _derived_domain="${_vmname}.${_tappaas_domain}"
+            local _pd_tmp
+            _pd_tmp=$(mktemp)
+            if jq --arg d "${_derived_domain}" '.proxyDomain = $d' \
+                    "${dest_json}" > "${_pd_tmp}"; then
+                mv "${_pd_tmp}" "${dest_json}"
+                info "  Set proxyDomain = ${_derived_domain} (default: vmname.tappaas-domain)"
+            else
+                rm -f "${_pd_tmp}"
+            fi
+        fi
+    fi
+
     # ── Apply variant defaults (before explicit overrides) ───────────
     if [[ -n "${variant}" ]]; then
         info "Applying variant defaults..."
