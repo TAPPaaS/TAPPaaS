@@ -93,13 +93,20 @@ if ! ssh -o BatchMode=yes root@"${NODE_FQDN}" \
     "test -f ${SECRETS_FILE} && grep -q HA_TOKEN ${SECRETS_FILE}" 2>/dev/null; then
 
     info "  ${BOLD}Bootstrapping Long-Lived Access Token...${CL}"
-    ONBOARD_STATUS=$(curl -sf --max-time 10 "${HA_URL}/api/onboarding" 2>/dev/null || echo "[]")
+    # 401 on /api/onboarding means onboarding is complete (user exists)
+    ONBOARD_HTTP=$(curl -s --max-time 10 -o /dev/null -w "%{http_code}" "${HA_URL}/api/onboarding" 2>/dev/null || echo "000")
+    if [[ "${ONBOARD_HTTP}" == "401" ]]; then
+        ONBOARD_STATUS="[]"  # treat as done — user exists, skip creation
+    else
+        ONBOARD_STATUS=$(curl -sf --max-time 10 "${HA_URL}/api/onboarding" 2>/dev/null || echo "[]")
+    fi
 
     # Check specifically if the 'user' step is not yet done
     USER_DONE=$(echo "${ONBOARD_STATUS}" | python3 -c "
 import sys,json
 d=json.load(sys.stdin)
-print('yes' if any(s.get('step')=='user' and s.get('done') for s in d) else 'no')
+# Empty list (401 case) or user step done = treat as done
+print('yes' if not d or any(s.get('step')=='user' and s.get('done') for s in d) else 'no')
 " 2>/dev/null || echo "unknown")
 
     if [[ "${USER_DONE}" == "no" ]]; then
