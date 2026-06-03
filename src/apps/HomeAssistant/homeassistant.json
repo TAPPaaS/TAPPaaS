@@ -57,5 +57,6 @@
         "srv_cust"
       ]
     }
-  }
+  },
+  "aliasType": "network"
 }
