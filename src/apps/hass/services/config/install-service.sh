@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
 #
-# TAPPaaS HomeAssistant Config Service - Install
+# TAPPaaS hass Config Service - Install
 #
 # Configures a fresh HAOS installation for TAPPaaS proxy integration:
 #   1. Bootstraps a Long-Lived Access Token via the HA onboarding API
-#      (first-run only) and stores it in /etc/secrets/homeassistant.env
+#      (first-run only) and stores it in /etc/secrets/hass.env
 #   2. Completes remaining onboarding steps (core_config, analytics, integration)
 #   3. Writes http: block to configuration.yaml (trusted_proxies derived
 #      from zones.json + module zone0; no hardcoded IPs)
@@ -35,8 +35,8 @@ check_json "/home/tappaas/config/${MODULE}.json" || exit 1
 readonly CONFIG_DIR="/home/tappaas/config"
 readonly SYSTEM_CONFIG="${CONFIG_DIR}/configuration.json"
 readonly ZONES_FILE="/home/tappaas/TAPPaaS/src/foundation/firewall/zones.json"
-readonly SECRETS_FILE="/etc/secrets/homeassistant.env"
-readonly HA_CONFIG_YAML="/mnt/data/supervisor/homeassistant/configuration.yaml"
+readonly SECRETS_FILE="/etc/secrets/hass.env"
+readonly HA_CONFIG_YAML="/mnt/data/supervisor/hass/configuration.yaml"
 
 # ── Resolve values from SSoT ─────────────────────────────────────────────────
 
@@ -70,7 +70,7 @@ for i in ifaces:
 [[ -n "${HA_IP}" ]] || die "Cannot determine HA IP for VMID ${VMID} on ${NODE}"
 HA_URL="http://${HA_IP}:8123"
 
-info "homeassistant:config install-service for module: ${BL}${MODULE}${CL}"
+info "hass:config install-service for module: ${BL}${MODULE}${CL}"
 info "  HA URL        : ${BL}${HA_URL}${CL}"
 info "  external_url  : ${BL}${EXTERNAL_URL}${CL}"
 info "  mgmt CIDR     : ${MGMT_CIDR}"
@@ -110,7 +110,7 @@ print(''.join(secrets.choice(string.ascii_letters+string.digits) for _ in range(
 ")"
         ONBOARD_RESP=$(curl -sf --max-time 30 -X POST \
             -H "Content-Type: application/json" \
-            -d "{\"client_id\":\"http://homeassistant.local/\",\"name\":\"TAPPaaS Admin\",\"username\":\"tappaas\",\"password\":\"${ADMIN_PASS}\",\"language\":\"en\"}" \
+            -d "{\"client_id\":\"http://hass.local/\",\"name\":\"TAPPaaS Admin\",\"username\":\"tappaas\",\"password\":\"${ADMIN_PASS}\",\"language\":\"en\"}" \
             "${HA_URL}/api/onboarding/users" 2>/dev/null)
 
         AUTH_CODE=$(echo "${ONBOARD_RESP}" | python3 -c \
@@ -120,7 +120,7 @@ print(''.join(secrets.choice(string.ascii_letters+string.digits) for _ in range(
         # Step 2: exchange auth_code for access_token
         ACCESS_TOKEN=$(curl -sf --max-time 10 -X POST \
             -H "Content-Type: application/x-www-form-urlencoded" \
-            -d "grant_type=authorization_code&code=${AUTH_CODE}&client_id=http%3A%2F%2Fhomeassistant.local%2F" \
+            -d "grant_type=authorization_code&code=${AUTH_CODE}&client_id=http%3A%2F%2Fhass.local%2F" \
             "${HA_URL}/auth/token" 2>/dev/null \
             | python3 -c "import sys,json; print(json.load(sys.stdin).get('access_token',''))" 2>/dev/null)
         [[ -n "${ACCESS_TOKEN}" ]] || die "Could not exchange auth_code for access_token"
@@ -212,7 +212,7 @@ if [[ -n "${LLAT}" ]]; then
 else
     # Fallback: sed on storage file
     ssh -o BatchMode=yes root@"${NODE_FQDN}" "qm guest exec ${VMID} -- bash -c '
-        sed -i \"s|\\\"external_url\\\": \\\"[^\\\"]*\\\"|\\\"external_url\\\": \\\"${EXTERNAL_URL}\\\"|\" /mnt/data/supervisor/homeassistant/.storage/core.config 2>/dev/null && echo done || echo skipped
+        sed -i \"s|\\\"external_url\\\": \\\"[^\\\"]*\\\"|\\\"external_url\\\": \\\"${EXTERNAL_URL}\\\"|\" /mnt/data/supervisor/hass/.storage/core.config 2>/dev/null && echo done || echo skipped
     '" 2>/dev/null | python3 -c "import sys,json; print(json.load(sys.stdin).get('out-data',''))" 2>/dev/null
     info "  ${GN}✓${CL} external_url set via storage file"
 fi
@@ -242,4 +242,4 @@ ssh -o BatchMode=yes root@"${NODE_FQDN}" \
     "qm guest exec ${VMID} -- bash -c 'ha core restart 2>/dev/null || true'" 2>/dev/null || true
 info "  ${GN}✓${CL} HA Core restart triggered"
 
-info "${GN}homeassistant:config install-service completed for ${MODULE}${CL}"
+info "${GN}hass:config install-service completed for ${MODULE}${CL}"

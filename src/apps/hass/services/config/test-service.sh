@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 #
-# TAPPaaS HomeAssistant Config Service - Test
+# TAPPaaS hass Config Service - Test
 #
-# Verifies that the homeassistant:config service has been applied correctly:
-#   1. LLAT exists in /etc/secrets/homeassistant.env
+# Verifies that the hass:config service has been applied correctly:
+#   1. LLAT exists in /etc/secrets/hass.env
 #   2. http: block present in configuration.yaml (trusted_proxies)
 #   3. external_url matches derived proxy domain
 #   4. HA responds 200 with X-Forwarded-* headers (proxy chain works)
@@ -44,19 +44,19 @@ PASS=0; FAIL=0
 pass() { info "    ${GN}✓${CL} $1"; PASS=$((PASS+1)); }
 fail() { error "    ✗ $1"; FAIL=$((FAIL+1)); }
 
-info "  homeassistant:config tests for ${BL}${MODULE}${CL}"
+info "  hass:config tests for ${BL}${MODULE}${CL}"
 
 # Check 1: LLAT in secrets
 if ssh -o BatchMode=yes root@"${NODE_FQDN}" \
-    "grep -q HA_TOKEN /etc/secrets/homeassistant.env" 2>/dev/null; then
-    pass "HA_TOKEN present in /etc/secrets/homeassistant.env"
+    "grep -q HA_TOKEN /etc/secrets/hass.env" 2>/dev/null; then
+    pass "HA_TOKEN present in /etc/secrets/hass.env"
 else
-    fail "HA_TOKEN missing from /etc/secrets/homeassistant.env"
+    fail "HA_TOKEN missing from /etc/secrets/hass.env"
 fi
 
 # Check 2: trusted_proxies in configuration.yaml
 if ssh -o BatchMode=yes root@"${NODE_FQDN}" \
-    "qm guest exec ${VMID} -- bash -c 'grep -q use_x_forwarded_for /mnt/data/supervisor/homeassistant/configuration.yaml'" 2>/dev/null \
+    "qm guest exec ${VMID} -- bash -c 'grep -q use_x_forwarded_for /mnt/data/supervisor/hass/configuration.yaml'" 2>/dev/null \
     | python3 -c "import sys,json; d=json.load(sys.stdin); exit(0 if d.get('exitcode',1)==0 else 1)" 2>/dev/null; then
     pass "http.use_x_forwarded_for configured in configuration.yaml"
 else
@@ -65,7 +65,7 @@ fi
 
 # Check 3: external_url set
 STORED_URL=$(ssh -o BatchMode=yes root@"${NODE_FQDN}" \
-    "qm guest exec ${VMID} -- python3 -c \"import json; d=json.load(open('/mnt/data/supervisor/homeassistant/.storage/core.config')); print(d['data'].get('external_url',''))\"" \
+    "qm guest exec ${VMID} -- python3 -c \"import json; d=json.load(open('/mnt/data/supervisor/hass/.storage/core.config')); print(d['data'].get('external_url',''))\"" \
     2>/dev/null | python3 -c "import sys,json; print(json.load(sys.stdin).get('out-data','').strip())" 2>/dev/null || echo "")
 EXPECTED_URL="https://${PROXY_DOMAIN}"
 if [[ "${STORED_URL}" == "${EXPECTED_URL}" ]]; then

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# TAPPaaS HomeAssistant Config Service - Update
+# TAPPaaS hass Config Service - Update
 #
 # Idempotent: re-applies trusted_proxies and external_url derived from current
 # TAPPaaS SSoT. Safe to run on every update cycle.

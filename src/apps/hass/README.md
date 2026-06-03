@@ -4,7 +4,7 @@
 > resolved, deploy in a zone without underscores in the name. Use `--zone0 work` as a
 > test deployment:
 > ```bash
-> install-module.sh homeassistant --zone0 work --vmid <id>
+> install-module.sh hass --zone0 work --vmid <id>
 > ```
 > Production zone is `srv_home`. Revert once PR #278 is merged.
 
@@ -30,16 +30,16 @@ cloud dependency.
 
 ## Requirements
 
-- Proxmox node with storage pool configured in `homeassistant.json`
+- Proxmox node with storage pool configured in `hass.json`
 - UEFI boot support (OVMF — included in Proxmox)
 - Active network zone without underscores in zone name (see deployment note above)
 
 ## Security note — bootstrap admin account
 
-The `homeassistant:config` service creates a `tappaas` user with **owner + system-admin**
+The `hass:config` service creates a `tappaas` user with **owner + system-admin**
 access during first-run onboarding. This is required to bootstrap the Long-Lived Access
 Token (LLAT) used for automation. The account credentials are stored in
-`/etc/secrets/homeassistant.env` on the Proxmox node.
+`/etc/secrets/hass.env` on the Proxmox node.
 
 **Recommended after first login:** change the `tappaas` user password in HA → Profile.
 The LLAT remains valid after a password change.

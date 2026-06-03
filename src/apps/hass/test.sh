@@ -1,13 +1,13 @@
 #!/usr/bin/env bash
 #
-# TAPPaaS HomeAssistant Module Tests
+# TAPPaaS hass Module Tests
 #
 # Tests:
 #   1. VM is running (via qm status on Proxmox node)
 #   2. HAOS web UI reachable on port 8123 (HTTP 200 or 302)
 #
 # Usage: ./test.sh <vmname>
-# Example: ./test.sh homeassistant
+# Example: ./test.sh hass
 #
 
 set -euo pipefail

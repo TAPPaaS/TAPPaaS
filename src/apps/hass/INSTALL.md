@@ -5,33 +5,33 @@ Only manual steps are listed here. Scripts handle everything else automatically.
 ## Prerequisites
 
 1. **Active network zone** — the target zone must be active in `zones.json` and configured
-   in OPNsense. See `homeassistant.json` for the configured `zone0`.
+   in OPNsense. See `hass.json` for the configured `zone0`.
 2. **HAOS image** — downloaded automatically by `install-module.sh` from the URL in
-   `homeassistant.json` (`config.cluster:vm.imageLocation`). No manual download needed.
+   `hass.json` (`config.cluster:vm.imageLocation`). No manual download needed.
 
 ## Install
 
 ```bash
-cd /home/tappaas/TAPPaaS/src/apps/HomeAssistant
-install-module.sh homeassistant
+cd /home/tappaas/TAPPaaS/src/apps/hass
+install-module.sh hass
 ```
 
 Override zone and VMID if needed (e.g. test deployment):
 
 ```bash
-install-module.sh homeassistant --zone0 work --vmid 211
+install-module.sh hass --zone0 work --vmid 211
 ```
 
 This creates the VM, imports the HAOS disk image, and configures automatically:
 - Firewall proxy (HTTPS reverse proxy for the configured domain)
 - Firewall pinholes to IoT modules (alfen, sonos, reolink)
-- HAOS trusted_proxies, external_url and LLAT bootstrap (`homeassistant:config` service)
+- HAOS trusted_proxies, external_url and LLAT bootstrap (`hass:config` service)
 
 ## Post-install
 
-**Onboarding is automated.** The `homeassistant:config` service:
+**Onboarding is automated.** The `hass:config` service:
 - Creates admin user `tappaas` with a generated password
-- Stores credentials in `/etc/secrets/homeassistant.env` on the Proxmox node
+- Stores credentials in `/etc/secrets/hass.env` on the Proxmox node
 - Writes `trusted_proxies` + `use_x_forwarded_for` to `configuration.yaml`
 - Sets `external_url` to the configured proxy domain
 - Restarts HA Core
@@ -49,7 +49,7 @@ This creates the VM, imports the HAOS disk image, and configures automatically:
 ## Verification
 
 ```bash
-test-module.sh homeassistant
+test-module.sh hass
 ```
 
 Manual checks:
@@ -58,7 +58,7 @@ Manual checks:
 |-------|----------|
 | `https://<vmname>.<tappaas.domain>` from configured zones | HA login page (302) |
 | `http://<ha-ip>:8123` direct | HA login page |
-| `/etc/secrets/homeassistant.env` on Proxmox node | `HA_TOKEN` present |
+| `/etc/secrets/hass.env` on Proxmox node | `HA_TOKEN` present |
 
 ## Troubleshooting
 
@@ -67,11 +67,11 @@ Zone name contains an underscore (e.g. `srv_home`). See PR #278. Workaround:
 deploy with `--zone0 work` or another zone without underscores.
 
 **Proxy returns 400 Bad Request**
-`trusted_proxies` not applied. Re-run `homeassistant:config` service:
+`trusted_proxies` not applied. Re-run `hass:config` service:
 ```bash
-bash services/config/install-service.sh homeassistant
+bash services/config/install-service.sh hass
 ```
 
 **Sonos speakers not discovered**
-Verify mDNS relay: `test-service.sh firewall:discovery homeassistant`.
-If pinholes are missing, run `install-module.sh homeassistant --force`.
+Verify mDNS relay: `test-service.sh firewall:discovery hass`.
+If pinholes are missing, run `install-module.sh hass --force`.

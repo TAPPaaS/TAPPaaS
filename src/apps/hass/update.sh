@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
 #
-# TAPPaaS HomeAssistant VM update
+# TAPPaaS hass VM update
 #
 # HAOS manages its own updates via the Home Assistant web UI.
 # This script verifies the VM is running and reports access info.
 #
 # Usage: ./update.sh <vmname>
-# Example: ./update.sh homeassistant
+# Example: ./update.sh hass
 #
 
 set -euo pipefail
@@ -22,7 +22,7 @@ ZONE0NAME="$(get_config_value 'zone0' 'mgmt')"
 HANODE="$(get_config_value 'HANode' "$(get_default_ha_node "$NODE")")"
 
 readonly ZONES_FILE="/home/tappaas/config/zones.json"
-readonly HA_CONFIG_YAML="/mnt/data/supervisor/homeassistant/configuration.yaml"
+readonly HA_CONFIG_YAML="/mnt/data/supervisor/hass/configuration.yaml"
 
 # ── Configure reverse-proxy trust ────────────────────────────────────
 #
