@@ -11,5 +11,12 @@ set -euo pipefail
 
 . ./update.sh
 
+# Apply TAPPaaS-native HAOS configuration (trusted_proxies, external_url, LLAT bootstrap)
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+if [[ -x "${SCRIPT_DIR}/services/config/install-service.sh" ]]; then
+    info "Running homeassistant:config service..."
+    bash "${SCRIPT_DIR}/services/config/install-service.sh" "${1:-homeassistant}"
+fi
+
 echo ""
 info "${GN}✓${CL} VM installation completed successfully."
