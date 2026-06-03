@@ -141,13 +141,20 @@ print(''.join(secrets.choice(string.ascii_letters+string.digits) for _ in range(
             -d '{}' "${HA_URL}/api/onboarding/integration" 2>/dev/null || true
 
         # Step 4: create LLAT
-        LLAT=$(curl -sf --max-time 10 -X POST \
+        # Note: /api/auth/long_lived_access_token was moved to WebSocket API in HA 2025+
+        # We store the access_token as a functional fallback (expires in hours).
+        # The user should create a permanent LLAT via HA UI → Profile → Security.
+        LLAT_RESP=$(curl -s --max-time 10 -X POST \
             -H "Authorization: Bearer ${ACCESS_TOKEN}" \
             -H "Content-Type: application/json" \
             -d '{"client_name":"tappaas-cicd","lifespan":3650}' \
-            "${HA_URL}/api/auth/long_lived_access_token" 2>/dev/null \
-            | python3 -c "import sys,json; print(json.load(sys.stdin).get('token',''))" 2>/dev/null)
-        [[ -n "${LLAT}" ]] || die "Could not create Long-Lived Access Token"
+            "${HA_URL}/api/auth/long_lived_access_token" 2>/dev/null)
+        LLAT=$(echo "${LLAT_RESP}" | python3 -c "import sys,json; print(json.load(sys.stdin).get('token',''))" 2>/dev/null || echo "")
+        if [[ -z "${LLAT}" ]]; then
+            warn "  LLAT REST endpoint unavailable (HA 2025+ uses WebSocket API)"
+            warn "  Using access_token as temporary token — create permanent LLAT via HA UI"
+            LLAT="${ACCESS_TOKEN}"
+        fi
 
         ssh -o BatchMode=yes root@"${NODE_FQDN}" "bash -c '
             mkdir -p /etc/secrets && chmod 750 /etc/secrets
@@ -210,16 +217,22 @@ else
     info "  ${GN}✓${CL} external_url set via storage file"
 fi
 
-# ── Restart HA Core ───────────────────────────────────────────────────────────
+# ── Validate config then restart HA Core ─────────────────────────────────────
+
+info "  Validating configuration.yaml..."
+CHECK=$(ssh -o BatchMode=yes root@"${NODE_FQDN}" \
+    "qm guest exec ${VMID} -- bash -c 'ha core check 2>&1'" 2>/dev/null \
+    | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('out-data','').strip())" 2>/dev/null || echo "")
+if echo "${CHECK}" | grep -qi "failed\|invalid\|error"; then
+    error "  configuration.yaml validation failed:"
+    echo "${CHECK}" | head -10 >&2
+    die "Aborting restart — fix configuration errors first"
+fi
+info "  ${GN}✓${CL} configuration.yaml valid"
 
 info "  Restarting HA Core..."
-if [[ -n "${LLAT}" ]]; then
-    curl -sf --max-time 10 -X POST \
-        -H "Authorization: Bearer ${LLAT}" \
-        "${HA_URL}/api/services/homeassistant/restart" 2>/dev/null || true
-else
-    ssh -o BatchMode=yes root@"${NODE_FQDN}" "qm guest exec ${VMID} -- bash -c 'ha core restart 2>/dev/null || true'" 2>/dev/null || true
-fi
+ssh -o BatchMode=yes root@"${NODE_FQDN}" \
+    "qm guest exec ${VMID} -- bash -c 'ha core restart 2>/dev/null || true'" 2>/dev/null || true
 info "  ${GN}✓${CL} HA Core restart triggered"
 
 info "${GN}homeassistant:config install-service completed for ${MODULE}${CL}"
