@@ -336,3 +336,90 @@ Defaults are chosen so the commands above "just work". Override as needed:
 
 Field definitions for module JSON are in `src/foundation/module-fields.json`;
 network zones/VLANs in `src/foundation/firewall/zones.json`.
+
+---
+
+## Appendix: Installing via SSH
+
+The main install guide recommends the Proxmox console, but SSH works fine with
+proper preparation. The key is using `tmux` so the install continues if your
+connection drops during network reconfiguration.
+
+### 1. Generate and install an SSH key (from your workstation)
+
+If you don't already have an SSH key pair:
+
+```bash
+# Generate a new key (accept defaults, optionally set a passphrase)
+ssh-keygen -t ed25519 -C "your-email@example.com"
+
+# Copy the public key to the Proxmox node (use the node's current IP)
+ssh-copy-id root@<proxmox-ip>
+```
+
+Now you can SSH without a password:
+
+```bash
+ssh root@<proxmox-ip>
+```
+
+### 2. Install and start tmux
+
+`tmux` keeps your session alive even if SSH disconnects. On the Proxmox node:
+
+```bash
+apt update && apt install -y tmux
+```
+
+Start a named session for the install:
+
+```bash
+tmux new -s install
+```
+
+**If your SSH connection drops**, reconnect and reattach:
+
+```bash
+ssh root@<proxmox-ip>
+tmux attach -t install
+```
+
+**Useful tmux commands:**
+
+- `Ctrl+b d` — Detach (leave session running in background)
+- `Ctrl+b [` — Scroll mode (arrow keys to scroll, `q` to exit)
+
+### 3. Fix locale warnings (optional)
+
+Fresh Proxmox installs may show Perl locale warnings. Fix them:
+
+```bash
+# Quick fix for current session
+export LC_ALL=en_US.UTF-8
+export LANGUAGE=en_US.UTF-8
+
+# Permanent fix (then start a new shell)
+echo "en_US.UTF-8 UTF-8" >> /etc/locale.gen && locale-gen && \
+  update-locale LC_ALL=en_US.UTF-8 LANGUAGE=en_US.UTF-8
+```
+
+### 4. Run the install
+
+Inside your tmux session, run the bootstrap command from §2.1:
+
+```bash
+REPO="https://raw.githubusercontent.com/TAPPaaS/TAPPaaS/"; BRANCH="main"
+curl -fsSL ${REPO}${BRANCH}/src/foundation/cluster/install.sh >install.sh
+chmod +x install.sh && ./install.sh "$REPO" "$BRANCH" --domain "yourdomain.com"
+```
+
+Even if your SSH drops during network cutover, the install continues inside
+tmux. Reconnect with `tmux attach -t install` to see progress.
+
+### 5. After install
+
+Once complete, you can access:
+
+- **Proxmox UI:** `https://10.0.0.10:8006` (or the node's upstream IP)
+- **Firewall GUI:** `https://10.0.0.1`
+- **CICD Mothership:** `ssh tappaas@tappaas-cicd` (or `ssh tappaas@10.0.0.143`)
