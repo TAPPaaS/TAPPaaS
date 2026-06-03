@@ -164,10 +164,11 @@ swap_gateway() {
   #     to that network via the upstream gateway so the operator stays connected.
   if [[ -z "$ADMIN_ROUTE" && "$INTERACTIVE" == "1" && -n "$old_gw" ]]; then
     echo "" >&2
-    info "Your default route is moving to the firewall (${FW_IP})."
-    info "If you manage this node from a network reached via the current upstream"
-    info "gateway (${old_gw}) — e.g. an admin/jump LAN — enter it to keep a route to it."
-    read -r -p "  Management network/IP to keep via ${old_gw} (CIDR, or blank for none): " ADMIN_ROUTE
+    info "Is your management console (browser/SSH) on a DIFFERENT network than this node?"
+    info "  - If YES: enter that network below to add a static route via ${old_gw},"
+    info "            so you keep connectivity after the default route moves to the firewall."
+    info "  - If NO (same subnet as this node): just press Enter — no extra route needed."
+    read -r -p "  Admin network to route via ${old_gw} (CIDR, e.g. 192.168.1.0/24, or blank): " ADMIN_ROUTE
   fi
   if [[ -n "$ADMIN_ROUTE" ]]; then
     if [[ -z "$old_gw" ]]; then
