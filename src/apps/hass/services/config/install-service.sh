@@ -234,7 +234,7 @@ until [[ $_tries -ge 3 ]]; do
         "qm guest exec ${VMID} -- bash -c 'ha core check 2>&1'" 2>/dev/null \
         | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('out-data','').strip())" 2>/dev/null || echo "")
     # "Another job is running" is a transient Supervisor lock, not a config error
-    echo "${CHECK}" | grep -qi "Another job is running" && { (( _tries++ )); sleep 15; continue; }
+    echo "${CHECK}" | grep -qi "Another job is running" && { _tries=$(( _tries + 1 )); sleep 15; continue; }
     break
 done
 if echo "${CHECK}" | grep -qi "failed\|invalid"; then
