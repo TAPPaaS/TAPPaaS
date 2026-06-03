@@ -220,10 +220,17 @@ fi
 # ── Validate config then restart HA Core ─────────────────────────────────────
 
 info "  Validating configuration.yaml..."
-CHECK=$(ssh -o BatchMode=yes root@"${NODE_FQDN}" \
-    "qm guest exec ${VMID} -- bash -c 'ha core check 2>&1'" 2>/dev/null \
-    | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('out-data','').strip())" 2>/dev/null || echo "")
-if echo "${CHECK}" | grep -qi "failed\|invalid\|error"; then
+# Retry check up to 3 times — Supervisor may be busy with init jobs
+CHECK=""; _tries=0
+until [[ $_tries -ge 3 ]]; do
+    CHECK=$(ssh -o BatchMode=yes root@"${NODE_FQDN}" \
+        "qm guest exec ${VMID} -- bash -c 'ha core check 2>&1'" 2>/dev/null \
+        | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('out-data','').strip())" 2>/dev/null || echo "")
+    # "Another job is running" is a transient Supervisor lock, not a config error
+    echo "${CHECK}" | grep -qi "Another job is running" && { (( _tries++ )); sleep 15; continue; }
+    break
+done
+if echo "${CHECK}" | grep -qi "failed\|invalid"; then
     error "  configuration.yaml validation failed:"
     echo "${CHECK}" | head -10 >&2
     die "Aborting restart — fix configuration errors first"
