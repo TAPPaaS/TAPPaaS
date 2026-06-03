@@ -328,13 +328,37 @@ byid_for() {
 
 register_pve() {
   local name="$1"
+  local thisnode
+  thisnode="$(hostname -s)"
   command -v pvesm >/dev/null || { warn "pvesm not found — skipping PVE registration of ${name}"; return 0; }
+
+  # ZFS pools are node-local: the pool just created exists only on THIS node
+  # (until another node's run of this script creates a same-named pool). But
+  # storage.cfg is cluster-wide, so a zfspool with no 'nodes' restriction makes
+  # Proxmox try to activate it on every node and fail with "cannot open '<pool>':
+  # no such pool" on the nodes that lack it. Scope each storage to the node(s)
+  # that actually hold the pool, accumulating nodes as the per-node runs register
+  # the same-named pool (e.g. tanka1 ends up on all nodes; tankc1 stays on one).
   if pvesm status 2>/dev/null | awk '{print $1}' | grep -qx "$name"; then
-    info "  PVE storage '${name}' already registered."
+    local cur
+    cur="$(awk -v s="$name" '
+      $1=="zfspool:" && $2==s {f=1; next}
+      f && $1=="nodes" {print $2; exit}
+      f && $1 ~ /:$/ {exit}
+    ' /etc/pve/storage.cfg 2>/dev/null)"
+    if [[ -z "$cur" ]]; then
+      info "  PVE storage '${name}' already registered (all nodes) — leaving unrestricted."
+    elif grep -qw "$thisnode" <<<"${cur//,/ }"; then
+      info "  PVE storage '${name}' already scoped to ${thisnode}."
+    elif pvesm set "$name" --nodes "${cur},${thisnode}" >/dev/null 2>&1; then
+      info "  ${GN}✓${CL} Extended PVE storage '${name}' to ${thisnode} (nodes: ${cur},${thisnode})."
+    else
+      warn "  Could not extend node list for PVE storage '${name}'."
+    fi
     return 0
   fi
-  if pvesm add zfspool "$name" -pool "$name" -content images,rootdir >/dev/null 2>&1; then
-    info "  ${GN}✓${CL} Registered PVE storage '${name}' (images,rootdir)."
+  if pvesm add zfspool "$name" -pool "$name" -content images,rootdir -nodes "$thisnode" >/dev/null 2>&1; then
+    info "  ${GN}✓${CL} Registered PVE storage '${name}' on ${thisnode} (images,rootdir)."
   else
     warn "  Could not register PVE storage '${name}' (may already exist cluster-wide)."
   fi

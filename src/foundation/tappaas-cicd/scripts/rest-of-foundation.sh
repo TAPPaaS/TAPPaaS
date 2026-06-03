@@ -98,9 +98,9 @@ What's next:
   • If not done yet: set your real domain (create-configuration.sh --update
     --domain <yourdomain>) and add the Caddy DNS-01 provider token so public
     TLS certificates issue.
-  • Optional hardening: on each node run  config-network.sh --drop-upstream  to
-    take Proxmox off the upstream network (reach it via the mgmt net / firewall /
-    netbird).
+  • Optional hardening: take tappaas1 off the upstream network so Proxmox is
+    reachable only via the mgmt net / firewall / netbird:
+        ssh root@tappaas1.mgmt.internal '~/tappaas/config-network.sh --drop-upstream'
 EOF
   exit 0
 else
