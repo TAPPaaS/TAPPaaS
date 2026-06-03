@@ -124,8 +124,8 @@ Do this **after** the first node's bootstrap has finished (cicd is up).
    firewall HA), then **auto-joins** the cluster. *(No `tappaas1` reboot is needed —
    corosync was bound to the `10.0.0.10` mgmt IP from the start.)*
 
-3. Back on the mothership, run `update-tappaas` so cicd reconciles the new
-   topology — it then configures **HA + replication automatically** across nodes.
+3. Back on the mothership, run `update-tappaas --force` so cicd reconciles the
+   new topology — it then configures **HA + replication automatically** across nodes.
 
 ### 2.3 Set up TLS certificates
 

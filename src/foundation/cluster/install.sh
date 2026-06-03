@@ -599,7 +599,7 @@ if [ "$CLUSTER_ROLE" = "created" ] && [ "$SKIP_PLATFORM" != 1 ] && [ "$SKIP_FIRE
   echo ""
   echo -e "  ${BOLD}1.${CL} Multi-node cluster (optional):"
   echo "     Install additional nodes — they auto-join on the mgmt network."
-  echo -e "     Then run ${BL}update-tappaas${CL} on tappaas-cicd to configure HA + replication."
+  echo -e "     Then run ${BL}update-tappaas --force${CL} on tappaas-cicd to configure HA + replication."
   echo ""
   echo -e "  ${BOLD}2.${CL} Set up TLS certificates (on tappaas-cicd):"
   echo -e "       ${BL}acme-setup.sh${CL}"
