@@ -267,7 +267,12 @@ update_nixos() {
             ( run_quiet "nixos-rebuild on ${vm_ip} (attempt ${attempt}/3)" \
                 ssh -o BatchMode=yes "tappaas@${vm_ip}" "sudo nixos-rebuild switch ${nixpkgs_arg} -I nixos-config=${remote_nix_path}" ) || rc=$?
         fi
-        if [[ "$rc" -eq 0 ]]; then
+        # Exit code 4 means switch-to-configuration reported service activation
+        # failures but the build itself succeeded. This is expected on first
+        # deploy — services like nextcloud-setup fail because the application
+        # is not yet initialized; install.sh completes setup afterwards.
+        if [[ "$rc" -eq 0 || "$rc" -eq 4 ]]; then
+            [[ "$rc" -eq 4 ]] && warn "nixos-rebuild: some services failed activation (exit 4) — expected on first deploy, install.sh will complete setup"
             rebuilt=1; break
         fi
         [[ "$attempt" -lt 3 ]] || break
