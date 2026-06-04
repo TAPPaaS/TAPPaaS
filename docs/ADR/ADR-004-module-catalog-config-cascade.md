@@ -46,7 +46,7 @@ Add a `type` field to each repository entry:
       {
         "name": "my-org-apps",
         "url": "github.com/example/my-org-apps",
-        "branch": "main",
+        "branch": "stable",
         "path": "/home/tappaas/repos/my-org-apps",
         "managed": "tracked"
       }
@@ -126,6 +126,6 @@ Operator-owned desired-state files. Contract with layer 2: `moduleName` = config
 ### Implementation order
 
 1. Merge #297 (`module-catalog.json` rename + JSON Schema)
-2. Extend `repository.sh` with `--type` flag
-3. Update `configuration.json repositories[]` with `type` field
+2. Extend `repository.sh` with `--managed <full|tracked>` flag
+3. Update `configuration.json repositories[]` with `managed` field
 4. Add `stack` + `category` to existing `module-catalog.json` entries
