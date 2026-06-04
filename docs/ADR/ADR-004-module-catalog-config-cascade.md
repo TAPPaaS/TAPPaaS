@@ -3,75 +3,81 @@
 **Status:** proposed
 **Date:** 2026-06-04
 **Deciders:** @LarsRossen + @ErikDaniel007
-**Related:** #297 (module-catalog.json rename), repository.sh
+**Related:** #297, #305, repository.sh
+
+---
+
+## Cascade (overview)
+
+```
+configuration.json                 ← Layer 1: cluster registry
+  repositories[].catalog           ↓
+src/module-catalog.json            ← Layer 2: what CAN exist  (#305: renamed from modules.json)
+  moduleName = filename stem       ↓
+/home/tappaas/config/              ← Layer 3: what SHOULD exist (desired state)
+  <repo>/                          ←   NEW: folder per repo mirrors repo structure
+    <module>.json
+```
+
+**Reference schemas:**
+- Layer 1: `src/foundation/configuration-fields.json`
+- Layer 2: `src/foundation/module-catalog-schema.json` · `src/foundation/module-fields.json`
+- Layer 2 dependency graph: `src/module-dependencies.md`
 
 ---
 
 ## Context
 
-A TAPPaaS cluster draws modules from one or more repositories. Two questions arise as the platform scales:
+Three questions arise as the platform scales beyond one repo:
 
-1. **What modules exist?** No single file answers this across multiple repos.
-2. **What is deployed?** `/home/tappaas/config/*.json` are the live desired state, but no formal contract links them to the catalog.
-
-The current state has three files without a formal cascade:
-
-| File | Role today | Gap |
-|---|---|---|
-| `configuration.json` | Cluster root; lists repos | No `type` field per repo; only TAPPaaS registered |
-| `src/modules.json` (→ `module-catalog.json`) | VMID collision register | No taxonomy, no schema |
-| `/home/tappaas/config/<m>.json` | Live desired state | Not validated against catalog |
+1. **What repos contribute to this cluster?** `configuration.json` lists repos but has no `managed` type or catalog pointer — tooling cannot route validation without hardcoded paths.
+2. **What modules exist?** `src/modules.json` is a VMID collision register only — no taxonomy, no schema, no cross-repo queryability.
+3. **What is deployed?** `/home/tappaas/config/*.json` is a flat list — no structural link to the repo or module that produced each file.
 
 ---
 
 ## Decision
 
-**Define a three-layer cascade with formal contracts at each boundary.**
+### Layer 1 — Cluster registry: `configuration.json`  *(NEW fields)*
 
-### Layer 1 — Cluster registry: `configuration.json`
-
-Add a `type` field to each repository entry:
+Add `managed` and `catalog` to each repository entry:
 
 ```json
 {
-  "tappaas": {
-    "repositories": [
-      {
-        "name": "TAPPaaS",
-        "url": "github.com/TAPPaaS/TAPPaaS",
-        "branch": "main",
-        "path": "/home/tappaas/TAPPaaS",
-        "managed": "full",
-        "catalog": "src/module-catalog.json"
-      },
-      {
-        "name": "my-org-apps",
-        "url": "github.com/example/my-org-apps",
-        "branch": "stable",
-        "path": "/home/tappaas/repos/my-org-apps",
-        "managed": "tracked"
-      }
-    ]
-  }
+  "name": "TAPPaaS",
+  "url": "github.com/TAPPaaS/TAPPaaS",
+  "branch": "main",
+  "path": "/home/tappaas/TAPPaaS",
+  "managed": "full",
+  "catalog": "src/module-catalog.json"
 }
 ```
 
-`managed` values:
-
-| Value | Meaning | `repository.sh` behaviour |
+| Field | Values | Meaning |
 |---|---|---|
-| `"full"` | Repo contains TAPPaaS modules with `src/module-catalog.json` | Full validation: VMID registry, catalog schema, module count |
-| `"tracked"` | Repo uses the cluster but defines no TAPPaaS modules | Registered in `configuration.json`; no catalog validation; `repository.sh` records it but does not manage module lifecycle |
+| `managed` | `"full"` | Repo contains TAPPaaS modules — full catalog validation |
+| `managed` | `"tracked"` | Repo registered but no catalog requirements |
+| `catalog` | path string | Location of module catalog relative to repo root. Default: `src/module-catalog.json`. Override for non-standard layouts. Omit for `tracked` repos. |
 
-`tracked` repos are registered so cluster tooling knows they exist (e.g. update schedules, SSH key distribution) but TAPPaaS imposes no structural requirements on their content.
+**NEW — `timezone`** *(open: new issue)*
 
-`catalog` (optional): path to the module catalog file relative to repo root. Default: `src/module-catalog.json`. Omit for `managed: tracked` repos. Override when a repo places its catalog at a non-standard path.
+Add cluster-wide timezone to `configuration.json`:
 
-### Layer 2 — Module catalog: `src/module-catalog.json`
+```json
+{ "tappaas": { "timezone": "Europe/Amsterdam" } }
+```
 
-Every `managed: full` repo contains `src/module-catalog.json` (per #297).
+`copy-update-json.sh` propagates it to instance configs as `timeZone`. `update-os.sh` injects it before `nixos-rebuild switch`. NixOS modules use `lib.mkDefault "UTC"` as fallback — no per-module `timeZone` field. See `src/foundation/configuration-fields.json` for field schema.
 
-Required fields per entry:
+`repository.sh add --managed <full|tracked>` is the authoritative tool for registering repos.
+
+---
+
+### Layer 2 — Module catalog: `src/module-catalog.json`  *(NEW: rename + taxonomy)*
+
+**Renamed** from `modules.json` (per #297 + #305). Every `managed: full` repo contains this file. Validated by `src/foundation/module-catalog-schema.json`.
+
+Required fields per entry *(NEW: `stack`, `category`, `status`)*:
 
 ```json
 {
@@ -84,23 +90,60 @@ Required fields per entry:
 }
 ```
 
-- `stack` and `category`: enable catalog-driven tooling and UI (per #297)
+- `stack` + `category`: enable catalog-driven tooling and UI
 - `status`: single source of truth for module readiness
-- VMID uniqueness validated at commit time via JSON Schema
+- VMID uniqueness: enforced at commit time via `module-catalog-schema.json`
+- Module field contract: see `src/foundation/module-fields.json`
+- Dependency graph: see `src/module-dependencies.md`
 
-### Layer 3 — Desired state: `/home/tappaas/config/<module>.json`
+---
 
-Operator-owned desired-state files. Contract with layer 2: `moduleName` = config filename stem. `install-module.sh` is the authoritative tool for creating and updating these files.
+### Layer 3 — Desired state: `/home/tappaas/config/`  *(NEW: folder structure)*
+
+**Current:** flat list — `forgejo.json`, `hass.json`, etc.
+
+**NEW** *(open: new issue)*: mirror the repo and module path structure:
+
+```
+/home/tappaas/config/
+  TAPPaaS/
+    foundation/
+      firewall.json
+      backup.json
+    ErikDaniel007/development/
+      forgejo.json
+  gdty-apps/                       ← tracked repo configs here
+    ...
+```
+
+- Eliminates ambiguity when multiple repos define modules with the same `moduleName`
+- `install-module.sh` writes to `config/<repoName>/<modulePath>/<moduleName>.json`
+- `repository.sh` and `install-module.sh` derive the path from `configuration.json repositories[].name` + module location
+
+**Contract with layer 2:** `moduleName` = config filename stem. `install-module.sh` is the authoritative tool for creating and updating config files.
 
 ---
 
 ## Rationale
 
-**`managed` in `configuration.json`:** `repository.sh` validates `src/module-catalog.json` for `full` repos; `tracked` repos are registered with no catalog requirements. The field is machine-readable so tooling routes without operator flags at runtime.
+**`managed` + `catalog` fields:** `repository.sh` derives validation rules from `configuration.json` at runtime — no hardcoded paths, no operator flags needed.
 
-**`stack` + `category` in module-catalog:** Two fields cover all current query patterns without over-specifying. Sufficient for UI, dashboards, and compliance sweeps.
+**Rename to `module-catalog.json`:** Consistent with `module-fields.json` naming convention. Communicates role (catalog, not implementation detail).
 
-**Industry precedent:** This three-layer model is standard in platform engineering (Backstage `catalog-info.yaml` + desired state; Helm chart registry + `values.yaml`; Crossplane XRD + XR). TAPPaaS implements the same pattern in JSON.
+**Config folder structure:** A flat config directory breaks at multi-repo scale. Mirroring repo structure makes the provenance of each config file self-evident and avoids naming collisions.
+
+**`timezone` in `configuration.json`:** A cluster has one timezone. Propagating it from one field eliminates per-VM drift and manual overrides. `lib.mkDefault "UTC"` in modules provides a safe fallback.
+
+---
+
+## Open issues
+
+| # | Topic | Status |
+|---|---|---|
+| #297 | `module-catalog.json` rename + JSON Schema | open |
+| #305 | Rename `module.json` → `module-catalog.json` (community repo) | open |
+| TBD | `timezone` field in `configuration.json` + propagation | new issue |
+| TBD | Config directory folder structure per repo | new issue |
 
 ---
 
@@ -108,27 +151,24 @@ Operator-owned desired-state files. Contract with layer 2: `moduleName` = config
 
 ### Changes required
 
-| What | Where | Blocks on |
-|---|---|---|
-| Add `managed` field to `configuration.json repositories[]` | `configuration.json` | `repository.sh` |
-| `repository.sh add --managed <full|tracked>` flag | `scripts/repository.sh` | tracked repo registration |
-| `stack`, `category`, `status` in `module-catalog.json` entries | per #297 | catalog tooling |
-
-### What gets better
-
-- Any tool reading `configuration.json` knows all repos and their validation rules
-- VMID collisions caught at commit time, not install time
-- `module-catalog.json` + JSON Schema is the single queryable module registry
+| What | Where |
+|---|---|
+| Add `managed`, `catalog` fields to `repositories[]` | `configuration.json` |
+| `repository.sh add --managed <full\|tracked>` | `scripts/repository.sh` |
+| Add `timezone` field + `copy-update-json.sh` propagation | `configuration.json`, `scripts/` |
+| Add `stack`, `category`, `status` to catalog entries | `src/module-catalog.json` |
+| Migrate `/home/tappaas/config/` to folder structure | `config/`, `install-module.sh` |
 
 ### What stays the same
 
-- `/home/tappaas/config/` structure — no changes
-- `install-module.sh` — no changes
-- GH Issues workflow — no changes
+- `module-fields.json` field contract for individual module JSONs
+- `install-module.sh` as the authoritative tool for config files
+- GH Issues workflow
 
 ### Implementation order
 
-1. Merge #297 (`module-catalog.json` rename + JSON Schema)
-2. Extend `repository.sh` with `--managed <full|tracked>` flag
-3. Update `configuration.json repositories[]` with `managed` field
-4. Add `stack` + `category` to existing `module-catalog.json` entries
+1. Merge #297 + #305 (`module-catalog.json` rename + schema)
+2. File + implement `timezone` issue
+3. `repository.sh --managed` + `catalog` field in `configuration.json`
+4. Config folder structure migration + `install-module.sh` update
+5. Add `stack` + `category` to existing catalog entries
