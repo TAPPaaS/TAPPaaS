@@ -4,10 +4,10 @@
         "summary": "VMID ranges are allocated by module type. Numbers are assigned in increments of 10, giving each module a block of 10 VMIDs for the local TAPPaaS administrator to create multiple copies of the same module/app.",
         "ranges": {
             "100-200": "Foundation modules (core platform infrastructure)",
-            "201-499": "Application modules — NixOS/Linux-based services",
-            "500-599": "Application modules — Windows Server-based services",
-            "600-799": "Application modules — general services",
-            "800-899": "Application modules — network and infrastructure",
+            "201-499": "Application modules \u2014 NixOS/Linux-based services",
+            "500-599": "Application modules \u2014 Windows Server-based services",
+            "600-799": "Application modules \u2014 general services",
+            "800-899": "Application modules \u2014 network and infrastructure",
             "900-999": "Test modules (used for VM creation testing and templates)",
             "8000-9000": "Proxmox templates (VM templates used for cloning)"
         },
@@ -16,119 +16,155 @@
     "foundationModules": [
         {
             "moduleName": "firewall",
+            "repo": "foundation",
+            "moduleJson": "src/foundation/firewall/firewall.json",
             "vmid": 110,
-            "moduleJson": "src/foundation/firewall/firewall.json"
+            "stack": "foundation",
+            "category": "platform"
         },
         {
             "moduleName": "tappaas-cicd",
+            "repo": "foundation",
+            "moduleJson": "src/foundation/tappaas-cicd/tappaas-cicd.json",
             "vmid": 130,
-            "moduleJson": "src/foundation/tappaas-cicd/tappaas-cicd.json"
+            "stack": "foundation",
+            "category": "platform"
         },
         {
             "moduleName": "identity",
+            "repo": "foundation",
+            "moduleJson": "src/foundation/identity/identity.json",
             "vmid": 140,
-            "moduleJson": "src/foundation/identity/identity.json"
+            "stack": "security",
+            "category": "identity"
         },
         {
             "moduleName": "logging",
+            "repo": "foundation",
+            "moduleJson": "src/foundation/logging/logging.json",
             "vmid": 150,
-            "moduleJson": "src/foundation/logging/logging.json"
+            "stack": "foundation",
+            "category": "observability"
         },
         {
             "moduleName": "backup",
+            "repo": "foundation",
+            "moduleJson": "src/foundation/backup/backup.json",
             "vmid": 0,
-            "moduleJson": "src/foundation/backup/backup.json"
+            "stack": "foundation",
+            "category": "backup"
         }
     ],
     "applicationModules": [
         {
             "moduleName": "litellm",
+            "repo": "application",
+            "moduleJson": "src/apps/litellm/litellm.json",
             "vmid": 310,
-            "moduleJson": "src/apps/litellm/litellm.json"
+            "stack": "ai",
+            "category": "inference"
         },
         {
             "moduleName": "openwebui",
+            "repo": "application",
+            "moduleJson": "src/apps/openwebui/openwebui.json",
             "vmid": 311,
-            "moduleJson": "src/apps/openwebui/openwebui.json"
+            "stack": "ai",
+            "category": "interface"
         },
         {
             "moduleName": "vllm-amd",
+            "repo": "application",
+            "moduleJson": "src/apps/vllm-amd/vllm-amd.json",
             "vmid": 312,
-            "moduleJson": "src/apps/vllm-amd/vllm-amd.json"
+            "stack": "ai",
+            "category": "inference"
         },
         {
             "moduleName": "vaultwarden",
+            "repo": "application",
+            "moduleJson": "src/apps/vaultwarden/vaultwarden.json",
             "vmid": 610,
-            "moduleJson": "src/apps/vaultwarden/vaultwarden.json"
+            "stack": "security",
+            "category": "credentials"
         },
         {
             "moduleName": "windows-server",
+            "repo": "application",
+            "moduleJson": "src/apps/windows-server/windows-server.json",
             "vmid": 500,
-            "moduleJson": "src/apps/windows-server/windows-server.json"
+            "stack": "application",
+            "category": "desktop"
         },
         {
             "moduleName": "netbird-client",
+            "repo": "application",
+            "moduleJson": "src/apps/netbird-client/netbird-client.json",
             "vmid": 800,
-            "moduleJson": "src/apps/netbird-client/netbird-client.json"
+            "stack": "infrastructure",
+            "category": "network"
         },
         {
             "moduleName": "unifi",
+            "repo": "application",
+            "moduleJson": "src/apps/unifi/unifi.json",
             "vmid": 810,
-            "moduleJson": "src/apps/unifi/unifi.json"
+            "stack": "infrastructure",
+            "category": "network"
         }
     ],
     "proxmoxTemplates": [
         {
             "moduleName": "template",
-            "vmid": 8080,
-            "moduleJson": "src/foundation/templates/template.json"
+            "moduleJson": "src/foundation/templates/template.json",
+            "vmid": 8080
         },
         {
             "moduleName": "tappaas-winserver",
-            "vmid": 8081,
-            "moduleJson": "src/foundation/templates/tappaas-winserver.json"
+            "moduleJson": "src/foundation/templates/tappaas-winserver.json",
+            "vmid": 8081
         }
     ],
     "testModules": [
         {
             "moduleName": "test-debian",
-            "vmid": 901,
-            "moduleJson": "src/foundation/tappaas-cicd/test-vm-creation/test-debian.json"
+            "moduleJson": "src/foundation/tappaas-cicd/test-vm-creation/test-debian.json",
+            "vmid": 901
         },
         {
             "moduleName": "test-debian-vlan-node",
-            "vmid": 902,
-            "moduleJson": "src/foundation/tappaas-cicd/test-vm-creation/test-debian-vlan-node.json"
+            "moduleJson": "src/foundation/tappaas-cicd/test-vm-creation/test-debian-vlan-node.json",
+            "vmid": 902
         },
         {
             "moduleName": "test-debian-nonode",
-            "vmid": 903,
-            "moduleJson": "src/foundation/tappaas-cicd/test-vm-creation/test-debian-nonode.json"
+            "moduleJson": "src/foundation/tappaas-cicd/test-vm-creation/test-debian-nonode.json",
+            "vmid": 903
         },
         {
             "moduleName": "test-debian-node3-noha",
-            "vmid": 904,
-            "moduleJson": "src/foundation/tappaas-cicd/test-vm-creation/test-debian-node3-noha.json"
+            "moduleJson": "src/foundation/tappaas-cicd/test-vm-creation/test-debian-node3-noha.json",
+            "vmid": 904
         },
         {
             "moduleName": "test-ubuntu-vlan",
-            "vmid": 905,
-            "moduleJson": "src/foundation/tappaas-cicd/test-vm-creation/test-ubuntu-vlan.json"
+            "moduleJson": "src/foundation/tappaas-cicd/test-vm-creation/test-ubuntu-vlan.json",
+            "vmid": 905
         },
         {
             "moduleName": "test-nixos",
-            "vmid": 911,
-            "moduleJson": "src/foundation/tappaas-cicd/test-vm-creation/test-nixos.json"
+            "moduleJson": "src/foundation/tappaas-cicd/test-vm-creation/test-nixos.json",
+            "vmid": 911
         },
         {
             "moduleName": "test-nixos-vlan-node",
-            "vmid": 912,
-            "moduleJson": "src/foundation/tappaas-cicd/test-vm-creation/test-nixos-vlan-node.json"
+            "moduleJson": "src/foundation/tappaas-cicd/test-vm-creation/test-nixos-vlan-node.json",
+            "vmid": 912
         },
         {
             "moduleName": "template",
-            "vmid": 999,
-            "moduleJson": "src/apps/00-Template/template.json"
+            "moduleJson": "src/apps/00-Template/template.json",
+            "vmid": 999
         }
     ]
 }
