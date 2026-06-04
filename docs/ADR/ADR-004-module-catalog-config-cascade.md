@@ -41,18 +41,32 @@ Add a `type` field to each repository entry:
         "url": "github.com/TAPPaaS/TAPPaaS",
         "branch": "main",
         "path": "/home/tappaas/TAPPaaS",
-        "type": "module"
+        "managed": "full"
+      },
+      {
+        "name": "my-org-apps",
+        "url": "github.com/example/my-org-apps",
+        "branch": "main",
+        "path": "/home/tappaas/repos/my-org-apps",
+        "managed": "tracked"
       }
     ]
   }
 }
 ```
 
-`type` values: `"module"` | `"digital-org"`. `repository.sh` routes validation by type.
+`managed` values:
+
+| Value | Meaning | `repository.sh` behaviour |
+|---|---|---|
+| `"full"` | Repo contains TAPPaaS modules with `src/module-catalog.json` | Full validation: VMID registry, catalog schema, module count |
+| `"tracked"` | Repo uses the cluster but defines no TAPPaaS modules | Registered in `configuration.json`; no catalog validation; `repository.sh` records it but does not manage module lifecycle |
+
+`tracked` repos are registered so cluster tooling knows they exist (e.g. update schedules, SSH key distribution) but TAPPaaS imposes no structural requirements on their content.
 
 ### Layer 2 — Module catalog: `src/module-catalog.json`
 
-Every `type: module` repo contains `src/module-catalog.json` (renamed from `modules.json` per #297).
+Every `managed: full` repo contains `src/module-catalog.json` (per #297).
 
 Required fields per entry:
 
@@ -79,7 +93,7 @@ Operator-owned desired-state files. Contract with layer 2: `moduleName` = config
 
 ## Rationale
 
-**`type` in `configuration.json`:** `repository.sh` must validate repos differently — `src/module-catalog.json` for module repos, `catalog.json` for digital-org repos. The type must be machine-readable at runtime without operator flags.
+**`managed` in `configuration.json`:** `repository.sh` validates `src/module-catalog.json` for `full` repos; `tracked` repos are registered with no catalog requirements. The field is machine-readable so tooling routes without operator flags at runtime.
 
 **`stack` + `category` in module-catalog:** Two fields cover all current query patterns without over-specifying. Sufficient for UI, dashboards, and compliance sweeps.
 
@@ -93,8 +107,8 @@ Operator-owned desired-state files. Contract with layer 2: `moduleName` = config
 
 | What | Where | Blocks on |
 |---|---|---|
-| Add `type` to `configuration.json repositories[]` | `configuration.json` | `repository.sh` |
-| `repository.sh add --type <type>` flag | `scripts/repository.sh` | non-module repo registration |
+| Add `managed` field to `configuration.json repositories[]` | `configuration.json` | `repository.sh` |
+| `repository.sh add --managed <full|tracked>` flag | `scripts/repository.sh` | tracked repo registration |
 | `stack`, `category`, `status` in `module-catalog.json` entries | per #297 | catalog tooling |
 
 ### What gets better
