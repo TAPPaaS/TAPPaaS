@@ -23,6 +23,8 @@ check_json "/home/tappaas/config/${MODULE}.json" || exit 2
 readonly CONFIG_DIR="/home/tappaas/config"
 readonly SYSTEM_CONFIG="${CONFIG_DIR}/configuration.json"
 readonly ZONES_FILE="/home/tappaas/TAPPaaS/src/foundation/firewall/zones.json"
+readonly HA_DATA_DIR="/mnt/data/supervisor/homeassistant"
+readonly HA_CONFIG_YAML="${HA_DATA_DIR}/configuration.yaml"
 
 VMNAME="$(get_config_value 'vmname' "${MODULE}")"
 VMID="$(get_config_value 'vmid')"
@@ -56,7 +58,7 @@ fi
 
 # Check 2: trusted_proxies in configuration.yaml
 if ssh -o BatchMode=yes root@"${NODE_FQDN}" \
-    "qm guest exec ${VMID} -- bash -c 'grep -q use_x_forwarded_for /mnt/data/supervisor/hass/configuration.yaml'" 2>/dev/null \
+    "qm guest exec ${VMID} -- bash -c 'grep -q use_x_forwarded_for ${HA_CONFIG_YAML}'" 2>/dev/null \
     | python3 -c "import sys,json; d=json.load(sys.stdin); exit(0 if d.get('exitcode',1)==0 else 1)" 2>/dev/null; then
     pass "http.use_x_forwarded_for configured in configuration.yaml"
 else
@@ -65,7 +67,7 @@ fi
 
 # Check 3: external_url set
 STORED_URL=$(ssh -o BatchMode=yes root@"${NODE_FQDN}" \
-    "qm guest exec ${VMID} -- python3 -c \"import json; d=json.load(open('/mnt/data/supervisor/hass/.storage/core.config')); print(d['data'].get('external_url',''))\"" \
+    "qm guest exec ${VMID} -- python3 -c \"import json; d=json.load(open('${HA_DATA_DIR}/.storage/core.config')); print(d['data'].get('external_url',''))\"" \
     2>/dev/null | python3 -c "import sys,json; print(json.load(sys.stdin).get('out-data','').strip())" 2>/dev/null || echo "")
 EXPECTED_URL="https://${PROXY_DOMAIN}"
 if [[ "${STORED_URL}" == "${EXPECTED_URL}" ]]; then

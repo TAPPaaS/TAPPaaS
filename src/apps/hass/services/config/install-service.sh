@@ -35,8 +35,9 @@ check_json "/home/tappaas/config/${MODULE}.json" || exit 1
 readonly CONFIG_DIR="/home/tappaas/config"
 readonly SYSTEM_CONFIG="${CONFIG_DIR}/configuration.json"
 readonly ZONES_FILE="/home/tappaas/TAPPaaS/src/foundation/firewall/zones.json"
+readonly HA_DATA_DIR="/mnt/data/supervisor/homeassistant"
 readonly SECRETS_FILE="/etc/secrets/hass.env"
-readonly HA_CONFIG_YAML="/mnt/data/supervisor/hass/configuration.yaml"
+readonly HA_CONFIG_YAML="${HA_DATA_DIR}/configuration.yaml"
 
 # ── Resolve values from SSoT ─────────────────────────────────────────────────
 
@@ -219,7 +220,7 @@ if [[ -n "${LLAT}" ]]; then
 else
     # Fallback: sed on storage file
     ssh -o BatchMode=yes root@"${NODE_FQDN}" "qm guest exec ${VMID} -- bash -c '
-        sed -i \"s|\\\"external_url\\\": \\\"[^\\\"]*\\\"|\\\"external_url\\\": \\\"${EXTERNAL_URL}\\\"|\" /mnt/data/supervisor/hass/.storage/core.config 2>/dev/null && echo done || echo skipped
+        sed -i \"s|\\\"external_url\\\": \\\"[^\\\"]*\\\"|\\\"external_url\\\": \\\"${EXTERNAL_URL}\\\"|\" ${HA_DATA_DIR}/.storage/core.config 2>/dev/null && echo done || echo skipped
     '" 2>/dev/null | python3 -c "import sys,json; print(json.load(sys.stdin).get('out-data',''))" 2>/dev/null
     info "  ${GN}✓${CL} external_url set via storage file"
 fi

@@ -22,7 +22,8 @@ ZONE0NAME="$(get_config_value 'zone0' 'mgmt')"
 HANODE="$(get_config_value 'HANode' "$(get_default_ha_node "$NODE")")"
 
 readonly ZONES_FILE="/home/tappaas/config/zones.json"
-readonly HA_CONFIG_YAML="/mnt/data/supervisor/hass/configuration.yaml"
+readonly HA_DATA_DIR="/mnt/data/supervisor/homeassistant"
+readonly HA_CONFIG_YAML="${HA_DATA_DIR}/configuration.yaml"
 
 # ── Configure reverse-proxy trust ────────────────────────────────────
 #
