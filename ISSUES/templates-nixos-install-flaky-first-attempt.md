@@ -1,5 +1,7 @@
 # templates:nixos install flaky for VMs in freshly-activated zones
 
+> **GitHub issue**: TAPPaaS/TAPPaaS#309
+
 **Observed**: 2026-05-16, during three back-to-back `firewall/test.sh --deep` runs while validating issues #173 and #177.
 
 ## Symptom
