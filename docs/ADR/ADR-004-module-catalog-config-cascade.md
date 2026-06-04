@@ -119,29 +119,42 @@ Required fields per entry *(NEW: `stack`, `category`, `status`)*:
 
 ---
 
-### Layer 3 — Desired state: `/home/tappaas/config/`  *(NEW: folder structure)*
+### Layer 3 — Desired state: `/home/tappaas/config/`  *(NEW: zone-based structure)*
 
-**Current:** flat list — `forgejo.json`, `hass.json`, etc.
+**Current:** flat list — `forgejo.json`, `hass.json`, etc. Zone membership is invisible at filesystem level.
 
-**NEW** *(open: new issue)*: mirror the repo and module path structure:
+**NEW** *(open: new issue)*: organize by zone — the primary security and isolation boundary in TAPPaaS. `zone0` is already present in every module config; the folder structure is implicit in the data.
 
 ```
 /home/tappaas/config/
-  TAPPaaS/
-    foundation/
-      firewall.json
-      backup.json
-    ErikDaniel007/development/
-      forgejo.json
-  Community/
-    AndreasJe/nextcloud-hub/
-      nextcloud.json
-  my-org-apps/                     ← tracked repo configs (if any)
+  configuration.json         ← cluster root (stays at top level)
+  zones.json                 ← zone definitions (stays at top level)
+
+  mgmt/                      ← management zone
+    firewall.json
+    backup.json
+    tappaas-cicd.json
+
+  srvWork/
+    forgejo.json
+    litellm.json
+
+  Community/srvWork/         ← Community repo, srvWork zone
+    nextcloud.json
+
+  iotCloud/
+    solaredge.json
+    alfen.json
+
+  _cluster/                  ← no zone0: cluster-level helpers
+    cluster.json
+    templates.json
 ```
 
-- Eliminates ambiguity when multiple repos define modules with the same `moduleName`
-- `install-module.sh` writes to `config/<repoName>/<modulePath>/<moduleName>.json`
-- `repository.sh` and `install-module.sh` derive the path from `configuration.json repositories[].name` + module location
+- Zone isolation is visible at a glance — `ls config/iotCloud/` answers "what is in my IoT zone?"
+- `install-module.sh` derives path from `zone0` in module config
+- Valid folder names are bounded by `zones.json` zone keys
+- Multi-repo: prefix with repo name when same zone appears in multiple repos (e.g. `Community/srvWork/`)
 
 **Contract with layer 2:** `moduleName` = config filename stem. `install-module.sh` is the authoritative tool for creating and updating config files.
 
@@ -153,7 +166,7 @@ Required fields per entry *(NEW: `stack`, `category`, `status`)*:
 
 **Rename to `module-catalog.json`:** Consistent with `module-fields.json` naming convention. Communicates role (catalog, not implementation detail).
 
-**Config folder structure:** A flat config directory breaks at multi-repo scale. Mirroring repo structure makes the provenance of each config file self-evident and avoids naming collisions.
+**Config folder structure (zone-based):** The config directory is operational state, not build state. Organize by operational domain (zone = security boundary), not supply chain (repo). `zone0` is already in every module config — the folder structure is implicit in the data. Zone isolation is the primary compliance boundary; it should be visible at the filesystem level. Multi-repo disambiguation uses `<repo>/<zone>/` prefix when needed.
 
 **`timezone` in `configuration.json`:** A cluster has one timezone. Propagating it from one field eliminates per-VM drift and manual overrides. `lib.mkDefault "UTC"` in modules provides a safe fallback.
 
@@ -166,7 +179,7 @@ Required fields per entry *(NEW: `stack`, `category`, `status`)*:
 | #297 | `module-catalog.json` rename + JSON Schema | open |
 | #305 | Rename `module.json` → `module-catalog.json` (community repo) | open |
 | TBD | `timezone` field in `configuration.json` + propagation | new issue |
-| TBD | Config directory folder structure per repo | new issue |
+| TBD | Config directory zone-based folder structure | new issue |
 
 ---
 
