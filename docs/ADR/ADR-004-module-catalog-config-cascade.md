@@ -41,7 +41,8 @@ Add a `type` field to each repository entry:
         "url": "github.com/TAPPaaS/TAPPaaS",
         "branch": "main",
         "path": "/home/tappaas/TAPPaaS",
-        "managed": "full"
+        "managed": "full",
+        "catalog": "src/module-catalog.json"
       },
       {
         "name": "my-org-apps",
@@ -63,6 +64,8 @@ Add a `type` field to each repository entry:
 | `"tracked"` | Repo uses the cluster but defines no TAPPaaS modules | Registered in `configuration.json`; no catalog validation; `repository.sh` records it but does not manage module lifecycle |
 
 `tracked` repos are registered so cluster tooling knows they exist (e.g. update schedules, SSH key distribution) but TAPPaaS imposes no structural requirements on their content.
+
+`catalog` (optional): path to the module catalog file relative to repo root. Default: `src/module-catalog.json`. Omit for `managed: tracked` repos. Override when a repo places its catalog at a non-standard path.
 
 ### Layer 2 — Module catalog: `src/module-catalog.json`
 
