@@ -103,9 +103,9 @@ run_case "split-state-and-vlantag" \
 run_case "zone-added" \
     '{"home":{"type":"Client","state":"Active","vlantag":300}}' \
     '{"home":{"type":"Client","state":"Active","vlantag":300}}' \
-    '{"home":{"type":"Client","state":"Active","vlantag":300},"srv_cust":{"type":"Service","state":"Inactive","vlantag":230}}' \
-    '.["srv_cust"].state == "Inactive" and .home.state == "Active"' \
-    'added.*srv_cust'
+    '{"home":{"type":"Client","state":"Active","vlantag":300},"srvCust":{"type":"Service","state":"Inactive","vlantag":230}}' \
+    '.["srvCust"].state == "Inactive" and .home.state == "Active"' \
+    'added.*srvCust'
 
 # Case 7: zone kept (orphan — in current but not source).
 run_case "zone-kept-orphan" \

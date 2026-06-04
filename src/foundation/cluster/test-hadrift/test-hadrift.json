@@ -14,7 +14,7 @@
   "imageType": "clone",
   "image": "8080",
   "bridge0": "lan",
-  "zone0": "srv_home",
+  "zone0": "srvHome",
   "dependsOn": [
     "cluster:vm",
     "cluster:ha"

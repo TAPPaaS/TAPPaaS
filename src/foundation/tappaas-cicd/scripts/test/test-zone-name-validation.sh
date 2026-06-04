@@ -1,11 +1,10 @@
 #!/usr/bin/env bash
 #
-# test-zone-name-validation.sh — schema regex rejects hyphens in zone names (#237).
+# test-zone-name-validation.sh — schema regex enforces camelCase zone names (#278).
 #
 # Confirms the module-fields.json `format` pattern on zone0/zone1/trunks0/trunks1
-# accepts the underscore form and rejects the legacy hyphen form. check_json
-# returns non-zero on validation failure, so we capture stdout+stderr and grep
-# the report.
+# accepts camelCase and rejects hyphens and underscores. check_json returns
+# non-zero on validation failure, so we capture stdout+stderr and grep the report.
 #
 
 set -uo pipefail
@@ -41,7 +40,7 @@ mkmod() {
   "imageType": "clone",
   "image": "9000",
   "bridge0": "lan",
-  "zone0": "srv_home",
+  "zone0": "srvHome",
   "trunks0": "NONE",
   "dependsOn": ["cluster:vm"],
   "provides": []
@@ -59,13 +58,13 @@ echo "── test-zone-name-validation.sh ──"
 SCHEMA="${FOUNDATION_DIR}/module-fields.json"
 [[ -f "${SCHEMA}" ]] || { fail "module-fields.json not found at ${SCHEMA}"; exit 1; }
 
-# Case 1: valid underscore zone0 passes the format regex.
+# Case 1: valid camelCase zone0 passes the format regex.
 F1="${WORK}/case1.json"; mkmod "${F1}"
 out=$(cj "${F1}" "${SCHEMA}" || true)
 if echo "${out}" | grep -qE "zone0.*does not match format"; then
-    fail "underscore zone0 (srv_home) was flagged"
+    fail "camelCase zone0 (srvHome) was flagged"
 else
-    pass "underscore zone0 (srv_home) passes regex"
+    pass "camelCase zone0 (srvHome) passes regex"
 fi
 
 # Case 2: hyphenated zone0 fails the regex.
@@ -91,7 +90,7 @@ fi
 
 # Case 4: hyphenated trunks0 entry fails the regex.
 F4="${WORK}/case4.json"; mkmod "${F4}"
-jq '.trunks0 = "srv_home;iot-local;dmz"' "${F4}" > "${F4}.tmp" && mv "${F4}.tmp" "${F4}"
+jq '.trunks0 = "srvHome;iot-local;dmz"' "${F4}" > "${F4}.tmp" && mv "${F4}.tmp" "${F4}"
 out=$(cj "${F4}" "${SCHEMA}" || true)
 if echo "${out}" | grep -qE "trunks0.*does not match format"; then
     pass "trunks0 with hyphenated entry rejected"
@@ -112,14 +111,24 @@ for sentinel in "ALL" "NONE" "*"; do
 done
 [[ "${all_ok}" -eq 1 ]] && pass "trunks0 sentinels (ALL/NONE/*) all pass"
 
-# Case 6: uppercase letters in zone0 fail (zone keys are lowercase by convention).
+# Case 6: starts-uppercase zone0 fails (camelCase must start lowercase).
 F6="${WORK}/case6.json"; mkmod "${F6}"
-jq '.zone0 = "Srv_Home"' "${F6}" > "${F6}.tmp" && mv "${F6}.tmp" "${F6}"
+jq '.zone0 = "SrvHome"' "${F6}" > "${F6}.tmp" && mv "${F6}.tmp" "${F6}"
 out=$(cj "${F6}" "${SCHEMA}" || true)
 if echo "${out}" | grep -qE "zone0.*does not match format"; then
-    pass "uppercase zone0 (Srv_Home) rejected by regex"
+    pass "starts-uppercase zone0 (SrvHome) rejected by regex"
 else
-    fail "uppercase zone0 (Srv_Home) NOT rejected"
+    fail "starts-uppercase zone0 (SrvHome) NOT rejected"
+fi
+
+# Case 7: underscore zone0 fails (#278 — camelCase only, no underscores).
+F7="${WORK}/case7.json"; mkmod "${F7}"
+jq '.zone0 = "srv_home"' "${F7}" > "${F7}.tmp" && mv "${F7}.tmp" "${F7}"
+out=$(cj "${F7}" "${SCHEMA}" || true)
+if echo "${out}" | grep -qE "zone0.*does not match format"; then
+    pass "underscore zone0 (srv_home) rejected by regex"
+else
+    fail "underscore zone0 (srv_home) NOT rejected — format pattern may not enforce camelCase"
 fi
 
 echo

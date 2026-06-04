@@ -38,7 +38,7 @@ else
     cat > "${TMP_ZONES}" <<'JSON'
 {
   "mgmt":     { "state": "Manual",   "vlantag": 0,   "bridge": "lan" },
-  "srv_home": { "state": "Active",   "vlantag": 210, "bridge": "lan" },
+  "srvHome": { "state": "Active",   "vlantag": 210, "bridge": "lan" },
   "dmz":      { "state": "Mandatory","vlantag": 610, "bridge": "lan" },
   "old":      { "state": "Inactive", "vlantag": 999, "bridge": "lan" }
 }
@@ -58,8 +58,8 @@ ck() {
     fi
 }
 
-# zone → tag (srv_home is the Active 210 zone post-#178)
-ck "zone srv_home → 210"  "210" "$(vmnet_zone_vlantag srv_home "${ZONES}")"
+# zone → tag (srvHome is the Active 210 zone post-#178)
+ck "zone srvHome → 210"  "210" "$(vmnet_zone_vlantag srvHome "${ZONES}")"
 ck "zone mgmt → 0"        "0"   "$(vmnet_zone_vlantag mgmt "${ZONES}")"
 # undefined / inactive zones fail (return non-zero)
 if vmnet_zone_vlantag nope "${ZONES}" >/dev/null 2>&1; then
@@ -69,7 +69,7 @@ else
 fi
 
 # tag → zone (reverse)
-ck "tag 210 → srv_home"  "srv_home"  "$(vmnet_zone_for_tag 210 "${ZONES}")"
+ck "tag 210 → srvHome"  "srvHome"  "$(vmnet_zone_for_tag 210 "${ZONES}")"
 ck "tag 0 → mgmt"        "mgmt"      "$(vmnet_zone_for_tag 0 "${ZONES}")"
 
 # all-active tags + "ALL" sentinel (issue #194). Compare to an independent jq
@@ -101,7 +101,7 @@ cat > "${EXPLICIT_FIXTURE}" <<'JSON'
 {
   "mgmt":     { "state": "Manual",    "vlantag": 0,   "bridge": "lan" },
   "srv":      { "state": "Active",    "vlantag": 200, "bridge": "lan" },
-  "srv_home": { "state": "Active",    "vlantag": 210, "bridge": "lan" },
+  "srvHome": { "state": "Active",    "vlantag": 210, "bridge": "lan" },
   "dmz":      { "state": "Mandatory", "vlantag": 610, "bridge": "lan" },
   "manual-z": { "state": "Manual",    "vlantag": 700, "bridge": "lan" },
   "iot-off":  { "state": "Disabled",  "vlantag": 440, "bridge": "lan" },

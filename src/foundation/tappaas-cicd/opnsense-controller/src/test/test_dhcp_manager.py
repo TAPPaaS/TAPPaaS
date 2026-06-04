@@ -205,7 +205,7 @@ class TestIpInAnyRange(unittest.TestCase):
 
     _ROWS = [{
         "uuid": "u1",
-        "description": "srv_home",
+        "description": "srvHome",
         "start_addr": "10.2.10.100",
         "end_addr": "10.2.10.200",
         "interface": "opt1",
@@ -215,7 +215,7 @@ class TestIpInAnyRange(unittest.TestCase):
         manager = _make_manager(existing_rows=self._ROWS)
         match = manager.ip_in_any_range("10.2.10.150")
         self.assertIsNotNone(match)
-        self.assertEqual(match["description"], "srv_home")
+        self.assertEqual(match["description"], "srvHome")
 
     def test_ip_outside_pool_returns_none(self):
         manager = _make_manager(existing_rows=self._ROWS)
@@ -261,14 +261,14 @@ class TestListLeases(unittest.TestCase):
         rows = [{
             "address": "10.2.10.217", "hostname": "litellm",
             "hwaddr": "02:f4:59:9a:2d:ba", "if_name": "opt11",
-            "if_descr": "srv_home", "expire": 1779954626,
+            "if_descr": "srvHome", "expire": 1779954626,
         }]
         manager = self._manager_with_leases(rows)
         leases = manager.list_leases()
         self.assertEqual(len(leases), 1)
         self.assertEqual(leases[0], {
             "ip": "10.2.10.217", "hostname": "litellm",
-            "mac": "02:f4:59:9a:2d:ba", "zone": "srv_home",
+            "mac": "02:f4:59:9a:2d:ba", "zone": "srvHome",
             "interface": "opt11", "expire": 1779954626,
         })
 
@@ -283,11 +283,11 @@ class TestListLeases(unittest.TestCase):
     def test_sorted_by_zone_then_numeric_ip(self):
         rows = [
             {"address": "10.0.0.134", "hostname": "cicd", "hwaddr": "a", "if_descr": "LAN", "if_name": "lan", "expire": 1},
-            {"address": "10.2.10.217", "hostname": "litellm", "hwaddr": "b", "if_descr": "srv_home", "if_name": "opt11", "expire": 2},
-            {"address": "10.2.10.9", "hostname": "early", "hwaddr": "c", "if_descr": "srv_home", "if_name": "opt11", "expire": 3},
+            {"address": "10.2.10.217", "hostname": "litellm", "hwaddr": "b", "if_descr": "srvHome", "if_name": "opt11", "expire": 2},
+            {"address": "10.2.10.9", "hostname": "early", "hwaddr": "c", "if_descr": "srvHome", "if_name": "opt11", "expire": 3},
         ]
         leases = self._manager_with_leases(rows).list_leases()
-        # LAN before srv_home; within srv_home .9 sorts before .217 numerically.
+        # LAN before srvHome; within srvHome .9 sorts before .217 numerically.
         self.assertEqual([l["hostname"] for l in leases], ["cicd", "early", "litellm"])
 
     def test_missing_hostname_becomes_empty(self):

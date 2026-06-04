@@ -7,7 +7,7 @@
 #   Basic (always)     : DNS lookup, internet reachability, OPNsense reachability.
 #   Standard (always)  : Schema sanity, CLI presence, zone gateway pings, DHCP/DNS
 #                        probes, rules-manager dry-runs, NONE-mode fallback.
-#   Deep (--deep)      : Provisions two test VMs in zones test_allow_a/test_allow_b, configures
+#   Deep (--deep)      : Provisions two test VMs in zones testAllowA/testAllowB, configures
 #                        Caddy reverse proxy on VM-A, applies rules-manager rules
 #                        on VM-B (exercising both module-name and module-local
 #                        alias peers), validates inter-VM connectivity, then
@@ -280,7 +280,7 @@ if [[ -z "${sample_modules}" ]]; then
 else
     while IFS= read -r vmname; do
         [[ -z "${vmname}" ]] && continue
-        zone=$(read_module_config "${vmname}" 2>/dev/null | jq -r '.zone0 // "srv_home"' 2>/dev/null || echo "srv_home")
+        zone=$(read_module_config "${vmname}" 2>/dev/null | jq -r '.zone0 // "srvHome"' 2>/dev/null || echo "srvHome")
         fqdn="${vmname}.${zone}.internal"
         if getent hosts "${fqdn}" >/dev/null 2>&1; then
             pass "DNS resolves ${fqdn}"
@@ -660,16 +660,16 @@ cleanup_deep() {
                 || warn "  delete-module.sh ${vm} returned non-zero"
         fi
     done
-    # Deactivate test_allow_a/test_allow_b/test_pinhole (restore them to Inactive in /home/tappaas/config/zones.json)
+    # Deactivate testAllowA/testAllowB/testPinhole (restore them to Inactive in /home/tappaas/config/zones.json)
     if [[ -f "${CONFIG_DIR}/zones.json" ]]; then
         local tmp
         tmp=$(mktemp)
-        jq '(.test_allow_a.state = "Inactive") | (.test_allow_b.state = "Inactive") | (.test_pinhole.state = "Inactive")' \
+        jq '(.testAllowA.state = "Inactive") | (.testAllowB.state = "Inactive") | (.testPinhole.state = "Inactive")' \
             "${CONFIG_DIR}/zones.json" > "${tmp}" \
             && mv "${tmp}" "${CONFIG_DIR}/zones.json"
         zone-manager --no-ssl-verify --zones-file "${CONFIG_DIR}/zones.json" --execute \
             >/dev/null 2>&1 || warn "zone-manager teardown returned non-zero"
-        info "Reverted test_allow_a/test_allow_b/test_pinhole to Inactive in zones.json and re-ran zone-manager"
+        info "Reverted testAllowA/testAllowB/testPinhole to Inactive in zones.json and re-ran zone-manager"
     fi
     return ${rc}
 }
@@ -679,11 +679,11 @@ if [[ "${DEEP}" != "1" ]]; then
     info "  Re-run with --deep (or TAPPAAS_TEST_DEEP=1) to provision two test VMs and"
     info "  validate inter-zone firewall rules end-to-end. Expected runtime: 5–10 min."
 else
-    section "Deep 1: Activate test_allow_a and test_allow_b zones"
+    section "Deep 1: Activate testAllowA and testAllowB zones"
 
     trap cleanup_deep EXIT
 
-    # Refresh deployed zones.json from the canonical source so test_allow_a/test_allow_b are
+    # Refresh deployed zones.json from the canonical source so testAllowA/testAllowB are
     # fully defined (jq stub-injection if they were missing would crash zone-manager).
     if ! cp "${ZONES_JSON_CANONICAL:-${SCRIPT_DIR}/zones.json}" "${CONFIG_DIR}/zones.json.test-bak"; then
         :
@@ -698,30 +698,30 @@ else
         fail "deployed zones.json missing — cannot activate test zones"
     else
         tmp=$(mktemp)
-        jq '(.test_allow_a.state = "Active") | (.test_allow_b.state = "Active") | (.test_pinhole.state = "Active")' \
+        jq '(.testAllowA.state = "Active") | (.testAllowB.state = "Active") | (.testPinhole.state = "Active")' \
             "${CONFIG_DIR}/zones.json" > "${tmp}" \
             && mv "${tmp}" "${CONFIG_DIR}/zones.json"
-        info "Activated test_allow_a, test_allow_b and test_pinhole in deployed zones.json"
+        info "Activated testAllowA, testAllowB and testPinhole in deployed zones.json"
 
-        # Ensure the deployed firewall.json's trunks0 list includes test_pinhole,
+        # Ensure the deployed firewall.json's trunks0 list includes testPinhole,
         # so the trunks-sync block below picks up VLAN 830. Idempotent — only
-        # rewrites when test_pinhole is missing. The runtime fields (installTime,
+        # rewrites when testPinhole is missing. The runtime fields (installTime,
         # location, …) are preserved by a surgical jq update.
         if [[ -f "${CONFIG_DIR}/firewall.json" ]] \
                 && ! read_module_config "firewall" 2>/dev/null \
                        | jq -r '.trunks0 // ""' \
-                       | grep -qE '(^|;)test_pinhole(;|$)'; then
+                       | grep -qE '(^|;)testPinhole(;|$)'; then
             # Pattern A-aware write (#207): trunks0 routes under config.cluster:vm.
-            jq_module_write "firewall" '.trunks0 = ((.trunks0 // "") + ";test_pinhole" | sub("^;"; ""))'
-            info "Added test_pinhole to deployed firewall.json trunks0"
+            jq_module_write "firewall" '.trunks0 = ((.trunks0 // "") + ";testPinhole" | sub("^;"; ""))'
+            info "Added testPinhole to deployed firewall.json trunks0"
         fi
         if zone-manager --no-ssl-verify --zones-file "${CONFIG_DIR}/zones.json" --execute 2>&1 | tail -5; then
-            pass "zone-manager applied test_allow_a+test_allow_b (VLAN+DHCP+rules)"
+            pass "zone-manager applied testAllowA+testAllowB (VLAN+DHCP+rules)"
         else
-            fail "zone-manager could not apply test_allow_a+test_allow_b"
+            fail "zone-manager could not apply testAllowA+testAllowB"
         fi
 
-        # zone-manager creates new opt interfaces (opt5/opt6 for test_allow_a/test_allow_b), but
+        # zone-manager creates new opt interfaces (opt5/opt6 for testAllowA/testAllowB), but
         # OPNsense's auto-generated bootp/anti-lockout pass rules for those new
         # interfaces are NOT regenerated by /api/firewall/filter/apply. Without
         # `configctl filter reload`, DHCP DISCOVER from VMs in the new zones is
@@ -737,7 +737,7 @@ else
         # Sync OPNsense VM's Proxmox trunks with currently-active VLAN zones.
         # See firewall/update.sh for the long-form rationale; in short: the
         # Proxmox vlan-aware bridge only forwards VLAN tags listed in the OPNsense
-        # NIC's trunks=... allowlist. New zones (test_allow_a=810, test_allow_b=820) need that
+        # NIC's trunks=... allowlist. New zones (testAllowA=810, testAllowB=820) need that
         # list updated or their traffic is dropped before reaching OPNsense.
         local _fw_cfg
         _fw_cfg=$(read_module_config "firewall" 2>/dev/null)
@@ -795,7 +795,7 @@ else
     fi
 
     # Distribute the refreshed zones.json to each Proxmox node so
-    # Create-TAPPaaS-VM.sh on the node can resolve test_allow_a/test_allow_b zones.
+    # Create-TAPPaaS-VM.sh on the node can resolve testAllowA/testAllowB zones.
     nodes_pushed=0
     if command -v jq >/dev/null 2>&1 && [[ -f "${CONFIG_DIR}/configuration.json" ]]; then
         mapfile -t pve_nodes < <(jq -r '."tappaas-nodes"[]?.hostname // empty' \
@@ -816,7 +816,7 @@ else
         skip "Could not enumerate/push to Proxmox nodes (test VMs may fail to create)"
     fi
 
-    section "Deep 2a: Install test-fw-c in test_pinhole (auto-pinhole provider, #173)"
+    section "Deep 2a: Install test-fw-c in testPinhole (auto-pinhole provider, #173)"
 
     pushd "${FIXTURES_DIR}" >/dev/null || die "Cannot enter ${FIXTURES_DIR}"
 
@@ -854,34 +854,34 @@ else
 
     info "Waiting up to 90s for test-fw-c DNS registration..."
     for _ in {1..18}; do
-        if getent hosts test-fw-c.test_pinhole.internal >/dev/null 2>&1; then
-            pass "DNS registered test-fw-c.test_pinhole.internal"
+        if getent hosts test-fw-c.testPinhole.internal >/dev/null 2>&1; then
+            pass "DNS registered test-fw-c.testPinhole.internal"
             break
         fi
         sleep 5
     done
-    getent hosts test-fw-c.test_pinhole.internal >/dev/null 2>&1 \
-        || fail "test-fw-c.test_pinhole.internal did not appear in DNS within 90s"
+    getent hosts test-fw-c.testPinhole.internal >/dev/null 2>&1 \
+        || fail "test-fw-c.testPinhole.internal did not appear in DNS within 90s"
 
-    section "Deep 2b: Install test-fw-a in test_allow_a (auto-pinhole consumer, #173)"
+    section "Deep 2b: Install test-fw-a in testAllowA (auto-pinhole consumer, #173)"
 
     install_with_retry test-fw-a "${FIXTURES_DIR}" || true
 
     # Wait for cloud-init / DHCP / DNS to settle
     info "Waiting up to 90s for test-fw-a DNS registration..."
     for _ in {1..18}; do
-        if getent hosts test-fw-a.test_allow_a.internal >/dev/null 2>&1; then
-            pass "DNS registered test-fw-a.test_allow_a.internal"
+        if getent hosts test-fw-a.testAllowA.internal >/dev/null 2>&1; then
+            pass "DNS registered test-fw-a.testAllowA.internal"
             break
         fi
         sleep 5
     done
-    getent hosts test-fw-a.test_allow_a.internal >/dev/null 2>&1 \
-        || fail "test-fw-a.test_allow_a.internal did not appear in DNS within 90s"
+    getent hosts test-fw-a.testAllowA.internal >/dev/null 2>&1 \
+        || fail "test-fw-a.testAllowA.internal did not appear in DNS within 90s"
 
     section "Deep 3: Verify test-fw-a webserver"
 
-    if curl -fsS --max-time 5 "http://test-fw-a.test_allow_a.internal:8080/" 2>/dev/null \
+    if curl -fsS --max-time 5 "http://test-fw-a.testAllowA.internal:8080/" 2>/dev/null \
             | grep -q "tappaas-firewall-test-a-ok"; then
         pass "test-fw-a webserver returns marker"
     else
@@ -909,14 +909,14 @@ else
         skip "no proxyDomain — Caddy verification skipped"
     fi
 
-    section "Deep 5: Install test-fw-b in test_allow_b"
+    section "Deep 5: Install test-fw-b in testAllowB"
 
     install_with_retry test-fw-b "${FIXTURES_DIR}" || true
 
     info "Waiting up to 90s for test-fw-b DNS registration..."
     for _ in {1..18}; do
-        if getent hosts test-fw-b.test_allow_b.internal >/dev/null 2>&1; then
-            pass "DNS registered test-fw-b.test_allow_b.internal"
+        if getent hosts test-fw-b.testAllowB.internal >/dev/null 2>&1; then
+            pass "DNS registered test-fw-b.testAllowB.internal"
             break
         fi
         sleep 5
@@ -999,15 +999,15 @@ else
 
     # Test VMs are typically reinstalled fresh; clear stale host keys so the
     # inter-VM ssh probes don't fail on REMOTE_HOST_IDENTIFICATION_CHANGED.
-    ssh-keygen -R test-fw-a.test_allow_a.internal >/dev/null 2>&1 || true
-    ssh-keygen -R test-fw-b.test_allow_b.internal >/dev/null 2>&1 || true
+    ssh-keygen -R test-fw-a.testAllowA.internal >/dev/null 2>&1 || true
+    ssh-keygen -R test-fw-b.testAllowB.internal >/dev/null 2>&1 || true
 
     section "Deep 8: Inter-VM connectivity (pinhole works)"
 
     # From test-fw-a, curl test-fw-b on its pinhole port — should succeed.
     if ssh -o BatchMode=yes -o StrictHostKeyChecking=accept-new \
-            tappaas@test-fw-a.test_allow_a.internal \
-            "curl -fsS --max-time 5 http://test-fw-b.test_allow_b.internal:9090/" 2>/dev/null \
+            tappaas@test-fw-a.testAllowA.internal \
+            "curl -fsS --max-time 5 http://test-fw-b.testAllowB.internal:9090/" 2>/dev/null \
             | grep -q "tappaas-firewall-test-b-ok"; then
         pass "test-fw-a → test-fw-b:9090 (pinhole permitted)"
     else
@@ -1016,11 +1016,11 @@ else
 
     section "Deep 9: Reverse direction respects policy"
 
-    # test-fw-b → test-fw-a on 8080 IS declared in test-fw-a's ingress (from test_allow_b),
+    # test-fw-b → test-fw-a on 8080 IS declared in test-fw-a's ingress (from testAllowB),
     # so this SHOULD succeed; confirms bidirectional rule compilation.
     if ssh -o BatchMode=yes -o StrictHostKeyChecking=accept-new \
-            tappaas@test-fw-b.test_allow_b.internal \
-            "curl -fsS --max-time 5 http://test-fw-a.test_allow_a.internal:8080/" 2>/dev/null \
+            tappaas@test-fw-b.testAllowB.internal \
+            "curl -fsS --max-time 5 http://test-fw-a.testAllowA.internal:8080/" 2>/dev/null \
             | grep -q "tappaas-firewall-test-a-ok"; then
         pass "test-fw-b → test-fw-a:8080 (declared pinhole permitted)"
     else
@@ -1029,21 +1029,21 @@ else
 
     section "Deep 9b: Auto-pinhole permits real traffic (issue #173, AC-2)"
 
-    # Curl from test-fw-a (consumer, in test_allow_a) → test-fw-c (provider, in test_pinhole)
-    # over the auto-pinhole rule on port 9091. zone-level access-to from test_allow_a
-    # to test_pinhole is deliberately absent (test_pinhole.access-to = ['internet']) — only
+    # Curl from test-fw-a (consumer, in testAllowA) → test-fw-c (provider, in testPinhole)
+    # over the auto-pinhole rule on port 9091. zone-level access-to from testAllowA
+    # to testPinhole is deliberately absent (testPinhole.access-to = ['internet']) — only
     # the auto-pinhole grants this path. A successful response with the
     # test-fw-c marker proves the auto-pinhole works end-to-end.
     #
     # FQDN-alias asynchrony: rules-manager creates the OPNsense alias
-    # tappaas_module_test_fw_c pointing at test-fw-c.test_pinhole.internal, but the
+    # tappaas_module_test_fw_c pointing at test-fw-c.testPinhole.internal, but the
     # pfctl alias TABLE behind it is populated by OPNsense's update_tables.py
     # cron (typically every 60s). Until the table holds an IP, the rule's
     # destination matches nothing and the packet falls through to deny. We
     # poke filter+alias reload on the firewall to coerce immediate population,
     # then retry the curl with backoff so a cold cron schedule doesn't make
     # this test flaky.
-    ssh-keygen -R test-fw-c.test_pinhole.internal >/dev/null 2>&1 || true
+    ssh-keygen -R test-fw-c.testPinhole.internal >/dev/null 2>&1 || true
 
     ssh -o BatchMode=yes -o StrictHostKeyChecking=accept-new \
         root@"${FIREWALL_FQDN}" \
@@ -1055,8 +1055,8 @@ else
     autopinhole_curl_ok=0
     for attempt in 1 2 3 4 5 6; do
         if ssh -o BatchMode=yes -o StrictHostKeyChecking=accept-new \
-                tappaas@test-fw-a.test_allow_a.internal \
-                "curl -fsS --max-time 5 http://test-fw-c.test_pinhole.internal:9091/" 2>/dev/null \
+                tappaas@test-fw-a.testAllowA.internal \
+                "curl -fsS --max-time 5 http://test-fw-c.testPinhole.internal:9091/" 2>/dev/null \
                 | grep -q "tappaas-firewall-test-c-ok"; then
             autopinhole_curl_ok=1
             break
@@ -1084,8 +1084,8 @@ else
             "timeout 3 tcpdump -i pflog0 -nvec 2 'tcp port 9091' 2>/dev/null &
              sleep 1
              ssh -o BatchMode=yes -o StrictHostKeyChecking=accept-new \
-                 tappaas@test-fw-a.test_allow_a.internal \
-                 'curl --max-time 2 http://test-fw-c.test_pinhole.internal:9091/ >/dev/null 2>&1'
+                 tappaas@test-fw-a.testAllowA.internal \
+                 'curl --max-time 2 http://test-fw-c.testPinhole.internal:9091/ >/dev/null 2>&1'
              wait" 2>/dev/null || true)
 
         if echo "${pflog_verdict}" | grep -qE 'block.*in on vlan0\.810'; then
@@ -1107,11 +1107,11 @@ else
 
     # Negative check: a port that is NOT in pinhole.json should be blocked.
     # We use 22/SSH on test-fw-c — sshd is enabled but no pinhole or zone rule
-    # allows test_allow_a → test_pinhole:22, so the connection must be filtered.
+    # allows testAllowA → testPinhole:22, so the connection must be filtered.
     if ssh -o BatchMode=yes -o StrictHostKeyChecking=accept-new \
             -o ConnectTimeout=3 \
-            tappaas@test-fw-a.test_allow_a.internal \
-            "timeout 5 bash -c 'echo > /dev/tcp/test-fw-c.test_pinhole.internal/22' 2>&1; echo rc=\$?" \
+            tappaas@test-fw-a.testAllowA.internal \
+            "timeout 5 bash -c 'echo > /dev/tcp/test-fw-c.testPinhole.internal/22' 2>&1; echo rc=\$?" \
             2>/dev/null | grep -qE 'rc=(1|124|2)'; then
         pass "test-fw-a → test-fw-c:22 BLOCKED (no auto-pinhole, no zone access)"
     else

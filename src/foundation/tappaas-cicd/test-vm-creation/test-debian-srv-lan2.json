@@ -4,7 +4,7 @@
   "vmid": 909,
   "vmtag": "TAPPaaS,Test",
   "vmname": "test-debian-srv-lan2",
-  "zone0": "srv_home",
+  "zone0": "srvHome",
   "dependsOn": [
     "cluster:vm",
     "templates:debian"

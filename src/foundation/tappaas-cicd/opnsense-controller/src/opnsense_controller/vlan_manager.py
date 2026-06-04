@@ -269,7 +269,7 @@ class VlanManager:
         runtime state drifted) come back in sync.
 
         Observed in #237 verification: after a `configctl configd restart`
-        the srv_home VLAN 210 was still in /conf/config.xml (opt20 →
+        the srvHome VLAN 210 was still in /conf/config.xml (opt20 →
         vlan0.210 → 10.2.10.1/24) but the FreeBSD interface had no IP. A
         manual `configctl interface reconfigure` brought it back. This
         endpoint achieves the same via the API.

@@ -105,7 +105,7 @@ fi
 # --- Apply OPNsense os-caddy ToDomain underscore patch (issue #237 follow-up) ---
 # Caddy's HostnameField rejects underscored hostnames by default; the patch
 # adds <IsDNSName>Y</IsDNSName> so internal DNS labels like
-# litellm.srv_home.internal can be used as reverse-proxy upstreams.
+# litellm.srvHome.internal can be used as reverse-proxy upstreams.
 # Applied BEFORE the zone-key migration so the migration's Stage 5
 # (firewall:proxy update-service per affected module) can write the
 # underscored upstream without OPNsense validation failures.
@@ -122,7 +122,7 @@ fi
 # --- One-shot rename: zone keys hyphen → underscore (issue #237) ---
 # Marker-gated; runs exactly once per cluster, then becomes a no-op. Must run
 # BEFORE apply-zones-merge.sh — otherwise the merge would see srv-home (current)
-# vs srv_home (source) as a possible-rename and flag both for review instead of
+# vs srvHome (source) as a possible-rename and flag both for review instead of
 # resolving them automatically.
 if [ -f /home/tappaas/bin/migrate-zone-keys-to-underscore.sh ] \
    && [ -f /home/tappaas/config/zones.json ]; then

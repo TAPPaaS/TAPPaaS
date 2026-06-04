@@ -298,7 +298,7 @@ echo ""
 
 # Apply the os-caddy ToDomain underscore patch (#237). os-caddy's HostnameField
 # default rejects underscored hostnames; the patch adds <IsDNSName>Y</IsDNSName>
-# so internal DNS labels like litellm.srv_home.internal work as reverse-proxy
+# so internal DNS labels like litellm.srvHome.internal work as reverse-proxy
 # upstreams. Idempotent; safe to re-run. Must happen NOW (after os-caddy is
 # installed) — pre-update.sh also tries to apply it on every update-tappaas,
 # but on a FRESH install pre-update.sh runs BEFORE os-caddy exists (Caddy.xml

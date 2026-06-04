@@ -21,3 +21,5 @@ result
 
 # gridtefy DW agents (private IP — never upstream)
 .claude/agents/agent-tappaas-devops-dw.md
+.claude/agents/agent-tappaas-po-dw.md
+.claude/skills/tappaas-commission-creator

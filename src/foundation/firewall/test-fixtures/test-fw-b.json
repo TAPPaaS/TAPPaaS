@@ -1,5 +1,5 @@
 {
-  "description": "Firewall test VM B — client in test_allow_b zone (used by firewall/test.sh --deep). Exercises both module-name peers AND module-local alias references.",
+  "description": "Firewall test VM B — client in testAllowB zone (used by firewall/test.sh --deep). Exercises both module-name peers AND module-local alias references.",
   "version": "0.1",
   "vmname": "test-fw-b",
   "vmid": 922,
@@ -12,7 +12,7 @@
   "imageType": "clone",
   "image": "8080",
   "bridge0": "lan",
-  "zone0": "test_allow_b",
+  "zone0": "testAllowB",
   "ports": [
     { "port": 9090, "protocol": "TCP", "description": "Test webserver" }
   ],
@@ -45,7 +45,7 @@
     "test_admin_ips": {
       "type": "host",
       "addresses": ["10.80.10.50"],
-      "description": "Pretend admin IPs from test_allow_a — module-local alias used in ingress to validate alias compilation"
+      "description": "Pretend admin IPs from testAllowA — module-local alias used in ingress to validate alias compilation"
     }
   },
   "dependsOn": [

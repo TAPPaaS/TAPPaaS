@@ -340,7 +340,7 @@ validate_provided_services() {
 # Validate that the module's zone0 is Active in zones.json.
 # Early-exit guard: called before any provisioning action in install-module.sh.
 # Arguments:
-#   $1  zone name (e.g. srv_work)
+#   $1  zone name (e.g. srvWork)
 # Returns 1 if zone is missing or not Active; 0 if Active or zones.json absent.
 validate_zone_active() {
     local zone="$1"

@@ -1,5 +1,5 @@
 {
-  "description": "Firewall test VM A — webserver in test_allow_a zone (used by firewall/test.sh --deep)",
+  "description": "Firewall test VM A — webserver in testAllowA zone (used by firewall/test.sh --deep)",
   "version": "0.1",
   "vmname": "test-fw-a",
   "vmid": 921,
@@ -12,15 +12,15 @@
   "imageType": "clone",
   "image": "8080",
   "bridge0": "lan",
-  "zone0": "test_allow_a",
+  "zone0": "testAllowA",
   "ports": [
     { "port": 8080, "protocol": "TCP", "description": "Test webserver" }
   ],
   "ingress": [
     {
-      "from": "test_allow_b",
+      "from": "testAllowB",
       "ports": [8080],
-      "description": "test-fw-b in test_allow_b reaches the webserver (cross-zone pinhole)"
+      "description": "test-fw-b in testAllowB reaches the webserver (cross-zone pinhole)"
     },
     {
       "from": "dmz",

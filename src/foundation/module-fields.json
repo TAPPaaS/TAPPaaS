@@ -547,9 +547,9 @@
         "cluster:lxc"
       ],
       "default": "mgmt",
-      "format": "^[a-z][a-z0-9_]*$",
-      "example": "srv_home",
-      "note": "Zone determines VLAN tag. 'mgmt' is untagged traffic. Hyphens are NOT allowed in zone names — use underscores (#237 SSOT alignment with OPNsense/UniFi interface labels)."
+      "format": "^[a-z][a-zA-Z0-9]*$",
+      "example": "srvHome",
+      "note": "Zone determines VLAN tag. 'mgmt' is untagged traffic. camelCase only — no underscores or hyphens (#278)."
     },
     "trunks0": {
       "description": "Semicolon-separated list of additional zone names to trunk on net0. Zone names are resolved to VLAN tags. Used when a VM needs to see traffic from multiple VLANs on a single NIC (e.g., the firewall).",
@@ -560,9 +560,9 @@
         "cluster:lxc"
       ],
       "default": "NONE",
-      "format": "^([a-z][a-z0-9_]*(;[a-z][a-z0-9_]*)*|ALL|\\*|NONE)$",
+      "format": "^([a-z][a-zA-Z0-9]*(;[a-z][a-zA-Z0-9]*)*|ALL|\\*|NONE)$",
       "example": "srv;iot;dmz",
-      "note": "Zone names must exist in zones.json and contain only [a-z0-9_]. Semicolon-delimited, no spaces. Sentinels: ALL/* expand to every Active zone; NONE = empty."
+      "note": "Zone names must exist in zones.json, camelCase only [a-zA-Z0-9]. Semicolon-delimited, no spaces. Sentinels: ALL/* expand to every Active zone; NONE = empty."
     },
     "bridge1": {
       "description": "Proxmox bridge for the VM's second network interface (net1). If not present, only one NIC is configured.",
@@ -596,7 +596,7 @@
         "cluster:lxc"
       ],
       "default": "mgmt",
-      "format": "^[a-z][a-z0-9_]*$",
+      "format": "^[a-z][a-zA-Z0-9]*$",
       "note": "Only used if bridge1 is defined. Hyphens are NOT allowed — use underscores (#237)."
     },
     "trunks1": {
@@ -608,9 +608,9 @@
         "cluster:lxc"
       ],
       "default": "NONE",
-      "format": "^([a-z][a-z0-9_]*(;[a-z][a-z0-9_]*)*|ALL|\\*|NONE)$",
+      "format": "^([a-z][a-zA-Z0-9]*(;[a-z][a-zA-Z0-9]*)*|ALL|\\*|NONE)$",
       "example": "srv;iot;dmz",
-      "note": "Only used if bridge1 is defined. Zone names must exist in zones.json and contain only [a-z0-9_]."
+      "note": "Only used if bridge1 is defined. Zone names must exist in zones.json, camelCase only [a-zA-Z0-9]."
     },
     "firewallType": {
       "description": "Type of firewall in use. Set to 'NONE' when the TAPPaaS OPNsense firewall is not deployed (e.g. using pfSense, UniFi, Cisco, or no firewall).",
@@ -719,8 +719,8 @@
         "mgmt",
         "home",
         "work",
-        "srv_home",
-        "srv_work"
+        "srvHome",
+        "srvWork"
       ],
       "note": "Zero-trust by default: when omitted, a service is reachable only from the internal trusted zones, never the internet. Add 'internet' to publish it publicly (no restriction). Zone names are resolved to subnets via zones.json. Changing this re-applies on the next install/update of the module."
     },
@@ -735,7 +735,7 @@
       "default": [],
       "example": [
         "home",
-        "srv_home"
+        "srvHome"
       ],
       "note": "Requires firewall:discovery in dependsOn. Idempotently unions zone0 + declared consumer zones into the repeater interface list. Boolean true is deprecated."
     },
@@ -768,7 +768,7 @@
           "port": 36549,
           "zones": [
             "home",
-            "iot_cloud"
+            "iotCloud"
           ]
         }
       ],
@@ -834,7 +834,7 @@
             "description": "Traffic source. One of: zone name (in zones.json), another module name (resolved to an OPNsense host alias for the module's FQDN), the literal 'internet', or 'alias:<name>' to reference a module-local or global alias.",
             "type": "string",
             "required": true,
-            "example": "srv_work"
+            "example": "srvWork"
           },
           "ports": {
             "description": "Destination ports allowed for this source. Each value must also appear in module.ports[].",
@@ -865,7 +865,7 @@
       },
       "example": [
         {
-          "from": "srv_work",
+          "from": "srvWork",
           "ports": [
             4000
           ],

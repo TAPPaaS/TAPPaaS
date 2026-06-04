@@ -10,7 +10,7 @@
 # default, which forbids underscores in hostnames per RFC 952/1123. The os-
 # caddy plugin uses HostnameField for the ToDomain (upstream) and AuthToDomain
 # (forward-auth) fields, so it rejects internal DNS names like
-# litellm.srv_home.internal. Setting <IsDNSName>Y</IsDNSName> on the field
+# litellm.srvHome.internal. Setting <IsDNSName>Y</IsDNSName> on the field
 # flips the validator to RFC 2181 mode, which accepts underscores in DNS
 # labels — fine for internal-only DNS.
 #
@@ -74,7 +74,7 @@ fi
 # to restart configd here. Restarting configd is disruptive: it briefly
 # unbinds VLAN interfaces and can leave the runtime in a state where the
 # kernel-level IP assignment for opt-style interfaces falls out of sync with
-# /conf/config.xml (observed in #237 verification — srv_home VLAN 210 lost
+# /conf/config.xml (observed in #237 verification — srvHome VLAN 210 lost
 # its IP after configd restart and only `ifconfig vlan0.210 inet 10.2.10.1/24`
 # brought it back).
 #

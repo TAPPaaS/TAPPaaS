@@ -3,7 +3,7 @@
 # TAPPaaS Discovery Service - Install
 #
 # Configures cross-VLAN discovery on OPNsense for a consuming module:
-#   - discoveryMdns: true  → adds zone0 + home + srv_home to os-mdns-repeater
+#   - discoveryMdns: true  → adds zone0 + home + srvHome to os-mdns-repeater
 #   - discoveryUdpRelay[]  → adds per-port relay instances to os-udpbroadcastrelay
 #
 # Both operations are idempotent: mDNS uses GET→union→SET, UDP relay checks
@@ -38,13 +38,13 @@ info "firewall:discovery install-service for module: ${BL}${MODULE}${CL}"
 ZONE0=$(get_config_value 'zone0' '')
 UDP_RELAY_COUNT=$(read_module_config "${MODULE}" | jq -r '(.discoveryUdpRelay // []) | length')
 
-# discoveryMdns accepts an array of consumer zone names (e.g. ["home","srv_home"]).
+# discoveryMdns accepts an array of consumer zone names (e.g. ["home","srvHome"]).
 # Legacy boolean true is still accepted but deprecated — emit a warning and treat as
 # empty consumer list (zone0 is still added; run update-service to migrate).
 MDNS_RAW=$(read_module_config "${MODULE}" | jq -r '.discoveryMdns // "false"')
 MDNS_ZONES_COUNT=0
 if [[ "${MDNS_RAW}" == "true" ]]; then
-    warn "  discoveryMdns: true is deprecated. Use an array of consumer zones, e.g. [\"home\",\"srv_home\"]."
+    warn "  discoveryMdns: true is deprecated. Use an array of consumer zones, e.g. [\"home\",\"srvHome\"]."
     MDNS_ZONES_COUNT=0
 elif [[ "${MDNS_RAW}" != "false" ]]; then
     MDNS_ZONES_COUNT=$(read_module_config "${MODULE}" | jq -r '.discoveryMdns | length')
@@ -65,7 +65,7 @@ FIREWALL_TYPE="opnsense"
 if [[ "${FIREWALL_TYPE}" == "NONE" ]]; then
     warn "firewallType=NONE — manual configuration required:"
     if [[ "${HAS_MDNS}" == "true" ]]; then
-        warn "  Install os-mdns-repeater; add interfaces for zones: ${ZONE0}, home, srv_home"
+        warn "  Install os-mdns-repeater; add interfaces for zones: ${ZONE0}, home, srvHome"
     fi
     if (( UDP_RELAY_COUNT > 0 )); then
         read_module_config "${MODULE}" | jq -r '.discoveryUdpRelay[]? |
@@ -88,7 +88,7 @@ API="https://${FW_HOST}:8443/api"
 CURL=(-sk -u "${KEY}:${SECRET}")
 
 # ── Fetch mDNS interface map ─────────────────────────────────────────
-# Used for zone-name → OPNsense interface-id resolution (e.g. iot_cloud → opt21).
+# Used for zone-name → OPNsense interface-id resolution (e.g. iotCloud → opt21).
 # mDNS GET returns all available interfaces; we parse the value strings.
 # If the endpoint returns an error, os-mdns-repeater is not installed.
 

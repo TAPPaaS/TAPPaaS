@@ -45,10 +45,10 @@ ZONES_FIXTURE = {
     "mgmt": {"type": "mgmt", "state": "Manual", "typeId": "0", "subId": "0",
               "vlantag": 0, "ip": "10.0.0.0/24", "bridge": "lan",
               "access-to": [], "pinhole-allowed-from": []},
-    "srv_work": {"type": "service", "state": "Active", "typeId": "2", "subId": "10",
+    "srvWork": {"type": "service", "state": "Active", "typeId": "2", "subId": "10",
                   "vlantag": 210, "ip": "10.2.10.0/24", "bridge": "lan",
                   "access-to": ["internet"],
-                  "pinhole-allowed-from": ["srv_work", "dmz", "home"]},
+                  "pinhole-allowed-from": ["srvWork", "dmz", "home"]},
     "dmz": {"type": "dmz", "state": "Mandatory", "typeId": "6", "subId": "0",
              "vlantag": 610, "ip": "10.6.0.0/24", "bridge": "lan",
              "access-to": ["internet"], "pinhole-allowed-from": ["internet"]},
@@ -59,13 +59,13 @@ ZONES_FIXTURE = {
 
 LITELLM_FIXTURE = {
     "vmname": "litellm",
-    "zone0": "srv_work",
+    "zone0": "srvWork",
     "bridge0": "lan",
     "ports": [
         {"port": 4000, "protocol": "TCP", "description": "API"},
     ],
     "ingress": [
-        {"from": "srv_work", "ports": [4000], "description": "Intra-zone"},
+        {"from": "srvWork", "ports": [4000], "description": "Intra-zone"},
         {"from": "dmz", "ports": [4000], "description": "Reverse proxy"},
     ],
     "egress": [
@@ -83,7 +83,7 @@ LITELLM_FIXTURE = {
 
 VLLM_FIXTURE = {
     "vmname": "vllm",
-    "zone0": "srv_work",
+    "zone0": "srvWork",
     "bridge0": "lan",
     "ports": [{"port": 11434, "protocol": "TCP"}],
 }
@@ -104,8 +104,8 @@ class TestHelpers(unittest.TestCase):
 
     def test_canonical_description_tcp_omits_protocol(self):
         self.assertEqual(
-            _canonical_description("litellm", "ingress", "srv_work", 4000, "TCP"),
-            "tappaas-module:litellm:ingress:srv_work:4000",
+            _canonical_description("litellm", "ingress", "srvWork", 4000, "TCP"),
+            "tappaas-module:litellm:ingress:srvWork:4000",
         )
 
     def test_canonical_description_non_tcp_includes_protocol(self):
@@ -159,15 +159,15 @@ class TestLoaders(unittest.TestCase):
 
     def test_load_zones(self):
         zones = load_zones(self.dir / "zones.json")
-        self.assertIn("srv_work", zones)
-        self.assertEqual(zones["srv_work"].ip_network, "10.2.10.0/24")
-        self.assertEqual(zones["srv_work"].vlan_tag, 210)
-        self.assertIn("dmz", zones["srv_work"].pinhole_allowed_from)
+        self.assertIn("srvWork", zones)
+        self.assertEqual(zones["srvWork"].ip_network, "10.2.10.0/24")
+        self.assertEqual(zones["srvWork"].vlan_tag, 210)
+        self.assertIn("dmz", zones["srvWork"].pinhole_allowed_from)
 
     def test_load_module(self):
         mod = load_module(self.dir, "litellm")
         self.assertEqual(mod.vmname, "litellm")
-        self.assertEqual(mod.zone0, "srv_work")
+        self.assertEqual(mod.zone0, "srvWork")
         self.assertEqual(len(mod.ingress), 2)
         self.assertIn("llm_providers", mod.aliases)
 
@@ -211,7 +211,7 @@ def _make_manager(zones=None, modules_dir=None, global_aliases=None, firewall_ty
 class TestValidation(unittest.TestCase):
     def _module(self, **overrides) -> ModuleSpec:
         base = dict(
-            vmname="litellm", zone0="srv_work", bridge0="lan",
+            vmname="litellm", zone0="srvWork", bridge0="lan",
             ports=[{"port": 4000, "protocol": "TCP"}],
             ingress=[], egress=[], aliases={}, firewall_type="opnsense",
         )
@@ -220,13 +220,13 @@ class TestValidation(unittest.TestCase):
 
     def test_valid_module_has_no_errors(self):
         mgr = _make_manager()
-        mod = self._module(ingress=[{"from": "srv_work", "ports": [4000], "description": "ok"}])
+        mod = self._module(ingress=[{"from": "srvWork", "ports": [4000], "description": "ok"}])
         self.assertEqual(mgr._validate(mod), [])
 
     def test_policy_violation_rejected(self):
-        # iot_cams not in srv_work.pinhole-allowed-from
+        # iotCams not in srvWork.pinhole-allowed-from
         zones = ZONES_FIXTURE.copy()
-        zones["iot_cams"] = {
+        zones["iotCams"] = {
             **ZONES_FIXTURE["home"], "ip": "10.4.30.0/24",
             "access-to": [], "pinhole-allowed-from": []
         }
@@ -238,20 +238,20 @@ class TestValidation(unittest.TestCase):
                           pinhole_allowed_from=z.get("pinhole-allowed-from", []))
             for n, z in zones.items()
         })
-        mod = self._module(ingress=[{"from": "iot_cams", "ports": [4000], "description": "x"}])
+        mod = self._module(ingress=[{"from": "iotCams", "ports": [4000], "description": "x"}])
         errors = mgr._validate(mod)
         self.assertTrue(any("violates policy" in e.message for e in errors), errors)
 
     def test_port_consistency_required(self):
         mgr = _make_manager()
         # Ingress declares port 5000 not in module.ports[]
-        mod = self._module(ingress=[{"from": "srv_work", "ports": [5000], "description": "x"}])
+        mod = self._module(ingress=[{"from": "srvWork", "ports": [5000], "description": "x"}])
         errors = mgr._validate(mod)
         self.assertTrue(any("not declared in module.ports" in e.message for e in errors), errors)
 
     def test_missing_description_rejected(self):
         mgr = _make_manager()
-        mod = self._module(ingress=[{"from": "srv_work", "ports": [4000]}])
+        mod = self._module(ingress=[{"from": "srvWork", "ports": [4000]}])
         errors = mgr._validate(mod)
         self.assertTrue(any("missing 'description'" in e.message for e in errors), errors)
 
@@ -304,7 +304,7 @@ class TestCompile(unittest.TestCase):
         rules, errors = self.mgr._compile(mod)
         self.assertEqual(errors, [])
         descs = {r.description for r in rules}
-        self.assertIn("tappaas-module:litellm:ingress:srv_work:4000", descs)
+        self.assertIn("tappaas-module:litellm:ingress:srvWork:4000", descs)
         self.assertIn("tappaas-module:litellm:ingress:dmz:4000", descs)
         self.assertIn("tappaas-module:litellm:egress:alias:llm_providers:443", descs)
         self.assertIn("tappaas-module:litellm:egress:vllm:11434", descs)
@@ -336,7 +336,7 @@ class TestCompile(unittest.TestCase):
     def test_zone_peer_resolved_to_cidr(self):
         mod = load_module(self.dir, "litellm")
         rules, _ = self.mgr._compile(mod)
-        ingress_srv = next(r for r in rules if r.peer == "srv_work")
+        ingress_srv = next(r for r in rules if r.peer == "srvWork")
         self.assertEqual(ingress_srv.source_net, "10.2.10.0/24")
 
     def test_peer_module_fqdn_alias_generated(self):
@@ -345,11 +345,11 @@ class TestCompile(unittest.TestCase):
         # Self alias — host type, FQDN content
         self_alias = aliases["tappaas_module_litellm"]
         self.assertEqual(self_alias.alias_type, "host")
-        self.assertEqual(self_alias.content, ["litellm.srv_work.internal"])
+        self.assertEqual(self_alias.content, ["litellm.srvWork.internal"])
         # Peer (egress to vllm)
         peer_alias = aliases["tappaas_module_vllm"]
         self.assertEqual(peer_alias.alias_type, "host")
-        self.assertEqual(peer_alias.content, ["vllm.srv_work.internal"])
+        self.assertEqual(peer_alias.content, ["vllm.srvWork.internal"])
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -360,7 +360,7 @@ class TestCompile(unittest.TestCase):
 class TestAliasType(unittest.TestCase):
     def _module(self, **overrides) -> ModuleSpec:
         base = dict(
-            vmname="sonos-fleet", zone0="srv_work", bridge0="lan",
+            vmname="sonos-fleet", zone0="srvWork", bridge0="lan",
             ports=[], ingress=[], egress=[], aliases={}, firewall_type="opnsense",
         )
         base.update(overrides)
@@ -376,7 +376,7 @@ class TestAliasType(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             d = Path(tmp)
             (d / "sonos.json").write_text(json.dumps(
-                {"vmname": "sonos", "zone0": "srv_work", "aliasType": "network"}
+                {"vmname": "sonos", "zone0": "srvWork", "aliasType": "network"}
             ))
             self.assertEqual(load_module(d, "sonos").alias_type, "network")
 
@@ -392,13 +392,13 @@ class TestAliasType(unittest.TestCase):
         mgr = _make_manager()
         target = mgr._module_aliases_to_provision(self._module())["tappaas_module_sonos_fleet"]
         self.assertEqual(target.alias_type, "host")
-        self.assertEqual(target.content, ["sonos-fleet.srv_work.internal"])
+        self.assertEqual(target.content, ["sonos-fleet.srvWork.internal"])
 
     def test_peer_alias_honors_peer_network_type(self):
         with tempfile.TemporaryDirectory() as tmp:
             d = Path(tmp)
             (d / "sonos-fleet.json").write_text(json.dumps(
-                {"vmname": "sonos-fleet", "zone0": "srv_work", "aliasType": "network"}
+                {"vmname": "sonos-fleet", "zone0": "srvWork", "aliasType": "network"}
             ))
             mgr = _make_manager(modules_dir=d)
             consumer = self._module(
@@ -550,7 +550,7 @@ class TestAutoPinholes(unittest.TestCase):
     """
 
     def _make_zones(self, **overrides):
-        """Default zone topology: srv_work, dmz, home — see ZONES_FIXTURE.
+        """Default zone topology: srvWork, dmz, home — see ZONES_FIXTURE.
 
         Overrides let individual tests tweak access-to / pinhole-allowed-from
         without redefining the whole map.
@@ -624,11 +624,11 @@ class TestAutoPinholes(unittest.TestCase):
     # ── happy path ───────────────────────────────────────────────────────
 
     def test_cross_zone_dependency_emits_auto_pinhole(self):
-        # dmz -> srv_work: dmz IS in srv_work.pinhole-allowed-from
-        # dmz is NOT in srv_work.access-to → policy permits, no zone shortcut
+        # dmz -> srvWork: dmz IS in srvWork.pinhole-allowed-from
+        # dmz is NOT in srvWork.access-to → policy permits, no zone shortcut
         # → auto-pinhole expected.
         self._write_provider(
-            self.dir, vmname="api", zone0="srv_work",
+            self.dir, vmname="api", zone0="srvWork",
             pinhole_ports=[{"port": 4000, "protocol": "TCP", "description": "API"}],
             service="rest",
         )
@@ -655,7 +655,7 @@ class TestAutoPinholes(unittest.TestCase):
 
     def test_multiple_ports_emit_multiple_rules(self):
         self._write_provider(
-            self.dir, vmname="api", zone0="srv_work",
+            self.dir, vmname="api", zone0="srvWork",
             pinhole_ports=[
                 {"port": 80,  "protocol": "TCP", "description": "HTTP"},
                 {"port": 443, "protocol": "TCP", "description": "HTTPS"},
@@ -674,7 +674,7 @@ class TestAutoPinholes(unittest.TestCase):
 
     def test_non_tcp_protocol_appears_in_description(self):
         self._write_provider(
-            self.dir, vmname="dns", zone0="srv_work",
+            self.dir, vmname="dns", zone0="srvWork",
             pinhole_ports=[{"port": 53, "protocol": "UDP"}], service="resolver",
         )
         self._write_consumer(
@@ -690,11 +690,11 @@ class TestAutoPinholes(unittest.TestCase):
 
     def test_intra_zone_dependency_emits_no_pinhole(self):
         self._write_provider(
-            self.dir, vmname="api", zone0="srv_work",
+            self.dir, vmname="api", zone0="srvWork",
             pinhole_ports=[{"port": 4000}], service="rest",
         )
         self._write_consumer(
-            self.dir, vmname="ui", zone0="srv_work",  # same zone!
+            self.dir, vmname="ui", zone0="srvWork",  # same zone!
             depends_on=["api:rest"],
         )
         mgr = _make_manager(zones=self._make_zones(), modules_dir=self.dir)
@@ -702,11 +702,11 @@ class TestAutoPinholes(unittest.TestCase):
         self.assertFalse(any(r.description.startswith("tappaas-svcdep:") for r in rules))
 
     def test_access_to_covers_traffic_so_no_pinhole_needed(self):
-        # Make dmz appear in srv_work.access-to → zone-level rule already
+        # Make dmz appear in srvWork.access-to → zone-level rule already
         # permits the traffic; the per-module pinhole is redundant.
-        zones = self._make_zones(**{"srv_work": {"access_to": ["internet", "dmz"]}})
+        zones = self._make_zones(**{"srvWork": {"access_to": ["internet", "dmz"]}})
         self._write_provider(
-            self.dir, vmname="api", zone0="srv_work",
+            self.dir, vmname="api", zone0="srvWork",
             pinhole_ports=[{"port": 4000}], service="rest",
         )
         self._write_consumer(
@@ -717,15 +717,15 @@ class TestAutoPinholes(unittest.TestCase):
         rules, _ = mgr._compile(load_module(self.dir, "ui"))
         self.assertFalse(any(r.description.startswith("tappaas-svcdep:") for r in rules))
 
-    def test_pinhole_allowed_from_violation_warns_and_skips(self):
-        # Override srv_work.pinhole-allowed-from to NOT include 'home',
-        # so the consumer (home) can't pinhole into srv_work.
+    def testPinhole_allowed_from_violation_warns_and_skips(self):
+        # Override srvWork.pinhole-allowed-from to NOT include 'home',
+        # so the consumer (home) can't pinhole into srvWork.
         # Per #173 design: skip with a warning, do not hard-error.
         zones = self._make_zones(**{
-            "srv_work": {"pinhole_allowed_from": ["srv_work", "dmz"]},
+            "srvWork": {"pinhole_allowed_from": ["srvWork", "dmz"]},
         })
         self._write_provider(
-            self.dir, vmname="api", zone0="srv_work",
+            self.dir, vmname="api", zone0="srvWork",
             pinhole_ports=[{"port": 4000}], service="rest",
         )
         self._write_consumer(
@@ -741,7 +741,7 @@ class TestAutoPinholes(unittest.TestCase):
     def test_service_without_pinhole_json_is_a_noop(self):
         # Provider has no pinhole.json for the 'metrics' service → no rule.
         self._write_provider(
-            self.dir, vmname="api", zone0="srv_work",
+            self.dir, vmname="api", zone0="srvWork",
             pinhole_ports=None, service="metrics",  # no pinhole.json written
         )
         self._write_consumer(
@@ -758,7 +758,7 @@ class TestAutoPinholes(unittest.TestCase):
         # The provider must show up in _module_aliases_to_provision so that
         # OPNsense gets its FQDN alias before any rule references it.
         self._write_provider(
-            self.dir, vmname="api", zone0="srv_work",
+            self.dir, vmname="api", zone0="srvWork",
             pinhole_ports=[{"port": 4000}], service="rest",
         )
         self._write_consumer(
@@ -768,7 +768,7 @@ class TestAutoPinholes(unittest.TestCase):
         mgr = _make_manager(zones=self._make_zones(), modules_dir=self.dir)
         consumer = load_module(self.dir, "ui")
         aliases = mgr._module_aliases_to_provision(consumer)
-        self.assertEqual(aliases["tappaas_module_api"].content, ["api.srv_work.internal"])
+        self.assertEqual(aliases["tappaas_module_api"].content, ["api.srvWork.internal"])
         # And self alias is still emitted
         self.assertEqual(aliases["tappaas_module_ui"].content, ["ui.dmz.internal"])
 
@@ -811,7 +811,7 @@ class TestPeerResolution(unittest.TestCase):
     def setUp(self):
         self.mgr = _make_manager()
         self.module = ModuleSpec(
-            vmname="litellm", zone0="srv_work", bridge0="lan",
+            vmname="litellm", zone0="srvWork", bridge0="lan",
             ports=[], ingress=[], egress=[], aliases={}, firewall_type="opnsense",
         )
 

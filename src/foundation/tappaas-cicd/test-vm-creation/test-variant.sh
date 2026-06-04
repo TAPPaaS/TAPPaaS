@@ -107,7 +107,7 @@ cat > "${MODULE_DIR}/testmod.json" << 'EOF'
   "imageType": "clone",
   "image": "8080",
   "bridge0": "lan",
-  "zone0": "srv_home",
+  "zone0": "srvHome",
   "proxyDomain": "testmod.test.tapaas.org",
   "proxyPort": 8080,
   "dependsOn": [],
@@ -161,7 +161,7 @@ if [[ -f "${RESULT}" ]]; then
 
     # zone0 should be unchanged (no "staging" zone in zones.json)
     actual_zone=$(get_field zone0 "${RESULT}")
-    assert_eq "zone0 = srv_home (unchanged, no staging zone)" "srv_home" "${actual_zone}"
+    assert_eq "zone0 = srvHome (unchanged, no staging zone)" "srvHome" "${actual_zone}"
 
     # Other fields should be preserved
     actual_cores=$(get_field cores "${RESULT}")
@@ -313,7 +313,7 @@ cat > "${MODULE_DIR}/patmod.json" << 'EOF'
   "config": {
     "cluster:vm": {
       "cores": 2, "memory": "2048", "diskSize": "8G", "storage": "tanka1",
-      "imageType": "clone", "image": "8080", "bridge0": "lan", "zone0": "srv_home"
+      "imageType": "clone", "image": "8080", "bridge0": "lan", "zone0": "srvHome"
     },
     "firewall:proxy": {
       "proxyDomain": "patmod.default.example",
@@ -390,7 +390,7 @@ cat > "${MODULE_DIR}/patmod-noproxy.json" << 'EOF'
   "config": {
     "cluster:vm": {
       "cores": 2, "memory": "2048", "diskSize": "8G", "storage": "tanka1",
-      "imageType": "clone", "image": "8080", "bridge0": "lan", "zone0": "srv_home"
+      "imageType": "clone", "image": "8080", "bridge0": "lan", "zone0": "srvHome"
     }
   }
 }
@@ -471,7 +471,7 @@ cat > "${MODULE_DIR}/patmod-lxc-first.json" << 'EOF'
   "config": {
     "cluster:lxc": {
       "memory": "2048", "diskSize": "8G", "storage": "tanka1",
-      "imageType": "clone", "image": "8080", "bridge0": "lan", "zone0": "srv_home"
+      "imageType": "clone", "image": "8080", "bridge0": "lan", "zone0": "srvHome"
     }
   }
 }

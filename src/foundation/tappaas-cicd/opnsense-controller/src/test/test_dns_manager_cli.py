@@ -27,7 +27,7 @@ class TestCheckDnsRange(unittest.TestCase):
     def test_ip_inside_pool_returns_false(self):
         manager = MagicMock()
         manager.ip_in_any_range.return_value = {
-            "description": "srv_work",
+            "description": "srvWork",
             "start_addr": "10.2.20.100",
             "end_addr": "10.2.20.200",
         }
