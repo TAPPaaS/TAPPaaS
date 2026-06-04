@@ -44,12 +44,33 @@ Add `managed` and `catalog` to each repository entry:
 
 ```json
 {
-  "name": "TAPPaaS",
-  "url": "github.com/TAPPaaS/TAPPaaS",
-  "branch": "main",
-  "path": "/home/tappaas/TAPPaaS",
-  "managed": "full",
-  "catalog": "src/module-catalog.json"
+  "tappaas": {
+    "repositories": [
+      {
+        "name": "TAPPaaS",
+        "url": "github.com/TAPPaaS/TAPPaaS",
+        "branch": "main",
+        "path": "/home/tappaas/TAPPaaS",
+        "managed": "full",
+        "catalog": "src/module-catalog.json"
+      },
+      {
+        "name": "Community",
+        "url": "github.com/TAPPaaS/Community",
+        "branch": "stable",
+        "path": "/home/tappaas/Community",
+        "managed": "full",
+        "catalog": "src/module-catalog.json"
+      },
+      {
+        "name": "my-org-apps",
+        "url": "github.com/example/my-org-apps",
+        "branch": "main",
+        "path": "/home/tappaas/repos/my-org-apps",
+        "managed": "tracked"
+      }
+    ]
+  }
 }
 ```
 
@@ -112,8 +133,10 @@ Required fields per entry *(NEW: `stack`, `category`, `status`)*:
       backup.json
     ErikDaniel007/development/
       forgejo.json
-  gdty-apps/                       ← tracked repo configs here
-    ...
+  Community/
+    AndreasJe/nextcloud-hub/
+      nextcloud.json
+  my-org-apps/                     ← tracked repo configs (if any)
 ```
 
 - Eliminates ambiguity when multiple repos define modules with the same `moduleName`
