@@ -145,6 +145,30 @@ if [[ ${#CRED_FIELDS[@]} -eq 0 ]]; then
     fi
 fi
 
+# ── Enable os-acme-client plugin ───────────────────────────────────────────
+# The plugin ships disabled; acme-manager setup will fail with status=400 if
+# it is not enabled before the sign step is triggered.
+
+CRED_FILE_OPN="/home/tappaas/.opnsense-credentials.txt"
+[[ -f "$CRED_FILE_OPN" ]] || die "OPNsense credentials not found: $CRED_FILE_OPN"
+API_KEY_OPN=$(grep '^key=' "$CRED_FILE_OPN" | cut -d= -f2-)
+API_SECRET_OPN=$(grep '^secret=' "$CRED_FILE_OPN" | cut -d= -f2-)
+echo
+info "Enabling os-acme-client plugin..."
+for _port in 8443 443; do
+    _acme_enable=$(curl -sk --max-time 10 -u "${API_KEY_OPN}:${API_SECRET_OPN}" \
+        -X POST "https://${FIREWALL}:${_port}/api/AcmeClient/settings/set" \
+        -H "Content-Type: application/json" \
+        -d '{"settings":{"enabled":"1"}}' 2>&1) && break
+done
+info "  plugin set: ${_acme_enable}"
+
+for _port in 8443 443; do
+    curl -sk --max-time 10 -u "${API_KEY_OPN}:${API_SECRET_OPN}" \
+        -X POST "https://${FIREWALL}:${_port}/api/AcmeClient/service/reconfigure" > /dev/null 2>&1 && break
+done
+info "  reconfigure applied"
+
 # ── Provision + sign via acme-manager ──────────────────────────────────────
 
 STAGING_ARG=()
@@ -180,6 +204,32 @@ TMP="$(mktemp)"
 jq --arg refid "$REFID" '.tappaas.tlsCertRefid = $refid' "$CONFIG_FILE" > "$TMP"
 mv "$TMP" "$CONFIG_FILE"
 info "  ${GN}✓${CL} tappaas.tlsCertRefid = ${REFID}"
+
+# ── Register wildcard split-horizon DNS override in Unbound ────────────────
+# Internal clients resolve *.<domain> via public DNS (→ WAN IP). Without an
+# Unbound override, traffic hairpins through NAT and Caddy sees the NAT source
+# IP instead of the client's zone IP, causing access-list rejections (HTTP 403).
+# One wildcard entry covers all current and future dns01 proxy modules.
+
+echo
+info "${BOLD}Registering *.${DOMAIN} in Unbound (internal split-horizon)${CL}"
+ZONES_FILE="${CONFIG_DIR}/../TAPPaaS/src/foundation/firewall/zones.json"
+[[ -f "$ZONES_FILE" ]] || ZONES_FILE="/home/tappaas/TAPPaaS/src/foundation/firewall/zones.json"
+GW_IP="$(jq -r '.home.ip // empty' "$ZONES_FILE" \
+    | sed 's|/[0-9]*$||' \
+    | awk -F. '{print $1"."$2"."$3".1"}')"
+[[ -n "$GW_IP" ]] || GW_IP="$(jq -r '
+    to_entries[]
+    | select(.value.type == "Client" and (.value.state // "") == "Active")
+    | .value.ip
+    ' "$ZONES_FILE" | head -1 | sed 's|/[0-9]*$||' | awk -F. '{print $1"."$2"."$3".1"}')"
+[[ -n "$GW_IP" ]] || { warn "  Could not derive gateway IP from zones.json — skipping Unbound registration"; }
+if [[ -n "$GW_IP" ]]; then
+    dns-manager --no-ssl-verify add "*" "${DOMAIN}" "${GW_IP}" \
+        --description "TAPPaaS: *.${DOMAIN} internal (wildcard, set by acme-setup.sh)" \
+        && info "  ${GN}✓${CL} *.${DOMAIN} → ${GW_IP} registered in Unbound" \
+        || warn "  dns-manager add failed — add *.${DOMAIN} → ${GW_IP} manually in OPNsense Unbound"
+fi
 
 echo
 info "${BOLD}${GN}✓${CL} ACME setup complete${BOLD}.${CL}"
