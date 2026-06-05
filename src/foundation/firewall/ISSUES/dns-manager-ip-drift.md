@@ -4,6 +4,16 @@
 **Status:** Investigation complete, solution pending
 **Related Issues:** NixOS hostname vs DHCP timing
 
+> **2026-06-05 addendum — Option 2 (NixOS boot order) investigated.** Several
+> premises in the original write-up below turned out to be stale once the live
+> firewall was inspected (DNS for VMs already resolves from DHCP leases, not
+> from `dns-manager` static pins; `regdhcp=0` is a red herring). The full
+> findings, a feasibility verdict on Option 2, and how it relates to GitHub
+> issues **#302** and **#309** are in the
+> **[Option 2 Investigation (2026-06-05)](#option-2-investigation-2026-06-05)**
+> section at the end of this document. Read that section first — it supersedes
+> the "Recommended Solution" above.
+
 ## Summary
 
 The `dns-manager` tool creates static DNS host entries in OPNsense's Dnsmasq service. These entries do NOT include MAC address bindings, which means VMs can receive different IPs from DHCP on reboot, causing DNS entries to become stale.
@@ -152,3 +162,208 @@ Add a cron job or update-tappaas check that:
 - Dnsmasq static hosts: `dhcp-host=<mac>,<ip>,<hostname>`
 - OPNsense DHCP static mappings: Services → DHCPv4 → Static Mappings
 - Proxmox guest agent: `qm guest cmd <vmid> network-get-interfaces`
+
+---
+
+# Option 2 Investigation (2026-06-05)
+
+**Scope:** Investigate "Option 2: Fix NixOS Boot Order" (above) and its
+relationship to GitHub **#302** (`update-service` doesn't re-register DNS unless
+the zone changes) and **#309** (`templates:nixos` silent half-install / fresh-zone
+timing race). Findings are backed by reading the install pipeline end-to-end and
+by inspecting the **live** OPNsense firewall and DHCP lease table.
+
+## TL;DR
+
+- **Option 2 is feasible and is the right long-term fix**, but for a reason
+  different from the one the original doc gives. The IP-drift problem it was
+  meant to solve **largely does not exist** in the current architecture; what
+  Option 2 actually fixes is the **"VM is leased/known under the wrong name"**
+  failure that produces the user-visible symptoms in #302 and #309.
+- **DNS for DHCP VMs already works "via masqdns / DHCP allocation"** — exactly
+  what #302's last comment says it *should* do. It is **not** driven by
+  `dns-manager` static pins today. So the architecture lars wants is already
+  ~90% in place; the gap is purely *getting the correct hostname into the very
+  first DHCP lease*.
+- Recommended concrete change: **template `networking.hostName = lib.mkDefault ""`**
+  so cloud-init's `local-hostname` (which Proxmox already injects as `--name
+  <vmname>`) sets the hostname before the first DHCP request, instead of the
+  baked-in `tappaas-nixos`. Keep `fix_dhcp_hostname` as a belt-and-suspenders
+  during the transition. Needs one deep-test to confirm NixOS+cloud-init
+  ordering (see Test Plan).
+
+## What was actually verified on the live system
+
+Inspected `firewall.mgmt.internal` (`/conf/config.xml`, running dnsmasq,
+`/var/db/dnsmasq.leases`, `/var/etc/dnsmasq-hosts`) and the cicd resolver:
+
+1. **dnsmasq is the integrated DHCP+DNS server.** Its config defines the DHCP
+   ranges directly (`domain=mgmt.internal,10.0.0.100,10.0.0.254`, …) and runs
+   with `dhcp-authoritative` + `dhcp-fqdn`. In this mode dnsmasq **natively
+   answers DNS for current DHCP leases** — no separate registration step needed.
+
+2. **`regdhcp=0` is a red herring.** `regdhcp`/`regdhcpstatic` are legacy
+   *"register DHCP leases in the DNS Forwarder/Unbound"* toggles. They do **not**
+   govern dnsmasq's own lease resolution. The original doc's central claim
+   ("Dnsmasq auto-registration is DISABLED → that's why dns-manager exists") is
+   incorrect for the current setup.
+
+3. **VM names resolve from leases, not from static pins.** `identity`,
+   `logging`, `nixos` all resolve (`identity.mgmt.internal → 10.0.0.186`, etc.)
+   yet appear **only** in the lease table — `<hosts>` count in `config.xml` is
+   `0`, and `/var/etc/dnsmasq-hosts` contains **only the static infrastructure**
+   (firewall, `tappaas1..9`, `backup`). Those static entries come from the
+   `firewall:dns` service for fixed-IP hardware — *not* from VM installs.
+
+4. **The lease table shows the boot-order problem directly:**
+
+   ```
+   10.0.0.161 02:ce:c7:6b:3b:fe  test-debian      ← correct name (after fix)
+   10.0.0.238 02:8c:a9:b3:ee:3d  *                ← NO hostname sent
+   10.0.0.162 02:81:16:e7:14:0e  tappaas-cicd
+   10.0.0.186 02:fe:a1:ad:01:66  identity
+   10.0.0.207 6c:1f:f7:67:a4:67  nixos
+   ```
+
+   The `*` lease is a VM that leased an IP **without** ever sending its real
+   hostname. A name that never reaches a lease never resolves — this is the
+   actual user-facing failure behind #302/#309 ("502 on proxy domain", "name
+   doesn't resolve"), **not** IP drift.
+
+## How the hostname actually gets set (corrects the original doc)
+
+The original doc says cloud-init sets the hostname. For TAPPaaS NixOS VMs that
+is **not** how the final hostname is set:
+
+| Stage | What sets the hostname | Value |
+|-------|------------------------|-------|
+| Template image | `networking.hostName = lib.mkDefault "tappaas-nixos"` in `tappaas-common.nix` (declarative, baked into the image) | `tappaas-nixos` |
+| Proxmox cloud-init | `qm set --name <vmname>` → cloud-init `local-hostname` (`Create-TAPPaaS-VM.sh:639-646`) | correct, but **overridden** by the NixOS declarative value |
+| Install pipeline | `nixos-rebuild switch` applies the consumer overlay `<vmname>.nix`, which sets `networking.hostName = "<vmname>"` (`update-os.sh:update_nixos`) | correct — but only **after** first boot + DHCP |
+| Post-rebuild | `fix_dhcp_hostname()` sets `nmcli ipv4.dhcp-hostname=$(hostname)` + `device reapply` → re-sends DHCP with the now-correct name (`update-os.sh:376-423`) | correct — re-leases under the right name |
+
+So the real hostname is **declarative (the overlay)**, applied late, and the
+correct DHCP lease only happens at the very end via the `fix_dhcp_hostname`
+nmcli reapply. The sequence that bites us:
+
+1. Clone boots as `tappaas-nixos` → **first DHCP lease is under the wrong name.**
+2. `nixos-rebuild` applies the overlay (sets real hostname) and reboots.
+3. `fix_dhcp_hostname` re-applies DHCP → lease corrected to `<vmname>`.
+
+If step 2 fails (**#309**, fresh-zone `nixos-rebuild` race), steps 2–3 never
+complete, the VM stays `tappaas-nixos` (or `*`), and the real name never
+resolves. If step 3 is skipped/raced, you get the `*` lease seen above.
+
+> Note: `update-os.sh` already contains a **3× `nixos-rebuild` retry with settle
+> + `wait_for_ssh`** (lines ~312-338) and the `run_quiet`/`PIPESTATUS` fix from
+> #201, so part of #309's "concrete ask 3" is already implemented. The
+> still-open #309 asks are (1) **surface the real stderr** on failure (today
+> `run_quiet` collapses it to dots and `die`s with only an exit code) and
+> (2) tighten the post-SSH `cloud-init status --wait` + `sudo -n true` gate.
+
+## What Option 2 actually buys (re-framed)
+
+Because DNS already resolves from leases, Option 2's value is **not** "avoid IP
+drift" (drift self-heals — a fresh lease always re-resolves to the current IP).
+Its value is **getting the correct name into the first lease**, which:
+
+- Makes a VM resolvable **immediately at boot**, with no dependency on the
+  fragile post-rebuild `fix_dhcp_hostname` reapply.
+- Makes DNS correct **even when `nixos-rebuild` fails** (#309) — the operator
+  then sees an honest "service not responding" instead of a misleading
+  "name doesn't resolve / 502" two steps removed from the root cause.
+- Eliminates the stale `*` / `tappaas-nixos` leases.
+- Is the prerequisite for eventually **retiring** the `fix_dhcp_hostname` nmcli
+  dance and the residual `dns-manager` VM pins (Windows path, zone-change path).
+
+It does **not** by itself fix #309's `nixos-rebuild` race — that remains an
+`update-os.sh` hardening task — but it removes the worst *symptom* (silent wrong
+DNS) and decouples "is the VM addressable?" from "did the overlay apply?".
+
+## Recommended implementation (Approach A)
+
+Set the hostname from cloud-init metadata **before** NetworkManager sends its
+first DHCP request, and let the consumer overlay converge to the same value:
+
+1. **Template (`tappaas-common.nix`):** change
+   `networking.hostName = lib.mkDefault "tappaas-nixos"` →
+   `networking.hostName = lib.mkDefault ""`. An empty `hostName` tells NixOS not
+   to force a hostname, allowing cloud-init's `cc_set_hostname`
+   (`local-hostname`, already supplied by Proxmox `--name`) to own it.
+2. **Keep the consumer overlay** setting `networking.hostName = "<vmname>"`. The
+   value matches what cloud-init set, so the final declarative state is
+   unchanged and there is no flip-flop — the only behavioural change is the
+   *first-boot* name.
+3. **Keep `fix_dhcp_hostname` for now** as a safety net (and for Debian/Ubuntu,
+   which are unaffected by the NixOS change). Remove it only after the deep test
+   proves the first lease is already correct across a few release cycles.
+
+### Why not the alternatives
+- **`bootcmd`/`hostnamectl` via `--cicustom` user-data** (the doc's literal
+  Option 2): also works and is the most explicit, but requires threading a
+  custom user-data snippet through `Create-TAPPaaS-VM.sh`, which today relies on
+  Proxmox's auto-generated cloud-init. More surface area for the same result.
+- **DHCP static reservations (Option 1/3, MAC→IP):** solves a drift problem that
+  the lease model already solves; adds a Proxmox-MAC lookup to every install for
+  little benefit now that VMs resolve from live leases.
+
+### Risk to validate
+NixOS + cloud-init hostname ordering is finicky. `cc_set_hostname` runs in the
+`cloud-init.service` (network) stage; if it lands **after** NetworkManager's
+first DHCP, the first lease could still be generic and we'd still depend on a
+reapply. The deep test below determines whether the empty-`hostName` approach
+sets the name early enough on its own, or whether we additionally need the
+hostname set in the `cloud-init-local` (pre-network) stage.
+
+## Relationship to the GitHub issues
+
+- **#302** ("DNS not re-registered unless zone changes"): under the verified
+  lease-based model, the "refresh" that matters is **making the VM re-send its
+  hostname**, not a `dns-manager add`. `update-service` → `update-os.sh` already
+  runs `fix_dhcp_hostname` on every update, so `update-module.sh <m> --force`
+  *does* re-assert the lease name today (the proposed `dns-manager add` in the
+  issue would only matter for the static-pin path). **Option 2 addresses #302 at
+  the source** by making the name correct from boot. If Option 2 is deferred,
+  the minimal #302 fix is to ensure `fix_dhcp_hostname` is reached on every
+  update path (it is, for NixOS/Debian) and optionally add an idempotent
+  `dns-manager add` fallback for guests whose agent never reports a hostname.
+- **#309** ("templates:nixos silent half-install"): Option 2 removes the
+  **misleading DNS symptom** but not the root `nixos-rebuild` race. The two
+  remaining #309 asks (surface stderr; tighten the cloud-init/sudo gate) stay
+  valid and are independent of Option 2.
+
+## Test Plan (deep)
+
+1. On a cluster with `test3` Inactive, branch the change to
+   `tappaas-common.nix` (`hostName = ""`) and rebuild the NixOS template.
+2. `install-module.sh test-nixos` (mgmt) and a fresh-zone NixOS fixture
+   (e.g. `test-fw-c` in a just-activated zone).
+3. **Before** `nixos-rebuild` runs, snapshot the lease table: assert the VM's
+   first lease already carries `<vmname>`, **not** `tappaas-nixos`/`*`.
+4. Confirm `<vmname>.<zone>.internal` resolves from cicd within seconds of boot,
+   before the overlay is applied.
+5. Force a `nixos-rebuild` failure (e.g. break the overlay) and confirm DNS
+   *still* resolves to the right VM (symptom decoupled from overlay success).
+6. Reboot the VM and confirm the lease/name persist (no regression vs. today).
+7. Regression: repeat for `test-debian` (must be unaffected by the NixOS change).
+
+## Files involved (current, verified paths)
+
+| File | Role |
+|------|------|
+| `src/foundation/templates/tappaas-common.nix` | `networking.hostName = lib.mkDefault "tappaas-nixos"` ← the change |
+| `src/foundation/cluster/Create-TAPPaaS-VM.sh` (≈634-647) | sets cloud-init `--name <vmname>`, `--ciuser`, `ip=dhcp` |
+| `src/foundation/tappaas-cicd/scripts/update-os.sh` | `update_nixos` (overlay apply), `fix_dhcp_hostname` (nmcli reapply) |
+| `src/foundation/templates/services/nixos/{install,update}-service.sh` | thin wrappers → `update-os.sh` |
+| `src/foundation/cluster/services/vm/{install,update}-service.sh` | `dns-manager` pins (Windows path; zone-change path only — #302) |
+| `firewall-config.xml.template` | `regdhcp=0` (legacy, irrelevant to dnsmasq lease resolution) |
+
+## Bottom line
+
+Adopt Option 2 via the one-line template change (`hostName = lib.mkDefault ""`),
+gated behind the deep test above. It aligns the implementation with the
+already-true "DNS via DHCP/masqdns" model, fixes the real #302/#309 *symptom*
+(wrong-name / unresolvable VMs), and is the precondition for later deleting the
+`fix_dhcp_hostname` and residual `dns-manager` VM-pinning workarounds. The
+original Option 3 (MAC binding) is unnecessary — it targets an IP-drift problem
+the integrated-dnsmasq lease model has already eliminated for DHCP VMs.
