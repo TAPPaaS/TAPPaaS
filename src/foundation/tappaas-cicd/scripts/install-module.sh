@@ -15,8 +15,12 @@
 #
 # Options:
 #   --variant <name>   Install a variant of the module (see copy-update-json.sh)
-#   --force            Re-run the installer even if the module is already
-#                      installed (alias: --reinstall)
+#   --force            Re-run the installer against the existing deployment even
+#                      if the module is already installed (skips the
+#                      already-installed precondition; does NOT remove anything)
+#   --reinstall        Delete the existing deployment first (delete-module.sh
+#                      --force), then install fresh. Use when a previous install
+#                      left a partial/broken deployment behind (issue #301).
 #   --<field> <value>  Override a JSON field (passed to copy-update-json.sh)
 #   -h, --help         Show this help message
 #
@@ -27,7 +31,8 @@
 #   install-module.sh openwebui --variant dev --zone0 srv-dev --vmid 315
 #
 # The script performs these steps:
-#   1. Checks the module is not already installed (unless --force is given)
+#   1. Checks the module is not already installed (unless --force is given, or
+#      --reinstall, which first deletes the existing deployment)
 #   2. Copies and validates the module JSON config (variant-aware)
 #   3. Checks that every dependsOn service is provided by an installed module
 #   4. Validates that the module has service scripts for each service it provides
@@ -57,7 +62,10 @@ Arguments:
 
 Options:
     --variant <name>         Install a variant (output: <module>-<name>.json)
-    --force, --reinstall     Install even if the module already exists
+    --force                  Install even if the module already exists (re-runs
+                             against the existing deployment; removes nothing)
+    --reinstall              Delete the existing deployment first, then install
+                             fresh (delete-module.sh --force, then install)
     --<field> <value>        Override a JSON field value
     -h, --help               Show this help message
 
@@ -67,6 +75,7 @@ Examples:
     ${SCRIPT_NAME} openwebui --variant staging
     ${SCRIPT_NAME} openwebui --variant dev --zone0 srv-dev --vmid 315
     ${SCRIPT_NAME} identity --force
+    ${SCRIPT_NAME} homeassistant --reinstall
 EOF
 }
 
@@ -92,17 +101,22 @@ main() {
     info "${BOLD}║  TAPPaaS Module Install: ${BL}${module}${CL}"
     info "${BOLD}╚══════════════════════════════════════════════╝${CL}"
 
-    # Parse options: extract --force (consumed here) and capture --variant
-    # (needed for the early existence check). All other arguments are passed
-    # through unchanged to copy-update-json.sh, which reads "$@" when sourced.
+    # Parse options: extract --force/--reinstall (consumed here) and capture
+    # --variant (needed for the early existence check). All other arguments are
+    # passed through unchanged to copy-update-json.sh, which reads "$@" when
+    # sourced.
     local force=false
+    local reinstall=false
     local variant=""
     local -a passthru=()
     shift  # drop the module name; re-added below
     while [[ $# -gt 0 ]]; do
         case "$1" in
-            --force|--reinstall)
+            --force)
                 force=true
+                ;;
+            --reinstall)
+                reinstall=true
                 ;;
             --variant)
                 variant="${2:-}"
@@ -127,11 +141,24 @@ main() {
     local precheck_module="${module}"
     [[ -n "${variant}" ]] && precheck_module="${module}-${variant}"
 
-    if module_exists "${precheck_module}"; then
+    if [[ "${reinstall}" == true ]]; then
+        # --reinstall: tear down any existing deployment first, then install
+        # fresh. Decide on config presence (not module_exists, which also probes
+        # the cluster) so a partial install — config written but VM/services left
+        # half-wired (issue #301) — is still fully cleaned up before re-install.
+        if [[ -f "${CONFIG_DIR}/${precheck_module}.json" ]]; then
+            warn "  '${precheck_module}' already deployed — deleting it first (--reinstall)"
+            /home/tappaas/bin/delete-module.sh "${precheck_module}" --force \
+                || die "Pre-reinstall delete of '${precheck_module}' failed — aborting before re-install"
+            info "  ${GN}✓${CL} '${precheck_module}' deleted — proceeding with a fresh install"
+        else
+            info "  ${GN}✓${CL} '${precheck_module}' is not installed — --reinstall proceeds as a normal install"
+        fi
+    elif module_exists "${precheck_module}"; then
         if [[ "${force}" == true ]]; then
             warn "  '${precheck_module}' is already installed — continuing anyway (--force)"
         else
-            die "Module '${precheck_module}' is already installed. Run 'delete-module.sh ${precheck_module}' first, or pass --force to re-run the installer against the existing deployment."
+            die "Module '${precheck_module}' is already installed. Run 'delete-module.sh ${precheck_module}' first, pass --reinstall to delete and re-install fresh, or pass --force to re-run the installer against the existing deployment."
         fi
     else
         info "  ${GN}✓${CL} '${precheck_module}' is not yet installed"

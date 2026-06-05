@@ -267,9 +267,25 @@ if [[ "${DEEP}" -eq 1 ]]; then
     else
         skip "test-vm-creation/test.sh not found"
     fi
+
+    # ── Deep Test: --reinstall round-trip (issue #301) ───────────────
+    info "${BOLD}Deep Test: install-module.sh --reinstall round-trip${CL}"
+
+    if [[ -x test-vm-creation/test-reinstall.sh ]]; then
+        info "  Verifying --reinstall deletes then recreates the VM..."
+        if test-vm-creation/test-reinstall.sh; then
+            pass "--reinstall round-trip test passed"
+        else
+            fail "--reinstall round-trip test failed"
+        fi
+    else
+        skip "test-vm-creation/test-reinstall.sh not found"
+    fi
 else
     info "${BOLD}Deep Test: VM creation suite${CL}"
     skip "VM creation tests (use --deep to run)"
+    info "${BOLD}Deep Test: install-module.sh --reinstall round-trip${CL}"
+    skip "--reinstall round-trip test (use --deep to run)"
 fi
 
 # ── Summary ─────────────────────────────────────────────────────────

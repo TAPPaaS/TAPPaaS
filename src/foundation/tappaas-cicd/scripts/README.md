@@ -709,7 +709,7 @@ Installs a TAPPaaS module with dependency validation and service wiring. Support
 
 **Usage:**
 ```bash
-install-module.sh <module-name> [--variant <name>] [--force] [--<field> <value>]...
+install-module.sh <module-name> [--variant <name>] [--force | --reinstall] [--<field> <value>]...
 ```
 
 **Parameters:**
@@ -718,11 +718,14 @@ install-module.sh <module-name> [--variant <name>] [--force] [--<field> <value>]
 |-----------|-------------|---------|
 | `module-name` | Name of the module to install | `openwebui` |
 | `--variant <name>` | Install a variant of the module | `--variant staging` |
-| `--force`, `--reinstall` | Install even if the module already exists (re-runs `install.sh` against the existing deployment) | |
+| `--force` | Install even if the module already exists — re-runs the installer against the **existing** deployment (idempotent service installers reconcile drift). Removes nothing. | |
+| `--reinstall` | Delete the existing deployment first (`delete-module.sh --force`), then install fresh. Use to recover from a partial/broken install (issue #301). | |
 | `--<field> <value>` | Override a JSON field (passed to `copy-update-json.sh`) | `--node tappaas2` |
 
+> `--force` and `--reinstall` differ deliberately: `--force` keeps the current VM and just re-runs the installers over it (skip the already-installed check); `--reinstall` tears the deployment down and rebuilds it from scratch.
+
 **What it does:**
-1. Checks the module is not already installed — aborts early otherwise (unless `--force`). Detects an existing install by its config in `~/config`; for VM-backed modules (those that `dependsOn cluster:vm`) it also confirms the VM exists on the cluster, so a leftover config whose VM is gone is treated as not-installed.
+1. Checks the module is not already installed — aborts early otherwise (unless `--force`, or `--reinstall` which first deletes the existing deployment). Detects an existing install by its config in `~/config`; for VM-backed modules (those that `dependsOn cluster:vm`) it also confirms the VM exists on the cluster, so a leftover config whose VM is gone is treated as not-installed.
 2. Copies and validates the module JSON config (variant-aware via `copy-update-json.sh`)
 3. Checks that every `dependsOn` service is provided by an installed module
 4. Validates that the module has service scripts for each service it provides
@@ -740,8 +743,11 @@ install-module.sh openwebui --variant staging
 # Install a dev variant with explicit zone and vmid overrides
 install-module.sh openwebui --variant dev --zone0 srv-dev --vmid 315
 
-# Re-run the installer against an already-installed module
+# Re-run the installer against an already-installed module (keeps the VM)
 install-module.sh identity --force
+
+# Recover from a partial/broken install: delete, then install fresh (issue #301)
+install-module.sh homeassistant --reinstall
 ```
 
 **Variant mode:**
