@@ -37,12 +37,24 @@ readonly MGMT="mgmt"
 run_quiet() {
     local desc="$1" rc
     shift
+    # Tee the live output to a log so the dots stay terse but the REAL error is
+    # recoverable on failure. Previously the output was discarded entirely, so a
+    # failed nixos-rebuild surfaced only as a generic exit code — the actual
+    # stderr that identifies which step exploded was lost (issue #309 ask 1).
+    local _log
+    _log="$(mktemp /tmp/tappaas-update-os.XXXXXX.log)"
     set +e
-    "$@" 2>&1 | while IFS= read -r _; do printf "."; done
+    "$@" 2>&1 | tee "${_log}" | while IFS= read -r _; do printf "."; done
     rc=${PIPESTATUS[0]}
     set -e
     echo ""
-    [[ "${rc}" -eq 0 ]] || die "${desc} failed (exit ${rc})"
+    if [[ "${rc}" -ne 0 ]]; then
+        error "${desc} failed (exit ${rc}) — last 20 lines of output:"
+        tail -n 20 "${_log}" | sed 's/^/    /' >&2
+        warn "Full output of the failed step saved to ${_log}"
+        die "${desc} failed (exit ${rc}); see ${_log}"
+    fi
+    rm -f "${_log}"
 }
 
 usage() {
@@ -184,12 +196,44 @@ wait_for_cloud_init() {
     ssh "tappaas@${ip}" "cloud-init status --wait" 2>/dev/null || true
 }
 
+# Wait until the VM is actually ready for privileged provisioning: cloud-init
+# has finished AND passwordless sudo works for the tappaas user. A VM (especially
+# the first in a freshly-activated zone) can accept SSH on port 22 before
+# cloud-init has finished laying down /etc/nixos, the tappaas account and its
+# NOPASSWD sudoers entry — running nixos-rebuild against that half-set-up target
+# is exactly the flaky-first-attempt failure in issue #309. Best-effort: warns
+# and proceeds if the deadline passes, so a quirk here never hard-blocks install.
+wait_for_provisioning() {
+    local ip="$1"
+    local max="${2:-150}"
+    local waited=0
+
+    info "Waiting for cloud-init to finish on ${ip}..."
+    ssh -o BatchMode=yes "tappaas@${ip}" "cloud-init status --wait" >/dev/null 2>&1 || true
+
+    info "Waiting for passwordless sudo on ${ip}..."
+    while ! ssh -o BatchMode=yes "tappaas@${ip}" "sudo -n true" 2>/dev/null; do
+        sleep 3
+        waited=$((waited + 3))
+        if [[ ${waited} -ge ${max} ]]; then
+            warn "passwordless sudo not ready on ${ip} after ${max}s — proceeding anyway"
+            return 0
+        fi
+    done
+    info "  ${GN}✓${CL} cloud-init done and passwordless sudo ready"
+}
+
 # Update NixOS VM
 update_nixos() {
     local vmname="$1"
     local vmid="$2"
     local node="$3"
     local vm_ip="$4"
+
+    # Gate on cloud-init done + passwordless sudo before any privileged step
+    # (scp install, nixos-generate-config, nixos-rebuild). Stops the flaky
+    # first-attempt failure where SSH is up but provisioning isn't (#309 ask 2).
+    wait_for_provisioning "${vm_ip}"
 
     # Resolve NixOS config. For plain deploys: ./<vmname>.nix.
     # For variant deploys (<vmname> = <source>-<variant>): the source module
