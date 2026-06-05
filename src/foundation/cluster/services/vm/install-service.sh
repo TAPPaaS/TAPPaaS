@@ -28,6 +28,7 @@ NODE="$(get_config_value 'node' "$(get_node_hostname 0)")"
 ZONE0NAME="$(get_config_value 'zone0' 'mgmt')"
 IMAGETYPE="$(get_config_value 'imageType' 'img')"
 OSTYPE_VAL="$(get_config_value 'ostype' 'l26')"
+CLOUDINIT="$(get_config_value 'cloudInit' 'true')"
 MGMT="mgmt"
 
 # For Windows clone VMs, prepare the OOBE answer file on the target node before
@@ -265,6 +266,48 @@ except Exception:
         dns-manager --no-ssl-verify delete "${VMNAME}" "${ZONE0NAME}.internal" >/dev/null 2>&1 || true
         dns-manager --no-ssl-verify add    "${VMNAME}" "${ZONE0NAME}.internal" "${_vm_ip}" >/dev/null 2>&1 || true
         info "  ${GN}✓${CL} DNS: ${VMNAME}.${ZONE0NAME}.internal → ${_vm_ip}"
+    fi
+fi
+
+# DNS for non-cloud-init APPLIANCE VMs (e.g. HAOS) — issue #303.
+# These boot under their own internal hostname (HAOS → "homeassistant"), not
+# <vmname>, and have no cloud-init to set it — so they never self-register
+# <vmname>.<zone>.internal via their DHCP lease the way cloud-init VMs do (the
+# masqdns/Option 2 model). They also boot slowly (HAOS: Linux→Docker→Supervisor
+# →Core, 2-5 min), so the guest agent isn't ready immediately. Wait for the IP
+# (general loop — returns as soon as the IP appears, so this costs only the
+# actual boot time), then pin the DNS record via dns-manager.
+# Skipped for cloud-init VMs (they self-register) and for Windows (handled above).
+if [[ "$CLOUDINIT" == "false" && "$_is_windows" != "true" ]]; then
+    info "Appliance VM (cloudInit:false) — waiting for guest agent IP to register DNS (${VMNAME}.${ZONE0NAME}.internal)..."
+    _appliance_ip=""
+    _ip_wait=0
+    while [[ -z "$_appliance_ip" && $_ip_wait -lt 300 ]]; do
+        _appliance_ip=$(ssh -n -o BatchMode=yes -o ConnectTimeout=10 "root@${NODE}.${MGMT}.internal" \
+            "qm guest cmd ${VMID} network-get-interfaces 2>/dev/null" \
+            | python3 -c "
+import json, sys
+try:
+    d = json.load(sys.stdin)
+    ifaces = d if isinstance(d, list) else d.get('result', [])
+    for iface in ifaces:
+        for addr in iface.get('ip-addresses', []):
+            ip = addr.get('ip-address', '')
+            if addr.get('ip-address-type') == 'ipv4' and not ip.startswith('127.') and not ip.startswith('172.'):
+                print(ip); sys.exit(0)
+except Exception:
+    pass
+" 2>/dev/null) || _appliance_ip=""
+        [[ -n "$_appliance_ip" ]] && break
+        sleep 10; _ip_wait=$((_ip_wait + 10))
+    done
+
+    if [[ -n "$_appliance_ip" && -x "$(command -v dns-manager)" ]]; then
+        dns-manager --no-ssl-verify delete "${VMNAME}" "${ZONE0NAME}.internal" >/dev/null 2>&1 || true
+        dns-manager --no-ssl-verify add    "${VMNAME}" "${ZONE0NAME}.internal" "${_appliance_ip}" >/dev/null 2>&1 || true
+        info "  ${GN}✓${CL} DNS: ${VMNAME}.${ZONE0NAME}.internal → ${_appliance_ip} (after ${_ip_wait}s)"
+    else
+        warn "  Could not determine IP for ${VMNAME} after ${_ip_wait}s — DNS NOT registered (VM may still be booting; re-run update-module.sh once it is up)"
     fi
 fi
 
