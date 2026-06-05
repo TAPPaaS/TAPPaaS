@@ -2,6 +2,40 @@
 
 > **GitHub issue**: TAPPaaS/TAPPaaS#309
 
+## Resolution (2026-06-05) — all three asks addressed
+
+Fixed on `main`. The deep investigation lives in
+[../src/foundation/firewall/ISSUES/dns-manager-ip-drift.md](../src/foundation/firewall/ISSUES/dns-manager-ip-drift.md)
+(Option 2 sections).
+
+- **Silent wrong DNS (the worst symptom).** Root cause was the boot order: the
+  template baked `networking.hostName = "tappaas-nixos"`, so a clone's first DHCP
+  lease (hence its dnsmasq name) was wrong until `nixos-rebuild` applied the
+  overlay — and stayed wrong forever if the rebuild failed. Fixed by template
+  v1.2: `hostName = lib.mkDefault ""` + a `tappaas-dhcp-hostname` re-acquire
+  service, so the VM self-registers under `<vmname>` at boot **independent of
+  whether nixos-rebuild succeeds**. A failed overlay now yields an honest
+  "service not responding", not a misleading "name doesn't resolve / 502".
+  (commit `fix(templates): NixOS VM self-registers correct DNS name at boot`)
+- **Ask 1 — surface the real error.** `update-os.sh` `run_quiet` now tees output
+  to a log and prints the last 20 lines (and keeps the full log) on failure,
+  instead of discarding it and dying with a bare exit code.
+- **Ask 2 — tighten the post-SSH wait.** New `wait_for_provisioning()` gates
+  `update_nixos` on `cloud-init status --wait` **and** `sudo -n true` before any
+  privileged step — closing the SSH-up-but-not-provisioned race that hit the
+  first VM in a fresh zone.
+- **Ask 3 — retry in place, not full recreate.** Already implemented: a 3×
+  `nixos-rebuild` retry with settle + `wait_for_ssh` (no VM re-clone).
+
+Validated by repeated full `install-module.sh` runs cloning from the rebuilt
+production template (DNS resolves, lease carries `<vmname>`, install clean).
+
+**Remaining (ops, not code):** publish the `nixos-template-v1.2` GitHub release
+(push the tag) so fresh foundation installs fetch the fixed image; the on-cluster
+template 8080 was already rebuilt from v1.2.
+
+---
+
 **Observed**: 2026-05-16, during three back-to-back `firewall/test.sh --deep` runs while validating issues #173 and #177.
 
 ## Symptom

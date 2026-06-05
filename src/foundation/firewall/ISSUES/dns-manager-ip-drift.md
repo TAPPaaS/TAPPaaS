@@ -437,15 +437,34 @@ failed-overlay case (#309); the **consumer overlay** sets
 `networking.hostName=<vmname>` declaratively, so post-rebuild the static hostname
 is non-empty and NM advertises the correct name on its own.
 
-### Caveats / not-yet-done
+### Shipped (2026-06-05, on `main`)
 
-- The image change requires **rebuilding and republishing the NixOS template**
-  (`nixos-template-v1.x`) for production clones to pick it up — clones use the
-  released image, not a local build.
-- Consider also fixing `update-os.sh` `fix_dhcp_hostname` to use a full
-  re-acquire instead of `device reapply` (ineffective, per above) — independent
-  of Option 2 and useful for Debian VMs and the update path.
-- The brief `*` window could be eliminated entirely only by having Proxmox
-  deliver the hostname via cloud-init **meta-data** (read pre-network) rather
-  than user-data — out of scope here and not worth the complexity given the
-  ~40 s self-correction.
+- **Template v1.2** carries the fix; `tappaas-nixos.json` bumped to v1.2 and the
+  on-cluster template 8080 rebuilt from it. **Remaining ops step:** publish the
+  `nixos-template-v1.2` GitHub release (push the tag) so fresh foundation
+  installs fetch it — clones use the released image, not a local build.
+- **`update-os.sh` `fix_dhcp_hostname` fixed** to do a full re-acquire
+  (`nmcli device disconnect/connect`, run detached via `systemd-run` so it can't
+  strand the SSH session) instead of the no-op `device reapply`. This is the
+  belt-and-suspenders for the NixOS NM path and also matters for the update path.
+- **#309 hardening** landed alongside: `run_quiet` surfaces the failing step's
+  output; `wait_for_provisioning()` gates `update_nixos` on cloud-init + sudo.
+
+### Remaining caveat
+
+- The brief `*` window (~10 s before the re-acquire) could be eliminated only by
+  having Proxmox deliver the hostname via cloud-init **meta-data** (read
+  pre-network) rather than user-data — out of scope and not worth the complexity
+  given the ~40 s self-correction and that the install pipeline reboots anyway.
+
+### #302 closure note
+
+`#302` ("update-service doesn't re-register DNS unless the zone changes") is
+addressed the way its own thread concluded it should be — **via masqdns/DHCP, not
+a dns-manager pin**. Verified that VM DNS already resolves from dnsmasq leases;
+Option 2 makes the lease correct at boot, and the now-working `fix_dhcp_hostname`
+re-asserts it on every `update-module.sh` run (every VM module depends on
+`templates:nixos`/`:debian`, whose update path runs `update-os.sh`). The literal
+proposed patch (an unconditional `dns-manager add` in `cluster:vm
+update-service.sh`) was deliberately **not** applied — it would re-introduce the
+static pin the masqdns model makes unnecessary.
