@@ -390,9 +390,25 @@ fix_dhcp_hostname() {
         info "  Using NetworkManager for DHCP hostname fix"
         info "  Ethernet connection: ${eth_connection}"
         info "  Ethernet device: ${eth_device}"
-        ssh "tappaas@${vm_ip}" "sudo nmcli connection modify '${eth_connection}' ipv4.dhcp-hostname \"\$(hostname)\"" || true
-        ssh "tappaas@${vm_ip}" "sudo nmcli device reapply '${eth_device}'" || true
-        info "  DHCP hostname updated to: ${vmname}"
+
+        # Resolve nmcli's absolute path on the target (NixOS:
+        # /run/current-system/sw/bin, Debian: /usr/bin) so the detached
+        # systemd-run unit below — which runs with a minimal PATH — can find it.
+        local nmcli_path
+        nmcli_path=$(ssh "tappaas@${vm_ip}" "command -v nmcli" 2>/dev/null) || nmcli_path=nmcli
+
+        # 1. Advertise the hostname. NM sends the *static* hostname by default;
+        #    setting ipv4.dhcp-hostname explicitly guarantees option-12 is sent
+        #    even when the static hostname is empty (e.g. NixOS hostName="").
+        ssh "tappaas@${vm_ip}" "sudo ${nmcli_path} connection modify '${eth_connection}' ipv4.dhcp-hostname \"\$(hostname)\"" || true
+
+        # 2. Force a FULL DHCP re-acquire. A renew / 'nmcli device reapply' does
+        #    NOT refresh an existing lease's hostname on NM 1.52 (verified on the
+        #    live cluster) — only a disconnect/connect does. Run it DETACHED via
+        #    systemd-run: the disconnect drops the link, which would otherwise
+        #    kill this SSH session before 'connect' runs and strand the VM.
+        ssh "tappaas@${vm_ip}" "sudo systemd-run --collect --quiet /bin/sh -c '${nmcli_path} device disconnect ${eth_device}; sleep 2; ${nmcli_path} device connect ${eth_device}'" || true
+        info "  DHCP hostname updated to: ${vmname} (re-acquire scheduled)"
         return 0
     fi
 
