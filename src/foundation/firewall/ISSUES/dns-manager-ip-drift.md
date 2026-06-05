@@ -367,3 +367,85 @@ already-true "DNS via DHCP/masqdns" model, fixes the real #302/#309 *symptom*
 `fix_dhcp_hostname` and residual `dns-manager` VM-pinning workarounds. The
 original Option 3 (MAC binding) is unnecessary — it targets an IP-drift problem
 the integrated-dnsmasq lease model has already eliminated for DHCP VMs.
+
+---
+
+# Deep Test Results (2026-06-05) — branch `test/option2-nixos-boot-order`
+
+Built the modified NixOS template image (`nix build .#image` from
+`templates/flake.nix`) and tested fresh clones on the live cluster (throwaway
+VMIDs 8081-8086, all destroyed afterwards; production template 8080 untouched).
+DHCP lease names observed directly in `/var/db/dnsmasq.leases` on the firewall.
+
+**The one-line change is necessary but NOT sufficient.** Five build/test
+iterations were needed to land a working fix. Key empirical findings:
+
+| # | Template variant | First DHCP lease | Notes |
+|---|------------------|------------------|-------|
+| baseline | current (`hostName="tappaas-nixos"`) | **`tappaas-nixos`** | wrong name baked in; only corrected by overlay+reboot; never if `nixos-rebuild` fails |
+| v1 | `hostName=""` only | **`*`** (no name) | cloud-init *does* set the live hostname (`/etc/hostname=<vmname>`) independent of the overlay — but in its **network stage**, after NM's first DHCP |
+| v2/v3 | `+` pre-network oneshot setting hostname from `instance-data.json` | **`*`** | dead end: at the pre-network stage `v1.local_hostname` is the cloud-init default `nixos` — Proxmox delivers the real name via cloud-init **user-data** (network stage), not meta-data |
+| v4 | `+` post-cloud-init `nmcli down/up` | **`*`** | bounced the wrong profile, and NM sends the **static** hostname (empty under `hostName=""`) — not the live one |
+| **v5** | `+` post-cloud-init: set `ipv4.dhcp-hostname` explicitly **then** full device re-acquire | **`*` → `<vmname>` at ~40s** | ✅ resolves from cicd; **survives reboot**; needs neither `nixos-rebuild` nor any cicd action |
+
+### Decisive mechanism facts (verified live, not theorised)
+
+- **NM sends the *static* hostname for DHCP option 12.** With `hostName=""` the
+  static hostname is empty, so NM leases as `*` even though cloud-init has set
+  the *live/transient* hostname correctly. The fix must set
+  `ipv4.dhcp-hostname` explicitly on the connection profile.
+- **A NetworkManager renew / `device reapply` does NOT change an existing
+  lease's name** — only a full `device disconnect`/`connect` (fresh DISCOVER)
+  does. **This means the existing `fix_dhcp_hostname` in `update-os.sh`, which
+  uses `nmcli device reapply`, is ineffective at correcting a lease name on this
+  NM version** (NixOS 25.11 / NM 1.52). That is a separate latent bug worth
+  fixing regardless of Option 2.
+- **cloud-init sets the correct hostname independent of the overlay.** This is
+  the core #309 win: even when `nixos-rebuild` never applies, the bare template
+  + cloud-init + the re-acquire service give a correctly-named, resolvable VM.
+
+### The validated fix (now on the branch, in `tappaas-common.nix`)
+
+1. `networking.hostName = lib.mkDefault "";` — delegate the name to cloud-init.
+2. `systemd.services.tappaas-dhcp-hostname` — a oneshot ordered
+   `After=cloud-init.service` that (a) sets `ipv4.dhcp-hostname=<live hostname>`
+   on every ethernet profile and (b) does a full `nmcli device disconnect/connect`
+   to re-lease under the correct name. Runs every boot (self-healing).
+
+**Measured behaviour of the fix:** brief `*` window (~10 s from boot) →
+auto-corrects to `<vmname>` (~40 s) → resolves in DNS → persists across reboot.
+No nixos-rebuild and no cicd involvement required.
+
+### Full-pipeline validation (passed)
+
+Beyond the bare-clone test, the complete `install-module.sh` path was validated:
+built a modified **template** VM (8081) from the image, then installed a real
+module (`test-bo-full`, VMID 902) that clones from it through
+`cluster:vm` → `templates:nixos` (`update-os.sh` → `nixos-rebuild` overlay →
+reboot). Result (`install-module.sh` exit 0):
+
+- DNS: `test-bo-full.mgmt.internal → 10.0.0.129` ✓
+- DHCP lease name: `test-bo-full` (not `*`, not `tappaas-nixos`) ✓
+- In-VM: `hostname=test-bo-full`, `/etc/hostname=test-bo-full`, overlay applied
+  (`networking.hostName="test-bo-full"`), `ipv4.dhcp-hostname=test-bo-full` ✓
+- The `tappaas-dhcp-hostname` re-acquire (network bounce) did **not** disrupt
+  `update-os.sh`'s SSH / `nixos-rebuild` — the install ran clean.
+
+Note the two mechanisms compose to cover all cases: the **template** fix
+(`hostName=""` + re-acquire) handles the pre-rebuild window and the
+failed-overlay case (#309); the **consumer overlay** sets
+`networking.hostName=<vmname>` declaratively, so post-rebuild the static hostname
+is non-empty and NM advertises the correct name on its own.
+
+### Caveats / not-yet-done
+
+- The image change requires **rebuilding and republishing the NixOS template**
+  (`nixos-template-v1.x`) for production clones to pick it up — clones use the
+  released image, not a local build.
+- Consider also fixing `update-os.sh` `fix_dhcp_hostname` to use a full
+  re-acquire instead of `device reapply` (ineffective, per above) — independent
+  of Option 2 and useful for Debian VMs and the update path.
+- The brief `*` window could be eliminated entirely only by having Proxmox
+  deliver the hostname via cloud-init **meta-data** (read pre-network) rather
+  than user-data — out of scope here and not worth the complexity given the
+  ~40 s self-correction.

@@ -62,8 +62,73 @@
   ];
 
   # Network
-  networking.hostName = lib.mkDefault "tappaas-nixos"; # Define your hostname.
+  # Option 2 (issue #302/#309): leave the hostname UNSET in the template so the
+  # per-clone hostname is owned by cloud-init's local-hostname (Proxmox injects
+  # it via `qm set --name <vmname>`) instead of being baked to "tappaas-nixos".
+  # On its own this is not enough — cloud-init applies the name in its network
+  # stage, after NetworkManager's first DHCP, so the first lease is briefly "*";
+  # the tappaas-dhcp-hostname service below re-acquires DHCP once the name is set.
+  # The net effect (verified on the live cluster) is that the VM self-registers
+  # in DNS under <vmname> within ~40s of first boot, with NO dependency on the
+  # cicd pipeline or on the consumer's nixos-rebuild overlay applying. Consumer
+  # overlays still set networking.hostName = "<vmname>" for the final state.
+  networking.hostName = lib.mkDefault ""; # was "tappaas-nixos" — see Option 2 investigation
   networking.networkmanager.enable = true;  # Easiest to use and most distros use this by default.
+
+  # Option 2 (issue #302/#309): make the DHCP lease carry the correct per-clone
+  # name autonomously, independent of the cicd install pipeline AND of whether
+  # the consumer's nixos-rebuild overlay ever applies.
+  #
+  # Why this is needed: the per-VM hostname is delivered by Proxmox via cloud-init
+  # USER-DATA, which cloud-init only processes in its network stage — so it lands
+  # AFTER NetworkManager has already sent its first DHCP request. With hostName
+  # left unset (above), that first request carries no name → dnsmasq records a "*"
+  # lease that does not resolve. cloud-init then sets the correct hostname, but a
+  # NetworkManager renew/reapply does NOT update an existing lease's name (verified
+  # on the live cluster) — only a full re-acquire does.
+  #
+  # This oneshot runs right AFTER cloud-init.service (by which point the hostname
+  # is correct) and bounces the ethernet connection, forcing a fresh DHCP DISCOVER
+  # that carries the right name. Result: the VM self-registers in DNS at first
+  # boot under <vmname>, with no dependency on update-os.sh or nixos-rebuild.
+  systemd.services.tappaas-dhcp-hostname = {
+    description = "Re-acquire DHCP so the lease carries the cloud-init hostname (TAPPaaS Option 2)";
+    after = [ "cloud-init.service" "NetworkManager.service" ];
+    requires = [ "cloud-init.service" ];
+    wantedBy = [ "multi-user.target" ];
+    serviceConfig = {
+      Type = "oneshot";
+      RemainAfterExit = true;
+    };
+    # Two things are required on this NetworkManager version (both verified on the
+    # live cluster):
+    #   1. Set ipv4.dhcp-hostname EXPLICITLY on the ethernet profile(s). With the
+    #      template hostName unset the *static* hostname is empty, and NM sends the
+    #      static (not the live) hostname — so without this the lease is "*".
+    #   2. Re-acquire with a full device disconnect/connect. `device reapply` /
+    #      connection renew do NOT refresh an existing lease's name.
+    script = ''
+      hn=$(cat /proc/sys/kernel/hostname 2>/dev/null || true)
+      case "$hn" in ""|localhost|"(none)")
+        echo "TAPPaaS: hostname not set ('$hn') — skipping DHCP re-acquire"; exit 0 ;;
+      esac
+      # Set the DHCP hostname on every ethernet profile so NM advertises it.
+      ${pkgs.networkmanager}/bin/nmcli -t -f NAME,TYPE connection show 2>/dev/null \
+        | ${pkgs.gnugrep}/bin/grep ethernet | ${pkgs.coreutils}/bin/cut -d: -f1 \
+        | while IFS= read -r c; do
+            ${pkgs.networkmanager}/bin/nmcli connection modify "$c" ipv4.dhcp-hostname "$hn" 2>/dev/null || true
+          done
+      # Full re-acquire on the ethernet device → fresh DHCP DISCOVER carrying $hn.
+      dev=$(${pkgs.networkmanager}/bin/nmcli -t -f DEVICE,TYPE device status 2>/dev/null \
+              | ${pkgs.gnugrep}/bin/grep ethernet | ${pkgs.coreutils}/bin/cut -d: -f1 \
+              | ${pkgs.coreutils}/bin/head -1)
+      [ -z "$dev" ] && dev=eth0
+      echo "TAPPaaS: re-acquiring DHCP on '$dev' so the lease carries hostname '$hn'"
+      ${pkgs.networkmanager}/bin/nmcli device disconnect "$dev" 2>/dev/null || true
+      ${pkgs.coreutils}/bin/sleep 1
+      ${pkgs.networkmanager}/bin/nmcli device connect "$dev" 2>/dev/null || true
+    '';
+  };
 
   # Ensure consistent interface naming across cloned VMs.
   # Proxmox virtio NICs may appear as ens18, eth0, or enp0s18 depending on
