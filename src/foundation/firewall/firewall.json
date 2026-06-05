@@ -38,7 +38,8 @@
     "proxy",
     "rules",
     "discovery",
-    "dns"
+    "dns",
+    "nat"
   ],
   "config": {
     "cluster:vm": {

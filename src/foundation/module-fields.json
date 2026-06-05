@@ -57,6 +57,7 @@
     "ingress",
     "egress",
     "aliases",
+    "natRules",
     "dependsOn",
     "provides"
   ],
@@ -991,6 +992,58 @@
         }
       },
       "note": "Aliases are created in OPNsense before referencing rules are applied, and removed on remove-rules unless still referenced by other modules."
+    },
+    "natRules": {
+      "description": "Destination-NAT (port-forward) mappings that expose an internal service port on the firewall's WAN interface. Each entry is compiled into an OPNsense rdr-pass rule (translate + allow in one rule). Use this for non-HTTP ports (e.g. SSH); use firewall:proxy for HTTP(S). All rules forward to this module's single target (its 'ip', or <vmname>.<zone0>.internal).",
+      "type": "array",
+      "requiredBy": [],
+      "usedBy": [
+        "firewall:nat"
+      ],
+      "default": [],
+      "items": {
+        "type": "object",
+        "fields": {
+          "externalPort": {
+            "description": "Port exposed on the firewall WAN interface (e.g. 2022).",
+            "type": "integer|string",
+            "required": true,
+            "minimum": 1,
+            "maximum": 65535
+          },
+          "internalPort": {
+            "description": "Service port on the target host. Defaults to externalPort when omitted.",
+            "type": "integer|string",
+            "required": false,
+            "minimum": 1,
+            "maximum": 65535
+          },
+          "protocol": {
+            "description": "Transport protocol for this port-forward.",
+            "type": "string",
+            "values": {
+              "TCP": "TCP only (default)",
+              "UDP": "UDP only",
+              "TCP/UDP": "Both TCP and UDP"
+            },
+            "default": "TCP"
+          },
+          "description": {
+            "description": "Human-readable purpose of this port-forward (audit/documentation). Combined with the module name to form the rule's identity.",
+            "type": "string",
+            "required": false
+          }
+        }
+      },
+      "example": [
+        {
+          "externalPort": 2022,
+          "internalPort": 22,
+          "protocol": "TCP",
+          "description": "SSH"
+        }
+      ],
+      "note": "Activated when firewall:nat is in dependsOn. Rules are created as rdr-pass on the WAN interface, so no separate firewall:rules ingress entry is needed for the forwarded port."
     },
     "dependsOn": {
       "description": "List of services this module depends on. Each entry is a 'module:service' pair identifying which module delivers the service.",
