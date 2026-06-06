@@ -68,7 +68,7 @@ Reasoning: TAPPaaS is a self-hosted operator's tool — there is a single admin,
 
 The following safeguards remain in force regardless:
 
-- **Never** `git commit` or `git push` unless explicitly requested (this rule predates the policy and is unchanged).
+- **Never run `git commit` or `git push` — full stop.** The operator performs ALL commits and pushes themselves. This holds even when a request seems to imply it (e.g. "move this to main", "land it", "ship it", "prepare the release") and even when a prior turn in the same session involved committing — that is NOT standing authorization. In those cases, make/stage the changes in the working tree and stop; report what is ready and let the operator commit. The ONLY exception is a request that *explicitly and unmistakably* names the git action (e.g. "run git commit now", "commit and push this"). When unsure, do not commit.
 - **Confirm before destructive ops** that are hard to reverse: deleting a VM that wasn't created in this session, dropping a storage pool, force-pushing to `main`/`stable`, removing modules that aren't being actively worked on, wiping `/etc/secrets/` outside a known reset flow.
 - **Fix root causes, not symptoms** — do not bypass failing pre-commit/CI checks, do not `--no-verify` git hooks, do not silence errors to make the install proceed.
 - **Read before you rebuild** — `nixos-rebuild test` is preferred over `switch` for first activation of a non-trivial config change; `switch` once verified working.
@@ -78,7 +78,7 @@ The following safeguards remain in force regardless:
 1. **Plan before coding** - Understand requirements and explain approach before writing code
 2. **Ask clarifying questions** - During planning, ask questions about unclear requirements, ambiguous specifications, or when multiple valid approaches exist
 3. **Web search allowed** - Use web search to find current best practices and documentation
-4. **Never commit to git** - Do not run `git commit` or `git push` unless explicitly requested
+4. **Never commit to git** - Do not run `git commit` or `git push`. The operator commits and pushes; leave changes in the working tree (see the git safeguard under "Execution Policy" for the full rule). A request to "move to main"/"land"/"ship" does NOT authorize a commit.
 
 ## Testing Requirements
 
