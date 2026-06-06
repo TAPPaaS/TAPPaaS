@@ -29,6 +29,7 @@ MGMTVLAN="mgmt"
 VMID="${TAPPAAS_VMID_OVERRIDE:-$(get_config_value 'vmid')}"
 NODE="${TAPPAAS_NODE_OVERRIDE:-$(get_config_value 'node' "$(get_node_hostname 0)")}"
 VMNAME=$(get_config_value 'vmname' "${MODULE_NAME}")
+ZONE0NAME=$(get_config_value 'zone0' 'mgmt')
 
 NODE_FQDN="${NODE}.${MGMTVLAN}.internal"
 
@@ -53,5 +54,16 @@ ssh root@"${NODE_FQDN}" "qm destroy ${VMID} --purge" || {
     error "Failed to destroy VM ${VMID}"
     exit 1
 }
+
+# Remove any DNS pin / static DHCP reservation created at install time for
+# appliance (cloudInit:false) or Windows VMs. Harmless no-op for cloud-init VMs
+# (they self-register via the lease and have no pin) and when none exists.
+# Without this the dnsmasq dhcp-host=<mac>,<ip>,<vmname> reservation would linger
+# after the VM is gone and could mis-route a future guest that reuses the IP/name.
+if command -v dns-manager >/dev/null 2>&1; then
+    info "  Removing any DNS pin/reservation for ${VMNAME}.${ZONE0NAME}.internal"
+    dns-manager --no-ssl-verify delete "${VMNAME}" "${ZONE0NAME}.internal" >/dev/null 2>&1 \
+        || debug "  no DNS record to remove for ${VMNAME}.${ZONE0NAME}.internal"
+fi
 
 info "VM ${VMNAME} (VMID: ${VMID}) destroyed successfully"

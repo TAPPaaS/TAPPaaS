@@ -57,7 +57,16 @@ ssh "${SSH_OPTS[@]}" "root@${NODE_FQDN}" "/root/tappaas/Create-TAPPaaS-LXC.sh ${
 ssh "${SSH_OPTS[@]}" "root@${NODE_FQDN}" \
     "rm -f /root/tappaas/${MODULE}.json /root/tappaas/${MODULE}.meta.json" || true
 
-# ── 2. Wait for an IPv4 and register DNS ─────────────────────────────
+# ── 2. Wait for an IPv4 (readiness) — DNS is via masqdns, no static pin ──
+#
+# The container is created with --hostname "${VMNAME}" (see Create-TAPPaaS-LXC.sh),
+# so it sends <vmname> as its DHCP option-12 hostname and dnsmasq resolves
+# <vmname>.<zone0>.internal directly from the live lease — exactly like the
+# cloud-init VMs (the masqdns model). We deliberately do NOT create a
+# dns-manager static host override here: a static pin would (a) be redundant with
+# the lease and (b) SHADOW the live lease with a stale IP if the container's
+# lease ever changes (static addn-hosts take precedence over leases) — the very
+# IP-drift the pins were meant to avoid. Below is a readiness wait only.
 
 info "  Waiting for container ${VMID} to obtain an IPv4..."
 ip=""
@@ -70,13 +79,13 @@ for _ in $(seq 1 30); do
 done
 
 if [[ -z "${ip}" ]]; then
-    warn "  Container did not report an IPv4 yet — DNS not registered (register later via update-service)"
+    warn "  Container did not report an IPv4 yet — it will register in DNS via its DHCP lease once it does"
 else
-    info "  Container came up with IP ${BL}${ip}${CL}"
-    info "  Registering DNS: ${VMNAME}.${ZONE0}.internal → ${ip}"
-    dns-manager --no-ssl-verify add "${VMNAME}" "${ZONE0}.internal" "${ip}" \
-        --description "${MODULE} (cluster:lxc)" \
-        || warn "  dns-manager add failed for ${VMNAME}.${ZONE0}.internal"
+    info "  Container came up with IP ${BL}${ip}${CL} — DNS via masqdns lease (${VMNAME}.${ZONE0}.internal)"
 fi
+
+# Best-effort: remove any LEGACY static pin from an older install of this module,
+# so it can't shadow the live lease. Harmless no-op when none exists.
+dns-manager --no-ssl-verify delete "${VMNAME}" "${ZONE0}.internal" >/dev/null 2>&1 || true
 
 info "${GN}✓${CL} LXC ${VMNAME} (VMID ${VMID}) created on ${NODE}, zone ${ZONE0}"

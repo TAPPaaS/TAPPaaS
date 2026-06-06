@@ -35,6 +35,7 @@ def add_dns_host(
     ip_address: str,
     description: str | None = None,
     check_mode: bool = False,
+    mac: str | None = None,
 ) -> bool:
     """Add or update a DNS host entry.
 
@@ -45,6 +46,12 @@ def add_dns_host(
         ip_address: IP address for the host
         description: Description for the entry (defaults to hostname)
         check_mode: If True, perform dry-run without making changes
+        mac: Optional MAC address. When given, the entry becomes a full DHCP
+            static reservation (MAC -> IP) AND the hostname->IP DNS record in a
+            single dnsmasq host. This LOCKS the guest's IP, so the DNS record can
+            never drift if DHCP would otherwise hand out a different address on a
+            later lease/reboot. Used for guests that cannot self-register via the
+            DHCP lease under <vmname> (appliances like HAOS, Windows clones).
 
     Returns:
         True if successful, False otherwise
@@ -70,13 +77,18 @@ def add_dns_host(
         else:
             print(f"Creating DNS entry: {hostname}.{domain} -> {ip_address}")
 
-    # Create/update the DNS host entry
+    # Create/update the DNS host entry. With a MAC it is a full static
+    # reservation (MAC -> IP) that also serves the hostname -> IP record, so the
+    # IP is locked and the DNS record cannot drift.
     host = DhcpHost(
         description=description,
         host=hostname,
         ip=[ip_address],
         domain=domain,
+        hardware_addr=[mac] if mac else [],
     )
+    if mac:
+        print(f"  (static DHCP reservation: {mac} -> {ip_address})")
 
     try:
         result = manager.create_host(host, check_mode=check_mode)
@@ -308,6 +320,12 @@ Examples:
         "--description",
         help="Description for the entry (default: hostname.domain)",
     )
+    add_parser.add_argument(
+        "--mac",
+        help="MAC address — make this a static DHCP reservation (MAC -> IP) so "
+             "the IP is locked and the DNS record cannot drift. Use for guests "
+             "that do not self-register via the lease (HAOS, Windows clones).",
+    )
 
     # Delete command
     delete_parser = subparsers.add_parser("delete", help="Delete a DNS host entry by hostname and domain")
@@ -367,6 +385,7 @@ Examples:
                     args.ip,
                     args.description,
                     args.check_mode,
+                    mac=args.mac,
                 )
             elif args.command == "delete":
                 success = delete_dns_host(

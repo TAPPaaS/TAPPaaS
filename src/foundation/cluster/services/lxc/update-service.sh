@@ -192,20 +192,19 @@ if [[ ${RESTART_NEEDED} -eq 1 ]]; then
                  | tr ' ' '\n' | grep -E '^[0-9]+\.' | grep -v '^127\.' | head -1) || true
         [[ -n "${new_ip}" ]] && break
     done
-    [[ -z "${new_ip}" ]] && die "container did not report an IPv4 after restart — cannot register DNS"
-    info "  Container came up with IP ${BL}${new_ip}${CL}"
+    [[ -z "${new_ip}" ]] && die "container did not report an IPv4 after restart — unhealthy"
+    info "  Container came up with IP ${BL}${new_ip}${CL} — DNS via masqdns lease (${VMNAME}.${ZONE0}.internal)"
 
-    info "  Registering DNS: ${VMNAME}.${ZONE0}.internal → ${new_ip}"
-    dns-manager --no-ssl-verify add "${VMNAME}" "${ZONE0}.internal" "${new_ip}" \
-        --description "${MODULE} (cluster:lxc reconcile)" \
-        || warn "  dns-manager add failed for ${VMNAME}.${ZONE0}.internal"
-
+    # masqdns model: the container leases under <vmname>, so DNS follows the live
+    # lease in the new subnet — no static pin to register. Clean up any LEGACY
+    # pin (current zone, and the old zone on a zone change) so a stale override
+    # can't shadow the live lease.
+    dns-manager --no-ssl-verify delete "${VMNAME}" "${ZONE0}.internal" >/dev/null 2>&1 || true
     if [[ ${ZONE_CHANGED} -eq 1 && -n "${live_tag0:-}" && "${live_tag0}" != "0" ]]; then
         old_zone="$(jq -r --argjson t "${live_tag0}" 'to_entries[] | select(.value.vlantag == $t) | .key' "${ZONES_FILE}" 2>/dev/null | head -1)"
         if [[ -n "${old_zone}" && "${old_zone}" != "${ZONE0}" ]]; then
-            info "  Removing stale DNS: ${VMNAME}.${old_zone}.internal"
-            dns-manager --no-ssl-verify delete "${VMNAME}" "${old_zone}.internal" \
-                || debug "  no stale DNS to remove"
+            info "  Removing any stale DNS pin from old zone: ${VMNAME}.${old_zone}.internal"
+            dns-manager --no-ssl-verify delete "${VMNAME}" "${old_zone}.internal" >/dev/null 2>&1 || true
         fi
     fi
 fi

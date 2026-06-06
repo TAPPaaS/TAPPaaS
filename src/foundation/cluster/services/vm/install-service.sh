@@ -31,6 +31,17 @@ OSTYPE_VAL="$(get_config_value 'ostype' 'l26')"
 CLOUDINIT="$(get_config_value 'cloudInit' 'true')"
 MGMT="mgmt"
 
+# Read the VM's primary-NIC (net0) MAC from the Proxmox config. Used to turn a
+# DNS pin into a static DHCP reservation (MAC -> IP) for guests that must be
+# pinned (HAOS appliances, Windows clones) so the locked IP can never drift and
+# leave the pin stale. Empty if it can't be read (caller falls back to a plain
+# host override).
+_vm_net0_mac() {
+    ssh -n -o BatchMode=yes -o ConnectTimeout=10 "root@${NODE}.${MGMT}.internal" \
+        "qm config ${VMID} 2>/dev/null" 2>/dev/null \
+        | sed -n 's/^net0:.*virtio=\([0-9A-Fa-f:]\{17\}\).*/\1/p' | head -1
+}
+
 # For Windows clone VMs, prepare the OOBE answer file on the target node before
 # Create-TAPPaaS-VM.sh runs. The script deletes the file after building the per-VM
 # ISO, so it must be present on each deployment — not just the first.
@@ -263,9 +274,14 @@ except Exception:
 " 2>/dev/null) || _vm_ip=""
 
     if [[ -n "$_vm_ip" && -x "$(command -v dns-manager)" ]]; then
+        # Pin as a static DHCP reservation (MAC -> IP) so Windows always gets
+        # this IP and the record can't drift (#303 sibling). Falls back to a
+        # plain host override if the MAC can't be read.
+        _mac="$(_vm_net0_mac)"; _macarg=()
+        [[ -n "$_mac" ]] && _macarg=(--mac "$_mac")
         dns-manager --no-ssl-verify delete "${VMNAME}" "${ZONE0NAME}.internal" >/dev/null 2>&1 || true
-        dns-manager --no-ssl-verify add    "${VMNAME}" "${ZONE0NAME}.internal" "${_vm_ip}" >/dev/null 2>&1 || true
-        info "  ${GN}✓${CL} DNS: ${VMNAME}.${ZONE0NAME}.internal → ${_vm_ip}"
+        dns-manager --no-ssl-verify add    "${VMNAME}" "${ZONE0NAME}.internal" "${_vm_ip}" ${_macarg[@]+"${_macarg[@]}"} >/dev/null 2>&1 || true
+        info "  ${GN}✓${CL} DNS: ${VMNAME}.${ZONE0NAME}.internal → ${_vm_ip}${_mac:+ (MAC-reserved ${_mac})}"
     fi
 fi
 
@@ -303,9 +319,15 @@ except Exception:
     done
 
     if [[ -n "$_appliance_ip" && -x "$(command -v dns-manager)" ]]; then
+        # Pin as a static DHCP reservation (MAC -> IP). HAOS leases under its own
+        # hostname, so the pin is the only thing resolving <vmname>; a reservation
+        # locks the IP so that pin can never go stale on a later lease/reboot
+        # (the IP-drift concern). Falls back to a plain host override without MAC.
+        _mac="$(_vm_net0_mac)"; _macarg=()
+        [[ -n "$_mac" ]] && _macarg=(--mac "$_mac")
         dns-manager --no-ssl-verify delete "${VMNAME}" "${ZONE0NAME}.internal" >/dev/null 2>&1 || true
-        dns-manager --no-ssl-verify add    "${VMNAME}" "${ZONE0NAME}.internal" "${_appliance_ip}" >/dev/null 2>&1 || true
-        info "  ${GN}✓${CL} DNS: ${VMNAME}.${ZONE0NAME}.internal → ${_appliance_ip} (after ${_ip_wait}s)"
+        dns-manager --no-ssl-verify add    "${VMNAME}" "${ZONE0NAME}.internal" "${_appliance_ip}" ${_macarg[@]+"${_macarg[@]}"} >/dev/null 2>&1 || true
+        info "  ${GN}✓${CL} DNS: ${VMNAME}.${ZONE0NAME}.internal → ${_appliance_ip}${_mac:+ (MAC-reserved ${_mac})} (after ${_ip_wait}s)"
     else
         warn "  Could not determine IP for ${VMNAME} after ${_ip_wait}s — DNS NOT registered (VM may still be booting; re-run update-module.sh once it is up)"
     fi
