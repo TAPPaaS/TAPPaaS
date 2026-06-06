@@ -1,8 +1,8 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "module-catalog-schema.json",
+  "$id": "module-catalog-fields.json",
   "title": "TAPPaaS Module Catalog Schema",
-  "description": "Validates module-catalog.json (currently modules.json). Defines the structure of the TAPPaaS module registry used for VMID allocation, catalog browsing, and tooling.",
+  "description": "Field schema for module-catalog.json (the per-repo TAPPaaS module registry; renamed from modules.json per #305). Defines the structure used for VMID allocation, catalog browsing, taxonomy and tooling. Every 'managed: full' repo carries a module-catalog.json validated against this schema.",
 
   "type": "object",
   "required": ["foundationModules", "applicationModules"],
@@ -22,24 +22,25 @@
     },
     "proxmoxTemplates": {
       "type": "array",
-      "items": { "$ref": "#/$defs/catalogEntry" }
+      "items": { "$ref": "#/$defs/simpleEntry" }
     },
     "testModules": {
       "type": "array",
-      "items": { "$ref": "#/$defs/catalogEntry" }
+      "items": { "$ref": "#/$defs/simpleEntry" }
     }
   },
 
   "$defs": {
     "catalogEntry": {
       "type": "object",
-      "required": ["moduleName", "vmid", "moduleJson"],
+      "description": "A user-facing catalog module (foundation or application). Carries the full taxonomy (stack, category, status) for catalog-driven tooling and UI.",
+      "required": ["moduleName", "vmid", "moduleJson", "stack", "category", "status"],
       "additionalProperties": false,
       "properties": {
         "moduleName": {
           "type": "string",
           "pattern": "^[a-zA-Z][a-zA-Z0-9-]*$",
-          "description": "Unique module identifier. Matches vmname in module.json."
+          "description": "Unique module identifier. Matches vmname in the module's JSON."
         },
         "repo": {
           "type": "string",
@@ -75,6 +76,38 @@
           "type": "string",
           "pattern": "^[a-z][a-z0-9-]*$",
           "description": "Category within the stack. Free-form lowercase string."
+        },
+        "status": {
+          "type": "string",
+          "enum": ["stable", "beta", "incomplete", "deprecated"],
+          "description": "Single source of truth for module readiness. stable=production-ready; beta=usable, under active development; incomplete=not yet functional; deprecated=scheduled for removal."
+        }
+      }
+    },
+
+    "simpleEntry": {
+      "type": "object",
+      "description": "A non-user-facing catalog entry (VM template or test fixture). VMID-register only — no taxonomy required.",
+      "required": ["moduleName", "vmid", "moduleJson"],
+      "additionalProperties": false,
+      "properties": {
+        "moduleName": {
+          "type": "string",
+          "pattern": "^[a-zA-Z][a-zA-Z0-9-]*$",
+          "description": "Unique identifier for the template or test fixture."
+        },
+        "repo": {
+          "type": "string",
+          "enum": ["foundation", "application", "community"]
+        },
+        "moduleJson": {
+          "type": "string",
+          "description": "Relative path from repo root to the entry's JSON declaration file."
+        },
+        "vmid": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Proxmox VM ID. Must be unique across all catalog entries in this repo."
         }
       }
     }

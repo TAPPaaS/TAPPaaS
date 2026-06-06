@@ -38,4 +38,4 @@ ssh root@<node>.mgmt.internal "qm screendump <VMID> > /tmp/screen.ppm && base64 
 ```
 
 Paste the output into a base64 decoder (e.g. `base64 -d > screen.ppm`) to view it.
-The VMID for each module is in its JSON file and in `src/modules.json`.
+The VMID for each module is in its JSON file and in `src/module-catalog.json`.

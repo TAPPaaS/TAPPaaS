@@ -845,7 +845,7 @@ repository.sh remove tappaas-community --force
 1. Validates the repository URL is reachable via `git ls-remote`
 2. Clones the repository to `/home/tappaas/<name>/`
 3. Checks out the specified branch (default: `stable`)
-4. Verifies the repo contains `src/modules.json`
+4. Verifies the repo contains `src/module-catalog.json` (legacy `src/modules.json` also accepted)
 5. Warns on VMID or module name conflicts with existing repos
 6. Updates `configuration.json` with the new repository entry
 

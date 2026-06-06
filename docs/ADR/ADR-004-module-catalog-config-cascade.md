@@ -1,9 +1,19 @@
 # ADR-004: Module catalog → desired-state config cascade
 
-**Status:** proposed
+**Status:** accepted — core implemented (2026-06-06); cluster `timezone` and Layer-3 config zone-folder migration deferred to follow-up issues (see Open issues)
 **Date:** 2026-06-04
 **Deciders:** @LarsRossen + @ErikDaniel007
 **Related:** #297, #305, repository.sh
+
+> **Implementation note (2026-06-06):** Implemented Layer-1 (`managed`/`catalog`
+> in `configuration.json` + `configuration-fields.json`, and
+> `repository.sh add --managed full|tracked [--catalog <path>]`), Layer-2 (catalog
+> renamed `modules.json` → `module-catalog.json`; schema renamed
+> `module-catalog-schema.json` → `module-catalog-fields.json` with required
+> `stack`/`category`/`status` taxonomy), and registered the Community repo. The two
+> items below marked *(open: new issue)* — cluster `timezone` propagation and the
+> Layer-3 zone-folder migration — are intentionally **not** done here; they are
+> larger/disruptive and tracked separately.
 
 ---
 
@@ -21,7 +31,7 @@ src/module-catalog.json            ← Layer 2: what CAN exist  (#305: renamed f
 
 **Reference schemas:**
 - Layer 1: `src/foundation/configuration-fields.json`
-- Layer 2: `src/foundation/module-catalog-schema.json` · `src/foundation/module-fields.json`
+- Layer 2: `src/foundation/module-catalog-fields.json` · `src/foundation/module-fields.json`
 - Layer 2 dependency graph: `src/module-dependencies.md`
 
 ---
@@ -96,7 +106,7 @@ Add cluster-wide timezone to `configuration.json`:
 
 ### Layer 2 — Module catalog: `src/module-catalog.json`  *(NEW: rename + taxonomy)*
 
-**Renamed** from `modules.json` (per #297 + #305). Every `managed: full` repo contains this file. Validated by `src/foundation/module-catalog-schema.json`.
+**Renamed** from `modules.json` (per #297 + #305). Every `managed: full` repo contains this file. Validated by `src/foundation/module-catalog-fields.json`.
 
 Required fields per entry *(NEW: `stack`, `category`, `status`)*:
 
@@ -113,7 +123,7 @@ Required fields per entry *(NEW: `stack`, `category`, `status`)*:
 
 - `stack` + `category`: enable catalog-driven tooling and UI
 - `status`: single source of truth for module readiness
-- VMID uniqueness: enforced at commit time via `module-catalog-schema.json`
+- VMID uniqueness: enforced at commit time via `module-catalog-fields.json`
 - Module field contract: see `src/foundation/module-fields.json`
 - Dependency graph: see `src/module-dependencies.md`
 
@@ -176,10 +186,10 @@ Required fields per entry *(NEW: `stack`, `category`, `status`)*:
 
 | # | Topic | Status |
 |---|---|---|
-| #297 | `module-catalog.json` rename + JSON Schema | open |
-| #305 | Rename `module.json` → `module-catalog.json` (community repo) | open |
-| TBD | `timezone` field in `configuration.json` + propagation | new issue |
-| TBD | Config directory zone-based folder structure | new issue |
+| #297 | `module-catalog.json` rename + JSON Schema (`module-catalog-fields.json`) | ✅ done |
+| #305 | Rename `modules.json` → `module-catalog.json` (TAPPaaS + Community repos) | ✅ done |
+| TBD | `timezone` field in `configuration.json` + propagation | **to file** (deferred) |
+| TBD | Config directory zone-based folder structure | **to file** (deferred) |
 
 ---
 
@@ -203,8 +213,8 @@ Required fields per entry *(NEW: `stack`, `category`, `status`)*:
 
 ### Implementation order
 
-1. Merge #297 + #305 (`module-catalog.json` rename + schema)
-2. File + implement `timezone` issue
-3. `repository.sh --managed` + `catalog` field in `configuration.json`
-4. Config folder structure migration + `install-module.sh` update
-5. Add `stack` + `category` to existing catalog entries
+1. ✅ Merge #297 + #305 (`module-catalog.json` rename + `module-catalog-fields.json` schema)
+2. ⏳ File + implement `timezone` issue *(deferred — own issue)*
+3. ✅ `repository.sh --managed` + `catalog` field in `configuration.json`
+4. ⏳ Config folder structure migration + `install-module.sh` update *(deferred — own issue)*
+5. ✅ Add `stack` + `category` + `status` to catalog entries

@@ -53,7 +53,9 @@
                             "name": "TAPPaaS",
                             "url": "github.com/TAPPaaS/TAPPaaS",
                             "branch": "main",
-                            "path": "/home/tappaas/TAPPaaS"
+                            "path": "/home/tappaas/TAPPaaS",
+                            "managed": "full",
+                            "catalog": "src/module-catalog.json"
                         }
                     ],
                     "items": {
@@ -83,6 +85,21 @@
                                 "type": "string",
                                 "required": true,
                                 "example": "/home/tappaas/TAPPaaS"
+                            },
+                            "managed": {
+                                "description": "How TAPPaaS manages this repository (ADR-004). 'full' = contains TAPPaaS modules and is fully catalog-validated; 'tracked' = registered but has no catalog requirements.",
+                                "type": "string",
+                                "required": false,
+                                "enum": ["full", "tracked"],
+                                "default": "full",
+                                "example": "full"
+                            },
+                            "catalog": {
+                                "description": "Path to the repository's module catalog, relative to repo root (ADR-004). Defaults to src/module-catalog.json; override for non-standard layouts. Omit for 'tracked' repos.",
+                                "type": "string",
+                                "required": false,
+                                "default": "src/module-catalog.json",
+                                "example": "src/module-catalog.json"
                             }
                         }
                     }

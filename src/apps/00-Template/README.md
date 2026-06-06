@@ -167,7 +167,7 @@ echo "<paste base64 here>" | base64 -d | display
 ```
 
 Replace `<node>` with the Proxmox node name (e.g., `tappaas1`) and `<VMID>` with the VM ID.
-The VMID is in the module's JSON file (`vmid` field) and listed in `src/modules.json`.
+The VMID is in the module's JSON file (`vmid` field) and listed in `src/module-catalog.json`.
 
 ### Proxmox QEMU monitor
 

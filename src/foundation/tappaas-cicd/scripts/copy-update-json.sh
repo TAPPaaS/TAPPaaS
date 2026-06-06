@@ -189,7 +189,7 @@ should_be_number() {
     [[ "$value" =~ ^-?[0-9]+$ ]]
 }
 
-# Find the next available VMID after source_vmid by scanning config and modules.json
+# Find the next available VMID after source_vmid by scanning config and the module catalog
 find_next_vmid() {
     local source_vmid="$1"
     local used_vmids=""
@@ -203,8 +203,9 @@ find_next_vmid() {
         [[ -n "$vid" ]] && used_vmids="${used_vmids} ${vid}"
     done
 
-    # Collect VMIDs from modules.json
-    local modules_json="/home/tappaas/TAPPaaS/src/modules.json"
+    # Collect VMIDs from the module catalog (legacy name: src/modules.json — #305)
+    local modules_json="/home/tappaas/TAPPaaS/src/module-catalog.json"
+    [[ -f "${modules_json}" ]] || modules_json="/home/tappaas/TAPPaaS/src/modules.json"
     if [[ -f "${modules_json}" ]]; then
         local vid
         for vid in $(jq -r '.. | .vmid? // empty' "${modules_json}" 2>/dev/null); do

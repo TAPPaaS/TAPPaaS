@@ -184,13 +184,13 @@ else
         cd "${TEST_BARE_DIR}"
         git init --bare "${TEST_REPO_NAME}.git" >/dev/null 2>&1
 
-        # Create a working copy, add modules.json, push
+        # Create a working copy, add the module catalog, push
         WORK_DIR=$(mktemp -d)
         cd "${WORK_DIR}"
         git init >/dev/null 2>&1
         git checkout -b main >/dev/null 2>&1
         mkdir -p src
-        cat > src/modules.json << 'MODJSON'
+        cat > src/module-catalog.json << 'MODJSON'
 {
     "description": "Test Module Registry",
     "foundationModules": [],
@@ -247,8 +247,8 @@ MODJSON
     check_condition "add-clone-exists" "Clone directory exists" \
         "[ -d '${TEST_CLONE_PATH}' ]"
 
-    check_condition "add-modules-json" "Clone has src/modules.json" \
-        "[ -f '${TEST_CLONE_PATH}/src/modules.json' ]"
+    check_condition "add-module-catalog" "Clone has src/module-catalog.json" \
+        "[ -f '${TEST_CLONE_PATH}/src/module-catalog.json' ]"
 
     # Test: list shows new repo
     check_condition "list-shows-test" "List shows test repo" \

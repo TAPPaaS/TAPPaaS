@@ -4,10 +4,10 @@
         "summary": "VMID ranges are allocated by module type. Numbers are assigned in increments of 10, giving each module a block of 10 VMIDs for the local TAPPaaS administrator to create multiple copies of the same module/app.",
         "ranges": {
             "100-200": "Foundation modules (core platform infrastructure)",
-            "201-499": "Application modules \u2014 NixOS/Linux-based services",
-            "500-599": "Application modules \u2014 Windows Server-based services",
-            "600-799": "Application modules \u2014 general services",
-            "800-899": "Application modules \u2014 network and infrastructure",
+            "201-499": "Application modules — NixOS/Linux-based services",
+            "500-599": "Application modules — Windows Server-based services",
+            "600-799": "Application modules — general services",
+            "800-899": "Application modules — network and infrastructure",
             "900-999": "Test modules (used for VM creation testing and templates)",
             "8000-9000": "Proxmox templates (VM templates used for cloning)"
         },
@@ -20,7 +20,8 @@
             "moduleJson": "src/foundation/firewall/firewall.json",
             "vmid": 110,
             "stack": "foundation",
-            "category": "platform"
+            "category": "platform",
+            "status": "stable"
         },
         {
             "moduleName": "tappaas-cicd",
@@ -28,7 +29,8 @@
             "moduleJson": "src/foundation/tappaas-cicd/tappaas-cicd.json",
             "vmid": 130,
             "stack": "foundation",
-            "category": "platform"
+            "category": "platform",
+            "status": "stable"
         },
         {
             "moduleName": "identity",
@@ -36,7 +38,8 @@
             "moduleJson": "src/foundation/identity/identity.json",
             "vmid": 140,
             "stack": "security",
-            "category": "identity"
+            "category": "identity",
+            "status": "beta"
         },
         {
             "moduleName": "logging",
@@ -44,7 +47,8 @@
             "moduleJson": "src/foundation/logging/logging.json",
             "vmid": 150,
             "stack": "foundation",
-            "category": "observability"
+            "category": "observability",
+            "status": "beta"
         },
         {
             "moduleName": "backup",
@@ -52,7 +56,8 @@
             "moduleJson": "src/foundation/backup/backup.json",
             "vmid": 0,
             "stack": "foundation",
-            "category": "backup"
+            "category": "backup",
+            "status": "stable"
         }
     ],
     "applicationModules": [
@@ -62,7 +67,8 @@
             "moduleJson": "src/apps/litellm/litellm.json",
             "vmid": 310,
             "stack": "ai",
-            "category": "inference"
+            "category": "inference",
+            "status": "beta"
         },
         {
             "moduleName": "openwebui",
@@ -70,7 +76,8 @@
             "moduleJson": "src/apps/openwebui/openwebui.json",
             "vmid": 311,
             "stack": "ai",
-            "category": "interface"
+            "category": "interface",
+            "status": "beta"
         },
         {
             "moduleName": "vllm-amd",
@@ -78,7 +85,8 @@
             "moduleJson": "src/apps/vllm-amd/vllm-amd.json",
             "vmid": 312,
             "stack": "ai",
-            "category": "inference"
+            "category": "inference",
+            "status": "beta"
         },
         {
             "moduleName": "vaultwarden",
@@ -86,7 +94,8 @@
             "moduleJson": "src/apps/vaultwarden/vaultwarden.json",
             "vmid": 610,
             "stack": "security",
-            "category": "credentials"
+            "category": "credentials",
+            "status": "beta"
         },
         {
             "moduleName": "windows-server",
@@ -94,7 +103,8 @@
             "moduleJson": "src/apps/windows-server/windows-server.json",
             "vmid": 500,
             "stack": "application",
-            "category": "desktop"
+            "category": "desktop",
+            "status": "beta"
         },
         {
             "moduleName": "netbird-client",
@@ -102,7 +112,8 @@
             "moduleJson": "src/apps/netbird-client/netbird-client.json",
             "vmid": 800,
             "stack": "infrastructure",
-            "category": "network"
+            "category": "network",
+            "status": "beta"
         },
         {
             "moduleName": "unifi",
@@ -110,7 +121,8 @@
             "moduleJson": "src/apps/unifi/unifi.json",
             "vmid": 810,
             "stack": "infrastructure",
-            "category": "network"
+            "category": "network",
+            "status": "incomplete"
         }
     ],
     "proxmoxTemplates": [

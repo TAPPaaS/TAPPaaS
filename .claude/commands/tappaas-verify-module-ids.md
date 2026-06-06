@@ -1,10 +1,10 @@
-Verify that `src/modules.json` is consistent with the actual module JSON files on disk.
+Verify that `src/module-catalog.json` is consistent with the actual module JSON files on disk.
 
 ## Verification Steps
 
 ### 1. Load the registry
 
-Read `src/modules.json` and parse all four module lists:
+Read `src/module-catalog.json` and parse all four module lists:
 - `foundationModules`
 - `applicationModules`
 - `proxmoxTemplates`
@@ -17,7 +17,8 @@ Search for all module definition JSON files on disk:
 - `src/apps/*/*.json` — application modules
 
 A file is a **module JSON** if it contains a `"vmid"` field. Exclude:
-- Schema/reference files: `module-fields.json`, `configuration-fields.json`, `zones-fields.json`, `zones.json`
+- Schema/reference files: `module-fields.json`, `module-catalog-fields.json`, `configuration-fields.json`, `zones-fields.json`, `zones.json`
+- The catalog itself: `src/module-catalog.json` (the registry, not a module)
 - All files under `src/foundation/templates/` — these are Proxmox VM template definitions managed separately and tracked via the `proxmoxTemplates` registry key, not as standard module files
 
 ### 3. Cross-reference and check for discrepancies
@@ -37,7 +38,7 @@ For **`proxmoxTemplates` entries**, only verify:
 - Skip file-exists, VMID-match, and name-match checks — Proxmox templates are OS-level disk images managed outside the standard module JSON convention
 
 For **each module JSON found on disk**, verify:
-1. **Registered**: The module appears in `modules.json`
+1. **Registered**: The module appears in `module-catalog.json`
 2. **No duplicates**: No VMID is used by more than one module across all categories
 
 ### 4. Check VMID convention compliance
@@ -75,7 +76,7 @@ Present findings in a clear summary:
 (same table format)
 
 ### Missing from Registry
-(List any module JSON files on disk not found in modules.json)
+(List any module JSON files on disk not found in module-catalog.json)
 
 ### Missing from Disk
 (List any registry entries whose moduleJson file does not exist)

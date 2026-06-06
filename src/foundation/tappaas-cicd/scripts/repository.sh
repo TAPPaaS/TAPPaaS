@@ -55,10 +55,15 @@ Usage: ${SCRIPT_NAME} <command> [options]
 Manage TAPPaaS module repositories.
 
 Commands:
-    add <url> [--branch <branch>]
+    add <url> [--branch <branch>] [--managed full|tracked] [--catalog <path>]
         Add a new module repository. The repository is cloned into
         ${CLONE_DIR}/<name>/ where <name> is derived from the URL.
         Default branch: stable.
+        --managed full     (default) repo carries TAPPaaS modules; its module
+                           catalog is validated. --catalog overrides the catalog
+                           path (default: src/module-catalog.json, legacy
+                           src/modules.json accepted).
+        --managed tracked  register the repo without catalog requirements.
 
     remove <name> [--force]
         Remove a module repository. Blocked if installed modules
@@ -156,12 +161,29 @@ validate_git_url() {
     fi
 }
 
-# Count modules in a repository's src/modules.json
+# Resolve a repository's module-catalog file path (issue #305).
+# Prefers the current name (src/module-catalog.json) and falls back to the legacy
+# name (src/modules.json) so external module repos that have not migrated yet
+# keep working. Echoes the path of whichever exists, else the preferred (new)
+# path so callers can emit a clear "not found" message.
+# Arguments: <repo-path>
+repo_catalog_file() {
+    local repo_path="$1"
+    if [[ -f "${repo_path}/src/module-catalog.json" ]]; then
+        echo "${repo_path}/src/module-catalog.json"
+    elif [[ -f "${repo_path}/src/modules.json" ]]; then
+        echo "${repo_path}/src/modules.json"
+    else
+        echo "${repo_path}/src/module-catalog.json"
+    fi
+}
+
+# Count modules in a repository's module catalog
 # Arguments: <repo-path>
 # Outputs: module count
 count_repo_modules() {
     local repo_path="$1"
-    local modules_json="${repo_path}/src/modules.json"
+    local modules_json; modules_json="$(repo_catalog_file "${repo_path}")"
     if [[ -f "${modules_json}" ]]; then
         jq '[
             (.foundationModules // []),
@@ -174,12 +196,12 @@ count_repo_modules() {
     fi
 }
 
-# List module names from a repository's src/modules.json
+# List module names from a repository's module catalog
 # Arguments: <repo-path>
 # Outputs: module names (one per line)
 list_repo_modules() {
     local repo_path="$1"
-    local modules_json="${repo_path}/src/modules.json"
+    local modules_json; modules_json="$(repo_catalog_file "${repo_path}")"
     if [[ -f "${modules_json}" ]]; then
         jq -r '[
             (.foundationModules // []),
@@ -190,12 +212,12 @@ list_repo_modules() {
     fi
 }
 
-# Get all VMIDs from a repository's src/modules.json
+# Get all VMIDs from a repository's module catalog
 # Arguments: <repo-path>
 # Outputs: VMIDs (one per line)
 get_repo_vmids() {
     local repo_path="$1"
-    local modules_json="${repo_path}/src/modules.json"
+    local modules_json; modules_json="$(repo_catalog_file "${repo_path}")"
     if [[ -f "${modules_json}" ]]; then
         jq -r '[
             (.foundationModules // []),
@@ -227,6 +249,8 @@ update_config() {
 cmd_add() {
     local url=""
     local branch="stable"
+    local managed="full"          # ADR-004: full | tracked
+    local catalog=""              # ADR-004: catalog path; defaults per managed type
 
     # Parse arguments
     while [[ $# -gt 0 ]]; do
@@ -236,6 +260,23 @@ cmd_add() {
                     die "Option --branch requires a value"
                 fi
                 branch="$2"
+                shift 2
+                ;;
+            --managed)
+                if [[ -z "${2:-}" ]]; then
+                    die "Option --managed requires a value (full|tracked)"
+                fi
+                case "$2" in
+                    full|tracked) managed="$2" ;;
+                    *) die "Invalid --managed value '$2' (expected: full | tracked)" ;;
+                esac
+                shift 2
+                ;;
+            --catalog)
+                if [[ -z "${2:-}" ]]; then
+                    die "Option --catalog requires a value"
+                fi
+                catalog="$2"
                 shift 2
                 ;;
             --*)
@@ -252,7 +293,16 @@ cmd_add() {
     done
 
     if [[ -z "${url}" ]]; then
-        die "Repository URL is required. Usage: ${SCRIPT_NAME} add <url> [--branch <branch>]"
+        die "Repository URL is required. Usage: ${SCRIPT_NAME} add <url> [--branch <branch>] [--managed full|tracked] [--catalog <path>]"
+    fi
+
+    # ADR-004 defaults: a 'full' repo carries a catalog (default src/module-catalog.json);
+    # a 'tracked' repo has no catalog requirement.
+    if [[ "${managed}" == "full" && -z "${catalog}" ]]; then
+        catalog="src/module-catalog.json"
+    fi
+    if [[ "${managed}" == "tracked" && -n "${catalog}" ]]; then
+        die "--catalog is not valid with --managed tracked (tracked repos have no catalog)"
     fi
 
     local name
@@ -310,20 +360,36 @@ cmd_add() {
     # ── Step 4: Validate repository structure ────────────────────────
     info "\n${BOLD}Step 4: Validate repository structure${CL}"
 
-    local modules_json="${repo_path}/src/modules.json"
-    if [[ ! -f "${modules_json}" ]]; then
-        rm -rf "${repo_path}"
-        die "Repository does not contain src/modules.json — not a valid TAPPaaS module repository"
-    fi
+    if [[ "${managed}" == "tracked" ]]; then
+        # ADR-004: a 'tracked' repo is registered without catalog requirements.
+        info "  ${GN}✓${CL} managed=tracked — skipping module-catalog validation"
+    else
+        # 'full' repo: a valid module catalog is required. A custom --catalog path
+        # overrides the default new/legacy lookup.
+        local modules_json
+        if [[ -n "${catalog}" && -f "${repo_path}/${catalog}" ]]; then
+            modules_json="${repo_path}/${catalog}"
+        else
+            modules_json="$(repo_catalog_file "${repo_path}")"
+        fi
+        if [[ ! -f "${modules_json}" ]]; then
+            rm -rf "${repo_path}"
+            die "Repository does not contain ${catalog:-src/module-catalog.json (or legacy src/modules.json)} — not a valid TAPPaaS module repository (use --managed tracked for a non-module repo)"
+        fi
 
-    if ! jq empty "${modules_json}" 2>/dev/null; then
-        rm -rf "${repo_path}"
-        die "Invalid JSON in src/modules.json"
-    fi
+        if ! jq empty "${modules_json}" 2>/dev/null; then
+            rm -rf "${repo_path}"
+            die "Invalid JSON in ${modules_json#"${repo_path}/"}"
+        fi
 
-    local module_count
-    module_count=$(count_repo_modules "${repo_path}")
-    info "  ${GN}✓${CL} Found ${module_count} module(s) in src/modules.json"
+        # Record the catalog path actually found (relative to repo root) so the
+        # configuration.json entry points at the real file.
+        catalog="${modules_json#"${repo_path}/"}"
+
+        local module_count
+        module_count=$(count_repo_modules "${repo_path}")
+        info "  ${GN}✓${CL} Found ${module_count} module(s) in ${catalog}"
+    fi
 
     # ── Step 5: Check for conflicts ──────────────────────────────────
     info "\n${BOLD}Step 5: Check for conflicts${CL}"
@@ -380,10 +446,16 @@ cmd_add() {
     # ── Step 6: Update configuration ─────────────────────────────────
     info "\n${BOLD}Step 6: Update configuration${CL}"
 
+    # Build the entry (ADR-004): always include managed; include catalog only
+    # for 'full' repos (tracked repos carry no catalog).
     local tmp_file
     tmp_file=$(mktemp)
-    if jq --arg name "${name}" --arg url "${url}" --arg branch "${branch}" --arg path "${repo_path}" \
-        '.tappaas.repositories = (.tappaas.repositories // []) + [{"name": $name, "url": $url, "branch": $branch, "path": $path}]' \
+    if jq --arg name "${name}" --arg url "${url}" --arg branch "${branch}" \
+          --arg path "${repo_path}" --arg managed "${managed}" --arg catalog "${catalog}" \
+        '.tappaas.repositories = (.tappaas.repositories // []) + [
+            ({"name": $name, "url": $url, "branch": $branch, "path": $path, "managed": $managed})
+            + (if $managed == "full" then {"catalog": $catalog} else {} end)
+         ]' \
         "${CONFIG_FILE}" > "${tmp_file}" 2>/dev/null; then
         mv "${tmp_file}" "${CONFIG_FILE}"
     else

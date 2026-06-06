@@ -4,7 +4,7 @@ Generate a Mermaid dependency graph of all TAPPaaS modules and write it to `src/
 
 ### 1. Load the module registry
 
-Read `src/modules.json` and collect modules from these lists only:
+Read `src/module-catalog.json` and collect modules from these lists only:
 - `foundationModules`
 - `applicationModules`
 
