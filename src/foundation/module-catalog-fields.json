@@ -52,9 +52,9 @@
           "description": "Relative path from repo root to the module's JSON declaration file."
         },
         "vmid": {
-          "type": "integer",
+          "type": ["integer", "null"],
           "minimum": 0,
-          "description": "Proxmox VM ID. Must be unique across all catalog entries in this repo."
+          "description": "Proxmox VM ID, unique across catalog entries in this repo. Use null (or 0) for modules with no dedicated VM — e.g. policy-only firewall modules, or a service that shares a node."
         },
         "stack": {
           "type": "string",
