@@ -85,30 +85,70 @@ acme-setup.sh --variant ""
 
 ### 3. Zone Naming and Allocation
 
-Variant zones use the variant name directly (not prefixed):
+Variant zones use the variant name directly (not prefixed) and **inherit properties from the module's original zone**.
+
+#### Zone Inheritance
+
+When a variant zone is created for a module, it inherits the following from the module's source zone:
+
+- `type` — zone type (e.g., "Service")
+- `bridge` — network bridge (e.g., "lan")
+- `access-to` — list of zones this zone can reach
+- `pinhole-allowed-from` — list of zones allowed to reach this zone
+
+The variant zone gets a new `vlantag` allocated from the same zone type range (see below).
+
+#### VLAN Allocation Strategy
+
+VLANs are allocated **backwards from x99** within the same zone type category:
+
+| Zone Type  | Type ID (x) | Standard Range | Variant Range    |
+| ---------- | ----------- | -------------- | ---------------- |
+| Service    | 2           | 200-259        | 299, 298, 297... |
+| Management | 3           | 300-359        | 399, 398, 397... |
+| DMZ        | 4           | 400-459        | 499, 498, 497... |
+
+**Example:** If module `nextcloud` is in zone `srvHome` (VLAN 210):
+
+- First variant created → VLAN 299
+- Second variant created → VLAN 298
+- Third variant created → VLAN 297
+
+This keeps variant VLANs in the same "family" as the original zone while avoiding collisions with standard allocations.
+
+#### Variant Zone Example
+
+For `nextcloud` in `srvHome` (VLAN 210) with variant `acme-corp`:
 
 ```json
 {
   "acme-corp": {
     "type": "Service",
     "state": "Active",
-    "vlantag": 260,
-    "ip": "10.2.60.0/24",
+    "vlantag": 299,
+    "ip": "10.2.99.0/24",
     "bridge": "lan",
     "access-to": ["internet"],
     "pinhole-allowed-from": ["dmz"],
-    "parent": "srvCust",
+    "parent": "srvHome",
     "variant": "acme-corp",
-    "description": "ACME Corporation tenant zone"
+    "description": "Variant zone for acme-corp (inherited from srvHome)"
   }
 }
 ```
 
-**VLAN allocation:**
+**Inherited from `srvHome`:** `type`, `bridge`, `access-to`, `pinhole-allowed-from`
+**Derived:** `vlantag` (299 = first free backwards from 299), `ip` (10.2.99.0/24)
 
-- Variant zones start at VLAN 260 (10.2.60.0/24)
-- Supports up to 39 variants (VLAN 260-298, avoiding 299 reserved)
-- Can be overridden: `variant-manager add foo --domain foo.com --add-zone --vlan 275`
+#### VLAN Override
+
+The auto-allocation can be overridden:
+
+```bash
+variant-manager add foo --domain foo.com --add-zone --vlan 275
+```
+
+This is useful when specific VLAN placement is required for network policy reasons.
 
 ### 4. Variant-Aware Dependency Resolution
 
@@ -169,19 +209,29 @@ Use cases for `per-service`:
 
 ### 6. Per-Service DNS Registration (Fixes #269)
 
+**Why split-horizon DNS is required:** Caddy (os-caddy plugin) runs on OPNsense and binds to all interfaces (0.0.0.0:443). Without split-horizon DNS, internal clients resolve `*.tappaas.org` via public DNS → get WAN IP → traffic routes through external NAT → Caddy sees NAT source IP instead of client's real zone IP → `proxyAllowedZones` ACL denies the request (HTTP 403).
+
+With split-horizon DNS, internal clients resolve `*.tappaas.org` to the **DMZ gateway IP** (firewall's DMZ interface), traffic routes internally via the DMZ zone, and Caddy sees the client's real zone IP for proper ACL evaluation.
+
+**Implementation note:** The DMZ gateway IP should be looked up dynamically from `zones.json` (e.g., `10.6.0.1` for DMZ subnet `10.6.0.0/24`). Do not hardcode the IP.
+
+**Zone requirement:** Split-horizon DNS only works for zones that have `access-to: ["dmz"]` (directly or transitively). Some IoT zones intentionally lack DMZ access and cannot use proxy services — this is by design.
+
 When `dnsMode: "wildcard"`:
 
 ```bash
 # Single wildcard entry per variant (registered by acme-setup.sh)
-dns-manager add "*" "tappaas.org" "10.6.0.1" --description "TAPPaaS: wildcard"
+# Points to DMZ gateway where Caddy listens (looked up from zones.json)
+DMZ_GW=$(jq -r '.dmz.ip | split("/")[0] | split(".")[0:3] | join(".") + ".1"' zones.json)
+dns-manager add "*" "tappaas.org" "${DMZ_GW}" --description "TAPPaaS: wildcard"
 ```
 
 When `dnsMode: "per-service"`:
 
 ```bash
 # Per-module entry (registered by firewall:proxy install-service.sh)
-dns-manager add "nextcloud" "acme-corp.eu" "10.6.0.1" --description "TAPPaaS: nextcloud-acme-corp"
-dns-manager add "vaultwarden" "acme-corp.eu" "10.6.0.1" --description "TAPPaaS: vaultwarden-acme-corp"
+dns-manager add "nextcloud" "acme-corp.eu" "${DMZ_GW}" --description "TAPPaaS: nextcloud-acme-corp"
+dns-manager add "vaultwarden" "acme-corp.eu" "${DMZ_GW}" --description "TAPPaaS: vaultwarden-acme-corp"
 ```
 
 ### 7. Redirect Handler Support (Addresses #270)
@@ -289,14 +339,14 @@ install-module.sh nextcloud --variant acme-corp
   "acme-corp": {
     "type": "Service",
     "state": "Active",
-    "vlantag": 260,
-    "ip": "10.2.60.0/24",
+    "vlantag": 299,
+    "ip": "10.2.99.0/24",
     "bridge": "lan",
-    "parent": "srvCust",
+    "parent": "srvHome",
     "variant": "acme-corp",
     "access-to": ["internet"],
     "pinhole-allowed-from": ["dmz"],
-    "description": "ACME Corporation tenant zone"
+    "description": "Variant zone for acme-corp (inherited from srvHome)"
   }
 }
 ```
@@ -424,7 +474,11 @@ install-module.sh nextcloud --variant acme-corp
 #### 2.3 Implement `variant-manager add --add-zone`
 
 - **File:** Also modifies `zones.json`
-- **Logic:** Find next free VLAN starting at 260, create zone entry with `parent: "srvCust"`, `variant: <name>`
+- **Logic:**
+  1. Determine the module's source zone type (e.g., Service = type ID 2)
+  2. Find next free VLAN backwards from x99 (e.g., 299, 298, 297...)
+  3. Inherit `bridge`, `access-to`, `pinhole-allowed-from` from source zone
+  4. Create zone entry with `parent: <source-zone>`, `variant: <name>`
 - **Option:** `--vlan <num>` to override auto-allocation
 - **Calls:** `zone-manager` to activate the new zone
 
@@ -570,8 +624,8 @@ src/foundation/tappaas-cicd/
 | ---- | ----------- |
 | VM-01 | `variant-manager add "" --domain foo.org` creates default variant |
 | VM-02 | `variant-manager add demo --domain demo.foo.org` creates named variant |
-| VM-03 | `variant-manager add x --add-zone` allocates VLAN 260, creates zone |
-| VM-04 | `variant-manager add y --add-zone` allocates VLAN 261 (next free) |
+| VM-03 | `variant-manager add x --add-zone` allocates VLAN 299 (backwards from x99), creates zone |
+| VM-04 | `variant-manager add y --add-zone` allocates VLAN 298 (next free backwards) |
 | VM-05 | `variant-manager add z --add-zone --vlan 275` uses explicit VLAN |
 | VM-06 | `variant-manager add dup --domain dup.org` fails if variant exists |
 | VM-07 | `variant-manager add bad!name` fails on invalid characters |
