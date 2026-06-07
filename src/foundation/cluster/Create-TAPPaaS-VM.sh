@@ -215,6 +215,84 @@ function resolve_trunks() {
   echo -n "${result}"
 }
 
+function zfs_recv_preflight() {
+  # Pre-flight guard against poisoned-pool hangs (issue #308).
+  #
+  # A prior failed migration or receive can leave a D-state 'zfs recv' process
+  # (uninterruptible — cannot be killed, only a reboot clears it) or an orphan
+  # '@__migration__' snapshot on this (target) node. Any subsequent write into
+  # the poisoned pool then hangs indefinitely in __flush_workqueue with no
+  # diagnostic output. That covers every ZFS-writing creation path on this node:
+  #   - imageType=img : qm importdisk into ${STORAGE}
+  #   - imageType=iso : pvesm alloc / --scsi0 into ${STORAGE}
+  #   - clone (local or migrated): clone / migration recv into ${STORAGE}
+  # Originally this check only ran on the remote-clone path; #308 hoists it so it
+  # runs for every imageType before any ZFS work. The checks are read-only/cheap.
+  #
+  # Arguments:
+  #   $1  target storage pool (e.g. tanka1) — detection is scoped to this pool so
+  #       a stuck recv on a different, healthy pool does not block the deploy.
+  #   $2  "true" to also check for orphan @__migration__ snapshots (clone path).
+  local pool="$1"
+  local check_snaps="${2:-false}"
+  local node
+  node="$(hostname -s)"
+
+  info "Pre-flight check for stale ZFS state on ${node} (pool ${BL}${pool}${CL})..."
+
+  # D-state 'zfs recv'/'zfs receive' whose target dataset is in THIS pool. The
+  # hang is pool-local, so we only abort when the stuck recv targets ${pool}.
+  local STUCK_RECV
+  STUCK_RECV=$(ps -eo pid,stat,args --no-headers 2>/dev/null \
+    | awk -v p="$pool" '$2 ~ /D/ && /zfs[[:space:]]+(recv|receive)/ && $0 ~ ("(^| )" p "/")' \
+    || true)
+
+  local STALE_SNAPS=""
+  if [[ "$check_snaps" == "true" ]]; then
+    STALE_SNAPS=$(zfs list -H -t snapshot -o name 2>/dev/null | grep '@__migration__' || true)
+  fi
+
+  if [ -n "$STUCK_RECV" ] || [ -n "$STALE_SNAPS" ]; then
+    local LOG
+    LOG="/root/tappaas/migration-stale-${node}-$(date +%Y%m%d-%H%M%S).log"
+    mkdir -p /root/tappaas
+    {
+      echo "=== Pre-flight detected stale ZFS state on ${node} (pool ${pool}) at $(date) ==="
+      echo
+      echo "--- Stale '@__migration__' snapshots ---"
+      echo "${STALE_SNAPS:-<none>}"
+      echo
+      echo "--- D-state 'zfs recv' processes (pool ${pool}) ---"
+      echo "${STUCK_RECV:-<none>}"
+      echo
+      echo "--- Kernel stacks of stuck zfs recv PIDs ---"
+      echo "$STUCK_RECV" | awk '{print $1}' | while read -r pid; do
+        [ -n "$pid" ] || continue
+        echo "-- PID $pid --"
+        cat "/proc/${pid}/stack" 2>/dev/null || echo "(no /proc/${pid}/stack)"
+      done
+      echo
+      echo "--- zpool status ${pool} ---"
+      zpool status "$pool" 2>&1
+      echo
+      echo "--- zpool events (last 100) ---"
+      zpool events -v 2>/dev/null | tail -100
+      echo
+      echo "--- dmesg (last 500 lines) ---"
+      dmesg -T 2>/dev/null | tail -500
+    } > "$LOG" 2>&1
+    echo -e "\n${RD}[ERROR]${CL} Stale ZFS state detected on ${YW}${node}${CL} (pool ${YW}${pool}${CL})." >&2
+    echo -e "A previous migration/receive likely left a stuck 'zfs recv' (D-state) or an" >&2
+    echo -e "orphan '@__migration__' snapshot. New writes to this pool will hang indefinitely." >&2
+    echo -e "Diagnostics captured to: ${YW}${LOG}${CL}" >&2
+    echo -e "Inspect the log; D-state processes cannot be killed and require a reboot" >&2
+    echo -e "of ${node} to clear. Orphan snapshots can be removed with 'zfs destroy -r'.\n" >&2
+    trap - ERR
+    exit 1
+  fi
+  info "Pre-flight check passed — no stale ZFS state on ${node} (pool ${pool})"
+}
+
 # generate some MAC addresses
 info "${BOLD}Creating TAPPaaS VM in proxmox using the following settings:"
 NODE="$(get_config_value 'node' "$(hostname)")"
@@ -289,6 +367,12 @@ DISK1="vm-${VMID}-disk-1"
 DISK1_REF=${STORAGE}:${DISK1}
 
 create_vm_descriptions_html "$DESCRIPTION"
+
+# Pre-flight (issue #308): abort before any ZFS work — and before a potentially
+# large image download — if a stuck D-state 'zfs recv' is poisoning the target
+# pool. Runs for every imageType (img/iso/clone); the remote-clone path re-runs
+# it with the migration-snapshot check just before migrating.
+zfs_recv_preflight "$STORAGE" false
 
 if [ "${IMAGETYPE:-}" != "clone" ]; then
   if [ "$IMAGETYPE" = "iso" ]; then
@@ -543,51 +627,12 @@ if [ "$IMAGETYPE" == "clone" ]; then
     # Remote clone - need to clone on template node then migrate to current node
     info "Template is on ${TEMPLATE_NODE}, current node is ${CURRENT_NODE}"
 
-    # Pre-flight: a prior failed migration can leave orphaned '@__migration__'
-    # snapshots or D-state 'zfs recv' processes on the target. Any new recv
-    # into the poisoned pool will hang indefinitely in __flush_workqueue.
-    # Detect that up-front and capture diagnostics so the operator can act.
-    info "Pre-flight check for stale migration state on ${CURRENT_NODE}..."
-    STALE_SNAPS=$(zfs list -H -t snapshot -o name 2>/dev/null | grep '@__migration__' || true)
-    STUCK_RECV=$(ps -eo pid,stat,cmd --no-headers 2>/dev/null | awk '$2 ~ /D/ && /zfs recv/' || true)
-    if [ -n "$STALE_SNAPS" ] || [ -n "$STUCK_RECV" ]; then
-      LOG="/root/tappaas/migration-stale-${CURRENT_NODE}-$(date +%Y%m%d-%H%M%S).log"
-      mkdir -p /root/tappaas
-      {
-        echo "=== Pre-flight detected stale migration state on ${CURRENT_NODE} at $(date) ==="
-        echo
-        echo "--- Stale '@__migration__' snapshots ---"
-        echo "${STALE_SNAPS:-<none>}"
-        echo
-        echo "--- D-state 'zfs recv' processes ---"
-        echo "${STUCK_RECV:-<none>}"
-        echo
-        echo "--- Kernel stacks of stuck zfs recv PIDs ---"
-        echo "$STUCK_RECV" | awk '{print $1}' | while read -r pid; do
-          [ -n "$pid" ] || continue
-          echo "-- PID $pid --"
-          cat "/proc/${pid}/stack" 2>/dev/null || echo "(no /proc/${pid}/stack)"
-        done
-        echo
-        echo "--- zpool status ${STORAGE} ---"
-        zpool status "$STORAGE" 2>&1
-        echo
-        echo "--- zpool events (last 100) ---"
-        zpool events -v 2>/dev/null | tail -100
-        echo
-        echo "--- dmesg (last 500 lines) ---"
-        dmesg -T 2>/dev/null | tail -500
-      } > "$LOG" 2>&1
-      echo -e "\n${RD}[ERROR]${CL} Stale migration state detected on ${YW}${CURRENT_NODE}${CL}." >&2
-      echo -e "A previous migration likely left a stuck 'zfs recv' (D-state) or an orphan" >&2
-      echo -e "'@__migration__' snapshot. New migrations will hang indefinitely." >&2
-      echo -e "Diagnostics captured to: ${YW}${LOG}${CL}" >&2
-      echo -e "Inspect the log; D-state processes cannot be killed and require a reboot" >&2
-      echo -e "of ${CURRENT_NODE} to clear. Orphan snapshots can be removed with 'zfs destroy -r'.\n" >&2
-      trap - ERR
-      exit 1
-    fi
-    info "Pre-flight check passed — no stale migration state on ${CURRENT_NODE}"
+    # Pre-flight (issue #308): a prior failed migration can leave orphan
+    # '@__migration__' snapshots or a D-state 'zfs recv' on the target; a new
+    # recv into the poisoned pool hangs indefinitely in __flush_workqueue. Re-run
+    # the shared check here (immediately before migrating) with the
+    # migration-snapshot check enabled — the early call only covers stuck recvs.
+    zfs_recv_preflight "$STORAGE" true
 
     info "Cloning on ${TEMPLATE_NODE} and migrating to ${CURRENT_NODE}..."
 
