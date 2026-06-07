@@ -774,7 +774,6 @@ else
         # Proxmox vlan-aware bridge only forwards VLAN tags listed in the OPNsense
         # NIC's trunks=... allowlist. The new test zones (VLANs 810/820) need that
         # list updated or their traffic is dropped before reaching OPNsense.
-        local _fw_cfg
         _fw_cfg=$(read_module_config "firewall" 2>/dev/null)
         FIREWALL_VMID=$(echo "${_fw_cfg}" | jq -r '.vmid // 110')
         FIREWALL_MAC=$(echo "${_fw_cfg}" | jq -r '.mac0 // empty')
