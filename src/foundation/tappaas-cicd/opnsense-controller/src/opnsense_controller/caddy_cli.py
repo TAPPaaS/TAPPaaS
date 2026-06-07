@@ -7,6 +7,7 @@ domains and handlers on OPNsense.
 
 import argparse
 import sys
+from urllib.parse import urlparse
 
 from .caddy_manager import CaddyDomain, CaddyHandler, CaddyManager
 from .config import Config
@@ -88,25 +89,40 @@ def add_domain(
 def add_handler(
     manager: CaddyManager,
     domain_name: str,
-    upstream: str,
+    upstream: str | None = None,
     port: str = "80",
     description: str = "",
     access_list: str = "",
     upstream_tls: bool = False,
     forward_auth: bool = False,
     check_mode: bool = False,
+    redir: str = "",
+    redir_path: str = "",
 ) -> bool:
-    """Add (or reconcile) a reverse proxy handler for a domain.
+    """Add (or reconcile) a reverse-proxy OR redir handler for a domain.
+
+    Exactly one of `upstream` (reverse_proxy) or `redir` (HTTP redirect) is used.
+
+    For `redir`, os-caddy 2.1.0 renders ``redir <target>{uri}`` with no status
+    code, so Caddy's default (302) applies — the redirect code is not
+    configurable via the plugin (issue #270). The target scheme is taken from
+    the URL (https → TLS), and the request path/query is preserved unless
+    `redir_path` is given.
 
     Args:
         manager: CaddyManager instance.
         domain_name: Domain FQDN to attach the handler to.
-        upstream: Upstream server hostname (e.g., "app.srv.internal").
+        upstream: Reverse-proxy upstream hostname (e.g., "app.srv.internal").
         port: Upstream port.
         description: Description for the handler.
         access_list: Optional access-list NAME to attach (issue #206). Restricts
             which client networks may reach the service. Empty = unrestricted.
+        upstream_tls: Reverse-proxy to an HTTPS upstream.
+        forward_auth: Enable per-handle Authentik forward_auth (issue #45).
         check_mode: If True, perform dry-run.
+        redir: Redirect target URL (e.g. "https://identity.example.com").
+        redir_path: For redir, a fixed target path (Caddy ToPath); empty
+            preserves the request path/query.
 
     Returns:
         True if successful.
@@ -126,25 +142,53 @@ def add_handler(
             return False
         access_list_uuid = al.uuid
 
-    handler = CaddyHandler(
-        domain_uuid=domain_info.uuid,
-        upstream_domain=upstream,
-        upstream_port=str(port),
-        description=description,
-        access_list_uuid=access_list_uuid,
-        upstream_tls=upstream_tls,
-        forward_auth=forward_auth,
-    )
+    if redir:
+        # Parse the redirect target URL → scheme (TLS), host (ToDomain),
+        # optional port (ToPort), optional path (ToPath). A bare host defaults
+        # to https.
+        target = redir if "://" in redir else f"https://{redir}"
+        parsed = urlparse(target)
+        if not parsed.hostname:
+            print(f"ERROR: Could not parse redirect target '{redir}'", file=sys.stderr)
+            return False
+        # An explicit --redir-path wins; otherwise use the URL path unless it is
+        # empty/root, in which case leave it blank so os-caddy preserves {uri}.
+        to_path = redir_path or (parsed.path if parsed.path not in ("", "/") else "")
+        handler = CaddyHandler(
+            domain_uuid=domain_info.uuid,
+            upstream_domain=parsed.hostname,
+            upstream_port=str(parsed.port) if parsed.port else "",
+            description=description,
+            access_list_uuid=access_list_uuid,
+            upstream_tls=(parsed.scheme == "https"),
+            forward_auth=forward_auth,
+            directive="redir",
+            to_path=to_path,
+        )
+        scheme = "https" if parsed.scheme == "https" else "http"
+        port_part = f":{parsed.port}" if parsed.port else ""
+        target_desc = f"redir {scheme}://{parsed.hostname}{port_part}{to_path or '{uri}'}"
+    else:
+        handler = CaddyHandler(
+            domain_uuid=domain_info.uuid,
+            upstream_domain=upstream,
+            upstream_port=str(port),
+            description=description,
+            access_list_uuid=access_list_uuid,
+            upstream_tls=upstream_tls,
+            forward_auth=forward_auth,
+        )
+        target_desc = f"{upstream}:{port}"
 
     # Reconcile an existing handler (so the access list / upstream stay current)
     # rather than skipping — important for applying #206 restriction changes.
     existing = manager.get_handler_by_description(description) if description else None
     if existing:
         if check_mode:
-            print(f"Would update handler: {domain_name} -> {upstream}:{port} "
+            print(f"Would update handler: {domain_name} -> {target_desc} "
                   f"(access_list={access_list or 'none'}) (dry-run)")
             return True
-        print(f"Updating handler: {domain_name} -> {upstream}:{port} "
+        print(f"Updating handler: {domain_name} -> {target_desc} "
               f"(access_list={access_list or 'none'})")
         result = manager.update_handler(existing.uuid, handler)
         if result.get("result") in ("saved", "ok") or result.get("uuid"):
@@ -154,11 +198,11 @@ def add_handler(
         return False
 
     if check_mode:
-        print(f"Would create handler: {domain_name} -> {upstream}:{port} "
+        print(f"Would create handler: {domain_name} -> {target_desc} "
               f"(access_list={access_list or 'none'}) (dry-run)")
         return True
 
-    print(f"Creating handler: {domain_name} -> {upstream}:{port} "
+    print(f"Creating handler: {domain_name} -> {target_desc} "
           f"(access_list={access_list or 'none'})")
     result = manager.add_handler(handler)
 
@@ -447,8 +491,11 @@ Examples:
   caddy-manager add-domain app.test.tapaas.org --description "TAPPaaS: myapp" --no-ssl-verify
   caddy-manager --no-ssl-verify add-domain app.test.tapaas.org --description "TAPPaaS: myapp"
 
-  # Add a handler for a domain
+  # Add a reverse-proxy handler for a domain
   caddy-manager add-handler app.test.tapaas.org --upstream myapp.srv.internal --port 8080 --description "TAPPaaS: myapp"
+
+  # Add a redirect handler (issue #270): www.example.com -> https://identity.example.com (preserves path; 302)
+  caddy-manager add-handler www.example.com --redir https://identity.example.com --description "TAPPaaS: www-redir"
 
   # Delete a handler by description
   caddy-manager delete-handler --description "TAPPaaS: myapp"
@@ -487,10 +534,20 @@ Examples:
     )
 
     # add-handler
-    add_handler_parser = subparsers.add_parser("add-handler", parents=[global_parser], help="Add a reverse proxy handler")
+    add_handler_parser = subparsers.add_parser("add-handler", parents=[global_parser], help="Add a reverse proxy or redirect handler")
     add_handler_parser.add_argument("domain", help="Domain FQDN to attach the handler to")
-    add_handler_parser.add_argument("--upstream", required=True, help="Upstream server (e.g., app.srv.internal)")
-    add_handler_parser.add_argument("--port", default="80", help="Upstream port (default: 80)")
+    # Exactly one of --upstream (reverse_proxy) or --redir (HTTP redirect).
+    handler_target = add_handler_parser.add_mutually_exclusive_group(required=True)
+    handler_target.add_argument("--upstream", help="Reverse-proxy upstream server (e.g., app.srv.internal)")
+    handler_target.add_argument(
+        "--redir",
+        help="Redirect target URL (e.g. https://identity.example.com) — configures a Caddy "
+        "'redir' handler instead of reverse_proxy (issue #270). The request path/query is "
+        "preserved unless --redir-path is given. NOTE: os-caddy emits no status code, so "
+        "Caddy's default (302) applies — the redirect code is not configurable via the plugin.",
+    )
+    add_handler_parser.add_argument("--redir-path", default="", help="For --redir: fixed target path (e.g. /ui/); omit to preserve the request path/query")
+    add_handler_parser.add_argument("--port", default="80", help="Upstream port (default: 80; reverse_proxy only)")
     add_handler_parser.add_argument("--description", default="", help="Description for the handler")
     add_handler_parser.add_argument("--access-list", default="", help="Name of an access list to attach (issue #206) — restrict client networks")
     add_handler_parser.add_argument("--upstream-tls", action="store_true", help="Reverse-proxy to an HTTPS upstream (e.g. the OPNsense GUI on :8443); skips upstream cert verification")
@@ -572,6 +629,7 @@ Examples:
                     manager, args.domain, args.upstream, args.port,
                     args.description, args.access_list, args.upstream_tls,
                     args.forward_auth, args.check_mode,
+                    redir=args.redir, redir_path=args.redir_path,
                 )
             elif args.command == "add-accesslist":
                 success = add_access_list_cmd(

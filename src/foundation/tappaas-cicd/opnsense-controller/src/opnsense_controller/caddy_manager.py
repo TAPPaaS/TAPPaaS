@@ -47,6 +47,13 @@ class CaddyHandler:
     # makes Caddy redirect unauthenticated requests through the Authentik
     # outpost before reverse-proxying to the upstream.
     forward_auth: bool = False
+    # os-caddy handler directive: "reverse_proxy" (proxy to upstream_domain) or
+    # "redir" (HTTP redirect to upstream_domain). For redir, the target scheme
+    # comes from upstream_tls (https/http) and the path from to_path (issue #270).
+    directive: str = "reverse_proxy"
+    # ToPath: for redir, a fixed target path (empty → os-caddy uses "{uri}",
+    # preserving the request path/query). For reverse_proxy, a rewrite path.
+    to_path: str = ""
 
 
 @dataclass
@@ -97,10 +104,20 @@ class CaddyHandlerInfo:
     upstream_port: str
     description: str
     enabled: bool
+    # "reverse_proxy" or "redir" (issue #270).
+    directive: str = "reverse_proxy"
 
     @classmethod
     def from_api_response(cls, data: dict) -> "CaddyHandlerInfo":
         """Create from OPNsense API search response row."""
+        directive = data.get("HandleDirective", "")
+        # The search endpoint may return the field as an OPNsense option dict
+        # ({value: {selected: 1}, ...}) rather than a plain string.
+        if isinstance(directive, dict):
+            directive = next(
+                (k for k, v in directive.items() if isinstance(v, dict) and v.get("selected") == 1),
+                "reverse_proxy",
+            )
         return cls(
             uuid=data.get("uuid", ""),
             domain_uuid=data.get("reverse", ""),
@@ -108,6 +125,7 @@ class CaddyHandlerInfo:
             upstream_port=data.get("ToPort", ""),
             description=data.get("description", ""),
             enabled=data.get("enabled") == "1",
+            directive=directive or "reverse_proxy",
         )
 
 
@@ -385,9 +403,10 @@ class CaddyManager:
                 "enabled": "1" if handler.enabled else "0",
                 "reverse": handler.domain_uuid,
                 "HandleType": "handle",
-                "HandleDirective": "reverse_proxy",
+                "HandleDirective": handler.directive,
                 "ToDomain": handler.upstream_domain,
                 "ToPort": str(handler.upstream_port),
+                "ToPath": handler.to_path,
                 "HttpTls": "1" if handler.upstream_tls else "0",
                 "HttpTlsInsecureSkipVerify": "1" if (handler.upstream_tls and handler.upstream_tls_skip_verify) else "0",
                 "accesslist": handler.access_list_uuid,
@@ -412,9 +431,10 @@ class CaddyManager:
                 "enabled": "1" if handler.enabled else "0",
                 "reverse": handler.domain_uuid,
                 "HandleType": "handle",
-                "HandleDirective": "reverse_proxy",
+                "HandleDirective": handler.directive,
                 "ToDomain": handler.upstream_domain,
                 "ToPort": str(handler.upstream_port),
+                "ToPath": handler.to_path,
                 "HttpTls": "1" if handler.upstream_tls else "0",
                 "HttpTlsInsecureSkipVerify": "1" if (handler.upstream_tls and handler.upstream_tls_skip_verify) else "0",
                 "accesslist": handler.access_list_uuid,
