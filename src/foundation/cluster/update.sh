@@ -147,5 +147,29 @@ done <<< "$NODES"
 echo ""
 info "SSD lifecycle configuration refreshed on all Proxmox nodes."
 
+# Step 4: Realtek RTL8127 NIC driver fix on all nodes (issue #308).
+#   - Hardware-gated: a no-op on nodes without an RTL8127 (e.g. Intel-igc nodes).
+#   - Idempotent: installs the r8127 DKMS driver + blacklists r8169 (only after
+#     the module is confirmed to build/load), so MS-S1 MAX nodes survive a warm
+#     reboot instead of needing a power cycle. Re-asserted every update so the
+#     fix is reinstated if a kernel/package change ever drifted it.
+echo ""
+info "${BOLD}Step 4: Refreshing Realtek RTL8127 NIC driver fix${CL}"
+while read -r node; do
+    NODE_FQDN="$node.$MGMTVLAN.internal"
+    echo ""
+    info "Deploying Realtek NIC setup to $node..."
+    scp "${SCRIPT_DIR}/setup-realtek-nic.sh" root@"$NODE_FQDN":/root/tappaas/
+    scp "${SCRIPT_DIR}/assets/r8127-dkms_11.015.00-1_all.deb" \
+        root@"$NODE_FQDN":/root/tappaas/ 2>/dev/null || true
+    if ! ssh -n -o StrictHostKeyChecking=no root@"$NODE_FQDN" "/root/tappaas/setup-realtek-nic.sh"; then
+        warn "Realtek NIC setup reported an issue on $node (see output above)"
+        continue
+    fi
+    info "$node Realtek NIC setup complete."
+done <<< "$NODES"
+echo ""
+info "Realtek NIC driver fix refreshed on all Proxmox nodes."
+
 echo ""
 info "${GN}✓${CL} Cluster module update completed successfully."

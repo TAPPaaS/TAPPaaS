@@ -532,6 +532,22 @@ if ! /root/tappaas/setup-ssd-lifecycle.sh >/dev/null; then
 fi
 msg_ok "Configured SSD lifecycle management"
 
+msg_info "Configuring Realtek RTL8127 NIC driver (if present)"
+# MS-S1 MAX dual 10GbE (RTL8127) needs the r8127 DKMS driver — the in-tree r8169
+# drops the NIC on a warm reboot (issue #308). Hardware-gated: a no-op on nodes
+# without an RTL8127. The vendored, SHA256-pinned .deb is fetched alongside so the
+# install is reproducible. Non-fatal: a fresh node still has working (pre-reboot)
+# networking via r8169, and update.sh re-runs this enforcer every cycle to
+# converge it. Needs Secure Boot off + one power cycle (the script instructs).
+fetch "${REPO}${BRANCH}/src/foundation/cluster/setup-realtek-nic.sh" \
+    /root/tappaas/setup-realtek-nic.sh 755
+fetch "${REPO}${BRANCH}/src/foundation/cluster/assets/r8127-dkms_11.015.00-1_all.deb" \
+    /root/tappaas/r8127-dkms_11.015.00-1_all.deb 644
+if ! /root/tappaas/setup-realtek-nic.sh; then
+    msg_error "Realtek NIC setup reported an issue (see output above) — continuing"
+fi
+msg_ok "Realtek NIC driver step complete"
+
 # msg_info "Install netbird client:"
 # curl -fsSL https://pkgs.netbird.io/install.sh | sh
 

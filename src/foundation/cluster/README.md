@@ -29,8 +29,11 @@ A guest is **either** a VM **or** a container, never both.
 | `install-platform.sh` | Run once on the first node after all nodes + firewall are up — builds the NixOS template (vmid 8080) and the `tappaas-cicd` mothership (vmid 130). |
 | `Create-TAPPaaS-VM.sh` / `Create-TAPPaaS-LXC.sh` | Guest provisioners, distributed to every node and invoked by the `cluster:vm` / `cluster:lxc` services. |
 | `setup-ssd-lifecycle.sh` | Autotrim + TRIM/SMART cron jobs (#152). |
+| `setup-realtek-nic.sh` | Realtek RTL8127 10GbE driver fix for MS-S1 MAX nodes (#308) — hardware-gated, idempotent. See [Node hardware quirks](#node-hardware-quirks). |
+| `reboot-node.sh` / `reboot-cluster.sh` | Controlled HA node reboot (single node / orchestrated kernel-reboot pass) (#275). |
 | `update.sh` | Cluster module update — apt upgrade on all nodes and re-distribute the provisioners + `zones.json`. |
 | `test.sh` | Cluster regression tests. |
+| `assets/` | Vendored binaries used at provision time (e.g. the pinned `r8127-dkms` `.deb`). |
 
 ---
 
@@ -206,9 +209,38 @@ you pick disks and a topology (existing pools are skipped).
 `update.sh` (run from the mothership) keeps the provisioners and `zones.json` in
 sync across all nodes.
 
+## Node hardware quirks
+
+### Minisforum MS-S1 MAX — Realtek RTL8127 10GbE (issue #308)
+
+The MS-S1 MAX's two 10GbE ports are Realtek **RTL8127** `[10ec:8127]`. The in-tree
+**`r8169`** driver fails to re-initialise them across a **warm/soft reboot** — the
+NIC drops off the PCIe bus and only a **full power cycle** brings it back. (Same
+chipset bug seen on the NVIDIA DGX Spark.) Intel-`igc` nodes are unaffected.
+
+The fix is codified in **`setup-realtek-nic.sh`** (run by `install.sh` at bootstrap
+and re-asserted by `update.sh` every cycle; hardware-gated, idempotent): install
+Realtek's **`r8127`** DKMS driver (vendored, SHA256-pinned, in `assets/`) and
+blacklist `r8169` — but **only after** the `r8127` module is confirmed to build and
+load, so a future kernel that can't build it never leaves the node driverless.
+
+Two steps the OS cannot do for you (the script detects and instructs):
+
+1. **Disable Secure Boot** in the BIOS — the unsigned DKMS module will not load
+   otherwise (or MOK-sign it). The MS-S1 MAX ships with Secure Boot **enabled**.
+2. **One power cycle** the first time — the node boots on `r8169`; only a full
+   power cycle (drain), not a warm reboot, switches cleanly to `r8127`. After
+   that, warm reboots (incl. the `#275` automated kernel-reboot pass) are safe.
+
+Because `update.sh` re-runs the enforcer every cycle and DKMS rebuilds `r8127` for
+each new kernel, ordinary updates **maintain** the fix rather than overwrite it; a
+from-scratch reinstall re-applies it automatically via `install.sh`.
+
 ## Related issues
 
 - #140 — automate cluster create/join in `install.sh`
 - #141 — `config-network.sh` (lan/wan bridge setup, swap-cables step)
 - #175 — robust downloads (`fetch()`): a failed download is now fatal, never a
   silent 0-byte file reported as success
+- #275 — controlled HA node reboots (`reboot-node.sh` / `reboot-cluster.sh`)
+- #308 — Realtek RTL8127 NIC driver fix for MS-S1 MAX (`setup-realtek-nic.sh`)
