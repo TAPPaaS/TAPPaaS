@@ -233,6 +233,23 @@ apply_variant_defaults() {
 
     local tmp_file
 
+    # Registry lookup (ADR-005 Sprint 3): a named variant MUST be registered in
+    # configuration.json before it can be installed. Domain and (optional) zone
+    # are read from the registry rather than guessed.
+    local vcfg vdomain vzone
+    if ! vcfg="$(get_variant_config "${variant}")"; then
+        die "Variant '${variant}' not registered. Run: variant-manager add ${variant} --domain <domain>"
+    fi
+    vdomain="$(jq -r '.domain // empty' <<<"${vcfg}")"
+    vzone="$(jq -r '.zone // empty' <<<"${vcfg}")"
+
+    # Capture the service "name" part (first label of proxyDomain, else vmname)
+    # BEFORE we rename vmname, so proxyDomain can be rebuilt as <name>.<vdomain>.
+    local base_name
+    base_name="$(jq -r '.proxyDomain // empty' "${dest_json}")"
+    base_name="${base_name%%.*}"
+    [[ -z "${base_name}" ]] && base_name="$(jq -r '.vmname // empty' "${dest_json}")"
+
     # 1. vmname: append -<variant> to source vmname
     if [[ "${has_vmname}" == "false" ]]; then
         local src_vmname
@@ -260,32 +277,23 @@ apply_variant_defaults() {
         fi
     fi
 
-    # 3. zone0: use variant name if it matches a zone in zones.json
-    if [[ "${has_zone0}" == "false" ]]; then
-        local zones_file="/home/tappaas/TAPPaaS/src/foundation/firewall/zones.json"
-        # Also check deployed copy
-        [[ ! -f "${zones_file}" ]] && zones_file="/home/tappaas/config/zones.json"
-        if [[ -f "${zones_file}" ]] && jq -e --arg z "${variant}" 'has($z)' "${zones_file}" >/dev/null 2>&1; then
-            tmp_file=$(mktemp)
-            jq --arg v "${variant}" '.zone0 = $v' "${dest_json}" > "${tmp_file}"
-            mv "${tmp_file}" "${dest_json}"
-            info "  Variant: zone0 = ${variant} (matched zone name)"
-        fi
+    # 3. zone0: take the variant's dedicated zone from the registry (if any).
+    #    If the variant declares no zone, the module keeps its own zone0.
+    if [[ "${has_zone0}" == "false" && -n "${vzone}" && "${vzone}" != "null" ]]; then
+        tmp_file=$(mktemp)
+        jq --arg v "${vzone}" '.zone0 = $v' "${dest_json}" > "${tmp_file}"
+        mv "${tmp_file}" "${dest_json}"
+        info "  Variant: zone0 = ${vzone} (from variant registry)"
     fi
 
-    # 4. proxyDomain: transform "name.domain" to "name.<variant>.domain"
-    if [[ "${has_proxydomain}" == "false" ]]; then
-        local src_domain
-        src_domain=$(jq -r '.proxyDomain // empty' "${dest_json}")
-        if [[ -n "${src_domain}" && "${src_domain}" == *.* ]]; then
-            local name="${src_domain%%.*}"
-            local domain="${src_domain#*.}"
-            local new_domain="${name}.${variant}.${domain}"
-            tmp_file=$(mktemp)
-            jq --arg v "${new_domain}" '.proxyDomain = $v' "${dest_json}" > "${tmp_file}"
-            mv "${tmp_file}" "${dest_json}"
-            info "  Variant: proxyDomain = ${new_domain}"
-        fi
+    # 4. proxyDomain: <service-name>.<variant-domain> from the registry
+    #    (e.g. nextcloud + acme-corp.eu -> nextcloud.acme-corp.eu).
+    if [[ "${has_proxydomain}" == "false" && -n "${vdomain}" && -n "${base_name}" ]]; then
+        local new_domain="${base_name}.${vdomain}"
+        tmp_file=$(mktemp)
+        jq --arg v "${new_domain}" '.proxyDomain = $v' "${dest_json}" > "${tmp_file}"
+        mv "${tmp_file}" "${dest_json}"
+        info "  Variant: proxyDomain = ${new_domain} (from variant registry)"
     fi
 }
 

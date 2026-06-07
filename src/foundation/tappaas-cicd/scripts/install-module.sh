@@ -164,6 +164,17 @@ main() {
         info "  ${GN}✓${CL} '${precheck_module}' is not yet installed"
     fi
 
+    # ── Variant registry validation (ADR-005 Sprint 3) ───────────────
+    # A named variant must be registered in configuration.json before install,
+    # so we fail fast with a clear message before copying configs or creating
+    # any resources. The default (no --variant) is exempt.
+    if [[ -n "${variant}" ]]; then
+        if ! get_variant_config "${variant}" >/dev/null 2>&1; then
+            die "Variant '${variant}' not registered. Run: variant-manager add ${variant} --domain <domain>"
+        fi
+        info "  ${GN}✓${CL} variant '${variant}' is registered"
+    fi
+
     # ── Step 2: Copy JSON config and validate ────────────────────────
     echo ""
     info "${BOLD}Step 2: Copy and validate module configuration${CL}"
