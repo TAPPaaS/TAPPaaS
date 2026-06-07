@@ -113,6 +113,22 @@ get_node_fqdn() {
     echo "${dns_host}.${mgmt}.internal"
 }
 
+# Whether TAPPaaS may perform automated reboots (Proxmox node kernel reboots and
+# the firewall/identity VM reboots). Reads tappaas.automaticReboot from
+# configuration.json; defaults to true when unset or the file is missing.
+# Returns 0 (enabled) or 1 (disabled). Shared gate for all reboot sites (#275).
+automatic_reboot_enabled() {
+    local config="${CONFIG_DIR}/configuration.json"
+    local val=""
+    if [[ -f "$config" ]]; then
+        # NB: do NOT use jq's `// true` here — `false // true` yields true.
+        # Read the raw value; null/missing means "use the default (true)".
+        val=$(jq -r '.tappaas.automaticReboot' "$config" 2>/dev/null) || val=""
+    fi
+    # Enabled unless explicitly set to false.
+    [[ "$val" != "false" ]]
+}
+
 # Get the first node from configuration.json whose hostname differs from the given primary node.
 # Used to resolve a default HANode when none is explicitly set.
 # Arguments: [primary-node-hostname] (default: first node in config)

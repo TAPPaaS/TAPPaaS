@@ -88,6 +88,7 @@ run_cycle() {
         pass "${label}: post-rollback verification passed"
     else
         fail "${label}: no 'Post-rollback tests passed' in update log"
+        sed 's/^/    /' "${log}" | tail -40
     fi
     rm -f "${log}"
 

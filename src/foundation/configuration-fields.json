@@ -157,6 +157,14 @@
                             "description": "Monthly on first Thursday at 2 AM"
                         }
                     ]
+                },
+                "automaticReboot": {
+                    "description": "Whether update-tappaas may automatically reboot Proxmox cluster nodes (to apply a pending kernel upgrade) and the firewall/identity VMs. When false, the operator performs all reboots manually under supervision and update-tappaas only logs which reboots are pending.",
+                    "type": "boolean",
+                    "required": false,
+                    "default": true,
+                    "example": true,
+                    "note": "Node reboots run as a final pass after all module updates: one node at a time, quorum (>=2 active) re-checked before each, the tappaas-cicd host rebooted last (it live-migrates off first so the orchestrator survives), aborting if any node fails to return. See cluster/reboot-cluster.sh (issue #275)."
                 }
             }
         },

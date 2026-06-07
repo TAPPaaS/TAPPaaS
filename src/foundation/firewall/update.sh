@@ -67,38 +67,46 @@ else
     echo ""
 fi
 
-# ── Reboot firewall (unconditional) ─────────────────────────────────
+# ── Reboot firewall ─────────────────────────────────────────────────
 #
-# Always reboot after OPNsense update during the install/update phase.
-# This ensures:
+# Reboot after OPNsense update during the install/update phase. This ensures:
 # - Any kernel updates are applied
 # - Unbound config is regenerated with current OPNsense state
 # - We catch any Unbound/DNSBL issues BEFORE zone-manager runs
+# - It serves as a clean slate for zone configuration.
 #
-# The reboot also serves as a clean slate for zone configuration.
+# Gated by tappaas.automaticReboot (issue #275): when false the operator
+# performs the disruptive firewall reboot manually under supervision, so we
+# only warn that it is pending and skip the reboot/wait.
 
-info "Rebooting firewall to apply updates..."
-ssh root@"$FIREWALL_FQDN" "shutdown -r now" 2>/dev/null || true
+if automatic_reboot_enabled; then
+    info "Rebooting firewall to apply updates..."
+    ssh root@"$FIREWALL_FQDN" "shutdown -r now" 2>/dev/null || true
 
-# Wait for SSH to go down (firewall is rebooting)
-info "Waiting for firewall to reboot..."
-sleep 10
+    # Wait for SSH to go down (firewall is rebooting)
+    info "Waiting for firewall to reboot..."
+    sleep 10
 
-# Wait for SSH to come back (max 5 minutes)
-WAIT_MAX=300
-WAIT_COUNT=0
-while ! ssh -o ConnectTimeout=5 -o BatchMode=yes -o StrictHostKeyChecking=accept-new \
-        root@"$FIREWALL_FQDN" "echo ok" >/dev/null 2>&1; do
-    sleep 5
-    WAIT_COUNT=$((WAIT_COUNT + 5))
-    if [[ $WAIT_COUNT -ge $WAIT_MAX ]]; then
-        error "Firewall did not come back after reboot within ${WAIT_MAX}s"
-        exit 1
-    fi
-    printf "."
-done
-echo ""
-info "${GN}✓${CL} Firewall is back online"
+    # Wait for SSH to come back (max 5 minutes)
+    WAIT_MAX=300
+    WAIT_COUNT=0
+    while ! ssh -o ConnectTimeout=5 -o BatchMode=yes -o StrictHostKeyChecking=accept-new \
+            root@"$FIREWALL_FQDN" "echo ok" >/dev/null 2>&1; do
+        sleep 5
+        WAIT_COUNT=$((WAIT_COUNT + 5))
+        if [[ $WAIT_COUNT -ge $WAIT_MAX ]]; then
+            error "Firewall did not come back after reboot within ${WAIT_MAX}s"
+            exit 1
+        fi
+        printf "."
+    done
+    echo ""
+    info "${GN}✓${CL} Firewall is back online"
+else
+    warn "${BOLD}automaticReboot=false${CL} — skipping firewall reboot."
+    warn "  A reboot is needed to apply OPNsense updates and regenerate Unbound config."
+    warn "  Reboot manually under supervision: ssh root@${FIREWALL_FQDN} 'shutdown -r now'"
+fi
 
 # ── Verify Unbound DNS is working ────────────────────────────────────
 #

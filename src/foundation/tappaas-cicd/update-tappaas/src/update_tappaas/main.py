@@ -273,6 +273,46 @@ def update_module(module_name: str) -> bool:
         return False
 
 
+# ── Phase 3: cluster node reboot pass (issue #275) ───────────────────
+
+
+def reboot_cluster_script() -> Path | None:
+    """Resolve cluster/reboot-cluster.sh from the installed cluster module."""
+    try:
+        with open(CONFIG_DIR / "cluster.json") as f:
+            location = json.load(f).get("location", "")
+    except (FileNotFoundError, json.JSONDecodeError):
+        return None
+    if not location:
+        return None
+    script = Path(location) / "reboot-cluster.sh"
+    return script if script.is_file() else None
+
+
+def reboot_pass(automatic_reboot: bool, dry_run: bool) -> bool:
+    """Run the controlled node reboot pass after all module updates.
+
+    Reboots Proxmox nodes that have a pending kernel upgrade (one at a time,
+    quorum-checked, cicd host last, abort on failure). Gated by
+    tappaas.automaticReboot: when false, reboot-cluster.sh only reports which
+    nodes are pending. Returns True on success (or nothing to do).
+    """
+    script = reboot_cluster_script()
+    if script is None:
+        log.warning("reboot-cluster.sh not found (cluster module location?) — skipping reboot pass")
+        return True
+
+    # --dry-run previews; --execute acts. When automaticReboot is false the
+    # script itself only reports pending nodes, so --execute is still safe.
+    mode = "--dry-run" if (dry_run or not automatic_reboot) else "--execute"
+    try:
+        result = subprocess.run([str(script), mode], text=True)
+        return result.returncode == 0
+    except (subprocess.SubprocessError, FileNotFoundError) as e:
+        log.error("Error running reboot-cluster.sh: %s", e)
+        return False
+
+
 # ── Main ─────────────────────────────────────────────────────────────
 
 
@@ -315,6 +355,9 @@ def main():
         if (CONFIG_DIR / f"{m}.json").exists()
     ]
 
+    # tappaas.automaticReboot (default true) gates the Phase 3 node reboot pass.
+    automatic_reboot = config.get("tappaas", {}).get("automaticReboot", True)
+
     # Dry run: show the update plan
     if args.dry_run:
         log.info("=== DRY RUN MODE ===")
@@ -332,6 +375,8 @@ def main():
                 log.info("  %d. update-module.sh %s%s", i, app, dep_str)
         else:
             log.info("  (no app modules installed)")
+        log.info("Phase 3 - Node reboot pass (automaticReboot=%s):", automatic_reboot)
+        reboot_pass(automatic_reboot, dry_run=True)
         log.info("To run these updates: update-tappaas --force")
         sys.exit(0)
 
@@ -362,6 +407,14 @@ def main():
     else:
         log.info("No app modules found to update")
 
+    # Phase 3: controlled node reboot pass (issue #275)
+    log.info("=" * 60)
+    log.info("Phase 3: Node reboot pass (automaticReboot=%s)", automatic_reboot)
+    log.info("=" * 60)
+    reboot_ok = reboot_pass(automatic_reboot, dry_run=False)
+    if not reboot_ok:
+        log.error("FAILED: node reboot pass")
+
     # Summary
     end_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     total = len(installed_foundation) + len(sorted_apps)
@@ -369,12 +422,14 @@ def main():
 
     log.info("=" * 60)
     log.info(
-        "update-tappaas completed: %s | total=%d succeeded=%d failed=%d",
+        "update-tappaas completed: %s | total=%d succeeded=%d failed=%d reboot=%s",
         end_time, total, succeeded, len(failed_modules),
+        "ok" if reboot_ok else "failed",
     )
 
-    if failed_modules:
-        log.error("Failed modules: %s", ", ".join(failed_modules))
+    if failed_modules or not reboot_ok:
+        if failed_modules:
+            log.error("Failed modules: %s", ", ".join(failed_modules))
         sys.exit(1)
 
     log.info("All modules updated successfully")

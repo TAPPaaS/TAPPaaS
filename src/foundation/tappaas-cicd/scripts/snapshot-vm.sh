@@ -216,6 +216,43 @@ case "${ACTION}" in
         ssh root@"${NODE_FQDN}" "${CMD} start ${VMID}" \
             || die "Failed to start VM after rollback"
 
+        # A restore must return a USABLE VM, not merely a started one. Otherwise
+        # the caller's post-restore verification races the guest boot and a
+        # perfectly good rollback looks like a failure — e.g. update-module.sh's
+        # post-rollback test, or cluster:vm's test-service which pings the guest
+        # and is fatal if it's unreachable (#307). For QEMU VMs with the guest
+        # agent, wait for it to respond (proves the OS is up and networking is
+        # live), then a short settle so sshd/ICMP are ready. Agent-less VMs and
+        # LXC fall back to a fixed grace period.
+        agent_on=0
+        if [[ "${CMD}" == "qm" ]] \
+           && ssh root@"${NODE_FQDN}" "qm config ${VMID}" 2>/dev/null \
+                | grep -q '^agent:.*1'; then
+            agent_on=1
+        fi
+        if [[ "${agent_on}" -eq 1 ]]; then
+            info "  Waiting for guest agent on VM ${VMID} to respond..."
+            waited=0
+            up=0
+            while [[ "${waited}" -lt 180 ]]; do
+                if ssh root@"${NODE_FQDN}" "qm guest cmd ${VMID} ping" >/dev/null 2>&1; then
+                    up=1
+                    break
+                fi
+                sleep 5
+                waited=$((waited + 5))
+            done
+            if [[ "${up}" -eq 1 ]]; then
+                info "  ${GN}Guest agent responding after ${waited}s — settling...${CL}"
+                sleep 20
+            else
+                warn "  Guest agent did not respond within 180s — proceeding anyway"
+            fi
+        else
+            info "  No guest agent detected — waiting 45s grace period for boot..."
+            sleep 45
+        fi
+
         info "${GN}VM ${VMNAME} restored to snapshot '${TARGET}' and started${CL}"
         ;;
 esac

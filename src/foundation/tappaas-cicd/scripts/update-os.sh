@@ -381,11 +381,21 @@ update_nixos() {
     done
     [[ "$rebuilt" == "1" ]] || die "nixos-rebuild failed after 3 attempts"
 
-    info "Rebooting VM to apply configuration..."
-    ssh "root@${node}.${MGMT}.internal" "qm reboot ${vmid}"
+    # nixos-rebuild switch already activated the new generation; the reboot
+    # applies kernel/bootloader changes. Gated by tappaas.automaticReboot
+    # (issue #275) — covers the identity VM and any other NixOS guest. When
+    # false the operator reboots manually under supervision.
+    if automatic_reboot_enabled; then
+        info "Rebooting VM to apply configuration..."
+        ssh "root@${node}.${MGMT}.internal" "qm reboot ${vmid}"
 
-    info "Waiting 60 seconds for VM to restart..."
-    sleep 60
+        info "Waiting 60 seconds for VM to restart..."
+        sleep 60
+    else
+        warn "automaticReboot=false — skipping reboot of VM ${vmid} (${vmname})."
+        warn "  The new NixOS generation is active, but a reboot is needed to apply kernel/bootloader changes."
+        warn "  Reboot manually under supervision: ssh root@${node}.${MGMT}.internal 'qm reboot ${vmid}'"
+    fi
 }
 
 # Update Debian/Ubuntu VM
