@@ -1,0 +1,24 @@
+{
+  "description": "Test fixture: minimal NixOS clone driven by test-rollback.sh to verify update-module.sh snapshot rollback (#307). Not a real service.",
+  "version": "0.5",
+  "vmname": "rollback-test",
+  "vmid": 912,
+  "vmtag": "TAPPaaS,Test",
+  "node": "tappaas1",
+  "zone0": "mgmt",
+  "dependsOn": [
+    "cluster:vm",
+    "templates:nixos"
+  ],
+  "config": {
+    "cluster:vm": {
+      "bridge0": "lan",
+      "cores": 1,
+      "diskSize": "24G",
+      "image": "8080",
+      "imageType": "clone",
+      "memory": "2048",
+      "storage": "tanka1"
+    }
+  }
+}

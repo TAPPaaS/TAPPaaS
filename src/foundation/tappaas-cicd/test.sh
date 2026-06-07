@@ -281,11 +281,27 @@ if [[ "${DEEP}" -eq 1 ]]; then
     else
         skip "test-vm-creation/test-reinstall.sh not found"
     fi
+
+    # ── Deep Test: update -> snapshot rollback (issue #307) ──────────
+    info "${BOLD}Deep Test: update-module.sh snapshot rollback${CL}"
+
+    if [[ -x test-vm-creation/test-rollback.sh ]]; then
+        info "  Verifying a broken update rolls back to the pre-update snapshot..."
+        if test-vm-creation/test-rollback.sh; then
+            pass "update->rollback test passed"
+        else
+            fail "update->rollback test failed"
+        fi
+    else
+        skip "test-vm-creation/test-rollback.sh not found"
+    fi
 else
     info "${BOLD}Deep Test: VM creation suite${CL}"
     skip "VM creation tests (use --deep to run)"
     info "${BOLD}Deep Test: install-module.sh --reinstall round-trip${CL}"
     skip "--reinstall round-trip test (use --deep to run)"
+    info "${BOLD}Deep Test: update-module.sh snapshot rollback${CL}"
+    skip "update->rollback test (use --deep to run)"
 fi
 
 # ── Summary ─────────────────────────────────────────────────────────
