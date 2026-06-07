@@ -20,9 +20,11 @@ MGMT_SUFFIX=".mgmt.internal"
 rn_node_fqdn() { echo "${1}${MGMT_SUFFIX}"; }
 
 # Run a command on a node over SSH (batch mode, short connect timeout).
+# -n: never read local stdin — these are command-only calls, and consuming stdin
+# would steal a caller's interactive confirmation (e.g. reboot-node.sh's prompt).
 rn_node_ssh() {
     local node="$1"; shift
-    ssh -o BatchMode=yes -o ConnectTimeout=10 "root@$(rn_node_fqdn "$node")" "$@"
+    ssh -n -o BatchMode=yes -o ConnectTimeout=10 "root@$(rn_node_fqdn "$node")" "$@"
 }
 
 # Block until a node answers SSH again, returning non-zero after <max> seconds.
@@ -30,7 +32,7 @@ rn_node_ssh() {
 rn_wait_for_node() {
     local node="$1" max="${2:-${RN_WAIT_MAX:-180}}" n=0
     info "  Waiting for ${node} to return..."
-    until ssh -o BatchMode=yes -o ConnectTimeout=5 "root@$(rn_node_fqdn "$node")" "true" 2>/dev/null; do
+    until ssh -n -o BatchMode=yes -o ConnectTimeout=5 "root@$(rn_node_fqdn "$node")" "true" 2>/dev/null; do
         sleep 5; (( n+=5 ))
         [[ $n -lt $max ]] || return 1
     done
@@ -55,11 +57,20 @@ rn_kernel_gap() {
     [[ -n "$running" && -n "$latest" && "$running" != *"$latest"* ]]
 }
 
-# Number of HA nodes whose local resource manager is active (proxy for quorum).
+# Number of cluster nodes whose HA local resource manager is ALIVE — i.e. LRM
+# state 'active' (currently managing services) OR 'idle' (up, but no HA services
+# assigned to it right now). Both mean the node is online and quorate; only
+# dead/stale LRMs are excluded. Used as the quorum guard: >=2 alive nodes means
+# dropping one still leaves the cluster quorate.
+#
+# NB: counting only '(active' false-negatives a perfectly healthy cluster — a
+# node with no HA services shows '(idle', so on a cluster where all guests
+# happen to sit on one node the others read as "not active" and a reboot is
+# wrongly refused. (Surfaced while validating #275/#308.)
 rn_ha_active_count() {
     local node="$1"
     rn_node_ssh "$node" "ha-manager status 2>/dev/null" 2>/dev/null \
-        | grep -c "lrm .* (active" || true
+        | grep -cE "lrm .* \((active|idle)" || true
 }
 
 # Names of HA-managed VMs currently started on a node.
@@ -87,10 +98,10 @@ reboot_one_node() {
     # migrate off this one.
     active=$(rn_ha_active_count "$node")
     if [[ "${active:-0}" -lt 2 ]]; then
-        error "Quorum check failed for ${node}: only ${active:-0} active HA node(s) (need >=2)"
+        error "Quorum check failed for ${node}: only ${active:-0} alive cluster node(s) (need >=2)"
         return 1
     fi
-    info "  ${GN}✓${CL} HA quorum OK (${active} active)"
+    info "  ${GN}✓${CL} HA quorum OK (${active} alive)"
 
     latest=$(rn_latest_kernel "$node")
 
@@ -120,7 +131,9 @@ reboot_one_node() {
 
     # Verify the new kernel is the one actually running.
     new_running=$(rn_running_kernel "$node")
-    if [[ -n "$latest" && "$new_running" == *"$latest"* ]]; then
+    if [[ -z "$latest" ]]; then
+        info "  ${GN}✓${CL} Running kernel: ${new_running} (no newer kernel pending)"
+    elif [[ "$new_running" == *"$latest"* ]]; then
         info "  ${GN}✓${CL} New kernel active: ${new_running}"
     else
         warn "  ${node} running ${new_running} (expected ${latest}) — check grub default"

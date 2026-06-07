@@ -94,10 +94,11 @@ if ! rn_kernel_gap "$NODE"; then
     warn "  No kernel gap detected — reboot may not be necessary"
 fi
 
-# HA quorum
+# HA quorum: count alive cluster nodes (LRM active or idle), need >=2 so
+# dropping this one keeps the cluster quorate.
 ACTIVE_NODES=$(rn_ha_active_count "$NODE")
-info "  HA active nodes: ${ACTIVE_NODES}"
-[[ "${ACTIVE_NODES:-0}" -ge 2 ]] || die "HA quorum check failed: fewer than 2 active nodes. Aborting."
+info "  Alive cluster nodes: ${ACTIVE_NODES}"
+[[ "${ACTIVE_NODES:-0}" -ge 2 ]] || die "HA quorum check failed: fewer than 2 alive nodes. Aborting."
 info "  ${GN}✓${CL} HA quorum OK"
 
 ###############################################################################
