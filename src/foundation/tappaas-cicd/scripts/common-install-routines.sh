@@ -229,6 +229,7 @@ get_variant_config() {
         local legacy_domain
         legacy_domain=$(jq -r '.tappaas.domain // empty' "${cfg}")
         if [[ -n "${legacy_domain}" ]]; then
+            warn "tappaas.domain is deprecated (ADR-005). Run migrate-to-variants.sh to create tappaas.variants[\"\"]." >&2
             jq -c '{ domain:       .tappaas.domain,
                      tlsCertRefid: (.tappaas.tlsCertRefid // ""),
                      dnsMode:      "wildcard",
