@@ -469,38 +469,39 @@ validate_zone_active() {
 }
 
 # ── OPNsense module alias naming (#300, ADR-005 #316) ────────────────
-# firewall:rules provisions an OPNsense alias `tappaas_module_<vmname>` for a
-# module. OPNsense alias names must match ^[a-zA-Z_][a-zA-Z0-9_]{0,31}$ — at most
-# 32 chars. This MUST stay byte-identical to rules_manager._module_alias_name
-# (Python), which is the authority that actually creates the alias.
+# firewall:rules provisions an OPNsense alias `tm_<vmname>` for a module. OPNsense
+# alias names must match ^[a-zA-Z_][a-zA-Z0-9_]{0,31}$ — at most 32 chars. This
+# MUST stay byte-identical to rules_manager._module_alias_name (Python), the
+# authority that actually creates the alias.
 #
-# Scheme: sanitise (non-alphanumeric -> underscore); use the natural name when it
-# fits 32 chars, else keep a readable prefix and append a 6-hex sha1 of the FULL
-# vmname (deterministic, collision-free) so long base+variant names still fit.
+# Scheme: short `tm_` prefix + sanitise (non-alphanumeric -> underscore). A vmname
+# (incl. variant suffix) under MODULE_ALIAS_HASH_THRESHOLD chars gets the plain
+# `tm_<sanitised>` alias; at/above it the alias is a readable prefix + 6-hex sha1
+# of the FULL vmname (deterministic, collision-free) so long names still fit 32.
+MODULE_ALIAS_PREFIX="tm_"
+MODULE_ALIAS_HASH_THRESHOLD=28
 module_alias_name() {
     local vmname="$1"
-    local prefix="tappaas_module_"
-    local sanitised alias_name digest keep
+    local sanitised digest keep
     sanitised="${vmname//[^a-zA-Z0-9]/_}"
-    alias_name="${prefix}${sanitised}"
-    if [[ "${#alias_name}" -le 32 ]]; then
-        printf '%s\n' "${alias_name}"
+    if [[ "${#vmname}" -lt "${MODULE_ALIAS_HASH_THRESHOLD}" ]]; then
+        printf '%s\n' "${MODULE_ALIAS_PREFIX}${sanitised}"
         return 0
     fi
     digest="$(printf '%s' "${vmname}" | sha1sum | cut -c1-6)"
-    keep=$(( 32 - ${#prefix} - 1 - ${#digest} ))
-    printf '%s_%s\n' "${prefix}${sanitised:0:keep}" "${digest}"
+    keep=$(( 32 - ${#MODULE_ALIAS_PREFIX} - 1 - ${#digest} ))
+    printf '%s_%s\n' "${MODULE_ALIAS_PREFIX}${sanitised:0:keep}" "${digest}"
 }
 
-# Validate/announce the alias a vmname will get. Since long names now hash to a
-# safe 32-char alias (rather than being rejected — superseding #300's fail-fast),
-# this never blocks; it only warns when a name is long enough to be hashed, so the
-# operator knows the firewall alias won't be the literal vmname.
+# Announce the alias a vmname will get. A vmname at/above the hash threshold gets a
+# hashed alias rather than being rejected (superseding #300's fail-fast); this
+# never blocks — it only warns so the operator knows the firewall alias won't be
+# the literal vmname.
 validate_module_alias_name() {
     local vmname="$1" alias_name
     alias_name="$(module_alias_name "${vmname}")"
-    if [[ "${alias_name}" != "tappaas_module_${vmname//[^a-zA-Z0-9]/_}" ]]; then
-        warn "vmname '${vmname}' is long; its OPNsense firewall alias is hashed to '${alias_name}' (<=32 chars)"
+    if [[ "${#vmname}" -ge "${MODULE_ALIAS_HASH_THRESHOLD}" ]]; then
+        warn "vmname '${vmname}' is ${#vmname} chars (>= ${MODULE_ALIAS_HASH_THRESHOLD}); its OPNsense alias is hashed to '${alias_name}'"
     fi
     return 0
 }

@@ -1027,9 +1027,9 @@ else
     if rules-manager list-rules --module test-fw-b --output json --no-ssl-verify 2>/dev/null \
             | jq -e '.rules[] | select(.description | contains("test-fw-a")) | .uuid' \
             >/dev/null 2>&1; then
-        pass "rules referencing FQDN alias tappaas_module_test_fw_a applied to OPNsense"
+        pass "rules referencing FQDN alias tm_test_fw_a applied to OPNsense"
     else
-        fail "no rule references tappaas_module_test_fw_a — alias not wired through"
+        fail "no rule references tm_test_fw_a — alias not wired through"
     fi
 
     # Test VMs are typically reinstalled fresh; clear stale host keys so the
@@ -1071,7 +1071,7 @@ else
     # test-fw-c marker proves the auto-pinhole works end-to-end.
     #
     # FQDN-alias asynchrony: rules-manager creates the OPNsense alias
-    # tappaas_module_test_fw_c pointing at ${TFW_C_FQDN}, but the
+    # tm_test_fw_c pointing at ${TFW_C_FQDN}, but the
     # pfctl alias TABLE behind it is populated by OPNsense's update_tables.py
     # cron (typically every 60s). Until the table holds an IP, the rule's
     # destination matches nothing and the packet falls through to deny. We
@@ -1134,8 +1134,8 @@ else
             info "  -- pfctl alias contents on firewall --"
             ssh -o BatchMode=yes -o StrictHostKeyChecking=accept-new \
                 root@"${FIREWALL_FQDN}" \
-                "pfctl -t tappaas_module_test_fw_c -T show 2>&1; \
-                 pfctl -t tappaas_module_test_fw_a -T show 2>&1" 2>/dev/null \
+                "pfctl -t tm_test_fw_c -T show 2>&1; \
+                 pfctl -t tm_test_fw_a -T show 2>&1" 2>/dev/null \
                 | sed 's/^/      /' | head -20
         fi
     fi
