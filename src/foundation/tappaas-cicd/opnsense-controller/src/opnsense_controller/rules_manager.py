@@ -285,17 +285,23 @@ def load_pinhole_ports(provider_location: str, service: str) -> list[dict] | Non
 def _module_alias_name(peer_vmname: str) -> str:
     """Generate an OPNsense-safe host alias name for a TAPPaaS module.
 
-    OPNsense aliases must match `^[a-zA-Z_][a-zA-Z0-9_]{0,31}$` — only
-    alphanumerics and underscores, max 32 chars. We sanitise the vmname by
-    replacing any non-alphanumeric character with underscore, then truncate
-    the combined name if necessary.
+    OPNsense aliases must match `^[a-zA-Z_][a-zA-Z0-9_]{0,31}$` — alphanumerics
+    and underscores, max 32 chars. We sanitise the vmname (non-alphanumeric ->
+    underscore). When the natural name ``tappaas_module_<sanitised>`` would exceed
+    32 chars — e.g. a long base module plus a variant suffix
+    (``nextcloud-acme-corp``) — we keep a readable prefix and append a short
+    deterministic hash of the *full* vmname rather than silently truncating. That
+    stays within 32 chars AND avoids collisions between two long names sharing a
+    prefix (ADR-005 / #316; supersedes the truncation behaviour of #300).
     """
     sanitised = "".join(c if c.isalnum() else "_" for c in peer_vmname)
     name = f"{MODULE_ALIAS_PREFIX}{sanitised}"
-    # OPNsense alias name limit is 32 characters
-    if len(name) > 32:
-        name = name[:32].rstrip("_")
-    return name
+    if len(name) <= 32:
+        return name
+    # Too long: <prefix><sanitised[:keep]>_<6-hex-hash>  == exactly 32 chars.
+    digest = hashlib.sha1(peer_vmname.encode()).hexdigest()[:6]
+    keep = 32 - len(MODULE_ALIAS_PREFIX) - 1 - len(digest)
+    return f"{MODULE_ALIAS_PREFIX}{sanitised[:keep]}_{digest}"
 
 
 # ─────────────────────────────────────────────────────────────────────────────

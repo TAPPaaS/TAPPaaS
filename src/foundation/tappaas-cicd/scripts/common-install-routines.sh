@@ -468,31 +468,39 @@ validate_zone_active() {
     return 1
 }
 
-# ── OPNsense alias-name length guard (#300) ──────────────────────────
+# ── OPNsense module alias naming (#300, ADR-005 #316) ────────────────
 # firewall:rules provisions an OPNsense alias `tappaas_module_<vmname>` for a
-# module (rules_manager._module_alias_name replaces every non-alphanumeric in the
-# vmname with an underscore). OPNsense alias names must match
-# ^[a-zA-Z_][a-zA-Z0-9_]{0,31}$ — at most 32 characters. The vmname schema
-# pattern (module-fields.json: ^[a-zA-Z][a-zA-Z0-9-]*$) already guarantees a
-# valid leading character and charset, so LENGTH is the only thing that can
-# overflow: with the 15-char `tappaas_module_` prefix, vmname must be <= 17 chars.
-# Validate up front so a too-long vmname fails fast with a clear message instead
-# of dying mid-install at firewall:rules — or worse, silently truncating the
-# alias and colliding with another module's alias.
-validate_module_alias_name() {
+# module. OPNsense alias names must match ^[a-zA-Z_][a-zA-Z0-9_]{0,31}$ — at most
+# 32 chars. This MUST stay byte-identical to rules_manager._module_alias_name
+# (Python), which is the authority that actually creates the alias.
+#
+# Scheme: sanitise (non-alphanumeric -> underscore); use the natural name when it
+# fits 32 chars, else keep a readable prefix and append a 6-hex sha1 of the FULL
+# vmname (deterministic, collision-free) so long base+variant names still fit.
+module_alias_name() {
     local vmname="$1"
     local prefix="tappaas_module_"
-    local maxlen=32
-    local sanitised alias_name
-    # Mirror rules_manager._module_alias_name: non-alphanumeric -> underscore.
+    local sanitised alias_name digest keep
     sanitised="${vmname//[^a-zA-Z0-9]/_}"
     alias_name="${prefix}${sanitised}"
-    if [[ "${#alias_name}" -gt "${maxlen}" ]]; then
-        local maxvm=$((maxlen - ${#prefix}))
-        error "vmname '${YW}${vmname}${CL}' is too long for its OPNsense firewall alias"
-        error "  Alias '${YW}${alias_name}${CL}' would be ${#alias_name} chars; the OPNsense limit is ${maxlen}"
-        error "  Shorten vmname to at most ${maxvm} characters (or use a shorter --variant name)"
-        return 1
+    if [[ "${#alias_name}" -le 32 ]]; then
+        printf '%s\n' "${alias_name}"
+        return 0
+    fi
+    digest="$(printf '%s' "${vmname}" | sha1sum | cut -c1-6)"
+    keep=$(( 32 - ${#prefix} - 1 - ${#digest} ))
+    printf '%s_%s\n' "${prefix}${sanitised:0:keep}" "${digest}"
+}
+
+# Validate/announce the alias a vmname will get. Since long names now hash to a
+# safe 32-char alias (rather than being rejected — superseding #300's fail-fast),
+# this never blocks; it only warns when a name is long enough to be hashed, so the
+# operator knows the firewall alias won't be the literal vmname.
+validate_module_alias_name() {
+    local vmname="$1" alias_name
+    alias_name="$(module_alias_name "${vmname}")"
+    if [[ "${alias_name}" != "tappaas_module_${vmname//[^a-zA-Z0-9]/_}" ]]; then
+        warn "vmname '${vmname}' is long; its OPNsense firewall alias is hashed to '${alias_name}' (<=32 chars)"
     fi
     return 0
 }

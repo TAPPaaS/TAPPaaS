@@ -118,8 +118,24 @@ class TestHelpers(unittest.TestCase):
         # OPNsense aliases disallow hyphens; vmname hyphens get normalised to _
         self.assertEqual(_module_alias_name("vllm-amd"), "tappaas_module_vllm_amd")
         self.assertEqual(_module_alias_name("vllm"), "tappaas_module_vllm")
-        # Long vmname truncates to 32-char OPNsense limit
+        # A name whose natural alias exceeds 32 chars (long base + variant) gets a
+        # readable prefix + 6-hex hash, staying within 32 (ADR-005 #316).
+        long_alias = _module_alias_name("nextcloud-acme-corp")
+        self.assertLessEqual(len(long_alias), 32)
+        self.assertTrue(long_alias.startswith("tappaas_module_"))
         self.assertLessEqual(len(_module_alias_name("a" * 50)), 32)
+
+    def test_module_alias_name_deterministic_and_collision_free(self):
+        # Hashing is deterministic and distinguishes names that share a long
+        # prefix (the old truncation behaviour would have collided them).
+        self.assertEqual(
+            _module_alias_name("nextcloud-acme-corp"),
+            _module_alias_name("nextcloud-acme-corp"),
+        )
+        self.assertNotEqual(
+            _module_alias_name("nextcloud-customer-one"),
+            _module_alias_name("nextcloud-customer-two"),
+        )
 
     def test_normalize_protocol_default_tcp(self):
         self.assertEqual(_normalize_protocol(None), "TCP")

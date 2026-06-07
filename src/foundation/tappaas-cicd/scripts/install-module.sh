@@ -197,14 +197,12 @@ main() {
         validate_zone_active "$zone0" || die "Zone validation failed — install aborted before any resources were created"
     fi
 
-    # Fail fast if the vmname would overflow its OPNsense firewall alias (#300),
-    # before any VM or service resources are created.
+    # Announce the OPNsense firewall alias this vmname will get (#300, #316).
+    # Long names are hashed to a safe 32-char alias rather than rejected, so this
+    # only warns when hashing applies — it never blocks the install.
     local vmname_check
     vmname_check=$(jq -r '.vmname // empty' "${module_json}")
-    if [[ -n "${vmname_check}" ]]; then
-        validate_module_alias_name "${vmname_check}" \
-            || die "vmname validation failed — install aborted before any resources were created"
-    fi
+    [[ -n "${vmname_check}" ]] && validate_module_alias_name "${vmname_check}"
 
     # ── Step 3: Validate dependencies ────────────────────────────────
     echo ""
