@@ -73,6 +73,15 @@ The following safeguards remain in force regardless:
 - **Fix root causes, not symptoms** — do not bypass failing pre-commit/CI checks, do not `--no-verify` git hooks, do not silence errors to make the install proceed.
 - **Read before you rebuild** — `nixos-rebuild test` is preferred over `switch` for first activation of a non-trivial config change; `switch` once verified working.
 
+## Running Long Tasks (deep tests, VM installs, nixos-rebuild)
+
+Use exactly **one** level of backgrounding so completion notifications actually fire.
+
+- **Do NOT double-background.** Never combine `nohup … & echo PID` with the Bash tool's `run_in_background: true`. The harness notifies you when the *tracked* command exits — and `nohup … & echo PID` exits in milliseconds, so you get an instant "completed" for the launcher and **no signal** for the real task (it runs on, untracked). This has repeatedly made waits look like they "never trigger back".
+- **Right pattern:** run the actual long command directly with `run_in_background: true` and **no** `nohup`, **no** trailing `&`. Redirect its output to a logfile inside the command if you want to tail progress. The harness then tracks the real process and fires a reliable completion notification.
+- **If a task is already detached,** arm a single waiter as one `run_in_background` command (no nohup/&): `until ! pgrep -f "<proc>" >/dev/null; do sleep 20; done; <print summary>`. Its exit is the reliable signal.
+- The Monitor tool only emits on matching stdout lines (milestones minutes apart make it look dead, and its break condition may never match) — use it for live progress, but rely on the single-background command/waiter for the actual completion signal. Don't poll across turns.
+
 ## General Workflow
 
 1. **Plan before coding** - Understand requirements and explain approach before writing code
