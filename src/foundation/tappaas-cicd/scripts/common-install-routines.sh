@@ -242,6 +242,20 @@ get_variant_config() {
     return 1
 }
 
+# Compute the DMZ gateway IP (the firewall's DMZ interface, where the os-caddy
+# reverse proxy listens) from zones.json — e.g. dmz ip 10.6.0.0/24 -> 10.6.0.1.
+# Used for split-horizon DNS so internal clients reach Caddy over the DMZ instead
+# of routing out via the WAN and tripping Caddy's zone ACL (#269, ADR-005 §6).
+# Never hardcode the IP — it is derived from the live zones.json.
+dmz_gateway_ip() {
+    local zones="${CONFIG_DIR}/zones.json"
+    [[ -f "${zones}" ]] || { error "zones.json not found at ${zones}"; return 1; }
+    local gw
+    gw="$(jq -r '(.dmz.ip // "") | if . == "" then "" else (split("/")[0] | split(".") | .[0:3] | join(".") + ".1") end' "${zones}")"
+    [[ -n "${gw}" ]] || { error "could not derive DMZ gateway IP from ${zones} (no dmz zone?)"; return 1; }
+    printf '%s\n' "${gw}"
+}
+
 # Resolve a dependency's provider module name, honoring variant preference
 # (#292, ADR-005 §4). Given a bare provider name and the installing module's
 # variant, prefer an installed same-variant provider `<provider>-<variant>.json`

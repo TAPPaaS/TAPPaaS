@@ -198,6 +198,27 @@ mv "$TMP" "$CONFIG_FILE"
 info "  ${GN}✓${CL} variants[\"${VARIANT}\"].tlsCertRefid = ${REFID}"
 [[ -z "$VARIANT" ]] && info "  ${GN}✓${CL} tappaas.tlsCertRefid = ${REFID} (legacy alias)"
 
+# ── Split-horizon wildcard DNS (ADR-005 §6, #269) ──────────────────────────
+# In wildcard mode, point *.<domain> at the DMZ gateway (where os-caddy listens)
+# in the firewall's Dnsmasq, so internal clients reach Caddy over the DMZ instead
+# of resolving the public WAN IP and tripping Caddy's zone ACL (HTTP 403).
+DNS_MODE="$(jq -r '.dnsMode // "wildcard"' <<<"$VCFG")"
+if [[ "$DNS_MODE" == "wildcard" ]]; then
+    echo
+    info "${BOLD}Registering split-horizon wildcard DNS${CL}"
+    if DMZ_GW="$(dmz_gateway_ip)"; then
+        if dns-manager --no-ssl-verify add "*" "${DOMAIN}" "${DMZ_GW}" \
+                --description "TAPPaaS: ${VARIANT:-default} wildcard -> Caddy (DMZ)"; then
+            info "  ${GN}✓${CL} *.${DOMAIN} -> ${DMZ_GW} (DMZ gateway)"
+        else
+            warn "  Could not register *.${DOMAIN} in Dnsmasq — register manually:"
+            warn "    dns-manager --no-ssl-verify add '*' '${DOMAIN}' '${DMZ_GW}'"
+        fi
+    else
+        warn "  Skipped wildcard DNS — could not derive DMZ gateway from zones.json"
+    fi
+fi
+
 echo
 info "${BOLD}${GN}✓${CL} ACME setup complete${BOLD}.${CL}"
 info "  • Wildcard *.${DOMAIN} is issued and lives in OPNsense Trust (refid ${REFID})"
