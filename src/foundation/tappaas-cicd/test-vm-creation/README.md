@@ -7,9 +7,9 @@ This directory contains test configurations for validating TAPPaaS VM creation a
 | Test | VMID | Type | Zone | Node | HA Node | Description |
 |------|------|------|------|------|---------|-------------|
 | test-debian | 901 | Debian img | mgmt | tappaas1 | - | Debian cloud image on management network |
-| test-debian-vlan-node | 902 | Debian img | srv | tappaas3 | - | Debian cloud image on srv VLAN on different node |
+| test-deb-vlannode | 902 | Debian img | srv | tappaas3 | - | Debian cloud image on srv VLAN on different node |
 | test-nixos | 903 | NixOS clone | mgmt | tappaas1 | tappaas2 | NixOS clone on mgmt with HA replication to tappaas2 |
-| test-nixos-vlan-node | 904 | NixOS clone | srv | tappaas2 | - | NixOS clone on srv VLAN on different node |
+| test-nix-vlannode | 904 | NixOS clone | srv | tappaas2 | - | NixOS clone on srv VLAN on different node |
 | test-ubuntu-vlan | 905 | Ubuntu img | srv | tappaas2 | - | Ubuntu cloud image on srv VLAN |
 
 ## Prerequisites
@@ -53,8 +53,8 @@ Options:
 - `./test.sh --skip-install --skip-delete` - Test existing VMs and keep them
 
 Available test names:
-- `test-debian`, `test-debian-vlan-node`
-- `test-nixos`, `test-nixos-vlan-node`
+- `test-debian`, `test-deb-vlannode`
+- `test-nixos`, `test-nix-vlannode`
 - `test-ubuntu-vlan`
 
 Example output:
@@ -69,9 +69,9 @@ Mode: Install and Test
 Logs: /home/tappaas/logs/
 
 [test-debian] Installing... OK. Testing... PASS
-[test-debian-vlan-node] Installing... OK. Testing... PASS
+[test-deb-vlannode] Installing... OK. Testing... PASS
 [test-nixos] Installing... OK. Testing... PASS
-[test-nixos-vlan-node] Installing... OK. Testing... PASS
+[test-nix-vlannode] Installing... OK. Testing... PASS
 [test-ubuntu-vlan] Installing... OK. Testing... PASS
 
 ==============================================
@@ -81,9 +81,9 @@ Test Results Summary
 Test                 Type       Zone       Install    Test
 ----                 ----       ----       -------    ----
 test-debian          debian     mgmt       PASS       PASS
-test-debian-vlan-node debian    srv        PASS       PASS
+test-deb-vlannode debian    srv        PASS       PASS
 test-nixos           nixos-ha   mgmt       PASS       PASS
-test-nixos-vlan-node nixos      srv        PASS       PASS
+test-nix-vlannode nixos      srv        PASS       PASS
 test-ubuntu-vlan     ubuntu     srv        PASS       PASS
 
 ==============================================
@@ -105,7 +105,7 @@ The unified `install.sh` script handles both NixOS and Debian/Ubuntu VMs. It aut
 ```bash
 ./install.sh test-debian           # Debian image VM
 ./install.sh test-nixos            # NixOS clone VM (with HA if HANode specified)
-./install.sh test-nixos-vlan-node  # NixOS clone VM without HA
+./install.sh test-nix-vlannode  # NixOS clone VM without HA
 ./install.sh test-ubuntu-vlan      # Ubuntu image VM
 ```
 
@@ -212,11 +212,11 @@ test-vm-creation/
 ├── test.sh                       # Run full test suite (all 5 VMs)
 ├── test-vm.sh                    # Test a single VM (basic + HA tests if applicable)
 ├── test-debian.json              # Debian on mgmt (tappaas1) - VMID 901
-├── test-debian-vlan-node.json    # Debian on srv VLAN (tappaas3) - VMID 902
+├── test-deb-vlannode.json    # Debian on srv VLAN (tappaas3) - VMID 902
 ├── test-nixos.json               # NixOS clone on mgmt with HA (tappaas1->tappaas2) - VMID 903
 ├── test-nixos.nix                # NixOS config for test-nixos
-├── test-nixos-vlan-node.json     # NixOS clone on srv VLAN (tappaas2) - VMID 904
-├── test-nixos-vlan-node.nix      # NixOS config for test-nixos-vlan-node
+├── test-nix-vlannode.json     # NixOS clone on srv VLAN (tappaas2) - VMID 904
+├── test-nix-vlannode.nix      # NixOS config for test-nix-vlannode
 └── test-ubuntu-vlan.json         # Ubuntu on srv VLAN (tappaas2) - VMID 905
 ```
 

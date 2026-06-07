@@ -38,19 +38,19 @@ done
 # Installation is handled by install-module.sh (dependency-aware)
 # Optimized test matrix:
 # - test-debian: Debian on mgmt zone (tappaas1)
-# - test-debian-nonode: Debian with no explicit node (defaults from configuration.json)
-# - test-debian-node3-noha: Debian on tappaas3, no cluster:ha in dependsOn
-# - test-debian-vlan-node: Debian on srv VLAN on different node (tappaas3)
+# - test-deb-nonode: Debian with no explicit node (defaults from configuration.json)
+# - test-deb-n3noha: Debian on tappaas3, no cluster:ha in dependsOn
+# - test-deb-vlannode: Debian on srv VLAN on different node (tappaas3)
 # - test-nixos: NixOS on mgmt zone with HA (tappaas1 -> tappaas3)
-# - test-nixos-vlan-node: NixOS on srv VLAN on different node (tappaas2)
+# - test-nix-vlannode: NixOS on srv VLAN on different node (tappaas2)
 # - test-ubuntu-vlan: Ubuntu on srv VLAN (tappaas2) - unchanged per request
 declare -a ALL_TESTS=(
     "test-debian:debian:test-vm.sh"
-    "test-debian-nonode:debian:test-vm.sh"
-    "test-debian-node3-noha:debian:test-vm.sh"
-    "test-debian-vlan-node:debian:test-vm.sh"
+    "test-deb-nonode:debian:test-vm.sh"
+    "test-deb-n3noha:debian:test-vm.sh"
+    "test-deb-vlannode:debian:test-vm.sh"
     "test-nixos:nixos-ha:test-vm.sh"
-    "test-nixos-vlan-node:nixos:test-vm.sh"
+    "test-nix-vlannode:nixos:test-vm.sh"
     "test-ubuntu-vlan:ubuntu:test-vm.sh"
 )
 

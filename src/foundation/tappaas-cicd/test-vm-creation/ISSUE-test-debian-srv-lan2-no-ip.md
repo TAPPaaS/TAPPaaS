@@ -1,4 +1,4 @@
-# Issue: test-debian-srv-lan2 toont geen IP in PVE (geen guest-agent)
+# Issue: test-deb-srvlan2 toont geen IP in PVE (geen guest-agent)
 
 > **Status: RESOLVED (2026-05-16) — fix shipped as part of issue #147.**
 > Optie B is gekozen: een cloud-init vendor-data snippet
@@ -27,7 +27,7 @@
 
 
 ## Symptoom
-`test-debian-srv-lan2.json` heeft `"dependsOn": ["cluster:vm", "templates:debian"]` — identiek aan het werkende `test-debian.json`. De VM krijgt wél een IP (pfSense dient DHCP op `lan2`), maar:
+`test-deb-srvlan2.json` heeft `"dependsOn": ["cluster:vm", "templates:debian"]` — identiek aan het werkende `test-debian.json`. De VM krijgt wél een IP (pfSense dient DHCP op `lan2`), maar:
 - Proxmox toont geen IP in de GUI-kolom.
 - `update-os.sh` kan het IP niet vinden en hangt in `wait_for_vm_ip`.
 - Gevolg: `qemu-guest-agent` wordt nooit geïnstalleerd.
@@ -57,7 +57,7 @@ Beide IP-detectie-methoden werken hier niet:
 Hierdoor is er een **kip-en-ei**: voor installatie van de guest-agent is SSH nodig, voor SSH is IP nodig, voor IP is de guest-agent of een bereikbare DHCP-server nodig. Voor zones die niet door de mgmt-firewall worden bediend breekt de keten hier.
 
 ## Verschil met werkende `test-debian.json`
-| Veld | test-debian.json (werkt) | test-debian-srv-lan2.json (faalt) |
+| Veld | test-debian.json (werkt) | test-deb-srvlan2.json (faalt) |
 |---|---|---|
 | `node` | tappaas1 | tappaas2 |
 | `bridge0` | `lan` | `lan2` |

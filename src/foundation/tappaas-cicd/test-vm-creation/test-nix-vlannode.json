@@ -1,7 +1,7 @@
 {
   "description": "Test: NixOS clone on srv VLAN on a different node (tappaas2)",
   "version": "0.5",
-  "vmname": "test-nixos-vlan-node",
+  "vmname": "test-nix-vlannode",
   "vmid": 912,
   "vmtag": "TAPPaaS,Test",
   "node": "tappaas3",

@@ -144,18 +144,18 @@
             "vmid": 901
         },
         {
-            "moduleName": "test-debian-vlan-node",
-            "moduleJson": "src/foundation/tappaas-cicd/test-vm-creation/test-debian-vlan-node.json",
+            "moduleName": "test-deb-vlannode",
+            "moduleJson": "src/foundation/tappaas-cicd/test-vm-creation/test-deb-vlannode.json",
             "vmid": 902
         },
         {
-            "moduleName": "test-debian-nonode",
-            "moduleJson": "src/foundation/tappaas-cicd/test-vm-creation/test-debian-nonode.json",
+            "moduleName": "test-deb-nonode",
+            "moduleJson": "src/foundation/tappaas-cicd/test-vm-creation/test-deb-nonode.json",
             "vmid": 903
         },
         {
-            "moduleName": "test-debian-node3-noha",
-            "moduleJson": "src/foundation/tappaas-cicd/test-vm-creation/test-debian-node3-noha.json",
+            "moduleName": "test-deb-n3noha",
+            "moduleJson": "src/foundation/tappaas-cicd/test-vm-creation/test-deb-n3noha.json",
             "vmid": 904
         },
         {
@@ -169,8 +169,8 @@
             "vmid": 911
         },
         {
-            "moduleName": "test-nixos-vlan-node",
-            "moduleJson": "src/foundation/tappaas-cicd/test-vm-creation/test-nixos-vlan-node.json",
+            "moduleName": "test-nix-vlannode",
+            "moduleJson": "src/foundation/tappaas-cicd/test-vm-creation/test-nix-vlannode.json",
             "vmid": 912
         },
         {

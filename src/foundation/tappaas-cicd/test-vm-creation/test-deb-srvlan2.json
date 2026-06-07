@@ -3,7 +3,7 @@
   "node": "tappaas2",
   "vmid": 909,
   "vmtag": "TAPPaaS,Test",
-  "vmname": "test-debian-srv-lan2",
+  "vmname": "test-deb-srvlan2",
   "zone0": "srvHome",
   "dependsOn": [
     "cluster:vm",

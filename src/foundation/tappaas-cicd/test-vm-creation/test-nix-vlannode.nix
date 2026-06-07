@@ -16,7 +16,7 @@
   boot.loader.systemd-boot.enable = lib.mkDefault true;
   boot.loader.efi.canTouchEfiVariables = lib.mkDefault true;
 
-  networking.hostName = "test-nixos-vlan-node";
+  networking.hostName = "test-nix-vlannode";
   networking.networkmanager.enable = true;
 
   time.timeZone = lib.mkDefault "Europe/Amsterdam";

@@ -2,7 +2,7 @@
 
 > **GitHub issue**: TAPPaaS/TAPPaaS#308
 
-**Observed**: 2026-05-16, while validating issue #147 with `test-debian-srv-lan2.json` on its native node tappaas2.
+**Observed**: 2026-05-16, while validating issue #147 with `test-deb-srvlan2.json` on its native node tappaas2.
 
 ## What we saw
 
