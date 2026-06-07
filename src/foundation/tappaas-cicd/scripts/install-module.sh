@@ -214,7 +214,7 @@ main() {
         info "  No dependencies declared"
     else
         for dep in ${depends_on}; do
-            if check_service_available "${dep}" "install-service.sh"; then
+            if check_service_available "${dep}" "install-service.sh" "${variant}"; then
                 info "  ${GN}✓${CL} ${dep}"
             else
                 dep_errors=$((dep_errors + 1))
@@ -256,7 +256,11 @@ main() {
         info "  No dependency services to call"
     else
         for dep in ${depends_on}; do
-            local provider_module="${dep%%:*}"
+            # Resolve the provider honoring variant preference, identically to the
+            # Step 3 availability check, so a variant install calls the variant
+            # provider's install-service.sh (#292).
+            local provider_module
+            provider_module="$(resolve_provider_module "${dep%%:*}" "${variant}")"
             local service_name="${dep##*:}"
             local provider_dir
 

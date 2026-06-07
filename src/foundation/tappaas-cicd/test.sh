@@ -308,6 +308,19 @@ if [[ "${DEEP}" -eq 1 ]]; then
     else
         skip "scripts/test/test-alias-name-validation.sh not found"
     fi
+
+    # ── Deep Test: variant architecture suite (ADR-005 / #316) ───────
+    info "${BOLD}Deep Test: variant architecture suite (ADR-005)${CL}"
+
+    if [[ -x test-variants/test.sh ]]; then
+        if TAPPAAS_TEST_DEEP=1 test-variants/test.sh; then
+            pass "variant architecture suite passed"
+        else
+            fail "variant architecture suite failed"
+        fi
+    else
+        skip "test-variants/test.sh not found"
+    fi
 else
     info "${BOLD}Deep Test: VM creation suite${CL}"
     skip "VM creation tests (use --deep to run)"
@@ -317,6 +330,8 @@ else
     skip "update->rollback test (use --deep to run)"
     info "${BOLD}Deep Test: vmname alias-name length validation${CL}"
     skip "alias-name length validation test (use --deep to run)"
+    info "${BOLD}Deep Test: variant architecture suite (ADR-005)${CL}"
+    skip "variant architecture suite (use --deep to run)"
 fi
 
 # ── Summary ─────────────────────────────────────────────────────────

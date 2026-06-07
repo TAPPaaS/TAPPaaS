@@ -44,6 +44,20 @@
                     "default": 3,
                     "example": 3
                 },
+                "variants": {
+                    "description": "Variant registry (ADR-005). Maps a variant name to its public domain, TLS cert, optional dedicated zone, and DNS mode. The empty-string key \"\" is the default variant used by installs without --variant. Managed by variant-manager. The legacy top-level 'domain'/'tlsCertRefid' fields are kept as aliases for variants[\"\"] for backwards compatibility.",
+                    "type": "object",
+                    "required": false,
+                    "note": "Each variant entry: {domain, tlsCertRefid, dnsMode: wildcard|per-service, zone (optional), description}. Register variants with: variant-manager add <name> --domain <domain>",
+                    "example": {
+                        "": {
+                            "domain": "tappaas.org",
+                            "tlsCertRefid": "abc123",
+                            "dnsMode": "wildcard",
+                            "description": "Default (no variant)"
+                        }
+                    }
+                },
                 "repositories": {
                     "description": "Array of module repositories. Each entry tracks a git repository containing TAPPaaS modules. The first entry is the main TAPPaaS repository. Managed by repository.sh add/remove/modify commands.",
                     "type": "array",
