@@ -15,8 +15,11 @@
 #      once by identity/install.sh).
 #
 # Pre-requirements (set up by identity/install.sh):
-#   • ~/.authentik-credentials.txt on the cicd with url= + token=
 #   • Caddy global AuthProvider configured (AuthToDomain/Port/Uri/Tls + CopyHeaders)
+#
+# ~/.authentik-credentials.txt (url= + token=) is bootstrapped on demand: if it
+# is missing or its token is stale, ensure_authentik_credentials re-fetches it
+# from the identity VM, so this install self-heals on a fresh cicd (issue #312).
 #
 # Usage: install-service.sh <module-name>
 #
@@ -24,6 +27,11 @@
 set -euo pipefail
 
 . /home/tappaas/bin/common-install-routines.sh
+
+# Shared Authentik credential bootstrap helper (issue #312).
+_ACCESSCONTROL_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=../../lib/ensure-authentik-creds.sh disable=SC1091
+. "${_ACCESSCONTROL_DIR}/../../lib/ensure-authentik-creds.sh"
 
 MODULE="${1:-}"
 [[ -n "${MODULE}" ]] || die "Usage: $0 <module-name>"
@@ -53,9 +61,10 @@ info "  external: https://${PROXY_DOMAIN}    upstream: ${UPSTREAM}:${PROXY_PORT}
 if ! command -v authentik-manager >/dev/null 2>&1; then
     die "authentik-manager not in PATH (rebuild opnsense-controller)"
 fi
-if [[ ! -f "${HOME}/.authentik-credentials.txt" ]]; then
-    die "${HOME}/.authentik-credentials.txt missing — has identity install completed?"
-fi
+# Bootstrap the cicd-side Authentik credentials on demand (missing or stale
+# token → re-fetch from the identity VM). die()s with remediation if the VM
+# cannot supply the token (issue #312).
+ensure_authentik_credentials
 
 info "  Authentik: ensuring Proxy app/provider '${MODULE}' (attached to embedded outpost)"
 authentik-manager proxy-app-ensure "${MODULE}" \

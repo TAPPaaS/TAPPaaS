@@ -27,6 +27,12 @@ set -euo pipefail
 
 . /home/tappaas/bin/common-install-routines.sh
 
+# Shared Authentik credential bootstrap helper (issue #312) — single source of
+# truth for materialising ~/.authentik-credentials.txt from the identity VM.
+IDENTITY_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=lib/ensure-authentik-creds.sh disable=SC1091
+. "${IDENTITY_DIR}/lib/ensure-authentik-creds.sh"
+
 VMNAME="$(get_config_value 'vmname' "$1")"
 VMID="$(get_config_value 'vmid')"
 NODE="$(get_config_value 'node' "$(get_node_hostname 0)")"
@@ -39,8 +45,8 @@ DOMAIN="$(jq -r '.tappaas.domain // empty' "$CONFIG_FILE" 2>/dev/null)"
 
 IDENTITY_FQDN="${VMNAME}.${ZONE0NAME}.internal"
 IDENTITY_PUBLIC="https://identity.${DOMAIN}"
-IDENTITY_API="http://${IDENTITY_FQDN}:9000"
-CRED_FILE="${HOME}/.authentik-credentials.txt"
+# ~/.authentik-credentials.txt (url=http://${IDENTITY_FQDN}:9000 + token=) is
+# materialised by ensure_authentik_credentials below (shared helper, #312).
 FIREWALL_FQDN="firewall.mgmt.internal"
 OPNSENSE_CREDS="${HOME}/.opnsense-credentials.txt"
 
@@ -48,48 +54,12 @@ info "${BOLD}Post-Install / Update Configuration${CL}"
 info "  VM: ${VMNAME} (VMID: ${VMID})  Node: ${NODE}  Zone: ${ZONE0NAME}"
 [[ -n "${HANODE}" ]] && info "  HA Node: ${HANODE}"
 
-# ── Phase B step 1: wait for Authentik API ──────────────────────────────────
-
-info "${BOLD}Waiting for Authentik API at ${IDENTITY_API}/api/v3/ (up to 5 min)...${CL}"
-for i in $(seq 1 60); do
-    if curl -fsS -o /dev/null --max-time 4 "${IDENTITY_API}/api/v3/" 2>/dev/null; then
-        info "  ${GN}✓${CL} Authentik API responding"
-        break
-    fi
-    [[ $i -eq 60 ]] && die "Authentik API never came up at ${IDENTITY_API}"
-    sleep 5
-done
-
-# ── Phase B step 2-3: fetch the bootstrap token, persist on cicd ─────────────
-
-info "${BOLD}Fetching AUTHENTIK_BOOTSTRAP_TOKEN from ${IDENTITY_FQDN}${CL}"
-# Clear any stale host key (the VM was re-created with a new ed25519 key) so
-# StrictHostKeyChecking=accept-new actually accepts the current key.
-ssh-keygen -R "${IDENTITY_FQDN}" 2>/dev/null || true
-TOKEN="$(ssh -o BatchMode=yes -o StrictHostKeyChecking=accept-new -o UserKnownHostsFile=/home/tappaas/.ssh/known_hosts \
-    "tappaas@${IDENTITY_FQDN}" \
-    "sudo grep '^AUTHENTIK_BOOTSTRAP_TOKEN=' /etc/secrets/authentik.env | cut -d= -f2-" 2>/dev/null || true)"
-[[ -n "$TOKEN" ]] || die "could not read AUTHENTIK_BOOTSTRAP_TOKEN from ${IDENTITY_FQDN}:/etc/secrets/authentik.env (is the identity VM finished its first boot?)"
-
-(umask 077
- printf 'url=%s\ntoken=%s\n' "$IDENTITY_API" "$TOKEN" > "$CRED_FILE")
-chmod 600 "$CRED_FILE"
-info "  ${GN}✓${CL} ${CRED_FILE} written (mode 600)"
-
-# ── Phase B step 4: verify the token via authentik-manager ──────────────────
-
-command -v authentik-manager >/dev/null || die "authentik-manager not in PATH (rebuild opnsense-controller)"
-# Authentik's worker binds AUTHENTIK_BOOTSTRAP_TOKEN to akadmin asynchronously
-# on first boot — the API may be up before the token is valid. Poll up to 3 min.
-info "${BOLD}Waiting for the bootstrap token to be accepted by Authentik...${CL}"
-for i in $(seq 1 36); do
-    if authentik-manager test >/dev/null 2>&1; then
-        info "  ${GN}✓${CL} token accepted"
-        break
-    fi
-    [[ $i -eq 36 ]] && die "authentik-manager test never succeeded after 3 min — token not bound to akadmin"
-    sleep 5
-done
+# ── Phase B step 1-4: bootstrap + verify the cicd-side Authentik credentials ─
+# Waits for the Authentik API, fetches AUTHENTIK_BOOTSTRAP_TOKEN from the
+# identity VM, writes ~/.authentik-credentials.txt (mode 600), and polls until
+# the token is accepted. Shared with accessControl/install-service.sh so a
+# consumer install self-heals when the credential is missing/stale (#312).
+ensure_authentik_credentials
 
 # ── Phase B step 5-6: Caddy global AuthProvider + 12 X-Authentik-* headers ──
 
