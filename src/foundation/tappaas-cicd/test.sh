@@ -295,6 +295,19 @@ if [[ "${DEEP}" -eq 1 ]]; then
     else
         skip "test-vm-creation/test-rollback.sh not found"
     fi
+
+    # ── Deep Test: vmname -> OPNsense alias length guard (issue #300) ─
+    info "${BOLD}Deep Test: vmname alias-name length validation${CL}"
+
+    if [[ -x scripts/test/test-alias-name-validation.sh ]]; then
+        if scripts/test/test-alias-name-validation.sh; then
+            pass "alias-name length validation test passed"
+        else
+            fail "alias-name length validation test failed"
+        fi
+    else
+        skip "scripts/test/test-alias-name-validation.sh not found"
+    fi
 else
     info "${BOLD}Deep Test: VM creation suite${CL}"
     skip "VM creation tests (use --deep to run)"
@@ -302,6 +315,8 @@ else
     skip "--reinstall round-trip test (use --deep to run)"
     info "${BOLD}Deep Test: update-module.sh snapshot rollback${CL}"
     skip "update->rollback test (use --deep to run)"
+    info "${BOLD}Deep Test: vmname alias-name length validation${CL}"
+    skip "alias-name length validation test (use --deep to run)"
 fi
 
 # ── Summary ─────────────────────────────────────────────────────────

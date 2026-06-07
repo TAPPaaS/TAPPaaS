@@ -402,6 +402,35 @@ validate_zone_active() {
     return 1
 }
 
+# ── OPNsense alias-name length guard (#300) ──────────────────────────
+# firewall:rules provisions an OPNsense alias `tappaas_module_<vmname>` for a
+# module (rules_manager._module_alias_name replaces every non-alphanumeric in the
+# vmname with an underscore). OPNsense alias names must match
+# ^[a-zA-Z_][a-zA-Z0-9_]{0,31}$ — at most 32 characters. The vmname schema
+# pattern (module-fields.json: ^[a-zA-Z][a-zA-Z0-9-]*$) already guarantees a
+# valid leading character and charset, so LENGTH is the only thing that can
+# overflow: with the 15-char `tappaas_module_` prefix, vmname must be <= 17 chars.
+# Validate up front so a too-long vmname fails fast with a clear message instead
+# of dying mid-install at firewall:rules — or worse, silently truncating the
+# alias and colliding with another module's alias.
+validate_module_alias_name() {
+    local vmname="$1"
+    local prefix="tappaas_module_"
+    local maxlen=32
+    local sanitised alias_name
+    # Mirror rules_manager._module_alias_name: non-alphanumeric -> underscore.
+    sanitised="${vmname//[^a-zA-Z0-9]/_}"
+    alias_name="${prefix}${sanitised}"
+    if [[ "${#alias_name}" -gt "${maxlen}" ]]; then
+        local maxvm=$((maxlen - ${#prefix}))
+        error "vmname '${YW}${vmname}${CL}' is too long for its OPNsense firewall alias"
+        error "  Alias '${YW}${alias_name}${CL}' would be ${#alias_name} chars; the OPNsense limit is ${maxlen}"
+        error "  Shorten vmname to at most ${maxvm} characters (or use a shorter --variant name)"
+        return 1
+    fi
+    return 0
+}
+
 # ── Module-config normalization (#161 / #207) ────────────────────────
 # Defined here (before auto-load) so the auto-load block below can call it.
 # A module JSON may group per-service configuration under a Pattern-A `config`
