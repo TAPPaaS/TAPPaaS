@@ -69,6 +69,64 @@ def _check_unbound_dns(label: str = "") -> bool:
         prefix = f"[UNBOUND-CHECK {label}] " if label else "[UNBOUND-CHECK] "
         warn(f"{prefix}DNS FAILED - Unbound check error: {e}")
         return False
+
+
+def _check_egress(host: str = "1.1.1.1", port: int = 443,
+                  timeout: float = 3.0, label: str = "") -> bool:
+    """Check control-plane egress: can we open a TCP connection to host:port?
+
+    Detects when a firewall mutation has broken outbound connectivity (e.g. a
+    bad ruleset), independent of DNS — the target is an IP literal on purpose.
+    Returns True if reachable, False otherwise. (#307)
+    """
+    prefix = f"[EGRESS-CHECK {label}] " if label else "[EGRESS-CHECK] "
+    try:
+        with socket.create_connection((host, port), timeout=timeout):
+            info(f"{prefix}egress OK - TCP {host}:{port} reachable")
+            return True
+    except Exception as e:
+        warn(f"{prefix}egress FAILED - cannot reach {host}:{port}: {e}")
+        return False
+
+
+def preflight_checks(skip_egress: bool = False) -> bool:
+    """Probe control-plane health BEFORE any mutating zone operation (#307).
+
+    Verifies Unbound DNS (10.0.0.1:53) and, unless skipped, control-plane egress
+    (1.1.1.1:443) — both via IP literals so the probe never depends on DNS.
+    Returns True if healthy. The caller should abort --execute on False: mutating
+    an already-degraded firewall risks leaving DNS unrecoverable, and recovery
+    SSH needs name resolution that would no longer work (UNBOUND-DNSBL-PYTHON).
+    """
+    dns_ok = _check_unbound_dns("PRE-FLIGHT")
+    egress_ok = True if skip_egress else _check_egress(label="PRE-FLIGHT")
+    if not dns_ok:
+        error("Pre-flight: Unbound DNS (10.0.0.1:53) is DOWN — refusing to mutate "
+              "(a zone change could make DNS unrecoverable). Restore DNS first, or "
+              "override with --skip-preflight.")
+    if not egress_ok:
+        error("Pre-flight: control-plane egress (1.1.1.1:443) FAILED — refusing to "
+              "mutate. Override with --skip-egress-check (air-gapped) or --skip-preflight.")
+    return dns_ok and egress_ok
+
+
+def postflight_checks(skip_egress: bool = False) -> bool:
+    """Probe control-plane health AFTER zone mutations (#307).
+
+    Same IP-literal probes as preflight. Returns True if still healthy; the caller
+    exits non-zero on False so CI/CD stops before a degraded firewall is shipped.
+    """
+    dns_ok = _check_unbound_dns("POST-FLIGHT")
+    egress_ok = True if skip_egress else _check_egress(label="POST-FLIGHT")
+    if not dns_ok:
+        error("Post-flight: Unbound DNS (10.0.0.1:53) is DOWN after zone changes — "
+              "DNS may be unrecoverable. Recover via the firewall's mgmt IP "
+              "(10.0.0.1), NOT via name resolution.")
+    if not egress_ok:
+        error("Post-flight: control-plane egress (1.1.1.1:443) FAILED after zone changes.")
+    return dns_ok and egress_ok
+
+
 from .dhcp_manager import DhcpManager, DhcpRange
 from .firewall_manager import FirewallManager, FirewallRule, FirewallRuleInfo, RuleAction
 from .log import debug, error, info, warn
@@ -1894,6 +1952,20 @@ def main():
         help=("Directory containing module.json files used by --summary's "
               "pinhole-allowed-from validator (default: /home/tappaas/config)"),
     )
+    parser.add_argument(
+        "--skip-preflight",
+        action="store_true",
+        help="Skip the pre-flight AND post-flight DNS/egress health gates (#307). "
+             "Use for recovery or air-gapped runs where the 10.0.0.1/1.1.1.1 probes "
+             "do not apply. By default --execute aborts if DNS/egress is degraded.",
+    )
+    parser.add_argument(
+        "--skip-egress-check",
+        action="store_true",
+        help="Skip only the egress probe (1.1.1.1:443) in the health gates (#307), "
+             "keeping the Unbound DNS check. Use on air-gapped clusters with no "
+             "internet egress but a working local resolver.",
+    )
 
     args = parser.parse_args()
     check_mode = not args.execute
@@ -1988,6 +2060,16 @@ def main():
         print_validation_report(warnings, errors)
         sys.exit(2 if errors else 0)
 
+    # Pre-flight health gate (#307): refuse to mutate a firewall whose DNS or
+    # egress is already degraded — a further zone change can make DNS
+    # unrecoverable (and recovery SSH would itself need DNS). Probes use IP
+    # literals (10.0.0.1, 1.1.1.1) so they never depend on name resolution.
+    if args.execute and not args.skip_preflight:
+        if not preflight_checks(skip_egress=args.skip_egress_check):
+            error("Aborting --execute on pre-flight health failure. "
+                  "Override with --skip-preflight (recovery/air-gapped).")
+            sys.exit(2)
+
     # Configure based on options
     # By default, VLANs are assigned to interfaces (use --no-assign to disable)
     # By default, firewall rules are configured (use --no-firewall-rules to disable)
@@ -2023,6 +2105,15 @@ def main():
         info(f"  Firewall rules: {len(fw)} zones processed")
         for zone_name, result in fw.items():
             debug(f"    {zone_name}: {result.get('status', 'unknown')}")
+
+    # Post-flight health gate (#307): if the zone changes degraded DNS or egress,
+    # exit non-zero so the deploy pipeline stops before shipping a broken
+    # firewall. Recovery must use the firewall's mgmt IP (10.0.0.1), not DNS.
+    if args.execute and not args.skip_preflight:
+        if not postflight_checks(skip_egress=args.skip_egress_check):
+            error("Post-flight health check failed — zone changes degraded "
+                  "DNS/egress. Recover via the firewall mgmt IP (10.0.0.1), not DNS.")
+            sys.exit(2)
 
 
 if __name__ == "__main__":

@@ -140,6 +140,23 @@ info "Reloading OPNsense filter to regenerate auto-rules for any new interfaces.
 ssh root@"$FIREWALL_FQDN" "configctl filter reload" >/dev/null 2>&1 \
     || warn "configctl filter reload returned non-zero (continuing)"
 
+# Compile-check the generated ruleset (#307). OPNsense renders the active filter
+# spec to /tmp/rules.debug; `pfctl -nf` parses it WITHOUT loading, so a non-zero
+# rc means the ruleset is broken (a malformed rule a reload accepted silently).
+# Fail the update here so the deploy stops (and update-module.sh rolls the
+# firewall snapshot back) before a broken ruleset is declared healthy.
+# Reachability note: the firewall is addressed by FQDN, kept DNS-independent via
+# the cicd's static /etc/hosts pin (networking.hosts in tappaas-cicd.nix) so this
+# check — and the rollback that may follow — work even if Unbound is down.
+info "Compile-checking the firewall ruleset (pfctl -nf /tmp/rules.debug)..."
+if ssh root@"$FIREWALL_FQDN" "pfctl -nf /tmp/rules.debug" >/dev/null 2>&1; then
+    info "${GN}✓${CL} Firewall ruleset compiles cleanly"
+else
+    error "pfctl ruleset compile-check FAILED — /tmp/rules.debug does not parse."
+    error "The firewall ruleset is broken; aborting the update (deploy should roll back)."
+    exit 1
+fi
+
 # ── Reconcile the firewall's own reverse-proxy entry ────────────────
 #
 # The firewall is installed in two phases: a bare OPNsense install, then a

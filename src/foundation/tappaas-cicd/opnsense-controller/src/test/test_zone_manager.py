@@ -22,7 +22,10 @@ from opnsense_controller.zone_manager import (
     Zone,
     ValidationMessage,
     ZoneManager,
+    _check_egress,
     discover_module_files,
+    postflight_checks,
+    preflight_checks,
     validate_pinhole_allowed_from,
 )
 
@@ -583,6 +586,69 @@ class TestConfigureFirewallRulesSequencing(unittest.TestCase):
             r for r in second.created if r.description == "Zone srv -> gateway"
         )
         self.assertGreaterEqual(recreated.sequence, 30000)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Pre-flight / post-flight health guards (issue #307)
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+class TestEgressProbe(unittest.TestCase):
+    """_check_egress() opens a TCP connection to an IP literal (no DNS)."""
+
+    @patch("opnsense_controller.zone_manager.socket.create_connection")
+    def test_egress_reachable_returns_true(self, mock_conn):
+        mock_conn.return_value = MagicMock()  # context-manager-capable
+        self.assertTrue(_check_egress(label="TEST"))
+        # Probed an IP literal on the control port — never a hostname.
+        addr = mock_conn.call_args.args[0]
+        self.assertEqual(addr, ("1.1.1.1", 443))
+
+    @patch("opnsense_controller.zone_manager.socket.create_connection",
+           side_effect=OSError("Network is unreachable"))
+    def test_egress_unreachable_returns_false(self, _mock_conn):
+        self.assertFalse(_check_egress(label="TEST"))
+
+    @patch("opnsense_controller.zone_manager.socket.create_connection",
+           side_effect=TimeoutError("timed out"))
+    def test_egress_timeout_returns_false(self, _mock_conn):
+        self.assertFalse(_check_egress(label="TEST"))
+
+
+class TestPreflightChecks(unittest.TestCase):
+    """preflight_checks()/postflight_checks() gate on Unbound DNS + egress."""
+
+    @patch("opnsense_controller.zone_manager._check_egress", return_value=True)
+    @patch("opnsense_controller.zone_manager._check_unbound_dns", return_value=True)
+    def test_all_healthy_passes(self, _dns, _egress):
+        self.assertTrue(preflight_checks())
+        self.assertTrue(postflight_checks())
+
+    @patch("opnsense_controller.zone_manager._check_egress", return_value=True)
+    @patch("opnsense_controller.zone_manager._check_unbound_dns", return_value=False)
+    def test_dns_down_fails(self, _dns, _egress):
+        self.assertFalse(preflight_checks())
+        self.assertFalse(postflight_checks())
+
+    @patch("opnsense_controller.zone_manager._check_egress", return_value=False)
+    @patch("opnsense_controller.zone_manager._check_unbound_dns", return_value=True)
+    def test_egress_down_fails(self, _dns, _egress):
+        self.assertFalse(preflight_checks())
+        self.assertFalse(postflight_checks())
+
+    @patch("opnsense_controller.zone_manager._check_egress", return_value=False)
+    @patch("opnsense_controller.zone_manager._check_unbound_dns", return_value=True)
+    def test_skip_egress_ignores_egress_failure(self, _dns, mock_egress):
+        # With skip_egress, a failing egress probe must NOT be run or counted.
+        self.assertTrue(preflight_checks(skip_egress=True))
+        self.assertTrue(postflight_checks(skip_egress=True))
+        mock_egress.assert_not_called()
+
+    @patch("opnsense_controller.zone_manager._check_egress", return_value=True)
+    @patch("opnsense_controller.zone_manager._check_unbound_dns", return_value=False)
+    def test_skip_egress_still_enforces_dns(self, _dns, _egress):
+        # skip_egress must NOT bypass the DNS check.
+        self.assertFalse(preflight_checks(skip_egress=True))
 
 
 if __name__ == "__main__":

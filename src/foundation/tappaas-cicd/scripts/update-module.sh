@@ -102,6 +102,53 @@ finalize_config() {
     fi
 }
 
+# Roll back to the pre-update snapshot after a fatal failure (#307). Mirrors the
+# post-update-test fatal handling so that ANY mutating step — the pre-update
+# hook, the dependency updaters, the module's own update.sh, or the post-update
+# test — recovers the same way instead of leaving a half-updated module. The VM
+# is reachable for the restore via the node FQDNs pinned in the cicd's
+# /etc/hosts (networking.hosts in tappaas-cicd.nix), so rollback works even when
+# a firewall update has taken DNS down. Does NOT exit — the caller exits.
+# Args: <module> <snapshot_created: true|false>
+attempt_rollback() {
+    local module="$1" snap_created="$2"
+    if [[ "${OPT_NO_SNAPSHOT}" -eq 1 ]]; then
+        warn "Rollback skipped (--no-snapshot) — manual intervention required"
+        finalize_config "${module}"
+        return
+    fi
+    if [[ "${snap_created}" == true ]]; then
+        echo ""
+        warn "Attempting rollback to pre-update snapshot..."
+        if /home/tappaas/bin/snapshot-vm.sh "${module}" --restore 1; then
+            info "  ${GN}✓${CL} Rollback completed — VM restored to pre-update state"
+            info "  Running post-rollback verification..."
+            local rollback_test_exit=0
+            /home/tappaas/bin/test-module.sh "${module}" || rollback_test_exit=$?
+            if [[ "${rollback_test_exit}" -eq 0 ]]; then
+                info "  ${GN}✓${CL} Post-rollback tests passed — module is back to working state"
+            else
+                fatal "Post-rollback tests also failed (exit ${rollback_test_exit})"
+            fi
+        else
+            fatal "Rollback failed — manual intervention required"
+        fi
+    else
+        error "  No snapshot available for rollback — manual intervention required"
+    fi
+}
+
+# fatal() + rollback + exit 2, for any failure AFTER the pre-update snapshot
+# (#307). Use at every post-snapshot fatal exit so a broken update is rolled
+# back rather than left in place.
+# Args: <module> <snapshot_created> <message>
+fatal_with_rollback() {
+    local module="$1" snap_created="$2" message="$3"
+    fatal "${message}"
+    attempt_rollback "${module}" "${snap_created}"
+    exit 2
+}
+
 # ── Main ─────────────────────────────────────────────────────────────
 
 main() {
@@ -235,8 +282,7 @@ main() {
             if ./pre-update.sh "${module}"; then
                 info "  ${GN}✓${CL} pre-update.sh completed"
             else
-                fatal "Module pre-update.sh failed"
-                exit 2
+                fatal_with_rollback "${module}" "${snapshot_created}" "Module pre-update.sh failed"
             fi
         else
             info "  No pre-update.sh found — skipping"
@@ -266,24 +312,23 @@ main() {
             local provider_dir
 
             if ! provider_dir=$(get_module_dir "${provider_module}" 2>/dev/null); then
-                fatal "Cannot find provider module '${provider_module}' for dependency '${dep}'"
-                exit 2
+                fatal_with_rollback "${module}" "${snapshot_created}" \
+                    "Cannot find provider module '${provider_module}' for dependency '${dep}'"
             fi
 
             ensure_scripts_executable "${provider_dir}"
             local svc_script="${provider_dir}/services/${service_name}/update-service.sh"
 
             if [[ ! -x "${svc_script}" ]]; then
-                fatal "Missing update-service.sh for dependency '${dep}': ${svc_script}"
-                exit 2
+                fatal_with_rollback "${module}" "${snapshot_created}" \
+                    "Missing update-service.sh for dependency '${dep}': ${svc_script}"
             fi
 
             info "  Calling ${BL}${dep}${CL} update-service.sh for module '${module}'..."
             if "${svc_script}" "${module}"; then
                 info "  ${GN}✓${CL} ${dep} update-service completed"
             else
-                fatal "Service updater failed: ${dep}"
-                exit 2
+                fatal_with_rollback "${module}" "${snapshot_created}" "Service updater failed: ${dep}"
             fi
         done
     fi
@@ -299,8 +344,7 @@ main() {
             if ./update.sh "${module}"; then
                 info "  ${GN}✓${CL} Module update.sh completed"
             else
-                fatal "Module update.sh failed"
-                exit 2
+                fatal_with_rollback "${module}" "${snapshot_created}" "Module update.sh failed"
             fi
         else
             info "  No executable update.sh found — skipping"
@@ -319,33 +363,8 @@ main() {
     if [[ "${post_test_exit}" -eq 0 ]]; then
         info "  ${GN}✓${CL} Post-update tests passed"
     elif [[ "${post_test_exit}" -eq 2 ]]; then
-        # Fatal test failure — attempt rollback (unless --no-snapshot)
-        fatal "Post-update tests reported a fatal error"
-        if [[ "${OPT_NO_SNAPSHOT}" -eq 1 ]]; then
-            warn "Rollback skipped (--no-snapshot) — manual intervention required"
-            finalize_config "${module}"
-            exit 2
-        elif [[ "${snapshot_created}" == true ]]; then
-            echo ""
-            warn "Attempting rollback to pre-update snapshot..."
-            if /home/tappaas/bin/snapshot-vm.sh "${module}" --restore 1; then
-                info "  ${GN}✓${CL} Rollback completed — VM restored to pre-update state"
-                # Re-test after rollback
-                info "  Running post-rollback verification..."
-                local rollback_test_exit=0
-                /home/tappaas/bin/test-module.sh "${module}" || rollback_test_exit=$?
-                if [[ "${rollback_test_exit}" -eq 0 ]]; then
-                    info "  ${GN}✓${CL} Post-rollback tests passed — module is back to working state"
-                else
-                    fatal "Post-rollback tests also failed (exit ${rollback_test_exit})"
-                fi
-            else
-                fatal "Rollback failed — manual intervention required"
-            fi
-        else
-            error "  No snapshot available for rollback — manual intervention required"
-        fi
-        exit 2
+        # Fatal test failure — roll back (shared helper, #307).
+        fatal_with_rollback "${module}" "${snapshot_created}" "Post-update tests reported a fatal error"
     else
         # Non-fatal test failure — warn but don't rollback
         warn "Post-update tests failed (exit ${post_test_exit}) — update completed but module may have issues"

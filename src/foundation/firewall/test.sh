@@ -168,6 +168,13 @@ else
     skip "opnsense-firewall not in PATH — cannot test API"
 fi
 
+# Capture Basic-section failures (#307). The Basic checks (DNS lookup, internet
+# reachability, OPNsense reachability) are run first, so FAIL at this point counts
+# only them. A failure here means the firewall is fundamentally broken/unreachable
+# — that is FATAL (exit 2), not a soft fail, so `update-module.sh` rolls the
+# pre-update snapshot back rather than leaving a bricked firewall in place.
+BASIC_FAIL=${FAIL}
+
 # ─────────────────────────────────────────────────────────────────────
 # Standard tests (always run; non-destructive)
 # ─────────────────────────────────────────────────────────────────────
@@ -1185,6 +1192,12 @@ info "Log saved: ${LOG_FILE}"
 if [[ "${FAIL}" -eq 0 ]]; then
     info "${GN}${BOLD}All firewall tests passed.${CL}"
     exit 0
+elif [[ "${BASIC_FAIL:-0}" -gt 0 ]]; then
+    # Basic connectivity/DNS broke → firewall is unreachable/non-functional.
+    # Exit 2 (fatal) so update-module.sh treats it as rollback-worthy (#307).
+    error "${RD}${BOLD}${FAIL} firewall test(s) failed — ${BASIC_FAIL} in Basic"
+    error "${RD}${BOLD}(DNS/connectivity): firewall is broken — FATAL.${CL}"
+    exit 2
 else
     error "${RD}${BOLD}${FAIL} firewall test(s) failed.${CL}"
     exit 1

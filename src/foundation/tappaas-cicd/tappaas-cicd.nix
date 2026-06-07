@@ -48,6 +48,28 @@ in
   networking.hostName = lib.mkDefault "tappaas-cicd"; # Define your hostname.
   networking.networkmanager.enable = true;  # Easiest to use and most distros use this by default.
 
+  # DNS-independent control plane (#307). The mothership reaches the firewall and
+  # the Proxmox nodes by their mgmt FQDNs to run updates AND to roll a snapshot
+  # back when a post-update test fails. But the cluster resolver IS the firewall's
+  # Unbound (10.0.0.1) — so if a firewall update breaks Unbound, FQDN resolution
+  # dies and the very rollback that must recover it can no longer reach the node.
+  # Pin the control-plane FQDNs in /etc/hosts (nsswitch resolves `files` before
+  # `dns`) so this path never depends on the firewall's own DNS. IPs follow the
+  # fixed TAPPaaS mgmt convention on 10.0.0.0/24: firewall=.1, tappaasN=.(9+N).
+  # If a deployment deviates from that convention, update these entries.
+  networking.hosts = {
+    "10.0.0.1"  = [ "firewall.mgmt.internal" "firewall" ];
+    "10.0.0.10" = [ "tappaas1.mgmt.internal" "tappaas1" ];
+    "10.0.0.11" = [ "tappaas2.mgmt.internal" "tappaas2" ];
+    "10.0.0.12" = [ "tappaas3.mgmt.internal" "tappaas3" ];
+    "10.0.0.13" = [ "tappaas4.mgmt.internal" "tappaas4" ];
+    "10.0.0.14" = [ "tappaas5.mgmt.internal" "tappaas5" ];
+    "10.0.0.15" = [ "tappaas6.mgmt.internal" "tappaas6" ];
+    "10.0.0.16" = [ "tappaas7.mgmt.internal" "tappaas7" ];
+    "10.0.0.17" = [ "tappaas8.mgmt.internal" "tappaas8" ];
+    "10.0.0.18" = [ "tappaas9.mgmt.internal" "tappaas9" ];
+  };
+
   # Set your time zone.
   time.timeZone = lib.mkDefault "Europe/Amsterdam";
 
