@@ -55,8 +55,36 @@ and import `./test-fw-webserver.nix`; (b) inline the overlay into `test-fw-c.nix
 or (c) teach `update-os.sh` to copy parent-relative `imports`. New fixtures should
 be **self-contained** (no cross-dir imports) — see `test-caddy-web.nix`.
 
+## Defect 3 — split-horizon DNS override not honored by the resolver (#269)
+
+Found by `firewall/test-caddy-public.sh` (Option B). External Caddy passthrough
+works (a service on the internet is reachable, TLS-valid, proxied), and Caddy is
+reachable internally when you point straight at the DMZ gateway (10.6.0.1). But
+**internal clients resolve the public FQDN to the WAN IP, not the DMZ gateway**, so
+split-horizon traffic hair-pins out through the WAN instead of staying internal:
+
+    getent hosts test-caddy-web.test2.tapaas.org   -> 91.226.145.25 (public)
+    dig @10.0.0.1 '*.test2.tapaas.org'             -> 91.226.145.25 (public)
+
+Root cause: Sprint 4's `acme-setup.sh` (and `firewall:proxy` per-service) register
+the split-horizon override via `dns-manager`, which writes **Dnsmasq** host
+overrides. But the resolver clients use on `10.0.0.1:53` is **Unbound** (see the
+zone-manager UNBOUND post-flight), which does NOT serve Dnsmasq host overrides —
+it forwards `test2.tapaas.org` upstream to public DNS. The Dnsmasq entry exists
+(`dns-manager list` shows `*.test2.tapaas.org -> 10.6.0.1`) but is never consulted.
+Additionally a `*`-named host entry is not a wildcard, so it would not match
+subdomains even in Dnsmasq.
+
+**Fix (next task):** implement split-horizon in the resolver clients actually use
+(Unbound) — e.g. an Unbound host-override / local-data for each proxied FQDN (or a
+domain-level override) pointing at the DMZ gateway. The `dns-manager` Dnsmasq path
+used by acme-setup §6 / firewall:proxy per-service is the wrong mechanism for this
+OPNsense setup. Needs the operator's DNS-architecture decision (Unbound override
+shape; per-service vs domain wildcard).
+
 ## Note
 
 The standalone Caddy test (`firewall/test-caddy-public.sh`, Option B) deliberately
-avoids both defects: it places its webserver in an already-active zone (no zone
+avoids defects 1 & 2: it places its webserver in an already-active zone (no zone
 activation, no trunk-sync) and uses a self-contained `.nix` (no cross-dir import).
+It is what surfaced defect 3.

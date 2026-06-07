@@ -6,7 +6,7 @@
   "vmtag": "TAPPaaS,Test,Firewall",
   "node": "tappaas1",
   "cores": 1,
-  "memory": "1024",
+  "memory": "2048",
   "diskSize": "16G",
   "storage": "tanka1",
   "imageType": "clone",
@@ -15,12 +15,18 @@
   "zone0": "srvWork",
   "proxyPort": 8080,
   "ports": [
-    { "port": 8080, "protocol": "TCP", "description": "Test webserver" }
+    {
+      "port": 8080,
+      "protocol": "TCP",
+      "description": "Test webserver"
+    }
   ],
   "ingress": [
     {
       "from": "dmz",
-      "ports": [8080],
+      "ports": [
+        8080
+      ],
       "description": "Caddy reverse proxy (dmz) forwards the public hostname to the webserver"
     }
   ],
