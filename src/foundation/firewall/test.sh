@@ -1173,6 +1173,68 @@ else
     rm -f /tmp/rm-rec.json
 
     popd >/dev/null
+
+    # ── Deep 11: Caddy public + split-horizon access (ADR-005, #316) ──────
+    # Reuses the test-fw-a webserver (already registered via firewall:proxy with
+    # the default variant's wildcard domain) to prove a service published on the
+    # internet is reachable end-to-end:
+    #   (a) from outside — via the public IP, TLS-terminated + proxied by Caddy
+    #   (b) from inside  — via split-horizon DNS (FQDN -> DMZ gateway -> Caddy)
+    section "Deep 11: Caddy public + split-horizon access (ADR-005)"
+
+    # Reject empty / RFC1918 / loopback / link-local — i.e. require a public IP.
+    is_public_ip() {
+        local ip="$1"
+        [[ -n "${ip}" ]] || return 1
+        case "${ip}" in
+            10.*|127.*|169.254.*|192.168.*|172.1[6-9].*|172.2[0-9].*|172.3[01].*) return 1 ;;
+        esac
+        return 0
+    }
+
+    TFW_A_MARKER="tappaas-firewall-test-a-ok"
+    DEF_DOMAIN="$(get_variant_config "" 2>/dev/null | jq -r '.domain // ""')"
+    PROXY_FQDN=""
+    [[ -n "${DEF_DOMAIN}" ]] && PROXY_FQDN="test-fw-a.${DEF_DOMAIN}"
+    PUBLIC_IP=""
+    if [[ -n "${PROXY_FQDN}" ]]; then
+        PUBLIC_IP="$(dig +short @1.1.1.1 A "${PROXY_FQDN}" 2>/dev/null | grep -E '^[0-9.]+$' | tail -1)"
+    fi
+
+    # ── Gate: default-variant domain set AND public DNS -> a public IP ────
+    if [[ -z "${DEF_DOMAIN}" || "${DEF_DOMAIN}" == CHANGE* ]]; then
+        skip "Deep 11: no default-variant domain set (variant-manager add \"\" --domain <domain>)"
+    elif ! is_public_ip "${PUBLIC_IP}"; then
+        skip "Deep 11: public DNS for ${PROXY_FQDN} did not resolve to a public IP (got '${PUBLIC_IP:-none}') — publish the A/wildcard record first"
+    else
+        info "  Service FQDN: ${BL}${PROXY_FQDN}${CL}"
+        info "  Public IP:    ${BL}${PUBLIC_IP}${CL}"
+
+        # (a) External passthrough: connect to the public IP (NAT reflection),
+        #     Caddy terminates the wildcard TLS and proxies to the upstream.
+        if curl -fsS --max-time 15 --resolve "${PROXY_FQDN}:443:${PUBLIC_IP}" \
+                "https://${PROXY_FQDN}/" 2>/dev/null | grep -q "${TFW_A_MARKER}"; then
+            pass "Deep 11a: ${PROXY_FQDN} reachable via public IP ${PUBLIC_IP} (TLS + passthrough through Caddy)"
+        else
+            fail "Deep 11a: no passthrough via public IP ${PUBLIC_IP} (needs public A record, NAT reflection, valid wildcard cert, and Caddy->upstream:8080)"
+        fi
+
+        # (b) Split-horizon: internal DNS must resolve the FQDN to the DMZ gateway
+        #     (NOT the public IP), and the service must be reachable that way.
+        DMZ_GW="$(dmz_gateway_ip 2>/dev/null || echo '')"
+        INTERNAL_IP="$(getent hosts "${PROXY_FQDN}" 2>/dev/null | awk '{print $1}' | head -1)"
+        if [[ -n "${DMZ_GW}" && "${INTERNAL_IP}" == "${DMZ_GW}" ]]; then
+            pass "Deep 11b: internal DNS resolves ${PROXY_FQDN} -> ${DMZ_GW} (split-horizon)"
+        else
+            fail "Deep 11b: internal DNS for ${PROXY_FQDN} is '${INTERNAL_IP:-none}', expected DMZ gateway '${DMZ_GW:-?}'"
+        fi
+
+        if curl -fsS --max-time 15 "https://${PROXY_FQDN}/" 2>/dev/null | grep -q "${TFW_A_MARKER}"; then
+            pass "Deep 11c: ${PROXY_FQDN} reachable internally via split-horizon DNS + Caddy"
+        else
+            fail "Deep 11c: not reachable internally via split-horizon (needs DMZ access from this host + Caddy->upstream:8080)"
+        fi
+    fi
 fi
 
 # ─────────────────────────────────────────────────────────────────────
