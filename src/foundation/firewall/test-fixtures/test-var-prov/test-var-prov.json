@@ -1,0 +1,32 @@
+{
+  "description": "Variant E2E test PROVIDER: webserver that provides 'svc' (firewall/test-variant-public.sh)",
+  "version": "0.1",
+  "vmname": "test-var-prov",
+  "vmid": 926,
+  "vmtag": "TAPPaaS,Test,Firewall,Variant",
+  "node": "tappaas1",
+  "cores": 1,
+  "memory": "2048",
+  "diskSize": "16G",
+  "storage": "tanka1",
+  "imageType": "clone",
+  "image": "8080",
+  "bridge0": "lan",
+  "zone0": "srvWork",
+  "proxyPort": 8080,
+  "ports": [
+    { "port": 8080, "protocol": "TCP", "description": "Provider webserver" }
+  ],
+  "ingress": [
+    { "from": "dmz", "ports": [8080], "description": "Caddy (dmz) forwards the public hostname to the provider" }
+  ],
+  "provides": [
+    "svc"
+  ],
+  "dependsOn": [
+    "cluster:vm",
+    "templates:nixos",
+    "firewall:proxy",
+    "firewall:rules"
+  ]
+}

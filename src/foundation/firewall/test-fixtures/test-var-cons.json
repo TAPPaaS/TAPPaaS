@@ -1,0 +1,21 @@
+{
+  "description": "Variant E2E test CONSUMER: depends on test-var-prov:svc (firewall/test-variant-public.sh)",
+  "version": "0.1",
+  "vmname": "test-var-cons",
+  "vmid": 927,
+  "vmtag": "TAPPaaS,Test,Firewall,Variant",
+  "node": "tappaas1",
+  "cores": 1,
+  "memory": "2048",
+  "diskSize": "16G",
+  "storage": "tanka1",
+  "imageType": "clone",
+  "image": "8080",
+  "bridge0": "lan",
+  "zone0": "srvWork",
+  "dependsOn": [
+    "cluster:vm",
+    "templates:nixos",
+    "test-var-prov:svc"
+  ]
+}

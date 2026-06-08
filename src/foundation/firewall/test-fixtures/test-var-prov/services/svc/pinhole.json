@@ -1,0 +1,6 @@
+{
+  "_comment": "Auto-pinhole (#173) for the 'svc' service of test-var-prov: a consumer that dependsOn ['test-var-prov:svc'] in another zone gets an ingress rule for these ports.",
+  "ports": [
+    { "port": 8080, "protocol": "TCP", "description": "test-var-prov webserver — auto-pinhole target" }
+  ]
+}
