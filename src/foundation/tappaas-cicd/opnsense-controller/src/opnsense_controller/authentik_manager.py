@@ -278,13 +278,14 @@ class AuthentikManager:
             # Authentik routes /core/applications/<x>/ on SLUG, not pk.
             self._delete(f"/core/applications/{a['slug']}/")
             if provider_pk:
-                # Try both endpoints; whichever matches deletes the provider.
+                # Delete the backing provider. Provider pks are unique across
+                # provider types, so attempt BOTH endpoints — the matching one
+                # deletes, the other 404s harmlessly (_delete tolerates 404).
+                # Do NOT break after the first: a 404 is not a successful delete,
+                # so breaking on the proxy attempt would leak an oauth2 provider
+                # (the OIDC case — caught by identity/test.sh --deep §7 teardown).
                 for endpoint in ("/providers/proxy", "/providers/oauth2"):
-                    try:
-                        self._delete(f"{endpoint}/{provider_pk}/")
-                        break
-                    except httpx.HTTPStatusError:
-                        continue
+                    self._delete(f"{endpoint}/{provider_pk}/")
 
     # ── Embedded Outpost ────────────────────────────────────────────────
 

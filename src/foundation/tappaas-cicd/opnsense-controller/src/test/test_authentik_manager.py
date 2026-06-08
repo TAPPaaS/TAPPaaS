@@ -412,6 +412,27 @@ class TestAppBindGroups(unittest.TestCase):
         self.assertFalse(any(c["method"] == "POST" for c in calls))
 
 
+class TestAppDelete(unittest.TestCase):
+    def test_deletes_app_and_BOTH_provider_endpoints(self):
+        # Regression: an oauth2 provider was leaked because the proxy-endpoint
+        # DELETE 404s silently (tolerated) and the loop broke before trying
+        # oauth2. app_delete must hit both endpoints (the matching one deletes).
+        mgr, calls = _make_manager({
+            ("GET", "/core/applications/"): {"results": [
+                {"pk": "APP", "slug": "test-idoidc", "provider": 2}]},
+        })
+        mgr.app_delete("test-idoidc")
+        deletes = [c["path"] for c in calls if c["method"] == "DELETE"]
+        self.assertIn("/core/applications/test-idoidc/", deletes)
+        self.assertIn("/providers/proxy/2/", deletes)
+        self.assertIn("/providers/oauth2/2/", deletes)
+
+    def test_noop_when_app_absent(self):
+        mgr, calls = _make_manager({("GET", "/core/applications/"): {"results": []}})
+        mgr.app_delete("ghost")
+        self.assertFalse(any(c["method"] == "DELETE" for c in calls))
+
+
 class TestOidcAppEnsure(unittest.TestCase):
     def test_create_provider_and_application(self):
         mgr, calls = _make_manager({
