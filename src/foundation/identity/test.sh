@@ -10,7 +10,8 @@
 # Commands are taken from ~/bin by default; override for pre-deploy testing:
 #   AUTHENTIK_MANAGER=… ROLES_ENSURE=… USER_SH=… ./test.sh
 #
-# Usage: ./test.sh [<vmname>]
+# Usage: ./test.sh [--deep] [<vmname>]
+#   --deep  also run the full user.sh lifecycle (add → modify membership → delete).
 # Exit: 0 all passed, 1 one or more failed, 2 fatal/unreachable.
 
 # pass()/fail() always return 0, so the `cond && pass || fail` idiom is a genuine
@@ -24,9 +25,14 @@ AUTHENTIK_MANAGER="${AUTHENTIK_MANAGER:-authentik-manager}"
 ROLES_ENSURE="${ROLES_ENSURE:-/home/tappaas/bin/roles-ensure.sh}"
 USER_SH="${USER_SH:-/home/tappaas/bin/user.sh}"
 
+RUN_DEEP=0
+for _a in "$@"; do [[ "${_a}" == "--deep" ]] && RUN_DEEP=1; done
+
 TP="zzz-identity-test"
 TUSER="${TP}-alice"
 TVAR="${TP}var"
+DEEPUSER="${TP}-deep"
+DEEPMOD="zzzmod"          # throwaway module name for the deep module-admin role
 
 PASS=0; FAIL=0
 section() { echo; info "${BOLD}═══ $* ═══${CL}"; }
@@ -45,10 +51,12 @@ user_groups() { api '/core/users/?page_size=1000' | jq -r --arg u "$1" '.results
 
 cleanup() {
     info "  cleanup…"
-    local upk gpk g
-    upk="$(api '/core/users/?page_size=1000' | jq -r --arg u "${TUSER}" '.results[]|select(.username==$u)|.pk')"
-    [[ -n "${upk}" ]] && api "/core/users/${upk}/" -X DELETE -o /dev/null 2>/dev/null
-    for g in "${TVAR}-users" "${TVAR}-admins" "${TVAR}"; do
+    local upk gpk g u
+    for u in "${TUSER}" "${DEEPUSER}"; do
+        upk="$(api '/core/users/?page_size=1000' | jq -r --arg u "$u" '.results[]|select(.username==$u)|.pk')"
+        [[ -n "${upk}" ]] && api "/core/users/${upk}/" -X DELETE -o /dev/null 2>/dev/null
+    done
+    for g in "${TVAR}-users" "${TVAR}-admins" "${TVAR}" "tappaas-${DEEPMOD}-admins"; do
         gpk="$(api '/core/groups/?page_size=1000' | jq -r --arg n "$g" '.results[]|select(.name==$n)|.pk')"
         [[ -n "${gpk}" ]] && api "/core/groups/${gpk}/" -X DELETE -o /dev/null 2>/dev/null
     done
@@ -98,6 +106,44 @@ tp="$(api '/core/groups/?page_size=1000' | jq -r --arg n "tappaas-users" '.resul
 [[ -n "${vp}" && "${vp}" != "${tp}" && "${vp}" != "null" ]] \
     && pass "${TVAR}-users has its own parent scope (≠ default) → isolation by group" \
     || fail "variant scope parent not distinct (vp=${vp} tp=${tp})"
+
+# ── 5. DEEP: full user.sh lifecycle (add → modify → delete) ──────────────────
+if [[ "${RUN_DEEP}" -eq 1 ]]; then
+    section "5 (deep): user.sh lifecycle — add / modify membership / delete"
+    DG="tappaas-${DEEPMOD}-admins"
+
+    # create
+    "${USER_SH}" add "${DEEPUSER}" --email "${DEEPUSER}@example.invalid" --name "Deep User" \
+        --role user --no-credential >/dev/null 2>&1 || fail "deep: user.sh add failed"
+    mapfile -t d1 < <(user_groups "${DEEPUSER}")
+    [[ " ${d1[*]} " == *" tappaas-users "* ]] \
+        && pass "created — in tappaas-users" || fail "not in tappaas-users (got: ${d1[*]:-none})"
+
+    # modify membership: +admin +module-admin:zzzmod, -user
+    "${USER_SH}" modify "${DEEPUSER}" --add-role admin --add-role "module-admin:${DEEPMOD}" \
+        --remove-role user >/dev/null 2>&1 || fail "deep: user.sh modify (roles) failed"
+    mapfile -t d2 < <(user_groups "${DEEPUSER}")
+    { [[ " ${d2[*]} " == *" tappaas-admins "* ]] && [[ " ${d2[*]} " == *" ${DG} "* ]] \
+        && [[ " ${d2[*]} " != *" tappaas-users "* ]]; } \
+        && pass "modify — added admin + ${DG}, removed user" \
+        || fail "modify membership wrong (got: ${d2[*]:-none})"
+
+    # modify profile: email + name
+    "${USER_SH}" modify "${DEEPUSER}" --email "${DEEPUSER}-new@example.invalid" \
+        --name "Deep User 2" >/dev/null 2>&1 || fail "deep: user.sh modify (profile) failed"
+    em="$(api '/core/users/?page_size=1000' | jq -r --arg u "${DEEPUSER}" '.results[]|select(.username==$u)|.email')"
+    [[ "${em}" == "${DEEPUSER}-new@example.invalid" ]] \
+        && pass "modify — email updated" || fail "email not updated (got: ${em})"
+
+    # delete
+    "${USER_SH}" delete "${DEEPUSER}" --yes >/dev/null 2>&1 || fail "deep: user.sh delete failed"
+    gone="$(api '/core/users/?page_size=1000' | jq -r --arg u "${DEEPUSER}" '[.results[]|select(.username==$u)]|length')"
+    [[ "${gone}" -eq 0 ]] && pass "deleted — user gone" || fail "user still present after delete"
+
+    # delete idempotent
+    "${USER_SH}" delete "${DEEPUSER}" --yes >/dev/null 2>&1 \
+        && pass "delete idempotent (no error when absent)" || fail "delete errored on absent user"
+fi
 
 # ── summary ─────────────────────────────────────────────────────────────────
 section "Summary"
