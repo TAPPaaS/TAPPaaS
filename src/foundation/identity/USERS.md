@@ -30,41 +30,52 @@ roles-ensure.sh                 # installers + default scope + every variant
 roles-ensure.sh --variant acme  # just the acme scope
 ```
 
-## Add or update a user
+## Manage users — `user.sh`
+
+One command with verbs **add / modify / delete / show / list**.
 
 ```bash
-# A basic user on the default install
-add-user.sh lars --email lars@example.org
+# add — create a login and grant roles
+user.sh add lars  --email lars@example.org                       # basic user (default)
+user.sh add lars  --email lars@example.org --role admin
+user.sh add jane  --email jane@acme.org --variant acme --role user
+user.sh add jane  --email jane@acme.org --variant acme --role module-admin:nextcloud
+user.sh add root  --email root@example.org --role installer
+user.sh add lars  --email lars@example.org --role admin --no-credential  # skip credential
 
-# With a role
-add-user.sh lars --email lars@example.org --role admin
+# modify — grant/revoke roles or update profile (additive + subtractive)
+user.sh modify lars --add-role admin
+user.sh modify jane --variant acme --remove-role user --add-role admin
+user.sh modify lars --email lars@new.org --name "Lars R" --credential  # re-issue credential
 
-# A client's user / module admin (multi-tenant)
-add-user.sh jane --email jane@acme.org --variant acme --role user
-add-user.sh jane --email jane@acme.org --variant acme --role module-admin:nextcloud
+# show / list
+user.sh show lars
+user.sh list                 # users in the default scope
+user.sh list --variant acme  # users in a client's scope
 
-# A platform installer
-add-user.sh root --email root@example.org --role installer
+# delete — remove the login entirely (prompts unless --yes)
+user.sh delete lars
 ```
 
-`add-user.sh` is **idempotent and additive** — re-running adds roles, never removes
-them. Pass `--role` multiple times to grant several at once, `--no-credential` to
-only change roles without (re)issuing a credential.
+`add` is **idempotent and additive** (re-running adds roles, never removes). Roles
+are scoped: pass `--variant <client>` so `admin`/`user`/`module-admin:<m>` resolve to
+that client's groups (`installer` is always global).
 
 ### Credential delivery
 
-`add-user.sh` finishes by either:
+`add` (and `modify --credential`) finishes by either:
 
 - printing a **one-time enrollment link** (when a recovery flow + SMTP are set up —
   deferred to the SMTP issue; the link is then emailed automatically), or
 - setting and **printing a temporary password** (the fallback today) — share it over
   a secure channel; the user changes it after first login.
 
-## Removing a role / user
+## Removing a role or user
 
-Role groups are managed in Authentik. To drop a role, remove the user from that
-group in the Authentik admin UI (`https://identity.<domain>`). Deleting the user
-there removes the login entirely. (A scriptable `remove-user` is a future addition.)
+- Drop a role: `user.sh modify <user> [--variant v] --remove-role <role>`.
+- Delete the login entirely: `user.sh delete <user>` (login + MFA gone; re-addable).
+
+You can also manage everything in the Authentik admin UI at `https://identity.<domain>`.
 
 ## Which modules use which login path
 

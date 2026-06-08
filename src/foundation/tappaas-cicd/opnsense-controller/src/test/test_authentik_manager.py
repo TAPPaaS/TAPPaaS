@@ -354,6 +354,37 @@ class TestUserEnsure(unittest.TestCase):
         mgr.user_add_to_groups("lars", ["tappaas-users"])
         self.assertFalse(any(c["method"] == "PATCH" for c in calls))
 
+    def test_remove_from_groups_patches_remaining(self):
+        mgr, calls = _make_manager({
+            ("GET", "/core/groups/"): {"results": [
+                {"pk": "GU", "name": "tappaas-users"}, {"pk": "GA", "name": "tappaas-admins"}]},
+            ("GET", "/core/users/"): {"results": [
+                {"pk": 7, "username": "lars", "groups": ["GU", "GA"]}]},
+            ("PATCH", "/core/users/7/"): {"pk": 7},
+        })
+        mgr.user_remove_from_groups("lars", ["tappaas-admins"])
+        patch = next(c for c in calls if c["method"] == "PATCH")
+        self.assertEqual(patch["json"]["groups"], ["GU"])      # GA dropped, GU kept
+
+    def test_remove_from_groups_noop_when_not_member(self):
+        mgr, calls = _make_manager({
+            ("GET", "/core/groups/"): {"results": [{"pk": "GA", "name": "tappaas-admins"}]},
+            ("GET", "/core/users/"): {"results": [
+                {"pk": 7, "username": "lars", "groups": ["GU"]}]},
+        })
+        mgr.user_remove_from_groups("lars", ["tappaas-admins"])
+        self.assertFalse(any(c["method"] == "PATCH" for c in calls))
+
+    def test_delete_existing_and_missing(self):
+        mgr, calls = _make_manager({
+            ("GET", "/core/users/"): {"results": [{"pk": 7, "username": "lars", "groups": []}]},
+        })
+        self.assertTrue(mgr.user_delete("lars"))
+        self.assertTrue(any(c["method"] == "DELETE" and c["path"] == "/core/users/7/" for c in calls))
+        mgr2, calls2 = _make_manager({("GET", "/core/users/"): {"results": []}})
+        self.assertFalse(mgr2.user_delete("ghost"))
+        self.assertFalse(any(c["method"] == "DELETE" for c in calls2))
+
 
 class TestAppBindGroups(unittest.TestCase):
     def test_creates_binding_with_app_as_target(self):

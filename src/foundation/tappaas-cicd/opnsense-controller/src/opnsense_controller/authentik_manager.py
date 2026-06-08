@@ -441,6 +441,26 @@ class AuthentikManager:
             f"/core/users/{user['pk']}/", {"groups": sorted(have | want)}
         )
 
+    def user_remove_from_groups(self, username: str, group_names: list[str]) -> dict:
+        """Remove an existing user from the named groups (idempotent)."""
+        user = self.user_get(username)
+        if not user:
+            raise RuntimeError(f"user {username!r} not found")
+        drop = set(self._group_pks(group_names))
+        have = set(user.get("groups", []))
+        keep = sorted(have - drop)
+        if len(keep) == len(have):
+            return user
+        return self._patch_json(f"/core/users/{user['pk']}/", {"groups": keep})
+
+    def user_delete(self, username: str) -> bool:
+        """Delete a user entirely. Returns False if the user didn't exist."""
+        user = self.user_get(username)
+        if not user:
+            return False
+        self._delete(f"/core/users/{user['pk']}/")
+        return True
+
     def user_set_password(self, username: str, password: str) -> None:
         """Set a user's password directly (fallback when no recovery flow/SMTP)."""
         user = self.user_get(username)

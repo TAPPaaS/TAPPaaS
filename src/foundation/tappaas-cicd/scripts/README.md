@@ -703,6 +703,66 @@ manual reload needed.
 
 ---
 
+### roles-ensure.sh
+
+Reconciles the Authentik **role groups** for the current variant set (ADR-006, #56).
+Idempotent — safe to re-run. Called automatically by `identity/update.sh` and by
+`variant-manager.sh add`; run by hand to repair drift.
+
+**Usage:**
+```bash
+roles-ensure.sh                 # installers + default scope + every registered variant
+roles-ensure.sh --variant acme  # just the acme scope
+```
+
+**Guarantees these groups exist:**
+- `tappaas-installers` — global superuser (platform root); never per-variant
+- default scope: parent group `tappaas` → `tappaas-admins`, `tappaas-users`
+- per registered variant `<v>`: parent `<v>` → `<v>-admins`, `<v>-users`
+
+Each group carries `attributes.tappaas = {variant, role}`. Per-module admin groups
+(`<scope>-<module>-admins`) are opt-in and created at module install / by `user.sh`,
+not here. Talks to Authentik via `authentik-manager` (override with
+`AUTHENTIK_MANAGER=` for testing).
+
+---
+
+### user.sh
+
+Manage a person's **single Authentik login** and their **roles** (ADR-006, #56).
+One person = one user; roles are group memberships, scoped to a variant (except
+`installer`, which is global). See also `src/foundation/identity/USERS.md`.
+
+**Usage:**
+```bash
+user.sh add    <username> --email <addr> [--name N] [--variant v] [--role R ...] [--no-credential]
+user.sh modify <username> [--variant v] [--add-role R ...] [--remove-role R ...] [--email E] [--name N] [--credential]
+user.sh delete <username> [--yes]
+user.sh show   <username>
+user.sh list   [--variant v]
+```
+
+**Roles** (`--role` / `--add-role` / `--remove-role`): `installer`, `admin`, `user`,
+`module-admin:<module>`. They resolve to scope groups (`installer`→`tappaas-installers`;
+`admin`/`user`→`<scope>-admins`/`-users`; `module-admin:nextcloud`→`<scope>-nextcloud-admins`,
+created on demand). `<scope>` is `tappaas` by default or the `--variant` name.
+
+**Examples:**
+```bash
+user.sh add lars --email lars@example.org --role admin
+user.sh add jane --email jane@acme.org --variant acme --role module-admin:nextcloud
+user.sh modify jane --variant acme --remove-role user --add-role admin
+user.sh show lars
+user.sh delete lars
+```
+
+**Idempotent + additive:** `add` re-runs add roles, never remove. **Credential**
+(`add`, or `modify --credential`): a one-time enrollment link when the brand has a
+recovery flow (emailed once SMTP is configured — deferred to the SMTP issue), else a
+generated password is set and printed.
+
+---
+
 ### install-module.sh
 
 Installs a TAPPaaS module with dependency validation and service wiring. Supports installing module variants with `--variant`.
@@ -1247,6 +1307,8 @@ scripts/
 ├── resize-disk.sh               # Resize VM disk in Proxmox and filesystem
 ├── setup-caddy.sh               # Install Caddy reverse proxy + os-acme-client + os-ddclient
 ├── acme-setup.sh                # Issue the TAPPaaS wildcard TLS cert via os-acme-client (#254)
+├── roles-ensure.sh             # Reconcile Authentik role groups for the variant set (ADR-006)
+├── user.sh                     # Manage Authentik logins + roles: add/modify/delete/show/list (ADR-006)
 ├── snapshot-vm.sh               # VM snapshot management (create/list/cleanup/restore)
 ├── test-module.sh               # Test a module with dependency-recursive service testing
 ├── update-module.sh             # Update a module with snapshot, testing, and rollback

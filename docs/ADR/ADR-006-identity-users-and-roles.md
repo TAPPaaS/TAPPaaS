@@ -10,7 +10,7 @@
 ## Context
 
 Issue #56 asks us to define and implement the standard **role profiles** and
-**default users** for TAPPaaS, and to provide an `add-user` workflow. The identity
+**default users** for TAPPaaS, and to provide an `user.sh` workflow. The identity
 module (Authentik) today has the plumbing but none of the people-facing machinery:
 
 | Area | State today |
@@ -32,7 +32,7 @@ user actually ends up with a working account in a downstream app** (the Nextclou
 - **No variants installed** → a set of default roles.
 - **Variants installed** → those roles exist **per client**, except **Installer**
   (TAPPaaS-wide administration) which stays global.
-- There must be an **`add-user`** script that sets up a basic user.
+- There must be a **`user.sh`** tool (verbs add/modify/delete) — at minimum it sets up a basic user.
 
 ---
 
@@ -61,7 +61,7 @@ Authentik has three primitives that are easy to conflate. We use them deliberate
 
 In v1, **Admin and Module-Admin are app-level roles only** — they are groups that flow to
 applications, *not* Authentik-admin capabilities. Only the Installer can administer
-Authentik and run `add-user`. (Delegated per-client admin is deferred — see Consequences.)
+Authentik and run `user.sh`. (Delegated per-client admin is deferred — see Consequences.)
 
 ### 3. Group hierarchy: parent-per-scope, unique child names
 
@@ -164,28 +164,29 @@ user's group list. Opt-in keeps the group set meaningful.
 | Static website | No | ❌ none |
 
 Promoting a user is then just another membership — same single login, more authority:
-`add-user lars --role module-admin:nextcloud`.
+`user.sh modify lars --add-role module-admin:nextcloud`.
 
 ### 7. Credential delivery: email via Authentik SMTP (link fallback)
 
-`add-user` creates the account and asks Authentik to **email an enrollment link**; the
+`user.sh` creates the account and asks Authentik to **email an enrollment link**; the
 user sets their own password + MFA. Authentik talks SMTP directly via `AUTHENTIK_EMAIL__*`
 (already stubbed in `identity.nix`) — it does **not** use the local postfix. Because no
-SMTP relay exists in the cluster yet (see below), `add-user` is **email-first with a
+SMTP relay exists in the cluster yet (see below), `user.sh` is **email-first with a
 printed one-time-link fallback**, so it works before SMTP is wired and improves to silent
 email once it is.
 
 ### 8. Tooling
 
-- **`add-user <user> --email <e> [--variant <v>] --role installer|admin|user|module-admin:<module> [--role …]`**
-  — idempotent: ensure user → ensure scope/parent + child groups → add memberships →
-  email enrollment (or print link). Mirrors the existing `*-manager` reconcile style.
+- **`user.sh <add|modify|delete|show|list>`** — manage one person's login + roles.
+  `add`/`modify` are idempotent: ensure user → ensure scope/parent + child groups → add
+  (or remove) memberships → credential (enrollment link, else printed password). Mirrors the
+  existing `*-manager` reconcile style.
 - **`roles-ensure`** — reconcile that guarantees `tappaas-installers` plus the scope groups
   for the *current* variant set exist. Invoked from `identity/update.sh`, and hooked into
   `variant-manager add/remove` and module install.
-- **`authentik-manager`** gains `user-ensure`, `group-ensure`, `user-add-to-group`,
-  `user-email-recovery` / `recovery-link`, `app-bind-groups`, and list/reconcile helpers;
-  plus the real **`oidc-app-ensure`** (replacing the Phase-D stub).
+- **`authentik-manager`** gains `group-ensure`, `user-ensure`, `user-add-to-groups`,
+  `user-remove-from-groups`, `user-delete`, `user-set-password`, `user-recovery-link`,
+  `app-bind-groups`, and the real **`oidc-app-ensure`** (replacing the Phase-D stub).
 
 ---
 
@@ -232,9 +233,9 @@ the block once → re-render everywhere.
 | ------ | ------ | ----- |
 | **External provider** (you already run Google Workspace for `hrossen.dk`; a Workspace/Gmail SMTP relay, or SES/Mailgun/Postmark…) | Lowest | Best deliverability for user-facing enrollment mail. Recommended. |
 | **Cluster smarthost** — one postfix that accepts from the cluster and does direct-MX like the nodes do now | Medium | Truest "same as Proxmox"; also upgrades Proxmox/OPNsense notifications. Good follow-up. |
-| **Leave `host` empty** | None | `add-user` prints the one-time enrollment link instead of emailing. |
+| **Leave `host` empty** | None | `user.sh` prints the one-time enrollment link instead of emailing. |
 
-Difficulty to wire Authentik→SMTP once `tappaas.smtp` is set = **LOW**. Because `add-user`
+Difficulty to wire Authentik→SMTP once `tappaas.smtp` is set = **LOW**. Because `user.sh`
 has the printed-link fallback, **SMTP is a prerequisite for the nicest UX, not for shipping
 the role system.**
 
@@ -269,7 +270,7 @@ So end-to-end, once Phase 4 below is done:
    `tappaas-nextcloud-admins` + `tappaas-admins` + `tappaas-installers`. It writes
    `client_id/secret/discovery_uri` into `/etc/secrets/nextcloud.env`; the Nextcloud service
    registers the provider.
-2. `add-user lars --email lars@… --role user` → Authentik user `lars` in group `tappaas-users`.
+2. `user.sh add lars --email lars@… --role user` → Authentik user `lars` in group `tappaas-users`.
 3. `lars` opens `https://nextcloud.test2.tapaas.org` → clicks **Log in with Authentik** →
    authenticates once → **`user_oidc` JIT-creates his Nextcloud account on first login**
    (research-confirmed default: `auto_provision=true`), display name/email from his claims,
@@ -338,7 +339,7 @@ Status legend: ✅ implemented (branch `feat/56-identity-users-roles`), ⏸ defe
 
 - **Phase 0 — SMTP + recovery flow. ⏸ Deferred** (folded into the separate SMTP issue).
   The probe found no recovery flow on the brand and no cluster SMTP relay; both belong with
-  the SMTP work. Until then `add-user.sh` is **link-first with a printed-password fallback**
+  the SMTP work. Until then `user.sh` is **link-first with a printed-password fallback**
   (it already sets and prints a temporary password), so the role system ships without it.
 - **Phase 1 — Authentik API surface. ✅** `AuthentikManager` gained `group_ensure`,
   `user_ensure`, `user_add_to_groups`, `user_set_password`, `user_recovery_link`,
@@ -347,8 +348,9 @@ Status legend: ✅ implemented (branch `feat/56-identity-users-roles`), ⏸ defe
   a group-bound app is hidden from the admin list unless `superuser_full_list=true`.)
 - **Phase 2 — `roles-ensure.sh` reconcile. ✅** Guarantees `tappaas-installers` + the scope
   groups for the current variant set; hooked into `identity/update.sh` and `variant-manager add`.
-- **Phase 3 — `add-user.sh`. ✅** ensure-user → ensure-groups → additive membership →
-  credential (recovery link, else printed password). Default + variant scopes work.
+- **Phase 3 — `user.sh` (verbs add/modify/delete/show/list). ✅** add/modify: ensure-user →
+  ensure-groups → add/remove memberships → credential (recovery link, else printed password);
+  delete removes the login. Default + variant scopes work.
 - **Phase 4 — module integration & access bindings. ✅** `oidc-app-ensure` implemented and
   `services/identity/{install,update,delete,test}-service.sh` wired: roles-ensure → opt-in
   `<scope>-<module>-admins` (module-JSON `identity.providesAdminRole`) → OIDC provider/app →
@@ -356,7 +358,7 @@ Status legend: ✅ implemented (branch `feat/56-identity-users-roles`), ⏸ defe
   service. Closes the Nextcloud loop. Module `identity` contract documented in
   `module-fields.json`. Authentik side validated live; VM-side write is deployment-time.
 - **Phase 5 — tests + docs. ✅** `identity/test.sh` (11 checks: connectivity, baseline groups
-  + attributes, add-user create/idempotent/additive, variant scope isolation by parent);
+  + attributes, user.sh add create/idempotent/additive, variant scope isolation by parent);
   `test-service.sh` asserts each module's app exists AND has an access binding (the fail-open
   guard); `USERS.md` operator guide. *(Full browser-level SSO / cross-variant-denial proof
   needs real apps + a browser; the group-model and per-app-binding invariants are asserted
@@ -376,7 +378,7 @@ Status legend: ✅ implemented (branch `feat/56-identity-users-roles`), ⏸ defe
 - **Delegated per-client admin** (an Acme Admin managing only Acme's users *inside Authentik*)
   needs per-object Authentik RBAC and is **out of scope for v1**. v1: the Installer provisions
   everyone; "Admin" is an app-level role. Revisit with Authentik RBAC roles later.
-- **SMTP relay** must be chosen/provided for silent email; until then `add-user` prints the
+- **SMTP relay** must be chosen/provided for silent email; until then `user.sh` prints the
   enrollment link.
 - **Module-admin groups are opt-in** (a module declares it has an admin role) to avoid
   littering Authentik with admin groups for apps that have no admin concept.

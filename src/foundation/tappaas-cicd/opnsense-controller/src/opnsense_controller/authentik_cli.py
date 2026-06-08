@@ -174,6 +174,20 @@ def cmd_user_add_to_groups(mgr: AuthentikManager, args: argparse.Namespace) -> i
     return 0
 
 
+def cmd_user_remove_from_groups(mgr: AuthentikManager, args: argparse.Namespace) -> int:
+    u = mgr.user_remove_from_groups(args.username, args.group)
+    print(f"==> user '{u['username']}' now in {len(u.get('groups', []))} group(s)")
+    return 0
+
+
+def cmd_user_delete(mgr: AuthentikManager, args: argparse.Namespace) -> int:
+    if mgr.user_delete(args.username):
+        print(f"==> deleted user '{args.username}'")
+    else:
+        print(f"==> user '{args.username}' not found (already gone)")
+    return 0
+
+
 def cmd_user_set_password(mgr: AuthentikManager, args: argparse.Namespace) -> int:
     password = args.password or secrets.token_urlsafe(16)
     mgr.user_set_password(args.username, password)
@@ -281,6 +295,15 @@ def main(argv: list[str] | None = None) -> int:
     ug.add_argument("username")
     ug.add_argument("--group", action="append", required=True, default=[], help="group name; repeatable")
     ug.set_defaults(handler=cmd_user_add_to_groups)
+
+    ur2 = sub.add_parser("user-remove-from-groups", help="remove a user from groups (idempotent)")
+    ur2.add_argument("username")
+    ur2.add_argument("--group", action="append", required=True, default=[], help="group name; repeatable")
+    ur2.set_defaults(handler=cmd_user_remove_from_groups)
+
+    ud = sub.add_parser("user-delete", help="delete a user entirely")
+    ud.add_argument("username")
+    ud.set_defaults(handler=cmd_user_delete)
 
     up = sub.add_parser("user-set-password", help="set a user's password (prints generated one if omitted)")
     up.add_argument("username")

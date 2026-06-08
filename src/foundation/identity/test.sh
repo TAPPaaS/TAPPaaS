@@ -2,13 +2,13 @@
 #
 # TAPPaaS Identity — module tests (ADR-006 users/roles, issue #56).
 #
-# Exercises the role-group model and add-user against the LIVE Authentik on the
+# Exercises the role-group model and user.sh against the LIVE Authentik on the
 # identity VM. Uses throwaway zzz-identity-test* objects and cleans them up; the
 # real baseline groups (tappaas-installers / tappaas / tappaas-admins /
 # tappaas-users) created by roles-ensure are left in place.
 #
 # Commands are taken from ~/bin by default; override for pre-deploy testing:
-#   AUTHENTIK_MANAGER=… ROLES_ENSURE=… ADD_USER=… ./test.sh
+#   AUTHENTIK_MANAGER=… ROLES_ENSURE=… USER_SH=… ./test.sh
 #
 # Usage: ./test.sh [<vmname>]
 # Exit: 0 all passed, 1 one or more failed, 2 fatal/unreachable.
@@ -22,7 +22,7 @@ set -uo pipefail
 
 AUTHENTIK_MANAGER="${AUTHENTIK_MANAGER:-authentik-manager}"
 ROLES_ENSURE="${ROLES_ENSURE:-/home/tappaas/bin/roles-ensure.sh}"
-ADD_USER="${ADD_USER:-/home/tappaas/bin/add-user.sh}"
+USER_SH="${USER_SH:-/home/tappaas/bin/user.sh}"
 
 TP="zzz-identity-test"
 TUSER="${TP}-alice"
@@ -69,17 +69,17 @@ for g in tappaas tappaas-admins tappaas-users; do
 done
 [[ "$(group_attr tappaas-users | jq -r '.tappaas.role')" == "user" ]] && pass "tappaas-users has role=user attr" || fail "tappaas-users attr wrong"
 
-# ── 3. add-user create + idempotent + additive ──────────────────────────────
-section "3: add-user create / idempotent / additive role"
-"${ADD_USER}" "${TUSER}" --email "${TUSER}@example.invalid" --no-credential >/dev/null 2>&1 || fail "add-user create failed"
+# ── 3. user.sh add: create + idempotent + additive ──────────────────────────────
+section "3: user.sh add — create / idempotent / additive role"
+"${USER_SH}" add "${TUSER}" --email "${TUSER}@example.invalid" --no-credential >/dev/null 2>&1 || fail "user.sh add failed"
 mapfile -t g1 < <(user_groups "${TUSER}")
 [[ " ${g1[*]} " == *" tappaas-users "* ]] && pass "new user is in tappaas-users" || fail "new user not in tappaas-users (got: ${g1[*]:-none})"
 
-"${ADD_USER}" "${TUSER}" --email "${TUSER}@example.invalid" --no-credential >/dev/null 2>&1
+"${USER_SH}" add "${TUSER}" --email "${TUSER}@example.invalid" --no-credential >/dev/null 2>&1
 n="$(api '/core/users/?page_size=1000' | jq -r --arg u "${TUSER}" '[.results[]|select(.username==$u)]|length')"
 [[ "${n}" -eq 1 ]] && pass "idempotent — still exactly one user" || fail "idempotent re-run produced ${n} users"
 
-"${ADD_USER}" "${TUSER}" --email "${TUSER}@example.invalid" --role admin --no-credential >/dev/null 2>&1
+"${USER_SH}" add "${TUSER}" --email "${TUSER}@example.invalid" --role admin --no-credential >/dev/null 2>&1
 mapfile -t g2 < <(user_groups "${TUSER}")
 { [[ " ${g2[*]} " == *" tappaas-users "* ]] && [[ " ${g2[*]} " == *" tappaas-admins "* ]]; } \
     && pass "additive — user now in BOTH tappaas-users and tappaas-admins" \
