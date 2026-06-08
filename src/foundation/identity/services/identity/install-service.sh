@@ -141,6 +141,10 @@ for g in "${ALLOW_GROUPS[@]}"; do bind_args+=("--group" "${g}"); done
 ${AUTHENTIK_MANAGER} "${bind_args[@]}" || die "app-bind-groups failed for ${SLUG}"
 
 # ── Step 5: write the OIDC client config onto the module VM ──────────────────
+# A freshly (re)created VM reuses the hostname with a NEW host key; clear any
+# stale known_hosts entry first so StrictHostKeyChecking=accept-new doesn't reject
+# the CHANGED key (same approach as update-os.sh update_ssh_known_hosts).
+ssh-keygen -R "${UPSTREAM}" >/dev/null 2>&1 || true
 info "  VM: writing ${SECRETS_ENV} on ${UPSTREAM} (mode 600)"
 ENV_CONTENT="$(printf 'OIDC_CLIENT_ID=%s\nOIDC_CLIENT_SECRET=%s\nOIDC_DISCOVERY_URI=%s\n' \
     "${CLIENT_ID}" "${CLIENT_SECRET}" "${DISCOVERY_URI}")"
