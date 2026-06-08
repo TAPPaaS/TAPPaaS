@@ -1,0 +1,26 @@
+{
+  "description": "ADR-005 variant test fixture: short-named Debian VM on mgmt (alias-safe under #300)",
+  "version": "0.5",
+  "vmname": "tvbase",
+  "vmid": 8900,
+  "vmtag": "TAPPaaS,Test",
+  "zone0": "mgmt",
+  "proxyDomain": "tvbase.example.org",
+  "dependsOn": [
+    "cluster:vm",
+    "templates:debian"
+  ],
+  "config": {
+    "cluster:vm": {
+      "bridge0": "lan",
+      "cloudInit": "true",
+      "cores": 1,
+      "diskSize": "4G",
+      "image": "debian-13-generic-amd64-20260112-2355.qcow2",
+      "imageLocation": "https://cdimage.debian.org/cdimage/cloud/trixie/20260112-2355",
+      "imageType": "img",
+      "memory": "1024",
+      "storage": "tanka1"
+    }
+  }
+}

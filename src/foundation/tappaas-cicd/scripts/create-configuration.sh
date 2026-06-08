@@ -100,6 +100,9 @@ read_existing_config() {
         EXISTING_HOUR=$(jq -r '.tappaas.updateSchedule[2] // ""' "$CONFIG_FILE")
         EXISTING_PRIMARY_DNS=$(jq -r '."tappaas-nodes"[0]."dns-hostname" // ."tappaas-nodes"[0].hostname // ""' "$CONFIG_FILE")
         EXISTING_REPOS=$(jq -c '.tappaas.repositories // []' "$CONFIG_FILE")
+        # Preserve any variant registry so `--update` never wipes variants that
+        # variant-manager registered (ADR-005 Sprint 1).
+        EXISTING_VARIANTS=$(jq -c '.tappaas.variants // {}' "$CONFIG_FILE")
         # Preserve existing dns-hostname mappings
         EXISTING_DNS_MAP=$(jq -c '[."tappaas-nodes"[] | {(.hostname): (."dns-hostname" // null)}] | add // {}' "$CONFIG_FILE")
         return 0
@@ -442,6 +445,23 @@ build_and_write_config() {
         repos_json=$(printf '[{"name": "TAPPaaS", "url": "%s", "branch": "%s", "path": "/home/tappaas/TAPPaaS"}]' "$UPSTREAM_GIT" "$BRANCH")
     fi
 
+    # Build variants registry (ADR-005). Preserve any existing variants, but keep
+    # the default variant "" tracking the (possibly updated) DOMAIN so it stays in
+    # sync with the legacy tappaas.domain alias. Fresh installs seed just "".
+    local variants_json
+    if [[ -n "${EXISTING_VARIANTS:-}" && "${EXISTING_VARIANTS}" != "{}" ]]; then
+        variants_json=$(echo "${EXISTING_VARIANTS}" | jq --arg d "${DOMAIN}" '
+            .[""] = ((.[""] // {})
+                     + { domain: $d,
+                         tlsCertRefid: ((.[""] // {}).tlsCertRefid // ""),
+                         dnsMode: ((.[""] // {}).dnsMode // "wildcard"),
+                         description: ((.[""] // {}).description // "Default (no variant)") })')
+    else
+        variants_json=$(jq -n --arg d "${DOMAIN}" '
+            { "": { domain: $d, tlsCertRefid: "", dnsMode: "wildcard", description: "Default (no variant)" } }')
+    fi
+    debug "Variants registry: ${variants_json}"
+
     # Build the complete configuration JSON
     local config_json
     config_json=$(cat << CONFIGEOF
@@ -454,6 +474,7 @@ build_and_write_config() {
     "domain": "${DOMAIN}",
     "email": "${EMAIL}",
     "nodeCount": ${NODE_COUNT},
+    "variants": ${variants_json},
     "repositories": ${repos_json},
     "updateSchedule": ${schedule_json}
   },

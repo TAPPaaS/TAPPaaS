@@ -1,19 +1,15 @@
-# Firewall test VM C — webserver in the test-pinhole zone.
+# Standalone Caddy-public test webserver (Option B, ADR-005 #316).
 #
-# Listens on 9091 and serves a distinct marker so the auto-pinhole (#173) live
-# test can tell reaching test-fw-c apart from a stray hit on test-fw-a.
-#
-# SELF-CONTAINED (no cross-directory import). test-fw-c lives in its own subdir,
-# and update-os.sh only copies same-directory sibling .nix files to the VM — a
-# parent-relative `../test-fw-webserver.nix` import resolved to a non-existent
-# /etc/test-fw-webserver.nix and broke nixos-rebuild
-# (ISSUES/deep-test-trunk-and-nixbuild.md defect 2). The webserver is inlined here.
+# A small NixOS HTTP server returning a marker string on port 8080. Deliberately
+# SELF-CONTAINED — no cross-directory `imports` — so update-os.sh copies it to the
+# VM cleanly (avoids the parent-import nix-build failure documented in
+# ISSUES/deep-test-trunk-and-nixbuild.md). Used by firewall/test-caddy-public.sh.
 
 { config, lib, pkgs, modulesPath, system, ... }:
 
 let
-  webserverPort = 9091;
-  marker = "tappaas-firewall-test-c-ok";
+  webserverPort = 8080;
+  marker = "tappaas-caddy-public-ok";
 in
 {
   imports = [
@@ -28,7 +24,7 @@ in
   boot.loader.systemd-boot.enable = lib.mkDefault true;
   boot.loader.efi.canTouchEfiVariables = lib.mkDefault true;
 
-  networking.hostName = "test-fw-c";
+  networking.hostName = "test-caddy-web";
   networking.networkmanager.enable = true;
 
   time.timeZone = lib.mkDefault "Europe/Amsterdam";
@@ -37,7 +33,6 @@ in
     isNormalUser = true;
     extraGroups = [ "wheel" "networkmanager" ];
   };
-
   security.sudo.wheelNeedsPassword = false;
 
   services.openssh = {
@@ -56,14 +51,14 @@ in
   services.qemuGuest.enable = true;
   boot.growPartition = lib.mkDefault true;
 
-  environment.systemPackages = with pkgs; [ curl jq ];
-
-  # Inlined test webserver (was the shared test-fw-webserver.nix overlay).
+  # Open the webserver port on the VM-local firewall (OPNsense pinholes are
+  # handled by firewall:rules from the module's ingress declaration).
   networking.firewall.allowedTCPPorts = [ webserverPort ];
+
   environment.etc."tappaas-test-www/index.html".text = "${marker}\n";
 
-  systemd.services.tappaas-test-webserver = {
-    description = "TAPPaaS firewall test webserver (port ${toString webserverPort})";
+  systemd.services.tappaas-caddy-web = {
+    description = "TAPPaaS Caddy-public test webserver (port ${toString webserverPort})";
     wantedBy = [ "multi-user.target" ];
     after = [ "network-online.target" ];
     wants = [ "network-online.target" ];

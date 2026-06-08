@@ -136,30 +136,56 @@ else
     warn "dig not available — skipping DNS validation"
 fi
 
-# ── TLS certificate strategy (proxyTls, default dns01) ──────────────
+# ── TLS certificate strategy: variant dnsMode (ADR-005 §5/§6), proxyTls override ─
 
-# proxyTls selects how this domain gets its public TLS cert (issue #254):
-#   dns01 → bind the wildcard cert issued by os-acme-client (see acme-setup.sh)
-#           via Caddy's per-domain CustomCertificate. Works for internal-only
-#           services (no inbound HTTP-01 traffic needed) and shares one cert
-#           across all dns01 modules. tappaas.tlsCertRefid must be populated
-#           in configuration.json (acme-setup.sh does this).
-#   http01 → Caddy issues a per-domain cert via ACME HTTP-01; the domain MUST
-#            be reachable from the internet on :80. No DNS API needed.
-PROXY_TLS=$(get_config_value 'proxyTls' 'dns01')
+# The variant's dnsMode drives cert handling; an explicit per-module proxyTls
+# (issue #254) overrides it (dns01->wildcard, http01->per-service):
+#   wildcard    → bind the variant's wildcard cert (variants[<v>].tlsCertRefid,
+#                 issued by acme-setup.sh) via Caddy's per-domain CustomCertificate.
+#                 The wildcard's split-horizon DNS is registered once by acme-setup.
+#   per-service → no wildcard; register this module's own split-horizon DNS entry
+#                 (<host>.<domain> -> DMZ gateway) and let Caddy issue a per-domain
+#                 cert via ACME HTTP-01. No DNS API needed (#269, #289).
+VARIANT=$(get_config_value 'variant' '')
+VCFG="$(get_variant_config "${VARIANT}" 2>/dev/null || echo '{}')"
+DNS_MODE="$(jq -r '.dnsMode // "wildcard"' <<<"${VCFG}")"
+VARIANT_REFID="$(jq -r '.tlsCertRefid // ""' <<<"${VCFG}")"
+
+# Explicit proxyTls override (back-compat with #254).
+PROXY_TLS=$(get_config_value 'proxyTls' '')
+case "${PROXY_TLS}" in
+    dns01)  DNS_MODE="wildcard" ;;
+    http01) DNS_MODE="per-service" ;;
+esac
+
 CADDY_DOMAIN_ARGS=()
-if [[ "${PROXY_TLS}" == "dns01" ]]; then
-    TLS_CERT_REFID=$(jq -r '.tappaas.tlsCertRefid // ""' "${CONFIG_DIR}/configuration.json" 2>/dev/null)
-    if [[ -n "${TLS_CERT_REFID}" ]]; then
-        info "  TLS: DNS-01 wildcard (proxyTls=dns01) — refid ${TLS_CERT_REFID}"
-        CADDY_DOMAIN_ARGS=(--custom-certificate "${TLS_CERT_REFID}")
+if [[ "${DNS_MODE}" == "per-service" ]]; then
+    info "  TLS: per-service HTTP-01 (dnsMode=per-service) — Caddy issues a cert for ${PROXY_DOMAIN}"
+    # Split-horizon DNS must be an UNBOUND host override (the 10.0.0.1:53 resolver);
+    # Dnsmasq host entries are not served for public domains (#269).
+    if DMZ_GW="$(dmz_gateway_ip)"; then
+        DNS_HOST="${PROXY_DOMAIN%%.*}"
+        DNS_ZONE="${PROXY_DOMAIN#*.}"
+        if unbound-manager --no-ssl-verify add "${DNS_HOST}" "${DNS_ZONE}" "${DMZ_GW}" --description "${DESCRIPTION}"; then
+            info "  ${GN}✓${CL} split-horizon DNS ${DNS_HOST}.${DNS_ZONE} -> ${DMZ_GW} (DMZ, Unbound)"
+        else
+            warn "  Could not register ${PROXY_DOMAIN} in Unbound — register manually:"
+            warn "    unbound-manager --no-ssl-verify add '${DNS_HOST}' '${DNS_ZONE}' '${DMZ_GW}'"
+        fi
     else
-        warn "  TLS: proxyTls=dns01 but tappaas.tlsCertRefid is not set yet."
-        warn "       The domain entry will be created; until acme-setup.sh runs,"
-        warn "       the public HTTPS endpoint has no certificate (internal LAN access still works)."
+        warn "  Could not derive DMZ gateway — register ${PROXY_DOMAIN} DNS manually"
     fi
 else
-    info "  TLS: HTTP-01 per-domain (proxyTls=${PROXY_TLS}) — Caddy will issue via ACME on :80"
+    # wildcard: prefer the variant's refid, fall back to the legacy global one.
+    TLS_CERT_REFID="${VARIANT_REFID}"
+    [[ -z "${TLS_CERT_REFID}" ]] && TLS_CERT_REFID=$(jq -r '.tappaas.tlsCertRefid // ""' "${SYSTEM_CONFIG}" 2>/dev/null)
+    if [[ -n "${TLS_CERT_REFID}" ]]; then
+        info "  TLS: DNS-01 wildcard (dnsMode=wildcard) — refid ${TLS_CERT_REFID}"
+        CADDY_DOMAIN_ARGS=(--custom-certificate "${TLS_CERT_REFID}")
+    else
+        warn "  TLS: wildcard but no tlsCertRefid for variant '${VARIANT:-default}' yet."
+        warn "       Run: acme-setup.sh --variant '${VARIANT}' (internal LAN access still works meanwhile)."
+    fi
 fi
 
 # ── Create domain ───────────────────────────────────────────────────

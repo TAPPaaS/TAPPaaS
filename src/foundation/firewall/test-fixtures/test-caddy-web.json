@@ -1,18 +1,18 @@
 {
-  "description": "Firewall test VM A — webserver in testAllowA zone (used by firewall/test.sh --deep)",
+  "description": "Standalone Caddy-public test webserver in srvWork (Option B, firewall/test-caddy-public.sh)",
   "version": "0.1",
-  "vmname": "test-fw-a",
-  "vmid": 921,
+  "vmname": "test-caddy-web",
+  "vmid": 925,
   "vmtag": "TAPPaaS,Test,Firewall",
   "node": "tappaas1",
   "cores": 1,
-  "memory": 2048,
+  "memory": "2048",
   "diskSize": "16G",
   "storage": "tanka1",
   "imageType": "clone",
   "image": "8080",
   "bridge0": "lan",
-  "zone0": "testAllowA",
+  "zone0": "srvWork",
   "proxyPort": 8080,
   "ports": [
     {
@@ -23,24 +23,16 @@
   ],
   "ingress": [
     {
-      "from": "testAllowB",
-      "ports": [
-        8080
-      ],
-      "description": "test-fw-b in testAllowB reaches the webserver (cross-zone pinhole)"
-    },
-    {
       "from": "dmz",
       "ports": [
         8080
       ],
-      "description": "Caddy reverse proxy in dmz forwards public hostname"
+      "description": "Caddy reverse proxy (dmz) forwards the public hostname to the webserver"
     }
   ],
   "dependsOn": [
     "cluster:vm",
     "templates:nixos",
-    "test-fw-c:web",
     "firewall:proxy",
     "firewall:rules"
   ]

@@ -134,6 +134,14 @@ for script in scripts/*.sh; do
   fi
 done
 
+# variant-manager is invoked as `variant-manager` (no .sh) per ADR-005, matching
+# the zone-manager/dns-manager CLI convention. Add the bare alias alongside the
+# .sh symlink the loop above created.
+if [ -f scripts/variant-manager.sh ]; then
+  rm -f /home/tappaas/bin/variant-manager 2>/dev/null || true
+  ln -s "$(realpath scripts/variant-manager.sh)" /home/tappaas/bin/variant-manager
+fi
+
 # Install the cluster and firewall jsons
 cd ../cluster || { _error "Cluster directory not found!"; exit 1; }
 /home/tappaas/bin/copy-update-json.sh cluster

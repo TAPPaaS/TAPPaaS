@@ -37,6 +37,7 @@ FIREWALL="${OPNSENSE_HOST:-firewall.mgmt.internal}"
 STAGING=0
 PROVIDER_OVERRIDE=""
 SAVE_CREDS=1
+VARIANT=""
 
 usage() {
     cat <<'EOF'
@@ -51,6 +52,9 @@ Options:
                          supports; also accepts the raw key like dns_cf, dns_desec)
   --no-save-creds        Don't offer to persist provider credentials to
                          ~/.acme-dns-credentials.txt
+  --variant <name>       Issue the cert for a registered variant's domain and
+                         store the refid under tappaas.variants[<name>] (ADR-005).
+                         Default: "" (the default variant).
   --help                 Show this help
 
 Credentials file (~/.acme-dns-credentials.txt, chmod 600), one KEY=VALUE per line:
@@ -68,15 +72,20 @@ while [[ $# -gt 0 ]]; do
         --staging)         STAGING=1; shift ;;
         --provider)        PROVIDER_OVERRIDE="$2"; shift 2 ;;
         --no-save-creds)   SAVE_CREDS=0; shift ;;
+        --variant)         VARIANT="$2"; shift 2 ;;
         --help|-h)         usage; exit 0 ;;
         *)                 die "Unknown option: $1 (try --help)" ;;
     esac
 done
 
 [[ -f "$CONFIG_FILE" ]] || die "configuration.json not found: $CONFIG_FILE"
-DOMAIN="$(jq -r '.tappaas.domain // empty' "$CONFIG_FILE")"
+# Domain comes from the variant registry (ADR-005). The default variant ""
+# falls back to legacy tappaas.domain on un-migrated installs.
+VCFG="$(get_variant_config "${VARIANT}")" \
+    || die "Variant '${VARIANT:-<default>}' not registered. Run: variant-manager add ${VARIANT} --domain <domain>"
+DOMAIN="$(jq -r '.domain // empty' <<<"$VCFG")"
 EMAIL="$(jq -r '.tappaas.email // empty' "$CONFIG_FILE")"
-[[ -n "$DOMAIN" && "$DOMAIN" != CHANGE* ]] || die "tappaas.domain not set (run create-configuration.sh --update --domain <yours>)"
+[[ -n "$DOMAIN" && "$DOMAIN" != CHANGE* ]] || die "Variant '${VARIANT:-<default>}' has no domain set (run: variant-manager add ${VARIANT} --domain <yours>)"
 [[ -n "$EMAIL"  && "$EMAIL"  != CHANGE* ]] || die "tappaas.email not set"
 
 info "${BOLD}TAPPaaS ACME setup${CL}"
@@ -176,10 +185,42 @@ REFID="$(awk '/^[[:space:]]+refid:[[:space:]]/ {print $2}' "$LOG_FILE" | tail -1
 
 echo
 info "${BOLD}Recording refid in configuration.json${CL}"
+# Write the refid into the variant registry (ADR-005). For the default variant
+# also mirror it to the legacy tappaas.tlsCertRefid so un-migrated readers keep
+# working (backwards compatibility — Sprint 3.3).
 TMP="$(mktemp)"
-jq --arg refid "$REFID" '.tappaas.tlsCertRefid = $refid' "$CONFIG_FILE" > "$TMP"
+jq --arg refid "$REFID" --arg v "$VARIANT" '
+    .tappaas.variants = (.tappaas.variants // {})
+    | .tappaas.variants[$v] = ((.tappaas.variants[$v] // {}) + { tlsCertRefid: $refid })
+    | (if $v == "" then .tappaas.tlsCertRefid = $refid else . end)' \
+    "$CONFIG_FILE" > "$TMP"
 mv "$TMP" "$CONFIG_FILE"
-info "  ${GN}✓${CL} tappaas.tlsCertRefid = ${REFID}"
+info "  ${GN}✓${CL} variants[\"${VARIANT}\"].tlsCertRefid = ${REFID}"
+[[ -z "$VARIANT" ]] && info "  ${GN}✓${CL} tappaas.tlsCertRefid = ${REFID} (legacy alias)"
+
+# ── Split-horizon wildcard DNS (ADR-005 §6, #269) ──────────────────────────
+# In wildcard mode, point *.<domain> at the DMZ gateway (where os-caddy listens)
+# via an UNBOUND host override, so internal clients reach Caddy over the DMZ
+# instead of resolving the public WAN IP and tripping Caddy's zone ACL (HTTP 403).
+# Must be Unbound (the resolver on 10.0.0.1:53) — Dnsmasq host entries are not
+# served for public domains and cannot express a wildcard. Unbound supports a "*"
+# wildcard host override.
+DNS_MODE="$(jq -r '.dnsMode // "wildcard"' <<<"$VCFG")"
+if [[ "$DNS_MODE" == "wildcard" ]]; then
+    echo
+    info "${BOLD}Registering split-horizon wildcard DNS (Unbound)${CL}"
+    if DMZ_GW="$(dmz_gateway_ip)"; then
+        if unbound-manager --no-ssl-verify add "*" "${DOMAIN}" "${DMZ_GW}" \
+                --description "TAPPaaS: ${VARIANT:-default} wildcard -> Caddy (DMZ)"; then
+            info "  ${GN}✓${CL} *.${DOMAIN} -> ${DMZ_GW} (DMZ gateway, Unbound)"
+        else
+            warn "  Could not register *.${DOMAIN} in Unbound — register manually:"
+            warn "    unbound-manager --no-ssl-verify add '*' '${DOMAIN}' '${DMZ_GW}'"
+        fi
+    else
+        warn "  Skipped wildcard DNS — could not derive DMZ gateway from zones.json"
+    fi
+fi
 
 echo
 info "${BOLD}${GN}✓${CL} ACME setup complete${BOLD}.${CL}"

@@ -34,6 +34,8 @@ set -euo pipefail
 
 # shellcheck source=../tappaas-cicd/scripts/common-install-routines.sh
 . /home/tappaas/bin/common-install-routines.sh
+# shellcheck source=../cluster/lib/vm-net.sh disable=SC1091
+. /home/tappaas/TAPPaaS/src/foundation/cluster/lib/vm-net.sh
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 readonly SCRIPT_DIR
@@ -667,9 +669,11 @@ cleanup_deep() {
                 || warn "  delete-module.sh ${vm} returned non-zero"
         fi
     done
-    # Deactivate the test zones (restore them to Inactive in the deployed
-    # zones.json). Zone names come from the globals derived in the deep block
-    # below (set before this trap is armed) — never hardcoded (#306).
+    # Tear the test zones back out of the DEPLOYED zones.json: first set them
+    # Inactive and reconcile (so zone-manager removes their OPNsense VLAN
+    # interfaces), then DELETE the keys entirely — leaving every other zone,
+    # including runtime-only ones like variant zones, untouched (defect 4). Zone
+    # names come from the globals derived in the deep block (#306).
     if [[ -f "${CONFIG_DIR}/zones.json" ]]; then
         local tmp
         tmp=$(mktemp)
@@ -679,8 +683,18 @@ cleanup_deep() {
             && mv "${tmp}" "${CONFIG_DIR}/zones.json"
         zone-manager --no-ssl-verify --zones-file "${CONFIG_DIR}/zones.json" --execute \
             >/dev/null 2>&1 || warn "zone-manager teardown returned non-zero"
-        info "Reverted ${TFW_A_ZONE}/${TFW_B_ZONE}/${TFW_C_ZONE} to Inactive in zones.json and re-ran zone-manager"
+        tmp=$(mktemp)
+        jq --arg za "${TFW_A_ZONE}" --arg zb "${TFW_B_ZONE}" --arg zc "${TFW_C_ZONE}" \
+           'del(.[$za]) | del(.[$zb]) | del(.[$zc])' \
+            "${CONFIG_DIR}/zones.json" > "${tmp}" \
+            && mv "${tmp}" "${CONFIG_DIR}/zones.json"
+        info "Deactivated and removed test zones ${TFW_A_ZONE}/${TFW_B_ZONE}/${TFW_C_ZONE} from deployed zones.json"
     fi
+    # Restore the firewall VM net0 trunks now that the test zones are gone, so the
+    # NIC config is back to the production set (defect 1 — the old code never did
+    # this, leaving the firewall config clobbered after a run).
+    vmnet_sync_firewall_trunks "${CONFIG_DIR}/zones.json" "${CONFIG_DIR}/firewall.json" \
+        || warn "Could not restore firewall net0 trunks — verify manually"
     return ${rc}
 }
 
@@ -717,15 +731,25 @@ else
 
     trap cleanup_deep EXIT
 
-    # Refresh deployed zones.json from the canonical source so the test zones are
-    # fully defined (jq stub-injection if they were missing would crash zone-manager).
-    if ! cp "${ZONES_JSON_CANONICAL:-${SCRIPT_DIR}/zones.json}" "${CONFIG_DIR}/zones.json.test-bak"; then
-        :
-    fi
-    if [[ -f "${SCRIPT_DIR}/zones.json" ]]; then
-        cp "${SCRIPT_DIR}/zones.json" "${CONFIG_DIR}/zones.json" \
-            || die "Cannot refresh ${CONFIG_DIR}/zones.json from canonical"
-        info "Refreshed ${CONFIG_DIR}/zones.json from canonical firewall/zones.json"
+    # MERGE the test zones from the canonical SOURCE into the DEPLOYED zones.json
+    # (set Active), preserving every other zone. We must NOT overwrite the runtime
+    # config wholesale — that destroys runtime-only zones such as variant zones
+    # (defect 4, ISSUES/deep-test-trunk-and-nixbuild.md). cleanup_deep removes
+    # these test-zone keys again afterwards.
+    if [[ -f "${SCRIPT_DIR}/zones.json" && -f "${CONFIG_DIR}/zones.json" ]]; then
+        tmp=$(mktemp)
+        if jq --slurpfile src "${SCRIPT_DIR}/zones.json" \
+              --arg za "${TFW_A_ZONE}" --arg zb "${TFW_B_ZONE}" --arg zc "${TFW_C_ZONE}" '
+              ($src[0]) as $s
+              | reduce ([$za, $zb, $zc][]) as $z
+                  (.; .[$z] = (($s[$z] // {}) + { state: "Active" }))' \
+              "${CONFIG_DIR}/zones.json" > "${tmp}" && jq empty "${tmp}" 2>/dev/null; then
+            mv "${tmp}" "${CONFIG_DIR}/zones.json"
+            info "Merged test zones ${TFW_A_ZONE}/${TFW_B_ZONE}/${TFW_C_ZONE} (Active) into deployed zones.json (runtime-only zones preserved)"
+        else
+            rm -f "${tmp}"
+            fail "Could not merge test zones into deployed zones.json"
+        fi
     fi
 
     if [[ ! -f "${CONFIG_DIR}/zones.json" ]]; then
@@ -738,18 +762,11 @@ else
             && mv "${tmp}" "${CONFIG_DIR}/zones.json"
         info "Activated ${TFW_A_ZONE}, ${TFW_B_ZONE} and ${TFW_C_ZONE} in deployed zones.json"
 
-        # Ensure the deployed firewall.json's trunks0 list includes the test
-        # provider zone (${TFW_C_ZONE}, VLAN 830) so the trunks-sync block below
-        # picks it up. Idempotent — only rewrites when it is missing. The runtime
-        # fields (installTime, location, …) are preserved by a surgical jq update.
-        if [[ -f "${CONFIG_DIR}/firewall.json" ]] \
-                && ! read_module_config "firewall" 2>/dev/null \
-                       | jq -r '.trunks0 // ""' \
-                       | grep -qE "(^|;)${TFW_C_ZONE}(;|\$)"; then
-            # Pattern A-aware write (#207): trunks0 routes under config.cluster:vm.
-            jq_module_write "firewall" ".trunks0 = ((.trunks0 // \"\") + \";${TFW_C_ZONE}\" | sub(\"^;\"; \"\"))"
-            info "Added ${TFW_C_ZONE} to deployed firewall.json trunks0"
-        fi
+        # NOTE: do NOT touch firewall.json trunks0 — it is the sentinel "ALL",
+        # which vmnet_sync_firewall_trunks resolves to every active zone's VLAN
+        # (the test zones are Active by now, so they are included automatically).
+        # Appending a zone NAME here used to mangle "ALL" and clobber the firewall
+        # NIC to a single VLAN (defect 1 — now fixed).
         if zone-manager --no-ssl-verify --zones-file "${CONFIG_DIR}/zones.json" --execute 2>&1 | tail -5; then
             pass "zone-manager applied ${TFW_A_ZONE}+${TFW_B_ZONE} (VLAN+DHCP+rules)"
         else
@@ -769,63 +786,15 @@ else
             fail "configctl filter reload failed — DHCP for new zones may not work"
         fi
 
-        # Sync OPNsense VM's Proxmox trunks with currently-active VLAN zones.
-        # See firewall/update.sh for the long-form rationale; in short: the
-        # Proxmox vlan-aware bridge only forwards VLAN tags listed in the OPNsense
-        # NIC's trunks=... allowlist. The new test zones (VLANs 810/820) need that
-        # list updated or their traffic is dropped before reaching OPNsense.
-        local _fw_cfg
-        _fw_cfg=$(read_module_config "firewall" 2>/dev/null)
-        FIREWALL_VMID=$(echo "${_fw_cfg}" | jq -r '.vmid // 110')
-        FIREWALL_MAC=$(echo "${_fw_cfg}" | jq -r '.mac0 // empty')
-        FIREWALL_BRIDGE=$(echo "${_fw_cfg}" | jq -r '.bridge0 // "lan"')
-        TRUNK_ZONES=$(echo "${_fw_cfg}" | jq -r '.trunks0 // ""')
-
-        # Locate the node currently hosting the firewall VM (may have HA-migrated)
-        primary_node=$(jq -r '."tappaas-nodes"[0].hostname // "tappaas1"' \
-                         "${CONFIG_DIR}/configuration.json" 2>/dev/null)
-        FIREWALL_NODE=$(ssh -o BatchMode=yes -o StrictHostKeyChecking=accept-new \
-                          root@"${primary_node}.mgmt.internal" \
-                          "pvesh get /cluster/resources --type vm --output-format json 2>/dev/null \
-                           | jq -r --arg vmid \"${FIREWALL_VMID}\" '.[] | select(.vmid==(\$vmid|tonumber)) | .node'" \
-                          2>/dev/null | head -1)
-        if [[ -z "${FIREWALL_MAC}" && -n "${FIREWALL_NODE}" ]]; then
-            # Extract MAC from `net0: virtio=AA:BB:CC:DD:EE:FF,bridge=...`
-            FIREWALL_MAC=$(ssh -o BatchMode=yes root@"${FIREWALL_NODE}.mgmt.internal" \
-                            "qm config ${FIREWALL_VMID}" 2>/dev/null \
-                            | grep -E '^net0:' \
-                            | grep -oE '[0-9A-Fa-f]{2}(:[0-9A-Fa-f]{2}){5}' \
-                            | head -1)
-        fi
-
-        # Resolve active VLAN tags from trunks0 list against current zones.json
-        TRUNK_TAGS=""
-        IFS=';' read -ra _names <<< "${TRUNK_ZONES}"
-        for zone_name in "${_names[@]}"; do
-            state=$(jq -r --arg n "${zone_name}" '.[$n].state // empty' \
-                     "${CONFIG_DIR}/zones.json" 2>/dev/null)
-            if [[ "${state}" == "Active" || "${state}" == "Mandatory" ]]; then
-                tag=$(jq -r --arg n "${zone_name}" '.[$n].vlantag // empty' \
-                       "${CONFIG_DIR}/zones.json" 2>/dev/null)
-                if [[ -n "${tag}" && "${tag}" != "0" ]]; then
-                    [[ -z "${TRUNK_TAGS}" ]] && TRUNK_TAGS="${tag}" || TRUNK_TAGS="${TRUNK_TAGS};${tag}"
-                fi
-            fi
-        done
-
-        if [[ -n "${FIREWALL_NODE}" && -n "${FIREWALL_MAC}" && -n "${TRUNK_TAGS}" ]]; then
-            net0_opts="virtio=${FIREWALL_MAC},bridge=${FIREWALL_BRIDGE},trunks=${TRUNK_TAGS}"
-            # IMPORTANT: single-quote the value inside the remote command so the
-            # semicolons in trunks=210;310;... aren't parsed as command separators
-            # by the remote shell.
-            if ssh -o BatchMode=yes root@"${FIREWALL_NODE}.mgmt.internal" \
-                    "qm set ${FIREWALL_VMID} --net0 '${net0_opts}'" >/dev/null 2>&1; then
-                pass "OPNsense VM trunks synced: ${TRUNK_TAGS}"
-            else
-                fail "Could not update OPNsense VM trunks via qm set"
-            fi
+        # Sync the firewall VM's Proxmox net0 trunks so the newly-activated test
+        # VLANs reach OPNsense. Uses the SAFE shared helper (resolves trunks0=
+        # "ALL" -> all active VLAN tags; preserves MAC/tag/queues; only writes on
+        # change) — NOT the old per-zone rewrite that clobbered net0 to a single
+        # VLAN (defect 1, ISSUES/deep-test-trunk-and-nixbuild.md).
+        if vmnet_sync_firewall_trunks "${CONFIG_DIR}/zones.json" "${CONFIG_DIR}/firewall.json"; then
+            pass "OPNsense VM net0 trunks synced with all active VLANs"
         else
-            fail "Cannot resolve firewall vmid/mac/node for trunk sync (node=${FIREWALL_NODE} mac=${FIREWALL_MAC} tags=${TRUNK_TAGS})"
+            fail "Could not sync OPNsense VM net0 trunks"
         fi
     fi
 
@@ -1027,9 +996,9 @@ else
     if rules-manager list-rules --module test-fw-b --output json --no-ssl-verify 2>/dev/null \
             | jq -e '.rules[] | select(.description | contains("test-fw-a")) | .uuid' \
             >/dev/null 2>&1; then
-        pass "rules referencing FQDN alias tappaas_module_test_fw_a applied to OPNsense"
+        pass "rules referencing FQDN alias tm_test_fw_a applied to OPNsense"
     else
-        fail "no rule references tappaas_module_test_fw_a — alias not wired through"
+        fail "no rule references tm_test_fw_a — alias not wired through"
     fi
 
     # Test VMs are typically reinstalled fresh; clear stale host keys so the
@@ -1071,7 +1040,7 @@ else
     # test-fw-c marker proves the auto-pinhole works end-to-end.
     #
     # FQDN-alias asynchrony: rules-manager creates the OPNsense alias
-    # tappaas_module_test_fw_c pointing at ${TFW_C_FQDN}, but the
+    # tm_test_fw_c pointing at ${TFW_C_FQDN}, but the
     # pfctl alias TABLE behind it is populated by OPNsense's update_tables.py
     # cron (typically every 60s). Until the table holds an IP, the rule's
     # destination matches nothing and the packet falls through to deny. We
@@ -1134,8 +1103,8 @@ else
             info "  -- pfctl alias contents on firewall --"
             ssh -o BatchMode=yes -o StrictHostKeyChecking=accept-new \
                 root@"${FIREWALL_FQDN}" \
-                "pfctl -t tappaas_module_test_fw_c -T show 2>&1; \
-                 pfctl -t tappaas_module_test_fw_a -T show 2>&1" 2>/dev/null \
+                "pfctl -t tm_test_fw_c -T show 2>&1; \
+                 pfctl -t tm_test_fw_a -T show 2>&1" 2>/dev/null \
                 | sed 's/^/      /' | head -20
         fi
     fi
@@ -1156,9 +1125,11 @@ else
     section "Deep 10: Reconcile prunes a removed ingress entry"
 
     # Remove one ingress entry from the deployed test-fw-b.json and reconcile.
-    tmp=$(mktemp)
-    jq 'del(.ingress[] | select(.from == "alias:test_admin_ips"))' \
-        "${CONFIG_DIR}/test-fw-b.json" > "${tmp}" && mv "${tmp}" "${CONFIG_DIR}/test-fw-b.json"
+    # The deployed config is in Pattern A form (#207) — `ingress` is nested under
+    # `.config.*`, so a raw `jq '.ingress[]'` against the file sees null. Use
+    # jq_module_write, which normalizes to flat (where `.ingress` is the array),
+    # applies the filter, and writes back as Pattern A.
+    jq_module_write test-fw-b 'del(.ingress[] | select(.from == "alias:test_admin_ips"))'
 
     if rules-manager reconcile test-fw-b --no-ssl-verify --output json >/tmp/rm-rec.json 2>/dev/null; then
         deleted=$(jq -r '.deleted // 0' /tmp/rm-rec.json 2>/dev/null || echo 0)
@@ -1173,6 +1144,68 @@ else
     rm -f /tmp/rm-rec.json
 
     popd >/dev/null
+
+    # ── Deep 11: Caddy public + split-horizon access (ADR-005, #316) ──────
+    # Reuses the test-fw-a webserver (already registered via firewall:proxy with
+    # the default variant's wildcard domain) to prove a service published on the
+    # internet is reachable end-to-end:
+    #   (a) from outside — via the public IP, TLS-terminated + proxied by Caddy
+    #   (b) from inside  — via split-horizon DNS (FQDN -> DMZ gateway -> Caddy)
+    section "Deep 11: Caddy public + split-horizon access (ADR-005)"
+
+    # Reject empty / RFC1918 / loopback / link-local — i.e. require a public IP.
+    is_public_ip() {
+        local ip="$1"
+        [[ -n "${ip}" ]] || return 1
+        case "${ip}" in
+            10.*|127.*|169.254.*|192.168.*|172.1[6-9].*|172.2[0-9].*|172.3[01].*) return 1 ;;
+        esac
+        return 0
+    }
+
+    TFW_A_MARKER="tappaas-firewall-test-a-ok"
+    DEF_DOMAIN="$(get_variant_config "" 2>/dev/null | jq -r '.domain // ""')"
+    PROXY_FQDN=""
+    [[ -n "${DEF_DOMAIN}" ]] && PROXY_FQDN="test-fw-a.${DEF_DOMAIN}"
+    PUBLIC_IP=""
+    if [[ -n "${PROXY_FQDN}" ]]; then
+        PUBLIC_IP="$(dig +short @1.1.1.1 A "${PROXY_FQDN}" 2>/dev/null | grep -E '^[0-9.]+$' | tail -1)"
+    fi
+
+    # ── Gate: default-variant domain set AND public DNS -> a public IP ────
+    if [[ -z "${DEF_DOMAIN}" || "${DEF_DOMAIN}" == CHANGE* ]]; then
+        skip "Deep 11: no default-variant domain set (variant-manager add \"\" --domain <domain>)"
+    elif ! is_public_ip "${PUBLIC_IP}"; then
+        skip "Deep 11: public DNS for ${PROXY_FQDN} did not resolve to a public IP (got '${PUBLIC_IP:-none}') — publish the A/wildcard record first"
+    else
+        info "  Service FQDN: ${BL}${PROXY_FQDN}${CL}"
+        info "  Public IP:    ${BL}${PUBLIC_IP}${CL}"
+
+        # (a) External passthrough: connect to the public IP (NAT reflection),
+        #     Caddy terminates the wildcard TLS and proxies to the upstream.
+        if curl -fsS --max-time 15 --resolve "${PROXY_FQDN}:443:${PUBLIC_IP}" \
+                "https://${PROXY_FQDN}/" 2>/dev/null | grep -q "${TFW_A_MARKER}"; then
+            pass "Deep 11a: ${PROXY_FQDN} reachable via public IP ${PUBLIC_IP} (TLS + passthrough through Caddy)"
+        else
+            fail "Deep 11a: no passthrough via public IP ${PUBLIC_IP} (needs public A record, NAT reflection, valid wildcard cert, and Caddy->upstream:8080)"
+        fi
+
+        # (b) Split-horizon: internal DNS must resolve the FQDN to the DMZ gateway
+        #     (NOT the public IP), and the service must be reachable that way.
+        DMZ_GW="$(dmz_gateway_ip 2>/dev/null || echo '')"
+        INTERNAL_IP="$(getent hosts "${PROXY_FQDN}" 2>/dev/null | awk '{print $1}' | head -1)"
+        if [[ -n "${DMZ_GW}" && "${INTERNAL_IP}" == "${DMZ_GW}" ]]; then
+            pass "Deep 11b: internal DNS resolves ${PROXY_FQDN} -> ${DMZ_GW} (split-horizon)"
+        else
+            fail "Deep 11b: internal DNS for ${PROXY_FQDN} is '${INTERNAL_IP:-none}', expected DMZ gateway '${DMZ_GW:-?}'"
+        fi
+
+        if curl -fsS --max-time 15 "https://${PROXY_FQDN}/" 2>/dev/null | grep -q "${TFW_A_MARKER}"; then
+            pass "Deep 11c: ${PROXY_FQDN} reachable internally via split-horizon DNS + Caddy"
+        else
+            fail "Deep 11c: not reachable internally via split-horizon (needs DMZ access from this host + Caddy->upstream:8080)"
+        fi
+    fi
 fi
 
 # ─────────────────────────────────────────────────────────────────────

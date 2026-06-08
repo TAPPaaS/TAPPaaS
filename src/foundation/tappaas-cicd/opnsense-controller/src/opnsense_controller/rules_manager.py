@@ -10,7 +10,7 @@ Description-based identity makes apply operations idempotent:
 
 When a peer is another module's name (rather than a zone, 'internet', or an
 'alias:<name>' reference), the manager creates and references an OPNsense alias
-`tappaas_module_<peer_vmname>` (OPNsense aliases use underscores; any hyphens in
+`tm_<peer_vmname>` (OPNsense aliases use underscores; any hyphens in
 vmname are normalised). The alias content depends on the module's `aliasType`:
 
   - "host" (default): a host alias of the peer's FQDN `<vmname>.<zone0>.internal`.
@@ -63,7 +63,11 @@ DESCRIPTION_PREFIX = "tappaas-module"
 DESCRIPTION_PREFIX_SVCDEP = "tappaas-svcdep"
 # All per-module rule prefixes recognised by remove/list/verify scans.
 MODULE_RULE_PREFIXES: tuple[str, ...] = (DESCRIPTION_PREFIX, DESCRIPTION_PREFIX_SVCDEP)
-MODULE_ALIAS_PREFIX = "tappaas_module_"
+MODULE_ALIAS_PREFIX = "tm_"
+# A vmname (including any variant suffix) must be under this many characters to
+# get a plain `tm_<vmname>` alias; at or above it, the alias is hashed to stay
+# within OPNsense's 32-char limit (#300, #316).
+MODULE_ALIAS_HASH_THRESHOLD = 28
 DEFAULT_DOMAIN_SUFFIX = "internal"
 
 BAND_INGRESS_BASE = 10000
@@ -108,7 +112,7 @@ class ModuleSpec:
     egress: list[dict]
     aliases: dict[str, dict]
     firewall_type: str  # "opnsense" | "NONE"
-    # OPNsense alias type for tappaas_module_<vmname>: "host" (FQDN, default) or
+    # OPNsense alias type for tm_<vmname>: "host" (FQDN, default) or
     # "network" (zone0 subnet, for multi-device modules with no single FQDN — #241).
     alias_type: str = "host"
     # `dependsOn` and `location` are needed by the auto-pinhole pass (issue #173).
@@ -121,7 +125,7 @@ class ModuleSpec:
 
 @dataclass
 class AliasTarget:
-    """The OPNsense alias to provision for a tappaas_module_<name> reference.
+    """The OPNsense alias to provision for a tm_<name> reference.
 
     `alias_type` is "host" (content = the module FQDN) or "network" (content =
     the module's zone0 subnet CIDR). Rules reference the alias by name, so the
@@ -285,17 +289,22 @@ def load_pinhole_ports(provider_location: str, service: str) -> list[dict] | Non
 def _module_alias_name(peer_vmname: str) -> str:
     """Generate an OPNsense-safe host alias name for a TAPPaaS module.
 
-    OPNsense aliases must match `^[a-zA-Z_][a-zA-Z0-9_]{0,31}$` — only
-    alphanumerics and underscores, max 32 chars. We sanitise the vmname by
-    replacing any non-alphanumeric character with underscore, then truncate
-    the combined name if necessary.
+    OPNsense aliases must match `^[a-zA-Z_][a-zA-Z0-9_]{0,31}$` — alphanumerics
+    and underscores, max 32 chars. We use a short ``tm_`` prefix and sanitise the
+    vmname (non-alphanumeric -> underscore). A vmname (including any variant
+    suffix) under MODULE_ALIAS_HASH_THRESHOLD chars gets the plain
+    ``tm_<sanitised>`` alias. At/above the threshold we keep a readable prefix and
+    append a short deterministic hash of the *full* vmname — staying within 32
+    chars AND avoiding collisions between two long names sharing a prefix
+    (ADR-005 / #316; supersedes the truncation/reject behaviour of #300).
     """
     sanitised = "".join(c if c.isalnum() else "_" for c in peer_vmname)
-    name = f"{MODULE_ALIAS_PREFIX}{sanitised}"
-    # OPNsense alias name limit is 32 characters
-    if len(name) > 32:
-        name = name[:32].rstrip("_")
-    return name
+    if len(peer_vmname) < MODULE_ALIAS_HASH_THRESHOLD:
+        return f"{MODULE_ALIAS_PREFIX}{sanitised}"
+    # Hashed: <prefix><sanitised[:keep]>_<6-hex-hash>  == at most 32 chars.
+    digest = hashlib.sha1(peer_vmname.encode()).hexdigest()[:6]
+    keep = 32 - len(MODULE_ALIAS_PREFIX) - 1 - len(digest)
+    return f"{MODULE_ALIAS_PREFIX}{sanitised[:keep]}_{digest}"
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -598,7 +607,7 @@ class RulesManager:
 
         # 1. Ensure aliases exist in OPNsense before any rule references them:
         #    a) module-local aliases declared in module.aliases
-        #    b) peer-module FQDN aliases (tappaas_module_<peer>)
+        #    b) peer-module FQDN aliases (tm_<peer>)
         #    c) global aliases from firewall/aliases.json that are referenced
         #       via "alias:<name>" in this module's ingress/egress
         for alias_name, alias_def in module.aliases.items():
@@ -1136,7 +1145,7 @@ class RulesManager:
     def _alias_target_for(
         self, vmname: str, zone0: str, alias_type: str
     ) -> AliasTarget | None:
-        """Build the AliasTarget for tappaas_module_<vmname> from its alias type.
+        """Build the AliasTarget for tm_<vmname> from its alias type.
 
         "host" → the module FQDN (resolved via Unbound/dnsmasq). "network" →
         the zone0 subnet CIDR from zones.json, for multi-device modules with no

@@ -4,7 +4,7 @@
 #
 # Removes all firewall rules and aliases owned by a module (every OPNsense
 # rule whose description begins with `tappaas-module:<vmname>:`, and any
-# `tappaas_module_<vmname>` FQDN alias that no other module still references).
+# `tm_<vmname>` FQDN alias that no other module still references).
 #
 # When firewallType is "NONE", logs a no-op and exits 0.
 #

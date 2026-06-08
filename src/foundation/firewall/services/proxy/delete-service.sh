@@ -116,6 +116,20 @@ if [[ -n "${PROXY_DOMAIN}" ]]; then
     info "  Deleting Caddy domain: ${BL}${PROXY_DOMAIN}${CL}"
     caddy-manager delete-domain "${PROXY_DOMAIN}" \
         --no-ssl-verify || warn "Could not delete domain ${PROXY_DOMAIN}"
+
+    # Per-service split-horizon DNS cleanup (ADR-005 §6, #269). Only per-service
+    # mode created a per-module Dnsmasq entry; wildcard mode shares one entry
+    # owned by acme-setup, so we must NOT remove that here. Deleting a
+    # non-existent host is a harmless no-op.
+    VARIANT=$(get_config_value 'variant' '' 2>/dev/null || echo '')
+    VCFG="$(get_variant_config "${VARIANT}" 2>/dev/null || echo '{}')"
+    if [[ "$(jq -r '.dnsMode // "wildcard"' <<<"${VCFG}")" == "per-service" ]]; then
+        DNS_HOST="${PROXY_DOMAIN%%.*}"
+        DNS_ZONE="${PROXY_DOMAIN#*.}"
+        info "  Removing per-service Unbound override ${DNS_HOST}.${DNS_ZONE}..."
+        unbound-manager --no-ssl-verify delete "${DNS_HOST}" "${DNS_ZONE}" >/dev/null 2>&1 \
+            || warn "Could not remove Unbound override ${DNS_HOST}.${DNS_ZONE} (may not exist)"
+    fi
 else
     warn "Cannot determine proxy domain — manual cleanup may be needed"
 fi

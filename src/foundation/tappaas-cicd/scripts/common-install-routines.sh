@@ -198,11 +198,111 @@ ensure_scripts_executable() {
 #   $2  (optional) Script name to check for (default: "install-service.sh")
 #
 # Returns 0 if the service is available, 1 otherwise.
+# Read a variant's configuration from configuration.json (ADR-005). Echoes a
+# normalized JSON object on stdout:
+#   {domain, tlsCertRefid, dnsMode, zone, description}
+# Resolution order:
+#   1. tappaas.variants[<name>]                         (the variant registry)
+#   2. legacy tappaas.domain / tappaas.tlsCertRefid     (only for the default
+#      variant "", so un-migrated installs keep working — Sprint 1 compat)
+# Returns 1 if the variant is not registered and there is no legacy fallback.
+#   get_variant_config <variant-name>   (use "" for the default variant)
+get_variant_config() {
+    local variant="$1"
+    local cfg="${CONFIG_DIR}/configuration.json"
+    [[ -f "${cfg}" ]] || { error "configuration.json not found at ${cfg}"; return 1; }
+
+    # 1. Variant registry (guard against a missing .variants object).
+    if jq -e --arg v "${variant}" '(.tappaas.variants // {})[$v] // empty' "${cfg}" >/dev/null 2>&1; then
+        jq -c --arg v "${variant}" '
+            (.tappaas.variants // {})[$v]
+            | { domain:       .domain,
+                tlsCertRefid: (.tlsCertRefid // ""),
+                dnsMode:      (.dnsMode // "wildcard"),
+                zone:         (.zone // null),
+                description:  (.description // "") }' "${cfg}"
+        return 0
+    fi
+
+    # 2. Legacy fallback — only the default variant maps to tappaas.domain.
+    if [[ -z "${variant}" ]]; then
+        local legacy_domain
+        legacy_domain=$(jq -r '.tappaas.domain // empty' "${cfg}")
+        if [[ -n "${legacy_domain}" ]]; then
+            warn "tappaas.domain is deprecated (ADR-005). Run migrate-to-variants.sh to create tappaas.variants[\"\"]." >&2
+            jq -c '{ domain:       .tappaas.domain,
+                     tlsCertRefid: (.tappaas.tlsCertRefid // ""),
+                     dnsMode:      "wildcard",
+                     zone:         null,
+                     description:  "Default (legacy tappaas.domain)" }' "${cfg}"
+            return 0
+        fi
+    fi
+
+    error "Variant '${variant}' not registered in configuration.json (no variants entry, no legacy fallback)"
+    return 1
+}
+
+# Push the deployed zones.json to every Proxmox node's /root/tappaas/zones.json so
+# node-side tooling (Create-TAPPaaS-VM.sh) can resolve a newly-added zone's VLAN
+# tag. Without this, installing a module into a freshly-created zone fails with
+# `get_vlan_value "<zone>"` on the node. Returns non-zero if nothing was pushed.
+distribute_zones_to_nodes() {
+    local zones="${CONFIG_DIR}/zones.json" cfg="${CONFIG_DIR}/configuration.json"
+    [[ -f "${zones}" && -f "${cfg}" ]] || { warn "distribute_zones_to_nodes: missing zones.json/configuration.json"; return 1; }
+    local node pushed=0
+    while IFS= read -r node; do
+        [[ -z "${node}" ]] && continue
+        if scp -o StrictHostKeyChecking=accept-new -o ConnectTimeout=5 \
+                "${zones}" "root@${node}.mgmt.internal:/root/tappaas/zones.json" >/dev/null 2>&1; then
+            pushed=$((pushed + 1))
+        fi
+    done < <(jq -r '."tappaas-nodes"[]?.hostname // empty' "${cfg}" 2>/dev/null)
+    info "  Distributed zones.json to ${pushed} Proxmox node(s)"
+    [[ "${pushed}" -gt 0 ]]
+}
+
+# Compute the DMZ gateway IP (the firewall's DMZ interface, where the os-caddy
+# reverse proxy listens) from zones.json — e.g. dmz ip 10.6.0.0/24 -> 10.6.0.1.
+# Used for split-horizon DNS so internal clients reach Caddy over the DMZ instead
+# of routing out via the WAN and tripping Caddy's zone ACL (#269, ADR-005 §6).
+# Never hardcode the IP — it is derived from the live zones.json.
+dmz_gateway_ip() {
+    local zones="${CONFIG_DIR}/zones.json"
+    [[ -f "${zones}" ]] || { error "zones.json not found at ${zones}"; return 1; }
+    local gw
+    gw="$(jq -r '(.dmz.ip // "") | if . == "" then "" else (split("/")[0] | split(".") | .[0:3] | join(".") + ".1") end' "${zones}")"
+    [[ -n "${gw}" ]] || { error "could not derive DMZ gateway IP from ${zones} (no dmz zone?)"; return 1; }
+    printf '%s\n' "${gw}"
+}
+
+# Resolve a dependency's provider module name, honoring variant preference
+# (#292, ADR-005 §4). Given a bare provider name and the installing module's
+# variant, prefer an installed same-variant provider `<provider>-<variant>.json`
+# and otherwise fall back to the base `<provider>.json`. Always echoes a name:
+# the same-variant name when its config exists, else the base name (the caller
+# validates that the resolved config actually exists). With an empty variant this
+# is a no-op that returns the base name, so default installs behave exactly as
+# before.
+#   resolve_provider_module <provider> [variant]
+resolve_provider_module() {
+    local provider="$1" variant="${2:-}"
+    if [[ -n "${variant}" && -f "${CONFIG_DIR}/${provider}-${variant}.json" ]]; then
+        echo "${provider}-${variant}"
+    else
+        echo "${provider}"
+    fi
+}
+
 check_service_available() {
     local dep="$1"
     local required_script="${2:-install-service.sh}"
-    local provider_module="${dep%%:*}"
+    # Optional installing-variant: when set, a same-variant provider config is
+    # preferred over the base one (#292). Empty → legacy behavior (base only).
+    local variant="${3:-}"
     local service_name="${dep##*:}"
+    local provider_module
+    provider_module="$(resolve_provider_module "${dep%%:*}" "${variant}")"
     local provider_json="${CONFIG_DIR}/${provider_module}.json"
 
     # Check the provider module is installed (JSON in config dir)
@@ -402,31 +502,40 @@ validate_zone_active() {
     return 1
 }
 
-# ── OPNsense alias-name length guard (#300) ──────────────────────────
-# firewall:rules provisions an OPNsense alias `tappaas_module_<vmname>` for a
-# module (rules_manager._module_alias_name replaces every non-alphanumeric in the
-# vmname with an underscore). OPNsense alias names must match
-# ^[a-zA-Z_][a-zA-Z0-9_]{0,31}$ — at most 32 characters. The vmname schema
-# pattern (module-fields.json: ^[a-zA-Z][a-zA-Z0-9-]*$) already guarantees a
-# valid leading character and charset, so LENGTH is the only thing that can
-# overflow: with the 15-char `tappaas_module_` prefix, vmname must be <= 17 chars.
-# Validate up front so a too-long vmname fails fast with a clear message instead
-# of dying mid-install at firewall:rules — or worse, silently truncating the
-# alias and colliding with another module's alias.
-validate_module_alias_name() {
+# ── OPNsense module alias naming (#300, ADR-005 #316) ────────────────
+# firewall:rules provisions an OPNsense alias `tm_<vmname>` for a module. OPNsense
+# alias names must match ^[a-zA-Z_][a-zA-Z0-9_]{0,31}$ — at most 32 chars. This
+# MUST stay byte-identical to rules_manager._module_alias_name (Python), the
+# authority that actually creates the alias.
+#
+# Scheme: short `tm_` prefix + sanitise (non-alphanumeric -> underscore). A vmname
+# (incl. variant suffix) under MODULE_ALIAS_HASH_THRESHOLD chars gets the plain
+# `tm_<sanitised>` alias; at/above it the alias is a readable prefix + 6-hex sha1
+# of the FULL vmname (deterministic, collision-free) so long names still fit 32.
+MODULE_ALIAS_PREFIX="tm_"
+MODULE_ALIAS_HASH_THRESHOLD=28
+module_alias_name() {
     local vmname="$1"
-    local prefix="tappaas_module_"
-    local maxlen=32
-    local sanitised alias_name
-    # Mirror rules_manager._module_alias_name: non-alphanumeric -> underscore.
+    local sanitised digest keep
     sanitised="${vmname//[^a-zA-Z0-9]/_}"
-    alias_name="${prefix}${sanitised}"
-    if [[ "${#alias_name}" -gt "${maxlen}" ]]; then
-        local maxvm=$((maxlen - ${#prefix}))
-        error "vmname '${YW}${vmname}${CL}' is too long for its OPNsense firewall alias"
-        error "  Alias '${YW}${alias_name}${CL}' would be ${#alias_name} chars; the OPNsense limit is ${maxlen}"
-        error "  Shorten vmname to at most ${maxvm} characters (or use a shorter --variant name)"
-        return 1
+    if [[ "${#vmname}" -lt "${MODULE_ALIAS_HASH_THRESHOLD}" ]]; then
+        printf '%s\n' "${MODULE_ALIAS_PREFIX}${sanitised}"
+        return 0
+    fi
+    digest="$(printf '%s' "${vmname}" | sha1sum | cut -c1-6)"
+    keep=$(( 32 - ${#MODULE_ALIAS_PREFIX} - 1 - ${#digest} ))
+    printf '%s_%s\n' "${MODULE_ALIAS_PREFIX}${sanitised:0:keep}" "${digest}"
+}
+
+# Announce the alias a vmname will get. A vmname at/above the hash threshold gets a
+# hashed alias rather than being rejected (superseding #300's fail-fast); this
+# never blocks — it only warns so the operator knows the firewall alias won't be
+# the literal vmname.
+validate_module_alias_name() {
+    local vmname="$1" alias_name
+    alias_name="$(module_alias_name "${vmname}")"
+    if [[ "${#vmname}" -ge "${MODULE_ALIAS_HASH_THRESHOLD}" ]]; then
+        warn "vmname '${vmname}' is ${#vmname} chars (>= ${MODULE_ALIAS_HASH_THRESHOLD}); its OPNsense alias is hashed to '${alias_name}'"
     fi
     return 0
 }

@@ -164,6 +164,17 @@ main() {
         info "  ${GN}✓${CL} '${precheck_module}' is not yet installed"
     fi
 
+    # ── Variant registry validation (ADR-005 Sprint 3) ───────────────
+    # A named variant must be registered in configuration.json before install,
+    # so we fail fast with a clear message before copying configs or creating
+    # any resources. The default (no --variant) is exempt.
+    if [[ -n "${variant}" ]]; then
+        if ! get_variant_config "${variant}" >/dev/null 2>&1; then
+            die "Variant '${variant}' not registered. Run: variant-manager add ${variant} --domain <domain>"
+        fi
+        info "  ${GN}✓${CL} variant '${variant}' is registered"
+    fi
+
     # ── Step 2: Copy JSON config and validate ────────────────────────
     echo ""
     info "${BOLD}Step 2: Copy and validate module configuration${CL}"
@@ -186,14 +197,12 @@ main() {
         validate_zone_active "$zone0" || die "Zone validation failed — install aborted before any resources were created"
     fi
 
-    # Fail fast if the vmname would overflow its OPNsense firewall alias (#300),
-    # before any VM or service resources are created.
+    # Announce the OPNsense firewall alias this vmname will get (#300, #316).
+    # Long names are hashed to a safe 32-char alias rather than rejected, so this
+    # only warns when hashing applies — it never blocks the install.
     local vmname_check
     vmname_check=$(jq -r '.vmname // empty' "${module_json}")
-    if [[ -n "${vmname_check}" ]]; then
-        validate_module_alias_name "${vmname_check}" \
-            || die "vmname validation failed — install aborted before any resources were created"
-    fi
+    [[ -n "${vmname_check}" ]] && validate_module_alias_name "${vmname_check}"
 
     # ── Step 3: Validate dependencies ────────────────────────────────
     echo ""
@@ -214,7 +223,7 @@ main() {
         info "  No dependencies declared"
     else
         for dep in ${depends_on}; do
-            if check_service_available "${dep}" "install-service.sh"; then
+            if check_service_available "${dep}" "install-service.sh" "${variant}"; then
                 info "  ${GN}✓${CL} ${dep}"
             else
                 dep_errors=$((dep_errors + 1))
@@ -256,7 +265,11 @@ main() {
         info "  No dependency services to call"
     else
         for dep in ${depends_on}; do
-            local provider_module="${dep%%:*}"
+            # Resolve the provider honoring variant preference, identically to the
+            # Step 3 availability check, so a variant install calls the variant
+            # provider's install-service.sh (#292).
+            local provider_module
+            provider_module="$(resolve_provider_module "${dep%%:*}" "${variant}")"
             local service_name="${dep##*:}"
             local provider_dir
 

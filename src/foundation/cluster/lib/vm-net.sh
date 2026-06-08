@@ -171,3 +171,51 @@ vmnet_parse() {
     done
     echo -n ""
 }
+
+# Sync the firewall VM's Proxmox net0 trunks with ALL active VLAN zones — the SAFE
+# mechanism used by firewall/update.sh: resolve trunks0 (normally the sentinel
+# "ALL") against zones.json, then a trunks-only `qm set --net0` that PRESERVES the
+# MAC, tag and queues (never recreates the NIC). Replaces the broken per-zone
+# logic in firewall/test.sh --deep that clobbered net0 to a single VLAN
+# (ISSUES/deep-test-trunk-and-nixbuild.md defect 1).
+#
+#   vmnet_sync_firewall_trunks <zones_file> <firewall_json>
+#
+# Reads vmid/bridge0/trunks0 from <firewall_json> (flat or Pattern-A config),
+# finds the node currently hosting the firewall VM, and only writes when the live
+# trunk list actually differs. Diagnostics go to stderr. Returns 0 on success or
+# no-op, 1 if it could not determine or apply the trunks. Requires the vmnet_*
+# helpers above and get_primary_node_fqdn (common-install-routines).
+vmnet_sync_firewall_trunks() {
+    local zones_file="$1" firewall_json="$2"
+    [[ -f "$zones_file" && -f "$firewall_json" ]] || { echo "vmnet_sync_firewall_trunks: missing zones.json/firewall.json" >&2; return 1; }
+    local fw_vmid fw_bridge fw_trunks0 desired primary fw_node live_net0 mac trunks tag queues opts
+    fw_vmid=$(jq -r '.vmid // empty' "$firewall_json")
+    fw_bridge=$(jq -r '(.bridge0 // .config["cluster:vm"].bridge0) // "lan"' "$firewall_json")
+    fw_trunks0=$(jq -r '(.trunks0 // .config["cluster:vm"].trunks0) // "ALL"' "$firewall_json")
+    desired=$(vmnet_resolve_trunks "$fw_trunks0" "$zones_file")
+    primary=$(get_primary_node_fqdn 2>/dev/null || echo "tappaas1.mgmt.internal")
+    fw_node=$(ssh -o BatchMode=yes -o StrictHostKeyChecking=accept-new root@"$primary" \
+        "pvesh get /cluster/resources --type vm --output-format json 2>/dev/null \
+         | jq -r --arg v \"$fw_vmid\" '.[] | select(.vmid==(\$v|tonumber)) | .node'" 2>/dev/null | head -1)
+    [[ -n "$fw_vmid" && -n "$fw_node" && -n "$desired" ]] \
+        || { echo "vmnet_sync_firewall_trunks: could not resolve vmid/node/trunks (vmid=$fw_vmid node=$fw_node)" >&2; return 1; }
+    live_net0=$(ssh -o BatchMode=yes root@"$fw_node.mgmt.internal" "qm config $fw_vmid" 2>/dev/null \
+        | awk -F': ' '/^net0:/ {print $2; exit}')
+    mac=$(vmnet_parse "$live_net0" mac)
+    trunks=$(vmnet_parse "$live_net0" trunks)
+    tag=$(vmnet_parse "$live_net0" tag)
+    queues=$(vmnet_parse "$live_net0" queues)
+    [[ -n "$mac" ]] || { echo "vmnet_sync_firewall_trunks: could not read net0 MAC" >&2; return 1; }
+    if [[ "$trunks" == "$desired" ]]; then
+        echo "vmnet_sync_firewall_trunks: net0 already in sync ($desired)"
+        return 0
+    fi
+    opts=$(vmnet_build_netopts "$fw_bridge" "$mac" "$tag" "$desired" "$queues")
+    if ssh -o BatchMode=yes root@"$fw_node.mgmt.internal" "qm set $fw_vmid --net0 '$opts'" >/dev/null 2>&1; then
+        echo "vmnet_sync_firewall_trunks: net0 trunks ${trunks:-none} -> $desired"
+        return 0
+    fi
+    echo "vmnet_sync_firewall_trunks: qm set --net0 failed" >&2
+    return 1
+}

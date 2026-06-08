@@ -115,11 +115,28 @@ class TestHelpers(unittest.TestCase):
         )
 
     def test_module_alias_name(self):
-        # OPNsense aliases disallow hyphens; vmname hyphens get normalised to _
-        self.assertEqual(_module_alias_name("vllm-amd"), "tappaas_module_vllm_amd")
-        self.assertEqual(_module_alias_name("vllm"), "tappaas_module_vllm")
-        # Long vmname truncates to 32-char OPNsense limit
+        # Short names (< 28 chars): plain tm_ alias; hyphens normalised to _.
+        self.assertEqual(_module_alias_name("vllm-amd"), "tm_vllm_amd")
+        self.assertEqual(_module_alias_name("vllm"), "tm_vllm")
+        # A 19-char name stays plain under the 28-char threshold.
+        self.assertEqual(_module_alias_name("nextcloud-acme-corp"), "tm_nextcloud_acme_corp")
+        # A name at/above 28 chars gets a readable prefix + 6-hex hash, <=32.
+        long_alias = _module_alias_name("nextcloud-customer-environment-one")
+        self.assertLessEqual(len(long_alias), 32)
+        self.assertTrue(long_alias.startswith("tm_"))
         self.assertLessEqual(len(_module_alias_name("a" * 50)), 32)
+
+    def test_module_alias_name_deterministic_and_collision_free(self):
+        # Hashing is deterministic and distinguishes >=28-char names that share
+        # their first sanitised chars (truncation would have collided them).
+        self.assertEqual(
+            _module_alias_name("nextcloud-customer-environment-one"),
+            _module_alias_name("nextcloud-customer-environment-one"),
+        )
+        self.assertNotEqual(
+            _module_alias_name("nextcloud-customer-environment-one"),
+            _module_alias_name("nextcloud-customer-environment-two"),
+        )
 
     def test_normalize_protocol_default_tcp(self):
         self.assertEqual(_normalize_protocol(None), "TCP")
@@ -320,18 +337,18 @@ class TestCompile(unittest.TestCase):
 
     def test_module_peer_resolved_via_fqdn_alias(self):
         """An egress entry referencing another module's name must point at
-        the FQDN-alias (tappaas_module_<peer>), not a literal IP."""
+        the FQDN-alias (tm_<peer>), not a literal IP."""
         mod = load_module(self.dir, "litellm")
         rules, _ = self.mgr._compile(mod)
         egress_to_vllm = next(r for r in rules if r.peer == "vllm" and r.direction == "egress")
-        self.assertEqual(egress_to_vllm.destination_net, "tappaas_module_vllm")
+        self.assertEqual(egress_to_vllm.destination_net, "tm_vllm")
 
     def test_self_destination_is_module_alias(self):
         """Ingress destination is the module's own FQDN alias."""
         mod = load_module(self.dir, "litellm")
         rules, _ = self.mgr._compile(mod)
         ingress = next(r for r in rules if r.direction == "ingress")
-        self.assertEqual(ingress.destination_net, "tappaas_module_litellm")
+        self.assertEqual(ingress.destination_net, "tm_litellm")
 
     def test_zone_peer_resolved_to_cidr(self):
         mod = load_module(self.dir, "litellm")
@@ -343,11 +360,11 @@ class TestCompile(unittest.TestCase):
         mod = load_module(self.dir, "litellm")
         aliases = self.mgr._module_aliases_to_provision(mod)
         # Self alias — host type, FQDN content
-        self_alias = aliases["tappaas_module_litellm"]
+        self_alias = aliases["tm_litellm"]
         self.assertEqual(self_alias.alias_type, "host")
         self.assertEqual(self_alias.content, ["litellm.srvWork.internal"])
         # Peer (egress to vllm)
-        peer_alias = aliases["tappaas_module_vllm"]
+        peer_alias = aliases["tm_vllm"]
         self.assertEqual(peer_alias.alias_type, "host")
         self.assertEqual(peer_alias.content, ["vllm.srvWork.internal"])
 
@@ -384,13 +401,13 @@ class TestAliasType(unittest.TestCase):
         mgr = _make_manager()
         mod = self._module(alias_type="network")
         aliases = mgr._module_aliases_to_provision(mod)
-        target = aliases["tappaas_module_sonos_fleet"]
+        target = aliases["tm_sonos_fleet"]
         self.assertEqual(target.alias_type, "network")
         self.assertEqual(target.content, ["10.2.10.0/24"])
 
     def test_self_alias_host_unchanged(self):
         mgr = _make_manager()
-        target = mgr._module_aliases_to_provision(self._module())["tappaas_module_sonos_fleet"]
+        target = mgr._module_aliases_to_provision(self._module())["tm_sonos_fleet"]
         self.assertEqual(target.alias_type, "host")
         self.assertEqual(target.content, ["sonos-fleet.srvWork.internal"])
 
@@ -405,7 +422,7 @@ class TestAliasType(unittest.TestCase):
                 vmname="hass", egress=[{"to": "sonos-fleet", "ports": [1400], "description": "x"}]
             )
             aliases = mgr._module_aliases_to_provision(consumer)
-            peer = aliases["tappaas_module_sonos_fleet"]
+            peer = aliases["tm_sonos_fleet"]
             self.assertEqual(peer.alias_type, "network")
             self.assertEqual(peer.content, ["10.2.10.0/24"])
 
@@ -645,8 +662,8 @@ class TestAutoPinholes(unittest.TestCase):
         # Owner is the consumer
         self.assertEqual(rule.module_name, "ui")
         # Source is consumer's self alias, destination is provider's alias
-        self.assertEqual(rule.source_net, "tappaas_module_ui")
-        self.assertEqual(rule.destination_net, "tappaas_module_api")
+        self.assertEqual(rule.source_net, "tm_ui")
+        self.assertEqual(rule.destination_net, "tm_api")
         # Sequence is in ingress band, in ui's slot
         self.assertGreaterEqual(rule.sequence, BAND_INGRESS_BASE)
         self.assertLess(rule.sequence, BAND_EGRESS_BASE)
@@ -768,9 +785,9 @@ class TestAutoPinholes(unittest.TestCase):
         mgr = _make_manager(zones=self._make_zones(), modules_dir=self.dir)
         consumer = load_module(self.dir, "ui")
         aliases = mgr._module_aliases_to_provision(consumer)
-        self.assertEqual(aliases["tappaas_module_api"].content, ["api.srvWork.internal"])
+        self.assertEqual(aliases["tm_api"].content, ["api.srvWork.internal"])
         # And self alias is still emitted
-        self.assertEqual(aliases["tappaas_module_ui"].content, ["ui.dmz.internal"])
+        self.assertEqual(aliases["tm_ui"].content, ["ui.dmz.internal"])
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -826,7 +843,7 @@ class TestPeerResolution(unittest.TestCase):
 
     def test_module_name_resolves_to_alias(self):
         self.assertEqual(self.mgr._resolve_peer_net("some-module", self.module),
-                         "tappaas_module_some_module")
+                         "tm_some_module")
 
 
 # ─────────────────────────────────────────────────────────────────────────────
