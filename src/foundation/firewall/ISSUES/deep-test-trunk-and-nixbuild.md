@@ -91,7 +91,16 @@ used by acme-setup §6 / firewall:proxy per-service is the wrong mechanism for t
 OPNsense setup. Needs the operator's DNS-architecture decision (Unbound override
 shape; per-service vs domain wildcard).
 
-## Defect 4 — legacy --deep overwrites the runtime zones.json from git source
+## Defect 4 — legacy --deep overwrites the runtime zones.json from git source — FIXED
+
+**Fixed:** `firewall/test.sh --deep` now MERGES the three test zones (taken from
+the source definition, set Active) into the deployed zones.json instead of
+`cp`-ing the source over it, and `cleanup_deep` deactivates then DELETES those
+test-zone keys — leaving every other zone, including runtime-only variant zones,
+untouched. Verified the merge/delete preserves a runtime `tv` zone. Original
+analysis below.
+
+
 
 `firewall/test.sh --deep` (around line 726) does:
 

@@ -667,9 +667,11 @@ cleanup_deep() {
                 || warn "  delete-module.sh ${vm} returned non-zero"
         fi
     done
-    # Deactivate the test zones (restore them to Inactive in the deployed
-    # zones.json). Zone names come from the globals derived in the deep block
-    # below (set before this trap is armed) — never hardcoded (#306).
+    # Tear the test zones back out of the DEPLOYED zones.json: first set them
+    # Inactive and reconcile (so zone-manager removes their OPNsense VLAN
+    # interfaces), then DELETE the keys entirely — leaving every other zone,
+    # including runtime-only ones like variant zones, untouched (defect 4). Zone
+    # names come from the globals derived in the deep block (#306).
     if [[ -f "${CONFIG_DIR}/zones.json" ]]; then
         local tmp
         tmp=$(mktemp)
@@ -679,7 +681,12 @@ cleanup_deep() {
             && mv "${tmp}" "${CONFIG_DIR}/zones.json"
         zone-manager --no-ssl-verify --zones-file "${CONFIG_DIR}/zones.json" --execute \
             >/dev/null 2>&1 || warn "zone-manager teardown returned non-zero"
-        info "Reverted ${TFW_A_ZONE}/${TFW_B_ZONE}/${TFW_C_ZONE} to Inactive in zones.json and re-ran zone-manager"
+        tmp=$(mktemp)
+        jq --arg za "${TFW_A_ZONE}" --arg zb "${TFW_B_ZONE}" --arg zc "${TFW_C_ZONE}" \
+           'del(.[$za]) | del(.[$zb]) | del(.[$zc])' \
+            "${CONFIG_DIR}/zones.json" > "${tmp}" \
+            && mv "${tmp}" "${CONFIG_DIR}/zones.json"
+        info "Deactivated and removed test zones ${TFW_A_ZONE}/${TFW_B_ZONE}/${TFW_C_ZONE} from deployed zones.json"
     fi
     return ${rc}
 }
@@ -717,15 +724,25 @@ else
 
     trap cleanup_deep EXIT
 
-    # Refresh deployed zones.json from the canonical source so the test zones are
-    # fully defined (jq stub-injection if they were missing would crash zone-manager).
-    if ! cp "${ZONES_JSON_CANONICAL:-${SCRIPT_DIR}/zones.json}" "${CONFIG_DIR}/zones.json.test-bak"; then
-        :
-    fi
-    if [[ -f "${SCRIPT_DIR}/zones.json" ]]; then
-        cp "${SCRIPT_DIR}/zones.json" "${CONFIG_DIR}/zones.json" \
-            || die "Cannot refresh ${CONFIG_DIR}/zones.json from canonical"
-        info "Refreshed ${CONFIG_DIR}/zones.json from canonical firewall/zones.json"
+    # MERGE the test zones from the canonical SOURCE into the DEPLOYED zones.json
+    # (set Active), preserving every other zone. We must NOT overwrite the runtime
+    # config wholesale — that destroys runtime-only zones such as variant zones
+    # (defect 4, ISSUES/deep-test-trunk-and-nixbuild.md). cleanup_deep removes
+    # these test-zone keys again afterwards.
+    if [[ -f "${SCRIPT_DIR}/zones.json" && -f "${CONFIG_DIR}/zones.json" ]]; then
+        tmp=$(mktemp)
+        if jq --slurpfile src "${SCRIPT_DIR}/zones.json" \
+              --arg za "${TFW_A_ZONE}" --arg zb "${TFW_B_ZONE}" --arg zc "${TFW_C_ZONE}" '
+              ($src[0]) as $s
+              | reduce ([$za, $zb, $zc][]) as $z
+                  (.; .[$z] = (($s[$z] // {}) + { state: "Active" }))' \
+              "${CONFIG_DIR}/zones.json" > "${tmp}" && jq empty "${tmp}" 2>/dev/null; then
+            mv "${tmp}" "${CONFIG_DIR}/zones.json"
+            info "Merged test zones ${TFW_A_ZONE}/${TFW_B_ZONE}/${TFW_C_ZONE} (Active) into deployed zones.json (runtime-only zones preserved)"
+        else
+            rm -f "${tmp}"
+            fail "Could not merge test zones into deployed zones.json"
+        fi
     fi
 
     if [[ ! -f "${CONFIG_DIR}/zones.json" ]]; then
