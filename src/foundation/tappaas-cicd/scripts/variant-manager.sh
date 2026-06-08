@@ -187,6 +187,14 @@ cmd_add() {
             + (if $z == "" then {} else { zone: $z } end))'
 
     info "${GN}✓${CL} Variant '${BL}${name:-<default>}${CL}' registered (domain=${domain}, dnsMode=${dns_mode}${zone_name:+, zone=${zone_name}})"
+
+    # ── ADR-006: create this variant's Authentik role groups (idempotent) ──
+    # <variant>-admins / <variant>-users under a `<variant>` parent group. Best
+    # effort — a missing/unreachable identity module must not fail variant add.
+    if [[ -n "${name}" && -x /home/tappaas/bin/roles-ensure.sh ]]; then
+        /home/tappaas/bin/roles-ensure.sh --variant "${name}" \
+            || warn "roles-ensure --variant ${name} failed — create its role groups later with: roles-ensure.sh --variant ${name}"
+    fi
 }
 
 # Create a variant zone in zones.json; echoes the zone name. Inherits from
