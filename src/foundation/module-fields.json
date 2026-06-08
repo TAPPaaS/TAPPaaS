@@ -1108,6 +1108,46 @@
         }
       },
       "note": "Convert between forms with module-format.sh (to-flat | to-config). Backward compatible: flat modules are untouched."
+    },
+    "identity": {
+      "description": "OIDC integration contract for a module that dependsOn identity:identity (ADR-006). Consumed by services/identity/install-service.sh. Omit for forward-auth modules (those use identity:accessControl).",
+      "type": "object",
+      "requiredBy": [],
+      "usedBy": [
+        "identity:identity"
+      ],
+      "default": {},
+      "fields": {
+        "providesAdminRole": {
+          "description": "Opt-in: create and bind a <scope>-<module>-admins group so a per-module admin role exists. Default false keeps Authentik uncluttered for modules with no admin concept.",
+          "type": "boolean",
+          "default": false
+        },
+        "oidcRedirectPaths": {
+          "description": "OIDC callback paths, each appended to https://<proxyDomain> to form a redirect URI. Default suits Nextcloud user_oidc.",
+          "type": "array",
+          "items": "string",
+          "default": [
+            "/apps/user_oidc/code"
+          ]
+        },
+        "scopes": {
+          "description": "OIDC scope-mapping names the provider should expose. Default (empty) yields openid/email/profile; Authentik’s profile scope already emits the groups claim.",
+          "type": "array",
+          "items": "string",
+          "default": []
+        },
+        "secretsEnv": {
+          "description": "Absolute path on the module VM where OIDC_CLIENT_ID/OIDC_CLIENT_SECRET/OIDC_DISCOVERY_URI are written (mode 600). Default /etc/secrets/<base-module>.env.",
+          "type": "string",
+          "default": ""
+        },
+        "configureService": {
+          "description": "systemd unit on the module VM to restart after writing the env so the app registers the provider (e.g. nextcloud-configure-oidc.service). Empty = applies on next nixos-rebuild/boot.",
+          "type": "string",
+          "default": ""
+        }
+      }
     }
   },
   "module_structure": {
