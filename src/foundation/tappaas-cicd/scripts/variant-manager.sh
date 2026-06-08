@@ -162,7 +162,10 @@ cmd_add() {
         if [[ "${activate}" -eq 1 ]]; then
             info "Activating zone '${zone_name}' via zone-manager..."
             if command -v zone-manager >/dev/null 2>&1; then
-                zone-manager --execute || warn "zone-manager --execute returned non-zero; activate manually"
+                # --no-ssl-verify: the firewall API serves an untrusted cert;
+                # --zones-file: reconcile from the deployed zones.json we just wrote.
+                zone-manager --no-ssl-verify --zones-file "${ZONES_FILE}" --execute \
+                    || warn "zone-manager --execute returned non-zero; activate manually"
             else
                 warn "zone-manager not on PATH — activate '${zone_name}' manually"
             fi
