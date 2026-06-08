@@ -220,8 +220,11 @@ create_variant_zone() {
         pinhole="$(jq -c --arg z "${src}" '.[$z]["pinhole-allowed-from"] // []' "${ZONES_FILE}")"
         parent="${src}"
     else
+        # Default template is a Service-type zone: include "dmz" so its apps can
+        # reach the DMZ Caddy for split-horizon (OIDC discovery, internal access).
+        # --from-zone variants inherit access-to from the source zone instead.
         typeId="2"; type="Service"; bridge="lan"
-        access_to='["internet"]'; pinhole='[]'; parent=""
+        access_to='["internet","dmz"]'; pinhole='[]'; parent=""
     fi
 
     # VLAN allocation

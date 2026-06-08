@@ -62,7 +62,7 @@
       "dmz"
     ],
     "pinhole-allowed-from": [],
-    "_comment": "Always-on control plane. Full access to all zones for operational control. No inbound pinholes \u2014 mgmt initiates only.",
+    "_comment": "Always-on control plane. Full access to all zones for operational control. No inbound pinholes — mgmt initiates only.",
     "description": "Control plane: hypervisors, backup, firewall, identity, cicd"
   },
   "srv": {
@@ -74,13 +74,14 @@
     "ip": "10.2.0.0/24",
     "bridge": "lan",
     "access-to": [
-      "internet"
+      "internet",
+      "dmz"
     ],
     "pinhole-allowed-from": [
       "dmz"
     ],
     "_comment": "Flat-topology alternative to srvHome/srvWork/srvCust. Use only when zone segmentation is not required. Set state=Active to enable.",
-    "description": "Generic service zone \u2014 single-zone deployments only"
+    "description": "Generic service zone — single-zone deployments only"
   },
   "srvHome": {
     "type": "Service",
@@ -93,7 +94,8 @@
     "access-to": [
       "internet",
       "iotCloud",
-      "iotLocal"
+      "iotLocal",
+      "dmz"
     ],
     "pinhole-allowed-from": [],
     "_comment": "Personal-tier services: Home Assistant, household apps. home reaches zone-wide via its access-to; mgmt via its access-to.",
@@ -108,7 +110,8 @@
     "ip": "10.2.20.0/24",
     "bridge": "lan",
     "access-to": [
-      "internet"
+      "internet",
+      "dmz"
     ],
     "pinhole-allowed-from": [
       "dmz"
@@ -125,7 +128,8 @@
     "ip": "10.2.30.0/24",
     "bridge": "lan",
     "access-to": [
-      "internet"
+      "internet",
+      "dmz"
     ],
     "pinhole-allowed-from": [
       "dmz"
@@ -142,10 +146,11 @@
     "ip": "10.2.40.0/24",
     "bridge": "lan",
     "access-to": [
-      "internet"
+      "internet",
+      "dmz"
     ],
     "pinhole-allowed-from": [],
-    "_comment": "Development environment. Combined dev+test for small teams (<10, no compliance requirement). For ISO 27001 A.8.31 or teams >10, use srvTest separately. No dmz pinhole \u2014 not publicly reachable.",
+    "_comment": "Development environment. Combined dev+test for small teams (<10, no compliance requirement). For ISO 27001 A.8.31 or teams >10, use srvTest separately. No dmz pinhole — not publicly reachable.",
     "description": "Development services: internal workloads, not public-facing"
   },
   "srvTest": {
@@ -157,7 +162,8 @@
     "ip": "10.2.50.0/24",
     "bridge": "lan",
     "access-to": [
-      "internet"
+      "internet",
+      "dmz"
     ],
     "pinhole-allowed-from": [
       "dmz"
@@ -181,7 +187,7 @@
       "iotLocal"
     ],
     "pinhole-allowed-from": [],
-    "_comment": "Trusted personal devices on the home network. Reaches srvHome and iotLocal/iotCloud zone-wide for consumer app compatibility (Hue, Shelly, Sonos). Does not reach srvWork \u2014 use the work zone for managed corporate access.",
+    "_comment": "Trusted personal devices on the home network. Reaches srvHome and iotLocal/iotCloud zone-wide for consumer app compatibility (Hue, Shelly, Sonos). Does not reach srvWork — use the work zone for managed corporate access.",
     "description": "Trusted personal devices: laptops, phones, tablets"
   },
   "work": {
@@ -216,7 +222,7 @@
       "srv"
     ],
     "_comment": "Flat-topology alternative to iotLocal/iotCloud/iotCams. Use only when IoT sub-zone segmentation is not required. Set state=Active to enable.",
-    "description": "Generic IoT zone \u2014 single-zone deployments only"
+    "description": "Generic IoT zone — single-zone deployments only"
   },
   "iotLocal": {
     "type": "IoT",
@@ -266,7 +272,7 @@
       "srvHome",
       "srvWork"
     ],
-    "_comment": "Cameras and NVR. No internet, no LAN egress. NVR module in srvHome or srvWork reaches via explicit pinhole only \u2014 never zone-wide access-to (GDPR: access is purpose-limited). Usually wired PoE; no SSID.",
+    "_comment": "Cameras and NVR. No internet, no LAN egress. NVR module in srvHome or srvWork reaches via explicit pinhole only — never zone-wide access-to (GDPR: access is purpose-limited). Usually wired PoE; no SSID.",
     "description": "Surveillance: cameras + NVR, fully isolated"
   },
   "iotUntrust": {
@@ -331,7 +337,7 @@
     ],
     "pinhole-allowed-from": [],
     "_comment": "Generic network probe for basic connectivity validation. Activate to verify routing and internet egress from an isolated subnet. For inter-zone rule validation use testAllowA/testAllowB and testPinhole instead.",
-    "description": "Generic test zone \u2014 basic connectivity probe (inactive)"
+    "description": "Generic test zone — basic connectivity probe (inactive)"
   },
   "testAllowA": {
     "type": "Test",
@@ -387,7 +393,7 @@
     "pinhole-allowed-from": [
       "testAllowA"
     ],
-    "_comment": "Activated by firewall test.sh --deep. Only testAllowA in pinhole-allowed-from, not in access-to \u2014 validates auto-pinhole path (see issue #173).",
+    "_comment": "Activated by firewall test.sh --deep. Only testAllowA in pinhole-allowed-from, not in access-to — validates auto-pinhole path (see issue #173).",
     "description": "Test zone: pinhole-only path validation (inactive)"
   }
 }
