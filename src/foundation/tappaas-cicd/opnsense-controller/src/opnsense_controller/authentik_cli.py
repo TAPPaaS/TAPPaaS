@@ -31,7 +31,14 @@ import os
 import sys
 from pathlib import Path
 
-from .authentik_manager import AuthentikConfig, AuthentikManager, ProxyApp
+import secrets
+
+from .authentik_manager import (
+    AuthentikConfig,
+    AuthentikManager,
+    OidcApp,
+    ProxyApp,
+)
 
 
 DEFAULT_CRED_FILE = Path.home() / ".authentik-credentials.txt"
@@ -123,6 +130,92 @@ def cmd_outpost_set_authentik_host(mgr: AuthentikManager, args: argparse.Namespa
     return 0
 
 
+def _parse_attrs(pairs: list[str]) -> dict:
+    """Turn ['k=v', 'a.b=c'] into a nested dict (dotted keys → nesting)."""
+    out: dict = {}
+    for pair in pairs or []:
+        if "=" not in pair:
+            raise SystemExit(f"--attr expects key=value, got {pair!r}")
+        key, value = pair.split("=", 1)
+        node = out
+        parts = key.split(".")
+        for p in parts[:-1]:
+            node = node.setdefault(p, {})
+        node[parts[-1]] = value
+    return out
+
+
+def cmd_group_ensure(mgr: AuthentikManager, args: argparse.Namespace) -> int:
+    g = mgr.group_ensure(
+        args.name,
+        parent_name=args.parent or None,
+        is_superuser=args.superuser,
+        attributes=_parse_attrs(args.attr) or None,
+    )
+    print(f"==> group '{g['name']}' pk={g['pk']} superuser={g.get('is_superuser')} parent={g.get('parent') or '-'}")
+    return 0
+
+
+def cmd_user_ensure(mgr: AuthentikManager, args: argparse.Namespace) -> int:
+    u = mgr.user_ensure(
+        args.username,
+        email=args.email,
+        name=args.name or None,
+        group_names=args.group or [],
+        attributes=_parse_attrs(args.attr) or None,
+    )
+    print(f"==> user '{u['username']}' pk={u['pk']} groups={len(u.get('groups', []))} email={u.get('email')}")
+    return 0
+
+
+def cmd_user_add_to_groups(mgr: AuthentikManager, args: argparse.Namespace) -> int:
+    u = mgr.user_add_to_groups(args.username, args.group)
+    print(f"==> user '{u['username']}' now in {len(u.get('groups', []))} group(s)")
+    return 0
+
+
+def cmd_user_set_password(mgr: AuthentikManager, args: argparse.Namespace) -> int:
+    password = args.password or secrets.token_urlsafe(16)
+    mgr.user_set_password(args.username, password)
+    print(f"==> password set for '{args.username}'")
+    if not args.password:
+        print(f"    generated password: {password}")
+    return 0
+
+
+def cmd_user_recovery_link(mgr: AuthentikManager, args: argparse.Namespace) -> int:
+    link = mgr.user_recovery_link(args.username)
+    if link:
+        print(link)
+        return 0
+    print("no recovery flow configured on the brand (set brand.flow_recovery) — "
+          "use 'user-set-password' as a fallback", file=sys.stderr)
+    return 2
+
+
+def cmd_app_bind_groups(mgr: AuthentikManager, args: argparse.Namespace) -> int:
+    created = mgr.app_bind_groups(args.slug, args.group)
+    print(f"==> app '{args.slug}': {created} new group binding(s); {len(args.group)} requested")
+    return 0
+
+
+def cmd_oidc_app_ensure(mgr: AuthentikManager, args: argparse.Namespace) -> int:
+    res = mgr.oidc_app_ensure(OidcApp(
+        name=args.name or args.slug,
+        slug=args.slug,
+        redirect_uris=args.redirect_uri,
+        scopes=args.scope or None,
+        description=args.description,
+    ))
+    print(f"==> oidc app '{res.slug}': provider_pk={res.provider_pk} application_pk={res.application_pk}")
+    if args.show_secret:
+        print(f"    client_id={res.client_id}")
+        print(f"    client_secret={res.client_secret}")
+    else:
+        print(f"    client_id={res.client_id}  (client_secret hidden; use --show-secret)")
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     p = argparse.ArgumentParser(
         prog="authentik-manager",
@@ -166,6 +259,55 @@ def main(argv: list[str] | None = None) -> int:
                         help="set the embedded outpost's authentik_host (public URL for redirects)")
     oh.add_argument("host", help="full URL, e.g. https://identity.example.org")
     oh.set_defaults(handler=cmd_outpost_set_authentik_host)
+
+    # ── Groups / Users / Roles (ADR-006) ────────────────────────────────
+    ge = sub.add_parser("group-ensure", help="create/update a group (role)")
+    ge.add_argument("name")
+    ge.add_argument("--parent", default="", help="parent group name (must already exist)")
+    ge.add_argument("--superuser", action="store_true", help="mark group is_superuser (Installer)")
+    ge.add_argument("--attr", action="append", default=[], metavar="k=v",
+                    help="group attribute (dotted keys nest, e.g. tappaas.variant=acme); repeatable")
+    ge.set_defaults(handler=cmd_group_ensure)
+
+    ue = sub.add_parser("user-ensure", help="create/update a user (additive group membership)")
+    ue.add_argument("username")
+    ue.add_argument("--email", default="")
+    ue.add_argument("--name", default="", help="display name (default: username)")
+    ue.add_argument("--group", action="append", default=[], help="group to add the user to; repeatable")
+    ue.add_argument("--attr", action="append", default=[], metavar="k=v", help="user attribute; repeatable")
+    ue.set_defaults(handler=cmd_user_ensure)
+
+    ug = sub.add_parser("user-add-to-groups", help="add an existing user to groups (additive)")
+    ug.add_argument("username")
+    ug.add_argument("--group", action="append", required=True, default=[], help="group name; repeatable")
+    ug.set_defaults(handler=cmd_user_add_to_groups)
+
+    up = sub.add_parser("user-set-password", help="set a user's password (prints generated one if omitted)")
+    up.add_argument("username")
+    up.add_argument("--password", default="", help="explicit password (default: generate + print)")
+    up.set_defaults(handler=cmd_user_set_password)
+
+    ur = sub.add_parser("user-recovery-link", help="print a one-time recovery/enrollment link")
+    ur.add_argument("username")
+    ur.set_defaults(handler=cmd_user_recovery_link)
+
+    bg = sub.add_parser("app-bind-groups",
+                        help="bind groups to an application (the access gate; additive)")
+    bg.add_argument("slug")
+    bg.add_argument("--group", action="append", required=True, default=[], help="group name; repeatable")
+    bg.set_defaults(handler=cmd_app_bind_groups)
+
+    oe = sub.add_parser("oidc-app-ensure",
+                        help="create/update an OIDC (OAuth2/OpenID) Provider + Application")
+    oe.add_argument("slug", help="immutable URL slug (also used to match existing)")
+    oe.add_argument("--name", default="", help="human-readable name (default: slug)")
+    oe.add_argument("--redirect-uri", action="append", required=True, default=[],
+                    help="exact redirect URI (strict match); repeatable")
+    oe.add_argument("--scope", action="append", default=[],
+                    help="OIDC scope-mapping name (default: openid email profile); repeatable")
+    oe.add_argument("--description", default="")
+    oe.add_argument("--show-secret", action="store_true", help="print the client_secret (sensitive)")
+    oe.set_defaults(handler=cmd_oidc_app_ensure)
 
     args = p.parse_args(argv)
     with _make_manager(args) as mgr:

@@ -53,12 +53,37 @@ class ProxyApp:
 
 @dataclass
 class OidcApp:
-    """An OIDC Application + Provider pair (Phase D — Nextcloud)."""
+    """An OIDC Application + Provider pair (ADR-006 — Nextcloud & other OIDC apps)."""
 
     name: str
     slug: str
     redirect_uris: list[str]
-    scopes: list[str]
+    # Scope-mapping NAMES the provider should expose. The default set is enough
+    # for login + group sync: Authentik's stock ``profile`` scope already emits a
+    # ``groups`` claim, so Nextcloud's ``--mapping-groups=groups`` works without a
+    # custom scope. Unknown names are skipped with a warning.
+    scopes: list[str] | None = None
+    description: str = ""
+
+
+@dataclass
+class OidcAppResult:
+    """OIDC provider + application identifiers returned after ensure.
+
+    ``client_id`` / ``client_secret`` are read back from Authentik (the secret is
+    auto-generated on create and preserved across idempotent re-runs). The caller
+    builds the discovery URL from the PUBLIC identity URL + slug:
+    ``<public>/application/o/<slug>/.well-known/openid-configuration``.
+    """
+
+    application_pk: str
+    provider_pk: int
+    slug: str
+    client_id: str
+    client_secret: str
+
+
+DEFAULT_OIDC_SCOPES = ["openid", "email", "profile"]
 
 
 @dataclass
@@ -154,6 +179,18 @@ class AuthentikManager:
     def _find_by_name(rows: list[dict], name: str) -> dict | None:
         return AuthentikManager._find_by_field(rows, "name", name)
 
+    def _applications(self) -> list[dict]:
+        """All applications for management.
+
+        ``/core/applications/`` filters to apps the CALLER is authorized to launch,
+        so once an app is bound to groups the admin token isn't in (the access gate),
+        it would DISAPPEAR from the default list and idempotent re-runs would fail to
+        find it. ``superuser_full_list=true`` returns every app regardless of policy.
+        """
+        return self._get_json(
+            "/core/applications/", superuser_full_list="true", page_size=1000
+        ).get("results", [])
+
     # ── flow lookup (read-once cache) ───────────────────────────────────
 
     def _flow_pk(self, slug: str) -> str:
@@ -203,7 +240,7 @@ class AuthentikManager:
         # Application has a 1:1 link to a Provider; if some OTHER app already
         # owns this provider_pk, reuse THAT app rather than POSTing a new one
         # (Authentik would 400 "Application with this provider already exists").
-        app_rows = self._get_json("/core/applications/").get("results", [])
+        app_rows = self._applications()
         existing_app = (
             self._find_by_field(app_rows, "slug", app.slug)
             or self._find_by_field(app_rows, "provider", provider_pk)
@@ -233,7 +270,7 @@ class AuthentikManager:
     def app_delete(self, slug: str) -> None:
         """Remove an Application and its Provider (proxy or oidc) by slug. Idempotent."""
         # Client-side filter — Authentik's ?slug= URL filter is ignored.
-        all_apps = self._get_json("/core/applications/").get("results", [])
+        all_apps = self._applications()
         match = self._find_by_field(all_apps, "slug", slug)
         apps = [match] if match else []
         for a in apps:
@@ -293,15 +330,255 @@ class AuthentikManager:
         cfg["authentik_host"] = authentik_host
         self._patch_json(f"/outposts/instances/{outpost['pk']}/", {"config": cfg})
 
-    # ── OIDC (Phase D — Nextcloud; scaffolded) ──────────────────────────
+    # ── Groups / Roles (ADR-006) ────────────────────────────────────────
 
-    def oidc_app_ensure(self, app: OidcApp) -> dict:  # pragma: no cover  (Phase D)
-        """Create an OIDC Provider + Application; returns {client_id, client_secret, issuer}.
+    def groups_list(self) -> list[dict]:
+        """All groups (handles pagination defensively for small directories)."""
+        return self._get_json("/core/groups/", page_size=1000).get("results", [])
 
-        Placeholder — wired in Phase D for Nextcloud. The real call hits
-        ``/providers/oauth2/`` with client_type=confidential + the redirect URIs,
-        then reads back the auto-generated client_id/secret.
+    def group_get(self, name: str) -> dict | None:
+        # Authentik ignores ?name=; filter client-side (see search-helpers note).
+        return self._find_by_name(self.groups_list(), name)
+
+    def group_ensure(
+        self,
+        name: str,
+        *,
+        parent_name: str | None = None,
+        is_superuser: bool = False,
+        attributes: dict | None = None,
+    ) -> dict:
+        """Create or update a group by name (idempotent).
+
+        ``parent_name`` must already exist — roles-ensure creates parent scopes
+        before their children. Returns the full group dict (incl. ``pk``).
         """
-        raise NotImplementedError(
-            "oidc_app_ensure is part of Phase D (deferred to follow-up); see plan in #45 comments"
+        parent_pk = None
+        if parent_name:
+            parent = self.group_get(parent_name)
+            if not parent:
+                raise RuntimeError(
+                    f"parent group {parent_name!r} not found — create it before {name!r}"
+                )
+            parent_pk = parent["pk"]
+
+        body: dict = {"name": name, "is_superuser": is_superuser, "parent": parent_pk}
+        if attributes is not None:
+            body["attributes"] = attributes
+
+        existing = self.group_get(name)
+        if existing:
+            # Don't clobber attributes the operator may have added by hand: merge.
+            if attributes is not None:
+                merged = dict(existing.get("attributes") or {})
+                merged.update(attributes)
+                body["attributes"] = merged
+            return self._patch_json(f"/core/groups/{existing['pk']}/", body)
+        return self._post_json("/core/groups/", body)
+
+    # ── Users (ADR-006) ─────────────────────────────────────────────────
+
+    def users_list(self) -> list[dict]:
+        return self._get_json("/core/users/", page_size=1000).get("results", [])
+
+    def user_get(self, username: str) -> dict | None:
+        return self._find_by_field(self.users_list(), "username", username)
+
+    def _group_pks(self, names: list[str]) -> list[str]:
+        """Resolve group names → pks; raise on any missing (caller ensures first)."""
+        by_name = {g["name"]: g["pk"] for g in self.groups_list()}
+        missing = [n for n in names if n not in by_name]
+        if missing:
+            raise RuntimeError(f"groups not found (create them first): {missing}")
+        return [by_name[n] for n in names]
+
+    def user_ensure(
+        self,
+        username: str,
+        *,
+        email: str = "",
+        name: str | None = None,
+        group_names: list[str] | None = None,
+        attributes: dict | None = None,
+        is_active: bool = True,
+        path: str = "users",
+    ) -> dict:
+        """Create or update a user by username (idempotent).
+
+        Group membership is *additive* — existing memberships are preserved and
+        the requested groups merged in (never removes the user from other groups).
+        """
+        group_pks = self._group_pks(group_names or [])
+        existing = self.user_get(username)
+        body: dict = {
+            "username": username,
+            "name": name if name is not None else (existing.get("name") if existing else username),
+            "email": email,
+            "type": "internal",
+            "is_active": is_active,
+            "path": path,
+        }
+        if attributes is not None:
+            body["attributes"] = attributes
+
+        if existing:
+            merged = sorted(set(existing.get("groups", [])) | set(group_pks))
+            body["groups"] = merged
+            return self._patch_json(f"/core/users/{existing['pk']}/", body)
+        body["groups"] = group_pks
+        return self._post_json("/core/users/", body)
+
+    def user_add_to_groups(self, username: str, group_names: list[str]) -> dict:
+        """Add an existing user to the named groups (additive, idempotent)."""
+        user = self.user_get(username)
+        if not user:
+            raise RuntimeError(f"user {username!r} not found")
+        want = set(self._group_pks(group_names))
+        have = set(user.get("groups", []))
+        if want <= have:
+            return user
+        return self._patch_json(
+            f"/core/users/{user['pk']}/", {"groups": sorted(have | want)}
+        )
+
+    def user_set_password(self, username: str, password: str) -> None:
+        """Set a user's password directly (fallback when no recovery flow/SMTP)."""
+        user = self.user_get(username)
+        if not user:
+            raise RuntimeError(f"user {username!r} not found")
+        r = self.client.post(f"/core/users/{user['pk']}/set_password/", json={"password": password})
+        if r.status_code not in (200, 204):
+            r.raise_for_status()
+
+    def user_recovery_link(self, username: str) -> str | None:
+        """Return a one-time recovery/enrollment link, or None if no recovery flow
+        is configured on the brand (then the caller falls back to set_password).
+        """
+        user = self.user_get(username)
+        if not user:
+            raise RuntimeError(f"user {username!r} not found")
+        r = self.client.post(f"/core/users/{user['pk']}/recovery/")
+        if r.status_code in (400, 404):
+            return None          # brand has no flow_recovery set → caller falls back
+        r.raise_for_status()
+        return r.json().get("link")
+
+    # ── Access bindings: group → Application (ADR-006 §5) ────────────────
+
+    def app_bind_groups(self, slug: str, group_names: list[str]) -> int:
+        """Bind the named groups to an Application via PolicyBindings (additive).
+
+        This is the access gate: without any binding, Authentik allows ALL users
+        into the app (fail-open). Returns the count of bindings newly created.
+        Idempotent — skips groups already bound.
+        """
+        all_apps = self._applications()
+        app = self._find_by_field(all_apps, "slug", slug)
+        if not app:
+            raise RuntimeError(f"application {slug!r} not found")
+        target = app["pk"]
+        group_pks = self._group_pks(group_names)
+
+        # Authentik ignores ?target=; pull all bindings and filter client-side.
+        bindings = self._get_json("/policies/bindings/", page_size=1000).get("results", [])
+        bound = {b.get("group") for b in bindings if b.get("target") == target}
+        existing_orders = [b.get("order", 0) for b in bindings if b.get("target") == target]
+        next_order = (max(existing_orders) + 1) if existing_orders else 0
+
+        created = 0
+        for gpk in group_pks:
+            if gpk in bound:
+                continue
+            self._post_json("/policies/bindings/", {
+                "target": target,
+                "group": gpk,
+                "order": next_order,
+                "enabled": True,
+                "negate": False,
+                "timeout": 30,
+            })
+            next_order += 1
+            created += 1
+        return created
+
+    # ── OIDC (ADR-006 — Nextcloud & other native-OIDC apps) ─────────────
+
+    def _scope_mapping_pks(self, names: list[str]) -> list[str]:
+        """Resolve OIDC scope-mapping names → pks; skip unknown with a note."""
+        rows = self._get_json("/propertymappings/provider/scope/", page_size=1000).get("results", [])
+        by_name = {r["scope_name"]: r["pk"] for r in rows}
+        pks, missing = [], []
+        for n in names:
+            (pks.append(by_name[n]) if n in by_name else missing.append(n))
+        if missing:
+            # Non-fatal: the app simply won't receive claims for these scopes.
+            print(f"    warning: OIDC scope mapping(s) not found, skipping: {missing}")
+        return pks
+
+    def _default_signing_key_pk(self) -> str:
+        """A certificate-key pair to sign ID tokens (Nextcloud validates via JWKS)."""
+        rows = self._get_json("/crypto/certificatekeypairs/", has_key=True, page_size=100).get("results", [])
+        if not rows:
+            raise RuntimeError("no signing certificate-key pair available for OIDC")
+        preferred = self._find_by_name(rows, "authentik Self-signed Certificate")
+        return (preferred or rows[0])["pk"]
+
+    def oidc_app_ensure(self, app: OidcApp) -> OidcAppResult:
+        """Create or update an OIDC (OAuth2/OpenID) Provider + Application.
+
+        Idempotent on slug/name; the client_secret is generated once by Authentik
+        and preserved across re-runs. Returns the client_id/secret for the app's
+        own OIDC client config (e.g. Nextcloud user_oidc).
+        """
+        auth_flow_pk = self._flow_pk(DEFAULT_AUTHORIZATION_FLOW_SLUG)
+        invalidation_flow_pk = self._flow_pk(DEFAULT_INVALIDATION_FLOW_SLUG)
+        scope_pks = self._scope_mapping_pks(app.scopes or DEFAULT_OIDC_SCOPES)
+        signing_key = self._default_signing_key_pk()
+        redirect_uris = [{"matching_mode": "strict", "url": u} for u in app.redirect_uris]
+
+        provider_body = {
+            "name": app.name,
+            "authorization_flow": auth_flow_pk,
+            "invalidation_flow": invalidation_flow_pk,
+            "client_type": "confidential",
+            "redirect_uris": redirect_uris,
+            "property_mappings": scope_pks,
+            "signing_key": signing_key,
+            "sub_mode": "hashed_user_id",
+        }
+
+        provider_rows = self._get_json("/providers/oauth2/", page_size=1000).get("results", [])
+        existing_provider = self._find_by_name(provider_rows, app.name)
+        if existing_provider:
+            provider_pk = existing_provider["pk"]
+            provider = self._patch_json(f"/providers/oauth2/{provider_pk}/", provider_body)
+        else:
+            provider = self._post_json("/providers/oauth2/", provider_body)
+            provider_pk = provider["pk"]
+
+        # Find or create the Application (slug is the immutable key; reuse an app
+        # that already owns this provider to avoid the 1:1 "already exists" 400).
+        app_rows = self._applications()
+        existing_app = (
+            self._find_by_field(app_rows, "slug", app.slug)
+            or self._find_by_field(app_rows, "provider", provider_pk)
+        )
+        app_body = {
+            "name": app.name,
+            "slug": app.slug,
+            "provider": provider_pk,
+            "meta_description": app.description,
+        }
+        if existing_app:
+            application_pk = existing_app["pk"]
+            self._patch_json(f"/core/applications/{existing_app['slug']}/", app_body)
+        else:
+            application_pk = self._post_json("/core/applications/", app_body)["pk"]
+
+        return OidcAppResult(
+            application_pk=application_pk,
+            provider_pk=provider_pk,
+            slug=app.slug,
+            client_id=provider["client_id"],
+            client_secret=provider["client_secret"],
         )

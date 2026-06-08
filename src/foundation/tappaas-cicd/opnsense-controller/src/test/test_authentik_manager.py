@@ -1,8 +1,8 @@
-"""Unit tests for authentik_manager + authentik_cli (issue #45).
+"""Unit tests for authentik_manager + authentik_cli (issue #45, ADR-006).
 
 Stubs the httpx.Client so the idempotent ensure paths can be exercised without
-a running Authentik. The Phase D OIDC verbs are intentionally untested here
-(they raise NotImplementedError until the OIDC follow-up wires them up).
+a running Authentik. Covers the forward-auth verbs (#45) and the ADR-006
+user/group/binding/OIDC verbs.
 """
 
 from __future__ import annotations
@@ -16,6 +16,7 @@ from opnsense_controller.authentik_cli import _read_creds
 from opnsense_controller.authentik_manager import (
     AuthentikConfig,
     AuthentikManager,
+    OidcApp,
     ProxyApp,
     EMBEDDED_OUTPOST_NAME,
     DEFAULT_AUTHORIZATION_FLOW_SLUG,
@@ -284,6 +285,132 @@ class TestEmbeddedOutpostLookup(unittest.TestCase):
         # We can't observe that directly here without re-reading calls, but the
         # absence of an exception (RuntimeError "not found") is the proof the
         # name-matching works.
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# ADR-006: groups (roles), users, access bindings, OIDC
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+class TestGroupEnsure(unittest.TestCase):
+    def test_create_with_parent_resolution_and_attributes(self):
+        mgr, calls = _make_manager({
+            ("GET", "/core/groups/"): {"results": [{"pk": "PARENT", "name": "acme"}]},
+            ("POST", "/core/groups/"): {"pk": "CHILD", "name": "acme-users"},
+        })
+        mgr.group_ensure("acme-users", parent_name="acme",
+                         attributes={"tappaas": {"role": "user"}})
+        post = next(c for c in calls if c["method"] == "POST" and c["path"] == "/core/groups/")
+        self.assertEqual(post["json"]["parent"], "PARENT")
+        self.assertFalse(post["json"]["is_superuser"])
+        self.assertEqual(post["json"]["attributes"], {"tappaas": {"role": "user"}})
+
+    def test_missing_parent_raises(self):
+        mgr, _ = _make_manager({("GET", "/core/groups/"): {"results": []}})
+        with self.assertRaises(RuntimeError):
+            mgr.group_ensure("acme-users", parent_name="acme")
+
+    def test_update_merges_attributes(self):
+        mgr, calls = _make_manager({
+            ("GET", "/core/groups/"): {"results": [
+                {"pk": "G", "name": "acme-users", "attributes": {"keep": "x"}}]},
+            ("PATCH", "/core/groups/G/"): {"pk": "G", "name": "acme-users"},
+        })
+        mgr.group_ensure("acme-users", attributes={"new": "y"})
+        patch = next(c for c in calls if c["method"] == "PATCH")
+        self.assertEqual(patch["json"]["attributes"], {"keep": "x", "new": "y"})
+
+
+class TestUserEnsure(unittest.TestCase):
+    def test_create_resolves_groups(self):
+        mgr, calls = _make_manager({
+            ("GET", "/core/groups/"): {"results": [{"pk": "GU", "name": "tappaas-users"}]},
+            ("GET", "/core/users/"): {"results": []},
+            ("POST", "/core/users/"): {"pk": 7, "username": "lars"},
+        })
+        mgr.user_ensure("lars", email="l@x", group_names=["tappaas-users"])
+        post = next(c for c in calls if c["method"] == "POST" and c["path"] == "/core/users/")
+        self.assertEqual(post["json"]["groups"], ["GU"])
+        self.assertEqual(post["json"]["type"], "internal")
+
+    def test_update_is_additive(self):
+        mgr, calls = _make_manager({
+            ("GET", "/core/groups/"): {"results": [
+                {"pk": "GU", "name": "tappaas-users"}, {"pk": "GA", "name": "acme-users"}]},
+            ("GET", "/core/users/"): {"results": [
+                {"pk": 7, "username": "lars", "groups": ["GU"]}]},
+            ("PATCH", "/core/users/7/"): {"pk": 7},
+        })
+        mgr.user_ensure("lars", group_names=["acme-users"])
+        patch = next(c for c in calls if c["method"] == "PATCH")
+        self.assertEqual(sorted(patch["json"]["groups"]), ["GA", "GU"])  # kept GU, added GA
+
+    def test_add_to_groups_noop_when_already_member(self):
+        mgr, calls = _make_manager({
+            ("GET", "/core/groups/"): {"results": [{"pk": "GU", "name": "tappaas-users"}]},
+            ("GET", "/core/users/"): {"results": [
+                {"pk": 7, "username": "lars", "groups": ["GU"]}]},
+        })
+        mgr.user_add_to_groups("lars", ["tappaas-users"])
+        self.assertFalse(any(c["method"] == "PATCH" for c in calls))
+
+
+class TestAppBindGroups(unittest.TestCase):
+    def test_creates_binding_with_app_as_target(self):
+        mgr, calls = _make_manager({
+            ("GET", "/core/applications/"): {"results": [{"pk": "APP", "slug": "nc", "provider": 2}]},
+            ("GET", "/core/groups/"): {"results": [{"pk": "GU", "name": "tappaas-users"}]},
+            ("GET", "/policies/bindings/"): {"results": []},
+            ("POST", "/policies/bindings/"): {"pk": "B1"},
+        })
+        created = mgr.app_bind_groups("nc", ["tappaas-users"])
+        self.assertEqual(created, 1)
+        post = next(c for c in calls if c["method"] == "POST" and c["path"] == "/policies/bindings/")
+        self.assertEqual(post["json"]["target"], "APP")
+        self.assertEqual(post["json"]["group"], "GU")
+        self.assertTrue(post["json"]["enabled"])
+
+    def test_idempotent_skip_when_already_bound(self):
+        mgr, calls = _make_manager({
+            ("GET", "/core/applications/"): {"results": [{"pk": "APP", "slug": "nc", "provider": 2}]},
+            ("GET", "/core/groups/"): {"results": [{"pk": "GU", "name": "tappaas-users"}]},
+            ("GET", "/policies/bindings/"): {"results": [{"pk": "B1", "target": "APP", "group": "GU", "order": 0}]},
+        })
+        created = mgr.app_bind_groups("nc", ["tappaas-users"])
+        self.assertEqual(created, 0)
+        self.assertFalse(any(c["method"] == "POST" for c in calls))
+
+
+class TestOidcAppEnsure(unittest.TestCase):
+    def test_create_provider_and_application(self):
+        mgr, calls = _make_manager({
+            ("GET", "/flows/instances/"): {"results": [{"pk": "FLOW"}]},
+            ("GET", "/propertymappings/provider/scope/"): {"results": [
+                {"pk": "S-OPENID", "scope_name": "openid"},
+                {"pk": "S-EMAIL", "scope_name": "email"},
+                {"pk": "S-PROFILE", "scope_name": "profile"},
+            ]},
+            ("GET", "/crypto/certificatekeypairs/"): {"results": [
+                {"pk": "CERT", "name": "authentik Self-signed Certificate"}]},
+            ("GET", "/providers/oauth2/"): {"results": []},
+            ("POST", "/providers/oauth2/"): {"pk": 2, "client_id": "CID", "client_secret": "CSEC"},
+            ("GET", "/core/applications/"): {"results": []},
+            ("POST", "/core/applications/"): {"pk": "APP"},
+        })
+        res = mgr.oidc_app_ensure(OidcApp(
+            name="nc", slug="nc",
+            redirect_uris=["https://nc.test/apps/user_oidc/code"],
+        ))
+        self.assertEqual(res.client_id, "CID")
+        self.assertEqual(res.client_secret, "CSEC")
+        self.assertEqual(res.provider_pk, 2)
+        self.assertEqual(res.application_pk, "APP")
+        prov = next(c for c in calls if c["method"] == "POST" and c["path"] == "/providers/oauth2/")
+        self.assertEqual(prov["json"]["client_type"], "confidential")
+        self.assertEqual(prov["json"]["signing_key"], "CERT")
+        self.assertEqual(prov["json"]["redirect_uris"],
+                         [{"matching_mode": "strict", "url": "https://nc.test/apps/user_oidc/code"}])
+        self.assertEqual(prov["json"]["property_mappings"], ["S-OPENID", "S-EMAIL", "S-PROFILE"])
 
 
 if __name__ == "__main__":
