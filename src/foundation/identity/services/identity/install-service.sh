@@ -76,6 +76,10 @@ CONFIGURE_SERVICE="$(echo "${JSON}" | jq -r '.identity.configureService // ""')"
 MODULE_BASE="${MODULE}"
 [[ -n "${VARIANT}" && "${MODULE}" == *"-${VARIANT}" ]] && MODULE_BASE="${MODULE%-"${VARIANT}"}"
 SECRETS_ENV="$(echo "${JSON}" | jq -r --arg d "/etc/secrets/${MODULE_BASE}.env" '.identity.secretsEnv // $d')"
+# Default the configure unit to the convention <base>-configure-oidc.service so a
+# module needn't declare it (Nextcloud ships nextcloud-configure-oidc.service).
+# Restart is best-effort (warns if absent → applies on next rebuild/boot).
+[[ -z "${CONFIGURE_SERVICE}" ]] && CONFIGURE_SERVICE="${MODULE_BASE}-configure-oidc.service"
 
 # Scope prefix: `tappaas` for the default variant, else the variant name.
 PREFIX="tappaas"; [[ -n "${VARIANT}" ]] && PREFIX="${VARIANT}"
