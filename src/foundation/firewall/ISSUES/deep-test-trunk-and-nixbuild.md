@@ -1,11 +1,20 @@
-# firewall/test.sh --deep: two defects found (June 2026)
+# firewall/test.sh --deep: four defects found + FIXED (June 2026)
 
-Discovered while validating the ADR-005 Caddy work. The firewall `--deep` suite
-had never actually run end-to-end (a `local` outside a function aborted it at
-Deep 1 — fixed in commit 3f84658), which hid the two defects below. **Until both
-are fixed, `firewall/test.sh --deep` is unsafe to run against a live firewall.**
+Discovered while validating the ADR-005 Caddy/variant work. The firewall `--deep`
+suite had never actually run end-to-end (a `local` outside a function aborted it
+at Deep 1 — fixed in commit 3f84658), which hid the defects below. **All four are
+now fixed; `firewall/test.sh --deep` should be safe to run again** (worth one
+supervised run to confirm). Each section keeps the original analysis for context.
 
-## Defect 1 — trunk-sync clobbers the firewall VM NIC config (SERIOUS)
+## Defect 1 — trunk-sync clobbers the firewall VM NIC config (SERIOUS) — FIXED
+
+**Fixed:** the per-zone trunk rewrite was replaced with the shared, safe
+`vmnet_sync_firewall_trunks` (cluster/lib/vm-net.sh) — resolves trunks0="ALL" to
+every active VLAN, preserves MAC/tag/queues, only writes on change. The firewall.json
+trunks0 "ALL" sentinel is no longer mangled, and cleanup_deep now restores the
+trunks after removing the test zones. Same helper now used by firewall/update.sh's
+intent and test-variant-public.sh. Original analysis below.
+
 
 The deep block (around the "Sync OPNsense VM net0 trunks" section) treats
 `firewall.json` `trunks0` as a **zone-name list**: it appends the test zone name
@@ -32,7 +41,12 @@ keep `trunks0="ALL"` and call `vmnet_resolve_trunks "ALL" zones.json` (the test
 zones are Active by then, so they're included automatically). And `cleanup_deep`
 must restore the firewall `net0` trunks (and `trunks0`) on teardown.
 
-## Defect 2 — nix-build fails: parent-relative .nix import not copied to the VM
+## Defect 2 — nix-build fails: parent-relative .nix import not copied to the VM — FIXED
+
+**Fixed:** test-fw-c.nix is now self-contained (the webserver is inlined; the
+`../test-fw-webserver.nix` parent import is gone), so update-os.sh copies it to the
+VM cleanly. Original analysis below.
+
 
 `test-fw-c.nix` lives in `test-fixtures/test-fw-c/` and imports the shared
 overlay one level up:

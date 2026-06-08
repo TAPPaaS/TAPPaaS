@@ -1,18 +1,23 @@
-# Firewall test VM C — webserver in test_pinhole zone.
+# Firewall test VM C — webserver in the test-pinhole zone.
 #
-# Mirrors test-fw-a but listens on 9091 and serves a different marker so the
-# auto-pinhole (#173) live test can distinguish reaching test-fw-c from any
-# stray hit on test-fw-a.
+# Listens on 9091 and serves a distinct marker so the auto-pinhole (#173) live
+# test can tell reaching test-fw-c apart from a stray hit on test-fw-a.
 #
-# The shared webserver overlay lives one directory up; we import it via a
-# relative path because copy-update-json.sh keeps the original on-disk layout.
+# SELF-CONTAINED (no cross-directory import). test-fw-c lives in its own subdir,
+# and update-os.sh only copies same-directory sibling .nix files to the VM — a
+# parent-relative `../test-fw-webserver.nix` import resolved to a non-existent
+# /etc/test-fw-webserver.nix and broke nixos-rebuild
+# (ISSUES/deep-test-trunk-and-nixbuild.md defect 2). The webserver is inlined here.
 
 { config, lib, pkgs, modulesPath, system, ... }:
 
+let
+  webserverPort = 9091;
+  marker = "tappaas-firewall-test-c-ok";
+in
 {
   imports = [
     /etc/nixos/hardware-configuration.nix
-    ../test-fw-webserver.nix
   ];
 
   services.cloud-init = {
@@ -53,9 +58,25 @@
 
   environment.systemPackages = with pkgs; [ curl jq ];
 
-  tappaas.test = {
-    webserverPort = 9091;
-    marker = "tappaas-firewall-test-c-ok";
+  # Inlined test webserver (was the shared test-fw-webserver.nix overlay).
+  networking.firewall.allowedTCPPorts = [ webserverPort ];
+  environment.etc."tappaas-test-www/index.html".text = "${marker}\n";
+
+  systemd.services.tappaas-test-webserver = {
+    description = "TAPPaaS firewall test webserver (port ${toString webserverPort})";
+    wantedBy = [ "multi-user.target" ];
+    after = [ "network-online.target" ];
+    wants = [ "network-online.target" ];
+    serviceConfig = {
+      ExecStart = "${pkgs.python3}/bin/python3 -m http.server ${toString webserverPort} --directory /etc/tappaas-test-www --bind 0.0.0.0";
+      Restart = "on-failure";
+      RestartSec = "5s";
+      DynamicUser = true;
+      ReadOnlyPaths = [ "/etc/tappaas-test-www" ];
+      ProtectSystem = "strict";
+      ProtectHome = true;
+      NoNewPrivileges = true;
+    };
   };
 
   system.stateVersion = "25.05";

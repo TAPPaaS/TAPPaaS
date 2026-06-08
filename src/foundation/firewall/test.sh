@@ -34,6 +34,8 @@ set -euo pipefail
 
 # shellcheck source=../tappaas-cicd/scripts/common-install-routines.sh
 . /home/tappaas/bin/common-install-routines.sh
+# shellcheck source=../cluster/lib/vm-net.sh disable=SC1091
+. /home/tappaas/TAPPaaS/src/foundation/cluster/lib/vm-net.sh
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 readonly SCRIPT_DIR
@@ -688,6 +690,11 @@ cleanup_deep() {
             && mv "${tmp}" "${CONFIG_DIR}/zones.json"
         info "Deactivated and removed test zones ${TFW_A_ZONE}/${TFW_B_ZONE}/${TFW_C_ZONE} from deployed zones.json"
     fi
+    # Restore the firewall VM net0 trunks now that the test zones are gone, so the
+    # NIC config is back to the production set (defect 1 — the old code never did
+    # this, leaving the firewall config clobbered after a run).
+    vmnet_sync_firewall_trunks "${CONFIG_DIR}/zones.json" "${CONFIG_DIR}/firewall.json" \
+        || warn "Could not restore firewall net0 trunks — verify manually"
     return ${rc}
 }
 
@@ -755,18 +762,11 @@ else
             && mv "${tmp}" "${CONFIG_DIR}/zones.json"
         info "Activated ${TFW_A_ZONE}, ${TFW_B_ZONE} and ${TFW_C_ZONE} in deployed zones.json"
 
-        # Ensure the deployed firewall.json's trunks0 list includes the test
-        # provider zone (${TFW_C_ZONE}, VLAN 830) so the trunks-sync block below
-        # picks it up. Idempotent — only rewrites when it is missing. The runtime
-        # fields (installTime, location, …) are preserved by a surgical jq update.
-        if [[ -f "${CONFIG_DIR}/firewall.json" ]] \
-                && ! read_module_config "firewall" 2>/dev/null \
-                       | jq -r '.trunks0 // ""' \
-                       | grep -qE "(^|;)${TFW_C_ZONE}(;|\$)"; then
-            # Pattern A-aware write (#207): trunks0 routes under config.cluster:vm.
-            jq_module_write "firewall" ".trunks0 = ((.trunks0 // \"\") + \";${TFW_C_ZONE}\" | sub(\"^;\"; \"\"))"
-            info "Added ${TFW_C_ZONE} to deployed firewall.json trunks0"
-        fi
+        # NOTE: do NOT touch firewall.json trunks0 — it is the sentinel "ALL",
+        # which vmnet_sync_firewall_trunks resolves to every active zone's VLAN
+        # (the test zones are Active by now, so they are included automatically).
+        # Appending a zone NAME here used to mangle "ALL" and clobber the firewall
+        # NIC to a single VLAN (defect 1 — now fixed).
         if zone-manager --no-ssl-verify --zones-file "${CONFIG_DIR}/zones.json" --execute 2>&1 | tail -5; then
             pass "zone-manager applied ${TFW_A_ZONE}+${TFW_B_ZONE} (VLAN+DHCP+rules)"
         else
@@ -786,62 +786,15 @@ else
             fail "configctl filter reload failed — DHCP for new zones may not work"
         fi
 
-        # Sync OPNsense VM's Proxmox trunks with currently-active VLAN zones.
-        # See firewall/update.sh for the long-form rationale; in short: the
-        # Proxmox vlan-aware bridge only forwards VLAN tags listed in the OPNsense
-        # NIC's trunks=... allowlist. The new test zones (VLANs 810/820) need that
-        # list updated or their traffic is dropped before reaching OPNsense.
-        _fw_cfg=$(read_module_config "firewall" 2>/dev/null)
-        FIREWALL_VMID=$(echo "${_fw_cfg}" | jq -r '.vmid // 110')
-        FIREWALL_MAC=$(echo "${_fw_cfg}" | jq -r '.mac0 // empty')
-        FIREWALL_BRIDGE=$(echo "${_fw_cfg}" | jq -r '.bridge0 // "lan"')
-        TRUNK_ZONES=$(echo "${_fw_cfg}" | jq -r '.trunks0 // ""')
-
-        # Locate the node currently hosting the firewall VM (may have HA-migrated)
-        primary_node=$(jq -r '."tappaas-nodes"[0].hostname // "tappaas1"' \
-                         "${CONFIG_DIR}/configuration.json" 2>/dev/null)
-        FIREWALL_NODE=$(ssh -o BatchMode=yes -o StrictHostKeyChecking=accept-new \
-                          root@"${primary_node}.mgmt.internal" \
-                          "pvesh get /cluster/resources --type vm --output-format json 2>/dev/null \
-                           | jq -r --arg vmid \"${FIREWALL_VMID}\" '.[] | select(.vmid==(\$vmid|tonumber)) | .node'" \
-                          2>/dev/null | head -1)
-        if [[ -z "${FIREWALL_MAC}" && -n "${FIREWALL_NODE}" ]]; then
-            # Extract MAC from `net0: virtio=AA:BB:CC:DD:EE:FF,bridge=...`
-            FIREWALL_MAC=$(ssh -o BatchMode=yes root@"${FIREWALL_NODE}.mgmt.internal" \
-                            "qm config ${FIREWALL_VMID}" 2>/dev/null \
-                            | grep -E '^net0:' \
-                            | grep -oE '[0-9A-Fa-f]{2}(:[0-9A-Fa-f]{2}){5}' \
-                            | head -1)
-        fi
-
-        # Resolve active VLAN tags from trunks0 list against current zones.json
-        TRUNK_TAGS=""
-        IFS=';' read -ra _names <<< "${TRUNK_ZONES}"
-        for zone_name in "${_names[@]}"; do
-            state=$(jq -r --arg n "${zone_name}" '.[$n].state // empty' \
-                     "${CONFIG_DIR}/zones.json" 2>/dev/null)
-            if [[ "${state}" == "Active" || "${state}" == "Mandatory" ]]; then
-                tag=$(jq -r --arg n "${zone_name}" '.[$n].vlantag // empty' \
-                       "${CONFIG_DIR}/zones.json" 2>/dev/null)
-                if [[ -n "${tag}" && "${tag}" != "0" ]]; then
-                    [[ -z "${TRUNK_TAGS}" ]] && TRUNK_TAGS="${tag}" || TRUNK_TAGS="${TRUNK_TAGS};${tag}"
-                fi
-            fi
-        done
-
-        if [[ -n "${FIREWALL_NODE}" && -n "${FIREWALL_MAC}" && -n "${TRUNK_TAGS}" ]]; then
-            net0_opts="virtio=${FIREWALL_MAC},bridge=${FIREWALL_BRIDGE},trunks=${TRUNK_TAGS}"
-            # IMPORTANT: single-quote the value inside the remote command so the
-            # semicolons in trunks=210;310;... aren't parsed as command separators
-            # by the remote shell.
-            if ssh -o BatchMode=yes root@"${FIREWALL_NODE}.mgmt.internal" \
-                    "qm set ${FIREWALL_VMID} --net0 '${net0_opts}'" >/dev/null 2>&1; then
-                pass "OPNsense VM trunks synced: ${TRUNK_TAGS}"
-            else
-                fail "Could not update OPNsense VM trunks via qm set"
-            fi
+        # Sync the firewall VM's Proxmox net0 trunks so the newly-activated test
+        # VLANs reach OPNsense. Uses the SAFE shared helper (resolves trunks0=
+        # "ALL" -> all active VLAN tags; preserves MAC/tag/queues; only writes on
+        # change) — NOT the old per-zone rewrite that clobbered net0 to a single
+        # VLAN (defect 1, ISSUES/deep-test-trunk-and-nixbuild.md).
+        if vmnet_sync_firewall_trunks "${CONFIG_DIR}/zones.json" "${CONFIG_DIR}/firewall.json"; then
+            pass "OPNsense VM net0 trunks synced with all active VLANs"
         else
-            fail "Cannot resolve firewall vmid/mac/node for trunk sync (node=${FIREWALL_NODE} mac=${FIREWALL_MAC} tags=${TRUNK_TAGS})"
+            fail "Could not sync OPNsense VM net0 trunks"
         fi
     fi
 
