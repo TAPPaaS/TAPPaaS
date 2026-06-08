@@ -334,27 +334,33 @@ as a regression guard.
 
 ## Implementation plan (phased)
 
-- **Phase 0 — SMTP + recovery flow.** Add `AUTHENTIK_EMAIL__*` (from `/etc/secrets`) to
-  `identity.nix`; ensure an enrollment/recovery flow + email stage exist (idempotent, in
-  `roles-ensure`). Decide the relay (external provider recommended; cluster smarthost is a
-  follow-up). Non-blocking thanks to the link fallback.
-- **Phase 1 — Authentik API surface.** Extend `AuthentikManager`: `group_ensure`,
-  `user_ensure`, `user_add_to_group`, `user_email_recovery`/`recovery_link`,
-  `app_bind_groups`, list/reconcile helpers + `authentik-manager` subcommands. Idempotent
-  reconcile-in-place. *(Load-bearing — everything depends on it.)*
-- **Phase 2 — `roles-ensure` reconcile.** Guarantees `tappaas-installers` + the scope groups
-  for the current variant set; hooked into `identity/update.sh`, `variant-manager add/remove`.
-- **Phase 3 — `add-user` script.** Orchestrates ensure-user → ensure-groups → add-to-groups
-  → email enrollment (link fallback). Default `tappaas` scope works end-to-end here.
-- **Phase 4 — module integration & access bindings.** Implement `oidc-app-ensure` (replace the
-  stub) and wire the empty `services/identity/install-service.sh` to: create the per-module
-  `<scope>-<module>-admins` group (opt-in via a module-JSON flag), bind app access
-  (variant-aware), and — for OIDC apps — write `<module>.env` and trigger the app's configure
-  service. This is the phase that closes the Nextcloud loop.
-- **Phase 5 — tests + docs.** `identity/test.sh` cases: idempotent reconcile; default vs
-  per-variant group creation; **SSO reuse across modules**; **cross-variant denial** (a
-  `client1` user is rejected from another scope's app — the fail-open guard); access gating;
-  OIDC provider present. Plus operator docs.
+Status legend: ✅ implemented (branch `feat/56-identity-users-roles`), ⏸ deferred.
+
+- **Phase 0 — SMTP + recovery flow. ⏸ Deferred** (folded into the separate SMTP issue).
+  The probe found no recovery flow on the brand and no cluster SMTP relay; both belong with
+  the SMTP work. Until then `add-user.sh` is **link-first with a printed-password fallback**
+  (it already sets and prints a temporary password), so the role system ships without it.
+- **Phase 1 — Authentik API surface. ✅** `AuthentikManager` gained `group_ensure`,
+  `user_ensure`, `user_add_to_groups`, `user_set_password`, `user_recovery_link`,
+  `app_bind_groups`, and the real `oidc_app_ensure` + `authentik-manager` subcommands.
+  Idempotent; validated live + 21 unit tests. (Also fixed `/core/applications/` visibility:
+  a group-bound app is hidden from the admin list unless `superuser_full_list=true`.)
+- **Phase 2 — `roles-ensure.sh` reconcile. ✅** Guarantees `tappaas-installers` + the scope
+  groups for the current variant set; hooked into `identity/update.sh` and `variant-manager add`.
+- **Phase 3 — `add-user.sh`. ✅** ensure-user → ensure-groups → additive membership →
+  credential (recovery link, else printed password). Default + variant scopes work.
+- **Phase 4 — module integration & access bindings. ✅** `oidc-app-ensure` implemented and
+  `services/identity/{install,update,delete,test}-service.sh` wired: roles-ensure → opt-in
+  `<scope>-<module>-admins` (module-JSON `identity.providesAdminRole`) → OIDC provider/app →
+  **mandatory** `app-bind-groups` → write `<module>.env` on the VM + restart its configure
+  service. Closes the Nextcloud loop. Module `identity` contract documented in
+  `module-fields.json`. Authentik side validated live; VM-side write is deployment-time.
+- **Phase 5 — tests + docs. ✅** `identity/test.sh` (11 checks: connectivity, baseline groups
+  + attributes, add-user create/idempotent/additive, variant scope isolation by parent);
+  `test-service.sh` asserts each module's app exists AND has an access binding (the fail-open
+  guard); `USERS.md` operator guide. *(Full browser-level SSO / cross-variant-denial proof
+  needs real apps + a browser; the group-model and per-app-binding invariants are asserted
+  here as the automatable proxy.)*
 
 ---
 
