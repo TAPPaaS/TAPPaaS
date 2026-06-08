@@ -91,9 +91,31 @@ used by acme-setup §6 / firewall:proxy per-service is the wrong mechanism for t
 OPNsense setup. Needs the operator's DNS-architecture decision (Unbound override
 shape; per-service vs domain wildcard).
 
+## Defect 4 — legacy --deep overwrites the runtime zones.json from git source
+
+`firewall/test.sh --deep` (around line 726) does:
+
+    cp "${SCRIPT_DIR}/zones.json" "${CONFIG_DIR}/zones.json"   # source -> runtime, every run
+
+i.e. it clobbers the deployed `/home/tappaas/config/zones.json` with the git-tracked
+source on every `--deep` run. Any runtime-only zone — a variant zone created by
+`variant-manager --add-zone`, or any operator customization not in the source —
+is silently destroyed. The "backup" on line 722 copies the *source* to
+`zones.json.test-bak` (because `ZONES_JSON_CANONICAL` defaults to
+`${SCRIPT_DIR}/zones.json`), NOT the real runtime config, and `cleanup_deep` never
+restores it — so there is no protection of runtime state.
+
+This is only safe under the (now-false) assumption that runtime zones.json always
+equals the source. Variant zones break that assumption.
+
+**Fix:** back up the REAL runtime `${CONFIG_DIR}/zones.json` (not the source) and
+restore it in `cleanup_deep`; or stop overwriting wholesale and instead merge only
+the test zones into the runtime copy.
+
 ## Note
 
-The standalone Caddy test (`firewall/test-caddy-public.sh`, Option B) deliberately
-avoids defects 1 & 2: it places its webserver in an already-active zone (no zone
-activation, no trunk-sync) and uses a self-contained `.nix` (no cross-dir import).
-It is what surfaced defect 3.
+The standalone Caddy test (`firewall/test-caddy-public.sh`, Option B) and the
+variant test (`firewall/test-variant-public.sh`) deliberately avoid all four
+defects: they touch only the runtime `${CONFIG_DIR}/zones.json` (never copy
+source->runtime), place VMs in active/created zones with the SAFE trunk-sync, and
+use self-contained `.nix` files. They surfaced defects 3 and 4.
