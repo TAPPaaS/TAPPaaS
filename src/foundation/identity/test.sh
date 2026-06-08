@@ -56,10 +56,17 @@ cleanup() {
         upk="$(api '/core/users/?page_size=1000' | jq -r --arg u "$u" '.results[]|select(.username==$u)|.pk')"
         [[ -n "${upk}" ]] && api "/core/users/${upk}/" -X DELETE -o /dev/null 2>/dev/null
     done
-    for g in "${TVAR}-users" "${TVAR}-admins" "${TVAR}" "tappaas-${DEEPMOD}-admins"; do
+    for g in "${TVAR}-users" "${TVAR}-admins" "${TVAR}" "tappaas-${DEEPMOD}-admins" \
+             "tappaas-test-idoidc-admins"; do
         gpk="$(api '/core/groups/?page_size=1000' | jq -r --arg n "$g" '.results[]|select(.name==$n)|.pk')"
         [[ -n "${gpk}" ]] && api "/core/groups/${gpk}/" -X DELETE -o /dev/null 2>/dev/null
     done
+    # Safety net for the VM integration tests (idempotent; no-op if not installed).
+    if [[ "${RUN_DEEP:-0}" -eq 1 && -x /home/tappaas/bin/delete-module.sh ]]; then
+        for m in test-idfa test-idoidc; do
+            /home/tappaas/bin/delete-module.sh "$m" --force >/dev/null 2>&1 || true
+        done
+    fi
 }
 trap cleanup EXIT
 
@@ -143,6 +150,68 @@ if [[ "${RUN_DEEP}" -eq 1 ]]; then
     # delete idempotent
     "${USER_SH}" delete "${DEEPUSER}" --yes >/dev/null 2>&1 \
         && pass "delete idempotent (no error when absent)" || fail "delete errored on absent user"
+fi
+
+# ── 6+7. DEEP integration: identity fronts a real webserver, both modes ──────
+# Installs two tiny self-contained webserver VMs (test-fixtures/) and checks the
+# OBSERVABLE difference: forward-auth GATES the URL (Authentik login, no marker);
+# OIDC passes through (marker reachable) + stands up the OIDC provider/binding and
+# delivers the OIDC env to the VM. Each VM is torn down after its checks.
+if [[ "${RUN_DEEP}" -eq 1 ]]; then
+    FIXTURES="$(cd "$(dirname "$0")" && pwd)/test-fixtures"
+    DOMAIN="$(jq -r '(.tappaas.variants[""].domain // .tappaas.domain // "")' "${CONFIG_DIR}/configuration.json")"
+    INSTALL_MODULE="${INSTALL_MODULE:-/home/tappaas/bin/install-module.sh}"
+    DELETE_MODULE="${DELETE_MODULE:-/home/tappaas/bin/delete-module.sh}"
+
+    if [[ -z "${DOMAIN}" || ! -x "${INSTALL_MODULE}" || ! -x "${DELETE_MODULE}" ]]; then
+        section "6-7 (deep): identity integration — SKIPPED"
+        warn "  default domain or install/delete-module.sh unavailable; skipping VM integration"
+    else
+        # ── 6. forward-auth (identity:accessControl) GATES the webserver ──
+        section "6 (deep): forward-auth — Authentik gates the webserver"
+        FA_FQDN="test-idfa.${DOMAIN}"
+        if ( cd "${FIXTURES}/test-idfa" && "${INSTALL_MODULE}" test-idfa --proxyDomain "${FA_FQDN}" ) >/tmp/idfa-install.log 2>&1; then
+            pass "test-idfa installed (forward-auth)"
+            body="$(curl -ksSL --max-time 25 "https://${FA_FQDN}/" 2>/dev/null)"
+            { ! grep -q "tappaas-idfa-ok" <<<"${body}" && grep -qi "authentik" <<<"${body}"; } \
+                && pass "unauthenticated request gated → Authentik login served, marker withheld" \
+                || fail "forward-auth NOT gating (marker leaked or non-Authentik response)"
+            [[ "$(api '/core/applications/?superuser_full_list=true&page_size=1000' | jq -r '[.results[]|select(.slug=="test-idfa")]|length')" -ge 1 ]] \
+                && pass "Authentik proxy app 'test-idfa' present" || fail "no Authentik proxy app for test-idfa"
+            "${DELETE_MODULE}" test-idfa --force >/dev/null 2>&1 \
+                && pass "test-idfa torn down" || fail "test-idfa teardown failed"
+        else
+            fail "test-idfa install failed (see /tmp/idfa-install.log)"
+        fi
+
+        # ── 7. OIDC (identity:identity) — passthrough + provider + env delivery ──
+        section "7 (deep): OIDC — passthrough + provider/binding + env on VM"
+        OIDC_FQDN="test-idoidc.${DOMAIN}"
+        if ( cd "${FIXTURES}/test-idoidc" && "${INSTALL_MODULE}" test-idoidc --proxyDomain "${OIDC_FQDN}" ) >/tmp/idoidc-install.log 2>&1; then
+            pass "test-idoidc installed (OIDC)"
+            body="$(curl -ksSL --max-time 25 "https://${OIDC_FQDN}/" 2>/dev/null)"
+            grep -q "tappaas-idoidc-ok" <<<"${body}" \
+                && pass "webserver reachable — OIDC mode does NOT gate (Caddy passthrough)" \
+                || fail "OIDC webserver not reachable (got: $(head -c 80 <<<"${body}"))"
+            oapp="$(api '/core/applications/?superuser_full_list=true&page_size=1000' | jq -r '.results[]|select(.slug=="test-idoidc")|.pk')"
+            [[ -n "${oapp}" ]] && pass "Authentik OIDC application present" || fail "no OIDC application for test-idoidc"
+            [[ "$(api '/providers/oauth2/?page_size=1000' | jq -r '[.results[]|select(.name=="test-idoidc")]|length')" -ge 1 ]] \
+                && pass "OAuth2/OpenID provider present" || fail "no oauth2 provider for test-idoidc"
+            nb="$(api '/policies/bindings/?page_size=1000' | jq -r --arg t "${oapp}" '[.results[]|select(.target==$t)]|length')"
+            [[ "${nb:-0}" -ge 1 ]] && pass "access binding present (${nb}) — gate applied" || fail "OIDC app has NO access binding (allow-all)"
+            ver="$(ssh -o StrictHostKeyChecking=accept-new -o ConnectTimeout=10 "tappaas@test-idoidc.srvWork.internal" 'cat /var/lib/test-idoidc/oidc-verified 2>/dev/null' 2>/dev/null)"
+            grep -qE "^client_id=.+" <<<"${ver}" \
+                && pass "OIDC env delivered to the VM + configure-service ran (client_id present)" \
+                || fail "OIDC env not delivered/verified on the VM"
+            grep -q "discovery_reachable=yes" <<<"${ver}" \
+                && pass "OIDC discovery document reachable + valid from the VM" \
+                || warn "  discovery not reachable from the VM (split-horizon DNS?) — env delivery still verified"
+            "${DELETE_MODULE}" test-idoidc --force >/dev/null 2>&1 \
+                && pass "test-idoidc torn down" || fail "test-idoidc teardown failed"
+        else
+            fail "test-idoidc install failed (see /tmp/idoidc-install.log)"
+        fi
+    fi
 fi
 
 # ── summary ─────────────────────────────────────────────────────────────────
