@@ -126,9 +126,9 @@ if [[ -n "${PROXY_DOMAIN}" ]]; then
     if [[ "$(jq -r '.dnsMode // "wildcard"' <<<"${VCFG}")" == "per-service" ]]; then
         DNS_HOST="${PROXY_DOMAIN%%.*}"
         DNS_ZONE="${PROXY_DOMAIN#*.}"
-        info "  Removing per-service DNS entry ${DNS_HOST}.${DNS_ZONE}..."
-        dns-manager --no-ssl-verify delete "${DNS_HOST}" "${DNS_ZONE}" >/dev/null 2>&1 \
-            || warn "Could not remove DNS entry ${DNS_HOST}.${DNS_ZONE} (may not exist)"
+        info "  Removing per-service Unbound override ${DNS_HOST}.${DNS_ZONE}..."
+        unbound-manager --no-ssl-verify delete "${DNS_HOST}" "${DNS_ZONE}" >/dev/null 2>&1 \
+            || warn "Could not remove Unbound override ${DNS_HOST}.${DNS_ZONE} (may not exist)"
     fi
 else
     warn "Cannot determine proxy domain — manual cleanup may be needed"

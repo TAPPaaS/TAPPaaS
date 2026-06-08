@@ -200,19 +200,22 @@ info "  ${GN}✓${CL} variants[\"${VARIANT}\"].tlsCertRefid = ${REFID}"
 
 # ── Split-horizon wildcard DNS (ADR-005 §6, #269) ──────────────────────────
 # In wildcard mode, point *.<domain> at the DMZ gateway (where os-caddy listens)
-# in the firewall's Dnsmasq, so internal clients reach Caddy over the DMZ instead
-# of resolving the public WAN IP and tripping Caddy's zone ACL (HTTP 403).
+# via an UNBOUND host override, so internal clients reach Caddy over the DMZ
+# instead of resolving the public WAN IP and tripping Caddy's zone ACL (HTTP 403).
+# Must be Unbound (the resolver on 10.0.0.1:53) — Dnsmasq host entries are not
+# served for public domains and cannot express a wildcard. Unbound supports a "*"
+# wildcard host override.
 DNS_MODE="$(jq -r '.dnsMode // "wildcard"' <<<"$VCFG")"
 if [[ "$DNS_MODE" == "wildcard" ]]; then
     echo
-    info "${BOLD}Registering split-horizon wildcard DNS${CL}"
+    info "${BOLD}Registering split-horizon wildcard DNS (Unbound)${CL}"
     if DMZ_GW="$(dmz_gateway_ip)"; then
-        if dns-manager --no-ssl-verify add "*" "${DOMAIN}" "${DMZ_GW}" \
+        if unbound-manager --no-ssl-verify add "*" "${DOMAIN}" "${DMZ_GW}" \
                 --description "TAPPaaS: ${VARIANT:-default} wildcard -> Caddy (DMZ)"; then
-            info "  ${GN}✓${CL} *.${DOMAIN} -> ${DMZ_GW} (DMZ gateway)"
+            info "  ${GN}✓${CL} *.${DOMAIN} -> ${DMZ_GW} (DMZ gateway, Unbound)"
         else
-            warn "  Could not register *.${DOMAIN} in Dnsmasq — register manually:"
-            warn "    dns-manager --no-ssl-verify add '*' '${DOMAIN}' '${DMZ_GW}'"
+            warn "  Could not register *.${DOMAIN} in Unbound — register manually:"
+            warn "    unbound-manager --no-ssl-verify add '*' '${DOMAIN}' '${DMZ_GW}'"
         fi
     else
         warn "  Skipped wildcard DNS — could not derive DMZ gateway from zones.json"

@@ -55,7 +55,16 @@ and import `./test-fw-webserver.nix`; (b) inline the overlay into `test-fw-c.nix
 or (c) teach `update-os.sh` to copy parent-relative `imports`. New fixtures should
 be **self-contained** (no cross-dir imports) — see `test-caddy-web.nix`.
 
-## Defect 3 — split-horizon DNS override not honored by the resolver (#269)
+## Defect 3 — split-horizon DNS override not honored by the resolver (#269) — FIXED
+
+**Fixed** by moving split-horizon from Dnsmasq to **Unbound** (the resolver on
+10.0.0.1:53). New `unbound-manager` CLI (opnsense_controller.unbound_cli, oxl
+`unbound_host`) creates Unbound host overrides; acme-setup §6 (wildcard, `*` host)
+and firewall:proxy per-service now use it instead of `dns-manager`. Verified live:
+`*.test2.tapaas.org -> 10.6.0.1` resolves every subdomain to the DMZ gateway.
+Original analysis below.
+
+
 
 Found by `firewall/test-caddy-public.sh` (Option B). External Caddy passthrough
 works (a service on the internet is reachable, TLS-valid, proxied), and Caddy is

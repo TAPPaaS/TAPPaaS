@@ -161,14 +161,16 @@ esac
 CADDY_DOMAIN_ARGS=()
 if [[ "${DNS_MODE}" == "per-service" ]]; then
     info "  TLS: per-service HTTP-01 (dnsMode=per-service) — Caddy issues a cert for ${PROXY_DOMAIN}"
+    # Split-horizon DNS must be an UNBOUND host override (the 10.0.0.1:53 resolver);
+    # Dnsmasq host entries are not served for public domains (#269).
     if DMZ_GW="$(dmz_gateway_ip)"; then
         DNS_HOST="${PROXY_DOMAIN%%.*}"
         DNS_ZONE="${PROXY_DOMAIN#*.}"
-        if dns-manager --no-ssl-verify add "${DNS_HOST}" "${DNS_ZONE}" "${DMZ_GW}" --description "${DESCRIPTION}"; then
-            info "  ${GN}✓${CL} split-horizon DNS ${DNS_HOST}.${DNS_ZONE} -> ${DMZ_GW} (DMZ)"
+        if unbound-manager --no-ssl-verify add "${DNS_HOST}" "${DNS_ZONE}" "${DMZ_GW}" --description "${DESCRIPTION}"; then
+            info "  ${GN}✓${CL} split-horizon DNS ${DNS_HOST}.${DNS_ZONE} -> ${DMZ_GW} (DMZ, Unbound)"
         else
-            warn "  Could not register ${PROXY_DOMAIN} in Dnsmasq — register manually:"
-            warn "    dns-manager --no-ssl-verify add '${DNS_HOST}' '${DNS_ZONE}' '${DMZ_GW}'"
+            warn "  Could not register ${PROXY_DOMAIN} in Unbound — register manually:"
+            warn "    unbound-manager --no-ssl-verify add '${DNS_HOST}' '${DNS_ZONE}' '${DMZ_GW}'"
         fi
     else
         warn "  Could not derive DMZ gateway — register ${PROXY_DOMAIN} DNS manually"
