@@ -38,7 +38,7 @@ Result:
 
 ## Step 1 — Register the variant and create its dedicated zone
 
-Pick one DNS mode now (you can read the trade-off in Step 3):
+Pick one DNS/cert mode now (see the **[Appendix: Which certificate should I pick?](#appendix-which-certificate-should-i-pick)**):
 
 - **wildcard** (default): one shared cert + one wildcard DNS entry. Needs a DNS
   provider API for the cert.
@@ -124,6 +124,8 @@ provider. (configuration.json / zones.json are untouched by this step.)
 ---
 
 ## Step 3 — TLS certificate (pick the mode you chose in Step 1)
+
+Not sure which? See the **[Appendix: Which certificate should I pick?](#appendix-which-certificate-should-i-pick)**.
 
 ### Option A — Wildcard certificate (dnsMode=wildcard)
 
@@ -225,31 +227,49 @@ from any other client variant.
 delete-module.sh euro-office-client1
 delete-module.sh nextcloud-client1
 
-# Then deregister the variant
+# Deregister the variant (removes tappaas.variants.client1 from configuration.json)
 variant-manager remove client1
+
+# variant-manager does NOT remove the zone. Retire the client1 zone explicitly:
+jq '.client1.state = "Inactive"' /home/tappaas/config/zones.json > /tmp/z.json \
+    && mv /tmp/z.json /home/tappaas/config/zones.json
+zone-manager --no-ssl-verify --execute        # removes the VLAN/DHCP/rules on OPNsense
+jq 'del(.client1)' /home/tappaas/config/zones.json > /tmp/z.json \
+    && mv /tmp/z.json /home/tappaas/config/zones.json   # drop the zone key
 ```
 
 `delete-module.sh` removes the VMs, their Caddy entries and (per-service) DNS
 overrides. `variant-manager remove` deletes `tappaas.variants.client1` from
 configuration.json (it refuses while modules are still deployed unless you pass
-`--force`).
-
-> Note: `variant-manager remove` does **not** delete the `client1` **zone** from
-> zones.json or OPNsense. To retire the zone too, set its `state` to `Inactive` in
-> `/home/tappaas/config/zones.json`, run `zone-manager --no-ssl-verify --execute`,
-> then remove the key.
+`--force`). The two `jq` + `zone-manager` steps deactivate the zone on OPNsense
+first (so its VLAN/DHCP/rules are torn down) and then remove the key from the
+runtime `zones.json` — the git-tracked source `zones.json` is never touched.
 
 ---
 
-## Which combination should I pick?
+## Appendix: Which certificate should I pick?
 
-| | Wildcard (3A) | Per-service (3B) |
+First, two terms that sound alike but are different:
+
+- A **wildcard domain** is a single **DNS** record like `*.client1.tappaas.org`
+  that resolves *every* subdomain (`nextcloud.…`, `euro-office.…`) to one address.
+  It is about **name resolution**.
+- A **wildcard certificate** is one **TLS** certificate whose subject covers
+  `*.client1.tappaas.org`, so every service presents the same cert. It is about
+  **encryption**. Issuing it uses a DNS-01 challenge, which is why it needs a DNS
+  provider API.
+
+They are independent — you can use a wildcard DNS record with per-service
+certificates, or per-service DNS records with… per-service certificates. The
+choice below is about the **certificate** strategy (Step 3A vs 3B).
+
+| | Wildcard Cert (3A) | per-Service Cert (3B) |
 | --- | --- | --- |
-| DNS records (Step 2) | wildcard A record | wildcard **or** per-service A records |
+| DNS records (Step 2) | wildcard DNS A record | wildcard **or** per-service DNS A records |
 | DNS provider API | **required** (DNS-01) | not required |
 | Inbound :80 reachable | not required | **required** (HTTP-01) |
 | Certs | one shared `*.client1.tappaas.org` | one per service |
-| Best when | you control DNS via a supported provider | the client's domain has no ACME DNS API |
+| Best when | you have services that need public DNS names but are **not** reachable from the internet | the client's domain has no ACME DNS API |
 
 The variant registry (`configuration.json`) and zone (`zones.json`) are identical
 in both cases — only the cert/DNS mechanics differ.
