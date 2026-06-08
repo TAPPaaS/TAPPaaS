@@ -1125,9 +1125,11 @@ else
     section "Deep 10: Reconcile prunes a removed ingress entry"
 
     # Remove one ingress entry from the deployed test-fw-b.json and reconcile.
-    tmp=$(mktemp)
-    jq 'del(.ingress[] | select(.from == "alias:test_admin_ips"))' \
-        "${CONFIG_DIR}/test-fw-b.json" > "${tmp}" && mv "${tmp}" "${CONFIG_DIR}/test-fw-b.json"
+    # The deployed config is in Pattern A form (#207) — `ingress` is nested under
+    # `.config.*`, so a raw `jq '.ingress[]'` against the file sees null. Use
+    # jq_module_write, which normalizes to flat (where `.ingress` is the array),
+    # applies the filter, and writes back as Pattern A.
+    jq_module_write test-fw-b 'del(.ingress[] | select(.from == "alias:test_admin_ips"))'
 
     if rules-manager reconcile test-fw-b --no-ssl-verify --output json >/tmp/rm-rec.json 2>/dev/null; then
         deleted=$(jq -r '.deleted // 0' /tmp/rm-rec.json 2>/dev/null || echo 0)

@@ -6,7 +6,7 @@
   "vmtag": "TAPPaaS,Test,Firewall",
   "node": "tappaas1",
   "cores": 1,
-  "memory": "1024",
+  "memory": 2048,
   "diskSize": "16G",
   "storage": "tanka1",
   "imageType": "clone",
@@ -15,17 +15,25 @@
   "zone0": "testAllowA",
   "proxyPort": 8080,
   "ports": [
-    { "port": 8080, "protocol": "TCP", "description": "Test webserver" }
+    {
+      "port": 8080,
+      "protocol": "TCP",
+      "description": "Test webserver"
+    }
   ],
   "ingress": [
     {
       "from": "testAllowB",
-      "ports": [8080],
+      "ports": [
+        8080
+      ],
       "description": "test-fw-b in testAllowB reaches the webserver (cross-zone pinhole)"
     },
     {
       "from": "dmz",
-      "ports": [8080],
+      "ports": [
+        8080
+      ],
       "description": "Caddy reverse proxy in dmz forwards public hostname"
     }
   ],

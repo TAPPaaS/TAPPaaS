@@ -6,7 +6,7 @@
   "vmtag": "TAPPaaS,Test,Firewall",
   "node": "tappaas1",
   "cores": 1,
-  "memory": "1024",
+  "memory": 2048,
   "diskSize": "16G",
   "storage": "tanka1",
   "imageType": "clone",
@@ -14,29 +14,41 @@
   "bridge0": "lan",
   "zone0": "testAllowB",
   "ports": [
-    { "port": 9090, "protocol": "TCP", "description": "Test webserver" }
+    {
+      "port": 9090,
+      "protocol": "TCP",
+      "description": "Test webserver"
+    }
   ],
   "ingress": [
     {
       "from": "test-fw-a",
-      "ports": [9090],
+      "ports": [
+        9090
+      ],
       "description": "Module-name peer — exercises FQDN host alias (tappaas_module_test_fw_a)"
     },
     {
       "from": "alias:test_admin_ips",
-      "ports": [9090],
+      "ports": [
+        9090
+      ],
       "description": "Module-local alias peer — exercises alias resolution from module.aliases"
     }
   ],
   "egress": [
     {
       "to": "test-fw-a",
-      "ports": [8080],
+      "ports": [
+        8080
+      ],
       "description": "Egress to module-name peer (return-path tests use this)"
     },
     {
       "to": "alias:private_ranges",
-      "ports": [53],
+      "ports": [
+        53
+      ],
       "protocol": "UDP",
       "description": "Egress to global alias (RFC1918 DNS) — exercises global aliases.json"
     }
@@ -44,7 +56,9 @@
   "aliases": {
     "test_admin_ips": {
       "type": "host",
-      "addresses": ["10.80.10.50"],
+      "addresses": [
+        "10.80.10.50"
+      ],
       "description": "Pretend admin IPs from testAllowA — module-local alias used in ingress to validate alias compilation"
     }
   },

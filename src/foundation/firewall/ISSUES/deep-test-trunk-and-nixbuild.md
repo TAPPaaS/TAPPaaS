@@ -1,10 +1,11 @@
-# firewall/test.sh --deep: four defects found + FIXED (June 2026)
+# firewall/test.sh --deep: six defects found + FIXED (June 2026)
 
 Discovered while validating the ADR-005 Caddy/variant work. The firewall `--deep`
 suite had never actually run end-to-end (a `local` outside a function aborted it
-at Deep 1 — fixed in commit 3f84658), which hid the defects below. **All four are
-now fixed; `firewall/test.sh --deep` should be safe to run again** (worth one
-supervised run to confirm). Each section keeps the original analysis for context.
+at Deep 1 — fixed in commit 3f84658), which hid the defects below. **All six are
+now fixed; `firewall/test.sh --deep` runs green (73→74/74).** The first
+supervised run after fixing defects 1/2/4 surfaced two more (5 and 6) that only a
+real end-to-end run could expose. Each section keeps the original analysis for context.
 
 ## Defect 1 — trunk-sync clobbers the firewall VM NIC config (SERIOUS) — FIXED
 
@@ -134,6 +135,43 @@ equals the source. Variant zones break that assumption.
 **Fix:** back up the REAL runtime `${CONFIG_DIR}/zones.json` (not the source) and
 restore it in `cleanup_deep`; or stop overwriting wholesale and instead merge only
 the test zones into the runtime copy.
+
+## Defect 5 — test-fw fixtures OOM nixos-rebuild at 1024 MB RAM — FIXED
+
+**Fixed:** bumped `test-fw-a/b/c.json` `memory` 1024 → 2048. Surfaced only once
+defect 2 let test-fw-c reach `nix-build` (before, it died on the import error).
+
+`nixos-rebuild`'s `nix-build` was SIGKILL'd (exit 247 = OOM-killer) at 1024 MB on
+every test-fw VM, after the VMs got DHCP/SSH fine:
+
+    Command 'nix-build … nixos-config=/etc/nixos/test-fw-a.nix' died with <Signals.SIGKILL: 9>.
+    nixos-rebuild on 10.80.10.235 (attempt 3/3) failed (exit 247)
+
+Same OOM already hit and fixed for `test-caddy-web.nix` (also bumped to 2048).
+New test fixtures that run `nixos-rebuild` need ≥2048 MB.
+
+## Defect 6 — Deep 10 edits the deployed config as flat, but it is Pattern A — FIXED
+
+**Fixed:** Deep 10 now removes the ingress entry via `jq_module_write test-fw-b
+'del(.ingress[] | select(.from=="alias:test_admin_ips"))'` instead of a raw `jq`
+against the on-disk file.
+
+The deployed `${CONFIG_DIR}/test-fw-b.json` is stored in Pattern A form (#207) —
+user fields are nested under `.config.*`, so `ingress` is NOT at the top level. The
+old test did:
+
+    jq 'del(.ingress[] | select(.from == "alias:test_admin_ips"))' "${CONFIG_DIR}/test-fw-b.json"
+
+which sees `.ingress == null` and aborts:
+
+    jq: error (at …/test-fw-b.json:79): Cannot iterate over null (null)
+    ✗ reconcile did not delete the removed ingress (deleted=0)
+
+The `&& mv` short-circuits on the jq failure, so the config is left unchanged and
+reconcile finds nothing to prune. `jq_module_write` normalizes to flat (where
+`.ingress` is the array), applies the filter, and writes back as Pattern A — the
+same read/write path the product code uses. (rules-manager reconcile itself was
+never broken: Deep 6 proves it builds rules correctly from the Pattern-A ingress.)
 
 ## Note
 

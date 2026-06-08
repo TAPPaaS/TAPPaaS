@@ -6,7 +6,7 @@
   "vmtag": "TAPPaaS,Test,Firewall",
   "node": "tappaas1",
   "cores": 1,
-  "memory": "1024",
+  "memory": 2048,
   "diskSize": "16G",
   "storage": "tanka1",
   "imageType": "clone",
@@ -14,9 +14,15 @@
   "bridge0": "lan",
   "zone0": "testPinhole",
   "ports": [
-    { "port": 9091, "protocol": "TCP", "description": "Test webserver, exposed via services/web/pinhole.json" }
+    {
+      "port": 9091,
+      "protocol": "TCP",
+      "description": "Test webserver, exposed via services/web/pinhole.json"
+    }
   ],
-  "provides": ["web"],
+  "provides": [
+    "web"
+  ],
   "dependsOn": [
     "cluster:vm",
     "templates:nixos"
