@@ -166,6 +166,9 @@ cmd_add() {
                 # --zones-file: reconcile from the deployed zones.json we just wrote.
                 zone-manager --no-ssl-verify --zones-file "${ZONES_FILE}" --execute \
                     || warn "zone-manager --execute returned non-zero; activate manually"
+                # Push zones.json to the Proxmox nodes so a module can be created
+                # in the new zone (node-side Create-TAPPaaS-VM.sh resolves its VLAN).
+                distribute_zones_to_nodes || warn "Could not distribute zones.json to nodes — module installs into '${zone_name}' may fail"
             else
                 warn "zone-manager not on PATH — activate '${zone_name}' manually"
             fi

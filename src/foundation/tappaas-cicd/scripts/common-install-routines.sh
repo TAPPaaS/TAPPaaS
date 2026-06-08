@@ -243,6 +243,25 @@ get_variant_config() {
     return 1
 }
 
+# Push the deployed zones.json to every Proxmox node's /root/tappaas/zones.json so
+# node-side tooling (Create-TAPPaaS-VM.sh) can resolve a newly-added zone's VLAN
+# tag. Without this, installing a module into a freshly-created zone fails with
+# `get_vlan_value "<zone>"` on the node. Returns non-zero if nothing was pushed.
+distribute_zones_to_nodes() {
+    local zones="${CONFIG_DIR}/zones.json" cfg="${CONFIG_DIR}/configuration.json"
+    [[ -f "${zones}" && -f "${cfg}" ]] || { warn "distribute_zones_to_nodes: missing zones.json/configuration.json"; return 1; }
+    local node pushed=0
+    while IFS= read -r node; do
+        [[ -z "${node}" ]] && continue
+        if scp -o StrictHostKeyChecking=accept-new -o ConnectTimeout=5 \
+                "${zones}" "root@${node}.mgmt.internal:/root/tappaas/zones.json" >/dev/null 2>&1; then
+            pushed=$((pushed + 1))
+        fi
+    done < <(jq -r '."tappaas-nodes"[]?.hostname // empty' "${cfg}" 2>/dev/null)
+    info "  Distributed zones.json to ${pushed} Proxmox node(s)"
+    [[ "${pushed}" -gt 0 ]]
+}
+
 # Compute the DMZ gateway IP (the firewall's DMZ interface, where the os-caddy
 # reverse proxy listens) from zones.json — e.g. dmz ip 10.6.0.0/24 -> 10.6.0.1.
 # Used for split-horizon DNS so internal clients reach Caddy over the DMZ instead
