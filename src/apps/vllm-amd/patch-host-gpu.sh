@@ -99,6 +99,43 @@ else
   err "cgroup2" "not active — check Proxmox host config"
 fi
 
+# --- Step 9: Reconcile the LXC cgroup device allow to the LIVE device majors ---
+# /dev/kfd's major is assigned dynamically at host boot, but the LXC conf's
+# `lxc.cgroup2.devices.allow` is written only at container-create time
+# (Create-TAPPaaS-LXC.sh). So after a host reboot — or if the container was
+# created from a stale committed meta — the conf can pin a major the kernel
+# denies: the bind-mounted /dev/kfd is then visible (ls passes) but unusable
+# → "No HIP GPUs are available". Re-sync the conf to the live majors here;
+# restart the container only when something actually changed. Idempotent.
+MODULE_JSON="/root/tappaas/${MODULE}.json"
+VMID="$(jq -r '.vmid // empty' "$MODULE_JSON" 2>/dev/null)"
+CONF="/etc/pve/lxc/${VMID}.conf"
+if [ -n "$VMID" ] && [ -f "$CONF" ]; then
+  LIVE_KFD_MAJ="$(printf '%d' "0x$(stat -c '%t' /dev/kfd)")"
+  LIVE_REN_MAJ="$(printf '%d' "0x$(stat -c '%t' "/dev/dri/${RENDER_NODE}")")"
+  LIVE_REN_MIN="$(printf '%d' "0x$(stat -c '%T' "/dev/dri/${RENDER_NODE}")")"
+  changed=0
+  # kfd line is the only allow with minor :0; render line carries the render minor.
+  if ! grep -q "^lxc.cgroup2.devices.allow: c ${LIVE_KFD_MAJ}:0 rwm$" "$CONF"; then
+    sed -i -E "s|^lxc\.cgroup2\.devices\.allow: c [0-9]+:0 rwm$|lxc.cgroup2.devices.allow: c ${LIVE_KFD_MAJ}:0 rwm|" "$CONF"
+    changed=1
+  fi
+  if ! grep -q "^lxc.cgroup2.devices.allow: c ${LIVE_REN_MAJ}:${LIVE_REN_MIN} rwm$" "$CONF"; then
+    sed -i -E "s|^lxc\.cgroup2\.devices\.allow: c [0-9]+:${LIVE_REN_MIN} rwm$|lxc.cgroup2.devices.allow: c ${LIVE_REN_MAJ}:${LIVE_REN_MIN} rwm|" "$CONF"
+    changed=1
+  fi
+  if [ "$changed" -eq 1 ]; then
+    ok "LXC ${VMID} cgroup allow re-synced (kfd ${LIVE_KFD_MAJ}:0, ${RENDER_NODE} ${LIVE_REN_MAJ}:${LIVE_REN_MIN})"
+    if pct status "${VMID}" 2>/dev/null | grep -q running; then
+      pct reboot "${VMID}" && ok "LXC ${VMID} restarted to apply cgroup change"
+    fi
+  else
+    ok "LXC ${VMID} cgroup allow already matches live majors"
+  fi
+else
+  err "cgroup reconcile" "VMID/conf not resolved (${MODULE_JSON}) — skipped"
+fi
+
 echo ""
 echo "  === host GPU patch complete ==="
 echo ""

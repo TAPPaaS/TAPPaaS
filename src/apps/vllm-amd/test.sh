@@ -107,11 +107,17 @@ if [[ "$HTTP_CODE" == "200" ]]; then
     echo "--- Inference Test ---"
     MODEL=$(api "http://127.0.0.1:8000/v1/models" | jq -r '.data[0].id' 2>/dev/null || echo "")
     if [[ -n "$MODEL" ]]; then
+        # The pct() wrapper forwards args over ssh: the remote shell re-parses the
+        # joined command, so an unquoted JSON body gets brace-expanded (commas in
+        # {...}) and emptied → curl posts nothing (HTTP 400 "JSON decode error").
+        # Wrap the payload in LITERAL single quotes so the remote shell passes it
+        # through verbatim. `|| true` keeps a transient inference failure from
+        # aborting the script (set -e) before the summary prints.
         RESPONSE=$(pct exec "${VMID}" -- curl -s --connect-timeout 30 --max-time 60 \
             -X POST "http://127.0.0.1:8000/v1/chat/completions" \
-            -H "Content-Type: application/json" \
-            -d "{\"model\":\"${MODEL}\",\"messages\":[{\"role\":\"user\",\"content\":\"Say hello in exactly 3 words.\"}],\"max_tokens\":20}" \
-            2>/dev/null)
+            -H "Content-Type:application/json" \
+            -d "'{\"model\":\"${MODEL}\",\"messages\":[{\"role\":\"user\",\"content\":\"Say hello in exactly 3 words.\"}],\"max_tokens\":20}'" \
+            2>/dev/null || true)
         if echo "$RESPONSE" | jq -e '.choices[0].message.content' > /dev/null 2>&1; then
             check "Inference working (model: ${MODEL})" "0"
             ANSWER=$(echo "$RESPONSE" | jq -r '.choices[0].message.content')
