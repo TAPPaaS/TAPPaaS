@@ -484,6 +484,18 @@ build_and_write_config() {
 CONFIGEOF
 )
 
+    # Preserve operator-set tappaas.* fields the heredoc above does NOT regenerate
+    # (e.g. automaticReboot #275, the ADR-006 smtp block). Without this, an
+    # --update silently DROPS them — reverting to code defaults. This is exactly
+    # how the 2026-06-09 incident's automaticReboot=false would have flipped back
+    # to the default (true) on the next nightly create-configuration --update.
+    # Old keys are kept; every field the heredoc emits still wins (new overrides).
+    if [[ "$UPDATE_MODE" == "true" && -f "$CONFIG_FILE" ]]; then
+        config_json=$(jq -n --argjson new "$config_json" --slurpfile old "$CONFIG_FILE" \
+            '$new | .tappaas = (($old[0].tappaas // {}) + .tappaas)') \
+            || die "failed to preserve existing tappaas.* fields during --update"
+    fi
+
     # Validate the generated JSON
     if ! echo "$config_json" | jq '.' >/dev/null 2>&1; then
         die "Generated JSON is invalid. Please check the inputs."
