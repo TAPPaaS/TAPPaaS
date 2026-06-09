@@ -1,7 +1,7 @@
 {
   "description": "TAPPaaS Open Webui",
-  "version": "0.7.0",
-  "releaseDate": "2026-06-05",
+  "version": "0.7.1",
+  "releaseDate": "2026-06-09",
   "maintainer": "@ErikDaniel007",
   "status": "Development",
   "vmname": "openwebui",
@@ -14,7 +14,6 @@
     "templates:nixos",
     "backup:vm",
     "firewall:proxy",
-    "identity:accessControl",
     "litellm:models",
     "firewall:rules"
   ],

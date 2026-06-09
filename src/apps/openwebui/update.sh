@@ -82,7 +82,7 @@ main() {
         set -euo pipefail
 
         CURRENT_VER=$(sudo -u postgres psql --version 2>/dev/null | grep -oP '\d+(?=\.\d+)' | head -1)
-        OLD_DIRS=$(find /var/lib/postgresql -mindepth 1 -maxdepth 1 -type d \
+        OLD_DIRS=$(sudo find /var/lib/postgresql -mindepth 1 -maxdepth 1 -type d \
             ! -name "${CURRENT_VER}" 2>/dev/null | sort -V)
 
         if [[ -z "${OLD_DIRS}" ]]; then
