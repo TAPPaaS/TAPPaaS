@@ -385,7 +385,17 @@ update_nixos() {
     # applies kernel/bootloader changes. Gated by tappaas.automaticReboot
     # (issue #275) — covers the identity VM and any other NixOS guest. When
     # false the operator reboots manually under supervision.
-    if automatic_reboot_enabled; then
+    if [[ "${vmname}" == "$(hostname)" ]]; then
+        # SELF-UPDATE GUARD (incident 2026-06-09): never reboot/stop the VM that
+        # is running THIS updater — doing so kills the orchestrator mid-run, so
+        # the follow-up start never happens and the controller is stranded down
+        # (and an in-flight config write like zones.json can be lost). The new
+        # NixOS generation is already active; the operator reboots the controller
+        # under supervision (the cicd is on local storage and can't live-migrate).
+        warn "Skipping auto-reboot: ${vmname} is THIS controller VM — rebooting it from its own"
+        warn "  update would kill the updater (incident 2026-06-09). New generation is active."
+        warn "  Reboot under supervision when ready: ssh root@${node}.${MGMT}.internal 'qm reboot ${vmid}'"
+    elif automatic_reboot_enabled; then
         info "Rebooting VM to apply configuration..."
         ssh "root@${node}.${MGMT}.internal" "qm reboot ${vmid}"
 

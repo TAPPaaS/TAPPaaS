@@ -256,7 +256,13 @@ fi
 
 # Pretty-print to match the existing 4-space indent of zones.json so the diff
 # stays small for operators who eyeball the file.
-tmp_current=$(mktemp)
+#
+# Crash-safe write (incident 2026-06-09: an unclean VM stop mid-update lost
+# config/zones.json because the temp file was on /tmp — a DIFFERENT filesystem —
+# so `mv` was a non-atomic copy+unlink with no fsync). Fixes:
+#   1. temp file in the SAME directory as zones.json → `mv` is an atomic rename;
+#   2. `sync` after the rename so the write is durable before we move on.
+tmp_current=$(mktemp "${ZONES_CURRENT}.merge.XXXXXX")
 if ! jq --indent 4 '.' <<<"${merged_zones}" > "${tmp_current}" \
    || ! jq empty "${tmp_current}" 2>/dev/null; then
     rm -f "${tmp_current}"
@@ -265,7 +271,8 @@ fi
 
 # Only write if content actually changed (avoid pointless mtime churn).
 if ! diff -q "${tmp_current}" "${ZONES_CURRENT}" >/dev/null 2>&1; then
-    mv "${tmp_current}" "${ZONES_CURRENT}"
+    mv "${tmp_current}" "${ZONES_CURRENT}"   # atomic: same filesystem
+    sync                                     # durable: flush before continuing
     info "  ${GN}✓${CL} Wrote merged ${ZONES_CURRENT}"
     info "    Apply on OPNsense via:"
     info "      ${BL}zone-manager --no-ssl-verify --zones-file ${ZONES_CURRENT} --execute${CL}"
@@ -274,7 +281,7 @@ else
 fi
 
 # Advance baseline regardless: future merges compare against the new release.
-cp "${ZONES_SOURCE}" "${ZONES_ORIG}"
+cp "${ZONES_SOURCE}" "${ZONES_ORIG}" && sync
 
 if [[ "${backfilled}" -eq 1 ]]; then
     info "  Backfilled ${ZONES_ORIG} from upstream source"
