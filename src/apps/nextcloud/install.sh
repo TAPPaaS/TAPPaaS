@@ -47,22 +47,28 @@ else
     warn "    ssh tappaas@${NEXTCLOUD_HOST} 'sudo cat /var/lib/nextcloud/admin-pass'"
 fi
 
-# ── Configure public domain via occ (not in Nix — works like openwebui) ────────
+# ── Configure trusted domains + public URL via occ ─────────────────────────────
+# Call nextcloud-occ DIRECTLY (it self-switches to the nextcloud user). Do NOT wrap it in
+# `systemd-run -p User=nextcloud` — nextcloud-occ runs systemd-run internally, so wrapping it
+# nests systemd-run as a non-root user, which polkit denies during/after activation (exit 1).
+# Nix no longer pins trusted_domains, so these occ values persist (no override.config.php shadow).
+# Index 0 = hostName (auto-added by NixOS); we append the internal FQDN, the environment/public
+# domain, and localhost.
 if [[ -n "${PROXY_DOMAIN}" ]]; then
-    info "${BOLD}Configuring public domain…${CL}"
-    ssh -o BatchMode=yes -o ConnectTimeout=15 -o StrictHostKeyChecking=no \
+    info "${BOLD}Configuring trusted domains + public URL…${CL}"
+    if occ_out=$(ssh -o BatchMode=yes -o ConnectTimeout=15 -o StrictHostKeyChecking=no \
         "tappaas@${NEXTCLOUD_HOST}" \
-        "sudo systemd-run --no-ask-password -p User=nextcloud -p Type=oneshot \
-          /run/current-system/sw/bin/nextcloud-occ config:system:set trusted_domains 0 --value='${PROXY_DOMAIN}' && \
-         sudo systemd-run --no-ask-password -p User=nextcloud -p Type=oneshot \
-          /run/current-system/sw/bin/nextcloud-occ config:system:set trusted_domains 1 --value='${VMNAME}' && \
-         sudo systemd-run --no-ask-password -p User=nextcloud -p Type=oneshot \
-          /run/current-system/sw/bin/nextcloud-occ config:system:set overwrite.cli.url --value='https://${PROXY_DOMAIN}' && \
-         sudo systemd-run --no-ask-password -p User=nextcloud -p Type=oneshot \
-          /run/current-system/sw/bin/nextcloud-occ config:system:set overwriteprotocol --value='https'" \
-        2>/dev/null && \
-        info "  ${GN}✓${CL} Domain configured: https://${PROXY_DOMAIN}" || \
-        warn "  Could not configure domain — run occ manually after setup"
+        "sudo nextcloud-occ config:system:set trusted_domains 1 --value='${NEXTCLOUD_HOST}' && \
+         sudo nextcloud-occ config:system:set trusted_domains 2 --value='${PROXY_DOMAIN}' && \
+         sudo nextcloud-occ config:system:set trusted_domains 3 --value='localhost' && \
+         sudo nextcloud-occ config:system:set overwrite.cli.url --value='https://${PROXY_DOMAIN}' && \
+         sudo nextcloud-occ config:system:set overwriteprotocol --value='https'" 2>&1)
+    then
+        info "  ${GN}✓${CL} Trusted domains + public URL configured (https://${PROXY_DOMAIN})"
+    else
+        warn "  Domain config failed (deploy continues) — occ output:"
+        warn "    ${occ_out}"
+    fi
 fi
 
 echo ""

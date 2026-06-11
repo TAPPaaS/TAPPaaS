@@ -371,10 +371,12 @@ in
       # Required for Authentik (same srv zone) to be reachable as OIDC provider
       allow_local_remote_servers = true;
 
-      # trusted_domains: hostName is auto-added by NixOS module. Public domain
-      # added by install.sh via nextcloud-occ (index 1+) — not set here to
-      # avoid Nix store overriding occ-set values at index 0.
-      trusted_domains = [ config.networking.hostName "localhost" ];
+      # trusted_domains: deliberately NOT pinned in Nix. The NixOS module auto-adds the hostName;
+      # install.sh appends the internal FQDN, the environment/public domain, and localhost via
+      # nextcloud-occ. Pinning a list here writes override.config.php, which SHADOWS occ-set values
+      # — so the environment/public domain would never become trusted (operator cannot log in via
+      # the site domain). TODO: propagate the environment domain declaratively (ADR-007
+      # Environment.domain → module), then this can move back to Nix.
 
       # trusted_proxies: Caddy runs on the OPNsense firewall which holds the
       # gateway IP of every TAPPaaS zone (10.x.y.1). Including 10.0.0.0/8
