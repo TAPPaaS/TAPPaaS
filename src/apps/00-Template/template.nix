@@ -93,6 +93,33 @@
   # Auto-grow root partition
   boot.growPartition = lib.mkDefault true;
 
+  # ── OOM resilience (issue #323) ────────────────────────────────────────
+  # Without swap and oomd configuration, memory exhaustion causes host-wide
+  # stalls. zram provides a compressed memory buffer (no disk I/O penalty),
+  # and systemd-oomd kills runaway processes before the kernel OOM killer
+  # intervenes unpredictably.
+
+  # Compressed in-memory swap — gives oomd time to act before hard OOM
+  zramSwap = {
+    enable = true;
+    memoryPercent = 25;
+  };
+
+  # systemd-oomd: pressure-based OOM handling
+  systemd.oomd = {
+    enable = true;
+    enableRootSlice = true;
+    enableUserSlices = true;
+  };
+
+  # Limit user.slice memory to create backpressure before system exhaustion
+  systemd.slices."user-".sliceConfig = {
+    ManagedOOMMemoryPressure = "kill";
+    ManagedOOMMemoryPressureLimit = "80%";
+    MemoryHigh = "90%";
+    MemoryMax = "95%";
+  };
+
   # System packages
   environment.systemPackages = with pkgs; [
         vim
