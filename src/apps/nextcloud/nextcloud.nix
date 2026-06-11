@@ -698,8 +698,13 @@ in
         set -euo pipefail
         export PATH="/run/current-system/sw/bin:${pkgs.coreutils}/bin:$PATH"
 
+        # whiteboard.env provides only JWT_SECRET_KEY — NEXTCLOUD_PUBLIC_URL is not set there.
+        # Default to the internal host so activation never fails on `set -u`; the public collab
+        # backend URL is refined post-deploy (needs the proxy domain + cert, like the connector).
+        PUBLIC_URL="''${NEXTCLOUD_PUBLIC_URL:-http://${config.networking.hostName}}"
+
         nextcloud-occ config:app:set whiteboard collabBackendUrl \
-          --value="$NEXTCLOUD_PUBLIC_URL"
+          --value="$PUBLIC_URL"
 
         nextcloud-occ config:app:set whiteboard jwt_secret_key \
           --value="$JWT_SECRET_KEY"
@@ -726,8 +731,9 @@ in
     serviceConfig = {
       Type            = "oneshot";
       RemainAfterExit = true;
-      # Run as the nextcloud user so files are accessible
-      User            = "nextcloud";
+      # Runs as root (like the other configure services); nextcloud-occ switches to the
+      # nextcloud user itself via systemd-run. A User=nextcloud service cannot call
+      # systemd-run during nixos activation — polkit denies it non-interactively (exit 4).
       ExecStart = pkgs.writeShellScript "nextcloud-preview-backfill" ''
         set -euo pipefail
         export PATH="/run/current-system/sw/bin:${pkgs.coreutils}/bin:$PATH"

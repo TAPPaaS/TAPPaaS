@@ -15,7 +15,10 @@ cd /home/tappaas/TAPPaaS/src/apps/nextcloud
 install-module.sh nextcloud
 ```
 
-Duration: ~15–25 minutes on first run (NixOS rebuild + Nextcloud + PostgreSQL/Redis provisioning).
+Duration: **~9 minutes** measured on a fresh VM (clean exit-0 deploy 2026-06-11, test variant on
+srvWork). Dominated by the first-time NixOS rebuild building Nextcloud + the eurooffice connector and
+`uppush` from source (uncached). Subsequent deploys that hit the nix store cache are faster; a stalled
+`uppush`/codeberg `/archive` fetch can inflate this substantially (build-time SPOF — see backlog).
 
 ## Customisation (optional)
 

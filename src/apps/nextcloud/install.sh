@@ -35,7 +35,12 @@ ADMIN_PASS=$(ssh -o BatchMode=yes -o ConnectTimeout=15 -o StrictHostKeyChecking=
     "sudo cat /var/lib/nextcloud/admin-pass 2>/dev/null" || true)
 
 if [[ -n "${ADMIN_PASS}" ]]; then
-    upsert_secret "${SECRETS_FILE}" "NEXTCLOUD_ADMIN_PASS" "${ADMIN_PASS}"
+    # Inline upsert (the toolbox has no upsert_secret): drop any existing line, append fresh.
+    mkdir -p "$(dirname "${SECRETS_FILE}")"
+    { grep -v '^NEXTCLOUD_ADMIN_PASS=' "${SECRETS_FILE}" 2>/dev/null || true; \
+      printf 'NEXTCLOUD_ADMIN_PASS=%s\n' "${ADMIN_PASS}"; } > "${SECRETS_FILE}.tmp"
+    mv "${SECRETS_FILE}.tmp" "${SECRETS_FILE}"
+    chmod 600 "${SECRETS_FILE}"
     info "  Admin credentials saved to ${SECRETS_FILE}"
 else
     warn "  Could not read admin password from ${NEXTCLOUD_HOST} — check manually:"
