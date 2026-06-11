@@ -2,16 +2,20 @@
 #
 # TAPPaaS VM Template update (templates module)
 #
-# Keeps the prebuilt NixOS VM template (VM 8080) in sync with the latest
-# published image release (GitHub Actions builds the image and publishes it as
-# the `nixos-template-v*` Release — see
-# .github/workflows/build-nixos-template-image.yml).
+# Keeps the prebuilt NixOS VM template (VM 8080) in sync with the version
+# specified in tappaas-nixos.json. The target version is controlled by the
+# branch — update the JSON's "version" and "imageLocation" fields to roll out
+# a new template image. This ensures stable branches stay on tested versions
+# while main can point to newer builds.
 #
-# It is VERSION-GATED so it is cheap to run regularly: it makes one small GitHub
-# API call for the latest release tag and compares it to the tag recorded on the
-# template's node (/root/tappaas/nixos-template.version). The ~700 MB image is
-# downloaded and the template rebuilt ONLY when a newer release exists — an
-# already-current template costs a single HTTPS request and nothing else.
+# GitHub Actions builds the image and publishes it as a `nixos-template-v*`
+# Release — see .github/workflows/build-nixos-template-image.yml.
+#
+# It is VERSION-GATED so it is cheap to run regularly: it compares the version
+# from tappaas-nixos.json to the tag recorded on the template's node
+# (/root/tappaas/nixos-template.version). The ~700 MB image is downloaded and
+# the template rebuilt ONLY when the JSON specifies a different version — an
+# already-current template costs nothing.
 #
 # Updating the template affects only NEW clones; VMs already cloned from an older
 # template are independent (full clones) and update via their own nixos-rebuild.
@@ -27,12 +31,7 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
-readonly GH_REPO="TAPPaaS/TAPPaaS"
-# This module's release STREAM. The repo publishes multiple streams (e.g.
-# opnsense-firewall-v*), so /releases/latest (repo-wide) is NOT reliable — we
-# resolve the newest release whose tag starts with this prefix.
 readonly TAG_PREFIX="nixos-template-v"
-readonly RELEASES_API="https://api.github.com/repos/${GH_REPO}/releases"
 readonly NIX_JSON="${SCRIPT_DIR}/tappaas-nixos.json"
 readonly CREATE_VM="${SCRIPT_DIR}/../cluster/Create-TAPPaaS-VM.sh"
 readonly MARKER="/root/tappaas/nixos-template.version"   # lives on the template's node
@@ -46,8 +45,16 @@ NIX_JSON_FLAT="$(normalize_module_config < "$NIX_JSON")"
 VMID="$(jq -r '.vmid' <<< "$NIX_JSON_FLAT")"
 VMNAME="$(jq -r '.vmname' <<< "$NIX_JSON_FLAT")"
 IMAGE="$(jq -r '.image' <<< "$NIX_JSON_FLAT")"
+IMAGE_LOCATION="$(jq -r '.imageLocation' <<< "$NIX_JSON_FLAT")"
+JSON_VERSION="$(jq -r '.version' "$NIX_JSON")"
 [[ -n "$VMID" && "$VMID" != "null" ]] || die "vmid missing from ${NIX_JSON}"
 [[ -n "$IMAGE" && "$IMAGE" != "null" ]] || die "image missing from ${NIX_JSON}"
+[[ -n "$JSON_VERSION" && "$JSON_VERSION" != "null" ]] || die "version missing from ${NIX_JSON}"
+[[ -n "$IMAGE_LOCATION" && "$IMAGE_LOCATION" != "null" ]] || die "imageLocation missing from ${NIX_JSON}"
+
+# The target tag is derived from the version in the JSON (branch-controlled).
+readonly TARGET_TAG="${TAG_PREFIX}${JSON_VERSION}"
+readonly TAG_URL="${IMAGE_LOCATION%/}"
 
 NODE1_FQDN="$(get_primary_node_fqdn)"
 
@@ -57,18 +64,8 @@ node_run() { ssh "${SSH_OPTS[@]}" "root@${NODE}.mgmt.internal" "$@"; }
 echo ""
 info "${BOLD}TAPPaaS NixOS template update${CL} (${VMNAME}, VM ${VMID})"
 
-# ── 1. Latest available release tag (cheap). Fail-soft on a network hiccup so a
-#       transient GitHub outage does not fail the whole hourly update run. ──────
-info "Checking latest published template release..."
-latest_tag="$(curl -fsSL "$RELEASES_API" 2>/dev/null \
-  | jq -r --arg p "$TAG_PREFIX" '[.[] | select(.tag_name | startswith($p))] | sort_by(.published_at) | reverse | .[0].tag_name // empty')"
-if [[ -z "$latest_tag" ]]; then
-  warn "No ${TAG_PREFIX}* release found (or GitHub unreachable) — skipping template update this run."
-  exit 0
-fi
-# Download URL for THIS release tag specifically (not /releases/latest/download,
-# which would resolve to whatever stream published most recently).
-readonly TAG_URL="https://github.com/${GH_REPO}/releases/download/${latest_tag}"
+# ── 1. Target version from tappaas-nixos.json (branch-controlled). ─────────────
+info "Target template version: ${GN}${TARGET_TAG}${CL} (from tappaas-nixos.json)"
 
 # ── 2. Locate the template in the cluster (empty if it does not exist yet). ────
 NODE="$(vm_exists_on_cluster "$VMID" "$NODE1_FQDN" || true)"
@@ -83,12 +80,12 @@ if [[ -n "$NODE" ]]; then
   installed_tag="$(node_run "cat ${MARKER} 2>/dev/null" || true)"
 fi
 
-if [[ "$is_template" == "1" && "$installed_tag" == "$latest_tag" ]]; then
-  info "Template already at ${GN}${latest_tag}${CL} — nothing to do."
+if [[ "$is_template" == "1" && "$installed_tag" == "$TARGET_TAG" ]]; then
+  info "Template already at ${GN}${TARGET_TAG}${CL} — nothing to do."
   exit 0
 fi
 
-info "Update available: ${YW}${installed_tag:-<none>}${CL} -> ${GN}${latest_tag}${CL}"
+info "Update available: ${YW}${installed_tag:-<none>}${CL} -> ${GN}${TARGET_TAG}${CL}"
 
 # Fall back to the primary node if the template does not exist yet.
 [[ -n "$NODE" ]] || NODE="$(get_node_hostname 0)"
@@ -132,9 +129,9 @@ fi
 qm stop ${VMID} >/dev/null 2>&1 || true
 for _ in \$(seq 1 30); do qm status ${VMID} 2>/dev/null | grep -q stopped && break; sleep 1; done
 qm template ${VMID} >/dev/null
-printf '%s\n' "${latest_tag}" > ${MARKER}
+printf '%s\n' "${TARGET_TAG}" > ${MARKER}
 REMOTE
 
 echo ""
-info "${GN}✓${CL} NixOS template ${VMNAME} (VM ${VMID}) updated to ${BOLD}${latest_tag}${CL} on ${NODE}."
+info "${GN}✓${CL} NixOS template ${VMNAME} (VM ${VMID}) updated to ${BOLD}${TARGET_TAG}${CL} on ${NODE}."
 info "New clones use the updated template; existing VMs update via their own nixos-rebuild."
