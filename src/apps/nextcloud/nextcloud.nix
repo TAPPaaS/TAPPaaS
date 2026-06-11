@@ -36,9 +36,16 @@
 { config, lib, pkgs, modulesPath, system, ... }:
 
 let
+  # ── Version pins — single source of truth; bump here. ───────────────────────────
+  # `ncMajor` drives BOTH the Nextcloud package and its app-set (dynamic attr access),
+  # so a major bump is one number. Majors must be sequential — Nextcloud refuses to skip
+  # (33 → 34 → 35). The eurooffice connector pin lives in eurooffice-nextcloud.nix; the
+  # nixpkgs template rev is pinned engine-side (update-os.sh). See UPGRADE.md.
+  ncMajor = 33;
   versions = {
-    postgresPkg  = pkgs.postgresql_15;
-    nextcloudPkg = pkgs.nextcloud33;
+    postgresPkg   = pkgs.postgresql_15;
+    nextcloudPkg  = pkgs."nextcloud${toString ncMajor}";
+    nextcloudApps = pkgs."nextcloud${toString ncMajor}Packages".apps;
   };
 
 in
@@ -304,7 +311,7 @@ in
     package  = versions.nextcloudPkg;
 
     extraApps = {
-      inherit (pkgs.nextcloud33Packages.apps)
+      inherit (versions.nextcloudApps)
         # Auth
         user_oidc
         # Talk & real-time
