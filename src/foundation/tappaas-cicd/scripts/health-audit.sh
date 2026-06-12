@@ -23,8 +23,10 @@
 #     D1  cluster reconcile            desired /config vmid vs running (inspect)
 #     D2  firewall services            per-module test-service (presence/--deep)
 #     D3  DNS canonical resolves       canonical-bearing module FQDN resolves
+#                                       (skipped for a configured-but-not-running
+#                                       VM — no DHCP lease, no canonical by design)
 #
-# Lifecycle state is respected (the .state field):
+# Lifecycle state is respected (the .status field):
 #   archived                  → skipped (intentionally retired; VM gone by design)
 #   draft|development|testing → soft-warned (reported, does NOT fail the run)
 #   else (incl. empty)        → strict (a failure flips the exit code)
@@ -62,6 +64,27 @@ indent() { sed 's/^/      /'; }
 # audit is never mistaken for "traffic flows".
 svc_supports_deep() { case "$1" in rules|dns) return 0 ;; *) return 1 ;; esac; }
 
+# Running VMIDs from the cluster, via the sanctioned path (enter through a
+# reachable node and read /cluster/resources). Echoes a space-separated set on
+# success; non-zero if no node is reachable. Mirrors the migrate-zone-keys
+# --verify gate so D3 can skip a stopped VM: no DHCP lease -> no DNS canonical
+# by design, which is not drift.
+running_vmids() {
+    local mgmt node node_fqdn json
+    mgmt="${MGMT:-mgmt}"
+    while IFS= read -r node; do
+        [[ -z "${node}" ]] && continue
+        node_fqdn="${node}.${mgmt}.internal"
+        ping -c1 -W1 "${node_fqdn}" >/dev/null 2>&1 || continue
+        json=$(ssh -o ConnectTimeout=5 root@"${node_fqdn}" \
+            "pvesh get /cluster/resources --type vm --output-format json" 2>/dev/null) || continue
+        [[ -z "${json}" ]] && continue
+        echo "${json}" | jq -r '.[] | select(.status == "running") | .vmid' 2>/dev/null | tr '\n' ' '
+        return 0
+    done < <(get_all_node_hostnames 2>/dev/null)
+    return 1
+}
+
 # ── Arguments ─────────────────────────────────────────────────────────
 
 OPT_DEEP=0
@@ -83,7 +106,10 @@ done
 FAILS=0
 WARNS=0
 SKIPPED=0
+NOTRUN=0            # modules skipped by the D3 gate (configured but not running)
 CUR_MODE="strict"   # per-module strictness, set before each module is audited
+RUNNING_SET=""      # space-wrapped set of running VMIDs (empty until populated)
+CLUSTER_RUNNING_OK=0
 
 # Map a module's lifecycle status to audit strictness (the field is .status;
 # .state kept as a fallback for older configs):
@@ -237,14 +263,24 @@ audit_fw_services() {
 # D3 — DNS canonical resolves for modules that own one (guest vmname+zone0, or
 # firewall:dns). A stable name pointing at nothing is the classic silent drift.
 audit_dns_canonical() {
-    local p="$1" bn vmname zone0 deps fqdn ip
+    local p="$1" bn vmname zone0 deps vmid fqdn ip
     bn=$(basename "$p" .json)
     vmname=$(jq -r '.vmname // empty' "$p" 2>/dev/null)
     zone0=$(jq -r '.zone0 // empty' "$p" 2>/dev/null)
     deps=$(jq -r '(.dependsOn // []) | join(",")' "$p" 2>/dev/null)
+    vmid=$(jq -r '.vmid // empty' "$p" 2>/dev/null)
     [[ -z "${vmname}" || -z "${zone0}" ]] && return 0
     # Only modules that should own a canonical: a guest (vmid) or firewall:dns.
-    if [[ -z "$(jq -r '.vmid // empty' "$p" 2>/dev/null)" && ",${deps}," != *",firewall:dns,"* ]]; then
+    if [[ -z "${vmid}" && ",${deps}," != *",firewall:dns,"* ]]; then
+        return 0
+    fi
+    # Running-state gate: a configured VM that is not running has no DHCP lease,
+    # hence no DNS canonical by design — skip, do not fail (matches migrate
+    # --verify). When the cluster is unreachable / --no-cluster, fall back to
+    # config-trust and check anyway.
+    if [[ "${CLUSTER_RUNNING_OK}" -eq 1 && -n "${vmid}" && "${RUNNING_SET}" != *" ${vmid} "* ]]; then
+        [[ "${OPT_QUIET}" -eq 1 ]] || info "  ${YW}–${CL} D3 ${bn} — skip: configured but not running (vmid ${vmid})"
+        NOTRUN=$((NOTRUN + 1))
         return 0
     fi
     fqdn="${vmname}.${zone0}.internal"
@@ -255,6 +291,16 @@ audit_dns_canonical() {
         fail "D3 ${fqdn} — NOT RESOLVING (DNS/DHCP drift)"
     fi
 }
+
+# Populate the running-state set once for the D3 gate (skipped when offline).
+if [[ "${OPT_NO_CLUSTER}" -eq 0 ]]; then
+    if RUN_RAW=$(running_vmids); then
+        RUNNING_SET=" ${RUN_RAW} "
+        CLUSTER_RUNNING_OK=1
+    else
+        soft "D3 cluster unreachable — checking all canonical-bearing modules (config-trust)"
+    fi
+fi
 
 while IFS= read -r p; do
     CUR_MODE=$(module_audit_mode "$p")
@@ -273,7 +319,7 @@ if [[ "${OPT_DEEP}" -eq 0 ]]; then
     info "  Presence-level run. Add --deep for connectivity probes (effectiveness)"
     info "  on services that support them: rules, dns."
 fi
-info "${BOLD}Audit summary: ${FAILS} failure(s), ${WARNS} warning(s), ${SKIPPED} archived-skipped${CL}"
+info "${BOLD}Audit summary: ${FAILS} failure(s), ${WARNS} warning(s), ${SKIPPED} archived-skipped, ${NOTRUN} not-running-skipped${CL}"
 
 if [[ "${FAILS}" -gt 0 ]]; then
     error "${BOLD}Health audit: DRIFT/VIOLATIONS found — see ✗ above${CL}"
