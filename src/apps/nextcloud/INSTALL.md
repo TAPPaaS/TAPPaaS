@@ -16,7 +16,7 @@ install-module.sh nextcloud
 ```
 
 Duration: **~9 minutes** measured on a fresh VM (clean exit-0 deploy 2026-06-11, test variant on
-srvWork). Dominated by the first-time NixOS rebuild building Nextcloud + the eurooffice connector and
+srv). Dominated by the first-time NixOS rebuild building Nextcloud + the eurooffice connector and
 `uppush` from source (uncached). Subsequent deploys that hit the nix store cache are faster; a stalled
 `uppush`/codeberg `/archive` fetch can inflate this substantially (build-time SPOF — see backlog).
 
@@ -25,12 +25,12 @@ srvWork). Dominated by the first-time NixOS rebuild building Nextcloud + the eur
 Override any JSON field at install time:
 
 ```bash
-install-module.sh nextcloud --node tappaas1 --zone0 srvWork --vmid 340
+install-module.sh nextcloud --node tappaas1 --zone0 srv --vmid 340
 ```
 
 | Flag | Default | Controls |
 |---|---|---|
-| `--zone0` | `srvWork` | Network zone (VLAN) |
+| `--zone0` | `srv` | Network zone (VLAN) |
 | `--vmid` | `340` | Proxmox VM ID |
 | `--node` | `tappaas1` | Proxmox node |
 | `--memory` | `8192` | RAM in MB |
@@ -73,6 +73,6 @@ A required service is not installed (`cluster:vm`, `templates:nixos`, `backup:vm
 **Nextcloud not reachable after first boot**
 NixOS first-boot may still be running. Check from inside the VM:
 ```bash
-ssh tappaas@nextcloud.srvWork.internal "sudo journalctl -u phpfpm-nextcloud -n 30"
+ssh tappaas@nextcloud.srv.internal "sudo journalctl -u phpfpm-nextcloud -n 30"
 ```
 Wait 2–3 minutes, then run `./test.sh nextcloud`.

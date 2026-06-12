@@ -23,7 +23,7 @@ NODE="$(get_config_value 'node' "$(get_node_hostname 0)")"
 ZONE0NAME="$(get_config_value 'zone0' 'srv')"
 
 # Variant-aware host — VMNAME/ZONE0NAME come from the flattened (variant) $JSON,
-# never hardcode the base name or zone (the VM may be nextcloud-hpb-test.srvWork).
+# never hardcode the base name or zone (the VM may be nextcloud-hpb-test.srv).
 HPB_HOST="${VMNAME}.${ZONE0NAME}.internal"
 COTURN_MGMT_SECRETS="/home/tappaas/secrets/coturn.env"
 # Runtime secrets directory — must match secretsDir in nextcloud-hpb.nix

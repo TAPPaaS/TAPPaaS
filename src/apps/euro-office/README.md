@@ -51,4 +51,4 @@ For installation, customisation, and troubleshooting see [INSTALL.md](./INSTALL.
 ## Deploy notes & known limitations (0.1.0)
 
 - Validated via test variant; the OnlyOffice <-> Nextcloud connector is proven end-to-end (N4 wiring, ADR-COM-0002).
-- The consumer egress (srvWork -> reverse proxy:443) is declared in this module; named-variant deploys depend on the foundation egress-flattening + provider-variant resolution fixes (upstream issue).
+- The consumer egress (srv -> reverse proxy:443) is declared in this module; named-variant deploys depend on the foundation egress-flattening + provider-variant resolution fixes (upstream issue).

@@ -29,7 +29,7 @@ Core of the collaboration hub: `provides: nextcloud`, consumed by `coturn`, `nex
 
 ## Requirements
 
-- `srvWork` zone
+- `srv` zone
 - NixOS template (`pkgs.nextcloud33`)
 - Authentik available for SSO (`identity:identity`)
 
