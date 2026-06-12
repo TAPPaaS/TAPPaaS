@@ -161,10 +161,10 @@ fi
 # API hook for: dns_<provider>"), so the sign fails with a cryptic statusCode
 # 400. Re-run setup.sh idempotently and verify the provider hook resolves
 # before signing, failing fast with a clear message instead of the opaque 400.
-case "$PROVIDER" in
-    dns_*) DNS_HOOK="${PROVIDER}.sh" ;;
-    *)     DNS_HOOK="dns_${PROVIDER}.sh" ;;
-esac
+# The hook file is named after the RESOLVED os-acme-client key, not the friendly
+# provider name (cloudflare→dns_cf.sh, route53→dns_aws.sh) — resolve_dns_service
+# mirrors acme-manager so the default provider isn't false-negatived (#327).
+DNS_HOOK="$(resolve_dns_service "$PROVIDER").sh"
 echo
 info "${BOLD}Ensuring acme.sh DNS hooks on ${FIREWALL}${CL}"
 ssh -o ConnectTimeout=5 root@"${FIREWALL}" \

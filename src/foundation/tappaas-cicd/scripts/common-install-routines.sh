@@ -540,6 +540,35 @@ validate_module_alias_name() {
     return 0
 }
 
+# ── ACME DNS provider → os-acme-client key resolution (#327) ─────────────
+# acme-setup.sh accepts a friendly --provider name (cloudflare, route53, ...) and
+# passes it to acme-manager, which translates it to the os-acme-client `dns_service`
+# key. acme.sh's dnsapi hook file is named after that RESOLVED key, not the friendly
+# name (cloudflare→dns_cf.sh, route53→dns_aws.sh, powerdns→dns_pdns.sh), so the
+# preflight hook check must resolve first or it false-negatives the default provider.
+# This MUST stay in sync with PROVIDER_ALIASES in opnsense-controller's acme_cli.py,
+# the authority that actually drives os-acme-client.
+resolve_dns_service() {
+    local provider="$1"
+    case "$provider" in
+        dns_*)       printf '%s\n' "$provider" ;;
+        cloudflare)  printf 'dns_cf\n' ;;
+        desec)       printf 'dns_desec\n' ;;
+        hetzner)     printf 'dns_hetzner\n' ;;
+        ovh)         printf 'dns_ovh\n' ;;
+        route53|aws) printf 'dns_aws\n' ;;
+        namecheap)   printf 'dns_namecheap\n' ;;
+        namecom)     printf 'dns_namecom\n' ;;
+        godaddy)     printf 'dns_godaddy\n' ;;
+        powerdns)    printf 'dns_pdns\n' ;;
+        njalla)      printf 'dns_njalla\n' ;;
+        inwx)        printf 'dns_inwx\n' ;;
+        gandi)       printf 'dns_gandi\n' ;;
+        he)          printf 'dns_he\n' ;;
+        *)           printf 'dns_%s\n' "$provider" ;;
+    esac
+}
+
 # ── Module-config normalization (#161 / #207) ────────────────────────
 # Defined here (before auto-load) so the auto-load block below can call it.
 # A module JSON may group per-service configuration under a Pattern-A `config`
