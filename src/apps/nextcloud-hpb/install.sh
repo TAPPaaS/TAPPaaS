@@ -101,6 +101,15 @@ info "  TURN secret synced to runtime plane; nextcloud-spreed-signaling restarte
 echo ""
 info "${BOLD}Wiring HPB signaling backend + TURN (nixos-rebuild)…${CL}"
 NEXTCLOUD_PROXY="$(jq -r '.config["firewall:proxy"].proxyDomain // .proxyDomain // empty' "${NC_JSON}" 2>/dev/null || true)"
+# Nextcloud intentionally doesn't store proxyDomain (it's derived as <vmname>.<domain>;
+# see firewall:proxy / identity install-services). Mirror that derivation here so the
+# HPB backend allow-list points at Nextcloud's real PUBLIC URL — otherwise it stays at
+# the nix placeholder and Talk rejects signaling with invalid_backend.
+if [[ -z "${NEXTCLOUD_PROXY}" ]]; then
+    _nc_dom="$(get_variant_config "${VARIANT}" 2>/dev/null | jq -r '.domain // empty')"
+    _nc_vm="$(jq -r '.vmname // "nextcloud"' "${NC_JSON}" 2>/dev/null || echo nextcloud)"
+    [[ -n "${_nc_dom}" ]] && NEXTCLOUD_PROXY="${_nc_vm}.${_nc_dom}"
+fi
 _coturn_cfg="/home/tappaas/config/coturn.json"
 [[ -n "${VARIANT}" && -f "/home/tappaas/config/coturn-${VARIANT}.json" ]] && \
     _coturn_cfg="/home/tappaas/config/coturn-${VARIANT}.json"
