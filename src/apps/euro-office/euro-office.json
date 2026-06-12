@@ -1,0 +1,49 @@
+{
+  "description": "Euro-Office DocumentServer — collaborative document editing for Nextcloud.",
+  "version": "0.1.0",
+  "releaseDate": "2026-06-12",
+  "maintainer": "@ErikDaniel007",
+  "status": "Testing",
+  "vmname": "euro-office",
+  "vmid": 343,
+  "vmtag": "TAPPaaS,App",
+  "node": "tappaas1",
+  "zone0": "srvWork",
+  "dependsOn": [
+    "cluster:vm",
+    "templates:nixos",
+    "backup:vm",
+    "firewall:proxy",
+    "firewall:rules",
+    "nextcloud:nextcloud"
+  ],
+  "provides": [],
+  "appVersion": "9.3.1",
+  "config": {
+    "cluster:vm": {
+      "cores": 4,
+      "memory": "8192",
+      "diskSize": "32G",
+      "storage": "tanka1",
+      "imageType": "clone",
+      "image": "8080",
+      "bridge0": "lan"
+    },
+    "firewall:proxy": {
+      "proxyPort": 80
+    },
+    "nextcloud:nextcloud": {
+      "connector": "onlyoffice"
+    }
+  },
+  "egress": [
+    {
+      "to": "home",
+      "ports": [
+        443
+      ],
+      "protocol": "TCP",
+      "description": "OnlyOffice document-server callback to Nextcloud reverse proxy (return path)"
+    }
+  ]
+}
