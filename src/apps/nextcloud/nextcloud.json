@@ -1,0 +1,53 @@
+{
+  "description": "Nextcloud file sharing and collaboration platform with Authentik SSO support.",
+  "version": "0.1.0",
+  "releaseDate": "2026-06-12",
+  "maintainer": "@ErikDaniel007",
+  "status": "Testing",
+  "vmname": "nextcloud",
+  "vmid": 340,
+  "vmtag": "TAPPaaS,App",
+  "node": "tappaas1",
+  "zone0": "srvWork",
+  "dependsOn": [
+    "cluster:vm",
+    "templates:nixos",
+    "backup:vm",
+    "firewall:proxy",
+    "firewall:rules",
+    "identity:identity"
+  ],
+  "provides": [
+    "nextcloud"
+  ],
+  "egress": [
+    {
+      "to": "home",
+      "ports": [
+        443
+      ],
+      "protocol": "TCP",
+      "description": "Nextcloud -> reverse proxy for Talk HPB signaling check + backend notify (consumer egress, ADR-COM-0002)"
+    }
+  ],
+  "appVersion": "33",
+  "config": {
+    "cluster:vm": {
+      "bios": "ovmf",
+      "os": "nixos",
+      "ostype": "l26",
+      "cputype": "host",
+      "cores": 4,
+      "memory": 8192,
+      "diskSize": "80G",
+      "storage": "tanka1",
+      "imageType": "clone",
+      "image": "8080",
+      "cloudInit": true,
+      "bridge0": "lan"
+    },
+    "firewall:proxy": {
+      "proxyPort": 80
+    }
+  }
+}

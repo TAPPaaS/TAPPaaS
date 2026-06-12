@@ -123,6 +123,42 @@
             "stack": "infrastructure",
             "category": "network",
             "status": "incomplete"
+        },
+        {
+            "moduleName": "nextcloud",
+            "repo": "application",
+            "moduleJson": "src/apps/nextcloud/nextcloud.json",
+            "vmid": 340,
+            "stack": "collaboration",
+            "category": "hub",
+            "status": "beta"
+        },
+        {
+            "moduleName": "coturn",
+            "repo": "application",
+            "moduleJson": "src/apps/coturn/coturn.json",
+            "vmid": 341,
+            "stack": "collaboration",
+            "category": "turn",
+            "status": "beta"
+        },
+        {
+            "moduleName": "nextcloud-hpb",
+            "repo": "application",
+            "moduleJson": "src/apps/nextcloud-hpb/nextcloud-hpb.json",
+            "vmid": 342,
+            "stack": "collaboration",
+            "category": "signaling",
+            "status": "beta"
+        },
+        {
+            "moduleName": "euro-office",
+            "repo": "application",
+            "moduleJson": "src/apps/euro-office/euro-office.json",
+            "vmid": 343,
+            "stack": "collaboration",
+            "category": "office",
+            "status": "beta"
         }
     ],
     "proxmoxTemplates": [

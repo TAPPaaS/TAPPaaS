@@ -1,0 +1,10 @@
+Copyright (c) 2025 TAPPaaS org
+
+This Source Code Form is subject to the terms of the Mozilla Public
+License, v. 2.0. If a copy of the MPL was not distributed with this
+file, You can obtain one at https://mozilla.org/MPL/2.0/.
+
+This module deploys the Euro-Office DocumentServer container, which is
+distributed separately under its own license by the Euro-Office project
+(https://github.com/Euro-Office/DocumentServer). This LICENSE covers only
+the TAPPaaS module code in this directory.
