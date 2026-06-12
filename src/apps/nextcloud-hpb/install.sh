@@ -36,7 +36,7 @@ HPB_HOST="$(jq -r '.vmname' "${EFFECTIVE_JSON}").$(jq -r '.zone0' "${EFFECTIVE_J
 NC_JSON="/home/tappaas/config/nextcloud.json"
 [[ -n "${VARIANT}" && -f "/home/tappaas/config/nextcloud-${VARIANT}.json" ]] && \
     NC_JSON="/home/tappaas/config/nextcloud-${VARIANT}.json"
-NEXTCLOUD_HOST="$(jq -r '.vmname' "${NC_JSON}" 2>/dev/null || echo nextcloud).$(jq -r '.zone0' "${NC_JSON}" 2>/dev/null || echo srvWork).internal"
+NEXTCLOUD_HOST="$(jq -r '.vmname' "${NC_JSON}" 2>/dev/null || echo nextcloud).$(jq -r '.zone0' "${NC_JSON}" 2>/dev/null || echo srv).internal"
 PROXY_DOMAIN="$(get_config_value 'proxyDomain')"
 HPB_HOST_PART="${PROXY_DOMAIN%%.*}"
 HPB_DOMAIN_PART="${PROXY_DOMAIN#*.}"

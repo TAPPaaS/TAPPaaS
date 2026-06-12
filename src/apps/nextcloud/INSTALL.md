@@ -42,7 +42,7 @@ install-module.sh nextcloud --node tappaas1 --zone0 srvWork --vmid 340
 `https://nextcloud.<domain>/apps/user_oidc/code`).
 
 **Document editing (euro-office connector):** no action here. When the `euro-office` module is installed
-(`dependsOn nextcloud:nextcloud`), nextcloud's `services/nextcloud/install-service.sh` writes
+(`dependsOn nextcloud:fileservice`), nextcloud's `services/nextcloud/install-service.sh` writes
 `/etc/secrets/onlyoffice.env` and the declarative `nextcloud-configure-eurooffice` service applies it
 (ADR-COM-0002). The `onlyoffice` app ships as a Nix `extraApp`.
 

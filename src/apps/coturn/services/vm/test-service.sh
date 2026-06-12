@@ -24,7 +24,17 @@ if [[ -z "${MODULE}" ]]; then
 fi
 
 readonly CONFIG_DIR="/home/tappaas/config"
-readonly COTURN_JSON="${CONFIG_DIR}/coturn.json"
+readonly CONSUMER_JSON="${CONFIG_DIR}/${MODULE}.json"
+# Resolve coturn's config variant-awarely: a consumer deployed as a variant pairs
+# with the same-variant provider; fall back to the base for production.
+VARIANT=""
+[[ -n "${MODULE}" && -f "${CONSUMER_JSON}" ]] && \
+    VARIANT=$(jq -r '.variant // empty' "${CONSUMER_JSON}" 2>/dev/null || true)
+if [[ -n "${VARIANT}" && -f "${CONFIG_DIR}/coturn-${VARIANT}.json" ]]; then
+    readonly COTURN_JSON="${CONFIG_DIR}/coturn-${VARIANT}.json"
+else
+    readonly COTURN_JSON="${CONFIG_DIR}/coturn.json"
+fi
 
 if [[ ! -f "${COTURN_JSON}" ]]; then
     error "coturn config not found: ${COTURN_JSON}"

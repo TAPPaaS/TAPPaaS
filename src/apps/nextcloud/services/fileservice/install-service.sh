@@ -13,13 +13,23 @@ set -euo pipefail
 
 MODULE="${1:-}"
 readonly CONFIG_DIR="/home/tappaas/config"
-readonly NEXTCLOUD_JSON="${CONFIG_DIR}/nextcloud.json"
+readonly CONSUMER_JSON="${CONFIG_DIR}/${MODULE}.json"
+# Resolve Nextcloud's config variant-awarely: a consumer deployed as a variant
+# pairs with the same-variant provider; fall back to the base for production.
+VARIANT=""
+[[ -n "${MODULE}" && -f "${CONSUMER_JSON}" ]] && \
+    VARIANT=$(jq -r '.variant // empty' "${CONSUMER_JSON}" 2>/dev/null || true)
+if [[ -n "${VARIANT}" && -f "${CONFIG_DIR}/nextcloud-${VARIANT}.json" ]]; then
+    readonly NEXTCLOUD_JSON="${CONFIG_DIR}/nextcloud-${VARIANT}.json"
+else
+    readonly NEXTCLOUD_JSON="${CONFIG_DIR}/nextcloud.json"
+fi
 
 VMNAME=$(jq -r '.vmname' "${NEXTCLOUD_JSON}")
 ZONE=$(jq -r '.zone0' "${NEXTCLOUD_JSON}")
 INTERNAL_URL="http://${VMNAME}.${ZONE}.internal"
 
-info "nextcloud:nextcloud install-service — verifying Nextcloud is reachable for module: ${MODULE}"
+info "nextcloud:fileservice install-service — verifying Nextcloud is reachable for module: ${MODULE}"
 
 if curl -sf --max-time 10 "${INTERNAL_URL}/status.php" | grep -q '"installed":true'; then
     info "${GN}✓${CL} Nextcloud is installed and reachable at ${INTERNAL_URL}"
@@ -29,7 +39,7 @@ fi
 
 # ── Connector wiring (ADR-COM-0002) — declarative, provider-owned ──────────────
 # A consumer that wants the OnlyOffice editor DECLARES it in its own manifest, under the
-# dependency capability:  config["nextcloud:nextcloud"].connector == "onlyoffice".
+# dependency capability:  config["nextcloud:fileservice"].connector == "onlyoffice".
 # Nextcloud (the provider) then owns the wiring:
 #   - URLs are DERIVED from the consumer manifest (SSOT) — no readFile, no hardcoding.
 #   - the JWT secret is OWNED by the consumer (euro-office auto-generates it in nix on first
@@ -42,10 +52,10 @@ CONNECTOR=""
 # Read 'connector' from EITHER the raw manifest (nested under the dependency
 # capability) OR the flattened on-disk canonical form (#207): install-module
 # renders the consumer JSON to canonical Pattern A, which hoists the
-# config["nextcloud:nextcloud"].connector field to top-level. Checking both
+# config["nextcloud:fileservice"].connector field to top-level. Checking both
 # keeps this generic installer correct regardless of which form it's handed.
 [[ -n "${MODULE}" && -f "${CONSUMER_JSON}" ]] && \
-    CONNECTOR=$(jq -r '.config["nextcloud:nextcloud"].connector // .connector // empty' "${CONSUMER_JSON}" 2>/dev/null || true)
+    CONNECTOR=$(jq -r '.config["nextcloud:fileservice"].connector // .connector // empty' "${CONSUMER_JSON}" 2>/dev/null || true)
 
 if [[ "${CONNECTOR}" == "onlyoffice" ]]; then
     info "  ${MODULE} declares an onlyoffice connector — wiring it (ADR-COM-0002)"

@@ -8,7 +8,7 @@
   "vmid": 340,
   "vmtag": "TAPPaaS,App",
   "node": "tappaas1",
-  "zone0": "srvWork",
+  "zone0": "srv",
   "dependsOn": [
     "cluster:vm",
     "templates:nixos",
@@ -18,7 +18,7 @@
     "identity:identity"
   ],
   "provides": [
-    "nextcloud"
+    "fileservice"
   ],
   "egress": [
     {

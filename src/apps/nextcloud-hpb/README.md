@@ -29,7 +29,7 @@ Browser/Phone ─wss://hpb.<domain>/spreed─▶ Caddy (OPNsense) ─▶ nextclo
 ## Requirements
 
 - `srv` zone
-- `nextcloud` (`nextcloud:nextcloud`) and `coturn` (`coturn:turn`) deployed
+- `nextcloud` (`nextcloud:fileservice`) and `coturn` (`coturn:turn`) deployed
 - NixOS template (`templates:nixos`)
 
 ## Dependencies
@@ -40,7 +40,7 @@ Browser/Phone ─wss://hpb.<domain>/spreed─▶ Caddy (OPNsense) ─▶ nextclo
 | `templates:nixos` | NixOS base image |
 | `backup:vm` | VM registered with Proxmox Backup Server |
 | `firewall:proxy` | `wss://` reverse proxy via Caddy |
-| `nextcloud:nextcloud` | The Nextcloud instance whose Talk uses this backend |
+| `nextcloud:fileservice` | The Nextcloud instance whose Talk uses this backend |
 | `coturn:turn` | TURN relay whose credentials HPB distributes |
 
 For installation, the shared-secret wiring, and troubleshooting see [INSTALL.md](./INSTALL.md).

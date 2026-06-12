@@ -15,12 +15,22 @@ set -euo pipefail
 
 . /home/tappaas/bin/common-install-routines.sh
 
-EUROOFFICE_HOST="euro-office.srv.internal"
-NEXTCLOUD_HOST="nextcloud.srv.internal"
-_SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-ONLYOFFICE_URL="https://$(jq -r '.proxyDomain' "${_SCRIPT_DIR}/euro-office.json")"
-NEXTCLOUD_URL="https://$(jq -r '.proxyDomain' "${_SCRIPT_DIR}/../nextcloud/nextcloud.json")/"
-unset _SCRIPT_DIR
+# Variant-aware: derive hosts/URLs from the deployed configs, never hardcode the
+# zone (modules deploy to srv, srvWork, srvCust …). Pair Nextcloud by variant.
+MODULE="${1:-euro-office}"
+CONFIG_DIR="/home/tappaas/config"
+EO_JSON="${CONFIG_DIR}/${MODULE}.json"
+VARIANT="$(jq -r '.variant // empty' "${EO_JSON}" 2>/dev/null || true)"
+NC_JSON="${CONFIG_DIR}/nextcloud.json"
+[[ -n "${VARIANT}" && -f "${CONFIG_DIR}/nextcloud-${VARIANT}.json" ]] && NC_JSON="${CONFIG_DIR}/nextcloud-${VARIANT}.json"
+
+_fqdn()  { echo "$(jq -r '.vmname' "$1").$(jq -r '.zone0' "$1").internal"; }
+_proxy() { jq -r '.config["firewall:proxy"].proxyDomain // .proxyDomain // empty' "$1"; }
+
+EUROOFFICE_HOST="$(_fqdn "${EO_JSON}")"
+NEXTCLOUD_HOST="$(_fqdn "${NC_JSON}")"
+ONLYOFFICE_URL="https://$(_proxy "${EO_JSON}")"
+NEXTCLOUD_URL="https://$(_proxy "${NC_JSON}")/"
 
 info "Reading JWT_SECRET from ${EUROOFFICE_HOST}…"
 JWT_SECRET=$(ssh -o BatchMode=yes -o ConnectTimeout=15 \
@@ -36,7 +46,7 @@ info "JWT_SECRET read (${#JWT_SECRET} characters). Writing to Nextcloud Euro-Off
 
 ssh -o BatchMode=yes -o ConnectTimeout=15 "tappaas@${NEXTCLOUD_HOST}" \
     "sudo -u nextcloud nextcloud-occ config:app:set onlyoffice DocumentServerUrl         --value='${ONLYOFFICE_URL}' > /tmp/occ.out 2>&1
-     sudo -u nextcloud nextcloud-occ config:app:set onlyoffice DocumentServerInternalUrl --value='http://euro-office.srv.internal/' >> /tmp/occ.out 2>&1
+     sudo -u nextcloud nextcloud-occ config:app:set onlyoffice DocumentServerInternalUrl --value='http://${EUROOFFICE_HOST}/' >> /tmp/occ.out 2>&1
      sudo -u nextcloud nextcloud-occ config:app:set onlyoffice StorageUrl                --value='${NEXTCLOUD_URL}' >> /tmp/occ.out 2>&1
      sudo -u nextcloud nextcloud-occ config:app:set onlyoffice jwt_secret                --value='${JWT_SECRET}' >> /tmp/occ.out 2>&1
      sudo -u nextcloud nextcloud-occ config:app:set onlyoffice jwt_header                --value='Authorization' >> /tmp/occ.out 2>&1

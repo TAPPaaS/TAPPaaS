@@ -17,14 +17,15 @@ set -euo pipefail
 
 . /home/tappaas/bin/common-install-routines.sh
 
-# Config-derived host — never hardcode the zone (modules deploy to dmz, etc.).
-COTURN_HOST="$(jq -r '.vmname' coturn.json).$(jq -r '.zone0' coturn.json).internal"
+# Config-derived host — read from the loaded config ($JSON, keyed on $1), never a
+# relative/literal file. Never hardcode the zone (modules deploy to dmz, etc.).
+COTURN_HOST="$(get_config_value vmname coturn).$(get_config_value zone0 dmz).internal"
 readonly MGMT_SECRETS="/home/tappaas/secrets/coturn.env"
 
 # ── Nextcloud connector — owned by Nextcloud, NOT here (ADR-COM-0002) ─────────
 # coturn does ONLY its own layer. The Talk TURN connector (sharing COTURN_SECRET
 # with Nextcloud) is wired by NEXTCLOUD's services/nextcloud/install-service.sh,
-# triggered by this module's config["nextcloud:nextcloud"].connector = "talk".
+# triggered by this module's config["nextcloud:fileservice"].connector = "talk".
 # No cross-VM SSH push from this module. (N4 generalization for talk/hpb: follow-up.)
 
 # ── Auto-detect WAN IP → write to coturn VM + management plane ───────────────
@@ -93,7 +94,7 @@ echo ""
 warn "Ensure OPNsense has the following (not configured automatically):"
 warn "  - NAT rule: WAN:3478 (UDP+TCP) -> coturn DMZ IP:3478"
 warn "  - NAT rule: WAN:49152-65535 (UDP) -> coturn DMZ IP:49152-65535"
-warn "  - DNS A record: $(jq -r '.publicDomain' coturn.json) -> public WAN IP"
+warn "  - DNS A record: $(get_config_value publicDomain '') -> public WAN IP"
 
 echo ""
 info "${GN}✓${CL} coturn installation completed successfully."

@@ -33,7 +33,7 @@ Image: `ghcr.io/euro-office/documentserver:v9.3.1` — pinned (immutable semver)
 ## Requirements
 
 - `srv` zone (VLAN 210)
-- `nextcloud` deployed and reachable (`nextcloud:nextcloud` dependency) — install it first
+- `nextcloud` deployed and reachable (`nextcloud:fileservice` dependency) — install it first
 - NixOS template (`templates:nixos`)
 
 ## Dependencies
@@ -44,7 +44,7 @@ Image: `ghcr.io/euro-office/documentserver:v9.3.1` — pinned (immutable semver)
 | `templates:nixos` | NixOS base image |
 | `backup:vm` | Daily document backups |
 | `firewall:proxy` | HTTPS reverse proxy |
-| `nextcloud:nextcloud` | The Nextcloud instance this server edits documents for |
+| `nextcloud:fileservice` | The Nextcloud instance this server edits documents for |
 
 For installation, customisation, and troubleshooting see [INSTALL.md](./INSTALL.md).
 

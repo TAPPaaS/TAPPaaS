@@ -22,7 +22,7 @@
 # euro-office does ONLY its own layer (the document server + its auto-generated JWT
 # in euro-office.nix). The euro-office <-> Nextcloud connector is wired by NEXTCLOUD:
 # its services/nextcloud/install-service.sh (N4) fires because this module declares
-#   dependsOn nextcloud:nextcloud  +  config["nextcloud:nextcloud"].connector = "onlyoffice"
+#   dependsOn nextcloud:fileservice  +  config["nextcloud:fileservice"].connector = "onlyoffice"
 # and reads euro-office's JWT, writes /etc/secrets/onlyoffice.env on the Nextcloud VM,
 # and restarts nextcloud-configure-eurooffice. No cross-VM SSH from this module.
 # The document-server -> Nextcloud return path is declared here as `egress` (firewall:rules).

@@ -8,14 +8,14 @@
   "vmid": 342,
   "vmtag": "TAPPaaS,App",
   "node": "tappaas2",
-  "zone0": "srvWork",
+  "zone0": "srv",
   "dependsOn": [
     "backup:vm",
     "cluster:vm",
     "coturn:turn",
     "firewall:proxy",
     "firewall:rules",
-    "nextcloud:nextcloud",
+    "nextcloud:fileservice",
     "templates:nixos"
   ],
   "provides": [],
@@ -30,10 +30,9 @@
       "bridge0": "lan"
     },
     "firewall:proxy": {
-      "proxyDomain": "hpb.example.com",
       "proxyPort": 8080
     },
-    "nextcloud:nextcloud": {
+    "nextcloud:fileservice": {
       "connector": "hpb"
     }
   },

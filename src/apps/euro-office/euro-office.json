@@ -8,21 +8,21 @@
   "vmid": 343,
   "vmtag": "TAPPaaS,App",
   "node": "tappaas1",
-  "zone0": "srvWork",
+  "zone0": "srv",
   "dependsOn": [
     "cluster:vm",
     "templates:nixos",
     "backup:vm",
     "firewall:proxy",
     "firewall:rules",
-    "nextcloud:nextcloud"
+    "nextcloud:fileservice"
   ],
   "provides": [],
   "appVersion": "9.3.1",
   "config": {
     "cluster:vm": {
       "cores": 4,
-      "memory": "8192",
+      "memory": 8192,
       "diskSize": "32G",
       "storage": "tanka1",
       "imageType": "clone",
@@ -32,7 +32,7 @@
     "firewall:proxy": {
       "proxyPort": 80
     },
-    "nextcloud:nextcloud": {
+    "nextcloud:fileservice": {
       "connector": "onlyoffice"
     }
   },

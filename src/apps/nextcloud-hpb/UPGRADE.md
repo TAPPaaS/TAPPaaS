@@ -13,7 +13,7 @@ update-module.sh nextcloud-hpb
 ## Connector after upgrade
 
 The Talk HPB signaling backend (sharing `HPB_SECRET` with Nextcloud, `wss://<domain>/spreed`) is owned
-by Nextcloud (ADR-COM-0002, `config["nextcloud:nextcloud"].connector = "hpb"`). `dependsOn coturn:turn`
+by Nextcloud (ADR-COM-0002, `config["nextcloud:fileservice"].connector = "hpb"`). `dependsOn coturn:turn`
 for the TURN secret. No connector action here on upgrade.
 
 ## Rollback / verify

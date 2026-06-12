@@ -16,7 +16,7 @@ Core of the collaboration hub: `provides: nextcloud`, consumed by `coturn`, `nex
 ## What is not included
 
 - **OnlyOffice document server** — the separate `euro-office` module. Nextcloud ships the connector
-  app + config service; the server is wired in by euro-office's dependency on `nextcloud:nextcloud`.
+  app + config service; the server is wired in by euro-office's dependency on `nextcloud:fileservice`.
 - **TURN relay** — the `coturn` module (Talk audio/video).
 - **HPB signaling backend** — the `nextcloud-hpb` module (multi-party call scaling).
 - **Mail server** — uses an external SMTP relay (configured via the `mail.env` secret).
@@ -25,7 +25,7 @@ Core of the collaboration hub: `provides: nextcloud`, consumed by `coturn`, `nex
 
 | Capability | Consumed by |
 |---|---|
-| `nextcloud` | `coturn`, `nextcloud-hpb`, `euro-office` (each `dependsOn nextcloud:nextcloud`) |
+| `nextcloud` | `coturn`, `nextcloud-hpb`, `euro-office` (each `dependsOn nextcloud:fileservice`) |
 
 ## Requirements
 

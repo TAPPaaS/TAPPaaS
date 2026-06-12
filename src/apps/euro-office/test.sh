@@ -10,14 +10,16 @@
 
 set -euo pipefail
 
-# Configuration — derive the target FQDN from the deployed config (never hardcode
-# the zone; modules deploy to srv, srvWork, etc.).
-_EO_CFG="/home/tappaas/config/euro-office.json"
+# Configuration — derive the target FQDN from the (variant-aware) deployed config
+# (never hardcode the name or zone; modules deploy to srv, srvWork, srvCust …).
+# The module name arrives as $1 (test-module.sh passes it).
+MODULE="${1:-euro-office}"
+_EO_CFG="/home/tappaas/config/${MODULE}.json"
 TARGET="$(jq -r '.vmname' "${_EO_CFG}" 2>/dev/null || echo euro-office).$(jq -r '.zone0' "${_EO_CFG}" 2>/dev/null || echo srv).internal"
 SSH_CMD="ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 -o BatchMode=yes tappaas@${TARGET}"
 TIMESTAMP=$(date '+%Y-%m-%d_%H%M%S')
 LOG_DIR="/home/tappaas/logs"
-LOG_FILE="${LOG_DIR}/euro-office-test-${TIMESTAMP}.log"
+LOG_FILE="${LOG_DIR}/${MODULE}-test-${TIMESTAMP}.log"
 
 # Color definitions
 YW='\033[33m'    # Yellow

@@ -10,21 +10,24 @@
 
 set -euo pipefail
 
-# Configuration — read vmname and zone from installed config, not hardcoded
+# Configuration — read vmname and zone from the (variant-aware) effective
+# config, never hardcode the base name or zone. The module name arrives as $1
+# (test-module.sh passes it); fall back to the base module for direct runs.
 readonly CONFIG_DIR="/home/tappaas/config"
-readonly MODULE_JSON="${CONFIG_DIR}/nextcloud.json"
+readonly MODULE="${1:-nextcloud}"
+readonly MODULE_JSON="${CONFIG_DIR}/${MODULE}.json"
 if [[ -f "${MODULE_JSON}" ]]; then
     VMNAME=$(jq -r '.vmname // "nextcloud"' "${MODULE_JSON}")
     ZONE=$(jq -r '.zone0 // "srv"' "${MODULE_JSON}")
 else
-    VMNAME="nextcloud"
+    VMNAME="${MODULE}"
     ZONE="srv"
 fi
 TARGET="${VMNAME}.${ZONE}.internal"
 SSH_CMD="ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 -o BatchMode=yes tappaas@${TARGET}"
 TIMESTAMP=$(date '+%Y-%m-%d_%H%M%S')
 LOG_DIR="/home/tappaas/logs"
-LOG_FILE="${LOG_DIR}/nextcloud-test-${TIMESTAMP}.log"
+LOG_FILE="${LOG_DIR}/${MODULE}-test-${TIMESTAMP}.log"
 
 # Color definitions
 YW='\033[33m'    # Yellow

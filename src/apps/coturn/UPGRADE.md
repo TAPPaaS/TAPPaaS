@@ -13,7 +13,7 @@ update-module.sh coturn
 ## Connector after upgrade
 
 The Talk TURN connector (sharing `COTURN_SECRET` with Nextcloud) is owned by Nextcloud (ADR-COM-0002,
-triggered by `config["nextcloud:nextcloud"].connector = "talk"`). No connector action here on upgrade.
+triggered by `config["nextcloud:fileservice"].connector = "talk"`). No connector action here on upgrade.
 
 ## Rollback / verify
 

@@ -17,7 +17,7 @@ TARGET="$(jq -r '.vmname' "${EFF_JSON}" 2>/dev/null).$(jq -r '.zone0' "${EFF_JSO
 # Nextcloud provider — pair with the same variant; fall back to base for production.
 NC_JSON="${CFG_DIR}/nextcloud.json"
 [[ -n "${VARIANT}" && -f "${CFG_DIR}/nextcloud-${VARIANT}.json" ]] && NC_JSON="${CFG_DIR}/nextcloud-${VARIANT}.json"
-NEXTCLOUD_HOST="$(jq -r '.vmname' "${NC_JSON}" 2>/dev/null || echo nextcloud).$(jq -r '.zone0' "${NC_JSON}" 2>/dev/null || echo srvWork).internal"
+NEXTCLOUD_HOST="$(jq -r '.vmname' "${NC_JSON}" 2>/dev/null || echo nextcloud).$(jq -r '.zone0' "${NC_JSON}" 2>/dev/null || echo srv).internal"
 SSH_CMD="ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 -o BatchMode=yes tappaas@${TARGET}"
 # proxyDomain lives in the firewall:proxy config block (variant registry sets it there); fall back to top-level.
 HPB_PROXY_DOMAIN="$(jq -r '.config["firewall:proxy"].proxyDomain // .proxyDomain // empty' "${EFF_JSON}")"

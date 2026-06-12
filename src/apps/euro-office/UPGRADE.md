@@ -20,7 +20,7 @@ so an app upgrade is an image-tag bump — no in-place database migration in thi
 
 The euro-office ↔ Nextcloud connector is owned by Nextcloud (ADR-COM-0002). No connector action is
 needed here on upgrade: Nextcloud's `services/nextcloud/install-service.sh` re-wires it from this
-module's manifest (`config["nextcloud:nextcloud"].connector = "onlyoffice"`) and JWT. If the JWT
+module's manifest (`config["nextcloud:fileservice"].connector = "onlyoffice"`) and JWT. If the JWT
 secret rotates, re-run the Nextcloud module's update so it re-reads it.
 
 ## Rollback

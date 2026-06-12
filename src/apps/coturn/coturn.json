@@ -13,7 +13,7 @@
     "backup:vm",
     "cluster:vm",
     "firewall:rules",
-    "nextcloud:nextcloud",
+    "nextcloud:fileservice",
     "templates:nixos"
   ],
   "provides": [
@@ -29,7 +29,7 @@
       "image": "8080",
       "bridge0": "lan"
     },
-    "nextcloud:nextcloud": {
+    "nextcloud:fileservice": {
       "connector": "talk"
     }
   },

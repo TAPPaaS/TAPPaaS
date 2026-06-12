@@ -28,7 +28,7 @@ Custom systemd `coturn` service (not the NixOS `services.coturn` module). Only p
 ## Requirements
 
 - `dmz` zone
-- `nextcloud` deployed (`nextcloud:nextcloud` dependency) — Talk is the consumer
+- `nextcloud` deployed (`nextcloud:fileservice` dependency) — Talk is the consumer
 - NixOS template (`templates:nixos`)
 
 ## Dependencies
@@ -38,7 +38,7 @@ Custom systemd `coturn` service (not the NixOS `services.coturn` module). Only p
 | `cluster:vm` | VM provisioning |
 | `templates:nixos` | NixOS base image |
 | `backup:vm` | VM registered with Proxmox Backup Server |
-| `nextcloud:nextcloud` | The Nextcloud instance whose Talk uses this relay |
+| `nextcloud:fileservice` | The Nextcloud instance whose Talk uses this relay |
 
 For installation, the shared-secret wiring, and troubleshooting see [INSTALL.md](./INSTALL.md).
 

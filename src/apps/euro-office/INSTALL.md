@@ -4,7 +4,7 @@ Only manual steps are listed here. Scripts handle everything else automatically 
 
 ## Prerequisites
 
-- `nextcloud` is installed and reachable (`nextcloud:nextcloud` dependency) — install it **before** euro-office.
+- `nextcloud` is installed and reachable (`nextcloud:fileservice` dependency) — install it **before** euro-office.
 - Verify `euro-office.json` matches your environment (node, storage, zone). To override, copy it to `/home/tappaas/config/` and edit, or use the flags below.
 
 ## Install

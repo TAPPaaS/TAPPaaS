@@ -3,7 +3,7 @@
 # TAPPaaS Nextcloud Service - Test
 #
 # Verifies Nextcloud is installed and reachable for a consuming module.
-# Called by test-module.sh for any module that depends on nextcloud:nextcloud.
+# Called by test-module.sh for any module that depends on nextcloud:fileservice.
 #
 # Tests:
 #   1. Nextcloud HTTP endpoint responds
@@ -56,7 +56,7 @@ FAIL=0
 pass() { info "    ${GN}✓${CL} $1"; PASS=$((PASS + 1)); }
 fail() { error "    ✗ $1"; FAIL=$((FAIL + 1)); }
 
-info "  ${BOLD}nextcloud:nextcloud tests for ${BL}${MODULE}${CL}"
+info "  ${BOLD}nextcloud:fileservice tests for ${BL}${MODULE}${CL}"
 
 # ── Test 1: Nextcloud HTTP endpoint ──────────────────────────────────
 
