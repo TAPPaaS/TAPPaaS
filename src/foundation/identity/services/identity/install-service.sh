@@ -62,8 +62,17 @@ VMNAME="$(get_config_value 'vmname' '')"
 ZONE0="$(get_config_value 'zone0' '')"
 PROXY_DOMAIN="$(get_config_value 'proxyDomain' '')"
 VARIANT="$(get_config_value 'variant' '')"
+# Derive proxyDomain when a module doesn't hardcode it — the Nextcloud pattern
+# ("no proxyDomain is hardcoded"; the public domain is <vmname>.<domain>). Mirror
+# firewall:proxy's derivation so the OIDC redirect URIs match the reverse proxy's
+# domain, taking <domain> from the module's variant registry (default variant for
+# unsuffixed installs) to stay correct under ADR-005.
+if [[ -z "${PROXY_DOMAIN}" ]]; then
+    _DERIVED_DOMAIN="$(get_variant_config "${VARIANT}" 2>/dev/null | jq -r '.domain // empty')"
+    [[ -n "${_DERIVED_DOMAIN}" && -n "${VMNAME}" ]] && PROXY_DOMAIN="${VMNAME}.${_DERIVED_DOMAIN}"
+fi
 [[ -n "${VMNAME}" && -n "${ZONE0}" && -n "${PROXY_DOMAIN}" ]] \
-    || die "module ${MODULE} must set vmname, zone0, proxyDomain"
+    || die "module ${MODULE} must set vmname, zone0, proxyDomain (or set the variant domain so it derives as <vmname>.<domain>)"
 
 # identity.* contract (with Nextcloud-friendly defaults).
 PROVIDES_ADMIN="$(echo "${JSON}" | jq -r '.identity.providesAdminRole // false')"
