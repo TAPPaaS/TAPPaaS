@@ -39,8 +39,13 @@ fi
 # Generic: any onlyoffice consumer reuses this; non-declaring consumers are a no-op.
 CONSUMER_JSON="${CONFIG_DIR}/${MODULE}.json"
 CONNECTOR=""
+# Read 'connector' from EITHER the raw manifest (nested under the dependency
+# capability) OR the flattened on-disk canonical form (#207): install-module
+# renders the consumer JSON to canonical Pattern A, which hoists the
+# config["nextcloud:nextcloud"].connector field to top-level. Checking both
+# keeps this generic installer correct regardless of which form it's handed.
 [[ -n "${MODULE}" && -f "${CONSUMER_JSON}" ]] && \
-    CONNECTOR=$(jq -r '.config["nextcloud:nextcloud"].connector // empty' "${CONSUMER_JSON}" 2>/dev/null || true)
+    CONNECTOR=$(jq -r '.config["nextcloud:nextcloud"].connector // .connector // empty' "${CONSUMER_JSON}" 2>/dev/null || true)
 
 if [[ "${CONNECTOR}" == "onlyoffice" ]]; then
     info "  ${MODULE} declares an onlyoffice connector — wiring it (ADR-COM-0002)"
