@@ -24,6 +24,11 @@
 #     D2  firewall services            per-module test-service (presence/--deep)
 #     D3  DNS canonical resolves       canonical-bearing module FQDN resolves
 #
+# Lifecycle state is respected (the .state field):
+#   archived                  → skipped (intentionally retired; VM gone by design)
+#   draft|development|testing → soft-warned (reported, does NOT fail the run)
+#   else (incl. empty)        → strict (a failure flips the exit code)
+#
 # Usage:
 #   health-audit.sh                  # full audit, presence-level
 #   health-audit.sh --deep           # + connectivity probes where supported
@@ -77,12 +82,39 @@ done
 
 FAILS=0
 WARNS=0
+SKIPPED=0
+CUR_MODE="strict"   # per-module strictness, set before each module is audited
+
+# Map a module's lifecycle status to audit strictness (the field is .status;
+# .state kept as a fallback for older configs):
+#   archived                    → skip   (intentionally retired; VM gone by design)
+#   draft|development|testing   → soft   (pre-production; report, don't fail cron)
+#   anything else (incl. empty) → strict (treated as production / deployed)
+module_audit_mode() {
+    local st
+    st=$(jq -r '(.status // .state // "") | ascii_downcase' "$1" 2>/dev/null)
+    case "${st}" in
+        archived)                  echo skip ;;
+        draft|development|testing) echo soft ;;
+        *)                         echo strict ;;
+    esac
+}
 
 # Result emitters — pass lines are suppressed in --quiet (cron) mode; warnings
-# and failures always print. A failure flips the exit code; a warning does not.
+# and failures always print. fail() routes by CUR_MODE: a strict-module failure
+# flips the exit code; a pre-prod (soft) failure is reported but does not, so a
+# cron run stays green on known-incomplete modules.
 pass() { [[ "${OPT_QUIET}" -eq 1 ]] || info "  ${GN}✓${CL} $*"; }
 soft() { warn "  ${YW}!${CL} $*"; WARNS=$((WARNS + 1)); }
-fail() { warn "  ${RD}✗${CL} $*"; FAILS=$((FAILS + 1)); }
+fail() {
+    if [[ "${CUR_MODE}" == "soft" ]]; then
+        warn "  ${YW}~${CL} $* ${YW}[pre-prod — not failing]${CL}"
+        WARNS=$((WARNS + 1))
+    else
+        warn "  ${RD}✗${CL} $*"
+        FAILS=$((FAILS + 1))
+    fi
+}
 
 # Iterate installed module configs (excludes infra/meta files). Single-module
 # mode narrows to one. Emits absolute paths.
@@ -133,12 +165,14 @@ C2_FAILS_BEFORE="${FAILS}"
 if [[ -n "${ZONE_KEYS}" ]]; then
     while IFS= read -r p; do
         bn=$(basename "$p" .json)
+        CUR_MODE=$(module_audit_mode "$p")
+        [[ "${CUR_MODE}" == "skip" ]] && continue
         while IFS= read -r z; do
             [[ -z "$z" ]] && continue
             [[ "${ZONE_KEYS}" == *" ${z} "* ]] || fail "C2 ${bn}: zone \"${z}\" not defined in zones.json"
         done < <(jq -r '[.zone0, .zone1] | map(select(. != null and . != "")) | .[]' "$p" 2>/dev/null)
     done < <(module_configs)
-    [[ "${FAILS}" -eq "${C2_FAILS_BEFORE}" ]] && pass "C2 all modules: zone references resolve"
+    [[ "${FAILS}" -eq "${C2_FAILS_BEFORE}" ]] && pass "C2 all live modules: zone references resolve"
 fi
 
 # ══ DRIFT (desired → live) ════════════════════════════════════════════
@@ -223,6 +257,11 @@ audit_dns_canonical() {
 }
 
 while IFS= read -r p; do
+    CUR_MODE=$(module_audit_mode "$p")
+    if [[ "${CUR_MODE}" == "skip" ]]; then
+        SKIPPED=$((SKIPPED + 1))
+        continue
+    fi
     audit_fw_services "$p"
     audit_dns_canonical "$p"
 done < <(module_configs)
@@ -234,7 +273,7 @@ if [[ "${OPT_DEEP}" -eq 0 ]]; then
     info "  Presence-level run. Add --deep for connectivity probes (effectiveness)"
     info "  on services that support them: rules, dns."
 fi
-info "${BOLD}Audit summary: ${FAILS} failure(s), ${WARNS} warning(s)${CL}"
+info "${BOLD}Audit summary: ${FAILS} failure(s), ${WARNS} warning(s), ${SKIPPED} archived-skipped${CL}"
 
 if [[ "${FAILS}" -gt 0 ]]; then
     error "${BOLD}Health audit: DRIFT/VIOLATIONS found — see ✗ above${CL}"
