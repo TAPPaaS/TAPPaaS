@@ -154,6 +154,28 @@ if [[ ${#CRED_FIELDS[@]} -eq 0 ]]; then
     fi
 fi
 
+# ── Preflight: ensure acme.sh DNS hooks exist on the firewall (#327) ────────
+# os-acme-client's setup.sh symlinks home/{deploy,dnsapi,notify} into the
+# acme.sh examples dir on the firewall. These can disappear on a /var/etc
+# regeneration, making every DNS-01 provider hook unfindable ("Cannot find DNS
+# API hook for: dns_<provider>"), so the sign fails with a cryptic statusCode
+# 400. Re-run setup.sh idempotently and verify the provider hook resolves
+# before signing, failing fast with a clear message instead of the opaque 400.
+case "$PROVIDER" in
+    dns_*) DNS_HOOK="${PROVIDER}.sh" ;;
+    *)     DNS_HOOK="dns_${PROVIDER}.sh" ;;
+esac
+echo
+info "${BOLD}Ensuring acme.sh DNS hooks on ${FIREWALL}${CL}"
+ssh -o ConnectTimeout=5 root@"${FIREWALL}" \
+    'sh /usr/local/opnsense/scripts/OPNsense/AcmeClient/setup.sh' 2>/dev/null \
+    || warn "  could not run os-acme-client setup.sh on ${FIREWALL} (continuing to verify)"
+if ! ssh -o ConnectTimeout=5 root@"${FIREWALL}" \
+        "test -e /var/etc/acme-client/home/dnsapi/${DNS_HOOK}"; then
+    die "acme.sh DNS hook ${DNS_HOOK} missing on ${FIREWALL} after setup.sh (see #327)"
+fi
+info "  ${GN}✓${CL} dnsapi hook ${DNS_HOOK} present"
+
 # ── Provision + sign via acme-manager ──────────────────────────────────────
 
 STAGING_ARG=()
