@@ -7,7 +7,7 @@ Unified AI API gateway — routes requests to multiple LLM providers with usage 
 | Capability | Access from | How |
 |---|---|---|
 | Unified LLM API | Any internal zone | OpenAI-compatible endpoint on port 4000 |
-| Web UI | Internal network | `http://litellm.srv_work.internal:4000/ui` |
+| Web UI | Internal network | `http://litellm.srvwork.internal:4000/ui` |
 | Usage tracking | Admin UI | Per-key request counts, cost, latency |
 | Response caching | Automatic | Redis-backed; reduces provider API costs |
 | Virtual API keys | Admin UI | Scope per user or application |
@@ -28,7 +28,7 @@ Clients → LiteLLM :4000 → LLM Providers (OpenRouter, Anthropic, …)
 
 ## Requirements
 
-- `srv_work` zone (VLAN 220)
+- `srvwork` zone (VLAN 220)
 - NixOS template (`templates:nixos`)
 - 4 vCPU, 4GB RAM minimum (see sizing below)
 

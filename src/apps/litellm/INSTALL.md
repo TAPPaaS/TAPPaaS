@@ -26,7 +26,7 @@ install-module.sh litellm --node tappaas1 --zone0 srv_dev --vmid 399
 
 | Flag | Default | Controls |
 |---|---|---|
-| `--zone0` | `srv_work` | Network zone (VLAN) |
+| `--zone0` | `srvwork` | Network zone (VLAN) |
 | `--vmid` | `310` | Proxmox VM ID |
 | `--node` | `tappaas2` | Proxmox node |
 | `--memory` | `4096` | RAM in MB |
@@ -37,14 +37,14 @@ install-module.sh litellm --node tappaas1 --zone0 srv_dev --vmid 399
 **1. Get the master key**
 
 ```bash
-ssh tappaas@litellm.srv_work.internal "sudo cat /etc/secrets/litellm.env"
+ssh tappaas@litellm.srvwork.internal "sudo cat /etc/secrets/litellm.env"
 ```
 
 Save this key in your password manager — it is the admin password for the UI and API.
 
 **2. Open the UI and configure**
 
-`http://litellm.srv_work.internal:4000/ui` — log in with the master key.
+`http://litellm.srvwork.internal:4000/ui` — log in with the master key.
 
 1. Settings → Credentials — add API keys (OpenRouter, Anthropic, Perplexity, …)
 2. AI Hub — add models
@@ -77,17 +77,17 @@ All 10 tests should pass. Passing output:
 
 **Container not starting**
 ```bash
-ssh tappaas@litellm.srv_work.internal "journalctl -u podman-litellm -n 50"
+ssh tappaas@litellm.srvwork.internal "journalctl -u podman-litellm -n 50"
 ```
 Common cause: API key not yet configured — add at least one provider credential via UI first.
 
 **Cannot connect to UI after install**
 Verify firewall proxy is active: `rules-manager verify-rules litellm --no-ssl-verify`
-Check VM is reachable: `nc -zv -w 5 litellm.srv_work.internal 4000`
+Check VM is reachable: `nc -zv -w 5 litellm.srvwork.internal 4000`
 
 **Master key lost**
 ```bash
-ssh tappaas@litellm.srv_work.internal
+ssh tappaas@litellm.srvwork.internal
 sudo rm /etc/secrets/litellm.env
 sudo systemctl restart generate-litellm-secrets podman-litellm
 # New key generated — retrieve again with sudo cat
@@ -96,8 +96,8 @@ Warning: existing virtual keys remain valid; only the master key changes.
 
 **Database not responding**
 ```bash
-ssh tappaas@litellm.srv_work.internal "systemctl status postgresql"
-ssh tappaas@litellm.srv_work.internal "sudo -u postgres psql -c '\l'"
+ssh tappaas@litellm.srvwork.internal "systemctl status postgresql"
+ssh tappaas@litellm.srvwork.internal "sudo -u postgres psql -c '\l'"
 ```
 
 ## Backup and restore
