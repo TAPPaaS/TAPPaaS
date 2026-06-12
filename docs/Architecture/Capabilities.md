@@ -8,6 +8,16 @@ TAPPaaS is designed both top down and bottom up. Top down we looked at the capab
 
 We are trying to bring this together in a structured manner. This is a description of WHAT we want TAPPaaS to deliver. The HOW to deliver it is in the [SoftwareStack](TheSoftwareStack.md)
 
+> **Related models.** This document is the **strategy + structure** view (Stack → Capability →
+> Module). A **proposed composition meta-model** — `Node ▷ Module ▷ Component ▷ Function ▷ Service`
+> — is **issue #171**; it currently **diverges** from this document and the ArchiMate appendix on
+> `Node` (a VM here vs a physical machine in #171), on **`Capability` vs `Service`** (#171 replaces
+> capability with service — see #171 §10), and on **`Stack`** (used here, absent in #171).
+> Reconciliation is tracked on **issue #171**. Separately, the **classification** of each Module
+> (Site · People · Apps · Environments · Health + `tier`/`source`) is
+> **[ADR-007](<../ADR/ADR-007 - TAPPaaS Taxonomy.md>)** — orthogonal to whichever composition model
+> is ratified.
+
 ## TAPPaaS high level structure
 
 As with most complex IT solutions you can divide the capabilities of the solution into some dependent sub system.

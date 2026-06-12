@@ -6,7 +6,7 @@
 | **Version** | 1.1 |
 | **Date** | 2026-06-09 |
 | **Supersedes** | Old terminology: *Variants*, *Modules*, *Tenants* |
-| **Related** | configuration.json, zones.json, module-fields.json, Authentik tenants |
+| **Related** | configuration.json, zones.json, module-fields.json, Authentik tenants; **composition meta-model:** issue #171 + [Capabilities](<../Architecture/Capabilities.md>) — see [Meta-model relationship](#meta-model-relationship--classification-vs-composition) |
 
 ---
 
@@ -32,6 +32,24 @@ This model is MECE, DRY, and matches industry-standard naming used by Apple, GCP
 ADR-004 (/home/tappaas/TAPPaaS/docs/ADR/ADR-004-module-catalog-config-cascade.md)
 ADR-005 (/home/tappaas/TAPPaaS/docs/ADR/ADR-005-variant-domain-architecture.md)
 ADR-006 (/home/tappaas/TAPPaaS/docs/ADR/ADR-006-identity-users-and-roles.md)
+
+## Meta-model relationship — classification vs composition
+
+This ADR is the **classification taxonomy**: it answers *which bucket* a thing is in
+(Site · People · Apps · Environments · Health) plus `tier` and `source`. It does **not** define how
+things are built.
+
+The **composition meta-model** — how a deployable unit is structured — is defined separately and is
+currently **not yet settled**: the proposed model in **issue #171**
+(`Node ▷ Module ▷ Component ▷ Function ▷ Service`) **diverges from** the current
+[Capabilities](<../Architecture/Capabilities.md>) / ArchiMate appendix on `Node` (physical machine
+vs VM), on `Capability` vs `Service`, and on `Stack` (present vs absent). Reconciliation is tracked
+on **issue #171**. This ADR's classification applies regardless of which composition model is ratified.
+
+**How they couple:** every **Module** (composition) is *classified* by exactly one ADR-007 bucket
+(+ `tier` + `source`). One model **composes**, the other **classifies** — apply both, never one as a
+substitute for the other. Example: `firewall` is a *Module* (composition) classified as
+*Environments* (this ADR); its sub-units are *Components*, not buckets.
 
 ---
 
