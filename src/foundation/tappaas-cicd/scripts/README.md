@@ -453,6 +453,65 @@ validate-configuration.sh --config /tmp/test-config.json --quiet
 
 ---
 
+### health-audit.sh
+
+Periodic, schedulable **compliance & drift** audit across all installed modules.
+Orchestrates the per-component verifies into one correlated pass with a single
+exit code (cron/CI-friendly), and — crucially — extends from config-**presence**
+to runtime-**effectiveness** where the service test supports it (`--deep`): a
+rule existing is not the same as traffic flowing.
+
+**Usage:**
+```bash
+health-audit.sh [OPTIONS]
+```
+
+**Options:**
+
+| Option | Description |
+|--------|-------------|
+| `--deep` | Add connectivity/effectiveness probes where supported (`rules`, `dns`). Others are presence-only and flagged as such. |
+| `--module <name>` | Audit a single module (skips cluster-wide C1/D1). |
+| `--no-cluster` | Skip cluster-reachability checks (D1) when offline. |
+| `--quiet` | Cron mode: emit only warnings/failures and the summary. |
+
+**Checks performed:**
+
+| ID | Dimension | Check |
+|----|-----------|-------|
+| C1 | Compliance | `validate-configuration.sh` (schema / required fields) |
+| C2 | Compliance | Every `zone0`/`zone1` a module references is a defined key in `zones.json` (generic rename/typo guard) |
+| D1 | Drift | Cluster reconcile — desired `/config` vmid vs running (`inspect-cluster.sh`, informational) |
+| D2 | Drift | Per-module firewall services — `services/<svc>/test-service.sh` for each `firewall:<svc>` dependency (presence, or `--deep` effectiveness) |
+| D3 | Drift | DNS canonical resolves for canonical-bearing modules (guest vmid, or `firewall:dns`) — catches a stable name pointing at a dead IP |
+
+**Examples:**
+```bash
+# Full audit, presence level
+health-audit.sh
+
+# Scheduled drift check with effectiveness probes, quiet for cron
+health-audit.sh --deep --quiet
+
+# Audit one module offline
+health-audit.sh --module hassanova --no-cluster
+```
+
+**Exit codes:**
+
+| Code | Meaning |
+|------|---------|
+| `0` | Compliant, no drift |
+| `1` | One or more checks failed (violation or drift) |
+| `2` | Bad arguments |
+
+**Relation to the migration script:** the migration-specific re-apply+verify of
+interface-bound services lives in `migrate-zone-keys-to-camelcase.sh` (Stages
+4b/7b). `health-audit.sh` is the generic, ongoing equivalent — run it on a timer
+to catch drift between deployments, not only after a migration.
+
+---
+
 ### update-os.sh
 
 Updates a VM's operating system based on its type (NixOS or Debian/Ubuntu).

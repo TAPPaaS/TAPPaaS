@@ -17,11 +17,26 @@
 #   2. Rewrite zones.json + zones.json.orig (keys + access-to + pinhole-allowed-from)
 #   3. Rewrite every installed module config (zone0/1, trunks, arrays, etc.)
 #   4. Push renamed labels to OPNsense via zone-manager --force-rename-labels
+#  4b. Re-apply interface-bound services (firewall:discovery + firewall:rules)
+#      for EVERY module that declares them. --force-rename-labels is an OPNsense
+#      interface unassign+reassign (#213) that resets mDNS repeater memberships,
+#      UDP relays and interface-pinned rules; DNS alone does not repair this.
+#      Proven by the 2026-06-09 incident (mDNS silently lost iotCams → cameras
+#      gone for days). Scope is all-declaring, not only rewritten modules: a
+#      module on an unchanged zone0 can still span a renamed interface via
+#      discoveryMdns. Service update scripts are idempotent. (#213 follow-up.)
 #   5. Re-register DNS: add new vm.srvHome.internal (canonical) +
 #      keep vm.srv_home.internal as compat alias until --cleanup is run
 #   6. Refresh Caddy upstreams per affected module (firewall:proxy update-service)
-#   7. --verify: confirm DNS resolves under both old and new names for all
-#      touched modules; report pass/fail per record
+#   7. --verify: confirm DNS resolves under both old and new names. Scope is
+#      limited to canonical-bearing modules (guest VM/LXC via DHCP lease, or
+#      explicit firewall:dns dependency); discovery-only fleets, policy/physical
+#      devices and archived modules have no canonical by design and are skipped
+#      (else --verify false-fails and blocks --cleanup; #304 / P1).
+#  7b. Verify interface-bound services with their test-service.sh. DNS resolving
+#      is necessary but not sufficient — the reassign can leave a name pointing
+#      at a live IP while the discovery the device needs is gone (the false-green
+#      that hid the 2026-06-09 breakage). Presence != effectiveness.
 #
 # Usage:
 #   migrate-zone-keys-to-camelcase.sh              # full migration
@@ -73,6 +88,99 @@ reverse_map() {
 
 indent() { sed 's/^/      /'; }
 
+# Run a firewall:<svc> script over every installed module that declares
+# dependsOn firewall:<svc>. Shared by Stage 4b (re-apply update-service) and
+# Stage 7b (verify test-service) — both must touch the interface-bound services
+# that --force-rename-labels reset, across ALL declaring modules (a module on an
+# unchanged zone0 can still span a renamed interface via discoveryMdns).
+# Args: $1=svc  $2=script-path  $3=label  $4=mode (quiet|verbose, default verbose)
+# Returns non-zero if any invocation failed.
+for_modules_with_fw_service() {
+    local svc="$1" script="$2" label="$3" mode="${4:-verbose}" rc=0 p bn deps
+    while IFS= read -r p; do
+        [[ -f "$p" ]] || continue
+        bn=$(basename "$p" .json)
+        case "$bn" in
+            configuration|zones|module-fields|firewall|firewall.json.bak.*) continue ;;
+        esac
+        deps=$(jq -r '(.dependsOn // []) | join(",")' "$p" 2>/dev/null)
+        [[ ",${deps}," == *",firewall:${svc},"* ]] || continue
+        if [[ "${mode}" == "quiet" ]]; then
+            if "${script}" "${bn}" >/dev/null 2>&1; then
+                info "  ${GN}✓${CL} ${bn}: firewall:${svc} ${label} OK"
+            else
+                warn "  ${RD}✗${CL} ${bn}: firewall:${svc} ${label} FAILED"
+                rc=1
+            fi
+        else
+            if "${script}" "${bn}" 2>&1 | tail -5 | indent; then
+                info "  ${GN}✓${CL} ${bn}: firewall:${svc} ${label}"
+            else
+                warn "  ${RD}✗${CL} ${bn}: firewall:${svc} ${label} FAILED"
+                rc=1
+            fi
+        fi
+    done < <(find "${CONFIG_DIR}" -maxdepth 1 -name '*.json' | sort)
+    return "${rc}"
+}
+
+readonly FW_SERVICES_DIR="/home/tappaas/TAPPaaS/src/foundation/firewall/services"
+
+# module_expects_canonical <module-json-path>
+#
+# Decides whether a module SHOULD have a canonical <vmname>.<zone0>.internal
+# DNS record. Only two provisioning paths create one:
+#   - the module is a guest (cluster:vm / cluster:lxc) → resolves via dnsmasq
+#     DHCP lease under its zone domain;
+#   - the module explicitly depends on firewall:dns → declarative canonical.
+#
+# Everything else has NO canonical by design and must be skipped, else --verify
+# false-fails and permanently blocks --cleanup (#304 / P1):
+#   - firewall:discovery-only device fleets (reach via the mDNS repeater);
+#   - policy-only / physical devices (firewall:rules / firewall:proxy, no VM,
+#     no firewall:dns — e.g. solaredge until it adopts firewall:dns, P3);
+#   - archived / inactive modules.
+#
+# Returns 0 (expects canonical) or 1 (skip).
+module_expects_canonical() {
+    local p="$1"
+    local deps state
+    deps=$(jq -r '(.dependsOn // []) | join(",")' "$p" 2>/dev/null)
+    state=$(jq -r '(.state // "") | ascii_downcase' "$p" 2>/dev/null)
+    case "${state}" in
+        inactive|disabled|archived|removed) return 1 ;;
+    esac
+    [[ ",${deps}," == *",firewall:dns,"* ]] && return 0
+    [[ ",${deps}," == *",cluster:vm,"* || ",${deps}," == *",cluster:lxc,"* ]] && return 0
+    return 1
+}
+
+# cluster_running_vmids
+#
+# Echo the space-separated VMIDs of all guests currently RUNNING on the cluster,
+# using the native pvesh data source (the same /cluster/resources query that
+# inspect-cluster.sh and vm_exists_on_cluster() use) and the native node
+# discovery helpers from common-install-routines.sh.
+#
+# Returns 0 with the VMID list on stdout, or 1 if no node is reachable — the
+# caller then falls back to config-trust (checking every canonical-bearing
+# module) rather than silently passing.
+cluster_running_vmids() {
+    local mgmt node node_fqdn json
+    mgmt="${MGMT:-mgmt}"
+    while IFS= read -r node; do
+        [[ -z "${node}" ]] && continue
+        node_fqdn="${node}.${mgmt}.internal"
+        ping -c1 -W1 "${node_fqdn}" >/dev/null 2>&1 || continue
+        json=$(ssh -o ConnectTimeout=5 root@"${node_fqdn}" \
+            "pvesh get /cluster/resources --type vm --output-format json" 2>/dev/null) || continue
+        [[ -z "${json}" ]] && continue
+        echo "${json}" | jq -r '.[] | select(.status == "running") | .vmid' 2>/dev/null | tr '\n' ' '
+        return 0
+    done < <(get_all_node_hostnames 2>/dev/null)
+    return 1
+}
+
 OPT_DRY_RUN=0
 OPT_FORCE=0
 OPT_VERIFY=0
@@ -93,7 +201,9 @@ Then pushes renamed labels to OPNsense, re-registers DNS under new names
 Options:
     --dry-run   Report changes without writing anything.
     --verify    DNS verification only — check both old and new names resolve.
-                Run after migration to confirm correctness. Exit 3 on failure.
+                Scoped to canonical-bearing modules (guest VM/LXC or
+                firewall:dns); discovery-only/policy/physical/archived modules
+                are skipped by design. Run after migration. Exit 3 on failure.
     --cleanup   Remove compat (old snake_case) DNS aliases after successful
                 verification. Run only after --verify passes.
     --force     Ignore the marker file and re-run the migration.
@@ -122,8 +232,25 @@ done
 
 if [[ "${OPT_VERIFY}" -eq 1 ]]; then
     info "${BOLD}Verify: DNS resolution check (old compat + new canonical)${CL}"
+    info "  Scope: only canonical-bearing modules (guest VM/LXC or firewall:dns)."
+    info "  Skipped by design: discovery-only fleets, policy/physical devices, archived."
     VERIFY_FAIL=0
+    N_CHECKED=0
+    N_SKIPPED=0
     RMAP=$(reverse_map)
+
+    # Gate VM-backed modules on actual running state, fetched once from the
+    # native pvesh data source. A configured-but-not-running VM (e.g. an
+    # undeployed demo) has no DHCP-lease canonical by design → skip, do not fail.
+    if RUN_RAW=$(cluster_running_vmids); then
+        CLUSTER_OK=1
+        RUNNING_SET=" ${RUN_RAW} "
+        info "  Cluster reachable — gating VM checks on running state (pvesh)."
+    else
+        CLUSTER_OK=0
+        RUNNING_SET=""
+        warn "  Cluster unreachable — cannot gate on running state; checking all canonical-bearing modules (config-trust)."
+    fi
 
     while IFS= read -r p; do
         [[ -f "$p" ]] || continue
@@ -139,12 +266,31 @@ if [[ "${OPT_VERIFY}" -eq 1 ]]; then
         old_zone=$(jq -nr --argjson m "${RMAP}" --arg z "${new_zone}" '$m[$z] // empty')
         [[ -z "${old_zone}" ]] && continue
 
+        # Only modules that actually provision a canonical (guest VM/LXC via DHCP
+        # lease, or explicit firewall:dns). Discovery-only / policy / physical /
+        # archived modules have none by design → skip, do not fail (#304 / P1).
+        if ! module_expects_canonical "$p"; then
+            info "  ${YW}–${CL} ${bn} (${new_zone}) — skip: no canonical by design"
+            N_SKIPPED=$((N_SKIPPED + 1))
+            continue
+        fi
+
+        # VM-backed module (has a vmid) that is not currently running → no lease,
+        # no canonical by design. Skip; config-trust fallback when cluster down.
+        vmid=$(jq -r '.vmid // empty' "$p" 2>/dev/null)
+        if [[ "${CLUSTER_OK}" -eq 1 && -n "${vmid}" && "${RUNNING_SET}" != *" ${vmid} "* ]]; then
+            info "  ${YW}–${CL} ${bn} (${new_zone}) — skip: configured but not running (vmid ${vmid})"
+            N_SKIPPED=$((N_SKIPPED + 1))
+            continue
+        fi
+
         new_fqdn="${vmname}.${new_zone}.internal"
         old_fqdn="${vmname}.${old_zone}.internal"
 
         new_ip=$(dig +short A "${new_fqdn}" 2>/dev/null | head -1)
         old_ip=$(dig +short A "${old_fqdn}" 2>/dev/null | head -1)
 
+        N_CHECKED=$((N_CHECKED + 1))
         if [[ -n "${new_ip}" ]]; then
             info "  ${GN}✓${CL} ${new_fqdn} → ${new_ip} (canonical)"
         else
@@ -159,6 +305,7 @@ if [[ "${OPT_VERIFY}" -eq 1 ]]; then
         fi
     done < <(find "${CONFIG_DIR}" -maxdepth 1 -name '*.json' | sort)
 
+    info "${BOLD}Verify summary: ${N_CHECKED} canonical-bearing checked, ${N_SKIPPED} skipped by design${CL}"
     if [[ "${VERIFY_FAIL}" -eq 1 ]]; then
         error "DNS verify FAILED — one or more canonical records are missing"
         exit 3
@@ -389,6 +536,28 @@ elif [[ "${OPT_DRY_RUN}" -eq 1 ]]; then
     info "  [dry-run] would run: zone-manager --execute ${ZM_DRY_FLAGS}"
 fi
 
+# ── Stage 4b: re-apply interface-bound services after the reassign ────
+#
+# Only when --force-rename-labels actually ran (full run, not sweep — sweep
+# omits it, so no reassign happened and there is nothing to repair). Re-apply
+# firewall:discovery + firewall:rules for every module declaring them; the
+# update scripts are idempotent (mDNS GET→union→SET; rules check-before-add).
+
+if [[ "${OPT_DRY_RUN}" -eq 0 && "${OPT_SWEEP}" -eq 0 && -n "${LIVE_SNAKE}" ]]; then
+    info "${BOLD}Stage 4b: re-applying interface-bound services after reassign${CL}"
+    for svc in discovery rules; do
+        upd="${FW_SERVICES_DIR}/${svc}/update-service.sh"
+        if [[ ! -x "${upd}" ]]; then
+            warn "  firewall:${svc} update-service.sh not found — re-apply skipped"
+            continue
+        fi
+        for_modules_with_fw_service "${svc}" "${upd}" "re-applied" \
+            || warn "  one or more firewall:${svc} re-applies failed — see Stage 7b verify"
+    done
+elif [[ "${OPT_DRY_RUN}" -eq 1 && -n "${LIVE_SNAKE}" ]]; then
+    info "  [dry-run] would re-apply firewall:discovery + firewall:rules for all declaring modules"
+fi
+
 # ── Stage 5: re-register DNS (new canonical + keep old compat alias) ──
 
 info "${BOLD}Stage 5: DNS registration (canonical new + compat old)${CL}"
@@ -474,6 +643,28 @@ if [[ "${OPT_DRY_RUN}" -eq 0 && "${#TOUCHED_MODULES[@]}" -gt 0 ]]; then
         warn "  Compat aliases remain active. Backup at: ${BACKUP_DIR}"
     else
         info "  ${GN}All canonical records resolve OK${CL}"
+    fi
+fi
+
+# ── Stage 7b: verify interface-bound services (effectiveness, not DNS) ─
+#
+# Only after a full run that ran the reassign. test-service.sh confirms the
+# service the reassign reset is actually in place again — a green here means
+# discovery/rules are effective, not merely that a DNS name resolves.
+
+if [[ "${OPT_DRY_RUN}" -eq 0 && "${OPT_SWEEP}" -eq 0 && -n "${LIVE_SNAKE}" ]]; then
+    info "${BOLD}Stage 7b: interface-bound service verification${CL}"
+    SVC_FAIL=0
+    for svc in discovery rules; do
+        tst="${FW_SERVICES_DIR}/${svc}/test-service.sh"
+        [[ -x "${tst}" ]] || continue
+        for_modules_with_fw_service "${svc}" "${tst}" "verify" quiet || SVC_FAIL=1
+    done
+    if [[ "${SVC_FAIL}" -eq 1 ]]; then
+        warn "  Interface-bound service verify FAILED for one or more modules —"
+        warn "  the reassign may have left a service reset. Backup at: ${BACKUP_DIR}"
+    else
+        info "  ${GN}All interface-bound services verified OK${CL}"
     fi
 fi
 
