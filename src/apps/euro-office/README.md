@@ -47,3 +47,8 @@ Image: `ghcr.io/euro-office/documentserver:v9.3.1` — pinned (immutable semver)
 | `nextcloud:nextcloud` | The Nextcloud instance this server edits documents for |
 
 For installation, customisation, and troubleshooting see [INSTALL.md](./INSTALL.md).
+
+## Deploy notes & known limitations (0.1.0)
+
+- Validated via test variant; the OnlyOffice <-> Nextcloud connector is proven end-to-end (N4 wiring, ADR-COM-0002).
+- The consumer egress (srvWork -> reverse proxy:443) is declared in this module; named-variant deploys depend on the foundation egress-flattening + provider-variant resolution fixes (upstream issue).

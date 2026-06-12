@@ -630,10 +630,25 @@ in
         set -euo pipefail
         export PATH="/run/current-system/sw/bin:${pkgs.coreutils}/bin:$PATH"
 
-        nextcloud-occ config:app:set spreed signaling_servers \
-          --value="[{\"server\":\"wss://$HPB_URL/spreed\",\"verify\":false}]"
-        nextcloud-occ config:app:set spreed signaling_secret \
-          --value="$HPB_SECRET"
+        # Signaling (HPB) — use the canonical talk:signaling:add, which writes the
+        # structure Talk expects: {"servers":[…],"secret":"…"}. The raw
+        # config:app:set produced a bare array WITHOUT the inner "secret" key, so
+        # OCA\Talk\Config::getSignalingSecret() returned null and the admin Talk
+        # page 500'd (TypeError). Clear first; the add command appends.
+        nextcloud-occ config:app:delete spreed signaling_servers >/dev/null 2>&1 || true
+        nextcloud-occ config:app:delete spreed signaling_secret  >/dev/null 2>&1 || true
+        # Base URL only — Talk appends /api/v1/welcome (check) and /spreed (websocket)
+        # itself. Including /spreed here makes the check hit /spreed/api/v1/welcome → 404.
+        nextcloud-occ talk:signaling:add "wss://$HPB_URL" "$HPB_SECRET"
+
+        # TURN + STUN (coturn) — only when the consumer plumbed them into hpb.env.
+        # Without these, calls with >2 participants have no relay (admin warns).
+        if [ -n "''${TURN_SERVER:-}" ] && [ -n "''${TURN_SECRET:-}" ]; then
+          nextcloud-occ config:app:delete spreed turn_servers >/dev/null 2>&1 || true
+          nextcloud-occ config:app:delete spreed stun_servers >/dev/null 2>&1 || true
+          nextcloud-occ talk:stun:add "$TURN_SERVER"
+          nextcloud-occ talk:turn:add turn "$TURN_SERVER" "udp,tcp" --secret="$TURN_SECRET"
+        fi
 
         echo "Nextcloud Talk HPB signaling backend configured."
       '';

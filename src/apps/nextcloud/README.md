@@ -44,3 +44,8 @@ Core of the collaboration hub: `provides: nextcloud`, consumed by `coturn`, `nex
 | `identity:identity` | SSO (Authentik) + secrets |
 
 For installation steps see [INSTALL.md](./INSTALL.md).
+
+## Deploy notes & known limitations (0.1.0)
+
+- Validated on the cluster via a named test variant (`--variant test`). A base/production deploy is the canonical path; named-variant deploys depend on the foundation provider-variant resolution (see the `deploy-engine: pass resolved provider variant` upstream issue).
+- Talk HPB/TURN connector wiring (signaling backend allow-list, egress to the reverse proxy) is config-derived at deploy. External multi-party calls additionally require a publicly reachable coturn (WAN endpoint).

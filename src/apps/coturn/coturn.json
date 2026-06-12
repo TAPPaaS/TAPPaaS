@@ -1,0 +1,55 @@
+{
+  "description": "coturn TURN/STUN server for Nextcloud Talk WebRTC audio/video calls.",
+  "version": "0.1.0",
+  "releaseDate": "2026-06-12",
+  "maintainer": "@ErikDaniel007",
+  "status": "Testing",
+  "vmname": "coturn",
+  "vmid": 341,
+  "vmtag": "TAPPaaS,App",
+  "node": "tappaas1",
+  "zone0": "dmz",
+  "dependsOn": [
+    "backup:vm",
+    "cluster:vm",
+    "firewall:rules",
+    "nextcloud:nextcloud",
+    "templates:nixos"
+  ],
+  "provides": [
+    "turn"
+  ],
+  "config": {
+    "cluster:vm": {
+      "cores": 1,
+      "memory": "2048",
+      "diskSize": "8G",
+      "storage": "tanka1",
+      "imageType": "clone",
+      "image": "8080",
+      "bridge0": "lan"
+    },
+    "nextcloud:nextcloud": {
+      "connector": "talk"
+    }
+  },
+  "appVersion": "4.9.0",
+  "ingress": [
+    {
+      "from": "internet",
+      "ports": [
+        3478
+      ],
+      "protocol": "UDP",
+      "description": "Nextcloud Talk TURN/STUN (WAN)"
+    },
+    {
+      "from": "internet",
+      "ports": [
+        3478
+      ],
+      "protocol": "TCP",
+      "description": "Nextcloud Talk TURN/STUN TCP fallback (WAN)"
+    }
+  ]
+}
