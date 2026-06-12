@@ -157,7 +157,16 @@ fi
 # ── Provision + sign via acme-manager ──────────────────────────────────────
 
 STAGING_ARG=()
-[[ $STAGING -eq 1 ]] && STAGING_ARG=(--staging)
+ACCOUNT_ARG=()
+if [[ $STAGING -eq 1 ]]; then
+    STAGING_ARG=(--staging)
+    # Use a SEPARATE ACME account for staging (#329). os-acme-client keys the
+    # account by name; reusing the production account name for staging flips its
+    # CA to letsencrypt_test, so the production-registered account becomes
+    # unknown on the staging endpoint and breaks subsequent production
+    # issuance and renewals.
+    ACCOUNT_ARG=(--account-name letsencrypt-staging)
+fi
 
 PROV_ARGS=()
 for f in "${CRED_FIELDS[@]}"; do
@@ -172,6 +181,7 @@ trap 'rm -f "$LOG_FILE"' EXIT
 if ! acme-manager --firewall "$FIREWALL" --no-ssl-verify setup \
         --domain "$DOMAIN" --email "$EMAIL" \
         --provider "$PROVIDER" \
+        "${ACCOUNT_ARG[@]}" \
         "${PROV_ARGS[@]}" \
         "${STAGING_ARG[@]}" 2>&1 | tee "$LOG_FILE"; then
     die "acme-manager setup failed (see ${LOG_FILE})"
