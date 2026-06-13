@@ -139,7 +139,67 @@ Both files live in the config directory alongside `zones.json` and `configuratio
           "source": "zones",
           "description": "Uplink to tappaas2 (all VLANs)"
         },
-        "10": {
+        "45": {
+          "mode": "access",
+          "nativeVlan": 50,
+          "taggedVlans": [],
+          "connectedTo": {
+            "type": "wan",
+            "target": "firewall",
+            "port": "nic1",
+            "interface": "wan"
+          },
+          "source": "manual",
+          "description": "WAN VLAN to firewall (via tappaas1 passthrough)"
+        },
+        "46": {
+          "mode": "access",
+          "nativeVlan": 50,
+          "taggedVlans": [],
+          "connectedTo": {
+            "type": "wan",
+            "target": "firewall",
+            "port": "nic2",
+            "interface": "wan-backup"
+          },
+          "source": "manual",
+          "description": "WAN VLAN to firewall (via tappaas2 passthrough)"
+        },
+        "47": {
+          "mode": "access",
+          "nativeVlan": 50,
+          "taggedVlans": [],
+          "connectedTo": {
+            "type": "device",
+            "target": "wan-modem",
+            "mac": "00:11:22:33:44:55"
+          },
+          "source": "manual",
+          "description": "WAN modem uplink (ISP fiber ONT)"
+        },
+        "48": {
+          "mode": "trunk",
+          "nativeVlan": null,
+          "taggedVlans": [0, 200, 210, 220, 230, 310, 320, 410, 420, 610],
+          "connectedTo": {
+            "type": "switch",
+            "target": "access-switch-1",
+            "port": "24"
+          },
+          "source": "zones",
+          "description": "Trunk to access-switch-1 (all VLANs)"
+        }
+      }
+    },
+    "access-switch-1": {
+      "uuid": "c3d4e5f6-a7b8-9012-cdef-345678901234",
+      "vendor": "unifi",
+      "model": "USW-24-PoE",
+      "managementIp": "10.0.0.21",
+      "location": "home-office",
+      "description": "Access switch for home office and living room",
+      "ports": {
+        "1": {
           "mode": "access",
           "zone": "home",
           "nativeVlan": 310,
@@ -152,31 +212,7 @@ Both files live in the config directory alongside `zones.json` and `configuratio
           "source": "manual",
           "description": "HP LaserJet in home office"
         },
-        "24": {
-          "mode": "trunk",
-          "nativeVlan": null,
-          "taggedVlans": [310, 320, 410, 420],
-          "connectedTo": {
-            "type": "ap",
-            "target": "ap-living-room"
-          },
-          "source": "manual",
-          "description": "Trunk to living room AP"
-        },
-        "47": {
-          "mode": "access",
-          "nativeVlan": null,
-          "taggedVlans": [],
-          "connectedTo": {
-            "type": "wan",
-            "target": "firewall",
-            "port": "nic1",
-            "interface": "wan"
-          },
-          "source": "manual",
-          "description": "WAN uplink to firewall"
-        },
-        "48": {
+        "2": {
           "mode": "access",
           "zone": "iotCloud",
           "nativeVlan": 420,
@@ -188,6 +224,29 @@ Both files live in the config directory alongside `zones.json` and `configuratio
           },
           "source": "manual",
           "description": "EV charger (iotCloud VLAN)"
+        },
+        "12": {
+          "mode": "trunk",
+          "nativeVlan": null,
+          "taggedVlans": [310, 320, 410, 420],
+          "connectedTo": {
+            "type": "ap",
+            "target": "ap-living-room"
+          },
+          "source": "manual",
+          "description": "Trunk to living room AP"
+        },
+        "24": {
+          "mode": "trunk",
+          "nativeVlan": null,
+          "taggedVlans": [0, 200, 210, 220, 230, 310, 320, 410, 420, 610],
+          "connectedTo": {
+            "type": "switch",
+            "target": "core-switch-1",
+            "port": "48"
+          },
+          "source": "zones",
+          "description": "Trunk to core-switch-1 (all VLANs)"
         }
       }
     }
@@ -200,8 +259,8 @@ Both files live in the config directory alongside `zones.json` and `configuratio
       "model": "U6-Pro",
       "managementIp": "10.0.0.30",
       "location": "living-room-ceiling",
-      "uplinkSwitch": "core-switch-1",
-      "uplinkPort": "24",
+      "uplinkSwitch": "access-switch-1",
+      "uplinkPort": "12",
       "ssids": {
         "TAPPaaS-Home": {
           "vlan": 310,
