@@ -273,3 +273,44 @@ choice below is about the **certificate** strategy (Step 3A vs 3B).
 
 The variant registry (`configuration.json`) and zone (`zones.json`) are identical
 in both cases — only the cert/DNS mechanics differ.
+
+---
+
+## Provider notes & troubleshooting
+
+### DNS provider — deSEC
+
+```bash
+acme-setup.sh --variant client1 --provider desec     # reads the token from ~/.acme-dns-credentials.txt
+```
+
+- The variant subdomain (`client1.tappaas.org`) is a **plain subname** under the parent deSEC zone
+  (`tappaas.org`). Do **not** register it as a delegated child zone — acme.sh writes the
+  `_acme-challenge` TXT directly in the parent zone, which resolves and propagates fastest.
+- **Never use `--staging`.** os-acme-client keys the ACME account by name; staging flips the single
+  shared account to the staging CA, which then breaks production issuance and renewals (see #329).
+
+### Cert fails with `statusCode 400`
+
+The controller only surfaces the status code, and `/var/log/acme.sh.log` stays empty — the real
+error is elsewhere:
+
+1. os-acme-client logs to **syslog tag `AcmeClient`** (not `acme.sh.log`).
+2. For the actual Let's Encrypt / DNS error, run acme.sh directly with `--debug 2` using the exact
+   args from the syslog `AcmeClient: The shell command ...` line. It prints e.g. "Cannot find DNS
+   API hook" (#327), "No TXT record found" (dns_sleep, #328), or the LE problem document.
+
+### Guest in the variant zone gets no IP
+
+A new variant VLAN `N` must be carried by **every** L2 layer, not just OPNsense L3:
+
+| Layer | Must carry vid N | Gap |
+| --- | --- | --- |
+| OPNsense L3 (interface + DHCP) | yes (zone-manager) | — |
+| **Firewall VM Proxmox `net trunks=`** | **yes — the intra-node gate** | #335 (manual `qm set`) |
+| Node `lan`-bridge `bridge-vids` | yes (config-network = 2-4094) | — |
+| UniFi Network + trunk profiles | only for **cross-node/switch** traffic | #333 (manual) |
+
+If the guest's DHCP DISCOVER never reaches OPNsense (check `netstat -I vlan0.N` Ipkts on the
+firewall), the VLAN is being dropped at one of these L2 layers — most often the firewall VM's
+`trunks=` (verify with `qm config <firewall-vmid> | grep ^net`).
