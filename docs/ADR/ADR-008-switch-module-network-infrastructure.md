@@ -411,7 +411,7 @@ ap-manager reconcile                        # Check SSIDs match zones.json
 
 Reconciliation is triggered automatically when `zone-manager` modifies `zones.json`, or can be run manually via `switch-manager reconcile`. It runs in five phases:
 
-```
+```text
 ┌─────────────────────────────────────────────────────────────────────────────┐
 │                         RECONCILIATION PHASES                               │
 ├─────────────────────────────────────────────────────────────────────────────┤
@@ -422,10 +422,12 @@ Reconciliation is triggered automatically when `zone-manager` modifies `zones.js
 │  • Add new VLANs to trunk ports connected to nodes                          │
 │  • Add new SSIDs for zones with SSID field                                  │
 │  • Remove VLANs/SSIDs for deleted zones                                     │
+│  • Skip manual and discovered ports (preserve existing config)              │
 │                                                                             │
 │  Phase 1: INTERROGATE ACTUAL                                                │
 │  ──────────────────────────                                                 │
 │  Query switches for current config → update switch-configuration-actual.json│
+│  • Retrieves ALL ports on each switch (not just configured ones)            │
 │  • Uses vendor plugin (unifi.sh, mikrotik.sh, etc.) if available            │
 │  • If no plugin: actual.json is manually maintained                         │
 │                                                                             │
@@ -436,17 +438,21 @@ Reconciliation is triggered automatically when `zone-manager` modifies `zones.js
 │  • VLANs to remove from trunk ports                                         │
 │  • SSIDs to create/update/delete                                            │
 │  • Port mode changes (access ↔ trunk)                                       │
+│  • Flag unconfigured ports with link UP as DISCOVERED                       │
 │                                                                             │
 │  Phase 3: CONFIGURE DELTA                                                   │
 │  ────────────────────────                                                   │
 │  Apply changes to switches                                                  │
 │  • If vendor plugin exists: push via API                                    │
 │  • If no plugin: output delta to stdout for manual application              │
+│  • Discovered ports: no changes applied (informational only)                │
 │                                                                             │
-│  Phase 4: UPDATE ACTUAL                                                     │
-│  ──────────────────────                                                     │
-│  After successful configuration, update switch-configuration-actual.json    │
-│  • Only runs if Phase 3 succeeded (automated) or user confirms (manual)     │
+│  Phase 4: UPDATE ACTUAL + REGISTER DISCOVERED                               │
+│  ────────────────────────────────────────────                               │
+│  After successful configuration:                                            │
+│  • Update switch-configuration-actual.json to match switch state            │
+│  • Register discovered ports in switch-configuration-desired.json           │
+│    (source: "discovered") so they persist and appear in future reports      │
 │                                                                             │
 └─────────────────────────────────────────────────────────────────────────────┘
 ```
@@ -639,13 +645,47 @@ When no vendor plugin is available, `switch-manager apply` outputs actionable in
 ╚══════════════════════════════════════════════════════════════════════════════╝
 ```
 
-#### Phase 4: Update Actual
+#### Phase 4: Update Actual and Register Discovered Ports
+
+Phase 4 performs two tasks:
+
+1. **Update actual config** — After Phase 3 succeeds (automated) or the user confirms (manual), update `switch-configuration-actual.json` to match the current switch state.
+
+2. **Register discovered ports in desired** — Ports found during Phase 1 interrogation that were not already in the desired configuration are registered with `source: "discovered"`.
 
 ```bash
 # After automated apply succeeds, or after manual confirmation:
 switch-manager confirm
 
-# Updates switch-configuration-actual.json to match desired
+# What it does:
+# 1. Updates switch-configuration-actual.json to match switch state
+# 2. For each port in actual that is not in desired:
+#    → Add to switch-configuration-desired.json with source: "discovered"
+#    → These ports persist across reconciliations until the operator configures them
+```
+
+**Why register discovered ports in desired (not just actual)?**
+
+- Ports in `actual.json` reflect the physical switch state — they are overwritten on each interrogation
+- Ports in `desired.json` persist and track operator intent
+- By adding discovered ports to `desired.json`, we ensure:
+  - They appear in future delta reports until resolved
+  - The operator knows about unconfigured devices
+  - No configuration is lost if the device temporarily disconnects
+
+```text
+Phase 4 logic:
+
+1. Copy switch state to actual.json (for ports with successful apply)
+2. For each port in actual.json:
+   if port not in desired.json:
+     → Add to desired.json with:
+       source: "discovered"
+       mode: (from actual)
+       nativeVlan: (from actual)
+       connectedTo: { type: "unknown", mac: (from switch MAC table) }
+       description: "Auto-discovered port — review and configure"
+3. Write both actual.json and desired.json
 ```
 
 ### 7. Zone-to-SSID Mapping
@@ -670,39 +710,87 @@ The reconcile logic uses this to validate that:
 
 ### 8. Integration with zone-manager
 
-When `zone-manager` modifies `zones.json`, it automatically triggers switch reconciliation:
+The reconciliation model follows the same pattern for both L3 (OPNsense) and L2 (switches/APs): changes are batched to `zones.json`, and then a single reconciliation pass is triggered for the entire updated configuration. This ensures efficiency — multiple zone additions/removals result in one reconciliation, not one per change.
 
-```bash
-# Inside zone-manager after modifying zones.json:
-zone-manager add home --vlantag 310 --type Client
+#### Reconciliation Flow
 
-# zone-manager internally calls:
-switch-manager update-desired    # Phase 0: update desired config from zones.json
-switch-manager reconcile         # Phases 1-4: interrogate, delta, apply, confirm
+```text
+┌─────────────────────────────────────────────────────────────────────────┐
+│  1. Operator modifies zones.json (add/remove/update zones)              │
+└────────────────────────────────┬────────────────────────────────────────┘
+                                 │
+                                 ▼
+┌─────────────────────────────────────────────────────────────────────────┐
+│  2. zone-manager reconcile                                              │
+│     - Compares zones.json to OPNsense actual config                     │
+│     - Applies delta to OPNsense (VLANs, interfaces, DHCP, firewall)     │
+│     - Single reconciliation for all zone changes                        │
+└────────────────────────────────┬────────────────────────────────────────┘
+                                 │
+                    ┌────────────┴────────────┐
+                    │   (parallel or after)   │
+                    ▼                         ▼
+┌─────────────────────────────┐   ┌─────────────────────────────┐
+│  3a. switch-manager         │   │  3b. ap-manager             │
+│      reconcile              │   │      reconcile              │
+│  - Updates desired from     │   │  - Updates SSID/VLAN        │
+│    zones.json               │   │    mappings from zones.json │
+│  - Interrogates switches    │   │  - Applies to APs           │
+│  - Applies delta to         │   │                             │
+│    switches                 │   │                             │
+└─────────────────────────────┘   └─────────────────────────────┘
 ```
 
-This ensures that:
+#### Triggering Reconciliation
 
-1. Adding a new zone immediately identifies which switch ports need the new VLAN
-2. Removing a zone warns about orphaned VLANs on switches
-3. The operator gets immediate feedback about L2 infrastructure changes needed
+Reconciliation is triggered by the caller, not internally by zone-manager. This allows batching multiple changes before a single reconciliation pass:
+
+```bash
+# Step 1: Modify zones.json (multiple changes)
+zone-manager add home --vlantag 310 --type Client
+zone-manager add work --vlantag 320 --type Client
+zone-manager set-access home --allowed-from mgmt
+
+# Step 2: Reconcile all infrastructure (single pass)
+# Option A: Sequential — zone-manager first, then switch-manager
+zone-manager reconcile           # L3: OPNsense VLANs, DHCP, firewall
+switch-manager reconcile         # L2: Switch port VLANs
+
+# Option B: Parallel — both reconciliations run simultaneously
+zone-manager reconcile &
+switch-manager reconcile &
+wait
+```
+
+The `update-module.sh` orchestrator uses Option A (sequential) to ensure OPNsense has the VLANs configured before switches attempt to tag them.
+
+#### Why Not Call switch-manager from zone-manager?
+
+- **Efficiency**: Multiple zone changes would trigger multiple switch reconciliations
+- **Independence**: L3 (OPNsense) and L2 (switches) reconciliation can be tested/debugged separately
+- **Parallelism**: On large deployments, switch reconciliation can run in parallel with OPNsense
+- **Consistency**: Both managers follow the same pattern: read zones.json, compare to actual, apply delta
+
+#### Component Responsibilities
 
 | Component | Role in Reconciliation |
 | --------- | ---------------------- |
-| `zones.json` | Source of truth for VLANs — drives desired configuration |
-| `zone-manager` | Triggers reconciliation after zone changes |
-| `switch-manager` | Manages switch inventory and runs reconciliation phases |
-| `ap-manager` | Manages AP/SSID inventory; called by switch-manager for WiFi changes |
+| `zones.json` | Source of truth for VLANs — drives desired configuration for all managers |
+| `zone-manager reconcile` | Reconciles OPNsense to match zones.json (L3: VLANs, DHCP, firewall rules) |
+| `switch-manager reconcile` | Reconciles switches to match zones.json (L2: port VLAN assignments) |
+| `ap-manager reconcile` | Reconciles APs to match zones.json (WiFi: SSID/VLAN mappings) |
 | Vendor plugins | Provide automation for specific switch/AP vendors |
+| `update-module.sh` | Orchestrates the reconciliation sequence during module updates |
 
-### 9. Manual vs Zones-Based Port Configuration
+### 9. Port Configuration Sources: Zones, Manual, and Discovered
 
-Port configurations come from two sources, distinguished by the `source` field:
+Port configurations come from three sources, distinguished by the `source` field:
 
 | Source | Value | Description |
 | ------ | ----- | ----------- |
 | `zones` | Auto-managed | VLANs derived from `zones.json`; updated by `switch-manager update-desired` |
 | `manual` | User-managed | Manually configured; preserved during reconciliation |
+| `discovered` | Auto-detected | Found during interrogation; pending operator review |
 
 #### How It Works
 
@@ -719,6 +807,96 @@ Port configurations come from two sources, distinguished by the `source` field:
 - Preserved during `update-desired` — zones.json changes do not modify them
 - Used for: WAN uplinks, access ports, AP trunks, inter-switch links, end devices
 - Operator is responsible for ensuring correct VLANs
+
+**Discovered ports (`source: "discovered"`):**
+
+- Auto-detected during Phase 1 (interrogate) when a port has connectivity but is not in the desired configuration
+- Registered in `desired.json` during Phase 4 so they persist across reconciliations
+- Appear in reconciliation output as requiring operator review
+- Should be promoted to `manual` or `zones` once the operator identifies the device
+
+#### Full Port Discovery Flow
+
+When `switch-manager reconcile` runs, it discovers **all ports** on each named switch in the inventory:
+
+```text
+Phase 1 (Interrogate):
+┌─────────────────────────────────────────────────────────────────────────┐
+│  For each switch in inventory:                                          │
+│    Query switch via vendor plugin (or skip if manual.sh)                │
+│    Retrieve ALL ports and their state:                                  │
+│      - Port number                                                      │
+│      - Mode (access/trunk)                                              │
+│      - Native VLAN / Tagged VLANs                                       │
+│      - Link state (up/down)                                             │
+│      - MAC address table entries (for device identification)            │
+│    Write to switch-configuration-actual.json                            │
+└─────────────────────────────────────────────────────────────────────────┘
+
+Phase 2 (Delta):
+┌─────────────────────────────────────────────────────────────────────────┐
+│  Compare actual.json to desired.json:                                   │
+│                                                                         │
+│  For each port in actual:                                               │
+│    if port exists in desired:                                           │
+│      → Compare VLAN assignments, mode, etc.                             │
+│      → Generate delta if different                                      │
+│    if port NOT in desired AND link_state == "up":                       │
+│      → Flag as DISCOVERED (pending registration)                        │
+│      → Output: "Port N: Link UP, MAC xx:xx:xx — not configured"         │
+└─────────────────────────────────────────────────────────────────────────┘
+
+Phase 4 (Update Actual + Register Discovered):
+┌─────────────────────────────────────────────────────────────────────────┐
+│  After Phase 3 apply succeeds:                                          │
+│                                                                         │
+│  For each port in actual:                                               │
+│    if port NOT in desired:                                              │
+│      → Add to desired.json with:                                        │
+│          source: "discovered"                                           │
+│          connectedTo: { type: "unknown", mac: "..." }                   │
+│          description: "Auto-discovered — review and configure"          │
+│                                                                         │
+│  Write both actual.json and desired.json                                │
+└─────────────────────────────────────────────────────────────────────────┘
+```
+
+#### Discovered Port Lifecycle
+
+```text
+1. DETECTION
+   Phase 1 interrogates switch → finds port 15 with link UP
+   Port 15 is not in desired.json
+
+2. FLAGGING
+   Phase 2 outputs: "DISCOVERED: Port 15, MAC aa:bb:cc:dd:ee:ff"
+   No changes applied to switch (discovered ports are informational)
+
+3. REGISTRATION (Phase 4)
+   Port 15 added to desired.json with source: "discovered"
+   Now persists across future reconciliations
+
+4. OPERATOR ACTION (one of):
+   a) Configure as manual:
+      switch-manager port core-switch-1 15 \
+        --connected-to device:new-printer --zone home --source manual
+      → Changes source from "discovered" to "manual"
+      → Applies appropriate VLAN
+
+   b) Mark as unused:
+      switch-manager port core-switch-1 15 --connected-to unused
+      → Changes connectedTo.type to "unused"
+      → Stops appearing in discovery warnings
+
+   c) Remove from inventory (device disconnected):
+      switch-manager port core-switch-1 15 --remove
+      → Removes from desired.json
+      → Will be re-discovered if device reconnects
+
+5. SUBSEQUENT RECONCILIATIONS
+   If still source: "discovered", appears in output:
+   "INFO: Port 15 still unconfigured (discovered) — review recommended"
+```
 
 #### Adding Manual Ports
 
@@ -754,7 +932,7 @@ switch-manager port core-switch-1 1 \
     --description "Uplink to tappaas1 (all VLANs)"
 ```
 
-#### Reconciliation Behavior
+#### Reconciliation Behavior by Source
 
 During Phase 0 (`update-desired`):
 
@@ -765,6 +943,16 @@ For each port in desired config:
     → Update the port configuration
   if source == "manual":
     → Skip — preserve existing configuration
+  if source == "discovered":
+    → Skip — preserve until operator configures
+```
+
+During Phase 4 (`update-actual`):
+
+```text
+For each port in actual config:
+  if port not in desired:
+    → Add to desired with source: "discovered"
 ```
 
 This means:
@@ -772,10 +960,13 @@ This means:
 1. **Adding a new zone** → Automatically adds VLAN to all `source: "zones"` trunk ports
 2. **Removing a zone** → Automatically removes VLAN from `source: "zones"` ports
 3. **Manual ports unchanged** → Operator must manually update if needed
+4. **Discovered ports persist** → Remain in desired.json until operator configures or removes them
 
 #### Validation and Warnings
 
-Reconciliation warns about potential issues with manual ports:
+Reconciliation warns about potential issues:
+
+**Manual port missing VLAN:**
 
 ```text
 WARNING: Manual port core-switch-1:24 (ap-living-room trunk) missing VLAN 299
@@ -784,9 +975,18 @@ WARNING: Manual port core-switch-1:24 (ap-living-room trunk) missing VLAN 299
     switch-manager port core-switch-1 24 --tagged +299
 ```
 
+**Discovered port pending review:**
+
+```text
+INFO: Discovered port core-switch-1:15 still unconfigured
+  MAC: aa:bb:cc:dd:ee:ff, Mode: access, VLAN: 1
+  Configure: switch-manager port core-switch-1 15 --connected-to device:<name> --zone <zone>
+  Or mark unused: switch-manager port core-switch-1 15 --connected-to unused
+```
+
 #### Port Source in Data Model
 
-The `source` field is part of the Port Object:
+The `source` field is part of the Port Object. All three source types are shown below:
 
 ```json
 {
@@ -812,6 +1012,18 @@ The `source` field is part of the Port Object:
     },
     "source": "manual",
     "description": "HP LaserJet in home office"
+  },
+  "15": {
+    "mode": "access",
+    "nativeVlan": 1,
+    "taggedVlans": [],
+    "connectedTo": {
+      "type": "unknown",
+      "target": null,
+      "mac": "11:22:33:44:55:66"
+    },
+    "source": "discovered",
+    "description": "Auto-discovered port — review and configure"
   }
 }
 ```
