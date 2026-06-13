@@ -47,7 +47,7 @@ fi
 #   - we write the 4-var contract to /etc/secrets/onlyoffice.env on the Nextcloud VM; the
 #     declarative nextcloud-configure-eurooffice.service applies it idempotently via occ.
 # Generic: any onlyoffice consumer reuses this; non-declaring consumers are a no-op.
-CONSUMER_JSON="${CONFIG_DIR}/${MODULE}.json"
+# CONSUMER_JSON already resolved (readonly) above for the variant-aware provider lookup.
 CONNECTOR=""
 # Read 'connector' from EITHER the raw manifest (nested under the dependency
 # capability) OR the flattened on-disk canonical form (#207): install-module

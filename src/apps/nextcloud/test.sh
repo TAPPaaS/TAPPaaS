@@ -331,15 +331,20 @@ fi
 header "Test 10: Data Backup Service"
 info "Triggering nextcloud-data-backup.service (oneshot) — this may take a moment..."
 
-BACKUP_BEFORE=$(remote "sudo bash -c 'ls -t /var/backup/nextcloud/data/*.tar.gz 2>/dev/null | head -1'" || echo "")
+# Robust against clock skew / future-dated files: compare the full SET of backup
+# files before/after by filename, not the newest-by-mtime (a single file with a
+# future mtime — e.g. from a fresh VM before NTP sync — would otherwise shadow
+# every new backup under `ls -t` and cause a false negative).
+BACKUP_BEFORE=$(remote "sudo bash -c 'ls /var/backup/nextcloud/data/*.tar.gz 2>/dev/null | sort'" || echo "")
 
 if remote "sudo systemctl start nextcloud-data-backup.service" 2>/dev/null; then
-    BACKUP_AFTER=$(remote "sudo bash -c 'ls -t /var/backup/nextcloud/data/*.tar.gz 2>/dev/null | head -1'" || echo "")
-    if [ -n "$BACKUP_AFTER" ] && [ "$BACKUP_AFTER" != "$BACKUP_BEFORE" ]; then
-        BACKUP_SIZE=$(remote "sudo du -sh '$BACKUP_AFTER' 2>/dev/null | cut -f1" || echo "?")
-        pass "Data backup succeeded — ${BACKUP_AFTER##*/} (${BACKUP_SIZE})"
+    BACKUP_AFTER=$(remote "sudo bash -c 'ls /var/backup/nextcloud/data/*.tar.gz 2>/dev/null | sort'" || echo "")
+    NEW_BACKUP=$(comm -13 <(printf '%s\n' "$BACKUP_BEFORE") <(printf '%s\n' "$BACKUP_AFTER") | grep -v '^$' | tail -1)
+    if [ -n "$NEW_BACKUP" ]; then
+        BACKUP_SIZE=$(remote "sudo du -sh '$NEW_BACKUP' 2>/dev/null | cut -f1" || echo "?")
+        pass "Data backup succeeded — ${NEW_BACKUP##*/} (${BACKUP_SIZE})"
     elif [ -n "$BACKUP_AFTER" ]; then
-        fail "Backup service exited 0 but no new .tar.gz was created in /var/backup/nextcloud/data/"
+        fail "Backup service exited 0 but no new .tar.gz appeared in /var/backup/nextcloud/data/"
     else
         fail "Backup service exited 0 but /var/backup/nextcloud/data/ is empty"
     fi

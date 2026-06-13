@@ -28,29 +28,30 @@ readonly MGMT_SECRETS="/home/tappaas/secrets/coturn.env"
 # triggered by this module's config["nextcloud:fileservice"].connector = "talk".
 # No cross-VM SSH push from this module. (N4 generalization for talk/hpb: follow-up.)
 
-# ── Auto-detect WAN IP → write to coturn VM + management plane ───────────────
+# ── Detect the public (WAN/NAT) IP coturn advertises as external-ip ───────────
+# Detected from the coturn VM itself via external echo services — the post-NAT IP
+# the outside world sees, which is exactly what TURN external-ip needs. Cred-free
+# and robust to OPNsense API / interface-naming changes (the prior OPNsense
+# interfacesInfo query was fragile: it failed silently here, leaving external Talk
+# media broken while the install still reported success). Single-WAN assumption;
+# requires DMZ egress to the internet. Falls back to a manual warning if blocked.
 echo ""
-info "${BOLD}Detecting WAN IP from OPNsense…${CL}"
-
-CRED_FILE="/home/tappaas/.opnsense-credentials.txt"
-FIREWALL="firewall.mgmt.internal"
-WAN_IP=""
-
-if [[ -f "$CRED_FILE" ]]; then
-    OPNSENSE_TOKEN=$(sed -n '1p' "$CRED_FILE")
-    OPNSENSE_SECRET=$(sed -n '2p' "$CRED_FILE")
-
-    WAN_IP=$(curl -sk --max-time 10 \
-        -u "${OPNSENSE_TOKEN}:${OPNSENSE_SECRET}" \
-        "https://${FIREWALL}/api/interfaces/overview/interfacesInfo" \
-        | jq -r '.rows[] | select(.identifier == "wan") | .ipv4 // empty' \
-        | cut -d/ -f1 || true)
-fi
+info "${BOLD}Detecting public IP from the coturn VM…${CL}"
+# Retry across providers AND rounds — a single curl can miss transiently even
+# when egress is healthy (declarative wait, like the secret read below).
+WAN_IP=$(ssh -o BatchMode=yes -o ConnectTimeout=15 -o StrictHostKeyChecking=accept-new \
+    "tappaas@${COTURN_HOST}" '
+    for _round in $(seq 1 6); do
+        for u in https://checkip.amazonaws.com https://api.ipify.org https://ifconfig.me/ip; do
+            ip=$(curl -s --max-time 6 "$u" 2>/dev/null | tr -dc "0-9.")
+            if [[ "$ip" =~ ^([0-9]{1,3}\.){3}[0-9]{1,3}$ ]]; then echo "$ip"; exit 0; fi
+        done
+        sleep 5
+    done' 2>/dev/null || true)
 
 if [[ -n "${WAN_IP}" ]]; then
-    info "  Detected WAN IP: ${WAN_IP}"
-    info "  Writing COTURN_EXTERNAL_IP to coturn VM…"
-    ssh -o BatchMode=yes -o ConnectTimeout=15 -o StrictHostKeyChecking=no "tappaas@${COTURN_HOST}" \
+    info "  Detected public IP: ${WAN_IP}"
+    ssh -o BatchMode=yes -o ConnectTimeout=15 -o StrictHostKeyChecking=accept-new "tappaas@${COTURN_HOST}" \
         "sudo sed -i 's/^COTURN_EXTERNAL_IP=.*/COTURN_EXTERNAL_IP=${WAN_IP}/' /etc/secrets/coturn.env && \
          sudo systemctl restart coturn.service" && \
         info "  COTURN_EXTERNAL_IP=${WAN_IP} set and coturn restarted." || \
@@ -61,9 +62,9 @@ if [[ -n "${WAN_IP}" ]]; then
     mv "${MGMT_SECRETS}.tmp" "${MGMT_SECRETS}"
     info "  COTURN_EXTERNAL_IP saved to management plane."
 else
-    warn "  Could not detect WAN IP from OPNsense — set it manually:"
+    warn "  Could not detect public IP from the coturn VM (DMZ egress blocked?) — external Talk media will fail until set manually:"
     warn "    ssh tappaas@${COTURN_HOST}"
-    warn "    sudo sed -i 's/COTURN_EXTERNAL_IP=/COTURN_EXTERNAL_IP=<YOUR-WAN-IP>/' /etc/secrets/coturn.env"
+    warn "    sudo sed -i 's/^COTURN_EXTERNAL_IP=.*/COTURN_EXTERNAL_IP=<YOUR-WAN-IP>/' /etc/secrets/coturn.env"
     warn "    sudo systemctl restart coturn.service"
 fi
 
@@ -75,9 +76,17 @@ fi
 # WAN-IP detection above), since hpb's install will die without it.
 echo ""
 info "${BOLD}Reading COTURN_SECRET from coturn VM…${CL}"
-COTURN_SECRET=$(ssh -o BatchMode=yes -o ConnectTimeout=15 -o StrictHostKeyChecking=accept-new \
-    "tappaas@${COTURN_HOST}" \
-    "sudo grep -h '^COTURN_SECRET=' /etc/secrets/coturn.env 2>/dev/null | cut -d= -f2-" 2>/dev/null || true)
+# NixOS first-boot generates the secret asynchronously; poll for it (idempotent —
+# a re-run just re-reads) instead of failing on a fresh-VM startup race.
+COTURN_SECRET=""
+for _attempt in $(seq 1 30); do
+    COTURN_SECRET=$(ssh -o BatchMode=yes -o ConnectTimeout=15 -o StrictHostKeyChecking=accept-new \
+        "tappaas@${COTURN_HOST}" \
+        "sudo grep -h '^COTURN_SECRET=' /etc/secrets/coturn.env 2>/dev/null | cut -d= -f2-" 2>/dev/null || true)
+    [[ -n "${COTURN_SECRET}" ]] && break
+    [[ "${_attempt}" -eq 1 ]] && info "  Secret not present yet — waiting for first-boot generation (up to ~5min)…"
+    sleep 10
+done
 if [[ -n "${COTURN_SECRET}" ]]; then
     # inline upsert (the toolbox has no upsert_secret); preserve any other keys
     mkdir -p "$(dirname "${MGMT_SECRETS}")"
