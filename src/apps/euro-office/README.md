@@ -11,6 +11,22 @@ Collaborative document editing for Nextcloud — real-time co-authoring of Word,
 | OnlyOffice-compatible API | `srv` zone | `http://euro-office.srv.internal` (port 80) |
 | Public editor endpoint | via reverse proxy | `https://euro-office.<domain>` |
 
+## Clients — browser, desktop, mobile
+
+Editing is not browser-only. Because the server is OnlyOffice-compatible, the
+official **OnlyOffice clients** open the same documents through your Nextcloud
+(they connect to Nextcloud, not to this server directly):
+
+| Client | Platform | How |
+|---|---|---|
+| Browser (default) | any | Open a document in Nextcloud Files |
+| OnlyOffice Desktop Editors | **macOS** (Intel + Apple Silicon), **Windows**, Linux | "Connect to cloud" → add your Nextcloud → open documents; co-authoring routes through this DocumentServer |
+| OnlyOffice Documents | iOS, Android | Same Nextcloud connection |
+
+Desktop download (free): <https://www.onlyoffice.com/download-desktop.aspx>
+The clients are OnlyOffice's official product; compatibility here is via the
+Nextcloud integration, not a Euro-Office-branded build.
+
 ## What is not included
 
 - Standalone access — the editor is reached through Nextcloud, not directly. The built-in `/example/` test app is disabled (`EXAMPLE_ENABLED=false`).

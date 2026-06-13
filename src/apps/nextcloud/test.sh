@@ -379,6 +379,46 @@ else
 fi
 
 # ============================================================================
+# Test 12: OnlyOffice Connector URL Consistency (conditional)
+# ============================================================================
+# Server-side health (JWT, /healthcheck, commandservice) can be green while the
+# BROWSER still fails with "ONLYOFFICE cannot be reached" — when the public URLs
+# were composed as <vmname>.<domain> instead of the module's proxyDomain
+# (<name>.<variant-domain>), so StorageUrl points at a host NOT in trusted_domains
+# and the DocumentServer cannot fetch the document. Server checks miss this; the
+# browser surfaces it. This test catches the mismatch.
+header "Test 12: OnlyOffice Connector URL Consistency"
+
+DS_URL=$(remote "sudo -u postgres psql -d nextcloud -tAc \"SELECT configvalue FROM oc_appconfig WHERE appid='onlyoffice' AND configkey='DocumentServerUrl'\" 2>/dev/null" | tr -d '\r ' || echo "")
+
+if [ -z "$DS_URL" ]; then
+    skip "OnlyOffice: connector not configured (no DocumentServerUrl) — skipping"
+else
+    EXPECT_DOMAIN=$(jq -r '.config["firewall:proxy"].proxyDomain // .proxyDomain // empty' "${MODULE_JSON}" 2>/dev/null || echo "")
+    STORAGE_URL=$(remote "sudo -u postgres psql -d nextcloud -tAc \"SELECT configvalue FROM oc_appconfig WHERE appid='onlyoffice' AND configkey='StorageUrl'\" 2>/dev/null" | tr -d '\r ' || echo "")
+    STORAGE_HOST=$(printf '%s' "$STORAGE_URL" | sed -E 's#^https?://##; s#[:/].*$##')
+
+    # 1. StorageUrl host (the DocumentServer's callback target) must be this
+    #    module's trusted public domain. The variant URL-composition bug pointed it
+    #    at <vmname>.<domain>, which is NOT in trusted_domains → callback fails.
+    if [ -z "$STORAGE_URL" ]; then
+        skip "OnlyOffice StorageUrl unset (DocumentServer uses the request host) — no mismatch possible"
+    elif [ -n "$EXPECT_DOMAIN" ] && [ "$STORAGE_HOST" = "$EXPECT_DOMAIN" ]; then
+        pass "OnlyOffice StorageUrl host ($STORAGE_HOST) matches the module proxyDomain (trusted)"
+    else
+        fail "OnlyOffice StorageUrl host '$STORAGE_HOST' != module proxyDomain '$EXPECT_DOMAIN' — DocumentServer cannot fetch documents (vmname-vs-proxyDomain URL bug)"
+    fi
+
+    # 2. DocumentServerUrl (the editor the browser loads) must be publicly reachable.
+    DS_HEALTH=$(curl -s -o /dev/null -w '%{http_code}' --max-time 10 "${DS_URL%/}/healthcheck" 2>/dev/null || echo "000")
+    if [ "$DS_HEALTH" = "200" ]; then
+        pass "OnlyOffice DocumentServerUrl publicly reachable (${DS_URL%/}/healthcheck -> 200)"
+    else
+        fail "OnlyOffice DocumentServerUrl ${DS_URL} not reachable on the browser path (/healthcheck -> HTTP ${DS_HEALTH})"
+    fi
+fi
+
+# ============================================================================
 # Summary
 # ============================================================================
 header "Test Summary"
