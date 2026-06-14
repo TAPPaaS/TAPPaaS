@@ -42,6 +42,12 @@ class CaddyHandler:
     upstream_tls: bool = False
     # Skip verification of the upstream's TLS cert (internal/self-signed backends).
     upstream_tls_skip_verify: bool = True
+    # Force a specific HTTP version to the upstream (os-caddy "HttpVersion" field):
+    # "" = default (offers HTTP/1.1 + HTTP/2); "http1"/"http2"/"http3". Use
+    # "http1" for WebSocket apps behind a TLS upstream — otherwise Caddy
+    # negotiates HTTP/2 with the upstream, which cannot carry a WebSocket Upgrade
+    # and returns 500 (e.g. the UniFi OS console). (#339)
+    upstream_http_version: str = ""
     # Enable Caddy's per-handle forward_auth (issue #45). When the global
     # AuthProvider is set to Authentik (via identity install at Phase B), this
     # makes Caddy redirect unauthenticated requests through the Authentik
@@ -409,6 +415,7 @@ class CaddyManager:
                 "ToPath": handler.to_path,
                 "HttpTls": "1" if handler.upstream_tls else "0",
                 "HttpTlsInsecureSkipVerify": "1" if (handler.upstream_tls and handler.upstream_tls_skip_verify) else "0",
+                "HttpVersion": handler.upstream_http_version,
                 "accesslist": handler.access_list_uuid,
                 "description": handler.description,
                 "ForwardAuth": "1" if handler.forward_auth else "0",
@@ -437,6 +444,7 @@ class CaddyManager:
                 "ToPath": handler.to_path,
                 "HttpTls": "1" if handler.upstream_tls else "0",
                 "HttpTlsInsecureSkipVerify": "1" if (handler.upstream_tls and handler.upstream_tls_skip_verify) else "0",
+                "HttpVersion": handler.upstream_http_version,
                 "accesslist": handler.access_list_uuid,
                 "description": handler.description,
                 "ForwardAuth": "1" if handler.forward_auth else "0",

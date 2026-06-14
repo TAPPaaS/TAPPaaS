@@ -211,6 +211,16 @@ if [[ "$(get_config_value 'proxyUpstreamTls' 'false')" == "true" ]]; then
     TLS_ARGS=(--upstream-tls)
 fi
 
+# Force HTTP/1.1 to the upstream (os-caddy HttpVersion=http1). Needed for apps
+# whose UI rides a WebSocket behind a TLS upstream (e.g. the UniFi OS console):
+# Caddy otherwise negotiates HTTP/2 with the upstream, which cannot carry a
+# WebSocket Upgrade and returns 500 — the SPA then renders blank. (#339)
+HTTP1_ARGS=()
+if [[ "$(get_config_value 'proxyUpstreamHttp1' 'false')" == "true" ]]; then
+    info "  Forcing HTTP/1.1 to the upstream (proxyUpstreamHttp1=true — WebSocket support)"
+    HTTP1_ARGS=(--upstream-http1)
+fi
+
 # ── Create handler ──────────────────────────────────────────────────
 
 info "  Creating Caddy handler..."
@@ -220,6 +230,7 @@ caddy-manager add-handler "${PROXY_DOMAIN}" \
     --description "${DESCRIPTION}" \
     "${ACL_ARGS[@]+"${ACL_ARGS[@]}"}" \
     "${TLS_ARGS[@]+"${TLS_ARGS[@]}"}" \
+    "${HTTP1_ARGS[@]+"${HTTP1_ARGS[@]}"}" \
     --no-ssl-verify || die "Failed to create Caddy handler"
 
 # ── Reconfigure Caddy ───────────────────────────────────────────────

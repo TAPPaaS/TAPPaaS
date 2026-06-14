@@ -98,6 +98,7 @@ def add_handler(
     check_mode: bool = False,
     redir: str = "",
     redir_path: str = "",
+    upstream_http1: bool = False,
 ) -> bool:
     """Add (or reconcile) a reverse-proxy OR redir handler for a domain.
 
@@ -176,6 +177,7 @@ def add_handler(
             description=description,
             access_list_uuid=access_list_uuid,
             upstream_tls=upstream_tls,
+            upstream_http_version=("http1" if upstream_http1 else ""),
             forward_auth=forward_auth,
         )
         target_desc = f"{upstream}:{port}"
@@ -551,6 +553,7 @@ Examples:
     add_handler_parser.add_argument("--description", default="", help="Description for the handler")
     add_handler_parser.add_argument("--access-list", default="", help="Name of an access list to attach (issue #206) — restrict client networks")
     add_handler_parser.add_argument("--upstream-tls", action="store_true", help="Reverse-proxy to an HTTPS upstream (e.g. the OPNsense GUI on :8443); skips upstream cert verification")
+    add_handler_parser.add_argument("--upstream-http1", action="store_true", help="Force HTTP/1.1 to the upstream (os-caddy HttpVersion=http1). Required for WebSocket apps behind a TLS upstream (e.g. the UniFi OS console), which otherwise 500 on the WS over HTTP/2 (#339)")
     add_handler_parser.add_argument("--forward-auth", action="store_true",
                                     help="Enable Caddy per-handle forward_auth — redirects unauthenticated "
                                     "requests through the global Authentik outpost (issue #45). Requires "
@@ -630,6 +633,7 @@ Examples:
                     args.description, args.access_list, args.upstream_tls,
                     args.forward_auth, args.check_mode,
                     redir=args.redir, redir_path=args.redir_path,
+                    upstream_http1=args.upstream_http1,
                 )
             elif args.command == "add-accesslist":
                 success = add_access_list_cmd(

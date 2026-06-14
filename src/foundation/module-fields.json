@@ -49,6 +49,7 @@
     "proxyDomain",
     "proxyPort",
     "proxyUpstreamTls",
+    "proxyUpstreamHttp1",
     "proxyTls",
     "proxyAllowedZones",
     "discoveryMdns",
@@ -692,6 +693,19 @@
       "values": {
         "true": "Upstream is HTTPS (skip upstream cert verification)",
         "false": "Upstream is plain HTTP (default)"
+      }
+    },
+    "proxyUpstreamHttp1": {
+      "description": "Force HTTP/1.1 to the upstream (os-caddy HttpVersion=http1). Required for apps whose UI rides a WebSocket behind a TLS upstream — e.g. the UniFi OS console. Without it, Caddy negotiates HTTP/2 with the upstream, which cannot carry a WebSocket Upgrade and returns 500, so the SPA renders blank (issue #339).",
+      "type": "string",
+      "requiredBy": [],
+      "usedBy": [
+        "firewall:proxy"
+      ],
+      "default": "false",
+      "values": {
+        "true": "Force HTTP/1.1 to the upstream (WebSocket support)",
+        "false": "Default upstream HTTP versions (HTTP/1.1 + HTTP/2)"
       }
     },
     "proxyTls": {
