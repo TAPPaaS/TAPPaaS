@@ -22,13 +22,6 @@ set -euo pipefail
 COTURN_HOST="$(get_config_value vmname coturn).$(get_config_value zone0 dmz).internal"
 readonly MGMT_SECRETS="/home/tappaas/secrets/coturn.env"
 
-# Recreate-safe SSH: a redeployed VM (same hostname, new host key) trips strict
-# host-key checking, so the ssh calls below (which use accept-new — it accepts
-# unknown hosts but REJECTS changed keys) fail on a delete+reinstall and the
-# secret read never succeeds. Clear any stale key so accept-new re-pins the
-# current one (mirrors nextcloud-hpb's install.sh).
-ssh-keygen -R "${COTURN_HOST}" >/dev/null 2>&1 || true
-
 # ── Nextcloud connector — owned by Nextcloud, NOT here (ADR-COM-0002) ─────────
 # coturn does ONLY its own layer. The Talk TURN connector (sharing COTURN_SECRET
 # with Nextcloud) is wired by NEXTCLOUD's services/nextcloud/install-service.sh,

@@ -31,6 +31,20 @@ OSTYPE_VAL="$(get_config_value 'ostype' 'l26')"
 CLOUDINIT="$(get_config_value 'cloudInit' 'true')"
 MGMT="mgmt"
 
+# ── Recreate-safe SSH (central stale host-key clear) ──────────────────────
+# A redeployed VM reuses its hostname (vmname.zone.internal) but gets a NEW SSH
+# host key. A stale known_hosts entry from the prior VM then makes every later ssh
+# that connects by hostname fail with "host key changed" — silently breaking the
+# framework + module install/wiring scripts that use StrictHostKeyChecking=accept-new
+# (it adds unknown hosts but REJECTS changed keys). Clear the stale hostname key ONCE
+# here, at (re)creation, so downstream scripts need no per-script `ssh-keygen -R`.
+# (The framework already clears the IP key in update-os.sh; this covers the hostname
+# path that modules actually connect on.)
+for _z in "${ZONE0NAME}" "$(get_config_value 'zone1' '')" "$(get_config_value 'zone2' '')"; do
+    [[ -n "${_z}" ]] || continue
+    ssh-keygen -R "${VMNAME}.${_z}.internal" >/dev/null 2>&1 || true
+done
+
 # Read the VM's primary-NIC (net0) MAC from the Proxmox config. Used to turn a
 # DNS pin into a static DHCP reservation (MAC -> IP) for guests that must be
 # pinned (HAOS appliances, Windows clones) so the locked IP can never drift and
