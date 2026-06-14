@@ -87,10 +87,17 @@ ssh -o BatchMode=yes -o StrictHostKeyChecking=accept-new "root@${NODE_FQDN}" \
     "qm set ${VMID} --agent enabled=1,freeze-fs-on-backup=1" >/dev/null \
     || warn "appliance-ssh: could not set agent freeze-fs (continuing)"
 
-# ── Step 3: cold stop/start (HAOS reads CONFIG at boot; agent channel attaches) ─
-info "  Cold stop/start so HAOS enables root@22222 and the agent channel attaches..."
-ssh -o BatchMode=yes -o StrictHostKeyChecking=accept-new "root@${NODE_FQDN}" \
-    "qm stop ${VMID}" >/dev/null 2>&1 || true
+# ── Step 3: GRACEFUL stop/start (HAOS reads CONFIG at boot; agent channel attaches) ─
+# Use `qm shutdown` (ACPI/guest-agent graceful) — NOT `qm stop` (hard power-off).
+# A hard power-off of HAOS corrupts the docker/supervisor network + ext4 (the same
+# failure mode as the 2026-06-13 incident; cf. HA supervisor issue #4354 "no route
+# to host 172.30.32.2"). A clean shutdown lets HAOS flush before the CONFIG disk is
+# re-read on the next boot.
+info "  Graceful stop/start so HAOS flushes cleanly + reads the CONFIG disk on boot..."
+if ! ssh -o BatchMode=yes -o StrictHostKeyChecking=accept-new "root@${NODE_FQDN}" \
+        "qm shutdown ${VMID} --timeout 150" >/dev/null 2>&1; then
+    warn "appliance-ssh: graceful shutdown timed out (150s) — verify HAOS health before retrying (do NOT hard-stop)"
+fi
 for _i in $(seq 1 30); do
     _st="$(ssh -o BatchMode=yes -o StrictHostKeyChecking=accept-new "root@${NODE_FQDN}" \
         "qm status ${VMID} 2>/dev/null" | awk '{print $2}')"
