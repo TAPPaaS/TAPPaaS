@@ -107,22 +107,20 @@ done
 ssh -o BatchMode=yes -o StrictHostKeyChecking=accept-new "root@${NODE_FQDN}" \
     "qm start ${VMID}" >/dev/null || die "appliance-ssh: failed to start ${VMID}"
 
-# Wait for the guest agent to come back after the cold boot, so downstream steps
-# (config HA-IP detection) don't race the restart.
-info "  Waiting for guest agent after restart (HAOS cold boot)..."
+# Wait until the guest agent reports a network interface after the cold boot —
+# exactly what the downstream config step needs (HA-IP detection), so no arbitrary
+# settle sleep is required.
+info "  Waiting for guest agent + network after restart (HAOS cold boot)..."
 _agent_up=0
 for _i in $(seq 1 60); do
     if ssh -o BatchMode=yes -o StrictHostKeyChecking=accept-new "root@${NODE_FQDN}" \
-            "qm agent ${VMID} ping" >/dev/null 2>&1; then
+            "qm agent ${VMID} network-get-interfaces 2>/dev/null" 2>/dev/null \
+            | grep -q '"ip-address"'; then
         _agent_up=1; break
     fi
     sleep 5
 done
-if [[ "${_agent_up}" -eq 1 ]]; then
-    sleep 10   # small settle so network-get-interfaces reports the IPv4
-    info "  ${GN}✓${CL} guest agent back after restart"
-else
-    warn "appliance-ssh: guest agent not responding 300s after restart (downstream may retry)"
-fi
+[[ "${_agent_up}" -eq 1 ]] && info "  ${GN}✓${CL} guest agent + network back after restart" \
+    || warn "appliance-ssh: guest agent/network not ready 300s after restart (downstream may retry)"
 
 info "  ${GN}✓${CL} ${VMNAME}: host SSH root@22222 active + QGA freeze-fs on"

@@ -84,24 +84,28 @@ else
     run_test "HAOS web UI (could not get VM IP)" "fail"
 fi
 
-# Test 3: LLAT authenticated HA API (app-level functional admin) — NON-FATAL (WARN).
-# Tracked separately: hass:config stores the LLAT off-VM (node /etc/secrets/hass.env,
-# hardcoded -> variant collision) and as a short-lived access_token that the final
-# `ha core restart` invalidates -> 401. Fix = durable WS-minted LLAT stored on the
-# VM. Until then this is a WARN so it does not gate the appliance deliverable.
-LLAT="$(ssh -o StrictHostKeyChecking=no "root@${NODE}.mgmt.internal" \
-    "grep '^HA_TOKEN=' /etc/secrets/hass.env 2>/dev/null | cut -d= -f2-" 2>/dev/null || echo "")"
+# Test 3: LLAT authenticated HA API (app-level functional admin) — hard gate (#344).
+# The durable LLAT is stored ON the VM at /mnt/data/tappaas/hass.env (outside HA
+# backups); read it via the node's qm guest exec.
+_guest_out() {
+    ssh -o StrictHostKeyChecking=no "root@${NODE}.mgmt.internal" \
+        "qm guest exec ${VMID} -- bash -c $(printf '%q' "$1")" 2>/dev/null \
+        | python3 -c "import sys,json
+try: sys.stdout.write(json.load(sys.stdin).get('out-data',''))
+except Exception: pass"
+}
+LLAT="$(_guest_out "grep '^HA_TOKEN=' /mnt/data/tappaas/hass.env 2>/dev/null | cut -d= -f2-" | tr -d '\r\n')"
 if [[ -z "${LLAT}" ]]; then
-    run_test "LLAT retrievable (known bug — tracked separately)" "warn"
+    run_test "LLAT present on the VM (/mnt/data/tappaas/hass.env)" "fail"
 elif [[ -z "${VM_IP}" ]]; then
-    run_test "HA API with LLAT (no VM IP)" "warn"
+    run_test "HA API authenticated with LLAT (no VM IP)" "fail"
 else
     API_CODE="$(curl -s -o /dev/null -w "%{http_code}" --max-time 10 \
         -H "Authorization: Bearer ${LLAT}" "http://${VM_IP}:8123/api/" 2>/dev/null; true)"
     if [[ "${API_CODE}" == "200" ]]; then
         run_test "HA API authenticated with LLAT (HTTP 200)" "pass"
     else
-        run_test "HA API with LLAT (HTTP ${API_CODE} — known LLAT bug, tracked separately)" "warn"
+        run_test "HA API with LLAT (HTTP ${API_CODE} — token invalid/expired?)" "fail"
     fi
 fi
 
@@ -116,6 +120,35 @@ elif ssh -p 22222 -o BatchMode=yes -o StrictHostKeyChecking=accept-new \
     run_test "Appliance host SSH reachable (root@${VM_IP}:22222)" "pass"
 else
     run_test "Appliance host SSH (root@${VM_IP}:22222 — CONFIG disk attached + mgmt->guest:22222 allowed?)" "fail"
+fi
+
+# Test 5: onboarding complete — a human lands on LOGIN, not /onboarding.html.
+# (Caught by the principal user-test 2026-06-14: the integration onboarding step
+# was left undone, so HA kept redirecting to onboarding.)
+if [[ -n "${VM_IP}" ]]; then
+    REDIR="$(curl -s -o /dev/null -w '%{redirect_url}' --max-time 10 "http://${VM_IP}:8123/" 2>/dev/null; true)"
+    if echo "${REDIR}" | grep -q 'onboarding'; then
+        run_test "Onboarding complete (still redirects to onboarding: ${REDIR})" "fail"
+    else
+        run_test "Onboarding complete (no /onboarding.html redirect)" "pass"
+    fi
+fi
+
+# Test 6: internal_url + external_url configured. Hassanova lesson (2026-06-13
+# incident): internal_url MUST be the direct .internal LAN URL, NOT the proxy
+# domain — else internal access couples to the external proxy/firewall and breaks
+# with it.
+if [[ -n "${LLAT}" && -n "${VM_IP}" ]]; then
+    CFG="$(curl -s --max-time 10 -H "Authorization: Bearer ${LLAT}" "http://${VM_IP}:8123/api/config" 2>/dev/null)"
+    INT="$(echo "${CFG}" | python3 -c "import sys,json; print(json.load(sys.stdin).get('internal_url') or '')" 2>/dev/null || echo '')"
+    EXT="$(echo "${CFG}" | python3 -c "import sys,json; print(json.load(sys.stdin).get('external_url') or '')" 2>/dev/null || echo '')"
+    if [[ -z "${INT}" || -z "${EXT}" ]]; then
+        run_test "internal_url + external_url configured (internal='${INT}' external='${EXT}')" "fail"
+    elif echo "${INT}" | grep -qE '\.internal:8123$'; then
+        run_test "URLs set (internal=${INT}, external=${EXT})" "pass"
+    else
+        run_test "internal_url must be the direct .internal LAN URL (got: ${INT}) — hassanova lesson" "fail"
+    fi
 fi
 
 # Summary

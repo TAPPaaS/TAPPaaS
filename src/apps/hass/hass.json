@@ -3,7 +3,7 @@
   "version": "0.2.0",
   "releaseDate": "2026-06-14",
   "maintainer": "@ErikDaniel007",
-  "status": "Development",
+  "status": "Testing",
   "vmname": "hass",
   "vmid": 210,
   "vmtag": "TAPPaaS,App,HomeAutomation",
@@ -49,11 +49,7 @@
       "proxyPort": 8123,
       "proxyAllowedZones": [
         "mgmt",
-        "home",
-        "work",
-        "srvHome",
-        "srvWork",
-        "srvCust"
+        "home"
       ]
     }
   }
