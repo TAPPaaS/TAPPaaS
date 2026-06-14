@@ -395,6 +395,15 @@ if [ -z "$DS_URL" ]; then
     skip "OnlyOffice: connector not configured (no DocumentServerUrl) — skipping"
 else
     EXPECT_DOMAIN=$(jq -r '.config["firewall:proxy"].proxyDomain // .proxyDomain // empty' "${MODULE_JSON}" 2>/dev/null || echo "")
+    # proxyDomain is intentionally not stored — Nextcloud derives it as
+    # <vmname>.<domain> (see firewall:proxy / identity install-services). Mirror
+    # that derivation (variant-aware via the registry) so this check validates
+    # against the real public domain instead of an empty value.
+    if [ -z "${EXPECT_DOMAIN}" ]; then
+        _variant=$(jq -r '.variant // ""' "${MODULE_JSON}" 2>/dev/null || echo "")
+        _dom=$(jq -r --arg v "${_variant}" '.tappaas.variants[$v].domain // .tappaas.domain // empty' "${CONFIG_DIR}/configuration.json" 2>/dev/null || echo "")
+        [ -n "${_dom}" ] && EXPECT_DOMAIN="${VMNAME}.${_dom}"
+    fi
     STORAGE_URL=$(remote "sudo -u postgres psql -d nextcloud -tAc \"SELECT configvalue FROM oc_appconfig WHERE appid='onlyoffice' AND configkey='StorageUrl'\" 2>/dev/null" | tr -d '\r ' || echo "")
     STORAGE_HOST=$(printf '%s' "$STORAGE_URL" | sed -E 's#^https?://##; s#[:/].*$##')
 
