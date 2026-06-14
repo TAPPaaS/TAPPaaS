@@ -1,7 +1,7 @@
 {
   "description": "Home Assistant OS (HAOS) - home automation platform",
-  "version": "0.1.0",
-  "releaseDate": "2026-05-22",
+  "version": "0.2.0",
+  "releaseDate": "2026-06-14",
   "maintainer": "@ErikDaniel007",
   "status": "Development",
   "vmname": "hass",
@@ -12,7 +12,6 @@
     "cluster:vm",
     "backup:vm",
     "firewall:proxy",
-    "identity:identity",
     "firewall:rules",
     "alfen:ui",
     "alfen:discovery",
