@@ -1,40 +1,46 @@
-# ADR-008: Switch Module — Network Infrastructure Management
+# ADR-008: Network Infrastructure Management — Zone Orchestration Across Control Points
 
 **Status:** proposed
-**Date:** 2026-06-13
+**Date:** 2026-06-13 (revised 2026-06-14: orchestrator + per-target provider model)
 **Deciders:** @LarsRossen
-**Related:** [ADR-001](ADR-001%20-%20Use%20Trunk%20Mode%20for%20TAPPaaS%20VM%20VLAN%20Connectivity.md) (trunk mode for VMs); [zones.json](../../src/foundation/firewall/zones.json) (canonical VLAN definitions)
+**Related:** [ADR-001](ADR-001%20-%20Use%20Trunk%20Mode%20for%20TAPPaaS%20VM%20VLAN%20Connectivity.md) (trunk mode for VMs); [zones.json](../../src/foundation/firewall/zones.json) (canonical VLAN definitions); issues [#333], [#334] (inspect-vm trunk visibility), [#335] (firewall VM not trunked on zone add), [#339] (switch management)
 
 ---
 
 ## Context
 
-TAPPaaS defines network zones in `zones.json`, and the firewall module configures OPNsense to route and firewall between them. But **the physical layer — switches and WiFi access points — is currently unmanaged**:
+TAPPaaS defines network zones in `zones.json`, and the firewall module configures OPNsense to route and firewall between them. But a VLAN/zone is only usable end-to-end when **every layer that touches that VLAN agrees on it** — and today only one of them (OPNsense L3) is reconciled from `zones.json`. Each VLAN passes through several independent **control points**, and a zone change must land on all of them or a guest silently gets no IP:
 
-| Layer | Managed by TAPPaaS today | Gap |
-| ----- | ------------------------ | --- |
-| L3 routing + firewall | OPNsense (firewall module) | ✅ |
-| L2 VLANs on firewall VM | `qm set` trunk config | ✅ (ADR-001) |
-| L2 VLANs on Proxmox bridges | `config-network` (manual) | ⚠️ Documented, not automated |
-| **L2 VLANs on physical switches** | **None** | ❌ Manual |
-| **WiFi SSIDs → VLANs** | **None** | ❌ Manual |
+| Control point | Carries the VLAN as | Managed from `zones.json` today | Gap |
+| ----- | ------------------------ | --- | --- |
+| OPNsense (L3 routing, DHCP, DNS, firewall) | VLAN interface + DHCP + rules | ✅ `zone-manager` (OPNsense) | — |
+| Proxmox VM trunks (firewall VM, future trunk-`ALL` VMs) | `qm set --netN ...,trunks=` | ⚠️ set once at provisioning; **not re-synced on zone add** | **#335** |
+| Proxmox node bridges | vlan-aware bridge `bridge-vids` | ⚠️ `config-network` blanket `2-4094`, manual | not automated |
+| Physical switches | trunk/access port VLANs | ❌ None | **#339** |
+| WiFi access points | SSID → VLAN mapping | ❌ None | **#339** |
 
-When a new zone is added to `zones.json` (e.g., a variant zone per ADR-005), the operator must:
+Two structural problems follow from this list:
 
-1. Log into each managed switch and add the VLAN
-2. Configure trunk ports to carry the new VLAN
-3. Configure access ports if devices need to terminate on that VLAN
-4. Update WiFi controller to add/modify SSIDs mapped to the VLAN
+1. **No single thing guarantees convergence.** OPNsense is treated as *the* network and everything else as downstream/manual. There is no orchestrator that takes one `zones.json` change and proves it reached every control point. #335 is the canonical failure: the OPNsense VLAN interface and node bridge are fine, but the firewall VM's static `trunks=` list never got the new VLAN, so the host's vlan-aware bridge drops the guest's tagged frames and DHCP never arrives — the guest VM runs but has no IP, silently.
+2. **The control points are not symmetric in the design even though they are symmetric in reality.** OPNsense, Proxmox, switches, and APs are all just consumers of the same desired state. They should each reconcile themselves to `zones.json` through one uniform mechanism.
+
+When a new zone is added to `zones.json` (e.g., a variant zone per ADR-005), the operator today must manually:
+
+1. Update the firewall VM (and any other trunk-`ALL` VM) `qm set --netN trunks=`
+2. Confirm the node bridge carries the VLAN
+3. Log into each managed switch and add the VLAN; configure trunk and access ports
+4. Update the WiFi controller to add/modify SSIDs mapped to the VLAN
 5. Document all of this somewhere (usually nowhere)
 
 This is error-prone, undocumented, and violates the "infrastructure as code" principle.
 
 ### Goals
 
-1. **Inventory** — Maintain a single source of truth for switching infrastructure: switches, ports, WiFi APs, SSIDs
-2. **Documentation** — Know what's connected to each port, what VLANs it carries
-3. **Reconciliation** — When `zones.json` changes, identify what switch/WiFi config changes are needed
-4. **Automation** — Push VLAN configuration to supported switches via API (UniFi and MikroTik in v1)
+1. **Guaranteed convergence** — One `zones.json` change is reconciled onto *every* control point (OPNsense, Proxmox, switches, APs) by a single orchestrator, or the run fails loudly. No control point is privileged; none is left manual-by-default.
+2. **Uniform provider contract** — Every control point is reconciled through the same five-verb interface, so OPNsense, Proxmox, switches, and APs are handled symmetrically and can be tested/debugged independently.
+3. **Inventory** — Maintain a single source of truth for switching infrastructure: switches, ports, WiFi APs, SSIDs
+4. **Documentation** — Know what's connected to each port, what VLANs it carries
+5. **Automation** — Push VLAN configuration to supported targets via API (UniFi and MikroTik switches in v1; Proxmox via `qm`/`ip`)
 
 ### Non-goals (v1)
 
@@ -46,31 +52,63 @@ This is error-prone, undocumented, and violates the "infrastructure as code" pri
 
 ## Decision
 
-### 1. Switch Management is Part of the Firewall Module
+### 1. Architecture: One Orchestrator, Many Per-Target Providers
 
-Switch and WiFi management is **integrated into the existing firewall module**, not a separate module. This reflects that L2 (switches, VLANs, WiFi) and L3 (OPNsense routing/firewall) are both "network infrastructure":
+`zones.json` is the single source of truth (desired state). Every control point that carries a VLAN is a **provider** that reconciles its own *actual* state to that desired state through one uniform contract. A single **orchestrator** fans a `zones.json` change out to all providers and guarantees they all converge.
 
-- Lives at `src/foundation/firewall/` (existing module)
-- New CLI tools added: `switch-manager`, `ap-manager`
-- Triggered automatically by `zone-manager` when `zones.json` changes
-- Maintains configuration in `~/config/switch-configuration-desired.json` and `~/config/switch-configuration-actual.json`
+This flips the previous mental model — *OPNsense is the network, everything else is downstream* — into *`zones.json` is the network, and OPNsense/Proxmox/switches/APs are all equal consumers of it*. OPNsense stops being the privileged trigger and becomes one provider among four.
+
+```text
+                       zones.json   (desired: VLAN ids, types, ACLs, optional SSID)
+                            │  single source of truth
+        ┌───────────────────┴── zone-manager  (ORCHESTRATOR) ──────────────────┐
+        │   validate → run providers (update-desired/interrogate/delta) →        │
+        │   present combined plan → apply in dependency order → aggregate report │
+        ▼               ▼                  ▼                 ▼                    ▼
+  opnsense-manager  proxmox-manager   switch-manager     ap-manager       (future providers)
+   L3 / DHCP /      node bridge-vids  physical switch    WiFi SSID →
+   DNS / rules      + per-VM trunks=  trunk/access ports VLAN mapping
+   OPNsense API     qm / ip link      UniFi / MikroTik   UniFi / …
+```
+
+#### Naming
+
+The orchestrator keeps the familiar **`zone-manager`** name (operators keep typing it; it just now reconciles the whole stack instead of only OPNsense). Each control point gets a `‹target›-manager` provider — the bare, target-less word is the orchestrator, a target-prefixed word is a provider:
+
+| Role | Name | Was |
+| ---- | ---- | --- |
+| **Orchestrator** (operator front door) | **`zone-manager`** | *(new role)* |
+| OPNsense L3 reconciler | **`opnsense-manager`** | current `zone-manager` |
+| Proxmox L2 reconciler (bridges + VM trunks) | **`proxmox-manager`** | *(new — generalizes `vmnet_sync_firewall_trunks`)* |
+| Switch L2 reconciler | `switch-manager` | this ADR |
+| WiFi reconciler | `ap-manager` | this ADR |
+
+`zone-manager --only opnsense` reproduces today's narrow OPNsense-only behavior for scripts and tests that need it; an `opnsense` → `zone-manager` alias preserves muscle memory during migration (see §12).
+
+#### Module Location and File Layout
+
+All of this lives in the existing firewall module — L2 (switches, VLANs, WiFi), L3 (OPNsense), and the Proxmox hypervisor trunks are all "network infrastructure":
 
 ```
 src/foundation/firewall/
 ├── firewall.json            # Existing module metadata
-├── install.sh               # Updated: also installs switch/ap-manager
-├── update.sh                # Updated: calls zone-manager reconciliation
-├── test.sh                  # Updated: validates switch config schema
-├── zones.json               # Existing: canonical VLAN definitions
+├── install.sh               # Updated: installs all providers + orchestrator
+├── update.sh                # Updated: calls `zone-manager reconcile` (all providers)
+├── test.sh                  # Updated: validates config schema + provider contract
+├── zones.json               # Existing: canonical VLAN definitions (source of truth)
 └── scripts/
-    ├── zone-manager         # Existing: now triggers switch reconciliation
-    ├── switch-manager       # NEW: CLI for switch/port configuration
-    ├── ap-manager           # NEW: CLI for WiFi AP/SSID configuration
-    └── plugins/             # NEW: vendor automation plugins
+    ├── zone-manager         # NEW role: ORCHESTRATOR (fans out to all providers)
+    ├── opnsense-manager     # RENAMED from zone-manager: OPNsense L3 provider
+    ├── proxmox-manager      # NEW: Proxmox provider (bridge-vids + per-VM trunks=)
+    ├── switch-manager       # NEW: physical switch provider
+    ├── ap-manager           # NEW: WiFi AP/SSID provider
+    └── plugins/             # NEW: vendor automation plugins (switch/AP)
         ├── unifi.sh
         ├── mikrotik.sh
         └── manual.sh        # Fallback: outputs delta to stdout
 ```
+
+The Proxmox provider reuses the existing [`vmnet_*` helpers](../../src/foundation/cluster/lib/vm-net.sh) (`vmnet_resolve_trunks`, `vmnet_sync_firewall_trunks`); see §8 for its full behavior. The orchestrator coordinates across nodes and runs on `tappaas-cicd`.
 
 #### Decision Point: Rename "firewall" to "network"?
 
@@ -78,6 +116,8 @@ The module currently manages:
 - OPNsense firewall VM configuration
 - Zone definitions (`zones.json`)
 - Zone-to-VLAN mappings
+- **NEW:** Cross-stack zone orchestration (`zone-manager`)
+- **NEW:** Proxmox bridge + VM-trunk reconciliation (`proxmox-manager`)
 - **NEW:** Switch port configuration
 - **NEW:** WiFi SSID configuration
 
@@ -93,7 +133,7 @@ Switch configuration uses a **desired vs actual** model with two files:
 
 | File | Purpose | Updated by |
 | ---- | ------- | ---------- |
-| `switch-configuration-desired.json` | What the infrastructure **should** look like | `zone-manager` (from zones.json) + manual edits |
+| `switch-configuration-desired.json` | What the infrastructure **should** look like | `switch-manager update-desired` (from zones.json, driven by the orchestrator) + manual edits |
 | `switch-configuration-actual.json` | What the infrastructure **currently** looks like | `switch-manager` (interrogates switches) |
 
 Both files live in the config directory alongside `zones.json` and `configuration.json`.
@@ -365,6 +405,32 @@ The `connectedTo` field documents what's on the other end of the cable:
 
 ### 5. CLI Tools
 
+#### `zone-manager` (orchestrator)
+
+```bash
+zone-manager reconcile                       # dry-run: combined plan across ALL providers
+zone-manager reconcile --apply               # converge OPNsense + Proxmox + switches + APs (ordered)
+zone-manager reconcile --only proxmox        # run a single provider's reconcile
+zone-manager reconcile --only opnsense --apply
+zone-manager status                          # aggregate drift report across all providers
+```
+
+#### `opnsense-manager` (OPNsense L3 provider — renamed from `zone-manager`)
+
+```bash
+# Edit zones.json + reconcile OPNsense L3 (VLAN interfaces, DHCP, DNS, firewall rules)
+opnsense-manager add <zone> --vlantag 310 --type Client
+opnsense-manager reconcile [--apply]         # the old `zone-manager --execute` behavior
+```
+
+#### `proxmox-manager` (Proxmox L2 provider)
+
+```bash
+proxmox-manager reconcile                    # show node bridge-vids + per-VM trunk drift (dry-run)
+proxmox-manager reconcile --apply            # idempotent qm set --netN trunks= for all trunk-bearing VMs
+proxmox-manager show <vmname>                # resolved vs actual trunks for one VM (cf. inspect-vm, #334)
+```
+
 #### `switch-manager`
 
 ```bash
@@ -407,9 +473,9 @@ ap-manager link <ap> --switch core-switch-1 --port 24
 ap-manager reconcile                        # Check SSIDs match zones.json
 ```
 
-### 6. Five-Phase Reconciliation Process
+### 6. Five-Phase Reconciliation Process (the Provider Contract)
 
-Reconciliation is triggered automatically when `zone-manager` modifies `zones.json`, or can be run manually via `switch-manager reconcile`. It runs in five phases:
+The five phases below **are the provider contract** from §1 — every provider (`opnsense-manager`, `proxmox-manager`, `switch-manager`, `ap-manager`) implements the same five verbs, and the `zone-manager` orchestrator drives them uniformly. The switch wording is used here because switches are the richest case (vendor plugins, port discovery); for Proxmox the same phases map onto bridge-vids + `qm set --netN trunks=` (see §8), and for OPNsense onto VLAN interfaces / DHCP / rules. Reconciliation is triggered by the orchestrator when `zones.json` changes, or a single provider can be run directly (e.g. `switch-manager reconcile`). It runs in five phases:
 
 ```text
 ┌─────────────────────────────────────────────────────────────────────────────┐
@@ -459,10 +525,10 @@ Reconciliation is triggered automatically when `zone-manager` modifies `zones.js
 
 #### Phase 0: Update Desired Configuration
 
-When `zone-manager` adds/removes zones, it calls `switch-manager update-desired`:
+When zones change, the `zone-manager` orchestrator runs each provider's `update-desired` — for the switch provider that is `switch-manager update-desired`:
 
 ```bash
-# Automatically called by zone-manager after zones.json changes
+# Automatically run by `zone-manager reconcile` after zones.json changes
 switch-manager update-desired
 
 # What it does:
@@ -708,79 +774,104 @@ The reconcile logic uses this to validate that:
 2. The SSID is mapped to the correct VLAN
 3. The AP's trunk port carries that VLAN
 
-### 8. Integration with zone-manager
+### 8. Orchestration and the Provider Contract
 
-The reconciliation model follows the same pattern for both L3 (OPNsense) and L2 (switches/APs): changes are batched to `zones.json`, and then a single reconciliation pass is triggered for the entire updated configuration. This ensures efficiency — multiple zone additions/removals result in one reconciliation, not one per change.
+`zone-manager` is the orchestrator. It owns no control point itself; it reads `zones.json`, runs every provider through the five-verb contract (§6), presents a combined plan, applies in dependency order, and aggregates one report. A run succeeds only when **every** provider's delta is empty — that is what makes "a zone change is guaranteed to reach every layer" true rather than hopeful.
 
-#### Reconciliation Flow
+#### The provider contract (five verbs)
+
+Every provider implements the same interface. The orchestrator does not know or care whether a provider talks to the OPNsense API, `qm set`, or a UniFi controller — it just runs the verbs and checks the deltas.
+
+| Verb | Meaning |
+| ---- | ------- |
+| `update-desired` | Translate `zones.json` → this target's desired shape |
+| `interrogate` | Read the target's live *actual* state |
+| `delta` | desired − actual (the drift) |
+| `apply` | Converge idempotently — or emit manual instructions if no automation exists for this target |
+| `confirm` | Persist actual after a successful apply |
+
+`provider reconcile` = run all five in order. `zone-manager reconcile` = run every provider's `reconcile`, ordered.
+
+#### Reconciliation flow
 
 ```text
 ┌─────────────────────────────────────────────────────────────────────────┐
-│  1. Operator modifies zones.json (add/remove/update zones)              │
+│  1. Operator modifies zones.json (add/remove/update zones)               │
+│     (or variant-manager --add-zone does it programmatically)             │
 └────────────────────────────────┬────────────────────────────────────────┘
-                                 │
                                  ▼
 ┌─────────────────────────────────────────────────────────────────────────┐
-│  2. zone-manager reconcile                                              │
-│     - Compares zones.json to OPNsense actual config                     │
-│     - Applies delta to OPNsense (VLANs, interfaces, DHCP, firewall)     │
-│     - Single reconciliation for all zone changes                        │
-└────────────────────────────────┬────────────────────────────────────────┘
-                                 │
-                    ┌────────────┴────────────┐
-                    │   (parallel or after)   │
-                    ▼                         ▼
-┌─────────────────────────────┐   ┌─────────────────────────────┐
-│  3a. switch-manager         │   │  3b. ap-manager             │
-│      reconcile              │   │      reconcile              │
-│  - Updates desired from     │   │  - Updates SSID/VLAN        │
-│    zones.json               │   │    mappings from zones.json │
-│  - Interrogates switches    │   │  - Applies to APs           │
-│  - Applies delta to         │   │                             │
-│    switches                 │   │                             │
-└─────────────────────────────┘   └─────────────────────────────┘
+│  2. zone-manager reconcile  (ORCHESTRATOR)                               │
+│     • validate zones.json (schema)                                       │
+│     • for each provider: update-desired → interrogate → delta            │
+│     • present combined plan (dry-run by default; --apply to converge)    │
+│     • apply in dependency order; aggregate per-provider status           │
+│     • exit non-zero if ANY provider cannot reach an empty delta          │
+└──────┬──────────────┬───────────────────┬────────────────────┬──────────┘
+       ▼              ▼                   ▼                    ▼
+ opnsense-manager  proxmox-manager   switch-manager       ap-manager
+  L3 VLAN iface /  node bridge-vids  trunk/access port    SSID → VLAN
+  DHCP / DNS /     + per-VM trunks=  VLANs (UniFi/         (UniFi/…)
+  firewall rules   (qm / ip link)    MikroTik plugins)
 ```
 
-#### Triggering Reconciliation
+#### Apply order — what actually guarantees a guest gets an IP
 
-Reconciliation is triggered by the caller, not internally by zone-manager. This allows batching multiple changes before a single reconciliation pass:
+A new zone carries traffic end-to-end only when L3 exists **and** the L2 path is unbroken at every hop (switch trunk port → node bridge → VM trunk). The orchestrator applies providers in a fixed dependency order and reverses it for removal, so a live VLAN's gateway is never pulled out from under it:
+
+- **Add:** `opnsense` (gateway + DHCP must exist first) → `proxmox` (bridge-vids + VM trunks) → `switch` (trunk/access ports) → `ap` (SSID).
+- **Remove:** `ap` → `switch` → `proxmox` → `opnsense`.
+
+Providers are independent and may run concurrently *within* a phase, but the orchestrator does not declare success until all have converged. A partial failure produces a per-provider status table — no more "the VM is up but silently has no IP."
+
+#### The Proxmox provider (`proxmox-manager`) — closes #335 and the trunk-`ALL` future
+
+`proxmox-manager` owns the two Proxmox control points the layer table (Context) marks unmanaged. It is **data-driven, not firewall-special** — the firewall stops being a hardcoded case:
+
+1. **Per-VM trunks.** It scans every `~/config/*.json` for `trunks0`/`trunks1`, resolves each (including the `ALL`/`*` sentinel) against `zones.json` via [`vmnet_resolve_trunks`](../../src/foundation/cluster/lib/vm-net.sh), and idempotently `qm set --netN`s each NIC — preserving MAC/tag/queues — using the generalized [`vmnet_sync_firewall_trunks`](../../src/foundation/cluster/lib/vm-net.sh) logic. **Any** VM that declares `trunks0=ALL` (today only the firewall; tomorrow others) is reconciled identically. This is the root-cause fix for **#335**: a zone add re-resolves and re-applies trunks for every trunk-bearing VM instead of leaving a stale static list.
+2. **Node bridge-vids.** It owns the `bridge-vids` on each node's `lan` bridge. v1 may keep the blanket `2-4094`; a least-privilege mode narrows it to the active VLAN set. Either way the bridge becomes *managed* state with drift detection rather than a manual `config-network` artifact.
+
+The per-VM trunk `delta` this provider computes is exactly the trunk-drift comparison surfaced per-VM by `inspect-vm` (**#334**); the orchestrator's combined report is the whole-system version of that inspection.
+
+#### Triggering reconciliation
+
+Reconciliation is triggered by the caller (operator or `variant-manager`), not internally by any single provider — so multiple zone edits batch into one pass:
 
 ```bash
-# Step 1: Modify zones.json (multiple changes)
-zone-manager add home --vlantag 310 --type Client
-zone-manager add work --vlantag 320 --type Client
-zone-manager set-access home --allowed-from mgmt
+# Step 1: Modify zones.json (batch multiple changes; opnsense-manager edits the file)
+opnsense-manager add home --vlantag 310 --type Client
+opnsense-manager add work --vlantag 320 --type Client
 
-# Step 2: Reconcile all infrastructure (single pass)
-# Option A: Sequential — zone-manager first, then switch-manager
-zone-manager reconcile           # L3: OPNsense VLANs, DHCP, firewall
-switch-manager reconcile         # L2: Switch port VLANs
+# Step 2: Reconcile the WHOLE stack in one ordered pass
+zone-manager reconcile            # dry-run: show combined plan across all providers
+zone-manager reconcile --apply    # converge OPNsense + Proxmox + switches + APs
 
-# Option B: Parallel — both reconciliations run simultaneously
-zone-manager reconcile &
-switch-manager reconcile &
-wait
+# Scope to one provider when debugging:
+zone-manager reconcile --only opnsense
+zone-manager reconcile --only proxmox --apply
 ```
 
-The `update-module.sh` orchestrator uses Option A (sequential) to ensure OPNsense has the VLANs configured before switches attempt to tag them.
+`update.sh` (firewall/network module) and `variant-manager --add-zone` call `zone-manager reconcile --apply` so a zone add lands on every control point automatically.
 
-#### Why Not Call switch-manager from zone-manager?
+#### Why an orchestrator rather than provider-calls-provider?
 
-- **Efficiency**: Multiple zone changes would trigger multiple switch reconciliations
-- **Independence**: L3 (OPNsense) and L2 (switches) reconciliation can be tested/debugged separately
-- **Parallelism**: On large deployments, switch reconciliation can run in parallel with OPNsense
-- **Consistency**: Both managers follow the same pattern: read zones.json, compare to actual, apply delta
+- **Convergence guarantee**: a single component is responsible for "did every layer get it?" — and can fail the run if not.
+- **Batching**: many zone edits → one reconcile pass per provider, not one per edit.
+- **Independence**: each provider is testable/debuggable in isolation (`--only`), and a new control point is added by writing one more provider — no changes to the others.
+- **Consistency**: all providers obey the same five-verb contract and the same dependency ordering.
 
 #### Component Responsibilities
 
 | Component | Role in Reconciliation |
 | --------- | ---------------------- |
-| `zones.json` | Source of truth for VLANs — drives desired configuration for all managers |
-| `zone-manager reconcile` | Reconciles OPNsense to match zones.json (L3: VLANs, DHCP, firewall rules) |
-| `switch-manager reconcile` | Reconciles switches to match zones.json (L2: port VLAN assignments) |
-| `ap-manager reconcile` | Reconciles APs to match zones.json (WiFi: SSID/VLAN mappings) |
+| `zones.json` | Single source of truth (desired state) — drives every provider |
+| `zone-manager` | **Orchestrator** — validate, fan out to all providers, order the apply, aggregate the report, guarantee convergence |
+| `opnsense-manager` | Provider — reconciles OPNsense to zones.json (L3: VLAN interfaces, DHCP, DNS, firewall rules). *Renamed from the old `zone-manager`.* |
+| `proxmox-manager` | Provider — reconciles Proxmox to zones.json (node `bridge-vids` + per-VM `trunks=` for all trunk-bearing VMs). Fixes #335. |
+| `switch-manager` | Provider — reconciles physical switches to zones.json (L2: port VLAN assignments) |
+| `ap-manager` | Provider — reconciles APs to zones.json (WiFi: SSID/VLAN mappings) |
 | Vendor plugins | Provide automation for specific switch/AP vendors |
-| `update-module.sh` | Orchestrates the reconciliation sequence during module updates |
+| `update-module.sh` | Invokes `zone-manager reconcile --apply` during module updates |
 
 ### 9. Port Configuration Sources: Zones, Manual, and Discovered
 
@@ -1489,7 +1580,7 @@ load_switch_credentials() {
 
 **Source values:**
 
-- `zones` — Auto-managed by zone-manager; VLANs updated when zones.json changes
+- `zones` — Auto-managed from zones.json (via `switch-manager update-desired`, driven by the `zone-manager` orchestrator); VLANs updated when zones.json changes
 - `manual` — User-configured; preserved during reconciliation
 - `discovered` — Auto-added during Phase 2 when port has connectivity but no config
 
@@ -1541,13 +1632,15 @@ The "firewall" module currently manages:
 
 - OPNsense firewall VM (routing, NAT, firewall rules)
 - `zones.json` — network zone definitions
-- `zone-manager` — VLAN and interface configuration
+- `opnsense-manager` (renamed from `zone-manager`) — OPNsense VLAN and interface configuration
 - DNS services (Unbound)
 - DHCP services
 - Reverse proxy (Caddy)
 
 With ADR-008, it will also manage:
 
+- `zone-manager` orchestration across all control points
+- `proxmox-manager` — node bridges + per-VM trunks
 - Switch inventory and port configuration
 - AP inventory and SSID configuration
 - `switch-manager` and `ap-manager` commands
@@ -1748,19 +1841,24 @@ The `update-module.sh` and `test-module.sh` scripts would resolve aliases before
 
 ### Positive
 
-- **Single source of truth** for switching infrastructure
-- **Documentation as code** — the inventory describes the physical network
-- **Proactive validation** — catch VLAN mismatches before guests lose connectivity
-- **Foundation for automation** — API-based provisioning can be added incrementally
+- **Guaranteed cross-stack convergence** — one orchestrator reconciles a zone change onto OPNsense, Proxmox, switches, and APs, or fails the run. Eliminates the silent "VM up, no IP" class of bug (#335).
+- **Symmetric, extensible model** — every control point is a provider behind one five-verb contract; a new layer (e.g. a cloud overlay) is added by writing one more provider.
+- **Single source of truth** — `zones.json` drives every layer; the switch/AP inventory is documentation-as-code for the physical network.
+- **Proactive validation** — catch VLAN mismatches (e.g. a VM missing a trunk VLAN) before guests lose connectivity; the orchestrator's combined drift report generalizes `inspect-vm` (#334).
+- **Foundation for automation** — API-based provisioning can be added incrementally, provider by provider.
 
 ### Negative / Risks
 
-- **Manual synchronization** — v1 requires manual switch configuration
-- **Inventory drift** — Inventory can diverge from reality if not maintained
-- **Vendor lock-in risk** — Deep integration favors UniFi initially
+- **Orchestrator complexity** — a new coordination layer with ordering and partial-failure semantics to get right.
+- **Rename churn** — `zone-manager` → `opnsense-manager` touches scripts/tests/docs; mitigated by the alias and `--only opnsense`.
+- **Manual synchronization** — v1 still requires manual switch configuration where no vendor plugin exists.
+- **Inventory drift** — Inventory can diverge from reality if not maintained.
+- **Vendor lock-in risk** — Deep integration favors UniFi initially.
 
 ### Mitigations
 
+- The `zone-manager` orchestrator defaults to dry-run; `--apply` is explicit, and a non-empty delta after apply fails the run.
+- `opnsense` → `zone-manager` alias and `--only <provider>` preserve existing behavior/muscle memory during the rename.
 - `test.sh` validates inventory schema and warns on potential drift
 - `reconcile` output provides copy-pasteable commands for manual application
 - Vendor-specific code isolated in provider modules
@@ -1769,7 +1867,22 @@ The `update-module.sh` and `test-module.sh` scripts would resolve aliases before
 
 ## Implementation Plan
 
-### Sprint 1: Foundation
+Each sprint is independently shippable. Sprints 0 and 1 deliver the orchestrator + the Proxmox provider, which fix #335 on their own — switch/AP automation (Sprints 2–5) layers on top.
+
+### Sprint 0: Orchestrator + Provider Contract
+
+1. Define the five-verb provider contract (`update-desired`/`interrogate`/`delta`/`apply`/`confirm`) and the `zone-manager` orchestrator skeleton (validate → fan out → ordered apply → aggregate report; dry-run default, `--apply`, `--only <provider>`).
+2. Rename the existing `zone-manager` → `opnsense-manager`; add an `opnsense` → `zone-manager` compatibility alias. **No behavior change** — `zone-manager --only opnsense` reproduces today's flow.
+3. Wire `update.sh` and `variant-manager --add-zone` to call `zone-manager reconcile --apply`.
+
+### Sprint 1: Proxmox Provider (fixes #335)
+
+1. Implement `proxmox-manager` as a provider over the existing [`vmnet_*` helpers](../../src/foundation/cluster/lib/vm-net.sh).
+2. Per-VM trunks: scan `~/config/*.json` for `trunks0`/`trunks1`, resolve (incl. `ALL`) against zones.json, idempotent `qm set --netN` preserving MAC/tag/queues — for **all** trunk-bearing VMs, not just the firewall.
+3. Node `bridge-vids` ownership (blanket `2-4094` in v1; least-privilege mode optional).
+4. `delta` surfaces per-VM trunk drift (the `inspect-vm` view from #334).
+
+### Sprint 2: Switch Provider — Foundation
 
 1. Add `switch-manager` and `ap-manager` scripts to `src/foundation/firewall/scripts/`
 2. Define JSON schema for `switch-configuration-desired.json` and `switch-configuration-actual.json`
@@ -1778,22 +1891,22 @@ The `update-module.sh` and `test-module.sh` scripts would resolve aliases before
 5. Update `firewall/install.sh` to create empty configuration files
 6. Create `plugins/manual.sh` fallback plugin
 
-### Sprint 2: AP and SSID Management
+### Sprint 3: AP and SSID Management
 
 1. Implement `ap-manager add/remove/list/show`
 2. Implement `ap-manager ssid` subcommands
 3. Implement `ap-manager link` for switch-to-AP association
 4. Add SSID-to-zone validation
 
-### Sprint 3: Reconciliation Phases
+### Sprint 4: Switch Reconciliation Phases
 
 1. Implement Phase 0: `switch-manager update-desired` (zones.json → desired.json)
 2. Implement Phase 2: `switch-manager delta` (desired vs actual comparison)
 3. Implement Phase 3: `switch-manager apply` with manual.sh fallback
 4. Implement Phase 4: `switch-manager confirm`
-5. Integrate with `zone-manager` to trigger full reconciliation on zone changes
+5. Register `switch-manager` (and `ap-manager`) with the `zone-manager` orchestrator so they run in the ordered reconcile pass
 
-### Sprint 4: Vendor Plugins (v1 scope)
+### Sprint 5: Vendor Plugins (v1 scope)
 
 1. Implement Phase 1: `switch-manager interrogate` framework
 2. UniFi plugin (`plugins/unifi.sh`) — Network Controller API integration
