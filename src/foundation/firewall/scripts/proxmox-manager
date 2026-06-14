@@ -1,0 +1,374 @@
+#!/usr/bin/env bash
+#
+# proxmox-manager — TAPPaaS Proxmox network provider (ADR-008)
+#
+# Reconciles the Proxmox hypervisor L2 layer to zones.json, the single source
+# of truth. It owns two control points the rest of the stack depended on being
+# correct by hand:
+#
+#   1. Per-VM trunks  — every VM whose module JSON declares trunks0/trunks1 has
+#      its live `qm config netN ...,trunks=` resolved against zones.json (incl.
+#      the ALL/* sentinel) and idempotently re-applied, preserving MAC/tag/
+#      queues. This is data-driven across ALL trunk-bearing VMs, not just the
+#      firewall — fixing #335 (a zone added after provisioning never reached the
+#      firewall VM's static trunk list, so guests got no IP).
+#
+#   2. Node bridge-vids — the vlan-aware `lan` bridge on each node. v1 default is
+#      least-privilege: the active VLAN set from zones.json rather than the
+#      blanket 2-4094 config-network writes. Reported by `reconcile`; APPLY is
+#      operator-gated (`bridge-vids --apply`) because rewriting a live node's
+#      interfaces + ifreload is disruptive.
+#
+# This is the `proxmox-manager` provider in the ADR-008 orchestrator model; the
+# five-verb contract maps here as: desired = resolved from zones.json + module
+# JSONs on the fly, actual = interrogated live via qm/ssh, delta+apply below.
+#
+# Usage:
+#   proxmox-manager reconcile [--apply]   # per-VM trunks (apply) + bridge-vids (report)
+#   proxmox-manager trunks    [--apply]   # per-VM trunks only
+#   proxmox-manager bridge-vids [--apply] # node bridge-vids (apply is operator-gated)
+#   proxmox-manager show <vmname>         # resolved vs actual trunks for one VM
+#
+# Without --apply every command is a dry-run that only reports drift.
+#
+
+set -euo pipefail
+
+# ── Logging / shared helpers ─────────────────────────────────────────
+# shellcheck source=../../tappaas-cicd/scripts/common-install-routines.sh disable=SC1091
+. /home/tappaas/bin/common-install-routines.sh
+
+# Network helpers (vmnet_resolve_trunks / vmnet_parse / vmnet_build_netopts /
+# vmnet_all_active_tags) — the same logic cluster:vm uses to build NICs.
+# shellcheck source=../../cluster/lib/vm-net.sh disable=SC1091
+. /home/tappaas/TAPPaaS/src/foundation/cluster/lib/vm-net.sh
+
+readonly ZONES_FILE="${CONFIG_DIR}/zones.json"
+readonly LAN_BRIDGE="lan"
+
+# ── Counters for the summary / exit code ─────────────────────────────
+DRIFT=0      # number of control points found out of sync
+CHANGED=0    # number actually converged (with --apply)
+ERRORS=0     # number of failures
+
+# ── Usage ────────────────────────────────────────────────────────────
+
+usage() {
+    cat <<'EOF'
+Usage: proxmox-manager <command> [--apply]
+
+Commands:
+  reconcile [--apply]     Per-VM trunks (applied) + node bridge-vids (reported)
+  trunks    [--apply]     Reconcile per-VM trunks= for all trunk-bearing VMs
+  bridge-vids [--apply]   Reconcile node lan bridge-vids (apply is operator-gated)
+  show <vmname>           Show resolved-vs-actual trunks for one VM
+
+Without --apply, commands report drift only (dry-run). Exit code is non-zero if
+drift remains after the command (so callers/CI can gate on convergence).
+EOF
+}
+
+# ── Cluster helpers ──────────────────────────────────────────────────
+
+# Print "vmid<TAB>node" for every VM in the cluster (queried once).
+_vm_node_map() {
+    local primary
+    primary=$(get_primary_node_fqdn 2>/dev/null || echo "tappaas1.mgmt.internal")
+    ssh -o BatchMode=yes -o StrictHostKeyChecking=accept-new root@"${primary}" \
+        "pvesh get /cluster/resources --type vm --output-format json 2>/dev/null" \
+        | jq -r '.[] | "\(.vmid)\t\(.node)"' 2>/dev/null
+}
+
+# Print every cluster node name.
+_cluster_nodes() {
+    local primary
+    primary=$(get_primary_node_fqdn 2>/dev/null || echo "tappaas1.mgmt.internal")
+    ssh -o BatchMode=yes -o StrictHostKeyChecking=accept-new root@"${primary}" \
+        "pvesh get /cluster/resources --type node --output-format json 2>/dev/null" \
+        | jq -r '.[].node' 2>/dev/null
+}
+
+# Read a module-JSON field, tolerating both flat and Pattern-A (config.*) shapes.
+#   _mod_field <module-json> <field>
+_mod_field() {
+    local f="$1" key="$2"
+    normalize_module_config < "$f" 2>/dev/null | jq -r --arg k "$key" '.[$k] // empty' 2>/dev/null
+}
+
+# Sort a ';'-separated VLAN list numerically, dropping blanks, for comparison.
+_norm() {
+    echo "$1" | tr ';' '\n' | sed '/^$/d' | sort -n | tr '\n' ';' | sed 's/;$//'
+}
+
+# ── Per-VM trunk reconciliation ──────────────────────────────────────
+
+# Reconcile one NIC's trunk list. Args:
+#   <vmname> <vmid> <node-fqdn> <nic-index> <declared-trunks> <apply 0|1>
+_reconcile_nic() {
+    local vmname="$1" vmid="$2" node_fqdn="$3" idx="$4" decl="$5" apply="$6"
+    local desired live_net live_bridge live_mac live_trunks live_tag live_queues
+
+    desired=$(vmnet_resolve_trunks "${decl}" "${ZONES_FILE}" 2>/dev/null || true)
+    if [[ -z "${desired}" ]]; then
+        warn "  ${vmname} net${idx}: trunks '${decl}' resolved to nothing in zones.json — skipping"
+        return
+    fi
+
+    live_net=$(ssh -o BatchMode=yes root@"${node_fqdn}" "qm config ${vmid}" 2>/dev/null \
+        | awk -F': ' "/^net${idx}:/ {print \$2; exit}")
+    if [[ -z "${live_net}" ]]; then
+        warn "  ${vmname} net${idx}: declared trunks but VM has no net${idx} — skipping"
+        return
+    fi
+
+    live_bridge=$(vmnet_parse "${live_net}" bridge)
+    live_mac=$(vmnet_parse "${live_net}" mac)
+    live_trunks=$(vmnet_parse "${live_net}" trunks)
+    live_tag=$(vmnet_parse "${live_net}" tag)
+    live_queues=$(vmnet_parse "${live_net}" queues)
+
+    if [[ "$(_norm "${live_trunks}")" == "$(_norm "${desired}")" ]]; then
+        info "  ${GN}✓${CL} ${vmname} net${idx} trunks in sync (${desired})"
+        return
+    fi
+
+    DRIFT=$((DRIFT + 1))
+    warn "  ${vmname} net${idx} trunks DRIFT: ${live_trunks:-none} → ${desired}"
+
+    if [[ "${apply}" -ne 1 ]]; then
+        return
+    fi
+    if [[ -z "${live_mac}" ]]; then
+        error "  ${vmname} net${idx}: could not read live MAC — refusing to rewrite NIC"
+        ERRORS=$((ERRORS + 1))
+        return
+    fi
+
+    local opts
+    opts=$(vmnet_build_netopts "${live_bridge}" "${live_mac}" "${live_tag}" "${desired}" "${live_queues}")
+    # Single-quote the value so ';' in trunks=... is not a command separator.
+    if ssh -o BatchMode=yes -o StrictHostKeyChecking=accept-new root@"${node_fqdn}" \
+            "qm set ${vmid} --net${idx} '${opts}'" >/dev/null 2>&1; then
+        info "  ${GN}✓${CL} ${vmname} net${idx} trunks applied (queues preserved: ${live_queues:-none})"
+        CHANGED=$((CHANGED + 1))
+        DRIFT=$((DRIFT - 1))
+    else
+        error "  ${vmname} net${idx}: qm set --net${idx} failed"
+        ERRORS=$((ERRORS + 1))
+    fi
+}
+
+# Reconcile trunks for every trunk-bearing VM module in CONFIG_DIR.
+reconcile_trunks() {
+    local apply="$1"
+    info "${BOLD}Per-VM trunks${CL} (source: module JSON trunks0/trunks1 → zones.json)"
+
+    local vm_map
+    vm_map=$(_vm_node_map) || true
+    if [[ -z "${vm_map}" ]]; then
+        error "Could not query cluster VM locations — is the primary node reachable?"
+        ERRORS=$((ERRORS + 1))
+        return
+    fi
+
+    local f vmname vmid trunks0 trunks1 node node_fqdn found=0
+    for f in "${CONFIG_DIR}"/*.json; do
+        vmname=$(basename "$f" .json)
+        [[ "${vmname}" == "zones" || "${vmname}" == "configuration" || "${vmname}" == "module-fields" ]] && continue
+
+        trunks0=$(_mod_field "$f" trunks0)
+        trunks1=$(_mod_field "$f" trunks1)
+        [[ -z "${trunks0}" && -z "${trunks1}" ]] && continue   # not a trunk-bearing VM
+
+        vmid=$(_mod_field "$f" vmid)
+        if [[ -z "${vmid}" ]]; then
+            warn "  ${vmname}: declares trunks but has no vmid — skipping"
+            continue
+        fi
+
+        node=$(awk -v id="${vmid}" '$1==id {print $2; exit}' <<< "${vm_map}")
+        if [[ -z "${node}" ]]; then
+            warn "  ${vmname} (vmid ${vmid}): not found in the cluster — skipping"
+            continue
+        fi
+        node_fqdn="${node}.mgmt.internal"
+        found=1
+
+        [[ -n "${trunks0}" ]] && _reconcile_nic "${vmname}" "${vmid}" "${node_fqdn}" 0 "${trunks0}" "${apply}"
+        [[ -n "${trunks1}" ]] && _reconcile_nic "${vmname}" "${vmid}" "${node_fqdn}" 1 "${trunks1}" "${apply}"
+    done
+
+    [[ "${found}" -eq 0 ]] && info "  (no trunk-bearing VMs found)"
+    return 0
+}
+
+# ── Node bridge-vids reconciliation (apply operator-gated) ───────────
+
+# Desired least-privilege bridge-vids = active VLAN tags from zones.json,
+# space-separated (the form /etc/network/interfaces expects).
+_desired_bridge_vids() {
+    vmnet_all_active_tags "${ZONES_FILE}" | tr ';' ' '
+}
+
+reconcile_bridge_vids() {
+    local apply="$1"
+    info "${BOLD}Node bridge-vids${CL} (lan bridge; least-privilege = active VLAN set)"
+
+    local desired
+    desired=$(_desired_bridge_vids)
+    if [[ -z "${desired}" ]]; then
+        warn "  No active VLAN tags resolved from zones.json — skipping bridge-vids"
+        return
+    fi
+    info "  desired (least-privilege): ${desired}"
+
+    local nodes node actual
+    nodes=$(_cluster_nodes) || true
+    if [[ -z "${nodes}" ]]; then
+        error "  Could not enumerate cluster nodes"
+        ERRORS=$((ERRORS + 1))
+        return
+    fi
+
+    for node in ${nodes}; do
+        # Read the FULL bridge-vids value of the lan stanza (may be a single
+        # range like "2-4094" or a space-separated list like "200 210 ..."), so
+        # the post-apply idempotency check compares the whole list, not just $1.
+        actual=$(ssh -o BatchMode=yes root@"${node}.mgmt.internal" \
+            "awk -v b='${LAN_BRIDGE}' '\$1==\"iface\" && \$2==b {f=1; next} f && \$1==\"bridge-vids\" {\$1=\"\"; sub(/^[ \t]+/,\"\"); print; exit} \$1==\"iface\"{f=0}' /etc/network/interfaces" \
+            2>/dev/null || true)
+        actual="${actual//$'\r'/}"
+        actual="${actual#"${actual%%[![:space:]]*}"}"   # ltrim
+        actual="${actual%"${actual##*[![:space:]]}"}"    # rtrim
+
+        if [[ "${actual}" == "${desired}" ]]; then
+            info "  ${GN}✓${CL} ${node}: bridge-vids in sync"
+            continue
+        fi
+        DRIFT=$((DRIFT + 1))
+        warn "  ${node}: bridge-vids DRIFT: '${actual:-<unset>}' → '${desired}'"
+
+        if [[ "${apply}" -ne 1 ]]; then
+            continue
+        fi
+        # Operator-gated apply: rewrite the lan stanza's bridge-vids and ifreload.
+        # Disruptive on a live node — backup first.
+        warn "  ${node}: applying bridge-vids (backup /etc/network/interfaces, then ifreload -a)"
+        if ssh -o BatchMode=yes root@"${node}.mgmt.internal" "
+                set -e
+                cp -a /etc/network/interfaces /etc/network/interfaces.proxmox-manager.bak
+                awk -v want='${desired}' '
+                    /^iface ${LAN_BRIDGE} /{f=1}
+                    f && /bridge-vids/{sub(/bridge-vids.*/, \"bridge-vids \" want); f=0}
+                    {print}
+                ' /etc/network/interfaces.proxmox-manager.bak > /etc/network/interfaces
+                ifreload -a
+            " >/dev/null 2>&1; then
+            info "  ${GN}✓${CL} ${node}: bridge-vids applied"
+            CHANGED=$((CHANGED + 1))
+            DRIFT=$((DRIFT - 1))
+        else
+            error "  ${node}: bridge-vids apply failed (interfaces restored from .bak on the node)"
+            ERRORS=$((ERRORS + 1))
+        fi
+    done
+    return 0
+}
+
+# ── show <vmname> ────────────────────────────────────────────────────
+
+show_vm() {
+    local vmname="$1"
+    local f="${CONFIG_DIR}/${vmname}.json"
+    [[ -f "$f" ]] || die "Module config not found: ${f}"
+
+    local vmid trunks0 trunks1 vm_map node node_fqdn
+    vmid=$(_mod_field "$f" vmid)
+    trunks0=$(_mod_field "$f" trunks0)
+    trunks1=$(_mod_field "$f" trunks1)
+    [[ -z "${vmid}" ]] && die "No vmid in ${f}"
+
+    vm_map=$(_vm_node_map)
+    node=$(awk -v id="${vmid}" '$1==id {print $2; exit}' <<< "${vm_map}")
+    [[ -z "${node}" ]] && die "VM ${vmname} (vmid ${vmid}) not found in cluster"
+    node_fqdn="${node}.mgmt.internal"
+
+    info "${BOLD}${vmname}${CL} (vmid ${vmid}) on ${node}"
+    local idx decl desired live_net live_trunks
+    for idx in 0 1; do
+        decl=$([[ "${idx}" -eq 0 ]] && echo "${trunks0}" || echo "${trunks1}")
+        [[ -z "${decl}" ]] && continue
+        desired=$(_norm "$(vmnet_resolve_trunks "${decl}" "${ZONES_FILE}" 2>/dev/null || true)")
+        live_net=$(ssh -o BatchMode=yes root@"${node_fqdn}" "qm config ${vmid}" 2>/dev/null \
+            | awk -F': ' "/^net${idx}:/ {print \$2; exit}")
+        live_trunks=$(_norm "$(vmnet_parse "${live_net}" trunks)")
+        printf "  net%s  declared=%-6s  desired(vlan)=%s\n" "${idx}" "${decl}" "${desired:-<none>}"
+        printf "        actual(vlan)=%s  %s\n" "${live_trunks:-<none>}" \
+            "$([[ "${desired}" == "${live_trunks}" ]] && echo "${GN}✓ in sync${CL}" || echo "${RD}✗ drift${CL}")"
+    done
+}
+
+# ── Summary ──────────────────────────────────────────────────────────
+
+summary() {
+    echo ""
+    if [[ "${ERRORS}" -gt 0 ]]; then
+        error "${ERRORS} error(s); ${CHANGED} change(s) applied; ${DRIFT} still out of sync"
+        exit 1
+    fi
+    if [[ "${DRIFT}" -gt 0 ]]; then
+        warn "${DRIFT} control point(s) out of sync (${CHANGED} applied). Re-run with --apply to converge."
+        exit 2
+    fi
+    info "${GN}Proxmox network in sync${CL} (${CHANGED} change(s) applied)"
+}
+
+# ── Argument parsing ─────────────────────────────────────────────────
+
+main() {
+    local cmd="${1:-}"
+    [[ -z "${cmd}" || "${cmd}" == "-h" || "${cmd}" == "--help" ]] && { usage; exit 0; }
+    shift || true
+
+    [[ -f "${ZONES_FILE}" ]] || die "zones.json not found: ${ZONES_FILE}"
+
+    local apply=0 arg vmname=""
+    for arg in "$@"; do
+        case "${arg}" in
+            --apply) apply=1 ;;
+            -h|--help) usage; exit 0 ;;
+            -*) die "Unknown option: ${arg}" ;;
+            *) vmname="${arg}" ;;
+        esac
+    done
+
+    case "${cmd}" in
+        reconcile)
+            reconcile_trunks "${apply}"
+            echo ""
+            reconcile_bridge_vids 0   # report-only inside reconcile (apply is gated)
+            summary
+            ;;
+        trunks)
+            reconcile_trunks "${apply}"
+            summary
+            ;;
+        bridge-vids)
+            reconcile_bridge_vids "${apply}"
+            summary
+            ;;
+        show)
+            [[ -n "${vmname}" ]] || die "show requires a <vmname>"
+            show_vm "${vmname}"
+            ;;
+        *)
+            die "Unknown command: ${cmd} (try --help)"
+            ;;
+    esac
+}
+
+# Only run when executed directly — allows the unit test to source and exercise
+# the pure helper functions (_norm, _desired_bridge_vids) without a live cluster.
+if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
+    main "$@"
+fi

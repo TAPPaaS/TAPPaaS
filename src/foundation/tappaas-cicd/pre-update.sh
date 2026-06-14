@@ -161,6 +161,26 @@ for _oc_tool in opnsense-controller zone-manager dns-manager unbound-manager cad
     ln -s "${_oc_src}" "/home/tappaas/bin/${_oc_tool}"
   fi
 done
+
+# ADR-008 network providers/orchestrator.
+#  - opnsense-manager: additive alias for the OPNsense zone reconciler (same nix
+#    binary as zone-manager). Per ADR-008 the orchestrator eventually takes the
+#    `zone-manager` name and the binary is referenced as opnsense-manager.
+#  - proxmox-manager:  Proxmox L2 provider (per-VM trunks + bridge-vids; #335).
+#  - zone-reconcile:   transitional orchestrator front door (becomes zone-manager).
+_oc_zm="/home/tappaas/TAPPaaS/src/foundation/tappaas-cicd/opnsense-controller/result/bin/zone-manager"
+if [ -e "${_oc_zm}" ]; then
+  rm -f /home/tappaas/bin/opnsense-manager 2>/dev/null || true
+  ln -s "${_oc_zm}" /home/tappaas/bin/opnsense-manager
+fi
+for _fw_tool in proxmox-manager switch-manager ap-manager zone-reconcile; do
+  _fw_src="/home/tappaas/TAPPaaS/src/foundation/firewall/scripts/${_fw_tool}"
+  if [ -e "${_fw_src}" ]; then
+    chmod +x "${_fw_src}" 2>/dev/null || true
+    rm -f "/home/tappaas/bin/${_fw_tool}" 2>/dev/null || true
+    ln -s "${_fw_src}" "/home/tappaas/bin/${_fw_tool}"
+  fi
+done
 # Ensure OPNsense credentials file exists; if missing, create a skeleton and warn
 if [ ! -f ~/.opnsense-credentials.txt ]; then
   warn "~/.opnsense-credentials.txt not found; creating skeleton file with empty key/secret. Please populate it with real values."

@@ -829,7 +829,7 @@ Providers are independent and may run concurrently *within* a phase, but the orc
 `proxmox-manager` owns the two Proxmox control points the layer table (Context) marks unmanaged. It is **data-driven, not firewall-special** — the firewall stops being a hardcoded case:
 
 1. **Per-VM trunks.** It scans every `~/config/*.json` for `trunks0`/`trunks1`, resolves each (including the `ALL`/`*` sentinel) against `zones.json` via [`vmnet_resolve_trunks`](../../src/foundation/cluster/lib/vm-net.sh), and idempotently `qm set --netN`s each NIC — preserving MAC/tag/queues — using the generalized [`vmnet_sync_firewall_trunks`](../../src/foundation/cluster/lib/vm-net.sh) logic. **Any** VM that declares `trunks0=ALL` (today only the firewall; tomorrow others) is reconciled identically. This is the root-cause fix for **#335**: a zone add re-resolves and re-applies trunks for every trunk-bearing VM instead of leaving a stale static list.
-2. **Node bridge-vids.** It owns the `bridge-vids` on each node's `lan` bridge. v1 may keep the blanket `2-4094`; a least-privilege mode narrows it to the active VLAN set. Either way the bridge becomes *managed* state with drift detection rather than a manual `config-network` artifact.
+2. **Node bridge-vids.** It owns the `bridge-vids` on each node's `lan` bridge. **v1 default is least-privilege**: the bridge carries exactly the active VLAN set from `zones.json` (`vmnet_all_active_tags`), not the blanket `2-4094` that `config-network` writes today. The bridge becomes *managed* state with drift detection, and the bridge stops trunking VLANs no zone uses. Because rewriting a live node's `bridge-vids` (interfaces file + `ifreload`) is disruptive, the bridge-vids **apply is operator-gated** (`proxmox-manager bridge-vids --apply`, run under supervision); `reconcile` reports the drift but does not auto-apply it. Per-VM trunk apply (the #335 fix) is safe/idempotent and runs unguarded.
 
 The per-VM trunk `delta` this provider computes is exactly the trunk-drift comparison surfaced per-VM by `inspect-vm` (**#334**); the orchestrator's combined report is the whole-system version of that inspection.
 
@@ -1879,8 +1879,10 @@ Each sprint is independently shippable. Sprints 0 and 1 deliver the orchestrator
 
 1. Implement `proxmox-manager` as a provider over the existing [`vmnet_*` helpers](../../src/foundation/cluster/lib/vm-net.sh).
 2. Per-VM trunks: scan `~/config/*.json` for `trunks0`/`trunks1`, resolve (incl. `ALL`) against zones.json, idempotent `qm set --netN` preserving MAC/tag/queues — for **all** trunk-bearing VMs, not just the firewall.
-3. Node `bridge-vids` ownership (blanket `2-4094` in v1; least-privilege mode optional).
+3. Node `bridge-vids` ownership — **least-privilege (active VLAN set from zones.json) is the v1 default**; apply is operator-gated (`bridge-vids --apply`) because it rewrites a live node's interfaces + `ifreload`.
 4. `delta` surfaces per-VM trunk drift (the `inspect-vm` view from #334).
+
+> **Naming/migration note:** `zone-manager` is currently the OPNsense reconciler binary, referenced by ~10 scripts/tests and built by the opnsense-controller nix flake. Taking that name for the orchestrator (and renaming the binary → `opnsense-manager`) is the **final, supervised** step of Sprint 0. The orchestrator therefore ships first under the transitional entry point `zone-reconcile`; `opnsense-manager` is added as an additive alias immediately. The `zone-manager` symlink swap + caller migration happens once the orchestrator is proven.
 
 ### Sprint 2: Switch Provider — Foundation
 

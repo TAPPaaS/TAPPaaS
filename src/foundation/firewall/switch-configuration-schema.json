@@ -1,0 +1,100 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "switch-configuration-schema.json",
+  "title": "TAPPaaS switch/AP infrastructure configuration (ADR-008)",
+  "description": "Desired/actual model for the switch-manager and ap-manager providers. switch-configuration-desired.json holds operator intent + zones-derived state; switch-configuration-actual.json holds the interrogated live state.",
+  "type": "object",
+  "required": ["version", "switches"],
+  "additionalProperties": true,
+  "properties": {
+    "$schema": { "type": "string" },
+    "version": { "type": "string" },
+    "lastUpdated": { "type": "string" },
+    "switches": {
+      "type": "object",
+      "additionalProperties": { "$ref": "#/$defs/switch" }
+    },
+    "accessPoints": {
+      "type": "object",
+      "additionalProperties": { "$ref": "#/$defs/accessPoint" }
+    },
+    "wifiController": { "type": "object" }
+  },
+  "$defs": {
+    "switch": {
+      "type": "object",
+      "required": ["vendor", "managementIp", "ports"],
+      "additionalProperties": true,
+      "properties": {
+        "uuid": { "type": "string" },
+        "vendor": { "type": "string", "enum": ["unifi", "mikrotik", "cisco", "generic"] },
+        "model": { "type": "string" },
+        "managementIp": { "type": "string" },
+        "location": { "type": "string" },
+        "description": { "type": "string" },
+        "ports": {
+          "type": "object",
+          "additionalProperties": { "$ref": "#/$defs/port" }
+        }
+      }
+    },
+    "port": {
+      "type": "object",
+      "required": ["mode", "source"],
+      "additionalProperties": true,
+      "properties": {
+        "mode": { "type": "string", "enum": ["access", "trunk"] },
+        "zone": { "type": "string" },
+        "nativeVlan": { "type": ["integer", "null"] },
+        "taggedVlans": { "type": "array", "items": { "type": "integer" } },
+        "connectedTo": { "$ref": "#/$defs/connectedTo" },
+        "source": { "type": "string", "enum": ["zones", "manual", "discovered"] },
+        "description": { "type": "string" },
+        "poe": { "type": "boolean" }
+      }
+    },
+    "connectedTo": {
+      "type": "object",
+      "required": ["type"],
+      "additionalProperties": true,
+      "properties": {
+        "type": { "type": "string", "enum": ["node", "switch", "ap", "wan", "device", "unused", "unknown"] },
+        "target": { "type": ["string", "null"] },
+        "port": { "type": "string" },
+        "interface": { "type": "string" },
+        "mac": { "type": "string" }
+      }
+    },
+    "accessPoint": {
+      "type": "object",
+      "required": ["vendor", "ssids"],
+      "additionalProperties": true,
+      "properties": {
+        "uuid": { "type": "string" },
+        "vendor": { "type": "string", "enum": ["unifi", "mikrotik", "generic"] },
+        "model": { "type": "string" },
+        "managementIp": { "type": "string" },
+        "location": { "type": "string" },
+        "uplinkSwitch": { "type": "string" },
+        "uplinkPort": { "type": "string" },
+        "ssids": {
+          "type": "object",
+          "additionalProperties": { "$ref": "#/$defs/ssid" }
+        }
+      }
+    },
+    "ssid": {
+      "type": "object",
+      "required": ["vlan", "zone", "security", "enabled"],
+      "additionalProperties": true,
+      "properties": {
+        "vlan": { "type": "integer" },
+        "zone": { "type": "string" },
+        "security": { "type": "string", "enum": ["open", "wpa2-personal", "wpa3-personal", "wpa2-enterprise", "wpa3-enterprise"] },
+        "radiusServer": { "type": "string" },
+        "captivePortal": { "type": "boolean" },
+        "enabled": { "type": "boolean" }
+      }
+    }
+  }
+}

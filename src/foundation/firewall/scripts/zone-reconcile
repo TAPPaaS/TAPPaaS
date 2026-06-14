@@ -1,0 +1,159 @@
+#!/usr/bin/env bash
+#
+# zone-reconcile — TAPPaaS zone orchestrator (ADR-008)
+#
+# Reads zones.json (the single source of truth) and reconciles it onto EVERY
+# control point through one ordered pass, then reports a per-provider status.
+# A zone change is only "done" when every provider's delta is empty — this is
+# what makes cross-stack sync a guarantee rather than a hope (closes the #335
+# class of "VM up, but silently no IP").
+#
+# This is the orchestrator described in ADR-008 §8. It ships under the
+# transitional name `zone-reconcile`; per the ADR it becomes `zone-manager`
+# once the existing `zone-manager` (OPNsense) binary is renamed to
+# `opnsense-manager` and its ~10 callers are migrated (a supervised step).
+#
+# Providers (run in dependency order so a guest can actually get an IP):
+#   1. opnsense   — L3: VLAN interfaces, DHCP, DNS, firewall rules
+#   2. proxmox    — L2: node bridge-vids + per-VM trunks= (fixes #335)
+#   3. switch     — L2: physical-switch trunk/access port VLANs (#339)
+#   4. ap         — WiFi: SSID→VLAN mappings (#339)
+#
+# On removal the order is reversed by the providers themselves; this pass is
+# add/update oriented.
+#
+# Usage:
+#   zone-reconcile [--apply] [--only <provider>]
+#
+#   (no flag)            dry-run: show drift across all providers
+#   --apply             converge all providers
+#   --only opnsense     run a single provider (opnsense|proxmox|switch|ap)
+#
+
+set -euo pipefail
+
+# shellcheck source=../../tappaas-cicd/scripts/common-install-routines.sh disable=SC1091
+. /home/tappaas/bin/common-install-routines.sh
+
+readonly ZONES_FILE="${CONFIG_DIR}/zones.json"
+readonly OPNSENSE_MGR="opnsense-manager"   # alias → the OPNsense zone reconciler
+readonly PROXMOX_MGR="/home/tappaas/TAPPaaS/src/foundation/firewall/scripts/proxmox-manager"
+readonly SWITCH_MGR="/home/tappaas/TAPPaaS/src/foundation/firewall/scripts/switch-manager"
+readonly AP_MGR="/home/tappaas/TAPPaaS/src/foundation/firewall/scripts/ap-manager"
+
+usage() {
+    cat <<'EOF'
+Usage: zone-reconcile [--apply] [--only <provider>]
+
+Reconciles zones.json onto every control point in dependency order.
+
+Options:
+  --apply               Converge providers (default is dry-run / report only)
+  --only <provider>     Run a single provider: opnsense | proxmox | switch | ap
+  -h, --help            Show this help
+
+Exit code is non-zero if any provider still reports drift after the pass.
+EOF
+}
+
+APPLY=0
+ONLY=""
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        --apply) APPLY=1; shift ;;
+        --only)  ONLY="${2:-}"; shift 2 ;;
+        -h|--help) usage; exit 0 ;;
+        *) die "Unknown argument: $1 (try --help)" ;;
+    esac
+done
+
+[[ -f "${ZONES_FILE}" ]] || die "zones.json not found: ${ZONES_FILE}"
+if [[ -n "${ONLY}" && "${ONLY}" != "opnsense" && "${ONLY}" != "proxmox" && "${ONLY}" != "switch" && "${ONLY}" != "ap" ]]; then
+    die "--only must be one of: opnsense, proxmox, switch, ap"
+fi
+
+FAILED=()
+
+run_opnsense() {
+    info "${BOLD}=== Provider: opnsense (L3) ===${CL}"
+    if ! command -v "${OPNSENSE_MGR}" >/dev/null 2>&1; then
+        warn "  ${OPNSENSE_MGR} not on PATH — skipping OPNsense provider"
+        FAILED+=("opnsense")
+        return
+    fi
+    if [[ "${APPLY}" -eq 1 ]]; then
+        if "${OPNSENSE_MGR}" --no-ssl-verify --zones-file "${ZONES_FILE}" --execute; then
+            info "  ${GN}✓${CL} opnsense converged"
+        else
+            error "  opnsense reconcile failed"
+            FAILED+=("opnsense")
+        fi
+    else
+        "${OPNSENSE_MGR}" --no-ssl-verify --zones-file "${ZONES_FILE}" --summary \
+            || { error "  opnsense summary failed"; FAILED+=("opnsense"); }
+    fi
+    return 0
+}
+
+run_proxmox() {
+    info "${BOLD}=== Provider: proxmox (L2) ===${CL}"
+    local args=(reconcile)
+    [[ "${APPLY}" -eq 1 ]] && args+=(--apply)
+    # proxmox-manager exits 2 when drift remains (dry-run), 1 on error, 0 in sync.
+    local rc=0
+    "${PROXMOX_MGR}" "${args[@]}" || rc=$?
+    case "${rc}" in
+        0) info "  ${GN}✓${CL} proxmox in sync" ;;
+        2) if [[ "${APPLY}" -eq 1 ]]; then error "  proxmox still drifting after apply"; FAILED+=("proxmox"); fi ;;
+        *) error "  proxmox reconcile error (rc=${rc})"; FAILED+=("proxmox") ;;
+    esac
+    return 0
+}
+
+run_switch() {
+    info "${BOLD}=== Provider: switch (L2) ===${CL}"
+    local args=(reconcile)
+    [[ "${APPLY}" -eq 1 ]] && args+=(--apply)
+    # switch-manager: 0 in sync, 2 drift (dry-run) or needs-manual (apply), 1 error.
+    local rc=0
+    "${SWITCH_MGR}" "${args[@]}" || rc=$?
+    case "${rc}" in
+        0) info "  ${GN}✓${CL} switch in sync" ;;
+        2) if [[ "${APPLY}" -eq 1 ]]; then warn "  switch needs manual application (see steps above)"; fi ;;
+        *) error "  switch reconcile error (rc=${rc})"; FAILED+=("switch") ;;
+    esac
+    return 0
+}
+
+run_ap() {
+    info "${BOLD}=== Provider: ap (WiFi) ===${CL}"
+    local args=(reconcile)
+    [[ "${APPLY}" -eq 1 ]] && args+=(--apply)
+    # ap-manager: 0 in sync, 2 drift/needs-manual/validation-warning, 1 error.
+    local rc=0
+    "${AP_MGR}" "${args[@]}" || rc=$?
+    case "${rc}" in
+        0) info "  ${GN}✓${CL} ap in sync" ;;
+        2) if [[ "${APPLY}" -eq 1 ]]; then warn "  ap needs manual application / has validation warnings (see above)"; fi ;;
+        *) error "  ap reconcile error (rc=${rc})"; FAILED+=("ap") ;;
+    esac
+    return 0
+}
+
+# Dependency order: L3 before L2 on add (gateway/DHCP must exist first).
+if [[ -z "${ONLY}" || "${ONLY}" == "opnsense" ]]; then run_opnsense; echo ""; fi
+if [[ -z "${ONLY}" || "${ONLY}" == "proxmox"  ]]; then run_proxmox;  echo ""; fi
+if [[ -z "${ONLY}" || "${ONLY}" == "switch"   ]]; then run_switch;   echo ""; fi
+if [[ -z "${ONLY}" || "${ONLY}" == "ap"       ]]; then run_ap;       echo ""; fi
+
+# ── Aggregate report ─────────────────────────────────────────────────
+if [[ "${#FAILED[@]}" -eq 0 ]]; then
+    if [[ "${APPLY}" -eq 1 ]]; then
+        info "${GN}All providers converged.${CL}"
+    else
+        info "${GN}All providers reported (dry-run). Re-run with --apply to converge.${CL}"
+    fi
+    exit 0
+fi
+error "Providers not in sync: ${FAILED[*]}"
+exit 1

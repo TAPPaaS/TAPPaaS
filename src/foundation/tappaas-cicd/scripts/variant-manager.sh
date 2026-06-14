@@ -169,6 +169,16 @@ cmd_add() {
                 # Push zones.json to the Proxmox nodes so a module can be created
                 # in the new zone (node-side Create-TAPPaaS-VM.sh resolves its VLAN).
                 distribute_zones_to_nodes || warn "Could not distribute zones.json to nodes — module installs into '${zone_name}' may fail"
+                # Trunk the new VLAN to the firewall VM (and any other trunk-ALL VM)
+                # so guests in '${zone_name}' actually receive DHCP/IP. Without this,
+                # OPNsense L3 exists but the host bridge drops the VM's tagged frames
+                # for the new VLAN — the silent "VM up, no IP" bug (#335, ADR-008).
+                if command -v proxmox-manager >/dev/null 2>&1; then
+                    proxmox-manager trunks --apply \
+                        || warn "proxmox-manager trunk sync reported drift/errors — guests in '${zone_name}' may not get an IP until resolved"
+                else
+                    warn "proxmox-manager not on PATH — trunk the new VLAN to the firewall VM manually, or guests in '${zone_name}' get no IP"
+                fi
             else
                 warn "zone-manager not on PATH — activate '${zone_name}' manually"
             fi

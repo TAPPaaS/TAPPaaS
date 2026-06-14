@@ -190,79 +190,26 @@ if jq -e '(.dependsOn // []) | index("firewall:proxy")' "${FIREWALL_JSON}" >/dev
     fi
 fi
 
-# ── Sync OPNsense VM net0 trunks with active VLAN zones ─────────────
+# ── Sync Proxmox VM trunks with active VLAN zones (proxmox-manager) ──
 #
-# The OPNsense VM's Proxmox net0 trunks list controls which VLAN tags the
-# host's vlan-aware bridge forwards to the VM. It is set ONCE at VM creation
-# and never updated, so a zone activated afterwards is unreachable: the
-# vlan0.<tag> interface exists on OPNsense and dnsmasq listens, but Proxmox's
-# bridge drops the VM's tagged frames (the VLAN isn't in the NIC's trunk
-# allowlist) and DHCP DISCOVER never arrives. See #194.
+# A VM's Proxmox netN trunks= list controls which VLAN tags the host's
+# vlan-aware bridge forwards to the VM. It is set ONCE at VM creation and never
+# updated, so a zone activated afterwards is unreachable: the vlan0.<tag>
+# interface exists on OPNsense and dnsmasq listens, but Proxmox's bridge drops
+# the VM's tagged frames (the VLAN isn't in the NIC's trunk allowlist) and DHCP
+# DISCOVER never arrives. See #194, #335.
 #
-# The trunk list is derived from ALL active zones in zones.json (firewall.json
-# carries trunks0="ALL"), so new zones are picked up with no config edit. A
-# trunks-only `qm set --net0` updates the bridge VLAN filter live, without
-# recreating the NIC — safe on the running firewall.
-#
-# IMPORTANT: we deliberately do NOT change `queues` here. Changing queues on a
-# running VM forces QEMU to hot-replug the virtio NIC, which drops OPNsense's
-# LAN + all VLAN parent interfaces until a reboot (observed outage). queues is
-# therefore set only at VM creation (Create-TAPPaaS-VM.sh); here we PRESERVE
-# whatever queues value the live NIC already has.
-
-info "Syncing OPNsense VM net0 trunks with active VLAN zones..."
-
-# shellcheck source=../cluster/lib/vm-net.sh disable=SC1091
-. /home/tappaas/TAPPaaS/src/foundation/cluster/lib/vm-net.sh
-
-FIREWALL_VMID=$(jq -r '.vmid // empty' "${FIREWALL_JSON}")
-FIREWALL_BRIDGE=$(jq -r '.bridge0 // "lan"' "${FIREWALL_JSON}")
-FIREWALL_TRUNKS0=$(jq -r '.trunks0 // "ALL"' "${FIREWALL_JSON}")
-
-# Find the cluster node currently hosting the firewall VM (its location can
-# change via HA migration).
-PRIMARY_NODE=$(get_primary_node_fqdn 2>/dev/null || echo "tappaas1.mgmt.internal")
-FIREWALL_NODE=$(ssh -o BatchMode=yes -o StrictHostKeyChecking=accept-new \
-                    root@"${PRIMARY_NODE}" \
-                    "pvesh get /cluster/resources --type vm --output-format json 2>/dev/null \
-                     | jq -r --arg vmid \"${FIREWALL_VMID}\" '.[] | select(.vmid==(\$vmid|tonumber)) | .node'" \
-                    2>/dev/null | head -1)
-
-DESIRED_TRUNKS=$(vmnet_resolve_trunks "${FIREWALL_TRUNKS0}" "${CONFIG_DIR}/zones.json")
-
-if [[ -z "${FIREWALL_NODE}" || -z "${FIREWALL_VMID}" ]]; then
-    warn "  Could not locate firewall VM (node=${FIREWALL_NODE}, vmid=${FIREWALL_VMID}) — skipping net0 sync"
-elif [[ -z "${DESIRED_TRUNKS}" ]]; then
-    warn "  No active VLAN trunks resolved from zones.json — skipping net0 sync"
+# `proxmox-manager` (ADR-008) reconciles trunks for EVERY trunk-bearing VM
+# (firewall.json carries trunks0="ALL", resolved from zones.json), preserving
+# MAC/tag/queues — a trunks-only `qm set` that never recreates the NIC. queues
+# is deliberately NOT changed here: changing it on a running VM hot-replugs the
+# virtio NIC and drops OPNsense's LAN + VLAN parents until reboot.
+info "Syncing Proxmox VM trunks with active VLAN zones (proxmox-manager)..."
+if command -v proxmox-manager >/dev/null 2>&1; then
+    proxmox-manager trunks --apply \
+        || warn "  proxmox-manager reported drift/errors — new VLANs may not receive traffic"
 else
-    FIREWALL_NODE_FQDN="${FIREWALL_NODE}.mgmt.internal"
-    LIVE_NET0=$(ssh -o BatchMode=yes root@"${FIREWALL_NODE_FQDN}" \
-                    "qm config ${FIREWALL_VMID}" 2>/dev/null | awk -F': ' '/^net0:/ {print $2; exit}')
-
-    LIVE_MAC=$(vmnet_parse "${LIVE_NET0}" mac)
-    LIVE_TRUNKS=$(vmnet_parse "${LIVE_NET0}" trunks)
-    LIVE_TAG=$(vmnet_parse "${LIVE_NET0}" tag)
-    LIVE_QUEUES=$(vmnet_parse "${LIVE_NET0}" queues)
-
-    if [[ -z "${LIVE_MAC}" ]]; then
-        warn "  Could not read firewall net0 MAC — skipping net0 sync"
-    elif [[ "${LIVE_TRUNKS}" == "${DESIRED_TRUNKS}" ]]; then
-        info "  ${GN}✓${CL} net0 trunks already in sync (${DESIRED_TRUNKS})"
-    else
-        # Refresh trunks only; preserve MAC, tag and the existing queues value
-        # (changing queues live would recreate the NIC — see note above).
-        NET0_OPTS=$(vmnet_build_netopts "${FIREWALL_BRIDGE}" "${LIVE_MAC}" "${LIVE_TAG}" "${DESIRED_TRUNKS}" "${LIVE_QUEUES}")
-        info "  Updating net0 trunks on VM ${FIREWALL_VMID} (node ${FIREWALL_NODE}):"
-        info "    trunks: ${LIVE_TRUNKS:-none} → ${DESIRED_TRUNKS} (queues preserved: ${LIVE_QUEUES:-none})"
-        # Single-quote the value so ';' in trunks=... is not a command separator.
-        if ssh -o BatchMode=yes -o StrictHostKeyChecking=accept-new \
-                root@"${FIREWALL_NODE_FQDN}" \
-                "qm set ${FIREWALL_VMID} --net0 '${NET0_OPTS}'" >/dev/null 2>&1; then
-            info "  ${GN}✓${CL} OPNsense VM net0 trunks synced"
-        else
-            warn "  Failed to update OPNsense VM net0 trunks — new VLANs may not receive traffic"
-        fi
-    fi
+    warn "  proxmox-manager not on PATH — skipping VM trunk sync"
 fi
 
 info "${GN}✓${CL} Firewall update completed"

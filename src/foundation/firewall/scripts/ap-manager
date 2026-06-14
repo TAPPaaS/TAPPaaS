@@ -1,0 +1,436 @@
+#!/usr/bin/env bash
+#
+# ap-manager — TAPPaaS WiFi access-point network provider (ADR-008, #339)
+#
+# Reconciles WiFi SSID→VLAN mappings to zones.json (the single source of truth)
+# so a zone with an `SSID` field is broadcast on the right VLAN without manual
+# controller edits. It is the `ap-manager` provider in the ADR-008 orchestrator
+# model and implements the same five-verb contract as switch-manager:
+#
+#   update-desired  zones.json → SSID vlan tracking in desired
+#   interrogate     live AP/controller state → actual (via vendor plugin)
+#   delta           desired vs actual (SSID add/remove/vlan-change + validations)
+#   apply           push via vendor plugin, or print manual steps
+#   confirm         record applied state in actual;
+#   reconcile       = the five verbs in order (apply only with --apply)
+#
+# AP inventory + SSIDs live under the .accessPoints key of the SAME files
+# switch-manager uses (switch-configuration-{desired,actual}.json). Vendor
+# automation lives in scripts/plugins/<vendor>.sh; manual.sh is the fallback.
+#
+# Usage: see `ap-manager --help`.
+#
+
+set -euo pipefail
+
+# shellcheck source=../../tappaas-cicd/scripts/common-install-routines.sh disable=SC1091
+. /home/tappaas/bin/common-install-routines.sh
+# shellcheck source=../../cluster/lib/vm-net.sh disable=SC1091
+. /home/tappaas/TAPPaaS/src/foundation/cluster/lib/vm-net.sh
+
+SCRIPT_DIR="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")" && pwd)"
+readonly SCRIPT_DIR
+readonly PLUGIN_DIR="${SCRIPT_DIR}/plugins"
+readonly ZONES_FILE="${CONFIG_DIR}/zones.json"
+readonly DESIRED="${CONFIG_DIR}/switch-configuration-desired.json"
+readonly ACTUAL="${CONFIG_DIR}/switch-configuration-actual.json"
+
+# ── Usage ────────────────────────────────────────────────────────────
+
+usage() {
+    cat <<'EOF'
+Usage: ap-manager <command> [args]
+
+Inventory:
+  add <name> --vendor <v> [--ip <ip>] [--model <m>] [--location <l>]
+  remove <name>
+  list
+  show <name>
+
+SSID configuration:
+  ssid <ap> add <ssid> --zone <zone> --security <sec> [--vlan <n>] [--radius <srv>]
+        [--captive] [--disabled]
+  ssid <ap> remove <ssid>
+  ssid <ap> list
+
+  link <ap> --switch <switch> --port <port>     associate AP uplink to a switch port
+
+Reconciliation (five-verb provider contract):
+  update-desired          zones.json -> SSID vlan tracking
+  interrogate             live APs -> actual.json (via vendor plugin)
+  delta                   show desired-vs-actual + zone/SSID/uplink validations
+  apply                   push delta via plugin (manual plugin prints steps)
+  confirm                 record applied state in actual.json
+  reconcile [--apply]     run all five in order (apply only with --apply)
+
+security: open | wpa2-personal | wpa3-personal | wpa2-enterprise | wpa3-enterprise
+EOF
+}
+
+# ── State files ──────────────────────────────────────────────────────
+
+ensure_files() {
+    local f
+    for f in "${DESIRED}" "${ACTUAL}"; do
+        if [[ ! -f "${f}" ]]; then
+            jq -n '{"$schema":"switch-configuration-schema.json","version":"1.0","switches":{},"accessPoints":{},"wifiController":{}}' > "${f}"
+        fi
+    done
+}
+
+jq_desired() {
+    local filter="$1"; shift
+    local tmp; tmp="$(mktemp)"
+    if jq "$@" "${filter}" "${DESIRED}" > "${tmp}"; then
+        mv "${tmp}" "${DESIRED}"
+    else
+        rm -f "${tmp}"; die "Failed to update ${DESIRED}"
+    fi
+}
+
+# ── Inventory commands ───────────────────────────────────────────────
+
+cmd_add() {
+    local name="$1"; shift
+    [[ -n "${name}" ]] || die "add requires a <name>"
+    local vendor="" ip="" model="" location=""
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+            --vendor) vendor="$2"; shift 2 ;;
+            --ip) ip="$2"; shift 2 ;;
+            --model) model="$2"; shift 2 ;;
+            --location) location="$2"; shift 2 ;;
+            *) die "add: unknown option '$1'" ;;
+        esac
+    done
+    [[ -n "${vendor}" ]] || die "add requires --vendor"
+    if jq -e --arg n "${name}" '.accessPoints | has($n)' "${DESIRED}" >/dev/null; then
+        die "AP '${name}' already exists"
+    fi
+    jq_desired '.accessPoints[$n] = {vendor:$v, model:$m, managementIp:$ip, location:$loc, ssids:{}}' \
+        --arg n "${name}" --arg v "${vendor}" --arg m "${model}" --arg ip "${ip}" --arg loc "${location}"
+    info "${GN}✓${CL} added AP '${name}' (${vendor})"
+}
+
+cmd_remove() {
+    local name="$1"
+    [[ -n "${name}" ]] || die "remove requires a <name>"
+    jq -e --arg n "${name}" '.accessPoints | has($n)' "${DESIRED}" >/dev/null \
+        || die "AP '${name}' not found"
+    jq_desired 'del(.accessPoints[$n])' --arg n "${name}"
+    info "${GN}✓${CL} removed AP '${name}'"
+}
+
+cmd_list() {
+    local count
+    count=$(jq -r '.accessPoints // {} | length' "${DESIRED}")
+    info "${BOLD}Access points (${count}):${CL}"
+    jq -r '.accessPoints // {} | to_entries[] | "  \(.key)  [\(.value.vendor)]  \(.value.managementIp // "-")  ssids=\(.value.ssids|length)  uplink=\(.value.uplinkSwitch // "-"):\(.value.uplinkPort // "-")"' "${DESIRED}"
+    return 0
+}
+
+cmd_show() {
+    local name="$1"
+    [[ -n "${name}" ]] || die "show requires a <name>"
+    jq -e --arg n "${name}" '.accessPoints | has($n)' "${DESIRED}" >/dev/null \
+        || die "AP '${name}' not found"
+    jq --arg n "${name}" '.accessPoints[$n]' "${DESIRED}"
+}
+
+cmd_link() {
+    local ap="$1"; shift
+    [[ -n "${ap}" ]] || die "link requires an <ap>"
+    jq -e --arg n "${ap}" '.accessPoints | has($n)' "${DESIRED}" >/dev/null \
+        || die "AP '${ap}' not found"
+    local switch="" port=""
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+            --switch) switch="$2"; shift 2 ;;
+            --port) port="$2"; shift 2 ;;
+            *) die "link: unknown option '$1'" ;;
+        esac
+    done
+    [[ -n "${switch}" && -n "${port}" ]] || die "link requires --switch and --port"
+    jq_desired '.accessPoints[$n].uplinkSwitch=$s | .accessPoints[$n].uplinkPort=$p' \
+        --arg n "${ap}" --arg s "${switch}" --arg p "${port}"
+    info "${GN}✓${CL} linked AP '${ap}' → ${switch}:${port}"
+}
+
+# ── SSID subcommands ─────────────────────────────────────────────────
+
+cmd_ssid() {
+    local ap="$1" sub="$2"; shift 2 2>/dev/null || die "ssid requires <ap> <add|remove|list>"
+    [[ -n "${ap}" ]] || die "ssid requires an <ap>"
+    jq -e --arg n "${ap}" '.accessPoints | has($n)' "${DESIRED}" >/dev/null \
+        || die "AP '${ap}' not found"
+    case "${sub}" in
+        add)    _ssid_add "${ap}" "$@" ;;
+        remove) _ssid_remove "${ap}" "${1:-}" ;;
+        list)   jq --arg n "${ap}" '.accessPoints[$n].ssids' "${DESIRED}" ;;
+        *) die "ssid: unknown subcommand '${sub}' (add|remove|list)" ;;
+    esac
+}
+
+_ssid_add() {
+    local ap="$1" ssid="$2"; shift 2 2>/dev/null || die "ssid add requires <ssid-name>"
+    [[ -n "${ssid}" ]] || die "ssid add requires <ssid-name>"
+    local zone="" security="" vlan="" radius="" captive="false" enabled="true"
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+            --zone) zone="$2"; shift 2 ;;
+            --security) security="$2"; shift 2 ;;
+            --vlan) vlan="$2"; shift 2 ;;
+            --radius) radius="$2"; shift 2 ;;
+            --captive) captive="true"; shift ;;
+            --disabled) enabled="false"; shift ;;
+            *) die "ssid add: unknown option '$1'" ;;
+        esac
+    done
+    [[ -n "${zone}" ]] || die "ssid add requires --zone"
+    [[ -n "${security}" ]] || die "ssid add requires --security"
+    # Default the VLAN from the zone if not given.
+    if [[ -z "${vlan}" ]]; then
+        vlan=$(vmnet_zone_vlantag "${zone}" "${ZONES_FILE}" 2>/dev/null || true)
+        [[ -n "${vlan}" ]] || die "could not resolve VLAN for zone '${zone}'; pass --vlan"
+    fi
+    local obj
+    obj=$(jq -n --argjson v "${vlan}" --arg z "${zone}" --arg s "${security}" \
+        --argjson cap "${captive}" --argjson en "${enabled}" --arg r "${radius}" \
+        '{vlan:$v, zone:$z, security:$s, enabled:$en}
+         + (if $cap then {captivePortal:true} else {} end)
+         + (if $r!="" then {radiusServer:$r} else {} end)')
+    jq_desired '.accessPoints[$n].ssids[$ssid] = $o' --arg n "${ap}" --arg ssid "${ssid}" --argjson o "${obj}"
+    info "${GN}✓${CL} ${ap} SSID '${ssid}': $(jq -c . <<< "${obj}")"
+}
+
+_ssid_remove() {
+    local ap="$1" ssid="$2"
+    [[ -n "${ssid}" ]] || die "ssid remove requires <ssid-name>"
+    jq -e --arg n "${ap}" --arg s "${ssid}" '.accessPoints[$n].ssids | has($s)' "${DESIRED}" >/dev/null \
+        || die "SSID '${ssid}' not found on AP '${ap}'"
+    jq_desired 'del(.accessPoints[$n].ssids[$s])' --arg n "${ap}" --arg s "${ssid}"
+    info "${GN}✓${CL} removed SSID '${ssid}' from AP '${ap}'"
+}
+
+# ── Phase 0: update-desired (track SSID vlan from its zone) ──────────
+
+cmd_update_desired() {
+    info "${BOLD}update-desired${CL} (zones.json → SSID vlan tracking)"
+    local out tracked
+    out=$(jq --slurpfile z "${ZONES_FILE}" '
+        ([.accessPoints[]?.ssids[]? | select((.zone // "")!="" and ($z[0][.zone].vlantag != null) and (.vlan != $z[0][.zone].vlantag))] | length) as $n
+        | .accessPoints |= map_values(
+            .ssids |= map_values(
+                if ((.zone // "")!="" and ($z[0][.zone].vlantag != null))
+                then .vlan = $z[0][.zone].vlantag else . end))
+        | {result: ., n: $n}' "${DESIRED}")
+    echo "${out}" | jq '.result' > "${DESIRED}.tmp" && mv "${DESIRED}.tmp" "${DESIRED}"
+    tracked=$(echo "${out}" | jq -r '.n')
+    info "  SSID VLANs re-tracked from zones: ${tracked}"
+    return 0
+}
+
+# ── Phase 1: interrogate (via vendor plugin; manual = no-op) ─────────
+
+select_plugin() {
+    local vendor="$1" p
+    for p in "${PLUGIN_DIR}"/*.sh; do
+        [[ "$(basename "$p")" == "manual.sh" ]] && continue
+        # shellcheck disable=SC1090
+        ( . "$p"; plugin_supports "${vendor}" "" ) >/dev/null 2>&1 && { echo "$p"; return 0; }
+    done
+    echo "${PLUGIN_DIR}/manual.sh"
+}
+
+cmd_interrogate() {
+    info "${BOLD}interrogate${CL} (live APs → actual.json)"
+    ensure_files
+    local names name vendor ip plugin state
+    names=$(jq -r '.accessPoints // {} | keys[]' "${DESIRED}")
+    if [[ -z "${names}" ]]; then info "  (no APs in inventory)"; return 0; fi
+    while IFS= read -r name; do
+        vendor=$(jq -r --arg n "${name}" '.accessPoints[$n].vendor' "${DESIRED}")
+        ip=$(jq -r --arg n "${name}" '.accessPoints[$n].managementIp // ""' "${DESIRED}")
+        plugin=$(select_plugin "${vendor}")
+        # shellcheck disable=SC1090
+        state=$( . "${plugin}"; plugin_interrogate "${name}" "${ip}" 2>/dev/null )
+        info "  ${name}: interrogated via $(basename "${plugin}" .sh) plugin"
+        if [[ -n "${state}" && "${state}" != "{}" ]]; then
+            local tmp; tmp="$(mktemp)"
+            jq --arg n "${name}" --argjson s "${state}" '.accessPoints[$n] = $s' "${ACTUAL}" > "${tmp}" && mv "${tmp}" "${ACTUAL}"
+        fi
+    done <<< "${names}"
+    return 0
+}
+
+# ── Phase 2: delta (desired vs actual + zone/uplink validations) ────
+
+compute_delta() {
+    jq -n --slurpfile d "${DESIRED}" --slurpfile a "${ACTUAL}" '
+      ($d[0].accessPoints // {}) as $des
+      | ($a[0].accessPoints // {}) as $act
+      | reduce ($des | keys[]) as $ap ({};
+          . + {($ap): {
+              changes: [
+                ($des[$ap].ssids // {} | to_entries[]) as $s
+                | ($act[$ap].ssids[$s.key]) as $as
+                | if $as == null then
+                    {action:"create-ssid", ssid:$s.key,
+                     description:"SSID \($s.key) (VLAN \($s.value.vlan), zone \($s.value.zone)) not on AP yet"}
+                  elif ($as.vlan != $s.value.vlan) then
+                    {action:"ssid-vlan", ssid:$s.key,
+                     description:"SSID \($s.key) VLAN \($as.vlan) -> \($s.value.vlan)"}
+                  else empty end
+              ],
+              removed: [
+                (($act[$ap].ssids // {} | keys) - ($des[$ap].ssids // {} | keys))[]
+              ]
+          }})
+    '
+}
+
+# Validate: every zone with an SSID field is served by some AP; and each AP's
+# uplink switch port carries every SSID VLAN. Prints warnings; sets VALIDATION_WARN.
+validate() {
+    VALIDATION_WARN=0
+    local zone ssid_name served
+    # zones with an SSID field must be broadcast somewhere
+    while IFS=$'\t' read -r zone ssid_name; do
+        [[ -z "${ssid_name}" || "${ssid_name}" == "null" ]] && continue
+        served=$(jq -r --arg s "${ssid_name}" '[.accessPoints[]?.ssids // {} | has($s)] | any' "${DESIRED}")
+        if [[ "${served}" != "true" ]]; then
+            warn "  zone '${zone}' declares SSID '${ssid_name}' but no AP broadcasts it"
+            VALIDATION_WARN=$((VALIDATION_WARN + 1))
+        fi
+    done < <(jq -r 'to_entries[] | select(.value.SSID? != null) | "\(.key)\t\(.value.SSID)"' "${ZONES_FILE}")
+
+    # AP uplink port must carry each SSID's VLAN (cross-check against switch config)
+    local ap up_sw up_port carried vlan ssid
+    while IFS= read -r ap; do
+        up_sw=$(jq -r --arg n "${ap}" '.accessPoints[$n].uplinkSwitch // ""' "${DESIRED}")
+        up_port=$(jq -r --arg n "${ap}" '.accessPoints[$n].uplinkPort // ""' "${DESIRED}")
+        [[ -z "${up_sw}" || -z "${up_port}" ]] && continue
+        carried=$(jq -c --arg s "${up_sw}" --arg p "${up_port}" '.switches[$s].ports[$p].taggedVlans // []' "${DESIRED}")
+        while IFS=$'\t' read -r ssid vlan; do
+            [[ -z "${vlan}" ]] && continue
+            if [[ "$(echo "${carried}" | jq --argjson v "${vlan}" 'index($v) != null')" != "true" ]]; then
+                warn "  AP '${ap}' uplink ${up_sw}:${up_port} does not carry VLAN ${vlan} (SSID '${ssid}')"
+                VALIDATION_WARN=$((VALIDATION_WARN + 1))
+            fi
+        done < <(jq -r --arg n "${ap}" '.accessPoints[$n].ssids // {} | to_entries[] | "\(.key)\t\(.value.vlan)"' "${DESIRED}")
+    done < <(jq -r '.accessPoints // {} | keys[]' "${DESIRED}")
+    return 0
+}
+
+cmd_delta() {
+    local delta total=0
+    delta=$(compute_delta)
+    info "${BOLD}delta${CL} (desired vs actual)"
+    local ap
+    for ap in $(echo "${delta}" | jq -r 'keys[]'); do
+        local n r
+        n=$(echo "${delta}" | jq -r --arg a "${ap}" '.[$a].changes | length')
+        r=$(echo "${delta}" | jq -r --arg a "${ap}" '.[$a].removed | length')
+        total=$((total + n + r))
+        if [[ "${n}" -gt 0 ]]; then
+            warn "  ${ap}: ${n} change(s)"
+            echo "${delta}" | jq -r --arg a "${ap}" '.[$a].changes[] | "      \(.action): \(.description)"'
+        else
+            info "  ${GN}✓${CL} ${ap}: SSIDs in sync"
+        fi
+        [[ "${r}" -gt 0 ]] && warn "  ${ap}: ${r} SSID(s) to remove: $(echo "${delta}" | jq -r --arg a "${ap}" '.[$a].removed | join(", ")')"
+    done
+    [[ "$(echo "${delta}" | jq -r 'keys|length')" -eq 0 ]] && info "  (no APs in inventory)"
+    validate
+    DELTA_TOTAL=$((total + VALIDATION_WARN))
+    return 0
+}
+
+# ── Phase 3 / 4: apply / confirm ────────────────────────────────────
+
+cmd_apply() {
+    local delta ap vendor changes plugin rc manual=0 applied=0
+    delta=$(compute_delta)
+    info "${BOLD}apply${CL}"
+    for ap in $(echo "${delta}" | jq -r 'keys[]'); do
+        changes=$(echo "${delta}" | jq -c --arg a "${ap}" '{changes: .[$a].changes}')
+        [[ "$(echo "${changes}" | jq '.changes|length')" -eq 0 ]] && continue
+        vendor=$(jq -r --arg n "${ap}" '.accessPoints[$n].vendor' "${DESIRED}")
+        plugin=$(select_plugin "${vendor}")
+        rc=0
+        # shellcheck disable=SC1090
+        ( . "${plugin}"; plugin_apply "${ap}" "${changes}" ) || rc=$?
+        if [[ "${rc}" -eq 0 ]]; then info "  ${GN}✓${CL} ${ap}: applied via $(basename "${plugin}" .sh)"; applied=$((applied+1))
+        else manual=$((manual+1)); fi
+    done
+    APPLY_MANUAL="${manual}"; APPLY_DONE="${applied}"
+    return 0
+}
+
+cmd_confirm() {
+    info "${BOLD}confirm${CL} (record applied state in actual.json)"
+    ensure_files
+    local tmp; tmp="$(mktemp)"
+    jq --slurpfile d "${DESIRED}" '.accessPoints = ($d[0].accessPoints // {})' "${ACTUAL}" > "${tmp}" && mv "${tmp}" "${ACTUAL}"
+    info "  ${GN}✓${CL} actual.json AP state updated to match desired"
+    return 0
+}
+
+cmd_reconcile() {
+    local apply="$1"
+    DELTA_TOTAL=0; APPLY_MANUAL=0; APPLY_DONE=0; VALIDATION_WARN=0
+    cmd_update_desired; echo ""
+    cmd_interrogate; echo ""
+    cmd_delta; echo ""
+    if [[ "${apply}" -eq 1 ]]; then
+        cmd_apply; echo ""
+        if [[ "${APPLY_MANUAL:-0}" -eq 0 ]]; then
+            cmd_confirm
+            info "${GN}ap-manager: converged${CL} (${APPLY_DONE:-0} applied)"
+            [[ "${VALIDATION_WARN:-0}" -gt 0 ]] && { warn "ap-manager: ${VALIDATION_WARN} validation warning(s)"; return 2; }
+            return 0
+        fi
+        warn "ap-manager: ${APPLY_MANUAL} AP(s) need MANUAL application — apply, then run: ap-manager confirm"
+        return 2
+    fi
+    if [[ "${DELTA_TOTAL:-0}" -gt 0 ]]; then
+        warn "ap-manager: ${DELTA_TOTAL} change(s)/warning(s) pending. Re-run with --apply."
+        return 2
+    fi
+    info "${GN}ap-manager: in sync${CL}"
+    return 0
+}
+
+# ── Main ─────────────────────────────────────────────────────────────
+
+main() {
+    local cmd="${1:-}"
+    [[ -z "${cmd}" || "${cmd}" == "-h" || "${cmd}" == "--help" ]] && { usage; exit 0; }
+    shift || true
+    [[ -f "${ZONES_FILE}" ]] || die "zones.json not found: ${ZONES_FILE}"
+    ensure_files
+
+    case "${cmd}" in
+        add)            cmd_add "$@" ;;
+        remove)         cmd_remove "${1:-}" ;;
+        list)           cmd_list ;;
+        show)           cmd_show "${1:-}" ;;
+        link)           cmd_link "$@" ;;
+        ssid)           cmd_ssid "$@" ;;
+        update-desired) cmd_update_desired ;;
+        interrogate)    cmd_interrogate ;;
+        delta)          cmd_delta ;;
+        apply)          cmd_apply ;;
+        confirm)        cmd_confirm ;;
+        reconcile)
+            local apply=0
+            [[ "${1:-}" == "--apply" ]] && apply=1
+            cmd_reconcile "${apply}"
+            ;;
+        *) die "Unknown command: ${cmd} (try --help)" ;;
+    esac
+}
+
+if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
+    main "$@"
+fi

@@ -183,11 +183,27 @@ BASIC_FAIL=${FAIL}
 
 section "Standard 1: CLI tools available"
 
-for tool in opnsense-firewall zone-manager dns-manager caddy-manager rules-manager; do
+for tool in opnsense-firewall zone-manager dns-manager caddy-manager rules-manager \
+            opnsense-manager proxmox-manager switch-manager ap-manager zone-reconcile; do
     if command -v "${tool}" >/dev/null 2>&1; then
         pass "${tool} on PATH"
     else
         fail "${tool} missing from PATH"
+    fi
+done
+
+section "Standard 1b: ADR-008 provider unit tests (proxmox/switch/ap; #335/#339)"
+
+for ut in test-proxmox-manager.sh test-switch-manager.sh test-ap-manager.sh; do
+    if [[ -x "${SCRIPT_DIR}/scripts/${ut}" ]]; then
+        if ut_out=$("${SCRIPT_DIR}/scripts/${ut}" 2>&1); then
+            pass "${ut}"
+        else
+            fail "${ut}"
+            echo "${ut_out}" | sed 's/^/    /'
+        fi
+    else
+        skip "scripts/${ut} not found or not executable"
     fi
 done
 
@@ -698,11 +714,152 @@ cleanup_deep() {
     return ${rc}
 }
 
+# ─────────────────────────────────────────────────────────────────────
+# Deep A/B: ADR-008 switch/ap providers (#339) — SAFE, file-only.
+#
+# Runs entirely in an isolated temp CONFIG_DIR (a copy of the live zones.json +
+# test zones), so it never touches live zones.json or the live switch-config
+# files and needs no hardware (vendor 'generic' → manual plugin). Exercises:
+#   - adding / changing / removing test zones and the resulting desired.json
+#   - the five reconcile phases and how desired.json vs actual.json evolve
+#   - switch ports, incl. an unknown equipment type that forces manual mode
+#   - that the manual instructions cite the correct ports / VLANs
+#   - ap-manager SSID tracking + cross-provider uplink validation
+#
+# CONFIG_DIR is readonly here, so providers are invoked with `env CONFIG_DIR=…`;
+# every call is guarded (|| true / capture rc) because the suite runs set -e.
+deep_test_adr008_providers() {
+    local T D AF z out rc
+    T="$(mktemp -d)"
+    D="${T}/switch-configuration-desired.json"
+    AF="${T}/switch-configuration-actual.json"
+    if ! cp "${CONFIG_DIR}/zones.json" "${T}/zones.json" 2>/dev/null; then
+        fail "Deep A: could not copy zones.json for isolated test"; rm -rf "${T}"; return 0
+    fi
+    set +e   # body uses explicit pass/fail + rc capture; a stray non-zero must not abort the suite
+
+    # Local assert helpers (use the global pass/fail counters).
+    _dgrep() { # desc, fixed-pattern, text
+        if grep -qF -- "$2" <<< "$3"; then pass "$1"; else fail "$1"; echo "      expected to find: $2" >&2; fi
+    }
+    _djq() { # desc, jq-filter, file  (pass if filter is truthy/non-null)
+        if [[ "$(jq -r "$2" "$3" 2>/dev/null)" == "true" ]]; then pass "$1"; else fail "$1"; fi
+    }
+
+    section "Deep A: switch-manager — zone add/change/remove across reconcile phases (#339)"
+
+    # Seed two test zones (961, 962) as Active in the isolated zones.json.
+    jq '.swdeepA={state:"Active",vlantag:961} | .swdeepB={state:"Active",vlantag:962}' \
+        "${T}/zones.json" > "${T}/z" && mv "${T}/z" "${T}/zones.json"
+
+    # vendor 'generic' has no plugin → manual fallback (an "equipment type that
+    # does not exist" as far as automation is concerned).
+    env CONFIG_DIR="${T}" switch-manager add testcore --vendor generic --ip 10.0.0.99 >/dev/null 2>&1 || true
+    env CONFIG_DIR="${T}" switch-manager port testcore 1 --mode trunk --source zones \
+        --connected-to node:tappaas1:nic0:lan >/dev/null 2>&1 || true
+    env CONFIG_DIR="${T}" switch-manager port testcore 5 --mode access --zone swdeepA \
+        --connected-to device:test-printer >/dev/null 2>&1 || true
+
+    # ── A1: add zones → update-desired pulls the new VLANs into desired.json ──
+    env CONFIG_DIR="${T}" switch-manager update-desired >/dev/null 2>&1 || true
+    _djq "Deep A1: desired trunk port gained added VLANs 961+962" \
+        '.switches.testcore.ports["1"].taggedVlans | (index(961) and index(962)) != null' "${D}"
+    _djq "Deep A1: access port nativeVlan tracks zone swdeepA (961)" \
+        '.switches.testcore.ports["5"].nativeVlan == 961' "${D}"
+
+    # ── A2: phases — actual.json only changes after confirm ──────────────────
+    env CONFIG_DIR="${T}" switch-manager interrogate >/dev/null 2>&1 || true   # manual → actual stays empty
+    out="$(env CONFIG_DIR="${T}" switch-manager delta 2>&1 || true)"
+    _dgrep "Deep A2: delta reports ports need configuring (actual empty)" "configure-port" "${out}"
+    if jq -e '.switches.testcore' "${AF}" >/dev/null 2>&1; then
+        fail "Deep A2: actual.json must NOT contain testcore before confirm"
+    else
+        pass "Deep A2: actual.json has no testcore before confirm"
+    fi
+    env CONFIG_DIR="${T}" switch-manager confirm >/dev/null 2>&1 || true
+    _djq "Deep A2: confirm wrote applied state into actual.json" \
+        '.switches.testcore.ports["1"].taggedVlans | index(961) != null' "${AF}"
+    rc=0; env CONFIG_DIR="${T}" switch-manager reconcile >/dev/null 2>&1 || rc=$?
+    if [[ "${rc}" -eq 0 ]]; then pass "Deep A2: reconcile reports in-sync after confirm (rc 0)"; else fail "Deep A2: reconcile not in-sync after confirm (rc ${rc})"; fi
+
+    # ── A3: change a zone's VLAN (961→965) → drift on trunk AND access ──────
+    jq '.swdeepA.vlantag=965' "${T}/zones.json" > "${T}/z" && mv "${T}/z" "${T}/zones.json"
+    env CONFIG_DIR="${T}" switch-manager update-desired >/dev/null 2>&1 || true
+    out="$(env CONFIG_DIR="${T}" switch-manager delta 2>&1 || true)"
+    _dgrep "Deep A3: trunk VLAN change detected" "trunk-vlans" "${out}"
+    _dgrep "Deep A3: access VLAN change detected" "access-vlan" "${out}"
+    _djq "Deep A3: desired.json now has new VLAN 965" \
+        '.switches.testcore.ports["1"].taggedVlans | index(965) != null' "${D}"
+    _djq "Deep A3: actual.json still has OLD VLAN 961 (drift, not yet applied)" \
+        '.switches.testcore.ports["1"].taggedVlans | index(961) != null' "${AF}"
+
+    # ── A4: remove a zone → its VLAN drops out of desired.json ─────────────
+    jq 'del(.swdeepB)' "${T}/zones.json" > "${T}/z" && mv "${T}/z" "${T}/zones.json"
+    env CONFIG_DIR="${T}" switch-manager update-desired >/dev/null 2>&1 || true
+    _djq "Deep A4: removed zone VLAN 962 dropped from desired trunk" \
+        '.switches.testcore.ports["1"].taggedVlans | index(962) == null' "${D}"
+
+    # ── A5: unknown equipment type → manual instructions cite real port/VLAN ─
+    out="$(env CONFIG_DIR="${T}" switch-manager reconcile --apply 2>&1)"; rc=$?
+    _dgrep "Deep A5: manual plugin engaged for unknown vendor 'generic'" "MANUAL CONFIGURATION REQUIRED" "${out}"
+    _dgrep "Deep A5: manual instructions cite the affected port (port 1)" "port 1" "${out}"
+    _dgrep "Deep A5: manual instructions cite the new VLAN (965)" "965" "${out}"
+    if [[ "${rc}" -eq 2 ]]; then pass "Deep A5: reconcile --apply returns needs-manual (rc 2)"; else fail "Deep A5: expected rc 2 (needs-manual), got ${rc}"; fi
+    if jq -e '.switches.testcore.ports["1"].taggedVlans | index(965)' "${AF}" >/dev/null 2>&1; then
+        fail "Deep A5: actual.json must stay unchanged after a manual (unapplied) reconcile"
+    else
+        pass "Deep A5: actual.json unchanged after manual reconcile (no false confirm)"
+    fi
+
+    section "Deep B: ap-manager — SSID tracking + cross-provider uplink validation (#339)"
+
+    # swdeepA (965) gains an SSID; an AP (unknown vendor → manual) broadcasts it.
+    jq '.swdeepA.SSID="TAPPaaS-Test"' "${T}/zones.json" > "${T}/z" && mv "${T}/z" "${T}/zones.json"
+    env CONFIG_DIR="${T}" ap-manager add testap --vendor generic --ip 10.0.0.98 >/dev/null 2>&1 || true
+    env CONFIG_DIR="${T}" ap-manager ssid testap add TAPPaaS-Test --zone swdeepA --security wpa3-personal >/dev/null 2>&1 || true
+    env CONFIG_DIR="${T}" ap-manager link testap --switch testcore --port 9 >/dev/null 2>&1 || true
+    env CONFIG_DIR="${T}" ap-manager update-desired >/dev/null 2>&1 || true
+    _djq "Deep B1: SSID VLAN auto-tracks its zone (965)" \
+        '.accessPoints.testap.ssids["TAPPaaS-Test"].vlan == 965' "${D}"
+
+    out="$(env CONFIG_DIR="${T}" ap-manager delta 2>&1 || true)"
+    _dgrep "Deep B1: ap delta reports create-ssid" "create-ssid" "${out}"
+    _dgrep "Deep B2: validation flags uplink port not carrying the SSID VLAN" "does not carry VLAN 965" "${out}"
+
+    # Fix the uplink: switch port 9 trunk must carry 965 → validation clears.
+    env CONFIG_DIR="${T}" switch-manager port testcore 9 --mode trunk --tagged 965 \
+        --connected-to ap:testap >/dev/null 2>&1 || true
+    out="$(env CONFIG_DIR="${T}" ap-manager delta 2>&1 || true)"
+    if grep -qF "does not carry VLAN 965" <<< "${out}"; then
+        fail "Deep B2: uplink validation should clear once port 9 carries VLAN 965"
+    else
+        pass "Deep B2: uplink validation clears once the switch port carries the SSID VLAN"
+    fi
+
+    # Manual apply instructions for the AP must cite the SSID; confirm writes actual.
+    out="$(env CONFIG_DIR="${T}" ap-manager reconcile --apply 2>&1 || true)"
+    _dgrep "Deep B3: AP manual instructions cite the SSID" "TAPPaaS-Test" "${out}"
+    env CONFIG_DIR="${T}" ap-manager confirm >/dev/null 2>&1 || true
+    if jq -e '.accessPoints.testap.ssids["TAPPaaS-Test"]' "${AF}" >/dev/null 2>&1; then
+        pass "Deep B3: ap confirm wrote the SSID into actual.json"
+    else
+        fail "Deep B3: ap confirm did not update actual.json"
+    fi
+
+    rm -rf "${T}"
+    set -e
+    return 0
+}
+
 if [[ "${DEEP}" != "1" ]]; then
     section "Deep tests skipped"
     info "  Re-run with --deep (or TAPPAAS_TEST_DEEP=1) to provision two test VMs and"
     info "  validate inter-zone firewall rules end-to-end. Expected runtime: 5–10 min."
 else
+    # ADR-008 switch/ap provider deep tests run first: isolated (temp CONFIG_DIR),
+    # fast, hardware-free, and independent of the VM-provisioning deep flow below.
+    deep_test_adr008_providers
+
     # ── Derive zone names + FQDNs from the fixture JSON (issue #306) ──────
     # The deep path must NOT hardcode zone names: derive them once here so a zone
     # rename in the fixtures flows everywhere (DNS, SSH, curl, zone-manager, and
