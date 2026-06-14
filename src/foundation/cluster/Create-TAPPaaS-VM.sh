@@ -324,6 +324,13 @@ fi
 VMNAME="$(get_config_value 'vmname' "$1")"
 VMTAG="$(get_config_value 'vmtag')"
 BIOS="$(get_config_value 'bios' 'ovmf')"
+# Fail loudly on an unknown firmware rather than silently mis-provisioning (#341).
+case "$BIOS" in
+  ovmf|seabios) ;;
+  *)
+    echo -e "\n${RD}[ERROR]${CL} unsupported bios '${YW}${BIOS}${CL}' — expected 'ovmf' or 'seabios'."
+    exit 1 ;;
+esac
 CORE_COUNT="$(get_config_value 'cores' '2')"
 VM_OSTYPE="$(get_config_value 'ostype' 'l26')"
 CPU_TYPE="$(get_config_value 'cputype' 'host')"
@@ -442,7 +449,22 @@ if [ "$IMAGETYPE" == "img" ]; then  # First use: this is used to stand up a fire
   info "${BOLD}Creating a Image based VM"
   qm create $VMID -agent 1 -tablet 0 -localtime 1 \
     -name $VMNAME  -onboot 1 -bios $BIOS -ostype $VM_OSTYPE -cpu "$CPU_TYPE" -scsihw virtio-scsi-single 1>/dev/null
-  qm importdisk $VMID ${TARGET_IMAGE} $STORAGE  1>/dev/null
+  qm importdisk $VMID ${TARGET_IMAGE} $STORAGE  1>/dev/null   # OS image → vm-${VMID}-disk-0
+  if [ "$BIOS" == "ovmf" ]; then
+    # OVMF needs a PERSISTENT EFI vars disk. Without efidisk0 Proxmox synthesises an
+    # ephemeral /run NVRAM, so EFI boot entries / SecureBoot keys reset every power
+    # cycle and the declared bios=ovmf disagrees with what's actually provisioned
+    # (issue #341 — the ISO/clone paths already attach efidisk0; only img omitted it).
+    # importdisk took disk-0 for the OS image, so put the EFI disk on disk-1, and seed
+    # it from the vars template — Proxmox 9 leaves a fresh efidisk all-zeros, which
+    # hangs OVMF (same reason the ISO path dd's it). Plain (non-SecureBoot) vars suit
+    # these Linux images (firewall/nixos/debian/hass).
+    pvesm alloc $STORAGE $VMID $DISK1 4M 1>/dev/null
+    dd if=/usr/share/pve-edk2-firmware/OVMF_VARS_4M.fd \
+       of=/dev/zvol/${STORAGE}/${DISK1} bs=1M 2>/dev/null || true
+    qm set $VMID -efidisk0 ${DISK1_REF},efitype=4m 1>/dev/null
+    info " - Created persistent EFI disk (NVRAM initialised from OVMF_VARS_4M.fd)"
+  fi
   qm set $VMID \
     -scsi0 ${DISK0_REF} \
     -boot order=scsi0   >/dev/null
