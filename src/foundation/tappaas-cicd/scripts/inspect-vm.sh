@@ -21,6 +21,12 @@ set -euo pipefail
 # shellcheck source=common-install-routines.sh disable=SC1091
 . /home/tappaas/bin/common-install-routines.sh
 
+# Network helpers (vmnet_parse / vmnet_resolve_trunks / vmnet_zone_vlantag) —
+# the same zone→VLAN and trunk-resolution logic cluster:vm uses to build NICs,
+# so the Actual column matches how the live VM was provisioned. (issue #334)
+# shellcheck source=../../cluster/lib/vm-net.sh disable=SC1091
+. /home/tappaas/TAPPaaS/src/foundation/cluster/lib/vm-net.sh
+
 # ── Arguments ────────────────────────────────────────────────────────
 
 if [[ -z "${1:-}" || "$1" == "-h" || "$1" == "--help" ]]; then
@@ -142,6 +148,79 @@ print_row() {
         "${act_color}" "${actual_val:--}" "${CL}"
 }
 
+# ── Helper: format a VLAN tag for display ────────────────────────────
+# Proxmox tag=0 means untagged — identical to carrying no tag at all. Collapse
+# 0, "", and a missing tag all to "(untagged)" so they read as the same value
+# and never show up as spurious drift. (issue #334)
+fmt_vlan() {
+    local t="$1"
+    if [[ -z "${t}" || "${t}" == "0" ]]; then
+        echo -n "(untagged)"
+    else
+        echo -n "${t}"
+    fi
+}
+
+# ── Helper: normalize a ';'-separated VLAN list ──────────────────────
+# Sort numerically and drop blanks so a resolved-config trunk list and the live
+# trunk list compare equal regardless of ordering. (issue #334)
+norm_trunks() {
+    echo "$1" | tr ';' '\n' | sed '/^$/d' | sort -n | tr '\n' ';' | sed 's/;$//'
+}
+
+# ── Helper: print the comparison rows for one NIC (net0 / net1) ───────
+# TAPPaaS VMs carry at most two NICs. For each we surface bridge, zone (by name
+# AND by VLAN tag — two views of the same thing), the trunk allow-list resolved
+# to VLAN tags, and the MAC. trunks0 on the firewall is normally the sentinel
+# "ALL"; vmnet_resolve_trunks expands it to every active zone's tag exactly as
+# cluster:vm does, so a missing-trunk mismatch shows as red drift. (issue #334)
+print_nic() {
+    local i="$1"
+    local actual_net="${ACTUAL[net${i}]:-}"
+
+    local config_bridge git_bridge config_zone git_zone
+    local config_trunks git_trunks config_mac git_mac
+    config_bridge=$(get_cfg "bridge${i}")
+    git_bridge=$(get_git "bridge${i}")
+    config_zone=$(get_cfg "zone${i}")
+    git_zone=$(get_git "zone${i}")
+    config_trunks=$(get_cfg "trunks${i}")
+    git_trunks=$(get_git "trunks${i}")
+    config_mac=$(get_cfg "mac${i}")
+    git_mac=$(get_git "mac${i}")
+
+    # NIC absent from config, git, AND the live VM → single "none" line. (#334)
+    if [[ -z "${actual_net}" && -z "${config_bridge}" && -z "${git_bridge}" ]]; then
+        printf "  %-18s  %-20s  %-20s  %-20s\n" "nic${i}" "none" "none" "none"
+        return
+    fi
+
+    # Bridge
+    print_row "bridge${i}" "${config_bridge}" "${git_bridge}" "$(vmnet_parse "${actual_net}" bridge)"
+
+    # Zone shown two ways. The (tag) row carries the zone NAME and catches a
+    # config-vs-git name change; the (vlan) row carries the VLAN NUMBER and
+    # catches actual-vs-config drift — same split as before, just relabelled so
+    # both views are clearly the same zone expressed differently. (#334)
+    local actual_tag config_vlan
+    actual_tag=$(vmnet_parse "${actual_net}" tag)
+    config_vlan=""
+    [[ -n "${config_zone}" ]] && config_vlan=$(vmnet_zone_vlantag "${config_zone}" "${zones_file}" 2>/dev/null || true)
+    print_row "zone${i} (tag)"  "${config_zone}" "${git_zone}" "${config_zone}"
+    print_row "zone${i} (vlan)" "$(fmt_vlan "${config_vlan}")" "$(fmt_vlan "${config_vlan}")" "$(fmt_vlan "${actual_tag}")"
+
+    # Trunks — resolve the zone-name/sentinel config form to VLAN tags so it
+    # lines up with the live list, and normalize ordering on both sides. (#334)
+    local config_trunks_v git_trunks_v actual_trunks_v
+    config_trunks_v=$(norm_trunks "$(vmnet_resolve_trunks "${config_trunks}" "${zones_file}" 2>/dev/null || true)")
+    git_trunks_v=$(norm_trunks "$(vmnet_resolve_trunks "${git_trunks}" "${zones_file}" 2>/dev/null || true)")
+    actual_trunks_v=$(norm_trunks "$(vmnet_parse "${actual_net}" trunks)")
+    print_row "trunks${i}" "${config_trunks_v}" "${git_trunks_v}" "${actual_trunks_v}"
+
+    # MAC
+    print_row "mac${i}" "${config_mac}" "${git_mac}" "$(vmnet_parse "${actual_net}" mac)"
+}
+
 # ── Print table header ───────────────────────────────────────────────
 
 printf "  ${BOLD}%-18s  %-20s  %-20s  %-20s${CL}\n" "Field" "Released (Git)" "Desired (~/config)" "Actual"
@@ -192,30 +271,12 @@ config_cpu=$(get_cfg cputype)
 git_cpu=$(get_git cputype)
 print_row "cputype" "${config_cpu}" "${git_cpu}" "${ACTUAL[cpu]:-}"
 
-# Network
-config_bridge=$(get_cfg bridge0)
-git_bridge=$(get_git bridge0)
-actual_net0="${ACTUAL[net0]:-}"
-actual_bridge=$(echo "${actual_net0}" | grep -oP 'bridge=\K[^,]+' || true)
-print_row "bridge0" "${config_bridge}" "${git_bridge}" "${actual_bridge}"
-
-config_zone=$(get_cfg zone0)
-git_zone=$(get_git zone0)
-actual_tag=$(echo "${actual_net0}" | grep -oP 'tag=\K[^,]+' || true)
-# Resolve zone name to VLAN tag for comparison display
+# Network — net0 and net1 (TAPPaaS allows at most two NICs per VM). Each NIC's
+# bridge, zone (name + VLAN), trunks, and MAC are surfaced so an access-VLAN or
+# trunk-allowlist mismatch is visible without raw `qm config`. (issue #334)
 zones_file="${CONFIG_DIR}/zones.json"
-config_vlan=""
-if [[ -n "${config_zone}" && -f "${zones_file}" ]]; then
-    config_vlan=$(jq -r --arg z "${config_zone}" '.[$z].vlantag // empty' "${zones_file}" 2>/dev/null)
-fi
-print_row "zone0" "${config_zone}" "${git_zone}" "${config_zone}"
-print_row "zone0 (vlan)" "${config_vlan:-N/A}" "${config_vlan:-N/A}" "${actual_tag:-(untagged)}"
-
-# MAC address
-config_mac=$(get_cfg mac0)
-git_mac=$(get_git mac0)
-actual_mac=$(echo "${actual_net0}" | grep -oiP '([0-9A-Fa-f]{2}:){5}[0-9A-Fa-f]{2}' || true)
-print_row "mac0" "${config_mac}" "${git_mac}" "${actual_mac}"
+print_nic 0
+print_nic 1
 
 # HA
 config_ha=$(get_cfg HANode)
