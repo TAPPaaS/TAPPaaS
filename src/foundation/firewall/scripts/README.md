@@ -58,9 +58,11 @@ becomes `zone-manager` once the OPNsense reconciler is renamed.)
 Three-tier inventory in `actual`: **controllers** (a management plane such as
 UniFi OS that adopts switches), **switches**, and per-switch **ports**. A port
 records its topology — `type` ∈ `node|switch|ap|device|uplink`, `target`,
-`targetPort` — and `desired` derives the VLANs from it (node/switch/uplink →
-trunk carrying the full active VLAN set; `ap` → trunk carrying the **WiFi VLAN
-set** = active zones that declare an `SSID`; `device` + `zone` → access on that VLAN).
+`targetPort` — and `desired` derives the VLANs from it (node/switch/uplink/ap →
+trunk carrying the full active VLAN set; `device` + `zone` → access on that VLAN).
+(AP-uplink ports also carry the full active set: a UniFi controller auto-manages
+AP ports as "all VLANs" and reverts any attempt to restrict them, so TAPPaaS
+matches that — the AP still only broadcasts the SSIDs you configure.)
 
 ```
 # Inventory (written to switch-configuration-actual.json)

@@ -77,10 +77,10 @@ plugin_interrogate() {
     local name="$1" mgmt_ip="${2:-}"
     _unifi_login || { echo "{}"; return 0; }
     local devs nets
-    devs=$(_unifi_get /stat/device) || { echo "{}"; return 0; }
+    devs=$(_unifi_get /stat/device)
+    echo "${devs}" | jq -e . >/dev/null 2>&1 || { _unifi_warn "no/invalid device list (unreachable or rate-limited?)"; echo "{}"; return 0; }
     nets=$(_unifi_get /rest/networkconf)
-    [[ -n "${devs}" ]] || { echo "{}"; return 0; }
-    [[ -n "${nets}" ]] || nets='{}'
+    echo "${nets}" | jq -e . >/dev/null 2>&1 || nets='{"data":[]}'
 
     jq -n --arg name "${name}" --arg ip "${mgmt_ip}" \
           --argjson devs "${devs}" --argjson nets "${nets}" '
@@ -131,10 +131,10 @@ plugin_controller_interrogate() {
     local name="$1" mgmt_ip="${2:-}"   # mgmt_ip unused: creds carry the URL
     _unifi_login || { echo "{}"; return 0; }
     local devs nets
-    devs=$(_unifi_get /stat/device) || { echo "{}"; return 0; }
+    devs=$(_unifi_get /stat/device)
+    echo "${devs}" | jq -e . >/dev/null 2>&1 || { _unifi_warn "controller returned no/invalid device list (unreachable or rate-limited?)"; echo "{}"; return 0; }
     nets=$(_unifi_get /rest/networkconf)
-    [[ -n "${devs}" ]] || { echo "{}"; return 0; }
-    [[ -n "${nets}" ]] || nets='{}'
+    echo "${nets}" | jq -e . >/dev/null 2>&1 || nets='{"data":[]}'
 
     jq -n --argjson devs "${devs}" --argjson nets "${nets}" '
         (reduce (($nets.data // [])[]) as $n ({}; .[$n._id] = ($n.vlan // 0))) as $id2vlan
@@ -327,9 +327,10 @@ plugin_ap_interrogate() {
     local name="$1" mgmt_ip="${2:-}"
     _unifi_login || { echo "{}"; return 0; }
     local devs nets wlans
-    devs=$(_unifi_get /stat/device); [[ -n "${devs}" ]] || { echo "{}"; return 0; }
-    nets=$(_unifi_get /rest/networkconf); [[ -n "${nets}" ]] || nets='{}'
-    wlans=$(_unifi_get /rest/wlanconf);   [[ -n "${wlans}" ]] || wlans='{}'
+    devs=$(_unifi_get /stat/device)
+    echo "${devs}" | jq -e . >/dev/null 2>&1 || { _unifi_warn "no/invalid device list (unreachable or rate-limited?)"; echo "{}"; return 0; }
+    nets=$(_unifi_get /rest/networkconf); echo "${nets}" | jq -e . >/dev/null 2>&1 || nets='{"data":[]}'
+    wlans=$(_unifi_get /rest/wlanconf);   echo "${wlans}" | jq -e . >/dev/null 2>&1 || wlans='{"data":[]}'
 
     jq -n --arg name "${name}" --arg ip "${mgmt_ip}" \
           --argjson devs "${devs}" --argjson nets "${nets}" --argjson wlans "${wlans}" '

@@ -81,11 +81,12 @@ ck "device port mode access"         "access" "$(jq -r '.switches.core.ports["10
 "${SM}" update-desired >/dev/null 2>&1
 ck "device desired nativeVlan=zone"  "310"    "$(jq -r '.switches.core.ports["10"].nativeVlan' "${DES}")"
 
-# AP-uplink port → desired trunk carrying only the WiFi VLAN set (zones with SSID).
+# AP-uplink port → desired trunk carrying the full active set (UniFi auto-manages
+# AP ports as "all VLANs", so AP ports match node/trunk rather than a subset).
 "${SM}" add-port core 11 --type ap --target nano-ap >/dev/null 2>&1
 "${SM}" update-desired >/dev/null 2>&1
 ck "ap port desired trunk"           "trunk"  "$(jq -r '.switches.core.ports["11"].mode' "${DES}")"
-ck "ap port carries WiFi VLANs only" "310"    "$(jq -rc '.switches.core.ports["11"].taggedVlans|join(",")' "${DES}")"
+ck "ap port carries active VLANs"    "200,310,610" "$(jq -rc '.switches.core.ports["11"].taggedVlans|join(",")' "${DES}")"
 
 # list-ports: one line per port, actual + drift (read-only, computed on the fly)
 lp="$("${SM}" list-ports core 2>&1)"
@@ -123,6 +124,14 @@ ck "re-interrogate keeps target"     "tappaas3" "$(jq -r '.switches.StubSw.ports
 "${SM}" update-desired >/dev/null 2>&1
 ck "annotated port → active VLANs"   "200,310,610" "$(jq -rc '.switches.StubSw.ports["3"].taggedVlans|join(",")' "${DES}")"
 ck "un-annotated port stays bare"    ""       "$(jq -rc '.switches.StubSw.ports["1"].type // ""' "${DES}")"
+# robust to a non-JSON controller response (e.g. HTTP 429): warn, leave actual as-is, rc 0
+cat > "${STUBDIR}/stub.sh" <<'EOF'
+plugin_supports() { [[ "$1" == "stub" ]]; }
+plugin_arch() { echo controller; }
+plugin_controller_interrogate() { echo '<html>429 Too Many Requests</html>'; }
+EOF
+ck "interrogate survives bad response" "0" "$(PLUGIN_DIR="${STUBDIR}" rc_of "${SM}" interrogate)"
+ck "bad response leaves switch intact" "node" "$(jq -r '.switches.StubSw.ports["3"].type' "${ACT}")"
 "${SM}" remove-switch StubSw >/dev/null 2>&1; "${SM}" remove-controller cstub >/dev/null 2>&1
 
 # ── list / show / remove / guards ───────────────────────────────────
