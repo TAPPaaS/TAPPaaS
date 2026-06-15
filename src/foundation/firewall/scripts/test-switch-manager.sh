@@ -19,7 +19,7 @@ cat > "${TMP}/zones.json" <<'JSON'
 {
   "mgmt": { "state": "Manual",    "vlantag": 0   },
   "srv":  { "state": "Active",    "vlantag": 200 },
-  "home": { "state": "Active",    "vlantag": 310 },
+  "home": { "state": "Active",    "vlantag": 310, "SSID": "Home" },
   "dmz":  { "state": "Mandatory", "vlantag": 610 },
   "old":  { "state": "Inactive",  "vlantag": 999 }
 }
@@ -81,6 +81,12 @@ ck "device port mode access"         "access" "$(jq -r '.switches.core.ports["10
 "${SM}" update-desired >/dev/null 2>&1
 ck "device desired nativeVlan=zone"  "310"    "$(jq -r '.switches.core.ports["10"].nativeVlan' "${DES}")"
 
+# AP-uplink port → desired trunk carrying only the WiFi VLAN set (zones with SSID).
+"${SM}" add-port core 11 --type ap --target nano-ap >/dev/null 2>&1
+"${SM}" update-desired >/dev/null 2>&1
+ck "ap port desired trunk"           "trunk"  "$(jq -r '.switches.core.ports["11"].mode' "${DES}")"
+ck "ap port carries WiFi VLANs only" "310"    "$(jq -rc '.switches.core.ports["11"].taggedVlans|join(",")' "${DES}")"
+
 # ── controller inventory + graceful interrogate skip (no plugin hook) ─
 "${SM}" add-controller ctrl1 --vendor unifi --ip https://unifi >/dev/null 2>&1
 ck "add-controller recorded"         "unifi"  "$(jq -r '.controllers.ctrl1.vendor' "${ACT}")"
@@ -92,7 +98,26 @@ ck "add-switch bad controller (rc)"  "1"      "$(rc_of "${SM}" add-switch s9 --v
 "${SM}" add-port usw 1 --type node --target tappaas1 >/dev/null 2>&1
 "${SM}" update-desired >/dev/null 2>&1
 apply_out="$("${SM}" apply 2>&1)"
-ck "unifi+manual uses manual.sh"     "yes"    "$(grep -q 'MANUAL CONFIGURATION REQUIRED' <<<"${apply_out}" && echo yes || echo no)"
+ck "unifi+manual uses manual.sh"     "yes"    "$(grep -q 'MANUAL CONFIGURATION' <<<"${apply_out}" && echo yes || echo no)"
+
+# ── controller interrogate MERGES (preserves operator annotations) ──
+# Regression: a re-interrogate must not wipe a port's type/target set by update-port.
+STUBDIR="${TMP}/plugins"; mkdir -p "${STUBDIR}"; cp "${SCRIPT_DIR}/plugins/manual.sh" "${STUBDIR}/"
+cat > "${STUBDIR}/stub.sh" <<'EOF'
+plugin_supports() { [[ "$1" == "stub" ]]; }
+plugin_arch() { echo controller; }
+plugin_controller_interrogate() { echo '{"switches":{"StubSw":{"vendor":"stub","model":"S1","managementIp":"1.2.3.4","ports":{"1":{"mode":"trunk","taggedVlans":[],"source":"discovered"},"3":{"mode":"trunk","taggedVlans":[],"source":"discovered"}}}},"aps":{}}'; }
+EOF
+PLUGIN_DIR="${STUBDIR}" "${SM}" add-controller cstub --vendor stub --ip 1.2.3.4 >/dev/null 2>&1
+PLUGIN_DIR="${STUBDIR}" "${SM}" interrogate >/dev/null 2>&1
+"${SM}" update-port StubSw 3 --type node --target tappaas3 >/dev/null 2>&1
+PLUGIN_DIR="${STUBDIR}" "${SM}" interrogate >/dev/null 2>&1   # re-interrogate
+ck "re-interrogate keeps port type"  "node"   "$(jq -r '.switches.StubSw.ports["3"].type' "${ACT}")"
+ck "re-interrogate keeps target"     "tappaas3" "$(jq -r '.switches.StubSw.ports["3"].target' "${ACT}")"
+"${SM}" update-desired >/dev/null 2>&1
+ck "annotated port → active VLANs"   "200,310,610" "$(jq -rc '.switches.StubSw.ports["3"].taggedVlans|join(",")' "${DES}")"
+ck "un-annotated port stays bare"    ""       "$(jq -rc '.switches.StubSw.ports["1"].type // ""' "${DES}")"
+"${SM}" remove-switch StubSw >/dev/null 2>&1; "${SM}" remove-controller cstub >/dev/null 2>&1
 
 # ── list / show / remove / guards ───────────────────────────────────
 ck "show switch"                     "tplink" "$("${SM}" show core | jq -r '.vendor')"

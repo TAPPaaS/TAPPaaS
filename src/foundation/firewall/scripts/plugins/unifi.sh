@@ -139,6 +139,8 @@ plugin_controller_interrogate() {
     jq -n --argjson devs "${devs}" --argjson nets "${nets}" '
         (reduce (($nets.data // [])[]) as $n ({}; .[$n._id] = ($n.vlan // 0))) as $id2vlan
         | ([ ($nets.data // [])[] | (.vlan // 0) | select(. > 0) ] | sort | unique) as $allvlans
+        # switch MAC -> name, to resolve an AP uplink to its switch.
+        | ([ ($devs.data // [])[] | select(.type=="usw") | {key:.mac, value:.name} ] | from_entries) as $swmac
         | { switches: (reduce (($devs.data // []) | map(select(.type=="usw")) | .[]) as $d ({};
             (reduce ($d.port_overrides[]?) as $o ({}; .[($o.port_idx|tostring)] = $o)) as $ov
             | .[$d.name] = {
@@ -159,7 +161,18 @@ plugin_controller_interrogate() {
                         elif $fwd == "customize" then { mode:"trunk", nativeVlan:$natvlan, taggedVlans:($allvlans - $exclv), source:"discovered" }
                         else { mode:"trunk", nativeVlan:$natvlan, taggedVlans:$allvlans, source:"discovered" } end) }
                   ))
-              } )) }'
+              } )),
+            # APs (type "uap") with their wired uplink resolved to a switch + port,
+            # so switch-manager can register that port as an AP trunk.
+            aps: (reduce (($devs.data // []) | map(select(.type=="uap")) | .[]) as $d ({};
+                ($d.uplink // {}) as $u
+                | .[$d.name] = {
+                    vendor: "unifi",
+                    model: ($d.model // ""),
+                    managementIp: ($d.ip // ""),
+                    uplinkSwitch: (($u.uplink_device_name // $swmac[$u.uplink_mac]) // ""),
+                    uplinkPort: (if ($u.uplink_remote_port != null) then ($u.uplink_remote_port|tostring) else "" end)
+                  } )) }'
     return 0
 }
 
@@ -190,7 +203,13 @@ plugin_apply() {
     devid=$(echo "${devs}" | jq -r --arg n "${name}" --arg ip "${mip}" '.data[] | select(((.ip==$ip) and ($ip!="")) or (.name==$n)) | ._id' 2>/dev/null | head -1)
     [[ -n "${devid}" ]] || { _unifi_warn "${name}: no matching UniFi device (ip=${mip})"; return 1; }
 
-    # Ensure a VLAN-only network for each VLAN id used by the desired ports.
+    # TAPPaaS only manages ports it has ANNOTATED (a `type` set by add-port /
+    # update-port, or the auto-detected AP port). Discovered ports with no type
+    # are left exactly as the switch has them (don't convert forward:all → custom).
+    desired=$(echo "${desired}" | jq -c 'with_entries(select(.value.type != null))')
+    [[ "${desired}" != "{}" ]] || { _unifi_warn "${name}: no TAPPaaS-managed ports — nothing to apply"; return 0; }
+
+    # Ensure a VLAN-only network for each VLAN id used by the managed ports.
     local needed v id resp
     needed=$(echo "${desired}" | jq -r '[ (.[] | (.nativeVlan // 0), ((.taggedVlans // [])[]) ) ] | map(select(. > 0)) | unique | .[]' 2>/dev/null)
     for v in ${needed}; do

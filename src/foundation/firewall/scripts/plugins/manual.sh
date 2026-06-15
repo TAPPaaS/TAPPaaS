@@ -37,11 +37,17 @@ plugin_apply() {
         return 0
     fi
     echo "  ╔══════════════════════════════════════════════════════════════════"
-    echo "  ║  MANUAL CONFIGURATION REQUIRED — no automation plugin for '${name}'"
+    echo "  ║  MANUAL CONFIGURATION — tag these VLANs on switch '${name}' by hand"
     echo "  ╠══════════════════════════════════════════════════════════════════"
     echo "${delta_json}" | jq -r '.changes[] | "  ║  \(.action): \(.description)"' 2>/dev/null
     echo "  ╠══════════════════════════════════════════════════════════════════"
-    echo "  ║  After applying on the device, run:  switch-manager confirm"
+    # `reconcile --apply` records the intent automatically (SM_AUTOCONFIRM set);
+    # only bare `apply` needs a follow-up `confirm`.
+    if [[ -n "${SM_AUTOCONFIRM:-}" ]]; then
+        echo "  ║  TAPPaaS has recorded this as the intended config — just apply it on the device."
+    else
+        echo "  ║  After applying on the device, run:  switch-manager confirm"
+    fi
     echo "  ╚══════════════════════════════════════════════════════════════════"
     return 1
 }

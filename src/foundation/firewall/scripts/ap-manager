@@ -257,7 +257,10 @@ cmd_interrogate() {
         info "  ${name}: interrogated via $(basename "${plugin}" .sh) plugin"
         if [[ -n "${state}" && "${state}" != "{}" ]]; then
             local tmp; tmp="$(mktemp)"
-            jq --arg n "${name}" --argjson s "${state}" '.accessPoints[$n] = $s' "${ACTUAL}" > "${tmp}" && mv "${tmp}" "${ACTUAL}"
+            # Merge (not replace) so operator/auto-detected fields like
+            # uplinkSwitch/uplinkPort survive an interrogate that only reports
+            # vendor/model/managementIp/ssids.
+            jq --arg n "${name}" --argjson s "${state}" '.accessPoints[$n] = ((.accessPoints[$n] // {}) * $s)' "${ACTUAL}" > "${tmp}" && mv "${tmp}" "${ACTUAL}"
         fi
     done <<< "${names}"
     return 0

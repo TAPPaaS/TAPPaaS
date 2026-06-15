@@ -67,10 +67,11 @@ JSON
         ;;
         /stat/device) cat <<'JSON'
 {"data":[
-  {"_id":"d1","name":"USW Pro","type":"usw","model":"USWPRO","ip":"10.0.0.5",
+  {"_id":"d1","name":"USW Pro","type":"usw","model":"USWPRO","ip":"10.0.0.5","mac":"aa:bb:cc:00:00:01",
    "port_table":[{"port_idx":1,"forward":"all"},{"port_idx":2,"forward":"native"}],
    "port_overrides":[{"port_idx":2,"forward":"native","native_networkconf_id":"n200"}]},
-  {"_id":"ap1","name":"AP","type":"uap"}
+  {"_id":"ap1","name":"Nano","type":"uap","model":"U7","ip":"10.0.0.9",
+   "uplink":{"uplink_device_name":"USW Pro","uplink_remote_port":5,"uplink_mac":"aa:bb:cc:00:00:01"}}
 ]}
 JSON
         ;;
@@ -78,10 +79,15 @@ JSON
 }
 COUT="$(plugin_controller_interrogate ctrl1 https://x)"
 ck "controller lists the usw switch"   "USW Pro" "$(jq -r '.switches|keys[0]' <<<"$COUT")"
-ck "controller skips the uap"          "1"       "$(jq -r '.switches|length' <<<"$COUT")"
+ck "controller has 1 switch"           "1"       "$(jq -r '.switches|length' <<<"$COUT")"
 ck "controller switch vendor"          "unifi"   "$(jq -r '.switches["USW Pro"].vendor' <<<"$COUT")"
 ck "controller port1 trunk(all)"       "200,210" "$(jq -rc '.switches["USW Pro"].ports["1"].taggedVlans|join(",")' <<<"$COUT")"
 ck "controller port2 access nativeVlan" "200"    "$(jq -r '.switches["USW Pro"].ports["2"].nativeVlan' <<<"$COUT")"
+# APs: enumerated with their uplink resolved to switch + port
+ck "controller lists the uap"          "Nano"    "$(jq -r '.aps|keys[0]' <<<"$COUT")"
+ck "ap uplinkSwitch detected"          "USW Pro" "$(jq -r '.aps["Nano"].uplinkSwitch' <<<"$COUT")"
+ck "ap uplinkPort detected"            "5"       "$(jq -r '.aps["Nano"].uplinkPort' <<<"$COUT")"
+ck "ap model"                          "U7"      "$(jq -r '.aps["Nano"].model' <<<"$COUT")"
 
 # ── AP (WiFi) interrogate + security mapping (offline) ──────────────
 # Re-stub the API for a uap device + two WLANs (one disabled WPA2 on VLAN 400,
@@ -125,6 +131,27 @@ ck "secfields wpa2 passphrase"      "secret123" "$(_unifi_security_fields wpa2-p
 ck "secfields wpa2 wpa_mode"        "wpa2"   "$(_unifi_security_fields wpa2-personal secret123 | jq -r .wpa_mode)"
 ck "secfields wpa3 wpa_mode"        "wpa3"   "$(_unifi_security_fields wpa3-personal secret123 | jq -r .wpa_mode)"
 ck "secfields open has no passphrase" "null" "$(_unifi_security_fields open "" | jq -r '.x_passphrase // "null"')"
+
+# ── apply manages ONLY annotated ports (type set), not discovered ones ──
+APTMP="$(mktemp -d)"; export CONFIG_DIR="${APTMP}"
+cat > "${APTMP}/switch-configuration-desired.json" <<'JSON'
+{"switches":{"SW":{"managementIp":"","ports":{
+  "1":{"mode":"trunk","taggedVlans":[200],"source":"discovered"},
+  "3":{"mode":"trunk","taggedVlans":[200,310],"type":"node","target":"tappaas1"},
+  "9":{"mode":"trunk","taggedVlans":[310],"type":"ap","target":"AP"}
+}}},"accessPoints":{}}
+JSON
+_unifi_login() { _UNIFI_URL="x"; _UNIFI_JAR="/dev/null"; _UNIFI_CSRF=""; return 0; }
+_unifi_get() {
+    case "$1" in
+        /rest/networkconf) echo '{"data":[{"_id":"def","vlan":null},{"_id":"n200","vlan":200},{"_id":"n310","vlan":310}]}' ;;
+        /stat/device) echo '{"data":[{"_id":"d1","name":"SW","ip":"","port_overrides":[]}]}' ;;
+    esac
+}
+_unifi_send() { if [[ "$1" == "PUT" ]]; then echo "$3" > "${APTMP}/put.json"; fi; echo '{"meta":{"rc":"ok"}}'; }
+plugin_apply SW "{}" >/dev/null 2>&1
+ck "apply touches only annotated ports" "3,9" "$(jq -rc '[.port_overrides[].port_idx]|sort|join(",")' "${APTMP}/put.json" 2>/dev/null)"
+rm -rf "${APTMP}"
 
 echo ""
 echo "test-unifi-plugin: ${PASS} passed, ${FAIL} failed"

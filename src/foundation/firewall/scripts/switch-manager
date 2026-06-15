@@ -42,7 +42,8 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")" && pwd)"
 readonly SCRIPT_DIR
-readonly PLUGIN_DIR="${SCRIPT_DIR}/plugins"
+# PLUGIN_DIR is env-overridable so tests can supply stub vendor plugins.
+PLUGIN_DIR="${PLUGIN_DIR:-${SCRIPT_DIR}/plugins}"; readonly PLUGIN_DIR
 readonly ZONES_FILE="${CONFIG_DIR}/zones.json"
 readonly ACTUAL="${CONFIG_DIR}/switch-configuration-actual.json"
 readonly DESIRED="${CONFIG_DIR}/switch-configuration-desired.json"
@@ -106,6 +107,13 @@ jq_actual() {
 # Active VLAN tags as a JSON array of ints (the trunk set for node uplinks).
 active_vlans_json() {
     vmnet_all_active_tags "${ZONES_FILE}" | tr ';' '\n' | sed '/^$/d' | jq -R 'tonumber' | jq -s 'sort'
+}
+
+# VLANs that carry WiFi — active zones that declare an SSID (the trunk set for AP
+# uplink ports). JSON array of ints.
+wifi_vlans_json() {
+    jq -r 'to_entries[] | select((.value.SSID? != null) and ((.value.state // "Active")=="Active")) | (.value.vlantag // empty)' \
+        "${ZONES_FILE}" | sed '/^$/d' | jq -R 'tonumber' | jq -s 'map(select(. > 0)) | sort | unique'
 }
 
 # ── Controller inventory ─────────────────────────────────────────────
@@ -314,17 +322,32 @@ cmd_interrogate() {
         state=$( . "${plugin}"; plugin_controller_interrogate "${name}" "${ip}" 2>/dev/null )
         [[ -n "${state}" && "${state}" != "{}" ]] || { info "  controller ${name}: nothing uploaded"; continue; }
         tmp="$(mktemp)"
-        # Merge each reported switch: set meta + controller ref, merge ports
-        # (live VLAN config overlaid on any existing operator annotations).
+        # ACTUAL: merge each reported switch (meta + controller ref + ports, live
+        # config overlaid on operator annotations); and mark each AP's wired uplink
+        # switch port as an AP trunk so update-desired carries the WiFi VLANs.
         jq --arg c "${name}" --argjson st "${state}" '
             reduce ($st.switches // {} | to_entries[]) as $s (.;
               .switches[$s.key] = ((.switches[$s.key] // {}) * $s.value
-                | .controller = $c | .managed = "auto"
-                | .ports = ((.switches[$s.key].ports // {}) as $old
-                    | reduce ($s.value.ports // {} | to_entries[]) as $p ({};
-                        .[$p.key] = (($old[$p.key] // {}) * $p.value))) ))' \
+                | .controller = $c | .managed = "auto"))
+            | reduce ($st.aps // {} | to_entries[]) as $a (.;
+                ($a.value.uplinkSwitch) as $usw | ($a.value.uplinkPort) as $up
+                | if ($usw != "" and $up != "" and (.switches[$usw] != null))
+                  then .switches[$usw].ports[$up] = ((.switches[$usw].ports[$up] // {}) + {type:"ap", target:$a.key, mode:"trunk"})
+                  else . end )' \
             "${ACTUAL}" > "${tmp}" && mv "${tmp}" "${ACTUAL}"
-        info "  controller ${name}: uploaded $(echo "${state}" | jq -r '.switches // {} | length') switch(es)"
+        # DESIRED: auto-register discovered APs into ap-manager's inventory
+        # (it keeps .accessPoints in desired), preserving any operator-set SSIDs.
+        if [[ "$(echo "${state}" | jq -r '.aps // {} | length')" -gt 0 ]]; then
+            tmp="$(mktemp)"
+            jq --argjson st "${state}" '
+                reduce ($st.aps // {} | to_entries[]) as $a (.;
+                  .accessPoints[$a.key] = ((.accessPoints[$a.key] // {})
+                    + {vendor:$a.value.vendor, model:$a.value.model, managementIp:$a.value.managementIp,
+                       uplinkSwitch:$a.value.uplinkSwitch, uplinkPort:$a.value.uplinkPort,
+                       ssids: ((.accessPoints[$a.key].ssids) // {})}))' \
+                "${DESIRED}" > "${tmp}" && mv "${tmp}" "${DESIRED}"
+        fi
+        info "  controller ${name}: uploaded $(echo "${state}" | jq -r '.switches // {} | length') switch(es), $(echo "${state}" | jq -r '.aps // {} | length') AP(s)"
     done < <(jq -r '.controllers // {} | keys[]' "${ACTUAL}")
 
     # Standalone auto switches (no controller, brand has a device plugin).
@@ -340,10 +363,7 @@ cmd_interrogate() {
         [[ -n "${state}" && "${state}" != "{}" ]] || continue
         tmp="$(mktemp)"
         jq --arg n "${name}" --argjson s "${state}" '
-            .switches[$n] = ((.switches[$n] // {}) * $s
-              | .ports = ((.switches[$n].ports // {}) as $old
-                  | reduce ($s.ports // {} | to_entries[]) as $p ({};
-                      .[$p.key] = (($old[$p.key] // {}) * $p.value))))' \
+            .switches[$n] = ((.switches[$n] // {}) * $s)' \
             "${ACTUAL}" > "${tmp}" && mv "${tmp}" "${ACTUAL}"
         info "  switch ${name}: uploaded $(echo "${state}" | jq -r '.ports // {} | length') port(s)"
     done < <(jq -r '.switches // {} | to_entries[] | select(.value.controller == null) | .key' "${ACTUAL}")
@@ -354,12 +374,13 @@ cmd_interrogate() {
 cmd_update_desired() {
     info "${BOLD}update-desired${CL} (actual topology + zones.json → desired.json)"
     ensure_files
-    local active; active=$(active_vlans_json)
+    local active wifi; active=$(active_vlans_json); wifi=$(wifi_vlans_json)
     local tmp; tmp="$(mktemp)"
     # Base the new desired on the EXISTING desired (preserving .accessPoints, which
     # ap-manager owns, and any other keys), overriding only .controllers/.switches
-    # — those we regenerate from actual's topology (.) + the active VLAN set.
-    jq --argjson active "${active}" --slurpfile z "${ZONES_FILE}" --slurpfile cur "${DESIRED}" '
+    # — those we regenerate from actual's topology (.) + the VLAN sets. Node/switch/
+    # uplink trunks carry the full active set; AP-uplink trunks carry the WiFi set.
+    jq --argjson active "${active}" --argjson wifi "${wifi}" --slurpfile z "${ZONES_FILE}" --slurpfile cur "${DESIRED}" '
         ($z[0]) as $zones
         | ($cur[0] // {}) as $des
         | $des
@@ -369,7 +390,9 @@ cmd_update_desired() {
                 | $sw + { ports: (($sw.ports // {}) | map_values(
                     . as $p
                     | (.type // "") as $t
-                    | if ($t=="node" or $t=="switch" or $t=="ap" or $t=="uplink") then
+                    | if ($t=="ap") then
+                        $p + {mode:"trunk", taggedVlans:$wifi}
+                      elif ($t=="node" or $t=="switch" or $t=="uplink") then
                         $p + {mode:"trunk", taggedVlans:$active}
                       elif ($t=="device") then
                         ((.zone // "") as $zn
@@ -415,7 +438,8 @@ cmd_delta() {
     local delta total=0 sw n
     delta=$(compute_delta)
     info "${BOLD}delta${CL} (desired vs actual)"
-    for sw in $(echo "${delta}" | jq -r 'keys[]'); do
+    while IFS= read -r sw; do
+        [[ -z "${sw}" ]] && continue
         n=$(echo "${delta}" | jq -r --arg s "${sw}" '.[$s].changes | length')
         total=$((total + n))
         if [[ "${n}" -gt 0 ]]; then
@@ -424,7 +448,7 @@ cmd_delta() {
         else
             info "  ${GN}✓${CL} ${sw}: in sync"
         fi
-    done
+    done < <(echo "${delta}" | jq -r 'keys[]')
     [[ "$(echo "${delta}" | jq -r 'keys|length')" -eq 0 ]] && info "  (no switches in inventory)"
     DELTA_TOTAL="${total}"
     return 0
@@ -435,7 +459,8 @@ cmd_apply() {
     local delta sw changes plugin rc manual=0 applied=0
     delta=$(compute_delta)
     info "${BOLD}apply${CL}"
-    for sw in $(echo "${delta}" | jq -r 'keys[]'); do
+    while IFS= read -r sw; do
+        [[ -z "${sw}" ]] && continue
         changes=$(echo "${delta}" | jq -c --arg s "${sw}" '{changes: .[$s].changes}')
         [[ "$(echo "${changes}" | jq '.changes|length')" -eq 0 ]] && continue
         plugin=$(plugin_for_switch "${sw}")
@@ -444,7 +469,7 @@ cmd_apply() {
         ( . "${plugin}"; plugin_apply "${sw}" "${changes}" ) || rc=$?
         if [[ "${rc}" -eq 0 ]]; then info "  ${GN}✓${CL} ${sw}: applied via $(basename "${plugin}" .sh)"; applied=$((applied+1))
         else manual=$((manual+1)); fi
-    done
+    done < <(echo "${delta}" | jq -r 'keys[]')
     APPLY_MANUAL="${manual}"; APPLY_DONE="${applied}"
     return 0
 }
@@ -478,7 +503,7 @@ cmd_reconcile() {
     cmd_update_desired; echo ""
     cmd_delta; echo ""
     if [[ "${apply}" -eq 1 ]]; then
-        cmd_apply; echo ""
+        SM_AUTOCONFIRM=1 cmd_apply; echo ""   # confirm runs right after → tell manual.sh not to ask for it
         # Record the intended config into actual.json for EVERY switch, including
         # manual ones: auto switches were just programmed by their plugin; for
         # manual switches the VLANs to tag were printed above and we record the

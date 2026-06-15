@@ -100,18 +100,23 @@ controllers_of_vendor() {
     jq -r --arg v "$1" '.controllers // {} | to_entries[] | select(.value.vendor==$v) | .key' "${ACTUAL}" 2>/dev/null
 }
 
-# Condensed inventory: one line per switch, its ports indented below.
+# Condensed inventory: one line per switch, only the TAPPaaS-MANAGED ports (those
+# with a type) indented below, plus a count of the remaining untouched ports.
 print_inventory() {
     local n; n=$(jq -r '.switches // {} | length' "${ACTUAL}" 2>/dev/null || echo 0)
     if [[ "${n:-0}" -eq 0 ]]; then info "No switches registered yet."; return 0; fi
     info "${BOLD}Registered switches (${n}):${CL}"
     jq -r '
       .switches // {} | to_entries[] |
-      "  \(.key)  [\(.value.vendor) · \(.value.managed)\(if .value.controller then " · via "+.value.controller else "" end)]",
-      ( (.value.ports // {}) | to_entries[] |
-        "      port \(.key): \(.value.type // "?") → \(.value.target // "?")\(if .value.targetPort then "/"+.value.targetPort else "" end)  "
+      ((.value.ports // {}) | to_entries) as $ports
+      | ($ports | map(select(.value.type != null))) as $managed
+      | "  \(.key)  [\(.value.vendor) · \(.value.managed)\(if .value.controller then " · via "+.value.controller else "" end)]",
+      ( $managed[] |
+        "      port \(.key): \(.value.type) → \(.value.target // "?")\(if .value.targetPort then "/"+.value.targetPort else "" end)  "
         + ( if .value.mode=="access" then "access \(.value.nativeVlan // 0)"
-            else "trunk " + (if (.value.taggedVlans|type)=="array" then (.value.taggedVlans|map(tostring)|join(",")) else "(pending reconcile)" end) end ) )
+            else "trunk " + (if (.value.taggedVlans|type)=="array" then (.value.taggedVlans|map(tostring)|join(",")) else "(pending reconcile)" end) end ) ),
+      ( (($ports|length) - ($managed|length)) as $rest
+        | if $rest > 0 then "      (+\($rest) other port(s) left untouched)" else empty end )
     ' "${ACTUAL}" 2>/dev/null
     return 0
 }

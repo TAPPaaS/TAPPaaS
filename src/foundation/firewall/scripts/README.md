@@ -58,8 +58,9 @@ becomes `zone-manager` once the OPNsense reconciler is renamed.)
 Three-tier inventory in `actual`: **controllers** (a management plane such as
 UniFi OS that adopts switches), **switches**, and per-switch **ports**. A port
 records its topology — `type` ∈ `node|switch|ap|device|uplink`, `target`,
-`targetPort` — and `desired` derives the VLANs from it (node/switch/ap/uplink →
-trunk carrying the active VLAN set; `device` + `zone` → access on that VLAN).
+`targetPort` — and `desired` derives the VLANs from it (node/switch/uplink →
+trunk carrying the full active VLAN set; `ap` → trunk carrying the **WiFi VLAN
+set** = active zones that declare an `SSID`; `device` + `zone` → access on that VLAN).
 
 ```
 # Inventory (written to switch-configuration-actual.json)
@@ -85,6 +86,9 @@ switch-manager reconcile [--apply]
   then run `switch-manager confirm`.
 - `--managed auto` lets the vendor plugin program the switch on `reconcile --apply`.
 - `--ip` is optional for manual switches (only plugin interrogate/apply needs it).
+- **TAPPaaS only manages ports you've annotated** (`add-port`/`update-port` set a
+  `type`) or that are auto-detected (AP uplinks). Other ports a controller reports
+  are left exactly as the switch has them — TAPPaaS won't touch them.
 
 **Example — a manual TP-Link with two node uplinks:**
 ```
@@ -103,6 +107,13 @@ switch-manager reconcile --apply    # prints the VLANs to tag on ports 9 & 10 AN
 Stores APs + SSIDs under `.accessPoints` in the same config files. SSID *names*
 and VLANs come from `zones.json` (the `SSID` field per zone); the security level
 is chosen per SSID here; passphrases live in a separate secrets file (below).
+
+**Auto-population:** when `switch-manager interrogate` runs against a UniFi
+controller, it also enumerates the controller's **APs** — registering each into
+the AP inventory (vendor/model/IP) and detecting its **wired uplink** (which
+switch + port). That switch port is automatically marked `type:ap`, so it becomes
+a trunk carrying the WiFi VLANs. So adopting a controller populates the AP list
+and wires up the AP's switch port with no manual steps.
 
 ```
 ap-manager add <name> --vendor <v> [--ip <ip>] [--model <m>] [--location <l>]
@@ -186,7 +197,7 @@ A plugin is sourced (not exec'd) and implements:
 | `plugin_supports <vendor>` | rc 0 if this plugin handles the brand |
 | `plugin_arch` | `controller` or `device` — drives `setup-switches.sh`'s management menu |
 | `plugin_controller_module` | TAPPaaS module to install for the "install a controller" path |
-| `plugin_controller_interrogate <ctrl> <ip>` | controller-arch: enumerate its switches+ports → `{switches:{...}}` |
+| `plugin_controller_interrogate <ctrl> <ip>` | controller-arch: enumerate its switches+ports **and APs (with uplink switch/port)** → `{switches:{...}, aps:{...}}` |
 | `plugin_interrogate <switch> <ip>` | device-arch: one switch's live ports |
 | `plugin_apply <switch> <delta>` | push the desired port config (rc 1 ⇒ manual action required) |
 | `plugin_ap_interrogate` / `plugin_ap_apply` | AP/SSID equivalents (used by `ap-manager`) |
