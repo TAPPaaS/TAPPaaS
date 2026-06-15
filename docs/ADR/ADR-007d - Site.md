@@ -1,0 +1,64 @@
+# ADR-007d — Site
+
+| | |
+|---|---|
+| **Status** | Proposed |
+| **Version** | 1.0 |
+| **Date** | 2026-06-15 |
+| **Author** | Erik Daniel |
+| **Parent** | [ADR-007 Taxonomy (Overview)](<ADR-007 - TAPPaaS Taxonomy.md>) |
+| **Related** | #320; #313 (timezone→site.json); ADR-004 (config cascade) |
+
+The **🏢 Site** — the **container**, not a bucket. One TAPPaaS = one Site: the physical + admin
+perimeter holding everything shared across all Environments inside it.
+
+## Decision
+
+- A Site owns: hardware (`nodes`, `storagePools`, `cluster`), WAN/ISP, `rootDomain`, DNS provider,
+  identity provider (Authentik), backup target, update channel, location (country/timezone/locale).
+- **`nodes` are the physical Proxmox hosts** (`tappaas1`, `tappaas2`) — the same `node` the module
+  schema refers to (the physical host an App's VM is installed on). The composition naming of
+  physical-host-vs-VM is reconciled in **[ADR-009](<ADR-009 - Composition Meta-Model.md>)**; the schema
+  usage here — `node` = physical host — is authoritative.
+- **Add a second Site** only for: different ISP, different physical hardware, different legal admin
+  team, or a DR location.
+
+## Schema (`config/site.json`)
+
+```json
+{
+  "name": "mysite-soho",
+  "displayName": "My SOHO",
+  "owner": "<owner>",
+  "location": { "country": "NL", "timezone": "Europe/Amsterdam", "locale": "nl_NL" },
+  "network": { "isp": "<your-isp>", "publicIp": "auto", "rootDomain": "myhomedomain.nl" },
+  "dns": { "provider": "<your-dns-provider>", "credentialsRef": "secrets/dns-provider" },
+  "hardware": { "nodes": ["tappaas1", "tappaas2"], "storagePools": ["tanka1", "tankb2"], "cluster": "tappaas" },
+  "identityProvider": { "type": "authentik", "url": "https://id.myhomedomain.nl" },
+  "backup": { "target": "backup.myhomedomain.nl", "offsite": "tappaas-backup-buddy" },
+  "updateChannel": "stable"
+}
+```
+
+## Config split (migration)
+
+The legacy mixed `configuration.json` splits into **`site.json`** (site-wide) + **`environments/*.json`**
+(per-environment), aligned with ADR-004:
+
+| `configuration.json` field | Goes to |
+|---|---|
+| `domain`, `rootDomain` | `site.json → network.rootDomain` |
+| `nodes` | `site.json → hardware.nodes` |
+| `dns provider`, `backup target` | `site.json → dns` / `backup` |
+| `timezone`, `locale` | `site.json → location` |
+| `updateSchedule` | `environments/{name}.json → updateWindow` |
+| `subdomain prefix` | `environments/{name}.json → domains` |
+| `active zones` | `environments/{name}.json → network.zone` |
+
+Scripts read `site.json` first, fall back to the old file; deprecate `configuration.json` over 2 minor
+releases.
+
+## Acceptance
+
+- [ ] `site.json` schema validated by `validate-configuration.sh`.
+- [ ] Site-level fields migrated out of `configuration.json`; fallback path works.
