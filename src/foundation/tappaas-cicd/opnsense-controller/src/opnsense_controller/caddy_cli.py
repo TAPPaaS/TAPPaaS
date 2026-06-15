@@ -99,6 +99,7 @@ def add_handler(
     redir: str = "",
     redir_path: str = "",
     upstream_http1: bool = False,
+    preserve_host: bool = False,
 ) -> bool:
     """Add (or reconcile) a reverse-proxy OR redir handler for a domain.
 
@@ -178,6 +179,7 @@ def add_handler(
             access_list_uuid=access_list_uuid,
             upstream_tls=upstream_tls,
             upstream_http_version=("http1" if upstream_http1 else ""),
+            host_header=(domain_name if preserve_host else ""),
             forward_auth=forward_auth,
         )
         target_desc = f"{upstream}:{port}"
@@ -554,6 +556,7 @@ Examples:
     add_handler_parser.add_argument("--access-list", default="", help="Name of an access list to attach (issue #206) — restrict client networks")
     add_handler_parser.add_argument("--upstream-tls", action="store_true", help="Reverse-proxy to an HTTPS upstream (e.g. the OPNsense GUI on :8443); skips upstream cert verification")
     add_handler_parser.add_argument("--upstream-http1", action="store_true", help="Force HTTP/1.1 to the upstream (os-caddy HttpVersion=http1). Required for WebSocket apps behind a TLS upstream (e.g. the UniFi OS console), which otherwise 500 on the WS over HTTP/2 (#339)")
+    add_handler_parser.add_argument("--preserve-host", action="store_true", help="Force the upstream Host header to the public domain (header_up Host <domain>). Needed for apps that validate a WebSocket's Origin against the Host header (e.g. UniFi OS), which otherwise 500 because Caddy sends the upstream's own hostname (#339)")
     add_handler_parser.add_argument("--forward-auth", action="store_true",
                                     help="Enable Caddy per-handle forward_auth — redirects unauthenticated "
                                     "requests through the global Authentik outpost (issue #45). Requires "
@@ -634,6 +637,7 @@ Examples:
                     args.forward_auth, args.check_mode,
                     redir=args.redir, redir_path=args.redir_path,
                     upstream_http1=args.upstream_http1,
+                    preserve_host=args.preserve_host,
                 )
             elif args.command == "add-accesslist":
                 success = add_access_list_cmd(

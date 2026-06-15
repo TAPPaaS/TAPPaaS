@@ -221,6 +221,15 @@ if [[ "$(get_config_value 'proxyUpstreamHttp1' 'false')" == "true" ]]; then
     HTTP1_ARGS=(--upstream-http1)
 fi
 
+# Preserve the original Host upstream (header_up Host <domain>). Needed for apps
+# that validate a WebSocket's Origin against the Host header (e.g. UniFi OS):
+# Caddy otherwise sends the upstream's own hostname, so Origin≠Host → 500. (#339)
+PRESERVE_HOST_ARGS=()
+if [[ "$(get_config_value 'proxyPreserveHost' 'false')" == "true" ]]; then
+    info "  Preserving Host upstream (proxyPreserveHost=true — WebSocket Origin check)"
+    PRESERVE_HOST_ARGS=(--preserve-host)
+fi
+
 # ── Create handler ──────────────────────────────────────────────────
 
 info "  Creating Caddy handler..."
@@ -231,6 +240,7 @@ caddy-manager add-handler "${PROXY_DOMAIN}" \
     "${ACL_ARGS[@]+"${ACL_ARGS[@]}"}" \
     "${TLS_ARGS[@]+"${TLS_ARGS[@]}"}" \
     "${HTTP1_ARGS[@]+"${HTTP1_ARGS[@]}"}" \
+    "${PRESERVE_HOST_ARGS[@]+"${PRESERVE_HOST_ARGS[@]}"}" \
     --no-ssl-verify || die "Failed to create Caddy handler"
 
 # ── Reconfigure Caddy ───────────────────────────────────────────────

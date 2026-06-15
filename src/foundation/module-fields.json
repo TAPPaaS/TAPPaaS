@@ -50,6 +50,7 @@
     "proxyPort",
     "proxyUpstreamTls",
     "proxyUpstreamHttp1",
+    "proxyPreserveHost",
     "proxyTls",
     "proxyAllowedZones",
     "discoveryMdns",
@@ -706,6 +707,19 @@
       "values": {
         "true": "Force HTTP/1.1 to the upstream (WebSocket support)",
         "false": "Default upstream HTTP versions (HTTP/1.1 + HTTP/2)"
+      }
+    },
+    "proxyPreserveHost": {
+      "description": "Force the upstream Host header to the public domain (Caddy header_up Host <domain>). Needed for apps that validate a WebSocket's Origin against the Host header — e.g. the UniFi OS console: Caddy otherwise sends the upstream's own hostname, so the browser's Origin (the public domain) ≠ Host and the WebSocket upgrade returns 500, leaving the SPA blank after login (issue #339). Usually paired with proxyUpstreamHttp1 for WebSocket apps behind a TLS upstream.",
+      "type": "string",
+      "requiredBy": [],
+      "usedBy": [
+        "firewall:proxy"
+      ],
+      "default": "false",
+      "values": {
+        "true": "Send Host: <domain> upstream (WebSocket Origin check)",
+        "false": "Caddy default upstream Host"
       }
     },
     "proxyTls": {

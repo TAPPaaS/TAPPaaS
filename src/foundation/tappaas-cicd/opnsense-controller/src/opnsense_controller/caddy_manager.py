@@ -48,6 +48,12 @@ class CaddyHandler:
     # negotiates HTTP/2 with the upstream, which cannot carry a WebSocket Upgrade
     # and returns 500 (e.g. the UniFi OS console). (#339)
     upstream_http_version: str = ""
+    # Force the upstream Host header to this value via a `header_up Host <value>`
+    # os-caddy header attached to the handle. Empty = leave Caddy's default. Set
+    # to the public domain so an app that validates a WebSocket's Origin against
+    # the Host header (e.g. the UniFi OS console) sees Host == Origin instead of
+    # the upstream's own hostname, which it 500s on. (#339)
+    host_header: str = ""
     # Enable Caddy's per-handle forward_auth (issue #45). When the global
     # AuthProvider is set to Authentik (via identity install at Phase B), this
     # makes Caddy redirect unauthenticated requests through the Authentik
@@ -395,6 +401,27 @@ class CaddyManager:
                 return handler
         return None
 
+    def _get_or_create_header(self, updown: str, htype: str, hvalue: str, description: str) -> str:
+        """Return the uuid of a reverseproxy.header matching `description`,
+        creating it (header_up/header_down <htype> <hvalue>) if absent. Headers
+        are reusable objects referenced by a handle's `header` field."""
+        resp = self._api_get("ReverseProxy", "searchHeader")
+        for row in resp.get("rows", []):
+            if row.get("description") == description:
+                return row.get("uuid", "")
+        data = {"header": {"HeaderUpDown": updown, "HeaderType": htype,
+                           "HeaderValue": hvalue, "HeaderReplace": "", "description": description}}
+        return self._api_post("ReverseProxy", "addHeader", data).get("uuid", "")
+
+    def _handle_header_field(self, handler: "CaddyHandler") -> str:
+        """Comma-separated header-uuid list for the handle's `header` field.
+        Currently only the optional host_header (`header_up Host <value>`)."""
+        if not handler.host_header:
+            return ""
+        return self._get_or_create_header(
+            "header_up", "Host", handler.host_header,
+            f"tappaas-host-header:{handler.host_header}")
+
     def add_handler(self, handler: CaddyHandler) -> dict:
         """Add a new reverse proxy handler.
 
@@ -416,6 +443,7 @@ class CaddyManager:
                 "HttpTls": "1" if handler.upstream_tls else "0",
                 "HttpTlsInsecureSkipVerify": "1" if (handler.upstream_tls and handler.upstream_tls_skip_verify) else "0",
                 "HttpVersion": handler.upstream_http_version,
+                "header": self._handle_header_field(handler),
                 "accesslist": handler.access_list_uuid,
                 "description": handler.description,
                 "ForwardAuth": "1" if handler.forward_auth else "0",
@@ -445,6 +473,7 @@ class CaddyManager:
                 "HttpTls": "1" if handler.upstream_tls else "0",
                 "HttpTlsInsecureSkipVerify": "1" if (handler.upstream_tls and handler.upstream_tls_skip_verify) else "0",
                 "HttpVersion": handler.upstream_http_version,
+                "header": self._handle_header_field(handler),
                 "accesslist": handler.access_list_uuid,
                 "description": handler.description,
                 "ForwardAuth": "1" if handler.forward_auth else "0",
