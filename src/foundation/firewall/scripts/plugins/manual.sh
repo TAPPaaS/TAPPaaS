@@ -45,3 +45,26 @@ plugin_apply() {
     echo "  ╚══════════════════════════════════════════════════════════════════"
     return 1
 }
+
+# ── AP fallback verbs (sourced by ap-manager) ───────────────────────
+# Same catch-all semantics as the switch verbs above, for WiFi APs.
+plugin_ap_interrogate() {
+    echo "{}"
+}
+
+plugin_ap_apply() {
+    local name="$1" delta_json="$2"
+    local changes
+    changes=$(echo "${delta_json}" | jq -r '.changes // []' 2>/dev/null)
+    if [[ -z "${changes}" || "${changes}" == "[]" ]]; then
+        return 0
+    fi
+    echo "  ╔══════════════════════════════════════════════════════════════════"
+    echo "  ║  MANUAL WiFi CONFIGURATION REQUIRED — no automation plugin for '${name}'"
+    echo "  ╠══════════════════════════════════════════════════════════════════"
+    echo "${delta_json}" | jq -r '.changes[] | "  ║  \(.action): \(.description)"' 2>/dev/null
+    echo "  ╠══════════════════════════════════════════════════════════════════"
+    echo "  ║  After applying on the controller, run:  ap-manager confirm"
+    echo "  ╚══════════════════════════════════════════════════════════════════"
+    return 1
+}

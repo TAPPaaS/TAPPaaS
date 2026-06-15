@@ -253,7 +253,7 @@ cmd_interrogate() {
         ip=$(jq -r --arg n "${name}" '.accessPoints[$n].managementIp // ""' "${DESIRED}")
         plugin=$(select_plugin "${vendor}")
         # shellcheck disable=SC1090
-        state=$( . "${plugin}"; plugin_interrogate "${name}" "${ip}" 2>/dev/null )
+        state=$( . "${plugin}"; plugin_ap_interrogate "${name}" "${ip}" 2>/dev/null )
         info "  ${name}: interrogated via $(basename "${plugin}" .sh) plugin"
         if [[ -n "${state}" && "${state}" != "{}" ]]; then
             local tmp; tmp="$(mktemp)"
@@ -359,7 +359,7 @@ cmd_apply() {
         plugin=$(select_plugin "${vendor}")
         rc=0
         # shellcheck disable=SC1090
-        ( . "${plugin}"; plugin_apply "${ap}" "${changes}" ) || rc=$?
+        ( . "${plugin}"; plugin_ap_apply "${ap}" "${changes}" ) || rc=$?
         if [[ "${rc}" -eq 0 ]]; then info "  ${GN}✓${CL} ${ap}: applied via $(basename "${plugin}" .sh)"; applied=$((applied+1))
         else manual=$((manual+1)); fi
     done

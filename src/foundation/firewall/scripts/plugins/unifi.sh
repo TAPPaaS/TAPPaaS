@@ -1,10 +1,12 @@
 # shellcheck shell=bash
 #
-# plugins/unifi.sh — UniFi vendor plugin for switch-manager (ADR-008 Stage 5, #339).
+# plugins/unifi.sh — UniFi vendor plugin for switch-manager + ap-manager (ADR-008 Stage 5, #339).
 #
-# Configures UniFi switches via the self-hosted UniFi OS Server Network API. Sourced
-# by switch-manager (its select_plugin picks this for vendor "unifi"); implements the
-# plugin contract: plugin_supports / plugin_interrogate / plugin_apply.
+# Configures UniFi switches AND WiFi APs via the self-hosted UniFi OS Server Network
+# API. Sourced by switch-manager and ap-manager (each select_plugin picks this for
+# vendor "unifi"). Implements two contracts that share plugin_supports:
+#   switch verbs: plugin_interrogate / plugin_apply       (ports → port_overrides)
+#   AP verbs:     plugin_ap_interrogate / plugin_ap_apply (SSIDs → wlanconf)
 #
 # Self-hosted UniFi OS has no API keys, so we authenticate with a LOCAL ADMIN read
 # from /home/tappaas/.unifi-os-credentials.txt (POST /api/auth/login -> TOKEN cookie +
@@ -186,3 +188,169 @@ plugin_apply() {
 }
 
 _unifi_log_ok() { if command -v info >/dev/null 2>&1; then info "  ${GN:-}✓${CL:-} $*"; else echo "unifi.sh: $*" >&2; fi; }
+
+# ════════════════════════════════════════════════════════════════════
+# AP / WiFi support (sourced by ap-manager). The AP contract uses the
+# `plugin_ap_*` names so it never collides with the switch verbs above —
+# both managers source THIS file. plugin_supports (vendor==unifi) is shared.
+# ════════════════════════════════════════════════════════════════════
+
+# Cached networkconf blob (shared by the VLAN-network helper).
+_UNIFI_NETS=""
+_unifi_refresh_nets() { _UNIFI_NETS=$(_unifi_get /rest/networkconf); }
+
+# Ensure a VLAN-only network exists for <vlan>; echo its networkconf _id.
+# vlan 0 → the Default (untagged) network. TAPPaaS keeps gateway/DHCP on
+# OPNsense, so created networks are VLAN-only (DHCP off). Returns 1 on error.
+_unifi_ensure_vlan_network() {
+    local vlan="$1" id resp
+    [[ -n "${_UNIFI_NETS}" ]] || _unifi_refresh_nets
+    if [[ "${vlan}" -eq 0 ]]; then
+        echo "${_UNIFI_NETS}" | jq -r '([.data[]|select((.vlan//null)==null)][0]._id) // .data[0]._id'
+        return 0
+    fi
+    id=$(echo "${_UNIFI_NETS}" | jq -r --argjson v "${vlan}" '.data[]|select(.vlan==$v)._id' | head -1)
+    if [[ -z "${id}" || "${id}" == "null" ]]; then
+        resp=$(_unifi_send POST /rest/networkconf \
+            "$(jq -nc --arg n "tappaas-vlan-${vlan}" --argjson v "${vlan}" '{name:$n,purpose:"vlan-only",vlan_enabled:true,vlan:$v,networkgroup:"LAN",enabled:true}')")
+        if [[ "$(echo "${resp}" | jq -r '.meta.rc // empty')" != "ok" ]]; then
+            _unifi_warn "failed to create VLAN-only network for VLAN ${vlan}: $(echo "${resp}" | jq -rc '.meta.msg // .')"; return 1
+        fi
+        id=$(echo "${resp}" | jq -r '.data[0]._id')
+        _unifi_refresh_nets
+        _unifi_log_ok "created VLAN-only network for VLAN ${vlan}" >&2
+    fi
+    echo "${id}"
+}
+
+# The site's "All APs" group id (newer wlanconf uses ap_group_ids + ap_group_mode).
+_unifi_default_apgroup() {
+    curl -sk -m 20 -b "${_UNIFI_JAR}" ${_UNIFI_CSRF:+-H "X-CSRF-Token: ${_UNIFI_CSRF}"} \
+        "${_UNIFI_URL}/proxy/network/v2/api/site/${UNIFI_SITE}/apgroups" 2>/dev/null \
+        | jq -r '([.[]|select(.attr_hidden_id=="default")][0]._id) // (.[0]._id) // empty'
+}
+
+# WLAN passphrase for <ssid>, read from the vendor-neutral secrets file managed
+# by setup-wlan-secrets.sh (never the committed config): lines "<ssid>=<passphrase>"
+# (split on the FIRST '=' so passphrases may contain '='). Empty if not present.
+_unifi_wlan_passphrase() {
+    local ssid="$1" f="${WLAN_SECRETS:-/home/tappaas/.wlan-secrets.txt}"
+    [[ -f "${f}" ]] || return 0
+    awk -v s="${ssid}" '{eq=index($0,"="); if(eq>0 && substr($0,1,eq-1)==s){print substr($0,eq+1); exit}}' "${f}"
+}
+
+# Build the wlanconf security fields for a TAPPaaS security level + passphrase.
+# (Enterprise needs a RADIUS profile object — handled by the caller, not here.)
+_unifi_security_fields() {
+    local sec="$1" pass="$2"
+    jq -nc --arg sec "${sec}" --arg pass "${pass}" '
+        if   $sec=="open" then {security:"open"}
+        elif $sec=="wpa3-personal" then {security:"wpapsk", wpa_mode:"wpa3", wpa_enc:"ccmp", pmf_mode:"required"}
+        else {security:"wpapsk", wpa_mode:"wpa2", wpa_enc:"ccmp", pmf_mode:"optional"} end
+        + (if $pass!="" then {x_passphrase:$pass} else {} end)'
+}
+
+# ── AP contract: interrogate <name> <mgmt_ip> ───────────────────────
+# UniFi WLANs are controller-wide (broadcast by AP groups), so we report
+# every WLAN as an SSID on the matched AP. Emit ap-manager's actual shape:
+#   {vendor,model,managementIp,ssids:{ "<ssid>": {vlan,enabled,security} }}
+plugin_ap_interrogate() {
+    local name="$1" mgmt_ip="${2:-}"
+    _unifi_login || { echo "{}"; return 0; }
+    local devs nets wlans
+    devs=$(_unifi_get /stat/device); [[ -n "${devs}" ]] || { echo "{}"; return 0; }
+    nets=$(_unifi_get /rest/networkconf); [[ -n "${nets}" ]] || nets='{}'
+    wlans=$(_unifi_get /rest/wlanconf);   [[ -n "${wlans}" ]] || wlans='{}'
+
+    jq -n --arg name "${name}" --arg ip "${mgmt_ip}" \
+          --argjson devs "${devs}" --argjson nets "${nets}" --argjson wlans "${wlans}" '
+        (reduce (($nets.data // [])[]) as $n ({}; .[$n._id] = ($n.vlan // 0))) as $id2vlan
+        | ( ($devs.data // []) | map(select((.type=="uap") and (((.ip==$ip) and ($ip!="")) or (.name==$name)))) | .[0] ) as $d
+        | if $d == null then {} else
+            {
+              vendor: "unifi",
+              model: ($d.model // ""),
+              managementIp: ($d.ip // $ip),
+              ssids: (reduce (($wlans.data // [])[]) as $w ({};
+                  .[$w.name] = {
+                    vlan: ($id2vlan[$w.networkconf_id] // 0),
+                    enabled: (if ($w|has("enabled")) then $w.enabled else true end),
+                    security: (
+                      if   $w.security=="open"  then "open"
+                      elif $w.security=="wpaeap" then (if $w.wpa_mode=="wpa3" then "wpa3-enterprise" else "wpa2-enterprise" end)
+                      else (if $w.wpa_mode=="wpa3" then "wpa3-personal" else "wpa2-personal" end) end),
+                    source: "discovered"
+                  }))
+            }
+          end'
+    return 0
+}
+
+# ── AP contract: apply <name> <delta_json> ──────────────────────────
+# Converge controller WLANs to the DESIRED ssids of this AP (read from
+# switch-configuration-desired.json). Creates VLAN-only networks as needed,
+# then creates/updates a wlanconf per SSID bound to that network. Does not
+# delete WLANs (mirrors switch-manager — removal stays operator-driven).
+plugin_ap_apply() {
+    local name="$1"  # $2 = delta json (unused; we converge to desired)
+    _unifi_login || return 1
+    local dfile="${CONFIG_DIR:-/home/tappaas/config}/switch-configuration-desired.json"
+    [[ -f "${dfile}" ]] || { _unifi_warn "desired config not found: ${dfile}"; return 1; }
+
+    local ssids
+    ssids=$(jq -c --arg n "${name}" '.accessPoints[$n].ssids // {}' "${dfile}" 2>/dev/null)
+    [[ -n "${ssids}" && "${ssids}" != "{}" && "${ssids}" != "null" ]] || { _unifi_warn "${name}: no desired SSIDs — nothing to apply"; return 0; }
+
+    _unifi_refresh_nets
+    local ug ag wlans
+    ug=$(_unifi_get /rest/usergroup | jq -r '.data[]|select(.name=="Default")._id' | head -1)
+    ag=$(_unifi_default_apgroup)
+    wlans=$(_unifi_get /rest/wlanconf)
+    [[ -n "${ug}" && "${ug}" != "null" ]] || { _unifi_warn "no Default usergroup found"; return 1; }
+    [[ -n "${ag}" ]] || { _unifi_warn "no AP group found"; return 1; }
+
+    local rc=0 ssid
+    while IFS= read -r ssid; do
+        [[ -z "${ssid}" ]] && continue
+        local vlan sec enabled netid pass secf existing body resp cur
+        vlan=$(echo "${ssids}"   | jq -r --arg s "${ssid}" '.[$s].vlan // 0')
+        sec=$(echo "${ssids}"    | jq -r --arg s "${ssid}" '.[$s].security // "wpa2-personal"')
+        enabled=$(echo "${ssids}"| jq -r --arg s "${ssid}" '.[$s] | if has("enabled") then .enabled else true end')
+        existing=$(echo "${wlans}" | jq -r --arg s "${ssid}" '.data[]|select(.name==$s)._id' | head -1)
+
+        case "${sec}" in
+            wpa2-enterprise|wpa3-enterprise)
+                _unifi_warn "${ssid}: ${sec} needs a RADIUS profile (not yet automated) — configure this SSID by hand in the UniFi UI"
+                rc=1; continue ;;
+        esac
+
+        pass=$(_unifi_wlan_passphrase "${ssid}")
+        if [[ "${sec}" == wpa2-personal || "${sec}" == wpa3-personal ]] && [[ -z "${existing}" && -z "${pass}" ]]; then
+            _unifi_warn "${ssid}: WPA-personal needs a passphrase to create — run setup-wlan-secrets.sh (or add '${ssid}=<psk>' to ${WLAN_SECRETS:-/home/tappaas/.wlan-secrets.txt}), then re-run"
+            rc=1; continue
+        fi
+
+        netid=$(_unifi_ensure_vlan_network "${vlan}") || { rc=1; continue; }
+        secf=$(_unifi_security_fields "${sec}" "${pass}")
+
+        if [[ -n "${existing}" && "${existing}" != "null" ]]; then
+            cur=$(echo "${wlans}" | jq -c --arg id "${existing}" '.data[]|select(._id==$id)')
+            body=$(jq -nc --argjson cur "${cur}" --argjson en "${enabled}" --arg net "${netid}" --argjson sf "${secf}" \
+                '$cur + {enabled:$en, networkconf_id:$net} + $sf')
+            resp=$(_unifi_send PUT "/rest/wlanconf/${existing}" "${body}")
+        else
+            body=$(jq -nc --arg n "${ssid}" --argjson en "${enabled}" --arg net "${netid}" \
+                          --arg ug "${ug}" --arg ag "${ag}" --argjson sf "${secf}" \
+                '{name:$n, enabled:$en, networkconf_id:$net, usergroup_id:$ug,
+                  ap_group_ids:[$ag], ap_group_mode:"all", wlan_band:"both"} + $sf')
+            resp=$(_unifi_send POST /rest/wlanconf "${body}")
+        fi
+        if [[ "$(echo "${resp}" | jq -r '.meta.rc // empty')" == "ok" ]]; then
+            _unifi_log_ok "${name}: SSID '${ssid}' → VLAN ${vlan} ($([[ -n "${existing}" && "${existing}" != "null" ]] && echo updated || echo created))"
+        else
+            _unifi_warn "${name}: SSID '${ssid}' failed: $(echo "${resp}" | jq -rc '.meta.msg // .' 2>/dev/null | head -c 200)"
+            rc=1
+        fi
+    done < <(echo "${ssids}" | jq -r 'keys[]')
+    return "${rc}"
+}
