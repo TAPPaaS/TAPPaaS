@@ -9,14 +9,15 @@ TAPPaaS is designed both top down and bottom up. Top down we looked at the capab
 We are trying to bring this together in a structured manner. This is a description of WHAT we want TAPPaaS to deliver. The HOW to deliver it is in the [SoftwareStack](TheSoftwareStack.md)
 
 > **Related models.** This document is the **strategy + structure** view (Stack → Capability →
-> Module). A **proposed composition meta-model** — `Node ▷ Module ▷ Component ▷ Function ▷ Service`
-> — is **issue #171**; it currently **diverges** from this document and the ArchiMate appendix on
-> `Node` (a VM here vs a physical machine in #171), on **`Capability` vs `Service`** (#171 replaces
-> capability with service — see #171 §10), and on **`Stack`** (used here, absent in #171).
-> Reconciliation is tracked on **issue #171**. Separately, the **classification** of each Module
-> (Site · People · Apps · Environments · Health + `tier`/`source`) is
-> **[ADR-007](<../ADR/ADR-007 - TAPPaaS Taxonomy.md>)** — orthogonal to whichever composition model
-> is ratified.
+> Module). The **composition meta-model** — `Stack ▷ Module ▷ Component ▷ Function ▷ Service` — is now
+> consolidated in **[ADR-009](<../ADR/ADR-009 - Composition Meta-Model.md>)** (tracking issue #171).
+> Note the open divergence ADR-009 records: this document/appendix call `Node` a **VM**, but the
+> schema (`module-fields.json`, `node` = `tappaas1`), #171, and the foundation design page all use
+> `node` = the **physical host** (with the **Module** as the VM). ADR-009 recommends aligning this
+> prose to *node = physical host*; `Capability` (Strategy) and `Service` (Application) are both kept.
+> Separately, the **classification** of each Module — one **Site** + 3 buckets (People · Apps ·
+> Environments) + **Health lens**, plus `tier`/`source` — is
+> **[ADR-007](<../ADR/ADR-007 - TAPPaaS Taxonomy.md>)**, orthogonal to the composition model.
 
 ## TAPPaaS high level structure
 
