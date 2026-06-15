@@ -87,6 +87,12 @@ ck "device desired nativeVlan=zone"  "310"    "$(jq -r '.switches.core.ports["10
 ck "ap port desired trunk"           "trunk"  "$(jq -r '.switches.core.ports["11"].mode' "${DES}")"
 ck "ap port carries WiFi VLANs only" "310"    "$(jq -rc '.switches.core.ports["11"].taggedVlans|join(",")' "${DES}")"
 
+# list-ports: one line per port, actual + drift (read-only, computed on the fly)
+lp="$("${SM}" list-ports core 2>&1)"
+ck "list-ports: node port 4 in sync"  "yes" "$(grep -qE 'port 4: node .*\| in sync' <<<"${lp}" && echo yes || echo no)"
+ck "list-ports: ap port 11 drift"     "yes" "$(grep -qE 'port 11: ap .*DRIFT' <<<"${lp}" && echo yes || echo no)"
+ck "list-ports: unknown switch (rc)"  "1"   "$(rc_of "${SM}" list-ports nope)"
+
 # ── controller inventory + graceful interrogate skip (no plugin hook) ─
 "${SM}" add-controller ctrl1 --vendor unifi --ip https://unifi >/dev/null 2>&1
 ck "add-controller recorded"         "unifi"  "$(jq -r '.controllers.ctrl1.vendor' "${ACT}")"

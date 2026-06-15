@@ -73,6 +73,7 @@ switch-manager add-port <switch> <port> --type node|switch|ap|device|uplink \
 switch-manager update-port <switch> <port> [ ...same flags... ]
 switch-manager remove-controller|remove-switch|remove-port ...
 switch-manager list
+switch-manager list-ports [<switch>]   # one line per port: actual config + drift vs zones.json
 switch-manager show <controller|switch>
 
 # Reconcile (5-verb contract)

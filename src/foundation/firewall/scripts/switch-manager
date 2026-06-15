@@ -70,6 +70,7 @@ Inventory (recorded in switch-configuration-actual.json):
   update-port <switch> <port> [ ...same flags... ]
   remove-port <switch> <port>
   list
+  list-ports [<switch>]   one line per port: actual config + drift vs zones.json
   show <controller|switch>
 
 Reconciliation (five-verb provider contract, run in this order):
@@ -279,6 +280,45 @@ cmd_show() {
     else
         die "No controller or switch named '${name}'"
     fi
+}
+
+# ── list-ports: one line per port, actual config + drift vs desired ──
+# Read-only: computes the desired VLANs on the fly (same rules as update-desired)
+# from actual's topology + zones, so it never writes files and is always current.
+cmd_list_ports() {
+    local target="${1:-}" active wifi sw
+    [[ -z "${target}" ]] || jq -e --arg n "${target}" '.switches | has($n)' "${ACTUAL}" >/dev/null \
+        || die "Switch '${target}' not found"
+    active=$(active_vlans_json); wifi=$(wifi_vlans_json)
+    while IFS= read -r sw; do
+        [[ -z "${sw}" ]] && continue
+        info "${BOLD}${sw}${CL} — actual port config (drift vs zones.json):"
+        jq -r --argjson active "${active}" --argjson wifi "${wifi}" --slurpfile z "${ZONES_FILE}" --arg sw "${sw}" '
+            ($z[0]) as $zones
+            | (.switches[$sw].ports // {}) | to_entries | sort_by(.key|tonumber) | .[]
+            | .key as $k | .value as $p
+            | ($p.type // "") as $t
+            | ($p.taggedVlans // []) as $atag
+            | ($p.nativeVlan // 0) as $anat
+            | ($p.mode // "?") as $amode
+            | (if $t=="ap" then {mode:"trunk", tagged:$wifi, nat:0}
+               elif ($t=="node" or $t=="switch" or $t=="uplink") then {mode:"trunk", tagged:$active, nat:0}
+               elif $t=="device" then {mode:"access", tagged:[],
+                     nat:(($p.zone // "") as $zn | if ($zn!="" and ($zones[$zn].vlantag!=null)) then $zones[$zn].vlantag else $anat end)}
+               else null end) as $d
+            | (if $d==null then "untouched (unmanaged)"
+               elif $d.mode=="trunk" then (($d.tagged - $atag) as $add | ($atag - $d.tagged) as $rem
+                    | if (($add|length)>0 or ($rem|length)>0) then "DRIFT +\($add|join(",")) -\($rem|join(","))" else "in sync" end)
+               else (if ($d.nat != $anat) then "DRIFT native \($anat) -> \($d.nat)" else "in sync" end) end) as $status
+            | "  port \($k): "
+              + (if $t=="" then "—" else "\($t) → \($p.target // "?")\(if $p.targetPort then "/"+$p.targetPort else "" end)" end)
+              + "  | actual: \($amode) "
+              + (if $amode=="access" then "vlan \($anat)" else (if ($atag|length)>0 then ($atag|map(tostring)|join(",")) else "-" end) end)
+              + "  | \($status)"
+        ' "${ACTUAL}"
+    done < <(if [[ -n "${target}" ]]; then echo "${target}"; else jq -r '.switches // {} | keys[]' "${ACTUAL}"; fi)
+    [[ -n "${target}" || "$(jq -r '.switches // {} | length' "${ACTUAL}")" -gt 0 ]] || info "  (no switches in inventory)"
+    return 0
 }
 
 # ── Plugin selection ─────────────────────────────────────────────────
@@ -542,6 +582,7 @@ main() {
         update-port)       cmd_update_port "$@" ;;
         remove-port)       cmd_remove_port "${1:-}" "${2:-}" ;;
         list)              cmd_list ;;
+        list-ports|--list-ports) cmd_list_ports "${1:-}" ;;
         show)              cmd_show "${1:-}" ;;
         interrogate)       cmd_interrogate ;;
         update-desired)    cmd_update_desired ;;
