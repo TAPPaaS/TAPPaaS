@@ -192,6 +192,30 @@ grant_cicd_firewall_access() {
     || warn "  could not write cicd ~/.ssh/config for the firewall"
 }
 
+# ── Switch setup (#351): offer to configure physical switches now ───
+# setup-switches.sh lives on cicd (it drives switch-manager + the vendor plugins).
+# Best-effort and optional: only when this node session is interactive and cicd is
+# reachable. Otherwise the operator runs it later (printed in install.sh Next steps).
+# Run via a LOGIN shell so ~/bin (switch-manager, setup-switches.sh) is on PATH.
+offer_switch_setup() {
+  [[ "$SKIP_CICD" == "1" ]] && return 0
+  if [[ "$INTERACTIVE" != "1" || -z "$CICD_IP" ]]; then
+    info "Configure physical switches later on cicd:  ${BL}setup-switches.sh${CL}"
+    return 0
+  fi
+  echo -e "\n${GN}${BOLD}=== C. Physical switch setup (optional) ===${CL}"
+  local ans
+  read -r -p "  Configure your switch(es) now (runs setup-switches.sh on cicd)? [Y/n]: " ans || true
+  if [[ "${ans,,}" == n* ]]; then
+    info "Skipped. Run later on cicd:  ${BL}setup-switches.sh${CL}"
+    return 0
+  fi
+  if ! ssh -tt "${CICD_SSH_OPTS[@]}" "tappaas@${CICD_IP}" "bash -lc setup-switches.sh"; then
+    warn "setup-switches.sh did not complete — run it later on cicd:  setup-switches.sh"
+  fi
+  return 0
+}
+
 # Fallback: print the manual in-VM install steps (old behaviour / --manual-cicd).
 print_manual_cicd() { # print_manual_cicd <vmid> <domain>
   local cicdid="$1" dom="$2"
@@ -339,5 +363,8 @@ fi
 
 if [[ "$SKIP_TEMPLATE" == "1" ]]; then info "Skipping NixOS template (--skip-template)"; else build_template; fi
 if [[ "$SKIP_CICD" == "1" ]];     then info "Skipping tappaas-cicd (--skip-cicd)";      else build_cicd;     fi
+
+# Switch setup (#351): offer it now (best-effort/interactive); else Next steps covers it.
+offer_switch_setup
 
 # Final message is printed by install.sh (the main bootstrap), not here.

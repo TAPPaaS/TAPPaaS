@@ -125,6 +125,20 @@ Several zone fields can be computed from others:
 - **vlantag**: `typeId * 100 + subId` (e.g., typeId=2, subId=10 → vlantag=210)
 - **ip**: `10.typeId.subId.0/24` (e.g., typeId=2, subId=10 → 10.2.10.0/24)
 
+## WiFi: the `SSID` field
+
+A zone may declare an optional `SSID` field — the WiFi network name broadcast on
+that zone's VLAN. It is consumed by the ADR-008 WiFi tooling (see
+[`firewall/scripts/README.md`](firewall/scripts/README.md)):
+
+- **`setup-wlan-secrets.sh`** walks the active zones that declare an `SSID`, lets
+  you set the real name (replacing the shipped `<PLACEHOLDER>`), and stores the
+  WPA passphrase in a 0600 secrets file (never in `zones.json`).
+- **`ap-manager`** maps each SSID to its zone's VLAN on the WiFi controller.
+
+The passphrase and per-SSID security level are **not** stored here — only the
+SSID name and (via `vlantag`) its VLAN.
+
 ## Field Reference
 
 For complete field definitions including all possible values, defaults, and validation rules, see:

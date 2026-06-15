@@ -59,8 +59,15 @@ _unifi_login() {
 _unifi_get()  { curl -sk -m 20 -b "${_UNIFI_JAR}" ${_UNIFI_CSRF:+-H "X-CSRF-Token: ${_UNIFI_CSRF}"} "${_UNIFI_URL}/proxy/network/api/s/${UNIFI_SITE}$1" 2>/dev/null; }
 _unifi_send() { local m="$1" path="$2" body="$3"; curl -sk -m 25 -b "${_UNIFI_JAR}" ${_UNIFI_CSRF:+-H "X-CSRF-Token: ${_UNIFI_CSRF}"} -H "Content-Type: application/json" -X "${m}" -d "${body}" "${_UNIFI_URL}/proxy/network/api/s/${UNIFI_SITE}${path}" 2>/dev/null; }
 
-# ── Contract: supports ──────────────────────────────────────────────
+# ── Contract: supports + management metadata ────────────────────────
 plugin_supports() { [[ "${1:-}" == "unifi" ]]; }
+
+# UniFi is a CONTROLLER-architecture brand: switches are adopted by a UniFi OS
+# controller (which setup-switches can install or register), not configured per
+# device. (MikroTik will be "device".) Drives setup-switches' management menu.
+plugin_arch() { echo "controller"; }
+# The TAPPaaS module that provides a controller for the "install a controller" path.
+plugin_controller_module() { echo "unifi-os"; }
 
 # ── Contract: interrogate <name> <mgmt_ip> ──────────────────────────
 # Emit the device's live state in switch-manager's actual-switch shape:
@@ -110,6 +117,49 @@ plugin_interrogate() {
               ))
           }
         end'
+    return 0
+}
+
+# ── Contract: controller-interrogate <controller> <controller_ip> ───
+# Enumerate every SWITCH (type "usw") the UniFi controller adopts and emit them
+# in switch-manager's controller-upload shape:
+#   { switches: { "<device name>": {vendor,model,managementIp,ports:{ "<idx>":{...} }} } }
+# Port mapping is identical to plugin_interrogate (forward/native/excluded →
+# access/trunk + VLANs). switch-manager merges this into actual, preserving any
+# operator port annotations (type/target/targetPort).
+plugin_controller_interrogate() {
+    local name="$1" mgmt_ip="${2:-}"   # mgmt_ip unused: creds carry the URL
+    _unifi_login || { echo "{}"; return 0; }
+    local devs nets
+    devs=$(_unifi_get /stat/device) || { echo "{}"; return 0; }
+    nets=$(_unifi_get /rest/networkconf)
+    [[ -n "${devs}" ]] || { echo "{}"; return 0; }
+    [[ -n "${nets}" ]] || nets='{}'
+
+    jq -n --argjson devs "${devs}" --argjson nets "${nets}" '
+        (reduce (($nets.data // [])[]) as $n ({}; .[$n._id] = ($n.vlan // 0))) as $id2vlan
+        | ([ ($nets.data // [])[] | (.vlan // 0) | select(. > 0) ] | sort | unique) as $allvlans
+        | { switches: (reduce (($devs.data // []) | map(select(.type=="usw")) | .[]) as $d ({};
+            (reduce ($d.port_overrides[]?) as $o ({}; .[($o.port_idx|tostring)] = $o)) as $ov
+            | .[$d.name] = {
+                vendor: "unifi",
+                model: ($d.model // ""),
+                managementIp: ($d.ip // ""),
+                ports: (reduce ($d.port_table[]?) as $p ({};
+                    ($p.port_idx|tostring) as $k
+                    | ($ov[$k] // {}) as $o
+                    | (($o.forward // $p.forward) // "all") as $fwd
+                    | (($o.native_networkconf_id) // null) as $nat
+                    | (if $nat == null then 0 else ($id2vlan[$nat] // 0) end) as $natvlan
+                    | (($o.excluded_networkconf_ids) // []) as $excl
+                    | ([ $excl[] | ($id2vlan[.] // empty) ]) as $exclv
+                    | . + { ($k): (
+                        if $fwd == "native" then { mode:"access", nativeVlan:$natvlan, source:"discovered" }
+                        elif $fwd == "disabled" then { mode:"access", nativeVlan:0, disabled:true, source:"discovered" }
+                        elif $fwd == "customize" then { mode:"trunk", nativeVlan:$natvlan, taggedVlans:($allvlans - $exclv), source:"discovered" }
+                        else { mode:"trunk", nativeVlan:$natvlan, taggedVlans:$allvlans, source:"discovered" } end) }
+                  ))
+              } )) }'
     return 0
 }
 

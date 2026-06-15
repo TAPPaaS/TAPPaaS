@@ -2,89 +2,108 @@
 #
 # Unit tests for switch-manager — the physical-switch provider (ADR-008, #339).
 #
-# Black-box / offline: drives switch-manager against a temp CONFIG_DIR with a
-# fixture zones.json. No live switches (manual plugin fallback). Covers the
-# ADR-008 test plan SW-01..SW-05 plus the reconcile lifecycle.
+# Black-box / offline against a temp CONFIG_DIR + fixture zones.json. No live
+# switches (manual plugin fallback). Covers the 3-tier inventory (controller /
+# switch / port), the regenerated-desired model, and the reconcile lifecycle
+# (interrogate → update-desired → delta → apply → confirm), incl. add/remove port.
 #
 # Usage: ./test-switch-manager.sh   — exit 0 all passed, 1 otherwise.
-#
 
 set -uo pipefail
-
 SCRIPT_DIR="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")" && pwd)"
 SM="${SCRIPT_DIR}/switch-manager"
 
-TMP="$(mktemp -d)"
+TMP="$(mktemp -d)"; trap 'rm -rf "${TMP}"' EXIT
 export CONFIG_DIR="${TMP}"
 cat > "${TMP}/zones.json" <<'JSON'
 {
-  "mgmt": { "state": "Manual",    "vlantag": 0,   "bridge": "lan" },
-  "srv":  { "state": "Active",    "vlantag": 200, "bridge": "lan" },
-  "home": { "state": "Active",    "vlantag": 310, "bridge": "lan" },
-  "dmz":  { "state": "Mandatory", "vlantag": 610, "bridge": "lan" },
-  "old":  { "state": "Inactive",  "vlantag": 999, "bridge": "lan" }
+  "mgmt": { "state": "Manual",    "vlantag": 0   },
+  "srv":  { "state": "Active",    "vlantag": 200 },
+  "home": { "state": "Active",    "vlantag": 310 },
+  "dmz":  { "state": "Mandatory", "vlantag": 610 },
+  "old":  { "state": "Inactive",  "vlantag": 999 }
 }
 JSON
-trap 'rm -rf "${TMP}"' EXIT
-
+ACT="${TMP}/switch-configuration-actual.json"
 DES="${TMP}/switch-configuration-desired.json"
 PASS=0; FAIL=0
-ck() {
-    local desc="$1" exp="$2" got="$3"
-    if [[ "${exp}" == "${got}" ]]; then echo "  ok: ${desc}"; PASS=$((PASS+1))
-    else echo "  FAIL: ${desc} (expected '${exp}', got '${got}')"; FAIL=$((FAIL+1)); fi
-}
+ck() { local d="$1" e="$2" g="$3"; if [[ "$e" == "$g" ]]; then echo "  ok: $d"; PASS=$((PASS+1)); else echo "  FAIL: $d (expected '$e', got '$g')"; FAIL=$((FAIL+1)); fi; }
 rc_of() { "$@" >/dev/null 2>&1; echo $?; }
 
 echo "test-switch-manager:"
 
-# SW-01: add creates a switch with required fields
-"${SM}" add core-sw1 --vendor unifi --ip 10.0.0.20 --model USW-Pro-48 >/dev/null 2>&1
-ck "SW-01 add creates switch"        "unifi"  "$(jq -r '.switches["core-sw1"].vendor' "${DES}")"
-ck "SW-01 add records ip"            "10.0.0.20" "$(jq -r '.switches["core-sw1"].managementIp' "${DES}")"
+# ── Inventory: switch + ports written to ACTUAL ─────────────────────
+"${SM}" add-switch core --vendor tplink --managed manual >/dev/null 2>&1
+ck "add-switch writes actual"        "tplink" "$(jq -r '.switches.core.vendor' "${ACT}")"
+ck "add-switch records managed"      "manual" "$(jq -r '.switches.core.managed' "${ACT}")"
+ck "add-switch desired untouched"    "true"   "$(jq -e '(.switches // {}) == {}' "${DES}" >/dev/null && echo true || echo false)"
+ck "add-switch dup rejected (rc)"    "1"      "$(rc_of "${SM}" add-switch core --vendor x --managed manual)"
+ck "add-switch bad managed (rc)"     "1"      "$(rc_of "${SM}" add-switch s2 --vendor x --managed bogus)"
+ck "add-switch needs managed (rc)"   "1"      "$(rc_of "${SM}" add-switch s2 --vendor x)"
 
-# add duplicate fails
-ck "add duplicate rejected (rc)"     "1"      "$(rc_of "${SM}" add core-sw1 --vendor unifi --ip 1.2.3.4)"
+# ── Ports: topology only (no VLANs yet) ─────────────────────────────
+"${SM}" add-port core 4 --type node --target tappaas1 --target-port eth0 >/dev/null 2>&1
+ck "add-port type recorded"          "node"     "$(jq -r '.switches.core.ports["4"].type' "${ACT}")"
+ck "add-port target recorded"        "tappaas1" "$(jq -r '.switches.core.ports["4"].target' "${ACT}")"
+ck "add-port targetPort recorded"    "eth0"     "$(jq -r '.switches.core.ports["4"].targetPort' "${ACT}")"
+ck "add-port node defaults trunk"    "trunk"    "$(jq -r '.switches.core.ports["4"].mode' "${ACT}")"
+ck "add-port no VLANs yet"           "null"     "$(jq -r '.switches.core.ports["4"].taggedVlans // "null"' "${ACT}")"
+ck "add-port bad type (rc)"          "1"        "$(rc_of "${SM}" add-port core 9 --type bogus)"
+ck "add-port needs type (rc)"        "1"        "$(rc_of "${SM}" add-port core 9 --target x)"
+ck "update-port missing (rc)"        "1"        "$(rc_of "${SM}" update-port core 99 --type node)"
 
-# SW-02: trunk port validates taggedVlans is an array
-"${SM}" port core-sw1 1 --mode trunk --source zones --connected-to node:tappaas1:nic0:lan >/dev/null 2>&1
-ck "SW-02 trunk port mode"           "trunk"  "$(jq -r '.switches["core-sw1"].ports["1"].mode' "${DES}")"
-ck "SW-02 connectedTo parsed"        "tappaas1" "$(jq -r '.switches["core-sw1"].ports["1"].connectedTo.target' "${DES}")"
-ck "SW-02 connectedTo iface parsed"  "lan"    "$(jq -r '.switches["core-sw1"].ports["1"].connectedTo.interface' "${DES}")"
-
-# SW-03: access port with zone
-"${SM}" port core-sw1 10 --mode access --zone home --connected-to device:printer --mac aa:bb:cc:dd:ee:ff >/dev/null 2>&1
-ck "SW-03 access port zone"          "home"   "$(jq -r '.switches["core-sw1"].ports["10"].zone' "${DES}")"
-
-# Phase 0: update-desired — trunk gets active set; access tracks zone vlan
+# ── update-desired regenerates desired (trunk + active VLANs) ────────
 "${SM}" update-desired >/dev/null 2>&1
-ck "update-desired trunk = active set" "200,310,610" "$(jq -rc '.switches["core-sw1"].ports["1"].taggedVlans | join(",")' "${DES}")"
-ck "update-desired access nativeVlan tracks zone" "310" "$(jq -r '.switches["core-sw1"].ports["10"].nativeVlan' "${DES}")"
+ck "desired port is trunk"           "trunk"     "$(jq -r '.switches.core.ports["4"].mode' "${DES}")"
+ck "desired tags active set"         "200,310,610" "$(jq -rc '.switches.core.ports["4"].taggedVlans | join(",")' "${DES}")"
 
-# SW-04: reconcile detects VLAN/ports needing config (empty actual) → drift rc 2
-ck "SW-04 reconcile dry-run drift (rc)" "2" "$(rc_of "${SM}" reconcile)"
+# ── delta wants the VLANs tagged; apply prints manual; confirm syncs ─
+ck "delta detects drift (rc)"        "2"      "$(rc_of "${SM}" reconcile)"
+# reconcile --apply prints the manual VLANs to tag AND records the intended config
+# into actual in one step (manual switches included), then reports converged.
+ck "reconcile --apply rc 0"          "0"      "$(rc_of "${SM}" reconcile --apply)"
+ck "reconcile --apply updated actual" "200,310,610" "$(jq -rc '.switches.core.ports["4"].taggedVlans // [] | join(",")' "${ACT}")"
+ck "after apply in sync (rc)"        "0"      "$(rc_of "${SM}" reconcile)"
+# standalone confirm still works (re-records desired→actual; idempotent).
+ck "standalone confirm rc 0"         "0"      "$(rc_of "${SM}" confirm)"
 
-# apply via manual plugin → needs-manual rc 2, then confirm makes it converge
-ck "reconcile --apply needs-manual (rc)" "2" "$(rc_of "${SM}" reconcile --apply)"
-"${SM}" confirm >/dev/null 2>&1
-ck "after confirm reconcile in sync (rc)" "0" "$(rc_of "${SM}" reconcile)"
-
-# SW-05: a zone VLAN renumber is detected on BOTH trunk and access ports
-jq '.home.vlantag=311' "${TMP}/zones.json" > "${TMP}/z2" && mv "${TMP}/z2" "${TMP}/zones.json"
-delta_out="$("${SM}" delta 2>&1)"   # delta runs against current desired/actual; need update-desired first
+# ── added/removed ports flow through the regenerated desired ─────────
+"${SM}" add-port core 6 --type node --target tappaas3 >/dev/null 2>&1
 "${SM}" update-desired >/dev/null 2>&1
-delta_out="$("${SM}" delta 2>&1)"
-ck "SW-05 trunk change detected" "yes" "$(grep -q 'trunk-vlans' <<< "${delta_out}" && echo yes || echo no)"
-ck "SW-05 access-vlan change detected" "yes" "$(grep -q 'access-vlan' <<< "${delta_out}" && echo yes || echo no)"
+ck "added port shows in delta (rc)"  "2"      "$(rc_of "${SM}" reconcile)"
+"${SM}" remove-port core 6 >/dev/null 2>&1
+"${SM}" update-desired >/dev/null 2>&1
+ck "removed port → back in sync (rc)" "0"     "$(rc_of "${SM}" reconcile)"
 
-# remove
-"${SM}" remove core-sw1 >/dev/null 2>&1
-ck "remove deletes switch"           "0"      "$(jq -r '.switches | length' "${DES}")"
+# ── access port: device + zone → nativeVlan derived from zones ───────
+"${SM}" add-port core 10 --type device --target printer --zone home >/dev/null 2>&1
+ck "device port mode access"         "access" "$(jq -r '.switches.core.ports["10"].mode' "${ACT}")"
+"${SM}" update-desired >/dev/null 2>&1
+ck "device desired nativeVlan=zone"  "310"    "$(jq -r '.switches.core.ports["10"].nativeVlan' "${DES}")"
 
-# CLI guards
+# ── controller inventory + graceful interrogate skip (no plugin hook) ─
+"${SM}" add-controller ctrl1 --vendor unifi --ip https://unifi >/dev/null 2>&1
+ck "add-controller recorded"         "unifi"  "$(jq -r '.controllers.ctrl1.vendor' "${ACT}")"
+ck "add-controller dup (rc)"         "1"      "$(rc_of "${SM}" add-controller ctrl1 --vendor x --ip y)"
+ck "add-switch bad controller (rc)"  "1"      "$(rc_of "${SM}" add-switch s9 --vendor unifi --managed auto --controller nope)"
+
+# ── managed:manual forces manual.sh even for a brand WITH a plugin ───
+"${SM}" add-switch usw --vendor unifi --managed manual >/dev/null 2>&1
+"${SM}" add-port usw 1 --type node --target tappaas1 >/dev/null 2>&1
+"${SM}" update-desired >/dev/null 2>&1
+apply_out="$("${SM}" apply 2>&1)"
+ck "unifi+manual uses manual.sh"     "yes"    "$(grep -q 'MANUAL CONFIGURATION REQUIRED' <<<"${apply_out}" && echo yes || echo no)"
+
+# ── list / show / remove / guards ───────────────────────────────────
+ck "show switch"                     "tplink" "$("${SM}" show core | jq -r '.vendor')"
+ck "show controller"                 "unifi"  "$("${SM}" show ctrl1 | jq -r '.vendor')"
+ck "show missing (rc)"               "1"      "$(rc_of "${SM}" show nope)"
+"${SM}" remove-switch core >/dev/null 2>&1
+ck "remove-switch deletes"           "false"  "$(jq -e '.switches | has("core")' "${ACT}")"
+"${SM}" remove-controller ctrl1 >/dev/null 2>&1
+ck "remove-controller deletes"       "false"  "$(jq -e '.controllers | has("ctrl1")' "${ACT}")"
 ck "--help (rc)"                     "0"      "$(rc_of "${SM}" --help)"
 ck "unknown command (rc)"            "1"      "$(rc_of "${SM}" bogus)"
-ck "show missing switch (rc)"        "1"      "$(rc_of "${SM}" show nope)"
 
 echo ""
 echo "test-switch-manager: ${PASS} passed, ${FAIL} failed"

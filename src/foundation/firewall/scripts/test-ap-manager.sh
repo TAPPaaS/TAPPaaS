@@ -78,8 +78,12 @@ ck "reconcile --apply needs-manual (rc)" "2"  "$(rc_of "${AM}" reconcile --apply
 # Add work SSID so the unserved-zone warning clears, and a switch trunk port 12
 # carrying 310/510/320 so the uplink validation passes.
 "${AM}" ssid ap-living add TAPPaaS-Work --zone work --security wpa2-enterprise --radius radius.mgmt.internal >/dev/null 2>&1
-"${SM}" add core-sw1 --vendor unifi --ip 10.0.0.20 >/dev/null 2>&1
-"${SM}" port core-sw1 12 --mode trunk --tagged 310,510,320 --connected-to ap:ap-living >/dev/null 2>&1
+# Switch uplink carrying the SSID VLANs (new switch-manager CLI): an ap-type trunk
+# port → update-desired sets its tagged set to the active VLANs (310,320,510),
+# which switch-manager writes into the shared desired file ap-manager validates.
+"${SM}" add-switch core-sw1 --vendor unifi --managed manual >/dev/null 2>&1
+"${SM}" add-port core-sw1 12 --type ap --target ap-living >/dev/null 2>&1
+"${SM}" update-desired >/dev/null 2>&1
 "${AM}" reconcile --apply >/dev/null 2>&1   # creates+confirms SSIDs (manual → confirm via next line)
 "${AM}" confirm >/dev/null 2>&1
 ck "after confirm + full coverage → in sync (rc)" "0" "$(rc_of "${AM}" reconcile)"

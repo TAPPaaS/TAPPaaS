@@ -288,6 +288,31 @@ rules-manager remove-alias <name>
 The CLI is normally invoked by the `services/rules/*.sh` capability scripts on
 the consumer module's lifecycle hooks, but can be run directly for debugging.
 
+## Physical network: switches & WiFi (ADR-008)
+
+Beyond OPNsense (L3), `zones.json` is also reconciled onto **Proxmox** bridges/
+trunks, **physical switches**, and **WiFi APs** so a zone's VLAN is carried
+everywhere it needs to be. These providers live in [`scripts/`](scripts/) and run
+on tappaas-cicd (symlinked into `~/bin`):
+
+| Script | Role |
+|--------|------|
+| `zone-reconcile` | orchestrator — runs every provider in order (`opnsense → proxmox → switch → ap`) |
+| `switch-manager` | physical switches (controllers / switches / ports → trunk + access VLANs) |
+| `ap-manager` | WiFi APs (SSID → VLAN via the vendor controller) |
+| `proxmox-manager` | node bridge-vids + per-VM trunks (#335) |
+| `setup-switches.sh` | interactive switch registration (bootstrap step #351) |
+| `setup-wlan-secrets.sh` | set WiFi SSID names (in `zones.json`) + passphrases (0600 secrets file) |
+
+Each provider follows a 5-verb contract (`interrogate → update-desired → delta →
+apply → confirm`) over two files in `~/config/`:
+`switch-configuration-actual.json` (reality) and `…-desired.json` (regenerated
+from `zones.json`). Vendor automation is plugin-based (`scripts/plugins/<vendor>.sh`;
+`unifi.sh` shipped, `manual.sh` is the by-hand fallback).
+
+**Full command reference, the inventory model, and how to add a switch brand:
+[`scripts/README.md`](scripts/README.md).**
+
 ## Test network on a dedicated physical port (issue #225)
 
 `test-network.sh` stands up a throwaway, isolated test network served on a
@@ -342,6 +367,8 @@ setup/teardown runbook, options, verification, and troubleshooting.
 - [`zones.json`](zones.json) — canonical zone definitions (referenced from `from`/`to`)
 - [`aliases.json`](aliases.json) — global aliases shared across modules
 - [`services/rules/`](services/rules/) — capability lifecycle scripts
+- [`scripts/`](scripts/) — network orchestration (zone-reconcile, switch-manager, ap-manager, setup-*) — see [`scripts/README.md`](scripts/README.md)
 - `tappaas-cicd/opnsense-controller/src/opnsense_controller/rules_manager.py` — implementation
 - [`../ZONES.md`](../ZONES.md) — zone reference
+- [`../../docs/ADR/ADR-008-switch-module-network-infrastructure.md`](../../../docs/ADR/ADR-008-switch-module-network-infrastructure.md) — design
 - [`../module-fields.json`](../module-fields.json) — full field schema

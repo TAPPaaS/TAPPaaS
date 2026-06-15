@@ -23,9 +23,12 @@ echo "test-unifi-plugin:"
 # Contract: plugin_supports
 if plugin_supports unifi;   then ck "supports unifi"  yes yes; else ck "supports unifi"  yes no; fi
 if plugin_supports generic; then ck "rejects generic" no  yes; else ck "rejects generic" no  no; fi
-for fn in plugin_supports plugin_interrogate plugin_apply plugin_ap_interrogate plugin_ap_apply; do
+for fn in plugin_supports plugin_interrogate plugin_apply plugin_ap_interrogate plugin_ap_apply \
+          plugin_arch plugin_controller_module plugin_controller_interrogate; do
     ck "function ${fn} defined" "function" "$(type -t "$fn")"
 done
+ck "plugin_arch is controller"      "controller" "$(plugin_arch)"
+ck "plugin_controller_module"       "unifi-os"   "$(plugin_controller_module)"
 
 # Stub the API for an offline interrogate test.
 _unifi_login() { _UNIFI_URL="https://stub"; _UNIFI_JAR="/dev/null"; _UNIFI_CSRF=""; return 0; }
@@ -54,6 +57,31 @@ ck "port1 nativeVlan 200"          "200"    "$(jq -r '.ports["1"].nativeVlan' <<
 ck "port2 trunk"                   "trunk"  "$(jq -r '.ports["2"].mode' <<<"$OUT")"
 ck "port2 tagged = all minus excluded(210) = [200]" "200" "$(jq -rc '.ports["2"].taggedVlans|join(",")' <<<"$OUT")"
 ck "port3 trunk(all) tagged = 200,210" "200,210" "$(jq -rc '.ports["3"].taggedVlans|join(",")' <<<"$OUT")"
+
+# ── Controller interrogate: enumerate usw switches (skip uap) ───────
+_unifi_get() {
+    case "$1" in
+        /rest/networkconf) cat <<'JSON'
+{"data":[{"_id":"def","name":"Default","vlan":null},{"_id":"n200","name":"srv","vlan":200},{"_id":"n210","name":"home","vlan":210}]}
+JSON
+        ;;
+        /stat/device) cat <<'JSON'
+{"data":[
+  {"_id":"d1","name":"USW Pro","type":"usw","model":"USWPRO","ip":"10.0.0.5",
+   "port_table":[{"port_idx":1,"forward":"all"},{"port_idx":2,"forward":"native"}],
+   "port_overrides":[{"port_idx":2,"forward":"native","native_networkconf_id":"n200"}]},
+  {"_id":"ap1","name":"AP","type":"uap"}
+]}
+JSON
+        ;;
+    esac
+}
+COUT="$(plugin_controller_interrogate ctrl1 https://x)"
+ck "controller lists the usw switch"   "USW Pro" "$(jq -r '.switches|keys[0]' <<<"$COUT")"
+ck "controller skips the uap"          "1"       "$(jq -r '.switches|length' <<<"$COUT")"
+ck "controller switch vendor"          "unifi"   "$(jq -r '.switches["USW Pro"].vendor' <<<"$COUT")"
+ck "controller port1 trunk(all)"       "200,210" "$(jq -rc '.switches["USW Pro"].ports["1"].taggedVlans|join(",")' <<<"$COUT")"
+ck "controller port2 access nativeVlan" "200"    "$(jq -r '.switches["USW Pro"].ports["2"].nativeVlan' <<<"$COUT")"
 
 # ── AP (WiFi) interrogate + security mapping (offline) ──────────────
 # Re-stub the API for a uap device + two WLANs (one disabled WPA2 on VLAN 400,
