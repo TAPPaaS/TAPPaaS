@@ -251,6 +251,44 @@ else
     fail "install-module.sh --help missing --force"
 fi
 
+# ── Test 9: snapshot_retention config reader (Issue #353) ───────────
+
+info "${BOLD}Test 9: snapshot_retention reader & cleanup wiring${CL}"
+
+# Unit-test snapshot_retention against a temp configuration.json: configured
+# value is honoured; unset / non-integer / zero / missing-file fall back to 5.
+sr_tmp=$(mktemp -d)
+trap 'rm -rf "${sr_tmp}"' EXIT
+sr_run() {
+    ( CONFIG_DIR="${sr_tmp}"; snapshot_retention )
+}
+
+printf '{"tappaas":{"snapshotRetention":3}}\n' > "${sr_tmp}/configuration.json"
+[[ "$(sr_run)" == "3" ]] && pass "configured retention honoured (3)" || fail "configured retention should be 3"
+
+printf '{"tappaas":{}}\n' > "${sr_tmp}/configuration.json"
+[[ "$(sr_run)" == "5" ]] && pass "unset retention -> default 5" || fail "unset retention should default to 5"
+
+printf '{"tappaas":{"snapshotRetention":"abc"}}\n' > "${sr_tmp}/configuration.json"
+[[ "$(sr_run)" == "5" ]] && pass "non-integer retention -> default 5" || fail "non-integer retention should default to 5"
+
+printf '{"tappaas":{"snapshotRetention":0}}\n' > "${sr_tmp}/configuration.json"
+[[ "$(sr_run)" == "5" ]] && pass "zero retention -> default 5" || fail "zero retention should default to 5"
+
+rm -f "${sr_tmp}/configuration.json"
+[[ "$(sr_run)" == "5" ]] && pass "missing config file -> default 5" || fail "missing config file should default to 5"
+
+rm -rf "${sr_tmp}"
+trap - EXIT
+
+# update-module.sh wires cleanup into the success path (prune_snapshots calls
+# snapshot-vm.sh --cleanup); guard against the wiring silently disappearing.
+if grep -q 'snapshot-vm.sh.*--cleanup' /home/tappaas/bin/update-module.sh; then
+    pass "update-module.sh invokes snapshot-vm.sh --cleanup"
+else
+    fail "update-module.sh no longer invokes --cleanup (snapshot retention unwired)"
+fi
+
 # ── Deep Test: VM creation suite ────────────────────────────────────
 
 if [[ "${DEEP}" -eq 1 ]]; then

@@ -26,6 +26,7 @@ Global system configuration including:
 - **nodeCount** - Number of Proxmox nodes in the cluster
 - **repositories** - Array of module repositories (managed by `repository.sh`)
 - **updateSchedule** - When to apply system updates (applies to all nodes)
+- **snapshotRetention** - *(optional)* How many pre-update VM snapshots to keep per module (default `5`). `update-module.sh` creates a snapshot before every update and, on success, prunes the oldest beyond this count so per-VM snapshot chains stay bounded (#353). The newest snapshot is always kept, so rollback is never affected.
 
 ### tappaas-nodes
 
