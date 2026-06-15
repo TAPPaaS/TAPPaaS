@@ -1,0 +1,6 @@
+{
+  "_comment": "Auto-On pinhole for vllm-amd. When a consumer in a different zone declares dependsOn ['vllm-amd:inference'] and the zone-policy permits a pinhole, rules-manager synthesises an ingress rule for each port listed below.",
+  "ports": [
+    { "port": 8000, "protocol": "TCP", "description": "vLLM OpenAI-compatible inference API" }
+  ]
+}

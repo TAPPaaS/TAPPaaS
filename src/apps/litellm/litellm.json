@@ -1,7 +1,7 @@
 {
   "description": "TAPPaaS LiteLLM",
-  "version": "0.5.0",
-  "releaseDate": "2026-05-20",
+  "version": "0.6.0",
+  "releaseDate": "2026-06-15",
   "maintainer": "@ErikDaniel007",
   "status": "Development",
   "vmname": "litellm",
@@ -15,7 +15,8 @@
     "backup:vm",
     "identity:identity",
     "firewall:proxy",
-    "firewall:rules"
+    "firewall:rules",
+    "vllm-amd:inference"
   ],
   "provides": [
     "models"

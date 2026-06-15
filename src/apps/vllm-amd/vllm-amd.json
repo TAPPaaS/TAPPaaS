@@ -1,7 +1,7 @@
 {
   "description": "vLLM AMD ROCm inference — Ryzen AI MAX+ 395 (tappaas2)",
-  "version": "0.6.0",
-  "releaseDate": "2026-02-20",
+  "version": "0.7.0",
+  "releaseDate": "2026-06-15",
   "maintainer": "@ErikDaniel007",
   "status": "Development",
   "vmname": "vllm-amd",
@@ -12,6 +12,9 @@
   "dependsOn": [
     "cluster:lxc",
     "backup:vm"
+  ],
+  "provides": [
+    "inference"
   ],
   "config": {
     "cluster:lxc": {
