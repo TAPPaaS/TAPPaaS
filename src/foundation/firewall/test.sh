@@ -194,7 +194,7 @@ done
 
 section "Standard 1b: ADR-008 provider unit tests (proxmox/switch/ap; #335/#339)"
 
-for ut in test-proxmox-manager.sh test-switch-manager.sh test-ap-manager.sh; do
+for ut in test-proxmox-manager.sh test-switch-manager.sh test-ap-manager.sh test-unifi-plugin.sh; do
     if [[ -x "${SCRIPT_DIR}/scripts/${ut}" ]]; then
         if ut_out=$("${SCRIPT_DIR}/scripts/${ut}" 2>&1); then
             pass "${ut}"
