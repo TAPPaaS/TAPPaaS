@@ -2,6 +2,8 @@
 
 This document investigates options for deploying a UniFi management solution as a TAPPaaS module and implementing the `unifi.sh` plugin for ADR-008 switch/AP automation.
 
+> **API note (UniFi Network Application v9+):** there is now an **official Network API** — REST, authenticated with an **API key** via the `X-API-KEY` header (Settings → Control Plane → Integrations → Create API Key), base path `https://<host>/proxy/network/integration/v1/...`. Prefer it for inventory/reads and supported device actions. The cookie/CSRF session API documented below (`/api/login` + `/api/s/{site}/...`) is the **legacy, community-reverse-engineered** interface — still functional, and still required for endpoints the official API does not yet cover (e.g. some `port_overrides` writes), but not officially supported. The `unifi.sh` plugin should authenticate via the API key and fall back to the legacy endpoints only where needed.
+
 ## Table of Contents
 
 1. [Background](#1-background)
