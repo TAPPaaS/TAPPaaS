@@ -140,6 +140,14 @@ get_snapshot_names() {
 case "${ACTION}" in
 
     create)
+        # SELF-SNAPSHOT GUARD (#352, incident 2026-06-15): never snapshot the VM
+        # that is running THIS script. `qm snapshot` fsfreezes the guest via the
+        # QEMU agent to get a consistent image; freezing the controller's OWN root
+        # filesystem mid-run can hang the thaw and strand the VM for hours (same
+        # incident class as the #275 self-reboot guard in update-os.sh).
+        if [[ "${VMNAME}" == "$(hostname)" || "${VMNAME}" == "$(hostname -s)" ]]; then
+            die "Refusing to snapshot '${VMNAME}' (VM ${VMID}) — it is THIS host. An agent fsfreeze of the controller's own root FS can strand it (#352). Snapshot it from a PVE node under supervision if you really need to."
+        fi
         SNAP_NAME="tappaas-$(date +'%Y%m%d-%H%M%S')"
         SNAP_DESC="TAPPaaS snapshot for ${MODULE}"
         info "  Creating snapshot: ${BL}${SNAP_NAME}${CL}"

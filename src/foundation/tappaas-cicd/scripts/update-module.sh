@@ -257,8 +257,21 @@ main() {
         has_vm=true
     fi
 
+    local self_vm; self_vm="$(read_module_config "${module}" | jq -r '.vmname // empty')"
+    [[ -n "${self_vm}" ]] || self_vm="${module}"
+
     if [[ "${OPT_NO_SNAPSHOT}" -eq 1 ]]; then
         info "  Skipped (--no-snapshot)"
+    elif [[ "${self_vm}" == "$(hostname)" || "${self_vm}" == "$(hostname -s)" ]]; then
+        # SELF-UPDATE GUARD (#352, incident 2026-06-15): never snapshot the VM that
+        # is running THIS updater. `qm snapshot` fsfreezes the guest via the QEMU
+        # agent; freezing the controller's own root FS mid-update can hang the thaw
+        # and strand the VM for hours (same class as the #275 self-reboot guard).
+        # Proceed WITHOUT a snapshot — so snapshot_created stays false and no later
+        # rollback will try to stop/restore this VM from inside.
+        warn "  Skipping pre-update snapshot: ${self_vm} is THIS controller VM (#352)."
+        warn "    Snapshotting it from inside fsfreezes its own root FS and can strand it."
+        warn "    Continuing WITHOUT a rollback safety net (take a node-side snapshot under supervision if needed)."
     elif [[ "${has_vm}" == true ]]; then
         if /home/tappaas/bin/snapshot-vm.sh "${module}"; then
             info "  ${GN}✓${CL} Snapshot created"
