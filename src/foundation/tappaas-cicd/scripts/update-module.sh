@@ -37,6 +37,7 @@
 #   4. Call dependency update-service.sh scripts
 #   5. Run module update.sh
 #   6. Run post-update tests (rollback on fatal failure)
+#   7. On success, prune old snapshots to tappaas.snapshotRetention (#353)
 #
 
 set -euo pipefail
@@ -147,6 +148,27 @@ fatal_with_rollback() {
     fatal "${message}"
     attempt_rollback "${module}" "${snap_created}"
     exit 2
+}
+
+# Prune old pre-update snapshots down to tappaas.snapshotRetention (#353). Every
+# update creates a snapshot (Step 1) but nothing pruned them, so per-VM chains
+# grew without bound (observed on vm:130). Runs only on the success paths — never
+# after a rollback, which wants the history kept — and only when this run
+# actually created a snapshot. Best-effort: a cleanup failure is a warning, not
+# fatal, so it can never fail an otherwise-successful update. snapshot-vm.sh
+# --cleanup keeps the newest N, so this run's snapshot (and --restore 1) is safe.
+# Args: <module> <snapshot_created: true|false>
+prune_snapshots() {
+    local module="$1" snap_created="$2"
+    [[ "${snap_created}" == true ]] || return 0
+    local keep
+    keep="$(snapshot_retention)"
+    info "  Pruning old snapshots, keeping last ${keep}..."
+    if /home/tappaas/bin/snapshot-vm.sh "${module}" --cleanup "${keep}"; then
+        info "  ${GN}✓${CL} Snapshot retention enforced (keeping last ${keep})"
+    else
+        warn "Snapshot cleanup failed — old snapshots may remain (non-fatal)"
+    fi
 }
 
 # ── Main ─────────────────────────────────────────────────────────────
@@ -369,11 +391,13 @@ main() {
         # Non-fatal test failure — warn but don't rollback
         warn "Post-update tests failed (exit ${post_test_exit}) — update completed but module may have issues"
         finalize_config "${module}"
+        prune_snapshots "${module}" "${snapshot_created}"
         exit 1
     fi
 
     # ── Success ───────────────────────────────────────────────────────
     finalize_config "${module}"
+    prune_snapshots "${module}" "${snapshot_created}"
 
     echo ""
     info "${GN}${BOLD}Module '${module}' updated successfully${CL}"

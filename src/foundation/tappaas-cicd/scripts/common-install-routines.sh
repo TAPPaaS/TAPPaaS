@@ -129,6 +129,24 @@ automatic_reboot_enabled() {
     [[ "$val" != "false" ]]
 }
 
+# How many pre-update VM snapshots update-module.sh keeps per module. Reads
+# tappaas.snapshotRetention from configuration.json; defaults to 5 when unset,
+# missing, or not a positive integer. Echoes the count. Paired with
+# snapshot-vm.sh --cleanup to bound per-VM snapshot chains (#353).
+snapshot_retention() {
+    local config="${CONFIG_DIR}/configuration.json"
+    local val=""
+    if [[ -f "$config" ]]; then
+        val=$(jq -r '.tappaas.snapshotRetention // empty' "$config" 2>/dev/null) || val=""
+    fi
+    # Accept only a positive integer; otherwise fall back to the default.
+    if [[ "$val" =~ ^[0-9]+$ ]] && [[ "$val" -ge 1 ]]; then
+        echo "$val"
+    else
+        echo 5
+    fi
+}
+
 # Get the first node from configuration.json whose hostname differs from the given primary node.
 # Used to resolve a default HANode when none is explicitly set.
 # Arguments: [primary-node-hostname] (default: first node in config)

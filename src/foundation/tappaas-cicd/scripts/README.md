@@ -841,6 +841,7 @@ update-module.sh [options] <module-name>
 4. Iterates `dependsOn` and calls each provider's `update-service.sh`
 5. Calls the module's own `update.sh`
 6. Runs `test-module.sh` post-update — rolls back on fatal failure (warns only with `--no-snapshot`)
+7. On success, prunes old pre-update snapshots to `tappaas.snapshotRetention` (default `5`) via `snapshot-vm.sh --cleanup`, so per-VM snapshot chains stay bounded (#353). Best-effort — a cleanup failure warns but does not fail the update. Skipped after a rollback and with `--no-snapshot`.
 
 **Exit codes:**
 | Code | Meaning |
@@ -968,6 +969,9 @@ snapshot-vm.sh vaultwarden --restore 1
 - Snapshot names follow the format `tappaas-YYYYMMDD-HHMMSS`
 - Restore stops the VM, rolls back, then starts it again
 - Cleanup deletes oldest snapshots first
+- `--cleanup` is invoked automatically by `update-module.sh` after a successful
+  update, keeping `tappaas.snapshotRetention` snapshots (default `5`), so chains
+  stay bounded without manual pruning (#353)
 
 ---
 
