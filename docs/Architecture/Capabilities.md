@@ -11,10 +11,10 @@ We are trying to bring this together in a structured manner. This is a descripti
 > **Related models.** This document is the **strategy + structure** view (Stack → Capability →
 > Module). The **composition meta-model** — `Stack ▷ Module ▷ Component ▷ Function ▷ Service` — is now
 > consolidated in **[ADR-009](<../ADR/ADR-009 - Composition Meta-Model.md>)** (tracking issue #171).
-> Note the open divergence ADR-009 records: this document/appendix call `Node` a **VM**, but the
-> schema (`module-fields.json`, `node` = `tappaas1`), #171, and the foundation design page all use
-> `node` = the **physical host** (with the **Module** as the VM). ADR-009 recommends aligning this
-> prose to *node = physical host*; `Capability` (Strategy) and `Service` (Application) are both kept.
+> **Vocabulary alignment (ADR-009 v0.3, 2026-06-16).** `node` = the **physical Proxmox host**
+> (`tappaas1`); the **Module** is the VM. Option B confirmed (Erik⟷Lars review 2026-06-16). See
+> **[ontology.md](<ontology.md>)** §B for canonical term definitions. `Capability` (Strategy) and
+> `Service` (Application) are both kept.
 > Separately, the **classification** of each Module — one **Site** + 3 buckets (People · Apps ·
 > Environments) + **Health lens**, plus `tier`/`source` — is
 > **[ADR-007](<../ADR/ADR-007 - TAPPaaS Taxonomy.md>)**, orthogonal to the composition model.
