@@ -88,4 +88,4 @@ Aggregation) vs `stack` in #297 (a browse facet). **Recommendation:** rename the
 - [x] Node/Device direction confirmed as Option B (Erik⟷Lars review 2026-06-15).
 - [x] Capabilities.md updated (node = physical host, Option B); taxonomy.md Appendix C already correct.
 - [x] #171 closed (2026-06-16).
-- [ ] #297 `stack` → `domain` follow-up filed/decided.
+- [x] #297 `stack` → `domain` follow-up filed as #361 (2026-06-16).
