@@ -3,12 +3,12 @@
 | | |
 |---|---|
 | **Status** | Proposed |
-| **Version** | 0.3 |
+| **Version** | 0.5 |
 | **Date** | 2026-06-16 |
 | **Author** | Erik Daniel |
 | **Parent** | [ADR-007 Taxonomy (Overview)](<ADR-007 - TAPPaaS Taxonomy.md>) |
 | **Related** | #320 (taxonomy); **composition:** [ADR-009](<ADR-009 - Composition Meta-Model.md>) (Stack ▷ Module ▷ Component); [ADR-008](<ADR-008-switch-module-network-infrastructure.md>) (switch/control-points); ADR-004 (config cascade); `src/foundation/tappaas-cicd/scripts/`; **implementation:** tappaas-cicd restructure (issue — to be filed) |
-| **Changelog** | v0.3 — added the **Stack ▷ Module ▷ Component** level (ADR-009): Environments & Site are **Stacks** (≥2-Module composition, ADR-008); People/Health = Modules; Apps = lifecycle Module + workloads. Tiering rule: composition ≠ coordination. v0.2 — opnsense-controller → Environments |
+| **Changelog** | v0.5 — added the **orchestrator** layer (bucket → orchestrator → level → Module → services); `repository.sh` moved **Apps → Site** (repositories are Site-level, CR-17); `variant-manager.sh` recognised as **`environment-manager` v0.1**. v0.4 — ontology precision: Stack = **Aggregation** (grouping) ≠ dependency (Serving). v0.3 — Stack ▷ Module ▷ Component level (ADR-008/009). v0.2 — opnsense-controller → Environments |
 
 The **SSOT mapping** from the ADR-007 classification (buckets) to the **existing TAPPaaS foundation
 modules and control-plane scripts**. This ADR answers the question the flat `scripts/` pile cannot:
@@ -22,36 +22,55 @@ Realization has **two layers**, both TAPPaaS-native ([ADR-009](<ADR-009 - Compos
 1. **Classification** (this family): every foundation module + control-plane script maps to exactly one
    ADR-007 bucket. MECE/DRY. Health is a **lens** (cross-cutting `health/`), not a bucket.
 2. **Composition level** (ADR-009 `Stack ▷ Module ▷ Component`): a bucket is realized as a **Stack**
-   *only* when it genuinely **composes ≥2 Modules**; otherwise as a single **Module**. Scripts are the
-   **Components** of their Module.
+   *only* when it genuinely **aggregates ≥2 Modules**; otherwise as a single **Module**. Scripts are
+   the **Components** of their Module.
 
-**Tiering rule — composition ≠ coordination.** Promote a bucket to a **Stack** only on genuine
-≥2-Module composition, **not** because a manager *coordinates* scripts at runtime:
+**A Stack is an ArchiMate Aggregation — a *grouping*, not a dependency graph.** It says *which* Modules
+belong together under a Capability (they still exist independently). It does **not** encode *how* they
+relate: the **dependency relations** among them — e.g. `setup-caddy → opnsense-firewall`,
+`zone-manager → vlan/dhcp/firewall`, all reconciling from the shared `zones.json` SSOT (ADR-008,
+`src/foundation/DEPENDENCIES.csv`) — are **separate** ArchiMate **Serving** relations, carried in
+`dependsOn`/`provides`. *Aggregation = what is grouped; the dependency graph = how they relate* — two
+distinct relationship types.
 
-- 🏠 **Environments = Stack** — composes **firewall** (OPNsense L3) + **switch** + **proxy/TLS** Modules.
-  Data-driven: [ADR-008](<ADR-008-switch-module-network-infrastructure.md>) shows a zone spans *multiple
-  independent control points* that must all reconcile → genuine multi-Module composition.
-- 🏢 **Site = Stack** — composes **cluster** + **backup** + **templates** Modules.
+**Tiering rule — aggregation ≠ coordination.** Promote a bucket to a **Stack** only on genuine
+≥2-Module *aggregation under a shared Capability*, **not** because a manager *coordinates* scripts at
+runtime:
+
+- 🏠 **Environments = Stack** — aggregates **firewall** (OPNsense L3) + **switch** + **proxy/TLS**
+  Modules; their **dependency relations** (a zone reconciling across control points — ADR-008; the
+  `dependsOn` edges in `DEPENDENCIES.csv`) are Serving relations, *separate from* the aggregation.
+- 🏢 **Site = Stack** — aggregates **cluster** + **backup** + **templates** Modules.
 - 👥 **People = Module** (`identity`) · 🩺 **Health = Module** (`logging`) — single Module, not a Stack.
 - 📦 **Apps** — `app-manager` is a single **lifecycle Module** (it *coordinates* installs at runtime;
-  coordination ≠ composition); the App workloads are independent Modules.
+  coordination ≠ aggregation); the App workloads are independent Modules.
 
-## Mapping (SSOT) — bucket → level → Module (System) → scripts (Components)
+## Mapping (SSOT) — bucket → orchestrator → level → Module → services (Components)
 
-| Bucket | Level (ADR-009) | Module (System) | Scripts (Components) |
-|--------|-----------------|-----------------|----------------------|
-| 👥 **People** ([007a](<ADR-007a - People.md>)) | **Module** | `identity` | `user.sh`, `roles-ensure.sh` |
-| 📦 **Apps** ([007b](<ADR-007b - Apps.md>)) | **Module** (lifecycle) + App workloads | `app-manager` *(coordinates installs)*; the apps are independent Modules | `install-module.sh`, `update-module.sh`, `delete-module.sh`, `test-module.sh`, `module-format.sh`, `copy-update-json.sh`, `common-install-routines.sh`, `snapshot-vm.sh`, `resize-disk.sh`, `update-os.sh`; `catalog/repository.sh` |
-| 🏠 **Environments** ([007c](<ADR-007c - Environments.md>)) | **Stack** | `firewall` (OPNsense, incl. `opnsense-controller/`) | `zone-state.sh`, `apply-zones-merge.sh` |
-| | | `proxy`/TLS (Caddy/ACME) | `setup-caddy.sh`, `acme-setup.sh` |
-| | | `switch` ([ADR-008](<ADR-008-switch-module-network-infrastructure.md>)) | *(control-point reconcilers — #339)* |
-| | | env/variant | `variant-manager.sh` |
-| 🏢 **Site** ([007d](<ADR-007d - Site.md>)) | **Stack** | `cluster` | `migrate-node.sh`, `migrate-vm.sh` |
-| | | `backup` | *(backup LCM ops)* |
-| | | `templates` | — |
-| | | site config | `validate-configuration.sh` |
-| 🩺 **Health** *(lens)* ([007e](<ADR-007e - Health.md>)) | **Module** | `logging` | `inspect-cluster.sh`, `inspect-vm.sh`, `check-disk-threshold.sh` |
-| — *(cross-component libs)* | — | `shared/` | `apply-json-merge.sh`, `audit-jq-readers.sh` |
+| Bucket | Orchestrator (control plane) | Level | Module | Services (Components) |
+|--------|------------------------------|-------|--------|-----------------------|
+| 👥 **People** ([007a](<ADR-007a - People.md>)) | `identity-manager` | Module | `identity` | `user.sh`, `roles-ensure.sh` |
+| 📦 **Apps** ([007b](<ADR-007b - Apps.md>)) | `app-manager` *(coordinates installs)* | Module (lifecycle) | the App workloads (independent Modules) | `install-module.sh`, `update-module.sh`, `delete-module.sh`, `test-module.sh`, `module-format.sh`, `copy-update-json.sh`, `common-install-routines.sh`, `snapshot-vm.sh`, `resize-disk.sh`, `update-os.sh` |
+| 🏠 **Environments** ([007c](<ADR-007c - Environments.md>)) | **`environment-manager`** *(today: `variant-manager.sh` = its v0.1)* | **Stack** | `firewall` (OPNsense, incl. `opnsense-controller/`) | `zone-state.sh`, `apply-zones-merge.sh` |
+| | | | `proxy`/TLS (Caddy/ACME) | `setup-caddy.sh`, `acme-setup.sh` |
+| | | | `switch` ([ADR-008](<ADR-008-switch-module-network-infrastructure.md>)) | *(control-point reconcilers — #339)* |
+| 🏢 **Site** ([007d](<ADR-007d - Site.md>)) | `site-manager` | **Stack** | `cluster` | `migrate-node.sh`, `migrate-vm.sh` |
+| | | | `backup` | *(backup LCM ops)* |
+| | | | `templates` | — |
+| | | | **catalog / repositories** | **`repository.sh`**, `validate-configuration.sh` |
+| 🩺 **Health** *(lens)* ([007e](<ADR-007e - Health.md>)) | `health/` | Module | `logging` | `inspect-cluster.sh`, `inspect-vm.sh`, `check-disk-threshold.sh` |
+| — *(shared libs)* | `shared/` | — | — | `apply-json-merge.sh`, `audit-jq-readers.sh` |
+
+> **Realization layers** (terms → [ontology.md](<../Architecture/ontology.md>)): **bucket** →
+> **orchestrator** (control-plane manager) → **level** (Stack if it orchestrates ≥2 Modules, else
+> Module) → **Module** → **services** (the scripts = Components). This containment makes the grouping
+> MECE (every service in exactly one Module under one orchestrator) and DRY.
+
+> **Two review corrections (data-driven).** (1) `repository.sh` (the **Repository Manager** — adds /
+> lists / modifies module repositories) moves **Apps → Site**: repositories are a **Site-level** concept
+> (`site.json.repositories`, ADR-007d CR-17), not per-App. (2) `variant-manager.sh` (it registers an
+> *environment*/variant and orchestrates its zone + TLS + DNS) is the **v0.1 of `environment-manager`**
+> — the embryonic Environments **orchestrator**, not a leaf service.
 
 ### Schema co-location (DRY)
 
