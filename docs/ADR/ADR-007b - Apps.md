@@ -3,11 +3,12 @@
 | | |
 |---|---|
 | **Status** | Proposed |
-| **Version** | 1.0 |
-| **Date** | 2026-06-15 |
+| **Version** | 1.1 |
+| **Date** | 2026-06-16 |
 | **Author** | Erik Daniel |
 | **Parent** | [ADR-007 Taxonomy (Overview)](<ADR-007 - TAPPaaS Taxonomy.md>) |
 | **Related** | #320; #297 (module-catalog stack/category); **composition:** [ADR-009](<ADR-009 - Composition Meta-Model.md>) + #171 |
+| **Changelog** | v1.1 — applied Erik⟷Lars review: module name = filename, drop `module` field (CR-04); `sourceMetadata` → Site repositories (CR-05); drop `ownerGroup`/`environment` (deploy-inferred, CR-06/07); `local` intent → issue (CR-03) |
 
 The **📦 Apps** bucket. An App = a thing that runs (VM, container, service) with a lifecycle: install,
 update, test, backup, delete. Owned by a Group, lives in one Environment.
@@ -20,6 +21,9 @@ Apps carry **two orthogonal attributes** — never collapsed into one enum (that
 |-----------|--------|---------|
 | **`tier`** | `foundation` · `app` | *Can it be uninstalled?* (lifecycle role) |
 | **`source`** | `official` · `community` · `private` · `local` | *Where does the catalog entry come from?* (origin & trust) |
+
+> **Open (CR-03 → issue):** the intent of `source: local` — "operational data in markdown" — is under
+> discussion; tracked as a separate issue.
 
 Every App is exactly one cell of the `tier × source` grid — naturally MECE.
 
@@ -50,22 +54,21 @@ Every App is exactly one cell of the `tier × source` grid — naturally MECE.
 
 ```json
 {
-  "module": "openwebui",
   "displayName": "OpenWebUI",
   "tier": "app",
   "source": "official",
-  "sourceMetadata": { "repo": "https://github.com/tappaas-org/openwebui-module", "maintainer": "tappaas-org", "supportLevel": "supported", "verifiedBy": "tappaas-org" },
   "version": "0.4.1",
-  "ownerGroup": "mybusiness-bv__staff",
-  "environment": "mybusiness",
   "vmname": "openwebui", "vmid": 311, "node": "tappaas2",
   "dependsOn": ["cluster:vm", "litellm:models", "identity:sso"],
   "provides": []
 }
 ```
 
-New classification fields: `tier`, `source`, `sourceMetadata`, `ownerGroup`. Lint rule:
-`tier: foundation` ⇒ `source: official` (or explicit override).
+New classification fields: `tier`, `source`. Lint rule: `tier: foundation` ⇒ `source: official` (or explicit override).
+
+Rules from review: a module's name **is** its `{name}.json` filename — no separate `module` field
+(CR-04). `sourceMetadata` lives in **Site → `repositories`** (ADR-007d), not on the module (CR-05).
+`ownerGroup` and `environment` are **inferred at deploy time**, not stored on the module (CR-06, CR-07).
 
 > **`node` = the physical Proxmox host** (e.g. `tappaas2`) the App's VM is installed on — see
 > [007d Site](<ADR-007d - Site.md>) and [ADR-009](<ADR-009 - Composition Meta-Model.md>).

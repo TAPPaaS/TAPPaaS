@@ -3,11 +3,12 @@
 | | |
 |---|---|
 | **Status** | Proposed |
-| **Version** | 2.0 |
-| **Date** | 2026-06-15 |
+| **Version** | 2.2 |
+| **Date** | 2026-06-16 |
 | **Author** | Erik Daniel |
 | **Supersedes** | ADR-007 v1.1 (monolithic) — decomposed into this overview + 007a–007e + ADR-009 |
-| **Related** | #320 (taxonomy); **details:** [007a People](<ADR-007a - People.md>) · [007b Apps](<ADR-007b - Apps.md>) · [007c Environments](<ADR-007c - Environments.md>) · [007d Site](<ADR-007d - Site.md>) · [007e Health](<ADR-007e - Health.md>); **composition:** [ADR-009](<ADR-009 - Composition Meta-Model.md>) + #171; **evidence + glossary:** [Architecture/taxonomy.md](<../Architecture/taxonomy.md>) |
+| **Related** | #320 (taxonomy); **details:** [007a People](<ADR-007a - People.md>) · [007b Apps](<ADR-007b - Apps.md>) · [007c Environments](<ADR-007c - Environments.md>) · [007d Site](<ADR-007d - Site.md>) · [007e Health](<ADR-007e - Health.md>); **realization:** [ADR-007f](<ADR-007f - Realization.md>); **composition:** [ADR-009](<ADR-009 - Composition Meta-Model.md>) + #171; **glossary (SSOT):** [Architecture/ontology.md](<../Architecture/ontology.md>); **evidence + samples:** [Architecture/taxonomy.md](<../Architecture/taxonomy.md>) |
+| **Changelog** | v2.2 — added the consolidated ontology glossary SSOT (`Architecture/ontology.md`). v2.1 — added ADR-007f (realization mapping SSOT) |
 
 ---
 
@@ -97,6 +98,13 @@ This taxonomy **classifies**; it does not define how a unit is **built**. The co
 exactly one bucket here (+ `tier` + `source`). Apply both; never one as a substitute. *Example:*
 `firewall` is a **Module** (ADR-009) classified as **Environments** (this ADR); its sub-units are
 **Components**, not buckets.
+
+## Realization (delegated to ADR-007f)
+
+How the taxonomy is *operationalized* — the foundation modules + the `tappaas-cicd` control plane (one
+**manager per bucket**, all ~42 scripts mapped MECE/DRY) — is the SSOT in
+**[ADR-007f](<ADR-007f - Realization.md>)**. The control plane mirrors the buckets 1:1: this overview
+*classifies*, ADR-007f *realizes*.
 
 ---
 

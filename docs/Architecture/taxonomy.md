@@ -83,6 +83,9 @@ model curated-vs-community as **source**, separate from lifecycle **tier**. Both
 
 ## Appendix C — Glossary
 
+> The **consolidated ontology SSOT** is **[ontology.md](<ontology.md>)** (classification + composition +
+> realization terms). That is authoritative; the table below is a convenience subset.
+
 | Term | Definition |
 |---|---|
 | **Site** | The physical + admin perimeter. One TAPPaaS = one Site. |

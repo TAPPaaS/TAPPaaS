@@ -3,11 +3,12 @@
 | | |
 |---|---|
 | **Status** | Proposed |
-| **Version** | 1.0 |
-| **Date** | 2026-06-15 |
+| **Version** | 1.1 |
+| **Date** | 2026-06-16 |
 | **Author** | Erik Daniel |
 | **Parent** | [ADR-007 Taxonomy (Overview)](<ADR-007 - TAPPaaS Taxonomy.md>) |
 | **Related** | #320; ADR-006 (identity — users, roles, SSO) |
+| **Changelog** | v1.1 — applied Erik⟷Lars review: attribute-discipline rule (CR-01); membership modeled on User, removed from Group (CR-02) |
 
 The **👥 People** bucket — one of ADR-007's three buckets.
 
@@ -48,6 +49,10 @@ across many Organizations. Maps 1:1 onto Authentik primitives (Tenant · Group �
 
 A **customer** adds `parentOrg`, `billing.invoicedBy`, `billing.contractRef`, `dpaSigned`.
 
+> **Attribute discipline (rule).** Every attribute must justify itself — state its **reason**,
+> **default**, and **operational impact**. This schema exists to *set up and run* TAPPaaS, **not** to
+> become a CRM. **Avoid info-only attributes** (data with no operational impact).
+
 ### Group — schema (`config/people/groups/{org}__{name}.json`)
 
 ```json
@@ -56,11 +61,12 @@ A **customer** adds `parentOrg`, `billing.invoicedBy`, `billing.contractRef`, `d
   "type": "team",
   "displayName": "MyBusiness Staff",
   "ownerOrg": "mybusiness-bv",
-  "members": ["<owner>", "person2"],
   "authentikGroup": "mybusiness-bv-staff",
   "roles": ["editor"]
 }
 ```
+
+Membership is modeled on the **User** (`memberOf`), not duplicated on the Group.
 
 ### User — schema (`config/people/users/{name}.json`)
 
