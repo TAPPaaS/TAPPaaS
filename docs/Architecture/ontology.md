@@ -17,12 +17,11 @@
 
 | Term | Definition |
 |------|------------|
-| **Site** | The physical + admin perimeter. One TAPPaaS = one Site. The *container*, not a bucket. |
-| **Bucket** | A top-level classification. Exactly three: People · Apps · Environments. |
-| **People** | Bucket. `Organization → Group → User`. RBAC primitive = Group. |
-| **Apps** | Bucket. A workload (VM/container/service). Has `tier` × `source`. Each App is a **Module** in the composition model — see §B. |
-| **Environments** | Bucket. Where Apps run — zones, domain, posture. Owned by one Organization. |
-| **Health** | A cross-cutting **lens** (observability overlay) — **not** a bucket. |
+| **Site** | The physical + admin perimeter. One TAPPaaS = one Site. The *container* that holds the three classification terms. |
+| **People** | `Organization → Group → User`. Group is the RBAC primitive: finer-grained than Organization (org-level RBAC is too coarse), coarser than per-user rules. |
+| **Apps** | A workload (VM/container/service). Has `tier` × `source`. Each App is a **Module** in the composition model — see §B. |
+| **Environments** | Where Apps run — zones, domain, posture. Owned by one Organization. |
+| **Health** | A cross-cutting **lens** (observability overlay) — applies across all classification terms, not a term itself. |
 | **tier** | App lifecycle class: `foundation` (cannot uninstall) · `app` (user-installable). |
 | **source** | App origin/trust: `official` · `community` · `private` · `local`. |
 
@@ -30,8 +29,7 @@
 
 | Term | Definition |
 |------|------------|
-| **Device** | Physical hardware — the Proxmox host (`tappaas1`). (`node` in `module-fields.json`.) |
-| **Node** | The VM. (`node` field in `module-fields.json` = the **physical host** = Device — Option B confirmed, Erik⟷Lars 2026-06-15. Two prose docs still say Node = VM and need updating — see ADR-009.) |
+| **Node** | The physical Proxmox host (e.g. `tappaas1`). The `node` field in `module-fields.json` refers to this host. The VM is the **Module**. (Confirmed Erik⟷Lars 2026-06-16; ADR-009 Option B.) |
 | **Module** | The atomic deployable unit: one VM, one `{name}.json`. *Module boundary = VM boundary.* |
 | **Component** | A composable unit inside a Module (recursive). ArchiMate Application Component. |
 | **Function** | Behaviour a Component realises. ArchiMate Application Function. |
@@ -46,9 +44,10 @@
 
 | Term | Definition |
 |------|------------|
-| **Orchestrator / manager** | The control-plane component that operates a bucket's Modules (e.g. `environment-manager`, `site-manager`). Realizes a **Stack** when it orchestrates ≥2 Modules. |
-| **Realization level** | **Stack** (orchestrator over ≥2 aggregated Modules) vs **Module** (single). Promote to Stack only on genuine ≥2-Module aggregation — **not** runtime coordination. |
-| **Tiering rule** | aggregation ≠ coordination. A manager that merely coordinates scripts at runtime is a Module, not a Stack. |
+| **Manager** | Top-level control-plane orchestrator for a classification domain (e.g. `environment-manager`, `app-manager`, `site-manager`). Orchestrates one or more Controllers. Owns the domain's lifecycle contract. |
+| **Controller** | A leaf control-plane component inside a Module that operates one specific function (e.g. `opnsense-controller`, `zone-controller`). Invoked by the Manager; not exposed to end-users directly. Corresponds to a Function in ArchiMate terms. |
+| **Realization level** | **Stack** (Manager over ≥2 aggregated Modules) vs **Module** (single). Promote to Stack only on genuine ≥2-Module aggregation — **not** runtime coordination. |
+| **Tiering rule** | aggregation ≠ coordination. A Manager that merely coordinates scripts at runtime is a Module, not a Stack. |
 
 > All terms here are **TAPPaaS-native**. Other organisations that consume this ontology map it via a
 > one-way crosswalk maintained on **their** side — never in this repository.

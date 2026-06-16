@@ -36,8 +36,7 @@ decides on:
 
 | Term | Definition |
 |------|------------|
-| **Device** | Physical hardware — the Proxmox host (`tappaas1`); the `node` field in `module-fields.json`. |
-| **Node** | The VM. The `node` field in `module-fields.json` refers to the **physical host** (Device) — confirmed Option B (Erik⟷Lars 2026-06-15). Two prose docs (Capabilities.md + ArchiMate appendix) still say Node = VM; those are the minority and need updating. |
+| **Node** | The physical Proxmox host (e.g. `tappaas1`). The `node` field in `module-fields.json` refers to this host. The VM is the **Module**. (Option B confirmed Erik⟷Lars 2026-06-16. Prose docs aligned.) |
 | **Module** | The atomic deployable unit: one VM, one `{name}.json`. *Module boundary = VM boundary.* |
 | **App** | The user-facing classification label for a Module in the **Apps** bucket (ADR-007b). "App" and "Module" denote the same deployment unit — "App" is what the value stream calls it; "Module" is the technical/composition term. |
 | **Component** | A composable unit inside a Module (recursive). ArchiMate Application Component. |

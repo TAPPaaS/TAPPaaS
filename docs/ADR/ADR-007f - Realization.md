@@ -3,12 +3,12 @@
 | | |
 |---|---|
 | **Status** | Proposed |
-| **Version** | 0.6 |
+| **Version** | 0.7 |
 | **Date** | 2026-06-16 |
 | **Author** | Erik Daniel |
 | **Parent** | [ADR-007 Taxonomy (Overview)](<ADR-007 - TAPPaaS Taxonomy.md>) |
 | **Related** | #320 (taxonomy); **composition:** [ADR-009](<ADR-009 - Composition Meta-Model.md>) (Stack ▷ Module ▷ Component); [ADR-008](<ADR-008-switch-module-network-infrastructure.md>) (switch/control-points); ADR-004 (config cascade); `src/foundation/tappaas-cicd/scripts/`; **implementation:** tappaas-cicd restructure (issue — to be filed) |
-| **Changelog** | v0.6 — added a **Schema** column (per-bucket `*-fields.json`); surfaced gaps (People has no schema; Health none = lens), the `configuration-fields.json` split, and `module-catalog-fields.json` → Site (CR-17). v0.5 — added the **orchestrator** layer (bucket → orchestrator → level → Module → services); `repository.sh` moved **Apps → Site** (repositories are Site-level, CR-17); `variant-manager.sh` recognised as **`environment-manager` v0.1**. v0.4 — ontology precision: Stack = **Aggregation** (grouping) ≠ dependency (Serving). v0.3 — Stack ▷ Module ▷ Component level (ADR-008/009). v0.2 — opnsense-controller → Environments |
+| **Changelog** | v0.7 — Manager/Controller distinction added (Erik⟷Lars 2026-06-16): Manager orchestrates Controllers; Controller = leaf function inside a Module. v0.6 — Schema column; People gap named; `module-catalog-fields.json` → Site. v0.5 — orchestrator layer; `repository.sh` → Site; `variant-manager.sh` = env-manager v0.1. v0.4 — Stack = Aggregation ≠ Serving. |
 
 The **SSOT mapping** from the ADR-007 classification (buckets) to the **existing TAPPaaS foundation
 modules and control-plane scripts**. This ADR answers the question the flat `scripts/` pile cannot:
@@ -32,6 +32,10 @@ relate: the **dependency relations** among them — e.g. `setup-caddy → opnsen
 `src/foundation/DEPENDENCIES.csv`) — are **separate** ArchiMate **Serving** relations, carried in
 `dependsOn`/`provides`. *Aggregation = what is grouped; the dependency graph = how they relate* — two
 distinct relationship types.
+
+**Manager vs Controller.** Two distinct control-plane roles (confirmed Erik⟷Lars 2026-06-16):
+- **Manager** — top-level orchestrator for a classification domain (`environment-manager`, `app-manager`, `site-manager`). Owns the domain's lifecycle contract. Orchestrates ≥1 Controllers.
+- **Controller** — a leaf control-plane component *inside* a Module that operates one specific function (`opnsense-controller`, `zone-controller`). Called by the Manager; encapsulated within the Module boundary.
 
 **Tiering rule — aggregation ≠ coordination.** Promote a bucket to a **Stack** only on genuine
 ≥2-Module *aggregation under a shared Capability*, **not** because a manager *coordinates* scripts at
