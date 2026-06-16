@@ -20,7 +20,7 @@
 | **Site** | The physical + admin perimeter. One TAPPaaS = one Site. The *container*, not a bucket. |
 | **Bucket** | A top-level classification. Exactly three: People · Apps · Environments. |
 | **People** | Bucket. `Organization → Group → User`. RBAC primitive = Group. |
-| **Apps** | Bucket. A workload (VM/container/service). Has `tier` × `source`. |
+| **Apps** | Bucket. A workload (VM/container/service). Has `tier` × `source`. Each App is a **Module** in the composition model — see §B. |
 | **Environments** | Bucket. Where Apps run — zones, domain, posture. Owned by one Organization. |
 | **Health** | A cross-cutting **lens** (observability overlay) — **not** a bucket. |
 | **tier** | App lifecycle class: `foundation` (cannot uninstall) · `app` (user-installable). |
@@ -31,7 +31,7 @@
 | Term | Definition |
 |------|------------|
 | **Device** | Physical hardware — the Proxmox host (`tappaas1`). (`node` in `module-fields.json`.) |
-| **Node** | The VM. (Prose-vs-schema reconciliation pending #171 — see ADR-009.) |
+| **Node** | The VM. (`node` field in `module-fields.json` = the **physical host** = Device — Option B confirmed, Erik⟷Lars 2026-06-15. Two prose docs still say Node = VM and need updating — see ADR-009.) |
 | **Module** | The atomic deployable unit: one VM, one `{name}.json`. *Module boundary = VM boundary.* |
 | **Component** | A composable unit inside a Module (recursive). ArchiMate Application Component. |
 | **Function** | Behaviour a Component realises. ArchiMate Application Function. |
