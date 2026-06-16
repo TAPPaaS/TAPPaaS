@@ -2,19 +2,20 @@
 
 | | |
 |---|---|
-| **Status** | Proposed — composition direction **pending #171** discussion |
-| **Version** | 0.1 |
-| **Date** | 2026-06-15 |
+| **Status** | Proposed — Node/Device direction confirmed (Erik⟷Lars review 2026-06-15, Option B); #171 open for community discussion |
+| **Version** | 0.3 |
+| **Date** | 2026-06-16 |
 | **Author** | Erik Daniel |
-| **Related** | **#171** (metamodel refine) · **#167** (component taxonomy) · #161, #151 (closed spikes) · #297 (catalog); **classification:** [ADR-007](<ADR-007 - TAPPaaS Taxonomy.md>); [Capabilities](<../Architecture/Capabilities.md>) + ArchiMate appendix |
+| **Related** | **#171** (metamodel refine) · **#167** (component taxonomy) · #161, #151 (closed spikes) · #297 (catalog); **classification:** [ADR-007](<ADR-007 - TAPPaaS Taxonomy.md>); **glossary SSOT:** [ontology.md](<../Architecture/ontology.md>); **realization:** [ADR-007f](<ADR-007f - Realization.md>); **existing docs:** [Capabilities](<../Architecture/Capabilities.md>) + ArchiMate appendix + [foundation module-designs](https://tappaas.org/architecture/module-designs/foundation/) |
+| **Changelog** | v0.3 — Node/Device direction confirmed (Option B, meeting 2026-06-15); App≡Module equivalence added to Terms. v0.2 — glossary-SSOT link (ontology.md) + Terms selection; cross-links to ADR-007f and foundation module-designs |
 
 How a deployable unit is **built**. The companion to [ADR-007](<ADR-007 - TAPPaaS Taxonomy.md>):
 ADR-007 *classifies* (which bucket), this ADR *composes* (how it is structured). Orthogonal — apply both.
 
 > **Scope & status.** This ADR consolidates the #171 metamodel + the current docs. The **Node/Device
-> direction** is the one genuinely open point (Decision §1) and stays **Proposed pending #171** —
-> @larsrossen asked to keep #171 "smaller and more discussion-oriented", so the contested rename is a
-> discussion, not a fait accompli. The rest is data-verified and ready.
+> direction** was confirmed in the Erik⟷Lars architecture review (2026-06-15) as **Option B** (node
+> field = physical host = Device; Module = the VM). The GitHub issue #171 remains open for community
+> discussion — the decision is owner-confirmed, not yet formally closed.
 
 ## The model (ArchiMate-grounded)
 
@@ -27,6 +28,25 @@ Artifact:     Implementation  →realizes→  Component/Module   (swappable)
 
 Every **Module** is classified by exactly one ADR-007 bucket (+ `tier` + `source`). One model composes,
 the other classifies.
+
+## Terms (selection — full glossary: [ontology.md](<../Architecture/ontology.md>) §B)
+
+The composition vocabulary is defined **once** in ontology.md (the term SSOT); the terms this ADR
+decides on:
+
+| Term | Definition |
+|------|------------|
+| **Device** | Physical hardware — the Proxmox host (`tappaas1`); the `node` field in `module-fields.json`. |
+| **Node** | The VM. The `node` field in `module-fields.json` refers to the **physical host** (Device) — confirmed Option B (Erik⟷Lars 2026-06-15). Two prose docs (Capabilities.md + ArchiMate appendix) still say Node = VM; those are the minority and need updating. |
+| **Module** | The atomic deployable unit: one VM, one `{name}.json`. *Module boundary = VM boundary.* |
+| **App** | The user-facing classification label for a Module in the **Apps** bucket (ADR-007b). "App" and "Module" denote the same deployment unit — "App" is what the value stream calls it; "Module" is the technical/composition term. |
+| **Component** | A composable unit inside a Module (recursive). ArchiMate Application Component. |
+| **Function** | Behaviour a Component realises. Application Function. |
+| **Service** | A defined exposed interface (`provides`/`dependsOn`). Application Service. |
+| **Stack** | An ArchiMate **Aggregation** of Modules realising a Capability — a *grouping*, not a dependency graph. |
+| **Capability** | What the platform can do (Strategy). A Stack *realizes* a Capability. |
+| **Implementation** | The swappable Artifact that *realizes* a Component/Module. |
+| **Aggregation** vs **Serving** | Aggregation = grouping (a Stack); Serving = a dependency (`dependsOn`/`provides`). Two distinct relations. |
 
 ## The divergence — three current sources disagree (live-verified 2026-06-15)
 
@@ -43,12 +63,13 @@ the other classifies.
 
 ## Decision
 
-1. **Node/Device — OPEN, pending #171.**
-   - **Option B (recommended)** — `node` = **physical host**, **Module = the VM** (what the code +
-     #171 + foundation page + ADR-007d already do; preserves "module boundary = VM boundary"). Fix
-     only the **2 prose docs** (appendix + Capabilities) to stop calling Node a VM.
-   - **Option A** — ArchiMate-pure: Node = VM, Device = physical (insert a VM-Node element). Higher
-     churn; contradicts the schema and #171.
+1. **Node/Device — CONFIRMED: Option B** (Erik⟷Lars architecture review 2026-06-15; #171 open for community discussion).
+   - **Option B (decided)** — `node` field = **physical host** (= Device); **Module = the VM**.
+     Preserves "module boundary = VM boundary"; matches the schema, #171 body, ADR-007d `hardware.nodes`,
+     and the tappaas.org foundation page. Fix only the **2 prose docs** (appendix + Capabilities.md)
+     to stop calling Node a VM.
+   - ~~Option A~~ — ArchiMate-pure (Node = VM, Device = physical) — not adopted; higher churn,
+     contradicts the schema and #171.
 2. **Keep both Capability (Strategy) and Service (Application).** Rename the `module:capability`
    notation → **`module:service`** (it is a Service).
 3. **Keep Stack** — an ArchiMate Aggregation of Modules realizing a Capability.
@@ -64,6 +85,7 @@ Aggregation) vs `stack` in #297 (a browse facet). **Recommendation:** rename the
 
 ## Acceptance
 
-- [ ] #171 ratifies the Node/Device direction (Option B recommended).
+- [x] Node/Device direction confirmed as Option B (Erik⟷Lars review 2026-06-15).
 - [ ] Appendix + Capabilities.md updated to match (node = physical host); `capability` → `service`.
+- [ ] #171 formally closed after community discussion.
 - [ ] #297 `stack` → `domain` follow-up filed/decided.
