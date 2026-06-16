@@ -1,49 +1,64 @@
 # TAPPaaS Foundation Layer - Dependency Documentation
 
 This document describes the program dependencies within the `src/foundation/` directory of TAPPaaS.
+Generated from `PROGRAMS.csv` and `DEPENDENCIES.csv`.
 
-Generated: 2026-04-02
+Generated: 2026-06-16
+
+> Scope: live foundation modules only. The archived `Attic/` tree is excluded.
+> "configuration.json" refers to the runtime config at `/home/tappaas/config/configuration.json`
+> (generated from `configuration-fields.json` + each module's JSON via `convert-json-to-config.sh`);
+> "zones.json" is the network zone/VLAN source of truth.
 
 ## Directory Summary
 
-| Directory | Shell Scripts | Python Files | pyproject.toml | Total |
-|-----------|-------------|-------------|---------------|-------|
-| tappaas-cicd/scripts/ | 19 | - | - | 19 |
-| tappaas-cicd/ (root) | 5 | - | - | 5 |
-| tappaas-cicd/opnsense-controller/ | - | 10 | 1 | 11 |
-| tappaas-cicd/update-tappaas/ | - | 2 | 1 | 3 |
-| tappaas-cicd/test-vm-creation/ | 4 | - | - | 4 |
-| tappaas-cicd/test-repository/ | 1 | - | - | 1 |
-| cluster/ | 3 | - | - | 3 |
-| cluster/services/ | 8 | - | - | 8 |
-| backup/ | 4 | - | - | 4 |
-| backup/services/ | 4 | - | - | 4 |
-| firewall/ | 1 | - | - | 1 |
-| firewall/services/ | 7 | - | - | 7 |
-| identity/ | 2 | - | - | 2 |
-| identity/services/ | 7 | - | - | 7 |
-| templates/services/ | 7 | - | - | 7 |
-| **Total** | **72** | **12** | **2** | **86** |
+| Directory | Shell Scripts | Python Files | Notes |
+|-----------|--------------:|-------------:|-------|
+| tappaas-cicd/scripts/ | 32 | - | Core programs symlinked into /home/tappaas/bin/ |
+| tappaas-cicd/scripts/test/ | 10 | - | Unit tests for the core scripts |
+| tappaas-cicd/ (root) | 5 | - | install1, install2, pre-update, update, test |
+| tappaas-cicd/opnsense-controller/ | - | 22 | 13 CLI entry points + manager/lib modules |
+| tappaas-cicd/update-tappaas/ | - | 2 | update-tappaas cron scheduler |
+| tappaas-cicd/test-vm-creation/ | 10 | - | incl. rollback-fixture/ |
+| tappaas-cicd/test-repository/ | 1 | - | |
+| tappaas-cicd/test-variants/ | 6 | - | ADR-005 variant tests |
+| firewall/ (root) | 6 | - | lifecycle + network/proxy tests |
+| firewall/scripts/ | 14 | - | ADR-008 providers + plugins + tests |
+| firewall/services/ | 22 | - | proxy, dns, nat, rules, discovery |
+| cluster/ (root + lib) | 17 | - | node/VM/LXC creation + ops |
+| cluster/services/ | 12 | - | vm, ha, lxc |
+| backup/ (root + lib) | 8 | - | PBS jobs + namespaces |
+| backup/services/ | 10 | - | vm, remote, external |
+| identity/ (root + lib) | 4 | - | Authentik IdP / SSO |
+| identity/services/ | 7 | - | identity, accessControl |
+| logging/ | 3 | - | |
+| templates/ (root + services) | 11 | - | nixos, debian, windows |
 
 ## Most Connected Files
 
 Files with the most dependents (other files that source or call them):
 
-| File | Depended On By (count) | Purpose |
-|------|----------------------|---------|
-| common-install-routines.sh | 35+ scripts | Shared library: logging, colors, config access, node helpers, JSON validation |
-| configuration.json | 18+ scripts | Central system config: domain, nodes, repos, schedule |
-| zones.json | 8+ scripts | Network zone/VLAN definitions |
-| update-module.sh | update-tappaas, install2.sh, cluster/update.sh | Orchestrates module update lifecycle |
-| test-module.sh | update-module.sh | Runs module + service tests |
-| copy-update-json.sh | install-module.sh, install2.sh, backup/install.sh | Deploys module JSON configs |
-| Create-TAPPaaS-VM.sh | cluster/services/vm/install-service.sh, cluster/update.sh, cluster/install.sh | Creates VMs on Proxmox nodes |
-| validate-configuration.sh | create-configuration.sh, cluster/update.sh, tappaas-cicd/test.sh | Validates configuration.json |
-| update-os.sh | templates:nixos/update-service.sh, templates:debian/update-service.sh | Updates VM operating system |
-| caddy-manager | setup-caddy.sh, firewall:proxy install/update/test/delete | Manages Caddy reverse proxy on OPNsense |
+| File | Depended On By (approx) | Purpose |
+|------|------------------------|---------|
+| common-install-routines.sh | 90+ scripts | Shared library: logging, colors, config access, node helpers, JSON validation |
+| configuration.json | 40+ scripts | Central runtime config: domain, nodes, repos, schedule, installed modules |
+| zones.json | 12+ programs | Network zone/VLAN definitions (canonical source of truth) |
+| update-module.sh | update-tappaas, cluster/*, templates, rest-of-foundation.sh, ha/vm services | Orchestrates the module update lifecycle |
+| Create-TAPPaaS-VM.sh | cluster install/update/test, cluster:vm install-service, templates/update.sh | Creates VMs on Proxmox nodes |
+| Create-TAPPaaS-LXC.sh | cluster install/update/test, cluster:lxc install-service | Creates LXC containers on Proxmox nodes |
+| caddy-manager | setup-caddy.sh, firewall:proxy install/update/delete, firewall/test.sh | Manages Caddy reverse proxy on OPNsense |
+| copy-update-json.sh | install-module.sh, install2.sh, backup/install.sh, test-variant.sh | Converts + deploys module JSON to runtime config |
+| convert-json-to-config.sh | copy-update-json.sh, apply-json-merge.sh | Flattens module-fields.json schema + module JSON into config |
+| test-module.sh | update-module.sh, test-variant-install.sh | Runs module + service tests |
 | snapshot-vm.sh | update-module.sh | Creates/restores/manages VM snapshots |
-| migrate-vm.sh | migrate-node.sh | Migrates individual VMs between nodes |
-| resize-disk.sh | check-disk-threshold.sh | Resizes VM disks in Proxmox and in-guest |
+| zone-manager | firewall/update.sh, pre-update.sh, migrate-zone-keys-*, firewall/test.sh | Reconciles OPNsense zones/VLANs/DHCP/firewall from zones.json |
+| dns-manager | acme-setup (via unbound), firewall:dns, migrate-zone-keys, test-variant-dns | Manages Unbound DNS host overrides |
+| update-os.sh | cluster:vm, templates:nixos/debian, identity:identity install-service | Updates VM operating system in-guest |
+| pbs-job.sh / pbs-namespace.sh | backup install/update + all backup:* services | PBS backup job + namespace helpers |
+| roles-ensure.sh | user.sh, identity/update.sh + test.sh, identity:identity install-service | Ensures Authentik roles/groups exist |
+| vm-net.sh | inspect-vm.sh, proxmox-manager, ap-manager, firewall tests, cluster:vm update | VM network-attach helper library |
+| validate-configuration.sh | create-configuration.sh, cluster/update.sh, tappaas-cicd/test.sh | Validates configuration.json |
+| authentik-manager | roles-ensure.sh, user.sh | Authentik API client CLI |
 
 ## Key Dependency Chains
 
@@ -51,21 +66,25 @@ Files with the most dependents (other files that source or call them):
 
 ```
 install-module.sh
-  |-- sources common-install-routines.sh
-  |-- sources copy-update-json.sh --> reads module-fields.json, zones.json
-  |-- validates JSON via check_json()
+  |-- sources common-install-routines.sh  --> configuration.json
+  |-- copy-update-json.sh --> convert-json-to-config.sh (reads module-fields.json) --> config
   |-- for each dependsOn: calls provider install-service.sh
   |     |-- cluster:vm/install-service.sh
   |     |     |-- sources common-install-routines.sh
-  |     |     |-- copies JSON to Proxmox node
-  |     |     +-- SSH calls Create-TAPPaaS-VM.sh (reads zones.json, <module>.json)
-  |     |-- cluster:ha/install-service.sh --> delegates to ha/update-service.sh
+  |     |     |-- SSH calls Create-TAPPaaS-VM.sh (reads zones.json, <module>.json)
+  |     |     +-- update-os.sh, update-module.sh
+  |     |-- cluster:lxc/install-service.sh --> Create-TAPPaaS-LXC.sh
+  |     |-- cluster:ha/install-service.sh
   |     |-- templates:nixos/install-service.sh --> delegates to nixos/update-service.sh
   |     |     +-- calls update-os.sh (sources common-install-routines.sh)
   |     |-- firewall:proxy/install-service.sh
-  |     |     |-- sources common-install-routines.sh
+  |     |     |-- sources common-install-routines.sh + access-list.sh
   |     |     +-- calls caddy-manager (add-domain, add-handler, reconfigure)
-  |     +-- backup:vm/install-service.sh (sources common-install-routines.sh)
+  |     |-- firewall:dns/install-service.sh --> dns-manager
+  |     |-- firewall:nat/install-service.sh --> nat-common.sh + nat-manager
+  |     |-- firewall:rules/install-service.sh --> rules-manager (reads zones.json)
+  |     |-- identity:identity/install-service.sh --> ensure-authentik-creds.sh + roles-ensure.sh
+  |     +-- backup:vm/install-service.sh --> pbs-job.sh
   +-- calls <module>/install.sh
 ```
 
@@ -75,87 +94,93 @@ install-module.sh
 update-module.sh
   |-- sources common-install-routines.sh
   |-- Step 1: snapshot-vm.sh (create pre-update snapshot)
-  |     +-- sources common-install-routines.sh
-  |-- Step 2: test-module.sh (pre-update test)
-  |     |-- sources common-install-routines.sh
-  |     |-- for each dependsOn: calls provider test-service.sh
-  |     +-- calls <module>/test.sh
+  |-- Step 2: test-module.sh (pre-update test) --> provider test-service.sh + <module>/test.sh
   |-- Step 3: <module>/pre-update.sh (if present)
   |-- Step 4: for each dependsOn: calls provider update-service.sh
-  |     |-- cluster:vm/update-service.sh (no-op)
+  |     |-- cluster:vm/update-service.sh (vm-net.sh)
   |     |-- cluster:ha/update-service.sh (HA rules + ZFS replication)
-  |     |-- templates:nixos/update-service.sh --> calls update-os.sh
-  |     |-- firewall:proxy/update-service.sh --> calls caddy-manager
-  |     +-- backup:vm/update-service.sh (no-op)
+  |     |-- templates:nixos|debian/update-service.sh --> update-os.sh
+  |     |-- firewall:proxy/update-service.sh --> caddy-manager (+ access-list.sh)
+  |     |-- firewall:nat/update-service.sh --> nat-manager
+  |     |-- firewall:rules/update-service.sh --> rules-manager
+  |     +-- backup:vm|remote|external/update-service.sh --> pbs-job.sh / pbs-namespace.sh
   |-- Step 5: <module>/update.sh
   |-- Step 6: test-module.sh (post-update test)
   +-- rollback via snapshot-vm.sh --restore on fatal failure
 ```
 
-### 3. Module Test Flow
+### 3. Bootstrap / Foundation Build Flow
 
 ```
-test-module.sh
+install1.sh (bare NixOS VM)
+install2.sh
+  |-- create-configuration.sh --> validate-configuration.sh --> configuration.json
+  |-- symlinks scripts/*.sh into /home/tappaas/bin/
+  |-- copy-update-json.sh (cluster, templates, firewall, tappaas-cicd)
+  |-- update-module.sh tappaas-cicd --no-snapshot
+  |     +-- pre-update.sh
+  |          |-- symlinks opnsense-controller CLIs + firewall provider tools into bin
+  |          |-- create-configuration.sh, apply-zones-merge.sh
+  |          +-- migrate-zone-keys-to-underscore.sh (zone-manager, dns-manager)
+  |-- update-module.sh cluster
+  |-- setup-caddy.sh --> opnsense-firewall, update-tappaas
+  +-- rest-of-foundation.sh --> install-module.sh / update-module.sh (firewall, backup, identity, logging, ...)
+```
+
+### 4. Network / Zone Reconcile Flow (ADR-008)
+
+```
+firewall/update.sh
   |-- sources common-install-routines.sh
-  |-- Step 1: validates module JSON via check_json()
-  |-- Step 2: checks dependency test-service.sh availability
-  |-- Step 3: for each dependsOn: calls provider test-service.sh
-  |     |-- cluster:vm/test-service.sh (VM running, ping, SSH, disk, memory)
-  |     |-- cluster:ha/test-service.sh (HA resource, affinity rule, replication)
-  |     |-- firewall:proxy/test-service.sh (Caddy domain, handler, HTTPS, TLS)
-  |     |-- backup:vm/test-service.sh (PBS storage, backups exist, backup age)
-  |     +-- identity:identity/test-service.sh
-  +-- Step 4: calls <module>/test.sh
-```
+  |-- zone-manager  (reads zones.json + configuration.json; imports vlan/dhcp/firewall managers)
+  +-- proxmox-manager (vm-net.sh) — per-VM trunk + bridge-vids on PVE nodes
 
-### 4. Module Delete Flow
-
-```
-delete-module.sh
+zone-reconcile (orchestrator front door)
   |-- sources common-install-routines.sh
-  |-- Step 1: validates module JSON exists
-  |-- Step 2: checks reverse dependencies (other modules depending on this one)
-  |-- Step 3: calls <module>/delete.sh (if present)
-  |-- Step 4: for each dependsOn (reverse order): calls provider delete-service.sh
-  |     |-- firewall:proxy/delete-service.sh --> caddy-manager (delete-handler, delete-domain)
-  |     |-- cluster:ha/delete-service.sh (remove HA resource, rule, replication)
-  |     +-- cluster:vm/delete-service.sh (stop + destroy VM)
-  +-- Step 5: removes module JSON from config dir
+  |-- opnsense-manager  (alias of zone-manager binary)
+  |-- proxmox-manager
+  |-- switch-manager
+  +-- ap-manager
 ```
 
-### 5. Cluster Update Flow
+### 5. update-tappaas (cron) Flow
 
 ```
-cluster/update.sh
-  |-- sources common-install-routines.sh
-  |-- Step 0: validate-configuration.sh
-  |-- Step 1: SSH to each node: apt update && apt upgrade
-  +-- Step 2: SCP zones.json + Create-TAPPaaS-VM.sh to each node
+update-tappaas (Python)
+  |-- reads configuration.json (installed modules + schedule)
+  +-- shells out to update-module.sh per module
+        |-- common-install-routines.sh
+        |-- snapshot-vm.sh
+        |-- test-module.sh
+        +-- <module>/update.sh
 ```
 
 ## Top-Level Entry Points
 
-These programs are not called by any other program in the foundation layer.
-They are user-invoked commands or cron-triggered schedulers.
+These programs are user-invoked commands or cron-triggered schedulers; no other foundation
+program calls them.
 
 | Program | Purpose |
 |---------|---------|
-| install-module.sh | Install a new module with dependency validation |
-| delete-module.sh | Remove an installed module with dependency cleanup |
 | inspect-cluster.sh | Audit cluster: compare running VMs vs configs |
-| inspect-vm.sh | Inspect single VM: compare git/config/actual values |
-| migrate-vm.sh | Migrate a VM to its HA node or back |
-| migrate-node.sh | Evacuate or return all VMs on a node |
+| inspect-vm.sh | Inspect a single VM: compare git/config/actual values |
+| migrate-node.sh | Evacuate or return all VMs on a node (calls migrate-vm.sh) |
 | repository.sh | Add, remove, modify, or list module repositories |
 | backup-manage.sh | Manage PBS backups (list, run, verify, prune, gc) |
 | restore.sh | Restore a VM from PBS backup |
-| resize-disk.sh | Manually resize a VM disk |
-| check-disk-threshold.sh | Check disk usage and auto-resize (cron) |
-| validate-configuration.sh | Validate configuration.json standalone |
-| create-configuration.sh | Create or update configuration.json |
+| check-disk-threshold.sh | Check disk usage and auto-resize (cron; calls resize-disk.sh) |
 | update-tappaas | Cron-triggered update scheduler (Python) |
-| install1.sh | First bootstrap step (run on bare NixOS VM) |
-| install2.sh | Second bootstrap step (completes CICD setup) |
+| install1.sh / install2.sh | Bootstrap the tappaas-cicd mothership |
+| rest-of-foundation.sh | Install/update the remaining foundation modules |
+| variant-manager / variant-manager.sh | Manage ADR-005 module variants |
+| migrate-to-variants.sh | One-shot migration of modules to the variant layout |
+| migrate-zone-keys-to-camelcase.sh / migrate-zone-keys-to-underscore.sh | Zone-key schema migrations |
+| zone-reconcile | ADR-008 network orchestrator front door |
+| setup-switches.sh / setup-wlan-secrets.sh | Configure physical switches / WLAN secrets |
+| user.sh | Manage Authentik users (calls roles-ensure.sh) |
+| audit-jq-readers.sh | Audit scripts that read JSON directly with jq |
+| module-format.sh | Lint/format module JSON against module-fields.json |
+| reboot-cluster.sh / reboot-node.sh | Orchestrated cluster/node reboots |
 
 ## Mermaid Dependency Graphs
 
@@ -166,13 +191,14 @@ graph TD
     A["install-module.sh"] --> B["common-install-routines.sh"]
     A --> C["copy-update-json.sh"]
     A --> D["module install.sh"]
-    C --> B
-    C --> E["module-fields.json"]
+    C --> K["convert-json-to-config.sh"]
+    K --> E["module-fields.json"]
     C --> F["zones.json"]
     D --> G["service install-service.sh"]
     G --> H["cluster:vm install-service.sh"]
     H --> B
     H --> I["Create-TAPPaaS-VM.sh"]
+    H --> U["update-os.sh"]
     I --> F
     B --> J["configuration.json"]
 ```
@@ -185,11 +211,12 @@ graph TD
     A --> C["snapshot-vm.sh"]
     A --> D["test-module.sh"]
     A --> E["module update.sh"]
-    A --> F["module-fields.json"]
+    A --> G["service update-service.sh"]
     C --> B
     D --> B
-    E --> G["service update-service.sh"]
     G --> H["update-os.sh"]
+    G --> M["caddy-manager"]
+    G --> N["pbs-job.sh"]
     H --> B
     B --> I["configuration.json"]
 ```
@@ -203,8 +230,8 @@ graph TD
     A --> D["service delete-service.sh (reverse order)"]
     D --> E["firewall:proxy delete-service.sh"]
     E --> F["caddy-manager"]
-    D --> G["cluster:ha delete-service.sh"]
-    G --> B
+    D --> P["firewall:dns delete-service.sh"]
+    P --> Q["dns-manager"]
     D --> H["cluster:vm delete-service.sh"]
     H --> B
     B --> I["configuration.json"]
@@ -224,8 +251,49 @@ graph TD
     E --> B
     F --> B
     G --> B
-    G --> I["caddy-manager"]
     H --> B
+    B --> J["configuration.json"]
+```
+
+### install2.sh (bootstrap)
+
+```mermaid
+graph TD
+    A["install2.sh"] --> G["common-install-routines.sh"]
+    A --> B["create-configuration.sh"]
+    A --> C["copy-update-json.sh"]
+    A --> D["update-module.sh tappaas-cicd"]
+    A --> E["update-module.sh cluster"]
+    A --> F["setup-caddy.sh"]
+    A --> OC["opnsense-controller"]
+    A --> ZM["zone-manager"]
+    B --> G
+    B --> H["validate-configuration.sh"]
+    B --> I["configuration.json"]
+    H --> I
+    D --> J["pre-update.sh"]
+    J --> G
+    J --> B
+    J --> AZ["apply-zones-merge.sh"]
+    J --> MZ["migrate-zone-keys-to-underscore.sh"]
+    J --> L["zones.json"]
+    F --> G
+    F --> M["opnsense-firewall"]
+    F --> UT["update-tappaas"]
+```
+
+### pre-update.sh
+
+```mermaid
+graph TD
+    A["pre-update.sh"] --> B["common-install-routines.sh"]
+    A --> C["create-configuration.sh"]
+    A --> D["apply-zones-merge.sh"]
+    A --> E["migrate-zone-keys-to-underscore.sh"]
+    A --> F["opnsense-controller"]
+    A --> G["zones.json"]
+    E --> H["zone-manager"]
+    E --> I["dns-manager"]
     B --> J["configuration.json"]
 ```
 
@@ -240,92 +308,92 @@ graph TD
     C --> F["test-module.sh"]
     C --> G["module update.sh"]
     D --> B
-    E --> D
-    F --> D
 ```
 
-### install2.sh (bootstrap)
+### firewall/update.sh + zone reconcile (ADR-008)
 
 ```mermaid
 graph TD
-    A["install2.sh"] --> B["create-configuration.sh"]
+    A["firewall/update.sh"] --> B["common-install-routines.sh"]
+    A --> C["zone-manager"]
+    A --> P["proxmox-manager"]
+    C --> D["zones.json"]
+    C --> CFG["configuration.json"]
+    P --> VN["vm-net.sh"]
+    R["zone-reconcile"] --> B
+    R --> OM["opnsense-manager"]
+    R --> P
+    R --> SW["switch-manager"]
+    R --> AP["ap-manager"]
+    B --> CFG
+```
+
+### zone-manager (Python)
+
+```mermaid
+graph TD
+    A["zone-manager"] --> B["config.py"]
+    A --> C["vlan_manager.py"]
+    A --> D["dhcp_manager.py"]
+    A --> E["firewall_manager.py"]
+    A --> F["log.py"]
+    A --> G["zones.json"]
+    A --> H["configuration.json"]
+```
+
+### backup install/update
+
+```mermaid
+graph TD
+    A["backup/install.sh"] --> B["common-install-routines.sh"]
     A --> C["copy-update-json.sh"]
-    A --> D["update-module.sh tappaas-cicd"]
-    A --> E["update-module.sh cluster"]
-    A --> F["setup-caddy.sh"]
-    A --> G["common-install-routines.sh"]
-    B --> G
-    B --> H["validate-configuration.sh"]
-    B --> I["configuration.json"]
-    H --> G
-    H --> I
-    D --> J["pre-update.sh"]
-    J --> G
-    J --> B
-    J --> I
-    E --> K["cluster/update.sh"]
-    K --> G
-    K --> H
-    K --> L["zones.json"]
-    F --> G
-    F --> I
-    F --> M["opnsense-firewall"]
+    A --> D["pbs-job.sh"]
+    A --> E["pbs-namespace.sh"]
+    F["backup:vm install-service.sh"] --> B
+    F --> D
+    G["backup:remote install-service.sh"] --> D
+    G --> E
+```
+
+### identity update / SSO
+
+```mermaid
+graph TD
+    A["identity/update.sh"] --> B["common-install-routines.sh"]
+    A --> C["ensure-authentik-creds.sh"]
+    A --> D["roles-ensure.sh"]
+    D --> E["authentik-manager"]
+    F["user.sh"] --> E
+    F --> D
+    C --> B
+```
+
+### check-disk-threshold.sh (cron)
+
+```mermaid
+graph TD
+    A["check-disk-threshold.sh"] --> B["common-install-routines.sh"]
+    A --> C["resize-disk.sh"]
+    B --> D["configuration.json"]
+    C --> B
 ```
 
 ### migrate-node.sh
 
 ```mermaid
 graph TD
-    A["migrate-node.sh"] --> B["migrate-vm.sh"]
+    A["migrate-node.sh"] --> B["common-install-routines.sh"]
+    A --> C["migrate-vm.sh"]
+    B --> D["configuration.json"]
 ```
 
-### inspect-cluster.sh
+### inspect-cluster.sh / inspect-vm.sh
 
 ```mermaid
 graph TD
     A["inspect-cluster.sh"] --> B["common-install-routines.sh"]
-    B --> C["configuration.json"]
-```
-
-### backup-manage.sh
-
-```mermaid
-graph TD
-    A["backup-manage.sh"] --> B["common-install-routines.sh"]
-    B --> C["configuration.json"]
-```
-
-### restore.sh
-
-```mermaid
-graph TD
-    A["restore.sh"] --> B["common-install-routines.sh"]
-    B --> C["configuration.json"]
-```
-
-### check-disk-threshold.sh
-
-```mermaid
-graph TD
-    A["check-disk-threshold.sh"] --> B["resize-disk.sh"]
-```
-
-### firewall update flow
-
-```mermaid
-graph TD
-    A["firewall/update.sh"] --> B["common-install-routines.sh"]
-    A --> C["zone-manager"]
-    C --> D["zones.json"]
-    E["firewall:proxy install-service.sh"] --> B
-    E --> F["caddy-manager"]
-    E --> G["configuration.json"]
-    B --> G
-```
-
-### inspect-vm.sh
-
-```mermaid
-graph TD
-    A["inspect-vm.sh"] --> B["zones.json"]
+    C["inspect-vm.sh"] --> B
+    C --> V["vm-net.sh"]
+    C --> Z["zones.json"]
+    B --> D["configuration.json"]
 ```

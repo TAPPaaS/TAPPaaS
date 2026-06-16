@@ -1,54 +1,97 @@
 Program,Install Location,Source Path,Type
 # ==========================================================================================
 # TAPPaaS Foundation Layer - Executable Programs and Scripts
-# Generated: 2026-04-02
+# Generated: 2026-06-16
 # ==========================================================================================
 #
-# --- Shell Scripts (installed as symlinks in /home/tappaas/bin/) -------------------------
+# --- Shell Scripts (symlinked into /home/tappaas/bin/ by install2.sh: scripts/*.sh) -------
+acme-setup.sh,/home/tappaas/bin/acme-setup.sh,tappaas-cicd/scripts/acme-setup.sh,script
+apply-json-merge.sh,/home/tappaas/bin/apply-json-merge.sh,tappaas-cicd/scripts/apply-json-merge.sh,script
+apply-zones-merge.sh,/home/tappaas/bin/apply-zones-merge.sh,tappaas-cicd/scripts/apply-zones-merge.sh,script
+audit-jq-readers.sh,/home/tappaas/bin/audit-jq-readers.sh,tappaas-cicd/scripts/audit-jq-readers.sh,script
+check-disk-threshold.sh,/home/tappaas/bin/check-disk-threshold.sh,tappaas-cicd/scripts/check-disk-threshold.sh,script
 common-install-routines.sh,/home/tappaas/bin/common-install-routines.sh,tappaas-cicd/scripts/common-install-routines.sh,library
+convert-json-to-config.sh,/home/tappaas/bin/convert-json-to-config.sh,tappaas-cicd/scripts/convert-json-to-config.sh,script
 copy-update-json.sh,/home/tappaas/bin/copy-update-json.sh,tappaas-cicd/scripts/copy-update-json.sh,script
 create-configuration.sh,/home/tappaas/bin/create-configuration.sh,tappaas-cicd/scripts/create-configuration.sh,script
-validate-configuration.sh,/home/tappaas/bin/validate-configuration.sh,tappaas-cicd/scripts/validate-configuration.sh,script
-install-module.sh,/home/tappaas/bin/install-module.sh,tappaas-cicd/scripts/install-module.sh,script
-update-module.sh,/home/tappaas/bin/update-module.sh,tappaas-cicd/scripts/update-module.sh,script
 delete-module.sh,/home/tappaas/bin/delete-module.sh,tappaas-cicd/scripts/delete-module.sh,script
-test-module.sh,/home/tappaas/bin/test-module.sh,tappaas-cicd/scripts/test-module.sh,script
 inspect-cluster.sh,/home/tappaas/bin/inspect-cluster.sh,tappaas-cicd/scripts/inspect-cluster.sh,script
 inspect-vm.sh,/home/tappaas/bin/inspect-vm.sh,tappaas-cicd/scripts/inspect-vm.sh,script
-migrate-vm.sh,/home/tappaas/bin/migrate-vm.sh,tappaas-cicd/scripts/migrate-vm.sh,script
+install-module.sh,/home/tappaas/bin/install-module.sh,tappaas-cicd/scripts/install-module.sh,script
 migrate-node.sh,/home/tappaas/bin/migrate-node.sh,tappaas-cicd/scripts/migrate-node.sh,script
-snapshot-vm.sh,/home/tappaas/bin/snapshot-vm.sh,tappaas-cicd/scripts/snapshot-vm.sh,script
-update-os.sh,/home/tappaas/bin/update-os.sh,tappaas-cicd/scripts/update-os.sh,script
-resize-disk.sh,/home/tappaas/bin/resize-disk.sh,tappaas-cicd/scripts/resize-disk.sh,script
-check-disk-threshold.sh,/home/tappaas/bin/check-disk-threshold.sh,tappaas-cicd/scripts/check-disk-threshold.sh,script
-setup-caddy.sh,/home/tappaas/bin/setup-caddy.sh,tappaas-cicd/scripts/setup-caddy.sh,script
-acme-setup.sh,/home/tappaas/bin/acme-setup.sh,tappaas-cicd/scripts/acme-setup.sh,script
+migrate-to-variants.sh,/home/tappaas/bin/migrate-to-variants.sh,tappaas-cicd/scripts/migrate-to-variants.sh,script
+migrate-vm.sh,/home/tappaas/bin/migrate-vm.sh,tappaas-cicd/scripts/migrate-vm.sh,script
+migrate-zone-keys-to-camelcase.sh,/home/tappaas/bin/migrate-zone-keys-to-camelcase.sh,tappaas-cicd/scripts/migrate-zone-keys-to-camelcase.sh,script
+migrate-zone-keys-to-underscore.sh,/home/tappaas/bin/migrate-zone-keys-to-underscore.sh,tappaas-cicd/scripts/migrate-zone-keys-to-underscore.sh,script
+module-format.sh,/home/tappaas/bin/module-format.sh,tappaas-cicd/scripts/module-format.sh,script
 repository.sh,/home/tappaas/bin/repository.sh,tappaas-cicd/scripts/repository.sh,script
+resize-disk.sh,/home/tappaas/bin/resize-disk.sh,tappaas-cicd/scripts/resize-disk.sh,script
+rest-of-foundation.sh,/home/tappaas/bin/rest-of-foundation.sh,tappaas-cicd/scripts/rest-of-foundation.sh,script
+roles-ensure.sh,/home/tappaas/bin/roles-ensure.sh,tappaas-cicd/scripts/roles-ensure.sh,script
+setup-caddy.sh,/home/tappaas/bin/setup-caddy.sh,tappaas-cicd/scripts/setup-caddy.sh,script
+snapshot-vm.sh,/home/tappaas/bin/snapshot-vm.sh,tappaas-cicd/scripts/snapshot-vm.sh,script
+test-module.sh,/home/tappaas/bin/test-module.sh,tappaas-cicd/scripts/test-module.sh,script
+update-module.sh,/home/tappaas/bin/update-module.sh,tappaas-cicd/scripts/update-module.sh,script
+update-os.sh,/home/tappaas/bin/update-os.sh,tappaas-cicd/scripts/update-os.sh,script
+user.sh,/home/tappaas/bin/user.sh,tappaas-cicd/scripts/user.sh,script
+validate-configuration.sh,/home/tappaas/bin/validate-configuration.sh,tappaas-cicd/scripts/validate-configuration.sh,script
+variant-manager.sh,/home/tappaas/bin/variant-manager.sh,tappaas-cicd/scripts/variant-manager.sh,script
+variant-manager,/home/tappaas/bin/variant-manager,tappaas-cicd/scripts/variant-manager.sh,script
+zone-state.sh,/home/tappaas/bin/zone-state.sh,tappaas-cicd/scripts/zone-state.sh,script
 #
-# --- Python Programs (installed as symlinks in /home/tappaas/bin/) -----------------------
+# --- Python Programs: opnsense-controller (nix-built; bin symlinks -> result/bin/<name>) --
+#     symlinked by tappaas-cicd/pre-update.sh; entry points defined in pyproject.toml
 opnsense-controller,/home/tappaas/bin/opnsense-controller,tappaas-cicd/opnsense-controller/src/opnsense_controller/main.py,python
 opnsense-firewall,/home/tappaas/bin/opnsense-firewall,tappaas-cicd/opnsense-controller/src/opnsense_controller/firewall_cli.py,python
 zone-manager,/home/tappaas/bin/zone-manager,tappaas-cicd/opnsense-controller/src/opnsense_controller/zone_manager.py,python
+opnsense-manager,/home/tappaas/bin/opnsense-manager,tappaas-cicd/opnsense-controller/src/opnsense_controller/zone_manager.py,python
 dns-manager,/home/tappaas/bin/dns-manager,tappaas-cicd/opnsense-controller/src/opnsense_controller/dns_manager_cli.py,python
+unbound-manager,/home/tappaas/bin/unbound-manager,tappaas-cicd/opnsense-controller/src/opnsense_controller/unbound_cli.py,python
 caddy-manager,/home/tappaas/bin/caddy-manager,tappaas-cicd/opnsense-controller/src/opnsense_controller/caddy_cli.py,python
+nat-manager,/home/tappaas/bin/nat-manager,tappaas-cicd/opnsense-controller/src/opnsense_controller/nat_cli.py,python
 acme-manager,/home/tappaas/bin/acme-manager,tappaas-cicd/opnsense-controller/src/opnsense_controller/acme_cli.py,python
 authentik-manager,/home/tappaas/bin/authentik-manager,tappaas-cicd/opnsense-controller/src/opnsense_controller/authentik_cli.py,python
+syslog-manager,/home/tappaas/bin/syslog-manager,tappaas-cicd/opnsense-controller/src/opnsense_controller/syslog_cli.py,python
+rules-manager,/home/tappaas/bin/rules-manager,tappaas-cicd/opnsense-controller/src/opnsense_controller/rules_manager.py,python
+test-network-manager,/home/tappaas/bin/test-network-manager,tappaas-cicd/opnsense-controller/src/opnsense_controller/test_network_cli.py,python
+#
+# --- Python Program: update-tappaas (nix-built; bin symlink -> result/bin/update-tappaas) -
 update-tappaas,/home/tappaas/bin/update-tappaas,tappaas-cicd/update-tappaas/src/update_tappaas/main.py,python
 #
-# --- Proxmox Node Scripts (installed in /root/tappaas/ on each PVE node) ----------------
-Create-TAPPaaS-VM.sh,/root/tappaas/Create-TAPPaaS-VM.sh,cluster/Create-TAPPaaS-VM.sh,script
+# --- Network Provider Tools (bash; symlinked into /home/tappaas/bin/ by pre-update.sh) ----
+#     ADR-008 orchestrator + L2/AP/switch providers
+proxmox-manager,/home/tappaas/bin/proxmox-manager,firewall/scripts/proxmox-manager,script
+switch-manager,/home/tappaas/bin/switch-manager,firewall/scripts/switch-manager,script
+ap-manager,/home/tappaas/bin/ap-manager,firewall/scripts/ap-manager,script
+zone-reconcile,/home/tappaas/bin/zone-reconcile,firewall/scripts/zone-reconcile,script
+setup-switches.sh,/home/tappaas/bin/setup-switches.sh,firewall/scripts/setup-switches.sh,script
+setup-wlan-secrets.sh,/home/tappaas/bin/setup-wlan-secrets.sh,firewall/scripts/setup-wlan-secrets.sh,script
 #
-# --- Module Lifecycle Scripts (not in bin; called via module directories) ----------------
+# --- Proxmox Node Scripts (installed in /root/tappaas/ on each PVE node) -------------------
+Create-TAPPaaS-VM.sh,/root/tappaas/Create-TAPPaaS-VM.sh,cluster/Create-TAPPaaS-VM.sh,script
+Create-TAPPaaS-LXC.sh,/root/tappaas/Create-TAPPaaS-LXC.sh,cluster/Create-TAPPaaS-LXC.sh,script
+#
+# --- Module Lifecycle Scripts (run in place; called by tappaas-cicd orchestrators) --------
 # tappaas-cicd module
 install1.sh,(run in place),tappaas-cicd/install1.sh,script
 install2.sh,(run in place),tappaas-cicd/install2.sh,script
-update.sh,(run in place),tappaas-cicd/update.sh,script
 pre-update.sh,(run in place),tappaas-cicd/pre-update.sh,script
+update.sh,(run in place),tappaas-cicd/update.sh,script
 test.sh,(run in place),tappaas-cicd/test.sh,script
 # cluster module
 install.sh,(run in place),cluster/install.sh,script
+install-platform.sh,(run in place),cluster/install-platform.sh,script
 update.sh,(run in place),cluster/update.sh,script
+reboot-cluster.sh,(run in place),cluster/reboot-cluster.sh,script
+reboot-node.sh,(run in place),cluster/reboot-node.sh,script
+sanity-check.sh,(run in place),cluster/sanity-check.sh,script
+capture.sh,(run in place),cluster/capture.sh,script
+config-network.sh,(run in place),cluster/config-network.sh,script
+config-storage.sh,(run in place),cluster/config-storage.sh,script
+setup-realtek-nic.sh,(run in place),cluster/setup-realtek-nic.sh,script
+setup-ssd-lifecycle.sh,(run in place),cluster/setup-ssd-lifecycle.sh,script
 # firewall module
+config-firewall.sh,(run in place),firewall/config-firewall.sh,script
 update.sh,(run in place),firewall/update.sh,script
 # backup module
 install.sh,(run in place),backup/install.sh,script
@@ -58,8 +101,24 @@ restore.sh,(run in place),backup/restore.sh,script
 # identity module
 install.sh,(run in place),identity/install.sh,script
 update.sh,(run in place),identity/update.sh,script
+# logging module
+install.sh,(run in place),logging/install.sh,script
+update.sh,(run in place),logging/update.sh,script
+# templates module
+update.sh,(run in place),templates/update.sh,script
 #
-# --- Service Scripts (called by module lifecycle orchestrators) --------------------------
+# --- Shared Libraries (sourced, not run directly) -----------------------------------------
+nat-common.sh,(sourced),firewall/services/nat/nat-common.sh,library
+access-list.sh,(sourced),firewall/services/proxy/access-list.sh,library
+vm-net.sh,(sourced),cluster/lib/vm-net.sh,library
+reboot-node-lib.sh,(sourced),cluster/lib/reboot-node-lib.sh,library
+pbs-job.sh,(sourced),backup/lib/pbs-job.sh,library
+pbs-namespace.sh,(sourced),backup/lib/pbs-namespace.sh,library
+ensure-authentik-creds.sh,(sourced),identity/lib/ensure-authentik-creds.sh,library
+manual.sh,(sourced),firewall/scripts/plugins/manual.sh,library
+unifi.sh,(sourced),firewall/scripts/plugins/unifi.sh,library
+#
+# --- Service Scripts (called by module lifecycle orchestrators; run in place) -------------
 # cluster:vm
 install-service.sh,(run in place),cluster/services/vm/install-service.sh,service
 update-service.sh,(run in place),cluster/services/vm/update-service.sh,service
@@ -70,25 +129,49 @@ install-service.sh,(run in place),cluster/services/ha/install-service.sh,service
 update-service.sh,(run in place),cluster/services/ha/update-service.sh,service
 test-service.sh,(run in place),cluster/services/ha/test-service.sh,service
 delete-service.sh,(run in place),cluster/services/ha/delete-service.sh,service
+# cluster:lxc
+install-service.sh,(run in place),cluster/services/lxc/install-service.sh,service
+update-service.sh,(run in place),cluster/services/lxc/update-service.sh,service
+test-service.sh,(run in place),cluster/services/lxc/test-service.sh,service
+delete-service.sh,(run in place),cluster/services/lxc/delete-service.sh,service
 # firewall:proxy
 install-service.sh,(run in place),firewall/services/proxy/install-service.sh,service
 update-service.sh,(run in place),firewall/services/proxy/update-service.sh,service
 test-service.sh,(run in place),firewall/services/proxy/test-service.sh,service
 delete-service.sh,(run in place),firewall/services/proxy/delete-service.sh,service
-# templates:nixos
-install-service.sh,(run in place),templates/services/nixos/install-service.sh,service
-update-service.sh,(run in place),templates/services/nixos/update-service.sh,service
-test-service.sh,(run in place),templates/services/nixos/test-service.sh,service
-delete-service.sh,(run in place),templates/services/nixos/delete-service.sh,service
-# templates:debian
-install-service.sh,(run in place),templates/services/debian/install-service.sh,service
-update-service.sh,(run in place),templates/services/debian/update-service.sh,service
-delete-service.sh,(run in place),templates/services/debian/delete-service.sh,service
+# firewall:dns
+install-service.sh,(run in place),firewall/services/dns/install-service.sh,service
+update-service.sh,(run in place),firewall/services/dns/update-service.sh,service
+test-service.sh,(run in place),firewall/services/dns/test-service.sh,service
+delete-service.sh,(run in place),firewall/services/dns/delete-service.sh,service
+# firewall:nat
+install-service.sh,(run in place),firewall/services/nat/install-service.sh,service
+update-service.sh,(run in place),firewall/services/nat/update-service.sh,service
+test-service.sh,(run in place),firewall/services/nat/test-service.sh,service
+delete-service.sh,(run in place),firewall/services/nat/delete-service.sh,service
+# firewall:rules
+install-service.sh,(run in place),firewall/services/rules/install-service.sh,service
+update-service.sh,(run in place),firewall/services/rules/update-service.sh,service
+test-service.sh,(run in place),firewall/services/rules/test-service.sh,service
+delete-service.sh,(run in place),firewall/services/rules/delete-service.sh,service
+# firewall:discovery
+install-service.sh,(run in place),firewall/services/discovery/install-service.sh,service
+update-service.sh,(run in place),firewall/services/discovery/update-service.sh,service
+test-service.sh,(run in place),firewall/services/discovery/test-service.sh,service
+delete-service.sh,(run in place),firewall/services/discovery/delete-service.sh,service
 # backup:vm
 install-service.sh,(run in place),backup/services/vm/install-service.sh,service
 update-service.sh,(run in place),backup/services/vm/update-service.sh,service
 test-service.sh,(run in place),backup/services/vm/test-service.sh,service
 delete-service.sh,(run in place),backup/services/vm/delete-service.sh,service
+# backup:remote
+install-service.sh,(run in place),backup/services/remote/install-service.sh,service
+update-service.sh,(run in place),backup/services/remote/update-service.sh,service
+delete-service.sh,(run in place),backup/services/remote/delete-service.sh,service
+# backup:external
+install-service.sh,(run in place),backup/services/external/install-service.sh,service
+update-service.sh,(run in place),backup/services/external/update-service.sh,service
+delete-service.sh,(run in place),backup/services/external/delete-service.sh,service
 # identity:identity
 install-service.sh,(run in place),identity/services/identity/install-service.sh,service
 update-service.sh,(run in place),identity/services/identity/update-service.sh,service
@@ -98,10 +181,38 @@ delete-service.sh,(run in place),identity/services/identity/delete-service.sh,se
 install-service.sh,(run in place),identity/services/accessControl/install-service.sh,service
 update-service.sh,(run in place),identity/services/accessControl/update-service.sh,service
 delete-service.sh,(run in place),identity/services/accessControl/delete-service.sh,service
+# templates:nixos
+install-service.sh,(run in place),templates/services/nixos/install-service.sh,service
+update-service.sh,(run in place),templates/services/nixos/update-service.sh,service
+test-service.sh,(run in place),templates/services/nixos/test-service.sh,service
+delete-service.sh,(run in place),templates/services/nixos/delete-service.sh,service
+# templates:debian
+install-service.sh,(run in place),templates/services/debian/install-service.sh,service
+update-service.sh,(run in place),templates/services/debian/update-service.sh,service
+delete-service.sh,(run in place),templates/services/debian/delete-service.sh,service
+# templates:windows
+install-service.sh,(run in place),templates/services/windows/install-service.sh,service
+update-service.sh,(run in place),templates/services/windows/update-service.sh,service
+test-service.sh,(run in place),templates/services/windows/test-service.sh,service
 #
-# --- Test Scripts -----------------------------------------------------------------------
+# --- Test Scripts (run in place; called by test.sh harnesses) -----------------------------
+test.sh,(run in place),tappaas-cicd/test.sh,test
 test.sh,(run in place),tappaas-cicd/test-repository/test.sh,test
-install.sh,(run in place),tappaas-cicd/test-vm-creation/install.sh,test
 test.sh,(run in place),tappaas-cicd/test-vm-creation/test.sh,test
-test-variant.sh,(run in place),tappaas-cicd/test-vm-creation/test-variant.sh,test
 test-vm.sh,(run in place),tappaas-cicd/test-vm-creation/test-vm.sh,test
+test-variant.sh,(run in place),tappaas-cicd/test-vm-creation/test-variant.sh,test
+test-reinstall.sh,(run in place),tappaas-cicd/test-vm-creation/test-reinstall.sh,test
+test-rollback.sh,(run in place),tappaas-cicd/test-vm-creation/test-rollback.sh,test
+test.sh,(run in place),tappaas-cicd/test-variants/test.sh,test
+test-variant-config.sh,(run in place),tappaas-cicd/test-variants/test-variant-config.sh,test
+test-variant-dns.sh,(run in place),tappaas-cicd/test-variants/test-variant-dns.sh,test
+test-variant-install.sh,(run in place),tappaas-cicd/test-variants/test-variant-install.sh,test
+test-variant-manager.sh,(run in place),tappaas-cicd/test-variants/test-variant-manager.sh,test
+test-variant-migrate.sh,(run in place),tappaas-cicd/test-variants/test-variant-migrate.sh,test
+test.sh,(run in place),firewall/test.sh,test
+test-network.sh,(run in place),firewall/test-network.sh,test
+test-caddy-public.sh,(run in place),firewall/test-caddy-public.sh,test
+test-variant-public.sh,(run in place),firewall/test-variant-public.sh,test
+test.sh,(run in place),cluster/test.sh,test
+test.sh,(run in place),identity/test.sh,test
+test.sh,(run in place),logging/test.sh,test
