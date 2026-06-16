@@ -98,21 +98,27 @@ def cmd_setup(mgr: AcmeManager, args: argparse.Namespace) -> int:
             file=sys.stderr,
         )
 
-    print(f"==> account ({args.account_name}, CA={ca})")
+    print(f"==> [1/4] account ({args.account_name}, CA={ca})")
+    print(f"    Registering the ACME account with the CA.")
     account_uuid = mgr.account_ensure(AcmeAccount(
         name=args.account_name, email=args.email, ca=ca,
     ))
     print(f"    uuid={account_uuid}")
 
-    print(f"==> validation ({args.validation_name}, dns_service={dns_service})")
+    print(f"==> [2/4] validation ({args.validation_name}, dns_service={dns_service})")
+    print(f"    Creating the DNS-01 validation. On sign, acme.sh writes the")
+    print(f"    _acme-challenge TXT then waits dns_sleep={args.dns_sleep}s for it to propagate")
+    print(f"    before the CA verifies (dns_sleep=0 caused the #328 'No TXT found' race).")
     validation_uuid = mgr.validation_ensure(AcmeValidation(
         name=args.validation_name,
         dns_service=dns_service,
         provider_params=provider_fields,
+        dns_sleep=args.dns_sleep,
     ))
     print(f"    uuid={validation_uuid}")
 
-    print(f"==> action ({args.action_name}, type=configd_reload_caddy)")
+    print(f"==> [3/4] action ({args.action_name}, type=configd_reload_caddy)")
+    print(f"    Creating the renewal hook that reloads Caddy when the cert rotates.")
     action_uuid = mgr.action_ensure(AcmeAction(
         name=args.action_name,
         action_type="configd_reload_caddy",
@@ -120,7 +126,8 @@ def cmd_setup(mgr: AcmeManager, args: argparse.Namespace) -> int:
     ))
     print(f"    uuid={action_uuid}")
 
-    print(f"==> certificate ({wildcard_cn}, alt_names={[domain]})")
+    print(f"==> [4/4] certificate ({wildcard_cn}, alt_names={[domain]})")
+    print(f"    Creating the wildcard cert request and pushing it to os-acme-client.")
     cert_uuid = mgr.certificate_ensure(AcmeCertificate(
         name=wildcard_cn,
         account_uuid=account_uuid,
@@ -136,6 +143,10 @@ def cmd_setup(mgr: AcmeManager, args: argparse.Namespace) -> int:
     mgr.service_reconfigure()
 
     print(f"==> sign + wait (timeout={args.timeout}s)")
+    print(f"    Signing now: acme.sh writes the challenge TXT, waits ~{args.dns_sleep}s for DNS")
+    print(f"    propagation, then the CA validates and issues. This is a live round-trip")
+    print(f"    to Let's Encrypt and can take from ~30s to a couple of minutes — please")
+    print(f"    be patient. Polling every 5s for up to {args.timeout}s; it will not hang.")
     mgr.certificate_sign(cert_uuid)
     info = mgr.certificate_wait(cert_uuid, timeout=args.timeout, poll_interval=5)
     print(f"    ✓ issued; refid={info.cert_refid}  status={info.status_code}")
@@ -198,6 +209,10 @@ def main(argv: list[str] | None = None) -> int:
                          "Repeatable. Field names match os-acme-client's model.")
     p_setup.add_argument("--account-name", default="letsencrypt", help="ACME account name")
     p_setup.add_argument("--validation-name", default="acme-dns01", help="Validation name")
+    p_setup.add_argument("--dns-sleep", type=int, default=45,
+                         help="Seconds to wait for DNS-01 TXT propagation before "
+                         "triggering LE validation (os-acme-client dns_sleep; default 45). "
+                         "0 reproduces the #328 race. Raise for slow DNS providers.")
     p_setup.add_argument("--action-name", default="caddy-reload", help="Action name")
     p_setup.add_argument("--staging", action="store_true",
                          help="Use Let's Encrypt staging CA (untrusted but no rate limits — for testing)")

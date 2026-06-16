@@ -65,6 +65,12 @@ class AcmeValidation:
     name: str
     dns_service: str
     provider_params: dict[str, str] = field(default_factory=dict)
+    # Seconds acme.sh waits after writing the challenge TXT before triggering
+    # Let's Encrypt validation. os-acme-client defaults this to 0, which fires
+    # LE immediately — before the DNS provider has propagated the record — so
+    # issuance fails with "No TXT record found" (#328). 45s covers the common
+    # providers (deSEC, Cloudflare, Hetzner); raise per-provider if needed.
+    dns_sleep: int = 45
     enabled: bool = True
 
 
@@ -267,6 +273,7 @@ class AcmeManager:
                 "name": validation.name,
                 "method": "dns01",
                 "dns_service": validation.dns_service,
+                "dns_sleep": str(validation.dns_sleep),
                 **validation.provider_params,
             }
         }

@@ -38,6 +38,7 @@ STAGING=0
 PROVIDER_OVERRIDE=""
 SAVE_CREDS=1
 VARIANT=""
+DNS_SLEEP=45
 
 usage() {
     cat <<'EOF'
@@ -55,6 +56,8 @@ Options:
   --variant <name>       Issue the cert for a registered variant's domain and
                          store the refid under tappaas.variants[<name>] (ADR-005).
                          Default: "" (the default variant).
+  --dns-sleep <secs>     Seconds to wait for DNS-01 TXT propagation before LE
+                         validation (default 45; raise for slow providers). #328
   --help                 Show this help
 
 Credentials file (~/.acme-dns-credentials.txt, chmod 600), one KEY=VALUE per line:
@@ -73,6 +76,7 @@ while [[ $# -gt 0 ]]; do
         --provider)        PROVIDER_OVERRIDE="$2"; shift 2 ;;
         --no-save-creds)   SAVE_CREDS=0; shift ;;
         --variant)         VARIANT="$2"; shift 2 ;;
+        --dns-sleep)       DNS_SLEEP="$2"; shift 2 ;;
         --help|-h)         usage; exit 0 ;;
         *)                 die "Unknown option: $1 (try --help)" ;;
     esac
@@ -196,18 +200,20 @@ for f in "${CRED_FIELDS[@]}"; do
 done
 
 echo
-info "${BOLD}Running acme-manager setup${CL}"
+info "${BOLD}Running acme-manager setup${CL}  (drives os-acme-client end-to-end; live progress below)"
 LOG_FILE="$(mktemp /tmp/acme-setup.XXXXXX.log)"
 trap 'rm -f "$LOG_FILE"' EXIT
 
 if ! acme-manager --firewall "$FIREWALL" --no-ssl-verify setup \
         --domain "$DOMAIN" --email "$EMAIL" \
         --provider "$PROVIDER" \
+        --dns-sleep "$DNS_SLEEP" \
         "${ACCOUNT_ARG[@]}" \
         "${PROV_ARGS[@]}" \
         "${STAGING_ARG[@]}" 2>&1 | tee "$LOG_FILE"; then
     die "acme-manager setup failed (see ${LOG_FILE})"
 fi
+info "  ${GN}✓${CL} Let's Encrypt issued the certificate (statusCode 200)"
 
 # Capture the refid from the script's terminal output (last "refid: ..." line).
 REFID="$(awk '/^[[:space:]]+refid:[[:space:]]/ {print $2}' "$LOG_FILE" | tail -1)"

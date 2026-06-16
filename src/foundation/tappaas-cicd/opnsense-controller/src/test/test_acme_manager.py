@@ -142,6 +142,28 @@ class TestValidationCarriesProviderFields(unittest.TestCase):
         body = next(c["data"] for c in mgr.client.calls if c["command"] == "add")
         self.assertEqual(body["validation"]["dns_hetzner_token"], "HT")
 
+    def test_default_dns_sleep_is_nonzero(self):
+        # Regression for #328: os-acme-client defaults dns_sleep to 0, firing LE
+        # validation before the TXT propagates. Our default must be > 0.
+        mgr = _make_manager({
+            ("Validations", "search"): {"rows": []},
+            ("Validations", "add"): {"uuid": "V3"},
+        })
+        mgr.validation_ensure(AcmeValidation(name="d", dns_service="dns_desec"))
+        body = next(c["data"] for c in mgr.client.calls if c["command"] == "add")["validation"]
+        self.assertEqual(body["dns_sleep"], "45")
+
+    def test_dns_sleep_override_lands_in_body(self):
+        mgr = _make_manager({
+            ("Validations", "search"): {"rows": []},
+            ("Validations", "add"): {"uuid": "V4"},
+        })
+        mgr.validation_ensure(AcmeValidation(
+            name="d", dns_service="dns_desec", dns_sleep=90,
+        ))
+        body = next(c["data"] for c in mgr.client.calls if c["command"] == "add")["validation"]
+        self.assertEqual(body["dns_sleep"], "90")
+
 
 class TestCertificateEnsure(unittest.TestCase):
     def test_creates_with_alt_names_and_restart_action(self):
