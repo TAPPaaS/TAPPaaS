@@ -3,12 +3,12 @@
 | | |
 |---|---|
 | **Status** | Proposed |
-| **Version** | 0.5 |
+| **Version** | 0.6 |
 | **Date** | 2026-06-16 |
 | **Author** | Erik Daniel |
 | **Parent** | [ADR-007 Taxonomy (Overview)](<ADR-007 - TAPPaaS Taxonomy.md>) |
 | **Related** | #320 (taxonomy); **composition:** [ADR-009](<ADR-009 - Composition Meta-Model.md>) (Stack ▷ Module ▷ Component); [ADR-008](<ADR-008-switch-module-network-infrastructure.md>) (switch/control-points); ADR-004 (config cascade); `src/foundation/tappaas-cicd/scripts/`; **implementation:** tappaas-cicd restructure (issue — to be filed) |
-| **Changelog** | v0.5 — added the **orchestrator** layer (bucket → orchestrator → level → Module → services); `repository.sh` moved **Apps → Site** (repositories are Site-level, CR-17); `variant-manager.sh` recognised as **`environment-manager` v0.1**. v0.4 — ontology precision: Stack = **Aggregation** (grouping) ≠ dependency (Serving). v0.3 — Stack ▷ Module ▷ Component level (ADR-008/009). v0.2 — opnsense-controller → Environments |
+| **Changelog** | v0.6 — added a **Schema** column (per-bucket `*-fields.json`); surfaced gaps (People has no schema; Health none = lens), the `configuration-fields.json` split, and `module-catalog-fields.json` → Site (CR-17). v0.5 — added the **orchestrator** layer (bucket → orchestrator → level → Module → services); `repository.sh` moved **Apps → Site** (repositories are Site-level, CR-17); `variant-manager.sh` recognised as **`environment-manager` v0.1**. v0.4 — ontology precision: Stack = **Aggregation** (grouping) ≠ dependency (Serving). v0.3 — Stack ▷ Module ▷ Component level (ADR-008/009). v0.2 — opnsense-controller → Environments |
 
 The **SSOT mapping** from the ADR-007 classification (buckets) to the **existing TAPPaaS foundation
 modules and control-plane scripts**. This ADR answers the question the flat `scripts/` pile cannot:
@@ -45,21 +45,21 @@ runtime:
 - 📦 **Apps** — `app-manager` is a single **lifecycle Module** (it *coordinates* installs at runtime;
   coordination ≠ aggregation); the App workloads are independent Modules.
 
-## Mapping (SSOT) — bucket → orchestrator → level → Module → services (Components)
+## Mapping (SSOT) — bucket → orchestrator → level → Module → schema → services
 
-| Bucket | Orchestrator (control plane) | Level | Module | Services (Components) |
-|--------|------------------------------|-------|--------|-----------------------|
-| 👥 **People** ([007a](<ADR-007a - People.md>)) | `identity-manager` | Module | `identity` | `user.sh`, `roles-ensure.sh` |
-| 📦 **Apps** ([007b](<ADR-007b - Apps.md>)) | `app-manager` *(coordinates installs)* | Module (lifecycle) | the App workloads (independent Modules) | `install-module.sh`, `update-module.sh`, `delete-module.sh`, `test-module.sh`, `module-format.sh`, `copy-update-json.sh`, `common-install-routines.sh`, `snapshot-vm.sh`, `resize-disk.sh`, `update-os.sh` |
-| 🏠 **Environments** ([007c](<ADR-007c - Environments.md>)) | **`environment-manager`** *(today: `variant-manager.sh` = its v0.1)* | **Stack** | `firewall` (OPNsense, incl. `opnsense-controller/`) | `zone-state.sh`, `apply-zones-merge.sh` |
-| | | | `proxy`/TLS (Caddy/ACME) | `setup-caddy.sh`, `acme-setup.sh` |
-| | | | `switch` ([ADR-008](<ADR-008-switch-module-network-infrastructure.md>)) | *(control-point reconcilers — #339)* |
-| 🏢 **Site** ([007d](<ADR-007d - Site.md>)) | `site-manager` | **Stack** | `cluster` | `migrate-node.sh`, `migrate-vm.sh` |
-| | | | `backup` | *(backup LCM ops)* |
-| | | | `templates` | — |
-| | | | **catalog / repositories** | **`repository.sh`**, `validate-configuration.sh` |
-| 🩺 **Health** *(lens)* ([007e](<ADR-007e - Health.md>)) | `health/` | Module | `logging` | `inspect-cluster.sh`, `inspect-vm.sh`, `check-disk-threshold.sh` |
-| — *(shared libs)* | `shared/` | — | — | `apply-json-merge.sh`, `audit-jq-readers.sh` |
+| Bucket | Orchestrator (control plane) | Level | Module | Schema (`src/foundation/`) | Services (Components) |
+|--------|------------------------------|-------|--------|----------------------------|-----------------------|
+| 👥 **People** ([007a](<ADR-007a - People.md>)) | `identity-manager` | Module | `identity` | **— gap** (orgs/groups/users unvalidated) | `user.sh`, `roles-ensure.sh` |
+| 📦 **Apps** ([007b](<ADR-007b - Apps.md>)) | `app-manager` *(coordinates installs)* | Module (lifecycle) | the App workloads (independent Modules) | `module-fields.json` (per-Module) | `install-module.sh`, `update-module.sh`, `delete-module.sh`, `test-module.sh`, `module-format.sh`, `copy-update-json.sh`, `common-install-routines.sh`, `snapshot-vm.sh`, `resize-disk.sh`, `update-os.sh` |
+| 🏠 **Environments** ([007c](<ADR-007c - Environments.md>)) | **`environment-manager`** *(today: `variant-manager.sh` = its v0.1)* | **Stack** | `firewall` (OPNsense, incl. `opnsense-controller/`) | `zones-fields.json` | `zone-state.sh`, `apply-zones-merge.sh` |
+| | | | `proxy`/TLS (Caddy/ACME) | | `setup-caddy.sh`, `acme-setup.sh` |
+| | | | `switch` ([ADR-008](<ADR-008-switch-module-network-infrastructure.md>)) | | *(control-point reconcilers — #339)* |
+| 🏢 **Site** ([007d](<ADR-007d - Site.md>)) | `site-manager` | **Stack** | `cluster` | `configuration-fields.json` *(→ splits into `site.json` + `environments/*`, ADR-007d)* | `migrate-node.sh`, `migrate-vm.sh` |
+| | | | `backup` | | *(backup LCM ops)* |
+| | | | `templates` | | — |
+| | | | **catalog / repositories** | `module-catalog-fields.json` | **`repository.sh`**, `validate-configuration.sh` |
+| 🩺 **Health** *(lens)* ([007e](<ADR-007e - Health.md>)) | `health/` | Module | `logging` | — *(lens; none)* | `inspect-cluster.sh`, `inspect-vm.sh`, `check-disk-threshold.sh` |
+| — *(shared libs)* | `shared/` | — | — | — | `apply-json-merge.sh`, `audit-jq-readers.sh` |
 
 > **Realization layers** (terms → [ontology.md](<../Architecture/ontology.md>)): **bucket** →
 > **orchestrator** (control-plane manager) → **level** (Stack if it orchestrates ≥2 Modules, else
@@ -72,11 +72,18 @@ runtime:
 > *environment*/variant and orchestrates its zone + TLS + DNS) is the **v0.1 of `environment-manager`**
 > — the embryonic Environments **orchestrator**, not a leaf service.
 
-### Schema co-location (DRY)
+### Schema coverage (MECE check)
 
-Each schema lives with the manager that owns its domain — not in a central pile:
-`module-fields.json` → `app-manager/`; `zones-fields.json` → `environment-manager/`;
-`configuration-fields.json` → `site-manager/` (splits into `site.json` + `environments/*` per ADR-007d).
+Each `src/foundation/*-fields.json` schema co-locates with its owning manager (DRY): `module-fields.json`
+→ `app-manager/`; `zones-fields.json` → `environment-manager/`; `configuration-fields.json` +
+`module-catalog-fields.json` → `site-manager/` (the catalog follows `repository.sh` to Site, CR-17).
+The schema column surfaces three findings:
+
+- **Gap — People** has no `*-fields.json`: organisations/groups/users are unvalidated. A `people`/identity
+  schema is owed (ADR-006).
+- **Transition — Site** `configuration-fields.json` is splitting into `site.json` + `environments/*`
+  (ADR-007d) — it currently spans Site and Environments until the split lands.
+- **Consistent — Health** has no schema, as expected for a lens (not a bucket).
 
 ## Why this is the realization, not the taxonomy
 

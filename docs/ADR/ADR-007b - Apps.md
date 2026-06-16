@@ -3,15 +3,20 @@
 | | |
 |---|---|
 | **Status** | Proposed |
-| **Version** | 1.1 |
+| **Version** | 1.2 |
 | **Date** | 2026-06-16 |
 | **Author** | Erik Daniel |
 | **Parent** | [ADR-007 Taxonomy (Overview)](<ADR-007 - TAPPaaS Taxonomy.md>) |
-| **Related** | #320; #297 (module-catalog stack/category); **composition:** [ADR-009](<ADR-009 - Composition Meta-Model.md>) + #171 |
-| **Changelog** | v1.1 — applied Erik⟷Lars review: module name = filename, drop `module` field (CR-04); `sourceMetadata` → Site repositories (CR-05); drop `ownerGroup`/`environment` (deploy-inferred, CR-06/07); `local` intent → issue (CR-03) |
+| **Related** | #320; #297 (module-catalog stack/category); **schema:** `module-fields.json`; **composition:** [ADR-009](<ADR-009 - Composition Meta-Model.md>) + #171 |
+| **Changelog** | v1.2 — named `module-fields.json` as the App schema; catalog schema → Site-level; acceptance corrected. v1.1 — applied Erik⟷Lars review (CR-04 module=filename; CR-05 sourceMetadata→Site; CR-06/07 drop ownerGroup/environment; CR-03 local→issue) |
 
 The **📦 Apps** bucket. An App = a thing that runs (VM, container, service) with a lifecycle: install,
 update, test, backup, delete. Owned by a Group, lives in one Environment.
+
+> **App ≡ Module.** In the composition model ([ADR-009](<ADR-009 - Composition Meta-Model.md>)), every
+> App is a **Module** — the atomic deployable unit (one VM, one `{name}.json`). "App" is the
+> user-facing label (the value stream calls them Apps because everyone knows what an app is); "Module"
+> is the technical/composition term. Same deployment unit, two vocabularies.
 
 ## Decision
 
@@ -66,6 +71,10 @@ Every App is exactly one cell of the `tier × source` grid — naturally MECE.
 
 New classification fields: `tier`, `source`. Lint rule: `tier: foundation` ⇒ `source: official` (or explicit override).
 
+**Schema.** Each `module.json` is validated by **`module-fields.json`** (the App schema, `src/foundation/`);
+the `tier`/`source` fields are defined there. The module *catalog* (the registry of all modules) has a
+separate schema, `module-catalog-fields.json` — a Site-level concern (see ADR-007f).
+
 Rules from review: a module's name **is** its `{name}.json` filename — no separate `module` field
 (CR-04). `sourceMetadata` lives in **Site → `repositories`** (ADR-007d), not on the module (CR-05).
 `ownerGroup` and `environment` are **inferred at deploy time**, not stored on the module (CR-06, CR-07).
@@ -85,5 +94,5 @@ as **source**, separate from lifecycle **tier**. Evidence: [taxonomy.md](<../Arc
 
 ## Acceptance
 
-- [ ] `tier`, `source`, `sourceMetadata`, `ownerGroup` added to `module-fields.json`.
+- [ ] `tier`, `source` added to `module-fields.json` (`sourceMetadata` → Site `repositories` per ADR-007d; `ownerGroup`/`environment` dropped — deploy-inferred).
 - [ ] One module re-tagged + passes `install-module.sh`; one `source: community` module installed e2e.
