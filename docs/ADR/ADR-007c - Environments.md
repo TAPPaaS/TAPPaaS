@@ -114,7 +114,27 @@ Environment, with a per-zone `environment` selector in `zones.json`. #299 is imp
 Environment derivation chain above — not as a separate concept. `cert_refid` moves onto the
 Environment's `domains` (one wildcard per Environment).
 
+## Implementation & related issues
+
+The Environment model is realized across these issues — **start from #318** (the spine):
+
+| Issue | Role for this ADR | State |
+|---|---|---|
+| [#318](https://github.com/TAPPaaS/TAPPaaS/issues/318) | Rename **variant → Environment**; realize `environment-manager` (ADR-007f) — the spine | **open** |
+| [#299](https://github.com/TAPPaaS/TAPPaaS/issues/299) | `domain_groups` per-zone domain routing — **subsumed** into `Environment.domains` + `network.zones[]` | closed |
+| [#316](https://github.com/TAPPaaS/TAPPaaS/issues/316) | ADR-005 variant model — the origin of `--variant`, superseded by the rename | closed |
+| [#294](https://github.com/TAPPaaS/TAPPaaS/issues/294) | Zone-aligned VMID ranges (multi-tenant Environments) | open |
+| [#319](https://github.com/TAPPaaS/TAPPaaS/issues/319) | Zone deletion semantics (managed vs client/Environment zones) | open |
+| [#313](https://github.com/TAPPaaS/TAPPaaS/issues/313) | `timezone` → config (an Environment/Site field) | open |
+| [#320](https://github.com/TAPPaaS/TAPPaaS/issues/320) | Decision to adopt the ADR-007 taxonomy (this family) | closed |
+
+**Order:** #318 is the spine (rename + `environment-manager`); it absorbs #299 (domains) and the
+ADR-005/#316 variant model. #294 / #319 / #313 are adjacent zone/field concerns that read the same
+`config/environments/` registry. #299 and #316 are closed because their scope folds into #318.
+
 ## Acceptance
 
 - [ ] `ownerOrg` present on every Environment; defaults to the family Org for legacy.
 - [ ] `install-module.sh` validates `ownerOrg`; `--environment` accepted alongside `--variant`.
+- [ ] `Environment.network.zones[]` accepts a set; `firewall:proxy` derives `proxyDomain` via the chain above.
+- [ ] `domain_groups` (#299) implemented **as** `Environment.domains` — no separate registry.
