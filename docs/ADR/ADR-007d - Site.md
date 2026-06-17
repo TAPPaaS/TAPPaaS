@@ -62,7 +62,7 @@ The legacy mixed `configuration.json` splits into **`site.json`** (site-wide) + 
 | `timezone`, `locale` | `site.json → location` |
 | `updateSchedule` | `environments/{name}.json → updateWindow` |
 | `subdomain prefix` | `environments/{name}.json → domains` |
-| `active zones` | `environments/{name}.json → network.zone` |
+| `active zones` | `environments/{name}.json → network.zones[]` |
 
 Scripts read `site.json` first, fall back to the old file; deprecate `configuration.json` over 2 minor
 releases.
