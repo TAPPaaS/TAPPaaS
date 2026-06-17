@@ -1,5 +1,14 @@
 """OPNsense Controller for TAPPaaS using oxl-opnsense-client."""
 
+from .acme_manager import (
+    AcmeAccount,
+    AcmeAction,
+    AcmeCertificate,
+    AcmeCertInfo,
+    AcmeManager,
+    AcmeValidation,
+    PluginDisabledError,
+)
 from .caddy_manager import (
     CaddyDomain,
     CaddyDomainInfo,
@@ -22,6 +31,12 @@ from .vlan_manager import Vlan, VlanManager
 from .zone_manager import Zone, ZoneManager
 
 __all__ = [
+    "AcmeAccount",
+    "AcmeAction",
+    "AcmeCertificate",
+    "AcmeCertInfo",
+    "AcmeManager",
+    "AcmeValidation",
     "CaddyDomain",
     "CaddyDomainInfo",
     "CaddyHandler",
@@ -35,6 +50,7 @@ __all__ = [
     "FirewallRule",
     "FirewallRuleInfo",
     "IpProtocol",
+    "PluginDisabledError",
     "Protocol",
     "RuleAction",
     "RuleDirection",

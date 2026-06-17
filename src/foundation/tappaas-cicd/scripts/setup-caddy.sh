@@ -92,6 +92,27 @@ for pkg in os-acme-client os-ddclient; do
     fi
 done
 
+# Step 1c: Enable os-acme-client plugin (issue #267).
+# The plugin ships disabled by default (<enabled>0</enabled> in model.xml); cert
+# signing fails with status=400 if the plugin isn't enabled before issuance.
+info "Step 1c: Enabling os-acme-client plugin..."
+ACME_ENABLE_RESP=$(ssh root@"$FIREWALL_FQDN" \
+    "curl -sk -X POST -H 'Content-Type: application/json' \
+         -u \"\$(cat /var/db/api_token)\" \
+         -d '{\"settings\":{\"enabled\":\"1\"}}' \
+         'https://127.0.0.1/api/acmeclient/settings/set'" 2>/dev/null) || true
+if echo "$ACME_ENABLE_RESP" | grep -q '"result":"saved"'; then
+    debug "  os-acme-client plugin enabled"
+    # Reconfigure to apply the change
+    ssh root@"$FIREWALL_FQDN" \
+        "curl -sk -X POST -H 'Content-Type: application/json' \
+             -u \"\$(cat /var/db/api_token)\" \
+             'https://127.0.0.1/api/acmeclient/service/reconfigure'" >/dev/null 2>&1 || true
+else
+    warn "  Could not enable os-acme-client via API (response: ${ACME_ENABLE_RESP:-empty})"
+    warn "  The plugin may already be enabled or manual intervention may be required"
+fi
+
 # Step 2: Reconfigure OPNsense web GUI to port 8443 and disable HTTP redirect
 info "Step 2: Reconfiguring OPNsense web GUI to port 8443..."
 # Pipe PHP script via stdin to avoid csh heredoc issues on OPNsense (csh)

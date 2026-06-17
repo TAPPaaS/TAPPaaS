@@ -37,6 +37,7 @@ from .acme_manager import (
     AcmeCertificate,
     AcmeManager,
     AcmeValidation,
+    PluginDisabledError,
 )
 from .config import Config
 
@@ -86,6 +87,15 @@ def _parse_fields(items: list[str]) -> dict[str, str]:
 
 def cmd_setup(mgr: AcmeManager, args: argparse.Namespace) -> int:
     """Provision the full wildcard-cert chain (idempotent)."""
+    # Fail fast if the plugin is disabled (issue #267).
+    print("==> Checking os-acme-client plugin status...")
+    try:
+        mgr.require_plugin_enabled()
+        print("    ✓ plugin is enabled")
+    except PluginDisabledError as e:
+        print(f"\n{e}", file=sys.stderr)
+        return 1
+
     domain = args.domain
     wildcard_cn = f"*.{domain}"
     ca = "letsencrypt_test" if args.staging else "letsencrypt"

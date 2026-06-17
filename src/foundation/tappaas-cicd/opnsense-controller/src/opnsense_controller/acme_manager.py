@@ -34,6 +34,21 @@ from .config import Config
 
 
 # ─────────────────────────────────────────────────────────────────────────────
+# Exceptions
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+class PluginDisabledError(RuntimeError):
+    """Raised when the os-acme-client plugin is disabled on OPNsense.
+
+    The plugin ships disabled by default. Certificate operations will fail
+    with status 400 if the plugin is not enabled first. This exception
+    provides a clear, actionable error message guiding the operator to
+    enable the plugin via the GUI or API.
+    """
+
+
+# ─────────────────────────────────────────────────────────────────────────────
 # Dataclasses
 # ─────────────────────────────────────────────────────────────────────────────
 
@@ -216,6 +231,40 @@ class AcmeManager:
         if url_params:
             params["params"] = url_params
         return self.client.run_module("raw", params=params).get("result", {}).get("response", {})
+
+    # ── plugin status ──────────────────────────────────────────────────
+
+    def is_plugin_enabled(self) -> bool:
+        """Check if the os-acme-client plugin is enabled.
+
+        The plugin ships disabled by default (<enabled>0</enabled> in model.xml).
+        Cert operations fail with status 400 if the plugin isn't enabled.
+        """
+        settings = self._api_get("Settings", "get")
+        # The response is {"settings": {"enabled": "0"|"1", ...}}
+        enabled = settings.get("settings", {}).get("enabled", "0")
+        return enabled == "1"
+
+    def require_plugin_enabled(self) -> None:
+        """Verify the plugin is enabled; raise a helpful error if not.
+
+        Call this before any certificate operations to fail fast with a
+        clear message instead of the opaque status=400 from os-acme-client.
+        """
+        if not self.is_plugin_enabled():
+            raise PluginDisabledError(
+                "The os-acme-client plugin is disabled on OPNsense.\n"
+                "\n"
+                "To enable it:\n"
+                "  1. OPNsense GUI: Services → ACME Client → Settings → Enable plugin\n"
+                "  2. Or run: acme-manager enable-plugin (if available)\n"
+                "  3. Or via API: POST /api/acmeclient/settings/set "
+                '{"settings":{"enabled":"1"}}\n'
+                "\n"
+                "The TAPPaaS setup-caddy.sh script should have enabled this automatically.\n"
+                "If you're seeing this error, the enable step may have failed — check\n"
+                "the setup-caddy.sh output or enable the plugin manually via the GUI."
+            )
 
     # ── search helpers (find existing by name; case-sensitive) ──────────
 
