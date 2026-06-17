@@ -10,7 +10,7 @@
 | **Related** | #320; ADR-006 (identity — users, roles, SSO) |
 | **Changelog** | v1.1 — applied Erik⟷Lars review: attribute-discipline rule (CR-01); membership modeled on User, removed from Group (CR-02) |
 
-The **👥 People** bucket — one of ADR-007's three buckets.
+The **👥 People** classification domain — one of ADR-007's three classification domains.
 
 ## Decision
 

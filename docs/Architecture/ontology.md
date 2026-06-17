@@ -45,7 +45,7 @@
 | Term | Definition |
 |------|------------|
 | **Manager** | Top-level control-plane orchestrator for a classification domain (e.g. `environment-manager`, `app-manager`, `site-manager`). Orchestrates one or more Controllers. Owns the domain's lifecycle contract. |
-| **Controller** | A leaf control-plane component inside a Module that operates one specific function (e.g. `opnsense-controller`, `zone-controller`). Invoked by the Manager; not exposed to end-users directly. Corresponds to a Function in ArchiMate terms. |
+| **Controller** | A leaf control-plane component inside a Module that operates one specific function (e.g. `opnsense-controller`, `zone-controller`). Invoked by the Manager; not exposed to end-users directly. Invokes the Module's Service scripts internally (today: .sh; roadmap: Python wrapping .sh). Corresponds to a Function in ArchiMate terms. |
 | **Realization level** | **Stack** (Manager over ≥2 aggregated Modules) vs **Module** (single). Promote to Stack only on genuine ≥2-Module aggregation — **not** runtime coordination. |
 | **Tiering rule** | aggregation ≠ coordination. A Manager that merely coordinates scripts at runtime is a Module, not a Stack. |
 

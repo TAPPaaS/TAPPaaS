@@ -3,14 +3,14 @@
 | | |
 |---|---|
 | **Status** | Proposed |
-| **Version** | 1.1 |
-| **Date** | 2026-06-16 |
+| **Version** | 1.2 |
+| **Date** | 2026-06-17 |
 | **Author** | Erik Daniel |
 | **Parent** | [ADR-007 Taxonomy (Overview)](<ADR-007 - TAPPaaS Taxonomy.md>) |
 | **Related** | #320; #313 (timezone→site.json); ADR-004 (config cascade); ADR-007b (Apps — `sourceMetadata` → Site `repositories`) |
-| **Changelog** | v1.1 — applied Erik⟷Lars review: drop `identityProvider.type` (single provider, CR-16); add `repositories`, `updateChannel` is **per-repo not per-site** (CR-17) |
+| **Changelog** | v1.2 — "bucket" → "classification domain" (Site = container, not a classification domain) (2026-06-17). v1.1 — applied Erik⟷Lars review: drop `identityProvider.type` (single provider, CR-16); add `repositories`, `updateChannel` is **per-repo not per-site** (CR-17) |
 
-The **🏢 Site** — the **container**, not a bucket. One TAPPaaS = one Site: the physical + admin
+The **🏢 Site** — the **container**, not a classification domain. One TAPPaaS = one Site: the physical + admin
 perimeter holding everything shared across all Environments inside it.
 
 ## Decision

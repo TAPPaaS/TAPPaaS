@@ -3,14 +3,14 @@
 | | |
 |---|---|
 | **Status** | Proposed |
-| **Version** | 1.1 |
-| **Date** | 2026-06-16 |
+| **Version** | 1.2 |
+| **Date** | 2026-06-17 |
 | **Author** | Erik Daniel |
 | **Parent** | [ADR-007 Taxonomy (Overview)](<ADR-007 - TAPPaaS Taxonomy.md>) |
 | **Related** | #320; #318 (rename "variant"→Environment); #319 (zone deletion); #294 (zone-aligned VMID); #313 (timezone→config) |
-| **Changelog** | v1.1 — applied Erik⟷Lars review: ownerOrg→People:Organization ref (CR-08); vlan→zones.json (CR-09); drop identityOrganization/tenant (CR-11); updateWindow/Channel out of v1 → issues (CR-12/13); backup cross-level issue (CR-14). Deferred: firewallPosture (CR-10), legal→own ADR (CR-15) |
+| **Changelog** | v1.2 — "bucket" → "classification domain" throughout (2026-06-17). v1.1 — applied Erik⟷Lars review: ownerOrg→People:Organization ref (CR-08); vlan→zones.json (CR-09); drop identityOrganization/tenant (CR-11); updateWindow/Channel out of v1 → issues (CR-12/13); backup cross-level issue (CR-14). Deferred: firewallPosture (CR-10), legal→own ADR (CR-15) |
 
-The **🏠 Environments** bucket. An Environment = **where apps run**: network zones, domain, update
+The **🏠 Environments** classification domain. An Environment = **where apps run**: network zones, domain, update
 window, security posture. Owned by **exactly one Organization** (`ownerOrg`).
 
 ## Decision
@@ -42,11 +42,11 @@ window, security posture. Owned by **exactly one Organization** (`ownerOrg`).
 > defined before adoption** (CR-10, deferred). `updateWindow`/`updateChannel` are **out of v1** — tracked
 > as issues (CR-12, CR-13). `backup` is a **cross-level** concern (site → env → apps) — tracked separately
 > (CR-14). The old `identityOrganization`/tenant field is **dropped**: `ownerOrg` + `domains` define
-> identity (CR-11). `legal`/processor is **cross-cutting** across all buckets — under review for its
+> identity (CR-11). `legal`/processor is **cross-cutting** across all classification domains — under review for its
 > **own ADR** (CR-15; KISS, SBB = authentik).
 
 `Zone` is the **network-implementation** of an Environment (kept as a term inside the Environment),
-not a separate bucket.
+not a separate classification domain.
 
 ## Migration (terminology)
 

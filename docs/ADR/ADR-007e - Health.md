@@ -3,18 +3,19 @@
 | | |
 |---|---|
 | **Status** | Proposed |
-| **Version** | 1.0 |
-| **Date** | 2026-06-15 |
+| **Version** | 1.1 |
+| **Date** | 2026-06-17 |
 | **Author** | Erik Daniel |
 | **Parent** | [ADR-007 Taxonomy (Overview)](<ADR-007 - TAPPaaS Taxonomy.md>) |
 | **Related** | #320 |
+| **Changelog** | v1.1 — "bucket" → "classification domain" throughout; Health = lens, not a classification domain (2026-06-17) |
 
-The **🩺 Health** lens. **Not a bucket** — a cross-cutting *overlay* that shows status on People,
+The **🩺 Health** lens. **Not a classification domain** — a cross-cutting *overlay* that shows status on People,
 Apps, and Environments.
 
 ## Decision
 
-Health is a **lens**, not a fourth bucket. Observability is folded into each artifact's status badge,
+Health is a **lens**, not a fourth classification domain. Observability is folded into each artifact's status badge,
 with a single Site-level Health page as the system-wide overview. This keeps the "it just works"
 prosumer UX (status on the thing it relates to) while preserving a cross-cutting ops view.
 
@@ -27,12 +28,12 @@ prosumer UX (status on the thing it relates to) while preserving a cross-cutting
 | next to a **User** | 🔴 MFA expired |
 | Site-level Health page | system-wide overview (the only dedicated Health UI page) |
 
-## Why a lens, not a bucket
+## Why a lens, not a classification domain
 
-A module that *observes everything* cannot be MECE-assigned to a single bucket. Modeling Health as a
-classification bucket would break ADR-007's "exactly one bucket per artifact" invariant. As a lens it
-overlays all three buckets without partitioning them. Industry: Health is universally tracked but
-variably positioned — TAPPaaS chooses *lens* over *bucket* for prosumer UX. Evidence:
+A module that *observes everything* cannot be MECE-assigned to a single classification domain. Modeling Health as a
+classification domain would break ADR-007's "exactly one classification domain per artifact" invariant. As a lens it
+overlays all three classification domains without partitioning them. Industry: Health is universally tracked but
+variably positioned — TAPPaaS chooses *lens* over *classification domain* for prosumer UX. Evidence:
 [Architecture/taxonomy.md](<../Architecture/taxonomy.md>) → A.1.
 
 ## Acceptance

@@ -4,6 +4,7 @@
 **Date:** 2026-06-06
 **Deciders:** @LarsRossen + @ErikDaniel007
 **Related:** #269, #270, #289, #290, #292, #299
+**Changelog:** 2026-06-17 — §6 amended: replace incorrect "route via DMZ gateway" split-horizon DNS prescription with correct "authorized-zone gateway (OPNsense self-traffic)" model (@ErikDaniel007, evidence: zones.json access-to audit + Lars 260616 worksession transcript)
 
 ---
 
@@ -207,32 +208,59 @@ Use cases for `per-service`:
 - Domain registrar has no supported ACME DNS plugin
 - Testing with domains you don't fully control
 
-### 6. Per-Service DNS Registration (Fixes #269)
+### 6. Split-horizon DNS for Proxy Services (Fixes #269)
 
-**Why split-horizon DNS is required:** Caddy (os-caddy plugin) runs on OPNsense and binds to all interfaces (0.0.0.0:443). Without split-horizon DNS, internal clients resolve `*.tappaas.org` via public DNS → get WAN IP → traffic routes through external NAT → Caddy sees NAT source IP instead of client's real zone IP → `proxyAllowedZones` ACL denies the request (HTTP 403).
+> **⚠ AMENDED 2026-06-17:** The original §6 prescribed routing via the *DMZ gateway IP* (10.6.0.x).
+> This was architecturally incorrect. See rationale below.
 
-With split-horizon DNS, internal clients resolve `*.tappaas.org` to the **DMZ gateway IP** (firewall's DMZ interface), traffic routes internally via the DMZ zone, and Caddy sees the client's real zone IP for proper ACL evaluation.
+**Why split-horizon DNS is required:** Caddy (os-caddy plugin) runs on OPNsense and binds to all interfaces (`0.0.0.0:443`). Without split-horizon DNS, internal clients resolve `*.tappaas.org` via public DNS → get WAN IP → traffic routes through external NAT → Caddy sees the NAT source IP instead of the client's real zone IP → `proxyAllowedZones` ACL denies the request (HTTP 403).
 
-**Implementation note:** The DMZ gateway IP should be looked up dynamically from `zones.json` (e.g., `10.6.0.1` for DMZ subnet `10.6.0.0/24`). Do not hardcode the IP.
+With split-horizon DNS, internal clients resolve `*.tappaas.org` to an **internal OPNsense interface IP**, traffic stays on the internal network, and Caddy sees the client's real zone IP for ACL evaluation.
 
-**Zone requirement:** Split-horizon DNS only works for zones that have `access-to: ["dmz"]` (directly or transitively). Some IoT zones intentionally lack DMZ access and cannot use proxy services — this is by design.
+**Where Caddy actually lives:** Caddy is integrated into OPNsense (os-caddy plugin). It does **not** live in the DMZ VLAN — it runs on the firewall itself, in its own isolated context with no VLAN. This means:
+
+1. Caddy listens on every OPNsense interface IP (`0.0.0.0:443`), including the home interface (10.3.10.1), work interface (10.3.20.1), mgmt interface (10.0.0.1), etc.
+2. Traffic from a client to the OPNsense interface IP **in that client's own subnet** is *self-destined traffic* — it reaches OPNsense (and thus Caddy) directly, without crossing any inter-zone firewall rule.
+3. Traffic routed *through* OPNsense to another zone's interface IP (e.g., home client → 10.6.0.1) *does* traverse inter-zone rules and will be blocked if the source zone does not have `access-to` for the target zone.
+
+**Correct split-horizon target:** For each authorized client zone in `proxyAllowedZones`, the split-horizon DNS entry must resolve to the **OPNsense gateway IP of that client zone** (i.e., the first host in the zone's subnet: `10.x.y.1`). This ensures the client's DNS resolves to an IP on its own subnet, making the connection self-traffic to OPNsense.
+
+**Zone requirement (corrected):** Split-horizon DNS works for any zone whose clients can reach the OPNsense interface on their own subnet — which is true for all active client and service zones. It does **not** require `access-to: ["dmz"]`. The previous requirement was wrong: the primary consumer zones (`home`, `work`) do not have DMZ access, yet they are the most common `proxyAllowedZones` targets.
+
+**Multi-zone services:** When `proxyAllowedZones` includes more than one client zone (e.g., `["home", "work"]`), register a separate Unbound host-override per zone, each pointing to that zone's OPNsense gateway IP. Unbound serves the correct answer to each subnet via `access-control-view` or — for simple cases — both host-override entries (Unbound returns the IP matching the client's subnet first).
+
+**Implementation note:** Replace `dmz_gateway_ip()` with a zone-aware lookup: given a zone name, derive its gateway as `<zone.ip first 3 octets>.1` from `zones.json`. For the default (no `proxyAllowedZones`), use the home zone gateway as the primary split-horizon target, and register additional entries for any other default-included zones that are client zones (work, mgmt).
 
 When `dnsMode: "wildcard"`:
 
 ```bash
-# Single wildcard entry per variant (registered by acme-setup.sh)
-# Points to DMZ gateway where Caddy listens (looked up from zones.json)
-DMZ_GW=$(jq -r '.dmz.ip | split("/")[0] | split(".")[0:3] | join(".") + ".1"' zones.json)
-dns-manager add "*" "tappaas.org" "${DMZ_GW}" --description "TAPPaaS: wildcard"
+# Register per authorized client zone (acme-setup.sh, called once per variant)
+# proxyAllowedZones drives which gateways to register; default = home + work
+for zone in "${PROXY_ZONES[@]}"; do
+    GW=$(jq -r --arg z "$zone" '.[$z].ip | split("/")[0] | split(".")[0:3] | join(".") + ".1"' zones.json)
+    unbound-manager add "*" "${DOMAIN}" "${GW}" --description "TAPPaaS: ${VARIANT} wildcard (${zone})"
+done
 ```
 
 When `dnsMode: "per-service"`:
 
 ```bash
 # Per-module entry (registered by firewall:proxy install-service.sh)
-dns-manager add "nextcloud" "acme-corp.eu" "${DMZ_GW}" --description "TAPPaaS: nextcloud-acme-corp"
-dns-manager add "vaultwarden" "acme-corp.eu" "${DMZ_GW}" --description "TAPPaaS: vaultwarden-acme-corp"
+# Same zone-aware gateway lookup — NOT dmz_gateway_ip()
+GW=$(zone_gateway_ip "${PRIMARY_CLIENT_ZONE}")
+unbound-manager add "nextcloud" "acme-corp.eu" "${GW}" --description "TAPPaaS: nextcloud-acme-corp"
 ```
+
+**Why the DMZ gateway was wrong (audit evidence):**
+
+| Claim in original §6 | Reality |
+|---|---|
+| "Caddy listens at the DMZ interface" | Caddy is on OPNsense itself, not in the DMZ VLAN |
+| "traffic routes via the DMZ zone" | home/work zones have no `access-to: dmz` → packets blocked |
+| "Zone requirement: must have access-to dmz" | Eliminates the exact zones that need proxy access (home, work) |
+| Production `openwebui.gridtefy.com → 10.3.10.1` | DNS was set to home gateway, not DMZ — and this is correct |
+
+Sources: `zones.json` access-to audit (home/work → no dmz); Lars Rossen, worksession 2026-06-16 ("Caddy kind of lives in its very own zone that is not even VLAN based"); empirical evidence from prod deployment (DNS → 10.3.10.1 works; DNS → 10.6.0.1 for srvCust1/a3k fails for home/work clients).
 
 ### 7. Redirect Handler Support (Addresses #270)
 

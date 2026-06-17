@@ -7,7 +7,7 @@
 
 ## The model at a glance
 
-**One Site** (container) → **3 buckets** (👥 People · 📦 Apps · 🏠 Environments) + **1 lens** (🩺 Health).
+**One Site** (container) → **3 classification domains** (👥 People · 📦 Apps · 🏠 Environments) + **1 lens** (🩺 Health).
 
 ## Worked example — SOHO setup
 
@@ -30,13 +30,13 @@ all on one physical Site:
 
 ## Secrets — where they live
 
-| Secret type | Bucket | Stored |
+| Secret type | Classification domain | Stored |
 |---|---|---|
 | Personal credential | 👥 People | Authentik + Vaultwarden |
 | Workload secret | 📦 App | App-scoped store, `secretsRef` |
 | Infrastructure secret | 🏢 Site | `site.json` references, vault-managed |
 
-Rule: a secret belongs to the *thing that consumes it*; People-bucket RBAC decides who may read/change it.
+Rule: a secret belongs to the *thing that consumes it*; People-domain RBAC decides who may read/change it.
 
 ## Sample files (ready-to-use; replace placeholders)
 
@@ -59,7 +59,7 @@ Environments, 007d Site). Minimal `site.json`:
 ## Appendix A — Industry evidence (data points)
 
 **A.1 — Top-level concepts across 18 platforms:** Identity/People 18/18; App/Workload 18/18;
-Environment 8/10; Project/Site 8/10; Health-as-separate-bucket 7/10 (variably positioned → TAPPaaS
+Environment 8/10; Project/Site 8/10; Health-as-separate-classification-domain 7/10 (variably positioned → TAPPaaS
 chooses *lens*). → justifies **People · Apps · Environments + Health lens**.
 
 **A.2 — Organization vs Tenant:** "Organization/Org" used by GCP, GitHub, Okta, Salesforce, HashiCorp,
@@ -70,7 +70,7 @@ Auth0, Linux, K8s RBAC, Backstage) use **Group**. Group covers all 7 TAPPaaS use
 
 **A.4 — Comparable hierarchies:** Backstage Domain→System→Component; Coolify Server→Project→Env→Resource;
 Vercel Team→Project→Env; K8s Cluster→Namespace→Workload; UniFi Account→Site→Devices; AWS Org→Account→Resource;
-GCP Org→Folder→Project. TAPPaaS is intentionally flatter (Site → 3 buckets) for prosumer UX.
+GCP Org→Folder→Project. TAPPaaS is intentionally flatter (Site → 3 classification domains) for prosumer UX.
 
 **A.5 — "Environment" adoption:** de-facto term in every multi-env-capable platform (K8s, Coolify,
 Vercel, GCP/AWS/Azure, Heroku); single-env appliances (Synology, YunoHost, Umbrel, CasaOS) omit it.
@@ -96,7 +96,7 @@ model curated-vs-community as **source**, separate from lifecycle **tier**. Both
 | **App** | A workload (VM, container, service). Has a `tier` and a `source`. |
 | **Tier** | App lifecycle class: `foundation` (cannot uninstall) or `app` (user-installable). |
 | **Source** | App origin: `official` · `community` · `private` · `local`. |
-| **Health** | Cross-cutting observability lens. Not a bucket. |
+| **Health** | Cross-cutting observability lens. Not a classification domain. |
 | **Tenant** | Architecture term for an isolated customer of a multi-tenant system. *Not* a UI term. |
 | **Node** | The physical Proxmox host (`tappaas1`). The VM is the **Module**. See ADR-009. |
 | **Module / Component / Function / Service / Stack** | Composition meta-model — see ADR-009. |

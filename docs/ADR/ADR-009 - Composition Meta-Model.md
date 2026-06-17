@@ -10,7 +10,7 @@
 | **Changelog** | v0.3 — Node/Device direction confirmed (Option B, meeting 2026-06-15); App≡Module equivalence added to Terms. v0.2 — glossary-SSOT link (ontology.md) + Terms selection; cross-links to ADR-007f and foundation module-designs |
 
 How a deployable unit is **built**. The companion to [ADR-007](<ADR-007 - TAPPaaS Taxonomy.md>):
-ADR-007 *classifies* (which bucket), this ADR *composes* (how it is structured). Orthogonal — apply both.
+ADR-007 *classifies* (which classification domain), this ADR *composes* (how it is structured). Orthogonal — apply both.
 
 > **Scope & status.** This ADR consolidates the #171 metamodel + the current docs. The **Node/Device
 > direction** was confirmed in the Erik⟷Lars architecture review (2026-06-15) as **Option B** (node
@@ -26,7 +26,7 @@ Technology:   Module (the VM)  ◁hosted-on◁  physical host (tappaas1)
 Artifact:     Implementation  →realizes→  Component/Module   (swappable)
 ```
 
-Every **Module** is classified by exactly one ADR-007 bucket (+ `tier` + `source`). One model composes,
+Every **Module** is classified by exactly one ADR-007 classification domain (+ `tier` + `source`). One model composes,
 the other classifies.
 
 ## Terms (selection — full glossary: [ontology.md](<../Architecture/ontology.md>) §B)
@@ -38,7 +38,7 @@ decides on:
 |------|------------|
 | **Node** | The physical Proxmox host (e.g. `tappaas1`). The `node` field in `module-fields.json` refers to this host. The VM is the **Module**. (Option B confirmed Erik⟷Lars 2026-06-16. Prose docs aligned.) |
 | **Module** | The atomic deployable unit: one VM, one `{name}.json`. *Module boundary = VM boundary.* |
-| **App** | The user-facing classification label for a Module in the **Apps** bucket (ADR-007b). "App" and "Module" denote the same deployment unit — "App" is what the value stream calls it; "Module" is the technical/composition term. |
+| **App** | The user-facing classification label for a Module in the **Apps** classification domain (ADR-007b). "App" and "Module" denote the same deployment unit — "App" is what the value stream calls it; "Module" is the technical/composition term. |
 | **Component** | A composable unit inside a Module (recursive). ArchiMate Application Component. |
 | **Function** | Behaviour a Component realises. Application Function. |
 | **Service** | A defined exposed interface (`provides`/`dependsOn`). Application Service. |

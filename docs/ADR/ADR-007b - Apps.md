@@ -10,7 +10,7 @@
 | **Related** | #320; #297 (module-catalog stack/category); **schema:** `module-fields.json`; **composition:** [ADR-009](<ADR-009 - Composition Meta-Model.md>) + #171 |
 | **Changelog** | v1.2 — named `module-fields.json` as the App schema; catalog schema → Site-level; acceptance corrected. v1.1 — applied Erik⟷Lars review (CR-04 module=filename; CR-05 sourceMetadata→Site; CR-06/07 drop ownerGroup/environment; CR-03 local→issue) |
 
-The **📦 Apps** bucket. An App = a thing that runs (VM, container, service) with a lifecycle: install,
+The **📦 Apps** classification domain. An App = a thing that runs (VM, container, service) with a lifecycle: install,
 update, test, backup, delete. Owned by a Group, lives in one Environment.
 
 > **App ≡ Module.** In the composition model ([ADR-009](<ADR-009 - Composition Meta-Model.md>)), every
