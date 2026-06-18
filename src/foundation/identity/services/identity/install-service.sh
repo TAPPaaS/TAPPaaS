@@ -150,18 +150,33 @@ for g in "${ALLOW_GROUPS[@]}"; do bind_args+=("--group" "${g}"); done
 ${AUTHENTIK_MANAGER} "${bind_args[@]}" || die "app-bind-groups failed for ${SLUG}"
 
 # ── Step 5: write the OIDC client config onto the module VM ──────────────────
+# 5a — verify the discovery URI is reachable from the module VM before writing.
+# Writing unreachable OIDC vars causes silent worker crash loops in apps that
+# eagerly initialise SSO on startup. Fail here rather than produce a broken
+# deployment (issue #369).
+info "  VM: verifying OIDC discovery URI reachable from ${UPSTREAM}"
+if ! ssh -o StrictHostKeyChecking=accept-new -o ConnectTimeout=10 "tappaas@${UPSTREAM}" \
+    "curl --silent --max-time 5 --output /dev/null --fail '${DISCOVERY_URI}' 2>/dev/null"; then
+    die "OIDC discovery URI unreachable from ${UPSTREAM}: ${DISCOVERY_URI} — add a firewall rule allowing ${VMNAME} to reach Authentik, then re-run"
+fi
+
+# 5b — merge-write: strip any prior OIDC_ lines, append new values. Preserves
+# co-managed keys (e.g. LITELLM_MASTER_KEY) that other services write to the
+# same secrets file (issue #369).
 # A freshly (re)created VM reuses the hostname with a NEW host key; clear any
 # stale known_hosts entry first so StrictHostKeyChecking=accept-new doesn't reject
 # the CHANGED key (same approach as update-os.sh update_ssh_known_hosts).
 ssh-keygen -R "${UPSTREAM}" >/dev/null 2>&1 || true
-info "  VM: writing ${SECRETS_ENV} on ${UPSTREAM} (mode 600)"
+info "  VM: merging OIDC vars into ${SECRETS_ENV} on ${UPSTREAM} (mode 600)"
 ENV_CONTENT="$(printf 'OIDC_CLIENT_ID=%s\nOIDC_CLIENT_SECRET=%s\nOIDC_DISCOVERY_URI=%s\n' \
     "${CLIENT_ID}" "${CLIENT_SECRET}" "${DISCOVERY_URI}")"
 if ssh -o StrictHostKeyChecking=accept-new -o ConnectTimeout=10 "tappaas@${UPSTREAM}" \
     "sudo install -d -m 700 \"\$(dirname '${SECRETS_ENV}')\" && \
-     printf '%s' \"${ENV_CONTENT}\" | sudo tee '${SECRETS_ENV}' >/dev/null && \
+     { if sudo test -f '${SECRETS_ENV}'; then sudo grep -v '^OIDC_' '${SECRETS_ENV}' || true; fi; \
+       printf '%s' \"${ENV_CONTENT}\"; } \
+     | sudo tee '${SECRETS_ENV}' >/dev/null && \
      sudo chmod 600 '${SECRETS_ENV}'"; then
-    info "  ${GN}✓${CL} wrote ${SECRETS_ENV}"
+    info "  ${GN}✓${CL} merged OIDC vars into ${SECRETS_ENV}"
 else
     die "failed to write ${SECRETS_ENV} on ${UPSTREAM} (is the VM up and SSH reachable?)"
 fi
