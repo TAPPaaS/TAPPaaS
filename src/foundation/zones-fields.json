@@ -33,6 +33,10 @@
                 "DMZ": {
                     "description": "Demilitarized zone for services that need controlled exposure.",
                     "typeId": 6
+                },
+                "Overlay": {
+                    "description": "Non-VLAN overlay network (e.g. NetBird/WireGuard) whose peers carry their own source CIDR (e.g. 100.64.0.0/10). Has no interface, DHCP or firewall rules — always state=Manual with vlantag=0. Exists so consumers like firewall:proxy access-list.sh can resolve the overlay CIDR. See zones.json 'netbird' (issue #367).",
+                    "typeId": 7
                 }
             }
         },
@@ -71,7 +75,8 @@
                 "3": "Client",
                 "4": "IoT",
                 "5": "Guest",
-                "6": "DMZ"
+                "6": "DMZ",
+                "7": "Overlay"
             },
             "note": "Should match the typeId from the 'type' field"
         },

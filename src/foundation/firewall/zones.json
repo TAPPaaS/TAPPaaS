@@ -65,6 +65,19 @@
     "_comment": "Always-on control plane. Full access to all zones for operational control. No inbound pinholes — mgmt initiates only.",
     "description": "Control plane: hypervisors, backup, firewall, identity, cicd"
   },
+  "netbird": {
+    "type": "Overlay",
+    "state": "Manual",
+    "typeId": "7",
+    "subId": "0",
+    "vlantag": 0,
+    "ip": "100.64.0.0/10",
+    "bridge": "lan",
+    "access-to": [],
+    "pinhole-allowed-from": [],
+    "_comment": "NetBird WireGuard overlay (issue #367). NOT a VLAN/interface zone: state=Manual + vlantag=0 mean zone-manager never creates an interface, DHCP, or firewall rules for it (the 'bridge' field is inert, present only to satisfy the schema). It exists so firewall:proxy access-list.sh can resolve the NetBird peer CIDR and admit tunnel peers through Caddy: peers terminate on OPNsense's OWN interface, so the routing-peer masquerade does NOT rewrite their source — Caddy sees the peer's overlay IP (e.g. 100.70.x.x), which matched no 10.x zone and was 403'd. Per-peer authorization is enforced by NetBird's own access policies (only the Admins group gets the route to OPNsense), so allowing the whole overlay CIDR here is safe. The default 100.64.0.0/10 is NetBird's full CGNAT allocation range and covers any sub-range the management server hands out (e.g. 100.70.0.0/16); narrow it only if you deliberately restrict NetBird to a smaller network. Included in the default Caddy allow-set like mgmt; services with an explicit proxyAllowedZones must add 'netbird' to keep tunnel access.",
+    "description": "NetBird VPN overlay: admin tunnel peers (not a VLAN)"
+  },
   "srv": {
     "type": "Service",
     "state": "Inactive",

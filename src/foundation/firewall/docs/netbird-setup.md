@@ -97,6 +97,42 @@ Allows admin peers to use the `TAPPaaS Internal` network route.
 
 ---
 
+## 5. Reaching Caddy-proxied services
+
+Services published through Caddy (the OPNsense reverse proxy) are guarded by
+per-zone IP access lists built from `zones.json` CIDRs. NetBird peers need one
+extra consideration here.
+
+> **Source-IP limitation.** The routing peer's **masquerade only rewrites
+> traffic it *forwards* to another host.** Caddy runs **on OPNsense itself**, so
+> a request to a proxied service *terminates on OPNsense's own interface* — there
+> is no forwarding hop to masquerade. Caddy therefore sees the peer's real
+> NetBird source (e.g. `100.70.x.x`), not a `10.x` zone IP. (Outbound NAT does
+> not help either: it rewrites traffic *leaving* an interface, and this traffic
+> is locally delivered.)
+
+TAPPaaS handles this with a **`netbird` overlay zone** in `zones.json`
+(`ip: 100.64.0.0/10`, `state: Manual`, `vlantag: 0` — no interface/DHCP/rules).
+`access-list.sh` resolves it like any other zone and includes it in the default
+internal allow-set, so tunnel peers are admitted alongside `mgmt`. Per-peer
+authorization stays with NetBird's own access policies (only `Admins` get the
+route to OPNsense), so allowing the whole overlay CIDR at Caddy is safe.
+
+> **Default CIDR.** `100.64.0.0/10` is NetBird's full CGNAT allocation range, so
+> it covers any sub-range the management server assigns (e.g. `100.70.0.0/16`)
+> with no per-deployment tuning. Narrow it only if you deliberately restrict
+> NetBird to a smaller network; peers assigned outside the configured CIDR are
+> 403'd again.
+
+> A service that overrides `proxyAllowedZones` to a narrow list (e.g.
+> `["mgmt"]`) must add `"netbird"` to keep tunnel access — the default-include
+> only applies when `proxyAllowedZones` is absent.
+
+If you prefer not to expose proxied services to the overlay at all, the
+operator workaround is to reach them from a wired LAN (mgmt) connection instead.
+
+---
+
 ## Result
 
 After setup, an admin peer connecting to Netbird automatically receives:

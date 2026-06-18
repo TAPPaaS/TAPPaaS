@@ -9,10 +9,13 @@
 #   caddy-manager add-handler ... --access-list "<name>"
 #
 # proxyAllowedZones semantics:
-#   - absent  → internal default: every Active "Service" zone plus home, work
-#               and mgmt (NOT the internet) — zero-trust-by-default.
+#   - absent  → internal default: every Active "Service" zone plus home, work,
+#               mgmt and the netbird overlay (NOT the internet) — zero-trust-by-
+#               default. netbird (#367) admits WireGuard tunnel peers, which reach
+#               Caddy with their own overlay source IP.
 #   - a list  → exactly those zones. Include the literal "internet" to publish
-#               the service publicly (no restriction).
+#               the service publicly (no restriction); include "netbird" to keep
+#               tunnel access on a service that otherwise narrows its zones.
 #
 # Expects the caller to provide info()/warn()/error() and have caddy-manager in
 # PATH. All progress output goes to stderr so stdout carries only the resolved
@@ -31,12 +34,16 @@ proxy_resolve_access_list() {
 
     if [[ ${#zones[@]} -eq 0 ]]; then
         if [[ -f "${zones_file}" ]]; then
-            # mgmt is always included (it is state=Manual, not Active); plus
-            # every Active Service zone and the home/work client zones.
+            # mgmt and netbird are always included (both state=Manual, not Active):
+            # mgmt is the control plane; netbird is the WireGuard admin overlay whose
+            # peers terminate on OPNsense with their own 100.70.x.x source (issue #367)
+            # — without it tunnel peers are 403'd by Caddy. Plus every Active Service
+            # zone and the home/work client zones.
             mapfile -t zones < <(jq -r '
                 to_entries[]
                 | select(
                     .key == "mgmt"
+                    or .key == "netbird"
                     or (.value.state == "Active"
                         and (.value.type == "Service" or .key == "home" or .key == "work"))
                   )
