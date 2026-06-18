@@ -51,6 +51,13 @@ function warn() {
 
 function error() { echo -e "${RD}[Error]${CL} $*" >&2; }
 
+# die: print an error and stop the build (#368). The image-prep paths below call
+# this to fail loudly on a bad decompression or an empty/truncated disk image —
+# without it a silently truncated zstd (the #368 symptom) imported a broken disk
+# with no diagnostic. Disable the ERR trap first so the message isn't buried
+# under error_handler's generic output (no VM/disk exists yet at call sites).
+function die() { trap - ERR; error "$*"; exit 1; }
+
 function create_vm_descriptions_html() {
   local TEXT="$1"
   DESCRIPTION_HTML=$(
@@ -422,20 +429,24 @@ if [ "${IMAGETYPE:-}" != "clone" ]; then
     if [[ "$IMAGE" == *.bz2 ]]; then
       TARGET_IMAGE="${IMAGE%.bz2}"
       info "Decompressing $TARGET_IMAGE after download, have patience"
-      bzip2 -dc "$IMAGE" > "$TARGET_IMAGE"
+      bzip2 -dc "$IMAGE" > "$TARGET_IMAGE" || die "Failed to decompress ${IMAGE} with bzip2"
     elif [[ "$IMAGE" == *.xz ]]; then
       TARGET_IMAGE="${IMAGE%.xz}"
       info "Decompressing $TARGET_IMAGE after download, have patience"
-      xz -d "$IMAGE"
+      xz -d "$IMAGE" || die "Failed to decompress ${IMAGE} with xz"
     elif [[ "$IMAGE" == *.zst ]]; then
       # The prebuilt tappaas-nixos image ships as .qcow2.zst (zstd is fast to
-      # decompress and present on every Proxmox node).
+      # decompress and present on every Proxmox node). --long=27 must match the
+      # window the image was compressed with, else zstd silently truncates (#368).
       TARGET_IMAGE="${IMAGE%.zst}"
       info "Decompressing $TARGET_IMAGE after download, have patience"
-      zstd -d --long=27 -f "$IMAGE" -o "$TARGET_IMAGE"
+      zstd -d --long=27 -f "$IMAGE" -o "$TARGET_IMAGE" || die "Failed to decompress ${IMAGE} with zstd"
     else
       TARGET_IMAGE="$IMAGE"
     fi
+    # Guard against a silently truncated/empty result before importing it (#368):
+    # a broken disk imports without error and the VM then never boots.
+    [[ -s "$TARGET_IMAGE" ]] || die "Image preparation failed; expected a usable disk image at ${TARGET_IMAGE}"
     info "Downloaded and prepared IMG: ${CL}${BL}${TARGET_IMAGE}${CL}"
   else
     info "unknown image type: ${IMAGETYPE}, exiting"
@@ -447,7 +458,14 @@ echo ""
 info "${BOLD}Starting the $VMNAME VM creation process..."
 if [ "$IMAGETYPE" == "img" ]; then  # First use: this is used to stand up a firewall vm from a disk image
   info "${BOLD}Creating a Image based VM"
-  qm create $VMID -agent 1 -tablet 0 -localtime 1 \
+  # Attach a serial console (#368). The prebuilt OPNsense firewall image bakes
+  # primaryconsole=serial (firewall-config.xml.template) and the maurice-w base
+  # image is serial-oriented, so FreeBSD directs its console to com1. Without a
+  # serial0 device that output goes nowhere — the VM "never comes alive" (blank
+  # Proxmox/noVNC display, no usable terminal). serial0=socket gives the serial
+  # console a sink and makes `qm terminal $VMID` work; VGA (std) remains as the
+  # image's secondaryconsole=video.
+  qm create $VMID -agent 1 -tablet 0 -localtime 1 -serial0 socket \
     -name $VMNAME  -onboot 1 -bios $BIOS -ostype $VM_OSTYPE -cpu "$CPU_TYPE" -scsihw virtio-scsi-single 1>/dev/null
   qm importdisk $VMID ${TARGET_IMAGE} $STORAGE  1>/dev/null   # OS image → vm-${VMID}-disk-0
   if [ "$BIOS" == "ovmf" ]; then
