@@ -641,6 +641,23 @@ class TestCaddyReachability(TestConfigureFirewallRulesSequencing):
         fake = self._run(zones)
         self.assertEqual(self._caddy_rules(fake), [])
 
+    def test_isolated_zone_without_internet_gets_no_rule(self):
+        # A zone with empty access-to (fully isolated) must NOT reach Caddy.
+        zones = _build_zones(home={"access_to": []})
+        fake = self._run(zones)
+        descs = {r.description for r in self._caddy_rules(fake)}
+        self.assertNotIn("Zone home -> caddy https", descs)
+        self.assertNotIn("Zone home -> caddy http", descs)
+        # internet-capable peers still get theirs.
+        self.assertIn("Zone srv -> caddy https", descs)
+
+    def test_all_access_zone_gets_rule(self):
+        # access-to=[all] implies internet → still reachable.
+        zones = _build_zones(home={"access_to": ["all"]})
+        fake = self._run(zones)
+        descs = {r.description for r in self._caddy_rules(fake)}
+        self.assertIn("Zone home -> caddy https", descs)
+
     def test_idempotent_rerun_creates_nothing(self):
         first = self._run(_build_zones())
         existing = [_to_info(r, uuid=f"u{i}") for i, r in enumerate(first.created)]

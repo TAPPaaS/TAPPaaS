@@ -615,9 +615,10 @@ class ZoneManager:
     # proxied name to the DMZ gateway IP (where os-caddy listens on 0.0.0.0:443).
     # Client zones such as home/work have no `access-to: dmz`, so their band-5
     # rfc1918 block (base+90, 30000+) would drop traffic to that IP. We therefore
-    # emit a blanket PASS to the DMZ gateway on tcp/80+443 from every zone, low in
-    # band 1 (100-999) so — under first-match-quick — it is evaluated *before* the
-    # rfc1918 block and lets the packet reach Caddy. This is L3 reachability only:
+    # emit a PASS to the DMZ gateway /32 on tcp/80+443 from every internet-capable
+    # zone, low in band 1 (100-999) so — under first-match-quick — it is evaluated
+    # *before* the rfc1918 block and lets the packet reach Caddy. This is L3
+    # reachability only (the DMZ gateway IP on Caddy's ports, not the DMZ subnet):
     # Caddy's own `proxyAllowedZones` ACL remains the real authorization gate, so
     # opening the path from all zones does not grant any zone access to a service.
     CADDY_REACH_SEQUENCE = 990         # band 1; https=990, http=991
@@ -1608,6 +1609,12 @@ class ZoneManager:
         pure L3 reachability — Caddy's `proxyAllowedZones` ACL still authorizes per
         service, so no zone gains service access it would not otherwise have.
 
+        Scope: only zones that already have internet access (``access-to``
+        contains ``internet`` or ``all``) get the pass. A fully-isolated zone
+        (e.g. iotCams/iotLocal with empty ``access-to``) is deliberately left
+        unable to reach the reverse proxy. The destination is the DMZ gateway
+        ``/32`` on Caddy's ports only — never the DMZ subnet.
+
         Rules are named ``Zone <name> -> caddy <proto>`` so the existing
         disabled-zone cleanup (which deletes by the ``Zone <name> `` prefix) tears
         them down when a zone is disabled.
@@ -1622,12 +1629,18 @@ class ZoneManager:
             warn(f"  Caddy reachability (#366): cannot derive DMZ gateway: {e} — skipping")
             return
 
-        # Every zone whose clients enter on their own interface needs the pass:
-        # enabled zones (incl. fully-isolated ones) plus manual zones (e.g. mgmt).
-        # The dmz zone itself reaches the gateway locally and is skipped.
+        # Only zones that already have internet egress reach the proxy: a zone
+        # with internet access can already initiate outbound, so letting it reach
+        # Caddy adds no new exposure. Fully-isolated zones (empty access-to) are
+        # left unable to reach the reverse proxy. The dmz zone reaches the gateway
+        # locally and is skipped. Manual zones (e.g. mgmt) are included.
+        def _has_internet(z: "Zone") -> bool:
+            targets = {t.lower() for t in z.access_to}
+            return "internet" in targets or "all" in targets
+
         candidate_zones = [
             z for z in (self.get_enabled_zones() + self.get_manual_zones())
-            if z.name != dmz.name
+            if z.name != dmz.name and _has_internet(z)
         ]
 
         for zone in candidate_zones:

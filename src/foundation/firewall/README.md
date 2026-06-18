@@ -225,7 +225,7 @@ and removed on the consumer's teardown — regardless of the provider's state.
 | Band | Range | Source | Purpose |
 |------|-------|--------|---------|
 | 0 | 0–99 | OPNsense auto | Anti-lockout |
-| 1 | 100–999 | `zone-manager` | Infrastructure (DHCP, NTP, ICMP); Caddy reachability to the DMZ gateway on tcp/80+443 from every zone (seq 990/991, #366) |
+| 1 | 100–999 | `zone-manager` | Infrastructure (DHCP, NTP, ICMP); Caddy reachability to the DMZ gateway `/32` on tcp/80+443 from every internet-capable zone (seq 990/991, #366) |
 | 2 | 1000–9999 | `zone-manager` | Foundation deny defaults |
 | **3** | **10000–19999** | **`rules-manager` ingress** | Per-module pinholes |
 | **4** | **20000–29999** | **`rules-manager` egress** | Per-module egress exceptions |
