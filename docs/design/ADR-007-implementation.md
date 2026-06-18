@@ -100,353 +100,6 @@ graph TB
 > **Note**: Zones are now named the same as environments (sunsetting `srvHome`, `srvWork`, `srvCust`, etc.).
 > The Nextcloud module is installed in both `foo` and `bar` environments.
 
-### Example: site.json (umbrella)
-
-Site.json contains **site-wide** settings only. Domain, DNS, and identity are **per-environment** (defined in each environment's `domains` and managed by Caddy/Authentik).
-
-```json
-{
-  "name": "foobar-site",
-  "displayName": "Foo & Bar Shared Platform",
-  "owner": "myOrg",
-  "location": {
-    "country": "NL",
-    "timezone": "Europe/Amsterdam",
-    "locale": "nl_NL"
-  },
-  "network": {
-    "isp": "KPN Business",
-    "publicIp": "auto"
-  },
-  "hardware": {
-    "nodes": [
-      { "name": "tappaas1", "storagePools": ["tanka1", "tankb1"] },
-      { "name": "tappaas2", "storagePools": ["tanka2", "tankb2"] },
-      { "name": "tappaas3", "storagePools": ["tanka3"] }
-    ]
-  },
-  "backup": {
-    "target": "backup.foobar-platform.nl",
-    "offsite": "pbs-offsite-buddy"
-  },
-  "updateSchedule": ["monthly", "Thursday", 2],
-  "automaticReboot": true,
-  "snapshotRetention": 5,
-  "repositories": [
-    {
-      "name": "tappaas-official",
-      "url": "https://github.com/TAPPaaS/TAPPaaS",
-      "updateChannel": "stable"
-    },
-    {
-      "name": "foo-private",
-      "url": "https://github.com/foo-company/tappaas-modules",
-      "updateChannel": "main"
-    }
-  ],
-  "environments": [
-    "config/environments/mgmt.json",
-    "config/environments/default.json",
-    "config/environments/foo.json",
-    "config/environments/bar.json"
-  ],
-  "organizations": [
-    "config/people/organizations/myOrg.json",
-    "config/people/organizations/foo-company.json",
-    "config/people/organizations/bar-company.json"
-  ]
-}
-```
-
-> **Migration note**: `automaticReboot` and `snapshotRetention` will move to per-environment settings when P3 is implemented. Until then, they remain site-wide in `site.json`.
-
-### Example: environments/foo.json
-
-Per ADR-007c:
-
-- `ownerOrg` **references** a People Organization (validated, not a free string)
-- `vlan` lives in `zones.json`, not here (CR-09)
-- `updateWindow`/`updateChannel` out of v1 (CR-12/13, tracked as issues)
-- Zone name matches environment name (sunsetting `srvHome`, `srvWork`, etc.)
-- `dataResidency` is per-environment (moved from Organization)
-
-```json
-{
-  "name": "foo",
-  "displayName": "Foo Company",
-  "ownerOrg": "foo-company",
-  "domains": {
-    "primary": "foo-company.nl",
-    "aliases": ["foocompany.com"],
-    "aliasMode": "redirect"
-  },
-  "network": {
-    "zone": "foo"
-  },
-  "dataResidency": "eu-only",
-  "backup": {
-    "retention": "7y"
-  },
-  "legal": {
-    "processor": "myOrg BV"
-  }
-}
-```
-
-### Example: environments/bar.json
-
-```json
-{
-  "name": "bar",
-  "displayName": "Bar Industries",
-  "ownerOrg": "bar-company",
-  "domains": {
-    "primary": "bar-industries.nl"
-  },
-  "network": {
-    "zone": "bar"
-  },
-  "dataResidency": "eu-only",
-  "backup": {
-    "retention": "5y"
-  },
-  "legal": {
-    "processor": "myOrg BV"
-  }
-}
-```
-
-### Example: environments/default.json
-
-```json
-{
-  "name": "default",
-  "displayName": "Default Environment",
-  "ownerOrg": "myOrg",
-  "domains": {
-    "primary": "foobar-platform.nl"
-  },
-  "network": {
-    "zone": "default"
-  },
-  "dataResidency": "eu-only",
-  "backup": {
-    "retention": "7y"
-  }
-}
-```
-
-### Example: environments/mgmt.json (Management Environment)
-
-The `mgmt` environment does not require a `domains` field — foundation modules are accessed via internal DNS only.
-
-```json
-{
-  "name": "mgmt",
-  "displayName": "Management",
-  "ownerOrg": "myOrg",
-  "network": {
-    "zone": "mgmt"
-  }
-}
-```
-
-### Example: people/roles/root.json
-
-Roles are labels that identify permission sets. The `name` is used to identify the role in Authentik. Actual permissions are configured directly in Authentik via policies and application entitlements.
-
-```json
-{
-  "name": "root",
-  "displayName": "Platform Root",
-  "description": "Full platform access - superuser privileges"
-}
-```
-
-### Example: people/roles/admin.json
-
-```json
-{
-  "name": "admin",
-  "displayName": "Administrator",
-  "description": "Administrative access to assigned environments"
-}
-```
-
-### Example: people/roles/user.json
-
-```json
-{
-  "name": "user",
-  "displayName": "User",
-  "description": "Standard user access to assigned applications"
-}
-```
-
-### Example: people/organizations/myOrg.json
-
-Per ADR-007a, every attribute must justify its **reason**, **default**, and **operational impact** (no CRM-creep). The `name` is used to identify the organization (tenant) in Authentik.
-
-```json
-{
-  "name": "myOrg",
-  "type": "company",
-  "displayName": "myOrg BV",
-  "owner": "admin"
-}
-```
-
-### Example: people/organizations/foo-company.json
-
-```json
-{
-  "name": "foo-company",
-  "type": "company",
-  "displayName": "Foo Company BV",
-  "owner": "jan-de-vries",
-  "parentOrg": "myOrg"
-}
-```
-
-### Example: people/organizations/bar-company.json
-
-A **customer** organization adds `parentOrg` to indicate the hosting relationship.
-
-```json
-{
-  "name": "bar-company",
-  "type": "customer",
-  "displayName": "Bar Industries BV",
-  "owner": "piet-bakker",
-  "parentOrg": "myOrg"
-}
-```
-
-### Example: people/groups/myOrg__admins.json
-
-Groups are named `{org}__{groupname}`. The `name` is used to identify the group in Authentik.
-
-```json
-{
-  "name": "myOrg__admins",
-  "type": "team",
-  "displayName": "myOrg Administrators",
-  "ownerOrg": "myOrg",
-  "roles": ["admin"]
-}
-```
-
-### Example: people/groups/myOrg__users.json
-
-```json
-{
-  "name": "myOrg__users",
-  "type": "team",
-  "displayName": "myOrg Users",
-  "ownerOrg": "myOrg",
-  "roles": ["user"]
-}
-```
-
-### Example: people/groups/foo-company__admins.json
-
-Per ADR-007a, membership is modeled on the **User** (`memberOf`), not on the Group.
-
-```json
-{
-  "name": "foo-company__admins",
-  "type": "team",
-  "displayName": "Foo Administrators",
-  "ownerOrg": "foo-company",
-  "roles": ["admin"]
-}
-```
-
-### Example: people/groups/foo-company__users.json
-
-```json
-{
-  "name": "foo-company__users",
-  "type": "team",
-  "displayName": "Foo Users",
-  "ownerOrg": "foo-company",
-  "roles": ["user"]
-}
-```
-
-### Example: people/users/admin.json
-
-The platform administrator. The `name` is used to identify the user in Authentik. The `roles` field assigns direct roles (independent of group membership) — use sparingly.
-
-```json
-{
-  "name": "admin",
-  "displayName": "Platform Administrator",
-  "primaryEmail": "admin@foobar-platform.nl",
-  "memberOf": [
-    "myOrg__admins"
-  ],
-  "roles": ["root"]
-}
-```
-
-### Example: people/users/jan-de-vries.json
-
-Users belong to groups via `memberOf`. The same user can be in groups across multiple organizations. Roles are inherited from groups.
-
-```json
-{
-  "name": "jan-de-vries",
-  "displayName": "Jan de Vries",
-  "primaryEmail": "jan@foo-company.nl",
-  "memberOf": [
-    "foo-company__admins",
-    "foo-company__users"
-  ]
-}
-```
-
-### Example: people/users/piet-bakker.json
-
-```json
-{
-  "name": "piet-bakker",
-  "displayName": "Piet Bakker",
-  "primaryEmail": "piet@bar-industries.nl",
-  "memberOf": [
-    "bar-company__admins"
-  ]
-}
-```
-
-### Module Installation
-
-**Important**: `tier` and `source` are **intrinsic properties** of the module, determined by:
-
-- **`tier`**: Defined in the module's `{name}.json` (`foundation` or `app`)
-- **`source`**: Determined by which repository the module comes from (official, community, private, or local)
-
-These are NOT installation-time flags. The installer reads them from the module definition and repository configuration.
-
-```bash
-# Install Nextcloud for Foo environment
-# tier=app and source=official are read from nextcloud.json and the tappaas-official repo
-install-module.sh nextcloud --environment foo
-
-# Install the same Nextcloud for Bar environment (multi-tenant)
-install-module.sh nextcloud --environment bar
-
-# Install a private module from the foo-private repo
-# tier=app is in foo-crm.json; source=private is inferred from the foo-private repo
-install-module.sh foo-crm --environment foo --repo foo-private
-
-# Install a community module for Bar
-# source=community is inferred from the community repo where paperless-ngx is catalogued
-install-module.sh paperless-ngx --environment bar
-```
-
-**Lint rule (ADR-007b)**: `tier: foundation` requires `source: official` (or explicit override for forks).
-
 ---
 
 ## Implementation Packages
@@ -691,6 +344,176 @@ Bootstrap script that creates minimal myOrg setup with one admin user:
 
 **Dependencies**: None (foundational package)
 
+### P1 Examples
+
+#### Example: people/roles/root.json
+
+Roles are labels that identify permission sets. The `name` is used to identify the role in Authentik. Actual permissions are configured directly in Authentik via policies and application entitlements.
+
+```json
+{
+  "name": "root",
+  "displayName": "Platform Root",
+  "description": "Full platform access - superuser privileges"
+}
+```
+
+#### Example: people/roles/admin.json
+
+```json
+{
+  "name": "admin",
+  "displayName": "Administrator",
+  "description": "Administrative access to assigned environments"
+}
+```
+
+#### Example: people/roles/user.json
+
+```json
+{
+  "name": "user",
+  "displayName": "User",
+  "description": "Standard user access to assigned applications"
+}
+```
+
+#### Example: people/organizations/myOrg.json
+
+Per ADR-007a, every attribute must justify its **reason**, **default**, and **operational impact** (no CRM-creep). The `name` is used to identify the organization (tenant) in Authentik.
+
+```json
+{
+  "name": "myOrg",
+  "type": "company",
+  "displayName": "myOrg BV",
+  "owner": "admin"
+}
+```
+
+#### Example: people/organizations/foo-company.json
+
+```json
+{
+  "name": "foo-company",
+  "type": "company",
+  "displayName": "Foo Company BV",
+  "owner": "jan-de-vries",
+  "parentOrg": "myOrg"
+}
+```
+
+#### Example: people/organizations/bar-company.json
+
+A **customer** organization adds `parentOrg` to indicate the hosting relationship.
+
+```json
+{
+  "name": "bar-company",
+  "type": "customer",
+  "displayName": "Bar Industries BV",
+  "owner": "piet-bakker",
+  "parentOrg": "myOrg"
+}
+```
+
+#### Example: people/groups/myOrg__admins.json
+
+Groups are named `{org}__{groupname}`. The `name` is used to identify the group in Authentik.
+
+```json
+{
+  "name": "myOrg__admins",
+  "type": "team",
+  "displayName": "myOrg Administrators",
+  "ownerOrg": "myOrg",
+  "roles": ["admin"]
+}
+```
+
+#### Example: people/groups/myOrg__users.json
+
+```json
+{
+  "name": "myOrg__users",
+  "type": "team",
+  "displayName": "myOrg Users",
+  "ownerOrg": "myOrg",
+  "roles": ["user"]
+}
+```
+
+#### Example: people/groups/foo-company__admins.json
+
+Per ADR-007a, membership is modeled on the **User** (`memberOf`), not on the Group.
+
+```json
+{
+  "name": "foo-company__admins",
+  "type": "team",
+  "displayName": "Foo Administrators",
+  "ownerOrg": "foo-company",
+  "roles": ["admin"]
+}
+```
+
+#### Example: people/groups/foo-company__users.json
+
+```json
+{
+  "name": "foo-company__users",
+  "type": "team",
+  "displayName": "Foo Users",
+  "ownerOrg": "foo-company",
+  "roles": ["user"]
+}
+```
+
+#### Example: people/users/admin.json
+
+The platform administrator. The `name` is used to identify the user in Authentik. The `roles` field assigns direct roles (independent of group membership) — use sparingly.
+
+```json
+{
+  "name": "admin",
+  "displayName": "Platform Administrator",
+  "primaryEmail": "admin@foobar-platform.nl",
+  "memberOf": [
+    "myOrg__admins"
+  ],
+  "roles": ["root"]
+}
+```
+
+#### Example: people/users/jan-de-vries.json
+
+Users belong to groups via `memberOf`. The same user can be in groups across multiple organizations. Roles are inherited from groups.
+
+```json
+{
+  "name": "jan-de-vries",
+  "displayName": "Jan de Vries",
+  "primaryEmail": "jan@foo-company.nl",
+  "memberOf": [
+    "foo-company__admins",
+    "foo-company__users"
+  ]
+}
+```
+
+#### Example: people/users/piet-bakker.json
+
+```json
+{
+  "name": "piet-bakker",
+  "displayName": "Piet Bakker",
+  "primaryEmail": "piet@bar-industries.nl",
+  "memberOf": [
+    "bar-company__admins"
+  ]
+}
+```
+
 ---
 
 ## P2: Site JSON Migration
@@ -811,6 +634,68 @@ fi
 
 **Dependencies**: P1 (for organization references in site.json)
 
+### P2 Example
+
+#### Example: site.json (umbrella)
+
+Site.json contains **site-wide** settings only. Domain, DNS, and identity are **per-environment** (defined in each environment's `domains` and managed by Caddy/Authentik).
+
+```json
+{
+  "name": "foobar-site",
+  "displayName": "Foo & Bar Shared Platform",
+  "owner": "myOrg",
+  "location": {
+    "country": "NL",
+    "timezone": "Europe/Amsterdam",
+    "locale": "nl_NL"
+  },
+  "network": {
+    "isp": "KPN Business",
+    "publicIp": "auto"
+  },
+  "hardware": {
+    "nodes": [
+      { "name": "tappaas1", "storagePools": ["tanka1", "tankb1"] },
+      { "name": "tappaas2", "storagePools": ["tanka2", "tankb2"] },
+      { "name": "tappaas3", "storagePools": ["tanka3"] }
+    ]
+  },
+  "backup": {
+    "target": "backup.foobar-platform.nl",
+    "offsite": "pbs-offsite-buddy"
+  },
+  "updateSchedule": ["monthly", "Thursday", 2],
+  "automaticReboot": true,
+  "snapshotRetention": 5,
+  "repositories": [
+    {
+      "name": "tappaas-official",
+      "url": "https://github.com/TAPPaaS/TAPPaaS",
+      "updateChannel": "stable"
+    },
+    {
+      "name": "foo-private",
+      "url": "https://github.com/foo-company/tappaas-modules",
+      "updateChannel": "main"
+    }
+  ],
+  "environments": [
+    "config/environments/mgmt.json",
+    "config/environments/default.json",
+    "config/environments/foo.json",
+    "config/environments/bar.json"
+  ],
+  "organizations": [
+    "config/people/organizations/myOrg.json",
+    "config/people/organizations/foo-company.json",
+    "config/people/organizations/bar-company.json"
+  ]
+}
+```
+
+> **Migration note**: `automaticReboot` and `snapshotRetention` will move to per-environment settings when P3 is implemented. Until then, they remain site-wide in `site.json`.
+
 ---
 
 ## P3: Environment Schema
@@ -885,6 +770,99 @@ Environment (config/environments/{name}.json):
 - [ ] Legacy environments default `ownerOrg` to family org
 
 **Dependencies**: P1, P2
+
+### P3 Examples
+
+#### Example: environments/foo.json
+
+Per ADR-007c:
+
+- `ownerOrg` **references** a People Organization (validated, not a free string)
+- `vlan` lives in `zones.json`, not here (CR-09)
+- `updateWindow`/`updateChannel` out of v1 (CR-12/13, tracked as issues)
+- Zone name matches environment name (sunsetting `srvHome`, `srvWork`, etc.)
+- `dataResidency` is per-environment (moved from Organization)
+
+```json
+{
+  "name": "foo",
+  "displayName": "Foo Company",
+  "ownerOrg": "foo-company",
+  "domains": {
+    "primary": "foo-company.nl",
+    "aliases": ["foocompany.com"],
+    "aliasMode": "redirect"
+  },
+  "network": {
+    "zone": "foo"
+  },
+  "dataResidency": "eu-only",
+  "backup": {
+    "retention": "7y"
+  },
+  "legal": {
+    "processor": "myOrg BV"
+  }
+}
+```
+
+#### Example: environments/bar.json
+
+```json
+{
+  "name": "bar",
+  "displayName": "Bar Industries",
+  "ownerOrg": "bar-company",
+  "domains": {
+    "primary": "bar-industries.nl"
+  },
+  "network": {
+    "zone": "bar"
+  },
+  "dataResidency": "eu-only",
+  "backup": {
+    "retention": "5y"
+  },
+  "legal": {
+    "processor": "myOrg BV"
+  }
+}
+```
+
+#### Example: environments/default.json
+
+```json
+{
+  "name": "default",
+  "displayName": "Default Environment",
+  "ownerOrg": "myOrg",
+  "domains": {
+    "primary": "foobar-platform.nl"
+  },
+  "network": {
+    "zone": "default"
+  },
+  "dataResidency": "eu-only",
+  "backup": {
+    "retention": "7y"
+  }
+}
+```
+
+#### Example: environments/mgmt.json (Management Environment)
+
+The `mgmt` environment does not require a `domains` field — foundation modules are accessed via internal DNS only.
+
+```json
+{
+  "name": "mgmt",
+  "displayName": "Management",
+  "ownerOrg": "myOrg",
+  "network": {
+    "zone": "mgmt"
+  }
+}
+```
 
 ---
 
@@ -1101,6 +1079,36 @@ Catalog Entry (module-catalog.json entries):
 - [ ] `--environment` and `--variant` both work (compat period)
 
 **Dependencies**: None (can run in parallel with P1-P3)
+
+### P4 Examples
+
+#### Module Installation
+
+**Important**: `tier` and `source` are **intrinsic properties** of the module, determined by:
+
+- **`tier`**: Defined in the module's `{name}.json` (`foundation` or `app`)
+- **`source`**: Determined by which repository the module comes from (official, community, private, or local)
+
+These are NOT installation-time flags. The installer reads them from the module definition and repository configuration.
+
+```bash
+# Install Nextcloud for Foo environment
+# tier=app and source=official are read from nextcloud.json and the tappaas-official repo
+install-module.sh nextcloud --environment foo
+
+# Install the same Nextcloud for Bar environment (multi-tenant)
+install-module.sh nextcloud --environment bar
+
+# Install a private module from the foo-private repo
+# tier=app is in foo-crm.json; source=private is inferred from the foo-private repo
+install-module.sh foo-crm --environment foo --repo foo-private
+
+# Install a community module for Bar
+# source=community is inferred from the community repo where paperless-ngx is catalogued
+install-module.sh paperless-ngx --environment bar
+```
+
+**Lint rule (ADR-007b)**: `tier: foundation` requires `source: official` (or explicit override for forks).
 
 ---
 
