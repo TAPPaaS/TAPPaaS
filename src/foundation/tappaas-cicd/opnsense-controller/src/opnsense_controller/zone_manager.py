@@ -128,7 +128,7 @@ def postflight_checks(skip_egress: bool = False) -> bool:
 
 
 from .dhcp_manager import DhcpManager, DhcpRange
-from .firewall_manager import FirewallManager, FirewallRule, FirewallRuleInfo, RuleAction
+from .firewall_manager import FirewallManager, FirewallRule, FirewallRuleInfo, Protocol, RuleAction
 from .log import debug, error, info, warn
 from .vlan_manager import Vlan, VlanManager
 
@@ -610,6 +610,19 @@ class ZoneManager:
     ZONE_RULE_PASS_MAX = 88            # access-to passes occupy base+1 .. base+89
     ZONE_RULE_BLOCK_OFFSET = 90        # rfc1918 blocks at base+90/91/92
     ZONE_RULE_INTERNET_OFFSET = 99     # internet pass last (lowest priority)
+
+    # Caddy reverse-proxy reachability (#366). Split-horizon DNS resolves every
+    # proxied name to the DMZ gateway IP (where os-caddy listens on 0.0.0.0:443).
+    # Client zones such as home/work have no `access-to: dmz`, so their band-5
+    # rfc1918 block (base+90, 30000+) would drop traffic to that IP. We therefore
+    # emit a blanket PASS to the DMZ gateway on tcp/80+443 from every zone, low in
+    # band 1 (100-999) so — under first-match-quick — it is evaluated *before* the
+    # rfc1918 block and lets the packet reach Caddy. This is L3 reachability only:
+    # Caddy's own `proxyAllowedZones` ACL remains the real authorization gate, so
+    # opening the path from all zones does not grant any zone access to a service.
+    CADDY_REACH_SEQUENCE = 990         # band 1; https=990, http=991
+    CADDY_REACH_SOURCE = "10.0.0.0/8"  # blanket internal source (rule is iface-bound)
+    CADDY_REACH_PORTS = (("443", "https"), ("80", "http"))
 
     def _zone_rule_base(self, zone: "Zone") -> int:
         """Deterministic band-5 base sequence for a zone's access-to rules."""
@@ -1264,6 +1277,8 @@ class ZoneManager:
         sequence: int,
         check_mode: bool,
         results_list: list[dict],
+        protocol: Protocol = Protocol.ANY,
+        destination_port: str | None = None,
     ) -> None:
         """Create a firewall rule or skip if it already exists.
 
@@ -1278,6 +1293,8 @@ class ZoneManager:
             sequence: Rule sequence number for ordering
             check_mode: If True, don't make changes
             results_list: List to append result dicts to
+            protocol: L4 protocol to match (default ANY — zone access-to rules)
+            destination_port: Destination port/range to match (None = any)
         """
         action_str = "pass" if action == RuleAction.PASS else "block"
 
@@ -1301,6 +1318,7 @@ class ZoneManager:
                 or (existing.action or "").lower() != action_str
                 or existing.destination_net != destination_net
                 or existing.source_net != source_net
+                or (existing.destination_port or None) != destination_port
                 or seq_drift
             )
             if not drifted:
@@ -1350,8 +1368,10 @@ class ZoneManager:
                     description=description,
                     action=action,
                     interface=interface,
+                    protocol=protocol,
                     source_net=source_net,
                     destination_net=destination_net,
+                    destination_port=destination_port,
                     log=True,
                     sequence=sequence,
                 )
@@ -1538,6 +1558,14 @@ class ZoneManager:
                     "rules": zone_results,
                 }
 
+            # Blanket reverse-proxy reachability (#366): every zone may reach the
+            # DMZ gateway (Caddy) on tcp/80+443 regardless of access-to, so
+            # split-horizon DNS to the DMZ gateway works for client zones that have
+            # no access-to: dmz. Emitted across all zone interfaces, in band 1.
+            self._configure_caddy_reachability(
+                manager, existing_by_desc, results, check_mode
+            )
+
             # Apply all changes at once if not in check mode
             if not check_mode:
                 debug("  Applying firewall changes...")
@@ -1562,6 +1590,62 @@ class ZoneManager:
                     }
 
         return results
+
+    def _configure_caddy_reachability(
+        self,
+        manager: FirewallManager,
+        existing_by_desc: dict[str, FirewallRuleInfo],
+        results: dict,
+        check_mode: bool,
+    ) -> None:
+        """Emit a blanket PASS to the DMZ gateway (Caddy) from every zone (#366).
+
+        Split-horizon DNS points every proxied name at the DMZ gateway IP, where
+        os-caddy listens on 0.0.0.0:443. Client zones (home, work, …) have no
+        `access-to: dmz`, so their band-5 rfc1918 block would drop that traffic.
+        This adds an interface-bound PASS on tcp/80+443 to the DMZ gateway low in
+        band 1, so under first-match-quick it wins over the rfc1918 block. It is
+        pure L3 reachability — Caddy's `proxyAllowedZones` ACL still authorizes per
+        service, so no zone gains service access it would not otherwise have.
+
+        Rules are named ``Zone <name> -> caddy <proto>`` so the existing
+        disabled-zone cleanup (which deletes by the ``Zone <name> `` prefix) tears
+        them down when a zone is disabled.
+        """
+        dmz = self.get_zone_by_name("dmz")
+        if dmz is None:
+            warn("  Caddy reachability (#366): no 'dmz' zone in zones.json — skipping")
+            return
+        try:
+            caddy_dest = f"{dmz.gateway_ip}/32"
+        except Exception as e:  # noqa: BLE001 - malformed dmz.ip should not abort reconcile
+            warn(f"  Caddy reachability (#366): cannot derive DMZ gateway: {e} — skipping")
+            return
+
+        # Every zone whose clients enter on their own interface needs the pass:
+        # enabled zones (incl. fully-isolated ones) plus manual zones (e.g. mgmt).
+        # The dmz zone itself reaches the gateway locally and is skipped.
+        candidate_zones = [
+            z for z in (self.get_enabled_zones() + self.get_manual_zones())
+            if z.name != dmz.name
+        ]
+
+        for zone in candidate_zones:
+            zone_interface = self.get_zone_interface(zone)
+            if not zone_interface:
+                continue
+            zone_results = results.setdefault(
+                zone.name, {"status": "processed", "rules": []}
+            ).setdefault("rules", [])
+            for offset, (port, label) in enumerate(self.CADDY_REACH_PORTS):
+                self._create_or_skip_rule(
+                    manager, existing_by_desc,
+                    f"Zone {zone.name} -> caddy {label}",
+                    zone_interface, self.CADDY_REACH_SOURCE, caddy_dest,
+                    RuleAction.PASS, self.CADDY_REACH_SEQUENCE + offset,
+                    check_mode, zone_results,
+                    protocol=Protocol.TCP, destination_port=port,
+                )
 
     def update_dnsmasq_interfaces(self, check_mode: bool = True) -> dict:
         """Update dnsmasq to listen on all enabled VLAN interfaces.

@@ -16,6 +16,7 @@ from unittest.mock import MagicMock, patch
 
 from opnsense_controller.firewall_manager import (
     FirewallRuleInfo,
+    Protocol,
     RuleAction,
 )
 from opnsense_controller.zone_manager import (
@@ -442,7 +443,7 @@ def _to_info(rule, uuid="u") -> FirewallRuleInfo:
         source_net=rule.source_net,
         source_port=None,
         destination_net=rule.destination_net,
-        destination_port=None,
+        destination_port=rule.destination_port,
         log=True,
         sequence=rule.sequence,
     )
@@ -504,16 +505,22 @@ class TestConfigureFirewallRulesSequencing(unittest.TestCase):
 
     def test_all_zone_rules_in_band_5(self):
         fake = self._run(_build_zones())
-        self.assertTrue(fake.created)
-        for rule in fake.created:
+        # Caddy reachability rules (#366) intentionally live in band 1; the
+        # access-to/block/internet rules are the band-5 ones under test here.
+        zone_rules = [r for r in fake.created if "-> caddy " not in r.description]
+        self.assertTrue(zone_rules)
+        for rule in zone_rules:
             self.assertGreaterEqual(rule.sequence, 30000)
             self.assertLessEqual(rule.sequence, 39999)
 
     def test_zone_rules_sit_above_module_bands(self):
         # Band 5 must exceed the rules-manager pinhole/egress bands (10000-29999)
         # so a zone's rfc1918 block no longer shadows module pinholes (#243).
+        # (Caddy reachability is band 1 by design and excluded here.)
         fake = self._run(_build_zones())
         for rule in fake.created:
+            if "-> caddy " in rule.description:
+                continue
             self.assertGreater(rule.sequence, 29999)
 
     def test_block_and_internet_trail_passes(self):
@@ -586,6 +593,59 @@ class TestConfigureFirewallRulesSequencing(unittest.TestCase):
             r for r in second.created if r.description == "Zone srv -> gateway"
         )
         self.assertGreaterEqual(recreated.sequence, 30000)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Caddy reverse-proxy reachability (issue #366)
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+class TestCaddyReachability(TestConfigureFirewallRulesSequencing):
+    """Every zone gets a band-1 PASS to the DMZ gateway on tcp/80+443 (#366)."""
+
+    def _caddy_rules(self, fake):
+        return [r for r in fake.created if "-> caddy " in r.description]
+
+    def test_rule_emitted_per_non_dmz_zone(self):
+        fake = self._run(_build_zones())
+        descs = {r.description for r in self._caddy_rules(fake)}
+        # srv, home, locked-srv each get https + http; dmz itself is skipped.
+        for z in ("srv", "home", "locked-srv"):
+            self.assertIn(f"Zone {z} -> caddy https", descs)
+            self.assertIn(f"Zone {z} -> caddy http", descs)
+        self.assertNotIn("Zone dmz -> caddy https", descs)
+
+    def test_targets_dmz_gateway_on_tcp_80_and_443(self):
+        fake = self._run(_build_zones())
+        for r in self._caddy_rules(fake):
+            self.assertEqual(r.destination_net, "10.2.10.1/32")  # dmz gateway
+            self.assertEqual(r.source_net, "10.0.0.0/8")
+            self.assertEqual(r.action, RuleAction.PASS)
+            self.assertEqual(r.protocol, Protocol.TCP)
+            self.assertIn(r.destination_port, ("80", "443"))
+
+    def test_sits_below_rfc1918_block(self):
+        # Band 1 < band 5: under first-match-quick the pass beats the zone's
+        # rfc1918 block, so traffic to the DMZ gateway reaches Caddy.
+        fake = self._run(_build_zones())
+        s = self._seqs_by_desc(fake)
+        for z in ("srv", "home", "locked-srv"):
+            caddy = s[f"Zone {z} -> caddy https"]
+            block10 = s[f"Zone {z} block rfc1918-10"]
+            self.assertLess(caddy, block10)
+            self.assertLess(caddy, 30000)
+
+    def test_skipped_when_no_dmz_zone(self):
+        zones = _build_zones()
+        del zones["dmz"]
+        fake = self._run(zones)
+        self.assertEqual(self._caddy_rules(fake), [])
+
+    def test_idempotent_rerun_creates_nothing(self):
+        first = self._run(_build_zones())
+        existing = [_to_info(r, uuid=f"u{i}") for i, r in enumerate(first.created)]
+        second = self._run(_build_zones(), existing=existing)
+        self.assertEqual([r.description for r in self._caddy_rules(second)], [])
 
 
 # ─────────────────────────────────────────────────────────────────────────────
