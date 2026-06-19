@@ -111,42 +111,29 @@ graph TB
                     │  P1: People Schema  │
                     └──────────┬──────────┘
                                │
-        ┌──────────────────────┼──────────────────────┐
-        │                      │                      │
-        ▼                      ▼                      ▼
-┌───────────────┐   ┌──────────────────┐   ┌─────────────────────┐
-│ P2: Site JSON │   │ P3: Environment  │   │ P4: Module Updates  │
-│ (from config) │   │    Schema        │   │    (tier/source)    │
-└───────┬───────┘   └────────┬─────────┘   └──────────┬──────────┘
-        │                    │                        │
-        └──────────┬─────────┴────────────────────────┘
-                   │
-                   ▼
-        ┌──────────────────────┐
-        │  P5: tappaas-cicd    │
-        │  Layout (managers)   │
-        └──────────┬───────────┘
-                   │
-        ┌──────────┼──────────┐
-        │          │          │
-        ▼          │          ▼
-┌───────────────┐  │  ┌─────────────────────┐
-│ P6: Mgmt Zone │  │  │ P7: Default         │
-│ → Environment │  │  │    Environment      │
-└───────┬───────┘  │  └──────────┬──────────┘
-        │          │             │
-        └─────┬────┘─────────────┘
-              │
-              ▼
-   ┌──────────────────────┐
-   │  P8: Rename          │
-   │  firewall → network  │
-   └──────────────────────┘
-
-   ┌──────────────────────┐
-   │  P9: Backup          │◀─── depends on P2, P3, P5
-   │  Configuration       │
-   └──────────────────────┘
+                    ┌──────────┴──────────┐
+                    ▼                     ▼
+            ┌───────────────┐   ┌──────────────────┐
+            │ P2: Site JSON │   │ P3: Environment  │   (P2 ∥ P3)
+            │ (from config) │   │    Schema        │──┐
+            └───────┬───────┘   └────────┬─────────┘  │ (only P3)
+                    │                    │            ▼
+                    │                    │   ┌─────────────────────┐
+                    │                    │   │ P7: Default          │
+                    │                    │   │    Environment       │
+                    └──────────┬─────────┘   └─────────────────────┘
+                               ▼
+                    ┌──────────────────────┐
+                    │  P4: tappaas-cicd    │   reorg BEFORE module updates —
+                    │  Layout (managers)   │   the hub everything below needs
+                    └──────────┬───────────┘
+              ┌────────────────┼───────────────┬────────────────┐
+              ▼                ▼                ▼                ▼
+   ┌──────────────────┐ ┌─────────────┐ ┌─────────────┐ ┌──────────────────┐
+   │ P5: Module       │ │ P6: Mgmt    │ │ P8: Rename  │ │ P9: Backup       │
+   │ Updates          │ │ Zone → Env  │ │ firewall →  │ │ Configuration    │
+   │ (tier/source)    │ │ (also P3)   │ │ network     │ │ (also P2, P3)    │
+   └──────────────────┘ └─────────────┘ └─────────────┘ └──────────────────┘
 ```
 
 ---
@@ -866,7 +853,295 @@ The `mgmt` environment does not require a `domains` field — foundation modules
 
 ---
 
-## P4: Module Updates
+## P4: tappaas-cicd Layout
+
+**Closes**: #365 (managers/controllers layout), #364 (split opnsense-controller)
+
+**Purpose**: Organize the control-plane scripts under `tappaas-cicd` into a clear **managers** vs **controllers** structure. The overall `src/` layout remains unchanged — this package focuses on organizing scripts within `tappaas-cicd`.
+
+### Managers vs Controllers
+
+| Type | Purpose | Operates On | Examples |
+|------|---------|-------------|----------|
+| **Manager** | CRUD + lifecycle for domain objects (incl. cross-controller orchestration) | JSON config files + Authentik sync | people-manager, environment-manager, site-manager, module-manager, health-manager, **network-manager** |
+| **Controller** | Direct control of infrastructure | APIs, VMs, network devices | zone-controller, opnsense-controller (+ dns/dhcp/firewall/caddy/nat subcontrollers), proxmox-controller, switch-controller, ap-controller, identity-controller |
+
+> **network-manager** is a manager that *orchestrates the network controllers* (the way `environment-manager` orchestrates `zone-controller` + `caddy-controller`) — see [Network Orchestration](#network-orchestration-network-manager) below. It is the single front door that fans a `zones.json` change out to every network plane.
+
+**Key distinction**: Managers work with **config state** (JSON files, schemas, validation). Controllers work with **runtime state** (APIs, device configs, VM operations).
+
+### What Changes
+
+- Create `managers/` and `controllers/` directories under `tappaas-cicd`
+- Organize existing scripts by their function
+- Add planned scripts from P1-P3 (people/site/environment managers); the
+  module-manager scripts move into this structure here, ahead of the P5 content updates
+
+### What Stays the Same
+
+- `src/foundation/` and `src/apps/` directory structure
+- Module locations (`src/foundation/firewall/`, `src/apps/nextcloud/`, etc.)
+- `bin/` entry points (symlinks to new locations)
+
+### Target Layout (tappaas-cicd internal)
+
+```
+src/foundation/tappaas-cicd/
+├── managers/                           # Domain object lifecycle (config state)
+│   │
+│   ├── people-manager/                 # 👥 People domain (P1)
+│   │   ├── people-manager.py           # Main entry: role/org/group/user CRUD
+│   │   ├── validate-people.sh          # Schema validation
+│   │   └── user-setup.sh               # Bootstrap minimal setup
+│   │
+│   ├── environment-manager/            # 🏠 Environments domain (P3)
+│   │   ├── environment-manager.sh      # Environment CRUD
+│   │   ├── migrate-variants.sh         # Variant → Environment migration
+│   │   └── validate-environment.sh     # Schema validation
+│   │
+│   ├── site-manager/                   # 🏢 Site domain (P2)
+│   │   ├── site-manager.sh             # Site config CRUD
+│   │   ├── migrate-configuration.sh    # configuration.json → site.json
+│   │   └── validate-site.sh            # Schema validation
+│   │
+│   ├── module-manager/                 # 📦 Apps/Modules domain (P5)
+│   │   ├── install-module.sh           # Install with --environment
+│   │   ├── update-module.sh            # Update with --environment
+│   │   ├── delete-module.sh            # Delete with --force for foundation
+│   │   ├── test-module.sh              # Run module tests
+│   │   ├── snapshot-vm.sh              # VM snapshot management
+│   │   └── validate-module.sh          # Tier/source lint rules
+│   │
+│   └── health-manager/                 # 🩺 Health domain (ADR-007e)
+│       ├── health-manager.sh           # Health check orchestration
+│       ├── inspect-cluster.sh          # Cluster health inspection
+│       ├── inspect-vm.sh               # VM health inspection
+│       ├── check-disk-threshold.sh     # Disk usage alerts
+│       └── check-backup-status.sh      # Backup health
+│
+├── controllers/                        # Infrastructure control (runtime state)
+│   │
+│   ├── zone-controller/                # Network zone lifecycle
+│   │   ├── zone-controller.sh          # Main entry (was zone-manager)
+│   │   ├── zone-state.sh               # Zone state queries
+│   │   ├── zone-create.sh              # Create zone (VLAN, firewall, DNS)
+│   │   └── zone-delete.sh              # Delete zone (#319)
+│   │
+│   ├── switch-controller/              # Managed switch VLAN control
+│   │   ├── switch-controller.py        # Main entry (was switch-manager)
+│   │   └── switch-api.py               # Switch API client
+│   │
+│   ├── opnsense-controller/            # OPNsense firewall/router control
+│   │   ├── opnsense-controller.py      # Main entry (existing)
+│   │   ├── opnsense-api.py             # OPNsense API client
+│   │   ├── firewall-rules.py           # Firewall rule management
+│   │   ├── dns-records.py              # Unbound DNS management
+│   │   ├── dhcp-leases.py              # DHCP management
+│   │   └── nat-rules.py                # NAT rule management
+│   │
+│   ├── identity-controller/            # Authentik runtime operations
+│   │   ├── identity-controller.py      # Main entry
+│   │   ├── authentik-api.py            # Authentik API client
+│   │   ├── sync-users.py               # Sync users to Authentik
+│   │   ├── sync-groups.py              # Sync groups to Authentik
+│   │   └── sync-tenants.py             # Sync orgs as tenants
+│   │
+│   └── caddy-controller/               # Caddy reverse proxy control
+│       ├── caddy-controller.sh         # Main entry (was caddy-manager)
+│       ├── setup-caddy.sh              # Initial Caddy setup
+│       ├── add-route.sh                # Add proxy route
+│       └── reload-caddy.sh             # Reload configuration
+│
+├── lib/                                # Shared libraries
+│   ├── common.sh                       # Bash utilities
+│   ├── logging.sh                      # Logging functions
+│   ├── validation.sh                   # JSON schema validation
+│   └── api-client.py                   # Base API client class
+│
+├── install.sh
+├── update.sh
+├── test.sh
+└── tappaas-cicd.json
+```
+
+### Manager ↔ Controller Interaction
+
+Managers call controllers to apply changes:
+
+```
+┌─────────────────┐     calls      ┌─────────────────────┐
+│ people-manager  │ ─────────────▶ │ identity-controller │
+│ (JSON CRUD)     │                │ (Authentik API)     │
+└─────────────────┘                └─────────────────────┘
+
+┌─────────────────────┐     calls      ┌──────────────────┐
+│ environment-manager │ ─────────────▶ │ zone-controller  │
+│ (JSON CRUD)         │                │ (VLAN/firewall)  │
+└─────────────────────┘                └──────────────────┘
+                       │
+                       │  calls      ┌──────────────────┐
+                       └───────────▶ │ caddy-controller │
+                                     │ (proxy routes)   │
+                                     └──────────────────┘
+
+┌────────────────┐     calls      ┌─────────────────────┐
+│ module-manager │ ─────────────▶ │ opnsense-controller │
+│ (install/etc)  │                │ (DNS, firewall)     │
+└────────────────┘                └─────────────────────┘
+```
+
+### Network Orchestration: `network-manager`
+
+Rolls up the cleanup behind **#372 / #373** (semi-fixed: node side closed, switch side open), **#335**, and **ADR-008**.
+
+**Context.** Creating or changing a network zone must converge state across **four infrastructure planes**:
+
+| Plane | Owns | New VLAN must be set here so that… |
+|-------|------|------------------------------------|
+| **OPNsense** | L3 interface, DHCP, DNS, firewall rules, Caddy | the gateway/DHCP/proxy exist for the zone |
+| **Proxmox hypervisors** | per-VM NIC trunks + each node's `lan` bridge VLANs | a VM's tagged frames are accepted by its node |
+| **Physical switch(es)** | inter-node / uplink trunk VLANs | tagged frames traverse *between* nodes |
+| **Access points** | SSID ↔ VLAN | wireless clients land in the zone |
+
+No single component owns that fan-out today, so a new VLAN reaches some planes and not others. That is the root cause of the #372/#373 "VM on a non-firewall node gets no IP" symptom: the new VLAN reaches OPNsense + the firewall trunk + node bridge-vids, but **never the physical switch**, so inter-node tagged frames are dropped (verified 2026-06: from a non-firewall node, an existing VLAN reaches the firewall but a new variant VLAN does not).
+
+#### Current call graph (2026-06)
+
+```
+environment-manager  (variant-manager.sh)          # variant/domain/cert lifecycle
+        │  add --add-zone / remove
+        ▼
+   zone-controller   (zone-controller.sh)           # NEW (#372/#373): authors zones.json + PARTIAL fan-out
+        ├─▶ zone-manager        (opnsense-controller)   # OPNsense: VLAN iface, DHCP, firewall rules
+        ├─▶ proxmox-manager                              # hypervisor: per-VM trunks + node bridge-vids
+        ├─▶ distribute zones.json → nodes
+        ✗   switch-manager   NOT called   ← the gap (physical switch never told)
+        ✗   ap-manager       NOT called
+
+zone-reconcile  (ADR-008 orchestrator)  ── operator-run / tests only; NOT auto-invoked ──
+        ├─▶ opnsense-manager   (alias → the OPNsense zone reconciler)
+        ├─▶ proxmox-manager    (per-VM trunks; reports bridge-vids)
+        ├─▶ switch-manager     (managed-switch VLANs)   ← only reachable via this manual path
+        └─▶ ap-manager         (SSID ↔ VLAN)
+
+setup-switches.sh  ── interactive, cluster bring-up ──▶ switch-manager   (register/configure switches)
+
+opnsense-controller (Python) exposes SEPARATE sibling CLIs, each called directly:
+        zone-manager · dns-manager · caddy-manager · nat/unbound-manager · …   # no single front door
+```
+
+Observations driving the redesign:
+
+- **Two partial orchestration paths, neither complete.** The automatic path (`variant-manager → zone-controller`) covers only the OPNsense + Proxmox planes. The complete fan-out (`zone-reconcile`) exists but is **never auto-invoked** — so `switch-manager`/`ap-manager` are out of the live flow.
+- **The physical switch is never updated** for a new VLAN (and no switch is even registered — `switch-configuration-desired.json` is empty), so off-firewall-node placement fails regardless of the bridge-vids fix.
+- **The OPNsense plane is fragmented** into independent CLIs (`zone-manager`, `dns-manager`, `caddy-manager`, …) with no single entry point.
+- **`proxmox-manager` is misnamed** — it is functionally a *controller* (drives Proxmox/ifupdown2 device state), not a config manager.
+
+#### Future state
+
+A single **`network-manager`** orchestrator owns the network reconcile loop. Given the desired network state (zones.json + switch/AP config), it converges **every** plane through exactly one controller per plane — `zone-reconcile` generalized, renamed, and made the auto-invoked front door.
+
+```
+environment-manager
+        │  add-zone / change / remove
+        ▼
+  ┌──────────────────────────────────────────────────────────────┐
+  │                     network-manager                           │
+  │   orchestrator — reconcile desired→actual across all planes;  │
+  │   idempotent; per-plane drift report; no plane skipped        │
+  └──────────────────────────────────────────────────────────────┘
+        │ writes desired        │ reconciles each plane
+        ▼                       ▼
+  zone-controller        ┌───────────────┬───────────────┬───────────────┐
+  (zones.json CRUD,      ▼               ▼               ▼               ▼
+   VLAN alloc,     opnsense-       proxmox-        switch-          ap-
+   invariants)     controller      controller      controller       controller
+                   (firewall       (per-VM         (uplink /        (SSID ↔
+                    plane)          trunks +        inter-node       VLAN)
+                    │               node            VLAN trunks)
+                    ├─ firewall      bridge-vids)
+                    ├─ dns   (Unbound)
+                    ├─ dhcp
+                    ├─ caddy (reverse proxy)
+                    └─ nat
+```
+
+Roles:
+
+| Component | Type | Responsibility |
+|-----------|------|----------------|
+| **network-manager** | orchestrator (manager) | Single front door for any zone/network change (`environment-manager` calls it). Reconciles desired→actual across all planes; idempotent; reports per-plane drift. This is `zone-reconcile`, generalized + renamed + wired into the auto flow. |
+| **zone-controller** | controller | Desired-state authority: `zones.json` CRUD, VLAN allocation, invariants (mgmt list). Produces the desired state `network-manager` reconciles. |
+| **opnsense-controller** | controller (+ subcontrollers) | The OPNsense/firewall plane behind one front door, with **subcontrollers**: `firewall` (rules), `dns` (Unbound), `dhcp`, `caddy` (reverse proxy), `nat`. Replaces today's separate `zone-manager`/`dns-manager`/`caddy-manager` CLIs. |
+| **proxmox-controller** | controller | Hypervisor plane (rename of `proxmox-manager`): per-VM NIC trunks + node `lan` bridge-vids. |
+| **switch-controller** | controller | Physical-switch plane (rename of `switch-manager`): inter-node/uplink + access VLAN trunks. |
+| **ap-controller** | controller | Wireless plane (rename of `ap-manager`): SSID ↔ VLAN. |
+
+A zone add then becomes **one** call that cannot silently skip a plane:
+
+```
+environment-manager → network-manager add-zone
+    → zone-controller writes desired (zones.json)
+    → network-manager reconciles { opnsense-controller, proxmox-controller,
+                                    switch-controller, ap-controller }
+```
+
+This closes the #372/#373/#335 class of gaps **by construction** — every plane is reconciled from one source of truth.
+
+**Migration path.** `zone-controller` (the #372/#373 work) and the `proxmox-manager` bridge-vids automation are the first two planes wired correctly. Completing P4 means: (1) fold them under `network-manager` (promote `zone-reconcile` to the auto-invoked front door), (2) rename `proxmox-manager`→`proxmox-controller` and `switch-manager`→`switch-controller`, (3) collapse the OPNsense CLIs under `opnsense-controller` subcontrollers, and (4) register the physical switch via `setup-switches.sh` so `switch-controller` has a device to converge.
+
+### Command Mapping (Old → New)
+
+| Old Command | New Location | Notes |
+|-------------|--------------|-------|
+| `zone-reconcile` | `managers/network-manager/` | Generalized → the auto-invoked network orchestrator (see Network Orchestration above) |
+| `zone-manager` | `controllers/zone-controller/` | Renamed manager→controller |
+| `switch-manager` | `controllers/switch-controller/` | Renamed manager→controller |
+| `proxmox-manager` | `controllers/proxmox-controller/` | Renamed manager→controller (hypervisor plane) |
+| `ap-manager` | `controllers/ap-controller/` | Renamed manager→controller (wireless plane) |
+| `opnsense-controller` | `controllers/opnsense-controller/` | Already named correctly |
+| `caddy-manager` | `controllers/opnsense-controller/` (caddy subcontroller) | Folded into opnsense-controller |
+| `dns-manager` | `controllers/opnsense-controller/dns-records.py` | Merged into opnsense |
+| `install-module.sh` | `managers/module-manager/` | New location |
+| `update-module.sh` | `managers/module-manager/` | New location |
+| `delete-module.sh` | `managers/module-manager/` | New location |
+| `test-module.sh` | `managers/module-manager/` | New location |
+| `inspect-cluster.sh` | `managers/health-manager/` | New location |
+| `inspect-vm.sh` | `managers/health-manager/` | New location |
+| *(new)* `people-manager` | `managers/people-manager/` | From P1 |
+| *(new)* `environment-manager` | `managers/environment-manager/` | From P3 |
+| *(new)* `site-manager` | `managers/site-manager/` | From P2 |
+| *(new)* `identity-controller` | `controllers/identity-controller/` | Authentik sync |
+
+### Deliverables
+
+1. Create `src/foundation/tappaas-cicd/managers/` directory structure
+2. Create `src/foundation/tappaas-cicd/controllers/` directory structure
+3. Move existing scripts to appropriate locations per mapping table
+4. Rename `-manager` → `-controller` for infrastructure scripts
+5. Create `lib/` with shared utilities
+6. Update `bin/` symlinks to point to new locations
+7. Add wrapper scripts for backward compatibility (one release)
+8. Update all scripts that call these tools
+
+### Test Criteria
+
+- [ ] All managers validate their JSON schemas
+- [ ] `people-manager` syncs to `identity-controller` → Authentik
+- [ ] `environment-manager` calls `zone-controller` + `caddy-controller`
+- [ ] `module-manager install` works with `--environment`
+- [ ] `zone-controller` creates/deletes zones correctly
+- [ ] `opnsense-controller` firewall/dns/dhcp commands work
+- [ ] `switch-controller` VLAN commands work
+- [ ] `caddy-controller` route commands work
+- [ ] Backward-compat wrappers work for one release
+- [ ] `bin/` symlinks resolve correctly
+
+**Dependencies**: P1 (people-manager), P2 (site-manager), P3 (environment-manager) — the schema/manager packages this reorg organizes. (Module *content* updates follow in P5, inside this structure.)
+
+---
+
+## P5: Module Updates
 
 **Closes**: #339 (module schema)
 
@@ -1080,7 +1355,7 @@ Catalog Entry (module-catalog.json entries):
 
 **Dependencies**: None (can run in parallel with P1-P3)
 
-### P4 Examples
+### P5 Examples
 
 #### Module Installation
 
@@ -1109,293 +1384,6 @@ install-module.sh paperless-ngx --environment bar
 ```
 
 **Lint rule (ADR-007b)**: `tier: foundation` requires `source: official` (or explicit override for forks).
-
----
-
-## P5: tappaas-cicd Layout
-
-**Closes**: #365 (managers/controllers layout), #364 (split opnsense-controller)
-
-**Purpose**: Organize the control-plane scripts under `tappaas-cicd` into a clear **managers** vs **controllers** structure. The overall `src/` layout remains unchanged — this package focuses on organizing scripts within `tappaas-cicd`.
-
-### Managers vs Controllers
-
-| Type | Purpose | Operates On | Examples |
-|------|---------|-------------|----------|
-| **Manager** | CRUD + lifecycle for domain objects (incl. cross-controller orchestration) | JSON config files + Authentik sync | people-manager, environment-manager, site-manager, module-manager, health-manager, **network-manager** |
-| **Controller** | Direct control of infrastructure | APIs, VMs, network devices | zone-controller, opnsense-controller (+ dns/dhcp/firewall/caddy/nat subcontrollers), proxmox-controller, switch-controller, ap-controller, identity-controller |
-
-> **network-manager** is a manager that *orchestrates the network controllers* (the way `environment-manager` orchestrates `zone-controller` + `caddy-controller`) — see [Network Orchestration](#network-orchestration-network-manager) below. It is the single front door that fans a `zones.json` change out to every network plane.
-
-**Key distinction**: Managers work with **config state** (JSON files, schemas, validation). Controllers work with **runtime state** (APIs, device configs, VM operations).
-
-### What Changes
-
-- Create `managers/` and `controllers/` directories under `tappaas-cicd`
-- Organize existing scripts by their function
-- Add planned scripts from P1-P4
-
-### What Stays the Same
-
-- `src/foundation/` and `src/apps/` directory structure
-- Module locations (`src/foundation/firewall/`, `src/apps/nextcloud/`, etc.)
-- `bin/` entry points (symlinks to new locations)
-
-### Target Layout (tappaas-cicd internal)
-
-```
-src/foundation/tappaas-cicd/
-├── managers/                           # Domain object lifecycle (config state)
-│   │
-│   ├── people-manager/                 # 👥 People domain (P1)
-│   │   ├── people-manager.py           # Main entry: role/org/group/user CRUD
-│   │   ├── validate-people.sh          # Schema validation
-│   │   └── user-setup.sh               # Bootstrap minimal setup
-│   │
-│   ├── environment-manager/            # 🏠 Environments domain (P3)
-│   │   ├── environment-manager.sh      # Environment CRUD
-│   │   ├── migrate-variants.sh         # Variant → Environment migration
-│   │   └── validate-environment.sh     # Schema validation
-│   │
-│   ├── site-manager/                   # 🏢 Site domain (P2)
-│   │   ├── site-manager.sh             # Site config CRUD
-│   │   ├── migrate-configuration.sh    # configuration.json → site.json
-│   │   └── validate-site.sh            # Schema validation
-│   │
-│   ├── module-manager/                 # 📦 Apps/Modules domain (P4)
-│   │   ├── install-module.sh           # Install with --environment
-│   │   ├── update-module.sh            # Update with --environment
-│   │   ├── delete-module.sh            # Delete with --force for foundation
-│   │   ├── test-module.sh              # Run module tests
-│   │   ├── snapshot-vm.sh              # VM snapshot management
-│   │   └── validate-module.sh          # Tier/source lint rules
-│   │
-│   └── health-manager/                 # 🩺 Health domain (ADR-007e)
-│       ├── health-manager.sh           # Health check orchestration
-│       ├── inspect-cluster.sh          # Cluster health inspection
-│       ├── inspect-vm.sh               # VM health inspection
-│       ├── check-disk-threshold.sh     # Disk usage alerts
-│       └── check-backup-status.sh      # Backup health
-│
-├── controllers/                        # Infrastructure control (runtime state)
-│   │
-│   ├── zone-controller/                # Network zone lifecycle
-│   │   ├── zone-controller.sh          # Main entry (was zone-manager)
-│   │   ├── zone-state.sh               # Zone state queries
-│   │   ├── zone-create.sh              # Create zone (VLAN, firewall, DNS)
-│   │   └── zone-delete.sh              # Delete zone (#319)
-│   │
-│   ├── switch-controller/              # Managed switch VLAN control
-│   │   ├── switch-controller.py        # Main entry (was switch-manager)
-│   │   └── switch-api.py               # Switch API client
-│   │
-│   ├── opnsense-controller/            # OPNsense firewall/router control
-│   │   ├── opnsense-controller.py      # Main entry (existing)
-│   │   ├── opnsense-api.py             # OPNsense API client
-│   │   ├── firewall-rules.py           # Firewall rule management
-│   │   ├── dns-records.py              # Unbound DNS management
-│   │   ├── dhcp-leases.py              # DHCP management
-│   │   └── nat-rules.py                # NAT rule management
-│   │
-│   ├── identity-controller/            # Authentik runtime operations
-│   │   ├── identity-controller.py      # Main entry
-│   │   ├── authentik-api.py            # Authentik API client
-│   │   ├── sync-users.py               # Sync users to Authentik
-│   │   ├── sync-groups.py              # Sync groups to Authentik
-│   │   └── sync-tenants.py             # Sync orgs as tenants
-│   │
-│   └── caddy-controller/               # Caddy reverse proxy control
-│       ├── caddy-controller.sh         # Main entry (was caddy-manager)
-│       ├── setup-caddy.sh              # Initial Caddy setup
-│       ├── add-route.sh                # Add proxy route
-│       └── reload-caddy.sh             # Reload configuration
-│
-├── lib/                                # Shared libraries
-│   ├── common.sh                       # Bash utilities
-│   ├── logging.sh                      # Logging functions
-│   ├── validation.sh                   # JSON schema validation
-│   └── api-client.py                   # Base API client class
-│
-├── install.sh
-├── update.sh
-├── test.sh
-└── tappaas-cicd.json
-```
-
-### Manager ↔ Controller Interaction
-
-Managers call controllers to apply changes:
-
-```
-┌─────────────────┐     calls      ┌─────────────────────┐
-│ people-manager  │ ─────────────▶ │ identity-controller │
-│ (JSON CRUD)     │                │ (Authentik API)     │
-└─────────────────┘                └─────────────────────┘
-
-┌─────────────────────┐     calls      ┌──────────────────┐
-│ environment-manager │ ─────────────▶ │ zone-controller  │
-│ (JSON CRUD)         │                │ (VLAN/firewall)  │
-└─────────────────────┘                └──────────────────┘
-                       │
-                       │  calls      ┌──────────────────┐
-                       └───────────▶ │ caddy-controller │
-                                     │ (proxy routes)   │
-                                     └──────────────────┘
-
-┌────────────────┐     calls      ┌─────────────────────┐
-│ module-manager │ ─────────────▶ │ opnsense-controller │
-│ (install/etc)  │                │ (DNS, firewall)     │
-└────────────────┘                └─────────────────────┘
-```
-
-### Network Orchestration: `network-manager`
-
-Rolls up the cleanup behind **#372 / #373** (semi-fixed: node side closed, switch side open), **#335**, and **ADR-008**.
-
-**Context.** Creating or changing a network zone must converge state across **four infrastructure planes**:
-
-| Plane | Owns | New VLAN must be set here so that… |
-|-------|------|------------------------------------|
-| **OPNsense** | L3 interface, DHCP, DNS, firewall rules, Caddy | the gateway/DHCP/proxy exist for the zone |
-| **Proxmox hypervisors** | per-VM NIC trunks + each node's `lan` bridge VLANs | a VM's tagged frames are accepted by its node |
-| **Physical switch(es)** | inter-node / uplink trunk VLANs | tagged frames traverse *between* nodes |
-| **Access points** | SSID ↔ VLAN | wireless clients land in the zone |
-
-No single component owns that fan-out today, so a new VLAN reaches some planes and not others. That is the root cause of the #372/#373 "VM on a non-firewall node gets no IP" symptom: the new VLAN reaches OPNsense + the firewall trunk + node bridge-vids, but **never the physical switch**, so inter-node tagged frames are dropped (verified 2026-06: from a non-firewall node, an existing VLAN reaches the firewall but a new variant VLAN does not).
-
-#### Current call graph (2026-06)
-
-```
-environment-manager  (variant-manager.sh)          # variant/domain/cert lifecycle
-        │  add --add-zone / remove
-        ▼
-   zone-controller   (zone-controller.sh)           # NEW (#372/#373): authors zones.json + PARTIAL fan-out
-        ├─▶ zone-manager        (opnsense-controller)   # OPNsense: VLAN iface, DHCP, firewall rules
-        ├─▶ proxmox-manager                              # hypervisor: per-VM trunks + node bridge-vids
-        ├─▶ distribute zones.json → nodes
-        ✗   switch-manager   NOT called   ← the gap (physical switch never told)
-        ✗   ap-manager       NOT called
-
-zone-reconcile  (ADR-008 orchestrator)  ── operator-run / tests only; NOT auto-invoked ──
-        ├─▶ opnsense-manager   (alias → the OPNsense zone reconciler)
-        ├─▶ proxmox-manager    (per-VM trunks; reports bridge-vids)
-        ├─▶ switch-manager     (managed-switch VLANs)   ← only reachable via this manual path
-        └─▶ ap-manager         (SSID ↔ VLAN)
-
-setup-switches.sh  ── interactive, cluster bring-up ──▶ switch-manager   (register/configure switches)
-
-opnsense-controller (Python) exposes SEPARATE sibling CLIs, each called directly:
-        zone-manager · dns-manager · caddy-manager · nat/unbound-manager · …   # no single front door
-```
-
-Observations driving the redesign:
-
-- **Two partial orchestration paths, neither complete.** The automatic path (`variant-manager → zone-controller`) covers only the OPNsense + Proxmox planes. The complete fan-out (`zone-reconcile`) exists but is **never auto-invoked** — so `switch-manager`/`ap-manager` are out of the live flow.
-- **The physical switch is never updated** for a new VLAN (and no switch is even registered — `switch-configuration-desired.json` is empty), so off-firewall-node placement fails regardless of the bridge-vids fix.
-- **The OPNsense plane is fragmented** into independent CLIs (`zone-manager`, `dns-manager`, `caddy-manager`, …) with no single entry point.
-- **`proxmox-manager` is misnamed** — it is functionally a *controller* (drives Proxmox/ifupdown2 device state), not a config manager.
-
-#### Future state
-
-A single **`network-manager`** orchestrator owns the network reconcile loop. Given the desired network state (zones.json + switch/AP config), it converges **every** plane through exactly one controller per plane — `zone-reconcile` generalized, renamed, and made the auto-invoked front door.
-
-```
-environment-manager
-        │  add-zone / change / remove
-        ▼
-  ┌──────────────────────────────────────────────────────────────┐
-  │                     network-manager                           │
-  │   orchestrator — reconcile desired→actual across all planes;  │
-  │   idempotent; per-plane drift report; no plane skipped        │
-  └──────────────────────────────────────────────────────────────┘
-        │ writes desired        │ reconciles each plane
-        ▼                       ▼
-  zone-controller        ┌───────────────┬───────────────┬───────────────┐
-  (zones.json CRUD,      ▼               ▼               ▼               ▼
-   VLAN alloc,     opnsense-       proxmox-        switch-          ap-
-   invariants)     controller      controller      controller       controller
-                   (firewall       (per-VM         (uplink /        (SSID ↔
-                    plane)          trunks +        inter-node       VLAN)
-                    │               node            VLAN trunks)
-                    ├─ firewall      bridge-vids)
-                    ├─ dns   (Unbound)
-                    ├─ dhcp
-                    ├─ caddy (reverse proxy)
-                    └─ nat
-```
-
-Roles:
-
-| Component | Type | Responsibility |
-|-----------|------|----------------|
-| **network-manager** | orchestrator (manager) | Single front door for any zone/network change (`environment-manager` calls it). Reconciles desired→actual across all planes; idempotent; reports per-plane drift. This is `zone-reconcile`, generalized + renamed + wired into the auto flow. |
-| **zone-controller** | controller | Desired-state authority: `zones.json` CRUD, VLAN allocation, invariants (mgmt list). Produces the desired state `network-manager` reconciles. |
-| **opnsense-controller** | controller (+ subcontrollers) | The OPNsense/firewall plane behind one front door, with **subcontrollers**: `firewall` (rules), `dns` (Unbound), `dhcp`, `caddy` (reverse proxy), `nat`. Replaces today's separate `zone-manager`/`dns-manager`/`caddy-manager` CLIs. |
-| **proxmox-controller** | controller | Hypervisor plane (rename of `proxmox-manager`): per-VM NIC trunks + node `lan` bridge-vids. |
-| **switch-controller** | controller | Physical-switch plane (rename of `switch-manager`): inter-node/uplink + access VLAN trunks. |
-| **ap-controller** | controller | Wireless plane (rename of `ap-manager`): SSID ↔ VLAN. |
-
-A zone add then becomes **one** call that cannot silently skip a plane:
-
-```
-environment-manager → network-manager add-zone
-    → zone-controller writes desired (zones.json)
-    → network-manager reconciles { opnsense-controller, proxmox-controller,
-                                    switch-controller, ap-controller }
-```
-
-This closes the #372/#373/#335 class of gaps **by construction** — every plane is reconciled from one source of truth.
-
-**Migration path.** `zone-controller` (the #372/#373 work) and the `proxmox-manager` bridge-vids automation are the first two planes wired correctly. Completing P5 means: (1) fold them under `network-manager` (promote `zone-reconcile` to the auto-invoked front door), (2) rename `proxmox-manager`→`proxmox-controller` and `switch-manager`→`switch-controller`, (3) collapse the OPNsense CLIs under `opnsense-controller` subcontrollers, and (4) register the physical switch via `setup-switches.sh` so `switch-controller` has a device to converge.
-
-### Command Mapping (Old → New)
-
-| Old Command | New Location | Notes |
-|-------------|--------------|-------|
-| `zone-reconcile` | `managers/network-manager/` | Generalized → the auto-invoked network orchestrator (see Network Orchestration above) |
-| `zone-manager` | `controllers/zone-controller/` | Renamed manager→controller |
-| `switch-manager` | `controllers/switch-controller/` | Renamed manager→controller |
-| `proxmox-manager` | `controllers/proxmox-controller/` | Renamed manager→controller (hypervisor plane) |
-| `ap-manager` | `controllers/ap-controller/` | Renamed manager→controller (wireless plane) |
-| `opnsense-controller` | `controllers/opnsense-controller/` | Already named correctly |
-| `caddy-manager` | `controllers/opnsense-controller/` (caddy subcontroller) | Folded into opnsense-controller |
-| `dns-manager` | `controllers/opnsense-controller/dns-records.py` | Merged into opnsense |
-| `install-module.sh` | `managers/module-manager/` | New location |
-| `update-module.sh` | `managers/module-manager/` | New location |
-| `delete-module.sh` | `managers/module-manager/` | New location |
-| `test-module.sh` | `managers/module-manager/` | New location |
-| `inspect-cluster.sh` | `managers/health-manager/` | New location |
-| `inspect-vm.sh` | `managers/health-manager/` | New location |
-| *(new)* `people-manager` | `managers/people-manager/` | From P1 |
-| *(new)* `environment-manager` | `managers/environment-manager/` | From P3 |
-| *(new)* `site-manager` | `managers/site-manager/` | From P2 |
-| *(new)* `identity-controller` | `controllers/identity-controller/` | Authentik sync |
-
-### Deliverables
-
-1. Create `src/foundation/tappaas-cicd/managers/` directory structure
-2. Create `src/foundation/tappaas-cicd/controllers/` directory structure
-3. Move existing scripts to appropriate locations per mapping table
-4. Rename `-manager` → `-controller` for infrastructure scripts
-5. Create `lib/` with shared utilities
-6. Update `bin/` symlinks to point to new locations
-7. Add wrapper scripts for backward compatibility (one release)
-8. Update all scripts that call these tools
-
-### Test Criteria
-
-- [ ] All managers validate their JSON schemas
-- [ ] `people-manager` syncs to `identity-controller` → Authentik
-- [ ] `environment-manager` calls `zone-controller` + `caddy-controller`
-- [ ] `module-manager install` works with `--environment`
-- [ ] `zone-controller` creates/deletes zones correctly
-- [ ] `opnsense-controller` firewall/dns/dhcp commands work
-- [ ] `switch-controller` VLAN commands work
-- [ ] `caddy-controller` route commands work
-- [ ] Backward-compat wrappers work for one release
-- [ ] `bin/` symlinks resolve correctly
-
-**Dependencies**: P1 (people-manager), P2 (site-manager), P3 (environment-manager), P4 (module-manager updates)
 
 ---
 
@@ -1430,7 +1418,7 @@ The mgmt environment is minimal — no domains required (internal DNS only). Man
 - [ ] Foundation modules auto-install to mgmt
 - [ ] mgmt.json validates against environment schema
 
-**Dependencies**: P3, P5
+**Dependencies**: P3, P4
 
 ---
 
@@ -1527,7 +1515,7 @@ firewall:rules    → network:rules
 - [ ] All dependent modules work after rename
 - [ ] Proxy routes work with new name
 
-**Dependencies**: P5 (managers consolidated before module rename)
+**Dependencies**: P4 (managers consolidated before module rename)
 
 ---
 
@@ -1635,38 +1623,41 @@ src/foundation/tappaas-cicd/controllers/backup-controller/
 - [ ] `backup-controller` communicates with PBS API
 - [ ] Backup residency respected (eu-only modules not backed up to non-EU targets)
 
-**Dependencies**: P2 (site.json), P3 (environment.json), P5 (managers/controllers structure)
+**Dependencies**: P2 (site.json), P3 (environment.json), P4 (managers/controllers structure)
 
 ---
 
 ## Implementation Order
 
-### Phase 1: Schemas (can parallelize)
+### Phase 1: People Schema
 
 - **P1**: People Schema (no dependencies)
-- **P4**: Module Updates (no dependencies)
 
-### Phase 2: Core Migration
+### Phase 2: Core Migration (P2 and P3, can parallelize)
 
 - **P2**: Site JSON Migration (depends on P1)
 - **P3**: Environment Schema (depends on P1, P2)
 
-### Phase 3: Control Plane
+### Phase 3: Control-Plane Reorg
 
-- **P5**: tappaas-cicd Layout (depends on P1, P4)
+- **P4**: tappaas-cicd Layout — managers/controllers structure (depends on P1, P2, P3)
 
-### Phase 4: Refinement
+### Phase 4: Module Updates
 
-- **P6**: Mgmt Zone as Environment (depends on P3, P5)
+- **P5**: Module Updates — tier/source + environment-aware deployment (depends on P4)
+
+### Phase 5: Refinement
+
+- **P6**: Mgmt Zone as Environment (depends on P3, P4)
 - **P7**: Default Environment (depends on P3)
 
-### Phase 5: Cleanup
+### Phase 6: Cleanup
 
-- **P8**: Rename firewall → network (depends on P5)
+- **P8**: Rename firewall → network (depends on P4)
 
-### Phase 6: Cross-Cutting Concerns
+### Phase 7: Cross-Cutting Concerns
 
-- **P9**: Backup Configuration (depends on P2, P3, P5)
+- **P9**: Backup Configuration (depends on P2, P3, P4)
 
 ---
 
@@ -1815,7 +1806,7 @@ zones.json                        # Rename zones to match environments
 ### Files Moved/Renamed
 
 ```bash
-# P5: tappaas-cicd managers/controllers reorganization
+# P4: tappaas-cicd managers/controllers reorganization
 
 # Controllers (infrastructure control)
 src/foundation/tappaas-cicd/opnsense-controller.py  →  controllers/opnsense-controller/opnsense-controller.py
