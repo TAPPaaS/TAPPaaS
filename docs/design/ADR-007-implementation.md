@@ -1122,8 +1122,10 @@ install-module.sh paperless-ngx --environment bar
 
 | Type | Purpose | Operates On | Examples |
 |------|---------|-------------|----------|
-| **Manager** | CRUD + lifecycle for domain objects | JSON config files + Authentik sync | people-manager, environment-manager, site-manager, module-manager, health-manager |
-| **Controller** | Direct control of infrastructure | APIs, VMs, network devices | zone-controller, switch-controller, opnsense-controller, identity-controller |
+| **Manager** | CRUD + lifecycle for domain objects (incl. cross-controller orchestration) | JSON config files + Authentik sync | people-manager, environment-manager, site-manager, module-manager, health-manager, **network-manager** |
+| **Controller** | Direct control of infrastructure | APIs, VMs, network devices | zone-controller, opnsense-controller (+ dns/dhcp/firewall/caddy/nat subcontrollers), proxmox-controller, switch-controller, ap-controller, identity-controller |
+
+> **network-manager** is a manager that *orchestrates the network controllers* (the way `environment-manager` orchestrates `zone-controller` + `caddy-controller`) — see [Network Orchestration](#network-orchestration-network-manager) below. It is the single front door that fans a `zones.json` change out to every network plane.
 
 **Key distinction**: Managers work with **config state** (JSON files, schemas, validation). Controllers work with **runtime state** (APIs, device configs, VM operations).
 
@@ -1246,14 +1248,117 @@ Managers call controllers to apply changes:
 └────────────────┘                └─────────────────────┘
 ```
 
+### Network Orchestration: `network-manager`
+
+Rolls up the cleanup behind **#372 / #373** (semi-fixed: node side closed, switch side open), **#335**, and **ADR-008**.
+
+**Context.** Creating or changing a network zone must converge state across **four infrastructure planes**:
+
+| Plane | Owns | New VLAN must be set here so that… |
+|-------|------|------------------------------------|
+| **OPNsense** | L3 interface, DHCP, DNS, firewall rules, Caddy | the gateway/DHCP/proxy exist for the zone |
+| **Proxmox hypervisors** | per-VM NIC trunks + each node's `lan` bridge VLANs | a VM's tagged frames are accepted by its node |
+| **Physical switch(es)** | inter-node / uplink trunk VLANs | tagged frames traverse *between* nodes |
+| **Access points** | SSID ↔ VLAN | wireless clients land in the zone |
+
+No single component owns that fan-out today, so a new VLAN reaches some planes and not others. That is the root cause of the #372/#373 "VM on a non-firewall node gets no IP" symptom: the new VLAN reaches OPNsense + the firewall trunk + node bridge-vids, but **never the physical switch**, so inter-node tagged frames are dropped (verified 2026-06: from a non-firewall node, an existing VLAN reaches the firewall but a new variant VLAN does not).
+
+#### Current call graph (2026-06)
+
+```
+environment-manager  (variant-manager.sh)          # variant/domain/cert lifecycle
+        │  add --add-zone / remove
+        ▼
+   zone-controller   (zone-controller.sh)           # NEW (#372/#373): authors zones.json + PARTIAL fan-out
+        ├─▶ zone-manager        (opnsense-controller)   # OPNsense: VLAN iface, DHCP, firewall rules
+        ├─▶ proxmox-manager                              # hypervisor: per-VM trunks + node bridge-vids
+        ├─▶ distribute zones.json → nodes
+        ✗   switch-manager   NOT called   ← the gap (physical switch never told)
+        ✗   ap-manager       NOT called
+
+zone-reconcile  (ADR-008 orchestrator)  ── operator-run / tests only; NOT auto-invoked ──
+        ├─▶ opnsense-manager   (alias → the OPNsense zone reconciler)
+        ├─▶ proxmox-manager    (per-VM trunks; reports bridge-vids)
+        ├─▶ switch-manager     (managed-switch VLANs)   ← only reachable via this manual path
+        └─▶ ap-manager         (SSID ↔ VLAN)
+
+setup-switches.sh  ── interactive, cluster bring-up ──▶ switch-manager   (register/configure switches)
+
+opnsense-controller (Python) exposes SEPARATE sibling CLIs, each called directly:
+        zone-manager · dns-manager · caddy-manager · nat/unbound-manager · …   # no single front door
+```
+
+Observations driving the redesign:
+
+- **Two partial orchestration paths, neither complete.** The automatic path (`variant-manager → zone-controller`) covers only the OPNsense + Proxmox planes. The complete fan-out (`zone-reconcile`) exists but is **never auto-invoked** — so `switch-manager`/`ap-manager` are out of the live flow.
+- **The physical switch is never updated** for a new VLAN (and no switch is even registered — `switch-configuration-desired.json` is empty), so off-firewall-node placement fails regardless of the bridge-vids fix.
+- **The OPNsense plane is fragmented** into independent CLIs (`zone-manager`, `dns-manager`, `caddy-manager`, …) with no single entry point.
+- **`proxmox-manager` is misnamed** — it is functionally a *controller* (drives Proxmox/ifupdown2 device state), not a config manager.
+
+#### Future state
+
+A single **`network-manager`** orchestrator owns the network reconcile loop. Given the desired network state (zones.json + switch/AP config), it converges **every** plane through exactly one controller per plane — `zone-reconcile` generalized, renamed, and made the auto-invoked front door.
+
+```
+environment-manager
+        │  add-zone / change / remove
+        ▼
+  ┌──────────────────────────────────────────────────────────────┐
+  │                     network-manager                           │
+  │   orchestrator — reconcile desired→actual across all planes;  │
+  │   idempotent; per-plane drift report; no plane skipped        │
+  └──────────────────────────────────────────────────────────────┘
+        │ writes desired        │ reconciles each plane
+        ▼                       ▼
+  zone-controller        ┌───────────────┬───────────────┬───────────────┐
+  (zones.json CRUD,      ▼               ▼               ▼               ▼
+   VLAN alloc,     opnsense-       proxmox-        switch-          ap-
+   invariants)     controller      controller      controller       controller
+                   (firewall       (per-VM         (uplink /        (SSID ↔
+                    plane)          trunks +        inter-node       VLAN)
+                    │               node            VLAN trunks)
+                    ├─ firewall      bridge-vids)
+                    ├─ dns   (Unbound)
+                    ├─ dhcp
+                    ├─ caddy (reverse proxy)
+                    └─ nat
+```
+
+Roles:
+
+| Component | Type | Responsibility |
+|-----------|------|----------------|
+| **network-manager** | orchestrator (manager) | Single front door for any zone/network change (`environment-manager` calls it). Reconciles desired→actual across all planes; idempotent; reports per-plane drift. This is `zone-reconcile`, generalized + renamed + wired into the auto flow. |
+| **zone-controller** | controller | Desired-state authority: `zones.json` CRUD, VLAN allocation, invariants (mgmt list). Produces the desired state `network-manager` reconciles. |
+| **opnsense-controller** | controller (+ subcontrollers) | The OPNsense/firewall plane behind one front door, with **subcontrollers**: `firewall` (rules), `dns` (Unbound), `dhcp`, `caddy` (reverse proxy), `nat`. Replaces today's separate `zone-manager`/`dns-manager`/`caddy-manager` CLIs. |
+| **proxmox-controller** | controller | Hypervisor plane (rename of `proxmox-manager`): per-VM NIC trunks + node `lan` bridge-vids. |
+| **switch-controller** | controller | Physical-switch plane (rename of `switch-manager`): inter-node/uplink + access VLAN trunks. |
+| **ap-controller** | controller | Wireless plane (rename of `ap-manager`): SSID ↔ VLAN. |
+
+A zone add then becomes **one** call that cannot silently skip a plane:
+
+```
+environment-manager → network-manager add-zone
+    → zone-controller writes desired (zones.json)
+    → network-manager reconciles { opnsense-controller, proxmox-controller,
+                                    switch-controller, ap-controller }
+```
+
+This closes the #372/#373/#335 class of gaps **by construction** — every plane is reconciled from one source of truth.
+
+**Migration path.** `zone-controller` (the #372/#373 work) and the `proxmox-manager` bridge-vids automation are the first two planes wired correctly. Completing P5 means: (1) fold them under `network-manager` (promote `zone-reconcile` to the auto-invoked front door), (2) rename `proxmox-manager`→`proxmox-controller` and `switch-manager`→`switch-controller`, (3) collapse the OPNsense CLIs under `opnsense-controller` subcontrollers, and (4) register the physical switch via `setup-switches.sh` so `switch-controller` has a device to converge.
+
 ### Command Mapping (Old → New)
 
 | Old Command | New Location | Notes |
 |-------------|--------------|-------|
+| `zone-reconcile` | `managers/network-manager/` | Generalized → the auto-invoked network orchestrator (see Network Orchestration above) |
 | `zone-manager` | `controllers/zone-controller/` | Renamed manager→controller |
 | `switch-manager` | `controllers/switch-controller/` | Renamed manager→controller |
+| `proxmox-manager` | `controllers/proxmox-controller/` | Renamed manager→controller (hypervisor plane) |
+| `ap-manager` | `controllers/ap-controller/` | Renamed manager→controller (wireless plane) |
 | `opnsense-controller` | `controllers/opnsense-controller/` | Already named correctly |
-| `caddy-manager` | `controllers/caddy-controller/` | Renamed manager→controller |
+| `caddy-manager` | `controllers/opnsense-controller/` (caddy subcontroller) | Folded into opnsense-controller |
 | `dns-manager` | `controllers/opnsense-controller/dns-records.py` | Merged into opnsense |
 | `install-module.sh` | `managers/module-manager/` | New location |
 | `update-module.sh` | `managers/module-manager/` | New location |
