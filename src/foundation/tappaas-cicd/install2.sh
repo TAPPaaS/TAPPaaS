@@ -142,6 +142,14 @@ if [ -f scripts/variant-manager.sh ]; then
   ln -s "$(realpath scripts/variant-manager.sh)" /home/tappaas/bin/variant-manager
 fi
 
+# zone-controller — the zone lifecycle primitive (add/delete). Invoked as
+# `zone-controller` (no .sh) by variant-manager and operators. See
+# docs/design/zone-controller.md.
+if [ -f scripts/zone-controller.sh ]; then
+  rm -f /home/tappaas/bin/zone-controller 2>/dev/null || true
+  ln -s "$(realpath scripts/zone-controller.sh)" /home/tappaas/bin/zone-controller
+fi
+
 # Install the cluster and firewall jsons
 cd ../cluster || { _error "Cluster directory not found!"; exit 1; }
 /home/tappaas/bin/copy-update-json.sh cluster

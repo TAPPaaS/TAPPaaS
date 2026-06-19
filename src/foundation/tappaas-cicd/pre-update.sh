@@ -86,6 +86,13 @@ for script in scripts/*.sh; do
   fi
 done
 
+# zone-controller — bare alias (no .sh) for the zone lifecycle primitive, invoked
+# as `zone-controller` by variant-manager and operators. See docs/design/zone-controller.md.
+if [ -f scripts/zone-controller.sh ]; then
+  rm -f /home/tappaas/bin/zone-controller 2>/dev/null || true
+  ln -s "$(realpath scripts/zone-controller.sh)" /home/tappaas/bin/zone-controller
+fi
+
 # --- Refresh configuration.json (re-discover nodes, validate) ---
 if [[ -x /home/tappaas/bin/create-configuration.sh ]]; then
     echo ""

@@ -43,11 +43,8 @@ readonly SCRIPT_NAME
 readonly CONFIG_FILE="${CONFIG_DIR}/configuration.json"
 readonly ZONES_FILE="${CONFIG_DIR}/zones.json"
 
-# Variant VLAN allocation walks backwards from sub-id 99 down to 60 within a zone
-# type (standard zones use 0-59, variants 60-99). ip = 10.<typeId>.<subId>.0/24,
-# vlantag = typeId*100 + subId.
-readonly VARIANT_SUB_MAX=99
-readonly VARIANT_SUB_MIN=60
+# Variant VLAN allocation (sub-id 60-99 within a type band) lives in the shared
+# zone-controller now — see ZONE_SUB_MIN/MAX in zone-controller.sh.
 
 usage() {
     cat <<EOF
@@ -158,33 +155,20 @@ cmd_add() {
             || die "Zone '${zone}' not found in ${ZONES_FILE}"
         zone_name="${zone}"
     elif [[ "${add_zone}" -eq 1 ]]; then
-        zone_name="$(create_variant_zone "${name}" "${from_zone}" "${vlan}")"
-        if [[ "${activate}" -eq 1 ]]; then
-            info "Activating zone '${zone_name}' via zone-manager..."
-            if command -v zone-manager >/dev/null 2>&1; then
-                # --no-ssl-verify: the firewall API serves an untrusted cert;
-                # --zones-file: reconcile from the deployed zones.json we just wrote.
-                zone-manager --no-ssl-verify --zones-file "${ZONES_FILE}" --execute \
-                    || warn "zone-manager --execute returned non-zero; activate manually"
-                # Push zones.json to the Proxmox nodes so a module can be created
-                # in the new zone (node-side Create-TAPPaaS-VM.sh resolves its VLAN).
-                distribute_zones_to_nodes || warn "Could not distribute zones.json to nodes — module installs into '${zone_name}' may fail"
-                # Trunk the new VLAN to the firewall VM (and any other trunk-ALL VM)
-                # so guests in '${zone_name}' actually receive DHCP/IP. Without this,
-                # OPNsense L3 exists but the host bridge drops the VM's tagged frames
-                # for the new VLAN — the silent "VM up, no IP" bug (#335, ADR-008).
-                if command -v proxmox-manager >/dev/null 2>&1; then
-                    proxmox-manager trunks --apply \
-                        || warn "proxmox-manager trunk sync reported drift/errors — guests in '${zone_name}' may not get an IP until resolved"
-                else
-                    warn "proxmox-manager not on PATH — trunk the new VLAN to the firewall VM manually, or guests in '${zone_name}' get no IP"
-                fi
-            else
-                warn "zone-manager not on PATH — activate '${zone_name}' manually"
-            fi
-        else
-            info "Zone '${zone_name}' created in zones.json (activation skipped: --no-activate)"
-        fi
+        # Delegate the whole zone lifecycle to the zone-controller: authoring +
+        # OPNsense reconcile + zones.json distribution + Proxmox per-VM trunks +
+        # node bridge-vids. The previous inline path applied only the firewall-VM
+        # trunk and skipped node bridge-vids, so a module VM placed off the firewall
+        # node got no IP (#335-family gap; see docs/design/zone-controller.md).
+        # A variant's dedicated zone is named after the variant.
+        zone_name="${name}"
+        command -v zone-controller >/dev/null 2>&1 \
+            || die "zone-controller not on PATH — cannot create variant zone '${name}'"
+        local zc_args=(add "${name}" --variant "${name}")
+        [[ -n "${from_zone}" ]] && zc_args+=(--from-zone "${from_zone}")
+        [[ -n "${vlan}" ]] && zc_args+=(--vlan "${vlan}")
+        [[ "${activate}" -eq 0 ]] && zc_args+=(--no-activate)
+        zone-controller "${zc_args[@]}" || die "zone-controller add failed for '${name}'"
     fi
 
     # Write the variant entry
@@ -207,75 +191,11 @@ cmd_add() {
     fi
 }
 
-# Create a variant zone in zones.json; echoes the zone name. Inherits from
-# --from-zone if given, otherwise a Service-type (typeId 2) default template.
-create_variant_zone() {
-    local name="$1" src="$2" vlan_override="$3"
-    [[ -n "${name}" ]] || die "--add-zone requires a non-empty variant name"
-    [[ "${name}" =~ ^[a-z][a-zA-Z0-9]*$ ]] \
-        || die "--add-zone: variant name '${name}' must be a camelCase zone name (^[a-z][a-zA-Z0-9]*\$, no hyphens — see #278)"
-    [[ -f "${ZONES_FILE}" ]] || die "zones.json not found at ${ZONES_FILE}"
-    jq -e --arg z "${name}" 'has($z)|not' "${ZONES_FILE}" >/dev/null 2>&1 \
-        || die "Zone '${name}' already exists in ${ZONES_FILE}"
-
-    # Inherit type/typeId/bridge/access-to/pinhole-allowed-from.
-    local typeId type bridge access_to pinhole parent
-    if [[ -n "${src}" ]]; then
-        jq -e --arg z "${src}" 'has($z)' "${ZONES_FILE}" >/dev/null 2>&1 \
-            || die "--from-zone '${src}' not found in ${ZONES_FILE}"
-        typeId="$(jq -r --arg z "${src}" '.[$z].typeId' "${ZONES_FILE}")"
-        type="$(jq -r --arg z "${src}" '.[$z].type' "${ZONES_FILE}")"
-        bridge="$(jq -r --arg z "${src}" '.[$z].bridge // "lan"' "${ZONES_FILE}")"
-        access_to="$(jq -c --arg z "${src}" '.[$z]["access-to"] // []' "${ZONES_FILE}")"
-        pinhole="$(jq -c --arg z "${src}" '.[$z]["pinhole-allowed-from"] // []' "${ZONES_FILE}")"
-        parent="${src}"
-    else
-        # Default template is a Service-type zone: include "dmz" so its apps can
-        # reach the DMZ Caddy for split-horizon (OIDC discovery, internal access).
-        # --from-zone variants inherit access-to from the source zone instead.
-        typeId="2"; type="Service"; bridge="lan"
-        access_to='["internet","dmz"]'; pinhole='[]'; parent=""
-    fi
-
-    # VLAN allocation
-    local sub vt
-    if [[ -n "${vlan_override}" ]]; then
-        [[ "${vlan_override}" =~ ^[0-9]+$ ]] || die "--vlan must be numeric"
-        vt="${vlan_override}"
-        # derive subId from the override (last two digits), sanity-check the type
-        sub=$((vt % 100))
-        jq -e --argjson t "${vt}" 'any(.[]?; .vlantag == $t)' "${ZONES_FILE}" >/dev/null 2>&1 \
-            && die "VLAN ${vt} is already in use"
-    else
-        sub=""
-        local s
-        for ((s = VARIANT_SUB_MAX; s >= VARIANT_SUB_MIN; s--)); do
-            vt=$((typeId * 100 + s))
-            if ! jq -e --argjson t "${vt}" 'any(.[]?; (.vlantag // -1) == $t)' "${ZONES_FILE}" >/dev/null 2>&1; then
-                sub="${s}"; break
-            fi
-        done
-        [[ -n "${sub}" ]] || die "No free variant VLAN in type ${typeId} (${typeId}${VARIANT_SUB_MIN}-${typeId}${VARIANT_SUB_MAX} all used)"
-        vt=$((typeId * 100 + sub))
-    fi
-    local ip="10.${typeId}.${sub}.0/24"
-
-    info "Creating zone '${name}': type=${type} vlan=${vt} ip=${ip}${parent:+ parent=${parent}}" >&2
-    jq_write "${ZONES_FILE}" \
-        --arg z "${name}" --arg type "${type}" --arg typeId "${typeId}" \
-        --arg subId "${sub}" --argjson vlantag "${vt}" --arg ip "${ip}" \
-        --arg bridge "${bridge}" --argjson access "${access_to}" \
-        --argjson pinhole "${pinhole}" --arg parent "${parent}" --arg variant "${name}" '
-        .[$z] = ({
-            type: $type, typeId: $typeId, subId: $subId, vlantag: $vlantag,
-            ip: $ip, bridge: $bridge, state: "Active",
-            "access-to": $access, "pinhole-allowed-from": $pinhole,
-            variant: $variant,
-            description: ("Variant zone for " + $variant + (if $parent == "" then "" else " (inherited from " + $parent + ")" end))
-        } + (if $parent == "" then {} else { parent: $parent } end))'
-
-    echo "${name}"
-}
+# Variant zone authoring (VLAN allocation, inheritance, jq write) + the full
+# OPNsense/Proxmox activation now lives in the shared `zone-controller add`
+# primitive (src/foundation/tappaas-cicd/scripts/zone-controller.sh; see
+# docs/design/zone-controller.md). cmd_add delegates to it so both variant-manager
+# and a hands-on operator go through one path that also applies node bridge-vids.
 
 # ── list ─────────────────────────────────────────────────────────────
 cmd_list() {
@@ -330,6 +250,22 @@ cmd_remove() {
         die "Variant '${name}' still has ${mods} deployed module(s) — delete them first or pass --force"
     fi
     [[ "${mods}" -gt 0 ]] && warn "Removing variant '${name}' with ${mods} module(s) still deployed (--force)"
+
+    # If this variant owns a dedicated zone (named after the variant and tagged
+    # with .variant == <variant>), tear it down via the zone-controller
+    # (mgmt.access-to + OPNsense interface + node trunks/bridge-vids). Variants
+    # that reuse an existing shared --zone are left untouched.
+    if jq -e --arg z "${name}" '(.[$z].variant // "") == $z' "${ZONES_FILE}" >/dev/null 2>&1; then
+        if command -v zone-controller >/dev/null 2>&1; then
+            info "Variant '${name}' owns dedicated zone '${name}' — deleting via zone-controller"
+            local zc_del=(delete "${name}")
+            [[ "${force}" -eq 1 ]] && zc_del+=(--force)
+            zone-controller "${zc_del[@]}" \
+                || warn "zone-controller delete '${name}' returned non-zero; clean up the zone manually"
+        else
+            warn "zone-controller not on PATH — dedicated zone '${name}' left in zones.json; remove it manually"
+        fi
+    fi
 
     jq_write "${CONFIG_FILE}" --arg v "${name}" 'del(.tappaas.variants[$v])'
     info "${GN}✓${CL} Variant '${name:-<default>}' removed"

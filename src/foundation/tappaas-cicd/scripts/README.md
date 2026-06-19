@@ -309,6 +309,49 @@ zone-manager --no-ssl-verify --zones-file /home/tappaas/config/zones.json --exec
 
 ---
 
+### zone-controller.sh
+
+The single **zone lifecycle primitive** — one command that creates or deletes a network zone end to end, across all three planes. Where [`zone-state.sh`](#zone-statesh) only flips a zone's `state` and [`zone-manager`](../opnsense-controller/README.md) only reconciles `zones.json` into OPNsense, **`zone-controller` owns the whole sequence** so no caller can forget a step (the root cause of the `#335`-family bridge-vids gap and the `#372`/`#373` mgmt-invariant drift). `variant-manager` delegates its `--add-zone`/`remove` paths to it; an operator can call it directly. Full design: [`docs/design/zone-controller.md`](../../../../docs/design/zone-controller.md).
+
+It does **not** reimplement OPNsense/Proxmox logic — it authors `zones.json` and orchestrates the existing reconcilers:
+
+```
+add    : author zones.json (VLAN alloc + inheritance) → append zone to mgmt.access-to
+         → zone-manager --execute (OPNsense VLAN/DHCP/rules) → distribute zones.json
+         → proxmox-manager reconcile --apply (firewall-VM trunk)
+         → proxmox-manager bridge-vids --apply (every node's lan bridge)   ← closes the gap
+delete : remove from mgmt.access-to → set Disabled → zone-manager --execute (drops the iface)
+         → proxmox-manager reconcile/bridge-vids --apply (drop trunk + VID, guarded)
+         → delete the key → distribute
+```
+
+**Usage:**
+```bash
+zone-controller add <name> [--from-zone <src>] [--vlan <tag>] [--variant <name>] \
+                           [--no-bridge-apply] [--no-activate] [--check]
+zone-controller delete <name> [--force] [--keep-bridge-vid] [--check]
+# examples
+zone-controller add tenant1 --from-zone srvCust --variant tenant1
+zone-controller delete tenant1
+```
+
+`add` allocates a free VLAN (sub-id 60–99 in the type band, or `--vlan`), derives `10.<typeId>.<sub>.0/24`, and inherits `type`/`bridge`/`access-to`/`pinhole-allowed-from` from `--from-zone` (else a Service template). It echoes the created zone name. `--check` is a dry-run; `--no-activate` authors `zones.json` (+ mgmt) only.
+
+**bridge-vids safety:** adding a VID only *widens* a node bridge's allow-list (non-disruptive), so `add` applies it automatically — this is what lets a module VM on a node **other than the firewall's** get a DHCP IP. Removing a VID is the sensitive direction, so `delete` guards it: if any VM still runs on that VLAN, the VID is kept (`--keep-bridge-vid` forces this; `--force` proceeds past the VM-present check). All `zones.json` edits are atomic (`jq` → validate → `mv`), and every downstream tool is idempotent, so a partially-failed `add` is fixed by re-running it.
+
+> **Note — mgmt invariant:** `zone-controller` maintains the explicit `mgmt.access-to` list (append on add, remove on delete) per `zones.json._README.isolation_invariant`. A self-maintaining `"all"` sentinel is a deferred enhancement — see [`docs/design/issue-mgmt-all-sentinel.md`](../../../../docs/design/issue-mgmt-all-sentinel.md).
+
+**Exit codes:**
+
+| Code | Meaning |
+|------|---------|
+| `0` | zone created / deleted (downstream reconcile warnings are non-fatal) |
+| `1` | bad zone name, zone exists (add) / not found (delete), or VMs still present without `--force` |
+
+**Deep test:** [`../test-variants/test-variant-zone-node.sh --deep`](../test-variants/test-variant-zone-node.sh) creates a variant zone, asserts the new VLAN reaches **every** node's bridge, places a `tvbase` VM on a non-firewall node (default `tappaas3`), and verifies it gets an IP and is reachable — the end-to-end regression for the bridge-vids gap.
+
+---
+
 ### test/ — tabletop tests for the storage-model tooling
 
 Runnable test scripts under [`test/`](test/) exercise the #207 + #209 + #237 + #264 plumbing without touching any VM or live config. Each writes its fixtures into a temp dir and tears down on exit. Run them individually or in sequence:
