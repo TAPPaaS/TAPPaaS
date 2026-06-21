@@ -9,7 +9,7 @@
 set -uo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-readonly MIGRATE="${SCRIPT_DIR}/../scripts/migrate-to-variants.sh"
+readonly MIGRATE="${SCRIPT_DIR}/../manager/environment-manager/migrate-to-variants.sh"
 
 WORK="$(mktemp -d)"
 trap 'rm -rf "${WORK}"' EXIT

@@ -86,6 +86,18 @@ for script in scripts/*.sh; do
   fi
 done
 
+# --- ADR-007 S0: two-level dispatch links relocated components' bins ---
+# The scripts/*.sh glob above only covers scripts NOT yet relocated. Components
+# moved into manager/<x>/ and controller/<x>/ link their own bins via their
+# install.sh, driven by the per-directory dispatcher. Additive + idempotent;
+# a no-op while a component still lives under scripts/.
+for _disp in manager controller; do
+  if [ -x "${_disp}/install.sh" ]; then
+    info "  linking ${_disp}/ components..."
+    "./${_disp}/install.sh" || warn "  ${_disp}/install.sh reported non-zero rc"
+  fi
+done
+
 # zone-controller — bare alias (no .sh) for the zone lifecycle primitive, invoked
 # as `zone-controller` by variant-manager and operators. See docs/design/zone-controller.md.
 if [ -f scripts/zone-controller.sh ]; then
@@ -180,14 +192,9 @@ if [ -e "${_oc_zm}" ]; then
   rm -f /home/tappaas/bin/opnsense-manager 2>/dev/null || true
   ln -s "${_oc_zm}" /home/tappaas/bin/opnsense-manager
 fi
-for _fw_tool in proxmox-manager switch-manager ap-manager zone-reconcile; do
-  _fw_src="/home/tappaas/TAPPaaS/src/foundation/firewall/scripts/${_fw_tool}"
-  if [ -e "${_fw_src}" ]; then
-    chmod +x "${_fw_src}" 2>/dev/null || true
-    rm -f "/home/tappaas/bin/${_fw_tool}" 2>/dev/null || true
-    ln -s "${_fw_src}" "/home/tappaas/bin/${_fw_tool}"
-  fi
-done
+# ADR-007 S0: proxmox-manager/switch-manager/ap-manager moved to
+# tappaas-cicd/controller/<x>-controller/ and zone-reconcile to manager/network-manager/;
+# they are now linked by the controller/ + manager/ dispatchers above. (was: firewall/scripts loop)
 # Ensure OPNsense credentials file exists; if missing, create a skeleton and warn
 if [ ! -f ~/.opnsense-credentials.txt ]; then
   warn "~/.opnsense-credentials.txt not found; creating skeleton file with empty key/secret. Please populate it with real values."

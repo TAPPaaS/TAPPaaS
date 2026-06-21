@@ -30,7 +30,7 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")" && pwd)"
 readonly SCRIPT_DIR
-readonly PLUGIN_DIR="${SCRIPT_DIR}/plugins"
+readonly PLUGIN_DIR="/home/tappaas/TAPPaaS/src/foundation/firewall/scripts/plugins"
 readonly ZONES_FILE="${CONFIG_DIR}/zones.json"
 readonly DESIRED="${CONFIG_DIR}/switch-configuration-desired.json"
 readonly ACTUAL="${CONFIG_DIR}/switch-configuration-actual.json"

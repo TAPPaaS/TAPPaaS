@@ -109,7 +109,7 @@ ck "unifi+manual uses manual.sh"     "yes"    "$(grep -q 'MANUAL CONFIGURATION' 
 
 # ── controller interrogate MERGES (preserves operator annotations) ──
 # Regression: a re-interrogate must not wipe a port's type/target set by update-port.
-STUBDIR="${TMP}/plugins"; mkdir -p "${STUBDIR}"; cp "${SCRIPT_DIR}/plugins/manual.sh" "${STUBDIR}/"
+STUBDIR="${TMP}/plugins"; mkdir -p "${STUBDIR}"; cp "/home/tappaas/TAPPaaS/src/foundation/firewall/scripts/plugins/manual.sh" "${STUBDIR}/"
 cat > "${STUBDIR}/stub.sh" <<'EOF'
 plugin_supports() { [[ "$1" == "stub" ]]; }
 plugin_arch() { echo controller; }

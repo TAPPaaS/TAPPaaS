@@ -1968,6 +1968,21 @@ Each package has its own test criteria. Additionally:
 
 If the pilot shows TS shrinks the code and the Nix+Node tax is a one-off, expand to a second, **Bash-heavy** component (the 48k-LOC question) before committing to a direction. If the toolchain proves a recurring tax, hold at "TS for new components only."
 
+### Pilot results (2026-06, branch `ADR007`) — **GO (qualified)**
+
+`switch-manager` (598 lines bash) was ported to `switch-controller` (TypeScript) at
+[`src/foundation/firewall/scripts/switch-controller/`](../../src/foundation/firewall/scripts/switch-controller/). Independently verified: `tsc --noEmit` clean; `nix-build -A default default.nix` OK; and the existing **`test-switch-manager.sh` run UNCHANGED against the TS build passes `47 passed, 0 failed`** (the bash original was restored byte-identical, not committed).
+
+| Metric | Result |
+|---|---|
+| **LOC delta** | 897 (`main.ts`) + 66 (`env.d.ts`) = **963 TS vs 598 bash (~1.6× growth)**. The growth is explicit JSON typing/accessors that bash got free from `jq` (`// {}`, `*` merge, set arithmetic), reimplemented natively in TS — so the controller has **no `jq` dependency**. |
+| **Build-time added** | Clean `nix-build` **~3–5.5s**; nodejs 22 + typescript 5.9 are already in the nixpkgs cache (no download). **Negligible** per-operator-rebuild cost on this box. |
+| **Subprocess/JSON ergonomics** | JSON is **trivially native** (`JSON.parse`/`stringify`, real deep-merge). The **bash-plugin FFI is clean**: `spawnSync("bash",["-c",'. "$1"; shift; fn "$@"',…])` with positional argv avoids quoting hazards; `PLUGIN_DIR` + `declare -F` probing port directly. The inverse-of-bash friction: you must **hand-roll `jq`'s loose semantics** (object-default coercion, recursive merge, int-array set ops). |
+| **Test effort to parity** | Low — the oracle is a true black box; the port iterated against it unchanged. Most of the win is **"it had tests."** |
+| **Nix+Node friction** | **One-off, low.** `stdenv.mkDerivation` + `tsc` + `makeWrapper`; **`@types/node` NOT needed** (a ~66-line ambient `env.d.ts` covers `fs`/`path`/`os`/`child_process`/`process` under strict mode, zero `node_modules`). |
+
+**Decision: GO for TypeScript on new + opportunistically-ported *controllers*** (per P10), with two qualifications: (1) the ~1.6× LOC growth is real for `jq`-heavy logic — TS is not shorter here, it's *typed and dependency-free*; (2) one rough edge to fix before wider use — the Nix wrapper currently bakes an **absolute `SWITCH_CONTROLLER_DIR`** to locate the bash `plugins/`; the eventual `network-manager` consolidation should ship plugins inside the derivation instead. Next per the appendix: port a **bash-heavy** component (little JSON, much `ssh`/`qm` glue) to test the 48k-LOC question before committing further.
+
 ---
 
 ## Deferred Items (from ADR Review Comments)

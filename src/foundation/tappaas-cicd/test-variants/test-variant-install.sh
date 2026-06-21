@@ -14,7 +14,7 @@ set -uo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 readonly FIX="${SCRIPT_DIR}/fixtures"
-readonly SCRIPTS="${SCRIPT_DIR}/../scripts"
+readonly SCRIPTS="${SCRIPT_DIR}/../manager/module-manager"
 readonly DEEP="${TAPPAAS_TEST_DEEP:-0}"
 
 # For vm_exists_on_cluster in the deep section (harmless offline).

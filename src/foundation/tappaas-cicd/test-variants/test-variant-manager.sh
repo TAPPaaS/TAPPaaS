@@ -9,7 +9,7 @@
 set -uo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-readonly VM="${SCRIPT_DIR}/../scripts/variant-manager.sh"
+readonly VM="${SCRIPT_DIR}/../manager/environment-manager/variant-manager.sh"
 
 WORK="$(mktemp -d)"
 trap 'rm -rf "${WORK}"' EXIT

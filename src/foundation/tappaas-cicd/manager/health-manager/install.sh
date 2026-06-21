@@ -1,0 +1,13 @@
+#!/usr/bin/env bash
+# manager/health-manager/install.sh — link this component's CLI entry scripts
+# into ~/bin (idempotent). Entry scripts = every *.sh here except the verb scripts.
+set -euo pipefail
+here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+bin="${TAPPAAS_BIN:-/home/tappaas/bin}"
+for f in "${here}"/*.sh; do
+    b="$(basename "${f}")"
+    case "${b}" in install.sh|update.sh|test.sh|validate.sh) continue ;; esac
+    chmod +x "${f}"
+    ln -sfn "${f}" "${bin}/${b}"
+    echo "  linked ${bin}/${b}"
+done

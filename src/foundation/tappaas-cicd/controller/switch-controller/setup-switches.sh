@@ -37,7 +37,7 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")" && pwd)"
 readonly SCRIPT_DIR
-readonly PLUGIN_DIR="${SCRIPT_DIR}/plugins"
+readonly PLUGIN_DIR="/home/tappaas/TAPPaaS/src/foundation/firewall/scripts/plugins"
 ACTUAL="${ACTUAL:-${CONFIG_DIR}/switch-configuration-actual.json}"
 
 # Injectable so tests can stub the helpers.

@@ -1,0 +1,13 @@
+{
+  "name": "switch-controller",
+  "version": "0.1.0",
+  "description": "TAPPaaS switch controller — TypeScript pilot (ADR-007 S-TS), port of switch-manager",
+  "license": "MIT",
+  "private": true,
+  "bin": {
+    "switch-controller": "dist/main.js"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json"
+  }
+}

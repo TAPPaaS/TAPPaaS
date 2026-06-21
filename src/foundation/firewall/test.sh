@@ -194,7 +194,9 @@ done
 
 section "Standard 1b: ADR-008 provider unit tests (proxmox/switch/ap; #335/#339)"
 
-for ut in test-proxmox-manager.sh test-switch-manager.sh test-ap-manager.sh test-unifi-plugin.sh; do
+# NB: test-{proxmox,switch,ap}-manager.sh moved to tappaas-cicd/controller/<x>-controller/
+# in ADR-007 S0 (run via controller/test.sh). test-unifi-plugin.sh stays with the plugins.
+for ut in test-unifi-plugin.sh; do
     if [[ -x "${SCRIPT_DIR}/scripts/${ut}" ]]; then
         if ut_out=$("${SCRIPT_DIR}/scripts/${ut}" 2>&1); then
             pass "${ut}"

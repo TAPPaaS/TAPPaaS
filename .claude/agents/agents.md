@@ -9,6 +9,7 @@ When a user request comes in, classify it and dispatch to the appropriate agent(
 Bash script create/modify     -> bash-dev
 NixOS .nix create/modify      -> nix-dev
 Python code create/modify     -> python-dev
+TypeScript controller create/modify (ADR-007 P10; Nix-built, oracle-tested) -> typescript-dev
 Create/update tests           -> tester
 Security audit/review         -> security
 OPNsense/firewall planning    -> opnsense (for feature planning, debugging, zone/rule design)

@@ -134,6 +134,16 @@ for script in scripts/*.sh; do
   fi
 done
 
+# --- ADR-007 S0: two-level dispatch links relocated components' bins ---
+# scripts/*.sh above only covers not-yet-relocated scripts; components moved into
+# manager/<x>/ + controller/<x>/ link their own bins via their install.sh.
+for _disp in manager controller; do
+  if [ -x "${_disp}/install.sh" ]; then
+    _info "  linking ${_disp}/ components..."
+    "./${_disp}/install.sh" || _error "  ${_disp}/install.sh reported non-zero rc"
+  fi
+done
+
 # variant-manager is invoked as `variant-manager` (no .sh) per ADR-005, matching
 # the zone-manager/dns-manager CLI convention. Add the bare alias alongside the
 # .sh symlink the loop above created.
