@@ -165,7 +165,7 @@ fi
 # --- Build and install opnsense-controller ---
 echo ""
 info "Building the opnsense-controller project..."
-cd opnsense-controller
+cd controller/opnsense-controller
 stdbuf -oL nix-build -A default default.nix 2>&1 | tee /tmp/opnsense-controller-build.log | while IFS= read -r line; do printf "."; done
 echo ""
 # Symlink every opnsense-controller CLI from the freshly-built result into
@@ -174,7 +174,7 @@ echo ""
 # opnsense-firewall, rules-manager and syslog-manager were previously only in
 # the system env, so their changes didn't propagate on update (issue #206).
 for _oc_tool in opnsense-controller zone-manager dns-manager unbound-manager caddy-manager nat-manager opnsense-firewall rules-manager syslog-manager test-network-manager acme-manager authentik-manager; do
-  _oc_src="/home/tappaas/TAPPaaS/src/foundation/tappaas-cicd/opnsense-controller/result/bin/${_oc_tool}"
+  _oc_src="/home/tappaas/TAPPaaS/src/foundation/tappaas-cicd/controller/opnsense-controller/result/bin/${_oc_tool}"
   if [ -e "${_oc_src}" ]; then
     rm -f "/home/tappaas/bin/${_oc_tool}" 2>/dev/null || true
     ln -s "${_oc_src}" "/home/tappaas/bin/${_oc_tool}"
@@ -187,7 +187,7 @@ done
 #    `zone-manager` name and the binary is referenced as opnsense-manager.
 #  - proxmox-manager:  Proxmox L2 provider (per-VM trunks + bridge-vids; #335).
 #  - zone-reconcile:   transitional orchestrator front door (becomes zone-manager).
-_oc_zm="/home/tappaas/TAPPaaS/src/foundation/tappaas-cicd/opnsense-controller/result/bin/zone-manager"
+_oc_zm="/home/tappaas/TAPPaaS/src/foundation/tappaas-cicd/controller/opnsense-controller/result/bin/zone-manager"
 if [ -e "${_oc_zm}" ]; then
   rm -f /home/tappaas/bin/opnsense-manager 2>/dev/null || true
   ln -s "${_oc_zm}" /home/tappaas/bin/opnsense-manager
@@ -205,7 +205,7 @@ EOF
 fi
 chmod 600 ~/.opnsense-credentials.txt
 info "  opnsense-controller binary installed to /home/tappaas/bin/opnsense-controller"
-cd ..
+cd ../..   # back to tappaas-cicd/ (opnsense-controller now under controller/)
 
 # --- Build and install update-tappaas ---
 echo ""

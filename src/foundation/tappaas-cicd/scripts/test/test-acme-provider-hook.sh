@@ -14,7 +14,7 @@
 set -uo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-ACME_CLI="${SCRIPT_DIR}/../../opnsense-controller/src/opnsense_controller/acme_cli.py"
+ACME_CLI="${SCRIPT_DIR}/../../controller/opnsense-controller/src/opnsense_controller/acme_cli.py"
 
 # shellcheck disable=SC1091
 . "${SCRIPT_DIR}/../common-install-routines.sh"

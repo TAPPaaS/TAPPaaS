@@ -27,7 +27,7 @@
 
 let
   # Import opnsense-controller package
-  opnsenseController = import ./opnsense-controller { inherit pkgs; };
+  opnsenseController = import ./controller/opnsense-controller { inherit pkgs; };
 in
 {
   imports =
