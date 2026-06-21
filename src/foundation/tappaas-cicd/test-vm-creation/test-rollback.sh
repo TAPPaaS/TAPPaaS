@@ -27,7 +27,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 readonly SCRIPT_DIR
 readonly FIXTURE_DIR="${SCRIPT_DIR}/rollback-fixture"
 
-# shellcheck source=../scripts/common-install-routines.sh disable=SC1091
+# shellcheck source=../lib/common-install-routines.sh disable=SC1091
 . /home/tappaas/bin/common-install-routines.sh
 # shellcheck source=rollback-fixture/lib.sh
 . "${FIXTURE_DIR}/lib.sh"

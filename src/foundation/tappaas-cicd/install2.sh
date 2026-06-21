@@ -117,7 +117,11 @@ cd
 cd TAPPaaS || { _error "TAPPaaS directory not found!"; exit 1; }
 # get to the right directory
 cd src/foundation/tappaas-cicd || { _error "TAPPaaS-CICD directory not found!"; exit 1; }
-for script in scripts/*.sh; do
+# scripts/*.sh = not-yet-relocated CLIs; lib/*.sh = shared sourced libraries
+# (ADR-007 S0: common-install-routines.sh et al. moved scripts/ -> lib/). Both
+# keep their /home/tappaas/bin/<name> symlink so the ~160 `. bin/...` sourcers
+# and operator CLIs resolve unchanged — bin/ is the move-safe indirection layer.
+for script in scripts/*.sh lib/*.sh; do
   if [ -f "$script" ]; then
     script_name=$(basename "$script")
     target="/home/tappaas/bin/$script_name"

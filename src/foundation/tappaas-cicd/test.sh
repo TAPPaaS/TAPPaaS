@@ -19,7 +19,7 @@
 
 set -euo pipefail
 
-# shellcheck source=scripts/common-install-routines.sh
+# shellcheck source=lib/common-install-routines.sh
 . /home/tappaas/bin/common-install-routines.sh
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"

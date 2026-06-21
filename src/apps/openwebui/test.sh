@@ -31,7 +31,7 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
-# shellcheck source=../../foundation/tappaas-cicd/scripts/common-install-routines.sh
+# shellcheck source=../../foundation/tappaas-cicd/lib/common-install-routines.sh
 . /home/tappaas/bin/common-install-routines.sh "${_MODULE}" 2>/dev/null || true
 
 # ── Configuration ─────────────────────────────────────────────────────

@@ -38,7 +38,7 @@ Scans:
 Excludes (allowlisted):
   - apply-json-merge.sh, convert-json-to-config.sh, copy-update-json.sh — the
     plumbing that's allowed to touch the file directly
-  - tappaas-cicd/scripts/common-install-routines.sh — defines the helpers
+  - tappaas-cicd/lib/common-install-routines.sh — defines the helpers
   - .bak, .orig, /Attic/, third-party Community/
 
 Options:

@@ -28,7 +28,7 @@
 
 set -euo pipefail
 
-# shellcheck source=../../tappaas-cicd/scripts/common-install-routines.sh disable=SC1091
+# shellcheck source=../../tappaas-cicd/lib/common-install-routines.sh disable=SC1091
 . /home/tappaas/bin/common-install-routines.sh
 
 # Both paths are env-injectable (defaults from CONFIG_DIR / WLAN_SECRETS) so the

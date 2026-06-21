@@ -19,7 +19,7 @@ trap 'rm -rf "${WORK}"' EXIT
 export CONFIG_DIR="${WORK}"
 
 # shellcheck disable=SC1091
-. "${SCRIPT_DIR}/../scripts/common-install-routines.sh"
+. "${SCRIPT_DIR}/../lib/common-install-routines.sh"
 
 PASS=0
 FAIL=0

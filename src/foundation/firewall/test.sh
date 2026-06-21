@@ -32,7 +32,7 @@ set -euo pipefail
 
 # ── Logging / helpers ────────────────────────────────────────────────
 
-# shellcheck source=../tappaas-cicd/scripts/common-install-routines.sh
+# shellcheck source=../tappaas-cicd/lib/common-install-routines.sh
 . /home/tappaas/bin/common-install-routines.sh
 # shellcheck source=../cluster/lib/vm-net.sh disable=SC1091
 . /home/tappaas/TAPPaaS/src/foundation/cluster/lib/vm-net.sh

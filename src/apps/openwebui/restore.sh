@@ -28,7 +28,7 @@ readonly SCRIPT_DIR
 JSON_CONFIG="/home/tappaas/config/openwebui.json"
 JSON=$(cat "${JSON_CONFIG}")
 
-# shellcheck source=../../foundation/tappaas-cicd/scripts/common-install-routines.sh
+# shellcheck source=../../foundation/tappaas-cicd/lib/common-install-routines.sh
 . /home/tappaas/bin/common-install-routines.sh
 
 # ── Configuration ─────────────────────────────────────────────────────

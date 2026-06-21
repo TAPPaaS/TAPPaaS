@@ -32,7 +32,7 @@
 
 set -euo pipefail
 
-# shellcheck source=../../tappaas-cicd/scripts/common-install-routines.sh disable=SC1091
+# shellcheck source=../../tappaas-cicd/lib/common-install-routines.sh disable=SC1091
 . /home/tappaas/bin/common-install-routines.sh
 
 SCRIPT_DIR="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")" && pwd)"

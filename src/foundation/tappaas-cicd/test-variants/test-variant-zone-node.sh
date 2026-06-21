@@ -31,9 +31,9 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 readonly SCRIPT_DIR
 readonly FIX="${SCRIPT_DIR}/fixtures"
 
-# shellcheck source=../scripts/common-install-routines.sh disable=SC1091
+# shellcheck source=../lib/common-install-routines.sh disable=SC1091
 . /home/tappaas/bin/common-install-routines.sh 2>/dev/null \
-    || . "${SCRIPT_DIR}/../scripts/common-install-routines.sh"
+    || . "${SCRIPT_DIR}/../lib/common-install-routines.sh"
 
 # ── parameters ───────────────────────────────────────────────────────
 readonly VAR="zcnode"                       # variant + dedicated-zone name

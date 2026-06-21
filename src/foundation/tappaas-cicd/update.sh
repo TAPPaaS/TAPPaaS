@@ -4,7 +4,7 @@
 
 set -euo pipefail
 
-. /home/tappaas/TAPPaaS/src/foundation/tappaas-cicd/scripts/common-install-routines.sh
+. /home/tappaas/TAPPaaS/src/foundation/tappaas-cicd/lib/common-install-routines.sh
 
 VMNAME="$(get_config_value 'vmname' "$1")"
 

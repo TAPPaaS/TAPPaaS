@@ -20,7 +20,7 @@ readonly SCRIPT_NAME
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 readonly SCRIPT_DIR
 
-# shellcheck source=../../foundation/tappaas-cicd/scripts/common-install-routines.sh
+# shellcheck source=../../foundation/tappaas-cicd/lib/common-install-routines.sh
 . /home/tappaas/bin/common-install-routines.sh
 
 # ── Configuration ─────────────────────────────────────────────────────
