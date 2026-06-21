@@ -29,7 +29,7 @@ This document describes the implementation packages for the ADR-007 series (TAPP
 | **People** | #56 (default user/role profiles) |
 | **Environments** | #318 (variant→environment), #319 (zone deletion), #294 (zone-aligned VMID), #313 (timezone→site) |
 | **Apps/Modules** | #339 (module schema), #356 (source:local), #357 (local intent) |
-| **Control-plane** | #364 (split opnsense-controller), #365 (managers/controllers layout) |
+| **Control-plane** | #364 (split opnsense-controller), #365 (manager/controller layout) |
 | **Cross-cutting** | #358 (backup) |
 | **Deferred** | #354, #359 |
 
@@ -227,10 +227,13 @@ graph TB
 
 **Key ADR-007a Rules**:
 
-- 4-level hierarchy: `Role → Organization → Group → User`
+- **Hierarchy is 3-level: `Organization → Group → User`.** `Role` is **not** part of this hierarchy — it is a cross-cutting label **associated with users**, assigned either directly on a User or inherited through a Group. *(Supersedes ADR-007a's "4-level `Role → Organization → Group → User`" framing — role is an association, not a hierarchy level.)*
+- A **user can hold many roles** and can be a **member of several groups across different organizations** (`memberOf` spans orgs; `roles` is a set). Roles and group membership are many-to-many on the User.
 - The `name` field is the identity key — used to identify entities in Authentik (no separate `authentikTenant`/`authentikGroup`/`authentikUser` fields)
 - Membership modeled on **User** (`memberOf`), NOT on Group
-- Roles can be assigned to Groups (inherited by members) or directly to Users (sparingly)
+- Roles reach a user two ways: **inherited** via a Group's `roles`, or **assigned directly** on the User's `roles` (use direct sparingly)
+- **Sync rules** (via `identity-controller`, on any JSON change): **entity existence** is additive (ensure-exists, never implicit-delete); **membership + role assignments** of managed active users are **fully reconciled** (added *and* removed to match the JSON, scoped to managed groups/roles); **attribute** drift only **warns**; unmanaged Authentik entities are left alone (see Sync semantics below)
+- **User lifecycle** via `state` (`planned` | `active` | `suspended` | `terminated`): only `active` users get access; `suspended` strips all roles/group-memberships (account disabled); `terminated` is the one **governed deletion** from Authentik. Removing a user's JSON file is **not** a delete — use `terminated`
 - **Attribute discipline**: every field must justify reason/default/operational impact (no CRM-creep)
 
 **Deliverables**:
@@ -246,9 +249,11 @@ graph TB
    - `config/people/users/{name}.json`
 6. Default roles: `root.json`, `admin.json`, `user.json`
 7. Example files for myOrg, Foo, and Bar
-8. `src/modules/foundation/identity/people-manager.py` - Python module for CRUD + Authentik sync
-9. `bin/user-setup.sh` - Bootstrap script for minimal myOrg setup
-10. Validation script: `bin/validate-people.sh`
+8. `manager/people-manager/minimal-org/` - **the stored "minimal org" default setup** that a fresh install copies. Contains exactly: the three default roles (from #6), **one** organization (placeholder name), **two** groups (`admin`, `users`), and **one** user (placeholder installer). This is the canonical bootstrap content — `user-setup.sh` copies it, it is not generated in code.
+9. `manager/people-manager/people-manager.ts` - **TypeScript** module for CRUD + Authentik sync (**pending validation** by the TypeScript pilot — step S-TS, see Implementation Sequence; falls back to Python if the pilot does not pass)
+10. `bin/user-setup.sh` - Bootstrap script that **copies `minimal-org/`** into `config/people/`, taking `--org`/`--user`/`--email` to substitute the org name and installer identity (see below)
+11. Wire the bootstrap into the **identity module's initial `install.sh`** (`40-Identity`): on first install it calls `user-setup.sh … && people-manager sync` (guarded to empty `config/people/`)
+12. Validation script: `bin/validate-people.sh`
 
 **Schema Design** (from ADR-007a):
 
@@ -259,7 +264,9 @@ Role (config/people/roles/{name}.json):
 ├── **name**        : string   — slug identifier (e.g., root, admin, user)
 ├── **displayName** : string   — human-readable name
 └── *description*   : string   — (default: "")
-   (Note: Actual permissions configured in Authentik via policies/entitlements)
+   (Standalone entity — NOT nested under org/group/user. Associated with users
+    via User.roles (direct) or Group.roles (inherited); many-to-many.
+    Actual permissions configured in Authentik via policies/entitlements.)
 
 Organization (config/people/organizations/{name}.json):
 ├── **name**        : string   — slug, used as Authentik tenant identifier
@@ -280,45 +287,138 @@ User (config/people/users/{name}.json):
 ├── **name**        : string   — slug, used as Authentik user identifier
 ├── **displayName** : string   — human-readable name
 ├── **primaryEmail**: string   — user's primary email address
+├── *state*         : enum     — (default: "active") planned | active | suspended | terminated
+│                                — governs the user's presence/access in Authentik (see Sync semantics)
 ├── *memberOf*      : string[] — (default: []) array of Group.name references
 └── *roles*         : string[] — (default: []) direct role assignment, use sparingly
 ```
 
-**people-manager.py**:
+**people-manager** (TypeScript, pending S-TS validation):
 
-A Python module associated with the identity module. Like `zone-manager` and `switch-manager`, it keeps Authentik updated idempotently.
+A TypeScript component built on the P10 `manager/TEMPLATE/`. Like the network/switch controllers, it keeps Authentik updated idempotently. Language is TypeScript per the P10 preference, **conditional on the TypeScript pilot (S-TS) passing**; if it does not, this falls back to Python with the same CLI.
 
-```python
-# src/modules/foundation/identity/people-manager.py
+```text
+# manager/people-manager/people-manager.ts
 #
 # CRUD operations on JSON config files + Authentik sync
 #
 # Commands:
-#   people-manager role list|get|create|update|delete
-#   people-manager org list|get|create|update|delete
+#   people-manager role  list|get|create|update|delete
+#   people-manager org   list|get|create|update|delete
 #   people-manager group list|get|create|update|delete
-#   people-manager user list|get|create|update|delete
+#   people-manager user  list|get|create|update|delete
 #   people-manager sync [--dry-run]  # sync all to Authentik
 #
 # Idempotent: running sync multiple times produces same result
-# Validates references: group.ownerOrg exists, user.memberOf groups exist
+# Validates references: group.ownerOrg exists, user.memberOf groups exist,
+#   user.roles + group.roles reference existing roles
 ```
+
+**Sync semantics (people-manager → identity-controller)**
+
+The JSON files are the source of truth for **what people-manager manages**, but Authentik is a shared system that may also hold entities TAPPaaS did not create. The sync therefore distinguishes three concerns, each with its own rule:
+
+1. **Entity existence** — additive & non-destructive (never implicit delete).
+2. **Access (group membership + role assignment) of managed users** — *fully reconciled*, added **and** removed to match the JSON.
+3. **User lifecycle (`state`)** — governs whether/how a user appears in Authentik, including the one **governed deletion**.
+
+On **any change** to a people/org JSON, people-manager calls the **`identity-controller`** to reconcile Authentik.
+
+**(1) Entity existence & attributes**
+
+| Situation | Action |
+|-----------|--------|
+| Managed org/group/user/role is **missing** in Authentik | **Create it** (ensure-exists) |
+| Managed entity **exists and matches** | No-op (idempotent) |
+| Managed entity **exists but differs in attributes** (e.g. displayName, email) | **Do NOT overwrite. Emit a warning** describing the drift |
+| A user **file removed** from `config/people/` (but not `terminated`) | **Leave the Authentik account** — removing the file is **not** a delete (to delete, set `state: terminated`) |
+| Authentik entity **not managed** by people-manager (foreign user/group/role) | **Ignore — perfectly OK**; not touched, not warned |
+
+**(2) Access reconciliation (managed `active` users)**
+
+Unlike attributes, **membership and roles are authoritative** and reconciled in both directions:
+
+- Group memberships and role assignments **present in the JSON but missing** in Authentik → **added**.
+- Managed group memberships / role assignments **in Authentik but no longer in the JSON** → **removed**.
+- Scope guard: removal only applies to **managed** links (groups/roles that exist in `config/people/`). A user's membership in a **foreign** group is never removed.
+
+**(3) User `state` → Authentik effect**
+
+| `state` | Effect in Authentik |
+|---------|---------------------|
+| `planned` | **Not created** — provisioned later; no Authentik presence yet |
+| `active` | Present; memberships + roles reconciled per (2) |
+| `suspended` | Account **retained but disabled**, and **stripped of all roles and role-conferring group memberships** (no access) — because groups carry roles, "remove all roles" means removing managed group memberships too. Reactivate by setting back to `active` and re-syncing |
+| `terminated` | **Removed from Authentik** — the single governed deletion (keep the JSON marked `terminated` as the audit record; do not just delete the file) |
+
+Key points:
+
+- **Existence is additive; access is reconciled; deletion is governed.** Entities are only ever created (never implicitly deleted); a managed active user's memberships/roles are made to match the JSON exactly; the only deletion path is an explicit `state: terminated`.
+- **Attribute conflicts warn, they don't reconcile.** Non-access attribute drift on a managed entity is a **warning**, not an overwrite.
+- **Foreign entities are first-class.** Users/groups/roles not in `config/people/` are expected and allowed; never reported as drift, never modified.
+- **"Managed" set** = exactly the entities whose `name` appears in `config/people/`. Reconciliation, drift warnings, and removals are scoped to that set only.
+
+The bootstrap content lives as real JSON files under the people-manager directory, so it is reviewable and versioned like any other config — not constructed in code. It is the smallest valid people domain:
+
+```
+manager/people-manager/minimal-org/
+├── roles/
+│   ├── root.json              # the three default roles (P1 deliverable #6)
+│   ├── admin.json
+│   └── user.json
+├── organizations/
+│   └── __ORG__.json           # 1 org; name ← the TAPPaaS installation name
+├── groups/
+│   ├── __ORG____admin.json    # group "admin"  (ownerOrg: __ORG__, roles: [admin])
+│   └── __ORG____users.json    # group "users"  (ownerOrg: __ORG__, roles: [user])
+└── users/
+    └── __USER__.json          # 1 user ← the installer; memberOf: [__ORG____admin], roles: [root]
+```
+
+`__ORG__`, `__USER__`, and `__EMAIL__` are placeholders substituted at copy time (from `user-setup.sh --org/--user/--email`).
 
 **user-setup.sh**:
 
-Bootstrap script that creates minimal myOrg setup with one admin user:
+A thin bootstrap that **copies `minimal-org/` into `config/people/`** and rewrites the placeholders from its `--` arguments — no entity-creation logic of its own:
 
 ```bash
 # bin/user-setup.sh
 #
-# Creates:
-#   - Default roles (root, admin, user) if not present
-#   - myOrg organization
-#   - myOrg__admins and myOrg__users groups
-#   - admin user with root role, member of myOrg__admins
+# Arguments (all required):
+#   --org   <name>    organization name = the TAPPaaS installation name (slug)
+#   --user  <name>    the installer's username (slug)
+#   --email <email>   the installer's primary email
 #
-# Usage: user-setup.sh --org myOrg --admin-email admin@example.com
+# Steps:
+#   1. Copy manager/people-manager/minimal-org/* → config/people/
+#   2. Substitute placeholders in filenames AND file contents:
+#        __ORG__   → --org    (name/displayName/ownerOrg/memberOf)
+#        __USER__  → --user   (name/displayName/memberOf)
+#        __EMAIL__ → --email  (primaryEmail)
+#   3. Run validate-people.sh on the result
+#
+# Result: 1 org, groups {<org>__admin, <org>__users}, 1 installer user
+#         (root role, member of <org>__admin), and the 3 default roles.
+#
+# Usage: user-setup.sh --org foobar-site --user lars --email lars@example.com
 ```
+
+> The org name is the **name of the TAPPaaS installation**; the single user is the **installer**. Everything else (more users, more groups, more orgs) is added later via `people-manager` — `minimal-org` is deliberately the floor.
+
+**Injection into the identity module install**:
+
+`user-setup.sh` is **not** run by the operator directly on a fresh install — it is invoked by the **identity module's initial `install.sh`** (foundation `40-Identity`), so the minimal org/user exists the moment Authentik comes up. The identity install passes the three values through (sourced from the install context — installation name + the installer identity collected at bring-up):
+
+```bash
+# src/foundation/40-Identity/install.sh  (initial install only)
+#   ... bring up Authentik ...
+if [[ ! -d config/people || -z "$(ls -A config/people 2>/dev/null)" ]]; then
+    user-setup.sh --org "$INSTALLATION_NAME" --user "$INSTALLER_USER" --email "$INSTALLER_EMAIL"
+fi
+people-manager sync          # push the minimal org/groups/user/roles into Authentik
+```
+
+The guard makes it run **only when `config/people/` is empty** (first install); re-runs/updates are no-ops, leaving any operator-added people untouched.
 
 **Test Criteria**:
 
@@ -327,9 +427,21 @@ Bootstrap script that creates minimal myOrg setup with one admin user:
 - [ ] Group references valid organization (ownerOrg)
 - [ ] User references valid groups (memberOf)
 - [ ] Role references in groups/users are valid
-- [ ] `people-manager.py sync` creates entities in Authentik
-- [ ] `people-manager.py sync` is idempotent (re-run produces no changes)
-- [ ] `user-setup.sh` creates minimal working setup
+- [ ] A user with **multiple roles** and **membership in groups across more than one organization** validates and syncs correctly
+- [ ] `people-manager sync` creates **missing** managed entities in Authentik (ensure-exists)
+- [ ] `people-manager sync` is idempotent (re-run produces no changes)
+- [ ] Adding a group to a user's `memberOf` **adds** the Authentik membership; removing it **removes** the membership (bidirectional access reconciliation)
+- [ ] Removing a managed role from a user/group **removes** it in Authentik; a **foreign** group membership is **not** removed
+- [ ] A managed entity whose **attributes** differ (displayName/email) triggers a **warning** and is **not** overwritten
+- [ ] `state: planned` user is **not** created; `state: active` is created with full access
+- [ ] `state: suspended` user is disabled and **stripped of all roles + role-conferring group memberships**; account is retained
+- [ ] `state: terminated` user is **removed** from Authentik; merely deleting the user file does **not** remove the account
+- [ ] A **foreign** Authentik user/group/role (not in `config/people/`) is left untouched and **not** flagged as drift
+- [ ] `people-manager sync --dry-run` reports the would-create/add/remove set and any conflicts without changing Authentik
+- [ ] `minimal-org/` validates on its own (with placeholders treated as valid slugs)
+- [ ] `user-setup.sh` copies `minimal-org/` and substitutes `__ORG__`/`__USER__`/`__EMAIL__` (from `--org`/`--user`/`--email`) in both filenames and contents
+- [ ] The identity module's initial `install.sh` invokes `user-setup.sh` then `people-manager sync`, guarded to run only when `config/people/` is empty
+- [ ] After `user-setup.sh`, the result is 1 org, groups `<org>__admin` + `<org>__users`, 1 installer user (root role, member of `<org>__admin`), 3 roles — and passes `validate-people.sh`
 
 **Dependencies**: None (foundational package)
 
@@ -872,7 +984,7 @@ The `mgmt` environment does not require a `domains` field — foundation modules
 
 ## P4: tappaas-cicd Layout
 
-**Closes**: #365 (managers/controllers layout), #364 (split opnsense-controller)
+**Closes**: #365 (manager/controller layout), #364 (split opnsense-controller)
 
 **Purpose**: Organize the control-plane scripts under `tappaas-cicd` into a clear **managers** vs **controllers** structure. The overall `src/` layout remains unchanged — this package focuses on organizing scripts within `tappaas-cicd`.
 
@@ -889,7 +1001,7 @@ The `mgmt` environment does not require a `domains` field — foundation modules
 
 ### What Changes
 
-- Create `managers/` and `controllers/` directories under `tappaas-cicd`
+- Create `manager/` and `controller/` directories under `tappaas-cicd`
 - Organize existing scripts by their function
 - Add planned scripts from P1-P3 (people/site/environment managers); the
   module-manager scripts move into this structure here, ahead of the P5 content updates
@@ -906,12 +1018,17 @@ The annotations (`← was:`) show which **current** programs each target directo
 
 ```
 src/foundation/tappaas-cicd/
-├── managers/                           # Domain object lifecycle (config state)
+├── manager/                           # Domain object lifecycle (config state)
+│   ├── install.sh                      # dispatcher: runs each */install.sh except TEMPLATE/
+│   ├── update.sh                       # dispatcher: runs each */update.sh  except TEMPLATE/
+│   ├── test.sh                         # dispatcher: runs each */test.sh    except TEMPLATE/
+│   ├── TEMPLATE/                        # P10 skeleton manager (copied to scaffold a new manager)
 │   │
 │   ├── people-manager/                 # 👥 People (P1)        ← was: user.sh, roles-ensure.sh
-│   │   ├── people-manager.py           #   role/org/group/user CRUD
+│   │   ├── people-manager.ts           #   role/org/group/user CRUD (TS pending S-TS; else .py)
+│   │   ├── minimal-org/                 #   stored default setup: 1 org, admin+users groups, 1 user, 3 roles
 │   │   ├── validate-people.sh
-│   │   └── user-setup.sh               #   bootstrap minimal myOrg
+│   │   └── user-setup.sh               #   copies minimal-org/ → config/people/ with substitution
 │   │
 │   ├── site-manager/                   # 🏢 Site (P2)          ← was: create-configuration.sh,
 │   │   ├── site-manager.sh             #     validate-configuration.sh, convert-json-to-config.sh,
@@ -946,7 +1063,11 @@ src/foundation/tappaas-cicd/
 │       ├── update-os.sh
 │       └── check-backup-status.sh
 │
-├── controllers/                        # Infrastructure control (runtime state)
+├── controller/                        # Infrastructure control (runtime state)
+│   ├── install.sh                      # dispatcher: runs each */install.sh except TEMPLATE/
+│   ├── update.sh                       # dispatcher: runs each */update.sh  except TEMPLATE/
+│   ├── test.sh                         # dispatcher: runs each */test.sh    except TEMPLATE/
+│   ├── TEMPLATE/                        # P10 skeleton controller
 │   │                                   # (no zone-controller — zones.json authority is in network-manager)
 │   ├── opnsense-controller/            # OPNsense plane (Python pkg) + subcontrollers
 │   │   ├── opnsense-controller.py      #   main          ← was: opnsense-controller (main.py)
@@ -974,15 +1095,24 @@ src/foundation/tappaas-cicd/
 │
 ├── lib/                                # Shared libraries  ← was: common-install-routines.sh,
 │   ├── common.sh                       #     apply-json-merge.sh, audit-jq-readers.sh
-│   ├── component-runner.sh             #   generic install|update|test fan-out (P10)
 │   ├── validation.sh
 │   └── api-client.py
 │
 ├── update-tappaas                      # umbrella updater (Python)  ← unchanged; now drives the
-│                                       #   generic fan-out + auto-migrations
-├── install.sh / update.sh / test.sh    # top-level: fan out over managers/* + controllers/* via lib/component-runner.sh
+│                                       #   two-level fan-out + auto-migrations
+├── install.sh / update.sh / test.sh    # top-level: just call manager/<verb>.sh + controller/<verb>.sh
 └── tappaas-cicd.json
 ```
+
+**Two-level dispatch (no shared runner).** There is no `component-runner.sh`. Each verb fans out through a plain hierarchy:
+
+```
+tappaas-cicd/install.sh
+   ├─ manager/install.sh      → for D in manager/*/;    [ "$D" = manager/TEMPLATE/ ]    || "$D/install.sh"
+   └─ controller/install.sh   → for D in controller/*/; [ "$D" = controller/TEMPLATE/ ] || "$D/install.sh"
+```
+
+`update.sh` and `test.sh` follow the identical shape. The dispatcher is ~3 lines of `for`-loop in each of `manager/` and `controller/`; `TEMPLATE/` is the one subdirectory it skips. Adding a component = drop a directory with the standard verb scripts; nothing above it changes.
 
 > **Front-door change**: `environment-manager` calls **`network-manager`** to create a zone or test whether one exists (domains/certs stay with `environment-manager`). `network-manager` (generalized `zone-reconcile`) is the single owner+orchestrator: it owns `zones.json`, computes deltas, and reconciles every plane. The former `zone-controller` is **dissolved into network-manager** — there is no separate zones.json controller. `zones.json` itself moves out of the firewall/network *module* and into **`config/network/`**, owned by network-manager (see [config inventory](#new-files-created)). This is the layout realization of the [Network Orchestration](#network-orchestration-network-manager) narrative.
 
@@ -992,21 +1122,21 @@ The S0 (structure-only) move **must account for every row** in [`PROGRAMS.csv`](
 
 | Current program(s) | Target |
 |---|---|
-| `user.sh`, `roles-ensure.sh` | `managers/people-manager/` |
-| `create-configuration.sh`, `validate-configuration.sh`, `convert-json-to-config.sh`, `repository.sh` | `managers/site-manager/` |
-| `variant-manager.sh`, `migrate-to-variants.sh` | `managers/environment-manager/` |
-| `install-module.sh`, `update-module.sh`, `delete-module.sh`, `test-module.sh`, `copy-update-json.sh`, `module-format.sh`, `snapshot-vm.sh` | `managers/module-manager/` |
-| `zone-reconcile`, `zone-controller.sh`, `zone-state.sh`, `migrate-zone-keys-to-{camelcase,underscore}.sh`, `apply-zones-merge.sh` | `managers/network-manager/` (owns zones.json; front door) |
-| `inspect-cluster.sh`, `inspect-vm.sh`, `check-disk-threshold.sh`, `update-os.sh` | `managers/health-manager/` |
-| `opnsense-controller`, `opnsense-firewall`, `rules-manager`, `zone-manager`/`opnsense-manager`, `dns-manager`, `unbound-manager`, `caddy-manager`, `nat-manager`, `acme-manager`, `syslog-manager`, `setup-caddy.sh`, `acme-setup.sh` | `controllers/opnsense-controller/` (subcontrollers) |
-| `proxmox-manager`, `migrate-vm.sh`, `migrate-node.sh`, `resize-disk.sh` | `controllers/proxmox-controller/` |
-| `switch-manager`, `setup-switches.sh` | `controllers/switch-controller/` |
-| `ap-manager`, `setup-wlan-secrets.sh` | `controllers/ap-controller/` |
-| `authentik-manager` | `controllers/identity-controller/` |
+| `user.sh`, `roles-ensure.sh` | `manager/people-manager/` |
+| `create-configuration.sh`, `validate-configuration.sh`, `convert-json-to-config.sh`, `repository.sh` | `manager/site-manager/` |
+| `variant-manager.sh`, `migrate-to-variants.sh` | `manager/environment-manager/` |
+| `install-module.sh`, `update-module.sh`, `delete-module.sh`, `test-module.sh`, `copy-update-json.sh`, `module-format.sh`, `snapshot-vm.sh` | `manager/module-manager/` |
+| `zone-reconcile`, `zone-controller.sh`, `zone-state.sh`, `migrate-zone-keys-to-{camelcase,underscore}.sh`, `apply-zones-merge.sh` | `manager/network-manager/` (owns zones.json; front door) |
+| `inspect-cluster.sh`, `inspect-vm.sh`, `check-disk-threshold.sh`, `update-os.sh` | `manager/health-manager/` |
+| `opnsense-controller`, `opnsense-firewall`, `rules-manager`, `zone-manager`/`opnsense-manager`, `dns-manager`, `unbound-manager`, `caddy-manager`, `nat-manager`, `acme-manager`, `syslog-manager`, `setup-caddy.sh`, `acme-setup.sh` | `controller/opnsense-controller/` (subcontrollers) |
+| `proxmox-manager`, `migrate-vm.sh`, `migrate-node.sh`, `resize-disk.sh` | `controller/proxmox-controller/` |
+| `switch-manager`, `setup-switches.sh` | `controller/switch-controller/` |
+| `ap-manager`, `setup-wlan-secrets.sh` | `controller/ap-controller/` |
+| `authentik-manager` | `controller/identity-controller/` |
 | `common-install-routines.sh`, `apply-json-merge.sh`, `audit-jq-readers.sh` | `lib/` |
 | `update-tappaas` | stays top-level (umbrella updater) |
-| `install1.sh`, `install2.sh`, `pre-update.sh`, `rest-of-foundation.sh`, `update.sh`, `test.sh` | tappaas-cicd lifecycle → folded into the generic fan-out (`lib/component-runner.sh`) |
-| `test-network-manager` (`test_network_cli.py`) | `controllers/opnsense-controller/` test entry |
+| `install1.sh`, `install2.sh`, `pre-update.sh`, `rest-of-foundation.sh`, `update.sh`, `test.sh` | tappaas-cicd top-level `install.sh`/`update.sh`/`test.sh` → call `manager/<verb>.sh` + `controller/<verb>.sh` (two-level dispatch) |
+| `test-network-manager` (`test_network_cli.py`) | `controller/opnsense-controller/` test entry |
 | `test-*` / `test-variants/*` fixtures | move with their owning component (tests travel with code) |
 
 **Out of scope for S0 (move with P8, not here)**: the `firewall/services/*` service scripts (`proxy`, `dns`, `nat`, `rules`, `discovery`) and `firewall/scripts/*` (`config-firewall.sh`, plugins) belong to the **network module**, not `tappaas-cicd`. They relocate under `src/foundation/network/` in P8. The `firewall:*` *rules plane* keeps the name "firewall" (it is the rules subcontroller of opnsense-controller — see P8 scope note).
@@ -1139,29 +1269,29 @@ This closes the #372/#373/#335 class of gaps **by construction** — `zones.json
 
 | Old Command | New Location | Notes |
 |-------------|--------------|-------|
-| `zone-reconcile`, `zone-controller.sh`, `zone-state.sh` | `managers/network-manager/` | Folded into network-manager, which **owns `zones.json`** (→ `config/network/`) and is the auto-invoked orchestrator (see Network Orchestration above) |
-| `zone-manager` / `opnsense-manager` (`zone_manager.py`) | `controllers/opnsense-controller/` (zone subcontroller) | OPNsense VLAN/zone plane — distinct from the bash authority above; stays a controller |
-| `switch-manager` | `controllers/switch-controller/` | Renamed manager→controller |
-| `proxmox-manager` | `controllers/proxmox-controller/` | Renamed manager→controller (hypervisor plane) |
-| `ap-manager` | `controllers/ap-controller/` | Renamed manager→controller (wireless plane) |
-| `opnsense-controller` | `controllers/opnsense-controller/` | Already named correctly |
-| `caddy-manager` | `controllers/opnsense-controller/` (caddy subcontroller) | Folded into opnsense-controller |
-| `dns-manager` | `controllers/opnsense-controller/dns-records.py` | Merged into opnsense |
-| `install-module.sh` | `managers/module-manager/` | New location |
-| `update-module.sh` | `managers/module-manager/` | New location |
-| `delete-module.sh` | `managers/module-manager/` | New location |
-| `test-module.sh` | `managers/module-manager/` | New location |
-| `inspect-cluster.sh` | `managers/health-manager/` | New location |
-| `inspect-vm.sh` | `managers/health-manager/` | New location |
-| *(new)* `people-manager` | `managers/people-manager/` | From P1 |
-| *(new)* `environment-manager` | `managers/environment-manager/` | From P3 |
-| *(new)* `site-manager` | `managers/site-manager/` | From P2 |
-| *(new)* `identity-controller` | `controllers/identity-controller/` | Authentik sync |
+| `zone-reconcile`, `zone-controller.sh`, `zone-state.sh` | `manager/network-manager/` | Folded into network-manager, which **owns `zones.json`** (→ `config/network/`) and is the auto-invoked orchestrator (see Network Orchestration above) |
+| `zone-manager` / `opnsense-manager` (`zone_manager.py`) | `controller/opnsense-controller/` (zone subcontroller) | OPNsense VLAN/zone plane — distinct from the bash authority above; stays a controller |
+| `switch-manager` | `controller/switch-controller/` | Renamed manager→controller |
+| `proxmox-manager` | `controller/proxmox-controller/` | Renamed manager→controller (hypervisor plane) |
+| `ap-manager` | `controller/ap-controller/` | Renamed manager→controller (wireless plane) |
+| `opnsense-controller` | `controller/opnsense-controller/` | Already named correctly |
+| `caddy-manager` | `controller/opnsense-controller/` (caddy subcontroller) | Folded into opnsense-controller |
+| `dns-manager` | `controller/opnsense-controller/dns-records.py` | Merged into opnsense |
+| `install-module.sh` | `manager/module-manager/` | New location |
+| `update-module.sh` | `manager/module-manager/` | New location |
+| `delete-module.sh` | `manager/module-manager/` | New location |
+| `test-module.sh` | `manager/module-manager/` | New location |
+| `inspect-cluster.sh` | `manager/health-manager/` | New location |
+| `inspect-vm.sh` | `manager/health-manager/` | New location |
+| *(new)* `people-manager` | `manager/people-manager/` | From P1 |
+| *(new)* `environment-manager` | `manager/environment-manager/` | From P3 |
+| *(new)* `site-manager` | `manager/site-manager/` | From P2 |
+| *(new)* `identity-controller` | `controller/identity-controller/` | Authentik sync |
 
 ### Deliverables
 
-1. Create `src/foundation/tappaas-cicd/managers/` directory structure
-2. Create `src/foundation/tappaas-cicd/controllers/` directory structure
+1. Create `src/foundation/tappaas-cicd/manager/` directory structure
+2. Create `src/foundation/tappaas-cicd/controller/` directory structure
 3. Move existing scripts to appropriate locations per mapping table
 4. Rename `-manager` → `-controller` for infrastructure scripts
 5. Create `lib/` with shared utilities
@@ -1633,10 +1763,10 @@ Module backup (stored in deployed module state):
 
 ### Backup Manager
 
-Add `backup-manager` to `managers/`:
+Add `backup-manager` to `manager/`:
 
 ```
-src/foundation/tappaas-cicd/managers/backup-manager/
+src/foundation/tappaas-cicd/manager/backup-manager/
 ├── backup-manager.sh       # Main entry: backup operations
 ├── backup-status.sh        # Check backup status for all modules
 ├── backup-restore.sh       # Restore operations
@@ -1645,10 +1775,10 @@ src/foundation/tappaas-cicd/managers/backup-manager/
 
 ### Backup Controller
 
-Add `backup-controller` to `controllers/`:
+Add `backup-controller` to `controller/`:
 
 ```
-src/foundation/tappaas-cicd/controllers/backup-controller/
+src/foundation/tappaas-cicd/controller/backup-controller/
 ├── backup-controller.py    # Main entry: PBS operations
 ├── pbs-api.py              # Proxmox Backup Server API client
 ├── schedule-backup.py      # Schedule backup jobs
@@ -1659,8 +1789,8 @@ src/foundation/tappaas-cicd/controllers/backup-controller/
 
 1. Add backup fields to site schema (`site-fields.json`)
 2. Add backup fields to environment schema (`environment-fields.json`)
-3. Create `managers/backup-manager/` with backup operations
-4. Create `controllers/backup-controller/` with PBS integration
+3. Create `manager/backup-manager/` with backup operations
+4. Create `controller/backup-controller/` with PBS integration
 5. Update `install-module.sh` to configure backup for new modules
 6. Update `health-manager` to include backup status checks
 7. Document backup inheritance model
@@ -1676,7 +1806,7 @@ src/foundation/tappaas-cicd/controllers/backup-controller/
 - [ ] `backup-controller` communicates with PBS API
 - [ ] Backup residency respected (eu-only modules not backed up to non-EU targets)
 
-**Dependencies**: P2 (site.json), P3 (environment.json), P4 (managers/controllers structure)
+**Dependencies**: P2 (site.json), P3 (environment.json), P4 (manager/controller structure)
 
 ---
 
@@ -1684,25 +1814,39 @@ src/foundation/tappaas-cicd/controllers/backup-controller/
 
 **Purpose**: Define the **uniform internal structure** of a manager and of a controller, as a reusable template. Every manager/controller built by P1–P3, P5, P9 (and every future one) is developed against this template, so they all install, update, test, and validate the same way. This is what lets `tappaas-cicd` drive each component generically (see the structure-only first step in the Implementation Sequence).
 
-**Why a package of its own**: P4 lays out *where* components live; P10 defines *what each one looks like inside*. Pinning the shape once removes the per-manager drift that the P1/P2/P3 "full manager" deliverables would otherwise each reinvent.
+**Why a package of its own**: P4 lays out *where* components live; P10 defines *what each one looks like inside* and *how the directory above it drives it*. Pinning the shape once removes the per-manager drift that the P1/P2/P3 "full manager" deliverables would otherwise each reinvent.
 
 ### Component contract (template)
 
-Each manager/controller lives in its own directory and exposes a fixed set of entry points that `tappaas-cicd`'s top-level installer/updater/tester fan out to:
+Each manager/controller lives in its own subdirectory and exposes a fixed set of verb scripts. The **template itself lives at `manager/TEMPLATE/` and `controller/TEMPLATE/`** — copy it to scaffold a new component:
 
 ```
-<managers|controllers>/<name>/
-├── <name>.{sh,py}        # Main entry: domain verbs (CRUD / reconcile)
-├── install.sh            # Idempotent: place on PATH (bin/ symlink), deps, one-time setup
-├── update.sh             # Idempotent: re-link, migrate on-disk state if schema changed
+manager/TEMPLATE/                  (and controller/TEMPLATE/)
+├── <name>.{ts,py,sh}     # Main entry: domain verbs (CRUD / reconcile)
+├── install.sh            # Idempotent: build artifact, place on PATH (bin/ symlink), one-time setup
+├── update.sh             # Idempotent: rebuild, re-link, migrate on-disk state if schema changed
 ├── test.sh               # Self-contained tests; exit non-zero on failure
 ├── validate.sh           # (managers) schema/reference validation for its domain
 └── README.md             # What it owns; manager-vs-controller; which controllers it calls
 ```
 
+### Dispatch: each parent directory drives its children (no shared runner)
+
+There is **no `lib/component-runner.sh`**. Instead, `manager/` and `controller/` each carry their own `install.sh` / `update.sh` / `test.sh` that simply invoke the matching verb script in every child directory **except `TEMPLATE/`**:
+
+```bash
+# manager/install.sh   (controller/install.sh and the update/test verbs are identical in shape)
+for d in "$(dirname "$0")"/*/; do
+    [ "$(basename "$d")" = TEMPLATE ] && continue
+    [ -x "$d/install.sh" ] && "$d/install.sh" "$@"
+done
+```
+
+The top-level `tappaas-cicd/install.sh` then just calls `manager/install.sh` and `controller/install.sh` (likewise update/test). Three levels, each trivial; adding a component is "drop a directory with the standard verb scripts" and nothing above changes.
+
 **Rules**:
 
-- `install.sh` / `update.sh` / `test.sh` are **mandatory** and **idempotent** in every component. `tappaas-cicd` calls them generically — it does not special-case individual components.
+- `install.sh` / `update.sh` / `test.sh` are **mandatory** and **idempotent** in every component. The parent-directory dispatcher calls them positionally — it does not special-case individual components, and it skips `TEMPLATE/`.
 - **Compiled components rebuild on install/update.** For a component that ships a compiled/packaged artifact — a Python package (e.g. `opnsense-controller`, `update-tappaas`, the nix-built entry points) or a future TypeScript package — `install.sh`/`update.sh` must **(re)build the package and refresh its `bin/` entry-point symlinks**, not just copy source. This is what makes `update-tappaas` pick up code changes. Concretely: Python → nix build / `pip install -e` of the component's `pyproject.toml`, then relink entry points (today's `pre-update.sh` behaviour, now per-component); TypeScript → `npm/pnpm install && build`, then link the bin. Bash components have nothing to compile (link only). The build step is idempotent and a no-op when inputs are unchanged.
 - A **manager** owns config state (JSON + schema) and may call controllers; it ships `validate.sh`.
 - A **controller** owns runtime state (APIs/devices/VMs); no `validate.sh` required.
@@ -1712,19 +1856,21 @@ Each manager/controller lives in its own directory and exposes a fixed set of en
 
 ### Deliverables
 
-1. `src/foundation/tappaas-cicd/TEMPLATE-manager/` - skeleton manager (the five files above, stubbed)
-2. `src/foundation/tappaas-cicd/TEMPLATE-controller/` - skeleton controller
-3. Document the contract above in `tappaas-cicd/README.md`
-4. `lib/component-runner.sh` - the generic `install|update|test` fan-out `tappaas-cicd` uses over `managers/*` and `controllers/*`
+1. `manager/TEMPLATE/` - skeleton manager (the verb scripts above, stubbed)
+2. `controller/TEMPLATE/` - skeleton controller
+3. `manager/{install,update,test}.sh` and `controller/{install,update,test}.sh` - the per-directory dispatchers (skip `TEMPLATE/`)
+4. Top-level `tappaas-cicd/{install,update,test}.sh` reduced to calling the two dispatchers
+5. Document the contract + dispatch in `tappaas-cicd/README.md`
 
 ### Test Criteria
 
-- [ ] A component scaffolded from the template installs/updates/tests via the generic fan-out with zero edits to `tappaas-cicd`'s top-level scripts
+- [ ] A component scaffolded from `TEMPLATE/` installs/updates/tests via the parent dispatcher with zero edits anywhere above it
+- [ ] The dispatcher **skips `TEMPLATE/`** (a stub left in TEMPLATE never runs)
 - [ ] `validate.sh` present for managers, absent-or-noop for controllers
 - [ ] A Python component's `update.sh` rebuilds the package and refreshes `bin/` entry points (code change is picked up without manual relink)
-- [ ] Template passes `bash-script-validator` (ShellCheck clean)
+- [ ] Template + dispatchers pass `bash-script-validator` (ShellCheck clean)
 
-**Dependencies**: P4-structure (the directory skeleton). Prerequisite for the *full-manager* form of P1, P2, P3 (and for P5/P9 components).
+**Dependencies**: P4-structure (the `manager/`+`controller/` skeleton). Prerequisite for the *full-manager* form of P1, P2, P3 (and for P5/P9 components).
 
 ---
 
@@ -1734,9 +1880,10 @@ The package list (P1–P10) describes **what** each unit delivers. The packages 
 
 | Step | What ships | References | Depends on |
 |------|-----------|-----------|-----------|
-| **S0 — P4-structure** | Create `managers/`, `controllers/`, `lib/` skeleton. **Move existing scripts** to their target directories per the P4 mapping table; wrap each in the per-directory `install/update/test`. Rewire `tappaas-cicd`'s top-level installer/updater/tester to **fan out generically** over `managers/*` and `controllers/*` (no per-script special-casing). **No behaviour change** — the goal is that everything that compiles and installs today still compiles and installs into `bin/`+`script/`, just from the new locations. | P4 (layout only) | none |
-| **S1 — P10 template** | Manager/controller template + the generic `component-runner.sh` the S0 fan-out uses. Freezes the component contract before any new manager is written. | P10 | S0 |
-| **S2 — P1 people-manager** | **Full manager** (people-manager + schemas + `validate.sh` + `user-setup.sh`), built on the S1 template, slotted into the S0 skeleton. | P1 | S1 |
+| **S-TS — TypeScript validation** | Run the TypeScript pilot **before** committing to TS anywhere. Port one existing, well-tested component (the appendix proposes `switch-manager`) to TypeScript, build it through Nix+Node, and run its existing bash test **unchanged** as a black-box oracle. Operates on **today's** code (pre-reorg) — its only job is to prove the toolchain and ergonomics. **Outcome gates the language of P1 (S2) and all new components.** Go → TS per the P10 preference; no-go → fall back to Python, TS for new components only. | [TS Migration appendix](#appendix-typescript-migration--assessment--pilot) | none |
+| **S0 — P4-structure** | Create `manager/`, `controller/`, `lib/` skeleton. **Move existing scripts** to their target directories per the P4 mapping table; wrap each in the per-directory `install/update/test`. Add the `manager/` and `controller/` **dispatchers** (loop children, skip `TEMPLATE/`) and reduce `tappaas-cicd`'s top-level scripts to calling them. **No behaviour change** — the goal is that everything that compiles and installs today still compiles and installs into `bin/`+`script/`, just from the new locations. | P4 (layout only) | none |
+| **S1 — P10 template** | `manager/TEMPLATE/` + `controller/TEMPLATE/` and the per-directory dispatchers. Freezes the component contract before any new manager is written. | P10 | S0 |
+| **S2 — P1 people-manager** | **Full manager** (people-manager + schemas + `validate.sh` + `user-setup.sh`), built on the S1 template, slotted into the S0 skeleton. **Language = TypeScript if S-TS passed, else Python.** | P1 | S1, S-TS (language) |
 | **S3 — P2 site-manager** | **Full manager**: `site.json` migration + schema, on the template. Auto-migration wired into `update-tappaas`. | P2 | S1, S2 (org refs) |
 | **S4 — P3 environment-manager** | **Full manager**: environment schema + variant migration + `create-minimal-environments.sh` bootstrap (owns `mgmt.json` + `default.json`, linked into `install.sh`). | P3 | S1, S3 |
 | **S5 — network-manager front door** | Fold `zone-controller` + `zone-reconcile` into `network-manager`, which **owns `zones.json`** (move it from the firewall module to `config/network/`); rename `proxmox-manager`→`-controller`, `switch-manager`→`-controller`; collapse OPNsense CLIs under `opnsense-controller`; register the physical switch. Closes the #372/#373/#335 fan-out gap by giving `zones.json` a single owner. | P4 (network orchestration) | S0 |
@@ -1747,7 +1894,8 @@ The package list (P1–P10) describes **what** each unit delivers. The packages 
 
 **Key points the sequence makes explicit:**
 
-- **S0 is structure-only and has no schema dependency.** The managers/controllers reorg and the generic fan-out can land *first*, before P1–P3 exist as full managers. This is what removes the P4↔P1/2/3 cycle.
+- **S-TS runs first and is independent.** The TypeScript pilot operates on today's code and gates only the *language choice* for P1 and new components — it blocks neither S0 nor S5, so it can run in parallel with the reorg. P1 (S2) is the first place its outcome is consumed.
+- **S0 is structure-only and has no schema dependency.** The manager/controller reorg and the two-level dispatch can land *first*, before P1–P3 exist as full managers. This is what removes the P4↔P1/2/3 cycle.
 - **S5 (network-manager) is unblocked early.** The live #372/#373 switch-fan-out gap rides on S0, not on the People/Site/Environment schemas — so it need not wait behind P1–P3.
 - **P1, P2, P3 each deliver a _full-blown manager_** (entry + schemas + install/update/test/validate), not just JSON files — built on the P10 template, slotted into the S0 skeleton.
 - **S0 also runs in parallel with S2–S4** once the skeleton exists; the table shows the hard ordering, not the only possible parallelism.
@@ -1933,10 +2081,13 @@ src/foundation/schemas/
 bin/
 └── create-minimal-environments.sh   # P3 bootstrap: emits mgmt.json + default.json, linked into install.sh
 
-src/foundation/tappaas-cicd/         # P10 template + generic runner
-├── TEMPLATE-manager/                # skeleton manager (install/update/test/validate + entry + README)
-├── TEMPLATE-controller/             # skeleton controller
-└── lib/component-runner.sh          # generic install|update|test fan-out over managers/* + controllers/*
+src/foundation/tappaas-cicd/         # P10 template + two-level dispatch
+├── manager/TEMPLATE/                # skeleton manager (install/update/test/validate + entry + README)
+├── manager/people-manager/minimal-org/  # P1 stored default: 1 org, admin+users groups, 1 user, 3 roles
+├── manager/{install,update,test}.sh # dispatcher: run each child's verb, skip TEMPLATE/
+├── controller/TEMPLATE/             # skeleton controller
+├── controller/{install,update,test}.sh
+└── {install,update,test}.sh         # top-level: call manager/<verb>.sh + controller/<verb>.sh
 ```
 
 ### Files Modified
@@ -1951,24 +2102,24 @@ zones.json                        # Rename zones to match environments
 ### Files Moved/Renamed
 
 ```bash
-# P4: tappaas-cicd managers/controllers reorganization
+# P4: tappaas-cicd manager/controller reorganization
 
 # Controllers (infrastructure control)
-src/foundation/.../opnsense-controller/    →  controllers/opnsense-controller/   (+ subcontrollers: firewall, zone, dns, dhcp, nat, caddy, acme, syslog)
-firewall/scripts/switch-manager            →  controllers/switch-controller/
-firewall/scripts/proxmox-manager           →  controllers/proxmox-controller/
-firewall/scripts/ap-manager                →  controllers/ap-controller/
+src/foundation/.../opnsense-controller/    →  controller/opnsense-controller/   (+ subcontrollers: firewall, zone, dns, dhcp, nat, caddy, acme, syslog)
+firewall/scripts/switch-manager            →  controller/switch-controller/
+firewall/scripts/proxmox-manager           →  controller/proxmox-controller/
+firewall/scripts/ap-manager                →  controller/ap-controller/
 
 # Managers (domain object lifecycle)
-bin/install-module.sh   →  managers/module-manager/install-module.sh
-bin/update-module.sh    →  managers/module-manager/update-module.sh
-bin/delete-module.sh    →  managers/module-manager/delete-module.sh
-bin/test-module.sh      →  managers/module-manager/test-module.sh
-bin/inspect-cluster.sh  →  managers/health-manager/inspect-cluster.sh
-bin/inspect-vm.sh       →  managers/health-manager/inspect-vm.sh
+bin/install-module.sh   →  manager/module-manager/install-module.sh
+bin/update-module.sh    →  manager/module-manager/update-module.sh
+bin/delete-module.sh    →  manager/module-manager/delete-module.sh
+bin/test-module.sh      →  manager/module-manager/test-module.sh
+bin/inspect-cluster.sh  →  manager/health-manager/inspect-cluster.sh
+bin/inspect-vm.sh       →  manager/health-manager/inspect-vm.sh
 
 # Network-manager: zone-controller folded in; it OWNS zones.json
-scripts/zone-controller.sh  scripts/zone-state.sh  firewall/scripts/zone-reconcile  →  managers/network-manager/
+scripts/zone-controller.sh  scripts/zone-state.sh  firewall/scripts/zone-reconcile  →  manager/network-manager/
 src/foundation/firewall/zones.json          →  config/network/zones.json    (network-manager's desired state)
 
 # P8: firewall → network rename
@@ -1979,13 +2130,13 @@ src/foundation/firewall/  →  src/foundation/network/
 
 ```text
 src/foundation/tappaas-cicd/
-├── managers/backup-manager/
+├── manager/backup-manager/
 │   ├── backup-manager.sh       # Backup operations
 │   ├── backup-status.sh        # Status for all modules
 │   ├── backup-restore.sh       # Restore operations
 │   └── validate-backup.sh      # Validate configuration
 │
-└── controllers/backup-controller/
+└── controller/backup-controller/
     ├── backup-controller.py    # PBS operations
     ├── pbs-api.py              # PBS API client
     ├── schedule-backup.py      # Schedule jobs
