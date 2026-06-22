@@ -1,6 +1,7 @@
 {
   "description": "The TAPPaaS Firewall VM (OPNsense)",
   "version": "1.0",
+  "tier": "foundation",
   "vmname": "firewall",
   "vmid": 110,
   "vmtag": "TAPPaaS,Foundation",

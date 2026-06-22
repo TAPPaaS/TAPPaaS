@@ -61,7 +61,15 @@ Arguments:
     module-name              Name of the module (expects ./<module-name>.json)
 
 Options:
-    --variant <name>         Install a variant (output: <module>-<name>.json)
+    --environment <name>     Target environment (ADR-007 P5). Drives the VM name
+                             (<module> in the default env, else <module>-<env>)
+                             and zone0 (from config/environments/<env>.json →
+                             network.zone). Foundation-tier modules may ONLY be
+                             installed into 'mgmt'.
+    --variant <name>         DEPRECATED alias for --environment (compat period).
+                             --environment wins if both are given.
+    --allow-fork             Permit a foundation-tier module from a non-official
+                             source (tier/source lint override).
     --force                  Install even if the module already exists (re-runs
                              against the existing deployment; removes nothing)
     --reinstall              Delete the existing deployment first, then install
@@ -69,11 +77,19 @@ Options:
     --<field> <value>        Override a JSON field value
     -h, --help               Show this help message
 
+Environment / zone resolution (ADR-007 P5):
+    * --environment given          → use it.
+    * else tier:foundation         → 'mgmt'.
+    * else                         → the default environment (single non-mgmt
+                                      env / site name); else today's behaviour.
+    zone0: explicit .zone0 in the JSON wins; else the environment's network.zone
+    (when the env file exists); else resolve_default_zone() (back-compat).
+
 Examples:
     ${SCRIPT_NAME} vaultwarden
     ${SCRIPT_NAME} litellm --node tappaas2
+    ${SCRIPT_NAME} nextcloud --environment foo
     ${SCRIPT_NAME} openwebui --variant staging
-    ${SCRIPT_NAME} openwebui --variant dev --zone0 srv-dev --vmid 315
     ${SCRIPT_NAME} identity --force
     ${SCRIPT_NAME} homeassistant --reinstall
 EOF
@@ -136,6 +152,71 @@ resolve_default_zone() {
     return 0
 }
 
+# ── Environment helpers (ADR-007 P5) ──────────────────────────────────
+#
+# The default environment is the single non-mgmt environment / site name <N>.
+# These helpers REUSE the same sources resolve_default_zone() uses (site.json
+# '.name' and the single non-mgmt environments/*.json), so default-env and
+# default-zone resolution stay unified — environment selection and zone
+# selection cannot disagree.
+
+# Echo the name of the default (non-mgmt) environment, or empty if none is
+# resolvable. Resolution order mirrors resolve_default_zone():
+#   1. site.json '.name'                 (when it names an existing env file, or
+#                                          there is no environments dir yet)
+#   2. the single non-mgmt environment   (when exactly one such env file exists)
+resolve_default_environment() {
+    local site_file="${CONFIG_DIR}/site.json"
+    local env_dir="${CONFIG_DIR}/environments"
+
+    # (1) site.json.name (the site/system name == default-env name per S6/N6).
+    if [[ -f "$site_file" ]]; then
+        local site_name
+        site_name="$(jq -r '.name // empty' "$site_file" 2>/dev/null)"
+        if [[ -n "$site_name" && "$site_name" != "mgmt" ]]; then
+            printf '%s\n' "$site_name"
+            return 0
+        fi
+    fi
+
+    # (2) exactly one non-mgmt environment file → its name.
+    if [[ -d "$env_dir" ]]; then
+        local f base count=0 only=""
+        for f in "$env_dir"/*.json; do
+            [[ -e "$f" ]] || continue
+            base="$(basename "$f" .json)"
+            [[ "$base" == "mgmt" ]] && continue
+            count=$((count + 1))
+            only="$base"
+        done
+        if [[ "$count" -eq 1 ]]; then
+            printf '%s\n' "$only"
+            return 0
+        fi
+    fi
+
+    # No default environment resolvable (pre-cutover / multi-env ambiguity).
+    printf '%s\n' ""
+    return 0
+}
+
+# Echo the zone for a given environment name, by reading
+# environments/<env>.json → .network.zone. Echoes empty if the file is absent
+# or declares no zone (caller falls back to resolve_default_zone for back-compat).
+resolve_zone_for_environment() {
+    local env="$1"
+    local env_file="${CONFIG_DIR}/environments/${env}.json"
+    [[ -f "$env_file" ]] || { printf '%s\n' ""; return 0; }
+    jq -r '.network.zone // empty' "$env_file" 2>/dev/null
+}
+
+# True if a module config for <module> already exists in CONFIG_DIR (the
+# installed marker). Used for the foundation single-instance guard — offline,
+# config-only (never probes the cluster).
+module_config_exists() {
+    [[ -f "${CONFIG_DIR}/${1}.json" ]]
+}
+
 # ── Main ─────────────────────────────────────────────────────────────
 
 main() {
@@ -165,6 +246,9 @@ main() {
     local force=false
     local reinstall=false
     local variant=""
+    local environment=""
+    local environment_explicit=false
+    local allow_fork=false
     local -a passthru=()
     shift  # drop the module name; re-added below
     while [[ $# -gt 0 ]]; do
@@ -175,10 +259,19 @@ main() {
             --reinstall)
                 reinstall=true
                 ;;
+            --allow-fork)
+                allow_fork=true
+                ;;
+            --environment)
+                environment="${2:-}"
+                environment_explicit=true
+                if [[ $# -ge 2 ]]; then shift; fi
+                ;;
             --variant)
+                # Deprecated alias for --environment (compat). --environment
+                # wins; only adopt the variant value if no --environment given.
                 variant="${2:-}"
-                passthru+=("$1")
-                if [[ $# -ge 2 ]]; then passthru+=("$2"); shift; fi
+                if [[ $# -ge 2 ]]; then shift; fi
                 ;;
             *)
                 passthru+=("$1")
@@ -186,17 +279,101 @@ main() {
         esac
         shift
     done
-    set -- "${module}" ${passthru[@]+"${passthru[@]}"}
+
+    # --environment wins over --variant. If only --variant was given, treat it
+    # as the environment name (the deprecated alias) — but keep the old variant
+    # registry path working by ALSO forwarding --variant when no --environment
+    # was explicitly given (back-compat for registered variants).
+    if [[ "${environment_explicit}" == false && -n "${variant}" ]]; then
+        # Deprecated --variant alias → environment, registry-free P5 path.
+        environment="${variant}"
+        warn "  --variant is deprecated; treating '--variant ${variant}' as '--environment ${variant}' (ADR-007 P5)"
+    fi
+    # The legacy variant value is not used past this point — the P5 environment
+    # path is registry-free. Keep it empty for the dependency-resolution helpers.
+    variant=""
+
+    # ── Step 0: Classify tier/source and resolve the target environment ──
+    echo ""
+    info "${BOLD}Step 0: Classify (tier/source) and resolve environment${CL}"
+
+    # The authored module JSON in the module directory (cwd) is the source of
+    # truth for tier (and any pinned source). Read it before copying anything.
+    local source_json="./${module}.json"
+    [[ -f "${source_json}" ]] || die "Source module config not found: ${source_json} (run install-module.sh from the module directory)"
+
+    # Tier/source lint (ADR-007b). Foundation modules MUST be source:official
+    # unless --allow-fork; community modules warn (non-fatal). The lint is the
+    # authority on the enum values, so install fails fast on a bad classification.
+    local lint_cmd="/home/tappaas/bin/validate-module-tier-source.sh"
+    if [[ ! -x "${lint_cmd}" ]]; then
+        # Fall back to the script alongside this one (e.g. when run from the repo
+        # without the ~/bin symlinks installed).
+        lint_cmd="$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/validate-module-tier-source.sh"
+    fi
+    local -a lint_args=("${source_json}")
+    [[ "${allow_fork}" == true ]] && lint_args+=("--allow-fork")
+    if ! "${lint_cmd}" "${lint_args[@]}"; then
+        die "tier/source lint failed for ${module} — fix the classification (or pass --allow-fork for a foundation fork)"
+    fi
+
+    local tier
+    tier="$(jq -r '.tier // "app"' "${source_json}")"
+    info "  tier=${BL}${tier}${CL}"
+
+    # Environment resolution (ADR-007 P5):
+    #   explicit --environment → use it; else tier:foundation → mgmt; else the
+    #   default environment (single non-mgmt env / site name); else "" (back-compat,
+    #   meaning "no environment selected" — behaves like a vanilla legacy install).
+    local default_env
+    default_env="$(resolve_default_environment)"
+    if [[ -z "${environment}" ]]; then
+        if [[ "${tier}" == "foundation" ]]; then
+            environment="mgmt"
+        elif [[ -n "${default_env}" ]]; then
+            environment="${default_env}"
+        else
+            environment=""   # nothing resolvable → legacy/no-env path
+        fi
+    fi
+    if [[ -n "${environment}" ]]; then
+        info "  environment=${BL}${environment}${CL} (default environment: ${default_env:-<none>})"
+    else
+        info "  no environment selected — legacy/no-env install (back-compat)"
+    fi
+
+    # Foundation-tier constraints: mgmt-only + single-instance (offline guard).
+    if [[ "${tier}" == "foundation" ]]; then
+        if [[ -n "${environment}" && "${environment}" != "mgmt" ]]; then
+            die "Foundation modules can only be installed in the 'mgmt' environment (got '${environment}')"
+        fi
+        if module_config_exists "${module}" && [[ "${force}" != true && "${reinstall}" != true ]]; then
+            die "Foundation module '${module}' is already installed (single-instance). Use --reinstall to replace, or --force to re-run the installer."
+        fi
+    fi
+
+    # Compute the effective module name and VM name from the environment.
+    # No suffix when: no environment selected (legacy), the environment IS the
+    # default environment, or it is 'mgmt' (foundation default). Otherwise the
+    # name is <module>-<environment>.
+    local effective_module="${module}"
+    local computed_vmname="${module}"
+    if [[ -n "${environment}" \
+          && "${environment}" != "mgmt" \
+          && ( -z "${default_env}" || "${environment}" != "${default_env}" ) ]]; then
+        effective_module="${module}-${environment}"
+        computed_vmname="${module}-${environment}"
+    fi
+    info "  effective module name = ${BL}${effective_module}${CL}; vmname = ${BL}${computed_vmname}${CL}"
 
     # ── Step 1: Check module not already installed ───────────────────
     echo ""
     info "${BOLD}Step 1: Check module not already installed${CL}"
 
     # The installed-marker is the config JSON in CONFIG_DIR, which Step 2
-    # overwrites — so check before copying. Variant builds use the suffixed
-    # name (matching copy-update-json.sh's <module>-<variant>.json naming).
-    local precheck_module="${module}"
-    [[ -n "${variant}" ]] && precheck_module="${module}-${variant}"
+    # overwrites — so check before copying. Environment builds use the suffixed
+    # name (<module>-<environment>.json).
+    local precheck_module="${effective_module}"
 
     if [[ "${reinstall}" == true ]]; then
         # --reinstall: tear down any existing deployment first, then install
@@ -221,41 +398,58 @@ main() {
         info "  ${GN}✓${CL} '${precheck_module}' is not yet installed"
     fi
 
-    # ── Variant registry validation (ADR-005 Sprint 3) ───────────────
-    # A named variant must be registered in configuration.json before install,
-    # so we fail fast with a clear message before copying configs or creating
-    # any resources. The default (no --variant) is exempt.
-    if [[ -n "${variant}" ]]; then
-        if ! get_variant_config "${variant}" >/dev/null 2>&1; then
-            die "Variant '${variant}' not registered. Run: variant-manager add ${variant} --domain <domain>"
-        fi
-        info "  ${GN}✓${CL} variant '${variant}' is registered"
-    fi
-
     # ── Step 2: Copy JSON config and validate ────────────────────────
     echo ""
     info "${BOLD}Step 2: Copy and validate module configuration${CL}"
 
+    # Build the copy-update-json argument vector. When an environment is
+    # selected we drive the effective name + vmname through --environment /
+    # --default-environment / --vmname (ADR-007 P5 — registry-free, distinct
+    # from the legacy --variant path). When no environment is selected we keep
+    # the plain legacy behaviour (back-compat).
+    local -a cuj_args=("${module}")
+    if [[ -n "${environment}" ]]; then
+        cuj_args+=("--environment" "${environment}")
+        [[ -n "${default_env}" ]] && cuj_args+=("--default-environment" "${default_env}")
+        # Computed vmname only when the operator did not pass an explicit one.
+        if [[ " ${passthru[*]-} " != *" --vmname "* ]]; then
+            cuj_args+=("--vmname" "${computed_vmname}")
+        fi
+    fi
+    cuj_args+=(${passthru[@]+"${passthru[@]}"})
+
+    set -- "${cuj_args[@]}"
     . /home/tappaas/bin/copy-update-json.sh
 
-    # Use effective module name (may differ from module when --variant is used)
-    local effective_module="${EFFECTIVE_MODULE:-${module}}"
+    # Use effective module name reported by copy-update-json (authoritative).
+    effective_module="${EFFECTIVE_MODULE:-${effective_module}}"
     if [[ "${effective_module}" != "${module}" ]]; then
-        info "Variant active: effective module name is ${BL}${effective_module}${CL}"
+        info "Environment active: effective module name is ${BL}${effective_module}${CL}"
     fi
 
     check_json "${CONFIG_DIR}/${effective_module}.json" || die "JSON validation failed for ${effective_module}"
 
     local module_json="${CONFIG_DIR}/${effective_module}.json"
 
-    # zone0 resolution (ADR-007 S6 N6): an explicit zone0 in the module JSON
-    # always wins. A blank/unset zone0 resolves to the system's DEFAULT zone (the
-    # default-environment zone = the system name), falling back to mgmt only when
-    # nothing is resolvable yet (pre-cutover). The resolved value is written back
-    # into the module JSON so every downstream consumer (the module's own
-    # install.sh via get_config_value 'zone0', network provisioning) sees it.
+    # zone0 resolution (ADR-007 P5, reconciled with S6 N6): precedence is
+    #   1. explicit .zone0 in the module JSON / --zone0 override  (always wins)
+    #   2. the target environment's network.zone                 (env file exists)
+    #   3. resolve_default_zone()                                (back-compat)
+    # The resolved value is written back into the module JSON so every downstream
+    # consumer (the module's own install.sh, network provisioning) sees it.
     local zone0
     zone0=$(jq -r '.zone0 // empty' "${module_json}")
+    if [[ -z "$zone0" && -n "${environment}" ]]; then
+        zone0="$(resolve_zone_for_environment "${environment}")"
+        if [[ -n "$zone0" ]]; then
+            info "  zone0 not set — using environment '${environment}' zone ${BL}${zone0}${CL}"
+            local _ztmp
+            _ztmp="$(mktemp "${module_json}.XXXXXX")"
+            jq --arg z "$zone0" '.zone0 = $z' "${module_json}" > "${_ztmp}" \
+                && mv "${_ztmp}" "${module_json}" \
+                || { rm -f "${_ztmp}"; die "Failed to write resolved zone0 into ${module_json}"; }
+        fi
+    fi
     if [[ -z "$zone0" ]]; then
         zone0="$(resolve_default_zone)"
         info "  zone0 not set — defaulting to ${BL}${zone0}${CL}"

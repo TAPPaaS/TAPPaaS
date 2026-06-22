@@ -60,7 +60,7 @@ if [[ -z "${_MERGE_CONFIG_DIR:-}" ]]; then
     # Header fields never merged — always preserve the installed value.
     # Note: vmname/vmid/etc are NOT in this list — operator changes there ARE
     # meaningful and follow the standard pin-vs-adopt rule.
-    readonly _MERGE_AUTO_FIELDS='["location","installTime","updateTime","releaseDate","variant"]'
+    readonly _MERGE_AUTO_FIELDS='["location","installTime","updateTime","releaseDate","variant","environment"]'
 fi
 
 # Load common log functions if not already provided.

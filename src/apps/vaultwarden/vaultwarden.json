@@ -4,6 +4,7 @@
   "releaseDate": "2026-02-17",
   "maintainer": "@larsrossen",
   "status": "Development",
+  "tier": "app",
   "vmname": "vaultwarden",
   "vmid": 610,
   "vmtag": "TAPPaaS,App",

@@ -61,6 +61,7 @@ OPT_YES=false
 OPT_VMID=""
 OPT_MODE="archive"        # archive (default, safe) | remove (destructive)
 OPT_MODE_EXPLICIT=false   # true once --archive/--remove is seen
+OPT_ENVIRONMENT=""        # ADR-007 P5: target environment
 
 # shellcheck source=common-install-routines.sh disable=SC1091
 . /home/tappaas/bin/common-install-routines.sh
@@ -87,8 +88,12 @@ Options:
     --vmid <id>    Target a specific VM instance by VMID (required when several
                    VMs share the module name). If it differs from the config
                    VMID, only that VM is destroyed and the config is kept.
+    --environment <name>  Target environment (ADR-007 P5). Resolves the installed
+                   config name (<module>-<env> for a non-default/non-mgmt env).
+    --variant <name>      DEPRECATED alias for --environment.
     --yes, -y      Skip the destroy confirmation prompt (for automation)
-    --force        Delete despite dependent modules; also implies --yes AND --remove
+    --force        Delete despite dependent modules; REQUIRED for tier:foundation
+                   modules; also implies --yes AND --remove
     -h, --help     Show this help message
 
 Examples:
@@ -203,6 +208,14 @@ main() {
             --vmid)
                 [[ -n "${2:-}" ]] || die "--vmid requires a value"
                 OPT_VMID="${2}"; shift ;;
+            --environment)
+                [[ -n "${2:-}" ]] || die "--environment requires a value"
+                OPT_ENVIRONMENT="${2}"; shift ;;
+            --variant)
+                [[ -n "${2:-}" ]] || die "--variant requires a value"
+                OPT_ENVIRONMENT="${2}"
+                warn "--variant is deprecated; treating as --environment ${2} (ADR-007 P5)"
+                shift ;;
             -*) die "Unknown option: ${1}" ;;
             *)
                 if [[ -n "${module}" ]]; then
@@ -231,6 +244,22 @@ main() {
         OPT_MODE="remove"
     fi
 
+    # ADR-007 P5: map a base module + --environment to the installed config name
+    # (<module>-<env> for a non-default/non-mgmt env). Only remap when the plain
+    # name has no config but the suffixed one does (so naming the suffixed module
+    # directly still works).
+    if [[ -n "${OPT_ENVIRONMENT}" && "${OPT_ENVIRONMENT}" != "mgmt" ]]; then
+        local _default_env=""
+        [[ -f "${CONFIG_DIR}/site.json" ]] && \
+            _default_env="$(jq -r '.name // empty' "${CONFIG_DIR}/site.json" 2>/dev/null)"
+        if [[ "${OPT_ENVIRONMENT}" != "${_default_env}" ]]; then
+            local _eff="${module}-${OPT_ENVIRONMENT}"
+            if [[ ! -f "${CONFIG_DIR}/${module}.json" && -f "${CONFIG_DIR}/${_eff}.json" ]]; then
+                module="${_eff}"
+            fi
+        fi
+    fi
+
     local module_json="${CONFIG_DIR}/${module}.json"
 
     info "${BOLD}╔══════════════════════════════════════════════╗${CL}"
@@ -245,6 +274,19 @@ main() {
     fi
 
     info "  ${GN}✓${CL} Module config found: ${module_json}"
+
+    # ── Foundation-tier protection (ADR-007 P5) ──────────────────────
+    # A tier:foundation module is a critical platform component — refuse to
+    # delete it unless --force is given.
+    local _tier
+    _tier="$(jq -r '.tier // "app"' "${module_json}" 2>/dev/null)"
+    if [[ "${_tier}" == "foundation" ]]; then
+        if [[ "${OPT_FORCE}" != true ]]; then
+            error "Cannot delete foundation module '${module}' without --force."
+            die "Foundation modules are critical platform components — re-run with --force to proceed."
+        fi
+        warn "Deleting foundation module '${module}' with --force"
+    fi
 
     # ── Step 2: Resolve & confirm target VM (issue #195) ─────────────
     info "\n${BOLD}Step 2: Resolve and confirm target VM${CL}"

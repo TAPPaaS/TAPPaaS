@@ -3,6 +3,7 @@
   "version": "0.8",
   "maintainer": "@TAPPaaS",
   "status": "Development",
+  "tier": "foundation",
   "dependsOn": [],
   "provides": [
     "vm",

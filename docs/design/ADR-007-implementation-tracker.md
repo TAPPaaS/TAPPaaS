@@ -36,7 +36,7 @@ Each stage is **not done** until it passes the gate below. The driver updates th
 | **S4** | P3 environment-manager (schema + variant migration + minimal-envs) | #318 | S1, S3 | 🟦 env schema + variant→env migration done; CRUD/--environment/P6-P7 after cutover | env-manager 29/0 | 56a2653 | ✅ (migration) |
 | **S5** | network-manager front door (owns zones.json; fold zone-controller/reconcile; controller renames) | #372, #373, #335, #364, #319 | S0 | ⬜ | — | — | — |
 | **S6** | P6/P7 mgmt-as-environment + default-env selection + legacy-zone sunset | #319 | S4 | 🟦 topology resolved; machinery N1–N4,N6 done; N5+S3b+P6=supervised live cutover | network-manager 99/0; env 37/0; module 22/0 | 879341b·c2d731d·57624a3·e0b9e70·8d1ea61 | ✅ (N1-N4,N6) |
-| **S7** | P5 module updates (tier/source + `--environment`) | #339, #356, #357 | S4, S0 | ⬜ | — | — | — |
+| **S7** | P5 module updates (tier/source + `--environment`) | #339, #356, #357 | S4, S0 | ✅ done (offline; unblocks P6) | module-manager 45/0; lint 13/0; 18 modules tagged | (next commit) | ⏳ |
 | **S8** | P8 firewall→network rename + migration (wide surface; slot ≥ S7) | — | S0, S7 | ⬜ | — | — | — |
 | **S9** | P9 backup hierarchy (backup-manager + backup-controller) | #358 | S3, S4, S1 | ⬜ | — | — | — |
 

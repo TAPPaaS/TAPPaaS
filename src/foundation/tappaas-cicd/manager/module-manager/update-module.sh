@@ -67,6 +67,11 @@ Arguments:
 
 Options:
     -h, --help        Show this help message
+    --environment <name>  Target environment (ADR-007 P5). The installed config
+                          is <module>-<env>.json for a non-default/non-mgmt env;
+                          <module>.json otherwise. Equivalent to naming the
+                          suffixed module directly.
+    --variant <name>      DEPRECATED alias for --environment.
     --force           Proceed even if pre-update test fails
     --no-snapshot     Skip pre-update test, snapshot, and rollback
     --debug           Show Debug-level messages
@@ -80,9 +85,29 @@ Exit codes:
 Examples:
     ${SCRIPT_NAME} vaultwarden
     ${SCRIPT_NAME} --force litellm
+    ${SCRIPT_NAME} nextcloud --environment foo
     ${SCRIPT_NAME} --no-snapshot nextcloud
     ${SCRIPT_NAME} --debug openwebui
 EOF
+}
+
+# Compute the installed (effective) module name from a base module + environment
+# (ADR-007 P5). No suffix for an empty env, 'mgmt', or the default environment;
+# otherwise <module>-<env>. Mirrors install-module.sh's computation.
+resolve_effective_module_name() {
+    local mod="$1" env="$2"
+    local site_file="${CONFIG_DIR}/site.json"
+    local default_env=""
+    if [[ -n "$env" ]]; then
+        if [[ -f "$site_file" ]]; then
+            default_env="$(jq -r '.name // empty' "$site_file" 2>/dev/null)"
+        fi
+        if [[ "$env" != "mgmt" && ( -z "$default_env" || "$env" != "$default_env" ) ]]; then
+            printf '%s\n' "${mod}-${env}"
+            return 0
+        fi
+    fi
+    printf '%s\n' "${mod}"
 }
 
 # ── Helpers ──────────────────────────────────────────────────────────
@@ -175,6 +200,7 @@ prune_snapshots() {
 
 main() {
     local module=""
+    local environment=""
 
     # Parse arguments
     while [[ $# -gt 0 ]]; do
@@ -184,6 +210,14 @@ main() {
             --no-snapshot)  OPT_NO_SNAPSHOT=1; shift ;;
             --debug)        OPT_DEBUG=1; export TAPPAAS_DEBUG=1; shift ;;
             --silent)    OPT_SILENT=1; export TAPPAAS_SILENT=1; shift ;;
+            --environment)
+                [[ -n "${2:-}" ]] || { fatal "--environment requires a value"; exit 2; }
+                environment="$2"; shift 2 ;;
+            --variant)
+                [[ -n "${2:-}" ]] || { fatal "--variant requires a value"; exit 2; }
+                environment="$2"
+                warn "--variant is deprecated; treating as --environment ${2} (ADR-007 P5)"
+                shift 2 ;;
             -*)          fatal "Unknown option: $1"; usage; exit 2 ;;
             *)
                 if [[ -z "${module}" ]]; then
@@ -202,6 +236,17 @@ main() {
         fatal "Module name is required"
         usage
         exit 2
+    fi
+
+    # ADR-007 P5: map a base module + --environment to the installed config name
+    # (<module>-<env> for a non-default env). If the caller already passed the
+    # suffixed name, this leaves it unchanged.
+    if [[ -n "${environment}" ]]; then
+        local _eff
+        _eff="$(resolve_effective_module_name "${module}" "${environment}")"
+        if [[ "${_eff}" != "${module}" && ! -f "${CONFIG_DIR}/${module}.json" ]]; then
+            module="${_eff}"
+        fi
     fi
 
     local module_json="${CONFIG_DIR}/${module}.json"

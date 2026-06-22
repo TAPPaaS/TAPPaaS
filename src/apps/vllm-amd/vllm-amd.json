@@ -4,6 +4,7 @@
   "releaseDate": "2026-06-15",
   "maintainer": "@ErikDaniel007",
   "status": "Development",
+  "tier": "app",
   "vmname": "vllm-amd",
   "vmid": 312,
   "vmtag": "TAPPaaS,AI,GPU,vLLM",

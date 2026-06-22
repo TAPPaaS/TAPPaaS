@@ -11,8 +11,11 @@
     "updateTime",
     "maintainer",
     "status",
+    "tier",
+    "source",
     "location",
     "variant",
+    "environment",
     "vmname",
     "vmid",
     "vmtag",
@@ -138,6 +141,16 @@
       "example": "staging",
       "note": "Set automatically when --variant <name> is used at install time (#207). Treated as an auto-managed field by the 3-way merge — never adopted from the release source."
     },
+    "environment": {
+      "description": "Target environment this module was installed into (ADR-007 P5). Persisted by copy-update-json.sh when --environment <name> is used so update-module.sh/delete-module.sh can resolve the source module file and the environment. Not present for legacy/no-environment installs.",
+      "type": "string",
+      "requiredBy": [],
+      "usedBy": [
+        "general"
+      ],
+      "example": "foo",
+      "note": "Set automatically when --environment <name> is used at install time. Auto-managed by the 3-way merge — never adopted from the release source. The successor to 'variant'."
+    },
     "maintainer": {
       "description": "Maintainer of the module",
       "type": "string",
@@ -167,6 +180,38 @@
       },
       "example": "Development"
     },
+    "tier": {
+      "description": "Lifecycle role of the module (ADR-007b). Answers 'Can it be uninstalled?'. Orthogonal to 'source' — never collapsed into one enum (MECE). 'foundation' modules are critical platform components: they may only be installed into the 'mgmt' environment, are single-instance, and require --force to delete. 'app' modules are tenant-facing and deploy into any environment.",
+      "type": "string",
+      "requiredBy": [],
+      "usedBy": [
+        "general"
+      ],
+      "default": "app",
+      "values": {
+        "foundation": "Critical platform module (mgmt-only, single-instance, --force to delete). Lint rule: source MUST be 'official' (or explicit --allow-fork override).",
+        "app": "Tenant/environment-facing module — deployable into any environment, multi-instance across environments."
+      },
+      "example": "app",
+      "note": "Mandatory in authored module JSON (ADR-007b CR-04). The schema gives it a 'app' default so legacy module configs that predate ADR-007 still validate (back-compat); authored modules SHOULD set it explicitly."
+    },
+    "source": {
+      "description": "Origin & trust of the catalog entry (ADR-007b). Answers 'Where does the catalog entry come from?'. Orthogonal to 'tier'. Normally INFERRED at deploy time from the repository the module is catalogued in (sourceMetadata lives in Site → repositories, CR-05); only set explicitly when the module file itself must pin it.",
+      "type": "string",
+      "requiredBy": [],
+      "usedBy": [
+        "general"
+      ],
+      "default": "official",
+      "values": {
+        "official": "🟢 Verified — TAPPaaS-maintained, signed (tappaas-official repo).",
+        "community": "🟡 Community — peer-reviewed, not officially supported.",
+        "private": "🔵 Private — customer/private repo.",
+        "local": "⚪ Local — local dev, not in any catalog."
+      },
+      "example": "official",
+      "note": "Optional. Defaults to 'official'. Lint rule (validate-module-tier-source.sh): tier:foundation requires source:official unless --allow-fork is given."
+    },
     "location": {
       "description": "Absolute path to the module directory containing install.sh, update.sh, etc.",
       "type": "string",
@@ -185,9 +230,10 @@
         "cluster:vm",
         "cluster:lxc"
       ],
-      "default": "<config filename without .json>",
+      "default": "<computed from module name + environment>",
       "pattern": "^[a-zA-Z][a-zA-Z0-9-]*$",
-      "example": "nextcloud"
+      "example": "nextcloud",
+      "note": "ADR-007 P5: vmname is COMPUTED at install time and need not be authored in the module JSON. The installer derives it from the module name and the target environment: '<module>' when the environment is the default environment, else '<module>-<environment>'. An explicit vmname in the JSON still wins (back-compat). The field is retained in the schema for legacy module configs."
     },
     "vmid": {
       "description": "Unique VM ID across all TAPPaaS nodes",
@@ -552,7 +598,7 @@
       "default": "mgmt",
       "format": "^[a-z][a-zA-Z0-9]*$",
       "example": "srvHome",
-      "note": "Zone determines VLAN tag. 'mgmt' is untagged traffic. camelCase only — no underscores or hyphens (#278)."
+      "note": "Zone determines VLAN tag. 'mgmt' is untagged traffic. camelCase only — no underscores or hyphens (#278). ADR-007 P5: when zone0 is unset it DEFAULTS to the target environment's network.zone (read from config/environments/<env>.json); pre-cutover (no site.json/environments) it falls back to resolve_default_zone()'s behaviour. An explicit zone0 in the module JSON always wins."
     },
     "trunks0": {
       "description": "Semicolon-separated list of additional zone names to trunk on net0. Zone names are resolved to VLAN tags. Used when a VM needs to see traffic from multiple VLANs on a single NIC (e.g., the firewall).",

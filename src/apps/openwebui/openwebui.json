@@ -4,6 +4,7 @@
   "releaseDate": "2026-06-09",
   "maintainer": "@ErikDaniel007",
   "status": "Development",
+  "tier": "app",
   "vmname": "openwebui",
   "vmid": 311,
   "vmtag": "TAPPaaS,App",

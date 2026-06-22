@@ -4,6 +4,7 @@
   "releaseDate": "2026-06-14",
   "maintainer": "@ErikDaniel007",
   "status": "Testing",
+  "tier": "app",
   "vmname": "hass",
   "vmid": 210,
   "vmtag": "TAPPaaS,App,HomeAutomation",

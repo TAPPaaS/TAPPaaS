@@ -4,6 +4,7 @@
   "releaseDate": "2026-06-12",
   "maintainer": "@ErikDaniel007",
   "status": "Testing",
+  "tier": "app",
   "vmname": "euro-office",
   "vmid": 343,
   "vmtag": "TAPPaaS,App",

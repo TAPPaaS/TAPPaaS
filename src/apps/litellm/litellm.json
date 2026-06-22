@@ -4,6 +4,7 @@
   "releaseDate": "2026-06-15",
   "maintainer": "@ErikDaniel007",
   "status": "Development",
+  "tier": "app",
   "vmname": "litellm",
   "vmid": 310,
   "vmtag": "TAPPaaS,App,AI",

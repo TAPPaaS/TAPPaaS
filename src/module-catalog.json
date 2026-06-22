@@ -1,218 +1,270 @@
 {
-    "description": "TAPPaaS Module Registry - All known modules and their VMID assignments.",
-    "vmidConventions": {
-        "summary": "VMID ranges are allocated by module type. Numbers are assigned in increments of 10, giving each module a block of 10 VMIDs for the local TAPPaaS administrator to create multiple copies of the same module/app.",
-        "ranges": {
-            "100-200": "Foundation modules (core platform infrastructure)",
-            "201-499": "Application modules — NixOS/Linux-based services",
-            "500-599": "Application modules — Windows Server-based services",
-            "600-799": "Application modules — general services",
-            "800-899": "Application modules — network and infrastructure",
-            "900-999": "Test modules (used for VM creation testing and templates)",
-            "8000-9000": "Proxmox templates (VM templates used for cloning)"
-        },
-        "allocationRule": "VMIDs are allocated in increments of 10. For example, if an application like litellm is assigned VMID 310, then VMIDs 310-319 are reserved for that module. This allows the local administrator to deploy multiple instances of the same module."
+  "description": "TAPPaaS Module Registry - All known modules and their VMID assignments.",
+  "vmidConventions": {
+    "summary": "VMID ranges are allocated by module type. Numbers are assigned in increments of 10, giving each module a block of 10 VMIDs for the local TAPPaaS administrator to create multiple copies of the same module/app.",
+    "ranges": {
+      "100-200": "Foundation modules (core platform infrastructure)",
+      "201-499": "Application modules — NixOS/Linux-based services",
+      "500-599": "Application modules — Windows Server-based services",
+      "600-799": "Application modules — general services",
+      "800-899": "Application modules — network and infrastructure",
+      "900-999": "Test modules (used for VM creation testing and templates)",
+      "8000-9000": "Proxmox templates (VM templates used for cloning)"
     },
-    "foundationModules": [
-        {
-            "moduleName": "firewall",
-            "repo": "foundation",
-            "moduleJson": "src/foundation/firewall/firewall.json",
-            "vmid": 110,
-            "stack": "foundation",
-            "category": "platform",
-            "status": "stable"
-        },
-        {
-            "moduleName": "tappaas-cicd",
-            "repo": "foundation",
-            "moduleJson": "src/foundation/tappaas-cicd/tappaas-cicd.json",
-            "vmid": 130,
-            "stack": "foundation",
-            "category": "platform",
-            "status": "stable"
-        },
-        {
-            "moduleName": "identity",
-            "repo": "foundation",
-            "moduleJson": "src/foundation/identity/identity.json",
-            "vmid": 140,
-            "stack": "security",
-            "category": "identity",
-            "status": "beta"
-        },
-        {
-            "moduleName": "logging",
-            "repo": "foundation",
-            "moduleJson": "src/foundation/logging/logging.json",
-            "vmid": 150,
-            "stack": "foundation",
-            "category": "observability",
-            "status": "beta"
-        },
-        {
-            "moduleName": "backup",
-            "repo": "foundation",
-            "moduleJson": "src/foundation/backup/backup.json",
-            "vmid": 0,
-            "stack": "foundation",
-            "category": "backup",
-            "status": "stable"
-        }
-    ],
-    "applicationModules": [
-        {
-            "moduleName": "litellm",
-            "repo": "application",
-            "moduleJson": "src/apps/litellm/litellm.json",
-            "vmid": 310,
-            "stack": "ai",
-            "category": "inference",
-            "status": "beta"
-        },
-        {
-            "moduleName": "openwebui",
-            "repo": "application",
-            "moduleJson": "src/apps/openwebui/openwebui.json",
-            "vmid": 311,
-            "stack": "ai",
-            "category": "interface",
-            "status": "beta"
-        },
-        {
-            "moduleName": "vllm-amd",
-            "repo": "application",
-            "moduleJson": "src/apps/vllm-amd/vllm-amd.json",
-            "vmid": 312,
-            "stack": "ai",
-            "category": "inference",
-            "status": "beta"
-        },
-        {
-            "moduleName": "vaultwarden",
-            "repo": "application",
-            "moduleJson": "src/apps/vaultwarden/vaultwarden.json",
-            "vmid": 610,
-            "stack": "security",
-            "category": "credentials",
-            "status": "beta"
-        },
-        {
-            "moduleName": "windows-server",
-            "repo": "application",
-            "moduleJson": "src/apps/windows-server/windows-server.json",
-            "vmid": 500,
-            "stack": "application",
-            "category": "desktop",
-            "status": "beta"
-        },
-        {
-            "moduleName": "netbird-client",
-            "repo": "application",
-            "moduleJson": "src/apps/netbird-client/netbird-client.json",
-            "vmid": 800,
-            "stack": "infrastructure",
-            "category": "network",
-            "status": "beta"
-        },
-        {
-            "moduleName": "unifi",
-            "repo": "application",
-            "moduleJson": "src/apps/unifi/unifi.json",
-            "vmid": 810,
-            "stack": "infrastructure",
-            "category": "network",
-            "status": "incomplete"
-        },
-        {
-            "moduleName": "nextcloud",
-            "repo": "application",
-            "moduleJson": "src/apps/nextcloud/nextcloud.json",
-            "vmid": 340,
-            "stack": "collaboration",
-            "category": "hub",
-            "status": "beta"
-        },
-        {
-            "moduleName": "coturn",
-            "repo": "application",
-            "moduleJson": "src/apps/coturn/coturn.json",
-            "vmid": 341,
-            "stack": "collaboration",
-            "category": "turn",
-            "status": "beta"
-        },
-        {
-            "moduleName": "nextcloud-hpb",
-            "repo": "application",
-            "moduleJson": "src/apps/nextcloud-hpb/nextcloud-hpb.json",
-            "vmid": 342,
-            "stack": "collaboration",
-            "category": "signaling",
-            "status": "beta"
-        },
-        {
-            "moduleName": "euro-office",
-            "repo": "application",
-            "moduleJson": "src/apps/euro-office/euro-office.json",
-            "vmid": 343,
-            "stack": "collaboration",
-            "category": "office",
-            "status": "beta"
-        }
-    ],
-    "proxmoxTemplates": [
-        {
-            "moduleName": "template",
-            "moduleJson": "src/foundation/templates/template.json",
-            "vmid": 8080
-        },
-        {
-            "moduleName": "tappaas-winserver",
-            "moduleJson": "src/foundation/templates/tappaas-winserver.json",
-            "vmid": 8081
-        }
-    ],
-    "testModules": [
-        {
-            "moduleName": "test-debian",
-            "moduleJson": "src/foundation/tappaas-cicd/test-vm-creation/test-debian.json",
-            "vmid": 901
-        },
-        {
-            "moduleName": "test-deb-vlannode",
-            "moduleJson": "src/foundation/tappaas-cicd/test-vm-creation/test-deb-vlannode.json",
-            "vmid": 902
-        },
-        {
-            "moduleName": "test-deb-nonode",
-            "moduleJson": "src/foundation/tappaas-cicd/test-vm-creation/test-deb-nonode.json",
-            "vmid": 903
-        },
-        {
-            "moduleName": "test-deb-n3noha",
-            "moduleJson": "src/foundation/tappaas-cicd/test-vm-creation/test-deb-n3noha.json",
-            "vmid": 904
-        },
-        {
-            "moduleName": "test-ubuntu-vlan",
-            "moduleJson": "src/foundation/tappaas-cicd/test-vm-creation/test-ubuntu-vlan.json",
-            "vmid": 905
-        },
-        {
-            "moduleName": "test-nixos",
-            "moduleJson": "src/foundation/tappaas-cicd/test-vm-creation/test-nixos.json",
-            "vmid": 911
-        },
-        {
-            "moduleName": "test-nix-vlannode",
-            "moduleJson": "src/foundation/tappaas-cicd/test-vm-creation/test-nix-vlannode.json",
-            "vmid": 912
-        },
-        {
-            "moduleName": "template",
-            "moduleJson": "src/apps/00-Template/template.json",
-            "vmid": 999
-        }
-    ]
+    "allocationRule": "VMIDs are allocated in increments of 10. For example, if an application like litellm is assigned VMID 310, then VMIDs 310-319 are reserved for that module. This allows the local administrator to deploy multiple instances of the same module."
+  },
+  "foundationModules": [
+    {
+      "moduleName": "firewall",
+      "repo": "foundation",
+      "moduleJson": "src/foundation/firewall/firewall.json",
+      "vmid": 110,
+      "stack": "foundation",
+      "category": "platform",
+      "status": "stable",
+      "tier": "foundation",
+      "source": "official"
+    },
+    {
+      "moduleName": "tappaas-cicd",
+      "repo": "foundation",
+      "moduleJson": "src/foundation/tappaas-cicd/tappaas-cicd.json",
+      "vmid": 130,
+      "stack": "foundation",
+      "category": "platform",
+      "status": "stable",
+      "tier": "foundation",
+      "source": "official"
+    },
+    {
+      "moduleName": "identity",
+      "repo": "foundation",
+      "moduleJson": "src/foundation/identity/identity.json",
+      "vmid": 140,
+      "stack": "security",
+      "category": "identity",
+      "status": "beta",
+      "tier": "foundation",
+      "source": "official"
+    },
+    {
+      "moduleName": "logging",
+      "repo": "foundation",
+      "moduleJson": "src/foundation/logging/logging.json",
+      "vmid": 150,
+      "stack": "foundation",
+      "category": "observability",
+      "status": "beta",
+      "tier": "foundation",
+      "source": "official"
+    },
+    {
+      "moduleName": "backup",
+      "repo": "foundation",
+      "moduleJson": "src/foundation/backup/backup.json",
+      "vmid": 0,
+      "stack": "foundation",
+      "category": "backup",
+      "status": "stable",
+      "tier": "foundation",
+      "source": "official"
+    }
+  ],
+  "applicationModules": [
+    {
+      "moduleName": "litellm",
+      "repo": "application",
+      "moduleJson": "src/apps/litellm/litellm.json",
+      "vmid": 310,
+      "stack": "ai",
+      "category": "inference",
+      "status": "beta",
+      "tier": "app",
+      "source": "official"
+    },
+    {
+      "moduleName": "openwebui",
+      "repo": "application",
+      "moduleJson": "src/apps/openwebui/openwebui.json",
+      "vmid": 311,
+      "stack": "ai",
+      "category": "interface",
+      "status": "beta",
+      "tier": "app",
+      "source": "official"
+    },
+    {
+      "moduleName": "vllm-amd",
+      "repo": "application",
+      "moduleJson": "src/apps/vllm-amd/vllm-amd.json",
+      "vmid": 312,
+      "stack": "ai",
+      "category": "inference",
+      "status": "beta",
+      "tier": "app",
+      "source": "official"
+    },
+    {
+      "moduleName": "vaultwarden",
+      "repo": "application",
+      "moduleJson": "src/apps/vaultwarden/vaultwarden.json",
+      "vmid": 610,
+      "stack": "security",
+      "category": "credentials",
+      "status": "beta",
+      "tier": "app",
+      "source": "official"
+    },
+    {
+      "moduleName": "windows-server",
+      "repo": "application",
+      "moduleJson": "src/apps/windows-server/windows-server.json",
+      "vmid": 500,
+      "stack": "application",
+      "category": "desktop",
+      "status": "beta",
+      "tier": "app",
+      "source": "official"
+    },
+    {
+      "moduleName": "netbird-client",
+      "repo": "application",
+      "moduleJson": "src/apps/netbird-client/netbird-client.json",
+      "vmid": 800,
+      "stack": "infrastructure",
+      "category": "network",
+      "status": "beta",
+      "tier": "app",
+      "source": "official"
+    },
+    {
+      "moduleName": "unifi",
+      "repo": "application",
+      "moduleJson": "src/apps/unifi/unifi.json",
+      "vmid": 810,
+      "stack": "infrastructure",
+      "category": "network",
+      "status": "incomplete",
+      "tier": "app",
+      "source": "official"
+    },
+    {
+      "moduleName": "nextcloud",
+      "repo": "application",
+      "moduleJson": "src/apps/nextcloud/nextcloud.json",
+      "vmid": 340,
+      "stack": "collaboration",
+      "category": "hub",
+      "status": "beta",
+      "tier": "app",
+      "source": "official"
+    },
+    {
+      "moduleName": "coturn",
+      "repo": "application",
+      "moduleJson": "src/apps/coturn/coturn.json",
+      "vmid": 341,
+      "stack": "collaboration",
+      "category": "turn",
+      "status": "beta",
+      "tier": "app",
+      "source": "official"
+    },
+    {
+      "moduleName": "nextcloud-hpb",
+      "repo": "application",
+      "moduleJson": "src/apps/nextcloud-hpb/nextcloud-hpb.json",
+      "vmid": 342,
+      "stack": "collaboration",
+      "category": "signaling",
+      "status": "beta",
+      "tier": "app",
+      "source": "official"
+    },
+    {
+      "moduleName": "euro-office",
+      "repo": "application",
+      "moduleJson": "src/apps/euro-office/euro-office.json",
+      "vmid": 343,
+      "stack": "collaboration",
+      "category": "office",
+      "status": "beta",
+      "tier": "app",
+      "source": "official"
+    }
+  ],
+  "proxmoxTemplates": [
+    {
+      "moduleName": "template",
+      "moduleJson": "src/foundation/templates/template.json",
+      "vmid": 8080,
+      "tier": "foundation",
+      "source": "official"
+    },
+    {
+      "moduleName": "tappaas-winserver",
+      "moduleJson": "src/foundation/templates/tappaas-winserver.json",
+      "vmid": 8081,
+      "tier": "foundation",
+      "source": "official"
+    }
+  ],
+  "testModules": [
+    {
+      "moduleName": "test-debian",
+      "moduleJson": "src/foundation/tappaas-cicd/test-vm-creation/test-debian.json",
+      "vmid": 901,
+      "tier": "app",
+      "source": "local"
+    },
+    {
+      "moduleName": "test-deb-vlannode",
+      "moduleJson": "src/foundation/tappaas-cicd/test-vm-creation/test-deb-vlannode.json",
+      "vmid": 902,
+      "tier": "app",
+      "source": "local"
+    },
+    {
+      "moduleName": "test-deb-nonode",
+      "moduleJson": "src/foundation/tappaas-cicd/test-vm-creation/test-deb-nonode.json",
+      "vmid": 903,
+      "tier": "app",
+      "source": "local"
+    },
+    {
+      "moduleName": "test-deb-n3noha",
+      "moduleJson": "src/foundation/tappaas-cicd/test-vm-creation/test-deb-n3noha.json",
+      "vmid": 904,
+      "tier": "app",
+      "source": "local"
+    },
+    {
+      "moduleName": "test-ubuntu-vlan",
+      "moduleJson": "src/foundation/tappaas-cicd/test-vm-creation/test-ubuntu-vlan.json",
+      "vmid": 905,
+      "tier": "app",
+      "source": "local"
+    },
+    {
+      "moduleName": "test-nixos",
+      "moduleJson": "src/foundation/tappaas-cicd/test-vm-creation/test-nixos.json",
+      "vmid": 911,
+      "tier": "app",
+      "source": "local"
+    },
+    {
+      "moduleName": "test-nix-vlannode",
+      "moduleJson": "src/foundation/tappaas-cicd/test-vm-creation/test-nix-vlannode.json",
+      "vmid": 912,
+      "tier": "app",
+      "source": "local"
+    },
+    {
+      "moduleName": "template",
+      "moduleJson": "src/apps/00-Template/template.json",
+      "vmid": 999,
+      "tier": "app",
+      "source": "local"
+    }
+  ]
 }

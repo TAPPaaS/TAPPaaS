@@ -153,7 +153,7 @@ field_destination() {
         --slurpfile schema "${SCHEMA_FILE}" \
         --slurpfile mod "${dest_json}" \
         --arg f "${field}" \
-        --argjson pinned '["vmname","vmid","vmtag","node","zone0","zone1","mac0","mac1","dependsOn","provides","config","variant"]' '
+        --argjson pinned '["vmname","vmid","vmtag","node","zone0","zone1","mac0","mac1","dependsOn","provides","config","variant","environment"]' '
         ($schema[0].fields[$f]) as $fdef
         | (($mod[0].dependsOn // [])) as $deps
         | if $fdef == null then
@@ -317,8 +317,16 @@ main() {
     local module="$1"
     shift
 
-    # ── Pre-scan arguments for --variant and track explicit overrides ──
+    # ── Pre-scan arguments for --variant/--environment and track overrides ──
+    # --environment (ADR-007 P5) is the successor to --variant: it suffixes the
+    # effective module name with the environment for non-default environments
+    # (so the installed config is <module>-<env>.json with vmname <module>-<env>),
+    # but — unlike --variant — it does NOT consult the legacy variant registry or
+    # apply variant defaults. install-module.sh computes vmname/zone0 from the
+    # environment file and passes them as explicit --vmname/--zone0 overrides.
     local variant=""
+    local environment=""
+    local default_env=""
     local has_explicit_vmname=false
     local has_explicit_vmid=false
     local has_explicit_zone0=false
@@ -330,6 +338,18 @@ main() {
             --variant)
                 [[ -z "${2:-}" ]] && die "Option --variant requires a value"
                 variant="$2"
+                shift 2
+                ;;
+            --environment)
+                [[ -z "${2:-}" ]] && die "Option --environment requires a value"
+                environment="$2"
+                shift 2
+                ;;
+            --default-environment)
+                # Name of the environment treated as "default" (effective module
+                # name is NOT suffixed for it). Passed by install-module.sh.
+                [[ -z "${2:-}" ]] && die "Option --default-environment requires a value"
+                default_env="$2"
                 shift 2
                 ;;
             --vmname)
@@ -371,6 +391,15 @@ main() {
     if [[ -n "${variant}" ]]; then
         effective_module="${module}-${variant}"
         info "Variant mode: ${module} → ${effective_module}"
+    elif [[ -n "${environment}" ]]; then
+        # ADR-007 P5: suffix only for a NON-default environment.
+        if [[ -n "${default_env}" && "${environment}" == "${default_env}" ]]; then
+            effective_module="${module}"
+            info "Environment mode: ${module} → ${effective_module} (default environment '${environment}')"
+        else
+            effective_module="${module}-${environment}"
+            info "Environment mode: ${module} → ${effective_module} (environment '${environment}')"
+        fi
     fi
 
     # Export for callers that source this script (e.g., install-module.sh)
@@ -466,6 +495,21 @@ main() {
         else
             rm -f "${tmp_file}"
             warn "  Could not persist variant field"
+        fi
+    fi
+
+    # Persist the environment on the installed config (ADR-007 P5) so
+    # update-module.sh / delete-module.sh can resolve the source module file and
+    # the target environment. Auto-managed by the 3-way merge — never adopted
+    # from the release source.
+    if [[ -n "${environment}" ]]; then
+        tmp_file=$(mktemp)
+        if jq --arg e "${environment}" '.environment = $e' "${dest_json}" > "${tmp_file}"; then
+            mv "${tmp_file}" "${dest_json}"
+            info "  Persisted environment = ${environment}"
+        else
+            rm -f "${tmp_file}"
+            warn "  Could not persist environment field"
         fi
     fi
 
