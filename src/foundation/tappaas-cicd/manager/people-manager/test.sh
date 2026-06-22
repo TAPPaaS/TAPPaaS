@@ -3,7 +3,7 @@
 # test.sh — OFFLINE tests for people-manager (no Authentik, no cluster).
 #
 # Covers:
-#   - committed example files under config/people/ validate
+#   - example people fixtures validate
 #   - minimal-org/ validates with placeholder tokens treated as valid slugs
 #   - validate.sh catches: missing required field, dangling ownerOrg,
 #     dangling memberOf, dangling role reference
@@ -21,9 +21,10 @@ USER_SETUP="${HERE}/user-setup.sh"
 MINIMAL_ORG="${HERE}/minimal-org"
 FOUNDATION_DIR="$(cd "${HERE}/../../.." && pwd)"
 SCHEMA_DIR="${FOUNDATION_DIR}/schemas"
-# Repo root = foundation/.. ; committed examples live at <repo>/config/people
-REPO_ROOT="$(cd "${FOUNDATION_DIR}/../.." && pwd)"
-EXAMPLE_PEOPLE="${REPO_ROOT}/config/people"
+# Example people domain (myOrg/foo/bar) — TEST FIXTURE ONLY, never committed as
+# runtime config. "config" = the target system's ~tappaas/config, created/edited
+# by the installer + people-manager, NOT stored in the repo.
+EXAMPLE_PEOPLE="${HERE}/test/fixtures/people"
 
 PASS=0
 FAIL=0
@@ -88,9 +89,9 @@ echo "== people-manager offline tests =="
 # ---------------------------------------------------------------------------
 if [[ -d "$EXAMPLE_PEOPLE" ]]; then
     if run_validate "$EXAMPLE_PEOPLE"; then
-        ok "committed example config/people validates"
+        ok "example people fixtures validate"
     else
-        bad "committed example config/people should validate"
+        bad "example people fixtures should validate"
     fi
 else
     bad "example people dir not found: ${EXAMPLE_PEOPLE}"

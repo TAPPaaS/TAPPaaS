@@ -35,6 +35,23 @@ This document describes the implementation packages for the ADR-007 series (TAPP
 
 ---
 
+## Convention: `config/` means the target system, not the repo
+
+Throughout this document (and for **all** managers and controllers), a path under
+`config/` — `config/people/`, `config/site.json`, `config/environments/`,
+`config/network/`, etc. — refers to **`~tappaas/config/` on the target TAPPaaS
+system** (i.e. `/home/tappaas/config/`), **not** a directory committed to the
+GitHub repository. These files are **operator/runtime state**: they are created
+and edited *on the target system* by the installer and by the relevant
+manager/controller (e.g. `user-setup.sh` + `people-manager` populate
+`config/people/`; `site-manager` writes `config/site.json`). The repository ships
+only the **schemas** (`src/foundation/schemas/`), the **bootstrap defaults**
+(e.g. `manager/people-manager/minimal-org/`), and **test fixtures** (under each
+component's `test/`). Example domains such as `myOrg`/`foo`/`bar` exist **only as
+test fixtures**, never as committed `config/`.
+
+---
+
 ## High-Level Architecture Example
 
 The following example shows the complete ADR-007 taxonomy in action with:

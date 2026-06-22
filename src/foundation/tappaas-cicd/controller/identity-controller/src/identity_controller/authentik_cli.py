@@ -39,6 +39,7 @@ from .authentik_manager import (
     OidcApp,
     ProxyApp,
 )
+from .people_sync import PeopleSync, format_plan
 
 
 DEFAULT_CRED_FILE = Path.home() / ".authentik-credentials.txt"
@@ -230,6 +231,17 @@ def cmd_oidc_app_ensure(mgr: AuthentikManager, args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_sync(mgr: AuthentikManager, args: argparse.Namespace) -> int:
+    """Reconcile a config/people/ directory into Authentik (ADR-007 P1)."""
+    syncer = PeopleSync(mgr)
+    plan = syncer.sync(args.config_dir, dry_run=args.dry_run)
+    print(format_plan(plan, dry_run=args.dry_run))
+    return 0
+
+
+DEFAULT_PEOPLE_DIR = "config/people"
+
+
 def main(argv: list[str] | None = None) -> int:
     p = argparse.ArgumentParser(
         prog="authentik-manager",
@@ -331,6 +343,14 @@ def main(argv: list[str] | None = None) -> int:
     oe.add_argument("--description", default="")
     oe.add_argument("--show-secret", action="store_true", help="print the client_secret (sensitive)")
     oe.set_defaults(handler=cmd_oidc_app_ensure)
+
+    sy = sub.add_parser("sync",
+                        help="reconcile config/people/ into Authentik (ADR-007 P1)")
+    sy.add_argument("--config-dir", default=DEFAULT_PEOPLE_DIR,
+                    help=f"people config directory (default: {DEFAULT_PEOPLE_DIR})")
+    sy.add_argument("--dry-run", action="store_true",
+                    help="print the would-create/add/remove/terminate set; change nothing")
+    sy.set_defaults(handler=cmd_sync)
 
     args = p.parse_args(argv)
     with _make_manager(args) as mgr:
