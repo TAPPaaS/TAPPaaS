@@ -1,0 +1,21 @@
+{
+  "_README": "TEST FIXTURE zones.json for environment-manager tests. Includes the zones referenced by the fixture environments (default, mgmt, home).",
+  "default": {
+    "type": "Service",
+    "vlantag": 200,
+    "bridge": "lan",
+    "description": "Default tenant zone (fixture)"
+  },
+  "mgmt": {
+    "type": "Management",
+    "vlantag": 0,
+    "bridge": "lan",
+    "description": "Management zone (fixture)"
+  },
+  "home": {
+    "type": "Client",
+    "vlantag": 100,
+    "bridge": "lan",
+    "description": "Home zone (fixture)"
+  }
+}

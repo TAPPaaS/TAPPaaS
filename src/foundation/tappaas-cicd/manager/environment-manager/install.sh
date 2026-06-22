@@ -10,3 +10,5 @@ for f in "${here}"/*.sh; do
     chmod +x "${f}"; ln -sfn "${f}" "${bin}/${b}"; echo "  linked ${bin}/${b}"
 done
 ln -sfn "${here}/variant-manager.sh" "${bin}/variant-manager"; echo "  linked ${bin}/variant-manager"
+# Alias: migrate-variants-to-environments.sh -> migrate-variants.sh (ADR-007 P3 naming)
+ln -sfn "${here}/migrate-variants.sh" "${bin}/migrate-variants-to-environments.sh"; echo "  linked ${bin}/migrate-variants-to-environments.sh"

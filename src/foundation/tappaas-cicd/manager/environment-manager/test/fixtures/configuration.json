@@ -1,0 +1,22 @@
+{
+  "tappaas": {
+    "name": "test-site",
+    "domain": "test2.tapaas.org",
+    "version": "1.0",
+    "variants": {
+      "": {
+        "domain": "test2.tapaas.org",
+        "tlsCertRefid": "6a25842447b34",
+        "dnsMode": "wildcard",
+        "description": "Default (no variant)"
+      },
+      "foo": {
+        "domain": "foo-company.nl",
+        "tlsCertRefid": "deadbeef0001",
+        "dnsMode": "per-service",
+        "zone": "home",
+        "description": "Foo tenant"
+      }
+    }
+  }
+}

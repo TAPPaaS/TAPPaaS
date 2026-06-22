@@ -1,0 +1,132 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "environment-fields.json",
+  "title": "TAPPaaS Environment",
+  "description": "An Environment is a per-tenant deployment context (ADR-007c). It owns the public domain(s), DNS mode, network zone reference, data-residency, backup retention, and legal processor for a set of services. It replaces the configuration.json '.tappaas.variants' construct. ownerOrg references a People Organization by name; network.zone references a zone in zones.json; neither is a free string. NOTE: tlsCertRefid is NOT an authored field here — whether a cert ref exists is decided by domains.dnsMode and the refid (if any) is reconciler-populated runtime state owned by the network/cert layer, so it is REJECTED by this schema. mgmt-type environments may omit 'domains'. See ADR-007 P3.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "name",
+    "displayName",
+    "ownerOrg",
+    "network"
+  ],
+  "properties": {
+    "name": {
+      "description": "Slug identifier for the environment (e.g. foo, bar, default, mgmt).",
+      "type": "string",
+      "pattern": "^[A-Za-z0-9_-]+$"
+    },
+    "displayName": {
+      "description": "Human-readable environment name.",
+      "type": "string",
+      "minLength": 1
+    },
+    "ownerOrg": {
+      "description": "Reference to the owning Organization.name (config/people/organizations/<ownerOrg>.json), validated.",
+      "type": "string",
+      "pattern": "^[A-Za-z0-9_-]+$"
+    },
+    "domains": {
+      "description": "Public domain configuration. Optional — mgmt-type environments (internal-DNS only) omit it.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "primary"
+      ],
+      "properties": {
+        "primary": {
+          "description": "Primary public domain (e.g. foo-company.nl).",
+          "type": "string",
+          "minLength": 1
+        },
+        "aliases": {
+          "description": "Alias domains for this environment.",
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "uniqueItems": true,
+          "default": []
+        },
+        "aliasMode": {
+          "description": "How aliases are served: redirect to primary, or mirror it.",
+          "type": "string",
+          "enum": [
+            "redirect",
+            "mirror"
+          ],
+          "default": "redirect"
+        },
+        "dnsMode": {
+          "description": "DNS / certificate strategy. 'per-service' (default): Caddy issues per-host HTTP-01 certs, nothing to store. 'wildcard': OPNsense ACME issues one *.<primary> cert, refid is runtime state (NOT authored here). Decides cert ownership.",
+          "type": "string",
+          "enum": [
+            "per-service",
+            "wildcard"
+          ],
+          "default": "per-service"
+        }
+      }
+    },
+    "network": {
+      "description": "Network placement. NO vlan here — vlan lives in zones.json (CR-09).",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "zone"
+      ],
+      "properties": {
+        "zone": {
+          "description": "Reference to a zone key in zones.json (validated).",
+          "type": "string",
+          "pattern": "^[A-Za-z0-9_-]+$"
+        }
+      }
+    },
+    "dataResidency": {
+      "description": "Where data for this environment may reside.",
+      "type": "string",
+      "enum": [
+        "eu-only",
+        "global"
+      ],
+      "default": "eu-only"
+    },
+    "backup": {
+      "description": "Per-environment backup policy. null when not configured.",
+      "type": [
+        "object",
+        "null"
+      ],
+      "default": null,
+      "additionalProperties": false,
+      "properties": {
+        "retention": {
+          "description": "Backup retention period (e.g. 7y, 5y, 1y).",
+          "type": "string",
+          "default": "7y"
+        }
+      }
+    },
+    "legal": {
+      "description": "Legal / processor metadata for this environment. null when not set.",
+      "type": [
+        "object",
+        "null"
+      ],
+      "default": null,
+      "additionalProperties": false,
+      "properties": {
+        "processor": {
+          "description": "Legal processor name.",
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null
+        }
+      }
+    }
+  }
+}

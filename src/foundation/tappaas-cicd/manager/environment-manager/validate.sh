@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
-# (S0 stub) schema/reference validation for this manager domain — filled in by its P-step.
+# validate.sh — manager verb: validate this manager's domain (ADR-007 P3).
+# Delegates to validate-environment.sh against the target config/environments.
 set -euo pipefail
-echo "validate: ok (stub)"
+here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+exec "${here}/validate-environment.sh" "$@"
