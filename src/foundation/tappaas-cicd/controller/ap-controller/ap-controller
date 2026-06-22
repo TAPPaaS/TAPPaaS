@@ -39,7 +39,7 @@ readonly ACTUAL="${CONFIG_DIR}/switch-configuration-actual.json"
 
 usage() {
     cat <<'EOF'
-Usage: ap-manager <command> [args]
+Usage: ap-controller <command> [args]
 
 Inventory:
   add <name> --vendor <v> [--ip <ip>] [--model <m>] [--location <l>]

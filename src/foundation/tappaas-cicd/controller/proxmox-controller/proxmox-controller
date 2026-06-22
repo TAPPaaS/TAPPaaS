@@ -55,7 +55,7 @@ ERRORS=0     # number of failures
 
 usage() {
     cat <<'EOF'
-Usage: proxmox-manager <command> [--apply]
+Usage: proxmox-controller <command> [--apply]
 
 Commands:
   reconcile [--apply]     Per-VM trunks (applied) + node bridge-vids (reported)

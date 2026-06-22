@@ -10,9 +10,9 @@
 // Per-plane CLI contracts (from zone-reconcile):
 //   opnsense : zone-manager --no-ssl-verify --zones-file <ZONES> --execute   (apply)
 //              zone-manager --no-ssl-verify --zones-file <ZONES> --summary   (dry-run)
-//   proxmox  : proxmox-manager reconcile [--apply]   (+ bridge-vids [--apply])
+//   proxmox  : proxmox-controller reconcile [--apply]   (+ bridge-vids [--apply])
 //   switch   : switch-controller reconcile [--apply]
-//   ap       : ap-manager reconcile [--apply]
+//   ap       : ap-controller reconcile [--apply]
 //
 // NO firewall/scripts/ paths appear here.
 
@@ -22,9 +22,9 @@ import { Plane, PlaneClient, PlaneResult, PlaneStatus } from "./types";
 // The bin name for each plane (overridable via env for tests / relocations).
 export const PLANE_BIN: Record<Plane, string> = {
   opnsense: process.env.NM_OPNSENSE_BIN ?? "zone-manager",
-  proxmox: process.env.NM_PROXMOX_BIN ?? "proxmox-manager",
+  proxmox: process.env.NM_PROXMOX_BIN ?? "proxmox-controller",
   switch: process.env.NM_SWITCH_BIN ?? "switch-controller",
-  ap: process.env.NM_AP_BIN ?? "ap-manager",
+  ap: process.env.NM_AP_BIN ?? "ap-controller",
 };
 
 export interface RunResult {

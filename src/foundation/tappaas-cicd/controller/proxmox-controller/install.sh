@@ -12,3 +12,6 @@ for f in "${here}"/*; do
     [ -x "${f}" ] || chmod +x "${f}"
     ln -sfn "${f}" "${bin}/${b}"; echo "  linked ${bin}/${b}"
 done
+# Compat alias: callers/tests still invoking the pre-S5 name resolve to the
+# renamed bin (proxmox-manager -> proxmox-controller). Drop at a later cutover.
+ln -sfn "${here}/proxmox-controller" "${bin}/proxmox-manager"; echo "  linked ${bin}/proxmox-manager (alias)"

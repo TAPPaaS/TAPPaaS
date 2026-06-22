@@ -13,7 +13,7 @@
 set -uo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PM="${SCRIPT_DIR}/proxmox-manager"
+PM="${SCRIPT_DIR}/proxmox-controller"
 
 # Use a self-contained fixture zones.json so the test is independent of live
 # operator state.
@@ -50,7 +50,7 @@ ck_rc() {
 }
 
 echo "test-proxmox-manager: sourcing helpers"
-# shellcheck source=proxmox-manager disable=SC1091
+# shellcheck source=proxmox-controller disable=SC1091
 . "${PM}"   # guarded main() will not run
 set +e      # proxmox-manager's `set -e` leaks in via source; we test exit codes
 

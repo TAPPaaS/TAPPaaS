@@ -12,7 +12,7 @@
 set -uo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")" && pwd)"
-AM="${SCRIPT_DIR}/ap-manager"
+AM="${SCRIPT_DIR}/ap-controller"
 SM="${SCRIPT_DIR}/switch-manager"
 
 TMP="$(mktemp -d)"

@@ -12,3 +12,5 @@ for f in "${here}"/*; do
     [ -x "${f}" ] || chmod +x "${f}"
     ln -sfn "${f}" "${bin}/${b}"; echo "  linked ${bin}/${b}"
 done
+# Compat alias: ap-manager -> ap-controller (drop at a later cutover).
+ln -sfn "${here}/ap-controller" "${bin}/ap-manager"; echo "  linked ${bin}/ap-manager (alias)"
