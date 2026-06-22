@@ -39,7 +39,11 @@ if ! declare -F info &>/dev/null; then
     fi
 fi
 
-HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# Resolve the REAL script location: user-setup.sh is symlinked into
+# /home/tappaas/bin, so BASH_SOURCE alone would point at the symlink dir and
+# minimal-org/ + validate.sh would not be found. readlink -f follows the link.
+_SELF="$(readlink -f "${BASH_SOURCE[0]}")"
+HERE="$(cd "$(dirname "${_SELF}")" && pwd)"
 MINIMAL_ORG_DIR="${MINIMAL_ORG_DIR:-${HERE}/minimal-org}"
 VALIDATE_SCRIPT="${HERE}/validate.sh"
 

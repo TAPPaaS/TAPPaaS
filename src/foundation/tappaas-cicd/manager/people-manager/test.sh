@@ -243,6 +243,21 @@ else
     ok "user-setup.sh rejects missing --email"
 fi
 
+# ---------------------------------------------------------------------------
+# 6b. Regression: user-setup.sh invoked via a SYMLINK (as it is from ~/bin)
+#     must still resolve minimal-org/ (it lives next to the REAL script, not
+#     the symlink). Bug: BASH_SOURCE pointed at the symlink dir; fixed with
+#     readlink -f. Run WITHOUT --minimal-org so default resolution is exercised.
+# ---------------------------------------------------------------------------
+LINKDIR="${WORK}/binlink"; mkdir -p "$LINKDIR"
+ln -s "$USER_SETUP" "${LINKDIR}/user-setup.sh"
+if "${LINKDIR}/user-setup.sh" --org zztest-link --user zz --email zz@example.com \
+        --people-dir "${WORK}/linkout/people" >/dev/null 2>&1; then
+    ok "user-setup.sh resolves minimal-org when invoked via a symlink (~/bin path)"
+else
+    bad "user-setup.sh fails via symlink — minimal-org not resolved (readlink regression)"
+fi
+
 # ===========================================================================
 # B. TypeScript UNIT tests (offline; fake in-memory PrimitiveClient)
 # ===========================================================================
