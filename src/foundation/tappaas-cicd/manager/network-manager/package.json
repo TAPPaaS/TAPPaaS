@@ -1,0 +1,13 @@
+{
+  "name": "network-manager",
+  "version": "0.1.0",
+  "description": "TAPPaaS network owner + orchestrator (ADR-007 P4 / ADR-008) — TypeScript",
+  "license": "MIT",
+  "private": true,
+  "bin": {
+    "network-manager": "dist/main.js"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json"
+  }
+}

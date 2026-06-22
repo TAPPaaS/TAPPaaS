@@ -1,0 +1,44 @@
+{
+  "_README": {
+    "_comment": "Documentation block, NOT a zone. Keys beginning with '_' are ignored by every consumer."
+  },
+  "mgmt": {
+    "_comment": "Tier-0 control plane.",
+    "access-to": ["dmz", "srvHome"],
+    "bridge": "lan",
+    "description": "Management",
+    "ip": "10.0.0.0/24",
+    "pinhole-allowed-from": [],
+    "state": "Mandatory",
+    "subId": "0",
+    "type": "Mgmt",
+    "typeId": "0",
+    "vlantag": 1
+  },
+  "dmz": {
+    "_comment": "Reverse proxy.",
+    "access-to": ["internet"],
+    "bridge": "lan",
+    "description": "Public-facing",
+    "ip": "10.6.0.0/24",
+    "pinhole-allowed-from": ["internet"],
+    "state": "Mandatory",
+    "subId": "0",
+    "type": "DMZ",
+    "typeId": "6",
+    "vlantag": 600
+  },
+  "srvHome": {
+    "_comment": "Home service backends.",
+    "access-to": ["internet"],
+    "bridge": "lan",
+    "description": "Home services",
+    "ip": "10.2.0.0/24",
+    "pinhole-allowed-from": ["home"],
+    "state": "Active",
+    "subId": "0",
+    "type": "Service",
+    "typeId": "2",
+    "vlantag": 200
+  }
+}

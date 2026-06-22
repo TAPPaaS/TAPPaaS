@@ -359,6 +359,16 @@ if [[ -x /home/tappaas/bin/migrate-configuration.sh && -f "${_site_fix}/configur
 else
     skip "site-manager migrate/validate not installed"
 fi
+# network-manager TS bin loads + reads zones.json (no reconcile — read-only)
+if command -v network-manager >/dev/null 2>&1; then
+    if network-manager zone list >/dev/null 2>&1; then
+        pass "network-manager CLI loads + reads zones.json (zone list)"
+    else
+        fail "network-manager zone list failed"
+    fi
+else
+    skip "network-manager not installed"
+fi
 
 # ── Deep Test: VM creation suite ────────────────────────────────────
 
