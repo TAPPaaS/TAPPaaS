@@ -289,6 +289,20 @@ else
     fail "update-module.sh no longer invokes --cleanup (snapshot retention unwired)"
 fi
 
+# ── Test 10: P10 manager/controller template + dispatch contract (ADR-007 S1) ─
+
+info "${BOLD}Test 10: P10 template/dispatch contract${CL}"
+
+if [[ -x "${SCRIPT_DIR}/scripts/test/test-template-contract.sh" ]]; then
+    if "${SCRIPT_DIR}/scripts/test/test-template-contract.sh" >/dev/null 2>&1; then
+        pass "P10 template/dispatch contract holds (TEMPLATE skipped, manager has validate.sh, scaffold dispatches)"
+    else
+        fail "P10 template/dispatch contract test failed (run scripts/test/test-template-contract.sh)"
+    fi
+else
+    skip "scripts/test/test-template-contract.sh not found"
+fi
+
 # ── Deep Test: VM creation suite ────────────────────────────────────
 
 if [[ "${DEEP}" -eq 1 ]]; then

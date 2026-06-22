@@ -30,7 +30,7 @@ Each stage is **not done** until it passes the gate below. The driver updates th
 |-------|----------|--------|-----------|--------|-------------------|--------|--------|
 | **S-TS** | TypeScript pilot (`switch-controller`) | — | none | ✅ GO (qualified) | 47 / 0 (oracle) | (in ADR007 history) | ✅ |
 | **S0** | P4-structure: manager/controller skeleton + script moves + dispatchers | #365, #364 | none | ✅ done (all batches; deep gate passed) | cicd --deep 31/2 (only pre-existing); firewall --deep = pre-existing only (11 switch-WIP + proxy-env); PROGRAMS.csv 56/0-nix; 0 dangling | 42df813·876bb2c·86294ba·4573597 | ✅ |
-| **S1** | P10 `manager/TEMPLATE/` + `controller/TEMPLATE/` + dispatchers | — | S0 | 🟦 planned (blocked on S0) | — | — | — |
+| **S1** | P10 `manager/TEMPLATE/` + `controller/TEMPLATE/` + dispatchers | — | S0 | ✅ done | contract test 25/0; cicd unit 27/0 (Test 10 added); ShellCheck clean | (next commit) | ⏳ |
 | **S2** | P1 people-manager (schemas, validate, user-setup, minimal-org) | #56 | S1, S-TS | ⬜ | — | — | — |
 | **S3** | P2 site-manager (site.json migration + schema, auto-migrate) | #313 | S1, S2 | ⬜ | — | — | — |
 | **S4** | P3 environment-manager (schema + variant migration + minimal-envs) | #318 | S1, S3 | ⬜ | — | — | — |
@@ -76,7 +76,13 @@ Newest entries on top. Each stage appends a dated block as it moves through the 
   - **Full S0 deep gate (`firewall --deep` + `cicd --deep`, VM-provisioning): DEFERRED to a supervised run** — exact op that hard-reset tappaas1; must be re-run (incl. the interrupted batch-2 `firewall --deep`) before S0 closes #365/#364.
 - **RESUME CHECKLIST (next session / operator):** (1) decide 3d A/B/C → driver implements+gates. (2) supervised full deep gate (`test-module.sh tappaas-cicd --deep` + firewall `--deep`); clean up any orphaned test VMs/zones. (3) regen the 3 dep docs against final structure; assert all programs resolve, no dangling. (4) mark S0 ✅, commit closing **#365 #364**, push. (5) then S1 (P10 finalize — 3d may already cover its top-level-dispatcher half).
 
-### S1 — P10 template
+### S1 — P10 template  ✅ DONE 2026-06-22
+- **Delivered**: TEMPLATEs + dispatchers (S0) + top-level→dispatchers (3d, option A) + NEW `tappaas-cicd/README.md` (component contract, 3-level dispatch, compiled-component rebuild rule, TS→Py→Bash order) + NEW `scripts/test/test-template-contract.sh` (P10 criteria: scaffold dispatches via parent, TEMPLATE/ skipped, manager-has-validate/controller-doesn't, ShellCheck clean) + compiled-component guidance comments in the 4 TEMPLATE install/update stubs.
+- **Gate**: contract test **25/0**; wired as cicd **Test 10** → `test.sh tappaas-cicd` **27/0**; ShellCheck clean (test.sh SC2034 is pre-existing Test 9). S1 criteria are all unit-level (no VM provisioning) so the fast gate is the complete deep test.
+- **Issues**: none (P10 is the template/contract stage).
+- **Implementation**: via subagent, independently verified + wired + gated by the driver.
+
+### S1 — P10 template (original dry-run plan, superseded by the DONE entry above)
 - **Status**: 🟦 planned (dry-run done 2026-06-21) — **blocked on S0**; do not start editing until S0 is committed (`TEMPLATE/`, dispatchers, top-level scripts are actively changing in the parallel S0 session).
 - **Dry-run finding**: S0 has **already built most of S1's nominal deliverables** — `manager/TEMPLATE/` + `controller/TEMPLATE/` skeletons (controller correctly has no `validate.sh`) and the `manager/` + `controller/` `{install,update,test}.sh` dispatchers (idempotent, skip `TEMPLATE/`, worst-rc). So **S1 is reframed: finalize → document → test the contract**, not build-from-scratch.
 - **Remaining S1 gap**:
