@@ -1,262 +1,175 @@
-File name,Location,Direct dependencies
+File,Location,Direct Dependencies
 # ==========================================================================================
 # TAPPaaS Foundation Layer - Direct Dependencies
-# Generated: 2026-06-16
+# Generated: 2026-06-22
 # ==========================================================================================
-# Dependencies are: scripts sourced (. / source), TAPPaaS programs invoked by name,
-# and config files read (configuration.json, zones.json, *-fields.json).
+# Direct deps are: scripts sourced (. / source), TAPPaaS programs invoked by name,
+# and config files read (configuration.json, zones.json). Semicolon-separated.
 #
-# --- tappaas-cicd/scripts/ (core programs installed to /home/tappaas/bin/) ----------------
-common-install-routines.sh,tappaas-cicd/scripts/,configuration.json
-copy-update-json.sh,tappaas-cicd/scripts/,common-install-routines.sh; convert-json-to-config.sh; module-fields.json; configuration.json; zones.json
-convert-json-to-config.sh,tappaas-cicd/scripts/,module-fields.json
-create-configuration.sh,tappaas-cicd/scripts/,common-install-routines.sh; configuration.json
-validate-configuration.sh,tappaas-cicd/scripts/,common-install-routines.sh; configuration.json
-install-module.sh,tappaas-cicd/scripts/,common-install-routines.sh; copy-update-json.sh; configuration.json
-update-module.sh,tappaas-cicd/scripts/,common-install-routines.sh; snapshot-vm.sh; test-module.sh; configuration.json
-delete-module.sh,tappaas-cicd/scripts/,common-install-routines.sh; configuration.json
-test-module.sh,tappaas-cicd/scripts/,common-install-routines.sh; configuration.json
-snapshot-vm.sh,tappaas-cicd/scripts/,common-install-routines.sh; configuration.json
-update-os.sh,tappaas-cicd/scripts/,common-install-routines.sh
-resize-disk.sh,tappaas-cicd/scripts/,common-install-routines.sh; configuration.json
-check-disk-threshold.sh,tappaas-cicd/scripts/,common-install-routines.sh; resize-disk.sh; configuration.json
-setup-caddy.sh,tappaas-cicd/scripts/,common-install-routines.sh; opnsense-firewall; update-tappaas; configuration.json
-acme-setup.sh,tappaas-cicd/scripts/,common-install-routines.sh; acme-manager; unbound-manager; configuration.json
-repository.sh,tappaas-cicd/scripts/,configuration.json
-inspect-cluster.sh,tappaas-cicd/scripts/,common-install-routines.sh; configuration.json
-inspect-vm.sh,tappaas-cicd/scripts/,common-install-routines.sh; vm-net.sh; configuration.json; zones.json
-migrate-vm.sh,tappaas-cicd/scripts/,common-install-routines.sh; configuration.json
-migrate-node.sh,tappaas-cicd/scripts/,common-install-routines.sh; migrate-vm.sh; configuration.json
-migrate-to-variants.sh,tappaas-cicd/scripts/,common-install-routines.sh; configuration.json
-migrate-zone-keys-to-camelcase.sh,tappaas-cicd/scripts/,common-install-routines.sh; zone-manager; configuration.json; zones.json
-migrate-zone-keys-to-underscore.sh,tappaas-cicd/scripts/,common-install-routines.sh; zone-manager; dns-manager; configuration.json; zones.json
-apply-json-merge.sh,tappaas-cicd/scripts/,common-install-routines.sh; convert-json-to-config.sh; configuration.json
-apply-zones-merge.sh,tappaas-cicd/scripts/,common-install-routines.sh; zones.json
-zone-state.sh,tappaas-cicd/scripts/,common-install-routines.sh; zones.json
-variant-manager.sh,tappaas-cicd/scripts/,common-install-routines.sh; configuration.json; zones.json
-roles-ensure.sh,tappaas-cicd/scripts/,common-install-routines.sh; authentik-manager; configuration.json
-user.sh,tappaas-cicd/scripts/,common-install-routines.sh; authentik-manager; roles-ensure.sh; configuration.json
-module-format.sh,tappaas-cicd/scripts/,common-install-routines.sh; module-fields.json
-rest-of-foundation.sh,tappaas-cicd/scripts/,common-install-routines.sh; install-module.sh; update-module.sh; update-tappaas
-audit-jq-readers.sh,tappaas-cicd/scripts/,
+# === tappaas-cicd (top level) ===
+install1.sh,tappaas-cicd/,install2.sh
+install2.sh,tappaas-cicd/,common-install-routines.sh; copy-update-json.sh; update-module.sh; variant-manager; zone-controller; configuration.json; zones.json
+pre-update.sh,tappaas-cicd/,common-install-routines.sh; apply-zones-merge.sh; create-configuration.sh; migrate-zone-keys-to-underscore.sh; opnsense-controller; opnsense-manager; update-tappaas; zone-controller; configuration.json; zones.json
+update.sh,tappaas-cicd/,common-install-routines.sh
+test.sh,tappaas-cicd/,common-install-routines.sh; install-module.sh; update-module.sh; validate-configuration.sh; configuration.json
 #
-# --- tappaas-cicd/scripts/test/ (unit tests for the core scripts) -------------------------
-test-acme-provider-hook.sh,tappaas-cicd/scripts/test/,common-install-routines.sh
-test-alias-name-validation.sh,tappaas-cicd/scripts/test/,common-install-routines.sh
-test-convert-to-config.sh,tappaas-cicd/scripts/test/,common-install-routines.sh; convert-json-to-config.sh; module-fields.json
-test-install-overrides.sh,tappaas-cicd/scripts/test/,
-test-json-merge.sh,tappaas-cicd/scripts/test/,common-install-routines.sh; apply-json-merge.sh; convert-json-to-config.sh; module-fields.json
-test-migrate-zone-keys.sh,tappaas-cicd/scripts/test/,common-install-routines.sh; configuration.json; zones.json
-test-read-module-config.sh,tappaas-cicd/scripts/test/,common-install-routines.sh; configuration.json
-test-zone-name-validation.sh,tappaas-cicd/scripts/test/,common-install-routines.sh
-test-zones-merge.sh,tappaas-cicd/scripts/test/,common-install-routines.sh; apply-zones-merge.sh; zones.json
-test-zone-state.sh,tappaas-cicd/scripts/test/,common-install-routines.sh; zone-state.sh; zones.json
+# === tappaas-cicd/lib ===
+apply-json-merge.sh,tappaas-cicd/lib/,convert-json-to-config.sh
+audit-jq-readers.sh,tappaas-cicd/lib/,configuration.json
+common-install-routines.sh,tappaas-cicd/lib/,convert-json-to-config.sh; configuration.json; zones.json
 #
-# --- tappaas-cicd/ (module lifecycle) -----------------------------------------------------
-install1.sh,tappaas-cicd/,
-install2.sh,tappaas-cicd/,common-install-routines.sh; copy-update-json.sh; create-configuration.sh; setup-caddy.sh; update-module.sh; opnsense-controller; zone-manager; configuration.json
-pre-update.sh,tappaas-cicd/,common-install-routines.sh; create-configuration.sh; apply-zones-merge.sh; migrate-zone-keys-to-underscore.sh; opnsense-controller; configuration.json; zones.json
-update.sh,tappaas-cicd/,common-install-routines.sh; update-tappaas
-test.sh,tappaas-cicd/,common-install-routines.sh; install-module.sh; update-module.sh; validate-configuration.sh; caddy-manager; opnsense-firewall; update-tappaas; configuration.json
+# === tappaas-cicd/manager/people-manager ===
+roles-ensure.sh,tappaas-cicd/manager/people-manager/,common-install-routines.sh; configuration.json
+user.sh,tappaas-cicd/manager/people-manager/,common-install-routines.sh; roles-ensure.sh; configuration.json
+test.sh,tappaas-cicd/manager/people-manager/,
 #
-# --- tappaas-cicd/test-vm-creation/ -------------------------------------------------------
-test.sh,tappaas-cicd/test-vm-creation/,common-install-routines.sh; configuration.json
-test-vm.sh,tappaas-cicd/test-vm-creation/,common-install-routines.sh
-test-variant.sh,tappaas-cicd/test-vm-creation/,common-install-routines.sh; copy-update-json.sh; install-module.sh; configuration.json; module-fields.json
-test-reinstall.sh,tappaas-cicd/test-vm-creation/,common-install-routines.sh; delete-module.sh; install-module.sh; configuration.json
-test-rollback.sh,tappaas-cicd/test-vm-creation/,common-install-routines.sh; update-module.sh; configuration.json
-install.sh,tappaas-cicd/test-vm-creation/,
+# === tappaas-cicd/manager/site-manager ===
+convert-json-to-config.sh,tappaas-cicd/manager/site-manager/,
+create-configuration.sh,tappaas-cicd/manager/site-manager/,common-install-routines.sh; validate-configuration.sh; configuration.json
+repository.sh,tappaas-cicd/manager/site-manager/,configuration.json
+validate-configuration.sh,tappaas-cicd/manager/site-manager/,common-install-routines.sh; configuration.json
+test.sh,tappaas-cicd/manager/site-manager/,
 #
-# --- tappaas-cicd/test-repository/ --------------------------------------------------------
-test.sh,tappaas-cicd/test-repository/,common-install-routines.sh; repository.sh; configuration.json
+# === tappaas-cicd/manager/environment-manager ===
+migrate-to-variants.sh,tappaas-cicd/manager/environment-manager/,common-install-routines.sh; configuration.json
+variant-manager.sh,tappaas-cicd/manager/environment-manager/,common-install-routines.sh; roles-ensure.sh; configuration.json; zones.json
+test.sh,tappaas-cicd/manager/environment-manager/,
+validate.sh,tappaas-cicd/manager/environment-manager/,
 #
-# --- tappaas-cicd/test-variants/ ----------------------------------------------------------
-test.sh,tappaas-cicd/test-variants/,common-install-routines.sh; test-variant-config.sh; test-variant-dns.sh; test-variant-install.sh; test-variant-manager.sh; test-variant-migrate.sh
-test-variant-config.sh,tappaas-cicd/test-variants/,common-install-routines.sh; copy-update-json.sh; configuration.json
-test-variant-dns.sh,tappaas-cicd/test-variants/,common-install-routines.sh; dns-manager; configuration.json
-test-variant-install.sh,tappaas-cicd/test-variants/,common-install-routines.sh; install-module.sh; test-module.sh; configuration.json
-test-variant-manager.sh,tappaas-cicd/test-variants/,common-install-routines.sh; variant-manager.sh; roles-ensure.sh; configuration.json; zones.json
-test-variant-migrate.sh,tappaas-cicd/test-variants/,common-install-routines.sh; configuration.json
+# === tappaas-cicd/manager/module-manager ===
+copy-update-json.sh,tappaas-cicd/manager/module-manager/,common-install-routines.sh; convert-json-to-config.sh; configuration.json; zones.json
+delete-module.sh,tappaas-cicd/manager/module-manager/,common-install-routines.sh
+install-module.sh,tappaas-cicd/manager/module-manager/,common-install-routines.sh; copy-update-json.sh; delete-module.sh; configuration.json
+module-format.sh,tappaas-cicd/manager/module-manager/,common-install-routines.sh
+snapshot-vm.sh,tappaas-cicd/manager/module-manager/,common-install-routines.sh
+test-module.sh,tappaas-cicd/manager/module-manager/,common-install-routines.sh
+update-module.sh,tappaas-cicd/manager/module-manager/,common-install-routines.sh; apply-json-merge.sh; snapshot-vm.sh; test-module.sh
+test.sh,tappaas-cicd/manager/module-manager/,
+validate.sh,tappaas-cicd/manager/module-manager/,
 #
-# --- Python: opnsense-controller (entry point -> imported modules + config) ---------------
-opnsense-controller (main.py),tappaas-cicd/opnsense-controller/,config.py; vlan_manager.py; dhcp_manager.py; firewall_manager.py
-opnsense-firewall (firewall_cli.py),tappaas-cicd/opnsense-controller/,config.py; firewall_manager.py
-zone-manager (zone_manager.py),tappaas-cicd/opnsense-controller/,config.py; vlan_manager.py; dhcp_manager.py; firewall_manager.py; log.py; zones.json; configuration.json
-dns-manager (dns_manager_cli.py),tappaas-cicd/opnsense-controller/,config.py; dhcp_manager.py
-unbound-manager (unbound_cli.py),tappaas-cicd/opnsense-controller/,config.py; dhcp_manager.py
-caddy-manager (caddy_cli.py),tappaas-cicd/opnsense-controller/,config.py; caddy_manager.py
-nat-manager (nat_cli.py),tappaas-cicd/opnsense-controller/,config.py; nat_manager.py
-acme-manager (acme_cli.py),tappaas-cicd/opnsense-controller/,config.py; acme_manager.py; configuration.json
-authentik-manager (authentik_cli.py),tappaas-cicd/opnsense-controller/,authentik_manager.py
-syslog-manager (syslog_cli.py),tappaas-cicd/opnsense-controller/,config.py; syslog_manager.py
-rules-manager (rules_manager.py),tappaas-cicd/opnsense-controller/,config.py; firewall_manager.py; vlan_manager.py; log.py; zones.json
-test-network-manager (test_network_cli.py),tappaas-cicd/opnsense-controller/,config.py; test_network_manager.py
+# === tappaas-cicd/manager/network-manager ===
+apply-zones-merge.sh,tappaas-cicd/manager/network-manager/,common-install-routines.sh; configuration.json; zones.json
+migrate-zone-keys-to-camelcase.sh,tappaas-cicd/manager/network-manager/,common-install-routines.sh; zones.json
+migrate-zone-keys-to-underscore.sh,tappaas-cicd/manager/network-manager/,common-install-routines.sh; zones.json
+zone-controller.sh,tappaas-cicd/manager/network-manager/,common-install-routines.sh; configuration.json; zones.json
+zone-state.sh,tappaas-cicd/manager/network-manager/,common-install-routines.sh; zones.json
+zone-reconcile,tappaas-cicd/manager/network-manager/,zones.json
+test.sh,tappaas-cicd/manager/network-manager/,
+validate.sh,tappaas-cicd/manager/network-manager/,
 #
-# --- Python: update-tappaas ---------------------------------------------------------------
-update-tappaas (main.py),tappaas-cicd/update-tappaas/,update-module.sh; configuration.json
+# === tappaas-cicd/manager/health-manager ===
+check-disk-threshold.sh,tappaas-cicd/manager/health-manager/,
+inspect-cluster.sh,tappaas-cicd/manager/health-manager/,common-install-routines.sh; configuration.json; zones.json
+inspect-vm.sh,tappaas-cicd/manager/health-manager/,common-install-routines.sh; vm-net.sh; zones.json
+update-os.sh,tappaas-cicd/manager/health-manager/,common-install-routines.sh; zones.json
+test.sh,tappaas-cicd/manager/health-manager/,
 #
-# --- Network Provider Tools (bash; symlinked to bin by pre-update.sh) ----------------------
-zone-reconcile,firewall/scripts/,common-install-routines.sh; opnsense-manager; proxmox-manager; switch-manager; ap-manager
-proxmox-manager,firewall/scripts/,common-install-routines.sh; vm-net.sh
-switch-manager,firewall/scripts/,common-install-routines.sh
-ap-manager,firewall/scripts/,common-install-routines.sh; vm-net.sh
-setup-switches.sh,firewall/scripts/,common-install-routines.sh; switch-manager; install-module.sh
-setup-wlan-secrets.sh,firewall/scripts/,common-install-routines.sh
-plugins/manual.sh,firewall/scripts/plugins/,
-plugins/unifi.sh,firewall/scripts/plugins/,
-test-ap-manager.sh,firewall/scripts/,
-test-proxmox-manager.sh,firewall/scripts/,
-test-switch-manager.sh,firewall/scripts/,
-test-setup-switches.sh,firewall/scripts/,
-test-setup-wlan-secrets.sh,firewall/scripts/,setup-wlan-secrets.sh
-test-unifi-plugin.sh,firewall/scripts/,plugins/unifi.sh
+# === tappaas-cicd/controller/proxmox-controller ===
+migrate-node.sh,tappaas-cicd/controller/proxmox-controller/,common-install-routines.sh; migrate-vm.sh
+migrate-vm.sh,tappaas-cicd/controller/proxmox-controller/,common-install-routines.sh; configuration.json; zones.json
+resize-disk.sh,tappaas-cicd/controller/proxmox-controller/,common-install-routines.sh
+proxmox-manager,tappaas-cicd/controller/proxmox-controller/,zones.json
+test-proxmox-manager.sh,tappaas-cicd/controller/proxmox-controller/,zones.json
 #
-# --- firewall/ (module lifecycle + tests) -------------------------------------------------
-config-firewall.sh,firewall/,
-update.sh,firewall/,common-install-routines.sh; zone-manager; proxmox-manager; zones.json
-test.sh,firewall/,common-install-routines.sh; vm-net.sh; opnsense-firewall; zone-manager; dns-manager; caddy-manager; rules-manager; opnsense-manager; proxmox-manager; switch-manager; ap-manager; zone-reconcile
-test-network.sh,firewall/,common-install-routines.sh
-test-caddy-public.sh,firewall/,common-install-routines.sh
-test-variant-public.sh,firewall/,common-install-routines.sh; vm-net.sh; variant-manager; zone-manager; unbound-manager; delete-module.sh; install-module.sh
+# === tappaas-cicd/controller/switch-controller ===
+setup-switches.sh,tappaas-cicd/controller/switch-controller/,common-install-routines.sh; zones.json
+switch-manager,tappaas-cicd/controller/switch-controller/,zones.json
+test-switch-manager.sh,tappaas-cicd/controller/switch-controller/,zones.json
 #
-# --- firewall/services/proxy/ -------------------------------------------------------------
-install-service.sh,firewall/services/proxy/,common-install-routines.sh; access-list.sh; caddy-manager; configuration.json
-update-service.sh,firewall/services/proxy/,common-install-routines.sh; access-list.sh; caddy-manager; configuration.json
-test-service.sh,firewall/services/proxy/,common-install-routines.sh; configuration.json
-delete-service.sh,firewall/services/proxy/,common-install-routines.sh; caddy-manager
-access-list.sh,firewall/services/proxy/,
+# === tappaas-cicd/controller/ap-controller ===
+ap-manager,tappaas-cicd/controller/ap-controller/,zones.json
+setup-wlan-secrets.sh,tappaas-cicd/controller/ap-controller/,common-install-routines.sh; zones.json
+test-ap-manager.sh,tappaas-cicd/controller/ap-controller/,zones.json
+test-setup-wlan-secrets.sh,tappaas-cicd/controller/ap-controller/,setup-wlan-secrets.sh; zones.json
 #
-# --- firewall/services/dns/ ---------------------------------------------------------------
-install-service.sh,firewall/services/dns/,common-install-routines.sh; dns-manager
-update-service.sh,firewall/services/dns/,common-install-routines.sh
-test-service.sh,firewall/services/dns/,common-install-routines.sh
-delete-service.sh,firewall/services/dns/,common-install-routines.sh; dns-manager
+# === tappaas-cicd/controller/opnsense-controller (Python pkg) ===
+main.py,opnsense-controller/src/opnsense_controller/,config.py; dhcp_manager.py; firewall_manager.py; vlan_manager.py
+firewall_cli.py,opnsense-controller/src/opnsense_controller/,config.py; firewall_manager.py
+zone_manager.py,opnsense-controller/src/opnsense_controller/,config.py; dhcp_manager.py; firewall_manager.py; vlan_manager.py; log.py; zones.json
+dns_manager_cli.py,opnsense-controller/src/opnsense_controller/,config.py; dhcp_manager.py
+unbound_cli.py,opnsense-controller/src/opnsense_controller/,config.py; dhcp_manager.py
+caddy_cli.py,opnsense-controller/src/opnsense_controller/,config.py; caddy_manager.py
+nat_cli.py,opnsense-controller/src/opnsense_controller/,config.py; nat_manager.py
+acme_cli.py,opnsense-controller/src/opnsense_controller/,config.py; acme_manager.py
+authentik_cli.py,opnsense-controller/src/opnsense_controller/,authentik_manager.py
+syslog_cli.py,opnsense-controller/src/opnsense_controller/,config.py; syslog_manager.py
+rules_manager.py,opnsense-controller/src/opnsense_controller/,config.py; firewall_manager.py; vlan_manager.py; log.py; zones.json
+test_network_cli.py,opnsense-controller/src/opnsense_controller/,config.py; test_network_manager.py
+test_network_manager.py,opnsense-controller/src/opnsense_controller/,zones.json
 #
-# --- firewall/services/nat/ ---------------------------------------------------------------
-install-service.sh,firewall/services/nat/,common-install-routines.sh; nat-common.sh; nat-manager
-update-service.sh,firewall/services/nat/,common-install-routines.sh; nat-common.sh; nat-manager
-test-service.sh,firewall/services/nat/,common-install-routines.sh; nat-common.sh
-delete-service.sh,firewall/services/nat/,common-install-routines.sh; nat-common.sh
-nat-common.sh,firewall/services/nat/,
+# === tappaas-cicd/update-tappaas (Python pkg) ===
+main.py,update-tappaas/src/update_tappaas/,update-module.sh
 #
-# --- firewall/services/rules/ -------------------------------------------------------------
-install-service.sh,firewall/services/rules/,common-install-routines.sh; rules-manager
-update-service.sh,firewall/services/rules/,common-install-routines.sh; rules-manager
-test-service.sh,firewall/services/rules/,common-install-routines.sh
-delete-service.sh,firewall/services/rules/,common-install-routines.sh; rules-manager
+# === tappaas-cicd/scripts ===
+acme-setup.sh,tappaas-cicd/scripts/,common-install-routines.sh; configuration.json; zones.json
+rest-of-foundation.sh,tappaas-cicd/scripts/,common-install-routines.sh; configuration.json
+setup-caddy.sh,tappaas-cicd/scripts/,common-install-routines.sh; opnsense-firewall; configuration.json
 #
-# --- firewall/services/discovery/ ---------------------------------------------------------
-install-service.sh,firewall/services/discovery/,common-install-routines.sh
-update-service.sh,firewall/services/discovery/,
-test-service.sh,firewall/services/discovery/,common-install-routines.sh
-delete-service.sh,firewall/services/discovery/,common-install-routines.sh
-#
-# --- cluster/ -----------------------------------------------------------------------------
-install.sh,cluster/,Create-TAPPaaS-LXC.sh; Create-TAPPaaS-VM.sh
-install-platform.sh,cluster/,Create-TAPPaaS-VM.sh
-update.sh,cluster/,common-install-routines.sh; Create-TAPPaaS-LXC.sh; Create-TAPPaaS-VM.sh; update-module.sh; validate-configuration.sh
-reboot-cluster.sh,cluster/,common-install-routines.sh; reboot-node-lib.sh
-reboot-node.sh,cluster/,common-install-routines.sh; reboot-node-lib.sh
-sanity-check.sh,cluster/,
-capture.sh,cluster/,
-config-network.sh,cluster/,
-config-storage.sh,cluster/,
-setup-realtek-nic.sh,cluster/,
-setup-ssd-lifecycle.sh,cluster/,
-test.sh,cluster/,common-install-routines.sh; Create-TAPPaaS-LXC.sh; Create-TAPPaaS-VM.sh; update-module.sh
+# === cluster ===
 Create-TAPPaaS-VM.sh,cluster/,zones.json
 Create-TAPPaaS-LXC.sh,cluster/,zones.json
+install.sh,cluster/,zones.json
+install-platform.sh,cluster/,Create-TAPPaaS-VM.sh
+reboot-cluster.sh,cluster/,common-install-routines.sh; reboot-node-lib.sh; configuration.json
+reboot-node.sh,cluster/,common-install-routines.sh; reboot-node-lib.sh
+test.sh,cluster/,common-install-routines.sh; install-module.sh; delete-module.sh
+update.sh,cluster/,common-install-routines.sh; validate-configuration.sh; configuration.json; zones.json
+lib/vm-net.sh,cluster/lib/,zones.json
+lib/reboot-node-lib.sh,cluster/lib/,
+services/vm/update-service.sh,cluster/services/vm/,common-install-routines.sh; vm-net.sh; resize-disk.sh; zones.json
+services/lxc/test-service.sh,cluster/services/lxc/,common-install-routines.sh; zones.json
+services/lxc/update-service.sh,cluster/services/lxc/,common-install-routines.sh; zones.json
+services/ha/update-service.sh,cluster/services/ha/,common-install-routines.sh; configuration.json
 #
-# --- cluster/lib/ -------------------------------------------------------------------------
-reboot-node-lib.sh,cluster/lib/,common-install-routines.sh
-vm-net.sh,cluster/lib/,common-install-routines.sh
-test-vm-net.sh,cluster/lib/,vm-net.sh
+# === firewall ===
+config-firewall.sh,firewall/,
+test.sh,firewall/,common-install-routines.sh; test-unifi-plugin.sh; vm-net.sh; install-module.sh; delete-module.sh; configuration.json; zones.json
+test-network.sh,firewall/,common-install-routines.sh
+test-caddy-public.sh,firewall/,common-install-routines.sh; install-module.sh; delete-module.sh
+test-variant-public.sh,firewall/,common-install-routines.sh; vm-net.sh; install-module.sh; delete-module.sh; variant-manager; zones.json
+update.sh,firewall/,common-install-routines.sh; zone-manager; zones.json
+scripts/plugins/unifi.sh,firewall/scripts/plugins/,
+scripts/test-unifi-plugin.sh,firewall/scripts/,unifi.sh
+services/proxy/access-list.sh,firewall/services/proxy/,zones.json
+services/proxy/install-service.sh,firewall/services/proxy/,common-install-routines.sh; access-list.sh; configuration.json; zones.json
+services/proxy/update-service.sh,firewall/services/proxy/,common-install-routines.sh; access-list.sh; configuration.json; zones.json
+services/proxy/delete-service.sh,firewall/services/proxy/,common-install-routines.sh; configuration.json
+services/proxy/test-service.sh,firewall/services/proxy/,common-install-routines.sh; configuration.json
+services/nat/install-service.sh,firewall/services/nat/,common-install-routines.sh; nat-common.sh
+services/nat/update-service.sh,firewall/services/nat/,common-install-routines.sh; nat-common.sh
+services/nat/delete-service.sh,firewall/services/nat/,common-install-routines.sh; nat-common.sh
+services/nat/test-service.sh,firewall/services/nat/,common-install-routines.sh; nat-common.sh
+services/dns/install-service.sh,firewall/services/dns/,common-install-routines.sh
+services/rules/install-service.sh,firewall/services/rules/,common-install-routines.sh
+services/discovery/install-service.sh,firewall/services/discovery/,common-install-routines.sh
 #
-# --- cluster/services/vm/ -----------------------------------------------------------------
-install-service.sh,cluster/services/vm/,common-install-routines.sh; Create-TAPPaaS-VM.sh; update-module.sh; update-os.sh
-update-service.sh,cluster/services/vm/,common-install-routines.sh; update-module.sh; vm-net.sh
-test-service.sh,cluster/services/vm/,common-install-routines.sh
-delete-service.sh,cluster/services/vm/,common-install-routines.sh
+# === identity ===
+install.sh,identity/,update.sh
+update.sh,identity/,common-install-routines.sh; ensure-authentik-creds.sh; roles-ensure.sh; configuration.json
+test.sh,identity/,common-install-routines.sh; user.sh; install-module.sh; delete-module.sh; roles-ensure.sh; configuration.json
+lib/ensure-authentik-creds.sh,identity/lib/,
+services/identity/install-service.sh,identity/services/identity/,common-install-routines.sh; ensure-authentik-creds.sh; roles-ensure.sh; configuration.json
+services/accessControl/install-service.sh,identity/services/accessControl/,common-install-routines.sh; ensure-authentik-creds.sh
 #
-# --- cluster/services/ha/ -----------------------------------------------------------------
-install-service.sh,cluster/services/ha/,
-update-service.sh,cluster/services/ha/,common-install-routines.sh; update-module.sh
-test-service.sh,cluster/services/ha/,common-install-routines.sh; update-module.sh
-delete-service.sh,cluster/services/ha/,common-install-routines.sh
-#
-# --- cluster/services/lxc/ ----------------------------------------------------------------
-install-service.sh,cluster/services/lxc/,common-install-routines.sh; Create-TAPPaaS-LXC.sh
-update-service.sh,cluster/services/lxc/,common-install-routines.sh
-test-service.sh,cluster/services/lxc/,common-install-routines.sh
-delete-service.sh,cluster/services/lxc/,common-install-routines.sh
-#
-# --- backup/ ------------------------------------------------------------------------------
-install.sh,backup/,common-install-routines.sh; copy-update-json.sh; pbs-job.sh; pbs-namespace.sh
-update.sh,backup/,common-install-routines.sh; pbs-job.sh
-backup-manage.sh,backup/,common-install-routines.sh
-restore.sh,backup/,common-install-routines.sh
-#
-# --- backup/lib/ --------------------------------------------------------------------------
-pbs-job.sh,backup/lib/,common-install-routines.sh
-pbs-namespace.sh,backup/lib/,common-install-routines.sh
-test-pbs-job.sh,backup/lib/,pbs-job.sh
-test-pbs-namespace.sh,backup/lib/,pbs-namespace.sh
-#
-# --- backup/services/vm/ ------------------------------------------------------------------
-install-service.sh,backup/services/vm/,common-install-routines.sh; pbs-job.sh
-update-service.sh,backup/services/vm/,common-install-routines.sh; pbs-job.sh
-test-service.sh,backup/services/vm/,common-install-routines.sh
-delete-service.sh,backup/services/vm/,common-install-routines.sh; pbs-job.sh
-#
-# --- backup/services/remote/ --------------------------------------------------------------
-install-service.sh,backup/services/remote/,common-install-routines.sh; pbs-job.sh; pbs-namespace.sh
-update-service.sh,backup/services/remote/,common-install-routines.sh; pbs-job.sh; pbs-namespace.sh
-delete-service.sh,backup/services/remote/,common-install-routines.sh; pbs-job.sh; pbs-namespace.sh
-#
-# --- backup/services/external/ ------------------------------------------------------------
-install-service.sh,backup/services/external/,common-install-routines.sh; pbs-job.sh; pbs-namespace.sh
-update-service.sh,backup/services/external/,common-install-routines.sh; pbs-job.sh; pbs-namespace.sh
-delete-service.sh,backup/services/external/,common-install-routines.sh; pbs-job.sh; pbs-namespace.sh
-#
-# --- identity/ ----------------------------------------------------------------------------
-install.sh,identity/,identity/update.sh
-update.sh,identity/,common-install-routines.sh; ensure-authentik-creds.sh; roles-ensure.sh
-test.sh,identity/,common-install-routines.sh; roles-ensure.sh; user.sh
-#
-# --- identity/lib/ ------------------------------------------------------------------------
-ensure-authentik-creds.sh,identity/lib/,common-install-routines.sh
-#
-# --- identity/services/identity/ ----------------------------------------------------------
-install-service.sh,identity/services/identity/,common-install-routines.sh; ensure-authentik-creds.sh; roles-ensure.sh; update-os.sh
-update-service.sh,identity/services/identity/,
-test-service.sh,identity/services/identity/,common-install-routines.sh
-delete-service.sh,identity/services/identity/,common-install-routines.sh
-#
-# --- identity/services/accessControl/ -----------------------------------------------------
-install-service.sh,identity/services/accessControl/,common-install-routines.sh; ensure-authentik-creds.sh
-update-service.sh,identity/services/accessControl/,
-delete-service.sh,identity/services/accessControl/,common-install-routines.sh
-#
-# --- logging/ -----------------------------------------------------------------------------
-install.sh,logging/,logging/update.sh
-update.sh,logging/,common-install-routines.sh
+# === logging ===
+install.sh,logging/,update.sh
+update.sh,logging/,common-install-routines.sh; configuration.json
 test.sh,logging/,common-install-routines.sh
 #
-# --- templates/ ---------------------------------------------------------------------------
-update.sh,templates/,common-install-routines.sh; Create-TAPPaaS-VM.sh; update-module.sh
+# === backup ===
+install.sh,backup/,common-install-routines.sh; pbs-job.sh; pbs-namespace.sh; copy-update-json.sh
+update.sh,backup/,common-install-routines.sh; pbs-job.sh
+restore.sh,backup/,common-install-routines.sh; configuration.json
+backup-manage.sh,backup/,common-install-routines.sh
+lib/pbs-job.sh,backup/lib/,
+lib/pbs-namespace.sh,backup/lib/,
+services/vm/install-service.sh,backup/services/vm/,common-install-routines.sh; pbs-job.sh
+services/remote/install-service.sh,backup/services/remote/,common-install-routines.sh; pbs-job.sh; pbs-namespace.sh
+services/external/install-service.sh,backup/services/external/,common-install-routines.sh; pbs-job.sh; pbs-namespace.sh
 #
-# --- templates/services/nixos/ ------------------------------------------------------------
-install-service.sh,templates/services/nixos/,templates/services/nixos/update-service.sh
-update-service.sh,templates/services/nixos/,common-install-routines.sh; update-os.sh
-test-service.sh,templates/services/nixos/,common-install-routines.sh
-delete-service.sh,templates/services/nixos/,
-#
-# --- templates/services/debian/ -----------------------------------------------------------
-install-service.sh,templates/services/debian/,templates/services/debian/update-service.sh
-update-service.sh,templates/services/debian/,common-install-routines.sh; update-os.sh
-delete-service.sh,templates/services/debian/,
-#
-# --- templates/services/windows/ ----------------------------------------------------------
-install-service.sh,templates/services/windows/,common-install-routines.sh
-update-service.sh,templates/services/windows/,common-install-routines.sh; update-module.sh
-test-service.sh,templates/services/windows/,common-install-routines.sh
+# === templates ===
+update.sh,templates/,common-install-routines.sh; zones.json
+services/debian/update-service.sh,templates/services/debian/,common-install-routines.sh; update-os.sh
+services/nixos/update-service.sh,templates/services/nixos/,common-install-routines.sh; update-os.sh
+services/nixos/test-service.sh,templates/services/nixos/,common-install-routines.sh
+services/windows/install-service.sh,templates/services/windows/,common-install-routines.sh
