@@ -1,0 +1,8 @@
+{
+  "name": "piet-bakker",
+  "displayName": "Piet Bakker",
+  "primaryEmail": "piet@bar-industries.nl",
+  "memberOf": [
+    "bar-company__admins"
+  ]
+}

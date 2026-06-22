@@ -1,0 +1,7 @@
+{
+  "name": "myOrg__users",
+  "type": "team",
+  "displayName": "myOrg Users",
+  "ownerOrg": "myOrg",
+  "roles": ["user"]
+}

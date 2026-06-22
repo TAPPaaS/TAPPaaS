@@ -1,0 +1,7 @@
+{
+  "name": "bar-company",
+  "type": "customer",
+  "displayName": "Bar Industries BV",
+  "owner": "piet-bakker",
+  "parentOrg": "myOrg"
+}

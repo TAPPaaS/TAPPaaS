@@ -1,0 +1,29 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "role-fields.json",
+  "title": "TAPPaaS Role",
+  "description": "A Role is a cross-cutting permission label associated with users (directly via User.roles or inherited via Group.roles). Standalone entity, NOT nested under org/group/user. Actual permissions are configured in Authentik via policies/entitlements. See ADR-007 P1 (ADR-007a).",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "name",
+    "displayName"
+  ],
+  "properties": {
+    "name": {
+      "description": "Slug identifier (e.g. root, admin, user). Identity key — used to identify the role in Authentik.",
+      "type": "string",
+      "pattern": "^[A-Za-z0-9_-]+$"
+    },
+    "displayName": {
+      "description": "Human-readable name.",
+      "type": "string",
+      "minLength": 1
+    },
+    "description": {
+      "description": "Optional free-text description of the role's purpose.",
+      "type": "string",
+      "default": ""
+    }
+  }
+}

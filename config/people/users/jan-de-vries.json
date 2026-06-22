@@ -1,0 +1,9 @@
+{
+  "name": "jan-de-vries",
+  "displayName": "Jan de Vries",
+  "primaryEmail": "jan@foo-company.nl",
+  "memberOf": [
+    "foo-company__admins",
+    "foo-company__users"
+  ]
+}

@@ -1,0 +1,9 @@
+{
+  "name": "admin",
+  "displayName": "Platform Administrator",
+  "primaryEmail": "admin@foobar-platform.nl",
+  "memberOf": [
+    "myOrg__admins"
+  ],
+  "roles": ["root"]
+}

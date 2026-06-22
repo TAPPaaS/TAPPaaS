@@ -1,0 +1,47 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "organization-fields.json",
+  "title": "TAPPaaS Organization",
+  "description": "An Organization is the top level of the 3-level People hierarchy (Organization -> Group -> User). The name is used as the Authentik tenant identifier. See ADR-007 P1 (ADR-007a).",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "name",
+    "displayName",
+    "owner"
+  ],
+  "properties": {
+    "name": {
+      "description": "Slug identifier, used as the Authentik tenant identifier. Identity key.",
+      "type": "string",
+      "pattern": "^[A-Za-z0-9_-]+$"
+    },
+    "type": {
+      "description": "Organization kind.",
+      "type": "string",
+      "enum": [
+        "family",
+        "company",
+        "foundation",
+        "customer"
+      ],
+      "default": "company"
+    },
+    "displayName": {
+      "description": "Human-readable name.",
+      "type": "string",
+      "minLength": 1
+    },
+    "owner": {
+      "description": "Reference to User.name that owns this organization.",
+      "type": "string",
+      "pattern": "^[A-Za-z0-9_-]+$"
+    },
+    "parentOrg": {
+      "description": "Optional reference to a parent Organization.name (e.g. a hosting relationship).",
+      "type": "string",
+      "pattern": "^[A-Za-z0-9_-]+$",
+      "default": null
+    }
+  }
+}

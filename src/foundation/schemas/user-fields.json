@@ -1,0 +1,61 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "user-fields.json",
+  "title": "TAPPaaS User",
+  "description": "A User is the leaf of the 3-level People hierarchy (Organization -> Group -> User). The name is used as the Authentik user identifier. Group membership (memberOf) and role assignment (roles) are many-to-many and can span multiple organizations. See ADR-007 P1 (ADR-007a).",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "name",
+    "displayName",
+    "primaryEmail"
+  ],
+  "properties": {
+    "name": {
+      "description": "Slug identifier, used as the Authentik user identifier. Identity key.",
+      "type": "string",
+      "pattern": "^[A-Za-z0-9_-]+$"
+    },
+    "displayName": {
+      "description": "Human-readable name.",
+      "type": "string",
+      "minLength": 1
+    },
+    "primaryEmail": {
+      "description": "The user's primary email address.",
+      "type": "string",
+      "format": "email"
+    },
+    "state": {
+      "description": "User lifecycle state governing presence/access in Authentik. Only 'active' users get access; 'suspended' strips all roles/group memberships; 'terminated' is the one governed deletion.",
+      "type": "string",
+      "enum": [
+        "planned",
+        "active",
+        "suspended",
+        "terminated"
+      ],
+      "default": "active"
+    },
+    "memberOf": {
+      "description": "Group.name references. Membership is modeled here on the User. May span multiple organizations.",
+      "type": "array",
+      "items": {
+        "type": "string",
+        "pattern": "^[A-Za-z0-9_-]+$"
+      },
+      "uniqueItems": true,
+      "default": []
+    },
+    "roles": {
+      "description": "Direct Role.name assignments (independent of group membership). Use sparingly; prefer inheriting roles via groups.",
+      "type": "array",
+      "items": {
+        "type": "string",
+        "pattern": "^[A-Za-z0-9_-]+$"
+      },
+      "uniqueItems": true,
+      "default": []
+    }
+  }
+}

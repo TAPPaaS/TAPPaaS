@@ -1,0 +1,7 @@
+{
+  "name": "foo-company",
+  "type": "company",
+  "displayName": "Foo Company BV",
+  "owner": "jan-de-vries",
+  "parentOrg": "myOrg"
+}

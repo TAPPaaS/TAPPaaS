@@ -1,0 +1,52 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "group-fields.json",
+  "title": "TAPPaaS Group",
+  "description": "A Group is the middle level of the 3-level People hierarchy (Organization -> Group -> User). Named {org}__{name} and used as the Authentik group identifier. Membership is modeled on the User (User.memberOf), NOT here. Roles listed here are inherited by all members. See ADR-007 P1 (ADR-007a).",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "name",
+    "displayName",
+    "ownerOrg"
+  ],
+  "properties": {
+    "name": {
+      "description": "Group identifier, e.g. myOrg__admins. Used as the Authentik group identifier. Identity key.",
+      "type": "string",
+      "pattern": "^[A-Za-z0-9_-]+$"
+    },
+    "type": {
+      "description": "Group kind.",
+      "type": "string",
+      "enum": [
+        "team",
+        "department",
+        "family-members",
+        "access-set",
+        "ad-hoc"
+      ],
+      "default": "team"
+    },
+    "displayName": {
+      "description": "Human-readable name.",
+      "type": "string",
+      "minLength": 1
+    },
+    "ownerOrg": {
+      "description": "Reference to the owning Organization.name.",
+      "type": "string",
+      "pattern": "^[A-Za-z0-9_-]+$"
+    },
+    "roles": {
+      "description": "Roles inherited by all members of this group. Each entry references a Role.name.",
+      "type": "array",
+      "items": {
+        "type": "string",
+        "pattern": "^[A-Za-z0-9_-]+$"
+      },
+      "uniqueItems": true,
+      "default": []
+    }
+  }
+}
