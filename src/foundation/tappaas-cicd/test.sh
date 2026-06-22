@@ -359,6 +359,25 @@ if [[ "${DEEP}" -eq 1 ]]; then
     else
         skip "test-variants/test.sh not found"
     fi
+
+    # ── Deep Test: relocated component dispatchers (ADR-007 S0 P4 3d, option A) ─
+    # The cicd module test additionally drives the manager/ + controller/ parent
+    # dispatchers, so every relocated component's own test.sh runs as part of the
+    # cicd deep gate. Placed in the deep section so the fast unit gate stays green;
+    # a known pre-existing component failure (e.g. ap-controller ADR-008 WIP) is
+    # judged against the batch baseline ("no NEW failures"), not absolute zero.
+    info "${BOLD}Deep Test: manager/ + controller/ component dispatchers${CL}"
+    for _disp in manager controller; do
+        if [[ -x "${SCRIPT_DIR}/${_disp}/test.sh" ]]; then
+            if "${SCRIPT_DIR}/${_disp}/test.sh"; then
+                pass "${_disp}/ component test dispatcher passed"
+            else
+                fail "${_disp}/ component test dispatcher reported failures (see above)"
+            fi
+        else
+            skip "${_disp}/test.sh not found"
+        fi
+    done
 else
     info "${BOLD}Deep Test: VM creation suite${CL}"
     skip "VM creation tests (use --deep to run)"

@@ -52,4 +52,18 @@ else
     debug "  firewall unreachable — skipping plugin ensure (will retry next update)"
 fi
 
+# ADR-007 S0 (P4 3d, option A — additive): besides the cicd VM's own rebuild
+# above, refresh the relocated manager/ + controller/ components by running each
+# parent dispatcher's update verb (idempotent bin relink; skips TEMPLATE/ and
+# any component without an update.sh, e.g. opnsense-controller which pre-update.sh
+# builds as a compiled component). A component failure warns, it does not abort
+# the cicd update.
+_cicd_dir="/home/tappaas/TAPPaaS/src/foundation/tappaas-cicd"
+for _disp in manager controller; do
+    if [[ -x "${_cicd_dir}/${_disp}/update.sh" ]]; then
+        info "  Updating ${_disp}/ components..."
+        "${_cicd_dir}/${_disp}/update.sh" || warn "  ${_disp}/update.sh reported non-zero rc"
+    fi
+done
+
 info "  ${GN}✓${CL} VM update completed successfully"
