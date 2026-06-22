@@ -35,7 +35,7 @@ Each stage is **not done** until it passes the gate below. The driver updates th
 | **S3** | P2 site-manager (site.json migration + schema, auto-migrate) | #313 | S1, S2 | 🟦 S3a done (phased); S3b cutover PAUSED (focused session — surface mapped) | site-manager 39/0; fast gate 31/0 | 52089c9 | ✅ (S3a) |
 | **S4** | P3 environment-manager (schema + variant migration + minimal-envs) | #318 | S1, S3 | 🟦 env schema + variant→env migration done; CRUD/--environment/P6-P7 after cutover | env-manager 29/0 | 56a2653 | ✅ (migration) |
 | **S5** | network-manager front door (owns zones.json; fold zone-controller/reconcile; controller renames) | #372, #373, #335, #364, #319 | S0 | ⬜ | — | — | — |
-| **S6** | P6/P7 mgmt-as-environment + default-env selection + legacy-zone sunset | #319 | S4 | ⬜ ⚠ DESIGN DECISION NEEDED (env↔zone topology — see S6 design note in logs) | — | — | — |
+| **S6** | P6/P7 mgmt-as-environment + default-env selection + legacy-zone sunset | #319 | S4 | 🟦 topology resolved; machinery N1–N4,N6 done; N5+S3b+P6=supervised live cutover | network-manager 99/0; env 37/0; module 22/0 | 879341b·c2d731d·57624a3·e0b9e70·8d1ea61 | ✅ (N1-N4,N6) |
 | **S7** | P5 module updates (tier/source + `--environment`) | #339, #356, #357 | S4, S0 | ⬜ | — | — | — |
 | **S8** | P8 firewall→network rename + migration (wide surface; slot ≥ S7) | — | S0, S7 | ⬜ | — | — | — |
 | **S9** | P9 backup hierarchy (backup-manager + backup-controller) | #358 | S3, S4, S1 | ⬜ | — | — | — |
@@ -96,7 +96,18 @@ Newest entries on top. Each stage appends a dated block as it moves through the 
 - **Module install:** blank zone defaults to the **default zone `<N>`**, NOT `mgmt` (today's default).
 - **Install-time zones transform** (`network-manager zones-init --name <N>`; zones.json is NOT copied verbatim): `srv`→`<N>`; `home`→`<N>-private` (its access-to `srvHome`→`<N>`); `guest`→`<N>-guest`; **Inactive**: `srvHome`,`srvWork`,`srvCust`,`srvDev`,**`work`** (operator: work inactive too); **stay**: `srvTest`,`iot*`,`dmz`,`netbird`,`test`,`mgmt`; + rewrite every `access-to`/zone-ref to a renamed key (referential integrity); idempotent.
 - **network-manager owns zones.json end-to-end** (operator direction): the repo **source template moves** `foundation/firewall/zones.json` → `tappaas-cicd/manager/network-manager/zones.json`; **install + update scripts route through network-manager** (no ad-hoc copies/merge scripts); network-manager **distributes zones.json to the nodes whenever it changes it** (port `distribute_zones_to_nodes`); and **every tappaas-cicd update runs a consistency check** of the live zones.json against the installation (`network-manager zones-check`).
-**Implementation chunks (N#):** N1 move source template → network-manager + repoint source readers (structural). N2 `network-manager zones-init --name <N>` transform (TS subcommand; offline-tested on template). N3 distribute-on-change (port distribute_zones_to_nodes into network-manager's write path; SSH/live). N4 `network-manager zones-check` consistency check + wire into update-tappaas/pre-update. N5 route install2.sh (seed→zones-init) + pre-update.sh (apply-zones-merge→network-manager) through network-manager; retire ad-hoc zone scripting. N6 default env `<N>.json` (create-minimal-environments --name) + install-module default zone mgmt→`<N>`. N3/N5 touch the live install/update flow + SSH → careful/supervised.
+**Implementation chunks (N#) — STATUS:**
+- **N1 ✅ (879341b)** moved source template firewall/→network-manager/zones.json + repointed all readers.
+- **N2 ✅ (c2d731d)** `network-manager zones-init --name <N>` transform (75 tests, offline).
+- **N3 ✅ (57624a3)** distribute-on-change (port distribute_zones_to_nodes; auto on live write; --dry-run enumerates the 3 nodes; tests never SSH).
+- **N4 ✅ (e0b9e70)** `network-manager zones-check` (well-formed/VLAN-uniq/ref-integrity/mgmt-invariant/installation-consistency) + non-fatal wire into pre-update.sh. Live: 5 ok/0/0. Module configs use `zone0`.
+- **N6 ✅ (8d1ea61)** create-minimal-environments `--name <N>` → default env `<N>.json` (zone `<N>`); install-module blank zone0 → default zone (site.name→single-env→mgmt fallback), safe pre/post-cutover.
+- **N5 + S3b + P6 = REMAINING = the SUPERVISED LIVE CUTOVER (coupled; partly disruptive):**
+  - **⚠ Blocker found by N4:** 3 deployed modules — `nextcloud`, `nextcloud-hpb`, `euro-office` — have `zone0=srvWork`, which zones-init sets **Inactive**. Running the transform on the live system orphans them ⇒ they must be **migrated to the default zone `<N>`** first (VM re-zone: re-IP/VLAN/DNS = service disruption). This is the migrate-legacy-zones step.
+  - **N5:** route install2.sh (seed cp → `zones-init --name <N>`, needs the new install-name question) + pre-update (apply-zones-merge → network-manager) fully through network-manager; run zones-init on the live zones.json.
+  - **S3b cutover:** switch the ~56 configuration.json readers → site.json (most via common-install-routines helpers); delete configuration.json + configuration-fields.json.
+  - **P6 mgmt enforcement** (foundation auto-install to mgmt; can't-delete mandatory) **depends on S7** (P5 module tier/source classification — not yet done).
+  - **Recommended:** a dedicated supervised session — it migrates 3 deployed module VMs across zones + deletes the live config + rewires the mothership install/update. All the machinery (N1–N4, N6) is built + tested; this is the "go".
 
 (original analysis retained below)
 
