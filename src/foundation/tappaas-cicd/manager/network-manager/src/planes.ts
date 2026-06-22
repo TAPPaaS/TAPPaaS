@@ -38,7 +38,14 @@ export interface RunResult {
 // (stdio: inherit) so the per-plane detail is visible, exactly as the bash
 // orchestrator did. Returns the exit code.
 function runStreaming(bin: string, args: string[]): RunResult {
-  const r = spawnSync(bin, args, { encoding: "utf8", stdio: "inherit" });
+  // The plane controllers read CONFIG_DIR (zones.json / switch+ap config live
+  // there). The bash orchestrator got it from common-install-routines.sh;
+  // network-manager must pass it explicitly (default the standard target path),
+  // otherwise the controllers fail with "CONFIG_DIR is not set".
+  const configDir =
+    process.env.CONFIG_DIR ?? process.env.TAPPAAS_CONFIG ?? "/home/tappaas/config";
+  const env = { ...process.env, CONFIG_DIR: configDir, TAPPAAS_CONFIG: configDir };
+  const r = spawnSync(bin, args, { encoding: "utf8", stdio: "inherit", env });
   if (r.error) {
     return { rc: -1, stdout: "", stderr: r.error.message, ran: false };
   }
