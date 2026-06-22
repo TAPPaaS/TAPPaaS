@@ -44,6 +44,19 @@ Each stage is **not done** until it passes the gate below. The driver updates th
 
 ---
 
+## Parking lot
+
+Work intentionally deferred — not part of the current stage sequence; revisit when its prerequisite or trigger arrives. (Distinct from a stage's own "remaining/follow-up" notes.)
+
+| Issue | Item | Why parked |
+|-------|------|-----------|
+| **#294** | **Zone-aligned VMID ranges** — derive/allocate a VM's VMID from its zone/environment (so VMID bands map to zones). | Needs the environment↔zone model settled (S4/S6) first; not required for the cutover. Revisit after S6. |
+| **#380** | *(title not in repo; `gh` is push-only here — operator to confirm the one-line.)* | Parked pending description. |
+
+> Other deferred-but-tracked work lives in the relevant stage logs below (e.g. S5 follow-ups: physical-switch registration, single-front-door consolidation; S3b legacy-zone sunset migration of the srvWork modules; switch-controller TS/bash consolidation).
+
+---
+
 ## Stage logs
 
 Newest entries on top. Each stage appends a dated block as it moves through the gate.
