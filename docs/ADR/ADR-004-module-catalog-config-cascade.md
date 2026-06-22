@@ -31,7 +31,7 @@ src/module-catalog.json            ← Layer 2: what CAN exist  (#305: renamed f
 
 **Reference schemas:**
 - Layer 1: `src/foundation/configuration-fields.json`
-- Layer 2: `src/foundation/module-catalog-fields.json` · `src/foundation/module-fields.json`
+- Layer 2: `src/foundation/schemas/module-catalog-fields.json` · `src/foundation/schemas/module-fields.json`
 - Layer 2 dependency graph: `src/module-dependencies.md`
 
 ---
@@ -106,7 +106,7 @@ Add cluster-wide timezone to `configuration.json`:
 
 ### Layer 2 — Module catalog: `src/module-catalog.json`  *(NEW: rename + taxonomy)*
 
-**Renamed** from `modules.json` (per #297 + #305). Every `managed: full` repo contains this file. Validated by `src/foundation/module-catalog-fields.json`.
+**Renamed** from `modules.json` (per #297 + #305). Every `managed: full` repo contains this file. Validated by `src/foundation/schemas/module-catalog-fields.json`.
 
 Required fields per entry *(NEW: `stack`, `category`, `status`)*:
 
@@ -124,7 +124,7 @@ Required fields per entry *(NEW: `stack`, `category`, `status`)*:
 - `stack` + `category`: enable catalog-driven tooling and UI
 - `status`: single source of truth for module readiness
 - VMID uniqueness: enforced at commit time via `module-catalog-fields.json`
-- Module field contract: see `src/foundation/module-fields.json`
+- Module field contract: see `src/foundation/schemas/module-fields.json`
 - Dependency graph: see `src/module-dependencies.md`
 
 ---

@@ -29,7 +29,7 @@ See `src/apps/00-Template/README.md` for details
 
 ### Configuration Files
 - `src/foundation/firewall/zones.json` - Network zone definitions with VLAN tags and access rules (canonical source of truth)
-- `src/foundation/module-fields.json` - Schema defining all available fields for module JSON configuration
+- `src/foundation/schemas/module-fields.json` - Schema defining all available fields for module JSON configuration
 
 ## Command/Scripts dependencis
 

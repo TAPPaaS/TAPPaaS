@@ -883,7 +883,7 @@ function jq_module_write() {
 # Outputs: Validation messages to stderr
 function check_json() {
   local json_file="$1"
-  local schema_file="${2:-/home/tappaas/TAPPaaS/src/foundation/module-fields.json}"
+  local schema_file="${2:-/home/tappaas/TAPPaaS/src/foundation/schemas/module-fields.json}"
   local errors=0
   local warnings=0
 

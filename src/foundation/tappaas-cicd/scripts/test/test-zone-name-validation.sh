@@ -55,7 +55,7 @@ cj() {
 
 echo "── test-zone-name-validation.sh ──"
 
-SCHEMA="${FOUNDATION_DIR}/module-fields.json"
+SCHEMA="${FOUNDATION_DIR}/schemas/module-fields.json"
 [[ -f "${SCHEMA}" ]] || { fail "module-fields.json not found at ${SCHEMA}"; exit 1; }
 
 # Case 1: valid camelCase zone0 passes the format regex.

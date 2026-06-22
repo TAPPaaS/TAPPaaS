@@ -106,8 +106,8 @@ else
     fail "configuration.json not found"
 fi
 
-if [[ -f /home/tappaas/TAPPaaS/src/foundation/module-fields.json ]]; then
-    if jq -e '.fieldOrder' /home/tappaas/TAPPaaS/src/foundation/module-fields.json &>/dev/null; then
+if [[ -f /home/tappaas/TAPPaaS/src/foundation/schemas/module-fields.json ]]; then
+    if jq -e '.fieldOrder' /home/tappaas/TAPPaaS/src/foundation/schemas/module-fields.json &>/dev/null; then
         pass "module-fields.json has fieldOrder"
     else
         fail "module-fields.json missing fieldOrder"

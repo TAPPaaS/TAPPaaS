@@ -112,7 +112,7 @@ The schema column surfaces three findings:
 
 - Taxonomy: [ADR-007](<ADR-007 - TAPPaaS Taxonomy.md>) + 007a–007e; issue #320.
 - Control plane: `src/foundation/tappaas-cicd/scripts/` (the scripts mapped above).
-- Schemas: `src/foundation/module-fields.json`, `zones-fields.json`, `configuration-fields.json`.
+- Schemas: `src/foundation/schemas/module-fields.json`, `schemas/zones-fields.json`, `configuration-fields.json`.
 - Config cascade: ADR-004.
 - **Implementing change:** the `tappaas-cicd` scripts/ → domain-manager restructure (issue to be
   filed). This ADR is its governing model; the restructure is its execution.

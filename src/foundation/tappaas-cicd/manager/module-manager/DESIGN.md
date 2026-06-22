@@ -15,7 +15,7 @@
 
 - **`config/<module>.json`** — the effective module config (`<module>-<env>.json`
   for non-default environments). Fields are validated against
-  `src/foundation/module-fields.json`, which also defines the `usedBy` grouping
+  `src/foundation/schemas/module-fields.json`, which also defines the `usedBy` grouping
   used for the canonical config-block ("Pattern A") form.
 - **`config/<module>.json.orig`** — the pre-image used for a 3-way merge so
   operator customizations survive a release update.

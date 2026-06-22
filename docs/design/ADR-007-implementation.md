@@ -1481,7 +1481,7 @@ fi
 
 ### Deliverables
 
-1. Update `src/foundation/module-fields.json`:
+1. Update `src/foundation/schemas/module-fields.json`:
    - Add `tier` field: `foundation` | `app`
    - Add `source` field: `official` | `community` | `private` | `local`
    - Remove `vmname` (computed)
@@ -2126,7 +2126,7 @@ src/foundation/tappaas-cicd/         # P10 template + two-level dispatch
 
 ```
 src/module-catalog.json          # Add tier/source fields
-src/foundation/module-fields.json # Add tier/source fields
+src/foundation/schemas/module-fields.json # Add tier/source fields
 configuration-fields.json         # Remove migrated fields
 zones.json                        # Rename zones to match environments
 ```

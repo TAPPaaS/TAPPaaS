@@ -13,7 +13,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # scripts/test → scripts → tappaas-cicd → foundation
 FOUNDATION_DIR="$(cd "${SCRIPT_DIR}/../../.." && pwd)"
 TAPPAAS_ROOT="${FOUNDATION_DIR}"
-export TAPPAAS_SCHEMA_FILE="${FOUNDATION_DIR}/module-fields.json"
+export TAPPAAS_SCHEMA_FILE="${FOUNDATION_DIR}/schemas/module-fields.json"
 
 # shellcheck disable=SC1091
 . "${SCRIPT_DIR}/../../lib/common-install-routines.sh"
@@ -46,7 +46,7 @@ run_case() {
     # tabletop tests we replace it in a sub-shell by re-sourcing the script
     # with the readonly override-via-pre-set.
     (
-        export TAPPAAS_SCHEMA_FILE="${FOUNDATION_DIR}/module-fields.json"
+        export TAPPAAS_SCHEMA_FILE="${FOUNDATION_DIR}/schemas/module-fields.json"
         # Re-execute the merge by calling the function directly. We can't
         # change _MERGE_CONFIG_DIR (readonly), so we run via a worktree by
         # symlinking the per-case config dir as /home/tappaas/config is not

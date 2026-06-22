@@ -100,7 +100,7 @@ The `firewall:rules` capability lets each module declare its inbound and
 outbound network contract in its own JSON. Rules are compiled deterministically
 into OPNsense and reconciled on every update.
 
-### Schema fields (see [`module-fields.json`](../module-fields.json))
+### Schema fields (see [`module-fields.json`](../schemas/module-fields.json))
 
 | Field | Purpose |
 |-------|---------|
@@ -371,4 +371,4 @@ setup/teardown runbook, options, verification, and troubleshooting.
 - `tappaas-cicd/opnsense-controller/src/opnsense_controller/rules_manager.py` — implementation
 - [`../ZONES.md`](../ZONES.md) — zone reference
 - [`../../docs/ADR/ADR-008-switch-module-network-infrastructure.md`](../../../docs/ADR/ADR-008-switch-module-network-infrastructure.md) — design
-- [`../module-fields.json`](../module-fields.json) — full field schema
+- [`../schemas/module-fields.json`](../schemas/module-fields.json) — full field schema

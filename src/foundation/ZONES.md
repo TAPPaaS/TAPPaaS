@@ -143,7 +143,7 @@ SSID name and (via `vlantag`) its VLAN.
 
 For complete field definitions including all possible values, defaults, and validation rules, see:
 
-**[zones-fields.json](zones-fields.json)**
+**[zones-fields.json](schemas/zones-fields.json)**
 
 This JSON schema file documents:
 - All available fields and their types

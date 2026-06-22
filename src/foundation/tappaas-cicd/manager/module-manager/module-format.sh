@@ -26,7 +26,7 @@ set -euo pipefail
 
 SCRIPT_NAME="$(basename "${BASH_SOURCE[0]}")"
 readonly SCRIPT_NAME
-readonly SCHEMA_FILE="/home/tappaas/TAPPaaS/src/foundation/module-fields.json"
+readonly SCHEMA_FILE="/home/tappaas/TAPPaaS/src/foundation/schemas/module-fields.json"
 
 # Header-pinned fields: module identity / placement that is owned by the module
 # itself (read by several services), never nested under a single service.

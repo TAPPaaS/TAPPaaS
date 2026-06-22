@@ -46,7 +46,7 @@ fi
 
 # Guard against double-sourcing: readonly fails the second time.
 if [[ -z "${_CONVERT_SCHEMA_FILE:-}" ]]; then
-    readonly _CONVERT_SCHEMA_FILE="${TAPPAAS_SCHEMA_FILE:-/home/tappaas/TAPPaaS/src/foundation/module-fields.json}"
+    readonly _CONVERT_SCHEMA_FILE="${TAPPAAS_SCHEMA_FILE:-/home/tappaas/TAPPaaS/src/foundation/schemas/module-fields.json}"
     readonly _CONVERT_HEADER_PINNED='["vmname","vmid","vmtag","node","zone0","zone1","mac0","mac1","dependsOn","provides","config","variant"]'
 fi
 

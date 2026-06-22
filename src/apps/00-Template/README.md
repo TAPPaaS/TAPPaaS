@@ -115,7 +115,7 @@ These two fields serve different purposes and are both needed for non-default OS
 
 For complete field definitions including all possible values, defaults, and validation rules, see:
 
-**[module-fields.json](../../foundation/module-fields.json)**
+**[module-fields.json](../../foundation/schemas/module-fields.json)**
 
 ### install.sh
 

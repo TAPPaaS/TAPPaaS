@@ -7,7 +7,7 @@ Utility scripts for TAPPaaS-CICD operations. These scripts are installed to `/ho
 A TAPPaaS module's JSON has two equivalent shapes:
 
 - **Flat** — every field at the top level: `{ "vmname": "x", "cores": 2, ... }`. Older sources used this; deprecated for new modules but still accepted everywhere.
-- **Pattern A (canonical)** — module identity / general fields stay at the top; service-owned fields move under `config["<module>:<service>"]` per the field's `usedBy` metadata in [`../../module-fields.json`](../../module-fields.json):
+- **Pattern A (canonical)** — module identity / general fields stay at the top; service-owned fields move under `config["<module>:<service>"]` per the field's `usedBy` metadata in [`../../schemas/module-fields.json`](../../schemas/module-fields.json):
   ```json
   {
     "vmname": "x", "dependsOn": ["cluster:vm","firewall:proxy"],

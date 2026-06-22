@@ -132,9 +132,9 @@ fi
 
 # --- Install foundation config files into /home/tappaas/config/ ---
 # module-fields.json: symlink (read-only schema, always tracks git)
-if [ -f "../module-fields.json" ]; then
+if [ -f "../schemas/module-fields.json" ]; then
   rm -f /home/tappaas/config/module-fields.json 2>/dev/null || true
-  ln -s "$(realpath ../module-fields.json)" /home/tappaas/config/module-fields.json
+  ln -s "$(realpath ../schemas/module-fields.json)" /home/tappaas/config/module-fields.json
 fi
 
 # --- Apply OPNsense os-caddy ToDomain underscore patch (issue #237 follow-up) ---

@@ -38,7 +38,7 @@ set -euo pipefail
 : "${RD:=$'\033[01;31m'}"
 : "${DGN:=$'\033[32m'}"
 : "${CL:=$'\033[m'}"
-SCHEMA_FILE="/home/tappaas/TAPPaaS/src/foundation/module-fields.json"
+SCHEMA_FILE="/home/tappaas/TAPPaaS/src/foundation/schemas/module-fields.json"
 
 # Source common-install-routines.sh if not already loaded (provides info, warn, error, die)
 if ! declare -F info &>/dev/null; then

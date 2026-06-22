@@ -8,7 +8,7 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # scripts/test → scripts → tappaas-cicd → foundation
 FOUNDATION_DIR="$(cd "${SCRIPT_DIR}/../../.." && pwd)"
-export TAPPAAS_SCHEMA_FILE="${FOUNDATION_DIR}/module-fields.json"
+export TAPPAAS_SCHEMA_FILE="${FOUNDATION_DIR}/schemas/module-fields.json"
 
 # shellcheck disable=SC1091
 . "${SCRIPT_DIR}/../../lib/common-install-routines.sh"

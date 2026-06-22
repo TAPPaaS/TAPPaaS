@@ -81,7 +81,7 @@ fi
 
 # jq_module_write: writes through Pattern A canonicalization
 echo '{"vmname":"m-write","dependsOn":["cluster:vm"],"cores":2}' > "${WORK}/m-write.json"
-export TAPPAAS_SCHEMA_FILE="${FOUNDATION_DIR}/module-fields.json"
+export TAPPAAS_SCHEMA_FILE="${FOUNDATION_DIR}/schemas/module-fields.json"
 if jq_module_write m-write '.cores = 8'; then
     # The on-disk shape must be Pattern A: cores under config.cluster:vm
     if [[ "$(jq -r '.config["cluster:vm"].cores' "${WORK}/m-write.json")" == "8" ]] \

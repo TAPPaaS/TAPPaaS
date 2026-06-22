@@ -56,7 +56,7 @@ fi
 # Guard against double-sourcing: readonly fails the second time.
 if [[ -z "${_MERGE_CONFIG_DIR:-}" ]]; then
     readonly _MERGE_CONFIG_DIR="${TAPPAAS_MERGE_CONFIG_DIR:-/home/tappaas/config}"
-    readonly _MERGE_SCHEMA_FILE="${TAPPAAS_SCHEMA_FILE:-/home/tappaas/TAPPaaS/src/foundation/module-fields.json}"
+    readonly _MERGE_SCHEMA_FILE="${TAPPAAS_SCHEMA_FILE:-/home/tappaas/TAPPaaS/src/foundation/schemas/module-fields.json}"
     # Header fields never merged — always preserve the installed value.
     # Note: vmname/vmid/etc are NOT in this list — operator changes there ARE
     # meaningful and follow the standard pin-vs-adopt rule.

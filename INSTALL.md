@@ -334,7 +334,7 @@ Defaults are chosen so the commands above "just work". Override as needed:
 | Domain / TLS | provided to the `firewall`/app modules; TLS issuance is DNS-01 by default. |
 | Unattended runs | most scripts accept `--non-interactive` (supply the values via flags). |
 
-Field definitions for module JSON are in `src/foundation/module-fields.json`;
+Field definitions for module JSON are in `src/foundation/schemas/module-fields.json`;
 network zones/VLANs in `src/foundation/firewall/zones.json`.
 
 ---
