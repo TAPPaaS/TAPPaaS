@@ -114,6 +114,23 @@ if [[ -x /home/tappaas/bin/create-configuration.sh ]]; then
     }
 fi
 
+# --- ADR-007 P2 (S3a): auto-migrate configuration.json -> site.json ---
+# PHASED migration: create site.json once, when configuration.json exists and
+# site.json does NOT. configuration.json is NOT deleted here (the flag-day
+# cutover is a later step), and existing configuration.json readers are left
+# untouched. Idempotent + guarded: once site.json exists this is a no-op, and
+# the migration script itself no-ops on an existing site.json.
+if [[ -f /home/tappaas/config/configuration.json && ! -f /home/tappaas/config/site.json ]]; then
+    if [[ -x /home/tappaas/bin/migrate-configuration.sh ]]; then
+        echo ""
+        info "Migrating configuration.json -> site.json (ADR-007 P2)..."
+        /home/tappaas/bin/migrate-configuration.sh --config-dir /home/tappaas/config \
+            || warn "  site.json migration reported an error — continuing (configuration.json untouched)"
+    else
+        warn "migrate-configuration.sh not on PATH yet; skipping site.json migration this run."
+    fi
+fi
+
 # --- Install foundation config files into /home/tappaas/config/ ---
 # module-fields.json: symlink (read-only schema, always tracks git)
 if [ -f "../module-fields.json" ]; then

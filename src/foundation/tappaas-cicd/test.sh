@@ -343,6 +343,22 @@ if command -v authentik-manager >/dev/null 2>&1; then
 else
     skip "authentik-manager not installed"
 fi
+# site-manager: configuration.json -> site.json migration + schema validation
+# (on the fixture, into a temp dir — never the live config)
+_site_fix="${SCRIPT_DIR}/manager/site-manager/test/fixtures"
+if [[ -x /home/tappaas/bin/migrate-configuration.sh && -f "${_site_fix}/configuration.json" ]]; then
+    _st="$(mktemp -d "${TMPDIR:-/tmp}/site-smoke.XXXXXX")"
+    cp "${_site_fix}/configuration.json" "${_st}/"
+    if /home/tappaas/bin/migrate-configuration.sh --config-dir "${_st}" >/dev/null 2>&1 \
+        && /home/tappaas/bin/validate-site.sh --quiet "${_st}/site.json" >/dev/null 2>&1; then
+        pass "site: configuration.json -> site.json migrates + validates"
+    else
+        fail "site: fixture migrate/validate failed"
+    fi
+    rm -rf "${_st}"
+else
+    skip "site-manager migrate/validate not installed"
+fi
 
 # ── Deep Test: VM creation suite ────────────────────────────────────
 

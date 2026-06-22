@@ -1,0 +1,210 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "site-fields.json",
+  "title": "TAPPaaS Site",
+  "description": "The Site is the top-level umbrella for a TAPPaaS installation (ADR-007d). It holds site-wide identity, location, hardware (Proxmox nodes + their storage pools), backup target, update schedule, module catalog repositories, and references to the environment and organization config files. Domain, DNS, and identity are per-environment (NOT site-wide) and live in config/environments/*.json. site.json replaces configuration.json at cutover; during the phased migration both files may coexist. See ADR-007 P2.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "name",
+    "displayName",
+    "owner",
+    "location",
+    "hardware",
+    "repositories"
+  ],
+  "properties": {
+    "name": {
+      "description": "Slug identifier for the site (e.g. foobar-site).",
+      "type": "string",
+      "pattern": "^[A-Za-z0-9_.-]+$"
+    },
+    "displayName": {
+      "description": "Human-readable site name.",
+      "type": "string",
+      "minLength": 1
+    },
+    "owner": {
+      "description": "Reference to the site-owner Organization.name (config/people/organizations/<owner>.json).",
+      "type": "string"
+    },
+    "version": {
+      "description": "Site config schema version.",
+      "type": "string",
+      "default": "1.0"
+    },
+    "location": {
+      "description": "Physical/legal location of the site.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "country",
+        "timezone"
+      ],
+      "properties": {
+        "country": {
+          "description": "ISO 3166-1 alpha-2 country code (e.g. NL).",
+          "type": "string",
+          "pattern": "^[A-Za-z]{2}$"
+        },
+        "timezone": {
+          "description": "IANA timezone (e.g. Europe/Amsterdam).",
+          "type": "string",
+          "minLength": 1
+        },
+        "locale": {
+          "description": "POSIX locale (e.g. nl_NL).",
+          "type": "string",
+          "default": "en_US"
+        }
+      }
+    },
+    "network": {
+      "description": "Site WAN configuration. No rootDomain — domains are per-environment.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "isp": {
+          "description": "ISP name, for operator reference only.",
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null
+        },
+        "publicIp": {
+          "description": "Public IP address, or \"auto\" to discover at runtime.",
+          "type": "string",
+          "default": "auto"
+        }
+      }
+    },
+    "hardware": {
+      "description": "Physical hardware: the Proxmox nodes that make up the cluster.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "nodes"
+      ],
+      "properties": {
+        "nodes": {
+          "description": "List of Proxmox nodes. nodeCount is computed from this array (no separate field).",
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "name"
+            ],
+            "properties": {
+              "name": {
+                "description": "Node name (e.g. tappaas1).",
+                "type": "string",
+                "pattern": "^[A-Za-z0-9_-]+$"
+              },
+              "storagePools": {
+                "description": "Storage pools available on this node (e.g. [\"tanka1\", \"tankb1\"]).",
+                "type": "array",
+                "items": {
+                  "type": "string"
+                },
+                "uniqueItems": true,
+                "default": []
+              }
+            }
+          }
+        }
+      }
+    },
+    "backup": {
+      "description": "Site-wide backup target. null when no backup is configured yet.",
+      "type": [
+        "object",
+        "null"
+      ],
+      "default": null,
+      "additionalProperties": false,
+      "properties": {
+        "target": {
+          "description": "Backup server hostname (Proxmox Backup Server).",
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null
+        },
+        "offsite": {
+          "description": "Offsite backup buddy identifier.",
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null
+        }
+      }
+    },
+    "updateSchedule": {
+      "description": "Site-wide update schedule [period, day, hour] (e.g. [\"monthly\", \"Thursday\", 2]).",
+      "type": "array",
+      "default": [
+        "monthly",
+        "Thursday",
+        2
+      ]
+    },
+    "automaticReboot": {
+      "description": "Whether updates may reboot automatically. Site-wide until P3 (then moves to Environment).",
+      "type": "boolean",
+      "default": true
+    },
+    "snapshotRetention": {
+      "description": "Number of snapshots to retain. Site-wide until P3 (then moves to Environment).",
+      "type": "integer",
+      "minimum": 0,
+      "default": 5
+    },
+    "repositories": {
+      "description": "Module catalog repositories.",
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": true,
+        "required": [
+          "name",
+          "url"
+        ],
+        "properties": {
+          "name": {
+            "description": "Repository identifier.",
+            "type": "string"
+          },
+          "url": {
+            "description": "Repository URL.",
+            "type": "string"
+          },
+          "updateChannel": {
+            "description": "Update channel (stable | main | etc.).",
+            "type": "string",
+            "default": "stable"
+          }
+        }
+      }
+    },
+    "environments": {
+      "description": "Paths to environment JSON files (config/environments/*.json). Populated from variants in S4/P3.",
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "default": []
+    },
+    "organizations": {
+      "description": "Paths to organization JSON files (config/people/organizations/*.json).",
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "default": []
+    }
+  }
+}

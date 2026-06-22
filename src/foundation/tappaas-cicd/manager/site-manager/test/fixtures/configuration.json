@@ -1,0 +1,45 @@
+{
+  "-comment1": "TEST FIXTURE — mirrors the live configuration.json shape (ADR-007 P2 migration input). NOT runtime config.",
+  "-comment2": "Edit at config/configuration.json (on the target). This copy is a test fixture only.",
+  "tappaas": {
+    "version": "nixos-template-v1.3",
+    "domain": "foo.example.org",
+    "email": "ops@example.org",
+    "nodeCount": 3,
+    "variants": {
+      "": {
+        "domain": "foo.example.org",
+        "tlsCertRefid": "abc123",
+        "dnsMode": "wildcard",
+        "description": "Default (no variant)"
+      },
+      "bar": {
+        "domain": "bar.example.org",
+        "tlsCertRefid": "",
+        "dnsMode": "per-service",
+        "description": "Bar variant"
+      }
+    },
+    "repositories": [
+      {
+        "name": "TAPPaaS",
+        "url": "github.com/TAPPaaS/TAPPaaS",
+        "branch": "main",
+        "path": "/home/tappaas/TAPPaaS",
+        "managed": "full",
+        "catalog": "src/module-catalog.json"
+      }
+    ],
+    "updateSchedule": [
+      "weekly",
+      "Tuesday",
+      2
+    ],
+    "automaticReboot": false
+  },
+  "tappaas-nodes": [
+    { "hostname": "tappaas1", "ip": "10.0.0.10" },
+    { "hostname": "tappaas2", "ip": "10.0.0.11" },
+    { "hostname": "tappaas3", "ip": "10.0.0.12" }
+  ]
+}
