@@ -1,0 +1,11 @@
+Copyright (c) 2026 Gridtefy / TAPPaaS org
+
+This Source Code Form is subject to the terms of the Mozilla Public
+License, v. 2.0. If a copy of the MPL was not distributed with this
+file, You can obtain one at https://mozilla.org/MPL/2.0/.
+
+This module deploys and configures third-party software covered by the
+following copyright and permission notice:
+Product: deCONZ (Dresden Elektronik)
+License: BSD-3-Clause (core open-sourced 2024-04-19) | https://github.com/dresden-elektronik/deconz
+Note: the Phoscon web UI bundled by deCONZ remains closed-source (vendor).

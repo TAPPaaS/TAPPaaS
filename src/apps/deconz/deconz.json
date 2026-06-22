@@ -1,0 +1,48 @@
+{
+  "description": "deCONZ — standalone Zigbee gateway (ConBee II) + native Hue-bridge API. See README.md / INSTALL.md.",
+  "version": "0.1.0",
+  "releaseDate": "2026-06-16",
+  "maintainer": "@ErikDaniel007",
+  "status": "Development",
+  "vmname": "deconz",
+  "vmid": 213,
+  "vmtag": "TAPPaaS,App,HomeAutomation",
+  "node": "tappaas2",
+  "zone0": "iotCloud",
+  "dependsOn": [
+    "cluster:vm",
+    "templates:nixos",
+    "backup:vm",
+    "firewall:proxy",
+    "firewall:rules"
+  ],
+  "provides": [
+    "zigbee",
+    "bridge"
+  ],
+  "appVersion": "nixpkgs-pinned",
+  "config": {
+    "cluster:vm": {
+      "cores": 2,
+      "memory": "4096",
+      "diskSize": "16G",
+      "storage": "tanka1",
+      "imageType": "clone",
+      "image": "8080",
+      "bridge0": "lan"
+    },
+    "firewall:proxy": {
+      "proxyPort": 8080,
+      "proxyAllowedZones": [
+        "mgmt"
+      ]
+    },
+    "firewall:rules": {
+      "ports": [
+        { "port": 8080, "protocol": "TCP", "description": "deCONZ REST + Hue-compat API (Phoscon UI via proxy; SysAP Hue control INTRA-zone iotCloud; HA REST cross-zone srvHome->iotCloud)" },
+        { "port": 8443, "protocol": "TCP", "description": "deCONZ websocket (HA deconz integration live events) — cross-zone srvHome->iotCloud pinhole" },
+        { "port": 1900, "protocol": "UDP", "description": "SSDP discovery — SysAP finds the Hue-emulated bridge INTRA-zone (iotCloud); no cross-zone relay (ADR-COM-0006)" }
+      ]
+    }
+  }
+}

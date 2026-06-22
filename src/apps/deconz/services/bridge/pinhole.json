@@ -1,0 +1,7 @@
+{
+  "_comment": "Auto-pinhole (#173) for deconz:bridge — the native Hue-compatible API that replaces HA emulated_hue. Consumed INTRA-zone by SysAP (both in iotCloud per ADR-COM-0006). Same capability name as hue:bridge -> interchangeable provider.",
+  "ports": [
+    { "port": 8080, "protocol": "TCP", "description": "deCONZ Hue-compat REST API (SysAP light/scene control) — intra-zone iotCloud" },
+    { "port": 1900, "protocol": "UDP", "description": "SSDP discovery — SysAP finds the Hue-emulated bridge intra-zone (iotCloud); no cross-zone relay" }
+  ]
+}
