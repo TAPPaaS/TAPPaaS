@@ -53,7 +53,7 @@ run "$a_priv" && ok "app+private passes"    || bad "app+private should pass"
 run "$a_loc"  && ok "app+local passes"      || bad "app+local should pass"
 
 # enum + mandatory checks
-run "$notier"  && bad "missing tier should FAIL"        || ok "missing mandatory tier rejected"
+run "$notier"  && ok "missing tier defaults to app (back-compat)" || bad "missing tier should default to app, not fail"
 run "$badtier" && bad "invalid tier enum should FAIL"   || ok "invalid tier enum rejected"
 run "$badsrc"  && bad "invalid source enum should FAIL" || ok "invalid source enum rejected"
 

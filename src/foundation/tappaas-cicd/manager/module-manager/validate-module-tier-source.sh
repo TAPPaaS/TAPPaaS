@@ -113,9 +113,12 @@ main() {
     # source defaults to 'official' when absent (CR-05: normally inferred).
     source="$(jq -r '.source // "official"' "$TARGET")"
 
-    # tier is mandatory.
+    # tier defaults to 'app' when absent (back-compat: untagged/legacy modules +
+    # test fixtures install as apps). An EXPLICIT out-of-range value is still an
+    # error. (New modules should set tier explicitly; this only warns.)
     if [[ -z "$tier" ]]; then
-        lint_error "${base}: missing mandatory field 'tier' (must be one of: ${VALID_TIERS})"
+        lint_warn "${base}: no 'tier' field — defaulting to 'app' (back-compat; set tier: foundation|app explicitly)"
+        tier="app"
     elif ! in_set "$tier" "$VALID_TIERS"; then
         lint_error "${base}: invalid tier '${tier}' (must be one of: ${VALID_TIERS})"
     fi
