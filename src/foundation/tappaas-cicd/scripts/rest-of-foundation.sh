@@ -58,6 +58,41 @@ for m in "${FOUNDATION_MODULES[@]}"; do
   install_one "$m" || FAILED+=("$m")
 done
 
+# ── ADR-007 P1: bootstrap the minimum people domain (after identity) ─────
+# Once identity (Authentik) is up and config/people is still empty (first
+# install), create the minimal org + admin/users groups + installer user and
+# sync them into Authentik. Per ADR-007: user-setup.sh copies minimal-org/ into
+# ~tappaas/config/people with the installation name + installer identity
+# substituted; `people-manager sync` then reconciles them into Authentik (via
+# identity-controller). Idempotent: skipped once config/people exists, so re-runs
+# never disturb operator-added people. (Supersedes the old ADR-006 roles-ensure
+# bootstrap — ADR-007 is authoritative.)
+if [[ " ${FAILED[*]} " != *" identity "* ]]; then
+  people_dir="${TAPPAAS_CONFIG:-${CONFIG_DIR}}/people"
+  if [[ ! -d "$people_dir" || -z "$(ls -A "$people_dir" 2>/dev/null)" ]]; then
+    cfg="${CONFIG_DIR}/configuration.json"
+    inst_email="$(jq -r '.tappaas.email // ""'  "$cfg" 2>/dev/null)"
+    inst_domain="$(jq -r '.tappaas.domain // ""' "$cfg" 2>/dev/null)"
+    inst_org="$(jq -r '.tappaas.name // ""'      "$cfg" 2>/dev/null)"
+    [[ -n "$inst_org" ]] || inst_org="${inst_domain%%.*}"   # first domain label
+    inst_user="${inst_email%@*}"                            # email local-part
+    inst_user="$(printf '%s' "$inst_user" | tr '[:upper:]' '[:lower:]' | tr -c 'a-z0-9-' '-' | sed 's/^-*//;s/-*$//')"
+    if [[ -n "$inst_org" && -n "$inst_user" && -n "$inst_email" ]]; then
+      echo ""
+      info "${BOLD}── People bootstrap (ADR-007): org=${inst_org} user=${inst_user} ──${CL}"
+      if user-setup.sh --org "$inst_org" --user "$inst_user" --email "$inst_email"; then
+        people-manager sync || warn "  people-manager sync reported issues — review the output above."
+      else
+        warn "  user-setup.sh failed — people bootstrap skipped (re-run rest-of-foundation.sh)."
+      fi
+    else
+      warn "  Installer org/user/email not determinable from configuration.json — skipping people bootstrap."
+    fi
+  else
+    info "  config/people already populated — skipping people bootstrap (idempotent)."
+  fi
+fi
+
 # ── Final system update + regression tests ───────────────────────────
 if [[ "$SKIP_UPDATE" == "0" ]]; then
   echo ""
