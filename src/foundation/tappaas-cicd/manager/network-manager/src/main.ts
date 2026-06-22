@@ -18,6 +18,7 @@
 //   network-manager zone delete <name> [--check]
 //   network-manager reconcile [--apply] [--only <plane>]
 //   network-manager zones-init --name <N> [--from <tpl>] [--out <f>] [--force]
+//   network-manager zones-distribute [--zones <file>] [--dry-run]
 //
 // Exit codes: ok=0, error/drift-after-apply=1.
 
@@ -38,6 +39,7 @@ import {
 import { addZone, deleteZone } from "./zonelifecycle";
 import { parseTemplate, zonesInit } from "./zonesinit";
 import { zonesCheck } from "./zonescheck";
+import { distributeZones, shouldAutoDistribute } from "./distribute";
 
 const VERSION = "0.1.0";
 
@@ -70,6 +72,7 @@ Usage:
   network-manager reconcile [--apply] [--only <plane>]
   network-manager zones-init --name <N> [--from <tpl>] [--out <f>] [--force]
   network-manager zones-check [--zones <file>] [--config-dir <dir>] [--strict]
+  network-manager zones-distribute [--zones <file>] [--dry-run]
 
 zone add options:
   --from-zone <src>   inherit type/typeId/bridge/access-to/pinhole from <src>
@@ -95,6 +98,13 @@ zones-check options (offline consistency audit; read-only; run at update):
   --zones <file>      zones.json to check (default \$TAPPAAS_CONFIG/zones.json)
   --config-dir <dir>  installed module configs to cross-check (default \$TAPPAAS_CONFIG)
   --strict            promote warnings to errors
+
+zones-distribute options (push the live zones.json to every Proxmox node so
+node-side tooling can resolve a zone's VLAN — N3; runs automatically after a
+live zones.json write, this is the manual entry point):
+  --zones <file>      zones.json to push (default \$TAPPAAS_CONFIG/zones.json)
+  --dry-run           list the node targets that WOULD receive it; no scp
+  --no-distribute     (on zone add/delete/zones-init) skip the auto-push
 
 common:
   --zones-file <f>    default \$TAPPAAS_CONFIG/zones.json
@@ -124,6 +134,9 @@ interface Opts {
   // zones-check
   configDir: string;
   strict: boolean;
+  // zones-distribute + auto-distribute opt-out
+  dryRun: boolean;
+  noDistribute: boolean;
 }
 
 function isPlane(s: string): s is Plane {
@@ -140,6 +153,8 @@ function parseOpts(args: string[]): Opts {
     force: false,
     configDir: defaultConfigDir(),
     strict: false,
+    dryRun: false,
+    noDistribute: false,
   };
   for (let i = 0; i < args.length; i++) {
     const a = args[i];
@@ -205,6 +220,12 @@ function parseOpts(args: string[]): Opts {
       case "--force":
         o.force = true;
         break;
+      case "--dry-run":
+        o.dryRun = true;
+        break;
+      case "--no-distribute":
+        o.noDistribute = true;
+        break;
       // accepted-for-symmetry no-arg flags from zone-controller.sh:
       case "--no-ssl-verify":
         break;
@@ -269,6 +290,7 @@ function cmdZoneAdd(opts: Opts, client: PlaneClient = new CliPlaneClient()): voi
     variant: opts.variant,
     dryRun: opts.check,
     noActivate: opts.noActivate,
+    noDistribute: opts.noDistribute,
   });
   if (res.dryRun) {
     info(`  [dry-run] would author zone '${name}' (vlan ${res.vlantag}) + reconcile all planes`);
@@ -293,7 +315,10 @@ function cmdZoneDelete(opts: Opts, client: PlaneClient = new CliPlaneClient()): 
   if (!name) die("zone delete: expected <name>");
   const dtag = opts.check ? " [dry-run]" : "";
   info(`zone-delete '${name}'${dtag}`);
-  const res = deleteZone(client, opts.zonesFile, name, { dryRun: opts.check });
+  const res = deleteZone(client, opts.zonesFile, name, {
+    dryRun: opts.check,
+    noDistribute: opts.noDistribute,
+  });
   if (res.dryRun) {
     info(`  [dry-run] would disable + reconcile all planes, then delete '${name}' (vlan ${res.vlantag})`);
     return;
@@ -365,6 +390,22 @@ function cmdZonesInit(opts: Opts): void {
 
   writeJsonAtomic(out, result.raw);
   info(`  ${GN}✓${CL} zones-init: wrote '${out}' (default zone '${name}', '${name}-private', '${name}-guest')`);
+
+  // N3: push the freshly-written live zones.json to the Proxmox nodes. Skipped
+  // for a non-live --out (e.g. a temp/test path), --no-distribute, or
+  // NM_NO_DISTRIBUTE=1 — so test runs to /tmp never SSH.
+  if (shouldAutoDistribute(out, opts.noDistribute)) {
+    distributeZones(out, { info, warn });
+  }
+}
+
+// ── zones-distribute command (push the live zones.json to every node — N3) ──
+// Manual entry point for the same push that runs automatically after a live
+// zones.json write. Returns the distribute rc (non-zero only when nodes exist
+// and NONE accepted the push; a node being down is warned, not fatal).
+function cmdZonesDistribute(opts: Opts): number {
+  const res = distributeZones(opts.zonesFile, { dryRun: opts.dryRun, info, warn });
+  return res.rc;
 }
 
 // ── zones-check command (offline consistency audit; read-only) ────────
@@ -415,6 +456,8 @@ export function run(argv: string[], client?: PlaneClient): number {
         return 0;
       case "zones-check":
         return cmdZonesCheck(opts);
+      case "zones-distribute":
+        return cmdZonesDistribute(opts);
       default:
         usage();
         die(`Unknown command: ${cmd}`);

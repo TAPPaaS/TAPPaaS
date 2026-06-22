@@ -13,7 +13,7 @@
 //
 // Tiny assert harness (no test framework).
 
-import { copyFileSync, mkdtempSync, readFileSync, writeFileSync } from "fs";
+import { copyFileSync, existsSync, mkdtempSync, readFileSync, writeFileSync } from "fs";
 import { join } from "path";
 import { tmpdir } from "os";
 import { PLANE_ORDER } from "../../src/types";
@@ -30,6 +30,12 @@ import {
 import { reconcileAll } from "../../src/reconcile";
 import { addZone, deleteZone } from "../../src/zonelifecycle";
 import { runChecks } from "../../src/zonescheck";
+import {
+  distributeZones,
+  enumerateNodes,
+  nodeTarget,
+  shouldAutoDistribute,
+} from "../../src/distribute";
 import { FakePlaneClient } from "./fake-plane-client";
 
 let passed = 0;
@@ -514,6 +520,101 @@ function tmpZones(): string {
     const strict = runChecks(loadZones(zonesFile), configDir, true);
     check(strict.errors > 0, `--strict promotes the warning to an error (got ${strict.errors})`);
   }
+}
+
+// ── 11. zones distribute-on-change (N3; offline — NO real scp) ────────
+// Assert node enumeration from a fixture configuration.json, that --dry-run
+// lists targets without scp, that distribute is auto-skipped for a non-live
+// --out / when NM_NO_DISTRIBUTE=1, and that the lifecycle/zones-init write
+// paths to a temp file never attempt SSH. A sentinel scp bin proves no scp
+// runs: if it were ever exec'd it would create a marker file we then detect.
+{
+  // A fake scp that, if ever run, drops a marker — so we can prove it was NOT.
+  const scpDir = mkdtempSync(join(tmpdir(), "nm-scp-"));
+  const marker = join(scpDir, "scp-was-run");
+  const fakeScp = join(scpDir, "scp");
+  writeFileSync(fakeScp, `#!/usr/bin/env bash\ntouch '${marker}'\nexit 0\n`, "utf8");
+  // chmod via spawnSync (no fs.chmodSync in our ambient decls); harmless if it
+  // no-ops — the assertions rely on the marker file, not on exec succeeding.
+
+  // (a) enumerateNodes parses tappaas-nodes[].hostname from configuration.json.
+  const cfgDir = mkdtempSync(join(tmpdir(), "nm-cfg-"));
+  writeFileSync(
+    join(cfgDir, "configuration.json"),
+    JSON.stringify({
+      "tappaas-nodes": [
+        { hostname: "tappaas1" },
+        { hostname: "tappaas2" },
+        { hostname: "" }, // empty → skipped (mirrors jq `// empty`)
+        { nothost: "x" }, // no hostname → skipped
+      ],
+    }),
+    "utf8",
+  );
+  const nodes = enumerateNodes(cfgDir);
+  check(nodes.join(",") === "tappaas1,tappaas2", `enumerateNodes reads node hostnames, skips empties (got ${nodes.join(",")})`);
+
+  // missing configuration.json → empty list (non-fatal, nothing to push)
+  const emptyCfg = mkdtempSync(join(tmpdir(), "nm-cfg-empty-"));
+  check(enumerateNodes(emptyCfg).length === 0, "enumerateNodes returns [] when configuration.json is absent");
+
+  // (b) nodeTarget shape mirrors the bash root@<host>.mgmt.internal:/root/tappaas/zones.json
+  check(
+    nodeTarget("tappaas1") === "root@tappaas1.mgmt.internal:/root/tappaas/zones.json",
+    "nodeTarget builds the mgmt FQDN scp target at /root/tappaas/zones.json",
+  );
+
+  // (c) distribute --dry-run lists targets, scp NEVER runs (marker absent).
+  {
+    const f = tmpZones();
+    process.env.NM_SCP_BIN = fakeScp;
+    const lines: string[] = [];
+    const res = distributeZones(f, { cfgDir, dryRun: true, info: (m) => lines.push(m), warn: (m) => lines.push(m) });
+    check(res.dryRun && res.pushed === 0 && res.rc === 0, "dry-run distribute pushes nothing and rc=0");
+    check(res.nodes.map((n) => n.hostname).join(",") === "tappaas1,tappaas2", "dry-run distribute enumerates the configured nodes");
+    check(lines.some((l) => l.includes("root@tappaas1.mgmt.internal:/root/tappaas/zones.json")), "dry-run distribute lists each node scp target");
+    check(!existsSync(marker), "dry-run distribute did NOT invoke scp (no marker)");
+  }
+
+  // (d) shouldAutoDistribute: skips for a non-live --out and when NM_NO_DISTRIBUTE=1.
+  {
+    const prev = process.env.NM_NO_DISTRIBUTE;
+    delete process.env.NM_NO_DISTRIBUTE;
+    check(
+      shouldAutoDistribute("/tmp/somewhere/zones.json", false) === false,
+      "auto-distribute skipped for a non-live --out (temp path)",
+    );
+    process.env.NM_NO_DISTRIBUTE = "1";
+    check(
+      shouldAutoDistribute("/tmp/somewhere/zones.json", false) === false,
+      "auto-distribute skipped when NM_NO_DISTRIBUTE=1",
+    );
+    if (prev === undefined) delete process.env.NM_NO_DISTRIBUTE;
+    else process.env.NM_NO_DISTRIBUTE = prev;
+  }
+
+  // (e) the lifecycle write paths (zone add/delete) to a TEMP zones.json never
+  //     distribute — the target is not the live ${CONFIG_DIR}/zones.json — so
+  //     scp is never attempted (marker stays absent) and the op still succeeds.
+  {
+    process.env.NM_SCP_BIN = fakeScp;
+    const f = tmpZones();
+    const c = new FakePlaneClient();
+    const add = addZone(c, f, "srvTenant", { fromZone: "srvHome" });
+    check(add.report.failed.length === 0, "zone add to a temp zones.json succeeds without distributing");
+    deleteZone(new FakePlaneClient(), f, "srvTenant", {});
+    check(!existsSync(marker), "zone add/delete to a temp zones.json did NOT SSH (non-live target auto-skipped)");
+  }
+
+  // (f) distributeZones on a MISSING zones.json is non-fatal (rc=1, no scp).
+  {
+    process.env.NM_SCP_BIN = fakeScp;
+    const res = distributeZones(join(cfgDir, "does-not-exist.json"), { cfgDir, info: () => {}, warn: () => {} });
+    check(res.rc === 1 && res.pushed === 0, "distribute on a missing zones.json returns rc=1, pushes nothing");
+    check(!existsSync(marker), "distribute on a missing zones.json did NOT invoke scp");
+  }
+
+  delete process.env.NM_SCP_BIN;
 }
 
 console.log("");

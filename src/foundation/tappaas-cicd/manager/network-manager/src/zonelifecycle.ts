@@ -17,6 +17,7 @@
 // the lifecycle reconciles EVERY plane in dependency order — the switch (and
 // ap) plane is ALWAYS included.
 
+import { distributeZones, shouldAutoDistribute } from "./distribute";
 import { reconcileAll } from "./reconcile";
 import { PlaneClient, ReconcileReport, Zone } from "./types";
 import {
@@ -28,6 +29,16 @@ import {
   setZoneState,
 } from "./zones";
 
+// After network-manager writes the live zones.json, push it to every Proxmox
+// node so node-side tooling (Create-TAPPaaS-VM.sh) can resolve a zone's VLAN
+// (ADR-007 "S6 N3"). Skipped for non-live writes (temp zonesFile), when
+// --no-distribute is given, or NM_NO_DISTRIBUTE=1 (unit tests). Non-fatal per
+// node — a node being down warns but does not fail the lifecycle op.
+function maybeDistribute(zonesFile: string, noDistribute: boolean): void {
+  if (!shouldAutoDistribute(zonesFile, noDistribute)) return;
+  distributeZones(zonesFile);
+}
+
 export interface LifecycleResult {
   zone: string;
   vlantag?: number;
@@ -38,6 +49,7 @@ export interface LifecycleResult {
 export interface AddOpts extends AddZoneOpts {
   dryRun?: boolean;
   noActivate?: boolean; // author zones.json only; skip reconcile
+  noDistribute?: boolean; // skip pushing zones.json to nodes after the write
 }
 
 // Create a zone end to end. Authors the zones.json entry, then reconciles EVERY
@@ -56,8 +68,10 @@ export function addZone(
     return { zone: name, vlantag: zone.vlantag, report: emptyReport(false), dryRun: true };
   }
 
-  // Persist the authored entry (+ mgmt.access-to invariant) atomically.
+  // Persist the authored entry (+ mgmt.access-to invariant) atomically, then
+  // distribute the live zones.json to the Proxmox nodes (N3).
   saveZones(zonesFile, doc);
+  maybeDistribute(zonesFile, opts.noDistribute ?? false);
 
   if (opts.noActivate) {
     return { zone: name, vlantag: zone.vlantag, report: emptyReport(true), dryRun: false };
@@ -70,6 +84,7 @@ export function addZone(
 
 export interface DeleteOpts {
   dryRun?: boolean;
+  noDistribute?: boolean; // skip pushing zones.json to nodes after the write
 }
 
 // Delete a zone end to end. Disables it, reconciles ALL planes (so OPNsense
@@ -100,9 +115,11 @@ export function deleteZone(
   //    switch + ap always included (the #372/#373 fix).
   const report = reconcileAll(client, { apply: true, zonesFile });
 
-  // 3. remove the key (+ mgmt.access-to) and persist.
+  // 3. remove the key (+ mgmt.access-to) and persist, then distribute the
+  //    final live zones.json to the Proxmox nodes (N3).
   removeZone(doc, name);
   saveZones(zonesFile, doc);
+  maybeDistribute(zonesFile, opts.noDistribute ?? false);
 
   return { zone: name, vlantag: vt, report, dryRun: false };
 }

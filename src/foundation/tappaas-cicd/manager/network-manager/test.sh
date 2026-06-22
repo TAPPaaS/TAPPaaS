@@ -98,6 +98,37 @@ if [[ -f "${UNIT_TSCONFIG}" ]]; then
             ok "zones-check CLI exits non-zero on a dangling access-to reference"
         fi
         rm -rf -- "${ZC_DIR}" "${ZC_BAD_DIR}"
+
+        # ── zones-distribute CLI smoke (offline; NO real scp) ─────────────
+        # --dry-run lists the configured node targets from a fixture
+        # configuration.json without scp'ing. A sentinel scp bin proves no
+        # scp runs (its marker file must stay absent).
+        ZD_DIR="$(mktemp -d)"
+        cp "${HERE}/zones.json" "${ZD_DIR}/zones.json"
+        cat > "${ZD_DIR}/configuration.json" <<'JSON'
+{ "tappaas-nodes": [ { "hostname": "tappaas1" }, { "hostname": "tappaas2" } ] }
+JSON
+        ZD_MARKER="${ZD_DIR}/scp-was-run"
+        printf '#!/usr/bin/env bash\ntouch %q\nexit 0\n' "${ZD_MARKER}" > "${ZD_DIR}/scp"
+        chmod +x "${ZD_DIR}/scp"
+        ZD_OUT="$(run_ts "CONFIG_DIR='${ZD_DIR}' NM_SCP_BIN='${ZD_DIR}/scp' node '${DIST_TEST}/src/main.js' zones-distribute --zones '${ZD_DIR}/zones.json' --dry-run" 2>&1)"
+        if echo "${ZD_OUT}" | grep -q "root@tappaas1.mgmt.internal:/root/tappaas/zones.json" \
+            && echo "${ZD_OUT}" | grep -q "root@tappaas2.mgmt.internal:/root/tappaas/zones.json" \
+            && [[ ! -f "${ZD_MARKER}" ]]; then
+            ok "zones-distribute --dry-run enumerates node targets without scp"
+        else
+            bad "zones-distribute --dry-run did not list targets (or invoked scp)"
+        fi
+
+        # zones-init to a TEMP --out (non-live) must NOT distribute → no scp.
+        ZD_INIT_OUT="${ZD_DIR}/init.json"
+        run_ts "CONFIG_DIR='${ZD_DIR}' NM_SCP_BIN='${ZD_DIR}/scp' NM_TEMPLATE='${HERE}/zones.json' node '${DIST_TEST}/src/main.js' zones-init --name acme --from '${HERE}/zones.json' --out '${ZD_INIT_OUT}'" >/dev/null 2>&1
+        if [[ -f "${ZD_INIT_OUT}" && ! -f "${ZD_MARKER}" ]]; then
+            ok "zones-init to a temp --out writes the file but does NOT scp (non-live auto-skip)"
+        else
+            bad "zones-init to a temp --out attempted scp (should auto-skip non-live)"
+        fi
+        rm -rf -- "${ZD_DIR}"
     else
         bad "TypeScript unit tests failed to compile"
     fi
