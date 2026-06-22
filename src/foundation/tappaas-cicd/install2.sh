@@ -3,9 +3,13 @@
 # install tappass-cicd foundation in a barebone nixos vm
 #
 # Usage:
-#   install2.sh [--branch NAME] [--domain DOMAIN]
+#   install2.sh [--name N] [--branch NAME] [--domain DOMAIN]
 #
-# Arguments passed from install-platform.sh are forwarded to create-configuration.sh.
+# Site-native install (ADR-007): writes site.json (create-site.sh) + transforms
+# zones.json (network-manager zones-init --name) + creates the mgmt/default
+# environments (create-minimal-environments.sh). No configuration.json.
+# --name is the TAPPaaS system name (= default zone & default environment name);
+# if omitted it is derived from --domain's first label.
 
 # Strict mode: exit on error, undefined vars, pipe failures
 set -euo pipefail
@@ -22,22 +26,46 @@ if [ "$(hostname)" != "tappaas-cicd" ]; then
 fi
 
 # ── Argument parsing ─────────────────────────────────────────────────
-# These are passed through to create-configuration.sh
+# --domain/--branch pass through to create-site.sh; --name sets the TAPPaaS
+# system name (site.json .name = default zone & environment name).
 DOMAIN=""
 BRANCH=""
+NAME=""
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
+    --name)    NAME="${2:-}"; shift 2 ;;
     --domain)  DOMAIN="${2:-}"; shift 2 ;;
     --branch)  BRANCH="${2:-}"; shift 2 ;;
     *)         shift ;;  # Ignore unknown args
   esac
 done
 
+# Resolve the TAPPaaS system name. It becomes site.json .name, the default zone
+# name, and the default environment name, so it must be a valid zone name
+# (^[a-z][a-zA-Z0-9]*$ — camelCase, no hyphens). Derive from --domain's first
+# label when --name is omitted; sanitise either way.
+if [[ -z "$NAME" ]]; then
+  if [[ -n "$DOMAIN" ]]; then
+    NAME="${DOMAIN%%.*}"
+    _info "No --name given; deriving TAPPaaS system name '$NAME' from domain '$DOMAIN'."
+  else
+    NAME="tappaas"
+    _warn "No --name or --domain given; defaulting TAPPaaS system name to '$NAME' (override with --name)."
+  fi
+fi
+# Sanitise to a valid zone/env name: strip non-alphanumerics, lowercase the
+# leading character. (zones-init validates again and will fail loudly if empty.)
+NAME="$(printf '%s' "$NAME" | tr -cd '[:alnum:]')"
+NAME="$(printf '%s' "${NAME:0:1}" | tr '[:upper:]' '[:lower:]')${NAME:1}"
+[[ "$NAME" =~ ^[a-z][a-zA-Z0-9]*$ ]] \
+  || { _error "Cannot form a valid TAPPaaS system name (^[a-z][a-zA-Z0-9]*\$) from '--name'/'--domain'. Pass --name explicitly."; exit 1; }
+_info "TAPPaaS system name: ${NAME}"
+
 #
 # Bootstrap default: use tappaas1 as the primary node for initial cluster discovery.
 # Once configuration.json exists, scripts use get_primary_node_fqdn() instead.
-# For legacy systems with different hostnames, pass --primary-node to create-configuration.sh.
+# For legacy systems with different hostnames, pass --primary-node to create-site.sh.
 MGMTVLAN="mgmt"
 NODE1_FQDN="${TAPPAAS_PRIMARY_NODE:-tappaas1}.$MGMTVLAN.internal"
 export FIREWALL_FQDN="firewall.$MGMTVLAN.internal"  # Used by sourced scripts
@@ -79,16 +107,17 @@ for rcfile in /home/tappaas/.profile /home/tappaas/.bashrc; do
     fi
 done
 
-# create the configuration.json
-# Pass --domain and --branch if provided by install-platform.sh
-CREATE_CONFIG_ARGS=()
-[[ -n "$DOMAIN" ]] && CREATE_CONFIG_ARGS+=(--domain "$DOMAIN")
-[[ -n "$BRANCH" ]] && CREATE_CONFIG_ARGS+=(--branch "$BRANCH")
+# create site.json (site-native — no configuration.json). create-site.sh
+# discovers the cluster and writes site.json; it validates via its sibling
+# validate-site.sh, so it works here before the ~/bin symlinks exist.
+CREATE_SITE_ARGS=(--name "$NAME")
+[[ -n "$DOMAIN" ]] && CREATE_SITE_ARGS+=(--domain "$DOMAIN")
+[[ -n "$BRANCH" ]] && CREATE_SITE_ARGS+=(--branch "$BRANCH")
 
-if [ -f ./scripts/create-configuration.sh ]; then
-  ./scripts/create-configuration.sh "${CREATE_CONFIG_ARGS[@]}"
+if [ -f ./manager/site-manager/create-site.sh ]; then
+  ./manager/site-manager/create-site.sh "${CREATE_SITE_ARGS[@]}"
 else
-  _error "./scripts/create-configuration.sh not found"
+  _error "./manager/site-manager/create-site.sh not found"
   exit 1
 fi
 
@@ -162,6 +191,28 @@ fi
 if [ -f scripts/zone-controller.sh ]; then
   rm -f /home/tappaas/bin/zone-controller 2>/dev/null || true
   ln -s "$(realpath scripts/zone-controller.sh)" /home/tappaas/bin/zone-controller
+fi
+
+# ── Site-native zones + environments (ADR-007 S6) ────────────────────
+# The managers are built+linked now (above), so transform zones.json for THIS
+# installation — network-manager zones-init renames the distributed 'srv' zone to
+# the system name, inactivates the unused legacy zones, and rewrites references —
+# and create the always-required mgmt + default (<NAME>) environments. The raw
+# zones.json seeded above is overwritten by the transform; zones.json.orig stays
+# the raw template (the 3-way-merge baseline, so the rename is preserved on
+# updates). Guarded on the default environment file so a re-run does not clobber a
+# customised zones.json.
+if [ ! -f "/home/tappaas/config/environments/${NAME}.json" ]; then
+  _info "Initialising zones for '${NAME}' (network-manager zones-init)..."
+  /home/tappaas/bin/network-manager zones-init --name "$NAME" --force \
+    || _error "  zones-init reported a non-zero rc"
+  _info "Creating the mgmt + ${NAME} environments..."
+  CME_ARGS=(--name "$NAME")
+  [[ -n "$DOMAIN" ]] && CME_ARGS+=(--domain "$DOMAIN")
+  /home/tappaas/bin/create-minimal-environments.sh "${CME_ARGS[@]}" \
+    || _error "  create-minimal-environments reported a non-zero rc"
+else
+  _info "Environments already initialised (config/environments/${NAME}.json exists) — skipping zones-init/environments."
 fi
 
 # Install the cluster and firewall jsons

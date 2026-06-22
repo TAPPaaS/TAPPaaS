@@ -28,6 +28,10 @@
 #   --name <N>         TAPPaaS system name (= default zone & default env name).
 #                      If omitted: derived from site.json '.name', else from the
 #                      first-domain label in configuration.json, else an error.
+#   --domain <D>       public domain for the default (<N>) environment's
+#                      domains.primary. If omitted: configuration.json (pre-cutover),
+#                      else the default env is created with no domain (internal only;
+#                      set it later via environment-manager).
 #   --config-dir DIR   config directory (default: ${TAPPAAS_CONFIG:-/home/tappaas/config})
 #   --out-dir DIR      output environments dir (default: <config-dir>/environments)
 #   --force            overwrite existing mgmt.json / <N>.json
@@ -65,6 +69,7 @@ _SELF="$(readlink -f "${BASH_SOURCE[0]}")"
 CONFIG_DIR="${TAPPAAS_CONFIG:-/home/tappaas/config}"
 OUT_DIR=""
 NAME=""
+DOMAIN_OVERRIDE=""
 FORCE=false
 
 usage() {
@@ -78,6 +83,9 @@ parse_args() {
             --name)
                 [[ -n "${2:-}" ]] || die "--name requires a value"
                 NAME="$2"; shift 2 ;;
+            --domain)
+                [[ -n "${2:-}" ]] || die "--domain requires a value"
+                DOMAIN_OVERRIDE="$2"; shift 2 ;;
             --config-dir)
                 [[ -n "${2:-}" ]] || die "--config-dir requires a path argument"
                 CONFIG_DIR="$2"; shift 2 ;;
@@ -185,7 +193,7 @@ main() {
     [[ -n "$owner" ]] || warn "No organization found under ${CONFIG_DIR}/people/organizations/ — ownerOrg left empty in bootstrap environments."
 
     local domain
-    domain="$(default_domain)"
+    domain="${DOMAIN_OVERRIDE:-$(default_domain)}"
 
     local display
     display="$(printf '%s%s' "$(printf '%s' "${name:0:1}" | tr '[:lower:]' '[:upper:]')" "${name:1}")"
