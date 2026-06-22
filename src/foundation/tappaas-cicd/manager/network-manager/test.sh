@@ -77,6 +77,27 @@ if [[ -f "${UNIT_TSCONFIG}" ]]; then
             bad "zones-init CLI smoke FAILED"
         fi
         rm -rf -- "$(dirname "${ZINIT_OUT}")"
+
+        # ── zones-check CLI smoke (offline; temp fixtures, never live config) ──
+        # Good fixture (the distributed template, default-active mgmt) exits 0;
+        # a fixture with a dangling access-to ref exits non-zero. The temp
+        # config-dir holds only zones.json so the installation check is a no-op.
+        ZC_DIR="$(mktemp -d)"
+        cp "${HERE}/zones.json" "${ZC_DIR}/zones.json"
+        if run_ts "node '${DIST_TEST}/src/main.js' zones-check --zones '${ZC_DIR}/zones.json' --config-dir '${ZC_DIR}'" >/dev/null 2>&1; then
+            ok "zones-check CLI exits 0 on a well-formed zones.json"
+        else
+            bad "zones-check CLI unexpectedly failed on a good fixture"
+        fi
+        # Inject a dangling access-to ref → must exit non-zero.
+        ZC_BAD_DIR="$(mktemp -d)"
+        run_ts "node -e 'const fs=require(\"fs\");const z=JSON.parse(fs.readFileSync(\"${ZC_DIR}/zones.json\",\"utf8\"));z.dmz[\"access-to\"].push(\"nosuchzone\");fs.writeFileSync(\"${ZC_BAD_DIR}/zones.json\",JSON.stringify(z));'" >/dev/null 2>&1
+        if run_ts "node '${DIST_TEST}/src/main.js' zones-check --zones '${ZC_BAD_DIR}/zones.json' --config-dir '${ZC_BAD_DIR}'" >/dev/null 2>&1; then
+            bad "zones-check CLI did NOT fail on a dangling reference"
+        else
+            ok "zones-check CLI exits non-zero on a dangling access-to reference"
+        fi
+        rm -rf -- "${ZC_DIR}" "${ZC_BAD_DIR}"
     else
         bad "TypeScript unit tests failed to compile"
     fi

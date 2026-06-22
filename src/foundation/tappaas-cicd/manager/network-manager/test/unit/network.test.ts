@@ -29,6 +29,7 @@ import {
 } from "../../src/zones";
 import { reconcileAll } from "../../src/reconcile";
 import { addZone, deleteZone } from "../../src/zonelifecycle";
+import { runChecks } from "../../src/zonescheck";
 import { FakePlaneClient } from "./fake-plane-client";
 
 let passed = 0;
@@ -351,6 +352,168 @@ function tmpZones(): string {
     edgeThrew = true;
   }
   check(edgeThrew, "template missing the 'guest' key is rejected with a clear error");
+}
+
+// ── 10. zones-check consistency audit (offline; temp fixtures) ────────
+// Read-only checks against an in-memory doc + a temp config-dir. The good
+// fixture passes; targeted mutations each produce a hard error; --strict
+// promotes an Inactive-ref warning to an error.
+{
+  // Build a self-contained good doc (mgmt Active, dmz, two service zones).
+  function goodRaw(): Record<string, unknown> {
+    return {
+      _README: { _comment: "doc block" },
+      mgmt: {
+        type: "Management",
+        state: "Manual",
+        typeId: "0",
+        subId: "0",
+        vlantag: 0,
+        ip: "10.0.0.0/24",
+        bridge: "lan",
+        "access-to": ["internet", "srvHome", "dmz"],
+        "pinhole-allowed-from": [],
+      },
+      dmz: {
+        type: "DMZ",
+        state: "Mandatory",
+        typeId: "6",
+        subId: "10",
+        vlantag: 610,
+        ip: "10.6.0.0/24",
+        bridge: "lan",
+        "access-to": ["internet"],
+        "pinhole-allowed-from": ["internet"],
+      },
+      srvHome: {
+        type: "Service",
+        state: "Active",
+        typeId: "2",
+        subId: "10",
+        vlantag: 210,
+        ip: "10.2.10.0/24",
+        bridge: "lan",
+        "access-to": ["internet", "dmz"],
+        "pinhole-allowed-from": ["dmz"],
+      },
+      srvOff: {
+        type: "Service",
+        state: "Inactive",
+        typeId: "2",
+        subId: "20",
+        vlantag: 220,
+        ip: "10.2.20.0/24",
+        bridge: "lan",
+        "access-to": ["internet"],
+        "pinhole-allowed-from": [],
+      },
+    };
+  }
+
+  // Write a doc to a temp zones.json + return a fresh temp config-dir.
+  function writeDoc(raw: Record<string, unknown>): { zonesFile: string; configDir: string } {
+    const d = mkdtempSync(join(tmpdir(), "nm-check-"));
+    const zonesFile = join(d, "zones.json");
+    writeFileSync(zonesFile, JSON.stringify(raw, null, 2), "utf8");
+    return { zonesFile, configDir: d };
+  }
+  function addModule(configDir: string, name: string, zone: string, field: "zone" | "zone0"): void {
+    writeFileSync(join(configDir, name), JSON.stringify({ vmname: name.replace(/\.json$/, ""), [field]: zone }), "utf8");
+  }
+
+  // (a) good fixture passes (0 errors)
+  {
+    const { zonesFile, configDir } = writeDoc(goodRaw());
+    addModule(configDir, "app.json", "srvHome", "zone0");
+    const r = runChecks(loadZones(zonesFile), configDir, false);
+    check(r.errors === 0, `good fixture: 0 errors (got ${r.errors}; warnings ${r.warnings})`);
+  }
+
+  // (b) dangling access-to ref → hard error
+  {
+    const raw = goodRaw();
+    (raw.srvHome as Record<string, unknown>)["access-to"] = ["internet", "nosuchzone"];
+    const { zonesFile, configDir } = writeDoc(raw);
+    const r = runChecks(loadZones(zonesFile), configDir, false);
+    check(r.errors > 0, `dangling access-to ref → hard error (got ${r.errors})`);
+  }
+
+  // (c) duplicate VLAN tag → hard error
+  {
+    const raw = goodRaw();
+    (raw.srvOff as Record<string, unknown>).vlantag = 210; // collides with srvHome
+    const { zonesFile, configDir } = writeDoc(raw);
+    const r = runChecks(loadZones(zonesFile), configDir, false);
+    check(r.errors > 0, `duplicate VLAN tag → hard error (got ${r.errors})`);
+  }
+
+  // (c2) duplicate subId within a type band → hard error
+  {
+    const raw = goodRaw();
+    (raw.srvOff as Record<string, unknown>).subId = "10"; // band 2 already uses subId 10
+    const { zonesFile, configDir } = writeDoc(raw);
+    const r = runChecks(loadZones(zonesFile), configDir, false);
+    check(r.errors > 0, `duplicate subId in a type band → hard error (got ${r.errors})`);
+  }
+
+  // (d) missing mgmt → hard error
+  {
+    const raw = goodRaw();
+    delete raw.mgmt;
+    // drop the now-dangling mgmt ref so we isolate the mgmt-invariant error
+    const { zonesFile, configDir } = writeDoc(raw);
+    const r = runChecks(loadZones(zonesFile), configDir, false);
+    check(r.errors > 0, `missing mgmt zone → hard error (got ${r.errors})`);
+  }
+
+  // (d2) mgmt present but Inactive → hard error
+  {
+    const raw = goodRaw();
+    (raw.mgmt as Record<string, unknown>).state = "Inactive";
+    const { zonesFile, configDir } = writeDoc(raw);
+    const r = runChecks(loadZones(zonesFile), configDir, false);
+    check(r.errors > 0, `mgmt zone Inactive → hard error (got ${r.errors})`);
+  }
+
+  // (e) module config naming a non-existent zone → hard error
+  {
+    const { zonesFile, configDir } = writeDoc(goodRaw());
+    addModule(configDir, "ghost.json", "nowhere", "zone0");
+    const r = runChecks(loadZones(zonesFile), configDir, false);
+    check(r.errors > 0, `module config zone missing from zones.json → hard error (got ${r.errors})`);
+  }
+
+  // (e2) module config naming an Inactive zone → hard error
+  {
+    const { zonesFile, configDir } = writeDoc(goodRaw());
+    addModule(configDir, "off.json", "srvOff", "zone");
+    const r = runChecks(loadZones(zonesFile), configDir, false);
+    check(r.errors > 0, `module config zone Inactive → hard error (got ${r.errors})`);
+  }
+
+  // (f) Inactive-ref is a NOTE in normal mode but the check is otherwise clean,
+  //     and --strict does NOT turn a note into an error (notes are informational).
+  //     An Inactive-ref must not block; a MISSING field warns, and --strict
+  //     promotes THAT warning to an error.
+  {
+    const raw = goodRaw();
+    // srvHome references srvOff (Inactive) — allowed, noted, not an error.
+    (raw.srvHome as Record<string, unknown>)["access-to"] = ["internet", "dmz", "srvOff"];
+    const { zonesFile, configDir } = writeDoc(raw);
+    const r = runChecks(loadZones(zonesFile), configDir, false);
+    check(r.errors === 0, `Inactive-zone ref is allowed (noted), not an error (got ${r.errors})`);
+  }
+
+  // (g) --strict promotes a missing-field WARNING to an error.
+  {
+    const raw = goodRaw();
+    delete (raw.srvOff as Record<string, unknown>)["access-to"]; // → missing-field warning
+    const { zonesFile, configDir } = writeDoc(raw);
+    const lenient = runChecks(loadZones(zonesFile), configDir, false);
+    check(lenient.errors === 0 && lenient.warnings > 0, `missing field warns (lenient): warn ${lenient.warnings}, err ${lenient.errors}`);
+    const strict = runChecks(loadZones(zonesFile), configDir, true);
+    check(strict.errors > 0, `--strict promotes the warning to an error (got ${strict.errors})`);
+  }
 }
 
 console.log("");

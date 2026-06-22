@@ -179,6 +179,23 @@ if [ -f /home/tappaas/bin/apply-zones-merge.sh ] \
   /home/tappaas/bin/apply-zones-merge.sh || warn "  zones.json merge reported an error — continuing"
 fi
 
+# --- Consistency-check zones.json against the installation (ADR-007 S6 N4) ---
+# Report-only audit run at every update: validates zones.json is well-formed,
+# VLAN/subId-unique, referentially intact, has an active mgmt zone, and that
+# every installed module's zone exists and is Active. Non-fatal by design — a
+# non-zero result is warned and the update continues. No-ops if network-manager
+# is not yet on PATH (first install before its bin is linked above).
+if command -v network-manager >/dev/null 2>&1 \
+   && [ -f /home/tappaas/config/zones.json ]; then
+  echo ""
+  info "Checking zones.json consistency (network-manager zones-check)..."
+  network-manager zones-check 2>&1 | while IFS= read -r line; do info "  $line"; done
+  # PIPESTATUS[0] is the zones-check rc (the while loop never fails).
+  if [ "${PIPESTATUS[0]}" -ne 0 ]; then
+    warn "  zones-check reported errors — continuing (report-only; review the lines above)"
+  fi
+fi
+
 # --- Build and install opnsense-controller ---
 echo ""
 info "Building the opnsense-controller project..."

@@ -35,6 +35,7 @@ declare module "fs" {
   export function renameSync(oldPath: string, newPath: string): void;
   export function mkdtempSync(prefix: string): string;
   export function copyFileSync(src: string, dest: string): void;
+  export function readdirSync(path: string): string[];
 }
 
 // ── node:path ──────────────────────────────────────────────────────────

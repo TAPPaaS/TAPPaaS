@@ -15,9 +15,12 @@ import { Zone, ZonesDoc } from "./types";
 export const ZONE_SUB_MAX = 99;
 export const ZONE_SUB_MIN = 60;
 
+export function defaultConfigDir(): string {
+  return process.env.TAPPAAS_CONFIG ?? "/home/tappaas/config";
+}
+
 export function defaultZonesFile(): string {
-  const base = process.env.TAPPAAS_CONFIG ?? "/home/tappaas/config";
-  return join(base, "zones.json");
+  return join(defaultConfigDir(), "zones.json");
 }
 
 // The distributed zones.json TEMPLATE shipped alongside the bin. The compiled

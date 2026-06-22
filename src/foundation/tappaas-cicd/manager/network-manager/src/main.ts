@@ -27,6 +27,7 @@ import { CliPlaneClient } from "./planes";
 import { reconcileAll } from "./reconcile";
 import { Plane, PLANE_ORDER, PlaneClient, ReconcileReport } from "./types";
 import {
+  defaultConfigDir,
   defaultTemplateFile,
   defaultZonesFile,
   getZone,
@@ -36,6 +37,7 @@ import {
 } from "./zones";
 import { addZone, deleteZone } from "./zonelifecycle";
 import { parseTemplate, zonesInit } from "./zonesinit";
+import { zonesCheck } from "./zonescheck";
 
 const VERSION = "0.1.0";
 
@@ -67,6 +69,7 @@ Usage:
   network-manager zone delete <name> [--check]
   network-manager reconcile [--apply] [--only <plane>]
   network-manager zones-init --name <N> [--from <tpl>] [--out <f>] [--force]
+  network-manager zones-check [--zones <file>] [--config-dir <dir>] [--strict]
 
 zone add options:
   --from-zone <src>   inherit type/typeId/bridge/access-to/pinhole from <src>
@@ -87,6 +90,11 @@ zones-init options (install-time template transform; offline):
   --from <tpl>        source template (default: zones.json shipped with the bin)
   --out <f>           output file (default: \$TAPPAAS_CONFIG/zones.json)
   --force             re-apply from the template even if already initialised
+
+zones-check options (offline consistency audit; read-only; run at update):
+  --zones <file>      zones.json to check (default \$TAPPAAS_CONFIG/zones.json)
+  --config-dir <dir>  installed module configs to cross-check (default \$TAPPAAS_CONFIG)
+  --strict            promote warnings to errors
 
 common:
   --zones-file <f>    default \$TAPPAAS_CONFIG/zones.json
@@ -113,6 +121,9 @@ interface Opts {
   from?: string;
   out?: string;
   force: boolean;
+  // zones-check
+  configDir: string;
+  strict: boolean;
 }
 
 function isPlane(s: string): s is Plane {
@@ -127,6 +138,8 @@ function parseOpts(args: string[]): Opts {
     check: false,
     noActivate: false,
     force: false,
+    configDir: defaultConfigDir(),
+    strict: false,
   };
   for (let i = 0; i < args.length; i++) {
     const a = args[i];
@@ -138,7 +151,14 @@ function parseOpts(args: string[]): Opts {
     };
     switch (a) {
       case "--zones-file":
+      case "--zones":
         o.zonesFile = next();
+        break;
+      case "--config-dir":
+        o.configDir = next();
+        break;
+      case "--strict":
+        o.strict = true;
         break;
       case "--apply":
         o.apply = true;
@@ -347,6 +367,15 @@ function cmdZonesInit(opts: Opts): void {
   info(`  ${GN}✓${CL} zones-init: wrote '${out}' (default zone '${name}', '${name}-private', '${name}-guest')`);
 }
 
+// ── zones-check command (offline consistency audit; read-only) ────────
+// Returns the check exit code (0 ok / warnings-only; 1 on hard errors).
+function cmdZonesCheck(opts: Opts): number {
+  return zonesCheck(
+    { zonesFile: opts.zonesFile, configDir: opts.configDir, strict: opts.strict },
+    info,
+  );
+}
+
 // Atomic JSON write (temp → validate-parse → rename), mirroring zones.ts's
 // saveZones safety so the live target is never left half-written.
 function writeJsonAtomic(file: string, raw: Record<string, unknown>): void {
@@ -384,6 +413,8 @@ export function run(argv: string[], client?: PlaneClient): number {
       case "zones-init":
         cmdZonesInit(opts);
         return 0;
+      case "zones-check":
+        return cmdZonesCheck(opts);
       default:
         usage();
         die(`Unknown command: ${cmd}`);
