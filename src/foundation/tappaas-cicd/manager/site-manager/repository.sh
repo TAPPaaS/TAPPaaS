@@ -6,6 +6,11 @@
 # removing, modifying, and listing external module repositories that
 # contain TAPPaaS modules alongside the main TAPPaaS repository.
 #
+# Storage: the repository list is the canonical `.repositories` array in
+# site.json (ADR-007). Reads fall back to the legacy
+# configuration.json .tappaas.repositories while both files coexist; writes
+# always target site.json .repositories.
+#
 # Usage: repository.sh <command> [options]
 #
 # Commands:
@@ -26,7 +31,13 @@ set -euo pipefail
 
 SCRIPT_NAME="$(basename "${BASH_SOURCE[0]}")"
 readonly SCRIPT_NAME
-readonly CONFIG_DIR="/home/tappaas/config"
+# CONFIG_DIR is overridable from the environment so tests can point at an
+# isolated fixture dir (default: the live config dir).
+CONFIG_DIR="${CONFIG_DIR:-/home/tappaas/config}"
+readonly CONFIG_DIR
+# Canonical repository store: site.json .repositories (ADR-007). The legacy
+# configuration.json .tappaas.repositories is only consulted as a read fallback.
+readonly SITE_FILE="${CONFIG_DIR}/site.json"
 readonly CONFIG_FILE="${CONFIG_DIR}/configuration.json"
 readonly CLONE_DIR="/home/tappaas"
 
@@ -104,24 +115,38 @@ derive_repo_name() {
     echo "${name}"
 }
 
-# Check that configuration.json exists and is valid
+# Check that site.json exists and is valid (the canonical repository store).
 validate_config() {
-    if [[ ! -f "${CONFIG_FILE}" ]]; then
-        die "Configuration file not found: ${CONFIG_FILE}"
+    if [[ ! -f "${SITE_FILE}" ]]; then
+        die "Site configuration file not found: ${SITE_FILE}"
     fi
-    if ! jq empty "${CONFIG_FILE}" 2>/dev/null; then
-        die "Invalid JSON in configuration file: ${CONFIG_FILE}"
+    if ! jq empty "${SITE_FILE}" 2>/dev/null; then
+        die "Invalid JSON in site configuration file: ${SITE_FILE}"
     fi
 }
 
-# Get a repository entry from configuration.json by name
+# Echo the repositories JSON array. Reads site.json .repositories if present and
+# a non-empty array; otherwise falls back to configuration.json
+# .tappaas.repositories; otherwise []. Read-only dual-state helper for list/get.
+get_repositories() {
+    local arr=""
+    if [[ -f "${SITE_FILE}" ]]; then
+        arr=$(jq -c '.repositories | select(type == "array" and length > 0)' "${SITE_FILE}" 2>/dev/null) || arr=""
+    fi
+    if [[ -z "${arr}" && -f "${CONFIG_FILE}" ]]; then
+        arr=$(jq -c '.tappaas.repositories | select(type == "array" and length > 0)' "${CONFIG_FILE}" 2>/dev/null) || arr=""
+    fi
+    [[ -n "${arr}" ]] || arr="[]"
+    printf '%s\n' "${arr}"
+}
+
+# Get a repository entry by name (reads site.json, falls back to config).
 # Arguments: <name>
 # Outputs: JSON object or "null"
 get_repo_by_name() {
     local name="$1"
-    jq -r --arg n "${name}" \
-        '.tappaas.repositories // [] | map(select(.name == $n)) | .[0] // "null"' \
-        "${CONFIG_FILE}" 2>/dev/null
+    get_repositories | jq -r --arg n "${name}" \
+        'map(select(.name == $n)) | .[0] // "null"' 2>/dev/null
 }
 
 # Get all installed modules whose location is under a given path
@@ -136,7 +161,7 @@ get_modules_in_repo() {
 
         # Skip non-module files
         case "${module_name}" in
-            configuration|zones|module-fields) continue ;;
+            configuration|site|zones|module-fields) continue ;;
         esac
         # Skip .orig backup files
         [[ "${config_file}" == *.orig ]] && continue
@@ -228,18 +253,18 @@ get_repo_vmids() {
     fi
 }
 
-# Update configuration.json atomically using jq
+# Update site.json atomically using jq (canonical repository store).
 # Arguments: <jq-filter> [jq-args...]
 update_config() {
     local filter="$1"
     shift
     local tmp_file
     tmp_file=$(mktemp)
-    if jq "$@" "${filter}" "${CONFIG_FILE}" > "${tmp_file}" 2>/dev/null; then
-        mv "${tmp_file}" "${CONFIG_FILE}"
+    if jq "$@" "${filter}" "${SITE_FILE}" > "${tmp_file}" 2>/dev/null; then
+        mv "${tmp_file}" "${SITE_FILE}"
     else
         rm -f "${tmp_file}"
-        die "Failed to update configuration.json"
+        die "Failed to update site.json"
     fi
 }
 
@@ -383,7 +408,7 @@ cmd_add() {
         fi
 
         # Record the catalog path actually found (relative to repo root) so the
-        # configuration.json entry points at the real file.
+        # site.json entry points at the real file.
         catalog="${modules_json#"${repo_path}/"}"
 
         local module_count
@@ -399,14 +424,18 @@ cmd_add() {
     new_vmids=$(get_repo_vmids "${repo_path}")
     local has_conflicts=false
 
-    # Get VMIDs from all existing repos
+    # Snapshot the existing repositories (site.json, config fallback) once.
+    local repos_json
+    repos_json=$(get_repositories)
     local repo_count
-    repo_count=$(jq '.tappaas.repositories // [] | length' "${CONFIG_FILE}" 2>/dev/null || echo "0")
+    repo_count=$(echo "${repos_json}" | jq 'length' 2>/dev/null || echo "0")
+
+    # Get VMIDs from all existing repos
     for i in $(seq 0 $(( repo_count - 1 ))); do
         local existing_path
-        existing_path=$(jq -r ".tappaas.repositories[${i}].path" "${CONFIG_FILE}")
+        existing_path=$(echo "${repos_json}" | jq -r ".[${i}].path")
         local existing_name
-        existing_name=$(jq -r ".tappaas.repositories[${i}].name" "${CONFIG_FILE}")
+        existing_name=$(echo "${repos_json}" | jq -r ".[${i}].name")
         local existing_vmids
         existing_vmids=$(get_repo_vmids "${existing_path}")
 
@@ -423,9 +452,9 @@ cmd_add() {
     new_modules=$(list_repo_modules "${repo_path}")
     for i in $(seq 0 $(( repo_count - 1 ))); do
         local existing_path
-        existing_path=$(jq -r ".tappaas.repositories[${i}].path" "${CONFIG_FILE}")
+        existing_path=$(echo "${repos_json}" | jq -r ".[${i}].path")
         local existing_name
-        existing_name=$(jq -r ".tappaas.repositories[${i}].name" "${CONFIG_FILE}")
+        existing_name=$(echo "${repos_json}" | jq -r ".[${i}].name")
         local existing_modules
         existing_modules=$(list_repo_modules "${existing_path}")
 
@@ -452,18 +481,18 @@ cmd_add() {
     tmp_file=$(mktemp)
     if jq --arg name "${name}" --arg url "${url}" --arg branch "${branch}" \
           --arg path "${repo_path}" --arg managed "${managed}" --arg catalog "${catalog}" \
-        '.tappaas.repositories = (.tappaas.repositories // []) + [
+        '.repositories = (.repositories // []) + [
             ({"name": $name, "url": $url, "branch": $branch, "path": $path, "managed": $managed})
             + (if $managed == "full" then {"catalog": $catalog} else {} end)
          ]' \
-        "${CONFIG_FILE}" > "${tmp_file}" 2>/dev/null; then
-        mv "${tmp_file}" "${CONFIG_FILE}"
+        "${SITE_FILE}" > "${tmp_file}" 2>/dev/null; then
+        mv "${tmp_file}" "${SITE_FILE}"
     else
         rm -f "${tmp_file}"
-        die "Failed to update configuration.json"
+        die "Failed to update site.json"
     fi
 
-    info "  ${GN}✓${CL} Repository added to configuration.json"
+    info "  ${GN}✓${CL} Repository added to site.json"
 
     # ── Done ─────────────────────────────────────────────────────────
     echo ""
@@ -556,15 +585,15 @@ cmd_remove() {
     local tmp_file
     tmp_file=$(mktemp)
     if jq --arg name "${name}" \
-        '.tappaas.repositories = [.tappaas.repositories[] | select(.name != $name)]' \
-        "${CONFIG_FILE}" > "${tmp_file}" 2>/dev/null; then
-        mv "${tmp_file}" "${CONFIG_FILE}"
+        '.repositories = [(.repositories // [])[] | select(.name != $name)]' \
+        "${SITE_FILE}" > "${tmp_file}" 2>/dev/null; then
+        mv "${tmp_file}" "${SITE_FILE}"
     else
         rm -f "${tmp_file}"
-        die "Failed to update configuration.json"
+        die "Failed to update site.json"
     fi
 
-    info "  ${GN}✓${CL} Repository removed from configuration.json"
+    info "  ${GN}✓${CL} Repository removed from site.json"
 
     # ── Done ─────────────────────────────────────────────────────────
     echo ""
@@ -677,12 +706,12 @@ cmd_modify() {
         local tmp_file
         tmp_file=$(mktemp)
         if jq --arg name "${name}" --arg branch "${new_branch}" \
-            '.tappaas.repositories = [.tappaas.repositories[] | if .name == $name then .branch = $branch else . end]' \
-            "${CONFIG_FILE}" > "${tmp_file}" 2>/dev/null; then
-            mv "${tmp_file}" "${CONFIG_FILE}"
+            '.repositories = [(.repositories // [])[] | if .name == $name then .branch = $branch else . end]' \
+            "${SITE_FILE}" > "${tmp_file}" 2>/dev/null; then
+            mv "${tmp_file}" "${SITE_FILE}"
         else
             rm -f "${tmp_file}"
-            die "Failed to update configuration.json"
+            die "Failed to update site.json"
         fi
 
         info "  ${GN}✓${CL} Configuration updated"
@@ -809,12 +838,12 @@ cmd_modify() {
     tmp_file=$(mktemp)
     if jq --arg name "${name}" --arg new_url "${new_url}" --arg branch "${target_branch}" \
         --arg new_name "${new_name}" --arg new_path "${new_path}" \
-        '.tappaas.repositories = [.tappaas.repositories[] | if .name == $name then .name = $new_name | .url = $new_url | .branch = $branch | .path = $new_path else . end]' \
-        "${CONFIG_FILE}" > "${tmp_file}" 2>/dev/null; then
-        mv "${tmp_file}" "${CONFIG_FILE}"
+        '.repositories = [(.repositories // [])[] | if .name == $name then .name = $new_name | .url = $new_url | .branch = $branch | .path = $new_path else . end]' \
+        "${SITE_FILE}" > "${tmp_file}" 2>/dev/null; then
+        mv "${tmp_file}" "${SITE_FILE}"
     else
         rm -f "${tmp_file}"
-        die "Failed to update configuration.json"
+        die "Failed to update site.json"
     fi
 
     info "  ${GN}✓${CL} Configuration updated"
@@ -834,8 +863,10 @@ cmd_list() {
     info "${BOLD}╚══════════════════════════════════════════════╝${CL}"
     echo ""
 
+    local repos_json
+    repos_json=$(get_repositories)
     local repo_count
-    repo_count=$(jq '.tappaas.repositories // [] | length' "${CONFIG_FILE}" 2>/dev/null || echo "0")
+    repo_count=$(echo "${repos_json}" | jq 'length' 2>/dev/null || echo "0")
 
     if [[ "${repo_count}" -eq 0 ]]; then
         info "  No repositories configured."
@@ -847,10 +878,10 @@ cmd_list() {
 
     for i in $(seq 0 $(( repo_count - 1 ))); do
         local r_name r_url r_branch r_path r_modules
-        r_name=$(jq -r ".tappaas.repositories[${i}].name" "${CONFIG_FILE}")
-        r_url=$(jq -r ".tappaas.repositories[${i}].url" "${CONFIG_FILE}")
-        r_branch=$(jq -r ".tappaas.repositories[${i}].branch" "${CONFIG_FILE}")
-        r_path=$(jq -r ".tappaas.repositories[${i}].path" "${CONFIG_FILE}")
+        r_name=$(echo "${repos_json}" | jq -r ".[${i}].name")
+        r_url=$(echo "${repos_json}" | jq -r ".[${i}].url")
+        r_branch=$(echo "${repos_json}" | jq -r ".[${i}].branch")
+        r_path=$(echo "${repos_json}" | jq -r ".[${i}].path")
 
         if [[ -d "${r_path}" ]]; then
             r_modules=$(count_repo_modules "${r_path}")

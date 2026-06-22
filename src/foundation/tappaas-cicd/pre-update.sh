@@ -13,50 +13,49 @@ NODE1_FQDN="$(get_primary_node_fqdn)"
 FIREWALL_FQDN="firewall.$MGMTVLAN.internal"
 info "Starting TAPPaaS-CICD module update for VM: $VMNAME on node: $NODE"
 
-# Pull all tracked repositories from configuration.json
+# Pull all tracked repositories. The repository list is now canonical in
+# site.json .repositories; get_repositories() reads it there first and falls
+# back to the legacy configuration.json .tappaas.repositories while both files
+# coexist (so updates keep pulling after configuration.json is deleted).
 CONFIG_FILE="/home/tappaas/config/configuration.json"
-if [ -f "$CONFIG_FILE" ]; then
-  # Migrate old format: convert upstreamGit+branch to repositories array
-  if jq -e '.tappaas.upstreamGit' "$CONFIG_FILE" >/dev/null 2>&1; then
-    echo ""
-    info "Migrating configuration.json from upstreamGit/branch to repositories format..."
-    OLD_URL=$(jq -r '.tappaas.upstreamGit' "$CONFIG_FILE")
-    OLD_BRANCH=$(jq -r '.tappaas.branch // "stable"' "$CONFIG_FILE")
-    OLD_NAME="${OLD_URL##*/}"
-    OLD_NAME="${OLD_NAME%.git}"
-    tmp_file=$(mktemp)
-    jq --arg name "$OLD_NAME" --arg url "$OLD_URL" --arg branch "$OLD_BRANCH" \
-      --arg path "/home/tappaas/${OLD_NAME}" \
-      '.tappaas.repositories = [{"name": $name, "url": $url, "branch": $branch, "path": $path}] | del(.tappaas.upstreamGit) | del(.tappaas.branch)' \
-      "$CONFIG_FILE" > "$tmp_file" && mv "$tmp_file" "$CONFIG_FILE"
-    info "  Migrated: upstreamGit=${OLD_URL} branch=${OLD_BRANCH} -> repositories[0]"
-  fi
 
-  REPO_COUNT=$(jq '.tappaas.repositories // [] | length' "$CONFIG_FILE" 2>/dev/null || echo "0")
-  if [ "$REPO_COUNT" -gt 0 ]; then
-    echo ""
-    info "Pulling latest changes from ${REPO_COUNT} repository/repositories..."
-    for i in $(seq 0 $(( REPO_COUNT - 1 ))); do
-      REPO_NAME=$(jq -r ".tappaas.repositories[$i].name" "$CONFIG_FILE")
-      REPO_PATH=$(jq -r ".tappaas.repositories[$i].path" "$CONFIG_FILE")
-      REPO_BRANCH=$(jq -r ".tappaas.repositories[$i].branch" "$CONFIG_FILE")
-      if [ -d "$REPO_PATH" ]; then
-        info "  Pulling ${REPO_NAME} (branch: ${REPO_BRANCH})..."
-        cd "$REPO_PATH" && git fetch origin && git checkout "$REPO_BRANCH" && git pull origin "$REPO_BRANCH" || warn "Failed to pull ${REPO_NAME}"
-      else
-        warn "Repository directory not found: ${REPO_PATH} (${REPO_NAME})"
-      fi
-    done
-  else
-    echo ""
-    info "No repositories configured — pulling TAPPaaS from default location..."
-    cd
-    cd TAPPaaS || die "TAPPaaS directory not found!"
-    git pull origin
-  fi
+# Legacy one-shot migration: upstreamGit+branch -> .tappaas.repositories. This
+# is retired once configuration.json is gone, so it is fully guarded on the file
+# actually existing (must never error on a missing configuration.json).
+if [ -f "$CONFIG_FILE" ] && jq -e '.tappaas.upstreamGit' "$CONFIG_FILE" >/dev/null 2>&1; then
+  echo ""
+  info "Migrating configuration.json from upstreamGit/branch to repositories format..."
+  OLD_URL=$(jq -r '.tappaas.upstreamGit' "$CONFIG_FILE")
+  OLD_BRANCH=$(jq -r '.tappaas.branch // "stable"' "$CONFIG_FILE")
+  OLD_NAME="${OLD_URL##*/}"
+  OLD_NAME="${OLD_NAME%.git}"
+  tmp_file=$(mktemp)
+  jq --arg name "$OLD_NAME" --arg url "$OLD_URL" --arg branch "$OLD_BRANCH" \
+    --arg path "/home/tappaas/${OLD_NAME}" \
+    '.tappaas.repositories = [{"name": $name, "url": $url, "branch": $branch, "path": $path}] | del(.tappaas.upstreamGit) | del(.tappaas.branch)' \
+    "$CONFIG_FILE" > "$tmp_file" && mv "$tmp_file" "$CONFIG_FILE"
+  info "  Migrated: upstreamGit=${OLD_URL} branch=${OLD_BRANCH} -> repositories[0]"
+fi
+
+REPOS_JSON="$(get_repositories)"
+REPO_COUNT=$(echo "$REPOS_JSON" | jq 'length' 2>/dev/null || echo "0")
+if [ "$REPO_COUNT" -gt 0 ]; then
+  echo ""
+  info "Pulling latest changes from ${REPO_COUNT} repository/repositories..."
+  for i in $(seq 0 $(( REPO_COUNT - 1 ))); do
+    REPO_NAME=$(echo "$REPOS_JSON" | jq -r ".[$i].name")
+    REPO_PATH=$(echo "$REPOS_JSON" | jq -r ".[$i].path")
+    REPO_BRANCH=$(echo "$REPOS_JSON" | jq -r ".[$i].branch")
+    if [ -d "$REPO_PATH" ]; then
+      info "  Pulling ${REPO_NAME} (branch: ${REPO_BRANCH})..."
+      cd "$REPO_PATH" && git fetch origin && git checkout "$REPO_BRANCH" && git pull origin "$REPO_BRANCH" || warn "Failed to pull ${REPO_NAME}"
+    else
+      warn "Repository directory not found: ${REPO_PATH} (${REPO_NAME})"
+    fi
+  done
 else
   echo ""
-  info "Configuration file not found — pulling TAPPaaS from default location..."
+  info "No repositories configured — pulling TAPPaaS from default location..."
   cd
   cd TAPPaaS || die "TAPPaaS directory not found!"
   git pull origin

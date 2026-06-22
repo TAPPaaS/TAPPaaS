@@ -175,6 +175,25 @@ installer_email() {
     get_site_value '.email' 'email'
 }
 
+# Echo the full repositories JSON array. Reads site.json .repositories if it is
+# present and a non-empty array; otherwise falls back to configuration.json
+# .tappaas.repositories; otherwise echoes []. Reads only — the dual-state
+# fallback for callers that iterate the repo list (e.g. pre-update.sh).
+#   get_repositories
+get_repositories() {
+    local site config arr=""
+    site="$(_site_json_path)"
+    config="$(_config_json_path)"
+    if [[ -f "$site" ]]; then
+        arr=$(jq -c '.repositories | select(type == "array" and length > 0)' "$site" 2>/dev/null) || arr=""
+    fi
+    if [[ -z "$arr" && -f "$config" ]]; then
+        arr=$(jq -c '.tappaas.repositories | select(type == "array" and length > 0)' "$config" 2>/dev/null) || arr=""
+    fi
+    [[ -n "$arr" ]] || arr="[]"
+    printf '%s\n' "$arr"
+}
+
 # Echo the .path of a named repository. Reads site.json .repositories[], falls
 # back to configuration.json .tappaas.repositories[]. Empty if not found.
 #   get_repo_path <repo-name>

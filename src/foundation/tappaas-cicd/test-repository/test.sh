@@ -3,7 +3,12 @@
 # TAPPaaS Repository Management Test Suite
 #
 # Tests the repository.sh add/remove/modify/list commands.
-# Uses the TAPPaaS repository itself as a test target.
+#
+# The repository list is canonical in site.json .repositories (ADR-007); this
+# suite exercises that store. ALL state lives in an isolated temporary
+# CONFIG_DIR fixture (a site.json built in $TEST_CONFIG_DIR) — the live
+# /home/tappaas/config is NEVER read or mutated. repository.sh honours the
+# CONFIG_DIR environment variable, which the tests point at the fixture.
 #
 # Usage: ./test.sh [--skip-network]
 #
@@ -15,10 +20,14 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_SCRIPT="/home/tappaas/bin/repository.sh"
-CONFIG_FILE="/home/tappaas/config/configuration.json"
 LOG_DIR="/home/tappaas/logs"
 TIMESTAMP=$(date +%Y%m%d_%H%M%S)
 LOG_FILE="${LOG_DIR}/${TIMESTAMP}_test-repository.log"
+
+# Isolated fixture config dir — created fresh per run, removed on exit. The live
+# /home/tappaas/config is intentionally untouched.
+TEST_CONFIG_DIR=""
+SITE_FILE=""
 
 # Test state
 PASS=0
@@ -41,6 +50,11 @@ for arg in "$@"; do
 done
 
 mkdir -p "${LOG_DIR}"
+
+# Run repository.sh against the isolated fixture CONFIG_DIR.
+repo() {
+    CONFIG_DIR="${TEST_CONFIG_DIR}" "${REPO_SCRIPT}" "$@"
+}
 
 # ── Test Helpers ─────────────────────────────────────────────────────
 
@@ -80,8 +94,7 @@ run_test() {
 }
 
 # Check a condition
-# Arguments: <test-name> <condition-description>
-# Stdin: none — uses the exit code of the preceding command
+# Arguments: <test-name> <condition-description> <command-string>
 check_condition() {
     local test_name="$1"
     local description="$2"
@@ -96,16 +109,32 @@ check_condition() {
     fi
 }
 
-# Backup configuration.json before tests
-backup_config() {
-    cp "${CONFIG_FILE}" "${CONFIG_FILE}.test-backup"
+# Build a fresh isolated fixture: a temp CONFIG_DIR holding a site.json with
+# a .repositories array (identical shape to the live one). Records the live
+# config mtime so the EXIT trap can assert it was never touched.
+LIVE_CONFIG_DIR="/home/tappaas/config"
+setup_fixture() {
+    TEST_CONFIG_DIR=$(mktemp -d)
+    SITE_FILE="${TEST_CONFIG_DIR}/site.json"
+    cat > "${SITE_FILE}" << 'SITEJSON'
+{
+    "name": "test",
+    "repositories": [
+        {
+            "name": "TAPPaaS",
+            "url": "github.com/TAPPaaS/TAPPaaS",
+            "branch": "main",
+            "path": "/home/tappaas/TAPPaaS",
+            "managed": "full",
+            "catalog": "src/module-catalog.json"
+        }
+    ]
+}
+SITEJSON
 }
 
-# Restore configuration.json after tests
-restore_config() {
-    if [[ -f "${CONFIG_FILE}.test-backup" ]]; then
-        mv "${CONFIG_FILE}.test-backup" "${CONFIG_FILE}"
-    fi
+cleanup() {
+    [[ -n "${TEST_CONFIG_DIR}" && -d "${TEST_CONFIG_DIR}" ]] && rm -rf "${TEST_CONFIG_DIR}"
 }
 
 # ── Tests ────────────────────────────────────────────────────────────
@@ -119,72 +148,100 @@ echo ""
 
 # Verify prerequisites
 if [[ ! -x "${REPO_SCRIPT}" ]] && [[ ! -f "${REPO_SCRIPT}" ]]; then
-    # Try the source location
-    REPO_SCRIPT="${SCRIPT_DIR}/../scripts/repository.sh"
+    # Try the source location (relocated under manager/site-manager/)
+    REPO_SCRIPT="${SCRIPT_DIR}/../manager/site-manager/repository.sh"
     if [[ ! -f "${REPO_SCRIPT}" ]]; then
         echo -e "${RED}ERROR: repository.sh not found${NC}"
         exit 1
     fi
 fi
-chmod +x "${REPO_SCRIPT}"
+chmod +x "${REPO_SCRIPT}" 2>/dev/null || true
 
-if [[ ! -f "${CONFIG_FILE}" ]]; then
-    echo -e "${RED}ERROR: configuration.json not found at ${CONFIG_FILE}${NC}"
-    exit 1
-fi
+setup_fixture
+trap cleanup EXIT
 
-# Backup config
-backup_config
-trap restore_config EXIT
+# Snapshot the live config dir so we can assert (best-effort) it stays untouched.
+LIVE_SITE_SUM=""
+LIVE_CFG_SUM=""
+[[ -f "${LIVE_CONFIG_DIR}/site.json" ]] && LIVE_SITE_SUM=$(sha256sum "${LIVE_CONFIG_DIR}/site.json")
+[[ -f "${LIVE_CONFIG_DIR}/configuration.json" ]] && LIVE_CFG_SUM=$(sha256sum "${LIVE_CONFIG_DIR}/configuration.json")
 
 # ── Test 1: Help and usage ───────────────────────────────────────────
 echo "Test Group 1: Help and Usage"
 
-run_test "help-flag" "pass" "${REPO_SCRIPT}" --help
-run_test "no-args" "fail" "${REPO_SCRIPT}"
-run_test "invalid-command" "fail" "${REPO_SCRIPT}" invalid-command
+run_test "help-flag" "pass" repo --help
+run_test "no-args" "fail" repo
+run_test "invalid-command" "fail" repo invalid-command
 echo ""
 
-# ── Test 2: List command ─────────────────────────────────────────────
+# ── Test 2: List command (reads site.json .repositories) ─────────────
 echo "Test Group 2: List Command"
 
-run_test "list-repos" "pass" "${REPO_SCRIPT}" list
+run_test "list-repos" "pass" repo list
 
 check_condition "list-shows-tappaas" "TAPPaaS repo in list" \
-    "'${REPO_SCRIPT}' list 2>&1 | grep -c 'TAPPaaS' >/dev/null"
+    "repo list 2>&1 | grep -c 'TAPPaaS' >/dev/null"
 echo ""
 
 # ── Test 3: Add command validation ───────────────────────────────────
 echo "Test Group 3: Add Command Validation"
 
-run_test "add-no-url" "fail" "${REPO_SCRIPT}" add
-run_test "add-invalid-url" "fail" "${REPO_SCRIPT}" add "invalid-url-does-not-exist.example.com/foo/bar"
-run_test "add-duplicate-name" "fail" "${REPO_SCRIPT}" add "github.com/TAPPaaS/TAPPaaS"
+run_test "add-no-url" "fail" repo add
+run_test "add-invalid-url" "fail" repo add "invalid-url-does-not-exist.example.com/foo/bar"
+run_test "add-duplicate-name" "fail" repo add "github.com/TAPPaaS/TAPPaaS"
 echo ""
 
-# ── Test 4: Network tests (add/modify/remove) ───────────────────────
+# ── Test 4: site.json add/modify/remove (no network) ────────────────
+# These prove add/remove/modify/list operate on site.json .repositories using a
+# manual entry (mirroring what cmd_add writes) so the data-store wiring is
+# verified without a real git clone.
+echo "Test Group 4: site.json store operations (no network)"
+
+TEST_REPO_NAME="fixture-repo-$$"
+# Manually add an entry to site.json .repositories (no clone/network).
+tmp_file=$(mktemp)
+jq --arg name "${TEST_REPO_NAME}" \
+   --arg url "local/${TEST_REPO_NAME}" \
+   --arg branch "main" \
+   --arg path "/tmp/${TEST_REPO_NAME}" \
+   '.repositories = (.repositories // []) + [{"name": $name, "url": $url, "branch": $branch, "path": $path, "managed": "tracked"}]' \
+   "${SITE_FILE}" > "${tmp_file}"
+mv "${tmp_file}" "${SITE_FILE}"
+
+check_condition "site-add-entry" "site.json .repositories has new entry" \
+    "jq -e --arg n '${TEST_REPO_NAME}' '.repositories[] | select(.name == \$n)' '${SITE_FILE}' >/dev/null 2>&1"
+
+check_condition "list-shows-fixture" "list shows the new repo (from site.json)" \
+    "repo list 2>&1 | grep -c '${TEST_REPO_NAME}' >/dev/null"
+
+# modify branch on a non-cloned repo: the script tries to fetch the (missing)
+# dir, so it is expected to fail — but it must locate the entry in site.json
+# (i.e. not report 'not found in configuration'). Verify the lookup resolves.
+check_condition "get-repo-from-site" "get_repo_by_name resolves from site.json" \
+    "repo modify '${TEST_REPO_NAME}' 2>&1 | grep -q 'Current branch: main'"
+
+# remove the entry (no installed modules, no dir) — should update site.json.
+run_test "remove-fixture" "pass" repo remove "${TEST_REPO_NAME}"
+
+check_condition "site-remove-clean" "site.json no longer has the repo" \
+    "! jq -e --arg n '${TEST_REPO_NAME}' '.repositories[] | select(.name == \$n)' '${SITE_FILE}' >/dev/null 2>&1"
+echo ""
+
+# ── Test 5: Network tests (real clone add/modify/remove) ────────────
 if [[ "${SKIP_NETWORK}" == "true" ]]; then
-    echo "Test Group 4: Network Tests (SKIPPED --skip-network)"
-    ((SKIP += 6))
+    echo "Test Group 5: Network Tests (SKIPPED --skip-network)"
+    ((SKIP += 4))
     echo ""
 else
-    echo "Test Group 4: Network Tests (add/modify/remove)"
+    echo "Test Group 5: Network Tests (local bare repo add/modify/remove)"
 
-    # Use a known small public repo for testing
-    # We use the TAPPaaS repo itself but to a different directory
-    TEST_URL="github.com/TAPPaaS/TAPPaaS"
-    TEST_BRANCH="stable"
-    # We need a different name since TAPPaaS is already tracked
-    # Create a small local bare repo for testing instead
     TEST_BARE_DIR=$(mktemp -d)
-    TEST_REPO_NAME="test-repo-$$"
+    NET_REPO_NAME="net-repo-$$"
 
-    # Create a minimal test repo locally
+    # Create a minimal test repo locally with a module catalog.
     (
         cd "${TEST_BARE_DIR}"
-        git init --bare "${TEST_REPO_NAME}.git" >/dev/null 2>&1
-
-        # Create a working copy, add the module catalog, push
+        git init --bare "${NET_REPO_NAME}.git" >/dev/null 2>&1
         WORK_DIR=$(mktemp -d)
         cd "${WORK_DIR}"
         git init >/dev/null 2>&1
@@ -195,11 +252,7 @@ else
     "description": "Test Module Registry",
     "foundationModules": [],
     "applicationModules": [
-        {
-            "moduleName": "test-app",
-            "vmid": 9999,
-            "moduleJson": "src/apps/test-app/test-app.json"
-        }
+        {"moduleName": "test-app", "vmid": 9999, "moduleJson": "src/apps/test-app/test-app.json"}
     ],
     "proxmoxTemplates": [],
     "testModules": []
@@ -207,87 +260,69 @@ else
 MODJSON
         git add -A >/dev/null 2>&1
         git commit -m "initial" >/dev/null 2>&1
-        git remote add origin "${TEST_BARE_DIR}/${TEST_REPO_NAME}.git" >/dev/null 2>&1
+        git remote add origin "${TEST_BARE_DIR}/${NET_REPO_NAME}.git" >/dev/null 2>&1
         git push origin main >/dev/null 2>&1
-
-        # Create a develop branch
         git checkout -b develop >/dev/null 2>&1
         echo "develop" > src/BRANCH_MARKER
         git add -A >/dev/null 2>&1
         git commit -m "develop branch" >/dev/null 2>&1
         git push origin develop >/dev/null 2>&1
-
         rm -rf "${WORK_DIR}"
     )
 
-    # Override the URL validation for local repos by using file:// protocol
-    # We need to test with the actual script, so use the local bare repo path
-    # The script prepends https://, so we test with a direct approach
+    # Simulate the clone + site.json entry that cmd_add produces for a local
+    # repo (URL validation prepends https://, which can't reach a local path).
+    NET_CLONE_PATH=$(mktemp -d)/${NET_REPO_NAME}
+    git clone "${TEST_BARE_DIR}/${NET_REPO_NAME}.git" "${NET_CLONE_PATH}" >/dev/null 2>&1
 
-    # Test: verify we can detect the local repo structure after manual clone
-    echo "  (Using local test repository for add/modify/remove tests)"
-
-    # Manually simulate what repository.sh add does for a local repo
-    TEST_CLONE_PATH="/home/tappaas/${TEST_REPO_NAME}"
-    git clone "${TEST_BARE_DIR}/${TEST_REPO_NAME}.git" "${TEST_CLONE_PATH}" >/dev/null 2>&1
-
-    # Manually add to config
     tmp_file=$(mktemp)
-    jq --arg name "${TEST_REPO_NAME}" \
-       --arg url "local/${TEST_REPO_NAME}" \
+    jq --arg name "${NET_REPO_NAME}" \
+       --arg url "local/${NET_REPO_NAME}" \
        --arg branch "main" \
-       --arg path "${TEST_CLONE_PATH}" \
-       '.tappaas.repositories = (.tappaas.repositories // []) + [{"name": $name, "url": $url, "branch": $branch, "path": $path}]' \
-       "${CONFIG_FILE}" > "${tmp_file}"
-    mv "${tmp_file}" "${CONFIG_FILE}"
+       --arg path "${NET_CLONE_PATH}" \
+       '.repositories = (.repositories // []) + [{"name": $name, "url": $url, "branch": $branch, "path": $path, "managed": "full", "catalog": "src/module-catalog.json"}]' \
+       "${SITE_FILE}" > "${tmp_file}"
+    mv "${tmp_file}" "${SITE_FILE}"
 
-    check_condition "add-config-updated" "Config has new repo" \
-        "jq -e --arg n '${TEST_REPO_NAME}' '.tappaas.repositories[] | select(.name == \$n)' '${CONFIG_FILE}' >/dev/null 2>&1"
+    check_condition "net-add-config" "site.json has the cloned repo" \
+        "jq -e --arg n '${NET_REPO_NAME}' '.repositories[] | select(.name == \$n)' '${SITE_FILE}' >/dev/null 2>&1"
 
-    check_condition "add-clone-exists" "Clone directory exists" \
-        "[ -d '${TEST_CLONE_PATH}' ]"
+    (cd "${NET_CLONE_PATH}" && git fetch origin >/dev/null 2>&1)
+    run_test "net-modify-branch" "pass" repo modify "${NET_REPO_NAME}" --branch develop
 
-    check_condition "add-module-catalog" "Clone has src/module-catalog.json" \
-        "[ -f '${TEST_CLONE_PATH}/src/module-catalog.json' ]"
+    check_condition "net-modify-config" "site.json branch updated to develop" \
+        "jq -r --arg n '${NET_REPO_NAME}' '.repositories[] | select(.name == \$n) | .branch' '${SITE_FILE}' | grep -q 'develop'"
 
-    # Test: list shows new repo
-    check_condition "list-shows-test" "List shows test repo" \
-        "'${REPO_SCRIPT}' list 2>&1 | grep -q '${TEST_REPO_NAME}'"
+    run_test "net-remove" "pass" repo remove "${NET_REPO_NAME}"
 
-    # Test: modify branch
-    (cd "${TEST_CLONE_PATH}" && git fetch origin >/dev/null 2>&1)
-    run_test "modify-branch" "pass" "${REPO_SCRIPT}" modify "${TEST_REPO_NAME}" --branch develop
+    check_condition "net-remove-clean" "site.json no longer has the repo" \
+        "! jq -e --arg n '${NET_REPO_NAME}' '.repositories[] | select(.name == \$n)' '${SITE_FILE}' >/dev/null 2>&1"
 
-    check_condition "modify-branch-config" "Config updated to develop" \
-        "jq -r --arg n '${TEST_REPO_NAME}' '.tappaas.repositories[] | select(.name == \$n) | .branch' '${CONFIG_FILE}' | grep -q 'develop'"
-
-    # Test: remove
-    run_test "remove-repo" "pass" "${REPO_SCRIPT}" remove "${TEST_REPO_NAME}"
-
-    check_condition "remove-config-clean" "Config no longer has test repo" \
-        "! jq -e --arg n '${TEST_REPO_NAME}' '.tappaas.repositories[] | select(.name == \$n)' '${CONFIG_FILE}' >/dev/null 2>&1"
-
-    check_condition "remove-dir-gone" "Clone directory removed" \
-        "[ ! -d '${TEST_CLONE_PATH}' ]"
-
-    # Cleanup
-    rm -rf "${TEST_BARE_DIR}"
-
+    rm -rf "${TEST_BARE_DIR}" "$(dirname "${NET_CLONE_PATH}")"
     echo ""
 fi
 
-# ── Test 5: Remove command validation ────────────────────────────────
-echo "Test Group 5: Remove Command Validation"
+# ── Test 6: Remove/modify command validation ────────────────────────
+echo "Test Group 6: Remove/Modify Command Validation"
 
-run_test "remove-no-name" "fail" "${REPO_SCRIPT}" remove
-run_test "remove-nonexistent" "fail" "${REPO_SCRIPT}" remove "nonexistent-repo"
+run_test "remove-no-name" "fail" repo remove
+run_test "remove-nonexistent" "fail" repo remove "nonexistent-repo"
+run_test "modify-no-name" "fail" repo modify
+run_test "modify-nonexistent" "fail" repo modify "nonexistent-repo" --branch main
 echo ""
 
-# ── Test 6: Modify command validation ────────────────────────────────
-echo "Test Group 6: Modify Command Validation"
+# ── Test 7: Live config untouched ────────────────────────────────────
+echo "Test Group 7: Live config isolation"
 
-run_test "modify-no-name" "fail" "${REPO_SCRIPT}" modify
-run_test "modify-nonexistent" "fail" "${REPO_SCRIPT}" modify "nonexistent-repo" --branch main
+NOW_SITE_SUM=""
+NOW_CFG_SUM=""
+[[ -f "${LIVE_CONFIG_DIR}/site.json" ]] && NOW_SITE_SUM=$(sha256sum "${LIVE_CONFIG_DIR}/site.json")
+[[ -f "${LIVE_CONFIG_DIR}/configuration.json" ]] && NOW_CFG_SUM=$(sha256sum "${LIVE_CONFIG_DIR}/configuration.json")
+
+check_condition "live-site-untouched" "live site.json unchanged" \
+    "[[ '${LIVE_SITE_SUM}' == '${NOW_SITE_SUM}' ]]"
+check_condition "live-config-untouched" "live configuration.json unchanged" \
+    "[[ '${LIVE_CFG_SUM}' == '${NOW_CFG_SUM}' ]]"
 echo ""
 
 # ── Summary ──────────────────────────────────────────────────────────
