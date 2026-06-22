@@ -248,6 +248,7 @@ main() {
     local variant=""
     local environment=""
     local environment_explicit=false
+    local env_user_specified=false   # user named an env via --environment or --variant
     local allow_fork=false
     local -a passthru=()
     shift  # drop the module name; re-added below
@@ -265,12 +266,14 @@ main() {
             --environment)
                 environment="${2:-}"
                 environment_explicit=true
+                env_user_specified=true
                 if [[ $# -ge 2 ]]; then shift; fi
                 ;;
             --variant)
                 # Deprecated alias for --environment (compat). --environment
                 # wins; only adopt the variant value if no --environment given.
                 variant="${2:-}"
+                env_user_specified=true
                 if [[ $# -ge 2 ]]; then shift; fi
                 ;;
             *)
@@ -343,12 +346,27 @@ main() {
     fi
 
     # Foundation-tier constraints: mgmt-only + single-instance (offline guard).
+    # Checked before the existence test below so a foundation module gets the more
+    # specific "foundation only in mgmt" error rather than a generic not-registered.
     if [[ "${tier}" == "foundation" ]]; then
         if [[ -n "${environment}" && "${environment}" != "mgmt" ]]; then
             die "Foundation modules can only be installed in the 'mgmt' environment (got '${environment}')"
         fi
         if module_config_exists "${module}" && [[ "${force}" != true && "${reinstall}" != true ]]; then
             die "Foundation module '${module}' is already installed (single-instance). Use --reinstall to replace, or --force to re-run the installer."
+        fi
+    fi
+
+    # Reject an explicitly-named environment that does not exist (fail fast, before
+    # any resource is touched, so a typo cannot create a stray deployment). A
+    # user-named environment (via --environment or the deprecated --variant) must
+    # resolve to a real one: 'mgmt', a config/environments/<env>.json file, or a
+    # registered legacy variant (get_variant_config). The auto-resolved default
+    # environment is exempt — only an explicit name is validated here.
+    if [[ "${env_user_specified}" == true && -n "${environment}" && "${environment}" != "mgmt" ]]; then
+        if [[ ! -f "${CONFIG_DIR}/environments/${environment}.json" ]] \
+           && ! get_variant_config "${environment}" >/dev/null 2>&1; then
+            die "Environment '${environment}' is not registered (no config/environments/${environment}.json and not a registered variant). Create it with environment-manager, or register a variant: variant-manager add ${environment} --domain <domain>."
         fi
     fi
 

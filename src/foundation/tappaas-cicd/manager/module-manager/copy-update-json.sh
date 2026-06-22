@@ -504,7 +504,18 @@ main() {
     # from the release source.
     if [[ -n "${environment}" ]]; then
         tmp_file=$(mktemp)
-        if jq --arg e "${environment}" '.environment = $e' "${dest_json}" > "${tmp_file}"; then
+        # Canonical: record the target environment. For a NON-default, non-mgmt
+        # environment (i.e. one that suffixes the module name) also mirror it into
+        # the legacy .variant field, which is still read by update-os, the 3-way
+        # merge, and many app service scripts (nextcloud-hpb/coturn/euro-office/…).
+        # A default or mgmt install leaves .variant untouched so legacy
+        # (non-variant) behaviour is preserved.
+        local _persist_expr='.environment = $e'
+        if [[ "${environment}" != "mgmt" \
+              && ( -z "${default_env}" || "${environment}" != "${default_env}" ) ]]; then
+            _persist_expr='.environment = $e | .variant = $e'
+        fi
+        if jq --arg e "${environment}" "${_persist_expr}" "${dest_json}" > "${tmp_file}"; then
             mv "${tmp_file}" "${dest_json}"
             info "  Persisted environment = ${environment}"
         else
