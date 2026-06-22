@@ -51,7 +51,7 @@ Work intentionally deferred — not part of the current stage sequence; revisit 
 | Issue | Item | Why parked |
 |-------|------|-----------|
 | **#294** | **Zone-aligned VMID ranges** — derive/allocate a VM's VMID from its zone/environment (so VMID bands map to zones). | Needs the environment↔zone model settled (S4/S6) first; not required for the cutover. Revisit after S6. |
-| **#380** | *(title not in repo; `gh` is push-only here — operator to confirm the one-line.)* | Parked pending description. |
+| **#380** | **Document & revalidate the install sequence** — end-to-end fresh-install flow (platform bring-up → tappaas-cicd → site.json/zones-init/environments → foundation modules → people bootstrap), re-validated against the post-cutover reality and written up. | The install flow is mid-change (zones-init wiring, site.json as source, install/update routed through network-manager = N5). Revalidate + document once the cutover (S3b/N5) settles, so the sequence is documented as it actually is, not as it's transitioning. |
 
 > Other deferred-but-tracked work lives in the relevant stage logs below (e.g. S5 follow-ups: physical-switch registration, single-front-door consolidation; S3b legacy-zone sunset migration of the srvWork modules; switch-controller TS/bash consolidation).
 
