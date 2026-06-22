@@ -1,0 +1,13 @@
+{
+  "name": "people-manager",
+  "version": "0.1.0",
+  "description": "TAPPaaS People → Authentik reconcile manager (ADR-007 P1, S2b-3) — TypeScript",
+  "license": "MIT",
+  "private": true,
+  "bin": {
+    "people-manager": "dist/main.js"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json"
+  }
+}
