@@ -14,17 +14,6 @@ from .authentik_manager import (
     DEFAULT_AUTHORIZATION_FLOW_SLUG,
     DEFAULT_INVALIDATION_FLOW_SLUG,
 )
-from .people_sync import (
-    PeopleSync,
-    PeopleConfig,
-    Plan,
-    AuthentikState,
-    Role,
-    Organization,
-    Group,
-    User,
-    format_plan,
-)
 
 __all__ = [
     "AuthentikConfig",
@@ -34,13 +23,4 @@ __all__ = [
     "EMBEDDED_OUTPOST_NAME",
     "DEFAULT_AUTHORIZATION_FLOW_SLUG",
     "DEFAULT_INVALIDATION_FLOW_SLUG",
-    "PeopleSync",
-    "PeopleConfig",
-    "Plan",
-    "AuthentikState",
-    "Role",
-    "Organization",
-    "Group",
-    "User",
-    "format_plan",
 ]
