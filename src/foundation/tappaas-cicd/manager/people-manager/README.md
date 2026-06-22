@@ -85,8 +85,10 @@ user-setup.sh --org acme --user alice --email alice@example.org
 
 ### `validate-people.sh` — validate the People config
 
-(This is the manager's `validate.sh`, linked onto `PATH` under the project-wide
-name `validate-people.sh`.)
+(This is the manager's `validate` operation: a bash `validate.sh` linked onto
+`PATH` under the project-wide name `validate-people.sh`. Tracked follow-up: as a
+TypeScript manager, this is slated to become a `people-manager validate` binary
+subcommand — the convention end-state.)
 
 ```
 validate-people.sh [DIR]                  # dir to validate (default $TAPPAAS_CONFIG/people)

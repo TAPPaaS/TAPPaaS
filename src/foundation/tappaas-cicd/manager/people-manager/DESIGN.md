@@ -12,7 +12,10 @@
   are unchanged).
 - Two bash helpers are linked alongside the compiled bin:
   - `user-setup.sh` → `~/bin/user-setup.sh`
-  - `validate.sh` → `~/bin/validate-people.sh`
+  - `validate.sh` → `~/bin/validate-people.sh` — the manager's `validate`
+    operation. As a TypeScript manager, this bash script is slated to become a
+    `people-manager validate` binary subcommand (the convention end-state); a
+    tracked follow-up.
 
 ## Internal structure
 
@@ -55,10 +58,13 @@ identity controller (runtime owner) cleanly separated.
 
 ## Validation
 
-`validate.sh` (linked as `validate-people.sh`) validates each file against its
-JSON Schema (draft 2020-12) using Python `jsonschema` when available, with a `jq`
-required-field fallback, plus `jq`-based reference-integrity checks
-(`group.ownerOrg`, `user.memberOf`, user/group `roles`, `org.owner`/`parentOrg`).
+`validate.sh` (linked as `validate-people.sh`) is the manager's `validate`
+operation: it validates each file against its JSON Schema (draft 2020-12) using
+Python `jsonschema` when available, with a `jq` required-field fallback, plus
+`jq`-based reference-integrity checks (`group.ownerOrg`, `user.memberOf`,
+user/group `roles`, `org.owner`/`parentOrg`). Tracked follow-up: as a TypeScript
+manager, this bash `validate.sh` is slated to become a `people-manager validate`
+binary subcommand — the convention end-state.
 
 ## Testing
 

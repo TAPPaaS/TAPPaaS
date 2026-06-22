@@ -3,7 +3,7 @@
 Cluster / VM / disk / OS **health and maintenance** utilities. These are
 operational, read-mostly tools that inspect the cluster against its config and
 keep VMs healthy. Unlike the other managers, health-manager does not author a
-config domain of its own and therefore ships **no `validate.sh`** — it reads the
+config domain of its own, so it has **no `validate` operation** — it reads the
 existing module/zone config and the live cluster.
 
 ## Commands

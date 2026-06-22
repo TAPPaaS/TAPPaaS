@@ -13,26 +13,40 @@ TAPPaaS has two kinds of control component:
 
 - A **manager owns configuration state** — it does CRUD + validation on the JSON
   config files (and schemas) for one domain, and may orchestrate one or more
-  controllers to apply that config. A manager ships a `validate.sh`.
+  controllers to apply that config. A manager exposes a `validate` operation
+  (validates its own config for schema + reference integrity), named
+  `validate-<manager>.sh` for a script (bash) manager or a `validate` binary
+  subcommand (`<manager> validate`) for a TypeScript manager.
 - A **controller owns runtime / device state** — it talks to a live service or
-  device and reconciles the real world toward a desired config. A controller does
-  **not** ship `validate.sh`.
+  device and reconciles the real world toward a desired config. A controller has
+  **no** `validate` operation (it owns no config of its own to validate).
 
 Managers live under `manager/`, controllers under `controller/`. Otherwise they
 share the same verb contract and dispatch model described below.
 
 ## The verb contract
 
-Every component is driven generically through a fixed set of **verb scripts** in
-its own directory. The mothership never needs to know what language a component
-is written in — it just runs the verbs.
+Every component is driven generically through a fixed set of **lifecycle verb
+scripts** in its own directory. The mothership never needs to know what language
+a component is written in — it just runs the verbs.
 
 | Verb | Required for | What it does |
 |------|--------------|--------------|
 | `install.sh` | all | One-time setup: build the compiled artifact (if any) and link the component's CLI(s) onto `PATH`. |
 | `update.sh`  | all | Re-build + re-link; migrate on-disk state if the schema changed. |
 | `test.sh`    | all | Self-contained tests; exit non-zero on failure. |
-| `validate.sh`| managers | Schema / reference validation of this domain's config. |
+
+These three lifecycle verbs keep generic filenames and are dispatched generically
+by the parent `manager/{install,update,test}.sh`.
+
+In addition, a **manager** exposes a `validate` **operation** — schema /
+reference validation of its own config domain. `validate` is a domain operation,
+not a generic lifecycle verb, so it is **not** dispatched generically: it is
+named `validate-<manager>.sh` for a script (bash) manager (matching the existing
+`<verb>-<manager>.sh` pattern, e.g. `install-module.sh`) or a `validate` binary
+subcommand (`<manager> validate`) for a TypeScript manager. A controller has no
+`validate` operation. The long-term direction is that all managers become
+TypeScript, so `validate` becomes a binary verb everywhere.
 
 **Every verb must be idempotent** — running it twice in a row must be safe and
 the second run must be a no-op when nothing changed.
@@ -121,9 +135,12 @@ cp -r controller/TEMPLATE controller/my-controller
 Then:
 
 1. Rename and write the main CLI `<name>.{ts,py,sh}`.
-2. Fill in the verb scripts (`install.sh`, `update.sh`, `test.sh`, and
-   `validate.sh` for a manager). Follow the compiled-component rule for your
-   language and keep every verb idempotent.
+2. Fill in the lifecycle verb scripts (`install.sh`, `update.sh`, `test.sh`). For
+   a manager, also provide its `validate` operation: rename the shipped
+   `validate.sh` placeholder to `validate-<manager>.sh` (a script manager), or
+   replace it with a `validate` binary subcommand of the manager CLI (a
+   TypeScript manager). Follow the compiled-component rule for your language and
+   keep every verb idempotent.
 3. Gate any disruptive test behind `TAPPAAS_TEST_DEEP=1` and add a smoke line to
    the mothership's fast gate.
 
@@ -136,4 +153,7 @@ changes needed above the component directory.
 - `install.sh` / `update.sh` — annotated compiled-component patterns for each
   language.
 - `test.sh` — the fast/deep convention stub.
-- `validate.sh` — the manager-only schema/reference validation stub.
+- `validate.sh` — a placeholder for the manager-only `validate` operation. A new
+  script manager renames it to `validate-<manager>.sh`; a TypeScript manager
+  replaces it with a `validate` binary subcommand. (Still shipped during the
+  transition.)

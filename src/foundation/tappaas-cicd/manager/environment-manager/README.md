@@ -44,7 +44,8 @@ create-minimal-environments.sh --name acme
 
 ### `validate-environment.sh` — validate environment files
 
-(This is the manager's `validate.sh`; `validate.sh` simply delegates here.)
+This is the manager's `validate` operation, named `validate-environment.sh` per
+the script-manager `validate-<manager>.sh` convention.
 
 ```
 validate-environment.sh [FILE|DIR] [--schema-dir PATH] [--config-dir DIR] [--zones FILE] [--quiet]

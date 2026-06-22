@@ -8,7 +8,9 @@
   and `~/bin/migrate-variants-to-environments.sh` (alias for
   `migrate-variants.sh`). Nothing to compile.
 - **`update.sh`** re-runs `install.sh` (idempotent relink).
-- **`validate.sh`** is a thin delegator: `exec validate-environment.sh "$@"`.
+- **`validate-environment.sh`** is the manager's `validate` operation
+  (script-manager `validate-<manager>.sh` convention); there is no generic
+  `validate.sh`.
 - On-PATH entry points after install: `create-minimal-environments.sh`,
   `validate-environment.sh`, `migrate-variants.sh` (+ alias), `variant-manager`,
   `migrate-to-variants.sh`.

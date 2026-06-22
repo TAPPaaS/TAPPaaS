@@ -7,9 +7,10 @@
   (`${TAPPAAS_BIN:-/home/tappaas/bin}`): `inspect-cluster.sh`, `inspect-vm.sh`,
   `check-disk-threshold.sh`, `update-os.sh`. Nothing to compile.
 - **`update.sh`** re-runs `install.sh` (idempotent relink).
-- **No `validate.sh`.** This component owns no config domain — it reads existing
-  module/zone config and the live cluster — so it is the one manager-area
-  component that intentionally omits the manager validation verb.
+- **No `validate` operation.** This component owns no config domain — it reads
+  existing module/zone config and the live cluster — so it is the one
+  manager-area component that intentionally omits the manager `validate`
+  operation.
 
 ## State it reads
 

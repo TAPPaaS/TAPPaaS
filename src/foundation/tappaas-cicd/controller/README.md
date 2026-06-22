@@ -14,7 +14,8 @@ A controller deliberately does **not**:
 
 - own configuration files (that is a *manager*'s job — managers own the
   declarative config, e.g. `zones.json`, and call controllers to apply it);
-- ship a `validate.sh` (validating config files is also a manager's job);
+- have a `validate` operation (validating config files is also a manager's job —
+  a controller has no config of its own to validate);
 - decide *what* the desired state should be — it is told, or it reads the
   config a manager points it at.
 
@@ -45,8 +46,8 @@ verbs. Each controller component therefore exposes:
 | `update.sh`  | Re-run after a code change: rebuild + re-link so the new code is live. Usually delegates to `install.sh`. Idempotent. |
 | `test.sh`    | Self-contained tests for this component. Exit non-zero on failure. |
 
-Controllers do **not** ship `validate.sh` — config validation belongs to the
-manager layer.
+Controllers have **no** `validate` operation (no config of their own to
+validate) — config validation belongs to the manager layer.
 
 `install.sh` / `update.sh` / `test.sh` must all be **idempotent**: running them
 twice in a row must be safe and must not change the result of the first run.

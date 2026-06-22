@@ -40,7 +40,8 @@ migrate-configuration.sh --force
 
 ### `validate-site.sh` — validate site.json
 
-(This is the manager's `validate.sh`, also runnable directly.)
+This is the manager's `validate` operation, named `validate-site.sh` per the
+script-manager `validate-<manager>.sh` convention; runnable directly.
 
 ```
 validate-site.sh [FILE] [--schema-dir PATH] [--quiet]

@@ -75,9 +75,11 @@ physical switch and off-firewall-node VMs got no IP.
 
 ## Validation
 
-`validate.sh` does structural + reference validation of `zones.json` (managers
-ship `validate.sh`); `zones-check` is the richer offline audit available as a CLI
-subcommand.
+`validate.sh` is the manager's `validate` operation: it does structural +
+reference validation of `zones.json`. `zones-check` is the richer offline audit
+available as a CLI subcommand. Tracked follow-up: as a TypeScript manager, this
+bash `validate.sh` is slated to become a `network-manager validate` binary
+subcommand — the convention end-state.
 
 ## Pending / not yet implemented
 

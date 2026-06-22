@@ -53,10 +53,11 @@ tier has been added yet.
 
 ## Pending / not yet implemented
 
-- **`validate.sh` is a stub.** It prints `validate: ok (stub)`; the
-  schema/reference validation for the manager verb has not been filled in yet
-  (the richer tier/source lint is available via
-  `validate-module-tier-source.sh`).
+- **`validate-module.sh` is a stub.** This is the manager's `validate` operation
+  (script-manager `validate-<manager>.sh` convention; renamed from the former
+  `validate.sh` stub). It prints `validate: ok (stub)`; the real validator —
+  which will lint every module config via `validate-module-tier-source.sh` (the
+  per-file tier/source lint) — has not been filled in yet.
 - **No deep test tier yet.** `test.sh` does not add live cluster/VM provisioning
   probes under `TAPPAAS_TEST_DEEP=1`.
 - **Operational guards** carried in the scripts (worth knowing): `snapshot-vm.sh`

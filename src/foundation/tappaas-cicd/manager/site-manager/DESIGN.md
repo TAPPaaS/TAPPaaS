@@ -3,10 +3,12 @@
 ## Language and build
 
 - **Language:** Bash throughout.
-- **`install.sh`** links every `*.sh` in the directory (except the verb scripts
-  `install.sh`/`update.sh`/`test.sh`/`validate.sh`) into `~/bin`, makes them
+- **`install.sh`** links every `*.sh` in the directory (except the lifecycle verb
+  scripts `install.sh`/`update.sh`/`test.sh`) into `~/bin`, makes them
   executable, and additionally links `migrate-configuration-to-site.sh` as an
-  alias for `migrate-configuration.sh`. There is nothing to compile.
+  alias for `migrate-configuration.sh`. There is nothing to compile. The
+  manager's `validate` operation is `validate-site.sh`
+  (script-manager `validate-<manager>.sh` convention), itself linked onto `PATH`.
 - **`update.sh`** re-runs `install.sh` (idempotent relink).
 - On-PATH entry points after install: `migrate-configuration.sh`,
   `migrate-configuration-to-site.sh`, `validate-site.sh`, plus the legacy

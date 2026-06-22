@@ -6,8 +6,9 @@ replace the stubs with the real CLI and verb logic.
 A controller owns **runtime / device state**: it talks directly to a live API
 or device (a firewall, a hypervisor, a switch, an identity server) and
 converges the real state onto a desired state. It does **not** own config files
-and does **not** ship `validate.sh` — that is a *manager*'s job. A manager owns
-the declarative config, validates it, and **calls a controller** to apply it.
+and has **no** `validate` operation (no config of its own to validate) — that is
+a *manager*'s job. A manager owns the declarative config, validates it, and
+**calls a controller** to apply it.
 
 ## The verb contract
 
@@ -21,9 +22,9 @@ twice is safe and produces the same result):
 | `update.sh`  | Re-run after a code change: rebuild + re-link so new code goes live. Normally just `exec install.sh`. |
 | `test.sh`    | Run this component's self-contained tests; exit non-zero on any failure. |
 
-Controllers do **not** ship `validate.sh`. The parent `controller/{install,update,test}.sh`
-dispatcher runs each child's verb script and **skips `TEMPLATE/`**, so these
-stubs never run in place.
+Controllers have **no** `validate` operation (no config of their own to
+validate). The parent `controller/{install,update,test}.sh` dispatcher runs each
+child's verb script and **skips `TEMPLATE/`**, so these stubs never run in place.
 
 ### Fast vs deep tests
 
