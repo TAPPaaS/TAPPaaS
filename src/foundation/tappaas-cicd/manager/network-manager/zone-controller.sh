@@ -232,6 +232,21 @@ cmd_add() {
     # ── 5. update Proxmox LAN ports across the nodes ──
     update_proxmox_add "${no_bridge}"
 
+    # ── 6. reconcile the switch + ap planes (ADR-007 S5, #372/#373) ──
+    # zone-controller historically stopped at OPNsense + Proxmox, so a new VLAN
+    # never reached the physical switch / APs — the root cause of an
+    # off-firewall-node VM getting no IP. network-manager owns the full fan-out;
+    # converge the remaining L2/WiFi planes here. No-op until a managed
+    # switch/AP is registered (warn-only on drift/needs-manual).
+    if command -v network-manager >/dev/null 2>&1; then
+        network-manager reconcile --only switch --apply \
+            || warn "  switch plane reconcile reported drift/needs-manual for '${name}' (see above)"
+        network-manager reconcile --only ap --apply \
+            || warn "  ap plane reconcile reported drift/needs-manual for '${name}' (see above)"
+    else
+        warn "  network-manager not on PATH — switch/ap planes not reconciled for '${name}'"
+    fi
+
     info "${GN}✓${CL} zone '${name}' created (VLAN ${vt}, ${ip})"
     echo "${name}"
 }
