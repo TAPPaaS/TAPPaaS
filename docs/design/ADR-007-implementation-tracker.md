@@ -59,6 +59,45 @@ Work intentionally deferred — not part of the current stage sequence; revisit 
 
 ---
 
+## Phase D prerequisite tree — retiring `configuration.json`
+
+The reader migration (Phase B) + repoint (B2) are done, but `configuration.json`
+cannot be deleted yet: it is still what a **fresh install creates** and several
+**live** components depend on it. Ordered work to make the delete safe and
+permanent (each step independently gated):
+
+- **D1 — Make the install flow site.json-native.** Today `install2.sh` calls
+  `scripts/create-configuration.sh`, which writes `configuration.json`; there is
+  **no** site.json creator on a fresh install (the live `site.json` exists only
+  because `migrate-configuration.sh` was run during the cutover). Wire the S6
+  fresh-install bootstrap: install asks/derives the TAPPaaS system name → writes
+  `site.json`, runs `network-manager zones-init`, creates the `mgmt` + default
+  environments — instead of writing `configuration.json`. (N5: route install
+  through the new managers.) Until this lands, a reinstall regenerates
+  `configuration.json` and no `site.json`. **This is the fundamental blocker.**
+- **D2 — Retire `roles-ensure.sh` / `user.sh` (people migration).** `roles-ensure.sh`
+  is called **live** by `identity/update.sh` and `identity/install-service.sh`
+  (every identity install/update) and reads `configuration.json`; people-manager
+  supersedes it. Repoint identity at people-manager and drop the roles-ensure /
+  user.sh calls. Deleting `configuration.json` before this breaks identity
+  install/update.
+- **D3 — Resolve `variant-manager` / `.tappaas.variants`.** The legacy variant
+  registry lives in `configuration.json`; retire it or rehome it as part of the
+  variant→environment completion (see the parking-lot item).
+- **D4 — Migrate the field-definition files to JSON Schemas.** Move
+  `module-fields.json`, the zones field definitions (`zones-fields`), and the
+  module-catalogue field definitions (`module-catalog`/`module-catalogue-fields`)
+  into `src/foundation/schemas/` as JSON Schema 2020-12 documents (matching the
+  site/environment/role/etc. schemas), and update **all** references to them.
+  `configuration-fields.json` is **not** migrated — it is **deleted** together
+  with `configuration.json` in D5.
+- **D5 — Delete `configuration.json` + `configuration-fields.json`.** Drop the
+  `configuration.json` read-fallbacks across the helpers/readers, finish N5
+  routing + P6 mgmt enforcement, then remove both files (rename-aside →
+  fast/deep gate → delete, with backups as rollback).
+
+---
+
 ## Stage logs
 
 Newest entries on top. Each stage appends a dated block as it moves through the gate.
