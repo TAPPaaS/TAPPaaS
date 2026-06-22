@@ -347,7 +347,11 @@ zz_cleanup() {
 }
 
 # Confirm Authentik reachability without mutating anything.
-if ! command -v "$PM_BIN" >/dev/null 2>&1; then
+# FAST/DEEP split: the live tier mutates Authentik, so it runs ONLY under
+# TAPPAAS_TEST_DEEP=1. Default (fast) mode runs tiers A+B only — non-disruptive.
+if [[ "${TAPPAAS_TEST_DEEP:-0}" != "1" ]]; then
+    echo "  SKIP: live integration tier (fast mode — set TAPPAAS_TEST_DEEP=1 to run the live, Authentik-mutating tests)"
+elif ! command -v "$PM_BIN" >/dev/null 2>&1; then
     echo "  SKIP: people-manager not on PATH (run install.sh first)"
 elif ! "$AK_BIN" test >/dev/null 2>&1; then
     echo "  SKIP: Authentik unreachable (authentik-manager test failed) — live test skipped"

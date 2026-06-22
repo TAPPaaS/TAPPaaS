@@ -303,6 +303,47 @@ else
     skip "scripts/test/test-template-contract.sh not found"
 fi
 
+# ── Test 11: ADR-007 component smoke (lightweight, non-disruptive) ───────────
+# A sub-second sanity check that the new ADR-007 components' BASIC functionality
+# is present — using the already-built bins. NO compile, NO nix-build, NO live
+# Authentik, NO cluster. The components' FULL suites (offline unit tiers + the
+# live Authentik tiers) run under --deep via the dispatchers below. Add new
+# fast/deep-aware components' smokes here as they land (see tappaas-cicd/README.md).
+
+info "${BOLD}Test 11: ADR-007 component smoke (lightweight)${CL}"
+_min_org="${SCRIPT_DIR}/manager/people-manager/minimal-org"
+_pm_fix="${SCRIPT_DIR}/manager/people-manager/test/fixtures/people"
+# people: schemas + validator work (minimal-org validates) — catches schema breakage
+if [[ -x /home/tappaas/bin/validate-people.sh ]]; then
+    if /home/tappaas/bin/validate-people.sh --quiet "${_min_org}" >/dev/null 2>&1; then
+        pass "people: schemas valid + minimal-org validates"
+    else
+        fail "people: validate-people on minimal-org failed"
+    fi
+else
+    skip "validate-people.sh not installed"
+fi
+# people-manager TS bin loads + reads config (no Authentik contact)
+if command -v people-manager >/dev/null 2>&1; then
+    if people-manager role list --config-dir "${_pm_fix}" >/dev/null 2>&1; then
+        pass "people-manager CLI loads + reads config (role list)"
+    else
+        fail "people-manager role list failed"
+    fi
+else
+    skip "people-manager not installed"
+fi
+# identity-controller CLI loads
+if command -v authentik-manager >/dev/null 2>&1; then
+    if authentik-manager --help >/dev/null 2>&1; then
+        pass "identity-controller CLI (authentik-manager) loads"
+    else
+        fail "authentik-manager --help failed"
+    fi
+else
+    skip "authentik-manager not installed"
+fi
+
 # ── Deep Test: VM creation suite ────────────────────────────────────
 
 if [[ "${DEEP}" -eq 1 ]]; then
@@ -383,7 +424,9 @@ if [[ "${DEEP}" -eq 1 ]]; then
     info "${BOLD}Deep Test: manager/ + controller/ component dispatchers${CL}"
     for _disp in manager controller; do
         if [[ -x "${SCRIPT_DIR}/${_disp}/test.sh" ]]; then
-            if "${SCRIPT_DIR}/${_disp}/test.sh"; then
+            # TAPPAAS_TEST_DEEP=1 so fast/deep-aware components also run their
+            # live tiers (Authentik mutation etc.) in the deep gate.
+            if TAPPAAS_TEST_DEEP=1 "${SCRIPT_DIR}/${_disp}/test.sh"; then
                 pass "${_disp}/ component test dispatcher passed"
             else
                 fail "${_disp}/ component test dispatcher reported failures (see above)"

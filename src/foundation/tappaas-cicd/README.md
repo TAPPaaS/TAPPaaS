@@ -106,6 +106,30 @@ merely copy source. This is what makes a code change get picked up on update.
 
 The build step must be **idempotent**: a no-op when its inputs are unchanged.
 
+## Testing: fast vs deep slices
+
+Every component `test.sh` runs a **fast, non-disruptive slice by default** and a
+**deep slice only when `TAPPAAS_TEST_DEEP=1`**:
+
+- **Fast (default)** — schema/CLI/validation + mocked-logic unit tests. No live
+  services, no Authentik mutation, no cluster/VM ops. Quick and safe anytime.
+- **Deep (`TAPPAAS_TEST_DEEP=1`)** — adds the disruptive/slow tests: live
+  Authentik reconcile, cluster ops, VM provisioning. These mutate real state, so
+  they are scoped (e.g. `zztest-` names) and self-cleaning.
+
+The cicd module gate honours the split:
+
+- `test-module.sh tappaas-cicd` (**fast**, ~seconds) runs the quick checks plus
+  **Test 11**, a lightweight per-component *smoke* using the already-built bins
+  (validate schemas, CLI loads, config reads) — confirms basic functionality
+  without touching anything.
+- `test-module.sh tappaas-cicd --deep` runs the VM/variant suites **and** the
+  `manager/` + `controller/` dispatchers with `TAPPAAS_TEST_DEEP=1`, so every
+  component's full suite (offline unit + live tiers) runs.
+
+When adding a component: gate its disruptive tests behind
+`[[ "${TAPPAAS_TEST_DEEP:-0}" == "1" ]]`, and add a one-line smoke to Test 11.
+
 ## Preferred language
 
 In order: **TypeScript → Python → Bash.** Pick the highest applicable tier for a

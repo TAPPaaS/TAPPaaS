@@ -15,6 +15,7 @@ Safety contract (non-negotiable):
 
 from __future__ import annotations
 
+import os
 import unittest
 from pathlib import Path
 
@@ -48,8 +49,14 @@ def _live_manager() -> AuthentikManager | None:
     return mgr
 
 
-@unittest.skipIf(_live_manager() is None,
-                 "Authentik unreachable or no credentials — skipping live tests")
+# FAST/DEEP split: these tests mutate the live Authentik, so they run ONLY when
+# TAPPAAS_TEST_DEEP=1. The `not _DEEP` short-circuit means fast mode never even
+# opens a connection (keeps the default suite fast + non-disruptive).
+_DEEP = os.environ.get("TAPPAAS_TEST_DEEP", "0") == "1"
+
+
+@unittest.skipIf(not _DEEP or _live_manager() is None,
+                 "live tests run only with TAPPAAS_TEST_DEEP=1 against a reachable Authentik")
 class TestPeoplePrimitivesLive(unittest.TestCase):
     """Exercise the primitives end-to-end against the live Authentik."""
 
