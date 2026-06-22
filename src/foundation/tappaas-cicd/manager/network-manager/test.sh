@@ -69,14 +69,18 @@ if [[ -f "${UNIT_TSCONFIG}" ]]; then
         # The unit tsconfig compiles src/ into dist-test/src; run the real CLI
         # entry against a temp output and assert the transformed file on disk.
         ZINIT_OUT="$(mktemp -d)/z.json"
-        if run_ts "NM_TEMPLATE='${HERE}/zones.json' node '${DIST_TEST}/src/main.js' zones-init --name acme --from '${HERE}/zones.json' --out '${ZINIT_OUT}'" >/dev/null 2>&1 \
+        # Isolate --config-dir to an empty dir so the occupancy scan finds no
+        # tenants (default configDir is the LIVE config, which would keep occupied
+        # legacy zones Active). With no occupancy, srvWork is inactivated as asserted.
+        ZINIT_CFG="$(mktemp -d)"
+        if run_ts "NM_TEMPLATE='${HERE}/zones.json' node '${DIST_TEST}/src/main.js' zones-init --name acme --from '${HERE}/zones.json' --out '${ZINIT_OUT}' --config-dir '${ZINIT_CFG}'" >/dev/null 2>&1 \
             && [[ -f "${ZINIT_OUT}" ]] \
             && run_ts "node -e 'const z=require(\"${ZINIT_OUT}\"); process.exit((z.acme&&!z.srv&&z[\"acme-private\"]&&z[\"acme-guest\"]&&z.acme.state===\"Active\"&&z.srvWork.state===\"Inactive\"&&!z[\"acme-private\"][\"access-to\"].includes(\"srvHome\")&&z[\"acme-private\"][\"access-to\"].includes(\"acme\"))?0:1)'" >/dev/null 2>&1; then
             ok "zones-init CLI transforms template to temp --out (renames + inactivations + ref-integrity)"
         else
             bad "zones-init CLI smoke FAILED"
         fi
-        rm -rf -- "$(dirname "${ZINIT_OUT}")"
+        rm -rf -- "$(dirname "${ZINIT_OUT}")" "${ZINIT_CFG}"
 
         # ── zones-check CLI smoke (offline; temp fixtures, never live config) ──
         # Good fixture (the distributed template, default-active mgmt) exits 0;

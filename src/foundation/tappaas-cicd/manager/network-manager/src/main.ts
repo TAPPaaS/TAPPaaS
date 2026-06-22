@@ -38,7 +38,7 @@ import {
 } from "./zones";
 import { addZone, deleteZone } from "./zonelifecycle";
 import { parseTemplate, zonesInit } from "./zonesinit";
-import { zonesCheck } from "./zonescheck";
+import { zonesCheck, occupiedZones } from "./zonescheck";
 import { distributeZones, shouldAutoDistribute } from "./distribute";
 
 const VERSION = "0.1.0";
@@ -376,9 +376,13 @@ function cmdZonesInit(opts: Opts): void {
     die((e as Error).message);
   }
 
-  let result: { raw: Record<string, unknown>; alreadyInitialised: boolean };
+  // Occupancy guard: never inactivate a legacy zone that still hosts deployed
+  // modules (would orphan them). Cross-check the installed module configs.
+  const occupied = occupiedZones(opts.configDir);
+
+  let result: { raw: Record<string, unknown>; alreadyInitialised: boolean; keptActive: string[] };
   try {
-    result = zonesInit(template, name, opts.force);
+    result = zonesInit(template, name, opts.force, occupied);
   } catch (e) {
     die((e as Error).message);
   }
@@ -390,6 +394,9 @@ function cmdZonesInit(opts: Opts): void {
 
   writeJsonAtomic(out, result.raw);
   info(`  ${GN}✓${CL} zones-init: wrote '${out}' (default zone '${name}', '${name}-private', '${name}-guest')`);
+  if (result.keptActive.length) {
+    warn(`  kept Active (still host deployed modules): ${result.keptActive.join(", ")} — legacy-zone sunset deferred; migrate their modules to '${name}' (or an environment) later`);
+  }
 
   // N3: push the freshly-written live zones.json to the Proxmox nodes. Skipped
   // for a non-live --out (e.g. a temp/test path), --no-distribute, or

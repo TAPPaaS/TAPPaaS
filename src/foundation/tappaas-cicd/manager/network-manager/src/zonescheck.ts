@@ -97,6 +97,12 @@ interface ModuleRef {
   zone: string; // the zone it names
 }
 
+// The set of zone names occupied by installed module configs (zone/zone0).
+// Used by zones-init to avoid inactivating a zone that still has tenants.
+export function occupiedZones(configDir: string): Set<string> {
+  return new Set(scanModuleConfigs(configDir).map((r) => r.zone));
+}
+
 // Scan a config dir for *.json module configs that carry a zone/zone0 field.
 // Skips zones.json itself and any non-module schema files (site.json,
 // configuration.json, module-fields.json) which never carry a module `zone`.

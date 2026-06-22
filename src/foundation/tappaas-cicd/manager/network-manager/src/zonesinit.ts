@@ -39,6 +39,10 @@ export interface ZonesInitResult {
   raw: Record<string, unknown>;
   // True when the input was already transformed and we made a safe no-op.
   alreadyInitialised: boolean;
+  // Legacy zones that WOULD have been set Inactive but were kept Active because
+  // they still host deployed modules (the caller warns about these). Safety: the
+  // transform must never inactivate a zone that has tenants (would orphan them).
+  keptActive: string[];
 }
 
 // A sane zone-name slug: lowercase letters/digits/hyphen, must start with a
@@ -111,13 +115,17 @@ export function zonesInit(
   template: Record<string, unknown>,
   name: string,
   force: boolean,
+  // Zones that must stay Active even if on the INACTIVATE list — typically those
+  // that still host deployed modules. Inactivating an occupied zone would orphan
+  // its tenants, so the caller passes the occupied set here.
+  keepActive: ReadonlySet<string> = new Set<string>(),
 ): ZonesInitResult {
   validateName(name);
 
   // Idempotency / already-initialised check (only meaningful without --force):
   // a transformed doc has <N> present and `srv` absent.
   if (!force && name in template && !("srv" in template)) {
-    return { raw: template, alreadyInitialised: true };
+    return { raw: template, alreadyInitialised: true, keptActive: [] };
   }
 
   // Validate the template has the expected distributed keys before we touch it.
@@ -188,10 +196,17 @@ export function zonesInit(
     }
   }
 
-  // 3. Force state Inactive on the listed zones (only if present).
+  // 3. Force state Inactive on the listed zones (only if present) — EXCEPT any
+  //    that are occupied (keepActive): inactivating a zone with tenants would
+  //    orphan them, so we leave it Active and report it for a warning.
+  const keptActive: string[] = [];
   for (const z of INACTIVATE) {
     const zone = out[z];
     if (zone !== null && typeof zone === "object" && !Array.isArray(zone)) {
+      if (keepActive.has(z)) {
+        keptActive.push(z);
+        continue; // leave its current state untouched (occupied)
+      }
       (zone as Record<string, unknown>).state = "Inactive";
     }
   }
@@ -206,5 +221,5 @@ export function zonesInit(
     }
   }
 
-  return { raw: out, alreadyInitialised: false };
+  return { raw: out, alreadyInitialised: false, keptActive };
 }
