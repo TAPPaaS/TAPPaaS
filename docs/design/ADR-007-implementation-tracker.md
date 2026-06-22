@@ -75,15 +75,31 @@ permanent (each step independently gated):
   environments — instead of writing `configuration.json`. (N5: route install
   through the new managers.) Until this lands, a reinstall regenerates
   `configuration.json` and no `site.json`. **This is the fundamental blocker.**
-- **D2 — Retire `roles-ensure.sh` / `user.sh` (people migration).** `roles-ensure.sh`
-  is called **live** by `identity/update.sh` and `identity/install-service.sh`
-  (every identity install/update) and reads `configuration.json`; people-manager
-  supersedes it. Repoint identity at people-manager and drop the roles-ensure /
-  user.sh calls. Deleting `configuration.json` before this breaks identity
-  install/update.
-- **D3 — Resolve `variant-manager` / `.tappaas.variants`.** The legacy variant
-  registry lives in `configuration.json`; retire it or rehome it as part of the
-  variant→environment completion (see the parking-lot item).
+- **D2+D3 — People/roles + variant→environment migration (SSO-sensitive; design
+  decision needed BEFORE coding).** Investigation found two **incompatible** group
+  models coexisting:
+  - *ADR-006 (`roles-ensure.sh`, LIVE):* creates `tappaas-admins`/`tappaas-users`/
+    `tappaas-installers` (prefix = variant, or `tappaas` for the default scope),
+    enumerating variants from `configuration.json .tappaas.variants`. **Every SSO
+    module's OIDC allow-list uses these exact names** — `identity/services/identity/
+    install-service.sh` binds ALLOW_GROUPS = `${PREFIX}-users`, `${PREFIX}-admins`,
+    `tappaas-installers`. Called live by `identity/update.sh` + `install-service.sh`.
+  - *ADR-007 (`people-manager`, bootstrapped):* reconciles `config/people/groups/*`
+    → `test2__admin`/`test2__users` (org-scoped, double-underscore). Different
+    groups entirely.
+
+  Naively retiring `roles-ensure` (or renaming the variant scope to the
+  environment name) leaves the deployed apps' allow-lists (`tappaas-*`) pointing at
+  groups that are no longer created → **SSO access breaks for every app**. So D2+D3
+  requires, in order: (a) a **design decision** on the one canonical group model
+  (org/people-manager naming vs the deployed ADR-006 allow-list naming) and how the
+  environment maps to a group scope; (b) make `identity/install-service.sh` bind
+  the canonical groups + have people-manager create them; (c) migrate the LIVE
+  Authentik groups + every deployed app's allow-list in lockstep; (d) retire
+  `roles-ensure.sh` + `user.sh` + `variant-manager`/`.tappaas.variants`; (e) **live
+  SSO test**. This is a focused, design-led, live-tested effort — not a blind code
+  change. The system is stable meanwhile (SSO runs on the ADR-006 model; the two
+  models coexist).
 - **D4 — Migrate the field-definition files to JSON Schemas.** Move
   `module-fields.json`, the zones field definitions (`zones-fields`), and the
   module-catalogue field definitions (`module-catalog`/`module-catalogue-fields`)
