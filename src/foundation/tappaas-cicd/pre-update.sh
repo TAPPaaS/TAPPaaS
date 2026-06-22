@@ -173,7 +173,7 @@ echo ""
 # build via update-tappaas rather than needing a nixos-rebuild. caddy-manager,
 # opnsense-firewall, rules-manager and syslog-manager were previously only in
 # the system env, so their changes didn't propagate on update (issue #206).
-for _oc_tool in opnsense-controller zone-manager dns-manager unbound-manager caddy-manager nat-manager opnsense-firewall rules-manager syslog-manager test-network-manager acme-manager authentik-manager; do
+for _oc_tool in opnsense-controller zone-manager dns-manager unbound-manager caddy-manager nat-manager opnsense-firewall rules-manager syslog-manager test-network-manager acme-manager; do
   _oc_src="/home/tappaas/TAPPaaS/src/foundation/tappaas-cicd/controller/opnsense-controller/result/bin/${_oc_tool}"
   if [ -e "${_oc_src}" ]; then
     rm -f "/home/tappaas/bin/${_oc_tool}" 2>/dev/null || true
@@ -206,6 +206,26 @@ fi
 chmod 600 ~/.opnsense-credentials.txt
 info "  opnsense-controller binary installed to /home/tappaas/bin/opnsense-controller"
 cd ../..   # back to tappaas-cicd/ (opnsense-controller now under controller/)
+
+# --- Build and install identity-controller (ADR-007 S2b-1) ---
+# Authentik runtime controller, extracted from opnsense-controller. Built and
+# linked the same way: nix-build then symlink its CLIs from result/bin into
+# ~/bin so they track the repo build without a nixos-rebuild. Ships
+# authentik-manager (the verb the people-manager calls) and identity-controller.
+echo ""
+info "Building the identity-controller project..."
+cd controller/identity-controller
+stdbuf -oL nix-build -A default default.nix 2>&1 | tee /tmp/identity-controller-build.log | while IFS= read -r line; do printf "."; done
+echo ""
+for _ic_tool in authentik-manager identity-controller; do
+  _ic_src="/home/tappaas/TAPPaaS/src/foundation/tappaas-cicd/controller/identity-controller/result/bin/${_ic_tool}"
+  if [ -e "${_ic_src}" ]; then
+    rm -f "/home/tappaas/bin/${_ic_tool}" 2>/dev/null || true
+    ln -s "${_ic_src}" "/home/tappaas/bin/${_ic_tool}"
+  fi
+done
+info "  identity-controller binaries installed to /home/tappaas/bin/ (authentik-manager, identity-controller)"
+cd ../..   # back to tappaas-cicd/
 
 # --- Build and install update-tappaas ---
 echo ""

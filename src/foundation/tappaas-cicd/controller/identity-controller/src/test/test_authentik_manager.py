@@ -12,8 +12,8 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 from unittest.mock import MagicMock
 
-from opnsense_controller.authentik_cli import _read_creds
-from opnsense_controller.authentik_manager import (
+from identity_controller.authentik_cli import _read_creds
+from identity_controller.authentik_manager import (
     AuthentikConfig,
     AuthentikManager,
     OidcApp,

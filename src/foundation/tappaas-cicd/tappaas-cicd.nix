@@ -28,6 +28,8 @@
 let
   # Import opnsense-controller package
   opnsenseController = import ./controller/opnsense-controller { inherit pkgs; };
+  # Import identity-controller package (Authentik runtime controller; ADR-007 S2b-1)
+  identityController = import ./controller/identity-controller { inherit pkgs; };
 in
 {
   imports =
@@ -282,6 +284,8 @@ in
         shellcheck   # bash script linting for module *.sh validation (#265)
         # OPNsense controller tools (opnsense-controller, opnsense-firewall, zone-manager, dns-manager)
         opnsenseController.default
+        # Identity controller tools (authentik-manager, identity-controller; ADR-007 S2b-1)
+        identityController.default
   ];
 
   # Enable automatic garbage collection

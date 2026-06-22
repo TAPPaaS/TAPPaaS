@@ -1,0 +1,21 @@
+[build-system]
+requires = ["setuptools >= 61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "identity-controller"
+version = "0.1.0"
+description = "Authentik runtime controller for TAPPaaS"
+readme = "README.md"
+requires-python = ">=3.10"
+license = "MIT"
+dependencies = [
+    "httpx",
+]
+
+[project.scripts]
+authentik-manager = "identity_controller.authentik_cli:main"
+identity-controller = "identity_controller.authentik_cli:main"
+
+[tool.setuptools.packages.find]
+where = ["."]
