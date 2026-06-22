@@ -8,7 +8,8 @@
 #   - site.json validates against site-fields.json
 #   - mapped fields present: name (from domain label), location.timezone,
 #     hardware.nodes mapped from tappaas-nodes, repositories carried over
-#   - dropped fields absent: domain / email / variants / nodeCount
+#   - dropped fields absent: domain / variants / nodeCount
+#   - email CARRIED to site.json .email (S3b reader cutover)
 #   - migration is idempotent (2nd run is a no-op; --force overwrites)
 #   - owner is derived from config/people/organizations/ when present
 #   - a deliberately-bad site.json FAILS validate-site.sh
@@ -97,8 +98,9 @@ if run_validate "$SITE"; then ok "site.json validates against schema"; else bad 
 
 # DROPPED fields must be absent from site.json
 [[ "$(jqv "$SITE" 'has("domain")')" == "false" ]] && ok "domain DROPPED" || bad "domain leaked"
-[[ "$(jqv "$SITE" 'has("email")')" == "false" ]] && ok "email DROPPED" || bad "email leaked"
 [[ "$(jqv "$SITE" 'has("variants")')" == "false" ]] && ok "variants DROPPED" || bad "variants leaked"
+# email is CARRIED to site.json .email (S3b reader cutover), not dropped
+[[ "$(jqv "$SITE" '.email')" == "ops@example.org" ]] && ok "email carried to site.json .email" || bad "email not carried (got '$(jqv "$SITE" '.email')')"
 [[ "$(jqv "$SITE" 'has("nodeCount")')" == "false" ]] && ok "nodeCount DROPPED" || bad "nodeCount leaked"
 # owner empty when no orgs present
 [[ "$(jqv "$SITE" '.owner')" == "" ]] && ok "owner empty when no organizations present" || bad "owner unexpectedly set"

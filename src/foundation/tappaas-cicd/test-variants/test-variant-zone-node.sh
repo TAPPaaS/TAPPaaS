@@ -62,7 +62,7 @@ skip() { warn "  ⊘ $1 (skipped)"; SKIP=$((SKIP + 1)); }
 section() { echo; info "${BOLD:-}${1}${CL}"; }
 
 # Firewall node (where the firewall VM lives) — for the "co-located vs not" point.
-FW_NODE="$(ssh -o ConnectTimeout=6 root@"$(jq -r '."tappaas-nodes"[0].hostname // "tappaas1"' "${CONFIG_DIR}/configuration.json")".mgmt.internal \
+FW_NODE="$(ssh -o ConnectTimeout=6 root@"$(get_node_hostname 0)".mgmt.internal \
     "pvesh get /cluster/resources --type vm --output-format json 2>/dev/null | jq -r '.[]|select(.name==\"firewall\")|.node'" 2>/dev/null || echo "")"
 
 # ── cleanup (idempotent; runs on any exit) ───────────────────────────

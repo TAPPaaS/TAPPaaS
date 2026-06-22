@@ -960,9 +960,9 @@ else
     # Distribute the refreshed zones.json to each Proxmox node so
     # Create-TAPPaaS-VM.sh on the node can resolve the new test zones.
     nodes_pushed=0
-    if command -v jq >/dev/null 2>&1 && [[ -f "${CONFIG_DIR}/configuration.json" ]]; then
-        mapfile -t pve_nodes < <(jq -r '."tappaas-nodes"[]?.hostname // empty' \
-                                    "${CONFIG_DIR}/configuration.json" 2>/dev/null)
+    if command -v jq >/dev/null 2>&1; then
+        # Node hostnames from site.json (.hardware.nodes), fallback configuration.json.
+        mapfile -t pve_nodes < <(get_all_node_hostnames 2>/dev/null)
         for node in "${pve_nodes[@]}"; do
             [[ -z "${node}" ]] && continue
             if scp -o StrictHostKeyChecking=accept-new -o ConnectTimeout=5 \
@@ -1056,8 +1056,10 @@ else
     # firewall:proxy install-service already ran via install-module.sh. Verify it.
     proxy_domain=$(read_module_config "test-fw-a" 2>/dev/null | jq -r '.proxyDomain // empty' 2>/dev/null)
     if [[ -z "${proxy_domain}" ]]; then
-        # Derive default — <vmname>.<tappaas.domain>
-        domain=$(jq -r '.tappaas.domain // empty' "${CONFIG_DIR}/configuration.json" 2>/dev/null)
+        # Derive default — <vmname>.<env-domain> (config/environments via
+        # get_variant_config, fallback configuration.json .tappaas.domain).
+        domain=$(jq -r '.domain // empty' <<<"$(get_variant_config "" 2>/dev/null || echo '{}')")
+        [[ -z "${domain}" ]] && domain=$(jq -r '.tappaas.domain // empty' "${CONFIG_DIR}/configuration.json" 2>/dev/null)
         proxy_domain="test-fw-a.${domain}"
     fi
     if [[ -n "${proxy_domain}" && "${proxy_domain}" != "test-fw-a." ]]; then

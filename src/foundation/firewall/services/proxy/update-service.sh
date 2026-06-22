@@ -59,10 +59,17 @@ if [[ -z "${VMNAME}" ]]; then
 fi
 
 ZONE=$(get_config_value 'zone0' 'srvHome')
-TAPPAAS_DOMAIN=$(jq -r '.tappaas.domain // empty' "${SYSTEM_CONFIG}")
+# Domain from the module's environment (config/environments/<env>.json via
+# get_variant_config), falling back to legacy configuration.json .tappaas.domain.
+VARIANT=$(get_config_value 'variant' '')
+VCFG="$(get_variant_config "${VARIANT}" 2>/dev/null || echo '{}')"
+TAPPAAS_DOMAIN=$(jq -r '.domain // empty' <<<"${VCFG}")
+if [[ -z "${TAPPAAS_DOMAIN}" ]]; then
+    TAPPAAS_DOMAIN=$(jq -r '.tappaas.domain // empty' "${SYSTEM_CONFIG}" 2>/dev/null)
+fi
 
 if [[ -z "${TAPPAAS_DOMAIN}" ]]; then
-    die "tappaas.domain not set in ${SYSTEM_CONFIG}"
+    die "No domain resolved for environment '${VARIANT:-default}' (config/environments/ or configuration.json)"
 fi
 
 PROXY_DOMAIN=$(get_config_value 'proxyDomain' '')
@@ -113,7 +120,15 @@ CHANGES_MADE=false
 PROXY_TLS=$(get_config_value 'proxyTls' 'dns01')
 CADDY_DOMAIN_ARGS=()
 if [[ "${PROXY_TLS}" == "dns01" ]]; then
-    TLS_CERT_REFID=$(jq -r '.tappaas.tlsCertRefid // ""' "${CONFIG_DIR}/configuration.json" 2>/dev/null)
+    # Prefer the env's refid from get_variant_config (cert-refids.json), then the
+    # runtime cert-refids.json directly, then the legacy global configuration.json.
+    TLS_CERT_REFID=$(jq -r '.tlsCertRefid // ""' <<<"${VCFG}")
+    if [[ -z "${TLS_CERT_REFID}" ]]; then
+        _ENV_NAME="${VARIANT}"
+        [[ -z "${_ENV_NAME}" ]] && _ENV_NAME="$(default_environment_name)"
+        TLS_CERT_REFID="$(cert_refid_for_env "${_ENV_NAME}")"
+    fi
+    [[ -z "${TLS_CERT_REFID}" ]] && TLS_CERT_REFID=$(jq -r '.tappaas.tlsCertRefid // ""' "${CONFIG_DIR}/configuration.json" 2>/dev/null)
     if [[ -n "${TLS_CERT_REFID}" ]]; then
         CADDY_DOMAIN_ARGS=(--custom-certificate "${TLS_CERT_REFID}")
     else

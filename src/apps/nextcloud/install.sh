@@ -18,7 +18,11 @@ VMNAME="$(get_config_value 'vmname' "${1:-nextcloud}")"
 ZONE0NAME="$(get_config_value 'zone0' 'srv')"
 PROXY_DOMAIN="$(get_config_value 'proxyDomain' '')"
 if [[ -z "${PROXY_DOMAIN}" ]]; then
-    _TAPPAAS_DOMAIN=$(jq -r '.tappaas.domain // empty' \
+    # Domain from the module's environment (config/environments/<env>.json via
+    # get_variant_config), falling back to legacy configuration.json .tappaas.domain.
+    _NC_VARIANT="$(get_config_value 'variant' '')"
+    _TAPPAAS_DOMAIN=$(jq -r '.domain // empty' <<<"$(get_variant_config "${_NC_VARIANT}" 2>/dev/null || echo '{}')")
+    [[ -z "${_TAPPAAS_DOMAIN}" ]] && _TAPPAAS_DOMAIN=$(jq -r '.tappaas.domain // empty' \
         "/home/tappaas/config/configuration.json" 2>/dev/null)
     PROXY_DOMAIN="${VMNAME}.${_TAPPAAS_DOMAIN}"
 fi

@@ -14,6 +14,7 @@
 #   displayName       <- .tappaas.displayName, else name
 #   owner             <- first org slug under config/people/organizations/,
 #                        else "" (operator must set it; a warning is emitted)
+#   email             <- .tappaas.email (installer/admin contact; S3b cutover)
 #   version           <- .tappaas.version
 #   location.timezone <- system tz (timedatectl / /etc/localtime, fallback Europe/Amsterdam)
 #   location.country  <- derived from timezone region (fallback NL)
@@ -31,7 +32,8 @@
 #   environments      <- []  (S4/P3 populates from variants)
 #   organizations     <- references to config/people/organizations/*.json if present, else []
 #
-# DROPPED (deliberately, move to environments in S4): domain, email, variants, nodeCount.
+# DROPPED (deliberately, move to environments in S4): domain, variants, nodeCount.
+# (email is now CARRIED to site.json .email — S3b reader cutover.)
 #
 # Idempotent: if site.json already exists it is a no-op unless --force is given.
 # configuration.json is backed up to configuration.json.bak and LEFT in place.
@@ -241,6 +243,7 @@ main() {
             name: $name,
             displayName: $displayName,
             owner: $owner,
+            email: ($t.email // ""),
             version: ($t.version // "1.0"),
             location: {
                 country: $country,

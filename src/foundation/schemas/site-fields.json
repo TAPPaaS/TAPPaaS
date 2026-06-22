@@ -28,6 +28,10 @@
       "description": "Reference to the site-owner Organization.name (config/people/organizations/<owner>.json).",
       "type": "string"
     },
+    "email": {
+      "description": "Installer/admin contact email (Let's Encrypt ACME account, people bootstrap). Carried over from configuration.json .tappaas.email during the S3b reader cutover.",
+      "type": "string"
+    },
     "version": {
       "description": "Site config schema version.",
       "type": "string",

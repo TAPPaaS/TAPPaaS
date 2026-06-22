@@ -159,7 +159,7 @@ fi
 # delivers the OIDC env to the VM. Each VM is torn down after its checks.
 if [[ "${RUN_DEEP}" -eq 1 ]]; then
     FIXTURES="$(cd "$(dirname "$0")" && pwd)/test-fixtures"
-    DOMAIN="$(jq -r '(.tappaas.variants[""].domain // .tappaas.domain // "")' "${CONFIG_DIR}/configuration.json")"
+    DOMAIN="$(jq -r '.domain // empty' <<<"$(get_variant_config "" 2>/dev/null || echo '{}')")"
     INSTALL_MODULE="${INSTALL_MODULE:-/home/tappaas/bin/install-module.sh}"
     DELETE_MODULE="${DELETE_MODULE:-/home/tappaas/bin/delete-module.sh}"
 

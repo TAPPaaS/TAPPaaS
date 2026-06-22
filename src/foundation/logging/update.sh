@@ -78,11 +78,13 @@ fi
 echo ""
 info "${BOLD}Configure Proxmox nodes' rsyslog forwarding${CL}"
 
-CONFIG_FILE="/home/tappaas/config/configuration.json"
-NODE_COUNT="$(jq -r '."tappaas-nodes" | length' "${CONFIG_FILE}" 2>/dev/null || echo 0)"
+# Node hostnames from site.json (.hardware.nodes), falling back to
+# configuration.json (.tappaas-nodes) — via the shared helper.
+mapfile -t NODE_HOSTS < <(get_all_node_hostnames 2>/dev/null)
+NODE_COUNT="${#NODE_HOSTS[@]}"
 
 if [[ "${NODE_COUNT}" -lt 1 ]]; then
-    warn "  No tappaas-nodes in configuration.json — skipping"
+    warn "  No nodes resolved (site.json/configuration.json) — skipping"
 else
     SYSLOG_FQDN="${VMNAME}.${ZONE0NAME}.internal"
 
@@ -107,8 +109,8 @@ EOF
     SSH_OPTS="-o BatchMode=yes -o ConnectTimeout=5 -o StrictHostKeyChecking=accept-new"
     REMOTE_PATH="/etc/rsyslog.d/99-tappaas-loki.conf"
 
-    for i in $(seq 0 $((NODE_COUNT - 1))); do
-        NODE_HOSTNAME="$(jq -r ".\"tappaas-nodes\"[${i}].hostname" "${CONFIG_FILE}")"
+    for NODE_HOSTNAME in "${NODE_HOSTS[@]}"; do
+        [[ -z "${NODE_HOSTNAME}" ]] && continue
         NODE_FQDN="${NODE_HOSTNAME}.mgmt.internal"
         info "  → ${NODE_HOSTNAME}"
 

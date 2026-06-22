@@ -281,6 +281,21 @@ rm -f "${sr_tmp}/configuration.json"
 rm -rf "${sr_tmp}"
 trap - EXIT
 
+# ── Test 9b: site.json + environments reader cutover (ADR-007 S3b) ──────────
+# Unit-tests the central config readers against TEMP fixtures: NEW sources
+# (site.json / environments / cert-refids.json) win when present; fall back to
+# configuration.json when absent. Never touches the live config or the cluster.
+info "${BOLD}Test 9b: site.json/environments reader cutover${CL}"
+if [[ -x "${SCRIPT_DIR}/lib/test-config-readers.sh" ]]; then
+    if "${SCRIPT_DIR}/lib/test-config-readers.sh" >/dev/null 2>&1; then
+        pass "config readers: site.json/environments/cert-refids + configuration.json fallback"
+    else
+        fail "config-readers cutover test failed (run lib/test-config-readers.sh)"
+    fi
+else
+    skip "lib/test-config-readers.sh not found"
+fi
+
 # update-module.sh wires cleanup into the success path (prune_snapshots calls
 # snapshot-vm.sh --cleanup); guard against the wiring silently disappearing.
 if grep -q 'snapshot-vm.sh.*--cleanup' /home/tappaas/bin/update-module.sh; then

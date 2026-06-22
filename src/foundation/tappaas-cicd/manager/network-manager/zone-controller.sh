@@ -28,7 +28,6 @@ readonly SCRIPT_NAME
 . /home/tappaas/bin/common-install-routines.sh 2>/dev/null \
     || . "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/common-install-routines.sh"
 
-readonly CONFIG_FILE="${CONFIG_DIR}/configuration.json"
 readonly ZONES_FILE="${CONFIG_DIR}/zones.json"
 
 # Dynamic-allocation VLAN window within a type band (10.<typeId>.<sub>.0/24).
@@ -97,8 +96,10 @@ jq_write() {
 }
 
 # Echo a Proxmox node hostname to ssh into (first declared cluster node).
+# Reads site.json (.hardware.nodes), falls back to configuration.json — via the
+# shared helper, which defaults to tappaas1 when neither is present.
 _primary_node() {
-    jq -r '."tappaas-nodes"[0].hostname // "tappaas1"' "${CONFIG_FILE}" 2>/dev/null
+    get_node_hostname 0
 }
 
 # Echo the cluster-wide list of VM config files whose NIC carries VLAN <tag>.

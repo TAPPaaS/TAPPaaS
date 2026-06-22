@@ -37,14 +37,12 @@ readonly SCRIPT_NAME
 # shellcheck source=common-install-routines.sh disable=SC1091
 . /home/tappaas/bin/common-install-routines.sh
 
-# Resolve repo source. configuration.json's tappaas.repositories tells us where
-# the canonical TAPPaaS checkout is; fall back to the conventional path.
+# Resolve repo source. site.json .repositories (fallback configuration.json
+# .tappaas.repositories, via get_repo_path) tells us where the canonical TAPPaaS
+# checkout is; fall back to the conventional path.
 default_source() {
-    local repos_dir=""
-    if [[ -f "${CONFIG_DIR}/configuration.json" ]]; then
-        repos_dir=$(jq -r '.tappaas.repositories[]? | select(.name=="TAPPaaS") | .path' \
-                    "${CONFIG_DIR}/configuration.json" 2>/dev/null || true)
-    fi
+    local repos_dir
+    repos_dir="$(get_repo_path TAPPaaS 2>/dev/null || true)"
     [[ -z "${repos_dir}" ]] && repos_dir="/home/tappaas/TAPPaaS"
     echo "${repos_dir}/src/foundation/tappaas-cicd/manager/network-manager/zones.json"
 }

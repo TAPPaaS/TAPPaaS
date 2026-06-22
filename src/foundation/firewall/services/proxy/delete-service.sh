@@ -50,7 +50,9 @@ if [[ "${FIREWALL_TYPE}" == "NONE" ]]; then
         [[ -z "${VMNAME}" ]] && VMNAME="${MODULE}"
         PROXY_DOMAIN=$(get_config_value 'proxyDomain' '')
         if [[ -z "${PROXY_DOMAIN}" ]]; then
-            TAPPAAS_DOMAIN=$(jq -r '.tappaas.domain // empty' "${SYSTEM_CONFIG}")
+            _V=$(get_config_value 'variant' '' 2>/dev/null || echo '')
+            TAPPAAS_DOMAIN=$(jq -r '.domain // empty' <<<"$(get_variant_config "${_V}" 2>/dev/null || echo '{}')")
+            [[ -z "${TAPPAAS_DOMAIN}" ]] && TAPPAAS_DOMAIN=$(jq -r '.tappaas.domain // empty' "${SYSTEM_CONFIG}" 2>/dev/null)
             [[ -n "${TAPPAAS_DOMAIN}" ]] && PROXY_DOMAIN="${VMNAME}.${TAPPAAS_DOMAIN}"
         fi
     fi
@@ -87,8 +89,12 @@ if [[ -f "${MODULE_JSON}" ]]; then
     fi
 
     PROXY_DOMAIN=$(get_config_value 'proxyDomain' '')
-    if [[ -z "${PROXY_DOMAIN}" ]] && [[ -f "${SYSTEM_CONFIG}" ]]; then
-        TAPPAAS_DOMAIN=$(jq -r '.tappaas.domain // empty' "${SYSTEM_CONFIG}")
+    if [[ -z "${PROXY_DOMAIN}" ]]; then
+        _V=$(get_config_value 'variant' '' 2>/dev/null || echo '')
+        TAPPAAS_DOMAIN=$(jq -r '.domain // empty' <<<"$(get_variant_config "${_V}" 2>/dev/null || echo '{}')")
+        if [[ -z "${TAPPAAS_DOMAIN}" ]] && [[ -f "${SYSTEM_CONFIG}" ]]; then
+            TAPPAAS_DOMAIN=$(jq -r '.tappaas.domain // empty' "${SYSTEM_CONFIG}" 2>/dev/null)
+        fi
         if [[ -n "${TAPPAAS_DOMAIN}" ]]; then
             PROXY_DOMAIN="${VMNAME}.${TAPPAAS_DOMAIN}"
         fi

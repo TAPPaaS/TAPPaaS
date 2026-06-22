@@ -40,8 +40,11 @@ ZONE0NAME="$(get_config_value 'zone0' 'mgmt')"
 HANODE="$(get_config_value 'HANode' "$(get_default_ha_node "$NODE")")"
 
 CONFIG_FILE="${CONFIG_DIR}/configuration.json"
-DOMAIN="$(jq -r '.tappaas.domain // empty' "$CONFIG_FILE" 2>/dev/null)"
-[[ -n "$DOMAIN" && "$DOMAIN" != CHANGE* ]] || die "tappaas.domain not set in ${CONFIG_FILE}"
+# Domain from the default environment (config/environments/<env>.json via
+# get_variant_config), falling back to legacy configuration.json .tappaas.domain.
+DOMAIN="$(jq -r '.domain // empty' <<<"$(get_variant_config "" 2>/dev/null || echo '{}')")"
+[[ -z "$DOMAIN" ]] && DOMAIN="$(jq -r '.tappaas.domain // empty' "$CONFIG_FILE" 2>/dev/null)"
+[[ -n "$DOMAIN" && "$DOMAIN" != CHANGE* ]] || die "No domain resolved (config/environments/ or configuration.json .tappaas.domain)"
 
 IDENTITY_FQDN="${VMNAME}.${ZONE0NAME}.internal"
 IDENTITY_PUBLIC="https://identity.${DOMAIN}"

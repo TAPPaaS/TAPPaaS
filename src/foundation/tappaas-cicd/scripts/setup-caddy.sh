@@ -17,25 +17,21 @@ set -e
 . /home/tappaas/bin/common-install-routines.sh
 
 FIREWALL_FQDN="firewall.mgmt.internal"
-CONFIG_FILE="/home/tappaas/config/configuration.json"
 
 info "Setting up Caddy reverse proxy on OPNsense firewall..."
 
-# Check if configuration file exists
-if [[ ! -f "$CONFIG_FILE" ]]; then
-    die "Configuration file not found: $CONFIG_FILE"
-fi
-
-# Extract domain and email from configuration.json
-DOMAIN=$(jq -r '.tappaas.domain' "$CONFIG_FILE")
-EMAIL=$(jq -r '.tappaas.email' "$CONFIG_FILE")
+# Domain comes from the default environment (config/environments/<env>.json via
+# get_variant_config); email from site.json .email (installer_email). Both fall
+# back to configuration.json during the phased migration.
+DOMAIN="$(jq -r '.domain // empty' <<<"$(get_variant_config "" 2>/dev/null || echo '{}')")"
+EMAIL="$(installer_email)"
 
 if [[ -z "$DOMAIN" || "$DOMAIN" == "null" || "$DOMAIN" == CHANGE* ]]; then
-    die "Domain not configured in configuration.json. Please set tappaas.domain to your actual domain."
+    die "Domain not configured. Set domains.primary in config/environments/<env>.json (or tappaas.domain in configuration.json)."
 fi
 
 if [[ -z "$EMAIL" || "$EMAIL" == "null" || "$EMAIL" == CHANGE* ]]; then
-    die "Email not configured in configuration.json. Please set tappaas.email for Let's Encrypt."
+    die "Email not configured. Set .email in site.json (or tappaas.email in configuration.json) for Let's Encrypt."
 fi
 
 debug "Domain: $DOMAIN"

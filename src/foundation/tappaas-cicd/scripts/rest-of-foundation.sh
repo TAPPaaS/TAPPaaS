@@ -70,10 +70,12 @@ done
 if [[ " ${FAILED[*]} " != *" identity "* ]]; then
   people_dir="${TAPPAAS_CONFIG:-${CONFIG_DIR}}/people"
   if [[ ! -d "$people_dir" || -z "$(ls -A "$people_dir" 2>/dev/null)" ]]; then
-    cfg="${CONFIG_DIR}/configuration.json"
-    inst_email="$(jq -r '.tappaas.email // ""'  "$cfg" 2>/dev/null)"
-    inst_domain="$(jq -r '.tappaas.domain // ""' "$cfg" 2>/dev/null)"
-    inst_org="$(jq -r '.tappaas.name // ""'      "$cfg" 2>/dev/null)"
+    # Installer identity: email from site.json .email (installer_email), the
+    # org/domain from the default environment (get_variant_config) and site name
+    # (get_site_value) — all fall back to configuration.json.
+    inst_email="$(installer_email)"
+    inst_domain="$(jq -r '.domain // ""' <<<"$(get_variant_config "" 2>/dev/null || echo '{}')")"
+    inst_org="$(get_site_value '.name' 'name')"
     [[ -n "$inst_org" ]] || inst_org="${inst_domain%%.*}"   # first domain label
     inst_user="${inst_email%@*}"                            # email local-part
     inst_user="$(printf '%s' "$inst_user" | tr '[:upper:]' '[:lower:]' | tr -c 'a-z0-9-' '-' | sed 's/^-*//;s/-*$//')"
@@ -105,7 +107,7 @@ if [[ "$SKIP_UPDATE" == "0" ]]; then
 fi
 
 # ── Summary ──────────────────────────────────────────────────────────
-domain="$(jq -r '.tappaas.domain // "<not set>"' "${CONFIG_DIR}/configuration.json" 2>/dev/null || echo '<unknown>')"
+domain="$(jq -r '.domain // "<not set>"' <<<"$(get_variant_config "" 2>/dev/null || echo '{}')")"
 nodes="$(pvesh get /cluster/resources --type node --output-format json 2>/dev/null \
           | jq -r '.[].node' 2>/dev/null | paste -sd', ' - 2>/dev/null || true)"
 if [[ -z "$nodes" ]]; then

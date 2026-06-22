@@ -5,17 +5,19 @@
 # chain has set up Caddy but before installing the rest of the foundation.
 #
 # What it does (idempotent):
-#   1. Reads tappaas.domain and tappaas.email from /home/tappaas/config/configuration.json
+#   1. Reads the environment's domain (config/environments/<env>.json, via
+#      get_variant_config) and the installer email (site.json .email, via
+#      installer_email) — both fall back to configuration.json
 #   2. Asks for the DNS provider (default: cloudflare) and its API credential(s),
 #      OR reads them from ~/.acme-dns-credentials.txt if present (chmod 600)
 #   3. Provisions an ACME account, DNS-01 validation, caddy-reload action, and
 #      a wildcard cert (*.<domain> + bare apex) on the OPNsense firewall via the
 #      acme-manager CLI (drives os-acme-client end-to-end)
-#   4. Captures the OPNsense Trust refid of the issued cert and writes it back
-#      into configuration.json as tappaas.tlsCertRefid — this is what the per-
-#      module proxy install reads so each domain binds the wildcard refid via
-#      Caddy's CustomCertificate (no per-module ACME, no DNS-API needed at
-#      module-install time)
+#   4. Captures the OPNsense Trust refid of the issued cert and writes it into
+#      the runtime cert-refids.json keyed by environment (ADR-007c), mirroring it
+#      to configuration.json for legacy fallback — this is what the per-module
+#      proxy install reads so each domain binds the wildcard refid via Caddy's
+#      CustomCertificate (no per-module ACME, no DNS-API needed at install time)
 #
 # Re-running this script is safe — every step in the chain is idempotent.
 # Adding a module with proxyTls=dns01 later just reuses the stored refid.
@@ -88,7 +90,7 @@ done
 VCFG="$(get_variant_config "${VARIANT}")" \
     || die "Variant '${VARIANT:-<default>}' not registered. Run: variant-manager add ${VARIANT} --domain <domain>"
 DOMAIN="$(jq -r '.domain // empty' <<<"$VCFG")"
-EMAIL="$(jq -r '.tappaas.email // empty' "$CONFIG_FILE")"
+EMAIL="$(installer_email)"
 [[ -n "$DOMAIN" && "$DOMAIN" != CHANGE* ]] || die "Variant '${VARIANT:-<default>}' has no domain set (run: variant-manager add ${VARIANT} --domain <yours>)"
 [[ -n "$EMAIL"  && "$EMAIL"  != CHANGE* ]] || die "tappaas.email not set"
 
@@ -219,22 +221,40 @@ info "  ${GN}✓${CL} Let's Encrypt issued the certificate (statusCode 200)"
 REFID="$(awk '/^[[:space:]]+refid:[[:space:]]/ {print $2}' "$LOG_FILE" | tail -1)"
 [[ -n "$REFID" ]] || die "could not capture certificate refid from acme-manager output"
 
-# ── Persist refid into configuration.json ──────────────────────────────────
+# ── Persist refid into the runtime cert-refids.json (ADR-007c) ──────────────
+# tlsCertRefid is reconciler-populated runtime state, not authored config. Write
+# it to ${CONFIG_DIR}/cert-refids.json keyed by ENVIRONMENT name. The env name is
+# the variant when set, else the default environment (site.json .name).
+
+ENV_NAME="$VARIANT"
+[[ -z "$ENV_NAME" ]] && ENV_NAME="$(default_environment_name)"
+CERT_REFIDS="$(cert_refids_path)"
 
 echo
-info "${BOLD}Recording refid in configuration.json${CL}"
-# Write the refid into the variant registry (ADR-005). For the default variant
-# also mirror it to the legacy tappaas.tlsCertRefid so un-migrated readers keep
-# working (backwards compatibility — Sprint 3.3).
+info "${BOLD}Recording refid in cert-refids.json${CL}"
 TMP="$(mktemp)"
-jq --arg refid "$REFID" --arg v "$VARIANT" '
-    .tappaas.variants = (.tappaas.variants // {})
-    | .tappaas.variants[$v] = ((.tappaas.variants[$v] // {}) + { tlsCertRefid: $refid })
-    | (if $v == "" then .tappaas.tlsCertRefid = $refid else . end)' \
-    "$CONFIG_FILE" > "$TMP"
-mv "$TMP" "$CONFIG_FILE"
-info "  ${GN}✓${CL} variants[\"${VARIANT}\"].tlsCertRefid = ${REFID}"
-[[ -z "$VARIANT" ]] && info "  ${GN}✓${CL} tappaas.tlsCertRefid = ${REFID} (legacy alias)"
+if [[ -f "$CERT_REFIDS" ]]; then
+    jq --arg e "$ENV_NAME" --arg refid "$REFID" '. + { ($e): $refid }' "$CERT_REFIDS" > "$TMP"
+else
+    jq -n --arg e "$ENV_NAME" --arg refid "$REFID" '{ ($e): $refid }' > "$TMP"
+fi
+mv "$TMP" "$CERT_REFIDS"
+info "  ${GN}✓${CL} cert-refids.json[\"${ENV_NAME}\"] = ${REFID}"
+
+# ── Also mirror into configuration.json (legacy fallback, kept until delete) ──
+# Un-migrated readers still consult the variant registry; keep them working
+# during the phased migration (the fallback is removed in a LATER phase).
+if [[ -f "$CONFIG_FILE" ]]; then
+    TMP="$(mktemp)"
+    jq --arg refid "$REFID" --arg v "$VARIANT" '
+        .tappaas.variants = (.tappaas.variants // {})
+        | .tappaas.variants[$v] = ((.tappaas.variants[$v] // {}) + { tlsCertRefid: $refid })
+        | (if $v == "" then .tappaas.tlsCertRefid = $refid else . end)' \
+        "$CONFIG_FILE" > "$TMP"
+    mv "$TMP" "$CONFIG_FILE"
+    info "  ${GN}✓${CL} (legacy) variants[\"${VARIANT}\"].tlsCertRefid = ${REFID}"
+    [[ -z "$VARIANT" ]] && info "  ${GN}✓${CL} (legacy) tappaas.tlsCertRefid = ${REFID}"
+fi
 
 # ── Split-horizon wildcard DNS (ADR-005 §6, #269) ──────────────────────────
 # In wildcard mode, point *.<domain> at the DMZ gateway (where os-caddy listens)

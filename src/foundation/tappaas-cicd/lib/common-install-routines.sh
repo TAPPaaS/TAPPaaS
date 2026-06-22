@@ -49,80 +49,164 @@ die()   { error "$@"; exit 1; }
 
 # ── Shared helper functions ──────────────────────────────────────────
 
-# ── Node lookup helpers (read from configuration.json) ───────────────
-# These functions resolve node hostnames from configuration.json, replacing
-# hardcoded "tappaas1" assumptions. They fall back to "tappaas1" when
-# configuration.json is not yet available (e.g., during initial bootstrap).
+# ── site.json source-of-truth helpers (ADR-007 S3b reader cutover) ───
+# The authoritative site config is now `site.json`; readers fall back to the
+# legacy `configuration.json` while both files coexist (the delete is a LATER
+# phase — the fallback MUST stay until then). These helpers centralize the
+# "read site.json, fall back to configuration.json" pattern so the bulk of the
+# tree is migrated by migrating the helpers.
 
-# Get the FQDN of the primary (first) Proxmox node.
-# Uses dns-hostname if set, otherwise hostname.
-# Returns: <dns-hostname>.mgmt.internal (e.g., tappaas1.mgmt.internal)
-get_primary_node_fqdn() {
-    local config="${CONFIG_DIR}/configuration.json"
-    local mgmt="mgmt"
-    if [[ -f "$config" ]]; then
-        local dns_host
-        dns_host=$(jq -r '."tappaas-nodes"[0]."dns-hostname" // ."tappaas-nodes"[0].hostname // "tappaas1"' "$config" 2>/dev/null) || dns_host="tappaas1"
-        echo "${dns_host}.${mgmt}.internal"
-    else
-        echo "tappaas1.${mgmt}.internal"
+# Path to the live site.json (honours CONFIG_DIR override used in tests).
+_site_json_path() { printf '%s\n' "${CONFIG_DIR}/site.json"; }
+# Path to the legacy configuration.json (fallback source).
+_config_json_path() { printf '%s\n' "${CONFIG_DIR}/configuration.json"; }
+
+# Resolve the default environment name: the single non-mgmt environment, i.e.
+# site.json .name. Falls back to the first DNS label of the legacy
+# tappaas.domain, else "default".
+default_environment_name() {
+    local site cfg name=""
+    site="$(_site_json_path)"
+    cfg="$(_config_json_path)"
+    if [[ -f "$site" ]]; then
+        name="$(jq -r '.name // empty' "$site" 2>/dev/null)" || name=""
     fi
+    if [[ -z "$name" && -f "$cfg" ]]; then
+        local domain
+        domain="$(jq -r '.tappaas.domain // empty' "$cfg" 2>/dev/null)" || domain=""
+        [[ -n "$domain" ]] && name="${domain%%.*}"
+    fi
+    [[ -n "$name" ]] || name="default"
+    printf '%s\n' "$name"
 }
+
+# Resolve the path to an environment config file by environment name.
+# Echoes the path if the file exists; returns 1 otherwise.
+#   environment_file <env-name>
+environment_file() {
+    local env="$1"
+    local p="${CONFIG_DIR}/environments/${env}.json"
+    [[ -f "$p" ]] && { printf '%s\n' "$p"; return 0; }
+    return 1
+}
+
+# ── Node lookup helpers (read from site.json, fall back to configuration.json)
+# These functions resolve node hostnames. site.json .hardware.nodes[].name is
+# authoritative; the FQDN is always <name>.mgmt.internal (dns-hostname/ip no
+# longer exist — name only). Falls back to configuration.json
+# ."tappaas-nodes"[].hostname when site.json is absent, and to "tappaas1" when
+# neither is available (e.g. during initial bootstrap).
 
 # Get the actual system hostname of the Nth node (0-indexed).
 # Arguments: [index] (default: 0)
 get_node_hostname() {
     local index="${1:-0}"
-    local config="${CONFIG_DIR}/configuration.json"
-    if [[ -f "$config" ]]; then
-        jq -r --argjson i "$index" '."tappaas-nodes"[$i].hostname // "tappaas1"' "$config" 2>/dev/null || echo "tappaas1"
-    else
-        echo "tappaas1"
+    local site config name=""
+    site="$(_site_json_path)"
+    config="$(_config_json_path)"
+    if [[ -f "$site" ]]; then
+        name=$(jq -r --argjson i "$index" '.hardware.nodes[$i].name // empty' "$site" 2>/dev/null) || name=""
     fi
+    if [[ -z "$name" && -f "$config" ]]; then
+        name=$(jq -r --argjson i "$index" '."tappaas-nodes"[$i].hostname // empty' "$config" 2>/dev/null) || name=""
+    fi
+    [[ -n "$name" ]] || name="tappaas1"
+    printf '%s\n' "$name"
 }
 
-# Get the dns-hostname of the Nth node (0-indexed), falling back to hostname.
+# Get the dns-hostname of the Nth node (0-indexed). dns-hostname no longer
+# exists as a distinct field — it is the node name. Kept for caller
+# compatibility; identical to get_node_hostname.
 # Arguments: [index] (default: 0)
 get_node_dns_hostname() {
-    local index="${1:-0}"
-    local config="${CONFIG_DIR}/configuration.json"
-    if [[ -f "$config" ]]; then
-        jq -r --argjson i "$index" '."tappaas-nodes"[$i]."dns-hostname" // ."tappaas-nodes"[$i].hostname // "tappaas1"' "$config" 2>/dev/null || echo "tappaas1"
-    else
-        echo "tappaas1"
-    fi
+    get_node_hostname "${1:-0}"
 }
 
-# Get all node hostnames from configuration.json, one per line.
+# Get the FQDN of the primary (first) Proxmox node.
+# Returns: <name>.mgmt.internal (e.g., tappaas1.mgmt.internal)
+get_primary_node_fqdn() {
+    printf '%s.mgmt.internal\n' "$(get_node_hostname 0)"
+}
+
+# Get all node hostnames, one per line. site.json first, then configuration.json.
 get_all_node_hostnames() {
-    local config="${CONFIG_DIR}/configuration.json"
-    if [[ -f "$config" ]]; then
-        jq -r '."tappaas-nodes"[].hostname' "$config" 2>/dev/null || echo "tappaas1"
-    else
-        echo "tappaas1"
+    local site config out=""
+    site="$(_site_json_path)"
+    config="$(_config_json_path)"
+    if [[ -f "$site" ]]; then
+        out=$(jq -r '.hardware.nodes[].name // empty' "$site" 2>/dev/null) || out=""
     fi
+    if [[ -z "$out" && -f "$config" ]]; then
+        out=$(jq -r '."tappaas-nodes"[].hostname // empty' "$config" 2>/dev/null) || out=""
+    fi
+    [[ -n "$out" ]] || out="tappaas1"
+    printf '%s\n' "$out"
 }
 
-# Get the FQDN of the Nth node (0-indexed), using dns-hostname if available.
+# Get the FQDN of the Nth node (0-indexed).
 # Arguments: [index] (default: 0)
 get_node_fqdn() {
     local index="${1:-0}"
-    local mgmt="mgmt"
-    local dns_host
-    dns_host=$(get_node_dns_hostname "$index")
-    echo "${dns_host}.${mgmt}.internal"
+    printf '%s.mgmt.internal\n' "$(get_node_hostname "$index")"
+}
+
+# Read a site-wide scalar field from site.json, falling back to a legacy
+# .tappaas.<field> read on configuration.json. Echoes the raw value, or empty
+# string when neither source has it.
+#   get_site_value <site-jq-path> <legacy-tappaas-field>
+# Example: get_site_value '.version' 'version'
+get_site_value() {
+    local site_path="$1" legacy_field="$2"
+    local site config val=""
+    site="$(_site_json_path)"
+    config="$(_config_json_path)"
+    if [[ -f "$site" ]]; then
+        val=$(jq -r "${site_path} // empty" "$site" 2>/dev/null) || val=""
+    fi
+    if [[ -z "$val" && -f "$config" ]]; then
+        val=$(jq -r --arg f "$legacy_field" '.tappaas[$f] // empty' "$config" 2>/dev/null) || val=""
+    fi
+    printf '%s' "$val"
+}
+
+# The installer/admin email (Let's Encrypt account, people bootstrap). Reads
+# site.json .email, falls back to configuration.json .tappaas.email.
+installer_email() {
+    get_site_value '.email' 'email'
+}
+
+# Echo the .path of a named repository. Reads site.json .repositories[], falls
+# back to configuration.json .tappaas.repositories[]. Empty if not found.
+#   get_repo_path <repo-name>
+get_repo_path() {
+    local name="$1"
+    local site config val=""
+    site="$(_site_json_path)"
+    config="$(_config_json_path)"
+    if [[ -f "$site" ]]; then
+        val=$(jq -r --arg n "$name" '.repositories[]? | select(.name==$n) | .path' "$site" 2>/dev/null | head -1) || val=""
+    fi
+    if [[ -z "$val" && -f "$config" ]]; then
+        val=$(jq -r --arg n "$name" '.tappaas.repositories[]? | select(.name==$n) | .path' "$config" 2>/dev/null | head -1) || val=""
+    fi
+    printf '%s' "$val"
 }
 
 # Whether TAPPaaS may perform automated reboots (Proxmox node kernel reboots and
-# the firewall/identity VM reboots). Reads tappaas.automaticReboot from
-# configuration.json; defaults to true when unset or the file is missing.
-# Returns 0 (enabled) or 1 (disabled). Shared gate for all reboot sites (#275).
+# the firewall/identity VM reboots). Reads site.json .automaticReboot; falls
+# back to configuration.json .tappaas.automaticReboot. Defaults to true when
+# unset or both files are missing. Returns 0 (enabled) or 1 (disabled). Shared
+# gate for all reboot sites (#275).
 automatic_reboot_enabled() {
-    local config="${CONFIG_DIR}/configuration.json"
-    local val=""
-    if [[ -f "$config" ]]; then
-        # NB: do NOT use jq's `// true` here — `false // true` yields true.
-        # Read the raw value; null/missing means "use the default (true)".
+    local site config val=""
+    site="$(_site_json_path)"
+    config="$(_config_json_path)"
+    # NB: do NOT use jq's `// true` here — `false // true` yields true.
+    # Read the raw value; null/missing means "use the default (true)".
+    if [[ -f "$site" ]]; then
+        val=$(jq -r '.automaticReboot' "$site" 2>/dev/null) || val=""
+    fi
+    if [[ ( -z "$val" || "$val" == "null" ) && -f "$config" ]]; then
         val=$(jq -r '.tappaas.automaticReboot' "$config" 2>/dev/null) || val=""
     fi
     # Enabled unless explicitly set to false.
@@ -130,13 +214,18 @@ automatic_reboot_enabled() {
 }
 
 # How many pre-update VM snapshots update-module.sh keeps per module. Reads
-# tappaas.snapshotRetention from configuration.json; defaults to 5 when unset,
-# missing, or not a positive integer. Echoes the count. Paired with
-# snapshot-vm.sh --cleanup to bound per-VM snapshot chains (#353).
+# site.json .snapshotRetention; falls back to configuration.json
+# .tappaas.snapshotRetention. Defaults to 5 when unset, missing, or not a
+# positive integer. Echoes the count. Paired with snapshot-vm.sh --cleanup to
+# bound per-VM snapshot chains (#353).
 snapshot_retention() {
-    local config="${CONFIG_DIR}/configuration.json"
-    local val=""
-    if [[ -f "$config" ]]; then
+    local site config val=""
+    site="$(_site_json_path)"
+    config="$(_config_json_path)"
+    if [[ -f "$site" ]]; then
+        val=$(jq -r '.snapshotRetention // empty' "$site" 2>/dev/null) || val=""
+    fi
+    if [[ -z "$val" && -f "$config" ]]; then
         val=$(jq -r '.tappaas.snapshotRetention // empty' "$config" 2>/dev/null) || val=""
     fi
     # Accept only a positive integer; otherwise fall back to the default.
@@ -147,15 +236,13 @@ snapshot_retention() {
     fi
 }
 
-# Get the first node from configuration.json whose hostname differs from the given primary node.
-# Used to resolve a default HANode when none is explicitly set.
-# Arguments: [primary-node-hostname] (default: first node in config)
+# Get the first node whose hostname differs from the given primary node.
+# Used to resolve a default HANode when none is explicitly set. Reads from
+# site.json (.hardware.nodes), falls back to configuration.json (.tappaas-nodes).
+# Arguments: [primary-node-hostname] (default: first node)
 get_default_ha_node() {
     local primary="${1:-$(get_node_hostname 0)}"
-    local config="${CONFIG_DIR}/configuration.json"
-    if [[ -f "$config" ]]; then
-        jq -r --arg p "$primary" '."tappaas-nodes"[] | select(.hostname != $p) | .hostname' "$config" 2>/dev/null | head -1
-    fi
+    get_all_node_hostnames | grep -vx "$primary" | head -1
 }
 
 # ── Module helper functions ──────────────────────────────────────────
@@ -216,48 +303,107 @@ ensure_scripts_executable() {
 #   $2  (optional) Script name to check for (default: "install-service.sh")
 #
 # Returns 0 if the service is available, 1 otherwise.
-# Read a variant's configuration from configuration.json (ADR-005). Echoes a
-# normalized JSON object on stdout:
+# Path to the runtime cert-refid state file (ADR-007c). Maps environment-name ->
+# OPNsense Trust refid for the env's wildcard cert. Reconciler/acme-setup writes
+# it; readers consume it. NOT authored config.
+cert_refids_path() { printf '%s\n' "${CONFIG_DIR}/cert-refids.json"; }
+
+# Look up the TLS cert refid for an environment, preferring the runtime
+# cert-refids.json (keyed by env name), then falling back to the legacy
+# configuration.json fields (.tappaas.variants[<env>].tlsCertRefid for non-empty
+# envs / default env, plus .tappaas.tlsCertRefid for the default). Echoes the
+# refid or empty string.
+#   cert_refid_for_env <env-name>
+cert_refid_for_env() {
+    local env="$1"
+    local crf cfg refid=""
+    crf="$(cert_refids_path)"
+    cfg="$(_config_json_path)"
+    if [[ -f "$crf" ]]; then
+        refid=$(jq -r --arg e "$env" '.[$e] // empty' "$crf" 2>/dev/null) || refid=""
+    fi
+    if [[ -z "$refid" && -f "$cfg" ]]; then
+        # Legacy: the variant key was the variant name; the default env maps to
+        # the "" variant and the top-level .tappaas.tlsCertRefid alias.
+        local default_env
+        default_env="$(default_environment_name)"
+        if [[ "$env" == "$default_env" ]]; then
+            refid=$(jq -r '(.tappaas.variants[""].tlsCertRefid // .tappaas.tlsCertRefid) // empty' "$cfg" 2>/dev/null) || refid=""
+        else
+            refid=$(jq -r --arg e "$env" '.tappaas.variants[$e].tlsCertRefid // empty' "$cfg" 2>/dev/null) || refid=""
+        fi
+    fi
+    printf '%s' "$refid"
+}
+
+# Read an environment's configuration (ADR-007 reader cutover). The "variant"
+# name IS the environment name; "" means the default environment (the single
+# non-mgmt environment = site.json .name). Echoes a normalized JSON object with
+# the SAME shape readers expect:
 #   {domain, tlsCertRefid, dnsMode, zone, description}
-# Resolution order:
-#   1. tappaas.variants[<name>]                         (the variant registry)
-#   2. legacy tappaas.domain / tappaas.tlsCertRefid     (only for the default
-#      variant "", so un-migrated installs keep working — Sprint 1 compat)
-# Returns 1 if the variant is not registered and there is no legacy fallback.
-#   get_variant_config <variant-name>   (use "" for the default variant)
+# sourced from config/environments/<env>.json:
+#   domain      <- .domains.primary
+#   dnsMode     <- .domains.dnsMode (default "wildcard")
+#   zone        <- .network.zone
+#   description <- .displayName
+#   tlsCertRefid<- runtime cert-refids.json (cert_refid_for_env)
+# Falls back to the legacy configuration.json (.tappaas.variants[<v>] /
+# .tappaas.domain) when the environment file is absent, so un-migrated installs
+# keep working. Returns 1 if neither source resolves.
+#   get_variant_config <variant-name>   (use "" for the default environment)
 get_variant_config() {
     local variant="$1"
-    local cfg="${CONFIG_DIR}/configuration.json"
-    [[ -f "${cfg}" ]] || { error "configuration.json not found at ${cfg}"; return 1; }
+    local env env_file refid
 
-    # 1. Variant registry (guard against a missing .variants object).
-    if jq -e --arg v "${variant}" '(.tappaas.variants // {})[$v] // empty' "${cfg}" >/dev/null 2>&1; then
-        jq -c --arg v "${variant}" '
-            (.tappaas.variants // {})[$v]
-            | { domain:       .domain,
-                tlsCertRefid: (.tlsCertRefid // ""),
-                dnsMode:      (.dnsMode // "wildcard"),
-                zone:         (.zone // null),
-                description:  (.description // "") }' "${cfg}"
+    # Resolve the environment name: explicit variant, else the default env.
+    if [[ -n "$variant" ]]; then
+        env="$variant"
+    else
+        env="$(default_environment_name)"
+    fi
+
+    # 1. New source: environment file + runtime cert-refids.json.
+    if env_file="$(environment_file "$env")"; then
+        refid="$(cert_refid_for_env "$env")"
+        jq -c --arg refid "$refid" '
+            { domain:       (.domains.primary // ""),
+              tlsCertRefid: $refid,
+              dnsMode:      (.domains.dnsMode // "wildcard"),
+              zone:         (.network.zone // null),
+              description:  (.displayName // "") }' "$env_file"
         return 0
     fi
 
-    # 2. Legacy fallback — only the default variant maps to tappaas.domain.
-    if [[ -z "${variant}" ]]; then
-        local legacy_domain
-        legacy_domain=$(jq -r '.tappaas.domain // empty' "${cfg}")
-        if [[ -n "${legacy_domain}" ]]; then
-            warn "tappaas.domain is deprecated (ADR-005). Run migrate-to-variants.sh to create tappaas.variants[\"\"]." >&2
-            jq -c '{ domain:       .tappaas.domain,
-                     tlsCertRefid: (.tappaas.tlsCertRefid // ""),
-                     dnsMode:      "wildcard",
-                     zone:         null,
-                     description:  "Default (legacy tappaas.domain)" }' "${cfg}"
+    # 2. Legacy fallback — configuration.json variant registry / tappaas.domain.
+    local cfg
+    cfg="$(_config_json_path)"
+    if [[ -f "${cfg}" ]]; then
+        if jq -e --arg v "${variant}" '(.tappaas.variants // {})[$v] // empty' "${cfg}" >/dev/null 2>&1; then
+            jq -c --arg v "${variant}" '
+                (.tappaas.variants // {})[$v]
+                | { domain:       .domain,
+                    tlsCertRefid: (.tlsCertRefid // ""),
+                    dnsMode:      (.dnsMode // "wildcard"),
+                    zone:         (.zone // null),
+                    description:  (.description // "") }' "${cfg}"
             return 0
+        fi
+        if [[ -z "${variant}" ]]; then
+            local legacy_domain
+            legacy_domain=$(jq -r '.tappaas.domain // empty' "${cfg}")
+            if [[ -n "${legacy_domain}" ]]; then
+                warn "tappaas.domain is deprecated (ADR-005/ADR-007). Migrate to config/environments/." >&2
+                jq -c '{ domain:       .tappaas.domain,
+                         tlsCertRefid: (.tappaas.tlsCertRefid // ""),
+                         dnsMode:      "wildcard",
+                         zone:         null,
+                         description:  "Default (legacy tappaas.domain)" }' "${cfg}"
+                return 0
+            fi
         fi
     fi
 
-    error "Variant '${variant}' not registered in configuration.json (no variants entry, no legacy fallback)"
+    error "Environment '${env}' not found (no config/environments/${env}.json, no legacy configuration.json fallback)"
     return 1
 }
 
@@ -266,8 +412,8 @@ get_variant_config() {
 # tag. Without this, installing a module into a freshly-created zone fails with
 # `get_vlan_value "<zone>"` on the node. Returns non-zero if nothing was pushed.
 distribute_zones_to_nodes() {
-    local zones="${CONFIG_DIR}/zones.json" cfg="${CONFIG_DIR}/configuration.json"
-    [[ -f "${zones}" && -f "${cfg}" ]] || { warn "distribute_zones_to_nodes: missing zones.json/configuration.json"; return 1; }
+    local zones="${CONFIG_DIR}/zones.json"
+    [[ -f "${zones}" ]] || { warn "distribute_zones_to_nodes: missing zones.json"; return 1; }
     local node pushed=0
     while IFS= read -r node; do
         [[ -z "${node}" ]] && continue
@@ -275,7 +421,7 @@ distribute_zones_to_nodes() {
                 "${zones}" "root@${node}.mgmt.internal:/root/tappaas/zones.json" >/dev/null 2>&1; then
             pushed=$((pushed + 1))
         fi
-    done < <(jq -r '."tappaas-nodes"[]?.hostname // empty' "${cfg}" 2>/dev/null)
+    done < <(get_all_node_hostnames 2>/dev/null)
     info "  Distributed zones.json to ${pushed} Proxmox node(s)"
     [[ "${pushed}" -gt 0 ]]
 }
@@ -929,12 +1075,13 @@ function check_json() {
     error "  HANode (${ha_node}) must be different from node (${node})"
     errors=$((errors + 1))
   fi
-  # Validate HANode exists in configuration.json if set
-  if [[ -n "$ha_node" ]] && [[ -f "${CONFIG_DIR}/configuration.json" ]]; then
+  # Validate HANode exists among the configured nodes if set (site.json first,
+  # configuration.json fallback — via get_all_node_hostnames).
+  if [[ -n "$ha_node" ]]; then
     local known_nodes
-    known_nodes=$(jq -r '."tappaas-nodes"[].hostname' "${CONFIG_DIR}/configuration.json" 2>/dev/null)
+    known_nodes=$(get_all_node_hostnames 2>/dev/null)
     if ! echo "$known_nodes" | grep -qx "$ha_node"; then
-      warn "  HANode '${ha_node}' not found in configuration.json tappaas-nodes"
+      warn "  HANode '${ha_node}' not found among configured nodes (site.json/configuration.json)"
       warnings=$((warnings + 1))
     fi
   fi

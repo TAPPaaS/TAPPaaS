@@ -49,7 +49,11 @@ VMNAME="$(get_config_value 'vmname' "${MODULE}")"
 VMID="$(get_config_value 'vmid')"
 NODE="$(get_config_value 'node' "$(get_node_hostname 0)")"
 ZONE0="$(get_config_value 'zone0' 'srvHome')"
-TAPPAAS_DOMAIN="$(jq -r '.tappaas.domain // empty' "${SYSTEM_CONFIG}")"
+# Domain from the module's environment (config/environments/<env>.json via
+# get_variant_config), falling back to legacy configuration.json .tappaas.domain.
+_HASS_VARIANT="$(get_config_value 'variant' '')"
+TAPPAAS_DOMAIN="$(jq -r '.domain // empty' <<<"$(get_variant_config "${_HASS_VARIANT}" 2>/dev/null || echo '{}')")"
+[[ -z "${TAPPAAS_DOMAIN}" ]] && TAPPAAS_DOMAIN="$(jq -r '.tappaas.domain // empty' "${SYSTEM_CONFIG}")"
 PROXY_DOMAIN="$(get_config_value 'proxyDomain' "${VMNAME}.${TAPPAAS_DOMAIN}")"
 EXTERNAL_URL="https://${PROXY_DOMAIN}"
 

@@ -94,7 +94,13 @@ read_existing_config() {
         EXISTING_UPSTREAM_GIT=$(jq -r '.tappaas.repositories[0].url // ""' "$CONFIG_FILE")
         EXISTING_BRANCH=$(jq -r '.tappaas.repositories[0].branch // ""' "$CONFIG_FILE")
         EXISTING_DOMAIN=$(jq -r '.tappaas.domain // ""' "$CONFIG_FILE")
-        EXISTING_EMAIL=$(jq -r '.tappaas.email // ""' "$CONFIG_FILE")
+        # Email: prefer the helper (site.json .email, falls back to
+        # configuration.json .tappaas.email); only when the helper is available.
+        if declare -F installer_email >/dev/null 2>&1; then
+            EXISTING_EMAIL="$(installer_email)"
+        else
+            EXISTING_EMAIL=$(jq -r '.tappaas.email // ""' "$CONFIG_FILE")
+        fi
         EXISTING_SCHEDULE=$(jq -r '.tappaas.updateSchedule[0] // ""' "$CONFIG_FILE")
         EXISTING_WEEKDAY=$(jq -r '.tappaas.updateSchedule[1] // ""' "$CONFIG_FILE")
         EXISTING_HOUR=$(jq -r '.tappaas.updateSchedule[2] // ""' "$CONFIG_FILE")

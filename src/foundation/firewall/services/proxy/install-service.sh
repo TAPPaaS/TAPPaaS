@@ -69,10 +69,19 @@ if [[ -z "${VMNAME}" ]]; then
 fi
 
 ZONE=$(get_config_value 'zone0' 'srvHome')
-TAPPAAS_DOMAIN=$(jq -r '.tappaas.domain // empty' "${SYSTEM_CONFIG}")
+# Domain comes from the module's environment (variant); get_variant_config reads
+# config/environments/<env>.json and falls back to configuration.json. Read it
+# here against the module's variant so PROXY_DOMAIN defaulting works; the
+# variant-specific read below (VCFG) reuses the same source for dnsMode/refid.
+_VARIANT_EARLY=$(get_config_value 'variant' '')
+TAPPAAS_DOMAIN=$(jq -r '.domain // empty' <<<"$(get_variant_config "${_VARIANT_EARLY}" 2>/dev/null || echo '{}')")
+if [[ -z "${TAPPAAS_DOMAIN}" ]]; then
+    # Last-ditch legacy fallback (kept until configuration.json is deleted).
+    TAPPAAS_DOMAIN=$(jq -r '.tappaas.domain // empty' "${SYSTEM_CONFIG}" 2>/dev/null)
+fi
 
 if [[ -z "${TAPPAAS_DOMAIN}" ]]; then
-    die "tappaas.domain not set in ${SYSTEM_CONFIG}"
+    die "No domain resolved for environment '${_VARIANT_EARLY:-default}' (config/environments/ or configuration.json)"
 fi
 
 # Resolve proxyDomain: explicit in module JSON, or default to <vmname>.<domain>
@@ -176,8 +185,15 @@ if [[ "${DNS_MODE}" == "per-service" ]]; then
         warn "  Could not derive DMZ gateway — register ${PROXY_DOMAIN} DNS manually"
     fi
 else
-    # wildcard: prefer the variant's refid, fall back to the legacy global one.
+    # wildcard: prefer the variant's refid (sourced from cert-refids.json via
+    # get_variant_config), then the runtime cert-refids.json for the env, then
+    # the legacy global one in configuration.json.
     TLS_CERT_REFID="${VARIANT_REFID}"
+    if [[ -z "${TLS_CERT_REFID}" ]]; then
+        _ENV_NAME="${VARIANT}"
+        [[ -z "${_ENV_NAME}" ]] && _ENV_NAME="$(default_environment_name)"
+        TLS_CERT_REFID="$(cert_refid_for_env "${_ENV_NAME}")"
+    fi
     [[ -z "${TLS_CERT_REFID}" ]] && TLS_CERT_REFID=$(jq -r '.tappaas.tlsCertRefid // ""' "${SYSTEM_CONFIG}" 2>/dev/null)
     if [[ -n "${TLS_CERT_REFID}" ]]; then
         info "  TLS: DNS-01 wildcard (dnsMode=wildcard) — refid ${TLS_CERT_REFID}"

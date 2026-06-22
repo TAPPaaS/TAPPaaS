@@ -62,7 +62,11 @@ if [[ "${CONNECTOR}" == "onlyoffice" ]]; then
 
     EO_VMNAME=$(jq -r '.vmname' "${CONSUMER_JSON}")
     EO_ZONE=$(jq -r '.zone0' "${CONSUMER_JSON}")
-    TAPPAAS_DOMAIN=$(jq -r '.tappaas.domain // empty' "${CONFIG_DIR}/configuration.json" 2>/dev/null || true)
+    # Base domain from the consumer's environment (config/environments/<env>.json
+    # via get_variant_config), falling back to legacy configuration.json.
+    _EO_VARIANT=$(jq -r '.variant // ""' "${CONSUMER_JSON}" 2>/dev/null || echo '')
+    TAPPAAS_DOMAIN=$(jq -r '.domain // empty' <<<"$(get_variant_config "${_EO_VARIANT}" 2>/dev/null || echo '{}')")
+    [[ -z "${TAPPAAS_DOMAIN}" ]] && TAPPAAS_DOMAIN=$(jq -r '.tappaas.domain // empty' "${CONFIG_DIR}/configuration.json" 2>/dev/null || true)
     EO_HOST="${EO_VMNAME}.${EO_ZONE}.internal"
     NC_HOST="${VMNAME}.${ZONE}.internal"
 
