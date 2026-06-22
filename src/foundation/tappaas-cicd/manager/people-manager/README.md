@@ -1,49 +1,99 @@
-# manager/people-manager
+# people-manager
 
-The **People domain** component (ADR-007 P1 / ADR-007a). It owns the
-Organization → Group → User hierarchy and the cross-cutting Role labels that
-back TAPPaaS identity in Authentik.
+The **People domain** manager. It owns the Organization → Group → User hierarchy
+and the cross-cutting Role labels that back TAPPaaS identity, and it reconciles
+that desired config onto the identity service (Authentik) via the identity
+controller.
 
-See `docs/design/ADR-007-implementation.md` → "P1: People Schema" for the full
-design (schema, sync semantics, lifecycle).
+## What it owns
 
-## What this component owns
+Config state lives under `config/people/` (default
+`${TAPPAAS_CONFIG:-/home/tappaas/config}/people/`), one JSON file per entity:
 
-- **Schemas** (in `src/foundation/schemas/`):
-  `role-fields.json`, `organization-fields.json`, `group-fields.json`,
-  `user-fields.json` — JSON Schema 2020-12 definitions of the People entities.
-- **`config/people/`** — the live People data:
-  `roles/`, `organizations/`, `groups/`, `users/` (the repo ships example/seed
-  files: roles root/admin/user, orgs myOrg/foo-company/bar-company, etc.).
-- **`minimal-org/`** — the stored bootstrap default (3 roles, 1 org, 2 groups,
-  1 installer user) with `__ORG__` / `__USER__` / `__EMAIL__` placeholders. This
-  is the canonical "minimal org" content a fresh install copies; it is *not*
-  generated in code.
+```
+config/people/
+  roles/*.json          # cross-cutting role labels
+  organizations/*.json  # tenant / company / family
+  groups/*.json         # teams, departments, access-sets (carry roles)
+  users/*.json          # people, with memberOf groups + roles + lifecycle state
+```
 
-## Bash entry points (this is a manager → it ships `validate.sh`)
+Each file is validated against a JSON Schema (`role-fields.json`,
+`organization-fields.json`, `group-fields.json`, `user-fields.json`) plus
+cross-reference integrity (e.g. a user's `memberOf` groups must exist, an org's
+`owner` must be a known user). User lifecycle `state` is one of `planned` (no
+identity presence), `active` (full access), `suspended` (disabled + roles
+stripped), `terminated` (deleted).
 
-| Script | Linked into `~/bin` as | Purpose |
-|--------|------------------------|---------|
-| `user-setup.sh` | `user-setup.sh` | Copy `minimal-org/` → `config/people/`, substituting `__ORG__`/`__USER__`/`__EMAIL__` from `--org`/`--user`/`--email`, then validate. Pure bootstrap — no Authentik calls. |
-| `validate.sh` | `validate-people.sh` | Validate a People directory against the schemas + reference integrity (group.ownerOrg, user.memberOf, user/group roles, org.owner/parentOrg). Exit non-zero on any violation. |
-| `install.sh` | — | Idempotently links the above into `~/bin`. |
-| `update.sh` | — | Re-runs `install.sh` (bash component: nothing to rebuild). |
-| `test.sh` | — | Self-contained OFFLINE tests (no Authentik, no cluster). |
+The repo also ships `minimal-org/` — the canonical bootstrap content (3 roles, 1
+org, 2 groups, 1 installer user) with `__ORG__` / `__USER__` / `__EMAIL__`
+placeholders.
 
-`validate.sh` uses the project's existing validation mechanism: Python
-`jsonschema` (draft 2020-12) for schema conformance when available — with a jq
-required-field fallback — plus jq-based reference-integrity checks, exactly like
-`site-manager/validate-configuration.sh`.
+## Commands
 
-## Not here yet — arrives in S2b
+This manager exposes one compiled CLI (`people-manager`) plus two bash helpers
+(`user-setup.sh`, `validate-people.sh`).
 
-- **`people-manager.ts`** — the TypeScript CRUD + Authentik **sync** engine
-  (`people-manager role|org|group|user list|get|create|update|delete`,
-  `people-manager sync [--dry-run]`). Pending the S-TS TypeScript pilot; falls
-  back to Python with the same CLI if the pilot does not pass.
-- **Wiring into `40-Identity/install.sh`** — the initial identity install will
-  call `user-setup.sh … && people-manager sync`, guarded to run only when
-  `config/people/` is empty.
+### `people-manager` — read + sync
 
-This S2a deliverable is the OFFLINE half: schema + config + bootstrap +
-validation. No TypeScript and no Authentik sync.
+```
+people-manager sync  [--dry-run] [--config-dir DIR]
+people-manager role         list | get [<name>]   [--config-dir DIR]
+people-manager organization list | get [<name>]   [--config-dir DIR]   # alias: org
+people-manager group        list | get [<name>]   [--config-dir DIR]
+people-manager user         list | get [<name>]   [--config-dir DIR]
+people-manager -h | --help
+```
+
+Options:
+
+- `--dry-run` — compute and print the reconcile plan; make **no** changes to the
+  identity service.
+- `--config-dir DIR` — the People directory to read (default
+  `$TAPPAAS_CONFIG/people`).
+
+`sync` reconciles `config/people/` into the identity service. `list` / `get` are
+read-only inspection of the on-disk config. (Entity `create` / `update` / `delete`
+are not yet implemented — see DESIGN.md; use `list`/`get` plus editing the JSON
+files, then `sync`.)
+
+Examples:
+
+```bash
+people-manager user list
+people-manager org get foo-company
+people-manager sync --dry-run          # preview the plan
+people-manager sync                    # apply to the identity service
+```
+
+### `user-setup.sh` — bootstrap a minimal org
+
+Copies `minimal-org/` into `config/people/`, substituting the placeholders. Pure
+file bootstrap — makes no identity calls.
+
+```
+user-setup.sh --org <slug> --user <slug> --email <email>
+              [--people-dir <path>]    # dest (default $TAPPAAS_CONFIG/people)
+              [--minimal-org <path>]   # source templates (default ./minimal-org)
+              [--force]                # overwrite a non-empty dest
+              [--skip-validate]        # skip post-copy validation
+```
+
+```bash
+user-setup.sh --org acme --user alice --email alice@example.org
+```
+
+### `validate-people.sh` — validate the People config
+
+(This is the manager's `validate.sh`, linked onto `PATH` under the project-wide
+name `validate-people.sh`.)
+
+```
+validate-people.sh [DIR]                  # dir to validate (default $TAPPAAS_CONFIG/people)
+                   [--schema-dir <path>]  # schema location
+                   [--quiet]              # errors/warnings only
+```
+
+```bash
+validate-people.sh                        # validate the live People dir
+```

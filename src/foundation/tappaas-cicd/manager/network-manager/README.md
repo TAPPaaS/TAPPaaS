@@ -1,73 +1,122 @@
-# manager/network-manager
+# network-manager
 
-The **network owner + orchestrator** (ADR-007 P4 / ADR-008). It is the single
-**front door** for the network: it owns `zones.json` (CRUD + delta) and
-reconciles all four infrastructure planes by calling the plane-controller bins.
+The **network front door**. It owns `zones.json` (the desired network state) and
+reconciles four infrastructure planes — OPNsense, Proxmox, the switch, and access
+points — by orchestrating their controllers. Adding or deleting a zone authors
+the config *and* drives every plane so a new VLAN actually reaches the firewall,
+the Proxmox hosts, the physical switch, and the WiFi.
 
-See `docs/design/ADR-007-implementation.md` → "Network Orchestration:
-network-manager" for the full design.
+## What it owns
 
-## What this component owns
+`zones.json` at `${TAPPAAS_CONFIG:-/home/tappaas/config}/zones.json`. Each top-level
+key is a zone (keys beginning `_` are documentation blocks, preserved but not
+treated as zones). A zone records its `type` / `typeId`, `vlantag`, `ip` (CIDR),
+`bridge`, `state`, reachability (`access-to`), per-module pinhole allowance
+(`pinhole-allowed-from`), and optional `variant`/`SSID`. Auto-allocated VLANs use
+the 60–99 window within each type band; zone names must be camelCase.
 
-- **`zones.json`** — the desired network state (stays at
-  `${TAPPAAS_CONFIG:-/home/tappaas/config}/zones.json` in this chunk). CRUD, VLAN
-  allocation, the `mgmt.access-to` operational-visibility invariant.
-- **The 4-plane reconcile loop** — converges desired → actual across every
-  plane, in dependency order, and reports per-plane drift.
+## Commands
 
-## TypeScript CLI (`network-manager`)
-
-Built with Nix (`tsc`, no `node_modules`, ambient `src/env.d.ts`) — the S-TS
-pattern, mirroring `switch-controller` and `people-manager`.
-
-| Command | Purpose |
-|---------|---------|
-| `zone list` / `zone exists <n>` / `zone get <n>` | read `zones.json` |
-| `zone add <n> [--from-zone S] [--type T --typeId N] [--vlan V] [--variant X] [--no-activate] [--check]` | author a zone + reconcile ALL planes (switch always included) |
-| `zone delete <n> [--check]` | disable + reconcile ALL planes + remove the key |
-| `reconcile [--apply] [--only <plane>]` | the full 4-plane reconcile (default dry-run) |
-
-### The four planes (dependency order)
-
-It calls the **on-PATH** controller bins — the #335/#372/#373 fix, since the old
-`zone-reconcile` hardcoded stale `firewall/scripts/` paths and never told the
-switch:
-
-1. **opnsense** (L3) — `zone-manager --no-ssl-verify --zones-file <f> {--summary|--execute}`
-2. **proxmox** (L2 node) — `proxmox-manager reconcile [--apply]` + `bridge-vids [--apply]`
-3. **switch** (L2 inter-node) — `switch-controller reconcile [--apply]` (the TS bin)
-4. **ap** (WiFi) — `ap-manager reconcile [--apply]`
-
-rc convention: `0` in-sync, `2` drift (dry-run) / needs-manual (apply), `1`/other
-error. A plane error → overall failure; proxmox still drifting after `--apply` →
-failure; switch/ap `needs-manual` is surfaced but not a hard failure.
-
-**#372/#373 fix:** `zone-controller.sh` reconciled only opnsense + proxmox on
-add/delete. network-manager **always** reconciles the switch (and ap) plane, so a
-new VLAN reaches the physical switch and off-firewall-node VMs get an IP.
-
-## Source layout (mirrors people-manager)
+One compiled CLI, `network-manager`:
 
 ```
-src/types.ts          Zone model + PlaneClient interface + Plan/report shapes
-src/zones.ts          load/CRUD zones.json + VLAN allocation + mgmt invariant
-src/planes.ts         CliPlaneClient: spawnSync the 4 plane bins; rc → status
-src/reconcile.ts      the dependency-ordered 4-plane reconcile (port of zone-reconcile)
-src/zonelifecycle.ts  zone add/delete (port of zone-controller.sh) — switch ALWAYS included
-src/main.ts           the CLI
+network-manager zone list
+network-manager zone exists <name>
+network-manager zone get <name>
+network-manager zone add <name>     [options]
+network-manager zone delete <name>  [--check]
+network-manager reconcile           [--apply] [--only <plane>]
+network-manager zones-init  --name <N> [--from <tpl>] [--out <file>] [--force]
+network-manager zones-check [--zones <file>] [--config-dir <dir>] [--strict]
+network-manager zones-distribute [--zones <file>] [--dry-run]
+network-manager -h | --help
 ```
 
-## Entry scripts
+### `zone` — CRUD on zones.json
 
-| Script | Purpose |
-|--------|---------|
-| `install.sh` | nix-build the TS bin + link `network-manager` into `~/bin`; relink legacy bash (not retired yet) |
-| `update.sh` | re-runs `install.sh` |
-| `test.sh` | FAST (offline tsc + unit tests) by default; DEEP (`TAPPAAS_TEST_DEEP=1`) live reconcile dry-run |
-| `validate.sh` | structural + reference validation of `zones.json` (managers ship `validate.sh`) |
+```bash
+network-manager zone list                 # list zone names
+network-manager zone exists srvHome        # exit 0/1
+network-manager zone get srvHome           # print the zone object
+```
 
-## Coexists with (not yet retired)
+`zone add <name>` authors a new zone **and reconciles all four planes** (so the
+VLAN reaches everything). Options:
 
-`zone-reconcile`, `zone-controller.sh`, `zone-state.sh` are still present and
-linked; a later chunk retires them. `apply-zones-merge.sh` and the
-`migrate-zone-keys-*.sh` migration helpers are left as-is (not on-PATH tools).
+- `--from-zone <src>` — inherit type/typeId/bridge/access-to/pinhole from `<src>`.
+- `--type <T>` — zone type (default `Service`).
+- `--typeId <N>` — numeric type band (default `2`).
+- `--vlan <tag>` — explicit VLAN tag (else auto-allocated 60–99 in the band).
+- `--variant <name>` — tag the zone with this variant (metadata).
+- `--no-activate` — author `zones.json` only; skip the all-plane reconcile.
+- `--check` — dry-run: show what would change, mutate nothing.
+
+`zone delete <name>` disables the zone, reconciles all planes, then removes the
+key. `--check` dry-runs it.
+
+```bash
+network-manager zone add labNet --from-zone srvHome --vlan 275
+network-manager zone add labNet --check          # preview
+network-manager zone delete labNet
+```
+
+### `reconcile` — the 4-plane converge loop
+
+```bash
+network-manager reconcile                  # dry-run: report drift on every plane
+network-manager reconcile --apply          # converge every plane
+network-manager reconcile --only switch    # one plane only
+network-manager reconcile --apply --only proxmox
+```
+
+`--only <plane>` is one of `opnsense | proxmox | switch | ap`. Default is a
+non-mutating dry-run. Exit `0` = in sync, `2` = drift reported (dry-run, not a
+failure), `1` = a hard error (a plane errored, or Proxmox still drifts after
+`--apply`).
+
+### `zones-init` — initialise zones.json from a template
+
+Used at install time to stamp a fresh `zones.json` named for the TAPPaaS system:
+
+```bash
+network-manager zones-init --name acme
+```
+
+- `--name <N>` (required) — system name; renames the template's `srv` → `<N>`,
+  `home` → `<N>-private`, `guest` → `<N>-guest`.
+- `--from <tpl>` — source template (default: the `zones.json` shipped with the
+  bin).
+- `--out <file>` — output (default `$TAPPAAS_CONFIG/zones.json`).
+- `--force` — re-apply even if already initialised.
+
+Writing to a non-live `--out` automatically skips distribution.
+
+### `zones-check` — offline consistency audit
+
+```bash
+network-manager zones-check
+network-manager zones-check --strict       # warnings become errors
+```
+
+- `--zones <file>` — zones.json to check (default `$TAPPAAS_CONFIG/zones.json`).
+- `--config-dir <dir>` — installed module configs dir (default `$TAPPAAS_CONFIG`).
+- `--strict` — promote warnings to errors.
+
+Exit `0` ok, `1` on dangling references / missing required fields / lost zones.
+
+### `zones-distribute` — push zones.json to the Proxmox nodes
+
+```bash
+network-manager zones-distribute
+network-manager zones-distribute --dry-run  # list target nodes, no copy
+```
+
+- `--zones <file>` — zones.json to distribute (default `$TAPPAAS_CONFIG/zones.json`).
+- `--dry-run` — list the nodes that would receive it; copy nothing.
+
+## Legacy bash tools (still linked, not retired)
+
+`zone-reconcile`, `zone-controller`, and `zone-state.sh` are linked onto `PATH`
+during the transition and will be retired once `network-manager` fully replaces
+them. `apply-zones-merge.sh` and `migrate-zone-keys-*.sh` are migration helpers,
+not on-PATH tools.

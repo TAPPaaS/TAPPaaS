@@ -1,31 +1,90 @@
-# manager/site-manager
+# site-manager
 
-Site (ADR-007d / ADR-007 P2) — site-wide identity, location, hardware (Proxmox
-nodes + storage pools), backup, update schedule, repositories, and references to
-environment/organization config files. The Site is the umbrella over a TAPPaaS
-installation; domain/DNS/identity are per-environment, not here.
+The **Site** manager. The Site is the umbrella over a whole TAPPaaS installation:
+site-wide identity, location, hardware (Proxmox nodes + storage pools), backup,
+update schedule, repositories, and references to the environment/organization
+config. (Domain / DNS / identity are *per-environment*, owned by
+`environment-manager`, not here.)
 
-## Entry points (linked into ~/bin by install.sh)
+## What it owns
 
-- `migrate-configuration.sh` — migrate `config/configuration.json` -> `config/site.json`
-  (alias: `migrate-configuration-to-site.sh`). **Phased (S3a):** creates
-  `site.json`, backs up `configuration.json` to `.bak`, and does NOT delete
-  `configuration.json`. Idempotent (`--force` to overwrite). Variant ->
-  environment expansion is deferred to S4/P3 (`environments` stays `[]`).
-- `validate-site.sh` — validate a `site.json` against
-  `src/foundation/schemas/site-fields.json` (jsonschema + jq fallback).
+`config/site.json` (default `${TAPPAAS_CONFIG:-/home/tappaas/config}/site.json`),
+validated against `site-fields.json`. It also migrates the legacy
+`config/configuration.json` into `site.json`.
 
-Legacy site scripts (`create-configuration.sh`, `validate-configuration.sh`,
-`convert-json-to-config.sh`, `repository.sh`) remain until the flag-day cutover.
+## Commands
 
-## Auto-migration
+All scripts are bash, linked onto `PATH` by `install.sh`.
 
-`pre-update.sh` runs `migrate-configuration.sh` when `configuration.json` exists
-and `site.json` does not (guarded, idempotent).
+### `migrate-configuration.sh` — configuration.json → site.json
 
-## Testing
+One-time, phased migration: it creates `site.json`, backs up
+`configuration.json` to `.bak`, and leaves `configuration.json` in place.
+Idempotent.
 
-`test.sh` follows the cicd fast/deep convention. FAST (default) migrates a
-fixture `configuration.json` on a temp copy and asserts the schema + field
-mapping; there are no deep/disruptive tests (S3a is all fast). The live config
-is never touched. Fixture: `test/fixtures/configuration.json`.
+```
+migrate-configuration.sh [--config-dir DIR] [--input FILE] [--output FILE] [--force]
+```
+
+- `--config-dir DIR` — config directory (default `$TAPPAAS_CONFIG`).
+- `--input FILE` — input configuration.json (default `<config-dir>/configuration.json`).
+- `--output FILE` — output site.json (default `<config-dir>/site.json`).
+- `--force` — overwrite an existing `site.json`.
+
+Also linked as `migrate-configuration-to-site.sh` (alias).
+
+```bash
+migrate-configuration.sh
+migrate-configuration.sh --force
+```
+
+### `validate-site.sh` — validate site.json
+
+(This is the manager's `validate.sh`, also runnable directly.)
+
+```
+validate-site.sh [FILE] [--schema-dir PATH] [--quiet]
+```
+
+- `FILE` — site.json to validate (default `$TAPPAAS_CONFIG/site.json`).
+- `--schema-dir PATH` — directory holding `site-fields.json`.
+- `--quiet` — errors/warnings only.
+
+```bash
+validate-site.sh
+```
+
+## Legacy tools (kept until the flag-day cutover)
+
+These predate `site.json` and operate on the legacy `configuration.json`:
+
+### `create-configuration.sh`
+
+Create/update `configuration.json` by discovering the running Proxmox cluster.
+Accepts named flags (`--upstream-git`, `--branch`, `--domain`, `--email`,
+`--schedule monthly|weekly|daily|none`, `--weekday`, `--hour`, `--primary-node`,
+`--update`) or legacy positionals
+(`<upstreamGit> <branch> <domain> <email> <schedule> [weekday] [hour]`). Idempotent.
+
+### `validate-configuration.sh`
+
+Validate `configuration.json`. Flags: `--config <path>`, `--check-connectivity`
+(ping nodes), `--check-cluster` (SSH the first node, compare cluster membership),
+`--check-repos` (git ls-remote each repo URL), `--quiet`.
+
+### `repository.sh`
+
+Manage module repositories registered in `configuration.json`:
+
+```
+repository.sh add <url> [--branch <b>] [--managed full|tracked] [--catalog <path>]
+repository.sh remove <name> [--force]
+repository.sh modify <name> [--url <new>] [--branch <new>]
+repository.sh list
+```
+
+### `convert-json-to-config.sh`
+
+Convert a flat module JSON into the canonical config-block form. CLI:
+`convert-json-to-config.sh [--in-place|--dry-run] <module-json>`; or source it and
+call `regroup_to_pattern_a`.

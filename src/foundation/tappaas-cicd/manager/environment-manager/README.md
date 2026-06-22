@@ -1,46 +1,94 @@
-# manager/environment-manager
+# environment-manager
 
-Owns the **Environment** taxonomy object (ADR-007c / P3): per-tenant deployment
-context holding public domain(s), DNS mode, network-zone reference, data
-residency, backup retention, and legal processor. Environments live at
-`config/environments/<name>.json` on the target system and replace the legacy
-`configuration.json` `.tappaas.variants` construct.
+The **Environment** manager. An Environment is a per-tenant deployment context:
+public domain(s), DNS mode, a network-zone reference, data residency, backup
+retention, and legal processor. Environments live at
+`config/environments/<name>.json` and replace the legacy `configuration.json`
+`.tappaas.variants` construct.
 
-## Scripts
+## What it owns
 
-- `migrate-variants.sh` (alias `migrate-variants-to-environments.sh`) —
-  one-shot migration of `configuration.json` `.tappaas.variants` (+ legacy
-  `.tappaas.domain` fallback for the default) into `config/environments/*.json`.
-  The `""` (default) variant becomes `default.json`. **Drops `tlsCertRefid`** —
-  it is runtime state, not authored config (see ADR-007 "TLS certificate
-  handling"). Idempotent (`--force` to overwrite). Does NOT delete
-  `configuration.json`.
-- `create-minimal-environments.sh` — bootstrap of the two always-required
-  environments: `mgmt.json` (zone `mgmt`, no domains) and the DEFAULT tenant
-  environment `<N>.json`, named after the TAPPaaS system name `<N>` (ADR-007 S6:
-  `<N>` = `site.json.name` = the default-zone name = the default-env name, with
-  `network.zone = <N>`). `--name <N>` sets it explicitly; if omitted it is derived
+`config/environments/*.json` (default
+`${TAPPAAS_CONFIG:-/home/tappaas/config}/environments/`), validated against
+`environment-fields.json`. Mandatory fields: `name`, `displayName`, `ownerOrg`,
+`network.zone`. `domains` is optional (the `mgmt` environment omits it);
+`domains.dnsMode` defaults to `per-service`. The schema is
+`additionalProperties:false`, so an authored `tlsCertRefid` is **rejected** — a
+cert refid is runtime state, not authored config.
+
+## Commands
+
+All scripts are bash, linked onto `PATH` by `install.sh`.
+
+### `create-minimal-environments.sh` — bootstrap the required environments
+
+Creates the two always-required environments: `mgmt.json` (zone `mgmt`, no
+domains) and the default tenant environment `<N>.json`, named after the TAPPaaS
+system name `<N>` (with `network.zone = <N>`). Idempotent; never deletes operator
+files.
+
+```
+create-minimal-environments.sh [--name <N>] [--config-dir DIR] [--out-dir DIR] [--force]
+```
+
+- `--name <N>` — system name (= default zone & env name). If omitted, derived
   from `site.json '.name'`, else from the first-domain label in
-  `configuration.json`. A legacy literal `default.json` (older bootstraps) is
-  left in place and noted, never deleted. Single owner of these files; P6/P7
-  consume them. Idempotent.
-- `validate-environment.sh` (manager verb `validate.sh`) — validates environment
-  files against `schemas/environment-fields.json` + reference integrity
-  (`network.zone` ∈ zones.json, `ownerOrg` ∈ organizations) and **rejects an
-  authored `tlsCertRefid`**.
-- `variant-manager.sh`, `migrate-to-variants.sh` — pre-P3 (S0) scripts, left
-  as-is during the phased migration.
+  `configuration.json`.
+- `--config-dir DIR` — config directory (default `$TAPPAAS_CONFIG`).
+- `--out-dir DIR` — environments dir (default `<config-dir>/environments`).
+- `--force` — overwrite existing `mgmt.json` / `<N>.json`.
 
-## Schema
+```bash
+create-minimal-environments.sh --name acme
+```
 
-`src/foundation/schemas/environment-fields.json` (JSON Schema 2020-12).
-Mandatory: `name`, `displayName`, `ownerOrg`, `network.zone`. `domains` optional
-(mgmt omits it); `domains.dnsMode` defaults to `per-service`. `additionalProperties:false`
-everywhere — `tlsCertRefid` is not a field and is rejected.
+### `validate-environment.sh` — validate environment files
 
-## Testing (FAST / DEEP)
+(This is the manager's `validate.sh`; `validate.sh` simply delegates here.)
 
-`test.sh` — FAST (default, temp fixtures, non-disruptive): migration shape, the
-`tlsCertRefid` drop + schema reject, reference checks, bootstrap, idempotency.
-DEEP (`TAPPAAS_TEST_DEEP=1`): additionally read-only-validates live
-`config/environments` when present. Fixtures under `test/fixtures/`.
+```
+validate-environment.sh [FILE|DIR] [--schema-dir PATH] [--config-dir DIR] [--zones FILE] [--quiet]
+```
+
+- `FILE|DIR` — an environment `.json` or a directory of them (default
+  `$TAPPAAS_CONFIG/environments`).
+- `--schema-dir PATH` — directory holding `environment-fields.json`.
+- `--config-dir DIR` — config dir for the `zones.json` + organizations lookup.
+- `--zones FILE` — path to `zones.json`.
+- `--quiet` — errors/warnings only.
+
+It checks the schema **and** reference integrity (`network.zone` must exist in
+`zones.json`, `ownerOrg` must exist in the organizations) and rejects an authored
+`tlsCertRefid`.
+
+```bash
+validate-environment.sh
+```
+
+### `migrate-variants.sh` — variants → environments
+
+One-shot migration of `configuration.json` `.tappaas.variants` (with the legacy
+`.tappaas.domain` fallback for the default) into `config/environments/*.json`. The
+`""` (default) variant becomes `default.json`. Drops `tlsCertRefid`. Idempotent;
+does not delete `configuration.json`.
+
+```
+migrate-variants.sh [--config-dir DIR] [--input FILE] [--out-dir DIR] [--force]
+```
+
+Also linked as `migrate-variants-to-environments.sh` (alias).
+
+## Legacy tools (pre-migration, left as-is)
+
+- **`variant-manager.sh`** (linked as `variant-manager`) — manage variants in the
+  legacy `configuration.json`:
+  ```
+  variant-manager add <name> --domain <d> [--zone <z>|--add-zone] [--from-zone <s>]
+                              [--vlan <n>] [--dns-mode wildcard|per-service]
+                              [--description "<t>"] [--no-activate]
+  variant-manager list
+  variant-manager show <name>
+  variant-manager remove <name> [--force]
+  ```
+- **`migrate-to-variants.sh`** — migrate a legacy single-domain install into the
+  variant registry: `[--force] [--remove-legacy] [--dry-run]`.
