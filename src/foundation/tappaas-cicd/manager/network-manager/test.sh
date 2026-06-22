@@ -59,11 +59,24 @@ if [[ -f "${UNIT_TSCONFIG}" ]]; then
     fi
     if run_ts "tsc -p '${UNIT_TSCONFIG}'" >/dev/null 2>&1; then
         ok "TypeScript unit tests compile"
-        if run_ts "NM_FIXTURE_DIR='${FIXTURE_DIR}' node '${DIST_TEST}/test/unit/network.test.js'"; then
-            ok "TypeScript reconcile/CRUD unit tests pass"
+        if run_ts "NM_FIXTURE_DIR='${FIXTURE_DIR}' NM_TEMPLATE='${HERE}/zones.json' node '${DIST_TEST}/test/unit/network.test.js'"; then
+            ok "TypeScript reconcile/CRUD/zones-init unit tests pass"
         else
             bad "TypeScript unit tests FAILED"
         fi
+
+        # ── zones-init CLI smoke (offline; temp --out, never live config) ──
+        # The unit tsconfig compiles src/ into dist-test/src; run the real CLI
+        # entry against a temp output and assert the transformed file on disk.
+        ZINIT_OUT="$(mktemp -d)/z.json"
+        if run_ts "NM_TEMPLATE='${HERE}/zones.json' node '${DIST_TEST}/src/main.js' zones-init --name acme --from '${HERE}/zones.json' --out '${ZINIT_OUT}'" >/dev/null 2>&1 \
+            && [[ -f "${ZINIT_OUT}" ]] \
+            && run_ts "node -e 'const z=require(\"${ZINIT_OUT}\"); process.exit((z.acme&&!z.srv&&z[\"acme-private\"]&&z[\"acme-guest\"]&&z.acme.state===\"Active\"&&z.srvWork.state===\"Inactive\"&&!z[\"acme-private\"][\"access-to\"].includes(\"srvHome\")&&z[\"acme-private\"][\"access-to\"].includes(\"acme\"))?0:1)'" >/dev/null 2>&1; then
+            ok "zones-init CLI transforms template to temp --out (renames + inactivations + ref-integrity)"
+        else
+            bad "zones-init CLI smoke FAILED"
+        fi
+        rm -rf -- "$(dirname "${ZINIT_OUT}")"
     else
         bad "TypeScript unit tests failed to compile"
     fi

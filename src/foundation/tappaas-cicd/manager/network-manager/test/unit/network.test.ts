@@ -13,10 +13,11 @@
 //
 // Tiny assert harness (no test framework).
 
-import { copyFileSync, mkdtempSync, readFileSync } from "fs";
+import { copyFileSync, mkdtempSync, readFileSync, writeFileSync } from "fs";
 import { join } from "path";
 import { tmpdir } from "os";
 import { PLANE_ORDER } from "../../src/types";
+import { parseTemplate, validateName, zonesInit } from "../../src/zonesinit";
 import {
   authorZone,
   getZone,
@@ -222,6 +223,134 @@ function tmpZones(): string {
   // zone delete --check mutates nothing
   deleteZone(new FakePlaneClient(), f, "dmz", { dryRun: true });
   check(readFileSync(f, "utf8") === before, "zone delete --check mutates nothing on disk");
+}
+
+// ── 8. zones-init transform (offline; against the REAL distributed template) ─
+// NM_TEMPLATE points at the canonical manager/network-manager/zones.json. We
+// transform it in memory (the CLI's atomic write to --out is exercised by the
+// shell tier); here we assert the transform rules + referential integrity.
+{
+  const tplPath = process.env.NM_TEMPLATE;
+  if (!tplPath) {
+    check(false, "NM_TEMPLATE env must point at the distributed zones.json template");
+  } else {
+    const template = parseTemplate(tplPath);
+    const { raw, alreadyInitialised } = zonesInit(template, "acme", false);
+
+    check(!alreadyInitialised, "transforming the distributed template is not a no-op");
+
+    // renames
+    check("acme" in raw && !("srv" in raw), "srv renamed to <N> (acme); srv key gone");
+    check("acme-private" in raw && !("home" in raw), "home renamed to <N>-private; home key gone");
+    check("acme-guest" in raw && !("guest" in raw), "guest renamed to <N>-guest; guest key gone");
+
+    // <N> carried srv's config + state Active
+    const acme = raw["acme"] as Record<string, unknown>;
+    check(acme["type"] === "Service" && acme["vlantag"] === 200, "<N> carried srv's config (type/vlan)");
+    check(acme["state"] === "Active", "<N> state forced Active");
+
+    // <N>-private access-to has <N> and NOT srvHome
+    const priv = raw["acme-private"] as Record<string, unknown>;
+    const privAccess = priv["access-to"] as string[];
+    check(privAccess.includes("acme"), "<N>-private access-to contains <N> (was srvHome)");
+    check(!privAccess.includes("srvHome"), "<N>-private access-to no longer references srvHome");
+
+    // inactivations
+    for (const z of ["srvHome", "srvWork", "srvCust", "srvDev", "work"]) {
+      const zz = raw[z] as Record<string, unknown>;
+      check(zz !== undefined && zz["state"] === "Inactive", `${z} state forced Inactive`);
+    }
+
+    // untouched zones still present
+    for (const z of ["srvTest", "iotLocal", "iotCloud", "iotCams", "mgmt", "dmz", "netbird", "test"]) {
+      check(z in raw, `${z} still present (untouched)`);
+    }
+    // srvTest state unchanged from template
+    check(
+      (raw["srvTest"] as Record<string, unknown>)["state"] ===
+        (template["srvTest"] as Record<string, unknown>)["state"],
+      "srvTest state unchanged",
+    );
+
+    // referential integrity: NO zone's access-to / pinhole-allowed-from still
+    // references the bare srv / home / guest keys.
+    let refOk = true;
+    for (const [k, v] of Object.entries(raw)) {
+      if (k.startsWith("_")) continue;
+      const zone = v as Record<string, unknown>;
+      for (const field of ["access-to", "pinhole-allowed-from"]) {
+        const arr = zone[field];
+        if (Array.isArray(arr)) {
+          for (const ref of arr) {
+            if (ref === "srv" || ref === "home" || ref === "guest") {
+              refOk = false;
+            }
+          }
+        }
+      }
+    }
+    check(refOk, "no zone references bare srv/home/guest after transform (referential integrity)");
+
+    // mgmt access-to was rewritten srv→acme, home→acme-private, guest→acme-guest
+    const mgmtAccess = (raw["mgmt"] as Record<string, unknown>)["access-to"] as string[];
+    check(
+      mgmtAccess.includes("acme") && mgmtAccess.includes("acme-private") && mgmtAccess.includes("acme-guest"),
+      "mgmt.access-to rewritten to the renamed zone names",
+    );
+    // other srvHome refs preserved (NOT globally rewritten to <N>)
+    check(mgmtAccess.includes("srvHome"), "mgmt.access-to still lists srvHome (not globally rewritten)");
+
+    // idempotency: re-running on the transformed doc (srv absent, acme present) is a no-op
+    const second = zonesInit(raw, "acme", false);
+    check(second.alreadyInitialised, "second zones-init run on transformed doc is a no-op");
+
+    // --force re-applies (but the transformed doc lacks srv → expected to error
+    // since the template keys are gone); confirm it throws rather than silently no-op.
+    let forceThrew = false;
+    try {
+      zonesInit(raw, "acme", true);
+    } catch {
+      forceThrew = true;
+    }
+    check(forceThrew, "--force on an already-transformed doc errors (template keys gone)");
+
+    // doc-block preserved
+    check("_README" in raw, "_README doc block preserved through the transform");
+  }
+}
+
+// ── 9. zones-init name validation + edge fixture ──────────────────────
+{
+  for (const bad of ["", "Acme", "9acme", "ac me", "acme-", "-acme", "acme_x"]) {
+    let threw = false;
+    try {
+      validateName(bad);
+    } catch {
+      threw = true;
+    }
+    check(threw, `invalid --name '${bad}' is rejected`);
+  }
+  for (const good of ["acme", "acme-corp", "a", "x1", "my-tappaas-1"]) {
+    let threw = false;
+    try {
+      validateName(good);
+    } catch {
+      threw = true;
+    }
+    check(!threw, `valid --name '${good}' is accepted`);
+  }
+
+  // edge fixture: a minimal template missing 'guest' → clear error
+  const d = mkdtempSync(join(tmpdir(), "nm-init-"));
+  const edge = join(d, "edge.json");
+  writeFileSync(edge, JSON.stringify({ srv: { state: "Inactive" }, home: { "access-to": ["srvHome"] } }), "utf8");
+  let edgeThrew = false;
+  try {
+    zonesInit(parseTemplate(edge), "acme", false);
+  } catch {
+    edgeThrew = true;
+  }
+  check(edgeThrew, "template missing the 'guest' key is rejected with a clear error");
 }
 
 console.log("");

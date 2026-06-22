@@ -20,6 +20,16 @@ export function defaultZonesFile(): string {
   return join(base, "zones.json");
 }
 
+// The distributed zones.json TEMPLATE shipped alongside the bin. The compiled
+// entry (main.js) lives at <out>/lib/main.js and the nix installPhase copies
+// zones.json next to it (<out>/lib/zones.json); __dirname therefore resolves
+// the template via the bin's REAL dir (node follows the /home/tappaas/bin
+// symlink), exactly as the component locates its own assets. An override is
+// allowed for tests / source-tree runs via NM_TEMPLATE.
+export function defaultTemplateFile(): string {
+  return process.env.NM_TEMPLATE ?? join(__dirname, "zones.json");
+}
+
 function isDocKey(k: string): boolean {
   return k.startsWith("_");
 }

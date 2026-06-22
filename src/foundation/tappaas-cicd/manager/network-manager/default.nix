@@ -44,6 +44,9 @@ let
       runHook preInstall
       mkdir -p "$out/lib"
       cp -r dist/* "$out/lib/"
+      # Ship the distributed zones.json template next to main.js so
+      # `zones-init` can resolve it via __dirname (the bin's real dir).
+      cp zones.json "$out/lib/zones.json"
       makeWrapper ${pkgs.nodejs_22}/bin/node "$out/bin/network-manager" \
         --add-flags "$out/lib/main.js"
       runHook postInstall

@@ -17,14 +17,25 @@
 //                                    [--vlan V] [--variant X] [--no-activate] [--check]
 //   network-manager zone delete <name> [--check]
 //   network-manager reconcile [--apply] [--only <plane>]
+//   network-manager zones-init --name <N> [--from <tpl>] [--out <f>] [--force]
 //
 // Exit codes: ok=0, error/drift-after-apply=1.
 
+import { writeFileSync, renameSync, mkdtempSync } from "fs";
+import { dirname, join } from "path";
 import { CliPlaneClient } from "./planes";
 import { reconcileAll } from "./reconcile";
 import { Plane, PLANE_ORDER, PlaneClient, ReconcileReport } from "./types";
-import { defaultZonesFile, getZone, listZoneNames, loadZones, zoneExists } from "./zones";
+import {
+  defaultTemplateFile,
+  defaultZonesFile,
+  getZone,
+  listZoneNames,
+  loadZones,
+  zoneExists,
+} from "./zones";
 import { addZone, deleteZone } from "./zonelifecycle";
+import { parseTemplate, zonesInit } from "./zonesinit";
 
 const VERSION = "0.1.0";
 
@@ -55,6 +66,7 @@ Usage:
   network-manager zone add <name> [options]
   network-manager zone delete <name> [--check]
   network-manager reconcile [--apply] [--only <plane>]
+  network-manager zones-init --name <N> [--from <tpl>] [--out <f>] [--force]
 
 zone add options:
   --from-zone <src>   inherit type/typeId/bridge/access-to/pinhole from <src>
@@ -68,6 +80,13 @@ zone add options:
 reconcile options:
   --apply             converge all planes (default is dry-run / report only)
   --only <plane>      one plane: opnsense | proxmox | switch | ap
+
+zones-init options (install-time template transform; offline):
+  --name <N>          TAPPaaS system name; renames srv→<N>, home→<N>-private,
+                      guest→<N>-guest and parameterises the distributed template
+  --from <tpl>        source template (default: zones.json shipped with the bin)
+  --out <f>           output file (default: \$TAPPAAS_CONFIG/zones.json)
+  --force             re-apply from the template even if already initialised
 
 common:
   --zones-file <f>    default \$TAPPAAS_CONFIG/zones.json
@@ -89,6 +108,11 @@ interface Opts {
   typeId?: string;
   vlan?: number;
   variant?: string;
+  // zones-init
+  name?: string;
+  from?: string;
+  out?: string;
+  force: boolean;
 }
 
 function isPlane(s: string): s is Plane {
@@ -102,6 +126,7 @@ function parseOpts(args: string[]): Opts {
     apply: false,
     check: false,
     noActivate: false,
+    force: false,
   };
   for (let i = 0; i < args.length; i++) {
     const a = args[i];
@@ -147,6 +172,18 @@ function parseOpts(args: string[]): Opts {
       }
       case "--variant":
         o.variant = next();
+        break;
+      case "--name":
+        o.name = next();
+        break;
+      case "--from":
+        o.from = next();
+        break;
+      case "--out":
+        o.out = next();
+        break;
+      case "--force":
+        o.force = true;
         break;
       // accepted-for-symmetry no-arg flags from zone-controller.sh:
       case "--no-ssl-verify":
@@ -280,6 +317,48 @@ function printReport(report: ReconcileReport): void {
   }
 }
 
+// ── zones-init command (install-time template transform; offline) ──────
+function cmdZonesInit(opts: Opts): void {
+  const name = opts.name;
+  if (!name) die("zones-init: --name <N> is required");
+  const from = opts.from ?? defaultTemplateFile();
+  const out = opts.out ?? defaultZonesFile();
+
+  let template: Record<string, unknown>;
+  try {
+    template = parseTemplate(from);
+  } catch (e) {
+    die((e as Error).message);
+  }
+
+  let result: { raw: Record<string, unknown>; alreadyInitialised: boolean };
+  try {
+    result = zonesInit(template, name, opts.force);
+  } catch (e) {
+    die((e as Error).message);
+  }
+
+  if (result.alreadyInitialised) {
+    info(`zones-init: '${out}' source already initialised for '${name}' — no-op (use --force to re-apply from template)`);
+    return;
+  }
+
+  writeJsonAtomic(out, result.raw);
+  info(`  ${GN}✓${CL} zones-init: wrote '${out}' (default zone '${name}', '${name}-private', '${name}-guest')`);
+}
+
+// Atomic JSON write (temp → validate-parse → rename), mirroring zones.ts's
+// saveZones safety so the live target is never left half-written.
+function writeJsonAtomic(file: string, raw: Record<string, unknown>): void {
+  const text = JSON.stringify(raw, null, 2) + "\n";
+  JSON.parse(text); // defence in depth: confirm valid JSON before writing
+  const dir = dirname(file);
+  const tmpDir = mkdtempSync(join(dir, ".zones-init-"));
+  const tmp = join(tmpDir, "zones.json");
+  writeFileSync(tmp, text, "utf8");
+  renameSync(tmp, file);
+}
+
 export function run(argv: string[], client?: PlaneClient): number {
   if (argv.length === 0 || argv[0] === "-h" || argv[0] === "--help") {
     usage();
@@ -301,6 +380,9 @@ export function run(argv: string[], client?: PlaneClient): number {
         return 0;
       case "reconcile":
         cmdReconcile(opts, client ?? new CliPlaneClient());
+        return 0;
+      case "zones-init":
+        cmdZonesInit(opts);
         return 0;
       default:
         usage();
