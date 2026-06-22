@@ -22,17 +22,31 @@ Subcommands:
   app-delete <slug>                         — remove an app + its provider
   outpost-attach <slug>                     — attach the app's provider to the embedded outpost
   outpost-set-authentik-host <url>          — set the public URL the outpost redirects to
+
+People PRIMITIVES (S2b-2 — JSON to stdout, for the TypeScript people-manager):
+  list-users | list-groups | list-roles    — JSON arrays
+  get-user --name                           — one user object (or null)
+  ensure-user --name --email --display [--inactive]
+  disable-user --name | delete-user --name
+  ensure-group --name --display | ensure-role --name --display
+  add-member --user --group | remove-member --user --group
+  assign-role --user --role | unassign-role --user --role
+See ``people_primitives.py`` for the Authentik role-mapping decision.
 """
 
 from __future__ import annotations
 
 import argparse
+import json
 import os
 import sys
 from pathlib import Path
 
 import secrets
 
+import httpx
+
+from . import people_primitives as pp
 from .authentik_manager import (
     AuthentikConfig,
     AuthentikManager,
@@ -230,6 +244,70 @@ def cmd_oidc_app_ensure(mgr: AuthentikManager, args: argparse.Namespace) -> int:
     return 0
 
 
+# ── People PRIMITIVES (S2b-2) — machine-readable JSON to stdout ──────────
+# Each does ONE thing and prints JSON the TypeScript people-manager parses.
+# No reconcile/managed-set/lifecycle policy lives here.
+
+def _emit(obj) -> int:
+    print(json.dumps(obj))
+    return 0
+
+
+def cmd_list_users(mgr: AuthentikManager, _args: argparse.Namespace) -> int:
+    return _emit(pp.list_users(mgr))
+
+
+def cmd_list_groups(mgr: AuthentikManager, _args: argparse.Namespace) -> int:
+    return _emit(pp.list_groups(mgr))
+
+
+def cmd_list_roles(mgr: AuthentikManager, _args: argparse.Namespace) -> int:
+    return _emit(pp.list_roles(mgr))
+
+
+def cmd_get_user(mgr: AuthentikManager, args: argparse.Namespace) -> int:
+    return _emit(pp.get_user(mgr, args.name))
+
+
+def cmd_ensure_user(mgr: AuthentikManager, args: argparse.Namespace) -> int:
+    return _emit(pp.ensure_user(
+        mgr, name=args.name, email=args.email, display=args.display,
+        inactive=args.inactive,
+    ))
+
+
+def cmd_disable_user(mgr: AuthentikManager, args: argparse.Namespace) -> int:
+    return _emit(pp.disable_user(mgr, args.name))
+
+
+def cmd_delete_user(mgr: AuthentikManager, args: argparse.Namespace) -> int:
+    return _emit({"name": args.name, "deleted": pp.delete_user(mgr, args.name)})
+
+
+def cmd_ensure_group(mgr: AuthentikManager, args: argparse.Namespace) -> int:
+    return _emit(pp.ensure_group(mgr, name=args.name, display=args.display))
+
+
+def cmd_ensure_role(mgr: AuthentikManager, args: argparse.Namespace) -> int:
+    return _emit(pp.ensure_role(mgr, name=args.name, display=args.display))
+
+
+def cmd_add_member(mgr: AuthentikManager, args: argparse.Namespace) -> int:
+    return _emit(pp.add_member(mgr, user=args.user, group=args.group))
+
+
+def cmd_remove_member(mgr: AuthentikManager, args: argparse.Namespace) -> int:
+    return _emit(pp.remove_member(mgr, user=args.user, group=args.group))
+
+
+def cmd_assign_role(mgr: AuthentikManager, args: argparse.Namespace) -> int:
+    return _emit(pp.assign_role(mgr, user=args.user, role=args.role))
+
+
+def cmd_unassign_role(mgr: AuthentikManager, args: argparse.Namespace) -> int:
+    return _emit(pp.unassign_role(mgr, user=args.user, role=args.role))
+
+
 def main(argv: list[str] | None = None) -> int:
     p = argparse.ArgumentParser(
         prog="authentik-manager",
@@ -332,9 +410,78 @@ def main(argv: list[str] | None = None) -> int:
     oe.add_argument("--show-secret", action="store_true", help="print the client_secret (sensitive)")
     oe.set_defaults(handler=cmd_oidc_app_ensure)
 
+    # ── People PRIMITIVES (S2b-2) — JSON to stdout for the TS people-manager ─
+    sub.add_parser("list-users", help="JSON array of users (name/active/email/displayName/groups/roles)")\
+       .set_defaults(handler=cmd_list_users)
+    sub.add_parser("list-groups", help="JSON array of {name, displayName} (excludes roles)")\
+       .set_defaults(handler=cmd_list_groups)
+    sub.add_parser("list-roles", help="JSON array of {name, displayName} (role-marked groups)")\
+       .set_defaults(handler=cmd_list_roles)
+
+    gu = sub.add_parser("get-user", help="JSON of one user object, or null if absent")
+    gu.add_argument("--name", required=True)
+    gu.set_defaults(handler=cmd_get_user)
+
+    eu = sub.add_parser("ensure-user", help="create user if missing (idempotent); reconciles only active flag")
+    eu.add_argument("--name", required=True)
+    eu.add_argument("--email", required=True)
+    eu.add_argument("--display", required=True)
+    eu.add_argument("--inactive", action="store_true", help="create/keep the user inactive")
+    eu.set_defaults(handler=cmd_ensure_user)
+
+    du = sub.add_parser("disable-user", help="set is_active=false (idempotent)")
+    du.add_argument("--name", required=True)
+    du.set_defaults(handler=cmd_disable_user)
+
+    dl = sub.add_parser("delete-user", help="delete a user (idempotent; no-op if absent)")
+    dl.add_argument("--name", required=True)
+    dl.set_defaults(handler=cmd_delete_user)
+
+    eg = sub.add_parser("ensure-group", help="create a group if missing (idempotent)")
+    eg.add_argument("--name", required=True)
+    eg.add_argument("--display", required=True)
+    eg.set_defaults(handler=cmd_ensure_group)
+
+    er = sub.add_parser("ensure-role", help="create a role (marked group) if missing (idempotent)")
+    er.add_argument("--name", required=True)
+    er.add_argument("--display", required=True)
+    er.set_defaults(handler=cmd_ensure_role)
+
+    am = sub.add_parser("add-member", help="add a user to a group (idempotent)")
+    am.add_argument("--user", required=True)
+    am.add_argument("--group", required=True)
+    am.set_defaults(handler=cmd_add_member)
+
+    rm = sub.add_parser("remove-member", help="remove a user from a group (idempotent)")
+    rm.add_argument("--user", required=True)
+    rm.add_argument("--group", required=True)
+    rm.set_defaults(handler=cmd_remove_member)
+
+    ar = sub.add_parser("assign-role", help="assign a role to a user directly (idempotent)")
+    ar.add_argument("--user", required=True)
+    ar.add_argument("--role", required=True)
+    ar.set_defaults(handler=cmd_assign_role)
+
+    uar = sub.add_parser("unassign-role", help="remove a role from a user (idempotent)")
+    uar.add_argument("--user", required=True)
+    uar.add_argument("--role", required=True)
+    uar.set_defaults(handler=cmd_unassign_role)
+
     args = p.parse_args(argv)
-    with _make_manager(args) as mgr:
-        return args.handler(mgr, args)
+    try:
+        with _make_manager(args) as mgr:
+            return args.handler(mgr, args)
+    except httpx.HTTPStatusError as e:
+        body = ""
+        try:
+            body = e.response.text
+        except Exception:  # noqa: BLE001
+            pass
+        print(f"Authentik API error: {e} {body}".strip(), file=sys.stderr)
+        return 1
+    except (httpx.HTTPError, RuntimeError) as e:
+        print(f"error: {e}", file=sys.stderr)
+        return 1
 
 
 if __name__ == "__main__":
