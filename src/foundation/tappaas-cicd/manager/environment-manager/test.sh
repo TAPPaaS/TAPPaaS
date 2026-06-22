@@ -159,21 +159,30 @@ else
 fi
 
 # ---------------------------------------------------------------------------
-# 6. create-minimal-environments produces mgmt + default
+# 6. create-minimal-environments --name <N> produces mgmt + <N> (ADR-007 S6 N6)
 # ---------------------------------------------------------------------------
 CFG2="${WORK}/bootstrap"
 mkdir -p "${CFG2}/people/organizations"
 cp "${FIX}/people/organizations/test2.json" "${CFG2}/people/organizations/test2.json"
 cp "${FIX}/zones.json" "${CFG2}/zones.json"
-if "$MINIMAL" --config-dir "$CFG2" >/dev/null 2>&1; then
-    ok "create-minimal-environments.sh runs"
+# zones.json fixture has no 'acme' zone — add one so the default env validates.
+jq '. + {"acme":{"type":"Service","vlantag":210,"bridge":"lan","description":"acme (fixture)"}}' \
+    "${CFG2}/zones.json" > "${CFG2}/zones.json.tmp" && mv "${CFG2}/zones.json.tmp" "${CFG2}/zones.json"
+if "$MINIMAL" --name acme --config-dir "$CFG2" >/dev/null 2>&1; then
+    ok "create-minimal-environments.sh --name acme runs"
 else
-    bad "create-minimal-environments.sh should succeed"
+    bad "create-minimal-environments.sh --name acme should succeed"
 fi
 M="${CFG2}/environments/mgmt.json"
-DD="${CFG2}/environments/default.json"
+DD="${CFG2}/environments/acme.json"
 [[ -f "$M" ]]  && ok "bootstrap produced mgmt.json"  || bad "expected mgmt.json"
-[[ -f "$DD" ]] && ok "bootstrap produced default.json" || bad "expected default.json"
+[[ -f "$DD" ]] && ok "bootstrap produced acme.json (default env named after system)" || bad "expected acme.json"
+[[ ! -f "${CFG2}/environments/default.json" ]] && ok "no literal default.json emitted" || bad "should not emit literal default.json"
+if [[ -f "$DD" ]]; then
+    [[ "$(jq -r '.name' "$DD")" == "acme" ]]         && ok "acme.json name=acme" || bad "acme.json name"
+    [[ "$(jq -r '.network.zone' "$DD")" == "acme" ]] && ok "acme.json network.zone=acme" || bad "acme.json zone"
+    [[ "$(jq -r '.ownerOrg' "$DD")" == "test2" ]]    && ok "acme.json ownerOrg <- site owner (test2)" || bad "acme.json ownerOrg"
+fi
 if [[ -f "$M" ]]; then
     [[ "$(jq -r '.network.zone' "$M")" == "mgmt" ]] && ok "mgmt.json network.zone=mgmt" || bad "mgmt.json zone"
     if jq -e 'has("domains")' "$M" | grep -q true; then
@@ -188,6 +197,32 @@ else
     bad "bootstrap environments should validate"
 fi
 
+# 6b. --name omitted → derive from site.json '.name'
+CFG3="${WORK}/bootstrap-site"
+mkdir -p "${CFG3}/people/organizations"
+cp "${FIX}/people/organizations/test2.json" "${CFG3}/people/organizations/test2.json"
+cp "${CFG2}/zones.json" "${CFG3}/zones.json"   # has acme + base zones
+cat > "${CFG3}/site.json" <<'JSON'
+{ "name": "acme", "displayName": "Acme Site", "owner": "test2",
+  "location": { "country": "NL", "timezone": "Europe/Amsterdam" },
+  "hardware": { "nodes": [ { "name": "tappaas1" } ] },
+  "repositories": [ { "name": "core", "url": "https://example/repo" } ] }
+JSON
+if "$MINIMAL" --config-dir "$CFG3" >/dev/null 2>&1; then
+    ok "create-minimal-environments.sh derives name from site.json (no --name)"
+else
+    bad "create-minimal-environments.sh should derive name from site.json"
+fi
+[[ -f "${CFG3}/environments/acme.json" ]] && ok "derived default env acme.json from site.json.name" || bad "expected acme.json derived from site.json"
+[[ "$(jq -r '.network.zone' "${CFG3}/environments/acme.json" 2>/dev/null)" == "acme" ]] \
+    && ok "derived acme.json network.zone=acme" || bad "derived acme.json zone"
+
+# 6c. idempotent re-run with --name does not clobber
+acme_before="$(cat "$DD" 2>/dev/null || true)"
+"$MINIMAL" --name acme --config-dir "$CFG2" >/dev/null 2>&1 || bad "create-minimal --name re-run should succeed"
+acme_after="$(cat "$DD" 2>/dev/null || true)"
+[[ "$acme_before" == "$acme_after" ]] && ok "create-minimal --name re-run did not clobber acme.json" || bad "re-run changed acme.json"
+
 # ---------------------------------------------------------------------------
 # 7. Idempotency: re-running migrate + minimal does not error and does not clobber
 # ---------------------------------------------------------------------------
@@ -201,7 +236,7 @@ default_after="$(cat "$D" 2>/dev/null || true)"
 [[ "$default_before" == "$default_after" ]] && ok "re-run did not clobber existing default.json" || bad "re-run changed default.json"
 
 mgmt_before="$(cat "$M" 2>/dev/null || true)"
-"$MINIMAL" --config-dir "$CFG2" >/dev/null 2>&1 || bad "create-minimal re-run should succeed"
+"$MINIMAL" --name acme --config-dir "$CFG2" >/dev/null 2>&1 || bad "create-minimal re-run should succeed"
 mgmt_after="$(cat "$M" 2>/dev/null || true)"
 [[ "$mgmt_before" == "$mgmt_after" ]] && ok "create-minimal re-run did not clobber mgmt.json" || bad "re-run changed mgmt.json"
 

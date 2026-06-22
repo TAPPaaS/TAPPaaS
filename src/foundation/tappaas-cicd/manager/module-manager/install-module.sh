@@ -79,6 +79,63 @@ Examples:
 EOF
 }
 
+# ── Default-zone resolution (ADR-007 S6 N6) ───────────────────────────
+#
+# Resolve the zone for a module whose JSON declares no explicit zone0. The
+# default zone is the TAPPaaS system's default-environment zone (= the system
+# name <N>), NOT mgmt. Resolution order:
+#
+#   1. explicit .zone0 in the module JSON          (handled by the caller — wins)
+#   2. site.json '.name'                           (when site.json exists AND that
+#                                                    zone exists in zones.json)
+#   3. the single non-mgmt environment's network.zone
+#                                                  (when exactly one such env exists)
+#   4. fall back to "mgmt" (today's behaviour)     (pre-cutover: no site.json /
+#                                                    environments yet) — with a warn
+#
+# Echoes the resolved zone name. Reads only ${CONFIG_DIR}; never mutates state.
+resolve_default_zone() {
+    local zones_file="${CONFIG_DIR}/zones.json"
+    local site_file="${CONFIG_DIR}/site.json"
+    local env_dir="${CONFIG_DIR}/environments"
+
+    # (2) site.json.name, when it names a zone that exists in zones.json.
+    if [[ -f "$site_file" ]]; then
+        local site_name
+        site_name="$(jq -r '.name // empty' "$site_file" 2>/dev/null)"
+        if [[ -n "$site_name" && "$site_name" != "mgmt" ]]; then
+            if [[ -f "$zones_file" ]] && \
+               jq -e --arg z "$site_name" 'has($z)' "$zones_file" >/dev/null 2>&1; then
+                printf '%s\n' "$site_name"
+                return 0
+            fi
+        fi
+    fi
+
+    # (3) exactly one non-mgmt environment → its network.zone.
+    if [[ -d "$env_dir" ]]; then
+        local f base zone count=0 only_zone=""
+        for f in "$env_dir"/*.json; do
+            [[ -e "$f" ]] || continue
+            base="$(basename "$f" .json)"
+            [[ "$base" == "mgmt" ]] && continue
+            zone="$(jq -r '.network.zone // empty' "$f" 2>/dev/null)"
+            [[ -n "$zone" ]] || continue
+            count=$((count + 1))
+            only_zone="$zone"
+        done
+        if [[ "$count" -eq 1 ]]; then
+            printf '%s\n' "$only_zone"
+            return 0
+        fi
+    fi
+
+    # (4) pre-cutover fallback — preserve today's behaviour.
+    warn "  No default zone resolvable (no site.json/zones.json match and not exactly one non-mgmt environment) — falling back to 'mgmt'. Set an explicit zone0, or bootstrap site.json + environments to enable default-zone placement." >&2
+    printf '%s\n' "mgmt"
+    return 0
+}
+
 # ── Main ─────────────────────────────────────────────────────────────
 
 main() {
@@ -191,8 +248,23 @@ main() {
 
     local module_json="${CONFIG_DIR}/${effective_module}.json"
 
+    # zone0 resolution (ADR-007 S6 N6): an explicit zone0 in the module JSON
+    # always wins. A blank/unset zone0 resolves to the system's DEFAULT zone (the
+    # default-environment zone = the system name), falling back to mgmt only when
+    # nothing is resolvable yet (pre-cutover). The resolved value is written back
+    # into the module JSON so every downstream consumer (the module's own
+    # install.sh via get_config_value 'zone0', network provisioning) sees it.
     local zone0
     zone0=$(jq -r '.zone0 // empty' "${module_json}")
+    if [[ -z "$zone0" ]]; then
+        zone0="$(resolve_default_zone)"
+        info "  zone0 not set — defaulting to ${BL}${zone0}${CL}"
+        local _ztmp
+        _ztmp="$(mktemp "${module_json}.XXXXXX")"
+        jq --arg z "$zone0" '.zone0 = $z' "${module_json}" > "${_ztmp}" \
+            && mv "${_ztmp}" "${module_json}" \
+            || { rm -f "${_ztmp}"; die "Failed to write resolved zone0 into ${module_json}"; }
+    fi
     if [[ -n "$zone0" ]]; then
         validate_zone_active "$zone0" || die "Zone validation failed — install aborted before any resources were created"
     fi

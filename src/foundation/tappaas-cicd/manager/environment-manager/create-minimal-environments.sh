@@ -1,27 +1,36 @@
 #!/usr/bin/env bash
 #
-# create-minimal-environments.sh — bootstrap the two always-required environments (ADR-007 P3)
+# create-minimal-environments.sh — bootstrap the two always-required environments (ADR-007 P3/P6/P7)
 #
 # Every TAPPaaS system requires two environments:
 #   - mgmt.json    : the management environment (foundation modules, internal DNS
 #                    only). network.zone = mgmt, NO domains.
-#   - default.json : the default tenant environment. network.zone = default,
-#                    no domains by default (a domain is added by the variant
-#                    migration or by an operator later).
+#   - <N>.json     : the DEFAULT tenant environment, named after the TAPPaaS
+#                    system name <N> (ADR-007 S6 topology: the system name <N> =
+#                    site.json.name = the default-zone name = the default-environment
+#                    name). network.zone = <N>. Domains are added if derivable from
+#                    site/configuration.json, else omitted (an operator/migration
+#                    adds them later).
 #
 # This script is the SINGLE OWNER of these two files (sibling of P1's
 # user-setup.sh). P6/P7 reference them, they do NOT re-author them.
 #
+# Pre-cutover note: older systems may carry a literal "default.json" produced by
+# an earlier version of this script or by migrate-variants.sh. We never delete an
+# operator file — if a stale default.json exists it is left in place and noted,
+# while the system-named <N>.json is the file this script emits and prefers.
+#
 # Idempotent: an existing environment file is left untouched unless --force.
-# When default.json was already produced by migrate-variants.sh (e.g. it carries
-# a domain), this script will not clobber it.
 #
 # Usage: create-minimal-environments.sh [OPTIONS]
 #
 # Options:
+#   --name <N>         TAPPaaS system name (= default zone & default env name).
+#                      If omitted: derived from site.json '.name', else from the
+#                      first-domain label in configuration.json, else an error.
 #   --config-dir DIR   config directory (default: ${TAPPAAS_CONFIG:-/home/tappaas/config})
 #   --out-dir DIR      output environments dir (default: <config-dir>/environments)
-#   --force            overwrite existing mgmt.json / default.json
+#   --force            overwrite existing mgmt.json / <N>.json
 #   -h, --help         show this help and exit
 #
 # Exit codes: 0 = success or no-op; 1 = error.
@@ -55,16 +64,20 @@ _SELF="$(readlink -f "${BASH_SOURCE[0]}")"
 
 CONFIG_DIR="${TAPPAAS_CONFIG:-/home/tappaas/config}"
 OUT_DIR=""
+NAME=""
 FORCE=false
 
 usage() {
-    sed -n '2,32p' "$_SELF" | sed 's/^# \{0,1\}//'
+    sed -n '2,38p' "$_SELF" | sed 's/^# \{0,1\}//'
 }
 
 parse_args() {
     while [[ $# -gt 0 ]]; do
         case "$1" in
             -h|--help) usage; exit 0 ;;
+            --name)
+                [[ -n "${2:-}" ]] || die "--name requires a value"
+                NAME="$2"; shift 2 ;;
             --config-dir)
                 [[ -n "${2:-}" ]] || die "--config-dir requires a path argument"
                 CONFIG_DIR="$2"; shift 2 ;;
@@ -87,6 +100,47 @@ site_owner() {
         base="$(basename "$f" .json)"
         printf '%s\n' "$base"
     done | LC_ALL=C sort | head -1
+}
+
+# Resolve the TAPPaaS system name <N>:
+#   1. explicit --name
+#   2. site.json '.name'
+#   3. first-domain label from configuration.json (.tappaas.domain, or the ""
+#      default variant's .domain) — the label before the first dot
+# Echoes the name, or returns 1 (with no output) when none is derivable.
+resolve_name() {
+    if [[ -n "$NAME" ]]; then
+        printf '%s\n' "$NAME"; return 0
+    fi
+
+    local site="${CONFIG_DIR}/site.json" n
+    if [[ -f "$site" ]]; then
+        n="$(jq -r '.name // empty' "$site" 2>/dev/null)"
+        if [[ -n "$n" ]]; then printf '%s\n' "$n"; return 0; fi
+    fi
+
+    local cfg="${CONFIG_DIR}/configuration.json" domain label
+    if [[ -f "$cfg" ]]; then
+        domain="$(jq -r '(.tappaas.domain // .tappaas.variants[""].domain) // empty' "$cfg" 2>/dev/null)"
+        if [[ -n "$domain" ]]; then
+            label="${domain%%.*}"
+            if [[ -n "$label" ]]; then printf '%s\n' "$label"; return 0; fi
+        fi
+    fi
+
+    return 1
+}
+
+# Domain (if derivable) for the default environment, else "".
+default_domain() {
+    local site="${CONFIG_DIR}/site.json" cfg="${CONFIG_DIR}/configuration.json"
+    # site.json deliberately carries NO site-wide domain (ADR-007d) — domains are
+    # per-environment — so the only pre-cutover source is configuration.json.
+    if [[ -f "$cfg" ]]; then
+        jq -r '(.tappaas.domain // .tappaas.variants[""].domain) // empty' "$cfg" 2>/dev/null
+        return 0
+    fi
+    printf '%s\n' ""
 }
 
 # Write a JSON document atomically to $1 unless it exists (and not --force).
@@ -114,9 +168,27 @@ main() {
     [[ -n "$OUT_DIR" ]] || OUT_DIR="${CONFIG_DIR}/environments"
     mkdir -p "$OUT_DIR"
 
+    local name
+    if ! name="$(resolve_name)"; then
+        die "Cannot determine the TAPPaaS system name. Pass --name <N>, or provide a site.json with '.name', or a configuration.json with a domain."
+    fi
+    # The default-env name doubles as a zone key — keep it slug-safe.
+    if [[ ! "$name" =~ ^[A-Za-z0-9_-]+$ ]]; then
+        die "Resolved system name '${name}' is not a valid slug (allowed: A-Z a-z 0-9 _ -)."
+    fi
+    if [[ "$name" == "mgmt" ]]; then
+        die "The TAPPaaS system name must not be 'mgmt' (that name is reserved for the management environment)."
+    fi
+
     local owner
     owner="$(site_owner)"
     [[ -n "$owner" ]] || warn "No organization found under ${CONFIG_DIR}/people/organizations/ — ownerOrg left empty in bootstrap environments."
+
+    local domain
+    domain="$(default_domain)"
+
+    local display
+    display="$(printf '%s%s' "$(printf '%s' "${name:0:1}" | tr '[:lower:]' '[:upper:]')" "${name:1}")"
 
     local mgmt_json default_json
     mgmt_json="$(jq -n --arg owner "$owner" '
@@ -126,22 +198,32 @@ main() {
             ownerOrg: $owner,
             network: { zone: "mgmt" }
         }')"
-    default_json="$(jq -n --arg owner "$owner" '
+    default_json="$(jq -n \
+        --arg name "$name" \
+        --arg display "$display" \
+        --arg owner "$owner" \
+        --arg domain "$domain" '
         {
-            name: "default",
-            displayName: "Default Environment",
-            ownerOrg: $owner,
-            network: { zone: "default" }
-        }')"
+            name: $name,
+            displayName: $display,
+            ownerOrg: $owner
+        }
+        + (if $domain != "" then { domains: { primary: $domain } } else {} end)
+        + { network: { zone: $name } }')"
 
     if write_if_absent "${OUT_DIR}/mgmt.json" "$mgmt_json"; then
         info "${GN:-}Wrote ${OUT_DIR}/mgmt.json${CL:-} (zone=mgmt, no domains)"
     fi
-    if write_if_absent "${OUT_DIR}/default.json" "$default_json"; then
-        info "${GN:-}Wrote ${OUT_DIR}/default.json${CL:-} (zone=default)"
+    if write_if_absent "${OUT_DIR}/${name}.json" "$default_json"; then
+        info "${GN:-}Wrote ${OUT_DIR}/${name}.json${CL:-} (default environment: name=${name}, zone=${name}, domain=${domain:-<none>})"
     fi
 
-    info "Minimal environments bootstrap complete (ownerOrg=${owner:-<unset>})."
+    # Note (do not delete) a stale literal default.json from older bootstraps.
+    if [[ "$name" != "default" && -f "${OUT_DIR}/default.json" ]]; then
+        warn "A legacy '${OUT_DIR}/default.json' exists — the default environment is now '${name}.json'. The legacy file is left in place; remove it manually once you have confirmed nothing references it."
+    fi
+
+    info "Minimal environments bootstrap complete (name=${name}, ownerOrg=${owner:-<unset>})."
 }
 
 main "$@"

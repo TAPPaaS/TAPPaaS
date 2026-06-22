@@ -16,8 +16,14 @@ residency, backup retention, and legal processor. Environments live at
   handling"). Idempotent (`--force` to overwrite). Does NOT delete
   `configuration.json`.
 - `create-minimal-environments.sh` — bootstrap of the two always-required
-  environments (`mgmt.json`, `default.json`). Single owner of those two files;
-  P6/P7 consume them. Idempotent.
+  environments: `mgmt.json` (zone `mgmt`, no domains) and the DEFAULT tenant
+  environment `<N>.json`, named after the TAPPaaS system name `<N>` (ADR-007 S6:
+  `<N>` = `site.json.name` = the default-zone name = the default-env name, with
+  `network.zone = <N>`). `--name <N>` sets it explicitly; if omitted it is derived
+  from `site.json '.name'`, else from the first-domain label in
+  `configuration.json`. A legacy literal `default.json` (older bootstraps) is
+  left in place and noted, never deleted. Single owner of these files; P6/P7
+  consume them. Idempotent.
 - `validate-environment.sh` (manager verb `validate.sh`) — validates environment
   files against `schemas/environment-fields.json` + reference integrity
   (`network.zone` ∈ zones.json, `ownerOrg` ∈ organizations) and **rejects an
