@@ -76,7 +76,7 @@ SLOT_SIZE = 100        # rules per module per direction
 SLOT_COUNT = 100       # number of distinct slots within a band
 
 DEFAULT_MODULES_DIR = Path("/home/tappaas/config")
-DEFAULT_ZONES_FILE = Path("/home/tappaas/TAPPaaS/src/foundation/firewall/zones.json")
+DEFAULT_ZONES_FILE = Path("/home/tappaas/TAPPaaS/src/foundation/tappaas-cicd/manager/network-manager/zones.json")
 DEFAULT_GLOBAL_ALIASES_FILE = Path(
     "/home/tappaas/TAPPaaS/src/foundation/firewall/aliases.json"
 )
@@ -1538,7 +1538,7 @@ def _find_zones_file(explicit: str | None) -> Path:
         Path("/home/tappaas/config/zones.json"),
         DEFAULT_ZONES_FILE,
         Path("zones.json"),
-        Path("src/foundation/firewall/zones.json"),
+        Path("src/foundation/tappaas-cicd/manager/network-manager/zones.json"),
     ]
     for c in candidates:
         if c.is_file():

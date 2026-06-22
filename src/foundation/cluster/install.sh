@@ -489,7 +489,7 @@ fetch "${REPO}${BRANCH}/src/foundation/tappaas-cicd/tappaas-cicd.json"  ~/tappaa
 msg_ok "Staged config-firewall.sh, install-platform.sh, tappaas-nixos.json, tappaas-cicd.json"
 
 msg_info "Copy zones.json"
-fetch "${REPO}${BRANCH}/src/foundation/firewall/zones.json" ~/tappaas/zones.json 644
+fetch "${REPO}${BRANCH}/src/foundation/tappaas-cicd/manager/network-manager/zones.json" ~/tappaas/zones.json 644
 msg_ok "Copied zones.json"
 
 # Debian/Ubuntu cloud-init vendor-data snippet (issue #147).

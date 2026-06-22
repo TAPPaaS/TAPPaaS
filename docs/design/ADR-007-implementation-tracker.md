@@ -89,8 +89,18 @@ Newest entries on top. Each stage appends a dated block as it moves through the 
   - **4 — retire zone-controller/zone-reconcile → delegate to network-manager:** `zone-reconcile` (broken: stale firewall/scripts/ paths; called by pre-update.sh/setup-switches/firewall test) and `zone-controller.sh` (called by variant-manager — the live zone path; network-manager.ts has NOT yet ported its VM-in-use SSH preflight on delete) become thin wrappers. Touches the update path → supervised. Plus PROGRAMS.csv regen + optional zones.json→config/network.
   - **The #372/#373 FIX is in the code** (network-manager always reconciles the switch plane); chunks 3-4 are the live wiring/verification + cleanup.
 
-### S6 — P6/P7 (mgmt / default / legacy-zone-sunset) — ⚠ DESIGN DECISION NEEDED BEFORE IMPLEMENTING
-Analysis 2026-06-22 (decide the environment↔zone topology first; the rest falls out).
+### S6 — P6/P7 — ✅ TOPOLOGY RESOLVED (operator 2026-06-22); implementation chunked
+**Resolved design (install-name `<N>`-driven; network-manager owns the whole zones lifecycle):**
+- Install asks the **TAPPaaS system name `<N>`** → `site.json.name`; `<N>` is also the **default zone** name and the **default environment** name (env `<N>.json`, `network.zone:<N>`).
+- **Default zone** = the distributed `srv` zone **renamed to `<N>`** (keeps VLAN/config, state Active).
+- **Module install:** blank zone defaults to the **default zone `<N>`**, NOT `mgmt` (today's default).
+- **Install-time zones transform** (`network-manager zones-init --name <N>`; zones.json is NOT copied verbatim): `srv`→`<N>`; `home`→`<N>-private` (its access-to `srvHome`→`<N>`); `guest`→`<N>-guest`; **Inactive**: `srvHome`,`srvWork`,`srvCust`,`srvDev`,**`work`** (operator: work inactive too); **stay**: `srvTest`,`iot*`,`dmz`,`netbird`,`test`,`mgmt`; + rewrite every `access-to`/zone-ref to a renamed key (referential integrity); idempotent.
+- **network-manager owns zones.json end-to-end** (operator direction): the repo **source template moves** `foundation/firewall/zones.json` → `tappaas-cicd/manager/network-manager/zones.json`; **install + update scripts route through network-manager** (no ad-hoc copies/merge scripts); network-manager **distributes zones.json to the nodes whenever it changes it** (port `distribute_zones_to_nodes`); and **every tappaas-cicd update runs a consistency check** of the live zones.json against the installation (`network-manager zones-check`).
+**Implementation chunks (N#):** N1 move source template → network-manager + repoint source readers (structural). N2 `network-manager zones-init --name <N>` transform (TS subcommand; offline-tested on template). N3 distribute-on-change (port distribute_zones_to_nodes into network-manager's write path; SSH/live). N4 `network-manager zones-check` consistency check + wire into update-tappaas/pre-update. N5 route install2.sh (seed→zones-init) + pre-update.sh (apply-zones-merge→network-manager) through network-manager; retire ad-hoc zone scripting. N6 default env `<N>.json` (create-minimal-environments --name) + install-module default zone mgmt→`<N>`. N3/N5 touch the live install/update flow + SSH → careful/supervised.
+
+(original analysis retained below)
+
+### S6 — P6/P7 (mgmt / default / legacy-zone-sunset) — original analysis 2026-06-22
 
 **Grounding — live zones.json has TWO tiers of zones:**
 - **Client/access zones** (`type: Client/Guest/IoT/DMZ/Overlay/Management/Test`): `home`, `work`, `guest`, `iot*`, `dmz`, `netbird`, `mgmt`, `test` — where devices/users live (e.g. client `home` = 10.3.10.0/24, `access-to: [srvHome,…]`).

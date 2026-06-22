@@ -97,7 +97,7 @@ fi
 # must not be overwritten here; ongoing release drift is reconciled by
 # apply-zones-merge.sh (sourced from pre-update.sh on every update-tappaas; #209).
 if [ ! -f /home/tappaas/config/zones.json ]; then
-  cp /home/tappaas/TAPPaaS/src/foundation/firewall/zones.json /home/tappaas/config/zones.json
+  cp /home/tappaas/TAPPaaS/src/foundation/tappaas-cicd/manager/network-manager/zones.json /home/tappaas/config/zones.json
   _info "Seeded /home/tappaas/config/zones.json from firewall module"
 else
   _info "Preserving existing /home/tappaas/config/zones.json (not overwriting)"
@@ -106,7 +106,7 @@ fi
 # at install time, so the first post-#209 update preserves any existing
 # operator customizations (current diverged from orig=source → pinned).
 if [ ! -f /home/tappaas/config/zones.json.orig ]; then
-  cp /home/tappaas/TAPPaaS/src/foundation/firewall/zones.json /home/tappaas/config/zones.json.orig
+  cp /home/tappaas/TAPPaaS/src/foundation/tappaas-cicd/manager/network-manager/zones.json /home/tappaas/config/zones.json.orig
   _info "Seeded /home/tappaas/config/zones.json.orig (3-way merge baseline)"
 fi
 

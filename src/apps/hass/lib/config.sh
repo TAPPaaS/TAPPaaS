@@ -34,7 +34,7 @@ check_json "/home/tappaas/config/${MODULE}.json" || exit 1
 
 readonly CONFIG_DIR="/home/tappaas/config"
 readonly SYSTEM_CONFIG="${CONFIG_DIR}/configuration.json"
-readonly ZONES_FILE="/home/tappaas/TAPPaaS/src/foundation/firewall/zones.json"
+readonly ZONES_FILE="/home/tappaas/TAPPaaS/src/foundation/tappaas-cicd/manager/network-manager/zones.json"
 readonly HA_DATA_DIR="/mnt/data/supervisor/homeassistant"
 # Secret store ON the hass VM: persistent (/mnt/data) but OUTSIDE the HA backup
 # set (not under supervisor/homeassistant) so the LLAT is not swept into HA

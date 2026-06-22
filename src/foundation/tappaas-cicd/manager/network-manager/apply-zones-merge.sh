@@ -46,7 +46,7 @@ default_source() {
                     "${CONFIG_DIR}/configuration.json" 2>/dev/null || true)
     fi
     [[ -z "${repos_dir}" ]] && repos_dir="/home/tappaas/TAPPaaS"
-    echo "${repos_dir}/src/foundation/firewall/zones.json"
+    echo "${repos_dir}/src/foundation/tappaas-cicd/manager/network-manager/zones.json"
 }
 
 ZONES_CURRENT="${CONFIG_DIR}/zones.json"

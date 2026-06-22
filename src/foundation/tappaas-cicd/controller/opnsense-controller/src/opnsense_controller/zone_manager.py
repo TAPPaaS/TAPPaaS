@@ -2073,8 +2073,8 @@ def main():
         # Try to find it relative to common locations
         possible_paths = [
             Path("zones.json"),
-            Path("src/foundation/firewall/zones.json"),
-            Path("/home/tappaas/TAPPaaS/src/foundation/firewall/zones.json"),
+            Path("src/foundation/tappaas-cicd/manager/network-manager/zones.json"),
+            Path("/home/tappaas/TAPPaaS/src/foundation/tappaas-cicd/manager/network-manager/zones.json"),
         ]
         for path in possible_paths:
             if path.exists():
