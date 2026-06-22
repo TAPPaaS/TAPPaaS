@@ -16,9 +16,9 @@ TAPPAAS_ROOT="${FOUNDATION_DIR}"
 export TAPPAAS_SCHEMA_FILE="${FOUNDATION_DIR}/module-fields.json"
 
 # shellcheck disable=SC1091
-. "${SCRIPT_DIR}/../common-install-routines.sh"
+. "${SCRIPT_DIR}/../../lib/common-install-routines.sh"
 # shellcheck disable=SC1091
-. "${SCRIPT_DIR}/../apply-json-merge.sh"
+. "${SCRIPT_DIR}/../../lib/apply-json-merge.sh"
 # shellcheck disable=SC1091
 . "${SCRIPT_DIR}/../convert-json-to-config.sh"
 

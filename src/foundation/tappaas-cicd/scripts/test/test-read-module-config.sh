@@ -9,7 +9,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 FOUNDATION_DIR="$(cd "${SCRIPT_DIR}/../../.." && pwd)"
 
 # shellcheck disable=SC1091
-. "${SCRIPT_DIR}/../common-install-routines.sh"
+. "${SCRIPT_DIR}/../../lib/common-install-routines.sh"
 
 PASS=0
 FAIL=0
@@ -64,7 +64,7 @@ fi
     cd "${WORK}"
     unset JSON
     # shellcheck disable=SC1091
-    . "${SCRIPT_DIR}/../common-install-routines.sh" m-pa
+    . "${SCRIPT_DIR}/../../lib/common-install-routines.sh" m-pa
     if [[ "$(get_config_value cores unset)" == "4" ]]; then
         pass "auto-loaded \$JSON: get_config_value reads through normalization"
     else

@@ -15,7 +15,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 MIGRATE="${SCRIPT_DIR}/../migrate-zone-keys-to-underscore.sh"
 
 # shellcheck disable=SC1091
-. "${SCRIPT_DIR}/../common-install-routines.sh"
+. "${SCRIPT_DIR}/../../lib/common-install-routines.sh"
 
 PASS=0
 FAIL=0

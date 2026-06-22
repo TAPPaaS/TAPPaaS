@@ -14,7 +14,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 FOUNDATION_DIR="$(cd "${SCRIPT_DIR}/../../.." && pwd)"
 
 # shellcheck disable=SC1091
-. "${SCRIPT_DIR}/../common-install-routines.sh"
+. "${SCRIPT_DIR}/../../lib/common-install-routines.sh"
 
 PASS=0
 FAIL=0
