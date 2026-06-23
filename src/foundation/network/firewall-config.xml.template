@@ -12,7 +12,7 @@
     <primaryconsole>serial</primaryconsole>
     <secondaryconsole>video</secondaryconsole>
     <optimization>normal</optimization>
-    <hostname>firewall</hostname>
+    <hostname>network</hostname>
     <domain>internal</domain>
     <dnsallowoverride>1</dnsallowoverride>
     <dnsallowoverride_exclude/>
@@ -52,7 +52,7 @@
       <ssl-ciphers/>
       <interfaces/>
       <compression/>
-      <althostnames>firewall.mgmt.internal</althostnames>
+      <althostnames>network.mgmt.internal firewall.mgmt.internal</althostnames>
     </webgui>
     <disablenatreflection>yes</disablenatreflection>
     <usevirtualterminal>1</usevirtualterminal>
