@@ -5,6 +5,7 @@
 **Driver**: the PM stage-gate workflow in [`.claude/skills/adr-007-driver/SKILL.md`](../../.claude/skills/adr-007-driver/SKILL.md).
 **Branch**: `ADR007`
 **Started**: 2026-06-21
+**Branch totals** (vs merge-base with `main`, as of 2026-06-23): **522 files touched** — 187 added, 88 modified, 140 renamed, **107 retired**; **+21,355 / −22,075 lines**; 68 commits.
 
 ---
 
@@ -39,7 +40,21 @@ All work not yet done, in **proposed order**. (Everything else — the S0–S9 b
 | 7 | **#294 — zone-aligned VMID ranges** | Derive/allocate a VM's VMID from its zone/environment. Needs the env↔zone model fully settled. |
 | 8 | **#380 — document & revalidate the install sequence** | End-to-end fresh-install write-up against the post-cutover reality. Do **last**, so it documents the settled state rather than a moving target. |
 
-> **S8 complete (incl. step 3 — the supervised live firewall→network migration, 2026-06-23):** config/firewall.json→network.json (vmname network), Proxmox VM 110 renamed to `network`, `network.mgmt.internal` added (both it and the `firewall.mgmt.internal` lifeline resolve to 10.0.0.1). Two D5/script leftovers found + fixed (proxy services no longer require configuration.json; migration dns-manager call corrected). Snapshots `pre_network_migration_*` on vmid 110+130. *Optional later, even-more-careful step:* re-point the 34 `FIREWALL_FQDN`/`firewall.mgmt.internal` consumers to `network.mgmt.internal` and retire the old hostname.
+> **S8 complete (incl. step 3 — the supervised live firewall→network migration, 2026-06-23):** config/firewall.json→network.json (vmname network), Proxmox VM 110 renamed to `network`, `network.mgmt.internal` added (both it and the `firewall.mgmt.internal` lifeline resolve to 10.0.0.1). Two D5/script leftovers found + fixed (proxy services no longer require configuration.json; migration dns-manager call corrected). Snapshots `pre_network_migration_*` on vmid 110+130. The full hostname switch is a **post-conversion clean-up** (below).
+
+---
+
+## Post-conversion clean-up
+
+Activities that are safe **only once EVERY TAPPaaS system has been converted** (each has run `migrate-firewall-to-network.sh` + the configuration.json cutover). Until then the transition back-compat MUST stay — removing it would break any system still on the old names. Do these as a final sweep, not before.
+
+| Deliverable | Notes |
+|-------------|-------|
+| **Retire `firewall.mgmt.internal` → `network.mgmt.internal`** | Re-point the 34 `FIREWALL_FQDN` / `firewall.mgmt.internal` consumers to `network.mgmt.internal`; flip the source `network.json` `vmname` firewall→network so a **fresh install** creates a `network` VM and registers `network.mgmt.internal` (today a fresh install still creates `firewall.mgmt.internal`; the migration only ADDS `network.mgmt.internal` as an alias and keeps the old name as the cicd lifeline); then retire the `firewall.mgmt.internal` DNS override. |
+| **Remove the firewall↔network back-compat** | `resolve_provider_module` firewall↔network alias; `get_module_dir` stale-`.location` follow; update-tappaas `FOUNDATION_LEGACY_NAMES` + `deployed_foundation_name`; the `network.json`/`firewall.json` dual-resolution + `firewall:*` provides/dependsOn aliases in the network service scripts. |
+| **Remove the configuration.json back-compat** | The `configuration.json` entry in update-tappaas `NON_MODULE_JSONS`; the residual `.tappaas.*` reads in the legacy `create-configuration.sh`; retire the legacy `create-configuration.sh` / `validate-configuration.sh` / `migrate-configuration.sh` + `migrate-firewall-to-network.sh` migration tooling once no un-migrated system remains. |
+
+> **Why separate:** the items above are *removals of compatibility shims*; running them before every system is converted would strand un-migrated systems. The **Remaining outstanding** items above are forward work that is safe to do now.
 
 ---
 
