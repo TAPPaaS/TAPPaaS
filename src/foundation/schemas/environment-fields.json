@@ -103,9 +103,26 @@
       "additionalProperties": false,
       "properties": {
         "retention": {
-          "description": "Backup retention period (e.g. 7y, 5y, 1y).",
+          "description": "Backup retention period (e.g. 7y, 5y, 1y). Overrides the site backup.defaultRetention for modules in this environment (ADR-007 P9 cascade).",
           "type": "string",
           "default": "7y"
+        },
+        "residency": {
+          "description": "Data residency for this environment's backups (ADR-007 P9). eu-only forbids targeting a non-EU offsite. Defaults to the environment's top-level dataResidency when unset.",
+          "type": "string",
+          "enum": [
+            "eu-only",
+            "global"
+          ],
+          "default": "eu-only"
+        },
+        "schedule": {
+          "description": "Environment-specific backup schedule (cron expression / PBS calendar event). null inherits the site-wide job schedule.",
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null
         }
       }
     },

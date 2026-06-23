@@ -389,6 +389,35 @@ if command -v network-manager >/dev/null 2>&1; then
 else
     skip "network-manager not installed"
 fi
+# backup-manager: cascade resolves on a temp fixture (site 7y -> env 5y -> mod 1y),
+# never touching the live config or PBS.
+_bm="${SCRIPT_DIR}/manager/backup-manager/backup-manager.sh"
+if [[ -x "${_bm}" ]]; then
+    _bf="$(mktemp -d "${TMPDIR:-/tmp}/backup-smoke.XXXXXX")"
+    mkdir -p "${_bf}/environments"
+    printf '{"backup":{"target":"pbs1","defaultRetention":"7y"}}\n' > "${_bf}/site.json"
+    printf '{"name":"bar","backup":{"retention":"5y"}}\n' > "${_bf}/environments/bar.json"
+    printf '{"vmid":210,"environment":"bar","backup":{"retention":"1y"}}\n' > "${_bf}/m.json"
+    if [[ "$("${_bm}" resolve m --config-dir "${_bf}" | jq -r .retention)" == "1y" ]]; then
+        pass "backup-manager: cascade resolves module override (7y->5y->1y)"
+    else
+        fail "backup-manager: cascade resolution wrong"
+    fi
+    rm -rf "${_bf}"
+else
+    skip "backup-manager not present"
+fi
+# backup-controller: pure-function selftest (no PBS contact)
+_bc="${SCRIPT_DIR}/controller/backup-controller/backup-controller"
+if [[ -x "${_bc}" ]]; then
+    if "${_bc}" --selftest 2>&1 | grep -q "pure-function checks passed"; then
+        pass "backup-controller: pure-function selftest passes"
+    else
+        fail "backup-controller: selftest failed"
+    fi
+else
+    skip "backup-controller not present"
+fi
 
 # ── Deep Test: VM creation suite ────────────────────────────────────
 

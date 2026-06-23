@@ -29,6 +29,7 @@
     "storage",
     "pbsStorageName",
     "alwaysBackup",
+    "backup",
     "imageType",
     "image",
     "imageLocation",
@@ -400,6 +401,40 @@
         "tappaas-cicd"
       ],
       "note": "Each entry is a module/VM name resolved to its VMID via /home/tappaas/config/<name>.json. Registered when the backup module installs/updates."
+    },
+    "backup": {
+      "description": "Module-level backup policy (ADR-007 P9). The leaf of the Site -> Environment -> Module backup cascade: backup-manager resolves the effective policy by merging site.json backup.defaultRetention, the environment's backup.retention/residency, then these module overrides. install-module.sh persists the resolved policy onto the deployed module config. Does NOT replace the dependsOn backup:vm wiring (which decides whether the VM is in the shared PBS job) — it records the resolved retention/exclude/enabled state.",
+      "type": "object",
+      "requiredBy": [],
+      "usedBy": [
+        "backup:vm"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "enabled": {
+          "description": "Whether this module is backed up. false disables backup for the module regardless of site/environment policy.",
+          "type": "boolean",
+          "default": true
+        },
+        "retention": {
+          "description": "Module-specific retention period (e.g. 1y). Overrides the environment/site retention in the cascade. Empty/absent inherits.",
+          "type": "string"
+        },
+        "exclude": {
+          "description": "Paths to exclude from this module's backup.",
+          "type": "array",
+          "items": "string",
+          "default": []
+        }
+      },
+      "example": {
+        "enabled": true,
+        "retention": "1y",
+        "exclude": [
+          "/var/cache"
+        ]
+      },
+      "note": "Authored optionally in the source module JSON; the resolved (cascaded) value is written back into /home/tappaas/config/<name>.json at install time."
     },
     "imageType": {
       "description": "How the guest's image/rootfs is sourced. Applies to both VMs (cluster:vm) and containers (cluster:lxc); whether the guest is a VM or an LXC is determined by dependsOn (cluster:vm vs cluster:lxc), not by this field.",

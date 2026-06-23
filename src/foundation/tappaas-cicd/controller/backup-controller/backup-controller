@@ -1,0 +1,153 @@
+#!/usr/bin/env bash
+# backup-controller — Proxmox Backup Server (PBS) operations for the backup
+# hierarchy (ADR-007 P9). Runtime-state controller: queries/triggers PBS for the
+# backup-manager and the operator. It REUSES the tested foundation PBS bash
+# logic (src/foundation/backup/lib/pbs-job.sh + pbs-namespace.sh) rather than
+# reimplementing the PBS API — see DESIGN.md for the "Python rewrite" aspiration.
+#
+# Commands:
+#   job-status              Query the shared PBS backup job (vmid list, schedule)
+#   list <module>           List snapshots for a module's VM (by vmid)
+#   verify <module>         Trigger + report a PBS verify for a module's VM
+#   namespaces              List the datastore's namespaces
+#   help
+#
+# Degrades gracefully when PBS / the cluster is unreachable: live commands print
+# a skip notice and exit 0 (so offline runs and tests do not fail). Pure helpers
+# (retention args, namespace paths) are unit-testable via --selftest.
+set -euo pipefail
+
+HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+CONFIG_DIR="${CONFIG_DIR:-/home/tappaas/config}"
+export CONFIG_DIR
+
+# Locate the foundation PBS libs (repo layout) and the shared routines.
+LIB_DIR="${PBS_LIB_DIR:-${HERE}/../../../backup/lib}"
+COMMON="${COMMON_ROUTINES:-/home/tappaas/bin/common-install-routines.sh}"
+[[ -f "$COMMON" ]] || COMMON="${HERE}/../../lib/common-install-routines.sh"
+
+# Source shared routines (colours/logging/get_node_hostname) then the PBS libs.
+# These are sourced WITHOUT a $1 module arg so no module JSON is auto-loaded.
+# shellcheck source=/dev/null
+[[ -f "$COMMON" ]] && . "$COMMON"
+# shellcheck source=/dev/null
+[[ -f "${LIB_DIR}/pbs-job.sh" ]] && . "${LIB_DIR}/pbs-job.sh"
+# shellcheck source=/dev/null
+[[ -f "${LIB_DIR}/pbs-namespace.sh" ]] && . "${LIB_DIR}/pbs-namespace.sh"
+
+# Fallbacks if common routines were not found (keeps --selftest/--help working
+# in a bare checkout). Real ops need the libs and will skip without them.
+type info  >/dev/null 2>&1 || info()  { echo "[Info] $*"; }
+type warn  >/dev/null 2>&1 || warn()  { echo "[Warning] $*" >&2; }
+type error >/dev/null 2>&1 || error() { echo "[Error] $*" >&2; }
+
+usage() { grep '^#' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//; 1d'; }
+
+# True if the PBS reuse libs loaded (functions present).
+have_pbs_libs() { type pbs_managed_job_id >/dev/null 2>&1; }
+
+# True if a mgmt node is reachable (a cheap probe before any heavy pvesh call).
+pbs_reachable() {
+    local node
+    type get_node_hostname >/dev/null 2>&1 || return 1
+    node="$(get_node_hostname 0 2>/dev/null)" || return 1
+    [[ -n "$node" ]] || return 1
+    ssh -n -o ConnectTimeout=5 -o BatchMode=yes -o StrictHostKeyChecking=accept-new \
+        "root@${node}.mgmt.internal" true >/dev/null 2>&1
+}
+
+# Resolve a module name to its VMID from the deployed config.
+module_vmid() {
+    local f="${CONFIG_DIR}/$1.json"
+    [[ -f "$f" ]] || { error "No config for module '$1' in ${CONFIG_DIR}"; return 1; }
+    jq -r '.vmid // empty' "$f" 2>/dev/null
+}
+
+# Skip-with-exit-0 helper for unreachable PBS (graceful degradation).
+skip_offline() {
+    warn "PBS / cluster not reachable — skipping live operation: $*"
+    exit 0
+}
+
+cmd_job_status() {
+    have_pbs_libs || skip_offline "job-status (PBS libs not loaded)"
+    pbs_reachable || skip_offline "job-status"
+    local id
+    id="$(pbs_managed_job_id)"
+    if [[ -z "$id" ]]; then
+        info "No managed TAPPaaS PBS backup job found (none created yet)"
+        return 0
+    fi
+    info "Managed backup job: ${id}"
+    info "  vmids: $(pbs_job_vmids "$id")"
+    info "  storage: $(pbs_storage_name)"
+}
+
+cmd_list() {
+    local module="${1:?list: <module> required}" vmid
+    vmid="$(module_vmid "$module")" || return 1
+    [[ -n "$vmid" ]] || { error "Module '$module' has no vmid"; return 1; }
+    pbs_reachable || skip_offline "list ${module} (vmid ${vmid})"
+    local node store
+    node="$(pbs_node)"; store="$(pbs_storage_name)"
+    info "Snapshots for ${module} (vmid ${vmid}) on ${store}:"
+    ssh -n -o ConnectTimeout=10 -o BatchMode=yes -o StrictHostKeyChecking=accept-new \
+        "root@${node}.mgmt.internal" \
+        "proxmox-backup-debug api get /admin/datastore/${store}/snapshots --output-format json 2>/dev/null" \
+        | jq -r --arg vmid "$vmid" '.[]
+              | select(.["backup-type"]=="vm" and (.["backup-id"]==$vmid))
+              | .["backup-time"]' \
+        2>/dev/null || warn "could not list snapshots for vmid ${vmid}"
+}
+
+cmd_verify() {
+    local module="${1:?verify: <module> required}" vmid
+    vmid="$(module_vmid "$module")" || return 1
+    [[ -n "$vmid" ]] || { error "Module '$module' has no vmid"; return 1; }
+    pbs_reachable || skip_offline "verify ${module} (vmid ${vmid})"
+    type pbs_ensure_verify >/dev/null 2>&1 || skip_offline "verify (pbs lib missing)"
+    info "Ensuring datastore verification covers vmid ${vmid} (reuses pbs_ensure_verify)"
+    pbs_ensure_verify
+}
+
+cmd_namespaces() {
+    have_pbs_libs || skip_offline "namespaces (PBS libs not loaded)"
+    type pbs_ns_list >/dev/null 2>&1 || skip_offline "namespaces (pbs-namespace lib missing)"
+    pbs_reachable || skip_offline "namespaces"
+    info "Namespaces in $(pbs_storage_name):"
+    pbs_ns_list | sed 's/^/  /'
+}
+
+# Pure-function self-test (no cluster) — exercised by test.sh.
+selftest() {
+    local rc=0
+    type _pbs_ns_acl_path >/dev/null 2>&1 || { echo "FAIL: pbs-namespace lib not loaded"; return 1; }
+    [[ "$(_pbs_ns_acl_path tappaas_backup)" == "/datastore/tappaas_backup" ]] \
+        || { echo "FAIL: acl path root"; rc=1; }
+    [[ "$(_pbs_ns_acl_path tappaas_backup remote/lars)" == "/datastore/tappaas_backup/remote/lars" ]] \
+        || { echo "FAIL: acl path ns"; rc=1; }
+    [[ "$(_pbs_ns_parents remote/lars | paste -sd, -)" == "remote,remote/lars" ]] \
+        || { echo "FAIL: ns parents"; rc=1; }
+    [[ "$(_pbs_retention_args '{"keepLast":4,"keepDaily":14}')" == "--keep-last 4 --keep-daily 14" ]] \
+        || { echo "FAIL: retention args"; rc=1; }
+    [[ "$(_pbs_csv_add "1,3" 2)" == "1,2,3" ]] || { echo "FAIL: csv add"; rc=1; }
+    [[ "$(_pbs_csv_remove "1,2,3" 2)" == "1,3" ]] || { echo "FAIL: csv remove"; rc=1; }
+    [[ $rc -eq 0 ]] && echo "selftest: all pure-function checks passed"
+    return $rc
+}
+
+main() {
+    local cmd="${1:-help}"
+    [[ $# -gt 0 ]] && shift || true
+    case "$cmd" in
+        job-status) cmd_job_status "$@" ;;
+        list)       cmd_list "$@" ;;
+        verify)     cmd_verify "$@" ;;
+        namespaces) cmd_namespaces "$@" ;;
+        --selftest) selftest ;;
+        help|-h|--help) usage ;;
+        *) error "Unknown command: ${cmd}"; usage >&2; return 2 ;;
+    esac
+}
+
+main "$@"

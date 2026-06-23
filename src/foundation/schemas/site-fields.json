@@ -144,6 +144,20 @@
             "null"
           ],
           "default": null
+        },
+        "defaultRetention": {
+          "description": "Site-wide default backup retention period (e.g. 7y, 5y, 1y). The base of the Site -> Environment -> Module retention cascade (ADR-007 P9): environments and modules may override it.",
+          "type": "string",
+          "default": "7y"
+        },
+        "offsiteResidency": {
+          "description": "Data residency of the offsite backup buddy (ADR-007 P9). Used by validate-backup to reject backing an eu-only environment up to a non-EU offsite. eu-only by default; set global only when the offsite is outside the EU.",
+          "type": "string",
+          "enum": [
+            "eu-only",
+            "global"
+          ],
+          "default": "eu-only"
         }
       }
     },

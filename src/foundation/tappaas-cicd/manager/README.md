@@ -83,7 +83,8 @@ dispatcher.)
 | [`environment-manager`](environment-manager/) | The Environment taxonomy: per-tenant deployment contexts (public domain(s), DNS mode, network-zone reference, data residency, backup, legal). Owns `config/environments/*.json` and bootstraps the always-required `mgmt` + default environments. |
 | [`module-manager`](module-manager/) | The module lifecycle: install / update / delete / test / snapshot of TAPPaaS modules, with tier/source classification lint and environment-aware deployment. Owns the per-module JSON in `config/`. |
 | [`network-manager`](network-manager/) | The network front door: owns `zones.json` (CRUD + VLAN allocation) and reconciles four infrastructure planes (OPNsense, Proxmox, switch, access points) by orchestrating their controllers. |
-| [`health-manager`](health-manager/) | Cluster / VM / disk / OS health and maintenance utilities: inspect the cluster, diff a VM against its config, grow disks over a threshold, update a VM's OS. Operational/read-mostly; owns no config, so it has no `validate` operation. |
+| [`health-manager`](health-manager/) | Cluster / VM / disk / OS health and maintenance utilities: inspect the cluster, diff a VM against its config, grow disks over a threshold, update a VM's OS, and report backup health. Operational/read-mostly; owns no config, so it has no `validate` operation. |
+| [`backup-manager`](backup-manager/) | The backup hierarchy: the Site → Environment → Module backup-policy cascade. Resolves the effective backup policy (retention, residency, enabled, exclude) for any module, reports status across all modules, validates the hierarchy, and delegates restore/PBS ops to `backup-controller` + the foundation `restore.sh`. |
 
 `TEMPLATE/` is the scaffold skeleton, not a manager — the dispatcher skips it.
 See [`TEMPLATE/README.md`](TEMPLATE/README.md) for the canonical rules on building

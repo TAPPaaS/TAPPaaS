@@ -84,6 +84,7 @@ passes over it.
 | [`switch-controller`](switch-controller/) | Bash | Physical managed switches: which VLANs are tagged on which ports, reconciled to `zones.json` via vendor plugins (or printed for manual application). |
 | [`ap-controller`](ap-controller/) | Bash | Wireless access points: the mapping of WiFi SSIDs to VLANs, reconciled to `zones.json` via vendor plugins. |
 | [`identity-controller`](identity-controller/) | Python package | The Authentik identity server (admin REST API): users, groups/roles and membership, proxy/OIDC applications, and the forward-auth outpost. |
+| [`backup-controller`](backup-controller/) | Bash (reuses foundation PBS libs) | The Proxmox Backup Server: shared-job status, per-module snapshot listing, verify, and datastore namespaces. Reuses `backup/lib/pbs-job.sh` + `pbs-namespace.sh` rather than reimplementing the PBS API; degrades gracefully when PBS is unreachable. |
 
 Each controller directory contains a `README.md` (user-facing: what it does and
 how to drive its CLI) and a `DESIGN.md` (implementation notes: language, build,

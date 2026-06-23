@@ -480,6 +480,38 @@ main() {
         validate_zone_active "$zone0" || die "Zone validation failed — install aborted before any resources were created"
     fi
 
+    # Resolve + persist the effective backup policy (ADR-007 P9). The
+    # Site -> Environment -> Module cascade is computed by backup-manager and the
+    # result is written back into the deployed module JSON's .backup, so the
+    # module's backup state (enabled, retention, residency, exclude) is explicit
+    # on disk. This is RECORD-ONLY: the dependsOn backup:vm wiring (which adds the
+    # VM to the shared PBS job) is left untouched. Mirrors the zone0 write-back
+    # pattern above; best-effort (a missing backup-manager must not block install).
+    local _bm_sibling
+    _bm_sibling="$(cd "$(dirname "${BASH_SOURCE[0]}")/../backup-manager" 2>/dev/null && pwd)/backup-manager.sh"
+    if command -v backup-manager >/dev/null 2>&1 || [[ -x "${_bm_sibling}" ]]; then
+        local _bm _bpol _btmp
+        _bm="$(command -v backup-manager 2>/dev/null || true)"
+        [[ -n "$_bm" ]] || _bm="${_bm_sibling}"
+        if _bpol="$("${_bm}" resolve "${effective_module}" --config-dir "${CONFIG_DIR}" 2>/dev/null)" \
+            && [[ -n "${_bpol}" ]]; then
+            # Persist only the module-relevant fields (enabled/retention/exclude);
+            # target/offsite/residency stay derived (site/env own them).
+            _btmp="$(mktemp "${module_json}.XXXXXX")"
+            if jq --argjson p "${_bpol}" \
+                  '.backup = {enabled: $p.enabled, retention: $p.retention, exclude: $p.exclude}' \
+                  "${module_json}" > "${_btmp}" 2>/dev/null; then
+                mv "${_btmp}" "${module_json}"
+                info "  backup policy resolved → retention=${BL}$(jq -r .retention <<<"${_bpol}")${CL} enabled=${BL}$(jq -r .enabled <<<"${_bpol}")${CL} residency=${BL}$(jq -r .residency <<<"${_bpol}")${CL}"
+            else
+                rm -f "${_btmp}"
+                warn "  could not persist resolved backup policy onto ${effective_module}.json (continuing)"
+            fi
+        else
+            warn "  backup-manager resolve failed for ${effective_module} (continuing without persisted backup policy)"
+        fi
+    fi
+
     # Announce the OPNsense firewall alias this vmname will get (#300, #316).
     # Long names are hashed to a safe 32-char alias rather than rejected, so this
     # only warns when hashing applies — it never blocks the install.
