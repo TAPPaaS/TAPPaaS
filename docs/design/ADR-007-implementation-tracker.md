@@ -5,7 +5,7 @@
 **Driver**: the PM stage-gate workflow in [`.claude/skills/adr-007-driver/SKILL.md`](../../.claude/skills/adr-007-driver/SKILL.md).
 **Branch**: `ADR007`
 **Started**: 2026-06-21
-**Branch totals** (vs merge-base with `main`, as of 2026-06-23): **522 files touched** — 187 added, 88 modified, 140 renamed, **107 retired**; **+21,355 / −22,075 lines**; 68 commits.
+**Branch totals** (vs merge-base `1cb61d2`, as of 2026-06-23): **522 files** — 187 added (+17,717), 88 modified (+2,418/−1,801), 140 renamed (+1,244/−635), **107 retired (−19,643)**; **+21,379 / −22,079 lines → net −700**; 68 commits. (Despite 6 managers + 5 controllers + schemas + tests, the branch is marginally *leaner* — the Attic removal [88 files, ~16k lines] + the legacy config/variant/roles retirement roughly balance the new architecture.)
 
 ---
 
