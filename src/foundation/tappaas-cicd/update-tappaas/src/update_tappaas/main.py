@@ -20,7 +20,7 @@ import sys
 from datetime import datetime
 from pathlib import Path
 
-CONFIG_PATH = Path("/home/tappaas/config/configuration.json")
+CONFIG_PATH = Path("/home/tappaas/config/site.json")
 CONFIG_DIR = Path("/home/tappaas/config")
 UPDATE_MODULE_CMD = "/home/tappaas/bin/update-module.sh"
 
@@ -35,10 +35,14 @@ FOUNDATION_MODULES = [
     "logging",       # Loki/Grafana/Promtail
 ]
 
-# Config JSONs that are not modules
+# Config JSONs that are not modules (system/foundation files in config/)
 NON_MODULE_JSONS = {
-    "configuration.json",
+    "configuration.json",   # retired (kept for back-compat with old installs)
+    "site.json",
     "zones.json",
+    "zones.json.orig",
+    "zones.rename.json",
+    "cert-refids.json",
     "module-fields.json",
 }
 
@@ -121,8 +125,8 @@ def parse_schedule(schedule: list) -> tuple[str, int | None, int]:
 
 def should_update_now(config: dict, current_hour: int) -> bool:
     """Decide whether updates should run based on the global updateSchedule."""
-    tappaas_config = config.get("tappaas", {})
-    schedule = tappaas_config.get("updateSchedule", [])
+    # site.json is flat (ADR-007): .updateSchedule (was .tappaas.updateSchedule).
+    schedule = config.get("updateSchedule", [])
 
     frequency, scheduled_weekday, scheduled_hour = parse_schedule(schedule)
 
@@ -355,8 +359,9 @@ def main():
         if (CONFIG_DIR / f"{m}.json").exists()
     ]
 
-    # tappaas.automaticReboot (default true) gates the Phase 3 node reboot pass.
-    automatic_reboot = config.get("tappaas", {}).get("automaticReboot", True)
+    # automaticReboot (default true) gates the Phase 3 node reboot pass.
+    # site.json is flat (ADR-007): .automaticReboot (was .tappaas.automaticReboot).
+    automatic_reboot = config.get("automaticReboot", True)
 
     # Dry run: show the update plan
     if args.dry_run:
