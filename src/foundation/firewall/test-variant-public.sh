@@ -1,12 +1,14 @@
 #!/usr/bin/env bash
 #
-# test-variant-public.sh — variant architecture end-to-end test (ADR-005 #316).
+# test-variant-public.sh — environment architecture end-to-end test (ADR-007).
 #
-# Self-contained: creates a variant WITH a dedicated variant zone, installs the
-# test provider in BOTH the default variant and the variant (coexistence),
-# installs a consumer in the variant whose dependency must resolve to the variant
-# provider, validates Caddy + split-horizon for the variant domain, then tears it
-# ALL down (VMs, variant zone, firewall trunks, variant registration).
+# Self-contained: creates an environment WITH a dedicated zone, installs the
+# test provider in BOTH the default environment and the named environment
+# (coexistence), installs a consumer in the environment whose dependency must
+# resolve to the environment provider, validates Caddy + split-horizon for the
+# environment domain, then tears it ALL down (VMs, zone, firewall trunks,
+# environment file). The legacy ADR-005 variant registry is retired — the
+# "variant" naming below is just the environment name.
 #
 # Trunk handling uses the SAME safe mechanism as firewall/update.sh
 # (vmnet_resolve_trunks "ALL" -> qm set --net0, preserving MAC/queues) — NOT the
@@ -41,6 +43,7 @@ readonly CONSUMER="test-var-cons"
 readonly PROV_MARKER="tappaas-var-prov-ok"
 readonly ZONES_JSON="${CONFIG_DIR}/zones.json"
 readonly FIREWALL_JSON="${CONFIG_DIR}/firewall.json"
+readonly ENV_FILE="${CONFIG_DIR}/environments/${VARIANT}.json"
 
 NO_CLEANUP=0
 [[ "${1:-}" == "--no-cleanup" ]] && NO_CLEANUP=1
@@ -117,14 +120,10 @@ cleanup() {
     # Remove leftover per-service Unbound override (delete-service handles the
     # normal path; this catches a mid-failure).
     unbound-manager --no-ssl-verify delete "${PROVIDER}" "${VARIANT_DOMAIN}" >/dev/null 2>&1 || true
-    # Deregister the variant and remove its zone, then restore firewall trunks.
-    /home/tappaas/bin/variant-manager remove "${VARIANT}" --force >/dev/null 2>&1 || true
-    if jq -e --arg z "${VARIANT}" 'has($z)' "${ZONES_JSON}" >/dev/null 2>&1; then
-        local tmp; tmp=$(mktemp)
-        jq --arg z "${VARIANT}" 'del(.[$z])' "${ZONES_JSON}" > "${tmp}" && mv "${tmp}" "${ZONES_JSON}"
-        zone-manager --no-ssl-verify --zones-file "${ZONES_JSON}" --execute >/dev/null 2>&1 || true
-        info "  removed variant zone '${VARIANT}' + reconciled OPNsense"
-    fi
+    # Remove the environment file and its dedicated zone, then restore firewall trunks.
+    rm -f "${ENV_FILE}" 2>/dev/null && info "  removed environment ${VARIANT}" || true
+    /home/tappaas/bin/zone-controller delete "${VARIANT}" --apply >/dev/null 2>&1 \
+        && info "  removed environment zone '${VARIANT}' + reconciled OPNsense" || true
     sync_fw_trunks || true
     return "${rc}"
 }
@@ -146,13 +145,26 @@ info "  Variant FQDN: ${BL}${PROXY_FQDN}${CL}   public IP: ${BL}${PUBLIC_IP}${CL
 
 trap cleanup EXIT
 
-# ── Step 1: register variant + create dedicated variant zone ─────────
-info "${BOLD}Step 1: variant-manager add ${VARIANT} --add-zone${CL}"
-if /home/tappaas/bin/variant-manager add "${VARIANT}" --domain "${VARIANT_DOMAIN}" \
-        --dns-mode per-service --add-zone --from-zone srvWork; then
-    pass "variant ${VARIANT} registered with dedicated zone"
+# ── Step 1: create dedicated zone + author the environment file ──────
+info "${BOLD}Step 1: zone-controller add ${VARIANT} + author environment ${VARIANT}${CL}"
+if /home/tappaas/bin/zone-controller add "${VARIANT}" --from-zone srvWork --variant "${VARIANT}"; then
+    pass "environment zone '${VARIANT}' created"
 else
-    fail "variant-manager add --add-zone failed"
+    fail "zone-controller add ${VARIANT} failed"
+    exit 1
+fi
+# Author the environment file (domains.primary + per-service dnsMode + zone). The
+# legacy variant registry is retired — environments are the source of truth.
+mkdir -p "$(dirname "${ENV_FILE}")"
+ENV_OWNER="$(jq -r '.owner // empty' "${CONFIG_DIR}/site.json" 2>/dev/null)"
+[[ -n "${ENV_OWNER}" ]] || ENV_OWNER="$(ls "${CONFIG_DIR}/people/organizations"/*.json 2>/dev/null | head -1 | xargs -r basename | sed 's/\.json$//')"
+if jq -n --arg n "${VARIANT}" --arg owner "${ENV_OWNER}" --arg d "${VARIANT_DOMAIN}" --arg z "${VARIANT}" '
+        { name: $n, displayName: $n, ownerOrg: $owner,
+          domains: { primary: $d, dnsMode: "per-service" },
+          network: { zone: $z } }' > "${ENV_FILE}"; then
+    pass "environment ${VARIANT} authored (${VARIANT_DOMAIN}, dnsMode per-service, zone ${VARIANT})"
+else
+    fail "could not author environment file ${ENV_FILE}"
     exit 1
 fi
 ZTAG="$(jq -r --arg z "${VARIANT}" '.[$z].vlantag // empty' "${ZONES_JSON}")"
@@ -172,9 +184,9 @@ info "${BOLD}Step 3: install ${PROVIDER} (default variant)${CL}"
 ( cd "${FIX}/${PROVIDER}" && /home/tappaas/bin/install-module.sh "${PROVIDER}" ) \
     && pass "installed ${PROVIDER} (base)" || fail "install ${PROVIDER} (base) failed"
 
-info "${BOLD}Step 4: install ${PROVIDER} --variant ${VARIANT}${CL}"
-( cd "${FIX}/${PROVIDER}" && /home/tappaas/bin/install-module.sh "${PROVIDER}" --variant "${VARIANT}" ) \
-    && pass "installed ${PROVIDER}-${VARIANT} (variant)" || fail "install ${PROVIDER}-${VARIANT} failed"
+info "${BOLD}Step 4: install ${PROVIDER} --environment ${VARIANT}${CL}"
+( cd "${FIX}/${PROVIDER}" && /home/tappaas/bin/install-module.sh "${PROVIDER}" --environment "${VARIANT}" ) \
+    && pass "installed ${PROVIDER}-${VARIANT} (environment)" || fail "install ${PROVIDER}-${VARIANT} failed"
 
 # Coexistence assertions
 base_cfg="${CONFIG_DIR}/${PROVIDER}.json"
@@ -201,13 +213,13 @@ resolved="$(resolve_provider_module "${PROVIDER}" "${VARIANT}")"
     && pass "dep resolution: ${PROVIDER} + ${VARIANT} -> ${resolved} (variant)" \
     || fail "dep resolution: got '${resolved}', expected ${PROVIDER}-${VARIANT}"
 
-# ── Step 5: consumer in the variant — dep must resolve to the variant ─
-info "${BOLD}Step 5: install ${CONSUMER} --variant ${VARIANT} (dep -> ${PROVIDER}-${VARIANT})${CL}"
-if ( cd "${FIX}" && /home/tappaas/bin/install-module.sh "${CONSUMER}" --variant "${VARIANT}" ); then
-    pass "installed ${CONSUMER}-${VARIANT} (variant dependency resolved + provisioned)"
+# ── Step 5: consumer in the environment — dep must resolve to the env provider ─
+info "${BOLD}Step 5: install ${CONSUMER} --environment ${VARIANT} (dep -> ${PROVIDER}-${VARIANT})${CL}"
+if ( cd "${FIX}" && /home/tappaas/bin/install-module.sh "${CONSUMER}" --environment "${VARIANT}" ); then
+    pass "installed ${CONSUMER}-${VARIANT} (environment dependency resolved + provisioned)"
     cons_cfg="${CONFIG_DIR}/${CONSUMER}-${VARIANT}.json"
-    [[ "$(jq -r '.variant' "${cons_cfg}" 2>/dev/null)" == "${VARIANT}" ]] \
-        && pass "consumer config records variant=${VARIANT}" || fail "consumer variant field wrong"
+    [[ "$(jq -r '.environment' "${cons_cfg}" 2>/dev/null)" == "${VARIANT}" ]] \
+        && pass "consumer config records environment=${VARIANT}" || fail "consumer environment field wrong"
 else
     fail "install ${CONSUMER}-${VARIANT} failed (variant dependency did not resolve/provision)"
 fi

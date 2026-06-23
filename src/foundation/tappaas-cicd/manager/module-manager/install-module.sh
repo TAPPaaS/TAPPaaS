@@ -359,14 +359,13 @@ main() {
 
     # Reject an explicitly-named environment that does not exist (fail fast, before
     # any resource is touched, so a typo cannot create a stray deployment). A
-    # user-named environment (via --environment or the deprecated --variant) must
-    # resolve to a real one: 'mgmt', a config/environments/<env>.json file, or a
-    # registered legacy variant (get_variant_config). The auto-resolved default
-    # environment is exempt — only an explicit name is validated here.
+    # user-named environment (via --environment or the deprecated --variant alias)
+    # must resolve to a real one: 'mgmt' or a config/environments/<env>.json file.
+    # The auto-resolved default environment is exempt — only an explicit name is
+    # validated here.
     if [[ "${env_user_specified}" == true && -n "${environment}" && "${environment}" != "mgmt" ]]; then
-        if [[ ! -f "${CONFIG_DIR}/environments/${environment}.json" ]] \
-           && ! get_variant_config "${environment}" >/dev/null 2>&1; then
-            die "Environment '${environment}' is not registered (no config/environments/${environment}.json and not a registered variant). Create it with environment-manager, or register a variant: variant-manager add ${environment} --domain <domain>."
+        if [[ ! -f "${CONFIG_DIR}/environments/${environment}.json" ]]; then
+            die "Environment '${environment}' is not registered (no config/environments/${environment}.json). Create it with environment-manager."
         fi
     fi
 

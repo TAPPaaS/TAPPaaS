@@ -7,17 +7,17 @@
 # What it does (idempotent):
 #   1. Reads the environment's domain (config/environments/<env>.json, via
 #      get_variant_config) and the installer email (site.json .email, via
-#      installer_email) — both fall back to configuration.json
+#      installer_email)
 #   2. Asks for the DNS provider (default: cloudflare) and its API credential(s),
 #      OR reads them from ~/.acme-dns-credentials.txt if present (chmod 600)
 #   3. Provisions an ACME account, DNS-01 validation, caddy-reload action, and
 #      a wildcard cert (*.<domain> + bare apex) on the OPNsense firewall via the
 #      acme-manager CLI (drives os-acme-client end-to-end)
 #   4. Captures the OPNsense Trust refid of the issued cert and writes it into
-#      the runtime cert-refids.json keyed by environment (ADR-007c), mirroring it
-#      to configuration.json for legacy fallback — this is what the per-module
-#      proxy install reads so each domain binds the wildcard refid via Caddy's
-#      CustomCertificate (no per-module ACME, no DNS-API needed at install time)
+#      the runtime cert-refids.json keyed by environment (ADR-007c) — this is
+#      what the per-module proxy install reads so each domain binds the wildcard
+#      refid via Caddy's CustomCertificate (no per-module ACME, no DNS-API needed
+#      at install time)
 #
 # Re-running this script is safe — every step in the chain is idempotent.
 # Adding a module with proxyTls=dns01 later just reuses the stored refid.
@@ -33,7 +33,6 @@ set -euo pipefail
 
 . /home/tappaas/bin/common-install-routines.sh
 
-CONFIG_FILE="${CONFIG_DIR}/configuration.json"
 CREDS_FILE="${HOME}/.acme-dns-credentials.txt"
 FIREWALL="${OPNSENSE_HOST:-firewall.mgmt.internal}"
 STAGING=0
@@ -55,9 +54,11 @@ Options:
                          supports; also accepts the raw key like dns_cf, dns_desec)
   --no-save-creds        Don't offer to persist provider credentials to
                          ~/.acme-dns-credentials.txt
-  --variant <name>       Issue the cert for a registered variant's domain and
-                         store the refid under tappaas.variants[<name>] (ADR-005).
-                         Default: "" (the default variant).
+  --environment <name>   Issue the cert for the named environment's domain
+                         (config/environments/<name>.json) and store the refid
+                         in cert-refids.json[<name>]. Default: "" (the default
+                         environment = site.json .name).
+  --variant <name>       DEPRECATED alias for --environment (compat period).
   --dns-sleep <secs>     Seconds to wait for DNS-01 TXT propagation before LE
                          validation (default 45; raise for slow providers). #328
   --help                 Show this help
@@ -77,22 +78,22 @@ while [[ $# -gt 0 ]]; do
         --staging)         STAGING=1; shift ;;
         --provider)        PROVIDER_OVERRIDE="$2"; shift 2 ;;
         --no-save-creds)   SAVE_CREDS=0; shift ;;
-        --variant)         VARIANT="$2"; shift 2 ;;
+        --environment)     VARIANT="$2"; shift 2 ;;
+        --variant)         VARIANT="$2"; shift 2 ;;  # deprecated alias
         --dns-sleep)       DNS_SLEEP="$2"; shift 2 ;;
         --help|-h)         usage; exit 0 ;;
         *)                 die "Unknown option: $1 (try --help)" ;;
     esac
 done
 
-[[ -f "$CONFIG_FILE" ]] || die "configuration.json not found: $CONFIG_FILE"
-# Domain comes from the variant registry (ADR-005). The default variant ""
-# falls back to legacy tappaas.domain on un-migrated installs.
+# Domain comes from the environment file (config/environments/<env>.json). The
+# default environment "" resolves to site.json .name.
 VCFG="$(get_variant_config "${VARIANT}")" \
-    || die "Variant '${VARIANT:-<default>}' not registered. Run: variant-manager add ${VARIANT} --domain <domain>"
+    || die "Environment '${VARIANT:-<default>}' not found. Create it with environment-manager (config/environments/<env>.json)."
 DOMAIN="$(jq -r '.domain // empty' <<<"$VCFG")"
 EMAIL="$(installer_email)"
-[[ -n "$DOMAIN" && "$DOMAIN" != CHANGE* ]] || die "Variant '${VARIANT:-<default>}' has no domain set (run: variant-manager add ${VARIANT} --domain <yours>)"
-[[ -n "$EMAIL"  && "$EMAIL"  != CHANGE* ]] || die "tappaas.email not set"
+[[ -n "$DOMAIN" && "$DOMAIN" != CHANGE* ]] || die "Environment '${VARIANT:-<default>}' has no domain set (set domains.primary in its environment file)"
+[[ -n "$EMAIL"  && "$EMAIL"  != CHANGE* ]] || die "site.json .email not set"
 
 info "${BOLD}TAPPaaS ACME setup${CL}"
 info "  domain        : ${BL}${DOMAIN}${CL}"
@@ -224,7 +225,7 @@ REFID="$(awk '/^[[:space:]]+refid:[[:space:]]/ {print $2}' "$LOG_FILE" | tail -1
 # ── Persist refid into the runtime cert-refids.json (ADR-007c) ──────────────
 # tlsCertRefid is reconciler-populated runtime state, not authored config. Write
 # it to ${CONFIG_DIR}/cert-refids.json keyed by ENVIRONMENT name. The env name is
-# the variant when set, else the default environment (site.json .name).
+# the named environment when set, else the default environment (site.json .name).
 
 ENV_NAME="$VARIANT"
 [[ -z "$ENV_NAME" ]] && ENV_NAME="$(default_environment_name)"
@@ -240,21 +241,6 @@ else
 fi
 mv "$TMP" "$CERT_REFIDS"
 info "  ${GN}✓${CL} cert-refids.json[\"${ENV_NAME}\"] = ${REFID}"
-
-# ── Also mirror into configuration.json (legacy fallback, kept until delete) ──
-# Un-migrated readers still consult the variant registry; keep them working
-# during the phased migration (the fallback is removed in a LATER phase).
-if [[ -f "$CONFIG_FILE" ]]; then
-    TMP="$(mktemp)"
-    jq --arg refid "$REFID" --arg v "$VARIANT" '
-        .tappaas.variants = (.tappaas.variants // {})
-        | .tappaas.variants[$v] = ((.tappaas.variants[$v] // {}) + { tlsCertRefid: $refid })
-        | (if $v == "" then .tappaas.tlsCertRefid = $refid else . end)' \
-        "$CONFIG_FILE" > "$TMP"
-    mv "$TMP" "$CONFIG_FILE"
-    info "  ${GN}✓${CL} (legacy) variants[\"${VARIANT}\"].tlsCertRefid = ${REFID}"
-    [[ -z "$VARIANT" ]] && info "  ${GN}✓${CL} (legacy) tappaas.tlsCertRefid = ${REFID}"
-fi
 
 # ── Split-horizon wildcard DNS (ADR-005 §6, #269) ──────────────────────────
 # In wildcard mode, point *.<domain> at the DMZ gateway (where os-caddy listens)

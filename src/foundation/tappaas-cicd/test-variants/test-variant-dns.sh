@@ -1,10 +1,14 @@
 #!/usr/bin/env bash
 #
-# test-variant-dns.sh — ADR-005 Sprint 4 DNS-mode tests (offline, no firewall).
+# test-variant-dns.sh — DNS-mode tests (offline, no firewall).
 #
 # Covers the pure logic behind wildcard vs per-service DNS:
 #   - dmz_gateway_ip()  : derives the split-horizon target from zones.json (#269)
 #   - get_variant_config: surfaces dnsMode/tlsCertRefid that drive proxy install
+#
+# get_variant_config reads config/environments/<env>.json (the dnsMode) and the
+# runtime cert-refids.json (the tlsCertRefid). The legacy ADR-005 variant
+# registry is retired (ADR-007 Phase D).
 #
 # Live registration (VN-01..05 against Unbound/Caddy) is exercised by the firewall
 # deep test and a manual smoke; this file keeps the deterministic pieces fast.
@@ -27,7 +31,7 @@ pass() { echo "  ✓ $*"; PASS=$((PASS + 1)); }
 fail() { echo "  ✗ $*"; FAIL=$((FAIL + 1)); }
 assert_eq() { if [[ "$1" == "$2" ]]; then pass "$3"; else fail "$3 (got '$1' expected '$2')"; fi; }
 
-echo "test-variant-dns: DNS-mode helpers (ADR-005 Sprint 4)"
+echo "test-variant-dns: DNS-mode helpers (ADR-007)"
 
 # ── dmz_gateway_ip ───────────────────────────────────────────────────
 cat > "${WORK}/zones.json" <<'JSON'
@@ -50,16 +54,31 @@ else
     pass "dmz_gateway_ip fails cleanly when no dmz zone present"
 fi
 
-# ── dnsMode surfaced by the variant registry ─────────────────────────
-cat > "${WORK}/configuration.json" <<'JSON'
-{ "tappaas": { "domain": "base.org", "variants": {
-  "": { "domain": "base.org", "dnsMode": "wildcard", "tlsCertRefid": "abc" },
-  "tenant": { "domain": "tenant.example.com", "dnsMode": "per-service", "tlsCertRefid": "" } } } }
+# ── dnsMode surfaced by the environment files + cert-refids.json ─────
+mkdir -p "${WORK}/environments"
+cat > "${WORK}/site.json" <<'JSON'
+{ "name": "base", "displayName": "Base", "owner": "test2",
+  "hardware": { "nodes": [ { "name": "tappaas1" } ] } }
 JSON
-assert_eq "$(get_variant_config ""       | jq -r '.dnsMode')" "wildcard"    "default variant dnsMode=wildcard"
-assert_eq "$(get_variant_config tenant   | jq -r '.dnsMode')" "per-service" "tenant variant dnsMode=per-service"
-assert_eq "$(get_variant_config ""       | jq -r '.tlsCertRefid')" "abc"    "wildcard variant carries a tlsCertRefid"
-assert_eq "$(get_variant_config tenant   | jq -r '.tlsCertRefid')" ""       "per-service variant has no tlsCertRefid"
+cat > "${WORK}/environments/base.json" <<'JSON'
+{ "name": "base", "displayName": "Default", "ownerOrg": "test2",
+  "domains": { "primary": "base.org", "dnsMode": "wildcard" },
+  "network": { "zone": "base" } }
+JSON
+cat > "${WORK}/environments/tenant.json" <<'JSON'
+{ "name": "tenant", "displayName": "Tenant", "ownerOrg": "test2",
+  "domains": { "primary": "tenant.example.com", "dnsMode": "per-service" },
+  "network": { "zone": "tenant" } }
+JSON
+# Runtime cert-refids: the default (wildcard) env has a refid; the per-service
+# tenant env has none.
+cat > "${WORK}/cert-refids.json" <<'JSON'
+{ "base": "abc" }
+JSON
+assert_eq "$(get_variant_config ""       | jq -r '.dnsMode')" "wildcard"    "default env dnsMode=wildcard"
+assert_eq "$(get_variant_config tenant   | jq -r '.dnsMode')" "per-service" "tenant env dnsMode=per-service"
+assert_eq "$(get_variant_config ""       | jq -r '.tlsCertRefid')" "abc"    "wildcard env carries a tlsCertRefid"
+assert_eq "$(get_variant_config tenant   | jq -r '.tlsCertRefid')" ""       "per-service env has no tlsCertRefid"
 
 echo "  Results: ${PASS} passed, ${FAIL} failed"
 [[ "${FAIL}" -eq 0 ]]

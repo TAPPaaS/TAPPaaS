@@ -8,17 +8,16 @@
 #   - <N>.json     : the DEFAULT tenant environment, named after the TAPPaaS
 #                    system name <N> (ADR-007 S6 topology: the system name <N> =
 #                    site.json.name = the default-zone name = the default-environment
-#                    name). network.zone = <N>. Domains are added if derivable from
-#                    site/configuration.json, else omitted (an operator/migration
-#                    adds them later).
+#                    name). network.zone = <N>. A domain is added if --domain is
+#                    given, else omitted (an operator adds it later).
 #
 # This script is the SINGLE OWNER of these two files (sibling of P1's
 # user-setup.sh). P6/P7 reference them, they do NOT re-author them.
 #
-# Pre-cutover note: older systems may carry a literal "default.json" produced by
-# an earlier version of this script or by migrate-variants.sh. We never delete an
-# operator file — if a stale default.json exists it is left in place and noted,
-# while the system-named <N>.json is the file this script emits and prefers.
+# Note: older systems may carry a literal "default.json" produced by an earlier
+# version of this script. We never delete an operator file — if a stale
+# default.json exists it is left in place and noted, while the system-named
+# <N>.json is the file this script emits and prefers.
 #
 # Idempotent: an existing environment file is left untouched unless --force.
 #
@@ -26,12 +25,10 @@
 #
 # Options:
 #   --name <N>         TAPPaaS system name (= default zone & default env name).
-#                      If omitted: derived from site.json '.name', else from the
-#                      first-domain label in configuration.json, else an error.
+#                      If omitted: derived from site.json '.name', else an error.
 #   --domain <D>       public domain for the default (<N>) environment's
-#                      domains.primary. If omitted: configuration.json (pre-cutover),
-#                      else the default env is created with no domain (internal only;
-#                      set it later via environment-manager).
+#                      domains.primary. If omitted the default env is created with
+#                      no domain (internal only; set it later via environment-manager).
 #   --config-dir DIR   config directory (default: ${TAPPAAS_CONFIG:-/home/tappaas/config})
 #   --out-dir DIR      output environments dir (default: <config-dir>/environments)
 #   --force            overwrite existing mgmt.json / <N>.json
@@ -113,8 +110,6 @@ site_owner() {
 # Resolve the TAPPaaS system name <N>:
 #   1. explicit --name
 #   2. site.json '.name'
-#   3. first-domain label from configuration.json (.tappaas.domain, or the ""
-#      default variant's .domain) — the label before the first dot
 # Echoes the name, or returns 1 (with no output) when none is derivable.
 resolve_name() {
     if [[ -n "$NAME" ]]; then
@@ -127,27 +122,14 @@ resolve_name() {
         if [[ -n "$n" ]]; then printf '%s\n' "$n"; return 0; fi
     fi
 
-    local cfg="${CONFIG_DIR}/configuration.json" domain label
-    if [[ -f "$cfg" ]]; then
-        domain="$(jq -r '(.tappaas.domain // .tappaas.variants[""].domain) // empty' "$cfg" 2>/dev/null)"
-        if [[ -n "$domain" ]]; then
-            label="${domain%%.*}"
-            if [[ -n "$label" ]]; then printf '%s\n' "$label"; return 0; fi
-        fi
-    fi
-
     return 1
 }
 
 # Domain (if derivable) for the default environment, else "".
+# site.json deliberately carries NO site-wide domain (ADR-007d) — domains are
+# per-environment — and the legacy configuration.json variant registry is
+# retired (ADR-007 Phase D). The only source is the --domain override.
 default_domain() {
-    local site="${CONFIG_DIR}/site.json" cfg="${CONFIG_DIR}/configuration.json"
-    # site.json deliberately carries NO site-wide domain (ADR-007d) — domains are
-    # per-environment — so the only pre-cutover source is configuration.json.
-    if [[ -f "$cfg" ]]; then
-        jq -r '(.tappaas.domain // .tappaas.variants[""].domain) // empty' "$cfg" 2>/dev/null
-        return 0
-    fi
     printf '%s\n' ""
 }
 
@@ -178,7 +160,7 @@ main() {
 
     local name
     if ! name="$(resolve_name)"; then
-        die "Cannot determine the TAPPaaS system name. Pass --name <N>, or provide a site.json with '.name', or a configuration.json with a domain."
+        die "Cannot determine the TAPPaaS system name. Pass --name <N>, or provide a site.json with '.name'."
     fi
     # The default-env name doubles as a zone key — keep it slug-safe.
     if [[ ! "$name" =~ ^[A-Za-z0-9_-]+$ ]]; then

@@ -311,7 +311,7 @@ zone-manager --no-ssl-verify --zones-file /home/tappaas/config/zones.json --exec
 
 ### zone-controller.sh
 
-The single **zone lifecycle primitive** — one command that creates or deletes a network zone end to end, across all three planes. Where [`zone-state.sh`](#zone-statesh) only flips a zone's `state` and [`zone-manager`](../opnsense-controller/README.md) only reconciles `zones.json` into OPNsense, **`zone-controller` owns the whole sequence** so no caller can forget a step (the root cause of the `#335`-family bridge-vids gap and the `#372`/`#373` mgmt-invariant drift). `variant-manager` delegates its `--add-zone`/`remove` paths to it; an operator can call it directly. Full design: [`docs/design/zone-controller.md`](../../../../docs/design/zone-controller.md).
+The single **zone lifecycle primitive** — one command that creates or deletes a network zone end to end, across all three planes. Where [`zone-state.sh`](#zone-statesh) only flips a zone's `state` and [`zone-manager`](../opnsense-controller/README.md) only reconciles `zones.json` into OPNsense, **`zone-controller` owns the whole sequence** so no caller can forget a step (the root cause of the `#335`-family bridge-vids gap and the `#372`/`#373` mgmt-invariant drift). Operators and test harnesses call it directly to create/delete an environment's dedicated zone. Full design: [`docs/design/zone-controller.md`](../../../../docs/design/zone-controller.md).
 
 It does **not** reimplement OPNsense/Proxmox logic — it authors `zones.json` and orchestrates the existing reconcilers:
 
@@ -748,9 +748,9 @@ manual reload needed.
 
 ### roles-ensure.sh
 
-Reconciles the Authentik **role groups** for the current variant set (ADR-006, #56).
-Idempotent — safe to re-run. Called automatically by `identity/update.sh` and by
-`variant-manager.sh add`; run by hand to repair drift.
+Reconciles the Authentik **role groups** for the current environment set (ADR-006, #56).
+Idempotent — safe to re-run. Called automatically by `identity/update.sh`; run by
+hand to repair drift.
 
 **Usage:**
 ```bash

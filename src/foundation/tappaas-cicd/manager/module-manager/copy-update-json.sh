@@ -2,30 +2,28 @@
 #
 # Copy a module JSON file to config directory and update fields.
 #
-# Usage: copy-update-json.sh <module-name> [--variant <name>] [--<field> <value>]...
+# Usage: copy-update-json.sh <module-name> [--environment <name>] [--<field> <value>]...
 #
 # Example:
 #   copy-update-json.sh identity --node "tappaas2" --cores 4
-#   copy-update-json.sh openwebui --variant staging
-#   copy-update-json.sh openwebui --variant dev --zone0 srv-dev --vmid 315
+#   copy-update-json.sh openwebui --environment staging
+#   copy-update-json.sh openwebui --environment dev --zone0 srv-dev --vmid 315
 #
 # This script:
 #   1. Copies <module>.json from current directory to /home/tappaas/config/
-#      (or <module>-<variant>.json when --variant is used)
+#      (or <module>-<env>.json for a non-default --environment)
 #   2. Automatically sets the 'location' field to the module directory
 #   3. Validates field names against module-fields.json schema
-#   4. When --variant is used, applies variant defaults (see below)
-#   5. Modifies the copied JSON based on --<field> <value> arguments
-#   6. Creates a .orig backup if modifications are made
-#   7. Validates the resulting JSON
+#   4. Modifies the copied JSON based on --<field> <value> arguments
+#   5. Creates a .orig backup if modifications are made
+#   6. Validates the resulting JSON
 #
-# Variant mode (--variant <name>):
-#   Output JSON is named <module>-<variant>.json. Fields are derived
-#   automatically unless explicitly overridden with --<field>:
-#     vmname       → <source vmname>-<variant>
-#     vmid         → next available VMID after the source VMID
-#     zone0        → <variant> if it matches a zone in zones.json, else unchanged
-#     proxyDomain  → "name.<variant>.domain" (inserts variant after first segment)
+# Environment mode (--environment <name>):
+#   For a NON-default environment the output JSON is named <module>-<env>.json
+#   and the .environment field is persisted on it. install-module.sh computes
+#   vmname/zone0/proxyDomain from the environment file and passes them as explicit
+#   --<field> overrides. --variant is a DEPRECATED alias for --environment (the
+#   legacy ADR-005 variant registry is retired — ADR-007 Phase D).
 #
 
 set -euo pipefail
@@ -55,7 +53,7 @@ fi
 
 usage() {
     cat << EOF
-Usage: ${SCRIPT_NAME} <module-name> [--variant <name>] [--<field> <value>]...
+Usage: ${SCRIPT_NAME} <module-name> [--environment <name>] [--<field> <value>]...
 
 Copy a module JSON file to the config directory and optionally update fields.
 
@@ -63,7 +61,9 @@ Arguments:
     module-name         Name of the module (expects ./<module-name>.json to exist)
 
 Options:
-    --variant <name>    Create a variant of the module (output: <module>-<name>.json)
+    --environment <n>   Target environment (output: <module>-<n>.json for a
+                        non-default environment; persists .environment)
+    --variant <name>    DEPRECATED alias for --environment (compat period)
     --<field> <value>   Set JSON field to value (can be repeated)
     -h, --help          Show this help message
 
@@ -71,16 +71,14 @@ Examples:
     ${SCRIPT_NAME} identity
     ${SCRIPT_NAME} identity --node "tappaas2" --cores 4
     ${SCRIPT_NAME} nextcloud --memory 4096 --zone0 "trusted"
-    ${SCRIPT_NAME} openwebui --variant staging
-    ${SCRIPT_NAME} openwebui --variant dev --zone0 srv-dev --vmid 315
+    ${SCRIPT_NAME} openwebui --environment staging
+    ${SCRIPT_NAME} openwebui --environment dev --zone0 srv-dev --vmid 315
 
-Variant mode:
-    When --variant is used, the output JSON is named <module>-<variant>.json.
-    The following fields are derived automatically unless explicitly overridden:
-      vmname       → <source vmname>-<variant>
-      vmid         → next available VMID after the source module's VMID
-      zone0        → <variant> if it matches a zone name in zones.json, else unchanged
-      proxyDomain  → inserts <variant> after first segment (e.g. app.example.com → app.<variant>.example.com)
+Environment mode:
+    For a NON-default --environment the output JSON is named <module>-<env>.json
+    and .environment is persisted on it. install-module.sh computes
+    vmname/zone0/proxyDomain from the environment file and passes them as
+    explicit --<field> overrides. --variant is a deprecated alias.
 
 Notes:
     - Source file must exist as ./<module-name>.json in current directory
@@ -189,114 +187,6 @@ should_be_number() {
     [[ "$value" =~ ^-?[0-9]+$ ]]
 }
 
-# Find the next available VMID after source_vmid by scanning config and the module catalog
-find_next_vmid() {
-    local source_vmid="$1"
-    local used_vmids=""
-
-    # Collect VMIDs from config directory
-    local f
-    for f in "${CONFIG_DIR}"/*.json; do
-        [[ -f "$f" ]] || continue
-        local vid
-        vid=$(jq -r '.vmid // empty' "$f" 2>/dev/null)
-        [[ -n "$vid" ]] && used_vmids="${used_vmids} ${vid}"
-    done
-
-    # Collect VMIDs from the module catalog (legacy name: src/modules.json — #305)
-    local modules_json="/home/tappaas/TAPPaaS/src/module-catalog.json"
-    [[ -f "${modules_json}" ]] || modules_json="/home/tappaas/TAPPaaS/src/modules.json"
-    if [[ -f "${modules_json}" ]]; then
-        local vid
-        for vid in $(jq -r '.. | .vmid? // empty' "${modules_json}" 2>/dev/null); do
-            used_vmids="${used_vmids} ${vid}"
-        done
-    fi
-
-    # Find next available starting from source_vmid + 1
-    local candidate=$((source_vmid + 1))
-    while echo " ${used_vmids} " | grep -q " ${candidate} "; do
-        candidate=$((candidate + 1))
-    done
-
-    echo "${candidate}"
-}
-
-# Apply variant defaults for fields not explicitly overridden
-apply_variant_defaults() {
-    local variant="$1"
-    local dest_json="$2"
-    local has_vmname="$3"
-    local has_vmid="$4"
-    local has_zone0="$5"
-    local has_proxydomain="$6"
-
-    local tmp_file
-
-    # Registry lookup (ADR-005 Sprint 3): a named variant MUST be registered in
-    # configuration.json before it can be installed. Domain and (optional) zone
-    # are read from the registry rather than guessed.
-    local vcfg vdomain vzone
-    if ! vcfg="$(get_variant_config "${variant}")"; then
-        die "Variant '${variant}' not registered. Run: variant-manager add ${variant} --domain <domain>"
-    fi
-    vdomain="$(jq -r '.domain // empty' <<<"${vcfg}")"
-    vzone="$(jq -r '.zone // empty' <<<"${vcfg}")"
-
-    # Capture the service "name" part (first label of proxyDomain, else vmname)
-    # BEFORE we rename vmname, so proxyDomain can be rebuilt as <name>.<vdomain>.
-    local base_name
-    base_name="$(jq -r '.proxyDomain // empty' "${dest_json}")"
-    base_name="${base_name%%.*}"
-    [[ -z "${base_name}" ]] && base_name="$(jq -r '.vmname // empty' "${dest_json}")"
-
-    # 1. vmname: append -<variant> to source vmname
-    if [[ "${has_vmname}" == "false" ]]; then
-        local src_vmname
-        src_vmname=$(jq -r '.vmname // empty' "${dest_json}")
-        if [[ -n "${src_vmname}" ]]; then
-            local new_vmname="${src_vmname}-${variant}"
-            tmp_file=$(mktemp)
-            jq --arg v "${new_vmname}" '.vmname = $v' "${dest_json}" > "${tmp_file}"
-            mv "${tmp_file}" "${dest_json}"
-            info "  Variant: vmname = ${new_vmname}"
-        fi
-    fi
-
-    # 2. vmid: auto-increment to next available
-    if [[ "${has_vmid}" == "false" ]]; then
-        local src_vmid
-        src_vmid=$(jq -r '.vmid // empty' "${dest_json}")
-        if [[ -n "${src_vmid}" ]]; then
-            local next_vmid
-            next_vmid=$(find_next_vmid "${src_vmid}")
-            tmp_file=$(mktemp)
-            jq --argjson v "${next_vmid}" '.vmid = $v' "${dest_json}" > "${tmp_file}"
-            mv "${tmp_file}" "${dest_json}"
-            info "  Variant: vmid = ${next_vmid}"
-        fi
-    fi
-
-    # 3. zone0: take the variant's dedicated zone from the registry (if any).
-    #    If the variant declares no zone, the module keeps its own zone0.
-    if [[ "${has_zone0}" == "false" && -n "${vzone}" && "${vzone}" != "null" ]]; then
-        tmp_file=$(mktemp)
-        jq --arg v "${vzone}" '.zone0 = $v' "${dest_json}" > "${tmp_file}"
-        mv "${tmp_file}" "${dest_json}"
-        info "  Variant: zone0 = ${vzone} (from variant registry)"
-    fi
-
-    # 4. proxyDomain: <service-name>.<variant-domain> from the registry
-    #    (e.g. nextcloud + acme-corp.eu -> nextcloud.acme-corp.eu).
-    if [[ "${has_proxydomain}" == "false" && -n "${vdomain}" && -n "${base_name}" ]]; then
-        local new_domain="${base_name}.${vdomain}"
-        tmp_file=$(mktemp)
-        jq --arg v "${new_domain}" '.proxyDomain = $v' "${dest_json}" > "${tmp_file}"
-        mv "${tmp_file}" "${dest_json}"
-        info "  Variant: proxyDomain = ${new_domain} (from variant registry)"
-    fi
-}
-
 # Main function
 main() {
     check_dependencies
@@ -318,24 +208,22 @@ main() {
     shift
 
     # ── Pre-scan arguments for --variant/--environment and track overrides ──
-    # --environment (ADR-007 P5) is the successor to --variant: it suffixes the
-    # effective module name with the environment for non-default environments
-    # (so the installed config is <module>-<env>.json with vmname <module>-<env>),
-    # but — unlike --variant — it does NOT consult the legacy variant registry or
-    # apply variant defaults. install-module.sh computes vmname/zone0 from the
-    # environment file and passes them as explicit --vmname/--zone0 overrides.
+    # --environment (ADR-007 P5) suffixes the effective module name with the
+    # environment for non-default environments (so the installed config is
+    # <module>-<env>.json with vmname <module>-<env>). install-module.sh computes
+    # vmname/zone0 from the environment file and passes them as explicit
+    # --vmname/--zone0 overrides. --variant is a deprecated alias for --environment.
     local variant=""
     local environment=""
     local default_env=""
-    local has_explicit_vmname=false
-    local has_explicit_vmid=false
-    local has_explicit_zone0=false
-    local has_explicit_proxydomain=false
     local filtered_args=()
 
     while [[ $# -gt 0 ]]; do
         case "$1" in
             --variant)
+                # DEPRECATED alias for --environment (ADR-007 Phase D). The
+                # legacy variant registry is retired — --variant now behaves
+                # exactly like --environment. --environment wins if both given.
                 [[ -z "${2:-}" ]] && die "Option --variant requires a value"
                 variant="$2"
                 shift 2
@@ -352,26 +240,6 @@ main() {
                 default_env="$2"
                 shift 2
                 ;;
-            --vmname)
-                has_explicit_vmname=true
-                filtered_args+=("$1" "$2")
-                shift 2
-                ;;
-            --vmid)
-                has_explicit_vmid=true
-                filtered_args+=("$1" "$2")
-                shift 2
-                ;;
-            --zone0)
-                has_explicit_zone0=true
-                filtered_args+=("$1" "$2")
-                shift 2
-                ;;
-            --proxyDomain)
-                has_explicit_proxydomain=true
-                filtered_args+=("$1" "$2")
-                shift 2
-                ;;
             --*)
                 [[ -z "${2:-}" ]] && die "Option $1 requires a value"
                 filtered_args+=("$1" "$2")
@@ -383,15 +251,25 @@ main() {
         esac
     done
 
-    # Restore filtered args (without --variant)
+    # Restore filtered args (without --variant/--environment)
     set -- "${filtered_args[@]+${filtered_args[@]}}"
+
+    # --variant is a deprecated alias for --environment (ADR-007 Phase D): the
+    # legacy variant registry is retired, so a variant name is just an
+    # environment name. --environment wins when both are given.
+    if [[ -n "${variant}" ]]; then
+        if [[ -z "${environment}" ]]; then
+            environment="${variant}"
+            warn "  --variant is deprecated; treating '--variant ${variant}' as '--environment ${variant}' (ADR-007 Phase D)"
+        else
+            warn "  --variant ignored: --environment '${environment}' takes precedence"
+        fi
+        variant=""
+    fi
 
     # Determine effective module name
     local effective_module="${module}"
-    if [[ -n "${variant}" ]]; then
-        effective_module="${module}-${variant}"
-        info "Variant mode: ${module} → ${effective_module}"
-    elif [[ -n "${environment}" ]]; then
+    if [[ -n "${environment}" ]]; then
         # ADR-007 P5: suffix only for a NON-default environment.
         if [[ -n "${default_env}" && "${environment}" == "${default_env}" ]]; then
             effective_module="${module}"
@@ -476,26 +354,6 @@ main() {
     # Check if releaseDate was auto-populated
     if ! jq -e '.releaseDate' "${source_json}" >/dev/null 2>&1; then
         info "  Set releaseDate = ${release_date} (auto-populated)"
-    fi
-
-    # ── Apply variant defaults (before explicit overrides) ───────────
-    if [[ -n "${variant}" ]]; then
-        info "Applying variant defaults..."
-        apply_variant_defaults "${variant}" "${dest_json}" \
-            "${has_explicit_vmname}" "${has_explicit_vmid}" \
-            "${has_explicit_zone0}" "${has_explicit_proxydomain}"
-        # Persist the variant name on the installed config so update-module.sh
-        # can resolve the correct source file (#207). The variant field is
-        # treated as auto-managed by the 3-way merge — never adopted from
-        # the release source.
-        tmp_file=$(mktemp)
-        if jq --arg v "${variant}" '.variant = $v' "${dest_json}" > "${tmp_file}"; then
-            mv "${tmp_file}" "${dest_json}"
-            info "  Persisted variant = ${variant}"
-        else
-            rm -f "${tmp_file}"
-            warn "  Could not persist variant field"
-        fi
     fi
 
     # Persist the environment on the installed config (ADR-007 P5) so

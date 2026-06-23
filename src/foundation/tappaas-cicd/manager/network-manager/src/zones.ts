@@ -11,7 +11,7 @@ import { dirname, join } from "path";
 import { Zone, ZonesDoc } from "./types";
 
 // Dynamic-allocation VLAN window within a type band (10.<typeId>.<sub>.0/24).
-// Matches zone-controller.sh / variant-manager so zone choices are unchanged.
+// Matches zone-controller.sh so zone choices are unchanged.
 export const ZONE_SUB_MAX = 99;
 export const ZONE_SUB_MIN = 60;
 

@@ -181,16 +181,8 @@ for _disp in manager controller; do
   fi
 done
 
-# variant-manager is invoked as `variant-manager` (no .sh) per ADR-005, matching
-# the zone-manager/dns-manager CLI convention. Add the bare alias alongside the
-# .sh symlink the loop above created.
-if [ -f scripts/variant-manager.sh ]; then
-  rm -f /home/tappaas/bin/variant-manager 2>/dev/null || true
-  ln -s "$(realpath scripts/variant-manager.sh)" /home/tappaas/bin/variant-manager
-fi
-
 # zone-controller — the zone lifecycle primitive (add/delete). Invoked as
-# `zone-controller` (no .sh) by variant-manager and operators. See
+# `zone-controller` (no .sh) by operators. See
 # docs/design/zone-controller.md.
 if [ -f scripts/zone-controller.sh ]; then
   rm -f /home/tappaas/bin/zone-controller 2>/dev/null || true

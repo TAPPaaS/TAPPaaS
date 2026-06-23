@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 #
-# test-variant-zone-node.sh — variant with a dedicated zone, module placed on a
-# NON-firewall node (tappaas3).
+# test-variant-zone-node.sh — environment with a dedicated zone, module placed on
+# a NON-firewall node (tappaas3). The legacy ADR-005 variant registry is retired
+# (ADR-007) — "variant" below is just the environment/zone name.
 #
 # A module VM on a node OTHER than the firewall's gets a DHCP IP only if the new
 # VLAN is present at EVERY layer of the path:
@@ -36,13 +37,14 @@ readonly FIX="${SCRIPT_DIR}/fixtures"
     || . "${SCRIPT_DIR}/../lib/common-install-routines.sh"
 
 # ── parameters ───────────────────────────────────────────────────────
-readonly VAR="zcnode"                       # variant + dedicated-zone name
+readonly VAR="zcnode"                       # environment + dedicated-zone name
 readonly DOMAIN="zcnode.test2.tapaas.org"
 readonly FROM_ZONE="srvCust"
 readonly DEST_NODE="${TAPPAAS_TEST_NODE:-tappaas3}"   # the non-firewall destination
 readonly MODULE="tvbase"                    # minimal fixture VM (deps: cluster:vm, templates:debian)
 readonly VMID="8950"                        # fixture VMID band 8900-8999
 readonly ZONES_FILE="${CONFIG_DIR}/zones.json"
+readonly ENV_FILE="${CONFIG_DIR}/environments/${VAR}.json"
 
 DEEP="${TAPPAAS_TEST_DEEP:-0}"
 NO_CLEANUP="${TAPPAAS_TEST_NO_CLEANUP:-0}"
@@ -69,7 +71,7 @@ FW_NODE="$(ssh -o ConnectTimeout=6 root@"$(get_node_hostname 0)".mgmt.internal \
 cleanup() {
     local rc=$?
     if [[ "${NO_CLEANUP}" == "1" ]]; then
-        warn "Skipping cleanup (--no-cleanup): variant '${VAR}', zone '${VAR}', VM ${VMID} left in place."
+        warn "Skipping cleanup (--no-cleanup): environment '${VAR}', zone '${VAR}', VM ${VMID} left in place."
         exit "${rc}"
     fi
     section "─── cleanup ───"
@@ -78,11 +80,11 @@ cleanup() {
         /home/tappaas/bin/delete-module.sh "${MODULE}-${VAR}" --force >/dev/null 2>&1 \
             || warn "  delete-module ${MODULE}-${VAR} returned non-zero — check VM ${VMID} on ${DEST_NODE}"
     fi
-    if jq -e --arg v "${VAR}" '(.tappaas.variants // {}) | has($v)' "${CONFIG_DIR}/configuration.json" >/dev/null 2>&1 \
-       || jq -e --arg z "${VAR}" 'has($z)' "${ZONES_FILE}" >/dev/null 2>&1; then
-        info "Removing variant '${VAR}' + dedicated zone (via zone-controller)…"
-        variant-manager remove "${VAR}" --force >/dev/null 2>&1 \
-            || warn "  variant-manager remove ${VAR} returned non-zero — clean up the zone manually"
+    [[ -f "${ENV_FILE}" ]] && { rm -f "${ENV_FILE}"; info "Removed environment '${VAR}'"; }
+    if jq -e --arg z "${VAR}" 'has($z)' "${ZONES_FILE}" >/dev/null 2>&1; then
+        info "Removing dedicated zone '${VAR}' (via zone-controller)…"
+        zone-controller delete "${VAR}" --apply >/dev/null 2>&1 \
+            || warn "  zone-controller delete ${VAR} returned non-zero — clean up the zone manually"
     fi
     exit "${rc}"
 }
@@ -97,7 +99,6 @@ if [[ "${DEEP}" != "1" ]]; then
     exit 0
 fi
 command -v zone-controller >/dev/null 2>&1 || { fail "zone-controller not on PATH"; exit 2; }
-command -v variant-manager >/dev/null 2>&1 || { fail "variant-manager not on PATH"; exit 2; }
 [[ -f "${FIX}/${MODULE}.json" ]] || { fail "fixture ${MODULE}.json missing"; exit 2; }
 ssh -o ConnectTimeout=6 root@"${DEST_NODE}".mgmt.internal true >/dev/null 2>&1 \
     || { fail "destination node ${DEST_NODE} unreachable over mgmt"; exit 2; }
@@ -108,12 +109,24 @@ fi
     && pass "destination ${DEST_NODE} is NOT the firewall node (${FW_NODE:-unknown}) — this is the gap-exposing case" \
     || skip "firewall also runs on ${DEST_NODE}; co-located placement masks the bridge-vids gap"
 
-# ── 1. create the variant + dedicated zone (delegates to zone-controller) ──
-section "1. variant-manager add ${VAR} --add-zone --from-zone ${FROM_ZONE}"
-if variant-manager add "${VAR}" --domain "${DOMAIN}" --add-zone --from-zone "${FROM_ZONE}" >/dev/null 2>&1; then
-    pass "variant '${VAR}' + dedicated zone created"
+# ── 1. create the dedicated zone (zone-controller) + author the environment ──
+section "1. zone-controller add ${VAR} --from-zone ${FROM_ZONE} + author environment ${VAR}"
+if zone-controller add "${VAR}" --from-zone "${FROM_ZONE}" --variant "${VAR}" >/dev/null 2>&1; then
+    pass "dedicated zone '${VAR}' created"
 else
-    fail "variant-manager add failed"; exit 1
+    fail "zone-controller add failed"; exit 1
+fi
+# Author the environment file (the source of truth — no variant registry).
+mkdir -p "$(dirname "${ENV_FILE}")"
+_owner="$(jq -r '.owner // empty' "${CONFIG_DIR}/site.json" 2>/dev/null)"
+[[ -n "${_owner}" ]] || _owner="$(ls "${CONFIG_DIR}/people/organizations"/*.json 2>/dev/null | head -1 | xargs -r basename | sed 's/\.json$//')"
+if jq -n --arg n "${VAR}" --arg owner "${_owner}" --arg d "${DOMAIN}" --arg z "${VAR}" '
+        { name: $n, displayName: $n, ownerOrg: $owner,
+          domains: { primary: $d, dnsMode: "wildcard" },
+          network: { zone: $z } }' > "${ENV_FILE}"; then
+    pass "environment '${VAR}' authored (zone ${VAR}, ${DOMAIN})"
+else
+    fail "could not author environment file ${ENV_FILE}"; exit 1
 fi
 VLAN="$(jq -r --arg z "${VAR}" '.[$z].vlantag // empty' "${ZONES_FILE}")"
 SUBNET="$(jq -r --arg z "${VAR}" '.[$z].ip // empty' "${ZONES_FILE}" | cut -d/ -f1 | cut -d. -f1-3)"
@@ -163,9 +176,9 @@ fi
 if [[ "${INTERNODE_OK}" != "1" ]]; then
     skip "VM install on ${DEST_NODE} (the new VLAN can't traverse the switch — would just time out waiting for an IP)"
 else
-    section "4. install ${MODULE} --variant ${VAR} --node ${DEST_NODE} → VM gets an IP"
+    section "4. install ${MODULE} --environment ${VAR} --node ${DEST_NODE} → VM gets an IP"
     INSTALL_LOG="${TAPPAAS_LOG_DIR:-/home/tappaas/log}/zone-node-install-${VAR}.log"
-    if ( cd "${FIX}" && /home/tappaas/bin/install-module.sh "${MODULE}" --variant "${VAR}" --node "${DEST_NODE}" --vmid "${VMID}" ) >"${INSTALL_LOG}" 2>&1; then
+    if ( cd "${FIX}" && /home/tappaas/bin/install-module.sh "${MODULE}" --environment "${VAR}" --node "${DEST_NODE}" --vmid "${VMID}" ) >"${INSTALL_LOG}" 2>&1; then
         pass "install-module ${MODULE}-${VAR} on ${DEST_NODE} succeeded"
     else
         fail "install-module failed despite a viable L2 path — see ${INSTALL_LOG}:"

@@ -3,8 +3,8 @@
 # test.sh — tests for environment-manager (ADR-007 P3).
 #
 # FAST (default): non-disruptive, runs entirely on TEMP fixtures. Covers
-#   variant->environment migration, the bootstrap minimal environments, schema
-#   validation, the tlsCertRefid drop/reject rule, and idempotency.
+#   the bootstrap minimal environments, schema validation, the tlsCertRefid
+#   drop/reject rule, reference checks, and idempotency.
 # DEEP (TAPPAAS_TEST_DEEP=1): additionally read-only-validates the LIVE
 #   config/environments (if present) against the schema. Never writes to live.
 #
@@ -16,7 +16,6 @@ HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 FOUNDATION_DIR="$(cd "${HERE}/../../.." && pwd)"
 SCHEMA_DIR="${FOUNDATION_DIR}/schemas"
 
-MIGRATE="${HERE}/migrate-variants.sh"
 MINIMAL="${HERE}/create-minimal-environments.sh"
 VALIDATE="${HERE}/validate-environment.sh"
 
@@ -39,67 +38,15 @@ run_validate() {
 echo "== environment-manager FAST tests =="
 
 # ---------------------------------------------------------------------------
-# 0. Build a fixture config dir (configuration.json + zones.json + people org).
+# 0. Build a fixture config dir (zones.json + people org). The variant registry
+#    (configuration.json) is retired (ADR-007 Phase D) — environments are the
+#    only source. CFG provides the zone/ownerOrg targets the reference checks
+#    below resolve against.
 # ---------------------------------------------------------------------------
 CFG="${WORK}/config"
 mkdir -p "${CFG}/people/organizations"
-cp "${FIX}/configuration.json" "${CFG}/configuration.json"
 cp "${FIX}/zones.json" "${CFG}/zones.json"
 cp "${FIX}/people/organizations/test2.json" "${CFG}/people/organizations/test2.json"
-
-# ---------------------------------------------------------------------------
-# 1. Migration: default + named variant -> environments
-# ---------------------------------------------------------------------------
-if "$MIGRATE" --config-dir "$CFG" >/dev/null 2>&1; then
-    ok "migrate-variants.sh runs on fixture configuration.json"
-else
-    bad "migrate-variants.sh should succeed"
-fi
-
-ENVDIR="${CFG}/environments"
-[[ -f "${ENVDIR}/default.json" ]] && ok "produced default.json" || bad "expected default.json"
-[[ -f "${ENVDIR}/foo.json" ]]     && ok "produced foo.json (named variant)" || bad "expected foo.json"
-
-# ---------------------------------------------------------------------------
-# 2. default.json shape: domains.primary + dnsMode + network.zone; NO tlsCertRefid
-# ---------------------------------------------------------------------------
-D="${ENVDIR}/default.json"
-if [[ -f "$D" ]]; then
-    [[ "$(jq -r '.name' "$D")" == "default" ]]                  && ok "default.json name=default" || bad "default.json name"
-    [[ "$(jq -r '.domains.primary' "$D")" == "test2.tapaas.org" ]] && ok "default.json domains.primary carried over" || bad "default.json domains.primary"
-    [[ "$(jq -r '.domains.dnsMode' "$D")" == "wildcard" ]]      && ok "default.json domains.dnsMode carried over (wildcard)" || bad "default.json dnsMode"
-    [[ "$(jq -r '.network.zone' "$D")" == "default" ]]         && ok "default.json network.zone defaults to 'default'" || bad "default.json network.zone"
-    [[ "$(jq -r '.ownerOrg' "$D")" == "test2" ]]               && ok "default.json ownerOrg <- site owner (test2)" || bad "default.json ownerOrg"
-    if jq -e '.. | objects | has("tlsCertRefid")' "$D" >/dev/null 2>&1; then
-        bad "default.json should NOT contain tlsCertRefid (must be DROPPED)"
-    else
-        ok "default.json has NO tlsCertRefid (dropped)"
-    fi
-else
-    bad "default.json missing — cannot assert shape"
-fi
-
-# foo.json: domain + per-service dnsMode + explicit zone home
-F="${ENVDIR}/foo.json"
-if [[ -f "$F" ]]; then
-    [[ "$(jq -r '.domains.primary' "$F")" == "foo-company.nl" ]] && ok "foo.json domains.primary" || bad "foo.json domains.primary"
-    [[ "$(jq -r '.domains.dnsMode' "$F")" == "per-service" ]]    && ok "foo.json dnsMode=per-service" || bad "foo.json dnsMode"
-    [[ "$(jq -r '.network.zone' "$F")" == "home" ]]              && ok "foo.json network.zone=home (explicit)" || bad "foo.json zone"
-    if jq -e '.. | objects | has("tlsCertRefid")' "$F" >/dev/null 2>&1; then
-        bad "foo.json should NOT contain tlsCertRefid"
-    else
-        ok "foo.json has NO tlsCertRefid (dropped)"
-    fi
-fi
-
-# ---------------------------------------------------------------------------
-# 3. Migrated environments validate (schema + references)
-# ---------------------------------------------------------------------------
-if run_validate "$CFG"; then
-    ok "migrated environments validate (schema + zone/ownerOrg references)"
-else
-    bad "migrated environments should validate"
-fi
 
 # ---------------------------------------------------------------------------
 # 4. Schema REJECTS an authored tlsCertRefid
@@ -232,28 +179,12 @@ acme_after="$(cat "$DD" 2>/dev/null || true)"
 [[ "$acme_before" == "$acme_after" ]] && ok "create-minimal --name re-run did not clobber acme.json" || bad "re-run changed acme.json"
 
 # ---------------------------------------------------------------------------
-# 7. Idempotency: re-running migrate + minimal does not error and does not clobber
+# 7. Idempotency: re-running create-minimal does not error and does not clobber
 # ---------------------------------------------------------------------------
-default_before="$(cat "$D" 2>/dev/null || true)"
-if "$MIGRATE" --config-dir "$CFG" >/dev/null 2>&1; then
-    ok "migrate-variants.sh idempotent re-run succeeds"
-else
-    bad "migrate-variants.sh re-run should succeed"
-fi
-default_after="$(cat "$D" 2>/dev/null || true)"
-[[ "$default_before" == "$default_after" ]] && ok "re-run did not clobber existing default.json" || bad "re-run changed default.json"
-
 mgmt_before="$(cat "$M" 2>/dev/null || true)"
 "$MINIMAL" --name acme --config-dir "$CFG2" >/dev/null 2>&1 || bad "create-minimal re-run should succeed"
 mgmt_after="$(cat "$M" 2>/dev/null || true)"
 [[ "$mgmt_before" == "$mgmt_after" ]] && ok "create-minimal re-run did not clobber mgmt.json" || bad "re-run changed mgmt.json"
-
-# 7b. --force overwrites
-if "$MIGRATE" --config-dir "$CFG" --force >/dev/null 2>&1; then
-    ok "migrate-variants.sh --force succeeds"
-else
-    bad "migrate-variants.sh --force should succeed"
-fi
 
 # ---------------------------------------------------------------------------
 # 8. P3 example shapes validate (foo/bar/default/mgmt from the ADR)

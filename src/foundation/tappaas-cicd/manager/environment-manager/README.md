@@ -66,30 +66,17 @@ It checks the schema **and** reference integrity (`network.zone` must exist in
 validate-environment.sh
 ```
 
-### `migrate-variants.sh` — variants → environments
+## Retired tooling (ADR-007 Phase D)
 
-One-shot migration of `configuration.json` `.tappaas.variants` (with the legacy
-`.tappaas.domain` fallback for the default) into `config/environments/*.json`. The
-`""` (default) variant becomes `default.json`. Drops `tlsCertRefid`. Idempotent;
-does not delete `configuration.json`.
+The legacy ADR-005 variant registry is retired. The following scripts have been
+removed — environments authored under `config/environments/*.json` are the single
+source of truth, and modules deploy via `install-module.sh <module> --environment
+<env>` (`--variant` is a deprecated alias for `--environment`):
 
-```
-migrate-variants.sh [--config-dir DIR] [--input FILE] [--out-dir DIR] [--force]
-```
+- `variant-manager.sh` (managed `configuration.json` `.tappaas.variants`)
+- `migrate-variants.sh` / `migrate-variants-to-environments.sh`
+- `migrate-to-variants.sh`
 
-Also linked as `migrate-variants-to-environments.sh` (alias).
-
-## Legacy tools (pre-migration, left as-is)
-
-- **`variant-manager.sh`** (linked as `variant-manager`) — manage variants in the
-  legacy `configuration.json`:
-  ```
-  variant-manager add <name> --domain <d> [--zone <z>|--add-zone] [--from-zone <s>]
-                              [--vlan <n>] [--dns-mode wildcard|per-service]
-                              [--description "<t>"] [--no-activate]
-  variant-manager list
-  variant-manager show <name>
-  variant-manager remove <name> [--force]
-  ```
-- **`migrate-to-variants.sh`** — migrate a legacy single-domain install into the
-  variant registry: `[--force] [--remove-legacy] [--dry-run]`.
+To create or change an environment, author/edit its `config/environments/<env>.json`
+file (validated by `validate-environment.sh`); to create its dedicated network
+zone use `zone-controller add <env> --from-zone <src> --variant <env>`.

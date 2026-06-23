@@ -1333,9 +1333,9 @@ else
         PUBLIC_IP="$(dig +short @1.1.1.1 A "${PROXY_FQDN}" 2>/dev/null | grep -E '^[0-9.]+$' | tail -1)"
     fi
 
-    # ── Gate: default-variant domain set AND public DNS -> a public IP ────
+    # ── Gate: default-environment domain set AND public DNS -> a public IP ────
     if [[ -z "${DEF_DOMAIN}" || "${DEF_DOMAIN}" == CHANGE* ]]; then
-        skip "Deep 11: no default-variant domain set (variant-manager add \"\" --domain <domain>)"
+        skip "Deep 11: no default-environment domain set (set domains.primary in the default environment file)"
     elif ! is_public_ip "${PUBLIC_IP}"; then
         skip "Deep 11: public DNS for ${PROXY_FQDN} did not resolve to a public IP (got '${PUBLIC_IP:-none}') — publish the A/wildcard record first"
     else

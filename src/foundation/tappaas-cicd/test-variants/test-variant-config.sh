@@ -1,13 +1,15 @@
 #!/usr/bin/env bash
 #
-# test-variant-config.sh — ADR-005 Sprint 1 unit tests (offline, no cluster).
+# test-variant-config.sh — environment-config readers (offline, no cluster).
 #
 # Covers:
-#   - get_variant_config        (VM-12, VM-13, VM-14)
-#   - resolve_provider_module   (#292 same-variant preference / fallback)
+#   - get_variant_config        (VM-12, VM-13, VM-13b) — reads config/environments/
+#   - resolve_provider_module   (#292 same-environment preference / fallback)
 #
 # These exercise the library functions in common-install-routines.sh against a
-# throwaway CONFIG_DIR fixture, so they are fast and require no cluster.
+# throwaway CONFIG_DIR fixture, so they are fast and require no cluster. The
+# legacy ADR-005 variant registry (configuration.json .tappaas.variants) is
+# retired (ADR-007 Phase D) — get_variant_config reads environment files only.
 #
 
 set -uo pipefail
@@ -37,89 +39,68 @@ assert_eq() {
     fi
 }
 
-echo "test-variant-config: get_variant_config + resolve_provider_module (ADR-005 Sprint 1)"
+echo "test-variant-config: get_variant_config + resolve_provider_module (ADR-007)"
 
 # ── Fixtures ─────────────────────────────────────────────────────────
-# Config with a variant registry (default "" + "demo").
-write_registry_config() {
-    cat > "${CONFIG_DIR}/configuration.json" <<'JSON'
-{
-  "tappaas": {
-    "domain": "foo.org",
-    "email": "admin@foo.org",
-    "variants": {
-      "": { "domain": "foo.org", "tlsCertRefid": "abc", "dnsMode": "wildcard", "description": "Default" },
-      "demo": { "domain": "demo.foo.org", "tlsCertRefid": "def", "dnsMode": "per-service", "zone": "demo", "description": "Demo env" }
-    }
-  }
-}
+# site.json names the default environment (.name = "foo"), plus two environment
+# files: the default ("foo") and a named one ("demo"). The default env's cert
+# refid lives in the runtime cert-refids.json keyed by env name.
+mkdir -p "${CONFIG_DIR}/environments"
+cat > "${CONFIG_DIR}/site.json" <<'JSON'
+{ "name": "foo", "displayName": "Foo", "owner": "test2",
+  "email": "admin@foo.org",
+  "hardware": { "nodes": [ { "name": "tappaas1" } ] } }
 JSON
-}
-# Legacy config: only tappaas.domain, no variants registry.
-write_legacy_config() {
-    cat > "${CONFIG_DIR}/configuration.json" <<'JSON'
-{
-  "tappaas": {
-    "domain": "legacy.org",
-    "tlsCertRefid": "legacycert",
-    "email": "admin@legacy.org"
-  }
-}
+cat > "${CONFIG_DIR}/environments/foo.json" <<'JSON'
+{ "name": "foo", "displayName": "Default", "ownerOrg": "test2",
+  "domains": { "primary": "foo.org", "dnsMode": "wildcard" },
+  "network": { "zone": "foo" } }
 JSON
-}
+cat > "${CONFIG_DIR}/environments/demo.json" <<'JSON'
+{ "name": "demo", "displayName": "Demo env", "ownerOrg": "test2",
+  "domains": { "primary": "demo.foo.org", "dnsMode": "per-service" },
+  "network": { "zone": "demo" } }
+JSON
+cat > "${CONFIG_DIR}/cert-refids.json" <<'JSON'
+{ "foo": "abc", "demo": "def" }
+JSON
 
-# ── VM-12: default variant from registry ─────────────────────────────
-write_registry_config
+# ── VM-12: default environment ("" -> site.json .name = foo) ──────────
 out="$(get_variant_config "")"
-if [[ "$(jq -r '.domain' <<<"${out}")" == "foo.org" ]]; then
-    pass "VM-12 get_variant_config \"\" returns default variant (domain=foo.org)"
+if [[ "$(jq -r '.domain' <<<"${out}")" == "foo.org" \
+   && "$(jq -r '.tlsCertRefid' <<<"${out}")" == "abc" ]]; then
+    pass "VM-12 get_variant_config \"\" returns default environment (domain=foo.org, refid=abc)"
 else
     fail "VM-12 get_variant_config \"\" -> ${out}"
 fi
 
-# ── VM-13: named variant from registry ───────────────────────────────
+# ── VM-13: named environment ─────────────────────────────────────────
 out="$(get_variant_config "demo")"
 if [[ "$(jq -r '.domain' <<<"${out}")" == "demo.foo.org" \
    && "$(jq -r '.dnsMode' <<<"${out}")" == "per-service" \
-   && "$(jq -r '.zone' <<<"${out}")" == "demo" ]]; then
-    pass "VM-13 get_variant_config demo returns demo variant (domain/dnsMode/zone)"
+   && "$(jq -r '.zone' <<<"${out}")" == "demo" \
+   && "$(jq -r '.tlsCertRefid' <<<"${out}")" == "def" ]]; then
+    pass "VM-13 get_variant_config demo returns demo environment (domain/dnsMode/zone/refid)"
 else
     fail "VM-13 get_variant_config demo -> ${out}"
 fi
 
-# ── VM-13b: unregistered variant errors ──────────────────────────────
+# ── VM-13b: unknown environment errors ───────────────────────────────
 if get_variant_config "ghost" >/dev/null 2>&1; then
-    fail "VM-13b get_variant_config ghost should fail (not registered)"
+    fail "VM-13b get_variant_config ghost should fail (no environment file)"
 else
-    pass "VM-13b get_variant_config ghost fails cleanly (unregistered)"
-fi
-
-# ── VM-14: legacy fallback to tappaas.domain ─────────────────────────
-write_legacy_config
-out="$(get_variant_config "")"
-if [[ "$(jq -r '.domain' <<<"${out}")" == "legacy.org" \
-   && "$(jq -r '.tlsCertRefid' <<<"${out}")" == "legacycert" ]]; then
-    pass "VM-14 get_variant_config \"\" falls back to legacy tappaas.domain"
-else
-    fail "VM-14 get_variant_config \"\" legacy -> ${out}"
-fi
-# Legacy fallback must NOT invent non-default variants.
-if get_variant_config "demo" >/dev/null 2>&1; then
-    fail "VM-14b legacy: get_variant_config demo should fail (no registry)"
-else
-    pass "VM-14b legacy: named variant has no fallback (fails cleanly)"
+    pass "VM-13b get_variant_config ghost fails cleanly (no config/environments/ghost.json)"
 fi
 
 # ── #292: resolve_provider_module preference/fallback ────────────────
-write_registry_config
 : > "${CONFIG_DIR}/litellm.json"          # base provider config exists
-: > "${CONFIG_DIR}/litellm-demo.json"     # same-variant provider config exists
+: > "${CONFIG_DIR}/litellm-demo.json"     # same-environment provider config exists
 
-assert_eq "$(resolve_provider_module litellm demo)"    "litellm-demo" "#292 resolve litellm+demo -> litellm-demo (same-variant)"
+assert_eq "$(resolve_provider_module litellm demo)"    "litellm-demo" "#292 resolve litellm+demo -> litellm-demo (same-environment)"
 assert_eq "$(resolve_provider_module litellm "")"      "litellm"      "#292 resolve litellm+\"\" -> litellm (default)"
-assert_eq "$(resolve_provider_module litellm staging)" "litellm"      "#292 resolve litellm+staging -> litellm (no variant cfg, fallback)"
-# Foundation-style dep with a variant: no cluster-demo.json -> falls back to cluster.
-assert_eq "$(resolve_provider_module cluster demo)"    "cluster"      "#292 resolve cluster+demo -> cluster (foundation, variant-agnostic)"
+assert_eq "$(resolve_provider_module litellm staging)" "litellm"      "#292 resolve litellm+staging -> litellm (no env cfg, fallback)"
+# Foundation-style dep with an environment: no cluster-demo.json -> falls back to cluster.
+assert_eq "$(resolve_provider_module cluster demo)"    "cluster"      "#292 resolve cluster+demo -> cluster (foundation, env-agnostic)"
 
 echo "  Results: ${PASS} passed, ${FAIL} failed"
 [[ "${FAIL}" -eq 0 ]]

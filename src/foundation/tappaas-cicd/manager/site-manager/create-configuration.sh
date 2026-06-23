@@ -106,8 +106,10 @@ read_existing_config() {
         EXISTING_HOUR=$(jq -r '.tappaas.updateSchedule[2] // ""' "$CONFIG_FILE")
         EXISTING_PRIMARY_DNS=$(jq -r '."tappaas-nodes"[0]."dns-hostname" // ."tappaas-nodes"[0].hostname // ""' "$CONFIG_FILE")
         EXISTING_REPOS=$(jq -c '.tappaas.repositories // []' "$CONFIG_FILE")
-        # Preserve any variant registry so `--update` never wipes variants that
-        # variant-manager registered (ADR-005 Sprint 1).
+        # Preserve any legacy variant registry block so `--update` never wipes it
+        # on a pre-migration configuration.json. The variant registry itself is
+        # retired (ADR-007 Phase D); this only avoids destroying data on an old
+        # file that has not yet been migrated to site.json + environments.
         EXISTING_VARIANTS=$(jq -c '.tappaas.variants // {}' "$CONFIG_FILE")
         # Preserve existing dns-hostname mappings
         EXISTING_DNS_MAP=$(jq -c '[."tappaas-nodes"[] | {(.hostname): (."dns-hostname" // null)}] | add // {}' "$CONFIG_FILE")

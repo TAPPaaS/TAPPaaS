@@ -397,20 +397,19 @@ else
     EXPECT_DOMAIN=$(jq -r '.config["firewall:proxy"].proxyDomain // .proxyDomain // empty' "${MODULE_JSON}" 2>/dev/null || echo "")
     # proxyDomain is intentionally not stored — Nextcloud derives it as
     # <vmname>.<domain> (see firewall:proxy / identity install-services). Mirror
-    # that derivation (variant-aware via the registry) so this check validates
+    # that derivation (environment-aware via the env file) so this check validates
     # against the real public domain instead of an empty value.
     if [ -z "${EXPECT_DOMAIN}" ]; then
-        _variant=$(jq -r '.variant // ""' "${MODULE_JSON}" 2>/dev/null || echo "")
+        _variant=$(jq -r '.environment // .variant // ""' "${MODULE_JSON}" 2>/dev/null || echo "")
         # Domain from the env file (config/environments/<env>.json), where env is
-        # the variant or the default env (site.json .name); fall back to the legacy
-        # configuration.json variant registry / tappaas.domain.
+        # the persisted environment or the default env (site.json .name). The
+        # legacy configuration.json variant registry is retired (ADR-007 Phase D).
         _env="${_variant}"
         [ -z "${_env}" ] && _env=$(jq -r '.name // empty' "${CONFIG_DIR}/site.json" 2>/dev/null || echo "")
         _dom=""
         if [ -n "${_env}" ] && [ -f "${CONFIG_DIR}/environments/${_env}.json" ]; then
             _dom=$(jq -r '.domains.primary // empty' "${CONFIG_DIR}/environments/${_env}.json" 2>/dev/null || echo "")
         fi
-        [ -z "${_dom}" ] && _dom=$(jq -r --arg v "${_variant}" '.tappaas.variants[$v].domain // .tappaas.domain // empty' "${CONFIG_DIR}/configuration.json" 2>/dev/null || echo "")
         [ -n "${_dom}" ] && EXPECT_DOMAIN="${VMNAME}.${_dom}"
     fi
     STORAGE_URL=$(remote "sudo -u postgres psql -d nextcloud -tAc \"SELECT configvalue FROM oc_appconfig WHERE appid='onlyoffice' AND configkey='StorageUrl'\" 2>/dev/null" | tr -d '\r ' || echo "")

@@ -2,7 +2,7 @@
 #
 # zone-controller — single primitive for the network-zone lifecycle.
 #
-# Owns zone CREATE/DELETE end to end so every caller (variant-manager, or a
+# Owns zone CREATE/DELETE end to end so every caller (a test harness, or a
 # hands-on operator) goes through one path that cannot forget a step. It does
 # NOT reimplement OPNsense/Proxmox logic — it authors zones.json and orchestrates
 # the existing reconcilers:
@@ -31,7 +31,6 @@ readonly SCRIPT_NAME
 readonly ZONES_FILE="${CONFIG_DIR}/zones.json"
 
 # Dynamic-allocation VLAN window within a type band (10.<typeId>.<sub>.0/24).
-# Matches variant-manager's range so zone choices are unchanged when it delegates.
 readonly ZONE_SUB_MAX=99
 readonly ZONE_SUB_MIN=60
 
