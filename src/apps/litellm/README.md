@@ -48,8 +48,8 @@ Clients → LiteLLM :4000 → LLM Providers (OpenRouter, Anthropic, …)
 | `templates:nixos` | NixOS base image |
 | `backup:vm` | Daily backups |
 | `identity:identity` | Secrets management |
-| `firewall:proxy` | HTTPS reverse proxy |
-| `firewall:rules` | Internal firewall pinholes |
+| `network:proxy` | HTTPS reverse proxy |
+| `network:rules` | Internal firewall pinholes |
 
 For installation steps see [INSTALL.md](./INSTALL.md).
 Upgrading? See [UPGRADE.md](./UPGRADE.md).

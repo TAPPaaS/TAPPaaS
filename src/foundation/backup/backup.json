@@ -8,6 +8,7 @@
   "storage": "tankc1",
   "pbsStorageName": "tappaas_backup",
   "alwaysBackup": [
+    "network",
     "firewall",
     "tappaas-cicd"
   ],

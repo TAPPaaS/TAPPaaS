@@ -12,7 +12,7 @@
     "templates:debian",
     "backup:vm",
     "identity:identity",
-    "firewall:proxy"
+    "network:proxy"
   ],
   "provides": [],
   "config": {
@@ -27,7 +27,7 @@
       "cloudInit": "true",
       "bridge0": "lan"
     },
-    "firewall:proxy": {
+    "network:proxy": {
       "proxyAllowedZones": [
         "internet"
       ]

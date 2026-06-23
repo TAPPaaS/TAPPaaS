@@ -39,7 +39,7 @@ Browser/Phone ─wss://hpb.<domain>/spreed─▶ Caddy (OPNsense) ─▶ nextclo
 | `cluster:vm` | VM provisioning |
 | `templates:nixos` | NixOS base image |
 | `backup:vm` | VM registered with Proxmox Backup Server |
-| `firewall:proxy` | `wss://` reverse proxy via Caddy |
+| `network:proxy` | `wss://` reverse proxy via Caddy |
 | `nextcloud:fileservice` | The Nextcloud instance whose Talk uses this backend |
 | `coturn:turn` | TURN relay whose credentials HPB distributes |
 

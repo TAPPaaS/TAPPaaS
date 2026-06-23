@@ -6,7 +6,7 @@ isolated test network, serve DHCP on it and install the routing/firewall
 policy (test→internet, mgmt→test, isolate everything else).
 
 The Proxmox-side work (find a vacant port, create the bridge, attach the NIC to
-the firewall VM) is done by ``src/foundation/firewall/test-network.sh``, which
+the firewall VM) is done by ``src/foundation/network/test-network.sh``, which
 shells out to this CLI for the OPNsense steps.
 
 Usage:

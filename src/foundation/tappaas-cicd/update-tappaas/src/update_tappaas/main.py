@@ -29,11 +29,35 @@ FOUNDATION_MODULES = [
     "cluster",       # Proxmox nodes (apt update/upgrade + file distribution)
     "tappaas-cicd",  # Mothership VM
     "templates",     # NixOS/Debian VM templates (config: templates.json)
-    "firewall",      # OPNsense firewall
+    "network",       # OPNsense network module (routing/DNS/DHCP/NAT/firewall rules/proxy)
     "backup",        # Proxmox Backup Server
     "identity",      # Authentik identity provider
     "logging",       # Loki/Grafana/Promtail
 ]
+
+# ADR-007 P8 back-compat: the "firewall" module was renamed to "network". A fresh
+# install deploys config/network.json; a not-yet-migrated live system still has
+# config/firewall.json. Map each canonical foundation name to the legacy name its
+# deployed config may use, so such a system is still recognised and updated in the
+# correct foundation slot (zero live change required — the host rename is deferred).
+FOUNDATION_LEGACY_NAMES = {
+    "network": "firewall",
+}
+
+
+def deployed_foundation_name(module: str) -> str | None:
+    """Return the deployed config name for a canonical foundation module.
+
+    Prefers the canonical name (e.g. network.json); falls back to the legacy
+    name (e.g. firewall.json) for systems not yet migrated. Returns None when
+    neither config file exists (module not installed).
+    """
+    if (CONFIG_DIR / f"{module}.json").exists():
+        return module
+    legacy = FOUNDATION_LEGACY_NAMES.get(module)
+    if legacy and (CONFIG_DIR / f"{legacy}.json").exists():
+        return legacy
+    return None
 
 # Config JSONs that are not modules (system/foundation files in config/)
 NON_MODULE_JSONS = {
@@ -199,7 +223,9 @@ def should_update_now(config: dict, current_hour: int) -> bool:
 
 def get_installed_apps() -> list[str]:
     """Get list of installed app modules (non-foundation)."""
-    foundation_set = set(FOUNDATION_MODULES)
+    # Include legacy foundation names (e.g. firewall) so a not-yet-migrated
+    # config/firewall.json is treated as the foundation network module, not an app.
+    foundation_set = set(FOUNDATION_MODULES) | set(FOUNDATION_LEGACY_NAMES.values())
     apps = []
     for json_file in CONFIG_DIR.glob("*.json"):
         if json_file.name in NON_MODULE_JSONS:
@@ -354,9 +380,14 @@ def main():
     apps = get_installed_apps()
     sorted_apps = topological_sort(apps)
 
+    # Resolve each canonical foundation module to its deployed config name,
+    # honouring the ADR-007 P8 legacy alias (network → firewall). update-module.sh
+    # is invoked with the deployed name so a not-yet-migrated firewall.json updates
+    # correctly in the network slot.
     installed_foundation = [
-        m for m in FOUNDATION_MODULES
-        if (CONFIG_DIR / f"{m}.json").exists()
+        name
+        for m in FOUNDATION_MODULES
+        if (name := deployed_foundation_name(m)) is not None
     ]
 
     # automaticReboot (default true) gates the Phase 3 node reboot pass.
@@ -369,7 +400,7 @@ def main():
         log.info("Phase 1 - Foundation update order:")
         for i, mod in enumerate(installed_foundation, 1):
             log.info("  %d. update-module.sh %s", i, mod)
-        skipped = [m for m in FOUNDATION_MODULES if m not in installed_foundation]
+        skipped = [m for m in FOUNDATION_MODULES if deployed_foundation_name(m) is None]
         if skipped:
             log.info("  (not installed: %s)", ", ".join(skipped))
         log.info("Phase 2 - App update order (%d module(s)):", len(sorted_apps))

@@ -26,7 +26,7 @@ A file is a **module JSON** if it contains a `"vmid"` field. Exclude:
 For **each entry in `foundationModules`, `applicationModules`, and `testModules`**, verify:
 1. **File exists**: The path in `moduleJson` points to an existing file
 2. **VMID matches**: The `vmid` in the registry matches the `vmid` in the actual JSON file
-3. **Module name matches**: The `moduleName` matches the `vmname` (or `hostname` for firewall) in the actual JSON file
+3. **Module name matches**: The `moduleName` matches the `vmname` (or `hostname` for firewall) in the actual JSON file. **Transitional exception (ADR-007 P8):** the `network` module deliberately keeps `vmname: "firewall"` until the supervised host-rename migration (`migrate-firewall-to-network.sh`) runs; for this entry, `moduleName: "network"` matching `vmname: "firewall"` via the catalog `legacyName: "firewall"` field is expected and is NOT a discrepancy.
 4. **Correct category**: The module is listed in the right section based on VMID range:
    - `foundationModules`: VMID 100–200
    - `applicationModules`: VMID 201–899

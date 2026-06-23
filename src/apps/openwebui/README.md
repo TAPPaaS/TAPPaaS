@@ -32,8 +32,8 @@ AI chat interface — multi-model conversations with persistent history, user ma
 | `templates:nixos` | NixOS base image |
 | `backup:vm` | Daily backups (PostgreSQL, Redis, container data) |
 | `identity:identity` | Secrets management |
-| `firewall:proxy` | HTTPS reverse proxy |
-| `firewall:rules` | Internal firewall pinholes |
+| `network:proxy` | HTTPS reverse proxy |
+| `network:rules` | Internal firewall pinholes |
 | `litellm:models` | LLM model routing |
 
 For installation steps see [INSTALL.md](./INSTALL.md).

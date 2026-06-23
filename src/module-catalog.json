@@ -15,9 +15,10 @@
   },
   "foundationModules": [
     {
-      "moduleName": "firewall",
+      "moduleName": "network",
+      "legacyName": "firewall",
       "repo": "foundation",
-      "moduleJson": "src/foundation/firewall/firewall.json",
+      "moduleJson": "src/foundation/network/network.json",
       "vmid": 110,
       "stack": "foundation",
       "category": "platform",

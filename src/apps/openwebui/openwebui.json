@@ -14,9 +14,9 @@
     "cluster:vm",
     "templates:nixos",
     "backup:vm",
-    "firewall:proxy",
+    "network:proxy",
     "litellm:models",
-    "firewall:rules"
+    "network:rules"
   ],
   "provides": [],
   "appVersion": "0.9.6",
@@ -30,7 +30,7 @@
       "image": "8080",
       "bridge0": "lan"
     },
-    "firewall:proxy": {
+    "network:proxy": {
       "proxyPort": 8080,
       "proxyAllowedZones": [
         "home"

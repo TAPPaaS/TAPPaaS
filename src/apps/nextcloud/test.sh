@@ -394,9 +394,9 @@ DS_URL=$(remote "sudo -u postgres psql -d nextcloud -tAc \"SELECT configvalue FR
 if [ -z "$DS_URL" ]; then
     skip "OnlyOffice: connector not configured (no DocumentServerUrl) — skipping"
 else
-    EXPECT_DOMAIN=$(jq -r '.config["firewall:proxy"].proxyDomain // .proxyDomain // empty' "${MODULE_JSON}" 2>/dev/null || echo "")
+    EXPECT_DOMAIN=$(jq -r '.config["network:proxy"].proxyDomain // .proxyDomain // empty' "${MODULE_JSON}" 2>/dev/null || echo "")
     # proxyDomain is intentionally not stored — Nextcloud derives it as
-    # <vmname>.<domain> (see firewall:proxy / identity install-services). Mirror
+    # <vmname>.<domain> (see network:proxy / identity install-services). Mirror
     # that derivation (environment-aware via the env file) so this check validates
     # against the real public domain instead of an empty value.
     if [ -z "${EXPECT_DOMAIN}" ]; then

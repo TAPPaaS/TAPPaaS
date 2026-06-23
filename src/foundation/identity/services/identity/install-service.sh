@@ -68,7 +68,7 @@ PROXY_DOMAIN="$(get_config_value 'proxyDomain' '')"
 VARIANT="$(get_config_value 'variant' '')"
 # Derive proxyDomain when a module doesn't hardcode it — the Nextcloud pattern
 # ("no proxyDomain is hardcoded"; the public domain is <vmname>.<domain>). Mirror
-# firewall:proxy's derivation so the OIDC redirect URIs match the reverse proxy's
+# network:proxy's derivation so the OIDC redirect URIs match the reverse proxy's
 # domain, taking <domain> from the module's variant registry (default variant for
 # unsuffixed installs) to stay correct under ADR-005.
 if [[ -z "${PROXY_DOMAIN}" ]]; then

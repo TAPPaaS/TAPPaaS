@@ -45,10 +45,10 @@ JSON
     cat > "${cfg}/openwebui.json" <<'JSON'
 {
   "vmname": "openwebui",
-  "dependsOn": ["cluster:vm", "firewall:proxy"],
+  "dependsOn": ["cluster:vm", "network:proxy"],
   "config": {
     "cluster:vm":     {"zone0": "srv-work", "trunks0": "NONE"},
-    "firewall:proxy": {"proxyAllowedZones": ["home", "srv-work"]}
+    "network:proxy": {"proxyAllowedZones": ["home", "srv-work"]}
   }
 }
 JSON
@@ -57,10 +57,10 @@ JSON
     cat > "${cfg}/alfen.json" <<'JSON'
 {
   "vmname": "alfen",
-  "dependsOn": ["cluster:vm", "firewall:rules"],
+  "dependsOn": ["cluster:vm", "network:rules"],
   "config": {
     "cluster:vm":      {"zone0": "iot-cloud", "trunks0": "NONE"},
-    "firewall:rules":  {
+    "network:rules":  {
       "discoveryUdpRelay": [{"port": 36549, "zones": ["home", "iot-cloud"]}],
       "ingress": [{"from": "srv-home", "ports": [443], "description": "HA"}],
       "egress":  [{"to":   "iot-local","ports": [1880],"description": "Node-RED"}]
@@ -118,7 +118,7 @@ ow_norm=$(normalize_module_config < "${CFG2}/openwebui.json")
 ow_zone0=$(echo "${ow_norm}" | jq -r '.zone0 // empty')
 ow_pAZ=$(echo "${ow_norm}" | jq -r '.proxyAllowedZones | join(",")')
 if [[ "${ow_zone0}" == "srv_work" && "${ow_pAZ}" == "home,srv_work" ]]; then
-    pass "openwebui zone0 + proxyAllowedZones rewritten (header zone0; proxyAllowedZones under config.firewall:proxy)"
+    pass "openwebui zone0 + proxyAllowedZones rewritten (header zone0; proxyAllowedZones under config.network:proxy)"
 else
     fail "openwebui rewrite: zone0=${ow_zone0}, pAZ=${ow_pAZ}"
 fi

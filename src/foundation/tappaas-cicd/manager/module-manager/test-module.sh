@@ -4,7 +4,7 @@
 #
 # Tests a TAPPaaS module by first running each dependency's
 # test-service.sh script (e.g., cluster:vm verifies the VM is up,
-# firewall:proxy verifies the reverse proxy), then running the
+# network:proxy verifies the reverse proxy), then running the
 # module's own test.sh.
 #
 # Usage: test-module.sh [options] <module-name>

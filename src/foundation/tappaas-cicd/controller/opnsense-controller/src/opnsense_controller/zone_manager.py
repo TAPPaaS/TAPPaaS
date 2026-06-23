@@ -586,7 +586,7 @@ class ZoneManager:
     ]
 
     # Zone-level access-to rules live in band 5 (30000-39999) per the firewall
-    # sequence-band architecture (see src/foundation/firewall/README.md). This is
+    # sequence-band architecture (see src/foundation/network/README.md). This is
     # ABOVE the rules-manager module bands (3: 10000-19999 ingress, 4: 20000-29999
     # egress), so — under first-match-quick — per-module pinholes are evaluated
     # before a zone's rfc1918 catch-all block and are no longer shadowed (#243).

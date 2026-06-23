@@ -30,7 +30,7 @@ set (the trunk set for node uplinks) is read from `zones.json`.
 
 ### Vendor-plugin model
 
-Vendor automation lives in `firewall/scripts/plugins/<vendor>.sh`, with
+Vendor automation lives in `network/scripts/plugins/<vendor>.sh`, with
 `manual.sh` as the fallback. The plugin directory is overridable via the
 `PLUGIN_DIR` env var (used by tests to supply stub plugins). For each switch the
 controller selects a plugin by sourcing each plugin and asking
@@ -63,7 +63,7 @@ non-zero on failure.
 
 - **Vendor plugins are limited.** Only `unifi.sh` (full automation) and
   `manual.sh` (operator-applied fallback) exist in
-  `firewall/scripts/plugins/`. Any other brand falls through to `manual.sh`, so
+  `network/scripts/plugins/`. Any other brand falls through to `manual.sh`, so
   `apply` prints instructions rather than programming the switch.
 - **Device-arch brands** (e.g. MikroTik) are referenced in `setup-switches.sh`
   as a management mode but have no plugin yet — they are effectively manual

@@ -701,7 +701,7 @@
       "type": "string",
       "requiredBy": [],
       "usedBy": [
-        "firewall:proxy"
+        "network:proxy"
       ],
       "default": "opnsense",
       "values": {
@@ -709,14 +709,14 @@
         "NONE": "No TAPPaaS firewall — manual reverse proxy and firewall rule configuration required"
       },
       "example": "NONE",
-      "note": "When set to 'NONE', firewall:proxy prints manual configuration instructions instead of calling caddy-manager"
+      "note": "When set to 'NONE', network:proxy prints manual configuration instructions instead of calling caddy-manager"
     },
     "aliasType": {
       "description": "OPNsense alias type for the module's firewall alias (tappaas_module_<vmname>). 'host' (default) targets the FQDN <vmname>.<zone0>.internal resolved via Unbound/dnsmasq. 'network' targets the entire zone0 subnet from zones.json — use for modules representing multiple devices with no single resolvable hostname (e.g. an IoT speaker fleet, a set of physical appliances).",
       "type": "string",
       "requiredBy": [],
       "usedBy": [
-        "firewall:proxy"
+        "network:proxy"
       ],
       "default": "host",
       "values": {
@@ -727,13 +727,13 @@
       "note": "When 'network', the alias content is derived from the zone0 subnet — no separate field is needed. The module's zone0 must define an 'ip' (subnet) in zones.json."
     },
     "ip": {
-      "description": "Static IPv4 address of the device this module represents. Used by firewall:dns to create the DNS host override <vmname>.<zone0>.internal -> <ip>. Must be a static reservation OUTSIDE the zone's DHCP pool; firewall:dns install-service warns (does not fail) if the IP falls inside a configured pool. No default — supply it in the module JSON (typically under config.\"firewall:dns\".ip) or override at install time with --ip <addr>.",
+      "description": "Static IPv4 address of the device this module represents. Used by network:dns to create the DNS host override <vmname>.<zone0>.internal -> <ip>. Must be a static reservation OUTSIDE the zone's DHCP pool; network:dns install-service warns (does not fail) if the IP falls inside a configured pool. No default — supply it in the module JSON (typically under config.\"network:dns\".ip) or override at install time with --ip <addr>.",
       "type": "string",
       "requiredBy": [
-        "firewall:dns"
+        "network:dns"
       ],
       "usedBy": [
-        "firewall:dns"
+        "network:dns"
       ],
       "format": "^([0-9]{1,3}\\.){3}[0-9]{1,3}$",
       "example": "10.4.20.25",
@@ -744,7 +744,7 @@
       "type": "string",
       "requiredBy": [],
       "usedBy": [
-        "firewall:proxy"
+        "network:proxy"
       ],
       "default": "<vmname>.<tappaas.domain>",
       "format": "^[a-zA-Z0-9]([a-zA-Z0-9.-]*[a-zA-Z0-9])?$",
@@ -756,7 +756,7 @@
       "type": "integer",
       "requiredBy": [],
       "usedBy": [
-        "firewall:proxy"
+        "network:proxy"
       ],
       "default": 80,
       "minimum": 1,
@@ -765,11 +765,11 @@
       "note": "The port the service listens on inside the VM"
     },
     "proxyUpstreamTls": {
-      "description": "Reverse-proxy to an HTTPS upstream instead of plain HTTP. Set true for backends that only speak TLS — e.g. the OPNsense GUI on :8443. firewall:proxy renders the Caddy upstream as https:// with upstream certificate verification skipped (internal/self-signed backends).",
+      "description": "Reverse-proxy to an HTTPS upstream instead of plain HTTP. Set true for backends that only speak TLS — e.g. the OPNsense GUI on :8443. network:proxy renders the Caddy upstream as https:// with upstream certificate verification skipped (internal/self-signed backends).",
       "type": "string",
       "requiredBy": [],
       "usedBy": [
-        "firewall:proxy"
+        "network:proxy"
       ],
       "default": "false",
       "values": {
@@ -782,7 +782,7 @@
       "type": "string",
       "requiredBy": [],
       "usedBy": [
-        "firewall:proxy"
+        "network:proxy"
       ],
       "default": "false",
       "values": {
@@ -795,7 +795,7 @@
       "type": "string",
       "requiredBy": [],
       "usedBy": [
-        "firewall:proxy"
+        "network:proxy"
       ],
       "default": "false",
       "values": {
@@ -804,11 +804,11 @@
       }
     },
     "proxyTls": {
-      "description": "How firewall:proxy obtains the public TLS certificate for this domain. 'dns01' (default) binds the TAPPaaS-wide wildcard certificate issued by os-acme-client (see acme-setup.sh, issue #254) to this domain via Caddy's per-domain CustomCertificate — no inbound HTTP-01 validation, no per-module DNS API call (one wildcard serves every dns01 module). 'http01' uses classic ACME HTTP-01: Caddy obtains a per-domain cert via the :80 challenge, so the domain MUST be reachable from the internet on port 80 — useful for genuinely public services where DNS-API access is not available. For dns01 to deliver a certificate, the wildcard must already be in OPNsense Trust (run acme-setup.sh on the cicd at INSTALL.md §2.3); until then the module's LAN endpoint still works but the public HTTPS endpoint has no cert.",
+      "description": "How network:proxy obtains the public TLS certificate for this domain. 'dns01' (default) binds the TAPPaaS-wide wildcard certificate issued by os-acme-client (see acme-setup.sh, issue #254) to this domain via Caddy's per-domain CustomCertificate — no inbound HTTP-01 validation, no per-module DNS API call (one wildcard serves every dns01 module). 'http01' uses classic ACME HTTP-01: Caddy obtains a per-domain cert via the :80 challenge, so the domain MUST be reachable from the internet on port 80 — useful for genuinely public services where DNS-API access is not available. For dns01 to deliver a certificate, the wildcard must already be in OPNsense Trust (run acme-setup.sh on the cicd at INSTALL.md §2.3); until then the module's LAN endpoint still works but the public HTTPS endpoint has no cert.",
       "type": "string",
       "requiredBy": [],
       "usedBy": [
-        "firewall:proxy"
+        "network:proxy"
       ],
       "default": "dns01",
       "values": {
@@ -817,11 +817,11 @@
       }
     },
     "proxyAllowedZones": {
-      "description": "Zones (and the literal 'internet') permitted to reach this service through the reverse proxy (issue #206). firewall:proxy compiles this into an os-caddy access list (allow-list by client subnet) attached to the handler; non-matching clients get HTTP 403.",
+      "description": "Zones (and the literal 'internet') permitted to reach this service through the reverse proxy (issue #206). network:proxy compiles this into an os-caddy access list (allow-list by client subnet) attached to the handler; non-matching clients get HTTP 403.",
       "type": "array",
       "requiredBy": [],
       "usedBy": [
-        "firewall:proxy"
+        "network:proxy"
       ],
       "default": "<internal default: every Active 'Service' zone plus home, work and mgmt — NOT the internet>",
       "items": "string",
@@ -840,21 +840,21 @@
       "items": "string",
       "requiredBy": [],
       "usedBy": [
-        "firewall:discovery"
+        "network:discovery"
       ],
       "default": [],
       "example": [
         "home",
         "srvHome"
       ],
-      "note": "Requires firewall:discovery in dependsOn. Idempotently unions zone0 + declared consumer zones into the repeater interface list. Boolean true is deprecated."
+      "note": "Requires network:discovery in dependsOn. Idempotently unions zone0 + declared consumer zones into the repeater interface list. Boolean true is deprecated."
     },
     "discoveryUdpRelay": {
       "description": "UDP broadcast relay instances via os-udpbroadcastrelay. Each entry creates one relay identified by 'tappaas:<module>:<port>'.",
       "type": "array",
       "requiredBy": [],
       "usedBy": [
-        "firewall:discovery"
+        "network:discovery"
       ],
       "default": [],
       "items": {
@@ -882,14 +882,14 @@
           ]
         }
       ],
-      "note": "Requires firewall:discovery in dependsOn. Idempotent: checks description before adding. Reload is triggered only when new entries are added."
+      "note": "Requires network:discovery in dependsOn. Idempotent: checks description before adding. Reload is triggered only when new entries are added."
     },
     "ports": {
       "description": "Network ports this module exposes for inbound traffic. Source of truth for ingress validation.",
       "type": "array",
       "requiredBy": [],
       "usedBy": [
-        "firewall:rules"
+        "network:rules"
       ],
       "default": [],
       "items": {
@@ -927,14 +927,14 @@
           "description": "Service API"
         }
       ],
-      "note": "Ingress entries must reference ports declared here. Activated when firewall:rules is in dependsOn."
+      "note": "Ingress entries must reference ports declared here. Activated when network:rules is in dependsOn."
     },
     "ingress": {
       "description": "Inbound traffic permitted to this module's ports. Each entry is compiled into an OPNsense pass rule and validated against the destination zone's pinhole-allowed-from policy at compile time.",
       "type": "array",
       "requiredBy": [],
       "usedBy": [
-        "firewall:rules"
+        "network:rules"
       ],
       "default": [],
       "items": {
@@ -996,7 +996,7 @@
       "type": "array",
       "requiredBy": [],
       "usedBy": [
-        "firewall:rules"
+        "network:rules"
       ],
       "default": [],
       "items": {
@@ -1058,7 +1058,7 @@
       "type": "object",
       "requiredBy": [],
       "usedBy": [
-        "firewall:rules"
+        "network:rules"
       ],
       "default": {},
       "patternProperties": {
@@ -1103,11 +1103,11 @@
       "note": "Aliases are created in OPNsense before referencing rules are applied, and removed on remove-rules unless still referenced by other modules."
     },
     "natRules": {
-      "description": "Destination-NAT (port-forward) mappings that expose an internal service port on the firewall's WAN interface. Each entry is compiled into an OPNsense rdr-pass rule (translate + allow in one rule). Use this for non-HTTP ports (e.g. SSH); use firewall:proxy for HTTP(S). All rules forward to this module's single target (its 'ip', or <vmname>.<zone0>.internal).",
+      "description": "Destination-NAT (port-forward) mappings that expose an internal service port on the firewall's WAN interface. Each entry is compiled into an OPNsense rdr-pass rule (translate + allow in one rule). Use this for non-HTTP ports (e.g. SSH); use network:proxy for HTTP(S). All rules forward to this module's single target (its 'ip', or <vmname>.<zone0>.internal).",
       "type": "array",
       "requiredBy": [],
       "usedBy": [
-        "firewall:nat"
+        "network:nat"
       ],
       "default": [],
       "items": {
@@ -1152,7 +1152,7 @@
           "description": "SSH"
         }
       ],
-      "note": "Activated when firewall:nat is in dependsOn. Rules are created as rdr-pass on the WAN interface, so no separate firewall:rules ingress entry is needed for the forwarded port."
+      "note": "Activated when network:nat is in dependsOn. Rules are created as rdr-pass on the WAN interface, so no separate network:rules ingress entry is needed for the forwarded port."
     },
     "dependsOn": {
       "description": "List of services this module depends on. Each entry is a 'module:service' pair identifying which module delivers the service.",
@@ -1167,7 +1167,7 @@
       "example": [
         "cluster:vm",
         "cluster:ha",
-        "firewall:proxy"
+        "network:proxy"
       ],
       "note": "The installer validates that each referenced module is installed and provides the named service"
     },
@@ -1211,7 +1211,7 @@
           "memory": "4096",
           "diskSize": "32G"
         },
-        "firewall:proxy": {
+        "network:proxy": {
           "proxyDomain": "app.example.com",
           "proxyPort": 8080
         }
@@ -1369,7 +1369,7 @@
         "required": "if module provides services"
       },
       "services/<service-name>/pinhole.json": {
-        "description": "Declares the network ports a service exposes. When a consumer module depends on this service across zones, firewall:rules synthesises an auto-pinhole rule per declared port (subject to the destination zone's pinhole-allowed-from policy). Issue #173.",
+        "description": "Declares the network ports a service exposes. When a consumer module depends on this service across zones, network:rules synthesises an auto-pinhole rule per declared port (subject to the destination zone's pinhole-allowed-from policy). Issue #173.",
         "required": false,
         "schema": {
           "ports": {

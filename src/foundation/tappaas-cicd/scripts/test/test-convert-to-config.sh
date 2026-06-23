@@ -67,13 +67,13 @@ run_case "unknown-field" \
     '.customField == "x" and .config["cluster:vm"].cores == 2'
 
 # Case 7: orphan — usedBy refers to dep the module doesn't declare → stay at top
-# proxyDomain is usedBy=["firewall:proxy"]. Module declares only cluster:vm. Orphan.
+# proxyDomain is usedBy=["network:proxy"]. Module declares only cluster:vm. Orphan.
 run_case "orphan-field" \
     '{"vmname":"a","dependsOn":["cluster:vm"],"proxyDomain":"x.test","cores":2}' \
     '.proxyDomain == "x.test"'
 
 # Case 8: lossless round-trip via flatten — normalize(convert(X)) == flatten(X)
-input='{"vmname":"a","dependsOn":["cluster:vm","firewall:proxy"],"cores":2,"memory":"4096","proxyDomain":"x.test","proxyPort":80}'
+input='{"vmname":"a","dependsOn":["cluster:vm","network:proxy"],"cores":2,"memory":"4096","proxyDomain":"x.test","proxyPort":80}'
 flat_in=$(echo "${input}" | normalize_module_config)
 converted=$(echo "${input}" | regroup_to_pattern_a 2>/dev/null)
 flat_out=$(echo "${converted}" | normalize_module_config)

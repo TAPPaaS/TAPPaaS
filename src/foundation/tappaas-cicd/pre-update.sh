@@ -142,7 +142,7 @@ fi
 # adds <IsDNSName>Y</IsDNSName> so internal DNS labels like
 # litellm.srvHome.internal can be used as reverse-proxy upstreams.
 # Applied BEFORE the zone-key migration so the migration's Stage 5
-# (firewall:proxy update-service per affected module) can write the
+# (network:proxy update-service per affected module) can write the
 # underscored upstream without OPNsense validation failures.
 FIREWALL_FQDN_EARLY="firewall.mgmt.internal"
 if [ -f opnsense-patch/apply-caddy-isdnsname.sh ] \

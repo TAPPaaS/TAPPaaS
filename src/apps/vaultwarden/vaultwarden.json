@@ -15,7 +15,7 @@
     "templates:nixos",
     "backup:vm",
     "identity:identity",
-    "firewall:proxy"
+    "network:proxy"
   ],
   "provides": [],
   "config": {
@@ -28,7 +28,7 @@
       "image": "8080",
       "bridge0": "lan"
     },
-    "firewall:proxy": {
+    "network:proxy": {
       "proxyAllowedZones": [
         "internet"
       ]

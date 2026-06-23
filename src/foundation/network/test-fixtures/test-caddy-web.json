@@ -1,0 +1,39 @@
+{
+  "description": "Standalone Caddy-public test webserver in srvWork (Option B, firewall/test-caddy-public.sh)",
+  "version": "0.1",
+  "vmname": "test-caddy-web",
+  "vmid": 925,
+  "vmtag": "TAPPaaS,Test,Firewall",
+  "node": "tappaas1",
+  "cores": 1,
+  "memory": "2048",
+  "diskSize": "16G",
+  "storage": "tanka1",
+  "imageType": "clone",
+  "image": "8080",
+  "bridge0": "lan",
+  "zone0": "srvWork",
+  "proxyPort": 8080,
+  "ports": [
+    {
+      "port": 8080,
+      "protocol": "TCP",
+      "description": "Test webserver"
+    }
+  ],
+  "ingress": [
+    {
+      "from": "dmz",
+      "ports": [
+        8080
+      ],
+      "description": "Caddy reverse proxy (dmz) forwards the public hostname to the webserver"
+    }
+  ],
+  "dependsOn": [
+    "cluster:vm",
+    "templates:nixos",
+    "network:proxy",
+    "network:rules"
+  ]
+}

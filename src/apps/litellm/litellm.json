@@ -15,8 +15,8 @@
     "templates:nixos",
     "backup:vm",
     "identity:identity",
-    "firewall:proxy",
-    "firewall:rules",
+    "network:proxy",
+    "network:rules",
     "vllm-amd:inference"
   ],
   "provides": [
@@ -33,7 +33,7 @@
       "image": "8080",
       "bridge0": "lan"
     },
-    "firewall:proxy": {
+    "network:proxy": {
       "proxyPort": 4000
     }
   }

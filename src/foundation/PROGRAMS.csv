@@ -1,32 +1,43 @@
 Program,Install Location,Source Path,Type
 # ==========================================================================================
 # TAPPaaS Foundation Layer - Executable Programs and Scripts
-# Generated: 2026-06-22
+# Generated: 2026-06-23
 # ==========================================================================================
-# Source paths are repo-relative (under src/foundation/). The /home/tappaas/bin symlinks
-# are the source of truth for installed programs; Python CLIs resolve through a /nix/store
-# env but are mapped here to their repo module per pyproject.toml [project.scripts].
+# Source paths are repo-relative (under src/foundation/). The /home/tappaas/bin symlinks on
+# the tappaas-cicd mothership are the installed-program surface; each manager/controller
+# install.sh links its scripts and compiled bins onto PATH. Python/TypeScript CLIs resolve
+# through a /nix/store result/ env but are mapped here to their repo source per the
+# pyproject.toml [project.scripts] / package.json bin entry.
 #
-# --- lib/ (shared routines, sourced via /home/tappaas/bin/<name>) -------------------------
+# --- tappaas-cicd/lib/ (shared routines, sourced or run via /home/tappaas/bin/<name>) -----
 apply-json-merge.sh,/home/tappaas/bin/apply-json-merge.sh,tappaas-cicd/lib/apply-json-merge.sh,library
 audit-jq-readers.sh,/home/tappaas/bin/audit-jq-readers.sh,tappaas-cicd/lib/audit-jq-readers.sh,script
 common-install-routines.sh,/home/tappaas/bin/common-install-routines.sh,tappaas-cicd/lib/common-install-routines.sh,library
+test-config-readers.sh,/home/tappaas/bin/test-config-readers.sh,tappaas-cicd/lib/test-config-readers.sh,script
+#
+# --- tappaas-cicd/scripts/ (foundation setup, symlinked to /home/tappaas/bin/) ------------
+acme-setup.sh,/home/tappaas/bin/acme-setup.sh,tappaas-cicd/scripts/acme-setup.sh,script
+rest-of-foundation.sh,/home/tappaas/bin/rest-of-foundation.sh,tappaas-cicd/scripts/rest-of-foundation.sh,script
+setup-caddy.sh,/home/tappaas/bin/setup-caddy.sh,tappaas-cicd/scripts/setup-caddy.sh,script
 #
 # --- manager/people-manager/ --------------------------------------------------------------
-people-manager,/home/tappaas/bin/people-manager,tappaas-cicd/manager/people-manager/src/*.ts,program
+people-manager,/home/tappaas/bin/people-manager,tappaas-cicd/manager/people-manager/src/main.ts,program
 user-setup.sh,/home/tappaas/bin/user-setup.sh,tappaas-cicd/manager/people-manager/user-setup.sh,script
 validate-people.sh,/home/tappaas/bin/validate-people.sh,tappaas-cicd/manager/people-manager/validate.sh,script
 #
 # --- manager/site-manager/ ----------------------------------------------------------------
 convert-json-to-config.sh,/home/tappaas/bin/convert-json-to-config.sh,tappaas-cicd/manager/site-manager/convert-json-to-config.sh,script
 create-configuration.sh,/home/tappaas/bin/create-configuration.sh,tappaas-cicd/manager/site-manager/create-configuration.sh,script
+create-site.sh,/home/tappaas/bin/create-site.sh,tappaas-cicd/manager/site-manager/create-site.sh,script
+migrate-configuration.sh,/home/tappaas/bin/migrate-configuration.sh,tappaas-cicd/manager/site-manager/migrate-configuration.sh,script
 repository.sh,/home/tappaas/bin/repository.sh,tappaas-cicd/manager/site-manager/repository.sh,script
+test-create-site.sh,/home/tappaas/bin/test-create-site.sh,tappaas-cicd/manager/site-manager/test-create-site.sh,script
 validate-configuration.sh,/home/tappaas/bin/validate-configuration.sh,tappaas-cicd/manager/site-manager/validate-configuration.sh,script
+validate-site.sh,/home/tappaas/bin/validate-site.sh,tappaas-cicd/manager/site-manager/validate-site.sh,script
 #
 # --- manager/environment-manager/ ---------------------------------------------------------
-migrate-to-variants.sh,/home/tappaas/bin/migrate-to-variants.sh,tappaas-cicd/manager/environment-manager/migrate-to-variants.sh,script
-variant-manager,/home/tappaas/bin/variant-manager,tappaas-cicd/manager/environment-manager/variant-manager.sh,script
-variant-manager.sh,/home/tappaas/bin/variant-manager.sh,tappaas-cicd/manager/environment-manager/variant-manager.sh,script
+create-minimal-environments.sh,/home/tappaas/bin/create-minimal-environments.sh,tappaas-cicd/manager/environment-manager/create-minimal-environments.sh,script
+validate-environment.sh,/home/tappaas/bin/validate-environment.sh,tappaas-cicd/manager/environment-manager/validate-environment.sh,script
 #
 # --- manager/module-manager/ --------------------------------------------------------------
 copy-update-json.sh,/home/tappaas/bin/copy-update-json.sh,tappaas-cicd/manager/module-manager/copy-update-json.sh,script
@@ -35,12 +46,13 @@ install-module.sh,/home/tappaas/bin/install-module.sh,tappaas-cicd/manager/modul
 module-format.sh,/home/tappaas/bin/module-format.sh,tappaas-cicd/manager/module-manager/module-format.sh,script
 snapshot-vm.sh,/home/tappaas/bin/snapshot-vm.sh,tappaas-cicd/manager/module-manager/snapshot-vm.sh,script
 test-module.sh,/home/tappaas/bin/test-module.sh,tappaas-cicd/manager/module-manager/test-module.sh,script
+test-validate-module-tier-source.sh,/home/tappaas/bin/test-validate-module-tier-source.sh,tappaas-cicd/manager/module-manager/test-validate-module-tier-source.sh,script
 update-module.sh,/home/tappaas/bin/update-module.sh,tappaas-cicd/manager/module-manager/update-module.sh,script
+validate-module.sh,/home/tappaas/bin/validate-module.sh,tappaas-cicd/manager/module-manager/validate-module.sh,script
+validate-module-tier-source.sh,/home/tappaas/bin/validate-module-tier-source.sh,tappaas-cicd/manager/module-manager/validate-module-tier-source.sh,script
 #
 # --- manager/network-manager/ -------------------------------------------------------------
-apply-zones-merge.sh,/home/tappaas/bin/apply-zones-merge.sh,tappaas-cicd/manager/network-manager/apply-zones-merge.sh,script
-migrate-zone-keys-to-camelcase.sh,/home/tappaas/bin/migrate-zone-keys-to-camelcase.sh,tappaas-cicd/manager/network-manager/migrate-zone-keys-to-camelcase.sh,script
-migrate-zone-keys-to-underscore.sh,/home/tappaas/bin/migrate-zone-keys-to-underscore.sh,tappaas-cicd/manager/network-manager/migrate-zone-keys-to-underscore.sh,script
+network-manager,/home/tappaas/bin/network-manager,tappaas-cicd/manager/network-manager/src/main.ts,program
 zone-controller,/home/tappaas/bin/zone-controller,tappaas-cicd/manager/network-manager/zone-controller.sh,script
 zone-controller.sh,/home/tappaas/bin/zone-controller.sh,tappaas-cicd/manager/network-manager/zone-controller.sh,script
 zone-reconcile,/home/tappaas/bin/zone-reconcile,tappaas-cicd/manager/network-manager/zone-reconcile,script
@@ -52,23 +64,31 @@ inspect-cluster.sh,/home/tappaas/bin/inspect-cluster.sh,tappaas-cicd/manager/hea
 inspect-vm.sh,/home/tappaas/bin/inspect-vm.sh,tappaas-cicd/manager/health-manager/inspect-vm.sh,script
 update-os.sh,/home/tappaas/bin/update-os.sh,tappaas-cicd/manager/health-manager/update-os.sh,script
 #
+# --- manager/backup-manager/ --------------------------------------------------------------
+backup-manager,/home/tappaas/bin/backup-manager,tappaas-cicd/manager/backup-manager/backup-manager.sh,script
+backup-manager.sh,/home/tappaas/bin/backup-manager.sh,tappaas-cicd/manager/backup-manager/backup-manager.sh,script
+backup-restore.sh,/home/tappaas/bin/backup-restore.sh,tappaas-cicd/manager/backup-manager/backup-restore.sh,script
+backup-status.sh,/home/tappaas/bin/backup-status.sh,tappaas-cicd/manager/backup-manager/backup-status.sh,script
+validate-backup.sh,/home/tappaas/bin/validate-backup.sh,tappaas-cicd/manager/backup-manager/validate-backup.sh,script
+#
 # --- controller/proxmox-controller/ -------------------------------------------------------
+proxmox-controller,/home/tappaas/bin/proxmox-controller,tappaas-cicd/controller/proxmox-controller/proxmox-controller,script
+proxmox-manager,/home/tappaas/bin/proxmox-manager,tappaas-cicd/controller/proxmox-controller/proxmox-controller,script
 migrate-node.sh,/home/tappaas/bin/migrate-node.sh,tappaas-cicd/controller/proxmox-controller/migrate-node.sh,script
 migrate-vm.sh,/home/tappaas/bin/migrate-vm.sh,tappaas-cicd/controller/proxmox-controller/migrate-vm.sh,script
-proxmox-manager,/home/tappaas/bin/proxmox-manager,tappaas-cicd/controller/proxmox-controller/proxmox-manager,script
 resize-disk.sh,/home/tappaas/bin/resize-disk.sh,tappaas-cicd/controller/proxmox-controller/resize-disk.sh,script
 #
 # --- controller/switch-controller/ --------------------------------------------------------
-setup-switches.sh,/home/tappaas/bin/setup-switches.sh,tappaas-cicd/controller/switch-controller/setup-switches.sh,script
 switch-manager,/home/tappaas/bin/switch-manager,tappaas-cicd/controller/switch-controller/switch-manager,script
+setup-switches.sh,/home/tappaas/bin/setup-switches.sh,tappaas-cicd/controller/switch-controller/setup-switches.sh,script
 #
 # --- controller/ap-controller/ ------------------------------------------------------------
-ap-manager,/home/tappaas/bin/ap-manager,tappaas-cicd/controller/ap-controller/ap-manager,script
+ap-controller,/home/tappaas/bin/ap-controller,tappaas-cicd/controller/ap-controller/ap-controller,script
+ap-manager,/home/tappaas/bin/ap-manager,tappaas-cicd/controller/ap-controller/ap-controller,script
 setup-wlan-secrets.sh,/home/tappaas/bin/setup-wlan-secrets.sh,tappaas-cicd/controller/ap-controller/setup-wlan-secrets.sh,script
 #
 # --- controller/opnsense-controller/ (Python pkg; console-scripts per pyproject.toml) -----
 acme-manager,/home/tappaas/bin/acme-manager,tappaas-cicd/controller/opnsense-controller/src/opnsense_controller/acme_cli.py,python
-authentik-manager,/home/tappaas/bin/authentik-manager,tappaas-cicd/controller/opnsense-controller/src/opnsense_controller/authentik_cli.py,python
 caddy-manager,/home/tappaas/bin/caddy-manager,tappaas-cicd/controller/opnsense-controller/src/opnsense_controller/caddy_cli.py,python
 dns-manager,/home/tappaas/bin/dns-manager,tappaas-cicd/controller/opnsense-controller/src/opnsense_controller/dns_manager_cli.py,python
 nat-manager,/home/tappaas/bin/nat-manager,tappaas-cicd/controller/opnsense-controller/src/opnsense_controller/nat_cli.py,python
@@ -81,10 +101,9 @@ test-network-manager,/home/tappaas/bin/test-network-manager,tappaas-cicd/control
 unbound-manager,/home/tappaas/bin/unbound-manager,tappaas-cicd/controller/opnsense-controller/src/opnsense_controller/unbound_cli.py,python
 zone-manager,/home/tappaas/bin/zone-manager,tappaas-cicd/controller/opnsense-controller/src/opnsense_controller/zone_manager.py,python
 #
-# --- tappaas-cicd/scripts/ (foundation setup, symlinked to /home/tappaas/bin/) ------------
-acme-setup.sh,/home/tappaas/bin/acme-setup.sh,tappaas-cicd/scripts/acme-setup.sh,script
-rest-of-foundation.sh,/home/tappaas/bin/rest-of-foundation.sh,tappaas-cicd/scripts/rest-of-foundation.sh,script
-setup-caddy.sh,/home/tappaas/bin/setup-caddy.sh,tappaas-cicd/scripts/setup-caddy.sh,script
+# --- controller/identity-controller/ (Python pkg; console-scripts per pyproject.toml) -----
+authentik-manager,/home/tappaas/bin/authentik-manager,tappaas-cicd/controller/identity-controller/src/identity_controller/authentik_cli.py,python
+identity-controller,/home/tappaas/bin/identity-controller,tappaas-cicd/controller/identity-controller/src/identity_controller/authentik_cli.py,python
 #
 # --- update-tappaas/ (Python pkg; console-script per pyproject.toml) ----------------------
 update-tappaas,/home/tappaas/bin/update-tappaas,tappaas-cicd/update-tappaas/src/update_tappaas/main.py,python

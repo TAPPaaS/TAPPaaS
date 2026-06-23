@@ -33,10 +33,10 @@ EOF
 cat > "${WORK}/m-pa.json" <<'EOF'
 {
   "vmname": "m-pa",
-  "dependsOn": ["cluster:vm", "firewall:proxy"],
+  "dependsOn": ["cluster:vm", "network:proxy"],
   "config": {
     "cluster:vm": { "cores": 4, "memory": "4096" },
-    "firewall:proxy": { "proxyDomain": "x.test" }
+    "network:proxy": { "proxyDomain": "x.test" }
   }
 }
 EOF

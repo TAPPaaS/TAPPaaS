@@ -212,7 +212,7 @@ trap 'rm -rf "${me_tmp}"' EXIT
 
 # Fixtures
 printf '{"dependsOn":["cluster:vm","backup:vm"],"vmid":140}\n' > "${me_tmp}/vmmod.json"
-printf '{"dependsOn":["firewall:proxy"]}\n'                    > "${me_tmp}/svcmod.json"
+printf '{"dependsOn":["network:proxy"]}\n'                    > "${me_tmp}/svcmod.json"
 printf '{"dependsOn":["cluster:vm"]}\n'                        > "${me_tmp}/novmid.json"
 
 # Helper: run module_exists in a subshell with overridden CONFIG_DIR and a

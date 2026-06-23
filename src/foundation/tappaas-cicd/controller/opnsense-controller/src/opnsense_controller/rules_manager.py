@@ -78,7 +78,7 @@ SLOT_COUNT = 100       # number of distinct slots within a band
 DEFAULT_MODULES_DIR = Path("/home/tappaas/config")
 DEFAULT_ZONES_FILE = Path("/home/tappaas/TAPPaaS/src/foundation/tappaas-cicd/manager/network-manager/zones.json")
 DEFAULT_GLOBAL_ALIASES_FILE = Path(
-    "/home/tappaas/TAPPaaS/src/foundation/firewall/aliases.json"
+    "/home/tappaas/TAPPaaS/src/foundation/network/aliases.json"
 )
 DEFAULT_SEQUENCE_MAP_FILE = Path("/home/tappaas/config/firewall/sequence-map.json")
 
@@ -339,9 +339,11 @@ def load_module(modules_dir: Path, name: str) -> ModuleSpec:
         raise FileNotFoundError(f"module config not found: {path}")
     with open(path) as f:
         data = json.load(f)
-    # Pattern A (#207) nests firewall:rules fields under config."firewall:rules".
+    # Pattern A (#207) nests rules fields under config."network:rules"
+    # (legacy: config."firewall:rules" — ADR-007 P8 module rename, back-compat).
     # Fall back to nested form when the top-level key is absent or empty.
-    fr = data.get("config", {}).get("firewall:rules", {})
+    _cfg = data.get("config", {})
+    fr = _cfg.get("network:rules") or _cfg.get("firewall:rules", {})
     return ModuleSpec(
         vmname=data.get("vmname", name),
         zone0=data.get("zone0", ""),
@@ -1379,7 +1381,7 @@ class RulesManager:
 
     def _emit_manual_instructions(self, module: ModuleSpec) -> None:
         info(
-            f"firewall:rules — firewallType is NONE for module '{module.vmname}'. "
+            f"network:rules — firewallType is NONE for module '{module.vmname}'. "
             f"Manual firewall configuration required."
         )
         info("")
@@ -1617,7 +1619,7 @@ def main() -> int:
 
     p_add = subparsers.add_parser("add-rules", parents=[global_parser],
                                     help="Compile and apply rules for a module")
-    p_add.add_argument("module", help="Module name (consumer of firewall:rules)")
+    p_add.add_argument("module", help="Module name (consumer of network:rules)")
 
     p_rec = subparsers.add_parser("reconcile", parents=[global_parser],
                                     help="Diff live state against module.json; apply and prune")

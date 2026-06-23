@@ -12,7 +12,7 @@
     "cluster:vm",
     "templates:windows",
     "backup:vm",
-    "firewall:proxy"
+    "network:proxy"
   ],
   "config": {
     "cluster:vm": {

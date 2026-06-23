@@ -100,9 +100,9 @@ info "  TURN secret synced to runtime plane; nextcloud-spreed-signaling restarte
 # Nextcloud PUBLIC base URL, so the internal default is rejected with invalid_backend.
 echo ""
 info "${BOLD}Wiring HPB signaling backend + TURN (nixos-rebuild)…${CL}"
-NEXTCLOUD_PROXY="$(jq -r '.config["firewall:proxy"].proxyDomain // .proxyDomain // empty' "${NC_JSON}" 2>/dev/null || true)"
+NEXTCLOUD_PROXY="$(jq -r '.config["network:proxy"].proxyDomain // .proxyDomain // empty' "${NC_JSON}" 2>/dev/null || true)"
 # Nextcloud intentionally doesn't store proxyDomain (it's derived as <vmname>.<domain>;
-# see firewall:proxy / identity install-services). Mirror that derivation here so the
+# see network:proxy / identity install-services). Mirror that derivation here so the
 # HPB backend allow-list points at Nextcloud's real PUBLIC URL — otherwise it stays at
 # the nix placeholder and Talk rejects signaling with invalid_backend.
 if [[ -z "${NEXTCLOUD_PROXY}" ]]; then

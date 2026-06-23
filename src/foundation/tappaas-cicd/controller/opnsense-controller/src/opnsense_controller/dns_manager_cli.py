@@ -218,7 +218,7 @@ def check_dns_range(manager: DhcpManager, ip_address: str) -> bool:
 
     Prints the matching range if the IP is inside a DHCP pool and returns
     False (so the shell sees a non-zero exit); returns True when the IP is
-    clear of every pool. Callers (e.g. firewall:dns install-service) treat a
+    clear of every pool. Callers (e.g. network:dns install-service) treat a
     non-zero exit as a warning, not a hard failure — a static reservation
     inside the pool still works, it is just risky.
 

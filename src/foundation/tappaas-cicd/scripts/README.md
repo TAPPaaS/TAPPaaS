@@ -10,10 +10,10 @@ A TAPPaaS module's JSON has two equivalent shapes:
 - **Pattern A (canonical)** — module identity / general fields stay at the top; service-owned fields move under `config["<module>:<service>"]` per the field's `usedBy` metadata in [`../../schemas/module-fields.json`](../../schemas/module-fields.json):
   ```json
   {
-    "vmname": "x", "dependsOn": ["cluster:vm","firewall:proxy"],
+    "vmname": "x", "dependsOn": ["cluster:vm","network:proxy"],
     "config": {
       "cluster:vm":    { "cores": 2, "memory": "4096" },
-      "firewall:proxy": { "proxyDomain": "x.test", "proxyPort": 80 }
+      "network:proxy": { "proxyDomain": "x.test", "proxyPort": 80 }
     }
   }
   ```
@@ -132,7 +132,7 @@ When `--variant` is used, the following fields are derived automatically unless 
 - The `--<field>` CLI overrides are applied to the flat internal form and then re-rendered in canonical Pattern A as the very last step, so an override like `--cores 16` lands under `config["cluster:vm"].cores`, not at the top. The override log line tells you exactly where each field will land in the canonical shape (#264):
   ```
     Set cores = 16 → config["cluster:vm"].cores
-    Set proxyDomain = test.example.com → config["firewall:proxy"].proxyDomain
+    Set proxyDomain = test.example.com → config["network:proxy"].proxyDomain
     Set vmid = 12345 → top-level
     Set HANode = tappaas2 → top-level (orphan)
   ```
@@ -1231,7 +1231,7 @@ test-module.sh [options] <module-name>
 |---------|-----------------|----------------|
 | `cluster:vm` | VM running, ping, SSH | Disk usage, memory |
 | `cluster:ha` | HA resource status, affinity rule | Replication job, replication health |
-| `firewall:proxy` | Caddy domain, handler, HTTPS | TLS certificate, upstream reachability |
+| `network:proxy` | Caddy domain, handler, HTTPS | TLS certificate, upstream reachability |
 
 **Structured output:** Each message is prepended with `[Info]`, `[Debug]`, `[Warning]`, `[Error]`, or `[Fatal]`.
 

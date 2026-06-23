@@ -25,7 +25,7 @@
 #   dependsOn nextcloud:fileservice  +  config["nextcloud:fileservice"].connector = "onlyoffice"
 # and reads euro-office's JWT, writes /etc/secrets/onlyoffice.env on the Nextcloud VM,
 # and restarts nextcloud-configure-eurooffice. No cross-VM SSH from this module.
-# The document-server -> Nextcloud return path is declared here as `egress` (firewall:rules).
+# The document-server -> Nextcloud return path is declared here as `egress` (network:rules).
 
 echo ""
 info "${GN}✓${CL} euro-office installation completed successfully."

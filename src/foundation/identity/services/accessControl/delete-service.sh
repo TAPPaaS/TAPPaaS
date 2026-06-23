@@ -5,7 +5,7 @@
 # Reverses install-service.sh:
 #   • Authentik: detach the Proxy provider from the embedded outpost and
 #     delete the Application + Provider for this module.
-#   • Caddy handler ForwardAuth is left alone — firewall:proxy/delete-service.sh
+#   • Caddy handler ForwardAuth is left alone — network:proxy/delete-service.sh
 #     deletes the whole reverse + handler when the consumer goes away, so
 #     turning ForwardAuth off here would just churn config that's about to be
 #     removed anyway.

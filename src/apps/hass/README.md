@@ -86,8 +86,8 @@ used at deploy time; HAOS self-updates from there.
 |------------|---------|
 | `cluster:vm` | VM provisioning |
 | `backup:vm` | Scheduled VM snapshots |
-| `firewall:proxy` | HTTPS reverse proxy |
-| `firewall:rules` | Firewall pinholes to IoT modules |
+| `network:proxy` | HTTPS reverse proxy |
+| `network:rules` | Firewall pinholes to IoT modules |
 
 **IoT module integrations** (optional — only when the module is deployed):
 

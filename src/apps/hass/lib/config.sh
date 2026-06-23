@@ -14,7 +14,7 @@
 # All values derived from TAPPaaS SSoT — no hardcoded IPs or domains:
 #   tappaas.domain  → configuration.json
 #   vmname, zone0   → {module}.json
-#   proxyDomain     → {module}.json config.firewall:proxy
+#   proxyDomain     → {module}.json config.network:proxy
 #   trusted_proxies → zones.json (mgmt CIDR + module zone0 gateway)
 #
 # Usage: install-service.sh <module-name>

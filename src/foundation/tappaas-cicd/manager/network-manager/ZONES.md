@@ -232,7 +232,7 @@ cameras only through an explicit per-module pinhole, never via `access-to`.
 
 A zone may declare an optional `SSID` field — the WiFi network name broadcast on
 that zone's VLAN. It is consumed by the ADR-008 WiFi tooling (see
-[`firewall/scripts/README.md`](../../../firewall/scripts/README.md)):
+[`network/scripts/README.md`](../../../network/scripts/README.md)):
 
 - **`setup-wlan-secrets.sh`** walks the active zones that declare an `SSID`, lets
   you set the real name (replacing the shipped `<PLACEHOLDER>`), and stores the
@@ -254,7 +254,7 @@ access-control values.
 ## Per-Module Firewall Rules
 
 Zone-level rules govern coarse access between zones. **Per-module** rules
-(`firewall:rules` capability) declare each module's ingress/egress contract in
+(`network:rules` capability) declare each module's ingress/egress contract in
 its own JSON and are validated against the zone-level policy:
 
 - Every `ingress.from` zone must be in the destination zone's `pinhole-allowed-from`.
@@ -264,5 +264,5 @@ A peer that is **another module's name** is resolved via an OPNsense host alias
 populated with the peer's FQDN (`<vmname>.<zone0>.internal`), kept fresh by
 OPNsense Unbound against dnsmasq — DHCP IP changes do not require rule rewrites.
 
-See [`firewall/README.md`](../../../firewall/README.md) for the full schema,
+See [`network/README.md`](../../../network/README.md) for the full schema,
 sequence bands, and CLI reference.

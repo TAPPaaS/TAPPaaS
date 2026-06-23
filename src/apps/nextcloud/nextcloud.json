@@ -14,8 +14,8 @@
     "cluster:vm",
     "templates:nixos",
     "backup:vm",
-    "firewall:proxy",
-    "firewall:rules",
+    "network:proxy",
+    "network:rules",
     "identity:identity"
   ],
   "provides": [
@@ -47,7 +47,7 @@
       "cloudInit": true,
       "bridge0": "lan"
     },
-    "firewall:proxy": {
+    "network:proxy": {
       "proxyPort": 80
     }
   }

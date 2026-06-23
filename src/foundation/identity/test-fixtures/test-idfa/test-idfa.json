@@ -23,8 +23,8 @@
   "dependsOn": [
     "cluster:vm",
     "templates:nixos",
-    "firewall:proxy",
+    "network:proxy",
     "identity:accessControl",
-    "firewall:rules"
+    "network:rules"
   ]
 }

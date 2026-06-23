@@ -14,8 +14,8 @@
     "cluster:vm",
     "templates:nixos",
     "backup:vm",
-    "firewall:proxy",
-    "firewall:rules",
+    "network:proxy",
+    "network:rules",
     "nextcloud:fileservice"
   ],
   "provides": [],
@@ -30,7 +30,7 @@
       "image": "8080",
       "bridge0": "lan"
     },
-    "firewall:proxy": {
+    "network:proxy": {
       "proxyPort": 80
     },
     "nextcloud:fileservice": {

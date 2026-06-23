@@ -29,7 +29,7 @@ readonly HA_CONFIG_YAML="${HA_DATA_DIR}/configuration.yaml"
 #
 # Home Assistant rejects proxied requests with HTTP 400 unless the proxy's
 # source IP is listed in http.trusted_proxies (with use_x_forwarded_for).
-# When this module is fronted by firewall:proxy, Caddy reaches HA from the
+# When this module is fronted by network:proxy, Caddy reaches HA from the
 # firewall's gateway IP on the VM's own zone (e.g. srv-home -> 10.2.10.1), so
 # that address must be trusted. HAOS keeps its config inside the VM (not nix),
 # so we inject the block via the qemu guest agent and restart Core.
@@ -39,7 +39,7 @@ readonly HA_CONFIG_YAML="${HA_DATA_DIR}/configuration.yaml"
 # apply it, rather than failing the install.
 configure_ha_trusted_proxy() {
     # Only relevant when this module is actually proxied.
-    if ! jq -e '(.dependsOn // []) | index("firewall:proxy")' \
+    if ! jq -e '(.dependsOn // []) | index("network:proxy")' \
             <<<"${JSON}" >/dev/null 2>&1; then
         return 0
     fi

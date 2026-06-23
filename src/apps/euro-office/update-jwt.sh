@@ -25,7 +25,7 @@ NC_JSON="${CONFIG_DIR}/nextcloud.json"
 [[ -n "${VARIANT}" && -f "${CONFIG_DIR}/nextcloud-${VARIANT}.json" ]] && NC_JSON="${CONFIG_DIR}/nextcloud-${VARIANT}.json"
 
 _fqdn()  { echo "$(jq -r '.vmname' "$1").$(jq -r '.zone0' "$1").internal"; }
-_proxy() { jq -r '.config["firewall:proxy"].proxyDomain // .proxyDomain // empty' "$1"; }
+_proxy() { jq -r '.config["network:proxy"].proxyDomain // .proxyDomain // empty' "$1"; }
 
 EUROOFFICE_HOST="$(_fqdn "${EO_JSON}")"
 NEXTCLOUD_HOST="$(_fqdn "${NC_JSON}")"

@@ -1,0 +1,47 @@
+{
+  "description": "Firewall test VM A — webserver in testAllowA zone (used by firewall/test.sh --deep)",
+  "version": "0.1",
+  "vmname": "test-fw-a",
+  "vmid": 921,
+  "vmtag": "TAPPaaS,Test,Firewall",
+  "node": "tappaas1",
+  "cores": 1,
+  "memory": 2048,
+  "diskSize": "16G",
+  "storage": "tanka1",
+  "imageType": "clone",
+  "image": "8080",
+  "bridge0": "lan",
+  "zone0": "testAllowA",
+  "proxyPort": 8080,
+  "ports": [
+    {
+      "port": 8080,
+      "protocol": "TCP",
+      "description": "Test webserver"
+    }
+  ],
+  "ingress": [
+    {
+      "from": "testAllowB",
+      "ports": [
+        8080
+      ],
+      "description": "test-fw-b in testAllowB reaches the webserver (cross-zone pinhole)"
+    },
+    {
+      "from": "dmz",
+      "ports": [
+        8080
+      ],
+      "description": "Caddy reverse proxy in dmz forwards public hostname"
+    }
+  ],
+  "dependsOn": [
+    "cluster:vm",
+    "templates:nixos",
+    "test-fw-c:web",
+    "network:proxy",
+    "network:rules"
+  ]
+}

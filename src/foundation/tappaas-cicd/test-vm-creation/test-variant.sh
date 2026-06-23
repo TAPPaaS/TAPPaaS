@@ -308,14 +308,14 @@ cat > "${MODULE_DIR}/patmod.json" << 'EOF'
   "vmid": 700,
   "vmtag": "TAPPaaS,Test",
   "node": "tappaas1",
-  "dependsOn": ["cluster:vm", "firewall:proxy"],
+  "dependsOn": ["cluster:vm", "network:proxy"],
   "provides": [],
   "config": {
     "cluster:vm": {
       "cores": 2, "memory": "2048", "diskSize": "8G", "storage": "tanka1",
       "imageType": "clone", "image": "8080", "bridge0": "lan", "zone0": "srvHome"
     },
-    "firewall:proxy": {
+    "network:proxy": {
       "proxyDomain": "patmod.default.example",
       "proxyPort": 80
     }
@@ -324,7 +324,7 @@ cat > "${MODULE_DIR}/patmod.json" << 'EOF'
 EOF
 
 # ── Test PA1: service-owned field override ──────────────────────
-echo "Test PA1: Pattern A source — --proxyDomain lands under config['firewall:proxy']"
+echo "Test PA1: Pattern A source — --proxyDomain lands under config['network:proxy']"
 (
     cd "${MODULE_DIR}"
     export CONFIG_DIR
@@ -336,9 +336,9 @@ if [[ -f "${RESULT}" ]]; then
     assert_eq "normalized proxyDomain = pa1.override.example.com" \
               "pa1.override.example.com" \
               "$(get_field proxyDomain "${RESULT}")"
-    assert_eq "on-disk: under config['firewall:proxy']" \
+    assert_eq "on-disk: under config['network:proxy']" \
               "pa1.override.example.com" \
-              "$(get_field_at '.config["firewall:proxy"].proxyDomain' "${RESULT}")"
+              "$(get_field_at '.config["network:proxy"].proxyDomain' "${RESULT}")"
     assert_eq "on-disk: NOT at top level" \
               "null" \
               "$(get_field_at '.proxyDomain // "null"' "${RESULT}")"
@@ -385,7 +385,7 @@ cat > "${MODULE_DIR}/patmod-noproxy.json" << 'EOF'
   "vmname": "patmod-noproxy",
   "vmid": 701,
   "node": "tappaas1",
-  "dependsOn": ["cluster:vm", "firewall:proxy"],
+  "dependsOn": ["cluster:vm", "network:proxy"],
   "provides": [],
   "config": {
     "cluster:vm": {
@@ -405,9 +405,9 @@ RESULT="${CONFIG_DIR}/patmod-noproxy.json"
 if [[ -f "${RESULT}" ]]; then
     assert_eq "added proxyDomain reads back" \
               "pa4.added.example" "$(get_field proxyDomain "${RESULT}")"
-    assert_eq "added field lives under config['firewall:proxy']" \
+    assert_eq "added field lives under config['network:proxy']" \
               "pa4.added.example" \
-              "$(get_field_at '.config["firewall:proxy"].proxyDomain' "${RESULT}")"
+              "$(get_field_at '.config["network:proxy"].proxyDomain' "${RESULT}")"
 fi
 rm -f "${RESULT}" "${RESULT}.orig"
 echo ""
@@ -429,8 +429,8 @@ if [[ -f "${RESULT}" ]]; then
     assert_eq "proxyDomain set"    "pa5.multi.example"   "$(get_field proxyDomain "${RESULT}")"
     assert_eq "cores under config['cluster:vm']" \
               "8" "$(get_field_at '.config["cluster:vm"].cores' "${RESULT}")"
-    assert_eq "proxyPort under config['firewall:proxy']" \
-              "4000" "$(get_field_at '.config["firewall:proxy"].proxyPort' "${RESULT}")"
+    assert_eq "proxyPort under config['network:proxy']" \
+              "4000" "$(get_field_at '.config["network:proxy"].proxyPort' "${RESULT}")"
 fi
 rm -f "${RESULT}" "${RESULT}.orig"
 echo ""
@@ -451,9 +451,9 @@ if [[ -f "${RESULT}" ]]; then
               "patmod-staging" "$(get_field vmname "${RESULT}")"
     assert_eq "proxyDomain = pa6.from-override.example (override wins)" \
               "pa6.from-override.example" "$(get_field proxyDomain "${RESULT}")"
-    assert_eq "override lands under config['firewall:proxy']" \
+    assert_eq "override lands under config['network:proxy']" \
               "pa6.from-override.example" \
-              "$(get_field_at '.config["firewall:proxy"].proxyDomain' "${RESULT}")"
+              "$(get_field_at '.config["network:proxy"].proxyDomain' "${RESULT}")"
 fi
 rm -f "${RESULT}" "${RESULT}.orig"
 echo ""
@@ -466,7 +466,7 @@ cat > "${MODULE_DIR}/patmod-lxc-first.json" << 'EOF'
   "vmname": "patmod-lxc-first",
   "vmid": 702,
   "node": "tappaas1",
-  "dependsOn": ["cluster:lxc", "cluster:vm", "firewall:proxy"],
+  "dependsOn": ["cluster:lxc", "cluster:vm", "network:proxy"],
   "provides": [],
   "config": {
     "cluster:lxc": {

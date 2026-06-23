@@ -1,6 +1,6 @@
 // Minimal ambient declarations for the Node globals + built-in modules this
 // manager uses, so `tsc` compiles with ZERO npm dependencies (no @types/node).
-// Mirrors the S-TS pilot (firewall/scripts/switch-controller/src/env.d.ts).
+// Mirrors the S-TS pilot (network/scripts/switch-controller/src/env.d.ts).
 // Only the surface actually used here is declared; everything is typed (no
 // implicit `any`) to satisfy strict mode.
 

@@ -40,7 +40,7 @@ Core of the collaboration hub: `provides: nextcloud`, consumed by `coturn`, `nex
 | `cluster:vm` | VM provisioning |
 | `templates:nixos` | NixOS base image |
 | `backup:vm` | Daily backups (PostgreSQL, data) |
-| `firewall:proxy` | HTTPS reverse proxy (public domain derived from `vmname` + `tappaas.domain`) |
+| `network:proxy` | HTTPS reverse proxy (public domain derived from `vmname` + `tappaas.domain`) |
 | `identity:identity` | SSO (Authentik) + secrets |
 
 For installation steps see [INSTALL.md](./INSTALL.md).

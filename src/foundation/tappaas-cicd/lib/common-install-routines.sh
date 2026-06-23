@@ -240,6 +240,15 @@ get_module_dir() {
         return 1
     fi
 
+    # ADR-007 P8: a not-yet-migrated firewall.json still records
+    # .location=.../firewall, but the source dir was renamed to .../network.
+    # If the recorded dir is gone, follow the rename so service resolution
+    # keeps working until the live config is migrated.
+    if [[ ! -d "${location}" && "${location}" == */firewall ]]; then
+        local renamed="${location%/firewall}/network"
+        [[ -d "${renamed}" ]] && location="${renamed}"
+    fi
+
     echo "${location}"
     return 0
 }
@@ -379,13 +388,37 @@ dmz_gateway_ip() {
 # is a no-op that returns the base name, so default installs behave exactly as
 # before.
 #   resolve_provider_module <provider> [variant]
+# ADR-007 P8: the "firewall" module was renamed to "network". A dependency may
+# name either prefix, and a system may be deployed under either config name
+# (network.json on a fresh/migrated system; firewall.json on a not-yet-migrated
+# one). Echo the legacy<->new counterpart for a provider, or empty.
+_legacy_module_alias() {
+    case "$1" in
+        network)  echo "firewall" ;;
+        firewall) echo "network" ;;
+        *)        echo "" ;;
+    esac
+}
+
 resolve_provider_module() {
     local provider="$1" variant="${2:-}"
     if [[ -n "${variant}" && -f "${CONFIG_DIR}/${provider}-${variant}.json" ]]; then
         echo "${provider}-${variant}"
-    else
-        echo "${provider}"
+        return
     fi
+    # Prefer the named provider's own config; else fall back to its firewall<->
+    # network legacy counterpart if THAT is the one actually deployed.
+    if [[ -f "${CONFIG_DIR}/${provider}.json" ]]; then
+        echo "${provider}"
+        return
+    fi
+    local alias
+    alias="$(_legacy_module_alias "${provider}")"
+    if [[ -n "${alias}" && -f "${CONFIG_DIR}/${alias}.json" ]]; then
+        echo "${alias}"
+        return
+    fi
+    echo "${provider}"
 }
 
 check_service_available() {
@@ -597,7 +630,7 @@ validate_zone_active() {
 }
 
 # ── OPNsense module alias naming (#300, ADR-005 #316) ────────────────
-# firewall:rules provisions an OPNsense alias `tm_<vmname>` for a module. OPNsense
+# network:rules provisions an OPNsense alias `tm_<vmname>` for a module. OPNsense
 # alias names must match ^[a-zA-Z_][a-zA-Z0-9_]{0,31}$ — at most 32 chars. This
 # MUST stay byte-identical to rules_manager._module_alias_name (Python), the
 # authority that actually creates the alias.

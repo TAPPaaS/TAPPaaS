@@ -62,7 +62,7 @@ Manual checks:
 
 ## Troubleshooting
 
-**firewall:rules fails during install**
+**network:rules fails during install**
 Zone name contains an underscore (e.g. `srv_home`). See PR #278. Workaround:
 deploy with `--zone0 work` or another zone without underscores.
 
@@ -73,5 +73,5 @@ bash services/config/install-service.sh hass
 ```
 
 **Sonos speakers not discovered**
-Verify mDNS relay: `test-service.sh firewall:discovery hass`.
+Verify mDNS relay: `test-service.sh network:discovery hass`.
 If pinholes are missing, run `install-module.sh hass --force`.

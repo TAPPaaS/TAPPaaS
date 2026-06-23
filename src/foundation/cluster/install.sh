@@ -239,7 +239,7 @@ do_first_node_platform() {
     return 0
   fi
   echo -e "\n${GN}=== [chain 1/4] OPNsense firewall ===${CL}"
-  fetch "${REPO}${BRANCH}/src/foundation/firewall/config-firewall.sh" ~/tappaas/config-firewall.sh 755
+  fetch "${REPO}${BRANCH}/src/foundation/network/config-firewall.sh" ~/tappaas/config-firewall.sh 755
   if ! ~/tappaas/config-firewall.sh --repo "$REPO" --branch "$BRANCH" --chained ${NONINT_ARG}; then
     msg_error "config-firewall.sh did not complete — fix it, then re-run ~/tappaas/config-firewall.sh and continue manually."
     return 1
@@ -482,7 +482,7 @@ msg_ok "Installed TAPPaaS helper scripts (VM + LXC + sanity-check)"
 # install can proceed on this node without re-fetching: the firewall bootstrap,
 # the NixOS VM template, and the tappaas-cicd mothership.
 msg_info "Staging firewall / platform installers + template/cicd configs"
-fetch "${REPO}${BRANCH}/src/foundation/firewall/config-firewall.sh"    ~/tappaas/config-firewall.sh    744
+fetch "${REPO}${BRANCH}/src/foundation/network/config-firewall.sh"    ~/tappaas/config-firewall.sh    744
 fetch "${REPO}${BRANCH}/src/foundation/cluster/install-platform.sh"    ~/tappaas/install-platform.sh   744
 fetch "${REPO}${BRANCH}/src/foundation/templates/tappaas-nixos.json"   ~/tappaas/tappaas-nixos.json    644
 fetch "${REPO}${BRANCH}/src/foundation/tappaas-cicd/tappaas-cicd.json"  ~/tappaas/tappaas-cicd.json     644

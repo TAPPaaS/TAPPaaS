@@ -77,8 +77,8 @@ if [[ "${CONNECTOR}" == "onlyoffice" ]]; then
     # latter pointed OnlyOffice at a non-trusted host → "DocumentServer unreachable".
     # Fall back to the old form only if no proxyDomain is set. Pattern-A flattens the
     # field to top-level (#207); also accept the nested config form.
-    EO_PROXY=$(jq -r '.config["firewall:proxy"].proxyDomain // .proxyDomain // empty' "${CONSUMER_JSON}" 2>/dev/null || true)
-    NC_PROXY=$(jq -r '.config["firewall:proxy"].proxyDomain // .proxyDomain // empty' "${NEXTCLOUD_JSON}" 2>/dev/null || true)
+    EO_PROXY=$(jq -r '.config["network:proxy"].proxyDomain // .proxyDomain // empty' "${CONSUMER_JSON}" 2>/dev/null || true)
+    NC_PROXY=$(jq -r '.config["network:proxy"].proxyDomain // .proxyDomain // empty' "${NEXTCLOUD_JSON}" 2>/dev/null || true)
     EURO_OFFICE_URL="https://${EO_PROXY:-${EO_VMNAME}.${TAPPAAS_DOMAIN}}"
     EURO_OFFICE_INTERNAL_URL="http://${EO_HOST}/"
     NEXTCLOUD_PUBLIC_URL="${NC_PROXY:-${VMNAME}.${TAPPAAS_DOMAIN}}"

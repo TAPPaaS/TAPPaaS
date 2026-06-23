@@ -59,7 +59,7 @@ Image: `ghcr.io/euro-office/documentserver:v9.3.1` — pinned (immutable semver)
 | `cluster:vm` | VM provisioning |
 | `templates:nixos` | NixOS base image |
 | `backup:vm` | Daily document backups |
-| `firewall:proxy` | HTTPS reverse proxy |
+| `network:proxy` | HTTPS reverse proxy |
 | `nextcloud:fileservice` | The Nextcloud instance this server edits documents for |
 
 For installation, customisation, and troubleshooting see [INSTALL.md](./INSTALL.md).

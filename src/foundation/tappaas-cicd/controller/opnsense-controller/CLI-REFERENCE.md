@@ -13,7 +13,7 @@ This package provides six command-line tools:
 | `dns-manager` | DNS host entry management for Dnsmasq |
 | `zone-manager` | Automated zone configuration from zones.json + static pinhole-allowed-from policy validator (issue #163) |
 | `caddy-manager` | Caddy reverse proxy domain and handler management |
-| `rules-manager` | Per-module firewall rules compiled from `module.json` (`firewall:rules` capability) |
+| `rules-manager` | Per-module firewall rules compiled from `module.json` (`network:rules` capability) |
 
 ## Requirements
 
@@ -440,7 +440,7 @@ The DNS Manager provides a dedicated CLI for managing DNS host entries in OPNsen
 
 ### Caddy Manager (`caddy-manager` command)
 
-The Caddy Manager provides a dedicated CLI for managing Caddy reverse proxy domains and handlers on OPNsense. It is used by the `firewall:proxy` service scripts to automate proxy setup for TAPPaaS modules.
+The Caddy Manager provides a dedicated CLI for managing Caddy reverse proxy domains and handlers on OPNsense. It is used by the `network:proxy` service scripts to automate proxy setup for TAPPaaS modules.
 
 #### CLI Usage
 
@@ -823,7 +823,7 @@ latter forcing exit 2.
 
 ### Rules Manager (`rules-manager` command)
 
-The Rules Manager compiles per-module firewall rules from `module.json` into OPNsense, providing the `firewall:rules` capability. It is a TAPPaaS-aware orchestrator on top of the lower-level `FirewallManager`: it understands `ports`, `ingress`, `egress`, and `aliases` declarations, validates them against zone-level policy from `zones.json`, and applies the resulting rules atomically using description-based idempotent upsert.
+The Rules Manager compiles per-module firewall rules from `module.json` into OPNsense, providing the `network:rules` capability. It is a TAPPaaS-aware orchestrator on top of the lower-level `FirewallManager`: it understands `ports`, `ingress`, `egress`, and `aliases` declarations, validates them against zone-level policy from `zones.json`, and applies the resulting rules atomically using description-based idempotent upsert.
 
 Module-named peers in `from`/`to` are resolved by creating an OPNsense host alias `tappaas_module_<peer>` populated with the peer's FQDN (`<peer>.<zone0>.internal`). Any hyphens in the peer's vmname are normalised to underscores because OPNsense alias names disallow hyphens. OPNsense Unbound resolves the FQDN against dnsmasq, so DHCP IP changes flow through transparently without rule rewrites.
 

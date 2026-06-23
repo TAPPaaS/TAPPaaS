@@ -3,7 +3,7 @@
 # TAPPaaS Identity Access Control Service — Install (issue #45).
 #
 # Runs when a module declares `dependsOn: ["identity:accessControl"]`. The
-# module's firewall:proxy install-service must have run first (in dependsOn
+# module's network:proxy install-service must have run first (in dependsOn
 # order) so the Caddy reverse + handler already exist; this script then layers
 # Authentik forward-auth on top:
 #
@@ -43,7 +43,7 @@ VMNAME="$(get_config_value 'vmname' '')"
 ZONE0="$(get_config_value 'zone0' '')"
 PROXY_DOMAIN="$(get_config_value 'proxyDomain' '')"
 PROXY_PORT="$(get_config_value 'proxyPort' '')"
-# Must match the description firewall:proxy/install-service.sh sets on the
+# Must match the description network:proxy/install-service.sh sets on the
 # handler — that's the natural key we use to locate the row.
 DESCRIPTION="TAPPaaS: ${MODULE}"
 
@@ -90,7 +90,7 @@ info "  Caddy: looking up existing handler for ${PROXY_DOMAIN}"
 HANDLE_UUID="$(curl -ksS -u "$OPNSENSE_AUTH" "${CADDY_API}/ReverseProxy/searchHandle" \
     | jq -r --arg d "$DESCRIPTION" '.rows[] | select(.description==$d) | .uuid' | head -1)"
 [[ -n "$HANDLE_UUID" ]] \
-    || die "no Caddy handler with description '${DESCRIPTION}' (firewall:proxy install-service.sh runs first?)"
+    || die "no Caddy handler with description '${DESCRIPTION}' (network:proxy install-service.sh runs first?)"
 
 info "  Caddy: enabling ForwardAuth=1 on handler ${HANDLE_UUID:0:8}..."
 curl -ksS -u "$OPNSENSE_AUTH" -X POST "${CADDY_API}/ReverseProxy/setHandle/${HANDLE_UUID}" \

@@ -27,8 +27,8 @@
   "dependsOn": [
     "cluster:vm",
     "templates:nixos",
-    "firewall:proxy",
+    "network:proxy",
     "identity:identity",
-    "firewall:rules"
+    "network:rules"
   ]
 }

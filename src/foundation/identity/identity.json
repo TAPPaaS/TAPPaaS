@@ -14,7 +14,7 @@
     "cluster:ha",
     "templates:nixos",
     "backup:vm",
-    "firewall:proxy"
+    "network:proxy"
   ],
   "provides": [
     "accessControl",
@@ -30,7 +30,7 @@
       "image": "8080",
       "bridge0": "lan"
     },
-    "firewall:proxy": {
+    "network:proxy": {
       "proxyPort": 9000,
       "proxyAllowedZones": [
         "internet"

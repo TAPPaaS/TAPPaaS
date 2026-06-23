@@ -67,7 +67,7 @@ Daily automated backups: PostgreSQL dump + data-dir at 02:00–02:30, 30-day ret
 ## Troubleshooting — install-module failures
 
 **install-module.sh exits with dependency error**
-A required service is not installed (`cluster:vm`, `templates:nixos`, `backup:vm`, `firewall:proxy`,
+A required service is not installed (`cluster:vm`, `templates:nixos`, `backup:vm`, `network:proxy`,
 `identity:identity`). Install the missing module first, then retry.
 
 **Nextcloud not reachable after first boot**

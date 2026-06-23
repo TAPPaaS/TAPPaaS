@@ -13,7 +13,7 @@
   "dependsOn": [
     "backup:vm",
     "cluster:vm",
-    "firewall:rules",
+    "network:rules",
     "nextcloud:fileservice",
     "templates:nixos"
   ],

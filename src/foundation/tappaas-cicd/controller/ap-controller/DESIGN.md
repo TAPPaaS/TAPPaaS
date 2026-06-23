@@ -25,7 +25,7 @@ rewrites. The active VLAN set and per-zone SSID/VLAN come from `zones.json`.
 
 ### Vendor-plugin model
 
-Vendor automation lives in `firewall/scripts/plugins/<vendor>.sh`, with
+Vendor automation lives in `network/scripts/plugins/<vendor>.sh`, with
 `manual.sh` as the fallback. A plugin is selected per-AP by sourcing each plugin
 and asking `plugin_supports <vendor>`. Plugins expose `plugin_ap_interrogate`
 (read live AP state) and `plugin_ap_apply` (push SSID/VLAN changes); `manual.sh`
@@ -55,7 +55,7 @@ exits non-zero on failure.
 ## Pending / not yet implemented
 
 - **Vendor plugins are limited.** Only `unifi.sh` and the `manual.sh` fallback
-  exist in `firewall/scripts/plugins/`. Any other AP brand falls through to
+  exist in `network/scripts/plugins/`. Any other AP brand falls through to
   `manual.sh`, so `apply` prints instructions rather than programming the AP.
 - The validations in `delta` rely on the AP's `link` (uplink switch/port) being
   recorded; an AP without a linked uplink cannot have its uplink-VLAN coverage

@@ -121,7 +121,7 @@ else
   exit 1
 fi
 
-# Seed zones.json from the canonical source (firewall module) only on first install.
+# Seed zones.json from the canonical source (network-manager) only on first install.
 # Existing /home/tappaas/config/zones.json may contain operator customizations and
 # must not be overwritten here; ongoing release drift is reconciled by
 # `network-manager zones-merge` (run from pre-update.sh on every update-tappaas;
@@ -131,7 +131,7 @@ fi
 # here is only a transient pre-rename placeholder.
 if [ ! -f /home/tappaas/config/zones.json ]; then
   cp /home/tappaas/TAPPaaS/src/foundation/tappaas-cicd/manager/network-manager/zones.json /home/tappaas/config/zones.json
-  _info "Seeded /home/tappaas/config/zones.json from firewall module"
+  _info "Seeded /home/tappaas/config/zones.json from network-manager"
 else
   _info "Preserving existing /home/tappaas/config/zones.json (not overwriting)"
 fi
@@ -216,26 +216,29 @@ else
   _info "Environments already initialised (config/environments/${NAME}.json exists) — skipping zones-init/environments."
 fi
 
-# Install the cluster and firewall jsons
+# Install the cluster and network jsons
 cd ../cluster || { _error "Cluster directory not found!"; exit 1; }
 /home/tappaas/bin/copy-update-json.sh cluster
 cd ../templates || { _error "Templates directory not found!"; exit 1; }
 /home/tappaas/bin/copy-update-json.sh templates
-cd ../firewall || { _error "Firewall directory not found!"; exit 1; }
+# ADR-007 P8: the firewall module is renamed to "network" (deploys config/network.json).
+# The OPNsense HOST is still reached as FIREWALL_FQDN (firewall.mgmt.internal) — the
+# host rename is the deferred supervised migration, so that lifeline is unchanged here.
+cd ../network || { _error "Network directory not found!"; exit 1; }
 FIREWALL_AVAILABLE=true
 if ! ping -c 1 -W 2 "$FIREWALL_FQDN" >/dev/null 2>&1; then
     FIREWALL_AVAILABLE=false
     echo ""
     _warn "OPNsense firewall ($FIREWALL_FQDN) is not reachable."
-    _warn "Deploying firewall module with firewallType=NONE."
+    _warn "Deploying network module with firewallType=NONE."
     _warn "You will need to configure reverse proxy and firewall rules manually."
 fi
-/home/tappaas/bin/copy-update-json.sh firewall
+/home/tappaas/bin/copy-update-json.sh network
 if [[ "$FIREWALL_AVAILABLE" == "false" ]]; then
     # Override: remove VM dependencies and mark as non-OPNsense deployment
     tmp_fw=$(mktemp)
-    jq '.dependsOn = [] | .firewallType = "NONE"' /home/tappaas/config/firewall.json > "$tmp_fw" \
-        && mv "$tmp_fw" /home/tappaas/config/firewall.json
+    jq '.dependsOn = [] | .firewallType = "NONE"' /home/tappaas/config/network.json > "$tmp_fw" \
+        && mv "$tmp_fw" /home/tappaas/config/network.json
 fi
 cd ../tappaas-cicd || { _error "TAPPaaS-CICD directory not found!"; exit 1; }
 /home/tappaas/bin/copy-update-json.sh tappaas-cicd
@@ -269,8 +272,8 @@ if [[ "$FIREWALL_AVAILABLE" == "true" ]]; then
         }
     fi
 
-    # Set up Caddy on the firewall BEFORE updating the firewall module. The
-    # firewall module's firewall:proxy update-service calls the OPNsense Caddy
+    # Set up Caddy on the firewall BEFORE updating the network module. The
+    # network module's network:proxy update-service calls the OPNsense Caddy
     # API (/api/caddy/...), which 404s until the os-caddy plugin is installed —
     # and installing it is setup-caddy.sh's job. (It relies on opnsense-controller,
     # which the tappaas-cicd update above already installed.) On a long-lived
@@ -283,13 +286,13 @@ if [[ "$FIREWALL_AVAILABLE" == "true" ]]; then
         warn "Caddy setup encountered issues. Please review and complete manually."
     }
 
-    # Update the firewall module (now that os-caddy/the Caddy API is available).
-    /home/tappaas/bin/update-module.sh firewall --no-snapshot
+    # Update the network module (now that os-caddy/the Caddy API is available).
+    /home/tappaas/bin/update-module.sh network --no-snapshot
 else
     echo ""
     warn "Skipping firewall update (no OPNsense firewall)."
     warn "Skipping Caddy reverse proxy setup (no OPNsense firewall)."
-    warn "When modules with firewall:proxy dependency are installed,"
+    warn "When modules with network:proxy dependency are installed,"
     warn "you will see manual configuration instructions for your firewall."
 fi
 

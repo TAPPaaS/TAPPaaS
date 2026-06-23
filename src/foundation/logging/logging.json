@@ -13,7 +13,7 @@
     "cluster:vm",
     "templates:nixos",
     "backup:vm",
-    "firewall:proxy"
+    "network:proxy"
   ],
   "provides": [],
   "config": {
@@ -26,7 +26,7 @@
       "image": "8080",
       "bridge0": "lan"
     },
-    "firewall:proxy": {
+    "network:proxy": {
       "proxyPort": 3000,
       "proxyAllowedZones": [
         "mgmt"

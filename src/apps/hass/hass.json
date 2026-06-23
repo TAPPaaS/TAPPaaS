@@ -12,8 +12,8 @@
   "dependsOn": [
     "cluster:vm",
     "backup:vm",
-    "firewall:proxy",
-    "firewall:rules",
+    "network:proxy",
+    "network:rules",
     "alfen:ui",
     "alfen:discovery",
     "alfen:modbus",
@@ -37,7 +37,7 @@
       "sshAccess": false,
       "bridge0": "lan"
     },
-    "firewall:rules": {
+    "network:rules": {
       "ports": [
         {
           "port": 8123,
@@ -46,7 +46,7 @@
         }
       ]
     },
-    "firewall:proxy": {
+    "network:proxy": {
       "proxyPort": 8123,
       "proxyAllowedZones": [
         "mgmt",
