@@ -150,6 +150,16 @@ So a brand-new `myOrg` system has an Active footprint of `myOrg`, `myOrg-private
 `myOrg-guest`, `iotLocal`, `iotCloud`, `iotCams` (+ `dmz` Mandatory; `mgmt`/`netbird`
 Manual); everything else is Inactive/Disabled — defined, ready to activate.
 
+### Zone stability — installed modules stay put
+
+A zone kept Active by the occupancy guard (a legacy zone such as `srvWork` still
+hosting deployed modules) is the **intended steady state**, not a migration TODO.
+Already-installed modules **stay in their zone**; the network lifecycle never moves
+a running service to another zone and never auto-inactivates a zone that has live
+services. To relocate a module to a different zone, **back up its data, uninstall
+it, and reinstall it in the target zone** — there is no in-place re-home (a zone
+change means a new VLAN/subnet/IP and re-wired dependents).
+
 ### Three files, run on every update (rename-aware 3-way merge)
 
 Keeping the rename robust across releases uses three files in `${CONFIG_DIR}`,

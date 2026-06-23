@@ -27,18 +27,19 @@ Each stage is **not done** until it passes the gate below. The driver updates th
 
 ## Remaining outstanding
 
-All work not yet done, in **proposed order**. (Everything else — the S0–S9 build — is recorded in **Done Work** below.) Items 1–2 finish the in-flight cutover; 3–5 are the architecture arc that build on each other; 6–7 are deferred and best done last.
+All work not yet done, in **proposed order**. (Everything else — the S0–S9 build — is recorded in **Done Work** below.) Item 1 finishes the SSO cutover; 2 is the network front-door follow-up; 3–5 are the architecture arc that build on each other; 6–7 are deferred and best done last.
+
+> **Decided (zone stability, 2026-06-23):** already-installed modules **stay in their zones**. The occupancy guard keeps a zone Active while a deployed module references it (e.g. `srvWork` stays Active for nextcloud/nextcloud-hpb/euro-office) — and that is the intended end state, NOT a TODO. Moving a module to another zone is done by **backup data → uninstall → reinstall** in the target zone, never an in-place re-home. A zone that is active with services on a legacy/installed system is never auto-inactivated. (This retires the former "legacy-zone sunset" item — there is no forced migration.)
 
 | # | Deliverable | Notes |
 |---|-------------|-------|
 | 1 | **SSO finalisation** — (a)+(b) ✅ done | ✅ (a) `install-service.sh` now binds `ALLOW_GROUPS=("users")` (the OIDC claim carries memberships, not the RBAC roles; providesAdminRole adds `<module>-admins`); ✅ (b) `root` Authentik password set (744b0eb). **Remaining (cosmetic):** (c) remove the legacy `tappaas-*` + inert `user`/`admin`/`root` bindings on the live nextcloud app — harmless (empty/inert groups; effective binding is `users`); needs the Authentik UI or a future `app-unbind` CLI (no unbind command today). |
-| 2 | **Legacy-zone sunset (S6 remainder)** | Migrate the 3 `srvWork`-pinned modules (nextcloud / nextcloud-hpb / euro-office) to the default zone, then inactivate `srvWork` (the occupancy guard keeps it Active until then). |
-| 3 | **S5 network front-door follow-ups** | Register the physical switch; single-front-door consolidation (port `distribute_zones` + delete-preflight fully into network-manager); switch-controller TS/bash consolidation. |
-| 4 | **All-managers-to-TypeScript migration** | The arc items 5–6 build on (people + network are TS; site / environment / module / health / backup are bash). |
-| 5 | **Finish the `validate` verb convention** | Port people + network `validate.sh` → a `<manager> validate` TS subcommand and retire the bash; implement a real `validate-module.sh` (currently a stub); reconcile `manager/TEMPLATE` + the P10 contract test once managers are TS. Rides on #4. |
-| 6 | **Managers expose CRUD verbs** | add / update / delete / list per manager (people org/group/user/role, site fields + nodes, environments, module config, zones) so admins manage via the CLI and never hand-edit JSON; each write validates first. Rides on #4–#5. |
-| 7 | **#294 — zone-aligned VMID ranges** | Derive/allocate a VM's VMID from its zone/environment. Needs the env↔zone model fully settled. |
-| 8 | **#380 — document & revalidate the install sequence** | End-to-end fresh-install write-up against the post-cutover reality. Do **last**, so it documents the settled state rather than a moving target. |
+| 2 | **S5 network front-door follow-ups** | Register the physical switch; single-front-door consolidation (port `distribute_zones` + delete-preflight fully into network-manager); switch-controller TS/bash consolidation. |
+| 3 | **All-managers-to-TypeScript migration** | The arc items 4–5 build on (people + network are TS; site / environment / module / health / backup are bash). |
+| 4 | **Finish the `validate` verb convention** | Port people + network `validate.sh` → a `<manager> validate` TS subcommand and retire the bash; implement a real `validate-module.sh` (currently a stub); reconcile `manager/TEMPLATE` + the P10 contract test once managers are TS. Rides on #3. |
+| 5 | **Managers expose CRUD verbs** | add / update / delete / list per manager (people org/group/user/role, site fields + nodes, environments, module config, zones) so admins manage via the CLI and never hand-edit JSON; each write validates first. Rides on #3–#4. |
+| 6 | **#294 — zone-aligned VMID ranges** | Derive/allocate a VM's VMID from its zone/environment. Needs the env↔zone model fully settled. |
+| 7 | **#380 — document & revalidate the install sequence** | End-to-end fresh-install write-up against the post-cutover reality. Do **last**, so it documents the settled state rather than a moving target. |
 
 > **S8 complete (incl. step 3 — the supervised live firewall→network migration, 2026-06-23):** config/firewall.json→network.json (vmname network), Proxmox VM 110 renamed to `network`, `network.mgmt.internal` added (both it and the `firewall.mgmt.internal` lifeline resolve to 10.0.0.1). Two D5/script leftovers found + fixed (proxy services no longer require configuration.json; migration dns-manager call corrected). Snapshots `pre_network_migration_*` on vmid 110+130. The full hostname switch is a **post-conversion clean-up** (below).
 
