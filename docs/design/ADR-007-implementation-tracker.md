@@ -59,7 +59,28 @@ Work intentionally deferred — not part of the current stage sequence; revisit 
 
 ---
 
-## Phase D prerequisite tree — retiring `configuration.json`
+## Phase D prerequisite tree — retiring `configuration.json` ✅ COMPLETE
+
+**Status (done):** D1 install site.json-native, DA rename-aware zones lifecycle,
+D2 people model + retire roles-ensure/user.sh, D3 retire variant-manager + drop all
+configuration.json fallbacks, D4 field-defs→schemas, D5 delete configuration.json +
+configuration-fields.json. The last runtime reader (the Python `update-tappaas`) was
+repointed to `site.json` (caught by the post-delete end-to-end run). Verified WITHOUT
+configuration.json: every helper resolves from site.json/environments/cert-refids;
+cicd fast gate 33/0; `update-tappaas --force --dry-run` EXIT 0 (full plan,
+automaticReboot read from site.json); zones-check 5 ok/0/0; 3 services up; branch
+ADR007. Live config keeps backups (configuration.json.bak, a dated .RETIRED copy,
+.cutover-backup-*).
+
+**Remaining forward step (not a blocker):** the LIVE Authentik people migration —
+`people-manager sync` to create the new `users`/`admin`/`user`/`root` groups + users,
+then re-bind deployed SSO apps from the legacy `tappaas-*` groups to `user/admin/root`,
+then live SSO test. The D2 CODE is done; live SSO still runs on the legacy groups until
+this is applied (so nothing is broken). SSO-sensitive — do it deliberately + tested.
+
+---
+
+### Original ordered plan (for reference)
 
 The reader migration (Phase B) + repoint (B2) are done, but `configuration.json`
 cannot be deleted yet: it is still what a **fresh install creates** and several
