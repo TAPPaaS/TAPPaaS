@@ -25,8 +25,9 @@ ln -sfn "${out}/bin/network-manager" "${bin}/network-manager"
 echo "  linked ${bin}/network-manager -> ${out}/bin/network-manager"
 
 # ── link the legacy bash entry programs (not retired yet) ─────────────
-# zone-reconcile + the *.sh tools, EXCEPT the verb scripts and the migration
-# helpers (apply-zones-merge / migrate-zone-keys-*), which are not on-PATH tools.
+# zone-reconcile + the *.sh tools, EXCEPT the verb scripts and the one-shot
+# migration helper (migrate-zone-keys-*), which are not on-PATH tools. (The old
+# apply-zones-merge.sh was retired in favour of `network-manager zones-merge`.)
 link_bash() {
     local src="$1" name="$2"
     [ -f "${src}" ] || { echo "  skip: ${src} not found"; return 0; }

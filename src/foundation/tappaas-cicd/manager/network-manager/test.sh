@@ -80,7 +80,30 @@ if [[ -f "${UNIT_TSCONFIG}" ]]; then
         else
             bad "zones-init CLI smoke FAILED"
         fi
-        rm -rf -- "$(dirname "${ZINIT_OUT}")" "${ZINIT_CFG}"
+        # Design A: zones-init also seeds zones.rename.json + zones.json.orig
+        # beside a custom --out, all in the renamed namespace (current==orig==rename).
+        ZINIT_DIR="$(dirname "${ZINIT_OUT}")"
+        if [[ -f "${ZINIT_DIR}/zones.rename.json" && -f "${ZINIT_DIR}/zones.json.orig" ]] \
+            && run_ts "node -e 'const fs=require(\"fs\");const a=fs.readFileSync(\"${ZINIT_OUT}\",\"utf8\");const r=fs.readFileSync(\"${ZINIT_DIR}/zones.rename.json\",\"utf8\");const o=fs.readFileSync(\"${ZINIT_DIR}/zones.json.orig\",\"utf8\");const rj=JSON.parse(r);process.exit((a===r&&a===o&&rj.acme&&!rj.srv)?0:1)'" >/dev/null 2>&1; then
+            ok "zones-init seeds zones.rename.json + zones.json.orig (current==orig==rename, renamed namespace)"
+        else
+            bad "zones-init 3-file seeding (Design A) FAILED"
+        fi
+        rm -rf -- "${ZINIT_DIR}" "${ZINIT_CFG}"
+
+        # ── zones-merge CLI smoke (offline; Design A; never live config) ──
+        # On a fresh renamed install (current==orig==rename), a merge must NOT
+        # re-introduce srv/home/guest and must produce no duplicate vlantags.
+        ZM_DIR="$(mktemp -d)"
+        printf '{ "name": "acme" }\n' > "${ZM_DIR}/site.json"
+        run_ts "NM_TEMPLATE='${HERE}/zones.json' node '${DIST_TEST}/src/main.js' zones-init --name acme --from '${HERE}/zones.json' --out '${ZM_DIR}/zones.json' --config-dir '${ZM_DIR}'" >/dev/null 2>&1
+        if run_ts "NM_TEMPLATE='${HERE}/zones.json' node '${DIST_TEST}/src/main.js' zones-merge --config-dir '${ZM_DIR}' --template '${HERE}/zones.json'" >/dev/null 2>&1 \
+            && run_ts "node -e 'const z=require(\"${ZM_DIR}/zones.json\");const dup=Object.entries(z).filter(([k,v])=>v&&typeof v===\"object\"&&!Array.isArray(v)&&typeof v.vlantag===\"number\"&&v.vlantag>0).reduce((m,[k,v])=>{m[v.vlantag]=(m[v.vlantag]||0)+1;return m;},{});const hasDup=Object.values(dup).some(n=>n>1);process.exit((!z.srv&&!z.home&&!z.guest&&z.acme&&!hasDup)?0:1)'" >/dev/null 2>&1; then
+            ok "zones-merge CLI: fresh renamed install does NOT re-add srv/home/guest, no duplicate vlantags"
+        else
+            bad "zones-merge CLI smoke FAILED (re-added a renamed-away zone or created a duplicate vlantag)"
+        fi
+        rm -rf -- "${ZM_DIR}"
 
         # ── zones-check CLI smoke (offline; temp fixtures, never live config) ──
         # Good fixture (the distributed template, default-active mgmt) exits 0;

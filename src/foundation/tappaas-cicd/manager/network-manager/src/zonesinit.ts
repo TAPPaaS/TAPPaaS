@@ -223,3 +223,20 @@ export function zonesInit(
 
   return { raw: out, alreadyInitialised: false, keptActive };
 }
+
+// Convenience wrapper that both zones-init and zones-merge use: read the repo
+// template from disk and apply the pure §B rename transform, returning the
+// renamed raw document. This is the single shared entry point so the two
+// lifecycle commands cannot diverge on how the rename is computed.
+//
+// `force` is always true here: zones-merge re-bases the upstream template into
+// the renamed namespace every run, and the template (which still ships
+// srv/home/guest) is never "already initialised". keepActive is the occupancy
+// guard (legacy zones still hosting deployed modules stay Active).
+export function renameTemplateFile(
+  templateFile: string,
+  name: string,
+  keepActive: ReadonlySet<string> = new Set<string>(),
+): ZonesInitResult {
+  return zonesInit(parseTemplate(templateFile), name, true, keepActive);
+}

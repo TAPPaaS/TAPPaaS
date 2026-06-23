@@ -124,7 +124,11 @@ fi
 # Seed zones.json from the canonical source (firewall module) only on first install.
 # Existing /home/tappaas/config/zones.json may contain operator customizations and
 # must not be overwritten here; ongoing release drift is reconciled by
-# apply-zones-merge.sh (sourced from pre-update.sh on every update-tappaas; #209).
+# `network-manager zones-merge` (run from pre-update.sh on every update-tappaas;
+# #209 / ADR-007 Design A). NOTE: on a fresh install the `zones-init --name`
+# step further below OVERWRITES both this raw zones.json and zones.json.orig with
+# the renamed-namespace version (and writes zones.rename.json), so the raw seed
+# here is only a transient pre-rename placeholder.
 if [ ! -f /home/tappaas/config/zones.json ]; then
   cp /home/tappaas/TAPPaaS/src/foundation/tappaas-cicd/manager/network-manager/zones.json /home/tappaas/config/zones.json
   _info "Seeded /home/tappaas/config/zones.json from firewall module"
@@ -197,11 +201,16 @@ fi
 # The managers are built+linked now (above), so transform zones.json for THIS
 # installation — network-manager zones-init renames the distributed 'srv' zone to
 # the system name, inactivates the unused legacy zones, and rewrites references —
-# and create the always-required mgmt + default (<NAME>) environments. The raw
-# zones.json seeded above is overwritten by the transform; zones.json.orig stays
-# the raw template (the 3-way-merge baseline, so the rename is preserved on
-# updates). Guarded on the default environment file so a re-run does not clobber a
-# customised zones.json.
+# and create the always-required mgmt + default (<NAME>) environments.
+#
+# ADR-007 "Design A": zones-init now seeds ALL THREE files in the renamed
+# namespace — zones.json (current), zones.json.orig (merge baseline), and
+# zones.rename.json (the renamed source). So the raw zones.json/zones.json.orig
+# seeded above are BOTH overwritten with the renamed version, giving
+# current == orig == rename on a fresh install. This is what stops the daily
+# `zones-merge` from re-introducing srv/home/guest (the old duplicate-VLAN
+# corruption). Guarded on the default environment file so a re-run does not
+# clobber a customised zones.json.
 if [ ! -f "/home/tappaas/config/environments/${NAME}.json" ]; then
   _info "Initialising zones for '${NAME}' (network-manager zones-init)..."
   /home/tappaas/bin/network-manager zones-init --name "$NAME" --force \

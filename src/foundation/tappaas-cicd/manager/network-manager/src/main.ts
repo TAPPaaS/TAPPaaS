@@ -18,6 +18,7 @@
 //   network-manager zone delete <name> [--check]
 //   network-manager reconcile [--apply] [--only <plane>]
 //   network-manager zones-init --name <N> [--from <tpl>] [--out <f>] [--force]
+//   network-manager zones-merge [--diff] [--config-dir <dir>] [--template <tpl>]
 //   network-manager zones-distribute [--zones <file>] [--dry-run]
 //
 // Exit codes: ok=0, error/drift-after-apply=1.
@@ -29,17 +30,21 @@ import { reconcileAll } from "./reconcile";
 import { Plane, PLANE_ORDER, PlaneClient, ReconcileReport } from "./types";
 import {
   defaultConfigDir,
+  defaultOrigFile,
+  defaultRenameFile,
   defaultTemplateFile,
   defaultZonesFile,
   getZone,
   listZoneNames,
   loadZones,
+  readSiteName,
   zoneExists,
 } from "./zones";
 import { addZone, deleteZone } from "./zonelifecycle";
-import { parseTemplate, zonesInit } from "./zonesinit";
+import { parseTemplate, renameTemplateFile, zonesInit } from "./zonesinit";
 import { zonesCheck, occupiedZones } from "./zonescheck";
 import { distributeZones, shouldAutoDistribute } from "./distribute";
+import { runZonesMerge } from "./zonesmerge";
 
 const VERSION = "0.1.0";
 
@@ -71,6 +76,7 @@ Usage:
   network-manager zone delete <name> [--check]
   network-manager reconcile [--apply] [--only <plane>]
   network-manager zones-init --name <N> [--from <tpl>] [--out <f>] [--force]
+  network-manager zones-merge [--diff] [--config-dir <dir>] [--template <tpl>]
   network-manager zones-check [--zones <file>] [--config-dir <dir>] [--strict]
   network-manager zones-distribute [--zones <file>] [--dry-run]
 
@@ -93,6 +99,16 @@ zones-init options (install-time template transform; offline):
   --from <tpl>        source template (default: zones.json shipped with the bin)
   --out <f>           output file (default: \$TAPPAAS_CONFIG/zones.json)
   --force             re-apply from the template even if already initialised
+
+zones-merge options (rename-aware 3-way reconciliation; ADR-007 Design A;
+replaces apply-zones-merge.sh — re-bases the repo template into THIS install's
+renamed namespace, then 3-way-merges zones.json vs zones.json.orig vs
+zones.rename.json; does NOT distribute by itself):
+  --config-dir <dir>  config dir holding site.json + the three zones files
+                      (default \$TAPPAAS_CONFIG)
+  --template <tpl>    repo zones.json template (default: shipped template)
+  --from <tpl>        alias for --template
+  --diff              show what would change; write nothing
 
 zones-check options (offline consistency audit; read-only; run at update):
   --zones <file>      zones.json to check (default \$TAPPAAS_CONFIG/zones.json)
@@ -137,6 +153,8 @@ interface Opts {
   // zones-distribute + auto-distribute opt-out
   dryRun: boolean;
   noDistribute: boolean;
+  // zones-merge
+  diff: boolean;
 }
 
 function isPlane(s: string): s is Plane {
@@ -155,6 +173,7 @@ function parseOpts(args: string[]): Opts {
     strict: false,
     dryRun: false,
     noDistribute: false,
+    diff: false,
   };
   for (let i = 0; i < args.length; i++) {
     const a = args[i];
@@ -212,7 +231,11 @@ function parseOpts(args: string[]): Opts {
         o.name = next();
         break;
       case "--from":
+      case "--template":
         o.from = next();
+        break;
+      case "--diff":
+        o.diff = true;
         break;
       case "--out":
         o.out = next();
@@ -392,8 +415,23 @@ function cmdZonesInit(opts: Opts): void {
     return;
   }
 
+  // Design A 3-file seeding. The renamed template is the canonical seed for all
+  // three files so a fresh install has current == orig in the renamed namespace
+  // (which is exactly what makes zones-merge stable — see zonesmerge.ts). When
+  // --out targets the live ${CONFIG_DIR}/zones.json we also materialise
+  // zones.rename.json + zones.json.orig beside it; when --out is a custom/test
+  // path we seed the siblings relative to that path's directory so tests stay
+  // self-contained and never touch live config.
   writeJsonAtomic(out, result.raw);
   info(`  ${GN}✓${CL} zones-init: wrote '${out}' (default zone '${name}', '${name}-private', '${name}-guest')`);
+
+  const outDir = dirname(out);
+  const renameFile = out === defaultZonesFile() ? defaultRenameFile() : join(outDir, "zones.rename.json");
+  const origFile = out === defaultZonesFile() ? defaultOrigFile() : join(outDir, "zones.json.orig");
+  writeJsonAtomic(renameFile, result.raw);
+  writeJsonAtomic(origFile, result.raw);
+  info(`  ${GN}✓${CL} zones-init: seeded '${renameFile}' (renamed source) and '${origFile}' (merge baseline)`);
+
   if (result.keptActive.length) {
     warn(`  kept Active (still host deployed modules): ${result.keptActive.join(", ")} — legacy-zone sunset deferred; migrate their modules to '${name}' (or an environment) later`);
   }
@@ -421,6 +459,40 @@ function cmdZonesCheck(opts: Opts): number {
   return zonesCheck(
     { zonesFile: opts.zonesFile, configDir: opts.configDir, strict: opts.strict },
     info,
+  );
+}
+
+// ── zones-merge command (rename-aware 3-way reconciliation; Design A) ──
+// Re-bases the repo template into THIS installation's renamed namespace
+// (zones.rename.json), 3-way-merges current vs orig vs that renamed source, then
+// writes merged → zones.json and advances zones.json.orig. Does NOT distribute
+// (callers/reconcile handle distribution), matching apply-zones-merge.sh.
+// Returns the merge exit code (0 success).
+function cmdZonesMerge(opts: Opts): number {
+  const cfg = opts.configDir;
+  let name: string;
+  try {
+    name = readSiteName(cfg);
+  } catch (e) {
+    die((e as Error).message);
+  }
+  // Occupancy guard: never inactivate a legacy zone still hosting deployed
+  // modules. Same cross-check zones-init uses, so the renamed source preserves
+  // a live service's Active state through the merge's state-pin.
+  const keepActive = occupiedZones(cfg);
+  const template = opts.from ?? defaultTemplateFile();
+  return runZonesMerge(
+    {
+      current: join(cfg, "zones.json"),
+      orig: join(cfg, "zones.json.orig"),
+      rename: join(cfg, "zones.rename.json"),
+      template,
+      name,
+      keepActive,
+      diff: opts.diff,
+    },
+    { info, warn },
+    (tpl, n, ka) => renameTemplateFile(tpl, n, ka).raw,
   );
 }
 
@@ -461,6 +533,8 @@ export function run(argv: string[], client?: PlaneClient): number {
       case "zones-init":
         cmdZonesInit(opts);
         return 0;
+      case "zones-merge":
+        return cmdZonesMerge(opts);
       case "zones-check":
         return cmdZonesCheck(opts);
       case "zones-distribute":

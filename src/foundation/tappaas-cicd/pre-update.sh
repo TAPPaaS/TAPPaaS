@@ -156,7 +156,7 @@ fi
 
 # --- One-shot rename: zone keys hyphen → underscore (issue #237) ---
 # Marker-gated; runs exactly once per cluster, then becomes a no-op. Must run
-# BEFORE apply-zones-merge.sh — otherwise the merge would see srv-home (current)
+# BEFORE the zones-merge below — otherwise the merge would see srv-home (current)
 # vs srvHome (source) as a possible-rename and flag both for review instead of
 # resolving them automatically.
 if [ -f /home/tappaas/bin/migrate-zone-keys-to-underscore.sh ] \
@@ -165,17 +165,23 @@ if [ -f /home/tappaas/bin/migrate-zone-keys-to-underscore.sh ] \
       || warn "  #237 zone-key migration reported issues — continuing"
 fi
 
-# --- Reconcile zones.json against upstream (3-way merge; issue #209) ---
+# --- Reconcile zones.json against upstream (rename-aware 3-way merge; #209 / ADR-007 Design A) ---
 # install2.sh seeds /home/tappaas/config/zones.json on first install but never
-# revisits it. apply-zones-merge.sh closes that gap: every update-tappaas run
-# adopts release changes for zones the operator hasn't touched, preserves
-# operator customizations (always pins `state`), reports new/orphan/renamed
-# zones, and advances zones.json.orig to the new release baseline.
-if [ -f /home/tappaas/bin/apply-zones-merge.sh ] \
+# revisits it. `network-manager zones-merge` closes that gap (replacing the
+# retired apply-zones-merge.sh): every update-tappaas run re-bases the repo
+# template into THIS installation's renamed namespace (zones.rename.json), then
+# 3-way-merges zones.json vs zones.json.orig vs zones.rename.json — adopting
+# release changes for zones the operator hasn't touched, preserving operator
+# customizations (always pins `state`), reporting new/orphan/renamed zones, and
+# advancing zones.json.orig to the renamed source. Because srv/home/guest are
+# renamed away in the source, the merge can never re-introduce them (the old
+# duplicate-VLAN corruption). No-ops if network-manager is not yet on PATH
+# (first install before its bin is linked above).
+if command -v network-manager >/dev/null 2>&1 \
    && [ -f /home/tappaas/config/zones.json ]; then
   echo ""
-  info "Reconciling zones.json against upstream (3-way merge)..."
-  /home/tappaas/bin/apply-zones-merge.sh || warn "  zones.json merge reported an error — continuing"
+  info "Reconciling zones.json against upstream (rename-aware 3-way merge)..."
+  network-manager zones-merge || warn "  zones.json merge reported an error — continuing"
 fi
 
 # --- Consistency-check zones.json against the installation (ADR-007 S6 N4) ---

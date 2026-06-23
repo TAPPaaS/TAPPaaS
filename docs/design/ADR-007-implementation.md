@@ -2174,3 +2174,194 @@ src/foundation/tappaas-cicd/
     ├── schedule-backup.py      # Schedule jobs
     └── verify-backup.py        # Verify integrity
 ```
+
+---
+
+## Appendix: Zones lifecycle — install, daily update, and operator reconfiguration
+
+This appendix documents, as-is, the three flows that touch `zones.json` so we can
+reason about Design A (keep org-renamed zones, make the lifecycle robust). The
+three flows are:
+
+1. **Install (cutover):** a fresh system runs `network-manager zones-init --name <N>`
+   once, which transforms the distributed template into the installation's zones.
+2. **Daily update:** every `update-tappaas` runs `apply-zones-merge.sh` to reconcile
+   the live `zones.json` against the upstream template (release drift).
+3. **Operator reconfiguration:** an operator adds/removes/edits a zone, either
+   directly via `network-manager` (zone add/delete) or indirectly via
+   `environment-manager` (a new environment ⇒ a new zone).
+
+Three files participate, all keyed by zone name:
+- **source template** — `…/network-manager/zones.json` in the repo (the distributed,
+  org-agnostic definitions; ships `srv`/`home`/`guest`/…).
+- **current** — `${CONFIG_DIR}/zones.json` (the live, per-installation zones).
+- **`.orig`** — `${CONFIG_DIR}/zones.json.orig` (the 3-way-merge baseline: the
+  version of the source that `current` was last merged from).
+
+### A. The distributed zone definitions (source template = the `.orig` baseline)
+
+Zone `state` values:
+
+| State | Meaning |
+|-------|---------|
+| **Active** | zone-manager creates/maintains the OPNsense interface, DHCP scope, and baseline firewall rules. |
+| **Mandatory** | Same as Active; the zone must exist and cannot be disabled. |
+| **Inactive** | Defined but **not** provisioned (no interface/DHCP/rules). The schema default. |
+| **Disabled** | Same as Inactive. |
+| **Manual** | zone-manager neither creates nor removes it — managed externally/by the operator. |
+
+The distributed definitions (`_`-prefixed documentation keys omitted):
+
+| Zone | Type | State | access-to |
+|------|------|-------|-----------|
+| `mgmt` | Management | Manual | internet, srv, srvHome, srvWork, srvCust, srvDev, srvTest, home, work, guest, iot, iotLocal, iotCloud, iotCams, iotUntrust, dmz |
+| `netbird` | Overlay | Manual | — |
+| `dmz` | DMZ | Mandatory | internet |
+| `srvHome` | Service | Active | internet, iotCloud, iotLocal, dmz |
+| `srvWork` | Service | Active | internet, dmz |
+| `srvCust` | Service | Active | internet, dmz |
+| `home` | Client | Active | internet, srvHome, iotCloud, iotLocal |
+| `work` | Client | Active | internet, srvWork |
+| `iotLocal` | IoT | Active | — |
+| `iotCloud` | IoT | Active | internet |
+| `iotCams` | IoT | Active | — |
+| `guest` | Guest | Active | internet |
+| `srv` | Service | Inactive | internet, dmz |
+| `srvDev` | Service | Inactive | internet, dmz |
+| `srvTest` | Service | Inactive | internet, dmz |
+| `iot` | IoT | Inactive | internet |
+| `test` | Test | Inactive | internet |
+| `testAllowA` | Test | Inactive | internet, testAllowB, dmz |
+| `testAllowB` | Test | Inactive | internet, testAllowA, dmz |
+| `testPinhole` | Test | Inactive | internet |
+| `iotUntrust` | IoT | Disabled | internet |
+
+Note the template encodes the **old** multi-service model (per-category service
+zones `srvHome`/`srvWork`/`srvCust` Active; the generic `srv` Inactive). `zones-init`
+flips this to a single default service zone named after the installation.
+
+### B. Installed zones after `network-manager zones-init --name myOrg`
+
+`zones-init` applies (idempotent — a no-op if `myOrg` is present and `srv` absent):
+- **rename** `srv` → `myOrg` (state forced **Active**), `home` → `myOrg-private`,
+  `guest` → `myOrg-guest`;
+- **state → Inactive** on `srvHome`, `srvWork`, `srvCust`, `srvDev`, `work`
+  (except any kept Active by the occupancy guard — a zone is left Active if a
+  deployed module's `zone0` still references it);
+- **leave untouched** `srvTest`, `iot*`, `dmz`, `netbird`, `test*`, `mgmt`,
+  `iotLocal`/`iotCloud`/`iotCams`;
+- **rewrite every zone-name reference** (`access-to`, `pinhole-allowed-from`, and
+  any zone-name array/string) by the rename map `srv→myOrg`, `home→myOrg-private`,
+  `guest→myOrg-guest` (the only `srvHome→myOrg` rewrite is the explicit one inside
+  `myOrg-private`'s access-to).
+
+Resulting live zones on a brand-new system (no deployed modules ⇒ all inactivations apply):
+
+| Zone | Type | State | access-to | From |
+|------|------|-------|-----------|------|
+| `myOrg` | Service | **Active** | internet, dmz | ← `srv` (default zone) |
+| `myOrg-private` | Client | **Active** | internet, myOrg, iotCloud, iotLocal | ← `home` (srvHome→myOrg) |
+| `myOrg-guest` | Guest | **Active** | internet | ← `guest` |
+| `iotLocal` | IoT | Active | — | unchanged |
+| `iotCloud` | IoT | Active | internet | unchanged |
+| `iotCams` | IoT | Active | — | unchanged |
+| `dmz` | DMZ | Mandatory | internet | unchanged |
+| `mgmt` | Management | Manual | …, myOrg, srvHome, …, myOrg-private, work, myOrg-guest, … | refs rewritten |
+| `netbird` | Overlay | Manual | — | unchanged |
+| `srvHome` | Service | Inactive | internet, iotCloud, iotLocal, dmz | inactivated |
+| `srvWork` | Service | Inactive¹ | internet, dmz | inactivated¹ |
+| `srvCust` | Service | Inactive | internet, dmz | inactivated |
+| `work` | Client | Inactive | internet, srvWork | inactivated |
+| `srvDev` | Service | Inactive | internet, dmz | unchanged |
+| `srvTest` | Service | Inactive | internet, dmz | unchanged |
+| `iot` | IoT | Inactive | internet | unchanged |
+| `iotUntrust` | IoT | Disabled | internet | unchanged |
+| `test`, `testAllowA`, `testAllowB`, `testPinhole` | Test | Inactive | … | unchanged |
+
+¹ `srvWork` (and any other inactivation-list zone) is **kept Active** if a deployed
+module's `zone0` references it — the occupancy guard, so a live service is never
+silently de-provisioned. On a fresh install there are no modules, so it goes Inactive.
+
+So the **Active footprint** of a new `myOrg` system is: `myOrg`, `myOrg-private`,
+`myOrg-guest`, `iotLocal`, `iotCloud`, `iotCams` (+ `dmz` Mandatory, `mgmt`/`netbird`
+Manual). Everything else is Inactive/Disabled — defined, ready to activate, not
+provisioned.
+
+### C. The 3-way merge at every `update-tappaas` (current behavior)
+
+`apply-zones-merge.sh` (invoked by `pre-update.sh`) reconciles `current` against the
+`source` template using `.orig` as the baseline:
+
+- **Per-field, within a zone present in both** `current` and `source`:
+  - `state` is an **AUTO_FIELD — operator-pinned, never adopted** from source.
+  - every other field: if `current == orig` → **adopt source** (take the upstream
+    change); else → **pin current** (a local/operator edit wins).
+- **Zone-level:**
+  - in `source`, absent in `current` → **ADD** (a release introduced a new zone);
+  - in `current`, absent in `source` → **KEEP + warn** (operator-added, or
+    release-removed but the operator still wants it);
+  - same `vlantag`, different name → **flag a possible rename; do NOT auto-rename**.
+- Then writes the merged `current` and **advances `.orig`** to the source.
+- Backfill: if `.orig` is missing, `cp source → orig` (so first-merge pins
+  operator customizations).
+
+**Why this breaks org-renamed zones (the recurring corruption):** after install,
+`current` has `myOrg` (vlan 200) and no `srv`; the `source` template still has `srv`
+(vlan 200) and no `myOrg`. The zone-level rule *"in source, absent in current → ADD"*
+therefore **re-creates `srv`** (Inactive, vlan 200) on the very next update — colliding
+with `myOrg` on vlan 200. Same for `home`/`myOrg-private` (310) and `guest`/`myOrg-guest`
+(510). The *"same vlantag, different name → flag rename"* rule **detects** the collision
+but only warns; it does not reconcile the rename. And because `zones-init` never
+re-based `.orig` into the renamed namespace (the baseline still says `srv`), nothing
+suppresses the re-add. Net effect: **every `update-tappaas` re-introduces the
+renamed-away zones**, producing duplicate-VLAN errors (observed: 6 errors — `srv`/`test2`
+200, `home`/`test2-private` 310, `guest`/`test2-guest` 510).
+
+This is the gap Design A must close: the merge (or a network-manager-owned zones
+lifecycle) has to be **rename-aware** — i.e. apply the installation's `zones-init`
+rename to the `source` (and re-base `.orig`) so `source`, `.orig`, and `current`
+all share the renamed namespace before the 3-way merge runs.
+
+### D. Design A — rename-aware lifecycle via a third `zones.rename.json` file
+
+The fix materialises the renamed source template as a **third file** in `${CONFIG_DIR}`,
+so the 3-way merge always runs entirely inside the installation's renamed namespace.
+network-manager owns the whole lifecycle; the legacy `apply-zones-merge.sh` is ported
+into a `network-manager zones-merge` command and all callers go through `network-manager`.
+
+**Files in `${CONFIG_DIR}`:**
+- `zones.json` — **current** (live, renamed namespace, e.g. `myOrg`).
+- `zones.json.orig` — **baseline** for the 3-way merge (renamed namespace).
+- `zones.rename.json` — **the source template with this installation's rename applied**
+  (the merge "source"; regenerated on demand, never hand-edited).
+
+**`network-manager zones-init --name <N>`** (fresh install / first cutover):
+1. read the distributed template → apply the rename algorithm (§B) → write `zones.rename.json`;
+2. seed `zones.json` ← `zones.rename.json` (then apply occupancy/operator state as today);
+3. seed `zones.json.orig` ← `zones.rename.json`.
+All three files start in the renamed namespace, so `current == orig` initially.
+
+**`network-manager zones-merge`** (every `update-tappaas`, replacing `apply-zones-merge.sh`):
+1. read the **current** repo template → apply the **same rename algorithm** (name from
+   `site.json .name`) → (re)write `zones.rename.json`. This re-bases the upstream
+   template into the installation's namespace, reflecting any release changes;
+2. 3-way merge across the three `${CONFIG_DIR}` files — `current` (`zones.json`) vs
+   `baseline` (`zones.json.orig`) vs `source` (`zones.rename.json`) — with the existing
+   rules (`state` operator-pinned; other fields `current==orig`→adopt source else pin
+   current; zone-level source-only→ADD, current-only→keep+warn, same-vlan-different-name→
+   flag);
+3. write merged → `zones.json`; **advance `zones.json.orig` ← `zones.rename.json`**.
+
+**Why this closes the gap:** `srv`/`home`/`guest` never appear in `zones.rename.json`
+(they are renamed to `myOrg`/`myOrg-private`/`myOrg-guest`), so the "source-only → ADD"
+rule can never re-create them. Occupancy (a live service still using e.g. `srvWork`) is
+preserved by the existing `state` operator-pin (current's state wins). Genuine upstream
+template changes still flow through (renamed) where `current == orig`.
+
+**One-time live repair** (existing systems whose `zones.json` already carries duplicate
+`srv`/`home`/`guest` from the old merge): the merge's "current-only → keep" rule will not
+delete them, so they must be removed once (surgically), after which `zones-merge` keeps
+them gone.
+
+**Callers:** `pre-update.sh` (and any other `apply-zones-merge.sh` invocation) call
+`network-manager zones-merge` instead; the bash script is retired.

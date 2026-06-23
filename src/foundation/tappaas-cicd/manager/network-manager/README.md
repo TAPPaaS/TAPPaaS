@@ -118,5 +118,7 @@ network-manager zones-distribute --dry-run  # list target nodes, no copy
 
 `zone-reconcile`, `zone-controller`, and `zone-state.sh` are linked onto `PATH`
 during the transition and will be retired once `network-manager` fully replaces
-them. `apply-zones-merge.sh` and `migrate-zone-keys-*.sh` are migration helpers,
-not on-PATH tools.
+them. `migrate-zone-keys-*.sh` is a one-shot migration helper, not an on-PATH
+tool. `apply-zones-merge.sh` has been **retired** — its rename-aware successor is
+`network-manager zones-merge` (see the `zones-merge` subcommand and ADR-007
+"Design A").

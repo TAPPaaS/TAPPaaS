@@ -23,6 +23,46 @@ export function defaultZonesFile(): string {
   return join(defaultConfigDir(), "zones.json");
 }
 
+// The 3-way-merge baseline file (the version of `source` that `current` was last
+// merged from). Lives next to zones.json under ${CONFIG_DIR}.
+export function defaultOrigFile(): string {
+  return join(defaultConfigDir(), "zones.json.orig");
+}
+
+// The rename-applied source template (Design A's third file): the repo template
+// with THIS installation's zones-init rename applied. Regenerated on demand by
+// zones-init / zones-merge; never hand-edited. Lives under ${CONFIG_DIR}.
+export function defaultRenameFile(): string {
+  return join(defaultConfigDir(), "zones.rename.json");
+}
+
+// Resolve the installation/site name from ${CONFIG_DIR}/site.json's `.name`.
+// This is the slug zones-init/zones-merge rename to (srv→<name>, …). Throws a
+// clear error if site.json is missing / unreadable / lacks a string `.name`,
+// since the rename namespace is undefined without it.
+export function readSiteName(configDir: string = defaultConfigDir()): string {
+  const site = join(configDir, "site.json");
+  if (!existsSync(site)) {
+    throw new Error(
+      `site.json not found: ${site} — cannot resolve the installation name for the zones rename`,
+    );
+  }
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(readFileSync(site, "utf8"));
+  } catch (e) {
+    throw new Error(`site.json is not valid JSON: ${site} (${(e as Error).message})`);
+  }
+  if (parsed === null || typeof parsed !== "object" || Array.isArray(parsed)) {
+    throw new Error(`site.json must be a JSON object: ${site}`);
+  }
+  const name = (parsed as Record<string, unknown>)["name"];
+  if (typeof name !== "string" || name.length === 0) {
+    throw new Error(`site.json has no string '.name' field: ${site}`);
+  }
+  return name;
+}
+
 // The distributed zones.json TEMPLATE shipped alongside the bin. The compiled
 // entry (main.js) lives at <out>/lib/main.js and the nix installPhase copies
 // zones.json next to it (<out>/lib/zones.json); __dirname therefore resolves
