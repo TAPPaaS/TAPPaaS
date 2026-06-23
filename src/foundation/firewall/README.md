@@ -369,6 +369,6 @@ setup/teardown runbook, options, verification, and troubleshooting.
 - [`services/rules/`](services/rules/) — capability lifecycle scripts
 - [`scripts/`](scripts/) — network orchestration (zone-reconcile, switch-manager, ap-manager, setup-*) — see [`scripts/README.md`](scripts/README.md)
 - `tappaas-cicd/opnsense-controller/src/opnsense_controller/rules_manager.py` — implementation
-- [`../ZONES.md`](../ZONES.md) — zone reference
+- [`../tappaas-cicd/manager/network-manager/ZONES.md`](../tappaas-cicd/manager/network-manager/ZONES.md) — zone reference
 - [`../../docs/ADR/ADR-008-switch-module-network-infrastructure.md`](../../../docs/ADR/ADR-008-switch-module-network-infrastructure.md) — design
 - [`../schemas/module-fields.json`](../schemas/module-fields.json) — full field schema

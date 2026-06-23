@@ -72,11 +72,16 @@ automaticReboot read from site.json); zones-check 5 ok/0/0; 3 services up; branc
 ADR007. Live config keeps backups (configuration.json.bak, a dated .RETIRED copy,
 .cutover-backup-*).
 
-**Remaining forward step (not a blocker):** the LIVE Authentik people migration —
-`people-manager sync` to create the new `users`/`admin`/`user`/`root` groups + users,
-then re-bind deployed SSO apps from the legacy `tappaas-*` groups to `user/admin/root`,
-then live SSO test. The D2 CODE is done; live SSO still runs on the legacy groups until
-this is applied (so nothing is broken). SSO-sensitive — do it deliberately + tested.
+**Live people migration — `people-manager sync` DONE.** config/people regenerated to
+the new model and synced into Authentik (9 actions, then 0 on re-run = converged):
+group `users`, user `lars` = admin+user (root unassigned), user `root` =
+admin+user+root. Old-model config/people backed up at `config/people.pre-newmodel-*`.
+*Note:* the `root` user has no login password yet (created via API) and `lars` no
+longer holds `root` — set root's password in Authentik before relying on it.
+
+**Remaining forward step (not a blocker):** re-bind the deployed SSO apps from the
+legacy `tappaas-*` groups to `user`/`admin`/`root` (re-run each module's identity
+install/update) + live SSO test. Live SSO still works on the legacy groups until then.
 
 ---
 
