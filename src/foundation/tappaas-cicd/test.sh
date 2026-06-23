@@ -90,20 +90,21 @@ done
 
 info "${BOLD}Test 3: Configuration files${CL}"
 
-if [[ -x /home/tappaas/bin/validate-configuration.sh ]]; then
-    if /home/tappaas/bin/validate-configuration.sh --quiet 2>/dev/null; then
-        pass "configuration.json passes all validation checks"
+# ADR-007: site.json is the source of truth (configuration.json retired).
+if [[ -x /home/tappaas/bin/validate-site.sh ]]; then
+    if /home/tappaas/bin/validate-site.sh --quiet 2>/dev/null; then
+        pass "site.json passes all validation checks"
     else
-        fail "configuration.json validation failed (run: validate-configuration.sh)"
+        fail "site.json validation failed (run: validate-site.sh)"
     fi
-elif [[ -f /home/tappaas/config/configuration.json ]]; then
-    if jq empty /home/tappaas/config/configuration.json 2>/dev/null; then
-        pass "configuration.json exists and is valid JSON"
+elif [[ -f /home/tappaas/config/site.json ]]; then
+    if jq empty /home/tappaas/config/site.json 2>/dev/null; then
+        pass "site.json exists and is valid JSON"
     else
-        fail "configuration.json exists but is not valid JSON"
+        fail "site.json exists but is not valid JSON"
     fi
 else
-    fail "configuration.json not found"
+    fail "site.json not found"
 fi
 
 if [[ -f /home/tappaas/TAPPaaS/src/foundation/schemas/module-fields.json ]]; then
@@ -116,8 +117,11 @@ else
     fail "module-fields.json not found"
 fi
 
-# Verify at least one module config exists
-config_count=$(find /home/tappaas/config -name '*.json' -not -name 'configuration.json' | wc -l)
+# Verify at least one module config exists (exclude the foundation/system files)
+config_count=$(find /home/tappaas/config -maxdepth 1 -name '*.json' \
+    -not -name 'configuration.json' -not -name 'site.json' \
+    -not -name 'zones.json' -not -name 'zones.json.orig' -not -name 'zones.rename.json' \
+    -not -name 'cert-refids.json' | wc -l)
 if [[ "${config_count}" -gt 0 ]]; then
     pass "${config_count} module config(s) in ~/config"
 else
@@ -255,27 +259,28 @@ fi
 
 info "${BOLD}Test 9: snapshot_retention reader & cleanup wiring${CL}"
 
-# Unit-test snapshot_retention against a temp configuration.json: configured
-# value is honoured; unset / non-integer / zero / missing-file fall back to 5.
+# Unit-test snapshot_retention against a temp site.json (ADR-007: site.json is the
+# source; configuration.json retired): configured value is honoured; unset /
+# non-integer / zero / missing-file fall back to 5.
 sr_tmp=$(mktemp -d)
 trap 'rm -rf "${sr_tmp}"' EXIT
 sr_run() {
     ( CONFIG_DIR="${sr_tmp}"; snapshot_retention )
 }
 
-printf '{"tappaas":{"snapshotRetention":3}}\n' > "${sr_tmp}/configuration.json"
+printf '{"snapshotRetention":3}\n' > "${sr_tmp}/site.json"
 [[ "$(sr_run)" == "3" ]] && pass "configured retention honoured (3)" || fail "configured retention should be 3"
 
-printf '{"tappaas":{}}\n' > "${sr_tmp}/configuration.json"
+printf '{}\n' > "${sr_tmp}/site.json"
 [[ "$(sr_run)" == "5" ]] && pass "unset retention -> default 5" || fail "unset retention should default to 5"
 
-printf '{"tappaas":{"snapshotRetention":"abc"}}\n' > "${sr_tmp}/configuration.json"
+printf '{"snapshotRetention":"abc"}\n' > "${sr_tmp}/site.json"
 [[ "$(sr_run)" == "5" ]] && pass "non-integer retention -> default 5" || fail "non-integer retention should default to 5"
 
-printf '{"tappaas":{"snapshotRetention":0}}\n' > "${sr_tmp}/configuration.json"
+printf '{"snapshotRetention":0}\n' > "${sr_tmp}/site.json"
 [[ "$(sr_run)" == "5" ]] && pass "zero retention -> default 5" || fail "zero retention should default to 5"
 
-rm -f "${sr_tmp}/configuration.json"
+rm -f "${sr_tmp}/site.json"
 [[ "$(sr_run)" == "5" ]] && pass "missing config file -> default 5" || fail "missing config file should default to 5"
 
 rm -rf "${sr_tmp}"
