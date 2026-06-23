@@ -9,8 +9,9 @@
 #      - validate.sh catches: missing required field, dangling ownerOrg,
 #        dangling memberOf, dangling role reference
 #      - a user with multiple roles + membership across >1 org validates
-#      - user-setup.sh copies + substitutes correctly; result has the expected
-#        shape and passes validate.sh
+#      - user-setup.sh copies + substitutes correctly; result has the ADR-007
+#        shape (org <ORG>; group `users`; roles admin/user/root; users root +
+#        <USER>) and passes validate.sh
 #   B. TypeScript UNIT tests (offline, fake in-memory PrimitiveClient) covering
 #      every ADR-007 P1 reconcile Test Criteria bullet — run via tsc + node.
 #   C. LIVE integration test (scoped to zztest- names, self-cleaning) against
@@ -195,30 +196,46 @@ if [[ -d "$DEST" ]]; then
 
     [[ "$n_org" == "1" ]] && ok "result has exactly 1 organization" || bad "expected 1 org, found ${n_org}"
     [[ "$n_rol" == "3" ]] && ok "result has 3 roles" || bad "expected 3 roles, found ${n_rol}"
-    [[ "$n_usr" == "1" ]] && ok "result has 1 installer user" || bad "expected 1 user, found ${n_usr}"
+    [[ "$n_usr" == "2" ]] && ok "result has 2 users (root + installer)" || bad "expected 2 users, found ${n_usr}"
 
-    # group files named <org>__admin and <org>__users
-    if [[ "$n_grp" == "2" && -f "$DEST/groups/acme-site__admin.json" && -f "$DEST/groups/acme-site__users.json" ]]; then
-        ok "result has groups acme-site__admin + acme-site__users"
+    # single team group literally named `users` (ownerOrg <org>, roles [user])
+    gf="$DEST/groups/users.json"
+    if [[ "$n_grp" == "1" && -f "$gf" ]] \
+        && [[ "$(jq -r '.name' "$gf")" == "users" ]] \
+        && [[ "$(jq -r '.ownerOrg' "$gf")" == "acme-site" ]] \
+        && [[ "$(jq -r '.roles | index("user") != null' "$gf")" == "true" ]]; then
+        ok "result has the single team group 'users' (ownerOrg acme-site, roles [user])"
     else
-        bad "expected groups acme-site__admin + acme-site__users (found ${n_grp} group files)"
+        bad "expected one group 'users' (ownerOrg acme-site, roles [user]); found ${n_grp} group files"
     fi
 
-    # placeholders fully substituted (no __ORG__/__USER__/__EMAIL__ remain)
-    if grep -rqE '__(ORG|USER|EMAIL)__' "$DEST" 2>/dev/null; then
+    # placeholders fully substituted (no __ORG__/__USER__/__EMAIL__/__ROOT_EMAIL__ remain)
+    if grep -rqE '__(ORG|USER|EMAIL|ROOT_EMAIL)__' "$DEST" 2>/dev/null; then
         bad "placeholders remain after substitution"
     else
         ok "no placeholder tokens remain after substitution"
     fi
 
-    # installer user: name=lars, root role, member of acme-site__admin, email substituted
+    # root user: roles [admin,user,root], email root@<domain-of-installer>, memberOf [users]
+    rf="$DEST/users/root.json"
+    if [[ -f "$rf" ]] \
+        && [[ "$(jq -r '.name' "$rf")" == "root" ]] \
+        && [[ "$(jq -r '.primaryEmail' "$rf")" == "root@example.com" ]] \
+        && [[ "$(jq -r '.roles | sort | join(",")' "$rf")" == "admin,root,user" ]] \
+        && [[ "$(jq -r '.memberOf | index("users") != null' "$rf")" == "true" ]]; then
+        ok "root user has roles [admin,user,root], email root@example.com, memberOf [users]"
+    else
+        bad "root user root.json not shaped as expected"
+    fi
+
+    # installer user: name=lars, roles [admin,user], member of users, installer email
     uf="$DEST/users/lars.json"
     if [[ -f "$uf" ]] \
         && [[ "$(jq -r '.name' "$uf")" == "lars" ]] \
         && [[ "$(jq -r '.primaryEmail' "$uf")" == "lars@example.com" ]] \
-        && [[ "$(jq -r '.roles | index("root") != null' "$uf")" == "true" ]] \
-        && [[ "$(jq -r '.memberOf | index("acme-site__admin") != null' "$uf")" == "true" ]]; then
-        ok "installer user has root role + membership in acme-site__admin"
+        && [[ "$(jq -r '.roles | sort | join(",")' "$uf")" == "admin,user" ]] \
+        && [[ "$(jq -r '.memberOf | index("users") != null' "$uf")" == "true" ]]; then
+        ok "installer user lars has roles [admin,user] + membership in users"
     else
         bad "installer user lars.json not shaped as expected"
     fi

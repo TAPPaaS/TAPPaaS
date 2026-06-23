@@ -1,0 +1,7 @@
+{
+  "name": "root",
+  "displayName": "Root",
+  "primaryEmail": "__ROOT_EMAIL__",
+  "memberOf": ["users"],
+  "roles": ["admin", "user", "root"]
+}

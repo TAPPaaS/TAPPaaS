@@ -137,15 +137,10 @@ authentik-manager proxy-app-ensure identity \
     --description "TAPPaaS identity self-app (#45)" \
     --attach-outpost
 
-# ── ADR-006: reconcile the baseline role groups (Installer + default + variants) ─
-# Idempotent — creates tappaas-installers and the default `tappaas` scope groups,
-# plus a scope per registered variant. Safe to skip if not yet deployed.
-info "${BOLD}Reconciling Authentik role groups (ADR-006)${CL}"
-if [[ -x /home/tappaas/bin/roles-ensure.sh ]]; then
-    /home/tappaas/bin/roles-ensure.sh || warn "roles-ensure reported an error — role groups may be incomplete"
-else
-    warn "roles-ensure.sh not in ~/bin yet (run update-tappaas to deploy it); skipping role-group reconcile"
-fi
+# ── ADR-007: role groups are owned by people-manager ────────────────────────
+# The role groups (user/admin/root) and the team group `users` are reconciled
+# into Authentik by `people-manager sync` (run at foundation install and on
+# update from config/people/). This script no longer ensures them here.
 
 echo
 info "${BOLD}Installation Complete${CL}"

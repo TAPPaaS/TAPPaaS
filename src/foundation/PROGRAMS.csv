@@ -13,8 +13,9 @@ audit-jq-readers.sh,/home/tappaas/bin/audit-jq-readers.sh,tappaas-cicd/lib/audit
 common-install-routines.sh,/home/tappaas/bin/common-install-routines.sh,tappaas-cicd/lib/common-install-routines.sh,library
 #
 # --- manager/people-manager/ --------------------------------------------------------------
-roles-ensure.sh,/home/tappaas/bin/roles-ensure.sh,tappaas-cicd/manager/people-manager/roles-ensure.sh,script
-user.sh,/home/tappaas/bin/user.sh,tappaas-cicd/manager/people-manager/user.sh,script
+people-manager,/home/tappaas/bin/people-manager,tappaas-cicd/manager/people-manager/src/*.ts,program
+user-setup.sh,/home/tappaas/bin/user-setup.sh,tappaas-cicd/manager/people-manager/user-setup.sh,script
+validate-people.sh,/home/tappaas/bin/validate-people.sh,tappaas-cicd/manager/people-manager/validate.sh,script
 #
 # --- manager/site-manager/ ----------------------------------------------------------------
 convert-json-to-config.sh,/home/tappaas/bin/convert-json-to-config.sh,tappaas-cicd/manager/site-manager/convert-json-to-config.sh,script

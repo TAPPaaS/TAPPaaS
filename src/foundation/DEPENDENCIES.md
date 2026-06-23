@@ -77,9 +77,10 @@ test-module.sh / delete-module.sh -> common-install-routines.sh
 ### 5. Identity / people flow
 ```
 identity/install.sh -> identity/update.sh
-  -> common-install-routines.sh; ensure-authentik-creds.sh; roles-ensure.sh (+ configuration.json)
-user.sh -> common-install-routines.sh; roles-ensure.sh (+ configuration.json)
-variant-manager.sh -> roles-ensure.sh (+ configuration.json, zones.json)
+  -> common-install-routines.sh; ensure-authentik-creds.sh (+ configuration.json)
+user-setup.sh -> common-install-routines.sh; validate.sh (copies minimal-org/ into config/people/)
+people-manager (TS) -> authentik-manager (reconciles config/people/ into Authentik; ADR-007)
+variant-manager.sh -> common-install-routines.sh (+ configuration.json, zones.json)
 authentik-manager (= authentik_cli.py) -> authentik_manager.py
 ```
 
@@ -95,7 +96,7 @@ Ranked by how many other foundation files source or invoke them.
 | `convert-json-to-config.sh` | JSON→shell config emitter | 4 |
 | `install-module.sh` | module installer, called by test harnesses | 7 |
 | `delete-module.sh` | module remover, called by installers/tests | 7 |
-| `roles-ensure.sh` | identity role reconciler | 5 |
+| `people-manager` (TS) | people/roles reconciler (ADR-007); reconciles config/people/ into Authentik | 1 |
 | `config.py` (opnsense pkg) | shared OPNsense API config, imported by all CLIs | 11 |
 | `firewall_manager.py` | OPNsense rule primitive, imported by zone/rules CLIs | 4 |
 

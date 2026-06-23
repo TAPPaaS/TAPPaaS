@@ -19,9 +19,9 @@ audit-jq-readers.sh,tappaas-cicd/lib/,configuration.json
 common-install-routines.sh,tappaas-cicd/lib/,convert-json-to-config.sh; configuration.json; zones.json
 #
 # === tappaas-cicd/manager/people-manager ===
-roles-ensure.sh,tappaas-cicd/manager/people-manager/,common-install-routines.sh; configuration.json
-user.sh,tappaas-cicd/manager/people-manager/,common-install-routines.sh; roles-ensure.sh; configuration.json
-test.sh,tappaas-cicd/manager/people-manager/,
+user-setup.sh,tappaas-cicd/manager/people-manager/,common-install-routines.sh; validate.sh
+validate.sh,tappaas-cicd/manager/people-manager/,common-install-routines.sh
+test.sh,tappaas-cicd/manager/people-manager/,validate.sh; user-setup.sh
 #
 # === tappaas-cicd/manager/site-manager ===
 convert-json-to-config.sh,tappaas-cicd/manager/site-manager/,
@@ -32,7 +32,7 @@ test.sh,tappaas-cicd/manager/site-manager/,
 #
 # === tappaas-cicd/manager/environment-manager ===
 migrate-to-variants.sh,tappaas-cicd/manager/environment-manager/,common-install-routines.sh; configuration.json
-variant-manager.sh,tappaas-cicd/manager/environment-manager/,common-install-routines.sh; roles-ensure.sh; configuration.json; zones.json
+variant-manager.sh,tappaas-cicd/manager/environment-manager/,common-install-routines.sh; configuration.json; zones.json
 test.sh,tappaas-cicd/manager/environment-manager/,
 validate.sh,tappaas-cicd/manager/environment-manager/,
 #
@@ -145,10 +145,10 @@ services/discovery/install-service.sh,firewall/services/discovery/,common-instal
 #
 # === identity ===
 install.sh,identity/,update.sh
-update.sh,identity/,common-install-routines.sh; ensure-authentik-creds.sh; roles-ensure.sh; configuration.json
-test.sh,identity/,common-install-routines.sh; user.sh; install-module.sh; delete-module.sh; roles-ensure.sh; configuration.json
+update.sh,identity/,common-install-routines.sh; ensure-authentik-creds.sh; configuration.json
+test.sh,identity/,common-install-routines.sh; authentik-manager; install-module.sh; delete-module.sh; configuration.json
 lib/ensure-authentik-creds.sh,identity/lib/,
-services/identity/install-service.sh,identity/services/identity/,common-install-routines.sh; ensure-authentik-creds.sh; roles-ensure.sh; configuration.json
+services/identity/install-service.sh,identity/services/identity/,common-install-routines.sh; ensure-authentik-creds.sh; authentik-manager; configuration.json
 services/accessControl/install-service.sh,identity/services/accessControl/,common-install-routines.sh; ensure-authentik-creds.sh
 #
 # === logging ===

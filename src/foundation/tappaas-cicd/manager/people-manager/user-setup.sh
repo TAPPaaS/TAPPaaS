@@ -3,14 +3,24 @@
 # user-setup.sh — bootstrap the minimal People domain
 #
 # Copies manager/people-manager/minimal-org/* into config/people/, substituting
-# the placeholders __ORG__ / __USER__ / __EMAIL__ in BOTH filenames and file
-# contents, then validates the result with validate-people.sh.
+# the placeholders __ORG__ / __USER__ / __EMAIL__ / __ROOT_EMAIL__ in BOTH
+# filenames and file contents, then validates the result with validate-people.sh.
+#
+#   __ORG__        the organization name (= the install/system name)
+#   __USER__       the installer's username
+#   __EMAIL__      the installer's primary email
+#   __ROOT_EMAIL__ root@<domain> where <domain> is the part of --email after '@'
 #
 # This is a thin bootstrap: it has no entity-creation logic of its own and it
 # does NOT push anything to Authentik (that is people-manager sync — step S2b).
 #
-# Result: 1 organization, groups <org>__admin + <org>__users, 1 installer user
-#         (root role, member of <org>__admin), and the 3 default roles.
+# Result (ADR-007 people model):
+#   * 1 organization  <ORG>            owner = <USER>
+#   * 1 group         users (team)     ownerOrg <ORG>, roles [user]
+#   * 3 roles         admin, user, root
+#   * 2 users, both memberOf [users]:
+#       root    roles [admin, user, root]   email root@<domain-of-installer>
+#       <USER>  roles [admin, user]         email <installer email>
 #
 # Usage: user-setup.sh --org <slug> --user <slug> --email <email> [OPTIONS]
 #
@@ -51,6 +61,7 @@ VALIDATE_SCRIPT="${HERE}/validate.sh"
 ORG=""
 USER_SLUG=""
 EMAIL=""
+ROOT_EMAIL=""
 PEOPLE_DIR="${TAPPAAS_CONFIG:-/home/tappaas/config}/people"
 FORCE=false
 SKIP_VALIDATE=false
@@ -111,6 +122,9 @@ validate_args() {
     [[ "$EMAIL" =~ ^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$ ]] || \
         die "--email '${EMAIL}' is not a valid email address"
 
+    # Derive the root user's email: root@<domain-of-installer-email>.
+    ROOT_EMAIL="root@${EMAIL#*@}"
+
     [[ -d "$MINIMAL_ORG_DIR" ]] || die "minimal-org directory not found: ${MINIMAL_ORG_DIR}"
 }
 
@@ -124,11 +138,14 @@ cleanup() {
 }
 trap cleanup EXIT INT TERM
 
-# substitute placeholders in a string (used for both paths and contents)
+# substitute placeholders in a string (used for both paths and contents).
+# __ROOT_EMAIL__ must be substituted BEFORE __EMAIL__ (it contains the literal
+# token "EMAIL" only as part of "ROOT_EMAIL"; ordering keeps both correct).
 subst() {
     local s="$1"
     s="${s//__ORG__/$ORG}"
     s="${s//__USER__/$USER_SLUG}"
+    s="${s//__ROOT_EMAIL__/$ROOT_EMAIL}"
     s="${s//__EMAIL__/$EMAIL}"
     printf '%s' "$s"
 }
@@ -138,11 +155,12 @@ main() {
     validate_args
 
     info "Bootstrapping People domain"
-    info "  org   = ${ORG}"
-    info "  user  = ${USER_SLUG}"
-    info "  email = ${EMAIL}"
-    info "  from  = ${MINIMAL_ORG_DIR}"
-    info "  to    = ${PEOPLE_DIR}"
+    info "  org        = ${ORG}"
+    info "  user       = ${USER_SLUG}"
+    info "  email      = ${EMAIL}"
+    info "  root email = ${ROOT_EMAIL}"
+    info "  from       = ${MINIMAL_ORG_DIR}"
+    info "  to         = ${PEOPLE_DIR}"
 
     # Guard: refuse to clobber a non-empty destination unless --force
     if [[ -d "$PEOPLE_DIR" ]] && [[ -n "$(ls -A "$PEOPLE_DIR" 2>/dev/null)" ]]; then

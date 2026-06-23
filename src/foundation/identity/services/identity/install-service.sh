@@ -9,19 +9,24 @@
 # the two — ADR-006 §4).
 #
 # Steps (all idempotent):
-#   1. Ensure the scope's role groups exist (roles-ensure --variant <variant>).
-#   2. If the module opts in (identity.providesAdminRole), ensure the opt-in
-#      <scope>-<module>-admins group.
-#   3. Authentik: oidc-app-ensure — create/update an OAuth2/OpenID Provider +
+#   1. If the module opts in (identity.providesAdminRole), ensure the opt-in
+#      <module>-admins group exists (group-ensure). The baseline role groups
+#      (user/admin/root) are owned + reconciled by people-manager (run at
+#      foundation install and on update); this script no longer ensures them.
+#   2. Authentik: oidc-app-ensure — create/update an OAuth2/OpenID Provider +
 #      Application for the module; read back client_id/client_secret.
-#   4. Access gate: bind the allowed groups to the Application (app-bind-groups)
+#   3. Access gate: bind the allowed groups to the Application (app-bind-groups)
 #      — MANDATORY (Authentik is allow-all without a binding; ADR-006 §5).
-#   5. Write OIDC_CLIENT_ID / OIDC_CLIENT_SECRET / OIDC_DISCOVERY_URI into the
+#   4. Write OIDC_CLIENT_ID / OIDC_CLIENT_SECRET / OIDC_DISCOVERY_URI into the
 #      module VM's secrets env file, and (if declared) restart its configure
 #      service so the app registers the provider.
 #
+# Access gate (ALLOW_GROUPS): the people-manager role groups user/admin/root
+# (root = the platform superuser). A module that opts into its own admin role
+# adds <module>-admins on top.
+#
 # Module JSON contract (object `identity`, all optional — defaults suit Nextcloud):
-#   identity.providesAdminRole   bool   create <scope>-<module>-admins (default false)
+#   identity.providesAdminRole   bool   create <module>-admins (default false)
 #   identity.oidcRedirectPaths   [str]  callback paths (default ["/apps/user_oidc/code"])
 #   identity.scopes              [str]  OIDC scope-mapping names (default openid/email/profile)
 #   identity.secretsEnv          str    path on the VM (default /etc/secrets/<base>.env)
@@ -39,7 +44,6 @@ _IDENTITY_SVC_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 . "${_IDENTITY_SVC_DIR}/../../lib/ensure-authentik-creds.sh"
 
 AUTHENTIK_MANAGER="${AUTHENTIK_MANAGER:-authentik-manager}"
-ROLES_ENSURE="${ROLES_ENSURE:-/home/tappaas/bin/roles-ensure.sh}"
 DRY_RUN=0
 
 MODULE=""
@@ -90,15 +94,13 @@ SECRETS_ENV="$(echo "${JSON}" | jq -r --arg d "/etc/secrets/${MODULE_BASE}.env" 
 # Restart is best-effort (warns if absent → applies on next rebuild/boot).
 [[ -z "${CONFIGURE_SERVICE}" ]] && CONFIGURE_SERVICE="${MODULE_BASE}-configure-oidc.service"
 
-# Scope prefix: `tappaas` for the default variant, else the variant name.
-PREFIX="tappaas"; [[ -n "${VARIANT}" ]] && PREFIX="${VARIANT}"
 SLUG="${MODULE}"                                  # unique per variant
 UPSTREAM="${VMNAME}.${ZONE0}.internal"
 
 # The OIDC issuer/discovery lives on the single identity instance, at the
 # DEFAULT variant's domain (one Authentik for the whole cluster).
 DEFAULT_DOMAIN="$(get_variant_config '' | jq -r '.domain')"
-[[ -n "${DEFAULT_DOMAIN}" && "${DEFAULT_DOMAIN}" != "null" ]] || die "default variant domain not set in configuration.json"
+[[ -n "${DEFAULT_DOMAIN}" && "${DEFAULT_DOMAIN}" != "null" ]] || die "default environment domain not set (config/environments/<env>.json)"
 DISCOVERY_URI="https://identity.${DEFAULT_DOMAIN}/application/o/${SLUG}/.well-known/openid-configuration"
 
 info "${BOLD}identity:identity (OIDC): wiring ${BL}${MODULE}${CL}"
@@ -108,18 +110,24 @@ command -v "${AUTHENTIK_MANAGER%% *}" >/dev/null 2>&1 || [[ -x "${AUTHENTIK_MANA
     || die "authentik-manager not available (rebuild opnsense-controller)"
 ensure_authentik_credentials
 
-# ── Step 1+2: role groups (+ opt-in module-admin) ───────────────────────────
-if [[ -x "${ROLES_ENSURE}" ]]; then
-    "${ROLES_ENSURE}" --variant "${VARIANT}" >/dev/null || warn "roles-ensure failed; assuming groups exist"
+# ── Step 1: access groups (+ opt-in module-admin) ───────────────────────────
+# The baseline role groups user/admin/root are reconciled by people-manager
+# (foundation install + update) — NOT here. As a safety net we ensure they exist
+# via group-ensure (idempotent), with no dependency on configuration.json.
+# `root` is the platform superuser (replaces the old tappaas-installers group).
+declare -a ALLOW_GROUPS=("user" "admin" "root")
+if [[ "${DRY_RUN}" -eq 0 ]]; then
+    for g in "${ALLOW_GROUPS[@]}"; do
+        ${AUTHENTIK_MANAGER} group-ensure "${g}" >/dev/null 2>&1 \
+            || warn "group-ensure ${g} failed; assuming people-manager already created it"
+    done
 fi
-declare -a ALLOW_GROUPS=("${PREFIX}-users" "${PREFIX}-admins" "tappaas-installers")
 if [[ "${PROVIDES_ADMIN}" == "true" ]]; then
-    ADMIN_GROUP="${PREFIX}-${MODULE_BASE}-admins"
+    ADMIN_GROUP="${MODULE_BASE}-admins"
     info "  module declares an admin role → ensuring group ${ADMIN_GROUP}"
-    [[ "${DRY_RUN}" -eq 0 ]] && ${AUTHENTIK_MANAGER} group-ensure "${ADMIN_GROUP}" --parent "${PREFIX}" \
-        --attr "tappaas.variant=${VARIANT}" --attr "tappaas.role=module-admin" \
-        --attr "tappaas.module=${MODULE_BASE}" >/dev/null
-    ALLOW_GROUPS=("${PREFIX}-users" "${ADMIN_GROUP}" "${PREFIX}-admins" "tappaas-installers")
+    [[ "${DRY_RUN}" -eq 0 ]] && ${AUTHENTIK_MANAGER} group-ensure "${ADMIN_GROUP}" \
+        --attr "tappaas.role=module-admin" --attr "tappaas.module=${MODULE_BASE}" >/dev/null
+    ALLOW_GROUPS=("user" "admin" "${ADMIN_GROUP}" "root")
 fi
 
 # ── Step 3: OIDC provider + application ──────────────────────────────────────

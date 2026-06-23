@@ -351,7 +351,7 @@ class AuthentikManager:
     ) -> dict:
         """Create or update a group by name (idempotent).
 
-        ``parent_name`` must already exist — roles-ensure creates parent scopes
+        ``parent_name`` must already exist — the caller creates parent groups
         before their children. Returns the full group dict (incl. ``pk``).
         """
         parent_pk = None

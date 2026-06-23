@@ -1,7 +1,0 @@
-{
-  "name": "__ORG____admin",
-  "type": "team",
-  "displayName": "__ORG__ Administrators",
-  "ownerOrg": "__ORG__",
-  "roles": ["admin"]
-}

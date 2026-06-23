@@ -2,8 +2,6 @@
   "name": "__USER__",
   "displayName": "__USER__",
   "primaryEmail": "__EMAIL__",
-  "memberOf": [
-    "__ORG____admin"
-  ],
-  "roles": ["root"]
+  "memberOf": ["users"],
+  "roles": ["admin", "user"]
 }
