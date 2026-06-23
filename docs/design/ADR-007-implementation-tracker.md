@@ -31,7 +31,7 @@ All work not yet done, in **proposed order**. (Everything else — the S0–S9 b
 
 | # | Deliverable | Notes |
 |---|-------------|-------|
-| 1 | **SSO finalisation** | (a) fix `identity/services/identity/install-service.sh` to bind the **`users`** membership group — the OIDC groups claim carries group memberships, not the RBAC roles `user`/`admin`/`root`; decide how admin-only apps gate. (b) set the `root` user's password in Authentik. (c) clean the legacy `tappaas-*` app bindings (additive `app-bind-groups` left them; needs an API/manual unbind). |
+| 1 | **SSO finalisation** — (a)+(b) ✅ done | ✅ (a) `install-service.sh` now binds `ALLOW_GROUPS=("users")` (the OIDC claim carries memberships, not the RBAC roles; providesAdminRole adds `<module>-admins`); ✅ (b) `root` Authentik password set (744b0eb). **Remaining (cosmetic):** (c) remove the legacy `tappaas-*` + inert `user`/`admin`/`root` bindings on the live nextcloud app — harmless (empty/inert groups; effective binding is `users`); needs the Authentik UI or a future `app-unbind` CLI (no unbind command today). |
 | 2 | **Legacy-zone sunset (S6 remainder)** | Migrate the 3 `srvWork`-pinned modules (nextcloud / nextcloud-hpb / euro-office) to the default zone, then inactivate `srvWork` (the occupancy guard keeps it Active until then). |
 | 3 | **S5 network front-door follow-ups** | Register the physical switch; single-front-door consolidation (port `distribute_zones` + delete-preflight fully into network-manager); switch-controller TS/bash consolidation. |
 | 4 | **All-managers-to-TypeScript migration** | The arc items 5–6 build on (people + network are TS; site / environment / module / health / backup are bash). |
