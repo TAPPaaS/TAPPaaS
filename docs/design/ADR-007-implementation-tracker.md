@@ -24,7 +24,25 @@ Each stage is **not done** until it passes the gate below. The driver updates th
 
 ---
 
-## Stage status
+## Remaining outstanding
+
+All work not yet done, in **proposed order**. (Everything else — the S0–S9 build — is recorded in **Done Work** below.) Items 1–4 finish the in-flight cutover; 5–7 are the architecture arc that build on each other; 8–9 are deferred and best done last.
+
+| # | Deliverable | Notes |
+|---|-------------|-------|
+| 1 | **S8 step 3 — supervised live firewall→network migration** | Run `migrate-firewall-to-network.sh`: rename `config/firewall.json`→`network.json`, the firewall VM (vmid 110), DNS `firewall.mgmt.internal`→`network.mgmt.internal`, Caddy routes; flip `vmname`/`FIREWALL_FQDN`. **High-risk** (the cicd↔firewall lifeline) — supervised, with rollback + verify. The resolver back-compat already lets the live system run on `firewall.json` until this is done. |
+| 2 | **SSO finalisation** | (a) fix `identity/services/identity/install-service.sh` to bind the **`users`** membership group — the OIDC groups claim carries group memberships, not the RBAC roles `user`/`admin`/`root`; decide how admin-only apps gate. (b) set the `root` user's password in Authentik. (c) clean the legacy `tappaas-*` app bindings (additive `app-bind-groups` left them; needs an API/manual unbind). |
+| 3 | **Legacy-zone sunset (S6 remainder)** | Migrate the 3 `srvWork`-pinned modules (nextcloud / nextcloud-hpb / euro-office) to the default zone, then inactivate `srvWork` (the occupancy guard keeps it Active until then). |
+| 4 | **S5 network front-door follow-ups** | Register the physical switch; single-front-door consolidation (port `distribute_zones` + delete-preflight fully into network-manager); switch-controller TS/bash consolidation. |
+| 5 | **All-managers-to-TypeScript migration** | The arc items 6–7 build on (people + network are TS; site / environment / module / health / backup are bash). |
+| 6 | **Finish the `validate` verb convention** | Port people + network `validate.sh` → a `<manager> validate` TS subcommand and retire the bash; implement a real `validate-module.sh` (currently a stub); reconcile `manager/TEMPLATE` + the P10 contract test once managers are TS. Rides on #5. |
+| 7 | **Managers expose CRUD verbs** | add / update / delete / list per manager (people org/group/user/role, site fields + nodes, environments, module config, zones) so admins manage via the CLI and never hand-edit JSON; each write validates first. Rides on #5–#6. |
+| 8 | **#294 — zone-aligned VMID ranges** | Derive/allocate a VM's VMID from its zone/environment. Needs the env↔zone model fully settled. |
+| 9 | **#380 — document & revalidate the install sequence** | End-to-end fresh-install write-up against the post-cutover reality. Do **last**, so it documents the settled state rather than a moving target. |
+
+---
+
+## Done Work
 
 | Stage | Delivers | Issues | Depends on | Status | Tests (pass/fail) | Commit | Pushed |
 |-------|----------|--------|-----------|--------|-------------------|--------|--------|
@@ -41,21 +59,6 @@ Each stage is **not done** until it passes the gate below. The driver updates th
 | **S9** | P9 backup hierarchy (backup-manager + backup-controller) | #358 | S3, S4, S1 | ⬜ | — | — | — |
 
 > Suggested order: **S1 → S2 → S3 → S4 → S6**, with **S5** running in parallel (rides on S0), then **S7 → S8 → S9**. S5 unblocks the live #372/#373 switch-fan-out gap early.
-
----
-
-## Parking lot
-
-Work intentionally deferred — not part of the current stage sequence; revisit when its prerequisite or trigger arrives. (Distinct from a stage's own "remaining/follow-up" notes.)
-
-| Issue | Item | Why parked |
-|-------|------|-----------|
-| **#294** | **Zone-aligned VMID ranges** — derive/allocate a VM's VMID from its zone/environment (so VMID bands map to zones). | Needs the environment↔zone model settled (S4/S6) first; not required for the cutover. Revisit after S6. |
-| **#380** | **Document & revalidate the install sequence** — end-to-end fresh-install flow (platform bring-up → tappaas-cicd → site.json/zones-init/environments → foundation modules → people bootstrap), re-validated against the post-cutover reality and written up. | The install flow is mid-change (zones-init wiring, site.json as source, install/update routed through network-manager = N5). Revalidate + document once the cutover (S3b/N5) settles, so the sequence is documented as it actually is, not as it's transitioning. |
-| — | **Finish the `validate` verb convention** — (a) port people-manager + network-manager's bash `validate.sh` to a `<manager> validate` TypeScript subcommand and retire the bash script; (b) implement a real `validate-module.sh` (currently a stub) that lints every module config via `validate-module-tier-source.sh` + schema-checks; (c) reconcile `manager/TEMPLATE` + the P10 contract test (`test-template-contract.sh`) once managers are TS (drop the generic `validate.sh` placeholder). | Script-manager dedup is done (env/site `validate.sh` removed, module renamed to `validate-module.sh`). The TS-verb ports touch live TS CLIs and belong in the "all-managers-to-TypeScript" arc; the module validator + TEMPLATE/contract reconciliation ride along. |
-| — | **Managers expose CRUD verbs for what they manage** — each manager should offer add / update / delete / list (or get) operations over its domain objects (people org/group/user/role, site fields + nodes, environments, module config, zones) so an admin manages config through the manager CLI and never hand-edits the JSON. Goes with the verb convention: a CRUD verb per object (`people-manager add user …`, `environment-manager delete <env>`, or `<verb>-<manager>.sh` for script managers). Each write validates + reference-checks before persisting. | Larger design+build per manager; the config schemas, validate operation, and (eventually) TS base must settle first. Hand-editing the JSON works in the interim. Prioritise after the cutover, alongside the TypeScript migration. |
-
-> Other deferred-but-tracked work lives in the relevant stage logs below (e.g. S5 follow-ups: physical-switch registration, single-front-door consolidation; S3b legacy-zone sunset migration of the srvWork modules; switch-controller TS/bash consolidation).
 
 ---
 
