@@ -64,9 +64,9 @@ if [[ ! -f "${MODULE_JSON}" ]]; then
     die "Module config not found: ${MODULE_JSON}"
 fi
 
-if [[ ! -f "${SYSTEM_CONFIG}" ]]; then
-    die "System configuration not found: ${SYSTEM_CONFIG}"
-fi
+# ADR-007: configuration.json is retired. The domain comes from get_variant_config
+# (config/environments/) and the cert refid from cert-refids.json; the SYSTEM_CONFIG
+# reads below are guarded legacy fallbacks, so its absence is NOT fatal.
 
 # ── Read module configuration ───────────────────────────────────────
 

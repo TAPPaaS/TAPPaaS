@@ -252,16 +252,16 @@ if command -v dns-manager >/dev/null 2>&1; then
     fw_ip="$(dig +short "${OLD_FQDN}" 2>/dev/null | head -n1 || true)"
     if [[ -n "${fw_ip}" ]]; then
         run "add DNS host override ${NEW_FQDN} -> ${fw_ip}" \
-            dns-manager add "${NEW_NAME}" "${MGMT_DOMAIN}" --ip "${fw_ip}" \
+            dns-manager --no-ssl-verify add "${NEW_NAME}" "${MGMT_DOMAIN}" "${fw_ip}" \
             || warn "dns-manager add ${NEW_FQDN} returned non-zero (continuing)"
     else
         warn "Could not resolve ${OLD_FQDN} to an IP — SKIPPING DNS add."
-        warn "  Add it manually: dns-manager add ${NEW_NAME} ${MGMT_DOMAIN} --ip <firewall-ip>"
+        warn "  Add it manually: dns-manager --no-ssl-verify add ${NEW_NAME} ${MGMT_DOMAIN} <firewall-ip>"
     fi
     info "Leaving ${OLD_FQDN} in place (cicd lifeline) — retire it separately when safe."
 else
     warn "dns-manager not on PATH — SKIPPING DNS step."
-    warn "  Add manually: dns-manager add ${NEW_NAME} ${MGMT_DOMAIN} --ip <firewall-ip>"
+    warn "  Add manually: dns-manager --no-ssl-verify add ${NEW_NAME} ${MGMT_DOMAIN} <firewall-ip>"
 fi
 
 # ---------------------------------------------------------------------------
