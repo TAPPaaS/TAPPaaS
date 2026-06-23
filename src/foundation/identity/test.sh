@@ -75,14 +75,15 @@ done
 
 # ── 3. OIDC allow-list points at the role groups (offline assertion) ─────────
 # install-service.sh must gate OIDC apps on the people-manager role groups
-# (user/admin/root), NOT the retired tappaas-* prefix groups.
-section "3: OIDC install allow-list = user/admin/root"
+# the `users` membership group (the OIDC groups claim carries memberships, not the
+# RBAC roles), NOT the retired tappaas-* prefix groups.
+section "3: OIDC install allow-list = users (membership group)"
 SVC="$(cd "$(dirname "$0")" && pwd)/services/identity/install-service.sh"
 if [[ -f "${SVC}" ]]; then
-    if grep -qE 'ALLOW_GROUPS=\("user" "admin" "root"\)' "${SVC}"; then
-        pass "default ALLOW_GROUPS = (user admin root)"
+    if grep -qE 'ALLOW_GROUPS=\("users"\)' "${SVC}"; then
+        pass "default ALLOW_GROUPS = (users) — the org membership group"
     else
-        fail "default ALLOW_GROUPS not (user admin root) in install-service.sh"
+        fail "default ALLOW_GROUPS not (users) in install-service.sh"
     fi
     if ! grep -qE 'tappaas-installers|\$\{PREFIX\}-users|\$\{PREFIX\}-admins' "${SVC}"; then
         pass "no retired prefix/installers groups remain in install-service.sh"

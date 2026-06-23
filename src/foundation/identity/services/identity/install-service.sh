@@ -111,23 +111,27 @@ command -v "${AUTHENTIK_MANAGER%% *}" >/dev/null 2>&1 || [[ -x "${AUTHENTIK_MANA
 ensure_authentik_credentials
 
 # ── Step 1: access groups (+ opt-in module-admin) ───────────────────────────
-# The baseline role groups user/admin/root are reconciled by people-manager
-# (foundation install + update) — NOT here. As a safety net we ensure they exist
-# via group-ensure (idempotent), with no dependency on configuration.json.
-# `root` is the platform superuser (replaces the old tappaas-installers group).
-declare -a ALLOW_GROUPS=("user" "admin" "root")
-if [[ "${DRY_RUN}" -eq 0 ]]; then
-    for g in "${ALLOW_GROUPS[@]}"; do
-        ${AUTHENTIK_MANAGER} group-ensure "${g}" >/dev/null 2>&1 \
-            || warn "group-ensure ${g} failed; assuming people-manager already created it"
-    done
-fi
+# Access is gated by GROUP MEMBERSHIP — Authentik's OIDC groups claim carries the
+# user's group memberships, NOT the RBAC roles (admin/user/root are roles, not
+# groups; binding them does not gate access). The org membership group is `users`
+# (people-manager creates it; every org member — including the `root` superuser via
+# its membership — is in it). So general apps allow `users`. A module that declares
+# an admin role ALSO binds its `<module>-admins` membership group (for the app's own
+# admin recognition); admins are added to that group by people-manager. group-ensure
+# is an idempotent safety net (no dependency on configuration.json).
+declare -a ALLOW_GROUPS=("users")
 if [[ "${PROVIDES_ADMIN}" == "true" ]]; then
     ADMIN_GROUP="${MODULE_BASE}-admins"
     info "  module declares an admin role → ensuring group ${ADMIN_GROUP}"
     [[ "${DRY_RUN}" -eq 0 ]] && ${AUTHENTIK_MANAGER} group-ensure "${ADMIN_GROUP}" \
         --attr "tappaas.role=module-admin" --attr "tappaas.module=${MODULE_BASE}" >/dev/null
-    ALLOW_GROUPS=("user" "admin" "${ADMIN_GROUP}" "root")
+    ALLOW_GROUPS=("users" "${ADMIN_GROUP}")
+fi
+if [[ "${DRY_RUN}" -eq 0 ]]; then
+    for g in "${ALLOW_GROUPS[@]}"; do
+        ${AUTHENTIK_MANAGER} group-ensure "${g}" >/dev/null 2>&1 \
+            || warn "group-ensure ${g} failed; assuming people-manager already created it"
+    done
 fi
 
 # ── Step 3: OIDC provider + application ──────────────────────────────────────
