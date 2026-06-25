@@ -198,6 +198,46 @@ migration tools. Small, well-justified set.
 
 ---
 
+## Approved decisions (2026-06-25)
+
+Settled before finalizing the ports:
+
+1. **`module reconcile` (the cascade leaf)** = a **new lighter converge**: re-run the
+   module's `install.sh`/`update.sh` + its dependency `*-service.sh` applies only —
+   **no** test/snapshot/3-way-merge/`updateTime` bump. Distinct from `modify`
+   (which changes config first). New bash entry; `module reconcile` shells to it.
+2. **Port scope = thin-orchestration.** TS owns the verb surface + config CRUD +
+   `validate` dispatch + the reconcile/cascade. Heavy cluster/git I/O (create-site
+   discovery, repository clone, install-module provisioning, PBS mutation) stays in
+   the proven `.sh`, invoked via the client. Port those internals incrementally.
+3. **`validate` = thin wrapper over the canonical `validate-<x>.sh`** (one schema
+   source, zero-dep). Native TS schema validation is a later #5 step.
+4. **`--json` standardized now** on every `list`/`show` (+ `backup-controller`), so
+   verbs are scriptable and the cascade parses machine output, not human text.
+5. **`people sync` → `reconcile`** (rename done; `sync` kept as a deprecated alias).
+6. **Module identity = a `"kind":"module"` tag** written by `install-module.sh`;
+   `list`/`show` select on it (heuristic as fallback). `templates` IS a module
+   (provider-only: `provides nixos/debian`, no `vmid`) — tag it; `list` tolerates
+   vmid-less modules.
+7. **backup CRUD writes the module `.backup` layer** (`backup modify <module>` sets
+   enabled/retention/exclude; site/env backup via `site`/`environment modify`).
+   backup-manager owns `.backup` writes; `install-module` keeps calling `resolve`.
+8. **backup apply** = new `backup-controller add-to-job <vmid>` / `apply-schedule`
+   verbs (manager resolves the cascade, controller mutates PBS). `reconcile` is
+   whole-cluster. (Controller verb may land as a follow-up; manager plans it now.)
+9. **health `list vm --diff`** = run the per-VM orig/config/running three-way for
+   every managed VM and roll up (reuses `show vm`).
+10. **health `validate`** = the health gate aggregating {service-liveness (a config
+    module not `running` → FAIL), disk-threshold @ **80%** default, backup-status};
+    `--threshold` cluster-wide. `cluster`/`node` entities, NIC-drift, nested-config
+    normalizer, guest-agent ping, and the full `update-os` port are deferred
+    follow-ups (verb shells to `update-os.sh` meanwhile).
+
+**Defaults taken:** all ports — `reconcile` previews by default, `--apply` commits,
+`--config-dir` common. module `list`/`show` config-only (live VM state is health's
+job); archived shown tagged. environment `add --owner` defaults to first org;
+`delete` refuses on `mgmt`/default-env or non-empty consumers unless `--force`.
+
 ## Recommended sequencing for #3
 
 1. **Lock this vocabulary** (verbs standardized above; `--config-dir`/`--json`/

@@ -2,18 +2,75 @@
 
 ## Language and build
 
-- **Language:** Bash throughout.
+- **Language:** TypeScript for the verb-aligned `site-manager` bin (ADR-007 #3);
+  Bash for the still-live operational tools it delegates to.
+- **TypeScript `site-manager`** — the ADR-007 front door. Structure mirrors
+  `people-manager` / `network-manager`: `src/main.ts` (verb dispatch + usage),
+  `src/types.ts` (the Site model + the injected `SiteClient` boundary +
+  reconcile-plan shapes), `src/config.ts` (load/validate/write `site.json`),
+  `src/reconcile.ts` (the pure engine, depends only on `SiteClient`),
+  `src/client.ts` (`CliSiteClient` — shells out to `git` / `validate-site.sh` /
+  the dependent manager bins), `src/env.d.ts` (zero-dependency ambient decls).
+  Built with `tsc` via `default.nix` (`result/bin/site-manager`), zero runtime
+  deps. Unit tests under `test/unit/` use an in-memory `FakeSiteClient`.
+- **Thin delegations.** TS owns config CRUD (`site modify`, `node` CRUD, the
+  `site.json` writes) + `validate` + `reconcile`. The heavy git/cluster I/O
+  stays in the bash tools, invoked over the client boundary: `add` →
+  `create-site.sh`, `repository add`/`delete` → `repository.sh`, `validate` →
+  `validate-site.sh` (one schema source).
 - **`install.sh`** links every `*.sh` in the directory (except the lifecycle verb
   scripts `install.sh`/`update.sh`/`test.sh`) into `~/bin`, makes them
   executable, and additionally links `migrate-configuration-to-site.sh` as an
-  alias for `migrate-configuration.sh`. There is nothing to compile. The
-  manager's `validate` operation is `validate-site.sh`
-  (script-manager `validate-<manager>.sh` convention), itself linked onto `PATH`.
+  alias for `migrate-configuration.sh`. **Not yet wired to nix-build the TS bin**
+  — the bash tools remain the installed entry points for now. The bash
+  `validate-site.sh` stays the `validate-<manager>.sh` convention entry.
 - **`update.sh`** re-runs `install.sh` (idempotent relink).
 - On-PATH entry points after install: `migrate-configuration.sh`,
   `migrate-configuration-to-site.sh`, `validate-site.sh`, plus the legacy
   `create-configuration.sh`, `validate-configuration.sh`,
   `convert-json-to-config.sh`, `repository.sh`.
+
+## Verb model (TypeScript `site-manager`)
+
+Entities are the first arg (`<entity> <verb>`, as in `network-manager`):
+
+| Entity | Verbs | Notes |
+|---|---|---|
+| `site` (singleton) | `show`, `modify` | one `site.json`; no add/delete |
+| `node` | `list`, `add`, `delete` | `hardware.nodes[]` CRUD |
+| `repository` | `list`, `add`, `delete`, `reconcile` | add/delete delegate to `repository.sh`; reconcile = repo-scoped converge |
+
+Top-level lifecycle verbs: `add` (create the singleton, = `create-site.sh`),
+`validate` (= `validate-site.sh`), `reconcile` (`[--apply] [--deep]`).
+
+Common options: `--config-dir`, `--json` (machine output for list/show),
+`--apply` (reconcile commits; default preview), `--deep`, `--force`.
+
+`site modify` editable fields are the **scalar site-wide** ones only:
+`displayName`, `owner`, `email`, `automaticReboot`, `snapshotRetention`,
+`backup.target`/`offsite`, `location.country`/`timezone`/`locale`,
+`network.isp`/`publicIp`. `hardware.nodes[]` (via `node …`) and the
+`repositories`/`environments`/`organizations` lists are excluded (own CRUD).
+
+## Reconcile cascade
+
+`reconcile` is shallow by default (validate `site.json`; converge each
+`repositories[]` entry to a live clone — clone if missing, checkout on branch
+drift). `--deep` walks the dependent managers in dependency order:
+
+```
+site reconcile --deep
+  → people-manager  reconcile
+  → network-manager reconcile
+  → for each environment in config/environments/*.json:
+       environment-manager <env> reconcile --deep
+```
+
+people/network are single bins (`people-manager reconcile` was renamed from
+`sync` and now exists); environments are enumerated from
+`config/environments/*.json` and each is driven with its own deep reconcile.
+Every leg is idempotent. The reconcile engine is pure and depends only on the
+injected `SiteClient`; `CliSiteClient` performs the actual `spawnSync` calls.
 
 ## Config state
 

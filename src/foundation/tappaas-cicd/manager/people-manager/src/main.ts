@@ -5,7 +5,7 @@
 // NO Authentik HTTP is reimplemented here — see src/primitives.ts.
 //
 // Commands:
-//   people-manager sync [--dry-run] [--config-dir DIR]
+//   people-manager reconcile [--dry-run] [--config-dir DIR]   (alias: sync, deprecated)
 //   people-manager role|org|group|user list|get [<name>] [--config-dir DIR]
 //
 // Exit codes: ok=0, error=1.
@@ -38,7 +38,7 @@ function usage(): void {
   info(`people-manager ${VERSION} — TAPPaaS People → Authentik manager
 
 Usage:
-  people-manager sync [--dry-run] [--config-dir DIR]
+  people-manager reconcile [--dry-run] [--config-dir DIR]   (alias: sync, deprecated)
   people-manager role  list|get [<name>] [--config-dir DIR]
   people-manager org   list|get [<name>] [--config-dir DIR]
   people-manager group list|get [<name>] [--config-dir DIR]
@@ -177,7 +177,11 @@ export function run(argv: string[], client: PrimitiveClient): number {
 
   try {
     switch (cmd) {
-      case "sync":
+      case "reconcile":
+        cmdSync(opts, client);
+        return 0;
+      case "sync": // deprecated alias for reconcile (kept for back-compat)
+        warn("'people-manager sync' is deprecated — use 'people-manager reconcile'");
         cmdSync(opts, client);
         return 0;
       case "role":

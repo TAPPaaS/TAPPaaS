@@ -1,0 +1,14 @@
+{
+  "kind": "module",
+  "description": "Nextcloud file sharing fixture",
+  "vmname": "nextcloud",
+  "vmid": 340,
+  "node": "tappaas1",
+  "zone0": "srvWork",
+  "tier": "app",
+  "source": "official",
+  "status": "Testing",
+  "location": "/home/tappaas/TAPPaaS/src/apps/nextcloud",
+  "dependsOn": ["cluster:vm", "templates:nixos"],
+  "provides": ["fileservice"]
+}

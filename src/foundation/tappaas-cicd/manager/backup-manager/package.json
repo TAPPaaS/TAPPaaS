@@ -1,0 +1,13 @@
+{
+  "name": "backup-manager",
+  "version": "0.1.0",
+  "description": "TAPPaaS backup-policy cascade manager (ADR-007 verb-alignment #3) — TypeScript",
+  "license": "MIT",
+  "private": true,
+  "bin": {
+    "backup-manager": "dist/main.js"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json"
+  }
+}

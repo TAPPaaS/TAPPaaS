@@ -6,11 +6,26 @@
 # reimplementing the PBS API — see DESIGN.md for the "Python rewrite" aspiration.
 #
 # Commands:
-#   job-status              Query the shared PBS backup job (vmid list, schedule)
-#   list <module>           List snapshots for a module's VM (by vmid)
+#   job-status [--json]     Query the shared PBS backup job (vmid list, schedule)
+#   list <module> [--json]  List snapshots for a module's VM (by vmid)
 #   verify <module>         Trigger + report a PBS verify for a module's VM
-#   namespaces              List the datastore's namespaces
+#   namespaces [--json]     List the datastore's namespaces
+#   add-to-job <vmid> [--retention <spec>]
+#                           Add <vmid> to the shared managed PBS backup job (PBS
+#                           mutation; reuses pbs_ensure_vmid). --retention is
+#                           accepted + echoed for the manager; per-job prune
+#                           wiring is a follow-up (the shared job + prune-job own
+#                           retention today).
+#   apply-schedule <spec>   Set the shared managed job's start time (PBS mutation;
+#                           e.g. "21:00"). Per-environment schedules are a
+#                           follow-up; this sets the single shared job's schedule.
 #   help
+#
+# The mutation verbs (add-to-job / apply-schedule) are how backup-manager's
+# `reconcile` pushes the RESOLVED cascade into PBS: the manager resolves the
+# Site->Environment->Module policy and calls these; the controller owns the PBS
+# write. --json makes job-status / list / namespaces machine-readable so the
+# TypeScript CliClient parses structured output (no fragile line scraping).
 #
 # Degrades gracefully when PBS / the cluster is unreachable: live commands print
 # a skip notice and exit 0 (so offline runs and tests do not fail). Pure helpers
@@ -63,41 +78,86 @@ module_vmid() {
     jq -r '.vmid // empty' "$f" 2>/dev/null
 }
 
-# Skip-with-exit-0 helper for unreachable PBS (graceful degradation).
+# JSON_OUT is set by the per-command --json flag parser. When set, commands emit
+# a single JSON value to stdout (and, when offline, a JSON object carrying
+# {"reachable": false} so the caller never has to scrape a human skip line).
+JSON_OUT=0
+
+# Strip --json from "$@", set JSON_OUT, and store the remaining args in the
+# global REST array. Must run in the CURRENT shell (not a subshell/process
+# substitution) so JSON_OUT propagates — callers do: parse_args "$@".
+REST=()
+parse_args() {
+    JSON_OUT=0
+    REST=()
+    local a
+    for a in "$@"; do
+        if [[ "$a" == "--json" ]]; then JSON_OUT=1; else REST+=("$a"); fi
+    done
+}
+
+# Skip-with-exit-0 helper for unreachable PBS (graceful degradation). In --json
+# mode emit a structured offline marker instead of a human warning so the
+# TypeScript CliClient can detect reachability without scraping text.
 skip_offline() {
-    warn "PBS / cluster not reachable — skipping live operation: $*"
+    if [[ "$JSON_OUT" -eq 1 ]]; then
+        jq -n '{reachable: false}'
+    else
+        warn "PBS / cluster not reachable — skipping live operation: $*"
+    fi
     exit 0
 }
 
 cmd_job_status() {
+    parse_args "$@"
     have_pbs_libs || skip_offline "job-status (PBS libs not loaded)"
     pbs_reachable || skip_offline "job-status"
-    local id
+    local id store vmids
     id="$(pbs_managed_job_id)"
+    store="$(pbs_storage_name)"
     if [[ -z "$id" ]]; then
-        info "No managed TAPPaaS PBS backup job found (none created yet)"
+        if [[ "$JSON_OUT" -eq 1 ]]; then
+            jq -n --arg store "$store" '{reachable: true, jobId: null, vmids: [], storage: $store}'
+        else
+            info "No managed TAPPaaS PBS backup job found (none created yet)"
+        fi
         return 0
     fi
-    info "Managed backup job: ${id}"
-    info "  vmids: $(pbs_job_vmids "$id")"
-    info "  storage: $(pbs_storage_name)"
+    vmids="$(pbs_job_vmids "$id")"
+    if [[ "$JSON_OUT" -eq 1 ]]; then
+        jq -n --arg id "$id" --arg store "$store" --arg vmids "$vmids" \
+            '{reachable: true, jobId: $id, storage: $store,
+              vmids: ($vmids | split(",") | map(select(length > 0)))}'
+    else
+        info "Managed backup job: ${id}"
+        info "  vmids: ${vmids}"
+        info "  storage: ${store}"
+    fi
 }
 
 cmd_list() {
-    local module="${1:?list: <module> required}" vmid
+    parse_args "$@"
+    local module="${REST[0]:?list: <module> required}" vmid
     vmid="$(module_vmid "$module")" || return 1
     [[ -n "$vmid" ]] || { error "Module '$module' has no vmid"; return 1; }
     pbs_reachable || skip_offline "list ${module} (vmid ${vmid})"
-    local node store
+    local node store snaps
     node="$(pbs_node)"; store="$(pbs_storage_name)"
-    info "Snapshots for ${module} (vmid ${vmid}) on ${store}:"
-    ssh -n -o ConnectTimeout=10 -o BatchMode=yes -o StrictHostKeyChecking=accept-new \
+    snaps="$(ssh -n -o ConnectTimeout=10 -o BatchMode=yes -o StrictHostKeyChecking=accept-new \
         "root@${node}.mgmt.internal" \
         "proxmox-backup-debug api get /admin/datastore/${store}/snapshots --output-format json 2>/dev/null" \
         | jq -r --arg vmid "$vmid" '.[]
               | select(.["backup-type"]=="vm" and (.["backup-id"]==$vmid))
               | .["backup-time"]' \
-        2>/dev/null || warn "could not list snapshots for vmid ${vmid}"
+        2>/dev/null)" || { warn "could not list snapshots for vmid ${vmid}"; snaps=""; }
+    if [[ "$JSON_OUT" -eq 1 ]]; then
+        jq -n --arg snaps "$snaps" --arg module "$module" --arg vmid "$vmid" \
+            '{reachable: true, module: $module, vmid: $vmid,
+              snapshots: ($snaps | split("\n") | map(select(length > 0)))}'
+    else
+        info "Snapshots for ${module} (vmid ${vmid}) on ${store}:"
+        [[ -n "$snaps" ]] && printf '%s\n' "$snaps"
+    fi
 }
 
 cmd_verify() {
@@ -111,11 +171,58 @@ cmd_verify() {
 }
 
 cmd_namespaces() {
+    parse_args "$@"
     have_pbs_libs || skip_offline "namespaces (PBS libs not loaded)"
     type pbs_ns_list >/dev/null 2>&1 || skip_offline "namespaces (pbs-namespace lib missing)"
     pbs_reachable || skip_offline "namespaces"
-    info "Namespaces in $(pbs_storage_name):"
-    pbs_ns_list | sed 's/^/  /'
+    local store nslist
+    store="$(pbs_storage_name)"
+    nslist="$(pbs_ns_list)"
+    if [[ "$JSON_OUT" -eq 1 ]]; then
+        jq -n --arg store "$store" --arg ns "$nslist" \
+            '{reachable: true, storage: $store,
+              namespaces: ($ns | split("\n") | map(select(length > 0)))}'
+    else
+        info "Namespaces in ${store}:"
+        printf '%s\n' "$nslist" | sed 's/^/  /'
+    fi
+}
+
+# ── PBS mutations (driven by backup-manager reconcile) ────────────────
+# add-to-job <vmid> [--retention <spec>] — ensure <vmid> is a member of the
+# shared managed PBS backup job. Reuses pbs_ensure_vmid (creates the job if
+# absent). --retention is recorded/echoed for the manager but per-job prune
+# wiring is a follow-up; the shared job + the foundation prune-job own retention.
+cmd_add_to_job() {
+    local vmid="" retention=""
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+            --retention) retention="$2"; shift 2 ;;
+            -*) error "add-to-job: unknown option $1"; return 2 ;;
+            *) vmid="$1"; shift ;;
+        esac
+    done
+    [[ -n "$vmid" ]] || { error "add-to-job: <vmid> required"; return 2; }
+    have_pbs_libs || skip_offline "add-to-job (PBS libs not loaded)"
+    type pbs_ensure_vmid >/dev/null 2>&1 || skip_offline "add-to-job (pbs-job lib missing)"
+    pbs_reachable || skip_offline "add-to-job ${vmid}"
+    [[ -n "$retention" ]] && info "  (retention '${retention}' noted; per-job prune wiring is a follow-up)"
+    pbs_ensure_vmid "$vmid"
+}
+
+# apply-schedule <spec> — set the shared managed backup job's start time
+# (e.g. "21:00"). Per-environment schedules are a follow-up; this sets the
+# single shared job's schedule via pvesh.
+cmd_apply_schedule() {
+    local spec="${1:?apply-schedule: <spec> required (e.g. 21:00)}"
+    have_pbs_libs || skip_offline "apply-schedule (PBS libs not loaded)"
+    pbs_reachable || skip_offline "apply-schedule ${spec}"
+    local id
+    id="$(pbs_managed_job_id)"
+    [[ -n "$id" ]] || { info "No managed backup job yet — nothing to schedule"; return 0; }
+    info "Setting managed backup job ${id} start time → ${spec}"
+    _pbs_ssh "pvesh set /cluster/backup/${id} --starttime '${spec}'" >/dev/null \
+        || { error "Failed to set start time for job ${id}"; return 1; }
 }
 
 # Pure-function self-test (no cluster) — exercised by test.sh.
@@ -140,11 +247,13 @@ main() {
     local cmd="${1:-help}"
     [[ $# -gt 0 ]] && shift || true
     case "$cmd" in
-        job-status) cmd_job_status "$@" ;;
-        list)       cmd_list "$@" ;;
-        verify)     cmd_verify "$@" ;;
-        namespaces) cmd_namespaces "$@" ;;
-        --selftest) selftest ;;
+        job-status)     cmd_job_status "$@" ;;
+        list)           cmd_list "$@" ;;
+        verify)         cmd_verify "$@" ;;
+        namespaces)     cmd_namespaces "$@" ;;
+        add-to-job)     cmd_add_to_job "$@" ;;
+        apply-schedule) cmd_apply_schedule "$@" ;;
+        --selftest)     selftest ;;
         help|-h|--help) usage ;;
         *) error "Unknown command: ${cmd}"; usage >&2; return 2 ;;
     esac

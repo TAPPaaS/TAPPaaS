@@ -1,0 +1,13 @@
+{
+  "name": "module-manager",
+  "version": "0.1.0",
+  "description": "TAPPaaS module lifecycle manager (ADR-007 #3 verb alignment) — TypeScript",
+  "license": "MIT",
+  "private": true,
+  "bin": {
+    "module-manager": "dist/main.js"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json"
+  }
+}

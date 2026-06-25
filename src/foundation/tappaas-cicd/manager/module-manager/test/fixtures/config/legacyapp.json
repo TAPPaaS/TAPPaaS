@@ -1,0 +1,9 @@
+{
+  "description": "Tier-less legacy app (no tier/source) — warns, defaults to app/official, passes",
+  "vmname": "legacyapp",
+  "vmid": 250,
+  "zone0": "srvWork",
+  "location": "/home/tappaas/TAPPaaS/src/apps/legacyapp",
+  "dependsOn": ["cluster:vm"],
+  "provides": []
+}

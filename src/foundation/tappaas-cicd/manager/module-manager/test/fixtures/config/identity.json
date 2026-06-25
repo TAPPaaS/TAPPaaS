@@ -1,0 +1,12 @@
+{
+  "description": "Authentik SSO identity fixture (foundation, official — passes lint)",
+  "vmname": "identity",
+  "vmid": 140,
+  "zone0": "mgmt",
+  "tier": "foundation",
+  "source": "official",
+  "status": "Development",
+  "location": "/home/tappaas/TAPPaaS/src/foundation/identity",
+  "dependsOn": ["cluster:vm"],
+  "provides": ["identity"]
+}

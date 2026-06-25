@@ -79,15 +79,18 @@ binary subcommand — the convention end-state.
 
 ## Pending / not yet implemented
 
-- **Entity CRUD over the CLI.** `role|org|group|user create|update|delete` are
+- **Verb naming (ADR-007 alignment).** The reconcile verb is **`reconcile`**
+  (`sync` is kept as a deprecated alias). Per-entity CRUD will standardize on
+  `add` / `modify` / `delete` (not create/update/remove).
+- **Entity CRUD over the CLI.** `role|org|group|user add|modify|delete` are
   deliberately not implemented in this build — `src/main.ts` dies with
   `"<kind> <sub>: not implemented in this build (use 'list' or 'get')"`. Editing
-  the JSON files plus `sync` is the current workflow.
+  the JSON files plus `reconcile` is the current workflow.
 - **Credential delivery on user creation** is deferred (a one-time enrollment
   link once SMTP is configured, otherwise a generated password) — see the note in
   `user.sh`.
 - **Per-module admin groups** (`<scope>-<module>-admins`) are created on demand at
   module-install time, not by this manager.
 - **Install-time wiring** of the initial identity install (run `user-setup.sh`
-  then `sync`, guarded to fire only when `config/people/` is empty) is a planned
-  integration point.
+  then `reconcile`, guarded to fire only when `config/people/` is empty) is a
+  planned integration point.

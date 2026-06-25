@@ -1,0 +1,5 @@
+{
+  "name": "dev",
+  "domain": "dev.acme.example",
+  "network": { "zone": "srv-dev" }
+}

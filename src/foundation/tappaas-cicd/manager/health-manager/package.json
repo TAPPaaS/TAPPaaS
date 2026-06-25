@@ -1,0 +1,13 @@
+{
+  "name": "health-manager",
+  "version": "0.1.0",
+  "description": "TAPPaaS cluster/VM/disk health manager (ADR-007 #3) — TypeScript (read-only)",
+  "license": "MIT",
+  "private": true,
+  "bin": {
+    "health-manager": "dist/main.js"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json"
+  }
+}

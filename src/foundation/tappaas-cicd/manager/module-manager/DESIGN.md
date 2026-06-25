@@ -2,14 +2,64 @@
 
 ## Language and build
 
-- **Language:** Bash throughout.
-- **`install.sh`** links every `*.sh` (except the verb scripts) into `~/bin`
-  (`${TAPPAAS_BIN:-/home/tappaas/bin}`): `install-module.sh`,
-  `update-module.sh`, `delete-module.sh`, `copy-update-json.sh`, `snapshot-vm.sh`,
+- **Front door:** the `module-manager` **TypeScript** CLI (ADR-007 #3 verb
+  alignment) — a thin orchestrator mirroring `people-manager` / `network-manager`
+  (zero npm deps, ambient `src/env.d.ts`, built by `tsc` via `default.nix` into
+  `result/bin/module-manager`). It owns the CONFIG-layer verbs in-process and
+  delegates the LIFECYCLE verbs to the bash scripts.
+- **Underlying lifecycle scripts:** Bash, unchanged. `install-module.sh`,
+  `update-module.sh`, `delete-module.sh`, `reconcile-module.sh`,
+  `test-module.sh`, `snapshot-vm.sh` + helpers (`copy-update-json.sh`,
   `module-format.sh`, `validate-module-tier-source.sh`,
-  `test-validate-module-tier-source.sh` (and `test-module.sh`). Nothing to
-  compile.
+  `test-validate-module-tier-source.sh`). They stay the source of truth until a
+  later retire phase; the TS verbs orchestrate them.
+- **`install.sh`** links every `*.sh` (except the verb scripts) into `~/bin`
+  (`${TAPPAAS_BIN:-/home/tappaas/bin}`). NOTE (next phase, NOT done here): it does
+  not yet `nix-build` + link the `module-manager` TS bin — that is deferred.
 - **`update.sh`** re-runs `install.sh` (idempotent relink).
+
+## Standardized verbs (ADR-007 #3)
+
+`module-manager` presents the canonical verbs on entity `module`. CONFIG-layer
+verbs are pure TS (read `config/*.json`); LIFECYCLE verbs shell out via an
+injected `ModuleClient` (production `CliModuleClient`; tests inject a fake):
+
+| Verb | Layer | Maps to |
+|------|-------|---------|
+| `list` / `show` | TS (config) | enumerate / detail deployed modules (`--json`) |
+| `validate` | TS (config) | tier/source lint (ported from `validate-module-tier-source.sh`) |
+| `add` | bash | `install-module.sh` |
+| `modify` | bash | `update-module.sh` (release update) |
+| `delete` | bash | `delete-module.sh` |
+| `reconcile` | bash | `reconcile-module.sh` (leaf converge — see below) |
+| `test` | bash | `test-module.sh` |
+| `snapshot-vm` | bash | `snapshot-vm.sh` (special VM op) |
+
+Common options: `--config-dir`, `--json` (list/show/validate). The `module`
+entity keyword is optional.
+
+### Module identity — the `kind` tag
+
+`install-module.sh` stamps `"kind":"module"` onto every deployed config (via the
+Pattern-A-aware `jq_module_write`). `module list`/`show` select on
+`.kind=="module"` — the authoritative way to distinguish a deployed module from
+the co-located state files (`zones.json`, `site.json`, `module-fields.json`,
+`switch-configuration-*`, `cert-refids.json`). For configs not yet re-installed
+(pre-tag) a **heuristic** fallback applies: any of `dependsOn`/`provides`/
+`location` present. The heuristic intentionally does **not** require `vmname`, so
+provider-only modules (e.g. `templates`: `provides:["nixos","debian"]`, no
+vmid/vmname) are still enumerated (shown without vmid/node, not filtered out).
+
+### `reconcile` vs `modify` — two distinct verbs
+
+`reconcile` (`reconcile-module.sh`) is the **leaf converge** the
+`site/environment reconcile --deep` cascade walks down to: it re-applies the
+module's **current** config to its VM/service — re-running each dependency's
+idempotent `install-service.sh` then the module's own `update.sh`/`install.sh` —
+with **no snapshot, no pre/post tests, no 3-way merge, and no `updateTime`
+bump**. `modify` (`update-module.sh`) *changes* the config via a release update
+and does all of those. Because `reconcile` mutates no config and is idempotent,
+re-running it (or a shared dependency) anytime is safe.
 
 ## Config state
 
@@ -53,11 +103,17 @@ tier has been added yet.
 
 ## Pending / not yet implemented
 
-- **`validate-module.sh` is a stub.** This is the manager's `validate` operation
-  (script-manager `validate-<manager>.sh` convention; renamed from the former
-  `validate.sh` stub). It prints `validate: ok (stub)`; the real validator —
-  which will lint every module config via `validate-module-tier-source.sh` (the
-  per-file tier/source lint) — has not been filled in yet.
+- **`validate` is real (in the TS verb).** `module validate` ports the ADR-007b
+  tier/source lint into `src/validate.ts` (foundation⇒official, enum checks,
+  community warn, `--allow-fork`) and runs it over one or every deployed config.
+  The legacy `validate-module.sh` bash entry remains a stub (kept for the old
+  on-PATH name until retire). Still **not** ported: a JSON **schema** check
+  against `module-fields.json` and dependsOn **reference-integrity** (do the
+  named providers exist among deployed modules) — both flagged in
+  `src/validate.ts` as future work.
+- **`install.sh` does not build/link the TS bin yet** (next phase). Today it
+  only relinks the `*.sh` scripts; the `module-manager` bin is built manually via
+  `default.nix`.
 - **No deep test tier yet.** `test.sh` does not add live cluster/VM provisioning
   probes under `TAPPAAS_TEST_DEEP=1`.
 - **Operational guards** carried in the scripts (worth knowing): `snapshot-vm.sh`

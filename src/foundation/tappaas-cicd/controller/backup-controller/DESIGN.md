@@ -33,6 +33,20 @@ Bash component: nothing to compile; `install.sh`/`update.sh` link the
   `install.sh` to the compiled-component pattern (nix build + relink). Until
   then, the bash reuse is intentional and sufficient.
 - **`schedule` / `verify` depth.** `verify <module>` currently delegates to the
-  datastore-wide `pbs_ensure_verify`; a per-snapshot verify trigger and a
-  per-environment schedule are the natural next steps (tie in with
-  `backup-manager`'s resolved `schedule`).
+  datastore-wide `pbs_ensure_verify`; a per-snapshot verify trigger is a natural
+  next step. `apply-schedule <spec>` now sets the *shared* managed job's start
+  time (driven by `backup-manager reconcile`), but a true *per-environment*
+  schedule (multiple PBS jobs) is the remaining follow-up.
+- **`add-to-job` retention.** `add-to-job --retention SPEC` accepts + echoes the
+  resolved retention for the manager, but per-job prune wiring is a follow-up;
+  the shared job + the foundation prune-job own retention today.
+
+## Verbs added for ADR-007 verb-alignment (#3)
+
+The query verbs (`job-status` / `list` / `namespaces`) gained `--json` so the
+TypeScript `backup-manager` parses structured output (no human-line scraping; an
+offline run emits `{"reachable": false}`). Two **mutation** verbs were added so
+the manager's `reconcile` can push the resolved cascade into PBS while the
+controller owns the PBS write: `add-to-job <vmid> [--retention]` (reuses
+`pbs_ensure_vmid`) and `apply-schedule <spec>` (sets the shared job's start time
+via `pvesh set`). All degrade gracefully when PBS is unreachable.

@@ -1,0 +1,11 @@
+{
+  "description": "Foundation module from a non-official source — MUST fail the tier/source lint",
+  "vmname": "badfork",
+  "vmid": 199,
+  "zone0": "mgmt",
+  "tier": "foundation",
+  "source": "community",
+  "location": "/home/tappaas/TAPPaaS/src/apps/badfork",
+  "dependsOn": ["cluster:vm"],
+  "provides": []
+}

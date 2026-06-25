@@ -1,0 +1,4 @@
+{
+  "name": "fixture-site",
+  "comment": "non-module config (no vmid) — must be SKIPPED by loadConfigModules"
+}

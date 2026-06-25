@@ -1,0 +1,13 @@
+{
+  "name": "environment-manager",
+  "version": "0.1.0",
+  "description": "TAPPaaS Environment manager (ADR-007 P3, #3) — TypeScript first-pass port",
+  "license": "MIT",
+  "private": true,
+  "bin": {
+    "environment-manager": "dist/main.js"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json"
+  }
+}

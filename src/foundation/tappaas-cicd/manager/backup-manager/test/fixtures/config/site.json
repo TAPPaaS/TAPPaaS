@@ -1,0 +1,9 @@
+{
+  "name": "demo-site",
+  "backup": {
+    "defaultRetention": "7y",
+    "target": "pbs.mgmt.internal:tappaas_backup",
+    "offsite": "remote-lars",
+    "offsiteResidency": "eu-only"
+  }
+}

@@ -12,9 +12,78 @@ config. (Domain / DNS / identity are *per-environment*, owned by
 validated against `site-fields.json`. It also migrates the legacy
 `config/configuration.json` into `site.json`.
 
-## Commands
+## `site-manager` (TypeScript, ADR-007 verb-aligned)
 
-All scripts are bash, linked onto `PATH` by `install.sh`.
+The TypeScript `site-manager` bin is the verb-aligned front door (ADR-007, #3).
+It owns the Site as a **singleton** and the `node` / `repository` sub-entities,
+following the same `<entity> <verb>` shape as `network-manager`. The heavy
+git/cluster I/O stays in the still-live bash tools, invoked as thin delegations:
+`add` → `create-site.sh`, `repository add`/`delete` → `repository.sh`,
+`validate` → `validate-site.sh`. TS owns config CRUD (`site modify`, `node`
+CRUD, the `site.json` writes) + `validate` + `reconcile`.
+
+### Entities and verbs
+
+```
+site (singleton)   site show [--json]
+                   site modify --<field> <value> [...]
+node               node list [--json]
+                   node add --name <N> [--pool <p> ...]
+                   node delete <name>
+repository         repository list [--json]
+                   repository add <url> [--branch <b>] [--managed full|tracked] [--catalog <p>]
+                   repository delete <name> [--force]
+                   repository reconcile [--apply]
+top-level          add --name <N> [create-site options]   (= create-site.sh)
+                   validate [FILE] [--schema-dir PATH]     (= validate-site.sh)
+                   reconcile [--apply] [--deep]
+```
+
+Common options: `--config-dir DIR`, `--json` (machine output for list/show),
+`--apply` (reconcile commits; default is preview), `--deep` (reconcile cascade),
+`--force` (repository delete → `repository.sh remove --force`).
+
+`site modify` editable fields (scalar, site-wide): `--displayName`, `--owner`,
+`--email`, `--automaticReboot`, `--snapshotRetention`, `--backupTarget`,
+`--backupOffsite`, `--locationCountry`, `--locationTimezone`,
+`--locationLocale`, `--networkIsp`, `--networkPublicIp`. The discovery-derived
+`hardware.nodes[]` (use `node …`) and the `repositories`/`environments`/
+`organizations` lists (own CRUD / own managers) are **not** modifiable here.
+
+### `reconcile` and the `--deep` cascade
+
+`reconcile` is **shallow by default** — it converges the site's own concern:
+validate `site.json`, then bring each `repositories[]` entry to a live clone
+(clone if missing, checkout if the branch drifts). Default output is a
+**preview**; `--apply` commits. `repository reconcile` is the repo-scoped
+subset of the same engine.
+
+`reconcile --deep` then cascades to the dependent managers in dependency order:
+
+```
+site reconcile --deep
+  → people-manager  reconcile          (people → Authentik)
+  → network-manager reconcile          (the 4 network planes)
+  → for each environment in config/environments/*.json:
+       environment-manager <env> reconcile --deep
+```
+
+people/network are single bins; environments fan out — one deep reconcile per
+registered environment. Every leg is idempotent, so re-running is safe; this is
+the natural whole-platform converge after `update-tappaas`.
+
+### Build
+
+TypeScript, built with `tsc` (zero npm deps, ambient `src/env.d.ts`), wrapped by
+`default.nix` into `result/bin/site-manager` — mirroring `people-manager` /
+`network-manager`. `install.sh` is **not** yet wired to nix-build it (the bash
+tools below remain the installed entry points for now).
+
+## Commands (legacy bash tools — kept live until cutover)
+
+All scripts are bash, linked onto `PATH` by `install.sh`. `repository.sh` and
+`validate-site.sh` remain live and are the tools the TS `repository add`/`delete`
+and `validate` delegate to; `create-site.sh` backs the TS `add`.
 
 ### `repository.sh` — manage module repositories
 

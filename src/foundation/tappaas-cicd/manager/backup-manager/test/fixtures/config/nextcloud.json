@@ -1,0 +1,10 @@
+{
+  "name": "nextcloud",
+  "vmid": "201",
+  "environment": "prod",
+  "dependsOn": ["backup:vm"],
+  "backup": {
+    "retention": "90d",
+    "exclude": ["/var/cache"]
+  }
+}

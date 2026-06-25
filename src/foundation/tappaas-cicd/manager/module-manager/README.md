@@ -1,9 +1,9 @@
 # module-manager
 
-The **module lifecycle** manager: install, update, delete, test, and snapshot
-TAPPaaS modules, with tier/source classification lint and environment-aware
-deployment. It owns the per-module JSON config in `config/` and drives the
-Proxmox cluster (over SSH) to provision and maintain the module's VM.
+The **module lifecycle** manager: install, update, delete, test, reconcile, and
+snapshot TAPPaaS modules, with tier/source classification lint and
+environment-aware deployment. It owns the per-module JSON config in `config/` and
+drives the Proxmox cluster (over SSH) to provision and maintain the module's VM.
 
 ## What it owns
 
@@ -13,10 +13,54 @@ Proxmox cluster (over SSH) to provision and maintain the module's VM.
 - The `tier` (`foundation` | `app`) and `source`
   (`official` | `community` | `private` | `local`) classification on each module
   JSON, validated against `module-fields.json`.
+- The `"kind":"module"` tag stamped onto every deployed config at install time —
+  the authoritative marker `list`/`show` use to tell a deployed module apart
+  from the co-located state files (`zones.json`, `site.json`, …). Configs from
+  before the tag fall back to a heuristic (any of `dependsOn`/`provides`/
+  `location`); provider-only modules (e.g. `templates`, no vmid/vmname) are kept.
 
-## Commands
+## Standardized verbs (ADR-007 #3) — `module-manager`
 
-All bash, linked onto `PATH` by `install.sh`.
+The `module-manager` TypeScript CLI presents the **standardized verbs** on entity
+`module` (the verb-alignment front door). It is a thin orchestrator: the
+CONFIG-layer verbs (`list`/`show`/`validate`) are pure TS over `config/*.json`;
+the LIFECYCLE verbs delegate to the bash scripts below (which stay live until a
+later retire phase).
+
+| Verb | Maps to | Notes |
+|------|---------|-------|
+| `module list` | — (TS) | enumerate deployed modules (`--json` for the cascade) |
+| `module show <m>` | — (TS) | one deployed config in full (`--json`) |
+| `module validate [<m>]` | tier/source lint (TS) | all modules, or one; `--allow-fork` |
+| `module add <m>` | `install-module.sh` | create + provision |
+| `module modify <m>` | `update-module.sh` | release update (snapshot + test + 3-way merge) |
+| `module delete <m>` | `delete-module.sh` | `--archive` (default) / `--remove` |
+| `module reconcile <m>` | `reconcile-module.sh` | **leaf converge** — re-apply current config |
+| `module test <m>` | `test-module.sh` | `--deep`, `--vmid`, `--zone0` |
+| `module snapshot-vm <m>` | `snapshot-vm.sh` | special VM op (not CRUD) |
+
+Common options: `--config-dir <dir>`, `--json` (list/show/validate), `-h`.
+The leading `module` entity keyword is optional (it is the only entity).
+
+**`reconcile` vs `modify`** — `reconcile` re-applies the *existing* config
+(idempotent converge: dependency `*-service.sh` applies + the module's own
+`update.sh`/`install.sh`), with **no snapshot, no tests, no 3-way merge, and no
+`updateTime` bump**. `modify` (`update-module.sh`) *changes* the config via a
+release update and does all of those. `reconcile` is the leaf the
+`site/environment reconcile --deep` cascade walks down to.
+
+```bash
+module-manager module list
+module-manager module show nextcloud --json
+module-manager module validate --allow-fork
+module-manager module add nextcloud --environment acme
+module-manager module reconcile nextcloud
+```
+
+## Underlying scripts
+
+All bash, linked onto `PATH` by `install.sh`. These remain the source of truth
+(the TS verbs orchestrate them) until a later retire phase.
 
 ### `install-module.sh` — install a module
 
@@ -64,6 +108,20 @@ delete-module.sh <module-name> [--archive|--remove] [--vmid <id>]
 - `--environment <name>` (alias `--variant`).
 - `--yes` / `-y` — skip the confirmation prompt.
 - `--force` — skip dependency checks; **required** for `tier:foundation` modules.
+
+### `reconcile-module.sh` — re-apply (converge) a module's current config
+
+```
+reconcile-module.sh [--environment <name>] [--debug] [--silent] <module-name>
+```
+
+The **leaf** of the `reconcile` cascade (`module reconcile`). Re-applies an
+already-installed module's current config to its VM/service, idempotently:
+re-runs each dependency's `install-service.sh` (the idempotent ensure/apply
+entry) then the module's own `update.sh` (or `install.sh`). It deliberately does
+**no snapshot, no pre/post tests, no 3-way merge, and no `updateTime` bump** —
+that is what distinguishes it from `update-module.sh` (a release update). Safe to
+run anytime.
 
 ### `test-module.sh` — run a module's tests
 

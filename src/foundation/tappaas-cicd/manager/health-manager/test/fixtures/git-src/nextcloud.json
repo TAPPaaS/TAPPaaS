@@ -1,0 +1,10 @@
+{
+  "vmname": "nextcloud",
+  "vmid": "311",
+  "node": "tappaas1",
+  "cores": "2",
+  "memory": "4096",
+  "diskSize": "32G",
+  "bios": "ovmf",
+  "cputype": "host"
+}

@@ -1,0 +1,9 @@
+{
+  "name": "prod",
+  "dataResidency": "eu-only",
+  "backup": {
+    "retention": "30d",
+    "residency": "eu-only",
+    "schedule": "daily"
+  }
+}

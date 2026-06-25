@@ -34,10 +34,10 @@ placeholders.
 This manager exposes one compiled CLI (`people-manager`) plus two bash helpers
 (`user-setup.sh`, `validate-people.sh`).
 
-### `people-manager` — read + sync
+### `people-manager` — read + reconcile
 
 ```
-people-manager sync  [--dry-run] [--config-dir DIR]
+people-manager reconcile  [--dry-run] [--config-dir DIR]   (alias: sync, deprecated)
 people-manager role         list | get [<name>]   [--config-dir DIR]
 people-manager organization list | get [<name>]   [--config-dir DIR]   # alias: org
 people-manager group        list | get [<name>]   [--config-dir DIR]
@@ -52,18 +52,19 @@ Options:
 - `--config-dir DIR` — the People directory to read (default
   `$TAPPAAS_CONFIG/people`).
 
-`sync` reconciles `config/people/` into the identity service. `list` / `get` are
-read-only inspection of the on-disk config. (Entity `create` / `update` / `delete`
+`reconcile` reconciles `config/people/` into the identity service (the verb was
+`sync`, kept as a deprecated alias — see ADR-007 verb alignment). `list` / `get`
+are read-only inspection of the on-disk config. (Entity `add` / `modify` / `delete`
 are not yet implemented — see DESIGN.md; use `list`/`get` plus editing the JSON
-files, then `sync`.)
+files, then `reconcile`.)
 
 Examples:
 
 ```bash
 people-manager user list
 people-manager org get foo-company
-people-manager sync --dry-run          # preview the plan
-people-manager sync                    # apply to the identity service
+people-manager reconcile --dry-run     # preview the plan
+people-manager reconcile               # apply to the identity service
 ```
 
 ### `user-setup.sh` — bootstrap a minimal org

@@ -16,9 +16,64 @@ retention, and legal processor. Environments live at
 `additionalProperties:false`, so an authored `tlsCertRefid` is **rejected** — a
 cert refid is runtime state, not authored config.
 
-## Commands
+## The `environment-manager` CLI (TypeScript, ADR-007 #3)
 
-All scripts are bash, linked onto `PATH` by `install.sh`.
+A first-pass TypeScript port presents the standardized ADR-007 verbs on the
+`environment` entity. It is a thin orchestration boundary — it owns
+`config/environments/*.json` and shells out to the plane/module managers for
+reconcile; it reimplements no plane logic (exactly as `people-manager` shells
+out to `authentik-manager`). Built with `tsc` (zero npm deps, ambient
+`src/env.d.ts`) and wrapped via `default.nix`. The bash scripts below stay live.
+
+```
+environment-manager list [--json] [--config-dir DIR]
+environment-manager show <env> [--json] [--config-dir DIR]
+environment-manager validate [<file|dir>] [--config-dir DIR]
+environment-manager add [<env>] [--name N] [--domain D] [--owner ORG]
+                        [--zone Z] [--display D] [--force] [--config-dir DIR]
+environment-manager modify <env> [--domain D] [--owner ORG] [--zone Z]
+                        [--display D] [--config-dir DIR]
+environment-manager delete <env> [--force] [--config-dir DIR]
+environment-manager reconcile <env> [--deep] [--apply] [--config-dir DIR]
+```
+
+| Verb | Behaviour |
+|------|-----------|
+| `list` | Enumerate environments. `--json` emits the full objects as a JSON array; default prints `name (zone …)` per line. |
+| `show <env>` | One environment in detail (canonical pretty JSON; `--json` = compact). |
+| `validate [<file/dir>]` | **Thin wrapper** over `validate-environment.sh` — the canonical schema + reference gate (one source of truth, zero TS dependency). Relays its output and exit status. |
+| `add` | Create an environment (writes validated config). With **no** `<env>` and **no** `--name` it **seeds the minimal set** (`mgmt` + the default `<N>`) via the `create-minimal-environments` bootstrap. With `<env>` (or `--name`) it creates that single env. `--owner` defaults to the first org under `people/organizations/`; `--zone` defaults to `<env>`. |
+| `modify <env>` | Change an existing environment (preserves un-flagged fields; writes validated config). |
+| `delete <env>` | Remove an environment file — **guard-railed** (see below). |
+| `reconcile <env>` | Converge the environment → live. `--apply` commits (default = preview). `--deep` cascades (see below). |
+
+### Reconcile cascade
+
+- **Shallow** (`reconcile <env>`): reconcile the environment setup **and its
+  associated zone**, by shelling out to `network-manager reconcile [--apply]`
+  (the network owner converges the zone as part of its pass).
+- **Deep** (`reconcile <env> --deep`): the above **plus** every deployed module
+  that consumes this environment — `module-manager <module> reconcile [--apply]`
+  per module. Consuming modules are enumerated as the deployed `config/*.json`
+  files whose `.environment` field equals `<env>`. Each reconcile is idempotent,
+  so re-touching the shared network is harmless.
+
+### `delete` guard rails
+
+`delete` **refuses** (exit 1) when, **without** `--force`:
+
+- the target is the reserved management environment `mgmt`, **or**
+- the target is the default `<N>` environment (`= site.json '.name'`), **or**
+- one or more **deployed modules still consume** the environment (those modules
+  are listed in the error).
+
+`create-minimal-environments` is the single owner of the two bootstrap files;
+`--force` overrides the guard rails for the rare deliberate removal.
+
+## Commands (bash scripts)
+
+All scripts are bash, linked onto `PATH` by `install.sh`. They remain live and
+are the implementation the TS `validate` verb delegates to.
 
 ### `create-minimal-environments.sh` — bootstrap the required environments
 

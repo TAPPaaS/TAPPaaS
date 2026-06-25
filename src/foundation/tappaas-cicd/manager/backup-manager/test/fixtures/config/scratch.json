@@ -1,0 +1,8 @@
+{
+  "name": "scratch",
+  "vmid": "202",
+  "environment": "prod",
+  "backup": {
+    "enabled": false
+  }
+}

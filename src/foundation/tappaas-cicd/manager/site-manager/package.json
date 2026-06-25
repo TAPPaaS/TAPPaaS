@@ -1,0 +1,13 @@
+{
+  "name": "site-manager",
+  "version": "0.1.0",
+  "description": "TAPPaaS Site manager (ADR-007 P2, #3 all-managers-to-TS) — TypeScript",
+  "license": "MIT",
+  "private": true,
+  "bin": {
+    "site-manager": "dist/main.js"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json"
+  }
+}

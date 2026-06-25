@@ -1,0 +1,5 @@
+{
+  "_README": "Non-module state file — must be EXCLUDED from `module list`.",
+  "mgmt": { "vlantag": 1, "state": "Mandatory" },
+  "srvWork": { "vlantag": 220, "state": "Active" }
+}
