@@ -71,6 +71,9 @@ NON_MODULE_JSONS = {
     "zones.rename.json",
     "cert-refids.json",
     "module-fields.json",
+    # switch/AP controller runtime state — NOT modules (they have no vmname/kind).
+    "switch-configuration-actual.json",
+    "switch-configuration-desired.json",
 }
 
 WEEKDAYS = {
@@ -224,6 +227,21 @@ def should_update_now(config: dict, current_hour: int) -> bool:
 # ── Module discovery / ordering ──────────────────────────────────────
 
 
+def _is_module_json(path) -> bool:
+    """True if a config/*.json is an actual deployed MODULE, not a co-located
+    state file. Mirrors module-manager's selector (ADR-007 #3): the `kind:"module"`
+    tag (written by install-module.sh), with a `vmname` heuristic fallback for
+    not-yet-tagged configs. Excludes state files like
+    switch-configuration-{actual,desired}.json that `glob("*.json")` also matches."""
+    try:
+        data = json.loads(path.read_text())
+    except (OSError, ValueError):
+        return False
+    if not isinstance(data, dict):
+        return False
+    return data.get("kind") == "module" or bool(data.get("vmname"))
+
+
 def get_installed_apps() -> list[str]:
     """Get list of installed app modules (non-foundation)."""
     # Include legacy foundation names (e.g. firewall) so a not-yet-migrated
@@ -235,6 +253,10 @@ def get_installed_apps() -> list[str]:
             continue
         module_name = json_file.stem
         if module_name in foundation_set:
+            continue
+        # Robust guard: only real modules (kind=module / has vmname), so state
+        # files that slipped past NON_MODULE_JSONS are never treated as apps.
+        if not _is_module_json(json_file):
             continue
         apps.append(module_name)
     return apps
