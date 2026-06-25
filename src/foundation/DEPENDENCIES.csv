@@ -401,7 +401,7 @@ test-service.sh,cluster/services/vm/,common-install-routines.sh
 #
 # === backup ===
 backup-manage.sh,backup/,common-install-routines.sh; backup.json
-install.sh,backup/,common-install-routines.sh; copy-update-json.sh; pbs-job.sh; pbs-namespace.sh; dns-manager; backup.json
+install.sh,backup/,common-install-routines.sh; pbs-job.sh; pbs-namespace.sh; dns-manager; backup.json
 restore.sh,backup/,common-install-routines.sh; site.json; backup.json
 update.sh,backup/,common-install-routines.sh; pbs-job.sh
 #
