@@ -70,35 +70,53 @@ That's it. Everything else is created by the install.
 
    ```bash
    REPO="https://raw.githubusercontent.com/TAPPaaS/TAPPaaS/"; BRANCH="main"
-   curl -fsSL ${REPO}${BRANCH}/src/foundation/cluster/install.sh >install.sh
-   chmod +x install.sh && ./install.sh "$REPO" "$BRANCH" --domain "yourdomain.com"
+   curl -fsSL ${REPO}${BRANCH}/src/foundation/install.sh >install.sh
+   chmod +x install.sh && ./install.sh "$REPO" "$BRANCH" --name <orgname> --domain "yourdomain.com"
    ```
 
-   Pass your **public domain** with `--domain` — the platform's reverse proxy is
-   configured for `<service>.yourdomain.com`, so it's needed up front (if you omit
-   it you'll be prompted). You don't need the domain's DNS-01 API token yet — that
-   comes in §2.3.
+   Pass two things up front:
+   - **`--name <orgname>`** — your organisation / system name (lowercase, ≤15
+     chars). This is **the one name** for the whole install: it names the **Proxmox
+     cluster**, the **`site.json`**, the **default environment**, and (later) the
+     **organisation** in the identity provider. If omitted you'll be prompted.
+   - **`--domain`** — your **public domain**; the reverse proxy is configured for
+     `<service>.yourdomain.com`. If omitted you'll be prompted. You don't need the
+     domain's DNS-01 API token yet — that comes in §2.3.
 
-   On the **first node** this runs the whole foundation bring-up **end-to-end** —
-   you run it once and watch:
+   On the **first node** this runs the whole foundation bring-up **end-to-end** as
+   a 5-step chain — you run it once and watch:
 
-   1. **Node** — Proxmox post-install, the `lan`/`wan` bridges (auto-detected: the
-      install NIC, the one with internet, becomes **WAN**; the other, to your
-      downstream switch, becomes **LAN**), the `TAPPaaS` cluster, and the ZFS pools.
-   2. **Firewall** — downloads and boots the **prebuilt OPNsense image** at
+   1. **[1/5] Node** — Proxmox post-install, the `lan`/`wan` bridges (auto-detected:
+      the install NIC with internet becomes **WAN**; the other, to your downstream
+      switch, becomes **LAN**), the Proxmox **cluster named `<orgname>`**, and the
+      ZFS pools.
+   2. **[2/5] Firewall** — downloads and boots the **prebuilt OPNsense image** at
       `10.0.0.1`, self-configured with unique credentials (no GUI, no installer).
-   3. **Gateway cutover** — adds this node's management IP `10.0.0.10` and points
-      its default route + DNS at the firewall. This is **additive and
-      non-disruptive**: the upstream IP is *kept*, **no cables move**, and your
-      current session is **not** dropped.
-   4. **Sanity check** — gateway, DNS, internet.
-   5. **Platform** — imports the prebuilt **NixOS template** and builds the
-      **`tappaas-cicd` mothership** (clone → `install1` → reboot → `install2`),
-      which then owns VLANs, the reverse proxy and firewall rules.
+   3. **[3/5] Gateway cutover** — adds this node's management IP `10.0.0.10` and
+      points its default route + DNS at the firewall. **Additive and
+      non-disruptive**: the upstream IP is *kept*, **no cables move**, your session
+      is **not** dropped.
+   4. **[4/5] Sanity check** — gateway, DNS, internet.
+   5. **[5/5] Platform** — imports the prebuilt **NixOS template** and builds the
+      **`tappaas-cicd` mothership** (`bootstrap.sh` clone+nixos-rebuild → reboot →
+      `install.sh`). The cicd's `install.sh` then **writes the system's
+      configuration**, automatically:
+      - **`site.json`** — the site singleton (nodes, domain, email, repos), via
+        `create-site.sh --name <orgname>`
+      - **`zones.json`** — the network zones, via `network-manager zones-init`
+      - the **`mgmt` + default `<orgname>` environments**, via
+        `create-minimal-environments.sh`
+      - the **foundation modules** (cluster, templates, network, tappaas-cicd) and
+        the **Caddy** reverse proxy
 
-   The domain you passed is used to configure the reverse proxy. To stop earlier,
-   pass `--skip-firewall` or `--skip-platform`; to drive the in-VM cicd install by
-   hand, see [Appendix: install options](#appendix-install-options).
+   > **One name, everywhere:** `<orgname>` = the Proxmox cluster name = `site.json`
+   > `.name` = the default environment name = your organisation name. You set it
+   > once with `--name`; the **organisation itself** isn't created until §3
+   > (`rest-of-foundation.sh`, after the identity provider is up).
+
+   The domain you passed configures the reverse proxy. To stop earlier, pass
+   `--skip-firewall` or `--skip-platform`; to drive the in-VM cicd install by hand,
+   see [Appendix: install options](#appendix-install-options).
 
    When it finishes, `tappaas1` is at `10.0.0.10` behind the firewall and
    `tappaas-cicd` owns the platform. Optionally move your admin laptop onto the
@@ -118,11 +136,14 @@ Do this **after** the first node's bootstrap has finished (cicd is up).
    VLAN trunks first — an **unmanaged** switch needs no setup; see
    [the network section](#network--cutting-over-to-the-firewall).)*
 
-2. Run the **same bootstrap** (the command in 2.1 step 2) on each. It detects it's
+2. Run the **same installer** (the command in 2.1 step 2) on each. It detects it's
    a secondary node (already on the mgmt net), assigns the install NIC as **LAN**
    and **asks which NIC is WAN** (wire it to your upstream if this node will host
-   firewall HA), then **auto-joins** the cluster. *(No `tappaas1` reboot is needed —
-   corosync was bound to the `10.0.0.10` mgmt IP from the start.)*
+   firewall HA), then **auto-joins** the cluster. On a secondary node the chain
+   **stops after the node step** ([1/5]) — the firewall, gateway and platform
+   already exist — so no firewall/platform work re-runs. *(No `tappaas1` reboot is
+   needed — corosync was bound to the `10.0.0.10` mgmt IP from the start. `--name`
+   is optional here: the node joins the existing `<orgname>` cluster.)*
 
 3. Back on the mothership, run `update-tappaas --force` so cicd reconciles the
    new topology — it then configures **HA + replication automatically** across nodes.
@@ -201,16 +222,25 @@ re-run `acme-setup.sh`.)*
 ## 3. Install the rest of the foundation
 
 From here on you work **from the cicd mothership** (`ssh tappaas@tappaas-cicd`).
-One command installs the remaining foundation modules (backup, identity,
-logging), runs a final system update + tests, and prints a summary:
+One command does two things:
 
 ```bash
 rest-of-foundation.sh
 ```
 
-It's idempotent — safe to re-run if a module needs attention. When it finishes
-you'll see a **"🎉 your TAPPaaS foundation is installed"** summary (nodes,
-firewall, mothership, domain/TLS, modules).
+1. **Installs the remaining foundation modules** in order — **backup → identity →
+   logging** — then runs a final system update + tests.
+2. **Bootstraps your people domain** — once the identity provider (Authentik) is
+   up and `config/people/` is still empty (first install), it creates the
+   **organisation `<orgname>`** (the same name from §2.1), the `users` group and
+   **your installer user** (from `site.json`'s email), and pushes them into
+   Authentik. So **this is where your organisation is actually created** — the
+   earlier `--name` only reserved the name; the org entity is materialised here.
+
+It's idempotent — safe to re-run if a module needs attention (the people bootstrap
+is skipped once `config/people/` exists, so it never disturbs people you've added).
+When it finishes you'll see a **"🎉 your TAPPaaS foundation is installed"** summary
+(nodes, firewall, mothership, domain/TLS, modules, organisation).
 
 > Prefer to do it by hand? `install-module.sh` is on the `PATH` but reads
 > `./<module>.json` from the current directory, so `cd` in first:
@@ -330,12 +360,13 @@ Defaults are chosen so the commands above "just work". Override as needed:
 | Branch `stable` | Pass a different branch as the 2nd arg to `install.sh` (e.g. `main`). |
 | Hostnames `tappaas1/2/3` | Set during the Proxmox install; the **first** node must be `tappaas1` (it creates the cluster). |
 | Management subnet `10.0.0.0/24`, gateway/firewall `10.0.0.1` | `config-network.sh --mgmt-ip <CIDR> --gateway <ip>`; firewall LAN lives in `src/foundation/network/firewall-config.xml.template`. |
+| Org / system / cluster name | `install.sh --name <orgname>` (the one name: Proxmox cluster, `site.json`, default environment, organisation; lowercase, ≤15 chars; prompted if omitted). |
 | Auto cluster create/join | `install.sh --cluster` / `--join` / `--no-cluster`. |
-| Chained first-node install (firewall→cutover→platform) | On by default; stop earlier with `install.sh --skip-firewall` or `--skip-platform`. |
+| Chained first-node install (node→firewall→cutover→sanity→platform) | The entry point `foundation/install.sh` runs all 5 steps on the first node by default; stop earlier with `--skip-firewall` or `--skip-platform`. The node step alone is `cluster/install.sh`. |
 | Gateway cutover (route via firewall) | Done automatically by the bootstrap; manual: `config-network.sh --swap-gateway` (additive — keeps the upstream IP). |
 | Take Proxmox off the upstream net (hardening) | `config-network.sh --drop-upstream` (run later, once you manage via the mgmt net / netbird). |
 | Platform install branch / domain | `install-platform.sh --branch <name> --domain <domain>`. |
-| Automated vs. manual cicd install | `install-platform.sh` automates the in-VM install over SSH; pass `--manual-cicd` to run `install1.sh`/`install2.sh` by hand inside the VM instead. |
+| Automated vs. manual cicd install | `install-platform.sh` automates the in-VM install over SSH; pass `--manual-cicd` to run `bootstrap.sh` then `install.sh` by hand inside the cicd VM instead. |
 | ZFS pools (`tankXY`, topology) | `config-storage.sh --pool name=topology:disks` (interactive by default). |
 | Firewall root password | `config-firewall.sh --root-pw <pw>` (otherwise prompted/generated; the API key is always unique per deploy). |
 | VM sizing, storage, network zone per module | edit the module's `<name>.json` (cores, memory, diskSize, storage, zone0/bridge0). |
@@ -426,8 +457,8 @@ Run the bootstrap command from §2.1:
 
 ```bash
 REPO="https://raw.githubusercontent.com/TAPPaaS/TAPPaaS/"; BRANCH="main"
-curl -fsSL ${REPO}${BRANCH}/src/foundation/cluster/install.sh >install.sh
-chmod +x install.sh && ./install.sh "$REPO" "$BRANCH" --domain "yourdomain.com"
+curl -fsSL ${REPO}${BRANCH}/src/foundation/install.sh >install.sh
+chmod +x install.sh && ./install.sh "$REPO" "$BRANCH" --name <orgname> --domain "yourdomain.com"
 ```
 
 Even if your SSH drops during network cutover, the install continues inside
