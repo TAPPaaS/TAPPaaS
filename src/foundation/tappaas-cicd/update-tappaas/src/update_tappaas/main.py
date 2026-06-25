@@ -22,7 +22,10 @@ from pathlib import Path
 
 CONFIG_PATH = Path("/home/tappaas/config/site.json")
 CONFIG_DIR = Path("/home/tappaas/config")
-UPDATE_MODULE_CMD = "/home/tappaas/bin/update-module.sh"
+# The verb-aligned front door (ADR-007 #3/#5). `module module modify <m>` delegates
+# to update-module.sh, so behaviour is unchanged — we just stop calling the script
+# directly. Override for tests with MODULE_MANAGER_CMD.
+MODULE_MANAGER_CMD = os.environ.get("MODULE_MANAGER_CMD", "/home/tappaas/bin/module-manager")
 
 # Foundation modules in their required update order
 FOUNDATION_MODULES = [
@@ -294,12 +297,15 @@ def topological_sort(apps: list[str]) -> list[str]:
 
 
 def update_module(module_name: str) -> bool:
-    """Call update-module.sh to update a single module."""
+    """Update a single module via `module-manager module modify` (which delegates
+    to update-module.sh — same behaviour, through the verb-aligned front door)."""
     try:
-        result = subprocess.run([UPDATE_MODULE_CMD, module_name], text=True)
+        result = subprocess.run(
+            [MODULE_MANAGER_CMD, "module", "modify", module_name], text=True
+        )
         return result.returncode == 0
     except (subprocess.SubprocessError, FileNotFoundError) as e:
-        log.error("Error running update-module.sh for %s: %s", module_name, e)
+        log.error("Error running 'module-manager module modify %s': %s", module_name, e)
         return False
 
 
@@ -381,9 +387,9 @@ def main():
     sorted_apps = topological_sort(apps)
 
     # Resolve each canonical foundation module to its deployed config name,
-    # honouring the ADR-007 P8 legacy alias (network → firewall). update-module.sh
-    # is invoked with the deployed name so a not-yet-migrated firewall.json updates
-    # correctly in the network slot.
+    # honouring the ADR-007 P8 legacy alias (network → firewall). The deployed name
+    # is passed to `module-manager module modify` so a not-yet-migrated firewall.json
+    # updates correctly in the network slot.
     installed_foundation = [
         name
         for m in FOUNDATION_MODULES
@@ -399,7 +405,7 @@ def main():
         log.info("=== DRY RUN MODE ===")
         log.info("Phase 1 - Foundation update order:")
         for i, mod in enumerate(installed_foundation, 1):
-            log.info("  %d. update-module.sh %s", i, mod)
+            log.info("  %d. module-manager module modify %s", i, mod)
         skipped = [m for m in FOUNDATION_MODULES if deployed_foundation_name(m) is None]
         if skipped:
             log.info("  (not installed: %s)", ", ".join(skipped))
@@ -408,7 +414,7 @@ def main():
             for i, app in enumerate(sorted_apps, 1):
                 dep_providers = get_module_dependencies(app)
                 dep_str = f" (depends on: {', '.join(dep_providers)})" if dep_providers else ""
-                log.info("  %d. update-module.sh %s%s", i, app, dep_str)
+                log.info("  %d. module-manager module modify %s%s", i, app, dep_str)
         else:
             log.info("  (no app modules installed)")
         log.info("Phase 3 - Node reboot pass (automaticReboot=%s):", automatic_reboot)
