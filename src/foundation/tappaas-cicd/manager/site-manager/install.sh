@@ -12,6 +12,18 @@ set -euo pipefail
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 bin="${TAPPAAS_BIN:-/home/tappaas/bin}"
 mkdir -p "${bin}"
+
+# ── build + link the TypeScript CLI via Nix (ADR-007 #3) ──────────────
+# The TS `site-manager` is the new verb-aligned front door; the legacy site
+# scripts stay linked below (transition) — the TS thin-delegation verbs shell
+# out to them until the retire phase.
+echo "  building site-manager (tsc via nix-build)..."
+( cd "${here}" && nix-build -A default default.nix --no-out-link >/tmp/site-manager-build.path )
+out="$(cat /tmp/site-manager-build.path)"
+[[ -x "${out}/bin/site-manager" ]] || { echo "  ERROR: build did not produce site-manager" >&2; exit 1; }
+ln -sfn "${out}/bin/site-manager" "${bin}/site-manager"
+echo "  linked ${bin}/site-manager -> ${out}/bin/site-manager"
+
 for f in "${here}"/*.sh; do
     b="$(basename "${f}")"
     case "${b}" in install.sh|update.sh|test.sh|validate.sh) continue ;; esac
