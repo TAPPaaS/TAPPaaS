@@ -37,17 +37,17 @@ run) and an optional **deep tier** (live, gated by `TAPPAAS_TEST_DEEP=1` and/or
 
 | Controller | test.sh | Tests | Gap |
 |-----------|:-------:|-------|-----|
-| **opnsense-controller** | ❌ **missing** | **8 pytest files** (zone/rules/dhcp/caddy/acme/dns/network) | the largest/most-critical controller has **no `test.sh` wrapper**, so its unit pytest is **NOT run by the test contract** (`test-module`/CI). Live behaviour is exercised via `network/test.sh`, but the unit suite is orphaned. |
+| **opnsense-controller** | ❌ **missing** | **8 unittest files (stdlib `unittest`, run via `python -m unittest`)** (zone/rules/dhcp/caddy/acme/dns/network) | the largest/most-critical controller has **no `test.sh` wrapper**, so its unittest suite is **NOT run by the test contract** (`test-module`/CI). Live behaviour is exercised via `network/test.sh`, but the unit suite is orphaned. |
 | proxmox-controller | ✅ dispatcher | → `test-proxmox-manager.sh` (unit) | live apply only smoke-tested (in network) |
 | switch-controller | ✅ dispatcher | → `test-switch-controller.sh` + `test-setup-switches.sh` | no live vendor-apply test (the UniFi 10.x fix was verified manually on hardware) |
 | ap-controller | ✅ dispatcher | → `test-ap-manager.sh` + `test-setup-wlan-secrets.sh` | no live AP path |
 | backup-controller | ✅ inline | PBS job/namespace/verify + `--json` | live PBS mutation (`add-to-job`/`apply-schedule`) not live-tested |
-| identity-controller | ✅ runs pytest | → `test_authentik_manager.py` + `test_people_primitives.py` | — |
+| identity-controller | ✅ runs unittest | → `python -m unittest` → `test_authentik_manager.py` + `test_people_primitives.py` | — |
 
 ## Coverage gaps & recommendations (prioritized)
 
 **P1 — missing `test.sh` (component contract holes):**
-1. **opnsense-controller** — add a `test.sh` that builds + runs the 8 pytest files, so the most critical controller is covered by the standard runner (today only its live side is hit, via network).
+1. **opnsense-controller** — add a `test.sh` that builds + runs the 8 unittest files (stdlib `unittest`, run via `python -m unittest`), so the most critical controller is covered by the standard runner (today only its live side is hit, via network).
 2. **backup module** — add `backup/test.sh` aggregating `lib/test-pbs-job.sh` + `lib/test-pbs-namespace.sh` (+ the vm service test); they're currently orphaned.
 3. **templates module** — add `templates/test.sh`; and **implement the NixOS `test-service.sh`** (currently a zero-assertion stub — the base image every VM clones from is untested).
 
