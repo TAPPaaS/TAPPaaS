@@ -86,13 +86,17 @@ environment that references it:
 network-manager zone add client1 --from-zone srv
 
 # Create the environment file referencing that zone.
-environment-manager create client1 \
-    --display-name "Client One" \
-    --owner-org client1-company \
+environment-manager add client1 \
+    --display "Client One" \
+    --owner client1-company \
     --domain client1.tappaas.org \
-    --dns-mode wildcard \
     --zone client1
 ```
+
+> `environment-manager add` writes `domains.primary` but defaults `dnsMode` to
+> `per-service`. For the **wildcard** scenario in this guide, set
+> `"domains": { "primary": "client1.tappaas.org", "dnsMode": "wildcard" }` in
+> `config/environments/client1.json` (there is no `--dns-mode` flag yet).
 
 `network-manager zone add` authors the zone in `zones.json` **and reconciles all
 four planes** (OPNsense interface + DHCP + rules, the Proxmox nodes, the switch,
@@ -111,7 +115,7 @@ reverse proxy). VLAN is auto-allocated in the type band unless you pass `--vlan`
   in the new zone.
 
 > `ownerOrg` must reference an existing People Organization. Use
-> `environment-manager list` / `environment-manager get client1` to inspect.
+> `environment-manager list` / `environment-manager show client1` to inspect.
 
 ---
 
@@ -222,7 +226,7 @@ install-module.sh euro-office --environment client1
 ## Step 5 — Verify
 
 ```bash
-environment-manager get client1       # domain, zone, dnsMode, owner
+environment-manager show client1      # domain, zone, dnsMode, owner
 environment-manager list              # all environments at a glance
 
 # External (from anywhere): the client's public URL serves the app over HTTPS

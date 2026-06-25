@@ -148,15 +148,18 @@ acme-setup.sh                 # interactive: picks up domain/email, prompts for 
 ```
 
 The script:
-1. Reads `tappaas.domain` and `tappaas.email` from `configuration.json`.
+1. Reads the domain from the default environment file
+   (`config/environments/<system-name>.json`, `domains.primary`) and the admin
+   email from `site.json` (`.email`).
 2. Prompts for your **DNS provider** (default `cloudflare`) and its **API token**
    (offers to save them to `~/.acme-dns-credentials.txt`, mode 600, for re-runs).
 3. Provisions an ACME account, a DNS-01 validation, a `caddy-reload` automation
    action, and a wildcard certificate (`*.<domain>` + bare apex) on the
    firewall — then signs it and waits for issuance (~10–30 s).
-4. Stores the issued cert's OPNsense Trust refid as `tappaas.tlsCertRefid` in
-   `configuration.json`. Every later `proxyTls: dns01` module install reads
-   this refid and binds the wildcard via `CustomCertificate` automatically.
+4. Stores the issued cert's OPNsense Trust refid in the runtime
+   `config/cert-refids.json`, keyed by environment name (ADR-007c). Every later
+   `proxyTls: dns01` module install reads this refid and binds the wildcard via
+   `CustomCertificate` automatically.
 
 **Cloudflare token scope** (recommended): create a custom token at
 <https://dash.cloudflare.com/profile/api-tokens> with permissions `Zone → Zone →
@@ -188,9 +191,10 @@ that module. The two strategies coexist per-module.
 
 Skipping §2.3 is fine if you only use TAPPaaS internally — every service stays
 reachable on the LAN; only the public HTTPS endpoint of `dns01` modules will
-lack a certificate until you run `acme-setup.sh`. *(To change the domain later:
-`create-configuration.sh --update --domain <yourdomain>`, then re-run
-`acme-setup.sh`.)*
+lack a certificate until you run `acme-setup.sh`. *(The public domain now lives
+per-environment, not in `site.json`. To change the default environment's domain
+later: `environment-manager modify <system-name> --domain <yourdomain>`, then
+re-run `acme-setup.sh`.)*
 
 ---
 
@@ -246,6 +250,10 @@ cd ~/TAPPaaS/src/apps/litellm && install-module.sh litellm
 That's it — the module is placed on the right VLAN/zone and gets its reverse
 proxy + firewall rules registered automatically. Install others the same way
 (`nextcloud`, `homeassistant`, `openwebui`, …) to build out your stacks.
+
+> The verb-aligned front door `module-manager module add <module>` is equivalent
+> to `install-module.sh <module>` (the manager delegates to these scripts); use
+> whichever you prefer.
 
 ---
 
@@ -321,7 +329,7 @@ Defaults are chosen so the commands above "just work". Override as needed:
 |---|---|
 | Branch `stable` | Pass a different branch as the 2nd arg to `install.sh` (e.g. `main`). |
 | Hostnames `tappaas1/2/3` | Set during the Proxmox install; the **first** node must be `tappaas1` (it creates the cluster). |
-| Management subnet `10.0.0.0/24`, gateway/firewall `10.0.0.1` | `config-network.sh --mgmt-ip <CIDR> --gateway <ip>`; firewall LAN lives in `firewall/firewall-config.xml.template`. |
+| Management subnet `10.0.0.0/24`, gateway/firewall `10.0.0.1` | `config-network.sh --mgmt-ip <CIDR> --gateway <ip>`; firewall LAN lives in `src/foundation/network/firewall-config.xml.template`. |
 | Auto cluster create/join | `install.sh --cluster` / `--join` / `--no-cluster`. |
 | Chained first-node install (firewall→cutover→platform) | On by default; stop earlier with `install.sh --skip-firewall` or `--skip-platform`. |
 | Gateway cutover (route via firewall) | Done automatically by the bootstrap; manual: `config-network.sh --swap-gateway` (additive — keeps the upstream IP). |
@@ -334,8 +342,11 @@ Defaults are chosen so the commands above "just work". Override as needed:
 | Domain / TLS | provided to the `firewall`/app modules; TLS issuance is DNS-01 by default. |
 | Unattended runs | most scripts accept `--non-interactive` (supply the values via flags). |
 
-Field definitions for module JSON are in `src/foundation/schemas/module-fields.json`;
-network zones/VLANs in `src/foundation/firewall/zones.json`.
+Field definitions for module JSON are in `src/foundation/schemas/module-fields.json`.
+Network zones/VLANs come from the git template
+`src/foundation/tappaas-cicd/manager/network-manager/zones.json`, which
+`network-manager zones-init` transforms into the live, per-installation
+`config/zones.json` at install time.
 
 ---
 
