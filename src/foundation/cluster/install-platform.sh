@@ -45,12 +45,14 @@ usage() { sed -n '2,/^set -euo/p' "$0" | sed 's/^# \{0,1\}//; /^set -euo/d'; }
 REPO="https://raw.githubusercontent.com/TAPPaaS/TAPPaaS/"
 BRANCH="main"
 DOMAIN=""
+ORGNAME=""        # org/system name (--name) — forwarded to the cicd install.sh
 SKIP_TEMPLATE=0 SKIP_CICD=0 INTERACTIVE=1 MANUAL_CICD=0
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --repo)            REPO="${2:-}"; shift 2 ;;
     --branch)          BRANCH="${2:-}"; shift 2 ;;
     --domain)          DOMAIN="${2:-}"; shift 2 ;;
+    --name)            ORGNAME="${2:-}"; shift 2 ;;
     --skip-template)   SKIP_TEMPLATE=1; shift ;;
     --skip-cicd)       SKIP_CICD=1; shift ;;
     --manual-cicd)     MANUAL_CICD=1; shift ;;
@@ -229,7 +231,7 @@ print_manual_cicd() { # print_manual_cicd <vmid> <domain>
         ${BL}sudo reboot${CL}   (then reconnect)
   3. Install the platform tooling:
         ${BL}cd TAPPaaS/src/foundation/tappaas-cicd${CL}
-        ${BL}./install.sh --branch "${BRANCH}" --domain "${dom}"${CL}
+        ${BL}./install.sh --name "${ORGNAME:-<orgname>}" --branch "${BRANCH}" --domain "${dom}"${CL}
 
 Once cicd is up it owns the platform: zone-manager / caddy-manager / rules-manager
 configure VLANs, the reverse proxy and firewall rules (using the firewall API key
@@ -342,11 +344,13 @@ build_cicd() {
   grant_cicd_firewall_access
 
   # B.4 — platform tooling + reverse proxy (install.sh). Pass --branch so the
-  #        cicd tracks the SAME branch we installed from (create-configuration.sh
-  #        otherwise defaults to 'stable', running stale code), and --domain (the
-  #        platform's Caddy reverse proxy needs a real domain; required above).
-  local install2_cmd="cd TAPPaaS/src/foundation/tappaas-cicd && ./install.sh --branch '${BRANCH}' --domain '${DOMAIN}'"
-  info "Running install.sh on cicd (domain ${DOMAIN})..."
+  #        cicd tracks the SAME branch we installed from, --domain (the platform's
+  #        Caddy reverse proxy needs a real domain; required above), and --name
+  #        (the org/system name → site.json + default environment; forwarded from
+  #        the orchestrator. If omitted, cicd install.sh derives it from the domain).
+  local name_arg=""; [[ -n "$ORGNAME" ]] && name_arg="--name '${ORGNAME}' "
+  local install2_cmd="cd TAPPaaS/src/foundation/tappaas-cicd && ./install.sh ${name_arg}--branch '${BRANCH}' --domain '${DOMAIN}'"
+  info "Running install.sh on cicd (name ${ORGNAME:-<from-domain>}, domain ${DOMAIN})..."
   if ! cicd_ssh "$install2_cmd"; then
     warn "install.sh reported errors — review on cicd (ssh tappaas@${CICD_IP})."
     return 1

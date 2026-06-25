@@ -105,7 +105,8 @@ SKIP_NETWORK=0
 SKIP_STORAGE=0
 SKIP_FIREWALL=0            # first node: skip the chained firewall bootstrap
 SKIP_PLATFORM=0           # first node: skip the chained template + cicd install
-DOMAIN=""                 # first node: public domain for the platform (Caddy/TLS)
+DOMAIN=""                 # accepted for back-compat; the chain now lives in foundation/install.sh
+ORGNAME=""                # the org/system name → the Proxmox cluster name (from --name)
 NONINTERACTIVE=0
 _pos=()
 while [ $# -gt 0 ]; do
@@ -118,17 +119,19 @@ while [ $# -gt 0 ]; do
     --skip-firewall)   SKIP_FIREWALL=1 ;;
     --skip-platform)   SKIP_PLATFORM=1 ;;
     --domain)          DOMAIN="${2:-}"; shift ;;
+    --name)            ORGNAME="${2:-}"; shift ;;
     --non-interactive) NONINTERACTIVE=1 ;;
     -h|--help)
-      echo "Usage: install.sh [REPO] [BRANCH] [--cluster|--join|--no-cluster]"
-      echo "                  [--skip-network] [--skip-storage] [--skip-firewall]"
-      echo "                  [--skip-platform] [--domain <yourdomain>] [--non-interactive]"
+      echo "Usage: install.sh [REPO] [BRANCH] --name <orgname>"
+      echo "                  [--cluster|--join|--no-cluster] [--skip-network] [--skip-storage]"
+      echo "                  [--non-interactive]"
       echo ""
-      echo "On the FIRST node the install chains end-to-end by default: bridges →"
-      echo "cluster → storage → firewall → gateway cutover → platform (template +"
-      echo "tappaas-cicd). The platform needs a public --domain (for the Caddy"
-      echo "reverse proxy); if omitted it is prompted for. Use --skip-firewall /"
-      echo "--skip-platform to stop earlier."
+      echo "The NODE step: Proxmox post-install, lan/wan bridges, cluster create"
+      echo "(named <orgname>) / join, ZFS pools. This is step [1/5] driven by the"
+      echo "orchestrator foundation/install.sh (which then runs the firewall, gateway"
+      echo "cutover and platform). Writes ~/tappaas/.cluster-role for the orchestrator."
+      echo "(--skip-firewall/--skip-platform/--domain are accepted for back-compat but"
+      echo "ignored here — those phases belong to foundation/install.sh.)"
       exit 0 ;;
     --*) msg_error "Unknown option: $1"; exit 2 ;;
     *)   _pos+=("$1") ;;
@@ -185,12 +188,16 @@ configure_cluster() {
       # Bind corosync ring0 to the mgmt IP (10.0.0.10) — present on `lan` from the
       # network phase — so the later gateway cutover does not have to renumber the
       # ring (which previously forced a reboot before a second node could join).
-      msg_info "Creating Proxmox cluster 'TAPPaaS' (first node: ${host}, ring0 ${mgmt})"
-      if pvecm create TAPPaaS --link0 "$mgmt" >/dev/null 2>&1 || pvecm create TAPPaaS >/dev/null 2>&1; then
-        msg_ok "Created cluster 'TAPPaaS'"
+      # Cluster name = the org/system name (--name). Falls back to "TAPPaaS" only
+      # when run standalone without --name (back-compat). pvecm cluster names allow
+      # letters/digits/hyphen — the orchestrator validates the orgname to that.
+      local cname="${ORGNAME:-TAPPaaS}"
+      msg_info "Creating Proxmox cluster '${cname}' (first node: ${host}, ring0 ${mgmt})"
+      if pvecm create "$cname" --link0 "$mgmt" >/dev/null 2>&1 || pvecm create "$cname" >/dev/null 2>&1; then
+        msg_ok "Created cluster '${cname}'"
         CLUSTER_ROLE="created"
       else
-        msg_error "pvecm create TAPPaaS failed (already clustered? check 'pvecm status')"
+        msg_error "pvecm create ${cname} failed (already clustered? check 'pvecm status')"
       fi
       ;;
     join)
@@ -220,59 +227,6 @@ configure_cluster() {
   esac
 }
 
-# ── Optional chained firewall install (first node only) ──────────────
-# When this node CREATED the cluster (i.e. it's the first node, not joining),
-# offer to continue straight into the OPNsense firewall bootstrap. The network
-# and storage phases have already run, so the lan/wan bridges and tank pools
-# the firewall VM needs are in place.
-# First node only: chain the rest of the bring-up end-to-end. Because the gateway
-# cutover is now ADDITIVE (keeps the upstream IP, no session break), the whole
-# sequence can run unattended from the one bootstrap command:
-#   firewall  →  gateway cutover  →  sanity check  →  platform (template + cicd)
-# Each sub-step is idempotent and can be re-run on its own if something fails.
-do_first_node_platform() {
-  [ "$CLUSTER_ROLE" = "created" ] || return 0
-
-  # ── Firewall ──────────────────────────────────────────────────────
-  if [ "$SKIP_FIREWALL" = 1 ]; then
-    msg_ok "Skipping firewall (--skip-firewall). Run later: ~/tappaas/config-firewall.sh"
-    return 0
-  fi
-  echo -e "\n${GN}=== [chain 1/4] OPNsense firewall ===${CL}"
-  fetch "${REPO}${BRANCH}/src/foundation/network/config-firewall.sh" ~/tappaas/config-firewall.sh 755
-  if ! ~/tappaas/config-firewall.sh --repo "$REPO" --branch "$BRANCH" --chained ${NONINT_ARG}; then
-    msg_error "config-firewall.sh did not complete — fix it, then re-run ~/tappaas/config-firewall.sh and continue manually."
-    return 1
-  fi
-
-  # ── Gateway cutover (additive — no connectivity break) ────────────
-  echo -e "\n${GN}=== [chain 2/4] Gateway cutover (route via the firewall) ===${CL}"
-  if ! ~/tappaas/config-network.sh --swap-gateway ${NONINT_ARG}; then
-    msg_error "Gateway cutover failed — re-run ~/tappaas/config-network.sh --swap-gateway, then continue manually."
-    return 1
-  fi
-
-  # ── Sanity check ──────────────────────────────────────────────────
-  echo -e "\n${GN}=== [chain 3/4] Sanity check ===${CL}"
-  fetch "${REPO}${BRANCH}/src/foundation/cluster/sanity-check.sh" ~/tappaas/sanity-check.sh 755
-  ~/tappaas/sanity-check.sh || msg_error "sanity-check reported problems — review above (continuing)."
-
-  # ── Platform: NixOS template + tappaas-cicd ───────────────────────
-  if [ "$SKIP_PLATFORM" = 1 ]; then
-    msg_ok "Skipping platform (--skip-platform). Run later: ~/tappaas/install-platform.sh"
-    return 0
-  fi
-  echo -e "\n${GN}=== [chain 4/4] Platform (NixOS template + tappaas-cicd) ===${CL}"
-  fetch "${REPO}${BRANCH}/src/foundation/cluster/install-platform.sh" ~/tappaas/install-platform.sh 755
-  # The platform needs a real domain (Caddy reverse proxy). Pass it through if the
-  # operator supplied --domain; otherwise install-platform.sh prompts for it
-  # (interactive) or errors (--non-interactive).
-  local dom_arg=(); [ -n "$DOMAIN" ] && dom_arg=(--domain "$DOMAIN")
-  if ! ~/tappaas/install-platform.sh --repo "$REPO" --branch "$BRANCH" "${dom_arg[@]}" ${NONINT_ARG}; then
-    msg_error "install-platform.sh did not complete — re-run ~/tappaas/install-platform.sh --domain <yourdomain>."
-    return 1
-  fi
-}
 
 # ── Final summary (addresses the long-standing TODO at top of file) ──
 print_summary() {
@@ -585,6 +539,9 @@ fi
 
 # Phase 1 — Cluster (issue #140). Must run BEFORE storage (see note above).
 configure_cluster
+# Hand the cluster role (created|joined|member|standalone) to the orchestrator
+# (foundation/install.sh) so it knows whether to run the firewall/platform chain.
+printf '%s' "${CLUSTER_ROLE}" > ~/tappaas/.cluster-role 2>/dev/null || true
 
 # Phase 3 — Storage: ZFS pools tanka1/tankb1/tankc1 (after cluster membership)
 if [ "$SKIP_STORAGE" = 1 ]; then
@@ -599,39 +556,19 @@ fi
 
 print_summary
 
-# First node only: chain firewall → cutover → sanity → platform end-to-end.
-do_first_node_platform
-
+# This is the NODE step only ([1/5] of foundation/install.sh). The first-node
+# chain (firewall → gateway cutover → sanity → platform) lives in the
+# orchestrator (foundation/install.sh), which reads ~/tappaas/.cluster-role
+# (written above) to decide whether to continue. So we just report node status.
 echo ""
-if [ "$CLUSTER_ROLE" = "created" ] && [ "$SKIP_PLATFORM" != 1 ] && [ "$SKIP_FIREWALL" != 1 ]; then
-  echo -e "${GN}${BOLD}"
-  echo "  ╔═══════════════════════════════════════════════════════════════════════╗"
-  echo "  ║                                                                       ║"
-  echo "  ║   Congratulations! TAPPaaS foundation install completed.              ║"
-  echo "  ║                                                                       ║"
-  echo "  ╚═══════════════════════════════════════════════════════════════════════╝"
-  echo -e "${CL}"
-  echo -e "  ${BOLD}Next steps:${CL}"
-  echo ""
-  echo -e "  ${BOLD}1.${CL} Multi-node cluster (optional):"
-  echo "     Install additional nodes — they auto-join on the mgmt network."
-  echo -e "     Then run ${BL}update-tappaas --force${CL} on tappaas-cicd to configure HA + replication."
-  echo ""
-  echo -e "  ${BOLD}2.${CL} Set up your physical switch(es) (on tappaas-cicd):"
-  echo -e "       ${BL}setup-switches.sh${CL}"
-  echo "     Choose unmanaged, guided-manual (TAPPaaS tells you which VLANs to tag),"
-  echo "     or auto-configure (TAPPaaS programs supported switches, e.g. UniFi)."
-  echo ""
-  echo -e "  ${BOLD}3.${CL} Set up TLS certificates (on tappaas-cicd):"
-  echo -e "       ${BL}acme-setup.sh${CL}"
-  echo "     Prompts for your DNS provider API token (e.g. Cloudflare)."
-  echo ""
-  echo -e "  ${BOLD}4.${CL} Install the rest of the foundation (on tappaas-cicd):"
-  echo -e "       ${BL}rest-of-foundation.sh${CL}"
-  echo ""
-else
-  msg_ok "Completed TAPPaaS post Proxmox VE install script"
-fi
+case "$CLUSTER_ROLE" in
+  created)
+    msg_ok "Node base + cluster '${ORGNAME:-TAPPaaS}' + storage ready (this node CREATED the cluster)." ;;
+  joined)
+    msg_ok "Node base + cluster join + storage ready (this node JOINED the cluster)." ;;
+  *)
+    msg_ok "Completed TAPPaaS node post-install (cluster role: ${CLUSTER_ROLE:-standalone})." ;;
+esac
 
 
 
