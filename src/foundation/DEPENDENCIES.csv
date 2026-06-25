@@ -374,7 +374,7 @@ sanity-check.sh,cluster/,
 setup-realtek-nic.sh,cluster/,
 setup-ssd-lifecycle.sh,cluster/,
 test.sh,cluster/,common-install-routines.sh; vm-net.sh; test-vm-net.sh; install-module.sh; update-module.sh; delete-module.sh; dns-manager
-update.sh,cluster/,common-install-routines.sh; validate-configuration.sh; Create-TAPPaaS-VM.sh; Create-TAPPaaS-LXC.sh; reboot-node.sh; zones.json; site.json
+update.sh,cluster/,common-install-routines.sh; Create-TAPPaaS-VM.sh; Create-TAPPaaS-LXC.sh; reboot-node.sh; zones.json; site.json
 #
 # === cluster/lib ===
 reboot-node-lib.sh,cluster/lib/,

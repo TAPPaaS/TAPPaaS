@@ -24,13 +24,10 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 echo ""
 info "Starting TAPPaaS Cluster module update..."
 
-# Step 0: Validate configuration.json
-if [[ -x /home/tappaas/bin/validate-configuration.sh ]]; then
-    info "Validating configuration.json..."
-    /home/tappaas/bin/validate-configuration.sh --quiet || {
-        warn "Configuration validation reported issues. Run: validate-configuration.sh"
-    }
-fi
+# (Removed: a legacy "Step 0" that ran validate-configuration.sh against the now-
+# retired config/configuration.json — warn-only, and spurious since that file is
+# gone. site.json is well-formed by construction (create-site / site-manager write
+# validated config); node discovery below fails fast if it were truly broken.)
 
 # Get list of all cluster nodes
 echo ""
