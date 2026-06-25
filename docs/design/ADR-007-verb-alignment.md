@@ -42,7 +42,7 @@ TS today: **people, network**. Script (port targets): **site, environment, modul
 | **add** | ✗ | 🟢`zone add` | ✎`create-site.sh` | ✎`create-minimal-environments.sh` | ✎`install-module.sh` | ✗ | N/A |
 | **modify** | ✗ | ✗ | ✗ | ✗ | ✎`update-module.sh` | ✗ | N/A |
 | **delete** | ✗ | 🟢`zone delete` | N/A (singleton) | ✗ | ✎`delete-module.sh` | ✗ | N/A |
-| **reconcile** | ✎`sync` | 🟢`reconcile` | ✎`repository.sh` (repos only) | ✗ (→ re-apply dependent modules) | ✗ (per-module today) | ✎`backup-manager.sh` | N/A |
+| **reconcile** | ✎`sync` | 🟢`reconcile` | ✎`repository.sh` → site + `--deep` cascade | ✗ → env+zone + `--deep` cascade | ✗ → re-apply this module | ✎`backup-manager.sh` | N/A |
 
 **Entity model per manager** (what the CRUD operates on — the entity is the first arg):
 
@@ -78,9 +78,34 @@ TS today: **people, network**. Script (port targets): **site, environment, modul
    update/delete-module`→`module add/modify/delete`; backup `backup-status`→
    `list`/`show`, `backup-manager`→`reconcile`; health `inspect-*`→`list/show vm`.
 3. **`validate` is a script everywhere, a verb nowhere** — fold into each port (#5).
-4. **Two reconcile questions to decide:** does `environment reconcile` mean
-   *re-apply modules that consume the env*? does `module reconcile` mean *re-apply
-   all deployed modules*? (Both are ✗ today; both are reasonable, both optional.)
+4. **`reconcile` is a dependency cascade** — see §Reconcile cascade.
+
+### Reconcile cascade (`--deep`)
+
+`reconcile` is **shallow by default** (reconcile this manager's own concern) and
+**recursive with `--deep`** (also reconcile everything that depends on it). Each
+manager knows only its direct dependents; `--deep` walks the tree, and because
+every `reconcile` is idempotent, re-touching a shared dependency (e.g. network) is
+harmless.
+
+```
+site reconcile               → site.json / nodes / repositories only
+site reconcile --deep        → people  +  network  +  (every) environment --deep
+                                                          │
+environment reconcile        → the environment setup + its associated zone (via network)
+environment reconcile --deep → the above  +  (every) module that consumes this env → module reconcile
+                                                          │
+module reconcile             → re-apply this deployed module's current config to its VM/service  [leaf]
+people  reconcile            → push people → Authentik   [leaf]
+network reconcile            → the 4 planes (opnsense → proxmox → switch → ap)  [leaf]
+```
+
+- **shallow** answers "make *my* config real"; **`--deep`** answers "make my
+  config real **and** everything downstream consistent with it."
+- `module reconcile` is the leaf re-apply (current config → VM/service) — distinct
+  from `module modify`, which *changes* the config first, then applies.
+- `site reconcile --deep` is the whole-platform converge; safe to run anytime
+  (idempotent), and the natural post-`update-tappaas` consistency pass.
 
 ---
 
@@ -95,6 +120,7 @@ Legend: 🟢 supported · ✗ not yet · N/A.
 | `--apply` (reconcile: commit; default=preview) | ✗ | 🟢 | N/A | N/A | N/A | ✗ | N/A |
 | `--diff` (show drift detail) | ✗ | 🟢`zones-merge --diff` | ✗ | ✗ | ✗ | ✗ | ✎ (the `list vm --diff` above) |
 | `--dry-run` (preview a write/reconcile) | ✗ | 🟢 (default) | ✗ | ✗ | ✗ | ✗ | N/A |
+| `--deep` (recurse into dependents on reconcile) | N/A | N/A | ✗ → people+network+environments | ✗ → dependent modules | N/A (leaf) | N/A | N/A |
 
 **Special options (per manager):**
 
