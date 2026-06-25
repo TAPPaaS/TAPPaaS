@@ -12,7 +12,7 @@
 // Commands:
 //   network-manager zone list
 //   network-manager zone exists <name>
-//   network-manager zone get <name>
+//   network-manager zone show <name>            (alias: get)
 //   network-manager zone add <name> [--from-zone S] [--type T --typeId N]
 //                                    [--vlan V] [--variant X] [--no-activate] [--check]
 //   network-manager zone delete <name> [--check]
@@ -71,7 +71,7 @@ function usage(): void {
 Usage:
   network-manager zone list
   network-manager zone exists <name>
-  network-manager zone get <name>
+  network-manager zone show <name>            (alias: get)
   network-manager zone add <name> [options]
   network-manager zone delete <name> [--check]
   network-manager reconcile [--apply] [--only <plane>]
@@ -262,7 +262,12 @@ function parseOpts(args: string[]): Opts {
 // ── zone read commands ────────────────────────────────────────────────
 function cmdZone(opts: Opts): void {
   const sub = opts.rest[0];
-  if (!sub) die("zone: expected 'list' | 'exists' | 'get' | 'add' | 'delete'");
+  // CRUD: list / show (alias get) / add / delete. There is intentionally no
+  // free-form `zone modify` — a zone's state + access-to graph are governed by
+  // the lifecycle (add/delete) and the install/update transforms (zones-init,
+  // zones-merge) with their invariants (mgmt access, occupancy guard); a naive
+  // field-editor would bypass them. (ADR-007 #5.)
+  if (!sub) die("zone: expected 'list' | 'exists' | 'show' | 'add' | 'delete'");
 
   if (sub === "list") {
     const doc = loadZones(opts.zonesFile);
@@ -278,9 +283,9 @@ function cmdZone(opts: Opts): void {
     if (!present) throw new DieError(`zone '${name}' not found`);
     return;
   }
-  if (sub === "get") {
+  if (sub === "show" || sub === "get") {
     const name = opts.rest[1];
-    if (!name) die("zone get: expected <name>");
+    if (!name) die(`zone ${sub}: expected <name>`);
     const doc = loadZones(opts.zonesFile);
     const z = getZone(doc, name);
     if (!z) die(`zone '${name}' not found in ${opts.zonesFile}`);

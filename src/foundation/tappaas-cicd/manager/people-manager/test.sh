@@ -308,6 +308,11 @@ if [[ -f "$UNIT_TSCONFIG" ]]; then
         else
             bad "TypeScript reconcile unit tests FAILED"
         fi
+        if run_ts "node '${DIST_TEST}/test/unit/entity.test.js'"; then
+            ok "TypeScript entity CRUD unit tests pass"
+        else
+            bad "TypeScript entity CRUD unit tests FAILED"
+        fi
     else
         bad "TypeScript unit tests failed to compile"
     fi

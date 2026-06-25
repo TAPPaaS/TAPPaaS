@@ -22,10 +22,37 @@
 ```
 src/main.ts        CLI: arg parsing + subcommand dispatch
 src/config.ts      load config/people/*; reference-integrity checks (validateRefs)
+src/entity.ts      config-only entity CRUD (add/modify/delete) — validated atomic writes
 src/types.ts       Role / Org / Group / User models + the PrimitiveClient interface
 src/reconcile.ts   snapshot-and-plan reconcile engine (compute plan, then apply)
 src/primitives.ts  CliPrimitiveClient — talks to the identity controller
 ```
+
+### Entity CRUD (config-only)
+
+`src/entity.ts` implements `add` / `modify` / `delete` for the four kinds
+(`role`, `org`, `group`, `user`). These are the ADR-007 #5 verbs — admins drive
+the config through them and never hand-edit JSON. Key properties:
+
+- **Config-only — never calls the identity service.** A write only produces a
+  validated JSON file under `config/people/<dir>/<name>.json`. Pushing to
+  Authentik is a separate, explicit `reconcile`. `main.ts` prints a reminder
+  after every successful write.
+- **Validated before write.** The op loads the on-disk model, merges the
+  candidate entity (or removes it, for delete), runs the same `validateRefs`
+  integrity gate `reconcile` uses, and refuses on any error. So a write can never
+  leave the tree referentially broken.
+- **Atomic.** Writes go to a temp file in the target dir and are `rename`d into
+  place (`atomicWrite`), so a rejected/interrupted write leaves no partial file.
+- **`add` guards on existence** (refuses an existing entity unless `--force`).
+- **`delete` guards on inbound references** (`referencesTo`): refuses while
+  another entity still points at it (role used by a group/user, org used as
+  `ownerOrg`/`owner`/`parentOrg`, group still in a user's `memberOf`) unless
+  `--force`.
+- **List fields** (`group.roles`, `user.roles`, `user.memberOf`) support a
+  whole-list replace (`--roles "a,b"`) and incremental `--add-<f>` / `--remove-<f>`
+  (set semantics: adds dedupe). User flag aliases: `--email`→`primaryEmail`,
+  `--groups`→`memberOf`.
 
 The reconcile engine is built around a `PrimitiveClient` interface, so the
 planning logic is decoupled from the live identity service. Tests inject an
@@ -79,13 +106,9 @@ binary subcommand — the convention end-state.
 
 ## Pending / not yet implemented
 
-- **Verb naming (ADR-007 alignment).** The reconcile verb is **`reconcile`**
-  (`sync` is kept as a deprecated alias). Per-entity CRUD will standardize on
-  `add` / `modify` / `delete` (not create/update/remove).
-- **Entity CRUD over the CLI.** `role|org|group|user add|modify|delete` are
-  deliberately not implemented in this build — `src/main.ts` dies with
-  `"<kind> <sub>: not implemented in this build (use 'list' or 'get')"`. Editing
-  the JSON files plus `reconcile` is the current workflow.
+- **Verb naming (ADR-007 alignment).** Done: the reconcile verb is **`reconcile`**
+  (`sync` kept as a deprecated alias); per-entity CRUD is **`add` / `modify` /
+  `delete`** and the read verb is **`show`** (`get` kept as a deprecated alias).
 - **Credential delivery on user creation** is deferred (a one-time enrollment
   link once SMTP is configured, otherwise a generated password) — see the note in
   `user.sh`.

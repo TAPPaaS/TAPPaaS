@@ -34,37 +34,75 @@ placeholders.
 This manager exposes one compiled CLI (`people-manager`) plus two bash helpers
 (`user-setup.sh`, `validate-people.sh`).
 
-### `people-manager` — read + reconcile
+### `people-manager` — read, CRUD + reconcile
 
 ```
 people-manager reconcile  [--dry-run] [--config-dir DIR]   (alias: sync, deprecated)
-people-manager role         list | get [<name>]   [--config-dir DIR]
-people-manager organization list | get [<name>]   [--config-dir DIR]   # alias: org
-people-manager group        list | get [<name>]   [--config-dir DIR]
-people-manager user         list | get [<name>]   [--config-dir DIR]
+people-manager validate                            [--config-dir DIR]
+people-manager <kind> list                         [--config-dir DIR]
+people-manager <kind> show   <name>                [--config-dir DIR]   (alias: get, deprecated)
+people-manager <kind> add    <name> [field flags]  [--force] [--config-dir DIR]
+people-manager <kind> modify <name> [field flags]  [--config-dir DIR]
+people-manager <kind> delete <name> [--force]      [--config-dir DIR]
 people-manager -h | --help
 ```
+
+`<kind>` is one of `role`, `org` (alias `organization`), `group`, `user`.
+
+The standardized ADR-007 verb vocabulary applies: `add` (was create), `modify`
+(was set/update-entity), `delete` (was remove), `show` (was get), `list`,
+`reconcile` (was sync). `get` is kept as a deprecated alias for `show`.
 
 Options:
 
 - `--dry-run` — compute and print the reconcile plan; make **no** changes to the
   identity service.
-- `--config-dir DIR` — the People directory to read (default
+- `--force` — on `add`, overwrite an existing entity; on `delete`, ignore the
+  reference guard.
+- `--config-dir DIR` — the People directory to read/write (default
   `$TAPPAAS_CONFIG/people`).
 
-`reconcile` reconciles `config/people/` into the identity service (the verb was
-`sync`, kept as a deprecated alias — see ADR-007 verb alignment). `list` / `get`
-are read-only inspection of the on-disk config. (Entity `add` / `modify` / `delete`
-are not yet implemented — see DESIGN.md; use `list`/`get` plus editing the JSON
-files, then `reconcile`.)
+#### Write-then-reconcile workflow
+
+`add` / `modify` / `delete` are **config-only**: they write the validated JSON
+under `config/people/<dir>/<name>.json` and **never** call the identity service.
+Each write is gated by the same `validateRefs` integrity check `reconcile` runs
+(an unknown role/org reference, a dangling `memberOf`, etc. is rejected and *no*
+file is written), and is atomic (`mktemp` + `rename`). After a successful write
+the command prints a reminder to run `reconcile`. Admins thus drive everything
+through verbs and never hand-edit JSON — see `docs/design/ADR-007-verb-alignment.md`
+("admins drive verbs, not JSON").
+
+```
+people-manager <kind> add|modify|delete ...   # writes validated config
+people-manager reconcile                       # then pushes config → identity service
+```
+
+#### Field flags
+
+| Kind | Scalar flags | List flags (support `--add-<f>` / `--remove-<f>`) |
+|------|--------------|----------------------------------------------------|
+| `role`  | `--displayName`, `--description` | — |
+| `org`   | `--displayName`, `--type`, `--owner` (a user), `--parentOrg` (an org) | — |
+| `group` | `--displayName`, `--type`, `--ownerOrg` (an org) | `--roles` |
+| `user`  | `--displayName`, `--email` (→ `primaryEmail`), `--state` (`planned`/`active`/`suspended`/`terminated`) | `--roles`, `--groups` (→ `memberOf`) |
+
+List flags accept a comma/space-separated value to **replace** the whole list
+(`--roles "admin,user"`), or `--add-<field>` / `--remove-<field>` (repeatable) to
+incrementally add/remove a member (set semantics — adds dedupe).
 
 Examples:
 
 ```bash
 people-manager user list
-people-manager org get foo-company
-people-manager reconcile --dry-run     # preview the plan
-people-manager reconcile               # apply to the identity service
+people-manager org show foo-company
+people-manager role add editor --displayName "Editor"
+people-manager user add jan --email jan@foo.nl --roles user --groups foo__users
+people-manager user modify jan --add-roles admin --remove-groups foo__users
+people-manager group delete foo__users          # refused if any user is a member
+people-manager role delete editor --force        # delete despite references
+people-manager reconcile --dry-run                # preview the plan
+people-manager reconcile                          # apply to the identity service
 ```
 
 ### `user-setup.sh` — bootstrap a minimal org

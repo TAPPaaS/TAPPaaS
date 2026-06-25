@@ -11,6 +11,13 @@
 // Exit codes: ok=0, error=1.
 
 import { defaultConfigDir, loadPeople, validateRefs } from "./config";
+import {
+  EntityError,
+  addEntity,
+  deleteEntity,
+  modifyEntity,
+  parseFieldArgs,
+} from "./entity";
 import { CliPrimitiveClient, AuthentikUnreachable } from "./primitives";
 import { applyPlan, computePlan, snapshot } from "./reconcile";
 import { PeopleModel, PrimitiveClient } from "./types";
@@ -40,15 +47,31 @@ function usage(): void {
 Usage:
   people-manager reconcile [--dry-run] [--config-dir DIR]   (alias: sync, deprecated)
   people-manager validate  [--config-dir DIR]
-  people-manager role  list|get [<name>] [--config-dir DIR]
-  people-manager org   list|get [<name>] [--config-dir DIR]
-  people-manager group list|get [<name>] [--config-dir DIR]
-  people-manager user  list|get [<name>] [--config-dir DIR]
+  people-manager <kind> list                       [--config-dir DIR]
+  people-manager <kind> show   <name>              [--config-dir DIR]   (alias: get, deprecated)
+  people-manager <kind> add    <name> [field flags] [--force]
+  people-manager <kind> modify <name> [field flags]
+  people-manager <kind> delete <name> [--force]
+
+  where <kind> is one of: role | org (alias organization) | group | user
+
+Field flags (write the validated config; Authentik is NOT touched):
+  role:  --displayName V  --description V
+  org:   --displayName V  --type V  --owner USER  --parentOrg ORG
+  group: --displayName V  --type V  --ownerOrg ORG  --roles "a,b"
+         --add-roles R  --remove-roles R
+  user:  --displayName V  --email ADDR  --state planned|active|suspended|terminated
+         --roles "a,b"  --groups "g1,g2"
+         --add-roles R --remove-roles R  --add-groups G --remove-groups G
 
 Options:
   --dry-run        Compute + print the plan; make NO changes to Authentik.
+  --force          add: overwrite an existing entity; delete: ignore ref guard.
   --config-dir DIR People directory (default: \$TAPPAAS_CONFIG/people).
-  -h, --help       Show this help.`);
+  -h, --help       Show this help.
+
+After a successful add/modify/delete, run 'people-manager reconcile' to push
+the change to the identity service. Writes never call Authentik directly.`);
 }
 
 // Pull --config-dir / --dry-run out of an arg list; return the rest.
@@ -163,27 +186,74 @@ function entityMap(model: PeopleModel, kind: string): Map<string, unknown> {
   }
 }
 
+// Pull --force out of an arg list; return it + the remaining args.
+function takeForce(args: string[]): { force: boolean; rest: string[] } {
+  let force = false;
+  const rest: string[] = [];
+  for (const a of args) {
+    if (a === "--force") force = true;
+    else rest.push(a);
+  }
+  return { force, rest };
+}
+
+function reconcileReminder(): void {
+  info("");
+  info(`Config written. Run '${GN}people-manager reconcile${CL}' to push to the identity service.`);
+}
+
 function cmdEntity(kind: string, opts: Opts): void {
   const sub = opts.rest[0];
-  if (!sub) die(`${kind}: expected 'list' or 'get'`);
-  const model = loadPeople(opts.configDir);
-  const map = entityMap(model, kind);
+  if (!sub) die(`${kind}: expected one of list|show|add|modify|delete`);
 
-  if (sub === "list") {
-    const names = Array.from(map.keys()).sort();
-    info(JSON.stringify(names, null, 2));
-    return;
-  }
-  if (sub === "get") {
+  // ── read-only verbs ──────────────────────────────────────────────────
+  if (sub === "list" || sub === "show" || sub === "get") {
+    const model = loadPeople(opts.configDir);
+    const map = entityMap(model, kind);
+    if (sub === "list") {
+      const names = Array.from(map.keys()).sort();
+      info(JSON.stringify(names, null, 2));
+      return;
+    }
+    if (sub === "get") warn("'get' is deprecated — use 'show'");
     const name = opts.rest[1];
-    if (!name) die(`${kind} get: expected <name>`);
+    if (!name) die(`${kind} ${sub}: expected <name>`);
     const v = map.get(name);
     if (v === undefined) die(`${kind} '${name}' not found in ${opts.configDir}`);
     info(JSON.stringify(v, null, 2));
     return;
   }
-  // create/update/delete are deliberately minimal in S2b-3 (sync is priority).
-  die(`${kind} ${sub}: not implemented in this build (use 'list' or 'get')`);
+
+  // ── write verbs (config-only; NEVER call Authentik) ──────────────────
+  if (sub === "add" || sub === "modify" || sub === "delete") {
+    const name = opts.rest[1];
+    if (!name) die(`${kind} ${sub}: expected <name>`);
+    const { force, rest } = takeForce(opts.rest.slice(2));
+    try {
+      if (sub === "add") {
+        const fa = parseFieldArgs(rest);
+        const r = addEntity(opts.configDir, kind, name, fa, force);
+        info(`Added ${kind} '${name}' → ${r.path}`);
+        reconcileReminder();
+      } else if (sub === "modify") {
+        const fa = parseFieldArgs(rest);
+        const r = modifyEntity(opts.configDir, kind, name, fa);
+        info(`Modified ${kind} '${name}' → ${r.path}`);
+        reconcileReminder();
+      } else {
+        if (rest.length > 0) die(`${kind} delete: unexpected argument '${rest[0]}'`);
+        const r = deleteEntity(opts.configDir, kind, name, force);
+        info(`Deleted ${kind} '${name}' (${r.path})`);
+        reconcileReminder();
+      }
+    } catch (e) {
+      if (e instanceof EntityError) die(e.message);
+      throw e;
+    }
+    return;
+  }
+
+  die(`${kind} ${sub}: unknown verb (use list|show|add|modify|delete)`);
 }
 
 export function run(argv: string[], client: PrimitiveClient): number {
