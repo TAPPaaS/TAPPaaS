@@ -1,30 +1,37 @@
 File,Location,Direct Dependencies
 # ==========================================================================================
 # TAPPaaS Foundation Layer - Direct Dependencies
-# Generated: 2026-06-23
+# Generated: 2026-06-25 (ADR-007 #3: TypeScript managers shell out to legacy verb scripts)
 # ==========================================================================================
-# Direct deps are: scripts sourced (. / source), TAPPaaS programs invoked by name,
-# and config files read (configuration.json, zones.json, network.json, or a module's own
-# <name>.json). Semicolon-separated. Many network scripts read network.json with a
-# firewall.json fallback; the dependency is recorded as network.json.
+# Direct deps are: scripts sourced (. / source), TAPPaaS programs/bins invoked by name,
+# and config files read (site.json, zones.json, environments/, network.json, or a module's
+# own <name>.json). Semicolon-separated.
+#
+# configuration.json is RETIRED in favour of site.json. Older bash scripts that have not yet
+# migrated still read configuration.json; those are recorded as-is and flagged. Many network
+# scripts read network.json with a firewall.json fallback; recorded as network.json.
+#
+# THE 7 TS MANAGERS are verb-aligned front doors. Their src/main.ts spawns legacy bash verb
+# scripts (recorded as the manager -> <verb>.sh edge). The default spawn bin names live in
+# src/main.ts via process.env.*_BIN ?? "<name>".
 #
 # === tappaas-cicd (top level) ===
 install1.sh,tappaas-cicd/,
-install2.sh,tappaas-cicd/,common-install-routines.sh; configuration.json; zones.json; network.json
-pre-update.sh,tappaas-cicd/,common-install-routines.sh; configuration.json; zones.json
+install2.sh,tappaas-cicd/,common-install-routines.sh; create-site.sh; create-minimal-environments.sh; copy-update-json.sh; update-module.sh; site.json; zones.json
+pre-update.sh,tappaas-cicd/,common-install-routines.sh; site.json; zones.json
 update.sh,tappaas-cicd/,common-install-routines.sh
-test.sh,tappaas-cicd/,common-install-routines.sh; configuration.json; zones.json
+test.sh,tappaas-cicd/,common-install-routines.sh; create-site.sh; validate-site.sh; validate-people.sh; repository.sh; copy-update-json.sh; snapshot-vm.sh; backup-controller; update-os.sh; inspect-cluster.sh; inspect-vm.sh; check-disk-threshold.sh; site.json; zones.json
 #
 # === tappaas-cicd/lib ===
 apply-json-merge.sh,tappaas-cicd/lib/,common-install-routines.sh; convert-json-to-config.sh
 audit-jq-readers.sh,tappaas-cicd/lib/,
-common-install-routines.sh,tappaas-cicd/lib/,
+common-install-routines.sh,tappaas-cicd/lib/,convert-json-to-config.sh; copy-update-json.sh; snapshot-vm.sh
 test-config-readers.sh,tappaas-cicd/lib/,common-install-routines.sh
 #
 # === tappaas-cicd/scripts ===
 acme-setup.sh,tappaas-cicd/scripts/,common-install-routines.sh
-rest-of-foundation.sh,tappaas-cicd/scripts/,common-install-routines.sh; configuration.json
-setup-caddy.sh,tappaas-cicd/scripts/,common-install-routines.sh; configuration.json
+rest-of-foundation.sh,tappaas-cicd/scripts/,common-install-routines.sh; user-setup.sh; people-manager; repository.sh; site.json
+setup-caddy.sh,tappaas-cicd/scripts/,common-install-routines.sh; site.json
 #
 # === tappaas-cicd/scripts/test ===
 test-acme-provider-hook.sh,tappaas-cicd/scripts/test/,common-install-routines.sh
@@ -34,93 +41,141 @@ test-install-overrides.sh,tappaas-cicd/scripts/test/,
 test-json-merge.sh,tappaas-cicd/scripts/test/,common-install-routines.sh; apply-json-merge.sh; convert-json-to-config.sh
 test-migrate-zone-keys.sh,tappaas-cicd/scripts/test/,common-install-routines.sh
 test-read-module-config.sh,tappaas-cicd/scripts/test/,common-install-routines.sh
-test-template-contract.sh,tappaas-cicd/scripts/test/,
+test-template-contract.sh,tappaas-cicd/scripts/test/,validate.sh
 test-zone-name-validation.sh,tappaas-cicd/scripts/test/,common-install-routines.sh
 test-zone-state.sh,tappaas-cicd/scripts/test/,
 #
-# === tappaas-cicd/manager ===
+# === tappaas-cicd/manager (component dispatchers) ===
 install.sh,tappaas-cicd/manager/,
 test.sh,tappaas-cicd/manager/,
 update.sh,tappaas-cicd/manager/,
 #
-# === tappaas-cicd/manager/people-manager ===
-install.sh,tappaas-cicd/manager/people-manager/,common-install-routines.sh
+# === tappaas-cicd/manager/people-manager (TS manager: people-manager) ===
+src/main.ts,tappaas-cicd/manager/people-manager/,authentik-manager; validate-people.sh
+src/config.ts,tappaas-cicd/manager/people-manager/,
+src/entity.ts,tappaas-cicd/manager/people-manager/,
+src/primitives.ts,tappaas-cicd/manager/people-manager/,
+src/reconcile.ts,tappaas-cicd/manager/people-manager/,
+src/types.ts,tappaas-cicd/manager/people-manager/,
 user-setup.sh,tappaas-cicd/manager/people-manager/,common-install-routines.sh; validate.sh
-validate.sh,tappaas-cicd/manager/people-manager/,common-install-routines.sh
+validate.sh,tappaas-cicd/manager/people-manager/,common-install-routines.sh; validate-configuration.sh
+install.sh,tappaas-cicd/manager/people-manager/,common-install-routines.sh; people-manager; user-setup.sh; validate.sh
 test.sh,tappaas-cicd/manager/people-manager/,validate.sh; user-setup.sh
 update.sh,tappaas-cicd/manager/people-manager/,common-install-routines.sh
 #
-# === tappaas-cicd/manager/site-manager ===
-convert-json-to-config.sh,tappaas-cicd/manager/site-manager/,
+# === tappaas-cicd/manager/site-manager (TS manager: site-manager) ===
+src/main.ts,tappaas-cicd/manager/site-manager/,create-site.sh; repository.sh; validate-site.sh; environment-manager; network-manager; people-manager; git; site.json; environments
+src/client.ts,tappaas-cicd/manager/site-manager/,create-site.sh; repository.sh; validate-site.sh
+src/config.ts,tappaas-cicd/manager/site-manager/,site.json
+src/reconcile.ts,tappaas-cicd/manager/site-manager/,repository.sh
+src/types.ts,tappaas-cicd/manager/site-manager/,
+convert-json-to-config.sh,tappaas-cicd/manager/site-manager/,copy-update-json.sh
 create-configuration.sh,tappaas-cicd/manager/site-manager/,common-install-routines.sh; validate-configuration.sh
 create-site.sh,tappaas-cicd/manager/site-manager/,common-install-routines.sh; validate-site.sh
 migrate-configuration.sh,tappaas-cicd/manager/site-manager/,common-install-routines.sh
 repository.sh,tappaas-cicd/manager/site-manager/,
 validate-configuration.sh,tappaas-cicd/manager/site-manager/,common-install-routines.sh
-validate-site.sh,tappaas-cicd/manager/site-manager/,common-install-routines.sh
-install.sh,tappaas-cicd/manager/site-manager/,
+validate-site.sh,tappaas-cicd/manager/site-manager/,common-install-routines.sh; validate-configuration.sh; user-setup.sh; site.json
+install.sh,tappaas-cicd/manager/site-manager/,site-manager; validate-site.sh
 test-create-site.sh,tappaas-cicd/manager/site-manager/,create-site.sh; validate-site.sh
 test.sh,tappaas-cicd/manager/site-manager/,migrate-configuration.sh; validate-site.sh
 update.sh,tappaas-cicd/manager/site-manager/,common-install-routines.sh
 #
-# === tappaas-cicd/manager/environment-manager ===
+# === tappaas-cicd/manager/environment-manager (TS manager: environment-manager) ===
+src/main.ts,tappaas-cicd/manager/environment-manager/,network-manager; module-manager; validate-environment.sh; reconcile-module; site.json; zones.json; environments
+src/bootstrap.ts,tappaas-cicd/manager/environment-manager/,create-minimal-environments.sh
+src/clients.ts,tappaas-cicd/manager/environment-manager/,module-manager; network-manager; delete-module.sh
+src/config.ts,tappaas-cicd/manager/environment-manager/,validate-environment.sh; site.json; zones.json; environments
+src/reconcile.ts,tappaas-cicd/manager/environment-manager/,
+src/validate.ts,tappaas-cicd/manager/environment-manager/,validate-environment.sh
+src/types.ts,tappaas-cicd/manager/environment-manager/,
 create-minimal-environments.sh,tappaas-cicd/manager/environment-manager/,common-install-routines.sh; user-setup.sh
 validate-environment.sh,tappaas-cicd/manager/environment-manager/,common-install-routines.sh; validate-site.sh; zones.json
-install.sh,tappaas-cicd/manager/environment-manager/,
+install.sh,tappaas-cicd/manager/environment-manager/,environment-manager; validate.sh
 test.sh,tappaas-cicd/manager/environment-manager/,create-minimal-environments.sh; validate-environment.sh
 update.sh,tappaas-cicd/manager/environment-manager/,
 #
-# === tappaas-cicd/manager/module-manager ===
+# === tappaas-cicd/manager/module-manager (TS manager: module-manager) ===
+src/main.ts,tappaas-cicd/manager/module-manager/,install-module.sh; update-module.sh; delete-module.sh; reconcile-module.sh; test-module.sh; snapshot-vm.sh; copy-update-json.sh; validate-module.sh; inspect-vm.sh
+src/client.ts,tappaas-cicd/manager/module-manager/,install-module.sh; update-module.sh; delete-module.sh; reconcile-module.sh; snapshot-vm.sh
+src/config.ts,tappaas-cicd/manager/module-manager/,update-module.sh; site.json
+src/validate.ts,tappaas-cicd/manager/module-manager/,validate-module.sh; validate-module-tier-source.sh
+src/types.ts,tappaas-cicd/manager/module-manager/,
 copy-update-json.sh,tappaas-cicd/manager/module-manager/,common-install-routines.sh; convert-json-to-config.sh
-delete-module.sh,tappaas-cicd/manager/module-manager/,common-install-routines.sh
-install-module.sh,tappaas-cicd/manager/module-manager/,common-install-routines.sh; copy-update-json.sh
+delete-module.sh,tappaas-cicd/manager/module-manager/,common-install-routines.sh; inspect-cluster.sh
+install-module.sh,tappaas-cicd/manager/module-manager/,common-install-routines.sh; copy-update-json.sh; validate-module-tier-source.sh
 module-format.sh,tappaas-cicd/manager/module-manager/,common-install-routines.sh
-snapshot-vm.sh,tappaas-cicd/manager/module-manager/,common-install-routines.sh; update-module.sh
+reconcile-module.sh,tappaas-cicd/manager/module-manager/,common-install-routines.sh; install-module.sh; update-module.sh
+snapshot-vm.sh,tappaas-cicd/manager/module-manager/,common-install-routines.sh; update-module.sh; update-os.sh
 update-module.sh,tappaas-cicd/manager/module-manager/,common-install-routines.sh; apply-json-merge.sh; snapshot-vm.sh
 validate-module.sh,tappaas-cicd/manager/module-manager/,
 validate-module-tier-source.sh,tappaas-cicd/manager/module-manager/,common-install-routines.sh
 test-validate-module-tier-source.sh,tappaas-cicd/manager/module-manager/,validate-module-tier-source.sh
-install.sh,tappaas-cicd/manager/module-manager/,
-test.sh,tappaas-cicd/manager/module-manager/,copy-update-json.sh; delete-module.sh; install-module.sh; validate-module.sh
+install.sh,tappaas-cicd/manager/module-manager/,module-manager; validate.sh
+test.sh,tappaas-cicd/manager/module-manager/,copy-update-json.sh; delete-module.sh; install-module.sh; validate-module.sh; validate-module-tier-source.sh; validate.sh
 update.sh,tappaas-cicd/manager/module-manager/,
 #
-# === tappaas-cicd/manager/network-manager ===
+# === tappaas-cicd/manager/network-manager (TS manager: network-manager) ===
+src/main.ts,tappaas-cicd/manager/network-manager/,zone-manager; proxmox-controller; switch-controller; ap-controller; scp; site.json; zones.json
+src/distribute.ts,tappaas-cicd/manager/network-manager/,Create-TAPPaaS-VM.sh; scp
+src/planes.ts,tappaas-cicd/manager/network-manager/,zone-manager; proxmox-controller; switch-controller; ap-controller
+src/reconcile.ts,tappaas-cicd/manager/network-manager/,zones.json
+src/zones.ts,tappaas-cicd/manager/network-manager/,zones.json
+src/zonelifecycle.ts,tappaas-cicd/manager/network-manager/,zones.json
+src/zonescheck.ts,tappaas-cicd/manager/network-manager/,zones.json
+src/zonesinit.ts,tappaas-cicd/manager/network-manager/,zones.json
+src/zonesmerge.ts,tappaas-cicd/manager/network-manager/,zones.json
+src/types.ts,tappaas-cicd/manager/network-manager/,
 zone-controller.sh,tappaas-cicd/manager/network-manager/,common-install-routines.sh
 zone-state.sh,tappaas-cicd/manager/network-manager/,common-install-routines.sh
-install.sh,tappaas-cicd/manager/network-manager/,
+install.sh,tappaas-cicd/manager/network-manager/,network-manager; zone-state.sh; zone-controller.sh
 validate.sh,tappaas-cicd/manager/network-manager/,
 test.sh,tappaas-cicd/manager/network-manager/,zone-controller.sh; zone-state.sh
 update.sh,tappaas-cicd/manager/network-manager/,
 #
-# === tappaas-cicd/manager/health-manager ===
-check-backup-status.sh,tappaas-cicd/manager/health-manager/,
+# === tappaas-cicd/manager/health-manager (TS manager: health-manager) ===
+src/main.ts,tappaas-cicd/manager/health-manager/,update-os.sh; inspect-cluster.sh; inspect-vm.sh; check-disk-threshold.sh; backup-status.sh; site.json
+src/checks.ts,tappaas-cicd/manager/health-manager/,check-disk-threshold.sh; backup-status.sh
+src/inspect.ts,tappaas-cicd/manager/health-manager/,inspect-cluster.sh; inspect-vm.sh
+src/client.ts,tappaas-cicd/manager/health-manager/,inspect-cluster.sh; inspect-vm.sh; check-disk-threshold.sh
+src/config.ts,tappaas-cicd/manager/health-manager/,inspect-cluster.sh; inspect-vm.sh; site.json
+src/types.ts,tappaas-cicd/manager/health-manager/,
+check-backup-status.sh,tappaas-cicd/manager/health-manager/,backup-manager; backup-status.sh
 check-disk-threshold.sh,tappaas-cicd/manager/health-manager/,
 inspect-cluster.sh,tappaas-cicd/manager/health-manager/,common-install-routines.sh
 inspect-vm.sh,tappaas-cicd/manager/health-manager/,common-install-routines.sh; vm-net.sh
 update-os.sh,tappaas-cicd/manager/health-manager/,common-install-routines.sh
-install.sh,tappaas-cicd/manager/health-manager/,
-test.sh,tappaas-cicd/manager/health-manager/,
+install.sh,tappaas-cicd/manager/health-manager/,health-manager; update-os.sh; validate.sh
+test.sh,tappaas-cicd/manager/health-manager/,validate.sh
 update.sh,tappaas-cicd/manager/health-manager/,
 #
-# === tappaas-cicd/manager/backup-manager ===
-backup-manager.sh,tappaas-cicd/manager/backup-manager/,lib-cascade.sh
-backup-restore.sh,tappaas-cicd/manager/backup-manager/,
+# === tappaas-cicd/manager/backup-manager (TS manager: backup-manager) ===
+src/main.ts,tappaas-cicd/manager/backup-manager/,backup-controller; backup-status.sh; backup-restore.sh; validate-backup.sh; site.json
+src/client.ts,tappaas-cicd/manager/backup-manager/,backup-controller
+src/restore.ts,tappaas-cicd/manager/backup-manager/,backup-controller; backup-restore.sh
+src/reconcile.ts,tappaas-cicd/manager/backup-manager/,
+src/modify.ts,tappaas-cicd/manager/backup-manager/,
+src/validate.ts,tappaas-cicd/manager/backup-manager/,validate-backup.sh
+src/config.ts,tappaas-cicd/manager/backup-manager/,site.json
+src/types.ts,tappaas-cicd/manager/backup-manager/,
+backup-manager.sh,tappaas-cicd/manager/backup-manager/,lib-cascade.sh; backup-status.sh; backup-restore.sh; backup-controller
+backup-restore.sh,tappaas-cicd/manager/backup-manager/,backup-controller
 backup-status.sh,tappaas-cicd/manager/backup-manager/,lib-cascade.sh
-lib-cascade.sh,tappaas-cicd/manager/backup-manager/,install-module.sh
+lib-cascade.sh,tappaas-cicd/manager/backup-manager/,install-module.sh; backup-status.sh
 validate-backup.sh,tappaas-cicd/manager/backup-manager/,lib-cascade.sh
-validate.sh,tappaas-cicd/manager/backup-manager/,
-install.sh,tappaas-cicd/manager/backup-manager/,
-test.sh,tappaas-cicd/manager/backup-manager/,
+validate.sh,tappaas-cicd/manager/backup-manager/,validate-backup.sh
+install.sh,tappaas-cicd/manager/backup-manager/,backup-manager; backup-status.sh; backup-restore.sh; validate-backup.sh; backup-controller; validate.sh
+test.sh,tappaas-cicd/manager/backup-manager/,backup-status.sh; backup-controller
 update.sh,tappaas-cicd/manager/backup-manager/,
 #
 # === tappaas-cicd/manager/TEMPLATE ===
 manager.sh,tappaas-cicd/manager/TEMPLATE/,
-install.sh,tappaas-cicd/manager/TEMPLATE/,
+install.sh,tappaas-cicd/manager/TEMPLATE/,validate.sh
 test.sh,tappaas-cicd/manager/TEMPLATE/,
 update.sh,tappaas-cicd/manager/TEMPLATE/,
 validate.sh,tappaas-cicd/manager/TEMPLATE/,
 #
-# === tappaas-cicd/controller ===
+# === tappaas-cicd/controller (component dispatchers) ===
 install.sh,tappaas-cicd/controller/,
 test.sh,tappaas-cicd/controller/,
 update.sh,tappaas-cicd/controller/,
@@ -130,23 +185,25 @@ migrate-node.sh,tappaas-cicd/controller/proxmox-controller/,common-install-routi
 migrate-vm.sh,tappaas-cicd/controller/proxmox-controller/,common-install-routines.sh
 resize-disk.sh,tappaas-cicd/controller/proxmox-controller/,common-install-routines.sh
 test-proxmox-manager.sh,tappaas-cicd/controller/proxmox-controller/,zones.json
-install.sh,tappaas-cicd/controller/proxmox-controller/,
+install.sh,tappaas-cicd/controller/proxmox-controller/,validate.sh
 test.sh,tappaas-cicd/controller/proxmox-controller/,
 update.sh,tappaas-cicd/controller/proxmox-controller/,
 #
 # === tappaas-cicd/controller/switch-controller ===
+switch-controller,tappaas-cicd/controller/switch-controller/,zones.json
 setup-switches.sh,tappaas-cicd/controller/switch-controller/,common-install-routines.sh; install-module.sh
 test-setup-switches.sh,tappaas-cicd/controller/switch-controller/,setup-switches.sh
-test-switch-manager.sh,tappaas-cicd/controller/switch-controller/,zones.json
-install.sh,tappaas-cicd/controller/switch-controller/,
+test-switch-controller.sh,tappaas-cicd/controller/switch-controller/,switch-controller; zones.json
+install.sh,tappaas-cicd/controller/switch-controller/,validate.sh
 test.sh,tappaas-cicd/controller/switch-controller/,
 update.sh,tappaas-cicd/controller/switch-controller/,
 #
 # === tappaas-cicd/controller/ap-controller ===
+ap-controller,tappaas-cicd/controller/ap-controller/,zones.json
 setup-wlan-secrets.sh,tappaas-cicd/controller/ap-controller/,common-install-routines.sh; zones.json
 test-ap-manager.sh,tappaas-cicd/controller/ap-controller/,zones.json
 test-setup-wlan-secrets.sh,tappaas-cicd/controller/ap-controller/,setup-wlan-secrets.sh
-install.sh,tappaas-cicd/controller/ap-controller/,
+install.sh,tappaas-cicd/controller/ap-controller/,validate.sh
 test.sh,tappaas-cicd/controller/ap-controller/,
 update.sh,tappaas-cicd/controller/ap-controller/,
 #
@@ -156,8 +213,8 @@ test.sh,tappaas-cicd/controller/identity-controller/,
 update.sh,tappaas-cicd/controller/identity-controller/,
 #
 # === tappaas-cicd/controller/backup-controller ===
-install.sh,tappaas-cicd/controller/backup-controller/,
-test.sh,tappaas-cicd/controller/backup-controller/,
+install.sh,tappaas-cicd/controller/backup-controller/,backup-controller
+test.sh,tappaas-cicd/controller/backup-controller/,backup-controller
 update.sh,tappaas-cicd/controller/backup-controller/,
 #
 # === tappaas-cicd/controller/TEMPLATE ===
@@ -181,7 +238,7 @@ log.py,tappaas-cicd/controller/opnsense-controller/src/opnsense_controller/,
 main.py,tappaas-cicd/controller/opnsense-controller/src/opnsense_controller/,config.py; dhcp_manager.py; firewall_manager.py; vlan_manager.py
 nat_cli.py,tappaas-cicd/controller/opnsense-controller/src/opnsense_controller/,config.py; nat_manager.py
 nat_manager.py,tappaas-cicd/controller/opnsense-controller/src/opnsense_controller/,config.py
-rules_manager.py,tappaas-cicd/controller/opnsense-controller/src/opnsense_controller/,config.py; firewall_manager.py; log.py; vlan_manager.py; zones.json
+rules_manager.py,tappaas-cicd/controller/opnsense-controller/src/opnsense_controller/,config.py; firewall_manager.py; log.py; vlan_manager.py; copy-update-json.sh; zones.json
 syslog_cli.py,tappaas-cicd/controller/opnsense-controller/src/opnsense_controller/,config.py; syslog_manager.py
 syslog_manager.py,tappaas-cicd/controller/opnsense-controller/src/opnsense_controller/,config.py
 test_network_cli.py,tappaas-cicd/controller/opnsense-controller/src/opnsense_controller/,
@@ -212,10 +269,11 @@ test_people_primitives.py,tappaas-cicd/controller/identity-controller/src/test/,
 #
 # === tappaas-cicd/update-tappaas (Python pkg: update_tappaas) ===
 __init__.py,tappaas-cicd/update-tappaas/src/update_tappaas/,
-main.py,tappaas-cicd/update-tappaas/src/update_tappaas/,
+main.py,tappaas-cicd/update-tappaas/src/update_tappaas/,update-module.sh; reboot-cluster.sh; site.json
 #
 # === tappaas-cicd/opnsense-patch ===
 apply-caddy-isdnsname.sh,tappaas-cicd/opnsense-patch/,
+InterfaceAssignController.php,tappaas-cicd/opnsense-patch/,
 #
 # === tappaas-cicd/test-variants ===
 test.sh,tappaas-cicd/test-variants/,
@@ -234,9 +292,9 @@ test-vm.sh,tappaas-cicd/test-vm-creation/,common-install-routines.sh
 #
 # === tappaas-cicd/test-vm-creation/rollback-fixture ===
 install.sh,tappaas-cicd/test-vm-creation/rollback-fixture/,common-install-routines.sh; lib.sh
-lib.sh,tappaas-cicd/test-vm-creation/rollback-fixture/,
-test.sh,tappaas-cicd/test-vm-creation/rollback-fixture/,common-install-routines.sh; lib.sh
-update.sh,tappaas-cicd/test-vm-creation/rollback-fixture/,common-install-routines.sh; lib.sh
+lib.sh,tappaas-cicd/test-vm-creation/rollback-fixture/,update-module.sh; snapshot-vm.sh
+test.sh,tappaas-cicd/test-vm-creation/rollback-fixture/,common-install-routines.sh; lib.sh; update-module.sh
+update.sh,tappaas-cicd/test-vm-creation/rollback-fixture/,common-install-routines.sh; lib.sh; update-module.sh
 #
 # === tappaas-cicd/test-repository ===
 test.sh,tappaas-cicd/test-repository/,repository.sh
@@ -245,7 +303,7 @@ test.sh,tappaas-cicd/test-repository/,repository.sh
 config-firewall.sh,network/,network.json
 migrate-firewall-to-network.sh,network/,common-install-routines.sh; dns-manager
 update.sh,network/,common-install-routines.sh; zone-manager; network.json
-test.sh,network/,common-install-routines.sh; vm-net.sh; opnsense-firewall; zone-manager; dns-manager; caddy-manager; rules-manager; zone-reconcile; network.json; zones.json
+test.sh,network/,common-install-routines.sh; vm-net.sh; opnsense-firewall; zone-manager; dns-manager; caddy-manager; rules-manager; zone-reconcile; delete-module.sh; network.json; zones.json
 test-network.sh,network/,common-install-routines.sh; test-network-manager; network.json
 test-caddy-public.sh,network/,common-install-routines.sh; install-module.sh; delete-module.sh
 test-variant-public.sh,network/,common-install-routines.sh; vm-net.sh; zone-controller; install-module.sh; delete-module.sh; unbound-manager; network.json; zones.json
@@ -257,12 +315,15 @@ test-unifi-plugin.sh,network/scripts/,unifi.sh
 manual.sh,network/scripts/plugins/,
 unifi.sh,network/scripts/plugins/,
 #
+# === network/scripts/switch-controller (TS S-TS pilot port; not yet the linked bin) ===
+src/main.ts,network/scripts/switch-controller/,zones.json
+#
 # === network/services/proxy ===
 access-list.sh,network/services/proxy/,caddy-manager; zones.json
-install-service.sh,network/services/proxy/,common-install-routines.sh; access-list.sh; caddy-manager; unbound-manager; configuration.json; network.json; zones.json
-update-service.sh,network/services/proxy/,common-install-routines.sh; access-list.sh; caddy-manager; configuration.json; network.json; zones.json
-delete-service.sh,network/services/proxy/,common-install-routines.sh; caddy-manager; unbound-manager; configuration.json; network.json
-test-service.sh,network/services/proxy/,common-install-routines.sh; caddy-manager; configuration.json; network.json
+install-service.sh,network/services/proxy/,common-install-routines.sh; access-list.sh; caddy-manager; unbound-manager; site.json; network.json; zones.json
+update-service.sh,network/services/proxy/,common-install-routines.sh; access-list.sh; caddy-manager; site.json; network.json; zones.json
+delete-service.sh,network/services/proxy/,common-install-routines.sh; caddy-manager; unbound-manager; site.json; network.json
+test-service.sh,network/services/proxy/,common-install-routines.sh; caddy-manager; site.json; network.json
 #
 # === network/services/rules ===
 install-service.sh,network/services/rules/,common-install-routines.sh; rules-manager; network.json
@@ -307,13 +368,13 @@ Create-TAPPaaS-LXC.sh,cluster/,zones.json
 Create-TAPPaaS-VM.sh,cluster/,zones.json
 install-platform.sh,cluster/,Create-TAPPaaS-VM.sh; install1.sh; install2.sh
 install.sh,cluster/,config-network.sh; config-storage.sh; config-firewall.sh; install-platform.sh; Create-TAPPaaS-VM.sh; Create-TAPPaaS-LXC.sh; zones.json
-reboot-cluster.sh,cluster/,common-install-routines.sh; reboot-node-lib.sh; reboot-node.sh; configuration.json
+reboot-cluster.sh,cluster/,common-install-routines.sh; reboot-node-lib.sh; reboot-node.sh; site.json
 reboot-node.sh,cluster/,common-install-routines.sh; reboot-node-lib.sh
 sanity-check.sh,cluster/,
 setup-realtek-nic.sh,cluster/,
 setup-ssd-lifecycle.sh,cluster/,
 test.sh,cluster/,common-install-routines.sh; vm-net.sh; test-vm-net.sh; install-module.sh; update-module.sh; delete-module.sh; dns-manager
-update.sh,cluster/,common-install-routines.sh; Create-TAPPaaS-VM.sh; Create-TAPPaaS-LXC.sh; reboot-node.sh; zones.json; configuration.json
+update.sh,cluster/,common-install-routines.sh; validate-configuration.sh; Create-TAPPaaS-VM.sh; Create-TAPPaaS-LXC.sh; reboot-node.sh; zones.json; site.json
 #
 # === cluster/lib ===
 reboot-node-lib.sh,cluster/lib/,
@@ -322,7 +383,7 @@ vm-net.sh,cluster/lib/,zones.json
 #
 # === cluster/services/ha ===
 install-service.sh,cluster/services/ha/,update-service.sh
-update-service.sh,cluster/services/ha/,common-install-routines.sh; configuration.json
+update-service.sh,cluster/services/ha/,common-install-routines.sh; site.json
 delete-service.sh,cluster/services/ha/,common-install-routines.sh
 test-service.sh,cluster/services/ha/,common-install-routines.sh
 #
@@ -340,8 +401,8 @@ test-service.sh,cluster/services/vm/,common-install-routines.sh
 #
 # === backup ===
 backup-manage.sh,backup/,common-install-routines.sh; backup.json
-install.sh,backup/,common-install-routines.sh; pbs-job.sh; pbs-namespace.sh; dns-manager; backup.json
-restore.sh,backup/,common-install-routines.sh; configuration.json; backup.json
+install.sh,backup/,common-install-routines.sh; copy-update-json.sh; pbs-job.sh; pbs-namespace.sh; dns-manager; backup.json
+restore.sh,backup/,common-install-routines.sh; site.json; backup.json
 update.sh,backup/,common-install-routines.sh; pbs-job.sh
 #
 # === backup/lib ===
@@ -368,7 +429,7 @@ test-service.sh,backup/services/vm/,common-install-routines.sh; backup.json
 #
 # === identity ===
 install.sh,identity/,update.sh
-update.sh,identity/,common-install-routines.sh; ensure-authentik-creds.sh; configuration.json
+update.sh,identity/,common-install-routines.sh; ensure-authentik-creds.sh; site.json
 test.sh,identity/,common-install-routines.sh; install-module.sh; delete-module.sh
 #
 # === identity/lib ===
@@ -380,14 +441,14 @@ update-service.sh,identity/services/accessControl/,install-service.sh
 delete-service.sh,identity/services/accessControl/,common-install-routines.sh
 #
 # === identity/services/identity ===
-install-service.sh,identity/services/identity/,common-install-routines.sh; ensure-authentik-creds.sh; authentik-manager; configuration.json
+install-service.sh,identity/services/identity/,common-install-routines.sh; ensure-authentik-creds.sh; authentik-manager; site.json
 update-service.sh,identity/services/identity/,install-service.sh
 delete-service.sh,identity/services/identity/,common-install-routines.sh
 test-service.sh,identity/services/identity/,common-install-routines.sh
 #
 # === logging ===
 install.sh,logging/,update.sh
-update.sh,logging/,common-install-routines.sh; configuration.json
+update.sh,logging/,common-install-routines.sh; site.json
 test.sh,logging/,common-install-routines.sh
 #
 # === templates ===
@@ -395,12 +456,12 @@ update.sh,templates/,common-install-routines.sh; Create-TAPPaaS-VM.sh; zones.jso
 #
 # === templates/services/debian ===
 install-service.sh,templates/services/debian/,update-service.sh
-update-service.sh,templates/services/debian/,common-install-routines.sh
+update-service.sh,templates/services/debian/,common-install-routines.sh; update-os.sh
 delete-service.sh,templates/services/debian/,
 #
 # === templates/services/nixos ===
 install-service.sh,templates/services/nixos/,update-service.sh
-update-service.sh,templates/services/nixos/,common-install-routines.sh
+update-service.sh,templates/services/nixos/,common-install-routines.sh; update-os.sh
 delete-service.sh,templates/services/nixos/,
 test-service.sh,templates/services/nixos/,common-install-routines.sh
 #

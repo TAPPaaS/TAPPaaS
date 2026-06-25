@@ -1,13 +1,29 @@
 Program,Install Location,Source Path,Type
 # ==========================================================================================
 # TAPPaaS Foundation Layer - Executable Programs and Scripts
-# Generated: 2026-06-23
+# Generated: 2026-06-25 (ADR-007 #3: 7 verb-aligned TypeScript MANAGERS are now the front doors)
 # ==========================================================================================
 # Source paths are repo-relative (under src/foundation/). The /home/tappaas/bin symlinks on
 # the tappaas-cicd mothership are the installed-program surface; each manager/controller
 # install.sh links its scripts and compiled bins onto PATH. Python/TypeScript CLIs resolve
-# through a /nix/store result/ env but are mapped here to their repo source per the
-# pyproject.toml [project.scripts] / package.json bin entry.
+# through a /nix/store result/ env but are mapped here to their repo source.
+#
+# THE 7 MANAGERS (ADR-007 #3) are compiled TypeScript bins (one bin = one program, source =
+# its src/*.ts tree built via default.nix). They are the verb-aligned FRONT DOORS and SHELL
+# OUT to the legacy bash verb scripts (thin orchestration). The legacy verb scripts remain
+# linked on PATH during the transition (and are still called directly by a few bootstrap /
+# nightly / template holdouts — see DEPENDENCIES.md "Manager front-door adoption").
+#
+# configuration.json is RETIRED. Site config is now site.json (+ environments/, zones.json).
+#
+# --- THE 7 MANAGERS (compiled TS bins, verb-aligned front doors; ADR-007 #3) --------------
+people-manager,/home/tappaas/bin/people-manager,tappaas-cicd/manager/people-manager/src/*.ts,program
+network-manager,/home/tappaas/bin/network-manager,tappaas-cicd/manager/network-manager/src/*.ts,program
+module-manager,/home/tappaas/bin/module-manager,tappaas-cicd/manager/module-manager/src/*.ts,program
+site-manager,/home/tappaas/bin/site-manager,tappaas-cicd/manager/site-manager/src/*.ts,program
+environment-manager,/home/tappaas/bin/environment-manager,tappaas-cicd/manager/environment-manager/src/*.ts,program
+backup-manager,/home/tappaas/bin/backup-manager,tappaas-cicd/manager/backup-manager/src/*.ts,program
+health-manager,/home/tappaas/bin/health-manager,tappaas-cicd/manager/health-manager/src/*.ts,program
 #
 # --- tappaas-cicd/lib/ (shared routines, sourced or run via /home/tappaas/bin/<name>) -----
 apply-json-merge.sh,/home/tappaas/bin/apply-json-merge.sh,tappaas-cicd/lib/apply-json-merge.sh,library
@@ -20,12 +36,11 @@ acme-setup.sh,/home/tappaas/bin/acme-setup.sh,tappaas-cicd/scripts/acme-setup.sh
 rest-of-foundation.sh,/home/tappaas/bin/rest-of-foundation.sh,tappaas-cicd/scripts/rest-of-foundation.sh,script
 setup-caddy.sh,/home/tappaas/bin/setup-caddy.sh,tappaas-cicd/scripts/setup-caddy.sh,script
 #
-# --- manager/people-manager/ --------------------------------------------------------------
-people-manager,/home/tappaas/bin/people-manager,tappaas-cicd/manager/people-manager/src/main.ts,program
+# --- manager/people-manager/ (legacy verb scripts wrapped by people-manager) --------------
 user-setup.sh,/home/tappaas/bin/user-setup.sh,tappaas-cicd/manager/people-manager/user-setup.sh,script
 validate-people.sh,/home/tappaas/bin/validate-people.sh,tappaas-cicd/manager/people-manager/validate.sh,script
 #
-# --- manager/site-manager/ ----------------------------------------------------------------
+# --- manager/site-manager/ (legacy verb scripts wrapped by site-manager) ------------------
 convert-json-to-config.sh,/home/tappaas/bin/convert-json-to-config.sh,tappaas-cicd/manager/site-manager/convert-json-to-config.sh,script
 create-configuration.sh,/home/tappaas/bin/create-configuration.sh,tappaas-cicd/manager/site-manager/create-configuration.sh,script
 create-site.sh,/home/tappaas/bin/create-site.sh,tappaas-cicd/manager/site-manager/create-site.sh,script
@@ -35,15 +50,16 @@ test-create-site.sh,/home/tappaas/bin/test-create-site.sh,tappaas-cicd/manager/s
 validate-configuration.sh,/home/tappaas/bin/validate-configuration.sh,tappaas-cicd/manager/site-manager/validate-configuration.sh,script
 validate-site.sh,/home/tappaas/bin/validate-site.sh,tappaas-cicd/manager/site-manager/validate-site.sh,script
 #
-# --- manager/environment-manager/ ---------------------------------------------------------
+# --- manager/environment-manager/ (legacy verb scripts wrapped by environment-manager) ----
 create-minimal-environments.sh,/home/tappaas/bin/create-minimal-environments.sh,tappaas-cicd/manager/environment-manager/create-minimal-environments.sh,script
 validate-environment.sh,/home/tappaas/bin/validate-environment.sh,tappaas-cicd/manager/environment-manager/validate-environment.sh,script
 #
-# --- manager/module-manager/ --------------------------------------------------------------
+# --- manager/module-manager/ (legacy verb scripts wrapped by module-manager) --------------
 copy-update-json.sh,/home/tappaas/bin/copy-update-json.sh,tappaas-cicd/manager/module-manager/copy-update-json.sh,script
 delete-module.sh,/home/tappaas/bin/delete-module.sh,tappaas-cicd/manager/module-manager/delete-module.sh,script
 install-module.sh,/home/tappaas/bin/install-module.sh,tappaas-cicd/manager/module-manager/install-module.sh,script
 module-format.sh,/home/tappaas/bin/module-format.sh,tappaas-cicd/manager/module-manager/module-format.sh,script
+reconcile-module.sh,/home/tappaas/bin/reconcile-module.sh,tappaas-cicd/manager/module-manager/reconcile-module.sh,script
 snapshot-vm.sh,/home/tappaas/bin/snapshot-vm.sh,tappaas-cicd/manager/module-manager/snapshot-vm.sh,script
 test-module.sh,/home/tappaas/bin/test-module.sh,tappaas-cicd/manager/module-manager/test-module.sh,script
 test-validate-module-tier-source.sh,/home/tappaas/bin/test-validate-module-tier-source.sh,tappaas-cicd/manager/module-manager/test-validate-module-tier-source.sh,script
@@ -51,21 +67,18 @@ update-module.sh,/home/tappaas/bin/update-module.sh,tappaas-cicd/manager/module-
 validate-module.sh,/home/tappaas/bin/validate-module.sh,tappaas-cicd/manager/module-manager/validate-module.sh,script
 validate-module-tier-source.sh,/home/tappaas/bin/validate-module-tier-source.sh,tappaas-cicd/manager/module-manager/validate-module-tier-source.sh,script
 #
-# --- manager/network-manager/ -------------------------------------------------------------
-network-manager,/home/tappaas/bin/network-manager,tappaas-cicd/manager/network-manager/src/main.ts,program
+# --- manager/network-manager/ (legacy verb scripts wrapped by network-manager) ------------
 zone-controller,/home/tappaas/bin/zone-controller,tappaas-cicd/manager/network-manager/zone-controller.sh,script
-zone-controller.sh,/home/tappaas/bin/zone-controller.sh,tappaas-cicd/manager/network-manager/zone-controller.sh,script
-zone-reconcile,/home/tappaas/bin/zone-reconcile,tappaas-cicd/manager/network-manager/zone-reconcile,script
 zone-state.sh,/home/tappaas/bin/zone-state.sh,tappaas-cicd/manager/network-manager/zone-state.sh,script
 #
-# --- manager/health-manager/ --------------------------------------------------------------
+# --- manager/health-manager/ (legacy verb scripts wrapped by health-manager) --------------
+check-backup-status.sh,/home/tappaas/bin/check-backup-status.sh,tappaas-cicd/manager/health-manager/check-backup-status.sh,script
 check-disk-threshold.sh,/home/tappaas/bin/check-disk-threshold.sh,tappaas-cicd/manager/health-manager/check-disk-threshold.sh,script
 inspect-cluster.sh,/home/tappaas/bin/inspect-cluster.sh,tappaas-cicd/manager/health-manager/inspect-cluster.sh,script
 inspect-vm.sh,/home/tappaas/bin/inspect-vm.sh,tappaas-cicd/manager/health-manager/inspect-vm.sh,script
 update-os.sh,/home/tappaas/bin/update-os.sh,tappaas-cicd/manager/health-manager/update-os.sh,script
 #
-# --- manager/backup-manager/ --------------------------------------------------------------
-backup-manager,/home/tappaas/bin/backup-manager,tappaas-cicd/manager/backup-manager/backup-manager.sh,script
+# --- manager/backup-manager/ (legacy verb scripts wrapped by backup-manager) --------------
 backup-manager.sh,/home/tappaas/bin/backup-manager.sh,tappaas-cicd/manager/backup-manager/backup-manager.sh,script
 backup-restore.sh,/home/tappaas/bin/backup-restore.sh,tappaas-cicd/manager/backup-manager/backup-restore.sh,script
 backup-status.sh,/home/tappaas/bin/backup-status.sh,tappaas-cicd/manager/backup-manager/backup-status.sh,script
@@ -78,8 +91,8 @@ migrate-node.sh,/home/tappaas/bin/migrate-node.sh,tappaas-cicd/controller/proxmo
 migrate-vm.sh,/home/tappaas/bin/migrate-vm.sh,tappaas-cicd/controller/proxmox-controller/migrate-vm.sh,script
 resize-disk.sh,/home/tappaas/bin/resize-disk.sh,tappaas-cicd/controller/proxmox-controller/resize-disk.sh,script
 #
-# --- controller/switch-controller/ --------------------------------------------------------
-switch-manager,/home/tappaas/bin/switch-manager,tappaas-cicd/controller/switch-controller/switch-manager,script
+# --- controller/switch-controller/ (live bin is bash; TS port is the S-TS pilot, not yet linked)
+switch-controller,/home/tappaas/bin/switch-controller,tappaas-cicd/controller/switch-controller/switch-controller,script
 setup-switches.sh,/home/tappaas/bin/setup-switches.sh,tappaas-cicd/controller/switch-controller/setup-switches.sh,script
 #
 # --- controller/ap-controller/ ------------------------------------------------------------
@@ -104,6 +117,9 @@ zone-manager,/home/tappaas/bin/zone-manager,tappaas-cicd/controller/opnsense-con
 # --- controller/identity-controller/ (Python pkg; console-scripts per pyproject.toml) -----
 authentik-manager,/home/tappaas/bin/authentik-manager,tappaas-cicd/controller/identity-controller/src/identity_controller/authentik_cli.py,python
 identity-controller,/home/tappaas/bin/identity-controller,tappaas-cicd/controller/identity-controller/src/identity_controller/authentik_cli.py,python
+#
+# --- controller/backup-controller/ (PBS provider; wrapped by backup-manager) --------------
+backup-controller,/home/tappaas/bin/backup-controller,tappaas-cicd/controller/backup-controller/,script
 #
 # --- update-tappaas/ (Python pkg; console-script per pyproject.toml) ----------------------
 update-tappaas,/home/tappaas/bin/update-tappaas,tappaas-cicd/update-tappaas/src/update_tappaas/main.py,python
