@@ -79,7 +79,32 @@ A "direct dependency" is one of:
 | `templates/` (+ `services/*`, `winserver/`) | 11 |
 | `Deprecated/` | 2 |
 
-## Key dependency chains (5 main flows)
+## Key dependency chains (6 main flows)
+
+### 0. First-node install chain (the bootstrap; ADR-007 #380)
+
+`foundation/install.sh` is the ENTRY point (the URL the install guide downloads).
+It threads one `--name <orgname>` through the whole chain (cluster name = site.json
+`.name` = default environment = organisation):
+
+```
+foundation/install.sh  --name <orgname> --domain <d>     <- entry orchestrator
+  [1/5] cluster/install.sh --name <orgname>   -> config-network.sh, config-storage.sh
+                                                 (pvecm create <orgname>; writes ~/tappaas/.cluster-role)
+  [2/5] config-firewall.sh        (prebuilt OPNsense @ 10.0.0.1)
+  [3/5] config-network.sh --swap-gateway      (staged by [1/5])
+  [4/5] sanity-check.sh
+  [5/5] install-platform.sh --name <orgname> --domain <d>
+          -> tappaas-cicd/bootstrap.sh   (clone + nixos-rebuild)
+          -> tappaas-cicd/install.sh --name <orgname>   (the cicd platform install)
+               -> create-site.sh --name <orgname>            => site.json
+               -> network-manager zones-init --name <orgname> => zones.json
+               -> create-minimal-environments.sh --name <orgname> => mgmt + <orgname> envs
+               -> copy-update-json.sh + update-module.sh (cluster/templates/network/tappaas-cicd)
+# secondary node: [1/5] joins, then the chain stops (role != created).
+# later, from the mothership: rest-of-foundation.sh -> backup/identity/logging,
+#   then user-setup.sh + people-manager reconcile => the <orgname> organisation.
+```
 
 ### 1. Module lifecycle through the manager (ADR-007 #3)
 
@@ -168,9 +193,11 @@ check-backup-status.sh -> backup-manager / backup-status.sh
 These are the operator-facing commands and orchestrators — no other file in the
 foundation tree depends on them:
 
-- **Foundation install:** `cluster/install.sh`, `cluster/install-platform.sh`,
-  `tappaas-cicd/bootstrap.sh`, `tappaas-cicd/pre-update.sh`,
-  `tappaas-cicd/update.sh`
+- **Foundation install:** `foundation/install.sh` (the entry orchestrator — see
+  flow 0). `cluster/install.sh`, `cluster/install-platform.sh`,
+  `tappaas-cicd/bootstrap.sh`, `tappaas-cicd/install.sh` are invoked **by** it (no
+  longer top-level), but remain runnable standalone for re-runs/manual fallback.
+  Also: `tappaas-cicd/pre-update.sh`, `tappaas-cicd/update.sh`
 - **The 7 managers (front doors):** `module-manager`, `site-manager`,
   `environment-manager`, `network-manager`, `people-manager`, `backup-manager`,
   `health-manager`
@@ -184,6 +211,27 @@ foundation tree depends on them:
   `backup-controller`
 
 ## Mermaid dependency graphs
+
+### First-node install chain (foundation/install.sh orchestrator)
+
+```mermaid
+graph TD
+    FI["foundation/install.sh<br/>(entry; --name orgname)"] --> CI["[1/5] cluster/install.sh<br/>(node; pvecm create orgname)"]
+    CI --> CN["config-network.sh"]
+    CI --> CS["config-storage.sh"]
+    CI --> ROLE["~/tappaas/.cluster-role"]
+    FI -->|reads| ROLE
+    FI --> FW["[2/5] config-firewall.sh"]
+    FI --> CUT["[3/5] config-network.sh --swap-gateway"]
+    FI --> SAN["[4/5] sanity-check.sh"]
+    FI --> IP["[5/5] install-platform.sh<br/>--name orgname"]
+    IP --> BS["tappaas-cicd/bootstrap.sh"]
+    IP --> CICD["tappaas-cicd/install.sh<br/>--name orgname"]
+    CICD --> CSITE["create-site.sh => site.json"]
+    CICD --> ZI["network-manager zones-init => zones.json"]
+    CICD --> CME["create-minimal-environments.sh<br/>=> mgmt + orgname envs"]
+    ROF["rest-of-foundation.sh<br/>(later, from cicd)"] --> US["user-setup.sh + people-manager<br/>=> orgname organisation"]
+```
 
 ### Module lifecycle (module-manager front door)
 
