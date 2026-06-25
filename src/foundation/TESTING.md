@@ -17,8 +17,8 @@ run) and an optional **deep tier** (live, gated by `TAPPAAS_TEST_DEEP=1` and/or
 | network | ✅ | zones audit + opnsense compile + **unifi-plugin unit (incl. `tagged_vlan_mgmt:custom` regression)** + plane-bin-resolves | ✅ live OPNsense rules/NAT/connectivity; switch+ap **5-verb lifecycle via generic/manual plugin only** | no live switch/AP hardware path; proxmox apply + top-level network-manager reconcile only smoke-tested |
 | identity | ✅ | Authentik reachable + role groups + allow-list grep | ✅ live forward-auth gating vs OIDC passthrough (fixture VMs) | §3 is a source grep, not enforcement |
 | logging | ✅ | **live** 8 health probes (Loki/Grafana/Promtail/syslog) | ❌ **none** | liveness-only; ingest assertion weak; no retention/dashboards/alerting |
-| **backup** | ❌ **missing** | — (orphaned `lib/test-pbs-*.sh` unit tests; vm service test via `backup:vm`) | vm-service deep **only WARNs, never fails** | **no module `test.sh`**; no restore/encryption/prune/GC verification |
-| **templates** | ❌ **missing** | — (per-service tests via dependents) | none | **no module `test.sh`**; **NixOS test is a STUB (zero assertions)** — baseline untested; Windows test = 4 baseline items |
+| backup | ✅ | `lib/test-pbs-*.sh` unit suites (9 asserts: vmid-list CSV + ACL/parent/retention) | ✅ live PBS reachability via `backup-controller list` | per-VM backup verification is the consumers' `backup:vm` service test; no restore/encryption/prune/GC verification |
+| templates | ✅ | template config JSONs valid + service scripts parse (+ flags the NixOS stub) | ✅ template VMs present on the cluster (qm status) | **NixOS `services/nixos/test-service.sh` is still a STUB (zero assertions)** — the base image's applied config is unverified (tracked TODO); Windows test = 4 baseline items |
 | tappaas-cicd | ✅ | config-reader unit tests + bin presence/load smoke | ✅ live VM create/reinstall/snapshot-rollback/variants; re-dispatches manager+controller suites | Test 11 component checks shallow; silent skips when optional bins absent |
 
 ## Managers (all have `test.sh` ✅; all run offline unit suites in fast tier)
@@ -37,7 +37,7 @@ run) and an optional **deep tier** (live, gated by `TAPPAAS_TEST_DEEP=1` and/or
 
 | Controller | test.sh | Tests | Gap |
 |-----------|:-------:|-------|-----|
-| **opnsense-controller** | ❌ **missing** | **8 unittest files (stdlib `unittest`, run via `python -m unittest`)** (zone/rules/dhcp/caddy/acme/dns/network) | the largest/most-critical controller has **no `test.sh` wrapper**, so its unittest suite is **NOT run by the test contract** (`test-module`/CI). Live behaviour is exercised via `network/test.sh`, but the unit suite is orphaned. |
+| opnsense-controller | ✅ | `test.sh` builds (nix) + runs the stdlib `unittest` suite — **152 tests** (zone/rules/dhcp/caddy/acme/dns) | live behaviour additionally exercised via `network/test.sh` |
 | proxmox-controller | ✅ dispatcher | → `test-proxmox-manager.sh` (unit) | live apply only smoke-tested (in network) |
 | switch-controller | ✅ dispatcher | → `test-switch-controller.sh` + `test-setup-switches.sh` | no live vendor-apply test (the UniFi 10.x fix was verified manually on hardware) |
 | ap-controller | ✅ dispatcher | → `test-ap-manager.sh` + `test-setup-wlan-secrets.sh` | no live AP path |
@@ -46,10 +46,10 @@ run) and an optional **deep tier** (live, gated by `TAPPAAS_TEST_DEEP=1` and/or
 
 ## Coverage gaps & recommendations (prioritized)
 
-**P1 — missing `test.sh` (component contract holes):**
-1. **opnsense-controller** — add a `test.sh` that builds + runs the 8 unittest files (stdlib `unittest`, run via `python -m unittest`), so the most critical controller is covered by the standard runner (today only its live side is hit, via network).
-2. **backup module** — add `backup/test.sh` aggregating `lib/test-pbs-job.sh` + `lib/test-pbs-namespace.sh` (+ the vm service test); they're currently orphaned.
-3. **templates module** — add `templates/test.sh`; and **implement the NixOS `test-service.sh`** (currently a zero-assertion stub — the base image every VM clones from is untested).
+**P1 — missing `test.sh` (component contract holes) — ✅ DONE:**
+1. ✅ **opnsense-controller** — added `test.sh` (nix-build + `python -m unittest discover`); **152 tests** now run under the contract (were orphaned).
+2. ✅ **backup module** — added `backup/test.sh` aggregating the `lib/test-pbs-*.sh` unit suites (9 asserts) + a deep live-PBS check.
+3. ✅ **templates module** — added `templates/test.sh` (config + service-script validation + deep template-VM check). ⚠️ **Still open:** the NixOS `services/nixos/test-service.sh` is a zero-assertion stub — the base image's applied config remains unverified (its `test.sh` runs but asserts nothing). Implementing it is the remaining piece.
 
 **P2 — weak/missing deep tiers (live behaviour unverified):**
 4. **health-manager** — add a deep tier exercising `list vm`/`validate` against the live cluster (it's a live-reading manager with no live test).

@@ -1,15 +1,14 @@
 # backup — tests
 
 ## How to run
-There is NO module-level `test.sh` for backup. Tests live in two layers and are not aggregated by a single entry point:
-
-- Pure unit tests (no cluster access), run directly:
-  - `./lib/test-pbs-job.sh` — exit 0 = all passed.
-  - `./lib/test-pbs-namespace.sh` — exit 0 = all passed.
-- Service test for the `backup:vm` capability, invoked by `test-module.sh` for any module that depends on `backup:vm`:
-  - `./services/vm/test-service.sh <module-name>` (fast).
-  - `TAPPAAS_TEST_DEEP=1 ./services/vm/test-service.sh <module-name>` (deep).
-  - Exit codes: 0 pass, 1 failed checks, 2 fatal (backup not configured / no node reachable).
+- **`./test.sh`** (fast) — the module test.sh; aggregates the pure unit suites
+  `lib/test-pbs-job.sh` + `lib/test-pbs-namespace.sh` (no cluster access).
+- **`TAPPAAS_TEST_DEEP=1 ./test.sh`** — adds a read-only live-PBS reachability check
+  (`backup-controller list`).
+- Per-VM backup verification is a SERVICE test owned by the *consumer* modules
+  (`dependsOn backup:vm`), invoked by `test-module.sh`:
+  `./services/vm/test-service.sh <module-name>` (fast) /
+  `TAPPAAS_TEST_DEEP=1 ./services/vm/test-service.sh <module-name>` (deep).
 
 ## Standard (fast) tests
 - `lib/test-pbs-job.sh` (CSV vmid-list helpers in `pbs-job.sh`, no cluster):
@@ -31,6 +30,7 @@ There is NO module-level `test.sh` for backup. Tests live in two layers and are 
 - The unit tests (`lib/test-pbs-*.sh`) have no deep tier and need no cluster.
 
 ## Coverage notes
-- MISSING top-level `test.sh`: backup has no module test.sh aggregating the component tests. The two `lib/test-pbs-*.sh` unit tests are not wired into any module-level harness and must be run manually; `test-module.sh` only invokes `services/vm/test-service.sh` (via the `backup:vm` dependency), so a routine `test-module.sh backup` does NOT run the CSV/namespace unit tests.
-- Deep checks 3 and 4 only WARN on failure (age stale, no covering job), so a "pass" exit can still hide a stale or uncovered backup. Likewise fast Check 2 only warns when zero backups exist.
+- A module `test.sh` now aggregates the `lib/test-pbs-*.sh` unit suites (they were
+  previously orphaned) + a deep live-PBS reachability check.
+- The per-VM service-test deep checks 3 and 4 only WARN on failure (age stale, no covering job), so a "pass" exit can still hide a stale or uncovered backup. Likewise fast Check 2 only warns when zero backups exist.
 - No test exercises actual restore (no restore verification), backup encryption, prune/GC execution, or remote/external namespace sync — only configuration presence and recency are checked.
