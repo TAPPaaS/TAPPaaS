@@ -77,7 +77,7 @@ Usage:
   network-manager reconcile [--apply] [--only <plane>]
   network-manager zones-init --name <N> [--from <tpl>] [--out <f>] [--force]
   network-manager zones-merge [--diff] [--config-dir <dir>] [--template <tpl>]
-  network-manager zones-check [--zones <file>] [--config-dir <dir>] [--strict]
+  network-manager validate [--zones <file>] [--config-dir <dir>] [--strict]   (alias: zones-check)
   network-manager zones-distribute [--zones <file>] [--dry-run]
 
 zone add options:
@@ -535,6 +535,7 @@ export function run(argv: string[], client?: PlaneClient): number {
         return 0;
       case "zones-merge":
         return cmdZonesMerge(opts);
+      case "validate": // ADR-007 #4: the standard verb name for the config gate
       case "zones-check":
         return cmdZonesCheck(opts);
       case "zones-distribute":

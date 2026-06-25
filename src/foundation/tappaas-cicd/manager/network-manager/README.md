@@ -91,11 +91,15 @@ network-manager zones-init --name acme
 
 Writing to a non-live `--out` automatically skips distribution.
 
-### `zones-check` — offline consistency audit
+### `validate` (alias `zones-check`) — offline consistency audit
+
+`validate` is the standardized verb (ADR-007 #4); `zones-check` is kept as an
+alias. Both run the same read-only zones.json audit.
 
 ```bash
+network-manager validate                   # = zones-check
 network-manager zones-check
-network-manager zones-check --strict       # warnings become errors
+network-manager validate --strict          # warnings become errors
 ```
 
 - `--zones <file>` — zones.json to check (default `$TAPPAAS_CONFIG/zones.json`).

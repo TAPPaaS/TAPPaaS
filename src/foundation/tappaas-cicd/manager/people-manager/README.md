@@ -84,19 +84,21 @@ user-setup.sh --org <slug> --user <slug> --email <email>
 user-setup.sh --org acme --user alice --email alice@example.org
 ```
 
-### `validate-people.sh` — validate the People config
+### `people-manager validate` — validate the People config
 
-(This is the manager's `validate` operation: a bash `validate.sh` linked onto
-`PATH` under the project-wide name `validate-people.sh`. Tracked follow-up: as a
-TypeScript manager, this is slated to become a `people-manager validate` binary
-subcommand — the convention end-state.)
-
-```
-validate-people.sh [DIR]                  # dir to validate (default $TAPPAAS_CONFIG/people)
-                   [--schema-dir <path>]  # schema location
-                   [--quiet]              # errors/warnings only
-```
+The manager's `validate` operation is now a native TypeScript verb (ADR-007 #4 —
+the convention end-state). It loads `config/people/` and checks reference
+integrity (the same `validateRefs` gate `reconcile` runs), report-only — no
+identity-service calls. Exit 0 = valid, 1 = reference errors.
 
 ```bash
-validate-people.sh                        # validate the live People dir
+people-manager validate [--config-dir DIR]
+```
+
+The bash `validate-people.sh` (a deeper JSON-Schema gate against
+`role-fields.json` etc.) remains linked under its project-wide name for
+back-compat and schema-level checks:
+
+```
+validate-people.sh [DIR] [--schema-dir <path>] [--quiet]
 ```

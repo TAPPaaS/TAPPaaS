@@ -39,6 +39,7 @@ function usage(): void {
 
 Usage:
   people-manager reconcile [--dry-run] [--config-dir DIR]   (alias: sync, deprecated)
+  people-manager validate  [--config-dir DIR]
   people-manager role  list|get [<name>] [--config-dir DIR]
   people-manager org   list|get [<name>] [--config-dir DIR]
   people-manager group list|get [<name>] [--config-dir DIR]
@@ -84,6 +85,24 @@ function loadValidated(configDir: string): PeopleModel {
     die(`People config has ${errs.length} reference error(s) — refusing to sync`);
   }
   return model;
+}
+
+// `validate` — load config/people/ and check reference integrity (the same
+// validateRefs gate cmdSync runs), but report-only: no identity service calls.
+// Exit 0 = valid, 1 = reference errors. (ADR-007 #4 verb convention.)
+function cmdValidate(opts: Opts): number {
+  const model = loadPeople(opts.configDir);
+  const errs = validateRefs(model);
+  if (errs.length > 0) {
+    for (const e of errs) console.error(`${RD}[Error]${CL} VALIDATION: ${e}`);
+    console.error(`${RD}[Error]${CL} People config has ${errs.length} reference error(s)`);
+    return 1;
+  }
+  info(
+    `People config valid: ${model.roles.size} roles, ${model.organizations.size} orgs, ` +
+      `${model.groups.size} groups, ${model.users.size} users (from ${opts.configDir})`,
+  );
+  return 0;
 }
 
 function cmdSync(opts: Opts, client: PrimitiveClient): void {
@@ -184,6 +203,8 @@ export function run(argv: string[], client: PrimitiveClient): number {
         warn("'people-manager sync' is deprecated — use 'people-manager reconcile'");
         cmdSync(opts, client);
         return 0;
+      case "validate":
+        return cmdValidate(opts);
       case "role":
       case "org":
       case "organization":
