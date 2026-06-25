@@ -70,9 +70,9 @@ Usage:
   environment-manager show <env> [--json] [--config-dir DIR]
   environment-manager validate [<file|dir>] [--config-dir DIR]
   environment-manager add [<env>] [--name N] [--domain D] [--owner ORG]
-                          [--zone Z] [--display D] [--force] [--config-dir DIR]
+                          [--zone Z] [--display D] [--dns-mode M] [--force] [--config-dir DIR]
   environment-manager modify <env> [--domain D] [--owner ORG] [--zone Z]
-                          [--display D] [--config-dir DIR]
+                          [--display D] [--dns-mode M] [--config-dir DIR]
   environment-manager delete <env> [--force] [--config-dir DIR]
   environment-manager reconcile <env> [--deep] [--apply] [--config-dir DIR]
 
@@ -90,6 +90,8 @@ Options:
   --owner ORG      Owning organization (add/modify; default = first org).
   --zone Z         network.zone reference (add/modify; default = <env>).
   --display D      displayName (add/modify).
+  --dns-mode M     domains.dnsMode: per-service (default, Caddy HTTP-01 per host)
+                   or wildcard (one *.<primary> ACME cert) (add/modify).
   --deep           reconcile: also reconcile every module consuming this env.
   --apply          reconcile: commit (default = preview / dry-run).
   --force          add: overwrite existing; delete: override guard rails.
@@ -103,6 +105,7 @@ interface Opts {
   owner?: string;
   zone?: string;
   display?: string;
+  dnsMode?: "per-service" | "wildcard";
   deep: boolean;
   apply: boolean;
   force: boolean;
@@ -146,6 +149,15 @@ function parseOpts(args: string[]): Opts {
       case "--display":
         o.display = need("--display");
         break;
+      case "--dns-mode":
+      case "--dnsMode": {
+        const v = need("--dns-mode");
+        if (v !== "per-service" && v !== "wildcard") {
+          die(`--dns-mode must be 'per-service' or 'wildcard' (got '${v}')`);
+        }
+        o.dnsMode = v;
+        break;
+      }
       case "--deep":
         o.deep = true;
         break;
@@ -258,7 +270,12 @@ function cmdAdd(opts: Opts): void {
     ownerOrg: owner,
     network: { zone: opts.zone ?? name },
   };
-  if (opts.domain) env.domains = { primary: opts.domain };
+  if (opts.domain || opts.dnsMode) {
+    env.domains = {
+      primary: opts.domain ?? "",
+      ...(opts.dnsMode ? { dnsMode: opts.dnsMode } : {}),
+    };
+  }
   assertValid(opts, env, env);
   const written = writeEnvironment(opts.configDir, env);
   info(`${GN}Wrote ${written}${CL}`);
@@ -276,8 +293,12 @@ function cmdModify(opts: Opts): void {
   if (opts.display) env.displayName = opts.display;
   if (opts.owner) env.ownerOrg = opts.owner;
   if (opts.zone) env.network.zone = opts.zone;
-  if (opts.domain) {
-    env.domains = { ...(env.domains ?? { primary: "" }), primary: opts.domain };
+  if (opts.domain || opts.dnsMode) {
+    env.domains = {
+      ...(env.domains ?? { primary: "" }),
+      ...(opts.domain ? { primary: opts.domain } : {}),
+      ...(opts.dnsMode ? { dnsMode: opts.dnsMode } : {}),
+    };
   }
   assertValid(opts, env, env);
   const written = writeEnvironment(opts.configDir, env);

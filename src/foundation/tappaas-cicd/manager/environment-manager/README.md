@@ -30,9 +30,9 @@ environment-manager list [--json] [--config-dir DIR]
 environment-manager show <env> [--json] [--config-dir DIR]
 environment-manager validate [<file|dir>] [--config-dir DIR]
 environment-manager add [<env>] [--name N] [--domain D] [--owner ORG]
-                        [--zone Z] [--display D] [--force] [--config-dir DIR]
+                        [--zone Z] [--display D] [--dns-mode M] [--force] [--config-dir DIR]
 environment-manager modify <env> [--domain D] [--owner ORG] [--zone Z]
-                        [--display D] [--config-dir DIR]
+                        [--display D] [--dns-mode M] [--config-dir DIR]
 environment-manager delete <env> [--force] [--config-dir DIR]
 environment-manager reconcile <env> [--deep] [--apply] [--config-dir DIR]
 ```
@@ -44,6 +44,11 @@ environment-manager reconcile <env> [--deep] [--apply] [--config-dir DIR]
 | `validate [<file/dir>]` | **Thin wrapper** over `validate-environment.sh` — the canonical schema + reference gate (one source of truth, zero TS dependency). Relays its output and exit status. |
 | `add` | Create an environment (writes validated config). With **no** `<env>` and **no** `--name` it **seeds the minimal set** (`mgmt` + the default `<N>`) via the `create-minimal-environments` bootstrap. With `<env>` (or `--name`) it creates that single env. `--owner` defaults to the first org under `people/organizations/`; `--zone` defaults to `<env>`. |
 | `modify <env>` | Change an existing environment (preserves un-flagged fields; writes validated config). |
+
+`--dns-mode <per-service\|wildcard>` (on `add`/`modify`) sets `domains.dnsMode` —
+the cert strategy: `per-service` (default; Caddy per-host HTTP-01) or `wildcard`
+(one `*.<primary>` OPNsense-ACME cert for the environment). Validated against the
+schema enum; this closes the last field that previously required a hand-edit.
 | `delete <env>` | Remove an environment file — **guard-railed** (see below). |
 | `reconcile <env>` | Converge the environment → live. `--apply` commits (default = preview). `--deep` cascades (see below). |
 

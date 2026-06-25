@@ -90,13 +90,14 @@ environment-manager add client1 \
     --display "Client One" \
     --owner client1-company \
     --domain client1.tappaas.org \
-    --zone client1
+    --zone client1 \
+    --dns-mode wildcard
 ```
 
-> `environment-manager add` writes `domains.primary` but defaults `dnsMode` to
-> `per-service`. For the **wildcard** scenario in this guide, set
-> `"domains": { "primary": "client1.tappaas.org", "dnsMode": "wildcard" }` in
-> `config/environments/client1.json` (there is no `--dns-mode` flag yet).
+> `--dns-mode` selects `domains.dnsMode`: `per-service` (default — Caddy issues a
+> per-host HTTP-01 cert) or `wildcard` (one `*.<primary>` ACME cert for the whole
+> environment, this guide's scenario). Change it later with
+> `environment-manager modify client1 --dns-mode <mode>`.
 
 `network-manager zone add` authors the zone in `zones.json` **and reconciles all
 four planes** (OPNsense interface + DHCP + rules, the Proxmox nodes, the switch,
