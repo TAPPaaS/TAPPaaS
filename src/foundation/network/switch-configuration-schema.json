@@ -2,7 +2,7 @@
   "$schema": "http://json-schema.org/draft-07/schema#",
   "$id": "switch-configuration-schema.json",
   "title": "TAPPaaS switch/AP infrastructure configuration (ADR-008)",
-  "description": "Desired/actual model for the switch-manager and ap-manager providers. switch-configuration-desired.json holds operator intent + zones-derived state; switch-configuration-actual.json holds the interrogated live state.",
+  "description": "Desired/actual model for the switch-controller and ap-manager providers. switch-configuration-desired.json holds operator intent + zones-derived state; switch-configuration-actual.json holds the interrogated live state.",
   "type": "object",
   "required": ["version", "switches"],
   "additionalProperties": true,

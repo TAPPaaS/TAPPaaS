@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# switch-manager — TAPPaaS physical-switch network provider (ADR-008, #339)
+# switch-controller — TAPPaaS physical-switch network provider (ADR-008, #339)
 #
 # Reconciles managed switches to zones.json (the single source of truth) so a
 # zone's VLAN is carried on every node-uplink trunk. It maintains two files:
@@ -30,7 +30,7 @@
 # fallback (prints a delta for manual application). A switch with managed:manual
 # always uses manual.sh even if its brand has a plugin.
 #
-# Usage: see `switch-manager --help`.
+# Usage: see `switch-controller --help`.
 #
 
 set -euo pipefail
@@ -56,7 +56,7 @@ _is_trunk_type() { case " ${1} " in *" node "*|*" switch "*|*" ap "*|*" uplink "
 
 usage() {
     cat <<'EOF'
-Usage: switch-manager <command> [args]
+Usage: switch-controller <command> [args]
 
 Inventory (recorded in switch-configuration-actual.json):
   add-controller <name> --vendor <v> --ip <ip> [--managed auto]
@@ -129,7 +129,7 @@ cmd_add_controller() {
     jq_actual '.controllers[$n] = {vendor:$v, managementIp:$ip, managed:$mg}' \
         --arg n "${name}" --arg v "${vendor}" --arg ip "${ip}" --arg mg "${managed}"
     info "${GN}✓${CL} added controller '${name}' (${vendor}, ${ip})"
-    info "  run 'switch-manager interrogate' to upload its switches + ports"
+    info "  run 'switch-controller interrogate' to upload its switches + ports"
 }
 
 cmd_remove_controller() {
@@ -169,9 +169,9 @@ cmd_add_switch() {
         --arg ip "${ip}" --arg m "${model}" --arg loc "${location}" --arg d "${description}"
     info "${GN}✓${CL} added switch '${name}' (${vendor}, ${managed}${controller:+, controller=${controller}}${ip:+, ${ip}})"
     if [[ "${managed}" == "manual" ]]; then
-        info "  add its uplink ports:  switch-manager add-port ${name} <port> --type node --target tappaasN --target-port ethX"
+        info "  add its uplink ports:  switch-controller add-port ${name} <port> --type node --target tappaasN --target-port ethX"
     elif [[ -z "${controller}" ]]; then
-        info "  run 'switch-manager interrogate' to upload its ports"
+        info "  run 'switch-controller interrogate' to upload its ports"
     fi
     return 0
 }
@@ -546,16 +546,16 @@ cmd_reconcile() {
         # updates actual — no separate `confirm` needed (it remains available).
         cmd_confirm; echo ""
         if [[ "${APPLY_MANUAL:-0}" -gt 0 ]]; then
-            warn "switch-manager: ${APPLY_MANUAL} manual switch(es) — apply the VLANs printed above on the hardware (actual.json now records the intended config)."
+            warn "switch-controller: ${APPLY_MANUAL} manual switch(es) — apply the VLANs printed above on the hardware (actual.json now records the intended config)."
         fi
-        info "${GN}switch-manager: applied${CL} (${APPLY_DONE:-0} via plugin, ${APPLY_MANUAL:-0} manual)"
+        info "${GN}switch-controller: applied${CL} (${APPLY_DONE:-0} via plugin, ${APPLY_MANUAL:-0} manual)"
         return 0
     fi
     if [[ "${DELTA_TOTAL:-0}" -gt 0 ]]; then
-        warn "switch-manager: ${DELTA_TOTAL} change(s) pending. Re-run with --apply."
+        warn "switch-controller: ${DELTA_TOTAL} change(s) pending. Re-run with --apply."
         return 2
     fi
-    info "${GN}switch-manager: in sync${CL}"
+    info "${GN}switch-controller: in sync${CL}"
     return 0
 }
 

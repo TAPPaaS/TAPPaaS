@@ -5,7 +5,10 @@
 // This is the #335 / #372 / #373 FIX: the old `zone-reconcile` hardcoded STALE
 // paths under firewall/scripts/{proxmox,switch,ap}-manager (moved by S0, so it
 // was broken). We call the on-PATH bins instead — and crucially we use
-// `switch-controller` (the TS bin), NOT the retired `switch-manager`.
+// `switch-controller`, the controller bin in controller/switch-controller/ (the
+// executable was renamed from `switch-manager` so its name matches its role and
+// the ap-controller pattern; a stale ~/bin/switch-controller symlink to the old
+// firewall/scripts TS build previously shadowed it and made this plane ENOENT).
 //
 // Per-plane CLI contracts (from zone-reconcile):
 //   opnsense : zone-manager --no-ssl-verify --zones-file <ZONES> --execute   (apply)

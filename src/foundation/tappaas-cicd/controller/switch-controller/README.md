@@ -19,7 +19,7 @@ hand, then record the result with `confirm`.
 
 ## CLI: `switch-controller`
 
-A compatibility alias `switch-manager` points at the same binary.
+A compatibility alias `switch-controller` points at the same binary.
 
 ```
 switch-controller <command> [args]

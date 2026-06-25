@@ -10,7 +10,7 @@
 #   2. OPNsense L3 + DHCP              ← zone-manager
 #   3. firewall-VM trunk              ← proxmox-manager trunks
 #   4. each node's lan bridge-vids    ← zone-controller → proxmox-manager bridge-vids (the fix)
-#   5. PHYSICAL inter-node switch trunk ← NOT automated (ADR-008 switch-manager, WIP)
+#   5. PHYSICAL inter-node switch trunk ← NOT automated (ADR-008 switch-controller, WIP)
 #
 # This test asserts the node side (1-4, what zone-controller owns) and then PROBES
 # the inter-node L2 path (5). On this cluster the physical switch trunks the static
@@ -168,8 +168,8 @@ if [[ "${L2_RC}" == "0" ]]; then
 else
     # Node bridge-vids passed (step 2) but the new VLAN does not traverse to the
     # firewall: the PHYSICAL inter-node switch trunks the static VLAN set but not
-    # this new one. That is the ADR-008 switch-manager gap, NOT the bridge-vids fix.
-    skip "VLAN ${VLAN} does NOT reach the firewall from ${DEST_NODE} — node bridge-vids is OK (step 2), but the physical inter-node switch does not trunk the new VLAN (ADR-008 switch-manager / manual switch trunk). Off-node placement is blocked here regardless of zone-controller."
+    # this new one. That is the ADR-008 switch-controller gap, NOT the bridge-vids fix.
+    skip "VLAN ${VLAN} does NOT reach the firewall from ${DEST_NODE} — node bridge-vids is OK (step 2), but the physical inter-node switch does not trunk the new VLAN (ADR-008 switch-controller / manual switch trunk). Off-node placement is blocked here regardless of zone-controller."
 fi
 
 # ── 4. end-to-end VM install — only meaningful if the L2 path is viable ──

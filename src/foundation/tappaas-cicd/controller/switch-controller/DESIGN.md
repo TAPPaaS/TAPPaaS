@@ -9,11 +9,11 @@ in this directory (except the verb scripts, `README.md`, and `test-*.sh`) into
 
 Linked entry points:
 
-- `switch-controller` — the main `switch-manager` reconciler (the file is named
-  `switch-manager` on disk; the `switch-controller` name is its primary CLI).
+- `switch-controller` — the main `switch-controller` reconciler (the file is named
+  `switch-controller` on disk; the `switch-controller` name is its primary CLI).
 - `setup-switches.sh` — interactive registration helper.
 
-> Note: the binary's internal name and usage text still say `switch-manager`;
+> Note: the binary's internal name and usage text still say `switch-controller`;
 > it is in the controller layer and behaves as a controller (it drives real
 > switch hardware).
 
@@ -55,7 +55,7 @@ provides no per-device logic — the controller and its plugins own that.
 
 ## Tests
 
-`test.sh` runs the co-located `test-switch-manager.sh` and
+`test.sh` runs the co-located `test-switch-controller.sh` and
 `test-setup-switches.sh` (offline; plugins stubbed via `PLUGIN_DIR`), exiting
 non-zero on failure.
 

@@ -298,7 +298,7 @@ on tappaas-cicd (symlinked into `~/bin`):
 | Script | Role |
 |--------|------|
 | `zone-reconcile` | orchestrator — runs every provider in order (`opnsense → proxmox → switch → ap`) |
-| `switch-manager` | physical switches (controllers / switches / ports → trunk + access VLANs) |
+| `switch-controller` | physical switches (controllers / switches / ports → trunk + access VLANs) |
 | `ap-manager` | WiFi APs (SSID → VLAN via the vendor controller) |
 | `proxmox-manager` | node bridge-vids + per-VM trunks (#335) |
 | `setup-switches.sh` | interactive switch registration (bootstrap step #351) |
@@ -367,7 +367,7 @@ setup/teardown runbook, options, verification, and troubleshooting.
 - [`zones.json`](zones.json) — canonical zone definitions (referenced from `from`/`to`)
 - [`aliases.json`](aliases.json) — global aliases shared across modules
 - [`services/rules/`](services/rules/) — capability lifecycle scripts
-- [`scripts/`](scripts/) — network orchestration (zone-reconcile, switch-manager, ap-manager, setup-*) — see [`scripts/README.md`](scripts/README.md)
+- [`scripts/`](scripts/) — network orchestration (zone-reconcile, switch-controller, ap-manager, setup-*) — see [`scripts/README.md`](scripts/README.md)
 - `tappaas-cicd/opnsense-controller/src/opnsense_controller/rules_manager.py` — implementation
 - [`../tappaas-cicd/manager/network-manager/ZONES.md`](../tappaas-cicd/manager/network-manager/ZONES.md) — zone reference
 - [`../../docs/ADR/ADR-008-switch-module-network-infrastructure.md`](../../../docs/ADR/ADR-008-switch-module-network-infrastructure.md) — design

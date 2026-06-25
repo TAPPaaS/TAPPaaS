@@ -2,7 +2,7 @@
 #
 # Offline tests for setup-switches.sh — the #351 switch-setup bootstrap step.
 # Sources it (source-guarded) for unit checks, and drives the brand-first menu
-# through a pty (util-linux `script`) with switch-manager + install-module stubbed
+# through a pty (util-linux `script`) with switch-controller + install-module stubbed
 # to call logs. Covers: validated menu input, controller detection, the manual
 # switch loop, and the final auto `reconcile --apply`.
 #
@@ -17,7 +17,7 @@ ck() { local d="$1" e="$2" g="$3"; if [[ "$e" == "$g" ]]; then echo "  ok: $d"; 
 
 TMP="$(mktemp -d)"; trap 'rm -rf "${TMP}"' EXIT
 SMLOG="${TMP}/sm.log"; IMLOG="${TMP}/im.log"
-STUB_SM="${TMP}/switch-manager"; STUB_IM="${TMP}/install-module.sh"
+STUB_SM="${TMP}/switch-controller"; STUB_IM="${TMP}/install-module.sh"
 cat > "${STUB_SM}" <<EOF
 #!/usr/bin/env bash
 echo "\$*" >> "${SMLOG}"; exit 0

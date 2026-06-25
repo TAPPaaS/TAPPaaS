@@ -190,8 +190,13 @@ BASIC_FAIL=${FAIL}
 
 section "Standard 1: CLI tools available"
 
+# The plane bins network-manager actually shells out to (planes.ts PLANE_BIN):
+# zone-manager (opnsense), proxmox-controller, switch-controller, ap-controller.
+# (Historically this listed the pre-split names opnsense-manager/proxmox-manager/
+# switch-controller/ap-manager/zone-reconcile — which left the switch-controller
+# rename gap undetected, since switch-controller existed while switch-controller did not.)
 for tool in opnsense-firewall zone-manager dns-manager caddy-manager rules-manager \
-            opnsense-manager proxmox-manager switch-manager ap-manager zone-reconcile; do
+            proxmox-controller switch-controller ap-controller network-manager; do
     if command -v "${tool}" >/dev/null 2>&1; then
         pass "${tool} on PATH"
     else
@@ -755,7 +760,7 @@ deep_test_adr008_providers() {
         if [[ "$(jq -r "$2" "$3" 2>/dev/null)" == "true" ]]; then pass "$1"; else fail "$1"; fi
     }
 
-    section "Deep A: switch-manager — zone add/change/remove across reconcile phases (#339)"
+    section "Deep A: switch-controller — zone add/change/remove across reconcile phases (#339)"
 
     # Seed two test zones (961, 962) as Active in the isolated zones.json.
     jq '.swdeepA={state:"Active",vlantag:961} | .swdeepB={state:"Active",vlantag:962}' \
@@ -763,38 +768,38 @@ deep_test_adr008_providers() {
 
     # vendor 'generic' has no plugin → manual fallback (an "equipment type that
     # does not exist" as far as automation is concerned).
-    env CONFIG_DIR="${T}" switch-manager add testcore --vendor generic --ip 10.0.0.99 >/dev/null 2>&1 || true
-    env CONFIG_DIR="${T}" switch-manager port testcore 1 --mode trunk --source zones \
+    env CONFIG_DIR="${T}" switch-controller add testcore --vendor generic --ip 10.0.0.99 >/dev/null 2>&1 || true
+    env CONFIG_DIR="${T}" switch-controller port testcore 1 --mode trunk --source zones \
         --connected-to node:tappaas1:nic0:lan >/dev/null 2>&1 || true
-    env CONFIG_DIR="${T}" switch-manager port testcore 5 --mode access --zone swdeepA \
+    env CONFIG_DIR="${T}" switch-controller port testcore 5 --mode access --zone swdeepA \
         --connected-to device:test-printer >/dev/null 2>&1 || true
 
     # ── A1: add zones → update-desired pulls the new VLANs into desired.json ──
-    env CONFIG_DIR="${T}" switch-manager update-desired >/dev/null 2>&1 || true
+    env CONFIG_DIR="${T}" switch-controller update-desired >/dev/null 2>&1 || true
     _djq "Deep A1: desired trunk port gained added VLANs 961+962" \
         '.switches.testcore.ports["1"].taggedVlans | (index(961) and index(962)) != null' "${D}"
     _djq "Deep A1: access port nativeVlan tracks zone swdeepA (961)" \
         '.switches.testcore.ports["5"].nativeVlan == 961' "${D}"
 
     # ── A2: phases — actual.json only changes after confirm ──────────────────
-    env CONFIG_DIR="${T}" switch-manager interrogate >/dev/null 2>&1 || true   # manual → actual stays empty
-    out="$(env CONFIG_DIR="${T}" switch-manager delta 2>&1 || true)"
+    env CONFIG_DIR="${T}" switch-controller interrogate >/dev/null 2>&1 || true   # manual → actual stays empty
+    out="$(env CONFIG_DIR="${T}" switch-controller delta 2>&1 || true)"
     _dgrep "Deep A2: delta reports ports need configuring (actual empty)" "configure-port" "${out}"
     if jq -e '.switches.testcore' "${AF}" >/dev/null 2>&1; then
         fail "Deep A2: actual.json must NOT contain testcore before confirm"
     else
         pass "Deep A2: actual.json has no testcore before confirm"
     fi
-    env CONFIG_DIR="${T}" switch-manager confirm >/dev/null 2>&1 || true
+    env CONFIG_DIR="${T}" switch-controller confirm >/dev/null 2>&1 || true
     _djq "Deep A2: confirm wrote applied state into actual.json" \
         '.switches.testcore.ports["1"].taggedVlans | index(961) != null' "${AF}"
-    rc=0; env CONFIG_DIR="${T}" switch-manager reconcile >/dev/null 2>&1 || rc=$?
+    rc=0; env CONFIG_DIR="${T}" switch-controller reconcile >/dev/null 2>&1 || rc=$?
     if [[ "${rc}" -eq 0 ]]; then pass "Deep A2: reconcile reports in-sync after confirm (rc 0)"; else fail "Deep A2: reconcile not in-sync after confirm (rc ${rc})"; fi
 
     # ── A3: change a zone's VLAN (961→965) → drift on trunk AND access ──────
     jq '.swdeepA.vlantag=965' "${T}/zones.json" > "${T}/z" && mv "${T}/z" "${T}/zones.json"
-    env CONFIG_DIR="${T}" switch-manager update-desired >/dev/null 2>&1 || true
-    out="$(env CONFIG_DIR="${T}" switch-manager delta 2>&1 || true)"
+    env CONFIG_DIR="${T}" switch-controller update-desired >/dev/null 2>&1 || true
+    out="$(env CONFIG_DIR="${T}" switch-controller delta 2>&1 || true)"
     _dgrep "Deep A3: trunk VLAN change detected" "trunk-vlans" "${out}"
     _dgrep "Deep A3: access VLAN change detected" "access-vlan" "${out}"
     _djq "Deep A3: desired.json now has new VLAN 965" \
@@ -804,12 +809,12 @@ deep_test_adr008_providers() {
 
     # ── A4: remove a zone → its VLAN drops out of desired.json ─────────────
     jq 'del(.swdeepB)' "${T}/zones.json" > "${T}/z" && mv "${T}/z" "${T}/zones.json"
-    env CONFIG_DIR="${T}" switch-manager update-desired >/dev/null 2>&1 || true
+    env CONFIG_DIR="${T}" switch-controller update-desired >/dev/null 2>&1 || true
     _djq "Deep A4: removed zone VLAN 962 dropped from desired trunk" \
         '.switches.testcore.ports["1"].taggedVlans | index(962) == null' "${D}"
 
     # ── A5: unknown equipment type → manual instructions cite real port/VLAN ─
-    out="$(env CONFIG_DIR="${T}" switch-manager reconcile --apply 2>&1)"; rc=$?
+    out="$(env CONFIG_DIR="${T}" switch-controller reconcile --apply 2>&1)"; rc=$?
     _dgrep "Deep A5: manual plugin engaged for unknown vendor 'generic'" "MANUAL CONFIGURATION REQUIRED" "${out}"
     _dgrep "Deep A5: manual instructions cite the affected port (port 1)" "port 1" "${out}"
     _dgrep "Deep A5: manual instructions cite the new VLAN (965)" "965" "${out}"
@@ -836,7 +841,7 @@ deep_test_adr008_providers() {
     _dgrep "Deep B2: validation flags uplink port not carrying the SSID VLAN" "does not carry VLAN 965" "${out}"
 
     # Fix the uplink: switch port 9 trunk must carry 965 → validation clears.
-    env CONFIG_DIR="${T}" switch-manager port testcore 9 --mode trunk --tagged 965 \
+    env CONFIG_DIR="${T}" switch-controller port testcore 9 --mode trunk --tagged 965 \
         --connected-to ap:testap >/dev/null 2>&1 || true
     out="$(env CONFIG_DIR="${T}" ap-manager delta 2>&1 || true)"
     if grep -qF "does not carry VLAN 965" <<< "${out}"; then

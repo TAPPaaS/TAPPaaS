@@ -2,7 +2,7 @@
 #
 # Unit tests for ap-manager — the WiFi AP/SSID provider (ADR-008, #339).
 #
-# Black-box / offline: drives ap-manager (and switch-manager for the uplink
+# Black-box / offline: drives ap-manager (and switch-controller for the uplink
 # cross-check) against a temp CONFIG_DIR with a fixture zones.json. No live APs
 # (manual plugin fallback). Covers ADR-008 test plan AP-01..AP-04.
 #
@@ -13,7 +13,7 @@ set -uo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")" && pwd)"
 AM="${SCRIPT_DIR}/ap-controller"
-SM="${SCRIPT_DIR}/switch-manager"
+SM="${SCRIPT_DIR}/switch-controller"
 
 TMP="$(mktemp -d)"
 export CONFIG_DIR="${TMP}"
@@ -78,9 +78,9 @@ ck "reconcile --apply needs-manual (rc)" "2"  "$(rc_of "${AM}" reconcile --apply
 # Add work SSID so the unserved-zone warning clears, and a switch trunk port 12
 # carrying 310/510/320 so the uplink validation passes.
 "${AM}" ssid ap-living add TAPPaaS-Work --zone work --security wpa2-enterprise --radius radius.mgmt.internal >/dev/null 2>&1
-# Switch uplink carrying the SSID VLANs (new switch-manager CLI): an ap-type trunk
+# Switch uplink carrying the SSID VLANs (new switch-controller CLI): an ap-type trunk
 # port → update-desired sets its tagged set to the active VLANs (310,320,510),
-# which switch-manager writes into the shared desired file ap-manager validates.
+# which switch-controller writes into the shared desired file ap-manager validates.
 "${SM}" add-switch core-sw1 --vendor unifi --managed manual >/dev/null 2>&1
 "${SM}" add-port core-sw1 12 --type ap --target ap-living >/dev/null 2>&1
 "${SM}" update-desired >/dev/null 2>&1

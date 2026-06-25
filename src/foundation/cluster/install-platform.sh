@@ -193,10 +193,10 @@ grant_cicd_firewall_access() {
 }
 
 # ── Switch setup (#351): offer to configure physical switches now ───
-# setup-switches.sh lives on cicd (it drives switch-manager + the vendor plugins).
+# setup-switches.sh lives on cicd (it drives switch-controller + the vendor plugins).
 # Best-effort and optional: only when this node session is interactive and cicd is
 # reachable. Otherwise the operator runs it later (printed in install.sh Next steps).
-# Run via a LOGIN shell so ~/bin (switch-manager, setup-switches.sh) is on PATH.
+# Run via a LOGIN shell so ~/bin (switch-controller, setup-switches.sh) is on PATH.
 offer_switch_setup() {
   [[ "$SKIP_CICD" == "1" ]] && return 0
   if [[ "$INTERACTIVE" != "1" || -z "$CICD_IP" ]]; then

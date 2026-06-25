@@ -164,6 +164,25 @@ else
     bad "unit test tsconfig not found: ${UNIT_TSCONFIG}"
 fi
 
+# ── B2. Plane controller bins resolve on PATH (FAST; no cluster needed) ──
+# network-manager reconcile shells out to these exact bins (planes.ts PLANE_BIN).
+# A rename/stale-symlink that leaves one unresolvable (e.g. switch-controller
+# dangling to an old firewall/scripts build) makes that plane ENOENT at runtime —
+# invisible to the FakePlaneClient unit tests above. Assert each resolves AND is
+# not a dangling symlink, so the mismatch fails here instead of in production.
+echo ""
+echo "== network-manager: plane controller bins resolve (fast) =="
+for bin in zone-manager proxmox-controller switch-controller ap-controller; do
+    p="$(command -v "${bin}" 2>/dev/null || true)"
+    if [[ -z "${p}" ]]; then
+        bad "plane bin '${bin}' NOT on PATH (network-manager reconcile would ENOENT this plane)"
+    elif [[ ! -e "$(readlink -f "${p}" 2>/dev/null)" ]]; then
+        bad "plane bin '${bin}' is a DANGLING symlink ($(readlink "${p}" 2>/dev/null))"
+    else
+        ok "plane bin '${bin}' resolves"
+    fi
+done
+
 # ── C. DEEP: live reconcile dry-run (non-mutating) ────────────────────
 echo ""
 echo "== network-manager: live reconcile dry-run (deep) =="
@@ -175,15 +194,27 @@ elif ! command -v "${NM_BIN}" >/dev/null 2>&1; then
 elif [[ ! -f "${TAPPAAS_CONFIG:-/home/tappaas/config}/zones.json" ]]; then
     echo "  SKIP: no live zones.json to reconcile"
 else
-    # Dry-run the SWITCH plane only — demonstrates the plane is invoked and the
-    # bin resolves, without mutating any state. A controller being unreachable
-    # surfaces as a non-zero exit; we report it but do not hard-fail the suite
-    # (the real live gate is a later chunk).
-    if "${NM_BIN}" reconcile --only switch >/dev/null 2>&1; then
-        ok "live: network-manager reconcile --only switch (dry-run) in sync"
+    # Dry-run the SWITCH plane only — non-mutating. Distinguish the outcomes:
+    #   in-sync (rc 0) / drift (rc 2)         → the plane ran → OK
+    #   bin not on PATH / spawn error / other → hard FAIL (this is the very gap
+    #                                           that hid the switch-controller
+    #                                           rename: a "not on PATH" error must
+    #                                           NOT be swallowed as "invoked").
+    # Pin CONFIG_DIR to the live config so this exercises the real switch state
+    # (earlier sections may have exported a fixture CONFIG_DIR; without this the
+    # reconcile would run against an empty dir and vacuously report "in sync").
+    out="$(CONFIG_DIR="${TAPPAAS_CONFIG:-/home/tappaas/config}" "${NM_BIN}" reconcile --only switch 2>&1)"; rc=$?
+    if [[ ${rc} -eq 0 ]]; then
+        # rc 0 = no failure (dry-run drift is reported, not a failure) → the plane
+        # ran and its bin resolved, which is what this gate checks.
+        ok "live: network-manager reconcile --only switch ran the switch plane (dry-run, no failure)"
+    elif grep -qiE "not on PATH|failed to spawn|ENOENT|did not run" <<<"${out}"; then
+        bad "live: switch plane bin did not run — ${out##*$'\n'}"
+    elif [[ ${rc} -eq 2 ]]; then
+        echo "  INFO: live switch-plane dry-run reported drift (expected when the switch needs reconcile)"
+        ok "live: network-manager reconcile --only switch ran the switch plane (drift reported)"
     else
-        echo "  INFO: live switch-plane dry-run reported drift/unreachable (expected off-cluster)"
-        ok "live: network-manager reconcile --only switch invoked the switch plane"
+        bad "live: network-manager reconcile --only switch failed (rc=${rc}) — ${out##*$'\n'}"
     fi
 fi
 

@@ -231,7 +231,7 @@ if [ -e "${_oc_zm}" ]; then
   rm -f /home/tappaas/bin/opnsense-manager 2>/dev/null || true
   ln -s "${_oc_zm}" /home/tappaas/bin/opnsense-manager
 fi
-# ADR-007 S0: proxmox-manager/switch-manager/ap-manager moved to
+# ADR-007 S0: proxmox-manager/switch-controller/ap-manager moved to
 # tappaas-cicd/controller/<x>-controller/ and zone-reconcile to manager/network-manager/;
 # they are now linked by the controller/ + manager/ dispatchers above. (was: firewall/scripts loop)
 # Ensure OPNsense credentials file exists; if missing, create a skeleton and warn

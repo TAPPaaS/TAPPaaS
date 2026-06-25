@@ -1,17 +1,17 @@
 #!/usr/bin/env bash
 #
-# Unit tests for switch-manager — the physical-switch provider (ADR-008, #339).
+# Unit tests for switch-controller — the physical-switch provider (ADR-008, #339).
 #
 # Black-box / offline against a temp CONFIG_DIR + fixture zones.json. No live
 # switches (manual plugin fallback). Covers the 3-tier inventory (controller /
 # switch / port), the regenerated-desired model, and the reconcile lifecycle
 # (interrogate → update-desired → delta → apply → confirm), incl. add/remove port.
 #
-# Usage: ./test-switch-manager.sh   — exit 0 all passed, 1 otherwise.
+# Usage: ./test-switch-controller.sh   — exit 0 all passed, 1 otherwise.
 
 set -uo pipefail
 SCRIPT_DIR="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")" && pwd)"
-SM="${SCRIPT_DIR}/switch-manager"
+SM="${SCRIPT_DIR}/switch-controller"
 
 TMP="$(mktemp -d)"; trap 'rm -rf "${TMP}"' EXIT
 export CONFIG_DIR="${TMP}"
@@ -30,7 +30,7 @@ PASS=0; FAIL=0
 ck() { local d="$1" e="$2" g="$3"; if [[ "$e" == "$g" ]]; then echo "  ok: $d"; PASS=$((PASS+1)); else echo "  FAIL: $d (expected '$e', got '$g')"; FAIL=$((FAIL+1)); fi; }
 rc_of() { "$@" >/dev/null 2>&1; echo $?; }
 
-echo "test-switch-manager:"
+echo "test-switch-controller:"
 
 # ── Inventory: switch + ports written to ACTUAL ─────────────────────
 "${SM}" add-switch core --vendor tplink --managed manual >/dev/null 2>&1
@@ -146,5 +146,5 @@ ck "--help (rc)"                     "0"      "$(rc_of "${SM}" --help)"
 ck "unknown command (rc)"            "1"      "$(rc_of "${SM}" bogus)"
 
 echo ""
-echo "test-switch-manager: ${PASS} passed, ${FAIL} failed"
+echo "test-switch-controller: ${PASS} passed, ${FAIL} failed"
 [[ "${FAIL}" -eq 0 ]]

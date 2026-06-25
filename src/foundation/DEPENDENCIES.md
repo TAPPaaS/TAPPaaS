@@ -165,7 +165,7 @@ in the foundation tree depends on them:
 - **Identity/people:** `people-manager`, `identity/install.sh`
 - **Update:** `update-tappaas`
 - **Top-level controllers:** `opnsense-controller`, `proxmox-controller`,
-  `switch-manager`, `ap-controller`
+  `switch-controller`, `ap-controller`
 
 ## Mermaid dependency graphs
 

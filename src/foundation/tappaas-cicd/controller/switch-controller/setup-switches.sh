@@ -2,7 +2,7 @@
 #
 # setup-switches.sh — registration & setup of switches that carry TAPPaaS traffic (#351, ADR-008)
 #
-# Runs on the cicd mothership (where switch-manager + the vendor plugins live),
+# Runs on the cicd mothership (where switch-controller + the vendor plugins live),
 # normally at the end of the platform install (install-platform.sh) but also
 # re-runnable any time. It walks you through registering each switch BRAND, one
 # at a time, into switch-configuration-actual.json so zone-reconcile / switch-
@@ -17,8 +17,8 @@
 #   device-arch brand (MikroTik, tbd) → manual | register each switch by IP
 #
 # "manual" records the node-uplink ports (TAPPaaS prints which VLANs to tag, you
-# apply them by hand, then `switch-manager confirm`). Controller/device modes let
-# the plugin program the switch via `switch-manager reconcile --apply`.
+# apply them by hand, then `switch-controller confirm`). Controller/device modes let
+# the plugin program the switch via `switch-controller reconcile --apply`.
 #
 # This step is switch-only. WiFi SSID→VLAN is setup-wlan-secrets.sh + ap-manager.
 #
@@ -41,7 +41,7 @@ readonly PLUGIN_DIR="/home/tappaas/TAPPaaS/src/foundation/network/scripts/plugin
 ACTUAL="${ACTUAL:-${CONFIG_DIR}/switch-configuration-actual.json}"
 
 # Injectable so tests can stub the helpers.
-SWITCH_MANAGER="${SWITCH_MANAGER:-switch-manager}"
+SWITCH_MANAGER="${SWITCH_MANAGER:-switch-controller}"
 INSTALL_MODULE="${INSTALL_MODULE:-install-module.sh}"
 UNIFI_CRED="${UNIFI_CRED:-/home/tappaas/.unifi-os-credentials.txt}"
 UNIFI_SETUP_CREDS="${UNIFI_SETUP_CREDS:-/home/tappaas/Community/src/larsrossen/network/unifi-os/setup-credentials.sh}"
@@ -321,7 +321,7 @@ run_loop() {
     done
     echo; info "Reconciling all switches with zones.json (applying / printing what to tag)..."
     "${SWITCH_MANAGER}" reconcile --apply || warn "  some switches need manual VLAN tagging — see the output above"
-    echo; info "${GN}Done.${CL} Review any time with: ${BL:-}switch-manager list${CL:-} / ${BL:-}switch-manager delta${CL:-}"
+    echo; info "${GN}Done.${CL} Review any time with: ${BL:-}switch-controller list${CL:-} / ${BL:-}switch-controller delta${CL:-}"
 }
 
 # ── Main ─────────────────────────────────────────────────────────────
@@ -335,7 +335,7 @@ main() {
         esac
     done
     command -v "${SWITCH_MANAGER}" >/dev/null 2>&1 || [[ -x "${SWITCH_MANAGER}" ]] \
-        || die "switch-manager not found (run this on the cicd mothership)"
+        || die "switch-controller not found (run this on the cicd mothership)"
     if [[ "${INTERACTIVE}" == "0" || ! -t 0 ]]; then
         info "Switch setup skipped (non-interactive). Configure switches later with:"
         info "  ${BL:-}setup-switches.sh${CL:-}"

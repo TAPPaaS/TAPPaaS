@@ -12,7 +12,7 @@
 //            delete the key + persist.
 //
 // THE #372/#373 FIX: zone-controller.sh reconciled only opnsense + proxmox on
-// add/delete (it NEVER called switch-manager or ap-manager), so a new VLAN
+// add/delete (it NEVER called switch-controller or ap-manager), so a new VLAN
 // never reached the physical switch and off-firewall-node VMs got no IP. Here
 // the lifecycle reconciles EVERY plane in dependency order — the switch (and
 // ap) plane is ALWAYS included.
