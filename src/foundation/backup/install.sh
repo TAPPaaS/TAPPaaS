@@ -40,9 +40,11 @@ trap cleanup EXIT
 # Get the directory where this script resides (the module directory)
 MODULE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
-# Copy and update JSON config from module directory
-cd "$MODULE_DIR"
-/home/tappaas/bin/copy-update-json.sh "$@"
+# NOTE (ADR-007 module contract): install-module.sh (the orchestrator) has already
+# staged + validated + tagged config/<module>.json (its Step 2 copy-update-json)
+# BEFORE invoking this script (Step 6) — exactly as for every other module. We do
+# NOT re-copy here: a re-copy would drop install-module's --field overrides and
+# strip the kind:"module" tag. This script just consumes the staged config.
 
 # Source common routines (just function definitions, no execution)
 . /home/tappaas/bin/common-install-routines.sh
@@ -50,9 +52,6 @@ cd "$MODULE_DIR"
 . "${MODULE_DIR}/lib/pbs-job.sh"
 # shellcheck source=lib/pbs-namespace.sh disable=SC1091
 . "${MODULE_DIR}/lib/pbs-namespace.sh"
-
-# Validate the JSON config
-check_json /home/tappaas/config/$1.json || exit 1
 
 # Now change to temp directory for the rest of the installation
 TEMP_DIR=$(mktemp -d)
