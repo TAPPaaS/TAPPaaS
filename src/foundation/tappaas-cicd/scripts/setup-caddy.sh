@@ -320,7 +320,7 @@ echo ""
 # installed) — pre-update.sh also tries to apply it on every update-tappaas,
 # but on a FRESH install pre-update.sh runs BEFORE os-caddy exists (Caddy.xml
 # doesn't yet) and silently skips. Without this call here, the very first
-# network:proxy install of an underscored-zone module (which install2.sh runs
+# network:proxy install of an underscored-zone module (which install.sh runs
 # right after this script) would hit the OPNsense ToDomain validator.
 PATCH_SCRIPT="/home/tappaas/TAPPaaS/src/foundation/tappaas-cicd/opnsense-patch/apply-caddy-isdnsname.sh"
 if [[ -f "${PATCH_SCRIPT}" ]]; then

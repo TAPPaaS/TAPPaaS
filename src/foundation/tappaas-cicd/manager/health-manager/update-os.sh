@@ -325,7 +325,7 @@ update_nixos() {
 
     # The prebuilt NixOS template ships without /etc/nixos/hardware-configuration.nix
     # — generate it on-demand so the module's `imports = [ /etc/nixos/hardware-configuration.nix ]`
-    # resolves on the FIRST rebuild. Idempotent: install1.sh follows the same
+    # resolves on the FIRST rebuild. Idempotent: bootstrap.sh follows the same
     # pattern for tappaas-cicd; we extend the convention to every module install.
     info "Ensuring /etc/nixos/hardware-configuration.nix exists on ${vm_ip}"
     ssh -o BatchMode=yes "tappaas@${vm_ip}" '

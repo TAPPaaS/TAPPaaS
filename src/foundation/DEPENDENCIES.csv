@@ -16,8 +16,8 @@ File,Location,Direct Dependencies
 # src/main.ts via process.env.*_BIN ?? "<name>".
 #
 # === tappaas-cicd (top level) ===
-install1.sh,tappaas-cicd/,
-install2.sh,tappaas-cicd/,common-install-routines.sh; create-site.sh; create-minimal-environments.sh; copy-update-json.sh; update-module.sh; site.json; zones.json
+bootstrap.sh,tappaas-cicd/,
+install.sh,tappaas-cicd/,common-install-routines.sh; create-site.sh; create-minimal-environments.sh; copy-update-json.sh; update-module.sh; site.json; zones.json
 pre-update.sh,tappaas-cicd/,common-install-routines.sh; site.json; zones.json
 update.sh,tappaas-cicd/,common-install-routines.sh
 test.sh,tappaas-cicd/,common-install-routines.sh; create-site.sh; validate-site.sh; validate-people.sh; repository.sh; copy-update-json.sh; snapshot-vm.sh; backup-controller; update-os.sh; inspect-cluster.sh; inspect-vm.sh; check-disk-threshold.sh; site.json; zones.json
@@ -366,7 +366,7 @@ config-network.sh,cluster/,
 config-storage.sh,cluster/,
 Create-TAPPaaS-LXC.sh,cluster/,zones.json
 Create-TAPPaaS-VM.sh,cluster/,zones.json
-install-platform.sh,cluster/,Create-TAPPaaS-VM.sh; install1.sh; install2.sh
+install-platform.sh,cluster/,Create-TAPPaaS-VM.sh; bootstrap.sh; install.sh
 install.sh,cluster/,config-network.sh; config-storage.sh; config-firewall.sh; install-platform.sh; Create-TAPPaaS-VM.sh; Create-TAPPaaS-LXC.sh; zones.json
 reboot-cluster.sh,cluster/,common-install-routines.sh; reboot-node-lib.sh; reboot-node.sh; site.json
 reboot-node.sh,cluster/,common-install-routines.sh; reboot-node-lib.sh

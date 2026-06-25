@@ -131,7 +131,7 @@ if [[ -f "$DD" ]]; then
     [[ "$(jq -r '.ownerOrg' "$DD")" == "test2" ]]    && ok "acme.json ownerOrg <- site owner (test2)" || bad "acme.json ownerOrg"
 fi
 # --domain sets the default env's domains.primary (the site-native install path:
-# site.json carries no domain, so install2.sh passes --domain here).
+# site.json carries no domain, so install.sh passes --domain here).
 if "$MINIMAL" --name acme --domain acme.example.net --config-dir "$CFG2" --force >/dev/null 2>&1 \
    && [[ "$(jq -r '.domains.primary' "$DD")" == "acme.example.net" ]]; then
     ok "create-minimal-environments --domain sets the default env domains.primary"

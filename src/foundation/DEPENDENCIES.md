@@ -169,7 +169,7 @@ These are the operator-facing commands and orchestrators — no other file in th
 foundation tree depends on them:
 
 - **Foundation install:** `cluster/install.sh`, `cluster/install-platform.sh`,
-  `tappaas-cicd/install1.sh`, `tappaas-cicd/pre-update.sh`,
+  `tappaas-cicd/bootstrap.sh`, `tappaas-cicd/pre-update.sh`,
   `tappaas-cicd/update.sh`
 - **The 7 managers (front doors):** `module-manager`, `site-manager`,
   `environment-manager`, `network-manager`, `people-manager`, `backup-manager`,
@@ -290,16 +290,16 @@ production script/program executes the legacy verb itself.
 | Wrapped verb | Owning manager | Production callers | Verdict |
 |--------------|----------------|--------------------|---------|
 | `install-module.sh` | module-manager | module-manager (TS); `cluster/services/vm/install-service.sh` (template build) | mostly MANAGER, 1 DIRECT |
-| `update-module.sh` | module-manager | module-manager (TS); `install2.sh`; `update-tappaas` (nightly); `network/update.sh`* | MANAGER + **2 DIRECT** |
+| `update-module.sh` | module-manager | module-manager (TS); `install.sh`; `update-tappaas` (nightly); `network/update.sh`* | MANAGER + **2 DIRECT** |
 | `delete-module.sh` | module-manager | module-manager / environment-manager (TS); `cluster/services/{lxc,vm}/delete-service.sh`** | MANAGER (service-plane callbacks) |
 | `reconcile-module.sh` | module-manager | module-manager / environment-manager (TS) only | MANAGER (clean) |
-| `copy-update-json.sh` | module-manager | module-manager (TS); `install2.sh`; `backup/install.sh` | MANAGER + **2 DIRECT** |
+| `copy-update-json.sh` | module-manager | module-manager (TS); `install.sh`; `backup/install.sh` | MANAGER + **2 DIRECT** |
 | `snapshot-vm.sh` | module-manager | module-manager (TS); `common-install-routines.sh` (lib) | MANAGER (lib-internal) |
-| `create-site.sh` | site-manager | site-manager (TS); `install2.sh` (bootstrap) | MANAGER + **1 DIRECT** |
+| `create-site.sh` | site-manager | site-manager (TS); `install.sh` (bootstrap) | MANAGER + **1 DIRECT** |
 | `repository.sh` | site-manager | site-manager (TS); `rest-of-foundation.sh` (echoed hint only) | MANAGER (clean) |
-| `validate-site.sh` | site-manager | site-manager / environment-manager (TS); `install2.sh` (bootstrap) | MANAGER + **1 DIRECT** |
+| `validate-site.sh` | site-manager | site-manager / environment-manager (TS); `install.sh` (bootstrap) | MANAGER + **1 DIRECT** |
 | `validate-configuration.sh` | site-manager | validate-site.sh; people validate.sh; `cluster/update.sh` | MANAGER + **1 DIRECT** |
-| `create-minimal-environments.sh` | environment-manager | environment-manager (TS); `install2.sh` (bootstrap) | MANAGER + **1 DIRECT** |
+| `create-minimal-environments.sh` | environment-manager | environment-manager (TS); `install.sh` (bootstrap) | MANAGER + **1 DIRECT** |
 | `validate-environment.sh` | environment-manager | environment-manager (TS) only | MANAGER (clean) |
 | `user-setup.sh` | people-manager | people-manager flow; `rest-of-foundation.sh` (bootstrap) | MANAGER + **1 DIRECT** |
 | `validate-people.sh` | people-manager | people-manager flow | MANAGER (clean) |
@@ -320,7 +320,7 @@ below the manager, not bypassing it.
 
 | Caller | Bypasses (legacy verb called directly) | Why it is still direct |
 |--------|----------------------------------------|------------------------|
-| `tappaas-cicd/install2.sh` | `create-site.sh`, `create-minimal-environments.sh`, `copy-update-json.sh`, `update-module.sh` | First-boot bootstrap — runs before the manager bins are linked on PATH; the highest-value target to migrate once a `tappaas-cicd`-native bootstrap exists |
+| `tappaas-cicd/install.sh` | `create-site.sh`, `create-minimal-environments.sh`, `copy-update-json.sh`, `update-module.sh` | First-boot bootstrap — runs before the manager bins are linked on PATH; the highest-value target to migrate once a `tappaas-cicd`-native bootstrap exists |
 | `tappaas-cicd/update-tappaas` (`main.py`) | `update-module.sh` (+ `reboot-cluster.sh`) | Nightly auto-updater calls `update-module.sh` per module directly instead of `module-manager update` |
 | `templates/services/nixos/update-service.sh` | `update-os.sh` | Template update-plane hook shells `update-os.sh` directly |
 | `templates/services/debian/update-service.sh` | `update-os.sh` | same as above |
@@ -337,11 +337,11 @@ remain.** The four read-only/backup verbs (`validate-*`, `backup-restore`,
 are reached **only** through their managers — clean. The holdouts cluster in two
 predictable places:
 
-1. **First-boot / nightly bootstrap** (`install2.sh`, `update-tappaas`,
+1. **First-boot / nightly bootstrap** (`install.sh`, `update-tappaas`,
    `rest-of-foundation.sh`) — these run before or outside the manager surface
    and are the principal migration targets (esp. `update-tappaas` →
    `module-manager`, and a `tappaas-cicd`-native bootstrap to retire the
-   `install2.sh` direct calls).
+   `install.sh` direct calls).
 2. **Template/cluster service hooks** (`templates/services/{nixos,debian}`,
    `cluster/services/vm`) — these call `update-os.sh` / `install-module.sh`
    directly as part of the module-service contract; lower priority because they

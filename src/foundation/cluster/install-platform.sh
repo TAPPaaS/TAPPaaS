@@ -8,13 +8,13 @@
 #   A. NixOS VM template (vmid 8080) — imports the prebuilt NixOS image and
 #      finalises it into a Proxmox template (no manual NixOS install).
 #   B. tappaas-cicd mothership (vmid 130) — clones the template and runs the
-#      in-VM install end-to-end OVER SSH: install1.sh (clone + nixos-rebuild),
-#      reboot the VM, then install2.sh (platform tooling + reverse proxy). cicd
+#      in-VM install end-to-end OVER SSH: bootstrap.sh (clone + nixos-rebuild),
+#      reboot the VM, then install.sh (platform tooling + reverse proxy). cicd
 #      then drives the rest of the platform (zone/caddy/rules-manager, modules).
 #
 # Phase B is automated: the node's root key is authorised on the cicd VM at clone
 # time, so the script SSHes in as tappaas and runs the installers itself. It also
-# pre-authorises cicd's key on every node so install2's node SSH setup needs no
+# pre-authorises cicd's key on every node so install's node SSH setup needs no
 # passwords. Use --manual-cicd to instead just print the in-VM steps.
 #
 # Usage:
@@ -137,13 +137,13 @@ wait_cicd_ssh() { # wait_cicd_ssh <vmid> [max_wait_s]
 }
 
 # Pre-authorise cicd's public key on every cluster node's root account, so
-# install2.sh's `ssh-copy-id` to each node succeeds non-interactively (the key
+# install.sh's `ssh-copy-id` to each node succeeds non-interactively (the key
 # it would install already authenticates; no root-password prompt). Run from the
 # node, which already has cluster-wide root SSH.
 distribute_cicd_key() {
   local pub node
   pub="$(cicd_ssh 'cat /home/tappaas/.ssh/id_ed25519.pub' 2>/dev/null || true)"
-  [[ -n "$pub" ]] || { warn "Could not read cicd public key — install2 may prompt for node passwords."; return 0; }
+  [[ -n "$pub" ]] || { warn "Could not read cicd public key — install may prompt for node passwords."; return 0; }
   info "Authorising cicd's key on cluster node root accounts..."
   while read -r node; do
     [[ -n "$node" ]] || continue
@@ -151,7 +151,7 @@ distribute_cicd_key() {
          "mkdir -p /root/.ssh && touch /root/.ssh/authorized_keys && chmod 700 /root/.ssh && chmod 600 /root/.ssh/authorized_keys && grep -qxF '${pub}' /root/.ssh/authorized_keys || echo '${pub}' >> /root/.ssh/authorized_keys" 2>/dev/null; then
       info "  ${node}: cicd key authorised"
     else
-      warn "  ${node}: could not authorise cicd key (install2 may prompt for its root password)"
+      warn "  ${node}: could not authorise cicd key (install may prompt for its root password)"
     fi
   done < <(pvesh get /cluster/resources --type node --output-format json 2>/dev/null | jq -r '.[].node')
 }
@@ -176,7 +176,7 @@ propagate_fw_credentials() {
 # Give the cicd SSH access to the firewall. config-firewall.sh authorized THIS
 # node's control-plane key on the firewall (key-only SSH); the cicd reaches the
 # firewall over SSH for the VLAN-assign PHP patch (pre-update.sh) and the QEMU
-# guest agent (install2.sh). Rather than mutate the firewall config to add a
+# guest agent (install.sh). Rather than mutate the firewall config to add a
 # second key, the cicd reuses the node's already-authorized key: copy it over and
 # point firewall SSH at it via ~/.ssh/config. (Single-operator control plane —
 # the node already injects its key into cicd and cicd's key onto the nodes.)
@@ -224,12 +224,12 @@ print_manual_cicd() { # print_manual_cicd <vmid> <domain>
   ${BOLD}Finish tappaas-cicd inside the VM (SSH in as the tappaas user):${CL}
   1. ${BL}ssh tappaas@tappaas-cicd${CL}   (or its DHCP address; see 'qm guest cmd ${cicdid} network-get-interfaces')
   2. Bootstrap the checkout + system config:
-        ${BL}curl -fsSL ${REPO}${BRANCH}/src/foundation/tappaas-cicd/install1.sh -o /tmp/install1.sh${CL}
-        ${BL}bash /tmp/install1.sh "https://github.com/TAPPaaS/TAPPaaS.git" "${BRANCH}"${CL}
+        ${BL}curl -fsSL ${REPO}${BRANCH}/src/foundation/tappaas-cicd/bootstrap.sh -o /tmp/bootstrap.sh${CL}
+        ${BL}bash /tmp/bootstrap.sh "https://github.com/TAPPaaS/TAPPaaS.git" "${BRANCH}"${CL}
         ${BL}sudo reboot${CL}   (then reconnect)
   3. Install the platform tooling:
         ${BL}cd TAPPaaS/src/foundation/tappaas-cicd${CL}
-        ${BL}./install2.sh --branch "${BRANCH}" --domain "${dom}"${CL}
+        ${BL}./install.sh --branch "${BRANCH}" --domain "${dom}"${CL}
 
 Once cicd is up it owns the platform: zone-manager / caddy-manager / rules-manager
 configure VLANs, the reverse proxy and firewall rules (using the firewall API key
@@ -313,15 +313,15 @@ build_cicd() {
     return 0
   fi
 
-  # B.1 — clone the repo + rebuild the NixOS system (install1.sh).
-  info "Running install1.sh on cicd (git clone + nixos-rebuild switch)..."
-  if ! cicd_ssh "curl -fsSL '${REPO}${BRANCH}/src/foundation/tappaas-cicd/install1.sh' -o /tmp/install1.sh && bash /tmp/install1.sh 'https://github.com/TAPPaaS/TAPPaaS.git' '${BRANCH}'"; then
-    warn "install1.sh failed on cicd. Finish manually:"
+  # B.1 — clone the repo + rebuild the NixOS system (bootstrap.sh).
+  info "Running bootstrap.sh on cicd (git clone + nixos-rebuild switch)..."
+  if ! cicd_ssh "curl -fsSL '${REPO}${BRANCH}/src/foundation/tappaas-cicd/bootstrap.sh' -o /tmp/bootstrap.sh && bash /tmp/bootstrap.sh 'https://github.com/TAPPaaS/TAPPaaS.git' '${BRANCH}'"; then
+    warn "bootstrap.sh failed on cicd. Finish manually:"
     print_manual_cicd "$cicdid" "$dom"
     return 0
   fi
 
-  # B.2 — pre-authorise cicd's key on the nodes so install2's ssh-copy-id is
+  # B.2 — pre-authorise cicd's key on the nodes so install's ssh-copy-id is
   #        non-interactive (no node root-password prompts).
   distribute_cicd_key
 
@@ -330,25 +330,25 @@ build_cicd() {
   qm reboot "$cicdid" >/dev/null 2>&1 || qm reset "$cicdid" >/dev/null 2>&1 || true
   sleep 10
   if ! wait_cicd_ssh "$cicdid"; then
-    warn "cicd did not come back after reboot. Finish install2 manually:"
+    warn "cicd did not come back after reboot. Finish install manually:"
     print_manual_cicd "$cicdid" "$dom"
     return 0
   fi
 
   # B.3.5 — hand the cicd what it needs to manage the firewall: the API
   #          credentials (for opnsense-controller / caddy) and SSH access (for the
-  #          VLAN-assign PHP patch + guest agent that install2/pre-update use).
+  #          VLAN-assign PHP patch + guest agent that install/pre-update use).
   propagate_fw_credentials
   grant_cicd_firewall_access
 
-  # B.4 — platform tooling + reverse proxy (install2.sh). Pass --branch so the
+  # B.4 — platform tooling + reverse proxy (install.sh). Pass --branch so the
   #        cicd tracks the SAME branch we installed from (create-configuration.sh
   #        otherwise defaults to 'stable', running stale code), and --domain (the
   #        platform's Caddy reverse proxy needs a real domain; required above).
-  local install2_cmd="cd TAPPaaS/src/foundation/tappaas-cicd && ./install2.sh --branch '${BRANCH}' --domain '${DOMAIN}'"
-  info "Running install2.sh on cicd (domain ${DOMAIN})..."
+  local install2_cmd="cd TAPPaaS/src/foundation/tappaas-cicd && ./install.sh --branch '${BRANCH}' --domain '${DOMAIN}'"
+  info "Running install.sh on cicd (domain ${DOMAIN})..."
   if ! cicd_ssh "$install2_cmd"; then
-    warn "install2.sh reported errors — review on cicd (ssh tappaas@${CICD_IP})."
+    warn "install.sh reported errors — review on cicd (ssh tappaas@${CICD_IP})."
     return 1
   fi
 

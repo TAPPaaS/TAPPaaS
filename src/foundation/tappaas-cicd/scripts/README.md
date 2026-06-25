@@ -26,7 +26,7 @@ The merge-on-update flow (3-way merge of `current`, `.orig`, and the new release
 
 ## Zone configuration (#209)
 
-The global `${CONFIG_DIR}/zones.json` follows the same drift-detection / merge model. The upstream template at [`../../firewall/zones.json`](../../firewall/zones.json) is seeded once on first install by [`install2.sh`](../install2.sh); thereafter [`apply-zones-merge.sh`](#apply-zones-mergesh) — invoked from [`pre-update.sh`](../pre-update.sh) on every `update-tappaas` cycle — does the 3-way reconciliation against `zones.json.orig`. Only `state` is operator-pinned (operators flip it via [`zone-state.sh`](#zone-statesh)); everything else follows the standard pin-vs-adopt rule.
+The global `${CONFIG_DIR}/zones.json` follows the same drift-detection / merge model. The upstream template at [`../../firewall/zones.json`](../../firewall/zones.json) is seeded once on first install by [`install.sh`](../install.sh); thereafter [`apply-zones-merge.sh`](#apply-zones-mergesh) — invoked from [`pre-update.sh`](../pre-update.sh) on every `update-tappaas` cycle — does the 3-way reconciliation against `zones.json.orig`. Only `state` is operator-pinned (operators flip it via [`zone-state.sh`](#zone-statesh)); everything else follows the standard pin-vs-adopt rule.
 
 ## Scripts
 
@@ -657,7 +657,7 @@ resize-disk.sh nextcloud 50G
 ### setup-caddy.sh
 
 Installs and configures the Caddy reverse proxy stack on the OPNsense firewall.
-Called automatically by `install2.sh` during initial cicd install; safe to
+Called automatically by `install.sh` during initial cicd install; safe to
 re-run (every step is idempotent).
 
 **Usage:**
@@ -1327,7 +1327,7 @@ delete-module.sh openwebui --vmid 313
 
 ## Installation
 
-These scripts are automatically installed by `install2.sh`:
+These scripts are automatically installed by `install.sh`:
 ```bash
 cp scripts/*.sh /home/tappaas/bin/
 chmod +x /home/tappaas/bin/*.sh

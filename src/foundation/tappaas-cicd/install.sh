@@ -3,7 +3,7 @@
 # install tappass-cicd foundation in a barebone nixos vm
 #
 # Usage:
-#   install2.sh [--name N] [--branch NAME] [--domain DOMAIN]
+#   install.sh [--name N] [--branch NAME] [--domain DOMAIN]
 #
 # Site-native install (ADR-007): writes site.json (create-site.sh) + transforms
 # zones.json (network-manager zones-init --name) + creates the mgmt/default

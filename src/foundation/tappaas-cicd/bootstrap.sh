@@ -85,7 +85,7 @@ grep -qxF "$(cat /home/tappaas/.ssh/id_ed25519.pub)" /home/tappaas/.ssh/authoriz
   || cat /home/tappaas/.ssh/id_ed25519.pub >> /home/tappaas/.ssh/authorized_keys
 chmod 600 /home/tappaas/.ssh/authorized_keys
 
-chmod +x /home/tappaas/TAPPaaS/src/foundation/tappaas-cicd/install1.sh
-chmod +x /home/tappaas/TAPPaaS/src/foundation/tappaas-cicd/install2.sh
+chmod +x /home/tappaas/TAPPaaS/src/foundation/tappaas-cicd/bootstrap.sh
+chmod +x /home/tappaas/TAPPaaS/src/foundation/tappaas-cicd/install.sh
 
 echo -e "\nPlease reboot tappaas-cicd VM."

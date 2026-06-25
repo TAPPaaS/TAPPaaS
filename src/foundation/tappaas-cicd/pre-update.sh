@@ -166,7 +166,7 @@ if [ -f /home/tappaas/bin/migrate-zone-keys-to-underscore.sh ] \
 fi
 
 # --- Reconcile zones.json against upstream (rename-aware 3-way merge; #209 / ADR-007 Design A) ---
-# install2.sh seeds /home/tappaas/config/zones.json on first install but never
+# install.sh seeds /home/tappaas/config/zones.json on first install but never
 # revisits it. `network-manager zones-merge` closes that gap (replacing the
 # retired apply-zones-merge.sh): every update-tappaas run re-bases the repo
 # template into THIS installation's renamed namespace (zones.rename.json), then
