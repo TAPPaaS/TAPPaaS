@@ -151,6 +151,12 @@ _unifi_get() {
 _unifi_send() { if [[ "$1" == "PUT" ]]; then echo "$3" > "${APTMP}/put.json"; fi; echo '{"meta":{"rc":"ok"}}'; }
 plugin_apply SW "{}" >/dev/null 2>&1
 ck "apply touches only annotated ports" "3,9" "$(jq -rc '[.port_overrides[].port_idx]|sort|join(",")' "${APTMP}/put.json" 2>/dev/null)"
+# Regression: UniFi Network 10.x requires tagged_vlan_mgmt:custom alongside
+# forward:customize, else the controller normalizes the trunk back to forward:all
+# and the prune silently no-ops (PUT still returns rc:ok). Every customize-trunk
+# override in the PUT body must carry it.
+ck "trunk overrides carry tagged_vlan_mgmt=custom (10.x prune)" "custom,custom" \
+   "$(jq -rc '[.port_overrides[]|select(.forward=="customize")|.tagged_vlan_mgmt]|join(",")' "${APTMP}/put.json" 2>/dev/null)"
 rm -rf "${APTMP}"
 
 echo ""

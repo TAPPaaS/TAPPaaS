@@ -182,10 +182,14 @@ plugin_controller_interrogate() {
 #   1. ensure a VLAN-only network exists for every native/tagged VLAN used;
 #   2. merge per-port overrides into the device's port_overrides (preserving
 #      ports not managed by TAPPaaS), then PUT the device.
-# Port mapping (confirmed against UniFi OS 5.x):
-#   access      → forward:native,   native_networkconf_id, tagged_vlan_mgmt:block_all
-#   trunk       → forward:customize, native, excluded_networkconf_ids = (all VLAN
-#                 networks) − (tagged ∪ native)   [exclusion model; empty ⇒ all]
+# Port mapping (confirmed against UniFi OS / Network 10.x on a USW Pro XG):
+#   access      → forward:native,    native_networkconf_id, tagged_vlan_mgmt:block_all
+#   trunk       → forward:customize,  native, tagged_vlan_mgmt:custom,
+#                 excluded_networkconf_ids = (all VLAN networks) − (tagged ∪ native)
+#                 [exclusion model; empty ⇒ all]
+# tagged_vlan_mgmt is REQUIRED on 10.x: without it the controller silently
+# normalizes forward:customize back to forward:all and ignores the exclusions
+# (the PUT still returns rc:ok), so the trunk never actually prunes.
 plugin_apply() {
     local name="$1"  # $2 = delta json (unused; we converge to desired)
     _unifi_login || return 1
@@ -242,6 +246,7 @@ plugin_apply() {
               else
                 ([ ($p.taggedVlans // [])[] | ($vid[(.|tostring)] // empty) ]) as $tagids
                 | {port_idx:$idx, forward:"customize", native_networkconf_id:$native_id,
+                   tagged_vlan_mgmt:"custom",
                    excluded_networkconf_ids: ($allvlannets - $tagids - [$native_id])}
               end)) as $new
         | (reduce $new[] as $np ($curmap; .[($np.port_idx|tostring)] = $np)) | [ .[] ]
