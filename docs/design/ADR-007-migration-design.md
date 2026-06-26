@@ -268,12 +268,15 @@ conservative (snapshot first, lifeline kept, host rename still deferred).
 - `firewall.json` **and** `network.json` both present,
 - a module whose resolved zone fell back to `mgmt` because no environment matched.
 
-### P6 — Document the operator upgrade procedure
-There is currently **no** operator-facing mainline→ADR-007 upgrade procedure
-(only the fresh-install path in `INSTALL.md`). Publish one: set the repo branch,
-back up `config/`, run the migration orchestrator, run `update-tappaas` (×2 to
-settle), verify (`site.json`, `environments/{mgmt,<org>}.json`, `network.json`,
-`zones-check` clean), then the supervised firewall→network step.
+### P6 — Document the operator upgrade procedure — ✅ IMPLEMENTED
+Published as [ADR-007-migration-runbook.md](ADR-007-migration-runbook.md): an
+operator-facing, command-by-command procedure — pre-flight (health + snapshots +
+config backup), pin the repo branch to `ADR007`, the two-pass `update-tappaas`
+settle (or the direct `migrate-to-adr007.sh` path), verification
+(`site.json`, `environments/{mgmt,<org>}.json`, `zones-check`, module deep tests),
+the **supervised firewall→network cutover** (snapshot → dry-run → execute →
+verify), and rollback. Closes the gap that previously left only the fresh-install
+path documented in `INSTALL.md`.
 
 ---
 
