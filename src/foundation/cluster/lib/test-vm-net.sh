@@ -23,10 +23,14 @@ error() { echo "ERR: $*" >&2; }
 # shellcheck source=vm-net.sh disable=SC1091
 . "${SCRIPT_DIR}/vm-net.sh"
 
-# Prefer the source-tree zones.json (canonical, always in-tree with this test).
-# Falls back to the deployed config, then a bundled fixture. This decouples the
-# unit test from the live operator state (#237).
-ZONES_REPO_SRC="$(cd "${SCRIPT_DIR}/../.." && pwd)/firewall/zones.json"
+# Prefer the source-tree zones TEMPLATE (canonical, always in-tree with this test:
+# it has the full pre-zones-init zone set incl. srvHome=Active/210). Falls back to
+# the deployed config, then a bundled fixture. This decouples the unit test from
+# the live operator state, where zones-init has renamed/inactivated zones (#237).
+# NOTE: the template moved from firewall/ to network-manager/ in the firewall→network
+# rename; pointing at the old firewall/zones.json silently fell through to the live
+# config, where srvHome is Inactive → the 'srvHome → 210' assertion failed.
+ZONES_REPO_SRC="$(cd "${SCRIPT_DIR}/../.." && pwd)/tappaas-cicd/manager/network-manager/zones.json"
 ZONES_DEPLOYED="/home/tappaas/config/zones.json"
 TMP_ZONES=""
 if [[ -f "${ZONES_REPO_SRC}" ]]; then

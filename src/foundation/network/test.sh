@@ -50,6 +50,13 @@ else
     readonly FIREWALL_JSON="${CONFIG_DIR}/firewall.json"
 fi
 readonly ZONES_JSON="${CONFIG_DIR}/zones.json"
+# The canonical zones SOURCE TEMPLATE moved out of this module dir into the
+# network-manager in the firewall→network rename (commit 879341b, "move
+# zones.json source template -> network-manager"). The Standard-8 NONE-mode
+# fallback and the deep-test zone seeding read from it; point at the new home
+# (the old ${SCRIPT_DIR}/zones.json no longer exists → rules-manager init
+# failed and the deep merge silently skipped).
+readonly ZONES_TEMPLATE="${SCRIPT_DIR}/../tappaas-cicd/manager/network-manager/zones.json"
 readonly ALIASES_JSON="${SCRIPT_DIR}/aliases.json"
 FIREWALL_FQDN="firewall.mgmt.internal"
 readonly TIMESTAMP=$(date '+%Y-%m-%d_%H%M%S')
@@ -223,7 +230,7 @@ done
 
 section "Standard 2: Schema files parse and validate"
 
-for file in "${ZONES_JSON}" "${SCRIPT_DIR}/zones.json"; do
+for file in "${ZONES_JSON}" "${ZONES_TEMPLATE}"; do
     if [[ -f "${file}" ]]; then
         if jq empty "${file}" >/dev/null 2>&1; then
             pass "$(basename "$(dirname "${file}")")/zones.json parses"
@@ -407,7 +414,7 @@ if command -v rules-manager >/dev/null 2>&1 && [[ -f "${FIXTURES_DIR}/test-fw-a.
     if rules-manager add-rules test-fw-a \
             --firewall-type NONE \
             --modules-dir "${FIXTURES_DIR}" \
-            --zones-file "${SCRIPT_DIR}/zones.json" \
+            --zones-file "${ZONES_TEMPLATE}" \
             --aliases-file "${ALIASES_JSON}" \
             --check-mode \
             >/dev/null 2>&1; then
@@ -907,9 +914,9 @@ else
     # config wholesale — that destroys runtime-only zones such as variant zones
     # (defect 4, ISSUES/deep-test-trunk-and-nixbuild.md). cleanup_deep removes
     # these test-zone keys again afterwards.
-    if [[ -f "${SCRIPT_DIR}/zones.json" && -f "${CONFIG_DIR}/zones.json" ]]; then
+    if [[ -f "${ZONES_TEMPLATE}" && -f "${CONFIG_DIR}/zones.json" ]]; then
         tmp=$(mktemp)
-        if jq --slurpfile src "${SCRIPT_DIR}/zones.json" \
+        if jq --slurpfile src "${ZONES_TEMPLATE}" \
               --arg za "${TFW_A_ZONE}" --arg zb "${TFW_B_ZONE}" --arg zc "${TFW_C_ZONE}" '
               ($src[0]) as $s
               | reduce ([$za, $zb, $zc][]) as $z

@@ -49,9 +49,15 @@ VM_HOST="${VMNAME}.${ZONE0NAME}.internal"
 # health. Defaults to true so ordinary NixOS VMs are unaffected.
 SSH_ACCESS="$(get_config_value 'sshAccess' 'true')"
 
-# Firewall VM only supports root access (no tappaas user)
-if [[ "${VMNAME}" == "firewall" ]]; then
+# The OPNsense firewall VM only supports root SSH (no tappaas user). The module
+# was renamed firewall→network (ADR-007 S8), but the OPNsense HOST rename is
+# deferred — it is still reached as root@firewall.<zone0>.internal, where the
+# ~/.ssh/config identity + host alias (and the rest of TAPPaaS, via FIREWALL_FQDN)
+# are keyed. Match both module names through the transition and pin the host to
+# the firewall alias so the SSH identity resolves.
+if [[ "${VMNAME}" == "firewall" || "${VMNAME}" == "network" ]]; then
     SSH_USER="root"
+    VM_HOST="firewall.${ZONE0NAME}.internal"
 else
     SSH_USER="tappaas"
 fi
