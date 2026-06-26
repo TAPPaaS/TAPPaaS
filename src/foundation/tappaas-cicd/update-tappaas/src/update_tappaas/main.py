@@ -27,6 +27,13 @@ CONFIG_DIR = Path("/home/tappaas/config")
 # directly. Override for tests with MODULE_MANAGER_CMD.
 MODULE_MANAGER_CMD = os.environ.get("MODULE_MANAGER_CMD", "/home/tappaas/bin/module-manager")
 
+# ADR-007 P2: the Phase-0 migration orchestrator (ADR-007 P1). Run before the
+# foundation loop so ordering is deterministic (not a side-effect of tappaas-cicd
+# being the 2nd module). Idempotent + guarded — a no-op on an already-migrated
+# system. Override the resolved path for tests with MIGRATE_SCRIPT.
+MIGRATE_SCRIPT = os.environ.get("MIGRATE_SCRIPT", "")
+MIGRATE_SCRIPT_NAME = "migrate-to-adr007.sh"
+
 # Foundation modules in their required update order
 FOUNDATION_MODULES = [
     "cluster",       # Proxmox nodes (apt update/upgrade + file distribution)
@@ -331,6 +338,64 @@ def update_module(module_name: str) -> bool:
         return False
 
 
+# ── Phase 0: ADR-007 migration pass (ADR-007 P2 / orchestrator P1) ───
+
+
+def migrate_script() -> Path | None:
+    """Resolve the ADR-007 migration orchestrator (migrate-to-adr007.sh).
+
+    Prefers $MIGRATE_SCRIPT, then ~/bin (the deployed name), then the in-repo
+    source. Returns None when not found (e.g. a first run before tappaas-cicd's
+    pre-update.sh has linked it — the next run picks it up)."""
+    if MIGRATE_SCRIPT:
+        p = Path(MIGRATE_SCRIPT)
+        return p if p.is_file() else None
+    candidates = [
+        Path("/home/tappaas/bin") / MIGRATE_SCRIPT_NAME,
+        Path("/home/tappaas/TAPPaaS/src/foundation/tappaas-cicd/scripts") / MIGRATE_SCRIPT_NAME,
+    ]
+    for c in candidates:
+        if c.is_file():
+            return c
+    return None
+
+
+def migration_pass(dry_run: bool) -> bool:
+    """Phase 0: converge the system onto the ADR-007 model before touching modules.
+
+    Idempotent + guarded (a no-op on an already-migrated system). Deliberately
+    NON-FATAL: a migration hiccup logs loudly but never blocks the module updates
+    — the orchestrator is idempotent and retries on the next run. The supervised
+    firewall->network step is never triggered from here (no --include-firewall);
+    when it is still pending the orchestrator returns rc=2 and we surface that as
+    an action-required warning. Returns True when the run may proceed."""
+    script = migrate_script()
+    if script is None:
+        log.warning("Phase 0: %s not found yet — skipping migration pass "
+                    "(it is linked when tappaas-cicd updates; next run will run it).",
+                    MIGRATE_SCRIPT_NAME)
+        return True
+    cmd = [str(script), "--yes"]
+    if dry_run:
+        cmd.append("--dry-run")
+    log.info("Phase 0: ADR-007 migration pass (%s)", " ".join(cmd))
+    try:
+        result = subprocess.run(cmd, text=True)
+    except (subprocess.SubprocessError, FileNotFoundError) as e:
+        log.error("Phase 0: error running %s: %s — continuing with module updates.",
+                  MIGRATE_SCRIPT_NAME, e)
+        return False
+    if result.returncode == 0:
+        return True
+    if result.returncode == 2:
+        log.warning("Phase 0: migration INCOMPLETE — a manual action is still required "
+                    "(see above, e.g. the supervised firewall->network step). Continuing.")
+        return True
+    log.error("Phase 0: migration pass failed (rc=%d) — continuing with module updates.",
+              result.returncode)
+    return False
+
+
 # ── Phase 3: cluster node reboot pass (issue #275) ───────────────────
 
 
@@ -425,6 +490,8 @@ def main():
     # Dry run: show the update plan
     if args.dry_run:
         log.info("=== DRY RUN MODE ===")
+        log.info("Phase 0 - ADR-007 migration pass:")
+        migration_pass(dry_run=True)
         log.info("Phase 1 - Foundation update order:")
         for i, mod in enumerate(installed_foundation, 1):
             log.info("  %d. module-manager module modify %s", i, mod)
@@ -445,6 +512,13 @@ def main():
         sys.exit(0)
 
     failed_modules = []
+
+    # Phase 0: ADR-007 migration pass (idempotent; converges the system onto the
+    # site/environments/network model before any module is touched). Non-fatal.
+    log.info("=" * 60)
+    log.info("Phase 0: ADR-007 migration pass")
+    log.info("=" * 60)
+    migration_pass(dry_run=False)
 
     # Phase 1: Foundation modules in fixed order
     log.info("=" * 60)
