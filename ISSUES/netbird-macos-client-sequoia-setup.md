@@ -79,7 +79,7 @@ The LaunchDaemon approach is for headless servers (OPNsense, LXC containers), no
 ### Network Routing
 
 - **Network:** TAPPaaS OPNsense Network
-- **Resource:** `10.0.0.0/8` (TAPPaaS OPNSense Subnet)
+- **Resource:** `10.0.0.0/24` (TAPPaaS OPNSense Subnet — hardened from /8 on 2026-06-26)
 - **Routing Peer:** opnsense (100.70.167.222)
 - **High Availability:** Inactive (single peer)
 
@@ -87,7 +87,7 @@ The LaunchDaemon approach is for headless servers (OPNsense, LXC containers), no
 
 **TAPPaaS OPNSense Subnet Policy:**
 - Sources: `mgmt`
-- Destinations: TAPPaaS OPNSense Subnet (10.0.0.0/8)
+- Destinations: TAPPaaS OPNSense Subnet (10.0.0.0/24)
 - Protocol: ALL
 - Ports: ALL
 - Direction: → (clients initiate)
@@ -105,9 +105,9 @@ The LaunchDaemon approach is for headless servers (OPNsense, LXC containers), no
 
 | Component | Version |
 |---|---|
-| macOS daemon | 0.72.4 |
-| OPNsense module | 0.70.0 |
-| iOS/iPadOS client | 0.70.4 |
+| macOS daemon | 0.75.0-rc.2 |
+| OPNsense module | 0.70.0+ |
+| iOS/iPadOS client | 0.70.4+ |
 
 ## Remaining Issue — Daemon Persistence After Reboot
 
