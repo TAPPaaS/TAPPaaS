@@ -97,10 +97,15 @@ NEEDS_ACTION=0   # set to 1 by a step that requires a follow-up manual action
 # ── Helpers ──────────────────────────────────────────────────────────
 
 # Resolve a tool path, preferring ~/bin (the deployed convention) then PATH.
+# Under --dry-run we are producing a PLAN, not executing: resolve to the deployed
+# ~/bin convention even when the bin isn't present on this host (e.g. a dev
+# checkout) so the plan is complete and host-independent (a real run happens on
+# the cicd where the bins exist). run() only prints these paths under dry-run.
 tool() {
     local t="$1"
     if [[ -x "${BIN_DIR}/${t}" ]]; then printf '%s\n' "${BIN_DIR}/${t}"
     elif command -v "$t" >/dev/null 2>&1; then command -v "$t"
+    elif [[ $DRY_RUN -eq 1 ]]; then printf '%s\n' "${BIN_DIR}/${t}"
     else printf '\n'; fi
 }
 
@@ -258,9 +263,11 @@ step_validate() {
     [[ -f "$FW_JSON" && -f "$NET_JSON" ]] && issues+=("both firewall.json and network.json present (half-migrated)")
     [[ -f "$FW_JSON" && ! -f "$NET_JSON" ]] && issues+=("still on firewall.json (firewall->network not done)")
 
-    # Report-only zones audit (never fatal here).
+    # Report-only zones audit (never fatal here). This is a real read of live
+    # state, not a planned action, so it only runs when the bin is actually
+    # executable — never against the dry-run convention path.
     local nm; nm="$(tool network-manager)"
-    if [[ -n "$nm" && -f "$ZONES" ]]; then
+    if [[ -x "$nm" && -f "$ZONES" ]]; then
         if ! "$nm" zones-check >/dev/null 2>&1; then
             warn "  zones-check reported issues — run 'network-manager zones-check' to review."
         fi
