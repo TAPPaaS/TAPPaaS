@@ -78,7 +78,6 @@ export function loadSite(siteFile: string): Site {
     snapshotRetention:
       typeof raw.snapshotRetention === "number" ? raw.snapshotRetention : undefined,
     repositories,
-    environments: asStringArray(raw.environments),
     organizations: asStringArray(raw.organizations),
   };
   return site;

@@ -92,9 +92,9 @@ if run_validate "$SITE"; then ok "site.json validates against schema"; else bad 
 # repositories carried
 [[ "$(jqv "$SITE" '.repositories[0].name')" == "TAPPaaS" ]] && ok "repositories carried over" || bad "repositories not carried"
 
-# backup null, environments empty (S4 populates)
+# backup null; environments are NOT a site field (enumerated from config/environments/)
 [[ "$(jqv "$SITE" '.backup')" == "null" ]] && ok "backup = null" || bad "backup not null"
-[[ "$(jqv "$SITE" '.environments | length')" == "0" ]] && ok "environments = [] (S4 populates)" || bad "environments not empty"
+[[ "$(jqv "$SITE" 'has("environments")')" == "false" ]] && ok "no .environments field (enumerated from config/environments/)" || bad ".environments should not be written to site.json"
 
 # DROPPED fields must be absent from site.json
 [[ "$(jqv "$SITE" 'has("domain")')" == "false" ]] && ok "domain DROPPED" || bad "domain leaked"

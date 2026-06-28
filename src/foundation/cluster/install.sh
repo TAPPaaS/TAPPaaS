@@ -108,6 +108,9 @@ SKIP_PLATFORM=0           # first node: skip the chained template + cicd install
 DOMAIN=""                 # accepted for back-compat; the chain now lives in foundation/install.sh
 ORGNAME=""                # the org/system name → the Proxmox cluster name (from --name)
 NONINTERACTIVE=0
+LAN_PORT=""               # F1: explicit LAN NIC → config-network.sh --lan-port
+WAN_PORT=""               # F1: explicit WAN NIC → config-network.sh --wan-port
+declare -a POOL_ARGS=()   # F1: --pool specs → config-storage.sh (repeatable)
 _pos=()
 while [ $# -gt 0 ]; do
   case "$1" in
@@ -120,10 +123,14 @@ while [ $# -gt 0 ]; do
     --skip-platform)   SKIP_PLATFORM=1 ;;
     --domain)          DOMAIN="${2:-}"; shift ;;
     --name)            ORGNAME="${2:-}"; shift ;;
+    --lan-port)        LAN_PORT="${2:-}"; shift ;;
+    --wan-port)        WAN_PORT="${2:-}"; shift ;;
+    --pool)            POOL_ARGS+=("--pool" "${2:-}"); shift ;;
     --non-interactive) NONINTERACTIVE=1 ;;
     -h|--help)
       echo "Usage: install.sh [REPO] [BRANCH] --name <orgname>"
       echo "                  [--cluster|--join|--no-cluster] [--skip-network] [--skip-storage]"
+      echo "                  [--lan-port <if>] [--wan-port <if>] [--pool <name=topo:disks>]..."
       echo "                  [--non-interactive]"
       echo ""
       echo "The NODE step: Proxmox post-install, lan/wan bridges, cluster create"
@@ -140,7 +147,6 @@ while [ $# -gt 0 ]; do
 done
 [ "${#_pos[@]}" -ge 1 ] && REPO="${_pos[0]}"
 [ "${#_pos[@]}" -ge 2 ] && BRANCH="${_pos[1]}"
-NONINT_ARG=""; [ "$NONINTERACTIVE" = 1 ] && NONINT_ARG="--non-interactive"
 # Interactive when not told otherwise AND we actually have a terminal (needed
 # to drive pvecm add's password prompt).
 INTERACTIVE_TTY=0
@@ -533,7 +539,12 @@ else
   msg_info "Fetching config-network.sh"
   fetch "${REPO}${BRANCH}/src/foundation/cluster/config-network.sh" ~/tappaas/config-network.sh 755
   msg_ok "Fetched config-network.sh"
-  ~/tappaas/config-network.sh ${NONINT_ARG} \
+  # F1: forward explicit NIC roles when given (else config-network.sh auto-detects).
+  net_args=()
+  [ "$NONINTERACTIVE" = 1 ] && net_args+=(--non-interactive)
+  [ -n "$LAN_PORT" ] && net_args+=(--lan-port "$LAN_PORT")
+  [ -n "$WAN_PORT" ] && net_args+=(--wan-port "$WAN_PORT")
+  ~/tappaas/config-network.sh ${net_args[@]+"${net_args[@]}"} \
     || msg_error "config-network.sh did not complete — re-run ~/tappaas/config-network.sh"
 fi
 
@@ -550,7 +561,16 @@ else
   msg_info "Fetching config-storage.sh"
   fetch "${REPO}${BRANCH}/src/foundation/cluster/config-storage.sh" ~/tappaas/config-storage.sh 755
   msg_ok "Fetched config-storage.sh"
-  ~/tappaas/config-storage.sh ${NONINT_ARG} \
+  # F1: in unattended mode pass --yes (assume-yes to wipe; implies --non-interactive)
+  # plus any --pool specs. Without --pool, no pools are created — warn loudly since
+  # the platform step needs tanka1. Interactive mode keeps the config-storage menu.
+  stor_args=()
+  if [ "$NONINTERACTIVE" = 1 ]; then
+    stor_args+=(--yes)
+    [ "${#POOL_ARGS[@]}" -eq 0 ] && msg_error "Unattended storage but no --pool given — NO ZFS pools will be created (platform install needs tanka1). Pass --pool 'tanka1=single:<disk>'."
+  fi
+  stor_args+=(${POOL_ARGS[@]+"${POOL_ARGS[@]}"})
+  ~/tappaas/config-storage.sh ${stor_args[@]+"${stor_args[@]}"} \
     || msg_error "config-storage.sh did not complete — re-run ~/tappaas/config-storage.sh"
 fi
 

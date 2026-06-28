@@ -105,9 +105,15 @@ if [ -f scripts/zone-controller.sh ]; then
 fi
 
 # --- Refresh configuration.json (re-discover nodes, validate) ---
-if [[ -x /home/tappaas/bin/create-configuration.sh ]]; then
+# F2: ONLY refresh when the legacy configuration.json ALREADY exists (a system
+# not yet migrated to site.json). On a fresh, site.json-native install there is
+# no configuration.json and `create-configuration.sh --update` would MINT a
+# vestigial one (with a placeholder domain) — so it must not run. site.json is
+# the source of truth for fresh installs; the node-discovery refresh applies only
+# to legacy systems still backed by configuration.json.
+if [[ -f /home/tappaas/config/configuration.json && -x /home/tappaas/bin/create-configuration.sh ]]; then
     echo ""
-    info "Refreshing configuration.json..."
+    info "Refreshing configuration.json (legacy system)..."
     /home/tappaas/bin/create-configuration.sh --update || {
         warn "Configuration refresh failed. Using existing configuration.json."
     }

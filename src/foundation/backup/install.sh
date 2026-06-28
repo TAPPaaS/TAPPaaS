@@ -143,9 +143,25 @@ PBS_USER="tappaas@pbs"
 
 info "${BOLD}Configuring Proxmox Backup Server...${CL}"
 
-# Prompt for password
-read -sp "Enter the password for tappaas user (this will be used for PBS): " TAPPAAS_PASSWORD
-echo
+# PBS tappaas@pbs password. Resolution order (so the module can install
+# UNATTENDED — F1: backup/install.sh used to hard-block on an interactive prompt):
+#   1. $TAPPAAS_PBS_PASSWORD  (explicit; e.g. exported by an unattended installer)
+#   2. interactive prompt      (a TTY is attached)
+#   3. no TTY + no env var → generate a strong one and save it (mode 600), the
+#      same pattern config-firewall.sh uses, so a scripted run never hangs.
+if [[ -n "${TAPPAAS_PBS_PASSWORD:-}" ]]; then
+  TAPPAAS_PASSWORD="${TAPPAAS_PBS_PASSWORD}"
+  info "Using PBS password from \$TAPPAAS_PBS_PASSWORD (non-interactive)."
+elif [[ -t 0 ]]; then
+  read -rsp "Enter the password for tappaas user (this will be used for PBS): " TAPPAAS_PASSWORD
+  echo
+else
+  TAPPAAS_PASSWORD="$(openssl rand -base64 18 | tr -d '/+=' | cut -c1-20)"
+  PBS_CRED_FILE="${HOME}/.pbs-credentials.txt"
+  printf 'pbs_user=%s\npbs_password=%s\n' "${PBS_USER}" "${TAPPAAS_PASSWORD}" >"${PBS_CRED_FILE}"
+  chmod 600 "${PBS_CRED_FILE}"
+  warn "No TTY and \$TAPPAAS_PBS_PASSWORD unset — generated a PBS password and saved it to ${PBS_CRED_FILE} (mode 600)."
+fi
 
 # Step 0: Add DNS entry in OPNsense
 info "Adding DNS entry in OPNsense for ${VMNAME}.${ZONE}.internal..."

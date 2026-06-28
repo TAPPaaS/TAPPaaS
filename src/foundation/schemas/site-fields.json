@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "site-fields.json",
   "title": "TAPPaaS Site",
-  "description": "The Site is the top-level umbrella for a TAPPaaS installation (ADR-007d). It holds site-wide identity, location, hardware (Proxmox nodes + their storage pools), backup target, update schedule, module catalog repositories, and references to the environment and organization config files. Domain, DNS, and identity are per-environment (NOT site-wide) and live in config/environments/*.json. site.json replaces configuration.json at cutover; during the phased migration both files may coexist. See ADR-007 P2.",
+  "description": "The Site is the top-level umbrella for a TAPPaaS installation (ADR-007d). It holds site-wide identity, location, hardware (Proxmox nodes + their storage pools), backup target, update schedule, module catalog repositories, and references to the organization config files. Environments are NOT listed here — they are simply whatever is present under config/environments/*.json (enumerated from the directory, not from site.json). Domain, DNS, and identity are per-environment (NOT site-wide) and live in config/environments/*.json. site.json replaces configuration.json at cutover; during the phased migration both files may coexist. See ADR-007 P2.",
   "type": "object",
   "additionalProperties": false,
   "required": [
@@ -207,14 +207,6 @@
           }
         }
       }
-    },
-    "environments": {
-      "description": "Paths to environment JSON files (config/environments/*.json). Populated from variants in S4/P3.",
-      "type": "array",
-      "items": {
-        "type": "string"
-      },
-      "default": []
     },
     "organizations": {
       "description": "Paths to organization JSON files (config/people/organizations/*.json).",

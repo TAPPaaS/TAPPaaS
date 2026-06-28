@@ -54,14 +54,17 @@ export interface Site {
   automaticReboot?: boolean;
   snapshotRetention?: number;
   repositories: Repository[];
-  environments?: string[];
+  // NOTE: environments are NOT a site field — they are enumerated from the
+  // config/environments/*.json directory (SiteClient.listEnvironments), which is
+  // what the --deep reconcile cascade fans out over.
   organizations?: string[];
 }
 
 // TODO(question): the editable surface of `site modify`. See PARKED Q1.
 // The fields a `site modify --<field> <value>` is allowed to set. Discovery-
 // derived fields (hardware.nodes via `node` CRUD) and lists managed by their
-// own CRUD (repositories, environments, organizations) are EXCLUDED here.
+// own CRUD (repositories, organizations) are EXCLUDED here. (Environments are
+// not a site field — they are the config/environments/*.json files.)
 export type SiteModifiableField =
   | "displayName"
   | "owner"

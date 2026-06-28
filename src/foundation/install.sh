@@ -32,7 +32,13 @@
 # Usage:
 #   install.sh [REPO] [BRANCH] --name <orgname> [--domain <d>]
 #              [--cluster|--join|--no-cluster] [--skip-network] [--skip-storage]
+#              [--lan-port <if>] [--wan-port <if>] [--pool <name=topo:disks>]...
 #              [--skip-firewall] [--skip-platform] [--non-interactive]
+#
+# For a fully UNATTENDED first-node install pass --non-interactive together with
+# --lan-port/--wan-port (NIC roles) and one or more --pool specs (ZFS pools);
+# otherwise the node step auto-detects NICs and creates no storage. These are
+# forwarded to cluster/install.sh → config-network.sh / config-storage.sh.
 
 set -euo pipefail
 shopt -s inherit_errexit nullglob
@@ -73,14 +79,25 @@ while [ $# -gt 0 ]; do
     --skip-platform)   SKIP_PLATFORM=1 ;;
     --non-interactive) NONINTERACTIVE=1; NODE_ARGS+=("--non-interactive") ;;
     --cluster|--join|--no-cluster|--skip-network|--skip-storage) NODE_ARGS+=("$1") ;;
+    # Unattended config-phase selectors (F1) — forwarded verbatim to the node
+    # step, which hands them to config-network.sh / config-storage.sh. --pool may
+    # be repeated. Without these, --non-interactive auto-detects NICs and creates
+    # NO pools, so a hands-off first-node install needs them.
+    --lan-port|--wan-port) NODE_ARGS+=("$1" "${2:-}"); shift ;;
+    --pool)                NODE_ARGS+=("$1" "${2:-}"); shift ;;
     -h|--help)
       echo "Usage: install.sh [REPO] [BRANCH] --name <orgname> [--domain <d>]"
       echo "                  [--cluster|--join|--no-cluster] [--skip-network] [--skip-storage]"
+      echo "                  [--lan-port <if>] [--wan-port <if>] [--pool <name=topo:disks>]..."
       echo "                  [--skip-firewall] [--skip-platform] [--non-interactive]"
       echo ""
       echo "The first-node entry point. Runs the 5-step chain: node → firewall →"
       echo "gateway cutover → sanity → platform. --name is the org/system name and"
       echo "names the cluster, site.json, the default environment and the organization."
+      echo ""
+      echo "Unattended example (no prompts):"
+      echo "  install.sh \"\$REPO\" ADR007 --name acme --domain acme.org --non-interactive \\"
+      echo "             --lan-port nic0 --wan-port nic4 --pool 'tanka1=single:nvme1n1'"
       exit 0 ;;
     --*) msg_error "Unknown option: $1"; exit 2 ;;
     *)   _pos+=("$1") ;;

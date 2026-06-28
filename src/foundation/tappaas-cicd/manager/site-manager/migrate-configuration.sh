@@ -6,7 +6,8 @@
 # configuration.json. This is the structural site-identity/hardware migration
 # ONLY. It does NOT:
 #   - delete configuration.json (the flag-day cutover is a later step),
-#   - migrate variants -> environments (that is S4/P3 — environments stays []),
+#   - migrate variants -> environments (that is S4/P3; environments live as
+#     config/environments/*.json files, NOT as a site.json list),
 #   - touch any existing configuration.json reader.
 #
 # Field mapping (configuration.json -> site.json):
@@ -29,8 +30,8 @@
 #   automaticReboot   <- .tappaas.automaticReboot
 #   snapshotRetention <- .tappaas.snapshotRetention // 5
 #   repositories      <- .tappaas.repositories
-#   environments      <- []  (S4/P3 populates from variants)
 #   organizations     <- references to config/people/organizations/*.json if present, else []
+#   (environments are NOT written — they are the config/environments/*.json files.)
 #
 # DROPPED (deliberately, move to environments in S4): domain, variants, nodeCount.
 # (email is now CARRIED to site.json .email — S3b reader cutover.)
@@ -265,7 +266,6 @@ main() {
             automaticReboot: (if ($t | has("automaticReboot")) then $t.automaticReboot else true end),
             snapshotRetention: (if ($t | has("snapshotRetention")) then $t.snapshotRetention else 5 end),
             repositories: ($t.repositories // []),
-            environments: [],
             organizations: $orgs
           }
         ' > "$tmp"

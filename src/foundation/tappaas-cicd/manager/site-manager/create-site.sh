@@ -30,8 +30,9 @@
 #   snapshotRetention <- preserved from existing site.json, else 5
 #   repositories[]    <- built from --upstream-git/--branch (default TAPPaaS repo),
 #                        preserving any existing operator-set repositories
-#   environments      <- []  (create-minimal-environments populates this later)
 #   organizations     <- []  (people-manager populates this later)
+#   (environments are NOT a site.json field — they are enumerated from
+#    config/environments/*.json; the site singleton keeps no list.)
 #
 # NOTE on --domain: the PUBLIC domain is per-ENVIRONMENT in the ADR-007 model and
 # is NOT a site.json field. --domain is accepted (for parity with
@@ -464,9 +465,6 @@ build_and_write_site() {
     # location: keep existing if present, else freshly-detected
     location="$(jq -c --arg c "$country" --arg t "$tz" --arg l "$locale" \
         '.location // {country: $c, timezone: $t, locale: $l}' <<<"$existing")"
-    # environments: preserve any already-registered environment refs
-    local environments
-    environments="$(jq -c '.environments // []' <<<"$existing")"
 
     mkdir -p "$CONFIG_DIR"
     TMP_SITE="$(mktemp "${SITE_FILE}.XXXXXX")"
@@ -485,7 +483,6 @@ build_and_write_site() {
         --argjson automaticReboot "$automaticReboot" \
         --argjson snapshotRetention "$snapshotRetention" \
         --argjson repositories "$repos_json" \
-        --argjson environments "$environments" \
         --argjson organizations "$organizations" \
         '{
             name: $name,
@@ -501,7 +498,6 @@ build_and_write_site() {
             automaticReboot: $automaticReboot,
             snapshotRetention: $snapshotRetention,
             repositories: $repositories,
-            environments: $environments,
             organizations: $organizations
          }' > "$TMP_SITE"
 

@@ -175,8 +175,9 @@ function cmdSite(o: Opts): void {
     let changed = 0;
     // The approved editable surface: scalar site-wide fields, mapped to schema
     // paths. The discovery-derived hardware.nodes[] and the repositories/
-    // environments/organizations lists are NOT modifiable here — each has its
-    // own CRUD (node …, repository …) or its own manager.
+    // organizations lists are NOT modifiable here — each has its own CRUD
+    // (node …, repository …) or its own manager. (Environments are not a site
+    // field at all — they are the config/environments/*.json files.)
     const setStr = (flag: string, path: string[]): void => {
       const v = o.flags.get(flag);
       if (v === undefined) return;

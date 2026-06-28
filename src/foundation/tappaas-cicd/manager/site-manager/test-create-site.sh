@@ -85,8 +85,8 @@ if run_validate "$SITE"; then ok "site.json validates against site-fields.json";
 [[ "$(jqv "$SITE" '.repositories[0].name')" == "TAPPaaS" ]] && ok "repositories[0].name = TAPPaaS" || bad "repositories not built"
 [[ "$(jqv "$SITE" '.repositories[0].branch')" == "stable" ]] && ok "repositories[0].branch = stable (default)" || bad "branch default wrong"
 
-# environments / organizations empty (later steps populate)
-[[ "$(jqv "$SITE" '.environments | length')" == "0" ]] && ok "environments = []" || bad "environments not empty"
+# organizations empty (later steps populate); environments are NOT a site field
+[[ "$(jqv "$SITE" 'has("environments")')" == "false" ]] && ok "no .environments field" || bad ".environments should not be written"
 [[ "$(jqv "$SITE" '.organizations | length')" == "0" ]] && ok "organizations = []" || bad "organizations not empty"
 
 # hardware.nodes[] non-empty IFF cluster reachable, else skip
