@@ -180,6 +180,21 @@
       <comments/>
       <aliases/>
     </hosts>
+    <hosts uuid="b0f1e2d3-c4a5-4697-8899-aabbccddeeff">
+      <host>network</host>
+      <domain>mgmt.internal</domain>
+      <local>0</local>
+      <ip>10.0.0.1</ip>
+      <cnames/>
+      <client_id/>
+      <hwaddr/>
+      <lease_time/>
+      <ignore>0</ignore>
+      <set_tag/>
+      <descr>ADR-007 network-primary name (same VM as firewall.mgmt.internal)</descr>
+      <comments/>
+      <aliases/>
+    </hosts>
     <hosts uuid="e219e739-e1b1-4b14-a385-9339d5fff5b9">
       <host>tappaas1</host>
       <domain>mgmt.internal</domain>

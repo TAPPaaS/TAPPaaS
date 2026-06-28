@@ -91,7 +91,7 @@ command -v sshpass >/dev/null || { info "Installing sshpass"; apt-get -y install
 readonly CONFIG_DIR="/home/tappaas/config"
 readonly TAPPAAS_DIR="/root/tappaas"
 readonly CREDS_FILE="${HOME}/.opnsense-credentials.txt"
-readonly FW_JSON="${TAPPAAS_DIR}/firewall.json"
+readonly FW_JSON="${TAPPAAS_DIR}/network.json"
 readonly TEMPLATE="${TAPPAAS_DIR}/firewall-config.xml.template"
 readonly CREATE_VM="${TAPPAAS_DIR}/Create-TAPPaaS-VM.sh"
 readonly FW_IP="10.0.0.1"
@@ -127,7 +127,7 @@ ensure_fw_reachable() {
   TEMP_FW_ADDED=1
 }
 
-# ── Fetch firewall.json + template if not present ───────────────────
+# ── Fetch network.json + template if not present ────────────────────
 mkdir -p "$TAPPAAS_DIR"
 fetch() { # fetch <url> <dest>  (fatal on failure, never leaves a partial)
   local tmp; tmp="$(mktemp)"
@@ -141,7 +141,7 @@ fetch() { # fetch <url> <dest>  (fatal on failure, never leaves a partial)
 VMID="$(jq -r '.vmid' "$FW_JSON")"
 VMNAME="$(jq -r '.vmname' "$FW_JSON")"
 LAN_BRIDGE="$(jq -r '.bridge0 // "lan"' "$FW_JSON")"
-[[ -n "$VMID" && "$VMID" != "null" ]] || die "vmid missing in firewall.json"
+[[ -n "$VMID" && "$VMID" != "null" ]] || die "vmid missing in network.json"
 
 # ── Preconditions ────────────────────────────────────────────────────
 ip link show "$LAN_BRIDGE" >/dev/null 2>&1 || die "Bridge '${LAN_BRIDGE}' not found — run config-network.sh first (it builds lan/wan)."
@@ -222,7 +222,7 @@ info "Rendered unique config.xml ($(wc -l <"$CONFIG_XML") lines; SSH key-only, c
 
 # ── 3. Create + boot the firewall VM from the prebuilt image ─────────
 info "Creating the firewall VM from the prebuilt image (downloads + imports)..."
-cp "$FW_JSON" "${CONFIG_DIR}/firewall.json" 2>/dev/null || true
+cp "$FW_JSON" "${CONFIG_DIR}/network.json" 2>/dev/null || true
 "$CREATE_VM" "$VMNAME"   # imageType img → download, import, boot (bootstrap config: 10.0.0.1, SSH on)
 
 # ── 4. Wait for the firewall to FULLY boot, then swap config + reboot ─
