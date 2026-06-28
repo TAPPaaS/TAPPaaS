@@ -270,10 +270,15 @@ main() {
     # Determine effective module name
     local effective_module="${module}"
     if [[ -n "${environment}" ]]; then
-        # ADR-007 P5: suffix only for a NON-default environment.
-        if [[ -n "${default_env}" && "${environment}" == "${default_env}" ]]; then
+        # ADR-007 P5: suffix only for a NON-default environment. 'mgmt' (the
+        # foundation environment) and the default environment both install under
+        # the BARE module name — matching install-module.sh's effective-name rule
+        # (and line ~372 below), so foundation modules are backup.json/identity.json
+        # (not backup-mgmt.json) and dependency resolution (which looks up the bare
+        # provider name) finds them.
+        if [[ "${environment}" == "mgmt" || ( -n "${default_env}" && "${environment}" == "${default_env}" ) ]]; then
             effective_module="${module}"
-            info "Environment mode: ${module} → ${effective_module} (default environment '${environment}')"
+            info "Environment mode: ${module} → ${effective_module} (no suffix; environment '${environment}')"
         else
             effective_module="${module}-${environment}"
             info "Environment mode: ${module} → ${effective_module} (environment '${environment}')"

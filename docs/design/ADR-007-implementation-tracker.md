@@ -46,6 +46,61 @@ Each stage is **not done** until it passes the gate below. The driver updates th
 
 ---
 
+## Fresh-install (on-hardware) findings — 2026-06-28
+
+First end-to-end **fresh** first-node install of the `ADR007` branch on real
+hardware (node `test4`, PVE 9.2.2). The 5-step foundation chain (node → firewall
+→ cutover → sanity → platform) completed green (network `test.sh` 49/0,
+`zones-check` 5 ok/0/0). Two **fresh-install-only** firewall→network bugs were
+found + fixed (the branch's tests run on already-*migrated* systems, so they
+missed these); three items remain outstanding.
+
+The full foundation came up green (network 110, tappaas-cicd 130, identity 140,
+logging 150; org `test4` + users synced to Authentik, `people-manager reconcile`
+0 actions). Five fresh-install bugs were found + fixed along the way.
+
+**Fixed — committed (`bbd6d36`):**
+- ✅ **`config-firewall.sh` staged the module config under the pre-rename name.**
+  It fetched `network/network.json` but wrote it to `firewall.json`, while
+  `Create-TAPPaaS-VM.sh` resolves `<vmname>.json` = `network.json` → *"JSON
+  configuration file not found"*, **hard-blocking** firewall VM creation. Pointed
+  `FW_JSON` (+ the config-dir copy + error string) at `network.json`.
+- ✅ **`firewall-config.xml.template` had no `network.mgmt.internal` DNS record.**
+  The deployed dnsmasq registered only `firewall.mgmt.internal`, so a
+  network-primary system could not resolve its own name and `network/test.sh`
+  Standard 4 failed. Added the `network` host-override (→ `10.0.0.1`).
+
+**Fixed — working tree (pending commit):**
+- ✅ **`install-module.sh` aborted EVERY new module install silently.** Line ~502
+  resolved the `backup-manager` sibling via `_bm_sibling="$(cd "$(dirname
+  "${BASH_SOURCE[0]}")/../backup-manager" … )"`; invoked through the `~/bin`
+  symlink, `BASH_SOURCE[0]`→`~/bin`, so `../backup-manager` doesn't exist, the
+  `cd` fails, and under `set -e`+`inherit_errexit` the failed command
+  substitution killed the script right after the zone check — with no message.
+  (Bootstrap foundation modules go through `update.sh`, not `install-module.sh`,
+  and the branch tests run from the source dir where the sibling resolves — so
+  neither path hit it.) Guarded the `cd` in an `if`.
+- ✅ **`copy-update-json.sh` env-suffixed `mgmt`/foundation modules.** Its
+  effective-name branch (line ~274) exempted only the *default* env, not `mgmt`,
+  so `backup`/`identity`/`logging` installed as `backup-mgmt.json` etc. — but the
+  bootstrap foundation modules (cluster/network/tappaas-cicd) are **bare**, and
+  dependency resolution looks up the bare provider name, so identity's `backup:vm`
+  dep failed ("provider 'backup' not installed"). Exempted `mgmt` too (matching
+  install-module.sh:378 and this script's own line ~372). Live recovery: renamed
+  `backup-mgmt.json`→`backup.json`.
+
+**Outstanding (fix eventually):**
+
+| # | Item | Detail / fix approach |
+|---|------|------------------------|
+| F1 | **Unattended install is impossible (multiple gaps)** | (a) The orchestrator (`foundation/install.sh`) and node step (`cluster/install.sh`) call `config-storage.sh`/`config-network.sh` with only `--non-interactive` and **never forward** `--pool`, `--lan-port`, or `--wan-port` (`cluster/install.sh:536,553`). So `--non-interactive` storage creates **nothing** (needs `--pool`) and NIC selection falls back to auto-detect (can pick the wrong LAN). (b) `backup/install.sh:147` does an unconditional `read -sp` for the PBS `tappaas@pbs` password — **no env/flag override**, so `rest-of-foundation.sh`/`install-module.sh backup` **block** waiting for input under any non-TTY/scripted run. **Fix:** thread `--pool`/`--lan-port`/`--wan-port` through the orchestrator → node step → config scripts; add a non-interactive password source (env var / flag / credential file) to `backup/install.sh`. Workaround used during the test install: drive `config-network.sh`/`config-storage.sh` directly with explicit flags + `--skip-network --skip-storage`; answer the PBS prompt via `tmux send-keys`. |
+| F2 | **`configuration.json` is still created on a fresh ADR-007 install** | `pre-update.sh` runs `create-configuration.sh --update`, which writes a fresh legacy `config/configuration.json` (with a placeholder `tappaas.domain = CHANGE-domain.tld`) even though the install is site.json-native. Vestigial — readers prefer `site.json`/`environments` — but it should not be generated at all on a fresh install. **Fix:** stop creating `configuration.json` in the fresh-install path (gate the `create-configuration.sh` call on a not-yet-migrated legacy system, or retire it once the configuration.json back-compat is removed — see Post-conversion clean-up). |
+| F3 | **`site.json .environments` is dead — remove the field** | The field is written **always empty** (`create-site.sh` sets `environments: []` deliberately; comment at `create-site.sh:39` says it's *not* populated) and **no runtime reader depends on its value** — environment discovery reads `config/environments/*.json` directly (install-module zone resolution, backup-manager cascade, etc.). The only consumers are the schema (`schemas/site-fields.json:211`) and the `site-manager/test.sh:97` assertion. **Decision (operator 2026-06-28):** remove `environments` from `site.json` entirely — environments are simply whatever is under `config/environments/`, no list needed in the site singleton. **Fix:** (a) drop the `environments` property from `site-fields.json`; (b) stop writing it in `create-site.sh` (lines ~467-469, 488, 504); (c) drop the `site-manager/test.sh:97` length assertion; (d) re-grep to confirm nothing reads `.environments` from site.json before deleting. |
+| F4 | **`install-module.sh` Step 6 swallows the module `install.sh` output on failure** | `./install.sh "${effective_module}" || die "Module install.sh failed"` (line ~626) discards stdout/stderr of the module installer, so a failure surfaces as a bare *"Module install.sh failed"* with no cause — undiagnosable inline (had to re-run `update-module.sh <m>` to see the real error). **Fix:** capture + echo the installer's output (or `tee` to a logfile) before `die`. |
+| F5 | **logging first-install is racy** | During `rest-of-foundation`, `logging` Step 6 failed transiently — its `install.sh` (which just sources `update.sh`) runs the Loki/Grafana config immediately after the Step-5 nixos-rebuild, before the services are up; a re-run (`update-module.sh logging`) was 8/8 green. **Fix:** have `logging/update.sh` wait for the services (or retry) before configuring; relates to F4 (the failure was invisible). |
+
+---
+
 ## Post-conversion clean-up
 
 Activities that are safe **only once EVERY TAPPaaS system has been converted** (each has run `migrate-firewall-to-network.sh` + the configuration.json cutover). Until then the transition back-compat MUST stay — removing it would break any system still on the old names. Do these as a final sweep, not before.

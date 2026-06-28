@@ -498,8 +498,16 @@ main() {
     # on disk. This is RECORD-ONLY: the dependsOn backup:vm wiring (which adds the
     # VM to the shared PBS job) is left untouched. Mirrors the zone0 write-back
     # pattern above; best-effort (a missing backup-manager must not block install).
-    local _bm_sibling
-    _bm_sibling="$(cd "$(dirname "${BASH_SOURCE[0]}")/../backup-manager" 2>/dev/null && pwd)/backup-manager.sh"
+    # Resolve the sibling backup-manager.sh defensively. When install-module.sh is
+    # invoked via its ~/bin symlink, BASH_SOURCE[0] points at ~/bin, so
+    # ../backup-manager does not exist and the cd fails — which under
+    # set -e + inherit_errexit would abort the whole install on a failed command
+    # substitution. Guard it in an `if` (cd failure → leave the sibling empty; the
+    # PATH lookup below still finds backup-manager when it is installed).
+    local _bm_dir _bm_sibling=""
+    if _bm_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")/../backup-manager" 2>/dev/null && pwd)"; then
+        _bm_sibling="${_bm_dir}/backup-manager.sh"
+    fi
     if command -v backup-manager >/dev/null 2>&1 || [[ -x "${_bm_sibling}" ]]; then
         local _bm _bpol _btmp
         _bm="$(command -v backup-manager 2>/dev/null || true)"
