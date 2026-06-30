@@ -15,7 +15,12 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 VMNAME="$(get_config_value 'vmname' "$1")"
-VMID="$(get_config_value 'vmid')"
+# F5 (defensive): vmid is written back to the module config by the cluster:vm
+# hook; on the very first install pass it could be absent when update.sh is
+# sourced from install.sh right after VM creation. It is DISPLAY-ONLY here, so
+# default it rather than let a missing value abort the whole logging install
+# under set -e (a Step-6 abort that — before F4 — was hidden). Reconciled next run.
+VMID="$(get_config_value 'vmid' 'unknown')"
 NODE="$(get_config_value 'node' "$(get_node_hostname 0)")"
 ZONE0NAME="$(get_config_value 'zone0' 'mgmt')"
 # Resolve HA node: on a single-node cluster get_default_ha_node returns empty,

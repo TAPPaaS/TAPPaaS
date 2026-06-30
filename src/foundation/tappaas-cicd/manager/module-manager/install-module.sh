@@ -623,8 +623,23 @@ main() {
 
     if [[ -x "./install.sh" ]]; then
         info "  Running ${module}/install.sh for '${effective_module}'..."
-        ./install.sh "${effective_module}" || die "Module install.sh failed"
-        info "  ${GN}✓${CL} Module install.sh completed"
+        # F4: tee the installer's combined output to a logfile while still
+        # streaming it live, so a Step-6 failure is never silent. Some module
+        # installers buffer or lose their output when they fail fast (this made
+        # such failures undiagnosable inline — the operator had to re-run
+        # update-module.sh to see the cause). On failure we point at the saved log
+        # and replay its tail. pipefail (set at the top) makes the `if` observe
+        # install.sh's exit status, not tee's.
+        _inst_log="$(mktemp "/tmp/tappaas-install-${effective_module}.XXXXXX")"
+        if ./install.sh "${effective_module}" 2>&1 | tee "${_inst_log}"; then
+            rm -f "${_inst_log}"
+            info "  ${GN}✓${CL} Module install.sh completed"
+        else
+            error "  Module install.sh FAILED for '${effective_module}'. Full output saved to ${_inst_log}"
+            error "  ── last 20 lines ──"
+            tail -n 20 "${_inst_log}" >&2 || true
+            die "Module install.sh failed for '${effective_module}' (see ${_inst_log})"
+        fi
     else
         info "  No install.sh found in module directory — skipping"
     fi
