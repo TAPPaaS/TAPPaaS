@@ -1,0 +1,7 @@
+{
+  "_comment": "Auto-pinhole (#173) for deconz:zigbee — the native deCONZ REST+websocket API consumed by Home Assistant's deconz integration. No MQTT. Per ADR-COM-0006 deconz is in iotCloud and HA in srvHome, so this is a CROSS-zone pinhole srvHome->iotCloud (allowed: iotCloud.pinhole-allowed-from includes srvHome). HA uses explicit IP -> unicast, no multicast relay.",
+  "ports": [
+    { "port": 8080, "protocol": "TCP", "description": "deCONZ REST API (HA setup + poll)" },
+    { "port": 8443, "protocol": "TCP", "description": "deCONZ websocket (HA live events)" }
+  ]
+}
