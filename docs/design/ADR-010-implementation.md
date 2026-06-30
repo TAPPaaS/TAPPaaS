@@ -182,7 +182,7 @@ Maps 1:1 to the packages. All ⬜ until implementation starts.
 
 | Stage | Delivers | Issues | Depends on | Status | Tests (pass/fail) | Commit | Pushed |
 |-------|----------|--------|-----------|--------|-------------------|--------|--------|
-| **P1** | Foundation & schema (`satellite/` module, edge+admin zones, fw rules) | TBD | — | ⬜ | — | — | — |
+| **P1** | Foundation & schema (`satellite/` module, edge+admin zones, fw rules) | TBD | — | 🟦 | fast: mgr 6/0, module 17/0 | 58a1f35.. | ⏳ |
 | **P2** | WireGuard infra tunnel | TBD | P1 | ⬜ | — | — | — |
 | **P3** | Provisioning (nixos-anywhere, lifecycle) | TBD | P1, P2 | ⬜ | — | — | — |
 | **P4** | reverse-proxy role (nginx stream + PROXY v2) | TBD | P2, P3 | ⬜ | — | — | — |
@@ -223,4 +223,14 @@ Append-only narrative per stage (newest first). Template:
 - Follow-ups: …
 ```
 
-_(no entries yet — implementation not started)_
+### P1 — Foundation & schema — 🟦 in progress — 2026-06-30
+- Plan: scaffold the `satellite/` module + `satellite-manager` + schema + the `edge`/`admin` zones, matching the ADR-007 module/manager contract.
+- Implemented:
+  - `src/foundation/satellite/` — `README.md`, `INSTALL.md`, `satellite.json` (example config), `satellite.nix` (role-gated NixOS skeleton w/ `TODO[P2..P6]`), `install.sh`/`update.sh`/`test.sh`.
+  - `src/foundation/schemas/satellite-fields.json` — config field reference.
+  - `src/foundation/tappaas-cicd/manager/satellite-manager/` — bash front door (`install`/`update`/`status`/`remove` wired but report not-implemented → P2-P6; `validate` works), component `install/update/test/validate.sh` + `README.md`.
+  - `network-manager/zones.json` — `edge` overlay (decided) + `admin` overlay (**provisional, Q3**).
+- Tests: satellite-manager fast **6/0**; satellite module fast **17/0**; all scripts `bash -n` clean. (ShellCheck + deep gate run on cicd.)
+- Key call: satellite is an **external-host** module — NOT a `cluster:vm`; operator-driven, NOT in `rest-of-foundation.sh`.
+- Follow-ups: real verbs (P2-P6); exact `edge`/`admin` `access-to` (Q6); finalise/merge `admin` zone (Q3); `autoUpgrade` signing (Q4); ShellCheck on cicd.
+

@@ -78,6 +78,32 @@
     "_comment": "NetBird WireGuard overlay (issue #367). NOT a VLAN/interface zone: state=Manual + vlantag=0 mean zone-manager never creates an interface, DHCP, or firewall rules for it (the 'bridge' field is inert, present only to satisfy the schema). It exists so network:proxy access-list.sh can resolve the NetBird peer CIDR and admit tunnel peers through Caddy: peers terminate on OPNsense's OWN interface, so the routing-peer masquerade does NOT rewrite their source — Caddy sees the peer's overlay IP (e.g. 100.70.x.x), which matched no 10.x zone and was 403'd. Per-peer authorization is enforced by NetBird's own access policies (only the Admins group gets the route to OPNsense), so allowing the whole overlay CIDR here is safe. The default 100.64.0.0/10 is NetBird's full CGNAT allocation range and covers any sub-range the management server hands out (e.g. 100.70.0.0/16); narrow it only if you deliberately restrict NetBird to a smaller network. Included in the default Caddy allow-set like mgmt; services with an explicit proxyAllowedZones must add 'netbird' to keep tunnel access.",
     "description": "NetBird VPN overlay: admin tunnel peers (not a VLAN)"
   },
+  "edge": {
+    "type": "Overlay",
+    "state": "Manual",
+    "typeId": "7",
+    "subId": "1",
+    "vlantag": 0,
+    "ip": "10.255.0.0/31",
+    "bridge": "lan",
+    "access-to": [],
+    "pinhole-allowed-from": [],
+    "_comment": "ADR-010 satellite WireGuard infra tunnel (NOT a VLAN: state=Manual + vlantag=0, so zone-manager creates no interface/DHCP). The home (OPNsense) end dials OUT to the satellite's public IP; this /31 is the tunnel link. The satellite is a semi-trusted external relay and gets LEAST-PRIVILEGE, ROLE-GATED reach only: edge -> Caddy ingress (reverse-proxy), edge -> OPNsense admin-WG listener (admin-vpn), edge -> home PBS :8007 (backup) — and NOTHING else, never broad mgmt. Those specific-port rules are applied per active satellite role by satellite-manager; their exact zones-schema form is TBD (ADR-010 implementation Q6), so access-to/pinhole-allowed-from are empty here.",
+    "description": "ADR-010 satellite infra tunnel (external relay; least-privilege)"
+  },
+  "admin": {
+    "type": "Overlay",
+    "state": "Manual",
+    "typeId": "7",
+    "subId": "2",
+    "vlantag": 0,
+    "ip": "10.255.1.0/24",
+    "bridge": "lan",
+    "access-to": [],
+    "pinhole-allowed-from": [],
+    "_comment": "PROVISIONAL (ADR-010 implementation Q3 — OPEN). Intended landing zone for admin-vpn WireGuard peers that terminate on OPNsense (relayed blind by the satellite), granting the operator the management plane. OPEN QUESTION: this may instead REUSE the existing 'netbird' overlay, or route admins straight into 'mgmt', or NetBird may be removed entirely if admin-vpn supersedes it. Finalised in package P5; until then access-to is empty and this zone is documentation of intent, not active config.",
+    "description": "ADR-010 admin-vpn landing (PROVISIONAL — see Q3)"
+  },
   "srv": {
     "type": "Service",
     "state": "Inactive",

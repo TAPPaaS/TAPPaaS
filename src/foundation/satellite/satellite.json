@@ -1,0 +1,88 @@
+{
+  "_README": "TAPPaaS satellite module config (ADR-010). UNLIKE other foundation modules this is NOT a Proxmox cluster:vm — it describes an EXTERNAL host (a VPS or any machine with a public IP) that tappaas-cicd provisions via nixos-anywhere and manages with `satellite-manager`. Fields are defined in src/foundation/schemas/satellite-fields.json. This file ships as a documented EXAMPLE; the operator copies it to ~/config/satellite-<name>.json and edits it (see INSTALL.md). Secrets (WireGuard keys, S3 credentials) are never stored here.",
+
+  "description": "Operator-owned VPS satellite: reverse-proxy frontend, admin VPN, and off-site backup for a cluster with no public IP",
+  "version": "0.1.0",
+  "releaseDate": "2026-06-30",
+  "maintainer": "@larsrossen",
+  "status": "Development",
+  "tier": "foundation",
+  "kind": "external-host",
+
+  "name": "satellite",
+  "roles": ["reverse-proxy", "admin-vpn", "backup"],
+
+  "dependsOn": ["network:vm", "tappaas-cicd:vm"],
+  "_dependsOn_note": "the `backup` role additionally requires the `backup` module (home PBS to pull from)",
+
+  "provider": {
+    "type": "hetzner",
+    "_type_values": "hetzner | generic (generic = operator supplies a host + SSH; no API automation)",
+    "allocation": "portal",
+    "_allocation_values": "portal (Tier A, default: operator creates the VPS in the console) | api (Tier B, opt-in: satellite-manager creates it via the hcloud API token)",
+    "location": "hel1",
+    "serverType": "cax11",
+    "image": "debian-12"
+  },
+
+  "host": {
+    "publicIp": "203.0.113.10",
+    "sshUser": "root",
+    "_ssh_note": "provisioning credential is ephemeral and revoked post-install; the only standing key is the operator's out-of-band key (NOT a tappaas-cicd key) — ADR-010 §7.3"
+  },
+
+  "tunnel": {
+    "subnet": "10.255.0.0/31",
+    "satelliteAddr": "10.255.0.0",
+    "homeAddr": "10.255.0.1",
+    "wgPort": 51820,
+    "wgPortFallback": "443/udp",
+    "persistentKeepalive": 25
+  },
+
+  "reverseProxy": {
+    "_active_when": "roles contains 'reverse-proxy'",
+    "forwarder": "nginx-stream",
+    "proxyProtocol": "v2",
+    "httpRedirect": true,
+    "sni": ["*"],
+    "_sni_note": "single home cluster => plain L4 passthrough of all :443 to Caddy; SNI list only matters for a future multi-site satellite"
+  },
+
+  "adminVpn": {
+    "_active_when": "roles contains 'admin-vpn'",
+    "adminWgPort": 51821,
+    "mtu": 1340,
+    "terminatesOn": "network",
+    "landingZone": "admin",
+    "sshPassthrough": { "enabled": false, "sshPort": 22 }
+  },
+
+  "backup": {
+    "_active_when": "roles contains 'backup'",
+    "direction": "pull",
+    "removeVanished": false,
+    "sourcePbs": "backup.mgmt.internal:8007",
+    "namespace": "remote/home",
+    "encryption": "client-side-at-home",
+    "backend": "s3",
+    "_backend_values": "s3 (default) | volume",
+    "s3": {
+      "endpoint": "https://hel1.your-objectstorage.com",
+      "bucket": "tappaas-satellite-backup",
+      "objectLock": { "enabled": true, "mode": "compliance", "retentionDays": 30 },
+      "_objectLock_note": "Object Lock MUST be enabled at bucket creation (cannot be added later). Retention window trades immutability vs. PBS prune/GC reclaim — see INSTALL.md."
+    },
+    "volume": {
+      "_active_when": "backend == 'volume'",
+      "sizeGiB": 200,
+      "datastore": "satellite-backup"
+    }
+  },
+
+  "update": {
+    "mode": "pull",
+    "_mode_note": "satellite autoUpgrades from a pinned/signed ref; tappaas-cicd never SSHes in to push (ADR-010 §7.3)",
+    "ref": "github:TAPPaaS/TAPPaaS/ADR007"
+  }
+}

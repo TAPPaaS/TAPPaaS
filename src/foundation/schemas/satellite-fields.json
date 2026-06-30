@@ -1,0 +1,58 @@
+{
+  "_README": "Schema/field reference for a TAPPaaS satellite config (ADR-010), i.e. ~/config/satellite-<name>.json. Descriptive (not strict JSON-Schema), matching the module-fields.json / zones-fields.json style. A satellite is an EXTERNAL host (kind=external-host), NOT a Proxmox cluster:vm — so it does NOT use vmid/zone0/cluster:vm config. Secrets are never stored in this file.",
+  "version": "0.1.0",
+  "appliesTo": "src/foundation/satellite/satellite.json and ~/config/satellite-<name>.json",
+
+  "fields": {
+    "kind": { "type": "string", "required": true, "values": { "external-host": "provisioned on an external host via nixos-anywhere (the only value for satellite)" } },
+    "tier": { "type": "string", "required": true, "values": { "foundation": "satellite is foundation-grade but OPTIONAL (not in the mandatory install chain)" } },
+    "name": { "type": "string", "required": true, "description": "satellite instance name (also the NixOS hostname); a site may run several" },
+    "roles": { "type": "array<string>", "required": true, "values": { "reverse-proxy": "L4 passthrough of :443/:80 to Caddy-on-OPNsense", "admin-vpn": "blind UDP relay of an admin WireGuard session terminating on OPNsense", "backup": "off-site PBS pull target" }, "note": "any combination; order irrelevant" },
+    "dependsOn": { "type": "array<string>", "description": "service deps; always network:vm + tappaas-cicd:vm; the backup role also needs the backup module" },
+
+    "provider.type": { "type": "string", "values": { "hetzner": "Hetzner Cloud (reference)", "generic": "operator supplies a host + SSH; no API automation" } },
+    "provider.allocation": { "type": "string", "default": "portal", "values": { "portal": "Tier A (default): operator creates the VPS in the console", "api": "Tier B (opt-in): satellite-manager creates it via the hcloud API token" } },
+    "provider.location": { "type": "string", "example": "hel1" },
+    "provider.serverType": { "type": "string", "example": "cax11", "note": "cax11 is ample for relay/admin; size up only for heavy backup verify" },
+    "provider.image": { "type": "string", "example": "debian-12", "note": "any stock image; nixos-anywhere kexecs into the NixOS installer" },
+
+    "host.publicIp": { "type": "string", "format": "ipv4", "required": true },
+    "host.sshUser": { "type": "string", "default": "root" },
+
+    "tunnel.subnet": { "type": "string", "format": "cidr", "default": "10.255.0.0/31", "note": "dedicated /31; must not collide with 10.x zones, netbird 100.64/10, or provider internal nets" },
+    "tunnel.satelliteAddr": { "type": "string", "format": "ipv4" },
+    "tunnel.homeAddr": { "type": "string", "format": "ipv4" },
+    "tunnel.wgPort": { "type": "integer", "default": 51820, "note": "satellite UDP listener; home dials out" },
+    "tunnel.wgPortFallback": { "type": "string", "default": "443/udp", "note": "for hostile egress (looks like QUIC)" },
+    "tunnel.persistentKeepalive": { "type": "integer", "default": 25, "note": "set on the HOME side to keep the CGNAT pinhole open" },
+
+    "reverseProxy.forwarder": { "type": "string", "default": "nginx-stream", "values": { "nginx-stream": "nginx stream module (decided)", "haproxy": "sanctioned alternative" } },
+    "reverseProxy.proxyProtocol": { "type": "string", "default": "v2", "note": "REQUIRED — preserves the real client IP for ADR-005 zone ACLs" },
+    "reverseProxy.httpRedirect": { "type": "boolean", "default": true, "note": ":80 passthrough; Caddy issues the 301" },
+    "reverseProxy.sni": { "type": "array<string>", "default": ["*"], "note": "single home cluster => '*' (plain passthrough); explicit list only for a future multi-site satellite" },
+
+    "adminVpn.adminWgPort": { "type": "integer", "default": 51821, "note": "public UDP relay port; distinct from tunnel.wgPort" },
+    "adminVpn.mtu": { "type": "integer", "default": 1340, "note": "admin-side WG MTU for the double-encapsulated path" },
+    "adminVpn.terminatesOn": { "type": "string", "default": "network", "note": "OPNsense terminates the admin WG; the satellite only relays" },
+    "adminVpn.landingZone": { "type": "string", "default": "admin", "note": "PROVISIONAL (Q3): may reuse 'netbird' or route to 'mgmt'" },
+    "adminVpn.sshPassthrough.enabled": { "type": "boolean", "default": false, "note": "optional minimal sub-mode: TCP passthrough to tappaas-cicd:22" },
+    "adminVpn.sshPassthrough.sshPort": { "type": "integer", "default": 22 },
+
+    "backup.direction": { "type": "string", "default": "pull", "note": "satellite pulls home (DR property — home holds no delete cred)" },
+    "backup.removeVanished": { "type": "boolean", "default": false, "note": "false => a source compromise can't erase the off-site copy" },
+    "backup.sourcePbs": { "type": "string", "example": "backup.mgmt.internal:8007" },
+    "backup.namespace": { "type": "string", "default": "remote/home" },
+    "backup.encryption": { "type": "string", "default": "client-side-at-home", "note": "satellite stores ciphertext only; key never leaves home (DR linchpin)" },
+    "backup.backend": { "type": "string", "default": "s3", "values": { "s3": "S3 object storage (default); immutability via Object Lock; needs PBS 4.2+", "volume": "dedicated block volume + local ZFS; immutability via ZFS snapshots" } },
+    "backup.s3.endpoint": { "type": "string", "example": "https://hel1.your-objectstorage.com" },
+    "backup.s3.bucket": { "type": "string" },
+    "backup.s3.objectLock.enabled": { "type": "boolean", "default": true, "note": "MUST be enabled at bucket creation (cannot be added later)" },
+    "backup.s3.objectLock.mode": { "type": "string", "values": { "compliance": "no one can shorten/remove retention", "governance": "privileged users can override (weaker)" } },
+    "backup.s3.objectLock.retentionDays": { "type": "integer", "default": 30, "note": "trades immutability window vs. PBS prune/GC reclaim" },
+    "backup.volume.sizeGiB": { "type": "integer", "note": "pre-sized to the backup set (volume backend only)" },
+    "backup.volume.datastore": { "type": "string" },
+
+    "update.mode": { "type": "string", "default": "pull", "note": "satellite autoUpgrades; cluster never SSHes in to push (ADR-010 §7.3)" },
+    "update.ref": { "type": "string", "example": "github:TAPPaaS/TAPPaaS/ADR007", "note": "pinned/signed; signing mechanism is implementation Q4" }
+  }
+}
