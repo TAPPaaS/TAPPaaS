@@ -4,7 +4,7 @@
 **Date:** 2026-06-29
 **Deciders:** @LarsRossen
 **Related:** [NetworkDesign.md](../Architecture/NetworkDesign.md) ("can function with no public IPv4"); [netbird-setup.md](../../src/foundation/firewall/docs/netbird-setup.md) (current remote-access overlay); [ADR-005](ADR-005-variant-domain-architecture.md) (variant/domain + split-horizon DNS, Caddy-on-OPNsense); [backup/QUICKREF.md](../../src/foundation/backup/QUICKREF.md) (PBS multi-source pull/push, #227); _TBD — open issue for satellite_
-**Changelog:** 2026-06-29 — skeleton + Context drafted; §2 TLS passthrough decided (terminate-at-satellite parked); §4 WireGuard tunnel (home dials out, satellite listens) + dedicated `edge` overlay zone decided; §4.4 all decided (`/31` `10.255.0.0/31`; :443 passthrough + :80 redirect-via-Caddy; wg `51820` default/configurable + `443/udp` fallback; automated DNS, split-horizon kept, no IPv6 v1); §5 provisioning/lifecycle drafted (NixOS via nixos-anywhere, `satellite-manager` on tappaas-cicd, optional `satellite` foundation module); §5.3 expanded with Hetzner Cloud reference, **Tier A (portal allocate) = default**, Tier B (hcloud API token) opt-in; nixos-anywhere kexec, no rescue/custom image; §3 Backup drafted — off-site PBS **pull** model (satellite pulls home, `--remove-vanished false`, client-side encryption key stays home, opt-in role + tunnel `edge→PBS:8007`); admin access reworked into the **`admin-vpn`** role (§6, Goal #5): WireGuard terminating on OPNsense → full management-plane reach, satellite as blind UDP relay (Option B); WG-hub rejected; SSH-only passthrough kept as minimal sub-mode; ports/firewall/roles updated throughout; **§7 secrets inventory (~11 creds) + compromise-isolation** added — pull-only data plane + no standing cicd root + ephemeral provisioning + one-directional mgmt + local immutable ZFS snapshots so a hacked cluster can't destroy the vault; §5.8 passthrough forwarder = **nginx `stream`** (HAProxy alt; Caddy-l4/Traefik rejected), PROXY-protocol-v2 required for client-IP, SNI only for future multi-site; §1 Role/trust-boundary summary written; closing sections fleshed out — Consequences, Alternatives, phased Implementation Plan, Testing Strategy, Acceptance (full first draft complete; status stays **draft** pending operator review). 2026-06-30 — module renamed `45-satellite` → `src/foundation/satellite/` and sibling refs de-numbered (`network`/`tappaas-cicd`/`identity`/`backup`) to match the ADR-007 named-module foundation
+**Changelog:** 2026-06-29 — skeleton + Context drafted; §2 TLS passthrough decided (terminate-at-satellite parked); §4 WireGuard tunnel (home dials out, satellite listens) + dedicated `edge` overlay zone decided; §4.4 all decided (`/31` `10.255.0.0/31`; :443 passthrough + :80 redirect-via-Caddy; wg `51820` default/configurable + `443/udp` fallback; automated DNS, split-horizon kept, no IPv6 v1); §5 provisioning/lifecycle drafted (NixOS via nixos-anywhere, `satellite-manager` on tappaas-cicd, optional `satellite` foundation module); §5.3 expanded with Hetzner Cloud reference, **Tier A (portal allocate) = default**, Tier B (hcloud API token) opt-in; nixos-anywhere kexec, no rescue/custom image; §3 Backup drafted — off-site PBS **pull** model (satellite pulls home, `--remove-vanished false`, client-side encryption key stays home, opt-in role + tunnel `edge→PBS:8007`); admin access reworked into the **`admin-vpn`** role (§6, Goal #5): WireGuard terminating on OPNsense → full management-plane reach, satellite as blind UDP relay (Option B); WG-hub rejected; SSH-only passthrough kept as minimal sub-mode; ports/firewall/roles updated throughout; **§7 secrets inventory (~11 creds) + compromise-isolation** added — pull-only data plane + no standing cicd root + ephemeral provisioning + one-directional mgmt + local immutable ZFS snapshots so a hacked cluster can't destroy the vault; §5.8 passthrough forwarder = **nginx `stream`** (HAProxy alt; Caddy-l4/Traefik rejected), PROXY-protocol-v2 required for client-IP, SNI only for future multi-site; §1 Role/trust-boundary summary written; closing sections fleshed out — Consequences, Alternatives, phased Implementation Plan, Testing Strategy, Acceptance (full first draft complete; status stays **draft** pending operator review). 2026-06-30 — module renamed `45-satellite` → `src/foundation/satellite/` and sibling refs de-numbered (`network`/`tappaas-cicd`/`identity`/`backup`) to match the ADR-007 named-module foundation. 2026-06-30 — §3.4 backup storage backend decided: **S3 object storage default** (Hetzner Object Storage, PBS 4.2+) with dedicated-volume alternative; immutability via **S3 Object Lock** (stronger than ZFS snapshots — §7.3); §5.9 added — `README.md`/`INSTALL.md` + conditional install-flow reference
 
 ---
 
@@ -105,13 +105,23 @@ The satellite sits on someone else's hardware and must be assumed seizable/compr
 
 #### 3.3 Mechanism & connectivity
 
-- **Reuse:** register the home PBS as a sync **remote** on the satellite's PBS; the satellite runs the same prune/GC/verify schedule the backup module already defines (#228 verify-job + verify-new guard bit-rot on the satellite's disk too).
+- **Reuse:** register the home PBS as a sync **remote** on the satellite's PBS; the satellite runs the same prune/GC/verify schedule the backup module already defines (#228 verify-job + verify-new guard integrity on the satellite datastore — S3 or local — too).
+- **Backend:** the satellite's PBS datastore is **S3 object storage by default** (a dedicated volume is the alternative) — see §3.4.
 - **Connectivity:** the pull reaches the home PBS (`:8007`) **over the established WireGuard tunnel**. This adds **one** least-privilege allowance to the `edge` zone for the backup role — `edge → home-PBS:8007` — beyond the Caddy ingress of §4.3. Nothing else in the cluster becomes reachable.
 - **Namespace:** home backups land in a dedicated namespace on the satellite datastore (e.g. `remote/home`), keeping the layout consistent with #227.
 
-#### 3.4 Storage & cost — opt-in role
+#### 3.4 Storage backend — S3 object storage by default; dedicated volume alternative (decided)
 
-The `reverse-proxy` and `admin-vpn` roles need almost no disk; the **`backup` role needs a datastore sized to the backup set**, which on a VPS means attaching a paid volume (e.g. a Hetzner Cloud Volume). Backup is therefore an **explicit opt-in role** in `satellite.json` (`roles: ["reverse-proxy", "admin-vpn", "backup"]`), so a pure ingress/admin satellite stays tiny and cheap. A site may also run *two* satellites (e.g. one relay+admin, one backup) — they are independent.
+The PBS datastore on the satellite can sit on one of two backends. **Default: S3-compatible object storage** (e.g. Hetzner Object Storage); **alternative: a dedicated block volume** (e.g. a Hetzner Cloud Volume) with a local ZFS datastore. `satellite.json` selects the backend; the module caters for both but **defaults to S3**.
+
+| Backend | When | Trade-offs |
+| ------- | ---- | ---------- |
+| **S3 object storage** (default) | the normal case | No pre-sizing — pay-per-use, scales with the backup set; cheapest at rest; **immutability via S3 Object Lock** (see §7.3). Needs PBS **4.2+** (S3 backend is stable since Apr 2026; PBS keeps a local cache to minimise API calls). The bucket **must be created with Object Lock enabled** (can't be added later). |
+| **Dedicated block volume** (alternative) | air-gapped/self-hosted satellite, or a provider without suitable object storage | Simple local ZFS datastore; immutability via **local ZFS snapshots** (weaker — see §7.3). Must be **pre-sized** to the backup set; fixed monthly cost even when under-used. |
+
+Either way, **client-side encryption (§3.2) means the backend stores only ciphertext** — the S3 provider (or the volume) never sees plaintext or the key. Object Lock retention interacts with PBS prune/GC (locked chunks can't be reclaimed until retention expires) — the retention window is an implementation tunable (see [implementation doc](../design/ADR-010-implementation.md) P6).
+
+**Cost framing:** the `reverse-proxy` and `admin-vpn` roles need almost no disk; the **`backup` role's cost is the chosen backend** (S3 usage, or a sized volume). Backup is an **explicit opt-in role** in `satellite.json` (`roles: ["reverse-proxy", "admin-vpn", "backup"]`), so a pure ingress/admin satellite stays tiny and cheap. A site may also run *two* satellites (e.g. one relay+admin, one backup) — they are independent.
 
 #### 3.5 Restore / disaster recovery
 
@@ -306,6 +316,15 @@ Why nginx over the alternatives:
 | **Caddy layer4** ❌ | Third-party, pre-1.0 plugin → custom build (xcaddy); weak "consistency" benefit since we deliberately *don't* terminate TLS here. |
 | **Traefik** ❌ | Built around dynamic service discovery (irrelevant for static config-as-data); heaviest surface; overkill for fixed passthrough. |
 
+#### 5.9 Operator docs & install-flow integration (decided)
+
+The `satellite` module ships two operator docs (authored during implementation):
+
+- **`README.md`** — what the satellite is, the three roles, the trust model, and the `satellite.json` reference.
+- **`INSTALL.md`** — the **detailed, step-by-step install runbook**: provider prerequisite (Hetzner Tier A portal allocation by default — VPS + SSH key + public IP; for the backup role, **create the S3 bucket with Object Lock enabled**), then the `satellite-manager install` flow, role selection, verification probes, and decommission.
+
+**Hook into the TAPPaaS install.** Because the satellite is **optional**, the main install flow (`foundation/install.sh`) does **not** run it unconditionally. Instead the TAPPaaS install/runbook **references `satellite/INSTALL.md` at the decision point** — *"does this site need a satellite? (no public IP / want off-site backup) → follow `satellite/INSTALL.md`"* — and the satellite install runs **after** its prerequisites (`network`, `tappaas-cicd`, and `backup` for the backup role) are up. The exact call-out wording and where it sits in the install sequence are settled in implementation; the decision here is that the satellite step is **conditional and explicitly referenced**, never silently part of the mandatory chain.
+
 ### 6. Administrative access — WireGuard via the satellite (`admin-vpn` role)
 
 The `admin-vpn` role gives the operator the **whole management plane** from anywhere — node Proxmox UIs (`tappaas1/2/3:8006`), OPNsense's UI, PBS (`:8007`), and SSH to any host — even with no public IP at home. Per-port TCP passthrough does not scale to that; **WireGuard** does. The design keeps the satellite a *blind relay*, consistent with §2/§3.
@@ -383,7 +402,11 @@ The threat: `tappaas-cicd` is the cluster's highest-value target (it already hol
 2. **Provisioning credential is ephemeral (#11).** Install-time root access is operator-initiated and **revoked once provisioning completes**; the only key left authorized is the operator's out-of-band key (#4), which lives on an operator workstation/hardware token, never on the cluster.
 3. **Updates are pull-based, not pushed.** The satellite runs NixOS `autoUpgrade` pulling a **pinned, signed** config ref; the cluster cannot forge a config the satellite will accept (signing key off-cluster). The satellite reaches out; nothing reaches in to manage it. (Revises §5.5's "remote `nixos-rebuild` from cicd".)
 4. **Management is one-directional over the tunnel.** The satellite's **host firewall** forbids the home/tunnel side from reaching the satellite's SSH or PBS-admin. The infra tunnel carries satellite→home pulls and relayed public ingress only — it is **not** a path for home to administer the satellite.
-5. **Local immutable history on the satellite.** The satellite keeps **local ZFS snapshots** of its datastore on a schedule that requires *local* root to delete. Even an attacker who somehow obtained the read-only sync token (#5) cannot rewrite history; deletion needs satellite root, which §7.3.1–4 keep away from the cluster.
+5. **Immutable history on the satellite — backend-dependent.**
+   - **S3 backend (default):** the bucket is created with **S3 Object Lock (retention)** enabled, so synced chunks are **WORM** — *no one*, not even satellite-local root or the bucket owner, can delete or overwrite a locked object before its retention expires. This is **stronger** than snapshots: it survives even a full satellite compromise, not just a cluster compromise.
+   - **Dedicated-volume alternative:** **local ZFS snapshots** on a schedule that requires *local* root to delete — weaker (a satellite-root attacker could remove them), but the cluster still can't reach them because §7.3.1–4 keep cluster-held credentials off the satellite.
+
+   Either way, an attacker who somehow obtained the read-only sync token (#5) cannot rewrite history.
 
 Plus, for the destroy-capable **Hetzner token (#9)**: it is **never standing on the mothership** — supplied only for an operator-initiated provision/teardown and not persisted (a compromised cluster therefore cannot `hcloud server delete` the vault). Hetzner tokens cannot be scoped to "no delete", so non-persistence is the only real control.
 
@@ -400,13 +423,13 @@ Plus, for the destroy-capable **Hetzner token (#9)**: it is **never standing on 
 - **Public reachability without a public IP.** Sites behind CGNAT / dynamic IP / no-inbound can publish services, expose admin access, and hold off-site backups — closing the gap [NetworkDesign.md](../Architecture/NetworkDesign.md) only asserts ("can function with no public IPv4").
 - **No commercial dependency in the data path** (goal #2). Ingress, admin VPN, and backup all run on operator-owned infra and TAPPaaS-managed software — no Cloudflare/Tailscale/ngrok, and no NetBird control plane required for the single-operator case.
 - **Self-owned trust preserved.** The blind-relay/blind-vault stance means an off-premises node never holds plaintext or keys; a seized VPS yields ciphertext only.
-- **Ransomware-resistant off-site backup.** Pull-only data flow + no standing cluster root + local immutable snapshots mean a full home-cluster compromise cannot destroy the off-site history (§7.3) — the property a 3-2-1 backup is supposed to provide.
+- **Ransomware-resistant off-site backup.** Pull-only data flow + no standing cluster root + immutable history mean a full home-cluster compromise cannot destroy the off-site copy (§7.3) — the property a 3-2-1 backup is supposed to provide. With the default **S3 Object Lock** backend the WORM guarantee survives even a *satellite* compromise.
 - **Stable public DNS.** Records point at the satellite's fixed IP, eliminating dynamic-DNS churn at home.
 - **Reuse over invention.** Leans on existing pieces — Caddy-on-OPNsense (ADR-005), `os-wireguard`, the `edge`/`netbird` overlay-zone pattern, the PBS multi-source model (#227), ADR-008 zone orchestration — rather than new mechanisms.
 
 ### Negative / costs
 
-- **A new node to own and pay for.** Even a minimal relay is another host to provision, patch, monitor, and fund; the backup role adds a paid volume.
+- **A new node to own and pay for.** Even a minimal relay is another host to provision, patch, monitor, and fund; the backup role adds storage cost (S3 usage by default, or a sized volume).
 - **A new bootstrap dependency: `nixos-anywhere`** — the one genuinely novel tool for TAPPaaS (no in-tree precedent outside the Attic).
 - **The satellite is a single point of failure for whatever flows through it.** If it dies, public ingress and admin-VPN (and backup sync) stop until it is rebuilt — though internal/on-LAN access and a real-public-IP path are unaffected. No HA in v1 (non-goal).
 - **The first *optional* foundation module** (`src/foundation/satellite/`) — every other foundation module is always installed (§5.7).
@@ -441,18 +464,19 @@ Plus, for the destroy-capable **Hetzner token (#9)**: it is **never standing on 
 3. **Provisioning** — `satellite-manager install` via `nixos-anywhere` (Tier A portal default; Tier B `hcloud` opt-in); on-node WG key generation + pubkey read-back; ephemeral provisioning credential + operator out-of-band key; pull-based `autoUpgrade`.
 4. **reverse-proxy role** — nginx `stream` passthrough (`:443`/`:80`) with PROXY-protocol v2; Caddy-on-OPNsense configured to trust it; `dns-manager` points records at the satellite; end-to-end public HTTPS probe.
 5. **admin-vpn role** — OPNsense admin-WG road-warrior + `admin` overlay zone → mgmt; satellite blind UDP relay of `adminWgPort`; MTU tuning; verify full management-plane reach.
-6. **backup role** — satellite PBS datastore + volume; register home PBS as a pull remote (`--remove-vanished false`, read-only token); client-side encryption at home; local ZFS snapshots; reuse #228 verify/prune schedule.
-7. **Hardening & docs** — host firewall (one-directional management), compromise-isolation review (§7.3), operator runbook + DR drill, decommission path.
+6. **backup role** — satellite PBS datastore on **S3 object storage (default; bucket created with Object Lock)** or a dedicated volume; register home PBS as a pull remote (`--remove-vanished false`, read-only token); client-side encryption at home; immutability via Object Lock (or ZFS snapshots on the volume alt); reuse #228 verify/prune schedule.
+7. **Hardening & docs** — host firewall (one-directional management), compromise-isolation review (§7.3), **`README.md` + `INSTALL.md`** for the module and the **conditional install-flow reference** (§5.9), operator runbook + DR drill, decommission path.
 
 ## Testing Strategy
 
 - **Tunnel:** handshake comes up; survives a home-WAN IP change (roaming + keepalive); `443/udp` fallback works on a UDP-restricted egress.
 - **Ingress (`test.sh`):** public HTTPS to a fronted name resolves satellite → tunnel → Caddy; Caddy logs show the **real client IP** (PROXY-protocol working) so ADR-005 zone ACLs still apply; HTTP→HTTPS redirect works.
 - **admin-vpn:** an admin peer reaches node `:8006`, OPNsense UI, PBS `:8007`, and SSH to a host; confirm the satellite cannot decrypt the session (blind relay).
-- **backup:** a pull sync replicates home → satellite; data lands **encrypted**; a **restore from the satellite** to a clean PBS succeeds *with* the key and fails *without* it (proves encryption + key-criticality).
+- **backup:** a pull sync replicates home → satellite (S3 backend by default); data lands **encrypted**; a **restore from the satellite** to a clean PBS succeeds *with* the key and fails *without* it (proves encryption + key-criticality).
 - **Compromise isolation (the headline tests):**
   - With the satellite's read-only token, attempts to delete/prune the home datastore are denied.
-  - Simulated `tappaas-cicd` compromise has **no standing credential** that deletes satellite backups, deletes local ZFS snapshots, or `hcloud`-destroys the VPS.
+  - **Object Lock holds:** a delete/overwrite of a retention-locked S3 object is refused even with full bucket credentials (the WORM guarantee).
+  - Simulated `tappaas-cicd` compromise has **no standing credential** that deletes satellite backups, removes the immutable history (Object Lock / ZFS snapshots), or `hcloud`-destroys the VPS.
   - The home/tunnel side **cannot** open an SSH/PBS-admin session to the satellite (one-directional management).
 - **Lifecycle:** `install` → `update` (pull-based) → `decommission` is clean; removal reverts tunnel/zone/DNS and falls back to the prior reachability model.
 - **Negative:** satellite offline degrades gracefully (internal access unaffected); a malformed/poisoned config ref is rejected by signature check.
@@ -465,7 +489,8 @@ Plus, for the destroy-capable **Hetzner token (#9)**: it is **never standing on 
 - [ ] `nixos-anywhere` provisioning works (Tier A default), with ephemeral provisioning credential **revoked** post-install and pull-based `autoUpgrade` in place.
 - [ ] reverse-proxy: public HTTPS passthrough works **and Caddy sees the real client IP** (PROXY-protocol v2); `:80` redirect works.
 - [ ] admin-vpn: full management-plane reach via WireGuard verified; satellite confirmed blind.
-- [ ] backup: pull sync + client-side encryption + restore-with-key proven; local immutable snapshots scheduled.
-- [ ] Compromise-isolation tests pass: a simulated cluster compromise cannot delete or destroy the off-site vault or VPS.
+- [ ] backup: pull sync + client-side encryption + restore-with-key proven; **S3 datastore (default) with Object Lock** (or dedicated-volume + ZFS snapshots) provides immutable history.
+- [ ] Compromise-isolation tests pass: a simulated cluster compromise cannot delete or destroy the off-site vault or VPS; Object Lock refuses deletion of retention-locked objects.
+- [ ] `README.md` + `INSTALL.md` authored, and the **conditional install-flow reference** (§5.9) added so the satellite step is reachable but never mandatory.
 - [ ] Operator runbook + DR drill (incl. **encryption-key recovery**) and decommission path documented.
 - [ ] Status advanced from **draft** → **proposed** after operator review.

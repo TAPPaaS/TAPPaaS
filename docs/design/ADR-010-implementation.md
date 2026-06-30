@@ -85,9 +85,12 @@ Decisions already made in the ADR (the build must honour these). Implementation-
 | D10 | **Provisioning = NixOS via `nixos-anywhere`**; Hetzner **Tier A (portal allocate) = default**, Tier B (`hcloud` API token) opt-in. | ADR §5.3 |
 | D11 | **Optional foundation module `src/foundation/satellite/`** (named, not numbered — ADR-007 retired the `NN-name` scheme; apps/-module placement rejected). | ADR §5.7 |
 | D12 | **Passthrough forwarder = nginx `stream`** (HAProxy alt; Caddy-l4/Traefik rejected). **PROXY protocol v2 required** to preserve client IP for ADR-005 ACLs. | ADR §5.8 |
-| D13 | **Compromise isolation, applied uniformly to every satellite:** no standing cicd root; ephemeral provisioning credential; pull-based signed `autoUpgrade`; one-directional management over the tunnel; local immutable ZFS snapshots; Hetzner token never standing. | ADR §7.3 |
+| D13 | **Compromise isolation, applied uniformly to every satellite:** no standing cicd root; ephemeral provisioning credential; pull-based signed `autoUpgrade`; one-directional management over the tunnel; immutable history (S3 Object Lock / ZFS snapshots); Hetzner token never standing. | ADR §7.3 |
 | D14 | **Roles** are independent (`reverse-proxy`, `admin-vpn`, `backup`) selected in `satellite.json`; a node may carry any combination; multiple satellites allowed. | ADR §1, §3.4 |
 | D15 | **Build on a branch off `ADR007`**, not parallel on `main`; satellite-side artifacts kept branch-agnostic; test system upgraded to ADR-007 first. | [Relationship to ADR-007](#relationship-to-adr-007--build-sequencing) (2026-06-30) |
+| D16 | **Backup storage backend = S3 object storage by default** (Hetzner Object Storage, PBS 4.2+), dedicated block volume the alternative; **immutability via S3 Object Lock** (bucket created with lock enabled) — stronger than ZFS snapshots. | ADR §3.4, §7.3 (2026-06-30) |
+| D17 | **Satellite ships `README.md` + `INSTALL.md`**; the TAPPaaS install **conditionally references** `satellite/INSTALL.md` at the "does this site need a satellite?" decision point — never part of the mandatory chain. | ADR §5.9 (2026-06-30) |
+| D18 | **Q1 resolved:** `wgPort`/`adminWgPort`/`sshPort` default `51820`/`51821`/`22`, all configurable; ship the `443/udp` fallback config. **Q2 resolved:** admin-WG MTU `1340`, tunable. | Open questions (2026-06-30) |
 
 ---
 
@@ -159,14 +162,17 @@ Decisions already made in the ADR (the build must honour these). Implementation-
 
 ### P6 — backup role
 
-- Satellite PBS datastore + attached volume; register home PBS as a **pull remote** (`--remove-vanished false`, read-only `Datastore.Read` token); client-side encryption at home; reuse #228 verify/prune schedule; **local ZFS snapshots** (local-root-only deletion).
-- **Test criteria:** pull sync replicates home → satellite; data lands **encrypted**; **restore from satellite** succeeds *with* the key and fails *without* it; immutable snapshots present.
+- PBS datastore backend: **S3 object storage by default** (provision a Hetzner Object Storage bucket **with Object Lock enabled at creation**; configure the PBS S3 endpoint, requires PBS 4.2+) **or** a dedicated block volume with local ZFS (selected in `satellite.json`).
+- Register home PBS as a **pull remote** (`--remove-vanished false`, read-only `Datastore.Read` token); client-side encryption at home; reuse #228 verify/prune schedule; tune the Object-Lock retention window vs. PBS prune/GC.
+- **Immutability:** S3 Object Lock (retention) on the default backend; local ZFS snapshots on the volume alternative.
+- **Test criteria:** pull sync replicates home → satellite (S3 backend); data lands **encrypted**; **restore from satellite** succeeds *with* the key and fails *without* it; a delete/overwrite of a retention-locked object is refused.
 
 ### P7 — Hardening & docs
 
 - Satellite **host firewall**: home/tunnel side cannot reach satellite SSH/PBS-admin (one-directional management).
 - Compromise-isolation verification (the headline tests, §7.3); operator runbook + **DR drill incl. encryption-key recovery**; decommission path; advance ADR `draft → proposed`.
-- **Test criteria:** simulated `tappaas-cicd` compromise cannot delete satellite backups/snapshots or destroy the VPS; one-directional management proven.
+- **`README.md` + `INSTALL.md`** (D17): module overview/trust model + `satellite.json` reference; detailed install runbook (Tier-A provider prereqs; S3-bucket-with-Object-Lock for backup; `satellite-manager install` flow; role selection; verification; decommission). Add the **conditional reference** from the TAPPaaS install flow at the "does this site need a satellite?" decision point (after `network`/`tappaas-cicd`/`backup` prereqs).
+- **Test criteria:** simulated `tappaas-cicd` compromise cannot delete satellite backups, remove immutable history, or destroy the VPS; one-directional management proven; the install-flow reference is present but the satellite step stays non-mandatory.
 
 ---
 
@@ -181,8 +187,8 @@ Maps 1:1 to the packages. All ⬜ until implementation starts.
 | **P3** | Provisioning (nixos-anywhere, lifecycle) | TBD | P1, P2 | ⬜ | — | — | — |
 | **P4** | reverse-proxy role (nginx stream + PROXY v2) | TBD | P2, P3 | ⬜ | — | — | — |
 | **P5** | admin-vpn role (WG via OPNsense, blind relay) | TBD | P2, P3 | ⬜ | — | — | — |
-| **P6** | backup role (PBS pull + encryption + snapshots) | TBD | P2, P3, **ADR-007 S9** (backup-manager/controller) | ⬜ | — | — | — |
-| **P7** | Hardening & docs (isolation, runbook, decommission) | TBD | P4, P5, P6 | ⬜ | — | — | — |
+| **P6** | backup role (PBS pull + encryption + S3/Object-Lock) | TBD | P2, P3, **ADR-007 S9** (backup-manager/controller) | ⬜ | — | — | — |
+| **P7** | Hardening & docs (isolation, README/INSTALL + install-flow ref, decommission) | TBD | P4, P5, P6 | ⬜ | — | — | — |
 
 > **Issues:** none filed yet — open GitHub issues per package when the branch is cut, and backfill the `Issues` column with `#NNN`.
 
@@ -190,17 +196,17 @@ Maps 1:1 to the packages. All ⬜ until implementation starts.
 
 ## Open questions
 
-Mechanical leftovers from the ADR that don't block planning but must be pinned during the relevant package:
+Mechanical leftovers from the ADR. Status: ✅ resolved · ⬜ open.
 
-| Q | Question | Decide in | Notes |
-|---|----------|-----------|-------|
-| Q1 | Final `wgPort` / `adminWgPort` / `sshPort` defaults & whether to ship `443/udp` fallback config | P2 / P5 | D6 sets `51820` default + configurable |
-| Q2 | Admin-WG **MTU** value for the double-encapsulated path | P5 | ADR §6.2 suggests ~1340; tune empirically |
-| Q3 | `admin` overlay zone **new vs. reuse `netbird`** | P1 / P5 | ADR leaves a separate `admin` zone for clarity; revisit |
-| Q4 | **Signing mechanism** for the pull-based `autoUpgrade` config ref (key off-cluster) | P3 | core to D13 rule 3 |
-| Q5 | Hetzner **server type + volume sizing** (relay vs. backup) | P3 / P6 | `cax11` relay; backup needs a sized Volume |
-| Q6 | Exact `access-to` / `pinhole-allowed-from` entries for `edge`/`admin` against the zones schema | P1 | per ADR §4.3 role table |
-| Q7 | Multi-site SNI fan-out (one satellite, several tunnels) | future | `ssl_preread` reserved; out of v1 |
+| Q | Question | Decide in | Status / notes |
+|---|----------|-----------|----------------|
+| Q1 | `wgPort` / `adminWgPort` / `sshPort` defaults & `443/udp` fallback | P2 / P5 | ✅ **D18** — `51820`/`51821`/`22`, all configurable; ship `443/udp` fallback config. |
+| Q2 | Admin-WG **MTU** for the double-encapsulated path | P5 | ✅ **D18** — `1340`, tunable empirically. |
+| Q3 | `admin` overlay zone — **new vs. reuse `netbird`** | P1 / P5 | ⬜ **Open (deliberately).** Possibly route admins straight into `mgmt`; or NetBird may be **removed** entirely if `admin-vpn` supersedes it. Revisit once `admin-vpn` is real. |
+| Q4 | **Signing mechanism** for pull-based `autoUpgrade` config ref (key off-cluster) | P3 | ⬜ Open — core to D13 rule 3. |
+| Q5 | Backup **storage backend** & sizing | P6 | ✅ **D16** — S3 object storage default (Hetzner Object Storage, Object Lock at bucket creation, PBS 4.2+); dedicated volume the alternative. Relay/admin node stays tiny (`cax11`-class). Open sub-tunable: Object-Lock retention window vs. PBS prune/GC. |
+| Q6 | Exact `access-to` / `pinhole-allowed-from` entries for `edge`/`admin` | P1 | ⬜ Open — to be determined at implementation, per ADR §4.3 role table. |
+| Q7 | Multi-site SNI fan-out (one satellite, several tunnels) | future | ⬜ **Out of scope for v2.** `ssl_preread` reserved; revisit post-v2. |
 
 ---
 
