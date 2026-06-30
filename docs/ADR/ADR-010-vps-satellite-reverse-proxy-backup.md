@@ -4,7 +4,7 @@
 **Date:** 2026-06-29
 **Deciders:** @LarsRossen
 **Related:** [NetworkDesign.md](../Architecture/NetworkDesign.md) ("can function with no public IPv4"); [netbird-setup.md](../../src/foundation/firewall/docs/netbird-setup.md) (current remote-access overlay); [ADR-005](ADR-005-variant-domain-architecture.md) (variant/domain + split-horizon DNS, Caddy-on-OPNsense); [backup/QUICKREF.md](../../src/foundation/backup/QUICKREF.md) (PBS multi-source pull/push, #227); _TBD — open issue for satellite_
-**Changelog:** 2026-06-29 — skeleton + Context drafted; §2 TLS passthrough decided (terminate-at-satellite parked); §4 WireGuard tunnel (home dials out, satellite listens) + dedicated `edge` overlay zone decided; §4.4 all decided (`/31` `10.255.0.0/31`; :443 passthrough + :80 redirect-via-Caddy; wg `51820` default/configurable + `443/udp` fallback; automated DNS, split-horizon kept, no IPv6 v1); §5 provisioning/lifecycle drafted (NixOS via nixos-anywhere, `satellite-manager` on tappaas-cicd, optional `45-satellite` foundation module); §5.3 expanded with Hetzner Cloud reference, **Tier A (portal allocate) = default**, Tier B (hcloud API token) opt-in; nixos-anywhere kexec, no rescue/custom image; §3 Backup drafted — off-site PBS **pull** model (satellite pulls home, `--remove-vanished false`, client-side encryption key stays home, opt-in role + tunnel `edge→PBS:8007`); admin access reworked into the **`admin-vpn`** role (§6, Goal #5): WireGuard terminating on OPNsense → full management-plane reach, satellite as blind UDP relay (Option B); WG-hub rejected; SSH-only passthrough kept as minimal sub-mode; ports/firewall/roles updated throughout
+**Changelog:** 2026-06-29 — skeleton + Context drafted; §2 TLS passthrough decided (terminate-at-satellite parked); §4 WireGuard tunnel (home dials out, satellite listens) + dedicated `edge` overlay zone decided; §4.4 all decided (`/31` `10.255.0.0/31`; :443 passthrough + :80 redirect-via-Caddy; wg `51820` default/configurable + `443/udp` fallback; automated DNS, split-horizon kept, no IPv6 v1); §5 provisioning/lifecycle drafted (NixOS via nixos-anywhere, `satellite-manager` on tappaas-cicd, optional `45-satellite` foundation module); §5.3 expanded with Hetzner Cloud reference, **Tier A (portal allocate) = default**, Tier B (hcloud API token) opt-in; nixos-anywhere kexec, no rescue/custom image; §3 Backup drafted — off-site PBS **pull** model (satellite pulls home, `--remove-vanished false`, client-side encryption key stays home, opt-in role + tunnel `edge→PBS:8007`); admin access reworked into the **`admin-vpn`** role (§6, Goal #5): WireGuard terminating on OPNsense → full management-plane reach, satellite as blind UDP relay (Option B); WG-hub rejected; SSH-only passthrough kept as minimal sub-mode; ports/firewall/roles updated throughout; **§7 secrets inventory (~11 creds) + compromise-isolation** added — pull-only data plane + no standing cicd root + ephemeral provisioning + one-directional mgmt + local immutable ZFS snapshots so a hacked cluster can't destroy the vault
 
 ---
 
@@ -203,7 +203,7 @@ The satellite runs **NixOS**, configured **declaratively** from the repo, same a
 
 #### 5.2 Where it is managed from — `tappaas-cicd`, via `satellite-manager`
 
-The satellite is owned by the **`tappaas-cicd` mothership**, like all foundation infrastructure, through a new **`satellite-manager`** CLI plus a config pair that mirrors the module convention:
+The satellite is **provisioned** from the **`tappaas-cicd` mothership** through a new **`satellite-manager`** CLI plus a config pair that mirrors the module convention. Note a deliberate departure from the usual model: `tappaas-cicd` does **not** retain standing root over *any* satellite after provisioning — see the compromise-isolation rules in §7.3 (applied uniformly to all roles).
 
 - `satellite.json` — declarative config: provider/label, public IP, SSH access, `wgPort` (infra tunnel), `adminWgPort` (admin-vpn relay), tunnel `/31`, the domain(s)/SNI names it fronts, and a `roles` list — any combination of `reverse-proxy`, `admin-vpn`, `backup`.
 - `satellite.nix` — the NixOS configuration deployed onto the external host.
@@ -259,7 +259,7 @@ WireGuard confidentiality rests on the private keys never leaving their node. Ea
 
 #### 5.5 Update
 
-Updates are declarative, same shape as `update.sh`/`update-os.sh` elsewhere: edit `satellite.nix`, then `satellite-manager update <name>` runs a remote `nixos-rebuild` (preferring `test` before `switch` for non-trivial changes, per the repo rule). Because the satellite holds no app state, a botched rebuild is recoverable by redeploy.
+Updates are declarative, same shape as `update.sh`/`update-os.sh` elsewhere: edit `satellite.nix`, then the satellite applies the new config. **This is pull-based for every satellite** (uniform isolation, §7.3) — the satellite `autoUpgrade`s from a pinned/signed ref rather than `tappaas-cicd` SSHing in, so a compromised cluster cannot push it malicious config. Because the satellite holds no app state, a botched rebuild is recoverable by redeploy.
 
 #### 5.6 Decommission
 
@@ -309,6 +309,56 @@ For "just a shell on the mothership" without running a WireGuard client, the sat
 #### 6.5 Relationship to NetBird
 
 `admin-vpn` covers the **single-operator** admin case with **plain WireGuard and no control plane** — strictly better than NetBird on the no-commercial-dependency axis (goal #2). NetBird stays the answer for many-peer mesh, site-to-site fabric, or any-peer-to-any-zone topologies. They coexist (both WireGuard) and are independent; a site can run either, both, or neither.
+
+### 7. Secrets inventory & compromise isolation
+
+This section answers two questions: **what secrets exist, where, and for how long**; and **how a fully-compromised home cluster is prevented from destroying the off-site backup** — the property that gives the backup role its entire value.
+
+#### 7.1 Secrets inventory
+
+Following the existing TAPPaaS convention (no central vault; secrets live in `/etc/secrets/` mode-600 and are generated in place — cf. [identity.nix](../../src/foundation/identity/identity.nix), [tappaas-cicd install](../../src/foundation/tappaas-cicd/)). Public keys are config, not secrets, and are omitted.
+
+| # | Secret | Generated | Stored at | Lifecycle / rotation | If leaked |
+| - | ------ | --------- | --------- | -------------------- | --------- |
+| 1 | Satellite **infra-tunnel** WG private key | on satellite, first boot | satellite only | per-satellite; rotate = regen + re-exchange pubkey | impersonate satellite to home (home still only exposes role endpoints) |
+| 2 | OPNsense **infra-tunnel** WG private key | on OPNsense | OPNsense only | rotate with #1 | impersonate home end |
+| 3 | Satellite **SSH host key** | on satellite (persisted via `--copy-host-keys`) | satellite only | stable across rebuilds; rotate = reprovision | MITM of satellite management SSH |
+| 4 | **Operator management key** authorized on the satellite | operator workstation / hardware token | **operator only — NOT on the cluster** | operator-controlled | full satellite root (see §7.3 — kept off the cluster on purpose) |
+| 5 | Home-PBS **read-only sync token** (`Datastore.Read`/`Audit`) | home PBS | satellite's PBS remote config | per-satellite; revocable at home | read **ciphertext** home backups; cannot delete/decrypt |
+| 6 | Satellite PBS local admin credential | satellite PBS | satellite only | local | control satellite datastore (still bounded by §7.3) |
+| 7 | **Client-side backup encryption key** (DR linchpin) | home | **home** `/etc/secrets` + independent offline copy | long-lived; rotation re-encrypts | read/forge backup *content*; **loss = unrecoverable DR** |
+| 8 | OPNsense **admin-WG** server key + admin client keys | on each device | OPNsense / admin laptops | per-device; revoke at OPNsense | join the admin VPN (still authenticates to OPNsense) |
+| 9 | _(opt-in, Tier B)_ **Hetzner API token** | Hetzner portal | tappaas-cicd secret | **provision/teardown only — see §7.3** | create **and destroy** the VPS, incur cost |
+| 10 | DNS provider API credential | existing | tappaas-cicd (reused from DNS-01) | existing lifecycle | alter public DNS records |
+| 11 | _(transient)_ Satellite **provisioning credential** | per-install | ephemeral — see §7.3 | **revoked after install** | root on satellite *during* install only |
+
+Roughly **eleven** credentials, but only **four live on the satellite** (#1, #3, #5, #6) and none of those can decrypt or delete the home-held data. The DR linchpin (#7) and the destroy-capable token (#9) live at home — and §7.3 governs how they (and the management path) are kept away from an attacker.
+
+#### 7.2 Trust directions — data plane is already safe
+
+The backup *data* path is isolated **by direction**, independent of any host hardening:
+
+- **Satellite pulls; home holds no write/delete credential to the satellite datastore** (§3.1). Via the PBS protocol, a compromised home **cannot** erase the off-site copy.
+- The satellite holds only a **read-only** token to home (#5) and **no decryption key**. A compromised satellite can read ciphertext, nothing more.
+- Backups are **client-side encrypted at home** (#7); the satellite stores ciphertext.
+
+Net: neither end's credentials let it destroy the other's data **over the backup protocol**. The residual risk is therefore entirely the **management plane** — can a compromised cluster get *root* on the satellite by another path?
+
+#### 7.3 Compromise isolation — keeping a hacked cluster out of the vault (decided direction)
+
+The threat: `tappaas-cicd` is the cluster's highest-value target (it already holds a root SSH key distributed to every node). If the satellite were managed the same way — **standing root SSH from `tappaas-cicd`** — then *compromise of the mothership = root on the vault = backups wiped and VPS destroyed*. That must be impossible. Five rules enforce it:
+
+1. **No standing inbound management credential from the cluster.** `tappaas-cicd` does **not** hold a persistent root key on the satellite. This is the single most important rule and the deliberate exception to the normal "cicd manages everything" model (goal #4 yields to security here, for every satellite — see §7.3 uniform-application note).
+2. **Provisioning credential is ephemeral (#11).** Install-time root access is operator-initiated and **revoked once provisioning completes**; the only key left authorized is the operator's out-of-band key (#4), which lives on an operator workstation/hardware token, never on the cluster.
+3. **Updates are pull-based, not pushed.** The satellite runs NixOS `autoUpgrade` pulling a **pinned, signed** config ref; the cluster cannot forge a config the satellite will accept (signing key off-cluster). The satellite reaches out; nothing reaches in to manage it. (Revises §5.5's "remote `nixos-rebuild` from cicd".)
+4. **Management is one-directional over the tunnel.** The satellite's **host firewall** forbids the home/tunnel side from reaching the satellite's SSH or PBS-admin. The infra tunnel carries satellite→home pulls and relayed public ingress only — it is **not** a path for home to administer the satellite.
+5. **Local immutable history on the satellite.** The satellite keeps **local ZFS snapshots** of its datastore on a schedule that requires *local* root to delete. Even an attacker who somehow obtained the read-only sync token (#5) cannot rewrite history; deletion needs satellite root, which §7.3.1–4 keep away from the cluster.
+
+Plus, for the destroy-capable **Hetzner token (#9)**: it is **never standing on the mothership** — supplied only for an operator-initiated provision/teardown and not persisted (a compromised cluster therefore cannot `hcloud server delete` the vault). Hetzner tokens cannot be scoped to "no delete", so non-persistence is the only real control.
+
+**Result:** a total home-cluster compromise can, at worst, **stop new backups flowing** and read its own (already-held) data. It **cannot** reach back to delete, encrypt, or destroy the existing off-site history or the VPS. The vault survives the thing it exists to survive.
+
+> **Uniform application (decided).** These rules apply to **every satellite**, regardless of role — not just backup-role ones. Rationale: one mental model ("a satellite is always semi-trusted and self-managing; the cluster never holds standing root over it") is far easier to reason about and audit than per-role management trust, and it removes any risk of a relay satellite later gaining the backup role while still carrying relaxed, cluster-rootable management. This is a deliberate, accepted departure from goal #4's "managed from `tappaas-cicd`" convenience for **all** satellites.
 
 ---
 
