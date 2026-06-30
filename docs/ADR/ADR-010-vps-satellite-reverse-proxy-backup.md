@@ -4,7 +4,7 @@
 **Date:** 2026-06-29
 **Deciders:** @LarsRossen
 **Related:** [NetworkDesign.md](../Architecture/NetworkDesign.md) ("can function with no public IPv4"); [netbird-setup.md](../../src/foundation/firewall/docs/netbird-setup.md) (current remote-access overlay); [ADR-005](ADR-005-variant-domain-architecture.md) (variant/domain + split-horizon DNS, Caddy-on-OPNsense); [backup/QUICKREF.md](../../src/foundation/backup/QUICKREF.md) (PBS multi-source pull/push, #227); _TBD — open issue for satellite_
-**Changelog:** 2026-06-29 — skeleton + Context drafted; §2 TLS passthrough decided (terminate-at-satellite parked); §4 WireGuard tunnel (home dials out, satellite listens) + dedicated `edge` overlay zone decided; §4.4 all decided (`/31` `10.255.0.0/31`; :443 passthrough + :80 redirect-via-Caddy; wg `51820` default/configurable + `443/udp` fallback; automated DNS, split-horizon kept, no IPv6 v1); §5 provisioning/lifecycle drafted (NixOS via nixos-anywhere, `satellite-manager` on tappaas-cicd, optional `45-satellite` foundation module); §5.3 expanded with Hetzner Cloud reference, **Tier A (portal allocate) = default**, Tier B (hcloud API token) opt-in; nixos-anywhere kexec, no rescue/custom image; §3 Backup drafted — off-site PBS **pull** model (satellite pulls home, `--remove-vanished false`, client-side encryption key stays home, opt-in role + tunnel `edge→PBS:8007`); admin access reworked into the **`admin-vpn`** role (§6, Goal #5): WireGuard terminating on OPNsense → full management-plane reach, satellite as blind UDP relay (Option B); WG-hub rejected; SSH-only passthrough kept as minimal sub-mode; ports/firewall/roles updated throughout; **§7 secrets inventory (~11 creds) + compromise-isolation** added — pull-only data plane + no standing cicd root + ephemeral provisioning + one-directional mgmt + local immutable ZFS snapshots so a hacked cluster can't destroy the vault
+**Changelog:** 2026-06-29 — skeleton + Context drafted; §2 TLS passthrough decided (terminate-at-satellite parked); §4 WireGuard tunnel (home dials out, satellite listens) + dedicated `edge` overlay zone decided; §4.4 all decided (`/31` `10.255.0.0/31`; :443 passthrough + :80 redirect-via-Caddy; wg `51820` default/configurable + `443/udp` fallback; automated DNS, split-horizon kept, no IPv6 v1); §5 provisioning/lifecycle drafted (NixOS via nixos-anywhere, `satellite-manager` on tappaas-cicd, optional `45-satellite` foundation module); §5.3 expanded with Hetzner Cloud reference, **Tier A (portal allocate) = default**, Tier B (hcloud API token) opt-in; nixos-anywhere kexec, no rescue/custom image; §3 Backup drafted — off-site PBS **pull** model (satellite pulls home, `--remove-vanished false`, client-side encryption key stays home, opt-in role + tunnel `edge→PBS:8007`); admin access reworked into the **`admin-vpn`** role (§6, Goal #5): WireGuard terminating on OPNsense → full management-plane reach, satellite as blind UDP relay (Option B); WG-hub rejected; SSH-only passthrough kept as minimal sub-mode; ports/firewall/roles updated throughout; **§7 secrets inventory (~11 creds) + compromise-isolation** added — pull-only data plane + no standing cicd root + ephemeral provisioning + one-directional mgmt + local immutable ZFS snapshots so a hacked cluster can't destroy the vault; §5.8 passthrough forwarder = **nginx `stream`** (HAProxy alt; Caddy-l4/Traefik rejected), PROXY-protocol-v2 required for client-IP, SNI only for future multi-site
 
 ---
 
@@ -271,9 +271,23 @@ Proposed as an **optional foundation module, `45-satellite`** (after `40-Identit
 
 > _Alternative placement:_ treat it as an `apps/` module since it is optional and externally hosted. Rejected for v1 because it provisions foundation-level network ingress and edits `zones.json`/firewall — squarely foundation concerns — not an application workload.
 
-#### 5.8 Open implementation detail — the SNI forwarder
+#### 5.8 The passthrough forwarder — nginx `stream` (decided)
 
-The passthrough relay needs a TCP/SNI-aware forwarder on the satellite. Candidates (all NixOS-packaged, all plaintext-blind): **nginx `stream` + `ssl_preread`**, **HAProxy** (TCP mode, SNI), or the **Caddy layer4** plugin (consistent with the rest of TAPPaaS, but a third-party plugin). To pick during implementation; the ADR only requires that it route by SNI and never terminate TLS.
+The satellite's TCP relay is **nginx** using the `stream` module (`ssl_preread` available for SNI). **HAProxy** is the sanctioned alternative.
+
+Framing that drives the choice:
+
+- The satellite **never terminates TLS**. For a single home cluster it is a **plain L4 passthrough** — *all* `:443` traffic goes to the one backend (Caddy-on-OPNsense over the tunnel), and Caddy does the real per-host routing. **SNI inspection is not needed in v1**; it only becomes relevant if one satellite fronts **multiple** sites/tunnels (a future multi-tenant case), which `ssl_preread` + a `map` covers without a redesign.
+- **Hard requirement (any tool): PROXY protocol v2.** The relay must prepend the real client IP (`proxy_protocol on;` in nginx `stream`; Caddy configured to trust it) — otherwise Caddy sees the satellite's tunnel IP and **ADR-005's per-zone ACLs and access logs break**.
+
+Why nginx over the alternatives:
+
+| Tool | Verdict |
+| ---- | ------- |
+| **nginx (`stream`+`ssl_preread`)** ✅ | First-class nixpkgs module; the *same* daemon relays both `:443` and `:80`; `proxy_protocol` for client-IP; `ssl_preread` in reserve for multi-site; tiny, mature, auditable static config. |
+| **HAProxy** (alt) | Purpose-built L4 proxy, cleanest SNI switching + best stats; entirely acceptable. Loses on a tie-break: its own config DSL and a separate daemon for `:80`. |
+| **Caddy layer4** ❌ | Third-party, pre-1.0 plugin → custom build (xcaddy); weak "consistency" benefit since we deliberately *don't* terminate TLS here. |
+| **Traefik** ❌ | Built around dynamic service discovery (irrelevant for static config-as-data); heaviest surface; overkill for fixed passthrough. |
 
 ### 6. Administrative access — WireGuard via the satellite (`admin-vpn` role)
 
