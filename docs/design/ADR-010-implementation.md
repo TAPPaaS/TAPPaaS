@@ -91,6 +91,8 @@ Decisions already made in the ADR (the build must honour these). Implementation-
 | D16 | **Backup storage backend = S3 object storage by default** (Hetzner Object Storage, PBS 4.2+), dedicated block volume the alternative; **immutability via S3 Object Lock** (bucket created with lock enabled) — stronger than ZFS snapshots. | ADR §3.4, §7.3 (2026-06-30) |
 | D17 | **Satellite ships `README.md` + `INSTALL.md`**; the TAPPaaS install **conditionally references** `satellite/INSTALL.md` at the "does this site need a satellite?" decision point — never part of the mandatory chain. | ADR §5.9 (2026-06-30) |
 | D18 | **Q1 resolved:** `wgPort`/`adminWgPort`/`sshPort` default `51820`/`51821`/`22`, all configurable; ship the `443/udp` fallback config. **Q2 resolved:** admin-WG MTU `1340`, tunable. | Open questions (2026-06-30) |
+| D19 | **WireGuard key flow (P2):** each end generates its OWN keypair locally; only **public** keys are exchanged — no private key ever transits. Satellite: NixOS generates `/etc/wireguard/wg-infra.key` on-host (first activation); `satellite-manager` reads back `wg show wg-infra public-key` over SSH. OPNsense: the `os-wireguard` instance keypair is generated on OPNsense; `wg-manager` reads its public key. Home is the initiator (peer endpoint=satellite:wgPort, keepalive 25); satellite only listens. | ADR §7.1, §4.2 (2026-06-30) |
+| D20 | **Home-side WireGuard = new `wg-manager`** in the opnsense-controller, driving `os-wireguard` via the controller's `raw` run-module passthrough (no os-wireguard support in TAPPaaS today). Overlay `edge`/`admin` zones are skipped by the standard reconcile, so the role-gated firewall rules are added **explicitly** by `wg-manager`/`satellite-manager`, not via zone `access-to`. | P2 explore (2026-06-30) |
 
 ---
 
@@ -183,7 +185,7 @@ Maps 1:1 to the packages. All ⬜ until implementation starts.
 | Stage | Delivers | Issues | Depends on | Status | Tests (pass/fail) | Commit | Pushed |
 |-------|----------|--------|-----------|--------|-------------------|--------|--------|
 | **P1** | Foundation & schema (`satellite/` module, edge+admin zones, fw rules) | TBD | — | 🟦 | fast: mgr 6/0, module 17/0 | 58a1f35.. | ⏳ |
-| **P2** | WireGuard infra tunnel | TBD | P1 | ⬜ | — | — | — |
+| **P2** | WireGuard infra tunnel | TBD | P1 | 🟦 | sat-mgr 9/0; wg dry-run (cicd) | (this commit) | ⏳ |
 | **P3** | Provisioning (nixos-anywhere, lifecycle) | TBD | P1, P2 | ⬜ | — | — | — |
 | **P4** | reverse-proxy role (nginx stream + PROXY v2) | TBD | P2, P3 | ⬜ | — | — | — |
 | **P5** | admin-vpn role (WG via OPNsense, blind relay) | TBD | P2, P3 | ⬜ | — | — | — |
@@ -222,6 +224,16 @@ Append-only narrative per stage (newest first). Template:
 - Commit/Push: …
 - Follow-ups: …
 ```
+
+### P2 — WireGuard infra tunnel — 🟦 in progress — 2026-06-30
+- Plan: build the satellite↔OPNsense WireGuard infra tunnel (home dials out, satellite listens); satellite-side done now, home-side scaffolded (live OPNsense binding is hardware-gated).
+- Implemented:
+  - **Satellite side (real):** `satellite.nix` `wg-infra` interface — on-host key generation (`generatePrivateKeyFile`; private key never leaves host), listener on `wgPort`, peer added once the OPNsense public key is known (no `endpoint`; home dials in). `wireguard-tools` on the host.
+  - **satellite-manager:** `lib/tunnel.sh` (read back the satellite's public key + handshake age over SSH; runner is overridable for tests); `status` verb now real (reports handshake / unreachable). Symlink-safe lib sourcing.
+  - **Home side (scaffold):** `opnsense-controller/wg_manager.py` + `wg_cli.py` — the new os-wireguard control-plane (none existed). `--dry-run` records the intended ops (home interface + satellite peer: endpoint, keepalive 25, allowed-ips); **live execution is gated** (`NotImplementedError`) until the os-wireguard REST binding is confirmed on a live OPNsense (deep test). Mirrors the `FirewallManager` pattern.
+- Decisions: **D19** (key flow — each end keeps its own private key; only pubkeys exchanged), **D20** (new `wg-manager` via the controller `raw` passthrough; overlay zones skipped by reconcile → role-gated fw rules added explicitly).
+- Tests: satellite-manager fast **9/0** (incl. mocked-SSH status + pubkey read-back); `wg_manager` dry-run pytest (runs on cicd); Python `ast`-clean locally.
+- Hardware-gated (deep test): the os-wireguard live binding, the OPNsense peer apply (home dials out + keepalive), and the end-to-end handshake — need a live OPNsense + a provisioned satellite (P3). The role-gated `edge` firewall rules land with P4–P6 (exact entries = Q6).
 
 ### P1 — Foundation & schema — 🟦 in progress — 2026-06-30
 - Plan: scaffold the `satellite/` module + `satellite-manager` + schema + the `edge`/`admin` zones, matching the ADR-007 module/manager contract.

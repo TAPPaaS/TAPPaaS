@@ -34,6 +34,7 @@ let
       homeAddr       = "10.255.0.1"; # /31 link, home (OPNsense) end
       wgPort         = 51820;        # public UDP listener for the infra tunnel
     };
+    homePublicKey    = "";           # OPNsense infra-tunnel WireGuard public key (filled by P3 read-back)
     homeCaddyAddr    = "10.255.0.1"; # reverse-proxy: forward target (Caddy on OPNsense over the tunnel)
     adminWgPort      = 51821;        # admin-vpn: public UDP relay port
     homeAdminWgAddr  = "10.255.0.1"; # admin-vpn: OPNsense admin-WG listener (over the tunnel)
@@ -81,17 +82,29 @@ in
   };
 
   # ==========================================================================
-  # WireGuard INFRA TUNNEL — satellite LISTENS; home dials out (ADR-010 §4)
+  # WireGuard INFRA TUNNEL — satellite LISTENS; home dials out (ADR-010 §4, P2)
   # ==========================================================================
+  # The satellite's private key is GENERATED ON-HOST and never leaves it
+  # (ADR-010 §7.1 #1): NixOS creates /etc/wireguard/wg-infra.key on first
+  # activation if absent. satellite-manager reads back only the PUBLIC key
+  # (`wg show wg-infra public-key`) over SSH to configure the OPNsense peer.
+  environment.systemPackages = [ pkgs.wireguard-tools ];
+
   networking.wireguard.interfaces.wg-infra = {
     listenPort = cfg.tunnel.wgPort;
     ips = [ "${cfg.tunnel.satelliteAddr}/31" ];
-    # privateKeyFile generated on-host at first boot (never leaves the host).
-    # TODO[P2]: privateKeyFile = "/etc/wireguard/wg-infra.key";
-    # TODO[P2]: peers = [ { publicKey = <home OPNsense pubkey>;
-    #                       allowedIPs = [ "${cfg.tunnel.homeAddr}/32" ]; } ];
-    # NOTE: no Endpoint for the home peer — it dials in; the satellite learns it
-    # from the handshake (roaming). Keepalive lives on the HOME side.
+    privateKeyFile = "/etc/wireguard/wg-infra.key";
+    generatePrivateKeyFile = true;   # on-host, first activation only; never leaves the host
+    # The home (OPNsense) peer is added once its public key is known (P3 read-back).
+    # NO `endpoint` here — HOME dials in (the satellite only listens); WireGuard
+    # roaming learns the home source address from the handshake. PersistentKeepalive
+    # lives on the HOME side to keep the CGNAT pinhole open.
+    peers = lib.optionals (cfg.homePublicKey != "") [
+      {
+        publicKey = cfg.homePublicKey;
+        allowedIPs = [ "${cfg.tunnel.homeAddr}/32" ];
+      }
+    ];
   };
 
   # ==========================================================================

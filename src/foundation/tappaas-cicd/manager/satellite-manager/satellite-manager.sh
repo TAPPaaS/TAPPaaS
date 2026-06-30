@@ -19,7 +19,8 @@
 #
 set -euo pipefail
 
-readonly SCRIPT_NAME="$(basename "${BASH_SOURCE[0]}")"
+SCRIPT_NAME="$(basename "${BASH_SOURCE[0]}")"
+readonly SCRIPT_NAME
 readonly VERSION="0.1.0"
 
 # Real implementation sources the cluster toolbox; the skeleton stays standalone
@@ -31,6 +32,15 @@ error() { echo "${RD}[Error]${CL} ${*}" >&2; }
 die() { error "${*}"; exit 1; }
 
 CONFIG_DIR="${TAPPAAS_CONFIG_DIR:-${CONFIG_DIR:-/home/tappaas/config}}"
+
+# Resolve our real dir even when invoked via the ~/bin symlink, so lib/ is found.
+_src="${BASH_SOURCE[0]}"
+if command -v readlink >/dev/null 2>&1 && readlink -f "${_src}" >/dev/null 2>&1; then
+    _src="$(readlink -f "${_src}")"
+fi
+SCRIPT_DIR="$(cd "$(dirname "${_src}")" && pwd)"
+# shellcheck source=lib/tunnel.sh
+[[ -f "${SCRIPT_DIR}/lib/tunnel.sh" ]] && . "${SCRIPT_DIR}/lib/tunnel.sh"
 
 usage() {
     cat << EOF
@@ -75,6 +85,35 @@ cmd_validate() {
     #           required when backend=s3; adminWgPort != wgPort).
 }
 
+cmd_status() {
+    local cfg; cfg="$(require_config "$1")"
+    local ip user roles
+    ip="$(jq -r '.host.publicIp // empty' "${cfg}")"
+    user="$(jq -r '.host.sshUser // "root"' "${cfg}")"
+    roles="$(jq -r '.roles // [] | join(", ")' "${cfg}")"
+    local target="${user}@${ip}"
+    info "satellite '${1}' — roles: ${roles:-none}"
+    info "  host: ${target}"
+
+    if ! declare -F tunnel_handshake_age >/dev/null; then
+        die "lib/tunnel.sh not loaded (satellite-manager install corrupt?)"
+    fi
+    local age rc=0
+    age="$(tunnel_handshake_age "${target}")" || rc=$?
+    if [[ "${rc}" -ne 0 ]]; then
+        warn "  wg-infra: ${age} — satellite unreachable or tunnel not up."
+        warn "  (a satellite is provisioned by 'satellite-manager install' — P3; until then this is expected.)"
+        return 1
+    fi
+    case "${age}" in
+        never)  info "  wg-infra: up, no handshake yet" ;;
+        *)      info "  wg-infra: last handshake ${age}s ago" ;;
+    esac
+    # TODO[P4-P6]: per-role health — reverse-proxy (nginx :443/:80), admin-vpn
+    #             (UDP relay), backup (PBS pull sync convergence).
+    return 0
+}
+
 not_implemented() {
     local verb="$1" name="$2" pkg="$3"
     warn "satellite ${verb} '${name}' is not implemented yet (lands in ${pkg})."
@@ -98,10 +137,7 @@ main() {
                 "pull-based autoUpgrade from the pinned/signed ref (cluster never pushes)."
             ;;
         status)
-            local name="${1:?usage: ${SCRIPT_NAME} status <name>}"
-            require_config "${name}" >/dev/null
-            not_implemented status "${name}" "P2-P6" \
-                "WireGuard handshake age; per-role health; backup pull sync convergence."
+            cmd_status "${1:?usage: ${SCRIPT_NAME} status <name>}"
             ;;
         remove)
             local name="${1:?usage: ${SCRIPT_NAME} remove <name>}"
