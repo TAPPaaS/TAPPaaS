@@ -2,13 +2,13 @@
 
 | | |
 |---|---|
-| **Status** | Proposed |
-| **Version** | 1.2 |
-| **Date** | 2026-06-16 |
+| **Status** | Accepted — **implemented** (P5/S7 on the `ADR007` branch) |
+| **Version** | 1.3 |
+| **Date** | 2026-06-30 |
 | **Author** | Erik Daniel |
 | **Parent** | [ADR-007 Taxonomy (Overview)](<ADR-007 - TAPPaaS Taxonomy.md>) |
-| **Related** | #320; #297 (module-catalog stack/category); **schema:** `module-fields.json`; **composition:** [ADR-009](<ADR-009 - Composition Meta-Model.md>) + #171 |
-| **Changelog** | v1.2 — named `module-fields.json` as the App schema; catalog schema → Site-level; acceptance corrected. v1.1 — applied Erik⟷Lars review (CR-04 module=filename; CR-05 sourceMetadata→Site; CR-06/07 drop ownerGroup/environment; CR-03 local→issue) |
+| **Related** | #320; #297 (module-catalog stack/category); **schema:** `schemas/module-fields.json`; **manager:** `module-manager` (verbs add/modify/delete/list/show/validate); **composition:** [ADR-009](<ADR-009 - Composition Meta-Model.md>) + #171 |
+| **Changelog** | v1.3 — **as-built (2026-06-30):** module configs are **flat** `config/<name>.json` (no `modules/` folder); the foundation `firewall` module was **renamed `network`**; `environment` IS persisted on the *deployed* config (and the deployed name/VM is suffixed `<name>-<env>` for a non-default, non-mgmt environment); `tier:foundation` is enforced as **mgmt-only + single-instance + --force-to-delete**; the manager is `module-manager`. v1.2 — named `module-fields.json` as the App schema; catalog schema → Site-level; acceptance corrected. v1.1 — applied Erik⟷Lars review (CR-04 module=filename; CR-05 sourceMetadata→Site; CR-06/07 drop ownerGroup/environment; CR-03 local→issue) |
 
 The **📦 Apps** classification domain. An App = a thing that runs (VM, container, service) with a lifecycle: install,
 update, test, backup, delete. Owned by a Group, lives in one Environment.
@@ -36,7 +36,7 @@ Every App is exactly one cell of the `tier × source` grid — naturally MECE.
 
 | Tier | Meaning | Example |
 |------|---------|---------|
-| `foundation` | ships with platform, cannot uninstall, removing it breaks the platform | `firewall`, `cluster`, `identity`, `caddy`, `backup`, `tappaas-cicd` |
+| `foundation` | ships with platform, **mgmt-only + single-instance**, `--force` to delete | `cluster`, `network` (was `firewall`), `identity`, `backup`, `templates`, `logging`, `tappaas-cicd` |
 | `app` | user-installable, freely removable | `openwebui`, `nextcloud`, `vaultwarden` |
 
 ### `source`
@@ -55,7 +55,12 @@ Every App is exactly one cell of the `tier × source` grid — naturally MECE.
 | **foundation** | ✅ normal | 🟡 rare (fork) | ✅ custom platform | ✅ dev |
 | **app** | ✅ normal | ✅ most community apps | ✅ customer-specific | ✅ dev |
 
-## Schema (`config/modules/{name}.json` — folder kept as `modules/` for compatibility)
+## Schema (`config/<name>.json` — flat, one file per deployed module)
+
+> **As built:** module configs are **flat** in the config dir (`config/openwebui.json`,
+> `config/network.json`, …) — there is no `config/modules/` folder. The *source* of a module lives in
+> its repo dir (`src/apps/<name>/<name>.json` or a community repo); install stages a validated copy into
+> `config/`.
 
 ```json
 {
@@ -64,20 +69,27 @@ Every App is exactly one cell of the `tier × source` grid — naturally MECE.
   "source": "official",
   "version": "0.4.1",
   "vmname": "openwebui", "vmid": 311, "node": "tappaas2",
+  "zone0": "myhome", "environment": "myhome",
   "dependsOn": ["cluster:vm", "litellm:models", "identity:sso"],
   "provides": []
 }
 ```
 
-New classification fields: `tier`, `source`. Lint rule: `tier: foundation` ⇒ `source: official` (or explicit override).
+Classification fields: `tier`, `source`. Lint rule: `tier: foundation` ⇒ `source: official` (or explicit
+override). A `tier: foundation` module may only be installed into the **`mgmt`** environment, is
+**single-instance**, and needs `--force` to delete.
 
-**Schema.** Each `module.json` is validated by **`module-fields.json`** (the App schema, `src/foundation/`);
-the `tier`/`source` fields are defined there. The module *catalog* (the registry of all modules) has a
-separate schema, `module-catalog-fields.json` — a Site-level concern (see ADR-007f).
+**Schema.** Each module JSON is validated by **`schemas/module-fields.json`** (the App schema); the
+`tier`/`source`/`environment` fields are defined there. The module *catalog* (the registry of all modules)
+has a separate schema, `schemas/module-catalog-fields.json` — a Site-level concern (see ADR-007f).
 
-Rules from review: a module's name **is** its `{name}.json` filename — no separate `module` field
-(CR-04). `sourceMetadata` lives in **Site → `repositories`** (ADR-007d), not on the module (CR-05).
-`ownerGroup` and `environment` are **inferred at deploy time**, not stored on the module (CR-06, CR-07).
+Rules from review: a module's name **is** its `<name>.json` filename — no separate `module` field
+(CR-04). `sourceMetadata` lives in **Site → `repositories`** (ADR-007d), not on the source module (CR-05).
+`ownerGroup` is deploy-inferred (CR-06). `environment` (CR-07): the *source* module carries none, but on
+**install** the chosen environment **is persisted** onto the deployed `config/<name>.json` (`.environment`),
+and for a **non-default, non-`mgmt`** environment both the config filename and the VM name are suffixed
+`<name>-<env>` (e.g. `nextcloud-staging`); `mgmt` and the single default environment install under the
+bare name.
 
 > **`node` = the physical Proxmox host** (e.g. `tappaas2`) the App's VM is installed on — see
 > [007d Site](<ADR-007d - Site.md>) and [ADR-009](<ADR-009 - Composition Meta-Model.md>).

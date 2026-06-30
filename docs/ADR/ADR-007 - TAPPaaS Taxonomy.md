@@ -2,13 +2,13 @@
 
 | | |
 |---|---|
-| **Status** | Proposed |
-| **Version** | 2.3 |
-| **Date** | 2026-06-16 |
+| **Status** | Accepted — **implemented** on the `ADR007` branch (S0–S9, foundation realized; pending merge to `stable`) |
+| **Version** | 2.4 |
+| **Date** | 2026-06-30 |
 | **Author** | Erik Daniel |
 | **Supersedes** | ADR-007 v1.1 (monolithic) — decomposed into this overview + 007a–007e + ADR-009 |
-| **Related** | #320 (taxonomy); **details:** [007a People](<ADR-007a - People.md>) · [007b Apps](<ADR-007b - Apps.md>) · [007c Environments](<ADR-007c - Environments.md>) · [007d Site](<ADR-007d - Site.md>) · [007e Health](<ADR-007e - Health.md>); **realization:** [ADR-007f](<ADR-007f - Realization.md>); **composition:** [ADR-009](<ADR-009 - Composition Meta-Model.md>) + #171; **glossary (SSOT):** [Architecture/ontology.md](<../Architecture/ontology.md>); **evidence + samples:** [Architecture/taxonomy.md](<../Architecture/taxonomy.md>) |
-| **Changelog** | v2.3 — "bucket" → "classification domain" throughout; sub-ADR table column renamed (2026-06-17). v2.2 — added the consolidated ontology glossary SSOT (`Architecture/ontology.md`). v2.1 — added ADR-007f (realization mapping SSOT) |
+| **Related** | #320 (taxonomy); **details:** [007a People](<ADR-007a - People.md>) · [007b Apps](<ADR-007b - Apps.md>) · [007c Environments](<ADR-007c - Environments.md>) · [007d Site](<ADR-007d - Site.md>) · [007e Health](<ADR-007e - Health.md>); **realization:** [ADR-007f](<ADR-007f - Realization.md>); **composition:** [ADR-009](<ADR-009 - Composition Meta-Model.md>) + #171; **glossary (SSOT):** [Architecture/ontology.md](<../Architecture/ontology.md>); **evidence + samples:** [Architecture/taxonomy.md](<../Architecture/taxonomy.md>); **build state + decisions:** [design/ADR-007-implementation-tracker.md](<../design/ADR-007-implementation-tracker.md>), [design/ADR-007-verb-alignment.md](<../design/ADR-007-verb-alignment.md>) |
+| **Changelog** | v2.4 — **updated to the as-built design** after implementation on the `ADR007` branch (2026-06-30): the model held; the sub-ADRs are corrected where the realization diverged (Role is now a first-class People entity 007a; `network.zone` is singular + `dnsMode` + runtime cert-refid 007c; the real `site.json` 007d; `firewall`→`network`, 7 TypeScript managers + 6 controllers 007f). v2.3 — "bucket" → "classification domain" throughout; sub-ADR table column renamed (2026-06-17). v2.2 — added the consolidated ontology glossary SSOT (`Architecture/ontology.md`). v2.1 — added ADR-007f (realization mapping SSOT) |
 
 ---
 
@@ -96,15 +96,19 @@ This taxonomy **classifies**; it does not define how a unit is **built**. The co
 (`Stack ▷ Module ▷ Component ▷ Function ▷ Service`) is **[ADR-009](<ADR-009 - Composition Meta-Model.md>)**
 (tracking issue #171). The two are orthogonal: every **Module** (composition) is *classified* by
 exactly one classification domain here (+ `tier` + `source`). Apply both; never one as a substitute. *Example:*
-`firewall` is a **Module** (ADR-009) classified as **Environments** (this ADR); its sub-units are
-**Components**, not classification domains.
+the `network` Module (ADR-009; the OPNsense firewall VM, renamed from `firewall` during implementation —
+see 007f) is classified as **Environments** (this ADR); its sub-units are **Components**, not
+classification domains.
 
 ## Realization (delegated to ADR-007f)
 
-How the taxonomy is *operationalized* — the foundation modules + the `tappaas-cicd` control plane (one
-**manager per classification domain**, all ~42 scripts mapped MECE/DRY) — is the SSOT in
-**[ADR-007f](<ADR-007f - Realization.md>)**. The control plane mirrors the classification domains 1:1: this overview
-*classifies*, ADR-007f *realizes*.
+How the taxonomy is *operationalized* — the foundation modules + the `tappaas-cicd` control plane — is the
+SSOT in **[ADR-007f](<ADR-007f - Realization.md>)**. The control plane mirrors the classification domains:
+this overview *classifies*, ADR-007f *realizes*. **As built** (`ADR007` branch): the realization is a
+two-layer control plane — **7 TypeScript Managers** (`people`, `module`, `environment`, `network`, `site`,
+`backup`, `health`) exposing a uniform verb surface ([verb-alignment](<../design/ADR-007-verb-alignment.md>)),
+which orchestrate **6 Controllers** (`opnsense`, `identity`, `proxmox`, `switch`, `ap`, `backup`) that do
+the live I/O — superseding the original "one manager per domain / ~42 flat scripts" framing.
 
 ---
 
