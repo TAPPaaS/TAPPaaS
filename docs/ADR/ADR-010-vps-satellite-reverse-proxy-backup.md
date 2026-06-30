@@ -4,7 +4,7 @@
 **Date:** 2026-06-29
 **Deciders:** @LarsRossen
 **Related:** [NetworkDesign.md](../Architecture/NetworkDesign.md) ("can function with no public IPv4"); [netbird-setup.md](../../src/foundation/firewall/docs/netbird-setup.md) (current remote-access overlay); [ADR-005](ADR-005-variant-domain-architecture.md) (variant/domain + split-horizon DNS, Caddy-on-OPNsense); [backup/QUICKREF.md](../../src/foundation/backup/QUICKREF.md) (PBS multi-source pull/push, #227); _TBD — open issue for satellite_
-**Changelog:** 2026-06-29 — skeleton + Context drafted; §2 TLS passthrough decided (terminate-at-satellite parked); §4 WireGuard tunnel (home dials out, satellite listens) + dedicated `edge` overlay zone decided; §4.4 all decided (`/31` `10.255.0.0/31`; :443 passthrough + :80 redirect-via-Caddy; wg `51820` default/configurable + `443/udp` fallback; automated DNS, split-horizon kept, no IPv6 v1); §5 provisioning/lifecycle drafted (NixOS via nixos-anywhere, `satellite-manager` on tappaas-cicd, optional `45-satellite` foundation module); §5.3 expanded with Hetzner Cloud reference, **Tier A (portal allocate) = default**, Tier B (hcloud API token) opt-in; nixos-anywhere kexec, no rescue/custom image; §3 Backup drafted — off-site PBS **pull** model (satellite pulls home, `--remove-vanished false`, client-side encryption key stays home, opt-in role + tunnel `edge→PBS:8007`); admin access reworked into the **`admin-vpn`** role (§6, Goal #5): WireGuard terminating on OPNsense → full management-plane reach, satellite as blind UDP relay (Option B); WG-hub rejected; SSH-only passthrough kept as minimal sub-mode; ports/firewall/roles updated throughout; **§7 secrets inventory (~11 creds) + compromise-isolation** added — pull-only data plane + no standing cicd root + ephemeral provisioning + one-directional mgmt + local immutable ZFS snapshots so a hacked cluster can't destroy the vault; §5.8 passthrough forwarder = **nginx `stream`** (HAProxy alt; Caddy-l4/Traefik rejected), PROXY-protocol-v2 required for client-IP, SNI only for future multi-site; §1 Role/trust-boundary summary written; closing sections fleshed out — Consequences, Alternatives, phased Implementation Plan, Testing Strategy, Acceptance (full first draft complete; status stays **draft** pending operator review)
+**Changelog:** 2026-06-29 — skeleton + Context drafted; §2 TLS passthrough decided (terminate-at-satellite parked); §4 WireGuard tunnel (home dials out, satellite listens) + dedicated `edge` overlay zone decided; §4.4 all decided (`/31` `10.255.0.0/31`; :443 passthrough + :80 redirect-via-Caddy; wg `51820` default/configurable + `443/udp` fallback; automated DNS, split-horizon kept, no IPv6 v1); §5 provisioning/lifecycle drafted (NixOS via nixos-anywhere, `satellite-manager` on tappaas-cicd, optional `satellite` foundation module); §5.3 expanded with Hetzner Cloud reference, **Tier A (portal allocate) = default**, Tier B (hcloud API token) opt-in; nixos-anywhere kexec, no rescue/custom image; §3 Backup drafted — off-site PBS **pull** model (satellite pulls home, `--remove-vanished false`, client-side encryption key stays home, opt-in role + tunnel `edge→PBS:8007`); admin access reworked into the **`admin-vpn`** role (§6, Goal #5): WireGuard terminating on OPNsense → full management-plane reach, satellite as blind UDP relay (Option B); WG-hub rejected; SSH-only passthrough kept as minimal sub-mode; ports/firewall/roles updated throughout; **§7 secrets inventory (~11 creds) + compromise-isolation** added — pull-only data plane + no standing cicd root + ephemeral provisioning + one-directional mgmt + local immutable ZFS snapshots so a hacked cluster can't destroy the vault; §5.8 passthrough forwarder = **nginx `stream`** (HAProxy alt; Caddy-l4/Traefik rejected), PROXY-protocol-v2 required for client-IP, SNI only for future multi-site; §1 Role/trust-boundary summary written; closing sections fleshed out — Consequences, Alternatives, phased Implementation Plan, Testing Strategy, Acceptance (full first draft complete; status stays **draft** pending operator review). 2026-06-30 — module renamed `45-satellite` → `src/foundation/satellite/` and sibling refs de-numbered (`network`/`tappaas-cicd`/`identity`/`backup`) to match the ADR-007 named-module foundation
 
 ---
 
@@ -84,7 +84,7 @@ Certificate strategy is therefore **unchanged**: Caddy on OPNsense obtains and r
 
 ### 3. Backup responsibility — off-site PBS, pull model (decided)
 
-The satellite's optional second role is an **off-site backup target**. It reuses the existing PBS multi-source machinery ([35-backup](../../src/foundation/backup/), #227) rather than inventing anything: the satellite is, in effect, the **Class A "remote pull" pattern inverted by location** — instead of the home PBS pulling a *buddy's* PBS, the **satellite PBS pulls the home PBS**.
+The satellite's optional second role is an **off-site backup target**. It reuses the existing PBS multi-source machinery (the [`backup`](../../src/foundation/backup/) module, #227) rather than inventing anything: the satellite is, in effect, the **Class A "remote pull" pattern inverted by location** — instead of the home PBS pulling a *buddy's* PBS, the **satellite PBS pulls the home PBS**.
 
 #### 3.1 Direction — the satellite pulls (decided)
 
@@ -272,7 +272,7 @@ This collapses provisioning to: **one API token (once) + one `satellite-manager 
 
 #### 5.4 Secrets — WireGuard keys
 
-WireGuard confidentiality rests on the private keys never leaving their node. Each end generates its own keypair locally; the satellite's private key lives only on the satellite, OPNsense's only on OPNsense. The exchanged **public** keys and the satellite's connection metadata are stored as TAPPaaS secrets under the existing identity/secrets model ([40-Identity](../../src/foundation/identity/), ADR-006) — not committed in cleartext. Key **rotation** = regenerate on one end, re-exchange public keys, re-reconcile; the declarative model makes this a config change rather than hand-surgery.
+WireGuard confidentiality rests on the private keys never leaving their node. Each end generates its own keypair locally; the satellite's private key lives only on the satellite, OPNsense's only on OPNsense. The exchanged **public** keys and the satellite's connection metadata are stored as TAPPaaS secrets under the existing identity/secrets model (the [`identity`](../../src/foundation/identity/) module, ADR-006) — not committed in cleartext. Key **rotation** = regenerate on one end, re-exchange public keys, re-reconcile; the declarative model makes this a config change rather than hand-surgery.
 
 #### 5.5 Update
 
@@ -282,9 +282,9 @@ Updates are declarative, same shape as `update.sh`/`update-os.sh` elsewhere: edi
 
 `satellite-manager remove <name>` reverses provisioning: tear down the OPNsense `os-wireguard` peer, remove the `edge` zone and reconcile, revert the public DNS record, and forget the secrets. **Destroying the VPS itself is provider-side and stays manual** (out-of-band, the operator's cloud account) — TAPPaaS removes only what it created (tunnel, zone, DNS, config). Removing the satellite must cleanly fall back to the prior reachability model (direct public IP, or none).
 
-#### 5.7 Foundation placement & numbering
+#### 5.7 Foundation placement
 
-Proposed as an **optional foundation module, `45-satellite`** (after `40-Identity`) — it is foundation-grade networking/backup infrastructure, but unlike `05–40` it is **not mandatory**: a site with a real public IP needs no satellite. Dependencies: requires `10-firewall` (zones + `os-wireguard` + Caddy) and `30-tappaas-cicd` (orchestration); the optional backup role additionally requires `35-backup`.
+Proposed as an **optional foundation module, `src/foundation/satellite/`** — foundation-grade networking/backup infrastructure, but unlike the always-installed foundation modules (`cluster`, `network`, `tappaas-cicd`, `identity`, `backup`, `logging`) it is **not mandatory**: a site with a real public IP needs no satellite. Dependencies: requires the `network` module (zones + `os-wireguard` + Caddy) and `tappaas-cicd` (orchestration); the optional backup role additionally requires `backup`. (Foundation modules are **named, not numbered** — the old `NN-name` numbering was retired in the ADR-007 refactor this builds on.)
 
 > _Alternative placement:_ treat it as an `apps/` module since it is optional and externally hosted. Rejected for v1 because it provisions foundation-level network ingress and edits `zones.json`/firewall — squarely foundation concerns — not an application workload.
 
@@ -409,7 +409,7 @@ Plus, for the destroy-capable **Hetzner token (#9)**: it is **never standing on 
 - **A new node to own and pay for.** Even a minimal relay is another host to provision, patch, monitor, and fund; the backup role adds a paid volume.
 - **A new bootstrap dependency: `nixos-anywhere`** — the one genuinely novel tool for TAPPaaS (no in-tree precedent outside the Attic).
 - **The satellite is a single point of failure for whatever flows through it.** If it dies, public ingress and admin-VPN (and backup sync) stop until it is rebuilt — though internal/on-LAN access and a real-public-IP path are unaffected. No HA in v1 (non-goal).
-- **The first *optional* foundation module** (`45-satellite`) breaks the "05–40 are all mandatory" pattern (§5.7).
+- **The first *optional* foundation module** (`src/foundation/satellite/`) — every other foundation module is always installed (§5.7).
 - **Deliberately weaker `tappaas-cicd` control** over the satellite than over the rest of the cluster (§7.3) — a conscious trade of convenience (goal #4) for compromise isolation.
 - **New operator-critical secret:** the client-side backup **encryption key** (#7) must be guarded and independently recoverable, or off-site DR is impossible.
 - **Latency + bandwidth** for public traffic now take a detour through the satellite (and its provider's egress).
@@ -436,7 +436,7 @@ Plus, for the destroy-capable **Hetzner token (#9)**: it is **never standing on 
 
 ## Implementation Plan (phased)
 
-1. **Foundation & schema** — create `src/foundation/45-satellite/` (`satellite.json`/`.nix`, `satellite-manager`, `install.sh`/`update.sh`/`test.sh`); add the `edge` overlay zone + the `admin` overlay zone to `zones.json` and the zones schema; define the role-gated firewall entries for the ADR-008 `opnsense` provider.
+1. **Foundation & schema** — create `src/foundation/satellite/` (`satellite.json`/`.nix`, `satellite-manager`, `install.sh`/`update.sh`/`test.sh`); add the `edge` overlay zone + the `admin` overlay zone to `zones.json` and the zones schema; define the role-gated firewall entries for the ADR-008 `opnsense` provider.
 2. **Tunnel** — `os-wireguard` peer on OPNsense (home dials out, keepalive); satellite WireGuard listener; `/31` addressing; verify handshake + least-privilege `edge` rules.
 3. **Provisioning** — `satellite-manager install` via `nixos-anywhere` (Tier A portal default; Tier B `hcloud` opt-in); on-node WG key generation + pubkey read-back; ephemeral provisioning credential + operator out-of-band key; pull-based `autoUpgrade`.
 4. **reverse-proxy role** — nginx `stream` passthrough (`:443`/`:80`) with PROXY-protocol v2; Caddy-on-OPNsense configured to trust it; `dns-manager` points records at the satellite; end-to-end public HTTPS probe.
@@ -459,7 +459,7 @@ Plus, for the destroy-capable **Hetzner token (#9)**: it is **never standing on 
 
 ## Acceptance
 
-- [ ] `45-satellite` module scaffolding (`satellite.json`/`.nix`, `satellite-manager`, install/update/test) created and documented.
+- [ ] `satellite` module scaffolding (`src/foundation/satellite/`: `satellite.json`/`.nix`, `satellite-manager`, install/update/test) created and documented.
 - [ ] `edge` + `admin` overlay zones and role-gated firewall rules added to `zones.json`/schema and reconciled by the ADR-008 `opnsense` provider.
 - [ ] WireGuard tunnel: home-dials-out + keepalive verified; `/31` addressing; least-privilege `edge` rules confirmed.
 - [ ] `nixos-anywhere` provisioning works (Tier A default), with ephemeral provisioning credential **revoked** post-install and pull-based `autoUpgrade` in place.
