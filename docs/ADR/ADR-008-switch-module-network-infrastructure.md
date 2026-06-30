@@ -1,9 +1,23 @@
 # ADR-008: Network Infrastructure Management — Zone Orchestration Across Control Points
 
-**Status:** proposed
+**Status:** **Partially implemented** — built as the ADR-007 `network-manager` + controllers (2026-06-30); see addendum
 **Date:** 2026-06-13 (revised 2026-06-14: orchestrator + per-target provider model)
 **Deciders:** @LarsRossen
-**Related:** [ADR-001](ADR-001%20-%20Use%20Trunk%20Mode%20for%20TAPPaaS%20VM%20VLAN%20Connectivity.md) (trunk mode for VMs); [zones.json](../../src/foundation/firewall/zones.json) (canonical VLAN definitions); issues [#333], [#334] (inspect-vm trunk visibility), [#335] (firewall VM not trunked on zone add), [#339] (switch management)
+**Related:** [ADR-001](<ADR-001 - Use Trunk Mode for TAPPaaS VM VLAN Connectivity.md>) (superseded); zones.json is now `config/zones.json` (template under `tappaas-cicd/manager/network-manager/`); realized per [ADR-007f](<ADR-007f - Realization.md>); issues [#333]/[#334]/[#335] (proxmox plane fix done), [#339]/[#372]/[#373] (switch management)
+
+> **As-built addendum (2026-06-30) — built, but renamed/restructured by ADR-007 (this doc kept as the design rationale).**
+> The intent (zones.json as SSOT; an orchestrator fanning out to OPNsense/Proxmox/switch/AP via the
+> five-verb `interrogate→update-desired→delta→apply→confirm` contract; vendor plugins) is **implemented**.
+> Name/structure map (ADR → as-built):
+> - `zone-manager` (bash orchestrator) → **`network-manager`** (TypeScript, compiled CLI; owns `zones.json`, reconciles 4 planes).
+> - `proxmox-manager`/`switch-manager`/`ap-manager` providers → **`controller/{proxmox,switch,ap}-controller`** under `tappaas-cicd/controller/`. The OPNsense plane still shells to the legacy `zone-manager` binary (not renamed to `opnsense-manager`).
+> - vendor plugins live at **`network/scripts/plugins/`** (`unifi.sh` full UniFi-OS impl + `manual.sh`). **MikroTik plugin not built.**
+> - **`firewall`→`network` rename is DONE** (§12 below lists it as future — now stale/reversed; `src/foundation/firewall/` is gone, module is `network`, `module-catalog.json` carries `legacyName:"firewall"`).
+> - `zones.json` is the runtime `config/zones.json` (owned by `network-manager`), with a template copy under the network-manager dir — the `src/foundation/firewall/zones.json` links in this doc are broken.
+>
+> **Still WIP:** physical inter-node switch trunking + `ap-controller` are flagged WIP in the live test
+> gates (UniFi `--apply` works; a real registered switch / off-node VLAN fan-out is not yet the proven
+> default); the `opnsense-manager` rename; the MikroTik plugin.
 
 ---
 

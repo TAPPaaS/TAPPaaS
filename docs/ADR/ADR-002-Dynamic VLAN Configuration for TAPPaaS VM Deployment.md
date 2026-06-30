@@ -1,9 +1,20 @@
 # ADR-002: Dynamic VLAN Configuration for TAPPaaS VM Deployment
 
 **Author** Erik Daniel (tappaas)
-**Status:** proposed - ready for review 
+**Status:** **Superseded — goal met by a different mechanism** (2026-06-30; see banner)
 **Date:** 2025-02-03  
 **Deciders:** @LarsRossen + @ErikDaniel 
+**Related:** built on [ADR-001](<ADR-001 - Use Trunk Mode for TAPPaaS VM VLAN Connectivity.md>) (also superseded); realized model in [ADR-007c](<ADR-007c - Environments.md>) + [ADR-008](<ADR-008-switch-module-network-infrastructure.md>)
+
+> **⚠ Superseded — the dynamic-VLAN GOAL is implemented, but NOT via this design (kept as history).**
+> This ADR proposed assigning VLANs at deploy time via **cloud-init injecting `/etc/tappaas/network.nix`**
+> and **NixOS `networking.vlans`** (in-guest tagging, on top of ADR-001 trunk mode). The as-built model
+> assigns VLANs **dynamically but host-side**: a module's `zone0` resolves to a `vlantag` in
+> `config/zones.json` and is applied as a Proxmox **access-port tag** (`Create-TAPPaaS-VM.sh` →
+> `qm set --net0 ...,tag=<vlan>`); the guest just runs plain DHCP. There is **no** `network.nix`,
+> `networking.vlans`, or per-host cloud-init network snippet. The "VLAN is first-boot-only / cannot change"
+> drawback is therefore moot (it can be changed with `qm set`). Source of truth is now `zones.json`, owned
+> by `network-manager` (ADR-007/008); the old `firewall` module is `network`; `variant`→`environment`.
 
 ---
 

@@ -1,4 +1,19 @@
-# Dependency management in TAPPAasS
+# ADR-003: Dependency management in TAPPaaS
+
+**Status:** **Accepted — implemented** (the `dependsOn`/`provides` service model is live)
+**Date:** 2026-06-30 (status added retroactively; the ADR itself predates the header convention)
+**Deciders:** @LarsRossen + @ErikDaniel
+**Related:** `module-fields.json` (`dependsOn`/`provides`); `install-module.sh`/`common-install-routines.sh`; [ADR-009](<ADR-009 - Composition Meta-Model.md>) (Service = a `provides`/`dependsOn` pair)
+
+> **As built (2026-06-30).** The decision is implemented: modules declare `dependsOn`/`provides` as
+> `<module>:<service>` pairs; `install-module.sh` validates them and calls each provider's
+> `services/<svc>/install-service.sh` in dependency order (also `delete-service.sh`/`test-service.sh`).
+> Drift from this doc's older text: provider scripts live under **`services/`** (not `cap/`); the general
+> scripts moved to `tappaas-cicd/manager/module-manager/` + `lib/` (ADR-007); provider names are mid-rename
+> **`firewall:`→`network:`** (a legacy alias bridges both). **Not** implemented: the proposed per-field
+> `services:` consumer list in `module-fields.json` — instead a dependency-keyed `config` block is used.
+> NOTE: this ADR (module *service* dependencies) is distinct from the foundation `DEPENDENCIES.csv`/
+> `PROGRAMS.csv` script-dependency inventory, despite the name overlap.
 
 ## Introduction
 
@@ -20,8 +35,8 @@ Each module in TAPPaaS is defined in a <module>.json. This file has two fields:
 
 Each module has a set of scrips for each services it delivers, registered in a subdirectory of the module:
 
-- cap/<name of service>/install.sh: a script which is called when a module consuming the service is installed. It is called with a single argument: the name of the module that will be consuming the service
-- cap/<name of service>/update.sh: a script which is called when a module consuming the service is being updated. It is called with a single argument: the name of the module that will be consuming the service
+- services/<name of service>/install-service.sh: a script which is called when a module consuming the service is installed. It is called with a single argument: the name of the module that will be consuming the service. *(As built: the directory is `services/` — not `cap/` — and the script is `install-service.sh`; there are also `update-service.sh`, `delete-service.sh`, `test-service.sh`.)*
+- services/<name of service>/update-service.sh: a script which is called when a module consuming the service is being updated. It is called with a single argument: the name of the module that will be consuming the service
 
 If the "consume.sh" needs more information about the module that will be consuming the service, then it can read the <module>.json. The module-fields.json define the fields that can be relevant for a given service.
     - the fields definition will have a new field:

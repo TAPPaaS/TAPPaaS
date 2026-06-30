@@ -86,5 +86,10 @@ Aggregation) vs `stack` in #297 (a browse facet). **Recommendation:** rename the
 
 - [x] Node/Device direction confirmed as Option B (Erik⟷Lars review 2026-06-15).
 - [x] Capabilities.md updated (node = physical host, Option B); taxonomy.md Appendix C already correct.
-- [x] #171 closed (2026-06-16).
+- [ ] #171 — the owner direction is confirmed (Option B), but the issue stays **open for community
+  discussion** (consistent with the Status line; the earlier "closed 2026-06-16" note was premature).
 - [x] #297 `stack` → `domain` follow-up filed as #361 (2026-06-16).
+- [x] **Realized:** the composition vocabulary is built — `Stack ▷ Module ▷ Component` maps to
+  `tappaas-cicd/manager/` + `controller/` + `lib/`; **Service = a `provides`/`dependsOn` pair**
+  (`module-fields.json`). See [ADR-007f](<ADR-007f - Realization.md>). (The model is unchanged; only the
+  realization landed — the ADR stays Proposed pending the #171 community discussion.)

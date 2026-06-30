@@ -1,11 +1,20 @@
-```markdown
 # ADR-001: Use Trunk Mode for TAPPaaS VM VLAN Connectivity
 
-**Status:** proposed - ready for review 
+**Status:** **Superseded — not adopted** (2026-06-30; see banner)
 **Date:** 2026-02-03  
 **Updated:** 2026-02-04 (Added bridge-vids requirement)  
 **Deciders:** @LarsRossen + @ErikDaniel
-**Related:** RCA-2025-02-03-VLAN-SRV.md, RCA-2025-02-03-VLAN-SRV-FIX.md
+**Related:** RCA-2025-02-03-VLAN-SRV.md, RCA-2025-02-03-VLAN-SRV-FIX.md; superseded by the network model in [ADR-008](<ADR-008-switch-module-network-infrastructure.md>) + [ADR-007f](<ADR-007f - Realization.md>)
+
+> **⚠ Superseded — the as-built cluster does the OPPOSITE of this proposal (kept as history).**
+> This ADR proposed **trunk mode** (in-guest VLAN tagging; remove `tag=` from the VM NIC; remove
+> `bridge-vids 2-4094`). The implementation chose the **reverse**: VMs are **access ports** — VLAN tagging
+> happens host-side on the Proxmox bridge (`qm set --net0 ...,tag=<vlan>`, `cluster/Create-TAPPaaS-VM.sh`)
+> and `bridge-vids 2-4094` is **deliberately kept** and reconciled by `network-manager`
+> (`zone-controller.sh` → `proxmox-controller bridge-vids`). Trunk mode survives only as the narrow special
+> case of the `network` (OPNsense) VM itself (`trunks0: "ALL"`). The proposed `vm-network-hook.sh` and the
+> in-guest `networking.vlans`/cloud-init `network.nix` were **never built**. If true trunk-to-guest is ever
+> wanted again, it needs a **fresh** ADR against the post-ADR-007 structure — not a revival of this one.
 
 ---
 
@@ -509,5 +518,7 @@ qm guest exec 999 -- ip addr show eth0.210
 - [ ] Template VM 8080 update pending
 - [ ] Create-TAPPaaS-VM.sh update pending
 - [ ] Full automation pending
-```
+
+> *(Historical checklist — left as-is. These items target the trunk-mode approach that was **not adopted**;
+> see the supersession banner at the top.)*
 

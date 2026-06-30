@@ -1,9 +1,21 @@
 # ADR-006: Identity — Users, Roles & SSO Provisioning
 
-**Status:** accepted
+**Status:** accepted — **SSO plumbing still authoritative; people/role data-model & tooling superseded by [ADR-007a](<ADR-007a - People.md>)** (2026-06-30)
 **Date:** 2026-06-08
 **Deciders:** @LarsRossen
-**Related:** #56 (default user & role profiles); builds on #45 (accessControl forward-auth) and the variant model in [ADR-005](ADR-005-variant-domain-architecture.md)
+**Related:** #56 (default user & role profiles); builds on #45 (accessControl forward-auth); the variant model in [ADR-005](ADR-005-variant-domain-architecture.md) is superseded; **people model now** [ADR-007a](<ADR-007a - People.md>)
+
+> **⚠ Split fate (2026-06-30).** **Still live & authoritative:** this ADR's **SSO architecture** — the two
+> integration modes (forward-auth via `identity:accessControl` vs OIDC via `identity:identity`), the
+> mandatory per-app **PolicyBinding fail-open guard**, and `oidc-app-ensure`. **Superseded by ADR-007a +
+> `people-manager`:** the *role/group data model and tooling*. The `roles-ensure.sh` and `user.sh` tools
+> are **retired** (gone); `config/people/{organizations,groups,users,roles}/*.json` is now reconciled by
+> **`people-manager`** (TS) → **`identity-controller`** (Python). The variant-prefix groups
+> (`tappaas-admins`/`<scope>-users`/`tappaas-installers`) are **retired** — SSO allow-lists now bind the
+> flat **`users`** group (a regression test asserts the old names are absent). **Role is now a first-class
+> entity** (`schemas/role-fields.json`; a Role = an Authentik group marked `kind=role`), and a **User has a
+> lifecycle** (`active`/`suspended`/`terminated`). So §2/§3 (prefix profiles + parent-per-scope naming) and
+> §8 (`user.sh`/`roles-ensure.sh`) below are **historical**; the data model is [ADR-007a](<ADR-007a - People.md>).
 
 ---
 

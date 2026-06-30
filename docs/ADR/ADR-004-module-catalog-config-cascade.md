@@ -1,9 +1,21 @@
 # ADR-004: Module catalog → desired-state config cascade
 
-**Status:** accepted — core implemented (2026-06-06); cluster `timezone` and Layer-3 config zone-folder migration deferred to follow-up issues (see Open issues)
+**Status:** accepted — **Layer 2 (catalog) live; Layer 1 (config cascade) SUPERSEDED by ADR-007** (2026-06-30)
 **Date:** 2026-06-04
 **Deciders:** @LarsRossen + @ErikDaniel007
-**Related:** #297, #305, repository.sh
+**Related:** #297, #305, repository.sh; **superseded in part by** [ADR-007d Site](<ADR-007d - Site.md>) + [ADR-007c Environments](<ADR-007c - Environments.md>)
+
+> **⚠ Partial supersession (2026-06-30).** **Layer 2** — the module *catalog* (`modules.json`→
+> `module-catalog.json`, schema `schemas/module-catalog-fields.json`, the `stack`/`category`/`status`
+> taxonomy) — is **fully live and unchanged**. **Layer 1** — the `configuration.json` registry + config
+> cascade this ADR is built around — is **superseded by ADR-007**: `configuration.json` was **retired**
+> (migrated then deleted) and replaced by `config/site.json` (`schemas/site-fields.json`) +
+> `config/environments/*.json` (`environment-fields.json`); the `managed`/`catalog` repo fields were **not**
+> carried into the new `site.json.repositories`; `timezone` now lives on `site.json` (done, relocated); the
+> deferred Layer-3 "zone-based config folders" is now **obsolete** (configs are flat `config/<name>.json`,
+> placement is per-environment). The live value-cascade is **site → environment → module** (e.g. backup
+> retention), introduced by ADR-007 — not the registry→catalog→desired-state lineage described below.
+> Schema paths below that say `src/foundation/*-fields.json` now live under `src/foundation/schemas/`.
 
 > **Implementation note (2026-06-06):** Implemented Layer-1 (`managed`/`catalog`
 > in `configuration.json` + `configuration-fields.json`, and

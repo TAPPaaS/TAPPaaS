@@ -1,10 +1,19 @@
 # ADR-005: Variant & Domain Architecture
 
-**Status:** proposed
+**Status:** **Superseded by [ADR-007c — Environments](<ADR-007c - Environments.md>)** (2026-06-30)
 **Date:** 2026-06-06
 **Deciders:** @LarsRossen + @ErikDaniel007
-**Related:** #269, #270, #289, #290, #292, #299
-**Changelog:** 2026-06-17 — §6 amended: replace incorrect "route via DMZ gateway" split-horizon DNS prescription with correct "authorized-zone gateway (OPNsense self-traffic)" model (@ErikDaniel007, evidence: zones.json access-to audit + Lars 260616 worksession transcript)
+**Related:** #269, #270, #289, #290, #292, #299; **superseded by** ADR-007c (#318 renamed variant→Environment, closes #316)
+**Changelog:** 2026-06-30 — marked Superseded by ADR-007c (the "variant" model was renamed wholesale to "Environment"). 2026-06-17 — §6 amended: replace incorrect "route via DMZ gateway" split-horizon DNS prescription with correct "authorized-zone gateway (OPNsense self-traffic)" model (@ErikDaniel007, evidence: zones.json access-to audit + Lars 260616 worksession transcript)
+
+> **⚠ Superseded — the "variant" concept became "Environment" (kept as history; §6 DNS analysis still
+> useful).** Realized model: `variant-manager` → **`environment-manager`** (+ `network-manager` for the
+> zone/TLS/DNS planes); `--variant` is now a **deprecated alias** of `--environment`; the
+> `configuration.json .tappaas.variants` registry → per-file **`config/environments/<name>.json`**
+> (`schemas/environment-fields.json`); a variant's authored `tlsCertRefid` → **runtime** state
+> (`config/cert-refids.json`); `domain` → `domains.primary`/`aliases`/`dnsMode`; optional single `zone` →
+> mandatory **`network.zone`** (singular). `mgmt` is now itself an Environment; the default Environment is
+> the Site/org name `<N>`. See [ADR-007c](<ADR-007c - Environments.md>) for the as-built model.
 
 ---
 
