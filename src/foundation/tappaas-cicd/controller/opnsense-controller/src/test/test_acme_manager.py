@@ -219,6 +219,29 @@ class TestCertificateWaitParsesSelectField(unittest.TestCase):
             mgr.certificate_wait("anything", timeout=1, poll_interval=0)
 
 
+class TestPluginEnabled(unittest.TestCase):
+    """settings/get wraps the payload in the model root ("acmeclient")."""
+
+    def test_enabled_when_root_wrapped(self):
+        mgr = _make_manager({
+            ("Settings", "get"): {"acmeclient": {"settings": {"enabled": "1"}}},
+        })
+        self.assertTrue(mgr.is_plugin_enabled())
+
+    def test_disabled_when_root_wrapped(self):
+        mgr = _make_manager({
+            ("Settings", "get"): {"acmeclient": {"settings": {"enabled": "0"}}},
+        })
+        self.assertFalse(mgr.is_plugin_enabled())
+
+    def test_tolerates_unwrapped_shape(self):
+        # Be robust if a future OPNsense build returns the model unwrapped.
+        mgr = _make_manager({
+            ("Settings", "get"): {"settings": {"enabled": "1"}},
+        })
+        self.assertTrue(mgr.is_plugin_enabled())
+
+
 class TestActionEnsure(unittest.TestCase):
     def test_caddy_reload_action_body(self):
         mgr = _make_manager({

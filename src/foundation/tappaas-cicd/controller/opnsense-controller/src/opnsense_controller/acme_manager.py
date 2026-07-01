@@ -241,8 +241,11 @@ class AcmeManager:
         Cert operations fail with status 400 if the plugin isn't enabled.
         """
         settings = self._api_get("Settings", "get")
-        # The response is {"settings": {"enabled": "0"|"1", ...}}
-        enabled = settings.get("settings", {}).get("enabled", "0")
+        # A model `get` wraps the payload in the model root node, i.e. the
+        # response is {"acmeclient": {"settings": {"enabled": "0"|"1", ...}}}.
+        # Unwrap that root if present (tolerant of an already-unwrapped shape).
+        node = settings.get("acmeclient", settings)
+        enabled = node.get("settings", {}).get("enabled", "0")
         return enabled == "1"
 
     def require_plugin_enabled(self) -> None:
