@@ -1,0 +1,36 @@
+{
+  "description": "Disposable test module (ADR-010): a minimal nginx published via network:proxy, used to validate the satellite HTTPS path end-to-end with the wildcard cert. Safe to delete.",
+  "version": "0.1",
+  "releaseDate": "2026-07-01",
+  "maintainer": "@larsrossen",
+  "status": "Testing",
+  "tier": "app",
+  "vmname": "sat-hello",
+  "vmid": 925,
+  "vmtag": "TAPPaaS,Test",
+  "zone0": "dmz",
+  "dependsOn": [
+    "cluster:vm",
+    "templates:nixos",
+    "network:proxy"
+  ],
+  "provides": [],
+  "config": {
+    "cluster:vm": {
+      "cores": 2,
+      "memory": "4096",
+      "diskSize": "8G",
+      "storage": "tanka1",
+      "imageType": "clone",
+      "image": "8080",
+      "bridge0": "lan"
+    },
+    "network:proxy": {
+      "proxyPort": 80,
+      "proxyTls": "dns01",
+      "proxyAllowedZones": [
+        "internet"
+      ]
+    }
+  }
+}

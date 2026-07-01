@@ -44,8 +44,23 @@ for s in install.sh update.sh test.sh delete.sh; do
     bash -n "${here}/${s}" && ok "parses: ${s}" || no "syntax: ${s}"
 done
 
+# 6. deep test: reverse-proxy end-to-end through a LIVE satellite (ADR-010).
+#    Delegates to test-vm-creation/ (install sat-hello → probe via the satellite
+#    public IP → teardown), mirroring tappaas-cicd/test-vm-creation. The driver
+#    SKIPs (exit 0) when prerequisites (satellite + wildcard cert) are absent, so
+#    the gate stays green on a cluster without a satellite.
 if [[ "${TAPPAAS_TEST_DEEP:-0}" == "1" ]]; then
-    echo "  (deep tests: live satellite provisioning — implemented in P2-P6)"
+    echo ""
+    echo "  deep: reverse-proxy end-to-end (test-vm-creation/)"
+    if [[ -x "${here}/test-vm-creation/test.sh" ]]; then
+        if "${here}/test-vm-creation/test.sh"; then
+            ok "reverse-proxy deep test passed (or skipped: prerequisites absent)"
+        else
+            no "reverse-proxy deep test failed"
+        fi
+    else
+        no "missing: test-vm-creation/test.sh"
+    fi
 fi
 
 echo ""
