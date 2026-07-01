@@ -44,7 +44,9 @@ in
   # ==========================================================================
   boot.loader.grub = {
     enable = true;
-    device = cfg.bootDevice;   # e.g. "/dev/sda"
+    efiSupport = false;
+    # grub.devices is provided by disko (disk-config.nix) — setting it here too
+    # would duplicate the device in mirroredBoots. cfg.bootDevice documents it.
   };
   networking.hostName = lib.mkDefault (cfg.hostName or "satellite");
   networking.useDHCP = lib.mkDefault true;   # Hetzner provides the public IP via DHCP on eth0
