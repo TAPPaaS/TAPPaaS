@@ -19,10 +19,8 @@
     "type": "hetzner",
     "_type_values": "hetzner | generic (operator supplies a host + SSH; no API automation)",
     "allocation": "portal",
-    "_allocation_values": "portal (Tier A, default) | api (Tier B, opt-in: hcloud API token)",
-    "location": "hel1",
-    "serverType": "cx23",
-    "image": "debian-12"
+    "_allocation_values": "portal (Tier A, default: you create the VPS in the console — location/type/image are YOUR console choices, satellite-manager just needs host.publicIp) | api (Tier B, opt-in via an hcloud token: then add location + serverType below; image is irrelevant — nixos-anywhere reformats any stock image)",
+    "_api_only": { "location": "hel1", "serverType": "cx23" }
   },
 
   "host": {
