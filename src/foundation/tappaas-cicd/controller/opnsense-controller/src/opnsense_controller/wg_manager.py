@@ -8,11 +8,24 @@ The HOME (OPNsense) end is the *initiator*: it dials OUT to the satellite's publ
 IP (peer endpoint + PersistentKeepalive); the satellite only listens. Each end
 generates its OWN keypair; only public keys are exchanged (D19).
 
-IMPORTANT: the exact os-wireguard REST endpoint / parameter shapes are marked
-CONFIRM-ON-LIVE and are verified against a live OPNsense with the os-wireguard
-plugin installed (P2 deep test, hardware-gated). Until then, only `dry_run`
-execution is supported — it records the intended operations (the reviewable
-home-side spec) without touching OPNsense. Live execution raises until confirmed.
+CONFIRMED against a live OPNsense test firewall (2026-07-01). WireGuard is in the
+OPNsense base (no os-wireguard package needed); the REST API is live:
+
+  Home INSTANCE ("server"):   /api/wireguard/server/{addServer,setServer,getServer,searchServer,delServer}
+    fields: name, instance, enabled, pubkey, privkey (empty => OPNsense generates),
+            port (listen; optional as we are the initiator), tunneladdress (home /31),
+            peers (list of client UUIDs), mtu, dns, gateway, disableroutes, ...
+  Satellite PEER ("client"):  /api/wireguard/client/{addClient,setClient,getClient,searchClient,delClient}
+    fields: name, enabled, pubkey (satellite pubkey), endpoint (satellite:wgPort <- home dials here),
+            keepalive (25), tunneladdress (allowed-IPs; satellite /32), servers (list of server UUIDs), psk
+  Enable + apply:  /api/wireguard/general/set  then  /api/wireguard/service/reconfigure
+
+Driven via the controller's `raw` run-module passthrough (module="wireguard").
+
+`dry_run` records the intended operations (the reviewable home-side spec) without
+touching OPNsense. `_live` is the next P2 step (create instance -> read back its
+generated pubkey -> add peer -> link -> reconfigure), validated create/read/delete
+on the test firewall before use.
 """
 
 from __future__ import annotations
@@ -87,16 +100,22 @@ class WireGuardManager:
         return entry
 
     def _live(self, op: str, **params):
-        # CONFIRM-ON-LIVE: bind to the os-wireguard REST API here. The controller's
-        # `raw` run-module passthrough is the mechanism (cf. FirewallManager):
+        # API CONFIRMED (2026-07-01, test OPNsense). Bind via the controller `raw`
+        # passthrough, e.g.:
         #   self._client.run_module("raw", params={"module": "wireguard",
-        #       "controller": <server|client|general>, "command": <add|set|get>,
-        #       "action": <add|set|get>, ...})
-        # The exact controller/command/param names are verified on a live OPNsense
-        # with os-wireguard installed (P2 deep test). Until then, refuse to run.
+        #       "controller": "server", "command": "addServer", "action": "add",
+        #       "data": {"name": ..., "tunneladdress": ..., "peers": [...]}})
+        # ensure_server -> server/addServer|setServer (privkey empty => OPNsense
+        #   generates; read pubkey via server/getServer|searchServer).
+        # ensure_peer   -> client/addClient|setClient (endpoint=<sat>:<wgPort>,
+        #   keepalive=25, tunneladdress=<sat>/32, servers=[<home server uuid>]).
+        # apply         -> general/set (enabled=1) + service/reconfigure.
+        # NOT YET WIRED — the create/read-back/link/reconfigure flow is the next P2
+        # step, validated create->read->delete on the test firewall before use.
         raise NotImplementedError(
-            f"os-wireguard live binding pending hardware confirmation for '{op}' "
-            f"(ADR-010 P2 deep test). Re-run with --dry-run."
+            f"wg-manager live binding not yet wired for '{op}' (OPNsense WireGuard "
+            f"API confirmed 2026-07-01; implementation is the next P2 step). "
+            f"Re-run with --dry-run."
         )
 
     def _do(self, op: str, **params):
