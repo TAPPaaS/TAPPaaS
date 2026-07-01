@@ -56,7 +56,8 @@ On `tappaas-cicd`, copy the example config and edit it:
 
 ```bash
 cp ~/src/foundation/satellite/satellite.json ~/config/satellite-<name>.json
-# edit: provider, host.publicIp, roles, tunnel ports, backup.s3 / backup.volume, update.ref
+# edit: roles, provider, host.publicIp + host.operatorSshKeys, and (backup role) backup.s3.{endpoint,bucket}
+# (everything else — tunnel /31, ports, per-role tuning, backup mechanics, update mode — is a sensible default)
 ```
 
 ## 3. Install
@@ -92,7 +93,7 @@ satellite-manager status <name>
 
 ## 5. Update
 
-Pull-based and automatic — the satellite `autoUpgrade`s from the pinned/signed `update.ref`.
+Pull-based and automatic — the satellite `autoUpgrade`s from a pinned/signed ref (a satellite-manager default, not a config field).
 `tappaas-cicd` never SSHes in to push (ADR-010 §7.3).
 
 ## 6. Decommission

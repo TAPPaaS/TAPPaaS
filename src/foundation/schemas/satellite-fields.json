@@ -1,59 +1,36 @@
 {
-  "_README": "Schema/field reference for a TAPPaaS satellite config (ADR-010), i.e. ~/config/satellite-<name>.json. Descriptive (not strict JSON-Schema), matching the module-fields.json / zones-fields.json style. A satellite is an EXTERNAL host (kind=external-host), NOT a Proxmox cluster:vm — so it does NOT use vmid/zone0/cluster:vm config. Secrets are never stored in this file.",
-  "version": "0.1.0",
+  "_README": "Field reference for a TAPPaaS satellite config (ADR-010): ~/config/satellite-<name>.json. A satellite is an EXTERNAL host (kind=external-host), NOT a Proxmox cluster:vm. PRINCIPLE: this file exposes ONLY operator-facing choices; every derived value (tunnel, ports, per-role tuning, backup mechanics, update mode) is defaulted by satellite-manager (lib/provision.sh) — see 'derived' below. Secrets are never stored here.",
+  "version": "0.2.0",
   "appliesTo": "src/foundation/satellite/satellite.json and ~/config/satellite-<name>.json",
 
   "fields": {
-    "kind": { "type": "string", "required": true, "values": { "external-host": "provisioned on an external host via nixos-anywhere (the only value for satellite)" } },
-    "tier": { "type": "string", "required": true, "values": { "foundation": "satellite is foundation-grade but OPTIONAL (not in the mandatory install chain)" } },
+    "kind": { "type": "string", "required": true, "values": { "external-host": "provisioned on an external host via nixos-anywhere (only value)" } },
+    "tier": { "type": "string", "required": true, "values": { "foundation": "foundation-grade but OPTIONAL (not in the mandatory install chain)" } },
     "name": { "type": "string", "required": true, "description": "satellite instance name (also the NixOS hostname); a site may run several" },
     "roles": { "type": "array<string>", "required": true, "values": { "reverse-proxy": "L4 passthrough of :443/:80 to Caddy-on-OPNsense", "admin-vpn": "blind UDP relay of an admin WireGuard session terminating on OPNsense", "backup": "off-site PBS pull target" }, "note": "any combination; order irrelevant" },
-    "dependsOn": { "type": "array<string>", "description": "service deps (module:service, where the module actually provides that service): network:firewall (OPNsense WG/rules/zones) + network:dns (public record); the backup role adds backup:remote. NOT cluster:vm — the satellite is external-host, not a cluster VM." },
+    "dependsOn": { "type": "array<string>", "required": false, "note": "EMPTY by design — the satellite is operator-driven (satellite-manager), not resolved through install-module.sh. Real prerequisites (network/OPNsense, tappaas-cicd, and backup for the backup role) are checked by satellite-manager." },
 
     "provider.type": { "type": "string", "values": { "hetzner": "Hetzner Cloud (reference)", "generic": "operator supplies a host + SSH; no API automation" } },
     "provider.allocation": { "type": "string", "default": "portal", "values": { "portal": "Tier A (default): operator creates the VPS in the console", "api": "Tier B (opt-in): satellite-manager creates it via the hcloud API token" } },
     "provider.location": { "type": "string", "example": "hel1" },
-    "provider.serverType": { "type": "string", "example": "cx23", "note": "default cx23 (x86 Intel, cheapest current line) is ample for relay/admin; cx33+ for a backup-heavy node; cax11 = ARM alternative" },
+    "provider.serverType": { "type": "string", "example": "cx23", "note": "x86 default cx23; cax11 = ARM alt; bump for a backup-heavy node" },
     "provider.image": { "type": "string", "example": "debian-12", "note": "any stock image; nixos-anywhere kexecs into the NixOS installer" },
 
     "host.publicIp": { "type": "string", "format": "ipv4", "required": true },
     "host.sshUser": { "type": "string", "default": "root" },
     "host.operatorSshKeys": { "type": "array<string>", "required": true, "note": "standing root SSH key(s) baked into the NixOS satellite (operator out-of-band key; NOT a tappaas-cicd key — §7.3)" },
 
-    "tunnel.subnet": { "type": "string", "format": "cidr", "default": "10.255.0.0/31", "note": "dedicated /31; must not collide with 10.x zones, netbird 100.64/10, or provider internal nets" },
-    "tunnel.satelliteAddr": { "type": "string", "format": "ipv4" },
-    "tunnel.homeAddr": { "type": "string", "format": "ipv4" },
-    "tunnel.wgPort": { "type": "integer", "default": 51820, "note": "satellite UDP listener; home dials out" },
-    "tunnel.wgPortFallback": { "type": "string", "default": "443/udp", "note": "for hostile egress (looks like QUIC)" },
-    "tunnel.persistentKeepalive": { "type": "integer", "default": 25, "note": "set on the HOME side to keep the CGNAT pinhole open" },
+    "backup.s3.endpoint": { "type": "string", "example": "https://hel1.your-objectstorage.com", "note": "backup role only; operator's S3 endpoint" },
+    "backup.s3.bucket": { "type": "string", "note": "backup role only; the Object-Lock bucket (must be created with Object Lock enabled)" },
+    "backup.backend": { "type": "string", "default": "s3", "required": false, "note": "advanced override; 'volume' for a dedicated block volume instead of S3" }
+  },
 
-    "reverseProxy.forwarder": { "type": "string", "default": "nginx-stream", "values": { "nginx-stream": "nginx stream module (decided)", "haproxy": "sanctioned alternative" } },
-    "reverseProxy.proxyProtocol": { "type": "string", "default": "v2", "note": "REQUIRED — preserves the real client IP for ADR-005 zone ACLs" },
-    "reverseProxy.httpRedirect": { "type": "boolean", "default": true, "note": ":80 passthrough; Caddy issues the 301" },
-    "reverseProxy.sni": { "type": "array<string>", "default": ["*"], "note": "single home cluster => '*' (plain passthrough); explicit list only for a future multi-site satellite" },
-
-    "adminVpn.adminWgPort": { "type": "integer", "default": 51821, "note": "public UDP relay port; distinct from tunnel.wgPort" },
-    "adminVpn.mtu": { "type": "integer", "default": 1340, "note": "admin-side WG MTU for the double-encapsulated path" },
-    "adminVpn.terminatesOn": { "type": "string", "default": "network", "note": "OPNsense terminates the admin WG; the satellite only relays" },
-    "adminVpn.landingZone": { "type": "string", "default": "admin", "note": "PROVISIONAL (Q3): may reuse 'netbird' or route to 'mgmt'" },
-    "adminVpn.sshPassthrough.enabled": { "type": "boolean", "default": false, "note": "optional minimal sub-mode: TCP passthrough to tappaas-cicd:22" },
-    "adminVpn.sshPassthrough.sshPort": { "type": "integer", "default": 22 },
-
-    "backup.direction": { "type": "string", "default": "pull", "note": "satellite pulls home (DR property — home holds no delete cred)" },
-    "backup.removeVanished": { "type": "boolean", "default": false, "note": "false => a source compromise can't erase the off-site copy" },
-    "backup.sourcePbs": { "type": "string", "example": "backup.mgmt.internal:8007" },
-    "backup.namespace": { "type": "string", "default": "remote/home" },
-    "backup.encryption": { "type": "string", "default": "client-side-at-home", "note": "satellite stores ciphertext only; key never leaves home (DR linchpin)" },
-    "backup.backend": { "type": "string", "default": "s3", "values": { "s3": "S3 object storage (default); immutability via Object Lock; needs PBS 4.2+", "volume": "dedicated block volume + local ZFS; immutability via ZFS snapshots" } },
-    "backup.s3.endpoint": { "type": "string", "example": "https://hel1.your-objectstorage.com" },
-    "backup.s3.bucket": { "type": "string" },
-    "backup.s3.objectLock.enabled": { "type": "boolean", "default": true, "note": "MUST be enabled at bucket creation (cannot be added later)" },
-    "backup.s3.objectLock.mode": { "type": "string", "values": { "compliance": "no one can shorten/remove retention", "governance": "privileged users can override (weaker)" } },
-    "backup.s3.objectLock.retentionDays": { "type": "integer", "default": 30, "note": "trades immutability window vs. PBS prune/GC reclaim" },
-    "backup.volume.sizeGiB": { "type": "integer", "note": "pre-sized to the backup set (volume backend only)" },
-    "backup.volume.datastore": { "type": "string" },
-
-    "update.mode": { "type": "string", "default": "pull", "note": "satellite autoUpgrades; cluster never SSHes in to push (ADR-010 §7.3)" },
-    "update.ref": { "type": "string", "example": "github:TAPPaaS/TAPPaaS/ADR007", "note": "pinned/signed; signing mechanism is implementation Q4" }
+  "derived": {
+    "_note": "NOT operator config — satellite-manager (lib/provision.sh) computes these with sensible defaults and writes them into the generated satellite-settings.nix. Listed here for reference only.",
+    "tunnel": "satelliteAddr/homeAddr = a dedicated /31 (default 10.255.0.0/31, auto-allocated per satellite); wgPort 51820 (config knob only if hostile egress needs 443/udp); PersistentKeepalive 25",
+    "reverseProxy": "forwarder nginx stream; :80 redirect via Caddy; SNI '*' (single-site passthrough); proxyProtocol off until the Caddy side supports it (§2)",
+    "adminVpn": "terminates on OPNsense (always) into the admin overlay zone; adminWgPort 51821; admin-side MTU ~1340",
+    "backup": "pull direction; --remove-vanished false; client-side encryption at home; S3 Object-Lock (mode compliance, retention 30d); namespace remote/<name>",
+    "update": "mode always pull (autoUpgrade from a pinned/signed ref); the cluster never pushes (§7.3)"
   }
 }

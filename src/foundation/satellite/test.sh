@@ -16,29 +16,31 @@ ok() { echo "  ok   - $*"; pass=$((pass+1)); }
 no() { echo "  FAIL - $*"; fail=$((fail+1)); }
 
 # 1. contract files present
-for f in README.md INSTALL.md satellite.json satellite.nix install.sh update.sh test.sh; do
+for f in README.md INSTALL.md satellite.json satellite.nix install.sh update.sh test.sh delete.sh; do
     [[ -f "${here}/${f}" ]] && ok "present: ${f}" || no "missing: ${f}"
 done
 
-# 2. satellite.json is valid JSON
+# 2. satellite.json valid + slim operator-facing shape (derived values are NOT here)
 if command -v jq >/dev/null 2>&1; then
     if jq empty "${here}/satellite.json" 2>/dev/null; then ok "satellite.json is valid JSON"; else no "satellite.json invalid JSON"; fi
-    # 3. required shape: kind=external-host, tier=foundation, roles[], host.publicIp
     [[ "$(jq -r '.kind' "${here}/satellite.json")" == "external-host" ]] && ok "kind=external-host" || no "kind"
     [[ "$(jq -r '.tier' "${here}/satellite.json")" == "foundation" ]] && ok "tier=foundation" || no "tier"
     [[ "$(jq -r '.roles | length' "${here}/satellite.json")" -ge 1 ]] && ok "roles present" || no "roles"
     [[ -n "$(jq -r '.host.publicIp // empty' "${here}/satellite.json")" ]] && ok "host.publicIp present" || no "host.publicIp"
-    # 4. backup role => s3 default backend with object lock
+    [[ "$(jq -r '.host.operatorSshKeys | length' "${here}/satellite.json")" -ge 1 ]] && ok "host.operatorSshKeys present" || no "operatorSshKeys"
+    # slim: derived tunnel/reverseProxy/adminVpn/update must NOT be exposed here
+    [[ "$(jq -r 'has("tunnel") or has("reverseProxy") or has("adminVpn") or has("update")' "${here}/satellite.json")" == "false" ]] \
+        && ok "derived values not exposed in json (sensible defaults)" || no "json exposes derived values"
+    # backup role => operator supplies the S3 target (bucket)
     if jq -e '.roles | index("backup")' "${here}/satellite.json" >/dev/null; then
-        [[ "$(jq -r '.backup.backend' "${here}/satellite.json")" == "s3" ]] && ok "backup backend=s3 (default)" || no "backup backend"
-        [[ "$(jq -r '.backup.s3.objectLock.enabled' "${here}/satellite.json")" == "true" ]] && ok "S3 Object Lock enabled" || no "object lock"
+        [[ -n "$(jq -r '.backup.s3.bucket // empty' "${here}/satellite.json")" ]] && ok "backup.s3.bucket present" || no "backup.s3.bucket"
     fi
 else
     no "jq not available (cannot validate satellite.json shape)"
 fi
 
 # 5. scripts parse
-for s in install.sh update.sh test.sh; do
+for s in install.sh update.sh test.sh delete.sh; do
     bash -n "${here}/${s}" && ok "parses: ${s}" || no "syntax: ${s}"
 done
 

@@ -125,11 +125,10 @@ cmd_install() {
     local ip user wgport ka sat_addr home_addr roles sname cname target
     ip="$(jq -r '.host.publicIp' "${cfg}")"
     user="$(jq -r '.host.sshUser // "root"' "${cfg}")"
-    wgport="$(jq -r '.tunnel.wgPort // 51820' "${cfg}")"
-    ka="$(jq -r '.tunnel.persistentKeepalive // 25' "${cfg}")"
-    sat_addr="$(jq -r '.tunnel.satelliteAddr // "10.255.0.0"' "${cfg}")"
-    home_addr="$(jq -r '.tunnel.homeAddr // "10.255.0.1"' "${cfg}")"
     roles="$(jq -r '.roles // [] | join(",")' "${cfg}")"
+    # tunnel addresses/ports are DERIVED defaults (lib/provision.sh), not json.
+    wgport="${SAT_WGPORT}"; ka="${SAT_KEEPALIVE}"
+    sat_addr="${SAT_SAT_ADDR}"; home_addr="${SAT_HOME_ADDR}"
     sname="tappaas-edge-${name}"; cname="tappaas-${name}"
     target="${user}@${ip}"
 
@@ -199,8 +198,7 @@ cmd_remove() {
         info "            revert DNS, and forget secrets. VPS destruction stays manual (§5.6)."
         return 0
     fi
-    # find + delete the peer then the server by name
-    local B; B="https://${OPNSENSE_HOST:-firewall.mgmt.internal}:${OPNSENSE_PORT:-8443}"
+    # find + delete the peer then the server by name (via lib/opnsense-wg.sh)
     local cli srv
     cli="$(_ow_api /api/wireguard/client/searchClient | jq -r --arg n "tappaas-${name}" '.rows[]? | select(.name==$n) | .uuid' | head -1)"
     srv="$(_ow_api /api/wireguard/server/searchServer | jq -r --arg n "tappaas-edge-${name}" '.rows[]? | select(.name==$n) | .uuid' | head -1)"
