@@ -188,7 +188,7 @@ Maps 1:1 to the packages. All ⬜ until implementation starts.
 | **P2** | WireGuard infra tunnel | TBD | P1 | 🟦 | sat-mgr 9/0; wg dry-run (cicd) | (this commit) | ⏳ |
 | **P3** | Provisioning (nixos-anywhere, lifecycle) | TBD | P1, P2 | 🟦 | nixos-anywhere deploy + declarative tunnel handshake validated live | (this commit) | ⏳ |
 | **P4** | reverse-proxy role (nginx stream + PROXY v2) | TBD | P2, P3 | 🟦 | passthrough validated live (external → satellite → tunnel → Caddy, :80 308) | (this commit) | ⏳ |
-| **P5** | admin-vpn role (WG via OPNsense, blind relay) | TBD | P2, P3 | 🟦 | blind UDP relay handshake validated live (admin→satellite:51821→OPNsense admin-WG) | (this commit) | ⏳ |
+| **P5** | admin-vpn role (WG via OPNsense, blind relay) | TBD | P2, P3 | 🟦 | blind UDP relay handshake validated live; **Q3 termination complete (2026-07-01)**: OPNsense `tappaas-admin` WG server + `admin→mgmt` firewall rule + `satellite-manager admin` tooling; new admin-peer handshake validated live; runbook `tappaas-cicd/ADMIN-VPN.md` | (this commit) | ⏳ |
 | **P6** | backup role (PBS pull + encryption + S3/Object-Lock) | TBD | P2, P3, **ADR-007 S9** (backup-manager/controller) | ⬜ | — | — | — |
 | **P7** | Hardening & docs (isolation, README/INSTALL + install-flow ref, decommission) | TBD | P4, P5, P6 | ⬜ | — | — | — |
 
@@ -204,7 +204,7 @@ Mechanical leftovers from the ADR. Status: ✅ resolved · ⬜ open.
 |---|----------|-----------|----------------|
 | Q1 | `wgPort` / `adminWgPort` / `sshPort` defaults & `443/udp` fallback | P2 / P5 | ✅ **D18** — `51820`/`51821`/`22`, all configurable; ship `443/udp` fallback config. |
 | Q2 | Admin-WG **MTU** for the double-encapsulated path | P5 | ✅ **D18** — `1340`, tunable empirically. |
-| Q3 | `admin` overlay zone — **new vs. reuse `netbird`** | P1 / P5 | ⬜ **Open (deliberately).** Possibly route admins straight into `mgmt`; or NetBird may be **removed** entirely if `admin-vpn` supersedes it. Revisit once `admin-vpn` is real. |
+| Q3 | `admin` overlay zone — **new vs. reuse `netbird`** | P1 / P5 | ✅ **Resolved 2026-07-01.** Dedicated `admin` overlay kept (`10.255.1.0/24`), separate from `netbird`. Admin WG **terminates on OPNsense** (`tappaas-admin` server, port 51821); `access-to: [mgmt]` realised by one explicit least-privilege `wireguard`-interface pass rule (`10.255.1.0/24 → 10.0.0.0/24`), created idempotently by `satellite-manager admin setup` (`lib/admin-vpn.sh`). Validated live: server + peer handshake + rule. NetBird stays independent (many-peer mesh). Peer mgmt via `satellite-manager admin add-peer`; runbook `tappaas-cicd/ADMIN-VPN.md`. |
 | Q4 | **Signing mechanism** for pull-based `autoUpgrade` config ref (key off-cluster) | P3 | ⬜ Open — core to D13 rule 3. |
 | Q5 | Backup **storage backend** & sizing | P6 | ✅ **D16** — S3 object storage default (Hetzner Object Storage, Object Lock at bucket creation, PBS 4.2+); dedicated volume the alternative. Relay/admin node stays tiny (`cax11`-class). Open sub-tunable: Object-Lock retention window vs. PBS prune/GC. |
 | Q6 | Exact `access-to` / `pinhole-allowed-from` entries for `edge`/`admin` | P1 | ⬜ Open — to be determined at implementation, per ADR §4.3 role table. |

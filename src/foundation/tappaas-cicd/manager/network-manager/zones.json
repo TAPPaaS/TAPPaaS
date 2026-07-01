@@ -99,10 +99,10 @@
     "vlantag": 0,
     "ip": "10.255.1.0/24",
     "bridge": "lan",
-    "access-to": [],
+    "access-to": ["mgmt"],
     "pinhole-allowed-from": [],
-    "_comment": "PROVISIONAL (ADR-010 implementation Q3 — OPEN). Intended landing zone for admin-vpn WireGuard peers that terminate on OPNsense (relayed blind by the satellite), granting the operator the management plane. OPEN QUESTION: this may instead REUSE the existing 'netbird' overlay, or route admins straight into 'mgmt', or NetBird may be removed entirely if admin-vpn supersedes it. Finalised in package P5; until then access-to is empty and this zone is documentation of intent, not active config.",
-    "description": "ADR-010 admin-vpn landing (PROVISIONAL — see Q3)"
+    "_comment": "ADR-010 admin-vpn landing zone (Q3 RESOLVED, validated live 2026-07-01). The operator's admin WireGuard session TERMINATES on OPNsense (a dedicated 'tappaas-admin' WG server on port 51821, tunneladdress 10.255.1.1/24); the satellite only blind-relays the UDP (or the admin device connects direct to the cluster WAN — the OPNsense side is identical). access-to: ['mgmt'] is realised NOT by zone-manager (which skips Overlay/vlantag=0 zones) but by a single explicit least-privilege firewall pass rule on the 'wireguard' interface: 10.255.1.0/24 -> 10.0.0.0/24, created idempotently by 'satellite-manager admin setup' (lib/admin-vpn.sh). NetBird (the 'netbird' overlay) remains independent for many-peer mesh; admin-vpn covers the single-operator case with plain WireGuard and no control plane. Peers are managed with 'satellite-manager admin add-peer'. Full runbook: tappaas-cicd/ADMIN-VPN.md.",
+    "description": "ADR-010 admin-vpn landing (mgmt tunnel; see ADMIN-VPN.md)"
   },
   "srv": {
     "type": "Service",

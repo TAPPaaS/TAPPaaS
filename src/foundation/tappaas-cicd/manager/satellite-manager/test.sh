@@ -81,6 +81,28 @@ else
     no "sat_write_config shape"
 fi
 
+# 11. admin-vpn lib parses (ADR-010 §6 / Q3)
+if bash -n "${here}/lib/admin-vpn.sh"; then ok "lib/admin-vpn.sh parses"; else no "admin-vpn.sh syntax"; fi
+
+# 12. `admin --help` prints usage, exits 0, no side effects
+rc=0
+out="$(TAPPAAS_CONFIG_DIR="${tmp}" "${mgr}" admin --help 2>&1)" || rc=$?
+if [[ "${rc}" -eq 0 ]] && grep -q "add-peer" <<< "${out}"; then ok "admin --help prints usage"; else no "admin --help rc=${rc}"; fi
+
+# 13. av_client_config renders a valid stanza (server pubkey + API mocked → offline)
+out="$( . "${here}/lib/admin-vpn.sh" >/dev/null 2>&1
+        av_server_pubkey() { echo "FAKEKEY="; }
+        _ow_api() { :; }
+        av_client_config "10.255.1.7/32" "203.0.113.5:51821" "PRIVKEY" )"
+if grep -q 'Endpoint            = 203.0.113.5:51821' <<< "${out}" \
+   && grep -q 'PublicKey           = FAKEKEY=' <<< "${out}" \
+   && grep -q 'AllowedIPs          = 10.0.0.0/24' <<< "${out}" \
+   && grep -q 'MTU        = 1340' <<< "${out}"; then
+    ok "av_client_config renders a valid client stanza"
+else
+    no "av_client_config format"
+fi
+
 echo ""
 echo "satellite-manager fast tests: ${pass} passed, ${fail} failed"
 [[ "${fail}" -eq 0 ]]
