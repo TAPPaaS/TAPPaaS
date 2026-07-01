@@ -155,8 +155,15 @@ ${AUTHENTIK_MANAGER} "${bind_args[@]}" || die "app-bind-groups failed for ${SLUG
 # eagerly initialise SSO on startup. Fail here rather than produce a broken
 # deployment (issue #369).
 info "  VM: verifying OIDC discovery URI reachable from ${UPSTREAM}"
-if ! ssh -o StrictHostKeyChecking=accept-new -o ConnectTimeout=10 "tappaas@${UPSTREAM}" \
-    "curl --silent --max-time 5 --output /dev/null --fail '${DISCOVERY_URI}' 2>/dev/null"; then
+_oidc_ok=0
+for _attempt in 1 2 3; do
+    if ssh -o StrictHostKeyChecking=accept-new -o ConnectTimeout=10 "tappaas@${UPSTREAM}" \
+        "curl --silent --max-time 10 --output /dev/null --fail '${DISCOVERY_URI}' 2>/dev/null"; then
+        _oidc_ok=1; break
+    fi
+    [[ "${_attempt}" -lt 3 ]] && { warn "  OIDC check attempt ${_attempt}/3 failed — waiting 15 s (network may still be settling after nixos activation)"; sleep 15; }
+done
+if [[ "${_oidc_ok}" -eq 0 ]]; then
     die "OIDC discovery URI unreachable from ${UPSTREAM}: ${DISCOVERY_URI} — add a firewall rule allowing ${VMNAME} to reach Authentik, then re-run"
 fi
 

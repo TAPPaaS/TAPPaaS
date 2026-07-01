@@ -332,6 +332,10 @@ main() {
 
     local depends_on
     depends_on=$(read_module_config "${module}" | jq -r '.dependsOn // [] | .[]' 2>/dev/null)
+    # Variant of the consuming module — used to resolve same-variant providers
+    # (e.g. "nextcloud:fileservice" → "nextcloud-test" when variant=="test").
+    local module_variant
+    module_variant=$(read_module_config "${module}" | jq -r '.variant // ""' 2>/dev/null) || module_variant=""
 
     if [[ -z "${depends_on}" ]]; then
         info "  No dependency services to call"
@@ -345,6 +349,9 @@ main() {
             local provider_module="${dep%%:*}"
             local service_name="${dep##*:}"
             local provider_dir
+
+            # Prefer the same-variant provider when it exists (issue #344).
+            provider_module="$(resolve_provider_module "${provider_module}" "${module_variant}")"
 
             if ! provider_dir=$(get_module_dir "${provider_module}" 2>/dev/null); then
                 fatal_with_rollback "${module}" "${snapshot_created}" \

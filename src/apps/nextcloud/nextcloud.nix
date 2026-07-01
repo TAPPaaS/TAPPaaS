@@ -79,7 +79,14 @@ in
   # NETWORKING
   # ============================================================================
 
-  networking.hostName = lib.mkDefault "nextcloud";
+  # Read vmname from companion JSON (deployed by update-os.sh to /etc/nixos/nextcloud.json)
+  # so DHCP registers the actual deployed name (e.g. "nextcloud-test") instead of the
+  # hardcoded base name. Falls back to "nextcloud" when the file is absent (fresh install).
+  networking.hostName = let
+    cfg = if builtins.pathExists ./nextcloud.json
+          then builtins.fromJSON (builtins.readFile ./nextcloud.json)
+          else {};
+  in lib.mkDefault (cfg.vmname or "nextcloud");
   networking.networkmanager.enable = true;
   networking.networkmanager.ensureProfiles.profiles.tappaas-ethernet = {
     connection = { id = "tappaas-ethernet"; type = "ethernet"; autoconnect = "true"; autoconnect-priority = "100"; };

@@ -399,12 +399,17 @@ update_nixos() {
         info "Rebooting VM to apply configuration..."
         ssh "root@${node}.${MGMT}.internal" "qm reboot ${vmid}"
 
-        info "Waiting 60 seconds for VM to restart..."
-        sleep 60
+        # Wait for sshd to come back (replaces fixed sleep 60 — issue #376).
+        update_ssh_known_hosts "${vm_ip}"
+        wait_for_ssh "${vm_ip}" 120 || warn "sshd unreachable after 120 s — subsequent service updaters may fail"
     else
         warn "automaticReboot=false — skipping reboot of VM ${vmid} (${vmname})."
         warn "  The new NixOS generation is active, but a reboot is needed to apply kernel/bootloader changes."
         warn "  Reboot manually under supervision: ssh root@${node}.${MGMT}.internal 'qm reboot ${vmid}'"
+        # sshd and networking restart during nixos switch activation even without a reboot.
+        # Wait for SSH to stabilise before returning so subsequent service updaters can reach the VM.
+        update_ssh_known_hosts "${vm_ip}"
+        wait_for_ssh "${vm_ip}" 90 || warn "sshd unreachable after 90 s — subsequent service updaters may fail"
     fi
 }
 
@@ -456,23 +461,25 @@ fix_dhcp_hostname() {
         info "  Ethernet device: ${eth_device}"
 
         # Resolve nmcli's absolute path on the target (NixOS:
-        # /run/current-system/sw/bin, Debian: /usr/bin) so the detached
-        # systemd-run unit below — which runs with a minimal PATH — can find it.
+        # /run/current-system/sw/bin, Debian: /usr/bin).
         local nmcli_path
         nmcli_path=$(ssh "tappaas@${vm_ip}" "command -v nmcli" 2>/dev/null) || nmcli_path=nmcli
 
-        # 1. Advertise the hostname. NM sends the *static* hostname by default;
-        #    setting ipv4.dhcp-hostname explicitly guarantees option-12 is sent
-        #    even when the static hostname is empty (e.g. NixOS hostName="").
-        ssh "tappaas@${vm_ip}" "sudo ${nmcli_path} connection modify '${eth_connection}' ipv4.dhcp-hostname \"\$(hostname)\"" || true
+        # 1. Set the advertised hostname to vmname (not $(hostname): NM may have a
+        #    stale transient hostname from a prior DHCP cycle that masks the static
+        #    NixOS hostname — using vmname directly is always authoritative).
+        ssh "tappaas@${vm_ip}" "sudo ${nmcli_path} connection modify '${eth_connection}' ipv4.dhcp-hostname '${vmname}'" || true
 
-        # 2. Force a FULL DHCP re-acquire. A renew / 'nmcli device reapply' does
-        #    NOT refresh an existing lease's hostname on NM 1.52 (verified on the
-        #    live cluster) — only a disconnect/connect does. Run it DETACHED via
-        #    systemd-run: the disconnect drops the link, which would otherwise
-        #    kill this SSH session before 'connect' runs and strand the VM.
-        ssh "tappaas@${vm_ip}" "sudo systemd-run --collect --quiet /bin/sh -c '${nmcli_path} device disconnect ${eth_device}; sleep 2; ${nmcli_path} device connect ${eth_device}'" || true
-        info "  DHCP hostname updated to: ${vmname} (re-acquire scheduled)"
+        # 2. Soft DHCP re-acquire via 'nmcli device reapply'. Unlike disconnect/
+        #    connect, reapply does NOT drop the link — the SSH session survives,
+        #    DNS stays live, and OPNsense Unbound updates within a few seconds.
+        #    (The older disconnect/connect approach caused a DNS blackout of 30-90 s
+        #    that blocked subsequent identity:identity service updates — issue #376.)
+        if ssh "tappaas@${vm_ip}" "sudo ${nmcli_path} device reapply ${eth_device}" 2>/dev/null; then
+            info "  DHCP hostname re-applied to: ${vmname} (reapply succeeded)"
+        else
+            warn "  nmcli device reapply failed — DHCP hostname may not be registered until next lease renewal"
+        fi
         return 0
     fi
 
@@ -564,6 +571,28 @@ main() {
 
     # Fix DHCP hostname registration
     fix_dhcp_hostname "${vmname}" "${vm_ip}"
+
+    # fix_dhcp_hostname schedules a NIC disconnect/reconnect (detached). Wait until
+    # the module's FQDN resolves in DNS (DHCP re-registration + Unbound update)
+    # before returning — subsequent service updaters (e.g. identity:identity) SSH
+    # by hostname and fail if DNS is still in the blackout window (issue #376).
+    if [[ "${os_type}" == "nixos" ]]; then
+        local _zone0
+        _zone0=$(jq -r '.zone0 // empty' "${CONFIG_DIR}/${vmname}.json" 2>/dev/null || true)
+        if [[ -n "${_zone0}" ]]; then
+            local _fqdn="${vmname}.${_zone0}.internal"
+            info "Waiting for DNS ${_fqdn} to register after DHCP reconnect..."
+            local _dns_ok=0 _dns_i
+            for _dns_i in {1..30}; do
+                if getent hosts "${_fqdn}" &>/dev/null; then
+                    info "  DNS ${_fqdn} confirmed (t=$(( (_dns_i - 1) * 3 )) s)"
+                    _dns_ok=1; break
+                fi
+                sleep 3
+            done
+            [[ "${_dns_ok}" -eq 1 ]] || warn "  DNS ${_fqdn} did not resolve after 90 s — subsequent service updaters may fail"
+        fi
+    fi
 
     echo ""
     info "${GN}=== OS update completed successfully ===${CL}"

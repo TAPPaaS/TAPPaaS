@@ -207,7 +207,7 @@ trap 'rm -f "$LOG_FILE"' EXIT
 if ! acme-manager --firewall "$FIREWALL" --no-ssl-verify setup \
         --domain "$DOMAIN" --email "$EMAIL" \
         --provider "$PROVIDER" \
-        --dns-sleep "$DNS_SLEEP" \
+        --timeout "$(( DNS_SLEEP + 180 ))" \
         "${ACCOUNT_ARG[@]}" \
         "${PROV_ARGS[@]}" \
         "${STAGING_ARG[@]}" 2>&1 | tee "$LOG_FILE"; then
