@@ -114,9 +114,14 @@ class WireGuardManager:
         #       read back: GET /api/wireguard/server/getServer/<uuid> -> .server.pubkey
         #   ensure_peer   -> POST /api/wireguard/client/addClient  (body:
         #       {"client":{"enabled":"1","name":..,"pubkey":SAT_PUB,
-        #                  "endpoint":"<sat-ip>:<wgPort>",   # host:port in ONE field
+        #                  "serveraddress":"<sat-ip>","serverport":"<wgPort>",  # <-- drives the WG Endpoint
         #                  "keepalive":"25","tunneladdress":"10.255.0.0/32",
         #                  "servers":"<server-uuid>"}})
+        #       NB: the `endpoint` field validates (host:port) but is INERT — it does
+        #       NOT populate the WireGuard Endpoint. Use serveraddress + serverport
+        #       (verified live 2026-07-01: with serveraddress/serverport the handshake
+        #       comes up; with `endpoint` alone the peer stays endpoint=(none)/offline).
+        #   also set the server's `peers` to include the client uuid (setServer).
         #   remove -> POST /api/wireguard/{client/delClient,server/delServer}/<uuid>
         #   apply  -> POST /api/wireguard/general/set (enabled=1) + service/reconfigure
         #
