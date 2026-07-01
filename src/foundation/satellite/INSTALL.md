@@ -25,10 +25,14 @@ Design reference: [ADR-010](../../../docs/ADR/ADR-010-vps-satellite-reverse-prox
 
 ### Tier A — portal (default)
 
-1. In the Hetzner Cloud console create a server: image **Debian 12**, type **`cx22`** (x86 Intel,
-   2 vCPU/4 GB; bump to `cx32` for a backup-heavy node — `cax11` is the cheaper ARM alternative),
-   and **attach your SSH public key**.
-2. Note its **public IP**.
+1. In the Hetzner Cloud console create a server: image **Debian 12**, type **`cx23`** (x86 Intel,
+   cheapest current line; bump to cx33+ for a backup-heavy node — `cax11` is the ARM alternative).
+2. **SSH key — attach your OPERATOR key (your workstation), NOT a `tappaas-cicd` key.** The key you
+   attach becomes the satellite's standing root. Per ADR-010 §7.3 the satellite must NOT be rootable
+   from `tappaas-cicd` (a compromised mothership must never own the off-site vault). So the standing
+   key is your out-of-band operator key; `tappaas-cicd` gets only an **ephemeral** provisioning
+   credential during install, which is revoked afterwards.
+3. Note its **public IP**.
 
 > Tier B (opt-in, fully automated): instead of the portal, store a Hetzner **API token** as a TAPPaaS
 > secret and let `satellite-manager` create the server via the `hcloud` API. The token can create

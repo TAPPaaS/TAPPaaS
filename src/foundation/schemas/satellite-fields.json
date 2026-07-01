@@ -13,7 +13,7 @@
     "provider.type": { "type": "string", "values": { "hetzner": "Hetzner Cloud (reference)", "generic": "operator supplies a host + SSH; no API automation" } },
     "provider.allocation": { "type": "string", "default": "portal", "values": { "portal": "Tier A (default): operator creates the VPS in the console", "api": "Tier B (opt-in): satellite-manager creates it via the hcloud API token" } },
     "provider.location": { "type": "string", "example": "hel1" },
-    "provider.serverType": { "type": "string", "example": "cx22", "note": "default cx22 (x86 Intel, 2 vCPU/4 GB) is ample for relay/admin; cx32 for a backup-heavy node; cax11 = ARM alternative" },
+    "provider.serverType": { "type": "string", "example": "cx23", "note": "default cx23 (x86 Intel, cheapest current line) is ample for relay/admin; cx33+ for a backup-heavy node; cax11 = ARM alternative" },
     "provider.image": { "type": "string", "example": "debian-12", "note": "any stock image; nixos-anywhere kexecs into the NixOS installer" },
 
     "host.publicIp": { "type": "string", "format": "ipv4", "required": true },
