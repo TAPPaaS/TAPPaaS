@@ -10,8 +10,10 @@ mkdir -p "${bin}"
 # The TS `health-manager` is the new read-only front door; the inspect/check
 # logic scripts stay linked below (the verbs shell out to update-os.sh etc.).
 echo "  building health-manager (tsc via nix-build)..."
-( cd "${here}" && nix-build -A default default.nix --no-out-link >/tmp/health-manager-build.path )
-out="$(cat /tmp/health-manager-build.path)"
+gcroots="${TAPPAAS_GCROOTS:-${HOME}/.tappaas-gcroots}"; mkdir -p "${gcroots}"
+# --out-link registers a nix GC root so nix-collect-garbage cannot delete the
+# build output out from under the ~/bin symlink (was --no-out-link => dangling).
+out="$( cd "${here}" && nix-build -A default default.nix --out-link "${gcroots}/health-manager" )"
 [[ -x "${out}/bin/health-manager" ]] || { echo "  ERROR: build did not produce health-manager" >&2; exit 1; }
 ln -sfn "${out}/bin/health-manager" "${bin}/health-manager"
 echo "  linked ${bin}/health-manager -> ${out}/bin/health-manager"

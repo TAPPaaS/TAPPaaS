@@ -18,8 +18,10 @@ mkdir -p "${bin}"
 # `backup-manager` name now — the legacy bash entry stays as backup-manager.sh).
 # The TS reconcile resolves the cascade and shells to backup-controller for PBS.
 echo "  building backup-manager (tsc via nix-build)..."
-( cd "${here}" && nix-build -A default default.nix --no-out-link >/tmp/backup-manager-build.path )
-out="$(cat /tmp/backup-manager-build.path)"
+gcroots="${TAPPAAS_GCROOTS:-${HOME}/.tappaas-gcroots}"; mkdir -p "${gcroots}"
+# --out-link registers a nix GC root so nix-collect-garbage cannot delete the
+# build output out from under the ~/bin symlink (was --no-out-link => dangling).
+out="$( cd "${here}" && nix-build -A default default.nix --out-link "${gcroots}/backup-manager" )"
 [[ -x "${out}/bin/backup-manager" ]] || { echo "  ERROR: build did not produce backup-manager" >&2; exit 1; }
 ln -sfn "${out}/bin/backup-manager" "${bin}/backup-manager"
 echo "  linked ${bin}/backup-manager -> ${out}/bin/backup-manager"

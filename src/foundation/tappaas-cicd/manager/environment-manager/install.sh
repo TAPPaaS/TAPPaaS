@@ -8,8 +8,10 @@ mkdir -p "${bin}"
 
 # ── build + link the TypeScript CLI via Nix (ADR-007 #3) ──────────────
 echo "  building environment-manager (tsc via nix-build)..."
-( cd "${here}" && nix-build -A default default.nix --no-out-link >/tmp/environment-manager-build.path )
-out="$(cat /tmp/environment-manager-build.path)"
+gcroots="${TAPPAAS_GCROOTS:-${HOME}/.tappaas-gcroots}"; mkdir -p "${gcroots}"
+# --out-link registers a nix GC root so nix-collect-garbage cannot delete the
+# build output out from under the ~/bin symlink (was --no-out-link => dangling).
+out="$( cd "${here}" && nix-build -A default default.nix --out-link "${gcroots}/environment-manager" )"
 [[ -x "${out}/bin/environment-manager" ]] || { echo "  ERROR: build did not produce environment-manager" >&2; exit 1; }
 ln -sfn "${out}/bin/environment-manager" "${bin}/environment-manager"
 echo "  linked ${bin}/environment-manager -> ${out}/bin/environment-manager"

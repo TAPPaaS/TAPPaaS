@@ -8,12 +8,11 @@ set -euo pipefail
 # so code changes are picked up, then re-links its bin entry point. A no-op when
 # inputs are unchanged. Bash components only re-link.
 #
-#   # Python / TypeScript: rebuild, then re-link the bin entry point
-#   #   Python:
-#   #     nix build .#my-manager        # or: pip install -e ./src
-#   #   TypeScript:
-#   #     npm ci && npm run build        # or: pnpm install && pnpm build
-#   ln -sf "$(pwd)/result/bin/my-manager" /home/tappaas/bin/my-manager
+#   # TypeScript / Python (nix-built): rebuild WITH a GC root, then re-link.
+#   # (Most managers just `exec install.sh` here — the fix lives there once.)
+#   gcroots="${TAPPAAS_GCROOTS:-${HOME}/.tappaas-gcroots}"; mkdir -p "${gcroots}"
+#   out="$( cd "${here}" && nix-build -A default default.nix --out-link "${gcroots}/my-manager" )"
+#   ln -sfn "${out}/bin/my-manager" "/home/tappaas/bin/my-manager"
 #
 #   # Bash: nothing to rebuild — just re-link:
 #   ln -sf "$(pwd)/my-manager.sh" /home/tappaas/bin/my-manager

@@ -20,8 +20,10 @@ mkdir -p "${bin}"
 
 # ── build the TypeScript CLI via Nix ──────────────────────────────────
 echo "  building people-manager (tsc via nix-build)..."
-( cd "${here}" && nix-build -A default default.nix --no-out-link >/tmp/people-manager-build.path )
-out="$(cat /tmp/people-manager-build.path)"
+gcroots="${TAPPAAS_GCROOTS:-${HOME}/.tappaas-gcroots}"; mkdir -p "${gcroots}"
+# --out-link registers a nix GC root so nix-collect-garbage cannot delete the
+# build output out from under the ~/bin symlink (was --no-out-link => dangling).
+out="$( cd "${here}" && nix-build -A default default.nix --out-link "${gcroots}/people-manager" )"
 [[ -x "${out}/bin/people-manager" ]] || { echo "  ERROR: build did not produce people-manager" >&2; exit 1; }
 ln -sfn "${out}/bin/people-manager" "${bin}/people-manager"
 echo "  linked ${bin}/people-manager -> ${out}/bin/people-manager"
