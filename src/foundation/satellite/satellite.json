@@ -29,7 +29,10 @@
   "host": {
     "publicIp": "203.0.113.10",
     "sshUser": "root",
-    "_ssh_note": "provisioning credential is ephemeral and revoked post-install; the only standing key is the operator's out-of-band key (NOT a tappaas-cicd key) — ADR-010 §7.3"
+    "operatorSshKeys": [
+      "ssh-ed25519 AAAA... operator@workstation"
+    ],
+    "_ssh_note": "operatorSshKeys = the standing root key(s) baked into the NixOS satellite (operator out-of-band key, NOT a tappaas-cicd key — ADR-010 §7.3). The provisioning credential is ephemeral and gone after the reformat."
   },
 
   "tunnel": {

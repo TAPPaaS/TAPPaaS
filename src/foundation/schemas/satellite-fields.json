@@ -18,6 +18,7 @@
 
     "host.publicIp": { "type": "string", "format": "ipv4", "required": true },
     "host.sshUser": { "type": "string", "default": "root" },
+    "host.operatorSshKeys": { "type": "array<string>", "required": true, "note": "standing root SSH key(s) baked into the NixOS satellite (operator out-of-band key; NOT a tappaas-cicd key — §7.3)" },
 
     "tunnel.subnet": { "type": "string", "format": "cidr", "default": "10.255.0.0/31", "note": "dedicated /31; must not collide with 10.x zones, netbird 100.64/10, or provider internal nets" },
     "tunnel.satelliteAddr": { "type": "string", "format": "ipv4" },

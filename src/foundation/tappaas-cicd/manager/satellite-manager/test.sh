@@ -30,11 +30,15 @@ if TAPPAAS_CONFIG_DIR="${tmp}" "${mgr}" validate b >/dev/null 2>&1; then no "val
 echo '{ "kind":"external-host","tier":"foundation","name":"c","roles":["backup"] }' > "${tmp}/satellite-c.json"
 if TAPPAAS_CONFIG_DIR="${tmp}" "${mgr}" validate c >/dev/null 2>&1; then no "validate should reject missing publicIp"; else ok "validate rejects missing publicIp"; fi
 
-# 6. install/remove still report not-implemented (exit 2) — P3.
-#    (|| rc=$? keeps the failing exit code without tripping `set -e`.)
+# 6. install --dry-run prints the provisioning plan (exit 0, no side effects).
+#    (|| rc=$? keeps the exit code without tripping `set -e`.)
 rc=0
-TAPPAAS_CONFIG_DIR="${tmp}" "${mgr}" install t >/dev/null 2>&1 || rc=$?
-if [[ "${rc}" -eq 2 ]]; then ok "install reports not-implemented (exit 2)"; else no "install exit code ${rc}"; fi
+out="$(TAPPAAS_CONFIG_DIR="${tmp}" "${mgr}" install t --dry-run 2>&1)" || rc=$?
+if [[ "${rc}" -eq 0 ]] && grep -q "nixos-anywhere" <<< "${out}"; then ok "install --dry-run prints plan"; else no "install --dry-run rc=${rc}"; fi
+# update still reports not-implemented (exit 2) — P3 autoUpgrade.
+rc=0
+TAPPAAS_CONFIG_DIR="${tmp}" "${mgr}" update t >/dev/null 2>&1 || rc=$?
+if [[ "${rc}" -eq 2 ]]; then ok "update reports not-implemented (exit 2)"; else no "update exit code ${rc}"; fi
 
 # --- P2 tunnel: mock the satellite over SSH ($TAPPAAS_SSH_RUNNER) ---
 cat > "${tmp}/mockssh" << 'SH'
