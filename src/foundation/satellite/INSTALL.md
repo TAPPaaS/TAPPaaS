@@ -25,8 +25,9 @@ Design reference: [ADR-010](../../../docs/ADR/ADR-010-vps-satellite-reverse-prox
 
 ### Tier A — portal (default)
 
-1. In the Hetzner Cloud console create a server: image **Debian 12**, type **`cax11`** (ARM, cheap;
-   bump it only if you need the backup role to do heavy verify), and **attach your SSH public key**.
+1. In the Hetzner Cloud console create a server: image **Debian 12**, type **`cx22`** (x86 Intel,
+   2 vCPU/4 GB; bump to `cx32` for a backup-heavy node — `cax11` is the cheaper ARM alternative),
+   and **attach your SSH public key**.
 2. Note its **public IP**.
 
 > Tier B (opt-in, fully automated): instead of the portal, store a Hetzner **API token** as a TAPPaaS

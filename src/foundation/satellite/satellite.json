@@ -21,7 +21,8 @@
     "allocation": "portal",
     "_allocation_values": "portal (Tier A, default: operator creates the VPS in the console) | api (Tier B, opt-in: satellite-manager creates it via the hcloud API token)",
     "location": "hel1",
-    "serverType": "cax11",
+    "serverType": "cx22",
+    "_serverType_note": "x86 Intel shared vCPU (2 vCPU/4 GB/40 GB). Bump to cx32 for a backup-heavy node. (cax11 = ARM alternative.)",
     "image": "debian-12"
   },
 
