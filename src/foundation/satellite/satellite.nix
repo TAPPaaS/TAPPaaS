@@ -113,9 +113,24 @@ in
   # ==========================================================================
   services.nginx = lib.mkIf (hasRole "reverse-proxy") {
     enable = true;
-    # TODO[P4]: streamConfig — listen 443/80; proxy_pass ${cfg.homeCaddyAddr}:{443,80};
-    #           proxy_protocol on;  (Caddy at home must trust PROXY v2 — preserves client IP
-    #           for ADR-005 zone ACLs). ssl_preread only needed for a future multi-site satellite.
+    # L4 TCP passthrough to Caddy-on-OPNsense over the tunnel — nginx NEVER
+    # terminates TLS (ADR-010 §2/§5.8). Single home cluster => plain passthrough
+    # of ALL :443 to Caddy, which does the SNI/host routing. `proxy_protocol on`
+    # preserves the real client IP for ADR-005 zone ACLs; it REQUIRES Caddy to
+    # expect PROXY protocol on the tunnel listener, so it is gated on the
+    # `proxyProtocol` setting (enable once the Caddy side is wired).
+    streamConfig =
+      let pp = lib.optionalString (cfg.proxyProtocol or false) "\n      proxy_protocol on;";
+      in ''
+        server {
+          listen 443;
+          proxy_pass ${cfg.homeCaddyAddr}:443;${pp}
+        }
+        server {
+          listen 80;
+          proxy_pass ${cfg.homeCaddyAddr}:80;${pp}
+        }
+      '';
   };
 
   # ==========================================================================

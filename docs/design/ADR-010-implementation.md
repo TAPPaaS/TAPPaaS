@@ -187,7 +187,7 @@ Maps 1:1 to the packages. All ⬜ until implementation starts.
 | **P1** | Foundation & schema (`satellite/` module, edge+admin zones, fw rules) | TBD | — | 🟦 | fast: mgr 6/0, module 17/0 | 58a1f35.. | ⏳ |
 | **P2** | WireGuard infra tunnel | TBD | P1 | 🟦 | sat-mgr 9/0; wg dry-run (cicd) | (this commit) | ⏳ |
 | **P3** | Provisioning (nixos-anywhere, lifecycle) | TBD | P1, P2 | 🟦 | nixos-anywhere deploy + declarative tunnel handshake validated live | (this commit) | ⏳ |
-| **P4** | reverse-proxy role (nginx stream + PROXY v2) | TBD | P2, P3 | ⬜ | — | — | — |
+| **P4** | reverse-proxy role (nginx stream + PROXY v2) | TBD | P2, P3 | 🟦 | passthrough validated live (external → satellite → tunnel → Caddy, :80 308) | (this commit) | ⏳ |
 | **P5** | admin-vpn role (WG via OPNsense, blind relay) | TBD | P2, P3 | ⬜ | — | — | — |
 | **P6** | backup role (PBS pull + encryption + S3/Object-Lock) | TBD | P2, P3, **ADR-007 S9** (backup-manager/controller) | ⬜ | — | — | — |
 | **P7** | Hardening & docs (isolation, README/INSTALL + install-flow ref, decommission) | TBD | P4, P5, P6 | ⬜ | — | — | — |
@@ -224,6 +224,13 @@ Append-only narrative per stage (newest first). Template:
 - Commit/Push: …
 - Follow-ups: …
 ```
+
+### P4 — reverse-proxy role — 🟦 passthrough validated live — 2026-07-01
+- Implemented the nginx `stream` L4 passthrough in `satellite.nix` (`:443`/`:80` → Caddy-on-OPNsense over the tunnel; `proxy_protocol` gated on a `proxyProtocol` setting, off until the Caddy side is wired).
+- Deployed to the live NixOS satellite with **`nixos-rebuild switch`** (non-destructive; `roles=["reverse-proxy"]`) — nginx up on `0.0.0.0:{443,80}`, tunnel stayed up.
+- Added the role-gated **`edge → Caddy` firewall rule** on OPNsense (the `wireguard` interface group; source `10.255.0.0/31` → `10.255.0.1:{443,80}`) — the P2 §4.3 rule, Q6. Before it, satellite→Caddy was blocked; after, open.
+- **End-to-end passthrough proven:** external `curl` → satellite public IP `:80` → tunnel → Caddy returned `308 → https://…`. The whole path works.
+- **`:443` correctly ACL-gated:** Caddy sends a TLS `internal error` alert for the internal-only test services (`network/identity/logging.test4`) because the `edge` tunnel source isn't authorized (ADR-005) — correct security, not a bug. A full public-HTTPS test needs a *published* service + **PROXY-protocol v2 + Caddy trusted-proxy** so Caddy sees/authorizes the real client IP (the ADR-005↔ADR-010 integration; §2 requirement). That + the exact `edge` rule form (Q6) are the remaining P4 pieces.
 
 ### P3 — Provisioning (nixos-anywhere) — 🟦 validated on real hardware — 2026-07-01
 - Made `satellite.nix` deployable: `flake.nix` (nixpkgs 25.05 + disko) + `disk-config.nix` (GPT + BIOS-boot + ext4 on `/dev/sda`) + settings file; BIOS GRUB (disko provides `grub.devices`), virtio-scsi initrd, DHCP, operator SSH key.
