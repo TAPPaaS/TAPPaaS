@@ -53,6 +53,24 @@ ${keys_nix}
 EOF
 }
 
+# Write the operator-facing satellite config JSON (the MANAGER owns the JSON —
+# operators pass flags, not hand-edited files). Args:
+#   <out> <name> <provider> <publicIp> <sshKey> <roles-csv> [bucket] [s3-endpoint]
+sat_write_config() {
+    local out="$1" name="$2" provider="$3" ip="$4" key="$5" roles="$6" bucket="${7:-}" s3ep="${8:-https://hel1.your-objectstorage.com}"
+    local roles_json backup_json='null'
+    roles_json="$(printf '%s' "${roles}" | jq -R 'split(",") | map(select(length>0))')"
+    [[ -n "${bucket}" ]] && backup_json="$(jq -n --arg ep "${s3ep}" --arg b "${bucket}" '{s3:{endpoint:$ep,bucket:$b}}')"
+    jq -n \
+        --arg name "${name}" --arg provider "${provider}" --arg ip "${ip}" --arg key "${key}" \
+        --argjson roles "${roles_json}" --argjson backup "${backup_json}" \
+        '{
+           kind:"external-host", tier:"foundation", name:$name, roles:$roles, dependsOn:[],
+           provider:{type:$provider, allocation:"portal"},
+           host:{publicIp:$ip, sshUser:"root", operatorSshKeys:[$key]}
+         } + (if $backup != null then {backup:$backup} else {} end)' > "${out}"
+}
+
 # Assemble a standalone deploy dir (flake + disko + satellite.nix + settings).
 # Args: <settings-file> ; echoes the deploy dir.
 sat_assemble_deploy() {

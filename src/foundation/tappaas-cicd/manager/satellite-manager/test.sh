@@ -71,6 +71,16 @@ else
     no "tunnel_satellite_pubkey"
 fi
 
+# 10. sat_write_config (manager owns the JSON): --bucket => backup role + slim shape
+( . "${here}/lib/provision.sh"; sat_write_config "${tmp}/w.json" n hetzner 1.2.3.4 "ssh-ed25519 K o@w" "reverse-proxy,admin-vpn,backup" mybkt )
+if [[ "$(jq -r '.roles|join(",")' "${tmp}/w.json" 2>/dev/null)" == "reverse-proxy,admin-vpn,backup" \
+      && "$(jq -r '.backup.s3.bucket' "${tmp}/w.json" 2>/dev/null)" == "mybkt" \
+      && "$(jq -r 'has("tunnel")' "${tmp}/w.json" 2>/dev/null)" == "false" ]]; then
+    ok "sat_write_config writes slim config + backup from bucket"
+else
+    no "sat_write_config shape"
+fi
+
 echo ""
 echo "satellite-manager fast tests: ${pass} passed, ${fail} failed"
 [[ "${fail}" -eq 0 ]]

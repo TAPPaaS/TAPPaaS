@@ -50,35 +50,38 @@ If you want the `backup` role on the **S3 backend** (the default):
 > Alternative backend: a dedicated block **Volume** with a local ZFS datastore (set
 > `backup.backend = "volume"`). Weaker immutability (ZFS snapshots) and must be pre-sized.
 
-## 2. Register the satellite
+## 2. Install
 
-On `tappaas-cicd`, copy the example config and edit it:
-
-```bash
-cp ~/src/foundation/satellite/satellite.json ~/config/satellite-<name>.json
-# edit: roles, provider, host.publicIp + host.operatorSshKeys, and (backup role) backup.s3.{endpoint,bucket}
-# (everything else — tunnel /31, ports, per-role tuning, backup mechanics, update mode — is a sensible default)
-```
-
-## 3. Install
+`satellite-manager` **owns the config** — you pass parameters and it writes
+`~/config/satellite-<name>.json` and provisions in one step (you never hand-edit
+JSON). Run it over `ssh -A` so your operator key is available for the post-provision
+pubkey read-back (§7.3: cicd holds no standing key on the satellite):
 
 ```bash
-satellite-manager install <name>
+satellite-manager install <name> \
+    --public-ip <satellite-ip> \
+    --sshkey ~/.ssh/<operator-key>.pub \
+    [--bucket <s3-object-lock-bucket>]     # provide → enables the backup role; omit → no backup
+    [--provider hetzner] [--s3-endpoint <url>] [--roles reverse-proxy,admin-vpn]
 ```
 
-`satellite-manager` will:
+- **Sensible defaults:** roles = `reverse-proxy,admin-vpn` (+ `backup` automatically when you pass
+  `--bucket`). `--sshkey` takes a key string or a path to a `.pub` file. Add `--dry-run` to preview.
+- Re-running `satellite-manager install <name>` with no flags re-provisions from the saved config.
 
-1. Deploy NixOS onto the host with `nixos-anywhere` (kexec from the stock image — no rescue mode).
-2. Bring up the WireGuard listener; the **home (OPNsense) end dials out** with keepalive.
-3. Read back the satellite's WireGuard **public** key (its private key never leaves the host).
-4. Add the `edge` (+ `admin`, for admin-vpn) overlay zone and the **least-privilege, role-gated**
-   firewall rules; run `zone-manager reconcile --apply`.
-5. Point the public DNS record at the satellite (`dns-manager`).
-6. **Revoke the provisioning credential** and switch the host to pull-based `autoUpgrade`.
-7. For the backup role: register the home PBS as a **pull remote** and configure the S3 (or volume)
-   datastore + Object-Lock retention.
+`satellite-manager` then:
 
-## 4. Verify
+1. Writes `~/config/satellite-<name>.json` from your parameters (the manager owns the JSON).
+2. Deploys NixOS onto the host with `nixos-anywhere` (kexec from the stock image — no rescue mode).
+3. Brings up the WireGuard listener; the **home (OPNsense) end dials out** with keepalive.
+4. Reads back the satellite's WireGuard **public** key (its private key never leaves the host).
+5. Adds the `edge` (+ `admin`, for admin-vpn) overlay zone and the **least-privilege, role-gated**
+   firewall rules; reconciles.
+6. Points the public DNS record at the satellite; **revokes the provisioning credential** (the reformat
+   leaves only your operator key) and switches the host to pull-based `autoUpgrade`.
+7. For the backup role: registers the home PBS as a **pull remote** + configures the S3 datastore + Object-Lock.
+
+## 3. Verify
 
 ```bash
 satellite-manager status <name>
@@ -91,12 +94,12 @@ satellite-manager status <name>
 - **backup:** `satellite-manager status <name>` shows the pull sync converged; run a **test restore**
   *with* the encryption key (it must fail *without* it).
 
-## 5. Update
+## 4. Update
 
 Pull-based and automatic — the satellite `autoUpgrade`s from a pinned/signed ref (a satellite-manager default, not a config field).
 `tappaas-cicd` never SSHes in to push (ADR-010 §7.3).
 
-## 6. Decommission
+## 5. Decommission
 
 ```bash
 satellite-manager remove <name>

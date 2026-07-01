@@ -50,17 +50,28 @@ usage() {
 ${SCRIPT_NAME} ${VERSION} — TAPPaaS VPS satellite manager (ADR-010)
 
 Usage:
-  ${SCRIPT_NAME} install  <name> [--dry-run]   Provision + wire a satellite
+  ${SCRIPT_NAME} install <name> --public-ip IP --sshkey KEY|FILE [options]
   ${SCRIPT_NAME} update   <name>               Pull-based config update
   ${SCRIPT_NAME} status   <name>               Tunnel / role / backup health
   ${SCRIPT_NAME} remove   <name> [--dry-run]   Decommission (tunnel side)
   ${SCRIPT_NAME} validate <name>               Validate satellite-<name>.json
   ${SCRIPT_NAME} --help                        This help
 
+install options (satellite-manager writes the config from these — you don't hand-
+edit JSON):
+  --public-ip IP     the satellite's public IPv4 (required to create)
+  --sshkey KEY|FILE  operator out-of-band public key or a path to it (required;
+                     NOT a tappaas-cicd key — §7.3)
+  --provider NAME    default hetzner (| generic)
+  --bucket NAME      S3 Object-Lock bucket → enables the backup role (omit = no backup)
+  --s3-endpoint URL  S3 endpoint (default Hetzner Object Storage)
+  --roles csv        override roles (default: reverse-proxy,admin-vpn [,backup if --bucket])
+  --dry-run          show the plan; write nothing
+  (with no flags and an existing config, re-provisions from it.)
+
 Run install over an agent-forwarded session ('ssh -A') so your OPERATOR key is
-available for the post-provision pubkey read-back (§7.3: cicd holds no standing
-key on the satellite). Config: \${CONFIG_DIR}/satellite-<name>.json (now: ${CONFIG_DIR})
-Docs: src/foundation/satellite/INSTALL.md
+available for the post-provision pubkey read-back (§7.3). Config:
+\${CONFIG_DIR}/satellite-<name>.json (now: ${CONFIG_DIR}). Docs: satellite/INSTALL.md
 EOF
 }
 
@@ -120,8 +131,44 @@ cmd_status() {
 }
 
 cmd_install() {
-    local name="$1"
-    local cfg; cfg="$(require_config "${name}")"
+    # Parse flags — the MANAGER owns the JSON: pass params, don't hand-edit files.
+    local name="" provider="hetzner" public_ip="" sshkey="" bucket="" s3ep="" roles_override=""
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+            --provider)              provider="$2"; shift 2 ;;
+            --public-ip|--publicip)  public_ip="$2"; shift 2 ;;
+            --sshkey|--ssh-key)      sshkey="$2"; shift 2 ;;
+            --bucket)                bucket="$2"; shift 2 ;;
+            --s3-endpoint)           s3ep="$2"; shift 2 ;;
+            --roles)                 roles_override="$2"; shift 2 ;;
+            --*)                     die "unknown option: $1" ;;
+            *)                       if [[ -z "${name}" ]]; then name="$1"; else die "unexpected arg: $1"; fi; shift ;;
+        esac
+    done
+    [[ -n "${name}" ]] || die "usage: ${SCRIPT_NAME} install <name> [--public-ip IP --sshkey KEY|FILE [--provider hetzner] [--bucket S3BUCKET] [--roles csv]] [--dry-run]"
+    local cfg; cfg="$(config_path "${name}")"
+
+    # If provisioning params were given, satellite-manager WRITES the config from
+    # them (sensible defaults: roles = reverse-proxy,admin-vpn; +backup iff --bucket).
+    if [[ -n "${public_ip}" || -n "${sshkey}" || -n "${bucket}" || -n "${roles_override}" ]]; then
+        [[ -n "${public_ip}" ]] || die "--public-ip is required to create a satellite config"
+        [[ -n "${sshkey}" ]]    || die "--sshkey is required (the operator out-of-band key; NOT a cicd key)"
+        local key_val="${sshkey}"; [[ -f "${sshkey}" ]] && key_val="$(cat "${sshkey}")"
+        local roles="${roles_override:-reverse-proxy,admin-vpn}"
+        [[ -z "${roles_override}" && -n "${bucket}" ]] && roles="${roles},backup"
+        if [[ "${DRY_RUN}" == "1" ]]; then
+            cfg="$(mktemp)"; sat_write_config "${cfg}" "${name}" "${provider}" "${public_ip}" "${key_val}" "${roles}" "${bucket}" "${s3ep:-https://hel1.your-objectstorage.com}"
+            info "[dry-run] would write $(config_path "${name}")"
+        else
+            sat_write_config "${cfg}" "${name}" "${provider}" "${public_ip}" "${key_val}" "${roles}" "${bucket}" "${s3ep:-https://hel1.your-objectstorage.com}"
+            info "wrote ${cfg} (roles: ${roles})"
+        fi
+    fi
+
+    # validate the resolved config (real path, or the temp we just wrote in dry-run)
+    [[ -f "${cfg}" ]] || die "no config for '${name}' — pass --public-ip and --sshkey to create one"
+    command -v jq >/dev/null 2>&1 || die "jq is required"
+    jq empty "${cfg}" 2>/dev/null || die "invalid JSON: ${cfg}"
     local ip user wgport ka sat_addr home_addr roles sname cname target
     ip="$(jq -r '.host.publicIp' "${cfg}")"
     user="$(jq -r '.host.sshUser // "root"' "${cfg}")"
@@ -231,7 +278,7 @@ main() {
     local verb="${1:-}"; shift || true
     case "${verb}" in
         install)
-            cmd_install "${1:?usage: ${SCRIPT_NAME} install <name> [--dry-run]}"
+            cmd_install "$@"
             ;;
         update)
             local name="${1:?usage: ${SCRIPT_NAME} update <name>}"
