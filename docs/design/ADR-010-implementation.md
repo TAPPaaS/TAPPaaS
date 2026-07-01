@@ -188,7 +188,7 @@ Maps 1:1 to the packages. All ⬜ until implementation starts.
 | **P2** | WireGuard infra tunnel | TBD | P1 | 🟦 | sat-mgr 9/0; wg dry-run (cicd) | (this commit) | ⏳ |
 | **P3** | Provisioning (nixos-anywhere, lifecycle) | TBD | P1, P2 | 🟦 | nixos-anywhere deploy + declarative tunnel handshake validated live | (this commit) | ⏳ |
 | **P4** | reverse-proxy role (nginx stream + PROXY v2) | TBD | P2, P3 | 🟦 | passthrough validated live (external → satellite → tunnel → Caddy, :80 308) | (this commit) | ⏳ |
-| **P5** | admin-vpn role (WG via OPNsense, blind relay) | TBD | P2, P3 | ⬜ | — | — | — |
+| **P5** | admin-vpn role (WG via OPNsense, blind relay) | TBD | P2, P3 | 🟦 | blind UDP relay handshake validated live (admin→satellite:51821→OPNsense admin-WG) | (this commit) | ⏳ |
 | **P6** | backup role (PBS pull + encryption + S3/Object-Lock) | TBD | P2, P3, **ADR-007 S9** (backup-manager/controller) | ⬜ | — | — | — |
 | **P7** | Hardening & docs (isolation, README/INSTALL + install-flow ref, decommission) | TBD | P4, P5, P6 | ⬜ | — | — | — |
 
@@ -224,6 +224,13 @@ Append-only narrative per stage (newest first). Template:
 - Commit/Push: …
 - Follow-ups: …
 ```
+
+### P5 — admin-vpn role — 🟦 blind UDP relay validated live — 2026-07-01
+- Implemented the satellite side in `satellite.nix`: **nftables blind UDP relay** — `adminWgPort/udp` DNAT → `homeAdminWgAddr:adminListenPort` over the infra tunnel + masquerade, `ip_forward=1`, firewall opens `adminWgPort` (all gated on the `admin-vpn` role). The satellite holds no admin keys.
+- Home side: created a second OPNsense WireGuard instance `tappaas-admin` (road-warrior listener, port 51821, admin pool `10.255.1.0/24`) + a test admin peer; added the role-gated `edge → 10.255.0.1:51821/udp` firewall rule.
+- Deployed to the live satellite via `nixos-rebuild switch` (`roles=["reverse-proxy","admin-vpn"]`) — coexists with reverse-proxy; infra tunnel stayed up.
+- **Validated live:** an admin client (cicd stand-in) with `endpoint=satellite:51821` completed a **WireGuard handshake with the OPNsense admin-WG through the satellite relay** (latest handshake seconds ago, bidirectional transfer). Confirms §6: admin↔OPNsense is end-to-end; the satellite blind-relays UDP only.
+- Remaining: OPNsense routing + firewall from the admin-WG interface → `mgmt` so admins actually reach node UIs/SSH (the `admin`→mgmt access, **Q3** — provisional: new zone vs reuse `netbird` vs direct mgmt); admin-side MTU ~1340 on real clients.
 
 ### P4 — reverse-proxy role — 🟦 passthrough validated live — 2026-07-01
 - Implemented the nginx `stream` L4 passthrough in `satellite.nix` (`:443`/`:80` → Caddy-on-OPNsense over the tunnel; `proxy_protocol` gated on a `proxyProtocol` setting, off until the Caddy side is wired).

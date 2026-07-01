@@ -135,11 +135,26 @@ in
 
   # ==========================================================================
   # ROLE: admin-vpn — BLIND UDP relay of an admin WireGuard session that
-  # terminates on OPNsense (ADR-010 §6). The satellite holds no admin keys.
-  # adminWgPort/udp  ->  ${cfg.homeAdminWgAddr}:adminWgPort  over the infra tunnel.
+  # terminates on OPNsense (ADR-010 §6). The satellite holds no admin keys — it
+  # only NATs adminWgPort/udp to the OPNsense admin-WG listener over the infra
+  # tunnel (admin<->OPNsense stays end-to-end encrypted; double-encapsulated on
+  # the satellite->OPNsense hop, so admins set MTU ~1340 on their side).
   # ==========================================================================
-  # TODO[P5]: stateful UDP DNAT/forward (nftables) adminWgPort -> home admin-WG
-  #           listener; admin-side MTU 1340 for the double-encapsulated path.
+  boot.kernel.sysctl."net.ipv4.ip_forward" = lib.mkIf (hasRole "admin-vpn") (lib.mkForce 1);
+  networking.nftables.enable = lib.mkIf (hasRole "admin-vpn") true;
+  networking.nftables.tables.adminvpn = lib.mkIf (hasRole "admin-vpn") {
+    family = "ip";
+    content = let alp = toString (cfg.adminListenPort or cfg.adminWgPort); in ''
+      chain prerouting {
+        type nat hook prerouting priority dstnat; policy accept;
+        udp dport ${toString cfg.adminWgPort} dnat to ${cfg.homeAdminWgAddr}:${alp}
+      }
+      chain postrouting {
+        type nat hook postrouting priority srcnat; policy accept;
+        ip daddr ${cfg.homeAdminWgAddr} udp dport ${alp} masquerade
+      }
+    '';
+  };
 
   # ==========================================================================
   # ROLE: backup — off-site PBS, PULL model; S3 Object-Lock backend by default
