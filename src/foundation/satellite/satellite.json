@@ -12,8 +12,8 @@
   "name": "satellite",
   "roles": ["reverse-proxy", "admin-vpn", "backup"],
 
-  "dependsOn": ["network:vm", "tappaas-cicd:vm"],
-  "_dependsOn_note": "the `backup` role additionally requires the `backup` module (home PBS to pull from)",
+  "dependsOn": ["network:firewall", "network:dns"],
+  "_dependsOn_note": "network:firewall = OPNsense (WireGuard peer + role-gated firewall rules + zones); network:dns = the public DNS record at the satellite IP. The `backup` role additionally requires `backup:remote` (the home PBS to pull from). NOTE: the satellite is an EXTERNAL host (kind=external-host) provisioned by nixos-anywhere — it is NOT a cluster:vm, so it does NOT depend on cluster:vm.",
 
   "provider": {
     "type": "hetzner",
@@ -28,6 +28,7 @@
 
   "host": {
     "publicIp": "203.0.113.10",
+    "_publicIp_note": "EXAMPLE placeholder only — 203.0.113.10 is RFC 5737 TEST-NET-3 (reserved for docs). Replace with the real satellite public IP when you copy this to ~/config/satellite-<name>.json.",
     "sshUser": "root",
     "operatorSshKeys": [
       "ssh-ed25519 AAAA... operator@workstation"

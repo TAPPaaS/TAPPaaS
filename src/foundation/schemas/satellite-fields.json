@@ -8,7 +8,7 @@
     "tier": { "type": "string", "required": true, "values": { "foundation": "satellite is foundation-grade but OPTIONAL (not in the mandatory install chain)" } },
     "name": { "type": "string", "required": true, "description": "satellite instance name (also the NixOS hostname); a site may run several" },
     "roles": { "type": "array<string>", "required": true, "values": { "reverse-proxy": "L4 passthrough of :443/:80 to Caddy-on-OPNsense", "admin-vpn": "blind UDP relay of an admin WireGuard session terminating on OPNsense", "backup": "off-site PBS pull target" }, "note": "any combination; order irrelevant" },
-    "dependsOn": { "type": "array<string>", "description": "service deps; always network:vm + tappaas-cicd:vm; the backup role also needs the backup module" },
+    "dependsOn": { "type": "array<string>", "description": "service deps (module:service, where the module actually provides that service): network:firewall (OPNsense WG/rules/zones) + network:dns (public record); the backup role adds backup:remote. NOT cluster:vm — the satellite is external-host, not a cluster VM." },
 
     "provider.type": { "type": "string", "values": { "hetzner": "Hetzner Cloud (reference)", "generic": "operator supplies a host + SSH; no API automation" } },
     "provider.allocation": { "type": "string", "default": "portal", "values": { "portal": "Tier A (default): operator creates the VPS in the console", "api": "Tier B (opt-in): satellite-manager creates it via the hcloud API token" } },
