@@ -251,4 +251,5 @@ Append-only narrative per stage (newest first). Template:
 - Tests: satellite-manager fast **6/0**; satellite module fast **17/0**; all scripts `bash -n` clean. (ShellCheck + deep gate run on cicd.)
 - Key call: satellite is an **external-host** module — NOT a `cluster:vm`; operator-driven, NOT in `rest-of-foundation.sh`.
 - Follow-ups: real verbs (P2-P6); exact `edge`/`admin` `access-to` (Q6); finalise/merge `admin` zone (Q3); `autoUpgrade` signing (Q4); ShellCheck on cicd.
+- **Live-verified (test system, 2026-07-01):** `network-manager zones-merge` adds **only** `edge`+`admin` to the runtime `zones.json` (`2 added`, nothing else); `zones-check` stays 5 ok / 0 err; `network-manager reconcile --only opnsense` (dry-run) **skips both overlays** (no VLAN/DHCP/interface/rule attempted — rc=0), confirming the `Overlay`/`Manual`/`vlantag 0` design behaves like `netbird`. (Also fixed a systemic nix GC-root defect in all 7 TS managers found along the way — commit 2326807.)
 
