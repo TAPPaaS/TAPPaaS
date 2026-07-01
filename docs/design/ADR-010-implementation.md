@@ -241,6 +241,8 @@ Append-only narrative per stage (newest first). Template:
 - **OPNsense WireGuard REST API confirmed live** (firewall.mgmt.internal:8443, self-signed → `--no-ssl-verify`; creds file is `key=`/`secret=` prefixed): `server/searchServer`, `client/searchClient`, `general/get` all 200; **exact server/client field schema captured** (recorded in `wg_manager.py` + D20). Un-gates the home-side implementation.
 - Still open: `network-manager` bin is a dangling symlink after the FF (needs its `install.sh` nix-build) → couldn't run `zones-merge` to add `edge`/`admin` to the *runtime* `~/config/zones.json` (the template has them); and reconcile-overlay-skip not yet exercised. Full end-to-end tunnel needs a provisioned satellite (P3).
 
+**Home-side WireGuard CRUD validated live (test OPNsense, 2026-07-01):** proved the full recipe against `/api/wireguard/*` — `wg genkey|pubkey` (no `genKeys` endpoint; addServer needs a real keypair) → `server/addServer` (saved) → `server/getServer` read-back **pubkey matched** → `client/addClient` (peer: `endpoint` is **host:port in one field**, `keepalive=25`, `tunneladdress=<sat>/32`, `servers=<server-uuid>`, saved) → `del{Client,Server}` → **0 servers / 0 clients** (firewall left clean). Exact bodies recorded in `wg_manager.py`. Remaining P2 code step: wire this recipe into `wg_manager._live` (needs a satellite for a real endpoint + handshake — P3).
+
 ### P1 — Foundation & schema — 🟦 in progress — 2026-06-30
 - Plan: scaffold the `satellite/` module + `satellite-manager` + schema + the `edge`/`admin` zones, matching the ADR-007 module/manager contract.
 - Implemented:

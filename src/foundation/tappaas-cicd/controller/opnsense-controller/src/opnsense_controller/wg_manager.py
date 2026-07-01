@@ -100,22 +100,32 @@ class WireGuardManager:
         return entry
 
     def _live(self, op: str, **params):
-        # API CONFIRMED (2026-07-01, test OPNsense). Bind via the controller `raw`
-        # passthrough, e.g.:
-        #   self._client.run_module("raw", params={"module": "wireguard",
-        #       "controller": "server", "command": "addServer", "action": "add",
-        #       "data": {"name": ..., "tunneladdress": ..., "peers": [...]}})
-        # ensure_server -> server/addServer|setServer (privkey empty => OPNsense
-        #   generates; read pubkey via server/getServer|searchServer).
-        # ensure_peer   -> client/addClient|setClient (endpoint=<sat>:<wgPort>,
-        #   keepalive=25, tunneladdress=<sat>/32, servers=[<home server uuid>]).
-        # apply         -> general/set (enabled=1) + service/reconfigure.
-        # NOT YET WIRED — the create/read-back/link/reconfigure flow is the next P2
-        # step, validated create->read->delete on the test firewall before use.
+        # RECIPE VALIDATED end-to-end on the test OPNsense (2026-07-01):
+        # create server -> read-back pubkey (matched) -> create client -> delete
+        # both -> 0/0 clean. Exact calls (POST JSON to :8443, self-signed => no
+        # verify; creds file is `key=`/`secret=` prefixed):
+        #
+        #   keygen: `wg genkey | wg pubkey`  (needs wireguard-tools; OPNsense has
+        #           NO genKeys endpoint and addServer will NOT auto-generate —
+        #           a real pubkey+privkey MUST be supplied).
+        #   ensure_server -> POST /api/wireguard/server/addServer  (body:
+        #       {"server":{"enabled":"1","name":..,"pubkey":H_PUB,"privkey":H_PRIV,
+        #                  "tunneladdress":"10.255.0.1/31"}}) -> {"result":"saved","uuid":..}
+        #       read back: GET /api/wireguard/server/getServer/<uuid> -> .server.pubkey
+        #   ensure_peer   -> POST /api/wireguard/client/addClient  (body:
+        #       {"client":{"enabled":"1","name":..,"pubkey":SAT_PUB,
+        #                  "endpoint":"<sat-ip>:<wgPort>",   # host:port in ONE field
+        #                  "keepalive":"25","tunneladdress":"10.255.0.0/32",
+        #                  "servers":"<server-uuid>"}})
+        #   remove -> POST /api/wireguard/{client/delClient,server/delServer}/<uuid>
+        #   apply  -> POST /api/wireguard/general/set (enabled=1) + service/reconfigure
+        #
+        # Wiring this recipe into requests/oxl calls is the remaining P2 code step
+        # (needs a satellite for a real endpoint + handshake — P3). Until wired:
         raise NotImplementedError(
             f"wg-manager live binding not yet wired for '{op}' (OPNsense WireGuard "
-            f"API confirmed 2026-07-01; implementation is the next P2 step). "
-            f"Re-run with --dry-run."
+            f"recipe VALIDATED live 2026-07-01 — see above; wiring is the remaining "
+            f"P2 code step). Re-run with --dry-run."
         )
 
     def _do(self, op: str, **params):
