@@ -186,7 +186,7 @@ Maps 1:1 to the packages. All ⬜ until implementation starts.
 |-------|----------|--------|-----------|--------|-------------------|--------|--------|
 | **P1** | Foundation & schema (`satellite/` module, edge+admin zones, fw rules) | TBD | — | 🟦 | fast: mgr 6/0, module 17/0 | 58a1f35.. | ⏳ |
 | **P2** | WireGuard infra tunnel | TBD | P1 | 🟦 | sat-mgr 9/0; wg dry-run (cicd) | (this commit) | ⏳ |
-| **P3** | Provisioning (nixos-anywhere, lifecycle) | TBD | P1, P2 | ⬜ | — | — | — |
+| **P3** | Provisioning (nixos-anywhere, lifecycle) | TBD | P1, P2 | 🟦 | nixos-anywhere deploy + declarative tunnel handshake validated live | (this commit) | ⏳ |
 | **P4** | reverse-proxy role (nginx stream + PROXY v2) | TBD | P2, P3 | ⬜ | — | — | — |
 | **P5** | admin-vpn role (WG via OPNsense, blind relay) | TBD | P2, P3 | ⬜ | — | — | — |
 | **P6** | backup role (PBS pull + encryption + S3/Object-Lock) | TBD | P2, P3, **ADR-007 S9** (backup-manager/controller) | ⬜ | — | — | — |
@@ -224,6 +224,12 @@ Append-only narrative per stage (newest first). Template:
 - Commit/Push: …
 - Follow-ups: …
 ```
+
+### P3 — Provisioning (nixos-anywhere) — 🟦 validated on real hardware — 2026-07-01
+- Made `satellite.nix` deployable: `flake.nix` (nixpkgs 25.05 + disko) + `disk-config.nix` (GPT + BIOS-boot + ext4 on `/dev/sda`) + settings file; BIOS GRUB (disko provides `grub.devices`), virtio-scsi initrd, DHCP, operator SSH key.
+- **Ran `nixos-anywhere` from cicd** (Mac has no nix) with an **ephemeral provisioning key** → reformatted the Hetzner `cx23` Debian box into **NixOS 25.05 (`satellite1`)**. `nix eval` pre-check caught a `grub.devices`/disko duplicate before the destructive step.
+- **Verified end-to-end:** NixOS booted; SSH works with the **operator key** and the provisioning key is **gone** (reformat naturally revoked it — §7.3 realized); `wg-infra` up **declaratively** from `satellite.nix` with a fresh on-host key; after pointing the OPNsense peer at the new key → **handshake up** (both ends, roaming endpoint = home WAN, bidirectional transfer).
+- Remaining: wire this flow into `satellite-manager install` (generate settings from satellite.json → nixos-anywhere → read-back pubkey → drive `wg-manager` → revoke provisioning key), and `system.autoUpgrade` (pull-based, Q4 signing). Role bodies (nginx/admin-relay/PBS) = P4–P6.
 
 ### P2 — WireGuard infra tunnel — 🟦 in progress — 2026-06-30
 - Plan: build the satellite↔OPNsense WireGuard infra tunnel (home dials out, satellite listens); satellite-side done now, home-side scaffolded (live OPNsense binding is hardware-gated).
