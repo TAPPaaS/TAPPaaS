@@ -89,43 +89,58 @@ jq -r '.tappaas.repositories[] | "\(.name): \(.branch)"' configuration.json
 
 ## 3. Run the migration
 
-The conversion needs **two `update-tappaas` runs** to fully settle, because the
-*installed* `update-tappaas`/managers are the mainline build until the first run
-rebuilds them (the new logic — including the Phase-0 migration — only takes effect
-on the *next* invocation). This is expected and safe.
+> **⚠ Do NOT just run `update-tappaas` on a mainline node — it cannot migrate itself.**
+> The ADR-007 refactor **relocated** the control-plane scripts
+> (`tappaas-cicd/scripts/*` → `manager/`, `lib/`, `controller/`). `update-tappaas`
+> calls `~/bin/update-module.sh`, whose (mainline) `pre-update.sh` does the branch
+> checkout and then keeps running mainline logic against the new layout
+> (e.g. `cd opnsense-controller`, which moved to `controller/`). It aborts **before**
+> the ADR-007 relink runs, dangling `~/bin/update-module.sh` — every later module
+> then fails and the node is left **half-migrated** (verified on the first migration
+> test). A mainline `pre-update.sh` simply cannot cross the reorg. Use the dedicated
+> **bootstrap** below.
 
-### Pass 1 — bootstrap the ADR-007 toolchain
+### Step 1 — bootstrap the ADR-007 toolchain (downloaded, run once)
+
+`migrate-bootstrap.sh` is not on PATH on a mainline system, so download and run it.
+It pins the branch, checks out ADR-007 (auto-stashing local changes), relinks the
+bootstrap bins, rebuilds/relinks the full toolchain (managers + controllers +
+`update-tappaas`), and verifies. A final `zones-check`/pre-update failure during it
+is **expected** (the live `zones.json` is still pre-migration) — the relink+build
+happen first; the script verifies the result.
 
 ```bash
-update-tappaas --force --dry-run     # review the plan first
-update-tappaas --force               # real run
+REPO="https://raw.githubusercontent.com/TAPPaaS/TAPPaaS/"; BRANCH="ADR007"
+curl -fsSL ${REPO}${BRANCH}/src/foundation/tappaas-cicd/scripts/migrate-bootstrap.sh -o /tmp/migrate-bootstrap.sh
+bash /tmp/migrate-bootstrap.sh          # --branch/--repo-dir overridable
 ```
 
-What happens: the repo checks out `ADR007`, the managers/controllers and
-`update-tappaas` itself are rebuilt and relinked, and the legacy guard in
-`tappaas-cicd/pre-update.sh` creates `config/site.json` from `configuration.json`.
-(`config/environments/` is still empty after pass 1 — that is fixed in pass 2.)
+### Step 2 — convert the config (idempotent orchestrator)
 
-### Pass 2 — converge onto the full model (now Phase 0 is live)
+Now the ADR-007 `migrate-to-adr007.sh` is on PATH:
 
 ```bash
-update-tappaas --force --dry-run     # you should now see "Phase 0 - ADR-007 migration pass"
-update-tappaas --force
+migrate-to-adr007.sh --dry-run          # preview: config→site, zones-init, environments
+migrate-to-adr007.sh --yes              # apply
 ```
 
-Pass 2's **Phase 0** runs the orchestrator before any module is touched:
-`config→site` (already done → skipped) → `zones-init --name <name>` →
-`create-minimal-environments` (mgmt + `<name>`) → firewall **detect+warn** →
-validation.
+`config→site` is usually already done (the bootstrap's `pre-update.sh` auto-migrates
+it); this adds `zones-init --name <name>` + `create-minimal-environments` (mgmt +
+`<name>`) and firewall **detect+warn**. Exit **0** = fully converged, **2** = a
+manual action remains (the firewall cutover — §5), **1** = hard error.
 
-> **Equivalent manual control.** Instead of relying on pass 2, you may drive the
-> orchestrator directly at any time (idempotent):
-> ```bash
-> migrate-to-adr007.sh --dry-run       # preview
-> migrate-to-adr007.sh --yes           # apply (config→site, zones, environments)
-> ```
-> It exits **0** when fully converged, **2** when a manual action remains (the
-> firewall cutover), **1** on a hard error.
+### Step 3 — reconcile modules
+
+```bash
+update-tappaas --force                  # now the ADR-007 build; converges every module
+```
+
+> **Note (as-built finding):** the original "two `update-tappaas` passes" recipe
+> did not work for the mainline→ADR-007 hop because of the script relocation above;
+> `migrate-bootstrap.sh` is the fix. The bootstrap step is only needed for the
+> mainline→ADR-007 crossing; subsequent ADR-007→ADR-007 updates use plain
+> `update-tappaas` (and `pre-update.sh` now auto-stashes local changes so a stray
+> edit can no longer silently block the branch switch).
 
 ---
 

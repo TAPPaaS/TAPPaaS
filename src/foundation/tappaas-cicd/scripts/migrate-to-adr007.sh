@@ -224,8 +224,15 @@ step_firewall() {
     # firewall.json is still the live network-module config.
     if [[ $INCLUDE_FIREWALL -eq 1 ]]; then
         [[ -n "$NODE_FQDN" ]] || die "  --include-firewall requires --node <FQDN>"
+        # migrate-firewall-to-network.sh is NOT symlinked into ~/bin — it ships in
+        # the network module dir. Prefer a real executable there; fall back to the
+        # tool() path only so the --dry-run plan stays host-independent.
         local mig; mig="$(tool migrate-firewall-to-network.sh)"
-        [[ -n "$mig" ]] || { warn "  migrate-firewall-to-network.sh not on PATH — skipping."; NEEDS_ACTION=1; return 0; }
+        local _fw2net="${TAPPAAS_REPO:-/home/tappaas/TAPPaaS}/src/foundation/network/migrate-firewall-to-network.sh"
+        [[ -x "$_fw2net" ]] && mig="$_fw2net"
+        if [[ $DRY_RUN -eq 0 && ! -x "$mig" ]]; then
+            warn "  migrate-firewall-to-network.sh not found (~/bin, PATH, or ${_fw2net}) — skipping."; NEEDS_ACTION=1; return 0
+        fi
         info "  running supervised firewall->network migration (node ${NODE_FQDN})..."
         local args=(--config-dir "$CONFIG_DIR" --node "$NODE_FQDN")
         [[ $DRY_RUN -eq 1 ]]   && args+=(--dry-run)
@@ -284,7 +291,10 @@ step_validate() {
 
 # ── Main ─────────────────────────────────────────────────────────────
 main() {
-    info "ADR-007 migration orchestrator (config-dir: ${CONFIG_DIR}${DRY_RUN:+, dry-run})"
+    # NB: $DRY_RUN is 0/1 — both non-empty — so ${DRY_RUN:+…} always expands. Use a
+    # numeric test so the header only says "dry-run" when actually dry-running.
+    local _dry=""; [[ $DRY_RUN -eq 1 ]] && _dry=", dry-run"
+    info "ADR-007 migration orchestrator (config-dir: ${CONFIG_DIR}${_dry})"
     [[ $DRY_RUN -eq 1 ]] && info "  DRY RUN — no changes will be made."
 
     step_site

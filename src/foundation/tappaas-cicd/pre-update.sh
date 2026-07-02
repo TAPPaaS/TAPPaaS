@@ -48,7 +48,20 @@ if [ "$REPO_COUNT" -gt 0 ]; then
     REPO_BRANCH=$(echo "$REPOS_JSON" | jq -r ".[$i].branch")
     if [ -d "$REPO_PATH" ]; then
       info "  Pulling ${REPO_NAME} (branch: ${REPO_BRANCH})..."
-      cd "$REPO_PATH" && git fetch origin && git checkout "$REPO_BRANCH" && git pull origin "$REPO_BRANCH" || warn "Failed to pull ${REPO_NAME}"
+      (
+        cd "$REPO_PATH" || exit 0
+        git fetch origin || warn "  fetch failed for ${REPO_NAME}"
+        # Auto-stash local changes before switching branches. A lingering edit to
+        # a tracked file makes `git checkout <branch>` abort — silently leaving the
+        # system on the OLD branch while the run still looks successful (a real
+        # migration foot-gun: hit during the ADR-007 migration test, where it left
+        # the node un-migrated). Stash preserves the change (recover via git stash).
+        if [ -n "$(git status --porcelain 2>/dev/null)" ]; then
+          warn "  ${REPO_NAME}: local changes present — auto-stashing before checkout (recover via 'git -C ${REPO_PATH} stash list')"
+          git stash push -u -m "tappaas pre-update auto-stash $(date +%Y%m%d-%H%M%S)" || warn "  stash failed — checkout may not switch branch"
+        fi
+        git checkout "$REPO_BRANCH" && git pull origin "$REPO_BRANCH" || warn "Failed to pull ${REPO_NAME}"
+      )
     else
       warn "Repository directory not found: ${REPO_PATH} (${REPO_NAME})"
     fi
