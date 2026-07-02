@@ -111,6 +111,100 @@ before trusting them unattended.
 
 ---
 
+## Deep-test sweep findings — 2026-07-02
+
+Full `test.sh --deep` sweep across all 8 modules installed on `test4`
+(single-node, minimally-provisioned). **Clean teardown (0 orphan VMs/CTs), node
+healthy throughout (no NVMe faults).** **Every unit / pure-function deep test
+passed** (hundreds of checks: switch-controller 47/0, backup cascade + namespace
+13/0 & 9/0, people/site-migration/dns/variant, proxmox-manager, setup-switches
+37/0, …). Results: identity/logging/nextcloud **green**; cluster/templates/
+tappaas-cicd/network/backup rc=1 — **dominated by two structural limitations of a
+single-node minimal deploy, not ADR-007 regressions**:
+
+- **No *service* zone is guaranteed Active on a minimal deploy.** `mgmt`=Manual
+  (always up, but it is the drift *source*), `srvWork`=Active *only because
+  nextcloud is installed* (occupancy guard), `srvHome`/`srvTest`=**Inactive**.
+  Every VM placed in `srvHome` fails to get DHCP → install times out. Clean
+  diagnostic split: **all mgmt-zone VMs passed, all srvHome-zone VMs failed**
+  (cluster test-hadrift/test-lxcdrift; tappaas-cicd test-deb-vlannode/
+  test-nix-vlannode/test-ubuntu-vlan).
+- **Single-node cluster** ("HANode could not be resolved") → HA-managed VMs
+  (test-nixos nixos-ha, cluster test-hadrift) cannot provision.
+- **templates**: VM 8081 (winserver) not installed on test4 (only nixos 8080) —
+  expected.
+- **backup**: pure-function tests green; only *live PBS reachability* failed
+  (PBS not fully wired on this minimal deploy).
+
+**Planned fix (the real ADR-007 test problem) — corrected 2026-07-02:** the
+cluster deep test hardcodes `srvHome`/VLAN 210 as its drift target — a legacy
+catalog zone that stays **Inactive** on a minimal deploy. **The correct fix is
+NOT to self-provision a disposable zone — it is to use the org-named DEFAULT
+zone**, which `zones-init --name <N>` creates **Active** on every fresh install
+*and* migration (renames `srv→<N>` Active, `home→<N>-private`, `guest→<N>-guest`).
+Verified on test4: zone `test4` = Active, VLAN 200; `test4.json` env
+`network.zone=test4`; `resolve_default_zone()` returns `site.json.name` so a
+new module with no explicit zone0 already lands there. **Fix = the cluster deep
+test resolves the default zone (`site.json.name`, asserted Active in zones.json)
+and drifts `mgmt → <default>`, reading the VLAN tag from zones.json instead of
+literal `210`; the HA sub-test keeps its single-node skip.** No self-provisioning,
+no firewall-trunk plumbing. *(status: **✅ IMPLEMENTED + run 2026-07-02** —
+`cluster/test.sh` now has `resolve_default_zone_and_vlan()` (site.json .name,
+asserted Active in zones.json, VLAN from zones.json); #192/#193/#203 target
+`${DEFAULT_ZONE}`/`${DEFAULT_VLAN}` instead of `srvHome`/`210`; #193/#203 install
+via `--zone0 ${DEFAULT_ZONE}` override; drift tests `skip` (not fail) when no
+Active default zone; **#193 skips on single-node clusters** (`NODE_COUNT<2`, no
+replication target). Verified on test4: drift correctly retargeted to `test4`/
+VLAN 200, **LXC install now succeeds** (was failing on srvHome), **net0 tag=200**
+✓, HA skipped cleanly. `bash -n` clean.)*
+
+**New finding surfaced by the fixed test — DHCP/DNS in the default zone
+(2026-07-02):** with the drift tests now correctly exercising the org-named
+default zone `test4` (VLAN 200), two checks still fail — sharing ONE root cause:
+**a VM/CT placed on VLAN 200 gets no DHCP lease/IP.** (#192 VM reconcile: "Waiting
+for VM to come back with an IP" → timeout; #203 LXC: container alive + cores
+reconciled but never registered DNS — no IP to register.) mgmt-zone VMs lease
+fine (they pass) and VLAN 200 IS trunked to the firewall — so the suspect is
+**whether OPNsense actually serves DHCP on the default zone's interface**.
+Notably **no module has ever actually run in the `test4` default zone on this box**
+(nextcloud is in srvWork), so default-zone DHCP was never exercised until now —
+may be a real gap (default zone unusable for real modules) or specific to this
+migrated test4. Firewall not SSH-reachable from the cicd for a deeper look;
+**needs investigation** (own item, distinct from the test fix). This is exactly
+the kind of real defect the fixed test is meant to surface.
+
+**Cluster name = org name — verified correct in code, unverified on hardware
+(2026-07-02):** ADR-007 `cluster/install.sh` threads `--name <orgname>` →
+`pvecm create "${ORGNAME:-TAPPaaS}"` (the `TAPPaaS` fallback only fires with no
+`--name`). But test4's live cluster is named **`TAPPaaS`**, because this cluster
+was **created from the `main` branch** (`main` hardcodes `pvecm create TAPPaaS`,
+[cluster/install.sh:189]) during the "install main → migrate" test, then migrated
+— and a corosync cluster name is fixed at create time; migration does not (and
+should not, live) rename it. **⟹ the org-name-cluster feature has never actually
+run on hardware** — every test4 cluster so far was born on main. Needs a genuine
+fresh ADR-007 `install.sh --name <org>` pass to confirm (matches the F1 "NOT yet
+exercised on hardware" caveat).
+
+**Decided (operator, 2026-07-02):** a main→ADR-007 migration **keeps** the
+existing `TAPPaaS` corosync cluster name — no live rename (too risky). Only a
+genuine fresh ADR-007 install gets the org-named cluster. **Node-join verified
+name-agnostic:** the `cluster/install.sh` join path uses `pvecm add <peer>`,
+which inherits the cluster identity from the peer's `corosync.conf` — it never
+uses `--name`/`ORGNAME`, so a new node correctly joins whatever the cluster is
+actually named. Fixed the one cosmetic leak (join prompt hardcoded "TAPPaaS
+cluster") and made the join success message + node summary report the real
+cluster name discovered via `pvecm status`.
+
+**Outstanding deep-test items (recorded; revisit later):**
+
+| # | Item | Detail |
+|---|------|--------|
+| D1 | **network Deep 9b — auto-pinhole permits real traffic (#173 AC-2)** | The auto-pinhole *rule* is correctly generated in OPNsense (AC-1/Deep 6b green: `tappaas-svcdep:test-fw-a:web:test-fw-c:9091` present, references both aliases) but *traffic* was blocked (pfctl alias dump empty at test time). Already documented as a known infra bug: `ISSUES/zone-manager-block-private-shadows-auto-pinholes.md` (block-private rule shadows the pinhole). Also gated by no FQDN set up in this env. **Deferred by operator (2026-07-02)** — revisit with the two D2/D3 unit fails. |
+| D2 | **tappaas-cicd unit — `test-variant-zone-node.sh` FAIL** | 1 failure in the variant/zone-node unit suite (21 passed, 1 failed). Not triaged yet. |
+| D3 | **tappaas-cicd unit — `test-ap-manager` 16/1** | 1 failing assertion in the ap-manager unit suite. Not triaged yet. |
+
+---
+
 ## Post-conversion clean-up
 
 Activities that are safe **only once EVERY TAPPaaS system has been converted** (each has run `migrate-firewall-to-network.sh` + the configuration.json cutover). Until then the transition back-compat MUST stay — removing it would break any system still on the old names. Do these as a final sweep, not before.

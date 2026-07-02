@@ -13,8 +13,11 @@
 # Deep mode:     additionally stands up disposable test guests and verifies the
 #                reconcilers correct induced drift:
 #                  #192 — VM zone change (net0 VLAN tag + DNS)
-#                  #193 — replication-schedule + HA-rule node drift
-#                  #203 — LXC create on srvHome/210 + DNS + cores drift
+#                  #193 — replication-schedule + HA-rule node drift (≥2 nodes)
+#                  #203 — LXC create in the default zone + DNS + cores drift
+#                The drift target is the org-named DEFAULT zone (site.json .name,
+#                Active per zones-init), NOT a hardcoded legacy zone — see the
+#                resolver below.
 #                Creates and deletes real VMs/containers (~minutes).
 #
 # Usage: ./test.sh [module-name]
@@ -60,6 +63,38 @@ find_vm() {
     done
     return 1
 }
+
+# ── Default service zone resolution (ADR-007) ──────────────────────
+# The deep drift tests must target the zone a REAL module lands in — the
+# org-named default zone that `zones-init --name <N>` makes Active on every
+# fresh install AND migration (site.json .name; renamed from `srv`). The former
+# hardcode (`srvHome`/VLAN 210) is a catalog zone that stays Inactive on a
+# minimal deploy, so a VM placed there never gets DHCP and the install times out
+# — which is exactly why the deep sweep's srvHome VMs failed while the mgmt ones
+# passed. Resolve site.json .name, assert it is present + Active in zones.json,
+# and read its VLAN tag. Echoes "<zone> <vlantag>"; non-zero when unresolvable
+# (callers skip the drift tests rather than fail).
+resolve_default_zone_and_vlan() {
+    local site="${CONFIG_DIR}/site.json" zones="${CONFIG_DIR}/zones.json"
+    local name state vlan
+    [[ -f "$site" && -f "$zones" ]] || return 1
+    name="$(jq -r '.name // empty' "$site" 2>/dev/null)"
+    [[ -n "$name" && "$name" != "mgmt" ]] || return 1
+    state="$(jq -r --arg z "$name" '.[$z].state // empty' "$zones" 2>/dev/null)"
+    vlan="$(jq -r --arg z "$name" '.[$z].vlantag // empty' "$zones" 2>/dev/null)"
+    [[ "$state" == "Active" && -n "$vlan" ]] || return 1
+    printf '%s %s\n' "$name" "$vlan"
+}
+
+DEFAULT_ZONE=""
+DEFAULT_VLAN=""
+if _dz="$(resolve_default_zone_and_vlan)"; then
+    DEFAULT_ZONE="${_dz%% *}"
+    DEFAULT_VLAN="${_dz##* }"
+fi
+
+# The HA drift test (#193) needs a replication target — i.e. ≥2 cluster nodes.
+NODE_COUNT="$(get_all_node_hostnames 2>/dev/null | wc -w | tr -d ' ')"
 
 # ── Test 1: VM lifecycle + reconciler scripts present ───────────────
 
@@ -154,15 +189,16 @@ fi
 deep_cleanup() {
     # Remove DNS records the reconciler may have registered (delete-module
     # does not touch DNS). Harmless if absent.
-    dns-manager --no-ssl-verify delete test-vmdrift srvHome.internal  >/dev/null 2>&1 || true
+    dns-manager --no-ssl-verify delete test-vmdrift "${DEFAULT_ZONE:-srvHome}.internal"  >/dev/null 2>&1 || true
     dns-manager --no-ssl-verify delete test-vmdrift mgmt.internal >/dev/null 2>&1 || true
     [[ -f "${CONFIG_DIR}/test-vmdrift.json" ]] || return 0
     info "  Cleaning up test VM (delete-module test-vmdrift)..."
     /home/tappaas/bin/delete-module.sh test-vmdrift --force >/dev/null 2>&1 || true
 }
 
-if [[ "${DEEP}" -eq 1 ]]; then
+if [[ "${DEEP}" -eq 1 && -n "${DEFAULT_ZONE}" ]]; then
     info "${BOLD}Deep Test: cluster:vm drift reconcile (issue #192)${CL}"
+    info "  Drift target = default zone ${BL}${DEFAULT_ZONE}${CL} (VLAN ${DEFAULT_VLAN})"
     trap deep_cleanup EXIT
 
     TVM="test-vmdrift"
@@ -190,11 +226,12 @@ if [[ "${DEEP}" -eq 1 ]]; then
         fi
     fi
 
-    # 3. Induce zone drift mgmt -> srvHome (active, VLAN 210, has DHCP).
+    # 3. Induce zone drift mgmt -> <default zone> (Active, VLAN ${DEFAULT_VLAN},
+    #    has DHCP — the zone a real module lands in by default).
     if [[ "${deep_ok}" -eq 1 ]]; then
         # Pattern A-aware write (#207).
-        if jq_module_write "${TVM}" '.zone0 = "srvHome"'; then
-            pass "induced drift: zone0 mgmt→srvHome in config"
+        if jq_module_write "${TVM}" ".zone0 = \"${DEFAULT_ZONE}\""; then
+            pass "induced drift: zone0 mgmt→${DEFAULT_ZONE} in config"
         else
             fail "could not edit test config"; deep_ok=0
         fi
@@ -209,7 +246,7 @@ if [[ "${DEEP}" -eq 1 ]]; then
         fi
     fi
 
-    # 5. Apply the reconcile (qm set net0 tag=210, reboot, wait IP, DNS).
+    # 5. Apply the reconcile (qm set net0 tag=${DEFAULT_VLAN}, reboot, wait IP, DNS).
     if [[ "${deep_ok}" -eq 1 ]]; then
         info "  Applying reconcile (this reboots the VM)..."
         reconcile_out=$("${UPSVC}" "${TVM}" 2>&1); reconcile_rc=$?
@@ -221,17 +258,17 @@ if [[ "${DEEP}" -eq 1 ]]; then
         fi
     fi
 
-    # 6. Verify the live VM is now tagged onto VLAN 210.
+    # 6. Verify the live VM is now tagged onto the default zone's VLAN.
     if [[ "${deep_ok}" -eq 1 ]]; then
         vmrow=$(find_vm 920) || true
         vmnode="${vmrow%% *}"
         if [[ -n "${vmnode}" ]]; then
             # shellcheck disable=SC2086
             net0=$(ssh ${SSH_OPTS} "root@${vmnode}.${MGMT}.internal" "qm config 920 | grep '^net0'" 2>/dev/null) || true
-            if grep -q "tag=210" <<< "${net0}"; then
-                pass "live net0 bound to srvHome VLAN (tag=210)"
+            if grep -q "tag=${DEFAULT_VLAN}" <<< "${net0}"; then
+                pass "live net0 bound to ${DEFAULT_ZONE} VLAN (tag=${DEFAULT_VLAN})"
             else
-                fail "live net0 not tagged 210 (got: ${net0:-none})"
+                fail "live net0 not tagged ${DEFAULT_VLAN} (got: ${net0:-none})"
             fi
         else
             fail "could not locate test VM after reconcile"
@@ -243,16 +280,19 @@ if [[ "${DEEP}" -eq 1 ]]; then
         # shellcheck disable=SC2001  # regex ANSI strip not expressible as ${//}
         new_ip=$(sed 's/\x1b\[[0-9;]*m//g' <<< "${reconcile_out}" \
                  | grep -oE 'came up with IP [0-9.]+' | grep -oE '[0-9.]+$')
-        dns_line=$(dns-manager --no-ssl-verify list 2>/dev/null | grep -i "test-vmdrift" | grep "srvHome.internal" || true)
+        dns_line=$(dns-manager --no-ssl-verify list 2>/dev/null | grep -i "test-vmdrift" | grep "${DEFAULT_ZONE}.internal" || true)
         if [[ -n "${dns_line}" ]] && { [[ -z "${new_ip}" ]] || grep -q "${new_ip}" <<< "${dns_line}"; }; then
-            pass "DNS record test-vmdrift.srvHome.internal registered (${new_ip:-ip unknown})"
+            pass "DNS record test-vmdrift.${DEFAULT_ZONE}.internal registered (${new_ip:-ip unknown})"
         else
-            fail "DNS record for test-vmdrift.srvHome.internal (${new_ip:-?}) not found"
+            fail "DNS record for test-vmdrift.${DEFAULT_ZONE}.internal (${new_ip:-?}) not found"
         fi
     fi
 
     deep_cleanup
     trap - EXIT
+elif [[ "${DEEP}" -eq 1 ]]; then
+    info "${BOLD}Deep Test: cluster:vm drift reconcile${CL}"
+    skip "no Active default zone resolved (site.json .name / zones.json) — drift test needs it"
 else
     info "${BOLD}Deep Test: cluster:vm drift reconcile${CL}"
     skip "VM creation + drift test (use TAPPAAS_TEST_DEEP=1 to run)"
@@ -261,14 +301,15 @@ fi
 # ── Deep Test: create an HA VM, induce HA drift, verify reconcile ───
 
 deep_cleanup_ha() {
-    dns-manager --no-ssl-verify delete test-hadrift srvHome.internal >/dev/null 2>&1 || true
+    dns-manager --no-ssl-verify delete test-hadrift "${DEFAULT_ZONE:-srvHome}.internal" >/dev/null 2>&1 || true
     [[ -f "${CONFIG_DIR}/test-hadrift.json" ]] || return 0
     info "  Cleaning up HA test VM (delete-module test-hadrift)..."
     /home/tappaas/bin/delete-module.sh test-hadrift --force >/dev/null 2>&1 || true
 }
 
-if [[ "${DEEP}" -eq 1 ]]; then
+if [[ "${DEEP}" -eq 1 && -n "${DEFAULT_ZONE}" && "${NODE_COUNT}" -ge 2 ]]; then
     info "${BOLD}Deep Test: cluster:ha drift reconcile (issue #193)${CL}"
+    info "  Default zone ${BL}${DEFAULT_ZONE}${CL} (VLAN ${DEFAULT_VLAN}); ${NODE_COUNT} nodes"
     trap deep_cleanup_ha EXIT
 
     THVM="test-hadrift"
@@ -278,10 +319,11 @@ if [[ "${DEEP}" -eq 1 ]]; then
     hdeep_ok=1
 
     # 1. Install the disposable HA-managed test VM. The cluster:vm service
-    #    creates the VM (zone0=srvHome / VLAN 210 so it stays reachable on
-    #    either node); the cluster:ha service configures the rule + replication.
-    info "  Installing ${THVM} (NixOS clone, HA-managed on srvHome/210)..."
-    if ( cd "${HFIX}" && /home/tappaas/bin/install-module.sh "${THVM}" ) >/dev/null 2>&1; then
+    #    creates the VM in the default zone (--zone0 override beats the fixture's
+    #    baked value) so it is Active + reachable on either node; the cluster:ha
+    #    service configures the rule + replication.
+    info "  Installing ${THVM} (NixOS clone, HA-managed on ${DEFAULT_ZONE}/${DEFAULT_VLAN})..."
+    if ( cd "${HFIX}" && /home/tappaas/bin/install-module.sh "${THVM}" --zone0 "${DEFAULT_ZONE}" ) >/dev/null 2>&1; then
         pass "HA test VM installed + HA configured"
     else
         fail "HA test VM install failed — aborting deep test"
@@ -381,6 +423,12 @@ if [[ "${DEEP}" -eq 1 ]]; then
 
     deep_cleanup_ha
     trap - EXIT
+elif [[ "${DEEP}" -eq 1 && -n "${DEFAULT_ZONE}" && "${NODE_COUNT}" -lt 2 ]]; then
+    info "${BOLD}Deep Test: cluster:ha drift reconcile${CL}"
+    skip "HA drift test needs ≥2 cluster nodes for a replication target (found ${NODE_COUNT})"
+elif [[ "${DEEP}" -eq 1 ]]; then
+    info "${BOLD}Deep Test: cluster:ha drift reconcile${CL}"
+    skip "no Active default zone resolved (site.json .name / zones.json) — HA drift test skipped"
 else
     info "${BOLD}Deep Test: cluster:ha drift reconcile${CL}"
     skip "HA VM creation + drift test (use TAPPAAS_TEST_DEEP=1 to run)"
@@ -389,14 +437,15 @@ fi
 # ── Deep Test: create an LXC, verify net/DNS, induce drift, reconcile ─
 
 deep_cleanup_lxc() {
-    dns-manager --no-ssl-verify delete test-lxcdrift srvHome.internal >/dev/null 2>&1 || true
+    dns-manager --no-ssl-verify delete test-lxcdrift "${DEFAULT_ZONE:-srvHome}.internal" >/dev/null 2>&1 || true
     [[ -f "${CONFIG_DIR}/test-lxcdrift.json" ]] || return 0
     info "  Cleaning up LXC test container (delete-module test-lxcdrift)..."
     /home/tappaas/bin/delete-module.sh test-lxcdrift --force >/dev/null 2>&1 || true
 }
 
-if [[ "${DEEP}" -eq 1 ]]; then
+if [[ "${DEEP}" -eq 1 && -n "${DEFAULT_ZONE}" ]]; then
     info "${BOLD}Deep Test: cluster:lxc provisioner + drift reconcile (issue #203)${CL}"
+    info "  Default zone ${BL}${DEFAULT_ZONE}${CL} (VLAN ${DEFAULT_VLAN})"
     trap deep_cleanup_lxc EXIT
 
     TLVM="test-lxcdrift"
@@ -405,10 +454,11 @@ if [[ "${DEEP}" -eq 1 ]]; then
     LVMID=922
     ldeep_ok=1
 
-    # 1. Install the disposable plain-Debian container (no GPU/meta) on
-    #    srvHome / VLAN 210 (the only test VLAN this switch trunks cross-node).
-    info "  Installing ${TLVM} (Debian CT on srvHome/210; first run downloads the template)..."
-    if ( cd "${LFIX}" && /home/tappaas/bin/install-module.sh "${TLVM}" ) >/dev/null 2>&1; then
+    # 1. Install the disposable plain-Debian container (no GPU/meta) in the
+    #    default zone (--zone0 override beats the fixture's baked value). The
+    #    default zone is Active + trunked cross-node, unlike the legacy srvHome.
+    info "  Installing ${TLVM} (Debian CT on ${DEFAULT_ZONE}/${DEFAULT_VLAN}; first run downloads the template)..."
+    if ( cd "${LFIX}" && /home/tappaas/bin/install-module.sh "${TLVM}" --zone0 "${DEFAULT_ZONE}" ) >/dev/null 2>&1; then
         pass "LXC container installed via cluster:lxc"
     else
         fail "LXC install failed — aborting deep test"
@@ -422,14 +472,14 @@ if [[ "${DEEP}" -eq 1 ]]; then
         [[ -z "${LNODE}" ]] && { fail "could not locate ${TLVM} (VMID ${LVMID}) after install"; ldeep_ok=0; }
     fi
 
-    # 2. net0 must be on the srvHome VLAN tag (210) — proves zone→tag for LXC.
+    # 2. net0 must be on the default zone's VLAN tag — proves zone→tag for LXC.
     if [[ "${ldeep_ok}" -eq 1 ]]; then
         # shellcheck disable=SC2086,SC2029
         lnet0=$(ssh ${SSH_OPTS} "root@${LNODE}.${MGMT}.internal" "pct config ${LVMID} | grep '^net0'" 2>/dev/null) || true
-        if grep -q "tag=210" <<< "${lnet0}"; then
-            pass "container net0 bound to srvHome VLAN (tag=210)"
+        if grep -q "tag=${DEFAULT_VLAN}" <<< "${lnet0}"; then
+            pass "container net0 bound to ${DEFAULT_ZONE} VLAN (tag=${DEFAULT_VLAN})"
         else
-            fail "container net0 not tagged 210 (got: ${lnet0:-none})"
+            fail "container net0 not tagged ${DEFAULT_VLAN} (got: ${lnet0:-none})"
         fi
     fi
 
@@ -442,12 +492,12 @@ if [[ "${DEEP}" -eq 1 ]]; then
         fi
     fi
 
-    # 4. DNS registered in srvHome.
+    # 4. DNS registered in the default zone.
     if [[ "${ldeep_ok}" -eq 1 ]]; then
-        if dns-manager --no-ssl-verify list 2>/dev/null | grep -i "test-lxcdrift" | grep -q "srvHome.internal"; then
-            pass "DNS record test-lxcdrift.srvHome.internal registered"
+        if dns-manager --no-ssl-verify list 2>/dev/null | grep -i "test-lxcdrift" | grep -q "${DEFAULT_ZONE}.internal"; then
+            pass "DNS record test-lxcdrift.${DEFAULT_ZONE}.internal registered"
         else
-            fail "DNS record test-lxcdrift.srvHome.internal not found"
+            fail "DNS record test-lxcdrift.${DEFAULT_ZONE}.internal not found"
         fi
     fi
 
@@ -481,6 +531,9 @@ if [[ "${DEEP}" -eq 1 ]]; then
 
     deep_cleanup_lxc
     trap - EXIT
+elif [[ "${DEEP}" -eq 1 ]]; then
+    info "${BOLD}Deep Test: cluster:lxc provisioner + drift reconcile${CL}"
+    skip "no Active default zone resolved (site.json .name / zones.json) — LXC drift test skipped"
 else
     info "${BOLD}Deep Test: cluster:lxc provisioner + drift reconcile${CL}"
     skip "LXC creation + drift test (use TAPPAAS_TEST_DEEP=1 to run)"

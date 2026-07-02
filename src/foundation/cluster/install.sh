@@ -212,15 +212,22 @@ configure_cluster() {
         echo "      pvecm add tappaas1.mgmt.internal"
         return 0
       fi
-      echo "  This node ('${host}') will JOIN the existing TAPPaaS cluster."
+      echo "  This node ('${host}') will JOIN the existing cluster."
       read -r -p "  Existing cluster node address [tappaas1.mgmt.internal]: " peer
       peer="${peer:-tappaas1.mgmt.internal}"
       msg_info "Joining cluster via ${peer} (ring0 ${mgmt}) — you'll be prompted for that node's root password"
       echo ""
       # pvecm add is interactive (password + SSH fingerprint); run on the TTY.
       # --link0 binds this node's ring to its mgmt IP (already on `lan`).
+      # NOTE: the join inherits the cluster IDENTITY (name + config) from the
+      # peer's corosync.conf — it does NOT take a cluster name and never uses
+      # --name/ORGNAME. So this correctly joins whatever the peer's cluster is
+      # named (e.g. "TAPPaaS" on a migrated system, or an org name on a fresh
+      # ADR-007 install). We discover + report the actual name below.
       if pvecm add "$peer" --link0 "$mgmt" || pvecm add "$peer"; then
-        msg_ok "Joined cluster via ${peer}"
+        local joined_name
+        joined_name="$(pvecm status 2>/dev/null | sed -n 's/^Name: *//p' | head -1)"
+        msg_ok "Joined cluster '${joined_name:-unknown}' via ${peer}"
         CLUSTER_ROLE="joined"
       else
         msg_error "pvecm add ${peer} failed — fix connectivity and re-run, or: pvecm add ${peer}"
@@ -585,7 +592,7 @@ case "$CLUSTER_ROLE" in
   created)
     msg_ok "Node base + cluster '${ORGNAME:-TAPPaaS}' + storage ready (this node CREATED the cluster)." ;;
   joined)
-    msg_ok "Node base + cluster join + storage ready (this node JOINED the cluster)." ;;
+    msg_ok "Node base + cluster '$(pvecm status 2>/dev/null | sed -n 's/^Name: *//p' | head -1)' join + storage ready (this node JOINED the cluster)." ;;
   *)
     msg_ok "Completed TAPPaaS node post-install (cluster role: ${CLUSTER_ROLE:-standalone})." ;;
 esac
