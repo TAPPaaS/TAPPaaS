@@ -2,12 +2,19 @@
 #
 # TAPPaaS LiteLLM — Rotate Provider API Key
 #
-# Orchestrates the full 3-step rotation SOP for the OPENROUTER_API_KEY (or any
+# Orchestrates the 2-step rotation SOP for the OPENROUTER_API_KEY (or any
 # provider key stored in /etc/secrets/litellm.env):
 #
 #   Step 1: Update OPENROUTER_API_KEY in /etc/secrets/litellm.env; restart service
-#   Step 2: PATCH the LiteLLM DB credential to the new key
-#   Step 3: Verify all DB-stored models have an explicit api_key; fix any that don't
+#   Step 2: Rotate the matching LiteLLM DB credential (delegates to
+#           litellm-credentials.sh rotate) — every model referencing that
+#           credential by name picks up the new value automatically, no
+#           per-model action needed.
+#
+# Formerly had a Step 3 that deleted+recreated every DB model with the literal
+# key embedded — that only existed because models didn't reference named
+# credentials yet. Now that they do (litellm-credentials.sh assign-model),
+# Step 3 is structurally obsolete and has been removed (2026-07-02).
 #
 # If --new-key is omitted, the key is read interactively (not stored in history).
 # If --new-key is provided (e.g. piped from openrouter-manager), the value is used
@@ -16,7 +23,7 @@
 #
 # Usage:
 #   rotate-provider-key.sh --vmname <vmname> [--new-key <key>] \
-#       [--owui-service <systemd-unit>] [--dry-run]
+#       [--credential-name <name>] [--owui-service <systemd-unit>] [--dry-run]
 #
 # Examples:
 #   rotate-provider-key.sh --vmname litellm-a3k
@@ -30,15 +37,17 @@ set -euo pipefail
 
 VMNAME=""
 NEW_KEY=""
+CREDENTIAL_NAME=""
 OWUI_SERVICE=""
 DRY_RUN=0
 
 while [[ $# -gt 0 ]]; do
     case "$1" in
-        --vmname)       VMNAME="$2";      shift 2 ;;
-        --new-key)      NEW_KEY="$2";     shift 2 ;;
-        --owui-service) OWUI_SERVICE="$2"; shift 2 ;;
-        --dry-run)      DRY_RUN=1;        shift ;;
+        --vmname)          VMNAME="$2";          shift 2 ;;
+        --new-key)         NEW_KEY="$2";         shift 2 ;;
+        --credential-name) CREDENTIAL_NAME="$2";  shift 2 ;;
+        --owui-service)    OWUI_SERVICE="$2";     shift 2 ;;
+        --dry-run)         DRY_RUN=1;             shift ;;
         -h|--help)
             sed -n '/^# Usage:/,/^[^#]/p' "$0" | grep '^#' | sed 's/^# \?//'
             exit 0 ;;
@@ -68,8 +77,7 @@ fi
 
 if [[ "${DRY_RUN}" -eq 1 ]]; then
     info "  ${YW}[dry-run]${CL} Step 1: would update OPENROUTER_API_KEY in ${SECRETS_FILE} on ${LITELLM_HOST}"
-    info "  ${YW}[dry-run]${CL} Step 2: would PATCH DB credential on ${LITELLM_HOST}"
-    info "  ${YW}[dry-run]${CL} Step 3: would verify DB-model api_key coverage on ${LITELLM_HOST}"
+    info "  ${YW}[dry-run]${CL} Step 2: would rotate DB credential${CREDENTIAL_NAME:+ '${CREDENTIAL_NAME}'} via litellm-credentials.sh"
     [[ -n "${OWUI_SERVICE}" ]] && \
         info "  ${YW}[dry-run]${CL} Post:   would restart ${OWUI_SERVICE} on ${LITELLM_HOST} zone"
     exit 0
@@ -116,85 +124,32 @@ MASTER=$(ssh -o StrictHostKeyChecking=accept-new -o ConnectTimeout=10 \
     || die "could not read LITELLM_MASTER_KEY from ${LITELLM_HOST}"
 [[ -n "${MASTER}" ]] || die "LITELLM_MASTER_KEY is empty on ${LITELLM_HOST}"
 
-# ── Step 2: PATCH DB credential ───────────────────────────────────────────────
-info "  ${BOLD}Step 2${CL}: updating DB credential on ${LITELLM_HOST}"
+# ── Step 2: rotate DB credential (delegates to litellm-credentials.sh) ───────
+info "  ${BOLD}Step 2${CL}: rotating DB credential on ${LITELLM_HOST}"
 
-CRED_LIST=$(ssh -o StrictHostKeyChecking=accept-new -o ConnectTimeout=10 \
-    "tappaas@${LITELLM_HOST}" \
-    "curl -sf http://localhost:4000/credentials \
-        -H 'Authorization: Bearer ${MASTER}'" 2>/dev/null) \
-    || die "Step 2 failed: could not list credentials"
-
-# Find the first credential with an openrouter-related name
-CRED_NAME=$(echo "${CRED_LIST}" | \
-    jq -r '.credentials[]? | select(.credential_name | test("openrouter|or-key"; "i")) | .credential_name' \
-    2>/dev/null | head -1 || true)
-
-if [[ -z "${CRED_NAME}" ]]; then
-    warn "Step 2: no openrouter credential found in LiteLLM DB — skipping DB credential update"
-    warn "  (only the env var was updated; add a DB credential via LiteLLM admin UI if needed)"
-else
-    PATCH_RESULT=$(ssh -o StrictHostKeyChecking=accept-new -o ConnectTimeout=10 \
+if [[ -z "${CREDENTIAL_NAME}" ]]; then
+    CRED_LIST=$(ssh -o StrictHostKeyChecking=accept-new -o ConnectTimeout=10 \
         "tappaas@${LITELLM_HOST}" \
-        "curl -sf -X PATCH http://localhost:4000/credentials/${CRED_NAME} \
-            -H 'Authorization: Bearer ${MASTER}' \
-            -H 'Content-Type: application/json' \
-            --data-raw '{\"credential_values\": {\"api_key\": \"${NEW_KEY}\"}}'" 2>/dev/null) \
-        || die "Step 2 failed: PATCH /credentials/${CRED_NAME} failed"
-    echo "${PATCH_RESULT}" | jq -e '.credential_name' >/dev/null 2>&1 \
-        || die "Step 2 failed: unexpected PATCH response: ${PATCH_RESULT}"
-    info "  ${GN}✓${CL} Step 2 complete — DB credential '${CRED_NAME}' updated"
+        "curl -sf http://localhost:4000/credentials \
+            -H 'Authorization: Bearer ${MASTER}'" 2>/dev/null) \
+        || die "Step 2 failed: could not list credentials"
+    # Default to the first credential with an openrouter-related name; pass
+    # --credential-name explicitly for any other provider.
+    CREDENTIAL_NAME=$(echo "${CRED_LIST}" | \
+        jq -r '.credentials[]? | select(.credential_name | test("openrouter|or-key"; "i")) | .credential_name' \
+        2>/dev/null | head -1 || true)
 fi
 
-# ── Step 3: Verify & fix DB-model api_key coverage ───────────────────────────
-info "  ${BOLD}Step 3${CL}: verifying DB-model api_key coverage"
-
-MODEL_INFO=$(ssh -o StrictHostKeyChecking=accept-new -o ConnectTimeout=10 \
-    "tappaas@${LITELLM_HOST}" \
-    "curl -sf http://localhost:4000/model/info \
-        -H 'Authorization: Bearer ${MASTER}'" 2>/dev/null) \
-    || die "Step 3 failed: could not call /model/info"
-
-MISSING=$(echo "${MODEL_INFO}" | \
-    jq -r '.data[] | select(.litellm_params.api_key == null) | "\(.model_info.id)|\(.model_name)|\(.litellm_params.model // "")"' \
-    2>/dev/null || true)
-
-if [[ -z "${MISSING}" ]]; then
-    info "  ${GN}✓${CL} Step 3 complete — all DB models have explicit api_key"
+if [[ -z "${CREDENTIAL_NAME}" ]]; then
+    warn "Step 2: no matching DB credential found — skipping DB credential update"
+    warn "  (only the env var was updated; pass --credential-name or create one with"
+    warn "   litellm-credentials.sh add if this is a new provider)"
 else
-    FIXED=0; FAILED_FIX=0
-    while IFS='|' read -r MODEL_ID MODEL_NAME MODEL_PATH; do
-        [[ -n "${MODEL_ID}" ]] || continue
-        info "    Fixing model '${MODEL_NAME}' (${MODEL_ID})"
-
-        # Delete
-        ssh -o StrictHostKeyChecking=accept-new -o ConnectTimeout=10 \
-            "tappaas@${LITELLM_HOST}" \
-            "curl -sf -X POST http://localhost:4000/model/delete \
-                -H 'Authorization: Bearer ${MASTER}' \
-                -H 'Content-Type: application/json' \
-                --data-raw '{\"id\": \"${MODEL_ID}\"}'" >/dev/null 2>&1 || true
-
-        # Re-add with explicit api_key
-        ADD_RESULT=$(ssh -o StrictHostKeyChecking=accept-new -o ConnectTimeout=10 \
-            "tappaas@${LITELLM_HOST}" \
-            "curl -sf -X POST http://localhost:4000/model/new \
-                -H 'Authorization: Bearer ${MASTER}' \
-                -H 'Content-Type: application/json' \
-                --data-raw '{\"model_name\": \"${MODEL_NAME}\", \
-                    \"litellm_params\": {\"model\": \"${MODEL_PATH}\", \
-                    \"api_key\": \"${NEW_KEY}\"}}'" 2>/dev/null) || true
-        if echo "${ADD_RESULT}" | jq -e '.model_name' >/dev/null 2>&1; then
-            info "    ${GN}✓${CL} '${MODEL_NAME}' re-added with explicit api_key"
-            FIXED=$((FIXED + 1))
-        else
-            warn "    could not re-add '${MODEL_NAME}' — fix manually: delete + POST /model/new with api_key"
-            FAILED_FIX=$((FAILED_FIX + 1))
-        fi
-    done <<< "${MISSING}"
-
-    info "  ${GN}✓${CL} Step 3 complete — ${FIXED} model(s) fixed, ${FAILED_FIX} failed"
-    [[ "${FAILED_FIX}" -eq 0 ]] || warn "  ${FAILED_FIX} model(s) still need manual api_key fix"
+    SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+    "${SCRIPT_DIR}/litellm-credentials.sh" rotate \
+        --vmname "${VMNAME}" --name "${CREDENTIAL_NAME}" --key "${NEW_KEY}" --yes \
+        || die "Step 2 failed: litellm-credentials.sh rotate failed for '${CREDENTIAL_NAME}'"
+    info "  ${GN}✓${CL} Step 2 complete — every model referencing '${CREDENTIAL_NAME}' picked up the new value automatically"
 fi
 
 # ── Post: restart OpenWebUI (optional) ───────────────────────────────────────
@@ -214,8 +169,7 @@ ELAPSED=$(( $(date +%s) - START_TIME ))
 info ""
 info "  ${GN}${BOLD}✓ Rotation complete for ${VMNAME}${CL} (${ELAPSED}s)"
 info "    Step 1 ✓  env var + service restart"
-info "    Step 2 ${CRED_NAME:+✓  credential '${CRED_NAME}' updated}${CRED_NAME:-⚠  no DB credential found}"
-info "    Step 3 ✓  DB-model api_key coverage verified"
+info "    Step 2 ${CREDENTIAL_NAME:+✓  credential '${CREDENTIAL_NAME}' rotated — all referencing models updated}${CREDENTIAL_NAME:-⚠  no DB credential found}"
 info ""
 info "  Verify: check OpenRouter dashboard for activity with new key"
 info "  Revoke: old key in OpenRouter org dashboard (manual)"

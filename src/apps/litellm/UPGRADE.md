@@ -1,5 +1,26 @@
 # LiteLLM — Upgrade Guide
 
+## v0.7.0 — credential management tooling (module version, no app upgrade)
+
+Not a LiteLLM app version change (still 1.85.0) — module tooling only.
+
+- Consolidated all provider-key wiring onto LiteLLM's native named-credential
+  registry (`litellm_credential_name`), replacing implicit env-var fallback
+  and one legacy row that resisted the standard update API. Rotating a key
+  now updates one credential object; every model referencing it picks up the
+  new value automatically — no per-model action needed.
+- New `scripts/litellm-credentials.sh` (`inspect`/`add`/`rotate`/`assign-model`)
+  — see README.md `## Operations`.
+- Fixed `services/models/test-service.sh`: Test 1's VK-keystore existence
+  check ran as an unprivileged user against a root-600 file, always
+  false-negative (upstream: TAPPaaS/TAPPaaS#394). Test 4's DB-model
+  `api_key` check now also recognizes `litellm_credential_name` references,
+  not just literal `api_key`.
+- `scripts/rotate-provider-key.sh`: removed the obsolete Step 3
+  (delete+recreate every model with a literal key) — structurally
+  unnecessary now that models reference credentials by name; Step 2 now
+  delegates to `litellm-credentials.sh rotate`.
+
 ## Upgrading to v1.85.0
 
 ### What is new
