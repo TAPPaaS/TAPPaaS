@@ -6,10 +6,10 @@
 # the consumer's pinholes (Hue API + SSDP) exist.
 #
 # NB (2026-07-02 regression): this used to check deCONZ's own port 8080 on
-# deconz.srvHome.internal — a leftover from before diyHue existed (ADR-COM-0006/
-# 0007 moved the SysAP-facing bridge to diyHue on 80/443, intra-zone iotCloud).
-# That mismatch let a diyHue outage pass this test as green. Check the ACTUAL
-# hue-bridge ports/zone, not deCONZ's.
+# deconz.srvHome.internal — a leftover from before diyHue existed (the SysAP-
+# facing bridge moved to diyHue on 80/443, intra-zone iotCloud). That mismatch
+# let a diyHue outage pass this test as green. Check the ACTUAL hue-bridge
+# ports/zone, not deCONZ's.
 #
 # Usage: test-service.sh <consumer-module-name>
 

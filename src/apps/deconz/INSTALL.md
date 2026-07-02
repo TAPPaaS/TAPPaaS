@@ -16,7 +16,7 @@
 ## Install
 
 ```bash
-cd /home/tappaas/Community/src/ErikDaniel007/home-automation/deconz
+cd "${TAPPAAS_REPO:-/home/tappaas/TAPPaaS}"/src/apps/deconz
 install-module.sh deconz        # run FROM the module dir (install-module is pwd-based)
 ```
 

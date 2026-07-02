@@ -26,7 +26,7 @@
 # So deCONZ is internalised from the SysAP (only diyHue faces it); HA keeps its path.
 # deCONZ retains iotCloud internet egress for Zigbee OTA bulb-firmware updates.
 #
-# Network: iotCloud zone (VMID 213, tappaas1; ADR-COM-0006). Ports: 22 (SSH),
+# Network: iotCloud zone (VMID 213, tappaas1). Ports: 22 (SSH),
 #   8080/8443 (deCONZ, HA+diyHue), 80/443 + UDP 1900/2100/1982 (diyHue, SysAP).
 # Hardware: ConBee II USB attached by update.sh (qm set -usb0 host=1cf1:0030).
 # diyHue: no nixpkgs package (nixpkgs#374133) -> OCI container via podman.

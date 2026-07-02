@@ -7,8 +7,8 @@ deCONZ is pinned by nixpkgs (`services.deconz` → `pkgs.deconz`). Upgrade
 declaratively:
 
 ```bash
-cd /home/tappaas/Community/src/ErikDaniel007/home-automation/deconz
-./update.sh deconz        # rebuilds the NixOS VM from deconz.nix
+cd "${TAPPAAS_REPO:-/home/tappaas/TAPPaaS}"/src/apps/deconz
+update-module.sh deconz        # rebuilds the NixOS VM from deconz.nix
 ```
 
 A NixOS rebuild keeps the previous generation — roll back with
