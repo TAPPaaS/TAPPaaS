@@ -1,0 +1,8 @@
+{
+  "_comment": "Auto-pinhole (#173) for deconz:hue-bridge — diyHue's genuine-grade Hue bridge in front of deCONZ (replaces deCONZ's thin Hue emulation, which free@home rejected — see ADR-COM-0006/0007). Consumed INTRA-zone by the SysAP (both in iotCloud).",
+  "ports": [
+    { "port": 80,   "protocol": "TCP", "description": "diyHue Hue API (SysAP light/scene control) — intra-zone iotCloud" },
+    { "port": 443,  "protocol": "TCP", "description": "diyHue Hue API TLS (genuine Hue-grade endpoint) — intra-zone iotCloud" },
+    { "port": 1900, "protocol": "UDP", "description": "SSDP discovery — diyHue advertises the bridge to the SysAP, intra-zone iotCloud" }
+  ]
+}

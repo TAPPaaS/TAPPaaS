@@ -11,7 +11,7 @@ set -euo pipefail
 . /home/tappaas/bin/common-install-routines.sh
 
 VMNAME="$(get_config_value 'vmname' "${1:-deconz}")"
-ZONE0NAME="$(get_config_value 'zone0' 'srvHome')"
+ZONE0NAME="$(get_config_value 'zone0' 'iotCloud')"
 HTTP_PORT="$(get_config_value 'config.firewall:proxy.proxyPort' '8080')"
 FQDN="${VMNAME}.${ZONE0NAME}.internal"
 
@@ -39,6 +39,24 @@ else
   warn "  FAIL — ws port ${WS_PORT} not reachable"
   fail=1
 fi
+
+# Gate 3 — diyHue's `hue-bridge` service (SysAP-facing Hue API) is up. Checked
+# HERE, independent of any consumer's firewall wiring, because the module
+# PROVIDES hue-bridge (deconz.json provides[]) — its own health must not depend
+# on whether a consumer module (e.g. sysap) happens to invoke
+# services/hue-bridge/test-service.sh. Regression history (2026-07-02): a
+# canon-patch redeploy silently dropped the diyHue container; Gate 1/2 still
+# passed (deCONZ itself was fine) and the outage went undetected until a
+# consumer noticed. This gate exists so `test.sh` alone catches that again.
+for HUE_PORT in 80 443; do
+  info "Gate 3: hue-bridge (diyHue) port ${FQDN}:${HUE_PORT} reachable"
+  if timeout 5 bash -c ">/dev/tcp/${FQDN}/${HUE_PORT}" 2>/dev/null; then
+    info "  ${GN}PASS${CL} — hue-bridge port ${HUE_PORT} open"
+  else
+    warn "  FAIL — hue-bridge port ${HUE_PORT} not reachable (diyHue container down/misconfigured?)"
+    fail=1
+  fi
+done
 
 echo ""
 if [[ "${fail}" -eq 0 ]]; then
