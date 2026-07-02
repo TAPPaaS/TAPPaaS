@@ -27,10 +27,12 @@ Local LLM inference using the AMD Ryzen AI MAX+ 395 integrated GPU (Radeon 8060S
 
 FP8 is not supported on gfx1151. Use AWQ or GPTQ for large models.
 
-Currently serving on the live instance: a Qwen3 30B MoE model at
-`/models/qwen3-30b-a3b-gptq-int4` (confirmed 2026-07-02 via `scripts/inspect.sh`
-— not independently verified against the exact HuggingFace repo above, may or
-may not be the same release as the Qwen3-Coder-30B row).
+Currently serving on the live instance: `Qwen/Qwen3-30B-A3B-GPTQ-Int4`
+(confirmed via `scripts/inspect.sh` — path `/models/qwen3-30b-a3b-gptq-int4` —
+cross-checked against this DP's own backlog, VLLM-006). This is the A3B
+mixture-of-experts variant, a **different model** from the
+Qwen3-Coder-30B-GPTQ-Int4 row above (code-generation-tuned) — both may have
+been tested, but A3B is what's currently deployed.
 
 ## Known limitations
 
