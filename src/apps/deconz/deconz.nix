@@ -42,7 +42,11 @@
   };
 
   # ── NETWORKING ───────────────────────────────────────────────────────────--
-  networking.hostName = lib.mkDefault "deconz";
+  networking.hostName = let
+    cfg = if builtins.pathExists ./deconz.json
+          then builtins.fromJSON (builtins.readFile ./deconz.json)
+          else {};
+  in lib.mkDefault (cfg.vmname or "deconz");
   networking.networkmanager.enable = true;
   networking.networkmanager.ensureProfiles.profiles.tappaas-ethernet = {
     connection = { id = "tappaas-ethernet"; type = "ethernet"; autoconnect = "true"; autoconnect-priority = "100"; };

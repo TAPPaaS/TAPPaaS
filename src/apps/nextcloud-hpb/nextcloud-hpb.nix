@@ -65,7 +65,11 @@ in
   # NETWORKING
   # ============================================================================
 
-  networking.hostName = lib.mkDefault "nextcloud-hpb";
+  networking.hostName = let
+    cfg = if builtins.pathExists ./nextcloud-hpb.json
+          then builtins.fromJSON (builtins.readFile ./nextcloud-hpb.json)
+          else {};
+  in lib.mkDefault (cfg.vmname or "nextcloud-hpb");
   networking.networkmanager.enable = true;
   networking.networkmanager.ensureProfiles.profiles.tappaas-ethernet = {
     connection = { id = "tappaas-ethernet"; type = "ethernet"; autoconnect = "true"; autoconnect-priority = "100"; };
