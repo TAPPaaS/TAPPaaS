@@ -171,7 +171,13 @@ if step cluster; then
     run systemctl stop pve-cluster
     run pmxcfs -l
     run rm -f /etc/pve/corosync.conf
+    # Clear /etc/corosync but KEEP the directory: a fresh Proxmox ships an
+    # (empty) /etc/corosync, and `corosync-keygen` (run by a later `pvecm create`)
+    # refuses to create the parent dir — so `rm -rf /etc/corosync` would leave the
+    # node unable to re-create a cluster ("Could not create /etc/corosync/authkey:
+    # No such file or directory"). Remove the contents, then re-create the dir.
     run rm -rf /etc/corosync
+    run mkdir -p /etc/corosync
     run pkill -9 pmxcfs
     run systemctl start pve-cluster
     info "  → after this the node should report no cluster (verify: pvecm status)."
