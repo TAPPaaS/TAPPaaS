@@ -68,8 +68,13 @@ in
   # ----------------------------------------
   # Network Configuration
   # ----------------------------------------
+  networking.hostName = let
+    cfg = if builtins.pathExists ./openwebui.json
+          then builtins.fromJSON (builtins.readFile ./openwebui.json)
+          else {};
+  in lib.mkDefault (cfg.vmname or "openwebui");
+
   networking = {
-    hostName = lib.mkDefault "openwebui";
     networkmanager.enable = true;
     # Match ethernet by type, not interface name (ens18/eth0/enp0s18 varies)
     networkmanager.ensureProfiles.profiles.tappaas-ethernet = {
@@ -77,8 +82,9 @@ in
       ipv4 = { method = "auto"; };
       ipv6 = { method = "auto"; addr-gen-mode = "default"; };
     };
-    firewall.allowedTCPPorts = [ 22 8080 ];
   };
+
+  networking.firewall = { enable = true; allowedTCPPorts = [ 22 8080 ]; };
 
   # Disable systemd-networkd (conflicts with NetworkManager)
   systemd.network.enable = lib.mkForce false;               # Avoid conflict
@@ -87,7 +93,7 @@ in
   # ----------------------------------------
   # Timezone
   # ----------------------------------------
-  time.timeZone = "Europe/Amsterdam";
+  time.timeZone = lib.mkDefault "Europe/Amsterdam";
 
   # ----------------------------------------
   # Users
