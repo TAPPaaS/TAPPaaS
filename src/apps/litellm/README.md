@@ -40,6 +40,21 @@ Clients → LiteLLM :4000 → LLM Providers (OpenRouter, Anthropic, …)
 | ≤250 | 6 | 8 GB |
 | 500+ | 8 | 16 GB |
 
+## Operations
+
+Provider credentials (OpenRouter, Perplexity, Abacus, etc.) are managed as
+named, referenceable objects — models point at a credential by name rather
+than embedding the key, so rotating a key updates every model that uses it
+in one step.
+
+| Task | Command |
+|---|---|
+| See models, credentials, virtual keys, teams (no secrets shown) | `scripts/litellm-credentials.sh inspect` |
+| Register a new provider credential | `scripts/litellm-credentials.sh add --name <name> --provider <provider>` |
+| Rotate an existing credential's value | `scripts/litellm-credentials.sh rotate --name <name>` |
+| Wire a model to a credential | `scripts/litellm-credentials.sh assign-model --model <model> --credential <name>` |
+| Full end-to-end key rotation (env file + credential + restart) | `scripts/rotate-provider-key.sh --vmname <vmname>` |
+
 ## Dependencies
 
 | Depends on | Purpose |
