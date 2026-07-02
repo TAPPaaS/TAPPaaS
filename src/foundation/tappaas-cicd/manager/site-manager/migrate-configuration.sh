@@ -245,7 +245,10 @@ main() {
             displayName: $displayName,
             owner: $owner,
             email: ($t.email // ""),
-            version: ($t.version // "1.0"),
+            # Only carry a schema-valid (N.N[.N]) version; a mainline .tappaas.version
+            # is often a non-numeric string (e.g. "nixos-template-v1.3") that would
+            # fail site-fields.json and break every later site validate/update.
+            version: (($t.version // "") | if test("^[0-9]+\\.[0-9]+(\\.[0-9]+)?$") then . else "2.0" end),
             location: {
                 country: $country,
                 timezone: $timezone,

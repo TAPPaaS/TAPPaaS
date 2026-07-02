@@ -108,13 +108,34 @@ else
 fi
 
 # ── 4. Build + relink the full ADR-007 toolchain ─────────────────────
-# `update-module.sh tappaas-cicd --force` runs the ADR-007 pre-update.sh (relink
-# all bins + nix-build the controllers + update-tappaas). Its final zones-check
-# gate is EXPECTED to fail here (the live zones.json is still pre-migration) —
-# that is fine: the relink + build happen first. We verify the result below.
+# `update-module.sh tappaas-cicd --force` runs the ADR-007 pre-update.sh, which
+# relinks the bins and nix-builds the controllers — but it ABORTS at its
+# zones-check gate (the live zones.json is still pre-migration, so the check
+# errors) BEFORE the step that rebuilds update-tappaas. So the controllers get
+# built here, but update-tappaas is (re)built explicitly in 4b below — otherwise
+# the STALE mainline update-tappaas keeps running (it mis-handles site.json /
+# zones.rename.json and lacks Phase-0). The zones-check failure is expected.
 info "Building + relinking the ADR-007 toolchain (update-module.sh tappaas-cicd --force)..."
-info "  (a final 'zones-check'/'pre-update' failure here is expected pre-migration — verifying below)"
-"${BIN_DIR}/update-module.sh" tappaas-cicd --force || warn "  tappaas-cicd update returned non-zero (expected: pre-migration zones-check) — verifying the toolchain anyway"
+info "  (a 'zones-check'/pre-update failure here is expected pre-migration — verifying below)"
+"${BIN_DIR}/update-module.sh" tappaas-cicd --force || warn "  tappaas-cicd update returned non-zero (expected: pre-migration zones-check) — continuing"
+
+# ── 4b. Explicitly rebuild + relink update-tappaas ───────────────────
+# pre-update.sh's update-tappaas build runs AFTER its zones-check gate, so the
+# abort above skips it. Do it here so the operator gets the ADR-007 update-tappaas
+# (with Phase 0 + the correct NON_MODULE_JSONS) rather than the stale mainline one.
+_ut_dir="${REPO_DIR}/src/foundation/tappaas-cicd/update-tappaas"
+if [[ -d "$_ut_dir" ]]; then
+  info "Rebuilding update-tappaas (skipped by pre-update's zones-check gate)..."
+  if ( cd "$_ut_dir" && nix-build -A default default.nix >/tmp/mb-update-tappaas-build.log 2>&1 ); then
+    rm -f "${BIN_DIR}/update-tappaas"
+    ln -s "${_ut_dir}/result/bin/update-tappaas" "${BIN_DIR}/update-tappaas"
+    info "  ${GN}✓${CL} update-tappaas rebuilt + relinked"
+  else
+    warn "  update-tappaas nix-build failed (see /tmp/mb-update-tappaas-build.log) — the stale binary may remain"
+  fi
+else
+  warn "  update-tappaas dir not found at ${_ut_dir}"
+fi
 
 # ── 5. Verify the toolchain resolves ─────────────────────────────────
 info "Verifying the ADR-007 toolchain..."
