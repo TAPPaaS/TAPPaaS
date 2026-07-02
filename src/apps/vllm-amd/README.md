@@ -27,11 +27,26 @@ Local LLM inference using the AMD Ryzen AI MAX+ 395 integrated GPU (Radeon 8060S
 
 FP8 is not supported on gfx1151. Use AWQ or GPTQ for large models.
 
+Currently serving on the live instance: a Qwen3 30B MoE model at
+`/models/qwen3-30b-a3b-gptq-int4` (confirmed 2026-07-02 via `scripts/inspect.sh`
+— not independently verified against the exact HuggingFace repo above, may or
+may not be the same release as the Qwen3-Coder-30B row).
+
 ## Known limitations
 
 - ROCm on gfx1151 uses nightly "TheRock" builds — not officially AMD-supported
 - Instability under sustained heavy load ([ROCm#5499](https://github.com/ROCm/ROCm/issues/5499))
 - Some memory access faults on specific workloads ([ROCm#5824](https://github.com/ROCm/ROCm/issues/5824))
+
+## Operations
+
+| Task | Command |
+|---|---|
+| See the currently serving model + everything downloaded on disk | `scripts/inspect.sh` |
+| Install a new model from HuggingFace | `scripts/install-model.sh <hf-repo> [--dir-name <name>]` |
+
+Models live under `/models/` on the LXC (not `/mnt/models/` — that path in
+`download-model.sh`/`test-model.sh` predates the current layout and is stale).
 
 ## Dependencies
 
