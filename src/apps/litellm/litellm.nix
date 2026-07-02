@@ -76,7 +76,11 @@ in
   # NETWORKING
   # ============================================================================
   
-  networking.hostName = lib.mkDefault "litellm";
+  networking.hostName = let
+    cfg = if builtins.pathExists ./litellm.json
+          then builtins.fromJSON (builtins.readFile ./litellm.json)
+          else {};
+  in lib.mkDefault (cfg.vmname or "litellm");
   networking.networkmanager.enable = true;
   # Match ethernet by type, not interface name (ens18/eth0/enp0s18 varies)
   networking.networkmanager.ensureProfiles.profiles.tappaas-ethernet = {
