@@ -1,5 +1,52 @@
 # OpenWebUI — Upgrade Guide
 
+## Upgrading to v0.10.2
+
+### What is new
+
+- OpenWebUI updated from 0.9.6 to 0.10.2
+- Upstream 0.10.x reportedly introduces a database schema migration and
+  changes the default tool-calling mode from Legacy to Native — **this could
+  not be independently verified from the authoring session** (web-fetch tools
+  returned internally inconsistent results for this repo in this environment).
+  Validate both via the `--test` variant before any production rollout, and
+  re-check the real upstream CHANGELOG at deploy time.
+- No PostgreSQL major-version change required — already on PostgreSQL 17
+
+---
+
+### Validation path
+
+This upgrade must be validated via a throwaway `--test` variant before any
+production instance (`openwebui`, `openwebui-a3k`) is touched:
+
+```bash
+install-module.sh openwebui --variant test --zone0 srvWork
+tappaas-module-manager.sh test --module <assigned-vmname> --deep
+```
+
+Confirm the container is running the `0.10.2` image tag and all 5 health
+checks pass before considering a production upgrade of vm311/vm315.
+
+---
+
+### PostgreSQL version upgrade — data migration
+
+Not applicable for this upgrade (already on PostgreSQL 17). See the `0.9.5`
+section below for the historical 15→17 migration mechanism, which remains in
+`update.sh` for reference.
+
+---
+
+### Verify after upgrade
+
+```bash
+cd TAPPaaS/src/apps/openwebui
+./test.sh
+```
+
+---
+
 ## Upgrading to v0.9.5
 
 ### What is new

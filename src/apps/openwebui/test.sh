@@ -39,7 +39,8 @@ done
 VMNAME="$(get_config_value 'vmname' "${_MODULE}")"
 VMID="${_OVERRIDE_VMID:-$(get_config_value 'vmid')}"
 ZONE0NAME="${_OVERRIDE_ZONE:-$(get_config_value 'zone0' 'srv-work')}"
-readonly VMNAME VMID ZONE0NAME
+EXPECTED_VERSION="$(get_config_value 'appVersion')"
+readonly VMNAME VMID ZONE0NAME EXPECTED_VERSION
 
 VM_HOST="${VMNAME}.${ZONE0NAME}.internal"
 readonly VM_HOST
@@ -79,6 +80,15 @@ check_fail() {
     FAIL_COUNT=$((FAIL_COUNT + 1))
 }
 
+# Advisory only — does not affect PASS_COUNT/FAIL_COUNT or exit code.
+# Use for conditions that are expected/benign in some valid call contexts
+# (e.g. version mismatch is expected pre-update, since the deployed VM still
+# runs the old version right up until nixos-rebuild actually applies the new
+# config) but still worth surfacing.
+check_warn() {
+    warn "  ⚠ $1"
+}
+
 # ── Test functions ────────────────────────────────────────────────────
 
 check_ssh() {
@@ -104,12 +114,33 @@ check_container() {
     fi
 }
 
+check_version() {
+    info "Check 2b: Container image matches configured version (${EXPECTED_VERSION:-unset})"
+    if [[ -z "${EXPECTED_VERSION}" ]]; then
+        check_fail "appVersion not found in config — cannot verify running image version"
+        return
+    fi
+    local image
+    # shellcheck disable=SC2086
+    image=$(ssh ${SSH_OPTS} "tappaas@${VM_HOST}" \
+        "sudo podman ps --filter name=openwebui --format '{{.Image}}'" 2>/dev/null) || true
+    if [[ "${image}" == *":${EXPECTED_VERSION}" ]]; then
+        check_pass "Running image matches configured version (${image})"
+    else
+        check_warn "Running image (${image:-not found}) does not match configured appVersion ${EXPECTED_VERSION} — expected pre-update (old version still running); should read as a real problem only after an update completes"
+    fi
+}
+
 check_http() {
     info "Check 3: HTTP health check on port 8080"
     # After a NixOS rebuild + reboot the OpenWebUI container takes a few seconds
     # to start serving HTTP, so the very first probe can miss it (#138). Retry up
-    # to 6 times over ~10s before declaring failure.
-    local http_code attempt max_attempts=6
+    # to 15 times over ~60s before declaring failure — widened 2026-07-02 after
+    # the 0.10.2 upgrade's real container needed longer than the original ~10s
+    # window (larger image / possible startup migration work on a bigger
+    # version bump), which triggered a false-failure rollback on an otherwise
+    # successful update.
+    local http_code attempt max_attempts=15
     for (( attempt = 1; attempt <= max_attempts; attempt++ )); do
         # shellcheck disable=SC2086
         http_code=$(ssh ${SSH_OPTS} "tappaas@${VM_HOST}" \
@@ -119,7 +150,7 @@ check_http() {
             return
         fi
         if (( attempt < max_attempts )); then
-            sleep 2
+            sleep 4
         fi
     done
     check_fail "HTTP not responding after ${max_attempts} attempts (last status: ${http_code:-timeout})"
@@ -165,6 +196,7 @@ main() {
 
     check_ssh
     check_container
+    check_version
     check_http
     check_postgresql
     check_redis

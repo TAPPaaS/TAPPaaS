@@ -12,10 +12,19 @@
 # TAPPaaS
 # Name: Open webui
 # Type: APP
-# Version: 0.9.6
-# Date: 2026-06-02
+# Version: 0.10.2
+# Date: 2026-07-02
 # Author: @ErikDaniel007 (Tappaas)
 # Products: openwebui, postgres, redis
+#
+# Changelog v0.10.2 (2026-07-02):
+# - Upgraded OpenWebUI 0.9.6 → 0.10.2
+# - Upstream 0.10.x includes a database schema migration and a
+#   tool-calling-mode default change (Legacy → Native) — validate via
+#   test-variant deploy before any production rollout; upstream changelog
+#   content could not be independently verified from this session, treat
+#   as unconfirmed until re-checked against a live source at deploy time.
+# - No PostgreSQL major-version change required (already on postgresql_17)
 #
 # Changelog v0.9.6 (2026-06-02):
 # - Upgraded OpenWebUI 0.9.5 → 0.9.6
@@ -38,7 +47,7 @@ let
   # Change versions in one place only
   # ----------------------------------------
   versions = {
-    openwebui   = "0.9.6";               # OpenWebUI container version (Docker Hub, no v-prefix)
+    openwebui   = "0.10.2";              # OpenWebUI container version (Docker Hub, no v-prefix)
     postgresPkg = pkgs.postgresql_17;   # PostgreSQL version
     redisPkg    = pkgs.redis;           # Redis version
   };
