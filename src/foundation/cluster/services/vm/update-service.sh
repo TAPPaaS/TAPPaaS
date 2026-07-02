@@ -358,27 +358,78 @@ if [[ ${REBOOT_NEEDED} -eq 1 ]]; then
     ssh "${SSH_OPTS[@]}" "root@${NODE_FQDN}" "qm reboot ${VMID}" >/dev/null || die "qm reboot failed"
 
     info "  Waiting for VM to come back with an IP..."
+    # The reboot moves the VM into ZONE0's subnet, so we want its address IN THAT
+    # subnet. Both discovery sources can surface a STALE address from the old
+    # subnet — the dnsmasq lease table keeps the previous lease until it expires,
+    # and the guest may briefly still report it — which would register a wrong,
+    # cross-zone DNS record. Derive the target /24 prefix and prefer a match.
+    zone_cidr="$(jq -r --arg z "${ZONE0}" '.[$z].ip // empty' "${ZONES_FILE}" 2>/dev/null)"
+    zone_prefix=""
+    [[ "${zone_cidr}" =~ ^([0-9]+\.[0-9]+\.[0-9]+)\. ]] && zone_prefix="${BASH_REMATCH[1]}."
     new_ip=""
-    for _ in $(seq 1 30); do
+    ip_src=""
+    # 90×4s = up to 360s: a NixOS guest can be slow to boot AND to re-DHCP into
+    # a new subnet after a VLAN change (it must drop the old-subnet lease first).
+    for _ in $(seq 1 90); do
         sleep 4
+        cands=""
+        # 1) qemu-guest-agent — guest-reported current IPv4s; may be absent on a
+        #    minimal image or slow to come up after the reboot.
         qm_iface=$(ssh "${SSH_OPTS[@]}" "root@${NODE_FQDN}" \
-            "qm guest cmd ${VMID} network-get-interfaces" 2>/dev/null) || continue
-        new_ip=$(jq -r '.[] | select(.name | test("^(lo|docker)") | not)
-                         | ."ip-addresses"[]?
-                         | select(."ip-address-type" == "ipv4")
-                         | ."ip-address"' <<< "${qm_iface}" 2>/dev/null | grep -v '^127\.' | head -1)
+            "qm guest cmd ${VMID} network-get-interfaces" 2>/dev/null) || qm_iface=""
+        if [[ -n "${qm_iface}" ]]; then
+            # `|| true`: under `set -e`+pipefail a no-match jq/grep must not abort
+            # the whole reconcile mid-wait — an empty result just means "not yet".
+            ga_ips=$(jq -r '.[] | select(.name | test("^(lo|docker)") | not)
+                             | ."ip-addresses"[]?
+                             | select(."ip-address-type" == "ipv4")
+                             | ."ip-address"' <<< "${qm_iface}" 2>/dev/null || true)
+            [[ -n "${ga_ips}" ]] && cands+="${ga_ips}"$'\n' && [[ -z "${ip_src}" ]] && ip_src="guest-agent"
+        fi
+        # 2) dnsmasq DHCP lease by MAC — guest-agent-independent (recovers the
+        #    common case where the agent is missing/silent but the guest has
+        #    already leased). `dns-manager` prints a connection banner ("OK") on
+        #    stdout, so match the IPv4 shape rather than taking the first line.
+        if [[ -n "${desired_mac0}" && "${desired_mac0}" != "__none__" ]]; then
+            # `|| true`: a no-match grep (MAC not currently leased — e.g. right
+            # after the guest sends a DHCP RELEASE on reboot) returns 1, which
+            # under `set -e`+pipefail would otherwise abort the reconcile.
+            le_ips=$(dns-manager --no-ssl-verify leases --mac "${desired_mac0}" 2>/dev/null \
+                     | grep -oE '^[0-9]{1,3}(\.[0-9]{1,3}){3}$' || true)
+            [[ -n "${le_ips}" ]] && cands+="${le_ips}"$'\n' && [[ -z "${ip_src}" ]] && ip_src="dhcp-lease"
+        fi
+        cands=$(grep -vE '^(127\.|$)' <<< "${cands}" || true)
+        [[ -z "${cands}" ]] && continue
+        # Prefer an address in the target subnet; if only a stale old-subnet
+        # address is visible so far, keep waiting for the new lease to appear.
+        if [[ -n "${zone_prefix}" ]]; then
+            # `|| true`: no target-subnet match yet is the normal "keep waiting"
+            # case; under pipefail the grep's non-zero would otherwise abort.
+            new_ip=$(grep -F "${zone_prefix}" <<< "${cands}" | head -1 || true)
+        else
+            new_ip=$(head -1 <<< "${cands}")   # no subnet known — best effort
+        fi
         [[ -n "${new_ip}" ]] && break
     done
 
-    [[ -z "${new_ip}" ]] && die "VM did not report an IPv4 after reboot — cannot register DNS"
-    info "  VM came up with IP ${BL}${new_ip}${CL}"
-
-    # ── DNS: register new record; drop the stale one if the zone changed ─
+    # ── DNS ──────────────────────────────────────────────────────────────
+    # The VLAN change is already applied. If we resolved an IP in the target
+    # subnet, register the static fast-path record. If not (a slow guest that
+    # has not yet re-DHCPed into the new subnet), DO NOT fail: dnsmasq resolves
+    # <vmname>.<zone>.internal from the guest's lease once it appears (masqdns —
+    # exactly how cluster:lxc and every leased VM already resolve), so warn and
+    # let masqdns take over rather than aborting a reconcile that succeeded.
     new_domain="${ZONE0}.internal"
-    info "  Registering DNS: ${VMNAME}.${new_domain} → ${new_ip}"
-    dns-manager --no-ssl-verify add "${VMNAME}" "${new_domain}" "${new_ip}" \
-        --description "${MODULE} (cluster:vm reconcile)" \
-        || warn "  dns-manager add failed for ${VMNAME}.${new_domain}"
+    if [[ -z "${new_ip}" ]]; then
+        warn "  VM did not report an IPv4 in ${ZONE0} (${zone_cidr:-?}) within the wait window (no guest-agent report and no matching DHCP lease for MAC ${desired_mac0:-net0})."
+        warn "  The net0 VLAN change IS applied; ${VMNAME}.${new_domain} will resolve via masqdns once the guest re-DHCPs. Skipping the static DNS fast-path."
+    else
+        info "  VM came up with IP ${BL}${new_ip}${CL} (via ${ip_src:-?})"
+        info "  Registering DNS: ${VMNAME}.${new_domain} → ${new_ip}"
+        dns-manager --no-ssl-verify add "${VMNAME}" "${new_domain}" "${new_ip}" \
+            --description "${MODULE} (cluster:vm reconcile)" \
+            || warn "  dns-manager add failed for ${VMNAME}.${new_domain}"
+    fi
 
     if [[ ${ZONE_CHANGED} -eq 1 ]]; then
         old_zone="$(vmnet_zone_for_tag "${OLD_TAG0}" "${ZONES_FILE}")"

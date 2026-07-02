@@ -1154,6 +1154,44 @@ class ZoneManager:
                     debug(f"  {zone.name}: DHCP range not found (nothing to delete)")
                     results[zone.name] = {"status": "not_found"}
 
+            # Remove ORPHAN TAPPaaS ranges — descriptions following the
+            # "<name> DHCP" convention whose <name> matches NO zone in the config.
+            # These are left behind when a zone is RENAMED (e.g. zones-init renames
+            # srv->test4, home->test4-private, guest->test4-guest): configure_dhcp
+            # creates the new "<new> DHCP" range, but the disabled-zone loop above
+            # never sees the old name (it is absent from the config, not merely
+            # disabled), so the stale "<old> DHCP" range lingers as a DUPLICATE on
+            # the same interface (migration DHCP-range duplicates). Only ranges
+            # matching the exact "<name> DHCP" convention are touched — a custom
+            # operator range with a different naming style is left alone.
+            known_descs = {z.dhcp_description for z in self.zones}
+            for desc, existing in existing_by_desc.items():
+                if desc in known_descs or not desc.endswith(" DHCP"):
+                    continue
+                iface = existing.get("interface") or "any"
+                if check_mode:
+                    results[f"orphan:{desc}"] = {
+                        "status": "would_delete_orphan",
+                        "interface": iface,
+                    }
+                    continue
+                try:
+                    result = manager.delete_range(
+                        desc, check_mode=False, reconfigure=False
+                    )
+                    changed = True
+                    results[f"orphan:{desc}"] = {
+                        "status": "deleted_orphan",
+                        "result": result,
+                    }
+                    info(
+                        f"  Removed orphan DHCP range '{desc}' on {iface} "
+                        f"(no matching zone — rename leftover)"
+                    )
+                except Exception as e:
+                    results[f"orphan:{desc}"] = {"status": "error", "error": str(e)}
+                    error(f"orphan '{desc}': {e}")
+
             # Then, create (or rebind) DHCP ranges for enabled zones with VLANs
             for zone in dhcp_zones:
                 dhcp_desc = zone.dhcp_description

@@ -275,16 +275,31 @@ if [[ "${DEEP}" -eq 1 && -n "${DEFAULT_ZONE}" ]]; then
         fi
     fi
 
-    # 7. Verify DNS was registered in the new zone, pointing at the new IP.
+    # 7. Verify DNS RESOLVES in the new zone, to a target-subnet address. The
+    #    reconciler registers a static fast-path when it gets the IP in time; a
+    #    slow guest re-DHCP falls back to masqdns (dynamic, lease-based) — either
+    #    way <vm>.<zone>.internal must RESOLVE via the firewall (the old check
+    #    queried only the STATIC host list, which the masqdns-only path misses).
+    #    Generous retry + subnet check: NixOS boot + re-DHCP into a new subnet
+    #    can be slow, and a lingering old-subnet lease must not satisfy the test.
     if [[ "${deep_ok}" -eq 1 ]]; then
-        # shellcheck disable=SC2001  # regex ANSI strip not expressible as ${//}
-        new_ip=$(sed 's/\x1b\[[0-9;]*m//g' <<< "${reconcile_out}" \
-                 | grep -oE 'came up with IP [0-9.]+' | grep -oE '[0-9.]+$')
-        dns_line=$(dns-manager --no-ssl-verify list 2>/dev/null | grep -i "test-vmdrift" | grep "${DEFAULT_ZONE}.internal" || true)
-        if [[ -n "${dns_line}" ]] && { [[ -z "${new_ip}" ]] || grep -q "${new_ip}" <<< "${dns_line}"; }; then
-            pass "DNS record test-vmdrift.${DEFAULT_ZONE}.internal registered (${new_ip:-ip unknown})"
+        vfqdn="test-vmdrift.${DEFAULT_ZONE}.internal"
+        vprefix=""
+        zcidr=$(jq -r --arg z "${DEFAULT_ZONE}" '.[$z].ip // empty' "${CONFIG_DIR}/zones.json" 2>/dev/null)
+        [[ "${zcidr}" =~ ^([0-9]+\.[0-9]+\.[0-9]+)\. ]] && vprefix="${BASH_REMATCH[1]}."
+        vresolved=""
+        for _ in $(seq 1 30); do
+            vresolved=$(getent hosts "${vfqdn}" 2>/dev/null | awk '{print $1}' | head -1)
+            if [[ -n "${vresolved}" ]]; then
+                [[ -z "${vprefix}" || "${vresolved}" == "${vprefix}"* ]] && break
+                vresolved=""   # resolved but old-subnet/stale — keep waiting
+            fi
+            sleep 6
+        done
+        if [[ -n "${vresolved}" ]]; then
+            pass "DNS resolves ${vfqdn} → ${vresolved} (${DEFAULT_ZONE} subnet, masqdns/static)"
         else
-            fail "DNS record for test-vmdrift.${DEFAULT_ZONE}.internal (${new_ip:-?}) not found"
+            fail "DNS did not resolve ${vfqdn} to a ${DEFAULT_ZONE}-subnet address"
         fi
     fi
 
@@ -492,12 +507,24 @@ if [[ "${DEEP}" -eq 1 && -n "${DEFAULT_ZONE}" ]]; then
         fi
     fi
 
-    # 4. DNS registered in the default zone.
+    # 4. DNS RESOLVES in the default zone. LXCs use masqdns (dynamic, lease-based
+    #    DNS) — install-service.sh deliberately registers NO static dns-manager
+    #    pin (a static addn-host would shadow the live lease). So verify that
+    #    <vm>.<zone>.internal RESOLVES via the firewall resolver, not that it
+    #    appears in the STATIC host list (`dns-manager list`) — the old check
+    #    asserted the wrong mechanism. Retry: the lease + masqdns take a moment.
     if [[ "${ldeep_ok}" -eq 1 ]]; then
-        if dns-manager --no-ssl-verify list 2>/dev/null | grep -i "test-lxcdrift" | grep -q "${DEFAULT_ZONE}.internal"; then
-            pass "DNS record test-lxcdrift.${DEFAULT_ZONE}.internal registered"
+        lfqdn="test-lxcdrift.${DEFAULT_ZONE}.internal"
+        resolved=""
+        for _ in $(seq 1 15); do
+            resolved=$(getent hosts "${lfqdn}" 2>/dev/null | awk '{print $1}' | head -1)
+            [[ -n "${resolved}" ]] && break
+            sleep 4
+        done
+        if [[ -n "${resolved}" ]]; then
+            pass "DNS resolves ${lfqdn} → ${resolved} (masqdns lease)"
         else
-            fail "DNS record test-lxcdrift.${DEFAULT_ZONE}.internal not found"
+            fail "DNS did not resolve ${lfqdn} (masqdns lease)"
         fi
     fi
 

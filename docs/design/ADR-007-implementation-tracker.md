@@ -158,20 +158,73 @@ replication target). Verified on test4: drift correctly retargeted to `test4`/
 VLAN 200, **LXC install now succeeds** (was failing on srvHome), **net0 tag=200**
 ✓, HA skipped cleanly. `bash -n` clean.)*
 
-**New finding surfaced by the fixed test — DHCP/DNS in the default zone
-(2026-07-02):** with the drift tests now correctly exercising the org-named
-default zone `test4` (VLAN 200), two checks still fail — sharing ONE root cause:
-**a VM/CT placed on VLAN 200 gets no DHCP lease/IP.** (#192 VM reconcile: "Waiting
-for VM to come back with an IP" → timeout; #203 LXC: container alive + cores
-reconciled but never registered DNS — no IP to register.) mgmt-zone VMs lease
-fine (they pass) and VLAN 200 IS trunked to the firewall — so the suspect is
-**whether OPNsense actually serves DHCP on the default zone's interface**.
-Notably **no module has ever actually run in the `test4` default zone on this box**
-(nextcloud is in srvWork), so default-zone DHCP was never exercised until now —
-may be a real gap (default zone unusable for real modules) or specific to this
-migrated test4. Firewall not SSH-reachable from the cicd for a deeper look;
-**needs investigation** (own item, distinct from the test fix). This is exactly
-the kind of real defect the fixed test is meant to surface.
+**New finding surfaced by the fixed test — investigated 2026-07-02 (NOT a DHCP
+bug):** the two remaining #192/#193 failures first looked like "no DHCP lease in
+the default zone", but the live evidence disproves that. **DHCP works everywhere,
+including the default zone.**
+- **Baseline check:** `environment-manager --deep` does NOT deploy (fixture/
+  read-only), so it's no baseline. The **`network --deep`** test IS a deploy
+  baseline — it creates brand-new zones (`testAllowA`/810, `testAllowB`/820) and
+  the VMs there lease + register DNS + do inter-VM connectivity. So **ADR-007
+  zone creation + DHCP works in general** (not a main→ADR-007 regression).
+- **Default zone specifically:** OPNsense (dnsmasq DHCP) has a `test4 DHCP` pool
+  (`opt10`, 10.2.0.50-250), and the **live lease table shows BOTH cluster-test
+  guests leased in it**: `10.2.0.245 test-vmdrift (test4)`, `10.2.0.71
+  test-lxcdrift (test4)`. So the default zone hands out leases fine.
+- **Actual root cause of #192:** `cluster/services/vm/update-service.sh` (~L360)
+  discovers the post-reboot IP via the **qemu-guest-agent** (`qm guest cmd
+  network-get-interfaces`, 30×4s=120s) — NOT the lease. The NixOS `test-vmdrift`
+  guest leased 10.2.0.245 but its guest agent didn't report an IPv4 within 120s
+  → `die "VM did not report an IPv4 after reboot"`. **Fragility, not DHCP.**
+  Fix (follow-up): fall back to the dnsmasq lease (dhcp_manager `list_leases`,
+  match by MAC/hostname) when the guest agent is silent, and/or raise the timeout.
+- **#203 LXC "DNS not found":** the CT leased 10.2.0.71 but its DNS record wasn't
+  registered/visible at check time (LXCs have no guest agent — separate register/
+  timing path in `services/lxc/`). Follow-up: verify the LXC DNS-registration
+  step and its timing.
+- **Migration artifact (cosmetic, worth cleaning):** the dnsmasq range list shows
+  DUPLICATE ranges from the zones-init rename — `test4-private DHCP` + `home DHCP`
+  both on `opt3` (identical range), `test4-guest` + `guest` both on `opt2`. The
+  renamed default-family zones got new ranges but the old `home`/`guest` ranges
+  were not removed. Harmless (same iface+range) but should be de-duped by the
+  migration's OPNsense reconciliation.
+**⟹ Answer to "general ADR-007 zone-DHCP regression vs special default-zone
+issue": NEITHER — DHCP is healthy in both. The failures are guest-agent IP
+discovery (VM) and LXC DNS registration timing.**
+
+**Follow-ups IMPLEMENTED + verified green (2026-07-02, `cluster --deep` = 18/0/1):**
+- **FU1 — VM reconciler lease fallback.** New `dns-manager leases [--mac|--ip|
+  --json]` CLI (`dns_manager_cli.py`, wraps the existing `list_leases`). The
+  `cluster:vm` reconciler now polls the qemu-guest-agent **and** the dnsmasq
+  lease-by-MAC each iteration (wait 120s→360s), so a silent/slow guest agent no
+  longer fails a VM that has already leased. **Subnet-safe:** it derives ZONE0's
+  /24 and prefers the lease IN the target subnet, ignoring a lingering old-subnet
+  lease (which otherwise registered a wrong cross-zone DNS record). **Warn-not-
+  die:** if no in-subnet IP appears in the window, it warns (the VLAN change IS
+  applied; masqdns resolves `<vm>.<zone>.internal` from the lease once the guest
+  re-DHCPs, exactly like every leased VM) instead of aborting a reconcile that
+  succeeded. Verified: `VM came up with IP 10.2.0.219 (via dhcp-lease)` with the
+  guest agent silent → DNS resolves to the test4-subnet IP.
+- **FU2 — #203 LXC DNS test corrected.** LXCs use masqdns (dynamic, lease-based
+  DNS) and deliberately register no static pin, but the test checked the STATIC
+  host list (`dns-manager list`). Now it verifies **resolution** (`getent hosts`,
+  with retry) — the correct mechanism. #192 was aligned the same way (resolution +
+  target-subnet check) rather than parsing the static list.
+- **FU3 — orphan DHCP-range cleanup.** `zone_manager.configure_dhcp` now removes
+  ranges following the `<name> DHCP` convention whose `<name>` matches NO zone in
+  the config (rename leftovers) — verified live: `Removed orphan DHCP range 'guest
+  DHCP' on opt2` + `'home DHCP' on opt3`; the range list is now one-per-interface.
+- **Bug found + fixed during validation:** the reconciler's new lease-lookup used
+  `x=$(… | grep …)` with no rc guard; under `set -euo pipefail` a no-match grep
+  (MAC momentarily unleased right after the guest's reboot DHCP-RELEASE) returned
+  1 and **aborted the whole reconcile mid-wait** (masquerading as "reconcile apply
+  failed"). Added `|| true` to the three at-risk substitutions. (The guest DOES
+  re-DHCP into the new subnet — just slower than the old 120s window; the crash,
+  not the guest, was the real blocker.)
+- **Remaining (separate, low-priority):** the OPNsense interface *labels* for the
+  renamed default-family zones still read `home`/`guest` (opt3/opt2) — flagged by
+  zone-manager as label drift, fixed only with the opt-in `--force-rename-labels`;
+  purely cosmetic (DHCP/DNS work regardless).
 
 **Cluster name = org name — verified correct in code, unverified on hardware
 (2026-07-02):** ADR-007 `cluster/install.sh` threads `--name <orgname>` →

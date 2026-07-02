@@ -6,6 +6,7 @@ in OPNsense's Dnsmasq service.
 """
 
 import argparse
+import json
 import sys
 
 from .config import Config
@@ -248,6 +249,63 @@ def check_dns_range(manager: DhcpManager, ip_address: str) -> bool:
     return True
 
 
+def list_dhcp_leases(
+    manager: DhcpManager,
+    mac: str | None = None,
+    ip: str | None = None,
+    as_json: bool = False,
+) -> bool:
+    """List active dnsmasq DHCP leases, optionally filtered by MAC or IP.
+
+    Primary consumer is the cluster:vm reconciler: after moving a VM to a new
+    zone it reboots and needs the guest's new IPv4. The qemu-guest-agent is the
+    first source, but it may be absent/slow; ``dns-manager leases --mac <MAC>``
+    is the guest-agent-independent fallback — it reads the IP straight from the
+    DHCP server's lease table.
+
+    Output:
+      * ``--mac``/``--ip`` filter: prints ONLY the matching lease IP(s), one per
+        line (so a shell can capture ``ip=$(dns-manager leases --mac X)``).
+        Exit non-zero (returns False) when nothing matches.
+      * no filter: prints a human table (or JSON with ``--json``).
+
+    Returns True on success (≥1 lease when filtered), False otherwise.
+    """
+    try:
+        leases = manager.list_leases()
+    except Exception as e:
+        print(f"ERROR: Failed to list DHCP leases: {e}", file=sys.stderr)
+        return False
+
+    if mac:
+        mac_l = mac.strip().lower()
+        leases = [le for le in leases if (le.get("mac") or "").lower() == mac_l]
+    if ip:
+        leases = [le for le in leases if le.get("ip") == ip]
+
+    if as_json:
+        print(json.dumps(leases, indent=2))
+        return bool(leases) if (mac or ip) else True
+
+    if mac or ip:
+        # Machine-friendly: just the IP(s) for the filtered lease(s).
+        for le in leases:
+            if le.get("ip"):
+                print(le["ip"])
+        return bool(leases)
+
+    if not leases:
+        print("No active DHCP leases")
+        return True
+    print(f"{'IP':<16} {'MAC':<18} {'ZONE':<14} HOSTNAME")
+    for le in leases:
+        print(
+            f"{(le.get('ip') or ''):<16} {(le.get('mac') or ''):<18} "
+            f"{(le.get('zone') or ''):<14} {le.get('hostname') or ''}"
+        )
+    return True
+
+
 def main():
     """Main entry point for DNS manager CLI."""
     parser = argparse.ArgumentParser(
@@ -342,6 +400,16 @@ Examples:
     )
     check_range_parser.add_argument("ip", help="IP address to check")
 
+    # Leases command (issue #235) — list dnsmasq DHCP leases; the cluster:vm
+    # reconciler uses `leases --mac <MAC>` as a guest-agent-independent way to
+    # find a VM's IP after a zone/subnet change.
+    leases_parser = subparsers.add_parser(
+        "leases", help="List active DHCP leases (optionally filter by --mac/--ip)"
+    )
+    leases_parser.add_argument("--mac", help="Only the lease for this MAC (prints its IP)")
+    leases_parser.add_argument("--ip", help="Only the lease for this IP")
+    leases_parser.add_argument("--json", action="store_true", help="Emit JSON")
+
     args = parser.parse_args()
 
     if not args.command:
@@ -399,6 +467,10 @@ Examples:
                 success = list_dns_hosts(manager)
             elif args.command == "check-range":
                 success = check_dns_range(manager, args.ip)
+            elif args.command == "leases":
+                success = list_dhcp_leases(
+                    manager, mac=args.mac, ip=args.ip, as_json=args.json
+                )
 
             sys.exit(0 if success else 1)
 
