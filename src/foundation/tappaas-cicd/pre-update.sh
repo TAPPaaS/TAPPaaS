@@ -213,9 +213,18 @@ if command -v network-manager >/dev/null 2>&1 \
    && [ -f /home/tappaas/config/zones.json ]; then
   echo ""
   info "Checking zones.json consistency (network-manager zones-check)..."
+  # Report-only: this must NEVER abort pre-update. Under `set -e` + `pipefail` a
+  # standalone failing pipeline aborts the SCRIPT before the PIPESTATUS check
+  # below can run — so a non-zero zones-check (e.g. a mid-migration zones.json)
+  # would silently skip the rest of pre-update: the opnsense/identity/update-tappaas
+  # nix-builds and the OPNsense controller-patch copy. Disable errexit around the
+  # pipeline, capture the real rc, then restore. (`|| true` is NOT enough — it
+  # clobbers PIPESTATUS, killing the warn.)
+  set +e
   network-manager zones-check 2>&1 | while IFS= read -r line; do info "  $line"; done
-  # PIPESTATUS[0] is the zones-check rc (the while loop never fails).
-  if [ "${PIPESTATUS[0]}" -ne 0 ]; then
+  zc_rc=${PIPESTATUS[0]}
+  set -e
+  if [ "${zc_rc}" -ne 0 ]; then
     warn "  zones-check reported errors — continuing (report-only; review the lines above)"
   fi
 fi
