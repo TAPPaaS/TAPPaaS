@@ -215,9 +215,15 @@ snapshot_retention() {
 # Used to resolve a default HANode when none is explicitly set. Reads from
 # site.json (.hardware.nodes).
 # Arguments: [primary-node-hostname] (default: first node)
+#
+# On a SINGLE-NODE cluster there is no other node, so `grep -vx` matches nothing
+# and exits 1; without the `|| true` that non-zero would propagate (pipefail) and
+# abort any caller that does a bare `VAR="$(get_default_ha_node …)"` under set -e
+# (e.g. logging/update.sh). "No failover node" is a valid result, not an error —
+# return empty output with success.
 get_default_ha_node() {
     local primary="${1:-$(get_node_hostname 0)}"
-    get_all_node_hostnames | grep -vx "$primary" | head -1
+    get_all_node_hostnames | grep -vx "$primary" | head -1 || true
 }
 
 # ── Module helper functions ──────────────────────────────────────────
