@@ -114,8 +114,11 @@ if step vms; then
   if [[ ${#TAPPAAS_VMS[@]} -eq 0 ]]; then info "  none."; else
     for id in "${TAPPAAS_VMS[@]}"; do
       info "  VM ${id} ($(qm config "$id" 2>/dev/null | sed -n 's/^name: //p'))"
-      run qm stop "$id" --skip-lock
-      run qm destroy "$id" --purge --destroy-unreferenced-disks --skip-lock
+      # NB: the flag is --skiplock (one word); --skip-lock is rejected by qm.
+      # Stop must complete before destroy, else the VM keeps its zvols open and a
+      # later `zpool destroy` blocks. `qm stop` is a hard stop (fine for teardown).
+      run qm stop "$id" --skiplock
+      run qm destroy "$id" --purge --destroy-unreferenced-disks --skiplock
     done
   fi
 fi
@@ -125,9 +128,11 @@ if step pbs; then
   info "${BOLD}[2] Proxmox Backup Server${CL}"
   for s in "${PBS_STORAGES[@]:-}"; do [[ -n "$s" ]] && run pvesm remove "$s"; done
   if command -v proxmox-backup-manager >/dev/null 2>&1; then
-    # Remove each datastore (best-effort; the on-disk dir goes with the pool).
+    # Remove each datastore by NAME (best-effort; the on-disk dir goes with the
+    # pool anyway). Use JSON + jq — the `text` output is a bordered table whose
+    # box-drawing chars would otherwise be fed to `datastore remove`.
     while read -r ds; do [[ -n "$ds" ]] && run proxmox-backup-manager datastore remove "$ds"; done \
-      < <(proxmox-backup-manager datastore list --output-format text 2>/dev/null | awk 'NR>1{print $1}')
+      < <(proxmox-backup-manager datastore list --output-format json 2>/dev/null | jq -r '.[].name' 2>/dev/null)
     run systemctl disable --now proxmox-backup proxmox-backup-proxy
     run apt-get -y purge proxmox-backup-server
     run rm -rf /etc/proxmox-backup
@@ -190,7 +195,17 @@ if step network; then
     fi
     # Remove the auto-rollback unit/artifacts config-network may have left.
     run rm -f /usr/local/sbin/tappaas-net-rollback.sh /run/tappaas-net-ok
-    warn "  verify /etc/resolv.conf afterwards (the cutover pointed DNS at the firewall 10.0.0.1, now gone)."
+    # Reset /etc/resolv.conf: the cutover pointed DNS at the firewall (10.0.0.1),
+    # which is now destroyed — leaving it would break DNS for the retest install.
+    # Point at the restored default gateway (from the interfaces we just wrote),
+    # with a public fallback, so the node can resolve names again.
+    gw="$(awk '/^[[:space:]]*gateway[[:space:]]/{print $2; exit}' /etc/network/interfaces 2>/dev/null)"
+    if [[ $DRY_RUN -eq 1 ]]; then
+      info "  would reset /etc/resolv.conf → nameserver ${gw:-<gateway>} + 1.1.1.1"
+    else
+      { [[ -n "$gw" ]] && printf 'nameserver %s\n' "$gw"; printf 'nameserver 1.1.1.1\n'; } > /etc/resolv.conf
+      info "  reset /etc/resolv.conf → ${gw:+nameserver $gw, }nameserver 1.1.1.1"
+    fi
   fi
 fi
 
