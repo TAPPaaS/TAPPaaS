@@ -1,3 +1,14 @@
+---
+name: vllm-amd — LLM Inference on AMD iGPU
+description: OpenAI-compatible LLM inference on the AMD Ryzen AI MAX+ 395 integrated GPU.
+kind: Guide
+version: 1.0.0
+language: gridtefy-B2
+copyright: © 2026 TAPPaaS org
+last-updated: 2026-07-03
+status: approved
+---
+
 # vllm-amd — LLM Inference on AMD iGPU
 
 Local LLM inference using the AMD Ryzen AI MAX+ 395 integrated GPU (Radeon 8060S, Strix Halo). Runs an OpenAI-compatible API endpoint for use with LiteLLM or direct clients.
@@ -7,32 +18,42 @@ Local LLM inference using the AMD Ryzen AI MAX+ 395 integrated GPU (Radeon 8060S
 | Capability | Access from | How |
 |---|---|---|
 | OpenAI-compatible inference API | Internal network | `http://vllm-amd.<zone>.internal:8000` |
-| Large model support | API | Up to 120B parameters on 128GB unified memory |
+| Large model support | API | Up to 120B parameters on 128 GB unified memory |
 | Fast inference | API | ~50 tok/s (7B FP16), ~20 tok/s (30B GPTQ-4bit) |
 
-## Hardware requirements
+## What this module installs
 
-- AMD Ryzen AI MAX+ 395 (Strix Halo, gfx1151) on `tappaas2`
-- 128 GB LPDDR5x unified memory
-- 64 GB+ storage for OS + ROCm + models
+An LXC container with Docker, ROCm (via [kyuz0/vllm-therock-gfx1151](https://github.com/kyuz0/amd-strix-halo-vllm-toolboxes)), and a vLLM server. The container starts automatically and serves whichever model is configured in `/opt/vllm/docker-compose.yml`.
 
-## Tested models
+**Tested models:**
 
 | Model | Size | Quantization | Notes |
 |---|---|---|---|
-| Qwen2.5-7B-Instruct | 7B | FP16 | Default — fast, good quality |
-| Qwen3-14B-AWQ | 14B | AWQ | Good balance speed/quality |
-| Qwen3-Coder-30B-GPTQ-Int4 | 30B | GPTQ-4bit | Code generation |
+| Qwen2.5-7B-Instruct | 7B | FP16 | Fast, good general quality |
+| Qwen3-14B-AWQ | 14B | AWQ | Balance of speed and quality |
+| Qwen3-30B-A3B-GPTQ-Int4 | 30B | GPTQ-4bit | Mixture-of-experts, low active params |
+| Qwen3-Coder-30B-GPTQ-Int4 | 30B | GPTQ-4bit | Code generation variant |
 | openai/gpt-oss-120b | 120B | AWQ | Largest tested |
 
-FP8 is not supported on gfx1151. Use AWQ or GPTQ for large models.
+FP8 is not supported on gfx1151. Use AWQ or GPTQ for models larger than 7B.
 
-Currently serving on the live instance: `Qwen/Qwen3-30B-A3B-GPTQ-Int4`
-(confirmed via `scripts/inspect.sh` — path `/models/qwen3-30b-a3b-gptq-int4` —
-cross-checked against this DP's own backlog, VLLM-006). This is the A3B
-mixture-of-experts variant, a **different model** from the
-Qwen3-Coder-30B-GPTQ-Int4 row above (code-generation-tuned) — both may have
-been tested, but A3B is what's currently deployed.
+**Not included:** model files (downloaded separately via `scripts/install-model.sh`), SSL termination, or external load balancing.
+
+## Requirements
+
+- AMD Ryzen AI MAX+ 395 (Strix Halo, gfx1151) — required for the ROCm build used by this module
+- 128 GB LPDDR5x unified memory on the host
+- 64 GB+ available storage for OS, ROCm container image, and models
+- A Proxmox node configured for LXC GPU passthrough (`/dev/kfd`, `/dev/dri/renderD128`)
+- TAPPaaS `cluster:lxc` and `backup:vm` services operational on the target node
+
+## Key decisions
+
+**Which model to run.** Select based on RAM budget and use case. The current default is `Qwen/Qwen3-30B-A3B-GPTQ-Int4` (~24 GB); a 7B FP16 model uses ~14 GB and loads in under a minute. Change the model by editing `--model` in `/opt/vllm/docker-compose.yml` after installation, or re-run `scripts/install-model.sh` to add a model first.
+
+**Quantization format.** AWQ and GPTQ-4bit are supported. FP8 is not. For models above 14B, quantization is required to fit within available memory.
+
+For step-by-step installation, see [INSTALL.md](./INSTALL.md).
 
 ## Known limitations
 
@@ -40,26 +61,7 @@ been tested, but A3B is what's currently deployed.
 - Instability under sustained heavy load ([ROCm#5499](https://github.com/ROCm/ROCm/issues/5499))
 - Some memory access faults on specific workloads ([ROCm#5824](https://github.com/ROCm/ROCm/issues/5824))
 
-## Operations
-
-| Task | Command |
-|---|---|
-| See the currently serving model + everything downloaded on disk | `scripts/inspect.sh` |
-| Install a new model from HuggingFace | `scripts/install-model.sh <hf-repo> [--dir-name <name>]` |
-
-Models live under `/models/` on the LXC (not `/mnt/models/` — that path in
-`download-model.sh`/`test-model.sh` predates the current layout and is stale).
-
-## Dependencies
-
-| Depends on | Purpose |
-|---|---|
-| `cluster:lxc` | LXC container provisioning |
-| `backup:vm` | Container snapshots |
-
-For installation steps see [install.sh](./install.sh).
-
-## References
+## External references
 
 - [Framework Community: vLLM on Strix Halo](https://community.frame.work/t/how-to-compiling-vllm-from-source-on-strix-halo/77241)
 - [kyuz0/amd-strix-halo-vllm-toolboxes](https://github.com/kyuz0/amd-strix-halo-vllm-toolboxes)
