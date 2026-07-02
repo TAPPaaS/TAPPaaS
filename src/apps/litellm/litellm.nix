@@ -287,7 +287,7 @@ in
         load_models_from_db: true
         set_verbose: true
         json_logs: true
-        request_timeout: 60
+        request_timeout: 300
         max_retries: 3
         log_raw_request_response: false
     '';

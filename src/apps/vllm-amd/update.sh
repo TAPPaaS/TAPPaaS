@@ -49,7 +49,7 @@ if [ ! -f /opt/vllm/docker-compose.yml ]; then
     cat > /opt/vllm/docker-compose.yml <<EOF
 services:
   vllm:
-    image: kyuz0/vllm-therock-gfx1151:latest
+    image: kyuz0/vllm-therock-gfx1151@sha256:f56f8d66c3efcf2de024251f6ff2328c5aa94b3ae34b2f74a36740b970f98d9c
     container_name: vllm
     restart: unless-stopped
     entrypoint: ["python", "-m", "vllm.entrypoints.openai.api_server"]
