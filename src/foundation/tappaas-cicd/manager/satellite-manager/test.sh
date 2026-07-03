@@ -103,6 +103,54 @@ else
     no "av_client_config format"
 fi
 
+# --- Debian satellite (ADR-010 Option 3 / Q8→D19) ---------------------------
+deb_src="${here}/../../../satellite/debian/provision-debian.sh"
+
+# 14. provision-debian.sh parses
+if [[ -f "${deb_src}" ]] && bash -n "${deb_src}"; then ok "provision-debian.sh parses"; else no "provision-debian.sh syntax/missing"; fi
+
+# 15. sat_gen_debian_configs role-gating (offline render)
+(
+    . "${here}/lib/provision.sh" >/dev/null 2>&1
+    # all three roles -> nginx + ip_forward + admin-vpn NAT present
+    echo '{"name":"a","os":"debian","roles":["reverse-proxy","admin-vpn","backup"],"host":{"operatorSshKeys":["k"]}}' > "${tmp}/a.json"
+    sat_gen_debian_configs "${tmp}/a.json" "HPUB=" "${tmp}/ao"
+    # reverse-proxy only -> NO ip_forward, NO admin NAT, NO nginx? (nginx yes)
+    echo '{"name":"b","os":"debian","roles":["reverse-proxy"],"host":{"operatorSshKeys":["k"]}}' > "${tmp}/b.json"
+    sat_gen_debian_configs "${tmp}/b.json" "HPUB=" "${tmp}/bo"
+)
+if [[ -f "${tmp}/ao/nginx-stream.conf" && -f "${tmp}/ao/99-tappaas-ipforward.conf" ]] \
+   && grep -q "table ip adminvpn" "${tmp}/ao/nftables.conf" \
+   && [[ ! -f "${tmp}/bo/99-tappaas-ipforward.conf" ]] \
+   && ! grep -q "table ip adminvpn" "${tmp}/bo/nftables.conf" \
+   && [[ -f "${tmp}/bo/nginx-stream.conf" ]]; then
+    ok "sat_gen_debian_configs role-gates files (nginx/ip_forward/admin-NAT)"
+else
+    no "sat_gen_debian_configs role-gating"
+fi
+
+# 16. sat_write_config records os (default debian; explicit nixos honoured)
+(
+    . "${here}/lib/provision.sh" >/dev/null 2>&1
+    sat_write_config "${tmp}/osd.json" d hetzner 1.2.3.4 "ssh-ed25519 K o@w" "reverse-proxy" "" "" ""
+    sat_write_config "${tmp}/osn.json" n hetzner 1.2.3.4 "ssh-ed25519 K o@w" "reverse-proxy" "" "" nixos
+)
+if [[ "$(jq -r .os "${tmp}/osd.json" 2>/dev/null)" == "debian" \
+      && "$(jq -r .os "${tmp}/osn.json" 2>/dev/null)" == "nixos" ]]; then
+    ok "sat_write_config records os (default debian / explicit nixos)"
+else
+    no "sat_write_config os field"
+fi
+
+# 17. install --dry-run branches on os (debian => provision-debian, no nixos-anywhere)
+echo '{ "kind":"external-host","tier":"foundation","name":"dbg","os":"debian","roles":["reverse-proxy"],"host":{"publicIp":"203.0.113.9","operatorSshKeys":["ssh-ed25519 K o@w"]} }' > "${tmp}/satellite-dbg.json"
+rc=0; out="$(TAPPAAS_CONFIG_DIR="${tmp}" "${mgr}" install dbg --dry-run 2>&1)" || rc=$?
+if [[ "${rc}" -eq 0 ]] && grep -q "provision-debian.sh" <<< "${out}" && ! grep -q "nixos-anywhere" <<< "${out}"; then
+    ok "install --dry-run (os=debian) plans the Debian path"
+else
+    no "install --dry-run debian branch rc=${rc}"
+fi
+
 echo ""
 echo "satellite-manager fast tests: ${pass} passed, ${fail} failed"
 [[ "${fail}" -eq 0 ]]
