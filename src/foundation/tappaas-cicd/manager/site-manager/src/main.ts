@@ -161,11 +161,38 @@ function cmdSite(o: Opts): void {
   const siteFile = siteFileOf(o);
 
   if (sub === "show") {
-    // The singleton in detail. Always structured; --json accepted for symmetry
-    // (the show output is JSON either way).
     const raw = loadRaw(siteFile);
     if (Object.keys(raw).length === 0) die(`site.json not found: ${siteFile}`);
-    info(JSON.stringify(raw, null, 2));
+    // --json → the exact on-disk document; default → a concise human summary
+    // (consistent with `node list` / `repository list`).
+    if (o.json) {
+      info(JSON.stringify(raw, null, 2));
+      return;
+    }
+    const site: Site = loadSite(siteFile);
+    const loc = site.location ?? ({} as Site["location"]);
+    const net = site.network ?? {};
+    const sched = Array.isArray(site.updateSchedule) ? site.updateSchedule : [];
+    const schedStr = sched.length
+      ? [sched[0], sched[1], sched[2] != null ? `@ ${String(sched[2]).padStart(2, "0")}:00` : null]
+          .filter((x) => x != null && x !== "")
+          .join(" ")
+      : "(unset)";
+    const nodes = site.hardware?.nodes ?? [];
+    const repos = site.repositories ?? [];
+    const orgs = site.organizations ?? [];
+    const lbl = (k: string): string => `${GN}${(k + ":").padEnd(15)}${CL}`;
+    info(`${lbl("Site")}${site.name}${site.displayName && site.displayName !== site.name ? ` (${site.displayName})` : ""}`);
+    info(`${lbl("Owner")}${site.owner || "(unset)"}`);
+    info(`${lbl("Email")}${site.email || "(unset)"}`);
+    info(`${lbl("Version")}${site.version || "(unset)"}`);
+    info(`${lbl("Location")}${[loc.country, loc.timezone, loc.locale].filter(Boolean).join(" / ") || "(unset)"}`);
+    info(`${lbl("Network")}publicIp=${net.publicIp ?? "(unset)"}  isp=${net.isp ?? "(none)"}`);
+    info(`${lbl("Update")}${schedStr}  (auto-reboot: ${site.automaticReboot ? "yes" : "no"}, keep ${site.snapshotRetention ?? "?"})`);
+    info(`${lbl("Nodes")}${nodes.length ? nodes.map((n) => `${n.name} [${n.storagePools.join(", ")}]`).join("  ") : "(none)"}`);
+    info(`${lbl("Repositories")}${repos.length ? repos.map((r) => `${r.name}${r.branch ? "@" + r.branch : ""}`).join("  ") : "(none)"}`);
+    info(`${lbl("Orgs")}${orgs.length ? orgs.join(", ") : "(none)"}`);
+    info(`${lbl("Backup")}${site.backup ? JSON.stringify(site.backup) : "(none)"}`);
     return;
   }
 
@@ -343,13 +370,37 @@ function cmdRepository(o: Opts, client: SiteClient): void {
   if (sub === "reconcile") {
     // repository reconcile = converge repositories[] to live clones (the (1)
     // own-concern half of `reconcile`, scoped to repos). Reuses the engine with
-    // deep=false; we still emit only the repo actions.
+    // deep=false; we still emit only the repo actions. Descriptive per-repo
+    // output so the operator sees WHAT was checked, not just an action count.
     const site = loadSite(siteFile);
     const plan = computePlan(site, client, { deep: false, apply: o.apply, siteFile });
-    printPlan(plan, o.apply);
-    if (o.apply && plan.actions.length > 0) {
+    info("");
+    info(
+      `Reconciling ${site.repositories.length} repository(ies) from site.json → live git clones` +
+        `${o.apply ? "" : " (preview)"}:`,
+    );
+    for (const w of plan.warnings) warn(w);
+    for (const repo of site.repositories) {
+      const br = repo.branch ?? "stable";
+      const act = plan.actions.find((a) => a.target.startsWith(`repository ${repo.name} `));
+      if (!act) {
+        info(`  ${GN}✓${CL} ${repo.name} @ ${br} — present, on the declared branch`);
+      } else if (act.kind === "clone-repo") {
+        info(`  ${YW}+${CL} ${repo.name} @ ${br} — ${o.apply ? "cloning" : "not cloned; would clone"} ${repo.url}`);
+      } else {
+        // checkout-repo target: "repository <name> → checkout <branch> (was <cur>)"
+        const detail = act.target.replace(`repository ${repo.name} → `, "");
+        info(`  ${YW}⟳${CL} ${repo.name} — ${o.apply ? "" : "would "}${detail}`);
+      }
+    }
+    info("");
+    if (plan.actions.length === 0) {
+      info(`${GN}Converged — every repository is present and on its declared branch. Nothing to do.${CL}`);
+    } else if (o.apply) {
       const n = applyPlan(client, plan);
       info(`${GN}Applied ${n} action(s).${CL}`);
+    } else {
+      info(`${plan.actions.length} change(s) needed — re-run with --apply to perform them.`);
     }
     return;
   }
