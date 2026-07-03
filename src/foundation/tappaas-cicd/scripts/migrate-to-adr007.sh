@@ -148,6 +148,41 @@ backup_state() {
     info "  backed up zones.json/configuration.json/site.json -> ${dest}"
 }
 
+# Merge each node's live tankXY zpools into site.json hardware.nodes[].storagePools.
+# migrate-configuration.sh is a pure OFFLINE transform (writes storagePools: []);
+# this is the "later step" its field-mapping references — the online discovery
+# belongs here in the orchestrator, not in the transform (which must stay
+# deterministic/unit-testable). Same query create-site.sh uses (zpool list per
+# node, NOT the cluster storage.cfg). Best-effort: an unreachable node keeps [] +
+# a warning. No-op when site.json has no nodes.
+populate_storage_pools() {
+    local nodes host fqdn pools pools_arr tmp
+    nodes="$(jq -r '.hardware.nodes[]?.name // empty' "$SITE" 2>/dev/null || true)"
+    [[ -n "$nodes" ]] || return 0
+    info "  Discovering storagePools per node (zpool list)..."
+    while IFS= read -r host; do
+        [[ -n "$host" ]] || continue
+        fqdn="${host}.mgmt.internal"
+        pools="$(ssh -o ConnectTimeout=5 -o BatchMode=yes -o StrictHostKeyChecking=accept-new \
+            "root@${fqdn}" "zpool list -H -o name 2>/dev/null" 2>/dev/null \
+            | grep -E '^tank' | LC_ALL=C sort || true)"
+        if [[ -z "$pools" ]]; then
+            warn "  ${host}: no tank* pools discovered (unreachable or none) — storagePools left empty; refresh later with 'create-site.sh --force'."
+            continue
+        fi
+        pools_arr="$(printf '%s\n' "$pools" | jq -R . | jq -s 'map(select(length>0))')"
+        tmp="$(mktemp "${SITE}.XXXXXX")"
+        if jq --arg h "$host" --argjson p "$pools_arr" \
+              '.hardware.nodes |= map(if .name == $h then .storagePools = $p else . end)' \
+              "$SITE" > "$tmp" 2>/dev/null; then
+            mv "$tmp" "$SITE"
+            info "  ${host}: storagePools = [${pools//$'\n'/, }]"
+        else
+            rm -f "$tmp"; warn "  ${host}: failed to merge storagePools into site.json."
+        fi
+    done <<< "$nodes"
+}
+
 # ── Step 1: configuration.json -> site.json ──────────────────────────
 step_site() {
     info "Step 1/5: configuration.json -> site.json"
@@ -162,6 +197,15 @@ step_site() {
     [[ -n "$mig" ]] || { warn "  migrate-configuration.sh not on PATH — skipping (run again once cicd is updated)."; NEEDS_ACTION=1; return 0; }
     run "$mig" --config-dir "$CONFIG_DIR" \
         || { warn "  site.json migration reported an error — continuing (configuration.json untouched)."; NEEDS_ACTION=1; }
+
+    # The "later step": populate storagePools from live per-node discovery
+    # (migrate-configuration.sh writes []). Real mode only — under --dry-run the
+    # site.json was not written, so nothing to enrich.
+    if [[ $DRY_RUN -eq 1 ]]; then
+        info "  (dry-run) would discover storagePools per node and merge into site.json"
+    elif [[ -f "$SITE" ]]; then
+        populate_storage_pools
+    fi
 }
 
 # ── Steps 2+3: zones-init + base environments (guarded together) ─────

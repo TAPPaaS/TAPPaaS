@@ -380,10 +380,27 @@ build_nodes_json() {
 # Resolve TAPPaaS version from git (same approach as create-configuration.sh).
 # ---------------------------------------------------------------------------
 resolve_version() {
-    local v="1.0"
-    if [[ -d "/home/tappaas/TAPPaaS/.git" ]]; then
-        v=$(git -C /home/tappaas/TAPPaaS describe --tags --abbrev=0 2>/dev/null || echo "1.0")
+    local v=""
+    # 1. Preserve an existing schema-valid version — a --force refresh must NOT
+    #    regress an operator-set / migration-sanitized version (only N.N[.N] is
+    #    honoured). This is what makes create-site.sh --force safe to re-run to
+    #    refresh discovery-derived fields (e.g. storagePools) on a migrated site.
+    if [[ -n "${SITE_FILE:-}" && -f "$SITE_FILE" ]]; then
+        v="$(jq -r '.version // empty' "$SITE_FILE" 2>/dev/null || true)"
+        if [[ "$v" =~ ^[0-9]+\.[0-9]+(\.[0-9]+)?$ ]]; then
+            printf '%s' "$v"; return 0
+        fi
     fi
+    # 2. Newest NUMERIC git tag only. `git describe --tags` returns ANY latest
+    #    tag — the repo also carries non-version tags (e.g. "nixos-template-v1.3")
+    #    that would produce a schema-invalid version. Match N.N[.N] (strip 'v').
+    v=""
+    if [[ -d "/home/tappaas/TAPPaaS/.git" ]]; then
+        v="$(git -C /home/tappaas/TAPPaaS tag --list --sort=-v:refname 2>/dev/null \
+             | grep -E '^v?[0-9]+\.[0-9]+(\.[0-9]+)?$' | head -1 | sed 's/^v//' || true)"
+    fi
+    # 3. Sane default.
+    [[ -n "$v" ]] || v="1.0"
     printf '%s' "$v"
 }
 

@@ -70,7 +70,10 @@ if run_validate "$SITE"; then ok "site.json validates against schema"; else bad 
 # mapped fields
 [[ "$(jqv "$SITE" '.name')" == "foo" ]] && ok "name derived from domain label (foo)" || bad "name not derived (got '$(jqv "$SITE" '.name')')"
 [[ "$(jqv "$SITE" '.displayName')" == "foo" ]] && ok "displayName defaults to name" || bad "displayName wrong"
-[[ "$(jqv "$SITE" '.version')" == "nixos-template-v1.3" ]] && ok "version carried over" || bad "version wrong"
+# The fixture's .tappaas.version is a non-numeric template tag; migrate-configuration.sh
+# SANITIZES any non-N.N[.N] version to "2.0" (a bad version fails site-fields.json
+# and breaks every later site validate/update), so the migrated value is "2.0".
+[[ "$(jqv "$SITE" '.version')" == "2.0" ]] && ok "non-numeric version sanitized to 2.0" || bad "version wrong (got '$(jqv "$SITE" '.version')')"
 [[ -n "$(jqv "$SITE" '.location.timezone')" && "$(jqv "$SITE" '.location.timezone')" != "null" ]] && ok "location.timezone present ($(jqv "$SITE" '.location.timezone'))" || bad "location.timezone missing"
 [[ "$(jqv "$SITE" '.location.country' | grep -cE '^[A-Za-z]{2}$')" == "1" ]] && ok "location.country is 2-letter ($(jqv "$SITE" '.location.country'))" || bad "location.country wrong"
 [[ -n "$(jqv "$SITE" '.location.locale')" ]] && ok "location.locale present ($(jqv "$SITE" '.location.locale'))" || bad "location.locale missing"
