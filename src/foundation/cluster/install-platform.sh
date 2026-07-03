@@ -18,16 +18,22 @@
 # passwords. Use --manual-cicd to instead just print the in-VM steps.
 #
 # Usage:
-#   install-platform.sh [--repo URL] [--branch NAME] [--domain DOMAIN]
+#   install-platform.sh [--name ORG] [--domain DOMAIN] [--branch NAME] [--repo URL]
 #                       [--skip-template] [--skip-cicd] [--manual-cicd]
 #                       [--non-interactive]
 #
 # Notes:
+#   --name    TAPPaaS system / organisation name. Becomes the Proxmox cluster
+#             name, the default environment, and the default network zone, and is
+#             forwarded to the cicd install.sh. If omitted it is derived from
+#             --domain. Recommended: pass it explicitly (e.g. --name test4).
 #   --domain  REQUIRED (the platform's Caddy reverse proxy is configured for
 #             <service>.<domain>, so it cannot be set up without a real domain).
 #             Prompted if omitted interactively; an error in --non-interactive.
 #             NOT derivable from the node (the Proxmox FQDN is mgmt.internal); the
 #             admin email IS auto-discovered. Only the DNS-01 token is set later.
+#   --branch  Git branch to install from (default: main). Pass the branch under
+#             test (e.g. --branch ADR007) to match the rest of the platform.
 #
 # Exit codes: 0 ok, 1 error, 2 usage.
 

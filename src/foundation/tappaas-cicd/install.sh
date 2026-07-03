@@ -113,6 +113,12 @@ done
 CREATE_SITE_ARGS=(--name "$NAME")
 [[ -n "$DOMAIN" ]] && CREATE_SITE_ARGS+=(--domain "$DOMAIN")
 [[ -n "$BRANCH" ]] && CREATE_SITE_ARGS+=(--branch "$BRANCH")
+# Idempotent resume: create-site.sh refuses to overwrite an existing site.json
+# without --force. A --force re-run PRESERVES operator-set fields (owner,
+# organizations, repositories, email, reboot/snapshot policy — see create-site.sh),
+# so it is the supported way to resume a partially-completed install without
+# clobbering anything. On a true first install site.json is absent → no --force.
+[[ -f /home/tappaas/config/site.json ]] && CREATE_SITE_ARGS+=(--force)
 
 if [ -f ./manager/site-manager/create-site.sh ]; then
   ./manager/site-manager/create-site.sh "${CREATE_SITE_ARGS[@]}"
