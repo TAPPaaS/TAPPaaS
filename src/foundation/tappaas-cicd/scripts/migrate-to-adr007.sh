@@ -334,6 +334,49 @@ step_validate() {
 }
 
 # ── Main ─────────────────────────────────────────────────────────────
+# ── Step (env): backfill module .environment on the deployed configs ──
+# A fresh ADR-007 install writes `.environment` on every deployed module config
+# (foundation-tier → mgmt, apps → the default/org environment) — but a system
+# MIGRATED from main has module configs with no `.environment`, so
+# `environment-manager reconcile <env> --deep` can't find them. Backfill it here
+# using the module's tier from the repository catalog (resolve-module.sh). Only
+# touches configs that (a) resolve to a catalog module and (b) have no
+# `.environment` yet — idempotent, and never clobbers an operator-set value.
+step_backfill_environment() {
+    info "Step (env): backfill module .environment on deployed configs"
+    if [[ ! -f "$SITE" ]]; then
+        [[ $DRY_RUN -eq 1 ]] && { info "  (dry-run) would backfill .environment after site.json exists"; return 0; }
+        warn "  no site.json yet — skipping .environment backfill (re-run after Step 1)."; NEEDS_ACTION=1; return 0
+    fi
+    local _rm="/home/tappaas/bin/resolve-module.sh"
+    [[ -x "$_rm" ]] || _rm="$(tool resolve-module.sh)"
+    if [[ -z "$_rm" || ! -x "$_rm" ]]; then
+        warn "  resolve-module.sh not on PATH — skipping .environment backfill (re-run once cicd is updated)."; NEEDS_ACTION=1; return 0
+    fi
+    local default_env; default_env="$(jq -r '.name // empty' "$SITE" 2>/dev/null || true)"
+    local f m cur tier env tmp changed=0
+    for f in "${CONFIG_DIR}"/*.json; do
+        [[ -e "$f" ]] || continue
+        m="$(basename "$f" .json)"
+        cur="$(jq -r '.environment // empty' "$f" 2>/dev/null || true)"
+        [[ -z "$cur" ]] || continue   # already set — leave the operator's value
+        tier="$("$_rm" "$m" --config-dir "${CONFIG_DIR}" --field tier 2>/dev/null || true)"
+        [[ -n "$tier" ]] || continue  # not a catalog module (site.json/zones.json/…) — skip
+        if [[ "$tier" == "foundation" ]]; then env="mgmt"; else env="${default_env}"; fi
+        [[ -n "$env" ]] || { warn "  ${m}: no default environment (site .name unset) — skipping"; NEEDS_ACTION=1; continue; }
+        if [[ $DRY_RUN -eq 1 ]]; then
+            info "  (dry-run) would set ${m}.environment = ${env}  (tier=${tier})"; continue
+        fi
+        tmp="$(mktemp "${f}.XXXXXX")"
+        if jq --arg e "$env" '.environment = $e' "$f" > "$tmp" 2>/dev/null; then
+            mv "$tmp" "$f"; info "  ${m}.environment = ${env}  (tier=${tier})"; changed=$((changed + 1))
+        else
+            command rm -f "$tmp"; warn "  ${m}: failed to write .environment"; NEEDS_ACTION=1
+        fi
+    done
+    [[ $DRY_RUN -eq 1 ]] || info "  Backfilled ${changed} module config(s)."
+}
+
 # ── Step (people): bootstrap the owner organization + identity ───────
 # The migration analogue of rest-of-foundation.sh's fresh-install people
 # bootstrap. When config/people is empty, create the owner org (named after the
@@ -384,6 +427,7 @@ main() {
     [[ $DRY_RUN -eq 1 ]] && info "  DRY RUN — no changes will be made."
 
     step_site
+    step_backfill_environment
     step_zones_and_envs
     step_people_bootstrap
     step_firewall

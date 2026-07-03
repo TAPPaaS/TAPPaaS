@@ -69,6 +69,28 @@
       "status": "stable",
       "tier": "foundation",
       "source": "official"
+    },
+    {
+      "moduleName": "cluster",
+      "repo": "foundation",
+      "moduleJson": "src/foundation/cluster/cluster.json",
+      "vmid": 0,
+      "stack": "foundation",
+      "category": "platform",
+      "status": "stable",
+      "tier": "foundation",
+      "source": "official"
+    },
+    {
+      "moduleName": "templates",
+      "repo": "foundation",
+      "moduleJson": "src/foundation/templates/templates.json",
+      "vmid": 0,
+      "stack": "foundation",
+      "category": "platform",
+      "status": "stable",
+      "tier": "foundation",
+      "source": "official"
     }
   ],
   "applicationModules": [

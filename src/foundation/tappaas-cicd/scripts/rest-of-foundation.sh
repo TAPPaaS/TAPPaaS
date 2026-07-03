@@ -47,7 +47,9 @@ install_one() {
     warn "  ${dir}/${m}.json not found — skipping ${m}"
     return 0
   fi
-  ( cd "$dir" && install-module.sh "$m" ) || { error "  install of ${m} failed"; return 1; }
+  # Foundation modules live in the mgmt environment — pass it explicitly (the
+  # tier:foundation default resolves to mgmt too, but be explicit + self-documenting).
+  ( cd "$dir" && install-module.sh "$m" --environment mgmt ) || { error "  install of ${m} failed"; return 1; }
   info "  ${GN}✓${CL} ${m} installed"
 }
 

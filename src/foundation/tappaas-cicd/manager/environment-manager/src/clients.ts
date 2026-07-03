@@ -67,8 +67,10 @@ export class CliModuleClient implements ModuleClient {
       }
       if (raw && typeof raw === "object") {
         const o = raw as Record<string, unknown>;
-        // A deployed module config carries `environment`; site.json,
-        // configuration.json etc. do not.
+        // A deployed module config carries an AUTHORITATIVE `environment` field,
+        // set at install time (foundation → mgmt, apps → the default env) and
+        // backfilled by migrate-to-adr007.sh on migrated systems. site.json,
+        // zones.json etc. do not have it.
         if (typeof o.environment === "string" && o.environment === env) {
           out.push(basename(f, ".json"));
         }

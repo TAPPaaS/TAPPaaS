@@ -4,6 +4,7 @@
   "maintainer": "@TAPPaaS",
   "status": "Development",
   "tier": "foundation",
+  "environment": "mgmt",
   "dependsOn": [],
   "provides": [
     "vm",
