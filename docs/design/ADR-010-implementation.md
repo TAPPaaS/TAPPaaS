@@ -189,7 +189,7 @@ Maps 1:1 to the packages. All ⬜ until implementation starts.
 | **P3** | Provisioning (nixos-anywhere, lifecycle) | TBD | P1, P2 | 🟦 | nixos-anywhere deploy + declarative tunnel handshake validated live | (this commit) | ⏳ |
 | **P4** | reverse-proxy role (nginx stream + PROXY v2) | TBD | P2, P3 | 🟦 | passthrough validated live (external → satellite → tunnel → Caddy, :80 308) | (this commit) | ⏳ |
 | **P5** | admin-vpn role (WG via OPNsense, blind relay) | TBD | P2, P3 | 🟦 | blind UDP relay handshake validated live; **Q3 termination complete (2026-07-01)**: OPNsense `tappaas-admin` WG server + `admin→mgmt` firewall rule + `satellite-manager admin` tooling; new admin-peer handshake validated live; runbook `tappaas-cicd/ADMIN-VPN.md` | (this commit) | ⏳ |
-| **P6** | backup role (PBS pull + encryption + S3/Object-Lock) | TBD | P2, P3, **ADR-007 S9** (backup-manager/controller) | ⬜ | — | — | — |
+| **P6** | backup role (PBS pull + encryption + S3/Object-Lock) | TBD | P2, P3, **ADR-007 S9** (backup-manager/controller) | 🟥 blocked (**Q8**) | — (design decision: `proxmox-backup-server` not on NixOS — 2026-07-03) | — | — |
 | **P7** | Hardening & docs (isolation, README/INSTALL + install-flow ref, decommission) | TBD | P4, P5, P6 | ⬜ | — | — | — |
 
 > **Issues:** none filed yet — open GitHub issues per package when the branch is cut, and backfill the `Issues` column with `#NNN`.
@@ -209,6 +209,7 @@ Mechanical leftovers from the ADR. Status: ✅ resolved · ⬜ open.
 | Q5 | Backup **storage backend** & sizing | P6 | ✅ **D16** — S3 object storage default (Hetzner Object Storage, Object Lock at bucket creation, PBS 4.2+); dedicated volume the alternative. Relay/admin node stays tiny (`cax11`-class). Open sub-tunable: Object-Lock retention window vs. PBS prune/GC. |
 | Q6 | Exact `access-to` / `pinhole-allowed-from` entries for `edge`/`admin` | P1 | ⬜ Open — to be determined at implementation, per ADR §4.3 role table. |
 | Q7 | Multi-site SNI fan-out (one satellite, several tunnels) | future | ⬜ **Out of scope for v2.** `ssl_preread` reserved; revisit post-v2. |
+| Q8 | **P6 — how to run PBS off-site when the satellite is NixOS** (no `proxmox-backup-server` in nixpkgs) | P6 | 🟥 **Open — BLOCKS P6.** Investigated 2026-07-03 (see stage log). Choices: (1) third-party native Nix PBS, (2) OCI-container PBS on NixOS, (3) Debian backup-node, (4) **⭐ drop satellite-side PBS → home PBS 4.2 → remote S3 + Object Lock**. Recommendation: evaluate (4) first — per **D16** Object Lock (not the pull *direction*) provides the anti-deletion property; else (2). **Touches D8** (pull-model isolation). P1–P5 unaffected. |
 
 ---
 
@@ -224,6 +225,19 @@ Append-only narrative per stage (newest first). Template:
 - Commit/Push: …
 - Follow-ups: …
 ```
+
+### P6 — backup role — 🟥 BLOCKED (design decision) — 2026-07-03
+**Investigation: does the satellite being NixOS break the backup role? YES — and it is isolated to P6.**
+- **P1–P5 are unaffected.** WireGuard, nginx `stream`, and nftables are all native in nixpkgs and already validated live on the NixOS satellite. The blocker is specific to the PBS datastore of the backup role.
+- **Root cause:** §3.1 requires the satellite to **run its own PBS** and pull from home. But **`proxmox-backup-server` is not packaged for NixOS** — nixpkgs (25.11, checked live on the cicd) ships only `proxmox-backup-client` 4.0.14; the server is the still-open request [nixpkgs #263369](https://github.com/NixOS/nixpkgs/issues/263369). Home PBS installs cleanly only because it is **Debian** (`backup/install.sh` → `apt install proxmox-backup-server`); NixOS has no equivalent path, so P6 cannot be a declarative `satellite.nix` role body the way P4/P5 were.
+- **Options (trade-offs):**
+  1. **Third-party native Nix PBS** — `AWildLeon/nixos-pbs` (real `rustPlatform.buildRustPackage` + `buildFHSEnv`, Steam-pattern; also `David-Kopczynski/proxmox`). Keeps the satellite fully declarative; **but** unofficial supply chain on a security-critical immutable vault (ironic vs. §7.3), PBS-4.2 **S3 backend support unverified**, and TAPPaaS carries the upstream-tracking burden.
+  2. **PBS in an OCI container** on NixOS (`virtualisation.oci-containers`, Debian PBS image). Host stays declarative NixOS; PBS runs in its supported Debian env. Cost: container image provenance, storage/S3-cred passthrough, PBS-in-container is not a Proxmox-supported config. **Most pragmatic if strict pull isolation is kept.**
+  3. **Debian for backup-role satellites** (deviate from **D10**). Official PBS + PBS-4.2 S3; **but** forks the fleet, breaks nixos-anywhere / `autoUpgrade` / uniform isolation (D13), and a relay+backup combo node cannot be both OSes.
+  4. **⭐ Drop satellite-side PBS — home PBS 4.2 writes a REMOTE S3 datastore with Object Lock.** **D16** already made **Object Lock** the immutability mechanism ("stronger than ZFS snapshots"), and **Object Lock — not the pull *direction* — is what actually enforces "a compromised home cannot delete the off-site copy"** (a locked object cannot be deleted within its retention window regardless of credentials). So the off-site target can be an **S3 bucket + Object Lock**, written by **home PBS 4.2** directly, with **no PBS on the satellite at all** — which dissolves the NixOS problem for P6. **Cost:** gives up the pull-direction property that home holds *no* credential to the off-site store — a compromised home could write garbage / fill the bucket (but still **cannot delete locked backups**), and could *read* home's own (encrypted) chunks. Also changes DR recovery (§128: restore from the S3 datastore rather than "pull back from the satellite"). **Touches D8** → operator/architect decision.
+- **Recommendation:** evaluate **Option 4** first — it removes the blocker and aligns with the D16 Object-Lock decision; if strict pull isolation must be preserved, **Option 2** (containerized PBS) is the pragmatic fallback that keeps the host declarative NixOS.
+- **Decision owner:** operator — tracked as **Q8**. P6 stays 🟥 until decided; P1–P5 are unblocked and can proceed independently (a relay/admin-only satellite is P1–P5 + P7).
+- Sources: [nixpkgs #263369](https://github.com/NixOS/nixpkgs/issues/263369); [NixOS Discourse — native PBS packaging](https://discourse.nixos.org/t/native-proxmox-backup-server-packaging-for-nixos-looking-for-testers/78563); [search.nixos.org — proxmox-backup-client](https://search.nixos.org/packages?show=proxmox-backup-client).
 
 ### P5 — admin-vpn role — 🟦 blind UDP relay validated live — 2026-07-01
 - Implemented the satellite side in `satellite.nix`: **nftables blind UDP relay** — `adminWgPort/udp` DNAT → `homeAdminWgAddr:adminListenPort` over the infra tunnel + masquerade, `ip_forward=1`, firewall opens `adminWgPort` (all gated on the `admin-vpn` role). The satellite holds no admin keys.
