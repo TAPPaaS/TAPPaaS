@@ -71,8 +71,11 @@ ZONE=$(get_config_value 'zone0' 'srvHome')
 VARIANT=$(get_config_value 'variant' '')
 VCFG="$(get_variant_config "${VARIANT}" 2>/dev/null || echo '{}')"
 TAPPAAS_DOMAIN=$(jq -r '.domain // empty' <<<"${VCFG}")
-if [[ -z "${TAPPAAS_DOMAIN}" ]]; then
-    TAPPAAS_DOMAIN=$(jq -r '.tappaas.domain // empty' "${SYSTEM_CONFIG}" 2>/dev/null)
+# Legacy fallback: configuration.json is retired (ADR-007) and ABSENT on a fresh
+# install; guard the read with -f + `|| true` so a missing file cannot abort the
+# script under `set -e` (a bare `x=$(jq missing-file)` inherits jq's exit 2).
+if [[ -z "${TAPPAAS_DOMAIN}" && -f "${SYSTEM_CONFIG}" ]]; then
+    TAPPAAS_DOMAIN=$(jq -r '.tappaas.domain // empty' "${SYSTEM_CONFIG}" 2>/dev/null) || TAPPAAS_DOMAIN=""
 fi
 
 if [[ -z "${TAPPAAS_DOMAIN}" ]]; then
@@ -135,7 +138,12 @@ if [[ "${PROXY_TLS}" == "dns01" ]]; then
         [[ -z "${_ENV_NAME}" ]] && _ENV_NAME="$(default_environment_name)"
         TLS_CERT_REFID="$(cert_refid_for_env "${_ENV_NAME}")"
     fi
-    [[ -z "${TLS_CERT_REFID}" ]] && TLS_CERT_REFID=$(jq -r '.tappaas.tlsCertRefid // ""' "${CONFIG_DIR}/configuration.json" 2>/dev/null)
+    # Legacy fallback: configuration.json is retired (ADR-007) and ABSENT on a
+    # fresh install; guard with -f + `|| true` so the missing file cannot abort
+    # under `set -e` (the culprit for the fresh-install "network:proxy" fatal).
+    if [[ -z "${TLS_CERT_REFID}" && -f "${CONFIG_DIR}/configuration.json" ]]; then
+        TLS_CERT_REFID=$(jq -r '.tappaas.tlsCertRefid // ""' "${CONFIG_DIR}/configuration.json" 2>/dev/null) || TLS_CERT_REFID=""
+    fi
     if [[ -n "${TLS_CERT_REFID}" ]]; then
         CADDY_DOMAIN_ARGS=(--custom-certificate "${TLS_CERT_REFID}")
     else

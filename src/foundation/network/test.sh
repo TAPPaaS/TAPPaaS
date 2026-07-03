@@ -1078,7 +1078,11 @@ else
         # Derive default — <vmname>.<env-domain> (config/environments via
         # get_variant_config, fallback configuration.json .tappaas.domain).
         domain=$(jq -r '.domain // empty' <<<"$(get_variant_config "" 2>/dev/null || echo '{}')")
-        [[ -z "${domain}" ]] && domain=$(jq -r '.tappaas.domain // empty' "${CONFIG_DIR}/configuration.json" 2>/dev/null)
+        # Guard the retired-configuration.json fallback with -f + `|| true` so a
+        # missing file (fresh ADR-007 install) cannot abort under `set -e`.
+        if [[ -z "${domain}" && -f "${CONFIG_DIR}/configuration.json" ]]; then
+            domain=$(jq -r '.tappaas.domain // empty' "${CONFIG_DIR}/configuration.json" 2>/dev/null) || domain=""
+        fi
         proxy_domain="test-fw-a.${domain}"
     fi
     if [[ -n "${proxy_domain}" && "${proxy_domain}" != "test-fw-a." ]]; then
