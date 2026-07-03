@@ -2,6 +2,7 @@
   "description": "The TAPPaaS mothership VM",
   "version": "1.0",
   "tier": "foundation",
+  "status": "Production",
   "environment": "mgmt",
   "vmname": "tappaas-cicd",
   "vmid": 130,

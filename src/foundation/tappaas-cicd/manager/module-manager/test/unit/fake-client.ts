@@ -12,6 +12,7 @@ import {
   ModifyOptions,
   ModuleClient,
   ReconcileOptions,
+  RunningGuest,
   SnapshotAction,
   TestOptions,
 } from "../../src/types";
@@ -33,6 +34,10 @@ export interface Invocation {
 export class FakeModuleClient implements ModuleClient {
   log: Invocation[] = [];
   rc = 0; // exit code every method returns (set per-test to simulate failure)
+  // Live cluster state the default `list` folds in. Default [] = "cluster
+  // unreachable" (the config-only graceful-degrade path); a test sets it to
+  // exercise the running-vs-config merge + orphan detection.
+  guests: RunningGuest[] = [];
 
   add(module: string, opts: AddOptions): number {
     this.log.push({ verb: "add", module, opts });
@@ -61,5 +66,8 @@ export class FakeModuleClient implements ModuleClient {
   snapshot(module: string, action: SnapshotAction): number {
     this.log.push({ verb: "snapshot", module, opts: action });
     return this.rc;
+  }
+  clusterResources(): RunningGuest[] {
+    return this.guests;
   }
 }

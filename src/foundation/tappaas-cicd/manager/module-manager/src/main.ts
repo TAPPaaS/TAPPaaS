@@ -278,44 +278,120 @@ function parseIntStrict(s: string, flag: string): number {
 }
 
 // ── CONFIG-layer verbs (pure TS over config/*.json) ────────────────────
+// The DEFAULT `list` is now a SUPERSET of the (removed) `health-manager list vm`
+// (a live running-guest-vs-config overview) PLUS module-manager's own config
+// columns. It merges config/*.json with the LIVE cluster (client.clusterResources
+// — best-effort, [] when unreachable) into one table:
+//   NAME  ENV  ZONE  NODE  VMID  RUN STATE  DEV STATUS
+// where NODE/RUN STATE come from the live guest (matched by vmid) when the VM is
+// running, and fall back to the config node / "-" otherwise. DEV STATUS is the
+// module's maturity from its JSON (Development | Testing | Production). Proxmox
+// TEMPLATES that are running-but-not-in-config are folded into the table with
+// RUN STATE "template" (they are expected infra); genuine orphan VMs are flagged
+// in a note below, as are CONFIGURED modules whose VM is not running. If the live
+// query yields nothing it degrades to the CONFIG-ONLY table (RUN STATE "-") with a
+// single warning, still exit 0.
 function cmdList(opts: Opts, client: ModuleClient): number {
   if (opts.diff) return cmdListDiff(opts, client);
   const mods = listModules(opts.configDir);
+
+  // LIVE cluster state (best-effort). clusterResources() never throws — it
+  // returns [] when the cluster is unreachable (e.g. a dev checkout).
+  const guests = client.clusterResources();
+  const live = guests.length > 0;
+  const byVmid = new Map<number, (typeof guests)[number]>();
+  for (const g of guests) byVmid.set(g.vmid, g);
+
+  // Resolve, per config module, its live guest (by vmid) → RUN STATE + ACTUAL
+  // node when running (else the config node / "-").
+  const resolved = mods.map((m) => {
+    const g = m.vmid != null ? byVmid.get(m.vmid) : undefined;
+    const run = g ? (g.template ? "template" : g.status) : m.vmid != null && live ? "stopped" : "-";
+    return { m, running: run, node: g ? g.node : m.node ?? "-" };
+  });
+
+  // Orphan guests = running guests whose vmid is in NO module config. Templates
+  // are EXPECTED infrastructure → folded into the main table; the rest are
+  // genuine anomalies → flagged in a note.
+  const configVmids = new Set(mods.map((m) => m.vmid).filter((v): v is number => v != null));
+  const orphanGuests = guests.filter((g) => !configVmids.has(g.vmid));
+  const templateGuests = orphanGuests.filter((g) => g.template).sort((a, b) => a.vmid - b.vmid);
+  const trueOrphans = orphanGuests.filter((g) => !g.template).sort((a, b) => a.vmid - b.vmid);
+
+  // Configured modules (with a vmid) whose VM is not running.
+  const notRunning = resolved.filter(
+    (r) => r.m.vmid != null && live && !byVmid.has(r.m.vmid),
+  );
+
   if (opts.json) {
-    // Machine-readable: emit a stable summary object per module (the cascade
-    // parses these fields). The full config is available via `show --json`.
-    const summary = mods.map((m) => ({
-      name: m.name,
-      vmname: m.vmname ?? null,
-      vmid: m.vmid ?? null,
-      node: m.node ?? null,
-      zone0: m.zone0 ?? null,
-      tier: m.tier ?? null,
-      status: m.status ?? null,
-      environment: m.environment ?? null,
+    // Machine-readable: KEEP the existing summary fields (the cascade parses
+    // these); ADDITIVELY surface the live running/actual-node + the orphans.
+    const summary = resolved.map((r) => ({
+      name: r.m.name,
+      vmname: r.m.vmname ?? null,
+      vmid: r.m.vmid ?? null,
+      node: r.m.node ?? null,
+      zone0: r.m.zone0 ?? null,
+      tier: r.m.tier ?? null,
+      status: r.m.status ?? null,
+      environment: r.m.environment ?? null,
+      // Additive live fields (null when the cluster query was unavailable).
+      running: live ? r.running : null,
+      actualNode: r.m.vmid != null && byVmid.has(r.m.vmid) ? r.node : null,
     }));
-    info(JSON.stringify(summary, null, 2));
+    const out: Record<string, unknown> = { modules: summary };
+    if (live) {
+      out.orphans = orphanGuests.map((g) => ({
+        vmid: g.vmid, name: g.name, node: g.node, status: g.status, template: !!g.template,
+      }));
+    }
+    // Back-compat: the top-level shape historically WAS the module array. Keep
+    // that when there is no live data to add, so existing parsers don't break.
+    info(JSON.stringify(live ? out : summary, null, 2));
     return 0;
   }
-  if (mods.length === 0) {
+
+  if (mods.length === 0 && templateGuests.length === 0) {
     info(`(no deployed modules in ${opts.configDir})`);
+    if (!live) info(`${YW}[Warning]${CL} live cluster query unavailable — showing config only`);
     return 0;
   }
-  // Column-aligned table with a header (was tab-separated — misaligned when the
-  // names differ in width). Columns: NAME VMID NODE ZONE ENV STATUS.
-  const headers = ["NAME", "VMID", "NODE", "ZONE", "ENV", "STATUS"];
-  const rows = mods.map((m) => [
-    m.name,
-    m.vmid != null ? String(m.vmid) : "-",
-    m.node ?? "-",
-    m.zone0 ?? "-",
-    m.environment ?? "-",
-    m.status ?? "active",
+
+  // Column-aligned table. Columns: NAME ENV ZONE NODE VMID RUN STATE DEV STATUS.
+  const headers = ["NAME", "ENV", "ZONE", "NODE", "VMID", "RUN STATE", "DEV STATUS"];
+  const modRows = resolved.map((r) => [
+    r.m.name,
+    r.m.environment ?? "-",
+    r.m.zone0 ?? "-",
+    r.node,
+    r.m.vmid != null ? String(r.m.vmid) : "-",
+    r.running,
+    r.m.status ?? "-",
   ]);
+  // Template guests fold in as rows (no config → env/zone/dev status "-").
+  const tmplRows = templateGuests.map((g) => [g.name, "-", "-", g.node, String(g.vmid), "template", "-"]);
+  const rows = [...modRows, ...tmplRows].sort((a, b) => a[0].localeCompare(b[0]));
   const w = headers.map((h, i) => Math.max(h.length, ...rows.map((r) => r[i].length)));
   const fmt = (cells: string[]): string => cells.map((c, i) => c.padEnd(w[i])).join("  ").trimEnd();
   info(`${GN}${fmt(headers)}${CL}`);
   for (const r of rows) info(fmt(r));
+
+  if (!live) {
+    info(`${YW}[Warning]${CL} live cluster query unavailable — showing config only`);
+    return 0;
+  }
+
+  // Configured-but-not-running note (one line per module).
+  for (const r of notRunning) {
+    info(`${YW}[Note]${CL} ${r.m.name} (vmid ${r.m.vmid}) is configured but not running`);
+  }
+
+  // Genuine orphans (non-template running VMs in no module config).
+  if (trueOrphans.length > 0) {
+    info("");
+    info(`${YW}Unexpected VMs (running, not in any module config):${CL}`);
+    for (const g of trueOrphans) info(`  ${g.vmid}  ${g.name}  ${g.node}  (${g.status})`);
+  }
   return 0;
 }
 

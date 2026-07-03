@@ -14,6 +14,33 @@ export function defaultConfigDir(): string {
   return process.env.TAPPAAS_CONFIG ?? process.env.CONFIG_DIR ?? "/home/tappaas/config";
 }
 
+// Node hostnames from site.json (.hardware.nodes[].name) — the bash
+// `get_all_node_hostnames` equivalent (ported from health-manager). Authoritative
+// source for the cluster node list; an empty array means "fall back to the
+// tappaas1..9 scan" (the CliModuleClient does that for its live cluster query).
+export function siteNodeHostnames(configDir: string): string[] {
+  const siteFile = join(configDir, "site.json");
+  if (!existsSync(siteFile)) return [];
+  let raw: Record<string, unknown>;
+  try {
+    raw = JSON.parse(readFileSync(siteFile, "utf8")) as Record<string, unknown>;
+  } catch {
+    return [];
+  }
+  const hw = raw.hardware;
+  if (!hw || typeof hw !== "object") return [];
+  const nodes = (hw as Record<string, unknown>).nodes;
+  if (!Array.isArray(nodes)) return [];
+  const out: string[] = [];
+  for (const n of nodes) {
+    if (n && typeof n === "object") {
+      const name = (n as Record<string, unknown>).name;
+      if (typeof name === "string" && name) out.push(name);
+    }
+  }
+  return out;
+}
+
 // Non-module config files that also live in config/ and must NOT be enumerated
 // as modules (network/site/zone state, the schema copy, switch desired/actual).
 // NOTE: `templates` is NOT here — it IS a module (a provider-only module:

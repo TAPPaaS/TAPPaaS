@@ -35,6 +35,19 @@ export interface ModuleConfig {
   raw: Record<string, unknown>;
 }
 
+// ── A running guest as Proxmox reports it (pvesh /cluster/resources) ───
+// Ported from health-manager so `module list` can fold the LIVE cluster state
+// (running guest vs config) into its config table — the superset of what
+// `health-manager list vm` used to show.
+export interface RunningGuest {
+  vmid: number;
+  name: string;
+  node: string;
+  status: string; // running | stopped | ...
+  type: "qemu" | "lxc";
+  template?: boolean; // true for a Proxmox template (pvesh template=1)
+}
+
 // ── Lifecycle verb options (parsed from the CLI, forwarded to the bins) ─
 export interface AddOptions {
   environment?: string;
@@ -104,6 +117,11 @@ export interface ModuleClient {
   test(module: string, opts: TestOptions): number;
   // snapshot-vm.sh <module> [action]
   snapshot(module: string, action: SnapshotAction): number;
+  // Cluster-wide running guests (pvesh /cluster/resources --type vm), used to
+  // fold LIVE running-vs-config state into the default `list`. BEST-EFFORT: it
+  // returns [] (never throws) when the cluster is unreachable, so `list` can
+  // gracefully degrade to a config-only view.
+  clusterResources(): RunningGuest[];
 }
 
 // ── validate result ───────────────────────────────────────────────────

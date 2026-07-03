@@ -12,12 +12,14 @@
 // operator's terminal, identical to running the script directly.
 
 import { spawnSync } from "child_process";
+import { defaultConfigDir, siteNodeHostnames } from "./config";
 import {
   AddOptions,
   DeleteOptions,
   ModifyOptions,
   ModuleClient,
   ReconcileOptions,
+  RunningGuest,
   SnapshotAction,
   TestOptions,
 } from "./types";
@@ -44,6 +46,54 @@ function run(bin: string, args: string[]): number {
     return 127;
   }
   return r.status ?? 1;
+}
+
+// ── LIVE cluster query (best-effort) ────────────────────────────────────
+// Ported from health-manager/src/client.ts so the default `module list` can
+// fold running-vs-config state into its table. NOTE: unlike the lifecycle
+// verbs above, this CAPTURES output (not inherited stdio) and NEVER throws —
+// it returns [] on any failure so `list` degrades to a config-only view.
+const MGMT = process.env.MM_MGMT_DOMAIN ?? "mgmt.internal";
+
+interface Captured {
+  rc: number;
+  stdout: string;
+  ran: boolean;
+}
+
+function capture(cmd: string, args: string[]): Captured {
+  const r = spawnSync(cmd, args, { encoding: "utf8", maxBuffer: 64 * 1024 * 1024 });
+  if (r.error) return { rc: -1, stdout: "", ran: false };
+  return { rc: r.status ?? -1, stdout: r.stdout ?? "", ran: true };
+}
+
+// ssh root@<host> "<remote>" with a short connect timeout + batch mode (no
+// interactive prompts) — matches health-manager's ssh helper.
+function ssh(user: string, host: string, remote: string): Captured {
+  return capture("ssh", [
+    "-o",
+    "ConnectTimeout=5",
+    "-o",
+    "BatchMode=yes",
+    `${user}@${host}`,
+    remote,
+  ]);
+}
+
+// The reachable Proxmox nodes: site.json .hardware.nodes[].name (bash
+// get_all_node_hostnames), else a tappaas1..9 scan — each ping-probed so only
+// live nodes are returned (mirrors inspect-cluster.sh / health-manager).
+function reachableNodes(): string[] {
+  let candidates = siteNodeHostnames(defaultConfigDir());
+  if (candidates.length === 0) {
+    candidates = Array.from({ length: 9 }, (_, i) => `tappaas${i + 1}`);
+  }
+  const out: string[] = [];
+  for (const node of candidates) {
+    const r = capture("ping", ["-c", "1", "-W", "1", `${node}.${MGMT}`]);
+    if (r.ran && r.rc === 0) out.push(node);
+  }
+  return out;
 }
 
 export class CliModuleClient implements ModuleClient {
@@ -120,5 +170,42 @@ export class CliModuleClient implements ModuleClient {
         break;
     }
     return run(BIN.snapshot, args);
+  }
+
+  // BEST-EFFORT live cluster query — returns [] on ANY failure (no reachable
+  // node, ssh/pvesh error, bad JSON) so `module list` degrades to config-only
+  // and still exits 0. Ported from health-manager's clusterResources(), but
+  // swallows errors here instead of throwing.
+  clusterResources(): RunningGuest[] {
+    const nodes = reachableNodes();
+    if (nodes.length === 0) return [];
+    const r = ssh(
+      "root",
+      `${nodes[0]}.${MGMT}`,
+      "pvesh get /cluster/resources --type vm --output-format json",
+    );
+    if (!r.ran || r.rc !== 0) return [];
+    let arr: unknown;
+    try {
+      arr = JSON.parse(r.stdout);
+    } catch {
+      return [];
+    }
+    if (!Array.isArray(arr)) return [];
+    const out: RunningGuest[] = [];
+    for (const e of arr) {
+      const o = e as Record<string, unknown>;
+      const type = typeof o.type === "string" ? o.type : "";
+      if (type !== "qemu" && type !== "lxc") continue;
+      out.push({
+        vmid: typeof o.vmid === "number" ? o.vmid : Number(o.vmid),
+        name: typeof o.name === "string" ? o.name : "unknown",
+        node: typeof o.node === "string" ? o.node : "unknown",
+        status: typeof o.status === "string" ? o.status : "unknown",
+        type: type as "qemu" | "lxc",
+        template: o.template === 1 || o.template === true,
+      });
+    }
+    return out;
   }
 }

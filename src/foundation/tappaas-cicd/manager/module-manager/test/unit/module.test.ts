@@ -251,6 +251,67 @@ const CONFIG =
   );
 }
 
+// ── 13. default list folds LIVE running-vs-config state (superset view) ──
+// The default `list` merges config with the live cluster: columns
+// NAME ENV ZONE NODE VMID "RUN STATE" "DEV STATUS", the ACTUAL node for running
+// guests, running TEMPLATES folded into the table with RUN STATE "template",
+// genuine orphans in an "Unexpected VMs" note, and a graceful config-only
+// fallback when the cluster is unreachable.
+function captureList(client: FakeModuleClient, extraArgs: string[] = []): string {
+  const real = console.log;
+  let out = "";
+  console.log = (...a: unknown[]): void => {
+    out += a.map(String).join(" ") + "\n";
+  };
+  try {
+    run(["module", "list", "--config-dir", CONFIG, ...extraArgs], client);
+  } finally {
+    console.log = real;
+  }
+  return out;
+}
+{
+  // Live cluster: nextcloud(340) running on tappaas2 (migrated from config
+  // tappaas1), identity(140) running, a running TEMPLATE (8080), plus a genuine
+  // ORPHAN guest 999 in no config.
+  const c = new FakeModuleClient();
+  c.guests = [
+    { vmid: 340, name: "nextcloud", node: "tappaas2", status: "running", type: "qemu" },
+    { vmid: 140, name: "identity", node: "tappaas1", status: "running", type: "qemu" },
+    { vmid: 8080, name: "tappaas-nixos", node: "tappaas1", status: "stopped", type: "qemu", template: true },
+    { vmid: 999, name: "mystery", node: "tappaas3", status: "running", type: "qemu" },
+  ];
+  const out = captureList(c);
+  check(/RUN STATE/.test(out) && /DEV STATUS/.test(out), "default list has RUN STATE + DEV STATUS columns");
+  // Column order NAME ENV ZONE NODE VMID RUN STATE: node tappaas2 then vmid 340 then running.
+  check(
+    /nextcloud(\s+\S+){2}\s+tappaas2\s+340\s+running/.test(out),
+    "running guest shows live status + ACTUAL node (tappaas2, not config tappaas1)",
+  );
+  // legacyapp(250) has a vmid but is NOT in the live set → configured-but-not-running.
+  check(
+    /legacyapp[\s\S]*not running/.test(out) || /not running[\s\S]*250/.test(out),
+    "a configured VM absent from the live set is noted as not running",
+  );
+  // templates has no vmid → VMID + RUN STATE "-".
+  check(/templates(\s+\S+){2}\s+-\s+-\s+-/.test(out), "vmid-less module shows VMID + RUN STATE '-'");
+  // Running template folds INTO the table with RUN STATE "template" (not an orphan note).
+  check(/tappaas-nixos(\s+\S+){2}\s+tappaas1\s+8080\s+template/.test(out), "running template folded into table as 'template'");
+  // Genuine (non-template) orphan → Unexpected VMs note.
+  check(/Unexpected VMs/.test(out) && /999\s+mystery\s+tappaas3/.test(out), "genuine orphan listed under Unexpected VMs");
+}
+{
+  // Cluster unreachable (guests = []): config-only fallback, RUN STATE '-', warn.
+  const c = new FakeModuleClient(); // guests defaults to []
+  const out = captureList(c);
+  check(
+    /live cluster query unavailable/.test(out),
+    "unreachable cluster → single graceful-degrade warning",
+  );
+  check(/nextcloud(\s+\S+){2}\s+\S+\s+340/.test(out), "config-only fallback still lists modules");
+  check(!/Unexpected VMs/.test(out), "no orphan section when there is no live data");
+}
+
 console.log("");
 console.log(`Results: ${passed} passed, ${failed} failed`);
 process.exit(failed === 0 ? 0 : 1);
