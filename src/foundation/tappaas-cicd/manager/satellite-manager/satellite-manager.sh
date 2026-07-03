@@ -67,6 +67,9 @@ edit JSON):
   --bucket NAME      S3 Object-Lock bucket → enables the backup role (omit = no backup)
   --s3-endpoint URL  S3 endpoint (default Hetzner Object Storage)
   --roles csv        override roles (default: reverse-proxy,admin-vpn [,backup if --bucket])
+  --os debian|nixos  satellite OS (default: debian — ADR-010 Option 3). 'debian' ships a
+                     stock Debian host over SSH (no nixos-anywhere; official PBS; OS diversity
+                     for the vault, §7.3). 'nixos' uses the declarative nixos-anywhere path.
   --dry-run          show the plan; write nothing
   (with no flags and an existing config, re-provisions from it.)
 
@@ -133,7 +136,7 @@ cmd_status() {
 
 cmd_install() {
     # Parse flags — the MANAGER owns the JSON: pass params, don't hand-edit files.
-    local name="" provider="hetzner" public_ip="" sshkey="" bucket="" s3ep="" roles_override=""
+    local name="" provider="hetzner" public_ip="" sshkey="" bucket="" s3ep="" roles_override="" os_override="debian"
     while [[ $# -gt 0 ]]; do
         case "$1" in
             --provider)              provider="$2"; shift 2 ;;
@@ -142,6 +145,7 @@ cmd_install() {
             --bucket)                bucket="$2"; shift 2 ;;
             --s3-endpoint)           s3ep="$2"; shift 2 ;;
             --roles)                 roles_override="$2"; shift 2 ;;
+            --os)                    os_override="$2"; shift 2 ;;
             --*)                     die "unknown option: $1" ;;
             *)                       if [[ -z "${name}" ]]; then name="$1"; else die "unexpected arg: $1"; fi; shift ;;
         esac
@@ -154,15 +158,16 @@ cmd_install() {
     if [[ -n "${public_ip}" || -n "${sshkey}" || -n "${bucket}" || -n "${roles_override}" ]]; then
         [[ -n "${public_ip}" ]] || die "--public-ip is required to create a satellite config"
         [[ -n "${sshkey}" ]]    || die "--sshkey is required (the operator out-of-band key; NOT a cicd key)"
+        [[ "${os_override}" == "debian" || "${os_override}" == "nixos" ]] || die "--os must be 'debian' (default) or 'nixos'"
         local key_val="${sshkey}"; [[ -f "${sshkey}" ]] && key_val="$(cat "${sshkey}")"
         local roles="${roles_override:-reverse-proxy,admin-vpn}"
         [[ -z "${roles_override}" && -n "${bucket}" ]] && roles="${roles},backup"
         if [[ "${DRY_RUN}" == "1" ]]; then
-            cfg="$(mktemp)"; sat_write_config "${cfg}" "${name}" "${provider}" "${public_ip}" "${key_val}" "${roles}" "${bucket}" "${s3ep:-https://hel1.your-objectstorage.com}"
-            info "[dry-run] would write $(config_path "${name}")"
+            cfg="$(mktemp)"; sat_write_config "${cfg}" "${name}" "${provider}" "${public_ip}" "${key_val}" "${roles}" "${bucket}" "${s3ep:-https://hel1.your-objectstorage.com}" "${os_override}"
+            info "[dry-run] would write $(config_path "${name}") (os=${os_override})"
         else
-            sat_write_config "${cfg}" "${name}" "${provider}" "${public_ip}" "${key_val}" "${roles}" "${bucket}" "${s3ep:-https://hel1.your-objectstorage.com}"
-            info "wrote ${cfg} (roles: ${roles})"
+            sat_write_config "${cfg}" "${name}" "${provider}" "${public_ip}" "${key_val}" "${roles}" "${bucket}" "${s3ep:-https://hel1.your-objectstorage.com}" "${os_override}"
+            info "wrote ${cfg} (roles: ${roles}, os: ${os_override})"
         fi
     fi
 
@@ -170,37 +175,56 @@ cmd_install() {
     [[ -f "${cfg}" ]] || die "no config for '${name}' — pass --public-ip and --sshkey to create one"
     command -v jq >/dev/null 2>&1 || die "jq is required"
     jq empty "${cfg}" 2>/dev/null || die "invalid JSON: ${cfg}"
-    local ip user wgport ka sat_addr home_addr roles sname cname target
+    local ip user wgport ka sat_addr home_addr roles sname cname target sat_os
     ip="$(jq -r '.host.publicIp' "${cfg}")"
     user="$(jq -r '.host.sshUser // "root"' "${cfg}")"
     roles="$(jq -r '.roles // [] | join(",")' "${cfg}")"
+    # OS selector (ADR-010 Option 3). Legacy configs without .os are NixOS.
+    sat_os="$(jq -r '.os // "nixos"' "${cfg}")"
     # tunnel addresses/ports are DERIVED defaults (lib/provision.sh), not json.
     wgport="${SAT_WGPORT}"; ka="${SAT_KEEPALIVE}"
     sat_addr="${SAT_SAT_ADDR}"; home_addr="${SAT_HOME_ADDR}"
     sname="tappaas-edge-${name}"; cname="tappaas-${name}"
     target="${user}@${ip}"
 
-    info "satellite install '${name}' — ip=${ip} roles=${roles:-none} wgPort=${wgport}"
+    info "satellite install '${name}' — ip=${ip} os=${sat_os} roles=${roles:-none} wgPort=${wgport}"
     if [[ "${DRY_RUN}" == "1" ]]; then
         info "  [dry-run] would:"
         info "   1. OPNsense: create WG server '${sname}' (home ${home_addr}/31); read home pubkey"
-        info "   2. generate satellite-settings.nix (roles=[${roles}] + home pubkey + operator keys)"
-        info "   3. nixos-anywhere --flake .#satellite --target-host ${target} -i ${PROVISION_KEY}"
+        if [[ "${sat_os}" == "debian" ]]; then
+            info "   2. render Debian configs (wg-infra/nftables$( [[ ",${roles}," == *,reverse-proxy,* ]] && printf '/nginx-stream')$( [[ ",${roles}," == *,admin-vpn,* ]] && printf '/ip_forward')/unattended-upgrades) for roles=[${roles}]"
+            info "   3. ship + run provision-debian.sh on ${target} (apt over SSH; no reformat)"
+        else
+            info "   2. generate satellite-settings.nix (roles=[${roles}] + home pubkey + operator keys)"
+            info "   3. nixos-anywhere --flake .#satellite --target-host ${target} -i ${PROVISION_KEY}"
+        fi
         info "   4. read back the satellite wg pubkey (operator key via ssh-agent)"
         info "   5. OPNsense: create peer '${cname}' (serveraddress=${ip}:${wgport}, keepalive=${ka}); link; reconfigure"
         info "   6. verify handshake"
         return 0
     fi
 
-    command -v nix >/dev/null || die "nix required — run satellite-manager install on tappaas-cicd"
     command -v jq >/dev/null || die "jq required"
-    [[ -f "${PROVISION_KEY}" ]] || { warn "generating provisioning key ${PROVISION_KEY}"; ssh-keygen -t ed25519 -f "${PROVISION_KEY}" -N "" -q; }
-    if ! ssh -i "${PROVISION_KEY}" -o IdentitiesOnly=yes -o StrictHostKeyChecking=accept-new \
-             -o UserKnownHostsFile=/dev/null -o ConnectTimeout=10 -o BatchMode=yes "${target}" true 2>/dev/null; then
-        error "cicd cannot SSH to ${target} with the provisioning key. Add this key to the"
-        error "satellite's root authorized_keys (operator, out-of-band), then re-run:"
-        error "  $(cat "${PROVISION_KEY}.pub")"
-        exit 1
+    if [[ "${sat_os}" == "nixos" ]]; then
+        command -v nix >/dev/null || die "nix required for --os nixos — run satellite-manager install on tappaas-cicd"
+        [[ -f "${PROVISION_KEY}" ]] || { warn "generating provisioning key ${PROVISION_KEY}"; ssh-keygen -t ed25519 -f "${PROVISION_KEY}" -N "" -q; }
+        if ! ssh -i "${PROVISION_KEY}" -o IdentitiesOnly=yes -o StrictHostKeyChecking=accept-new \
+                 -o UserKnownHostsFile=/dev/null -o ConnectTimeout=10 -o BatchMode=yes "${target}" true 2>/dev/null; then
+            error "cicd cannot SSH to ${target} with the provisioning key. Add this key to the"
+            error "satellite's root authorized_keys (operator, out-of-band), then re-run:"
+            error "  $(cat "${PROVISION_KEY}.pub")"
+            exit 1
+        fi
+    else
+        # Debian (Option 3): no reformat — provision over the OPERATOR key via the
+        # forwarded agent (run install over `ssh -A`). cicd holds no standing key (§7.3);
+        # Hetzner injected the operator key at boot, so root@ip is reachable now.
+        if ! ssh -o StrictHostKeyChecking=accept-new -o UserKnownHostsFile=/dev/null \
+                 -o LogLevel=ERROR -o ConnectTimeout=10 -o BatchMode=yes "${target}" true 2>/dev/null; then
+            error "cicd cannot SSH to ${target}. Run 'satellite-manager install' over 'ssh -A' so your"
+            error "operator key reaches ${target} (Hetzner injected it at boot; cicd holds no standing key)."
+            exit 1
+        fi
     fi
 
     info "  [1/6] OPNsense home WG server ${sname}"
@@ -210,13 +234,21 @@ cmd_install() {
     [[ -n "${srv}" ]] || die "OPNsense addServer failed"
     info "    server=${srv} home_pub=${home_pub}"
 
-    info "  [2/6] generate satellite-settings.nix"
-    local settings; settings="$(mktemp)"
-    sat_gen_settings "${cfg}" "${home_pub}" "${settings}" || die "settings generation failed"
-
-    info "  [3/6] nixos-anywhere -> ${target} (reformats to NixOS)"
-    local d; d="$(sat_assemble_deploy "${settings}")"
-    sat_nixos_anywhere "${d}" "${target}" || die "nixos-anywhere failed"
+    if [[ "${sat_os}" == "debian" ]]; then
+        info "  [2/6] render Debian configs (roles=[${roles}])"
+        local cdir; cdir="$(mktemp -d)"
+        sat_gen_debian_configs "${cfg}" "${home_pub}" "${cdir}" || die "Debian config generation failed"
+        info "  [3/6] provision Debian -> ${target} (apt; no reformat, no nixos-anywhere)"
+        local ddir; ddir="$(sat_assemble_debian_deploy "${cdir}")"
+        sat_provision_debian "${ddir}" "${target}" || die "Debian provisioning failed"
+    else
+        info "  [2/6] generate satellite-settings.nix"
+        local settings; settings="$(mktemp)"
+        sat_gen_settings "${cfg}" "${home_pub}" "${settings}" || die "settings generation failed"
+        info "  [3/6] nixos-anywhere -> ${target} (reformats to NixOS)"
+        local d; d="$(sat_assemble_deploy "${settings}")"
+        sat_nixos_anywhere "${d}" "${target}" || die "nixos-anywhere failed"
+    fi
 
     info "  [4/6] read back satellite wg pubkey (operator key via ssh-agent)"
     local sat_pub

@@ -4,9 +4,10 @@
   "appliesTo": "src/foundation/satellite/satellite.json and ~/config/satellite-<name>.json",
 
   "fields": {
-    "kind": { "type": "string", "required": true, "values": { "external-host": "provisioned on an external host via nixos-anywhere (only value)" } },
+    "kind": { "type": "string", "required": true, "values": { "external-host": "provisioned on an external host (only value)" } },
     "tier": { "type": "string", "required": true, "values": { "foundation": "foundation-grade but OPTIONAL (not in the mandatory install chain)" } },
-    "name": { "type": "string", "required": true, "description": "satellite instance name (also the NixOS hostname); a site may run several" },
+    "name": { "type": "string", "required": true, "description": "satellite instance name (also the hostname); a site may run several" },
+    "os": { "type": "string", "default": "debian", "required": false, "values": { "debian": "ADR-010 Option 3 (default): stock Debian 12/13 provisioned over SSH by satellite-manager (no nixos-anywhere); official proxmox-backup-server for the backup role; OS diversity protects the vault from a nixpkgs supply-chain compromise (§7.3)", "nixos": "declarative NixOS via nixos-anywhere (satellite.nix)" }, "note": "legacy configs without this field are treated as nixos" },
     "roles": { "type": "array<string>", "required": true, "values": { "reverse-proxy": "L4 passthrough of :443/:80 to Caddy-on-OPNsense", "admin-vpn": "blind UDP relay of an admin WireGuard session terminating on OPNsense", "backup": "off-site PBS pull target" }, "note": "any combination; order irrelevant" },
     "dependsOn": { "type": "array<string>", "required": false, "note": "EMPTY by design — the satellite is operator-driven (satellite-manager), not resolved through install-module.sh. Real prerequisites (network/OPNsense, tappaas-cicd, and backup for the backup role) are checked by satellite-manager." },
 
