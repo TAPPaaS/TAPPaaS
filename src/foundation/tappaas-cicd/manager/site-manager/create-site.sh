@@ -474,11 +474,15 @@ build_and_write_site() {
     local automaticReboot snapshotRetention owner displayName backup network location organizations
     automaticReboot="$(jq -r 'if .automaticReboot != null then (.automaticReboot|tostring) else "true" end' <<<"$existing")"
     snapshotRetention="$(jq -r 'if .snapshotRetention != null then (.snapshotRetention|tostring) else "5" end' <<<"$existing")"
-    owner="$(jq -r --arg n "$NAME" '.owner // $n' <<<"$existing")"
+    # owner + organizations default to the site-named owning org (matching the
+    # org a fresh install creates, named after the site). Treat an EMPTY value as
+    # unset too (not just null) so a --force re-run heals a migrated site.json
+    # that was left owner="" / organizations=[].
+    owner="$(jq -r --arg n "$NAME" 'if (.owner // "") == "" then $n else .owner end' <<<"$existing")"
     displayName="$(jq -r --arg n "$NAME" '.displayName // $n' <<<"$existing")"
     backup="$(jq -c '.backup // null' <<<"$existing")"
     network="$(jq -c '.network // {isp: null, publicIp: "auto"}' <<<"$existing")"
-    organizations="$(jq -c '.organizations // []' <<<"$existing")"
+    organizations="$(jq -c --arg p "config/people/organizations/${NAME}.json" 'if ((.organizations // []) | length) == 0 then [$p] else .organizations end' <<<"$existing")"
     # location: keep existing if present, else freshly-detected
     location="$(jq -c --arg c "$country" --arg t "$tz" --arg l "$locale" \
         '.location // {country: $c, timezone: $t, locale: $l}' <<<"$existing")"

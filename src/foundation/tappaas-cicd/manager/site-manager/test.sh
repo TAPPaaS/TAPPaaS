@@ -105,8 +105,10 @@ if run_validate "$SITE"; then ok "site.json validates against schema"; else bad 
 # email is CARRIED to site.json .email (S3b reader cutover), not dropped
 [[ "$(jqv "$SITE" '.email')" == "ops@example.org" ]] && ok "email carried to site.json .email" || bad "email not carried (got '$(jqv "$SITE" '.email')')"
 [[ "$(jqv "$SITE" 'has("nodeCount")')" == "false" ]] && ok "nodeCount DROPPED" || bad "nodeCount leaked"
-# owner empty when no orgs present
-[[ "$(jqv "$SITE" '.owner')" == "" ]] && ok "owner empty when no organizations present" || bad "owner unexpectedly set"
+# owner + organizations default to the site-named org when none present
+# (consistency with a fresh install, which creates an org named after the site).
+[[ "$(jqv "$SITE" '.owner')" == "foo" ]] && ok "owner defaults to site name when no orgs present" || bad "owner not defaulted (got '$(jqv "$SITE" '.owner')')"
+[[ "$(jqv "$SITE" '.organizations[0]')" == "config/people/organizations/foo.json" ]] && ok "organizations[] defaults to the site org ref" || bad "organizations[] not defaulted (got '$(jqv "$SITE" '.organizations[0]')')"
 
 # --- Case 1b: idempotency (2nd run is a no-op, does not change site.json) ---
 SUM_BEFORE="$(sha256sum "$SITE" | cut -d' ' -f1)"

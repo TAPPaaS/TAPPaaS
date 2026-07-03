@@ -218,9 +218,13 @@ main() {
             | sed 's#^#config/people/organizations/#; s#$#.json#' \
             | jq -R . | jq -s .)"
     else
-        owner=""
-        orgs='[]'
-        warn "No organization found under ${CONFIG_DIR}/people/organizations/ — owner left empty; set it manually in site.json."
+        # No org files yet — default to the site-named owning org, matching a
+        # fresh install (which creates an org named after the site). owner is a
+        # NAME reference; organizations points at the org file the people/install
+        # step will create (site validation does not require the file to exist).
+        owner="$name"
+        orgs="$(jq -n --arg p "config/people/organizations/${name}.json" '[$p]')"
+        info "No organization under ${CONFIG_DIR}/people/organizations/ — defaulting owner + organizations to the site org '${name}' (create it with people-manager)."
     fi
 
     # --- Build site.json ---
