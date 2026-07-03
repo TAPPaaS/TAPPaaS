@@ -300,6 +300,21 @@ main() {
     echo ""
     info "${BOLD}Step 0: Classify (tier/source) and resolve environment${CL}"
 
+    # Locate the module SOURCE. The current directory wins (back-compat: run from
+    # the module dir), otherwise resolve it from the repository catalogs (ADR-004)
+    # so `module-manager add <module>` works from ANY directory. resolve-module.sh
+    # searches every site.json repository's module-catalog.json (by moduleName or
+    # legacyName) and WARNS on a name clash across repos.
+    if [[ ! -f "./${module}.json" ]]; then
+        local _rm="/home/tappaas/bin/resolve-module.sh"
+        [[ -x "${_rm}" ]] || _rm="$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/resolve-module.sh"
+        local _mdir
+        _mdir="$("${_rm}" "${module}" --config-dir "${CONFIG_DIR}" --field dir)" \
+            || die "Module '${module}' not found: no ./${module}.json in the current directory and not in any repository catalog (check 'site.json .repositories')."
+        info "  Located '${module}' via repository catalog → ${BL}${_mdir}${CL}"
+        cd "${_mdir}" || die "Cannot enter resolved module directory: ${_mdir}"
+    fi
+
     # The authored module JSON in the module directory (cwd) is the source of
     # truth for tier (and any pinned source). Read it before copying anything.
     local source_json="./${module}.json"
