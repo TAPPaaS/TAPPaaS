@@ -48,11 +48,44 @@ identical** to the NixOS path (same `edge` tunnel, same `admin` WG server, same
 set-and-forget vault) and auto-reboots in a window (`SAT_REBOOT_TIME`, default `03:30`). For a
 backup node, keep that window outside the pull-sync schedule so a reboot never interrupts a sync.
 
+## Backup role (P6) — the vault
+
+The `backup` role makes the Debian satellite an **off-site PBS that PULLS from home**
+(ADR-010 §3, D8). This is the reason Debian was chosen (D19): it runs the **official
+`proxmox-backup-server`** — no unofficial Nix/OCI port.
+
+**Immutability = the pull model, NOT S3 Object Lock.** PBS does not support S3 Object Lock
+(enabling it *corrupts* the datastore — [Bugzilla #6780](https://bugzilla.proxmox.com/show_bug.cgi?id=6780)).
+Instead: the satellite pulls with `--remove-vanished false` and **owns prune/GC**, so a
+compromised home cannot delete the off-site copies. The **client-side encryption key stays at
+home** (§3.2) — the satellite stores only ciphertext.
+
+`provision-backup.sh` (run after the base) installs PBS, creates the local datastore, and wires
+the `remote` + pull `sync-job`. `satellite-manager` also adds the OPNsense **`edge → home-PBS:8007`**
+rule and widens the satellite's wg `AllowedIPs` to reach home PBS — and nothing else in the cluster.
+
+### Home-side prerequisites (operator, one-time)
+
+1. **Reachability:** home PBS must be reachable at `backup.pull.homePbsHost` over the tunnel
+   (satellite-manager adds the `edge → PBS:8007` rule + AllowedIPs).
+2. **Read-only token** on home PBS (so a compromised satellite can only *read* home's encrypted chunks):
+   ```bash
+   proxmox-backup-manager user generate-token satellite@pbs pull
+   proxmox-backup-manager acl update /datastore/<home-store> DatastoreReader --auth-id 'satellite@pbs!pull'
+   ```
+   Provide the printed **secret** to satellite-manager out-of-band — `TAPPAAS_SAT_PBS_TOKEN=<secret>`
+   (or `TAPPAAS_SAT_PBS_TOKEN_FILE=<path>`); it is shipped as a `0600` file and **never committed**.
+3. Put the non-secret pull config in the satellite JSON: `backup.pull.{homePbsHost,homeDatastore,authId,fingerprint,schedule}`.
+
+Without the token, `provision-backup.sh` still installs PBS + the datastore and prints this runbook;
+provide the token and re-run to activate the pull.
+
 ## Files
 
 | File | Purpose |
 | ---- | ------- |
-| `provision-debian.sh` | idempotent, role-gated on-host installer (run by `satellite-manager`) |
+| `provision-debian.sh` | idempotent, role-gated on-host installer (base: tunnel/proxy/admin-vpn/patching) |
+| `provision-backup.sh` | backup role: official PBS install + datastore + pull remote/sync-job |
 | `README.md` | this file |
 
 The rendered config files are **not committed** — they are generated per-deployment by
