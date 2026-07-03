@@ -4,8 +4,7 @@
 // identity, location, hardware nodes + storage pools, backup, update schedule,
 // module repositories). It is a SINGLETON: exactly one config/site.json.
 //
-// Entity model (the entity is the first arg — mirrors network-manager's
-// `network-manager zone <verb>`):
+// Entity model (the entity is the first arg):
 //   site       (SINGLETON) → show | modify
 //   node                   → list | add | delete
 //   repository             → list | add | delete | reconcile

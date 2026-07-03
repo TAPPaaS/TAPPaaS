@@ -60,12 +60,12 @@ if [[ -f "${UNIT_TSCONFIG}" ]]; then
     if run_ts "tsc -p '${UNIT_TSCONFIG}'" >/dev/null 2>&1; then
         ok "TypeScript unit tests compile"
         if run_ts "NM_FIXTURE_DIR='${FIXTURE_DIR}' NM_TEMPLATE='${HERE}/zones.json' node '${DIST_TEST}/test/unit/network.test.js'"; then
-            ok "TypeScript reconcile/CRUD/zones-init unit tests pass"
+            ok "TypeScript reconcile/CRUD/init unit tests pass"
         else
             bad "TypeScript unit tests FAILED"
         fi
 
-        # ── zones-init CLI smoke (offline; temp --out, never live config) ──
+        # ── init CLI smoke (offline; temp --out, never live config) ──
         # The unit tsconfig compiles src/ into dist-test/src; run the real CLI
         # entry against a temp output and assert the transformed file on disk.
         ZINIT_OUT="$(mktemp -d)/z.json"
@@ -73,35 +73,35 @@ if [[ -f "${UNIT_TSCONFIG}" ]]; then
         # tenants (default configDir is the LIVE config, which would keep occupied
         # legacy zones Active). With no occupancy, srvWork is inactivated as asserted.
         ZINIT_CFG="$(mktemp -d)"
-        if run_ts "NM_TEMPLATE='${HERE}/zones.json' node '${DIST_TEST}/src/main.js' zones-init --name acme --from '${HERE}/zones.json' --out '${ZINIT_OUT}' --config-dir '${ZINIT_CFG}'" >/dev/null 2>&1 \
+        if run_ts "NM_TEMPLATE='${HERE}/zones.json' node '${DIST_TEST}/src/main.js' init --name acme --from '${HERE}/zones.json' --out '${ZINIT_OUT}' --config-dir '${ZINIT_CFG}'" >/dev/null 2>&1 \
             && [[ -f "${ZINIT_OUT}" ]] \
             && run_ts "node -e 'const z=require(\"${ZINIT_OUT}\"); process.exit((z.acme&&!z.srv&&z[\"acme-private\"]&&z[\"acme-guest\"]&&z.acme.state===\"Active\"&&z.srvWork.state===\"Inactive\"&&!z[\"acme-private\"][\"access-to\"].includes(\"srvHome\")&&z[\"acme-private\"][\"access-to\"].includes(\"acme\"))?0:1)'" >/dev/null 2>&1; then
-            ok "zones-init CLI transforms template to temp --out (renames + inactivations + ref-integrity)"
+            ok "init CLI transforms template to temp --out (renames + inactivations + ref-integrity)"
         else
-            bad "zones-init CLI smoke FAILED"
+            bad "init CLI smoke FAILED"
         fi
-        # Design A: zones-init also seeds zones.rename.json + zones.json.orig
+        # Design A: init also seeds zones.rename.json + zones.json.orig
         # beside a custom --out, all in the renamed namespace (current==orig==rename).
         ZINIT_DIR="$(dirname "${ZINIT_OUT}")"
         if [[ -f "${ZINIT_DIR}/zones.rename.json" && -f "${ZINIT_DIR}/zones.json.orig" ]] \
             && run_ts "node -e 'const fs=require(\"fs\");const a=fs.readFileSync(\"${ZINIT_OUT}\",\"utf8\");const r=fs.readFileSync(\"${ZINIT_DIR}/zones.rename.json\",\"utf8\");const o=fs.readFileSync(\"${ZINIT_DIR}/zones.json.orig\",\"utf8\");const rj=JSON.parse(r);process.exit((a===r&&a===o&&rj.acme&&!rj.srv)?0:1)'" >/dev/null 2>&1; then
-            ok "zones-init seeds zones.rename.json + zones.json.orig (current==orig==rename, renamed namespace)"
+            ok "init seeds zones.rename.json + zones.json.orig (current==orig==rename, renamed namespace)"
         else
-            bad "zones-init 3-file seeding (Design A) FAILED"
+            bad "init 3-file seeding (Design A) FAILED"
         fi
         rm -rf -- "${ZINIT_DIR}" "${ZINIT_CFG}"
 
-        # ── zones-merge CLI smoke (offline; Design A; never live config) ──
+        # ── merge CLI smoke (offline; Design A; never live config) ──
         # On a fresh renamed install (current==orig==rename), a merge must NOT
         # re-introduce srv/home/guest and must produce no duplicate vlantags.
         ZM_DIR="$(mktemp -d)"
         printf '{ "name": "acme" }\n' > "${ZM_DIR}/site.json"
-        run_ts "NM_TEMPLATE='${HERE}/zones.json' node '${DIST_TEST}/src/main.js' zones-init --name acme --from '${HERE}/zones.json' --out '${ZM_DIR}/zones.json' --config-dir '${ZM_DIR}'" >/dev/null 2>&1
-        if run_ts "NM_TEMPLATE='${HERE}/zones.json' node '${DIST_TEST}/src/main.js' zones-merge --config-dir '${ZM_DIR}' --template '${HERE}/zones.json'" >/dev/null 2>&1 \
+        run_ts "NM_TEMPLATE='${HERE}/zones.json' node '${DIST_TEST}/src/main.js' init --name acme --from '${HERE}/zones.json' --out '${ZM_DIR}/zones.json' --config-dir '${ZM_DIR}'" >/dev/null 2>&1
+        if run_ts "NM_TEMPLATE='${HERE}/zones.json' node '${DIST_TEST}/src/main.js' merge --config-dir '${ZM_DIR}' --template '${HERE}/zones.json'" >/dev/null 2>&1 \
             && run_ts "node -e 'const z=require(\"${ZM_DIR}/zones.json\");const dup=Object.entries(z).filter(([k,v])=>v&&typeof v===\"object\"&&!Array.isArray(v)&&typeof v.vlantag===\"number\"&&v.vlantag>0).reduce((m,[k,v])=>{m[v.vlantag]=(m[v.vlantag]||0)+1;return m;},{});const hasDup=Object.values(dup).some(n=>n>1);process.exit((!z.srv&&!z.home&&!z.guest&&z.acme&&!hasDup)?0:1)'" >/dev/null 2>&1; then
-            ok "zones-merge CLI: fresh renamed install does NOT re-add srv/home/guest, no duplicate vlantags"
+            ok "merge CLI: fresh renamed install does NOT re-add srv/home/guest, no duplicate vlantags"
         else
-            bad "zones-merge CLI smoke FAILED (re-added a renamed-away zone or created a duplicate vlantag)"
+            bad "merge CLI smoke FAILED (re-added a renamed-away zone or created a duplicate vlantag)"
         fi
         rm -rf -- "${ZM_DIR}"
 
@@ -126,7 +126,7 @@ if [[ -f "${UNIT_TSCONFIG}" ]]; then
         fi
         rm -rf -- "${ZC_DIR}" "${ZC_BAD_DIR}"
 
-        # ── zones-distribute CLI smoke (offline; NO real scp) ─────────────
+        # ── distribute CLI smoke (offline; NO real scp) ─────────────
         # --dry-run lists the configured node targets from a fixture
         # configuration.json without scp'ing. A sentinel scp bin proves no
         # scp runs (its marker file must stay absent).
@@ -138,22 +138,22 @@ JSON
         ZD_MARKER="${ZD_DIR}/scp-was-run"
         printf '#!/usr/bin/env bash\ntouch %q\nexit 0\n' "${ZD_MARKER}" > "${ZD_DIR}/scp"
         chmod +x "${ZD_DIR}/scp"
-        ZD_OUT="$(run_ts "CONFIG_DIR='${ZD_DIR}' NM_SCP_BIN='${ZD_DIR}/scp' node '${DIST_TEST}/src/main.js' zones-distribute --zones '${ZD_DIR}/zones.json' --dry-run" 2>&1)"
+        ZD_OUT="$(run_ts "CONFIG_DIR='${ZD_DIR}' NM_SCP_BIN='${ZD_DIR}/scp' node '${DIST_TEST}/src/main.js' distribute --zones '${ZD_DIR}/zones.json' --dry-run" 2>&1)"
         if echo "${ZD_OUT}" | grep -q "root@tappaas1.mgmt.internal:/root/tappaas/zones.json" \
             && echo "${ZD_OUT}" | grep -q "root@tappaas2.mgmt.internal:/root/tappaas/zones.json" \
             && [[ ! -f "${ZD_MARKER}" ]]; then
-            ok "zones-distribute --dry-run enumerates node targets without scp"
+            ok "distribute --dry-run enumerates node targets without scp"
         else
-            bad "zones-distribute --dry-run did not list targets (or invoked scp)"
+            bad "distribute --dry-run did not list targets (or invoked scp)"
         fi
 
-        # zones-init to a TEMP --out (non-live) must NOT distribute → no scp.
+        # init to a TEMP --out (non-live) must NOT distribute → no scp.
         ZD_INIT_OUT="${ZD_DIR}/init.json"
-        run_ts "CONFIG_DIR='${ZD_DIR}' NM_SCP_BIN='${ZD_DIR}/scp' NM_TEMPLATE='${HERE}/zones.json' node '${DIST_TEST}/src/main.js' zones-init --name acme --from '${HERE}/zones.json' --out '${ZD_INIT_OUT}'" >/dev/null 2>&1
+        run_ts "CONFIG_DIR='${ZD_DIR}' NM_SCP_BIN='${ZD_DIR}/scp' NM_TEMPLATE='${HERE}/zones.json' node '${DIST_TEST}/src/main.js' init --name acme --from '${HERE}/zones.json' --out '${ZD_INIT_OUT}'" >/dev/null 2>&1
         if [[ -f "${ZD_INIT_OUT}" && ! -f "${ZD_MARKER}" ]]; then
-            ok "zones-init to a temp --out writes the file but does NOT scp (non-live auto-skip)"
+            ok "init to a temp --out writes the file but does NOT scp (non-live auto-skip)"
         else
-            bad "zones-init to a temp --out attempted scp (should auto-skip non-live)"
+            bad "init to a temp --out attempted scp (should auto-skip non-live)"
         fi
         rm -rf -- "${ZD_DIR}"
     else

@@ -22,7 +22,7 @@ copy lives at `${TAPPAAS_CONFIG:-/home/tappaas/config}/zones.json`.
 
 > The legacy `variant-manager` and `apply-zones-merge.sh` are **retired**. Variants
 > were replaced by ADR-007 **environments** (`config/environments/<env>.json`); the
-> bash merge was ported into `network-manager zones-merge` (see below).
+> bash merge was ported into `network-manager merge` (see below).
 > The full design is in the appendix "Zones lifecycle…" sections A–D of
 > `docs/design/ADR-007-implementation.md`.
 
@@ -118,14 +118,14 @@ One compiled CLI, `network-manager`, owns every flow that touches `zones.json`:
 
 | Command | Purpose |
 |---------|---------|
-| `zone list` / `zone exists <n>` / `zone get <n>` | Read CRUD on `zones.json`. |
-| `zone add <n> [--from-zone S] [--vlan N] [--check]` | Author a new zone **and reconcile all four planes** (so the VLAN reaches everything). `--from-zone` inherits type/bridge/access. |
-| `zone delete <n> [--check]` | Disable the zone, reconcile all planes, then drop the key. |
+| `list` / `exists <n>` / `show <n>` _(alias `get`)_ | Read CRUD on `zones.json`. The `zone` keyword is an optional, legacy prefix. |
+| `add <n> [--from-zone S] [--vlan N] [--check]` | Author a new zone **and reconcile all four planes** (so the VLAN reaches everything). `--from-zone` inherits type/bridge/access. |
+| `delete <n> [--check]` | Disable the zone, reconcile all planes, then drop the key. |
 | `reconcile [--apply] [--only <plane>]` | The 4-plane converge loop — `opnsense \| proxmox \| switch \| ap`. Default is a non-mutating dry-run (exit 2 = drift). |
-| `zones-init --name <N>` | Install-time template transform (the per-installation rename, see below). |
-| `zones-merge [--diff]` | Rename-aware 3-way reconciliation against the upstream template; run on every `update-tappaas` (replaces `apply-zones-merge.sh`). |
-| `zones-check [--strict]` | Offline consistency audit (dangling refs, missing fields, lost zones). |
-| `zones-distribute [--dry-run]` | Push the live `zones.json` to every Proxmox node so VMs can be created in its zones. |
+| `init --name <N>` _(alias `zones-init`)_ | Install-time template transform (the per-installation rename, see below). |
+| `merge [--diff]` _(alias `zones-merge`)_ | Rename-aware 3-way reconciliation against the upstream template; run on every `update-tappaas` (replaces `apply-zones-merge.sh`). |
+| `validate [--strict]` _(alias `zones-check`)_ | Offline consistency audit (dangling refs, missing fields, lost zones). |
+| `distribute [--dry-run]` _(alias `zones-distribute`)_ | Push the live `zones.json` to every Proxmox node so VMs can be created in its zones. |
 
 `environment-manager` calls `network-manager` when an environment needs a zone
 created or checked; domain/cert lifecycle stays with `environment-manager`.
@@ -134,7 +134,7 @@ created or checked; domain/cert lifecycle stays with `environment-manager`.
 
 The distributed template encodes the generic, org-agnostic zones (`srv`, `home`,
 `guest`, the per-category `srvHome`/`srvWork`/… etc.). A fresh install runs
-`network-manager zones-init --name <N>` once to stamp the zones for the
+`network-manager init --name <N>` once to stamp the zones for the
 installation named `<N>`:
 
 - **rename** `srv` → `<N>` (forced **Active** — the default service zone),
@@ -172,7 +172,7 @@ all in the installation's renamed namespace:
   installation's rename applied** (regenerated on demand from `site.json .name`;
   never hand-edited).
 
-`network-manager zones-merge` runs on every `update-tappaas`:
+`network-manager merge` runs on every `update-tappaas`:
 
 1. read the current repo template → apply the same rename algorithm → (re)write
    `zones.rename.json` (re-basing upstream changes into the renamed namespace);

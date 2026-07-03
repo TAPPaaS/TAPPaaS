@@ -9,17 +9,17 @@
 // TS, with the #335/#372/#373 fix: it calls the on-PATH bins (NOT the stale
 // firewall/scripts/ paths) and ALWAYS reconciles the switch plane on add/delete.
 //
-// Commands:
-//   network-manager zone list
-//   network-manager zone exists <name>
-//   network-manager zone show <name>            (alias: get)
-//   network-manager zone add <name> [--from-zone S] [--type T --typeId N]
-//                                    [--vlan V] [--variant X] [--no-activate] [--check]
-//   network-manager zone delete <name> [--check]
+// Commands (the `zone` keyword is an optional, legacy prefix — `add` == `zone add`):
+//   network-manager list
+//   network-manager exists <name>
+//   network-manager show <name>            (alias: get)
+//   network-manager add <name> [--from-zone S] [--type T --typeId N]
+//                              [--vlan V] [--variant X] [--no-activate] [--check]
+//   network-manager delete <name> [--check]
 //   network-manager reconcile [--apply] [--only <plane>]
-//   network-manager zones-init --name <N> [--from <tpl>] [--out <f>] [--force]
-//   network-manager zones-merge [--diff] [--config-dir <dir>] [--template <tpl>]
-//   network-manager zones-distribute [--zones <file>] [--dry-run]
+//   network-manager init --name <N> [--from <tpl>] [--out <f>] [--force]
+//   network-manager merge [--diff] [--config-dir <dir>] [--template <tpl>]
+//   network-manager distribute [--zones <file>] [--dry-run]
 //
 // Exit codes: ok=0, error/drift-after-apply=1.
 
@@ -71,12 +71,12 @@ const HELP: HelpSpec = {
   version: VERSION,
   tagline: "TAPPaaS network owner + orchestrator (ADR-007 P4 / ADR-008)",
   verbs: [
-    { usage: "zone list [--json]" },
-    { usage: "zone exists <name>" },
-    { usage: "zone show <name> [--json]", note: "(alias: get)" },
+    { usage: "list [--json]" },
+    { usage: "exists <name>" },
+    { usage: "show <name> [--json]", note: "(alias: get)" },
     {
-      usage: "zone add <name> [options]",
-      name: "zone add",
+      usage: "add <name> [options]",
+      name: "add",
       options: [
         ["--from-zone <src>", "inherit type/typeId/bridge/access-to/pinhole from <src>"],
         ["--type <T>", "zone type (default: Service)"],
@@ -87,7 +87,7 @@ const HELP: HelpSpec = {
         ["--check", "dry-run: show actions, mutate nothing"],
       ],
     },
-    { usage: "zone delete <name> [--check]" },
+    { usage: "delete <name> [--check]" },
     {
       usage: "reconcile [--apply] [--only <plane>]",
       name: "reconcile",
@@ -97,8 +97,9 @@ const HELP: HelpSpec = {
       ],
     },
     {
-      usage: "zones-init --name <N> [--from <tpl>] [--out <f>] [--force]",
-      name: "zones-init (install-time template transform; offline)",
+      usage: "init --name <N> [--from <tpl>] [--out <f>] [--force]",
+      note: "(alias: zones-init)",
+      name: "init (install-time template transform; offline)",
       options: [
         ["--name <N>", "TAPPaaS system name; renames srv→<N>, home→<N>-private,\n                guest→<N>-guest and parameterises the distributed template"],
         ["--from <tpl>", "source template (default: zones.json shipped with the bin)"],
@@ -107,9 +108,10 @@ const HELP: HelpSpec = {
       ],
     },
     {
-      usage: "zones-merge [--diff] [--config-dir <dir>] [--template <tpl>]",
+      usage: "merge [--diff] [--config-dir <dir>] [--template <tpl>]",
+      note: "(alias: zones-merge)",
       name:
-        "zones-merge (rename-aware 3-way reconciliation; ADR-007 Design A;\n" +
+        "merge (rename-aware 3-way reconciliation; ADR-007 Design A;\n" +
         "replaces apply-zones-merge.sh — re-bases the repo template into THIS install's\n" +
         "renamed namespace, then 3-way-merges zones.json vs zones.json.orig vs\n" +
         "zones.rename.json; does NOT distribute by itself)",
@@ -131,20 +133,22 @@ const HELP: HelpSpec = {
       ],
     },
     {
-      usage: "zones-distribute [--zones <file>] [--dry-run]",
+      usage: "distribute [--zones <file>] [--dry-run]",
+      note: "(alias: zones-distribute)",
       name:
-        "zones-distribute (push the live zones.json to every Proxmox node so\n" +
+        "distribute (push the live zones.json to every Proxmox node so\n" +
         "node-side tooling can resolve a zone's VLAN — N3; runs automatically after a\n" +
         "live zones.json write, this is the manual entry point)",
       options: [
         ["--zones <file>", "zones.json to push (default $TAPPAAS_CONFIG/zones.json)"],
         ["--dry-run", "list the node targets that WOULD receive it; no scp"],
-        ["--no-distribute", "(on zone add/delete/zones-init) skip the auto-push"],
+        ["--no-distribute", "(on zone add/delete/init) skip the auto-push"],
       ],
     },
   ],
   common: [["--zones-file <f>", "default $TAPPAAS_CONFIG/zones.json"]],
   notes: [
+    "The `zone` keyword is an optional, legacy prefix — `add` and `zone add` are equivalent.",
     "Exit code is non-zero if any plane reports an error (or proxmox still drifts\nafter --apply).",
   ],
 };
@@ -289,14 +293,12 @@ function parseOpts(args: string[]): Opts {
 }
 
 // ── zone read commands ────────────────────────────────────────────────
-function cmdZone(opts: Opts): void {
-  const sub = opts.rest[0];
-  // CRUD: list / show (alias get) / add / delete. There is intentionally no
-  // free-form `zone modify` — a zone's state + access-to graph are governed by
-  // the lifecycle (add/delete) and the install/update transforms (zones-init,
-  // zones-merge) with their invariants (mgmt access, occupancy guard); a naive
-  // field-editor would bypass them. (ADR-007 #5.)
-  if (!sub) die("zone: expected 'list' | 'exists' | 'show' | 'add' | 'delete'");
+function cmdZone(sub: string, opts: Opts): void {
+  // Read verbs: list / show (alias get) / exists. Mutating verbs (add / delete)
+  // are dispatched top-level. There is intentionally no free-form `modify` — a
+  // zone's state + access-to graph are governed by the lifecycle (add/delete)
+  // and the install/update transforms (init, merge) with their invariants (mgmt
+  // access, occupancy guard); a naive field-editor would bypass them. (ADR-007 #5.)
 
   if (sub === "list") {
     const doc = loadZones(opts.zonesFile);
@@ -318,8 +320,8 @@ function cmdZone(opts: Opts): void {
     return;
   }
   if (sub === "exists") {
-    const name = opts.rest[1];
-    if (!name) die("zone exists: expected <name>");
+    const name = opts.rest[0];
+    if (!name) die("exists: expected <name>");
     const doc = loadZones(opts.zonesFile);
     const present = zoneExists(doc, name);
     info(String(present));
@@ -327,8 +329,8 @@ function cmdZone(opts: Opts): void {
     return;
   }
   if (sub === "show" || sub === "get") {
-    const name = opts.rest[1];
-    if (!name) die(`zone ${sub}: expected <name>`);
+    const name = opts.rest[0];
+    if (!name) die(`${sub}: expected <name>`);
     const doc = loadZones(opts.zonesFile);
     const z = getZone(doc, name);
     if (!z) die(`zone '${name}' not found in ${opts.zonesFile}`);
@@ -347,20 +349,12 @@ function cmdZone(opts: Opts): void {
     }
     return;
   }
-  if (sub === "add") {
-    cmdZoneAdd(opts);
-    return;
-  }
-  if (sub === "delete") {
-    cmdZoneDelete(opts);
-    return;
-  }
-  die(`zone ${sub}: unknown subcommand`);
+  die(`${sub}: unknown subcommand`);
 }
 
 function cmdZoneAdd(opts: Opts, client: PlaneClient = new CliPlaneClient()): void {
-  const name = opts.rest[1];
-  if (!name) die("zone add: expected <name>");
+  const name = opts.rest[0];
+  if (!name) die("add: expected <name>");
   const dtag = opts.check ? " [dry-run]" : "";
   info(`zone-add '${name}'${opts.fromZone ? ` (from ${opts.fromZone})` : ""}${dtag}`);
   const res = addZone(client, opts.zonesFile, name, {
@@ -392,8 +386,8 @@ function cmdZoneAdd(opts: Opts, client: PlaneClient = new CliPlaneClient()): voi
 }
 
 function cmdZoneDelete(opts: Opts, client: PlaneClient = new CliPlaneClient()): void {
-  const name = opts.rest[1];
-  if (!name) die("zone delete: expected <name>");
+  const name = opts.rest[0];
+  if (!name) die("delete: expected <name>");
   const dtag = opts.check ? " [dry-run]" : "";
   info(`zone-delete '${name}'${dtag}`);
   const res = deleteZone(client, opts.zonesFile, name, {
@@ -446,7 +440,7 @@ function printReport(report: ReconcileReport): void {
 // ── zones-init command (install-time template transform; offline) ──────
 function cmdZonesInit(opts: Opts): void {
   const name = opts.name;
-  if (!name) die("zones-init: --name <N> is required");
+  if (!name) die("init: --name <N> is required");
   const from = opts.from ?? defaultTemplateFile();
   const out = opts.out ?? defaultZonesFile();
 
@@ -469,7 +463,7 @@ function cmdZonesInit(opts: Opts): void {
   }
 
   if (result.alreadyInitialised) {
-    info(`zones-init: '${out}' source already initialised for '${name}' — no-op (use --force to re-apply from template)`);
+    info(`init: '${out}' source already initialised for '${name}' — no-op (use --force to re-apply from template)`);
     return;
   }
 
@@ -481,14 +475,14 @@ function cmdZonesInit(opts: Opts): void {
   // path we seed the siblings relative to that path's directory so tests stay
   // self-contained and never touch live config.
   writeJsonAtomic(out, result.raw);
-  info(`  ${GN}✓${CL} zones-init: wrote '${out}' (default zone '${name}', '${name}-private', '${name}-guest')`);
+  info(`  ${GN}✓${CL} init: wrote '${out}' (default zone '${name}', '${name}-private', '${name}-guest')`);
 
   const outDir = dirname(out);
   const renameFile = out === defaultZonesFile() ? defaultRenameFile() : join(outDir, "zones.rename.json");
   const origFile = out === defaultZonesFile() ? defaultOrigFile() : join(outDir, "zones.json.orig");
   writeJsonAtomic(renameFile, result.raw);
   writeJsonAtomic(origFile, result.raw);
-  info(`  ${GN}✓${CL} zones-init: seeded '${renameFile}' (renamed source) and '${origFile}' (merge baseline)`);
+  info(`  ${GN}✓${CL} init: seeded '${renameFile}' (renamed source) and '${origFile}' (merge baseline)`);
 
   if (result.keptActive.length) {
     warn(`  kept Active (still host deployed modules): ${result.keptActive.join(", ")} — legacy-zone sunset deferred; migrate their modules to '${name}' (or an environment) later`);
@@ -571,31 +565,46 @@ export function run(argv: string[], client?: PlaneClient): number {
     usage();
     return 0;
   }
-  const cmd = argv[0];
-  const opts = parseOpts(argv.slice(1));
+  // `zone` is an OPTIONAL, legacy prefix — the whole manager is about zones, so
+  // `zone add x` and `add x` are equivalent. Strip a leading bare `zone`.
+  let args = argv;
+  if (args[0] === "zone") {
+    args = args.slice(1);
+    if (args.length === 0) {
+      usage();
+      return 0;
+    }
+  }
+  const cmd = args[0];
+  const opts = parseOpts(args.slice(1));
   try {
     switch (cmd) {
-      case "zone":
-        // route add/delete through the injected client (tests), reads use none
-        if (opts.rest[0] === "add") {
-          cmdZoneAdd(opts, client ?? new CliPlaneClient());
-        } else if (opts.rest[0] === "delete") {
-          cmdZoneDelete(opts, client ?? new CliPlaneClient());
-        } else {
-          cmdZone(opts);
-        }
+      case "list":
+      case "exists":
+      case "show":
+      case "get": // alias of show
+        cmdZone(cmd, opts);
+        return 0;
+      case "add":
+        cmdZoneAdd(opts, client ?? new CliPlaneClient());
+        return 0;
+      case "delete":
+        cmdZoneDelete(opts, client ?? new CliPlaneClient());
         return 0;
       case "reconcile":
         cmdReconcile(opts, client ?? new CliPlaneClient());
         return 0;
+      case "init": // primary verb; zones-init kept as fall-through alias
       case "zones-init":
         cmdZonesInit(opts);
         return 0;
+      case "merge": // primary verb; zones-merge kept as fall-through alias
       case "zones-merge":
         return cmdZonesMerge(opts);
       case "validate": // ADR-007 #4: the standard verb name for the config gate
       case "zones-check":
         return cmdZonesCheck(opts);
+      case "distribute": // primary verb; zones-distribute kept as fall-through alias
       case "zones-distribute":
         return cmdZonesDistribute(opts);
       default:

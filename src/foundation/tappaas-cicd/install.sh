@@ -6,7 +6,7 @@
 #   install.sh [--name N] [--branch NAME] [--domain DOMAIN]
 #
 # Site-native install (ADR-007): writes site.json (create-site.sh) + transforms
-# zones.json (network-manager zones-init --name) + creates the mgmt/default
+# zones.json (network-manager init --name) + creates the mgmt/default
 # environments (create-minimal-environments.sh). No configuration.json.
 # --name is the TAPPaaS system name (= default zone & default environment name);
 # if omitted it is derived from --domain's first label.
@@ -55,7 +55,7 @@ if [[ -z "$NAME" ]]; then
   fi
 fi
 # Sanitise to a valid zone/env name: strip non-alphanumerics, lowercase the
-# leading character. (zones-init validates again and will fail loudly if empty.)
+# leading character. (init validates again and will fail loudly if empty.)
 NAME="$(printf '%s' "$NAME" | tr -cd '[:alnum:]')"
 NAME="$(printf '%s' "${NAME:0:1}" | tr '[:upper:]' '[:lower:]')${NAME:1}"
 [[ "$NAME" =~ ^[a-z][a-zA-Z0-9]*$ ]] \
@@ -124,8 +124,8 @@ fi
 # Seed zones.json from the canonical source (network-manager) only on first install.
 # Existing /home/tappaas/config/zones.json may contain operator customizations and
 # must not be overwritten here; ongoing release drift is reconciled by
-# `network-manager zones-merge` (run from pre-update.sh on every update-tappaas;
-# #209 / ADR-007 Design A). NOTE: on a fresh install the `zones-init --name`
+# `network-manager merge` (run from pre-update.sh on every update-tappaas;
+# #209 / ADR-007 Design A). NOTE: on a fresh install the `init --name`
 # step further below OVERWRITES both this raw zones.json and zones.json.orig with
 # the renamed-namespace version (and writes zones.rename.json), so the raw seed
 # here is only a transient pre-rename placeholder.
@@ -191,29 +191,29 @@ fi
 
 # ── Site-native zones + environments (ADR-007 S6) ────────────────────
 # The managers are built+linked now (above), so transform zones.json for THIS
-# installation — network-manager zones-init renames the distributed 'srv' zone to
+# installation — network-manager init renames the distributed 'srv' zone to
 # the system name, inactivates the unused legacy zones, and rewrites references —
 # and create the always-required mgmt + default (<NAME>) environments.
 #
-# ADR-007 "Design A": zones-init now seeds ALL THREE files in the renamed
+# ADR-007 "Design A": init now seeds ALL THREE files in the renamed
 # namespace — zones.json (current), zones.json.orig (merge baseline), and
 # zones.rename.json (the renamed source). So the raw zones.json/zones.json.orig
 # seeded above are BOTH overwritten with the renamed version, giving
 # current == orig == rename on a fresh install. This is what stops the daily
-# `zones-merge` from re-introducing srv/home/guest (the old duplicate-VLAN
+# `merge` from re-introducing srv/home/guest (the old duplicate-VLAN
 # corruption). Guarded on the default environment file so a re-run does not
 # clobber a customised zones.json.
 if [ ! -f "/home/tappaas/config/environments/${NAME}.json" ]; then
-  _info "Initialising zones for '${NAME}' (network-manager zones-init)..."
-  /home/tappaas/bin/network-manager zones-init --name "$NAME" --force \
-    || _error "  zones-init reported a non-zero rc"
+  _info "Initialising zones for '${NAME}' (network-manager init)..."
+  /home/tappaas/bin/network-manager init --name "$NAME" --force \
+    || _error "  init reported a non-zero rc"
   _info "Creating the mgmt + ${NAME} environments..."
   CME_ARGS=(--name "$NAME")
   [[ -n "$DOMAIN" ]] && CME_ARGS+=(--domain "$DOMAIN")
   /home/tappaas/bin/create-minimal-environments.sh "${CME_ARGS[@]}" \
     || _error "  create-minimal-environments reported a non-zero rc"
 else
-  _info "Environments already initialised (config/environments/${NAME}.json exists) — skipping zones-init/environments."
+  _info "Environments already initialised (config/environments/${NAME}.json exists) — skipping init/environments."
 fi
 
 # Install the cluster and network jsons

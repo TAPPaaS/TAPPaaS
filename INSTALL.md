@@ -103,7 +103,7 @@ That's it. Everything else is created by the install.
       configuration**, automatically:
       - **`site.json`** — the site singleton (nodes, domain, email, repos), via
         `create-site.sh --name <orgname>`
-      - **`zones.json`** — the network zones, via `network-manager zones-init`
+      - **`zones.json`** — the network zones, via `network-manager init`
       - the **`mgmt` + default `<orgname>` environments**, via
         `create-minimal-environments.sh`
       - the **foundation modules** (cluster, templates, network, tappaas-cicd) and
@@ -376,7 +376,7 @@ Defaults are chosen so the commands above "just work". Override as needed:
 Field definitions for module JSON are in `src/foundation/schemas/module-fields.json`.
 Network zones/VLANs come from the git template
 `src/foundation/tappaas-cicd/manager/network-manager/zones.json`, which
-`network-manager zones-init` transforms into the live, per-installation
+`network-manager init` transforms into the live, per-installation
 `config/zones.json` at install time.
 
 ---

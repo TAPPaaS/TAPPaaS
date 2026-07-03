@@ -175,7 +175,7 @@ fi
 
 # --- One-shot rename: zone keys hyphen → underscore (issue #237) ---
 # Marker-gated; runs exactly once per cluster, then becomes a no-op. Must run
-# BEFORE the zones-merge below — otherwise the merge would see srv-home (current)
+# BEFORE the merge below — otherwise the merge would see srv-home (current)
 # vs srvHome (source) as a possible-rename and flag both for review instead of
 # resolving them automatically.
 if [ -f /home/tappaas/bin/migrate-zone-keys-to-underscore.sh ] \
@@ -186,7 +186,7 @@ fi
 
 # --- Reconcile zones.json against upstream (rename-aware 3-way merge; #209 / ADR-007 Design A) ---
 # install.sh seeds /home/tappaas/config/zones.json on first install but never
-# revisits it. `network-manager zones-merge` closes that gap (replacing the
+# revisits it. `network-manager merge` closes that gap (replacing the
 # retired apply-zones-merge.sh): every update-tappaas run re-bases the repo
 # template into THIS installation's renamed namespace (zones.rename.json), then
 # 3-way-merges zones.json vs zones.json.orig vs zones.rename.json — adopting
@@ -200,7 +200,7 @@ if command -v network-manager >/dev/null 2>&1 \
    && [ -f /home/tappaas/config/zones.json ]; then
   echo ""
   info "Reconciling zones.json against upstream (rename-aware 3-way merge)..."
-  network-manager zones-merge || warn "  zones.json merge reported an error — continuing"
+  network-manager merge || warn "  zones.json merge reported an error — continuing"
 fi
 
 # --- Consistency-check zones.json against the installation (ADR-007 S6 N4) ---

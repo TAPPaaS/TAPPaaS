@@ -147,7 +147,7 @@ done
 echo ""
 if [[ $missing -eq 0 ]]; then
   info "${BOLD}${GN}ADR-007 toolchain is live.${CL} Next:"
-  info "  1. Migrate the config:  ${BL}migrate-to-adr007.sh --yes${CL}   (config→site.json, zones-init, environments)"
+  info "  1. Migrate the config:  ${BL}migrate-to-adr007.sh --yes${CL}   (config→site.json, init, environments)"
   info "  2. Reconcile modules:   ${BL}update-tappaas --force${CL}"
   info "  3. Firewall→network (supervised, when ready):"
   info "       ${BL}migrate-to-adr007.sh --include-firewall --node <node.mgmt.internal> --dry-run${CL}  then --yes"

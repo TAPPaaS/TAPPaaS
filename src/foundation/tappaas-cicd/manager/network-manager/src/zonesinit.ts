@@ -52,14 +52,14 @@ const NAME_RE = /^[a-z][a-z0-9-]*$/;
 
 export function validateName(name: string): void {
   if (name.length === 0) {
-    throw new Error("zones-init: --name is required and must be non-empty");
+    throw new Error("init: --name is required and must be non-empty");
   }
   if (name.endsWith("-")) {
-    throw new Error(`zones-init: --name '${name}' must not end with a hyphen`);
+    throw new Error(`init: --name '${name}' must not end with a hyphen`);
   }
   if (!NAME_RE.test(name)) {
     throw new Error(
-      `zones-init: --name '${name}' is not a valid zone-name slug ` +
+      `init: --name '${name}' is not a valid zone-name slug ` +
         "(lowercase letters/digits/hyphen, must start with a letter)",
     );
   }

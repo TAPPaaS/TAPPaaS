@@ -381,10 +381,10 @@ else
 fi
 # network-manager TS bin loads + reads zones.json (no reconcile — read-only)
 if command -v network-manager >/dev/null 2>&1; then
-    if network-manager zone list >/dev/null 2>&1; then
-        pass "network-manager CLI loads + reads zones.json (zone list)"
+    if network-manager list >/dev/null 2>&1; then
+        pass "network-manager CLI loads + reads zones.json (list)"
     else
-        fail "network-manager zone list failed"
+        fail "network-manager list failed"
     fi
 else
     skip "network-manager not installed"

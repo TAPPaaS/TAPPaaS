@@ -30,12 +30,12 @@ function run(bin: string, args: string[]): string {
 
 export class CliNetworkClient implements NetworkClient {
   zoneExists(zone: string): boolean {
-    // network-manager zone exists <name> — exit 0 if present, non-zero otherwise.
-    const r = spawnSync(NETWORK_MANAGER_BIN, ["zone", "exists", zone], {
+    // network-manager exists <name> — exit 0 if present, non-zero otherwise.
+    const r = spawnSync(NETWORK_MANAGER_BIN, ["exists", zone], {
       encoding: "utf8",
       maxBuffer: 64 * 1024 * 1024,
     });
-    if (r.error) throw new NetworkUnreachable(`${NETWORK_MANAGER_BIN} zone exists: ${r.error.message}`);
+    if (r.error) throw new NetworkUnreachable(`${NETWORK_MANAGER_BIN} exists: ${r.error.message}`);
     return r.status === 0;
   }
 

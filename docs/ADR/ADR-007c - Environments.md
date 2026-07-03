@@ -127,7 +127,7 @@ concept. The TLS **cert refid does NOT live on the Environment** — it is runti
 `config/cert-refids.json` keyed by environment (see the TLS note above); `domains.dnsMode` selects
 per-service vs one wildcard per Environment.
 
-> **Install-time zone setup (as built).** `network-manager zones-init --name <N>` transforms the repo
+> **Install-time zone setup (as built).** `network-manager init --name <N>` transforms the repo
 > zones template into the live `config/zones.json` for this installation (e.g. the distributed `srv` zone
 > → the default zone `<N>`; unused legacy `srv*` zones set Inactive), and `create-minimal-environments`
 > creates the `mgmt` + default `<N>` environment files. `network-manager` owns `zones.json` end-to-end.

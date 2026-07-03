@@ -19,10 +19,10 @@
 src/main.ts          CLI: arg parsing + subcommand dispatch
 src/types.ts         Zone model, ZonesDoc, the PlaneClient interface, Plan/report shapes
 src/zones.ts         load/CRUD zones.json + VLAN allocation + the mgmt.access-to invariant
-src/zonelifecycle.ts zone add/delete (always includes the switch plane)
-src/zonesinit.ts     zones-init template transform (rename srv/home/guest to the system name)
+src/zonelifecycle.ts add/delete (always includes the switch plane)
+src/zonesinit.ts     init template transform (rename srv/home/guest to the system name)
 src/zonescheck.ts    zones-check offline consistency audit
-src/distribute.ts    zones-distribute: push zones.json to the Proxmox nodes
+src/distribute.ts    distribute: push zones.json to the Proxmox nodes
 src/planes.ts        CliPlaneClient — spawnSync the four plane controllers; rc -> status
 src/reconcile.ts     the dependency-ordered 4-plane reconcile
 ```
@@ -54,7 +54,7 @@ hard failure; switch/ap reporting `needs-manual` after `--apply` is surfaced but
 not a hard failure (they cannot always self-apply). In dry-run, drift is reported,
 never a failure.
 
-`zone add`/`zone delete` always include the switch (and ap) plane — earlier
+`add`/`delete` always include the switch (and ap) plane — earlier
 designs reconciled only opnsense + proxmox, so a new VLAN never reached the
 physical switch and off-firewall-node VMs got no IP.
 
@@ -65,9 +65,9 @@ physical switch and off-firewall-node VMs got no IP.
 - **Fast (default):** bash syntax-check of the legacy entry scripts; `tsc
   --noEmit` type-check; compile + run the offline unit tests against an in-memory
   `FakePlaneClient` (zone CRUD, the 4-plane order/flags, per-plane rc
-  aggregation, dry-run mutates nothing); plus CLI smoke tests of `zones-init`
+  aggregation, dry-run mutates nothing); plus CLI smoke tests of `init`
   (to a temp `--out`), `zones-check` (good + dangling-ref fixtures), and
-  `zones-distribute --dry-run`.
+  `distribute --dry-run`.
 - **Deep (`TAPPAAS_TEST_DEEP=1`):** a live reconcile **dry-run** (non-mutating)
   against the real plane controllers, reconciling the switch plane only as a
   proof of concept; skips gracefully when the bin isn't built or planes are
@@ -86,7 +86,7 @@ subcommand — the convention end-state.
 - **Legacy bash tools not yet retired.** `zone-reconcile`, `zone-controller.sh`,
   and `zone-state.sh` are still present and linked; a later change retires them
   once the TypeScript path fully supersedes them.
-- **Deferred legacy-zone sunset.** When `zones-init` would inactivate a zone that
+- **Deferred legacy-zone sunset.** When `init` would inactivate a zone that
   still hosts deployed modules, it keeps the zone Active and warns the operator to
   migrate those modules to the new system-named zone (or an environment) later —
   the automatic sunset is deferred. (See the warning in `src/main.ts`.)

@@ -20,27 +20,31 @@ the 60–99 window within each type band; zone names must be camelCase.
 One compiled CLI, `network-manager`:
 
 ```
-network-manager zone list
-network-manager zone exists <name>
-network-manager zone get <name>
-network-manager zone add <name>     [options]
-network-manager zone delete <name>  [--check]
+network-manager list
+network-manager exists <name>
+network-manager show <name>         (alias: get)
+network-manager add <name>          [options]
+network-manager delete <name>       [--check]
 network-manager reconcile           [--apply] [--only <plane>]
-network-manager zones-init  --name <N> [--from <tpl>] [--out <file>] [--force]
-network-manager zones-check [--zones <file>] [--config-dir <dir>] [--strict]
-network-manager zones-distribute [--zones <file>] [--dry-run]
+network-manager init        --name <N> [--from <tpl>] [--out <file>] [--force]
+network-manager validate    [--zones <file>] [--config-dir <dir>] [--strict]
+network-manager merge       [--diff] [--config-dir <dir>] [--template <tpl>]
+network-manager distribute  [--zones <file>] [--dry-run]
 network-manager -h | --help
 ```
 
-### `zone` — CRUD on zones.json
+The `zone` keyword is an optional, legacy prefix — `add` and `zone add` are
+equivalent. (`validate` keeps the alias `zones-check`.)
+
+### `list` / `exists` / `show` / `add` / `delete` — CRUD on zones.json
 
 ```bash
-network-manager zone list                 # list zone names
-network-manager zone exists srvHome        # exit 0/1
-network-manager zone get srvHome           # print the zone object
+network-manager list                 # list zone names
+network-manager exists srvHome        # exit 0/1
+network-manager show srvHome          # print the zone object (alias: get)
 ```
 
-`zone add <name>` authors a new zone **and reconciles all four planes** (so the
+`add <name>` authors a new zone **and reconciles all four planes** (so the
 VLAN reaches everything). Options:
 
 - `--from-zone <src>` — inherit type/typeId/bridge/access-to/pinhole from `<src>`.
@@ -51,13 +55,13 @@ VLAN reaches everything). Options:
 - `--no-activate` — author `zones.json` only; skip the all-plane reconcile.
 - `--check` — dry-run: show what would change, mutate nothing.
 
-`zone delete <name>` disables the zone, reconciles all planes, then removes the
+`delete <name>` disables the zone, reconciles all planes, then removes the
 key. `--check` dry-runs it.
 
 ```bash
-network-manager zone add labNet --from-zone srvHome --vlan 275
-network-manager zone add labNet --check          # preview
-network-manager zone delete labNet
+network-manager add labNet --from-zone srvHome --vlan 275
+network-manager add labNet --check          # preview
+network-manager delete labNet
 ```
 
 ### `reconcile` — the 4-plane converge loop
@@ -74,12 +78,13 @@ non-mutating dry-run. Exit `0` = in sync, `2` = drift reported (dry-run, not a
 failure), `1` = a hard error (a plane errored, or Proxmox still drifts after
 `--apply`).
 
-### `zones-init` — initialise zones.json from a template
+### `init` (alias `zones-init`) — initialise zones.json from a template
 
-Used at install time to stamp a fresh `zones.json` named for the TAPPaaS system:
+Used at install time to stamp a fresh `zones.json` named for the TAPPaaS system.
+`zones-init` is kept as an alias.
 
 ```bash
-network-manager zones-init --name acme
+network-manager init --name acme
 ```
 
 - `--name <N>` (required) — system name; renames the template's `srv` → `<N>`,
@@ -108,11 +113,13 @@ network-manager validate --strict          # warnings become errors
 
 Exit `0` ok, `1` on dangling references / missing required fields / lost zones.
 
-### `zones-distribute` — push zones.json to the Proxmox nodes
+### `distribute` (alias `zones-distribute`) — push zones.json to the Proxmox nodes
+
+`zones-distribute` is kept as an alias.
 
 ```bash
-network-manager zones-distribute
-network-manager zones-distribute --dry-run  # list target nodes, no copy
+network-manager distribute
+network-manager distribute --dry-run  # list target nodes, no copy
 ```
 
 - `--zones <file>` — zones.json to distribute (default `$TAPPAAS_CONFIG/zones.json`).
@@ -124,5 +131,5 @@ network-manager zones-distribute --dry-run  # list target nodes, no copy
 during the transition and will be retired once `network-manager` fully replaces
 them. `migrate-zone-keys-*.sh` is a one-shot migration helper, not an on-PATH
 tool. `apply-zones-merge.sh` has been **retired** — its rename-aware successor is
-`network-manager zones-merge` (see the `zones-merge` subcommand and ADR-007
-"Design A").
+`network-manager merge` (alias `zones-merge`; see the `merge` subcommand and
+ADR-007 "Design A").

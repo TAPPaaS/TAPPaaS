@@ -271,7 +271,7 @@ export function runZonesMerge(
   try {
     renamedRaw = renameTransform(opts.template, opts.name, opts.keepActive ?? new Set<string>());
   } catch (e) {
-    log.warn(`zones-merge: cannot build renamed source from template: ${(e as Error).message}`);
+    log.warn(`merge: cannot build renamed source from template: ${(e as Error).message}`);
     return 1;
   }
   if (!opts.diff) {
@@ -281,14 +281,14 @@ export function runZonesMerge(
 
   // 2. read current; backfill baseline from source if absent.
   if (!existsSync(opts.current)) {
-    log.warn(`zones-merge: current zones.json not found: ${opts.current}`);
+    log.warn(`merge: current zones.json not found: ${opts.current}`);
     return 1;
   }
   let current: Raw;
   try {
     current = parseFile(opts.current);
   } catch (e) {
-    log.warn(`zones-merge: ${(e as Error).message}`);
+    log.warn(`merge: ${(e as Error).message}`);
     return 1;
   }
 
@@ -298,7 +298,7 @@ export function runZonesMerge(
     try {
       baseline = parseFile(opts.orig);
     } catch (e) {
-      log.warn(`zones-merge: ${(e as Error).message}`);
+      log.warn(`merge: ${(e as Error).message}`);
       return 1;
     }
   } else {

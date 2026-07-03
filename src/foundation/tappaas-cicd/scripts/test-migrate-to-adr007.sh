@@ -50,7 +50,7 @@ echo '{ "mgmt": {"state":"Manual","vlantag":0} }' > "${C2}/zones.json"
 out2="$(bash "${ORCH}" --dry-run --config-dir "${C2}" 2>&1)"; rc2=$?
 ck "mainline layout exits 2 (action required)" "2" "${rc2}"
 ck_contains "plans config->site"          "would run: /home/tappaas/bin/migrate-configuration.sh" "${out2}"
-ck_contains "derives name from domain"    "zones-init --name acme"                                "${out2}"
+ck_contains "derives name from domain"    "init --name acme"                                      "${out2}"
 ck_contains "plans create-environments"   "create-minimal-environments.sh --name acme"            "${out2}"
 ck_contains "carries the domain through"  "--domain acme.example.com"                             "${out2}"
 ck_contains "flags firewall action"       "ACTION REQUIRED"                                        "${out2}"

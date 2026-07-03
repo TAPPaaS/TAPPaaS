@@ -70,7 +70,7 @@ export interface RefSources {
 // shelling out to network-manager. The engine depends only on this interface;
 // tests inject a fake, production uses CliNetworkClient (spawnSync).
 export interface NetworkClient {
-  // Whether a zone with this key exists in zones.json (network-manager zone exists).
+  // Whether a zone with this key exists in zones.json (network-manager exists).
   zoneExists(zone: string): boolean;
   // Converge the network planes. apply=false ⇒ dry-run/preview (the default).
   // network-manager reconciles ALL zones at once (no per-zone reconcile today);

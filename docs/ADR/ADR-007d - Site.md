@@ -84,7 +84,7 @@ The legacy mixed `configuration.json` split into **`site.json`** (site-wide) + *
 | `variants`, `active zones` | `environments/<env>.json` + `config/zones.json` (the env names its `network.zone`) |
 
 There is **no fallback to `configuration.json`** on a fresh install (no dual-read). On an upgrade, the
-migration runs once (config→site), the env/zone bootstrap runs (`zones-init` + `create-minimal-environments`),
+migration runs once (config→site), the env/zone bootstrap runs (`init` + `create-minimal-environments`),
 then `configuration.json` is dropped — see the [migration runbook](<../design/ADR-007-migration-runbook.md>).
 
 ## Acceptance

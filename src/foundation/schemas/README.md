@@ -30,7 +30,7 @@ This directory holds the JSON-Schema (draft 2020-12) field definitions for every
 | **User** | `user-fields.json` | `people/users/<name>.json` | **people-manager** — `user add`/`modify`/`delete`/`list`/`show`. People-wide: `reconcile` (push → Authentik; alias `sync`), `validate` |
 | **Module** (deployed) | `module-fields.json` | `<module>.json` | **module-manager** — `module add`/`modify`/`delete`/`list`/`show`/`validate`/`reconcile`/`test`/`snapshot-vm`. `add`=deploy, `modify`=redeploy, `reconcile`=re-apply current config (leaf) |
 | **Module catalog** | `module-catalog-fields.json` | `src/module-catalog.json` (in each repo) | **site-manager** — `repository add`/`delete`/`list`/`reconcile` (registers/clones the repo that ships the catalog) |
-| **Zones** | `zones-fields.json` | `zones.json` | **network-manager** — `zone add`/`delete`/`list`/`show`; `validate` (alias `zones-check`); `zones-init`/`zones-merge`/`zones-distribute`; `reconcile [--apply] [--only <plane>]`. (No free-form `zone modify` — state + access-to are governed by the lifecycle + zones-init/merge.) |
+| **Zones** | `zones-fields.json` | `zones.json` | **network-manager** — `add`/`delete`/`list`/`show`/`exists` (the `zone` keyword is an optional legacy prefix); `validate` (alias `zones-check`); `init`/`merge`/`distribute` (aliases `zones-init`/`zones-merge`/`zones-distribute`); `reconcile [--apply] [--only <plane>]`. (No free-form `modify` — state + access-to are governed by the lifecycle + init/merge.) |
 
 ### Objects without a schema in this directory
 

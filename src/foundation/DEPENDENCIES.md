@@ -98,7 +98,7 @@ foundation/install.sh  --name <orgname> --domain <d>     <- entry orchestrator
           -> tappaas-cicd/bootstrap.sh   (clone + nixos-rebuild)
           -> tappaas-cicd/install.sh --name <orgname>   (the cicd platform install)
                -> create-site.sh --name <orgname>            => site.json
-               -> network-manager zones-init --name <orgname> => zones.json
+               -> network-manager init --name <orgname> => zones.json
                -> create-minimal-environments.sh --name <orgname> => mgmt + <orgname> envs
                -> copy-update-json.sh + update-module.sh (cluster/templates/network/tappaas-cicd)
 # secondary node: [1/5] joins, then the chain stops (role != created).
@@ -228,7 +228,7 @@ graph TD
     IP --> BS["tappaas-cicd/bootstrap.sh"]
     IP --> CICD["tappaas-cicd/install.sh<br/>--name orgname"]
     CICD --> CSITE["create-site.sh => site.json"]
-    CICD --> ZI["network-manager zones-init => zones.json"]
+    CICD --> ZI["network-manager init => zones.json"]
     CICD --> CME["create-minimal-environments.sh<br/>=> mgmt + orgname envs"]
     ROF["rest-of-foundation.sh<br/>(later, from cicd)"] --> US["user-setup.sh + people-manager<br/>=> orgname organisation"]
 ```

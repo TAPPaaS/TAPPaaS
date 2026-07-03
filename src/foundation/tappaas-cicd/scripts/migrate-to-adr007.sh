@@ -12,7 +12,7 @@
 #
 # Steps (in order; each is skipped when its result already exists):
 #   1. configuration.json -> site.json          (migrate-configuration.sh)
-#   2. zones-init --name <site.name>             (network-manager; org-zone setup)
+#   2. init --name <site.name>             (network-manager; org-zone setup)
 #   3. mgmt + <name> environments                (create-minimal-environments.sh)
 #   4. firewall -> network (deployed)            (OPT-IN/supervised; default: detect + warn)
 #   5. validate: zones-check + structure audit   (loud on a half-migrated result)
@@ -208,7 +208,7 @@ step_site() {
     fi
 }
 
-# ── Steps 2+3: zones-init + base environments (guarded together) ─────
+# ── Steps 2+3: init + base environments (guarded together) ─────
 step_zones_and_envs() {
     local name domain envfile
     name="$(derive_name)"
@@ -221,10 +221,10 @@ step_zones_and_envs() {
     fi
     envfile="${ENV_DIR}/${name}.json"
 
-    info "Step 2/5: zones-init (org-zone setup for '${name}')"
+    info "Step 2/5: init (org-zone setup for '${name}')"
     info "Step 3/5: base environments (mgmt + ${name})"
     if [[ -f "$envfile" ]]; then
-        info "  environments/${name}.json exists — zones-init + environments already done, skipping."
+        info "  environments/${name}.json exists — init + environments already done, skipping."
         return 0
     fi
 
@@ -238,8 +238,8 @@ step_zones_and_envs() {
         NEEDS_ACTION=1; return 0
     fi
 
-    run "$nm" zones-init --name "$name" --force \
-        || { warn "  zones-init reported a non-zero rc — continuing."; NEEDS_ACTION=1; }
+    run "$nm" init --name "$name" --force \
+        || { warn "  init reported a non-zero rc — continuing."; NEEDS_ACTION=1; }
 
     local args=(--name "$name")
     [[ -n "$domain" ]] && args+=(--domain "$domain")
