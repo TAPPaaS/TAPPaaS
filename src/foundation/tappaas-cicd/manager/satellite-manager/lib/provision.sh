@@ -354,22 +354,46 @@ sat_provision_backup() {
         'cd /root/tappaas-satellite && bash ./provision-backup.sh'
 }
 
-# OPNsense least-privilege rule for the backup role: edge (/31) -> home PBS:8007,
-# so the satellite can PULL over the tunnel — and NOTHING else in the cluster
-# becomes reachable (ADR-010 §3.3). Mirrors the edge->caddy / edge->admin-wg rules.
-# Idempotent (find-by-description). Args: <home-pbs-host>
-sat_ensure_edge_pbs_rule() {
-    local pbs_host="$1" desc="tappaas-satellite edge->home-pbs"
-    [[ -n "${pbs_host}" ]] || { echo "no home PBS host — skipped" >&2; return 0; }
+# Ensure ONE least-privilege edge(/31) -> <dest>:<port> pass rule on the OPNsense
+# WireGuard interface (idempotent by description). The satellite is a semi-trusted
+# relay: it gets ROLE-GATED reach to exactly these endpoints and NOTHING else
+# (ADR-010 §4.3). Does NOT apply — batch, then call the apply once. Validated live
+# 2026-07-03: without these the satellite's tunnelled traffic is dropped by OPNsense.
+# Args: <description> <TCP|UDP> <dest-net> <dest-port>
+sat_ensure_edge_rule() {
+    local desc="$1" proto="$2" dest="$3" port="$4"
     command -v _ow_api >/dev/null 2>&1 || { echo "opnsense-wg lib not loaded" >&2; return 1; }
     local exist
     exist="$(_ow_api /api/firewall/filter/searchRule | jq -r --arg d "${desc}" '.rows[]? | select(.description==$d) | .uuid' | head -1)"
-    if [[ -z "${exist}" ]]; then
-        _ow_api -X POST -H 'Content-Type: application/json' \
-            -d "{\"rule\":{\"enabled\":\"1\",\"action\":\"pass\",\"interface\":\"wireguard\",\"direction\":\"in\",\"ipprotocol\":\"inet\",\"protocol\":\"TCP\",\"source_net\":\"${SAT_SAT_ADDR}/31\",\"destination_net\":\"${pbs_host}\",\"destination_port\":\"${SAT_HOME_PBS_PORT}\",\"description\":\"${desc}\"}}" \
-            /api/firewall/filter/addRule | jq -r '.result // empty'
-        _ow_api -X POST /api/firewall/filter/apply >/dev/null
-    else
-        echo "exists"
+    [[ -n "${exist}" ]] && { echo "exists"; return 0; }
+    _ow_api -X POST -H 'Content-Type: application/json' \
+        -d "{\"rule\":{\"enabled\":\"1\",\"action\":\"pass\",\"interface\":\"wireguard\",\"direction\":\"in\",\"ipprotocol\":\"inet\",\"protocol\":\"${proto}\",\"source_net\":\"${SAT_SAT_ADDR}/31\",\"destination_net\":\"${dest}\",\"destination_port\":\"${port}\",\"description\":\"${desc}\"}}" \
+        /api/firewall/filter/addRule | jq -r '.result // empty'
+}
+
+# Ensure the role-gated edge firewall rules for the active roles, then apply once.
+# reverse-proxy: edge -> Caddy :80/:443. admin-vpn: edge -> OPNsense admin-WG (udp).
+# (backup's edge -> home-PBS:8007 is handled by sat_ensure_edge_pbs_rule, which
+# needs the operator-supplied home PBS host.) Args: <roles-csv>
+sat_ensure_edge_rules() {
+    local roles="$1"
+    if [[ ",${roles}," == *,reverse-proxy,* ]]; then
+        sat_ensure_edge_rule "tappaas-satellite edge->caddy 80"  TCP "${SAT_HOME_ADDR}" 80  >/dev/null
+        sat_ensure_edge_rule "tappaas-satellite edge->caddy 443" TCP "${SAT_HOME_ADDR}" 443 >/dev/null
     fi
+    if [[ ",${roles}," == *,admin-vpn,* ]]; then
+        sat_ensure_edge_rule "tappaas-satellite edge->admin-wg" UDP "${SAT_HOME_ADDR}" "${SAT_ADMIN_WGPORT}" >/dev/null
+    fi
+    _ow_api -X POST /api/firewall/filter/apply >/dev/null
+}
+
+# OPNsense least-privilege rule for the backup role: edge (/31) -> home PBS:8007,
+# so the satellite can PULL over the tunnel — and NOTHING else in the cluster
+# becomes reachable (ADR-010 §3.3). Idempotent. Args: <home-pbs-host>
+sat_ensure_edge_pbs_rule() {
+    local pbs_host="$1"
+    [[ -n "${pbs_host}" ]] || { echo "no home PBS host — skipped" >&2; return 0; }
+    local r; r="$(sat_ensure_edge_rule "tappaas-satellite edge->home-pbs" TCP "${pbs_host}" "${SAT_HOME_PBS_PORT}")"
+    [[ "${r}" == "exists" ]] || _ow_api -X POST /api/firewall/filter/apply >/dev/null
+    echo "${r}"
 }

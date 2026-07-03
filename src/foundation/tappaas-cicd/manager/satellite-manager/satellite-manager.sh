@@ -274,6 +274,14 @@ cmd_install() {
     sleep 12
     info "    peer: $(ow_peer_status)"
 
+    # role-gated OPNsense edge firewall rules (Q6): edge -> Caddy (reverse-proxy) and
+    # edge -> admin-WG (admin-vpn). Without these the satellite's tunnelled traffic is
+    # dropped by OPNsense (validated live 2026-07-03).
+    if [[ ",${roles}," == *,reverse-proxy,* || ",${roles}," == *,admin-vpn,* ]]; then
+        info "  [edge-fw] OPNsense edge rules (${roles})"
+        sat_ensure_edge_rules "${roles}" || warn "    edge rule setup reported an issue"
+    fi
+
     # backup role (P6): after the tunnel is up, wire the OPNsense edge->home-PBS:8007
     # rule and install the satellite PBS body (pull from home). Debian only (D19).
     if [[ ",${roles}," == *,backup,* ]]; then

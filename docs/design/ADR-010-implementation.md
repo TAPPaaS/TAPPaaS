@@ -208,7 +208,7 @@ Mechanical leftovers from the ADR. Status: ✅ resolved · ⬜ open.
 | Q3 | `admin` overlay zone — **new vs. reuse `netbird`** | P1 / P5 | ✅ **Resolved 2026-07-01.** Dedicated `admin` overlay kept (`10.255.1.0/24`), separate from `netbird`. Admin WG **terminates on OPNsense** (`tappaas-admin` server, port 51821); `access-to: [mgmt]` realised by one explicit least-privilege `wireguard`-interface pass rule (`10.255.1.0/24 → 10.0.0.0/24`), created idempotently by `satellite-manager admin setup` (`lib/admin-vpn.sh`). Validated live: server + peer handshake + rule. NetBird stays independent (many-peer mesh). Peer mgmt via `satellite-manager admin add-peer`; runbook `tappaas-cicd/ADMIN-VPN.md`. |
 | Q4 | **Signing mechanism** for pull-based `autoUpgrade` config ref (key off-cluster) | P3 | ⬜ Open — core to D13 rule 3. |
 | Q5 | Backup **storage backend** & sizing | P6 | ⚠️ **D16 corrected (2026-07-03)** — S3 **Object Lock is unsupported by PBS and corrupts the datastore** ([#6780](https://bugzilla.proxmox.com/show_bug.cgi?id=6780)); immutability now comes from the **pull model** (D8/D13), not Object Lock. Backend = local ZFS datastore by default (S3 datastore optional, Object Lock **off**). Sizing: relay/admin node stays tiny (`cax11`); backup node sized to the datastore. |
-| Q6 | Exact `access-to` / `pinhole-allowed-from` entries for `edge`/`admin` | P1 | ⬜ Open — to be determined at implementation, per ADR §4.3 role table. |
+| Q6 | Exact `access-to` / `pinhole-allowed-from` entries for `edge`/`admin` | P1 | ✅ **Resolved 2026-07-03 (live).** `satellite-manager` creates role-gated `edge`-interface pass rules on OPNsense: reverse-proxy → `edge→caddy :80/:443`; admin-vpn → `edge→admin-wg :51821`; backup → `edge→home-pbs :8007`. Implemented as `sat_ensure_edge_rules` / `sat_ensure_edge_pbs_rule`; validated live. |
 | Q7 | Multi-site SNI fan-out (one satellite, several tunnels) | future | ⬜ **Out of scope for v2.** `ssl_preread` reserved; revisit post-v2. |
 | Q8 | **P6 — how to run PBS off-site when the satellite is NixOS** (no `proxmox-backup-server` in nixpkgs) | P6 | ✅ **RESOLVED 2026-07-03 → Option 3 (Debian satellite), see D19.** Deep research killed the earlier front-runner Option 4 (**PBS has no S3 Object Lock; enabling it corrupts the datastore — [#6780](https://bugzilla.proxmox.com/show_bug.cgi?id=6780)**), so immutability must come from the pull model (D8), which means the satellite must run PBS. Native-Nix PBS (Option 1, `AWildLeon/nixos-pbs`) is 2 weeks old/unverified; OCI PBS (Option 2, `ayufan`) is single-maintainer/unsupported. **Debian (Option 3)** runs official PBS, bootstraps trivially, and adds OS-diversity protection for the vault. Implemented in this branch. |
 
@@ -228,6 +228,14 @@ Append-only narrative per stage (newest first). Template:
 ```
 
 ### P6 — backup role — ✅ Q8 RESOLVED → Debian satellite (Option 3) — 2026-07-03
+
+**✅ LIVE-VALIDATED 2026-07-03 (Debian satellite, all roles).** Reinstalled the reference VPS (37.27.5.237) as **Debian 13 (trixie)** and ran `satellite-manager install sat1 --os debian --roles reverse-proxy,admin-vpn` from cicd (over `ssh -A`; cicd holds no standing key, §7.3):
+- **Provisioning** — `provision-debian.sh` apt-installed the stack; wg-infra **tunnel handshake online** (home dialed out from WAN `87.62.120.223`); nginx-stream/nftables/unattended-upgrades all active; wg key generated on-host.
+- **reverse-proxy** — external `Mac → 37.27.5.237:80 → tunnel → home Caddy → HTTP 308`. ✓
+- **admin-vpn** — WireGuard handshake through the satellite's **blind nftables DNAT relay** (`:51821`) to the OPNsense admin-WG (online + bytes transferred). ✓
+- **backup** — `provision-backup.sh` installed **official proxmox-backup-server 4.2.2-1** from the Proxmox repo and created the datastore (`proxmox-backup-proxy` active); datastore-only degraded gracefully with no home PBS. ✓ — *proves the D19 rationale: official PBS installs cleanly on Debian.*
+- **Gap found + fixed:** `cmd_install` created the tunnel but **not** the OPNsense **edge→role** firewall rules (Q6) — without them the satellite's tunnelled traffic is dropped. Added `sat_ensure_edge_rules` (edge→caddy :80/:443 for reverse-proxy; edge→admin-wg for admin-vpn) wired into `cmd_install`. Backup's `edge→home-pbs:8007` already existed. **Resolves Q6.**
+- **Not yet exercised live:** the full backup **pull** round-trip (needs a home PBS + read-only token) and the reverse-proxy **HTTPS** path (needs a wildcard cert on the rebuilt cluster).
 
 **UPDATE 2026-07-03 (resolution).** Deep research on the four options settled Q8:
 
