@@ -115,6 +115,21 @@ derive_repo_name() {
     echo "${name}"
 }
 
+# Normalize a user-supplied repo URL to the BARE form this module stores and the
+# `https://${url}` call sites expect (site.json stores e.g.
+# "github.com/TAPPaaS/TAPPaaS"). Operators may paste a full URL — strip an
+# http(s):// scheme (and a trailing slash) so we never build
+# "https://https://…". A bare URL passes through unchanged.
+# Arguments: <url>
+# Outputs: bare url
+normalize_repo_url() {
+    local u="${1:-}"
+    u="${u#https://}"
+    u="${u#http://}"
+    u="${u%/}"
+    printf '%s' "${u}"
+}
+
 # Check that site.json exists and is valid (the canonical repository store).
 validate_config() {
     if [[ ! -f "${SITE_FILE}" ]]; then
@@ -274,6 +289,7 @@ update_config() {
 cmd_add() {
     local url=""
     local branch="stable"
+    local branch_explicit=0       # was --branch passed, or is 'stable' the default?
     local managed="full"          # ADR-004: full | tracked
     local catalog=""              # ADR-004: catalog path; defaults per managed type
 
@@ -285,6 +301,7 @@ cmd_add() {
                     die "Option --branch requires a value"
                 fi
                 branch="$2"
+                branch_explicit=1
                 shift 2
                 ;;
             --managed)
@@ -311,7 +328,7 @@ cmd_add() {
                 if [[ -n "${url}" ]]; then
                     die "Unexpected argument: $1 (URL already set to '${url}')"
                 fi
-                url="$1"
+                url="$(normalize_repo_url "$1")"
                 shift
                 ;;
         esac
@@ -376,11 +393,24 @@ cmd_add() {
     fi
 
     info "  Checking out branch '${branch}' ..."
-    if ! (cd "${repo_path}" && git checkout "${branch}" 2>&1 | sed 's/^/  /'); then
-        rm -rf "${repo_path}"
-        die "Failed to checkout branch '${branch}'"
+    if ! (cd "${repo_path}" && git checkout "${branch}") >/dev/null 2>&1; then
+        # The requested branch is not on the remote. The clone already checked
+        # out the repo's own default branch (HEAD) — discover what that is.
+        local default_branch
+        default_branch="$(cd "${repo_path}" && git rev-parse --abbrev-ref HEAD 2>/dev/null || true)"
+        if [[ "${branch_explicit}" -eq 1 ]]; then
+            # An explicitly-requested branch that doesn't exist is a real error;
+            # point the operator at the actual default rather than guessing.
+            rm -rf "${repo_path}"
+            die "Branch '${branch}' not found in ${url} (its default branch is '${default_branch:-unknown}'). Re-run with --branch '${default_branch:-<branch>}'."
+        fi
+        # The default 'stable' is absent — fall back to the repo's own default
+        # branch so a plain 'add <url>' just works (the clone is already on it).
+        [[ -n "${default_branch}" ]] || { rm -rf "${repo_path}"; die "Branch '${branch}' not found and the repository's default branch could not be determined for ${url}."; }
+        warn "  Branch '${branch}' not found; using the repository's default branch '${default_branch}'."
+        branch="${default_branch}"
     fi
-    info "  ${GN}✓${CL} Repository cloned successfully"
+    info "  ${GN}✓${CL} Repository cloned successfully (branch '${branch}')"
 
     # ── Step 4: Validate repository structure ────────────────────────
     info "\n${BOLD}Step 4: Validate repository structure${CL}"
@@ -615,7 +645,7 @@ cmd_modify() {
                 if [[ -z "${2:-}" ]]; then
                     die "Option --url requires a value"
                 fi
-                new_url="$2"
+                new_url="$(normalize_repo_url "$2")"
                 shift 2
                 ;;
             --branch)
