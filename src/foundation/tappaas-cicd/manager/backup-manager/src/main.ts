@@ -31,6 +31,7 @@ import { addToBackupJob, modifyBackup, ModifyOpts, removeFromBackupJob } from ".
 import { applyPlan, computePlan } from "./reconcile";
 import { restoreList, restoreListAll, restoreRun } from "./restore";
 import { validate } from "./validate";
+import { HelpSpec, renderHelp } from "./help";
 import { BackupPolicyStatus, Client } from "./types";
 
 const VERSION = "0.1.0";
@@ -52,23 +53,49 @@ function die(msg: string): never {
   throw new DieError(msg);
 }
 
-function usage(): void {
-  info(`backup-manager ${VERSION} — TAPPaaS backup-policy cascade manager
-
-Usage:
-  backup-manager validate [--config-dir DIR]
-  backup-manager list [--disabled-only] [--json] [--config-dir DIR]
-  backup-manager show <module> [--json] [--config-dir DIR]
-  backup-manager resolve <module> [--environment ENV] [--json] [--config-dir DIR]
-  backup-manager modify <module> [--enabled true|false] [--retention SPEC] [--exclude a,b]
-  backup-manager add <module>      (wire into the shared PBS job)
-  backup-manager delete <module>   (un-wire from the shared PBS job)
-  backup-manager reconcile [--apply] [--config-dir DIR]
-  backup-manager restore list <module> [--config-dir DIR]
-  backup-manager restore restore <module> [opts...] [--config-dir DIR]
-  backup-manager restore list-all
-
-Verbs:
+const HELP: HelpSpec = {
+  name: "backup-manager",
+  version: VERSION,
+  tagline: "TAPPaaS backup-policy cascade manager",
+  verbs: [
+    { usage: "validate" },
+    {
+      usage: "list [--disabled-only]",
+      name: "list",
+      options: [["--disabled-only", "list: only modules with backup disabled."]],
+    },
+    { usage: "show <module>", name: "show" },
+    {
+      usage: "resolve <module> [--environment ENV]",
+      name: "resolve",
+      options: [["--environment ENV", "resolve: override the module's recorded .environment."]],
+    },
+    {
+      usage: "modify <module> [--enabled true|false] [--retention SPEC] [--exclude a,b]",
+      name: "modify",
+      options: [
+        ["--enabled B", "modify: set module backup.enabled (true|false)."],
+        ["--retention SPEC", "modify: set module backup.retention (e.g. 90d, 1y)."],
+        ["--exclude a,b", "modify: set module backup.exclude (comma-separated)."],
+      ],
+    },
+    { usage: "add <module>", name: "add", note: "(wire into the shared PBS job)" },
+    { usage: "delete <module>", name: "delete", note: "(un-wire from the shared PBS job)" },
+    {
+      usage: "reconcile [--apply]",
+      name: "reconcile",
+      options: [["--apply", "reconcile: commit changes (default = preview)."]],
+    },
+    { usage: "restore list <module>", name: "restore list" },
+    { usage: "restore restore <module> [opts...]", name: "restore restore" },
+    { usage: "restore list-all", name: "restore list-all" },
+  ],
+  common: [
+    ["--config-dir DIR", "Config root (default: $CONFIG_DIR or /home/tappaas/config)."],
+    ["--json", "Machine output (JSON) for list/show/resolve."],
+  ],
+  notes: [
+    `Verbs:
   validate    Backup hierarchy is well-formed + internally consistent.
   list        Effective backup policy for every deployed module (was backup-status).
   show        One module's effective policy (was backup-status <module>).
@@ -76,18 +103,11 @@ Verbs:
   modify      Write the module's .backup {enabled,retention,exclude} (atomic).
   add/delete  Wire / un-wire the module into the shared PBS job (dependsOn backup:vm).
   reconcile   Converge resolved policies → PBS (preview by default; --apply commits).
-  restore     SPECIAL — recovery action; delegates to foundation restore.sh / controller.
-
-Options:
-  --config-dir DIR   Config root (default: \$CONFIG_DIR or /home/tappaas/config).
-  --json             Machine output (JSON) for list/show/resolve.
-  --apply            reconcile: commit changes (default = preview).
-  --environment ENV  resolve: override the module's recorded .environment.
-  --disabled-only    list: only modules with backup disabled.
-  --enabled B        modify: set module backup.enabled (true|false).
-  --retention SPEC   modify: set module backup.retention (e.g. 90d, 1y).
-  --exclude a,b      modify: set module backup.exclude (comma-separated).
-  -h, --help         Show this help.`);
+  restore     SPECIAL — recovery action; delegates to foundation restore.sh / controller.`,
+  ],
+};
+function usage(): void {
+  info(renderHelp(HELP));
 }
 
 interface Opts {

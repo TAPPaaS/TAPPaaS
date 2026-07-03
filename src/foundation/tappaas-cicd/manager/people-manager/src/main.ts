@@ -21,6 +21,7 @@ import {
 import { CliPrimitiveClient, AuthentikUnreachable } from "./primitives";
 import { applyPlan, computePlan, snapshot } from "./reconcile";
 import { PeopleModel, PrimitiveClient } from "./types";
+import { HelpSpec, renderHelp } from "./help";
 
 const VERSION = "0.1.0";
 
@@ -41,40 +42,61 @@ function die(msg: string): never {
   throw new DieError(msg);
 }
 
-function usage(): void {
-  info(`people-manager ${VERSION} — TAPPaaS People → Authentik manager
-
-Usage:
-  people-manager reconcile [--apply] [--config-dir DIR]   (alias: sync, deprecated)
-  people-manager validate  [--config-dir DIR]
-  people-manager <kind> list         [--json] [--deep] [--config-dir DIR]
-  people-manager <kind> show   <name> [--json]         [--config-dir DIR]   (alias: get, deprecated)
-      --json   structured output (default is human-readable)
-      --deep   org/group list only: recurse into groups + user membership
-  people-manager <kind> add    <name> [field flags] [--force]
-  people-manager <kind> modify <name> [field flags]
-  people-manager <kind> delete <name> [--force]
-
-  where <kind> is one of: role | org (alias organization) | group | user
-
-Field flags (write the validated config; Authentik is NOT touched):
+const HELP: HelpSpec = {
+  name: "people-manager",
+  version: VERSION,
+  tagline: "TAPPaaS People → Authentik manager",
+  verbs: [
+    {
+      usage: "reconcile [--apply]",
+      note: "(alias: sync, deprecated)",
+      options: [
+        ["--apply", "push the plan to Authentik (default is PREVIEW)"],
+        ["--dry-run", "deprecated no-op (preview is already the default)"],
+      ],
+    },
+    { usage: "validate" },
+    {
+      usage: "<kind> list [--json] [--deep]",
+      name: "<kind> list",
+      options: [
+        ["--json", "structured output (default is human-readable)"],
+        ["--deep", "org/group only: recurse into groups + user membership"],
+      ],
+    },
+    {
+      usage: "<kind> show <name> [--json]",
+      name: "<kind> show",
+      note: "(alias: get, deprecated)",
+      options: [["--json", "structured output (default is human-readable)"]],
+    },
+    {
+      usage: "<kind> add <name> [field flags] [--force]",
+      name: "<kind> add",
+      options: [["--force", "overwrite an existing entity"]],
+    },
+    { usage: "<kind> modify <name> [field flags]" },
+    {
+      usage: "<kind> delete <name> [--force]",
+      name: "<kind> delete",
+      options: [["--force", "delete despite the reference guard"]],
+    },
+  ],
+  common: [["--config-dir DIR", "People directory (default: $TAPPAAS_CONFIG/people)"]],
+  notes: [
+    "where <kind> is one of: role | org (alias organization) | group | user",
+    `Field flags (write the validated config; Authentik is NOT touched):
   role:  --displayName V  --description V
   org:   --displayName V  --type V  --owner USER  --parentOrg ORG
-  group: --displayName V  --type V  --ownerOrg ORG  --roles "a,b"
-         --add-roles R  --remove-roles R
+  group: --displayName V  --type V  --ownerOrg ORG  --roles "a,b"  --add-roles R  --remove-roles R
   user:  --displayName V  --email ADDR  --state planned|active|suspended|terminated
-         --roles "a,b"  --groups "g1,g2"
-         --add-roles R --remove-roles R  --add-groups G --remove-groups G
+         --roles "a,b"  --groups "g1,g2"  --add-roles R  --remove-roles R  --add-groups G  --remove-groups G`,
+    "After a successful add/modify/delete, run 'people-manager reconcile --apply' to push to the identity service. Writes never call Authentik directly.",
+  ],
+};
 
-Options:
-  --apply          reconcile: push the plan to Authentik (default is PREVIEW).
-  --dry-run        reconcile: deprecated no-op (preview is already the default).
-  --force          add: overwrite an existing entity; delete: ignore ref guard.
-  --config-dir DIR People directory (default: \$TAPPAAS_CONFIG/people).
-  -h, --help       Show this help.
-
-After a successful add/modify/delete, run 'people-manager reconcile' to push
-the change to the identity service. Writes never call Authentik directly.`);
+function usage(): void {
+  info(renderHelp(HELP));
 }
 
 // Pull --config-dir / --apply / --dry-run out of an arg list; return the rest.

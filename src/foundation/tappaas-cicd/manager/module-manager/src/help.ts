@@ -1,0 +1,76 @@
+// help.ts — shared --help renderer for the TAPPaaS TypeScript managers.
+//
+// VENDORED, NOT imported cross-manager: each manager's nix build compiles only
+// its OWN src/ (tsc rootDir=src, src=./.), so this file is copied VERBATIM into
+// every manager's src/ (the same "mirror" convention used for env.d.ts). Keep
+// the copies byte-identical — the whole point is that every manager renders its
+// --help the SAME way.
+//
+// A manager declares a HelpSpec (its verbs + per-verb options) and prints
+// `renderHelp(spec)`. Layout (matches the network-manager reference):
+//
+//   <name> <version> — <tagline>
+//
+//   Usage:
+//     <name> <verb.usage>            (one line per verb)
+//
+//   <verb> options:                  (one block per verb that HAS options)
+//     --flag <arg>   description     (one line per option)
+//
+//   common:                          (options shared by every verb)
+//     --flag <arg>   description
+//     -h, --help     Show this help
+//
+//   <notes...>                       (optional free-text trailing paragraphs)
+
+export interface HelpVerb {
+  // The usage line WITHOUT the leading CLI name, e.g. "zone add <name> [options]".
+  usage: string;
+  // Header for this verb's options block, e.g. "zone add". Derived from `usage`
+  // (tokens up to the first <arg>/[opt]/--flag) when omitted.
+  name?: string;
+  // Appended to the usage line, e.g. "(alias: get)".
+  note?: string;
+  // [flag, description] pairs documented under "<name> options:".
+  options?: Array<[string, string]>;
+}
+
+export interface HelpSpec {
+  name: string; // CLI name, e.g. "network-manager"
+  version: string;
+  tagline: string;
+  verbs: HelpVerb[];
+  common?: Array<[string, string]>; // options shared by all verbs
+  notes?: string[]; // free-text paragraphs printed after the option blocks
+}
+
+function deriveName(usage: string): string {
+  const out: string[] = [];
+  for (const tok of usage.split(/\s+/)) {
+    if (tok.startsWith("<") || tok.startsWith("[") || tok.startsWith("-")) break;
+    out.push(tok);
+  }
+  return out.join(" ") || usage;
+}
+
+function renderOptions(opts: Array<[string, string]>): string[] {
+  if (opts.length === 0) return [];
+  const w = Math.max(...opts.map(([f]) => f.length));
+  return opts.map(([f, d]) => `  ${f.padEnd(w)}  ${d}`);
+}
+
+export function renderHelp(s: HelpSpec): string {
+  const lines: string[] = [`${s.name} ${s.version} — ${s.tagline}`, "", "Usage:"];
+  for (const v of s.verbs) {
+    lines.push(`  ${s.name} ${v.usage}${v.note ? `   ${v.note}` : ""}`);
+  }
+  for (const v of s.verbs) {
+    if (!v.options || v.options.length === 0) continue;
+    lines.push("", `${v.name ?? deriveName(v.usage)} options:`);
+    lines.push(...renderOptions(v.options));
+  }
+  const common: Array<[string, string]> = [...(s.common ?? []), ["-h, --help", "Show this help"]];
+  lines.push("", "common:", ...renderOptions(common));
+  for (const n of s.notes ?? []) lines.push("", n);
+  return lines.join("\n");
+}

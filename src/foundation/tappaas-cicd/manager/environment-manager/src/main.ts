@@ -35,6 +35,7 @@ import { CliModuleClient, CliNetworkClient, NetworkUnreachable } from "./clients
 import { applyPlan, computePlan } from "./reconcile";
 import { runValidate } from "./validate";
 import { Environment, ModuleClient, NetworkClient } from "./types";
+import { HelpSpec, renderHelp } from "./help";
 import { existsSync, readFileSync, unlinkSync } from "fs";
 import { join } from "path";
 
@@ -62,40 +63,76 @@ function die(msg: string): never {
   throw new DieError(msg);
 }
 
+const HELP: HelpSpec = {
+  name: "environment-manager",
+  version: VERSION,
+  tagline: "TAPPaaS Environment manager",
+  verbs: [
+    { usage: "list [--json]" },
+    { usage: "show <env> [--json]" },
+    { usage: "validate [<file|dir>]" },
+    {
+      usage: "add [<env>] [--name N] [--domain D] [--owner ORG]\n" +
+        "                          [--zone Z] [--display D] [--dns-mode M] [--force]",
+      name: "add",
+      options: [
+        ["--domain D", "Public primary domain (add/modify)."],
+        ["--owner ORG", "Owning organization (add/modify; default = first org)."],
+        ["--zone Z", "network.zone reference (add/modify; default = <env>)."],
+        ["--display D", "displayName (add/modify)."],
+        [
+          "--dns-mode M",
+          "domains.dnsMode: per-service (default, Caddy HTTP-01 per host)\n" +
+            "                   or wildcard (one *.<primary> ACME cert) (add/modify).",
+        ],
+        ["--force", "add: overwrite existing; delete: override guard rails."],
+      ],
+    },
+    {
+      usage: "modify <env> [--domain D] [--owner ORG] [--zone Z]\n" +
+        "                          [--display D] [--dns-mode M]",
+      name: "modify",
+      options: [
+        ["--domain D", "Public primary domain (add/modify)."],
+        ["--owner ORG", "Owning organization (add/modify; default = first org)."],
+        ["--zone Z", "network.zone reference (add/modify; default = <env>)."],
+        ["--display D", "displayName (add/modify)."],
+        [
+          "--dns-mode M",
+          "domains.dnsMode: per-service (default, Caddy HTTP-01 per host)\n" +
+            "                   or wildcard (one *.<primary> ACME cert) (add/modify).",
+        ],
+      ],
+    },
+    {
+      usage: "delete <env> [--force]",
+      name: "delete",
+      options: [["--force", "add: overwrite existing; delete: override guard rails."]],
+    },
+    {
+      usage: "reconcile <env> [--deep] [--apply]",
+      name: "reconcile",
+      options: [
+        ["--deep", "reconcile: also reconcile every module consuming this env."],
+        ["--apply", "reconcile: commit (default = preview / dry-run)."],
+      ],
+    },
+  ],
+  common: [
+    ["--config-dir DIR", "Config root (default: $TAPPAAS_CONFIG or /home/tappaas/config)."],
+    ["--json", "Machine-readable output (list/show)."],
+  ],
+  notes: [
+    "Notes:\n" +
+      "  add with no <env> and no --name seeds the minimal environment set\n" +
+      "  (mgmt + the default <N> environment) via the create-minimal-environments\n" +
+      "  bootstrap. With <env> (or --name) it creates that single environment.\n" +
+      "  delete refuses to remove 'mgmt', the default <N> environment, or an env still\n" +
+      "  consumed by deployed modules — unless --force.",
+  ],
+};
 function usage(): void {
-  info(`environment-manager ${VERSION} — TAPPaaS Environment manager
-
-Usage:
-  environment-manager list [--json] [--config-dir DIR]
-  environment-manager show <env> [--json] [--config-dir DIR]
-  environment-manager validate [<file|dir>] [--config-dir DIR]
-  environment-manager add [<env>] [--name N] [--domain D] [--owner ORG]
-                          [--zone Z] [--display D] [--dns-mode M] [--force] [--config-dir DIR]
-  environment-manager modify <env> [--domain D] [--owner ORG] [--zone Z]
-                          [--display D] [--dns-mode M] [--config-dir DIR]
-  environment-manager delete <env> [--force] [--config-dir DIR]
-  environment-manager reconcile <env> [--deep] [--apply] [--config-dir DIR]
-
-Notes:
-  add with no <env> and no --name seeds the minimal environment set
-  (mgmt + the default <N> environment) via the create-minimal-environments
-  bootstrap. With <env> (or --name) it creates that single environment.
-  delete refuses to remove 'mgmt', the default <N> environment, or an env still
-  consumed by deployed modules — unless --force.
-
-Options:
-  --config-dir DIR Config root (default: \$TAPPAAS_CONFIG or /home/tappaas/config).
-  --json           Machine-readable output (list/show).
-  --domain D       Public primary domain (add/modify).
-  --owner ORG      Owning organization (add/modify; default = first org).
-  --zone Z         network.zone reference (add/modify; default = <env>).
-  --display D      displayName (add/modify).
-  --dns-mode M     domains.dnsMode: per-service (default, Caddy HTTP-01 per host)
-                   or wildcard (one *.<primary> ACME cert) (add/modify).
-  --deep           reconcile: also reconcile every module consuming this env.
-  --apply          reconcile: commit (default = preview / dry-run).
-  --force          add: overwrite existing; delete: override guard rails.
-  -h, --help       Show this help.`);
+  info(renderHelp(HELP));
 }
 
 interface Opts {

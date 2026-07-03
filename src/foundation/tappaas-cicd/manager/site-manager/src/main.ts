@@ -25,6 +25,7 @@
 
 import { defaultConfigDir, defaultSchemaDir, loadRaw, loadSite, writeSite } from "./config";
 import { CliSiteClient } from "./client";
+import { HelpSpec, renderHelp } from "./help";
 import { applyPlan, computePlan } from "./reconcile";
 import { Site, SiteClient, SiteNode } from "./types";
 
@@ -47,40 +48,48 @@ function die(msg: string): never {
   throw new DieError(msg);
 }
 
+const HELP: HelpSpec = {
+  name: "site-manager",
+  version: VERSION,
+  tagline: "TAPPaaS Site manager (ADR-007 P2)",
+  verbs: [
+    { usage: "site show [--json]" },
+    { usage: "site modify --<field> <value> [...]" },
+    { usage: "node list [--json]" },
+    { usage: "node add --name <N> [--pool <p> ...]" },
+    { usage: "node delete <name>" },
+    { usage: "repository list [--json]", note: "(alias: repo)" },
+    { usage: "repository add <url> [--branch <b>] [--managed full|tracked] [--catalog <p>]" },
+    { usage: "repository delete <name> [--force]",
+      options: [["--force", "Forward to repository.sh remove --force."]] },
+    { usage: "repository reconcile [--apply]",
+      options: [["--apply", "Commit (default is preview)."]] },
+    { usage: "add --name <N> [create-site options]" },
+    { usage: "validate [FILE] [--schema-dir PATH]" },
+    { usage: "reconcile [--apply] [--deep]",
+      options: [
+        ["--apply", "Commit (default is preview)."],
+        ["--deep", "Cascade people → network → (every) environment."],
+      ] },
+  ],
+  common: [
+    ["--config-dir DIR", "Config root (default: $TAPPAAS_CONFIG or /home/tappaas/config)."],
+    ["--json", "Machine-readable output for list/show."],
+  ],
+  notes: [
+    "Owns config/site.json (the Site singleton). add (create-site.sh), repository\n" +
+      "add/delete (repository.sh) are thin delegations to the still-live bash tools;\n" +
+      "validate wraps validate-site.sh. TS owns config CRUD + validate + reconcile.",
+    "site modify fields:\n" +
+      "  --displayName --owner --email --automaticReboot --snapshotRetention\n" +
+      "  --backupTarget --backupOffsite\n" +
+      "  --locationCountry --locationTimezone --locationLocale\n" +
+      "  --networkIsp --networkPublicIp",
+  ],
+};
+
 function usage(): void {
-  info(`site-manager ${VERSION} — TAPPaaS Site manager (ADR-007 P2)
-
-Usage:
-  site-manager site show [--json] [--config-dir DIR]
-  site-manager site modify --<field> <value> [...] [--config-dir DIR]
-  site-manager node list [--json] [--config-dir DIR]
-  site-manager node add --name <N> [--pool <p> ...] [--config-dir DIR]
-  site-manager node delete <name> [--config-dir DIR]
-  site-manager repository list [--json] [--config-dir DIR]
-  site-manager repository add <url> [--branch <b>] [--managed full|tracked] [--catalog <p>]
-  site-manager repository delete <name> [--force] [--config-dir DIR]
-  site-manager repository reconcile [--apply] [--config-dir DIR]
-  site-manager add --name <N> [create-site options]
-  site-manager validate [FILE] [--schema-dir PATH] [--config-dir DIR]
-  site-manager reconcile [--apply] [--deep] [--config-dir DIR]
-
-Owns config/site.json (the Site singleton). add (create-site.sh), repository
-add/delete (repository.sh) are thin delegations to the still-live bash tools;
-validate wraps validate-site.sh. TS owns config CRUD + validate + reconcile.
-
-Options:
-  --config-dir DIR   Config root (default: \$TAPPAAS_CONFIG or /home/tappaas/config).
-  --json             Machine-readable output for list/show.
-  --apply            reconcile: commit (default is preview).
-  --deep             reconcile: cascade people → network → (every) environment.
-  --force            repository delete: forward to repository.sh remove --force.
-  -h, --help         Show this help.
-
-site modify fields:
-  --displayName --owner --email --automaticReboot --snapshotRetention
-  --backupTarget --backupOffsite
-  --locationCountry --locationTimezone --locationLocale
-  --networkIsp --networkPublicIp`);
+  info(renderHelp(HELP));
 }
 
 // ── option parsing ─────────────────────────────────────────────────────

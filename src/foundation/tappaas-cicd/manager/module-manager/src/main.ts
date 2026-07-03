@@ -26,6 +26,7 @@ import {
   listModules,
   loadModule,
 } from "./config";
+import { HelpSpec, renderHelp } from "./help";
 import {
   AddOptions,
   DeleteOptions,
@@ -56,32 +57,93 @@ function die(msg: string): never {
   throw new DieError(msg);
 }
 
-function usage(): void {
-  info(`module-manager ${VERSION} — TAPPaaS module lifecycle manager (ADR-007 #3)
-
-Usage:
-  module-manager module list [--config-dir DIR] [--json]
-  module-manager module show <module> [--config-dir DIR] [--json]
-  module-manager module validate [<module>] [--allow-fork] [--config-dir DIR] [--json]
-  module-manager module add <module> [--environment ENV] [--allow-fork]
-                                      [--force] [--reinstall] [--<field> <value>]...
-  module-manager module modify <module> [--environment ENV] [--force]
-                                         [--no-snapshot] [--debug] [--silent]
-  module-manager module delete <module> [--archive|--remove] [--vmid ID]
-                                         [--environment ENV] [--yes] [--force]
-  module-manager module reconcile <module> [--environment ENV] [--no-snapshot]
-  module-manager module test <module> [--deep] [--vmid ID] [--zone0 ZONE]
-  module-manager module snapshot-vm <module> [--list|--cleanup N|--restore N]
-
-Common options:
-  --config-dir DIR  Config root (default: \$TAPPAAS_CONFIG or /home/tappaas/config).
-  --json            Machine-readable output (list / show / validate).
-  -h, --help        Show this help.
-
-Verbs map (ADR-007 verb alignment):
+const HELP: HelpSpec = {
+  name: "module-manager",
+  version: VERSION,
+  tagline: "TAPPaaS module lifecycle manager (ADR-007 #3)",
+  verbs: [
+    { usage: "module list", name: "module list" },
+    { usage: "module show <module>", name: "module show" },
+    {
+      usage: "module validate [<module>] [--allow-fork]",
+      name: "module validate",
+      options: [["--allow-fork", "Permit forked/non-canonical module sources (relax tier/source lint)."]],
+    },
+    {
+      usage: "module add <module> [--environment ENV] [--allow-fork] [--force] [--reinstall] [--<field> <value>]...",
+      name: "module add",
+      options: [
+        ["--environment ENV", "Target environment/variant to install into."],
+        ["--allow-fork", "Permit forked/non-canonical module sources."],
+        ["--force", "Proceed despite warnings / overwrite an existing deployment."],
+        ["--reinstall", "Reinstall even if the module is already deployed."],
+        ["--<field> <value>", "Override any config field, passed through to install-module.sh."],
+      ],
+    },
+    {
+      usage: "module modify <module> [--environment ENV] [--force] [--no-snapshot] [--debug] [--silent]",
+      name: "module modify",
+      options: [
+        ["--environment ENV", "Target environment/variant to modify."],
+        ["--force", "Proceed despite warnings during the re-apply."],
+        ["--no-snapshot", "Skip the pre-change VM snapshot."],
+        ["--debug", "Verbose diagnostic output."],
+        ["--silent", "Suppress non-essential output."],
+      ],
+    },
+    {
+      usage: "module delete <module> [--archive|--remove] [--vmid ID] [--environment ENV] [--yes] [--force]",
+      name: "module delete",
+      options: [
+        ["--archive", "Archive the module config (default; mutually exclusive with --remove)."],
+        ["--remove", "Fully remove the module config (mutually exclusive with --archive)."],
+        ["--vmid ID", "Target a specific VM id."],
+        ["--environment ENV", "Target environment/variant to delete from."],
+        ["--yes", "Assume yes to confirmation prompts (also -y)."],
+        ["--force", "Proceed despite warnings."],
+      ],
+    },
+    {
+      usage: "module reconcile <module> [--environment ENV] [--no-snapshot]",
+      name: "module reconcile",
+      options: [
+        ["--environment ENV", "Target environment/variant to reconcile."],
+        ["--no-snapshot", "Skip any pre-change VM snapshot (leaf re-apply is idempotent)."],
+      ],
+    },
+    {
+      usage: "module test <module> [--deep] [--vmid ID] [--zone0 ZONE]",
+      name: "module test",
+      options: [
+        ["--deep", "Run the deep/regression test suite, not just the smoke test."],
+        ["--vmid ID", "Target a specific VM id."],
+        ["--zone0 ZONE", "Override the primary network zone under test."],
+      ],
+    },
+    {
+      usage: "module snapshot-vm <module> [--list|--cleanup N|--restore N]",
+      name: "module snapshot-vm",
+      options: [
+        ["--list", "List existing VM snapshots (default action is to create one)."],
+        ["--cleanup N", "Prune snapshots, keeping the N most recent."],
+        ["--restore N", "Restore the VM by rolling back N snapshot steps."],
+      ],
+    },
+  ],
+  common: [
+    ["--config-dir DIR", "Config root (default: $TAPPAAS_CONFIG or /home/tappaas/config)."],
+    ["--json", "Machine-readable output (list / show / validate)."],
+  ],
+  notes: [
+    `Verbs map (ADR-007 verb alignment):
   add=install-module  modify=update-module  delete=delete-module
   test=test-module    validate=tier/source lint  reconcile=leaf re-apply
-  list/show are new (TS, read config/*.json).  snapshot-vm stays a special verb.`);
+  list/show are new (TS, read config/*.json).  snapshot-vm stays a special verb.`,
+  ],
+};
+
+function usage(): void {
+  info(renderHelp(HELP));
 }
 
 // ── option parsing ─────────────────────────────────────────────────────

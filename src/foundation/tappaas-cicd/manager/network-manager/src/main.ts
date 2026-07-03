@@ -45,6 +45,7 @@ import { parseTemplate, renameTemplateFile, zonesInit } from "./zonesinit";
 import { zonesCheck, occupiedZones } from "./zonescheck";
 import { distributeZones, shouldAutoDistribute } from "./distribute";
 import { runZonesMerge } from "./zonesmerge";
+import { HelpSpec, renderHelp } from "./help";
 
 const VERSION = "0.1.0";
 
@@ -65,69 +66,91 @@ function die(msg: string): never {
   throw new DieError(msg);
 }
 
+const HELP: HelpSpec = {
+  name: "network-manager",
+  version: VERSION,
+  tagline: "TAPPaaS network owner + orchestrator (ADR-007 P4 / ADR-008)",
+  verbs: [
+    { usage: "zone list [--json]" },
+    { usage: "zone exists <name>" },
+    { usage: "zone show <name> [--json]", note: "(alias: get)" },
+    {
+      usage: "zone add <name> [options]",
+      name: "zone add",
+      options: [
+        ["--from-zone <src>", "inherit type/typeId/bridge/access-to/pinhole from <src>"],
+        ["--type <T>", "zone type (default: Service)"],
+        ["--typeId <N>", "numeric type band (default: 2)"],
+        ["--vlan <tag>", "explicit VLAN tag (else auto-allocated 60-99 in band)"],
+        ["--variant <name>", "tag the zone with this variant (metadata)"],
+        ["--no-activate", "author zones.json only; skip the all-plane reconcile"],
+        ["--check", "dry-run: show actions, mutate nothing"],
+      ],
+    },
+    { usage: "zone delete <name> [--check]" },
+    {
+      usage: "reconcile [--apply] [--only <plane>]",
+      name: "reconcile",
+      options: [
+        ["--apply", "converge all planes (default is dry-run / report only)"],
+        ["--only <plane>", "one plane: opnsense | proxmox | switch | ap"],
+      ],
+    },
+    {
+      usage: "zones-init --name <N> [--from <tpl>] [--out <f>] [--force]",
+      name: "zones-init (install-time template transform; offline)",
+      options: [
+        ["--name <N>", "TAPPaaS system name; renames srv→<N>, home→<N>-private,\n                guest→<N>-guest and parameterises the distributed template"],
+        ["--from <tpl>", "source template (default: zones.json shipped with the bin)"],
+        ["--out <f>", "output file (default: $TAPPAAS_CONFIG/zones.json)"],
+        ["--force", "re-apply from the template even if already initialised"],
+      ],
+    },
+    {
+      usage: "zones-merge [--diff] [--config-dir <dir>] [--template <tpl>]",
+      name:
+        "zones-merge (rename-aware 3-way reconciliation; ADR-007 Design A;\n" +
+        "replaces apply-zones-merge.sh — re-bases the repo template into THIS install's\n" +
+        "renamed namespace, then 3-way-merges zones.json vs zones.json.orig vs\n" +
+        "zones.rename.json; does NOT distribute by itself)",
+      options: [
+        ["--config-dir <dir>", "config dir holding site.json + the three zones files\n                      (default $TAPPAAS_CONFIG)"],
+        ["--template <tpl>", "repo zones.json template (default: shipped template)"],
+        ["--from <tpl>", "alias for --template"],
+        ["--diff", "show what would change; write nothing"],
+      ],
+    },
+    {
+      usage: "validate [--zones <file>] [--config-dir <dir>] [--strict]",
+      note: "(alias: zones-check)",
+      name: "zones-check (offline consistency audit; read-only; run at update)",
+      options: [
+        ["--zones <file>", "zones.json to check (default $TAPPAAS_CONFIG/zones.json)"],
+        ["--config-dir <dir>", "installed module configs to cross-check (default $TAPPAAS_CONFIG)"],
+        ["--strict", "promote warnings to errors"],
+      ],
+    },
+    {
+      usage: "zones-distribute [--zones <file>] [--dry-run]",
+      name:
+        "zones-distribute (push the live zones.json to every Proxmox node so\n" +
+        "node-side tooling can resolve a zone's VLAN — N3; runs automatically after a\n" +
+        "live zones.json write, this is the manual entry point)",
+      options: [
+        ["--zones <file>", "zones.json to push (default $TAPPAAS_CONFIG/zones.json)"],
+        ["--dry-run", "list the node targets that WOULD receive it; no scp"],
+        ["--no-distribute", "(on zone add/delete/zones-init) skip the auto-push"],
+      ],
+    },
+  ],
+  common: [["--zones-file <f>", "default $TAPPAAS_CONFIG/zones.json"]],
+  notes: [
+    "Exit code is non-zero if any plane reports an error (or proxmox still drifts\nafter --apply).",
+  ],
+};
+
 function usage(): void {
-  info(`network-manager ${VERSION} — TAPPaaS network owner + orchestrator (ADR-007 P4 / ADR-008)
-
-Usage:
-  network-manager zone list [--json]
-  network-manager zone exists <name>
-  network-manager zone show <name> [--json]   (alias: get)
-  network-manager zone add <name> [options]
-  network-manager zone delete <name> [--check]
-  network-manager reconcile [--apply] [--only <plane>]
-  network-manager zones-init --name <N> [--from <tpl>] [--out <f>] [--force]
-  network-manager zones-merge [--diff] [--config-dir <dir>] [--template <tpl>]
-  network-manager validate [--zones <file>] [--config-dir <dir>] [--strict]   (alias: zones-check)
-  network-manager zones-distribute [--zones <file>] [--dry-run]
-
-zone add options:
-  --from-zone <src>   inherit type/typeId/bridge/access-to/pinhole from <src>
-  --type <T>          zone type (default: Service)
-  --typeId <N>        numeric type band (default: 2)
-  --vlan <tag>        explicit VLAN tag (else auto-allocated 60-99 in band)
-  --variant <name>    tag the zone with this variant (metadata)
-  --no-activate       author zones.json only; skip the all-plane reconcile
-  --check             dry-run: show actions, mutate nothing
-
-reconcile options:
-  --apply             converge all planes (default is dry-run / report only)
-  --only <plane>      one plane: opnsense | proxmox | switch | ap
-
-zones-init options (install-time template transform; offline):
-  --name <N>          TAPPaaS system name; renames srv→<N>, home→<N>-private,
-                      guest→<N>-guest and parameterises the distributed template
-  --from <tpl>        source template (default: zones.json shipped with the bin)
-  --out <f>           output file (default: \$TAPPAAS_CONFIG/zones.json)
-  --force             re-apply from the template even if already initialised
-
-zones-merge options (rename-aware 3-way reconciliation; ADR-007 Design A;
-replaces apply-zones-merge.sh — re-bases the repo template into THIS install's
-renamed namespace, then 3-way-merges zones.json vs zones.json.orig vs
-zones.rename.json; does NOT distribute by itself):
-  --config-dir <dir>  config dir holding site.json + the three zones files
-                      (default \$TAPPAAS_CONFIG)
-  --template <tpl>    repo zones.json template (default: shipped template)
-  --from <tpl>        alias for --template
-  --diff              show what would change; write nothing
-
-zones-check options (offline consistency audit; read-only; run at update):
-  --zones <file>      zones.json to check (default \$TAPPAAS_CONFIG/zones.json)
-  --config-dir <dir>  installed module configs to cross-check (default \$TAPPAAS_CONFIG)
-  --strict            promote warnings to errors
-
-zones-distribute options (push the live zones.json to every Proxmox node so
-node-side tooling can resolve a zone's VLAN — N3; runs automatically after a
-live zones.json write, this is the manual entry point):
-  --zones <file>      zones.json to push (default \$TAPPAAS_CONFIG/zones.json)
-  --dry-run           list the node targets that WOULD receive it; no scp
-  --no-distribute     (on zone add/delete/zones-init) skip the auto-push
-
-common:
-  --zones-file <f>    default \$TAPPAAS_CONFIG/zones.json
-  -h, --help          Show this help
-
-Exit code is non-zero if any plane reports an error (or proxmox still drifts
-after --apply).`);
+  info(renderHelp(HELP));
 }
 
 interface Opts {
