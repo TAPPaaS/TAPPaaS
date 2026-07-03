@@ -192,6 +192,27 @@ else
     no "install --dry-run backup branch"
 fi
 
+# 22. sat_ensure_edge_rules emits the right role-gated rules (API mocked → offline).
+#     Mock _ow_api records each addRule payload to a file (searchRule returns empty
+#     so every rule is 'created'; apply is a no-op).
+EDGE_OUT="${tmp}/edge_rules.txt"; : > "${EDGE_OUT}"
+(
+    . "${here}/lib/provision.sh" >/dev/null 2>&1
+    _ow_api() {
+        case "$*" in
+            *searchRule*) echo '{"rows":[]}' ;;
+            *apply*)      : ;;
+            *)            printf '%s\n' "$*" >> "${EDGE_OUT}" ;;
+        esac
+    }
+    sat_ensure_edge_rules "reverse-proxy,admin-vpn" >/dev/null 2>&1
+)
+if grep -q 'edge->caddy 80' "${EDGE_OUT}" && grep -q 'edge->caddy 443' "${EDGE_OUT}" && grep -q 'edge->admin-wg' "${EDGE_OUT}"; then
+    ok "sat_ensure_edge_rules emits caddy+admin-wg rules"
+else
+    no "sat_ensure_edge_rules output"
+fi
+
 echo ""
 echo "satellite-manager fast tests: ${pass} passed, ${fail} failed"
 [[ "${fail}" -eq 0 ]]
