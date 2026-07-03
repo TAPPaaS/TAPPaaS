@@ -37,10 +37,10 @@ This manager exposes one compiled CLI (`people-manager`) plus two bash helpers
 ### `people-manager` — read, CRUD + reconcile
 
 ```
-people-manager reconcile  [--dry-run] [--config-dir DIR]   (alias: sync, deprecated)
+people-manager reconcile  [--apply]  [--config-dir DIR]   (alias: sync, deprecated)
 people-manager validate                            [--config-dir DIR]
-people-manager <kind> list                         [--config-dir DIR]
-people-manager <kind> show   <name>                [--config-dir DIR]   (alias: get, deprecated)
+people-manager <kind> list   [--json] [--deep]     [--config-dir DIR]
+people-manager <kind> show   <name> [--json]       [--config-dir DIR]   (alias: get, deprecated)
 people-manager <kind> add    <name> [field flags]  [--force] [--config-dir DIR]
 people-manager <kind> modify <name> [field flags]  [--config-dir DIR]
 people-manager <kind> delete <name> [--force]      [--config-dir DIR]
@@ -55,8 +55,12 @@ The standardized ADR-007 verb vocabulary applies: `add` (was create), `modify`
 
 Options:
 
-- `--dry-run` — compute and print the reconcile plan; make **no** changes to the
-  identity service.
+- `--apply` — on `reconcile`, push the plan to the identity service. **Without it,
+  `reconcile` only PREVIEWS the plan** (the default) — matching `site-manager`,
+  `network-manager`, etc. (`--dry-run` is a deprecated no-op: preview is already
+  the default.)
+- `--json` — on `list` / `show`, emit structured JSON (default is human-readable).
+- `--deep` — on `org` / `group` `list`, recurse into groups + user membership.
 - `--force` — on `add`, overwrite an existing entity; on `delete`, ignore the
   reference guard.
 - `--config-dir DIR` — the People directory to read/write (default
@@ -75,7 +79,8 @@ through verbs and never hand-edit JSON — see `docs/design/ADR-007-verb-alignme
 
 ```
 people-manager <kind> add|modify|delete ...   # writes validated config
-people-manager reconcile                       # then pushes config → identity service
+people-manager reconcile                       # preview the plan (default)
+people-manager reconcile --apply               # then pushes config → identity service
 ```
 
 #### Field flags
@@ -101,8 +106,8 @@ people-manager user add jan --email jan@foo.nl --roles user --groups foo__users
 people-manager user modify jan --add-roles admin --remove-groups foo__users
 people-manager group delete foo__users          # refused if any user is a member
 people-manager role delete editor --force        # delete despite references
-people-manager reconcile --dry-run                # preview the plan
-people-manager reconcile                          # apply to the identity service
+people-manager reconcile                          # preview the plan (default)
+people-manager reconcile --apply                  # apply to the identity service
 ```
 
 ### `user-setup.sh` — bootstrap a minimal org

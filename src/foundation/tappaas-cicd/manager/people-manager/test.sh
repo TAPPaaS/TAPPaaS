@@ -407,11 +407,11 @@ JSON
 { "name": "${ZUSER2}", "displayName": "zztest beta", "primaryEmail": "${ZUSER2}@example.invalid", "state": "planned" }
 JSON
 
-    # 1. sync (active alpha created; planned beta NOT created)
-    if "$PM_BIN" sync --config-dir "$CFG" >/dev/null 2>&1; then
-        ok "live: people-manager sync applied"
+    # 1. reconcile --apply (active alpha created; planned beta NOT created)
+    if "$PM_BIN" reconcile --apply --config-dir "$CFG" >/dev/null 2>&1; then
+        ok "live: people-manager reconcile --apply applied"
     else
-        bad "live: people-manager sync failed"
+        bad "live: people-manager reconcile --apply failed"
     fi
 
     users_json="$("$AK_BIN" list-users 2>/dev/null || echo '[]')"
@@ -433,19 +433,19 @@ JSON
         bad "live: ${ZUSER1} should have inherited role ${ZROLE}"
     fi
 
-    # 2. idempotent re-run → empty plan
-    plan_out="$("$PM_BIN" sync --dry-run --config-dir "$CFG" 2>/dev/null || true)"
-    if printf '%s' "$plan_out" | grep -qE 'Plan: 0 action'; then
-        ok "live: second sync is idempotent (0 actions)"
+    # 2. idempotent re-run → empty plan (preview is the default now)
+    plan_out="$("$PM_BIN" reconcile --config-dir "$CFG" 2>/dev/null || true)"
+    if printf '%s' "$plan_out" | grep -qiE 'in sync|nothing to do'; then
+        ok "live: second reconcile is idempotent (in sync)"
     else
-        bad "live: second sync should be idempotent"
+        bad "live: second reconcile should be idempotent"
     fi
 
     # 3. terminate alpha → deleted
     cat > "$CFG/users/${ZUSER1}.json" <<JSON
 { "name": "${ZUSER1}", "displayName": "zztest alpha", "primaryEmail": "${ZUSER1}@example.invalid", "state": "terminated" }
 JSON
-    "$PM_BIN" sync --config-dir "$CFG" >/dev/null 2>&1 || true
+    "$PM_BIN" reconcile --apply --config-dir "$CFG" >/dev/null 2>&1 || true
     if "$AK_BIN" list-users 2>/dev/null | jq -e --arg n "$ZUSER1" 'any(.[]; .name == $n)' >/dev/null 2>&1; then
         bad "live: terminated user ${ZUSER1} should be removed"
     else

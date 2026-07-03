@@ -104,9 +104,9 @@ export class CliSiteClient implements SiteClient {
   // ── (2) --deep cascade ──────────────────────────────────────────────
   cascade(manager: "people" | "network", apply: boolean): void {
     if (manager === "people") {
-      // people-manager reconcile now EXISTS (renamed from sync). --dry-run is
-      // the preview; --apply commits.
-      runStreaming(PEOPLE_BIN, apply ? ["reconcile", "--apply"] : ["reconcile", "--dry-run"]);
+      // people-manager reconcile: preview by DEFAULT, --apply commits (same as
+      // network below and every other manager).
+      runStreaming(PEOPLE_BIN, apply ? ["reconcile", "--apply"] : ["reconcile"]);
       return;
     }
     // network

@@ -69,9 +69,9 @@ function usage(): void {
   info(`network-manager ${VERSION} — TAPPaaS network owner + orchestrator (ADR-007 P4 / ADR-008)
 
 Usage:
-  network-manager zone list
+  network-manager zone list [--json]
   network-manager zone exists <name>
-  network-manager zone show <name>            (alias: get)
+  network-manager zone show <name> [--json]   (alias: get)
   network-manager zone add <name> [options]
   network-manager zone delete <name> [--check]
   network-manager reconcile [--apply] [--only <plane>]
@@ -155,6 +155,8 @@ interface Opts {
   noDistribute: boolean;
   // zones-merge
   diff: boolean;
+  // read commands: structured vs human output
+  json: boolean;
 }
 
 function isPlane(s: string): s is Plane {
@@ -174,6 +176,7 @@ function parseOpts(args: string[]): Opts {
     dryRun: false,
     noDistribute: false,
     diff: false,
+    json: false,
   };
   for (let i = 0; i < args.length; i++) {
     const a = args[i];
@@ -237,6 +240,9 @@ function parseOpts(args: string[]): Opts {
       case "--diff":
         o.diff = true;
         break;
+      case "--json":
+        o.json = true;
+        break;
       case "--out":
         o.out = next();
         break;
@@ -271,7 +277,21 @@ function cmdZone(opts: Opts): void {
 
   if (sub === "list") {
     const doc = loadZones(opts.zonesFile);
-    info(JSON.stringify(listZoneNames(doc), null, 2));
+    const names = listZoneNames(doc);
+    // Default is human-readable (name + state + vlan); --json emits the name
+    // array (was always-JSON — the flag is now meaningful, matching site/people).
+    if (opts.json) {
+      info(JSON.stringify(names, null, 2));
+    } else if (names.length === 0) {
+      info("(no zones)");
+    } else {
+      for (const n of names) {
+        const z = getZone(doc, n);
+        const state = z?.state ?? "";
+        const vlan = typeof z?.vlantag === "number" && z.vlantag > 0 ? `vlan ${z.vlantag}` : "";
+        info(`${n.padEnd(16)} ${String(state).padEnd(9)} ${vlan}`.trimEnd());
+      }
+    }
     return;
   }
   if (sub === "exists") {
@@ -291,7 +311,17 @@ function cmdZone(opts: Opts): void {
     if (!z) die(`zone '${name}' not found in ${opts.zonesFile}`);
     const out: Record<string, unknown> = { ...z };
     delete out.name;
-    info(JSON.stringify(out, null, 2));
+    if (opts.json) {
+      info(JSON.stringify(out, null, 2));
+    } else {
+      info(`${GN}zone ${name}${CL}`);
+      for (const [k, v] of Object.entries(out)) {
+        const s = Array.isArray(v)
+          ? v.length ? v.join(", ") : "(none)"
+          : v === "" || v == null ? "(unset)" : String(v);
+        info(`  ${k}: ${s}`);
+      }
+    }
     return;
   }
   if (sub === "add") {

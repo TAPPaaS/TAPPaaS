@@ -369,8 +369,8 @@ step_people_bootstrap() {
     fi
     info "  Bootstrapping People domain: org=${org} user=${user} email=${email}"
     if run "$us" --org "$org" --user "$user" --email "$email"; then
-        run "$pm" reconcile \
-            || { warn "  people-manager reconcile reported issues — the org is in config; re-run 'people-manager reconcile' once identity is reachable."; NEEDS_ACTION=1; }
+        run "$pm" reconcile --apply \
+            || { warn "  people-manager reconcile reported issues — the org is in config; re-run 'people-manager reconcile --apply' once identity is reachable."; NEEDS_ACTION=1; }
     else
         warn "  user-setup.sh failed — people bootstrap skipped."; NEEDS_ACTION=1
     fi

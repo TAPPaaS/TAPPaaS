@@ -63,7 +63,7 @@ done
 # install), create the minimal org + admin/users groups + installer user and
 # sync them into Authentik. Per ADR-007: user-setup.sh copies minimal-org/ into
 # ~tappaas/config/people with the installation name + installer identity
-# substituted; `people-manager sync` then reconciles them into Authentik (via
+# substituted; `people-manager reconcile --apply` then reconciles them into Authentik (via
 # identity-controller). Idempotent: skipped once config/people exists, so re-runs
 # never disturb operator-added people. (Supersedes the old ADR-006 roles-ensure
 # bootstrap — ADR-007 is authoritative.)
@@ -83,7 +83,7 @@ if [[ " ${FAILED[*]} " != *" identity "* ]]; then
       echo ""
       info "${BOLD}── People bootstrap (ADR-007): org=${inst_org} user=${inst_user} ──${CL}"
       if user-setup.sh --org "$inst_org" --user "$inst_user" --email "$inst_email"; then
-        people-manager sync || warn "  people-manager sync reported issues — review the output above."
+        people-manager reconcile --apply || warn "  people-manager reconcile reported issues — review the output above."
       else
         warn "  user-setup.sh failed — people bootstrap skipped (re-run rest-of-foundation.sh)."
       fi
