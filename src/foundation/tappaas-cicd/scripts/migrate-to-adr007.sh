@@ -334,6 +334,48 @@ step_validate() {
 }
 
 # ── Main ─────────────────────────────────────────────────────────────
+# ── Step (people): bootstrap the owner organization + identity ───────
+# The migration analogue of rest-of-foundation.sh's fresh-install people
+# bootstrap. When config/people is empty, create the owner org (named after the
+# site) + installer/root users + the users group + roles via user-setup.sh
+# (config only), then push them to the identity service with
+# `people-manager reconcile`. site.json's owner/organizations already REFERENCE
+# this org (create-site / migrate-configuration set them) — this makes the
+# reference real. Idempotent: skipped once config/people exists (never disturbs
+# operator-added people). Best-effort: a reconcile failure (identity unreachable)
+# leaves the org in config to sync later, and flags a manual follow-up.
+step_people_bootstrap() {
+    info "Step (people): owner organization + identity"
+    local people_dir="${CONFIG_DIR}/people"
+    if [[ -d "$people_dir" && -n "$(ls -A "$people_dir" 2>/dev/null)" ]]; then
+        info "  config/people already populated — skipping (idempotent)."
+        return 0
+    fi
+    if [[ ! -f "$SITE" ]]; then
+        if [[ $DRY_RUN -eq 1 ]]; then info "  (dry-run) would bootstrap the owner org from site.json (org=<site.name>)"; return 0; fi
+        warn "  no site.json yet — skipping people bootstrap (re-run after Step 1)."; NEEDS_ACTION=1; return 0
+    fi
+    local org email user
+    org="$(jq -r '.name // empty' "$SITE" 2>/dev/null || true)"
+    email="$(jq -r '.email // empty' "$SITE" 2>/dev/null || true)"
+    user="${email%@*}"
+    user="$(printf '%s' "$user" | tr '[:upper:]' '[:lower:]' | tr -c 'a-z0-9-' '-' | sed 's/^-*//;s/-*$//')"
+    if [[ -z "$org" || -z "$email" || -z "$user" ]]; then
+        warn "  cannot derive org/user/email from site.json (org='${org}' user='${user}' email='${email}') — skipping people bootstrap."; NEEDS_ACTION=1; return 0
+    fi
+    local us pm; us="$(tool user-setup.sh)"; pm="$(tool people-manager)"
+    if [[ -z "$us" || -z "$pm" ]]; then
+        warn "  user-setup.sh / people-manager not on PATH — skipping people bootstrap."; NEEDS_ACTION=1; return 0
+    fi
+    info "  Bootstrapping People domain: org=${org} user=${user} email=${email}"
+    if run "$us" --org "$org" --user "$user" --email "$email"; then
+        run "$pm" reconcile \
+            || { warn "  people-manager reconcile reported issues — the org is in config; re-run 'people-manager reconcile' once identity is reachable."; NEEDS_ACTION=1; }
+    else
+        warn "  user-setup.sh failed — people bootstrap skipped."; NEEDS_ACTION=1
+    fi
+}
+
 main() {
     # NB: $DRY_RUN is 0/1 — both non-empty — so ${DRY_RUN:+…} always expands. Use a
     # numeric test so the header only says "dry-run" when actually dry-running.
@@ -343,6 +385,7 @@ main() {
 
     step_site
     step_zones_and_envs
+    step_people_bootstrap
     step_firewall
     step_validate
 
