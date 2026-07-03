@@ -151,6 +151,47 @@ else
     no "install --dry-run debian branch rc=${rc}"
 fi
 
+# --- backup role body (ADR-010 P6) ------------------------------------------
+bkp_src="${here}/../../../satellite/debian/provision-backup.sh"
+
+# 18. provision-backup.sh parses
+if [[ -f "${bkp_src}" ]] && bash -n "${bkp_src}"; then ok "provision-backup.sh parses"; else no "provision-backup.sh syntax/missing"; fi
+
+# 19. sat_gen_backup_config renders backup.env + a 0600 token when provided
+echo '{"name":"v","os":"debian","roles":["backup"],"host":{"operatorSshKeys":["k"]},"backup":{"pull":{"homePbsHost":"10.0.0.20","authId":"satellite@pbs!pull"}}}' > "${tmp}/vb.json"
+( . "${here}/lib/provision.sh" >/dev/null 2>&1; TAPPAAS_SAT_PBS_TOKEN="S3CR" sat_gen_backup_config "${tmp}/vb.json" "${tmp}/vbo" )
+if grep -q 'HOME_PBS_HOST="10.0.0.20"' "${tmp}/vbo/backup.env" \
+   && grep -q 'REMOVE_VANISHED="false"' "${tmp}/vbo/backup.env" \
+   && [[ "$(cat "${tmp}/vbo/pbs-remote-token" 2>/dev/null)" == "S3CR" ]] \
+   && [[ "$(stat -f '%Lp' "${tmp}/vbo/pbs-remote-token" 2>/dev/null || stat -c '%a' "${tmp}/vbo/pbs-remote-token" 2>/dev/null)" == "600" ]]; then
+    ok "sat_gen_backup_config renders backup.env + 0600 token"
+else
+    no "sat_gen_backup_config backup.env/token"
+fi
+
+# 20. backup role widens wg AllowedIPs to the home PBS; non-backup does not
+( . "${here}/lib/provision.sh" >/dev/null 2>&1
+  sat_gen_debian_configs "${tmp}/vb.json" "HP=" "${tmp}/vwg" )
+echo '{"name":"w","os":"debian","roles":["reverse-proxy"],"host":{"operatorSshKeys":["k"]}}' > "${tmp}/w2.json"
+( . "${here}/lib/provision.sh" >/dev/null 2>&1
+  sat_gen_debian_configs "${tmp}/w2.json" "HP=" "${tmp}/vwg2" )
+if grep -q '10.0.0.20/32' "${tmp}/vwg/wg-infra.conf" && ! grep -q '10.0.0.20/32' "${tmp}/vwg2/wg-infra.conf"; then
+    ok "backup role widens wg AllowedIPs to home PBS"
+else
+    no "AllowedIPs widening"
+fi
+
+# 21. install --dry-run: backup+debian plans the pull; backup+nixos is skipped
+echo '{ "kind":"external-host","tier":"foundation","name":"bd","os":"debian","roles":["backup"],"host":{"publicIp":"203.0.113.9","operatorSshKeys":["ssh-ed25519 K o@w"]},"backup":{"pull":{"homePbsHost":"10.0.0.20"}} }' > "${tmp}/satellite-bd.json"
+out="$(TAPPAAS_CONFIG_DIR="${tmp}" "${mgr}" install bd --dry-run 2>&1)" || true
+echo '{ "kind":"external-host","tier":"foundation","name":"bn","os":"nixos","roles":["backup"],"host":{"publicIp":"203.0.113.9","operatorSshKeys":["ssh-ed25519 K o@w"]} }' > "${tmp}/satellite-bn.json"
+outn="$(TAPPAAS_CONFIG_DIR="${tmp}" "${mgr}" install bn --dry-run 2>&1)" || true
+if grep -q "pull sync-job" <<< "${out}" && grep -qi "SKIPPED" <<< "${outn}"; then
+    ok "install --dry-run backup: debian plans pull, nixos skipped"
+else
+    no "install --dry-run backup branch"
+fi
+
 echo ""
 echo "satellite-manager fast tests: ${pass} passed, ${fail} failed"
 [[ "${fail}" -eq 0 ]]

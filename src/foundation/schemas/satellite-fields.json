@@ -21,9 +21,14 @@
     "host.sshUser": { "type": "string", "default": "root" },
     "host.operatorSshKeys": { "type": "array<string>", "required": true, "note": "standing root SSH key(s) baked into the NixOS satellite (operator out-of-band key; NOT a tappaas-cicd key — §7.3)" },
 
-    "backup.s3.endpoint": { "type": "string", "example": "https://hel1.your-objectstorage.com", "note": "backup role only; operator's S3 endpoint" },
-    "backup.s3.bucket": { "type": "string", "note": "backup role only; the Object-Lock bucket (must be created with Object Lock enabled)" },
-    "backup.backend": { "type": "string", "default": "s3", "required": false, "note": "advanced override; 'volume' for a dedicated block volume instead of S3" }
+    "backup.datastore.name": { "type": "string", "default": "tappaas-offsite", "required": false, "note": "backup role; local PBS datastore that receives the pull (default local ZFS/dir)" },
+    "backup.datastore.path": { "type": "string", "default": "/srv/pbs/tappaas-offsite", "required": false, "note": "backup role; datastore path (put on a ZFS dataset for a real vault — create the pool on the host first)" },
+    "backup.pull.homePbsHost": { "type": "string", "required": false, "note": "backup role; HOME PBS address reachable over the tunnel (the satellite PULLS from it). Added to wg AllowedIPs + an OPNsense edge->PBS:8007 rule." },
+    "backup.pull.homeDatastore": { "type": "string", "default": "tappaas", "required": false, "note": "backup role; the home datastore to pull" },
+    "backup.pull.authId": { "type": "string", "example": "satellite@pbs!pull", "required": false, "note": "backup role; the READ-ONLY home PBS API token id. The token SECRET is out-of-band (TAPPAAS_SAT_PBS_TOKEN[_FILE]), NEVER in this JSON (§7)." },
+    "backup.pull.fingerprint": { "type": "string", "required": false, "note": "backup role; home PBS TLS cert fingerprint" },
+    "backup.pull.schedule": { "type": "string", "default": "daily", "required": false, "note": "backup role; pull sync-job schedule (PBS calendar event)" },
+    "backup.s3": { "type": "object", "required": false, "note": "OPTIONAL alternative backend (endpoint/bucket) instead of a local ZFS datastore. NOTE: PBS does NOT support S3 Object Lock — enabling it CORRUPTS the datastore (Bugzilla #6780). Immutability comes from the PULL model, not Object Lock." }
   },
 
   "derived": {
@@ -31,7 +36,7 @@
     "tunnel": "satelliteAddr/homeAddr = a dedicated /31 (default 10.255.0.0/31, auto-allocated per satellite); wgPort 51820 (config knob only if hostile egress needs 443/udp); PersistentKeepalive 25",
     "reverseProxy": "forwarder nginx stream; :80 redirect via Caddy; SNI '*' (single-site passthrough); proxyProtocol off until the Caddy side supports it (§2)",
     "adminVpn": "terminates on OPNsense (always) into the admin overlay zone; adminWgPort 51821; admin-side MTU ~1340",
-    "backup": "pull direction; --remove-vanished false; client-side encryption at home; S3 Object-Lock (mode compliance, retention 30d); namespace remote/<name>",
+    "backup": "PULL model (Debian satellite runs official PBS, pulls from home over the tunnel, owns prune/GC); --remove-vanished false; client-side encryption key stays home (§3.2); local datastore (default ZFS) into namespace remote/<name>; immutability = pull direction + destination-owned retention (NOT S3 Object Lock — PBS can't do it, #6780)",
     "update": "mode always pull (autoUpgrade from a pinned/signed ref); the cluster never pushes (§7.3)"
   }
 }

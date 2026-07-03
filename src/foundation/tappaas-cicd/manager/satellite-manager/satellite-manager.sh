@@ -201,6 +201,13 @@ cmd_install() {
         info "   4. read back the satellite wg pubkey (operator key via ssh-agent)"
         info "   5. OPNsense: create peer '${cname}' (serveraddress=${ip}:${wgport}, keepalive=${ka}); link; reconfigure"
         info "   6. verify handshake"
+        if [[ ",${roles}," == *,backup,* ]]; then
+            if [[ "${sat_os}" == "debian" ]]; then
+                info "   7. backup: OPNsense edge->home-PBS:${SAT_HOME_PBS_PORT} rule; install proxmox-backup-server; datastore; pull sync-job from home (--remove-vanished false)"
+            else
+                info "   7. backup: SKIPPED — needs --os debian (official PBS, D19)"
+            fi
+        fi
         return 0
     fi
 
@@ -266,7 +273,27 @@ cmd_install() {
     info "  [6/6] verify handshake"
     sleep 12
     info "    peer: $(ow_peer_status)"
-    info "${GN}✓${CL} satellite '${name}' provisioned. (DNS + role bodies: P4-P6.)"
+
+    # backup role (P6): after the tunnel is up, wire the OPNsense edge->home-PBS:8007
+    # rule and install the satellite PBS body (pull from home). Debian only (D19).
+    if [[ ",${roles}," == *,backup,* ]]; then
+        if [[ "${sat_os}" != "debian" ]]; then
+            warn "  [backup] role skipped: backup requires --os debian (official PBS; D19). Re-provision with --os debian."
+        else
+            info "  [backup] OPNsense edge -> home PBS:${SAT_HOME_PBS_PORT} + satellite PBS body"
+            local pbs_host; pbs_host="$(jq -r '.backup.pull.homePbsHost // empty' "${cfg}")"
+            if [[ -n "${pbs_host}" ]]; then
+                sat_ensure_edge_pbs_rule "${pbs_host}" >/dev/null || warn "    edge->PBS rule failed (add it manually)"
+            else
+                warn "    no backup.pull.homePbsHost in config — skipping edge->PBS rule (datastore-only)"
+            fi
+            local bdir; bdir="$(mktemp -d)"
+            sat_gen_backup_config "${cfg}" "${bdir}"
+            sat_assemble_backup_deploy "${bdir}"
+            sat_provision_backup "${bdir}" "${target}" || warn "    backup provisioning reported an issue (see above)"
+        fi
+    fi
+    info "${GN}✓${CL} satellite '${name}' provisioned."
 }
 
 cmd_remove() {
