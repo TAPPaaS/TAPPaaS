@@ -30,6 +30,7 @@ const BIN = {
   update: process.env.MM_UPDATE_BIN ?? "update-module.sh",
   delete: process.env.MM_DELETE_BIN ?? "delete-module.sh",
   reconcile: process.env.MM_RECONCILE_BIN ?? "reconcile-module.sh",
+  inspect: process.env.MM_INSPECT_BIN ?? "inspect-vm.sh",
   test: process.env.MM_TEST_BIN ?? "test-module.sh",
   snapshot: process.env.MM_SNAPSHOT_BIN ?? "snapshot-vm.sh",
 };
@@ -85,6 +86,13 @@ export class CliModuleClient implements ModuleClient {
     if (opts.silent) args.push("--silent");
     args.push(module);
     return run(BIN.reconcile, args);
+  }
+
+  // Read-only three-way drift inspect (the DEFAULT `reconcile`, no --apply). Runs
+  // inspect-vm.sh, which prints the Released/Desired/Actual table for a VM module
+  // and a config-only Released/Desired diff for a non-VM module (no vmid).
+  inspect(module: string): number {
+    return run(BIN.inspect, [module]);
   }
 
   test(module: string, opts: TestOptions): number {

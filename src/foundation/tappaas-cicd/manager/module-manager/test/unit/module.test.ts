@@ -150,14 +150,42 @@ const CONFIG =
   check(rc === 1 && c2.log.length === 0, "delete --archive + --remove is rejected (no invocation)");
 }
 
-// ── 8. reconcile is its OWN leaf converge (reconcile-module.sh, NOT modify) ─
+// ── 8. reconcile: DEFAULT = read-only inspect; --apply = leaf converge ──────
 {
+  // DEFAULT (no --apply) is the read-only three-way drift inspect (inspect-vm.sh).
+  const ci = new FakeModuleClient();
+  run(["module", "reconcile", "nextcloud"], ci);
+  check(
+    ci.log.length === 1 && ci.log[0].verb === "inspect" && ci.log[0].module === "nextcloud",
+    "reconcile (no --apply) runs the read-only inspect (NOT reconcile-module)",
+  );
+
+  // --apply delegates to reconcile-module.sh (its OWN leaf converge, NOT modify).
   const c = new FakeModuleClient();
-  run(["module", "reconcile", "nextcloud", "--environment", "foo"], c);
-  check(c.log.length === 1 && c.log[0].verb === "reconcile", "reconcile delegates to reconcile-module (NOT update/modify)");
+  run(["module", "reconcile", "nextcloud", "--apply", "--environment", "foo"], c);
+  check(
+    c.log.length === 1 && c.log[0].verb === "reconcile",
+    "reconcile --apply delegates to reconcile-module (NOT update/modify)",
+  );
   check(
     (c.log[0].opts as { environment?: string }).environment === "foo",
-    "reconcile forwards --environment",
+    "reconcile --apply forwards --environment",
+  );
+}
+
+// ── 8b. list --diff runs the per-module inspect rollup ──────────────────────
+{
+  const c = new FakeModuleClient();
+  const rc = run(["module", "list", "--diff", "--config-dir", CONFIG], c);
+  check(rc === 0, "list --diff returns 0 when every module inspect passes");
+  check(
+    c.log.length > 0 && c.log.every((l) => l.verb === "inspect"),
+    "list --diff runs an inspect per deployed module",
+  );
+  const modsInDiff = c.log.map((l) => l.module);
+  check(
+    modsInDiff.includes("nextcloud") && modsInDiff.includes("templates"),
+    "list --diff covers VM and provider-only modules alike",
   );
 }
 

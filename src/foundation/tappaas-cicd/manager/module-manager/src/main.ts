@@ -62,18 +62,24 @@ const HELP: HelpSpec = {
   version: VERSION,
   tagline: "TAPPaaS module lifecycle manager (ADR-007 #3)",
   verbs: [
-    { usage: "module list", name: "module list" },
-    { usage: "module show <module>", name: "module show" },
     {
-      usage: "module validate [<module>] [--allow-fork]",
-      name: "module validate",
+      usage: "list [--diff] [--json]",
+      name: "list",
+      options: [
+        ["--diff", "Per-module three-way (released/desired/running) drift rollup across every module."],
+      ],
+    },
+    { usage: "show <module> [--json]", name: "show" },
+    {
+      usage: "validate [<module>] [--allow-fork]",
+      name: "validate",
       options: [["--allow-fork", "Permit forked/non-canonical module sources (relax tier/source lint)."]],
     },
     {
-      usage: "module add <module> [--environment ENV] [--allow-fork] [--force] [--reinstall] [--<field> <value>]...",
-      name: "module add",
+      usage: "add <module> [--environment ENV] [--allow-fork] [--force] [--reinstall] [--<field> <value>]...",
+      name: "add",
       options: [
-        ["--environment ENV", "Target environment/variant to install into."],
+        ["--environment ENV", "Target environment to install into (default: foundation→mgmt, else the org env)."],
         ["--allow-fork", "Permit forked/non-canonical module sources."],
         ["--force", "Proceed despite warnings / overwrite an existing deployment."],
         ["--reinstall", "Reinstall even if the module is already deployed."],
@@ -81,10 +87,10 @@ const HELP: HelpSpec = {
       ],
     },
     {
-      usage: "module modify <module> [--environment ENV] [--force] [--no-snapshot] [--debug] [--silent]",
-      name: "module modify",
+      usage: "modify <module> [--environment ENV] [--force] [--no-snapshot] [--debug] [--silent]",
+      name: "modify",
       options: [
-        ["--environment ENV", "Target environment/variant to modify."],
+        ["--environment ENV", "Target environment to modify."],
         ["--force", "Proceed despite warnings during the re-apply."],
         ["--no-snapshot", "Skip the pre-change VM snapshot."],
         ["--debug", "Verbose diagnostic output."],
@@ -92,28 +98,29 @@ const HELP: HelpSpec = {
       ],
     },
     {
-      usage: "module delete <module> [--archive|--remove] [--vmid ID] [--environment ENV] [--yes] [--force]",
-      name: "module delete",
+      usage: "delete <module> [--archive|--remove] [--vmid ID] [--environment ENV] [--yes] [--force]",
+      name: "delete",
       options: [
         ["--archive", "Archive the module config (default; mutually exclusive with --remove)."],
         ["--remove", "Fully remove the module config (mutually exclusive with --archive)."],
         ["--vmid ID", "Target a specific VM id."],
-        ["--environment ENV", "Target environment/variant to delete from."],
-        ["--yes", "Assume yes to confirmation prompts (also -y)."],
-        ["--force", "Proceed despite warnings."],
+        ["--environment ENV", "Target environment to delete from."],
+        ["--yes", "Skip the VM-destroy confirmation prompt, for automation (also -y)."],
+        ["--force", "Proceed despite warnings; also implies --yes + --remove."],
       ],
     },
     {
-      usage: "module reconcile <module> [--environment ENV] [--no-snapshot]",
-      name: "module reconcile",
+      usage: "reconcile <module> [--apply] [--environment ENV] [--no-snapshot]",
+      name: "reconcile",
       options: [
-        ["--environment ENV", "Target environment/variant to reconcile."],
-        ["--no-snapshot", "Skip any pre-change VM snapshot (leaf re-apply is idempotent)."],
+        ["--apply", "Converge the module's config → VM/service. Default is a read-only three-way (released/desired/running) drift INSPECT."],
+        ["--environment ENV", "Target environment to reconcile."],
+        ["--no-snapshot", "Skip any pre-change VM snapshot (--apply; leaf re-apply is idempotent)."],
       ],
     },
     {
-      usage: "module test <module> [--deep] [--vmid ID] [--zone0 ZONE]",
-      name: "module test",
+      usage: "test <module> [--deep] [--vmid ID] [--zone0 ZONE]",
+      name: "test",
       options: [
         ["--deep", "Run the deep/regression test suite, not just the smoke test."],
         ["--vmid ID", "Target a specific VM id."],
@@ -121,8 +128,8 @@ const HELP: HelpSpec = {
       ],
     },
     {
-      usage: "module snapshot-vm <module> [--list|--cleanup N|--restore N]",
-      name: "module snapshot-vm",
+      usage: "snapshot-vm <module> [--list|--cleanup N|--restore N]",
+      name: "snapshot-vm",
       options: [
         ["--list", "List existing VM snapshots (default action is to create one)."],
         ["--cleanup N", "Prune snapshots, keeping the N most recent."],
@@ -135,10 +142,13 @@ const HELP: HelpSpec = {
     ["--json", "Machine-readable output (list / show / validate)."],
   ],
   notes: [
+    "The 'module' entity keyword is OPTIONAL (module is the only entity), so both\n" +
+      "'module-manager list' and 'module-manager module list' work.",
     `Verbs map (ADR-007 verb alignment):
   add=install-module  modify=update-module  delete=delete-module
-  test=test-module    validate=tier/source lint  reconcile=leaf re-apply
-  list/show are new (TS, read config/*.json).  snapshot-vm stays a special verb.`,
+  test=test-module    validate=tier/source lint
+  reconcile=inspect drift (default) / --apply=leaf re-apply (was health show vm)
+  list [--diff] reads config/*.json (+ live drift with --diff). snapshot-vm is special.`,
   ],
 };
 
@@ -150,6 +160,8 @@ function usage(): void {
 interface Opts {
   configDir: string;
   json: boolean;
+  diff: boolean;
+  apply: boolean;
   // lifecycle flags
   environment?: string;
   allowFork: boolean;
@@ -177,6 +189,8 @@ function parseOpts(args: string[]): Opts {
   const o: Opts = {
     configDir: defaultConfigDir(),
     json: false,
+    diff: false,
+    apply: false,
     allowFork: false,
     force: false,
     reinstall: false,
@@ -214,6 +228,10 @@ function parseOpts(args: string[]): Opts {
       o.snapRestore = parseIntStrict(next(), "--restore");
     } else if (a === "--json") {
       o.json = true;
+    } else if (a === "--diff") {
+      o.diff = true;
+    } else if (a === "--apply") {
+      o.apply = true;
     } else if (a === "--allow-fork") {
       o.allowFork = true;
     } else if (a === "--force") {
@@ -260,7 +278,8 @@ function parseIntStrict(s: string, flag: string): number {
 }
 
 // ── CONFIG-layer verbs (pure TS over config/*.json) ────────────────────
-function cmdList(opts: Opts): number {
+function cmdList(opts: Opts, client: ModuleClient): number {
+  if (opts.diff) return cmdListDiff(opts, client);
   const mods = listModules(opts.configDir);
   if (opts.json) {
     // Machine-readable: emit a stable summary object per module (the cascade
@@ -282,15 +301,45 @@ function cmdList(opts: Opts): number {
     info(`(no deployed modules in ${opts.configDir})`);
     return 0;
   }
-  // Tabular human view: name, vmid, node, zone0, status.
-  for (const m of mods) {
-    const vmid = m.vmid != null ? String(m.vmid) : "-";
-    const node = m.node ?? "-";
-    const zone = m.zone0 ?? "-";
-    const status = m.status ?? "active";
-    info(`${m.name}\tvmid=${vmid}\tnode=${node}\tzone0=${zone}\t[${status}]`);
-  }
+  // Column-aligned table with a header (was tab-separated — misaligned when the
+  // names differ in width). Columns: NAME VMID NODE ZONE ENV STATUS.
+  const headers = ["NAME", "VMID", "NODE", "ZONE", "ENV", "STATUS"];
+  const rows = mods.map((m) => [
+    m.name,
+    m.vmid != null ? String(m.vmid) : "-",
+    m.node ?? "-",
+    m.zone0 ?? "-",
+    m.environment ?? "-",
+    m.status ?? "active",
+  ]);
+  const w = headers.map((h, i) => Math.max(h.length, ...rows.map((r) => r[i].length)));
+  const fmt = (cells: string[]): string => cells.map((c, i) => c.padEnd(w[i])).join("  ").trimEnd();
+  info(`${GN}${fmt(headers)}${CL}`);
+  for (const r of rows) info(fmt(r));
   return 0;
+}
+
+// list --diff — the per-module three-way (Released/Desired/Actual) drift rollup.
+// Iterates every deployed module config and runs the same read-only inspect that
+// `reconcile <module>` (no --apply) runs — inspect-vm.sh — printing its table per
+// module (with a config-only fallback for non-VM modules). This is what used to
+// be `health-manager list vm --diff`. Returns non-zero if ANY module's inspect
+// exits non-zero (e.g. an unreachable node), so the rollup surfaces failures.
+function cmdListDiff(opts: Opts, client: ModuleClient): number {
+  const mods = listModules(opts.configDir);
+  if (mods.length === 0) {
+    info(`(no deployed modules in ${opts.configDir})`);
+    return 0;
+  }
+  info(`${GN}Per-module three-way drift (Released[git] / Desired[~/config] / Actual[running VM]):${CL}`);
+  let worst = 0;
+  for (const m of mods) {
+    info("");
+    info(`${GN}── ${m.name} ──${CL}`);
+    const rc = client.inspect(m.name);
+    if (rc !== 0) worst = rc;
+  }
+  return worst;
 }
 
 function cmdShow(opts: Opts): number {
@@ -381,20 +430,29 @@ function cmdTest(opts: Opts, client: ModuleClient): number {
   return client.test(module, t);
 }
 
-// reconcile = the LEAF re-apply (current config → VM/service). Per ADR-007 it is
-// distinct from `modify`: reconcile re-applies the EXISTING config (idempotent
-// converge), while modify CHANGES the config first then applies. This is the
-// leaf the `reconcile --deep` cascade (site → environment → module) depends on,
-// so it must be idempotent.
+// reconcile — DEFAULT (no --apply) is a READ-ONLY three-way drift INSPECT:
+// Released[git/source] / Desired[~/config] / Actual[running VM]. This is the
+// inspect that used to live in `health-manager show vm <module>` (backed by
+// inspect-vm.sh); for a non-VM module (no vmid) it falls back to a config-only
+// Released-vs-Desired diff (there is no running VM) and still exits 0.
 //
-// Wired to reconcile-module.sh — a purpose-built lighter converge that re-runs
-// the module's dependency *-service.sh applies + the module's own update.sh/
-// install.sh ONLY: NO snapshot, NO pre/post tests, NO 3-way merge, NO updateTime
-// bump. (update-module.sh / `module modify` does all of those — that is the
-// difference between the two verbs.)
+// WITH --apply it is the LEAF re-apply (current config → VM/service). Per ADR-007
+// that is distinct from `modify`: reconcile re-applies the EXISTING config
+// (idempotent converge), while modify CHANGES the config first then applies. It
+// is the leaf the `reconcile --deep` cascade (site → environment → module)
+// depends on, so it must be idempotent.
+//
+// The converge is wired to reconcile-module.sh — a purpose-built lighter converge
+// that re-runs the module's dependency *-service.sh applies + the module's own
+// update.sh/install.sh ONLY: NO snapshot, NO pre/post tests, NO 3-way merge, NO
+// updateTime bump. (update-module.sh / `module modify` does all of those.)
 function cmdReconcile(opts: Opts, client: ModuleClient): number {
   const module = opts.rest[0];
   if (!module) die("reconcile: expected <module>");
+  if (!opts.apply) {
+    // Read-only three-way drift report (inspect-vm.sh). No config change.
+    return client.inspect(module);
+  }
   const r: ReconcileOptions = {
     environment: opts.environment,
     debug: opts.debug,
@@ -427,7 +485,7 @@ function cmdSnapshot(opts: Opts, client: ModuleClient): number {
 function dispatch(verb: string, opts: Opts, client: ModuleClient): number {
   switch (verb) {
     case "list":
-      return cmdList(opts);
+      return cmdList(opts, client);
     case "show":
       return cmdShow(opts);
     case "validate":

@@ -95,6 +95,11 @@ export interface ModuleClient {
   // reconcile-module.sh [opts] <module>  (the LEAF converge: re-apply current
   // config — NO snapshot/test/merge/updateTime; distinct from modify)
   reconcile(module: string, opts: ReconcileOptions): number;
+  // inspect-vm.sh <module>  (READ-ONLY three-way drift report:
+  // Released[git] / Desired[~/config] / Actual[running VM]; config-only fallback
+  // when the module has no vmid). Backs `reconcile` WITHOUT --apply and, per
+  // module, the `list --diff` rollup.
+  inspect(module: string): number;
   // test-module.sh [opts] <module>
   test(module: string, opts: TestOptions): number;
   // snapshot-vm.sh <module> [action]

@@ -17,10 +17,11 @@ import {
 } from "../../src/types";
 
 export interface Invocation {
-  verb: "add" | "modify" | "delete" | "reconcile" | "test" | "snapshot";
+  verb: "add" | "modify" | "delete" | "reconcile" | "inspect" | "test" | "snapshot";
   module: string;
-  // The forwarded options, captured for assertions.
-  opts:
+  // The forwarded options, captured for assertions. `inspect` forwards no
+  // options (it is a bare read-only inspect call), so it is optional.
+  opts?:
     | AddOptions
     | ModifyOptions
     | DeleteOptions
@@ -47,6 +48,10 @@ export class FakeModuleClient implements ModuleClient {
   }
   reconcile(module: string, opts: ReconcileOptions): number {
     this.log.push({ verb: "reconcile", module, opts });
+    return this.rc;
+  }
+  inspect(module: string): number {
+    this.log.push({ verb: "inspect", module });
     return this.rc;
   }
   test(module: string, opts: TestOptions): number {

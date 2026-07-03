@@ -52,10 +52,6 @@ NODE=$(get_config_value 'node' 'tappaas1')
 VMNAME=$(get_config_value 'vmname' '')
 [[ -z "${VMNAME}" ]] && VMNAME="${MODULE}"
 
-if [[ -z "${VMID}" ]]; then
-    die "No vmid defined in ${MODULE_JSON}"
-fi
-
 NODE_FQDN="${NODE}.${MGMT}.internal"
 
 # ── Locate git source JSON ───────────────────────────────────────────
@@ -74,31 +70,9 @@ if [[ -z "${GIT_JSON}" ]]; then
     warn "Git column will show 'N/A'"
 fi
 
-info "${BOLD}TAPPaaS VM Inspection: ${BL}${VMNAME}${CL} (VMID: ${VMID}) on ${NODE}"
-echo ""
-
-# ── Get actual VM config from Proxmox ────────────────────────────────
-
-ACTUAL_CONFIG=$(ssh -o ConnectTimeout=5 root@"${NODE_FQDN}" \
-    "qm config ${VMID}" 2>/dev/null) \
-    || die "Failed to get VM config from Proxmox (VMID: ${VMID} on ${NODE})"
-
-# Parse actual values into associative array
-declare -A ACTUAL
-while IFS=': ' read -r key value; do
-    [[ -z "${key}" ]] && continue
-    ACTUAL["${key}"]="${value}"
-done <<< "${ACTUAL_CONFIG}"
-
-# Also get VM status for running state
-VM_STATUS=$(ssh root@"${NODE_FQDN}" "qm status ${VMID}" 2>/dev/null | awk '{print $2}') || VM_STATUS="unknown"
-
-# Get actual node where VM is currently running (may differ from config if migrated)
-ACTUAL_NODE=$(ssh root@"${NODE_FQDN}" \
-    "pvesh get /cluster/resources --type vm --output-format json 2>/dev/null" \
-    | jq -r --argjson id "${VMID}" '.[] | select(.vmid == $id) | .node // empty') || ACTUAL_NODE=""
-
-# ── Helper: get config value ─────────────────────────────────────────
+# ── Helpers: read a normalized field from the deployed config / git source ──
+# Defined early so the config-only fallback (non-VM module, no vmid) can reuse
+# them without needing the live-VM machinery below.
 
 get_cfg() {
     # Normalize Pattern A → flat so .<key> resolves the same regardless of on-disk shape.
@@ -110,8 +84,6 @@ get_git() {
         normalize_module_config < "${GIT_JSON}" 2>/dev/null | jq -r --arg k "$1" '.[$k] // empty' 2>/dev/null
     fi
 }
-
-# ── Helper: format comparison row ────────────────────────────────────
 
 WARNINGS=0
 ERRORS=0
@@ -147,6 +119,63 @@ print_row() {
         "${cfg_color}" "${config_val:--}" "${CL}" \
         "${act_color}" "${actual_val:--}" "${CL}"
 }
+
+# ── Config-only fallback: NON-VM module (no vmid) ────────────────────────
+# Some modules (cluster, templates, other provider-only foundation modules) have
+# NO VM, hence no vmid and no running guest to query. For those the three-way
+# report degrades to a TWO-way Released(git)-vs-Desired(~/config) config diff —
+# the Actual column is N/A because there is no VM. Print that and exit 0 (this is
+# a report, not a failure).
+if [[ -z "${VMID}" ]]; then
+    info "${BOLD}TAPPaaS Module Inspection: ${BL}${MODULE}${CL} (no VM — vmid not set)"
+    echo ""
+    printf "  ${BOLD}%-18s  %-20s  %-20s  %-20s${CL}\n" "Field" "Released (Git)" "Desired (~/config)" "Actual"
+    printf "  %-18s  %-20s  %-20s  %-20s\n" "------------------" "--------------------" "--------------------" "--------------------"
+    # Compare the config-level fields that a non-VM module can carry. No live
+    # column (Actual = N/A) since there is no running guest.
+    for f in vmname node zone0 zone1 tier source status environment cores memory diskSize storage description; do
+        cfg_v=$(get_cfg "${f}")
+        git_v=$(get_git "${f}")
+        # Skip fields absent from BOTH config and git — keep the table tight.
+        [[ -z "${cfg_v}" && -z "${git_v}" ]] && continue
+        print_row "${f}" "${cfg_v}" "${git_v}" ""
+    done
+    echo ""
+    warn "no VM (vmid) — running/Actual column N/A (config-only Released-vs-Desired diff)"
+    if [[ "${WARNINGS}" -eq 0 ]]; then
+        info "${GN}Config inspection passed — no config-vs-git discrepancies found${CL}"
+    else
+        warn "${WARNINGS} field(s) differ between config and git (${YW}yellow${CL})"
+    fi
+    exit 0
+fi
+
+info "${BOLD}TAPPaaS VM Inspection: ${BL}${VMNAME}${CL} (VMID: ${VMID}) on ${NODE}"
+echo ""
+
+# ── Get actual VM config from Proxmox ────────────────────────────────
+
+ACTUAL_CONFIG=$(ssh -o ConnectTimeout=5 root@"${NODE_FQDN}" \
+    "qm config ${VMID}" 2>/dev/null) \
+    || die "Failed to get VM config from Proxmox (VMID: ${VMID} on ${NODE})"
+
+# Parse actual values into associative array
+declare -A ACTUAL
+while IFS=': ' read -r key value; do
+    [[ -z "${key}" ]] && continue
+    ACTUAL["${key}"]="${value}"
+done <<< "${ACTUAL_CONFIG}"
+
+# Also get VM status for running state
+VM_STATUS=$(ssh root@"${NODE_FQDN}" "qm status ${VMID}" 2>/dev/null | awk '{print $2}') || VM_STATUS="unknown"
+
+# Get actual node where VM is currently running (may differ from config if migrated)
+ACTUAL_NODE=$(ssh root@"${NODE_FQDN}" \
+    "pvesh get /cluster/resources --type vm --output-format json 2>/dev/null" \
+    | jq -r --argjson id "${VMID}" '.[] | select(.vmid == $id) | .node // empty') || ACTUAL_NODE=""
+
+# get_cfg / get_git / print_row (+ WARNINGS/ERRORS) are defined earlier, above the
+# vmid gate, so the config-only fallback can reuse them.
 
 # ── Helper: format a VLAN tag for display ────────────────────────────
 # Proxmox tag=0 means untagged — identical to carrying no tag at all. Collapse
