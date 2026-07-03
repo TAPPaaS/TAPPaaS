@@ -70,7 +70,11 @@ fi
 ZONE="${TAPPAAS_ZONE0_OVERRIDE:-$(get_config_value 'zone0' 'srv-home')}"  # override: issue #196
 _V=$(get_config_value 'variant' '' 2>/dev/null || echo '')
 TAPPAAS_DOMAIN=$(jq -r '.domain // empty' <<<"$(get_variant_config "${_V}" 2>/dev/null || echo '{}')")
-[[ -z "${TAPPAAS_DOMAIN}" ]] && TAPPAAS_DOMAIN=$(jq -r '.tappaas.domain // empty' "${SYSTEM_CONFIG}" 2>/dev/null)
+# Legacy fallback: configuration.json is retired (ADR-007) and absent on a fresh
+# install; guard with -f + `|| true` so a missing file cannot abort under set -e.
+if [[ -z "${TAPPAAS_DOMAIN}" && -f "${SYSTEM_CONFIG}" ]]; then
+    TAPPAAS_DOMAIN=$(jq -r '.tappaas.domain // empty' "${SYSTEM_CONFIG}" 2>/dev/null) || TAPPAAS_DOMAIN=""
+fi
 
 PROXY_DOMAIN=$(get_config_value 'proxyDomain' '')
 if [[ -z "${PROXY_DOMAIN}" && -n "${TAPPAAS_DOMAIN}" ]]; then
