@@ -34,7 +34,7 @@ else
     readonly FIREWALL_JSON="${CONFIG_DIR}/firewall.json"
 fi
 
-info "network:rules update-service for module: ${BL}${MODULE}${CL}"
+debug "network:rules update-service for module: ${BL}${MODULE}${CL}"
 
 if [[ ! -f "${MODULE_JSON}" ]]; then
     die "Module config not found: ${MODULE_JSON}"
@@ -54,4 +54,4 @@ rules-manager reconcile "${MODULE}" \
     --no-ssl-verify \
     || die "rules-manager reconcile failed for ${MODULE}"
 
-info "${GN}network:rules update-service completed for ${MODULE}${CL}"
+debug "${GN}network:rules update-service completed for ${MODULE}${CL}"

@@ -97,7 +97,7 @@ STORAGE="$(cfg 'storage' 'tanka1')"
 
 readonly HA_RULE_NAME="ha-${MODULE}"
 
-info "${BOLD}cluster:ha update-service: reconciling ${BL}${MODULE}${CL} (VMID ${VMID})"
+debug "${BOLD}cluster:ha update-service: reconciling ${BL}${MODULE}${CL} (VMID ${VMID})"
 [[ "${CHECK_MODE}" == "1" ]] && warn "  CHECK MODE — drift will be reported, not applied"
 
 # ── Single-node / no-failover guard ──────────────────────────────────
@@ -111,7 +111,7 @@ if [[ "${HANODE}" == "${DESIRED_PRIMARY}" ]]; then
     exit 1
 fi
 
-info "  Desired: primary=${BL}${DESIRED_PRIMARY}${CL}, failover=${BL}${HANODE}${CL}, schedule=${REPL_SCHEDULE}"
+debug "  Desired: primary=${BL}${DESIRED_PRIMARY}${CL}, failover=${BL}${HANODE}${CL}, schedule=${REPL_SCHEDULE}"
 
 # ── Locate the VM's actual node + status (cluster-wide) ──────────────
 
@@ -132,7 +132,7 @@ done
 
 [[ -z "${actual_node}" ]] && die "VM ${VMID} (${MODULE}) not found on the cluster — is it installed?"
 NODE_FQDN="${actual_node}.${MGMT}.internal"
-info "  VM ${VMID} is on node ${BL}${actual_node}${CL} (status: ${vm_status})"
+debug "  VM ${VMID} is on node ${BL}${actual_node}${CL} (status: ${vm_status})"
 
 # ── Read live HA / replication state ─────────────────────────────────
 
@@ -217,15 +217,15 @@ fi
 # ── Report ───────────────────────────────────────────────────────────
 
 if [[ ${#CHANGES[@]} -eq 0 ]]; then
-    info "  ${GN}✓${CL} HA config is in sync with config — no changes needed"
+    debug "  ${GN}✓${CL} HA config is in sync with config — no changes needed"
     exit 0
 fi
 
-info "  Detected drift:"
-for c in "${CHANGES[@]}"; do info "    • ${c}"; done
+debug "  Detected drift:"
+for c in "${CHANGES[@]}"; do debug "    • ${c}"; done
 
 if [[ "${CHECK_MODE}" == "1" ]]; then
-    info "  CHECK MODE — no changes applied"
+    debug "  CHECK MODE — no changes applied"
     exit 0
 fi
 
@@ -244,25 +244,25 @@ fi
 # ── Apply ────────────────────────────────────────────────────────────
 
 if [[ ${DO_ADD_RESOURCE} -eq 1 ]]; then
-    info "  Adding VM ${VMID} to HA resources (state=started)..."
+    debug "  Adding VM ${VMID} to HA resources (state=started)..."
     ssh "${SSH_OPTS[@]}" "root@${NODE_FQDN}" \
         "ha-manager add vm:${VMID} --state started" >/dev/null || die "ha-manager add failed"
 fi
 
 if [[ ${DO_SET_STATE} -eq 1 ]]; then
-    info "  Setting HA resource vm:${VMID} state=started..."
+    debug "  Setting HA resource vm:${VMID} state=started..."
     ssh "${SSH_OPTS[@]}" "root@${NODE_FQDN}" \
         "ha-manager set vm:${VMID} --state started" >/dev/null || die "ha-manager set failed"
 fi
 
 if [[ ${DO_SET_RULE} -eq 1 ]]; then
     if [[ ${RULE_EXISTS} -eq 1 ]]; then
-        info "  Updating node-affinity rule ${HA_RULE_NAME} → ${DESIRED_NODES}..."
+        debug "  Updating node-affinity rule ${HA_RULE_NAME} → ${DESIRED_NODES}..."
         ssh "${SSH_OPTS[@]}" "root@${NODE_FQDN}" \
             "ha-manager rules set node-affinity ${HA_RULE_NAME} --nodes ${DESIRED_NODES} --resources vm:${VMID}" \
             >/dev/null || die "ha-manager rules set failed"
     else
-        info "  Creating node-affinity rule ${HA_RULE_NAME} → ${DESIRED_NODES}..."
+        debug "  Creating node-affinity rule ${HA_RULE_NAME} → ${DESIRED_NODES}..."
         ssh "${SSH_OPTS[@]}" "root@${NODE_FQDN}" \
             "ha-manager rules add node-affinity ${HA_RULE_NAME} --nodes ${DESIRED_NODES} --resources vm:${VMID}" \
             >/dev/null || die "ha-manager rules add failed"
@@ -271,28 +271,28 @@ fi
 
 if [[ ${DO_REPL_RECREATE} -eq 1 ]]; then
     if [[ -n "${live_repl_id}" ]]; then
-        info "  Removing stale replication job ${live_repl_id} (target ${live_repl_target})..."
+        debug "  Removing stale replication job ${live_repl_id} (target ${live_repl_target})..."
         ssh "${SSH_OPTS[@]}" "root@${NODE_FQDN}" \
             "pvesr delete ${live_repl_id} --force 1" >/dev/null 2>&1 || true
     fi
     JOB_ID="${VMID}-0"
-    info "  Creating replication job ${JOB_ID} → ${HANODE} (schedule ${REPL_SCHEDULE})..."
+    debug "  Creating replication job ${JOB_ID} → ${HANODE} (schedule ${REPL_SCHEDULE})..."
     ssh "${SSH_OPTS[@]}" "root@${NODE_FQDN}" \
         "pvesr create-local-job ${JOB_ID} ${HANODE} --schedule '${REPL_SCHEDULE}'" \
         >/dev/null || die "pvesr create-local-job failed"
 elif [[ ${DO_REPL_UPDATE} -eq 1 ]]; then
-    info "  Updating replication job ${live_repl_id} schedule → ${REPL_SCHEDULE}..."
+    debug "  Updating replication job ${live_repl_id} schedule → ${REPL_SCHEDULE}..."
     ssh "${SSH_OPTS[@]}" "root@${NODE_FQDN}" \
         "pvesr update ${live_repl_id} --schedule '${REPL_SCHEDULE}'" \
         >/dev/null || die "pvesr update failed"
 fi
 
 if [[ ${DO_MIGRATE} -eq 1 ]]; then
-    info "  Migrating VM ${VMID} ${actual_node}→${DESIRED_PRIMARY} (HA online migrate)..."
+    debug "  Migrating VM ${VMID} ${actual_node}→${DESIRED_PRIMARY} (HA online migrate)..."
     ssh "${SSH_OPTS[@]}" "root@${NODE_FQDN}" \
         "ha-manager crm-command migrate vm:${VMID} ${DESIRED_PRIMARY}" \
         >/dev/null || die "ha-manager crm-command migrate failed"
 fi
 
-info "  ${GN}✓${CL} cluster:ha update-service completed"
+debug "  ${GN}✓${CL} cluster:ha update-service completed"
 exit 0

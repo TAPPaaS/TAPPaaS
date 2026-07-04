@@ -32,12 +32,12 @@ ns="$(jq -r '.namespace // empty' "${CFG}")"
 retention="$(jq -c '.retention // {}' "${CFG}")"
 userid="${NAME}@pbs"
 
-info "${BOLD}Updating external client '${NAME}' (${store}/${ns})${CL}"
+debug "${BOLD}Updating external client '${NAME}' (${store}/${ns})${CL}"
 pbs_ns_ensure "${ns}"
 
 if _pbs_user_exists "${userid}"; then
     pbs_acl_ensure "$(_pbs_ns_acl_path "${store}" "${ns}")" DatastoreBackup "${userid}"
-    info "  ${GN}✓${CL} ACL re-applied for ${userid}"
+    debug "  ${GN}✓${CL} ACL re-applied for ${userid}"
 else
     warn "  user ${userid} missing — run 'backup-manage.sh add-external ${NAME}' to (re)create it"
 fi
@@ -45,4 +45,4 @@ fi
 read -ra ret <<< "$(_pbs_retention_args "${retention}")"
 [[ ${#ret[@]} -gt 0 ]] && pbs_prunejob_ensure_ns "prune-external-${NAME}" "${store}" "${ns}" "02:45" "${ret[@]}"
 
-info "  ${GN}✓${CL} external client '${NAME}' update completed"
+debug "  ${GN}✓${CL} external client '${NAME}' update completed"

@@ -53,7 +53,7 @@ readonly SCRIPT_DIR
 # shellcheck source=nat-common.sh disable=SC1091
 . "${SCRIPT_DIR}/nat-common.sh"
 
-info "network:nat install-service for module: ${BL}${MODULE}${CL}"
+debug "network:nat install-service for module: ${BL}${MODULE}${CL}"
 
 # ── Validate inputs ─────────────────────────────────────────────────
 
@@ -64,7 +64,7 @@ fi
 RULE_COUNT=$(nat_rule_count)
 if [[ "${RULE_COUNT}" -eq 0 ]]; then
     warn "Module '${MODULE}' depends on network:nat but defines no natRules — nothing to do."
-    info "${GN}network:nat install-service completed for ${MODULE} (no rules)${CL}"
+    debug "${GN}network:nat install-service completed for ${MODULE} (no rules)${CL}"
     exit 0
 fi
 
@@ -73,7 +73,7 @@ fi
 if ! TARGET=$(nat_resolve_target "${MODULE}"); then
     die "Cannot resolve internal target for ${MODULE} — set an 'ip' field or ensure DNS for <vmname>.<zone0>.internal exists."
 fi
-info "  Target: ${BL}${TARGET}${CL} (${RULE_COUNT} rule(s))"
+debug "  Target: ${BL}${TARGET}${CL} (${RULE_COUNT} rule(s))"
 
 # ── Check firewallType ───────────────────────────────────────────────
 
@@ -93,7 +93,7 @@ if [[ "${FIREWALL_TYPE}" == "NONE" ]]; then
         warn "  ${BOLD}${proto}${CL} WAN:${BL}${ext}${CL} -> ${BL}${TARGET}:${intp}${CL}"
     done < <(nat_rules_json)
     warn "Create these port-forwards on your firewall, then continue."
-    info "${GN}network:nat install-service completed for ${MODULE} (manual config required)${CL}"
+    debug "${GN}network:nat install-service completed for ${MODULE} (manual config required)${CL}"
     exit 0
 fi
 
@@ -116,7 +116,7 @@ while IFS= read -r rule; do
         die "natRules entry for ${MODULE} is missing 'externalPort': ${rule}"
     fi
 
-    info "  Creating port-forward: ${proto} WAN:${BL}${ext}${CL} -> ${BL}${TARGET}:${intp}${CL}"
+    debug "  Creating port-forward: ${proto} WAN:${BL}${ext}${CL} -> ${BL}${TARGET}:${intp}${CL}"
     nat-manager add-rule --no-ssl-verify --no-apply \
         --description "${desc}" \
         --external-port "${ext}" \
@@ -128,7 +128,7 @@ done < <(nat_rules_json)
 
 # ── Apply ────────────────────────────────────────────────────────────
 
-info "  Applying NAT configuration..."
+debug "  Applying NAT configuration..."
 nat-manager apply --no-ssl-verify || die "Failed to apply NAT configuration"
 
-info "${GN}network:nat install-service completed for ${MODULE}${CL}"
+debug "${GN}network:nat install-service completed for ${MODULE}${CL}"

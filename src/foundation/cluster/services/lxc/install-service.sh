@@ -41,13 +41,13 @@ NODE_FQDN="${NODE}.${MGMT}.internal"
 SSH_OPTS=(-o ConnectTimeout=10 -o StrictHostKeyChecking=accept-new
           -o UserKnownHostsFile=/dev/null -o LogLevel=ERROR -o BatchMode=yes)
 
-info "${BOLD}cluster:lxc install-service for ${BL}${MODULE}${CL} (VMID ${VMID}) on ${NODE}"
+debug "${BOLD}cluster:lxc install-service for ${BL}${MODULE}${CL} (VMID ${VMID}) on ${NODE}"
 
 # ── 1. Copy config (+ optional meta) and create the container ────────
 
 scp "${SSH_OPTS[@]}" "${CONFIG_DIR}/${MODULE}.json" "root@${NODE_FQDN}:/root/tappaas/${MODULE}.json" >/dev/null
 if [[ -f "${CONFIG_DIR}/${MODULE}.meta.json" ]]; then
-    info "  Shipping ${MODULE}.meta.json (LXC passthrough/bind-mount config)"
+    debug "  Shipping ${MODULE}.meta.json (LXC passthrough/bind-mount config)"
     scp -q "${SSH_OPTS[@]}" "${CONFIG_DIR}/${MODULE}.meta.json" "root@${NODE_FQDN}:/root/tappaas/${MODULE}.meta.json" >/dev/null
 fi
 
@@ -68,7 +68,7 @@ ssh "${SSH_OPTS[@]}" "root@${NODE_FQDN}" \
 # lease ever changes (static addn-hosts take precedence over leases) — the very
 # IP-drift the pins were meant to avoid. Below is a readiness wait only.
 
-info "  Waiting for container ${VMID} to obtain an IPv4..."
+debug "  Waiting for container ${VMID} to obtain an IPv4..."
 ip=""
 for _ in $(seq 1 30); do
     ip=$(ssh "${SSH_OPTS[@]}" "root@${NODE_FQDN}" \
@@ -81,11 +81,11 @@ done
 if [[ -z "${ip}" ]]; then
     warn "  Container did not report an IPv4 yet — it will register in DNS via its DHCP lease once it does"
 else
-    info "  Container came up with IP ${BL}${ip}${CL} — DNS via masqdns lease (${VMNAME}.${ZONE0}.internal)"
+    debug "  Container came up with IP ${BL}${ip}${CL} — DNS via masqdns lease (${VMNAME}.${ZONE0}.internal)"
 fi
 
 # Best-effort: remove any LEGACY static pin from an older install of this module,
 # so it can't shadow the live lease. Harmless no-op when none exists.
 dns-manager --no-ssl-verify delete "${VMNAME}" "${ZONE0}.internal" >/dev/null 2>&1 || true
 
-info "${GN}✓${CL} LXC ${VMNAME} (VMID ${VMID}) created on ${NODE}, zone ${ZONE0}"
+debug "${GN}✓${CL} LXC ${VMNAME} (VMID ${VMID}) created on ${NODE}, zone ${ZONE0}"

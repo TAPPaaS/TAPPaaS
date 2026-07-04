@@ -44,7 +44,7 @@ readonly SCRIPT_DIR
 # shellcheck source=nat-common.sh disable=SC1091
 . "${SCRIPT_DIR}/nat-common.sh"
 
-info "network:nat delete-service for module: ${BL}${MODULE}${CL}"
+debug "network:nat delete-service for module: ${BL}${MODULE}${CL}"
 
 # ── Check firewallType ───────────────────────────────────────────────
 
@@ -56,7 +56,7 @@ fi
 if [[ "${FIREWALL_TYPE}" == "NONE" ]]; then
     warn "${BOLD}OPNsense firewall is not deployed (firewallType=NONE).${CL}"
     warn "Remember to remove any port-forward rules for module '${MODULE}' from your firewall."
-    info "${GN}network:nat delete-service completed for ${MODULE} (manual cleanup required)${CL}"
+    debug "${GN}network:nat delete-service completed for ${MODULE} (manual cleanup required)${CL}"
     exit 0
 fi
 
@@ -68,8 +68,8 @@ fi
 
 # ── Remove all port-forwards for this module ────────────────────────
 
-info "  Removing ${MODULE} port-forwards..."
+debug "  Removing ${MODULE} port-forwards..."
 REMOVED=$(nat_purge_module_rules "${MODULE}")
-info "  Removed ${BL}${REMOVED}${CL} rule(s)"
+debug "  Removed ${BL}${REMOVED}${CL} rule(s)"
 
-info "${GN}network:nat delete-service completed for ${MODULE}${CL}"
+debug "${GN}network:nat delete-service completed for ${MODULE}${CL}"

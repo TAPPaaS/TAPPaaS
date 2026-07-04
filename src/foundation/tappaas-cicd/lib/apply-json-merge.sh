@@ -264,7 +264,7 @@ apply_three_way_merge() {
     n_added=$(jq   '.added   | length' <<<"${merged_with_report}")
     n_kept=$(jq    '.kept    | length' <<<"${merged_with_report}")
 
-    info "  Merge: ${n_adopted} adopted, ${n_pinned} pinned, ${n_added} added, ${n_kept} kept (orphan)"
+    debug "  Merge: ${n_adopted} adopted, ${n_pinned} pinned, ${n_added} added, ${n_kept} kept (orphan)"
     if [[ "${n_adopted}" -gt 0 ]]; then
         local adopted_list
         adopted_list=$(jq -r '.adopted | join(", ")' <<<"${merged_with_report}")
@@ -300,9 +300,9 @@ apply_three_way_merge() {
     cp "${source}" "${orig}"
 
     if [[ "${backfilled}" -eq 1 ]]; then
-        info "  ${eff}: 3-way merge complete (backfilled .orig from source)"
+        debug "  ${eff}: 3-way merge complete (backfilled .orig from source)"
     else
-        info "  ${eff}: 3-way merge complete"
+        debug "  ${eff}: 3-way merge complete"
     fi
     return 0
 }

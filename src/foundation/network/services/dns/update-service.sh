@@ -19,6 +19,6 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 readonly SCRIPT_DIR
 
-info "network:dns update-service delegating to install-service (idempotent) for: ${BL}${1:-}${CL}"
+debug "network:dns update-service delegating to install-service (idempotent) for: ${BL}${1:-}${CL}"
 
 exec "${SCRIPT_DIR}/install-service.sh" "$@"

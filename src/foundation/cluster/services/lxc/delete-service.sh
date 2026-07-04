@@ -32,15 +32,15 @@ ZONE0="$(get_config_value 'zone0' 'mgmt')"
 
 NODE_FQDN="${NODE}.${MGMT}.internal"
 
-info "Destroying LXC ${VMNAME} (VMID: ${VMID}) on node ${NODE}..."
+debug "Destroying LXC ${VMNAME} (VMID: ${VMID}) on node ${NODE}..."
 
 if ! ssh root@"${NODE_FQDN}" "pct status ${VMID}" &>/dev/null; then
     warn "LXC ${VMID} does not exist on node ${NODE} — nothing to destroy"
 else
-    info "  Stopping LXC ${VMID}..."
+    debug "  Stopping LXC ${VMID}..."
     ssh root@"${NODE_FQDN}" "pct stop ${VMID}" 2>/dev/null || true
     sleep 3
-    info "  Destroying LXC ${VMID} with --purge..."
+    debug "  Destroying LXC ${VMID} with --purge..."
     ssh root@"${NODE_FQDN}" "pct destroy ${VMID} --purge" || {
         error "Failed to destroy LXC ${VMID}"
         exit 1
@@ -48,8 +48,8 @@ else
 fi
 
 # Remove the DNS record (harmless if absent — install may not have registered it).
-info "  Removing DNS: ${VMNAME}.${ZONE0}.internal"
+debug "  Removing DNS: ${VMNAME}.${ZONE0}.internal"
 dns-manager --no-ssl-verify delete "${VMNAME}" "${ZONE0}.internal" \
     || debug "  no DNS record to remove for ${VMNAME}.${ZONE0}.internal"
 
-info "LXC ${VMNAME} (VMID: ${VMID}) destroyed successfully"
+debug "LXC ${VMNAME} (VMID: ${VMID}) destroyed successfully"

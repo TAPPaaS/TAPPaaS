@@ -109,7 +109,7 @@ PYEOF
               printf 'TAPPAAS_PASSWORD=%s\n' "$_tappaas_password"; } > "$_pw_tmp"
             mv "$_pw_tmp" "$_secrets_file"
             chmod 600 "$_secrets_file"
-            info "Generated tappaas account password → ${_secrets_file}"
+            debug "Generated tappaas account password → ${_secrets_file}"
         fi
 
     elif [[ "$IMAGETYPE" == "iso" ]]; then
@@ -118,7 +118,7 @@ PYEOF
         _autounattend="${_templates_dir}/winserver/autounattend.xml"
         if [[ -n "$_templates_dir" && -f "$_autounattend" ]]; then
             scp -q "$_autounattend" "root@${NODE}.${MGMT}.internal:/root/tappaas/autounattend.xml"
-            info "autounattend.xml deployed to ${NODE} — Windows install will run unattended"
+            debug "autounattend.xml deployed to ${NODE} — Windows install will run unattended"
         else
             warn "autounattend.xml not found — Windows template install will require manual input"
         fi
@@ -161,9 +161,9 @@ if [[ "$IMAGETYPE" == "clone" ]]; then
     cd ${_templates_dir:-src/foundation/templates} && install-module.sh ${_build_module}
   See: src/foundation/templates/${_build_module}/README.md"
             fi
-            info "Template ${IMAGE} not found — auto-building via ${_build_module} (this takes ~30 min)..."
+            debug "Template ${IMAGE} not found — auto-building via ${_build_module} (this takes ~30 min)..."
             (cd "${_templates_dir}" && install-module.sh "${_build_module}")
-            info "Template ${IMAGE} ready — continuing with VM clone"
+            debug "Template ${IMAGE} ready — continuing with VM clone"
         else
             die "Template ${IMAGE} not found on any cluster node.
   To build it manually: cd ${_templates_dir:-src/foundation/templates} && install-module.sh <template-module>"
@@ -187,14 +187,14 @@ if [[ "$_is_windows" == "true" && "$IMAGETYPE" == "clone" ]]; then
         _pubkey=$(cat /home/tappaas/.ssh/id_ed25519.pub 2>/dev/null || cat /home/tappaas/.ssh/id_rsa.pub 2>/dev/null || true)
     fi
 
-    info "Injecting Windows OOBE setup via guest agent (hostname: ${VMNAME})..."
+    debug "Injecting Windows OOBE setup via guest agent (hostname: ${VMNAME})..."
 
-    info "Waiting for QEMU guest agent on ${VMNAME}..."
+    debug "Waiting for QEMU guest agent on ${VMNAME}..."
     _ga_elapsed=0; _ga_max=300
     while [[ $_ga_elapsed -lt $_ga_max ]]; do
         if ssh -n -o BatchMode=yes -o ConnectTimeout=5 "root@${NODE}.${MGMT}.internal" \
             "qm guest cmd ${VMID} ping >/dev/null 2>&1"; then
-            info "  Guest agent ready"
+            debug "  Guest agent ready"
             break
         fi
         sleep 10; _ga_elapsed=$((_ga_elapsed + 10))
@@ -247,7 +247,7 @@ if [[ "$_is_windows" == "true" && "$IMAGETYPE" == "clone" ]]; then
         "qm guest exec ${VMID} -- powershell -EncodedCommand ${_win_encoded}" >/dev/null 2>&1 || true
 
     # Wait for the VM to come back up (reboot: running → stopped → running)
-    info "Waiting for VM ${VMNAME} to reboot after OOBE setup..."
+    debug "Waiting for VM ${VMNAME} to reboot after OOBE setup..."
     _rb_elapsed=0; _rb_max=180
     # Wait for stopped first (VM shutting down for reboot)
     while [[ $_rb_elapsed -lt $_rb_max ]]; do
@@ -266,7 +266,7 @@ if [[ "$_is_windows" == "true" && "$IMAGETYPE" == "clone" ]]; then
         [[ "$_rb_state" == "running" ]] && break
         sleep 5; _rb_elapsed=$((_rb_elapsed + 5))
     done
-    info "  VM ${VMNAME} is back up — SSH will be available once Windows finishes booting"
+    debug "  VM ${VMNAME} is back up — SSH will be available once Windows finishes booting"
 
     # Register DNS: get current IP from guest agent and update the DNS entry.
     # Without this, the hostname resolves to a stale IP after re-installs with a new MAC.
@@ -295,7 +295,7 @@ except Exception:
         [[ -n "$_mac" ]] && _macarg=(--mac "$_mac")
         dns-manager --no-ssl-verify delete "${VMNAME}" "${ZONE0NAME}.internal" >/dev/null 2>&1 || true
         dns-manager --no-ssl-verify add    "${VMNAME}" "${ZONE0NAME}.internal" "${_vm_ip}" ${_macarg[@]+"${_macarg[@]}"} >/dev/null 2>&1 || true
-        info "  ${GN}✓${CL} DNS: ${VMNAME}.${ZONE0NAME}.internal → ${_vm_ip}${_mac:+ (MAC-reserved ${_mac})}"
+        debug "  ${GN}✓${CL} DNS: ${VMNAME}.${ZONE0NAME}.internal → ${_vm_ip}${_mac:+ (MAC-reserved ${_mac})}"
     fi
 fi
 
@@ -309,7 +309,7 @@ fi
 # actual boot time), then pin the DNS record via dns-manager.
 # Skipped for cloud-init VMs (they self-register) and for Windows (handled above).
 if [[ "$CLOUDINIT" == "false" && "$_is_windows" != "true" ]]; then
-    info "Appliance VM (cloudInit:false) — waiting for guest agent IP to register DNS (${VMNAME}.${ZONE0NAME}.internal)..."
+    debug "Appliance VM (cloudInit:false) — waiting for guest agent IP to register DNS (${VMNAME}.${ZONE0NAME}.internal)..."
     _appliance_ip=""
     _ip_wait=0
     while [[ -z "$_appliance_ip" && $_ip_wait -lt 300 ]]; do
@@ -341,7 +341,7 @@ except Exception:
         [[ -n "$_mac" ]] && _macarg=(--mac "$_mac")
         dns-manager --no-ssl-verify delete "${VMNAME}" "${ZONE0NAME}.internal" >/dev/null 2>&1 || true
         dns-manager --no-ssl-verify add    "${VMNAME}" "${ZONE0NAME}.internal" "${_appliance_ip}" ${_macarg[@]+"${_macarg[@]}"} >/dev/null 2>&1 || true
-        info "  ${GN}✓${CL} DNS: ${VMNAME}.${ZONE0NAME}.internal → ${_appliance_ip}${_mac:+ (MAC-reserved ${_mac})} (after ${_ip_wait}s)"
+        debug "  ${GN}✓${CL} DNS: ${VMNAME}.${ZONE0NAME}.internal → ${_appliance_ip}${_mac:+ (MAC-reserved ${_mac})} (after ${_ip_wait}s)"
     else
         warn "  Could not determine IP for ${VMNAME} after ${_ip_wait}s — DNS NOT registered (VM may still be booting; re-run update-module.sh once it is up)"
     fi
@@ -351,7 +351,7 @@ fi
 # delete ISOs, and convert to a Proxmox template.
 _PROVIDES=$(read_module_config "$1" 2>/dev/null | jq -r '.provides // [] | .[]' 2>/dev/null) || _PROVIDES=""
 if [[ "$IMAGETYPE" == "iso" && "$_is_windows" == "true" ]] && echo "$_PROVIDES" | grep -q "^windows$"; then
-    info "Windows template build: starting VM ${VMID} for unattended install (~30 min)..."
+    debug "Windows template build: starting VM ${VMID} for unattended install (~30 min)..."
     ssh "root@${NODE}.${MGMT}.internal" "qm start ${VMID}" >/dev/null
 
     # OVMF boot sequence with ms-cert=2023k,pre-enrolled-keys=1:
@@ -375,7 +375,7 @@ if [[ "$IMAGETYPE" == "iso" && "$_is_windows" == "true" ]] && echo "$_PROVIDES" 
             "qm status ${VMID} 2>/dev/null | awk '{print \$2}'" 2>/dev/null) || _tw_state=""
         if [[ "$_tw_state" == "stopped" ]]; then
             printf "\r%-70s\n" ""
-            info "Windows install and sysprep complete — VM powered off"
+            debug "Windows install and sysprep complete — VM powered off"
             break
         fi
         if [[ $_tw_elapsed -ge $_max_wait ]]; then
@@ -391,8 +391,8 @@ if [[ "$IMAGETYPE" == "iso" && "$_is_windows" == "true" ]] && echo "$_PROVIDES" 
     ssh "root@${NODE}.${MGMT}.internal" \
         "qm set ${VMID} --delete ide1,ide2,ide3 2>/dev/null || true" >/dev/null 2>&1 || true
     ssh "root@${NODE}.${MGMT}.internal" "qm template ${VMID}" >/dev/null
-    info "Windows Server template VMID ${VMID} is ready for cloning"
+    debug "Windows Server template VMID ${VMID} is ready for cloning"
 fi
 
 echo ""
-info "VM ${VMNAME} (VMID: ${VMID}) created successfully on ${NODE}, in Zone: ${ZONE0NAME}"
+debug "VM ${VMNAME} (VMID: ${VMID}) created successfully on ${NODE}, in Zone: ${ZONE0NAME}"

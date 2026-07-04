@@ -34,7 +34,7 @@ if [[ ! -f "${HOME}/.authentik-credentials.txt" ]]; then
     exit 0
 fi
 
-info "identity:identity (OIDC): tearing down Authentik wiring for ${MODULE}"
+debug "identity:identity (OIDC): tearing down Authentik wiring for ${MODULE}"
 ${AUTHENTIK_MANAGER} app-delete "${MODULE}" \
     || warn "  app-delete for ${MODULE} returned non-zero (may already be gone)"
-info "  ${GN}✓${CL} Authentik OIDC app/provider for ${MODULE} removed (role groups left intact)"
+debug "  ${GN}✓${CL} Authentik OIDC app/provider for ${MODULE} removed (role groups left intact)"

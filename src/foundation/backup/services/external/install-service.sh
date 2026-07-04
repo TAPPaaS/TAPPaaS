@@ -39,7 +39,7 @@ ns="$(jq -r '.namespace // empty' "${CFG}")"
 retention="$(jq -c '.retention // {}' "${CFG}")"
 userid="${NAME}@pbs"
 
-info "${BOLD}Onboarding external client '${NAME}' → ${store}/${ns} (push, write-only)${CL}"
+debug "${BOLD}Onboarding external client '${NAME}' → ${store}/${ns} (push, write-only)${CL}"
 
 # Client password — prompted (blank auto-generates and is shown once).
 read -rsp "  Password for ${userid} (blank to auto-generate): " PW; echo
@@ -50,25 +50,25 @@ fi
 
 pbs_ns_ensure "${ns}"
 if _pbs_user_exists "${userid}"; then
-    info "  user ${userid} already exists (password unchanged)"
+    debug "  user ${userid} already exists (password unchanged)"
 else
     pbs_user_ensure "${userid}" "${PW}"
-    info "  ${GN}✓${CL} created user ${userid}"
+    debug "  ${GN}✓${CL} created user ${userid}"
 fi
 
 # Write-only ACL scoped to this namespace only (no delete, no other namespaces).
 pbs_acl_ensure "$(_pbs_ns_acl_path "${store}" "${ns}")" DatastoreBackup "${userid}"
-info "  ${GN}✓${CL} ${userid} granted DatastoreBackup on ${ns} (write, no delete)"
+debug "  ${GN}✓${CL} ${userid} granted DatastoreBackup on ${ns} (write, no delete)"
 
 # Admin-owned namespace prune-job (the client cannot prune).
 read -ra ret <<< "$(_pbs_retention_args "${retention}")"
 if [[ ${#ret[@]} -gt 0 ]]; then
     pbs_prunejob_ensure_ns "prune-external-${NAME}" "${store}" "${ns}" "02:45" "${ret[@]}"
-    info "  ${GN}✓${CL} admin prune-job prune-external-${NAME} scoped to ${ns}"
+    debug "  ${GN}✓${CL} admin prune-job prune-external-${NAME} scoped to ${ns}"
 fi
 
 echo
-info "${BOLD}Client setup (run on the client; encrypt with the CLIENT's own key):${CL}"
+debug "${BOLD}Client setup (run on the client; encrypt with the CLIENT's own key):${CL}"
 echo "  Repository : ${userid}@<pbs-reachable-host>:${store}"
 echo "  Namespace  : ${ns}"
 echo "  Example    : proxmox-backup-client backup data.pxar:/path \\"
@@ -78,4 +78,4 @@ echo "  Fingerprint: proxmox-backup-manager cert info | grep Fingerprint   (on t
 if [[ "${GENERATED:-0}" == "1" ]]; then
     warn "  Generated password for ${userid} (store it now, shown only once): ${PW}"
 fi
-info "  ${GN}✓${CL} external client '${NAME}' onboarded"
+debug "  ${GN}✓${CL} external client '${NAME}' onboarded"

@@ -46,7 +46,7 @@ readonly SCRIPT_DIR
 # shellcheck source=nat-common.sh disable=SC1091
 . "${SCRIPT_DIR}/nat-common.sh"
 
-info "network:nat update-service for module: ${BL}${MODULE}${CL}"
+debug "network:nat update-service for module: ${BL}${MODULE}${CL}"
 
 # ── Validate inputs ─────────────────────────────────────────────────
 
@@ -55,7 +55,7 @@ if [[ ! -f "${MODULE_JSON}" ]]; then
 fi
 
 RULE_COUNT=$(nat_rule_count)
-info "  Desired rules: ${BL}${RULE_COUNT}${CL}"
+debug "  Desired rules: ${BL}${RULE_COUNT}${CL}"
 
 # ── Resolve the internal target (shared by all rules) ───────────────
 
@@ -64,7 +64,7 @@ if [[ "${RULE_COUNT}" -gt 0 ]]; then
     if ! TARGET=$(nat_resolve_target "${MODULE}"); then
         die "Cannot resolve internal target for ${MODULE} — set an 'ip' field or ensure DNS for <vmname>.<zone0>.internal exists."
     fi
-    info "  Target: ${BL}${TARGET}${CL}"
+    debug "  Target: ${BL}${TARGET}${CL}"
 fi
 
 # ── Check firewallType ───────────────────────────────────────────────
@@ -84,7 +84,7 @@ if [[ "${FIREWALL_TYPE}" == "NONE" ]]; then
         proto=$(nat_rule_protocol "${rule}")
         warn "  ${BOLD}${proto}${CL} WAN:${BL}${ext}${CL} -> ${BL}${TARGET}:${intp}${CL}"
     done < <(nat_rules_json)
-    info "${GN}network:nat update-service completed for ${MODULE} (manual config required)${CL}"
+    debug "${GN}network:nat update-service completed for ${MODULE} (manual config required)${CL}"
     exit 0
 fi
 
@@ -96,14 +96,14 @@ fi
 
 # ── Sweep existing rules for this module ────────────────────────────
 
-info "  Removing existing ${MODULE} port-forwards..."
+debug "  Removing existing ${MODULE} port-forwards..."
 REMOVED=$(nat_purge_module_rules "${MODULE}")
-info "  Removed ${BL}${REMOVED}${CL} existing rule(s)"
+debug "  Removed ${BL}${REMOVED}${CL} existing rule(s)"
 
 # ── Recreate from current config ────────────────────────────────────
 
 if [[ "${RULE_COUNT}" -eq 0 ]]; then
-    info "${GN}network:nat update-service completed for ${MODULE} (no rules configured)${CL}"
+    debug "${GN}network:nat update-service completed for ${MODULE} (no rules configured)${CL}"
     exit 0
 fi
 
@@ -118,7 +118,7 @@ while IFS= read -r rule; do
         die "natRules entry for ${MODULE} is missing 'externalPort': ${rule}"
     fi
 
-    info "  Creating port-forward: ${proto} WAN:${BL}${ext}${CL} -> ${BL}${TARGET}:${intp}${CL}"
+    debug "  Creating port-forward: ${proto} WAN:${BL}${ext}${CL} -> ${BL}${TARGET}:${intp}${CL}"
     nat-manager add-rule --no-ssl-verify --no-apply \
         --description "${desc}" \
         --external-port "${ext}" \
@@ -128,7 +128,7 @@ while IFS= read -r rule; do
         || die "Failed to create port-forward (${desc})"
 done < <(nat_rules_json)
 
-info "  Applying NAT configuration..."
+debug "  Applying NAT configuration..."
 nat-manager apply --no-ssl-verify || die "Failed to apply NAT configuration"
 
-info "${GN}network:nat update-service completed for ${MODULE}${CL}"
+debug "${GN}network:nat update-service completed for ${MODULE}${CL}"

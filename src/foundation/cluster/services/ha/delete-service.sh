@@ -31,23 +31,23 @@ HANODE=$(get_config_value 'HANode' "$(get_default_ha_node "$NODE")")
 NODE_FQDN="${NODE}.${MGMTVLAN}.internal"
 HA_RULE_NAME="ha-${MODULE_NAME}"
 
-info "Removing HA configuration for module: ${MODULE_NAME} (VMID: ${VMID})"
+debug "Removing HA configuration for module: ${MODULE_NAME} (VMID: ${VMID})"
 
 # Remove VM from HA resources
 if ssh root@"${NODE_FQDN}" "ha-manager config" 2>/dev/null | grep -q "^vm:${VMID}"; then
-    info "  Removing VM from HA resources..."
+    debug "  Removing VM from HA resources..."
     ssh root@"${NODE_FQDN}" "ha-manager remove vm:${VMID}" 2>/dev/null || true
-    info "  HA resource removed"
+    debug "  HA resource removed"
 else
-    info "  VM not in HA resources, nothing to remove"
+    debug "  VM not in HA resources, nothing to remove"
 fi
 
 # Remove HA rule
 if ssh root@"${NODE_FQDN}" "ha-manager rules list" 2>/dev/null | grep -q "${HA_RULE_NAME}"; then
-    info "  Removing HA rule: ${HA_RULE_NAME}"
+    debug "  Removing HA rule: ${HA_RULE_NAME}"
     ssh root@"${NODE_FQDN}" "ha-manager rules remove ${HA_RULE_NAME}" 2>/dev/null || true
 else
-    info "  No HA rule found for this module"
+    debug "  No HA rule found for this module"
 fi
 
 # Remove all replication jobs for this VM
@@ -55,12 +55,12 @@ REPL_JOBS=$(ssh root@"${NODE_FQDN}" "pvesh get /cluster/replication --output-for
     | jq -r ".[] | select(.guest == ${VMID}) | .id" 2>/dev/null || echo "")
 if [[ -n "${REPL_JOBS}" ]]; then
     for job_id in ${REPL_JOBS}; do
-        info "  Removing replication job: ${job_id}"
+        debug "  Removing replication job: ${job_id}"
         ssh root@"${NODE_FQDN}" "pvesr delete ${job_id} --force 1" 2>/dev/null || true
     done
-    info "  Replication jobs removed"
+    debug "  Replication jobs removed"
 else
-    info "  No replication jobs found"
+    debug "  No replication jobs found"
 fi
 
-info "HA configuration removed for ${MODULE_NAME}"
+debug "HA configuration removed for ${MODULE_NAME}"

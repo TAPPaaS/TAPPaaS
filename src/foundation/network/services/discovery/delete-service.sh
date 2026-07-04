@@ -32,7 +32,7 @@ else
     readonly FIREWALL_JSON="${CONFIG_DIR}/firewall.json"
 fi
 
-info "network:discovery delete-service for module: ${BL}${MODULE}${CL}"
+debug "network:discovery delete-service for module: ${BL}${MODULE}${CL}"
 
 # ── Check firewallType ───────────────────────────────────────────────
 
@@ -41,7 +41,7 @@ FIREWALL_TYPE="opnsense"
 
 if [[ "${FIREWALL_TYPE}" == "NONE" ]]; then
     warn "firewallType=NONE — please manually remove any discovery configuration for ${MODULE}."
-    info "${GN}network:discovery delete-service completed for ${MODULE} (manual cleanup required)${CL}"
+    debug "${GN}network:discovery delete-service completed for ${MODULE} (manual cleanup required)${CL}"
     exit 0
 fi
 
@@ -71,7 +71,7 @@ while IFS= read -r row; do
     [[ -z "${row}" ]] && continue
     uuid=$(echo "${row}" | jq -r '.uuid')
     desc=$(echo "${row}" | jq -r '.description')
-    info "  Removing UDP relay: ${desc} (${uuid})"
+    debug "  Removing UDP relay: ${desc} (${uuid})"
     curl "${CURL[@]}" -X POST \
         "${API}/udpbroadcastrelay/settings/delRelay/${uuid}" >/dev/null
     (( DELETED++ )) || true
@@ -79,29 +79,29 @@ done <<< "${RELAY_ROWS}"
 
 if (( DELETED > 0 )); then
     curl "${CURL[@]}" -X POST "${API}/udpbroadcastrelay/service/reload" >/dev/null
-    info "  Removed ${DELETED} UDP relay entry/entries; service reloaded."
+    debug "  Removed ${DELETED} UDP relay entry/entries; service reloaded."
 else
-    info "  No UDP relay entries found for module '${MODULE}'."
+    debug "  No UDP relay entries found for module '${MODULE}'."
 fi
 
 # ── Remove mDNS repeater interfaces no longer needed ────────────────
 # Only removes interfaces that no other installed module still needs.
 
 if [[ ! -f "${MODULE_JSON}" ]]; then
-    info "  Module config not found — skipping mDNS cleanup."
-    info "${GN}network:discovery delete-service completed for ${MODULE}${CL}"
+    debug "  Module config not found — skipping mDNS cleanup."
+    debug "${GN}network:discovery delete-service completed for ${MODULE}${CL}"
     exit 0
 fi
 
 MDNS_RAW=$(read_module_config "${MODULE}" | jq -r '.discoveryMdns // "false"')
 
 if [[ "${MDNS_RAW}" == "false" ]]; then
-    info "  No discoveryMdns declared — skipping mDNS cleanup."
-    info "${GN}network:discovery delete-service completed for ${MODULE}${CL}"
+    debug "  No discoveryMdns declared — skipping mDNS cleanup."
+    debug "${GN}network:discovery delete-service completed for ${MODULE}${CL}"
     exit 0
 fi
 
-info "  Checking mDNS repeater cleanup..."
+debug "  Checking mDNS repeater cleanup..."
 
 # Collect zones contributed by this module (zone0 + consumer zones)
 THIS_ZONES=()
@@ -114,8 +114,8 @@ if [[ "${MDNS_RAW}" != "true" ]]; then
 fi
 
 if [[ "${#THIS_ZONES[@]}" -eq 0 ]]; then
-    info "  No mDNS zones to clean up."
-    info "${GN}network:discovery delete-service completed for ${MODULE}${CL}"
+    debug "  No mDNS zones to clean up."
+    debug "${GN}network:discovery delete-service completed for ${MODULE}${CL}"
     exit 0
 fi
 
@@ -148,13 +148,13 @@ for zone in "${THIS_ZONES[@]}"; do
     if [[ "${needed}" == "false" ]]; then
         SAFE_TO_REMOVE+=("${zone}")
     else
-        info "  Zone '${zone}' still needed by another module — keeping."
+        debug "  Zone '${zone}' still needed by another module — keeping."
     fi
 done
 
 if [[ "${#SAFE_TO_REMOVE[@]}" -eq 0 ]]; then
-    info "  All mDNS zones still needed by other modules — nothing removed."
-    info "${GN}network:discovery delete-service completed for ${MODULE}${CL}"
+    debug "  All mDNS zones still needed by other modules — nothing removed."
+    debug "${GN}network:discovery delete-service completed for ${MODULE}${CL}"
     exit 0
 fi
 
@@ -162,7 +162,7 @@ fi
 MDNS_RESP=$(curl "${CURL[@]}" "${API}/mdnsrepeater/settings/get")
 if ! echo "${MDNS_RESP}" | jq -e '.mdnsrepeater.interfaces' >/dev/null 2>&1; then
     warn "  os-mdns-repeater not available — skipping mDNS cleanup."
-    info "${GN}network:discovery delete-service completed for ${MODULE}${CL}"
+    debug "${GN}network:discovery delete-service completed for ${MODULE}${CL}"
     exit 0
 fi
 IFACE_JSON=$(echo "${MDNS_RESP}" | jq '.mdnsrepeater.interfaces')
@@ -184,13 +184,13 @@ for zone in "${SAFE_TO_REMOVE[@]}"; do
         warn "  Cannot resolve interface for zone '${zone}' — skipping."
     else
         REMOVE_IFACES+=("${iface}")
-        info "  Will remove mDNS interface: ${zone} → ${iface}"
+        debug "  Will remove mDNS interface: ${zone} → ${iface}"
     fi
 done
 
 if [[ "${#REMOVE_IFACES[@]}" -eq 0 ]]; then
-    info "  No mDNS interfaces resolved for removal."
-    info "${GN}network:discovery delete-service completed for ${MODULE}${CL}"
+    debug "  No mDNS interfaces resolved for removal."
+    debug "${GN}network:discovery delete-service completed for ${MODULE}${CL}"
     exit 0
 fi
 
@@ -216,6 +216,6 @@ echo "${SAVE_RESP}" | jq -e '.result == "saved"' >/dev/null \
     || die "mDNS settings/set failed: ${SAVE_RESP}"
 
 curl "${CURL[@]}" -X POST "${API}/mdnsrepeater/service/reconfigure" >/dev/null
-info "  mDNS repeater updated: removed ${#REMOVE_IFACES[@]} interface(s), reconfigured."
+debug "  mDNS repeater updated: removed ${#REMOVE_IFACES[@]} interface(s), reconfigured."
 
-info "${GN}network:discovery delete-service completed for ${MODULE}${CL}"
+debug "${GN}network:discovery delete-service completed for ${MODULE}${CL}"

@@ -29,9 +29,9 @@ VM_HOST="${VMNAME}.${ZONE0}.internal"
 
 readonly SSH_OPTS="-o ConnectTimeout=30 -o BatchMode=yes -o LogLevel=ERROR"
 
-info "=== Windows Security Update: ${VMNAME} (VMID ${VMID}) ==="
+debug "=== Windows Security Update: ${VMNAME} (VMID ${VMID}) ==="
 
-info "  Enabling Windows Update service..."
+debug "  Enabling Windows Update service..."
 # shellcheck disable=SC2086
 ssh ${SSH_OPTS} "tappaas@${VM_HOST}" "powershell -NoProfile -NonInteractive -Command \"
     Set-Service -Name wuauserv -StartupType Manual
@@ -39,7 +39,7 @@ ssh ${SSH_OPTS} "tappaas@${VM_HOST}" "powershell -NoProfile -NonInteractive -Com
     Write-Output 'Windows Update service started'
 \"" || true
 
-info "  Checking for security updates..."
+debug "  Checking for security updates..."
 # shellcheck disable=SC2086
 update_result=$(ssh ${SSH_OPTS} "tappaas@${VM_HOST}" "powershell -NoProfile -NonInteractive -Command \"
     \$psWU = Get-Module -ListAvailable -Name PSWindowsUpdate -ErrorAction SilentlyContinue
@@ -61,9 +61,9 @@ update_result=$(ssh ${SSH_OPTS} "tappaas@${VM_HOST}" "powershell -NoProfile -Non
     Write-Output \"UPDATES:\$(\$installed.Count)|REBOOT:\$rebootNeeded\"
 \"" 2>/dev/null) || true
 
-info "  ${update_result}"
+debug "  ${update_result}"
 
-info "  Disabling Windows Update service..."
+debug "  Disabling Windows Update service..."
 # shellcheck disable=SC2086
 ssh ${SSH_OPTS} "tappaas@${VM_HOST}" "powershell -NoProfile -NonInteractive -Command \"
     Stop-Service wuauserv -Force -ErrorAction SilentlyContinue
@@ -72,14 +72,14 @@ ssh ${SSH_OPTS} "tappaas@${VM_HOST}" "powershell -NoProfile -NonInteractive -Com
 \"" || true
 
 if [[ "${update_result}" == *"REBOOT:True"* ]]; then
-    info "  Reboot required after security updates — rebooting VM..."
+    debug "  Reboot required after security updates — rebooting VM..."
     ssh "root@${NODE}.mgmt.internal" "qm reboot ${VMID}" || true
-    info "  Waiting 120 seconds for VM to restart..."
+    debug "  Waiting 120 seconds for VM to restart..."
     sleep 120
 
     max_wait=300
     waited=0
-    info "  Waiting for SSH to become available on ${VM_HOST}..."
+    debug "  Waiting for SSH to become available on ${VM_HOST}..."
     # shellcheck disable=SC2086
     while ! ssh ${SSH_OPTS} "tappaas@${VM_HOST}" "exit 0" &>/dev/null; do
         sleep 10
@@ -89,11 +89,11 @@ if [[ "${update_result}" == *"REBOOT:True"* ]]; then
             exit 1
         fi
     done
-    info "  VM is back online after reboot"
+    debug "  VM is back online after reboot"
 elif [[ "${update_result}" == *"UPDATES:0"* ]]; then
-    info "  No security updates available — system is up to date"
+    debug "  No security updates available — system is up to date"
 else
-    info "  Updates installed — no reboot required"
+    debug "  Updates installed — no reboot required"
 fi
 
-info "=== Windows Security Update complete ==="
+debug "=== Windows Security Update complete ==="

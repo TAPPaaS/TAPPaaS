@@ -42,7 +42,7 @@ else
     readonly FIREWALL_JSON="${CONFIG_DIR}/firewall.json"
 fi
 
-info "network:rules install-service for module: ${BL}${MODULE}${CL}"
+debug "network:rules install-service for module: ${BL}${MODULE}${CL}"
 
 # ── Validate inputs ─────────────────────────────────────────────────
 
@@ -84,8 +84,8 @@ while read -r dep; do
 done < <(read_module_config "${MODULE}" | jq -r '(.dependsOn // [])[]')
 
 if (( INGRESS_COUNT == 0 && EGRESS_COUNT == 0 && ALIAS_COUNT == 0 && HAS_AUTO_PINHOLE == 0 )); then
-    info "  No ports/ingress/egress/aliases declared and no dependsOn pinholes — nothing to apply."
-    info "${GN}network:rules install-service completed for ${MODULE} (no-op)${CL}"
+    debug "  No ports/ingress/egress/aliases declared and no dependsOn pinholes — nothing to apply."
+    debug "${GN}network:rules install-service completed for ${MODULE} (no-op)${CL}"
     exit 0
 fi
 
@@ -97,11 +97,11 @@ fi
 
 # ── Apply ────────────────────────────────────────────────────────────
 
-info "  ingress=${INGRESS_COUNT} egress=${EGRESS_COUNT} aliases=${ALIAS_COUNT} firewallType=${FIREWALL_TYPE}"
+debug "  ingress=${INGRESS_COUNT} egress=${EGRESS_COUNT} aliases=${ALIAS_COUNT} firewallType=${FIREWALL_TYPE}"
 
 rules-manager add-rules "${MODULE}" \
     --firewall-type "${FIREWALL_TYPE}" \
     --no-ssl-verify \
     || die "rules-manager add-rules failed for ${MODULE}"
 
-info "${GN}network:rules install-service completed for ${MODULE}${CL}"
+debug "${GN}network:rules install-service completed for ${MODULE}${CL}"

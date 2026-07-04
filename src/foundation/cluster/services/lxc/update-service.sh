@@ -84,7 +84,7 @@ if [[ "${TRUNKS0_CFG}" != "NONE" ]]; then
     done
 fi
 
-info "${BOLD}cluster:lxc update-service: reconciling ${BL}${MODULE}${CL} (VMID ${VMID})"
+debug "${BOLD}cluster:lxc update-service: reconciling ${BL}${MODULE}${CL} (VMID ${VMID})"
 [[ "${CHECK_MODE}" == "1" ]] && warn "  CHECK MODE — drift will be reported, not applied"
 
 # ── Locate the container ─────────────────────────────────────────────
@@ -101,7 +101,7 @@ for cand in "${DESIRED_NODE}" $(get_all_node_hostnames); do
 done
 [[ -z "${actual_node}" ]] && die "LXC ${VMID} (${MODULE}) not found on the cluster — is it installed?"
 NODE_FQDN="${actual_node}.${MGMT}.internal"
-info "  LXC ${VMID} is on node ${BL}${actual_node}${CL} (status: ${ct_status})"
+debug "  LXC ${VMID} is on node ${BL}${actual_node}${CL} (status: ${ct_status})"
 
 LIVE="$(ssh "${SSH_OPTS[@]}" "root@${NODE_FQDN}" "pct config ${VMID}" 2>/dev/null)" \
     || die "Failed to read 'pct config ${VMID}' on ${actual_node}"
@@ -159,32 +159,32 @@ fi
 # ── Report ───────────────────────────────────────────────────────────
 
 if [[ ${#CHANGES[@]} -eq 0 ]]; then
-    info "  ${GN}✓${CL} LXC is in sync with config — no changes needed"
+    debug "  ${GN}✓${CL} LXC is in sync with config — no changes needed"
     exit 0
 fi
-info "  Detected drift:"
-for c in "${CHANGES[@]}"; do info "    • ${c}"; done
+debug "  Detected drift:"
+for c in "${CHANGES[@]}"; do debug "    • ${c}"; done
 if [[ "${CHECK_MODE}" == "1" ]]; then
-    info "  CHECK MODE — no changes applied"
+    debug "  CHECK MODE — no changes applied"
     exit 0
 fi
 
 # ── Apply ────────────────────────────────────────────────────────────
 
-info "  Applying pct set on ${actual_node}..."
+debug "  Applying pct set on ${actual_node}..."
 ssh "${SSH_OPTS[@]}" "root@${NODE_FQDN}" \
     "pct set ${VMID} $(printf '%q ' "${PCT_SET[@]}")" >/dev/null || die "pct set failed"
 
 if [[ ${RESTART_NEEDED} -eq 1 ]]; then
     if [[ "${ct_status}" != "running" ]]; then
         warn "  container not running — network change applied; DNS will register on next boot"
-        info "  ${GN}✓${CL} cluster:lxc update-service completed"
+        debug "  ${GN}✓${CL} cluster:lxc update-service completed"
         exit 0
     fi
-    info "  Restarting LXC ${VMID} to apply network change..."
+    debug "  Restarting LXC ${VMID} to apply network change..."
     ssh "${SSH_OPTS[@]}" "root@${NODE_FQDN}" "pct reboot ${VMID}" >/dev/null || die "pct reboot failed"
 
-    info "  Waiting for container to come back with an IP..."
+    debug "  Waiting for container to come back with an IP..."
     new_ip=""
     for _ in $(seq 1 30); do
         sleep 4
@@ -193,7 +193,7 @@ if [[ ${RESTART_NEEDED} -eq 1 ]]; then
         [[ -n "${new_ip}" ]] && break
     done
     [[ -z "${new_ip}" ]] && die "container did not report an IPv4 after restart — unhealthy"
-    info "  Container came up with IP ${BL}${new_ip}${CL} — DNS via masqdns lease (${VMNAME}.${ZONE0}.internal)"
+    debug "  Container came up with IP ${BL}${new_ip}${CL} — DNS via masqdns lease (${VMNAME}.${ZONE0}.internal)"
 
     # masqdns model: the container leases under <vmname>, so DNS follows the live
     # lease in the new subnet — no static pin to register. Clean up any LEGACY
@@ -203,11 +203,11 @@ if [[ ${RESTART_NEEDED} -eq 1 ]]; then
     if [[ ${ZONE_CHANGED} -eq 1 && -n "${live_tag0:-}" && "${live_tag0}" != "0" ]]; then
         old_zone="$(jq -r --argjson t "${live_tag0}" 'to_entries[] | select(.value.vlantag == $t) | .key' "${ZONES_FILE}" 2>/dev/null | head -1)"
         if [[ -n "${old_zone}" && "${old_zone}" != "${ZONE0}" ]]; then
-            info "  Removing any stale DNS pin from old zone: ${VMNAME}.${old_zone}.internal"
+            debug "  Removing any stale DNS pin from old zone: ${VMNAME}.${old_zone}.internal"
             dns-manager --no-ssl-verify delete "${VMNAME}" "${old_zone}.internal" >/dev/null 2>&1 || true
         fi
     fi
 fi
 
-info "  ${GN}✓${CL} cluster:lxc update-service completed"
+debug "  ${GN}✓${CL} cluster:lxc update-service completed"
 exit 0

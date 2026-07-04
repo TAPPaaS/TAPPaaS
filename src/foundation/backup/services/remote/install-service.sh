@@ -44,7 +44,7 @@ retention="$(jq -c '.retention // {}' "${CFG}")"
 [[ -n "${ns}" && -n "${rhost}" && -n "${rstore}" ]] \
     || die "config ${CFG} must set namespace, remoteHost and remoteStore"
 
-info "${BOLD}Onboarding TAPPaaS buddy '${NAME}' → ${store}/${ns} (pull from ${rhost})${CL}"
+debug "${BOLD}Onboarding TAPPaaS buddy '${NAME}' → ${store}/${ns} (pull from ${rhost})${CL}"
 
 # Buddy PBS API credentials — prompted, never persisted to the repo/config.
 read -rp "  Buddy PBS API auth-id (e.g. sync@pbs!token): " AUTHID
@@ -60,13 +60,13 @@ pbs_syncjob_ensure "sync-${NAME}" "${store}" "${ns}" "${NAME}" "${rstore}" "${rn
 read -ra ret <<< "$(_pbs_retention_args "${retention}")"
 if [[ ${#ret[@]} -gt 0 ]]; then
     pbs_prunejob_ensure_ns "prune-remote-${NAME}" "${store}" "${ns}" "02:30" "${ret[@]}"
-    info "  ${GN}✓${CL} prune-job prune-remote-${NAME} scoped to ${ns}"
+    debug "  ${GN}✓${CL} prune-job prune-remote-${NAME} scoped to ${ns}"
 fi
 
 # Optional: grant the buddy read-only access to their own offsite copy.
 if [[ -n "${readauth}" ]]; then
     pbs_acl_ensure "$(_pbs_ns_acl_path "${store}" "${ns}")" DatastoreReader "${readauth}"
-    info "  ${GN}✓${CL} ${readauth} granted DatastoreReader on ${ns}"
+    debug "  ${GN}✓${CL} ${readauth} granted DatastoreReader on ${ns}"
 fi
 
-info "  ${GN}✓${CL} buddy '${NAME}' onboarded — sync-job sync-${NAME} pulls at ${sched} (remove-vanished=${rv})"
+debug "  ${GN}✓${CL} buddy '${NAME}' onboarded — sync-job sync-${NAME} pulls at ${sched} (remove-vanished=${rv})"

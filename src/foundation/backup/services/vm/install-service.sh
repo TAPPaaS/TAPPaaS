@@ -34,6 +34,6 @@ if [[ -z "${VMID}" ]]; then
     exit 0
 fi
 
-info "${BOLD}backup:vm: registering ${BL}${VMNAME}${CL} (VMID ${VMID}) for PBS backup${CL}"
+debug "${BOLD}backup:vm: registering ${BL}${VMNAME}${CL} (VMID ${VMID}) for PBS backup${CL}"
 pbs_ensure_vmid "${VMID}"
-info "  ${GN}✓${CL} backup:vm install-service completed"
+debug "  ${GN}✓${CL} backup:vm install-service completed"

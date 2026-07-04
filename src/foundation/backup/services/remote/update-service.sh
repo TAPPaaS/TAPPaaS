@@ -34,12 +34,12 @@ rv="$(jq -r 'if .removeVanished then "true" else "false" end' "${CFG}")"
 retention="$(jq -c '.retention // {}' "${CFG}")"
 [[ -n "${ns}" ]] || die "config ${CFG} must set namespace"
 
-info "${BOLD}Updating TAPPaaS buddy '${NAME}' (${store}/${ns})${CL}"
+debug "${BOLD}Updating TAPPaaS buddy '${NAME}' (${store}/${ns})${CL}"
 pbs_ns_ensure "${ns}"
 
 if _pbs_syncjob_exists "sync-${NAME}"; then
     pbs_syncjob_ensure "sync-${NAME}" "${store}" "${ns}" "${NAME}" "" "" "${sched}" "${rv}"
-    info "  ${GN}✓${CL} sync-job sync-${NAME} schedule=${sched} remove-vanished=${rv}"
+    debug "  ${GN}✓${CL} sync-job sync-${NAME} schedule=${sched} remove-vanished=${rv}"
 else
     warn "  sync-job sync-${NAME} missing — run 'backup-manage.sh add-remote ${NAME}' to (re)create it with credentials"
 fi
@@ -47,4 +47,4 @@ fi
 read -ra ret <<< "$(_pbs_retention_args "${retention}")"
 [[ ${#ret[@]} -gt 0 ]] && pbs_prunejob_ensure_ns "prune-remote-${NAME}" "${store}" "${ns}" "02:30" "${ret[@]}"
 
-info "  ${GN}✓${CL} buddy '${NAME}' update completed"
+debug "  ${GN}✓${CL} buddy '${NAME}' update completed"

@@ -12,6 +12,7 @@
     "maintainer",
     "status",
     "tier",
+    "kind",
     "source",
     "location",
     "variant",
@@ -195,6 +196,21 @@
       },
       "example": "app",
       "note": "Mandatory in authored module JSON (ADR-007b CR-04). The schema gives it a 'app' default so legacy module configs that predate ADR-007 still validate (back-compat); authored modules SHOULD set it explicitly."
+    },
+    "kind": {
+      "description": "Authoritative object-type marker (ADR-007 #3), written by the tooling — NOT authored by hand. install-module.sh stamps '.kind = \"module\"' into every deployed /home/tappaas/config/<module>.json so module-manager list/show can distinguish a real deployed module from other config objects. It is absent from authored source JSON, which is why the reconcile flagged it as unknown before this field existed.",
+      "type": "string",
+      "requiredBy": [],
+      "usedBy": [
+        "general"
+      ],
+      "default": "module",
+      "values": {
+        "module": "A TAPPaaS module deployed via install-module.sh — the only value module-fields.json uses.",
+        "external-host": "A non-module cluster guest registered via satellite-manager; validated by satellite-fields.json, not this schema."
+      },
+      "example": "module",
+      "note": "System-managed: set automatically by install-module.sh (jq '.kind = \"module\"'). Do not set it in authored module JSON."
     },
     "source": {
       "description": "Origin & trust of the catalog entry (ADR-007b). Answers 'Where does the catalog entry come from?'. Orthogonal to 'tier'. Normally INFERRED at deploy time from the repository the module is catalogued in (sourceMetadata lives in Site → repositories, CR-05); only set explicitly when the module file itself must pin it.",

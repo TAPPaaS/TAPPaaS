@@ -90,7 +90,7 @@ def _check_egress(host: str = "1.1.1.1", port: int = 443,
     prefix = f"[EGRESS-CHECK {label}] " if label else "[EGRESS-CHECK] "
     try:
         with socket.create_connection((host, port), timeout=timeout):
-            info(f"{prefix}egress OK - TCP {host}:{port} reachable")
+            debug(f"{prefix}egress OK - TCP {host}:{port} reachable")
             return True
     except Exception as e:
         warn(f"{prefix}egress FAILED - cannot reach {host}:{port}: {e}")

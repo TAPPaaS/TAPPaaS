@@ -53,8 +53,8 @@ DESCRIPTION="TAPPaaS: ${MODULE}"
 # The upstream is the consumer VM's internal DNS name in its primary zone.
 UPSTREAM="${VMNAME}.${ZONE0}.internal"
 
-info "${BOLD}identity:accessControl: wiring forward-auth for ${BL}${MODULE}${CL}"
-info "  external: https://${PROXY_DOMAIN}    upstream: ${UPSTREAM}:${PROXY_PORT}"
+debug "${BOLD}identity:accessControl: wiring forward-auth for ${BL}${MODULE}${CL}"
+debug "  external: https://${PROXY_DOMAIN}    upstream: ${UPSTREAM}:${PROXY_PORT}"
 
 # ── Step 1: Authentik application + provider, attached to embedded outpost ──
 
@@ -66,7 +66,7 @@ fi
 # cannot supply the token (issue #312).
 ensure_authentik_credentials
 
-info "  Authentik: ensuring Proxy app/provider '${MODULE}' (attached to embedded outpost)"
+debug "  Authentik: ensuring Proxy app/provider '${MODULE}' (attached to embedded outpost)"
 authentik-manager proxy-app-ensure "${MODULE}" \
     --name "${MODULE}" \
     --external-host "https://${PROXY_DOMAIN}" \
@@ -86,23 +86,23 @@ OPNSENSE_SECRET="$(grep '^secret=' "$OPNSENSE_CREDS" | cut -d= -f2-)"
 OPNSENSE_AUTH="${OPNSENSE_KEY}:${OPNSENSE_SECRET}"
 CADDY_API="https://firewall.mgmt.internal:8443/api/caddy"
 
-info "  Caddy: looking up existing handler for ${PROXY_DOMAIN}"
+debug "  Caddy: looking up existing handler for ${PROXY_DOMAIN}"
 HANDLE_UUID="$(curl -ksS -u "$OPNSENSE_AUTH" "${CADDY_API}/ReverseProxy/searchHandle" \
     | jq -r --arg d "$DESCRIPTION" '.rows[] | select(.description==$d) | .uuid' | head -1)"
 [[ -n "$HANDLE_UUID" ]] \
     || die "no Caddy handler with description '${DESCRIPTION}' (network:proxy install-service.sh runs first?)"
 
-info "  Caddy: enabling ForwardAuth=1 on handler ${HANDLE_UUID:0:8}..."
+debug "  Caddy: enabling ForwardAuth=1 on handler ${HANDLE_UUID:0:8}..."
 curl -ksS -u "$OPNSENSE_AUTH" -X POST "${CADDY_API}/ReverseProxy/setHandle/${HANDLE_UUID}" \
     -H 'Content-Type: application/json' \
     -d '{"handle":{"ForwardAuth":"1"}}' | jq -r .result >/dev/null \
     || die "Failed to set ForwardAuth on handler for ${MODULE}"
 
-info "  Caddy: reconfiguring + reloading"
+debug "  Caddy: reconfiguring + reloading"
 curl -ksS -u "$OPNSENSE_AUTH" -X POST "${CADDY_API}/service/reconfigure" | jq -r .status >/dev/null
 ssh -o StrictHostKeyChecking=accept-new "root@firewall.mgmt.internal" \
     "/bin/sh -c 'configctl caddy reload'" >/dev/null 2>&1 || true
 
-info "  ${GN}✓${CL} identity:accessControl wired for ${MODULE}"
-info "      log in at https://${PROXY_DOMAIN}/ — Authentik gates the request,"
-info "      then Caddy proxies to ${UPSTREAM}:${PROXY_PORT} with X-Authentik-* headers"
+debug "  ${GN}✓${CL} identity:accessControl wired for ${MODULE}"
+debug "      log in at https://${PROXY_DOMAIN}/ — Authentik gates the request,"
+debug "      then Caddy proxies to ${UPSTREAM}:${PROXY_PORT} with X-Authentik-* headers"

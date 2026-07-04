@@ -46,7 +46,7 @@ readonly SCRIPT_DIR
 # shellcheck source=access-list.sh disable=SC1091
 . "${SCRIPT_DIR}/access-list.sh"
 
-info "network:proxy update-service for module: ${BL}${MODULE}${CL}"
+debug "network:proxy update-service for module: ${BL}${MODULE}${CL}"
 
 # ── Validate inputs ─────────────────────────────────────────────────
 
@@ -91,8 +91,8 @@ PROXY_PORT=$(get_config_value 'proxyPort' '80')
 UPSTREAM="${VMNAME}.${ZONE}.internal"
 DESCRIPTION="TAPPaaS: ${MODULE}"
 
-info "  Expected domain:   ${BL}${PROXY_DOMAIN}${CL}"
-info "  Expected upstream: ${BL}${UPSTREAM}:${PROXY_PORT}${CL}"
+debug "  Expected domain:   ${BL}${PROXY_DOMAIN}${CL}"
+debug "  Expected upstream: ${BL}${UPSTREAM}:${PROXY_PORT}${CL}"
 
 # ── Check firewallType ───────────────────────────────────────────────
 
@@ -107,7 +107,7 @@ if [[ "${FIREWALL_TYPE}" == "NONE" ]]; then
     warn "  ${BOLD}Domain:${CL}      ${BL}${PROXY_DOMAIN}${CL}"
     warn "  ${BOLD}Upstream:${CL}    ${BL}${UPSTREAM}${CL}"
     warn "  ${BOLD}Port:${CL}        ${BL}${PROXY_PORT}${CL}"
-    info "${GN}network:proxy update-service completed for ${MODULE} (manual config required)${CL}"
+    debug "${GN}network:proxy update-service completed for ${MODULE} (manual config required)${CL}"
     exit 0
 fi
 
@@ -152,7 +152,7 @@ if [[ "${PROXY_TLS}" == "dns01" ]]; then
 fi
 
 # Reconcile the domain (creates if missing, applies the TLS strategy either way)
-info "  Reconciling domain ${PROXY_DOMAIN} (TLS=${PROXY_TLS})..."
+debug "  Reconciling domain ${PROXY_DOMAIN} (TLS=${PROXY_TLS})..."
 run_caddy add-domain "${PROXY_DOMAIN}" \
     --description "${DESCRIPTION}" \
     "${CADDY_DOMAIN_ARGS[@]+"${CADDY_DOMAIN_ARGS[@]}"}" \
@@ -173,7 +173,7 @@ if [[ "$(get_config_value 'proxyUpstreamTls' 'false')" == "true" ]]; then
     TLS_ARGS=(--upstream-tls)
 fi
 
-info "  Reconciling handler (upstream ${UPSTREAM}:${PROXY_PORT}, access=${ACL_NAME:-public})..."
+debug "  Reconciling handler (upstream ${UPSTREAM}:${PROXY_PORT}, access=${ACL_NAME:-public})..."
 run_caddy add-handler "${PROXY_DOMAIN}" \
     --upstream "${UPSTREAM}" \
     --port "${PROXY_PORT}" \
@@ -186,7 +186,7 @@ CHANGES_MADE=true
 # ── Reconfigure if changes were made ────────────────────────────────
 
 if [[ "${CHANGES_MADE}" == "true" ]]; then
-    info "  Applying Caddy configuration..."
+    debug "  Applying Caddy configuration..."
     run_caddy reconfigure --no-ssl-verify || die "Failed to reconfigure Caddy"
 fi
 
@@ -199,4 +199,4 @@ if command -v dig &>/dev/null; then
     fi
 fi
 
-info "${GN}network:proxy update-service completed for ${MODULE}${CL}"
+debug "${GN}network:proxy update-service completed for ${MODULE}${CL}"

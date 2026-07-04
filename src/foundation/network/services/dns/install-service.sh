@@ -47,7 +47,7 @@ else
     readonly FIREWALL_JSON="${CONFIG_DIR}/firewall.json"
 fi
 
-info "network:dns install-service for module: ${BL}${MODULE}${CL}"
+debug "network:dns install-service for module: ${BL}${MODULE}${CL}"
 
 # ── Validate inputs ─────────────────────────────────────────────────
 
@@ -77,7 +77,7 @@ fi
 
 DESCRIPTION="TAPPaaS: ${MODULE}"
 
-info "  Host: ${BL}${VMNAME}.${DOMAIN}${CL} -> ${BL}${DNS_IP}${CL}"
+debug "  Host: ${BL}${VMNAME}.${DOMAIN}${CL} -> ${BL}${DNS_IP}${CL}"
 
 # ── Check firewallType ───────────────────────────────────────────────
 
@@ -92,7 +92,7 @@ if [[ "${FIREWALL_TYPE}" == "NONE" ]]; then
     warn "  ${BOLD}Hostname:${CL} ${BL}${VMNAME}.${DOMAIN}${CL}"
     warn "  ${BOLD}IP:${CL}       ${BL}${DNS_IP}${CL}"
     warn "Create this entry on your DNS server, then continue."
-    info "${GN}network:dns install-service completed for ${MODULE} (manual config required)${CL}"
+    debug "${GN}network:dns install-service completed for ${MODULE} (manual config required)${CL}"
     exit 0
 fi
 
@@ -113,9 +113,9 @@ fi
 
 # ── Create / update the DNS host override (idempotent) ──────────────
 
-info "  Creating DNS host override..."
+debug "  Creating DNS host override..."
 dns-manager --no-ssl-verify add "${VMNAME}" "${DOMAIN}" "${DNS_IP}" \
     --description "${DESCRIPTION}" \
     || die "dns-manager add failed for ${VMNAME}.${DOMAIN}"
 
-info "${GN}network:dns install-service completed for ${MODULE}${CL}"
+debug "${GN}network:dns install-service completed for ${MODULE}${CL}"

@@ -40,7 +40,7 @@ else
     readonly FIREWALL_JSON="${CONFIG_DIR}/firewall.json"
 fi
 
-info "network:proxy delete-service for module: ${BL}${MODULE}${CL}"
+debug "network:proxy delete-service for module: ${BL}${MODULE}${CL}"
 
 # ── Check firewallType ───────────────────────────────────────────────
 
@@ -75,7 +75,7 @@ if [[ "${FIREWALL_TYPE}" == "NONE" ]]; then
     else
         warn "Remember to remove any reverse proxy rules for module '${MODULE}' from your firewall."
     fi
-    info "${GN}network:proxy delete-service completed for ${MODULE} (manual cleanup required)${CL}"
+    debug "${GN}network:proxy delete-service completed for ${MODULE} (manual cleanup required)${CL}"
     exit 0
 fi
 
@@ -117,21 +117,21 @@ DESCRIPTION="TAPPaaS: ${MODULE}"
 
 # ── Delete handler ──────────────────────────────────────────────────
 
-info "  Deleting Caddy handler..."
+debug "  Deleting Caddy handler..."
 caddy-manager delete-handler \
     --description "${DESCRIPTION}" \
     --no-ssl-verify || warn "Could not delete handler for ${MODULE}"
 
 # ── Delete access list (issue #206) ─────────────────────────────────
 # Remove the handler first so nothing references the access list, then drop it.
-info "  Deleting Caddy access list (if any)..."
+debug "  Deleting Caddy access list (if any)..."
 caddy-manager delete-accesslist "tappaas-${MODULE}" \
     --no-ssl-verify >/dev/null 2>&1 || true
 
 # ── Delete domain ───────────────────────────────────────────────────
 
 if [[ -n "${PROXY_DOMAIN}" ]]; then
-    info "  Deleting Caddy domain: ${BL}${PROXY_DOMAIN}${CL}"
+    debug "  Deleting Caddy domain: ${BL}${PROXY_DOMAIN}${CL}"
     caddy-manager delete-domain "${PROXY_DOMAIN}" \
         --no-ssl-verify || warn "Could not delete domain ${PROXY_DOMAIN}"
 
@@ -144,7 +144,7 @@ if [[ -n "${PROXY_DOMAIN}" ]]; then
     if [[ "$(jq -r '.dnsMode // "wildcard"' <<<"${VCFG}")" == "per-service" ]]; then
         DNS_HOST="${PROXY_DOMAIN%%.*}"
         DNS_ZONE="${PROXY_DOMAIN#*.}"
-        info "  Removing per-service Unbound override ${DNS_HOST}.${DNS_ZONE}..."
+        debug "  Removing per-service Unbound override ${DNS_HOST}.${DNS_ZONE}..."
         unbound-manager --no-ssl-verify delete "${DNS_HOST}" "${DNS_ZONE}" >/dev/null 2>&1 \
             || warn "Could not remove Unbound override ${DNS_HOST}.${DNS_ZONE} (may not exist)"
     fi
@@ -154,7 +154,7 @@ fi
 
 # ── Reconfigure Caddy ───────────────────────────────────────────────
 
-info "  Applying Caddy configuration..."
+debug "  Applying Caddy configuration..."
 caddy-manager reconfigure --no-ssl-verify || warn "Caddy reconfigure returned non-zero"
 
-info "${GN}network:proxy delete-service completed for ${MODULE}${CL}"
+debug "${GN}network:proxy delete-service completed for ${MODULE}${CL}"

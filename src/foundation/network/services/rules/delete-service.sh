@@ -33,7 +33,7 @@ else
     readonly FIREWALL_JSON="${CONFIG_DIR}/firewall.json"
 fi
 
-info "network:rules delete-service for module: ${BL}${MODULE}${CL}"
+debug "network:rules delete-service for module: ${BL}${MODULE}${CL}"
 
 if [[ ! -f "${MODULE_JSON}" ]]; then
     warn "Module config not found: ${MODULE_JSON} (continuing — rules may still be removed by description prefix)"
@@ -45,8 +45,8 @@ if [[ -f "${FIREWALL_JSON}" ]]; then
 fi
 
 if [[ "${FIREWALL_TYPE}" == "NONE" ]]; then
-    info "firewallType=NONE — please manually remove any firewall rules for ${MODULE} on your firewall."
-    info "${GN}network:rules delete-service completed for ${MODULE} (manual cleanup required)${CL}"
+    debug "firewallType=NONE — please manually remove any firewall rules for ${MODULE} on your firewall."
+    debug "${GN}network:rules delete-service completed for ${MODULE} (manual cleanup required)${CL}"
     exit 0
 fi
 
@@ -59,4 +59,4 @@ rules-manager remove-rules "${MODULE}" \
     --no-ssl-verify \
     || die "rules-manager remove-rules failed for ${MODULE}"
 
-info "${GN}network:rules delete-service completed for ${MODULE}${CL}"
+debug "${GN}network:rules delete-service completed for ${MODULE}${CL}"

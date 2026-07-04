@@ -30,10 +30,10 @@ VMID="$(get_config_value 'vmid')"
 VMNAME="$(get_config_value 'vmname' "${MODULE}")"
 
 if [[ -z "${VMID}" ]]; then
-    info "backup:vm: ${MODULE} has no vmid — nothing to remove from backup"
+    debug "backup:vm: ${MODULE} has no vmid — nothing to remove from backup"
     exit 0
 fi
 
-info "${BOLD}backup:vm: removing ${BL}${VMNAME}${CL} (VMID ${VMID}) from PBS backup${CL}"
+debug "${BOLD}backup:vm: removing ${BL}${VMNAME}${CL} (VMID ${VMID}) from PBS backup${CL}"
 pbs_remove_vmid "${VMID}"
-info "  ${GN}✓${CL} backup:vm delete-service completed"
+debug "  ${GN}✓${CL} backup:vm delete-service completed"

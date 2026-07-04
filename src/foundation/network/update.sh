@@ -109,7 +109,7 @@ fi
 # only warn that it is pending and skip the reboot/wait.
 
 if [[ "$_fw_reboot_needed" -eq 0 ]]; then
-    info "${GN}✓${CL} OPNsense already current (${_fw_ver_after%%|*}) — no base/kernel update, skipping reboot."
+    debug "${GN}✓${CL} OPNsense already current (${_fw_ver_after%%|*}) — no base/kernel update, skipping reboot."
 elif automatic_reboot_enabled; then
     info "Rebooting firewall to apply updates..."
     ssh root@"$FIREWALL_FQDN" "shutdown -r now" 2>/dev/null || true
@@ -145,7 +145,7 @@ fi
 # Python/dnspython version mismatch (see ISSUES.md), Unbound may fail
 # to start. We check DNS here to catch the problem early.
 
-info "Verifying Unbound DNS is responding..."
+debug "Verifying Unbound DNS is responding..."
 DNS_CHECK_RETRIES=6
 DNS_CHECK_COUNT=0
 while ! dig @10.0.0.1 firewall.mgmt.internal +short +timeout=5 >/dev/null 2>&1; do
@@ -161,8 +161,10 @@ while ! dig @10.0.0.1 firewall.mgmt.internal +short +timeout=5 >/dev/null 2>&1; 
     printf "."
 done
 if [[ $DNS_CHECK_COUNT -lt $DNS_CHECK_RETRIES ]]; then
-    echo ""
-    info "${GN}✓${CL} Unbound DNS is responding"
+    # Only emit the newline when progress dots were actually printed (retry path);
+    # in the normal first-try case this avoids a spurious blank line.
+    [[ $DNS_CHECK_COUNT -gt 0 ]] && echo ""
+    debug "${GN}✓${CL} Unbound DNS is responding"
 fi
 
 # ── Apply zone configuration ────────────────────────────────────────
@@ -187,9 +189,9 @@ ssh root@"$FIREWALL_FQDN" "configctl filter reload" >/dev/null 2>&1 \
 # Reachability note: the firewall is addressed by FQDN, kept DNS-independent via
 # the cicd's static /etc/hosts pin (networking.hosts in tappaas-cicd.nix) so this
 # check — and the rollback that may follow — work even if Unbound is down.
-info "Compile-checking the firewall ruleset (pfctl -nf /tmp/rules.debug)..."
+debug "Compile-checking the firewall ruleset (pfctl -nf /tmp/rules.debug)..."
 if ssh root@"$FIREWALL_FQDN" "pfctl -nf /tmp/rules.debug" >/dev/null 2>&1; then
-    info "${GN}✓${CL} Firewall ruleset compiles cleanly"
+    debug "${GN}✓${CL} Firewall ruleset compiles cleanly"
 else
     error "pfctl ruleset compile-check FAILED — /tmp/rules.debug does not parse."
     error "The firewall ruleset is broken; aborting the update (deploy should roll back)."
@@ -213,7 +215,7 @@ fi
 # details (proxyDomain, proxyPort, proxyUpstreamTls, proxyTls, proxyAllowedZones)
 # are read from the deployed module JSON by the service script itself.
 if jq -e '(.dependsOn // []) | (index("network:proxy") // index("network:proxy"))' "${FIREWALL_JSON}" >/dev/null 2>&1; then
-    info "Reconciling the network module's own reverse-proxy entry (network:proxy)..."
+    debug "Reconciling the network module's own reverse-proxy entry (network:proxy)..."
     if [[ -x "${SCRIPT_DIR}/services/proxy/update-service.sh" ]]; then
         "${SCRIPT_DIR}/services/proxy/update-service.sh" "${NETWORK_MODULE_NAME}" \
             || warn "network:proxy update-service for the network module returned non-zero (continuing)"

@@ -31,17 +31,17 @@ ns="$(jq -r '.namespace // empty' "${CFG}" 2>/dev/null || true)"
 [[ -n "${ns}" ]] || ns="remote/${NAME}"
 readauth="$(jq -r '.readAuthId // ""' "${CFG}" 2>/dev/null || true)"
 
-info "${BOLD}Offboarding TAPPaaS buddy '${NAME}'${CL}"
-pbs_syncjob_delete "sync-${NAME}"   && info "  removed sync-job sync-${NAME}"
-pbs_prunejob_delete "prune-remote-${NAME}" && info "  removed prune-job prune-remote-${NAME}"
-pbs_remote_delete "${NAME}"         && info "  removed remote ${NAME}"
+debug "${BOLD}Offboarding TAPPaaS buddy '${NAME}'${CL}"
+pbs_syncjob_delete "sync-${NAME}"   && debug "  removed sync-job sync-${NAME}"
+pbs_prunejob_delete "prune-remote-${NAME}" && debug "  removed prune-job prune-remote-${NAME}"
+pbs_remote_delete "${NAME}"         && debug "  removed remote ${NAME}"
 [[ -n "${readauth}" ]] && pbs_acl_delete "$(_pbs_ns_acl_path "${store}" "${ns}")" DatastoreReader "${readauth}"
 
 if [[ "${PURGE}" == "--purge" ]]; then
     warn "  --purge: deleting namespace ${ns} and all its backups"
-    pbs_ns_delete "${ns}" --purge && info "  deleted namespace ${ns}"
+    pbs_ns_delete "${ns}" --purge && debug "  deleted namespace ${ns}"
 else
-    info "  namespace ${ns} kept (offsite copy preserved) — re-run with --purge to delete its data"
+    debug "  namespace ${ns} kept (offsite copy preserved) — re-run with --purge to delete its data"
 fi
 
-info "  ${GN}✓${CL} buddy '${NAME}' offboarded"
+debug "  ${GN}✓${CL} buddy '${NAME}' offboarded"

@@ -281,7 +281,7 @@ main() {
             # shellcheck disable=SC1091
             . /home/tappaas/bin/apply-json-merge.sh
             if apply_three_way_merge "${module}" "${module_dir_pre}"; then
-                info "  ${GN}✓${CL} Config reconciliation complete"
+                debug "  ${GN}✓${CL} Config reconciliation complete"
             else
                 warn "  3-way merge reported an error — continuing with current config unchanged"
             fi
@@ -343,7 +343,7 @@ main() {
         /home/tappaas/bin/test-module.sh "${module}" || pre_test_exit=$?
 
         if [[ "${pre_test_exit}" -eq 0 ]]; then
-            info "  ${GN}✓${CL} Pre-update tests passed"
+            debug "  ${GN}✓${CL} Pre-update tests passed"
         elif [[ "${OPT_FORCE}" -eq 1 ]]; then
             warn "Pre-update tests failed (exit ${pre_test_exit}) — continuing due to --force"
         else
@@ -369,7 +369,7 @@ main() {
                 fatal_with_rollback "${module}" "${snapshot_created}" "Module pre-update.sh failed"
             fi
         else
-            info "  No pre-update.sh found — skipping"
+            debug "  No pre-update.sh found — skipping"
         fi
     else
         info "  Module location not set — skipping"
@@ -410,7 +410,7 @@ main() {
 
             info "  Calling ${BL}${dep}${CL} update-service.sh for module '${module}'..."
             if "${svc_script}" "${module}"; then
-                info "  ${GN}✓${CL} ${dep} update-service completed"
+                debug "  ${GN}✓${CL} ${dep} update-service completed"
             else
                 fatal_with_rollback "${module}" "${snapshot_created}" "Service updater failed: ${dep}"
             fi

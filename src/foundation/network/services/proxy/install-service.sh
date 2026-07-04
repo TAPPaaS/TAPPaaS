@@ -56,7 +56,7 @@ readonly SCRIPT_DIR
 # shellcheck source=access-list.sh disable=SC1091
 . "${SCRIPT_DIR}/access-list.sh"
 
-info "network:proxy install-service for module: ${BL}${MODULE}${CL}"
+debug "network:proxy install-service for module: ${BL}${MODULE}${CL}"
 
 # ── Validate inputs ─────────────────────────────────────────────────
 
@@ -108,8 +108,8 @@ UPSTREAM="${VMNAME}.${ZONE}.internal"
 # Description tag for idempotency
 DESCRIPTION="TAPPaaS: ${MODULE}"
 
-info "  Domain:   ${BL}${PROXY_DOMAIN}${CL}"
-info "  Upstream: ${BL}${UPSTREAM}:${PROXY_PORT}${CL}"
+debug "  Domain:   ${BL}${PROXY_DOMAIN}${CL}"
+debug "  Upstream: ${BL}${UPSTREAM}:${PROXY_PORT}${CL}"
 
 # ── Check firewallType ───────────────────────────────────────────────
 
@@ -130,7 +130,7 @@ if [[ "${FIREWALL_TYPE}" == "NONE" ]]; then
     warn "  ${BOLD}Rule:${CL}        Forward HTTPS traffic for ${PROXY_DOMAIN} → ${UPSTREAM}:${PROXY_PORT}"
     warn ""
     warn "Continuing without automated proxy setup."
-    info "${GN}network:proxy install-service completed for ${MODULE} (manual config required)${CL}"
+    debug "${GN}network:proxy install-service completed for ${MODULE} (manual config required)${CL}"
     exit 0
 fi
 
@@ -148,7 +148,7 @@ if command -v dig &>/dev/null; then
         warn "No DNS A record found for ${PROXY_DOMAIN}"
         warn "Let's Encrypt certificate issuance may fail until DNS is configured"
     else
-        info "  DNS A:    ${BL}${DNS_RESULT}${CL}"
+        debug "  DNS A:    ${BL}${DNS_RESULT}${CL}"
     fi
 else
     warn "dig not available — skipping DNS validation"
@@ -178,14 +178,14 @@ esac
 
 CADDY_DOMAIN_ARGS=()
 if [[ "${DNS_MODE}" == "per-service" ]]; then
-    info "  TLS: per-service HTTP-01 (dnsMode=per-service) — Caddy issues a cert for ${PROXY_DOMAIN}"
+    debug "  TLS: per-service HTTP-01 (dnsMode=per-service) — Caddy issues a cert for ${PROXY_DOMAIN}"
     # Split-horizon DNS must be an UNBOUND host override (the 10.0.0.1:53 resolver);
     # Dnsmasq host entries are not served for public domains (#269).
     if DMZ_GW="$(dmz_gateway_ip)"; then
         DNS_HOST="${PROXY_DOMAIN%%.*}"
         DNS_ZONE="${PROXY_DOMAIN#*.}"
         if unbound-manager --no-ssl-verify add "${DNS_HOST}" "${DNS_ZONE}" "${DMZ_GW}" --description "${DESCRIPTION}"; then
-            info "  ${GN}✓${CL} split-horizon DNS ${DNS_HOST}.${DNS_ZONE} -> ${DMZ_GW} (DMZ, Unbound)"
+            debug "  ${GN}✓${CL} split-horizon DNS ${DNS_HOST}.${DNS_ZONE} -> ${DMZ_GW} (DMZ, Unbound)"
         else
             warn "  Could not register ${PROXY_DOMAIN} in Unbound — register manually:"
             warn "    unbound-manager --no-ssl-verify add '${DNS_HOST}' '${DNS_ZONE}' '${DMZ_GW}'"
@@ -210,7 +210,7 @@ else
         TLS_CERT_REFID=$(jq -r '.tappaas.tlsCertRefid // ""' "${SYSTEM_CONFIG}" 2>/dev/null) || TLS_CERT_REFID=""
     fi
     if [[ -n "${TLS_CERT_REFID}" ]]; then
-        info "  TLS: DNS-01 wildcard (dnsMode=wildcard) — refid ${TLS_CERT_REFID}"
+        debug "  TLS: DNS-01 wildcard (dnsMode=wildcard) — refid ${TLS_CERT_REFID}"
         CADDY_DOMAIN_ARGS=(--custom-certificate "${TLS_CERT_REFID}")
     else
         debug "  TLS: wildcard but no tlsCertRefid for variant '${VARIANT:-default}' yet."
@@ -220,7 +220,7 @@ fi
 
 # ── Create domain ───────────────────────────────────────────────────
 
-info "  Creating Caddy domain..."
+debug "  Creating Caddy domain..."
 run_caddy add-domain "${PROXY_DOMAIN}" \
     --description "${DESCRIPTION}" \
     "${CADDY_DOMAIN_ARGS[@]+"${CADDY_DOMAIN_ARGS[@]}"}" \
@@ -237,7 +237,7 @@ fi
 # HTTPS upstream (e.g. the OPNsense GUI on :8443).
 TLS_ARGS=()
 if [[ "$(get_config_value 'proxyUpstreamTls' 'false')" == "true" ]]; then
-    info "  Upstream is HTTPS (proxyUpstreamTls=true)"
+    debug "  Upstream is HTTPS (proxyUpstreamTls=true)"
     TLS_ARGS=(--upstream-tls)
 fi
 
@@ -247,7 +247,7 @@ fi
 # WebSocket Upgrade and returns 500 — the SPA then renders blank. (#339)
 HTTP1_ARGS=()
 if [[ "$(get_config_value 'proxyUpstreamHttp1' 'false')" == "true" ]]; then
-    info "  Forcing HTTP/1.1 to the upstream (proxyUpstreamHttp1=true — WebSocket support)"
+    debug "  Forcing HTTP/1.1 to the upstream (proxyUpstreamHttp1=true — WebSocket support)"
     HTTP1_ARGS=(--upstream-http1)
 fi
 
@@ -256,13 +256,13 @@ fi
 # Caddy otherwise sends the upstream's own hostname, so Origin≠Host → 500. (#339)
 PRESERVE_HOST_ARGS=()
 if [[ "$(get_config_value 'proxyPreserveHost' 'false')" == "true" ]]; then
-    info "  Preserving Host upstream (proxyPreserveHost=true — WebSocket Origin check)"
+    debug "  Preserving Host upstream (proxyPreserveHost=true — WebSocket Origin check)"
     PRESERVE_HOST_ARGS=(--preserve-host)
 fi
 
 # ── Create handler ──────────────────────────────────────────────────
 
-info "  Creating Caddy handler..."
+debug "  Creating Caddy handler..."
 run_caddy add-handler "${PROXY_DOMAIN}" \
     --upstream "${UPSTREAM}" \
     --port "${PROXY_PORT}" \
@@ -275,7 +275,7 @@ run_caddy add-handler "${PROXY_DOMAIN}" \
 
 # ── Reconfigure Caddy ───────────────────────────────────────────────
 
-info "  Applying Caddy configuration..."
+debug "  Applying Caddy configuration..."
 run_caddy reconfigure --no-ssl-verify || die "Failed to reconfigure Caddy"
 
-info "${GN}network:proxy install-service completed for ${MODULE}${CL}"
+debug "${GN}network:proxy install-service completed for ${MODULE}${CL}"

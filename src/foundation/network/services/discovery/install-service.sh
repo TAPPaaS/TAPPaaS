@@ -36,7 +36,7 @@ else
     readonly FIREWALL_JSON="${CONFIG_DIR}/firewall.json"
 fi
 
-info "network:discovery install-service for module: ${BL}${MODULE}${CL}"
+debug "network:discovery install-service for module: ${BL}${MODULE}${CL}"
 
 [[ -f "${MODULE_JSON}" ]] || die "Module config not found: ${MODULE_JSON}"
 
@@ -59,8 +59,8 @@ fi
 HAS_MDNS=$([[ "${MDNS_RAW}" != "false" ]] && echo "true" || echo "false")
 
 if [[ "${HAS_MDNS}" == "false" && "${UDP_RELAY_COUNT}" == "0" ]]; then
-    info "  No discoveryMdns or discoveryUdpRelay declared — nothing to apply."
-    info "${GN}network:discovery install-service completed for ${MODULE} (no-op)${CL}"
+    debug "  No discoveryMdns or discoveryUdpRelay declared — nothing to apply."
+    debug "${GN}network:discovery install-service completed for ${MODULE} (no-op)${CL}"
     exit 0
 fi
 
@@ -78,7 +78,7 @@ if [[ "${FIREWALL_TYPE}" == "NONE" ]]; then
         read_module_config "${MODULE}" | jq -r '.discoveryUdpRelay[]? |
             "  Install os-udpbroadcastrelay; UDP relay port \(.port) for zones: \(.zones | join(", "))"'
     fi
-    info "${GN}network:discovery install-service completed for ${MODULE} (manual config required)${CL}"
+    debug "${GN}network:discovery install-service completed for ${MODULE} (manual config required)${CL}"
     exit 0
 fi
 
@@ -120,7 +120,7 @@ resolve_iface() {
 
 if [[ "${HAS_MDNS}" == "true" ]]; then
     [[ -z "${ZONE0}" ]] && die "discoveryMdns set but zone0 not set in ${MODULE_JSON}"
-    info "  Configuring mDNS repeater (zone0=${ZONE0}, consumer zones: ${MDNS_ZONES_COUNT})..."
+    debug "  Configuring mDNS repeater (zone0=${ZONE0}, consumer zones: ${MDNS_ZONES_COUNT})..."
 
     ZONE0_IFACE=$(resolve_iface "${ZONE0}")
     [[ -z "${ZONE0_IFACE}" ]] && die "Cannot resolve OPNsense interface for zone: ${ZONE0}"
@@ -140,7 +140,7 @@ if [[ "${HAS_MDNS}" == "true" ]]; then
     ALL_IFACES=$(printf '%s\n' ${CURRENT} "${ZONE0_IFACE}" ${CONSUMER_IFACES} \
         | grep -v '^$' | sort -u | tr '\n' ',' | sed 's/,$//')
 
-    info "  mDNS interfaces set: ${BL}${ALL_IFACES}${CL}"
+    debug "  mDNS interfaces set: ${BL}${ALL_IFACES}${CL}"
 
     SAVE_RESP=$(curl "${CURL[@]}" -X POST -H "Content-Type: application/json" \
         -d "{\"mdnsrepeater\":{\"enabled\":\"1\",\"interfaces\":\"${ALL_IFACES}\"}}" \
@@ -151,13 +151,13 @@ if [[ "${HAS_MDNS}" == "true" ]]; then
     # reconfigure rebuilds the configd config file from config.xml and starts/restarts the daemon.
     # service/restart alone does not rebuild the config and leaves the daemon stopped.
     curl "${CURL[@]}" -X POST "${API}/mdnsrepeater/service/reconfigure" >/dev/null
-    info "  mDNS repeater reconfigured and started."
+    debug "  mDNS repeater reconfigured and started."
 fi
 
 # ── UDP broadcast relay ──────────────────────────────────────────────
 
 if (( UDP_RELAY_COUNT > 0 )); then
-    info "  Configuring UDP broadcast relay (${UDP_RELAY_COUNT} entries)..."
+    debug "  Configuring UDP broadcast relay (${UDP_RELAY_COUNT} entries)..."
 
     RELAY_SEARCH=$(curl "${CURL[@]}" "${API}/udpbroadcastrelay/settings/searchRelay")
     EXISTING_DESCS=$(echo "${RELAY_SEARCH}" | jq -r '.rows[].description // ""')
@@ -185,7 +185,7 @@ if (( UDP_RELAY_COUNT > 0 )); then
         DESC="tappaas_${MODULE_SAFE}_${PORT}"
 
         if echo "${EXISTING_DESCS}" | grep -qF "${DESC}"; then
-            info "  UDP relay port ${PORT} (${DESC}) already configured — skipping."
+            debug "  UDP relay port ${PORT} (${DESC}) already configured — skipping."
             continue
         fi
 
@@ -204,7 +204,7 @@ if (( UDP_RELAY_COUNT > 0 )); then
         [[ -z "${ZONE_IFACES}" ]] && die "No valid interfaces resolved for UDP relay port ${PORT}"
 
         INSTANCE_ID=$(next_instance_id)
-        info "  Adding UDP relay: port=${PORT} ifaces=${ZONE_IFACES} id=${INSTANCE_ID} desc=${DESC}"
+        debug "  Adding UDP relay: port=${PORT} ifaces=${ZONE_IFACES} id=${INSTANCE_ID} desc=${DESC}"
 
         ADD_RESP=$(curl "${CURL[@]}" -X POST -H "Content-Type: application/json" \
             -d "{\"udpbroadcastrelay\":{\"enabled\":\"1\",\"listenport\":\"${PORT}\",\"interfaces\":\"${ZONE_IFACES}\",\"InstanceID\":\"${INSTANCE_ID}\",\"description\":\"${DESC}\"}}" \
@@ -218,8 +218,8 @@ if (( UDP_RELAY_COUNT > 0 )); then
     done < <(read_module_config "${MODULE}" | jq -c '.discoveryUdpRelay[]')
 
     if (( RELAY_ADDED > 0 )); then
-        info "  UDP broadcast relay reloaded (${RELAY_ADDED} new entries added)."
+        debug "  UDP broadcast relay reloaded (${RELAY_ADDED} new entries added)."
     fi
 fi
 
-info "${GN}network:discovery install-service completed for ${MODULE}${CL}"
+debug "${GN}network:discovery install-service completed for ${MODULE}${CL}"

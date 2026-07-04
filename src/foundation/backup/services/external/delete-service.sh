@@ -30,16 +30,16 @@ ns="$(jq -r '.namespace // empty' "${CFG}" 2>/dev/null || true)"
 [[ -n "${ns}" ]] || ns="external/${NAME}"
 userid="${NAME}@pbs"
 
-info "${BOLD}Offboarding external client '${NAME}'${CL}"
-pbs_prunejob_delete "prune-external-${NAME}" && info "  removed prune-job prune-external-${NAME}"
-pbs_acl_delete "$(_pbs_ns_acl_path "${store}" "${ns}")" DatastoreBackup "${userid}" && info "  removed ACL for ${userid}"
-pbs_user_delete "${userid}" && info "  removed user ${userid}"
+debug "${BOLD}Offboarding external client '${NAME}'${CL}"
+pbs_prunejob_delete "prune-external-${NAME}" && debug "  removed prune-job prune-external-${NAME}"
+pbs_acl_delete "$(_pbs_ns_acl_path "${store}" "${ns}")" DatastoreBackup "${userid}" && debug "  removed ACL for ${userid}"
+pbs_user_delete "${userid}" && debug "  removed user ${userid}"
 
 if [[ "${PURGE}" == "--purge" ]]; then
     warn "  --purge: deleting namespace ${ns} and all its backups"
-    pbs_ns_delete "${ns}" --purge && info "  deleted namespace ${ns}"
+    pbs_ns_delete "${ns}" --purge && debug "  deleted namespace ${ns}"
 else
-    info "  namespace ${ns} kept — re-run with --purge to delete its data"
+    debug "  namespace ${ns} kept — re-run with --purge to delete its data"
 fi
 
-info "  ${GN}✓${CL} external client '${NAME}' offboarded"
+debug "  ${GN}✓${CL} external client '${NAME}' offboarded"

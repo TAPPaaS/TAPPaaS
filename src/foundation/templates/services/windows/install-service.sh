@@ -55,15 +55,15 @@ readonly SCP_OPTS="-o ConnectTimeout=30 -o StrictHostKeyChecking=accept-new -o U
 phase_oobe_wait() {
     local max_wait=1200 retry=15 elapsed=0
 
-    info "Phase 1: Waiting for OOBE on ${VM_HOST} (timeout: $((max_wait / 60)) min)"
-    info "  (Windows is running the answer file — tappaas account + SSH are configured automatically)"
+    debug "Phase 1: Waiting for OOBE on ${VM_HOST} (timeout: $((max_wait / 60)) min)"
+    debug "  (Windows is running the answer file — tappaas account + SSH are configured automatically)"
     echo ""
 
     while true; do
         # shellcheck disable=SC2086
         if ssh ${SSH_OPTS} "tappaas@${VM_HOST}" "exit 0" 2>/dev/null; then
             printf "\r%-70s\n" ""
-            info "${GN}✓${CL} SSH available on ${VM_HOST}"
+            debug "${GN}✓${CL} SSH available on ${VM_HOST}"
             break
         fi
         if [[ ${elapsed} -ge ${max_wait} ]]; then
@@ -111,12 +111,12 @@ phase_oobe_wait() {
         "qm config ${VMID} 2>/dev/null | grep -c '${oobe_iso}' || true" 2>/dev/null) || true
 
     if [[ "${attached:-0}" -gt 0 ]]; then
-        info "Detaching OOBE answer ISO (${oobe_iso})..."
+        debug "Detaching OOBE answer ISO (${oobe_iso})..."
         ssh -n -o BatchMode=yes "root@${NODE}.mgmt.internal" \
             "qm set ${VMID} --delete ide1 2>/dev/null || true" >/dev/null 2>&1 || true
         ssh -n -o BatchMode=yes "root@${NODE}.mgmt.internal" \
             "pvesm free 'local:iso/${oobe_iso}' 2>/dev/null || true" >/dev/null 2>&1 || true
-        info "${GN}✓${CL} OOBE ISO detached"
+        debug "${GN}✓${CL} OOBE ISO detached"
     fi
 }
 
@@ -159,8 +159,8 @@ run_ps1() {
 # Windows is fully booted, SSH is up, so these work reliably and stick.
 
 step_hostname_fix() {
-    info ""
-    info "Step 0: Hostname + network profile"
+    debug ""
+    debug "Step 0: Hostname + network profile"
 
     # Fix network profile (Public → Private) so the built-in OpenSSH firewall
     # rule (Private only) also covers this interface, in addition to the
@@ -179,11 +179,11 @@ Write-Output "  Network profile: Private. SSH firewall rule: Any."
     local current_host
     current_host=$(ssh ${SSH_OPTS} "tappaas@${VM_HOST}" 'hostname' 2>/dev/null | tr -d '\r\n' || echo "")
     if [[ "${current_host,,}" == "${VMNAME,,}" ]]; then
-        info "  ${GN}✓${CL} Hostname already correct: ${current_host}"
+        debug "  ${GN}✓${CL} Hostname already correct: ${current_host}"
         return 0
     fi
 
-    info "  Renaming: ${current_host} → ${VMNAME} (reboot required)"
+    debug "  Renaming: ${current_host} → ${VMNAME} (reboot required)"
     # Rename — don't include Restart-Computer in run_ps1 (connection would drop mid-cleanup)
     if ! run_ps1 "hostname_fix" "Rename-Computer -NewName '${VMNAME}' -Force -ErrorAction Stop; Write-Output '  Rename scheduled.'"; then
         error "  Rename-Computer failed"
@@ -195,13 +195,13 @@ Write-Output "  Network profile: Private. SSH firewall rule: Any."
         'powershell -NoProfile -NonInteractive -Command "Start-Sleep 1; Restart-Computer -Force"' \
         2>/dev/null || true
 
-    info "  Waiting for VM to reboot..."
+    debug "  Waiting for VM to reboot..."
     local elapsed=0 max_wait=300
     while [[ ${elapsed} -lt ${max_wait} ]]; do
         sleep 10; elapsed=$((elapsed + 10))
         # shellcheck disable=SC2086
         if ssh ${SSH_OPTS} "tappaas@${VM_HOST}" "exit 0" 2>/dev/null; then
-            info "  ${GN}✓${CL} Hostname set to ${VMNAME}"
+            debug "  ${GN}✓${CL} Hostname set to ${VMNAME}"
             return 0
         fi
     done
@@ -212,8 +212,8 @@ Write-Output "  Network profile: Private. SSH firewall rule: Any."
 # ── Phase 2: Generic Windows baseline ─────────────────────────────────
 
 step_disk_extend() {
-    info ""
-    info "Step 1: Extend C: to fill available disk"  # Step 0 is hostname_fix
+    debug ""
+    debug "Step 1: Extend C: to fill available disk"  # Step 0 is hostname_fix
     run_ps1 "disk_extend" '
 $ErrorActionPreference = "Continue"
 
@@ -259,8 +259,8 @@ Write-Output "Disk extend complete. Free: $([math]::Round((Get-PSDrive C).Free/1
 }
 
 step_virtio_agent() {
-    info ""
-    info "Step 2: VirtIO guest agent (QEMU-GA)"
+    debug ""
+    debug "Step 2: VirtIO guest agent (QEMU-GA)"
     run_ps1 "virtio_agent" '
 $ErrorActionPreference = "Stop"
 $svc = Get-Service -Name QEMU-GA -ErrorAction SilentlyContinue
@@ -287,8 +287,8 @@ Write-Output "  VirtIO guest agent installed and running."
 }
 
 step_windows_update() {
-    info ""
-    info "Step 3: Security-only Windows Updates  (timeout: 30 min — be patient)"
+    debug ""
+    debug "Step 3: Security-only Windows Updates  (timeout: 30 min — be patient)"
     # PSWindowsUpdate requires SYSTEM/elevation — SSH sessions don't get UAC.
     # Workaround: create a one-shot Scheduled Task that runs as SYSTEM, wait for it.
     run_ps1 "windows_update" '
@@ -345,12 +345,12 @@ Write-Output "  Windows Update complete."
 }
 
 step_rdp_setup() {
-    info ""
+    debug ""
     local action
     if [[ "${ENABLE_RDP}" == "true" ]]; then
-        action="enable"; info "Step 4: Enabling RDP"
+        action="enable"; debug "Step 4: Enabling RDP"
     else
-        action="disable"; info "Step 4: Disabling RDP"
+        action="disable"; debug "Step 4: Disabling RDP"
     fi
     local ps1
     ps1=$(cat <<'PS'
@@ -374,8 +374,8 @@ PS
 }
 
 step_tappaas_account() {
-    info ""
-    info "Step 5: tappaas account verification"
+    debug ""
+    debug "Step 5: tappaas account verification"
     run_ps1 "tappaas_account" '
 $ErrorActionPreference = "Stop"
 $user = Get-LocalUser -Name "tappaas" -ErrorAction SilentlyContinue
@@ -392,29 +392,29 @@ $keys = "C:\ProgramData\ssh\administrators_authorized_keys"
 $keyCount = if (Test-Path $keys) { (Get-Content $keys | Measure-Object -Line).Lines } else { 0 }
 Write-Output "  tappaas: enabled, local admin, $keyCount SSH key(s) configured."
 '
-    info ""
-    info "  SSH:    ssh tappaas@${VM_HOST}"
-    info "  PS run: ssh tappaas@${VM_HOST} 'powershell -NoProfile -Command \"<command>\"'"
-    info "  PS file: scp script.ps1 tappaas@${VM_HOST}:~/ && ssh tappaas@${VM_HOST} 'powershell -ExecutionPolicy Bypass -File C:/Users/tappaas/script.ps1'"
+    debug ""
+    debug "  SSH:    ssh tappaas@${VM_HOST}"
+    debug "  PS run: ssh tappaas@${VM_HOST} 'powershell -NoProfile -Command \"<command>\"'"
+    debug "  PS file: scp script.ps1 tappaas@${VM_HOST}:~/ && ssh tappaas@${VM_HOST} 'powershell -ExecutionPolicy Bypass -File C:/Users/tappaas/script.ps1'"
 }
 
 # ── Main ──────────────────────────────────────────────────────────────
 
 main() {
-    info "=== Windows Service: ${VMNAME} (VMID ${VMID}) ==="
-    info "RDP: ${ENABLE_RDP}"
+    debug "=== Windows Service: ${VMNAME} (VMID ${VMID}) ==="
+    debug "RDP: ${ENABLE_RDP}"
 
     phase_oobe_wait
 
-    info ""
-    info "Phase 2: Generic Windows baseline"
+    debug ""
+    debug "Phase 2: Generic Windows baseline"
 
     local -a steps=(hostname_fix disk_extend virtio_agent windows_update rdp_setup tappaas_account)
     local -a failed=()
 
     for step in "${steps[@]}"; do
         if "step_${step}"; then
-            info "  ✓ ${step}"
+            debug "  ✓ ${step}"
         else
             error "  ✗ ${step} failed"
             failed+=("${step}")
@@ -426,7 +426,7 @@ main() {
         error "=== Completed WITH FAILURES: ${failed[*]} ==="
         exit 1
     fi
-    info "=== Windows baseline complete. SSH: tappaas@${VM_HOST} ==="
+    debug "=== Windows baseline complete. SSH: tappaas@${VM_HOST} ==="
 }
 
 main "$@"

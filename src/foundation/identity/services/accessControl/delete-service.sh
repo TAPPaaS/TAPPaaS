@@ -31,6 +31,6 @@ if [[ ! -f "${HOME}/.authentik-credentials.txt" ]]; then
     exit 0
 fi
 
-info "identity:accessControl: tearing down Authentik wiring for ${MODULE}"
+debug "identity:accessControl: tearing down Authentik wiring for ${MODULE}"
 authentik-manager app-delete "${MODULE}" || warn "  app-delete for ${MODULE} returned non-zero (may already be gone)"
-info "  ${GN}✓${CL} Authentik app/provider for ${MODULE} removed"
+debug "  ${GN}✓${CL} Authentik app/provider for ${MODULE} removed"

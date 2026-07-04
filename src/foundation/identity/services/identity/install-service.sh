@@ -103,8 +103,8 @@ DEFAULT_DOMAIN="$(get_variant_config '' | jq -r '.domain')"
 [[ -n "${DEFAULT_DOMAIN}" && "${DEFAULT_DOMAIN}" != "null" ]] || die "default environment domain not set (config/environments/<env>.json)"
 DISCOVERY_URI="https://identity.${DEFAULT_DOMAIN}/application/o/${SLUG}/.well-known/openid-configuration"
 
-info "${BOLD}identity:identity (OIDC): wiring ${BL}${MODULE}${CL}"
-info "  scope '${VARIANT:-<default>}'  app/slug '${SLUG}'  upstream ${UPSTREAM}"
+debug "${BOLD}identity:identity (OIDC): wiring ${BL}${MODULE}${CL}"
+debug "  scope '${VARIANT:-<default>}'  app/slug '${SLUG}'  upstream ${UPSTREAM}"
 
 command -v "${AUTHENTIK_MANAGER%% *}" >/dev/null 2>&1 || [[ -x "${AUTHENTIK_MANAGER}" ]] \
     || die "authentik-manager not available (rebuild opnsense-controller)"
@@ -122,7 +122,7 @@ ensure_authentik_credentials
 declare -a ALLOW_GROUPS=("users")
 if [[ "${PROVIDES_ADMIN}" == "true" ]]; then
     ADMIN_GROUP="${MODULE_BASE}-admins"
-    info "  module declares an admin role → ensuring group ${ADMIN_GROUP}"
+    debug "  module declares an admin role → ensuring group ${ADMIN_GROUP}"
     [[ "${DRY_RUN}" -eq 0 ]] && ${AUTHENTIK_MANAGER} group-ensure "${ADMIN_GROUP}" \
         --attr "tappaas.role=module-admin" --attr "tappaas.module=${MODULE_BASE}" >/dev/null
     ALLOW_GROUPS=("users" "${ADMIN_GROUP}")
@@ -141,22 +141,22 @@ for p in "${REDIRECT_PATHS[@]}"; do oidc_args+=("--redirect-uri" "https://${PROX
 for s in "${OIDC_SCOPES[@]}"; do oidc_args+=("--scope" "${s}"); done
 
 if [[ "${DRY_RUN}" -eq 1 ]]; then
-    info "  ${YW}[dry-run]${CL} oidc: ${AUTHENTIK_MANAGER} ${oidc_args[*]}"
-    info "  ${YW}[dry-run]${CL} bind groups: ${ALLOW_GROUPS[*]}"
-    info "  ${YW}[dry-run]${CL} write ${SECRETS_ENV} on ${UPSTREAM} (OIDC_CLIENT_ID/SECRET/DISCOVERY_URI)"
-    info "  ${YW}[dry-run]${CL} discovery: ${DISCOVERY_URI}"
-    [[ -n "${CONFIGURE_SERVICE}" ]] && info "  ${YW}[dry-run]${CL} restart ${CONFIGURE_SERVICE} on ${UPSTREAM}"
+    debug "  ${YW}[dry-run]${CL} oidc: ${AUTHENTIK_MANAGER} ${oidc_args[*]}"
+    debug "  ${YW}[dry-run]${CL} bind groups: ${ALLOW_GROUPS[*]}"
+    debug "  ${YW}[dry-run]${CL} write ${SECRETS_ENV} on ${UPSTREAM} (OIDC_CLIENT_ID/SECRET/DISCOVERY_URI)"
+    debug "  ${YW}[dry-run]${CL} discovery: ${DISCOVERY_URI}"
+    [[ -n "${CONFIGURE_SERVICE}" ]] && debug "  ${YW}[dry-run]${CL} restart ${CONFIGURE_SERVICE} on ${UPSTREAM}"
     exit 0
 fi
 
-info "  Authentik: ensuring OIDC app/provider '${SLUG}'"
+debug "  Authentik: ensuring OIDC app/provider '${SLUG}'"
 OIDC_OUT="$(${AUTHENTIK_MANAGER} "${oidc_args[@]}")" || die "oidc-app-ensure failed for ${SLUG}"
 CLIENT_ID="$(echo "${OIDC_OUT}" | awk -F'client_id=' '/client_id=/{print $2; exit}' | tr -d '[:space:]')"
 CLIENT_SECRET="$(echo "${OIDC_OUT}" | awk -F'client_secret=' '/client_secret=/{print $2; exit}' | tr -d '[:space:]')"
 [[ -n "${CLIENT_ID}" && -n "${CLIENT_SECRET}" ]] || die "could not read client_id/secret from oidc-app-ensure output"
 
 # ── Step 4: access gate (MANDATORY — allow-all without it) ────────────────────
-info "  Authentik: binding access groups (${ALLOW_GROUPS[*]})"
+debug "  Authentik: binding access groups (${ALLOW_GROUPS[*]})"
 declare -a bind_args=("app-bind-groups" "${SLUG}")
 for g in "${ALLOW_GROUPS[@]}"; do bind_args+=("--group" "${g}"); done
 ${AUTHENTIK_MANAGER} "${bind_args[@]}" || die "app-bind-groups failed for ${SLUG}"
@@ -166,7 +166,7 @@ ${AUTHENTIK_MANAGER} "${bind_args[@]}" || die "app-bind-groups failed for ${SLUG
 # Writing unreachable OIDC vars causes silent worker crash loops in apps that
 # eagerly initialise SSO on startup. Fail here rather than produce a broken
 # deployment (issue #369).
-info "  VM: verifying OIDC discovery URI reachable from ${UPSTREAM}"
+debug "  VM: verifying OIDC discovery URI reachable from ${UPSTREAM}"
 if ! ssh -o StrictHostKeyChecking=accept-new -o ConnectTimeout=10 "tappaas@${UPSTREAM}" \
     "curl --silent --max-time 5 --output /dev/null --fail '${DISCOVERY_URI}' 2>/dev/null"; then
     die "OIDC discovery URI unreachable from ${UPSTREAM}: ${DISCOVERY_URI} — add a firewall rule allowing ${VMNAME} to reach Authentik, then re-run"
@@ -183,7 +183,7 @@ fi
 # stale known_hosts entry first so StrictHostKeyChecking=accept-new doesn't reject
 # the CHANGED key (same approach as update-os.sh update_ssh_known_hosts).
 ssh-keygen -R "${UPSTREAM}" >/dev/null 2>&1 || true
-info "  VM: merging OIDC vars into ${SECRETS_ENV} on ${UPSTREAM} (mode 600)"
+debug "  VM: merging OIDC vars into ${SECRETS_ENV} on ${UPSTREAM} (mode 600)"
 ENV_CONTENT="$(printf 'OIDC_CLIENT_ID=%s\nOIDC_CLIENT_SECRET=%s\nOIDC_DISCOVERY_URI=%s\n' \
     "${CLIENT_ID}" "${CLIENT_SECRET}" "${DISCOVERY_URI}")"
 if ssh -o StrictHostKeyChecking=accept-new -o ConnectTimeout=10 "tappaas@${UPSTREAM}" \
@@ -192,18 +192,18 @@ if ssh -o StrictHostKeyChecking=accept-new -o ConnectTimeout=10 "tappaas@${UPSTR
        { [ -f \"${SECRETS_ENV}\" ] && grep -v \"^OIDC_\" \"${SECRETS_ENV}\"; \
          printf \"%s\" \"${ENV_CONTENT}\"; } > \"\$t\" && \
        chmod 600 \"\$t\" && mv -f \"\$t\" \"${SECRETS_ENV}\"'"; then
-    info "  ${GN}✓${CL} merged OIDC vars into ${SECRETS_ENV}"
+    debug "  ${GN}✓${CL} merged OIDC vars into ${SECRETS_ENV}"
 else
     die "failed to write ${SECRETS_ENV} on ${UPSTREAM} (is the VM up and SSH reachable?)"
 fi
 
 if [[ -n "${CONFIGURE_SERVICE}" ]]; then
-    info "  VM: restarting ${CONFIGURE_SERVICE}"
+    debug "  VM: restarting ${CONFIGURE_SERVICE}"
     ssh -o StrictHostKeyChecking=accept-new -o ConnectTimeout=10 "tappaas@${UPSTREAM}" \
         "sudo systemctl restart '${CONFIGURE_SERVICE}'" \
         || warn "could not restart ${CONFIGURE_SERVICE} — it applies on next nixos-rebuild/boot"
 fi
 
-info "  ${GN}✓${CL} identity:identity (OIDC) wired for ${MODULE}"
-info "      users in ${ALLOW_GROUPS[*]} can log in at https://${PROXY_DOMAIN}/ via Authentik;"
-info "      accounts are provisioned in ${MODULE} on first login (JIT)"
+debug "  ${GN}✓${CL} identity:identity (OIDC) wired for ${MODULE}"
+debug "      users in ${ALLOW_GROUPS[*]} can log in at https://${PROXY_DOMAIN}/ via Authentik;"
+debug "      accounts are provisioned in ${MODULE} on first login (JIT)"

@@ -34,6 +34,6 @@ if [[ -z "${VMID}" ]]; then
     exit 0
 fi
 
-info "${BOLD}backup:vm: ensuring ${BL}${VMNAME}${CL} (VMID ${VMID}) is covered by PBS backup${CL}"
+debug "${BOLD}backup:vm: ensuring ${BL}${VMNAME}${CL} (VMID ${VMID}) is covered by PBS backup${CL}"
 pbs_ensure_vmid "${VMID}"
-info "  ${GN}✓${CL} backup:vm update-service completed"
+debug "  ${GN}✓${CL} backup:vm update-service completed"

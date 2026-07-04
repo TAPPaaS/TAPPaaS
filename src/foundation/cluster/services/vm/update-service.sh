@@ -108,7 +108,7 @@ DISKSIZE="$(cfg 'diskSize' '__none__')"
 STORAGE="$(cfg 'storage' '__none__')"
 BIOS="$(cfg 'bios' '__none__')"
 
-info "${BOLD}cluster:vm update-service: reconciling ${BL}${MODULE}${CL} (VMID ${VMID})"
+debug "${BOLD}cluster:vm update-service: reconciling ${BL}${MODULE}${CL} (VMID ${VMID})"
 [[ "${CHECK_MODE}" == "1" ]] && warn "  CHECK MODE — drift will be reported, not applied"
 
 # Resolve desired VLAN tags (errors out on undefined/inactive zone).
@@ -135,7 +135,7 @@ done
 
 [[ -z "${actual_node}" ]] && die "VM ${VMID} (${MODULE}) not found on the cluster — is it installed?"
 NODE_FQDN="${actual_node}.${MGMT}.internal"
-info "  VM ${VMID} is on node ${BL}${actual_node}${CL} (status: ${vm_status})"
+debug "  VM ${VMID} is on node ${BL}${actual_node}${CL} (status: ${vm_status})"
 
 # ── Read live config ─────────────────────────────────────────────────
 
@@ -301,24 +301,24 @@ fi
 # ── Report ───────────────────────────────────────────────────────────
 
 if [[ ${#CHANGES[@]} -eq 0 && ${FATAL} -eq 0 ]]; then
-    info "  ${GN}✓${CL} VM is in sync with config — no changes needed"
+    debug "  ${GN}✓${CL} VM is in sync with config — no changes needed"
     exit 0
 fi
 
-info "  Detected drift:"
-for c in "${CHANGES[@]}"; do info "    • ${c}"; done
+debug "  Detected drift:"
+for c in "${CHANGES[@]}"; do debug "    • ${c}"; done
 
 [[ ${FATAL} -eq 1 ]] && die "Unreconcilable drift detected — aborting (see errors above)"
 
 if [[ "${CHECK_MODE}" == "1" ]]; then
-    info "  CHECK MODE — no changes applied"
+    debug "  CHECK MODE — no changes applied"
     exit 0
 fi
 
 # ── Apply ────────────────────────────────────────────────────────────
 
 if [[ ${#QM_SET_ARGS[@]} -gt 0 ]]; then
-    info "  Applying qm set on ${actual_node}..."
+    debug "  Applying qm set on ${actual_node}..."
     ssh "${SSH_OPTS[@]}" "root@${NODE_FQDN}" \
         "qm set ${VMID} $(printf '%q ' "${QM_SET_ARGS[@]}")" >/dev/null || die "qm set failed"
 fi
@@ -329,12 +329,12 @@ if [[ ${QM_DELETE_NET1} -eq 1 ]]; then
 fi
 
 if [[ ${DISK_GROW} -eq 1 ]]; then
-    info "  Growing disk to ${DISKSIZE}..."
+    debug "  Growing disk to ${DISKSIZE}..."
     /home/tappaas/bin/resize-disk.sh "${VMNAME}" "${DISKSIZE}" || die "resize-disk.sh failed"
 fi
 
 if [[ ${NODE_MIGRATE} -eq 1 ]]; then
-    info "  Migrating VM ${VMID} ${actual_node}→${DESIRED_NODE}..."
+    debug "  Migrating VM ${VMID} ${actual_node}→${DESIRED_NODE}..."
     online_flag=0
     [[ "${vm_status}" == "running" ]] && online_flag=1
     ssh "${SSH_OPTS[@]}" "root@${NODE_FQDN}" \
@@ -350,14 +350,14 @@ fi
 if [[ ${REBOOT_NEEDED} -eq 1 ]]; then
     if [[ "${vm_status}" != "running" ]]; then
         warn "  VM not running — network change applied to config; DNS will register on next boot"
-        info "  ${GN}✓${CL} cluster:vm update-service completed"
+        debug "  ${GN}✓${CL} cluster:vm update-service completed"
         exit 0
     fi
 
-    info "  Rebooting VM ${VMID} to apply network change..."
+    debug "  Rebooting VM ${VMID} to apply network change..."
     ssh "${SSH_OPTS[@]}" "root@${NODE_FQDN}" "qm reboot ${VMID}" >/dev/null || die "qm reboot failed"
 
-    info "  Waiting for VM to come back with an IP..."
+    debug "  Waiting for VM to come back with an IP..."
     # The reboot moves the VM into ZONE0's subnet, so we want its address IN THAT
     # subnet. Both discovery sources can surface a STALE address from the old
     # subnet — the dnsmasq lease table keeps the previous lease until it expires,
@@ -424,8 +424,8 @@ if [[ ${REBOOT_NEEDED} -eq 1 ]]; then
         warn "  VM did not report an IPv4 in ${ZONE0} (${zone_cidr:-?}) within the wait window (no guest-agent report and no matching DHCP lease for MAC ${desired_mac0:-net0})."
         warn "  The net0 VLAN change IS applied; ${VMNAME}.${new_domain} will resolve via masqdns once the guest re-DHCPs. Skipping the static DNS fast-path."
     else
-        info "  VM came up with IP ${BL}${new_ip}${CL} (via ${ip_src:-?})"
-        info "  Registering DNS: ${VMNAME}.${new_domain} → ${new_ip}"
+        debug "  VM came up with IP ${BL}${new_ip}${CL} (via ${ip_src:-?})"
+        debug "  Registering DNS: ${VMNAME}.${new_domain} → ${new_ip}"
         dns-manager --no-ssl-verify add "${VMNAME}" "${new_domain}" "${new_ip}" \
             --description "${MODULE} (cluster:vm reconcile)" \
             || warn "  dns-manager add failed for ${VMNAME}.${new_domain}"
@@ -434,7 +434,7 @@ if [[ ${REBOOT_NEEDED} -eq 1 ]]; then
     if [[ ${ZONE_CHANGED} -eq 1 ]]; then
         old_zone="$(vmnet_zone_for_tag "${OLD_TAG0}" "${ZONES_FILE}")"
         if [[ -n "${old_zone}" && "${old_zone}" != "${ZONE0}" ]]; then
-            info "  Removing stale DNS: ${VMNAME}.${old_zone}.internal"
+            debug "  Removing stale DNS: ${VMNAME}.${old_zone}.internal"
             # A missing old record is normal (install-service registers no DNS),
             # so a failure here is informational, not a warning.
             dns-manager --no-ssl-verify delete "${VMNAME}" "${old_zone}.internal" \
@@ -443,5 +443,5 @@ if [[ ${REBOOT_NEEDED} -eq 1 ]]; then
     fi
 fi
 
-info "  ${GN}✓${CL} cluster:vm update-service completed"
+debug "  ${GN}✓${CL} cluster:vm update-service completed"
 exit 0

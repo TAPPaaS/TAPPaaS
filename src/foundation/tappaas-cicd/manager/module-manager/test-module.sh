@@ -288,7 +288,7 @@ main() {
                 if [[ -n "${_test_out}" ]]; then
                     while IFS= read -r _tl; do debug "  ${_tl}"; done <<<"${_test_out}"
                 fi
-                test_pass "Module test.sh passed"
+                test_pass_quiet "Module test.sh passed"
             else
                 if [[ -n "${_test_out}" ]]; then printf '%s\n' "${_test_out}" >&2; fi
                 if [[ ${_test_rc} -eq 2 ]]; then

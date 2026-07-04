@@ -39,7 +39,7 @@ else
     readonly FIREWALL_JSON="${CONFIG_DIR}/firewall.json"
 fi
 
-info "network:dns delete-service for module: ${BL}${MODULE}${CL}"
+debug "network:dns delete-service for module: ${BL}${MODULE}${CL}"
 
 # ── Resolve hostname (vmname) and domain (<zone0>.internal) ─────────
 # Tolerant: if the module config is gone we can still attempt cleanup by name.
@@ -69,13 +69,13 @@ if [[ "${FIREWALL_TYPE}" == "NONE" ]]; then
     else
         warn "Remember to remove any DNS host override for module '${MODULE}' from your DNS server."
     fi
-    info "${GN}network:dns delete-service completed for ${MODULE} (manual cleanup required)${CL}"
+    debug "${GN}network:dns delete-service completed for ${MODULE} (manual cleanup required)${CL}"
     exit 0
 fi
 
 if [[ -z "${DOMAIN}" ]]; then
     warn "Cannot determine DNS domain (zone0 unavailable) — skipping automated cleanup"
-    info "${GN}network:dns delete-service completed for ${MODULE} (nothing removed)${CL}"
+    debug "${GN}network:dns delete-service completed for ${MODULE} (nothing removed)${CL}"
     exit 0
 fi
 
@@ -87,8 +87,8 @@ fi
 
 # ── Delete the DNS host override ────────────────────────────────────
 
-info "  Deleting DNS host override ${BL}${VMNAME}.${DOMAIN}${CL}..."
+debug "  Deleting DNS host override ${BL}${VMNAME}.${DOMAIN}${CL}..."
 dns-manager --no-ssl-verify delete "${VMNAME}" "${DOMAIN}" \
     || warn "Could not delete DNS host ${VMNAME}.${DOMAIN} (may not exist)"
 
-info "${GN}network:dns delete-service completed for ${MODULE}${CL}"
+debug "${GN}network:dns delete-service completed for ${MODULE}${CL}"

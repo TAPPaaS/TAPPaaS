@@ -33,7 +33,7 @@ ZONE0NAME=$(get_config_value 'zone0' 'mgmt')
 
 NODE_FQDN="${NODE}.${MGMTVLAN}.internal"
 
-info "Destroying VM ${VMNAME} (VMID: ${VMID}) on node ${NODE}..."
+debug "Destroying VM ${VMNAME} (VMID: ${VMID}) on node ${NODE}..."
 
 # Check if VM exists
 if ! ssh root@"${NODE_FQDN}" "qm status ${VMID}" &>/dev/null; then
@@ -42,14 +42,14 @@ if ! ssh root@"${NODE_FQDN}" "qm status ${VMID}" &>/dev/null; then
 fi
 
 # Stop the VM (ignore errors if already stopped)
-info "  Stopping VM ${VMID}..."
+debug "  Stopping VM ${VMID}..."
 ssh root@"${NODE_FQDN}" "qm stop ${VMID}" 2>/dev/null || true
 
 # Wait briefly for stop to complete
 sleep 3
 
 # Destroy the VM with --purge to remove all associated data
-info "  Destroying VM ${VMID} with --purge..."
+debug "  Destroying VM ${VMID} with --purge..."
 ssh root@"${NODE_FQDN}" "qm destroy ${VMID} --purge" || {
     error "Failed to destroy VM ${VMID}"
     exit 1
@@ -61,9 +61,9 @@ ssh root@"${NODE_FQDN}" "qm destroy ${VMID} --purge" || {
 # Without this the dnsmasq dhcp-host=<mac>,<ip>,<vmname> reservation would linger
 # after the VM is gone and could mis-route a future guest that reuses the IP/name.
 if command -v dns-manager >/dev/null 2>&1; then
-    info "  Removing any DNS pin/reservation for ${VMNAME}.${ZONE0NAME}.internal"
+    debug "  Removing any DNS pin/reservation for ${VMNAME}.${ZONE0NAME}.internal"
     dns-manager --no-ssl-verify delete "${VMNAME}" "${ZONE0NAME}.internal" >/dev/null 2>&1 \
         || debug "  no DNS record to remove for ${VMNAME}.${ZONE0NAME}.internal"
 fi
 
-info "VM ${VMNAME} (VMID: ${VMID}) destroyed successfully"
+debug "VM ${VMNAME} (VMID: ${VMID}) destroyed successfully"
