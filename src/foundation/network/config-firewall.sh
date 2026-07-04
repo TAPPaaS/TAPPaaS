@@ -98,7 +98,7 @@ readonly FW_IP="10.0.0.1"
 readonly SSH_OPTS=(-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o ConnectTimeout=8)
 
 bssh() { sshpass -p "$BOOTSTRAP_PW" ssh "${SSH_OPTS[@]}" "root@${FW_IP}" "$@"; }
-bscp() { sshpass -p "$BOOTSTRAP_PW" scp "${SSH_OPTS[@]}" "$@"; }
+bscp() { sshpass -p "$BOOTSTRAP_PW" scp -q "${SSH_OPTS[@]}" "$@"; }
 
 # ── Ensure the node can reach the firewall's bootstrap LAN ───────────
 # During install the node's lan IP is still on the pre-existing network, so it

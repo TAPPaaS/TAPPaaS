@@ -318,8 +318,8 @@ cd ..
 info "Copying the AssignSettingsController.php to the OPNsense controller node..."
 if ping -c 1 -W 1 "$FIREWALL_FQDN" >/dev/null 2>&1; then
   info "  Firewall $FIREWALL_FQDN reachable; will attempt to copy controller patch."
-  scp opnsense-patch/InterfaceAssignController.php root@"$FIREWALL_FQDN":/usr/local/opnsense/mvc/app/controllers/OPNsense/Interfaces/Api/InterfaceAssignController.php
-  scp opnsense-patch/ACL.xml root@"$FIREWALL_FQDN":/usr/local/opnsense/mvc/app/models/OPNsense/Interfaces/ACL/ACL.xml
+  scp -q opnsense-patch/InterfaceAssignController.php root@"$FIREWALL_FQDN":/usr/local/opnsense/mvc/app/controllers/OPNsense/Interfaces/Api/InterfaceAssignController.php
+  scp -q opnsense-patch/ACL.xml root@"$FIREWALL_FQDN":/usr/local/opnsense/mvc/app/models/OPNsense/Interfaces/ACL/ACL.xml
   info "  OPNsense controller patch (InterfaceAssignController.php) and ACL file copied to firewall."
 else
   warn "Firewall $FIREWALL_FQDN appears unreachable; skipping controller patch copy."

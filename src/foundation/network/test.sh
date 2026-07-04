@@ -984,7 +984,7 @@ else
         mapfile -t pve_nodes < <(get_all_node_hostnames 2>/dev/null)
         for node in "${pve_nodes[@]}"; do
             [[ -z "${node}" ]] && continue
-            if scp -o StrictHostKeyChecking=accept-new -o ConnectTimeout=5 \
+            if scp -q -o StrictHostKeyChecking=accept-new -o ConnectTimeout=5 \
                     "${CONFIG_DIR}/zones.json" \
                     "root@${node}.mgmt.internal:/root/tappaas/zones.json" \
                     >/dev/null 2>&1; then

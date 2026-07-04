@@ -331,7 +331,7 @@ echo ""
 PATCH_SCRIPT="/home/tappaas/TAPPaaS/src/foundation/tappaas-cicd/opnsense-patch/apply-caddy-isdnsname.sh"
 if [[ -f "${PATCH_SCRIPT}" ]]; then
     info "Applying os-caddy ToDomain underscore patch..."
-    scp "${PATCH_SCRIPT}" root@"$FIREWALL_FQDN":/tmp/apply-caddy-isdnsname.sh
+    scp -q "${PATCH_SCRIPT}" root@"$FIREWALL_FQDN":/tmp/apply-caddy-isdnsname.sh
     ssh root@"$FIREWALL_FQDN" 'sh /tmp/apply-caddy-isdnsname.sh' \
         | while IFS= read -r line; do info "  $line"; done \
         || warn "  os-caddy patch reported an error"

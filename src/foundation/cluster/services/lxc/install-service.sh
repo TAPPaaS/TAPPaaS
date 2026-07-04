@@ -48,7 +48,7 @@ info "${BOLD}cluster:lxc install-service for ${BL}${MODULE}${CL} (VMID ${VMID}) 
 scp "${SSH_OPTS[@]}" "${CONFIG_DIR}/${MODULE}.json" "root@${NODE_FQDN}:/root/tappaas/${MODULE}.json" >/dev/null
 if [[ -f "${CONFIG_DIR}/${MODULE}.meta.json" ]]; then
     info "  Shipping ${MODULE}.meta.json (LXC passthrough/bind-mount config)"
-    scp "${SSH_OPTS[@]}" "${CONFIG_DIR}/${MODULE}.meta.json" "root@${NODE_FQDN}:/root/tappaas/${MODULE}.meta.json" >/dev/null
+    scp -q "${SSH_OPTS[@]}" "${CONFIG_DIR}/${MODULE}.meta.json" "root@${NODE_FQDN}:/root/tappaas/${MODULE}.meta.json" >/dev/null
 fi
 
 ssh "${SSH_OPTS[@]}" "root@${NODE_FQDN}" "/root/tappaas/Create-TAPPaaS-LXC.sh ${MODULE}"

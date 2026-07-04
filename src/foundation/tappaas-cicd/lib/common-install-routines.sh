@@ -362,7 +362,7 @@ distribute_zones_to_nodes() {
     local node pushed=0
     while IFS= read -r node; do
         [[ -z "${node}" ]] && continue
-        if scp -o StrictHostKeyChecking=accept-new -o ConnectTimeout=5 \
+        if scp -q -o StrictHostKeyChecking=accept-new -o ConnectTimeout=5 \
                 "${zones}" "root@${node}.mgmt.internal:/root/tappaas/zones.json" >/dev/null 2>&1; then
             pushed=$((pushed + 1))
         fi

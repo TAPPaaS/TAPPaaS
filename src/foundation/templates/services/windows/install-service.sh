@@ -138,7 +138,7 @@ run_ps1() {
     # multi-byte characters (e.g. em dash U+2014 → 0x94 = right double-quote).
     printf '\xef\xbb\xbf%s' "${script}" > "${local_tmp}"
     # shellcheck disable=SC2086
-    scp ${SCP_OPTS} "${local_tmp}" "tappaas@${VM_HOST}:~/${filename}"
+    scp -q ${SCP_OPTS} "${local_tmp}" "tappaas@${VM_HOST}:~/${filename}"
     rm -f "${local_tmp}"
     # shellcheck disable=SC2086
     ssh ${SSH_OPTS} "tappaas@${VM_HOST}" \

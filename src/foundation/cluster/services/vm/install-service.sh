@@ -117,7 +117,7 @@ PYEOF
         # Deploy autounattend.xml so Create-TAPPaaS-VM.sh can build the config ISO.
         _autounattend="${_templates_dir}/winserver/autounattend.xml"
         if [[ -n "$_templates_dir" && -f "$_autounattend" ]]; then
-            scp "$_autounattend" "root@${NODE}.${MGMT}.internal:/root/tappaas/autounattend.xml"
+            scp -q "$_autounattend" "root@${NODE}.${MGMT}.internal:/root/tappaas/autounattend.xml"
             info "autounattend.xml deployed to ${NODE} — Windows install will run unattended"
         else
             warn "autounattend.xml not found — Windows template install will require manual input"

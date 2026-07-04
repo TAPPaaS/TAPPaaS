@@ -280,7 +280,7 @@ update_nixos() {
     remote_nix_path="/etc/nixos/${nix_basename}"
 
     info "Copying ${nix_config} to ${vm_ip}:${remote_nix_path}"
-    scp -o StrictHostKeyChecking=accept-new -o BatchMode=yes "${nix_config}" "tappaas@${vm_ip}:/tmp/${nix_basename}" \
+    scp -q -o StrictHostKeyChecking=accept-new -o BatchMode=yes "${nix_config}" "tappaas@${vm_ip}:/tmp/${nix_basename}" \
         || die "failed to scp ${nix_config} to ${vm_ip}"
     ssh -o BatchMode=yes "tappaas@${vm_ip}" "sudo install -m 0644 /tmp/${nix_basename} ${remote_nix_path} && rm -f /tmp/${nix_basename}" \
         || die "failed to install ${remote_nix_path} on ${vm_ip}"
@@ -293,7 +293,7 @@ update_nixos() {
         _sib_base="$(basename "${_sib}")"
         [[ "${_sib_base}" == "${nix_basename}" ]] && continue
         local _sib_remote="/etc/nixos/${_sib_base}"
-        scp -o StrictHostKeyChecking=accept-new -o BatchMode=yes "${_sib}" "tappaas@${vm_ip}:/tmp/${_sib_base}" \
+        scp -q -o StrictHostKeyChecking=accept-new -o BatchMode=yes "${_sib}" "tappaas@${vm_ip}:/tmp/${_sib_base}" \
             || { warn "failed to scp sibling ${_sib} — continuing"; continue; }
         ssh -o BatchMode=yes "tappaas@${vm_ip}" "sudo install -m 0644 /tmp/${_sib_base} ${_sib_remote} && rm -f /tmp/${_sib_base}" \
             || warn "failed to install sibling ${_sib_remote} — continuing"
@@ -316,7 +316,7 @@ update_nixos() {
             cp "${_companion_local}" "${_flat_tmp}"
         fi
         info "Copying JSON config to ${vm_ip}:${_companion_remote}"
-        scp -o StrictHostKeyChecking=accept-new -o BatchMode=yes "${_flat_tmp}" "tappaas@${vm_ip}:/tmp/${_source_vmname}.json" \
+        scp -q -o StrictHostKeyChecking=accept-new -o BatchMode=yes "${_flat_tmp}" "tappaas@${vm_ip}:/tmp/${_source_vmname}.json" \
             || { rm -f "${_flat_tmp}"; die "failed to scp JSON config to ${vm_ip}"; }
         ssh -o BatchMode=yes "tappaas@${vm_ip}" "sudo install -m 0644 /tmp/${_source_vmname}.json ${_companion_remote} && rm -f /tmp/${_source_vmname}.json" \
             || { rm -f "${_flat_tmp}"; die "failed to install JSON config on ${vm_ip}"; }

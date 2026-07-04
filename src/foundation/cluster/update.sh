@@ -97,15 +97,15 @@ while read -r node; do
     NODE_FQDN="$node.$MGMTVLAN.internal"
     echo ""
     info "Copying zones.json and the VM/LXC provisioners to $node..."
-    scp /home/tappaas/config/zones.json root@"$NODE_FQDN":/root/tappaas/
-    scp "${SCRIPT_DIR}/Create-TAPPaaS-VM.sh" root@"$NODE_FQDN":/root/tappaas/
-    scp "${SCRIPT_DIR}/Create-TAPPaaS-LXC.sh" root@"$NODE_FQDN":/root/tappaas/
+    scp -q /home/tappaas/config/zones.json root@"$NODE_FQDN":/root/tappaas/
+    scp -q "${SCRIPT_DIR}/Create-TAPPaaS-VM.sh" root@"$NODE_FQDN":/root/tappaas/
+    scp -q "${SCRIPT_DIR}/Create-TAPPaaS-LXC.sh" root@"$NODE_FQDN":/root/tappaas/
 
     # Debian/Ubuntu cloud-init vendor-data snippet (issue #147). Must live at
     # /var/lib/vz/snippets/ to be referenced as 'local:snippets/...' in qm.
     info "Deploying Debian vendor-data snippet to $node..."
     ssh -n -o StrictHostKeyChecking=no root@"$NODE_FQDN" "mkdir -p /var/lib/vz/snippets"
-    scp "${SCRIPT_DIR}/snippets/tappaas-debian-vendor.yaml" \
+    scp -q "${SCRIPT_DIR}/snippets/tappaas-debian-vendor.yaml" \
         root@"$NODE_FQDN":/var/lib/vz/snippets/tappaas-debian-vendor.yaml
     # Ensure 'snippets' is in local storage content types (idempotent;
     # /etc/pve/storage.cfg is cluster-wide so only the first node matters).
@@ -133,7 +133,7 @@ while read -r node; do
     NODE_FQDN="$node.$MGMTVLAN.internal"
     echo ""
     info "Deploying SSD lifecycle setup to $node..."
-    scp "${SCRIPT_DIR}/setup-ssd-lifecycle.sh" root@"$NODE_FQDN":/root/tappaas/
+    scp -q "${SCRIPT_DIR}/setup-ssd-lifecycle.sh" root@"$NODE_FQDN":/root/tappaas/
     if ! ssh -n -o StrictHostKeyChecking=no root@"$NODE_FQDN" \
         "apt -y install smartmontools >/dev/null 2>&1 && /root/tappaas/setup-ssd-lifecycle.sh"; then
         warn "SSD lifecycle setup failed on $node"
@@ -156,8 +156,8 @@ while read -r node; do
     NODE_FQDN="$node.$MGMTVLAN.internal"
     echo ""
     info "Deploying Realtek NIC setup to $node..."
-    scp "${SCRIPT_DIR}/setup-realtek-nic.sh" root@"$NODE_FQDN":/root/tappaas/
-    scp "${SCRIPT_DIR}/assets/r8127-dkms_11.015.00-1_all.deb" \
+    scp -q "${SCRIPT_DIR}/setup-realtek-nic.sh" root@"$NODE_FQDN":/root/tappaas/
+    scp -q "${SCRIPT_DIR}/assets/r8127-dkms_11.015.00-1_all.deb" \
         root@"$NODE_FQDN":/root/tappaas/ 2>/dev/null || true
     # Capture the verbose apt/DKMS output; surface only a concise reason on
     # failure (not the whole dump). Keep the console clean per node.
