@@ -21,6 +21,24 @@
 # PATH. All progress output goes to stderr so stdout carries only the resolved
 # access-list name (empty = unrestricted/public).
 
+# run_caddy <caddy-manager args...> — run caddy-manager with its (noisy) stdout
+# routed to [Debug] (shown only when TAPPAAS_DEBUG=1). On failure the captured
+# output is surfaced on stderr so real errors stay visible. Returns caddy's rc.
+run_caddy() {
+    local _out _rc _cl
+    # Capture without tripping `set -e` on a non-zero caddy exit (bare
+    # `x=$(cmd)` would abort before we can inspect $?).
+    _out="$(caddy-manager "$@" 2>&1)" && _rc=0 || _rc=$?
+    if [[ ${_rc} -ne 0 ]]; then
+        if [[ -n "${_out}" ]]; then printf '%s\n' "${_out}" >&2; fi
+        return "${_rc}"
+    fi
+    if [[ -n "${_out}" ]]; then
+        while IFS= read -r _cl; do debug "  ${_cl}"; done <<<"${_out}"
+    fi
+    return 0
+}
+
 # proxy_resolve_access_list <module> <module_json> <zones_file> <description>
 # Echoes the access-list name to attach (empty string when public). Returns
 # non-zero on a hard error (caller should die).
@@ -49,9 +67,9 @@ proxy_resolve_access_list() {
                   )
                 | .key' "${zones_file}" 2>/dev/null)
         fi
-        info "  Access: ${BL}default internal zones${CL} (${zones[*]:-none})" >&2
+        debug "  Access: ${BL}default internal zones${CL} (${zones[*]:-none})" >&2
     else
-        info "  Access: ${BL}${zones[*]}${CL}" >&2
+        debug "  Access: ${BL}${zones[*]}${CL}" >&2
     fi
 
     # Internet exposure → no restriction; drop any prior allow-list.
@@ -81,7 +99,7 @@ proxy_resolve_access_list() {
         return 1
     fi
 
-    info "  Access list ${BL}${al_name}${CL}: allow only ${BL}${cidrs}${CL}" >&2
+    debug "  Access list ${BL}${al_name}${CL}: allow only ${BL}${cidrs}${CL}" >&2
 
     # Guard 1: caddy-manager binary must be present — if it's missing entirely
     # that is a hard error (the whole proxy service is broken, not just access lists).
@@ -100,12 +118,12 @@ proxy_resolve_access_list() {
         return 0
     fi
 
-    if ! caddy-manager add-accesslist "${al_name}" \
+    if ! run_caddy add-accesslist "${al_name}" \
             --clients "${cidrs}" \
             --matcher remote_ip \
             --response-code 403 \
             --description "${description} (allowed zones)" \
-            --no-ssl-verify >&2; then
+            --no-ssl-verify; then
         error "Failed to create/update Caddy access list ${al_name}" >&2
         return 1
     fi

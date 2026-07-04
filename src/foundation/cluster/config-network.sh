@@ -431,9 +431,13 @@ else
   info "  lan  ← port ${BL}${LAN_PORT}${CL}   ip ${BL}${LAN_MGMT_IP}${CL}  gw ${BL}${FW_IP}${CL}  (vlan-aware trunk 2-4094)"
   info "  wan  ← port ${BL}${WAN_PORT:-<none>}${CL}   (wired for firewall HA; no IP)"
 fi
-echo "----------------------------------------------------------------"
-echo "$NEW_CONFIG"
-echo "----------------------------------------------------------------"
+# The full generated file is useful on a dry-run preview (or when debugging), but
+# it's just noise during a normal apply — suppress it there.
+if [[ "$DRY_RUN" == "1" || "${TAPPAAS_DEBUG:-0}" == "1" ]]; then
+  echo "----------------------------------------------------------------"
+  echo "$NEW_CONFIG"
+  echo "----------------------------------------------------------------"
+fi
 
 if [[ "$DRY_RUN" == "1" ]]; then
   info "Dry-run: not writing or applying. Re-run with --apply to commit."

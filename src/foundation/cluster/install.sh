@@ -243,6 +243,9 @@ configure_cluster() {
 
 # ── Final summary (addresses the long-standing TODO at top of file) ──
 print_summary() {
+  # Verbose node diagnostics — emit only when debugging. The install already
+  # prints the one-line "Node base + cluster … ready" result below.
+  [[ "${TAPPAAS_DEBUG:-0}" == "1" ]] || return 0
   local p
   echo -e "\n${GN}========== TAPPaaS node summary ==========${CL}"
   echo "  Host: $(hostname -f 2>/dev/null || hostname)"

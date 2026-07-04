@@ -213,15 +213,15 @@ else
         info "  TLS: DNS-01 wildcard (dnsMode=wildcard) — refid ${TLS_CERT_REFID}"
         CADDY_DOMAIN_ARGS=(--custom-certificate "${TLS_CERT_REFID}")
     else
-        warn "  TLS: wildcard but no tlsCertRefid for variant '${VARIANT:-default}' yet."
-        warn "       Run: acme-setup.sh --variant '${VARIANT}' (internal LAN access still works meanwhile)."
+        debug "  TLS: wildcard but no tlsCertRefid for variant '${VARIANT:-default}' yet."
+        debug "       Run: acme-setup.sh --variant '${VARIANT}' (internal LAN access still works meanwhile)."
     fi
 fi
 
 # ── Create domain ───────────────────────────────────────────────────
 
 info "  Creating Caddy domain..."
-caddy-manager add-domain "${PROXY_DOMAIN}" \
+run_caddy add-domain "${PROXY_DOMAIN}" \
     --description "${DESCRIPTION}" \
     "${CADDY_DOMAIN_ARGS[@]+"${CADDY_DOMAIN_ARGS[@]}"}" \
     --no-ssl-verify || die "Failed to create Caddy domain"
@@ -263,7 +263,7 @@ fi
 # ── Create handler ──────────────────────────────────────────────────
 
 info "  Creating Caddy handler..."
-caddy-manager add-handler "${PROXY_DOMAIN}" \
+run_caddy add-handler "${PROXY_DOMAIN}" \
     --upstream "${UPSTREAM}" \
     --port "${PROXY_PORT}" \
     --description "${DESCRIPTION}" \
@@ -276,6 +276,6 @@ caddy-manager add-handler "${PROXY_DOMAIN}" \
 # ── Reconfigure Caddy ───────────────────────────────────────────────
 
 info "  Applying Caddy configuration..."
-caddy-manager reconfigure --no-ssl-verify || die "Failed to reconfigure Caddy"
+run_caddy reconfigure --no-ssl-verify || die "Failed to reconfigure Caddy"
 
 info "${GN}network:proxy install-service completed for ${MODULE}${CL}"

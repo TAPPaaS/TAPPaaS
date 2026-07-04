@@ -256,6 +256,22 @@ cd ../tappaas-cicd || { _error "TAPPaaS-CICD directory not found!"; exit 1; }
 # Source common-install-routines.sh to replace the minimal _info/_warn/_error with full versions
 . /home/tappaas/bin/common-install-routines.sh
 
+# Run a command with its (noisy) output routed to [Debug] — shown only when
+# TAPPAAS_DEBUG=1; on failure the captured output is surfaced so errors stay
+# visible. Returns the command's rc (so `run_quiet … || …` still works).
+run_quiet() {
+  local _out _rc _l
+  _out="$("$@" 2>&1)" && _rc=0 || _rc=$?
+  if [[ ${_rc} -ne 0 ]]; then
+    if [[ -n "${_out}" ]]; then printf '%s\n' "${_out}" >&2; fi
+    return "${_rc}"
+  fi
+  if [[ -n "${_out}" ]]; then
+    while IFS= read -r _l; do debug "  ${_l}"; done <<<"${_out}"
+  fi
+  return 0
+}
+
 if [[ "$FIREWALL_AVAILABLE" == "true" ]]; then
     # Install and enable QEMU guest agent on OPNsense (FreeBSD)
     # This allows Proxmox to communicate with the firewall VM via the guest agent
@@ -264,16 +280,16 @@ if [[ "$FIREWALL_AVAILABLE" == "true" ]]; then
     if ssh $SSH_ACCEPT root@"$FIREWALL_FQDN" "/bin/sh -c 'pkg info os-qemu-guest-agent'" &>/dev/null; then
         info "  QEMU guest agent already installed"
     else
-        ssh $SSH_ACCEPT root@"$FIREWALL_FQDN" "/bin/sh -c 'pkg install -y os-qemu-guest-agent'" || {
+        run_quiet ssh $SSH_ACCEPT root@"$FIREWALL_FQDN" "/bin/sh -c 'pkg install -y os-qemu-guest-agent'" || {
             warn "QEMU guest agent installation failed. Install manually via OPNsense UI."
         }
     fi
     info "Enabling QEMU guest agent service..."
-    ssh $SSH_ACCEPT root@"$FIREWALL_FQDN" "/bin/sh -c 'sysrc qemu_guest_agent_enable=YES'" 2>/dev/null || true
+    run_quiet ssh $SSH_ACCEPT root@"$FIREWALL_FQDN" "/bin/sh -c 'sysrc qemu_guest_agent_enable=YES'" || true
     if ssh $SSH_ACCEPT root@"$FIREWALL_FQDN" "/bin/sh -c 'service qemu-guest-agent status'" &>/dev/null; then
         info "  QEMU guest agent service is already running"
     else
-        ssh $SSH_ACCEPT root@"$FIREWALL_FQDN" "/bin/sh -c 'service qemu-guest-agent start'" 2>/dev/null || {
+        run_quiet ssh $SSH_ACCEPT root@"$FIREWALL_FQDN" "/bin/sh -c 'service qemu-guest-agent start'" || {
             warn "QEMU guest agent service could not be started. Enable manually in OPNsense."
         }
     fi

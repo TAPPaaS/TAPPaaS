@@ -464,4 +464,8 @@ for POOL in tanka1 tankb1 tankc1; do
 done
 
 info "${GN}Storage configuration complete.${CL}"
-zpool list 2>/dev/null || true
+# The pool listing is verbose confirmation (the node summary reports pools too) —
+# show it only when debugging; keep the console to the completion line.
+if [[ "${TAPPAAS_DEBUG:-0}" == "1" ]]; then
+  zpool list 2>/dev/null || true
+fi

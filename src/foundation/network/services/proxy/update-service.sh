@@ -147,13 +147,13 @@ if [[ "${PROXY_TLS}" == "dns01" ]]; then
     if [[ -n "${TLS_CERT_REFID}" ]]; then
         CADDY_DOMAIN_ARGS=(--custom-certificate "${TLS_CERT_REFID}")
     else
-        warn "  proxyTls=dns01 but tappaas.tlsCertRefid not set (run acme-setup.sh) — public TLS unavailable until then"
+        debug "  proxyTls=dns01 but tappaas.tlsCertRefid not set (run acme-setup.sh) — public TLS unavailable until then"
     fi
 fi
 
 # Reconcile the domain (creates if missing, applies the TLS strategy either way)
 info "  Reconciling domain ${PROXY_DOMAIN} (TLS=${PROXY_TLS})..."
-caddy-manager add-domain "${PROXY_DOMAIN}" \
+run_caddy add-domain "${PROXY_DOMAIN}" \
     --description "${DESCRIPTION}" \
     "${CADDY_DOMAIN_ARGS[@]+"${CADDY_DOMAIN_ARGS[@]}"}" \
     --no-ssl-verify || die "Failed to reconcile Caddy domain"
@@ -174,7 +174,7 @@ if [[ "$(get_config_value 'proxyUpstreamTls' 'false')" == "true" ]]; then
 fi
 
 info "  Reconciling handler (upstream ${UPSTREAM}:${PROXY_PORT}, access=${ACL_NAME:-public})..."
-caddy-manager add-handler "${PROXY_DOMAIN}" \
+run_caddy add-handler "${PROXY_DOMAIN}" \
     --upstream "${UPSTREAM}" \
     --port "${PROXY_PORT}" \
     --description "${DESCRIPTION}" \
@@ -187,7 +187,7 @@ CHANGES_MADE=true
 
 if [[ "${CHANGES_MADE}" == "true" ]]; then
     info "  Applying Caddy configuration..."
-    caddy-manager reconfigure --no-ssl-verify || die "Failed to reconfigure Caddy"
+    run_caddy reconfigure --no-ssl-verify || die "Failed to reconfigure Caddy"
 fi
 
 # ── DNS validation (warning only) ───────────────────────────────────
