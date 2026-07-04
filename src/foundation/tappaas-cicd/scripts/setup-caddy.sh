@@ -111,8 +111,9 @@ fi
 
 # Step 2: Reconfigure OPNsense web GUI to port 8443 and disable HTTP redirect
 info "Step 2: Reconfiguring OPNsense web GUI to port 8443..."
-# Pipe PHP script via stdin to avoid csh heredoc issues on OPNsense (csh)
-ssh root@"$FIREWALL_FQDN" /bin/sh -c 'php /dev/stdin' << 'EOFPHP'
+# Pipe PHP script via stdin to avoid csh heredoc issues on OPNsense (csh).
+# Capture the output and route it to [Debug] (the "OK" marker is noise).
+_s2out="$(ssh root@"$FIREWALL_FQDN" /bin/sh -c 'php /dev/stdin' 2>&1 << 'EOFPHP'
 <?php
 require_once("config.inc");
 require_once("util.inc");
@@ -128,6 +129,8 @@ $config["system"]["webgui"]["disablehttpredirect"] = "1";
 write_config("Changed web GUI port to 8443 and disabled HTTP redirect for Caddy reverse proxy");
 echo "OK\n";
 EOFPHP
+)" || true
+if [ -n "$_s2out" ]; then while IFS= read -r _l; do debug "  $_l"; done <<<"$_s2out"; fi
 
 # Restart web GUI to pick up the new port from config.xml
 # (the connection may drop as lighttpd restarts on a different port)
@@ -159,7 +162,8 @@ if [[ -x "$OPNSENSE_FIREWALL" ]]; then
         --destination wanip \
         --destination-port 80 \
         --log \
-        --no-apply || warn "HTTP rule creation failed or already exists"
+        --no-apply 2>&1 | while IFS= read -r _l; do debug "  $_l"; done \
+        || warn "HTTP rule creation failed or already exists"
 
     # Create HTTPS rule (port 443) on WAN interface
     debug "Creating HTTPS (port 443) rule on WAN..."
@@ -173,13 +177,15 @@ if [[ -x "$OPNSENSE_FIREWALL" ]]; then
         --destination wanip \
         --destination-port 443 \
         --log \
-        --no-apply || warn "HTTPS rule creation failed or already exists"
+        --no-apply 2>&1 | while IFS= read -r _l; do debug "  $_l"; done \
+        || warn "HTTPS rule creation failed or already exists"
 
     # Apply firewall changes
     debug "Applying firewall changes..."
     "$OPNSENSE_FIREWALL" apply \
         --firewall "$FIREWALL_FQDN" \
-        --no-ssl-verify || warn "Could not apply firewall changes"
+        --no-ssl-verify 2>&1 | while IFS= read -r _l; do debug "  $_l"; done \
+        || warn "Could not apply firewall changes"
 else
     warn "opnsense-firewall CLI not found, falling back to SSH/PHP method..."
 
@@ -294,9 +300,9 @@ debug "API response: ${api_result}"
 # Apply Caddy settings — reconfigures rc.conf.d, generates Caddyfile, starts service
 debug "Applying Caddy configuration via API..."
 curl -sk -u "${API_KEY}:${API_SECRET}" \
-    -X POST "${API_BASE}/caddy/service/reconfigure" 2>&1 || {
-    warn "Could not apply Caddy configuration via API"
-}
+    -X POST "${API_BASE}/caddy/service/reconfigure" 2>&1 \
+    | while IFS= read -r _l; do debug "  $_l"; done \
+    || warn "Could not apply Caddy configuration via API"
 
 # Give Caddy a moment to start
 sleep 3

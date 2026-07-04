@@ -61,7 +61,13 @@ if [ "$REPO_COUNT" -gt 0 ]; then
           git stash push -u -m "tappaas pre-update auto-stash $(date +%Y%m%d-%H%M%S)" || warn "  stash failed — checkout may not switch branch"
         fi
         git checkout "$REPO_BRANCH" && git pull origin "$REPO_BRANCH" || warn "Failed to pull ${REPO_NAME}"
-      )
+      ) 2>&1 | while IFS= read -r _l; do
+        # Keep tagged log lines ([Info]/[Warning]/[Error]); route raw git output to [Debug].
+        case "$_l" in
+          *'[Info]'*|*'[Warning]'*|*'[Error]'*) printf '%s\n' "$_l" ;;
+          *) debug "  $_l" ;;
+        esac
+      done
     else
       warn "Repository directory not found: ${REPO_PATH} (${REPO_NAME})"
     fi
@@ -167,9 +173,9 @@ FIREWALL_FQDN_EARLY="firewall.mgmt.internal"
 if [ -f opnsense-patch/apply-caddy-isdnsname.sh ] \
    && ping -c 1 -W 1 "${FIREWALL_FQDN_EARLY}" >/dev/null 2>&1; then
   info "Applying os-caddy ToDomain underscore patch..."
-  scp opnsense-patch/apply-caddy-isdnsname.sh root@"${FIREWALL_FQDN_EARLY}":/tmp/apply-caddy-isdnsname.sh
-  ssh root@"${FIREWALL_FQDN_EARLY}" 'sh /tmp/apply-caddy-isdnsname.sh' \
-    | while IFS= read -r line; do info "  $line"; done \
+  scp opnsense-patch/apply-caddy-isdnsname.sh root@"${FIREWALL_FQDN_EARLY}":/tmp/apply-caddy-isdnsname.sh >/dev/null 2>&1
+  ssh root@"${FIREWALL_FQDN_EARLY}" 'sh /tmp/apply-caddy-isdnsname.sh' 2>&1 \
+    | while IFS= read -r line; do debug "  $line"; done \
     || warn "  os-caddy patch reported an error — continuing"
 fi
 
@@ -200,7 +206,8 @@ if command -v network-manager >/dev/null 2>&1 \
    && [ -f /home/tappaas/config/zones.json ]; then
   echo ""
   info "Reconciling zones.json against upstream (rename-aware 3-way merge)..."
-  network-manager merge || warn "  zones.json merge reported an error — continuing"
+  network-manager merge 2>&1 | while IFS= read -r line; do debug "  $line"; done \
+    || warn "  zones.json merge reported an error — continuing"
 fi
 
 # --- Consistency-check zones.json against the installation (ADR-007 S6 N4) ---
