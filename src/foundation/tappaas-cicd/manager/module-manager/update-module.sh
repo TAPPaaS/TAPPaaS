@@ -274,7 +274,6 @@ main() {
     # touched; pin fields the operator has customized. .orig advances to the
     # current release. If .orig is missing (pre-#207 install) we backfill it
     # from source so existing customizations remain pinned.
-    echo ""
     info "${BOLD}Update Step 0: Reconcile module config (3-way merge)${CL}"
     if module_dir_pre=$(get_module_dir "${module}" 2>/dev/null); then
         if [[ -f /home/tappaas/bin/apply-json-merge.sh ]]; then
@@ -333,7 +332,6 @@ main() {
     fi
 
     # ── Step 2: Pre-update test ───────────────────────────────────────
-    echo ""
     info "${BOLD}Update Step 2: Run pre-update tests${CL}"
 
     if [[ "${OPT_NO_SNAPSHOT}" -eq 1 ]]; then
@@ -354,7 +352,6 @@ main() {
     fi
 
     # ── Step 3: Run pre-update.sh if present ─────────────────────────
-    echo ""
     info "${BOLD}Update Step 3: Run pre-update hook${CL}"
 
     local module_dir=""
@@ -376,14 +373,13 @@ main() {
     fi
 
     # ── Step 4: Call dependency update-service.sh scripts ─────────────
-    echo ""
     info "${BOLD}Update Step 4: Call dependency service updaters${CL}"
 
     local depends_on
     depends_on=$(read_module_config "${module}" | jq -r '.dependsOn // [] | .[]' 2>/dev/null)
 
     if [[ -z "${depends_on}" ]]; then
-        info "  No dependency services to call"
+        debug "  No dependency services to call"
     else
         # cd to the module directory so service scripts can find module files
         if [[ -n "${module_dir}" ]]; then

@@ -124,11 +124,28 @@ class SystemdPriorityFormatter(logging.Formatter):
         logging.CRITICAL: "[Fatal]",
     }
 
+    # ANSI colors matching common-install-routines.sh so the label color is
+    # identical whether a line comes from this driver or a bash script it calls:
+    # Info=green, Debug=cyan, Warning=yellow, Error/Fatal=red.
+    _CLEAR = "\033[m"
+    LABEL_COLOR = {
+        logging.DEBUG:    "\033[36m",      # cyan  (BL)
+        logging.INFO:     "\033[32m",      # green (DGN)
+        logging.WARNING:  "\033[33m",      # yellow (YW)
+        logging.ERROR:    "\033[01;31m",   # red   (RD)
+        logging.CRITICAL: "\033[01;31m",   # red   (RD)
+    }
+
     def format(self, record: logging.LogRecord) -> str:
         body = super().format(record)
         if UNDER_SYSTEMD:
             return self.PRIORITY.get(record.levelno, "<6>") + body
-        return f"{self.LABEL.get(record.levelno, '[Info]')} {body}"
+        label = self.LABEL.get(record.levelno, "[Info]")
+        color = self.LABEL_COLOR.get(record.levelno)
+        # Colorize only on a real TTY so captured/piped logs stay plain text.
+        if color and sys.stdout.isatty():
+            label = f"{color}{label}{self._CLEAR}"
+        return f"{label} {body}"
 
 
 def setup_logging() -> None:

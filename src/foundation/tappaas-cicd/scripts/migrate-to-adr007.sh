@@ -433,7 +433,6 @@ main() {
     step_firewall
     step_validate
 
-    echo ""
     if [[ $NEEDS_ACTION -eq 1 ]]; then
         warn "ADR-007 migration: INCOMPLETE — manual action required (see items above)."
         exit 2
