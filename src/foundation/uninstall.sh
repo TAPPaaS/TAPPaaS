@@ -136,17 +136,31 @@ if step pbs; then
   info "${BOLD}[2] Proxmox Backup Server${CL}"
   for s in "${PBS_STORAGES[@]:-}"; do [[ -n "$s" ]] && run pvesm remove "$s"; done
   if command -v proxmox-backup-manager >/dev/null 2>&1; then
-    # Remove each datastore by NAME (best-effort; the on-disk dir goes with the
-    # pool anyway). Use JSON + jq — the `text` output is a bordered table whose
-    # box-drawing chars would otherwise be fed to `datastore remove`.
-    while read -r ds; do [[ -n "$ds" ]] && run proxmox-backup-manager datastore remove "$ds"; done \
-      < <(proxmox-backup-manager datastore list --output-format json 2>/dev/null | jq -r '.[].name' 2>/dev/null)
+    # Remove each datastore by NAME, capturing its on-disk PATH first so we can
+    # delete the chunk store too — `datastore remove` keeps the data by design.
+    # If the datastore lives on a plain directory (a `storage` that isn't a real
+    # tank* pool, e.g. the /tankc1 default landing on root fs), the pool-destroy
+    # step below never touches it, so it would survive teardown and make the next
+    # install fail with "datastore path not empty". Use JSON+jq (the `text` output
+    # is a bordered table whose box chars would be fed to `datastore remove`).
+    while IFS=$'\t' read -r ds path; do
+      [[ -n "$ds" ]] || continue
+      run proxmox-backup-manager datastore remove "$ds"
+      [[ -n "$path" && -d "${path}/.chunks" ]] && run rm -rf "$path"
+    done < <(proxmox-backup-manager datastore list --output-format json 2>/dev/null | jq -r '.[] | [.name, .path] | @tsv' 2>/dev/null)
     run systemctl disable --now proxmox-backup proxmox-backup-proxy
     run apt-get -y purge proxmox-backup-server
     run rm -rf /etc/proxmox-backup
   else
     info "  PBS not installed on this node."
   fi
+  # Orphaned datastore dirs: a PBS reinstall clears the registry but leaves the
+  # chunk store on disk (unregistered), so the loop above can't see it. Remove the
+  # default TAPPaaS datastore paths — guarded on the .chunks marker so only an
+  # actual PBS datastore is ever deleted.
+  for _d in /tank*/tappaas_backup /var/lib/proxmox-backup/tappaas_backup; do
+    [[ -d "${_d}/.chunks" ]] && run rm -rf "$_d"
+  done
 fi
 
 # ── Step 3: ZFS data pools ───────────────────────────────────────────
