@@ -74,6 +74,13 @@ test_pass() {
     PASS_COUNT=$((PASS_COUNT + 1))
 }
 
+# Like test_pass but routes the ✓ line to [Debug] (still counts the pass) — for
+# sub-checks that are noise when green (e.g. config validation).
+test_pass_quiet() {
+    debug "  ${GN}✓${CL} $1"
+    PASS_COUNT=$((PASS_COUNT + 1))
+}
+
 test_fail() {
     error "  ✗ $1"
     FAIL_COUNT=$((FAIL_COUNT + 1))
@@ -165,18 +172,20 @@ main() {
 
     local module_json="${CONFIG_DIR}/${module}.json"
 
-    info "${BOLD}╔══════════════════════════════════════════════╗${CL}"
-    info "${BOLD}║  TAPPaaS Module Test: ${BL}${module}${CL}"
+    # Decorative banner → [Debug]; the caller (e.g. update-module Step 6) already
+    # prints a one-line "…: ${module}" header, so keep the console compact.
+    debug "${BOLD}╔══════════════════════════════════════════════╗${CL}"
+    debug "${BOLD}║  TAPPaaS Module Test: ${BL}${module}${CL}"
     if [[ "${OPT_DEEP}" -eq 1 ]]; then
-        info "${BOLD}║  Mode: ${YW}deep${CL}"
+        debug "${BOLD}║  Mode: ${YW}deep${CL}"
     fi
-    [[ -n "${opt_vmid}" ]]  && info "${BOLD}║  Override: ${YW}vmid=${opt_vmid}${CL}"
-    [[ -n "${opt_zone0}" ]] && info "${BOLD}║  Override: ${YW}zone0=${opt_zone0}${CL}"
-    info "${BOLD}╚══════════════════════════════════════════════╝${CL}"
+    [[ -n "${opt_vmid}" ]]  && debug "${BOLD}║  Override: ${YW}vmid=${opt_vmid}${CL}"
+    [[ -n "${opt_zone0}" ]] && debug "${BOLD}║  Override: ${YW}zone0=${opt_zone0}${CL}"
+    debug "${BOLD}╚══════════════════════════════════════════════╝${CL}"
 
     # ── Step 1: Validate module config ───────────────────────────────
     echo ""
-    info "${BOLD}Step 1: Validate module configuration${CL}"
+    info "${BOLD}Test Step 1: Validate module configuration${CL}"
 
     if [[ ! -f "${module_json}" ]]; then
         fatal "Module config not found: ${module_json} — is the module installed?"
@@ -184,7 +193,7 @@ main() {
     fi
 
     if check_json "${module_json}"; then
-        test_pass "Module config is valid"
+        test_pass_quiet "Module config is valid"
     else
         fatal "JSON validation failed for ${module}"
         exit 2
@@ -194,13 +203,13 @@ main() {
 
     # ── Step 2: Check dependency test-service.sh availability ────────
     echo ""
-    info "${BOLD}Step 2: Check dependency test availability${CL}"
+    info "${BOLD}Test Step 2: Check dependency test availability${CL}"
 
     local depends_on
     depends_on=$(read_module_config "${module}" 2>/dev/null | jq -r '.dependsOn // [] | .[]' 2>/dev/null)
 
     if [[ -z "${depends_on}" ]]; then
-        info "  No dependencies declared"
+        debug "  No dependencies declared"
     else
         for dep in ${depends_on}; do
             local provider_module="${dep%%:*}"
@@ -210,7 +219,7 @@ main() {
             if provider_dir=$(get_module_dir "${provider_module}" 2>/dev/null); then
                 local svc_test="${provider_dir}/services/${service_name}/test-service.sh"
                 if [[ -f "${svc_test}" ]]; then
-                    info "  ${GN}✓${CL} ${dep} — test-service.sh found"
+                    debug "  ${GN}✓${CL} ${dep} — test-service.sh found"
                 else
                     warn "${dep} — no test-service.sh (will skip)"
                 fi
@@ -222,10 +231,10 @@ main() {
 
     # ── Step 3: Call dependency test-service.sh scripts ──────────────
     echo ""
-    info "${BOLD}Step 3: Run dependency service tests${CL}"
+    info "${BOLD}Test Step 3: Run dependency service tests${CL}"
 
     if [[ -z "${depends_on}" ]]; then
-        info "  No dependency services to test"
+        debug "  No dependency services to test"
     else
         for dep in ${depends_on}; do
             local provider_module="${dep%%:*}"
@@ -246,11 +255,17 @@ main() {
             fi
 
             info "  Running ${BL}${dep}${CL} test-service.sh for '${module}'..."
-            if "${svc_test}" "${module}"; then
-                test_pass "${dep} service tests passed"
+            # Capture the service-test output: [Debug] when green, surfaced on failure.
+            local _svc_out _svc_rc _sl
+            _svc_out="$("${svc_test}" "${module}" 2>&1)" && _svc_rc=0 || _svc_rc=$?
+            if [[ ${_svc_rc} -eq 0 ]]; then
+                if [[ -n "${_svc_out}" ]]; then
+                    while IFS= read -r _sl; do debug "  ${_sl}"; done <<<"${_svc_out}"
+                fi
+                test_pass_quiet "${dep} service tests passed"
             else
-                local exit_code=$?
-                if [[ ${exit_code} -eq 2 ]]; then
+                if [[ -n "${_svc_out}" ]]; then printf '%s\n' "${_svc_out}" >&2; fi
+                if [[ ${_svc_rc} -eq 2 ]]; then
                     fatal "${dep} service test reported a fatal error"
                     FATAL=true
                 fi
@@ -261,19 +276,26 @@ main() {
 
     # ── Step 4: Call the module's own test.sh ────────────────────────
     echo ""
-    info "${BOLD}Step 4: Run module test.sh${CL}"
+    info "${BOLD}Test Step 4: Run module test.sh${CL}"
 
     local module_dir
     if module_dir=$(get_module_dir "${module}" 2>/dev/null); then
         ensure_scripts_executable "${module_dir}"
         if [[ -x "${module_dir}/test.sh" ]]; then
-            info "  Running ${module_dir}/test.sh..."
+            debug "  Running ${module_dir}/test.sh..."
             cd "${module_dir}"
-            if ./test.sh "${module}"; then
+            # Capture the test output: route it to [Debug] when green (it's noise),
+            # but surface it in full on failure so it stays diagnosable.
+            local _test_out _test_rc _tl
+            _test_out="$(./test.sh "${module}" 2>&1)" && _test_rc=0 || _test_rc=$?
+            if [[ ${_test_rc} -eq 0 ]]; then
+                if [[ -n "${_test_out}" ]]; then
+                    while IFS= read -r _tl; do debug "  ${_tl}"; done <<<"${_test_out}"
+                fi
                 test_pass "Module test.sh passed"
             else
-                local exit_code=$?
-                if [[ ${exit_code} -eq 2 ]]; then
+                if [[ -n "${_test_out}" ]]; then printf '%s\n' "${_test_out}" >&2; fi
+                if [[ ${_test_rc} -eq 2 ]]; then
                     fatal "Module test.sh reported a fatal error"
                     FATAL=true
                 fi

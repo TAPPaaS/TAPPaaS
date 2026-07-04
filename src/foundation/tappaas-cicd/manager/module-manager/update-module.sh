@@ -275,7 +275,7 @@ main() {
     # current release. If .orig is missing (pre-#207 install) we backfill it
     # from source so existing customizations remain pinned.
     echo ""
-    info "${BOLD}Step 0: Reconcile module config (3-way merge)${CL}"
+    info "${BOLD}Update Step 0: Reconcile module config (3-way merge)${CL}"
     if module_dir_pre=$(get_module_dir "${module}" 2>/dev/null); then
         if [[ -f /home/tappaas/bin/apply-json-merge.sh ]]; then
             # shellcheck disable=SC1091
@@ -294,7 +294,7 @@ main() {
 
     # ── Step 1: Pre-update snapshot (only for modules with a VM) ─────
     echo ""
-    info "${BOLD}Step 1: Create pre-update snapshot${CL}"
+    info "${BOLD}Update Step 1: Create pre-update snapshot${CL}"
 
     local snapshot_created=false
     local has_vm=false
@@ -330,7 +330,7 @@ main() {
 
     # ── Step 2: Pre-update test ───────────────────────────────────────
     echo ""
-    info "${BOLD}Step 2: Run pre-update tests${CL}"
+    info "${BOLD}Update Step 2: Run pre-update tests${CL}"
 
     if [[ "${OPT_NO_SNAPSHOT}" -eq 1 ]]; then
         info "  Skipped (--no-snapshot)"
@@ -351,7 +351,7 @@ main() {
 
     # ── Step 3: Run pre-update.sh if present ─────────────────────────
     echo ""
-    info "${BOLD}Step 3: Run pre-update hook${CL}"
+    info "${BOLD}Update Step 3: Run pre-update hook${CL}"
 
     local module_dir=""
     if module_dir=$(get_module_dir "${module}" 2>/dev/null); then
@@ -373,7 +373,7 @@ main() {
 
     # ── Step 4: Call dependency update-service.sh scripts ─────────────
     echo ""
-    info "${BOLD}Step 4: Call dependency service updaters${CL}"
+    info "${BOLD}Update Step 4: Call dependency service updaters${CL}"
 
     local depends_on
     depends_on=$(read_module_config "${module}" | jq -r '.dependsOn // [] | .[]' 2>/dev/null)
@@ -415,7 +415,7 @@ main() {
 
     # ── Step 5: Call the module's own update.sh ───────────────────────
     echo ""
-    info "${BOLD}Step 5: Run module update.sh${CL}"
+    info "${BOLD}Update Step 5: Run module update.sh${CL}"
 
     if [[ -n "${module_dir}" ]]; then
         if [[ -x "${module_dir}/update.sh" ]]; then
@@ -435,7 +435,7 @@ main() {
 
     # ── Step 6: Post-update test ──────────────────────────────────────
     echo ""
-    info "${BOLD}Step 6: Run post-update tests${CL}"
+    info "${BOLD}Update Step 6: Run post-update tests: ${BL}${module}${CL}"
 
     local post_test_exit=0
     /home/tappaas/bin/test-module.sh "${module}" || post_test_exit=$?
