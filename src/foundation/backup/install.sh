@@ -195,12 +195,20 @@ set -e
 # Create directory if it doesn't exist
 mkdir -p ${DATASTORE_PATH}
 
-# Create datastore using PBS CLI
-if ! proxmox-backup-manager datastore list | grep -q "${DATASTORE_NAME}"; then
+# Create datastore using PBS CLI (idempotent across re-installs).
+if proxmox-backup-manager datastore list | grep -q "${DATASTORE_NAME}"; then
+  echo "Datastore ${DATASTORE_NAME} already exists"
+elif [ -d "${DATASTORE_PATH}/.chunks" ]; then
+  # The path already holds a valid PBS datastore from a prior install: the
+  # directory survives teardown (it's a plain dir, not a destroyed tank* pool)
+  # and a PBS reinstall clears the registry — so it's present on disk but not
+  # registered. PBS refuses to 'create' on a non-empty path ("datastore path not
+  # empty"); re-attach the existing chunk store instead of failing.
+  proxmox-backup-manager datastore create ${DATASTORE_NAME} ${DATASTORE_PATH} --reuse-datastore true
+  echo "Datastore ${DATASTORE_NAME} re-attached (existing chunk store reused)"
+else
   proxmox-backup-manager datastore create ${DATASTORE_NAME} ${DATASTORE_PATH}
   echo "Datastore ${DATASTORE_NAME} created"
-else
-  echo "Datastore ${DATASTORE_NAME} already exists"
 fi
 EOF
 
