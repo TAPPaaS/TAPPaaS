@@ -51,6 +51,9 @@ function warn() {
 
 function error() { echo -e "${RD}[Error]${CL} $*" >&2; }
 
+# [Debug] lines are silent unless TAPPAAS_DEBUG=1 (matches the platform convention).
+function debug() { [[ "${TAPPAAS_DEBUG:-0}" -eq 1 ]] || return 0; echo -e "${BL}[Debug]${CL} $*"; }
+
 # die: print an error and stop the build (#368). The image-prep paths below call
 # this to fail loudly on a bad decompression or an empty/truncated disk image —
 # without it a silently truncated zstd (the #368 symptom) imported a broken disk
@@ -613,13 +616,13 @@ if [ "$IMAGETYPE" == "clone" ]; then
   CURRENT_NODE="$(hostname -s)"
   
   while read -r node; do
-    info "Checking for template $IMAGE on node: $node"
+    debug "Checking for template $IMAGE on node: $node"
     if ssh -n -o StrictHostKeyChecking=no root@"${node}.mgmt.internal" "qm status $IMAGE" >/dev/null 2>&1; then
       TEMPLATE_NODE="$node"
-      info "Found template $IMAGE on ${node}.mgmt.internal"
+      debug "Found template $IMAGE on ${node}.mgmt.internal"
       break
     else
-      info "Template $IMAGE not found on ${node}.mgmt.internal"
+      debug "Template $IMAGE not found on ${node}.mgmt.internal"
     fi
   # Use a management cluster node to list all cluster nodes (pvesh may only
   # return local node info on some hosts). We use the current node's hostname
@@ -627,7 +630,7 @@ if [ "$IMAGETYPE" == "clone" ]; then
   done < <(ssh -n -o StrictHostKeyChecking=no "root@$(hostname).mgmt.internal" "pvesh get /cluster/resources --type node --output-format json | jq --raw-output '.[] | select(.type==\"node\") | .node'")
   
   if [ -z "$TEMPLATE_NODE" ]; then
-    info "Template $IMAGE not found on any cluster node"
+    error "Template $IMAGE not found on any cluster node"
     exit 1
   fi
 
@@ -636,27 +639,32 @@ if [ "$IMAGETYPE" == "clone" ]; then
   _clone_with_progress() {
     local _node="$1" _src="$2" _new="$3" _name="$4" _via_ssh="${5:-}"
     local _pvesh_cmd="pvesh create /nodes/${_node}/qemu/${_src}/clone --newid ${_new} --name '${_name}' --full 1 2>&1"
-    info "  Cloning template ${_src} → VM ${_new} on ${_node}..."
+    debug "  Cloning template ${_src} → VM ${_new} on ${_node}..."
+    # Progress: 'transferred X of Y (Z%)' lines → a single dot each (visible
+    # progress without flooding); every other clone line → [Debug].
     if [[ -n "$_via_ssh" ]]; then
       # shellcheck disable=SC2029
       ssh -o StrictHostKeyChecking=no "root@${_node}.mgmt.internal" "${_pvesh_cmd}" \
         | while IFS= read -r _line; do
             [[ "$_line" =~ ^UPID: ]] && continue
-            [[ -n "$_line" ]] && info "  ${_line}"
+            [[ -z "$_line" ]] && continue
+            if [[ "$_line" == *transferred* ]]; then printf '.'; else debug "  ${_line}"; fi
           done
     else
       eval "${_pvesh_cmd}" \
         | while IFS= read -r _line; do
             [[ "$_line" =~ ^UPID: ]] && continue
-            [[ -n "$_line" ]] && info "  ${_line}"
+            [[ -z "$_line" ]] && continue
+            if [[ "$_line" == *transferred* ]]; then printf '.'; else debug "  ${_line}"; fi
           done
     fi
     _clone_rc=${PIPESTATUS[0]}
     if [[ $_clone_rc -ne 0 ]]; then
+      printf '\n'
       error "Clone failed (exit ${_clone_rc})"
       exit 1
     fi
-    info "  ${GN}✓${CL} Clone complete"
+    debug "  ${GN}✓${CL} Clone complete"
   }
 
   # Check if we're running on the node that has the template
@@ -665,7 +673,7 @@ if [ "$IMAGETYPE" == "clone" ]; then
     _clone_with_progress "${CURRENT_NODE}" "${IMAGE}" "${VMID}" "${VMNAME}"
   else
     # Remote clone - need to clone on template node then migrate to current node
-    info "Template is on ${TEMPLATE_NODE}, current node is ${CURRENT_NODE}"
+    debug "Template is on ${TEMPLATE_NODE}, current node is ${CURRENT_NODE}"
 
     # Pre-flight (issue #308): a prior failed migration can leave orphan
     # '@__migration__' snapshots or a D-state 'zfs recv' on the target; a new
@@ -674,19 +682,20 @@ if [ "$IMAGETYPE" == "clone" ]; then
     # migration-snapshot check enabled — the early call only covers stuck recvs.
     zfs_recv_preflight "$STORAGE" true
 
-    info "Cloning on ${TEMPLATE_NODE} and migrating to ${CURRENT_NODE}..."
+    debug "Cloning on ${TEMPLATE_NODE} and migrating to ${CURRENT_NODE}..."
 
     # Clone on the template node via SSH (with live progress)
     _clone_with_progress "${TEMPLATE_NODE}" "${IMAGE}" "${VMID}" "${VMNAME}" "ssh"
 
     # Migrate the VM to the current node (online=0 means offline migration)
-    info " - Migrating VM ${VMID} from ${TEMPLATE_NODE} to ${NODE}..."
+    debug " - Migrating VM ${VMID} from ${TEMPLATE_NODE} to ${NODE}..."
     ssh -o StrictHostKeyChecking=no root@${TEMPLATE_NODE}.mgmt.internal "qm migrate $VMID $NODE --online 0" >/dev/null
-    info " - Migration complete"
+    debug " - Migration complete"
   fi
 
   # Set CPU type after cloning (clone inherits from template)
   qm set $VMID --cpu "$CPU_TYPE" >/dev/null
+  printf '\n'   # terminate the clone progress-dot line
 fi
 
 info "${BOLD}Configuring the $VMNAME VM settings..."
