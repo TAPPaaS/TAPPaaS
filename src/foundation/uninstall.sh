@@ -31,7 +31,7 @@
 # Usage:
 #   uninstall.sh [--yes] [--force] [--keep-pools] [--keep-network] [--keep-user]
 #                [--only <step>[,<step>...]] [-h|--help]
-#     steps: vms,pbs,pools,cluster,network,user,markers
+#     steps: vms,pbs,pools,cluster,network,user,markers,hostkeys
 #
 #   uninstall.sh                 # dry-run: show the teardown plan, change nothing
 #   uninstall.sh --yes           # execute (asks to type ERASE on a TTY)
@@ -84,6 +84,14 @@ mapfile -t TAPPAAS_VMS < <(
     [[ "${tags,,}" == *tappaas* ]] && echo "$id"
   done
 )
+# VM NAMES too — the known_hosts scrub (hostkeys step) keys off hostnames, and
+# the VMs are already destroyed by the time that step runs.
+TAPPAAS_VM_NAMES=()
+for _id in "${TAPPAAS_VMS[@]:-}"; do
+  [[ -n "$_id" ]] || continue
+  _nm="$(qm config "$_id" 2>/dev/null | sed -n 's/^name: //p')"
+  [[ -n "$_nm" ]] && TAPPAAS_VM_NAMES+=("$_nm")
+done
 mapfile -t TANK_POOLS    < <(zpool list -H -o name 2>/dev/null | grep -E '^tank' || true)
 mapfile -t PBS_STORAGES  < <(awk '/^pbs: /{print $2}' /etc/pve/storage.cfg 2>/dev/null || true)
 IN_CLUSTER=0; pvecm status >/dev/null 2>&1 && IN_CLUSTER=1
@@ -237,6 +245,41 @@ if step markers; then
   run rm -f /var/lib/vz/snippets/tappaas-debian-vendor.yaml
   # ~/bin TAPPaaS helper symlinks (installed under /home/tappaas/bin; gone with the user).
   info "  (apt repos, the subscription-nag patch and dist-upgrade are intentionally LEFT — they are harmless and non-TAPPaaS-specific.)"
+fi
+
+# ── Step 8: stale SSH host keys (known_hosts) ────────────────────────
+# known_hosts on Debian is HASHED (HashKnownHosts yes), so entries CANNOT be
+# grep'd/sed'd by name — only `ssh-keygen -R <host>` removes them. Across
+# re-installs the firewall/cicd/nodes/VMs get fresh host keys (and cicd's DHCP
+# lease roams within the mgmt /24), so stale hashed entries accumulate and the
+# NEXT install then fails with "REMOTE HOST IDENTIFICATION HAS CHANGED" until the
+# operator runs `ssh-keygen -R` by hand. Scrub them here.
+if step hostkeys; then
+  info "${BOLD}[8] SSH known_hosts (TAPPaaS host keys)${CL}"
+  # Named TAPPaaS hosts (short + .mgmt.internal + .internal): firewall, cicd, the
+  # cluster nodes, and every TAPPaaS VM (names captured at inventory above).
+  _hk_hosts=()
+  for n in firewall tappaas-cicd tappaas1 tappaas2 tappaas3 tappaas4 tappaas5 tappaas6 tappaas7 tappaas8 tappaas9 "${TAPPAAS_VM_NAMES[@]}"; do
+    [[ -n "$n" ]] && _hk_hosts+=("$n" "${n}.mgmt.internal" "${n}.internal")
+  done
+  # Plus every IP in the mgmt /24 (10.0.0.0/24): the firewall/cicd/mgmt-zone hosts
+  # live here and cicd's DHCP address roams — hashed IPs can't be matched by name,
+  # so remove the whole subnet by IP.
+  for o in $(seq 1 254); do _hk_hosts+=("10.0.0.${o}"); done
+  # Scrub root's known_hosts (+ its .old backup) and any home dir's (covers --keep-user).
+  mapfile -t _hk_files < <(find /root/.ssh /home/*/.ssh -maxdepth 1 -name known_hosts 2>/dev/null || true)
+  if [[ ${#_hk_files[@]} -eq 0 ]]; then
+    info "  no known_hosts files present — nothing to do."
+  elif [[ $DRY_RUN -eq 1 ]]; then
+    info "  would remove host keys for firewall, tappaas-cicd, tappaas1-9, ${#TAPPAAS_VM_NAMES[@]} TAPPaaS VM(s) and 10.0.0.0/24"
+    info "  from: ${_hk_files[*]}"
+  else
+    for f in "${_hk_files[@]}"; do
+      for h in "${_hk_hosts[@]}"; do ssh-keygen -f "$f" -R "$h" >/dev/null 2>&1 || true; done
+      rm -f "${f}.old"
+      info "  scrubbed ${f}"
+    done
+  fi
 fi
 
 echo ""
