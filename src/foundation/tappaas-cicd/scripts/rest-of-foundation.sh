@@ -102,7 +102,10 @@ if [[ "$SKIP_UPDATE" == "0" ]]; then
   echo ""
   info "${BOLD}── Final system update + tests (update-tappaas) ──${CL}"
   if command -v update-tappaas >/dev/null 2>&1; then
-    update-tappaas || warn "update-tappaas reported issues — review the output above."
+    # --force: run now regardless of the configured update schedule — at install
+    # time we are almost always off-schedule, and update-tappaas would otherwise
+    # no-op (should_update_now) and skip the final update + regression tests.
+    update-tappaas --force || warn "update-tappaas reported issues — review the output above."
   else
     warn "update-tappaas not found on PATH — skipping the final update."
   fi
@@ -131,15 +134,6 @@ ${GN}${BOLD}🎉  Congratulations — your TAPPaaS foundation is installed.${CL}
   Domain / TLS  : ${domain}
   Modules       : ${installed:-<none>}
 
-What's next:
-  • Add app stacks:  repository.sh add <store> --branch main
-                     cd ~/TAPPaaS/src/apps/<name> && install-module.sh <name>
-  • If not done yet: set your real domain (create-configuration.sh --update
-    --domain <yourdomain>) and add the Caddy DNS-01 provider token so public
-    TLS certificates issue.
-  • Optional hardening: take tappaas1 off the upstream network so Proxmox is
-    reachable only via the mgmt net / firewall / netbird:
-        ssh root@tappaas1.mgmt.internal '~/tappaas/config-network.sh --drop-upstream'
 EOF
   exit 0
 else
