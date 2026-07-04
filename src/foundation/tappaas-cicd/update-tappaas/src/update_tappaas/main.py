@@ -114,11 +114,21 @@ class SystemdPriorityFormatter(logging.Formatter):
         logging.CRITICAL: "<2>",
     }
 
+    # Interactive: tag lines like the bash helpers ([Info]/[Warning]/…) so the
+    # console is consistent across the update-tappaas driver and the scripts it calls.
+    LABEL = {
+        logging.DEBUG:    "[Debug]",
+        logging.INFO:     "[Info]",
+        logging.WARNING:  "[Warning]",
+        logging.ERROR:    "[Error]",
+        logging.CRITICAL: "[Fatal]",
+    }
+
     def format(self, record: logging.LogRecord) -> str:
         body = super().format(record)
         if UNDER_SYSTEMD:
             return self.PRIORITY.get(record.levelno, "<6>") + body
-        return body
+        return f"{self.LABEL.get(record.levelno, '[Info]')} {body}"
 
 
 def setup_logging() -> None:
@@ -378,7 +388,7 @@ def migration_pass(dry_run: bool) -> bool:
     cmd = [str(script), "--yes"]
     if dry_run:
         cmd.append("--dry-run")
-    log.info("Phase 0: ADR-007 migration pass (%s)", " ".join(cmd))
+    log.debug("Phase 0: ADR-007 migration pass (%s)", " ".join(cmd))
     try:
         result = subprocess.run(cmd, text=True)
     except (subprocess.SubprocessError, FileNotFoundError) as e:
@@ -515,15 +525,11 @@ def main():
 
     # Phase 0: ADR-007 migration pass (idempotent; converges the system onto the
     # site/environments/network model before any module is touched). Non-fatal.
-    log.info("=" * 60)
-    log.info("Phase 0: ADR-007 migration pass")
-    log.info("=" * 60)
+    log.info("Phase 0: check for ADR-007 migration")
     migration_pass(dry_run=False)
 
     # Phase 1: Foundation modules in fixed order
-    log.info("=" * 60)
     log.info("Phase 1: Updating foundation modules")
-    log.info("=" * 60)
 
     for i, module in enumerate(installed_foundation, 1):
         log.info("[%d/%d] Updating %s", i, len(installed_foundation), module)
@@ -532,9 +538,7 @@ def main():
             failed_modules.append(module)
 
     # Phase 2: App modules in dependency order
-    log.info("=" * 60)
     log.info("Phase 2: Updating app modules")
-    log.info("=" * 60)
 
     if sorted_apps:
         for i, app in enumerate(sorted_apps, 1):
@@ -546,9 +550,7 @@ def main():
         log.info("No app modules found to update")
 
     # Phase 3: controlled node reboot pass (issue #275)
-    log.info("=" * 60)
     log.info("Phase 3: Node reboot pass (automaticReboot=%s)", automatic_reboot)
-    log.info("=" * 60)
     reboot_ok = reboot_pass(automatic_reboot, dry_run=False)
     if not reboot_ok:
         log.error("FAILED: node reboot pass")

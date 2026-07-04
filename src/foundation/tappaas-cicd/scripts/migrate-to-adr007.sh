@@ -159,7 +159,7 @@ populate_storage_pools() {
     local nodes host fqdn pools pools_arr tmp
     nodes="$(jq -r '.hardware.nodes[]?.name // empty' "$SITE" 2>/dev/null || true)"
     [[ -n "$nodes" ]] || return 0
-    info "  Discovering storagePools per node (zpool list)..."
+    debug "  Discovering storagePools per node (zpool list)..."
     while IFS= read -r host; do
         [[ -n "$host" ]] || continue
         fqdn="${host}.mgmt.internal"
@@ -176,7 +176,7 @@ populate_storage_pools() {
               '.hardware.nodes |= map(if .name == $h then .storagePools = $p else . end)' \
               "$SITE" > "$tmp" 2>/dev/null; then
             mv "$tmp" "$SITE"
-            info "  ${host}: storagePools = [${pools//$'\n'/, }]"
+            debug "  ${host}: storagePools = [${pools//$'\n'/, }]"
         else
             rm -f "$tmp"; warn "  ${host}: failed to merge storagePools into site.json."
         fi
@@ -185,9 +185,9 @@ populate_storage_pools() {
 
 # ── Step 1: configuration.json -> site.json ──────────────────────────
 step_site() {
-    info "Step 1/5: configuration.json -> site.json"
+    debug "Step 1/5: configuration.json -> site.json"
     if [[ -f "$SITE" ]]; then
-        info "  site.json already present — skipping (idempotent)."
+        debug "  site.json already present — skipping (idempotent)."
         return 0
     fi
     if [[ ! -f "$CONFIGURATION" ]]; then
@@ -221,10 +221,10 @@ step_zones_and_envs() {
     fi
     envfile="${ENV_DIR}/${name}.json"
 
-    info "Step 2/5: init (org-zone setup for '${name}')"
-    info "Step 3/5: base environments (mgmt + ${name})"
+    debug "Step 2/5: init (org-zone setup for '${name}')"
+    debug "Step 3/5: base environments (mgmt + ${name})"
     if [[ -f "$envfile" ]]; then
-        info "  environments/${name}.json exists — init + environments already done, skipping."
+        debug "  environments/${name}.json exists — init + environments already done, skipping."
         return 0
     fi
 
@@ -249,9 +249,9 @@ step_zones_and_envs() {
 
 # ── Step 4: firewall -> network (deployed) — supervised / opt-in ─────
 step_firewall() {
-    info "Step 4/5: firewall -> network (deployed VM/config rename)"
+    debug "Step 4/5: firewall -> network (deployed VM/config rename)"
     if [[ -f "$NET_JSON" && ! -f "$FW_JSON" ]]; then
-        info "  network.json present and firewall.json gone — already migrated, skipping."
+        debug "  network.json present and firewall.json gone — already migrated, skipping."
         return 0
     fi
     if [[ -f "$NET_JSON" && -f "$FW_JSON" ]]; then
@@ -262,7 +262,7 @@ step_firewall() {
         return 0
     fi
     if [[ ! -f "$FW_JSON" ]]; then
-        info "  no firewall.json and no network.json — nothing to do."
+        debug "  no firewall.json and no network.json — nothing to do."
         return 0
     fi
     # firewall.json is still the live network-module config.
@@ -295,7 +295,7 @@ step_firewall() {
 
 # ── Step 5: validate the resulting structure ────────────────────────
 step_validate() {
-    info "Step 5/5: validating ADR-007 structure"
+    debug "Step 5/5: validating ADR-007 structure"
     local issues=()
 
     if [[ -f "$SITE" ]]; then
@@ -325,7 +325,7 @@ step_validate() {
     fi
 
     if [[ ${#issues[@]} -eq 0 ]]; then
-        info "  ${GN:-}✓${CL:-} system is on the ADR-007 model."
+        debug "  ${GN:-}✓${CL:-} system is on the ADR-007 model."
     else
         warn "  structure audit found ${#issues[@]} item(s) still pending:"
         local it; for it in "${issues[@]}"; do warn "    - ${it}"; done
@@ -343,7 +343,7 @@ step_validate() {
 # touches configs that (a) resolve to a catalog module and (b) have no
 # `.environment` yet — idempotent, and never clobbers an operator-set value.
 step_backfill_environment() {
-    info "Step (env): backfill module .environment on deployed configs"
+    debug "Step (env): backfill module .environment on deployed configs"
     if [[ ! -f "$SITE" ]]; then
         [[ $DRY_RUN -eq 1 ]] && { info "  (dry-run) would backfill .environment after site.json exists"; return 0; }
         warn "  no site.json yet — skipping .environment backfill (re-run after Step 1)."; NEEDS_ACTION=1; return 0
@@ -374,7 +374,7 @@ step_backfill_environment() {
             command rm -f "$tmp"; warn "  ${m}: failed to write .environment"; NEEDS_ACTION=1
         fi
     done
-    [[ $DRY_RUN -eq 1 ]] || info "  Backfilled ${changed} module config(s)."
+    [[ $DRY_RUN -eq 1 ]] || debug "  Backfilled ${changed} module config(s)."
 }
 
 # ── Step (people): bootstrap the owner organization + identity ───────
@@ -388,10 +388,10 @@ step_backfill_environment() {
 # operator-added people). Best-effort: a reconcile failure (identity unreachable)
 # leaves the org in config to sync later, and flags a manual follow-up.
 step_people_bootstrap() {
-    info "Step (people): owner organization + identity"
+    debug "Step (people): owner organization + identity"
     local people_dir="${CONFIG_DIR}/people"
     if [[ -d "$people_dir" && -n "$(ls -A "$people_dir" 2>/dev/null)" ]]; then
-        info "  config/people already populated — skipping (idempotent)."
+        debug "  config/people already populated — skipping (idempotent)."
         return 0
     fi
     if [[ ! -f "$SITE" ]]; then
@@ -423,7 +423,7 @@ main() {
     # NB: $DRY_RUN is 0/1 — both non-empty — so ${DRY_RUN:+…} always expands. Use a
     # numeric test so the header only says "dry-run" when actually dry-running.
     local _dry=""; [[ $DRY_RUN -eq 1 ]] && _dry=", dry-run"
-    info "ADR-007 migration orchestrator (config-dir: ${CONFIG_DIR}${_dry})"
+    debug "ADR-007 migration orchestrator (config-dir: ${CONFIG_DIR}${_dry})"
     [[ $DRY_RUN -eq 1 ]] && info "  DRY RUN — no changes will be made."
 
     step_site
