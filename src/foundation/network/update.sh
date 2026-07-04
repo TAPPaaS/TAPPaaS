@@ -68,7 +68,10 @@ fi
 info "Updating OPNsense (base, kernel, and packages)..."
 # Fingerprint the installed base+kernel first, so we can tell whether this run
 # actually applies a firmware update (→ reboot) vs. a no-op re-run (→ no reboot).
-_fw_ver_before="$(ssh root@"$FIREWALL_FQDN" 'echo "$(freebsd-version -k)|$(freebsd-version -u)"' 2>/dev/null || true)"
+# NOTE: OPNsense's root login shell is csh (opnsense-shell) — it CANNOT parse
+# `$(...)`, so run the two version commands plain (csh handles `;`) and join the
+# lines locally.
+_fw_ver_before="$(ssh root@"$FIREWALL_FQDN" 'freebsd-version -k; freebsd-version -u' 2>/dev/null | tr '\n' '|' || true)"
 if [[ "${OPT_DEBUG:-0}" -eq 1 ]]; then
     ssh root@"$FIREWALL_FQDN" "opnsense-update -bkp" || {
         warn "OPNsense update returned non-zero exit code"
@@ -87,7 +90,7 @@ fi
 # unchanged, nothing that needs a reboot was applied (package-only updates don't
 # need one), so we skip the disruptive firewall reboot on a no-op re-run. If we
 # could not read the versions, assume a reboot is needed (safe default).
-_fw_ver_after="$(ssh root@"$FIREWALL_FQDN" 'echo "$(freebsd-version -k)|$(freebsd-version -u)"' 2>/dev/null || true)"
+_fw_ver_after="$(ssh root@"$FIREWALL_FQDN" 'freebsd-version -k; freebsd-version -u' 2>/dev/null | tr '\n' '|' || true)"
 _fw_reboot_needed=1
 if [[ -n "$_fw_ver_before" && "$_fw_ver_before" == "$_fw_ver_after" ]]; then
     _fw_reboot_needed=0
