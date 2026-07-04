@@ -19,56 +19,64 @@ import json
 import os
 import socket
 import sys
+import time
 from dataclasses import dataclass
 from pathlib import Path
 
 from .config import Config
 
 
-def _check_unbound_dns(label: str = "") -> bool:
+def _check_unbound_dns(label: str = "", retries: int = 1, delay: float = 2.0) -> bool:
     """Check if Unbound DNS at 10.0.0.1 is responding.
 
     Debug instrumentation to track when Unbound breaks during zone-manager
     operations. Returns True if DNS is working, False otherwise.
+
+    `retries` > 1 tolerates a briefly-stabilising Unbound: right after the
+    firewall regenerates its config on boot, OPNsense restarts Unbound, so a
+    single 2s probe can miss it even though it comes up moments later (the
+    update.sh `dig` check already retries for the same reason). The gating
+    pre/post-flight callers pass a few retries so a momentary miss does not abort
+    the whole run; the instrumentation callers keep the default single probe.
     """
-    try:
-        # Create a UDP socket for DNS query
+    prefix = f"[UNBOUND-CHECK {label}] " if label else "[UNBOUND-CHECK] "
+    # Simple DNS query for "firewall.mgmt.internal" (A record).
+    # DNS header: ID=0x1234, flags=0x0100 (standard query), 1 question.
+    query = (
+        b'\x12\x34'  # Transaction ID
+        b'\x01\x00'  # Flags: standard query
+        b'\x00\x01'  # Questions: 1
+        b'\x00\x00'  # Answer RRs: 0
+        b'\x00\x00'  # Authority RRs: 0
+        b'\x00\x00'  # Additional RRs: 0
+        b'\x08firewall\x04mgmt\x08internal\x00'
+        b'\x00\x01'  # Type: A
+        b'\x00\x01'  # Class: IN
+    )
+    attempts = max(1, retries)
+    for attempt in range(attempts):
         sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        sock.settimeout(2.0)
-
-        # Simple DNS query for "firewall.mgmt.internal" (A record)
-        # DNS header: ID=0x1234, flags=0x0100 (standard query), 1 question
-        query = (
-            b'\x12\x34'  # Transaction ID
-            b'\x01\x00'  # Flags: standard query
-            b'\x00\x01'  # Questions: 1
-            b'\x00\x00'  # Answer RRs: 0
-            b'\x00\x00'  # Authority RRs: 0
-            b'\x00\x00'  # Additional RRs: 0
-            # Query: firewall.mgmt.internal
-            b'\x08firewall\x04mgmt\x08internal\x00'
-            b'\x00\x01'  # Type: A
-            b'\x00\x01'  # Class: IN
-        )
-
-        sock.sendto(query, ("10.0.0.1", 53))
-        response, _ = sock.recvfrom(512)
-        sock.close()
-
-        # Check if we got a valid response (at least header + some data)
-        if len(response) >= 12:
-            prefix = f"[UNBOUND-CHECK {label}] " if label else "[UNBOUND-CHECK] "
-            debug(f"{prefix}DNS OK - Unbound responding on 10.0.0.1:53")
-            return True
-        return False
-    except socket.timeout:
-        prefix = f"[UNBOUND-CHECK {label}] " if label else "[UNBOUND-CHECK] "
-        warn(f"{prefix}DNS FAILED - Unbound NOT responding on 10.0.0.1:53 (timeout)")
-        return False
-    except Exception as e:
-        prefix = f"[UNBOUND-CHECK {label}] " if label else "[UNBOUND-CHECK] "
-        warn(f"{prefix}DNS FAILED - Unbound check error: {e}")
-        return False
+        try:
+            sock.settimeout(2.0)
+            sock.sendto(query, ("10.0.0.1", 53))
+            response, _ = sock.recvfrom(512)
+            # Valid response = at least a DNS header.
+            if len(response) >= 12:
+                debug(f"{prefix}DNS OK - Unbound responding on 10.0.0.1:53")
+                return True
+        except socket.timeout:
+            pass  # fall through to retry / final failure
+        except Exception as e:
+            warn(f"{prefix}DNS FAILED - Unbound check error: {e}")
+            return False
+        finally:
+            sock.close()
+        if attempt < attempts - 1:
+            debug(f"{prefix}no response (attempt {attempt + 1}/{attempts}) — retrying in {delay}s")
+            time.sleep(delay)
+    warn(f"{prefix}DNS FAILED - Unbound NOT responding on 10.0.0.1:53 "
+         f"(timeout after {attempts} attempt(s))")
+    return False
 
 
 def _check_egress(host: str = "1.1.1.1", port: int = 443,
@@ -98,7 +106,10 @@ def preflight_checks(skip_egress: bool = False) -> bool:
     an already-degraded firewall risks leaving DNS unrecoverable, and recovery
     SSH needs name resolution that would no longer work (UNBOUND-DNSBL-PYTHON).
     """
-    dns_ok = _check_unbound_dns("PRE-FLIGHT")
+    # Retry: Unbound may still be stabilising after a firewall reboot/config
+    # regen (same reason update.sh's dig check retries) — don't abort on a
+    # single momentary miss.
+    dns_ok = _check_unbound_dns("PRE-FLIGHT", retries=5, delay=2.0)
     egress_ok = True if skip_egress else _check_egress(label="PRE-FLIGHT")
     if not dns_ok:
         error("Pre-flight: Unbound DNS (10.0.0.1:53) is DOWN — refusing to mutate "
@@ -116,7 +127,7 @@ def postflight_checks(skip_egress: bool = False) -> bool:
     Same IP-literal probes as preflight. Returns True if still healthy; the caller
     exits non-zero on False so CI/CD stops before a degraded firewall is shipped.
     """
-    dns_ok = _check_unbound_dns("POST-FLIGHT")
+    dns_ok = _check_unbound_dns("POST-FLIGHT", retries=5, delay=2.0)
     egress_ok = True if skip_egress else _check_egress(label="POST-FLIGHT")
     if not dns_ok:
         error("Post-flight: Unbound DNS (10.0.0.1:53) is DOWN after zone changes — "
