@@ -293,8 +293,7 @@ main() {
     fi
 
     # ── Step 1: Pre-update snapshot (only for modules with a VM) ─────
-    echo ""
-    info "${BOLD}Update Step 1: Create pre-update snapshot${CL}"
+    info "${BOLD}Update Step 1: Create pre-update snapshot: ${BL}${module}${CL}"
 
     local snapshot_created=false
     local has_vm=false
@@ -306,7 +305,7 @@ main() {
     [[ -n "${self_vm}" ]] || self_vm="${module}"
 
     if [[ "${OPT_NO_SNAPSHOT}" -eq 1 ]]; then
-        info "  Skipped (--no-snapshot)"
+        debug "  Skipped (--no-snapshot)"
     elif [[ "${self_vm}" == "$(hostname)" || "${self_vm}" == "$(hostname -s)" ]]; then
         # SELF-UPDATE GUARD (#352, incident 2026-06-15): never snapshot the VM that
         # is running THIS updater. `qm snapshot` fsfreezes the guest via the QEMU
@@ -318,14 +317,19 @@ main() {
         warn "    Snapshotting it from inside fsfreezes its own root FS and can strand it."
         warn "    Continuing WITHOUT a rollback safety net (take a node-side snapshot under supervision if needed)."
     elif [[ "${has_vm}" == true ]]; then
-        if /home/tappaas/bin/snapshot-vm.sh "${module}"; then
-            info "  ${GN}✓${CL} Snapshot created"
+        # Capture snapshot-vm.sh (+ qm) output → [Debug] when green; surfaced on failure.
+        local _snap_out _snap_rc _sl
+        _snap_out="$(/home/tappaas/bin/snapshot-vm.sh "${module}" 2>&1)" && _snap_rc=0 || _snap_rc=$?
+        if [[ ${_snap_rc} -eq 0 ]]; then
+            if [[ -n "${_snap_out}" ]]; then while IFS= read -r _sl; do debug "  ${_sl}"; done <<<"${_snap_out}"; fi
+            debug "  ${GN}✓${CL} Snapshot created"
             snapshot_created=true
         else
+            if [[ -n "${_snap_out}" ]]; then printf '%s\n' "${_snap_out}" >&2; fi
             warn "Snapshot failed — continuing without rollback safety net"
         fi
     else
-        info "  Skipped (module has no VM)"
+        debug "  Skipped (module has no VM)"
     fi
 
     # ── Step 2: Pre-update test ───────────────────────────────────────

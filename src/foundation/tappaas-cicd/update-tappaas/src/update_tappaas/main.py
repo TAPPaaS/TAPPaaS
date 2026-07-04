@@ -531,8 +531,9 @@ def main():
     # Phase 1: Foundation modules in fixed order
     log.info("Phase 1: Updating foundation modules")
 
-    for i, module in enumerate(installed_foundation, 1):
-        log.info("[%d/%d] Updating %s", i, len(installed_foundation), module)
+    for module in installed_foundation:
+        # No "[i/N] Updating <module>" line — update-module.sh's own banner
+        # ("TAPPaaS Module Update: <module>") immediately repeats it.
         if not update_module(module):
             log.error("FAILED: %s", module)
             failed_modules.append(module)
@@ -541,8 +542,7 @@ def main():
     log.info("Phase 2: Updating app modules")
 
     if sorted_apps:
-        for i, app in enumerate(sorted_apps, 1):
-            log.info("[%d/%d] Updating %s", i, len(sorted_apps), app)
+        for app in sorted_apps:
             if not update_module(app):
                 log.error("FAILED: %s", app)
                 failed_modules.append(app)
