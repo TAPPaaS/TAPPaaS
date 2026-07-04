@@ -35,11 +35,12 @@ pbs_node() {
 # Idempotent: only writes a drop-in / reloads when missing or stale. Runs on the
 # PBS node itself. No `ssh -n` here — the remote heredoc needs stdin.
 pbs_ensure_zfs_ordering() {
-    local node
+    local node _out _rc _l
     node="$(pbs_node)"
     info "${BOLD}Ensuring PBS waits for ZFS mount on ${node} (issue #230)${CL}"
-    ssh -o ConnectTimeout=10 -o BatchMode=yes -o StrictHostKeyChecking=accept-new \
-        "root@${node}.mgmt.internal" 'bash -s' <<'REMOTE'
+    # Route the remote script's per-unit output to [Debug]; surface it on failure.
+    _out="$(ssh -o ConnectTimeout=10 -o BatchMode=yes -o StrictHostKeyChecking=accept-new \
+        "root@${node}.mgmt.internal" 'bash -s' 2>&1 <<'REMOTE'
 set -euo pipefail
 want='[Unit]
 After=zfs-mount.service
@@ -62,6 +63,9 @@ if [[ "$changed" -eq 1 ]]; then
     echo "  systemctl daemon-reload done"
 fi
 REMOTE
+)" && _rc=0 || _rc=$?
+    if [ -n "$_out" ]; then while IFS= read -r _l; do debug "  $_l"; done <<<"$_out"; fi
+    return "$_rc"
 }
 
 # Ensure the datastore has integrity checking configured (issue #228): a daily

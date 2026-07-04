@@ -48,6 +48,20 @@ MODULE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 # Source common routines (just function definitions, no execution)
 . /home/tappaas/bin/common-install-routines.sh
+
+# Run a command with its (noisy apt/ssh) output routed to [Debug] — shown only
+# with TAPPAAS_DEBUG=1; on failure the captured output is surfaced so errors stay
+# visible. Returns the command's rc (so `run_quiet … || die/warn` still works).
+run_quiet() {
+  local _out _rc _l
+  _out="$("$@" 2>&1)" && _rc=0 || _rc=$?
+  if [ "${_rc}" -ne 0 ]; then
+    if [ -n "${_out}" ]; then printf '%s\n' "${_out}" >&2; fi
+    return "${_rc}"
+  fi
+  if [ -n "${_out}" ]; then while IFS= read -r _l; do debug "  ${_l}"; done <<<"${_out}"; fi
+  return 0
+}
 # shellcheck source=lib/pbs-job.sh disable=SC1091
 . "${MODULE_DIR}/lib/pbs-job.sh"
 # shellcheck source=lib/pbs-namespace.sh disable=SC1091
@@ -72,9 +86,9 @@ ZONE="$(get_config_value 'zone0' 'mgmt')"
 info "${BOLD}Test if apt $IMAGE_LOCATION repositories are registered ..."
 if ssh root@${NODE}.$ZONE.internal "cat /etc/apt/sources.list.d/proxmox.sources 2>/dev/null" | grep -q "$IMAGE_LOCATION"
 then
-  echo "Proxmox PBS apt repository already registered."
+  debug "Proxmox PBS apt repository already registered."
 else
-  echo "Proxmox PBS apt repository not found, adding it ..."
+  debug "Proxmox PBS apt repository not found, adding it ..."
   ssh root@${NODE}.$ZONE.internal "cat >> /etc/apt/sources.list.d/proxmox.sources" << EOF
 Types: deb
 URIs: ${IMAGE_LOCATION}
@@ -85,12 +99,12 @@ EOF
 fi
 
 info "${BOLD}Installing ${DESCRIPTION} on node ${BGN}${NODE}${CL} ..."
-ssh root@${NODE}.$ZONE.internal bash -c "'
+run_quiet ssh root@${NODE}.$ZONE.internal bash -c "'
   set -e
   apt update
   apt install -y proxmox-backup-server proxmox-backup-client
   rm -f /etc/apt/sources.list.d/pbs-enterprise.sources
-'"
+'" || die "PBS server installation failed on ${NODE}"
 
 # The PBS datastore lives on a ZFS pool; make the services wait for the mount
 # so they don't open the chunk store before ZFS is up on boot (issue #230).
@@ -107,7 +121,7 @@ CLUSTER_NODES=$(ssh root@${NODE}.${ZONE}.internal "pvesh get /nodes --output-for
 
 for PVE_NODE in $CLUSTER_NODES; do
   info "Installing proxmox-backup-client on ${PVE_NODE}..."
-  ssh root@${PVE_NODE}.${ZONE}.internal bash -c "'
+  run_quiet ssh root@${PVE_NODE}.${ZONE}.internal bash -c "'
     set -e
     # Check if PBS repository is configured
     if ! grep -q \"${IMAGE_LOCATION}\" /etc/apt/sources.list.d/proxmox.sources 2>/dev/null; then
