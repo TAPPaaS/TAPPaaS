@@ -5,10 +5,21 @@
 set -euo pipefail
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 rc=0
+# Quiet by default: one '.' per component built — the child build/link logs are
+# noise during install. Set TAPPAAS_DEBUG=1 to stream each child's full output.
 for d in "${here}"/*/; do
     [ "$(basename "${d}")" = TEMPLATE ] && continue
     [ -x "${d}install.sh" ] || continue
-    echo "==> controller/$(basename "${d}")/install.sh"
-    "${d}install.sh" "$@" || rc=$?
+    name="$(basename "${d}")"
+    if [ -n "${TAPPAAS_DEBUG:-}" ]; then
+        echo "==> controller/${name}/install.sh"
+        "${d}install.sh" "$@" || rc=$?
+    elif log="$("${d}install.sh" "$@" 2>&1)"; then
+        printf '.'
+    else
+        rc=$?
+        printf '\n[controller/%s] install failed:\n%s\n' "${name}" "${log}" >&2
+    fi
 done
+[ -n "${TAPPAAS_DEBUG:-}" ] || printf '\n'
 exit "${rc}"

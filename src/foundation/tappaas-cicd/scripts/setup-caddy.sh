@@ -335,7 +335,3 @@ fi
 
 info "${GN}✓${CL} Caddy setup completed"
 info "  OPNsense web UI: https://$FIREWALL_FQDN:8443"
-echo ""
-info "${BOLD}Next step (TLS):${CL} run ${BL}acme-setup.sh${CL} to obtain a wildcard certificate"
-info "  for ${BL}*.${DOMAIN}${CL} via your DNS provider — see INSTALL.md §2.3 (issue #254)."
-info "  Without it, modules with proxyTls=dns01 stay reachable on LAN but have no public TLS."

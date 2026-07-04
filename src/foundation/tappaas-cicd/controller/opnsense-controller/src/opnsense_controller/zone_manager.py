@@ -58,7 +58,7 @@ def _check_unbound_dns(label: str = "") -> bool:
         # Check if we got a valid response (at least header + some data)
         if len(response) >= 12:
             prefix = f"[UNBOUND-CHECK {label}] " if label else "[UNBOUND-CHECK] "
-            info(f"{prefix}DNS OK - Unbound responding on 10.0.0.1:53")
+            debug(f"{prefix}DNS OK - Unbound responding on 10.0.0.1:53")
             return True
         return False
     except socket.timeout:
