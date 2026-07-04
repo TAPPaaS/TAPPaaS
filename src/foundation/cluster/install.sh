@@ -510,10 +510,18 @@ fetch "${REPO}${BRANCH}/src/foundation/cluster/setup-realtek-nic.sh" \
     /root/tappaas/setup-realtek-nic.sh 755
 fetch "${REPO}${BRANCH}/src/foundation/cluster/assets/r8127-dkms_11.015.00-1_all.deb" \
     /root/tappaas/r8127-dkms_11.015.00-1_all.deb 644
-if ! /root/tappaas/setup-realtek-nic.sh; then
-    msg_error "Realtek NIC setup reported an issue (see output above) — continuing"
+# Capture the (verbose apt/DKMS) output to a log to keep the console clean; on
+# failure surface only a concise reason (the last [realtek-nic] ERROR/WARN), not
+# the whole apt dump. Full detail stays in the log for debugging.
+_rt_log=/root/tappaas/realtek-nic.log
+if _rt_out="$(/root/tappaas/setup-realtek-nic.sh 2>&1)"; then
+    printf '%s\n' "${_rt_out}" >"${_rt_log}" 2>/dev/null || true
+    msg_ok "Realtek NIC driver step complete"
+else
+    printf '%s\n' "${_rt_out}" >"${_rt_log}" 2>/dev/null || true
+    _rt_reason="$(printf '%s\n' "${_rt_out}" | grep -iE '\[realtek-nic\]\[(error|warn)' | tail -1 | sed 's/^[[:space:]]*//')"
+    msg_error "Realtek NIC setup issue: ${_rt_reason:-see ${_rt_log}} — continuing (log: ${_rt_log})"
 fi
-msg_ok "Realtek NIC driver step complete"
 
 # msg_info "Install netbird client:"
 # curl -fsSL https://pkgs.netbird.io/install.sh | sh

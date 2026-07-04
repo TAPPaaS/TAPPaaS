@@ -134,6 +134,22 @@ apt-get install -y "$DEB" || {
     exit 1
 }
 
+# ── 5b. (Re)build for the RUNNING kernel if DKMS lacks it ─────────────
+# The apt-get above is a NO-OP when r8127-dkms is already installed — e.g. after a
+# Proxmox kernel upgrade, DKMS may hold the module only for the PREVIOUS kernel, so
+# nothing is built for ${KREL} and the Step-6 modinfo gate then fails. The headers
+# ensured in Step 3 make a targeted DKMS (re)build succeed. Idempotent: a no-op
+# when the module is already built for the running kernel.
+if ! modinfo -k "${KREL}" r8127 >/dev/null 2>&1; then
+    R8127_VER="$(dkms status -m r8127 2>/dev/null | sed -nE 's#^r8127[/,][[:space:]]*([^,]+),.*#\1#p' | head -1)"
+    if [[ -n "${R8127_VER}" ]]; then
+        info "r8127 not built for running kernel ${KREL} (DKMS has: $(dkms status -m r8127 2>/dev/null | paste -sd';' -)) — building now..."
+        dkms install -m r8127 -v "${R8127_VER}" -k "${KREL}" --force \
+            || dkms autoinstall -k "${KREL}" || true
+        depmod -a "${KREL}" 2>/dev/null || true
+    fi
+fi
+
 # ── 6. Verify the module actually built AND loads on this kernel ─────
 # This gate is what makes blacklisting r8169 safe: we only disable the working
 # driver once the replacement is proven good on the running kernel.

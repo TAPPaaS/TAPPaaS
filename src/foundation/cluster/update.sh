@@ -159,11 +159,15 @@ while read -r node; do
     scp "${SCRIPT_DIR}/setup-realtek-nic.sh" root@"$NODE_FQDN":/root/tappaas/
     scp "${SCRIPT_DIR}/assets/r8127-dkms_11.015.00-1_all.deb" \
         root@"$NODE_FQDN":/root/tappaas/ 2>/dev/null || true
-    if ! ssh -n -o StrictHostKeyChecking=no root@"$NODE_FQDN" "/root/tappaas/setup-realtek-nic.sh"; then
-        warn "Realtek NIC setup reported an issue on $node (see output above)"
+    # Capture the verbose apt/DKMS output; surface only a concise reason on
+    # failure (not the whole dump). Keep the console clean per node.
+    if _rt_out="$(ssh -n -o StrictHostKeyChecking=no root@"$NODE_FQDN" "/root/tappaas/setup-realtek-nic.sh" 2>&1)"; then
+        info "$node Realtek NIC setup complete."
+    else
+        _rt_reason="$(printf '%s\n' "${_rt_out}" | grep -iE '\[realtek-nic\]\[(error|warn)' | tail -1 | sed 's/^[[:space:]]*//')"
+        warn "Realtek NIC setup issue on $node: ${_rt_reason:-see the node output} — continuing"
         continue
     fi
-    info "$node Realtek NIC setup complete."
 done <<< "$NODES"
 echo ""
 info "Realtek NIC driver fix refreshed on all Proxmox nodes."
