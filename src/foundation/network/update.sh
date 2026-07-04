@@ -5,7 +5,8 @@
 #
 # Order of operations:
 # 1. OPNsense software update (base, kernel, packages)
-# 2. Unconditional reboot to apply updates and regenerate configs
+# 2. Reboot to apply updates + regenerate configs — ONLY when the update actually
+#    installed a new base/kernel (skipped on a no-op re-run; see the fingerprint)
 # 3. Wait for firewall to come back online
 # 4. Verify DNS is working (Unbound health check)
 # 5. Apply zone configuration via zone-manager
@@ -65,6 +66,9 @@ fi
 # applied before we trigger config regeneration via zone-manager.
 
 info "Updating OPNsense (base, kernel, and packages)..."
+# Fingerprint the installed base+kernel first, so we can tell whether this run
+# actually applies a firmware update (→ reboot) vs. a no-op re-run (→ no reboot).
+_fw_ver_before="$(ssh root@"$FIREWALL_FQDN" 'echo "$(freebsd-version -k)|$(freebsd-version -u)"' 2>/dev/null || true)"
 if [[ "${OPT_DEBUG:-0}" -eq 1 ]]; then
     ssh root@"$FIREWALL_FQDN" "opnsense-update -bkp" || {
         warn "OPNsense update returned non-zero exit code"
@@ -79,6 +83,16 @@ else
     echo ""
 fi
 
+# Did the update actually install a new base/kernel? If the fingerprint is
+# unchanged, nothing that needs a reboot was applied (package-only updates don't
+# need one), so we skip the disruptive firewall reboot on a no-op re-run. If we
+# could not read the versions, assume a reboot is needed (safe default).
+_fw_ver_after="$(ssh root@"$FIREWALL_FQDN" 'echo "$(freebsd-version -k)|$(freebsd-version -u)"' 2>/dev/null || true)"
+_fw_reboot_needed=1
+if [[ -n "$_fw_ver_before" && "$_fw_ver_before" == "$_fw_ver_after" ]]; then
+    _fw_reboot_needed=0
+fi
+
 # ── Reboot firewall ─────────────────────────────────────────────────
 #
 # Reboot after OPNsense update during the install/update phase. This ensures:
@@ -91,7 +105,9 @@ fi
 # performs the disruptive firewall reboot manually under supervision, so we
 # only warn that it is pending and skip the reboot/wait.
 
-if automatic_reboot_enabled; then
+if [[ "$_fw_reboot_needed" -eq 0 ]]; then
+    info "${GN}✓${CL} OPNsense already current (${_fw_ver_after%%|*}) — no base/kernel update, skipping reboot."
+elif automatic_reboot_enabled; then
     info "Rebooting firewall to apply updates..."
     ssh root@"$FIREWALL_FQDN" "shutdown -r now" 2>/dev/null || true
 
