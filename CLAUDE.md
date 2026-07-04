@@ -9,14 +9,18 @@ TAPPaaS (Trusted - Automated - Private Platform as a Service) is a self-hosted p
 ## Architecture
 
 ### Foundation Layer (src/foundation/)
-Foundation modules must be installed in numbered order:
-1. `05-ProxmoxNode` - First Proxmox node setup
-2. `10-firewall` - OPNsense firewall configuration
-3. `15-AdditionalPVE-Nodes` - Add cluster nodes
-4. `20-tappaas-nixos` - NixOS VM template creation
-5. `30-tappaas-cicd` - "Mothership" VM that controls the entire TAPPaaS system
-6. `35-backup` - Proxmox Backup Server
-7. `40-Identity` - Secrets and identity management
+Foundation modules are **named, not numbered** (the old `NN-name` numbering was retired in the ADR-007 refactor). Install order is derived from each module's `dependsOn`, not a numeric prefix. Current modules:
+
+- `cluster` - Proxmox node setup and adding cluster nodes (was `05-ProxmoxNode` + `15-AdditionalPVE-Nodes`)
+- `network` - OPNsense firewall, zones, DNS (was `10-firewall`)
+- `templates` - NixOS VM template creation (was `20-tappaas-nixos`)
+- `tappaas-cicd` - "Mothership" VM that controls the entire TAPPaaS system (was `30-tappaas-cicd`)
+- `backup` - Proxmox Backup Server (was `35-backup`)
+- `identity` - Secrets and identity management (was `40-Identity`)
+- `logging` - Centralized logging
+- `satellite` - Optional off-premises VPS for public ingress / off-site backup (ADR-010)
+
+> **Before referencing a foundation module by name, verify it against the tree — run `ls src/foundation/`.** This list and the old numbered names in git history/older ADRs go stale; the directory is the source of truth.
 
 ###  Platform and Service Modules (src/apps/)
 Each module contains:
@@ -28,7 +32,7 @@ Each module contains:
 See `src/apps/00-Template/README.md` for details
 
 ### Configuration Files
-- `src/foundation/firewall/zones.json` - Network zone definitions with VLAN tags and access rules (canonical source of truth)
+- `src/foundation/tappaas-cicd/manager/network-manager/zones.json` - Network zone definitions with VLAN tags and access rules (canonical source of truth)
 - `src/foundation/schemas/module-fields.json` - Schema defining all available fields for module JSON configuration
 
 ## Command/Scripts dependencis
