@@ -122,7 +122,7 @@ finalize_config() {
     local update_time
     update_time=$(date +'%Y%m%d-%H:%M:%S')
     if jq_module_write "${module}" '.updateTime = $t' --arg t "${update_time}"; then
-        info "  Set updateTime = ${update_time}"
+        debug "  Set updateTime = ${update_time}"
     else
         warn "Could not set updateTime"
     fi
@@ -414,12 +414,11 @@ main() {
     fi
 
     # ── Step 5: Call the module's own update.sh ───────────────────────
-    echo ""
-    info "${BOLD}Update Step 5: Run module update.sh${CL}"
+    info "${BOLD}Update Step 5: Run module update.sh: ${BL}${module}${CL}"
 
     if [[ -n "${module_dir}" ]]; then
         if [[ -x "${module_dir}/update.sh" ]]; then
-            info "  Running ${module_dir}/update.sh..."
+            debug "  Running ${module_dir}/update.sh..."
             cd "${module_dir}"
             if ./update.sh "${module}"; then
                 info "  ${GN}✓${CL} Module update.sh completed"
@@ -434,14 +433,13 @@ main() {
     fi
 
     # ── Step 6: Post-update test ──────────────────────────────────────
-    echo ""
     info "${BOLD}Update Step 6: Run post-update tests: ${BL}${module}${CL}"
 
     local post_test_exit=0
     /home/tappaas/bin/test-module.sh "${module}" || post_test_exit=$?
 
     if [[ "${post_test_exit}" -eq 0 ]]; then
-        info "  ${GN}✓${CL} Post-update tests passed"
+        debug "  ${GN}✓${CL} Post-update tests passed"
     elif [[ "${post_test_exit}" -eq 2 ]]; then
         # Fatal test failure — roll back (shared helper, #307).
         fatal_with_rollback "${module}" "${snapshot_created}" "Post-update tests reported a fatal error"
@@ -457,7 +455,6 @@ main() {
     finalize_config "${module}"
     prune_snapshots "${module}" "${snapshot_created}"
 
-    echo ""
     info "${GN}${BOLD}Module '${module}' updated successfully${CL}"
 }
 

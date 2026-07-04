@@ -184,7 +184,6 @@ main() {
     debug "${BOLD}╚══════════════════════════════════════════════╝${CL}"
 
     # ── Step 1: Validate module config ───────────────────────────────
-    echo ""
     info "${BOLD}Test Step 1: Validate module configuration${CL}"
 
     if [[ ! -f "${module_json}" ]]; then
@@ -202,7 +201,6 @@ main() {
     debug "Config file: ${module_json}"
 
     # ── Step 2: Check dependency test-service.sh availability ────────
-    echo ""
     info "${BOLD}Test Step 2: Check dependency test availability${CL}"
 
     local depends_on
@@ -230,7 +228,6 @@ main() {
     fi
 
     # ── Step 3: Call dependency test-service.sh scripts ──────────────
-    echo ""
     info "${BOLD}Test Step 3: Run dependency service tests${CL}"
 
     if [[ -z "${depends_on}" ]]; then
@@ -275,7 +272,6 @@ main() {
     fi
 
     # ── Step 4: Call the module's own test.sh ────────────────────────
-    echo ""
     info "${BOLD}Test Step 4: Run module test.sh${CL}"
 
     local module_dir
@@ -309,7 +305,6 @@ main() {
     fi
 
     # ── Final verdict ─────────────────────────────────────────────────
-    echo ""
     if [[ "${FATAL}" == true ]]; then
         fatal "Fatal error detected — module may require rollback/reinstall"
         exit 2

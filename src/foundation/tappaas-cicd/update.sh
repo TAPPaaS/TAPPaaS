@@ -61,7 +61,6 @@ fi
 _cicd_dir="/home/tappaas/TAPPaaS/src/foundation/tappaas-cicd"
 for _disp in manager controller; do
     if [[ -x "${_cicd_dir}/${_disp}/update.sh" ]]; then
-        info "  Updating ${_disp}/ components..."
         "${_cicd_dir}/${_disp}/update.sh" || warn "  ${_disp}/update.sh reported non-zero rc"
     fi
 done

@@ -1078,7 +1078,7 @@ function check_json() {
     warn "Validation passed with warnings: $warnings warning(s)"
     return 0
   else
-    info "Validation passed: No errors or warnings"
+    debug "Validation passed: No errors or warnings"
     return 0
   fi
 }
