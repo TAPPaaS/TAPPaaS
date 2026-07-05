@@ -40,6 +40,9 @@ sched="$(jq -r '.pullSchedule // "04:00"' "${CFG}")"
 rv="$(jq -r 'if .removeVanished then "true" else "false" end' "${CFG}")"
 readauth="$(jq -r '.readAuthId // ""' "${CFG}")"
 retention="$(jq -c '.retention // {}' "${CFG}")"
+# Optional subset selector (ADR-012 §3.6, #389): a PBS group-filter that pulls
+# only part of the source. Accepts a JSON array (joined with commas) or a string.
+gfilter="$(jq -r 'if (.groupFilter // "" | type) == "array" then (.groupFilter | join(",")) else (.groupFilter // "") end' "${CFG}")"
 
 [[ -n "${ns}" && -n "${rhost}" && -n "${rstore}" ]] \
     || die "config ${CFG} must set namespace, remoteHost and remoteStore"
@@ -54,7 +57,8 @@ read -rp "  Buddy PBS TLS fingerprint (sha256, blank to skip): " FP
 
 pbs_ns_ensure "${ns}"
 pbs_remote_ensure "${NAME}" "${rhost}" "${AUTHID}" "${PASSWORD}" "${FP}"
-pbs_syncjob_ensure "sync-${NAME}" "${store}" "${ns}" "${NAME}" "${rstore}" "${rns}" "${sched}" "${rv}"
+pbs_syncjob_ensure "sync-${NAME}" "${store}" "${ns}" "${NAME}" "${rstore}" "${rns}" "${sched}" "${rv}" "${gfilter}"
+[[ -n "${gfilter}" ]] && debug "  ${GN}✓${CL} sync-${NAME} restricted to subset: ${gfilter}"
 
 # Namespace-scoped, admin-owned prune-job (the buddy cannot prune our copy).
 read -ra ret <<< "$(_pbs_retention_args "${retention}")"

@@ -143,14 +143,17 @@ _pbs_syncjob_exists() {
         | jq -e --arg i "$1" 'any(.[]; .id==$i)' >/dev/null 2>&1
 }
 
-# Create/update a pull sync-job into local namespace <ns>. On update only the
-# mutable fields (schedule, remove-vanished) are touched to avoid identity churn.
-# Args: id store ns remote remote-store remote-ns schedule remove-vanished
+# Create/update a pull sync-job into local namespace <ns>. On update the mutable
+# fields (schedule, remove-vanished, group-filter) are touched to avoid identity
+# churn. An optional group-filter selects a SUBSET of the source (ADR-012 §3.6,
+# #389 "back up only a subset") — e.g. "type:vm" or "group:vm/101,group:vm/102".
+# Args: id store ns remote remote-store remote-ns schedule remove-vanished [group-filter]
 pbs_syncjob_ensure() {
-    local id="$1" store="$2" ns="$3" remote="$4" rstore="$5" rns="$6" sched="$7" rv="$8"
+    local id="$1" store="$2" ns="$3" remote="$4" rstore="$5" rns="$6" sched="$7" rv="$8" gfilter="${9:-}"
     if _pbs_syncjob_exists "$id"; then
         local -a a=(proxmox-backup-manager sync-job update "$id" --remove-vanished "$rv")
         [[ -n "$sched" ]] && a+=(--schedule "$sched")
+        [[ -n "$gfilter" ]] && a+=(--group-filter "$gfilter")
         _pbs_node_run "${a[@]}"
     else
         local -a a=(proxmox-backup-manager sync-job create "$id"
@@ -158,6 +161,7 @@ pbs_syncjob_ensure() {
                     --remote-store "$rstore" --remove-vanished "$rv")
         [[ -n "$rns" ]] && a+=(--remote-ns "$rns")
         [[ -n "$sched" ]] && a+=(--schedule "$sched")
+        [[ -n "$gfilter" ]] && a+=(--group-filter "$gfilter")
         _pbs_node_run "${a[@]}"
     fi
 }

@@ -149,7 +149,7 @@ Live execution state. A row is **not done** until it passes the [package gate](#
 | P2 | Shim promotion | #402 | ✅ | **live** rc=0 | (this commit) | live shim→local promotion green on tappaas1 |
 | P3 | Per-node client reconcile | #382 | ✅ | offline 4/0 + **live** | (this commit) | reconcile runs on install+update, idempotent |
 | P4 | Push / remote-only path | #402, #389 | 🧪 | offline 3/0 | (slice 1) | code done; live pending 3-node cluster |
-| P5 | Immutability + subset/retention | #389 | ⬜ | — | — | after P4 |
+| P5 | Immutability + subset/retention | #389 | 🧪 | offline 7/0 | (slice 2) | code done; ZFS-snapshot + group-filter live pending cluster |
 | P6 | Symmetry + unified credentials | §3.1/§3.2 | 🧪 | offline | (slice 1) | push leg added → pull+receive+push all exist |
 | P7 | Tooling: manager/controller | §5 | ⬜ | — | — | `backup-controller` → endpoint-agnostic |
 | P8 | Bootstrap & promotion wiring | §4 | 🧪 | offline | (slice 1) | remote-only wiring done (folded into P4) |
@@ -208,4 +208,11 @@ Tested on the single-node cluster `tappaas1` (a broken backup pinned at the non-
 - **P6 (symmetry + unified credentials)** — with the push leg added, all three off-site roles now exist on one PBS: **pull** (`add-remote`/Class A), **receive** (`add-external`/Class B), **push** (`add-push`, new). All share the prompt-not-store credential model and the §3.5 write-no-delete / remote-owned-prune invariant. Confirmed the mechanism; the operator-facing consolidation doc is P9.
 - **Tests:** new `lib/test-pbs-push.sh` (3); `backup/test.sh` **49/0 offline**; all changed scripts `bash -n` clean; JSON valid.
 - **Not yet:** live test on the 3-node cluster (push a VM off-site to a real remote PBS, verify write-no-delete + remote-owned prune). Deferred to the incoming cluster.
-- **Remaining:** **P5** (subset group-filter for pull; confirm independent retention; ZFS-snapshot immutability helper — S3 Object Lock is ADR-010's satellite domain), **P7** (backup-controller endpoint-agnostic + backup-manager placement/peer awareness), **P9** (compromise-isolation test suite, QUICKREF/TEST, ADR → Proposed).
+- **Remaining:** **P7** (endpoint-agnostic — **TS layer**, operator decision 2026-07-05), **P9** (compromise-isolation test suite, QUICKREF/TEST, ADR → Proposed).
+
+### 2026-07-05 — Slice 2: P5 (subset + independent retention + immutability) offline-green
+- **Subset (#389 "back up only a subset")** — `pbs_syncjob_ensure` gains an optional PBS **group-filter** (9th arg); `services/remote/install-service.sh` reads `.groupFilter` (string or array) from `remote-<name>.json` and passes it, so a remote/satellite pull can replicate only part of the source (e.g. `type:vm` or specific groups). `remote.json` template documents it.
+- **Independent retention** — already present (each `remote-<name>.json` / `external-<name>.json` carries its own `retention` → an admin-owned, namespace-scoped prune-job, destination-owned). Confirmed; no code change needed.
+- **Immutability (§3.5 / ADR-010 §7.3)** — new `lib/pbs-immutable.sh`: opt-in **ZFS-snapshot** WORM tier. When `backup.json .immutableSnapshots.enabled`, install/update deploy a systemd timer on the PBS node that takes read-only `@immutable-<ts>` snapshots of the datastore dataset and prunes to `keep`. History can't be rewritten by a sync/push credential holder or PBS prune/GC — only node-local root (the documented weaker tier; **S3 Object Lock stays the satellite/ADR-010 stronger tier**, provisioned satellite-side, out of module scope). Schema gains `immutableSnapshots`.
+- **Tests:** new `lib/test-pbs-immutable.sh` (7 — dataset derivation + OnCalendar mapping); `backup/test.sh` **56/0 offline**.
+- **Live pending (3-node):** group-filter pull subset, and the ZFS-snapshot timer (needs a real ZFS datastore) — deferred to the cluster.

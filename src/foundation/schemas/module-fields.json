@@ -31,6 +31,7 @@
     "storage",
     "placementState",
     "pushTarget",
+    "immutableSnapshots",
     "pbsStorageName",
     "alwaysBackup",
     "backup",
@@ -433,6 +434,39 @@
       "default": "",
       "example": "offsite",
       "note": "Set only on the backup module. The push credential is prompted at onboarding, never stored."
+    },
+    "immutableSnapshots": {
+      "description": "Backup module, optional WORM-ish immutability (ADR-012 §3.5 / ADR-010 §7.3, #389). When enabled, periodic read-only ZFS snapshots of the datastore dataset are taken on the PBS node and pruned to `keep`, so backup history cannot be rewritten by a sync/push credential holder or PBS prune/GC — only by node-local root. The weaker of the two tiers; S3 Object Lock (ADR-010 satellite) is the stronger one and is provisioned satellite-side.",
+      "type": "object",
+      "requiredBy": [],
+      "usedBy": [
+        "backup:vm"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "enabled": {
+          "description": "Enable ZFS-snapshot immutability for the local datastore.",
+          "type": "boolean",
+          "default": false
+        },
+        "schedule": {
+          "description": "systemd OnCalendar value or a friendly word (hourly|daily|weekly).",
+          "type": "string",
+          "default": "daily"
+        },
+        "keep": {
+          "description": "Number of newest immutable snapshots to retain (older pruned).",
+          "type": "integer",
+          "default": 30
+        }
+      },
+      "default": {},
+      "example": {
+        "enabled": true,
+        "schedule": "daily",
+        "keep": 30
+      },
+      "note": "Set only on the backup module. ZFS snapshots protect against credential-holder/prune tampering, not node-root compromise (use S3 Object Lock on a satellite for that)."
     },
     "pbsStorageName": {
       "description": "Name of the Proxmox Backup Server datastore / Proxmox storage used for backups. Set on the backup module; read by backup:vm scripts (install/test/restore/backup-manage).",

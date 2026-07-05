@@ -29,6 +29,8 @@ readonly MODULE_DIR
 . "${MODULE_DIR}/lib/pbs-placement.sh"
 # shellcheck source=lib/pbs-client.sh disable=SC1091
 . "${MODULE_DIR}/lib/pbs-client.sh"
+# shellcheck source=lib/pbs-immutable.sh disable=SC1091
+. "${MODULE_DIR}/lib/pbs-immutable.sh"
 
 ZONE="$(get_config_value 'zone0' 'mgmt')"
 STATE="$(pbs_placement_state)"
@@ -81,5 +83,10 @@ pbs_ensure_zfs_ordering
 # Retrofit datastore integrity verification (verify-job + verify-new, issue #228)
 # on already-deployed PBS servers; idempotent.
 pbs_ensure_verify
+
+# Apply/retrofit opt-in ZFS-snapshot immutability (ADR-012 §3.5 / #389); no-op
+# unless backup.json .immutableSnapshots.enabled.
+pbs_immutable_from_config "$(get_config_value 'storage' 'tankc1')" "$(pbs_storage_name)" \
+    || warn "Could not configure immutable snapshots"
 
 info "  ${GN}✓${CL} Backup module update completed"

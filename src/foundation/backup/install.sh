@@ -70,6 +70,8 @@ run_quiet() {
 . "${MODULE_DIR}/lib/pbs-placement.sh"
 # shellcheck source=lib/pbs-client.sh disable=SC1091
 . "${MODULE_DIR}/lib/pbs-client.sh"
+# shellcheck source=lib/pbs-immutable.sh disable=SC1091
+. "${MODULE_DIR}/lib/pbs-immutable.sh"
 
 # Now change to temp directory for the rest of the installation
 TEMP_DIR=$(mktemp -d)
@@ -307,6 +309,10 @@ pbs_ensure_verify
 info "${BOLD}Ensuring multi-source backup namespaces (issue #227)${CL}"
 pbs_ns_ensure remote
 pbs_ns_ensure external
+
+# Optional WORM-ish immutability: opt-in ZFS snapshots of the datastore
+# (ADR-012 §3.5 / #389). No-op unless backup.json .immutableSnapshots.enabled.
+pbs_immutable_from_config "${STORAGE}" "${DATASTORE_NAME}" || warn "Could not configure immutable snapshots"
 
 # Step 5: Get PBS fingerprint
 info "Getting PBS fingerprint..."
