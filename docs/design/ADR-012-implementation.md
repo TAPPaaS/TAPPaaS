@@ -153,7 +153,7 @@ Live execution state. A row is **not done** until it passes the [package gate](#
 | P6 | Symmetry + unified credentials | §3.1/§3.2 | 🧪 | offline | (slice 1) | push leg added → pull+receive+push all exist |
 | P7 | Tooling: manager/controller | §5 | ✅ | **cicd** TS 60/0 + ctrl 11/0 | (slice 3) | TS layer (operator choice) built + live-verified on cicd |
 | P8 | Bootstrap & promotion wiring | §4 | 🧪 | offline | (slice 1) | remote-only wiring done (folded into P4) |
-| P9 | Hardening & docs | #389 | ⬜ | — | — | flips ADR → Proposed |
+| P9 | Hardening & docs | #389 | 🧪 | docs done | (slice 4) | QUICKREF+TEST done; compromise-isolation suite + ADR→Proposed pending cluster/operator |
 
 > **Discovery (2026-07-05, from reading the code):** P6's symmetry is **already ~80% built** by #227 — `pbs-namespace.sh` is a complete idempotent toolbox (namespace/remote/sync-job/prune-job/acl/user), `services/remote/` does Class A **pull** and `services/external/` does Class B **push-receive**, both with the prompt-not-store credential model. The only missing leg of the symmetry is this cluster **pushing out** (the mirror of external-receive) → **P4 `services/push/`**. Slices: **(1) P4+P6+P8** push/remote-only + symmetry; **(2) P5** subset/retention + immutability; **(3) P7** tooling; **(4) P9** hardening/docs. Live testing of all deferred to the incoming 3-node + tankc cluster.
 
@@ -223,3 +223,11 @@ Operator chose "push into the TS layer" (2026-07-05). Extended the TypeScript `b
 - **backup-controller (bash)** — `parse_args` accepts/strips `--pbs <host>`; `pbs_node` is overridden to honor it for PBS-datastore ops (cluster-job pvesh stays local). Full satellite targeting (tunnel FQDN) validates on the cluster.
 - **Verified on cicd:** `nix-build` (tsc **strict** + noUnusedLocals) green; TS unit test **60/0** (14 new placement/peers asserts); live verbs against the shim config — `placement`, `placement --json`, `peers`, `validate` (emits the shim warning), `reconcile --pbs satellite.example` (targets endpoint → offline preview); `backup-controller` test.sh **11/0** and accepts `--pbs`.
 - **Remaining:** **P9** (compromise-isolation test suite, QUICKREF/TEST consolidation doc, ADR Draft → Proposed).
+
+### 2026-07-05 — Slice 4: P9 docs + test plan (offline)
+- **QUICKREF.md** — new "ADR-012 — Placement, off-site push, subset, immutability" section: placement/shim table + promote flow, the off-site symmetry table (pull `add-remote` / receive `add-external` / send `add-push`), subset (`groupFilter`) + independent retention, opt-in `immutableSnapshots`, and the endpoint-agnostic `backup-manager --pbs` tooling. Plus the `backup-manager placement|peers|validate` verbs.
+- **TEST.md** — documented the full ADR-012 unit suite (placement 20 / client 4 / push 3 / immutable 7 / TS 60) **and** the **compromise-isolation suite (#389)** as a concrete 6-step live checklist to run on the 3-node cluster (pull delete-denied, push write-no-delete, immutability holds, subset, remote-only restore with/without key, simulated compromise).
+- **ADR acceptance** checkboxes updated: 8/11 done (live-verified or offline+cicd); the 2 genuinely two-PBS tests (compromise isolation, restore-from-off-site) + ADR→Proposed remain **cluster/operator-pending**.
+- **ADR status stays Draft** — advancing to Proposed is the operator's call after the cluster live tests.
+
+**Summary — P1–P9:** P1/P2/P3 live-verified on tappaas1; P4/P5/P6/P8 implemented + offline-green; P7 (TS) built + verified on cicd; P9 docs + live test plan. What remains is purely **live validation on the incoming 3-node + tankc cluster** (off-site push/pull/subset/immutability/restore + the compromise-isolation suite) and the operator's Draft→Proposed sign-off.

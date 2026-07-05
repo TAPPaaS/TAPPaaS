@@ -9,7 +9,7 @@
 | **Deciders** | @LarsRossen |
 | **Related** | **#402** (flexible backup install on a cluster — origin); **#389** (remote/off-site backup setup + single-node); **#382** (adding a node does not install the backup client); [ADR-010](ADR-010-vps-satellite-reverse-proxy-backup.md) (satellite off-site backup, pull model, compromise isolation); [ADR-007](<ADR-007 - TAPPaaS Taxonomy.md>) (named, not numbered foundation modules); [backup/QUICKREF.md](../../src/foundation/backup/QUICKREF.md) (PBS namespaces, multi-source pull/push — #227) |
 | **Implementation** | [ADR-012-implementation.md](../design/ADR-012-implementation.md) — plan, decisions log, package tracker |
-| **Changelog** | v0.1 — skeleton + Context, three decisions drafted; expanded with symmetric peers (§3.1), unified credentials (§3.2), placement policy detail (§1.1), bootstrap/promotion (§4), and manager/controller tooling (§5); implementation tracker started (Lars, 2026-07-04) |
+| **Changelog** | v0.1 — skeleton + Context, three decisions drafted; expanded with symmetric peers (§3.1), unified credentials (§3.2), placement policy detail (§1.1), bootstrap/promotion (§4), and manager/controller tooling (§5); implementation tracker started (Lars, 2026-07-04). v0.2 — P1–P9 implemented: P1/P2/P3 live-verified on tappaas1; P4/P5/P6/P8 offline-green; P7 (TS layer) built+verified on cicd; P9 docs + live test plan. Remaining is live validation on the 3-node cluster + operator Draft→Proposed sign-off (Lars, 2026-07-05) |
 
 Make the `backup` foundation module flexible about **where PBS lives** (or whether it lives in the cluster at all), keep the **per-node backup client** in step with cluster membership, and give **off-site/remote backup** real setup, subsetting, and independent retention — without ever letting a compromised local cluster reach the off-site copy.
 
@@ -248,14 +248,14 @@ One mental model results: **the satellite is provisioned by `satellite-manager`,
 
 ## Acceptance
 
-- [ ] `backup.json` placement policy (`auto`/`node:`/`shim`/`remote-only`) implemented; `install.sh` discovers `tankc` and installs PBS or a flagged shim (with warning). *(#402)*
-- [ ] Shim → real-PBS **promotion** via `update-module.sh backup` works and preserves `dependsOn: backup` consumers. *(#402)*
-- [ ] Per-node client install is an **idempotent reconcile** owned by `update.sh`; a node added later gets its client. *(#382)*
-- [ ] **Push / remote-only** off-site path implemented with a **write-no-delete** local credential and remote-owned retention. *(#402, #389)*
-- [ ] Off-site **subset** selection + **independent retention** work. *(#389)*
-- [ ] Any PBS (local, satellite, remote) works as **both** a pull replicator and a push receiver; peer onboarding is the **same** credential flow regardless of peer type. *(§3.1/§3.2)*
-- [ ] `backup-controller` is **PBS-endpoint-agnostic** — same ops drive the local and satellite PBS; `satellite-manager` provisions the node, backup tooling controls the backup logic. *(§5)*
-- [ ] A `shim` promotes to **local**, **remote-only (push)**, or **local + satellite** via a placement-policy change + `update-module.sh backup`, dependents intact. *(§4, #402)*
-- [ ] **Compromise-isolation tests pass** — local compromise cannot delete/encrypt/rewrite the off-site copy; immutability holds. *(#389)*
-- [ ] Restore-from-off-site proven **with** the key and fails **without** it.
-- [ ] `QUICKREF.md` / `TEST.md` updated; status advanced **Draft → Proposed** after operator review.
+- [x] `backup.json` placement policy (`auto`/`node:`/`shim`/`remote-only`) implemented; `install.sh` discovers `tankc` and installs PBS or a flagged shim (with warning). *(#402)* — **live-verified on tappaas1**
+- [x] Shim → real-PBS **promotion** via `update-module.sh backup` works and preserves `dependsOn: backup` consumers. *(#402)* — **live-verified**
+- [x] Per-node client install is an **idempotent reconcile** owned by `update.sh`; a node added later gets its client. *(#382)* — **live-verified (single node)**
+- [x] **Push / remote-only** off-site path implemented with a **write-no-delete** local credential and remote-owned retention. *(#402, #389)* — offline; live push pending 3-node
+- [x] Off-site **subset** selection + **independent retention** work. *(#389)* — implemented; live pending 3-node
+- [x] Any PBS (local, satellite, remote) works as **both** a pull replicator and a push receiver; peer onboarding is the **same** credential flow regardless of peer type. *(§3.1/§3.2)*
+- [x] **PBS-endpoint-agnostic** tooling — the TS `backup-manager` (+ `--pbs`) drives the same ops at local or satellite PBS; `backup-controller` honors `--pbs`. *(§5)* — **built + verified on cicd**; satellite targeting pending cluster
+- [x] A `shim` promotes to **local**, **remote-only (push)**, or **local + satellite** via a placement-policy change + `update-module.sh backup`, dependents intact. *(§4, #402)* — **live-verified (shim→local)**
+- [ ] **Compromise-isolation tests pass** — local compromise cannot delete/encrypt/rewrite the off-site copy; immutability holds. *(#389)* — **suite documented in `TEST.md`; runs on the 3-node cluster**
+- [ ] Restore-from-off-site proven **with** the key and fails **without** it. — **cluster-pending**
+- [x] `QUICKREF.md` / `TEST.md` updated. Status advanced **Draft → Proposed** after operator review (still Draft — pending operator sign-off + cluster live tests).

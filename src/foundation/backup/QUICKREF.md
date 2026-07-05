@@ -191,6 +191,67 @@ proxmox-backup-client backup data.pxar:/path \
 # Fingerprint: ssh root@backup.mgmt.internal "proxmox-backup-manager cert info | grep Fingerprint"
 ```
 
+## ADR-012 — Placement, off-site push, subset, immutability
+
+### Placement (where/whether PBS lives)
+
+`backup.json` `.placement` decides placement; the resolved outcome is recorded as
+`.placementState`:
+
+| Policy | Meaning |
+|--------|---------|
+| `auto` (default) | discover a `tankc` pool (preferred `.node` first, then any node) and install PBS there; **falls back to a `shim` if none is found** |
+| `node:<name>` | pin PBS to that node's `tankc` |
+| `shim` | no datastore — a marker that still satisfies `dependsOn:backup`; dependent modules install and their `backup:vm` install/update/test **skip gracefully**. Promote later once storage exists |
+| `remote-only` | no local PBS; back up off-site by **push** (below) |
+
+```bash
+backup-manager placement           # show placement + state (--json for machine)
+backup-manager peers               # list off-site peers (pull/receive/push)
+backup-manager validate            # warns loudly when placement is a shim
+# Promote a shim → real PBS once a tankc pool appears (idempotent):
+update-module.sh backup
+```
+
+### Off-site symmetry (one PBS is all three)
+
+A PBS is simultaneously a **pull replicator**, a **push receiver**, and a **push
+sender** — namespace-partitioned, one prompt-not-store credential model:
+
+| Role | Command | Namespace | Direction |
+|------|---------|-----------|-----------|
+| pull (Class A) | `backup-manage.sh add-remote <n>` | `remote/<n>` | this PBS pulls a buddy |
+| receive (Class B) | `backup-manage.sh add-external <n>` | `external/<n>` | a client pushes in |
+| **send (ADR-012 P4)** | `backup-manage.sh add-push <n> [--make-default]` | remote's `external/<us>` | **we push out** (remote-only) |
+
+`add-push` registers the remote PBS as a Proxmox storage `offsite-<n>`; `--make-default`
+routes the managed backup job there. We hold **write-no-delete** and the **remote owns
+prune/retention/immutability** — a compromise here cannot erase the off-site copy.
+
+### Subset + independent retention (off-site ≠ 1:1)
+
+- **Subset (pull):** set `.groupFilter` in `remote-<n>.json` (string or array,
+  e.g. `"type:vm"` or `["group:vm/101","group:vm/102"]`) to replicate only part
+  of the source.
+- **Independent retention:** each `remote-`/`external-<n>.json` carries its own
+  `retention` → an admin-owned, namespace-scoped prune-job (destination-owned).
+
+### Immutability (opt-in WORM)
+
+Set `backup.json` `.immutableSnapshots` to take read-only ZFS snapshots of the
+datastore that a sync/push credential holder or PBS prune/GC **cannot** rewrite
+(only node-local root can). The stronger tier — **S3 Object Lock** — is provided
+by an ADR-010 satellite, not this module.
+
+```json
+"immutableSnapshots": { "enabled": true, "schedule": "daily", "keep": 30 }
+```
+
+### Endpoint-agnostic tooling (P7)
+
+`backup-manager --pbs <host> <verb>` targets a non-local PBS (e.g. a satellite):
+the same controller ops drive local or remote PBS.
+
 ## Automated Schedule
 
 Configured by `install.sh` (and kept current by `update.sh`). All times are
