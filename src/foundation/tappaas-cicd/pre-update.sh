@@ -23,7 +23,6 @@ CONFIG_FILE="/home/tappaas/config/configuration.json"
 # is retired once configuration.json is gone, so it is fully guarded on the file
 # actually existing (must never error on a missing configuration.json).
 if [ -f "$CONFIG_FILE" ] && jq -e '.tappaas.upstreamGit' "$CONFIG_FILE" >/dev/null 2>&1; then
-  echo ""
   info "Migrating configuration.json from upstreamGit/branch to repositories format..."
   OLD_URL=$(jq -r '.tappaas.upstreamGit' "$CONFIG_FILE")
   OLD_BRANCH=$(jq -r '.tappaas.branch // "stable"' "$CONFIG_FILE")
@@ -40,7 +39,6 @@ fi
 REPOS_JSON="$(get_repositories)"
 REPO_COUNT=$(echo "$REPOS_JSON" | jq 'length' 2>/dev/null || echo "0")
 if [ "$REPO_COUNT" -gt 0 ]; then
-  echo ""
   info "Pulling latest changes from ${REPO_COUNT} repository/repositories..."
   for i in $(seq 0 $(( REPO_COUNT - 1 ))); do
     REPO_NAME=$(echo "$REPOS_JSON" | jq -r ".[$i].name")
@@ -73,7 +71,6 @@ if [ "$REPO_COUNT" -gt 0 ]; then
     fi
   done
 else
-  echo ""
   info "No repositories configured — pulling TAPPaaS from default location..."
   cd
   cd TAPPaaS || die "TAPPaaS directory not found!"
@@ -85,7 +82,6 @@ cd /home/tappaas/TAPPaaS/src/foundation/tappaas-cicd || die "TAPPaaS-CICD direct
 # --- Install scripts as symlinks into /home/tappaas/bin/ ---
 # NOTE: symlinks must be installed BEFORE refreshing config, so that
 # create-configuration.sh in ~/bin/ points to the updated repo version.
-echo ""
 info "Installing scripts to /home/tappaas/bin/..."
 for script in scripts/*.sh; do
   if [ -f "$script" ]; then
@@ -131,7 +127,6 @@ fi
 # the source of truth for fresh installs; the node-discovery refresh applies only
 # to legacy systems still backed by configuration.json.
 if [[ -f /home/tappaas/config/configuration.json && -x /home/tappaas/bin/create-configuration.sh ]]; then
-    echo ""
     info "Refreshing configuration.json (legacy system)..."
     /home/tappaas/bin/create-configuration.sh --update || {
         warn "Configuration refresh failed. Using existing configuration.json."
@@ -146,7 +141,6 @@ fi
 # the migration script itself no-ops on an existing site.json.
 if [[ -f /home/tappaas/config/configuration.json && ! -f /home/tappaas/config/site.json ]]; then
     if [[ -x /home/tappaas/bin/migrate-configuration.sh ]]; then
-        echo ""
         info "Migrating configuration.json -> site.json (ADR-007 P2)..."
         /home/tappaas/bin/migrate-configuration.sh --config-dir /home/tappaas/config \
             || warn "  site.json migration reported an error — continuing (configuration.json untouched)"
@@ -204,7 +198,6 @@ fi
 # (first install before its bin is linked above).
 if command -v network-manager >/dev/null 2>&1 \
    && [ -f /home/tappaas/config/zones.json ]; then
-  echo ""
   info "Reconciling zones.json against upstream (rename-aware 3-way merge)..."
   network-manager merge 2>&1 | while IFS= read -r line; do debug "  $line"; done \
     || warn "  zones.json merge reported an error — continuing"
@@ -218,7 +211,6 @@ fi
 # is not yet on PATH (first install before its bin is linked above).
 if command -v network-manager >/dev/null 2>&1 \
    && [ -f /home/tappaas/config/zones.json ]; then
-  echo ""
   info "Checking zones.json consistency (network-manager zones-check)..."
   # Report-only: this must NEVER abort pre-update. Under `set -e` + `pipefail` a
   # standalone failing pipeline aborts the SCRIPT before the PIPESTATUS check
@@ -228,7 +220,7 @@ if command -v network-manager >/dev/null 2>&1 \
   # pipeline, capture the real rc, then restore. (`|| true` is NOT enough — it
   # clobbers PIPESTATUS, killing the warn.)
   set +e
-  network-manager zones-check 2>&1 | while IFS= read -r line; do info "  $line"; done
+  network-manager zones-check 2>&1 | while IFS= read -r line; do debug "  $line"; done
   zc_rc=${PIPESTATUS[0]}
   set -e
   if [ "${zc_rc}" -ne 0 ]; then
@@ -237,7 +229,6 @@ if command -v network-manager >/dev/null 2>&1 \
 fi
 
 # --- Build and install opnsense-controller ---
-echo ""
 info "Building the opnsense-controller project..."
 cd controller/opnsense-controller
 stdbuf -oL nix-build -A default default.nix 2>&1 | tee /tmp/opnsense-controller-build.log | while IFS= read -r line; do printf "."; done
@@ -278,7 +269,7 @@ secret=
 EOF
 fi
 chmod 600 ~/.opnsense-credentials.txt
-info "  opnsense-controller binary installed to /home/tappaas/bin/opnsense-controller"
+debug "  opnsense-controller binary installed to /home/tappaas/bin/opnsense-controller"
 cd ../..   # back to tappaas-cicd/ (opnsense-controller now under controller/)
 
 # --- Build and install identity-controller (ADR-007 S2b-1) ---
@@ -286,7 +277,6 @@ cd ../..   # back to tappaas-cicd/ (opnsense-controller now under controller/)
 # linked the same way: nix-build then symlink its CLIs from result/bin into
 # ~/bin so they track the repo build without a nixos-rebuild. Ships
 # authentik-manager (the verb the people-manager calls) and identity-controller.
-echo ""
 info "Building the identity-controller project..."
 cd controller/identity-controller
 stdbuf -oL nix-build -A default default.nix 2>&1 | tee /tmp/identity-controller-build.log | while IFS= read -r line; do printf "."; done
@@ -298,18 +288,17 @@ for _ic_tool in authentik-manager identity-controller; do
     ln -s "${_ic_src}" "/home/tappaas/bin/${_ic_tool}"
   fi
 done
-info "  identity-controller binaries installed to /home/tappaas/bin/ (authentik-manager, identity-controller)"
+debug "  identity-controller binaries installed to /home/tappaas/bin/ (authentik-manager, identity-controller)"
 cd ../..   # back to tappaas-cicd/
 
 # --- Build and install update-tappaas ---
-echo ""
 info "Building the update-tappaas project..."
 cd update-tappaas
 stdbuf -oL nix-build -A default default.nix 2>&1 | tee /tmp/update-tappaas-build.log | while IFS= read -r line; do printf "."; done
 echo ""
 rm /home/tappaas/bin/update-tappaas 2>/dev/null || true
 ln -s /home/tappaas/TAPPaaS/src/foundation/tappaas-cicd/update-tappaas/result/bin/update-tappaas /home/tappaas/bin/update-tappaas
-info "  update-tappaas binary installed to /home/tappaas/bin/"
+debug "  update-tappaas binary installed to /home/tappaas/bin/"
 cd ..
 
 # --- Copy OPNsense controller patch to the firewall ---
@@ -325,5 +314,4 @@ else
   warn "Firewall $FIREWALL_FQDN appears unreachable; skipping controller patch copy."
 fi
 
-echo ""
 info "${GN}✓${CL} All TAPPaaS-CICD programs and scripts installed successfully."

@@ -61,11 +61,10 @@ NODE1_FQDN="$(get_primary_node_fqdn)"
 # Run a command on the template's node as root.
 node_run() { ssh "${SSH_OPTS[@]}" "root@${NODE}.mgmt.internal" "$@"; }
 
-echo ""
 info "${BOLD}TAPPaaS NixOS template update${CL} (${VMNAME}, VM ${VMID})"
 
 # ── 1. Target version from tappaas-nixos.json (branch-controlled). ─────────────
-info "Target template version: ${GN}${TARGET_TAG}${CL} (from tappaas-nixos.json)"
+debug "Target template version: ${GN}${TARGET_TAG}${CL} (from tappaas-nixos.json)"
 
 # ── 2. Locate the template in the cluster (empty if it does not exist yet). ────
 NODE="$(vm_exists_on_cluster "$VMID" "$NODE1_FQDN" || true)"
@@ -81,7 +80,7 @@ if [[ -n "$NODE" ]]; then
 fi
 
 if [[ "$is_template" == "1" && "$installed_tag" == "$TARGET_TAG" ]]; then
-  info "Template already at ${GN}${TARGET_TAG}${CL} — nothing to do."
+  debug "Template already at ${GN}${TARGET_TAG}${CL} — nothing to do."
   exit 0
 fi
 

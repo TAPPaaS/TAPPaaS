@@ -358,7 +358,7 @@ main() {
     if module_dir=$(get_module_dir "${module}" 2>/dev/null); then
         ensure_scripts_executable "${module_dir}"
         if [[ -x "${module_dir}/pre-update.sh" ]]; then
-            info "  Running ${module_dir}/pre-update.sh..."
+            debug "  Running ${module_dir}/pre-update.sh..."
             cd "${module_dir}"
             if ./pre-update.sh "${module}"; then
                 info "  ${GN}✓${CL} pre-update.sh completed"
@@ -421,7 +421,7 @@ main() {
             debug "  Running ${module_dir}/update.sh..."
             cd "${module_dir}"
             if ./update.sh "${module}"; then
-                info "  ${GN}✓${CL} Module update.sh completed"
+                debug "  ${GN}✓${CL} Module update.sh completed"
             else
                 fatal_with_rollback "${module}" "${snapshot_created}" "Module update.sh failed"
             fi

@@ -116,7 +116,7 @@ wait_for_vm_ip() {
     local max_attempts="${3:-30}"
     local vm_ip=""
 
-    info "Waiting for VM to get IP address..." >&2
+    debug "Waiting for VM to get IP address..." >&2
 
     for ((i=1; i<=max_attempts; i++)); do
         # Try guest agent first
@@ -143,7 +143,12 @@ wait_for_vm_ip() {
 update_ssh_known_hosts() {
     local ip="$1"
 
-    ssh-keygen -R "${ip}" 2>/dev/null || true
+    # Capture ssh-keygen's stdout ("# Host <ip> found: line N", "known_hosts
+    # updated.", "Original contents retained…") and route it to [Debug] — it is
+    # noise on the console, useful only when troubleshooting.
+    local _kh_out
+    _kh_out="$(ssh-keygen -R "${ip}" 2>/dev/null || true)"
+    [[ -n "${_kh_out}" ]] && while IFS= read -r _kh_l; do debug "  ${_kh_l}"; done <<<"${_kh_out}"
     # Best-effort: if the VM's sshd is mid-restart, ssh-keyscan returns non-zero
     # and the next wait_for_ssh/rebuild attempt will retry. Don't let a transient
     # failure here trip set -e and abort the retry loop.
@@ -451,9 +456,9 @@ fix_dhcp_hostname() {
     eth_device=$(ssh "tappaas@${vm_ip}" "nmcli -t -f DEVICE,TYPE device status 2>/dev/null" | grep ethernet | cut -d: -f1 | head -1) || true
 
     if [[ -n "${eth_connection}" ]] && [[ -n "${eth_device}" ]]; then
-        info "  Using NetworkManager for DHCP hostname fix"
-        info "  Ethernet connection: ${eth_connection}"
-        info "  Ethernet device: ${eth_device}"
+        debug "  Using NetworkManager for DHCP hostname fix"
+        debug "  Ethernet connection: ${eth_connection}"
+        debug "  Ethernet device: ${eth_device}"
 
         # Resolve nmcli's absolute path on the target (NixOS:
         # /run/current-system/sw/bin, Debian: /usr/bin) so the detached
@@ -472,7 +477,7 @@ fix_dhcp_hostname() {
         #    systemd-run: the disconnect drops the link, which would otherwise
         #    kill this SSH session before 'connect' runs and strand the VM.
         ssh "tappaas@${vm_ip}" "sudo systemd-run --collect --quiet /bin/sh -c '${nmcli_path} device disconnect ${eth_device}; sleep 2; ${nmcli_path} device connect ${eth_device}'" || true
-        info "  DHCP hostname updated to: ${vmname} (re-acquire scheduled)"
+        debug "  DHCP hostname updated to: ${vmname} (re-acquire scheduled)"
         return 0
     fi
 
@@ -481,7 +486,7 @@ fix_dhcp_hostname() {
     networkd_active=$(ssh "tappaas@${vm_ip}" "systemctl is-active systemd-networkd 2>/dev/null") || true
 
     if [[ "${networkd_active}" == "active" ]]; then
-        info "  Using systemd-networkd for DHCP hostname fix"
+        debug "  Using systemd-networkd for DHCP hostname fix"
         # Find the .network file for the primary ethernet interface
         local network_file
         network_file=$(ssh "tappaas@${vm_ip}" "ls /run/systemd/network/*.network /etc/systemd/network/*.network 2>/dev/null | head -1") || true
@@ -491,10 +496,10 @@ fix_dhcp_hostname() {
             network_basename=$(basename "${network_file}")
             local dropin_dir="/etc/systemd/network/${network_basename}.d"
 
-            info "  Creating drop-in for ${network_basename}"
+            debug "  Creating drop-in for ${network_basename}"
             ssh "tappaas@${vm_ip}" "sudo mkdir -p '${dropin_dir}' && printf '[DHCPv4]\nSendHostname=yes\nHostname=${vmname}\n' | sudo tee '${dropin_dir}/hostname.conf' >/dev/null" || true
             ssh "tappaas@${vm_ip}" "sudo systemctl restart systemd-networkd" || true
-            info "  DHCP hostname updated to: ${vmname}"
+            debug "  DHCP hostname updated to: ${vmname}"
             return 0
         fi
     fi
@@ -536,7 +541,7 @@ main() {
     wait_for_ssh "${vm_ip}" 120 || die "SSH not available on ${vm_ip}"
 
     # Detect OS type
-    info "Detecting OS type..."
+    debug "Detecting OS type..."
     local os_type
     os_type=$(detect_os_type "${vm_ip}")
     info "Detected OS: ${BL}${os_type}${CL}"
@@ -565,7 +570,6 @@ main() {
     # Fix DHCP hostname registration
     fix_dhcp_hostname "${vmname}" "${vm_ip}"
 
-    echo ""
     info "${GN}=== OS update completed successfully ===${CL}"
     info "VM: ${vmname} (${vm_ip})"
 }

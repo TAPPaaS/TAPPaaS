@@ -29,23 +29,18 @@ ZONE0NAME="$(get_config_value 'zone0' 'mgmt')"
 HANODE_DEFAULT="$(get_default_ha_node "$NODE")"
 HANODE="$(get_config_value 'HANode' "${HANODE_DEFAULT:-NONE}")"
 
-echo ""
-info "${BOLD}Post-Install Configuration${CL}"
-info "  VM: ${VMNAME} (VMID: ${VMID})"
-
-echo ""
-info "${BOLD}Installation Complete${CL}"
-info "  VM: ${VMNAME} (VMID: ${VMID})"
-info "  Node: ${NODE}"
-info "  Zone: ${ZONE0NAME}"
+# One-line target summary — neutral wording so it reads correctly whether this
+# runs standalone (update) or sourced from install.sh (install). install.sh
+# appends the install-only "Next steps" after sourcing this script.
+_SUMMARY="  VM: ${VMNAME} (VMID: ${VMID}), Node: ${NODE}, Zone: ${ZONE0NAME}"
 if [[ -n "${HANODE}" && "${HANODE}" != "NONE" ]]; then
-    info "  HA Node: ${HANODE}"
+    _SUMMARY="${_SUMMARY}, HA Node: ${HANODE}"
 fi
+info "${_SUMMARY}"
 
 # ── Configure OPNsense to forward syslog to this VM ──────────────────
 # Idempotent: matches the destination by description ("tappaas-logging").
 # Skipped when firewallType != opnsense (deployment uses a different firewall).
-echo ""
 info "${BOLD}Configure OPNsense syslog forwarding${CL}"
 
 FIREWALL_TYPE="$(get_config_value 'firewallType' 'opnsense')"
@@ -59,14 +54,21 @@ elif ! command -v syslog-manager >/dev/null 2>&1; then
     warn "  Manual fallback: System → Settings → Logging / Targets → add ${SYSLOG_TARGET}:1514 (TCP, RFC 5424)"
 else
     info "  Target: ${SYSLOG_TARGET}:1514 (TCP, RFC 5424)"
-    if syslog-manager add-destination \
+    # Capture syslog-manager's chatter ("OK", "Destination … already correct",
+    # "Reconfiguring syslog…", "syslog reconfigured") and route it to [Debug] —
+    # it is noise on the console, useful only when troubleshooting.
+    _sl_out="$(syslog-manager add-destination \
             --hostname "${SYSLOG_TARGET}" \
             --port 1514 \
             --transport tcp4 \
             --rfc5424 \
             --description "${SYSLOG_DESC}" \
-            --no-ssl-verify; then
-        if syslog-manager reconfigure --no-ssl-verify; then
+            --no-ssl-verify 2>&1)" && _sl_rc=0 || _sl_rc=$?
+    [[ -n "${_sl_out}" ]] && while IFS= read -r _sl_l; do debug "  ${_sl_l}"; done <<<"${_sl_out}"
+    if [[ ${_sl_rc} -eq 0 ]]; then
+        _sl_out="$(syslog-manager reconfigure --no-ssl-verify 2>&1)" && _sl_rc=0 || _sl_rc=$?
+        [[ -n "${_sl_out}" ]] && while IFS= read -r _sl_l; do debug "  ${_sl_l}"; done <<<"${_sl_out}"
+        if [[ ${_sl_rc} -eq 0 ]]; then
             info "  ${GN}✓${CL} OPNsense will now forward syslog to ${SYSLOG_TARGET}:1514"
         else
             warn "  Destination saved but OPNsense reconfigure failed — apply manually in the UI"
@@ -80,7 +82,6 @@ fi
 # Each cluster node ships its journal-forwarded syslog (via rsyslog) to the
 # Promtail syslog receiver on tcp/1515 (source=proxmox).
 # Idempotent: scp overwrites the conf file; rsyslog restart is harmless.
-echo ""
 info "${BOLD}Configure Proxmox nodes' rsyslog forwarding${CL}"
 
 # Node hostnames from site.json (.hardware.nodes), falling back to
@@ -117,7 +118,7 @@ EOF
     for NODE_HOSTNAME in "${NODE_HOSTS[@]}"; do
         [[ -z "${NODE_HOSTNAME}" ]] && continue
         NODE_FQDN="${NODE_HOSTNAME}.mgmt.internal"
-        info "  → ${NODE_HOSTNAME}"
+        debug "  → ${NODE_HOSTNAME}"
 
         # PVE 9 / Debian 13 (trixie) ships journald-only by default — install
         # rsyslog if missing. Its default config wires `imjournal` so all
@@ -125,7 +126,7 @@ EOF
         # the omfwd forwarder to Promtail. Idempotent.
         # shellcheck disable=SC2086
         if ! ssh ${SSH_OPTS} "root@${NODE_FQDN}" "command -v rsyslogd >/dev/null" 2>/dev/null; then
-            info "    installing rsyslog..."
+            debug "    installing rsyslog..."
             # shellcheck disable=SC2086
             if ! ssh ${SSH_OPTS} "root@${NODE_FQDN}" \
                 "DEBIAN_FRONTEND=noninteractive apt-get install -y -qq rsyslog >/dev/null 2>&1"; then
@@ -143,17 +144,9 @@ EOF
         # shellcheck disable=SC2086
         if ssh ${SSH_OPTS} "root@${NODE_FQDN}" \
             "systemctl enable --now rsyslog >/dev/null 2>&1 && systemctl restart rsyslog" 2>/dev/null; then
-            info "    ${GN}✓${CL} ${NODE_HOSTNAME}: rsyslog → ${SYSLOG_FQDN}:1515"
+            debug "    ${GN}✓${CL} ${NODE_HOSTNAME}: rsyslog → ${SYSLOG_FQDN}:1515"
         else
             warn "    ${NODE_HOSTNAME}: config pushed but rsyslog (enable|restart) failed"
         fi
     done
 fi
-
-echo ""
-info "${BOLD}Next steps${CL}"
-info "  - Retrieve the initial Grafana admin password:"
-info "      ssh tappaas@${VMNAME}.${ZONE0NAME}.internal -- sudo cat /root/grafana-admin-password.initial"
-info "      Then change it in the UI and:"
-info "      ssh tappaas@${VMNAME}.${ZONE0NAME}.internal -- sudo rm /root/grafana-admin-password.initial"
-info "  - Other VMs: install a Promtail client pointing at http://${VMNAME}.${ZONE0NAME}.internal:3100"
