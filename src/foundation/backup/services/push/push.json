@@ -1,0 +1,12 @@
+{
+    "_comment": "ADR-012 P4 push target: a REMOTE PBS this cluster PUSHES its VM backups to. Used by a remote-only/single-node site (no local PBS), or as an extra off-site copy. Copy to /home/tappaas/config/push-<name>.json, edit, then: backup-manage.sh add-push <name>. The REMOTE side runs `add-external <thissite>` to grant our authId the DatastoreBackup role (write, no delete) on <namespace> and owns prune/retention/immutability — so a compromise here cannot erase the off-site copy (ADR-012 §3.5). The password + fingerprint are prompted at onboarding, NEVER stored here.",
+    "name": "offsite",
+    "type": "push",
+    "remoteHost": "backup.buddy.example",
+    "remoteStore": "tappaas_backup",
+    "namespace": "external/mysite",
+    "remotePort": "",
+    "authId": "mysite@pbs",
+    "makeDefault": true,
+    "retentionNote": "Retention is OWNED BY THE REMOTE (we hold write-no-delete and cannot prune). Set it on the remote's add-external for <thissite>."
+}

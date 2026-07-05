@@ -148,12 +148,14 @@ Live execution state. A row is **not done** until it passes the [package gate](#
 | P1 | Placement policy + shim | #402 | ✅ | offline 20/0 + **live** | (this commit) | live-verified on tappaas1 (no tankc → shim) |
 | P2 | Shim promotion | #402 | ✅ | **live** rc=0 | (this commit) | live shim→local promotion green on tappaas1 |
 | P3 | Per-node client reconcile | #382 | ✅ | offline 4/0 + **live** | (this commit) | reconcile runs on install+update, idempotent |
-| P4 | Push / remote-only path | #402, #389 | ⬜ | — | — | seam with ADR-010 P6 |
+| P4 | Push / remote-only path | #402, #389 | 🧪 | offline 3/0 | (slice 1) | code done; live pending 3-node cluster |
 | P5 | Immutability + subset/retention | #389 | ⬜ | — | — | after P4 |
-| P6 | Symmetry + unified credentials | §3.1/§3.2 | ⬜ | — | — | consolidates existing templates |
+| P6 | Symmetry + unified credentials | §3.1/§3.2 | 🧪 | offline | (slice 1) | push leg added → pull+receive+push all exist |
 | P7 | Tooling: manager/controller | §5 | ⬜ | — | — | `backup-controller` → endpoint-agnostic |
-| P8 | Bootstrap & promotion wiring | §4 | ⬜ | — | — | after P1/P2/P4/P7 |
+| P8 | Bootstrap & promotion wiring | §4 | 🧪 | offline | (slice 1) | remote-only wiring done (folded into P4) |
 | P9 | Hardening & docs | #389 | ⬜ | — | — | flips ADR → Proposed |
+
+> **Discovery (2026-07-05, from reading the code):** P6's symmetry is **already ~80% built** by #227 — `pbs-namespace.sh` is a complete idempotent toolbox (namespace/remote/sync-job/prune-job/acl/user), `services/remote/` does Class A **pull** and `services/external/` does Class B **push-receive**, both with the prompt-not-store credential model. The only missing leg of the symmetry is this cluster **pushing out** (the mirror of external-receive) → **P4 `services/push/`**. Slices: **(1) P4+P6+P8** push/remote-only + symmetry; **(2) P5** subset/retention + immutability; **(3) P7** tooling; **(4) P9** hardening/docs. Live testing of all deferred to the incoming 3-node + tankc cluster.
 
 **Suggested order:** **P3** (independent quick win) → **P1 → P2** (placement/shim) → **P6** (unify credentials) → **P4 → P5** (push/off-site) → **P7** (tooling) → **P8** (bootstrap/promotion) → **P9** (hardening/docs).
 
@@ -199,3 +201,11 @@ Tested on the single-node cluster `tappaas1` (a broken backup pinned at the non-
 - **P3 (reconcile)** — `update-module backup` runs *"Reconciling proxmox-backup-client across cluster nodes (#382)"* on both install and update, idempotent (client already present → no-op).
 - **Result:** all three packages green on hardware; two real bugs caught and fixed that offline tests could not have surfaced.
 - **Cleanup (operator decision):** reverted tappaas1 to the honest **shim** state — tore down the promoted PBS, destroyed the file-backed `tankc1` test pool + image, reinstalled backup (`auto` → shim), confirmed `logging` still updates green. The node now correctly reflects "no backup-tier storage → shim" until a real `tankc` disk is added. cicd checkout aligned to the pushed commit (`477e6a2`); operator's `resolve-module.sh` WIP preserved.
+
+### 2026-07-05 — Slice 1: P4 + P6 + P8 implemented (offline-green; live pending cluster)
+- **P4 (push / remote-only)** — new `lib/pbs-push.sh` (register a remote PBS as a Proxmox `pbs` storage `offsite-<name>`, idempotent, %q-safe creds) + `services/push/{push.json,install-service.sh,delete-service.sh}` (the mirror of external-receive: WE push, write-no-delete, remote owns prune/retention). `backup-manage.sh` gains `add-push`/`remove-push` and shows push targets in `list-sources`. When a push target is `--make-default`, install-service sets `.pbsStorageName` to the push storage so the existing pbs-job.sh machinery (alwaysBackup + dependsOn:backup:vm) routes the opted-in VMs off-site. Schema gains `pushTarget`.
+- **P8 (remote-only wiring)** — install.sh's `remote-only` branch records placement and guides `add-push` onboarding (the push credential is prompt-not-store, so it is an operator step, never an unattended hang).
+- **P6 (symmetry + unified credentials)** — with the push leg added, all three off-site roles now exist on one PBS: **pull** (`add-remote`/Class A), **receive** (`add-external`/Class B), **push** (`add-push`, new). All share the prompt-not-store credential model and the §3.5 write-no-delete / remote-owned-prune invariant. Confirmed the mechanism; the operator-facing consolidation doc is P9.
+- **Tests:** new `lib/test-pbs-push.sh` (3); `backup/test.sh` **49/0 offline**; all changed scripts `bash -n` clean; JSON valid.
+- **Not yet:** live test on the 3-node cluster (push a VM off-site to a real remote PBS, verify write-no-delete + remote-owned prune). Deferred to the incoming cluster.
+- **Remaining:** **P5** (subset group-filter for pull; confirm independent retention; ZFS-snapshot immutability helper — S3 Object Lock is ADR-010's satellite domain), **P7** (backup-controller endpoint-agnostic + backup-manager placement/peer awareness), **P9** (compromise-isolation test suite, QUICKREF/TEST, ADR → Proposed).

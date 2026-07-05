@@ -100,8 +100,17 @@ case "${MODE}" in
     ;;
   remote-only)
     pbs_write_placement_state remote-only
-    warn "Placement 'remote-only' — no local PBS datastore is installed."
-    warn "  Off-site push backup is configured separately (ADR-012 P4)."
+    PUSH_TARGET="$(get_config_value 'pushTarget' '')"
+    warn "Placement 'remote-only' — no local PBS datastore; VMs back up off-site by push (ADR-012 P4)."
+    # Off-site onboarding needs the remote credential (prompt-not-store), so it is
+    # an operator step (add-push), never auto-run unattended here. Point the way.
+    if [[ -n "${PUSH_TARGET}" && -f "${CONFIG_DIR:-/home/tappaas/config}/push-${PUSH_TARGET}.json" ]]; then
+      warn "  Push target '${PUSH_TARGET}' is configured — onboard it (prompts for the remote credential):"
+      warn "    backup-manage.sh add-push ${PUSH_TARGET} --make-default"
+    else
+      warn "  To enable it: copy services/push/push.json → config/push-<name>.json, edit, set .pushTarget, then:"
+      warn "    backup-manage.sh add-push <name> --make-default"
+    fi
     info "\n${GN}TAPPaaS backup remote-only placement recorded.${CL}"
     exit 0
     ;;

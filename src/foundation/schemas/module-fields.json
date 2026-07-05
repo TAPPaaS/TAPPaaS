@@ -30,6 +30,7 @@
     "diskSize",
     "storage",
     "placementState",
+    "pushTarget",
     "pbsStorageName",
     "alwaysBackup",
     "backup",
@@ -421,6 +422,17 @@
       ],
       "example": "local",
       "note": "Set only on the backup module, at install/update time."
+    },
+    "pushTarget": {
+      "description": "Backup module, remote-only placement only (ADR-012 P4). Name of the default off-site push target — a config/push-<name>.json describing a REMOTE PBS this cluster pushes its VM backups to when there is no local PBS. Empty/absent means no default; onboard with `backup-manage.sh add-push <name> --make-default`.",
+      "type": "string",
+      "requiredBy": [],
+      "usedBy": [
+        "backup:vm"
+      ],
+      "default": "",
+      "example": "offsite",
+      "note": "Set only on the backup module. The push credential is prompted at onboarding, never stored."
     },
     "pbsStorageName": {
       "description": "Name of the Proxmox Backup Server datastore / Proxmox storage used for backups. Set on the backup module; read by backup:vm scripts (install/test/restore/backup-manage).",

@@ -42,6 +42,8 @@ Multi-source datastore (issue #227):
   remove-remote <name> [--purge]   Offboard a buddy (--purge also deletes its data)
   add-external <name>         Onboard a third-party push client from external-<name>.json
   remove-external <name> [--purge]  Offboard an external client (--purge deletes its data)
+  add-push <name> [--make-default]  Register an off-site push target WE push to (push-<name>.json)
+  remove-push <name>          Remove an off-site push target (local storage only; remote data untouched)
 
   help                        Show this help message
 
@@ -164,6 +166,9 @@ case "$COMMAND" in
     echo
     info "${BOLD}Sync jobs:${CL}"
     ssh root@${PBS_NODE}.${ZONE}.internal "proxmox-backup-manager sync-job list" 2>/dev/null || true
+    echo
+    info "${BOLD}Push targets (we push off-site — ADR-012 P4):${CL}"
+    ssh root@${MGMT_NODE}.${ZONE}.internal "pvesm status" 2>/dev/null | awk 'NR==1 || $1 ~ /^offsite-/' || true
     ;;
 
   add-remote)
@@ -184,6 +189,16 @@ case "$COMMAND" in
   remove-external)
     [[ -n "${2:-}" ]] || die "Usage: $0 remove-external <name> [--purge]"
     "${SCRIPT_DIR}/services/external/delete-service.sh" "$2" "${3:-}"
+    ;;
+
+  add-push)
+    [[ -n "${2:-}" ]] || die "Usage: $0 add-push <name> [--make-default]"
+    "${SCRIPT_DIR}/services/push/install-service.sh" "$2" "${3:-}"
+    ;;
+
+  remove-push)
+    [[ -n "${2:-}" ]] || die "Usage: $0 remove-push <name>"
+    "${SCRIPT_DIR}/services/push/delete-service.sh" "$2"
     ;;
 
   help|--help|-h)
