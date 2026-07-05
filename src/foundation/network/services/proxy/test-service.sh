@@ -106,6 +106,23 @@ if read_module_config "${MODULE}" | jq -e '(.proxyAllowedZones // []) | index("i
     PROXY_PUBLIC=1
 fi
 
+# Has public TLS/cert handling been set up yet? The proxy binds a wildcard cert
+# by refid (dns01 mode) resolved from the env config, then cert-refids.json, then
+# legacy configuration.json — the SAME cascade proxy install/update uses. When NO
+# refid is resolvable, acme-setup.sh has not run and Caddy cannot serve a valid
+# public cert, so a dead HTTPS endpoint is "not configured yet" (a warning), NOT a
+# failure that should block every proxy-dependent module's install/update.
+TLS_CERT_REFID="$(jq -r '.tlsCertRefid // ""' <<<"$(get_variant_config "${_V}" 2>/dev/null || echo '{}')" 2>/dev/null || echo '')"
+if [[ -z "${TLS_CERT_REFID}" ]]; then
+    _env_name="${_V:-$(default_environment_name 2>/dev/null || echo '')}"
+    [[ -n "${_env_name}" ]] && TLS_CERT_REFID="$(cert_refid_for_env "${_env_name}" 2>/dev/null || echo '')"
+fi
+if [[ -z "${TLS_CERT_REFID}" && -f "${SYSTEM_CONFIG}" ]]; then
+    TLS_CERT_REFID="$(jq -r '.tappaas.tlsCertRefid // ""' "${SYSTEM_CONFIG}" 2>/dev/null || echo '')"
+fi
+TLS_CONFIGURED=0
+[[ -n "${TLS_CERT_REFID}" ]] && TLS_CONFIGURED=1
+
 info "  ${BOLD}network:proxy tests for ${BL}${MODULE}${CL}"
 info "    Domain: ${PROXY_DOMAIN:-unknown}"
 
@@ -161,12 +178,19 @@ else
     elif [[ -n "${http_code}" && "${http_code}" != "000" ]]; then
         # Got a response but not a redirect/success — warn but pass
         pass "HTTPS responding (status ${http_code} — may require auth)"
-    elif [[ "${PROXY_PUBLIC}" -eq 1 ]]; then
+    elif [[ "${PROXY_PUBLIC}" -eq 1 && "${TLS_CONFIGURED}" -eq 1 ]]; then
+        # Public service AND a public cert IS configured (acme-setup.sh has run) →
+        # a dead HTTPS endpoint is a genuine failure.
         fail "HTTPS not responding (status: ${http_code:-timeout})"
+    elif [[ "${TLS_CONFIGURED}" -eq 0 ]]; then
+        # No public cert configured yet (acme-setup.sh not run): Caddy cannot serve
+        # valid public TLS, so a dead HTTPS endpoint is EXPECTED. Warn, never fail —
+        # otherwise every proxy-dependent module's install/update aborts here (#).
+        warn "    HTTPS not responding (status: ${http_code:-timeout}) — public TLS/cert handling not set up yet (run acme-setup.sh); warning, not a failure"
     else
-        # Internal-only service: a missing/invalid public cert (e.g. DNS-01
-        # provider creds not set up yet) must not block the install.
-        warn "    HTTPS not responding (status: ${http_code:-timeout}) — internal-only service; public TLS cert/DNS-01 not configured yet (warning, not a failure)"
+        # Internal-only service (cert may exist but it is not publicly exposed):
+        # a missing/invalid public reachability must not block the install.
+        warn "    HTTPS not responding (status: ${http_code:-timeout}) — internal-only service; not publicly exposed (warning, not a failure)"
     fi
 fi
 
