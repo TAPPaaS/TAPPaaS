@@ -91,13 +91,18 @@ plugin_module_of() {
 
 _cred_url() { awk -F= '/^url=/{sub(/^url=/,"");print;exit}' "${UNIFI_CRED}" 2>/dev/null; }
 
+# NOTE: the trailing `|| true` is load-bearing. On a fresh system ACTUAL does not
+# exist yet ("No switches registered yet"), so jq exits non-zero. Without the
+# guard, a caller like `registered="$(controllers_of_vendor …)"` propagates that
+# under `set -e` and silently aborts the whole script (observed: the SSH session
+# to cicd closing right after the vendor prompt). Missing/empty state == no rows.
 switches_of_controller() {
-    jq -r --arg c "$1" '.switches // {} | to_entries[] | select(.value.controller==$c) | .key' "${ACTUAL}" 2>/dev/null
+    jq -r --arg c "$1" '.switches // {} | to_entries[] | select(.value.controller==$c) | .key' "${ACTUAL}" 2>/dev/null || true
 }
 
 # Registered controller names for a given vendor (from actual).
 controllers_of_vendor() {
-    jq -r --arg v "$1" '.controllers // {} | to_entries[] | select(.value.vendor==$v) | .key' "${ACTUAL}" 2>/dev/null
+    jq -r --arg v "$1" '.controllers // {} | to_entries[] | select(.value.vendor==$v) | .key' "${ACTUAL}" 2>/dev/null || true
 }
 
 # Condensed inventory: one line per switch, only the TAPPaaS-MANAGED ports (those

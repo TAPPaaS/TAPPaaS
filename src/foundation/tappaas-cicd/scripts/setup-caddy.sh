@@ -135,7 +135,9 @@ if [ -n "$_s2out" ]; then while IFS= read -r _l; do debug "  $_l"; done <<<"$_s2
 # Restart web GUI to pick up the new port from config.xml
 # (the connection may drop as lighttpd restarts on a different port)
 debug "Restarting web GUI on port 8443..."
-ssh root@"$FIREWALL_FQDN" 'configctl webgui restart' 2>/dev/null || true
+# Suppress BOTH streams: configctl prints "OK" to stdout, and the GUI restart
+# drops the SSH session (trailing blank lines) — all console noise.
+ssh root@"$FIREWALL_FQDN" 'configctl webgui restart' >/dev/null 2>&1 || true
 # Wait for the web GUI to come back up on the new port
 sleep 3
 

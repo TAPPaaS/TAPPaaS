@@ -107,6 +107,16 @@ if command -v script >/dev/null 2>&1; then
     run_pty '1\n3\nn\n' "${NOCRED}" "${ACTFILE}"
     ck "no-ctrl→install module"            "1" "$(grep -c -- 'unifi-os' "${IMLOG}")"
     ck "no-ctrl→install adds no switch"    "0" "$(grep -c -- 'add-switch' "${SMLOG}")"
+
+    # REGRESSION: fresh system — the ACTUAL state file does NOT exist yet ("No
+    # switches registered yet"). controllers_of_vendor must degrade to empty, not
+    # abort the script under `set -e` (the observed failure: the SSH session to
+    # cicd closed silently right after the vendor prompt, so setup never ran).
+    # unifi + creds + MISSING actual, pick 1 (use controller) must still reach
+    # add-controller — pre-fix it crashed at controllers_of_vendor and logged nothing.
+    MISSING="${TMP}/missing-actual.json"; rm -f "${MISSING}"
+    run_pty '1\n1\n\n\nn\n' "${CREDS}" "${MISSING}"
+    ck "missing-actual survives to add-controller" "1" "$(grep -c -- 'add-controller unifi-controller --vendor unifi --ip https://ctrl' "${SMLOG}")"
 else
     echo "  skip: pty menu tests (util-linux 'script' not available)"
 fi

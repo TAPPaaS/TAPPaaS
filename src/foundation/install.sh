@@ -161,7 +161,7 @@ echo -e "\n${GN}=== [3/5] Gateway cutover (route via the firewall) ===${CL}"
   || { msg_error "Gateway cutover failed — re-run ~/tappaas/config-network.sh --swap-gateway, then continue."; exit 1; }
 
 # ── [4/5] sanity check ─────────────────────────────────────────────────
-echo -e "\n${GN}=== [4/5] Sanity check ===${CL}"
+echo -e "${GN}=== [4/5] Sanity check ===${CL}"
 fetch "${REPO}${BRANCH}/src/foundation/cluster/sanity-check.sh" ~/tappaas/sanity-check.sh 755
 ~/tappaas/sanity-check.sh || msg_error "sanity-check reported problems — review above (continuing)."
 

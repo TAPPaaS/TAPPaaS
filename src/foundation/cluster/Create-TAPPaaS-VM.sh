@@ -148,7 +148,7 @@ function get_config_value() {
       value="$default"
     fi
   fi
-  info "     - $key has value: ${BGN}${value}" >&2 #TODO, this is a hack using std error for info logging
+  debug "     - $key has value: ${BGN}${value}" >&2
   echo -n "${value}"
   return 0
 }
@@ -166,7 +166,7 @@ function get_vlan_value() {
     echo -e "\n${RD}[ERROR]${CL} Zone '${YW}$key${CL}' in \"zones.json\" is not active. Current state: '${YW}$state${CL}'." >&2
     exit 1
   fi
-  info "     - $key has vlan value: ${BGN}${value}" >&2 #TODO, this is a hack using std error for info logging
+  debug "     - $key has vlan value: ${BGN}${value}" >&2
   echo -n "${value}"
   return 0
 }
@@ -215,7 +215,7 @@ function resolve_trunks() {
       echo -e "${YW}[WARN]${CL} Trunk zone '${YW}$zone_name${CL}' has vlantag=${tag} (untagged), skipping." >&2
       continue
     fi
-    info "     - trunk $zone_name has vlan value: ${BGN}${tag}" >&2
+    debug "     - trunk $zone_name has vlan value: ${BGN}${tag}" >&2
     if [ -n "$result" ]; then
       result="${result};${tag}"
     else
@@ -300,11 +300,11 @@ function zfs_recv_preflight() {
     trap - ERR
     exit 1
   fi
-  info "Pre-flight check passed — no stale ZFS state on ${node} (pool ${pool})"
+  debug "Pre-flight check passed — no stale ZFS state on ${node} (pool ${pool})"
 }
 
 # generate some MAC addresses
-info "${BOLD}Creating TAPPaaS VM in proxmox using the following settings:"
+info "${BOLD}Creating TAPPaaS VM in proxmox...${CL}"
 NODE="$(get_config_value 'node' "$(hostname)")"
 
 # Check if the specified node exists in the cluster
@@ -443,7 +443,9 @@ if [ "${IMAGETYPE:-}" != "clone" ]; then
       # window the image was compressed with, else zstd silently truncates (#368).
       TARGET_IMAGE="${IMAGE%.zst}"
       info "Decompressing $TARGET_IMAGE after download, have patience"
-      zstd -d --long=27 -f "$IMAGE" -o "$TARGET_IMAGE" || die "Failed to decompress ${IMAGE} with zstd"
+      # -q silences zstd's "<file>: N bytes" summary line (console noise); real
+      # errors still print and the exit code still trips `|| die`.
+      zstd -q -d --long=27 -f "$IMAGE" -o "$TARGET_IMAGE" || die "Failed to decompress ${IMAGE} with zstd"
     else
       TARGET_IMAGE="$IMAGE"
     fi
@@ -457,7 +459,6 @@ if [ "${IMAGETYPE:-}" != "clone" ]; then
   fi
 fi
 
-echo ""
 info "${BOLD}Starting the $VMNAME VM creation process..."
 if [ "$IMAGETYPE" == "img" ]; then  # First use: this is used to stand up a firewall vm from a disk image
   info "${BOLD}Creating a Image based VM"
@@ -700,7 +701,13 @@ fi
 
 info "${BOLD}Configuring the $VMNAME VM settings..."
 
-qm set $VMID --description "$DESCRIPTION_HTML" >/dev/null
+# Proxmox's Perl API emits a benign "Wide character in print at …/PVE/API2/Qemu.pm"
+# warning to stderr whenever the description contains a non-ASCII char (here the
+# em-dash "—"): qm writes to a filehandle that is not flagged UTF-8. It is purely
+# cosmetic — the description is stored correctly. Drop just that line from stderr
+# while preserving qm's own exit code (process substitution, not a pipe).
+qm set $VMID --description "$DESCRIPTION_HTML" >/dev/null \
+    2> >(grep -v 'Wide character in print' >&2 || true)
 qm set $VMID --tags $VMTAG >/dev/null
 qm set $VMID --agent enabled=1 >/dev/null
 qm set $VMID --cores $CORE_COUNT --memory $RAM_SIZE >/dev/null
@@ -889,7 +896,6 @@ fi
 
 if [[ "${IMAGETYPE}" != "iso" ]]; then
     qm start $VMID >/dev/null
-    echo ""
     info "${BOLD}TAPPaaS $VMNAME VM started successfully"
 fi
 

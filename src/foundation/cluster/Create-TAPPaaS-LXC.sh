@@ -77,7 +77,7 @@ get_config_value() {
     fi
     value="$2"
   fi
-  info "     - ${key} has value: ${BGN}${value}${CL}" >&2
+  debug "     - ${key} has value: ${BGN}${value}${CL}" >&2
   echo -n "${value}"
 }
 
@@ -101,7 +101,7 @@ get_vlan_value() {
     exit 1
   fi
   tag=$(echo "${ZONES}" | jq -r --arg K "${key}" '.[$K].vlantag')
-  info "     - ${key} has vlan value: ${BGN}${tag}${CL}" >&2
+  debug "     - ${key} has vlan value: ${BGN}${tag}${CL}" >&2
   echo -n "${tag}"
 }
 
@@ -135,7 +135,7 @@ resolve_trunks() {
 
 # ── Resolve desired state ────────────────────────────────────────────
 
-info "${BOLD}Creating TAPPaaS LXC using the following settings:${CL}"
+info "${BOLD}Creating TAPPaaS LXC...${CL}"
 
 VMID="$(get_config_value 'vmid')"
 if pct status "${VMID}" &>/dev/null || qm status "${VMID}" &>/dev/null; then

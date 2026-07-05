@@ -55,6 +55,8 @@ readonly RD=$'\033[01;31m' YW=$'\033[33m' GN=$'\033[1;92m' BL=$'\033[36m' CL=$'\
 info()  { echo -e "${GN}[network]${CL} $*"; }
 warn()  { echo -e "${YW}[network][warn]${CL} $*"; }
 error() { echo -e "${RD}[network][error]${CL} $*" >&2; }
+# Detail lines shown only under TAPPAAS_DEBUG=1 (cyan, matching the [Debug] convention).
+debug() { [ "${TAPPAAS_DEBUG:-0}" = "1" ] && echo -e "${BL}[network]${CL} $*" || true; }
 die()   { error "$*"; exit 1; }
 
 readonly INTERFACES=/etc/network/interfaces
@@ -202,17 +204,17 @@ swap_gateway() {
     cat "$tmp" > /etc/pve/corosync.conf && rm -f "$tmp"
     info "  /etc/pve/corosync.conf → ring0_addr ${mgmt_ip} (config_version $(( ${cv:-1} + 1 )))"
   else
-    info "  corosync ring0_addr already on the mgmt net — no change."
+    debug "  corosync ring0_addr already on the mgmt net — no change."
   fi
 
   # 6. Apply. Additive, so the existing session survives; restart corosync to
   #    rebind to the mgmt IP without a reboot.
-  info "  reloading network + restarting corosync (no reboot needed)..."
+  debug "  reloading network + restarting corosync (no reboot needed)..."
   ifreload -a 2>/dev/null || systemctl restart networking || warn "network reload returned non-zero"
   systemctl restart corosync pve-cluster 2>/dev/null || warn "corosync/pve-cluster restart returned non-zero"
 
   info "${GN}Gateway cutover complete.${CL} Node mgmt ${BL}${mgmt_ip}${CL}, routing via the firewall."
-  info "  Verify: ping ${FW_IP}; ping 8.8.8.8; pvecm status"
+  debug "  Verify: ping ${FW_IP}; ping 8.8.8.8; pvecm status"
 }
 
 # ── Mode: drop the upstream IP (later hardening) ─────────────────────

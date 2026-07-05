@@ -275,7 +275,6 @@ run_quiet() {
 if [[ "$FIREWALL_AVAILABLE" == "true" ]]; then
     # Install and enable QEMU guest agent on OPNsense (FreeBSD)
     # This allows Proxmox to communicate with the firewall VM via the guest agent
-    echo ""
     info "Installing QEMU guest agent on OPNsense..."
     if ssh $SSH_ACCEPT root@"$FIREWALL_FQDN" "/bin/sh -c 'pkg info os-qemu-guest-agent'" &>/dev/null; then
         info "  QEMU guest agent already installed"
@@ -301,8 +300,7 @@ if [[ "$FIREWALL_AVAILABLE" == "true" ]]; then
     # which the tappaas-cicd update above already installed.) On a long-lived
     # firewall os-caddy was already present, masking the ordering; the prebuilt
     # image has no plugins, so it must run first.
-    echo ""
-    info "Setting up Caddy reverse proxy (installs os-caddy)..."
+    debug "Setting up Caddy reverse proxy (installs os-caddy)..."
     chmod +x /home/tappaas/TAPPaaS/src/foundation/tappaas-cicd/scripts/setup-caddy.sh
     /home/tappaas/TAPPaaS/src/foundation/tappaas-cicd/scripts/setup-caddy.sh || {
         warn "Caddy setup encountered issues. Please review and complete manually."
