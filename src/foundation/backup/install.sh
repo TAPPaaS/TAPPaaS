@@ -66,20 +66,53 @@ run_quiet() {
 . "${MODULE_DIR}/lib/pbs-job.sh"
 # shellcheck source=lib/pbs-namespace.sh disable=SC1091
 . "${MODULE_DIR}/lib/pbs-namespace.sh"
+# shellcheck source=lib/pbs-placement.sh disable=SC1091
+. "${MODULE_DIR}/lib/pbs-placement.sh"
+# shellcheck source=lib/pbs-client.sh disable=SC1091
+. "${MODULE_DIR}/lib/pbs-client.sh"
 
 # Now change to temp directory for the rest of the installation
 TEMP_DIR=$(mktemp -d)
 pushd $TEMP_DIR >/dev/null
 
-info "${BOLD}Creating TAPPaaS Proxmox Backup Server (PBS) installation using the following settings:"
-NODE="$(get_config_value 'node' "$(get_node_hostname 0)")"
 VMNAME="$(get_config_value 'vmname' "$1")"
-STORAGE="$(get_config_value 'storage' 'tankc1')"
-IMAGE_TYPE="$(get_config_value 'imageType' 'apt')"
-IMAGE="$(get_config_value 'image' 'pbs')"
 IMAGE_LOCATION="$(get_config_value 'imageLocation' 'http://download.proxmox.com/debian/pbs')"
 DESCRIPTION="$(get_config_value 'description' 'TAPPaaS APT installation')"
 ZONE="$(get_config_value 'zone0' 'mgmt')"
+
+# ── Placement (ADR-012 P1) ───────────────────────────────────────────
+# Decide WHERE (or whether) PBS is realized before doing any work. The old hard
+# node:tappaas3 / storage:tankc1 literals are now just the preferred hints for
+# `auto`; `auto` discovers a tankc pool and falls back to a shim if none exists.
+POLICY="$(placement_policy)"
+PREFERRED_NODE="$(get_config_value 'node' "$(get_node_hostname 0)")"
+info "${BOLD}Resolving backup placement (policy ${BGN}${POLICY}${CL}${BOLD}, preferred node ${BGN}${PREFERRED_NODE}${CL}${BOLD})...${CL}"
+read -r MODE NODE STORAGE < <(pbs_discover_placement "${POLICY}" "${PREFERRED_NODE}" "${ZONE}")
+
+case "${MODE}" in
+  shim)
+    pbs_write_placement_state shim
+    warn "No usable 'tankc' pool found (policy ${POLICY}) — installing backup as a SHIM (no PBS datastore)."
+    warn "  dependsOn:backup is satisfied so dependent modules still install; promote later with:"
+    warn "    update-module.sh backup      (once a tankc pool exists)"
+    info "\n${GN}TAPPaaS backup shim recorded.${CL}"
+    exit 0
+    ;;
+  remote-only)
+    pbs_write_placement_state remote-only
+    warn "Placement 'remote-only' — no local PBS datastore is installed."
+    warn "  Off-site push backup is configured separately (ADR-012 P4)."
+    info "\n${GN}TAPPaaS backup remote-only placement recorded.${CL}"
+    exit 0
+    ;;
+  local)
+    info "${BOLD}Creating TAPPaaS PBS on node ${BGN}${NODE}${CL}${BOLD}, storage ${BGN}${STORAGE}${CL}${BOLD}.${CL}"
+    pbs_write_placement_state local "${NODE}" "${STORAGE}"
+    ;;
+  *)
+    die "Unexpected placement result: '${MODE}' (policy ${POLICY})"
+    ;;
+esac
 
 # update the apt sources and install pbs
 
@@ -113,33 +146,11 @@ pbs_ensure_zfs_ordering
 # Create a backup directory on the storage tank
 sudo mkdir -p /${STORAGE}/tappaas_backups
 
-# Install proxmox-backup-client on all Proxmox VE nodes
-info "${BOLD}Installing proxmox-backup-client on all Proxmox VE nodes...${CL}"
-
-# Get list of all cluster nodes
-CLUSTER_NODES=$(ssh root@${NODE}.${ZONE}.internal "pvesh get /nodes --output-format json" | jq -r '.[].node')
-
-for PVE_NODE in $CLUSTER_NODES; do
-  info "Installing proxmox-backup-client on ${PVE_NODE}..."
-  run_quiet ssh root@${PVE_NODE}.${ZONE}.internal bash -c "'
-    set -e
-    # Check if PBS repository is configured
-    if ! grep -q \"${IMAGE_LOCATION}\" /etc/apt/sources.list.d/proxmox.sources 2>/dev/null; then
-      # Add PBS repository
-      cat >> /etc/apt/sources.list.d/proxmox.sources <<EOFPBS
-Types: deb
-URIs: ${IMAGE_LOCATION}
-Suites: trixie
-Components: pbs-no-subscription
-Signed-By: /usr/share/keyrings/proxmox-archive-keyring.gpg
-EOFPBS
-    fi
-
-    # Install proxmox-backup-client
-    apt update
-    apt install -y proxmox-backup-client
-  '" || warn "Failed to install proxmox-backup-client on ${PVE_NODE}"
-done
+# Install proxmox-backup-client on ALL current Proxmox VE nodes (ADR-012 P3,
+# #382). Idempotent reconcile keyed on live cluster membership — the same
+# routine update.sh runs, so a node added later gets its client on update.
+pbs_client_reconcile "${ZONE}" "${IMAGE_LOCATION}" \
+  || warn "One or more nodes could not be reconciled for proxmox-backup-client (see above)"
 
 info "\n${GN}TAPPaaS PBS installation completed successfully.${CL}"
 echo
@@ -170,11 +181,22 @@ elif [[ -t 0 ]]; then
   read -rsp "Enter the password for tappaas user (this will be used for PBS): " TAPPAAS_PASSWORD
   echo
 else
-  TAPPAAS_PASSWORD="$(openssl rand -base64 18 | tr -d '/+=' | cut -c1-20)"
+  # Generate from /dev/urandom (dependency-free — openssl is NOT guaranteed on
+  # tappaas-cicd; a missing openssl here used to yield an EMPTY password and a
+  # cryptic PBS "must be at least 8 characters" failure, notably on the ADR-012
+  # shim→local promotion path which re-runs this installer non-interactively).
+  TAPPAAS_PASSWORD="$(LC_ALL=C tr -dc 'A-Za-z0-9' </dev/urandom | head -c 24)"
   PBS_CRED_FILE="${HOME}/.pbs-credentials.txt"
   printf 'pbs_user=%s\npbs_password=%s\n' "${PBS_USER}" "${TAPPAAS_PASSWORD}" >"${PBS_CRED_FILE}"
   chmod 600 "${PBS_CRED_FILE}"
   warn "No TTY and \$TAPPAAS_PBS_PASSWORD unset — generated a PBS password and saved it to ${PBS_CRED_FILE} (mode 600)."
+fi
+
+# Never proceed with a too-short/empty password — PBS requires ≥8 chars, and a
+# silent empty value (e.g. a failed generator) otherwise fails deep inside the
+# user-create step with an opaque error.
+if [[ "${#TAPPAAS_PASSWORD}" -lt 8 ]]; then
+  die "Failed to obtain a PBS password (need ≥8 chars). Set \$TAPPAAS_PBS_PASSWORD and retry."
 fi
 
 # Step 0: Add DNS entry in OPNsense

@@ -60,7 +60,7 @@ Placement is expressed as config, not code: `backup.json` gains an explicit **pl
 
 | Policy | Meaning | Local PBS datastore | Where backups land | Typical site |
 |---|---|---|---|---|
-| `auto` (default) | discover a `tankc` pool (configured node first, then any node) and install PBS there | yes | local, optionally replicated off-site | reference 2–3-node cluster |
+| `auto` (default) | discover a `tankc` pool (configured node first, then any node) and install PBS there; **falls back to `shim` if no `tankc` is found** | yes (else shim) | local, optionally replicated off-site | reference 2–3-node cluster |
 | `node:<name>` | pin PBS to a named node's `tankc`, overriding discovery | yes | local (+ optional off-site) | operator wants a specific node |
 | `shim` | no datastore — JSON/marker only, flagged as a shim; still satisfies `dependsOn: backup` | no | none yet (promote later, §4) | first boot, before storage exists |
 | `remote-only` | no local PBS at all; back up **directly to a satellite/remote PBS** by push (§3) | no | off-site only | single-node / no room for local PBS |

@@ -63,7 +63,7 @@ Decisions already made in the ADR (the build must honour these). Implementation-
 
 | # | Decision | Source |
 |---|----------|--------|
-| D1 | **Placement is policy, not literals** — `backup.json` carries `auto` \| `node:<name>` \| `shim` \| `remote-only`, replacing the hard `node`/`storage`. `auto` discovers `tankc` (configured node first, then any node). | [ADR §1 / §1.1](../ADR/ADR-012-backup-enhancement.md) |
+| D1 | **Placement is policy, not literals** — `backup.json` carries `auto` \| `node:<name>` \| `shim` \| `remote-only`, replacing the hard `node`/`storage`. `auto` discovers `tankc` (configured node first, then any node) and installs PBS there; **if no `tankc` is found anywhere, `auto` falls back to `shim`** (never fails the install). So `shim` is both an explicit policy and `auto`'s no-storage outcome. | [ADR §1 / §1.1](../ADR/ADR-012-backup-enhancement.md) |
 | D2 | **Shim when no `tankc`** — no PBS VM; a flagged JSON/marker satisfies `dependsOn: backup`; a warning is emitted. Promotable in place later. | ADR §1 |
 | D3 | **Shim promotion is idempotent + dependency-safe** — `update-module.sh backup` promotes shim → local / remote-only / local+satellite with no dependent reinstall. | ADR §1, §4.2 |
 | D4 | **Per-node client install is an idempotent reconcile** keyed on *current* cluster membership, **owned by `update.sh`** (not one-shot at PBS-install). Heals a later-added node (#382). | ADR §2 |
@@ -145,9 +145,9 @@ Live execution state. A row is **not done** until it passes the [package gate](#
 
 | P | Package | Issues | Status | Tests | Commit | Notes |
 |---|---------|--------|--------|-------|--------|-------|
-| P1 | Placement policy + shim | #402 | ⬜ | — | — | foundational; unblocks P2/P4/P8 |
-| P2 | Shim promotion | #402 | ⬜ | — | — | after P1 |
-| P3 | Per-node client reconcile | #382 | ⬜ | — | — | **independent — shippable first** |
+| P1 | Placement policy + shim | #402 | ✅ | offline 20/0 + **live** | (this commit) | live-verified on tappaas1 (no tankc → shim) |
+| P2 | Shim promotion | #402 | ✅ | **live** rc=0 | (this commit) | live shim→local promotion green on tappaas1 |
+| P3 | Per-node client reconcile | #382 | ✅ | offline 4/0 + **live** | (this commit) | reconcile runs on install+update, idempotent |
 | P4 | Push / remote-only path | #402, #389 | ⬜ | — | — | seam with ADR-010 P6 |
 | P5 | Immutability + subset/retention | #389 | ⬜ | — | — | after P4 |
 | P6 | Symmetry + unified credentials | §3.1/§3.2 | ⬜ | — | — | consolidates existing templates |
@@ -180,3 +180,21 @@ Append-only narrative per package. Add an entry when a package starts, blocks, o
 - ADR-012 drafted (symmetric peers, unified credentials, placement policy, bootstrap/promotion, manager/controller tooling); cross-linked with ADR-010; issues #402/#389/#382 annotated.
 - This tracker created. No package started. Branch `ADR007`.
 - Sequencing decided: P3 first (independent), then placement/shim, credentials, push/off-site, tooling, bootstrap, hardening.
+
+### 2026-07-04 — P1 + P2 + P3 implemented (offline-green; deep/live pending)
+- **New libs:** `backup/lib/pbs-placement.sh` (placement policy, tankc discovery, shim state read/write) and `backup/lib/pbs-client.sh` (idempotent per-node client reconcile).
+- **P1** — `backup.json` gains `placement` (`auto` default); `install.sh` resolves placement up front and branches: `local` → realize PBS on the discovered `tankc` node; `shim` (or `auto` finds no tankc) → write a `placementState:"shim"` marker + warning and exit 0 (no VM); `remote-only` → record marker (push wiring is P4). Resolved node/storage + `placementState` written back to `config/backup.json`. Schema (`module-fields.json`) gains `placement` + `placementState`.
+- **P2** — `update.sh` promotes a `shim` → `local` in place when the configured policy now resolves to a tankc (re-execs the idempotent `install.sh`); an explicit `shim` policy stays a shim; **empty state (legacy pre-ADR-012 installs) is backfilled to `local`, never promotion-reinstalled.** Dependent `dependsOn:backup` modules are untouched.
+- **P3** — the one-shot client loop is now `pbs_client_reconcile`, keyed on *current* cluster membership, called by **both** `install.sh` and `update.sh` — so `update-module.sh backup` installs the client on a node added later (#382). Per-node idempotent (skips when `dpkg -s proxmox-backup-client` present); warns (not dies) per unreachable node.
+- **Shim guards:** `services/vm/{install,update}-service.sh` degrade gracefully under a shim (dependents install; the VM is registered once promoted).
+- **Tests:** new `lib/test-pbs-placement.sh` (20) + `lib/test-pbs-client.sh` (4); full `backup/test.sh` **46/0 offline**. `bash -n` clean on all changed scripts; IDE shellcheck clean (only the universal SC1091 "can't follow /home/tappaas/bin" info). shellcheck CLI not installed in this env — run it on cicd before the gate.
+### 2026-07-05 — P1/P2/P3 LIVE-verified on tappaas1 (single-node)
+Tested on the single-node cluster `tappaas1` (a broken backup pinned at the non-existent `tankc1`; `logging`+`identity` updates were failing on the `backup:vm` post-update test). Deployed the working-tree files to `tappaas-cicd` and ran end-to-end:
+- **Teardown** — removed the broken PBS (datastore, storage, package, orphan `/tankc1`) via the `uninstall.sh --only pbs` steps. Left only `tanka1`.
+- **P1 (shim)** — `install-module backup --force` → *"No usable 'tankc' pool found (policy auto) — installing backup as a SHIM"*, `placementState:"shim"`, rc=0.
+- **Shim guards** — `update-module logging` → **green** (the `backup:vm` test-service now skips under a shim instead of the previous fatal *"PBS storage not configured"*). `update-module identity` clears the backup gate too (its remaining failure is an unrelated `network:proxy` HTTPS 000).
+- **Gap found live #1** — `services/vm/test-service.sh` also needed the shim guard (only install/update-service had it). **Fixed** + redeployed.
+- **P2 (promotion)** — created a file-backed `tankc1` zpool (test artifact) + `pvesm add`; `update-module backup` → detected shim, re-discovered `tankc1`, re-ran install.sh, **created datastore + user + prune/GC/verify jobs + storage + backup job**, post-tests green, rc=0; `placementState:"local"`.
+- **Gap found live #2** — install.sh's non-interactive password used `openssl`, which is **not installed on tappaas-cicd** → silent empty password → PBS *"must be ≥8 characters"*. **Fixed**: `/dev/urandom`-based generator + a hard ≥8-char guard (`die`) so it can never silently proceed. This also hardens every non-interactive fresh install.
+- **P3 (reconcile)** — `update-module backup` runs *"Reconciling proxmox-backup-client across cluster nodes (#382)"* on both install and update, idempotent (client already present → no-op).
+- **Result:** all three packages green on hardware; two real bugs caught and fixed that offline tests could not have surfaced. Note left: a **file-backed `tankc1` test pool** remains on tappaas1 (operator to decide: keep the now-working backup, or revert to shim + remove the artifact).

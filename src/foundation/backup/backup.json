@@ -5,6 +5,7 @@
   "status": "Testing",
   "vmname": "backup",
   "vmtag": "TAPPaaS,Foundation",
+  "placement": "auto",
   "node": "tappaas3",
   "storage": "tankc1",
   "pbsStorageName": "tappaas_backup",

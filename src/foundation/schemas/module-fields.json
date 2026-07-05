@@ -20,6 +20,7 @@
     "vmname",
     "vmid",
     "vmtag",
+    "placement",
     "node",
     "bios",
     "ostype",
@@ -28,6 +29,7 @@
     "memory",
     "diskSize",
     "storage",
+    "placementState",
     "pbsStorageName",
     "alwaysBackup",
     "backup",
@@ -392,6 +394,33 @@
       "default": "tanka1",
       "example": "tanka1",
       "note": "Storage pool must exist on the target node"
+    },
+    "placement": {
+      "description": "Backup module placement policy (ADR-012). Decides WHERE (or whether) a local PBS datastore is realized. 'auto' discovers a tankc pool (preferred node .node first, then any node) and installs PBS there, falling back to a shim if none exists. 'node:<name>' pins PBS to that node's tankc. 'shim' records a datastore-less marker that still satisfies dependsOn:backup and is promotable later via update-module.sh backup. 'remote-only' installs no local PBS (off-site push, ADR-012 P4). The resolved outcome is written back as .placementState (local|shim|remote-only).",
+      "type": "string",
+      "requiredBy": [],
+      "usedBy": [
+        "backup:vm"
+      ],
+      "pattern": "^(auto|shim|remote-only|node:.+)$",
+      "default": "auto",
+      "example": "auto",
+      "note": "Set only on the backup module. Replaces the old hard node/storage literals as the source of placement truth; .node/.storage remain the preferred hints for 'auto'."
+    },
+    "placementState": {
+      "description": "Resolved backup placement, written by backup/install.sh|update.sh (ADR-012): 'local' (PBS realized on .node/.storage), 'shim' (no datastore), or 'remote-only'. Runtime state — not authored by hand; read by the shim guards and pbs-job.sh.",
+      "type": "string",
+      "requiredBy": [],
+      "usedBy": [
+        "backup:vm"
+      ],
+      "enum": [
+        "local",
+        "shim",
+        "remote-only"
+      ],
+      "example": "local",
+      "note": "Set only on the backup module, at install/update time."
     },
     "pbsStorageName": {
       "description": "Name of the Proxmox Backup Server datastore / Proxmox storage used for backups. Set on the backup module; read by backup:vm scripts (install/test/restore/backup-manage).",

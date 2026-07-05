@@ -22,7 +22,12 @@
 
 set -euo pipefail
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+readonly SCRIPT_DIR
+
 . /home/tappaas/bin/common-install-routines.sh
+# shellcheck source=../../lib/pbs-placement.sh disable=SC1091
+. "${SCRIPT_DIR}/../../lib/pbs-placement.sh"
 
 MODULE="${1:-}"
 if [[ -z "${MODULE}" ]]; then
@@ -31,6 +36,15 @@ if [[ -z "${MODULE}" ]]; then
 fi
 
 check_json "/home/tappaas/config/${MODULE}.json" || exit 2
+
+# Shim backup (ADR-012): no PBS datastore by design. dependsOn:backup:vm is
+# satisfied structurally, so there is nothing to verify — a shim is the intended
+# state, not a failure. Skip cleanly so the dependent module's post-update test
+# passes; the VM is verified for real once backup is promoted (update.sh).
+if pbs_is_shim; then
+    warn "  backup:vm: backup is a shim (no PBS datastore) — skipping backup verification for ${MODULE}."
+    exit 0
+fi
 
 VMID="${TAPPAAS_VMID_OVERRIDE:-$(get_config_value 'vmid')}"  # override: issue #196
 VMNAME="$(get_config_value 'vmname' "${MODULE}")"

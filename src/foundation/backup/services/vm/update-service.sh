@@ -17,11 +17,20 @@ readonly SCRIPT_DIR
 . /home/tappaas/bin/common-install-routines.sh
 # shellcheck source=../../lib/pbs-job.sh disable=SC1091
 . "${SCRIPT_DIR}/../../lib/pbs-job.sh"
+# shellcheck source=../../lib/pbs-placement.sh disable=SC1091
+. "${SCRIPT_DIR}/../../lib/pbs-placement.sh"
 
 MODULE="${1:-}"
 if [[ -z "${MODULE}" ]]; then
     echo "Usage: $0 <module-name>"
     exit 1
+fi
+
+# Shim backup (no PBS datastore, ADR-012): nothing to re-assert yet; the VM is
+# registered automatically once backup is promoted. Degrade gracefully.
+if pbs_is_shim; then
+    debug "backup:vm: backup is a shim — skipping backup re-assertion for ${MODULE}."
+    exit 0
 fi
 
 check_json "/home/tappaas/config/${MODULE}.json" || exit 1
