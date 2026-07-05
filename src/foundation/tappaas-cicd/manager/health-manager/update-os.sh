@@ -27,6 +27,18 @@ readonly MGMT="mgmt"
 # shellcheck source=common-install-routines.sh
 . /home/tappaas/bin/common-install-routines.sh
 
+# When invoked as a module-update sub-step (templates:nixos / templates:debian
+# update-service.sh set TAPPAAS_OS_AS_DEBUG=1), route this script's [Info]
+# milestones to [Debug] so a routine module update stays quiet — the parent
+# already prints the "Calling templates:nixos update-service.sh …" line, making
+# the full OS-update narration redundant noise. Progress dots (run_quiet) and
+# warn/error/die are unaffected, and the detail is still recoverable with
+# TAPPAAS_DEBUG=1. A standalone/operator run (health-manager update-os verb,
+# env unset) keeps the normal [Info] output.
+if [[ "${TAPPAAS_OS_AS_DEBUG:-0}" == "1" ]]; then
+    info() { debug "$@"; }
+fi
+
 # Run a command quietly (progress dots in place of its output) while preserving
 # its REAL exit code, and die on failure. A bare `cmd 2>&1 | while read; do
 # printf .; done` pipeline reports the while-loop's exit status (always 0), so

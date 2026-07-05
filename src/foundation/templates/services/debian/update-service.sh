@@ -24,5 +24,8 @@ VMNAME="$(get_config_value 'vmname' "$MODULE_NAME")"
 VMID="$(get_config_value 'vmid')"
 NODE="$(get_config_value 'node' "$(get_node_hostname 0)")"
 
-# Run OS-specific update (auto-detects NixOS vs Debian)
-/home/tappaas/bin/update-os.sh "${VMNAME}" "${VMID}" "${NODE}"
+# Run OS-specific update (auto-detects NixOS vs Debian). TAPPAAS_OS_AS_DEBUG=1
+# routes update-os.sh's [Info] narration to [Debug] — as a module-update sub-step
+# the parent already announced this call, so only the progress dots and any
+# warnings/errors need to surface. Detail stays available with TAPPAAS_DEBUG=1.
+TAPPAAS_OS_AS_DEBUG=1 /home/tappaas/bin/update-os.sh "${VMNAME}" "${VMID}" "${NODE}"
