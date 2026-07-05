@@ -174,6 +174,32 @@ Mechanical leftovers to settle during the build (none block the design):
 
 ---
 
+## Known issues / deferred fixes
+
+Recorded here to fix later — each **needs a real GitHub issue first** to think through, because the fix touches shared infrastructure beyond ADR-012.
+
+### KI-1 — reconcile emits false "orphan field" warnings for provider modules (backup)
+
+**Symptom.** `update-module backup` (shim *or* local) prints ~9 warnings at "Step 0: Reconcile config":
+```
+[Warning] field 'placement' is usedBy=[backup:vm] but the module does not depend on any of them — kept at top level
+[Warning] field 'pbsStorageName' / 'alwaysBackup' / 'backup' / 'placementState' … (same)
+[Warning] field 'image' / 'imageType' / 'imageLocation' / 'storage' is usedBy=[cluster:vm,cluster:lxc] … (same)
+```
+
+**Root cause.** `regroup_to_pattern_a` in [`convert-json-to-config.sh`](../../src/foundation/tappaas-cicd/manager/site-manager/convert-json-to-config.sh) decides a field's owner by matching its schema `usedBy` against the module's **`dependsOn` only** — it never consults **`provides`**. The `backup` module **provides** `backup:vm` (it *is* the PBS server; `dependsOn: []`, `provides: ["vm","remote","external"]`), so its own service-config fields (`placement`, `placementState`, `pbsStorageName`, `alwaysBackup`, `backup`, all `usedBy:[backup:vm]`) look like orphans. The four `image*`/`storage` fields (`usedBy:[cluster:vm]`) that backup's own `install.sh` uses for its apt install are a second flavour of the same mismatch.
+
+**Notes.**
+- **Not shim-specific** — the check never references placement/shim; a *local* backup update warns identically. The operator just noticed it on a shim.
+- **Pre-existing, amplified by ADR-012** — `alwaysBackup`/`backup`/`pbsStorageName`/`image*`/`storage` already warned; ADR-012 added `placement`/`placementState` (same pattern).
+- **Harmless today** — "kept at top level" means the fields stay flat and the module's scripts still read them via `get_config_value`. It is warning noise, not a functional bug.
+
+**Not the fix.** Stripping the fields on a shim (the first instinct) is wrong: it silences nothing on a local backup, and a shim specifically *needs* `placement` + `placementState` (and `pbsStorageName`/`storage` at promotion) — removing them breaks P2 promotion.
+
+**Proposed direction (to design in the issue).** Make the owner/orphan check **`provides`-aware**: a field whose `usedBy` capability is one the module *provides* (self-capability `<module>:<provide>`, e.g. `backup:vm`) is the provider's own config, not an orphan. This clears the 5 `backup:vm` warnings for backup and any future provider module, shim or local, with no config loss. **Caveats:** (a) the 4 `image*`/`storage` warnings are `usedBy:[cluster:vm]`, so a provides-fix won't clear them — they need a separate small schema decision (attribute backup's direct usage, mark `general`, or accept); (b) the fix lives in the **shared** normalizer that runs for *every* module, so it needs its own test + care, not a backup-only patch.
+
+---
+
 ## Package logs
 
 Append-only narrative per package. Add an entry when a package starts, blocks, or completes.
