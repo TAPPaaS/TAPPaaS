@@ -10,9 +10,11 @@ import { tmpdir } from "os";
 import {
   listEnvironments,
   listModules,
+  listPeers,
   moduleEnvironment,
   moduleInPbsJob,
   moduleVmid,
+  readPlacement,
   resolvePolicy,
 } from "../../src/config";
 import { retentionValid, validate } from "../../src/validate";
@@ -220,6 +222,42 @@ check(!retentionValid("7") && !retentionValid("7x") && !retentionValid(""), "inv
     threw = true;
   }
   check(threw, "modify throws on a missing module");
+}
+
+// ── ADR-012: placement + off-site peers ───────────────────────────────
+{
+  const tmp = mkdtempSync(join(tmpdir(), "bm-placement-"));
+  // Default (no backup.json) → auto / unset / defaults.
+  const def = readPlacement(tmp);
+  eq(def.placement, "auto", "placement default auto");
+  eq(def.placementState, null, "placementState null when unset");
+  eq(def.pbsStorageName, "tappaas_backup", "pbsStorageName default");
+  eq(def.pushTarget, null, "pushTarget null default");
+
+  writeFileSync(
+    join(tmp, "backup.json"),
+    JSON.stringify({ placement: "remote-only", placementState: "shim", pushTarget: "offsite" }),
+    "utf8",
+  );
+  const pl = readPlacement(tmp);
+  eq(pl.placement, "remote-only", "placement read");
+  eq(pl.placementState, "shim", "placementState read");
+  eq(pl.pushTarget, "offsite", "pushTarget read");
+
+  // No peers yet.
+  eq(listPeers(tmp).length, 0, "no peers when none configured");
+  // One of each role — pull/receive/push.
+  writeFileSync(join(tmp, "remote-buddy.json"), JSON.stringify({ remoteHost: "h1", namespace: "remote/buddy" }), "utf8");
+  writeFileSync(join(tmp, "external-nas.json"), JSON.stringify({ remoteHost: "h2", namespace: "external/nas" }), "utf8");
+  writeFileSync(join(tmp, "push-vault.json"), JSON.stringify({ remoteHost: "h3", namespace: "external/mysite" }), "utf8");
+  const peers = listPeers(tmp);
+  eq(peers.length, 3, "three peers listed");
+  eq(peers.filter((p) => p.role === "pull").length, 1, "one pull peer (remote-)");
+  eq(peers.filter((p) => p.role === "receive").length, 1, "one receive peer (external-)");
+  eq(peers.filter((p) => p.role === "push").length, 1, "one push peer (push-)");
+  eq(peers.find((p) => p.role === "push")?.name ?? "", "vault", "push peer name stripped of prefix");
+  // Peers are NOT counted as modules.
+  eq(listModules(tmp).length, 0, "peers/backup are not deployed modules");
 }
 
 console.log(`\n${passed} passed, ${failed} failed`);

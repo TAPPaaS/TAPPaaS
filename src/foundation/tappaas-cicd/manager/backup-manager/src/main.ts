@@ -23,7 +23,9 @@
 import {
   defaultConfigDir,
   listModules,
+  listPeers,
   moduleInPbsJob,
+  readPlacement,
   resolvePolicy,
 } from "./config";
 import { CliClient } from "./client";
@@ -89,10 +91,13 @@ const HELP: HelpSpec = {
     { usage: "restore list <module>", name: "restore list" },
     { usage: "restore restore <module> [opts...]", name: "restore restore" },
     { usage: "restore list-all", name: "restore list-all" },
+    { usage: "placement", name: "placement", note: "(ADR-012 — backup placement/state)" },
+    { usage: "peers", name: "peers", note: "(ADR-012 — off-site pull/receive/push peers)" },
   ],
   common: [
     ["--config-dir DIR", "Config root (default: $CONFIG_DIR or /home/tappaas/config)."],
-    ["--json", "Machine output (JSON) for list/show/resolve."],
+    ["--json", "Machine output (JSON) for list/show/resolve/placement/peers."],
+    ["--pbs HOST", "ADR-012 P7: target a non-local PBS (e.g. a satellite) for controller ops."],
   ],
   notes: [
     `Verbs:
@@ -116,6 +121,7 @@ interface Opts {
   apply: boolean;
   environment: string | null;
   disabledOnly: boolean;
+  pbsEndpoint: string | null; // ADR-012 P7: target a non-local PBS (satellite)
   // modify flags (undefined = not given, so the field is left unchanged).
   enabled?: boolean;
   retention?: string;
@@ -128,6 +134,7 @@ function parseOpts(args: string[]): Opts {
   let apply = false;
   let environment: string | null = null;
   let disabledOnly = false;
+  let pbsEndpoint: string | null = null;
   let enabled: boolean | undefined;
   let retention: string | undefined;
   let exclude: string[] | undefined;
@@ -150,6 +157,11 @@ function parseOpts(args: string[]): Opts {
       if (!v) die("--environment requires a name argument");
       environment = v;
       i++;
+    } else if (a === "--pbs") {
+      const v = args[i + 1];
+      if (!v) die("--pbs requires a PBS endpoint (host) argument");
+      pbsEndpoint = v;
+      i++;
     } else if (a === "--enabled") {
       const v = args[i + 1];
       if (v !== "true" && v !== "false") die("--enabled requires 'true' or 'false'");
@@ -169,7 +181,7 @@ function parseOpts(args: string[]): Opts {
       rest.push(a);
     }
   }
-  return { configDir, json, apply, environment, disabledOnly, enabled, retention, exclude, rest };
+  return { configDir, json, apply, environment, disabledOnly, pbsEndpoint, enabled, retention, exclude, rest };
 }
 
 // ── list / show: every module's resolved policy (+ PBS-job wiring) ─────
@@ -250,6 +262,15 @@ function cmdResolve(opts: Opts): void {
 function cmdValidate(opts: Opts): void {
   const res = validate(opts.configDir);
   for (const o of res.oks) info(`  ok: ${o}`);
+  // ADR-012: surface placement so a datastore-less shim is visible, not silent.
+  const pl = readPlacement(opts.configDir);
+  if (pl.placementState === "shim") {
+    warn(
+      "backup placement is a SHIM (no datastore) — modules install but are NOT backed up until promoted: update-module.sh backup",
+    );
+  } else if (pl.placementState === "remote-only") {
+    info(`  ok: placement remote-only (off-site push${pl.pushTarget ? ` via '${pl.pushTarget}'` : ""})`);
+  }
   for (const e of res.errors) console.error(`  ERROR: ${e}`);
   info("");
   if (res.errors.length > 0) {
@@ -257,6 +278,38 @@ function cmdValidate(opts: Opts): void {
     die(`backup hierarchy has ${res.errors.length} error(s)`);
   }
   info(`${GN}validate-backup: hierarchy consistent${CL}`);
+}
+
+// ── placement / peers (ADR-012) ───────────────────────────────────────
+function cmdPlacement(opts: Opts): void {
+  const pl = readPlacement(opts.configDir);
+  if (opts.json) {
+    info(JSON.stringify(pl, null, 2));
+    return;
+  }
+  info(`placement:      ${pl.placement}`);
+  info(`placementState: ${pl.placementState ?? "(unset/legacy → local)"}`);
+  info(`pbsStorageName: ${pl.pbsStorageName}`);
+  info(`pushTarget:     ${pl.pushTarget ?? "-"}`);
+}
+
+function cmdPeers(opts: Opts): void {
+  const peers = listPeers(opts.configDir);
+  if (opts.json) {
+    info(JSON.stringify(peers, null, 2));
+    return;
+  }
+  if (peers.length === 0) {
+    info("No off-site peers configured (remote-/external-/push-<name>.json).");
+    return;
+  }
+  const pad = (s: string, n: number): string => (s.length >= n ? s : s + " ".repeat(n - s.length));
+  info(pad("NAME", 20) + " " + pad("ROLE", 9) + " " + pad("HOST", 28) + " NAMESPACE");
+  for (const p of peers) {
+    info(
+      pad(p.name, 20) + " " + pad(p.role, 9) + " " + pad(p.remoteHost ?? "-", 28) + " " + (p.namespace ?? "-"),
+    );
+  }
 }
 
 function cmdReconcile(opts: Opts, client: Client): void {
@@ -385,6 +438,12 @@ export function run(argv: string[], client: Client): number {
       case "resolve":
         cmdResolve(opts);
         return 0;
+      case "placement":
+        cmdPlacement(opts);
+        return 0;
+      case "peers":
+        cmdPeers(opts);
+        return 0;
       case "reconcile":
         cmdReconcile(opts, client);
         return 0;
@@ -413,6 +472,11 @@ export function run(argv: string[], client: Client): number {
 
 // Entry point (only when run directly, not when imported by tests).
 if (require.main === module) {
-  const client = new CliClient();
-  process.exit(run(process.argv.slice(2), client));
+  const argv = process.argv.slice(2);
+  // ADR-012 P7: pre-scan for --pbs so the CliClient targets the chosen PBS
+  // (local by default, or a satellite/remote when an endpoint is given).
+  const ei = argv.indexOf("--pbs");
+  const endpoint = ei >= 0 ? argv[ei + 1] : undefined;
+  const client = new CliClient(endpoint);
+  process.exit(run(argv, client));
 }

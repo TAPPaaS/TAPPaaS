@@ -151,7 +151,7 @@ Live execution state. A row is **not done** until it passes the [package gate](#
 | P4 | Push / remote-only path | #402, #389 | 🧪 | offline 3/0 | (slice 1) | code done; live pending 3-node cluster |
 | P5 | Immutability + subset/retention | #389 | 🧪 | offline 7/0 | (slice 2) | code done; ZFS-snapshot + group-filter live pending cluster |
 | P6 | Symmetry + unified credentials | §3.1/§3.2 | 🧪 | offline | (slice 1) | push leg added → pull+receive+push all exist |
-| P7 | Tooling: manager/controller | §5 | ⬜ | — | — | `backup-controller` → endpoint-agnostic |
+| P7 | Tooling: manager/controller | §5 | ✅ | **cicd** TS 60/0 + ctrl 11/0 | (slice 3) | TS layer (operator choice) built + live-verified on cicd |
 | P8 | Bootstrap & promotion wiring | §4 | 🧪 | offline | (slice 1) | remote-only wiring done (folded into P4) |
 | P9 | Hardening & docs | #389 | ⬜ | — | — | flips ADR → Proposed |
 
@@ -216,3 +216,10 @@ Tested on the single-node cluster `tappaas1` (a broken backup pinned at the non-
 - **Immutability (§3.5 / ADR-010 §7.3)** — new `lib/pbs-immutable.sh`: opt-in **ZFS-snapshot** WORM tier. When `backup.json .immutableSnapshots.enabled`, install/update deploy a systemd timer on the PBS node that takes read-only `@immutable-<ts>` snapshots of the datastore dataset and prunes to `keep`. History can't be rewritten by a sync/push credential holder or PBS prune/GC — only node-local root (the documented weaker tier; **S3 Object Lock stays the satellite/ADR-010 stronger tier**, provisioned satellite-side, out of module scope). Schema gains `immutableSnapshots`.
 - **Tests:** new `lib/test-pbs-immutable.sh` (7 — dataset derivation + OnCalendar mapping); `backup/test.sh` **56/0 offline**.
 - **Live pending (3-node):** group-filter pull subset, and the ZFS-snapshot timer (needs a real ZFS datastore) — deferred to the cluster.
+
+### 2026-07-05 — Slice 3: P7 tooling — TS layer (operator choice), built + verified on cicd
+Operator chose "push into the TS layer" (2026-07-05). Extended the TypeScript `backup-manager` + made the bash `backup-controller` endpoint-tolerant.
+- **backup-manager (TS)** — `types.ts` adds `Placement` + `Peer`; `config.ts` adds `readPlacement()` (backup.json placement/placementState/pbsStorageName/pushTarget) and `listPeers()` (remote-/external-/push-<n> → pull/receive/push); `main.ts` adds verbs **`placement`** and **`peers`** (+ `--json`), a **shim warning in `validate`**, and a global **`--pbs <host>`** flag; `client.ts` **CliClient is endpoint-agnostic** — constructed with a PBS endpoint, it prefixes every controller call `--pbs <host>` so the same ops drive local or a satellite PBS. `listModules` now also skips `push-` configs.
+- **backup-controller (bash)** — `parse_args` accepts/strips `--pbs <host>`; `pbs_node` is overridden to honor it for PBS-datastore ops (cluster-job pvesh stays local). Full satellite targeting (tunnel FQDN) validates on the cluster.
+- **Verified on cicd:** `nix-build` (tsc **strict** + noUnusedLocals) green; TS unit test **60/0** (14 new placement/peers asserts); live verbs against the shim config — `placement`, `placement --json`, `peers`, `validate` (emits the shim warning), `reconcile --pbs satellite.example` (targets endpoint → offline preview); `backup-controller` test.sh **11/0** and accepts `--pbs`.
+- **Remaining:** **P9** (compromise-isolation test suite, QUICKREF/TEST consolidation doc, ADR Draft → Proposed).

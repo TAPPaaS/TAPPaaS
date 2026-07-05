@@ -54,9 +54,18 @@ function asStringArray(v: unknown): string[] {
 }
 
 export class CliClient implements Client {
+  // ADR-012 P7: endpoint-agnostic. When constructed with a PBS endpoint (e.g. a
+  // satellite tunnel host), every controller call is prefixed `--pbs <endpoint>`
+  // so the SAME operations drive the local or a remote/satellite PBS. Omitted →
+  // the controller acts on the local PBS (unchanged default).
+  constructor(private readonly pbsEndpoint?: string) {}
+  private ep(): string[] {
+    return this.pbsEndpoint ? ["--pbs", this.pbsEndpoint] : [];
+  }
+
   jobStatus(): JobStatus {
     // { reachable, jobId, storage, vmids } — reachable:false when PBS offline.
-    const o = runJson(["job-status"]);
+    const o = runJson([...this.ep(), "job-status"]);
     // The controller always emits a `reachable` boolean; if it is absent the
     // output was empty/unparseable ⇒ treat as offline (defensive).
     const reachable = o.reachable === true;
@@ -70,27 +79,27 @@ export class CliClient implements Client {
 
   listSnapshots(module: string): string[] {
     // { reachable, module, vmid, snapshots: [backup-time, ...] }.
-    const o = runJson(["list", module]);
+    const o = runJson([...this.ep(), "list", module]);
     return asStringArray(o.snapshots);
   }
 
   namespaces(): string[] {
     // { reachable, storage, namespaces: [...] }.
-    const o = runJson(["namespaces"]);
+    const o = runJson([...this.ep(), "namespaces"]);
     return asStringArray(o.namespaces);
   }
 
   verify(module: string): void {
-    run(["verify", module]);
+    run([...this.ep(), "verify", module]);
   }
 
   addToJob(vmid: string, retention?: string): void {
-    const args = ["add-to-job", vmid];
+    const args = [...this.ep(), "add-to-job", vmid];
     if (retention) args.push("--retention", retention);
     run(args);
   }
 
   applySchedule(spec: string): void {
-    run(["apply-schedule", spec]);
+    run([...this.ep(), "apply-schedule", spec]);
   }
 }

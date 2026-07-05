@@ -53,6 +53,27 @@ export interface BackupPolicyStatus extends BackupPolicy {
   inPbsJob: boolean; // module declares dependsOn backup:vm
 }
 
+// ── Placement (ADR-012) — where/whether the local PBS is realized ─────
+// Read from backup.json; the manager surfaces it (validate warns on a shim) so
+// operators can see when backups have no datastore yet.
+export interface Placement {
+  placement: string; // policy: auto | node:<n> | shim | remote-only
+  placementState: string | null; // resolved: local | shim | remote-only (null = legacy/unset)
+  pbsStorageName: string; // datastore / pvesm storage the managed job targets
+  pushTarget: string | null; // remote-only default push target name (or null)
+}
+
+// ── Off-site peer (ADR-012 §3.1) — the symmetric pull / receive / push ─
+// A PBS is simultaneously a pull replicator (remote-<n>), a push receiver
+// (external-<n>), and/or a push sender (push-<n>). listPeers surfaces all three.
+export type PeerRole = "pull" | "receive" | "push";
+export interface Peer {
+  name: string;
+  role: PeerRole; // pull=remote-<n>, receive=external-<n>, push=push-<n>
+  remoteHost: string | null;
+  namespace: string | null;
+}
+
 // ── Client — the backup-controller boundary ───────────────────────────
 // The reconcile/restore logic depends ONLY on this interface; tests inject an
 // in-memory fake, production uses CliClient (spawnSync → `backup-controller`).

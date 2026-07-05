@@ -83,17 +83,38 @@ module_vmid() {
 # {"reachable": false} so the caller never has to scrape a human skip line).
 JSON_OUT=0
 
-# Strip --json from "$@", set JSON_OUT, and store the remaining args in the
-# global REST array. Must run in the CURRENT shell (not a subshell/process
-# substitution) so JSON_OUT propagates — callers do: parse_args "$@".
+# Strip --json (and ADR-012 P7 --pbs <host>) from "$@", set JSON_OUT /
+# PBS_ENDPOINT, and store the remaining args in the global REST array. Must run
+# in the CURRENT shell so the globals propagate — callers do: parse_args "$@".
 REST=()
+PBS_ENDPOINT=""
 parse_args() {
     JSON_OUT=0
+    PBS_ENDPOINT=""
     REST=()
-    local a
-    for a in "$@"; do
-        if [[ "$a" == "--json" ]]; then JSON_OUT=1; else REST+=("$a"); fi
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+            --json) JSON_OUT=1; shift ;;
+            # ADR-012 P7: target a non-local PBS (e.g. a satellite) for datastore
+            # ops. Passed by the TS backup-manager's endpoint-agnostic CliClient.
+            --pbs)  PBS_ENDPOINT="${2:-}"; shift 2 ;;
+            *)      REST+=("$1"); shift ;;
+        esac
     done
+}
+
+# Override pbs_node (from pbs-job.sh) to honor --pbs when set, so PBS datastore
+# ops (namespaces/list/verify) target the chosen endpoint instead of the local
+# node. Cluster-job ops (pvesh) still run on the local mgmt node. NOTE: full
+# satellite targeting (tunnel FQDN specifics) is validated on the 3-node cluster.
+pbs_node() {
+    if [[ -n "${PBS_ENDPOINT}" ]]; then
+        printf '%s\n' "${PBS_ENDPOINT}"
+        return 0
+    fi
+    local n
+    n="$(jq -r '.node // empty' "${PBS_CONFIG_DIR:-/home/tappaas/config}/backup.json" 2>/dev/null)"
+    if [[ -n "$n" ]]; then printf '%s\n' "$n"; else get_node_hostname 0; fi
 }
 
 # Skip-with-exit-0 helper for unreachable PBS (graceful degradation). In --json

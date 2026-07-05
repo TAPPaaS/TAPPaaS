@@ -22,7 +22,7 @@
 
 import { existsSync, readFileSync, readdirSync } from "fs";
 import { join } from "path";
-import { BackupPolicy } from "./types";
+import { BackupPolicy, Peer, PeerRole, Placement } from "./types";
 
 export function defaultConfigDir(): string {
   // The cascade reads the TARGET config root directly (it holds <module>.json,
@@ -122,7 +122,7 @@ export function listModules(configDir: string): string[] {
     if (!f.endsWith(".json")) continue;
     const b = f.slice(0, -".json".length);
     if (NON_MODULES.has(b)) continue;
-    if (b.startsWith("remote-") || b.startsWith("external-")) continue;
+    if (b.startsWith("remote-") || b.startsWith("external-") || b.startsWith("push-")) continue;
     out.push(b);
   }
   return out.sort();
@@ -153,4 +153,46 @@ export function listEnvironments(configDir: string): string[] {
 // Raw environment block (validate reads residency/dataResidency/backup.retention).
 export function environmentRaw(configDir: string, env: string): Record<string, unknown> {
   return asObject(readJson(join(configDir, "environments", `${env}.json`)));
+}
+
+// ── ADR-012: placement + off-site peers ───────────────────────────────
+
+// Read the backup module's placement (ADR-012) from backup.json.
+export function readPlacement(configDir: string): Placement {
+  const b = readJson(join(configDir, "backup.json")) ?? {};
+  return {
+    placement: asString(b.placement) ?? "auto",
+    placementState: asString(b.placementState),
+    pbsStorageName: asString(b.pbsStorageName) ?? "tappaas_backup",
+    pushTarget: asString(b.pushTarget),
+  };
+}
+
+// List off-site peers (ADR-012 §3.1) from the config dir: remote-<n> (pull),
+// external-<n> (receive) and push-<n> (send). Prompt-not-store means these
+// files carry host/namespace only — never credentials.
+export function listPeers(configDir: string): Peer[] {
+  if (!existsSync(configDir)) return [];
+  const prefixes: Array<[string, PeerRole]> = [
+    ["remote-", "pull"],
+    ["external-", "receive"],
+    ["push-", "push"],
+  ];
+  const out: Peer[] = [];
+  for (const f of readdirSync(configDir)) {
+    if (!f.endsWith(".json")) continue;
+    const b = f.slice(0, -".json".length);
+    for (const [prefix, role] of prefixes) {
+      if (!b.startsWith(prefix)) continue;
+      const j = readJson(join(configDir, f)) ?? {};
+      out.push({
+        name: b.slice(prefix.length),
+        role,
+        remoteHost: asString(j.remoteHost),
+        namespace: asString(j.namespace),
+      });
+      break;
+    }
+  }
+  return out.sort((a, b) => a.role.localeCompare(b.role) || a.name.localeCompare(b.name));
 }
