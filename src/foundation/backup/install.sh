@@ -97,7 +97,7 @@ case "${MODE}" in
     warn "No usable 'tankc' pool found (policy ${POLICY}) — installing backup as a SHIM (no PBS datastore)."
     warn "  dependsOn:backup is satisfied so dependent modules still install; promote later with:"
     warn "    update-module.sh backup      (once a tankc pool exists)"
-    info "\n${GN}TAPPaaS backup shim recorded.${CL}"
+    info "${GN}TAPPaaS backup shim recorded.${CL}"
     exit 0
     ;;
   remote-only)
@@ -113,7 +113,7 @@ case "${MODE}" in
       warn "  To enable it: copy services/push/push.json → config/push-<name>.json, edit, set .pushTarget, then:"
       warn "    backup-manage.sh add-push <name> --make-default"
     fi
-    info "\n${GN}TAPPaaS backup remote-only placement recorded.${CL}"
+    info "${GN}TAPPaaS backup remote-only placement recorded.${CL}"
     exit 0
     ;;
   local)
