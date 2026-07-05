@@ -204,6 +204,9 @@ Recorded here to fix later — each **needs a real GitHub issue first** to think
 
 Append-only narrative per package. Add an entry when a package starts, blocks, or completes.
 
+### 2026-07-05 — Fix: DNS test excludes datastore-less backup (shim/remote-only)
+`network/test.sh` "Standard 4: DNS for in-cluster modules" failed on a shim (`✗ DNS cannot resolve backup.mgmt.internal`): a shim has `vmname: backup` but realizes no local host, so it has no DNS record by design (a local backup registers `backup.mgmt.internal → PBS node IP` in install.sh; a shim exits before that and has no IP). Fixed by skipping modules with `placementState` in {`shim`,`remote-only`}, mirroring the existing `aliasType=network` exclusion. Verified live on tappaas1's shim — Standard 4 now excludes backup and resolves identity/logging/network; full network suite 50/0.
+
 ### 2026-07-04 — Planning
 - ADR-012 drafted (symmetric peers, unified credentials, placement policy, bootstrap/promotion, manager/controller tooling); cross-linked with ADR-010; issues #402/#389/#382 annotated.
 - This tracker created. No package started. Branch `ADR007`.

@@ -305,6 +305,7 @@ section "Standard 4: DNS for in-cluster modules"
 # DHCP/DNS record by design, so they must be excluded here (#255).
 sample_modules=""
 network_alias_count=0
+hostless_count=0
 for f in "${CONFIG_DIR}"/*.json; do
     vmname=$(jq -r '.vmname // empty' "${f}" 2>/dev/null)
     [[ -z "${vmname}" ]] && continue
@@ -313,12 +314,24 @@ for f in "${CONFIG_DIR}"/*.json; do
         network_alias_count=$((network_alias_count + 1))
         continue
     fi
+    # ADR-012: a datastore-less backup (placementState shim / remote-only)
+    # realizes no local host, so it has no <vmname> DNS record by design —
+    # exclude it, mirroring the aliasType=network exclusion above.
+    placement_state=$(jq -r '.placementState // empty' "${f}" 2>/dev/null)
+    if [[ "${placement_state}" == "shim" || "${placement_state}" == "remote-only" ]]; then
+        hostless_count=$((hostless_count + 1))
+        continue
+    fi
     sample_modules+="${vmname}"$'\n'
 done
 sample_modules=$(printf '%s' "${sample_modules}" | sort -u | head -3)
 
 if [[ "${network_alias_count}" -gt 0 ]]; then
     skip "${network_alias_count} module(s) excluded — aliasType=network has no DNS record by design"
+fi
+
+if [[ "${hostless_count}" -gt 0 ]]; then
+    skip "${hostless_count} module(s) excluded — datastore-less backup (shim/remote-only) has no DNS record by design"
 fi
 
 if [[ -z "${sample_modules}" ]]; then
