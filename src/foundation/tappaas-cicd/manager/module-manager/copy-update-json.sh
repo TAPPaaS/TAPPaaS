@@ -278,10 +278,10 @@ main() {
         # provider name) finds them.
         if [[ "${environment}" == "mgmt" || ( -n "${default_env}" && "${environment}" == "${default_env}" ) ]]; then
             effective_module="${module}"
-            info "Environment mode: ${module} → ${effective_module} (no suffix; environment '${environment}')"
+            debug "Environment mode: ${module} → ${effective_module} (no suffix; environment '${environment}')"
         else
             effective_module="${module}-${environment}"
-            info "Environment mode: ${module} → ${effective_module} (environment '${environment}')"
+            debug "Environment mode: ${module} → ${effective_module} (environment '${environment}')"
         fi
     fi
 
@@ -306,7 +306,7 @@ main() {
     mkdir -p "${CONFIG_DIR}"
 
     # Copy the file
-    info "Copying ${source_json} to ${dest_json}"
+    debug "Copying ${source_json} to ${dest_json}"
     cp "${source_json}" "${dest_json}"
 
     # Internal pipeline (#207): work on the flat representation throughout this
@@ -316,7 +316,7 @@ main() {
     # block, flatten it up to top now.
     if declare -F normalize_module_config >/dev/null 2>&1 \
        && jq -e '(.config | type) == "object"' "${dest_json}" >/dev/null 2>&1; then
-        info "  Flattening Pattern-A config block for internal processing"
+        debug "  Ungrouping the config{} blocks back to flat fields for processing (Pattern A)"
         local norm_tmp
         norm_tmp=$(mktemp)
         if normalize_module_config < "${dest_json}" > "${norm_tmp}" && jq empty "${norm_tmp}" 2>/dev/null; then
@@ -332,7 +332,7 @@ main() {
     local source_meta="./${module}.meta.json"
     if [[ -f "${source_meta}" ]]; then
         local dest_meta="${CONFIG_DIR}/${effective_module}.meta.json"
-        info "Copying ${source_meta} to ${dest_meta}"
+        debug "Copying ${source_meta} to ${dest_meta}"
         cp "${source_meta}" "${dest_meta}"
     fi
 
@@ -354,11 +354,11 @@ main() {
         die "Failed to set auto-populated fields"
     fi
     mv "${tmp_file}" "${dest_json}"
-    info "  Set location = ${module_dir}"
-    info "  Set installTime = ${install_time}"
+    debug "  Set location = ${module_dir}"
+    debug "  Set installTime = ${install_time}"
     # Check if releaseDate was auto-populated
     if ! jq -e '.releaseDate' "${source_json}" >/dev/null 2>&1; then
-        info "  Set releaseDate = ${release_date} (auto-populated)"
+        debug "  Set releaseDate = ${release_date} (auto-populated)"
     fi
 
     # Persist the environment on the installed config (ADR-007 P5) so
@@ -380,7 +380,7 @@ main() {
         fi
         if jq --arg e "${environment}" "${_persist_expr}" "${dest_json}" > "${tmp_file}"; then
             mv "${tmp_file}" "${dest_json}"
-            info "  Persisted environment = ${environment}"
+            debug "  Persisted environment = ${environment}"
         else
             rm -f "${tmp_file}"
             warn "  Could not persist environment field"
@@ -436,7 +436,7 @@ main() {
                 # canonical on-disk Pattern A shape (#264).
                 local dest_hint
                 dest_hint=$(field_destination "${field}" "${dest_json}")
-                info "  Set ${field} = ${value} → ${dest_hint}"
+                debug "  Set ${field} = ${value} → ${dest_hint}"
                 has_modifications=true
                 ;;
             *)
@@ -448,7 +448,7 @@ main() {
     # Create .orig backup if modifications were made
     if [[ "${has_modifications}" == "true" ]]; then
         if [[ ! -f "${orig_json}" ]]; then
-            info "Creating backup: ${orig_json}"
+            debug "Creating backup: ${orig_json}"
             cp "${source_json}" "${orig_json}"
         fi
     fi
@@ -480,7 +480,7 @@ main() {
         [[ -f "$_cv" ]] && { convert_cli="$_cv"; break; }
     done
     if [[ -n "${convert_cli}" ]]; then
-        info "  Rendering canonical Pattern A on disk (#207)"
+        debug "  Grouping fields into per-service config{} blocks in canonical field order (Pattern A, #207)"
         local pa_tmp
         pa_tmp=$(mktemp)
         if "${convert_cli}" "${dest_json}" > "${pa_tmp}" 2>/dev/null && jq empty "${pa_tmp}" 2>/dev/null; then
@@ -498,7 +498,7 @@ main() {
         die "Resulting JSON is invalid: ${dest_json}"
     fi
 
-    info "Successfully created ${dest_json}"
+    debug "Successfully created ${dest_json}"
 }
 
 main "$@"

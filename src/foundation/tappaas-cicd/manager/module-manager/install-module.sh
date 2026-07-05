@@ -297,7 +297,6 @@ main() {
     variant=""
 
     # ── Step 0: Classify tier/source and resolve the target environment ──
-    echo ""
     info "${BOLD}Step 0: Classify (tier/source) and resolve environment${CL}"
 
     # Locate the module SOURCE. The current directory wins (back-compat: run from
@@ -399,7 +398,6 @@ main() {
     info "  effective module name = ${BL}${effective_module}${CL}; vmname = ${BL}${computed_vmname}${CL}"
 
     # ── Step 1: Check module not already installed ───────────────────
-    echo ""
     info "${BOLD}Step 1: Check module not already installed${CL}"
 
     # The installed-marker is the config JSON in CONFIG_DIR, which Step 2
@@ -431,7 +429,6 @@ main() {
     fi
 
     # ── Step 2: Copy JSON config and validate ────────────────────────
-    echo ""
     info "${BOLD}Step 2: Copy and validate module configuration${CL}"
 
     # Build the copy-update-json argument vector. When an environment is
@@ -456,7 +453,7 @@ main() {
     # Use effective module name reported by copy-update-json (authoritative).
     effective_module="${EFFECTIVE_MODULE:-${effective_module}}"
     if [[ "${effective_module}" != "${module}" ]]; then
-        info "Environment active: effective module name is ${BL}${effective_module}${CL}"
+        debug "Environment active: effective module name is ${BL}${effective_module}${CL}"
     fi
 
     check_json "${CONFIG_DIR}/${effective_module}.json" || die "JSON validation failed for ${effective_module}"
@@ -485,7 +482,7 @@ main() {
     if [[ -z "$zone0" && -n "${environment}" ]]; then
         zone0="$(resolve_zone_for_environment "${environment}")"
         if [[ -n "$zone0" ]]; then
-            info "  zone0 not set — using environment '${environment}' zone ${BL}${zone0}${CL}"
+            debug "  zone0 not set — using environment '${environment}' zone ${BL}${zone0}${CL}"
             local _ztmp
             _ztmp="$(mktemp "${module_json}.XXXXXX")"
             jq --arg z "$zone0" '.zone0 = $z' "${module_json}" > "${_ztmp}" \
@@ -495,7 +492,7 @@ main() {
     fi
     if [[ -z "$zone0" ]]; then
         zone0="$(resolve_default_zone)"
-        info "  zone0 not set — defaulting to ${BL}${zone0}${CL}"
+        debug "  zone0 not set — defaulting to ${BL}${zone0}${CL}"
         local _ztmp
         _ztmp="$(mktemp "${module_json}.XXXXXX")"
         jq --arg z "$zone0" '.zone0 = $z' "${module_json}" > "${_ztmp}" \
@@ -554,7 +551,6 @@ main() {
     [[ -n "${vmname_check}" ]] && validate_module_alias_name "${vmname_check}"
 
     # ── Step 3: Validate dependencies ────────────────────────────────
-    echo ""
     info "${BOLD}Step 3: Validate dependencies${CL}"
 
     local depends_on
@@ -569,7 +565,7 @@ main() {
 
     local dep_errors=0
     if [[ -z "${depends_on}" ]]; then
-        info "  No dependencies declared"
+        debug "  No dependencies declared"
     else
         for dep in ${depends_on}; do
             if check_service_available "${dep}" "install-service.sh" "${variant}"; then
@@ -585,7 +581,6 @@ main() {
     fi
 
     # ── Step 4: Validate provided services ───────────────────────────
-    echo ""
     info "${BOLD}Step 4: Validate service scripts${CL}"
 
     local module_dir
@@ -602,16 +597,15 @@ main() {
         info "  Module does not provide any services"
     else
         for svc in ${provides}; do
-            info "  ${GN}✓${CL} provides: ${svc}"
+            debug "  ${GN}✓${CL} provides: ${svc}"
         done
     fi
 
     # ── Step 5: Call dependency install-service.sh scripts ───────────
-    echo ""
     info "${BOLD}Step 5: Call dependency service installers${CL}"
 
     if [[ -z "${depends_on}" ]]; then
-        info "  No dependency services to call"
+        debug "  No dependency services to call"
     else
         for dep in ${depends_on}; do
             # Resolve the provider honoring variant preference, identically to the
@@ -633,11 +627,10 @@ main() {
     fi
 
     # ── Step 6: Call the module's own install.sh ─────────────────────
-    echo ""
     info "${BOLD}Step 6: Run module install.sh${CL}"
 
     if [[ -x "./install.sh" ]]; then
-        info "  Running ${module}/install.sh for '${effective_module}'..."
+        debug "  Running ${module}/install.sh for '${effective_module}'..."
         # F4: tee the installer's combined output to a logfile while still
         # streaming it live, so a Step-6 failure is never silent. Some module
         # installers buffer or lose their output when they fail fast (this made
@@ -660,7 +653,6 @@ main() {
     fi
 
     # ── Done ─────────────────────────────────────────────────────────
-    echo ""
     info "${GN}${BOLD}╔══════════════════════════════════════════════╗${CL}"
     info "${GN}${BOLD}║  Module '${effective_module}' installed successfully     ${CL}"
     info "${GN}${BOLD}╚══════════════════════════════════════════════╝${CL}"

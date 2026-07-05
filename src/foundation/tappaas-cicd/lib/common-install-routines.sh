@@ -619,7 +619,7 @@ validate_zone_active() {
     # torn down) — provisioning there would leave the module without a network.
     case "$state" in
         Active|Manual|Mandatory)
-            info "  ${GN}✓${CL} Zone '${zone}' is ${state} (deployable)"
+            debug "  ${GN}✓${CL} Zone '${zone}' is ${state} (deployable)"
             return 0
             ;;
     esac
