@@ -133,7 +133,16 @@ wait_cicd_ssh() { # wait_cicd_ssh <vmid> [max_wait_s]
   while (( waited < max )); do
     ip="$(cicd_resolve_ip "$vmid" || true)"
     if [[ -n "$ip" ]]; then
-      CICD_IP="$ip"
+      if [[ "$ip" != "$CICD_IP" ]]; then
+        # This is a FRESHLY CREATED VM at a possibly REUSED DHCP IP: a previous
+        # install's cicd host key for the same IP makes accept-new REJECT the
+        # connection (silently — stderr is swallowed below), spinning this loop
+        # to timeout. Drop any stale known_hosts entry for the IP once;
+        # accept-new then pins the new VM's key. (uninstall.sh's known_hosts
+        # scrub is hostname-keyed and cannot enumerate past DHCP IPs.)
+        ssh-keygen -R "$ip" >/dev/null 2>&1 || true
+        CICD_IP="$ip"
+      fi
       if cicd_ssh true 2>/dev/null; then
         info "  cicd reachable at ${BL}${CICD_IP}${CL} (ssh tappaas@ ok)"
         return 0
