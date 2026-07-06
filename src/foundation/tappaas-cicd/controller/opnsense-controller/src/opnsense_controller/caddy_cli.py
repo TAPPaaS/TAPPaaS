@@ -7,6 +7,7 @@ domains and handlers on OPNsense.
 
 import argparse
 import sys
+import time
 from urllib.parse import urlparse
 
 from .caddy_manager import CaddyDomain, CaddyHandler, CaddyManager
@@ -129,8 +130,20 @@ def add_handler(
     Returns:
         True if successful.
     """
-    # Find the domain UUID
-    domain_info = manager.get_domain_by_name(domain_name)
+    # Find the domain UUID. Retry: a domain/access-list created moments earlier
+    # (same installer run, separate CLI invocation) can lag the OPNsense search
+    # API — seen on a virgin install, where the freshly created access list was
+    # "not found" by the immediately following handler creation.
+    def _lookup_with_retry(fn, name, attempts=4, delay=2.0):
+        item = fn(name)
+        for _ in range(attempts - 1):
+            if item:
+                return item
+            time.sleep(delay)
+            item = fn(name)
+        return item
+
+    domain_info = _lookup_with_retry(manager.get_domain_by_name, domain_name)
     if not domain_info:
         print(f"ERROR: Domain '{domain_name}' not found. Add it first.", file=sys.stderr)
         return False
@@ -138,7 +151,7 @@ def add_handler(
     # Resolve the access-list name to a UUID, if requested.
     access_list_uuid = ""
     if access_list:
-        al = manager.get_access_list_by_name(access_list)
+        al = _lookup_with_retry(manager.get_access_list_by_name, access_list)
         if not al:
             print(f"ERROR: Access list '{access_list}' not found. Add it first.", file=sys.stderr)
             return False

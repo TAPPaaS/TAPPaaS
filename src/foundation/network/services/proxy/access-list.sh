@@ -34,7 +34,13 @@ run_caddy() {
         return "${_rc}"
     fi
     if [[ -n "${_out}" ]]; then
-        while IFS= read -r _cl; do debug "  ${_cl}"; done <<<"${_out}"
+        # >&2 is LOAD-BEARING: this file's callers command-substitute the
+        # resolved access-list name from stdout, and debug() prints to stdout —
+        # without the redirect, TAPPAAS_DEBUG=1 leaks these lines INTO the
+        # captured name, and the handler creation then fails with
+        # "Access list '<multiline garbage>' not found" (broke the logging
+        # module's proxy on the ADR-007 virgin-install test).
+        while IFS= read -r _cl; do debug "  ${_cl}"; done <<<"${_out}" >&2
     fi
     return 0
 }

@@ -47,6 +47,15 @@ install_one() {
     warn "  ${dir}/${m}.json not found — skipping ${m}"
     return 0
   fi
+  # Already installed (deployed config exists)? SKIP — install-module.sh's
+  # single-instance guard refuses a re-install, so without this check a re-run
+  # of this "idempotent" script failed on every module that succeeded before.
+  # (A half-installed module — VM up but a service step failed — is repaired
+  # with `update-module.sh <m>`, which re-runs the dependency service installers.)
+  if [[ -f "${CONFIG_DIR:-/home/tappaas/config}/${m}.json" ]]; then
+    info "  ${m} already installed — skipping (repair/refresh via update-module.sh ${m})"
+    return 0
+  fi
   # Foundation modules live in the mgmt environment — pass it explicitly (the
   # tier:foundation default resolves to mgmt too, but be explicit + self-documenting).
   ( cd "$dir" && install-module.sh "$m" --environment mgmt ) || { error "  install of ${m} failed"; return 1; }
@@ -86,6 +95,21 @@ if [[ " ${FAILED[*]} " != *" identity "* ]]; then
       info "${BOLD}── People bootstrap (ADR-007): org=${inst_org} user=${inst_user} ──${CL}"
       if user-setup.sh --org "$inst_org" --user "$inst_user" --email "$inst_email"; then
         people-manager reconcile --apply || warn "  people-manager reconcile reported issues — review the output above."
+        # Backfill the bootstrap environments' ownerOrg NOW that the org exists.
+        # create-minimal-environments.sh runs before any organization can exist,
+        # so it leaves ownerOrg empty — which fails the environment schema until
+        # someone closes the gap (found by the ADR-007 refactor's deep gate:
+        # environments stayed invalid forever). This is the moment the reference
+        # becomes satisfiable, so close it here via the manager verb.
+        for _envf in "${CONFIG_DIR:-/home/tappaas/config}/environments/"*.json; do
+          [[ -f "$_envf" ]] || continue
+          if [[ -z "$(jq -r '.ownerOrg // empty' "$_envf")" ]]; then
+            _envn="$(basename "$_envf" .json)"
+            info "  backfilling ownerOrg=${inst_org} on bootstrap environment '${_envn}'"
+            environment-manager modify "$_envn" --owner "$inst_org" \
+              || warn "  environment-manager modify ${_envn} --owner failed — fix by hand (environment-manager validate will flag it)"
+          fi
+        done
       else
         warn "  user-setup.sh failed — people bootstrap skipped (re-run rest-of-foundation.sh)."
       fi
