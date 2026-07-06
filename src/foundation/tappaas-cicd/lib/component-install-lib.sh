@@ -29,11 +29,21 @@ build_and_link_nix_component() {
     local gcroots="${TAPPAAS_GCROOTS:-${HOME}/.tappaas-gcroots}"
     mkdir -p "${bin}" "${gcroots}"
     echo "  building ${name} (nix-build)..."
-    local out
-    out="$(cd "${dir}" && nix-build -A default default.nix --out-link "${gcroots}/${name}")" || {
-        echo "  ERROR: nix-build failed for ${name}" >&2
+    # nix-build prints the store path on stdout (captured into $out) and the
+    # BUILD LOG on stderr — dot-per-line it to the terminal (house style) and
+    # keep the full log for post-mortem. The dot filter writes to fd 2 so the
+    # captured stdout stays exactly the store path.
+    local out log="/tmp/tappaas-build-${name}.log"
+    out="$(
+        cd "${dir}" && nix-build -A default default.nix --out-link "${gcroots}/${name}" \
+            2> >(tee "${log}" | while IFS= read -r _; do printf '.' >&2; done)
+    )" || {
+        echo "" >&2
+        echo "  ERROR: nix-build failed for ${name} — log tail (full log: ${log}):" >&2
+        tail -8 "${log}" >&2 2>/dev/null || true
         return 1
     }
+    echo "" >&2
     local t
     for t in "${tools[@]}"; do
         if [ -e "${out}/bin/${t}" ]; then

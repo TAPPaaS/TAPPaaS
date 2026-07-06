@@ -173,13 +173,17 @@ fi
 # the zone-key migration — because the migration's Stage 5 (network:proxy
 # update-service per affected module) needs the caddy patch to write
 # underscored upstreams without OPNsense validation failures.
+# NON-FATAL by design: ensure-patches returns non-zero when a patch step had
+# issues, and under `set -e` + `pipefail` a bare failing pipeline would abort
+# this WHOLE script (the zones-check pitfall) — the trailing `|| warn` keeps
+# a firewall-patch hiccup from killing the update.
 if command -v opnsense-ensure-patches >/dev/null 2>&1; then
   opnsense-ensure-patches 2>&1 | while IFS= read -r _l; do
     case "$_l" in
       *'[Warning]'*|*'[Error]'*|*✓*) printf '%s\n' "$_l" ;;
       *) debug "  $_l" ;;
     esac
-  done
+  done || warn "  opnsense-ensure-patches reported issues — continuing (retried next cycle)"
 else
   warn "opnsense-ensure-patches not on PATH yet — skipping firewall patch ensure this run."
 fi

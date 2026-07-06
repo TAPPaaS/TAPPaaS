@@ -376,6 +376,26 @@ migration. Revisit after Phase 6 if still wanted.
 - [x] 6.5 Thin `validate.sh` wrappers added to environment/module/site managers (exec the domain-named script, mirroring backup-manager's shape) — the P10 "managers ship validate.sh" contract now holds for all 8.
 - Gate 2026-07-06: all six touched manager suites green after one test-fixture fix (the new queries.test.ts probed "no-such-org", which the fixture's dangling-parent org legitimately references — probe renamed); backup units 66/0; fast module gate green.
 
+### Phase 7 — bash→TS retire phase (PROPOSED, not started; caller precheck done 2026-07-06)
+
+The ADR-007 "thin delegation until the retire phase" bash scripts were
+inventoried repo-wide (34 domain scripts across the 7 TS managers; every
+caller verified line-by-line, comment-only refs excluded). Classification:
+**14 SAFE-TO-ABSORB** (no caller outside their own manager), **17 SHARED**
+(installer / other foundation modules / satellite / test suites / migration
+scripts), **3 OPERATOR-FACING** (runbook commands: module-format.sh,
+snapshot-vm.sh, test-module.sh). Every retirement must also update the
+`~/bin` presence list in tappaas-cicd/test.sh (Test 1) and drop the
+component install.sh symlink line.
+
+Proposed order (each its own test-gated step):
+- [ ] 7.1 Free retirements — TS ports already exist, bash has zero external callers: validate-module.sh, check-backup-status.sh, inspect-cluster.sh, check-disk-threshold.sh (+ delete the migrate-configuration-to-site.sh duplicate and validate-configuration.sh with the legacy config path).
+- [ ] 7.2 Bycatch cleanup: dead `scripts/zone-controller.sh` guards in install.sh:193 + pre-update.sh:125; stale scripts/test/test-zone-state.sh + test-convert-to-config.sh (source nonexistent paths).
+- [ ] 7.3 Single-caller ports: reconcile-module.sh (217 LOC), inspect-vm.sh (357 — share the three-way diff with health inspect.ts via lib/ts), validate-environment.sh (252).
+- [ ] 7.4 Backup quartet (backup-restore/validate-backup/lib-cascade ~300 LOC; TS already native) — prerequisite: rewire health checks.ts off `backup-status.sh`, and the two backup-manager.sh fallback call sites (install-module.sh:513, check-backup-status.sh:27).
+- [ ] 7.5 zone-controller.sh (1 real caller: network/test-variant-public.sh — repoint to `network-manager zone add/delete`), zone-state.sh (fix the common-install-routines hint text).
+- [ ] NO-GO for now (revisit per script with its own migration plan): update-os.sh (every VM update via templates' update-service.sh), install/update/delete-module.sh, copy-update-json.sh, convert-json-to-config.sh (hard dep of common-install-routines.sh), repository.sh (969 LOC), create-site.sh / create-minimal-environments.sh / user-setup.sh / migrate-configuration.sh (installer + migration paths), snapshot-vm.sh / test-module.sh / module-format.sh (operator-facing).
+
 ### Parked (D6 — needs its own design discussion)
 
 - F12: Proxmox-plane access from health/module/network managers vs extending

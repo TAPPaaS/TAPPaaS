@@ -56,14 +56,22 @@ fi
 rc=0
 
 # ── 2. os-caddy ToDomain underscore patch (#237) ───────────────────────
+# Skip cleanly when the os-caddy plugin isn't installed yet — on a FRESH
+# install this runs before setup-caddy.sh, so the plugin (and Caddy.xml the
+# patch edits) legitimately doesn't exist; setup-caddy.sh applies the patch
+# itself right after installing the plugin.
 if [ -f "${PATCH_DIR}/apply-caddy-isdnsname.sh" ]; then
-    info "  ensuring os-caddy ToDomain underscore patch..."
-    if scp -q "${PATCH_DIR}/apply-caddy-isdnsname.sh" root@"${FIREWALL_FQDN}":/tmp/apply-caddy-isdnsname.sh \
-        && ssh root@"${FIREWALL_FQDN}" 'sh /tmp/apply-caddy-isdnsname.sh' >/dev/null 2>&1; then
-        info "  ${GN}✓${CL} os-caddy patch ensured"
+    if ! ssh root@"${FIREWALL_FQDN}" "/bin/sh -c 'pkg info os-caddy'" >/dev/null 2>&1; then
+        info "  os-caddy not installed yet (setup-caddy.sh installs + patches it) — skipping caddy patch"
     else
-        warn "  os-caddy patch reported an error — continuing"
-        rc=1
+        info "  ensuring os-caddy ToDomain underscore patch..."
+        if scp -q "${PATCH_DIR}/apply-caddy-isdnsname.sh" root@"${FIREWALL_FQDN}":/tmp/apply-caddy-isdnsname.sh \
+            && ssh root@"${FIREWALL_FQDN}" 'sh /tmp/apply-caddy-isdnsname.sh' >/dev/null 2>&1; then
+            info "  ${GN}✓${CL} os-caddy patch ensured"
+        else
+            warn "  os-caddy patch reported an error — continuing"
+            rc=1
+        fi
     fi
 fi
 
