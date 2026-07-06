@@ -200,7 +200,61 @@ joins the cluster, registers itself, and the next update folds HA.
 | N3 provisioner + DHCP verb | M–L (new controller + opnsense verb) | the #404 core | PXE-boot a scratch box/VM |
 | N4 first-boot join | M (answer-file plumbing) | hands-free | wipe + full auto-standup of node 2 |
 
-## 7. Open decision points
+## 7. V-2 execution plan — hardware validation on the Minisforum MS-S1 Max
+
+The operator has an MS-S1 Max available as the PXE guinea pig for joining
+the test cluster. Ordered plan (each step gates the next):
+
+1. **NIC reality check (do this FIRST — it can sink the whole plan).** The
+   fleet's Minisforum boxes need `setup-realtek-nic.sh` (r8127 DKMS) on the
+   *installed* system — and the PVE **installer** kernel may not drive that
+   NIC either. On the MS-S1 Max, check which port will carry mgmt/PXE: if it
+   only has the Realtek 5GbE ports, verify the PVE 9 installer detects them
+   (boot the stock ISO once, check the network step); if it also has Intel
+   10GbE, prefer that port for provisioning. If the installer lacks the
+   driver, PXE-provisioning this box needs a custom-initrd detour — record
+   the finding and stop; the flow still works for Intel-NIC hardware.
+2. **N2 media dry-run (V-4, no PXE needed):** build the preconfigured ISO on
+   tappaas1 (`apt install proxmox-auto-install-assistant`, then
+   `make-install-media.sh --iso proxmox-ve_9.x.iso ...`) — `validate-answer`
+   passing pins the answer schema (V-2 #5) for the deployed PVE version.
+   Optionally USB-install the MS-S1 from it once: that validates the whole
+   answer-file mechanism independent of netboot.
+3. **Assets + fetch-mode ISO (V-2 #1, #3):** on tappaas1, prepare a
+   fetch-from-http ISO (`prepare-iso --fetch-from http --url
+   http://<cicd-mgmt-ip>:8090/answer`), copy it to cicd, run
+   `node-provisioner prepare --iso <it>` — validates the loop-mount/extract
+   recipe against the real ISO layout.
+4. **Registration + service:** `node-provisioner register tappaas4 --mac
+   <MS-S1 mgmt MAC> --pool 'tanka1=single:<disk>'`, then `node-provisioner
+   enable --ttl 7200` — verify `dhcp-manager pxe status` (rc 0), the units
+   (`node-provisioner status`), and that `curl http://<cicd>:8090/boot.ipxe`
+   serves the script.
+5. **The boot (V-2 #2, #4, #6):** PXE-boot the MS-S1 (BIOS boot menu). Watch
+   for: DHCP offer carries next-server (option-175 chainload accepted?),
+   iPXE loads kernel/initrd, installer starts in auto mode, POSTs system
+   info (confirm the JSON shape in `serve`'s log — V-2 #4), fetches the
+   answer, installs unattended.
+6. **Post-install:** confirm root ssh-key access (cicd + tappaas1 keys),
+   run the join (`install.sh --join` — manual this round; N4 automates it),
+   then on cicd `update-tappaas --force` → Phase 0.5 captures tappaas4 WITH
+   its pools; `site-manager node list` shows it; deep suites green.
+7. **Teardown of the trap:** `node-provisioner disable` (or let the TTL
+   fire) — `dhcp-manager pxe status` must report disabled.
+
+Record every deviation in this doc's V-2 list; N4 (first-boot auto-join)
+is built only after 1–7 pass.
+
+## 8. Regression tests (coded, run under `TAPPAAS_TEST_DEEP=1`)
+
+| Suite | Deep test | Guards |
+|---|---|---|
+| `manager/site-manager/test.sh` | live `node reconcile` preview: must run, cluster must be reachable, plan must be EMPTY | node/pool capture stays converged (N1); F12 read path works |
+| `controller/opnsense-controller/test.sh` | `dhcp-manager pxe` enable→status→disable→status round-trip against the live firewall (skips if PXE already enabled; self-cleaning) | the dnsmasq dhcp_boot verbs (N3) |
+| `controller/node-provisioner/test.sh` | localhost E2E: register (zztest MAC) → `serve` → POST system-info → 200 + answer.toml → second POST 404 → cleanup | the answer server, MAC matching and one-shot consume (N3) |
+| (existing) module deep suites | full update cycle incl. update-tappaas Phase 0.5 | capture wired into the update path |
+
+## 9. Open decision points
 
 - D-1: N2 media — bake in the four operator answers vs interactive-on-media.
 - D-2: N4 capture — push from the new node vs next-update-cycle pull.

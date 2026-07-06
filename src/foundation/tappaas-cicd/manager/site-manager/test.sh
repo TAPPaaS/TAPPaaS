@@ -157,7 +157,31 @@ JSON
 if run_validate "$BAD2"; then bad "site.json with extra field wrongly passed"; else ok "site.json with extra field correctly fails"; fi
 
 if [[ "${TAPPAAS_TEST_DEEP:-0}" == "1" ]]; then
-    echo "== DEEP tests: none for site-manager (S3a is all fast) =="
+    echo "== DEEP: live node-inventory reconcile (read-only preview; N1 regression) =="
+    # Regression guard for docs/design/node-provisioning.md N1: the site's
+    # node inventory (names + storagePools) must stay converged with the live
+    # cluster. A pending register-node/update-node-pools action here means a
+    # node joined (or grew pools) without being captured — update-tappaas
+    # Phase 0.5 should have applied it. Read-only: preview never writes.
+    if command -v site-manager >/dev/null 2>&1 && [[ -f "${TAPPAAS_CONFIG:-/home/tappaas/config}/site.json" ]]; then
+        if _nr_out="$(site-manager node reconcile 2>&1)"; then
+            ok "node reconcile preview runs against the live cluster"
+            if grep -qE "register-node|update-node-pools" <<<"${_nr_out}"; then
+                bad "node inventory NOT converged — run 'site-manager node reconcile --apply' (drift: $(grep -oE '(register-node|update-node-pools): [^(]*' <<<"${_nr_out}" | head -1))"
+            else
+                ok "node inventory converged (no pending register/pool actions)"
+            fi
+            if grep -q "cluster unreachable" <<<"${_nr_out}"; then
+                bad "cluster unreachable from site-manager (F12 read path broken?)"
+            else
+                ok "live cluster reachable via the F12 read path"
+            fi
+        else
+            bad "site-manager node reconcile preview failed"
+        fi
+    else
+        echo "  SKIP: no live site.json / site-manager bin (not on a mothership)"
+    fi
 fi
 
 echo ""

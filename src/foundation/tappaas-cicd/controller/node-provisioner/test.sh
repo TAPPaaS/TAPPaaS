@@ -32,3 +32,51 @@ fi
 
 echo "== unit tests (python -m unittest) =="
 PYTHONPATH="${here}/src" "${py}" -m unittest discover -s "${here}/src/test" -v
+
+# ── DEEP: register → serve → answer → one-shot consume (localhost E2E) ──
+# Exercises the real HTTP layer end-to-end with no PXE client: a pending
+# registration must answer exactly once for its MAC and 404 afterwards.
+# Self-contained: temp config dir, high port, server killed on exit.
+if [ "${TAPPAAS_TEST_DEEP:-0}" = "1" ]; then
+    echo "== DEEP: answer-server E2E (localhost) =="
+    _np_bin="$(command -v node-provisioner || true)"
+    if [ -n "${_np_bin}" ]; then
+        _np_tmp="$(mktemp -d)"
+        _np_port=18090
+        _np_rc=0
+        (
+            set -e
+            export TAPPAAS_CONFIG="${_np_tmp}/config"
+            export TAPPAAS_NODE_SECRETS="${_np_tmp}/secrets"
+            # serve refuses to start without staged PXE assets — stub the dir
+            # (the E2E exercises the ANSWER path, not the netboot assets).
+            export TAPPAAS_PXE_DIR="${_np_tmp}/pxe"
+            mkdir -p "${TAPPAAS_CONFIG}" "${TAPPAAS_PXE_DIR}"
+            printf '#!ipxe\n' > "${TAPPAAS_PXE_DIR}/boot.ipxe"
+            # serve renders answers against site.json — seed a minimal one.
+            printf '{"name":"zztest","hardware":{"nodes":[]},"repositories":[]}' > "${TAPPAAS_CONFIG}/site.json"
+            "${_np_bin}" register zztest-node --mac de:ad:be:ef:99:01 --pool 'tanka1=single:nvme0n1'
+            "${_np_bin}" serve --port "${_np_port}" >"${_np_tmp}/serve.log" 2>&1 &
+            _srv=$!
+            trap 'kill "${_srv}" 2>/dev/null || true' EXIT
+            # Wait for the port (up to 10s) instead of a blind sleep.
+            for _i in $(seq 1 20); do
+                curl -s -o /dev/null "http://127.0.0.1:${_np_port}/" && break
+                kill -0 "${_srv}" 2>/dev/null || { echo "[Error] serve died at startup:"; cat "${_np_tmp}/serve.log"; exit 1; } >&2
+                sleep 0.5
+            done
+            _payload='{"network_interfaces":[{"mac":"de:ad:be:ef:99:01"}],"dmi":{"system":{"serial":"ZZTEST"}}}'
+            _code="$(curl -s -o "${_np_tmp}/answer.toml" -w '%{http_code}' -X POST -d "${_payload}" "http://127.0.0.1:${_np_port}/answer")"
+            [ "${_code}" = "200" ] || { echo "[Error] answer POST returned ${_code}" >&2; exit 1; }
+            grep -q 'zztest-node' "${_np_tmp}/answer.toml" || { echo "[Error] answer.toml lacks the node fqdn" >&2; exit 1; }
+            echo "  ok: matched MAC → 200 + answer.toml with node identity"
+            _code2="$(curl -s -o /dev/null -w '%{http_code}' -X POST -d "${_payload}" "http://127.0.0.1:${_np_port}/answer")"
+            [ "${_code2}" = "404" ] || { echo "[Error] second POST returned ${_code2} (expected 404 — one-shot broken)" >&2; exit 1; }
+            echo "  ok: registration consumed (second request 404)"
+        ) || { _np_rc=1; echo "--- serve.log ---" >&2; cat "${_np_tmp}/serve.log" >&2 2>/dev/null || true; }
+        rm -rf "${_np_tmp}"
+        [ "${_np_rc}" = "0" ] || exit 1
+    else
+        echo "  SKIP: node-provisioner not installed"
+    fi
+fi
