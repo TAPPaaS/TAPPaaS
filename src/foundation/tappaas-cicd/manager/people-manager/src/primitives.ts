@@ -8,21 +8,24 @@
 // list-* verbs emit JSON to stdout (NO --json flag); mutating verbs emit a
 // status line we ignore. A non-zero exit (or unreachable Authentik) throws.
 
-import { spawnSync } from "child_process";
+import { captureResult } from "../../../lib/ts/src/exec";
 import { AkNamed, AkUser, PrimitiveClient } from "./types";
 
 export class AuthentikUnreachable extends Error {}
 
 const BIN = process.env.AUTHENTIK_MANAGER_BIN ?? "authentik-manager";
 
+// Thin wrapper over the shared exec helper: a spawn FAILURE (binary missing /
+// not executable) must throw AuthentikUnreachable (cmdSync catches it and
+// die()s with "Authentik unreachable: …"), while a non-zero EXIT stays a
+// generic Error — captureResult's ran/rc split preserves that distinction.
 function run(args: string[]): string {
-  const r = spawnSync(BIN, args, { encoding: "utf8", maxBuffer: 64 * 1024 * 1024 });
-  if (r.error) {
-    throw new AuthentikUnreachable(`${BIN} ${args[0]}: ${r.error.message}`);
+  const r = captureResult(BIN, args);
+  if (!r.ran) {
+    throw new AuthentikUnreachable(`${BIN} ${args[0]}: ${r.stderr}`);
   }
-  if (r.status !== 0) {
-    const stderr = (r.stderr ?? "").trim();
-    throw new Error(`${BIN} ${args.join(" ")} failed (exit ${r.status}): ${stderr}`);
+  if (r.rc !== 0) {
+    throw new Error(`${BIN} ${args.join(" ")} failed (exit ${r.rc}): ${r.stderr.trim()}`);
   }
   return r.stdout;
 }
@@ -45,12 +48,6 @@ export class CliPrimitiveClient implements PrimitiveClient {
 
   listRoles(): AkNamed[] {
     return normalizeNamed(runJson(["list-roles"]));
-  }
-
-  getUser(name: string): AkUser | null {
-    const v = runJson(["get-user", "--name", name]);
-    if (v === null || typeof v !== "object") return null;
-    return normalizeUser(v as Record<string, unknown>);
   }
 
   ensureUser(name: string, email: string, display: string, inactive: boolean): void {

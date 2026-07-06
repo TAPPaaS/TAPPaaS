@@ -8,13 +8,17 @@
 // `repository` are sub-entities — arrays inside the singleton, each with their
 // own CRUD that loads, mutates, and writes the whole document back atomically.
 
-import { existsSync, readFileSync, writeFileSync, renameSync, mkdtempSync } from "fs";
-import { dirname, join } from "path";
+import { existsSync, readFileSync } from "fs";
+import { join } from "path";
+import {
+  asString,
+  asStringArray,
+  defaultConfigDir,
+  writeJsonAtomic,
+} from "../../../lib/ts/src/config-io";
 import { Repository, Site, SiteNode } from "./types";
 
-export function defaultConfigDir(): string {
-  return process.env.TAPPAAS_CONFIG ?? "/home/tappaas/config";
-}
+export { defaultConfigDir };
 
 export function defaultSiteFile(): string {
   return join(defaultConfigDir(), "site.json");
@@ -26,14 +30,6 @@ export function defaultSiteFile(): string {
 // CliSiteClient passes --schema-dir explicitly so we don't have to here.
 export function defaultSchemaDir(): string {
   return process.env.SITE_SCHEMA_DIR ?? "";
-}
-
-function asString(v: unknown): string {
-  return typeof v === "string" ? v : "";
-}
-function asStringArray(v: unknown): string[] {
-  if (!Array.isArray(v)) return [];
-  return v.filter((x): x is string => typeof x === "string");
 }
 
 // Load and (loosely) normalise site.json into the Site model. Structural
@@ -92,9 +88,5 @@ export function loadRaw(siteFile: string): Record<string, unknown> {
 
 // Atomically write the (whole) site document. Mirrors the bash mktemp+mv idiom.
 export function writeSite(siteFile: string, doc: Record<string, unknown>): void {
-  const dir = dirname(siteFile);
-  const tmpDir = mkdtempSync(join(dir, ".site-"));
-  const tmp = join(tmpDir, "site.json");
-  writeFileSync(tmp, JSON.stringify(doc, null, 2) + "\n", "utf8");
-  renameSync(tmp, siteFile);
+  writeJsonAtomic(siteFile, doc);
 }

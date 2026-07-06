@@ -4,13 +4,8 @@
 set -euo pipefail
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 bin="${TAPPAAS_BIN:-/home/tappaas/bin}"
-for f in "${here}"/*; do
-    [ -f "${f}" ] || continue
-    b="$(basename "${f}")"
-    case "${b}" in install.sh|update.sh|test.sh|validate.sh|README.md) continue ;; esac
-    case "${b}" in test-*) continue ;; esac
-    [ -x "${f}" ] || chmod +x "${f}"
-    ln -sfn "${f}" "${bin}/${b}"; echo "  linked ${bin}/${b}"
-done
+# Shared link helper (lib/ doctrine: scaffolding lives once, sourced).
+. "${here}/../../lib/component-install-lib.sh"
+link_component_executables "${here}"
 # Compat alias: ap-manager -> ap-controller (drop at a later cutover).
 ln -sfn "${here}/ap-controller" "${bin}/ap-manager"; echo "  linked ${bin}/ap-manager (alias)"

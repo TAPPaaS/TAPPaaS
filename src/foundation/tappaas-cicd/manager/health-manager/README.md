@@ -94,9 +94,12 @@ ping-probed and only reachable nodes are used — matching inspect-cluster.sh.
 
 ## Build
 
-TypeScript, built with `tsc` (zero npm dependencies; ambient `src/env.d.ts`),
-wrapped as a Node `bin/health-manager` via `default.nix` — mirroring
-people-manager / the switch-controller pilot.
+TypeScript, built with `tsc` (zero npm dependencies; the shared ambient
+`../../lib/ts/src/env.d.ts`), wrapped as a Node `bin/health-manager` via
+`default.nix` — a thin import of the shared `../../lib/nix/ts-manager.nix`
+builder. The CLI plumbing (colors, `info`/`die`, the `guarded()` error guard,
+the `--help` renderer) and the cluster ssh/pvesh helpers come from
+`../../lib/ts/src/` (`cli.ts`, `help.ts`, `cluster.ts`, `config-io.ts`).
 
 ```
 nix-build -A default default.nix

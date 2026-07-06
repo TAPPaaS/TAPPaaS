@@ -33,31 +33,17 @@ fi
 # both the cron and the timer fired hourly (issue: weekly timer run failed with
 # "env: 'bash'" while the cron run masked it). Do NOT call update-cron.sh.
 
-# Retrofit OPNsense plugins on existing systems (issue #254). New installs get
-# these via setup-caddy.sh; this idempotent ensure brings already-deployed
-# systems up to date on the next update cycle so acme-setup.sh works without
-# the operator needing to re-run setup-caddy.sh by hand.
-FIREWALL_FQDN="firewall.mgmt.internal"
-if ssh -o ConnectTimeout=5 -o BatchMode=yes root@"$FIREWALL_FQDN" echo ok >/dev/null 2>&1; then
-    for pkg in os-acme-client os-ddclient; do
-        if ! ssh root@"$FIREWALL_FQDN" "/bin/sh -c 'pkg info $pkg'" &>/dev/null; then
-            info "  Installing missing OPNsense plugin: $pkg"
-            ssh root@"$FIREWALL_FQDN" "/bin/sh -c 'pkg install -y $pkg'" 2>&1 \
-                | while IFS= read -r _; do printf "."; done || \
-                warn "  $pkg install returned non-zero"
-            echo ""
-        fi
-    done
-else
-    debug "  firewall unreachable — skipping plugin ensure (will retry next update)"
-fi
+# The OPNsense plugin retrofit (#254: os-acme-client/os-ddclient) moved into
+# `opnsense-ensure-patches` (controller/opnsense-controller/), which
+# pre-update.sh runs earlier in this same update cycle — the firewall's local
+# patch/plugin state is the opnsense controller's job, not the VM update's
+# (ADR-007 post-implementation refactor, Phase 5 / D5).
 
 # ADR-007 S0 (P4 3d, option A — additive): besides the cicd VM's own rebuild
-# above, refresh the relocated manager/ + controller/ components by running each
-# parent dispatcher's update verb (idempotent bin relink; skips TEMPLATE/ and
-# any component without an update.sh, e.g. opnsense-controller which pre-update.sh
-# builds as a compiled component). A component failure warns, it does not abort
-# the cicd update.
+# above, refresh the manager/ + controller/ components by running each parent
+# dispatcher's update verb (idempotent rebuild + bin relink — every component,
+# compiled ones included, now ships its own install/update.sh). A component
+# failure warns, it does not abort the cicd update.
 _cicd_dir="/home/tappaas/TAPPaaS/src/foundation/tappaas-cicd"
 for _disp in manager controller; do
     if [[ -x "${_cicd_dir}/${_disp}/update.sh" ]]; then

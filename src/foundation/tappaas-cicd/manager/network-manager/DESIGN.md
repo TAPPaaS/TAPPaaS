@@ -3,12 +3,15 @@
 ## Language and build
 
 - **CLI:** TypeScript (`src/*.ts`), compiled with `tsc`, **no `node_modules`**
-  (Node types from an ambient `src/env.d.ts`).
-- **Build mechanism:** `install.sh` runs `nix-build -A default default.nix`, which
-  runs `tsc -p tsconfig.json`, copies the compiled `dist/` and the shipped
-  `zones.json` template into the output, and `makeWrapper`s
-  `result/bin/network-manager` (a Node 22 wrapper). It then `ln -sfn`s that into
-  `~/bin/network-manager` (override the bin dir with `TAPPAAS_BIN`).
+  (Node types from the shared ambient `../../lib/ts/src/env.d.ts`; the CLI
+  conventions — colors, `info`/`warn`/`die`, `--help` rendering, config-root
+  resolution, atomic JSON writes, spawn env plumbing — come from `../../lib/ts/src/`).
+- **Build mechanism:** `default.nix` is a thin import of the shared TS-manager
+  builder (`../../lib/nix/ts-manager.nix`), plus a `postInstall` that ships the
+  `zones.json` template next to the compiled `main.js`. `install.sh` runs
+  `nix-build -A default default.nix` and `ln -sfn`s the resulting
+  `result/bin/network-manager` (a Node 22 wrapper) into `~/bin/network-manager`
+  (override the bin dir with `TAPPAAS_BIN`).
 - **`update.sh`** re-runs `install.sh` (rebuild + relink; idempotent).
 - The same `install.sh` also relinks the not-yet-retired legacy bash tools
   (`zone-reconcile`, `zone-state.sh`, `zone-controller`).
@@ -21,11 +24,19 @@ src/types.ts         Zone model, ZonesDoc, the PlaneClient interface, Plan/repor
 src/zones.ts         load/CRUD zones.json + VLAN allocation + the mgmt.access-to invariant
 src/zonelifecycle.ts add/delete (always includes the switch plane)
 src/zonesinit.ts     init template transform (rename srv/home/guest to the system name)
+src/zonesmerge.ts    merge: the rename-aware 3-way zones.json reconciliation
+                     (current vs .orig baseline vs renamed repo template; port
+                     of apply-zones-merge.sh, run from update-tappaas)
 src/zonescheck.ts    zones-check offline consistency audit
 src/distribute.ts    distribute: push zones.json to the Proxmox nodes
 src/planes.ts        CliPlaneClient — spawnSync the four plane controllers; rc -> status
 src/reconcile.ts     the dependency-ordered 4-plane reconcile
 ```
+
+Cross-manager plumbing (colors, `info`/`warn`/`die`, `--help` rendering,
+config-root resolution, atomic JSON writes, spawn env, ambient Node types)
+lives in the shared `../../lib/ts/src/` — there is no per-manager `help.ts`
+or `env.d.ts` under `src/`.
 
 `zones.json` is round-tripped losslessly: documentation blocks (`_`-prefixed
 keys) and unknown fields are preserved on save. A core invariant is that the

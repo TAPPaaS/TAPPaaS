@@ -17,14 +17,9 @@ bin="${TAPPAAS_BIN:-/home/tappaas/bin}"
 mkdir -p "${bin}"
 
 # ── build the TypeScript CLI via Nix ──────────────────────────────────
-echo "  building network-manager (tsc via nix-build)..."
-gcroots="${TAPPAAS_GCROOTS:-${HOME}/.tappaas-gcroots}"; mkdir -p "${gcroots}"
-# --out-link registers a nix GC root so nix-collect-garbage cannot delete the
-# build output out from under the ~/bin symlink (was --no-out-link => dangling).
-out="$( cd "${here}" && nix-build -A default default.nix --out-link "${gcroots}/network-manager" )"
-[[ -x "${out}/bin/network-manager" ]] || { echo "  ERROR: build did not produce network-manager" >&2; exit 1; }
-ln -sfn "${out}/bin/network-manager" "${bin}/network-manager"
-echo "  linked ${bin}/network-manager -> ${out}/bin/network-manager"
+# Shared build+link helper (lib/ doctrine: scaffolding lives once, sourced).
+. "${here}/../../lib/component-install-lib.sh"
+build_and_link_nix_component "${here}" "network-manager"
 
 # ── link the legacy bash entry programs (not retired yet) ─────────────
 # zone-reconcile + the *.sh tools, EXCEPT the verb scripts and the one-shot

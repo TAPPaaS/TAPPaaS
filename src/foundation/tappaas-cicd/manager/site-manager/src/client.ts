@@ -9,9 +9,10 @@
 // `site add` and `repository add`/`delete` stays in the still-live .sh tools
 // (create-site.sh / repository.sh), invoked here as thin delegations.
 
-import { spawnSync } from "child_process";
 import { existsSync, readdirSync } from "fs";
 import { basename, join } from "path";
+import { defaultConfigDir } from "../../../lib/ts/src/config-io";
+import { capture as run, captureResult, stream as runStreaming } from "../../../lib/ts/src/exec";
 import { SiteClient } from "./types";
 
 // Bin names (overridable via env for tests / relocations).
@@ -24,38 +25,6 @@ const ENVIRONMENT_BIN = process.env.SITE_ENVIRONMENT_BIN ?? "environment-manager
 // The still-live bash tools `site add` / `repository <verb>` delegate to.
 const CREATE_SITE = process.env.SITE_CREATE_BIN ?? "create-site.sh";
 const REPOSITORY_SH = process.env.SITE_REPOSITORY_BIN ?? "repository.sh";
-
-function configDir(): string {
-  return process.env.CONFIG_DIR ?? process.env.TAPPAAS_CONFIG ?? "/home/tappaas/config";
-}
-
-function configEnv(): Record<string, string | undefined> {
-  const cd = configDir();
-  return { ...process.env, CONFIG_DIR: cd, TAPPAAS_CONFIG: cd };
-}
-
-// Run a command, capturing output. Throws on spawn error or non-zero exit.
-function run(bin: string, args: string[]): string {
-  const r = spawnSync(bin, args, {
-    encoding: "utf8",
-    env: configEnv(),
-    maxBuffer: 64 * 1024 * 1024,
-  });
-  if (r.error) throw new Error(`${bin} ${args[0] ?? ""}: ${r.error.message}`);
-  if (r.status !== 0) {
-    const stderr = (r.stderr ?? "").trim();
-    throw new Error(`${bin} ${args.join(" ")} failed (exit ${r.status}): ${stderr}`);
-  }
-  return r.stdout ?? "";
-}
-
-// Run a command, streaming its output to the operator's terminal (for the
-// cascade — the dependent manager's own progress should be visible). Returns rc.
-function runStreaming(bin: string, args: string[]): number {
-  const r = spawnSync(bin, args, { encoding: "utf8", stdio: "inherit", env: configEnv() });
-  if (r.error) throw new Error(`${bin} ${args[0] ?? ""}: ${r.error.message}`);
-  return r.status ?? -1;
-}
 
 export class CliSiteClient implements SiteClient {
   // The schema-dir to pass to validate-site.sh, if known.
@@ -89,11 +58,11 @@ export class CliSiteClient implements SiteClient {
     const args = ["--quiet"];
     if (this.schemaDir) args.push("--schema-dir", this.schemaDir);
     args.push(siteFile);
-    const r = spawnSync(VALIDATE_SITE, args, { encoding: "utf8", env: configEnv() });
-    if (r.error) return [`validate-site.sh not runnable: ${r.error.message}`];
-    if (r.status === 0) return [];
+    const r = captureResult(VALIDATE_SITE, args);
+    if (!r.ran) return [`validate-site.sh not runnable: ${r.stderr}`];
+    if (r.rc === 0) return [];
     // validate-site.sh prints "[Error] VALIDATION: ..." lines to stderr.
-    const out = `${r.stdout ?? ""}\n${r.stderr ?? ""}`;
+    const out = `${r.stdout}\n${r.stderr}`;
     return out
       .split("\n")
       .map((l) => l.trim())
@@ -117,7 +86,7 @@ export class CliSiteClient implements SiteClient {
     // Environments registered for this site = config/environments/*.json. The
     // environment NAME is the file basename (sans .json), the arg
     // environment-manager expects.
-    const dir = join(configDir(), "environments");
+    const dir = join(defaultConfigDir(), "environments");
     if (!existsSync(dir)) return [];
     return readdirSync(dir)
       .filter((f) => f.endsWith(".json"))

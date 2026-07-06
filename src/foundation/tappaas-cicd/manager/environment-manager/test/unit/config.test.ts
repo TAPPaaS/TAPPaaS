@@ -1,7 +1,8 @@
 // config.test.ts — unit tests for config load/write/validate, the bootstrap, and
 // CliModuleClient consumer discovery. Tiny inline assert harness (zero-dep,
 // mirrors people-manager). Run after compiling via the test/unit tsconfig:
-//   node dist-test/test/unit/config.test.js
+// (rootDir is the cicd root, so emit mirrors the tree):
+//   node dist-test/manager/environment-manager/test/unit/config.test.js
 //
 // Uses a throwaway config tree under the OS temp dir.
 

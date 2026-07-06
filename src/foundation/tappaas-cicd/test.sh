@@ -309,18 +309,18 @@ else
     fail "update-module.sh no longer invokes --cleanup (snapshot retention unwired)"
 fi
 
-# ── Test 10: P10 manager/controller template + dispatch contract (ADR-007 S1) ─
+# ── Test 10: P10 manager/controller dispatch contract (ADR-007 S1) ───────────
 
-info "${BOLD}Test 10: P10 template/dispatch contract${CL}"
+info "${BOLD}Test 10: P10 dispatch contract${CL}"
 
-if [[ -x "${SCRIPT_DIR}/scripts/test/test-template-contract.sh" ]]; then
-    if "${SCRIPT_DIR}/scripts/test/test-template-contract.sh" >/dev/null 2>&1; then
-        pass "P10 template/dispatch contract holds (TEMPLATE skipped, manager has validate.sh, scaffold dispatches)"
+if [[ -x "${SCRIPT_DIR}/scripts/test/test-dispatch-contract.sh" ]]; then
+    if "${SCRIPT_DIR}/scripts/test/test-dispatch-contract.sh" >/dev/null 2>&1; then
+        pass "P10 dispatch contract holds (dropped-in component dispatches, TEMPLATE/ skipped)"
     else
-        fail "P10 template/dispatch contract test failed (run scripts/test/test-template-contract.sh)"
+        fail "P10 dispatch contract test failed (run scripts/test/test-dispatch-contract.sh)"
     fi
 else
-    skip "scripts/test/test-template-contract.sh not found"
+    skip "scripts/test/test-dispatch-contract.sh not found"
 fi
 
 # ── Test 11: ADR-007 component smoke (lightweight, non-disruptive) ───────────
@@ -331,6 +331,30 @@ fi
 # fast/deep-aware components' smokes here as they land (see tappaas-cicd/README.md).
 
 info "${BOLD}Test 11: ADR-007 component smoke (lightweight)${CL}"
+
+# opnsense-controller + update-tappaas: the linked CLIs load. This is the gate
+# that surfaces a broken compiled-component build — pre-update.sh's dispatcher
+# deliberately warns-and-continues on build failure (stale bins keep working),
+# so a build regression must fail HERE, not block the fleet update.
+if [[ -x /home/tappaas/bin/opnsense-controller ]]; then
+    if /home/tappaas/bin/opnsense-controller --help >/dev/null 2>&1; then
+        pass "opnsense-controller: linked CLI loads"
+    else
+        fail "opnsense-controller: linked CLI fails to load (broken/stale build)"
+    fi
+else
+    skip "opnsense-controller not installed"
+fi
+if [[ -x /home/tappaas/bin/update-tappaas ]]; then
+    if /home/tappaas/bin/update-tappaas --help >/dev/null 2>&1; then
+        pass "update-tappaas: linked CLI loads"
+    else
+        fail "update-tappaas: linked CLI fails to load (broken/stale build)"
+    fi
+else
+    skip "update-tappaas not installed"
+fi
+
 _min_org="${SCRIPT_DIR}/manager/people-manager/minimal-org"
 _pm_fix="${SCRIPT_DIR}/manager/people-manager/test/fixtures/people"
 # people: schemas + validator work (minimal-org validates) — catches schema breakage

@@ -35,7 +35,8 @@ import { CliModuleClient, CliNetworkClient, NetworkUnreachable } from "./clients
 import { applyPlan, computePlan } from "./reconcile";
 import { runValidate } from "./validate";
 import { Environment, ModuleClient, NetworkClient } from "./types";
-import { HelpSpec, renderHelp } from "./help";
+import { HelpSpec, renderHelp } from "../../../lib/ts/src/help";
+import { RD, GN, CL, die, guarded, info, warn } from "../../../lib/ts/src/cli";
 import { existsSync, readFileSync, unlinkSync } from "fs";
 import { join } from "path";
 
@@ -45,23 +46,6 @@ import { join } from "path";
 const RESERVED_MGMT = "mgmt";
 
 const VERSION = "0.1.0";
-
-const YW = "\x1b[01;33m";
-const RD = "\x1b[01;31m";
-const GN = "\x1b[1;92m";
-const CL = "\x1b[0m";
-
-function info(msg: string): void {
-  console.log(msg);
-}
-function warn(msg: string): void {
-  console.log(`${YW}[Warning]${CL} ${msg}`);
-}
-class DieError extends Error {}
-function die(msg: string): never {
-  console.error(`${RD}[Error]${CL} ${msg}`);
-  throw new DieError(msg);
-}
 
 const HELP: HelpSpec = {
   name: "environment-manager",
@@ -427,7 +411,7 @@ export function run(argv: string[], net: NetworkClient, mod: ModuleClient): numb
   const cmd = argv[0];
   const opts = parseOpts(argv.slice(1));
 
-  try {
+  return guarded(() => {
     switch (cmd) {
       case "list":
         cmdList(opts);
@@ -454,18 +438,23 @@ export function run(argv: string[], net: NetworkClient, mod: ModuleClient): numb
         usage();
         die(`Unknown command: ${cmd}`);
     }
-  } catch (e) {
-    if (e instanceof DieError) return 1;
-    throw e;
-  }
+  });
 }
 
-// Entry point (only when run directly, not when imported by tests).
+// Entry point (only when run directly, not when imported by tests). The early
+// parseOpts (config-dir for the module client's discovery root) can die() on a
+// bad flag, so the WHOLE entry runs under guarded() — otherwise that die
+// escapes as a raw DieError stack trace instead of the clean [Error] line
+// (found by the deep gate of the ADR-007 post-implementation refactor).
 if (require.main === module) {
-  const argv = process.argv.slice(2);
-  // Resolve config-dir early for the module client's discovery root.
-  const opts = parseOpts(argv.slice(1));
-  const net = new CliNetworkClient();
-  const mod = new CliModuleClient(opts.configDir);
-  process.exit(run(argv, net, mod));
+  process.exit(
+    guarded(() => {
+      const argv = process.argv.slice(2);
+      // Resolve config-dir early for the module client's discovery root.
+      const opts = parseOpts(argv.slice(1));
+      const net = new CliNetworkClient();
+      const mod = new CliModuleClient(opts.configDir);
+      return run(argv, net, mod);
+    }),
+  );
 }

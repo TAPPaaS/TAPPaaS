@@ -17,14 +17,9 @@ mkdir -p "${bin}"
 # The TS `site-manager` is the new verb-aligned front door; the legacy site
 # scripts stay linked below (transition) — the TS thin-delegation verbs shell
 # out to them until the retire phase.
-echo "  building site-manager (tsc via nix-build)..."
-gcroots="${TAPPAAS_GCROOTS:-${HOME}/.tappaas-gcroots}"; mkdir -p "${gcroots}"
-# --out-link registers a nix GC root so nix-collect-garbage cannot delete the
-# build output out from under the ~/bin symlink (was --no-out-link => dangling).
-out="$( cd "${here}" && nix-build -A default default.nix --out-link "${gcroots}/site-manager" )"
-[[ -x "${out}/bin/site-manager" ]] || { echo "  ERROR: build did not produce site-manager" >&2; exit 1; }
-ln -sfn "${out}/bin/site-manager" "${bin}/site-manager"
-echo "  linked ${bin}/site-manager -> ${out}/bin/site-manager"
+# Shared build+link helper (lib/ doctrine: scaffolding lives once, sourced).
+. "${here}/../../lib/component-install-lib.sh"
+build_and_link_nix_component "${here}" "site-manager"
 
 for f in "${here}"/*.sh; do
     b="$(basename "${f}")"

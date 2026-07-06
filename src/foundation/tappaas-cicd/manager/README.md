@@ -64,10 +64,10 @@ every operation — `validate` included — is a verb of the manager's binary.
 ## How the dispatcher runs the lifecycle verbs
 
 A parent dispatcher at `manager/{install,update,test}.sh` runs each child
-manager's matching **lifecycle** verb. It iterates the subdirectories, **skips
-`TEMPLATE/`**, runs the child's executable verb script if present, and continues
-past a failing child (returning the worst exit code so a failure is never
-hidden). There is no shared runner — each verb is fully self-contained. The
+manager's matching **lifecycle** verb. It iterates the subdirectories, runs the
+child's executable verb script if present, and continues past a failing child
+(returning the worst exit code so a failure is never hidden). There is no
+shared runner — each verb is fully self-contained. The
 `tappaas-cicd` module calls these parent dispatchers as part of its own
 install/update/test, so adding a new manager subdirectory makes it part of the
 system automatically. (`validate` is invoked directly via the manager's own
@@ -86,6 +86,6 @@ dispatcher.)
 | [`health-manager`](health-manager/) | Cluster / VM / disk / OS health and maintenance utilities: inspect the cluster, diff a VM against its config, grow disks over a threshold, update a VM's OS, and report backup health. Operational/read-mostly; owns no config, so it has no `validate` operation. |
 | [`backup-manager`](backup-manager/) | The backup hierarchy: the Site → Environment → Module backup-policy cascade. Resolves the effective backup policy (retention, residency, enabled, exclude) for any module, reports status across all modules, validates the hierarchy, and delegates restore/PBS ops to `backup-controller` + the foundation `restore.sh`. |
 
-`TEMPLATE/` is the scaffold skeleton, not a manager — the dispatcher skips it.
-See [`TEMPLATE/README.md`](TEMPLATE/README.md) for the canonical rules on building
-a new manager or controller.
+To build a new manager, copy the nearest real one and edit (see the
+"Scaffolding a new component" section in [`../README.md`](../README.md) — the
+scaffold TEMPLATE dir was retired).

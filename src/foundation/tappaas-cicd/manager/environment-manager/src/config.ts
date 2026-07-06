@@ -8,27 +8,18 @@
 
 import { existsSync, readFileSync, readdirSync, writeFileSync } from "fs";
 import { basename, join } from "path";
+import { asString, asStringArray, defaultConfigDir } from "../../../lib/ts/src/config-io";
 import {
   Environment,
   EnvironmentModel,
   RefSources,
 } from "./types";
 
-export function defaultConfigDir(): string {
-  return process.env.TAPPAAS_CONFIG ?? "/home/tappaas/config";
-}
+export { defaultConfigDir };
 
 // The environments directory under a config root.
 export function environmentsDir(configDir: string): string {
   return join(configDir, "environments");
-}
-
-function asString(v: unknown): string {
-  return typeof v === "string" ? v : "";
-}
-function asStringArray(v: unknown): string[] {
-  if (!Array.isArray(v)) return [];
-  return v.filter((x): x is string => typeof x === "string");
 }
 
 // Parse one raw JSON object into an Environment (lenient — schema-conformance is

@@ -257,6 +257,21 @@ function newTree(): string {
   );
 }
 
+// ── 9. malformed entity JSON fails loudly, naming the file ─────────────
+// One corrupted file must not crash with a raw stack trace nor be silently
+// skipped — loadPeople throws a clean Error carrying the offending path.
+{
+  const d = newTree();
+  writeFileSync(join(d, "users", "broken.json"), "{ this is not json", "utf8");
+  let threw = false;
+  try {
+    loadPeople(d);
+  } catch (e) {
+    threw = e instanceof Error && e.message.includes("broken.json");
+  }
+  check(threw, "loadPeople throws a clean error naming the malformed file");
+}
+
 for (const d of trees) rmSync(d, { recursive: true, force: true });
 
 console.log("");

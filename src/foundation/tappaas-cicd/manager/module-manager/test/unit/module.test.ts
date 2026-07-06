@@ -29,13 +29,14 @@ function check(cond: boolean, msg: string): void {
   }
 }
 
-// Fixtures live in the SOURCE tree (not copied into dist-test). From the
-// compiled location dist-test/test/unit/, "../../../test/fixtures/config"
-// resolves back to module-manager/test/fixtures/config. test.sh may override
-// via MM_FIXTURES_CONFIG.
+// Fixtures live in the SOURCE tree (not copied into dist-test). The test
+// tsconfig extends lib/ts/tsconfig.base.json (rootDir = tappaas-cicd/), so the
+// compiled location is dist-test/manager/module-manager/test/unit/ — five ".."
+// resolve back to module-manager/, then test/fixtures/config. test.sh may
+// override via MM_FIXTURES_CONFIG.
 const CONFIG =
   process.env.MM_FIXTURES_CONFIG ??
-  join(__dirname, "..", "..", "..", "test", "fixtures", "config");
+  join(__dirname, "..", "..", "..", "..", "..", "test", "fixtures", "config");
 
 // ── 1. listModules enumerates ONLY module configs (filters state files) ──
 {

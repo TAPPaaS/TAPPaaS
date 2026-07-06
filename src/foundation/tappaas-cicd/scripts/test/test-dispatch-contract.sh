@@ -1,13 +1,16 @@
 #!/usr/bin/env bash
-# test-template-contract.sh — ADR-007 P10 component-contract unit test.
+# test-dispatch-contract.sh — ADR-007 P10 dispatcher-contract unit test.
 #
 # Self-contained: no VMs, no cluster, no network. Asserts the P10 contract for
-# the manager/ and controller/ TEMPLATE skeletons and the per-directory
-# dispatchers:
-#   1. Both TEMPLATEs ship executable install/update/test.sh
-#   2. manager TEMPLATE ships validate.sh; controller TEMPLATE does NOT
-#   3. The dispatcher runs a scaffolded component and SKIPS TEMPLATE/
-#   4. ShellCheck (-S warning) is clean on dispatchers + TEMPLATE verb scripts
+# the manager/ and controller/ per-directory dispatchers:
+#   1. The dispatcher runs a dropped-in component and SKIPS a TEMPLATE/ dir
+#      (the skip guard stays even though the scaffold TEMPLATEs were retired —
+#      it keeps any future scaffold/work dir named TEMPLATE inert)
+#   2. ShellCheck (-S warning) is clean on all six dispatchers
+#
+# (The TEMPLATE skeleton dirs themselves were removed in the ADR-007
+# post-implementation refactor — a new component is scaffolded by copying the
+# nearest real component. See docs/design/ADR007-post-implement-refactor.md.)
 #
 # Exits 1 if any assertion fails.
 set -euo pipefail
@@ -30,46 +33,14 @@ fail() {
 }
 
 # ---------------------------------------------------------------------------
-# Check 1: both TEMPLATEs ship executable install/update/test.sh
-# ---------------------------------------------------------------------------
-echo "[1] mandatory verb scripts present and executable"
-for kind in manager controller; do
-    tdir="${CICD_DIR}/${kind}/TEMPLATE"
-    for verb in install update test; do
-        f="${tdir}/${verb}.sh"
-        if [[ -f "${f}" && -x "${f}" ]]; then
-            pass "${kind}/TEMPLATE/${verb}.sh exists and is executable"
-        else
-            fail "${kind}/TEMPLATE/${verb}.sh missing or not executable"
-        fi
-    done
-done
-
-# ---------------------------------------------------------------------------
-# Check 2: managers ship validate.sh; controllers do not
-# ---------------------------------------------------------------------------
-echo "[2] validate.sh present for managers, absent for controllers"
-if [[ -f "${CICD_DIR}/manager/TEMPLATE/validate.sh" ]]; then
-    pass "manager/TEMPLATE/validate.sh exists"
-else
-    fail "manager/TEMPLATE/validate.sh missing (managers must ship it)"
-fi
-if [[ ! -e "${CICD_DIR}/controller/TEMPLATE/validate.sh" ]]; then
-    pass "controller/TEMPLATE/validate.sh absent"
-else
-    fail "controller/TEMPLATE/validate.sh present (controllers must not ship it)"
-fi
-
-# ---------------------------------------------------------------------------
-# Check 3: dispatch behaviour in an ISOLATED temp tree
+# Check 1: dispatch behaviour in an ISOLATED temp tree
 #   - copy the REAL manager/test.sh dispatcher
-#   - scaffold a fake component 'demo/' from manager/TEMPLATE/ whose test.sh
-#     writes a marker into the temp dir
+#   - drop in a fake component 'demo/' whose test.sh writes a marker
 #   - drop a TEMPLATE/ whose test.sh writes a FORBIDDEN marker
 #   - run the copied dispatcher (cwd = temp dir)
 #   - assert: demo marker EXISTS, TEMPLATE forbidden-marker does NOT
 # ---------------------------------------------------------------------------
-echo "[3] dispatcher runs scaffolded component and skips TEMPLATE/"
+echo "[1] dispatcher runs a dropped-in component and skips TEMPLATE/"
 TMPDIR_TEST=""
 cleanup() {
     [[ -n "${TMPDIR_TEST}" && -d "${TMPDIR_TEST}" ]] && rm -rf "${TMPDIR_TEST}"
@@ -85,8 +56,9 @@ forbidden_marker="${TMPDIR_TEST}/forbidden.marker"
 cp "${CICD_DIR}/manager/test.sh" "${TMPDIR_TEST}/test.sh"
 chmod +x "${TMPDIR_TEST}/test.sh"
 
-# Scaffold a component from the real manager/TEMPLATE with zero edits above it.
-cp -r "${CICD_DIR}/manager/TEMPLATE" "${TMPDIR_TEST}/demo"
+# A dropped-in component: just a directory with an executable test.sh —
+# exactly what "adding a component" means under the dispatch contract.
+mkdir -p "${TMPDIR_TEST}/demo"
 cat >"${TMPDIR_TEST}/demo/test.sh" <<EOF
 #!/usr/bin/env bash
 set -euo pipefail
@@ -107,9 +79,9 @@ chmod +x "${TMPDIR_TEST}/TEMPLATE/test.sh"
 ( cd "${TMPDIR_TEST}" && ./test.sh >/dev/null 2>&1 ) || true
 
 if [[ -f "${demo_marker}" ]]; then
-    pass "scaffolded demo component ran via dispatcher"
+    pass "dropped-in demo component ran via dispatcher"
 else
-    fail "scaffolded demo component did NOT run via dispatcher"
+    fail "dropped-in demo component did NOT run via dispatcher"
 fi
 if [[ ! -f "${forbidden_marker}" ]]; then
     pass "dispatcher skipped TEMPLATE/"
@@ -118,9 +90,9 @@ else
 fi
 
 # ---------------------------------------------------------------------------
-# Check 4: ShellCheck (-S warning) on dispatchers + TEMPLATE verb scripts
+# Check 2: ShellCheck (-S warning) on the six dispatchers
 # ---------------------------------------------------------------------------
-echo "[4] shellcheck -S warning on dispatchers and TEMPLATE scripts"
+echo "[2] shellcheck -S warning on the dispatchers"
 if command -v shellcheck >/dev/null 2>&1; then
     sc_targets=(
         "${CICD_DIR}/manager/install.sh"
@@ -129,15 +101,6 @@ if command -v shellcheck >/dev/null 2>&1; then
         "${CICD_DIR}/controller/install.sh"
         "${CICD_DIR}/controller/update.sh"
         "${CICD_DIR}/controller/test.sh"
-        "${CICD_DIR}/manager/TEMPLATE/install.sh"
-        "${CICD_DIR}/manager/TEMPLATE/update.sh"
-        "${CICD_DIR}/manager/TEMPLATE/test.sh"
-        "${CICD_DIR}/manager/TEMPLATE/validate.sh"
-        "${CICD_DIR}/manager/TEMPLATE/manager.sh"
-        "${CICD_DIR}/controller/TEMPLATE/install.sh"
-        "${CICD_DIR}/controller/TEMPLATE/update.sh"
-        "${CICD_DIR}/controller/TEMPLATE/test.sh"
-        "${CICD_DIR}/controller/TEMPLATE/controller.sh"
     )
     for t in "${sc_targets[@]}"; do
         if [[ ! -f "${t}" ]]; then

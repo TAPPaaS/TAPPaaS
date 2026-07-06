@@ -59,21 +59,22 @@ if [[ -f "${UNIT_TSCONFIG}" ]]; then
     fi
     if run_ts "tsc -p '${UNIT_TSCONFIG}'" >/dev/null 2>&1; then
         ok "TypeScript unit tests compile"
-        if run_ts "NM_FIXTURE_DIR='${FIXTURE_DIR}' NM_TEMPLATE='${HERE}/zones.json' node '${DIST_TEST}/test/unit/network.test.js'"; then
+        if run_ts "NM_FIXTURE_DIR='${FIXTURE_DIR}' NM_TEMPLATE='${HERE}/zones.json' node '${DIST_TEST}/manager/network-manager/test/unit/network.test.js'"; then
             ok "TypeScript reconcile/CRUD/init unit tests pass"
         else
             bad "TypeScript unit tests FAILED"
         fi
 
         # ── init CLI smoke (offline; temp --out, never live config) ──
-        # The unit tsconfig compiles src/ into dist-test/src; run the real CLI
+        # The unit tsconfig compiles src/ into dist-test/manager/network-manager/src
+        # (rootDir is the tappaas-cicd root, shared lib/ts included); run the real CLI
         # entry against a temp output and assert the transformed file on disk.
         ZINIT_OUT="$(mktemp -d)/z.json"
         # Isolate --config-dir to an empty dir so the occupancy scan finds no
         # tenants (default configDir is the LIVE config, which would keep occupied
         # legacy zones Active). With no occupancy, srvWork is inactivated as asserted.
         ZINIT_CFG="$(mktemp -d)"
-        if run_ts "NM_TEMPLATE='${HERE}/zones.json' node '${DIST_TEST}/src/main.js' init --name acme --from '${HERE}/zones.json' --out '${ZINIT_OUT}' --config-dir '${ZINIT_CFG}'" >/dev/null 2>&1 \
+        if run_ts "NM_TEMPLATE='${HERE}/zones.json' node '${DIST_TEST}/manager/network-manager/src/main.js' init --name acme --from '${HERE}/zones.json' --out '${ZINIT_OUT}' --config-dir '${ZINIT_CFG}'" >/dev/null 2>&1 \
             && [[ -f "${ZINIT_OUT}" ]] \
             && run_ts "node -e 'const z=require(\"${ZINIT_OUT}\"); process.exit((z.acme&&!z.srv&&z[\"acme-private\"]&&z[\"acme-guest\"]&&z.acme.state===\"Active\"&&z.srvWork.state===\"Inactive\"&&!z[\"acme-private\"][\"access-to\"].includes(\"srvHome\")&&z[\"acme-private\"][\"access-to\"].includes(\"acme\"))?0:1)'" >/dev/null 2>&1; then
             ok "init CLI transforms template to temp --out (renames + inactivations + ref-integrity)"
@@ -96,8 +97,8 @@ if [[ -f "${UNIT_TSCONFIG}" ]]; then
         # re-introduce srv/home/guest and must produce no duplicate vlantags.
         ZM_DIR="$(mktemp -d)"
         printf '{ "name": "acme" }\n' > "${ZM_DIR}/site.json"
-        run_ts "NM_TEMPLATE='${HERE}/zones.json' node '${DIST_TEST}/src/main.js' init --name acme --from '${HERE}/zones.json' --out '${ZM_DIR}/zones.json' --config-dir '${ZM_DIR}'" >/dev/null 2>&1
-        if run_ts "NM_TEMPLATE='${HERE}/zones.json' node '${DIST_TEST}/src/main.js' merge --config-dir '${ZM_DIR}' --template '${HERE}/zones.json'" >/dev/null 2>&1 \
+        run_ts "NM_TEMPLATE='${HERE}/zones.json' node '${DIST_TEST}/manager/network-manager/src/main.js' init --name acme --from '${HERE}/zones.json' --out '${ZM_DIR}/zones.json' --config-dir '${ZM_DIR}'" >/dev/null 2>&1
+        if run_ts "NM_TEMPLATE='${HERE}/zones.json' node '${DIST_TEST}/manager/network-manager/src/main.js' merge --config-dir '${ZM_DIR}' --template '${HERE}/zones.json'" >/dev/null 2>&1 \
             && run_ts "node -e 'const z=require(\"${ZM_DIR}/zones.json\");const dup=Object.entries(z).filter(([k,v])=>v&&typeof v===\"object\"&&!Array.isArray(v)&&typeof v.vlantag===\"number\"&&v.vlantag>0).reduce((m,[k,v])=>{m[v.vlantag]=(m[v.vlantag]||0)+1;return m;},{});const hasDup=Object.values(dup).some(n=>n>1);process.exit((!z.srv&&!z.home&&!z.guest&&z.acme&&!hasDup)?0:1)'" >/dev/null 2>&1; then
             ok "merge CLI: fresh renamed install does NOT re-add srv/home/guest, no duplicate vlantags"
         else
@@ -111,7 +112,7 @@ if [[ -f "${UNIT_TSCONFIG}" ]]; then
         # config-dir holds only zones.json so the installation check is a no-op.
         ZC_DIR="$(mktemp -d)"
         cp "${HERE}/zones.json" "${ZC_DIR}/zones.json"
-        if run_ts "node '${DIST_TEST}/src/main.js' zones-check --zones '${ZC_DIR}/zones.json' --config-dir '${ZC_DIR}'" >/dev/null 2>&1; then
+        if run_ts "node '${DIST_TEST}/manager/network-manager/src/main.js' zones-check --zones '${ZC_DIR}/zones.json' --config-dir '${ZC_DIR}'" >/dev/null 2>&1; then
             ok "zones-check CLI exits 0 on a well-formed zones.json"
         else
             bad "zones-check CLI unexpectedly failed on a good fixture"
@@ -119,7 +120,7 @@ if [[ -f "${UNIT_TSCONFIG}" ]]; then
         # Inject a dangling access-to ref → must exit non-zero.
         ZC_BAD_DIR="$(mktemp -d)"
         run_ts "node -e 'const fs=require(\"fs\");const z=JSON.parse(fs.readFileSync(\"${ZC_DIR}/zones.json\",\"utf8\"));z.dmz[\"access-to\"].push(\"nosuchzone\");fs.writeFileSync(\"${ZC_BAD_DIR}/zones.json\",JSON.stringify(z));'" >/dev/null 2>&1
-        if run_ts "node '${DIST_TEST}/src/main.js' zones-check --zones '${ZC_BAD_DIR}/zones.json' --config-dir '${ZC_BAD_DIR}'" >/dev/null 2>&1; then
+        if run_ts "node '${DIST_TEST}/manager/network-manager/src/main.js' zones-check --zones '${ZC_BAD_DIR}/zones.json' --config-dir '${ZC_BAD_DIR}'" >/dev/null 2>&1; then
             bad "zones-check CLI did NOT fail on a dangling reference"
         else
             ok "zones-check CLI exits non-zero on a dangling access-to reference"
@@ -138,7 +139,7 @@ JSON
         ZD_MARKER="${ZD_DIR}/scp-was-run"
         printf '#!/usr/bin/env bash\ntouch %q\nexit 0\n' "${ZD_MARKER}" > "${ZD_DIR}/scp"
         chmod +x "${ZD_DIR}/scp"
-        ZD_OUT="$(run_ts "CONFIG_DIR='${ZD_DIR}' NM_SCP_BIN='${ZD_DIR}/scp' node '${DIST_TEST}/src/main.js' distribute --zones '${ZD_DIR}/zones.json' --dry-run" 2>&1)"
+        ZD_OUT="$(run_ts "CONFIG_DIR='${ZD_DIR}' NM_SCP_BIN='${ZD_DIR}/scp' node '${DIST_TEST}/manager/network-manager/src/main.js' distribute --zones '${ZD_DIR}/zones.json' --dry-run" 2>&1)"
         if echo "${ZD_OUT}" | grep -q "root@tappaas1.mgmt.internal:/root/tappaas/zones.json" \
             && echo "${ZD_OUT}" | grep -q "root@tappaas2.mgmt.internal:/root/tappaas/zones.json" \
             && [[ ! -f "${ZD_MARKER}" ]]; then
@@ -149,7 +150,7 @@ JSON
 
         # init to a TEMP --out (non-live) must NOT distribute → no scp.
         ZD_INIT_OUT="${ZD_DIR}/init.json"
-        run_ts "CONFIG_DIR='${ZD_DIR}' NM_SCP_BIN='${ZD_DIR}/scp' NM_TEMPLATE='${HERE}/zones.json' node '${DIST_TEST}/src/main.js' init --name acme --from '${HERE}/zones.json' --out '${ZD_INIT_OUT}'" >/dev/null 2>&1
+        run_ts "CONFIG_DIR='${ZD_DIR}' NM_SCP_BIN='${ZD_DIR}/scp' NM_TEMPLATE='${HERE}/zones.json' node '${DIST_TEST}/manager/network-manager/src/main.js' init --name acme --from '${HERE}/zones.json' --out '${ZD_INIT_OUT}'" >/dev/null 2>&1
         if [[ -f "${ZD_INIT_OUT}" && ! -f "${ZD_MARKER}" ]]; then
             ok "init to a temp --out writes the file but does NOT scp (non-live auto-skip)"
         else

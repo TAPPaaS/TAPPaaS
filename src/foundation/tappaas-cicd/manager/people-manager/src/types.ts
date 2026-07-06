@@ -68,7 +68,6 @@ export interface PrimitiveClient {
   listUsers(): AkUser[];
   listGroups(): AkNamed[];
   listRoles(): AkNamed[];
-  getUser(name: string): AkUser | null;
   ensureUser(name: string, email: string, display: string, inactive: boolean): void;
   disableUser(name: string): void;
   deleteUser(name: string): void;

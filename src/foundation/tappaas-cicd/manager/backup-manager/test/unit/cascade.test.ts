@@ -24,12 +24,14 @@ import { addToBackupJob, modifyBackup, removeFromBackupJob } from "../../src/mod
 import { FakeClient } from "./fake-client";
 
 // Fixtures are JSON in the SOURCE tree (test/fixtures/config), not compiled.
-// The compiled test runs from dist-test/test/unit/, so walk back to the
-// component root (dist-test → component) and into the real test/fixtures.
+// The compiled test runs from dist-test/manager/backup-manager/test/unit/
+// (the shared tsconfig.base rootDir is the cicd root, so emit mirrors the
+// tree), so walk back to the component root (unit → test → backup-manager →
+// manager → dist-test → component) and into the real test/fixtures.
 // Overridable via FIXTURE_DIR for relocation.
 const FIX =
   process.env.FIXTURE_DIR ??
-  join(__dirname, "..", "..", "..", "test", "fixtures", "config");
+  join(__dirname, "..", "..", "..", "..", "..", "test", "fixtures", "config");
 
 let passed = 0;
 let failed = 0;
@@ -161,6 +163,48 @@ check(!retentionValid("7") && !retentionValid("7x") && !retentionValid(""), "inv
     plan.warnings.some((w) => w.includes("not reachable")),
     "reconcile warns when controller offline",
   );
+}
+
+// applyPlan continues past a failing action and reports it: a client whose
+// addToJob throws must not strand apply-schedule, and the outcome carries the
+// applied / total / failure counts for the caller's "applied N of M" report.
+{
+  const fake = new FakeClient();
+  fake.seedJob({ reachable: true, jobId: "tappaas-backup", vmids: [] });
+  const plan = computePlan(FIX, fake.jobStatus());
+  fake.failOn.add("addToJob");
+  const res = applyPlan(fake, plan);
+  check(res.total === plan.actions.length, "applyPlan outcome counts every planned action");
+  check(res.failures.length >= 1, "applyPlan records the failing add-to-job action");
+  check(res.applied === res.total - res.failures.length, "applyPlan applied = total - failed");
+  check(
+    fake.log.some((l) => l.startsWith("apply-schedule")),
+    "applyPlan continues to apply-schedule after add-to-job fails",
+  );
+  check(
+    res.failures.every((f) => f.message.includes("simulated addToJob failure")),
+    "applyPlan failure carries the underlying error message",
+  );
+}
+
+// ── malformed config JSON is an ERROR, not a silent default ───────────
+// A present-but-unparseable site.json must throw (naming the file), not
+// resolve every module to default policy while validate stays green.
+{
+  const tmp = mkdtempSync(join(tmpdir(), "bm-badjson-"));
+  writeFileSync(join(tmp, "site.json"), "{ this is not json", "utf8");
+  writeFileSync(
+    join(tmp, "m.json"),
+    JSON.stringify({ vmname: "m", vmid: 300, dependsOn: ["cluster:vm", "backup:vm"] }),
+    "utf8",
+  );
+  let threw = false;
+  try {
+    resolvePolicy(tmp, "m");
+  } catch (e) {
+    threw = e instanceof Error && e.message.includes("site.json");
+  }
+  check(threw, "resolvePolicy throws a clean error naming a malformed site.json");
 }
 
 // ── restore list (delegates to controller via Client) ─────────────────

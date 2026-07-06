@@ -25,13 +25,9 @@
 
 import { existsSync, readdirSync, readFileSync } from "fs";
 import { join } from "path";
+import { CL, GN, RD, YW } from "../../../lib/ts/src/cli";
 import { Zone, ZonesDoc } from "./types";
 import { loadZones } from "./zones";
-
-const YW = "\x1b[01;33m";
-const RD = "\x1b[01;31m";
-const GN = "\x1b[1;92m";
-const CL = "\x1b[0m";
 
 // A zone is considered "active" for reference/installation purposes when its
 // state is one that zone-manager actually provisions an interface for. Inactive

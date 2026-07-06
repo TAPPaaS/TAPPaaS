@@ -7,11 +7,17 @@
 
 import { existsSync, readFileSync, readdirSync } from "fs";
 import { join } from "path";
+import {
+  asString,
+  asStringArray,
+  defaultConfigDir as configRoot,
+} from "../../../lib/ts/src/config-io";
 import { Group, Organization, PeopleModel, Role, User } from "./types";
 
+// The People domain lives in the "people" SUBDIR of the shared config root
+// (config-io.defaultConfigDir resolves TAPPAAS_CONFIG / CONFIG_DIR / target).
 export function defaultConfigDir(): string {
-  const base = process.env.TAPPAAS_CONFIG ?? "/home/tappaas/config";
-  return join(base, "people");
+  return join(configRoot(), "people");
 }
 
 function readJsonFiles(dir: string): unknown[] {
@@ -20,17 +26,64 @@ function readJsonFiles(dir: string): unknown[] {
   for (const f of readdirSync(dir)) {
     if (!f.endsWith(".json")) continue;
     const txt = readFileSync(join(dir, f), "utf8");
-    out.push(JSON.parse(txt));
+    try {
+      out.push(JSON.parse(txt));
+    } catch (e) {
+      // Name the offending file — one malformed entity must fail loudly and
+      // precisely, not crash every command with a raw stack trace.
+      throw new Error(
+        `malformed JSON in ${join(dir, f)}: ${e instanceof Error ? e.message : String(e)}`,
+      );
+    }
   }
   return out;
 }
 
-function asString(v: unknown): string {
-  return typeof v === "string" ? v : "";
+// ── per-kind decoders: raw JSON object → typed entity ──────────────────
+// The ONE place the entity-shape defaults live ("company", "team", state
+// fallback "active"). Used by loadPeople below AND by entity.ts's
+// validate-with-candidate path, so both decode identically.
+
+export function toRole(o: Record<string, unknown>): Role {
+  return {
+    name: asString(o.name),
+    displayName: asString(o.displayName),
+    description: typeof o.description === "string" ? o.description : "",
+  };
 }
-function asStringArray(v: unknown): string[] {
-  if (!Array.isArray(v)) return [];
-  return v.filter((x): x is string => typeof x === "string");
+
+export function toOrg(o: Record<string, unknown>): Organization {
+  return {
+    name: asString(o.name),
+    type: typeof o.type === "string" ? o.type : "company",
+    displayName: asString(o.displayName),
+    owner: asString(o.owner),
+    parentOrg: typeof o.parentOrg === "string" ? o.parentOrg : null,
+  };
+}
+
+export function toGroup(o: Record<string, unknown>): Group {
+  return {
+    name: asString(o.name),
+    type: typeof o.type === "string" ? o.type : "team",
+    displayName: asString(o.displayName),
+    ownerOrg: asString(o.ownerOrg),
+    roles: asStringArray(o.roles),
+  };
+}
+
+export function toUser(o: Record<string, unknown>): User {
+  const state = asString(o.state);
+  return {
+    name: asString(o.name),
+    displayName: asString(o.displayName),
+    primaryEmail: asString(o.primaryEmail),
+    state: (state === "planned" || state === "suspended" || state === "terminated"
+      ? state
+      : "active") as User["state"],
+    memberOf: asStringArray(o.memberOf),
+    roles: asStringArray(o.roles),
+  };
 }
 
 export function loadPeople(peopleDir: string): PeopleModel {
@@ -42,52 +95,22 @@ export function loadPeople(peopleDir: string): PeopleModel {
   };
 
   for (const raw of readJsonFiles(join(peopleDir, "roles"))) {
-    const o = raw as Record<string, unknown>;
-    const r: Role = {
-      name: asString(o.name),
-      displayName: asString(o.displayName),
-      description: typeof o.description === "string" ? o.description : "",
-    };
+    const r = toRole(raw as Record<string, unknown>);
     model.roles.set(r.name, r);
   }
 
   for (const raw of readJsonFiles(join(peopleDir, "organizations"))) {
-    const o = raw as Record<string, unknown>;
-    const org: Organization = {
-      name: asString(o.name),
-      type: typeof o.type === "string" ? o.type : "company",
-      displayName: asString(o.displayName),
-      owner: asString(o.owner),
-      parentOrg: typeof o.parentOrg === "string" ? o.parentOrg : null,
-    };
+    const org = toOrg(raw as Record<string, unknown>);
     model.organizations.set(org.name, org);
   }
 
   for (const raw of readJsonFiles(join(peopleDir, "groups"))) {
-    const o = raw as Record<string, unknown>;
-    const g: Group = {
-      name: asString(o.name),
-      type: typeof o.type === "string" ? o.type : "team",
-      displayName: asString(o.displayName),
-      ownerOrg: asString(o.ownerOrg),
-      roles: asStringArray(o.roles),
-    };
+    const g = toGroup(raw as Record<string, unknown>);
     model.groups.set(g.name, g);
   }
 
   for (const raw of readJsonFiles(join(peopleDir, "users"))) {
-    const o = raw as Record<string, unknown>;
-    const state = asString(o.state);
-    const u: User = {
-      name: asString(o.name),
-      displayName: asString(o.displayName),
-      primaryEmail: asString(o.primaryEmail),
-      state: (state === "planned" || state === "suspended" || state === "terminated"
-        ? state
-        : "active") as User["state"],
-      memberOf: asStringArray(o.memberOf),
-      roles: asStringArray(o.roles),
-    };
+    const u = toUser(raw as Record<string, unknown>);
     model.users.set(u.name, u);
   }
 

@@ -8,11 +8,12 @@
 
 import { existsSync, readFileSync, readdirSync } from "fs";
 import { basename, join } from "path";
+import { defaultConfigDir } from "../../../lib/ts/src/config-io";
 import { ModuleConfig } from "./types";
 
-export function defaultConfigDir(): string {
-  return process.env.TAPPAAS_CONFIG ?? process.env.CONFIG_DIR ?? "/home/tappaas/config";
-}
+// Config-root resolution comes from the shared lib (TAPPAAS_CONFIG, then
+// CONFIG_DIR, then /home/tappaas/config). Re-exported for main.ts/client.ts.
+export { defaultConfigDir };
 
 // Node hostnames from site.json (.hardware.nodes[].name) — the bash
 // `get_all_node_hostnames` equivalent (ported from health-manager). Authoritative

@@ -15,8 +15,9 @@
 //   restore list|restore|list-all  SPECIAL verb — recovery (= backup-restore.sh)
 //   resolve <module>               print one resolved policy (cascade primitive)
 //
-// add/modify/delete are PARKED — see TODO(question 1/2): the policy is a
-// CASCADE, not a stored object; what those verbs write is unresolved.
+//   modify <module> [flags]        write the module .backup layer (decision 7)
+//   add <module> / delete <module> wire / un-wire the module into the shared
+//                                  PBS job (dependsOn backup:vm)
 //
 // Exit codes: ok=0, error=1.
 
@@ -33,27 +34,11 @@ import { addToBackupJob, modifyBackup, ModifyOpts, removeFromBackupJob } from ".
 import { applyPlan, computePlan } from "./reconcile";
 import { restoreList, restoreListAll, restoreRun } from "./restore";
 import { validate } from "./validate";
-import { HelpSpec, renderHelp } from "./help";
+import { HelpSpec, renderHelp } from "../../../lib/ts/src/help";
+import { GN, CL, die, guarded, info, warn } from "../../../lib/ts/src/cli";
 import { BackupPolicyStatus, Client } from "./types";
 
 const VERSION = "0.1.0";
-
-const YW = "\x1b[01;33m";
-const RD = "\x1b[01;31m";
-const GN = "\x1b[1;92m";
-const CL = "\x1b[0m";
-
-function info(msg: string): void {
-  console.log(msg);
-}
-function warn(msg: string): void {
-  console.log(`${YW}[Warning]${CL} ${msg}`);
-}
-class DieError extends Error {}
-function die(msg: string): never {
-  console.error(`${RD}[Error]${CL} ${msg}`);
-  throw new DieError(msg);
-}
 
 const HELP: HelpSpec = {
   name: "backup-manager",
@@ -121,7 +106,6 @@ interface Opts {
   apply: boolean;
   environment: string | null;
   disabledOnly: boolean;
-  pbsEndpoint: string | null; // ADR-012 P7: target a non-local PBS (satellite)
   // modify flags (undefined = not given, so the field is left unchanged).
   enabled?: boolean;
   retention?: string;
@@ -134,7 +118,6 @@ function parseOpts(args: string[]): Opts {
   let apply = false;
   let environment: string | null = null;
   let disabledOnly = false;
-  let pbsEndpoint: string | null = null;
   let enabled: boolean | undefined;
   let retention: string | undefined;
   let exclude: string[] | undefined;
@@ -158,9 +141,11 @@ function parseOpts(args: string[]): Opts {
       environment = v;
       i++;
     } else if (a === "--pbs") {
+      // ADR-012 P7: --pbs is handled by the entry-point argv pre-scan (it
+      // feeds the CliClient endpoint). Consume flag+value here so it never
+      // leaks into `rest`, but there is nothing to store.
       const v = args[i + 1];
       if (!v) die("--pbs requires a PBS endpoint (host) argument");
-      pbsEndpoint = v;
       i++;
     } else if (a === "--enabled") {
       const v = args[i + 1];
@@ -181,7 +166,7 @@ function parseOpts(args: string[]): Opts {
       rest.push(a);
     }
   }
-  return { configDir, json, apply, environment, disabledOnly, pbsEndpoint, enabled, retention, exclude, rest };
+  return { configDir, json, apply, environment, disabledOnly, enabled, retention, exclude, rest };
 }
 
 // ── list / show: every module's resolved policy (+ PBS-job wiring) ─────
@@ -333,13 +318,26 @@ function cmdReconcile(opts: Opts, client: Client): void {
     info("(preview — re-run with --apply to commit; default is preview)");
     return;
   }
+  if (!job.reachable) {
+    // The plan was computed against an offline (empty) job snapshot — applying
+    // it would blindly re-add every wired module and fail on the first
+    // controller call anyway. Refuse cleanly instead.
+    die(
+      "reconcile --apply refused: PBS / cluster not reachable, so the live job " +
+        "state is unknown. Re-run without --apply to preview, or retry when PBS is up.",
+    );
+  }
   if (plan.actions.length === 0) {
     info(`${GN}Nothing to do — PBS already matches resolved policies.${CL}`);
     return;
   }
-  const n = applyPlan(client, plan);
+  const res = applyPlan(client, plan);
   info("");
-  info(`${GN}Applied ${n} action(s).${CL}`);
+  if (res.failures.length > 0) {
+    for (const f of res.failures) warn(`failed ${f.target} — ${f.message}`);
+    die(`applied ${res.applied} of ${res.total} action(s); ${res.failures.length} failed`);
+  }
+  info(`${GN}Applied ${res.applied} action(s).${CL}`);
 }
 
 function cmdRestore(opts: Opts, client: Client): number {
@@ -424,7 +422,7 @@ export function run(argv: string[], client: Client): number {
   const cmd = argv[0];
   const opts = parseOpts(argv.slice(1));
 
-  try {
+  return guarded(() => {
     switch (cmd) {
       case "validate":
         cmdValidate(opts);
@@ -464,10 +462,7 @@ export function run(argv: string[], client: Client): number {
         usage();
         die(`Unknown command: ${cmd}`);
     }
-  } catch (e) {
-    if (e instanceof DieError) return 1;
-    throw e;
-  }
+  });
 }
 
 // Entry point (only when run directly, not when imported by tests).

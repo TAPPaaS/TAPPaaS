@@ -13,7 +13,7 @@
 // so a write is refused before it touches disk. validate-environment.sh remains
 // the authoritative full-conformance gate invoked here.
 
-import { spawnSync } from "child_process";
+import { captureResult } from "../../../lib/ts/src/exec";
 
 const VALIDATE_BIN = process.env.VALIDATE_ENVIRONMENT_BIN ?? "validate-environment.sh";
 
@@ -29,12 +29,10 @@ export interface ValidateResult {
 export function runValidate(configDir: string, target?: string): ValidateResult {
   const args: string[] = ["--config-dir", configDir];
   if (target) args.push(target);
-  const r = spawnSync(VALIDATE_BIN, args, {
-    encoding: "utf8",
-    maxBuffer: 64 * 1024 * 1024,
-  });
-  if (r.error) {
-    return { status: 1, stdout: "", stderr: `${VALIDATE_BIN}: ${r.error.message}` };
+  const r = captureResult(VALIDATE_BIN, args);
+  if (!r.ran) {
+    return { status: 1, stdout: "", stderr: `${VALIDATE_BIN}: ${r.stderr}` };
   }
-  return { status: r.status ?? 1, stdout: r.stdout ?? "", stderr: r.stderr ?? "" };
+  // captureResult maps a null exit status to -1; keep the historical "1 = errors".
+  return { status: r.rc < 0 ? 1 : r.rc, stdout: r.stdout, stderr: r.stderr };
 }

@@ -6,9 +6,9 @@
 // shells out to authentik-manager. NO plane/module logic is reimplemented here:
 // these are thin FFI boundaries.
 
-import { spawnSync } from "child_process";
 import { existsSync, readFileSync, readdirSync } from "fs";
 import { basename, join } from "path";
+import { captureResult } from "../../../lib/ts/src/exec";
 import { ModuleClient, NetworkClient } from "./types";
 
 export class NetworkUnreachable extends Error {}
@@ -16,14 +16,16 @@ export class NetworkUnreachable extends Error {}
 const NETWORK_MANAGER_BIN = process.env.NETWORK_MANAGER_BIN ?? "network-manager";
 const MODULE_MANAGER_BIN = process.env.MODULE_MANAGER_BIN ?? "module-manager";
 
+// Run + capture via the shared exec helper, mapping a spawn failure (binary
+// missing on PATH) to the manager-specific NetworkUnreachable so the reconcile
+// verb can die with its "unreachable" message.
 function run(bin: string, args: string[]): string {
-  const r = spawnSync(bin, args, { encoding: "utf8", maxBuffer: 64 * 1024 * 1024 });
-  if (r.error) {
-    throw new NetworkUnreachable(`${bin} ${args[0] ?? ""}: ${r.error.message}`);
+  const r = captureResult(bin, args);
+  if (!r.ran) {
+    throw new NetworkUnreachable(`${bin} ${args[0] ?? ""}: ${r.stderr}`);
   }
-  if (r.status !== 0) {
-    const stderr = (r.stderr ?? "").trim();
-    throw new Error(`${bin} ${args.join(" ")} failed (exit ${r.status}): ${stderr}`);
+  if (r.rc !== 0) {
+    throw new Error(`${bin} ${args.join(" ")} failed (exit ${r.rc}): ${r.stderr.trim()}`);
   }
   return r.stdout;
 }
@@ -31,12 +33,9 @@ function run(bin: string, args: string[]): string {
 export class CliNetworkClient implements NetworkClient {
   zoneExists(zone: string): boolean {
     // network-manager exists <name> — exit 0 if present, non-zero otherwise.
-    const r = spawnSync(NETWORK_MANAGER_BIN, ["exists", zone], {
-      encoding: "utf8",
-      maxBuffer: 64 * 1024 * 1024,
-    });
-    if (r.error) throw new NetworkUnreachable(`${NETWORK_MANAGER_BIN} exists: ${r.error.message}`);
-    return r.status === 0;
+    const r = captureResult(NETWORK_MANAGER_BIN, ["exists", zone]);
+    if (!r.ran) throw new NetworkUnreachable(`${NETWORK_MANAGER_BIN} exists: ${r.stderr}`);
+    return r.rc === 0;
   }
 
   reconcileNetwork(apply: boolean): void {

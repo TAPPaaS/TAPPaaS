@@ -3,7 +3,8 @@
 // Tiny inline assert harness (no test framework, no node:assert) — mirrors the
 // people-manager zero-dep convention. Run after compiling via the test/unit
 // tsconfig (see test.sh):
-//   node dist-test/test/unit/reconcile.test.js
+// (rootDir is the cicd root, so emit mirrors the tree):
+//   node dist-test/manager/environment-manager/test/unit/reconcile.test.js
 
 import { Environment } from "../../src/types";
 import { applyPlan, computePlan } from "../../src/reconcile";

@@ -14,12 +14,10 @@ For the full rationale see
 src/foundation/tappaas-cicd/
 ├── install.sh / update.sh / test.sh   # top-level entry scripts (drive the dispatchers)
 ├── manager/                           # domain-object lifecycle (CONFIG state)
-│   ├── install.sh / update.sh / test.sh   # dispatcher: loop children, skip TEMPLATE/
-│   ├── TEMPLATE/                      # P10 skeleton manager (copy to scaffold)
+│   ├── install.sh / update.sh / test.sh   # dispatcher: loop child components
 │   └── <name>-manager/               # one dir per manager component
 ├── controller/                        # infrastructure control (RUNTIME state)
-│   ├── install.sh / update.sh / test.sh   # dispatcher: loop children, skip TEMPLATE/
-│   ├── TEMPLATE/                      # P10 skeleton controller (copy to scaffold)
+│   ├── install.sh / update.sh / test.sh   # dispatcher: loop child components
 │   └── <name>-controller/            # one dir per controller component
 ├── lib/                               # shared libraries, sourced (never copied per component)
 └── scripts/                           # foundation bring-up + unit tests (scripts/test/)
@@ -60,6 +58,15 @@ files:
 - The preferred entry-point language order is **TypeScript → Python → Bash**
   (see "Preferred language" below).
 
+### Config root resolution
+
+Every component resolves the config root the same way:
+**`$TAPPAAS_CONFIG`, else `$CONFIG_DIR`, else `/home/tappaas/config`** —
+`TAPPAAS_CONFIG` is the TAPPaaS-specific override and wins; `CONFIG_DIR` is the
+long-standing variable the bash layer exports. A component must never invent a
+different precedence (managers used to disagree, which made two managers read
+different roots under the same environment).
+
 ## Three-level dispatch
 
 The control plane is driven by three trivial levels — adding a component never
@@ -68,13 +75,12 @@ changes anything above it:
 1. **Top level** — `tappaas-cicd/{install,update,test}.sh` call
    `manager/<verb>.sh` and `controller/<verb>.sh`.
 2. **Dispatcher level** — `manager/<verb>.sh` and `controller/<verb>.sh` each
-   loop their child component directories and run the matching verb script,
-   **skipping `TEMPLATE/`**. There is no shared runner; each dispatcher is a few
-   lines:
+   loop their child component directories and run the matching verb script.
+   There is no shared runner; each dispatcher is a few lines:
 
    ```bash
    for d in "${here}"/*/; do
-       [ "$(basename "${d}")" = TEMPLATE ] && continue
+       [ "$(basename "${d}")" = TEMPLATE ] && continue   # defensive: scaffold/work dirs stay inert
        [ -x "${d}install.sh" ] || continue
        "${d}install.sh" "$@"
    done
@@ -84,8 +90,8 @@ changes anything above it:
    `test.sh` does the actual work.
 
 **Adding a component** = drop a directory containing the standard verb scripts
-(scaffold from `TEMPLATE/`). The dispatcher picks it up automatically; nothing
-above it is edited.
+(copy the nearest real component and edit — see "Scaffolding a new component").
+The dispatcher picks it up automatically; nothing above it is edited.
 
 > **Top-level wiring is additive (option A).** The cicd VM keeps its own
 > `nixos-rebuild`/`test` for the VM itself **and** drives the manager/controller
@@ -140,16 +146,17 @@ components are not rewritten by this rule — they are migrated opportunisticall
 
 ## Scaffolding a new component
 
-Copy the matching template and edit in place:
+Copy the nearest real component and edit in place (the scaffold TEMPLATE dirs
+were retired — they had drifted from what real components look like):
 
 ```bash
-# a new manager
-cp -r manager/TEMPLATE manager/my-manager
+# a new TypeScript manager — copy a small real one and rename
+cp -r manager/site-manager manager/my-manager
 
-# a new controller
-cp -r controller/TEMPLATE controller/my-controller
+# a new bash controller — copy a small real one and rename
+cp -r controller/ap-controller controller/my-controller
 ```
 
-Then rename `<name>.{ts,py,sh}`, fill in the verb scripts, and (for a manager)
-the `validate.sh`. The dispatcher will run it on the next install/update/test
-with no changes above the component directory.
+Then rename the entry point, rewrite `src/` (or the entry script), fill in the
+verb scripts, and (for a manager) the `validate.sh`. The dispatcher will run it
+on the next install/update/test with no changes above the component directory.

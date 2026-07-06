@@ -37,8 +37,10 @@ and calls the controller's mutation verbs (`add-to-job <vmid>`, `apply-schedule
 
 ## TypeScript port
 
-A first-pass TypeScript port lives under `src/` (built by `default.nix` via
-`tsc`, zero npm deps, ambient `src/env.d.ts` — mirrors `people-manager`). It is
+A first-pass TypeScript port lives under `src/` (built by `default.nix`, a thin
+wrapper over the shared `lib/nix/ts-manager.nix` builder: `tsc`, zero npm deps,
+ambient `lib/ts/src/env.d.ts`; shared CLI/help/exec/config-io helpers come from
+`lib/ts/src/` — mirrors `site-manager`). It is
 **not yet wired into `install.sh`** (the `.sh` entry points stay live). The TS
 `backup-manager` shells out to `backup-controller` via `CliClient`
 (`src/client.ts`, parsing `--json` output) — no PBS API is reimplemented.

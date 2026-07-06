@@ -20,6 +20,7 @@
 // NO firewall/scripts/ paths appear here.
 
 import { spawnSync } from "child_process";
+import { configEnv } from "../../../lib/ts/src/exec";
 import { Plane, PlaneClient, PlaneResult, PlaneStatus } from "./types";
 
 // The bin name for each plane (overridable via env for tests / relocations).
@@ -40,15 +41,14 @@ export interface RunResult {
 // Run a controller, streaming its output through to the operator's terminal
 // (stdio: inherit) so the per-plane detail is visible, exactly as the bash
 // orchestrator did. Returns the exit code.
+//
+// Kept LOCAL (not lib exec.stream): the plane loop must not throw on a spawn
+// failure — a missing bin is a per-plane "error" RunResult (rc -1, ran false)
+// so the other planes still run and the report names the broken one. The
+// config-root env plumbing (CONFIG_DIR + TAPPAAS_CONFIG for the bash/TS
+// children) IS the shared exec.configEnv().
 function runStreaming(bin: string, args: string[]): RunResult {
-  // The plane controllers read CONFIG_DIR (zones.json / switch+ap config live
-  // there). The bash orchestrator got it from common-install-routines.sh;
-  // network-manager must pass it explicitly (default the standard target path),
-  // otherwise the controllers fail with "CONFIG_DIR is not set".
-  const configDir =
-    process.env.CONFIG_DIR ?? process.env.TAPPAAS_CONFIG ?? "/home/tappaas/config";
-  const env = { ...process.env, CONFIG_DIR: configDir, TAPPAAS_CONFIG: configDir };
-  const r = spawnSync(bin, args, { encoding: "utf8", stdio: "inherit", env });
+  const r = spawnSync(bin, args, { encoding: "utf8", stdio: "inherit", env: configEnv() });
   if (r.error) {
     return { rc: -1, stdout: "", stderr: r.error.message, ran: false };
   }

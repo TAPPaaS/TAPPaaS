@@ -1,10 +1,8 @@
 // help.ts — shared --help renderer for the TAPPaaS TypeScript managers.
 //
-// VENDORED, NOT imported cross-manager: each manager's nix build compiles only
-// its OWN src/ (tsc rootDir=src, src=./.), so this file is copied VERBATIM into
-// every manager's src/ (the same "mirror" convention used for env.d.ts). Keep
-// the copies byte-identical — the whole point is that every manager renders its
-// --help the SAME way.
+// SHARED via lib/ts (ADR-007 post-implementation refactor, Phase 3) — the
+// former per-manager vendored copies are gone; every manager imports this
+// one file so --help renders the SAME way everywhere.
 //
 // A manager declares a HelpSpec (its verbs + per-verb options) and prints
 // `renderHelp(spec)`. Layout (matches the network-manager reference):

@@ -35,13 +35,10 @@
 
 import { existsSync, readFileSync, writeFileSync, renameSync, mkdtempSync } from "fs";
 import { dirname, join } from "path";
+import { isDocKey } from "./zones";
 
 // Operator-pinned fields per zone — never adopted from the release source (#209).
 const AUTO_FIELDS = new Set<string>(["state"]);
-
-function isDocKey(k: string): boolean {
-  return k.startsWith("_");
-}
 
 // A parsed zones document: the full raw object (doc blocks included). Unlike
 // zones.ts's loadZones we keep EVERYTHING (incl. "_*") so writes round-trip the

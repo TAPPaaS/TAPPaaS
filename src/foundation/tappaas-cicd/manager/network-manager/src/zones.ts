@@ -6,8 +6,9 @@
 // does NOT move in this chunk). Doc blocks (keys beginning "_") are preserved
 // across writes; only real zones are indexed.
 
-import { existsSync, readFileSync, writeFileSync, renameSync, mkdtempSync } from "fs";
-import { dirname, join } from "path";
+import { existsSync, readFileSync } from "fs";
+import { join } from "path";
+import { defaultConfigDir, writeJsonAtomic } from "../../../lib/ts/src/config-io";
 import { Zone, ZonesDoc } from "./types";
 
 // Dynamic-allocation VLAN window within a type band (10.<typeId>.<sub>.0/24).
@@ -15,9 +16,9 @@ import { Zone, ZonesDoc } from "./types";
 export const ZONE_SUB_MAX = 99;
 export const ZONE_SUB_MIN = 60;
 
-export function defaultConfigDir(): string {
-  return process.env.TAPPAAS_CONFIG ?? "/home/tappaas/config";
-}
+// Config-root resolution is the shared lib rule (TAPPAAS_CONFIG > CONFIG_DIR >
+// /home/tappaas/config); re-exported so callers keep importing it from here.
+export { defaultConfigDir };
 
 export function defaultZonesFile(): string {
   return join(defaultConfigDir(), "zones.json");
@@ -64,16 +65,18 @@ export function readSiteName(configDir: string = defaultConfigDir()): string {
 }
 
 // The distributed zones.json TEMPLATE shipped alongside the bin. The compiled
-// entry (main.js) lives at <out>/lib/main.js and the nix installPhase copies
-// zones.json next to it (<out>/lib/zones.json); __dirname therefore resolves
-// the template via the bin's REAL dir (node follows the /home/tappaas/bin
-// symlink), exactly as the component locates its own assets. An override is
-// allowed for tests / source-tree runs via NM_TEMPLATE.
+// entry (main.js) lives at <out>/lib/manager/network-manager/src/main.js and
+// the nix postInstall copies zones.json next to it; __dirname therefore
+// resolves the template via the bin's REAL dir (node follows the
+// /home/tappaas/bin symlink), exactly as the component locates its own assets.
+// An override is allowed for tests / source-tree runs via NM_TEMPLATE.
 export function defaultTemplateFile(): string {
   return process.env.NM_TEMPLATE ?? join(__dirname, "zones.json");
 }
 
-function isDocKey(k: string): boolean {
+// Doc-block / comment keys ("_comment" etc.): never treated as zones.
+// Shared by zonesinit.ts and zonesmerge.ts.
+export function isDocKey(k: string): boolean {
   return k.startsWith("_");
 }
 
@@ -106,17 +109,10 @@ export function loadZones(file: string): ZonesDoc {
   return { raw, zones };
 }
 
-// Atomically write the raw document back (temp → validate-parse → rename),
-// mirroring zone-controller.sh's jq_write safety.
+// Atomically write the raw document back (temp → rename via the shared
+// config-io helper), mirroring zone-controller.sh's jq_write safety.
 export function saveZones(file: string, doc: ZonesDoc): void {
-  const out = JSON.stringify(doc.raw, null, 2) + "\n";
-  // Re-parse to confirm we are writing valid JSON (defence in depth).
-  JSON.parse(out);
-  const dir = dirname(file);
-  const tmpDir = mkdtempSync(join(dir, ".zones-"));
-  const tmp = join(tmpDir, "zones.json");
-  writeFileSync(tmp, out, "utf8");
-  renameSync(tmp, file);
+  writeJsonAtomic(file, doc.raw);
 }
 
 export function zoneExists(doc: ZonesDoc, name: string): boolean {

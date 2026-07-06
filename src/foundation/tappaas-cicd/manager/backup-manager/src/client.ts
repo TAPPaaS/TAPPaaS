@@ -4,7 +4,7 @@
 // shells out to authentik-manager and network-manager to the plane controllers.
 //
 // backup-controller is BASH (controller/backup-controller/backup-controller).
-// Query verbs (`job-status` / `list` / `namespaces`) accept `--json` and emit a
+// Query verbs (`job-status` / `list`) accept `--json` and emit a
 // single JSON object — including {"reachable": false} when PBS/the cluster is
 // offline (the controller degrades gracefully and still exits 0). This client
 // uses --json and parses the structured output (NO human-line scraping). The
@@ -12,7 +12,7 @@
 // resolved cascade into PBS — the controller owns the PBS write. A non-zero exit
 // (other than the graceful offline skip) throws.
 
-import { spawnSync } from "child_process";
+import { captureResult } from "../../../lib/ts/src/exec";
 import { Client, JobStatus } from "./types";
 
 export class BackupControllerUnreachable extends Error {}
@@ -20,20 +20,20 @@ export class BackupControllerUnreachable extends Error {}
 const BIN = process.env.BACKUP_CONTROLLER_BIN ?? "backup-controller";
 
 function run(args: string[]): string {
-  // The controller reads CONFIG_DIR (module/site JSONs live there); pass it
-  // through explicitly so it never fails with "CONFIG_DIR is not set".
-  const configDir =
-    process.env.CONFIG_DIR ?? process.env.TAPPAAS_CONFIG ?? "/home/tappaas/config";
-  const env = { ...process.env, CONFIG_DIR: configDir, TAPPAAS_CONFIG: configDir };
-  const r = spawnSync(BIN, args, { encoding: "utf8", maxBuffer: 64 * 1024 * 1024, env });
-  if (r.error) {
-    throw new BackupControllerUnreachable(`${BIN} ${args[0]}: ${r.error.message}`);
+  // The controller reads CONFIG_DIR (module/site JSONs live there); the lib's
+  // captureResult injects the resolved config root in BOTH spellings
+  // (CONFIG_DIR + TAPPAAS_CONFIG), so it never fails with "CONFIG_DIR is not
+  // set". A spawn failure (binary missing on PATH) is the DISTINCT
+  // BackupControllerUnreachable — callers (e.g. cmdReconcile's offline
+  // preview) rely on catching it; a non-zero exit stays a generic Error.
+  const r = captureResult(BIN, args);
+  if (!r.ran) {
+    throw new BackupControllerUnreachable(`${BIN} ${args[0]}: ${r.stderr}`);
   }
-  if (r.status !== 0) {
-    const stderr = (r.stderr ?? "").trim();
-    throw new Error(`${BIN} ${args.join(" ")} failed (exit ${r.status}): ${stderr}`);
+  if (r.rc !== 0) {
+    throw new Error(`${BIN} ${args.join(" ")} failed (exit ${r.rc}): ${r.stderr.trim()}`);
   }
-  return r.stdout ?? "";
+  return r.stdout;
 }
 
 // Run a query verb with --json and parse the single JSON object it emits.
@@ -81,16 +81,6 @@ export class CliClient implements Client {
     // { reachable, module, vmid, snapshots: [backup-time, ...] }.
     const o = runJson([...this.ep(), "list", module]);
     return asStringArray(o.snapshots);
-  }
-
-  namespaces(): string[] {
-    // { reachable, storage, namespaces: [...] }.
-    const o = runJson([...this.ep(), "namespaces"]);
-    return asStringArray(o.namespaces);
-  }
-
-  verify(module: string): void {
-    run([...this.ep(), "verify", module]);
   }
 
   addToJob(vmid: string, retention?: string): void {

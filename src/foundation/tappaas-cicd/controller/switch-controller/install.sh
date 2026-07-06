@@ -4,11 +4,6 @@
 set -euo pipefail
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 bin="${TAPPAAS_BIN:-/home/tappaas/bin}"
-for f in "${here}"/*; do
-    [ -f "${f}" ] || continue
-    b="$(basename "${f}")"
-    case "${b}" in install.sh|update.sh|test.sh|validate.sh|*.md) continue ;; esac
-    case "${b}" in test-*) continue ;; esac
-    [ -x "${f}" ] || chmod +x "${f}"
-    ln -sfn "${f}" "${bin}/${b}"; echo "  linked ${bin}/${b}"
-done
+# Shared link helper (lib/ doctrine: scaffolding lives once, sourced).
+. "${here}/../../lib/component-install-lib.sh"
+link_component_executables "${here}"

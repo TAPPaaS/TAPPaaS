@@ -1,8 +1,13 @@
-// Minimal ambient declarations for the Node globals + built-in modules this
-// manager uses, so `tsc` compiles with ZERO npm dependencies (no @types/node).
-// Mirrors people-manager / network-manager / the S-TS switch-controller pilot.
-// Only the surface actually used here is declared; everything is typed (no
-// implicit `any`) to satisfy strict mode.
+// env.d.ts — shared ambient declarations for the Node globals + built-in
+// modules the TAPPaaS managers use, so `tsc` compiles with ZERO npm
+// dependencies (no @types/node). This is the UNION of what the managers need;
+// it replaces the per-manager vendored copies (ADR-007 post-implementation
+// refactor, Phase 3). Everything is typed (no implicit `any`) to satisfy
+// strict mode.
+//
+// NOTE on spawnSync: stdout/stderr are truthfully `string | null` (null when
+// stdio is "inherit" — the child wrote straight to the terminal). Prefer the
+// lib/ts/src/exec.ts helpers, which normalise, over reading them raw.
 
 declare const console: {
   log(...args: unknown[]): void;
@@ -13,6 +18,7 @@ declare const process: {
   argv: string[];
   env: Record<string, string | undefined>;
   exit(code?: number): never;
+  pid: number;
   stdout: { write(s: string): void };
   stderr: { write(s: string): void };
 };
@@ -32,10 +38,20 @@ declare const module: unknown;
 declare module "fs" {
   export function existsSync(path: string): boolean;
   export function readFileSync(path: string, encoding: "utf8"): string;
-  export function writeFileSync(path: string, data: string, encoding: "utf8"): void;
+  export function writeFileSync(path: string, data: string, encoding?: "utf8"): void;
   export function renameSync(oldPath: string, newPath: string): void;
   export function mkdtempSync(prefix: string): string;
   export function readdirSync(path: string): string[];
+  export function mkdirSync(path: string, options?: { recursive?: boolean }): void;
+  export function unlinkSync(path: string): void;
+  export function rmSync(path: string, options?: { recursive?: boolean; force?: boolean }): void;
+  export function rmdirSync(path: string): void;
+  export function copyFileSync(src: string, dest: string): void;
+  export interface StatLike {
+    isDirectory(): boolean;
+    isFile(): boolean;
+  }
+  export function statSync(path: string): StatLike;
 }
 
 // ── node:path ──────────────────────────────────────────────────────────
@@ -45,19 +61,28 @@ declare module "path" {
   export function join(...parts: string[]): string;
 }
 
-// ── node:child_process (the git / validate / cascade FFI boundary) ─────
+// ── node:os (unit tests' writable temp trees) ──────────────────────────
+declare module "os" {
+  export function tmpdir(): string;
+}
+
+// ── node:child_process (the manager → controller/bash FFI boundary) ────
 declare module "child_process" {
   export interface SpawnSyncReturn {
     status: number | null;
-    stdout: string;
-    stderr: string;
+    // null when stdio is "inherit" (the child wrote straight to the terminal).
+    stdout: string | null;
+    stderr: string | null;
     error?: Error;
   }
   export interface SpawnSyncOptions {
     encoding?: "utf8";
     env?: Record<string, string | undefined>;
     maxBuffer?: number;
-    stdio?: string | (string | number)[];
+    // "inherit" streams the child's stdio to the operator's terminal (used for
+    // long-running scripts so their step-by-step output is visible, exactly as
+    // the bash orchestrators do).
+    stdio?: "inherit" | "pipe" | string | (string | number)[];
   }
   export function spawnSync(
     command: string,

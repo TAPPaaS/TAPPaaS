@@ -3,9 +3,12 @@
 ## Language and build
 
 - **Language:** TypeScript (ADR-007 §Health / Remaining-outstanding #3), built
-  with `tsc` and zero npm dependencies (ambient `src/env.d.ts` declares only the
-  Node built-ins used). `default.nix` compiles + wraps a `bin/health-manager`
-  Node entry — the people-manager / switch-controller pilot pattern. The legacy
+  with `tsc` and zero npm dependencies (the shared ambient
+  `../../lib/ts/src/env.d.ts` declares the Node built-ins used). `default.nix`
+  is a thin import of the shared `../../lib/nix/ts-manager.nix` builder, which
+  compiles + wraps a `bin/health-manager` Node entry. Shared CLI plumbing
+  (colors/`die`/`guarded`, the `--help` renderer) and the ssh/pvesh cluster
+  helpers come from `../../lib/ts/src/`. The legacy
   `*.sh` scripts stay live and on `PATH`; **`install.sh` is not yet wired to the
   nix build** (deliberate, this pass).
 - **`update.sh`** re-runs `install.sh` (idempotent relink of the `*.sh`).

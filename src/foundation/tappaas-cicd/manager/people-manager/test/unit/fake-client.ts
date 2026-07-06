@@ -12,6 +12,9 @@ export class FakeClient implements PrimitiveClient {
   roles = new Set<string>();
   users = new Map<string, AkUser>();
   log: string[] = [];
+  // Method names that throw when called — for failure-path tests (applyPlan
+  // must continue past a failing action and report it).
+  failOn = new Set<string>();
 
   // Seed a foreign or pre-existing entity (NOT via the recorded mutators).
   seedGroup(name: string): void {
@@ -36,10 +39,6 @@ export class FakeClient implements PrimitiveClient {
   }
   listRoles(): AkNamed[] {
     return Array.from(this.roles).map((n) => ({ name: n, displayName: n }));
-  }
-  getUser(name: string): AkUser | null {
-    const u = this.users.get(name);
-    return u ? { ...u, groups: [...u.groups], roles: [...u.roles] } : null;
   }
   ensureUser(name: string, email: string, display: string, inactive: boolean): void {
     this.log.push(`ensure-user ${name} ${inactive ? "inactive" : "active"}`);
@@ -67,6 +66,7 @@ export class FakeClient implements PrimitiveClient {
     this.users.delete(name);
   }
   ensureGroup(name: string, _display: string): void {
+    if (this.failOn.has("ensureGroup")) throw new Error("simulated ensureGroup failure");
     this.log.push(`ensure-group ${name}`);
     this.groups.add(name);
   }

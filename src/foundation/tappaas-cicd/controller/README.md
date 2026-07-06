@@ -56,18 +56,17 @@ twice in a row must be safe and must not change the result of the first run.
 
 `controller/install.sh`, `controller/update.sh` and `controller/test.sh` are a
 thin **two-level dispatcher**. Each one walks every immediate sub-directory of
-`controller/`, **skips `TEMPLATE/`**, and runs the matching child verb script
-(`<child>/install.sh`, etc.) if it exists and is executable. A failing child
-does not abort the others; the worst return code is propagated, so CI can gate
-on overall convergence.
+`controller/` and runs the matching child verb script (`<child>/install.sh`,
+etc.) if it exists and is executable. A failing child does not abort the
+others; the worst return code is propagated, so CI can gate on overall
+convergence.
 
 ```
 controller/install.sh
   ├─ ap-controller/install.sh
   ├─ identity-controller/install.sh
   ├─ proxmox-controller/install.sh
-  ├─ switch-controller/install.sh
-  └─ (TEMPLATE/ — skipped)
+  └─ switch-controller/install.sh
 ```
 
 A child that has no executable verb script is simply skipped — for example the
@@ -90,5 +89,6 @@ Each controller directory contains a `README.md` (user-facing: what it does and
 how to drive its CLI) and a `DESIGN.md` (implementation notes: language, build,
 internal structure, how a manager calls it, and what is not yet implemented).
 
-`TEMPLATE/` is the skeleton you copy to scaffold a new controller; the
-dispatcher always skips it. See [`TEMPLATE/README.md`](TEMPLATE/README.md).
+To build a new controller, copy the nearest real one and edit (see the
+"Scaffolding a new component" section in [`../README.md`](../README.md) — the
+scaffold TEMPLATE dir was retired).

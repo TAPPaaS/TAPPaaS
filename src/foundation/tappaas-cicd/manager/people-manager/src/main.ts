@@ -19,28 +19,13 @@ import {
   parseFieldArgs,
 } from "./entity";
 import { CliPrimitiveClient, AuthentikUnreachable } from "./primitives";
+import { childOrgs, deepGroup, deepOrg, groupsOfOrg, orgRoots, usersOfGroup } from "./queries";
 import { applyPlan, computePlan, snapshot } from "./reconcile";
 import { PeopleModel, PrimitiveClient } from "./types";
-import { HelpSpec, renderHelp } from "./help";
+import { HelpSpec, renderHelp } from "../../../lib/ts/src/help";
+import { CL, GN, RD, die, guarded, info, warn } from "../../../lib/ts/src/cli";
 
 const VERSION = "0.1.0";
-
-const YW = "\x1b[01;33m";
-const RD = "\x1b[01;31m";
-const GN = "\x1b[1;92m";
-const CL = "\x1b[0m";
-
-function info(msg: string): void {
-  console.log(msg);
-}
-function warn(msg: string): void {
-  console.log(`${YW}[Warning]${CL} ${msg}`);
-}
-class DieError extends Error {}
-function die(msg: string): never {
-  console.error(`${RD}[Error]${CL} ${msg}`);
-  throw new DieError(msg);
-}
 
 const HELP: HelpSpec = {
   name: "people-manager",
@@ -236,8 +221,12 @@ function cmdSync(opts: Opts, client: PrimitiveClient): void {
     info(`${plan.actions.length} change(s) — re-run with --apply to push them to Authentik.`);
     return;
   }
-  const n = applyPlan(client, plan);
-  info(`${GN}Applied ${n} action(s).${CL}`);
+  const res = applyPlan(client, plan);
+  if (res.failures.length > 0) {
+    for (const f of res.failures) warn(`failed ${f.target} — ${f.message}`);
+    die(`applied ${res.applied} of ${res.total} action(s); ${res.failures.length} failed`);
+  }
+  info(`${GN}Applied ${res.applied} action(s).${CL}`);
 }
 
 // ── read-only CRUD: list / get over the JSON config ───────────────────
@@ -273,47 +262,9 @@ function reconcileReminder(): void {
   info(`Config written. Run '${GN}people-manager reconcile${CL}' to push to the identity service.`);
 }
 
-// ── relationship helpers (for --deep) ─────────────────────────────────
-// org → its groups (group.ownerOrg == org); group → its users
-// (user.memberOf includes group); org → child orgs (o.parentOrg == org).
-function groupsOfOrg(model: PeopleModel, org: string): string[] {
-  return Array.from(model.groups.values()).filter((g) => g.ownerOrg === org).map((g) => g.name).sort();
-}
-function usersOfGroup(model: PeopleModel, group: string): string[] {
-  return Array.from(model.users.values()).filter((u) => (u.memberOf ?? []).includes(group)).map((u) => u.name).sort();
-}
-function childOrgs(model: PeopleModel, org: string): string[] {
-  return Array.from(model.organizations.values()).filter((o) => o.parentOrg === org).map((o) => o.name).sort();
-}
-// A top-level org has no parent, or a parent that no longer exists.
-function orgRoots(model: PeopleModel, names: string[]): string[] {
-  return names.filter((n) => {
-    const p = model.organizations.get(n)?.parentOrg;
-    return !p || !model.organizations.has(p);
-  });
-}
-
-// JSON shapes for --deep --json.
-function deepGroup(model: PeopleModel, group: string): Record<string, unknown> {
-  const g = model.groups.get(group);
-  return {
-    group,
-    ownerOrg: g?.ownerOrg ?? "",
-    roles: g?.roles ?? [],
-    users: usersOfGroup(model, group).map((u) => ({ user: u, roles: model.users.get(u)?.roles ?? [] })),
-  };
-}
-function deepOrg(model: PeopleModel, org: string): Record<string, unknown> {
-  const o = model.organizations.get(org);
-  return {
-    org,
-    owner: o?.owner ?? "",
-    groups: groupsOfOrg(model, org).map((g) => deepGroup(model, g)),
-    subOrgs: childOrgs(model, org).map((c) => deepOrg(model, c)),
-  };
-}
-
-// Human tree for --deep.
+// ── --deep output ──────────────────────────────────────────────────────
+// The pure relationship queries (groupsOfOrg, usersOfGroup, childOrgs,
+// orgRoots, deepGroup, deepOrg) live in queries.ts. Here: the human tree.
 function printDeepGroup(model: PeopleModel, group: string, indent: string): void {
   const g = model.groups.get(group);
   const roles = (g?.roles ?? []).join(", ");
@@ -429,7 +380,7 @@ export function run(argv: string[], client: PrimitiveClient): number {
   const cmd = argv[0];
   const opts = parseOpts(argv.slice(1));
 
-  try {
+  return guarded(() => {
     switch (cmd) {
       case "reconcile":
         cmdSync(opts, client);
@@ -451,10 +402,7 @@ export function run(argv: string[], client: PrimitiveClient): number {
         usage();
         die(`Unknown command: ${cmd}`);
     }
-  } catch (e) {
-    if (e instanceof DieError) return 1;
-    throw e;
-  }
+  });
 }
 
 // Entry point (only when run directly, not when imported by tests).

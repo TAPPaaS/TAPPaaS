@@ -26,7 +26,8 @@ import {
   listModules,
   loadModule,
 } from "./config";
-import { HelpSpec, renderHelp } from "./help";
+import { HelpSpec, renderHelp } from "../../../lib/ts/src/help";
+import { CL, GN, RD, YW, die, guarded, info, warn } from "../../../lib/ts/src/cli";
 import {
   AddOptions,
   DeleteOptions,
@@ -39,23 +40,6 @@ import {
 import { validateModules } from "./validate";
 
 const VERSION = "0.1.0";
-
-const YW = "\x1b[01;33m";
-const RD = "\x1b[01;31m";
-const GN = "\x1b[1;92m";
-const CL = "\x1b[0m";
-
-function info(msg: string): void {
-  console.log(msg);
-}
-function warn(msg: string): void {
-  console.log(`${YW}[Warning]${CL} ${msg}`);
-}
-class DieError extends Error {}
-function die(msg: string): never {
-  console.error(`${RD}[Error]${CL} ${msg}`);
-  throw new DieError(msg);
-}
 
 const HELP: HelpSpec = {
   name: "module-manager",
@@ -597,13 +581,13 @@ export function run(argv: string[], client: ModuleClient): number {
     return 0;
   }
   const verb = rest[0];
-  const opts = parseOpts(rest.slice(1));
-  try {
+  // guarded() maps THROWN errors the standard way (DieError → 1, already
+  // printed; any other Error → a clean `[Error] <msg>` + 1). Child exit codes
+  // are RETURNED by dispatch(), not thrown, so they propagate unchanged.
+  return guarded(() => {
+    const opts = parseOpts(rest.slice(1));
     return dispatch(verb, opts, client);
-  } catch (e) {
-    if (e instanceof DieError) return 1;
-    throw e;
-  }
+  });
 }
 
 // Entry point (only when run directly, not when imported by tests).

@@ -5,7 +5,9 @@
 **TypeScript (first-pass port, ADR-007 verb-alignment #3); bash still live.** The
 manager is being migrated to TypeScript to match `people-manager` /
 `network-manager` (all-managers-to-TS, #3). The TS sources are under `src/`,
-built by `default.nix` with `tsc` (zero npm deps, ambient `src/env.d.ts`), and
+built by `default.nix` via the shared `lib/nix/ts-manager.nix` builder with
+`tsc` (zero npm deps, ambient `lib/ts/src/env.d.ts`; help/CLI/exec/config-io
+helpers imported from the shared `lib/ts/src/`), and
 expose the standardized verbs (`validate`/`list`/`show`/`resolve`/`modify`/
 `add`/`delete`/`reconcile`/`restore`). The original bash entry scripts
 (`backup-manager.sh`, `backup-status.sh`, `validate-backup.sh`,

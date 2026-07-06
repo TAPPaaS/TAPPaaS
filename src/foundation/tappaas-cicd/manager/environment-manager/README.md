@@ -23,7 +23,8 @@ A first-pass TypeScript port presents the standardized ADR-007 verbs on the
 `config/environments/*.json` and shells out to the plane/module managers for
 reconcile; it reimplements no plane logic (exactly as `people-manager` shells
 out to `authentik-manager`). Built with `tsc` (zero npm deps, ambient
-`src/env.d.ts`) and wrapped via `default.nix`. The bash scripts below stay live.
+`lib/ts/src/env.d.ts` from the shared TS library) and wrapped via `default.nix`
+(a thin import of `lib/nix/ts-manager.nix`). The bash scripts below stay live.
 
 ```
 environment-manager list [--json] [--config-dir DIR]

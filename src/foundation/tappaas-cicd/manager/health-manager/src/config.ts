@@ -10,12 +10,13 @@
 
 import { existsSync, readFileSync, readdirSync } from "fs";
 import { join } from "path";
+import { defaultConfigDir } from "../../../lib/ts/src/config-io";
 import { ConfigModule } from "./types";
 
-export function defaultConfigDir(): string {
-  return process.env.CONFIG_DIR ?? process.env.TAPPAAS_CONFIG ?? "/home/tappaas/config";
-}
+export { defaultConfigDir };
 
+// NOT config-io's asString: this one also stringifies numbers (module JSONs
+// carry vmid as either "311" or 311); the shared helper returns "" for numbers.
 function asString(v: unknown): string {
   if (typeof v === "string") return v;
   if (typeof v === "number") return String(v);

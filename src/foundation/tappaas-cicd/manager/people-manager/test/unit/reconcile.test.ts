@@ -59,7 +59,11 @@ const ROLES: Role[] = [
 
 function syncOnce(m: PeopleModel, c: FakeClient): number {
   const plan = computePlan(m, snapshot(c));
-  return applyPlan(c, plan);
+  const res = applyPlan(c, plan);
+  if (res.failures.length > 0) {
+    throw new Error(`syncOnce: ${res.failures.length} action(s) failed unexpectedly`);
+  }
+  return res.applied;
 }
 
 // ── 1. ensure-exists creates missing entities ──────────────────────────
@@ -337,6 +341,39 @@ function syncOnce(m: PeopleModel, c: FakeClient): number {
   check(h.groups.length === 2, "multi-org user joined groups across both orgs");
   check(h.roles.length === 3, "multi-org user assigned all 3 roles");
   check(computePlan(m, snapshot(c)).actions.length === 0, "multi-org user is idempotent");
+}
+
+// ── 9b. applyPlan continues past a failing action and reports it ────────
+// A client whose ensureGroup throws must not strand the remaining actions
+// (users still created), and the outcome carries applied/total/failures for
+// the caller's "applied N of M" report.
+{
+  const m = model({
+    roles: ROLES,
+    orgs: [{ name: "orgA", displayName: "A", owner: "judy" }],
+    groups: [{ name: "orgA__users", displayName: "A users", ownerOrg: "orgA", roles: ["user"] }],
+    users: [
+      {
+        name: "judy",
+        displayName: "Judy",
+        primaryEmail: "judy@x.io",
+        state: "active",
+        memberOf: ["orgA__users"],
+      },
+    ],
+  });
+  const c = new FakeClient();
+  c.failOn.add("ensureGroup");
+  const plan = computePlan(m, snapshot(c));
+  const res = applyPlan(c, plan);
+  check(res.total === plan.actions.length, "failing apply: outcome counts every planned action");
+  check(res.failures.length >= 1, "failing apply: ensure-group failure recorded");
+  check(res.applied === res.total - res.failures.length, "failing apply: applied = total - failed");
+  check(c.users.has("judy"), "failing apply: later actions still ran (user created)");
+  check(
+    res.failures.every((f) => f.message.includes("simulated ensureGroup failure")),
+    "failing apply: failure carries the underlying error message",
+  );
 }
 
 // ── 10. --dry-run changes nothing (plan computed, not applied) ──────────

@@ -7,8 +7,8 @@
 
 import { existsSync, mkdirSync, readFileSync, renameSync, unlinkSync, writeFileSync } from "fs";
 import { dirname, join } from "path";
-import { loadPeople, validateRefs } from "./config";
-import { Group, Organization, PeopleModel, Role, User } from "./types";
+import { loadPeople, toGroup, toOrg, toRole, toUser, validateRefs } from "./config";
+import { PeopleModel } from "./types";
 
 // Raised by the CRUD ops on a user-facing error (bad ref, missing entity, …).
 // main.ts maps this to a `die()` (exit 1); tests assert on it.
@@ -254,45 +254,6 @@ function applyCandidateToModel(
       break;
     }
   }
-}
-
-function toRole(o: Record<string, unknown>): Role {
-  return {
-    name: String(o.name ?? ""),
-    displayName: String(o.displayName ?? ""),
-    description: typeof o.description === "string" ? o.description : "",
-  };
-}
-function toOrg(o: Record<string, unknown>): Organization {
-  return {
-    name: String(o.name ?? ""),
-    type: typeof o.type === "string" ? o.type : "company",
-    displayName: String(o.displayName ?? ""),
-    owner: typeof o.owner === "string" ? o.owner : "",
-    parentOrg: typeof o.parentOrg === "string" ? o.parentOrg : null,
-  };
-}
-function toGroup(o: Record<string, unknown>): Group {
-  return {
-    name: String(o.name ?? ""),
-    type: typeof o.type === "string" ? o.type : "team",
-    displayName: String(o.displayName ?? ""),
-    ownerOrg: typeof o.ownerOrg === "string" ? o.ownerOrg : "",
-    roles: asArray(o.roles),
-  };
-}
-function toUser(o: Record<string, unknown>): User {
-  const state = String(o.state ?? "active");
-  return {
-    name: String(o.name ?? ""),
-    displayName: String(o.displayName ?? ""),
-    primaryEmail: typeof o.primaryEmail === "string" ? o.primaryEmail : "",
-    state: (state === "planned" || state === "suspended" || state === "terminated"
-      ? state
-      : "active") as User["state"],
-    memberOf: asArray(o.memberOf),
-    roles: asArray(o.roles),
-  };
 }
 
 // ── reference guard for delete ─────────────────────────────────────────

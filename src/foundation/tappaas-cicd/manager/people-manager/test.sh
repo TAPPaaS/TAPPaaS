@@ -303,15 +303,22 @@ if [[ -f "$UNIT_TSCONFIG" ]]; then
     fi
     if run_ts "tsc -p '${UNIT_TSCONFIG}'" >/dev/null 2>&1; then
         ok "TypeScript unit tests compile"
-        if run_ts "node '${DIST_TEST}/test/unit/reconcile.test.js'"; then
+        # tsconfig rootDir is the tappaas-cicd root (shared lib/ts base), so
+        # the compiled tree mirrors manager/people-manager/ under dist-test.
+        if run_ts "node '${DIST_TEST}/manager/people-manager/test/unit/reconcile.test.js'"; then
             ok "TypeScript reconcile unit tests pass"
         else
             bad "TypeScript reconcile unit tests FAILED"
         fi
-        if run_ts "node '${DIST_TEST}/test/unit/entity.test.js'"; then
+        if run_ts "node '${DIST_TEST}/manager/people-manager/test/unit/entity.test.js'"; then
             ok "TypeScript entity CRUD unit tests pass"
         else
             bad "TypeScript entity CRUD unit tests FAILED"
+        fi
+        if run_ts "node '${DIST_TEST}/manager/people-manager/test/unit/queries.test.js'"; then
+            ok "TypeScript --deep query unit tests pass"
+        else
+            bad "TypeScript --deep query unit tests FAILED"
         fi
     else
         bad "TypeScript unit tests failed to compile"

@@ -538,7 +538,8 @@ function tmpZones(): string {
   // chmod via spawnSync (no fs.chmodSync in our ambient decls); harmless if it
   // no-ops — the assertions rely on the marker file, not on exec succeeding.
 
-  // (a) enumerateNodes parses tappaas-nodes[].hostname from configuration.json.
+  // (a) enumerateNodes parses tappaas-nodes[].hostname from configuration.json
+  //     (the legacy fallback path — no site.json in this fixture).
   const cfgDir = mkdtempSync(join(tmpdir(), "nm-cfg-"));
   writeFileSync(
     join(cfgDir, "configuration.json"),
@@ -558,6 +559,39 @@ function tmpZones(): string {
   // missing configuration.json → empty list (non-fatal, nothing to push)
   const emptyCfg = mkdtempSync(join(tmpdir(), "nm-cfg-empty-"));
   check(enumerateNodes(emptyCfg).length === 0, "enumerateNodes returns [] when configuration.json is absent");
+
+  // (a2) site.json is canonical: hardware.nodes[].name wins over the legacy file.
+  const siteCfg = mkdtempSync(join(tmpdir(), "nm-cfg-site-"));
+  writeFileSync(
+    join(siteCfg, "site.json"),
+    JSON.stringify({
+      hardware: { nodes: [{ name: "alpha" }, { name: "beta" }, { notname: "x" }] },
+    }),
+    "utf8",
+  );
+  writeFileSync(
+    join(siteCfg, "configuration.json"),
+    JSON.stringify({ "tappaas-nodes": [{ hostname: "legacy1" }] }),
+    "utf8",
+  );
+  check(
+    enumerateNodes(siteCfg).join(",") === "alpha,beta",
+    `enumerateNodes prefers site.json hardware.nodes[].name (got ${enumerateNodes(siteCfg).join(",")})`,
+  );
+
+  // (a3) an empty canonical node list falls through to the legacy file, so a
+  //      not-yet-migrated system keeps distributing.
+  const siteEmpty = mkdtempSync(join(tmpdir(), "nm-cfg-site-empty-"));
+  writeFileSync(join(siteEmpty, "site.json"), JSON.stringify({ hardware: { nodes: [] } }), "utf8");
+  writeFileSync(
+    join(siteEmpty, "configuration.json"),
+    JSON.stringify({ "tappaas-nodes": [{ hostname: "legacy1" }] }),
+    "utf8",
+  );
+  check(
+    enumerateNodes(siteEmpty).join(",") === "legacy1",
+    "enumerateNodes falls back to configuration.json when site.json lists no nodes",
+  );
 
   // (b) nodeTarget shape mirrors the bash root@<host>.mgmt.internal:/root/tappaas/zones.json
   check(

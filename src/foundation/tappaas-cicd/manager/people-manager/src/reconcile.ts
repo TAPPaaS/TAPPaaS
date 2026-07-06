@@ -248,10 +248,28 @@ export function snapshot(client: PrimitiveClient): AkSnapshot {
   };
 }
 
-// Apply a plan via the client. Returns count applied.
-export function applyPlan(client: PrimitiveClient, plan: Plan): number {
+export interface ApplyOutcome {
+  applied: number;
+  total: number;
+  failures: { target: string; message: string }[];
+}
+
+// Apply a plan via the client, continuing past a failing action so one bad
+// mutation cannot silently strand the rest of the plan — the caller reports
+// "applied N of M" and fails on any failure.
+export function applyPlan(client: PrimitiveClient, plan: Plan): ApplyOutcome {
+  const failures: { target: string; message: string }[] = [];
+  let applied = 0;
   for (const a of plan.actions) {
-    a.apply(client);
+    try {
+      a.apply(client);
+      applied++;
+    } catch (e) {
+      failures.push({
+        target: `${a.kind}: ${a.target}`,
+        message: e instanceof Error ? e.message : String(e),
+      });
+    }
   }
-  return plan.actions.length;
+  return { applied, total: plan.actions.length, failures };
 }

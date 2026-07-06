@@ -1,0 +1,97 @@
+#!/usr/bin/env bash
+# opnsense-ensure-patches — converge the OPNsense firewall's LOCAL PATCH state
+# (ADR-007 post-implementation refactor, Phase 5 / D5).
+#
+# Consolidates the firewall-mutation snippets that used to live inline in
+# tappaas-cicd/pre-update.sh and update.sh into the controller that owns the
+# firewall. Idempotent and reachability-guarded: when the firewall is
+# unreachable every remote step is SKIPPED with a warning and the exit code is
+# still 0 (an update run must not fail because the firewall is down — the next
+# cycle retries).
+#
+# What it ensures, in order:
+#   1. ~/.opnsense-credentials.txt exists (skeleton + warning when missing;
+#      local — runs even when the firewall is unreachable)
+#   2. os-caddy ToDomain/AuthToDomain underscore patch (#237) — pushed and
+#      applied on the firewall (patches/apply-caddy-isdnsname.sh, itself
+#      idempotent). Must run BEFORE the zone-key migration's Stage 5 writes
+#      underscored upstreams — the caller (pre-update.sh) sequences that.
+#   3. InterfaceAssignController.php + ACL.xml (VLAN-assign API patch) —
+#      copied onto the firewall (plain overwrite, idempotent)
+#   4. OPNsense plugins os-acme-client + os-ddclient present (#254) —
+#      installed when missing so acme-setup.sh works without re-running
+#      setup-caddy.sh by hand
+#
+# Usage: opnsense-ensure-patches [--firewall <fqdn>]
+set -uo pipefail
+
+here="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")" && pwd)"
+PATCH_DIR="${here}/patches"
+
+FIREWALL_FQDN="${TAPPAAS_FIREWALL_FQDN:-firewall.mgmt.internal}"
+if [ "${1:-}" = "--firewall" ] && [ -n "${2:-}" ]; then
+    FIREWALL_FQDN="$2"
+fi
+
+YW="\033[33m"; GN="\033[1;92m"; CL="\033[m"
+info() { echo -e "$*"; }
+warn() { echo -e "${YW}[Warning]${CL} $*"; }
+
+# ── 1. credentials skeleton (local; no firewall needed) ────────────────
+if [ ! -f ~/.opnsense-credentials.txt ]; then
+    warn "~/.opnsense-credentials.txt not found; creating skeleton with empty key/secret. Populate it with real values."
+    cat > ~/.opnsense-credentials.txt <<'EOF'
+key=
+secret=
+EOF
+fi
+chmod 600 ~/.opnsense-credentials.txt
+
+# ── reachability guard for the remote steps ────────────────────────────
+if ! ping -c 1 -W 1 "${FIREWALL_FQDN}" >/dev/null 2>&1; then
+    warn "firewall ${FIREWALL_FQDN} unreachable — skipping firewall patch/plugin ensure (retried next cycle)"
+    exit 0
+fi
+
+rc=0
+
+# ── 2. os-caddy ToDomain underscore patch (#237) ───────────────────────
+if [ -f "${PATCH_DIR}/apply-caddy-isdnsname.sh" ]; then
+    info "  ensuring os-caddy ToDomain underscore patch..."
+    if scp -q "${PATCH_DIR}/apply-caddy-isdnsname.sh" root@"${FIREWALL_FQDN}":/tmp/apply-caddy-isdnsname.sh \
+        && ssh root@"${FIREWALL_FQDN}" 'sh /tmp/apply-caddy-isdnsname.sh' >/dev/null 2>&1; then
+        info "  ${GN}✓${CL} os-caddy patch ensured"
+    else
+        warn "  os-caddy patch reported an error — continuing"
+        rc=1
+    fi
+fi
+
+# ── 3. InterfaceAssign controller patch + ACL ──────────────────────────
+if [ -f "${PATCH_DIR}/InterfaceAssignController.php" ]; then
+    info "  ensuring InterfaceAssign controller patch + ACL..."
+    if scp -q "${PATCH_DIR}/InterfaceAssignController.php" \
+            root@"${FIREWALL_FQDN}":/usr/local/opnsense/mvc/app/controllers/OPNsense/Interfaces/Api/InterfaceAssignController.php \
+        && scp -q "${PATCH_DIR}/ACL.xml" \
+            root@"${FIREWALL_FQDN}":/usr/local/opnsense/mvc/app/models/OPNsense/Interfaces/ACL/ACL.xml; then
+        info "  ${GN}✓${CL} InterfaceAssign patch + ACL ensured"
+    else
+        warn "  InterfaceAssign patch copy failed — continuing"
+        rc=1
+    fi
+fi
+
+# ── 4. plugin retrofit: os-acme-client + os-ddclient (#254) ────────────
+for pkg in os-acme-client os-ddclient; do
+    if ! ssh root@"${FIREWALL_FQDN}" "/bin/sh -c 'pkg info ${pkg}'" >/dev/null 2>&1; then
+        info "  installing missing OPNsense plugin: ${pkg}..."
+        if ssh root@"${FIREWALL_FQDN}" "/bin/sh -c 'pkg install -y ${pkg}'" >/dev/null 2>&1; then
+            info "  ${GN}✓${CL} ${pkg} installed"
+        else
+            warn "  ${pkg} install returned non-zero — continuing"
+            rc=1
+        fi
+    fi
+done
+
+exit "${rc}"

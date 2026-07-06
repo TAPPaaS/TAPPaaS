@@ -91,10 +91,6 @@ export interface Client {
   jobStatus(): JobStatus;
   // backup-controller list <module> --json — snapshot backup-times for a VM.
   listSnapshots(module: string): string[];
-  // backup-controller namespaces --json — datastore namespaces.
-  namespaces(): string[];
-  // backup-controller verify <module> — trigger/report a PBS verify.
-  verify(module: string): void;
   // ── PBS mutations (reconcile apply → controller owns the PBS write) ──
   // backup-controller add-to-job <vmid> [--retention <spec>] — ensure a vmid
   // is a member of the shared managed PBS backup job.
@@ -108,7 +104,7 @@ export interface Client {
 // The manager RESOLVES the Site→Environment→Module policy; the controller OWNS
 // the PBS write (add-to-job / apply-schedule). Modelled as a preview/apply plan
 // matching the network-manager reconcile shape.
-export type ActionKind = "ensure-job-member" | "apply-schedule" | "ensure-verify";
+export type ActionKind = "ensure-job-member" | "apply-schedule";
 
 export interface Action {
   kind: ActionKind;

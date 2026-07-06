@@ -24,28 +24,12 @@
 
 import { defaultConfigDir, defaultSchemaDir, loadRaw, loadSite, writeSite } from "./config";
 import { CliSiteClient } from "./client";
-import { HelpSpec, renderHelp } from "./help";
+import { HelpSpec, renderHelp } from "../../../lib/ts/src/help";
+import { DieError, GN, RD, YW, CL, die, guarded, info, warn } from "../../../lib/ts/src/cli";
 import { applyPlan, computePlan } from "./reconcile";
 import { Site, SiteClient, SiteNode } from "./types";
 
 const VERSION = "0.1.0";
-
-const YW = "\x1b[01;33m";
-const RD = "\x1b[01;31m";
-const GN = "\x1b[1;92m";
-const CL = "\x1b[0m";
-
-function info(msg: string): void {
-  console.log(msg);
-}
-function warn(msg: string): void {
-  console.log(`${YW}[Warning]${CL} ${msg}`);
-}
-class DieError extends Error {}
-function die(msg: string): never {
-  console.error(`${RD}[Error]${CL} ${msg}`);
-  throw new DieError(msg);
-}
 
 const HELP: HelpSpec = {
   name: "site-manager",
@@ -476,7 +460,7 @@ export function run(argv: string[], client: SiteClient): number {
   const cmd = argv[0];
   const o = parseOpts(argv.slice(1));
 
-  try {
+  return guarded(() => {
     switch (cmd) {
       case "site":
         cmdSite(o);
@@ -502,14 +486,7 @@ export function run(argv: string[], client: SiteClient): number {
         usage();
         die(`Unknown command: ${cmd}`);
     }
-  } catch (e) {
-    if (e instanceof DieError) return 1;
-    if (e instanceof Error) {
-      console.error(`${RD}[Error]${CL} ${e.message}`);
-      return 1;
-    }
-    throw e;
-  }
+  });
 }
 
 // Entry point (only when run directly, not when imported by tests).

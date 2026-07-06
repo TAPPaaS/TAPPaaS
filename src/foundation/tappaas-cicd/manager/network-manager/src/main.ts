@@ -23,7 +23,6 @@
 //
 // Exit codes: ok=0, error/drift-after-apply=1.
 
-import { writeFileSync, renameSync, mkdtempSync } from "fs";
 import { dirname, join } from "path";
 import { CliPlaneClient } from "./planes";
 import { reconcileAll } from "./reconcile";
@@ -45,26 +44,11 @@ import { parseTemplate, renameTemplateFile, zonesInit } from "./zonesinit";
 import { zonesCheck, occupiedZones } from "./zonescheck";
 import { distributeZones, shouldAutoDistribute } from "./distribute";
 import { runZonesMerge } from "./zonesmerge";
-import { HelpSpec, renderHelp } from "./help";
+import { HelpSpec, renderHelp } from "../../../lib/ts/src/help";
+import { CL, DieError, GN, RD, YW, die, guarded, info, warn } from "../../../lib/ts/src/cli";
+import { writeJsonAtomic } from "../../../lib/ts/src/config-io";
 
 const VERSION = "0.1.0";
-
-const YW = "\x1b[01;33m";
-const RD = "\x1b[01;31m";
-const GN = "\x1b[1;92m";
-const CL = "\x1b[0m";
-
-function info(msg: string): void {
-  console.log(msg);
-}
-function warn(msg: string): void {
-  console.log(`${YW}[Warning]${CL} ${msg}`);
-}
-class DieError extends Error {}
-function die(msg: string): never {
-  console.error(`${RD}[Error]${CL} ${msg}`);
-  throw new DieError(msg);
-}
 
 const HELP: HelpSpec = {
   name: "network-manager",
@@ -548,18 +532,6 @@ function cmdZonesMerge(opts: Opts): number {
   );
 }
 
-// Atomic JSON write (temp → validate-parse → rename), mirroring zones.ts's
-// saveZones safety so the live target is never left half-written.
-function writeJsonAtomic(file: string, raw: Record<string, unknown>): void {
-  const text = JSON.stringify(raw, null, 2) + "\n";
-  JSON.parse(text); // defence in depth: confirm valid JSON before writing
-  const dir = dirname(file);
-  const tmpDir = mkdtempSync(join(dir, ".zones-init-"));
-  const tmp = join(tmpDir, "zones.json");
-  writeFileSync(tmp, text, "utf8");
-  renameSync(tmp, file);
-}
-
 export function run(argv: string[], client?: PlaneClient): number {
   if (argv.length === 0 || argv[0] === "-h" || argv[0] === "--help") {
     usage();
@@ -577,7 +549,7 @@ export function run(argv: string[], client?: PlaneClient): number {
   }
   const cmd = args[0];
   const opts = parseOpts(args.slice(1));
-  try {
+  return guarded(() => {
     switch (cmd) {
       case "list":
       case "exists":
@@ -611,16 +583,10 @@ export function run(argv: string[], client?: PlaneClient): number {
         usage();
         die(`Unknown command: ${cmd}`);
     }
-  } catch (e) {
-    if (e instanceof DieError) return 1;
-    throw e;
-  }
+  });
 }
 
 // Entry point (only when run directly, not when imported by tests).
 if (require.main === module) {
   process.exit(run(process.argv.slice(2)));
 }
-
-// Re-export for tests.
-export { warn };

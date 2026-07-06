@@ -3,26 +3,30 @@
 ## Language and build
 
 - **CLI engine:** TypeScript (`src/*.ts`), compiled with `tsc` and **no
-  `node_modules`** — Node's runtime types come from an ambient `src/env.d.ts`.
+  `node_modules`** — Node's runtime types come from the shared ambient
+  `../../lib/ts/src/env.d.ts`, and the CLI/help/config/exec plumbing is
+  imported from `../../lib/ts/src/` (no vendored copies).
 - **Build mechanism:** `install.sh` runs a Nix build (`nix-build -A default
-  default.nix`) which compiles the TypeScript and wraps it with `makeWrapper`
+  default.nix`; a thin import of the shared `../../lib/nix/ts-manager.nix`
+  builder) which compiles the TypeScript and wraps it with `makeWrapper`
   into `result/bin/people-manager` (a shell wrapper invoking
-  `node .../lib/main.js` on Node 22). It then `ln -sfn`s that into `~/bin`.
+  `node .../lib/manager/people-manager/src/main.js` on Node 22). It then
+  `ln -sfn`s that into `~/bin`.
 - **`update.sh`** re-runs the same build + link (idempotent; a no-op when inputs
   are unchanged).
 - Two bash helpers are linked alongside the compiled bin:
   - `user-setup.sh` → `~/bin/user-setup.sh`
-  - `validate.sh` → `~/bin/validate-people.sh` — the manager's `validate`
-    operation. As a TypeScript manager, this bash script is slated to become a
-    `people-manager validate` binary subcommand (the convention end-state); a
-    tracked follow-up.
+  - `validate.sh` → `~/bin/validate-people.sh` — JSON-Schema + reference
+    validation in bash. A `people-manager validate` subcommand also exists
+    (see "Validation" below for how the two overlap).
 
 ## Internal structure
 
 ```
 src/main.ts        CLI: arg parsing + subcommand dispatch
-src/config.ts      load config/people/*; reference-integrity checks (validateRefs)
+src/config.ts      load config/people/* (per-kind decoders); reference-integrity checks (validateRefs)
 src/entity.ts      config-only entity CRUD (add/modify/delete) — validated atomic writes
+src/queries.ts     pure relationship queries for the --deep list views
 src/types.ts       Role / Org / Group / User models + the PrimitiveClient interface
 src/reconcile.ts   snapshot-and-plan reconcile engine (compute plan, then apply)
 src/primitives.ts  CliPrimitiveClient — talks to the identity controller
@@ -77,7 +81,7 @@ in-memory fake (`test/unit/fake-client.ts`); production uses `CliPrimitiveClient
 The engine does **not** speak the identity service's HTTP API directly. It shells
 out (via `spawnSync`) to the identity controller's CLI, `authentik-manager`
 (which must be on `PATH`; override with `AUTHENTIK_MANAGER_BIN`). It calls
-read primitives (`list-users`, `list-groups`, `list-roles`, `get-user`) and, when
+read primitives (`list-users`, `list-groups`, `list-roles`) and, when
 applying, mutating primitives (`ensure-user`, `disable-user`, `delete-user`,
 `ensure-group`, `ensure-role`, `add-member` / `remove-member`,
 `assign-role` / `unassign-role`). This keeps people-manager (config owner) and the
@@ -85,13 +89,20 @@ identity controller (runtime owner) cleanly separated.
 
 ## Validation
 
-`validate.sh` (linked as `validate-people.sh`) is the manager's `validate`
-operation: it validates each file against its JSON Schema (draft 2020-12) using
-Python `jsonschema` when available, with a `jq` required-field fallback, plus
-`jq`-based reference-integrity checks (`group.ownerOrg`, `user.memberOf`,
-user/group `roles`, `org.owner`/`parentOrg`). Tracked follow-up: as a TypeScript
-manager, this bash `validate.sh` is slated to become a `people-manager validate`
-binary subcommand — the convention end-state.
+Two overlapping paths exist:
+
+- **`people-manager validate`** (the ADR-007 verb, implemented — `cmdValidate`
+  in `src/main.ts`): loads `config/people/` and runs the in-process
+  `validateRefs` reference-integrity gate (the same gate `reconcile` and the
+  entity CRUD use). It does **reference checks only** — no JSON-Schema
+  validation.
+- **`validate.sh`** (linked as `validate-people.sh`): validates each file
+  against its JSON Schema (draft 2020-12) using Python `jsonschema` when
+  available, with a `jq` required-field fallback, plus `jq`-based
+  reference-integrity checks (`group.ownerOrg`, `user.memberOf`, user/group
+  `roles`, `org.owner`/`parentOrg`). It remains the schema-validation path
+  (and what `test.sh` and the P10 `validate.sh` contract exercise) until the
+  TS verb grows schema checks.
 
 ## Testing
 

@@ -46,7 +46,10 @@ if [[ -f "$UNIT_TSCONFIG" ]]; then
     fi
     if run_ts "tsc -p '${UNIT_TSCONFIG}'" >/dev/null 2>&1; then
         ok "TypeScript unit tests compile"
-        if run_ts "node '${DIST_TEST}/test/unit/inspect.test.js'"; then
+        # dist-test mirrors the tree from the tappaas-cicd root (shared
+        # lib/ts/tsconfig.base.json sets rootDir there), so the compiled test
+        # lives under manager/health-manager/.
+        if run_ts "node '${DIST_TEST}/manager/health-manager/test/unit/inspect.test.js'"; then
             ok "TypeScript inspect/gate unit tests pass"
         else
             bad "TypeScript inspect/gate unit tests FAILED"

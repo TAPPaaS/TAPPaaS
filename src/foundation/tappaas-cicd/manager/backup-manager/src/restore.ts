@@ -10,30 +10,37 @@
 // would call and exits cleanly (so tests / dry inspection are safe) — exactly as
 // the bash did.
 
-import { spawnSync } from "child_process";
 import { existsSync } from "fs";
 import { join } from "path";
 import { moduleVmid } from "./config";
+import { stream } from "../../../lib/ts/src/exec";
 import { Client } from "./types";
 
 // Foundation restore script (tested VM-restore logic). Overridable for tests.
 function restoreScriptPath(): string {
   // Default mirrors backup-restore.sh: manager dir → ../../../backup/restore.sh.
-  // __dirname here is .../backup-manager/dist; walk up to the manager dir's
-  // parent chain. Overridable via RESTORE_SH for tests / relocation.
+  // __dirname here is .../backup-manager/dist/manager/backup-manager/src (the
+  // shared tsconfig.base rootDir is the cicd root, so emit mirrors the tree);
+  // walk up to the manager dir's parent chain. Overridable via RESTORE_SH for
+  // tests / relocation.
   if (process.env.RESTORE_SH) return process.env.RESTORE_SH;
-  // dist/ → backup-manager → manager → tappaas-cicd → foundation; backup/restore.sh
-  return join(__dirname, "..", "..", "..", "..", "backup", "restore.sh");
+  // src → backup-manager → manager → dist → backup-manager → manager →
+  // tappaas-cicd → foundation; backup/restore.sh
+  return join(__dirname, "..", "..", "..", "..", "..", "..", "..", "backup", "restore.sh");
 }
 
 function spawnInherit(bin: string, args: string[]): number {
-  const r = spawnSync(bin, args, { encoding: "utf8" });
-  if (r.error) return -1;
-  // Pass through child output (no stdio:inherit decl in the minimal env.d.ts —
-  // print what we captured so the operator sees it).
-  if (r.stdout) process.stdout.write(r.stdout);
-  if (r.stderr) process.stderr.write(r.stderr);
-  return r.status ?? -1;
+  // Stream the child's output LIVE via lib exec.stream (stdio: "inherit") — a
+  // long restore.sh run shows progress as it happens. (The old vendored
+  // env.d.ts lacked the stdio declaration, so output was buffered and replayed
+  // only after exit; fixed with the shared lib — task 6.3.)
+  try {
+    return stream(bin, args);
+  } catch {
+    // stream() throws only when the binary cannot be spawned — keep the old
+    // spawn-failure rc mapping (-1).
+    return -1;
+  }
 }
 
 export interface RestoreDeps {

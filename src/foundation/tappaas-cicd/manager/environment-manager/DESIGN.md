@@ -10,9 +10,14 @@
   `bootstrap.ts` (the `create-minimal-environments` logic), `reconcile.ts` (the
   pure cascade engine, depends only on the injected clients), `clients.ts`
   (`CliNetworkClient`/`CliModuleClient` — the spawnSync FFI), `validate.ts` (a
-  thin wrapper over `validate-environment.sh`), `env.d.ts` (zero-dependency
-  ambient decls — Node built-ins only, no `@types/node`). Built with `tsc` and
-  wrapped by `default.nix`; unit tests under `test/unit/` inject fakes.
+  thin wrapper over `validate-environment.sh`). The shared TS library
+  (`../../lib/ts/src/`) supplies the CLI conventions (`cli.ts`), the exec
+  helpers (`exec.ts`), config I/O (`config-io.ts`), the `--help` renderer
+  (`help.ts`), and the zero-dependency ambient decls (`env.d.ts` — Node
+  built-ins only, no `@types/node`); the former vendored `src/help.ts` /
+  `src/env.d.ts` copies are gone. Built with `tsc` and wrapped by `default.nix`
+  (a thin import of `lib/nix/ts-manager.nix`); unit tests under `test/unit/`
+  inject fakes.
 - **`install.sh`** links every `*.sh` (except the verb scripts) into `~/bin`.
   (The legacy ADR-005 variant registry tooling — `variant-manager.sh`,
   `migrate-variants.sh`, `migrate-to-variants.sh` — has been retired, ADR-007

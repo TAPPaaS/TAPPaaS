@@ -20,27 +20,21 @@
 //   offsite   : site.backup.offsite
 //   schedule  : environment.backup.schedule > null (inherit site job)
 
-import { existsSync, readFileSync, readdirSync } from "fs";
+import { existsSync, readdirSync } from "fs";
 import { join } from "path";
+import { defaultConfigDir, readJsonObject as readJson } from "../../../lib/ts/src/config-io";
 import { BackupPolicy, Peer, PeerRole, Placement } from "./types";
 
-export function defaultConfigDir(): string {
-  // The cascade reads the TARGET config root directly (it holds <module>.json,
-  // site.json, environments/). lib-cascade.sh defaults to /home/tappaas/config.
-  return process.env.CONFIG_DIR ?? process.env.TAPPAAS_CONFIG ?? "/home/tappaas/config";
-}
+// The cascade reads the TARGET config root directly (it holds <module>.json,
+// site.json, environments/) — the lib's ONE config-root rule (TAPPAAS_CONFIG >
+// CONFIG_DIR > /home/tappaas/config), same default as lib-cascade.sh.
+export { defaultConfigDir };
 
-// Read + parse a JSON file, or null when absent / unparseable (the bash lib
-// treats a bad/missing layer as {}).
-function readJson(file: string): Record<string, unknown> | null {
-  if (!existsSync(file)) return null;
-  try {
-    const v = JSON.parse(readFileSync(file, "utf8"));
-    return v && typeof v === "object" ? (v as Record<string, unknown>) : null;
-  } catch {
-    return null;
-  }
-}
+// readJson = lib readJsonObject: an ABSENT file is a legitimately-missing
+// cascade layer → null (treated as {}); a PRESENT but unparseable/non-object
+// file THROWS naming the file — silently defaulting it would resolve every
+// module to default policy while `validate` reports the hierarchy consistent
+// (the exact failure that verb exists to catch).
 
 function asObject(v: unknown): Record<string, unknown> {
   return v && typeof v === "object" && !Array.isArray(v) ? (v as Record<string, unknown>) : {};

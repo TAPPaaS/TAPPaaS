@@ -22,11 +22,13 @@ function check(cond: boolean, msg: string): void {
   }
 }
 
-// Compiled output lives under dist-test/test/unit, so the source fixtures are
-// not beside __dirname. Walk up until we find test/fixtures (works whether run
-// from src or the dist-test mirror).
+// Compiled output lives under dist-test/manager/health-manager/test/unit (the
+// shared tsconfig.base.json roots the emit at the tappaas-cicd dir), so the
+// source fixtures are not beside __dirname. Walk up until we find test/fixtures
+// (works whether run from src or the dist-test mirror — the latter needs five
+// levels to escape dist-test/ back into the source health-manager dir).
 function findFixtures(): string {
-  for (const up of ["..", "../..", "../../..", "../../../.."]) {
+  for (const up of ["..", "../..", "../../..", "../../../..", "../../../../.."]) {
     const cand = join(__dirname, up, "test", "fixtures", "config");
     if (existsSync(cand)) return cand;
     const cand2 = join(__dirname, up, "fixtures", "config");

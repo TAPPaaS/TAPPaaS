@@ -50,7 +50,6 @@ A "direct dependency" is one of:
 | `tappaas-cicd/manager/network-manager/` (10 ts + 6 sh) | 16 |
 | `tappaas-cicd/manager/health-manager/` (6 ts + 8 sh) | 14 |
 | `tappaas-cicd/manager/backup-manager/` (8 ts + 9 sh) | 17 |
-| `tappaas-cicd/manager/TEMPLATE/` | 5 |
 | `tappaas-cicd/controller/` (dispatchers) | 3 |
 | `tappaas-cicd/controller/proxmox-controller/` | 7 |
 | `tappaas-cicd/controller/switch-controller/` | 6 |
@@ -58,7 +57,6 @@ A "direct dependency" is one of:
 | `tappaas-cicd/controller/identity-controller/` (3 sh + 4 py + 3 test) | 10 |
 | `tappaas-cicd/controller/backup-controller/` | 3 |
 | `tappaas-cicd/controller/opnsense-controller/` (22 py + 7 test) | 29 |
-| `tappaas-cicd/controller/TEMPLATE/` | 4 |
 | `tappaas-cicd/update-tappaas/` (py pkg) | 2 |
 | `tappaas-cicd/opnsense-patch/` (sh + php) | 2 |
 | `tappaas-cicd/test-variants/` | 5 |

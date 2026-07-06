@@ -4,7 +4,8 @@
 
 - **Front door:** the `module-manager` **TypeScript** CLI (ADR-007 #3 verb
   alignment) — a thin orchestrator mirroring `people-manager` / `network-manager`
-  (zero npm deps, ambient `src/env.d.ts`, built by `tsc` via `default.nix` into
+  (zero npm deps, shared `lib/ts` helpers + ambient `lib/ts/src/env.d.ts`, built
+  by `tsc` via the shared `lib/nix/ts-manager.nix` through `default.nix` into
   `result/bin/module-manager`). It owns the CONFIG-layer verbs in-process and
   delegates the LIFECYCLE verbs to the bash scripts.
 - **Underlying lifecycle scripts:** Bash, unchanged. `install-module.sh`,

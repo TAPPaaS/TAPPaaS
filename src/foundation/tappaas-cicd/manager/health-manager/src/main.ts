@@ -23,47 +23,44 @@ import { defaultConfigDir } from "./config";
 import { CliClusterClient } from "./client";
 import { runHealthGates } from "./checks";
 import { ClusterClient } from "./types";
+import { HelpSpec, renderHelp } from "../../../lib/ts/src/help";
+import { CL, GN, RD, YW, die, guarded, info } from "../../../lib/ts/src/cli";
 
 const VERSION = "0.1.0";
 
-const YW = "\x1b[01;33m";
-const RD = "\x1b[01;31m";
-const GN = "\x1b[1;92m";
+// BOLD is not part of the shared color set (lib/ts/src/cli) — kept local for
+// the validation report heading.
 const BOLD = "\x1b[1m";
-const CL = "\x1b[0m";
 
 const DEFAULT_THRESHOLD = 80; // disk-threshold gate default (check-disk-threshold uses an explicit arg)
 const DEFAULT_NODE = "tappaas1";
 const UPDATE_OS_BIN = process.env.UPDATE_OS_BIN ?? "update-os.sh"; // the special action verb's driver
 
-function info(msg: string): void {
-  console.log(msg);
-}
-class DieError extends Error {}
-function die(msg: string): never {
-  console.error(`${RD}[Error]${CL} ${msg}`);
-  throw new DieError(msg);
-}
+const HELP: HelpSpec = {
+  name: "health-manager",
+  version: VERSION,
+  tagline: "TAPPaaS cluster health manager (read-only)",
+  verbs: [
+    {
+      usage: "validate [--threshold PCT] [--config-dir DIR]",
+      options: [
+        ["--threshold PCT", `Disk-usage threshold percent (default ${DEFAULT_THRESHOLD}).`],
+      ],
+    },
+    { usage: "update-os <name> <vmid> <node>" },
+  ],
+  common: [["--config-dir DIR", "Config root (default: $CONFIG_DIR or /home/tappaas/config)."]],
+  notes: [
+    "validate ASSERTS the live system is healthy (health gates); exit 1 on fail.\n" +
+      "update-os is the OS-patch action (special) — shells out to update-os.sh.",
+    "Note: the per-VM three-way drift inspect (formerly 'show vm' / 'list vm --diff')\n" +
+      "moved to module-manager: 'module-manager reconcile <m>' (read-only report) and\n" +
+      "'module-manager list --diff' (per-module rollup).",
+  ],
+};
 
 function usage(): void {
-  info(`health-manager ${VERSION} — TAPPaaS cluster health manager (read-only)
-
-Usage:
-  health-manager validate [--threshold PCT] [--config-dir DIR]
-  health-manager update-os <name> <vmid> <node>
-
-Verbs:
-  validate       ASSERT the live system is healthy (health gates). Exit 1 on fail.
-  update-os      OS-patch action (special) — shells out to update-os.sh.
-
-Options:
-  --threshold PCT  validate: disk-usage threshold percent (default ${DEFAULT_THRESHOLD}).
-  --config-dir DIR Config root (default: \$CONFIG_DIR or /home/tappaas/config).
-  -h, --help       Show this help.
-
-Note: the per-VM three-way drift inspect (formerly 'show vm' / 'list vm --diff')
-moved to module-manager: 'module-manager reconcile <m>' (read-only report) and
-'module-manager list --diff' (per-module rollup).`);
+  info(renderHelp(HELP));
 }
 
 interface Opts {
@@ -126,7 +123,7 @@ export function run(argv: string[], client: ClusterClient): number {
   const cmd = argv[0];
   const opts = parseOpts(argv.slice(1));
 
-  try {
+  return guarded(() => {
     switch (cmd) {
       case "validate":
         return cmdValidate(opts, client);
@@ -153,14 +150,7 @@ export function run(argv: string[], client: ClusterClient): number {
         usage();
         die(`Unknown command: ${cmd}`);
     }
-  } catch (e) {
-    if (e instanceof DieError) return 1;
-    if (e instanceof Error) {
-      console.error(`${RD}[Error]${CL} ${e.message}`);
-      return 1;
-    }
-    throw e;
-  }
+  });
 }
 
 // Entry point (only when run directly, not when imported by tests).

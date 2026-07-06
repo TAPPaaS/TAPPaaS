@@ -25,14 +25,13 @@
 // component.
 
 import { readFileSync } from "fs";
+import { isDocKey } from "./zones";
 
 // Zones whose `state` is forced Inactive by the transform.
 const INACTIVATE = ["srvHome", "srvWork", "srvCust", "srvDev", "work"];
 
-// The doc-block / comment keys: never treated as zones, carried through as-is.
-function isDocKey(k: string): boolean {
-  return k.startsWith("_");
-}
+// The doc-block / comment keys (isDocKey, from zones.ts): never treated as
+// zones, carried through as-is.
 
 export interface ZonesInitResult {
   // The transformed raw document (ready to JSON-serialise / hand to saveZones).

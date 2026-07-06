@@ -330,7 +330,7 @@ echo ""
 # doesn't yet) and silently skips. Without this call here, the very first
 # network:proxy install of an underscored-zone module (which install.sh runs
 # right after this script) would hit the OPNsense ToDomain validator.
-PATCH_SCRIPT="/home/tappaas/TAPPaaS/src/foundation/tappaas-cicd/opnsense-patch/apply-caddy-isdnsname.sh"
+PATCH_SCRIPT="/home/tappaas/TAPPaaS/src/foundation/tappaas-cicd/controller/opnsense-controller/patches/apply-caddy-isdnsname.sh"
 if [[ -f "${PATCH_SCRIPT}" ]]; then
     info "Applying os-caddy ToDomain underscore patch..."
     scp -q "${PATCH_SCRIPT}" root@"$FIREWALL_FQDN":/tmp/apply-caddy-isdnsname.sh

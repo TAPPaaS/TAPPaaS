@@ -10,20 +10,21 @@
 // on; the op only fails as a whole if NOTHING could be pushed — matching the
 // bash's `[[ pushed -gt 0 ]]` return).
 //
-// Node enumeration: we read configuration.json directly (the same source +
-// JSON path the bash uses via jq `."tappaas-nodes"[]?.hostname`). This is the
-// least-fragile choice — no shelling out to a bash helper whose CONFIG_DIR/
-// PATH we'd have to reproduce — and it keeps distribute self-contained and
-// unit-testable from a fixture configuration.json. When site.json's
-// `hardware.nodes[].name` becomes canonical (per the prompt's note) this is the
-// single place to extend.
+// Node enumeration: site.json's `hardware.nodes[].name` is canonical (ADR-007
+// P2); the legacy configuration.json `."tappaas-nodes"[].hostname` is the
+// fallback while both files coexist — the same canonical-then-legacy shape
+// update-tappaas uses for foundation module configs. Both are read directly
+// (no shelling out to a bash helper whose CONFIG_DIR/PATH we'd have to
+// reproduce), keeping distribute self-contained and unit-testable from
+// fixture files.
 //
-// Dependency-free TS (strict tsc, ambient src/env.d.ts), mirroring planes.ts's
-// spawnSync + CONFIG_DIR handling.
+// Dependency-free TS (strict tsc, ambient lib/ts/src/env.d.ts); the scp spawn
+// + CONFIG_DIR env handling is the shared lib exec helpers.
 
-import { spawnSync } from "child_process";
 import { existsSync, readFileSync } from "fs";
 import { join } from "path";
+import { defaultConfigDir } from "../../../lib/ts/src/config-io";
+import { captureResult } from "../../../lib/ts/src/exec";
 
 // Where node-side tooling expects the file (mirrors the bash literal).
 export const NODE_ZONES_PATH = "/root/tappaas/zones.json";
@@ -46,39 +47,53 @@ function scpBin(): string {
   return process.env.NM_SCP_BIN ?? "scp";
 }
 
-// Resolve CONFIG_DIR the same way planes.ts does so every controller agrees on
-// where the live config lives.
-export function configDir(): string {
-  return (
-    process.env.CONFIG_DIR ?? process.env.TAPPAAS_CONFIG ?? "/home/tappaas/config"
-  );
-}
-
-// Enumerate Proxmox node hostnames from configuration.json's `tappaas-nodes`.
-// Mirrors the bash `jq -r '."tappaas-nodes"[]?.hostname // empty'`: skip empty/
-// missing entries; a missing file yields an empty list (the caller treats that
-// as nothing-to-push, non-fatal). The optional override is for tests.
-export function enumerateNodes(cfgDir: string = configDir()): string[] {
-  const cfg = join(cfgDir, "configuration.json");
-  if (!existsSync(cfg)) return [];
+// Read a JSON object file; null when absent / unparseable / not an object (a
+// bad file yields an empty node list — the caller treats that as
+// nothing-to-push, non-fatal). Deliberately NOT the lib config-io
+// readJsonObject, which THROWS on a malformed file — here a bad
+// site/configuration.json must stay non-fatal (nothing to push).
+function readJsonObject(file: string): Record<string, unknown> | null {
+  if (!existsSync(file)) return null;
   let parsed: unknown;
   try {
-    parsed = JSON.parse(readFileSync(cfg, "utf8"));
+    parsed = JSON.parse(readFileSync(file, "utf8"));
   } catch {
-    return [];
+    return null;
   }
   if (parsed === null || typeof parsed !== "object" || Array.isArray(parsed)) {
-    return [];
+    return null;
   }
-  const nodes = (parsed as Record<string, unknown>)["tappaas-nodes"];
+  return parsed as Record<string, unknown>;
+}
+
+// Collect a string field from every object entry of a node array.
+function nodeField(nodes: unknown, field: string): string[] {
   if (!Array.isArray(nodes)) return [];
   const out: string[] = [];
   for (const n of nodes) {
     if (n === null || typeof n !== "object" || Array.isArray(n)) continue;
-    const h = (n as Record<string, unknown>)["hostname"];
-    if (typeof h === "string" && h.length > 0) out.push(h);
+    const v = (n as Record<string, unknown>)[field];
+    if (typeof v === "string" && v.length > 0) out.push(v);
   }
   return out;
+}
+
+// Enumerate Proxmox node hostnames: site.json `.hardware.nodes[].name`
+// (canonical) first; legacy configuration.json `."tappaas-nodes"[].hostname`
+// as fallback while both files coexist. A missing/empty canonical list falls
+// through to legacy so a not-yet-migrated system keeps distributing. The
+// optional override is for tests.
+export function enumerateNodes(cfgDir: string = defaultConfigDir()): string[] {
+  const site = readJsonObject(join(cfgDir, "site.json"));
+  if (site !== null) {
+    const hw = site["hardware"];
+    if (hw !== null && typeof hw === "object" && !Array.isArray(hw)) {
+      const names = nodeField((hw as Record<string, unknown>)["nodes"], "name");
+      if (names.length > 0) return names;
+    }
+  }
+  const legacy = readJsonObject(join(cfgDir, "configuration.json"));
+  return nodeField(legacy?.["tappaas-nodes"], "hostname");
 }
 
 // The mgmt FQDN scp target for a node (mirrors `root@<host>.mgmt.internal`).
@@ -113,21 +128,18 @@ export interface DistributeResult {
 }
 
 // Run one scp, mapping spawn failure / non-zero exit to a per-node outcome.
+// captureResult injects the same CONFIG_DIR/TAPPAAS_CONFIG env this file used
+// to build by hand, and never throws (per-node failures stay non-fatal).
 function scpOne(zonesFile: string, hostname: string): NodeOutcome {
   const target = nodeTarget(hostname);
-  const cfgDir = configDir();
-  const env = { ...process.env, CONFIG_DIR: cfgDir, TAPPAAS_CONFIG: cfgDir };
-  const r = spawnSync(scpBin(), [...SSH_OPTS, zonesFile, target], {
-    encoding: "utf8",
-    env,
-  });
-  if (r.error) {
-    return { hostname, ok: false, message: `scp failed to spawn (${r.error.message})` };
+  const r = captureResult(scpBin(), [...SSH_OPTS, zonesFile, target]);
+  if (!r.ran) {
+    return { hostname, ok: false, message: `scp failed to spawn (${r.stderr})` };
   }
-  if ((r.status ?? -1) === 0) {
+  if (r.rc === 0) {
     return { hostname, ok: true, message: `pushed to ${target}` };
   }
-  const detail = (r.stderr ?? "").trim() || `rc=${r.status}`;
+  const detail = r.stderr.trim() || `rc=${r.rc}`;
   return { hostname, ok: false, message: `scp to ${hostname} failed (${detail})` };
 }
 
@@ -187,6 +199,6 @@ export function distributeZones(
 export function shouldAutoDistribute(outFile: string, noDistributeFlag: boolean): boolean {
   if (noDistributeFlag) return false;
   if (process.env.NM_NO_DISTRIBUTE === "1") return false;
-  const live = join(configDir(), "zones.json");
+  const live = join(defaultConfigDir(), "zones.json");
   return outFile === live;
 }

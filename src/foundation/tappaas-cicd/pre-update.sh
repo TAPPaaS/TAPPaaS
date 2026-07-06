@@ -8,9 +8,6 @@ set -euo pipefail
 
 VMNAME="$(get_config_value 'vmname' "$1")"
 NODE="$(get_config_value 'node' "$(get_node_hostname 0)")"
-MGMTVLAN="mgmt"
-NODE1_FQDN="$(get_primary_node_fqdn)"
-FIREWALL_FQDN="firewall.$MGMTVLAN.internal"
 info "Starting TAPPaaS-CICD module update for VM: $VMNAME on node: $NODE"
 
 # Pull all tracked repositories. The repository list is now canonical in
@@ -100,17 +97,28 @@ for script in scripts/*.sh; do
   fi
 done
 
-# --- ADR-007 S0: two-level dispatch links relocated components' bins ---
-# The scripts/*.sh glob above only covers scripts NOT yet relocated. Components
-# moved into manager/<x>/ and controller/<x>/ link their own bins via their
-# install.sh, driven by the per-directory dispatcher. Additive + idempotent;
-# a no-op while a component still lives under scripts/.
+# --- ADR-007 S0/P10: two-level dispatch builds + links every component ---
+# The scripts/*.sh glob above only covers scripts NOT yet relocated. Every
+# manager/<x>/ and controller/<x>/ component builds and links its own bins via
+# its install.sh, driven by the per-directory dispatcher — including the
+# COMPILED components (the TS managers, opnsense-controller and
+# identity-controller nix builds; the whole-VM build blocks that used to live
+# further down in this file are gone). Idempotent: nix no-ops when inputs are
+# unchanged. A component build failure WARNS and the update continues with the
+# previous (stale) bins — the Test-11 smoke slice is what surfaces a broken
+# build, so a bad component never blocks the fleet update.
 for _disp in manager controller; do
   if [ -x "${_disp}/install.sh" ]; then
     info "  linking ${_disp}/ components..."
     "./${_disp}/install.sh" || warn "  ${_disp}/install.sh reported non-zero rc"
   fi
 done
+
+# update-tappaas lives OUTSIDE manager/ + controller/ (it drives them), so no
+# dispatcher covers it — build + link it via its own contract install.sh.
+if [ -x update-tappaas/install.sh ]; then
+  ./update-tappaas/install.sh || warn "  update-tappaas/install.sh reported non-zero rc"
+fi
 
 # zone-controller — bare alias (no .sh) for the zone lifecycle primitive, invoked
 # as `zone-controller` by operators and test harnesses. See docs/design/zone-controller.md.
@@ -156,21 +164,24 @@ if [ -f "../schemas/module-fields.json" ]; then
   ln -s "$(realpath ../schemas/module-fields.json)" /home/tappaas/config/module-fields.json
 fi
 
-# --- Apply OPNsense os-caddy ToDomain underscore patch (issue #237 follow-up) ---
-# Caddy's HostnameField rejects underscored hostnames by default; the patch
-# adds <IsDNSName>Y</IsDNSName> so internal DNS labels like
-# litellm.srvHome.internal can be used as reverse-proxy upstreams.
-# Applied BEFORE the zone-key migration so the migration's Stage 5
-# (network:proxy update-service per affected module) can write the
-# underscored upstream without OPNsense validation failures.
-FIREWALL_FQDN_EARLY="firewall.mgmt.internal"
-if [ -f opnsense-patch/apply-caddy-isdnsname.sh ] \
-   && ping -c 1 -W 1 "${FIREWALL_FQDN_EARLY}" >/dev/null 2>&1; then
-  info "Applying os-caddy ToDomain underscore patch..."
-  scp opnsense-patch/apply-caddy-isdnsname.sh root@"${FIREWALL_FQDN_EARLY}":/tmp/apply-caddy-isdnsname.sh >/dev/null 2>&1
-  ssh root@"${FIREWALL_FQDN_EARLY}" 'sh /tmp/apply-caddy-isdnsname.sh' 2>&1 \
-    | while IFS= read -r line; do debug "  $line"; done \
-    || warn "  os-caddy patch reported an error — continuing"
+# --- OPNsense local patch/plugin state (ensure-patches; Phase 5 / D5) ---
+# The firewall-mutation snippets (os-caddy ToDomain patch #237, InterfaceAssign
+# controller patch + ACL, os-acme-client/os-ddclient plugin retrofit #254,
+# credentials skeleton) live in the controller that owns the firewall:
+# `opnsense-ensure-patches` (controller/opnsense-controller/, linked by its
+# install.sh above). Idempotent + reachability-guarded. Sequenced HERE — before
+# the zone-key migration — because the migration's Stage 5 (network:proxy
+# update-service per affected module) needs the caddy patch to write
+# underscored upstreams without OPNsense validation failures.
+if command -v opnsense-ensure-patches >/dev/null 2>&1; then
+  opnsense-ensure-patches 2>&1 | while IFS= read -r _l; do
+    case "$_l" in
+      *'[Warning]'*|*'[Error]'*|*✓*) printf '%s\n' "$_l" ;;
+      *) debug "  $_l" ;;
+    esac
+  done
+else
+  warn "opnsense-ensure-patches not on PATH yet — skipping firewall patch ensure this run."
 fi
 
 # --- One-shot rename: zone keys hyphen → underscore (issue #237) ---
@@ -228,90 +239,10 @@ if command -v network-manager >/dev/null 2>&1 \
   fi
 fi
 
-# --- Build and install opnsense-controller ---
-info "Building the opnsense-controller project..."
-cd controller/opnsense-controller
-stdbuf -oL nix-build -A default default.nix 2>&1 | tee /tmp/opnsense-controller-build.log | while IFS= read -r line; do printf "."; done
-echo ""
-# Symlink every opnsense-controller CLI from the freshly-built result into
-# ~/bin (which precedes the system profile in PATH), so they all track the repo
-# build via update-tappaas rather than needing a nixos-rebuild. caddy-manager,
-# opnsense-firewall, rules-manager and syslog-manager were previously only in
-# the system env, so their changes didn't propagate on update (issue #206).
-for _oc_tool in opnsense-controller zone-manager dns-manager unbound-manager caddy-manager nat-manager opnsense-firewall rules-manager syslog-manager test-network-manager acme-manager; do
-  _oc_src="/home/tappaas/TAPPaaS/src/foundation/tappaas-cicd/controller/opnsense-controller/result/bin/${_oc_tool}"
-  if [ -e "${_oc_src}" ]; then
-    rm -f "/home/tappaas/bin/${_oc_tool}" 2>/dev/null || true
-    ln -s "${_oc_src}" "/home/tappaas/bin/${_oc_tool}"
-  fi
-done
-
-# ADR-008 network providers/orchestrator.
-#  - opnsense-manager: additive alias for the OPNsense zone reconciler (same nix
-#    binary as zone-manager). Per ADR-008 the orchestrator eventually takes the
-#    `zone-manager` name and the binary is referenced as opnsense-manager.
-#  - proxmox-manager:  Proxmox L2 provider (per-VM trunks + bridge-vids; #335).
-#  - zone-reconcile:   transitional orchestrator front door (becomes zone-manager).
-_oc_zm="/home/tappaas/TAPPaaS/src/foundation/tappaas-cicd/controller/opnsense-controller/result/bin/zone-manager"
-if [ -e "${_oc_zm}" ]; then
-  rm -f /home/tappaas/bin/opnsense-manager 2>/dev/null || true
-  ln -s "${_oc_zm}" /home/tappaas/bin/opnsense-manager
-fi
-# ADR-007 S0: proxmox-manager/switch-controller/ap-manager moved to
-# tappaas-cicd/controller/<x>-controller/ and zone-reconcile to manager/network-manager/;
-# they are now linked by the controller/ + manager/ dispatchers above. (was: firewall/scripts loop)
-# Ensure OPNsense credentials file exists; if missing, create a skeleton and warn
-if [ ! -f ~/.opnsense-credentials.txt ]; then
-  warn "~/.opnsense-credentials.txt not found; creating skeleton file with empty key/secret. Please populate it with real values."
-  cat > ~/.opnsense-credentials.txt <<'EOF'
-key=
-secret=
-EOF
-fi
-chmod 600 ~/.opnsense-credentials.txt
-debug "  opnsense-controller binary installed to /home/tappaas/bin/opnsense-controller"
-cd ../..   # back to tappaas-cicd/ (opnsense-controller now under controller/)
-
-# --- Build and install identity-controller (ADR-007 S2b-1) ---
-# Authentik runtime controller, extracted from opnsense-controller. Built and
-# linked the same way: nix-build then symlink its CLIs from result/bin into
-# ~/bin so they track the repo build without a nixos-rebuild. Ships
-# authentik-manager (the verb the people-manager calls) and identity-controller.
-info "Building the identity-controller project..."
-cd controller/identity-controller
-stdbuf -oL nix-build -A default default.nix 2>&1 | tee /tmp/identity-controller-build.log | while IFS= read -r line; do printf "."; done
-echo ""
-for _ic_tool in authentik-manager identity-controller; do
-  _ic_src="/home/tappaas/TAPPaaS/src/foundation/tappaas-cicd/controller/identity-controller/result/bin/${_ic_tool}"
-  if [ -e "${_ic_src}" ]; then
-    rm -f "/home/tappaas/bin/${_ic_tool}" 2>/dev/null || true
-    ln -s "${_ic_src}" "/home/tappaas/bin/${_ic_tool}"
-  fi
-done
-debug "  identity-controller binaries installed to /home/tappaas/bin/ (authentik-manager, identity-controller)"
-cd ../..   # back to tappaas-cicd/
-
-# --- Build and install update-tappaas ---
-info "Building the update-tappaas project..."
-cd update-tappaas
-stdbuf -oL nix-build -A default default.nix 2>&1 | tee /tmp/update-tappaas-build.log | while IFS= read -r line; do printf "."; done
-echo ""
-rm /home/tappaas/bin/update-tappaas 2>/dev/null || true
-ln -s /home/tappaas/TAPPaaS/src/foundation/tappaas-cicd/update-tappaas/result/bin/update-tappaas /home/tappaas/bin/update-tappaas
-debug "  update-tappaas binary installed to /home/tappaas/bin/"
-cd ..
-
-# --- Copy OPNsense controller patch to the firewall ---
-# The os-caddy patch is already applied earlier in pre-update.sh (#237) so the
-# zone-key migration's Stage 5 can write underscored upstreams.
-info "Copying the AssignSettingsController.php to the OPNsense controller node..."
-if ping -c 1 -W 1 "$FIREWALL_FQDN" >/dev/null 2>&1; then
-  info "  Firewall $FIREWALL_FQDN reachable; will attempt to copy controller patch."
-  scp -q opnsense-patch/InterfaceAssignController.php root@"$FIREWALL_FQDN":/usr/local/opnsense/mvc/app/controllers/OPNsense/Interfaces/Api/InterfaceAssignController.php
-  scp -q opnsense-patch/ACL.xml root@"$FIREWALL_FQDN":/usr/local/opnsense/mvc/app/models/OPNsense/Interfaces/ACL/ACL.xml
-  info "  OPNsense controller patch (InterfaceAssignController.php) and ACL file copied to firewall."
-else
-  warn "Firewall $FIREWALL_FQDN appears unreachable; skipping controller patch copy."
-fi
+# (The whole-VM build blocks, the credentials skeleton and the firewall patch
+# copies that used to end this file all moved into the components: builds into
+# each component's contract install.sh — Phase 4 / F9+F10 — and the firewall
+# patch/plugin/credentials state into `opnsense-ensure-patches`, called above
+# before the zone-key migration — Phase 5 / D5.)
 
 info "${GN}✓${CL} All TAPPaaS-CICD programs and scripts installed successfully."

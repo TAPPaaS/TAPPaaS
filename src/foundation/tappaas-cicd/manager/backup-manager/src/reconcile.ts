@@ -80,9 +80,28 @@ export function computePlan(configDir: string, job: JobStatus): Plan {
   return { actions, warnings };
 }
 
-// Apply a plan via the client (the controller mutations). Returns the count
-// applied.
-export function applyPlan(client: Client, plan: Plan): number {
-  for (const a of plan.actions) a.apply(client);
-  return plan.actions.length;
+export interface ApplyOutcome {
+  applied: number;
+  total: number;
+  failures: { target: string; message: string }[];
+}
+
+// Apply a plan via the client (the controller mutations), continuing past a
+// failing action so one bad mutation cannot silently strand the rest of the
+// plan — the caller reports "applied N of M" and fails on any failure.
+export function applyPlan(client: Client, plan: Plan): ApplyOutcome {
+  const failures: { target: string; message: string }[] = [];
+  let applied = 0;
+  for (const a of plan.actions) {
+    try {
+      a.apply(client);
+      applied++;
+    } catch (e) {
+      failures.push({
+        target: `${a.kind}: ${a.target}`,
+        message: e instanceof Error ? e.message : String(e),
+      });
+    }
+  }
+  return { applied, total: plan.actions.length, failures };
 }
