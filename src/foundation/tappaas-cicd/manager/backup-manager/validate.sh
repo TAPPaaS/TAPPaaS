@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # validate.sh — backup-manager's `validate` verb (P10 contract). Delegates to
-# the domain validator validate-backup.sh against the live config dir.
+# the TypeScript validator (the legacy validate-backup.sh domain script was
+# retired in the ADR-007 post-implementation refactor, Phase 7.4).
 set -euo pipefail
-here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-exec "${here}/validate-backup.sh" "$@"
+exec backup-manager validate "$@"

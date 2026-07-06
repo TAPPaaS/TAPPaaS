@@ -23,6 +23,12 @@ In short: a **manager** owns the config and the policy; it **calls a
 controller** to make the world match that config. The controller is the
 imperative arm — idempotent, re-runnable, and safe to call repeatedly.
 
+One documented carve-out (F12, decision B): managers may **read** cluster
+runtime state through the shared `lib/ts/src/cluster.ts` helpers (a single
+audited choke-point) — every runtime **write** still goes through a
+controller. See the "Runtime-state access rule" section in
+[`../README.md`](../README.md).
+
 ```
    operator / config files
             │

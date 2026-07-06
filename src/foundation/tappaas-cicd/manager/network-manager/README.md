@@ -25,6 +25,7 @@ network-manager exists <name>
 network-manager show <name>         (alias: get)
 network-manager add <name>          [options]
 network-manager delete <name>       [--check]
+network-manager enable|disable|manual <name> [--force]
 network-manager reconcile           [--apply] [--only <plane>]
 network-manager init        --name <N> [--from <tpl>] [--out <file>] [--force]
 network-manager validate    [--zones <file>] [--config-dir <dir>] [--strict]
@@ -62,6 +63,23 @@ key. `--check` dry-runs it.
 network-manager add labNet --from-zone srvHome --vlan 275
 network-manager add labNet --check          # preview
 network-manager delete labNet
+```
+
+### `enable` / `disable` / `manual` — atomic zone state change
+
+The operator state verbs (was `zone-state.sh`, #209): `enable` → `Active`,
+`disable` → `Inactive`, `manual` → `Manual`. They mutate `zones.json`
+atomically and deliberately do **not** touch the planes — apply when ready with
+`network-manager reconcile --apply`. Guards: an unknown zone is refused (the
+known zones are listed), a same-state verb is a no-op (exit 0), and leaving the
+`Mandatory` state (e.g. `dmz`) is refused without `--force`. `Mandatory` and
+`Disabled` are intentionally not exposed as verbs (`Disabled` is reserved for
+the delete lifecycle).
+
+```bash
+network-manager enable srvTest
+network-manager disable srvTest
+network-manager disable dmz --force   # Mandatory zones refused otherwise
 ```
 
 ### `reconcile` — the 4-plane converge loop
@@ -125,11 +143,11 @@ network-manager distribute --dry-run  # list target nodes, no copy
 - `--zones <file>` — zones.json to distribute (default `$TAPPAAS_CONFIG/zones.json`).
 - `--dry-run` — list the nodes that would receive it; copy nothing.
 
-## Legacy bash tools (still linked, not retired)
+## Legacy bash tools
 
-`zone-reconcile`, `zone-controller`, and `zone-state.sh` are linked onto `PATH`
-during the transition and will be retired once `network-manager` fully replaces
-them. `migrate-zone-keys-*.sh` is a one-shot migration helper, not an on-PATH
-tool. `apply-zones-merge.sh` has been **retired** — its rename-aware successor is
-`network-manager merge` (alias `zones-merge`; see the `merge` subcommand and
-ADR-007 "Design A").
+Only `zone-reconcile` is still linked onto `PATH` during the transition.
+`migrate-zone-keys-*.sh` is a one-shot migration helper, not an on-PATH tool.
+**Retired** (ADR-007 Phase 7.5 / post-implementation refactor):
+`apply-zones-merge.sh` → `network-manager merge` (alias `zones-merge`, ADR-007
+"Design A"); `zone-controller.sh` → `network-manager add`/`delete` (the TS zone
+lifecycle); `zone-state.sh` → `network-manager enable`/`disable`/`manual`.

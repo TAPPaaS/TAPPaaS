@@ -137,7 +137,7 @@ migrate-configuration.sh [--config-dir DIR] [--input FILE] [--output FILE] [--fo
 - `--output FILE` — output site.json (default `<config-dir>/site.json`).
 - `--force` — overwrite an existing `site.json`.
 
-Also linked as `migrate-configuration-to-site.sh` (alias).
+(The former `migrate-configuration-to-site.sh` alias was retired in Phase 7.1 — it was a byte-identical duplicate.)
 
 ```bash
 migrate-configuration.sh

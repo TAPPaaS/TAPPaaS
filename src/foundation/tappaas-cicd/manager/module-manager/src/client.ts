@@ -4,9 +4,11 @@
 //
 // This is the FFI boundary, exactly as network-manager's planes.ts shells out to
 // the plane controllers and people-manager's primitives.ts shells out to
-// authentik-manager. NO cluster logic is reimplemented in TS for this first-pass
-// port — the heavy provisioning stays in the live bash scripts (they remain the
-// source of truth until a later retire phase).
+// authentik-manager. The heavy provisioning stays in the live bash scripts
+// (they remain the source of truth until their own retire step) — EXCEPT
+// `reconcile` and `inspect`, which are NATIVE TS since the ADR-007
+// post-implementation refactor Phase 7.3 (src/reconcile.ts / src/inspect.ts;
+// the single-caller reconcile-module.sh / inspect-vm.sh scripts are retired).
 //
 // stdio is inherited so the scripts' step-by-step output streams straight to the
 // operator's terminal, identical to running the script directly.
@@ -18,6 +20,8 @@ import {
 } from "../../../lib/ts/src/cluster";
 import { stream } from "../../../lib/ts/src/exec";
 import { defaultConfigDir, siteNodeHostnames } from "./config";
+import { inspectModule } from "./inspect";
+import { reconcileModule } from "./reconcile";
 import {
   AddOptions,
   DeleteOptions,
@@ -36,8 +40,6 @@ const BIN = {
   install: process.env.MM_INSTALL_BIN ?? "install-module.sh",
   update: process.env.MM_UPDATE_BIN ?? "update-module.sh",
   delete: process.env.MM_DELETE_BIN ?? "delete-module.sh",
-  reconcile: process.env.MM_RECONCILE_BIN ?? "reconcile-module.sh",
-  inspect: process.env.MM_INSPECT_BIN ?? "inspect-vm.sh",
   test: process.env.MM_TEST_BIN ?? "test-module.sh",
   snapshot: process.env.MM_SNAPSHOT_BIN ?? "snapshot-vm.sh",
 };
@@ -96,20 +98,20 @@ export class CliModuleClient implements ModuleClient {
     return run(BIN.delete, args);
   }
 
+  // NATIVE TS (Phase 7.3): the leaf converge, ported from the retired
+  // reconcile-module.sh. It still shells out to the KEPT scripts underneath
+  // (each dependency's install-service.sh + the module's update.sh/install.sh).
   reconcile(module: string, opts: ReconcileOptions): number {
-    const args: string[] = [];
-    if (opts.environment) args.push("--environment", opts.environment);
-    if (opts.debug) args.push("--debug");
-    if (opts.silent) args.push("--silent");
-    args.push(module);
-    return run(BIN.reconcile, args);
+    return reconcileModule(module, opts);
   }
 
-  // Read-only three-way drift inspect (the DEFAULT `reconcile`, no --apply). Runs
-  // inspect-vm.sh, which prints the Released/Desired/Actual table for a VM module
-  // and a config-only Released/Desired diff for a non-VM module (no vmid).
+  // NATIVE TS (Phase 7.3): the read-only three-way drift inspect (the DEFAULT
+  // `reconcile`, no --apply), ported from the retired inspect-vm.sh. Prints the
+  // Released/Desired/Actual table for a VM module (reading the live VM over
+  // ssh/qm via lib/ts cluster helpers) and a config-only Released/Desired diff
+  // for a non-VM module (no vmid).
   inspect(module: string): number {
-    return run(BIN.inspect, [module]);
+    return inspectModule(module);
   }
 
   test(module: string, opts: TestOptions): number {

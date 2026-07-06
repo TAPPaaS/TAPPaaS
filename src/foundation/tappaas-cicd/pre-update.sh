@@ -120,12 +120,9 @@ if [ -x update-tappaas/install.sh ]; then
   ./update-tappaas/install.sh || warn "  update-tappaas/install.sh reported non-zero rc"
 fi
 
-# zone-controller — bare alias (no .sh) for the zone lifecycle primitive, invoked
-# as `zone-controller` by operators and test harnesses. See docs/design/zone-controller.md.
-if [ -f scripts/zone-controller.sh ]; then
-  rm -f /home/tappaas/bin/zone-controller 2>/dev/null || true
-  ln -s "$(realpath scripts/zone-controller.sh)" /home/tappaas/bin/zone-controller
-fi
+# (The legacy zone-controller/zone-state bash scripts are retired — their verbs
+# are native in the network-manager TS bin linked by the dispatcher above:
+# `network-manager add/delete/enable/disable/manual`; ADR-007 Phase 7.5.)
 
 # --- Refresh configuration.json (re-discover nodes, validate) ---
 # F2: ONLY refresh when the legacy configuration.json ALREADY exists (a system

@@ -37,7 +37,7 @@ run_ts() {
 
 # ── A. legacy bash entry scripts parse ────────────────────────────────
 echo "== network-manager: legacy bash entry scripts parse =="
-for f in "${HERE}/zone-reconcile" "${HERE}/zone-controller.sh" "${HERE}/zone-state.sh"; do
+for f in "${HERE}/zone-reconcile"; do
     b="$(basename "${f}")"
     if bash -n "${f}" 2>/dev/null; then ok "${b} parses"; else bad "${b} parse error"; fi
 done

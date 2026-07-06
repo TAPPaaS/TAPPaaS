@@ -42,7 +42,7 @@ environment-manager reconcile <env> [--deep] [--apply] [--config-dir DIR]
 |------|-----------|
 | `list` | Enumerate environments. `--json` emits the full objects as a JSON array; default prints `name (zone …)` per line. |
 | `show <env>` | One environment in detail (canonical pretty JSON; `--json` = compact). |
-| `validate [<file/dir>]` | **Thin wrapper** over `validate-environment.sh` — the canonical schema + reference gate (one source of truth, zero TS dependency). Relays its output and exit status. |
+| `validate [<file/dir>]` | The canonical schema + reference gate, implemented natively (src/validate.ts interprets `environment-fields.json` in-process — the former `validate-environment.sh` is retired). Checks full schema conformance (`additionalProperties:false`, `pattern`/`enum`/`minLength`, the `tlsCertRefid` rejection) **and** reference integrity (`network.zone` in `zones.json`, `ownerOrg` in the organizations). See "The `validate` gate" below. |
 | `add` | Create an environment (writes validated config). With **no** `<env>` and **no** `--name` it **seeds the minimal set** (`mgmt` + the default `<N>`) via the `create-minimal-environments` bootstrap. With `<env>` (or `--name`) it creates that single env. `--owner` defaults to the first org under `people/organizations/`; `--zone` defaults to `<env>`. |
 | `modify <env>` | Change an existing environment (preserves un-flagged fields; writes validated config). |
 
@@ -76,10 +76,34 @@ schema enum; this closes the last field that previously required a hand-edit.
 `create-minimal-environments` is the single owner of the two bootstrap files;
 `--force` overrides the guard rails for the rare deliberate removal.
 
+### The `validate` gate
+
+`environment-manager validate` (also reachable as the P10 verb script
+`validate.sh`) validates environment files against
+`src/foundation/schemas/environment-fields.json` plus reference integrity:
+
+```
+environment-manager validate [FILE|DIR] [--schema-dir PATH] [--config-dir DIR] [--zones FILE] [--quiet]
+```
+
+- `FILE|DIR` — an environment `.json` or a directory of them (default
+  `$TAPPAAS_CONFIG/environments`).
+- `--schema-dir PATH` — directory holding `environment-fields.json` (default:
+  `$SCHEMA_DIR`, else derived from the checkout).
+- `--config-dir DIR` — config dir for the `zones.json` + organizations lookup.
+- `--zones FILE` — path to `zones.json`.
+- `--quiet` — errors/warnings only.
+
+The schema stays the single source of truth: `src/validate.ts` interprets it at
+runtime (the small draft-2020-12 subset it uses), and **fails loudly** if the
+schema ever grows a keyword the interpreter does not implement — so the gate can
+never silently under-validate. Exit codes: 0 = valid (warnings allowed),
+1 = validation errors. The former `validate-environment.sh` bash implementation
+(Python `jsonschema` + jq fallback) is retired.
+
 ## Commands (bash scripts)
 
-All scripts are bash, linked onto `PATH` by `install.sh`. They remain live and
-are the implementation the TS `validate` verb delegates to.
+All scripts are bash, linked onto `PATH` by `install.sh`.
 
 ### `create-minimal-environments.sh` — bootstrap the required environments
 
@@ -103,30 +127,6 @@ create-minimal-environments.sh [--name <N>] [--config-dir DIR] [--out-dir DIR] [
 create-minimal-environments.sh --name acme
 ```
 
-### `validate-environment.sh` — validate environment files
-
-This is the manager's `validate` operation, named `validate-environment.sh` per
-the script-manager `validate-<manager>.sh` convention.
-
-```
-validate-environment.sh [FILE|DIR] [--schema-dir PATH] [--config-dir DIR] [--zones FILE] [--quiet]
-```
-
-- `FILE|DIR` — an environment `.json` or a directory of them (default
-  `$TAPPAAS_CONFIG/environments`).
-- `--schema-dir PATH` — directory holding `environment-fields.json`.
-- `--config-dir DIR` — config dir for the `zones.json` + organizations lookup.
-- `--zones FILE` — path to `zones.json`.
-- `--quiet` — errors/warnings only.
-
-It checks the schema **and** reference integrity (`network.zone` must exist in
-`zones.json`, `ownerOrg` must exist in the organizations) and rejects an authored
-`tlsCertRefid`.
-
-```bash
-validate-environment.sh
-```
-
 ## Retired tooling (ADR-007 Phase D)
 
 The legacy ADR-005 variant registry is retired. The following scripts have been
@@ -138,6 +138,10 @@ source of truth, and modules deploy via `install-module.sh <module> --environmen
 - `migrate-variants.sh` / `migrate-variants-to-environments.sh`
 - `migrate-to-variants.sh`
 
+Also retired (ADR-007 post-implementation refactor): `validate-environment.sh` —
+the `environment-manager validate` verb is the schema + reference gate now
+(same flags, same exit codes; see "The `validate` gate" above).
+
 To create or change an environment, author/edit its `config/environments/<env>.json`
-file (validated by `validate-environment.sh`); to create its dedicated network
-zone use `zone-controller add <env> --from-zone <src> --variant <env>`.
+file (validated by `environment-manager validate`); to create its dedicated network
+zone use `network-manager zone add <env> --from-zone <src> --variant <env>`.

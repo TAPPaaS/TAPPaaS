@@ -1,28 +1,70 @@
 #!/usr/bin/env bash
-# test.sh — backup-manager offline test suite (ADR-007 P9).
+# test.sh — backup-manager offline test suite (ADR-007 P9; TS-native since the
+# post-implementation refactor, Phase 7.4 — the legacy bash layer is retired).
 #
-# FAST + non-disruptive by default: cascade resolution, validate good/bad
-# fixtures, status listing — all against temp fixtures, never the live config or
-# PBS. TAPPAAS_TEST_DEEP=1 adds nothing live here (the manager is pure config).
+# FAST + non-disruptive by default: compiles the TypeScript sources + unit
+# tests, runs the offline unit suite (cascade / validate / reconcile / modify
+# against fixtures + FakeClient), then exercises the compiled `backup-manager`
+# CLI against temp fixtures — never the live config or PBS.
+# TAPPAAS_TEST_DEEP=1 adds nothing live here (the manager is pure config).
 set -uo pipefail
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 pass=0; fail=0
 ok()   { echo "  ok: $1"; pass=$((pass + 1)); }
 bad()  { echo "  FAIL: $1" >&2; fail=$((fail + 1)); }
 
-BM="${HERE}/backup-manager.sh"
-VB="${HERE}/validate-backup.sh"
-ST="${HERE}/backup-status.sh"
-
-# ── Syntax: every script parses ──────────────────────────────────────
+# ── Syntax: every remaining script parses ────────────────────────────
 for f in "${HERE}"/*.sh; do
     b="$(basename "$f")"
     if bash -n "$f"; then ok "${b} parses"; else bad "${b} syntax"; fi
 done
 
+# ── Build the TypeScript CLI + unit tests ────────────────────────────
+run_ts() {
+    # Run a command, preferring a tsc/node already on PATH, else nix-shell.
+    if command -v tsc >/dev/null 2>&1 && command -v node >/dev/null 2>&1; then
+        bash -c "$1"
+    elif command -v nix-shell >/dev/null 2>&1; then
+        nix-shell -p typescript nodejs_22 --run "$1"
+    else
+        return 127
+    fi
+}
+
+DIST_TEST="${HERE}/dist-test"
+# tsconfig rootDir is the tappaas-cicd root (shared lib/ts base), so the
+# compiled tree mirrors manager/backup-manager/ under dist-test.
+BM_JS="${DIST_TEST}/manager/backup-manager/src/main.js"
+rm -rf -- "$DIST_TEST"
+
+if run_ts "tsc --noEmit -p '${HERE}/tsconfig.json'" >/dev/null 2>&1; then
+    ok "tsc --noEmit clean (src)"
+else
+    bad "tsc --noEmit reported type errors (src)"
+fi
+if run_ts "tsc -p '${HERE}/test/unit/tsconfig.json'" >/dev/null 2>&1; then
+    ok "TypeScript sources + unit tests compile"
+else
+    bad "TypeScript unit tests failed to compile"
+    rm -rf -- "$DIST_TEST"
+    echo ""
+    echo "backup-manager test: ${pass} passed, ${fail} failed"
+    exit 1
+fi
+
+# ── TS unit suite (cascade/validate/reconcile/restore/modify, FakeClient) ─
+if run_ts "node '${DIST_TEST}/manager/backup-manager/test/unit/cascade.test.js'"; then
+    ok "TypeScript cascade unit tests pass"
+else
+    bad "TypeScript cascade unit tests FAILED"
+fi
+
+# The compiled CLI, exercised exactly as the retired bash entry points were.
+BM() { run_ts "node '${BM_JS}' $*"; }
+
 # ── Build a fixture config dir for the cascade ───────────────────────
 FIX="$(mktemp -d "${TMPDIR:-/tmp}/bm-fix.XXXXXX")"
-trap 'rm -rf "${FIX}"' EXIT
+trap 'rm -rf "${FIX}" "${DIST_TEST}"' EXIT
 mkdir -p "${FIX}/environments"
 
 # site: defaultRetention 7y, eu-only offsite, target set.
@@ -68,7 +110,7 @@ cat > "${FIX}/m-off.json"   <<'JSON'
   "backup":{"enabled":false} }
 JSON
 
-R() { CONFIG_DIR="${FIX}" "${BM}" resolve "$1"; }
+R() { BM "resolve $1 --config-dir '${FIX}'"; }
 field() { jq -r "$2" <<<"$(R "$1")"; }
 
 # ── Cascade: site-only ───────────────────────────────────────────────
@@ -89,20 +131,22 @@ field() { jq -r "$2" <<<"$(R "$1")"; }
 [[ "$(field m-mod .enabled)" == "true" ]] && ok "default enabled=true" || bad "default enabled"
 
 # ── Environment-name override via --environment ──────────────────────
-[[ "$(CONFIG_DIR="${FIX}" "${BM}" resolve m-site --environment bar | jq -r .retention)" == "5y" ]] \
+[[ "$(BM "resolve m-site --environment bar --config-dir '${FIX}'" | jq -r .retention)" == "5y" ]] \
     && ok "--environment override applies env policy" || bad "--environment override"
 
-# ── status: lists all fixture modules ────────────────────────────────
-sj="$(CONFIG_DIR="${FIX}" "${ST}" --json)"
+# ── list (was backup-status): lists all fixture modules ──────────────
+sj="$(BM "list --json --config-dir '${FIX}'")"
 cnt="$(jq 'length' <<<"$sj")"
-[[ "$cnt" == "4" ]] && ok "status lists 4 fixture modules" || bad "status count=${cnt} (expected 4)"
+[[ "$cnt" == "4" ]] && ok "list --json lists 4 fixture modules" || bad "list count=${cnt} (expected 4)"
 [[ "$(jq -r '.[] | select(.module=="m-off") | .enabled' <<<"$sj")" == "false" ]] \
-    && ok "status reflects disabled module" || bad "status disabled module"
-dis="$(CONFIG_DIR="${FIX}" "${ST}" --json --disabled-only | jq 'length')"
-[[ "$dis" == "1" ]] && ok "status --disabled-only finds 1" || bad "disabled-only count=${dis}"
+    && ok "list reflects disabled module" || bad "list disabled module"
+[[ "$(jq -r '.[] | select(.module=="m-site") | .inPbsJob' <<<"$sj")" == "true" ]] \
+    && ok "list reports inPbsJob wiring" || bad "list inPbsJob"
+dis="$(BM "list --json --disabled-only --config-dir '${FIX}'" | jq 'length')"
+[[ "$dis" == "1" ]] && ok "list --disabled-only finds 1" || bad "disabled-only count=${dis}"
 
 # ── validate: good fixture passes ────────────────────────────────────
-if CONFIG_DIR="${FIX}" "${VB}" --quiet >/dev/null 2>&1; then
+if BM "validate --config-dir '${FIX}'" >/dev/null 2>&1; then
     ok "validate passes on good fixture"
 else
     bad "validate rejected a good fixture"
@@ -113,7 +157,7 @@ BADFIX="$(mktemp -d "${TMPDIR:-/tmp}/bm-bad.XXXXXX")"
 mkdir -p "${BADFIX}/environments"
 jq '.backup.offsiteResidency="global"' "${FIX}/site.json" > "${BADFIX}/site.json"
 cp "${FIX}/environments/bar.json" "${BADFIX}/environments/"   # eu-only env
-if CONFIG_DIR="${BADFIX}" "${VB}" --quiet >/dev/null 2>&1; then
+if BM "validate --config-dir '${BADFIX}'" >/dev/null 2>&1; then
     bad "validate accepted eu-only env -> non-EU offsite"
 else
     ok "validate rejects eu-only env -> non-EU offsite"
@@ -123,7 +167,7 @@ rm -rf "${BADFIX}"
 # ── validate: bad retention string rejected ──────────────────────────
 BADR="$(mktemp -d "${TMPDIR:-/tmp}/bm-badr.XXXXXX")"
 jq '.backup.defaultRetention="seven-years"' "${FIX}/site.json" > "${BADR}/site.json"
-if CONFIG_DIR="${BADR}" "${VB}" --quiet >/dev/null 2>&1; then
+if BM "validate --config-dir '${BADR}'" >/dev/null 2>&1; then
     bad "validate accepted bad retention string"
 else
     ok "validate rejects bad retention string"
@@ -135,7 +179,7 @@ BADE="$(mktemp -d "${TMPDIR:-/tmp}/bm-bade.XXXXXX")"
 mkdir -p "${BADE}/environments"
 cp "${FIX}/site.json" "${BADE}/site.json"
 jq '.backup.residency="mars-only"' "${FIX}/environments/bar.json" > "${BADE}/environments/bar.json"
-if CONFIG_DIR="${BADE}" "${VB}" --quiet >/dev/null 2>&1; then
+if BM "validate --config-dir '${BADE}'" >/dev/null 2>&1; then
     bad "validate accepted bad residency enum"
 else
     ok "validate rejects bad residency enum"
@@ -146,7 +190,7 @@ rm -rf "${BADE}"
 BADT="$(mktemp -d "${TMPDIR:-/tmp}/bm-badt.XXXXXX")"
 jq 'del(.backup.target)' "${FIX}/site.json" > "${BADT}/site.json"
 cp "${FIX}/m-site.json" "${BADT}/"   # enabled + in PBS job
-if CONFIG_DIR="${BADT}" "${VB}" --quiet >/dev/null 2>&1; then
+if BM "validate --config-dir '${BADT}'" >/dev/null 2>&1; then
     bad "validate accepted dangling (no target) with enabled in-job module"
 else
     ok "validate rejects dangling target"

@@ -18,15 +18,15 @@
   stays in the bash tools, invoked over the client boundary: `add` →
   `create-site.sh`, `repository add`/`delete` → `repository.sh`, `validate` →
   `validate-site.sh` (one schema source).
-- **`install.sh`** links every `*.sh` in the directory (except the lifecycle verb
-  scripts `install.sh`/`update.sh`/`test.sh`) into `~/bin`, makes them
-  executable, and additionally links `migrate-configuration-to-site.sh` as an
-  alias for `migrate-configuration.sh`. **Not yet wired to nix-build the TS bin**
-  — the bash tools remain the installed entry points for now. The bash
-  `validate-site.sh` stays the `validate-<manager>.sh` convention entry.
+- **`install.sh`** nix-builds the TS `site-manager` bin via the shared
+  `lib/component-install-lib.sh` helper and links every `*.sh` in the directory
+  (except the lifecycle verb scripts) into `~/bin`. The bash `validate-site.sh`
+  stays the schema-validation entry (the P10 `validate.sh` wrapper delegates to
+  it). The former `migrate-configuration-to-site.sh` alias was retired in
+  Phase 7.1 (byte-identical duplicate).
 - **`update.sh`** re-runs `install.sh` (idempotent relink).
-- On-PATH entry points after install: `migrate-configuration.sh`,
-  `migrate-configuration-to-site.sh`, `validate-site.sh`, plus the legacy
+- On-PATH entry points after install: `site-manager` (TS),
+  `migrate-configuration.sh`, `validate-site.sh`, plus the legacy
   `create-configuration.sh`, `validate-configuration.sh`,
   `convert-json-to-config.sh`, `repository.sh`.
 

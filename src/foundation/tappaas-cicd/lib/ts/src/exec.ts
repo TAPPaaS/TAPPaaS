@@ -57,8 +57,15 @@ export function capture(bin: string, args: string[]): string {
 // Run streaming the child's output to the operator's terminal (stdio inherit)
 // — for long-running delegations whose own progress should be visible.
 // Returns the exit code; throws only when the binary cannot be spawned.
-export function stream(bin: string, args: string[]): number {
-  const r = spawnSync(bin, args, { encoding: "utf8", stdio: "inherit", env: configEnv() });
+// opts.cwd runs the child from a specific directory (module-manager reconcile
+// runs a module's ./update.sh from the module directory, like the bash did).
+export function stream(bin: string, args: string[], opts?: { cwd?: string }): number {
+  const r = spawnSync(bin, args, {
+    encoding: "utf8",
+    stdio: "inherit",
+    env: configEnv(),
+    ...(opts?.cwd ? { cwd: opts.cwd } : {}),
+  });
   if (r.error) throw new Error(`${bin} ${args[0] ?? ""}: ${r.error.message}`);
   return r.status ?? -1;
 }

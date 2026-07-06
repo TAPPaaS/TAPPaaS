@@ -1,6 +1,21 @@
 # zone-controller — single primitive for zone create/delete
 
-Status: accepted (2026-06-18) · Owner: foundation/firewall · Related: #372, #373, #335, ADR-007f
+> **RETIRED (2026-07-06, ADR-007 post-implementation refactor Phase 7.5).**
+> The bash implementation (`manager/network-manager/zone-controller.sh`, and its
+> companion `zone-state.sh`) has been deleted. The lifecycle described here
+> lives natively in the TypeScript **network-manager**
+> (`src/foundation/tappaas-cicd/manager/network-manager/`):
+> `network-manager add|delete <zone>` (zonelifecycle.ts — which additionally
+> reconciles the switch + AP planes, the #372/#373 fix) and
+> `network-manager enable|disable|manual <zone> [--force]` (the zone-state
+> verbs, incl. the Mandatory guard). Two bash-only conveniences were
+> deliberately NOT ported: `delete --force`/`--keep-bridge-vid` and the
+> ssh-based "VMs still on this VLAN" preflight — the disruptive direction
+> (removing a bridge VID in use) remains guarded inside `proxmox-controller
+> bridge-vids`, which the TS lifecycle drives. This document is kept as the
+> design record.
+
+Status: accepted (2026-06-18), retired into network-manager (2026-07-06) · Owner: foundation/firewall · Related: #372, #373, #335, ADR-007f
 
 ## Problem
 

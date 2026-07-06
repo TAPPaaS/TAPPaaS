@@ -7,11 +7,15 @@ Because of that, the CRUD verbs (`add`/`modify`/`delete`/`reconcile`) are **N/A*
 here, and `validate` carries a special meaning (see below).
 
 This is the TypeScript port (ADR-007 §Health, Remaining-outstanding #3). The
-original bash scripts (`inspect-cluster.sh`, `inspect-vm.sh`,
-`check-disk-threshold.sh`, `check-backup-status.sh`, `update-os.sh`) remain in
+remaining bash scripts (`check-disk-threshold.sh` — its auto-grow is not
+yet ported — and `update-os.sh`) remain in
 place and working; the TS manager re-implements the unambiguous read verbs on top
 of a thin `ssh`/`pvesh`/`qm` shell-out boundary (no Proxmox logic is
-re-implemented).
+re-implemented). health-manager is a **read-mostly orchestrator** under the
+F12 runtime-state rule (see the "Runtime-state access rule" section in
+`tappaas-cicd/README.md`): its cluster reads go through the shared
+`lib/ts/src/cluster.ts` choke-point; its one write path (`update-os`) is a
+documented delegation pending the `update-os.sh` port.
 
 ## Verb surface
 
@@ -22,7 +26,7 @@ health-manager validate [--threshold PCT] [--config-dir DIR]
 health-manager update-os <name> <vmid> <node>
 ```
 
-### `list vm` — cluster overview (= inspect-cluster.sh)
+### `list vm` — cluster overview (native port of the retired inspect-cluster.sh)
 
 Read-only. Lists every running guest (VM/CT) across the Proxmox cluster (VMID,
 name, node, type, status) and classifies each against the module configs in
@@ -60,7 +64,7 @@ fails**:
 |------|--------|-----------|
 | `service-liveness` | `pvesh /cluster/resources` | a managed config module's VM is not `running` |
 | `disk-threshold` | SSH `df /` per guest | a reachable guest's `/` usage ≥ threshold (default **80%**, `--threshold PCT`) |
-| `backup-status` | `backup-status.sh --json` | a module is backup-disabled, or enabled but not in the PBS job |
+| `backup-status` | `backup-manager list --json` | a module is backup-disabled, or enabled but not in the PBS job |
 
 A gate with nothing to check (e.g. no reachable guests, backup tooling absent)
 reports **SKIP**, not FAIL. `--threshold` applies cluster-wide. The disk gate is
@@ -90,7 +94,7 @@ not re-implemented in TS.
 The cluster node list is read from `site.json` (`.hardware.nodes[].name`, the
 `get_all_node_hostnames` equivalent). When `site.json` yields no nodes,
 health-manager falls back to scanning `tappaas1..9`. Either way each candidate is
-ping-probed and only reachable nodes are used — matching inspect-cluster.sh.
+ping-probed and only reachable nodes are used.
 
 ## Build
 

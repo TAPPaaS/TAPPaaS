@@ -259,6 +259,55 @@ export function setZoneState(doc: ZonesDoc, name: string, state: string): void {
   }
 }
 
+// ── operator state verbs (port of zone-state.sh, #209) ────────────────
+// enable/disable/manual flip a zone's `state` field with the transition
+// guards; "Mandatory" and "Disabled" are intentionally NOT exposed as verbs
+// (Mandatory is the platform security model; Disabled is reserved for the
+// delete lifecycle).
+export const STATE_VERBS: Record<string, string> = {
+  enable: "Active",
+  disable: "Inactive",
+  manual: "Manual",
+};
+
+export interface StateChange {
+  from: string;
+  to: string;
+  changed: boolean; // false ⇒ already in the target state (no-op)
+}
+
+// Guarded state change (in memory; caller persists when `changed`). Throws on
+// an unknown verb, an unknown zone, a zone without a `state` field, or on
+// leaving "Mandatory" without force — exactly zone-state.sh's contract.
+export function changeZoneState(
+  doc: ZonesDoc,
+  name: string,
+  verb: string,
+  force = false,
+): StateChange {
+  const to = STATE_VERBS[verb];
+  if (!to) {
+    throw new Error(`unknown state verb '${verb}' (expected enable|disable|manual)`);
+  }
+  const z = getZone(doc, name);
+  if (!z) {
+    throw new Error(
+      `Zone '${name}' not found (known zones: ${listZoneNames(doc).join(", ")})`,
+    );
+  }
+  const from = typeof z.state === "string" ? z.state : "";
+  if (!from) throw new Error(`Zone '${name}' has no 'state' field`);
+  if (from === to) return { from, to, changed: false };
+  if (from === "Mandatory" && !force) {
+    throw new Error(
+      `Zone '${name}' is currently 'Mandatory' — refusing to change without --force ` +
+        `(Mandatory zones, e.g. dmz, are required for the platform's security model)`,
+    );
+  }
+  setZoneState(doc, name, to);
+  return { from, to, changed: true };
+}
+
 // ── mgmt reachability invariant (#372/#373 — operational visibility) ──
 // mgmt.access-to must list every standard zone so the control plane keeps
 // operational visibility. Ports ensure_mgmt_access / remove_mgmt_access.

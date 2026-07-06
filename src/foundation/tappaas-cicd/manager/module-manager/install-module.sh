@@ -504,43 +504,34 @@ main() {
     fi
 
     # Resolve + persist the effective backup policy (ADR-007 P9). The
-    # Site -> Environment -> Module cascade is computed by backup-manager and the
-    # result is written back into the deployed module JSON's .backup, so the
-    # module's backup state (enabled, retention, residency, exclude) is explicit
-    # on disk. This is RECORD-ONLY: the dependsOn backup:vm wiring (which adds the
-    # VM to the shared PBS job) is left untouched. Mirrors the zone0 write-back
-    # pattern above; best-effort (a missing backup-manager must not block install).
-    # Resolve the sibling backup-manager.sh defensively. When install-module.sh is
-    # invoked via its ~/bin symlink, BASH_SOURCE[0] points at ~/bin, so
-    # ../backup-manager does not exist and the cd fails — which under
-    # set -e + inherit_errexit would abort the whole install on a failed command
-    # substitution. Guard it in an `if` (cd failure → leave the sibling empty; the
-    # PATH lookup below still finds backup-manager when it is installed).
-    local _bm_dir _bm_sibling=""
-    if _bm_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")/../backup-manager" 2>/dev/null && pwd)"; then
-        _bm_sibling="${_bm_dir}/backup-manager.sh"
-    fi
-    if command -v backup-manager >/dev/null 2>&1 || [[ -x "${_bm_sibling}" ]]; then
-        local _bm _bpol _btmp
-        _bm="$(command -v backup-manager 2>/dev/null || true)"
-        [[ -n "$_bm" ]] || _bm="${_bm_sibling}"
-        if _bpol="$("${_bm}" resolve "${effective_module}" --config-dir "${CONFIG_DIR}" 2>/dev/null)" \
-            && [[ -n "${_bpol}" ]]; then
-            # Persist only the module-relevant fields (enabled/retention/exclude);
-            # target/offsite/residency stay derived (site/env own them).
-            _btmp="$(mktemp "${module_json}.XXXXXX")"
-            if jq --argjson p "${_bpol}" \
-                  '.backup = {enabled: $p.enabled, retention: $p.retention, exclude: $p.exclude}' \
-                  "${module_json}" > "${_btmp}" 2>/dev/null; then
-                mv "${_btmp}" "${module_json}"
-                info "  backup policy resolved → retention=${BL}$(jq -r .retention <<<"${_bpol}")${CL} enabled=${BL}$(jq -r .enabled <<<"${_bpol}")${CL} residency=${BL}$(jq -r .residency <<<"${_bpol}")${CL}"
-            else
-                rm -f "${_btmp}"
-                warn "  could not persist resolved backup policy onto ${effective_module}.json (continuing)"
-            fi
+    # Site -> Environment -> Module cascade is computed by the TS backup-manager
+    # and the result is written back into the deployed module JSON's .backup, so
+    # the module's backup state (enabled, retention, residency, exclude) is
+    # explicit on disk. This is RECORD-ONLY: the dependsOn backup:vm wiring
+    # (which adds the VM to the shared PBS job) is left untouched. Mirrors the
+    # zone0 write-back pattern above. The TS bin is always installed by the
+    # component install.sh (the legacy backup-manager.sh fallback was retired in
+    # the ADR-007 post-implementation refactor, Phase 7.4) — a missing bin is a
+    # hard error, not a silent skip.
+    command -v backup-manager >/dev/null 2>&1 \
+        || die "backup-manager not found on PATH — run manager/backup-manager/install.sh (required to record the module's backup policy)"
+    local _bpol _btmp
+    if _bpol="$(backup-manager resolve "${effective_module}" --config-dir "${CONFIG_DIR}" 2>/dev/null)" \
+        && [[ -n "${_bpol}" ]]; then
+        # Persist only the module-relevant fields (enabled/retention/exclude);
+        # target/offsite/residency stay derived (site/env own them).
+        _btmp="$(mktemp "${module_json}.XXXXXX")"
+        if jq --argjson p "${_bpol}" \
+              '.backup = {enabled: $p.enabled, retention: $p.retention, exclude: $p.exclude}' \
+              "${module_json}" > "${_btmp}" 2>/dev/null; then
+            mv "${_btmp}" "${module_json}"
+            info "  backup policy resolved → retention=${BL}$(jq -r .retention <<<"${_bpol}")${CL} enabled=${BL}$(jq -r .enabled <<<"${_bpol}")${CL} residency=${BL}$(jq -r .residency <<<"${_bpol}")${CL}"
         else
-            warn "  backup-manager resolve failed for ${effective_module} (continuing without persisted backup policy)"
+            rm -f "${_btmp}"
+            warn "  could not persist resolved backup policy onto ${effective_module}.json (continuing)"
         fi
+    else
+        warn "  backup-manager resolve failed for ${effective_module} (continuing without persisted backup policy)"
     fi
 
     # Announce the OPNsense firewall alias this vmname will get (#300, #316).

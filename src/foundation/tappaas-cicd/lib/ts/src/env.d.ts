@@ -47,6 +47,9 @@ declare module "fs" {
   export function rmSync(path: string, options?: { recursive?: boolean; force?: boolean }): void;
   export function rmdirSync(path: string): void;
   export function copyFileSync(src: string, dest: string): void;
+  // chmodSync: used by module-manager's reconcile (the ensure_scripts_executable
+  // port) to mark module/service scripts executable before spawning them.
+  export function chmodSync(path: string, mode: number): void;
   export interface StatLike {
     isDirectory(): boolean;
     isFile(): boolean;
@@ -83,6 +86,9 @@ declare module "child_process" {
     // long-running scripts so their step-by-step output is visible, exactly as
     // the bash orchestrators do).
     stdio?: "inherit" | "pipe" | string | (string | number)[];
+    // Working directory for the child (module-manager reconcile runs a module's
+    // ./update.sh from the module directory, as the bash orchestrator did).
+    cwd?: string;
   }
   export function spawnSync(
     command: string,

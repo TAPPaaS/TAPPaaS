@@ -13,10 +13,12 @@
 //   module snapshot-vm <m>   = snapshot-vm.sh  (special VM op — stays)
 //
 // CONFIG-layer verbs (list/show/validate) are pure TS reading config/*.json.
-// LIFECYCLE verbs (add/modify/delete/reconcile/test/snapshot-vm) delegate to the
-// existing bash scripts via the injected ModuleClient (the heavy cluster logic
-// stays in bash for this first-pass port — module-manager is a thin orchestrator
-// like network-manager).
+// LIFECYCLE verbs (add/modify/delete/test/snapshot-vm) delegate to the existing
+// bash scripts via the injected ModuleClient (the heavy cluster logic stays in
+// bash until each script's own retire step — module-manager is a thin
+// orchestrator like network-manager). `reconcile` (both the default inspect and
+// --apply converge) is NATIVE TS since Phase 7.3 (src/inspect.ts /
+// src/reconcile.ts).
 //
 // Exit codes: ok=0, error / non-zero child rc = that rc (1 for config errors).
 
@@ -381,9 +383,10 @@ function cmdList(opts: Opts, client: ModuleClient): number {
 
 // list --diff — the per-module three-way (Released/Desired/Actual) drift rollup.
 // Iterates every deployed module config and runs the same read-only inspect that
-// `reconcile <module>` (no --apply) runs — inspect-vm.sh — printing its table per
-// module (with a config-only fallback for non-VM modules). This is what used to
-// be `health-manager list vm --diff`. Returns non-zero if ANY module's inspect
+// `reconcile <module>` (no --apply) runs — the native TS src/inspect.ts (the
+// Phase 7.3 port of the retired inspect-vm.sh) — printing its table per module
+// (with a config-only fallback for non-VM modules). This is what used to be
+// `health-manager list vm --diff`. Returns non-zero if ANY module's inspect
 // exits non-zero (e.g. an unreachable node), so the rollup surfaces failures.
 function cmdListDiff(opts: Opts, client: ModuleClient): number {
   const mods = listModules(opts.configDir);
@@ -492,9 +495,10 @@ function cmdTest(opts: Opts, client: ModuleClient): number {
 
 // reconcile — DEFAULT (no --apply) is a READ-ONLY three-way drift INSPECT:
 // Released[git/source] / Desired[~/config] / Actual[running VM]. This is the
-// inspect that used to live in `health-manager show vm <module>` (backed by
-// inspect-vm.sh); for a non-VM module (no vmid) it falls back to a config-only
-// Released-vs-Desired diff (there is no running VM) and still exits 0.
+// inspect that used to live in `health-manager show vm <module>` (and in the
+// retired inspect-vm.sh; now native TS in src/inspect.ts, Phase 7.3); for a
+// non-VM module (no vmid) it falls back to a config-only Released-vs-Desired
+// diff (there is no running VM) and still exits 0.
 //
 // WITH --apply it is the LEAF re-apply (current config → VM/service). Per ADR-007
 // that is distinct from `modify`: reconcile re-applies the EXISTING config
@@ -502,8 +506,9 @@ function cmdTest(opts: Opts, client: ModuleClient): number {
 // is the leaf the `reconcile --deep` cascade (site → environment → module)
 // depends on, so it must be idempotent.
 //
-// The converge is wired to reconcile-module.sh — a purpose-built lighter converge
-// that re-runs the module's dependency *-service.sh applies + the module's own
+// The converge is native TS (src/reconcile.ts, the Phase 7.3 port of the retired
+// reconcile-module.sh) — a purpose-built lighter converge that re-runs the
+// module's dependency *-service.sh applies + the module's own
 // update.sh/install.sh ONLY: NO snapshot, NO pre/post tests, NO 3-way merge, NO
 // updateTime bump. (update-module.sh / `module modify` does all of those.)
 function cmdReconcile(opts: Opts, client: ModuleClient): number {

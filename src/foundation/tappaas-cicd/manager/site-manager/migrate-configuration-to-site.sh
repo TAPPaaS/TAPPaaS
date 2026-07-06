@@ -1,1 +1,0 @@
-migrate-configuration.sh

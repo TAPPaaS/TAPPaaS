@@ -44,8 +44,6 @@ required_scripts=(
     update-module.sh
     delete-module.sh
     test-module.sh
-    inspect-cluster.sh
-    inspect-vm.sh
     migrate-vm.sh
     migrate-node.sh
     snapshot-vm.sh
@@ -414,15 +412,15 @@ else
     skip "network-manager not installed"
 fi
 # backup-manager: cascade resolves on a temp fixture (site 7y -> env 5y -> mod 1y),
-# never touching the live config or PBS.
-_bm="${SCRIPT_DIR}/manager/backup-manager/backup-manager.sh"
-if [[ -x "${_bm}" ]]; then
+# never touching the live config or PBS. Uses the installed TS bin (the legacy
+# backup-manager.sh was retired in the ADR-007 post-implementation refactor 7.4).
+if command -v backup-manager >/dev/null 2>&1; then
     _bf="$(mktemp -d "${TMPDIR:-/tmp}/backup-smoke.XXXXXX")"
     mkdir -p "${_bf}/environments"
     printf '{"backup":{"target":"pbs1","defaultRetention":"7y"}}\n' > "${_bf}/site.json"
     printf '{"name":"bar","backup":{"retention":"5y"}}\n' > "${_bf}/environments/bar.json"
     printf '{"vmid":210,"environment":"bar","backup":{"retention":"1y"}}\n' > "${_bf}/m.json"
-    if [[ "$("${_bm}" resolve m --config-dir "${_bf}" | jq -r .retention)" == "1y" ]]; then
+    if [[ "$(backup-manager resolve m --config-dir "${_bf}" | jq -r .retention)" == "1y" ]]; then
         pass "backup-manager: cascade resolves module override (7y->5y->1y)"
     else
         fail "backup-manager: cascade resolution wrong"

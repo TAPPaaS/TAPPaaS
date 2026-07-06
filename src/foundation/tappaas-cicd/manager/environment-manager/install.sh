@@ -16,3 +16,7 @@ for f in "${here}"/*.sh; do
     case "${b}" in install.sh|update.sh|test.sh|validate.sh) continue ;; esac
     chmod +x "${f}"; ln -sfn "${f}" "${bin}/${b}"; echo "  linked ${bin}/${b}"
 done
+
+# validate-environment.sh is retired — the TS `environment-manager validate`
+# verb is the schema + reference gate now. Drop a stale link from older installs.
+rm -f "${bin}/validate-environment.sh"

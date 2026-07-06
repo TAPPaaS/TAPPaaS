@@ -628,8 +628,8 @@ validate_zone_active() {
     error ""
     error "  Options:"
     error "    1. Activate the zone (upstream PR + Lars review required):"
-    error "         zone-state.sh enable ${zone}"
-    error "         zone-manager --execute"
+    error "         network-manager enable ${zone}"
+    error "         network-manager reconcile --apply"
     error "    2. Redeploy to an already-active zone:"
     error "         install-module.sh <module> --zone0 <active-zone>"
     return 1

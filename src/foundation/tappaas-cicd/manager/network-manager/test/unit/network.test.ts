@@ -21,6 +21,7 @@ import { parseTemplate, renameTemplateFile, validateName, zonesInit } from "../.
 import { mergeZones, runZonesMerge } from "../../src/zonesmerge";
 import {
   authorZone,
+  changeZoneState,
   getZone,
   listZoneNames,
   loadZones,
@@ -834,6 +835,70 @@ function tmpZones(): string {
     const a = JSON.stringify(renamed, null, 2);
     const b = JSON.stringify(renameTemplateFile(tpl, "myorg").raw, null, 2);
     check(a === b, "the rename transform is deterministic (current==orig==rename at seed)");
+  }
+}
+
+// ── 14. zone state verbs (enable/disable/manual — port of zone-state.sh) ─
+// The guarded transition contract: verb→state mapping, no-op on same state,
+// unknown zone/verb rejected, and the Mandatory guard (+ --force override).
+{
+  function threw(fn: () => void): boolean {
+    try {
+      fn();
+      return false;
+    } catch {
+      return true;
+    }
+  }
+
+  const f = tmpZones();
+
+  // enable / disable / manual map to Active / Inactive / Manual and persist.
+  {
+    let doc = loadZones(f);
+    const r = changeZoneState(doc, "srvHome", "disable");
+    check(r.changed && r.from === "Active" && r.to === "Inactive", "disable: Active → Inactive");
+    saveZones(f, doc);
+    doc = loadZones(f);
+    check(getZone(doc, "srvHome")?.state === "Inactive", "state change persists across reload");
+
+    const r2 = changeZoneState(doc, "srvHome", "enable");
+    check(r2.changed && r2.to === "Active", "enable: Inactive → Active");
+    const r3 = changeZoneState(doc, "srvHome", "manual");
+    check(r3.changed && r3.to === "Manual", "manual: Active → Manual");
+    saveZones(f, doc);
+  }
+
+  // no-op when already in the target state (changed=false, disk untouched).
+  {
+    const doc = loadZones(f);
+    const before = readFileSync(f, "utf8");
+    const r = changeZoneState(doc, "srvHome", "manual");
+    check(!r.changed && r.from === "Manual" && r.to === "Manual", "same-state verb is a no-op (changed=false)");
+    check(readFileSync(f, "utf8") === before, "no-op state change leaves zones.json untouched");
+  }
+
+  // unknown zone / unknown verb / missing state field are rejected.
+  {
+    const doc = loadZones(f);
+    check(threw(() => changeZoneState(doc, "nope", "enable")), "unknown zone is rejected");
+    check(threw(() => changeZoneState(doc, "srvHome", "toggle")), "unknown state verb is rejected");
+    const noState = loadZones(f);
+    delete (noState.raw["srvHome"] as Record<string, unknown>)["state"];
+    delete noState.zones.get("srvHome")!.state;
+    check(threw(() => changeZoneState(noState, "srvHome", "enable")), "zone without a 'state' field is rejected");
+  }
+
+  // Mandatory guard: refused without force, state preserved; --force allows.
+  {
+    let doc = loadZones(f);
+    check(threw(() => changeZoneState(doc, "dmz", "disable")), "leaving Mandatory without --force is refused");
+    check(getZone(doc, "dmz")?.state === "Mandatory", "refused Mandatory change leaves the state untouched");
+    const r = changeZoneState(doc, "dmz", "disable", true);
+    check(r.changed && r.from === "Mandatory" && r.to === "Inactive", "--force allows leaving Mandatory");
+    saveZones(f, doc);
+    doc = loadZones(f);
+    check(getZone(doc, "dmz")?.state === "Inactive", "forced Mandatory change persists");
   }
 }
 

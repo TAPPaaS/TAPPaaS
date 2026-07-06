@@ -22,8 +22,8 @@ export function environmentsDir(configDir: string): string {
   return join(configDir, "environments");
 }
 
-// Parse one raw JSON object into an Environment (lenient — schema-conformance is
-// checked separately by validateEnvironment via the .sh schema, see TODO below).
+// Parse one raw JSON object into an Environment (lenient — schema-conformance
+// is checked separately by the `validate` verb, src/validate.ts).
 // `fallbackName` (the filename stem) is used when the JSON omits `name`.
 export function parseEnvironment(raw: unknown, fallbackName?: string): Environment {
   const o = (raw ?? {}) as Record<string, unknown>;
@@ -138,19 +138,22 @@ export function loadRefSources(configDir: string): RefSources {
   return { zoneNames, zonesAvailable, orgNames };
 }
 
-// ── Validation (mirrors validate-environment.sh reference checks) ─────
-// Schema conformance (additionalProperties:false, required fields, the
-// tlsCertRefid rejection) is delegated to validate-environment.sh — see the
-// TODO(question) in validate.ts. Here we replicate the cross-reference +
-// tlsCertRefid checks in-process so reconcile can refuse to run on a broken
-// tree. Returns { errors, warnings }.
+// ── Validation (the in-process PRE-WRITE guard) ───────────────────────
+// Full schema conformance (additionalProperties:false, pattern/enum/minLength)
+// is the `validate` verb's job — src/validate.ts interprets
+// environment-fields.json directly. Here we keep the lighter cross-reference +
+// required-field + tlsCertRefid checks used by add/modify (refuse a write
+// before it touches disk) and by reconcile (refuse to run on a broken tree).
+// Returns { errors, warnings }.
 export interface ValidationResult {
   errors: string[];
   warnings: string[];
 }
 
 // Recursively test whether any object node carries a `tlsCertRefid` key.
-function hasTlsCertRefid(v: unknown): boolean {
+// Also used by the `validate` verb (src/validate.ts) as the belt-and-braces
+// check over the schema's additionalProperties:false rejection.
+export function hasTlsCertRefid(v: unknown): boolean {
   if (Array.isArray(v)) return v.some(hasTlsCertRefid);
   if (v && typeof v === "object") {
     const o = v as Record<string, unknown>;

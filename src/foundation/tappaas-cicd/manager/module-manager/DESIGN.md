@@ -107,8 +107,8 @@ tier has been added yet.
 - **`validate` is real (in the TS verb).** `module validate` ports the ADR-007b
   tier/source lint into `src/validate.ts` (foundation⇒official, enum checks,
   community warn, `--allow-fork`) and runs it over one or every deployed config.
-  The legacy `validate-module.sh` bash entry remains a stub (kept for the old
-  on-PATH name until retire). Still **not** ported: a JSON **schema** check
+  The legacy `validate-module.sh` wrapper name was retired (Phase 7.1); the
+  P10 `validate.sh` delegates straight to the TS verb. Still **not** ported: a JSON **schema** check
   against `module-fields.json` and dependsOn **reference-integrity** (do the
   named providers exist among deployed modules) — both flagged in
   `src/validate.ts` as future work.

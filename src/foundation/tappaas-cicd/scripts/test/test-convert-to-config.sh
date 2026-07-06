@@ -13,7 +13,7 @@ export TAPPAAS_SCHEMA_FILE="${FOUNDATION_DIR}/schemas/module-fields.json"
 # shellcheck disable=SC1091
 . "${SCRIPT_DIR}/../../lib/common-install-routines.sh"
 # shellcheck disable=SC1091
-. "${SCRIPT_DIR}/../convert-json-to-config.sh"
+. "${SCRIPT_DIR}/../../manager/site-manager/convert-json-to-config.sh"
 
 PASS=0
 FAIL=0

@@ -2,9 +2,12 @@
 #
 # test.sh — tests for environment-manager (ADR-007 P3).
 #
-# FAST (default): non-disruptive, runs entirely on TEMP fixtures. Covers
-#   the bootstrap minimal environments, schema validation, the tlsCertRefid
-#   drop/reject rule, reference checks, and idempotency.
+# FAST (default): non-disruptive, runs entirely on TEMP fixtures. Compiles the
+#   TypeScript (tsc --noEmit on src + the unit tsconfig), runs the TS unit
+#   tests, then drives the compiled `environment-manager validate` verb — the
+#   native schema + reference gate that replaced validate-environment.sh —
+#   over fixture trees: schema validation, the tlsCertRefid reject rule,
+#   reference checks, plus the bootstrap minimal environments and idempotency.
 # DEEP (TAPPAAS_TEST_DEEP=1): additionally read-only-validates the LIVE
 #   config/environments (if present) against the schema. Never writes to live.
 #
@@ -17,7 +20,6 @@ FOUNDATION_DIR="$(cd "${HERE}/../../.." && pwd)"
 SCHEMA_DIR="${FOUNDATION_DIR}/schemas"
 
 MINIMAL="${HERE}/create-minimal-environments.sh"
-VALIDATE="${HERE}/validate-environment.sh"
 
 FIX="${HERE}/test/fixtures"
 
@@ -27,14 +29,65 @@ ok()  { echo "  ok: $*"; PASS=$((PASS + 1)); }
 bad() { echo "  FAIL: $*"; FAIL=$((FAIL + 1)); }
 
 WORK="$(mktemp -d "${TMPDIR:-/tmp}/env-test.XXXXXX")"
-cleanup() { [[ -n "${WORK:-}" && -d "$WORK" ]] && rm -rf -- "$WORK"; return 0; }
+DIST_TEST="${HERE}/dist-test"
+cleanup() {
+    [[ -n "${WORK:-}" && -d "$WORK" ]] && rm -rf -- "$WORK"
+    [[ -n "${DIST_TEST:-}" && -d "$DIST_TEST" ]] && rm -rf -- "$DIST_TEST"
+    return 0
+}
 trap cleanup EXIT INT TERM
 
-# Validate a single file/dir quietly against the schema + references.
-run_validate() {
-    "$VALIDATE" --schema-dir "$SCHEMA_DIR" --config-dir "$1" --quiet "${2:-$1/environments}" >/dev/null 2>&1
+run_ts() {
+    # Run a command, preferring a tsc/node already on PATH, else nix-shell.
+    if command -v tsc >/dev/null 2>&1 && command -v node >/dev/null 2>&1; then
+        bash -c "$1"
+    elif command -v nix-shell >/dev/null 2>&1; then
+        nix-shell -p typescript nodejs_22 --run "$1"
+    else
+        return 127
+    fi
 }
 
+# ===========================================================================
+# A. TypeScript build + unit tests (compile once; the compiled CLI also
+#    drives every validate test below — validate-environment.sh is retired).
+# ===========================================================================
+echo "== environment-manager TypeScript build + unit tests =="
+
+EM_JS="${DIST_TEST}/manager/environment-manager/src/main.js"
+UNIT_TSCONFIG="${HERE}/test/unit/tsconfig.json"
+TS_OK=0
+rm -rf -- "$DIST_TEST"
+if run_ts "tsc --noEmit -p '${HERE}/tsconfig.json'" >/dev/null 2>&1; then
+    ok "tsc --noEmit clean (src)"
+else
+    bad "tsc --noEmit reported type errors (src)"
+fi
+if run_ts "tsc -p '${UNIT_TSCONFIG}'" >/dev/null 2>&1; then
+    ok "TypeScript unit tests compile"
+    TS_OK=1
+    # tsconfig rootDir is the tappaas-cicd root (shared lib/ts base), so the
+    # compiled tree mirrors manager/environment-manager/ under dist-test.
+    for t in config reconcile validate; do
+        if run_ts "node '${DIST_TEST}/manager/environment-manager/test/unit/${t}.test.js'" >/dev/null 2>&1; then
+            ok "TypeScript ${t} unit tests pass"
+        else
+            bad "TypeScript ${t} unit tests FAILED"
+        fi
+    done
+else
+    bad "TypeScript unit tests failed to compile — validate CLI tests below cannot run"
+fi
+
+# Validate a file/dir quietly via the compiled `environment-manager validate`
+# verb (the native schema + reference gate). $1 = config dir, $2 = target
+# (default: $1/environments).
+run_validate() {
+    [[ "$TS_OK" == "1" ]] || return 1
+    run_ts "node '${EM_JS}' validate --schema-dir '${SCHEMA_DIR}' --config-dir '$1' --quiet '${2:-$1/environments}'" >/dev/null 2>&1
+}
+
+echo ""
 echo "== environment-manager FAST tests =="
 
 # ---------------------------------------------------------------------------
@@ -62,7 +115,7 @@ cat > "${BADENV}/evil.json" <<'JSON'
   "network": { "zone": "home" }
 }
 JSON
-if "$VALIDATE" --schema-dir "$SCHEMA_DIR" --config-dir "$CFG" --quiet "${BADENV}/evil.json" >/dev/null 2>&1; then
+if run_validate "$CFG" "${BADENV}/evil.json"; then
     bad "schema/validator should REJECT an authored tlsCertRefid"
 else
     ok "schema/validator REJECTS an authored tlsCertRefid"
@@ -78,7 +131,7 @@ cat > "${BADENV}/evil2.json" <<'JSON'
   "network": { "zone": "home" }
 }
 JSON
-if "$VALIDATE" --schema-dir "$SCHEMA_DIR" --config-dir "$CFG" --quiet "${BADENV}/evil2.json" >/dev/null 2>&1; then
+if run_validate "$CFG" "${BADENV}/evil2.json"; then
     bad "schema should REJECT a top-level tlsCertRefid"
 else
     ok "schema REJECTS a top-level tlsCertRefid"
@@ -90,7 +143,7 @@ fi
 cat > "${BADENV}/badzone.json" <<'JSON'
 { "name": "badzone", "displayName": "Bad Zone", "ownerOrg": "test2", "network": { "zone": "no-such-zone" } }
 JSON
-if "$VALIDATE" --schema-dir "$SCHEMA_DIR" --config-dir "$CFG" --quiet "${BADENV}/badzone.json" >/dev/null 2>&1; then
+if run_validate "$CFG" "${BADENV}/badzone.json"; then
     bad "should catch network.zone referencing an unknown zone"
 else
     ok "catches dangling network.zone reference"
@@ -99,7 +152,7 @@ fi
 cat > "${BADENV}/badorg.json" <<'JSON'
 { "name": "badorg", "displayName": "Bad Org", "ownerOrg": "no-such-org", "network": { "zone": "home" } }
 JSON
-if "$VALIDATE" --schema-dir "$SCHEMA_DIR" --config-dir "$CFG" --quiet "${BADENV}/badorg.json" >/dev/null 2>&1; then
+if run_validate "$CFG" "${BADENV}/badorg.json"; then
     bad "should catch ownerOrg referencing an unknown organization"
 else
     ok "catches dangling ownerOrg reference"
@@ -226,7 +279,7 @@ if [[ "${TAPPAAS_TEST_DEEP:-0}" != "1" ]]; then
 else
     LIVE="${TAPPAAS_CONFIG:-/home/tappaas/config}"
     if [[ -d "${LIVE}/environments" ]] && compgen -G "${LIVE}/environments/*.json" >/dev/null; then
-        if "$VALIDATE" --schema-dir "$SCHEMA_DIR" --config-dir "$LIVE" --quiet >/dev/null 2>&1; then
+        if run_validate "$LIVE"; then
             ok "live config/environments validate (read-only)"
         else
             bad "live config/environments did not validate"

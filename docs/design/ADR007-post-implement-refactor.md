@@ -389,18 +389,45 @@ snapshot-vm.sh, test-module.sh). Every retirement must also update the
 component install.sh symlink line.
 
 Proposed order (each its own test-gated step):
-- [ ] 7.1 Free retirements — TS ports already exist, bash has zero external callers: validate-module.sh, check-backup-status.sh, inspect-cluster.sh, check-disk-threshold.sh (+ delete the migrate-configuration-to-site.sh duplicate and validate-configuration.sh with the legacy config path).
-- [ ] 7.2 Bycatch cleanup: dead `scripts/zone-controller.sh` guards in install.sh:193 + pre-update.sh:125; stale scripts/test/test-zone-state.sh + test-convert-to-config.sh (source nonexistent paths).
-- [ ] 7.3 Single-caller ports: reconcile-module.sh (217 LOC), inspect-vm.sh (357 — share the three-way diff with health inspect.ts via lib/ts), validate-environment.sh (252).
-- [ ] 7.4 Backup quartet (backup-restore/validate-backup/lib-cascade ~300 LOC; TS already native) — prerequisite: rewire health checks.ts off `backup-status.sh`, and the two backup-manager.sh fallback call sites (install-module.sh:513, check-backup-status.sh:27).
-- [ ] 7.5 zone-controller.sh (1 real caller: network/test-variant-public.sh — repoint to `network-manager zone add/delete`), zone-state.sh (fix the common-install-routines hint text).
+- [x] 7.1 Free retirements DONE (2026-07-06): validate-module.sh (P10 validate.sh now execs the TS verb directly), check-backup-status.sh, inspect-cluster.sh, migrate-configuration-to-site.sh (byte-identical duplicate) — all deleted after re-verifying zero real callers (DEPENDENCIES.md had three STALE claims contradicting code; fixed those rows too). **Scope corrections vs the original list:** check-disk-threshold.sh KEPT — its auto-grow (resize +50% over threshold) is NOT in the TS port (read-only subset); retire it only when health-manager grows a `grow` verb. validate-configuration.sh KEPT — really called by create-configuration.sh:530 (living legacy path); retire together with it. Gate: site 39/0, module 51/0, health green, `module-manager validate` + wrapper OK on the test system.
+- [x] 7.2 Bycatch DONE: dead `scripts/zone-controller.sh` guards removed from install.sh + pre-update.sh; the two stale tests re-pointed at the components' new paths — both now pass 9/0 on the test system.
+- [x] 7.3 Single-caller ports DONE (2026-07-06): reconcile-module.sh + inspect-vm.sh → native TS in module-manager (`src/reconcile.ts`, `src/inspect.ts`, `src/shlog.ts`; the orchestration still shells out to the KEPT scripts underneath); validate-environment.sh → native TS in environment-manager `src/validate.ts` (+ new `test/unit/validate.test.ts`) — the port turned out feasible (the bash was field-level checks, not a general JSON-schema engine). Both porting agents hit their session limits mid-flight; the retirement tail (script deletion, presence lists, DEPENDENCIES rows) was finished by hand. Follow-up noted: dedicated unit tests for module-manager's inspect pure-diff logic are thinner than planned (the agent was cut before finishing) — extend module.test.ts when convenient. Gate: all 7 manager suites green post-rebuild (module 47/0, environment 26/0, network 15/0 shell + expanded unit suite, backup 26/0 TS-native, health 23/0, site 39/0, people 23/0), converted zone-state test 9/0, fast module gate green.
+- [x] 7.4 Backup quartet DONE (2026-07-06): backup-manager.sh, backup-status.sh, backup-restore.sh, lib-cascade.sh, validate-backup.sh deleted (TS backup-manager was already at full parity — `list --json` emits the identical array shape backup-status.sh did: module/environment/enabled/retention/residency/inPbsJob). Callers rewired first: health checks.ts backup-status gate now spawns `backup-manager list --config-dir <dir> --json` (env override renamed BACKUP_STATUS_BIN → BACKUP_MANAGER_BIN; gate name, parser, and SKIP-on-unavailable behavior unchanged); install-module.sh:513 sibling-.sh fallback removed — `backup-manager` on PATH is now REQUIRED there (die with pointer to the component install.sh; resolve-failure stays a warn-and-continue); P10 validate.sh now execs `backup-manager validate` (mirrors module-manager 7.1). backup-manager/test.sh rewritten TS-native: same fixture coverage (cascade 7y→5y→1y, enabled:false, --environment override, list/--disabled-only counts, validator's 4 accept/reject cases) exercised via the compiled `node dist-test/.../src/main.js`, plus it now actually runs `tsc --noEmit` + cascade.test.js (previously the unit suite wasn't wired into test.sh at all). install.sh reduced to the nix build+link (no .sh symlinks); cicd test.sh Test-11 smoke repointed at the installed TS bin; docs/inventories updated (backup-manager README/DESIGN, health README/DESIGN, backup-controller README, DEPENDENCIES.md/csv, PROGRAMS.csv — also dropped the stale check-backup-status.sh row left over from 7.1, site-fields.json description). NOTE for the test-system pass: rm the stale ~/bin symlinks (backup-manager.sh backup-status.sh backup-restore.sh validate-backup.sh).
+- [x] 7.5 DONE (2026-07-06): zone-controller.sh + zone-state.sh deleted. Gap found during re-verification: the TS bin had NO state verb — ported as `network-manager enable|disable|manual <zone> [--force]` (zones.ts `changeZoneState` + main.ts dispatch, Mandatory guard preserved; +unit tests in network.test.ts §14). Callers repointed: network/test-variant-public.sh AND test-variants/test-variant-zone-node.sh (second real caller the inventory missed; both used `zone-controller delete … --apply`, an unknown flag the bash script died on — cleanup was silently broken, now fixed) → `network-manager zone add/delete`; common-install-routines hint → `network-manager enable` + `reconcile --apply`; scripts/test/test-zone-state.sh converted to exercise the TS verbs (9 cases kept; usage errors now rc 1 per the shared TS convention, was rc 2; skips if network-manager absent). install.sh links removed + stale ~/bin symlinks rm'd; docs/inventories updated (scripts/README, network-manager README/DESIGN, environment-manager README, DEPENDENCIES.md/csv, PROGRAMS.csv, design doc retirement note). NOT ported (deliberate): delete `--force`/`--keep-bridge-vid` + the ssh VM-occupancy preflight — the VID-removal guard lives in proxmox-controller bridge-vids.
 - [ ] NO-GO for now (revisit per script with its own migration plan): update-os.sh (every VM update via templates' update-service.sh), install/update/delete-module.sh, copy-update-json.sh, convert-json-to-config.sh (hard dep of common-install-routines.sh), repository.sh (969 LOC), create-site.sh / create-minimal-environments.sh / user-setup.sh / migrate-configuration.sh (installer + migration paths), snapshot-vm.sh / test-module.sh / module-format.sh (operator-facing).
 
-### Parked (D6 — needs its own design discussion)
+### F12 — Proxmox-plane boundary: PROPOSAL (2026-07-06, awaiting operator decision)
 
-- F12: Proxmox-plane access from health/module/network managers vs extending
-  proxmox-controller's read surface; health-manager's manager-vs-controller
-  classification (or a documented "read-only orchestrator" carve-out).
+Current reality: health- and module-manager query the Proxmox plane directly
+(ssh `pvesh`/`qm` via the shared `lib/ts/src/cluster.ts`), network-manager
+scp's zones.json to nodes, and health-manager's `update-os` verb delegates to
+`update-os.sh` which MUTATES VMs — all without proxmox-controller.
+
+Options considered:
+- **(A) Extend proxmox-controller** with read verbs (`guests --json`,
+  `vm-config <vmid>` …) and make managers spawn it. Honest taxonomy, but adds
+  a bash CLI surface + a spawn per query while `cluster.ts` already provides
+  ONE audited choke-point; no control is actually gained.
+- **(B) Codify a read-only carve-out (RECOMMENDED)**: managers MAY read
+  cluster runtime state, but ONLY through `lib/ts/src/cluster.ts` (or an
+  equivalent single shared helper) — direct `pvesh`/`qm`/`ssh` scattered in
+  manager code stays forbidden; every runtime WRITE goes through a
+  controller. network-manager's zones.json scp is grandfathered as a
+  documented exception (it distributes a config artifact, not a device
+  mutation). health-manager stays a manager with an explicit
+  "read-mostly orchestrator" note; its one write path (`update-os`) is
+  revisited when Phase 7 reaches `update-os.sh` (a natural future
+  `os-controller` / proxmox-controller verb).
+- **(C) New cluster-controller** wrapping the ssh reads. Same taxonomy win as
+  (A), same cost, plus yet another component.
+
+- [x] **Operator decision 2026-07-06: (B) adopted.** Carve-out documented in
+  `tappaas-cicd/README.md` ("Runtime-state access rule"),
+  `controller/README.md`, and health-manager/README.md. F12 CLOSED.
+
+### Parked (D6)
+
+- ~~F12~~ → proposal above.
 
 ## 7. Log
 

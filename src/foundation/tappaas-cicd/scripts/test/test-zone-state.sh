@@ -1,15 +1,26 @@
 #!/usr/bin/env bash
 #
-# test-zone-state.sh — tabletop tests for zone-state.sh (#209).
+# test-zone-state.sh — tabletop tests for the zone state verbs (#209).
 #
-# Each case writes a fixture zones.json into a temp CONFIG_DIR, invokes
-# zone-state.sh, and asserts both the resulting state and the exit code.
+# The legacy zone-state.sh was retired into the TS network-manager
+# (`network-manager enable|disable|manual <zone> [--force]` — ADR-007 Phase
+# 7.5); these cases exercise the same guarded-transition contract through the
+# real CLI. Each case writes a fixture zones.json into a temp config dir,
+# invokes network-manager, and asserts both the resulting state and the exit
+# code (0 = changed/no-op, 1 = any error incl. bad arguments — the shared TS
+# manager convention; the bash script's separate rc 2 for usage errors is gone).
+#
+# Requires network-manager on PATH (like the other manager tests); skips
+# cleanly when it is not installed.
 #
 
 set -euo pipefail
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-ZONE_STATE="${SCRIPT_DIR}/../zone-state.sh"
+if ! command -v network-manager >/dev/null 2>&1; then
+    echo "── test-zone-state.sh ──"
+    echo "  SKIP: network-manager not on PATH (install tappaas-cicd/manager/network-manager first)"
+    exit 0
+fi
 
 PASS=0
 FAIL=0
@@ -18,6 +29,13 @@ trap 'rm -rf "${WORK}"' EXIT
 
 pass() { echo "  ✓ $*"; PASS=$((PASS + 1)); }
 fail() { echo "  ✗ $*"; FAIL=$((FAIL + 1)); }
+
+# Run network-manager against an isolated config dir (TAPPAAS_CONFIG wins over
+# CONFIG_DIR in the shared config-root resolution, so set both).
+nm() {
+    local cfg="$1"; shift
+    TAPPAAS_CONFIG="${cfg}" CONFIG_DIR="${cfg}" network-manager "$@"
+}
 
 # Build a zones.json fixture with the requested state for each named zone.
 write_fixture() {
@@ -46,7 +64,7 @@ run_case() {
 
     local rc=0
     # shellcheck disable=SC2086
-    CONFIG_DIR="${case_dir}/config" "${ZONE_STATE}" ${extra_args:-} "${verb}" "${zone}" >/dev/null 2>&1 || rc=$?
+    nm "${case_dir}/config" "${verb}" "${zone}" ${extra_args:-} >/dev/null 2>&1 || rc=$?
 
     if [[ "${rc}" != "${expect_rc}" ]]; then
         fail "${name}: exit code ${rc} != expected ${expect_rc}"
@@ -83,7 +101,7 @@ case_dir="${WORK}/nonexistent"
 mkdir -p "${case_dir}/config"
 write_fixture "${case_dir}/config/zones.json" "test1" "Inactive"
 rc=0
-CONFIG_DIR="${case_dir}/config" "${ZONE_STATE}" enable nope >/dev/null 2>&1 || rc=$?
+nm "${case_dir}/config" enable nope >/dev/null 2>&1 || rc=$?
 if [[ "${rc}" == "1" ]] && [[ "$(jq -r '.test1.state' "${case_dir}/config/zones.json")" == "Inactive" ]]; then
     pass "nonexistent-zone (exit 1, untouched)"
 else
@@ -96,7 +114,7 @@ case_dir="${WORK}/mandatory"
 mkdir -p "${case_dir}/config"
 write_fixture "${case_dir}/config/zones.json" "dmz" "Mandatory"
 rc=0
-CONFIG_DIR="${case_dir}/config" "${ZONE_STATE}" disable dmz >/dev/null 2>&1 || rc=$?
+nm "${case_dir}/config" disable dmz >/dev/null 2>&1 || rc=$?
 if [[ "${rc}" == "1" ]] && [[ "$(jq -r '.dmz.state' "${case_dir}/config/zones.json")" == "Mandatory" ]]; then
     pass "mandatory-refused (exit 1, untouched)"
 else
@@ -109,34 +127,34 @@ case_dir="${WORK}/mandatory-force"
 mkdir -p "${case_dir}/config"
 write_fixture "${case_dir}/config/zones.json" "dmz" "Mandatory"
 rc=0
-CONFIG_DIR="${case_dir}/config" "${ZONE_STATE}" --force disable dmz >/dev/null 2>&1 || rc=$?
+nm "${case_dir}/config" disable dmz --force >/dev/null 2>&1 || rc=$?
 if [[ "${rc}" == "0" ]] && [[ "$(jq -r '.dmz.state' "${case_dir}/config/zones.json")" == "Inactive" ]]; then
     pass "mandatory-with-force"
 else
     fail "mandatory-with-force: rc=${rc} state=$(jq -r '.dmz.state' "${case_dir}/config/zones.json")"
 fi
 
-# Case 8: invalid verb rejected with exit 2.
+# Case 8: invalid verb rejected (exit 1, unknown command), state untouched.
 echo "  Case: invalid-verb"
 case_dir="${WORK}/invalid-verb"
 mkdir -p "${case_dir}/config"
 write_fixture "${case_dir}/config/zones.json" "test1" "Inactive"
 rc=0
-CONFIG_DIR="${case_dir}/config" "${ZONE_STATE}" toggle test1 >/dev/null 2>&1 || rc=$?
-if [[ "${rc}" == "2" ]] && [[ "$(jq -r '.test1.state' "${case_dir}/config/zones.json")" == "Inactive" ]]; then
+nm "${case_dir}/config" toggle test1 >/dev/null 2>&1 || rc=$?
+if [[ "${rc}" == "1" ]] && [[ "$(jq -r '.test1.state' "${case_dir}/config/zones.json")" == "Inactive" ]]; then
     pass "invalid-verb"
 else
     fail "invalid-verb: rc=${rc} state=$(jq -r '.test1.state' "${case_dir}/config/zones.json")"
 fi
 
-# Case 9: missing zone argument → exit 2.
+# Case 9: missing zone argument → exit 1.
 echo "  Case: missing-zone-arg"
 case_dir="${WORK}/missing-arg"
 mkdir -p "${case_dir}/config"
 write_fixture "${case_dir}/config/zones.json" "test1" "Inactive"
 rc=0
-CONFIG_DIR="${case_dir}/config" "${ZONE_STATE}" enable >/dev/null 2>&1 || rc=$?
-if [[ "${rc}" == "2" ]]; then
+nm "${case_dir}/config" enable >/dev/null 2>&1 || rc=$?
+if [[ "${rc}" == "1" ]]; then
     pass "missing-zone-arg"
 else
     fail "missing-zone-arg: rc=${rc}"

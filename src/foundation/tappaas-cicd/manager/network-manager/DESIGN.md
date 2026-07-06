@@ -13,8 +13,8 @@
   `result/bin/network-manager` (a Node 22 wrapper) into `~/bin/network-manager`
   (override the bin dir with `TAPPAAS_BIN`).
 - **`update.sh`** re-runs `install.sh` (rebuild + relink; idempotent).
-- The same `install.sh` also relinks the not-yet-retired legacy bash tools
-  (`zone-reconcile`, `zone-state.sh`, `zone-controller`).
+- The same `install.sh` also relinks the not-yet-retired legacy `zone-reconcile`
+  (and removes the retired `zone-controller` / `zone-state.sh` symlinks).
 
 ## Internal structure
 
@@ -94,9 +94,10 @@ subcommand — the convention end-state.
 
 ## Pending / not yet implemented
 
-- **Legacy bash tools not yet retired.** `zone-reconcile`, `zone-controller.sh`,
-  and `zone-state.sh` are still present and linked; a later change retires them
-  once the TypeScript path fully supersedes them.
+- **Legacy bash tool not yet retired.** `zone-reconcile` is still present and
+  linked; a later change retires it once the TypeScript path fully supersedes
+  it. (`zone-controller.sh` and `zone-state.sh` were retired in ADR-007 Phase
+  7.5 — their verbs are native: `add`/`delete` and `enable`/`disable`/`manual`.)
 - **Deferred legacy-zone sunset.** When `init` would inactivate a zone that
   still hosts deployed modules, it keeps the zone Active and warns the operator to
   migrate those modules to the new system-named zone (or an environment) later —

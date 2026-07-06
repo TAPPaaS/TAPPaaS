@@ -2,17 +2,16 @@
 
 ## Language / build
 
-**TypeScript (first-pass port, ADR-007 verb-alignment #3); bash still live.** The
-manager is being migrated to TypeScript to match `people-manager` /
-`network-manager` (all-managers-to-TS, #3). The TS sources are under `src/`,
+**TypeScript (ADR-007 verb-alignment #3), matching `people-manager` /
+`network-manager` (all-managers-to-TS, #3).** The TS sources are under `src/`,
 built by `default.nix` via the shared `lib/nix/ts-manager.nix` builder with
 `tsc` (zero npm deps, ambient `lib/ts/src/env.d.ts`; help/CLI/exec/config-io
 helpers imported from the shared `lib/ts/src/`), and
 expose the standardized verbs (`validate`/`list`/`show`/`resolve`/`modify`/
-`add`/`delete`/`reconcile`/`restore`). The original bash entry scripts
-(`backup-manager.sh`, `backup-status.sh`, `validate-backup.sh`,
-`backup-restore.sh`, `lib-cascade.sh`) **stay live** — `install.sh` is NOT yet
-switched to the nix-build/compiled-component pattern.
+`add`/`delete`/`reconcile`/`restore`). `install.sh` builds + links the bin.
+The original bash entry scripts (`backup-manager.sh`, `backup-status.sh`,
+`validate-backup.sh`, `backup-restore.sh`, `lib-cascade.sh`) were **retired**
+in the ADR-007 post-implementation refactor, Phase 7.4.
 
 ### Division of labour (manager ↔ controller)
 
@@ -38,18 +37,14 @@ resolved policy after a deploy — that path is unchanged and not duplicated her
 
 ## Shape
 
-- `lib-cascade.sh` is the bash source of truth for the resolver. It is *sourced*
-  by `backup-manager.sh`, `backup-status.sh`, and `validate-backup.sh` (and is
-  reusable by the controller) so all agree on precedence. It does pure config
-  reads from `CONFIG_DIR` (overridable for fixtures) and never mutates state or
-  contacts PBS — making the cascade fully unit-testable. `src/config.ts`
-  re-implements the same precedence in lock-step; keep the two in sync.
-- The bash cascade is computed in a single `jq -n` pass over the three layers
-  (`site`, `environment`, `module`), so precedence is explicit and auditable; the
-  TS port mirrors it field-for-field in `resolvePolicy`.
-- The `validate` verb is `validate.sh` (P10 contract) delegating to the domain
-  validator `validate-backup.sh` (script-manager `validate-<manager>` convention);
-  the TS port re-implements the same checks in `src/validate.ts`.
+- `src/config.ts` `resolvePolicy` is the source of truth for the resolver
+  (it replaced the sourced `lib-cascade.sh` in Phase 7.4). It does pure config
+  reads from the config dir (`--config-dir` / `$CONFIG_DIR`, overridable for
+  fixtures) and never mutates state or contacts PBS — making the cascade fully
+  unit-testable. Precedence is explicit and field-for-field over the three
+  layers (`site`, `environment`, `module`).
+- The `validate` verb is `validate.sh` (P10 contract) exec-ing
+  `backup-manager validate`; the checks live in `src/validate.ts`.
 
 ## Integration
 
@@ -60,8 +55,9 @@ resolved policy after a deploy — that path is unchanged and not duplicated her
   adds a VM to the shared PBS job is untouched. The operator-facing `modify` /
   `add` / `delete` verbs are the hand-free way to change the same `.backup` /
   wiring.
-- `health-manager/check-backup-status.sh` calls `backup-manager status`/`list`
-  and flags disabled / not-in-PBS-job modules (read-only).
+- `health-manager`'s `backup-status` gate (`src/checks.ts`) spawns
+  `backup-manager list --json` and flags disabled / not-in-PBS-job modules
+  (read-only).
 
 ## Pending / aspirations
 

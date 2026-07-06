@@ -6,8 +6,8 @@
 #   nix-build -A default default.nix
 #   ln -sf "$PWD/result/bin/backup-manager" /home/tappaas/bin/backup-manager
 #
-# NOTE: not yet wired into install.sh (the .sh entry points stay live for this
-# first-pass port — see the ADR-007 #3 handoff).
+# install.sh builds + links this bin; the legacy .sh entry points were retired
+# in the ADR-007 post-implementation refactor, Phase 7.4.
 {
   pkgs ? import <nixpkgs> { },
 }:

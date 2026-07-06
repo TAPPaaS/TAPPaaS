@@ -23,7 +23,6 @@ set -uo pipefail
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 MIGRATE="${HERE}/migrate-configuration.sh"
-MIGRATE_ALIAS="${HERE}/migrate-configuration-to-site.sh"
 VALIDATE="${HERE}/validate-site.sh"
 FOUNDATION_DIR="$(cd "${HERE}/../../.." && pwd)"
 SCHEMA_DIR="${FOUNDATION_DIR}/schemas"
@@ -120,8 +119,8 @@ SUM_AFTER="$(sha256sum "$SITE" | cut -d' ' -f1)"
 if run_migrate "$C1" --force; then ok "--force re-run exits 0"; else bad "--force run failed"; fi
 run_validate "$SITE" && ok "site.json still valid after --force" || bad "site.json invalid after --force"
 
-# --- Case 1c: the alias resolves to the same behaviour ---
-[[ -e "$MIGRATE_ALIAS" ]] && ok "migrate-configuration-to-site.sh alias exists" || bad "alias missing"
+# (The migrate-configuration-to-site.sh alias was retired in Phase 7.1 of the
+# ADR-007 post-implementation refactor — it was a byte-identical duplicate.)
 
 # --- Case 2: owner derived from config/people/organizations/ ---
 C2="${WORK}/case2"

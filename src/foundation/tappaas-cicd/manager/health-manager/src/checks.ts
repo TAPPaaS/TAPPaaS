@@ -7,7 +7,7 @@
 //
 // Gates ported here:
 //   - disk-threshold   (= check-disk-threshold.sh, READ-ONLY subset — see note)
-//   - backup-status    (= check-backup-status.sh)
+//   - backup-status    (was check-backup-status.sh; reads `backup-manager list --json`)
 //   - service-liveness (guest-agent ping / running-state — see TODO)
 
 import { spawnSync } from "child_process";
@@ -65,14 +65,16 @@ export function checkDiskThreshold(
   };
 }
 
-// ── backup-status gate (= check-backup-status.sh) ─────────────────────
-// Shells out to backup-status.sh --json (the same source check-backup-status.sh
-// reads) and flags modules that are DISABLED or enabled-but-not-in-the-PBS-job.
-// Skips cleanly when the backup tooling is unavailable (matches the .sh exit 0).
-const BACKUP_STATUS_BIN = process.env.BACKUP_STATUS_BIN ?? "backup-status.sh";
+// ── backup-status gate (was check-backup-status.sh) ───────────────────
+// Shells out to the TS `backup-manager list --json` (which replaced the retired
+// backup-status.sh — same JSON array of {module, environment, enabled,
+// retention, residency, inPbsJob}) and flags modules that are DISABLED or
+// enabled-but-not-in-the-PBS-job. Skips cleanly when the backup tooling is
+// unavailable (preserves the historical exit-0 behavior).
+const BACKUP_MANAGER_BIN = process.env.BACKUP_MANAGER_BIN ?? "backup-manager";
 
 export function checkBackupStatus(configDir: string): CheckResult {
-  const r = spawnSync(BACKUP_STATUS_BIN, ["--config-dir", configDir, "--json"], {
+  const r = spawnSync(BACKUP_MANAGER_BIN, ["list", "--config-dir", configDir, "--json"], {
     encoding: "utf8",
     maxBuffer: 64 * 1024 * 1024,
   });

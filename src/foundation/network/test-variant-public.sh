@@ -129,8 +129,8 @@ cleanup() {
     unbound-manager --no-ssl-verify delete "${PROVIDER}" "${VARIANT_DOMAIN}" >/dev/null 2>&1 || true
     # Remove the environment file and its dedicated zone, then restore firewall trunks.
     rm -f "${ENV_FILE}" 2>/dev/null && info "  removed environment ${VARIANT}" || true
-    /home/tappaas/bin/zone-controller delete "${VARIANT}" --apply >/dev/null 2>&1 \
-        && info "  removed environment zone '${VARIANT}' + reconciled OPNsense" || true
+    /home/tappaas/bin/network-manager zone delete "${VARIANT}" >/dev/null 2>&1 \
+        && info "  removed environment zone '${VARIANT}' + reconciled all planes" || true
     sync_fw_trunks || true
     return "${rc}"
 }
@@ -153,11 +153,11 @@ info "  Variant FQDN: ${BL}${PROXY_FQDN}${CL}   public IP: ${BL}${PUBLIC_IP}${CL
 trap cleanup EXIT
 
 # ── Step 1: create dedicated zone + author the environment file ──────
-info "${BOLD}Step 1: zone-controller add ${VARIANT} + author environment ${VARIANT}${CL}"
-if /home/tappaas/bin/zone-controller add "${VARIANT}" --from-zone srvWork --variant "${VARIANT}"; then
+info "${BOLD}Step 1: network-manager zone add ${VARIANT} + author environment ${VARIANT}${CL}"
+if /home/tappaas/bin/network-manager zone add "${VARIANT}" --from-zone srvWork --variant "${VARIANT}"; then
     pass "environment zone '${VARIANT}' created"
 else
-    fail "zone-controller add ${VARIANT} failed"
+    fail "network-manager zone add ${VARIANT} failed"
     exit 1
 fi
 # Author the environment file (domains.primary + per-service dnsMode + zone). The

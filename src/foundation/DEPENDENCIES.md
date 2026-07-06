@@ -13,7 +13,7 @@ A "direct dependency" is one of:
 
 - a script **sourced** via `.` / `source`,
 - another TAPPaaS **program/script/bin invoked** by name (e.g.
-  `install-module.sh`, `caddy-manager`, `zone-controller`, `network-manager`),
+  `install-module.sh`, `caddy-manager`, `network-manager`),
 - a **config file read**: `site.json`, `zones.json`, the `environments/` tree,
   `network.json` (the renamed firewall config, read with a `firewall.json`
   fallback), or a module's own `<name>.json`.
@@ -49,7 +49,7 @@ A "direct dependency" is one of:
 | `tappaas-cicd/manager/module-manager/` (5 ts + 13 sh) | 18 |
 | `tappaas-cicd/manager/network-manager/` (10 ts + 6 sh) | 16 |
 | `tappaas-cicd/manager/health-manager/` (6 ts + 8 sh) | 14 |
-| `tappaas-cicd/manager/backup-manager/` (8 ts + 9 sh) | 17 |
+| `tappaas-cicd/manager/backup-manager/` (8 ts + 4 sh) | 12 |
 | `tappaas-cicd/controller/` (dispatchers) | 3 |
 | `tappaas-cicd/controller/proxmox-controller/` | 7 |
 | `tappaas-cicd/controller/switch-controller/` | 6 |
@@ -113,9 +113,9 @@ module-manager (TS)                  <- the verb-aligned front door
                                                        -> validate-module-tier-source.sh
     update-module.sh    -> apply-json-merge.sh -> convert-json-to-config.sh
                         -> snapshot-vm.sh -> update-module.sh / update-os.sh
-    delete-module.sh    -> common-install-routines.sh -> inspect-cluster.sh
+    delete-module.sh    -> common-install-routines.sh
     reconcile-module.sh -> install-module.sh / update-module.sh
-    validate-module.sh / test-module.sh
+    test-module.sh
 ```
 
 ### 2. Site / environment bootstrap (site-native, ADR-007)
@@ -136,7 +136,6 @@ environment-manager (TS) owns the environments/ tree
 network-manager (TS)     owns zones.json (single source of truth)
   src/main.ts spawns:  zone-manager (opnsense rules+vlan plane),
                        proxmox-controller, switch-controller, ap-controller, scp
-zone-controller(.sh) / zone-state.sh -> common-install-routines.sh
 network/update.sh -> zone-manager (--execute against zones.json)
 ```
 
@@ -156,11 +155,11 @@ network/services/dns/*-service.sh    -> dns-manager  (+ network.json)
 ### 5. Health + backup managers (read-only verbs over controllers)
 
 ```
-health-manager (TS)  src/main.ts spawns: update-os.sh, inspect-cluster.sh,
-                     inspect-vm.sh, check-disk-threshold.sh, backup-status.sh
-backup-manager (TS)  src/main.ts spawns: backup-controller, backup-status.sh,
-                     backup-restore.sh, validate-backup.sh
-check-backup-status.sh -> backup-manager / backup-status.sh
+health-manager (TS)  src/main.ts spawns: update-os.sh,
+                     inspect-vm.sh, check-disk-threshold.sh, backup-manager
+backup-manager (TS)  src/main.ts spawns: backup-controller,
+                     foundation backup/restore.sh (restore verb)
+health-manager (TS) checks.ts -> backup-manager list --json
 ```
 
 ## Most-connected files (most depended upon)
@@ -179,7 +178,6 @@ check-backup-status.sh -> backup-manager / backup-status.sh
 | `pbs-job.sh` | 12 | PBS backup job helper (backup module) |
 | `validate-site.sh` | 9 | site validation (wrapped by site-manager) |
 | `pbs-namespace.sh` | 8 | PBS namespace helper |
-| `backup-status.sh` | 7 | backup status verb (wrapped by backup/health managers) |
 | `vm-net.sh` | 6 | VM network helper (cluster/lib) |
 | `caddy-manager` | 6 | reverse-proxy CLI (opnsense-controller) |
 | `copy-update-json.sh` | 6 | config-to-VM copy verb |
@@ -239,7 +237,6 @@ graph TD
     MM --> UM["update-module.sh"]
     MM --> DM["delete-module.sh"]
     MM --> RM["reconcile-module.sh"]
-    MM --> VM["validate-module.sh"]
     MM --> TM["test-module.sh"]
     IM --> CIR["common-install-routines.sh"]
     IM --> CUJ["copy-update-json.sh"]
@@ -282,8 +279,6 @@ graph TD
     NM --> PX["proxmox-controller"]
     NM --> SC["switch-controller"]
     NM --> AP["ap-controller"]
-    ZC["zone-controller.sh"] --> CIR["common-install-routines.sh"]
-    ZS["zone-state.sh"] --> CIR
     NU["network/update.sh"] --> ZM
     ZM --> ZJ
 ```
@@ -293,16 +288,12 @@ graph TD
 ```mermaid
 graph TD
     HM["health-manager (TS)"] --> UOS["update-os.sh"]
-    HM --> IC["inspect-cluster.sh"]
     HM --> IV["inspect-vm.sh"]
     HM --> CDT["check-disk-threshold.sh"]
-    HM --> BS["backup-status.sh"]
-    BM["backup-manager (TS)"] --> BC["backup-controller"]
-    BM --> BS
-    BM --> BR["backup-restore.sh"]
-    BM --> VB["validate-backup.sh"]
-    BS --> LC["lib-cascade.sh"]
-    LC --> IM["install-module.sh"]
+    HM --> BM["backup-manager (TS)"]
+    BM --> BC["backup-controller"]
+    BM --> FR["backup/restore.sh"]
+    IM["install-module.sh"] --> BM
 ```
 
 ### opnsense-controller (rules plane, Python)
@@ -350,10 +341,8 @@ production script/program executes the legacy verb itself.
 | `user-setup.sh` | people-manager | people-manager flow; `rest-of-foundation.sh` (bootstrap) | MANAGER + **1 DIRECT** |
 | `validate-people.sh` | people-manager | people-manager flow | MANAGER (clean) |
 | `update-os.sh` | health-manager | health-manager (TS); `templates/services/{nixos,debian}/update-service.sh` | MANAGER + **2 DIRECT** |
-| `inspect-cluster.sh` / `inspect-vm.sh` | health-manager | health-manager (TS); `delete-module.sh` (uses inspect-cluster) | MANAGER (lib-internal) |
+| `inspect-vm.sh` | module-manager | module-manager (TS) | MANAGER (lib-internal) |
 | `check-disk-threshold.sh` | health-manager | health-manager (TS) only | MANAGER (clean) |
-| `backup-status.sh` | backup-manager | backup-manager (TS); health-manager (TS) / check-backup-status.sh | MANAGER (clean) |
-| `backup-restore.sh` / `validate-backup.sh` | backup-manager | backup-manager (TS) only | MANAGER (clean) |
 | `backup-controller` | (backup-manager wraps) | backup-manager (TS) only | MANAGER (clean) |
 
 \* `network/update.sh` only *mentions* update-module.sh in comments (it is
@@ -378,10 +367,11 @@ below the manager, not bypassing it.
 ### Verdict
 
 **Adoption is strong but not complete: ~8 production DIRECT-call holdouts
-remain.** The four read-only/backup verbs (`validate-*`, `backup-restore`,
-`backup-status`, `backup-controller`, `reconcile-module`, `check-disk-threshold`)
-are reached **only** through their managers — clean. The holdouts cluster in two
-predictable places:
+remain.** The read-only/backup verbs (`validate-*`, `backup-controller`,
+`reconcile-module`, `check-disk-threshold`) are reached **only** through their
+managers — clean (the backup bash layer — `backup-restore`/`backup-status` —
+was retired outright in the ADR-007 refactor Phase 7.4, absorbed into the TS
+`backup-manager`). The holdouts cluster in two predictable places:
 
 1. **First-boot / nightly bootstrap** (`install.sh`, `update-tappaas`,
    `rest-of-foundation.sh`) — these run before or outside the manager surface

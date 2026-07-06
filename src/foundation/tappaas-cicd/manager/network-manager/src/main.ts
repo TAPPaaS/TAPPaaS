@@ -16,6 +16,7 @@
 //   network-manager add <name> [--from-zone S] [--type T --typeId N]
 //                              [--vlan V] [--variant X] [--no-activate] [--check]
 //   network-manager delete <name> [--check]
+//   network-manager enable|disable|manual <name> [--force]   (was zone-state.sh)
 //   network-manager reconcile [--apply] [--only <plane>]
 //   network-manager init --name <N> [--from <tpl>] [--out <f>] [--force]
 //   network-manager merge [--diff] [--config-dir <dir>] [--template <tpl>]
@@ -28,6 +29,7 @@ import { CliPlaneClient } from "./planes";
 import { reconcileAll } from "./reconcile";
 import { Plane, PLANE_ORDER, PlaneClient, ReconcileReport } from "./types";
 import {
+  changeZoneState,
   defaultConfigDir,
   defaultOrigFile,
   defaultRenameFile,
@@ -37,6 +39,7 @@ import {
   listZoneNames,
   loadZones,
   readSiteName,
+  saveZones,
   zoneExists,
 } from "./zones";
 import { addZone, deleteZone } from "./zonelifecycle";
@@ -72,6 +75,16 @@ const HELP: HelpSpec = {
       ],
     },
     { usage: "delete <name> [--check]" },
+    {
+      usage: "enable|disable|manual <name> [--force]",
+      name:
+        "enable|disable|manual (atomic zone state change; was zone-state.sh —\n" +
+        "enable→Active, disable→Inactive, manual→Manual; mutates zones.json only,\n" +
+        "apply with `network-manager reconcile --apply` when ready)",
+      options: [
+        ["--force", 'allow leaving the "Mandatory" state (refused by default)'],
+      ],
+    },
     {
       usage: "reconcile [--apply] [--only <plane>]",
       name: "reconcile",
@@ -389,6 +402,27 @@ function cmdZoneDelete(opts: Opts, client: PlaneClient = new CliPlaneClient()): 
   }
 }
 
+// ── zone state verbs (enable/disable/manual — was zone-state.sh, #209) ─
+// Atomically flip a zone's `state` in zones.json with the transition guards
+// (unknown zone; leaving "Mandatory" needs --force). Deliberately does NOT
+// reconcile the planes — the operator applies when ready (same contract as
+// zone-state.sh, which printed the zone-manager command instead of running it).
+function cmdZoneState(verb: string, opts: Opts): void {
+  const name = opts.rest[0];
+  if (!name) die(`${verb}: expected <zone-name>`);
+  const doc = loadZones(opts.zonesFile);
+  const res = changeZoneState(doc, name, verb, opts.force);
+  if (!res.changed) {
+    info(`${name}: state already ${res.to} — no change`);
+    return;
+  }
+  saveZones(opts.zonesFile, doc);
+  info(`${name}: ${res.from} → ${GN}${res.to}${CL}`);
+  info("");
+  info("  To apply on the planes, run:");
+  info(`    network-manager reconcile --apply`);
+}
+
 // ── reconcile command ──────────────────────────────────────────────────
 function cmdReconcile(opts: Opts, client: PlaneClient = new CliPlaneClient()): void {
   // Validate zones.json is readable before touching any plane.
@@ -562,6 +596,11 @@ export function run(argv: string[], client?: PlaneClient): number {
         return 0;
       case "delete":
         cmdZoneDelete(opts, client ?? new CliPlaneClient());
+        return 0;
+      case "enable":
+      case "disable":
+      case "manual":
+        cmdZoneState(cmd, opts);
         return 0;
       case "reconcile":
         cmdReconcile(opts, client ?? new CliPlaneClient());

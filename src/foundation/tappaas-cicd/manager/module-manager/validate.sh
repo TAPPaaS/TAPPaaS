@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # validate.sh — module-manager's `validate` verb (P10 contract). Delegates to
-# the domain validator validate-module.sh.
+# the TypeScript validator (the legacy validate-module.sh wrapper name was
+# retired in the ADR-007 post-implementation refactor, Phase 7.1).
 set -euo pipefail
-here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-exec "${here}/validate-module.sh" "$@"
+exec module-manager validate "$@"

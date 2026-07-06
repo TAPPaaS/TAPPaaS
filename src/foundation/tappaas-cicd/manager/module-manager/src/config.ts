@@ -6,7 +6,7 @@
 // convention. Default path resolves from TAPPAAS_CONFIG (or /home/tappaas/config);
 // tests pass an explicit dir (a fixture tree).
 
-import { existsSync, readFileSync, readdirSync } from "fs";
+import { existsSync, readFileSync, readdirSync, statSync } from "fs";
 import { basename, join } from "path";
 import { defaultConfigDir } from "../../../lib/ts/src/config-io";
 import { ModuleConfig } from "./types";
@@ -182,4 +182,86 @@ export function resolveEffectiveModuleName(
   const defaultEnv = resolveDefaultEnvironment(configDir);
   if (defaultEnv && environment === defaultEnv) return module;
   return `${module}-${environment}`;
+}
+
+// ── Pattern-A → flat normalization (#161/#207) ─────────────────────────
+// Port of the bash `normalize_module_config` (common-install-routines.sh): a
+// module JSON may group per-service configuration under a `config` block keyed
+// by the "<module>:<service>" dependency coordinate. Flatten every config block
+// up to the top level (jq `. * $s.value` = recursive object merge, later blocks
+// win) and drop `config`. Already-flat ("Pattern C") docs pass through
+// unchanged. Used by the native reconcile + inspect (Phase 7.3 ports).
+function deepMergeObjects(
+  a: Record<string, unknown>,
+  b: Record<string, unknown>,
+): Record<string, unknown> {
+  const out: Record<string, unknown> = { ...a };
+  for (const [k, v] of Object.entries(b)) {
+    const cur = out[k];
+    if (
+      cur !== null && typeof cur === "object" && !Array.isArray(cur) &&
+      v !== null && typeof v === "object" && !Array.isArray(v)
+    ) {
+      out[k] = deepMergeObjects(cur as Record<string, unknown>, v as Record<string, unknown>);
+    } else {
+      out[k] = v;
+    }
+  }
+  return out;
+}
+
+export function normalizeModuleConfig(raw: Record<string, unknown>): Record<string, unknown> {
+  const cfg = raw.config;
+  if (cfg === null || typeof cfg !== "object" || Array.isArray(cfg)) return raw;
+  let out: Record<string, unknown> = { ...raw };
+  for (const block of Object.values(cfg as Record<string, unknown>)) {
+    // (jq would ERROR on a non-object block; we skip it — forgiving delta.)
+    if (block !== null && typeof block === "object" && !Array.isArray(block)) {
+      out = deepMergeObjects(out, block as Record<string, unknown>);
+    }
+  }
+  delete out.config;
+  return out;
+}
+
+// ── Module source-directory resolution (bash get_module_dir port) ──────
+// Reads .location from the deployed config. ADR-007 P8: a not-yet-migrated
+// firewall.json may record .location=.../firewall while the source dir was
+// renamed to .../network — follow the rename when the recorded dir is gone.
+// Returns null when the config or its .location is absent (bash `return 1`).
+function isDirectory(p: string): boolean {
+  try {
+    return statSync(p).isDirectory();
+  } catch {
+    return false;
+  }
+}
+
+export function getModuleDir(configDir: string, module: string): string | null {
+  const file = join(configDir, `${module}.json`);
+  if (!existsSync(file)) return null;
+  let raw: Record<string, unknown>;
+  try {
+    raw = JSON.parse(readFileSync(file, "utf8")) as Record<string, unknown>;
+  } catch {
+    return null;
+  }
+  let location = typeof raw.location === "string" ? raw.location : "";
+  if (!location) return null;
+  if (!isDirectory(location) && location.endsWith("/firewall")) {
+    const renamed = location.slice(0, -"/firewall".length) + "/network";
+    if (isDirectory(renamed)) location = renamed;
+  }
+  return location;
+}
+
+// ── Provider-name resolution (bash resolve_provider_module port, no-variant
+// form). Prefer the named provider's own deployed config; else its legacy
+// firewall<->network counterpart if THAT is the one actually deployed; else
+// echo the name back (the caller handles the miss).
+export function resolveProviderModule(configDir: string, provider: string): string {
+  if (existsSync(join(configDir, `${provider}.json`))) return provider;
+  const alias = provider === "network" ? "firewall" : provider === "firewall" ? "network" : "";
+  if (alias && existsSync(join(configDir, `${alias}.json`))) return alias;
+  return provider;
 }

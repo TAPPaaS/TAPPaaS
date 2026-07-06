@@ -35,15 +35,18 @@ reconcile` resolves the Site→Environment→Module policy for every deployed mo
 and calls the controller's mutation verbs (`add-to-job <vmid>`, `apply-schedule
 <spec>`) to make PBS match. The manager never talks to PBS directly.
 
-## TypeScript port
+## TypeScript implementation
 
-A first-pass TypeScript port lives under `src/` (built by `default.nix`, a thin
+The manager is TypeScript under `src/` (built by `default.nix`, a thin
 wrapper over the shared `lib/nix/ts-manager.nix` builder: `tsc`, zero npm deps,
 ambient `lib/ts/src/env.d.ts`; shared CLI/help/exec/config-io helpers come from
-`lib/ts/src/` — mirrors `site-manager`). It is
-**not yet wired into `install.sh`** (the `.sh` entry points stay live). The TS
-`backup-manager` shells out to `backup-controller` via `CliClient`
-(`src/client.ts`, parsing `--json` output) — no PBS API is reimplemented.
+`lib/ts/src/` — mirrors `site-manager`). `install.sh` builds + links the
+`backup-manager` bin; the legacy bash entry scripts (`backup-manager.sh`,
+`backup-status.sh`, `backup-restore.sh`, `validate-backup.sh`,
+`lib-cascade.sh`) were **retired** in the ADR-007 post-implementation refactor,
+Phase 7.4. The TS `backup-manager` shells out to `backup-controller` via
+`CliClient` (`src/client.ts`, parsing `--json` output) — no PBS API is
+reimplemented.
 
 ## Commands (standardized verbs)
 
@@ -79,19 +82,16 @@ backup-manager restore list <module> | restore <module> [opts] | list-all
         backup-controller (snapshot listing).
 ```
 
-Entry scripts (the live bash, all linked onto `PATH` by `install.sh`):
+The single entry point is the TS `backup-manager` bin (linked onto `PATH` by
+`install.sh`). Legacy-name → verb mapping (Phase 7.4 retirements):
 
-| Script               | Verb / purpose |
-|----------------------|----------------|
-| `backup-manager.sh`  | main entry (`resolve` / `status` / `restore`); `backup-manager` alias |
-| `backup-status.sh`   | per-module status; `--json`, `--disabled-only` |
-| `backup-restore.sh`  | restore wrapper over the foundation `restore.sh` + controller |
-| `validate-backup.sh` | domain validation (also the `validate` verb via `validate.sh`) |
-| `lib-cascade.sh`     | sourced cascade resolver (`bc_resolve`, `bc_list_modules`) — not linked |
-
-> `lib-cascade.sh` is the bash source of truth for the cascade (also reusable by
-> the controller); the TypeScript `src/config.ts` re-implements the same
-> precedence in lock-step. Keep the two in sync.
+| Retired script       | Replacement |
+|----------------------|-------------|
+| `backup-manager.sh`  | `backup-manager resolve` / `list` / `restore` |
+| `backup-status.sh`   | `backup-manager list [--json] [--disabled-only]` |
+| `backup-restore.sh`  | `backup-manager restore list\|restore\|list-all` |
+| `validate-backup.sh` | `backup-manager validate` (also via `validate.sh`, P10) |
+| `lib-cascade.sh`     | `src/config.ts` `resolvePolicy` (the cascade source of truth) |
 
 ## Controllers it calls
 
@@ -104,21 +104,22 @@ Entry scripts (the live bash, all linked onto `PATH` by `install.sh`):
 
 ## Validation (`validate` verb)
 
-`validate-backup.sh` checks the hierarchy is consistent and exits non-zero on
-any inconsistency: retention strings parse (`^[0-9]+[dwmy]$`), residency is a
-valid enum, an `eu-only` environment is not targeted at a non-EU offsite
-(`site.backup.offsiteResidency`), module `backup.enabled:false` is honoured, and
-there is no dangling target (enabled in-job modules require `site.backup.target`).
+`backup-manager validate` (`src/validate.ts`) checks the hierarchy is consistent
+and exits non-zero on any inconsistency: retention strings parse
+(`^[0-9]+[dwmy]$`), residency is a valid enum, an `eu-only` environment is not
+targeted at a non-EU offsite (`site.backup.offsiteResidency`), module
+`backup.enabled:false` is honoured, and there is no dangling target (enabled
+in-job modules require `site.backup.target`).
 
 ## Testing
 
-`test.sh` is fast + offline (fixtures, never the live config or PBS): cascade
-resolution at each layer, the `7y → 5y → 1y` override demo, `enabled:false`
-disabling, `status` listing, and the validator's accept/reject cases.
-
-The TypeScript port adds offline unit tests under `test/unit/` (a `FakeClient`
-for the controller boundary, fixtures under `test/fixtures/config/`): cascade
-resolution, `validate`, `list`/`show`, the `reconcile` plan (idempotent
-ensure-job-member + apply-schedule, and the controller-mutation apply path), the
-`restore` delegation, and the `modify`/`add`/`delete` atomic `.backup` writes.
-Build + run via the `test/unit/tsconfig.json` (`tsc` + `node`).
+`test.sh` is fast + offline (fixtures, never the live config or PBS). It
+compiles the TS sources + unit tests, runs the unit suite under `test/unit/`
+(a `FakeClient` for the controller boundary, fixtures under
+`test/fixtures/config/`): cascade resolution, `validate`, `list`/`show`, the
+`reconcile` plan (idempotent ensure-job-member + apply-schedule, and the
+controller-mutation apply path), the `restore` delegation, and the
+`modify`/`add`/`delete` atomic `.backup` writes. It then exercises the compiled
+CLI against temp fixtures: cascade resolution at each layer, the `7y → 5y → 1y`
+override demo, `enabled:false` disabling, `list` output, and the validator's
+accept/reject cases.

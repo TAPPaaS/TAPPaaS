@@ -67,22 +67,11 @@ update-module.sh,/home/tappaas/bin/update-module.sh,tappaas-cicd/manager/module-
 validate-module.sh,/home/tappaas/bin/validate-module.sh,tappaas-cicd/manager/module-manager/validate-module.sh,script
 validate-module-tier-source.sh,/home/tappaas/bin/validate-module-tier-source.sh,tappaas-cicd/manager/module-manager/validate-module-tier-source.sh,script
 #
-# --- manager/network-manager/ (legacy verb scripts wrapped by network-manager) ------------
-zone-controller,/home/tappaas/bin/zone-controller,tappaas-cicd/manager/network-manager/zone-controller.sh,script
-zone-state.sh,/home/tappaas/bin/zone-state.sh,tappaas-cicd/manager/network-manager/zone-state.sh,script
-#
 # --- manager/health-manager/ (legacy verb scripts wrapped by health-manager) --------------
-check-backup-status.sh,/home/tappaas/bin/check-backup-status.sh,tappaas-cicd/manager/health-manager/check-backup-status.sh,script
 check-disk-threshold.sh,/home/tappaas/bin/check-disk-threshold.sh,tappaas-cicd/manager/health-manager/check-disk-threshold.sh,script
 inspect-cluster.sh,/home/tappaas/bin/inspect-cluster.sh,tappaas-cicd/manager/health-manager/inspect-cluster.sh,script
 inspect-vm.sh,/home/tappaas/bin/inspect-vm.sh,tappaas-cicd/manager/health-manager/inspect-vm.sh,script
 update-os.sh,/home/tappaas/bin/update-os.sh,tappaas-cicd/manager/health-manager/update-os.sh,script
-#
-# --- manager/backup-manager/ (legacy verb scripts wrapped by backup-manager) --------------
-backup-manager.sh,/home/tappaas/bin/backup-manager.sh,tappaas-cicd/manager/backup-manager/backup-manager.sh,script
-backup-restore.sh,/home/tappaas/bin/backup-restore.sh,tappaas-cicd/manager/backup-manager/backup-restore.sh,script
-backup-status.sh,/home/tappaas/bin/backup-status.sh,tappaas-cicd/manager/backup-manager/backup-status.sh,script
-validate-backup.sh,/home/tappaas/bin/validate-backup.sh,tappaas-cicd/manager/backup-manager/validate-backup.sh,script
 #
 # --- controller/proxmox-controller/ -------------------------------------------------------
 proxmox-controller,/home/tappaas/bin/proxmox-controller,tappaas-cicd/controller/proxmox-controller/proxmox-controller,script

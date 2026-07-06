@@ -6,18 +6,20 @@
 #
 # A module VM on a node OTHER than the firewall's gets a DHCP IP only if the new
 # VLAN is present at EVERY layer of the path:
-#   1. zones.json                      ← zone-controller
+#   1. zones.json                      ← network-manager (zone lifecycle)
 #   2. OPNsense L3 + DHCP              ← zone-manager
 #   3. firewall-VM trunk              ← proxmox-manager trunks
-#   4. each node's lan bridge-vids    ← zone-controller → proxmox-manager bridge-vids (the fix)
+#   4. each node's lan bridge-vids    ← network-manager → proxmox bridge-vids (the fix)
 #   5. PHYSICAL inter-node switch trunk ← NOT automated (ADR-008 switch-controller, WIP)
 #
-# This test asserts the node side (1-4, what zone-controller owns) and then PROBES
+# This test asserts the node side (1-4, what the network-manager zone lifecycle
+# owns) and then PROBES
 # the inter-node L2 path (5). On this cluster the physical switch trunks the static
 # VLAN set but not new variant VLANs, so step 5 fails and the VM phase is SKIPPED
 # with that diagnosis — proving the bridge-vids fix is necessary but not sufficient
 # for off-firewall-node placement (the switch trunk is the remaining requirement).
-# See docs/design/zone-controller.md.
+# See docs/design/zone-controller.md (design; the bash primitive is retired into
+# `network-manager zone add/delete`, ADR-007 Phase 7.5).
 #
 # DEEP test: it creates and destroys a real zone (and a real VM only if the L2 path
 # is viable). Run as:
@@ -82,9 +84,9 @@ cleanup() {
     fi
     [[ -f "${ENV_FILE}" ]] && { rm -f "${ENV_FILE}"; info "Removed environment '${VAR}'"; }
     if jq -e --arg z "${VAR}" 'has($z)' "${ZONES_FILE}" >/dev/null 2>&1; then
-        info "Removing dedicated zone '${VAR}' (via zone-controller)…"
-        zone-controller delete "${VAR}" --apply >/dev/null 2>&1 \
-            || warn "  zone-controller delete ${VAR} returned non-zero — clean up the zone manually"
+        info "Removing dedicated zone '${VAR}' (via network-manager)…"
+        network-manager zone delete "${VAR}" >/dev/null 2>&1 \
+            || warn "  network-manager zone delete ${VAR} returned non-zero — clean up the zone manually"
     fi
     exit "${rc}"
 }
@@ -98,7 +100,7 @@ if [[ "${DEEP}" != "1" ]]; then
     NO_CLEANUP=1   # nothing was created
     exit 0
 fi
-command -v zone-controller >/dev/null 2>&1 || { fail "zone-controller not on PATH"; exit 2; }
+command -v network-manager >/dev/null 2>&1 || { fail "network-manager not on PATH"; exit 2; }
 [[ -f "${FIX}/${MODULE}.json" ]] || { fail "fixture ${MODULE}.json missing"; exit 2; }
 ssh -o ConnectTimeout=6 root@"${DEST_NODE}".mgmt.internal true >/dev/null 2>&1 \
     || { fail "destination node ${DEST_NODE} unreachable over mgmt"; exit 2; }
@@ -109,12 +111,12 @@ fi
     && pass "destination ${DEST_NODE} is NOT the firewall node (${FW_NODE:-unknown}) — this is the gap-exposing case" \
     || skip "firewall also runs on ${DEST_NODE}; co-located placement masks the bridge-vids gap"
 
-# ── 1. create the dedicated zone (zone-controller) + author the environment ──
-section "1. zone-controller add ${VAR} --from-zone ${FROM_ZONE} + author environment ${VAR}"
-if zone-controller add "${VAR}" --from-zone "${FROM_ZONE}" --variant "${VAR}" >/dev/null 2>&1; then
+# ── 1. create the dedicated zone (network-manager) + author the environment ──
+section "1. network-manager zone add ${VAR} --from-zone ${FROM_ZONE} + author environment ${VAR}"
+if network-manager zone add "${VAR}" --from-zone "${FROM_ZONE}" --variant "${VAR}" >/dev/null 2>&1; then
     pass "dedicated zone '${VAR}' created"
 else
-    fail "zone-controller add failed"; exit 1
+    fail "network-manager zone add failed"; exit 1
 fi
 # Author the environment file (the source of truth — no variant registry).
 mkdir -p "$(dirname "${ENV_FILE}")"
@@ -147,7 +149,7 @@ else
 fi
 
 # ── 3. inter-node L2 path: does the NEW VLAN actually traverse to the firewall? ──
-# The node side (steps 1-2) is what zone-controller owns. But a VM on a non-firewall
+# The node side (steps 1-2) is what the network-manager zone lifecycle owns. But a VM on a non-firewall
 # node also needs the PHYSICAL inter-node path to carry the new VLAN. We test this
 # cheaply (no VM): put the destination host on the new VLAN and ping the firewall
 # gateway. This isolates a switch-trunk gap from the node bridge-vids fix.
@@ -169,7 +171,7 @@ else
     # Node bridge-vids passed (step 2) but the new VLAN does not traverse to the
     # firewall: the PHYSICAL inter-node switch trunks the static VLAN set but not
     # this new one. That is the ADR-008 switch-controller gap, NOT the bridge-vids fix.
-    skip "VLAN ${VLAN} does NOT reach the firewall from ${DEST_NODE} — node bridge-vids is OK (step 2), but the physical inter-node switch does not trunk the new VLAN (ADR-008 switch-controller / manual switch trunk). Off-node placement is blocked here regardless of zone-controller."
+    skip "VLAN ${VLAN} does NOT reach the firewall from ${DEST_NODE} — node bridge-vids is OK (step 2), but the physical inter-node switch does not trunk the new VLAN (ADR-008 switch-controller / manual switch trunk). Off-node placement is blocked here regardless of the zone lifecycle."
 fi
 
 # ── 4. end-to-end VM install — only meaningful if the L2 path is viable ──

@@ -10,7 +10,7 @@
 // Entity: `environment`. Verbs:
 //   environment list
 //   environment show <env>
-//   environment validate [<file|dir>]
+//   environment validate [<file|dir>] [--schema-dir P] [--zones F] [--quiet]
 //   environment add [<env>] [--name <N>] [--domain <d>] [--owner <org>]
 //                   [--zone <z>] [--display <d>] [--force]   (no <env>+no --name ⇒ seed minimal set)
 //   environment modify <env> [--domain <d>] [--owner <org>] [--zone <z>] [--display <d>]
@@ -54,7 +54,15 @@ const HELP: HelpSpec = {
   verbs: [
     { usage: "list [--json]" },
     { usage: "show <env> [--json]" },
-    { usage: "validate [<file|dir>]" },
+    {
+      usage: "validate [<file|dir>] [--schema-dir P] [--zones F] [--quiet]",
+      name: "validate",
+      options: [
+        ["--schema-dir P", "Directory holding environment-fields.json (default: derived)."],
+        ["--zones F", "Path to zones.json (default: <config-dir>/zones.json)."],
+        ["--quiet", "Only output errors/warnings."],
+      ],
+    },
     {
       usage: "add [<env>] [--name N] [--domain D] [--owner ORG]\n" +
         "                          [--zone Z] [--display D] [--dns-mode M] [--force]",
@@ -127,6 +135,9 @@ interface Opts {
   zone?: string;
   display?: string;
   dnsMode?: "per-service" | "wildcard";
+  schemaDir?: string;
+  zones?: string;
+  quiet: boolean;
   deep: boolean;
   apply: boolean;
   force: boolean;
@@ -137,6 +148,7 @@ interface Opts {
 function parseOpts(args: string[]): Opts {
   const o: Opts = {
     configDir: defaultConfigDir(),
+    quiet: false,
     deep: false,
     apply: false,
     force: false,
@@ -179,6 +191,15 @@ function parseOpts(args: string[]): Opts {
         o.dnsMode = v;
         break;
       }
+      case "--schema-dir":
+        o.schemaDir = need("--schema-dir");
+        break;
+      case "--zones":
+        o.zones = need("--zones");
+        break;
+      case "--quiet":
+        o.quiet = true;
+        break;
       case "--deep":
         o.deep = true;
         break;
@@ -231,15 +252,32 @@ function cmdShow(opts: Opts): void {
 }
 
 // ── validate ──────────────────────────────────────────────────────────
-// Thin wrapper: delegate to validate-environment.sh (the canonical schema gate)
-// and relay its output + exit status.
+// Native schema + reference gate (src/validate.ts interprets
+// environment-fields.json in-process; validate-environment.sh is retired).
+// Output shapes and exit semantics match the retired script.
 function cmdValidate(opts: Opts): void {
-  const target = opts.rest[0];
-  const res = runValidate(opts.configDir, target);
-  if (res.stdout) process.stdout.write(res.stdout);
-  if (res.stderr) process.stderr.write(res.stderr);
-  if (res.status !== 0) {
-    die(`Environment validation failed (validate-environment.sh exit ${res.status})`);
+  const report = runValidate({
+    configDir: opts.configDir,
+    target: opts.rest[0],
+    schemaDir: opts.schemaDir,
+    zonesFile: opts.zones,
+  });
+  if (!opts.quiet) {
+    info(`Validating environments: ${report.target}`);
+    info(`Using schema: ${report.schemaPath}`);
+  }
+  for (const w of report.warnings) warn(`VALIDATION: ${w}`);
+  for (const e of report.errors) console.error(`${RD}[Error]${CL} VALIDATION: ${e}`);
+  info("");
+  if (report.errors.length > 0) {
+    die(
+      `Environment validation failed: ${report.errors.length} error(s), ` +
+        `${report.warnings.length} warning(s)`,
+    );
+  } else if (report.warnings.length > 0) {
+    warn(`Environment validation passed with ${report.warnings.length} warning(s)`);
+  } else if (!opts.quiet) {
+    info(`${GN}Environment validation passed: all checks OK${CL}`);
   }
 }
 

@@ -58,6 +58,23 @@ files:
 - The preferred entry-point language order is **TypeScript → Python → Bash**
   (see "Preferred language" below).
 
+### Runtime-state access rule (the F12 carve-out)
+
+Controllers own runtime state — but managers sometimes need to *read* it
+(health gates, module list, drift tables). The rule (ADR-007
+post-implementation refactor, F12 decision B):
+
+- A manager MAY **read** cluster runtime state, but ONLY through the shared
+  `lib/ts/src/cluster.ts` helpers (one audited choke-point) — never via its
+  own scattered `ssh`/`pvesh`/`qm` calls.
+- Every runtime **write** goes through a controller. No exceptions for new
+  code. (Grandfathered: network-manager scp's `zones.json` to the nodes —
+  that distributes a config artifact, it does not mutate a device; and
+  health-manager's `update-os` verb delegates to `update-os.sh`, to be
+  revisited when that script is ported.)
+- health-manager is a **read-mostly orchestrator** under this rule — it stays
+  a manager.
+
 ### Config root resolution
 
 Every component resolves the config root the same way:

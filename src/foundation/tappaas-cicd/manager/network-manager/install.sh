@@ -7,9 +7,10 @@
 # ap-manager). It is built with Nix (tsc, no node_modules) into
 # result/bin/network-manager, then linked onto PATH.
 #
-# The legacy bash entry points (zone-reconcile / zone-controller / zone-state)
-# are NOT retired yet (a later chunk does that), so they are still linked here
-# alongside the new TS bin. Idempotent.
+# The legacy zone-controller.sh / zone-state.sh bash entry points are RETIRED
+# (ADR-007 Phase 7.5) — their verbs live natively in the TS bin
+# (`network-manager add/delete/enable/disable/manual`). Only zone-reconcile is
+# still linked alongside the new TS bin. Idempotent.
 set -euo pipefail
 
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -22,9 +23,9 @@ mkdir -p "${bin}"
 build_and_link_nix_component "${here}" "network-manager"
 
 # ── link the legacy bash entry programs (not retired yet) ─────────────
-# zone-reconcile + the *.sh tools, EXCEPT the verb scripts and the one-shot
-# migration helper (migrate-zone-keys-*), which are not on-PATH tools. (The old
-# apply-zones-merge.sh was retired in favour of `network-manager merge`.)
+# zone-reconcile only. (apply-zones-merge.sh was retired in favour of
+# `network-manager merge`; zone-controller.sh / zone-state.sh in favour of the
+# TS zone lifecycle + state verbs — ADR-007 Phase 7.5.)
 link_bash() {
     local src="$1" name="$2"
     [ -f "${src}" ] || { echo "  skip: ${src} not found"; return 0; }
@@ -34,5 +35,7 @@ link_bash() {
 }
 
 link_bash "${here}/zone-reconcile"      zone-reconcile
-link_bash "${here}/zone-state.sh"       zone-state.sh
-link_bash "${here}/zone-controller.sh"  zone-controller
+
+# Drop the retired symlinks so an upgraded install has no dangling ~/bin
+# entries pointing at the deleted scripts.
+rm -f "${bin}/zone-controller" "${bin}/zone-state.sh"

@@ -60,7 +60,7 @@ Every live command first probes a reachable mgmt node. If PBS / the cluster is
 unreachable, the command prints a skip notice and **exits 0** — so offline runs
 and the test suite never fail on a missing cluster. The actual restore is done by
 the foundation [`backup/restore.sh`](../../../backup/restore.sh) (driven via
-`backup-manager restore` → `backup-restore.sh`).
+`backup-manager restore`).
 
 ## Testing
 

@@ -21,7 +21,7 @@ are **N/A**. The surface:
 
 | Verb | Maps to | Notes |
 |------|---------|-------|
-| `list vm` | `inspect-cluster.sh` | running-guest-vs-config overview (basics) |
+| `list vm` | `inspect-cluster.sh` (retired, Phase 7.1) | running-guest-vs-config overview (basics) |
 | `list vm --diff` | per-VM `show vm` rollup | orig/config/running drift across every managed module |
 | `show vm <name>` | `inspect-vm.sh` | three-way drift table for one module |
 | `validate` | the `check-*.sh` gates | **special**: asserts the *live* system is healthy (below) |
@@ -42,7 +42,7 @@ the running cluster and **exits non-zero if any FAIL**.
 |------|--------|----------------|----------------|
 | `service-liveness` | `pvesh /cluster/resources` | a managed config module's VM is not `running` | — |
 | `disk-threshold` | SSH `df /` per managed guest | reachable guest `/` usage ≥ threshold (default **80%**) | no guest reachable |
-| `backup-status` | `backup-status.sh --json` | a module disabled, or enabled-but-not-in-PBS-job | backup tooling absent / unparseable |
+| `backup-status` | `backup-manager list --json` | a module disabled, or enabled-but-not-in-PBS-job | backup tooling absent / unparseable |
 
 `--threshold` (default 80) applies cluster-wide. The disk gate is **read-only**:
 the 50%-auto-grow that `check-disk-threshold.sh` performs is a *mutation* and

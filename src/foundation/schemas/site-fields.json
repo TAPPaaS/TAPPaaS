@@ -151,7 +151,7 @@
           "default": "7y"
         },
         "offsiteResidency": {
-          "description": "Data residency of the offsite backup buddy (ADR-007 P9). Used by validate-backup to reject backing an eu-only environment up to a non-EU offsite. eu-only by default; set global only when the offsite is outside the EU.",
+          "description": "Data residency of the offsite backup buddy (ADR-007 P9). Used by 'backup-manager validate' to reject backing an eu-only environment up to a non-EU offsite. eu-only by default; set global only when the offsite is outside the EU.",
           "type": "string",
           "enum": [
             "eu-only",

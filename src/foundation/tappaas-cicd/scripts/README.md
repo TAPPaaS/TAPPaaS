@@ -26,7 +26,7 @@ The merge-on-update flow (3-way merge of `current`, `.orig`, and the new release
 
 ## Zone configuration (#209)
 
-The global `${CONFIG_DIR}/zones.json` follows the same drift-detection / merge model. The upstream template at [`../../firewall/zones.json`](../../firewall/zones.json) is seeded once on first install by [`install.sh`](../install.sh); thereafter [`apply-zones-merge.sh`](#apply-zones-mergesh) — invoked from [`pre-update.sh`](../pre-update.sh) on every `update-tappaas` cycle — does the 3-way reconciliation against `zones.json.orig`. Only `state` is operator-pinned (operators flip it via [`zone-state.sh`](#zone-statesh)); everything else follows the standard pin-vs-adopt rule.
+The global `${CONFIG_DIR}/zones.json` follows the same drift-detection / merge model. The upstream template at [`../../firewall/zones.json`](../../firewall/zones.json) is seeded once on first install by [`install.sh`](../install.sh); thereafter [`apply-zones-merge.sh`](#apply-zones-mergesh) — invoked from [`pre-update.sh`](../pre-update.sh) on every `update-tappaas` cycle — does the 3-way reconciliation against `zones.json.orig`. Only `state` is operator-pinned (operators flip it via `network-manager enable|disable|manual` — see [`../manager/network-manager/README.md`](../manager/network-manager/README.md)); everything else follows the standard pin-vs-adopt rule.
 
 ## Scripts
 
@@ -220,41 +220,18 @@ A clean audit (count = 0) means every reader goes through `read_module_config` /
 
 ---
 
-### zone-state.sh
+### zone-state.sh (retired)
 
-Atomic state-change helper for [`zones.json`](../../firewall/zones.json) (#209). Replaces the manual `jq '.<zone>.state = "…"' zones.json > tmp && mv …` ritual with one command that validates the zone exists, refuses bogus transitions, and prints the next-step `zone-manager --execute` command. Does **not** push to OPNsense itself — the operator runs zone-manager when ready.
+**Retired (ADR-007 Phase 7.5).** The atomic state-change helper for [`zones.json`](../../firewall/zones.json) (#209) was absorbed into the TypeScript network-manager:
 
-**Usage:**
 ```bash
-zone-state.sh enable  <zone-name>
-zone-state.sh disable <zone-name>
-zone-state.sh manual  <zone-name>
-zone-state.sh enable dmz --force    # Mandatory zones refused otherwise
+network-manager enable  <zone-name>     # state -> Active
+network-manager disable <zone-name>     # state -> Inactive
+network-manager manual  <zone-name>     # state -> Manual
+network-manager disable dmz --force     # Mandatory zones refused otherwise
 ```
 
-**Verb → state mapping:**
-
-| Verb | `state` written | zone-manager behavior |
-|------|-----------------|------------------------|
-| `enable` | `Active` | creates VLAN + DHCP + rules |
-| `disable` | `Inactive` | defined but not deployed |
-| `manual` | `Manual` | operator-managed, zone-manager leaves alone |
-
-**Behavior:**
-
-- Refuses an unknown zone name (lists known zones for convenience).
-- No-op (exit 0) when the zone is already in the requested state.
-- Refuses to leave `Mandatory` (e.g., `dmz`) without `--force`.
-- Writes atomically via `jq` + `mv`; the file is left unchanged if the new JSON would be invalid.
-- The `Mandatory` and `Disabled` states are intentionally not exposed as verbs — `Mandatory` is for platform-required zones (security model), `Disabled` is reserved for the zone-manager removal flow. Use `--force` if you really need to leave Mandatory.
-
-**Exit codes:**
-
-| Code | Meaning |
-|------|---------|
-| `0` | state changed (or already in target state) |
-| `1` | zone not found / file IO failure / Mandatory without `--force` |
-| `2` | bad arguments / unknown verb |
+Same contract as the old script: unknown zones refused (known zones listed), no-op when already in the target state, `Mandatory` guarded behind `--force`, atomic write, and no plane push — apply when ready with `network-manager reconcile --apply`. See [`../manager/network-manager/README.md`](../manager/network-manager/README.md). (Exit codes follow the shared TS manager convention: `0` ok/no-op, `1` any error including bad arguments.)
 
 ---
 
@@ -263,7 +240,7 @@ zone-state.sh enable dmz --force    # Mandatory zones refused otherwise
 3-way merge for `${CONFIG_DIR}/zones.json` against the upstream source at `src/foundation/firewall/zones.json` (#209). The same machinery as [`apply-json-merge.sh`](#apply-json-mergesh), tailored to the single global zones file:
 
 - Per-leaf merge within each shared zone:
-  - **AUTO_FIELDS** (`["state"]`) — operator-pinned, never adopted from source. `zone-state.sh` is the only path that should change `state`.
+  - **AUTO_FIELDS** (`["state"]`) — operator-pinned, never adopted from source. `network-manager enable|disable|manual` is the only path that should change `state`.
   - Otherwise: `current == orig` → adopt source; else → pin current.
 - Zone-level rules:
   - Zone in source, absent in current → **add** with release defaults.
@@ -309,44 +286,20 @@ zone-manager --no-ssl-verify --zones-file /home/tappaas/config/zones.json --exec
 
 ---
 
-### zone-controller.sh
+### zone-controller.sh (retired)
 
-The single **zone lifecycle primitive** — one command that creates or deletes a network zone end to end, across all three planes. Where [`zone-state.sh`](#zone-statesh) only flips a zone's `state` and [`zone-manager`](../opnsense-controller/README.md) only reconciles `zones.json` into OPNsense, **`zone-controller` owns the whole sequence** so no caller can forget a step (the root cause of the `#335`-family bridge-vids gap and the `#372`/`#373` mgmt-invariant drift). Operators and test harnesses call it directly to create/delete an environment's dedicated zone. Full design: [`docs/design/zone-controller.md`](../../../../docs/design/zone-controller.md).
+**Retired (ADR-007 Phase 7.5).** The single **zone lifecycle primitive** (create/delete a network zone end to end, across all planes) is now native in the TypeScript network-manager:
 
-It does **not** reimplement OPNsense/Proxmox logic — it authors `zones.json` and orchestrates the existing reconcilers:
-
-```
-add    : author zones.json (VLAN alloc + inheritance) → append zone to mgmt.access-to
-         → zone-manager --execute (OPNsense VLAN/DHCP/rules) → distribute zones.json
-         → proxmox-manager reconcile --apply (firewall-VM trunk)
-         → proxmox-manager bridge-vids --apply (every node's lan bridge)   ← closes the gap
-delete : remove from mgmt.access-to → set Disabled → zone-manager --execute (drops the iface)
-         → proxmox-manager reconcile/bridge-vids --apply (drop trunk + VID, guarded)
-         → delete the key → distribute
-```
-
-**Usage:**
 ```bash
-zone-controller add <name> [--from-zone <src>] [--vlan <tag>] [--variant <name>] \
-                           [--no-bridge-apply] [--no-activate] [--check]
-zone-controller delete <name> [--force] [--keep-bridge-vid] [--check]
+network-manager add <name> [--from-zone <src>] [--vlan <tag>] [--variant <name>] \
+                           [--no-activate] [--check]
+network-manager delete <name> [--check]
 # examples
-zone-controller add tenant1 --from-zone srvCust --variant tenant1
-zone-controller delete tenant1
+network-manager add tenant1 --from-zone srvCust --variant tenant1
+network-manager delete tenant1
 ```
 
-`add` allocates a free VLAN (sub-id 60–99 in the type band, or `--vlan`), derives `10.<typeId>.<sub>.0/24`, and inherits `type`/`bridge`/`access-to`/`pinhole-allowed-from` from `--from-zone` (else a Service template). It echoes the created zone name. `--check` is a dry-run; `--no-activate` authors `zones.json` (+ mgmt) only.
-
-**bridge-vids safety:** adding a VID only *widens* a node bridge's allow-list (non-disruptive), so `add` applies it automatically — this is what lets a module VM on a node **other than the firewall's** get a DHCP IP. Removing a VID is the sensitive direction, so `delete` guards it: if any VM still runs on that VLAN, the VID is kept (`--keep-bridge-vid` forces this; `--force` proceeds past the VM-present check). All `zones.json` edits are atomic (`jq` → validate → `mv`), and every downstream tool is idempotent, so a partially-failed `add` is fixed by re-running it.
-
-> **Note — mgmt invariant:** `zone-controller` maintains the explicit `mgmt.access-to` list (append on add, remove on delete) per `zones.json._README.isolation_invariant`. A self-maintaining `"all"` sentinel is a deferred enhancement — see [`docs/design/issue-mgmt-all-sentinel.md`](../../../../docs/design/issue-mgmt-all-sentinel.md).
-
-**Exit codes:**
-
-| Code | Meaning |
-|------|---------|
-| `0` | zone created / deleted (downstream reconcile warnings are non-fatal) |
-| `1` | bad zone name, zone exists (add) / not found (delete), or VMs still present without `--force` |
+The TS lifecycle keeps the whole sequence in one owner (author `zones.json` + the `mgmt.access-to` invariant, then reconcile **all four planes** — OPNsense, Proxmox trunks/bridge-vids, physical switch, APs — the `#372`/`#373` fix the bash version lacked) and auto-distributes `zones.json` to the nodes. Original design: [`docs/design/zone-controller.md`](../../../../docs/design/zone-controller.md) (retirement note at top); current behavior: [`../manager/network-manager/README.md`](../manager/network-manager/README.md).
 
 **Deep test:** [`../test-variants/test-variant-zone-node.sh --deep`](../test-variants/test-variant-zone-node.sh) creates a variant zone, asserts the new VLAN reaches **every** node's bridge, places a `tvbase` VM on a non-firewall node (default `tappaas3`), and verifies it gets an IP and is reachable — the end-to-end regression for the bridge-vids gap.
 
@@ -361,7 +314,7 @@ scripts/test/test-convert-to-config.sh      #  9 cases — converter rules + ide
 scripts/test/test-json-merge.sh             # 11 cases — module 3-way merge: pin/adopt/orphan/auto + Pattern A inputs
 scripts/test/test-read-module-config.sh     #  4 cases — read funnel + jq_module_write Pattern A render
 scripts/test/test-zones-merge.sh            # 11 cases — zones 3-way merge: pin state, adopt vlantag, rename detection, backfill
-scripts/test/test-zone-state.sh             #  9 cases — verbs, no-op, Mandatory refusal, --force, missing zone, invalid verb
+scripts/test/test-zone-state.sh             #  9 cases — network-manager enable/disable/manual: verbs, no-op, Mandatory refusal, --force, missing zone, invalid verb (skips if network-manager not installed)
 scripts/test/test-zone-name-validation.sh   #  6 cases — module-fields regex rejects hyphens in zone names (#237)
 scripts/test/test-migrate-zone-keys.sh      # 11 cases — zone-key migration: zones+modules rewrite, marker, backup, idempotency
 scripts/test/test-install-overrides.sh      # 43 cases — install-time --<field> overrides (flat + Pattern A + variant + multi-dep; #264)
