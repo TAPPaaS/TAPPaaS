@@ -1,6 +1,7 @@
 # ADR-007 post-implementation refactor
 
-**Status:** PLANNED — analysis complete, implementation not started
+**Status:** DONE — phases 1–6 implemented, gated, committed (`2ac53ab`) and
+verified end-to-end on the test system (only D6-parked items remain open)
 **Branch:** ADR007 (no production system runs this branch; the test system is available for deep verification)
 **Scope:** `src/foundation/tappaas-cicd/` — the TypeScript managers, the controllers, the shared `lib/`, and the install/update entry scripts (`pre-update.sh`, `update.sh`, `install.sh`, `update-tappaas`).
 
@@ -390,3 +391,4 @@ migration. Revisit after Phase 6 if still wanted.
 | 2026-07-06 | **Known pre-existing deep-run failures on ADR007** (present before this refactor, environmental): (a) ap-controller `test-ap-manager.sh` "after confirm + full coverage → in sync" expects rc 0, gets 2; (b) opnsense-controller `test_egress_down_fails` needs egress to 1.1.1.1:443, which the isolated test VM lacks. Not addressed here. |
 | 2026-07-06 | **Post-push verification required** (operator): after commit+push of this branch, run `update-tappaas --force` on the test system — the full pre-update.sh cycle (repo pull → dispatcher builds → ensure-patches → zone merge) could not be tested end-to-end against an uncommitted working tree (pre-update's git pull would auto-stash it). |
 | 2026-07-06 | **Deep-gate finds, fixed**: (a) environment-manager's entry point pre-parses argv OUTSIDE `guarded()`, so a bad flag dumped a raw DieError stack — latent pre-existing bug surfaced by the migration; entry now wrapped in `guarded()`. (b) The test system's live `config/environments/{mgmt,test4}.json` had empty `ownerOrg` (schema-invalid; bootstrap-era data) — fixed via `environment-manager modify <env> --owner test4`; the env deep tier ("live config/environments validate") now passes. Remaining deep failures are the documented environmental ones (tappaas3 node offline → VM-creation/variant suites; ap-manager rc-2; opnsense egress). |
+| 2026-07-06 | **Committed as `2ac53ab` and pushed to origin/ADR007** (148 files, +2344/−2965). Post-push verification PASSED: test system fast-forwarded to the commit (operator's local network/test.sh edits turned out to already be upstream), then a full `update-tappaas --force` cycle ran — rc 0, ZERO [Error] lines, `total=7 succeeded=7 failed=0`, reboot pass clean. Log confirms the new paths executed live: dispatcher component builds (manager/ + controller/, incl. the contract opnsense/identity/update-tappaas builds), `opnsense-ensure-patches` (both patches ensured ✓), then the zones 3-way merge. Plan complete; open items: the D6-parked F12 boundary question and the deferred `args.ts`. |
