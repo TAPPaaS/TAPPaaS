@@ -7,7 +7,8 @@
 #   tests, then drives the compiled `environment-manager validate` verb — the
 #   native schema + reference gate that replaced validate-environment.sh —
 #   over fixture trees: schema validation, the tlsCertRefid reject rule,
-#   reference checks, plus the bootstrap minimal environments and idempotency.
+#   reference checks, plus the `add` minimal-set bootstrap and idempotency
+#   (native since Phase 8.1 — create-minimal-environments.sh is retired).
 # DEEP (TAPPAAS_TEST_DEEP=1): additionally read-only-validates the LIVE
 #   config/environments (if present) against the schema. Never writes to live.
 #
@@ -18,8 +19,6 @@ set -uo pipefail
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 FOUNDATION_DIR="$(cd "${HERE}/../../.." && pwd)"
 SCHEMA_DIR="${FOUNDATION_DIR}/schemas"
-
-MINIMAL="${HERE}/create-minimal-environments.sh"
 
 FIX="${HERE}/test/fixtures"
 
@@ -85,6 +84,17 @@ fi
 run_validate() {
     [[ "$TS_OK" == "1" ]] || return 1
     run_ts "node '${EM_JS}' validate --schema-dir '${SCHEMA_DIR}' --config-dir '$1' --quiet '${2:-$1/environments}'" >/dev/null 2>&1
+}
+
+# Seed the minimal environment set via the compiled `environment-manager add`
+# (no positional <env> ⇒ bootstrap; create-minimal-environments.sh is retired —
+# ADR-007 refactor Phase 8.1). $@ = the bootstrap flags (--name/--domain/
+# --config-dir/--force), single-quoted into the run_ts command line.
+run_bootstrap() {
+    [[ "$TS_OK" == "1" ]] || return 1
+    local cmd="node '${EM_JS}' add" a
+    for a in "$@"; do cmd+=" '${a}'"; done
+    run_ts "$cmd" >/dev/null 2>&1
 }
 
 echo ""
@@ -159,7 +169,7 @@ else
 fi
 
 # ---------------------------------------------------------------------------
-# 6. create-minimal-environments --name <N> produces mgmt + <N> (ADR-007 S6 N6)
+# 6. `add` bootstrap --name <N> produces mgmt + <N> (ADR-007 S6 N6)
 # ---------------------------------------------------------------------------
 CFG2="${WORK}/bootstrap"
 mkdir -p "${CFG2}/people/organizations"
@@ -168,10 +178,10 @@ cp "${FIX}/zones.json" "${CFG2}/zones.json"
 # zones.json fixture has no 'acme' zone — add one so the default env validates.
 jq '. + {"acme":{"type":"Service","vlantag":210,"bridge":"lan","description":"acme (fixture)"}}' \
     "${CFG2}/zones.json" > "${CFG2}/zones.json.tmp" && mv "${CFG2}/zones.json.tmp" "${CFG2}/zones.json"
-if "$MINIMAL" --name acme --config-dir "$CFG2" >/dev/null 2>&1; then
-    ok "create-minimal-environments.sh --name acme runs"
+if run_bootstrap --name acme --config-dir "$CFG2"; then
+    ok "environment-manager add --name acme (bootstrap) runs"
 else
-    bad "create-minimal-environments.sh --name acme should succeed"
+    bad "environment-manager add --name acme (bootstrap) should succeed"
 fi
 M="${CFG2}/environments/mgmt.json"
 DD="${CFG2}/environments/acme.json"
@@ -185,11 +195,11 @@ if [[ -f "$DD" ]]; then
 fi
 # --domain sets the default env's domains.primary (the site-native install path:
 # site.json carries no domain, so install.sh passes --domain here).
-if "$MINIMAL" --name acme --domain acme.example.net --config-dir "$CFG2" --force >/dev/null 2>&1 \
+if run_bootstrap --name acme --domain acme.example.net --config-dir "$CFG2" --force \
    && [[ "$(jq -r '.domains.primary' "$DD")" == "acme.example.net" ]]; then
-    ok "create-minimal-environments --domain sets the default env domains.primary"
+    ok "add bootstrap --domain sets the default env domains.primary"
 else
-    bad "create-minimal-environments --domain should set the default env domains.primary"
+    bad "add bootstrap --domain should set the default env domains.primary"
 fi
 if [[ -f "$M" ]]; then
     [[ "$(jq -r '.network.zone' "$M")" == "mgmt" ]] && ok "mgmt.json network.zone=mgmt" || bad "mgmt.json zone"
@@ -216,10 +226,10 @@ cat > "${CFG3}/site.json" <<'JSON'
   "hardware": { "nodes": [ { "name": "tappaas1" } ] },
   "repositories": [ { "name": "core", "url": "https://example/repo" } ] }
 JSON
-if "$MINIMAL" --config-dir "$CFG3" >/dev/null 2>&1; then
-    ok "create-minimal-environments.sh derives name from site.json (no --name)"
+if run_bootstrap --config-dir "$CFG3"; then
+    ok "add bootstrap derives name from site.json (no --name)"
 else
-    bad "create-minimal-environments.sh should derive name from site.json"
+    bad "add bootstrap should derive name from site.json"
 fi
 [[ -f "${CFG3}/environments/acme.json" ]] && ok "derived default env acme.json from site.json.name" || bad "expected acme.json derived from site.json"
 [[ "$(jq -r '.network.zone' "${CFG3}/environments/acme.json" 2>/dev/null)" == "acme" ]] \
@@ -227,17 +237,17 @@ fi
 
 # 6c. idempotent re-run with --name does not clobber
 acme_before="$(cat "$DD" 2>/dev/null || true)"
-"$MINIMAL" --name acme --config-dir "$CFG2" >/dev/null 2>&1 || bad "create-minimal --name re-run should succeed"
+run_bootstrap --name acme --config-dir "$CFG2" || bad "add bootstrap --name re-run should succeed"
 acme_after="$(cat "$DD" 2>/dev/null || true)"
-[[ "$acme_before" == "$acme_after" ]] && ok "create-minimal --name re-run did not clobber acme.json" || bad "re-run changed acme.json"
+[[ "$acme_before" == "$acme_after" ]] && ok "add bootstrap --name re-run did not clobber acme.json" || bad "re-run changed acme.json"
 
 # ---------------------------------------------------------------------------
-# 7. Idempotency: re-running create-minimal does not error and does not clobber
+# 7. Idempotency: re-running the bootstrap does not error and does not clobber
 # ---------------------------------------------------------------------------
 mgmt_before="$(cat "$M" 2>/dev/null || true)"
-"$MINIMAL" --name acme --config-dir "$CFG2" >/dev/null 2>&1 || bad "create-minimal re-run should succeed"
+run_bootstrap --name acme --config-dir "$CFG2" || bad "add bootstrap re-run should succeed"
 mgmt_after="$(cat "$M" 2>/dev/null || true)"
-[[ "$mgmt_before" == "$mgmt_after" ]] && ok "create-minimal re-run did not clobber mgmt.json" || bad "re-run changed mgmt.json"
+[[ "$mgmt_before" == "$mgmt_after" ]] && ok "add bootstrap re-run did not clobber mgmt.json" || bad "re-run changed mgmt.json"
 
 # ---------------------------------------------------------------------------
 # 8. P3 example shapes validate (foo/bar/default/mgmt from the ADR)

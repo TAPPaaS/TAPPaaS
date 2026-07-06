@@ -62,6 +62,48 @@ export function reachableNodes(candidates: string[]): string[] {
   return out;
 }
 
+// Query the cluster's NODE membership via one reachable node. Returns the
+// node names, or null on ANY failure (no ssh, non-zero rc, bad JSON).
+// Uses /cluster/resources --type node — same endpoint family as the guest
+// query, so one API surface covers both.
+export function queryClusterNodes(node: string): string[] | null {
+  const r = ssh(
+    "root",
+    `${node}.${mgmtDomain()}`,
+    "pvesh get /cluster/resources --type node --output-format json",
+  );
+  if (!r.ran || r.rc !== 0) return null;
+  let arr: unknown;
+  try {
+    arr = JSON.parse(r.stdout);
+  } catch {
+    return null;
+  }
+  if (!Array.isArray(arr)) return null;
+  const out: string[] = [];
+  for (const e of arr) {
+    const o = e as Record<string, unknown>;
+    if (o.type === "node" && typeof o.node === "string" && o.node.length > 0) {
+      out.push(o.node);
+    }
+  }
+  return out.sort();
+}
+
+// The tankXY zpools physically present on a node (the TAPPaaS storagePools
+// naming convention) — mirrors create-site.sh's discovery: query the node
+// directly with `zpool list` (the cluster storage.cfg lists pools that may
+// not exist on every node). null on any failure.
+export function queryNodeTankPools(node: string): string[] | null {
+  const r = ssh("root", `${node}.${mgmtDomain()}`, "zpool list -H -o name 2>/dev/null");
+  if (!r.ran || r.rc !== 0) return null;
+  return r.stdout
+    .split("\n")
+    .map((s) => s.trim())
+    .filter((s) => /^tank/.test(s))
+    .sort();
+}
+
 // One row of `pvesh get /cluster/resources --type vm`.
 export interface ClusterGuest {
   vmid: number;

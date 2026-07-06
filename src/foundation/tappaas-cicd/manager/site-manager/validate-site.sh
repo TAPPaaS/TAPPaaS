@@ -51,7 +51,7 @@ command -v jq >/dev/null 2>&1 || die "jq is required but not installed."
 # Locate the schema relative to the REAL script path. validate-site.sh is
 # symlinked into /home/tappaas/bin, so BASH_SOURCE alone points at the symlink
 # dir and the schema would not be found. readlink -f follows the link (known
-# footgun — see people-manager/validate.sh and user-setup.sh).
+# footgun — see people-manager/validate.sh).
 # ---------------------------------------------------------------------------
 _SELF="$(readlink -f "${BASH_SOURCE[0]}")"
 HERE="$(cd "$(dirname "${_SELF}")" && pwd)"

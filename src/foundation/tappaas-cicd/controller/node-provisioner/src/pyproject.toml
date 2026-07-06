@@ -1,0 +1,19 @@
+[build-system]
+requires = ["setuptools >= 61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "node-provisioner"
+version = "0.1.0"
+description = "PXE provisioning service for follow-on TAPPaaS nodes (design N3)"
+requires-python = ">=3.10"
+license = "MIT"
+# Pure stdlib — the answer/asset server is http.server, the registry is
+# json files, systemd/mount/cpio are driven via subprocess.
+dependencies = []
+
+[project.scripts]
+node-provisioner = "node_provisioner.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["."]

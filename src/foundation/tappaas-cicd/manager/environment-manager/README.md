@@ -43,7 +43,7 @@ environment-manager reconcile <env> [--deep] [--apply] [--config-dir DIR]
 | `list` | Enumerate environments. `--json` emits the full objects as a JSON array; default prints `name (zone …)` per line. |
 | `show <env>` | One environment in detail (canonical pretty JSON; `--json` = compact). |
 | `validate [<file/dir>]` | The canonical schema + reference gate, implemented natively (src/validate.ts interprets `environment-fields.json` in-process — the former `validate-environment.sh` is retired). Checks full schema conformance (`additionalProperties:false`, `pattern`/`enum`/`minLength`, the `tlsCertRefid` rejection) **and** reference integrity (`network.zone` in `zones.json`, `ownerOrg` in the organizations). See "The `validate` gate" below. |
-| `add` | Create an environment (writes validated config). With **no** `<env>` and **no** `--name` it **seeds the minimal set** (`mgmt` + the default `<N>`) via the `create-minimal-environments` bootstrap. With `<env>` (or `--name`) it creates that single env. `--owner` defaults to the first org under `people/organizations/`; `--zone` defaults to `<env>`. |
+| `add` | Create an environment (writes validated config). With **no** positional `<env>` it **seeds the minimal set** (`mgmt` + the default `<N>`) — the bootstrap that replaced the retired `create-minimal-environments.sh`; `--name <N>` gives the system name explicitly, else it derives from `site.json '.name'` (see "The minimal-set bootstrap" below). With a positional `<env>` it creates that single env. `--owner` defaults to the first org under `people/organizations/`; `--zone` defaults to `<env>`. |
 | `modify <env>` | Change an existing environment (preserves un-flagged fields; writes validated config). |
 
 `--dns-mode <per-service\|wildcard>` (on `add`/`modify`) sets `domains.dnsMode` —
@@ -73,7 +73,7 @@ schema enum; this closes the last field that previously required a hand-edit.
 - one or more **deployed modules still consume** the environment (those modules
   are listed in the error).
 
-`create-minimal-environments` is the single owner of the two bootstrap files;
+The `add` minimal-set bootstrap is the single owner of the two bootstrap files;
 `--force` overrides the guard rails for the rare deliberate removal.
 
 ### The `validate` gate
@@ -101,31 +101,32 @@ never silently under-validate. Exit codes: 0 = valid (warnings allowed),
 1 = validation errors. The former `validate-environment.sh` bash implementation
 (Python `jsonschema` + jq fallback) is retired.
 
-## Commands (bash scripts)
-
-All scripts are bash, linked onto `PATH` by `install.sh`.
-
-### `create-minimal-environments.sh` — bootstrap the required environments
+### The minimal-set bootstrap (`add` with no `<env>`)
 
 Creates the two always-required environments: `mgmt.json` (zone `mgmt`, no
 domains) and the default tenant environment `<N>.json`, named after the TAPPaaS
-system name `<N>` (with `network.zone = <N>`). Idempotent; never deletes operator
-files.
+system name `<N>` (with `network.zone = <N>`). Idempotent (existing files are
+left untouched without `--force`); never deletes operator files (a stale legacy
+`default.json` is noted, not removed).
 
 ```
-create-minimal-environments.sh [--name <N>] [--config-dir DIR] [--out-dir DIR] [--force]
+environment-manager add [--name <N>] [--domain <D>] [--config-dir DIR] [--force]
 ```
 
 - `--name <N>` — system name (= default zone & env name). If omitted, derived
-  from `site.json '.name'`, else from the first-domain label in
-  `configuration.json`.
-- `--config-dir DIR` — config directory (default `$TAPPAAS_CONFIG`).
-- `--out-dir DIR` — environments dir (default `<config-dir>/environments`).
+  from `site.json '.name'`.
+- `--domain <D>` — the default env's `domains.primary` (omitted ⇒ no domain yet).
+- `--config-dir DIR` — config directory (default `$TAPPAAS_CONFIG`);
+  environments land in `<config-dir>/environments`.
 - `--force` — overwrite existing `mgmt.json` / `<N>.json`.
 
 ```bash
-create-minimal-environments.sh --name acme
+environment-manager add --name acme
 ```
+
+This is the single owner of the two bootstrap files (`install.sh` and
+`migrate-to-adr007.sh` call it) — downstream steps consume, they do not
+re-author them.
 
 ## Retired tooling (ADR-007 Phase D)
 
@@ -140,7 +141,10 @@ source of truth, and modules deploy via `install-module.sh <module> --environmen
 
 Also retired (ADR-007 post-implementation refactor): `validate-environment.sh` —
 the `environment-manager validate` verb is the schema + reference gate now
-(same flags, same exit codes; see "The `validate` gate" above).
+(same flags, same exit codes; see "The `validate` gate" above) — and
+`create-minimal-environments.sh` (Phase 8.1) — `environment-manager add` with no
+positional `<env>` is the minimal-set bootstrap now (same `--name`/`--domain`/
+`--config-dir`/`--force` flags; the unused `--out-dir` was dropped).
 
 To create or change an environment, author/edit its `config/environments/<env>.json`
 file (validated by `environment-manager validate`); to create its dedicated network

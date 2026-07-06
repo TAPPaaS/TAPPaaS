@@ -11,8 +11,15 @@
 
 import { existsSync, readdirSync } from "fs";
 import { basename, join } from "path";
+import {
+  defaultNodeCandidates,
+  queryClusterNodes,
+  queryNodeTankPools,
+  reachableNodes,
+} from "../../../lib/ts/src/cluster";
 import { defaultConfigDir } from "../../../lib/ts/src/config-io";
 import { capture as run, captureResult, stream as runStreaming } from "../../../lib/ts/src/exec";
+import { loadRaw, writeSite } from "./config";
 import { SiteClient } from "./types";
 
 // Bin names (overridable via env for tests / relocations).
@@ -68,6 +75,41 @@ export class CliSiteClient implements SiteClient {
       .map((l) => l.trim())
       .filter((l) => l.includes("VALIDATION:"))
       .map((l) => l.replace(/^.*VALIDATION:\s*/, ""));
+  }
+
+  // Live cluster node membership via the F12 read path (lib/ts cluster.ts):
+  // ping-probe the site's known node names (tappaas1..9 scan fallback when
+  // none), query /cluster/resources --type node through the first reachable.
+  clusterNodes(candidates: string[]): string[] | null {
+    const reach = reachableNodes(defaultNodeCandidates(candidates));
+    if (reach.length === 0) return null;
+    return queryClusterNodes(reach[0]);
+  }
+
+  // The node's tankXY pools (create-site.sh discovery: zpool list, tank*).
+  nodeStoragePools(node: string): string[] | null {
+    return queryNodeTankPools(node);
+  }
+
+  // Append a discovered node to site.json .hardware.nodes (idempotent).
+  registerNode(siteFile: string, name: string, pools: string[]): void {
+    const raw = loadRaw(siteFile);
+    const hw = (raw.hardware ?? (raw.hardware = {})) as Record<string, unknown>;
+    const nodes = (Array.isArray(hw.nodes) ? hw.nodes : (hw.nodes = [])) as unknown[];
+    if (nodes.some((n) => (n as Record<string, unknown> | null)?.name === name)) return;
+    nodes.push({ name, storagePools: pools });
+    writeSite(siteFile, raw);
+  }
+
+  // Fill a known node's storagePools (only ever called for empty lists).
+  setNodePools(siteFile: string, name: string, pools: string[]): void {
+    const raw = loadRaw(siteFile);
+    const hw = (raw.hardware ?? {}) as Record<string, unknown>;
+    const nodes = (Array.isArray(hw.nodes) ? hw.nodes : []) as Record<string, unknown>[];
+    const node = nodes.find((n) => n?.name === name);
+    if (!node) return;
+    node.storagePools = pools;
+    writeSite(siteFile, raw);
   }
 
   // ── (2) --deep cascade ──────────────────────────────────────────────

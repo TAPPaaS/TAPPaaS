@@ -15,8 +15,8 @@ bin="${TAPPAAS_BIN:-/home/tappaas/bin}"
 . "${here}/../../lib/component-install-lib.sh"
 
 build_and_link_nix_component "${here}" "opnsense-controller" \
-    opnsense-controller zone-manager dns-manager unbound-manager caddy-manager \
-    nat-manager opnsense-firewall rules-manager syslog-manager \
+    opnsense-controller zone-manager dns-manager dhcp-manager unbound-manager \
+    caddy-manager nat-manager opnsense-firewall rules-manager syslog-manager \
     test-network-manager acme-manager
 
 # ADR-008: opnsense-manager is an additive alias for the OPNsense zone

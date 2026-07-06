@@ -28,8 +28,8 @@ validate); zones are owned by **`network-manager`** (see
 
 ### The always-present environments
 
-Every TAPPaaS system ships two environments, created at install time by
-`create-minimal-environments.sh`:
+Every TAPPaaS system ships two environments, created at install time by the
+`environment-manager add` minimal-set bootstrap:
 
 - **`mgmt`** — the management environment (zone `mgmt`); foundation modules live
   here, reached over internal DNS only, so it needs no `domains`.

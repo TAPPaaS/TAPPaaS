@@ -13,7 +13,7 @@
 # Steps (in order; each is skipped when its result already exists):
 #   1. configuration.json -> site.json          (migrate-configuration.sh)
 #   2. init --name <site.name>             (network-manager; org-zone setup)
-#   3. mgmt + <name> environments                (create-minimal-environments.sh)
+#   3. mgmt + <name> environments                (environment-manager add)
 #   4. firewall -> network (deployed)            (OPT-IN/supervised; default: detect + warn)
 #   5. validate: zones-check + structure audit   (loud on a half-migrated result)
 #
@@ -230,21 +230,23 @@ step_zones_and_envs() {
 
     backup_state
 
-    local nm cme
+    local nm em
     nm="$(tool network-manager)"
-    cme="$(tool create-minimal-environments.sh)"
-    if [[ -z "$nm" || -z "$cme" ]]; then
-        warn "  network-manager / create-minimal-environments.sh not on PATH — skipping; re-run once cicd is updated."
+    em="$(tool environment-manager)"
+    if [[ -z "$nm" || -z "$em" ]]; then
+        warn "  network-manager / environment-manager not on PATH — skipping; re-run once cicd is updated."
         NEEDS_ACTION=1; return 0
     fi
 
     run "$nm" init --name "$name" --force \
         || { warn "  init reported a non-zero rc — continuing."; NEEDS_ACTION=1; }
 
-    local args=(--name "$name")
+    # `environment-manager add` with no positional <env> seeds the minimal set
+    # (the retired create-minimal-environments.sh — ADR-007 refactor Phase 8.1).
+    local args=(add --name "$name")
     [[ -n "$domain" ]] && args+=(--domain "$domain")
-    run "$cme" "${args[@]}" \
-        || { warn "  create-minimal-environments reported a non-zero rc — continuing."; NEEDS_ACTION=1; }
+    run "$em" "${args[@]}" \
+        || { warn "  environment bootstrap (environment-manager add) reported a non-zero rc — continuing."; NEEDS_ACTION=1; }
 }
 
 # ── Step 4: firewall -> network (deployed) — supervised / opt-in ─────
@@ -380,8 +382,9 @@ step_backfill_environment() {
 # ── Step (people): bootstrap the owner organization + identity ───────
 # The migration analogue of rest-of-foundation.sh's fresh-install people
 # bootstrap. When config/people is empty, create the owner org (named after the
-# site) + installer/root users + the users group + roles via user-setup.sh
-# (config only), then push them to the identity service with
+# site) + installer/root users + the users group + roles via
+# `people-manager bootstrap` (config only; the retired user-setup.sh — ADR-007
+# refactor Phase 8.2), then push them to the identity service with
 # `people-manager reconcile`. site.json's owner/organizations already REFERENCE
 # this org (create-site / migrate-configuration set them) — this makes the
 # reference real. Idempotent: skipped once config/people exists (never disturbs
@@ -406,16 +409,16 @@ step_people_bootstrap() {
     if [[ -z "$org" || -z "$email" || -z "$user" ]]; then
         warn "  cannot derive org/user/email from site.json (org='${org}' user='${user}' email='${email}') — skipping people bootstrap."; NEEDS_ACTION=1; return 0
     fi
-    local us pm; us="$(tool user-setup.sh)"; pm="$(tool people-manager)"
-    if [[ -z "$us" || -z "$pm" ]]; then
-        warn "  user-setup.sh / people-manager not on PATH — skipping people bootstrap."; NEEDS_ACTION=1; return 0
+    local pm; pm="$(tool people-manager)"
+    if [[ -z "$pm" ]]; then
+        warn "  people-manager not on PATH — skipping people bootstrap."; NEEDS_ACTION=1; return 0
     fi
     info "  Bootstrapping People domain: org=${org} user=${user} email=${email}"
-    if run "$us" --org "$org" --user "$user" --email "$email"; then
+    if run "$pm" bootstrap --org "$org" --user "$user" --email "$email"; then
         run "$pm" reconcile --apply \
             || { warn "  people-manager reconcile reported issues — the org is in config; re-run 'people-manager reconcile --apply' once identity is reachable."; NEEDS_ACTION=1; }
     else
-        warn "  user-setup.sh failed — people bootstrap skipped."; NEEDS_ACTION=1
+        warn "  people-manager bootstrap failed — people bootstrap skipped."; NEEDS_ACTION=1
     fi
 }
 

@@ -26,17 +26,19 @@ identity presence), `active` (full access), `suspended` (disabled + roles
 stripped), `terminated` (deleted).
 
 The repo also ships `minimal-org/` — the canonical bootstrap content (3 roles, 1
-org, 2 groups, 1 installer user) with `__ORG__` / `__USER__` / `__EMAIL__`
-placeholders.
+org, the `users` group, and 2 users: `root` + the installer) with `__ORG__` /
+`__USER__` / `__EMAIL__` / `__ROOT_EMAIL__` placeholders, seeded by
+`people-manager bootstrap`.
 
 ## Commands
 
-This manager exposes one compiled CLI (`people-manager`) plus two bash helpers
-(`user-setup.sh`, `validate-people.sh`).
+This manager exposes one compiled CLI (`people-manager`) plus one bash helper
+(`validate-people.sh`).
 
-### `people-manager` — read, CRUD + reconcile
+### `people-manager` — bootstrap, read, CRUD + reconcile
 
 ```
+people-manager bootstrap --org O --user U --email E [--minimal-org DIR] [--force] [--skip-validate] [--config-dir DIR]
 people-manager reconcile  [--apply]  [--config-dir DIR]   (alias: sync, deprecated)
 people-manager validate                            [--config-dir DIR]
 people-manager <kind> list   [--json] [--deep]     [--config-dir DIR]
@@ -110,21 +112,33 @@ people-manager reconcile                          # preview the plan (default)
 people-manager reconcile --apply                  # apply to the identity service
 ```
 
-### `user-setup.sh` — bootstrap a minimal org
+### `people-manager bootstrap` — bootstrap a minimal org
 
-Copies `minimal-org/` into `config/people/`, substituting the placeholders. Pure
-file bootstrap — makes no identity calls.
+Copies `minimal-org/` into `config/people/`, substituting the placeholders
+(`__ORG__` / `__USER__` / `__EMAIL__` / `__ROOT_EMAIL__`) in both filenames and
+contents. Pure file bootstrap — makes no identity calls (run
+`people-manager reconcile --apply` afterwards). Native TypeScript since the
+ADR-007 refactor Phase 8.2 (the former `user-setup.sh` is retired; the flags
+are preserved, with `--people-dir` folded into the manager's `--config-dir`).
 
 ```
-user-setup.sh --org <slug> --user <slug> --email <email>
-              [--people-dir <path>]    # dest (default $TAPPAAS_CONFIG/people)
-              [--minimal-org <path>]   # source templates (default ./minimal-org)
+people-manager bootstrap --org <slug> --user <slug> --email <email>
+              [--config-dir <path>]    # dest (default $TAPPAAS_CONFIG/people)
+              [--minimal-org <path>]   # source templates (default: the
+                                       #   component's minimal-org/; env
+                                       #   override PM_MINIMAL_ORG_DIR)
               [--force]                # overwrite a non-empty dest
               [--skip-validate]        # skip post-copy validation
 ```
 
+Refuses a non-empty destination without `--force`, so install-time callers
+(`rest-of-foundation.sh`, `migrate-to-adr007.sh`) stay idempotent — they skip
+the bootstrap once `config/people/` is populated. The result is validated for
+reference integrity (the `people-manager validate` gate); exit 0 = success,
+1 = error.
+
 ```bash
-user-setup.sh --org acme --user alice --email alice@example.org
+people-manager bootstrap --org acme --user alice --email alice@example.org
 ```
 
 ### `people-manager validate` — validate the People config

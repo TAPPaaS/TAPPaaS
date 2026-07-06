@@ -7,7 +7,7 @@
 #
 # Site-native install (ADR-007): writes site.json (create-site.sh) + transforms
 # zones.json (network-manager init --name) + creates the mgmt/default
-# environments (create-minimal-environments.sh). No configuration.json.
+# environments (environment-manager add). No configuration.json.
 # --name is the TAPPaaS system name (= default zone & default environment name);
 # if omitted it is derived from --domain's first label.
 
@@ -210,10 +210,15 @@ if [ ! -f "/home/tappaas/config/environments/${NAME}.json" ]; then
   /home/tappaas/bin/network-manager init --name "$NAME" --force \
     || _error "  init reported a non-zero rc"
   _info "Creating the mgmt + ${NAME} environments..."
+  # `environment-manager add` with no positional <env> seeds the minimal set
+  # (mgmt + <NAME>) — the retired create-minimal-environments.sh, native since
+  # the ADR-007 refactor (Phase 8.1). The TS bin IS on PATH at this point: the
+  # manager/install.sh dispatch loop above already nix-built + linked the
+  # managers ("linking manager/ components...").
   CME_ARGS=(--name "$NAME")
   [[ -n "$DOMAIN" ]] && CME_ARGS+=(--domain "$DOMAIN")
-  /home/tappaas/bin/create-minimal-environments.sh "${CME_ARGS[@]}" \
-    || _error "  create-minimal-environments reported a non-zero rc"
+  /home/tappaas/bin/environment-manager add "${CME_ARGS[@]}" \
+    || _error "  environment bootstrap (environment-manager add) reported a non-zero rc"
 else
   _info "Environments already initialised (config/environments/${NAME}.json exists) — skipping init/environments."
 fi

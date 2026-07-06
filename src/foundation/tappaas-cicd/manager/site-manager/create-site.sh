@@ -36,8 +36,9 @@
 #
 # NOTE on --domain: the PUBLIC domain is per-ENVIRONMENT in the ADR-007 model and
 # is NOT a site.json field. --domain is accepted (for parity with
-# create-configuration.sh and for the parent installer to forward to
-# create-minimal-environments) but it is intentionally NOT written to site.json.
+# create-configuration.sh and for the parent installer to forward to the
+# environment bootstrap, `environment-manager add`) but it is intentionally NOT
+# written to site.json.
 #
 # Idempotent: if site.json already exists, --force is required to overwrite. On a
 # --force re-run, operator-set fields are preserved (repositories, email,
@@ -568,7 +569,7 @@ main() {
     info "${GN:-}✓${CL:-} site.json created for '${NAME}' (${#NODES[@]} node(s) discovered)."
     info "Next steps:"
     info "  1. Review: cat ${SITE_FILE}"
-    info "  2. Create the default environment (create-minimal-environments) with domain '${DOMAIN:-<set later>}'."
+    info "  2. Create the mgmt + default environments (environment-manager add) with domain '${DOMAIN:-<set later>}'."
 }
 
 main "$@"

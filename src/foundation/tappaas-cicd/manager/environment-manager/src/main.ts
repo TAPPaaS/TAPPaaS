@@ -12,7 +12,9 @@
 //   environment show <env>
 //   environment validate [<file|dir>] [--schema-dir P] [--zones F] [--quiet]
 //   environment add [<env>] [--name <N>] [--domain <d>] [--owner <org>]
-//                   [--zone <z>] [--display <d>] [--force]   (no <env>+no --name ⇒ seed minimal set)
+//                   [--zone <z>] [--display <d>] [--force]
+//                   (no positional <env> ⇒ seed the minimal set; --name <N> gives
+//                   the system name explicitly, else it derives from site.json)
 //   environment modify <env> [--domain <d>] [--owner <org>] [--zone <z>] [--display <d>]
 //   environment delete <env>
 //   environment reconcile <env> [--deep] [--apply]
@@ -41,8 +43,9 @@ import { existsSync, readFileSync, unlinkSync } from "fs";
 import { join } from "path";
 
 // The two always-required bootstrap environments are protected from delete:
-// 'mgmt' and the default <N> environment (= site.json '.name'). create-minimal-
-// environments is their single owner.
+// 'mgmt' and the default <N> environment (= site.json '.name'). The `add`
+// minimal-set bootstrap (src/bootstrap.ts — the retired
+// create-minimal-environments.sh, ported) is their single owner.
 const RESERVED_MGMT = "mgmt";
 
 const VERSION = "0.1.0";
@@ -116,9 +119,10 @@ const HELP: HelpSpec = {
   ],
   notes: [
     "Notes:\n" +
-      "  add with no <env> and no --name seeds the minimal environment set\n" +
-      "  (mgmt + the default <N> environment) via the create-minimal-environments\n" +
-      "  bootstrap. With <env> (or --name) it creates that single environment.\n" +
+      "  add with no positional <env> seeds the minimal environment set (mgmt +\n" +
+      "  the default <N> environment). --name <N> gives the system name explicitly\n" +
+      "  (else it derives from site.json '.name'); --domain sets the default env's\n" +
+      "  domains.primary. With a positional <env> it creates that single environment.\n" +
       "  delete refuses to remove 'mgmt', the default <N> environment, or an env still\n" +
       "  consumed by deployed modules — unless --force.",
   ],
@@ -295,10 +299,14 @@ function assertValid(opts: Opts, env: Environment, raw: unknown): void {
 // ── add ───────────────────────────────────────────────────────────────
 function cmdAdd(opts: Opts): void {
   const single = opts.rest[0];
-  // No positional env AND no --name ⇒ seed the minimal set (bootstrap).
-  if (!single && !opts.name) {
+  // No positional env ⇒ seed the minimal set (the create-minimal-environments.sh
+  // bootstrap, now native — ADR-007 refactor Phase 8.1). --name passes the
+  // system name <N> explicitly (the install.sh / migrate path, where site.json
+  // may not carry it yet); without it the name derives from site.json '.name'.
+  if (!single) {
     const res = bootstrap({
       configDir: opts.configDir,
+      name: opts.name,
       domain: opts.domain,
       force: opts.force,
     });
@@ -312,15 +320,14 @@ function cmdAdd(opts: Opts): void {
   }
 
   // Single-environment create.
-  const name = single ?? opts.name;
-  if (!name) die("add: expected <env> or --name");
+  const name = single;
   const path = join(environmentsDir(opts.configDir), `${name}.json`);
   if (existsSync(path) && !opts.force) {
     die(`environment '${name}' already exists at ${path} (use --force to overwrite)`);
   }
   const display = opts.display ?? name.charAt(0).toUpperCase() + name.slice(1);
   // --owner default: the first organization under people/organizations/ (matches
-  // the create-minimal-environments bootstrap). Empty only when no org exists,
+  // the minimal-set bootstrap). Empty only when no org exists,
   // in which case the pre-write validation flags the missing ownerOrg.
   const owner = opts.owner ?? firstOrg(opts.configDir);
   const env: Environment = {
@@ -367,7 +374,7 @@ function cmdModify(opts: Opts): void {
 // ── delete ────────────────────────────────────────────────────────────
 // Guard rails: refuse to delete the bootstrap environments ('mgmt' and the
 // default <N> environment = site.json '.name'), and refuse when deployed modules
-// still consume the env — UNLESS --force. create-minimal-environments is the
+// still consume the env — UNLESS --force. The `add` minimal-set bootstrap is the
 // single owner of the bootstrap files, so they are never casually removed.
 function cmdDelete(opts: Opts, mod: ModuleClient): void {
   const name = opts.rest[0];

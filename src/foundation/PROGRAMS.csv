@@ -37,7 +37,6 @@ rest-of-foundation.sh,/home/tappaas/bin/rest-of-foundation.sh,tappaas-cicd/scrip
 setup-caddy.sh,/home/tappaas/bin/setup-caddy.sh,tappaas-cicd/scripts/setup-caddy.sh,script
 #
 # --- manager/people-manager/ (legacy verb scripts wrapped by people-manager) --------------
-user-setup.sh,/home/tappaas/bin/user-setup.sh,tappaas-cicd/manager/people-manager/user-setup.sh,script
 validate-people.sh,/home/tappaas/bin/validate-people.sh,tappaas-cicd/manager/people-manager/validate.sh,script
 #
 # --- manager/site-manager/ (legacy verb scripts wrapped by site-manager) ------------------
@@ -49,10 +48,6 @@ repository.sh,/home/tappaas/bin/repository.sh,tappaas-cicd/manager/site-manager/
 test-create-site.sh,/home/tappaas/bin/test-create-site.sh,tappaas-cicd/manager/site-manager/test-create-site.sh,script
 validate-configuration.sh,/home/tappaas/bin/validate-configuration.sh,tappaas-cicd/manager/site-manager/validate-configuration.sh,script
 validate-site.sh,/home/tappaas/bin/validate-site.sh,tappaas-cicd/manager/site-manager/validate-site.sh,script
-#
-# --- manager/environment-manager/ (legacy verb scripts wrapped by environment-manager) ----
-create-minimal-environments.sh,/home/tappaas/bin/create-minimal-environments.sh,tappaas-cicd/manager/environment-manager/create-minimal-environments.sh,script
-validate-environment.sh,/home/tappaas/bin/validate-environment.sh,tappaas-cicd/manager/environment-manager/validate-environment.sh,script
 #
 # --- manager/module-manager/ (legacy verb scripts wrapped by module-manager) --------------
 copy-update-json.sh,/home/tappaas/bin/copy-update-json.sh,tappaas-cicd/manager/module-manager/copy-update-json.sh,script
@@ -92,6 +87,7 @@ setup-wlan-secrets.sh,/home/tappaas/bin/setup-wlan-secrets.sh,tappaas-cicd/contr
 # --- controller/opnsense-controller/ (Python pkg; console-scripts per pyproject.toml) -----
 acme-manager,/home/tappaas/bin/acme-manager,tappaas-cicd/controller/opnsense-controller/src/opnsense_controller/acme_cli.py,python
 caddy-manager,/home/tappaas/bin/caddy-manager,tappaas-cicd/controller/opnsense-controller/src/opnsense_controller/caddy_cli.py,python
+dhcp-manager,/home/tappaas/bin/dhcp-manager,tappaas-cicd/controller/opnsense-controller/src/opnsense_controller/dhcp_manager_cli.py,python
 dns-manager,/home/tappaas/bin/dns-manager,tappaas-cicd/controller/opnsense-controller/src/opnsense_controller/dns_manager_cli.py,python
 nat-manager,/home/tappaas/bin/nat-manager,tappaas-cicd/controller/opnsense-controller/src/opnsense_controller/nat_cli.py,python
 opnsense-controller,/home/tappaas/bin/opnsense-controller,tappaas-cicd/controller/opnsense-controller/src/opnsense_controller/main.py,python
@@ -106,6 +102,9 @@ zone-manager,/home/tappaas/bin/zone-manager,tappaas-cicd/controller/opnsense-con
 # --- controller/identity-controller/ (Python pkg; console-scripts per pyproject.toml) -----
 authentik-manager,/home/tappaas/bin/authentik-manager,tappaas-cicd/controller/identity-controller/src/identity_controller/authentik_cli.py,python
 identity-controller,/home/tappaas/bin/identity-controller,tappaas-cicd/controller/identity-controller/src/identity_controller/authentik_cli.py,python
+#
+# --- controller/node-provisioner/ (Python pkg; console-script per pyproject.toml) ---------
+node-provisioner,/home/tappaas/bin/node-provisioner,tappaas-cicd/controller/node-provisioner/src/node_provisioner/cli.py,python
 #
 # --- controller/backup-controller/ (PBS provider; wrapped by backup-manager) --------------
 backup-controller,/home/tappaas/bin/backup-controller,tappaas-cicd/controller/backup-controller/,script

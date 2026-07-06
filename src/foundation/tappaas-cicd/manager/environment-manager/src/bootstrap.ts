@@ -1,4 +1,6 @@
-// bootstrap.ts — the create-minimal-environments.sh logic, ported.
+// bootstrap.ts — the create-minimal-environments.sh logic, ported (the bash
+// script is retired — ADR-007 refactor Phase 8.1; `environment-manager add`
+// with no positional <env> is the bootstrap entry point).
 //
 // Every TAPPaaS system requires two environments:
 //   - mgmt          : the management environment (foundation modules, internal
@@ -12,7 +14,7 @@
 // file is left untouched unless force=true. A stale literal default.json from an
 // older bootstrap is NOTED, never deleted.
 
-import { existsSync, readFileSync, readdirSync } from "fs";
+import { existsSync, mkdirSync, readFileSync, readdirSync } from "fs";
 import { basename, join } from "path";
 import { environmentsDir, serializeEnvironment } from "./config";
 import { Environment } from "./types";
@@ -91,6 +93,9 @@ export function buildBootstrapEnvironments(
 export function bootstrap(opts: BootstrapOptions): BootstrapResult {
   const configDir = opts.configDir.replace(/\/$/, "");
   const outDir = environmentsDir(configDir);
+  // Fresh install: config/environments does not exist yet (the retired bash
+  // did `mkdir -p "$OUT_DIR"` — parity, ADR-007 refactor Phase 8.1).
+  mkdirSync(outDir, { recursive: true });
 
   const name = resolveName(configDir, opts.name);
   if (!name) {

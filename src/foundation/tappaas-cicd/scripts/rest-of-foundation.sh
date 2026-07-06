@@ -72,12 +72,13 @@ done
 # ── ADR-007 P1: bootstrap the minimum people domain (after identity) ─────
 # Once identity (Authentik) is up and config/people is still empty (first
 # install), create the minimal org + admin/users groups + installer user and
-# sync them into Authentik. Per ADR-007: user-setup.sh copies minimal-org/ into
-# ~tappaas/config/people with the installation name + installer identity
-# substituted; `people-manager reconcile --apply` then reconciles them into Authentik (via
-# identity-controller). Idempotent: skipped once config/people exists, so re-runs
-# never disturb operator-added people. (Supersedes the old ADR-006 roles-ensure
-# bootstrap — ADR-007 is authoritative.)
+# sync them into Authentik. Per ADR-007: `people-manager bootstrap` copies
+# minimal-org/ into ~tappaas/config/people with the installation name +
+# installer identity substituted (the retired user-setup.sh, native since the
+# ADR-007 refactor Phase 8.2); `people-manager reconcile --apply` then
+# reconciles them into Authentik (via identity-controller). Idempotent: skipped
+# once config/people exists, so re-runs never disturb operator-added people.
+# (Supersedes the old ADR-006 roles-ensure bootstrap — ADR-007 is authoritative.)
 if [[ " ${FAILED[*]} " != *" identity "* ]]; then
   people_dir="${TAPPAAS_CONFIG:-${CONFIG_DIR}}/people"
   if [[ ! -d "$people_dir" || -z "$(ls -A "$people_dir" 2>/dev/null)" ]]; then
@@ -93,10 +94,11 @@ if [[ " ${FAILED[*]} " != *" identity "* ]]; then
     if [[ -n "$inst_org" && -n "$inst_user" && -n "$inst_email" ]]; then
       echo ""
       info "${BOLD}── People bootstrap (ADR-007): org=${inst_org} user=${inst_user} ──${CL}"
-      if user-setup.sh --org "$inst_org" --user "$inst_user" --email "$inst_email"; then
+      if people-manager bootstrap --org "$inst_org" --user "$inst_user" --email "$inst_email"; then
         people-manager reconcile --apply || warn "  people-manager reconcile reported issues — review the output above."
         # Backfill the bootstrap environments' ownerOrg NOW that the org exists.
-        # create-minimal-environments.sh runs before any organization can exist,
+        # The environment bootstrap (environment-manager add, in install.sh)
+        # runs before any organization can exist,
         # so it leaves ownerOrg empty — which fails the environment schema until
         # someone closes the gap (found by the ADR-007 refactor's deep gate:
         # environments stayed invalid forever). This is the moment the reference
@@ -111,7 +113,7 @@ if [[ " ${FAILED[*]} " != *" identity "* ]]; then
           fi
         done
       else
-        warn "  user-setup.sh failed — people bootstrap skipped (re-run rest-of-foundation.sh)."
+        warn "  people-manager bootstrap failed — people bootstrap skipped (re-run rest-of-foundation.sh)."
       fi
     else
       warn "  Installer org/user/email not determinable from configuration.json — skipping people bootstrap."

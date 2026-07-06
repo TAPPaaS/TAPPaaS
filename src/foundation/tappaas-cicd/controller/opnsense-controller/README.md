@@ -17,6 +17,7 @@ Each is its own command on `PATH`.
 | `opnsense-controller` | Low-level example/driver for VLAN, DHCP and firewall managers. |
 | `zone-manager` | Reconcile VLANs + DHCP + firewall rules from `zones.json`. The everyday network reconcile. |
 | `dns-manager` | DNS host entries in OPNsense Dnsmasq (and static DHCP reservations). |
+| `dhcp-manager` | DHCP scope options — PXE next-server/bootfile for node provisioning (`pxe enable/disable/status`, design N3). |
 | `unbound-manager` | Unbound host overrides (split-horizon / internal DNS). |
 | `caddy-manager` | The Caddy reverse proxy: domains, handlers, access lists. |
 | `nat-manager` | Destination-NAT (port-forward) rules. |

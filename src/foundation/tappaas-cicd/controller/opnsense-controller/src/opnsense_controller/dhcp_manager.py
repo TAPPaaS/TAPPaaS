@@ -646,6 +646,310 @@ class DhcpManager:
         return results
 
     # =========================================================================
+    # PXE / netboot boot options (dnsmasq dhcp_boot) — node provisioning N3
+    #
+    # OPNsense's dnsmasq model carries a first-class ``dhcp_boot`` grid
+    # (fields: interface, tag, filename, servername, address, description)
+    # that renders dnsmasq ``dhcp-boot=[tag:x,]filename[,servername[,address]]``
+    # — i.e. the DHCP header bootfile + next-server (siaddr). Driven via the
+    # raw settings controller (searchBoot/addBoot/delBoot), consistent with
+    # the range operations above (#179 precedent).
+    # =========================================================================
+
+    def list_boot_entries(self) -> list[dict]:
+        """List all configured dnsmasq DHCP boot (PXE) entries.
+
+        Returns list of dicts with uuid, interface, tag, filename,
+        servername, address, description.
+        """
+        result = self.client.run_module(
+            "raw",
+            params={
+                "module": "dnsmasq",
+                "controller": "settings",
+                "command": "searchBoot",
+                "action": "get",
+            },
+        )
+        rows = result.get("result", {}).get("response", {}).get("rows", [])
+        entries = []
+        for row in rows:
+            entries.append({
+                "uuid": row.get("uuid"),
+                "interface": row.get("interface"),
+                "tag": row.get("tag"),
+                "filename": row.get("filename"),
+                "servername": row.get("servername"),
+                "address": row.get("address"),
+                "description": row.get("description"),
+            })
+        return entries
+
+    def get_boot_by_description(self, description: str) -> dict | None:
+        """Get a DHCP boot entry by its description (TAPPaaS ownership key)."""
+        for entry in self.list_boot_entries():
+            if entry.get("description") == description:
+                return entry
+        return None
+
+    def set_boot_entry(
+        self,
+        filename: str,
+        description: str,
+        address: str = "",
+        servername: str = "",
+        interface: str | None = None,
+        tag: str | None = None,
+        check_mode: bool = False,
+        reconfigure: bool = True,
+    ) -> dict:
+        """Create (or replace) a DHCP boot entry — PXE next-server + bootfile.
+
+        Idempotent: any existing boot entry with the same description is
+        deleted first (same delete-by-description-then-add idiom as
+        create_range).
+
+        Args:
+            filename: Boot file name handed to the client (DHCP ``file``
+                field), e.g. ``ipxe.efi`` — or a full HTTP URL for an
+                iPXE-tagged chainload entry.
+            description: Ownership key (e.g. "TAPPaaS PXE boot (mgmt)").
+            address: next-server IPv4 (DHCP ``siaddr``) — the TFTP server.
+            servername: Optional TFTP server hostname (sname field).
+            interface: OPNsense interface identifier to scope the entry to
+                (e.g. 'lan', 'opt1'); None/'' = any.
+            tag: Optional dhcp_tags UUID — entry only applies to clients
+                that matched the tag (used for iPXE chainload conditionals).
+            check_mode: Dry-run.
+            reconfigure: Apply immediately (False to stage a batch).
+
+        Returns:
+            Result dictionary with changed/uuid keys.
+        """
+        if check_mode:
+            return {"changed": True, "check_mode": True, "filename": filename}
+
+        boot_payload = {
+            "filename": filename,
+            "servername": servername,
+            "address": address,
+            "description": description,
+        }
+        if interface:
+            boot_payload["interface"] = interface
+        if tag:
+            boot_payload["tag"] = tag
+
+        # Idempotency: drop any existing entry with this description first.
+        self.delete_boot_entry(description, reconfigure=False)
+
+        result = self.client.run_module(
+            "raw",
+            params={
+                "module": "dnsmasq",
+                "controller": "settings",
+                "command": "addBoot",
+                "action": "post",
+                "data": {"boot": boot_payload},
+            },
+        )
+        response = result.get("result", {}).get("response", {})
+        if response.get("result") != "saved":
+            raise RuntimeError(f"addBoot failed for '{description}': {response}")
+
+        if reconfigure:
+            self.reconfigure()
+
+        return {"changed": True, "uuid": response.get("uuid"), "result": response}
+
+    def delete_boot_entry(
+        self,
+        description: str,
+        check_mode: bool = False,
+        reconfigure: bool = True,
+    ) -> dict:
+        """Delete a DHCP boot entry by description (no-op when absent)."""
+        if check_mode:
+            return {"changed": True, "check_mode": True}
+
+        existing = self.get_boot_by_description(description)
+        if not existing or not existing.get("uuid"):
+            return {"changed": False, "note": "boot entry not found"}
+
+        result = self.client.run_module(
+            "raw",
+            params={
+                "module": "dnsmasq",
+                "controller": "settings",
+                "command": "delBoot",
+                "params": [existing["uuid"]],
+                "action": "post",
+            },
+        )
+        response = result.get("result", {}).get("response", {})
+        if response.get("result") != "deleted":
+            raise RuntimeError(f"delBoot failed for '{description}': {response}")
+
+        if reconfigure:
+            self.reconfigure()
+
+        return {"changed": True, "uuid": existing["uuid"]}
+
+    # ----- dhcp_tags + match options (iPXE chainload conditional) -----------
+
+    def list_dhcp_tags(self) -> list[dict]:
+        """List dnsmasq DHCP tags (uuid + tag name)."""
+        result = self.client.run_module(
+            "raw",
+            params={
+                "module": "dnsmasq",
+                "controller": "settings",
+                "command": "searchTag",
+                "action": "get",
+            },
+        )
+        rows = result.get("result", {}).get("response", {}).get("rows", [])
+        return [{"uuid": r.get("uuid"), "tag": r.get("tag")} for r in rows]
+
+    def ensure_dhcp_tag(self, tag: str) -> str:
+        """Get-or-create a dnsmasq DHCP tag; returns its UUID."""
+        for existing in self.list_dhcp_tags():
+            if existing.get("tag") == tag:
+                return existing["uuid"]
+        result = self.client.run_module(
+            "raw",
+            params={
+                "module": "dnsmasq",
+                "controller": "settings",
+                "command": "addTag",
+                "action": "post",
+                "data": {"tag": {"tag": tag}},
+            },
+        )
+        response = result.get("result", {}).get("response", {})
+        if response.get("result") != "saved":
+            raise RuntimeError(f"addTag failed for '{tag}': {response}")
+        return response.get("uuid")
+
+    def delete_dhcp_tag(self, tag: str, reconfigure: bool = False) -> dict:
+        """Delete a dnsmasq DHCP tag by name (no-op when absent)."""
+        match = None
+        for existing in self.list_dhcp_tags():
+            if existing.get("tag") == tag:
+                match = existing
+                break
+        if not match:
+            return {"changed": False, "note": "tag not found"}
+        result = self.client.run_module(
+            "raw",
+            params={
+                "module": "dnsmasq",
+                "controller": "settings",
+                "command": "delTag",
+                "params": [match["uuid"]],
+                "action": "post",
+            },
+        )
+        response = result.get("result", {}).get("response", {})
+        if response.get("result") != "deleted":
+            raise RuntimeError(f"delTag failed for '{tag}': {response}")
+        if reconfigure:
+            self.reconfigure()
+        return {"changed": True, "uuid": match["uuid"]}
+
+    def list_dhcp_options(self) -> list[dict]:
+        """List dnsmasq DHCP option entries (set + match types)."""
+        result = self.client.run_module(
+            "raw",
+            params={
+                "module": "dnsmasq",
+                "controller": "settings",
+                "command": "searchOption",
+                "action": "get",
+            },
+        )
+        rows = result.get("result", {}).get("response", {}).get("rows", [])
+        return rows
+
+    def create_match_option(
+        self,
+        option: str,
+        set_tag: str,
+        description: str,
+        value: str = "",
+        reconfigure: bool = True,
+    ) -> dict:
+        """Create a dnsmasq *match* option that sets a tag (dhcp-match).
+
+        E.g. option "175" (the iPXE feature-list option) with an empty value
+        renders ``dhcp-match=set:<tag>,175`` — every iPXE client gets the
+        tag, enabling a tagged dhcp-boot chainload entry.
+
+        Idempotent by description.
+
+        Args:
+            option: DHCP option number as a string (e.g. "175").
+            set_tag: UUID of the dhcp_tags entry to set on match.
+            description: Ownership key.
+            value: Optional value to match on (empty = option presence).
+        """
+        self.delete_option_by_description(description, reconfigure=False)
+        result = self.client.run_module(
+            "raw",
+            params={
+                "module": "dnsmasq",
+                "controller": "settings",
+                "command": "addOption",
+                "action": "post",
+                "data": {
+                    "option": {
+                        "type": "match",
+                        "option": option,
+                        "set_tag": set_tag,
+                        "value": value,
+                        "description": description,
+                    }
+                },
+            },
+        )
+        response = result.get("result", {}).get("response", {})
+        if response.get("result") != "saved":
+            raise RuntimeError(f"addOption failed for '{description}': {response}")
+        if reconfigure:
+            self.reconfigure()
+        return {"changed": True, "uuid": response.get("uuid")}
+
+    def delete_option_by_description(
+        self,
+        description: str,
+        reconfigure: bool = True,
+    ) -> dict:
+        """Delete a dnsmasq DHCP option entry by description (no-op if absent)."""
+        match = None
+        for row in self.list_dhcp_options():
+            if row.get("description") == description:
+                match = row
+                break
+        if not match or not match.get("uuid"):
+            return {"changed": False, "note": "option not found"}
+        result = self.client.run_module(
+            "raw",
+            params={
+                "module": "dnsmasq",
+                "controller": "settings",
+                "command": "delOption",
+                "params": [match["uuid"]],
+                "action": "post",
+            },
+        )
+        response = result.get("result", {}).get("response", {})
+        if response.get("result") != "deleted":
+            raise RuntimeError(f"delOption failed for '{description}': {response}")
+        if reconfigure:
+            self.reconfigure()
+        return {"changed": True, "uuid": match["uuid"]}
+
+    # =========================================================================
     # Dnsmasq Service Configuration
     # =========================================================================
 

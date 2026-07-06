@@ -293,7 +293,9 @@ export function referencesTo(model: PeopleModel, kind: Kind, name: string): stri
 }
 
 // ── atomic write ───────────────────────────────────────────────────────
-function atomicWrite(path: string, data: string): void {
+// Exported for reuse by the bootstrap (src/bootstrap.ts) — the one JSON-writing
+// path for the People domain.
+export function atomicWrite(path: string, data: string): void {
   const dir = dirname(path);
   mkdirSync(dir, { recursive: true });
   const tmp = join(dir, `.${process.pid}.${Date.now()}.tmp`);
@@ -301,7 +303,7 @@ function atomicWrite(path: string, data: string): void {
   renameSync(tmp, path);
 }
 
-function serialize(rec: Record<string, unknown>): string {
+export function serialize(rec: Record<string, unknown>): string {
   return JSON.stringify(rec, null, 2) + "\n";
 }
 

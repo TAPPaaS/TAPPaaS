@@ -40,6 +40,29 @@ export class FakeSiteClient implements SiteClient {
   validateSite(_siteFile: string): string[] {
     return [...this.validationErrors];
   }
+  // Live cluster node membership; null = unreachable. Defaults to the one
+  // node every test fixture declares, so the node slice is a no-op unless a
+  // test seeds drift. Registered nodes are recorded so a second reconcile
+  // proves idempotency.
+  liveNodes: string[] | null = ["tappaas1"];
+  // Per-node discovered tank pools; missing key → null (discovery failed).
+  // Default matches the fixture node so the node slice is a clean no-op.
+  livePools = new Map<string, string[]>([["tappaas1", ["tanka1"]]]);
+  registeredNodes: string[] = [];
+  clusterNodes(_candidates: string[]): string[] | null {
+    return this.liveNodes === null ? null : [...this.liveNodes];
+  }
+  nodeStoragePools(node: string): string[] | null {
+    const p = this.livePools.get(node);
+    return p === undefined ? null : [...p];
+  }
+  registerNode(_siteFile: string, name: string, pools: string[]): void {
+    this.log.push(`register-node ${name} [${pools.join(",")}]`);
+    this.registeredNodes.push(name);
+  }
+  setNodePools(_siteFile: string, name: string, pools: string[]): void {
+    this.log.push(`set-node-pools ${name} [${pools.join(",")}]`);
+  }
   cascade(manager: "people" | "network", apply: boolean): void {
     this.log.push(`cascade ${manager} ${apply ? "apply" : "preview"}`);
   }

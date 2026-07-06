@@ -41,6 +41,8 @@ const HELP: HelpSpec = {
     { usage: "node list [--json]" },
     { usage: "node add --name <N> [--pool <p> ...]" },
     { usage: "node delete <name>" },
+    { usage: "node reconcile [--apply]",
+      options: [["--apply", "Register nodes that joined the cluster (default is preview)."]] },
     { usage: "repository list [--json]", note: "(alias: repo)" },
     { usage: "repository add <url> [--branch <b>] [--managed full|tracked] [--catalog <p>]" },
     { usage: "repository delete <name> [--force]",
@@ -252,11 +254,31 @@ function setDeep(obj: Record<string, unknown>, path: string[], value: unknown): 
   cur[path[path.length - 1]] = value;
 }
 
-// ── `node` CRUD (hardware.nodes[]) ─────────────────────────────────────
-function cmdNode(o: Opts): void {
+// ── `node` CRUD + reconcile (hardware.nodes[]) ─────────────────────────
+function cmdNode(o: Opts, client: SiteClient): void {
   const sub = o.rest[0];
-  if (!sub) die("node: expected 'list' | 'add' | 'delete'");
+  if (!sub) die("node: expected 'list' | 'add' | 'delete' | 'reconcile'");
   const siteFile = siteFileOf(o);
+
+  if (sub === "reconcile") {
+    // Capture cluster membership into site.json (docs/design/
+    // node-provisioning.md N1): the scoped node slice of `reconcile`, exactly
+    // as `repository reconcile` is the repo slice.
+    const site: Site = loadSite(siteFile);
+    const plan = computePlan(site, client, {
+      deep: false,
+      apply: o.apply,
+      siteFile,
+      scope: "nodes",
+    });
+    printPlan(plan, o.apply);
+    if (o.apply && plan.actions.length > 0) {
+      const n = applyPlan(client, plan);
+      info("");
+      info(`${GN}Applied ${n} action(s) — declare storage pools for new nodes before installing modules on them.${CL}`);
+    }
+    return;
+  }
 
   if (sub === "list") {
     const site: Site = loadSite(siteFile);
@@ -365,7 +387,12 @@ function cmdRepository(o: Opts, client: SiteClient): void {
     // deep=false; we still emit only the repo actions. Descriptive per-repo
     // output so the operator sees WHAT was checked, not just an action count.
     const site = loadSite(siteFile);
-    const plan = computePlan(site, client, { deep: false, apply: o.apply, siteFile });
+    const plan = computePlan(site, client, {
+      deep: false,
+      apply: o.apply,
+      siteFile,
+      scope: "repositories",
+    });
     info("");
     info(
       `Reconciling ${site.repositories.length} repository(ies) from site.json → live git clones` +
@@ -466,7 +493,7 @@ export function run(argv: string[], client: SiteClient): number {
         cmdSite(o);
         return 0;
       case "node":
-        cmdNode(o);
+        cmdNode(o, client);
         return 0;
       case "repository":
       case "repo":

@@ -105,7 +105,7 @@ That's it. Everything else is created by the install.
         `create-site.sh --name <orgname>`
       - **`zones.json`** — the network zones, via `network-manager init`
       - the **`mgmt` + default `<orgname>` environments**, via
-        `create-minimal-environments.sh`
+        `environment-manager add` (the minimal-set bootstrap)
       - the **foundation modules** (cluster, templates, network, tappaas-cicd) and
         the **Caddy** reverse proxy
 

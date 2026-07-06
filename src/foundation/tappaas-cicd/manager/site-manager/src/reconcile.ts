@@ -35,6 +35,9 @@ export interface ReconcileOpts {
   apply: boolean;
   // The site.json being reconciled (for the validate action).
   siteFile: string;
+  // Which own-concern slice to plan (the scoped subverbs `node reconcile` /
+  // `repository reconcile` plan just their slice; full `reconcile` = "all").
+  scope?: "all" | "nodes" | "repositories";
 }
 
 // Compute the reconcile plan for a loaded Site against the live system as seen
@@ -49,8 +52,73 @@ export function computePlan(site: Site, client: SiteClient, opts: ReconcileOpts)
     for (const e of errs) warnings.push(`site.json validation: ${e}`);
   }
 
-  // ── (1) own concern: converge repositories[] to live clones ──────────
-  for (const repo of site.repositories) {
+  const scope = opts.scope ?? "all";
+
+  // ── (1a) own concern: capture live cluster nodes into site.json ──────
+  // The join path (cluster/install.sh on a NEW node) cannot write this
+  // site.json, so membership is reconciled from the cicd side: nodes in the
+  // live cluster but missing from .hardware.nodes are REGISTERED (with empty
+  // storagePools — the operator declares pools); site.json nodes that left
+  // the cluster are WARNED about, never auto-removed. Fixes the 2-node gap
+  // where HA fold / zone distribution could not see a joined node
+  // (docs/design/node-provisioning.md, Phase N1).
+  if (scope !== "repositories") {
+    const known = site.hardware.nodes.map((n) => n.name);
+    const live = client.clusterNodes(known);
+    if (live === null) {
+      warnings.push("cluster unreachable — node inventory not reconciled this run");
+    } else {
+      const knownSet = new Set(known);
+      for (const n of live) {
+        if (!knownSet.has(n)) {
+          // Discover the node's tankXY pools at PLAN time (create-site.sh's
+          // zpool-list discovery) so registration lands complete.
+          const pools = client.nodeStoragePools(n) ?? [];
+          const poolTxt =
+            pools.length > 0
+              ? `storagePools: [${pools.join(", ")}] (discovered)`
+              : "storagePools: [] — pool discovery failed; declare via 'node add' or edit";
+          actions.push({
+            kind: "register-node",
+            target: `node ${n} → register in site.json (${poolTxt})`,
+            apply: (c) => c.registerNode(opts.siteFile, n, pools),
+          });
+        }
+      }
+      for (const n of known) {
+        if (!live.includes(n)) {
+          warnings.push(
+            `site.json node '${n}' is not in the live cluster (removed? renamed?) — not auto-removed; use 'node delete ${n}' if intentional`,
+          );
+          continue;
+        }
+        // Known node: fill EMPTY storagePools from discovery (a node
+        // registered before discovery existed, or pools created later).
+        // Never overwrite a non-empty list — an operator-authored subset is
+        // legitimate; disagreement is a warning only.
+        const declared = site.hardware.nodes.find((x) => x.name === n)?.storagePools ?? [];
+        const livePoolList = client.nodeStoragePools(n);
+        if (livePoolList === null) continue;
+        if (declared.length === 0 && livePoolList.length > 0) {
+          actions.push({
+            kind: "update-node-pools",
+            target: `node ${n} → fill storagePools [${livePoolList.join(", ")}] (discovered; was empty)`,
+            apply: (c) => c.setNodePools(opts.siteFile, n, livePoolList),
+          });
+        } else if (
+          declared.length > 0 &&
+          declared.slice().sort().join(",") !== livePoolList.slice().sort().join(",")
+        ) {
+          warnings.push(
+            `node '${n}': site.json declares pools [${declared.join(", ")}] but the node reports [${livePoolList.join(", ")}] — not auto-changed`,
+          );
+        }
+      }
+    }
+  }
+
+  // ── (1b) own concern: converge repositories[] to live clones ──────────
+  if (scope !== "nodes") for (const repo of site.repositories) {
     const branch = repo.branch ?? "stable";
     const path = repo.path;
     if (!path) {

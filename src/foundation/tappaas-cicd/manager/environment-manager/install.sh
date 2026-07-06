@@ -20,3 +20,8 @@ done
 # validate-environment.sh is retired — the TS `environment-manager validate`
 # verb is the schema + reference gate now. Drop a stale link from older installs.
 rm -f "${bin}/validate-environment.sh"
+
+# create-minimal-environments.sh is retired (ADR-007 refactor Phase 8.1) — the
+# TS `environment-manager add` (no positional <env>) seeds the minimal set now.
+# Drop a stale link from older installs.
+rm -f "${bin}/create-minimal-environments.sh"

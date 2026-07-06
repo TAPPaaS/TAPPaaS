@@ -14,16 +14,19 @@
   `ln -sfn`s that into `~/bin`.
 - **`update.sh`** re-runs the same build + link (idempotent; a no-op when inputs
   are unchanged).
-- Two bash helpers are linked alongside the compiled bin:
-  - `user-setup.sh` → `~/bin/user-setup.sh`
+- One bash helper is linked alongside the compiled bin:
   - `validate.sh` → `~/bin/validate-people.sh` — JSON-Schema + reference
     validation in bash. A `people-manager validate` subcommand also exists
     (see "Validation" below for how the two overlap).
+  - (`user-setup.sh` is retired — ADR-007 refactor Phase 8.2; its logic is the
+    native `people-manager bootstrap` verb, `src/bootstrap.ts`. `install.sh`
+    removes the stale `~/bin/user-setup.sh` link from older installs.)
 
 ## Internal structure
 
 ```
 src/main.ts        CLI: arg parsing + subcommand dispatch
+src/bootstrap.ts   `bootstrap` — seed config/people from minimal-org/ (the retired user-setup.sh)
 src/config.ts      load config/people/* (per-kind decoders); reference-integrity checks (validateRefs)
 src/entity.ts      config-only entity CRUD (add/modify/delete) — validated atomic writes
 src/queries.ts     pure relationship queries for the --deep list views
@@ -125,6 +128,7 @@ Two overlapping paths exist:
   `user.sh`.
 - **Per-module admin groups** (`<scope>-<module>-admins`) are created on demand at
   module-install time, not by this manager.
-- **Install-time wiring** of the initial identity install (run `user-setup.sh`
-  then `reconcile`, guarded to fire only when `config/people/` is empty) is a
-  planned integration point.
+- **Install-time wiring** of the initial identity install is DONE:
+  `rest-of-foundation.sh` (fresh install) and `migrate-to-adr007.sh` (upgrade)
+  run `people-manager bootstrap` then `reconcile --apply`, guarded to fire only
+  when `config/people/` is empty.

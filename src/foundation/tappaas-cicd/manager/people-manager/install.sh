@@ -3,10 +3,9 @@
 #
 # people-manager is a TypeScript reconcile engine (ADR-007 P1, S2b-3). It is
 # built with Nix (tsc, no node_modules) into result/bin/people-manager, then
-# linked onto PATH alongside the bash entry points this component still owns:
+# linked onto PATH alongside the bash entry point this component still owns:
 #
 #   people-manager  -> ~/bin/people-manager       (the TS reconcile CLI)
-#   user-setup.sh   -> ~/bin/user-setup.sh         (bootstrap copy of minimal-org)
 #   validate.sh     -> ~/bin/validate-people.sh    (project-wide name)
 #
 # The reconcile engine calls the identity-controller PRIMITIVES via the
@@ -33,5 +32,9 @@ link_as() {
     echo "  linked ${bin}/${name}"
 }
 
-link_as user-setup.sh user-setup.sh
 link_as validate.sh    validate-people.sh
+
+# user-setup.sh is retired (ADR-007 refactor Phase 8.2) — the TS
+# `people-manager bootstrap` verb seeds the minimal People domain now. Drop a
+# stale link from older installs.
+rm -f "${bin}/user-setup.sh"

@@ -4,13 +4,14 @@ OPNsense controller for TAPPaaS using the `oxl-opnsense-client` library.
 
 ## CLI Tools
 
-This package provides six command-line tools:
+This package provides these command-line tools:
 
 | Command | Description |
 |---------|-------------|
 | `opnsense-controller` | Main CLI with examples for VLANs, DHCP, and firewall management |
 | `opnsense-firewall` | Standalone firewall rule management (create, list, delete rules) |
 | `dns-manager` | DNS host entry management for Dnsmasq |
+| `dhcp-manager` | DHCP scope options: PXE next-server/bootfile for node provisioning (`pxe enable/disable/status`, design N3) |
 | `zone-manager` | Automated zone configuration from zones.json + static pinhole-allowed-from policy validator (issue #163) |
 | `caddy-manager` | Caddy reverse proxy domain and handler management |
 | `rules-manager` | Per-module firewall rules compiled from `module.json` (`network:rules` capability) |
@@ -152,6 +153,34 @@ export OPNSENSE_PORT=8443
 
 # Configure general Dnsmasq settings
 ./result/bin/opnsense-controller --mode dhcp --no-ssl-verify --execute --example config
+```
+
+### PXE Boot Options (dhcp-manager)
+
+PXE next-server/bootfile management on a zone's DHCP scope, for the
+node-provisioning netboot plane (docs/design/node-provisioning.md N3).
+Normally driven by `node-provisioner enable`/`disable` on tappaas-cicd.
+
+```bash
+# Enable PXE on the mgmt scope: next-server (TFTP) + bootfile
+dhcp-manager pxe enable --next-server 10.0.0.10 --bootfile ipxe.efi
+
+# ...with an iPXE chainload conditional (dnsmasq match on option 175):
+# iPXE clients get the boot script URL instead of the binary, breaking the
+# stock-iPXE DHCP loop. Degrades to the plain entry with a warning if the
+# firewall rejects the option number (V-2).
+dhcp-manager pxe enable --next-server 10.0.0.10 \
+    --ipxe-script-url http://10.0.0.10:8090/boot.ipxe
+
+# Another zone / explicit interface
+dhcp-manager pxe enable --next-server 10.2.99.10 --zone srvTest
+dhcp-manager pxe enable --next-server 10.0.0.10 --interface lan
+
+# Show state (exit 0 when enabled, 1 when not)
+dhcp-manager pxe status
+
+# Clear everything again — always do this after provisioning
+dhcp-manager pxe disable
 ```
 
 ### Firewall Examples

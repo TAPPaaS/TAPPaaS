@@ -545,6 +545,23 @@ def main():
     log.info("Phase 0: check for ADR-007 migration")
     migration_pass(dry_run=False)
 
+    # Phase 0.5: capture cluster membership into site.json (node-provisioning
+    # design N1). A node joined via `install.sh --join` cannot register itself
+    # in this site.json; the HA fold / zone distribution read
+    # .hardware.nodes, so an uncaptured node is invisible to them. Non-fatal:
+    # a failure warns and the update proceeds with the known nodes.
+    # Override for tests with SITE_MANAGER_CMD.
+    site_manager_cmd = os.environ.get("SITE_MANAGER_CMD", "/home/tappaas/bin/site-manager")
+    log.info("Phase 0.5: reconcile cluster node inventory into site.json")
+    try:
+        result = subprocess.run(
+            [site_manager_cmd, "node", "reconcile", "--apply"], text=True
+        )
+        if result.returncode != 0:
+            log.warning("site-manager node reconcile reported issues (rc=%d) — continuing", result.returncode)
+    except (subprocess.SubprocessError, FileNotFoundError) as e:
+        log.warning("site-manager node reconcile could not run (%s) — continuing", e)
+
     # Phase 1: Foundation modules in fixed order
     log.info("Phase 1: Updating foundation modules")
 

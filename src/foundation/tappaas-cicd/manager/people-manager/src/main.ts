@@ -5,11 +5,14 @@
 // NO Authentik HTTP is reimplemented here — see src/primitives.ts.
 //
 // Commands:
+//   people-manager bootstrap --org O --user U --email E [--config-dir DIR]
+//                            (the retired user-setup.sh — Phase 8.2)
 //   people-manager reconcile [--apply] [--config-dir DIR]   (alias: sync, deprecated)
 //   people-manager role|org|group|user list|get [<name>] [--config-dir DIR]
 //
 // Exit codes: ok=0, error=1.
 
+import { BootstrapError, bootstrapPeople } from "./bootstrap";
 import { defaultConfigDir, loadPeople, validateRefs } from "./config";
 import {
   EntityError,
@@ -32,6 +35,20 @@ const HELP: HelpSpec = {
   version: VERSION,
   tagline: "TAPPaaS People → Authentik manager",
   verbs: [
+    {
+      usage: "bootstrap --org O --user U --email E [--minimal-org DIR]\n" +
+        "                        [--force] [--skip-validate]",
+      name: "bootstrap",
+      options: [
+        ["--org O", "organization slug (= the TAPPaaS installation name)"],
+        ["--user U", "the installer's username (slug)"],
+        ["--email E", "the installer's primary email address"],
+        ["--minimal-org DIR", "template source (default: the component's minimal-org/)"],
+        ["--force", "overwrite a non-empty destination"],
+        ["--skip-validate", "skip the post-copy reference validation"],
+      ],
+      note: "(seeds config/people from minimal-org/ — the retired user-setup.sh)",
+    },
     {
       usage: "reconcile [--apply]",
       note: "(alias: sync, deprecated)",
@@ -123,6 +140,80 @@ function parseOpts(args: string[]): Opts {
     }
   }
   return { configDir, apply, dryRun, json, deep, rest };
+}
+
+// `bootstrap` — seed the minimal People domain from the minimal-org/ templates
+// (the retired user-setup.sh, native — ADR-007 refactor Phase 8.2). Config-only:
+// run `people-manager reconcile --apply` afterwards to push to the identity
+// service. Refuses a non-empty destination unless --force (callers guard on
+// emptiness, so re-runs never disturb operator-added people). Exit 0 = success,
+// 1 = error (matching the bash).
+function cmdBootstrap(opts: Opts): void {
+  let org = "";
+  let user = "";
+  let email = "";
+  let minimalOrg: string | undefined;
+  let force = false;
+  let skipValidate = false;
+  const args = opts.rest;
+  for (let i = 0; i < args.length; i++) {
+    const a = args[i];
+    const need = (label: string): string => {
+      const v = args[i + 1];
+      if (!v) die(`${label} requires an argument`);
+      i++;
+      return v;
+    };
+    switch (a) {
+      case "--org":
+        org = need("--org");
+        break;
+      case "--user":
+        user = need("--user");
+        break;
+      case "--email":
+        email = need("--email");
+        break;
+      case "--minimal-org":
+        minimalOrg = need("--minimal-org");
+        break;
+      case "--force":
+        force = true;
+        break;
+      case "--skip-validate":
+        skipValidate = true;
+        break;
+      default:
+        die(`bootstrap: unknown argument '${a}'. Use --help for usage.`);
+    }
+  }
+
+  try {
+    // Announce first (mirrors the bash), resolving the template dir the same
+    // way bootstrapPeople will.
+    info("Bootstrapping People domain");
+    info(`  org        = ${org}`);
+    info(`  user       = ${user}`);
+    info(`  email      = ${email}`);
+    info(`  to         = ${opts.configDir}`);
+    const res = bootstrapPeople({
+      peopleDir: opts.configDir,
+      org,
+      user,
+      email,
+      minimalOrgDir: minimalOrg,
+      force,
+      skipValidate,
+    });
+    for (const w of res.warnings) warn(w);
+    info(`Copied minimal-org (${res.minimalOrgDir}) into ${opts.configDir}`);
+    info(`  root email = ${res.rootEmail}`);
+    if (!skipValidate) info("Validated result (reference integrity)");
+    info(`${GN}People bootstrap complete${CL}`);
+  } catch (e) {
+    if (e instanceof BootstrapError) die(e.message);
+    throw e;
+  }
 }
 
 function loadValidated(configDir: string): PeopleModel {
@@ -382,6 +473,9 @@ export function run(argv: string[], client: PrimitiveClient): number {
 
   return guarded(() => {
     switch (cmd) {
+      case "bootstrap":
+        cmdBootstrap(opts);
+        return 0;
       case "reconcile":
         cmdSync(opts, client);
         return 0;

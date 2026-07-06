@@ -87,6 +87,8 @@ export type SiteModifiableField =
 //                        people → network → (every) environment.
 export type SiteActionKind =
   | "validate-site"
+  | "register-node"
+  | "update-node-pools"
   | "clone-repo"
   | "checkout-repo"
   | "cascade-people"
@@ -122,6 +124,21 @@ export interface SiteClient {
   // Validate site.json against site-fields.json (validate-site.sh). Returns
   // the list of validation errors (empty = valid).
   validateSite(siteFile: string): string[];
+
+  // Live cluster NODE membership (node names), reached via one of the
+  // `candidates` (the site's already-known node names). null = cluster
+  // unreachable / query failed — the engine warns and plans nothing.
+  // (F12 read-only carve-out: implemented via lib/ts cluster.ts.)
+  clusterNodes(candidates: string[]): string[] | null;
+  // The tankXY zpools physically present on <node> (create-site.sh's
+  // discovery: `zpool list` on the node, tank* filter). null = query failed.
+  nodeStoragePools(node: string): string[] | null;
+  // Append a newly discovered cluster node to site.json .hardware.nodes
+  // with its discovered pools (empty when discovery failed).
+  registerNode(siteFile: string, name: string, pools: string[]): void;
+  // Fill a known node's storagePools (used when site.json has [] but the
+  // node reports pools — conservative: never overwrites a non-empty list).
+  setNodePools(siteFile: string, name: string, pools: string[]): void;
 
   // (2) --deep cascade — shell out to a dependent manager's `reconcile`.
   // `apply` toggles preview vs commit (maps to the manager's --apply/--dry-run).

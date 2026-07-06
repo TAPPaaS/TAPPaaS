@@ -123,6 +123,95 @@ const TAPPAAS: Repository = {
   check(plan.actions.length === 0 && plan.warnings.some((w) => w.includes("no .path")), "repo without .path → warning only");
 }
 
+// 8. node capture (N1): a joined-but-unregistered cluster node is planned as
+// register-node; departed nodes warn only; unreachable cluster warns only;
+// the repositories scope never plans node actions.
+{
+  const c = new FakeSiteClient();
+  c.seedClone(TAPPAAS.path!, "stable");
+  c.liveNodes = ["tappaas1", "tappaas2"];
+  const plan = computePlan(site([TAPPAAS]), c, { deep: false, apply: true, siteFile: "x" });
+  const reg = plan.actions.filter((a) => a.kind === "register-node");
+  check(reg.length === 1 && reg[0].target.includes("tappaas2"), "joined node planned as register-node");
+  applyPlan(c, plan);
+  check(c.registeredNodes.join(",") === "tappaas2", "apply registers exactly the missing node");
+}
+{
+  const c = new FakeSiteClient();
+  c.seedClone(TAPPAAS.path!, "stable");
+  c.liveNodes = []; // site knows tappaas1, cluster reports none
+  const plan = computePlan(site([TAPPAAS]), c, { deep: false, apply: false, siteFile: "x" });
+  check(
+    plan.actions.length === 0 && plan.warnings.some((w) => w.includes("not in the live cluster")),
+    "departed node → warning only, never auto-removed",
+  );
+}
+{
+  const c = new FakeSiteClient();
+  c.seedClone(TAPPAAS.path!, "stable");
+  c.liveNodes = null; // unreachable
+  const plan = computePlan(site([TAPPAAS]), c, { deep: false, apply: false, siteFile: "x" });
+  check(
+    plan.actions.length === 0 && plan.warnings.some((w) => w.includes("cluster unreachable")),
+    "unreachable cluster → warning, no node actions",
+  );
+}
+{
+  const c = new FakeSiteClient();
+  c.liveNodes = ["tappaas1", "tappaas2"]; // node drift present...
+  const plan = computePlan(site([TAPPAAS]), c, {
+    deep: false, apply: false, siteFile: "x", scope: "repositories",
+  });
+  check(
+    !plan.actions.some((a) => a.kind === "register-node"),
+    "repositories scope plans no node actions (repository reconcile unaffected by node drift)",
+  );
+  const plan2 = computePlan(site([TAPPAAS]), c, {
+    deep: false, apply: false, siteFile: "x", scope: "nodes",
+  });
+  check(
+    plan2.actions.every((a) => a.kind === "register-node") && plan2.actions.length === 1,
+    "nodes scope plans ONLY node actions",
+  );
+}
+
+// 9. storagePools discovery (N1 follow-up): registration carries discovered
+// pools; a known node with EMPTY declared pools gets them filled; a declared
+// non-empty mismatch warns only.
+{
+  const c = new FakeSiteClient();
+  c.seedClone(TAPPAAS.path!, "stable");
+  c.liveNodes = ["tappaas1", "tappaas3"];
+  c.livePools.set("tappaas3", ["tanka1", "tankb1"]);
+  const plan = computePlan(site([TAPPAAS]), c, { deep: false, apply: true, siteFile: "x" });
+  const reg = plan.actions.filter((a) => a.kind === "register-node");
+  check(reg.length === 1 && reg[0].target.includes("tanka1, tankb1"), "registration discovers the node's tank pools");
+  applyPlan(c, plan);
+  check(c.log.some((l) => l === "register-node tappaas3 [tanka1,tankb1]"), "apply registers WITH the discovered pools");
+}
+{
+  const c = new FakeSiteClient();
+  c.seedClone(TAPPAAS.path!, "stable");
+  const s2 = site([TAPPAAS]);
+  s2.hardware.nodes = [{ name: "tappaas1", storagePools: [] }]; // registered pre-discovery
+  const plan = computePlan(s2, c, { deep: false, apply: true, siteFile: "x" });
+  const upd = plan.actions.filter((a) => a.kind === "update-node-pools");
+  check(upd.length === 1 && upd[0].target.includes("tanka1"), "empty declared pools get a fill action from discovery");
+  applyPlan(c, plan);
+  check(c.log.some((l) => l === "set-node-pools tappaas1 [tanka1]"), "apply fills the pools");
+}
+{
+  const c = new FakeSiteClient();
+  c.seedClone(TAPPAAS.path!, "stable");
+  c.livePools.set("tappaas1", ["tanka1", "tankz9"]); // node reports MORE than declared
+  const plan = computePlan(site([TAPPAAS]), c, { deep: false, apply: false, siteFile: "x" });
+  check(
+    !plan.actions.some((a) => a.kind === "update-node-pools") &&
+      plan.warnings.some((w) => w.includes("not auto-changed")),
+    "non-empty declared pools that mismatch discovery → warning only",
+  );
+}
+
 console.log("");
 console.log(`reconcile.test: ${passed} passed, ${failed} failed`);
 if (failed > 0) process.exit(1);

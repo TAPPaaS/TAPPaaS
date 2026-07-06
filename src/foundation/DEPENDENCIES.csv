@@ -17,7 +17,7 @@ File,Location,Direct Dependencies
 #
 # === tappaas-cicd (top level) ===
 bootstrap.sh,tappaas-cicd/,
-install.sh,tappaas-cicd/,common-install-routines.sh; create-site.sh; create-minimal-environments.sh; copy-update-json.sh; update-module.sh; site.json; zones.json
+install.sh,tappaas-cicd/,common-install-routines.sh; create-site.sh; environment-manager; copy-update-json.sh; update-module.sh; site.json; zones.json
 pre-update.sh,tappaas-cicd/,common-install-routines.sh; site.json; zones.json
 update.sh,tappaas-cicd/,common-install-routines.sh
 test.sh,tappaas-cicd/,common-install-routines.sh; create-site.sh; validate-site.sh; validate-people.sh; repository.sh; copy-update-json.sh; snapshot-vm.sh; backup-controller; update-os.sh; check-disk-threshold.sh; site.json; zones.json
@@ -30,7 +30,7 @@ test-config-readers.sh,tappaas-cicd/lib/,common-install-routines.sh
 #
 # === tappaas-cicd/scripts ===
 acme-setup.sh,tappaas-cicd/scripts/,common-install-routines.sh
-rest-of-foundation.sh,tappaas-cicd/scripts/,common-install-routines.sh; user-setup.sh; people-manager; repository.sh; site.json
+rest-of-foundation.sh,tappaas-cicd/scripts/,common-install-routines.sh; people-manager; environment-manager; repository.sh; site.json
 setup-caddy.sh,tappaas-cicd/scripts/,common-install-routines.sh; site.json
 #
 # === tappaas-cicd/scripts/test ===
@@ -52,15 +52,15 @@ update.sh,tappaas-cicd/manager/,
 #
 # === tappaas-cicd/manager/people-manager (TS manager: people-manager) ===
 src/main.ts,tappaas-cicd/manager/people-manager/,authentik-manager; validate-people.sh
+src/bootstrap.ts,tappaas-cicd/manager/people-manager/,minimal-org
 src/config.ts,tappaas-cicd/manager/people-manager/,
 src/entity.ts,tappaas-cicd/manager/people-manager/,
 src/primitives.ts,tappaas-cicd/manager/people-manager/,
 src/reconcile.ts,tappaas-cicd/manager/people-manager/,
 src/types.ts,tappaas-cicd/manager/people-manager/,
-user-setup.sh,tappaas-cicd/manager/people-manager/,common-install-routines.sh; validate.sh
 validate.sh,tappaas-cicd/manager/people-manager/,common-install-routines.sh; validate-configuration.sh
-install.sh,tappaas-cicd/manager/people-manager/,common-install-routines.sh; people-manager; user-setup.sh; validate.sh
-test.sh,tappaas-cicd/manager/people-manager/,validate.sh; user-setup.sh
+install.sh,tappaas-cicd/manager/people-manager/,common-install-routines.sh; people-manager; validate.sh
+test.sh,tappaas-cicd/manager/people-manager/,validate.sh; people-manager
 update.sh,tappaas-cicd/manager/people-manager/,common-install-routines.sh
 #
 # === tappaas-cicd/manager/site-manager (TS manager: site-manager) ===
@@ -75,24 +75,22 @@ create-site.sh,tappaas-cicd/manager/site-manager/,common-install-routines.sh; va
 migrate-configuration.sh,tappaas-cicd/manager/site-manager/,common-install-routines.sh
 repository.sh,tappaas-cicd/manager/site-manager/,
 validate-configuration.sh,tappaas-cicd/manager/site-manager/,common-install-routines.sh
-validate-site.sh,tappaas-cicd/manager/site-manager/,common-install-routines.sh; validate-configuration.sh; user-setup.sh; site.json
+validate-site.sh,tappaas-cicd/manager/site-manager/,common-install-routines.sh; validate-configuration.sh; site.json
 install.sh,tappaas-cicd/manager/site-manager/,site-manager; validate-site.sh
 test-create-site.sh,tappaas-cicd/manager/site-manager/,create-site.sh; validate-site.sh
 test.sh,tappaas-cicd/manager/site-manager/,migrate-configuration.sh; validate-site.sh
 update.sh,tappaas-cicd/manager/site-manager/,common-install-routines.sh
 #
 # === tappaas-cicd/manager/environment-manager (TS manager: environment-manager) ===
-src/main.ts,tappaas-cicd/manager/environment-manager/,network-manager; module-manager; validate-environment.sh; reconcile-module; site.json; zones.json; environments
-src/bootstrap.ts,tappaas-cicd/manager/environment-manager/,create-minimal-environments.sh
+src/main.ts,tappaas-cicd/manager/environment-manager/,network-manager; module-manager; site.json; zones.json; environments
+src/bootstrap.ts,tappaas-cicd/manager/environment-manager/,site.json; environments
 src/clients.ts,tappaas-cicd/manager/environment-manager/,module-manager; network-manager; delete-module.sh
-src/config.ts,tappaas-cicd/manager/environment-manager/,validate-environment.sh; site.json; zones.json; environments
+src/config.ts,tappaas-cicd/manager/environment-manager/,site.json; zones.json; environments
 src/reconcile.ts,tappaas-cicd/manager/environment-manager/,
-src/validate.ts,tappaas-cicd/manager/environment-manager/,validate-environment.sh
+src/validate.ts,tappaas-cicd/manager/environment-manager/,zones.json; environments
 src/types.ts,tappaas-cicd/manager/environment-manager/,
-create-minimal-environments.sh,tappaas-cicd/manager/environment-manager/,common-install-routines.sh; user-setup.sh
-validate-environment.sh,tappaas-cicd/manager/environment-manager/,common-install-routines.sh; validate-site.sh; zones.json
 install.sh,tappaas-cicd/manager/environment-manager/,environment-manager; validate.sh
-test.sh,tappaas-cicd/manager/environment-manager/,create-minimal-environments.sh; validate-environment.sh
+test.sh,tappaas-cicd/manager/environment-manager/,environment-manager
 update.sh,tappaas-cicd/manager/environment-manager/,
 #
 # === tappaas-cicd/manager/module-manager (TS manager: module-manager) ===
@@ -203,6 +201,11 @@ install.sh,tappaas-cicd/controller/identity-controller/,common-install-routines.
 test.sh,tappaas-cicd/controller/identity-controller/,
 update.sh,tappaas-cicd/controller/identity-controller/,
 #
+# === tappaas-cicd/controller/node-provisioner ===
+install.sh,tappaas-cicd/controller/node-provisioner/,component-install-lib.sh
+test.sh,tappaas-cicd/controller/node-provisioner/,
+update.sh,tappaas-cicd/controller/node-provisioner/,
+#
 # === tappaas-cicd/controller/backup-controller ===
 install.sh,tappaas-cicd/controller/backup-controller/,backup-controller
 test.sh,tappaas-cicd/controller/backup-controller/,backup-controller
@@ -222,6 +225,7 @@ caddy_cli.py,tappaas-cicd/controller/opnsense-controller/src/opnsense_controller
 caddy_manager.py,tappaas-cicd/controller/opnsense-controller/src/opnsense_controller/,config.py
 config.py,tappaas-cicd/controller/opnsense-controller/src/opnsense_controller/,
 dhcp_manager.py,tappaas-cicd/controller/opnsense-controller/src/opnsense_controller/,config.py
+dhcp_manager_cli.py,tappaas-cicd/controller/opnsense-controller/src/opnsense_controller/,config.py; dhcp_manager.py; log.py; vlan_manager.py
 dns_manager_cli.py,tappaas-cicd/controller/opnsense-controller/src/opnsense_controller/,config.py; dhcp_manager.py
 firewall_cli.py,tappaas-cicd/controller/opnsense-controller/src/opnsense_controller/,config.py; firewall_manager.py
 firewall_manager.py,tappaas-cicd/controller/opnsense-controller/src/opnsense_controller/,config.py
@@ -243,6 +247,7 @@ __init__.py,tappaas-cicd/controller/opnsense-controller/src/test/,
 test_acme_manager.py,tappaas-cicd/controller/opnsense-controller/src/test/,
 test_caddy_manager.py,tappaas-cicd/controller/opnsense-controller/src/test/,
 test_dhcp_manager.py,tappaas-cicd/controller/opnsense-controller/src/test/,
+test_dhcp_manager_pxe.py,tappaas-cicd/controller/opnsense-controller/src/test/,
 test_dns_manager_cli.py,tappaas-cicd/controller/opnsense-controller/src/test/,
 test_rules_manager.py,tappaas-cicd/controller/opnsense-controller/src/test/,
 test_zone_manager.py,tappaas-cicd/controller/opnsense-controller/src/test/,
@@ -257,6 +262,22 @@ people_primitives.py,tappaas-cicd/controller/identity-controller/src/identity_co
 __init__.py,tappaas-cicd/controller/identity-controller/src/test/,
 test_authentik_manager.py,tappaas-cicd/controller/identity-controller/src/test/,
 test_people_primitives.py,tappaas-cicd/controller/identity-controller/src/test/,
+#
+# === tappaas-cicd/controller/node-provisioner (Python pkg: node_provisioner) ===
+__init__.py,tappaas-cicd/controller/node-provisioner/src/node_provisioner/,
+answer.py,tappaas-cicd/controller/node-provisioner/src/node_provisioner/,log.py
+assets.py,tappaas-cicd/controller/node-provisioner/src/node_provisioner/,log.py; util.py
+cli.py,tappaas-cicd/controller/node-provisioner/src/node_provisioner/,answer.py; assets.py; log.py; registry.py; server.py; service.py; util.py
+log.py,tappaas-cicd/controller/node-provisioner/src/node_provisioner/,
+registry.py,tappaas-cicd/controller/node-provisioner/src/node_provisioner/,log.py; util.py
+server.py,tappaas-cicd/controller/node-provisioner/src/node_provisioner/,answer.py; log.py; registry.py; util.py; site.json
+service.py,tappaas-cicd/controller/node-provisioner/src/node_provisioner/,log.py; registry.py; util.py; dhcp-manager
+util.py,tappaas-cicd/controller/node-provisioner/src/node_provisioner/,log.py
+#
+# === tappaas-cicd/controller/node-provisioner/src/test ===
+__init__.py,tappaas-cicd/controller/node-provisioner/src/test/,
+test_answer.py,tappaas-cicd/controller/node-provisioner/src/test/,
+test_registry.py,tappaas-cicd/controller/node-provisioner/src/test/,
 #
 # === tappaas-cicd/update-tappaas (Python pkg: update_tappaas) ===
 __init__.py,tappaas-cicd/update-tappaas/src/update_tappaas/,

@@ -9,11 +9,12 @@
 #      - validate.sh catches: missing required field, dangling ownerOrg,
 #        dangling memberOf, dangling role reference
 #      - a user with multiple roles + membership across >1 org validates
-#      - user-setup.sh copies + substitutes correctly; result has the ADR-007
-#        shape (org <ORG>; group `users`; roles admin/user/root; users root +
-#        <USER>) and passes validate.sh
 #   B. TypeScript UNIT tests (offline, fake in-memory PrimitiveClient) covering
 #      every ADR-007 P1 reconcile Test Criteria bullet — run via tsc + node.
+#      Includes bootstrap.test.ts (`people-manager bootstrap` — the retired
+#      user-setup.sh: copy + substitution shape, validateRefs, the non-empty
+#      guard, bad-args) plus a compiled-CLI drive of the bootstrap verb whose
+#      result must pass validate.sh.
 #   C. LIVE integration test (scoped to zztest- names, self-cleaning) against
 #      real Authentik via `people-manager sync` + `authentik-manager`. SKIPS
 #      gracefully if Authentik is unreachable; NEVER touches non-zztest- entities.
@@ -24,7 +25,6 @@ set -uo pipefail
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 VALIDATE="${HERE}/validate.sh"
-USER_SETUP="${HERE}/user-setup.sh"
 MINIMAL_ORG="${HERE}/minimal-org"
 FOUNDATION_DIR="$(cd "${HERE}/../../.." && pwd)"
 SCHEMA_DIR="${FOUNDATION_DIR}/schemas"
@@ -176,104 +176,9 @@ else
     ok "catches dangling user.roles reference"
 fi
 
-# ---------------------------------------------------------------------------
-# 5. user-setup.sh copies + substitutes correctly
-# ---------------------------------------------------------------------------
-DEST="${WORK}/setup/people"
-if "$USER_SETUP" --org acme-site --user lars --email lars@example.com \
-        --people-dir "$DEST" --minimal-org "$MINIMAL_ORG" >/dev/null 2>&1; then
-    ok "user-setup.sh runs and self-validates"
-else
-    bad "user-setup.sh should succeed and self-validate"
-fi
-
-# Shape assertions (only meaningful if the copy happened)
-if [[ -d "$DEST" ]]; then
-    n_org=$(find "$DEST/organizations" -name '*.json' 2>/dev/null | wc -l | tr -d ' ')
-    n_grp=$(find "$DEST/groups" -name '*.json' 2>/dev/null | wc -l | tr -d ' ')
-    n_usr=$(find "$DEST/users" -name '*.json' 2>/dev/null | wc -l | tr -d ' ')
-    n_rol=$(find "$DEST/roles" -name '*.json' 2>/dev/null | wc -l | tr -d ' ')
-
-    [[ "$n_org" == "1" ]] && ok "result has exactly 1 organization" || bad "expected 1 org, found ${n_org}"
-    [[ "$n_rol" == "3" ]] && ok "result has 3 roles" || bad "expected 3 roles, found ${n_rol}"
-    [[ "$n_usr" == "2" ]] && ok "result has 2 users (root + installer)" || bad "expected 2 users, found ${n_usr}"
-
-    # single team group literally named `users` (ownerOrg <org>, roles [user])
-    gf="$DEST/groups/users.json"
-    if [[ "$n_grp" == "1" && -f "$gf" ]] \
-        && [[ "$(jq -r '.name' "$gf")" == "users" ]] \
-        && [[ "$(jq -r '.ownerOrg' "$gf")" == "acme-site" ]] \
-        && [[ "$(jq -r '.roles | index("user") != null' "$gf")" == "true" ]]; then
-        ok "result has the single team group 'users' (ownerOrg acme-site, roles [user])"
-    else
-        bad "expected one group 'users' (ownerOrg acme-site, roles [user]); found ${n_grp} group files"
-    fi
-
-    # placeholders fully substituted (no __ORG__/__USER__/__EMAIL__/__ROOT_EMAIL__ remain)
-    if grep -rqE '__(ORG|USER|EMAIL|ROOT_EMAIL)__' "$DEST" 2>/dev/null; then
-        bad "placeholders remain after substitution"
-    else
-        ok "no placeholder tokens remain after substitution"
-    fi
-
-    # root user: roles [admin,user,root], email root@<domain-of-installer>, memberOf [users]
-    rf="$DEST/users/root.json"
-    if [[ -f "$rf" ]] \
-        && [[ "$(jq -r '.name' "$rf")" == "root" ]] \
-        && [[ "$(jq -r '.primaryEmail' "$rf")" == "root@example.com" ]] \
-        && [[ "$(jq -r '.roles | sort | join(",")' "$rf")" == "admin,root,user" ]] \
-        && [[ "$(jq -r '.memberOf | index("users") != null' "$rf")" == "true" ]]; then
-        ok "root user has roles [admin,user,root], email root@example.com, memberOf [users]"
-    else
-        bad "root user root.json not shaped as expected"
-    fi
-
-    # installer user: name=lars, roles [admin,user], member of users, installer email
-    uf="$DEST/users/lars.json"
-    if [[ -f "$uf" ]] \
-        && [[ "$(jq -r '.name' "$uf")" == "lars" ]] \
-        && [[ "$(jq -r '.primaryEmail' "$uf")" == "lars@example.com" ]] \
-        && [[ "$(jq -r '.roles | sort | join(",")' "$uf")" == "admin,user" ]] \
-        && [[ "$(jq -r '.memberOf | index("users") != null' "$uf")" == "true" ]]; then
-        ok "installer user lars has roles [admin,user] + membership in users"
-    else
-        bad "installer user lars.json not shaped as expected"
-    fi
-
-    # the produced tree passes validate.sh independently
-    if run_validate "$DEST"; then
-        ok "user-setup.sh result passes validate.sh"
-    else
-        bad "user-setup.sh result should pass validate.sh"
-    fi
-else
-    bad "user-setup.sh did not create destination ${DEST}"
-fi
-
-# ---------------------------------------------------------------------------
-# 6. user-setup.sh arg validation (missing required arg fails)
-# ---------------------------------------------------------------------------
-if "$USER_SETUP" --org acme --user lars --people-dir "${WORK}/never" \
-        --minimal-org "$MINIMAL_ORG" >/dev/null 2>&1; then
-    bad "user-setup.sh should fail when --email is missing"
-else
-    ok "user-setup.sh rejects missing --email"
-fi
-
-# ---------------------------------------------------------------------------
-# 6b. Regression: user-setup.sh invoked via a SYMLINK (as it is from ~/bin)
-#     must still resolve minimal-org/ (it lives next to the REAL script, not
-#     the symlink). Bug: BASH_SOURCE pointed at the symlink dir; fixed with
-#     readlink -f. Run WITHOUT --minimal-org so default resolution is exercised.
-# ---------------------------------------------------------------------------
-LINKDIR="${WORK}/binlink"; mkdir -p "$LINKDIR"
-ln -s "$USER_SETUP" "${LINKDIR}/user-setup.sh"
-if "${LINKDIR}/user-setup.sh" --org zztest-link --user zz --email zz@example.com \
-        --people-dir "${WORK}/linkout/people" >/dev/null 2>&1; then
-    ok "user-setup.sh resolves minimal-org when invoked via a symlink (~/bin path)"
-else
-    bad "user-setup.sh fails via symlink — minimal-org not resolved (readlink regression)"
-fi
+# (The former user-setup.sh cases moved to the TS tier: the bootstrap verb is
+# native — `people-manager bootstrap` — covered by test/unit/bootstrap.test.ts
+# plus the compiled-CLI drive in section B below. ADR-007 refactor Phase 8.2.)
 
 # ===========================================================================
 # B. TypeScript UNIT tests (offline; fake in-memory PrimitiveClient)
@@ -319,6 +224,41 @@ if [[ -f "$UNIT_TSCONFIG" ]]; then
             ok "TypeScript --deep query unit tests pass"
         else
             bad "TypeScript --deep query unit tests FAILED"
+        fi
+        if run_ts "node '${DIST_TEST}/manager/people-manager/test/unit/bootstrap.test.js'"; then
+            ok "TypeScript bootstrap unit tests pass"
+        else
+            bad "TypeScript bootstrap unit tests FAILED"
+        fi
+
+        # Compiled-CLI drive of the bootstrap verb (the retired user-setup.sh —
+        # ADR-007 refactor Phase 8.2). No PM_MINIMAL_ORG_DIR override: this also
+        # exercises the default template-dir resolution from the compiled tree
+        # (the successor of the old ~/bin symlink readlink regression case).
+        PM_JS="${DIST_TEST}/manager/people-manager/src/main.js"
+        BOOT_DEST="${WORK}/bootstrap/people"
+        if run_ts "node '${PM_JS}' bootstrap --org acme-site --user lars --email lars@example.com --config-dir '${BOOT_DEST}'" >/dev/null 2>&1; then
+            ok "people-manager bootstrap runs and self-validates"
+        else
+            bad "people-manager bootstrap should succeed and self-validate"
+        fi
+        # the produced tree passes the deeper bash schema gate independently
+        if run_validate "$BOOT_DEST"; then
+            ok "people-manager bootstrap result passes validate.sh"
+        else
+            bad "people-manager bootstrap result should pass validate.sh"
+        fi
+        # re-run without --force refuses the populated destination (exit 1)
+        if run_ts "node '${PM_JS}' bootstrap --org acme-site --user lars --email lars@example.com --config-dir '${BOOT_DEST}'" >/dev/null 2>&1; then
+            bad "bootstrap re-run should refuse a non-empty destination"
+        else
+            ok "bootstrap re-run refuses a non-empty destination (idempotency guard)"
+        fi
+        # missing required arg fails
+        if run_ts "node '${PM_JS}' bootstrap --org acme --user lars --config-dir '${WORK}/never'" >/dev/null 2>&1; then
+            bad "bootstrap should fail when --email is missing"
+        else
+            ok "bootstrap rejects missing --email"
         fi
     else
         bad "TypeScript unit tests failed to compile"

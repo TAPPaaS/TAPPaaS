@@ -55,8 +55,9 @@ A "direct dependency" is one of:
 | `tappaas-cicd/controller/switch-controller/` | 6 |
 | `tappaas-cicd/controller/ap-controller/` | 6 |
 | `tappaas-cicd/controller/identity-controller/` (3 sh + 4 py + 3 test) | 10 |
+| `tappaas-cicd/controller/node-provisioner/` (3 sh + 9 py + 3 test) | 15 |
 | `tappaas-cicd/controller/backup-controller/` | 3 |
-| `tappaas-cicd/controller/opnsense-controller/` (22 py + 7 test) | 29 |
+| `tappaas-cicd/controller/opnsense-controller/` (23 py + 8 test) | 31 |
 | `tappaas-cicd/update-tappaas/` (py pkg) | 2 |
 | `tappaas-cicd/opnsense-patch/` (sh + php) | 2 |
 | `tappaas-cicd/test-variants/` | 5 |
@@ -97,11 +98,11 @@ foundation/install.sh  --name <orgname> --domain <d>     <- entry orchestrator
           -> tappaas-cicd/install.sh --name <orgname>   (the cicd platform install)
                -> create-site.sh --name <orgname>            => site.json
                -> network-manager init --name <orgname> => zones.json
-               -> create-minimal-environments.sh --name <orgname> => mgmt + <orgname> envs
+               -> environment-manager add --name <orgname>   => mgmt + <orgname> envs
                -> copy-update-json.sh + update-module.sh (cluster/templates/network/tappaas-cicd)
 # secondary node: [1/5] joins, then the chain stops (role != created).
 # later, from the mothership: rest-of-foundation.sh -> backup/identity/logging,
-#   then user-setup.sh + people-manager reconcile => the <orgname> organisation.
+#   then people-manager bootstrap + reconcile => the <orgname> organisation.
 ```
 
 ### 1. Module lifecycle through the manager (ADR-007 #3)
@@ -125,9 +126,9 @@ site-manager (TS)        owns site.json
   src/main.ts spawns: create-site.sh, repository.sh, validate-site.sh,
                       environment-manager, network-manager, people-manager
 environment-manager (TS) owns the environments/ tree
-  src/main.ts spawns: network-manager, module-manager, reconcile-module,
-                      create-minimal-environments.sh, validate-environment.sh
-  (reads site.json, zones.json, environments/)
+  src/main.ts spawns: network-manager, module-manager
+  (native: the minimal-set bootstrap and the validate gate;
+   reads site.json, zones.json, environments/)
 ```
 
 ### 3. Network reconciliation (network-manager orchestrator + plane controllers)
@@ -204,7 +205,8 @@ foundation tree depends on them:
 - **Nightly update:** `update-tappaas`
 - **Top-level controllers:** `opnsense-controller`, `proxmox-controller`,
   `switch-controller`, `ap-controller`, `identity-controller`,
-  `backup-controller`
+  `backup-controller`, `node-provisioner` (PXE provisioning, design N3;
+  drives `dhcp-manager` from the opnsense-controller family)
 
 ## Mermaid dependency graphs
 
@@ -225,8 +227,8 @@ graph TD
     IP --> CICD["tappaas-cicd/install.sh<br/>--name orgname"]
     CICD --> CSITE["create-site.sh => site.json"]
     CICD --> ZI["network-manager init => zones.json"]
-    CICD --> CME["create-minimal-environments.sh<br/>=> mgmt + orgname envs"]
-    ROF["rest-of-foundation.sh<br/>(later, from cicd)"] --> US["user-setup.sh + people-manager<br/>=> orgname organisation"]
+    CICD --> CME["environment-manager add<br/>=> mgmt + orgname envs"]
+    ROF["rest-of-foundation.sh<br/>(later, from cicd)"] --> US["people-manager bootstrap + reconcile<br/>=> orgname organisation"]
 ```
 
 ### Module lifecycle (module-manager front door)
@@ -264,8 +266,6 @@ graph TD
     SM --> SJ["site.json"]
     EM --> NM
     EM --> MM["module-manager (TS)"]
-    EM --> CME["create-minimal-environments.sh"]
-    EM --> VE["validate-environment.sh"]
     EM --> ENV["environments/"]
     EM --> ZJ["zones.json"]
 ```
@@ -336,9 +336,6 @@ production script/program executes the legacy verb itself.
 | `repository.sh` | site-manager | site-manager (TS); `rest-of-foundation.sh` (echoed hint only) | MANAGER (clean) |
 | `validate-site.sh` | site-manager | site-manager / environment-manager (TS); `install.sh` (bootstrap) | MANAGER + **1 DIRECT** |
 | `validate-configuration.sh` | site-manager | validate-site.sh; people validate.sh; `cluster/update.sh` | MANAGER + **1 DIRECT** |
-| `create-minimal-environments.sh` | environment-manager | environment-manager (TS); `install.sh` (bootstrap) | MANAGER + **1 DIRECT** |
-| `validate-environment.sh` | environment-manager | environment-manager (TS) only | MANAGER (clean) |
-| `user-setup.sh` | people-manager | people-manager flow; `rest-of-foundation.sh` (bootstrap) | MANAGER + **1 DIRECT** |
 | `validate-people.sh` | people-manager | people-manager flow | MANAGER (clean) |
 | `update-os.sh` | health-manager | health-manager (TS); `templates/services/{nixos,debian}/update-service.sh` | MANAGER + **2 DIRECT** |
 | `inspect-vm.sh` | module-manager | module-manager (TS) | MANAGER (lib-internal) |
@@ -355,19 +352,20 @@ below the manager, not bypassing it.
 
 | Caller | Bypasses (legacy verb called directly) | Why it is still direct |
 |--------|----------------------------------------|------------------------|
-| `tappaas-cicd/install.sh` | `create-site.sh`, `create-minimal-environments.sh`, `copy-update-json.sh`, `update-module.sh` | First-boot bootstrap — runs before the manager bins are linked on PATH; the highest-value target to migrate once a `tappaas-cicd`-native bootstrap exists |
+| `tappaas-cicd/install.sh` | `create-site.sh`, `copy-update-json.sh`, `update-module.sh` | First-boot bootstrap — the pre-manager steps run before the manager bins are linked on PATH; the environments step now goes through `environment-manager add` (linked just before it runs) |
 | `tappaas-cicd/update-tappaas` (`main.py`) | `update-module.sh` (+ `reboot-cluster.sh`) | Nightly auto-updater calls `update-module.sh` per module directly instead of `module-manager update` |
 | `templates/services/nixos/update-service.sh` | `update-os.sh` | Template update-plane hook shells `update-os.sh` directly |
 | `templates/services/debian/update-service.sh` | `update-os.sh` | same as above |
 | `cluster/services/vm/install-service.sh` | `install-module.sh` | Builds the VM template via `install-module.sh` directly (a nested-module build) |
-| `tappaas-cicd/scripts/rest-of-foundation.sh` | `user-setup.sh` | Bootstrap copies the minimal-org via `user-setup.sh`, then *does* call `people-manager sync` (partially migrated) |
 | `cluster/update.sh` | `validate-configuration.sh` | Pre-distribution gate calls `validate-configuration.sh` directly (and `validate-configuration.sh` itself is a retired-config validator) |
 | `backup/install.sh` | `copy-update-json.sh` | Backup module install copies its config via `copy-update-json.sh` directly |
 
 ### Verdict
 
-**Adoption is strong but not complete: ~8 production DIRECT-call holdouts
-remain.** The read-only/backup verbs (`validate-*`, `backup-controller`,
+**Adoption is strong but not complete: ~7 production DIRECT-call holdouts
+remain** (the environments + people bootstraps moved onto the manager verbs —
+`environment-manager add` / `people-manager bootstrap` — in the ADR-007
+refactor Phase 8). The read-only/backup verbs (`validate-*`, `backup-controller`,
 `reconcile-module`, `check-disk-threshold`) are reached **only** through their
 managers — clean (the backup bash layer — `backup-restore`/`backup-status` —
 was retired outright in the ADR-007 refactor Phase 7.4, absorbed into the TS
