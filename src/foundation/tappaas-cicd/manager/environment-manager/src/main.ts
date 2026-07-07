@@ -28,7 +28,6 @@ import {
   loadEnvironments,
   loadRefSources,
   parseEnvironment,
-  serializeEnvironment,
   validateEnvironmentRefs,
   writeEnvironment,
 } from "./config";
@@ -149,7 +148,7 @@ interface Opts {
   rest: string[];
 }
 
-function parseOpts(args: string[]): Opts {
+export function parseOpts(args: string[]): Opts {
   const o: Opts = {
     configDir: defaultConfigDir(),
     quiet: false,
@@ -217,7 +216,12 @@ function parseOpts(args: string[]): Opts {
         o.json = true;
         break;
       default:
-        if (a.startsWith("--")) die(`Unknown option: ${a}`);
+        // Reject ANY dash-prefixed unknown token, not just `--`. A misspelled
+        // option (e.g. `-domain`, `--domian`) must error — never be silently
+        // swallowed into `rest` and ignored (which made `modify --<typo>` report
+        // "Updated" while dropping the flag). No single-dash short flags exist,
+        // and option values are consumed by need() so they never reach here.
+        if (a.startsWith("-")) die(`Unknown option: ${a}`);
         o.rest.push(a);
     }
   }
@@ -241,6 +245,40 @@ function cmdList(opts: Opts): void {
   }
 }
 
+// Human-readable single-environment summary (default `show` output). An aligned
+// label/value block, mirroring `list`'s human default; the raw JSON document is
+// available via `--json`. Optional fields are printed only when present.
+export function formatEnvironmentHuman(env: Environment): string {
+  const lines: string[] = [];
+  lines.push(
+    env.displayName && env.displayName !== env.name
+      ? `${env.name}  —  ${env.displayName}`
+      : env.name,
+  );
+  const row = (label: string, value: string): void =>
+    void lines.push(`  ${label.padEnd(9)} ${value}`);
+  row("owner", env.ownerOrg || "<unset>");
+  row("zone", env.network?.zone ?? "<unset>");
+  if (env.domains) {
+    const d = env.domains;
+    row("domain", (d.primary || "<unset>") + (d.dnsMode ? `  (dnsMode: ${d.dnsMode})` : ""));
+    if (d.aliases && d.aliases.length) {
+      row("aliases", d.aliases.join(", ") + (d.aliasMode ? `  (${d.aliasMode})` : ""));
+    }
+  }
+  if (env.dataResidency) row("residency", env.dataResidency);
+  if (env.backup) {
+    const b = env.backup;
+    const parts: string[] = [];
+    if (b.retention) parts.push(`retention=${b.retention}`);
+    if (b.residency) parts.push(`residency=${b.residency}`);
+    if (b.schedule !== undefined && b.schedule !== null) parts.push(`schedule=${b.schedule}`);
+    row("backup", parts.length ? parts.join(" ") : "(set)");
+  }
+  if (env.legal && env.legal.processor) row("legal", `processor=${env.legal.processor}`);
+  return lines.join("\n");
+}
+
 function cmdShow(opts: Opts): void {
   const name = opts.rest[0];
   if (!name) die("show: expected <env>");
@@ -251,8 +289,8 @@ function cmdShow(opts: Opts): void {
     info(JSON.stringify(env));
     return;
   }
-  // Human output: the canonical pretty-printed environment document.
-  info(serializeEnvironment(env).trimEnd());
+  // Human output: an aligned field summary (raw JSON doc via --json).
+  info(formatEnvironmentHuman(env));
 }
 
 // ── validate ──────────────────────────────────────────────────────────
