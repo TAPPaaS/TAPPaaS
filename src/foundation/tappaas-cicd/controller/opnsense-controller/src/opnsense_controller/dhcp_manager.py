@@ -795,6 +795,69 @@ class DhcpManager:
 
         return {"changed": True, "uuid": existing["uuid"]}
 
+    def get_host_row(self, host: str, domain: str | None = None) -> dict | None:
+        """Raw dnsmasq host row for a hostname (searchHost fields)."""
+        result = self.client.run_module(
+            "raw",
+            params={
+                "module": "dnsmasq",
+                "controller": "settings",
+                "command": "searchHost",
+                "action": "get",
+            },
+        )
+        rows = result.get("result", {}).get("response", {}).get("rows", [])
+        for row in rows:
+            if row.get("host") != host:
+                continue
+            if domain and row.get("domain") not in ("", domain):
+                continue
+            return row
+        return None
+
+    def pin_host_macs(self, host: str, ip: str, macs: list[str],
+                      domain: str | None = None,
+                      description: str = "") -> dict:
+        """Turn a hostname's dnsmasq host entry into a DHCP reservation.
+
+        The TAPPaaS firewall SHIPS host entries for tappaas1-9 (hostname +
+        standard IP, no MAC = DNS pin only). Setting ``hwaddr`` upgrades
+        the entry to a dhcp-host reservation; clearing it (macs=[]) makes
+        it DNS-only again. Existing entries are updated in place via the
+        raw ``setHost`` API (the ansible-style dnsmasq_host module did not
+        persist hardware addresses — stage-1 finding); a missing entry is
+        created with ``addHost``.
+        """
+        existing = self.get_host_row(host, domain)
+        payload = {
+            "host": host,
+            "domain": (existing or {}).get("domain") or (domain or ""),
+            "ip": ip or (existing or {}).get("ip", ""),
+            "hwaddr": ",".join(macs),
+            "descr": description or (existing or {}).get("descr", ""),
+        }
+        if existing and existing.get("uuid"):
+            command, params = "setHost", [existing["uuid"]]
+        else:
+            command, params = "addHost", []
+        result = self.client.run_module(
+            "raw",
+            params={
+                "module": "dnsmasq",
+                "controller": "settings",
+                "command": command,
+                "params": params,
+                "action": "post",
+                "data": {"host": payload},
+            },
+        )
+        response = result.get("result", {}).get("response", {})
+        if response.get("result") != "saved":
+            raise RuntimeError(f"{command} failed for '{host}': {response}")
+        self.reconfigure()
+        return {"changed": True,
+                "uuid": (existing or {}).get("uuid") or response.get("uuid")}
+
     # ----- dhcp_tags + match options (iPXE chainload conditional) -----------
 
     def list_dhcp_tags(self) -> list[dict]:

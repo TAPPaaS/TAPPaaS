@@ -39,6 +39,12 @@ export function ssh(user: string, host: string, remote: string): RemoteResult {
     "ConnectTimeout=5",
     "-o",
     "BatchMode=yes",
+    // accept-new: a freshly (re)installed node has an unknown host key and
+    // strict batch mode made every query against it fail (bit the N1 pool
+    // discovery twice). CHANGED keys are still rejected — a reprovisioned
+    // node needs its stale entry cleared (node add does this itself).
+    "-o",
+    "StrictHostKeyChecking=accept-new",
     `${user}@${host}`,
     remote,
   ]);

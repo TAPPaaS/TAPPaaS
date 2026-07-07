@@ -12,8 +12,9 @@ Run with:
 
 from __future__ import annotations
 
+import subprocess
 import unittest
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
 from opnsense_controller.dhcp_manager import DhcpManager
 from opnsense_controller import dhcp_manager_cli
@@ -176,55 +177,160 @@ class TestTagsAndMatchOptions(unittest.TestCase):
         self.assertEqual(opt["set_tag"], "tag-uuid")
 
 
+def _fake_fw(responses=None):
+    """A _fw_sh replacement recording scripts, answering by content."""
+    scripts = []
+
+    def fw_sh(config, script):
+        scripts.append(script)
+        stdout = ""
+        if "pluginctl" in script:
+            stdout = "vtnet0\n"
+        elif "rm -f" in script:
+            stdout = (responses or {}).get("rm", "removed\n")
+        elif "cat " in script and "TAPPAAS_EOF" not in script:
+            stdout = (responses or {}).get("cat", "")
+        return subprocess.CompletedProcess(
+            args=["ssh"], returncode=0, stdout=stdout, stderr="")
+
+    return fw_sh, scripts
+
+
+class TestRenderConf(unittest.TestCase):
+    def test_negated_tag_and_chainload(self):
+        conf = dhcp_manager_cli._render_conf(
+            "vtnet0", "10.0.0.10", "snp.efi",
+            "http://10.0.0.10:8090/boot.ipxe")
+        self.assertIn("dhcp-match=set:tappaas-ipxe,175", conf)
+        # The loop-breaker: non-iPXE clients only, servername AND address.
+        self.assertIn("dhcp-boot=tag:vtnet0,tag:!tappaas-ipxe,"
+                      "snp.efi,10.0.0.10,10.0.0.10", conf)
+        self.assertIn("dhcp-boot=tag:vtnet0,tag:tappaas-ipxe,"
+                      "http://10.0.0.10:8090/boot.ipxe", conf)
+
+    def test_no_chainload_line_without_url(self):
+        conf = dhcp_manager_cli._render_conf(
+            "vtnet0", "10.0.0.10", "snp.efi", None)
+        self.assertNotIn("tag:tappaas-ipxe,http", conf)
+
+
 class TestPxeCliFlows(unittest.TestCase):
-    def test_enable_stages_then_reconfigures_once(self):
+    def test_enable_writes_drop_in(self):
         manager = _make_manager()
-        ok = dhcp_manager_cli.pxe_enable(
-            manager, zone="mgmt", interface="lan",
-            next_server="10.0.0.10", bootfile="ipxe.efi",
-            ipxe_script_url="http://10.0.0.10:8090/boot.ipxe",
-        )
+        fw_sh, scripts = _fake_fw()
+        with patch.object(dhcp_manager_cli, "_fw_sh", fw_sh):
+            ok = dhcp_manager_cli.pxe_enable(
+                manager, MagicMock(), zone="mgmt", interface="lan",
+                next_server="10.0.0.10", bootfile="snp.efi",
+                ipxe_script_url="http://10.0.0.10:8090/boot.ipxe",
+            )
         self.assertTrue(ok)
-        adds = _calls(manager, "addBoot")
-        self.assertEqual(len(adds), 2)  # chain entry + plain entry
-        self.assertEqual(len(_calls(manager, "reconfigure")), 1)
+        deploy = [s for s in scripts if "TAPPAAS_EOF" in s]
+        self.assertEqual(len(deploy), 1)
+        self.assertIn("tag:!tappaas-ipxe", deploy[0])
+        self.assertIn("configctl dnsmasq restart", deploy[0])
+        # No legacy entries -> no API reconfigure needed.
+        self.assertEqual(_calls(manager, "reconfigure"), [])
 
-    def test_enable_degrades_when_match_option_rejected(self):
-        # V-2: option "175" may be rejected by the firewall's option
-        # catalogue — enable must fall back to the plain entry.
-        manager = _make_manager(fail_add_option=True)
-        ok = dhcp_manager_cli.pxe_enable(
-            manager, zone="mgmt", interface="lan",
-            next_server="10.0.0.10", bootfile="ipxe.efi",
-            ipxe_script_url="http://10.0.0.10:8090/boot.ipxe",
-        )
-        self.assertTrue(ok)
-        adds = _calls(manager, "addBoot")
-        self.assertEqual(len(adds), 1)  # only the plain entry
-        self.assertEqual(adds[0]["data"]["boot"]["filename"], "ipxe.efi")
-
-    def test_disable_clears_everything(self):
+    def test_enable_migrates_legacy_api_entries(self):
         manager = _make_manager(
-            boot_rows=[
-                {"uuid": "b1", "description": "TAPPaaS PXE boot (mgmt)"},
-                {"uuid": "b2", "description": "TAPPaaS PXE ipxe-chain (mgmt)"},
-            ],
+            boot_rows=[{"uuid": "b1",
+                        "description": "TAPPaaS PXE boot (mgmt)"}],
             tag_rows=[{"uuid": "t1", "tag": "tappaas_ipxe"}],
-            option_rows=[{"uuid": "o1",
-                          "description": "TAPPaaS PXE ipxe-match (mgmt)"}],
         )
-        ok = dhcp_manager_cli.pxe_disable(manager, "mgmt")
+        fw_sh, _ = _fake_fw()
+        with patch.object(dhcp_manager_cli, "_fw_sh", fw_sh):
+            ok = dhcp_manager_cli.pxe_enable(
+                manager, MagicMock(), zone="mgmt", interface="lan",
+                next_server="10.0.0.10", bootfile="snp.efi",
+                ipxe_script_url=None,
+            )
         self.assertTrue(ok)
-        self.assertEqual(len(_calls(manager, "delBoot")), 2)
-        self.assertEqual(len(_calls(manager, "delOption")), 1)
+        self.assertEqual(len(_calls(manager, "delBoot")), 1)
         self.assertEqual(len(_calls(manager, "delTag")), 1)
         self.assertEqual(len(_calls(manager, "reconfigure")), 1)
 
-    def test_disable_noop_when_nothing_set(self):
+    def test_disable_removes_drop_in(self):
         manager = _make_manager()
-        ok = dhcp_manager_cli.pxe_disable(manager, "mgmt")
+        fw_sh, scripts = _fake_fw()
+        with patch.object(dhcp_manager_cli, "_fw_sh", fw_sh):
+            ok = dhcp_manager_cli.pxe_disable(manager, MagicMock(), "mgmt")
         self.assertTrue(ok)
+        self.assertTrue(any("rm -f" in s for s in scripts))
         self.assertEqual(_calls(manager, "reconfigure"), [])
+
+    def test_status_reads_drop_in(self):
+        manager = _make_manager()
+        fw_sh, _ = _fake_fw(responses={
+            "cat": "dhcp-match=set:tappaas-ipxe,175\n"})
+        with patch.object(dhcp_manager_cli, "_fw_sh", fw_sh):
+            self.assertTrue(
+                dhcp_manager_cli.pxe_status(manager, MagicMock(), "mgmt"))
+
+    def test_status_disabled_when_absent(self):
+        manager = _make_manager()
+        fw_sh, _ = _fake_fw(responses={"cat": ""})
+        with patch.object(dhcp_manager_cli, "_fw_sh", fw_sh):
+            self.assertFalse(
+                dhcp_manager_cli.pxe_status(manager, MagicMock(), "mgmt"))
+
+
+class TestHostPinning(unittest.TestCase):
+    """pin_host_macs: raw setHost/addHost (the ansible dnsmasq_host module
+    silently drops hwaddr — stage-1 finding)."""
+
+    def _manager(self, host_rows):
+        manager = _make_manager()
+
+        def run_module(module, **kwargs):
+            params = kwargs.get("params", {})
+            command = params.get("command")
+            if command == "searchHost":
+                return _rows(host_rows)
+            if command in ("setHost", "addHost"):
+                return {"result": {"response": {"result": "saved",
+                                                "uuid": "host-uuid"}}}
+            if command == "reconfigure":
+                return {"result": {"response": {"status": "ok"}}}
+            return {"result": {"response": {}}}
+
+        manager._client.run_module.side_effect = run_module
+        return manager
+
+    def test_pin_updates_shipped_entry_in_place(self):
+        # The firewall SHIPS tappaas1-9 host entries (DNS pin, no MAC).
+        manager = self._manager([
+            {"uuid": "u4", "host": "tappaas4", "domain": "mgmt.internal",
+             "ip": "10.0.0.13", "hwaddr": "", "descr": ""},
+        ])
+        manager.pin_host_macs("tappaas4", "10.0.0.13",
+                              ["aa:bb:cc:dd:ee:01", "aa:bb:cc:dd:ee:02"],
+                              domain="mgmt.internal")
+        (set_call,) = _calls(manager, "setHost")
+        self.assertEqual(set_call["params"], ["u4"])
+        host = set_call["data"]["host"]
+        self.assertEqual(host["hwaddr"],
+                         "aa:bb:cc:dd:ee:01,aa:bb:cc:dd:ee:02")
+        self.assertEqual(host["ip"], "10.0.0.13")
+        self.assertEqual(len(_calls(manager, "reconfigure")), 1)
+
+    def test_pin_creates_when_missing(self):
+        manager = self._manager([])
+        manager.pin_host_macs("tappaas7", "10.0.0.16", ["aa:bb:cc:dd:ee:07"],
+                              domain="mgmt.internal")
+        (add_call,) = _calls(manager, "addHost")
+        self.assertEqual(add_call["data"]["host"]["host"], "tappaas7")
+
+    def test_clear_pinning_keeps_entry(self):
+        manager = self._manager([
+            {"uuid": "u9", "host": "tappaas9", "domain": "mgmt.internal",
+             "ip": "10.0.0.18", "hwaddr": "aa:bb:cc:dd:ee:09", "descr": "x"},
+        ])
+        ok = dhcp_manager_cli.host_del(manager, "tappaas9", "mgmt.internal")
+        self.assertTrue(ok)
+        (set_call,) = _calls(manager, "setHost")
+        self.assertEqual(set_call["data"]["host"]["hwaddr"], "")
+        self.assertEqual(set_call["data"]["host"]["ip"], "10.0.0.18")
 
 
 if __name__ == "__main__":

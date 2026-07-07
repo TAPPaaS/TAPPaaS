@@ -7,27 +7,32 @@ Front door for the node-provisioning netboot plane
 can PXE-boot the Proxmox VE automated installer served by tappaas-cicd's
 ``node-provisioner``.
 
-Backend: OPNsense's dnsmasq plane (the same one zone-manager/dns-manager
-drive) — its ``dhcp_boot`` grid renders ``dhcp-boot=[tag:x,]filename
-[,servername[,address]]``, i.e. the DHCP header bootfile + next-server.
+Backend (stage-1 hardware finding): the PXE lines are written as ONE owned
+drop-in file, ``/usr/local/etc/dnsmasq.conf.d/tappaas-pxe.conf`` — the
+dnsmasq plugin's sanctioned extension point (``conf-dir=...,*.conf``) —
+because breaking the stock-iPXE DHCP loop REQUIRES a negated tag
+(``dhcp-boot=tag:<if>,tag:!<ipxe>,...``) and the OPNsense dnsmasq model
+rejects negated tag references ("Option [!uuid] not in list", probed on
+25.7). The file is deployed over ssh (root@firewall, the same trust the
+foundation scripts use) and survives every OPNsense reconfigure; disable
+removes it. The dnsmasq mechanics: clients identifying as iPXE (DHCP
+option 175) are handed the chainload script URL, everyone else gets
+next-server + the iPXE binary.
 
-iPXE chainload: plain next-server+filename is enough when the TFTP-served
-iPXE binary carries an embedded script (or the firmware itself is iPXE).
-For a stock iPXE binary the classic DHCP loop (iPXE re-DHCPs and is handed
-itself again) is broken with a dnsmasq conditional: ``--ipxe-script-url``
-adds a match on DHCP option 175 (sent by iPXE) that hands iPXE the boot
-script URL instead of the binary. TODO(V-2): OPNsense validates the option
-number against its dnsmasq option catalogue — verify option "175" is
-accepted on the deployed firewall version; on rejection this CLI degrades
-to the plain entry with a warning.
+Host reservations (``host set``/``host del``) pin a node's MACs to its
+standard mgmt IP via the regular OPNsense API (the model supports those) —
+used by node-provisioner at answer-serve time so a freshly installed node
+boots straight onto its reserved 10.0.0.1x address.
 """
 
 import argparse
+import os
+import subprocess
 import sys
 
 from .config import Config
 from .dhcp_manager import DhcpManager
-from .log import error, info, warn
+from .log import error, info
 from .vlan_manager import VlanManager
 
 # The default TAPPaaS provisioning scope: the mgmt zone is the untagged
@@ -36,7 +41,9 @@ from .vlan_manager import VlanManager
 DEFAULT_ZONE = "mgmt"
 UNTAGGED_ZONE_INTERFACES = {"mgmt": "lan", "lan": "lan", "wan": "wan"}
 
-IPXE_TAG = "tappaas_ipxe"
+IPXE_TAG = "tappaas_ipxe"          # legacy API-object tag (cleanup only)
+CONF_D_FILE = "/usr/local/etc/dnsmasq.conf.d/tappaas-pxe.conf"
+IPXE_CONF_TAG = "tappaas-ipxe"     # raw dnsmasq tag name in the drop-in
 
 
 def _boot_description(zone: str) -> str:
@@ -49,6 +56,64 @@ def _chain_description(zone: str) -> str:
 
 def _match_description(zone: str) -> str:
     return f"TAPPaaS PXE ipxe-match ({zone})"
+
+
+def _fw_sh(config: Config, script: str) -> subprocess.CompletedProcess:
+    """Run a bourne script on the firewall over ssh.
+
+    root@firewall's login shell is csh — pipe the script to ``sh -s``
+    instead of quoting through csh (the established TAPPaaS pattern).
+    In root context (sudo node-provisioner, the TTL unit) root@cicd holds
+    no firewall key — fall back to the operator's DEDICATED firewall key
+    (~tappaas/.ssh/tappaas-fw, wired up by config-firewall.sh; the general
+    id_ed25519 is NOT authorized on the firewall), mirroring the
+    credential-file fallback.
+    """
+    cmd = ["ssh", "-o", "BatchMode=yes",
+           "-o", "StrictHostKeyChecking=accept-new"]
+    if os.geteuid() == 0:
+        fw_key = "/home/tappaas/.ssh/tappaas-fw"
+        if os.path.isfile(fw_key):
+            cmd += ["-i", fw_key, "-o", "IdentitiesOnly=yes"]
+    cmd += [f"root@{config.firewall}", "sh -s"]
+    return subprocess.run(cmd, input=script, text=True, capture_output=True)
+
+
+def _resolve_device(config: Config, interface: str) -> str:
+    """OPNsense interface identifier (lan/opt1/...) -> OS device (vtnet0/...).
+
+    The raw dnsmasq drop-in needs the OS device name (the generated config
+    tags scopes as ``tag:<device>``); ``pluginctl -g`` reads it from the
+    firewall's config.xml.
+    """
+    result = _fw_sh(config, f"pluginctl -g interfaces.{interface}.if\n")
+    device = (result.stdout or "").strip().splitlines()[-1].strip() \
+        if result.stdout.strip() else ""
+    if result.returncode != 0 or not device or device == "null":
+        raise RuntimeError(
+            f"cannot resolve OS device for interface '{interface}' via "
+            f"pluginctl on {config.firewall}: "
+            f"{(result.stderr or result.stdout).strip()}")
+    return device
+
+
+def _legacy_api_cleanup(manager: DhcpManager, zone: str) -> bool:
+    """Remove PXE entries an older dhcp-manager created as API objects."""
+    changed = False
+    for fn in (
+        lambda: manager.delete_boot_entry(_boot_description(zone),
+                                          reconfigure=False),
+        lambda: manager.delete_boot_entry(_chain_description(zone),
+                                          reconfigure=False),
+        lambda: manager.delete_option_by_description(_match_description(zone),
+                                                     reconfigure=False),
+        lambda: manager.delete_dhcp_tag(IPXE_TAG, reconfigure=False),
+    ):
+        try:
+            changed = fn().get("changed", False) or changed
+        except Exception:
+            pass
+    return changed
 
 
 def resolve_zone_interface(config: Config, zone: str) -> str:
@@ -72,8 +137,36 @@ def resolve_zone_interface(config: Config, zone: str) -> str:
     )
 
 
+def _render_conf(device: str, next_server: str, bootfile: str,
+                 ipxe_script_url: str | None) -> str:
+    """Render the tappaas-pxe.conf drop-in.
+
+    Non-iPXE clients (firmware PXE) get next-server + the iPXE binary;
+    clients already running iPXE (they send DHCP option 175) get the
+    chainload script URL — the negated tag on the first line is what breaks
+    the stock-iPXE self-download loop, and is exactly the construct the
+    OPNsense API cannot express. servername AND address are both set:
+    dnsmasq's 3-field form parses the third field as servername and clients
+    then fall back to the DHCP server itself as next-server (stage-1
+    PXE-E18 finding).
+    """
+    lines = [
+        "# TAPPaaS PXE provisioning (node-provisioner, design N3).",
+        "# Managed by 'dhcp-manager pxe enable/disable' — do not edit;",
+        "# present ONLY while a provisioning window is open.",
+        f"dhcp-match=set:{IPXE_CONF_TAG},175",
+        f"dhcp-boot=tag:{device},tag:!{IPXE_CONF_TAG},"
+        f"{bootfile},{next_server},{next_server}",
+    ]
+    if ipxe_script_url:
+        lines.append(
+            f"dhcp-boot=tag:{device},tag:{IPXE_CONF_TAG},{ipxe_script_url}")
+    return "\n".join(lines) + "\n"
+
+
 def pxe_enable(
     manager: DhcpManager,
+    config: Config,
     zone: str,
     interface: str,
     next_server: str,
@@ -81,121 +174,120 @@ def pxe_enable(
     ipxe_script_url: str | None,
     check_mode: bool = False,
 ) -> bool:
-    """Set PXE boot options on the zone's DHCP scope (idempotent)."""
+    """Deploy the PXE drop-in on the firewall (idempotent)."""
+    device = _resolve_device(config, interface)
+    conf = _render_conf(device, next_server, bootfile, ipxe_script_url)
     if check_mode:
-        info(f"[dry-run] would set dhcp-boot on '{interface}': "
-             f"file={bootfile} next-server={next_server}")
-        if ipxe_script_url:
-            info(f"[dry-run] would add iPXE chainload -> {ipxe_script_url}")
+        info(f"[dry-run] would write {CONF_D_FILE} (interface {interface} "
+             f"= {device}):\n{conf}")
         return True
 
-    staged = False
-
-    # Optional iPXE chainload conditional FIRST (so a failure degrades to
-    # the plain entry before anything is applied).
-    if ipxe_script_url:
-        try:
-            tag_uuid = manager.ensure_dhcp_tag(IPXE_TAG)
-            manager.create_match_option(
-                option="175",  # iPXE feature list — presence identifies iPXE
-                set_tag=tag_uuid,
-                description=_match_description(zone),
-                reconfigure=False,
-            )
-            manager.set_boot_entry(
-                filename=ipxe_script_url,
-                description=_chain_description(zone),
-                interface=interface,
-                tag=tag_uuid,
-                reconfigure=False,
-            )
-            staged = True
-            info(f"iPXE chainload conditional staged -> {ipxe_script_url}")
-        except Exception as e:  # degrade to plain entry (V-2)
-            warn(f"iPXE chainload conditional not accepted by firewall: {e}")
-            warn("Falling back to plain next-server+bootfile. The TFTP-served "
-                 "iPXE binary must then carry an embedded script (or the "
-                 "client firmware must be natively iPXE) to avoid the "
-                 "PXE re-DHCP loop. TODO(V-2).")
-
-    manager.set_boot_entry(
-        filename=bootfile,
-        address=next_server,
-        description=_boot_description(zone),
-        interface=interface,
-        reconfigure=False,
-    )
-    staged = True
-
-    if staged:
+    # Migrate away from the API-object shape of older versions.
+    if _legacy_api_cleanup(manager, zone):
         manager.reconfigure()
-    info(f"PXE enabled on zone '{zone}' (interface {interface}): "
-         f"next-server={next_server} bootfile={bootfile}")
+        info("removed legacy API-object PXE entries")
+
+    script = (
+        f"cat > {CONF_D_FILE} <<'TAPPAAS_EOF'\n{conf}TAPPAAS_EOF\n"
+        "configctl dnsmasq restart >/dev/null\n"
+        "dnsmasq --test --conf-file=/usr/local/etc/dnsmasq.conf "
+        "2>&1 | tail -1\n"
+    )
+    result = _fw_sh(config, script)
+    if result.returncode != 0:
+        raise RuntimeError(
+            f"deploying {CONF_D_FILE} failed: "
+            f"{(result.stderr or result.stdout).strip()}")
+
+    info(f"PXE enabled on zone '{zone}' ({device}): "
+         f"next-server={next_server} bootfile={bootfile}"
+         + (f" chainload={ipxe_script_url}" if ipxe_script_url else ""))
     return True
 
 
-def pxe_disable(manager: DhcpManager, zone: str, check_mode: bool = False) -> bool:
-    """Clear all TAPPaaS PXE boot options for the zone (idempotent)."""
+def pxe_disable(manager: DhcpManager, config: Config, zone: str,
+                check_mode: bool = False) -> bool:
+    """Remove the PXE drop-in (and any legacy API entries). Idempotent."""
     if check_mode:
-        info(f"[dry-run] would clear TAPPaaS PXE entries for zone '{zone}'")
+        info(f"[dry-run] would remove {CONF_D_FILE}")
         return True
 
-    changed = False
-    for step, fn in (
-        ("boot entry", lambda: manager.delete_boot_entry(
-            _boot_description(zone), reconfigure=False)),
-        ("ipxe-chain entry", lambda: manager.delete_boot_entry(
-            _chain_description(zone), reconfigure=False)),
-        ("ipxe-match option", lambda: manager.delete_option_by_description(
-            _match_description(zone), reconfigure=False)),
-    ):
-        try:
-            result = fn()
-            changed = changed or result.get("changed", False)
-        except Exception as e:
-            warn(f"Could not remove {step}: {e}")
-
-    # The shared tag is only removed once nothing references it; a failure
-    # here (still referenced by another zone's chain entry) is harmless.
-    try:
-        result = manager.delete_dhcp_tag(IPXE_TAG, reconfigure=False)
-        changed = changed or result.get("changed", False)
-    except Exception as e:
-        warn(f"Could not remove tag '{IPXE_TAG}' (still referenced?): {e}")
-
-    if changed:
+    if _legacy_api_cleanup(manager, zone):
         manager.reconfigure()
+        info("removed legacy API-object PXE entries")
+
+    result = _fw_sh(config, (
+        f"if [ -f {CONF_D_FILE} ]; then rm -f {CONF_D_FILE} && "
+        f"configctl dnsmasq restart >/dev/null && echo removed; "
+        f"else echo absent; fi\n"))
+    if result.returncode != 0:
+        raise RuntimeError(
+            f"removing {CONF_D_FILE} failed: "
+            f"{(result.stderr or result.stdout).strip()}")
+    if "removed" in result.stdout:
         info(f"PXE disabled on zone '{zone}'")
     else:
         info(f"PXE was not enabled on zone '{zone}' (nothing to clear)")
     return True
 
 
-def pxe_status(manager: DhcpManager, zone: str) -> bool:
-    """Show TAPPaaS PXE state for the zone. Exit 0 = enabled, 1 = disabled."""
-    entries = manager.list_boot_entries()
-    tappaas_entries = [
-        e for e in entries
-        if (e.get("description") or "").startswith("TAPPaaS PXE")
-    ]
-    boot = manager.get_boot_by_description(_boot_description(zone))
-    chain = manager.get_boot_by_description(_chain_description(zone))
+def pxe_status(manager: DhcpManager, config: Config, zone: str) -> bool:
+    """Show TAPPaaS PXE state. Exit 0 = enabled, 1 = disabled."""
+    result = _fw_sh(config, f"cat {CONF_D_FILE} 2>/dev/null || true\n")
+    conf = result.stdout.strip()
+    legacy = [e for e in manager.list_boot_entries()
+              if (e.get("description") or "").startswith("TAPPaaS PXE")]
 
-    if not tappaas_entries:
+    if not conf and not legacy:
         print(f"PXE: disabled (no TAPPaaS boot entries; zone '{zone}')")
         return False
+    if conf:
+        print(f"PXE: enabled (zone '{zone}', {CONF_D_FILE})")
+        for line in conf.splitlines():
+            if not line.startswith("#"):
+                print(f"  {line}")
+    for e in legacy:
+        print(f"  LEGACY API entry: {e.get('description')} "
+              f"file={e.get('filename')} — run pxe disable to migrate")
+    return bool(conf)
 
-    print(f"PXE: {'enabled' if boot else 'disabled'} (zone '{zone}')")
-    for e in tappaas_entries:
-        tagged = " [tagged]" if e.get("tag") else ""
-        print(
-            f"  {e.get('description')}: file={e.get('filename')} "
-            f"next-server={e.get('address') or '-'} "
-            f"interface={e.get('interface') or 'any'}{tagged}"
-        )
-    if chain:
-        print("  iPXE chainload conditional: active")
-    return bool(boot)
+
+def host_set(manager: DhcpManager, name: str, ip: str, macs: list,
+             domain: str | None, check_mode: bool = False) -> bool:
+    """Pin a node's MACs to its standard mgmt IP (dnsmasq reservation).
+
+    Reservations may sit OUTSIDE the dynamic dhcp-range — that is the
+    normal dnsmasq way to pin infrastructure addresses (the mgmt pool
+    starts at .100 precisely to keep .10-.18 free for the nodes). Multiple
+    MACs on one reservation are supported for machines that boot from
+    different ports (one active at a time).
+    """
+    if check_mode:
+        info(f"[dry-run] would reserve {ip} for {name} "
+             f"(macs: {', '.join(macs)})")
+        return True
+    manager.pin_host_macs(
+        host=name, ip=ip, macs=macs, domain=domain,
+        description=f"TAPPaaS node {name}")
+    info(f"reserved {ip} for {name} (macs: {', '.join(macs)})")
+    return True
+
+
+def host_del(manager: DhcpManager, name: str, domain: str | None,
+             check_mode: bool = False) -> bool:
+    """Clear a node's MAC pinning (the DNS host entry itself stays)."""
+    if check_mode:
+        info(f"[dry-run] would clear MAC pinning for '{name}'")
+        return True
+    existing = manager.get_host_row(name, domain)
+    if not existing or not existing.get("hwaddr"):
+        info(f"no MAC pinning for {name}")
+        return True
+    manager.pin_host_macs(
+        host=name, ip=existing.get("ip", ""), macs=[], domain=domain,
+        description="")
+    info(f"cleared MAC pinning for {name} (DNS host entry kept)")
+    return True
 
 
 def main():
@@ -296,6 +388,31 @@ Examples:
     )
     status_parser.add_argument("--zone", default=DEFAULT_ZONE)
 
+    # host command group — node MAC -> standard-IP reservations
+    host_parser = subparsers.add_parser(
+        "host", help="Static DHCP reservations for TAPPaaS nodes"
+    )
+    host_sub = host_parser.add_subparsers(dest="host_command", help="Action")
+
+    hset = host_sub.add_parser(
+        "set", help="Reserve a node's standard mgmt IP for its MAC(s)"
+    )
+    hset.add_argument("name", help="Node name (e.g. tappaas4)")
+    hset.add_argument("--ip", required=True,
+                      help="Reserved IPv4 (e.g. 10.0.0.13)")
+    hset.add_argument("--mac", action="append", required=True, default=[],
+                      help="MAC address (repeatable — one per NIC the "
+                           "machine may boot from)")
+    hset.add_argument("--domain", default="mgmt.internal",
+                      help="DNS domain for the reservation "
+                           "(default: mgmt.internal)")
+
+    hdel = host_sub.add_parser(
+        "del", help="Clear a node's MAC pinning (DNS entry kept)")
+    hdel.add_argument("name", help="Node name (e.g. tappaas4)")
+    hdel.add_argument("--domain", default="mgmt.internal",
+                      help="DNS domain of the entry (default: mgmt.internal)")
+
     args = parser.parse_args()
 
     if not args.command:
@@ -303,6 +420,9 @@ Examples:
         sys.exit(1)
     if args.command == "pxe" and not getattr(args, "pxe_command", None):
         pxe_parser.print_help()
+        sys.exit(1)
+    if args.command == "host" and not getattr(args, "host_command", None):
+        host_parser.print_help()
         sys.exit(1)
 
     # Build configuration
@@ -329,23 +449,34 @@ Examples:
                 sys.exit(1)
 
             success = False
-            if args.pxe_command == "enable":
-                interface = args.interface or resolve_zone_interface(
-                    config, args.zone
-                )
-                success = pxe_enable(
-                    manager,
-                    zone=args.zone,
-                    interface=interface,
-                    next_server=args.next_server,
-                    bootfile=args.bootfile,
-                    ipxe_script_url=args.ipxe_script_url,
-                    check_mode=args.check_mode,
-                )
-            elif args.pxe_command == "disable":
-                success = pxe_disable(manager, args.zone, args.check_mode)
-            elif args.pxe_command == "status":
-                success = pxe_status(manager, args.zone)
+            if args.command == "pxe":
+                if args.pxe_command == "enable":
+                    interface = args.interface or resolve_zone_interface(
+                        config, args.zone
+                    )
+                    success = pxe_enable(
+                        manager,
+                        config,
+                        zone=args.zone,
+                        interface=interface,
+                        next_server=args.next_server,
+                        bootfile=args.bootfile,
+                        ipxe_script_url=args.ipxe_script_url,
+                        check_mode=args.check_mode,
+                    )
+                elif args.pxe_command == "disable":
+                    success = pxe_disable(manager, config, args.zone,
+                                          args.check_mode)
+                elif args.pxe_command == "status":
+                    success = pxe_status(manager, config, args.zone)
+            elif args.command == "host":
+                if args.host_command == "set":
+                    success = host_set(manager, args.name, args.ip,
+                                       args.mac, args.domain,
+                                       args.check_mode)
+                elif args.host_command == "del":
+                    success = host_del(manager, args.name, args.domain,
+                                       args.check_mode)
 
             sys.exit(0 if success else 1)
 

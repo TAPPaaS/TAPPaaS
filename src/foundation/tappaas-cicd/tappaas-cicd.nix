@@ -286,6 +286,9 @@ in
         opnsenseController.default
         # Identity controller tools (authentik-manager, identity-controller; ADR-007 S2b-1)
         identityController.default
+        # TFTP server for node-provisioner's PXE trap (runs tftp-only via
+        # systemd-run when provisioning is enabled; node-provisioning.md N3)
+        dnsmasq
   ];
 
   # Enable automatic garbage collection
@@ -301,6 +304,13 @@ in
   # networking.firewall.allowedUDPPorts = [ ... ];
   # Or disable the firewall altogether.
   # networking.firewall.enable = false;
+
+  # node-provisioner PXE trap (node-provisioning.md N3): TFTP for ipxe.efi +
+  # the HTTP answer/asset server. The VM sits on the mgmt plane only, and the
+  # services are OFF by default (TTL-limited transient units) — the ports are
+  # open, the listeners are the interlock.
+  networking.firewall.allowedTCPPorts = [ 8090 ];
+  networking.firewall.allowedUDPPorts = [ 69 ];
 
   # This option defines the first version of NixOS you have installed on this particular machine,
   # and is used to maintain compatibility with application data (e.g. databases) created on older NixOS versions.

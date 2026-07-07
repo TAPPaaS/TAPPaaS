@@ -70,6 +70,12 @@ if [ "${TAPPAAS_TEST_DEEP:-0}" = "1" ]; then
             [ "${_code}" = "200" ] || { echo "[Error] answer POST returned ${_code}" >&2; exit 1; }
             grep -q 'zztest-node' "${_np_tmp}/answer.toml" || { echo "[Error] answer.toml lacks the node fqdn" >&2; exit 1; }
             echo "  ok: matched MAC → 200 + answer.toml with node identity"
+            # TAPPaaS disk standard: installer targets the BOOT disk only,
+            # ext4/LVM; declared pools are post-join (cf. tappaas1).
+            grep -q 'filesystem = "ext4"' "${_np_tmp}/answer.toml" || { echo "[Error] answer.toml is not ext4 on the boot disk" >&2; exit 1; }
+            grep -q 'disk-list = \["sda"\]' "${_np_tmp}/answer.toml" || { echo "[Error] answer.toml disk-list is not the default boot disk" >&2; exit 1; }
+            grep -q 'tanka1' "${_np_tmp}/answer.toml" || { echo "[Error] answer.toml lost the post-join pool note" >&2; exit 1; }
+            echo "  ok: disk-setup is ext4 on boot disk, pools deferred to post-join"
             _code2="$(curl -s -o /dev/null -w '%{http_code}' -X POST -d "${_payload}" "http://127.0.0.1:${_np_port}/answer")"
             [ "${_code2}" = "404" ] || { echo "[Error] second POST returned ${_code2} (expected 404 — one-shot broken)" >&2; exit 1; }
             echo "  ok: registration consumed (second request 404)"

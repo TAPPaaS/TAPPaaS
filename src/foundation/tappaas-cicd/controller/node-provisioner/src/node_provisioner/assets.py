@@ -44,17 +44,152 @@ KERNEL_IN_ISO = "boot/linux26"
 INITRD_IN_ISO = "boot/initrd.img"
 ISO_ASSET_NAME = "proxmox.iso"
 
+# Injected into the installer's /init right before switch_root (the installer
+# root is an overlayfs with a tmpfs upper, so the sed lands in the writable
+# upper layer). The stock installer gives dhclient only 10 seconds
+# (etc/dhcp/dhclient.conf: "timeout 10;") and proxmox-fetch-answer fires
+# exactly once — on hardware where the NIC re-trains its link after kernel
+# takeover (plus any switch STP delay) that window is lost and the answer
+# fetch dies with "Network unreachable" (stage-1 Atom, X553 NICs). 60s covers
+# link training and a 30s STP listening/learning hold.
+INIT_ANCHOR = "cp /etc/hostid /mnt/.installer-mp/etc/"
+INIT_PATCH = INIT_ANCHOR + """
+    # TAPPaaS node-provisioner: raise the DHCP timeout so the auto-installer
+    # answer fetch has a live network (link re-training + STP eat the stock 10s)
+    sed -i 's/^timeout 10;/timeout 60;/' /mnt/.installer-mp/etc/dhcp/dhclient.conf || true
+    # TAPPaaS node-provisioner: ask-at-boot boot disk (registration made
+    # without --boot-disk). The ONE question of the whole install: show the
+    # machine's real disks, read the choice on the console, and hand it to
+    # the answer server as a ?bootdisk= query parameter by bind-mounting a
+    # rewritten auto-installer-mode.toml over the ISO's copy (the ISO is
+    # read-only; a file bind on the already-bound /cdrom works). Pure
+    # busybox sh — no sed/cut dependencies.
+    if grep -q "tappaas.askdisk=1" /proc/cmdline; then
+        _tap_mode=/mnt/.installer-mp/cdrom/auto-installer-mode.toml
+        _tap_con="/dev/${console:-console}"
+        if [ -f "$_tap_mode" ]; then
+        {
+            # Late device-probe chatter (USB etc.) otherwise scrolls the
+            # menu away and buries the prompt (stage-1 operator feedback):
+            # let probing settle, then keep the console to errors only
+            # (the installer sets its own loglevel later anyway).
+            sleep 3
+            echo "1 1 1 7" > /proc/sys/kernel/printk 2>/dev/null || true
+            echo ""
+            echo "==== TAPPaaS node provisioning: choose the BOOT disk ===="
+            echo "The chosen disk is WIPED (PVE system, ext4/LVM). Disks found:"
+            for _tap_d in /sys/block/*; do
+                _tap_b="${_tap_d##*/}"
+                case "$_tap_b" in loop*|ram*|sr*|dm-*|zram*) continue ;; esac
+                _tap_sz=$(cat "$_tap_d/size" 2>/dev/null || echo 0)
+                echo "  $_tap_b  ($((_tap_sz / 2097152)) GB)  $(cat "$_tap_d/device/model" 2>/dev/null)"
+            done
+            _tap_disk=""
+            while [ ! -e "/sys/block/$_tap_disk" ] || [ -z "$_tap_disk" ]; do
+                printf "TAPPaaS boot disk> "
+                read -r _tap_disk
+            done
+            _tap_url=""
+            while IFS= read -r _tap_l; do
+                case "$_tap_l" in url*) _tap_u="${_tap_l#*\\"}"; _tap_url="${_tap_u%\\"*}" ;; esac
+            done < "$_tap_mode"
+            if [ -n "$_tap_url" ]; then
+                while IFS= read -r _tap_l; do
+                    case "$_tap_l" in
+                        url*) echo "url = \\"${_tap_url}?bootdisk=${_tap_disk}\\"" ;;
+                        *) echo "$_tap_l" ;;
+                    esac
+                done < "$_tap_mode" > /tappaas-mode.toml
+                mount --bind /tappaas-mode.toml "$_tap_mode"
+                echo "TAPPaaS: boot disk '$_tap_disk' goes to the answer server"
+            else
+                echo "TAPPaaS: WARNING - no answer URL in $_tap_mode; disk choice cannot be delivered"
+            fi
+        } < "$_tap_con" > "$_tap_con" 2>&1
+        fi
+    fi"""
+
 BOOT_IPXE_TEMPLATE = """#!ipxe
 # TAPPaaS node provisioning (design N3) — Proxmox VE automated installer.
-# ${{next-server}} is the DHCP-provided TFTP server = the cicd mgmt IP.
+# The asset-server IP is BAKED IN (not ${{next-server}}): in the iPXE DHCP
+# round the tagged chainload entry carries no siaddr, so ${{next-server}}
+# resolves to the FIREWALL and the kernel fetch times out (found on the
+# stage-1 Atom boot). node-provisioner enable refreshes this file with the
+# detected cicd mgmt IP.
 # Kernel args: proxmox-start-auto-installer runs the installer unattended
 # (answer fetched over HTTP per the URL prepared INTO the ISO); no proxdebug.
-# TODO(V-2): validate args against the deployed PVE ISO on hardware.
 echo TAPPaaS node provisioner: booting Proxmox VE automated installer
-kernel http://${{next-server}}:{port}/linux26 ro ramdisk_size=16777216 rw splash=silent proxmox-start-auto-installer
-initrd http://${{next-server}}:{port}/initrd
+kernel http://{server}:{port}/linux26 ro ramdisk_size=16777216 rw splash=silent proxmox-start-auto-installer{askflag}
+initrd http://{server}:{port}/initrd
 boot
 """
+
+# Kernel cmdline marker consumed by the injected /init block below: ask the
+# operator for the boot disk on the NODE's console. Set by enable when a
+# pending registration was made without --boot-disk (boot_disk == "ask").
+ASK_DISK_FLAG = " tappaas.askdisk=1"
+
+
+def _decompress_cmd(initrd_path: Path) -> list[str] | None:
+    """Pick a decompressor for the initrd by magic bytes (None = plain cpio)."""
+    magic = initrd_path.open("rb").read(6)
+    if magic[:4] == b"\x28\xb5\x2f\xfd":
+        return ["zstd", "-dc", str(initrd_path)]
+    if magic[:2] == b"\x1f\x8b":
+        return ["gzip", "-dc", str(initrd_path)]
+    if magic == b"070701":
+        return None
+    raise RuntimeError(
+        f"unrecognised initrd compression (magic {magic.hex()}) — "
+        "PVE layout drift? (V-2)")
+
+
+def _patched_init(initrd_path: Path, dest: Path) -> Path | None:
+    """Extract /init from the pristine initrd and patch the dhclient timeout.
+
+    Returns the path of the patched ``init`` staged under *dest* (to be
+    appended in the override cpio — the kernel lets a later initramfs
+    segment replace files from an earlier one), or None if the expected
+    anchor is missing (layout drift: boot proceeds with stock behaviour).
+    """
+    decomp = _decompress_cmd(initrd_path)
+    if decomp:
+        feed = subprocess.Popen(decomp, stdout=subprocess.PIPE)
+        stdin = feed.stdout
+    else:
+        feed = None
+        stdin = initrd_path.open("rb")
+    extract = subprocess.run(
+        ["cpio", "-i", "--quiet", "--to-stdout", "init"],
+        stdin=stdin, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
+    stdin.close()
+    if feed:
+        feed.wait()
+    init_text = extract.stdout.decode("utf-8", errors="replace")
+    if extract.returncode != 0 or not init_text.startswith("#!"):
+        warn("could not extract /init from the initrd — skipping the "
+             "dhclient-timeout patch (V-2 layout drift?)")
+        return None
+    if INIT_ANCHOR not in init_text:
+        warn("initrd /init has no '%s' anchor — skipping the "
+             "dhclient-timeout patch (V-2 layout drift?)" % INIT_ANCHOR)
+        return None
+    out = dest / "init"
+    out.write_text(init_text.replace(INIT_ANCHOR, INIT_PATCH, 1))
+    out.chmod(0o755)
+    info("staged patched /init (dhclient timeout 10s -> 60s in the "
+         "installer overlay)")
+    return out
+
+
+def write_boot_script(directory: Path, server: str, port: int,
+                      ask_disk: bool = False) -> Path:
+    """(Re)write boot.ipxe with the CONCRETE asset-server address."""
+    boot_script = Path(directory) / "boot.ipxe"
+    boot_script.write_text(BOOT_IPXE_TEMPLATE.format(
+        server=server, port=port,
+        askflag=ASK_DISK_FLAG if ask_disk else ""))
+    return boot_script
 
 
 def prepare(iso: str, directory=None, port: int = DEFAULT_PORT) -> Path:
@@ -104,12 +239,26 @@ def prepare(iso: str, directory=None, port: int = DEFAULT_PORT) -> Path:
         shutil.copyfile(iso_path, iso_dest)
 
     # 3. append the ISO to the initrd as a newc cpio archive (the PVE
-    # initramfs picks the ISO out of its own filesystem).
-    info("appending ISO to initrd (newc cpio)...")
+    # initramfs picks the ISO out of its own filesystem — its init checks
+    # /proxmox.iso first).
+    # Pad the base initrd to a 4-BYTE BOUNDARY first: the kernel's initramfs
+    # parser requires segment alignment and SILENTLY ignores a trailing cpio
+    # that starts misaligned. PVE 9.2's initrd.img is 55878409 bytes (≡1 mod
+    # 4) — without padding /proxmox.iso never appeared and the installer
+    # died with "no device with valid ISO found" (stage-1 Atom boot). Zero
+    # bytes between segments are explicitly allowed by the kernel format.
+    patched_init = _patched_init(initrd_out, dest)
+    pad = (-initrd_out.stat().st_size) % 4
+    if pad:
+        with open(initrd_out, "ab") as f:
+            f.write(b"\0" * pad)
+        info(f"padded initrd by {pad} byte(s) to a 4-byte segment boundary")
+    cpio_members = (["init"] if patched_init else []) + [ISO_ASSET_NAME]
+    info("appending %s to initrd (newc cpio)..." % " + ".join(cpio_members))
     with open(initrd_out, "ab") as f:
         subprocess.run(
             ["cpio", "-L", "-H", "newc", "-o"],
-            input=(ISO_ASSET_NAME + "\n").encode(),
+            input=("\n".join(cpio_members) + "\n").encode(),
             stdout=f,
             stderr=subprocess.PIPE,
             cwd=str(dest),
@@ -122,7 +271,8 @@ def prepare(iso: str, directory=None, port: int = DEFAULT_PORT) -> Path:
 def _finish(dest: Path, port: int) -> Path:
     # 4. iPXE boot script.
     boot_script = dest / "boot.ipxe"
-    boot_script.write_text(BOOT_IPXE_TEMPLATE.format(port=port))
+    from .util import detect_mgmt_ip
+    write_boot_script(dest, detect_mgmt_ip(), port)
     info(f"wrote {boot_script}")
 
     # World-readable assets (dnsmasq tftp runs unprivileged; http serves them).

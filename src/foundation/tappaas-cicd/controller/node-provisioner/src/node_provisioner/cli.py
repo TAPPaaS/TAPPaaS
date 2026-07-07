@@ -26,23 +26,41 @@ def _add_firewall_options(parser: argparse.ArgumentParser) -> None:
     parser.add_argument(
         "--firewall", default=None,
         help="Firewall IP/hostname (default: firewall.mgmt.internal)")
+    # TAPPaaS OPNsense installs use a self-signed API cert, so verification
+    # is DISABLED by default (requiring --no-ssl-verify on every call was a
+    # footgun — found on the first stage-1 hardware run). --ssl-verify opts
+    # back in for deployments with a real cert.
     parser.add_argument(
-        "--no-ssl-verify", action="store_true",
-        help="Disable SSL certificate verification (passed to dhcp-manager)")
+        "--no-ssl-verify", dest="no_ssl_verify", action="store_true",
+        default=True,
+        help="Disable SSL certificate verification (the DEFAULT; kept for "
+             "symmetry with the other TAPPaaS CLIs)")
+    parser.add_argument(
+        "--ssl-verify", dest="no_ssl_verify", action="store_false",
+        help="Enable SSL certificate verification (needs a real cert on the "
+             "OPNsense API)")
     parser.add_argument(
         "--credential-file", default=None,
         help="OPNsense API credential file (passed to dhcp-manager)")
 
 
 def cmd_register(args) -> bool:
-    reg = Registry().register(args.name, macs=args.mac, pool_specs=args.pool)
+    reg = Registry().register(args.name, macs=args.mac, pool_specs=args.pool,
+                              boot_disk=args.boot_disk or "ask")
     info(f"registered pending node '{reg.name}' -> {reg.path}")
+    if reg.boot_disk == "ask":
+        info("no --boot-disk given — the node's CONSOLE will ask for it at "
+             "boot (one question, shows the machine's real disks)")
+    else:
+        info(f"installer target: ext4/LVM on '{reg.boot_disk}' (WIPED); "
+             "declared pools are created post-join")
     if not reg.macs:
         info("no MAC pinned — the node matches only while it is the SINGLE "
              "pending registration (add --mac to pin)")
     if not reg.pools:
-        info("no pool declared — the answer will fall back to ext4 with a "
-             "TODO marker; declare --pool 'tanka1=single:<disk>'")
+        info("no data pool declared — declare --pool "
+             "'tanka1=single:<disk>' so the storage plane can create it "
+             "post-join (the platform layer expects tanka1)")
     return True
 
 
@@ -64,8 +82,8 @@ def cmd_list(_args) -> bool:
         pools = ", ".join(
             f"{p['name']}={p['layout']}:{','.join(p['disks'])}"
             for p in reg.pools) or "-"
-        print(f"{reg.name:20} macs={macs:24} pools={pools:32} "
-              f"created={reg.created}")
+        print(f"{reg.name:20} macs={macs:24} boot={reg.boot_disk:12} "
+              f"pools={pools:32} created={reg.created}")
     return True
 
 
@@ -137,8 +155,14 @@ placement is what scopes it (see README.md).
     p.add_argument("--mac", action="append", default=[],
                    help="Pin a MAC address (repeatable)")
     p.add_argument("--pool", action="append", default=[],
-                   help="Storage pool spec 'name=layout:disk[,disk...]' "
-                        "(repeatable), e.g. 'tanka1=single:nvme0n1'")
+                   help="POST-JOIN data pool spec 'name=layout:disk[,...]' "
+                        "(repeatable), e.g. 'tanka1=single:nvme0n1' — the "
+                        "installer never touches these disks")
+    p.add_argument("--boot-disk", default=None,
+                   help="Disk the installer puts the PVE system on, "
+                        "ext4/LVM — WIPED. Omit to be ASKED on the node's "
+                        "console at boot (for hardware with unknown disk "
+                        "naming)")
     p.set_defaults(func=cmd_register)
 
     p = sub.add_parser("unregister", help="Remove a pending registration")
@@ -176,7 +200,12 @@ placement is what scopes it (see README.md).
     p.add_argument("--next-server", default=None,
                    help="cicd mgmt IP handed to PXE clients "
                         "(default: auto-detect)")
-    p.add_argument("--bootfile", default="ipxe.efi")
+    # snp.efi drives the NIC through the firmware's SNP driver — works on
+    # any UEFI NIC that can PXE at all. ipxe.efi (native drivers) failed on
+    # the stage-1 Atom's X553 ports ("Link status: Unknown").
+    p.add_argument("--bootfile", default="snp.efi",
+                   help="iPXE UEFI binary to chainload (default: snp.efi; "
+                        "ipxe.efi uses iPXE's native NIC drivers)")
     p.add_argument("--zone", default="mgmt")
     _add_firewall_options(p)
     p.set_defaults(func=cmd_enable)

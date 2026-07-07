@@ -200,12 +200,23 @@ joins the cluster, registers itself, and the next update folds HA.
 | N3 provisioner + DHCP verb | M–L (new controller + opnsense verb) | the #404 core | PXE-boot a scratch box/VM |
 | N4 first-boot join | M (answer-file plumbing) | hands-free | wipe + full auto-standup of node 2 |
 
-## 7. V-2 execution plan — hardware validation on the Minisforum MS-S1 Max
+## 7. V-2 execution plan — hardware validation (two stages)
 
-The operator has an MS-S1 Max available as the PXE guinea pig for joining
-the test cluster. Ordered plan (each step gates the next):
+**Stage 1 — Intel Atom C3758 box (Intel ethernet):** validates the whole
+PXE/answer/install pipeline with a NIC the PVE installer definitely drives —
+isolating mechanism bugs from driver problems. Two Atom-specific notes:
+(a) **UEFI vs legacy PXE** — the DHCP boot entry defaults to `ipxe.efi`
+(UEFI netboot); if the board only does legacy PXE, stage `undionly.kpxe`
+and pass `--bootfile undionly.kpxe`; prefer UEFI if the firmware offers it.
+(b) **RAM floor ~4 GB** — the netboot initrd embeds the full PVE ISO.
 
-1. **NIC reality check (do this FIRST — it can sink the whole plan).** The
+**Stage 2 — Minisforum MS-S1 Max:** repeats the flow on the target hardware,
+where the open question is the Realtek NIC (below). Only differences from
+stage 1 are steps 1 (NIC check) and any driver workarounds.
+
+Ordered plan (each step gates the next; stage 1 skips step 1):
+
+1. **NIC reality check (MS-S1 Max; it can sink the plan for that box).** The
    fleet's Minisforum boxes need `setup-realtek-nic.sh` (r8127 DKMS) on the
    *installed* system — and the PVE **installer** kernel may not drive that
    NIC either. On the MS-S1 Max, check which port will carry mgmt/PXE: if it
@@ -244,6 +255,111 @@ the test cluster. Ordered plan (each step gates the next):
 
 Record every deviation in this doc's V-2 list; N4 (first-boot auto-join)
 is built only after 1–7 pass.
+
+### 7.1 Stage-1 findings (Intel Atom C3758, 2026-07-06/07) — all fixed in code
+
+Each PXE boot attempt advanced one layer deeper; every fix below is now part
+of the shipped flow (fixes marked ⚠ are still transient / pending):
+
+1. **cicd firewall**: 69/UDP + 8090/TCP had to be opened in the NixOS config
+   (`tappaas-cicd.nix` `networking.firewall.*`); dnsmasq added to the closure.
+2. **OPNsense dnsmasq template collapses empty fields**: `set_boot_entry`
+   must pass BOTH `servername` and `address` (else the IP lands in the
+   servername slot and next-server falls back to the firewall → PXE-E18).
+3. **`snp.efi`, not `ipxe.efi`**: iPXE's native drivers could not drive the
+   Atom's X553 NICs ("Link status: Unknown"); the firmware-SNP build works
+   on any UEFI NIC that can PXE at all → now the default bootfile.
+4. **iPXE self-download loop**: the base dhcp-boot entry must carry a
+   negated tag (`tag:!tappaas-ipxe` from the option-175 match) so iPXE gets
+   the chainload URL instead of snp.efi again. The OPNsense API REJECTS
+   negated tag references ("Option [!uuid] not in list", probed on 25.7),
+   so `dhcp-manager pxe enable/disable` now deploys the whole PXE trap as
+   ONE owned drop-in, `/usr/local/etc/dnsmasq.conf.d/tappaas-pxe.conf`
+   (the dnsmasq plugin's sanctioned `conf-dir` extension point, over ssh
+   root@firewall + `configctl dnsmasq restart`). Verified to survive
+   OPNsense reconfigures; legacy API-object entries are migrated away on
+   the next enable/disable.
+5. **Concrete asset-server IP in boot.ipxe**: `${next-server}` resolves to
+   the firewall in the tagged iPXE DHCP round — the template now bakes in
+   the detected cicd mgmt IP; `enable` refreshes the script.
+6. **Initramfs segment alignment**: the kernel SILENTLY ignores a trailing
+   concatenated cpio unless it starts 4-byte-aligned; PVE 9.2's initrd is
+   ≡1 mod 4 → zero-pad before appending the ISO cpio ("no device with valid
+   ISO found" otherwise).
+7. **Installer DHCP window too small**: the installer environment runs
+   dhclient with `timeout 10;` and fetches the answer exactly once — the
+   X553 link re-train after kernel takeover (+ any switch STP hold) misses
+   the window ("Network unreachable"). Fixed by shipping a patched `/init`
+   in the appended cpio (overrides the initrd's copy) that seds the
+   timeout to 60 s inside the installer's writable overlay before
+   switch_root.
+8. **Disk standard corrected (operator review)**: registrations now carry
+   `--boot-disk` (default `sda`) — the installer formats ONLY that disk,
+   ext4/LVM (the tappaas1 standard, stock `pve-root`); `--pool` specs are
+   post-join metadata for the storage plane, never given to the installer.
+   (The first cut wrongly installed ZFS onto the first declared pool.)
+9. **PVE 9.2 ISO note**: the netboot pipeline itself works against the
+   PVE 9.2 ISO layout (`/proxmox.iso` checked first by its init, line 288);
+   TAPPaaS platform support for 9.2 is a separate matter (INSTALL.md pins
+   9.1).
+10. **Standard-IP reservation (operator review + static-bake subtlety)**: a fresh
+   node used to come up on a random pool lease (10.0.0.100+) until the
+   join re-IPs it. The answer server now pins the node's POSTed MACs to
+   its standard mgmt IP (`dhcp-manager host set` → the SHIPPED tappaas1-9
+   dnsmasq host entries gain a `hwaddr`, upgrading the DNS pin to a
+   dhcp-host reservation — outside the dynamic pool by design). The
+   installed node boots straight onto 10.0.0.1x and is reachable as
+   `<name>.mgmt.internal`; `dhcp-manager host del <name>` clears the
+   pinning (DNS entry kept). Note the ansible-style `dnsmasq_host` module
+   silently fails to persist `hwaddr` — the raw `setHost` API is used
+   instead.
+11. **Root-context credentials**: sudo/TTL/service invocations of
+   node-provisioner found no OPNsense credentials (`/root` lookup only)
+   and silently left DHCP armed — node-provisioner now probes the
+   operator's `~tappaas/.opnsense-credentials.txt` and passes it to
+   dhcp-manager explicitly.
+
+### 7.2 Round-2 e2e (`site-manager node add tappaas4 --pxe`, 2026-07-07) — PASSED
+
+The operator front door is now `site-manager node add <name>` (design's
+`--provision` renamed): **default = adopt** (probe the node's designated
+mgmt IP for an existing hand-installed Proxmox, verify hostname, then join
++ capture over ssh), **`--pxe`** = bare-machine netboot install first,
+**`--config-only`** = write the site.json entry only. Ask-at-boot boot
+disk (register without `--boot-disk` → kernel-flag-armed console prompt in
+the injected /init → `?bootdisk=` on the answer URL) validated on
+hardware; WAN port + pool specs are asked interactively at join time with
+the node's real NICs/disks listed (`--wan-port`/`--no-wan`/`--pool` skip
+the questions). Full pass with all three interactions: console `sda`,
+WAN none, pools `tanka1=single:nvme0n1 tankb1=single:nvme1n1` — node
+installed, joined, pools created and captured. Findings (all fixed):
+
+1. Function-local `from .util import detect_mgmt_ip` in enable() shadowed
+   the module-level name used earlier in the SAME function (Python scoping)
+   — crash on every enable.
+2. Root-context ssh to the firewall needs the operator's DEDICATED
+   `~tappaas/.ssh/tappaas-fw` identity (the general cicd key is NOT
+   authorized on the firewall; ssh config maps it for the tappaas user).
+3. The node-step completion poll read `tail -3` of the install log — the
+   success marker sits above a longer epilogue, so the watcher hung
+   forever; now a 50-line window, plus fail-fast polling at the INSTALL IP
+   for failures before the network reshape moves the node.
+4. The boot-disk console prompt was buried under late device-probe kernel
+   chatter — the prompt block now settles 3s and drops the console
+   loglevel first.
+5. `lib/ts cluster.ts ssh()` used strict BatchMode — every query against a
+   freshly (re)installed node (unknown host key) failed, which is why N1
+   pool discovery reported "discovery failed" on both captures; now
+   `StrictHostKeyChecking=accept-new` (changed keys still refused).
+6. The serve unit's journal was empty: python block-buffers stdout on
+   non-ttys and the process is SIGTERMed at disable — log functions now
+   flush.
+
+Known warts for the node-add follow-up: `foundation/install.sh` demands
+`--name` even for `--join`; the installer bakes the install-time lease
+into `/etc/hosts` (node add corrects it before `pvecm add`); repeatable
+`--mac`/`--pool` flags are limited by site-manager's parseOpts (last one
+wins; pools also accepted as trailing positionals).
 
 ## 8. Regression tests (coded, run under `TAPPAAS_TEST_DEEP=1`)
 

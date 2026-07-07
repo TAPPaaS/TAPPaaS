@@ -254,6 +254,14 @@ cd ../tappaas-cicd || { _error "TAPPaaS-CICD directory not found!"; exit 1; }
 /home/tappaas/bin/update-module.sh tappaas-cicd --no-snapshot
 /home/tappaas/bin/update-module.sh cluster
 
+# ── Node-provisioning latency (design N3): stage the PVE netboot assets ──
+# so `site-manager node add <name> --pxe` works on EVERY TAPPaaS system with
+# zero prep. Non-fatal: a failed download only costs the latent capability
+# (re-run prepare-netboot.sh later); ~1.5 GB ISO fetched on tappaas1.
+_info "Staging PVE netboot assets for node provisioning (prepare-netboot.sh)..."
+/home/tappaas/bin/prepare-netboot.sh \
+  || _warn "netboot staging failed — 'node add --pxe' needs a later 'prepare-netboot.sh' run"
+
 # Source common-install-routines.sh to replace the minimal _info/_warn/_error with full versions
 . /home/tappaas/bin/common-install-routines.sh
 

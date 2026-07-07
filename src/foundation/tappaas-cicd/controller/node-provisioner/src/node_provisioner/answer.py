@@ -3,8 +3,12 @@
 Field set per the PVE >= 8.2 automated-installation docs
 (https://pve.proxmox.com/wiki/Automated_Installation): ``[global]`` with
 keyboard/country/fqdn/mailto/timezone/root-password/root-ssh-keys,
-``[network]`` from-dhcp, ``[disk-setup]`` with filesystem + zfs.raid +
-disk-list.
+``[network]`` from-dhcp, ``[disk-setup]`` ext4/LVM on the boot disk.
+
+TAPPaaS disk standard (cf. tappaas1): the PVE system lives on a DEDICATED
+boot disk with the stock ext4/LVM layout (pve-root); the tankXY data pools
+are separate whole-disk ZFS pools created POST-JOIN by the storage plane
+(config-storage.sh / site.json) — the installer must never touch them.
 
 TODO(V-2): validate the exact schema against the deployed PVE version's
 ``proxmox-auto-install-assistant validate-answer`` on a PVE node — key
@@ -24,16 +28,8 @@ DEFAULT_KEYBOARD = "en-us"
 DEFAULT_COUNTRY = "us"
 DEFAULT_TIMEZONE = "UTC"
 
-# cluster --pool topology -> PVE installer zfs.raid value.
-# Declared pools install as ZFS; 'single' is a one-disk raid0 (design N3:
-# "filesystem zfs raid0 for declared pools").
-LAYOUT_TO_ZFS_RAID = {
-    "single": "raid0",
-    "stripe": "raid0",
-    "mirror": "raid1",
-    "raidz": "raidz-1",
-    "raidz2": "raidz-2",
-}
+# NOTE: declared pools are post-join data pools (TAPPaaS standard, cf.
+# tappaas1) — the installer only ever formats the boot disk (ext4/LVM).
 
 
 def _toml_str(value: str) -> str:
@@ -63,6 +59,7 @@ def render_answer(
     root_password: str,
     ssh_keys,
     pools,
+    boot_disk: str = "sda",
     country: str = DEFAULT_COUNTRY,
     tz: str = DEFAULT_TIMEZONE,
     mailto: str = "",
@@ -77,9 +74,10 @@ def render_answer(
             the caller; day-2 access is SSH-keys-only per design §4).
         ssh_keys: Public keys placed in root's authorized_keys by the
             installer.
-        pools: Registration pool dicts ({name, layout, disks}); the FIRST
-            pool is the installer's root pool (ZFS). Empty => ext4
-            TODO-marker fallback.
+        pools: Registration pool dicts ({name, layout, disks}) — post-join
+            data pools, listed as a comment only (never installed to).
+        boot_disk: The disk the PVE system is installed on, ext4/LVM
+            (TAPPaaS standard, cf. tappaas1).
         country / tz / mailto / keyboard: site-level installer settings.
     """
     now = datetime.now(timezone.utc).isoformat(timespec="seconds")
@@ -106,36 +104,22 @@ def render_answer(
         'source = "from-dhcp"',
         "",
         "[disk-setup]",
+        "# TAPPaaS standard (cf. tappaas1): PVE system on a dedicated boot",
+        "# disk, stock ext4/LVM layout (pve-root).",
+        'filesystem = "ext4"',
+        f"disk-list = {_toml_str_list([boot_disk])}",
     ]
 
     if pools:
-        pool = pools[0]
-        raid = LAYOUT_TO_ZFS_RAID.get(pool.get("layout", "single"))
-        if raid is None:
-            warn(f"unknown pool layout {pool.get('layout')!r} — using raid0")
-            raid = "raid0"
+        extra = ", ".join(
+            "%s=%s:%s" % (p.get("name", "?"), p.get("layout", "?"),
+                          "+".join(p.get("disks", [])))
+            for p in pools)
         lines += [
-            'filesystem = "zfs"',
-            f'zfs.raid = {_toml_str(raid)}',
-            f"disk-list = {_toml_str_list(pool.get('disks', []))}",
-        ]
-        if len(pools) > 1:
-            extra = ", ".join(p.get("name", "?") for p in pools[1:])
-            lines += [
-                f"# NOTE: additional declared pools ({extra}) are NOT created "
-                "by the installer;",
-                "# they are created post-join by the storage plane "
-                "(config-storage.sh / site.json).",
-            ]
-    else:
-        lines += [
-            "# TODO(V-2): no storage pool declared for this node — falling "
-            "back to ext4",
-            "# on the first disk. Register with --pool "
-            "'tanka1=single:<disk>' for the",
-            "# intended ZFS layout (the platform layer expects tanka1).",
-            'filesystem = "ext4"',
-            'disk-list = ["sda"]',
+            f"# NOTE: declared data pools ({extra}) are NOT created by the "
+            "installer;",
+            "# they are created post-join by the storage plane "
+            "(config-storage.sh / site.json).",
         ]
 
     return "\n".join(lines) + "\n"

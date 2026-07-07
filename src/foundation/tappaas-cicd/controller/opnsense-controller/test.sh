@@ -38,11 +38,48 @@ if [ "${TAPPAAS_TEST_DEEP:-0}" = "1" ]; then
             echo "  SKIP: PXE already enabled (operator/provisioner owns it) — not touching"
         else
             _pxe_ok=1
-            dhcp-manager --no-ssl-verify pxe enable --next-server 10.0.0.250 --bootfile zztest.efi --zone mgmt >/dev/null 2>&1 || _pxe_ok=0
+            _fw="${TAPPAAS_FIREWALL_FQDN:-firewall.mgmt.internal}"
+            dhcp-manager --no-ssl-verify pxe enable --next-server 10.0.0.250 --bootfile zztest.efi --zone mgmt --ipxe-script-url http://10.0.0.250:8090/boot.ipxe >/dev/null 2>&1 || _pxe_ok=0
             if [ "${_pxe_ok}" = "1" ] && dhcp-manager --no-ssl-verify pxe status >/dev/null 2>&1; then
                 echo "  ok: pxe enable → status sees the boot entry"
             else
                 echo "[Error]   pxe enable/status failed" >&2; _pxe_ok=0
+            fi
+            # The drop-in must carry the negated iPXE tag (breaks the
+            # stock-iPXE self-download loop — inexpressible via the API,
+            # stage-1 finding).
+            if printf 'grep -q "tag:!tappaas-ipxe" /usr/local/etc/dnsmasq.conf.d/tappaas-pxe.conf && echo NEGATED\n' \
+                 | ssh -o BatchMode=yes "root@${_fw}" 'sh -s' 2>/dev/null | grep -q NEGATED; then
+                echo "  ok: drop-in carries the negated iPXE tag"
+            else
+                echo "[Error]   drop-in lacks the negated tag (or is missing)" >&2; _pxe_ok=0
+            fi
+            # host set/del round-trip — AND its reconfigure must not wipe
+            # the PXE drop-in (that is the whole point of conf.d).
+            # Guard: skip if tappaas9 is a REAL pinned node on this site.
+            if printf 'grep -E "dhcp-host=.*tappaas9" /usr/local/etc/dnsmasq.conf && echo REAL\n' \
+                 | ssh -o BatchMode=yes "root@${_fw}" 'sh -s' 2>/dev/null | grep -q REAL; then
+                echo "  SKIP: tappaas9 has a live MAC pinning — not touching it"
+            else
+                if dhcp-manager --no-ssl-verify host set tappaas9 --ip 10.0.0.18 --mac de:ad:be:ef:99:99 >/dev/null 2>&1 \
+                   && printf 'grep -q "de:ad:be:ef:99:99" /usr/local/etc/dnsmasq.conf && echo PINNED\n' \
+                        | ssh -o BatchMode=yes "root@${_fw}" 'sh -s' 2>/dev/null | grep -q PINNED; then
+                    echo "  ok: host set renders a dhcp-host reservation"
+                else
+                    echo "[Error]   host set did not render a reservation" >&2; _pxe_ok=0
+                fi
+                dhcp-manager --no-ssl-verify host del tappaas9 >/dev/null 2>&1 || _pxe_ok=0
+                if printf 'grep -q "de:ad:be:ef:99:99" /usr/local/etc/dnsmasq.conf || echo CLEARED\n' \
+                     | ssh -o BatchMode=yes "root@${_fw}" 'sh -s' 2>/dev/null | grep -q CLEARED; then
+                    echo "  ok: host del clears the pinning again"
+                else
+                    echo "[Error]   host del left the reservation behind" >&2; _pxe_ok=0
+                fi
+                if dhcp-manager --no-ssl-verify pxe status >/dev/null 2>&1; then
+                    echo "  ok: PXE drop-in survived the host reconfigures"
+                else
+                    echo "[Error]   a reconfigure wiped the PXE drop-in" >&2; _pxe_ok=0
+                fi
             fi
             dhcp-manager --no-ssl-verify pxe disable >/dev/null 2>&1 || _pxe_ok=0
             if dhcp-manager --no-ssl-verify pxe status >/dev/null 2>&1; then

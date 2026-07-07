@@ -27,6 +27,7 @@ import { CliSiteClient } from "./client";
 import { HelpSpec, renderHelp } from "../../../lib/ts/src/help";
 import { DieError, GN, RD, YW, CL, die, guarded, info, warn } from "../../../lib/ts/src/cli";
 import { applyPlan, computePlan } from "./reconcile";
+import { adoptNode, provisionNode } from "./provision";
 import { Site, SiteClient, SiteNode } from "./types";
 
 const VERSION = "0.1.0";
@@ -39,7 +40,12 @@ const HELP: HelpSpec = {
     { usage: "site show [--json]" },
     { usage: "site modify --<field> <value> [...]" },
     { usage: "node list [--json]" },
-    { usage: "node add --name <N> [--pool <p> ...]" },
+    { usage: "node add <N> [--pxe] [--boot-disk <d>] [--mac <m>] [--wan-port <if>|--no-wan] [--pool <p>] [--ttl <s>] [--config-only]",
+      options: [
+        ["(default)", "Adopt a Proxmox already installed at the node's designated mgmt IP: join the cluster + capture."],
+        ["--pxe", "Bare machine: PXE-install first, then join + capture. Omit --boot-disk to be asked on the NODE console; WAN port + pools are asked here."],
+        ["--config-only", "Only write the site.json entry (no machine contact)."],
+      ] },
     { usage: "node delete <name>" },
     { usage: "node reconcile [--apply]",
       options: [["--apply", "Register nodes that joined the cluster (default is preview)."]] },
@@ -93,7 +99,8 @@ interface Opts {
 }
 
 // Flags that take NO value (everything else with a value is captured generically).
-const NOARG = new Set(["--apply", "--deep", "--force", "--json"]);
+const NOARG = new Set(["--apply", "--deep", "--force", "--json",
+  "--pxe", "--provision", "--config-only", "--yes", "--no-wan"]);
 
 function parseOpts(args: string[]): Opts {
   const o: Opts = {
@@ -301,14 +308,38 @@ function cmdNode(o: Opts, client: SiteClient): void {
     // --pool may be given multiple times; parseOpts keeps only the last, so we
     // also accept trailing positionals after the name as pools.
     const pools = collectPools(o, name);
-    const raw = loadRaw(siteFile);
-    if (Object.keys(raw).length === 0) die(`site.json not found: ${siteFile}`);
-    const hw = (raw.hardware ?? (raw.hardware = {})) as Record<string, unknown>;
-    const nodes = (Array.isArray(hw.nodes) ? hw.nodes : (hw.nodes = [])) as SiteNode[];
-    if (nodes.some((n) => n.name === name)) die(`node '${name}' already exists`);
-    nodes.push({ name, storagePools: pools });
-    writeSite(siteFile, raw);
-    info(`${GN}✓${CL} node '${name}' added (pools: ${pools.join(", ") || "none"})`);
+    if (o.boolFlags.has("--config-only")) {
+      // Just declare the node in site.json (no machine contact).
+      const raw = loadRaw(siteFile);
+      if (Object.keys(raw).length === 0) die(`site.json not found: ${siteFile}`);
+      const hw = (raw.hardware ?? (raw.hardware = {})) as Record<string, unknown>;
+      const nodes = (Array.isArray(hw.nodes) ? hw.nodes : (hw.nodes = [])) as SiteNode[];
+      if (nodes.some((n) => n.name === name)) die(`node '${name}' already exists`);
+      nodes.push({ name, storagePools: pools });
+      writeSite(siteFile, raw);
+      info(`${GN}✓${CL} node '${name}' added (pools: ${pools.join(", ") || "none"})`);
+      return;
+    }
+    if (o.boolFlags.has("--provision")) {
+      warn("--provision is deprecated — use --pxe");
+    }
+    const opts = {
+      name,
+      bootDisk: o.flags.get("--boot-disk"),
+      macs: o.flags.get("--mac") ? [o.flags.get("--mac") as string] : [],
+      pools,
+      wanPort: o.boolFlags.has("--no-wan") ? "" : o.flags.get("--wan-port"),
+      ttlSeconds: Number(o.flags.get("--ttl") ?? 7200),
+      yes: o.boolFlags.has("--yes"),
+    };
+    if (o.boolFlags.has("--pxe") || o.boolFlags.has("--provision")) {
+      // Bare machine: PXE install → join → capture (design N3).
+      provisionNode(opts);
+    } else {
+      // Default: a Proxmox was installed by hand at the node's designated
+      // mgmt IP — verify and run the join pipeline over ssh.
+      adoptNode(opts);
+    }
     return;
   }
 

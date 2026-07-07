@@ -35,21 +35,21 @@ def info(msg: str) -> None:
     """Print an [Info] message (suppressed when TAPPAAS_SILENT=1)."""
     if _is_silent():
         return
-    print(f"{_DGN}[Info]{_CL} {msg}")
+    print(f"{_DGN}[Info]{_CL} {msg}", flush=True)
 
 
 def debug(msg: str) -> None:
     """Print a [Debug] message (shown only when TAPPAAS_DEBUG=1)."""
     if not _is_debug():
         return
-    print(f"{_BL}[Debug]{_CL} {msg}")
+    print(f"{_BL}[Debug]{_CL} {msg}", flush=True)
 
 
 def warn(msg: str) -> None:
     """Print a [Warning] message (always shown)."""
-    print(f"{_YW}[Warning]{_CL} {msg}")
+    print(f"{_YW}[Warning]{_CL} {msg}", flush=True)
 
 
 def error(msg: str) -> None:
     """Print an [Error] message (always shown, to stderr)."""
-    print(f"{_RD}[Error]{_CL} {msg}", file=sys.stderr)
+    print(f"{_RD}[Error]{_CL} {msg}", file=sys.stderr, flush=True)

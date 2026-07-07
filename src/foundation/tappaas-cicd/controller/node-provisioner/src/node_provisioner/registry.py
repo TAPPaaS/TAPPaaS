@@ -7,8 +7,9 @@ A registration is the operator's declared intent that a machine named
     {
       "name":   "tappaas3",
       "macs":   ["aa:bb:cc:dd:ee:ff"],          # optional pin
+      "boot_disk": "sda",                       # installer target (ext4/LVM)
       "pools":  [{"name": "tanka1", "layout": "single",
-                  "disks": ["nvme0n1"]}],
+                  "disks": ["nvme0n1"]}],       # post-join data pools
       "created": "2026-07-06T12:00:00+00:00"
     }
 
@@ -83,6 +84,7 @@ class Registration:
 
     name: str
     macs: list = field(default_factory=list)
+    boot_disk: str = "sda"
     pools: list = field(default_factory=list)
     created: str = ""
     path: Path | None = None
@@ -91,6 +93,7 @@ class Registration:
         return {
             "name": self.name,
             "macs": self.macs,
+            "boot_disk": self.boot_disk,
             "pools": self.pools,
             "created": self.created,
         }
@@ -105,19 +108,28 @@ class Registry:
     def _path(self, name: str) -> Path:
         return self.directory / f"{name}.json"
 
-    def register(self, name: str, macs=None, pool_specs=None) -> Registration:
+    def register(self, name: str, macs=None, pool_specs=None,
+                 boot_disk: str = "sda") -> Registration:
         """Create (or replace) a pending registration.
 
         Args:
             name: Node name (tappaasN convention; validated).
             macs: Optional list of MAC strings (normalized).
-            pool_specs: Optional list of 'name=layout:disks' strings.
+            pool_specs: Optional list of 'name=layout:disks' strings —
+                POST-JOIN data pools; the installer never touches them.
+            boot_disk: Disk the installer puts the PVE system on
+                (ext4/LVM, the TAPPaaS standard — cf. tappaas1).
         """
         if not NAME_RE.match(name):
             raise ValueError(f"invalid node name: {name!r}")
+        if not boot_disk or "/" in boot_disk:
+            raise ValueError(
+                f"boot disk must be a bare kernel name (e.g. sda, "
+                f"nvme0n1), got {boot_disk!r}")
         reg = Registration(
             name=name,
             macs=[normalize_mac(m) for m in (macs or [])],
+            boot_disk=boot_disk,
             pools=[parse_pool_spec(s) for s in (pool_specs or [])],
             created=datetime.now(timezone.utc).isoformat(timespec="seconds"),
         )
@@ -150,6 +162,7 @@ class Registry:
         return Registration(
             name=data.get("name") or path.stem,
             macs=[normalize_mac(m) for m in data.get("macs", [])],
+            boot_disk=data.get("boot_disk", "sda"),
             pools=list(data.get("pools", [])),
             created=data.get("created", ""),
             path=path,
@@ -200,10 +213,23 @@ class Registry:
             return reg
         return None
 
-    def consume(self, name: str) -> bool:
-        """One-shot: rename <name>.json -> <name>.json.consumed."""
+    def consume(self, name: str, install_ip: str = "") -> bool:
+        """One-shot: rename <name>.json -> <name>.json.consumed.
+
+        install_ip: the address the installer posted from. The PVE
+        installer bakes its DHCP lease as a STATIC address (stage-1
+        finding), so this is where the installed node boots — recorded
+        for the operator / the node-add step.
+        """
         path = self._path(name)
         if not path.exists():
             return False
+        if install_ip:
+            try:
+                data = json.loads(path.read_text())
+                data["install_ip"] = install_ip
+                path.write_text(json.dumps(data, indent=2) + "\n")
+            except (OSError, json.JSONDecodeError):
+                pass
         os.replace(path, path.with_name(path.name + ".consumed"))
         return True

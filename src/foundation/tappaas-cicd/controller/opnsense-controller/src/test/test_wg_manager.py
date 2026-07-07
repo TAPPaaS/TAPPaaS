@@ -5,7 +5,14 @@ without touching OPNsense. The live os-wireguard binding is hardware-gated
 (P2 deep test) and is not exercised here.
 """
 
-import pytest
+import unittest
+
+try:
+    import pytest
+except ImportError:  # the nix test env is stdlib-unittest only
+    raise unittest.SkipTest(
+        "pytest not available in the component test env (these dry-run "
+        "tests are pytest-style; run them from a dev env with pytest)")
 
 from opnsense_controller.config import Config
 from opnsense_controller.wg_manager import WgPeer, WgServer, WireGuardManager

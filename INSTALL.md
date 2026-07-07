@@ -40,10 +40,43 @@ That's it. Everything else is created by the install.
 
 ### 2.1 First node + firewall
 
-1. **Install Proxmox VE 9.1** on the first machine — download the ISO and create
-   a bootable USB per the official guide:
-   <https://pve.proxmox.com/wiki/Installation>. Note TAPPaaS does not support PVE 9.2 yet.
-   
+1. **Install Proxmox VE 9.1** on the first machine. Note TAPPaaS does not
+   support PVE 9.2 yet. Two ways:
+
+   **Option A — preconfigured install media (recommended).** Build a USB stick
+   that installs Proxmox with **one question asked on the target itself** (the
+   boot disk, chosen from the machine's real disks); everything else is
+   answered at build time (email, locale, root password) with TAPPaaS defaults
+   for the rest. The build runs on **your laptop** — no Proxmox needed: on
+   Linux the Proxmox assistant is fetched automatically, on macOS the script
+   re-runs itself in a Debian container (Docker required; run it from the
+   directory holding the ISO):
+
+   ```bash
+   src/foundation/cluster/make-install-media.sh --iso proxmox-ve_9.1.iso \
+       --fqdn tappaas1.mgmt.internal
+   # prompts for email / country / keyboard / timezone / root password,
+   # VALIDATES the answer, writes proxmox-ve_9.1-tappaas-auto.iso
+   dd if=proxmox-ve_9.1-tappaas-auto.iso of=/dev/<usb> bs=4M status=progress
+   ```
+
+   Boot the target from the stick with the NIC to your **upstream router**
+   connected — network comes from **DHCP**, exactly like the PXE flow (the
+   management addressing is applied later by the TAPPaaS install). Pick the
+   boot disk when the console asks; the rest is hands-off and WIPES that
+   disk. Pass `--disk <dev>` at build time for a zero-keystroke install.
+   ⚠ The stick embeds the root password — treat the media like a credential
+   and rewrite it after use.
+
+   > **Disk standard:** the PVE system goes on a **dedicated boot disk**
+   > (ext4/LVM — the default). The `tankXY` data pools live on **other**
+   > disks and are created later by the platform (§2.1 step [1/5] /
+   > `config-storage.sh`), never by the installer.
+
+   **Option B — stock ISO, manual screens.** Download the ISO and create a
+   bootable USB per the official guide:
+   <https://pve.proxmox.com/wiki/Installation>.
+
     On the installer screens:
    - **Network Nic** select the one you have connected to the upstream router. Initially this is the Lan port but it will eventually become the "wan" port of the TAPPaaS firewall. For secondary TAPPaaS nodes this is will stay lan port, as these nodes wil connect directly via the switch to the lan side of the firewall we create in the first node.
    - **Hostname (FQDN):** `tappaas1.mgmt.internal` — TAPPaaS uses the internal
@@ -124,29 +157,75 @@ That's it. Everything else is created by the install.
    `https://10.0.0.10:8006`, firewall GUI at `https://10.0.0.1`) — not required,
    since the node also keeps its upstream IP until you harden it later.
 
-### 2.2 Add additional nodes (3-node only — skip for single-node)
+### 2.2 Add additional nodes (skip for single-node)
 
 Do this **after** the first node's bootstrap has finished (cicd is up).
+Follow-on nodes install **over the network, fully unattended** — no USB stick,
+no installer screens. The mothership runs a TTL-limited network-boot trap
+(`node-provisioner`): a machine you have **registered** gets installed when it
+PXE-boots on the management LAN; every other machine is refused.
 
-1. Install Proxmox VE on each extra machine (`tappaas2`, `tappaas3`). At the
-   installer's network screen pick the NIC connected to the **downstream switch**
-   (the `10.0.0.0/24` LAN) and give it that node's mgmt IP (`10.0.0.11`,
-   `10.0.0.12`) with gateway `10.0.0.1` — the node comes up directly on the
-   management network. *(If the inter-node switch is **managed**, configure its
-   VLAN trunks first — an **unmanaged** switch needs no setup; see
-   [the network section](#network--cutting-over-to-the-firewall).)*
+Wire the new node's LAN NIC to the **downstream switch** (the `10.0.0.0/24`
+management network) and find out which disk is its **boot disk** — that disk
+is wiped. *(Managed inter-node switch? Configure its VLAN trunks first; see
+[the network section](#network--cutting-over-to-the-firewall).)*
 
-2. Run the **same installer** (the command in 2.1 step 2) on each. It detects it's
-   a secondary node (already on the mgmt net), assigns the install NIC as **LAN**
-   and **asks which NIC is WAN** (wire it to your upstream if this node will host
-   firewall HA), then **auto-joins** the cluster. On a secondary node the chain
-   **stops after the node step** ([1/5]) — the firewall, gateway and platform
-   already exist — so no firewall/platform work re-runs. *(No `tappaas1` reboot is
-   needed — corosync was bound to the `10.0.0.10` mgmt IP from the start. `--name`
-   is optional here: the node joins the existing `<orgname>` cluster.)*
+The netboot assets are **staged automatically by the first-node bootstrap**
+(`prepare-netboot.sh`, run at the end of the cicd install) — adding nodes is
+a latent capability of every TAPPaaS system. After a PVE version upgrade,
+re-stage once with `prepare-netboot.sh --force` on the mothership.
 
-3. Back on the mothership, run `update-tappaas --force` so cicd reconciles the
-   new topology — it then configures **HA + replication automatically** across nodes.
+**Per node — one command:**
+
+```bash
+site-manager node add tappaas2 --pxe
+```
+
+The command walks the whole flow and asks only what it cannot know:
+
+1. Registers the node and **arms a TTL-limited PXE trap** (auto-disarms;
+   only registered machines are answered).
+2. Tells you to **network-boot the machine** (UEFI PXE, e.g. F11). The
+   node's console asks **one question — the boot disk** (it lists the
+   machine's real disks; the chosen disk is WIPED, ext4/LVM). Everything
+   else is hands-off: the installer fetches its per-node answer from the
+   mothership and reboots into PVE. The generated root password lands
+   under `~/.node-secrets/` (0600) — the mothership's ssh key is already
+   authorized.
+3. Asks the **join-time questions** with the node's real hardware on
+   screen: the WAN NIC (only if this node will host firewall HA) and the
+   **data pool** declarations (e.g. `tanka1=single:nvme0n1`).
+4. Runs the node step (served from the mothership — no GitHub needed),
+   moves the node to its standard mgmt IP (`tappaasN` → `10.0.0.<9+N>`),
+   joins the Proxmox cluster, creates the pools, and captures everything
+   into site.json.
+
+Every question can be pre-answered for a fully unattended run:
+
+```bash
+site-manager node add tappaas2 --pxe --boot-disk sda --mac aa:bb:cc:dd:ee:ff \
+    --no-wan --pool 'tanka1=single:nvme0n1'
+# --mac also pre-reserves the standard IP, so the node installs onto it directly
+```
+
+Afterwards, fold the new topology into HA + replication:
+
+```bash
+update-tappaas --force
+```
+
+> **Machine can't PXE-boot?** Write the staged netboot image to a stick —
+> `dd if=/home/tappaas/pve-tappaas-netboot.iso of=/dev/<usb> bs=4M` on the
+> mothership — and boot from USB instead of pressing F11: the flow (and the
+> `node add <name> --pxe` command) is otherwise identical, the answer still
+> comes from the mothership over HTTP.
+>
+> **Manual install instead?** Install from a stock ISO or the §2.1 option A
+> stick, give the node its standard mgmt IP (or let it DHCP), then run
+> `site-manager node add tappaas2` (no `--pxe`) — it finds the Proxmox at
+> the node's designated IP and runs the same join + capture pipeline.
+> The underlying tools remain available for surgery: `node-provisioner
+> register/enable/disable/status` and `dhcp-manager pxe/host`.
 
 ### 2.3 Set up TLS certificates
 
