@@ -40,7 +40,7 @@ Topology B — cluster HAS a public IP (direct)
   `:51821` blind relay on the satellite and the `edge → admin-WG` allowance, giving a CGNAT
   site inbound reach.
 - **Topology B:** just a public IP on the cluster WAN — nothing to configure, bootstrap
-  already opened the WAN `:51821` rule (§2B).
+  already opened the WAN `:51821` rule (§1).
 - WireGuard on your workstation (§4).
 
 ---
@@ -70,37 +70,21 @@ admin-vpn ready: server=tappaas-admin port=51821 pubkey=U/rnce…PVs=
 
 > **Why open `:51821` on WAN unconditionally is safe.** WireGuard silently drops any packet
 > not authenticated by a registered peer (no handshake, no response, no banner), so the port
-> is inert until you enroll a device (§4). On a CGNAT site the rule is never even reached; on
+> is inert until you enroll a device (§3). On a CGNAT site the rule is never even reached; on
 > a public-IP site it *is* your Topology-B path — so bootstrap opens it and Topology B needs
 > no manual firewall step.
 
-## 2. Reachability of `:51821` — pick your `Endpoint`
-
-The server side is identical for both topologies; only the client `Endpoint` differs, and
-**neither needs a manual firewall step** (bootstrap opened the WAN rule in §1).
-
-### 2A. Topology A (satellite) — for CGNAT / no inbound
-Provision a satellite with the `admin-vpn` role
-(`satellite-manager install <name> --roles reverse-proxy,admin-vpn …`); that opens the
-`:51821` blind relay and the `edge → admin-WG` allowance. Your `Endpoint` is the
-**satellite** public IP. (The WAN `:51821` rule from §1 is simply inert behind CGNAT.)
-
-### 2B. Topology B (direct public IP) — nothing to do
-Bootstrap already opened the WAN `:51821 → This Firewall` pass (§1). Your `Endpoint` is the
-**cluster WAN** public IP. (To *close* direct exposure and force traffic through a satellite
-only, remove the `tappaas-admin WAN :51821` rule in OPNsense.)
-
-## 3. Generate your device keypair (on the workstation)
+## 2. Generate your device keypair (on the workstation)
 
 Same on macOS and Linux:
 
 ```bash
 wg genkey | tee ~/tappaas-admin.key | wg pubkey > ~/tappaas-admin.pub
-cat ~/tappaas-admin.pub   # copy this — you hand it to the server in §4
+cat ~/tappaas-admin.pub   # copy this — you hand it to the server in §3
 ```
 (macOS: `brew install wireguard-tools` first. The private key never leaves your device.)
 
-## 4. Register your device as a peer (on `tappaas-cicd`)
+## 3. Register your device as a peer (on `tappaas-cicd`)
 
 ```bash
 satellite-manager admin add-peer --name lars-mac --pubkey '<contents of tappaas-admin.pub>'
@@ -133,11 +117,11 @@ PersistentKeepalive = 25                       # keeps the CGNAT pinhole open
 
 Paste your private key from `~/tappaas-admin.key` into `PrivateKey`.
 
-## 5. Bring the tunnel up
+## 4. Bring the tunnel up
 
 ### macOS
 - **GUI (recommended):** install **WireGuard** from the Mac App Store → *Import tunnel(s)
-  from file* (save the §4 output as `tappaas-admin.conf`) → toggle **Activate**.
+  from file* (save the §3 output as `tappaas-admin.conf`) → toggle **Activate**.
 - **CLI:** `brew install wireguard-tools`, save the config to
   `/opt/homebrew/etc/wireguard/tappaas-admin.conf`, then `sudo wg-quick up tappaas-admin`
   (`sudo wg-quick down tappaas-admin` to stop).
@@ -148,7 +132,7 @@ Paste your private key from `~/tappaas-admin.key` into `PrivateKey`.
   `sudo systemctl enable --now wg-quick@tappaas-admin`).
 - **NetworkManager:** `nmcli connection import type wireguard file tappaas-admin.conf`.
 
-## 6. Verify
+## 5. Verify
 
 ```bash
 sudo wg show                       # a recent 'latest handshake' + non-zero transfer = tunnel up
