@@ -219,6 +219,26 @@ PersistentKeepalive = ${AV_KEEPALIVE}
 EOF
 }
 
+# Discover the client-config Endpoint (host:port) when the operator did not pass
+# one to `add-peer`. If a satellite carrying the admin-vpn role is configured, use
+# its recorded public IP — that satellite is what relays :51821 for a CGNAT site.
+# Otherwise emit a template placeholder for the operator to fill in (direct /
+# Topology-B reach, or before any satellite exists). The port is always the admin
+# listener port. Arg: <config-dir> holding satellite-<name>.json. Echoes host:port.
+av_discover_endpoint() {
+    local cfgdir="${1:-/home/tappaas/config}" port="${SAT_ADMIN_WGPORT}" cfg ip
+    for cfg in "${cfgdir}"/satellite-*.json; do
+        [[ -e "${cfg}" ]] || continue
+        # role-gated: only a satellite that actually relays admin-vpn qualifies.
+        jq -e '(.roles // []) | index("admin-vpn")' "${cfg}" >/dev/null 2>&1 || continue
+        ip="$(jq -r '.host.publicIp // empty' "${cfg}")"
+        [[ -n "${ip}" ]] || continue
+        printf '%s:%s\n' "${ip}" "${port}"
+        return 0
+    done
+    printf '<satellite-or-cluster-public-ip>:%s\n' "${port}"
+}
+
 av_list() {
     local srv; srv="$(av_server_uuid)"
     echo "server : ${AV_SERVER_NAME} (uuid=${srv:-<none>}) port=${SAT_ADMIN_WGPORT}"

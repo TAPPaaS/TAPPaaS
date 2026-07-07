@@ -86,36 +86,36 @@ cat ~/tappaas-admin.pub   # copy this — you hand it to the server in §3
 
 ## 3. Register your device as a peer (on `tappaas-cicd`)
 
-```bash
-satellite-manager admin add-peer --name lars-mac --pubkey '<contents of tappaas-admin.pub>'
-# → peer 'lars-mac' added at 10.255.1.3/32     (an admin overlay IP is auto-assigned)
-```
-
-Then print a ready-to-use client config (fill `<host:port>` per your topology):
+`add-peer` registers the device **and prints its client config**. It fills the
+`Endpoint` automatically: if a satellite carrying the `admin-vpn` role is configured
+(Topology A), it uses that satellite's recorded public IP; otherwise it leaves a
+placeholder. Pass `--endpoint <ip>:51821` to override (e.g. Topology B's cluster WAN IP):
 
 ```bash
-# Topology A:  satellite public IP
-satellite-manager admin config 10.255.1.3/32 <satellite-public-ip>:51821
-# Topology B:  cluster WAN public IP
-satellite-manager admin config 10.255.1.3/32 <cluster-public-ip>:51821
+satellite-manager admin add-peer --name lars-mac \
+    --pubkey '<contents of tappaas-admin.pub>' \
+    [--endpoint <cluster-or-satellite-public-ip>:51821]   # optional; auto-found for a satellite
 ```
 
-It emits:
+It reports the auto-assigned admin IP (on stderr) and emits the config (on stdout, so
+`… > tappaas-admin.conf` saves it straight to a file):
 
 ```ini
 [Interface]
 PrivateKey = <PASTE-YOUR-PRIVATE-KEY>          # from ~/tappaas-admin.key
-Address    = 10.255.1.3/32
+Address    = 10.255.1.3/32                     # the auto-assigned admin IP
 MTU        = 1340                              # admin WG is double-encapsulated over the relay — keep ≤1340
 
 [Peer]
 PublicKey           = U/rnce…PVs=              # the OPNsense admin-WG server key (from §1)
-Endpoint            = <satellite-or-cluster-ip>:51821
+Endpoint            = <satellite-or-cluster-public-ip>:51821
 AllowedIPs          = 10.0.0.0/24              # the mgmt plane; add more zones here to reach them
 PersistentKeepalive = 25                       # keeps the CGNAT pinhole open
 ```
 
-Paste your private key from `~/tappaas-admin.key` into `PrivateKey`.
+Paste your private key from `~/tappaas-admin.key` into `PrivateKey`. (Omit `--endpoint`
+and the config prints with an `Endpoint` placeholder to fill in yourself. To re-print an
+existing peer's config later: `satellite-manager admin config <ip/32> <host:port>`.)
 
 ## 4. Bring the tunnel up
 
@@ -150,11 +150,12 @@ Then, from the workstation, reach the management plane:
 
 ```bash
 satellite-manager admin list                         # server pubkey, rule, all peers
-satellite-manager admin add-peer --name <n> --pubkey <k> [--ip 10.255.1.N/32]
+satellite-manager admin add-peer --name <n> --pubkey <k> [--ip 10.255.1.N/32] [--endpoint <h:p>]
 satellite-manager admin remove-peer <n>
+satellite-manager admin config <ip/32> <h:p>         # re-print an existing peer's config
 ```
-Give each device its own peer (its own keypair + admin IP). Removing a peer revokes it
-immediately.
+Give each device its own peer (its own keypair + admin IP); `add-peer` prints its client
+config (pass `--endpoint`). Removing a peer revokes it immediately.
 
 ## Reaching more than `mgmt`
 

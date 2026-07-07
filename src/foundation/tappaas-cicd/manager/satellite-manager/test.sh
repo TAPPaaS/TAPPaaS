@@ -87,7 +87,11 @@ if bash -n "${here}/lib/admin-vpn.sh"; then ok "lib/admin-vpn.sh parses"; else n
 # 12. `admin --help` prints usage, exits 0, no side effects
 rc=0
 out="$(TAPPAAS_CONFIG_DIR="${tmp}" "${mgr}" admin --help 2>&1)" || rc=$?
-if [[ "${rc}" -eq 0 ]] && grep -q "add-peer" <<< "${out}"; then ok "admin --help prints usage"; else no "admin --help rc=${rc}"; fi
+if [[ "${rc}" -eq 0 ]] && grep -q "add-peer" <<< "${out}" && grep -q -- "--endpoint" <<< "${out}"; then
+    ok "admin --help prints usage (incl. add-peer --endpoint)"
+else
+    no "admin --help rc=${rc}"
+fi
 
 # 13. av_client_config renders a valid stanza (server pubkey + API mocked → offline)
 out="$( . "${here}/lib/admin-vpn.sh" >/dev/null 2>&1
@@ -101,6 +105,22 @@ if grep -q 'Endpoint            = 203.0.113.5:51821' <<< "${out}" \
     ok "av_client_config renders a valid client stanza"
 else
     no "av_client_config format"
+fi
+
+# 13b. av_discover_endpoint: an admin-vpn satellite's recorded IP:port when one is
+#      configured; a template placeholder otherwise (role-gated, offline / files+jq).
+EPDIR="${tmp}/epcfg"; mkdir -p "${EPDIR}"
+ep_none="$( . "${here}/lib/admin-vpn.sh" >/dev/null 2>&1; av_discover_endpoint "${EPDIR}" )"
+printf '%s' '{"name":"sat1","roles":["reverse-proxy"],"host":{"publicIp":"9.9.9.9"}}' > "${EPDIR}/satellite-sat1.json"
+ep_norole="$( . "${here}/lib/admin-vpn.sh" >/dev/null 2>&1; av_discover_endpoint "${EPDIR}" )"
+printf '%s' '{"name":"sat2","roles":["reverse-proxy","admin-vpn"],"host":{"publicIp":"1.2.3.4"}}' > "${EPDIR}/satellite-sat2.json"
+ep_found="$( . "${here}/lib/admin-vpn.sh" >/dev/null 2>&1; av_discover_endpoint "${EPDIR}" )"
+if [[ "${ep_none}" == "<satellite-or-cluster-public-ip>:51821" \
+   && "${ep_norole}" == "<satellite-or-cluster-public-ip>:51821" \
+   && "${ep_found}" == "1.2.3.4:51821" ]]; then
+    ok "av_discover_endpoint: admin-vpn satellite IP, else placeholder"
+else
+    no "av_discover_endpoint (none='${ep_none}' norole='${ep_norole}' found='${ep_found}')"
 fi
 
 # --- Debian satellite (ADR-010 Option 3 / Q8→D19) ---------------------------

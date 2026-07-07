@@ -341,17 +341,31 @@ cmd_admin() {
         setup)   av_setup ;;
         list|status) av_list ;;
         add-peer)
-            local name="" pub="" ip=""
+            local name="" pub="" ip="" endpoint=""
             while [[ $# -gt 0 ]]; do case "$1" in
                 --name) name="$2"; shift 2 ;;
                 --pubkey) pub="$2"; shift 2 ;;
                 --ip) ip="$2"; shift 2 ;;
+                --endpoint) endpoint="$2"; shift 2 ;;
                 *) die "admin add-peer: unknown option $1" ;;
             esac; done
             [[ -n "${name}" && -n "${pub}" ]] || die "admin add-peer needs --name and --pubkey"
             local got; got="$(av_add_peer "${name}" "${pub}" "${ip}")"
             av_apply >/dev/null
             info "peer '${name}' added at ${got}"
+            # A peer is only useful with a client config, so emit it right here
+            # (folds in the old separate `admin config` step). The config goes to
+            # stdout (info goes to stderr), so it redirects cleanly to a .conf.
+            # Endpoint: explicit --endpoint wins; else discover a configured
+            # admin-vpn satellite's recorded public IP; else a template placeholder.
+            [[ -n "${endpoint}" ]] || endpoint="$(av_discover_endpoint "${CONFIG_DIR}")"
+            info ""
+            if [[ "${endpoint}" == *"<"* ]]; then
+                info "client config for '${name}' — save as tappaas-admin.conf; fill in Endpoint + paste your private key:"
+            else
+                info "client config for '${name}' — save as tappaas-admin.conf; paste your private key (Endpoint = ${endpoint}):"
+            fi
+            av_client_config "${got}" "${endpoint}"
             ;;
         remove-peer)
             local name="${1:-}"; [[ -n "${name}" ]] || die "admin remove-peer <name>"
@@ -366,11 +380,14 @@ cmd_admin() {
         ""|-h|--help)
             cat <<EOF
 Usage: ${SCRIPT_NAME} admin <sub>
-  setup                                   ensure the OPNsense admin-WG server + admin->mgmt rule
-  add-peer --name N --pubkey K [--ip A]   register an admin device (auto-assigns an admin IP)
-  remove-peer <name>                      remove an admin device
-  list                                    show server pubkey, rule status, peers
-  config <ip/32> <host:port> [privkey]    print a ready client config for Mac/Linux
+  setup                                            ensure the OPNsense admin-WG server + admin->mgmt rule
+  add-peer --name N --pubkey K [--ip A] [--endpoint H:P]
+                                                   register an admin device (auto-assigns an admin IP) and
+                                                   print its client config. Endpoint: --endpoint wins, else a
+                                                   configured admin-vpn satellite's IP, else a placeholder
+  remove-peer <name>                               remove an admin device
+  list                                             show server pubkey, rule status, peers
+  config <ip/32> <host:port> [privkey]             re-print a client config for an existing peer
 EOF
             ;;
         *) die "admin: unknown sub '${sub}' (setup|add-peer|remove-peer|list|config)" ;;
