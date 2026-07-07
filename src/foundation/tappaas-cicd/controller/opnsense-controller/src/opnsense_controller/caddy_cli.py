@@ -462,16 +462,15 @@ def reconfigure_cmd(manager: CaddyManager, check_mode: bool = False) -> bool:
 def main():
     """Main entry point for caddy-manager CLI."""
     # Shared global options available in both positions (before or after subcommand)
-    global_parser = argparse.ArgumentParser(add_help=False)
+    global_parser = argparse.ArgumentParser(add_help=False,
+                                        argument_default=argparse.SUPPRESS)
     global_parser.add_argument(
         "--firewall",
-        default="firewall.mgmt.internal",
         help="Firewall IP/hostname (default: firewall.mgmt.internal)",
     )
     global_parser.add_argument(
         "--api-port",
         type=int,
-        default=None,
         dest="api_port",
         help="OPNsense API port (default: auto-detect by probing 443, then 8443)",
     )
@@ -604,6 +603,13 @@ Examples:
     # reconfigure
     subparsers.add_parser("reconfigure", parents=[global_parser], help="Reconfigure Caddy (apply changes)")
 
+    # The shared parent uses argument_default=SUPPRESS so a global flag
+    # given BEFORE the subcommand is not clobbered by the subparser's
+    # defaults (argparse parents gotcha — bit caddy-manager on the
+    # production cluster: --no-ssl-verify was silently ignored).
+    parser.set_defaults(firewall="firewall.mgmt.internal", api_port=None,
+                        credential_file=None, no_ssl_verify=False,
+                        debug=False, check_mode=False)
     args = parser.parse_args()
 
     if not args.command:

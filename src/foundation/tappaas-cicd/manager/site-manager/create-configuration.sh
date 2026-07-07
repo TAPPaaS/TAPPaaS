@@ -597,7 +597,9 @@ main() {
     run_validation
 
     echo ""
-    info "${GN}✓${CL} Configuration ${UPDATE_MODE:+updated}${UPDATE_MODE:+}${UPDATE_MODE:-created} successfully"
+    # UPDATE_MODE is the STRING true/false — the old :+/:- expansion chain
+    # always saw it as non-empty and printed "updatedtrue"/"updatedfalse".
+    info "${GN}✓${CL} Configuration $([[ "$UPDATE_MODE" == true ]] && echo updated || echo created) successfully"
     info "Next steps:"
     info "  1. Review the configuration: cat ${CONFIG_FILE}"
     info "  2. Validate: validate-configuration.sh"

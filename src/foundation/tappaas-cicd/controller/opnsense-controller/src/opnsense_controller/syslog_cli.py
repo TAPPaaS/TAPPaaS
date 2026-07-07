@@ -198,10 +198,10 @@ def reconfigure(manager: SyslogManager, check_mode: bool = False) -> bool:
 
 
 def main():
-    global_parser = argparse.ArgumentParser(add_help=False)
+    global_parser = argparse.ArgumentParser(add_help=False,
+                                        argument_default=argparse.SUPPRESS)
     global_parser.add_argument(
         "--firewall",
-        default="firewall.mgmt.internal",
         help="Firewall IP/hostname (default: firewall.mgmt.internal)",
     )
     global_parser.add_argument(
@@ -267,6 +267,13 @@ Examples:
     subparsers.add_parser("list", parents=[global_parser], help="List all destinations")
     subparsers.add_parser("reconfigure", parents=[global_parser], help="Apply pending changes")
 
+    # The shared parent uses argument_default=SUPPRESS so a global flag
+    # given BEFORE the subcommand is not clobbered by the subparser's
+    # defaults (argparse parents gotcha — bit caddy-manager on the
+    # production cluster: --no-ssl-verify was silently ignored).
+    parser.set_defaults(firewall="firewall.mgmt.internal", api_port=None,
+                        credential_file=None, no_ssl_verify=False,
+                        debug=False, check_mode=False)
     args = parser.parse_args()
     if not args.command:
         parser.print_help()

@@ -80,7 +80,12 @@ cd /home/tappaas/TAPPaaS/src/foundation/tappaas-cicd || die "TAPPaaS-CICD direct
 # NOTE: symlinks must be installed BEFORE refreshing config, so that
 # create-configuration.sh in ~/bin/ points to the updated repo version.
 info "Installing scripts to /home/tappaas/bin/..."
-for script in scripts/*.sh; do
+# scripts/*.sh AND lib/*.sh — mirrors install.sh (ADR-007 S0 moved shared
+# sourced libraries to lib/; a system UPDATED across that relocation never
+# re-linked them, leaving e.g. apply-json-merge.sh missing from ~/bin and
+# every module update silently skipping the 3-way config merge — found on
+# the production cluster 2026-07-07).
+for script in scripts/*.sh lib/*.sh; do
   if [ -f "$script" ]; then
     script_name=$(basename "$script")
     target="/home/tappaas/bin/$script_name"
@@ -137,6 +142,22 @@ if [[ -f /home/tappaas/config/configuration.json && -x /home/tappaas/bin/create-
         warn "Configuration refresh failed. Using existing configuration.json."
     }
 fi
+
+# --- ADR-007 P8 rename leftover: firewall:proxy -> network:proxy ---
+# A system CONVERTED to ADR-007 keeps its deployed module configs, and the
+# 3-way merge PINS the old dependency name as an operator customization
+# (orig-backfill semantics) — update-module then dies "Cannot find provider
+# module 'firewall'" and rolls the firewall VM back (production incident
+# 2026-07-07). One-time, idempotent rewrite of the renamed dependency.
+for _cfg in /home/tappaas/config/*.json; do
+  [[ -f "$_cfg" ]] || continue
+  if jq -e '(.dependsOn // []) | index("firewall:proxy")' "$_cfg" >/dev/null 2>&1; then
+    info "  migrating dependsOn firewall:proxy -> network:proxy in $(basename "$_cfg")"
+    _tmp=$(mktemp)
+    jq '.dependsOn |= map(if . == "firewall:proxy" then "network:proxy" else . end)' "$_cfg" > "$_tmp" \
+      && mv "$_tmp" "$_cfg" || { rm -f "$_tmp"; warn "  migration failed for $_cfg — leaving unchanged"; }
+  fi
+done
 
 # --- ADR-007 P2 (S3a): auto-migrate configuration.json -> site.json ---
 # PHASED migration: create site.json once, when configuration.json exists and
