@@ -317,6 +317,21 @@ if [[ "$FIREWALL_AVAILABLE" == "true" ]]; then
 
     # Update the network module (now that os-caddy/the Caddy API is available).
     /home/tappaas/bin/update-module.sh network --no-snapshot
+
+    # Bring up the admin-vpn (mgmt tunnel) OPNsense termination as part of the
+    # bootstrap (ADR-010 §6). This is topology-agnostic and needs NO satellite:
+    # it ensures the tappaas-admin WireGuard server, the admin->mgmt pass rule,
+    # and a WAN pass for UDP :51821. WireGuard is in the OPNsense base and
+    # silently drops any packet without a registered peer, so opening :51821 on
+    # WAN is inert until a device is enrolled — and it hands sites with a public
+    # IP direct (Topology-B) reach with no manual firewall step. Enrolling a
+    # device later is just `satellite-manager admin add-peer` (see ADMIN-VPN.md).
+    # Runs AFTER the network update so its rules are not reconciled away; kept
+    # non-fatal like Caddy — admin-vpn is an operator convenience, not required.
+    debug "Setting up admin-vpn OPNsense termination (satellite-manager admin setup)..."
+    /home/tappaas/bin/satellite-manager admin setup || {
+        warn "admin-vpn setup encountered issues. Run 'satellite-manager admin setup' manually (see ADMIN-VPN.md)."
+    }
 else
     echo ""
     warn "Skipping firewall update (no OPNsense firewall)."

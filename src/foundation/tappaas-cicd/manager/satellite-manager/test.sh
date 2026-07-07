@@ -213,6 +213,33 @@ else
     no "sat_ensure_edge_rules output"
 fi
 
+# 23. av_ensure_wan_rule creates the WAN UDP :51821 -> This Firewall pass via the
+#     opnsense-controller CLI (opnsense-firewall create-rule), NOT raw REST. A fake
+#     opnsense-firewall records its args; raw _ow_api must NOT be reached.
+WAN_OUT="${tmp}/wan_rule_args.txt"; : > "${WAN_OUT}"
+fakebin="${tmp}/fakebin"; mkdir -p "${fakebin}"
+cat > "${fakebin}/opnsense-firewall" <<FAKE
+#!/usr/bin/env bash
+printf '%s\n' "\$*" >> "${WAN_OUT}"
+FAKE
+chmod +x "${fakebin}/opnsense-firewall"
+(
+    . "${here}/lib/admin-vpn.sh" >/dev/null 2>&1
+    av_fw_cli() { printf '%s' "${fakebin}/opnsense-firewall"; }        # force the fake CLI
+    _ow_api() { printf 'RAW-REST-CALLED\n' >> "${WAN_OUT}"; }          # fallback must not fire
+    av_ensure_wan_rule >/dev/null 2>&1
+)
+if grep -q 'create-rule' "${WAN_OUT}" \
+   && grep -q -- '--interface wan' "${WAN_OUT}" \
+   && grep -q -- '--protocol udp' "${WAN_OUT}" \
+   && grep -q -- '--destination wanip' "${WAN_OUT}" \
+   && grep -q -- '--destination-port 51821' "${WAN_OUT}" \
+   && ! grep -q 'RAW-REST-CALLED' "${WAN_OUT}"; then
+    ok "av_ensure_wan_rule creates WAN :51821 rule via opnsense-controller CLI"
+else
+    no "av_ensure_wan_rule controller invocation"
+fi
+
 echo ""
 echo "satellite-manager fast tests: ${pass} passed, ${fail} failed"
 [[ "${fail}" -eq 0 ]]

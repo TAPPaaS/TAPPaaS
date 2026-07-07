@@ -30,49 +30,65 @@ Topology B — cluster HAS a public IP (direct)
 
 ## 0. Prerequisites
 
-- `tappaas-cicd` reachable (you run the server-side commands there), with
-  `~/.opnsense-credentials.txt`.
+- **The OPNsense termination is already up.** `satellite-manager admin setup` runs
+  automatically during the tappaas-cicd bootstrap (right after the `network` module), so the
+  `tappaas-admin` WireGuard server, the `admin → mgmt` rule, and the WAN `:51821` pass already
+  exist. §1 is only for (re-)running it by hand — it is idempotent.
+- `tappaas-cicd` reachable (you run the peer commands there), with `~/.opnsense-credentials.txt`.
 - **Topology A only:** a provisioned satellite carrying the `admin-vpn` role
   (`satellite-manager install <name> --roles reverse-proxy,admin-vpn …`) — this opens the
-  `:51821` blind relay on the satellite and the `edge → admin-WG` allowance.
-- **Topology B only:** a public IP on the cluster WAN and a WAN firewall rule allowing
-  **UDP 51821 → OPNsense** (see §2B).
+  `:51821` blind relay on the satellite and the `edge → admin-WG` allowance, giving a CGNAT
+  site inbound reach.
+- **Topology B:** just a public IP on the cluster WAN — nothing to configure, bootstrap
+  already opened the WAN `:51821` rule (§2B).
 - WireGuard on your workstation (§4).
 
 ---
 
-## 1. Server side (once) — bring up the OPNsense termination
+## 1. Server side — done at bootstrap (idempotent to re-run)
 
-On `tappaas-cicd`:
+The OPNsense termination is brought up automatically during the tappaas-cicd install
+(topology-agnostic, **no satellite required**). To (re-)apply or inspect it by hand, on
+`tappaas-cicd`:
 
 ```bash
-satellite-manager admin setup
+satellite-manager admin setup      # idempotent
+satellite-manager admin list       # server pubkey, rule + WAN-rule status, peers
 ```
 
-Idempotent. It ensures the `tappaas-admin` WireGuard **server** on OPNsense (port `51821`,
-tunnel `10.255.1.1/24`) and the least-privilege pass rule
-`admin 10.255.1.0/24 → mgmt 10.0.0.0/24` on the `wireguard` interface, then applies. It
-prints the **server public key** — you'll need it in the client config:
+`setup` ensures the `tappaas-admin` WireGuard **server** on OPNsense (port `51821`,
+tunnel `10.255.1.1/24`), the least-privilege pass rule
+`admin 10.255.1.0/24 → mgmt 10.0.0.0/24` on the `wireguard` interface, **and** a WAN pass for
+**UDP `51821` → This Firewall**, then applies. It prints the **server public key** — you'll
+need it in the client config:
 
 ```
 admin-vpn ready: server=tappaas-admin port=51821 pubkey=U/rnce…PVs=
   rule: 10.255.1.0/24 -> 10.0.0.0/24 (interface wireguard)
+  wan : UDP 51821 -> This Firewall (interface wan) — direct/Topology-B reach
 ```
 
-`satellite-manager admin list` shows the server pubkey, rule status, and registered peers at
-any time.
+> **Why open `:51821` on WAN unconditionally is safe.** WireGuard silently drops any packet
+> not authenticated by a registered peer (no handshake, no response, no banner), so the port
+> is inert until you enroll a device (§4). On a CGNAT site the rule is never even reached; on
+> a public-IP site it *is* your Topology-B path — so bootstrap opens it and Topology B needs
+> no manual firewall step.
 
-## 2. Make `:51821` reachable
+## 2. Reachability of `:51821` — pick your `Endpoint`
 
-### 2A. Topology A (satellite) — nothing to do
-Provisioning the satellite with the `admin-vpn` role already opened the `:51821` blind relay
-and the `edge → admin-WG` allowance. Your `Endpoint` will be the **satellite** public IP.
+The server side is identical for both topologies; only the client `Endpoint` differs, and
+**neither needs a manual firewall step** (bootstrap opened the WAN rule in §1).
 
-### 2B. Topology B (direct public IP) — one WAN rule
-Allow the admin WireGuard listener in from the internet (OPNsense → *Firewall → Rules → WAN*,
-or via API): **pass, WAN, UDP, dest = This Firewall, dest port 51821.** Your `Endpoint` will
-be the **cluster WAN** public IP. (Everything else — the admin-WG server and the `admin→mgmt`
-rule from §1 — is identical.)
+### 2A. Topology A (satellite) — for CGNAT / no inbound
+Provision a satellite with the `admin-vpn` role
+(`satellite-manager install <name> --roles reverse-proxy,admin-vpn …`); that opens the
+`:51821` blind relay and the `edge → admin-WG` allowance. Your `Endpoint` is the
+**satellite** public IP. (The WAN `:51821` rule from §1 is simply inert behind CGNAT.)
+
+### 2B. Topology B (direct public IP) — nothing to do
+Bootstrap already opened the WAN `:51821 → This Firewall` pass (§1). Your `Endpoint` is the
+**cluster WAN** public IP. (To *close* direct exposure and force traffic through a satellite
+only, remove the `tappaas-admin WAN :51821` rule in OPNsense.)
 
 ## 3. Generate your device keypair (on the workstation)
 
@@ -173,6 +189,9 @@ Keep it least-privilege — grant only the zones you actually administer.
   allows (default: `mgmt`). It is never itself *inside* `mgmt`.
 - **No control plane.** Plain WireGuard — no NetBird/Tailscale/commercial relay in the path
   (Goal #2). NetBird stays available and independent for many-peer mesh / site-to-site.
+- **WAN `:51821` open by default is safe.** Bootstrap opens it so a public-IP site is reachable
+  with zero manual steps; WireGuard's silent-drop-without-a-peer property means an exposed port
+  is inert until a device is enrolled, and behind CGNAT the rule is never reached.
 - **MTU 1340 / keepalive 25.** The admin WG is double-encapsulated over the infra tunnel on
   the relay hop, so lower the client MTU; keepalive holds the CGNAT pinhole open.
 
@@ -180,7 +199,7 @@ Keep it least-privilege — grant only the zones you actually administer.
 
 | Symptom | Check |
 | --- | --- |
-| No handshake (`wg show` blank) | `Endpoint` reachable? (A: satellite has `admin-vpn` role + `:51821` open; B: WAN UDP-51821 rule). Server pubkey correct? |
+| No handshake (`wg show` blank) | `Endpoint` reachable? (A: satellite has the `admin-vpn` role + `:51821` open; B: cluster has a public IP and the bootstrap WAN rule is present — `satellite-manager admin list` → `wan: present`). Server pubkey correct? |
 | Handshake OK, can't reach mgmt | `satellite-manager admin list` shows `rule: present`? Re-run `satellite-manager admin setup`. `AllowedIPs` includes `10.0.0.0/24`? |
 | Connects then stalls / hangs | Lower `MTU` (try `1280`). Confirm `PersistentKeepalive = 25`. |
 | Works on LAN, not remotely | You're hitting split-horizon/local routes — verify `Endpoint` is the **public** IP, not an internal one. |
