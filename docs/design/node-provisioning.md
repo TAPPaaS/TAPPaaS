@@ -1,8 +1,12 @@
 # Node provisioning — guided bootstrap of additional TAPPaaS nodes
 
-**Status:** PROPOSAL (2026-07-06) — addresses issue
+**Status:** IMPLEMENTED — stage 1 hardware-validated end-to-end 2026-07-07
+(commit `a3a65ef`; findings §7.1/§7.2); stage 2 (MS-S1 Max, Realtek NIC
+check) pending. Addresses issue
 [#404](https://github.com/TAPPaaS/TAPPaaS/issues/404) plus the node-capture
-gap found on the 2-node test install (ROF/HA "semi-failure").
+gap found on the 2-node test install (ROF/HA "semi-failure"). N4
+(first-boot auto-join) is superseded by `site-manager node add`'s
+mothership-pull design.
 
 ## 1. Problems
 
