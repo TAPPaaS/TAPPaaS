@@ -365,6 +365,37 @@ into `/etc/hosts` (node add corrects it before `pvecm add`); repeatable
 `--mac`/`--pool` flags are limited by site-manager's parseOpts (last one
 wins; pools also accepted as trailing positionals).
 
+### 7.3 Stage-2 (Minisforum MS-S1 Max → tappaas2, 2026-07-08) — PASSED
+
+The r8127 risk did NOT materialize: firmware PXE + snp.efi worked, the
+installer's in-kernel `r8169` (kernel 7.0, RTL8127 support since 6.16)
+drove the NIC through install, and the node step's built-in "Configuring
+Realtek RTL8127 NIC driver" step handled the installed system. PXE-booted,
+installed, joined as the 4th node with tanka1 captured. Findings (fixed):
+
+1. **WAN-port typo aborts config-network mid-node-step** ('emp98s0' for
+   enp98s0): the step still reported complete, no lan bridge / standard IP
+   materialized. node add now VALIDATES the WAN answer against the node's
+   real NIC list at the prompt, and refuses the completed-but-never-moved
+   state with a config-network re-run recipe instead of a false success.
+2. **Adopt-mode /etc/hosts gap**: the install-IP normalization only ran
+   when the IP had moved during THIS run — a stale baked IP from the
+   original install then broke `pvecm add` ("cannot use IP ... not found
+   on local node"). Normalization is now unconditional on the hostname's
+   line.
+3. **Cluster storage registration lost at join (design gap — operator
+   spotted it)**: pools are CREATED pre-join by config-storage, which also
+   appends the node to each pool's storage.cfg `nodes` list — but joining
+   replaces `/etc/pve`, silently dropping the node from every list
+   (`pvesm status` shows the pool 'disabled'; hit tappaas4 AND tappaas2).
+   The zpool itself is unaffected (node-local). node add now re-registers
+   the node in its CAPTURED pools' storage entries after the reconcile,
+   and runs `pvecm updatecerts` post-join (reused node names otherwise
+   leave stale host keys breaking inter-node root ssh).
+4. The update-tappaas fold does NOT reconcile storage `nodes` lists —
+   node add covers the join path now; drift-healing in the cluster module
+   update is a candidate follow-up.
+
 ## 8. Regression tests (coded, run under `TAPPAAS_TEST_DEEP=1`)
 
 | Suite | Deep test | Guards |

@@ -225,7 +225,16 @@ function joinAndCapture(
   if (wanPort === undefined) {
     const nics = sshTo(nodeIp, "ip -br link | grep -v '^lo'").out.trimEnd();
     info(`  NICs on ${o.name}:\n${nics.replace(/^/gm, "    ")}`);
-    wanPort = prompt("  WAN NIC for firewall-HA uplink (empty = none): ");
+    const nicNames = new Set(
+      nics.split("\n").map((l) => l.trim().split(/\s+/)[0]).filter(Boolean));
+    for (;;) {
+      wanPort = prompt("  WAN NIC for firewall-HA uplink (empty = none): ");
+      if (!wanPort || nicNames.has(wanPort)) break;
+      // Validate against the node's REAL NICs: a typo here aborts
+      // config-network deep inside the node step (stage-2 finding:
+      // 'emp98s0' for enp98s0 cost a full re-run).
+      warn(`  '${wanPort}' is not a NIC on ${o.name} — pick one from the list above (or empty for none)`);
+    }
   }
   const pools = [...o.pools];
   if (pools.length === 0) {
@@ -271,20 +280,34 @@ function joinAndCapture(
     run("ssh-keygen", ["-R", stdIp]);
     run("ssh-keygen", ["-R", `${o.name}.${domain}`]);
     const joinDeadline = Date.now() + 30 * 60 * 1000;
+    let completedAt = stdIp;
     for (;;) {
       // A wide tail: the success marker sits ABOVE a multi-line epilogue
       // (a 3-line window watched the epilogue forever — e2e-test finding).
+      let host = stdIp;
       let r = sshTo(stdIp, "tail -50 /root/tappaas-install.log 2>/dev/null", 5);
       if (r.rc !== 0 && nodeIp !== stdIp) {
         // The IP has not moved yet — a failure BEFORE the network reshape
         // strands the log at the install IP; watch it there too so we die
         // fast instead of timing out (e2e-test finding).
+        host = nodeIp;
         r = sshTo(nodeIp, "tail -50 /root/tappaas-install.log 2>/dev/null", 5);
       }
-      if (r.rc === 0 && /Node step complete/.test(r.out)) break;
+      if (r.rc === 0 && /Node step complete/.test(r.out)) { completedAt = host; break; }
       if (r.rc === 0 && /✗/.test(r.out)) die(`node step FAILED on ${o.name}:\n${r.out.split("\n").slice(-8).join("\n")} — full log: ssh root@${stdIp} (or ${nodeIp}) cat /root/tappaas-install.log`);
       if (Date.now() > joinDeadline) die(`timed out waiting for the node step — check ssh root@${stdIp} tail /root/tappaas-install.log (or at ${nodeIp} if the IP never moved)`);
       sleep(15);
+    }
+    if (completedAt !== stdIp) {
+      // Completion seen at the INSTALL ip = the step finished but the node
+      // never moved to its standard IP — the network reshape failed inside
+      // the node step (stage-2 finding: a WAN-port typo aborted
+      // config-network and the step still reported complete).
+      die(`node step completed but ${o.name} never appeared at ${stdIp} — ` +
+          `the network reshape failed (check: ssh root@${completedAt} ` +
+          `grep network /root/tappaas-install.log). Fix on the node with ` +
+          `'~/tappaas/config-network.sh --non-interactive', then re-run ` +
+          `'site-manager node add ${o.name}'.`);
     }
     info(`  ${GN}✓${CL} node step complete — ${o.name} is at its standard IP ${stdIp}`);
 
@@ -292,9 +315,10 @@ function joinAndCapture(
     step(`joining the Proxmox cluster via tappaas1.${domain}`);
     // The installer bakes the INSTALL ip into /etc/hosts; pvecm resolves
     // the local node from there and refuses a mismatch (stage-1 finding).
-    if (nodeIp !== stdIp) {
-      sshTo(stdIp, `sed -i 's/${nodeIp.replace(/\./g, "\\.")}\\b/${stdIp}/' /etc/hosts`);
-    }
+    // Normalize UNCONDITIONALLY on the hostname's line: in adopt mode
+    // nodeIp === stdIp yet /etc/hosts can still carry a stale install IP
+    // (bit the MS-S1 Max join — stage-2 finding).
+    sshTo(stdIp, `sed -i 's/^[0-9.]\\+\\(\\s\\+${o.name}\\.\\)/${stdIp}\\1/' /etc/hosts`);
     // Seed node→tappaas1 root ssh trust (pvecm add is password-interactive
     // without it): reuse the node's keypair, authorize it on tappaas1.
     sshTo(stdIp, "[ -f /root/.ssh/id_rsa.pub ] || ssh-keygen -t rsa -b 2048 -N '' -f /root/.ssh/id_rsa >/dev/null");
@@ -310,6 +334,10 @@ function joinAndCapture(
       die(`pvecm add failed on ${o.name}:\n${joined.out.trim()}`);
     }
     info(`  ${GN}✓${CL} ${o.name} joined the cluster`);
+    // Cluster ssh/cert plumbing for the NEW member (also refreshes the
+    // shared known_hosts — a REUSED node name otherwise leaves stale host
+    // keys that silently break inter-node root ssh; stage-2 finding).
+    sshTo(stdIp, "pvecm updatecerts >/dev/null 2>&1 || true");
   } finally {
     run("sudo", ["systemctl", "stop", SERVE_UNIT]);
   }
@@ -317,6 +345,33 @@ function joinAndCapture(
   // capture ------------------------------------------------------------------
   step("capturing the node in site.json (node reconcile --apply)");
   runStream("site-manager", ["node", "reconcile", "--apply"]);
+
+  // storage registration ------------------------------------------------------
+  // The node's pools were CREATED pre-join (config-storage in the node
+  // step), but joining replaced /etc/pve — dropping this node from every
+  // pool's cluster storage nodes-list, which pvesm shows as 'disabled'
+  // (stage-2 finding: tappaas2 AND the earlier tappaas4 were silently
+  // missing). Re-add the node per its CAPTURED pools (site.json, which the
+  // reconcile above just refreshed from the live zpools).
+  step("registering the node in its pools' cluster storage entries");
+  let capturedPools: string[] = [];
+  try {
+    const site = JSON.parse(fs.readFileSync(`${defaultConfigDir()}/site.json`, "utf8"));
+    const entry = (site.hardware?.nodes ?? []).find((n: { name: string }) => n.name === o.name);
+    capturedPools = entry?.storagePools ?? [];
+  } catch { /* leave empty */ }
+  if (capturedPools.length === 0) {
+    info("  no pools captured for this node — nothing to register");
+  }
+  for (const pool of capturedPools) {
+    const r = sshTo(`tappaas1.${domain}`,
+      `cur=$(sed -n "/zfspool: ${pool}\$/,/^\$/s/^\\s*nodes //p" /etc/pve/storage.cfg | head -1); ` +
+      `case ",\${cur}," in *,${o.name},*) echo "already" ;; ` +
+      `*) pvesm set ${pool} --nodes "\${cur:+\${cur},}${o.name}" && echo "added" ;; esac`);
+    if (/added/.test(r.out)) info(`  ${GN}✓${CL} ${o.name} added to storage '${pool}' nodes`);
+    else if (/already/.test(r.out)) info(`  storage '${pool}' already lists ${o.name}`);
+    else warn(`  could not register ${o.name} on storage '${pool}': ${r.out.trim()} — fix with: pvesm set ${pool} --nodes <list>`);
+  }
 
   info(`\n${GN}✓ node '${o.name}' is in the cluster and captured${CL}`);
   info(`  next: run ${YW}update-tappaas --force${CL} to fold HA + replication over the new topology.`);
