@@ -96,17 +96,16 @@ Gate for #402 + #389 + #382. P1–P3 live; P4–P9 coded/offline-green. Remainin
 
 ---
 
-## 4. Referenced issues needing operator judgment (NOT closed)
+## 4. Referenced issues needing operator judgment
 
-These are implemented, but under a different name or technology than the issue
-title states — so "truly closed" is an operator call, not an automatic one:
+Resolved by operator decision (2026-07-09): **#365** closed (control-plane
+manager/controller split delivered; TS-first superseded the "Python" framing),
+**#318** closed (variant → environment rename), **#319** closed (no-op by design
+decision). Remaining for judgment:
 
 | # | Title | What was delivered | The judgment |
 |---|-------|--------------------|--------------|
-| **#365** | control-plane: implement **Python** managers per classification domain | Managers delivered in **TypeScript** (module/site/environment/backup/health/people/network); controllers in Python (opnsense/identity). A TS-first decision superseded "Python managers". | Close if "managers per domain" was the intent; keep open if Python specifically was required. |
 | **#364** | control-plane: extract **caddy-controller and authentik-controller** | authentik-controller extracted as **identity-controller**; caddy folded into **opnsense-ensure-patches** (a verb, not a standalone controller). | Close if the extraction intent is satisfied by the current naming; keep open if the specific component names matter. |
-| **#318** | rename "variant" to something more descriptive | Code renamed **variant → environment** (environment-manager, environments/). | Close if the rename is what was wanted; check for residual "variant" terminology first. |
-| **#319** | delete zones that can be managed but variants/client | **Decided as a no-op** (2026-06-23): already-installed modules stay in their zones; the occupancy guard keeps zones Active. Legacy-zone sunset deferred. | Close as "won't do / resolved by design decision". |
 
 ---
 
