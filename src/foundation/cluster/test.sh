@@ -566,6 +566,48 @@ else
     skip "LXC creation + drift test (use TAPPAAS_TEST_DEEP=1 to run)"
 fi
 
+# ── Deep Test: storage nodes-list drift reconcile (node-prov. §7.3) ──
+# Induce drift on a REAL pool (drop the last site.json-declared node from
+# its storage.cfg nodes list), run reconcile-storage-nodes.sh, verify the
+# node is restored. Self-healing by construction: the reconcile itself is
+# the cleanup, and a trap restores the original list on abort.
+
+if [[ "${DEEP}" -eq 1 ]]; then
+    info "${BOLD}Deep Test: storage nodes-list drift reconcile${CL}"
+    _sd_node1="$(get_primary_node_fqdn)"
+    # Pick a pool declared for >= 2 nodes whose storage entry HAS a nodes list.
+    _sd_pool="" _sd_orig=""
+    while read -r _p; do
+        _l="$(ssh -n -o BatchMode=yes root@"${_sd_node1}" \
+            "sed -n '/^zfspool: ${_p}\$/,/^\$/s/^[[:space:]]*nodes //p' /etc/pve/storage.cfg" 2>/dev/null | head -1)"
+        [[ "${_l}" == *,* ]] && { _sd_pool="${_p}"; _sd_orig="${_l}"; break; }
+    done < <(jq -r '[.hardware.nodes[].storagePools[]?] | unique | .[]' "${CONFIG_DIR}/site.json" 2>/dev/null)
+    if [[ -z "${_sd_pool}" ]]; then
+        skip "no multi-node pool with a nodes list found — drift test needs one"
+    else
+        _sd_drifted="${_sd_orig%,*}"   # drop the last member
+        _sd_restore() { ssh -n -o BatchMode=yes root@"${_sd_node1}" "pvesm set '${_sd_pool}' --nodes '${_sd_orig}'" >/dev/null 2>&1 || true; }
+        trap _sd_restore EXIT
+        ssh -n -o BatchMode=yes root@"${_sd_node1}" "pvesm set '${_sd_pool}' --nodes '${_sd_drifted}'" >/dev/null 2>&1
+        if bash "${SCRIPT_DIR}/reconcile-storage-nodes.sh" >/dev/null 2>&1; then
+            _sd_now="$(ssh -n -o BatchMode=yes root@"${_sd_node1}" \
+                "sed -n '/^zfspool: ${_sd_pool}\$/,/^\$/s/^[[:space:]]*nodes //p' /etc/pve/storage.cfg" 2>/dev/null | head -1)"
+            _sd_lost="${_sd_orig##*,}"
+            case ",${_sd_now}," in
+                *",${_sd_lost},"*) pass "reconcile restored '${_sd_lost}' to ${_sd_pool} nodes (${_sd_now})" ;;
+                *) fail "reconcile did not restore '${_sd_lost}' to ${_sd_pool} (now: ${_sd_now})"; _sd_restore ;;
+            esac
+        else
+            fail "reconcile-storage-nodes.sh exited non-zero"
+            _sd_restore
+        fi
+        trap - EXIT
+    fi
+else
+    info "${BOLD}Deep Test: storage nodes-list drift reconcile${CL}"
+    skip "storage drift test (use TAPPAAS_TEST_DEEP=1 to run)"
+fi
+
 # ── Summary ─────────────────────────────────────────────────────────
 
 info "  Results: ${GN}${PASS} passed${CL}, ${RD}${FAIL} failed${CL}, ${YW}${SKIP} skipped${CL}"

@@ -162,4 +162,13 @@ while read -r node; do
 done <<< "$NODES"
 info "Realtek NIC driver fix refreshed on all Proxmox nodes."
 
+# Step 5: Drift-heal the cluster storage `nodes` lists from site.json.
+# The lists have only one-shot writers (config-storage at pool creation,
+# site-manager node add after a join) — a node that joined by any other
+# path shows its pools 'disabled' until reconciled (node-provisioning §7.3).
+info "${BOLD}Step 5: Reconciling storage node lists from site.json${CL}"
+if ! bash "${SCRIPT_DIR}/reconcile-storage-nodes.sh"; then
+    warn "storage nodes reconcile reported an error — run reconcile-storage-nodes.sh manually"
+fi
+
 info "${GN}✓${CL} Cluster module update completed successfully."
