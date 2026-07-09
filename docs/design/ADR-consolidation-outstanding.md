@@ -42,52 +42,48 @@ implementation evidence and a tracker "Closes #N" note:
 | **#313** | introduce timezone in configuration.json | 007 (S3a) | `site.json .location.timezone` is a first-class field with `detect_timezone()` auto-detection in create-site.sh; the configuration.json→site.json migration landed it (commit `52089c9`). |
 | **#380** | document and revalidate install sequence | 007 | INSTALL.md + INSTALL-ENVIRONMENT.md revalidated on a fresh hardware install (test4, PVE 9.2) and kept current through the node-provisioning work; `--dns-mode` gap closed. |
 
+Feature issues closed and rolled into a single Release-1.2 gate issue each
+(the delivered work is done + live-validated; only hardening/live-validation +
+operator sign-off remains, which is what the successor tracks):
+
+| Closed # | Delivered | Successor gate (Release 1.2, assigned operator) |
+|----------|-----------|--------------------------------------------------|
+| **#326** reverse proxy in a VPS | ADR-010 P4 reverse-proxy, live-validated | **#406** ADR-010 P7 hardening + sign-off |
+| **#325** remote management easy | ADR-010 P5 admin-vpn, live-validated | **#406** |
+| **#402** flexible backup on a cluster | ADR-012 P1–P3 live, P4/P7 coded | **#407** ADR-012 live validation + sign-off |
+| **#389** remote backup setup | ADR-012 P4–P6/P9 coded, offline-green | **#407** |
+| **#382** node backup client not installed | ADR-012 P3 client reconcile, live-verified | **#407** |
+
 Already closed before this pass (referenced by the ADRs, no action needed):
 **#227, #228** (010/012 backup foundation), **#333, #334, #335, #339, #372,
 #373** (008 zone/switch orchestration), **#320** (007 discussion).
 
 ---
 
-## 3. Outstanding — blocked issues, per ADR
+## 3. Outstanding — the two Release-1.2 gate issues
 
-Each row: what remains, and the GitHub issue(s) that cannot close until it does.
+The delivered feature issues (§2) are closed; their remaining work is
+consolidated into one tracking issue per ADR, both in the **Release 1.2:
+Security and stability release** milestone and assigned to the operator.
 
-### ADR-010 — VPS satellite (P7 gate)
+### #406 — ADR-010 satellite: P7 hardening + compromise-isolation + sign-off
 
-| Outstanding work | Blocks issue | Why it can't close yet |
-|------------------|--------------|------------------------|
-| **P7 hardening**: one-directional host firewall on the satellite (reject inbound SSH/PBS-admin from home/tunnel) | #326, #325 | §7.3 isolation rules not yet enforced in code. |
-| **P7 compromise-isolation tests**: prove a hacked cicd can't delete satellite backups; read-only-token + non-persistent-provider-token enforcement | #325, #326 | Decided, not tested live. |
-| **P6 backup live round-trip**: satellite pulls home PBS end-to-end; restore-from-off-site (proves key-criticality) | #326 (backup facet) | Body coded (Debian PBS 4.2.2, pull sync) but needs a live home PBS. |
-| **P7 final docs + operator sign-off**: README/INSTALL finalize, DR drill, decommission path; advance ADR *draft → proposed* | #326, #325 | ADR-010 explicitly gates closure on operator review after P7. |
+Gate for #326 + #325. Roles P1–P5 done + live-validated; P6 body coded. Remaining:
+- One-directional host firewall on the satellite (§7.3 rule 4)
+- P6 backup live round-trip + restore-from-off-site (with/without key)
+- Compromise-isolation tests (hacked cicd can't delete satellite backups;
+  read-only + non-persistent token enforcement)
+- Final README/INSTALL, DR drill, decommission path, optional install-flow ref
+- Operator sign-off → advance ADR draft → proposed
 
-- **#326** ("reverse proxy in a VPS") — the reverse-proxy role (P4) is
-  implemented and live-validated (external → satellite:80 → tunnel → Caddy 308).
-  Do NOT close until P7 hardening + sign-off; land the closing commit with
-  `Closes #326`.
-- **#325** ("make remote management easy") — the admin-vpn role (P5) is
-  implemented and live-validated (admin↔OPNsense handshake through the blind
-  satellite relay). Same gate as #326.
+### #407 — ADR-012 backup: 3-node live validation + compromise-isolation + sign-off
 
-### ADR-012 — Backup enhancement (live-test gate)
-
-| Outstanding work | Blocks issue | Why it can't close yet |
-|------------------|--------------|------------------------|
-| **Live push test**: local cluster pushes VMs to a remote PBS, write-no-delete verified | #402, #389 | P4 offline-green; needs a real remote PBS on a 3-node cluster. |
-| **Subset + immutability live tests**: group-filtered replication + ZFS-snapshot immutability on a live ZFS datastore | #389 | P5 offline-green (7/0); live pending. |
-| **Compromise-isolation + restore suite** (6 scenarios incl. restore with/without key) | #389, #402 | P9 test plan documented; must run live. |
-| **Operator sign-off**: advance ADR *draft → proposed* | #402, #389, #382 | ADR-012 acceptance requires the live suite green. |
-
-- **#402** ("more flexible backup on a cluster") — placement policy + shim
-  promotion + client reconcile (P1–P3) are live-verified on tappaas1; the
-  push/endpoint-agnostic paths (P4/P7) are coded but need live cluster tests.
-- **#389** ("remote backup setup") — remote/push/immutability bodies coded and
-  offline-green; blocked on the live compromise-isolation + restore tests.
-- **#382** ("adding a node does not install backup client") — the per-node
-  client reconcile (P3) is **live-verified**; this is the closest to closable.
-  Recommend closing it *with* the node-provisioning `node add` flow, once
-  confirmed that a `node add` run installs the backup client on the new node
-  (the reconcile exists; the node-add integration is the last check).
+Gate for #402 + #389 + #382. P1–P3 live; P4–P9 coded/offline-green. Remaining:
+- Live push test (write-no-delete to remote PBS)
+- Subset + immutability live tests (group-filter + ZFS-snapshot immutability)
+- Compromise-isolation suite (6 scenarios incl. restore with/without key)
+- Confirm `node add` installs the backup client on the new node (#382 loop)
+- Operator sign-off → advance ADR draft → proposed
 
 ### ADR-007 / 008 — non-blocking follow-ups (no issue gates completion)
 
@@ -128,13 +124,11 @@ documentation backlog.
 
 ## 6. Recommended next actions
 
-1. **ADR-012 #382** — verify a `node add` run installs the backup client on the
-   new node; if so, close #382 (its reconcile is already live-verified). This is
-   the single closest-to-done issue.
-2. **ADR-010 P7** — the last gate for #326 + #325; schedule the hardening +
-   compromise-isolation tests, then close both with `Closes #` commits.
-3. **ADR-012 live suite** — run the 3-node compromise-isolation + restore tests;
-   green unblocks #402 + #389 and moves the ADR draft → proposed.
-4. **Operator judgment on #365 / #364 / #318 / #319** — decide per §4.
-5. **Documentation backlog (§5)** — schedule the `docs(adr-007)` write-ups when
+1. **#406 (ADR-010 P7)** — hardening + compromise-isolation tests + sign-off;
+   the last gate for the satellite (advances ADR draft → proposed).
+2. **#407 (ADR-012 live suite)** — 3-node push/immutability/restore +
+   compromise-isolation tests + node-add backup-client check; advances ADR
+   draft → proposed.
+3. **Operator judgment on #365 / #364 / #318 / #319** — decide per §4.
+4. **Documentation backlog (§5)** — schedule the `docs(adr-007)` write-ups when
    convenient; they gate nothing.
