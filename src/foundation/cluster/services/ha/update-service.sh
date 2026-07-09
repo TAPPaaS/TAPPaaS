@@ -100,6 +100,11 @@ readonly HA_RULE_NAME="ha-${MODULE}"
 debug "${BOLD}cluster:ha update-service: reconciling ${BL}${MODULE}${CL} (VMID ${VMID})"
 [[ "${CHECK_MODE}" == "1" ]] && warn "  CHECK MODE — drift will be reported, not applied"
 
+# In --check mode the drift verdict IS the output (reporting is the whole
+# point of check mode), so emit it at info level; in apply mode keep it at
+# debug so the normal update-tappaas console stays compact.
+report_verdict() { if [[ "${CHECK_MODE}" == "1" ]]; then info "$@"; else debug "$@"; fi; }
+
 # ── Single-node / no-failover guard ──────────────────────────────────
 
 if [[ -z "${HANODE}" ]]; then
@@ -217,12 +222,12 @@ fi
 # ── Report ───────────────────────────────────────────────────────────
 
 if [[ ${#CHANGES[@]} -eq 0 ]]; then
-    debug "  ${GN}✓${CL} HA config is in sync with config — no changes needed"
+    report_verdict "  ${GN}✓${CL} HA config is in sync with config — no changes needed"
     exit 0
 fi
 
-debug "  Detected drift:"
-for c in "${CHANGES[@]}"; do debug "    • ${c}"; done
+report_verdict "  Detected drift:"
+for c in "${CHANGES[@]}"; do report_verdict "    • ${c}"; done
 
 if [[ "${CHECK_MODE}" == "1" ]]; then
     debug "  CHECK MODE — no changes applied"

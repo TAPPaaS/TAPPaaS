@@ -111,6 +111,11 @@ BIOS="$(cfg 'bios' '__none__')"
 debug "${BOLD}cluster:vm update-service: reconciling ${BL}${MODULE}${CL} (VMID ${VMID})"
 [[ "${CHECK_MODE}" == "1" ]] && warn "  CHECK MODE — drift will be reported, not applied"
 
+# In --check mode the drift verdict IS the output (reporting is the whole
+# point of check mode), so emit it at info level; in apply mode keep it at
+# debug so the normal update-tappaas console stays compact.
+report_verdict() { if [[ "${CHECK_MODE}" == "1" ]]; then info "$@"; else debug "$@"; fi; }
+
 # Resolve desired VLAN tags (errors out on undefined/inactive zone).
 DESIRED_TAG0="$(vmnet_zone_vlantag "${ZONE0}" "${ZONES_FILE}")" || die "Cannot resolve zone0 '${ZONE0}'"
 DESIRED_TRUNKS0=""
@@ -301,12 +306,12 @@ fi
 # ── Report ───────────────────────────────────────────────────────────
 
 if [[ ${#CHANGES[@]} -eq 0 && ${FATAL} -eq 0 ]]; then
-    debug "  ${GN}✓${CL} VM is in sync with config — no changes needed"
+    report_verdict "  ${GN}✓${CL} VM is in sync with config — no changes needed"
     exit 0
 fi
 
-debug "  Detected drift:"
-for c in "${CHANGES[@]}"; do debug "    • ${c}"; done
+report_verdict "  Detected drift:"
+for c in "${CHANGES[@]}"; do report_verdict "    • ${c}"; done
 
 [[ ${FATAL} -eq 1 ]] && die "Unreconcilable drift detected — aborting (see errors above)"
 
