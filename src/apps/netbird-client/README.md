@@ -1,42 +1,45 @@
-# Netbird client
+# NetBird Client
 
-** Not working **
+Primary audience: business or home users who want a VPN connection into their
+TAPPaaS installation.
 
-This module installs a netbird client in TAPPaaS
+VPN entry point — a NetBird peer inside a TAPPaaS zone, so remote devices can
+operate as if they were local to that zone.
 
-This client is Different from the Netbird client installed by default on the mgmt network for doing TAPPaaS management access
-This clinet is for business or home users that wants a VPN connection into their solution/installation
+> Status: not currently working. The module still needs conversion to NixOS
+> and to the new install system — see [DESIGN.md](./DESIGN.md).
 
-You can have several jsons if you want to have clients in several TAPPaaS zones
+## What you get
 
-## TODO
+| Capability | Access from | How |
+|------------|-------------|-----|
+| VPN access into a TAPPaaS zone | Your remote NetBird peers | NetBird overlay; VM in zone `home` |
+| Clients in several zones | — | Multiple instances, one json per zone |
 
-- convert to NisOS
-- convert to using new install system
-- also right now it does not work
+## What is not included
 
+- TAPPaaS management access — that is handled by the separate NetBird client
+  installed by default on the `mgmt` network; this module is for end-user
+  access only
+- A NetBird management server — you need your own NetBird account and
+  dashboard to create setup keys and manage peers
 
-## installation
+## Requirements
 
-rin
+- A NetBird account with dashboard access (to create a setup key)
+- Debian VM template (`templates:debian`)
+- `home` zone by default (override `zone0` for other zones)
+- 1 vCPU, 1 GB RAM, 4 GB disk by default
 
-```bash
-./install netbird-client
-```
+## Dependencies
 
-##  setup netbird 
+| Depends on | Purpose |
+|------------|---------|
+| `cluster:vm` | VM provisioning |
+| `cluster:ha` | High availability for the VM |
+| `templates:debian` | Debian cloud image base |
+| `backup:vm` | VM backups |
+| `identity:identity` | Secrets and identity management |
+| `network:proxy` | Proxy configuration (allowed from `internet`) |
 
-Before we configure NetBird, we are going to want to generate a one-off setup key to use with our VM
-while NetBird's documentation offers comprehensive guidance on this process, let's quickly review the essential steps:
-
-    Access your NetBird dashboard
-    Navigate to the Setup Keys section
-    Click the Create Setup Key button on the right
-    Name your key (e.g., "ProxmoxLXC")
-    Set an expiration date (recommended for enhanced security)
-    Configure auto-assigned groups if needed (e.g., "Homelab")
-    Click Create Setup Key to generate the setup key
-
-Now we can connect our client to our account using the setup key we generated earlier.
-
-  netbird up --setup-key <SETUP KEY>
+For installation steps see [INSTALL.md](./INSTALL.md).

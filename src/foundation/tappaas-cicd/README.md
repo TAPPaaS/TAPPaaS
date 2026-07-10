@@ -1,179 +1,49 @@
 # tappaas-cicd
 
-The TAPPaaS "mothership" control plane. This document describes the **internal
-component contract** and the **three-level dispatch** that drives every manager
-and controller uniformly (ADR-007 P10 deliverable #5).
+Primary audience: TAPPaaS admin.
 
-For the full rationale see
-[`docs/design/ADR-007-implementation.md`](../../../docs/design/ADR-007-implementation.md)
-(packages **P4** — layout — and **P10** — the template + dispatch).
+The TAPPaaS "mothership" — the control-plane VM that installs, updates, tests and
+configures every other module in the system.
 
-## Overview — internal layout
+## What you get
 
-```
-src/foundation/tappaas-cicd/
-├── install.sh / update.sh / test.sh   # top-level entry scripts (drive the dispatchers)
-├── manager/                           # domain-object lifecycle (CONFIG state)
-│   ├── install.sh / update.sh / test.sh   # dispatcher: loop child components
-│   └── <name>-manager/               # one dir per manager component
-├── controller/                        # infrastructure control (RUNTIME state)
-│   ├── install.sh / update.sh / test.sh   # dispatcher: loop child components
-│   └── <name>-controller/            # one dir per controller component
-├── lib/                               # shared libraries, sourced (never copied per component)
-└── scripts/                           # foundation bring-up + unit tests (scripts/test/)
-```
+| Capability | Access from | How |
+|------------|-------------|-----|
+| Admin shell + module toolbox | mgmt zone | `ssh tappaas@tappaas-cicd`; `install-module.sh`, `update-module.sh`, `test-module.sh`, `delete-module.sh`, … in `~/bin` |
+| Domain managers (config state) | mothership CLI | `site-manager`, `environment-manager`, `module-manager`, `network-manager`, `people-manager`, `health-manager`, … |
+| Infrastructure controllers (runtime state) | mothership CLI | `opnsense-controller`, `proxmox-controller`, `switch-controller`, `identity-controller`, `node-provisioner`, … |
+| Scheduled system updates | automatic | `update-tappaas` systemd timer (logs → journald → Loki) |
+| System configuration store | mothership | `/home/tappaas/config` (`site.json`, `zones.json`, environments, module jsons) |
+| Unattended node adding (PXE) | mothership CLI | `site-manager node add <name> --pxe` (netboot assets staged at install) |
+| Admin VPN termination on OPNsense | anywhere (WireGuard) | set up at install; enrol devices per [ADMIN-VPN.md](./ADMIN-VPN.md) |
+| Module store registration | mothership CLI | `repository.sh add <repo>` for community module stores |
 
-- **`manager/`** — owns **config state**: JSON config files, schemas, and their
-  validation. A manager may call controllers to realize that config. Managers
-  ship a `validate.sh`. Examples: `people-manager`, `site-manager`,
-  `environment-manager`, `module-manager`, `network-manager`, `health-manager`.
-- **`controller/`** — owns **runtime state**: APIs, network devices, VMs. A
-  controller does **not** ship a `validate.sh`. Examples: `opnsense-controller`,
-  `proxmox-controller`, `switch-controller`, `ap-controller`,
-  `identity-controller`.
-- **`lib/`** — shared code sourced by components (e.g.
-  `common-install-routines.sh`). Shared logic lives here once; it is never
-  copied into individual components.
-- **top-level entry scripts** — `install.sh` / `update.sh` / `test.sh` at the
-  cicd root.
+## What is not included
 
-## Component contract
+- The hypervisor layer (`cluster`), the firewall (`network`), the base images
+  (`templates`) — this VM *drives* them, it does not contain them.
+- Backup, identity and logging services — separate foundation modules that this VM
+  installs (`rest-of-foundation.sh`).
+- TLS certificate issuance — a post-install step (`acme-setup.sh`).
 
-Each manager/controller lives in its own subdirectory and exposes a fixed set of
-files:
+## Requirements
 
-```
-<component>/
-├── <name>.{ts,py,sh}   # main entry: domain verbs (CRUD for a manager, reconcile for a controller)
-├── install.sh          # idempotent: build artifact, place bin/ symlink, one-time setup
-├── update.sh           # idempotent: rebuild, re-link, migrate on-disk state if schema changed
-├── test.sh             # self-contained tests; exit non-zero on failure
-├── validate.sh         # (managers only) schema/reference validation for the domain
-└── README.md           # what it owns; manager-vs-controller; which controllers it calls
-```
+- The NixOS template (VM 8080) imported on the cluster (`templates` module).
+- The OPNsense firewall at `10.0.0.1` (`network` module). Without it the platform is
+  configured with `firewallType: "NONE"` and proxy/rules need manual handling.
+- Defaults (from `tappaas-cicd.json`): VM 130 in zone `mgmt`, 4 cores, 16 GB RAM,
+  32 GB disk on `tanka1`, HA replication every 15 min.
 
-- `install.sh`, `update.sh`, and `test.sh` are **mandatory** and must be
-  **idempotent** in every component.
-- `validate.sh` is **present for managers** and **absent for controllers**.
-- The preferred entry-point language order is **TypeScript → Python → Bash**
-  (see "Preferred language" below).
+## Dependencies
 
-### Runtime-state access rule (the F12 carve-out)
+| Depends on | Purpose |
+|------------|---------|
+| `cluster:vm` | Creates the mothership VM (clone of the NixOS template) |
+| `cluster:ha` | HA placement + `*/15` replication of the VM |
 
-Controllers own runtime state — but managers sometimes need to *read* it
-(health gates, module list, drift tables). The rule (ADR-007
-post-implementation refactor, F12 decision B):
+For installation steps see [INSTALL.md](./INSTALL.md).
 
-- A manager MAY **read** cluster runtime state, but ONLY through the shared
-  `lib/ts/src/cluster.ts` helpers (one audited choke-point) — never via its
-  own scattered `ssh`/`pvesh`/`qm` calls.
-- Every runtime **write** goes through a controller. No exceptions for new
-  code. (Grandfathered: network-manager scp's `zones.json` to the nodes —
-  that distributes a config artifact, it does not mutate a device; and
-  health-manager's `update-os` verb delegates to `update-os.sh`, to be
-  revisited when that script is ported.)
-- health-manager is a **read-mostly orchestrator** under this rule — it stays
-  a manager.
-
-### Config root resolution
-
-Every component resolves the config root the same way:
-**`$TAPPAAS_CONFIG`, else `$CONFIG_DIR`, else `/home/tappaas/config`** —
-`TAPPAAS_CONFIG` is the TAPPaaS-specific override and wins; `CONFIG_DIR` is the
-long-standing variable the bash layer exports. A component must never invent a
-different precedence (managers used to disagree, which made two managers read
-different roots under the same environment).
-
-## Three-level dispatch
-
-The control plane is driven by three trivial levels — adding a component never
-changes anything above it:
-
-1. **Top level** — `tappaas-cicd/{install,update,test}.sh` call
-   `manager/<verb>.sh` and `controller/<verb>.sh`.
-2. **Dispatcher level** — `manager/<verb>.sh` and `controller/<verb>.sh` each
-   loop their child component directories and run the matching verb script.
-   There is no shared runner; each dispatcher is a few lines:
-
-   ```bash
-   for d in "${here}"/*/; do
-       [ "$(basename "${d}")" = TEMPLATE ] && continue   # defensive: scaffold/work dirs stay inert
-       [ -x "${d}install.sh" ] || continue
-       "${d}install.sh" "$@"
-   done
-   ```
-
-3. **Component level** — each component's own `install.sh` / `update.sh` /
-   `test.sh` does the actual work.
-
-**Adding a component** = drop a directory containing the standard verb scripts
-(copy the nearest real component and edit — see "Scaffolding a new component").
-The dispatcher picks it up automatically; nothing above it is edited.
-
-> **Top-level wiring is additive (option A).** The cicd VM keeps its own
-> `nixos-rebuild`/`test` for the VM itself **and** drives the manager/controller
-> dispatchers — the dispatch is added alongside the existing VM lifecycle, it
-> does not replace it.
-
-## Compiled components
-
-A component that ships a **built/packaged artifact** must **rebuild the package
-and refresh its `bin/` entry-point symlinks** in `install.sh`/`update.sh` — not
-merely copy source. This is what makes a code change get picked up on update.
-
-- **Python** (e.g. `opnsense-controller`, `update-tappaas`) — nix build /
-  `pip install -e` of the component's `pyproject.toml`, then relink its entry
-  points (the former whole-VM `pre-update.sh` behaviour, now per-component).
-- **TypeScript** (future) — `npm`/`pnpm install && build`, then link the bin.
-- **Bash** — nothing to compile; just symlink the entry script onto `PATH`.
-
-The build step must be **idempotent**: a no-op when its inputs are unchanged.
-
-## Testing: fast vs deep slices
-
-Every component `test.sh` runs a **fast, non-disruptive slice by default** and a
-**deep slice only when `TAPPAAS_TEST_DEEP=1`**:
-
-- **Fast (default)** — schema/CLI/validation + mocked-logic unit tests. No live
-  services, no Authentik mutation, no cluster/VM ops. Quick and safe anytime.
-- **Deep (`TAPPAAS_TEST_DEEP=1`)** — adds the disruptive/slow tests: live
-  Authentik reconcile, cluster ops, VM provisioning. These mutate real state, so
-  they are scoped (e.g. `zztest-` names) and self-cleaning.
-
-The cicd module gate honours the split:
-
-- `test-module.sh tappaas-cicd` (**fast**, ~seconds) runs the quick checks plus
-  **Test 11**, a lightweight per-component *smoke* using the already-built bins
-  (validate schemas, CLI loads, config reads) — confirms basic functionality
-  without touching anything.
-- `test-module.sh tappaas-cicd --deep` runs the VM/variant suites **and** the
-  `manager/` + `controller/` dispatchers with `TAPPAAS_TEST_DEEP=1`, so every
-  component's full suite (offline unit + live tiers) runs.
-
-When adding a component: gate its disruptive tests behind
-`[[ "${TAPPAAS_TEST_DEEP:-0}" == "1" ]]`, and add a one-line smoke to Test 11.
-
-## Preferred language
-
-In order: **TypeScript → Python → Bash.** Pick the highest applicable tier for a
-new component: prefer TypeScript; use Python where an existing package/ecosystem
-fit makes it cheaper (e.g. extending `opnsense-controller`); reserve Bash for
-thin glue, install-time scripts, and small wrappers. Existing Bash/Python
-components are not rewritten by this rule — they are migrated opportunistically.
-
-## Scaffolding a new component
-
-Copy the nearest real component and edit in place (the scaffold TEMPLATE dirs
-were retired — they had drifted from what real components look like):
-
-```bash
-# a new TypeScript manager — copy a small real one and rename
-cp -r manager/site-manager manager/my-manager
-
-# a new bash controller — copy a small real one and rename
-cp -r controller/ap-controller controller/my-controller
-```
-
-Then rename the entry point, rewrite `src/` (or the entry script), fill in the
-verb scripts, and (for a manager) the `validate.sh`. The dispatcher will run it
-on the next install/update/test with no changes above the component directory.
+Design and implementation detail (component contract, manager/controller dispatch):
+[DESIGN.md](./DESIGN.md). Test coverage: [TEST.md](./TEST.md). Remote admin access:
+[ADMIN-VPN.md](./ADMIN-VPN.md). The `manager/` and `controller/` subtrees carry their
+own READMEs.

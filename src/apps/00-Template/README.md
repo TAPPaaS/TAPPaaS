@@ -120,7 +120,7 @@ For complete field definitions including all possible values, defaults, and vali
 ### install.sh
 
 Installation script called with the module name as an argument when the module is installed. 
-See [README-install.md](./README-install.md) for details
+See [README-install-sh.md](./README-install-sh.md) for details
 
 ### update.sh
 

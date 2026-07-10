@@ -1,31 +1,33 @@
-# <module name> Instalation Guide
+# <Module Name> — Installation
 
-## Installation Steps
+Primary audience: TAPPaaS admin.
 
-### 1. Confirm Configuration
+## Prerequisites
 
-<edit as appropiate for this module>
+1. <manual pre-condition that scripts cannot handle>
 
-look at ./<module-name>.json. If this file is not correctly reflecting how you want this module to be installed in your environments. For instance if:
+> To deviate from the defaults in `./<module>.json` (target node, storage,
+> zone/VLAN, sizing), copy the json to `/home/tappaas/config` and edit it
+> before installing.
 
-- you want to have the module to run on a different node than the default "tappaass1" 
-- you want the VM to e on a different storage node than "tanka1"
-- you want to make it a member of a different LAN zone (VLAN)
-Then copy the json to /home/tappaas/config and edit the file to reflect your choices
+## Install
 
-Then as tappaas use on the tappaas-cicd: run the command:
+    install-module.sh <module>
 
-```bash
-./install.sh <modulename>
-```
+## Post-install
 
-## Verification Tests
+<manual steps on the device, in third-party systems, etc. — only what the
+scripts cannot automate. If there are none, say "None.">
 
-Once installd verify the installation worked by executiong
+## Verification
 
-```bash
-./test.sh <modulename>
-```
+    test-module.sh <module>
 
-## Common Issues
+| Check | Expected |
+|-------|----------|
+| <manual check> | <expected result> |
 
+## Troubleshooting
+
+**<symptom>**
+<diagnosis and fix>

@@ -1,50 +1,38 @@
 # LiteLLM — Installation
 
-Only manual steps are listed here. Scripts handle everything else automatically.
+Primary audience: TAPPaaS admin.
 
 ## Prerequisites
 
-Verify `litellm.json` matches your environment (node, storage, zone).
-To use non-default values, override at install time — see §Customisation below.
+1. All dependency modules are installed — in particular `vllm-amd` (local inference
+   backend, see the `dependsOn` list in `litellm.json`).
+2. Verify `litellm.json` matches your environment (node, storage, zone).
+
+> To deviate from the defaults in `./litellm.json` (target node, storage,
+> zone/VLAN, sizing), copy the json to `/home/tappaas/config` and edit it
+> before installing.
+
+Fields can also be overridden with flags at install time, e.g.
+`install-module.sh litellm --node tappaas1 --zone0 srvDev --vmid 399 --memory 8192`,
+or a named variant config (`--variant staging` reads `litellm-staging.json`).
 
 ## Install
 
-```bash
-cd /home/tappaas/TAPPaaS/src/apps/litellm
-install-module.sh litellm
-```
+    install-module.sh litellm
 
 Duration: ~5–10 minutes on first run.
-
-## Customisation (optional)
-
-Override any JSON field at install time without editing files:
-
-```bash
-install-module.sh litellm --node tappaas1 --zone0 srv_dev --vmid 399
-```
-
-| Flag | Default | Controls |
-|---|---|---|
-| `--zone0` | `srvwork` | Network zone (VLAN) |
-| `--vmid` | `310` | Proxmox VM ID |
-| `--node` | `tappaas2` | Proxmox node |
-| `--memory` | `4096` | RAM in MB |
-| `--variant staging` | — | Named variant config (`litellm-staging.json`) |
 
 ## Post-install
 
 **1. Get the master key**
 
-```bash
-ssh tappaas@litellm.srvwork.internal "sudo cat /etc/secrets/litellm.env"
-```
+    ssh tappaas@litellm.srvWork.internal "sudo cat /etc/secrets/litellm.env"
 
 Save this key in your password manager — it is the admin password for the UI and API.
 
 **2. Open the UI and configure**
 
-`http://litellm.srvwork.internal:4000/ui` — log in with the master key.
+`http://litellm.srvWork.internal:4000/ui` — log in with the master key.
 
 1. Settings → Credentials — add API keys (OpenRouter, Anthropic, Perplexity, …)
 2. AI Hub — add models
@@ -52,70 +40,51 @@ Save this key in your password manager — it is the admin password for the UI a
 
 Reference: [LiteLLM proxy docs](https://docs.litellm.ai/docs/proxy/ui_credentials)
 
+For upgrades of an existing install see [UPGRADE.md](./UPGRADE.md).
+
 ## Verification
 
-```bash
-cd /home/tappaas/TAPPaaS/src/apps/litellm
-./test.sh
-```
+    test-module.sh litellm
 
-All 10 tests should pass. Passing output:
-```
-[PASS] postgresql is active
-[PASS] redis-litellm is active
-[PASS] podman-litellm is active
-[PASS] API health check passed
-[PASS] PostgreSQL is responding
-[PASS] LiteLLM database has N tables
-[PASS] Redis is responding (PONG)
-[PASS] API authentication successful
-[PASS] All backup directories exist
-[PASS] N backup timer(s) scheduled
-```
+All 10 tests should pass.
+
+| Check | Expected |
+|-------|----------|
+| `postgresql` service | active |
+| `redis-litellm` service | active |
+| `podman-litellm` service | active |
+| API health check | passed |
+| PostgreSQL | responding |
+| LiteLLM database | has tables |
+| Redis | responding (PONG) |
+| API authentication | successful |
+| Backup directories | all exist |
+| Backup timers | scheduled |
 
 ## Troubleshooting
 
 **Container not starting**
-```bash
-ssh tappaas@litellm.srvwork.internal "journalctl -u podman-litellm -n 50"
-```
-Common cause: API key not yet configured — add at least one provider credential via UI first.
+
+    ssh tappaas@litellm.srvWork.internal "journalctl -u podman-litellm -n 50"
+
+Common cause: API key not yet configured — add at least one provider credential
+via UI first.
 
 **Cannot connect to UI after install**
+
 Verify firewall proxy is active: `rules-manager verify-rules litellm --no-ssl-verify`
-Check VM is reachable: `nc -zv -w 5 litellm.srvwork.internal 4000`
+Check VM is reachable: `nc -zv -w 5 litellm.srvWork.internal 4000`
 
 **Master key lost**
-```bash
-ssh tappaas@litellm.srvwork.internal
-sudo rm /etc/secrets/litellm.env
-sudo systemctl restart generate-litellm-secrets podman-litellm
-# New key generated — retrieve again with sudo cat
-```
+
+    ssh tappaas@litellm.srvWork.internal
+    sudo rm /etc/secrets/litellm.env
+    sudo systemctl restart generate-litellm-secrets podman-litellm
+    # New key generated — retrieve again with sudo cat
+
 Warning: existing virtual keys remain valid; only the master key changes.
 
 **Database not responding**
-```bash
-ssh tappaas@litellm.srvwork.internal "systemctl status postgresql"
-ssh tappaas@litellm.srvwork.internal "sudo -u postgres psql -c '\l'"
-```
 
-## Backup and restore
-
-Daily automated backups run at:
-
-| Component | Time | Location |
-|---|---|---|
-| PostgreSQL dump | 02:00 | `/var/backup/postgresql/` |
-| Redis snapshot | 02:30 | `/var/backup/redis/` |
-| Secrets | 02:45 | `/var/backup/litellm-env/` |
-
-Retention: 30 days.
-
-**Manual restore:**
-```bash
-# PostgreSQL
-sudo systemctl stop podman-litellm
-gunzip -c /var/backup/postgresql/litellm-YYYY-MM-DD.sql.gz | sudo -u postgres psql litellm
-sudo systemctl start podman-litellm
-```
+    ssh tappaas@litellm.srvWork.internal "systemctl status postgresql"
+    ssh tappaas@litellm.srvWork.internal "sudo -u postgres psql -c '\l'"

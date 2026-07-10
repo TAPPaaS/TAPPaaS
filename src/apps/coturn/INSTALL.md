@@ -1,69 +1,67 @@
 # coturn — Installation
 
-Only manual steps are listed here. Scripts handle everything else automatically (VM creation, NixOS rebuild, secret generation).
+Primary audience: TAPPaaS admin.
 
 ## Prerequisites
 
-- `nextcloud` is installed (`nextcloud:vm` dependency) — coturn serves Nextcloud Talk.
-- Verify `coturn.json` matches your environment (node, storage, zone `dmz`). Override with flags below.
+1. `nextcloud` is installed (`nextcloud:fileservice` dependency) — coturn serves Nextcloud
+   Talk and the installer fails without it.
+2. The `dmz` zone has internet egress — the installer detects the public (post-NAT) IP from
+   the coturn VM via external echo services.
+
+> To deviate from the defaults in `./coturn.json` (target node, storage,
+> zone/VLAN, sizing), copy the json to `/home/tappaas/config` and edit it
+> before installing.
 
 ## Install
 
-```bash
-install-module.sh coturn
-```
-
-## Customisation (optional)
-
-```bash
-install-module.sh coturn --node tappaas2 --vmid 399
-```
-
-| Flag | Default | Controls |
-|---|---|---|
-| `--node` | `tappaas1` | Proxmox node |
-| `--zone0` | `dmz` | Network zone (VLAN) |
-| `--vmid` | `341` | Proxmox VM ID |
+    install-module.sh coturn
 
 ## Post-install
 
-On first boot the VM auto-generates the shared TURN secret (`COTURN_SECRET`) and external IP into `/etc/secrets/coturn.env`. Copy that file to the Nextcloud VM at the same path so Talk can issue matching credentials:
+1. Configure OPNsense manually (the installer prints a reminder; not automated):
+   - NAT rule: WAN:3478 (UDP+TCP) -> coturn DMZ IP:3478
+   - NAT rule: WAN:49152-65535 (UDP) -> coturn DMZ IP:49152-65535 (relay ports)
+   - DNS A record: the module's public domain -> public WAN IP
+2. Only if the installer warned that it could not detect the public IP (DMZ egress blocked):
+   set it manually on the coturn VM, then restart the service:
 
-```bash
-scp tappaas@coturn.dmz.internal:/etc/secrets/coturn.env /tmp/ \
-  && scp /tmp/coturn.env tappaas@nextcloud.<zone>.internal:/etc/secrets/coturn.env
-```
-
-The `nextcloud-configure-talk` service picks it up on the next boot. (`nextcloud-hpb` consumes `coturn:turn` automatically.)
+       ssh tappaas@coturn.dmz.internal
+       sudo sed -i 's/^COTURN_EXTERNAL_IP=.*/COTURN_EXTERNAL_IP=<YOUR-WAN-IP>/' \
+         /etc/secrets/coturn.env
+       sudo systemctl restart coturn.service
 
 ## Verification
 
-```bash
-./test.sh coturn
-```
+    test-module.sh coturn
 
-Confirms the VM is up and the TURN/STUN daemon answers on UDP/TCP 3478.
-
-## Backup and restore
-
-The VM is registered with Proxmox Backup Server (`backup:vm`); coturn is stateless beyond `/etc/secrets/coturn.env` — re-generated on reinstall if absent. No application data to restore.
-
-## Upgrading
-
-```bash
-update-module.sh coturn
-```
-
-NixOS rebuild only; the TURN daemon has no container image to pin.
+| Check | Expected |
+|-------|----------|
+| SSH to `coturn.dmz.internal` | Connection succeeds |
+| `systemctl is-active coturn` | `active`; `turnserver` process running |
+| TCP port 3478 | Open from tappaas-cicd |
+| UDP port 3478 | Answers a STUN binding request |
+| `/etc/secrets/coturn.env` | Exists, mode 0600, `COTURN_SECRET` is 64 hex chars |
+| `/run/coturn/turnserver.conf` | Generated at service start, contains `denied-peer-ip` entries |
+| `coturn-backup-secrets.timer` | Active (skip if not yet started) |
+| `COTURN_EXTERNAL_IP` | Set in `/etc/secrets/coturn.env` (else external calls fail) |
 
 ## Troubleshooting
 
-**`install-module.sh` exits with a dependency error** — `nextcloud` is not installed. Install it first.
+**`install-module.sh` exits with a dependency error**
+`nextcloud` is not installed. Install it first.
 
-**Talk calls fail to connect across NATs** — clients cannot reach UDP 3478, or the secret is out of sync.
-```bash
-ssh tappaas@coturn.dmz.internal "sudo systemctl status coturn; sudo ss -lunp | grep 3478"
-# confirm COTURN_SECRET matches on both VMs:
-ssh tappaas@coturn.dmz.internal "sudo cat /etc/secrets/coturn.env"
-```
-The secret in `/etc/secrets/coturn.env` must be identical on the coturn and Nextcloud VMs.
+**Talk calls fail to connect across NATs**
+Clients cannot reach UDP 3478, or the shared secret is out of sync.
+
+    ssh tappaas@coturn.dmz.internal "sudo systemctl status coturn; sudo ss -lunp | grep 3478"
+    # confirm the secret on the VM matches the management plane copy:
+    ssh tappaas@coturn.dmz.internal "sudo cat /etc/secrets/coturn.env"
+    cat /home/tappaas/secrets/coturn.env   # on tappaas-cicd
+
+`COTURN_SECRET` on the coturn VM must match the management-plane copy that Nextcloud
+Talk and `nextcloud-hpb` consume.
+
+**Calls from external networks fail while internal calls work**
+`COTURN_EXTERNAL_IP` is unset/wrong, or the WAN NAT rules (3478 and the 49152-65535
+relay range) are missing on OPNsense. See Post-install.

@@ -41,7 +41,7 @@ See `src/foundation/DEPENDENCIES.csv` and `src/foundation/DEPENDENCIES.md`
 For structure of a module 
 
 ### Module Installation
-`install.sh` in the root of the module will install the module. must be called with arguments see `apps/00-Template/README-install.md`
+`install.sh` in the root of the module will install the module. must be called with arguments see `apps/00-Template/README-install-sh.md`
 
 ## Network Zones/VLANs
 Defined in `zones.json` with VLAN tags.

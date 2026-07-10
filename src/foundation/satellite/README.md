@@ -1,65 +1,61 @@
-# satellite — TAPPaaS VPS Satellite (reverse proxy, admin VPN, off-site backup)
+# satellite
 
-> **Status:** scaffolding (ADR-010 implementation, package P1). Not yet functional.
-> **Design:** [ADR-010](../../../docs/ADR/ADR-010-vps-satellite-reverse-proxy-backup.md) · **Plan/tracker:** [ADR-010-implementation.md](../../../docs/design/ADR-010-implementation.md) · **Install:** [INSTALL.md](INSTALL.md)
+Primary audience: TAPPaaS admin.
 
-## What it is
+An operator-owned VPS with a stable public IP that gives a cluster behind CGNAT / dynamic
+IP / no inbound the public ingress, remote admin access, and off-site backup vault the
+rest of TAPPaaS assumes.
 
-A **satellite** is a small, operator-owned node with a **stable public IP** — typically a
-low-cost VPS (Hetzner is the reference), but any VM or physical host with a public address
-works. It gives a home/SMB cluster behind **CGNAT / dynamic IP / no inbound** the public
-reachability the rest of TAPPaaS assumes but cannot guarantee.
+> **Status:** scaffolding (ADR-010 implementation, package P1). Not yet functional — the
+> tunnel, provisioning, and per-role behaviour land in packages P2–P6.
+> Design: [ADR-010](../../../docs/ADR/ADR-010-vps-satellite-reverse-proxy-backup.md) ·
+> Tracker: [ADR-010-implementation.md](../../../docs/design/ADR-010-implementation.md)
 
-Unlike every other foundation module, the satellite is **not a Proxmox VM the cluster hosts** —
-it is an **external host the cluster reaches out to and manages**. It is therefore **optional**
-and provisioned on demand (see [INSTALL.md](INSTALL.md)), never part of the mandatory install chain.
+## What you get
 
-## Trust model — blind relay + blind vault
+| Capability | Access from | How |
+|------------|-------------|-----|
+| Public HTTPS ingress (`reverse-proxy` role): L4 TCP passthrough of `:443`/`:80` to Caddy-on-OPNsense over the WireGuard tunnel | internet | published DNS names point at the satellite's public IP; TLS terminates at home |
+| Remote admin access (`admin-vpn` role): blind UDP relay of an admin WireGuard session terminating on OPNsense | admin device, anywhere | WireGuard peer to the satellite's public IP → mgmt plane |
+| Off-site backup vault (`backup` role): a PBS datastore the home PBS is pulled into, S3 Object-Lock by default | tappaas-cicd | `satellite-manager` (pull-based sync; client-side encrypted at home) |
+| Lifecycle management | tappaas-cicd | `satellite-manager install\|update\|status\|remove <name>` |
 
-The satellite sits off-premises on someone else's hardware and is treated as **semi-trusted and
-seizable**. Every role is structured so a compromise of the satellite yields only **ciphertext**
-and the ability to *disrupt* — never to read, impersonate, or decrypt:
+Roles are independent and selected in `satellite.json` (`roles: [...]`). One node may
+carry any combination; a site may run several satellites. A pure relay/admin node needs
+almost no disk; the `backup` role adds storage cost (S3 usage by default, or a sized
+volume).
 
-| Role | What it does | What it never sees |
-| ---- | ------------ | ------------------ |
-| `reverse-proxy` | L4 TCP passthrough of `:443`/`:80` to Caddy-on-OPNsense over the WireGuard tunnel (nginx `stream`, PROXY-protocol v2) | TLS plaintext or cert keys — Caddy at home terminates |
-| `admin-vpn` | Blind UDP relay of an admin WireGuard session that terminates on OPNsense | admin keys/traffic — admin↔OPNsense is end-to-end |
-| `backup` | An off-site PBS datastore the home PBS is **pulled** into (S3 Object-Lock by default) | backup plaintext or the decryption key — client-side encrypted at home |
+## What is not included
 
-And the trust does not flow the other way: the cluster holds **no standing root** over the
-satellite (ephemeral provisioning credential, pull-based signed updates, one-directional
-management), so a compromise of the *home cluster* cannot reach out and destroy the off-site
-vault. See ADR-010 §7.
+- **Not a Proxmox VM the cluster hosts** — the satellite is an external host
+  (`kind: external-host`) the cluster reaches out to and manages. It is optional and
+  never part of the mandatory install chain.
+- No TLS termination or cert keys on the satellite — Caddy at home terminates; the
+  satellite relays ciphertext only (blind relay + blind vault trust model, ADR-010 §7).
+- No standing root from `tappaas-cicd` over the satellite — only an ephemeral
+  provisioning credential, revoked after install.
+- Not needed for a site with a real public IP.
 
-## Roles
+## Requirements
 
-Roles are independent and selected in `satellite.json` (`roles: [...]`). One node may carry any
-combination; a site may run several satellites. A pure relay/admin node needs almost no disk; the
-`backup` role adds storage cost (S3 usage by default, or a sized volume).
+- A host with a **stable public IPv4** and root SSH — the reference is a Hetzner Cloud
+  VPS, but any VM or physical host with a public address works.
+- A running TAPPaaS foundation: `network` (OPNsense) and `tappaas-cicd`.
+- For the `backup` role: the home `backup` module (PBS) plus an S3 bucket with
+  **Object Lock enabled at creation** (or a sized block volume, advanced).
+- Your operator SSH key (workstation) — it becomes the satellite's standing root.
 
-## Connectivity (summary)
+## Dependencies
 
-- **Tunnel:** WireGuard, **home dials out, satellite listens** (PersistentKeepalive keeps the
-  CGNAT pinhole open). Dedicated `edge` overlay zone, `/31` link (`10.255.0.0/31`).
-- **Admin VPN:** terminates on OPNsense into a dedicated `admin` overlay zone → mgmt plane; the
-  satellite only UDP-relays it.
-- **Least privilege:** the `edge` zone may reach *only* the endpoints its active roles require
-  (Caddy ingress / OPNsense admin-WG / home PBS `:8007`) — never broad `mgmt`.
+`dependsOn` is empty **by design**: the satellite is an external host, operator-driven
+via `satellite-manager`, not installed through `install-module.sh`, so it does not
+participate in the module dependency graph. Its real prerequisites are checked by
+`satellite-manager` at install time:
 
-## Files (module contract)
+| Depends on | Purpose |
+|------------|---------|
+| `network` (module, up) | OPNsense terminates the WireGuard tunnel and the admin VPN |
+| `tappaas-cicd` (up) | Hosts `satellite-manager`, drives provisioning and management |
+| `backup` (module, for the backup role) | The home PBS that is pulled into the off-site vault |
 
-| File | Purpose |
-| ---- | ------- |
-| `satellite.json` | Declarative satellite config (provider, public IP, tunnel, roles, per-role settings). Satellite-specific schema (`schemas/satellite-fields.json`). |
-| `satellite.nix` | NixOS configuration deployed onto the external host via `nixos-anywhere`. |
-| `install.sh` / `update.sh` / `test.sh` | Module lifecycle verbs (delegate to `satellite-manager`). |
-| `README.md` / `INSTALL.md` | This overview + the detailed install runbook. |
-
-The operator front door is the **`satellite-manager`** CLI on `tappaas-cicd`
-(`satellite-manager install|update|status|remove <name>`).
-
-## Status / roadmap
-
-See the [implementation tracker](../../../docs/design/ADR-010-implementation.md#stage-tracker)
-(packages P1–P7). This directory is **P1 scaffolding**; the tunnel, provisioning, and per-role
-behaviour land in P2–P6, hardening + docs in P7.
+For installation steps see [INSTALL.md](./INSTALL.md).

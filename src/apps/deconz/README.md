@@ -1,66 +1,42 @@
-# deconz — standalone Zigbee gateway (ConBee II) + Hue-bridge API
+# deconz
 
+Primary audience: home user with Zigbee devices; Home Assistant administrator.
 
-deCONZ runs the Zigbee network on a **dedicated NixOS VM** instead of inside
-Home Assistant. HA consumes it over the deCONZ websocket; SysAP (free@home)
-controls lights through deCONZ's **native Hue-compatible API** — so daily
-lighting no longer depends on HA being up.
-
-## Why this exists
-
-- **Decouple Zigbee from HA.** ZHA cannot run standalone — if HA is down, Zigbee
-  is down. deCONZ is an independent service; HA is just one consumer.
-- **Replace HA `emulated_hue`.** deCONZ *is* a Hue-compatible bridge by design,
-  so SysAP talks to it directly as a Hue bridge — HA out of the control path
-  (supports the ADR-COM-0005 control-plane split).
-- **No MQTT broker** — HA's deCONZ integration uses the websocket, not MQTT.
+Standalone Zigbee gateway (ConBee II) with a native Hue-compatible bridge API — runs the
+Zigbee network on its own VM so daily lighting does not depend on Home Assistant being up.
 
 ## What you get
 
-| Capability | Consumer | Access | How |
-|---|---|---|---|
-| `zigbee` | Home Assistant (`srvHome`) | TCP 8080 (REST) + 8443 (ws) | official `deconz` integration |
-| `bridge` | SysAP (`iotCloud`) | TCP 8080 (Hue API) + UDP 1900 (SSDP) | Hue-compat API (= `hue:bridge` capability) |
-| Admin UI | mgmt | TCP 8080 via reverse proxy | Phoscon web UI |
+| Capability | Access from | How |
+|------------|-------------|-----|
+| Zigbee network (`zigbee`) | Home Assistant (`srvHome`) | `deconz` integration (REST 8080, ws 8443) |
+| Hue-compatible bridge (`bridge`) | SysAP (`iotCloud`) | Hue API TCP 8080 + SSDP UDP 1900 |
+| Phoscon admin UI | `mgmt` zone | `http://deconz.iotCloud.internal:8080` via the reverse proxy |
 
-## Services offered (`provides`)
+## What is not included
 
-| Service | Ports | Used for |
-|---|---|---|
-| `zigbee` | TCP 8080, 8443 | native deCONZ REST + websocket (Home Assistant) |
-| `bridge` | TCP 8080, UDP 1900 | Hue-compat REST + SSDP (SysAP) — interchangeable with `hue:bridge` |
+- No MQTT broker — HA's deCONZ integration uses the websocket, not MQTT.
+- Hue Entertainment/sync — a Hue-bridge-only feature, not available on deCONZ.
+- No automatic background device-firmware OTA — updates are a manual, per-device flow
+  (see [UPGRADE.md](./UPGRADE.md)).
+- No engine-to-engine migration from ZHA — moving from ZHA means re-pairing all devices.
 
-## Device support
+## Requirements
 
-- **IKEA Trådfri** — full (standard Zigbee 3.0). OTA via deCONZ OTAU (mfr 117C).
-- **Philips Hue lamps** — supported as standard Zigbee lights (bridge bypassed);
-  OTA via OTAU (Signify 100B). *Hue Entertainment/sync is bridge-only — not on deCONZ.*
-- **Aqara/LUMI** — per-model via DDF (door/window, water, temp, humidity, vibration,
-  lux, motion — each with a battery %). Verify specific models on the deCONZ
-  compatibility list; Aqara battery reporting is quirky.
-
-## Scenes
-
-Created in **Phoscon** (Group → Scenes) and stored as the **Zigbee Scenes cluster
-on the devices** → recalled by a bound switch even with HA/deCONZ down (the
-resilient layer). Exposed to HA as `scene.<group>_<name>` and via the Hue-API.
-**SSOT rule:** daily single-radio scenes live on-device; HA scenes only for
-cross-system.
-
-## Hardware
-
-- ConBee II USB coordinator (reused from the previous ZHA setup).
-- Attached to this VM by `update.sh` (`qm set -usb0 host=1cf1:0030`) — module-local
-  (engine untouched). USB pins the VM to its node (no HA failover).
+- ConBee II USB coordinator (`1cf1:0030`) physically attached to the target node
+  (`tappaas2`). USB passthrough pins the VM to its node (no HA failover).
+- `iotCloud` zone; consumers reach it cross-zone via firewall pinholes
+  (HA: `srvHome` -> `iotCloud` on 8080/8443).
+- Home Assistant is optional — deCONZ runs standalone; HA is just one consumer.
 
 ## Dependencies
 
 | Depends on | Purpose |
-|---|---|
-| `cluster:vm` | the NixOS VM (clone of the golden template) |
+|------------|---------|
+| `cluster:vm` | The NixOS VM (clone of the golden template) |
 | `templates:nixos` | NixOS base image |
-| `backup:vm` | full-VM PBS backup (includes the Zigbee DB) |
-| `firewall:proxy` | Phoscon admin UI behind the reverse proxy (mgmt only) |
-| `firewall:rules` | pinholes for the `zigbee` + `bridge` services |
+| `backup:vm` | Full-VM PBS backup (includes the Zigbee DB) |
+| `firewall:proxy` | Phoscon admin UI behind the reverse proxy (`mgmt` only) |
+| `firewall:rules` | Pinholes for the `zigbee` + `bridge` services (8080, 8443, 1900) |
 
-For installation steps see [INSTALL.md](./INSTALL.md); upgrades see [UPGRADE.md](./UPGRADE.md).
+For installation steps see [INSTALL.md](./INSTALL.md).

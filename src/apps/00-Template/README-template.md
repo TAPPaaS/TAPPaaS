@@ -1,6 +1,28 @@
-# <module name>
+# <Module Name>
 
-< description of the purpose of the module >
-< link to further documentation of the module >
+Primary audience: <key user role, e.g. "home user, Home Assistant administrator">.
 
-For installation of the module see [INSTALL.md](./INSTALL.md)
+<One-line tagline — what it delivers to the end user.>
+
+## What you get
+
+| Capability | Access from | How |
+|------------|-------------|-----|
+| <feature>  | <zone/user> | <url or method> |
+
+## What is not included
+
+- <explicit scope boundary>
+
+## Requirements
+
+- <hardware or software prerequisite>
+- <zone or network requirement>
+
+## Dependencies
+
+| Depends on | Purpose |
+|------------|---------|
+| `firewall:rules` | Firewall pass rules |
+
+For installation steps see [INSTALL.md](./INSTALL.md).

@@ -1,24 +1,20 @@
-# TAPPaaS LiteLLM
+# LiteLLM
 
-Unified AI API gateway — routes requests to multiple LLM providers with usage tracking, caching, and access control.
+Primary audience: TAPPaaS admin and users of AI models (via apps or the API).
+
+Unified AI API gateway — routes requests to multiple LLM providers with usage
+tracking, caching, and access control.
 
 ## What you get
 
 | Capability | Access from | How |
-|---|---|---|
-| Unified LLM API | Any internal zone | OpenAI-compatible endpoint on port 4000 |
-| Web UI | Internal network | `http://litellm.srvwork.internal:4000/ui` |
+|------------|-------------|-----|
+| Unified LLM API | Any internal zone (via pinhole) | OpenAI-compatible endpoint on port 4000 |
+| Web UI | Internal network | `http://litellm.srvWork.internal:4000/ui` |
 | Usage tracking | Admin UI | Per-key request counts, cost, latency |
 | Response caching | Automatic | Redis-backed; reduces provider API costs |
 | Virtual API keys | Admin UI | Scope per user or application |
-
-## Architecture
-
-```
-Clients → LiteLLM :4000 → LLM Providers (OpenRouter, Anthropic, …)
-                        → PostgreSQL  (model config, usage, keys)
-                        → Redis       (response cache)
-```
+| Model service for modules | `litellm:models` consumers | Virtual key auto-provisioned at install |
 
 ## What is not included
 
@@ -28,28 +24,20 @@ Clients → LiteLLM :4000 → LLM Providers (OpenRouter, Anthropic, …)
 
 ## Requirements
 
-- `srvwork` zone (VLAN 220)
+- `srvWork` zone (VLAN 220)
 - NixOS template (`templates:nixos`)
-- 4 vCPU, 4GB RAM minimum (see sizing below)
-
-## Sizing
-
-| Users | vCPU | RAM |
-|---|---|---|
-| ≤100 | 4 | 4 GB |
-| ≤250 | 6 | 8 GB |
-| 500+ | 8 | 16 GB |
+- 4 vCPU, 4 GB RAM, 32 GB disk by default (sizing guidance in DESIGN.md)
 
 ## Dependencies
 
 | Depends on | Purpose |
-|---|---|
+|------------|---------|
 | `cluster:vm` | VM provisioning |
 | `templates:nixos` | NixOS base image |
 | `backup:vm` | Daily backups |
 | `identity:identity` | Secrets management |
 | `network:proxy` | HTTPS reverse proxy |
 | `network:rules` | Internal firewall pinholes |
+| `vllm-amd:inference` | Local LLM inference backend |
 
 For installation steps see [INSTALL.md](./INSTALL.md).
-Upgrading? See [UPGRADE.md](./UPGRADE.md).
