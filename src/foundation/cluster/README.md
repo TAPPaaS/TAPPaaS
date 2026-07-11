@@ -19,6 +19,33 @@ VM, LXC and HA services every other TAPPaaS module builds on.
 
 A guest is **either** a VM **or** an LXC container, never both.
 
+## Architecture
+
+```mermaid
+flowchart TB
+    subgraph Capabilities
+        Compute[Compute Capability]
+        HA[High Availability Capability]
+    end
+
+    subgraph ClusterModule["cluster module"]
+        PVE[Proxmox Virtual Environment]
+        VMService([vm service])
+        LXCService([lxc service])
+        HAService([ha service])
+        VMService -.->|provided by| PVE
+        LXCService -.->|provided by| PVE
+        HAService -.->|provided by| PVE
+    end
+
+    Compute -.->|realized by| PVE
+    HA -.->|realized by| PVE
+```
+
+The Compute and High Availability capabilities are realized by Proxmox VE, which
+provides the `vm`, `lxc` and `ha` services (the module's `provides` in
+`cluster.json`) that every other TAPPaaS module builds on.
+
 ## What is not included
 
 - The firewall/router itself — that is the [`network`](../network/README.md) module
@@ -37,6 +64,15 @@ A guest is **either** a VM **or** an LXC container, never both.
 - Multi-node: a switch between the nodes — unmanaged works out of the box; a managed
   switch needs VLAN trunking configured first (see the repo-root
   [INSTALL.md](../../../INSTALL.md)).
+
+## Alternatives considered
+
+- XCP-ng — seems less polished and with fewer features (though it also seems more "free").
+- FreeNAS/TrueNAS — good for storage (same ZFS underpinning) but not really a cloud
+  platform: no clustering and HA like Proxmox.
+
+Source: the TAPPaaS software-selection design (Documentation repo,
+`docs/architecture/solution-design/software-selection.md`). Depth: see [DESIGN.md](./DESIGN.md).
 
 ## Dependencies
 

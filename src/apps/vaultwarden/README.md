@@ -30,6 +30,13 @@ Bitwarden-compatible password manager, published to the internet from the DMZ zo
 - VM sizing (defaults from `vaultwarden.json`): 1 vCPU, 1 GB RAM, 8 GB disk on `tanka1`
 - A public DNS record `vaultwarden.<domain>` pointing at your WAN address
 
+## Alternatives considered
+
+- Official Bitwarden server — Vaultwarden is the audited Rust rewrite of the server part;
+  Bitwarden/Vaultwarden is judged the only true open-source self-hostable password manager.
+
+Source: [SecurityDesign.md](../../../docs/Architecture/SecurityDesign.md). Depth: see [DESIGN.md](./DESIGN.md).
+
 ## Dependencies
 
 | Depends on | Purpose |

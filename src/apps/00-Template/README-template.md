@@ -19,6 +19,14 @@ Primary audience: <key user role, e.g. "home user, Home Assistant administrator"
 - <hardware or software prerequisite>
 - <zone or network requirement>
 
+## Alternatives considered
+
+<!-- OPTIONAL section: keep it 3-5 lines max, one line per alternative.
+     Link DESIGN.md for the in-depth rationale. Omit this section entirely
+     if no documented selection rationale exists — do not invent entries. -->
+
+- <alternative> — <why not, one line>
+
 ## Dependencies
 
 | Depends on | Purpose |

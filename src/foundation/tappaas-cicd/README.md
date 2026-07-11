@@ -18,6 +18,43 @@ configures every other module in the system.
 | Admin VPN termination on OPNsense | anywhere (WireGuard) | set up at install; enrol devices per [ADMIN-VPN.md](./ADMIN-VPN.md) |
 | Module store registration | mothership CLI | `repository.sh add <repo>` for community module stores |
 
+## Architecture
+
+```mermaid
+flowchart TB
+    subgraph Capabilities
+        Automation[Automation Capability]
+        Deployment[Deployment Capability]
+    end
+
+    subgraph CICDModule["tappaas-cicd module"]
+        Mothership["tappaas-cicd VM — mothership"]
+        subgraph SubComponents["Sub-Components"]
+            Toolbox[Module toolbox scripts]
+            Managers[Domain managers]
+            Controllers[Infrastructure controllers]
+        end
+        Mothership --> Toolbox
+        Mothership --> Managers
+        Mothership --> Controllers
+    end
+
+    subgraph ClusterModule["cluster module"]
+        VMService([vm service])
+        HAService([ha service])
+    end
+
+    Automation -.->|realized by| Mothership
+    Deployment -.->|realized by| Mothership
+    Mothership -->|depends on| VMService
+    Mothership -->|depends on| HAService
+```
+
+The Automation and Deployment capabilities are realized by the mothership VM through
+its toolbox scripts, domain managers and infrastructure controllers. The module
+provides no `dependsOn` services of its own (`provides: []` in `tappaas-cicd.json`)
+— it is the control plane that installs and drives every other module.
+
 ## What is not included
 
 - The hypervisor layer (`cluster`), the firewall (`network`), the base images

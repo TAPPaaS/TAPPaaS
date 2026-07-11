@@ -21,6 +21,45 @@ Reference docs in this directory:
   delivery).
 - [TEST.md](./TEST.md) — what the module tests cover (fast and deep tiers).
 
+## Architecture
+
+```mermaid
+flowchart TB
+    subgraph Capabilities
+        Auth[Authentication Capability]
+        Access[Access Control Capability]
+    end
+
+    subgraph IdentityModule["identity module"]
+        Authentik[Authentik]
+        IdentityService([identity service])
+        AccessService([accessControl service])
+        IdentityService -.->|provided by| Authentik
+        AccessService -.->|provided by| Authentik
+    end
+
+    subgraph Dependencies
+        VMService(["cluster: vm service"])
+        HAService(["cluster: ha service"])
+        NixOSService(["templates: nixos service"])
+        BackupService(["backup: vm service"])
+        ProxyService(["network: proxy service"])
+    end
+
+    Auth -.->|realized by| Authentik
+    Access -.->|realized by| Authentik
+    Authentik -->|depends on| VMService
+    Authentik -->|depends on| HAService
+    Authentik -->|depends on| NixOSService
+    Authentik -->|depends on| BackupService
+    Authentik -->|depends on| ProxyService
+```
+
+The Authentication and Access Control capabilities are realized by Authentik, which
+provides the `identity` (OIDC) and `accessControl` (forward-auth) services (the
+`provides` in `identity.json`) consumed by other modules; the VM itself is
+provisioned, backed up and published by the foundation services it depends on.
+
 ## What is not included
 
 - Emailed one-time enrollment links — deferred until SMTP is set up; the fallback is a

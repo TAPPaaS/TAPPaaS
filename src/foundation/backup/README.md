@@ -25,6 +25,32 @@ Reference docs in this directory:
   maintenance, multi-source setup, ADR-012 features).
 - [TEST.md](./TEST.md) — what the module tests cover (fast and deep tiers).
 
+## Architecture
+
+```mermaid
+flowchart TB
+    subgraph Capabilities
+        BackupCap[Backup Capability]
+    end
+
+    subgraph BackupModule["backup module"]
+        PBS[Proxmox Backup Server]
+        VMBackupService(["vm service — managed VM backup"])
+        RemoteService(["remote service — pull a buddy&#39;s PBS"])
+        ExternalService(["external service — receive third-party pushes"])
+        VMBackupService -.->|provided by| PBS
+        RemoteService -.->|provided by| PBS
+        ExternalService -.->|provided by| PBS
+    end
+
+    BackupCap -.->|realized by| PBS
+```
+
+The Backup capability is realized by Proxmox Backup Server (installed natively on a
+cluster node), which provides the `vm`, `remote` and `external` services (the
+`provides` in `backup.json`) — `backup:vm` is how modules opt into the managed backup
+job, while `remote`/`external` implement the multi-source vault.
+
 ## What is not included
 
 - Foundation VMs that are reproducible from git are deliberately **not** auto-backed-up —
@@ -42,6 +68,18 @@ Reference docs in this directory:
 - PBS is installed via apt **on the Proxmox node itself** (not a VM), from
   `http://download.proxmox.com/debian/pbs`.
 - Zone: `mgmt` (DNS name `backup.mgmt.internal`).
+
+## Alternatives considered
+
+- Dedicated bare-metal PBS — full separation of concerns, but more costly (hardware not
+  reusable), needs an extra machine in small systems, and is more complicated to deploy.
+- PBS as a VM — becomes "just another service", but disk access is very complicated,
+  restore after hardware failure is harder, and Proxmox does not recommend it.
+- PBS in an LXC — shares the kernel like the native install, but hard-disk passthrough
+  is more complicated and LXC is not the TAPPaaS default deployment.
+
+Chosen: native PBS install alongside PVE on a cluster node. Source:
+[PBS-Implementation.md](../../../docs/Architecture/PBS-Implementation.md). Depth: see [DESIGN.md](./DESIGN.md).
 
 ## Dependencies
 
