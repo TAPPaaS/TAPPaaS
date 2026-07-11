@@ -26,6 +26,10 @@ mv README-template.md README.md
 mv template.json myModule.json
 ```
 
+Optionally record authorship in `AUTHORS.md` (edit the placeholder line, or delete
+the file — it is optional; see `src/foundation/schemas/README.md` for the
+contributor/author/maintainer role model).
+
 For NixOS-based modules, rename the .nix file:
 ```bash
 mv template.nix myModule.nix
