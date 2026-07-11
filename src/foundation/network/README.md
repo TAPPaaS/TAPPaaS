@@ -96,8 +96,8 @@ consumer modules depend on; the VM itself is created and kept highly available b
 - OpenWRT — seems less scalable and less feature-rich.
 - Proxmox built-in firewall — would be easier (already built in), but less secure.
 
-Source: the TAPPaaS software-selection design (Documentation repo,
-`docs/architecture/solution-design/software-selection.md`). Depth: see [DESIGN.md](./DESIGN.md).
+Source: the TAPPaaS curation criteria (Design Principles, tappaas.org
+What → Principles). Depth: see [DESIGN.md](./DESIGN.md).
 
 ## Dependencies
 

@@ -5,6 +5,40 @@ issue #247). Catalog info: [README.md](./README.md); install: [INSTALL.md](./INS
 users & roles: [USERS.md](./USERS.md); test coverage: [TEST.md](./TEST.md). Design
 rationale: [ADR-006](../../../docs/ADR/ADR-006-identity-users-and-roles.md).
 
+## Why Authentik — SSO alternatives analysis
+
+Migrated from the documentation site's solution-design "Single Sign-On" page so the
+selection rationale lives with the module. Open-source SSO platforms surveyed when the
+identity module was designed:
+
+| Solution | Assessment |
+|----------|------------|
+| **Keycloak** | Most popular and widely adopted; OIDC, SAML, OAuth2, LDAP, social logins and enterprise features — but heavier and more complex to operate than TAPPaaS needs |
+| **Authentik** | Modern interface with OIDC, SAML, LDAP and forward-auth proxy support; flexible and gaining popularity |
+| **Authelia** | Lightweight authentication portal focused on MFA and access policies; too narrow to serve as the platform IdP |
+| **Gluu** | Enterprise-ready with strong federation capabilities, but more complex setup |
+| **Zitadel** | Cloud-native, developer-friendly, modern approach to SSO |
+| **IdentityServer** | Popular in .NET environments for API and microservices |
+| **Apereo CAS** | Mature platform, strongest in academic and enterprise sectors |
+
+Authentik was chosen for its:
+
+- Modern, user-friendly interface (admin UI matters for a single-operator platform)
+- Comprehensive protocol support — OIDC, SAML, LDAP, plus the embedded-outpost
+  forward-auth proxy (the two hooks TAPPaaS actually uses: `identity:identity` OIDC and
+  `identity:accessControl` forward-auth, see below)
+- Flexibility and ease of configuration via a complete REST API (drives all the
+  automated wiring in this module)
+- Active development and a growing community
+- Light resource footprint suitable for self-hosted environments (the VM runs on
+  2 cores / 4 GB)
+
+Scope boundary: Authentik covers applications that speak OIDC or can sit behind
+forward-auth. Credentials for legacy and external services without SSO support belong
+in the password manager — see the combined Authentik + VaultWarden strategy in
+[SecurityDesign.md](../../../docs/Architecture/SecurityDesign.md) and the
+[vaultwarden app](../../apps/vaultwarden/README.md).
+
 ## Stack (identity.nix)
 
 - Authentik server + worker as podman containers (version pinned in `identity.nix`,

@@ -24,7 +24,7 @@ In line with the general TAPPaaS design philosophy we are designing the storage 
 In TAPPaaS storage is arranged in zfs pools. Pools are named tanka1, tankb1, ...
 in addition to the named pools for data and VMs the default TAPPaaS setup will have the boot/root disk to be a zfs pool
 
-Pools/tanks are mounted in /mnt
+Pools/tanks are mounted at `/<poolname>` (e.g. `/tanka1`)
 
 The default configuration of of a TAPPaaS node and the default setup of modules assumes that:
 

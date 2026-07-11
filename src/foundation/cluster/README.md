@@ -70,9 +70,14 @@ provides the `vm`, `lxc` and `ha` services (the module's `provides` in
 - XCP-ng — seems less polished and with fewer features (though it also seems more "free").
 - FreeNAS/TrueNAS — good for storage (same ZFS underpinning) but not really a cloud
   platform: no clustering and HA like Proxmox.
+- Dedicated SAN/NAS for storage — ZFS on commodity local disks delivers the redundancy
+  without extra hardware (up to 50% cheaper in small/medium deployments); Ceph/Garage S3
+  remain a roadmap option for synchronous cross-node replication.
 
-Source: the TAPPaaS software-selection design (Documentation repo,
-`docs/architecture/solution-design/software-selection.md`). Depth: see [DESIGN.md](./DESIGN.md).
+Source: the TAPPaaS curation criteria (Design Principles, tappaas.org
+What → Principles) and
+[StorageDesign.md](../../../docs/Architecture/StorageDesign.md). Depth: see
+[DESIGN.md](./DESIGN.md).
 
 ## Dependencies
 

@@ -26,7 +26,12 @@ Having a well established password manager that can be trusted is essential, and
 
 For secrets used in integration we chose to also use VaultWarden. This simplify setup
 
-The server part runs as a service under pangolin reverse proxy so available everywhere. secrets are stored encrypted so even a hack of the server is not going to compromise the passwords. For that reason we host the vault in the DMZ to assist with uptime, and the possibility to host in a VPS.
+The server part runs as a service behind the TAPPaaS reverse proxy so available everywhere. secrets are stored encrypted so even a hack of the server is not going to compromise the passwords. For that reason we host the vault in the DMZ to assist with uptime, and the possibility to host in a VPS.
+
+VaultWarden complements the Authentik SSO provided by the `identity` foundation module — together they form the complete TAPPaaS identity and credential strategy:
+
+- **Authentik** manages single sign-on for all applications that support it (OIDC or forward-auth)
+- **VaultWarden** securely stores credentials for legacy systems and external services that cannot yet leverage SSO
 
 
 ## Root and Management access to VM's

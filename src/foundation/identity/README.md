@@ -79,6 +79,18 @@ provisioned, backed up and published by the foundation services it depends on.
 - Sizing defaults: 2 cores, 4096 MB RAM, 32G disk on `tanka1` (VMID 140, zone `mgmt`,
   NixOS template 8080).
 
+## Alternatives considered
+
+- Keycloak — the most widely adopted open-source IdP (OIDC, SAML, OAuth2, LDAP), but
+  heavier and more complex to operate than a self-hosted platform needs.
+- Authelia — lightweight MFA/access-policy portal; too narrow to be the platform IdP.
+- Gluu, Zitadel, IdentityServer, Apereo CAS — enterprise-, cloud-native- or .NET-focused;
+  a poorer fit for TAPPaaS. Authentik was chosen for its modern UI, protocol coverage
+  (OIDC, forward-auth proxy, SAML, LDAP) and light footprint.
+
+Source: the documentation site's single-signon solution-design page (analysis now in
+[DESIGN.md](./DESIGN.md)). Depth: see [DESIGN.md](./DESIGN.md).
+
 ## Dependencies
 
 | Depends on | Purpose |

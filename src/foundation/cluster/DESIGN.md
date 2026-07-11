@@ -171,6 +171,40 @@ config-storage.sh [--pool <name>=<topology>:<disk>[,<disk>...]] [--list]
 Interactively, it offers to build `tanka1`, `tankb1`, `tankc1` in turn; for each you pick
 disks and a topology (existing pools are skipped).
 
+## Storage design decisions
+
+Migrated from the documentation site's solution-design "Storage" page; conceptual
+background in [StorageDesign.md](../../../docs/Architecture/StorageDesign.md).
+
+**ZFS as the storage manager.** ZFS meets the criteria for an efficient, scalable,
+redundant, flexible and trustworthy storage solution, combined here with a standard
+setup of snapshots and replication across cluster nodes. It gives TAPPaaS
+enterprise-grade storage on commodity disks without dedicated (costly) SAN/NAS
+hardware — in small to medium deployments this can cut storage hardware cost by up to
+50%. The design stays hardware-agnostic on SSD vs HDD and caching layout. Growth paths:
+add disks to a pool, add pools to a node, add nodes to the cluster. Redundancy is
+layered: ZFS RAID within a node, snapshot + replication across nodes (`cluster:ha`),
+and backup between local and remote installations (the `backup` module).
+
+**Known limitation — no synchronous cross-node replication.** The `cluster:ha` service
+uses asynchronous ZFS replication (default schedule `*/15`, i.e. up to 15 minutes of
+data loss on failover; a module can tighten this via its `replicationSchedule`).
+Providing a synchronous option (Ceph, Garage S3) is a roadmap item, recommended only
+for large installations.
+
+### Pool tiers
+
+`tankXY`: `X` is the tier, `Y` a sequence number. Pools mount at `/<poolname>`
+(e.g. `/tanka1`). The tier meanings (also printed by `config-storage.sh`):
+
+| Tier | Purpose | Typical build |
+|------|---------|---------------|
+| `tanka` | Primary VM storage — VM virtual disks and HA replication live here | fast + redundant (mirrored SSDs) |
+| `tankb` | Second-tier data: less-important services, S3 buckets, logging | no RAID redundancy, cheaper disks, no HA replication |
+| `tankc` | Backup — the PBS datastore | cost-optimized, mostly single-stream write; typically on one node only (`tappaas3` in a 3-node cluster) |
+
+Letters `d`, `e`, … remain free for specialized storage characteristics.
+
 ## Adding more nodes
 
 The supported flow is `site-manager node add tappaasN --pxe` from the mothership (see
