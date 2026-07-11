@@ -925,7 +925,8 @@ else
     # MERGE the test zones from the canonical SOURCE into the DEPLOYED zones.json
     # (set Active), preserving every other zone. We must NOT overwrite the runtime
     # config wholesale — that destroys runtime-only zones such as variant zones
-    # (defect 4, ISSUES/deep-test-trunk-and-nixbuild.md). cleanup_deep removes
+    # (historical defect 4 — investigation log in git history:
+    # network/ISSUES/deep-test-trunk-and-nixbuild.md). cleanup_deep removes
     # these test-zone keys again afterwards.
     if [[ -f "${ZONES_TEMPLATE}" && -f "${CONFIG_DIR}/zones.json" ]]; then
         tmp=$(mktemp)
@@ -981,7 +982,8 @@ else
         # VLANs reach OPNsense. Uses the SAFE shared helper (resolves trunks0=
         # "ALL" -> all active VLAN tags; preserves MAC/tag/queues; only writes on
         # change) — NOT the old per-zone rewrite that clobbered net0 to a single
-        # VLAN (defect 1, ISSUES/deep-test-trunk-and-nixbuild.md).
+        # VLAN (historical defect 1 — investigation log in git history:
+        # network/ISSUES/deep-test-trunk-and-nixbuild.md).
         if vmnet_sync_firewall_trunks "${CONFIG_DIR}/zones.json" "${FIREWALL_JSON}"; then
             pass "OPNsense VM net0 trunks synced with all active VLANs"
         else
@@ -1276,7 +1278,7 @@ else
     else
         # Distinguish "auto-pinhole wrong" from the known
         # "zone-manager block-private shadows the pinhole" infrastructure bug
-        # (see ISSUES/zone-manager-block-private-shadows-auto-pinholes.md).
+        # (see GitHub #386).
         # If pflog shows a `block` rule (numbered low on vlan0.810) eating
         # the SYN, that's the upstream issue, not an auto-pinhole bug — we
         # downgrade the result to a skip with a pointer.
@@ -1290,7 +1292,7 @@ else
              wait" 2>/dev/null || true)
 
         if echo "${pflog_verdict}" | grep -qE 'block.*in on vlan0\.810'; then
-            skip "test-fw-a → test-fw-c:9091 — auto-pinhole rule IS created (see Deep 6b) but zone-manager's block-private rule shadows it (see ISSUES/zone-manager-block-private-shadows-auto-pinholes.md)"
+            skip "test-fw-a → test-fw-c:9091 — auto-pinhole rule IS created (see Deep 6b) but zone-manager's block-private rule shadows it (see GitHub #386)"
             info "  -- pflog evidence (a 'block' rule on vlan0.810 caught the SYN) --"
             echo "${pflog_verdict}" | grep -E 'block|tcp.*9091' | sed 's/^/      /' | head -4
         else

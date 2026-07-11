@@ -88,8 +88,9 @@ tappaas-cicd install runs *before* updating the network module. Run
 
 **DNS breaks right after a firewall update**
 Update order matters: OPNsense software update + reboot happen **before** zone-manager
-re-applies configuration (which regenerates Unbound). See [ISSUES.md](./ISSUES.md) for
-background and `update.sh` for the exact sequence.
+re-applies configuration (which regenerates Unbound). See
+[DESIGN.md](./DESIGN.md#troubleshooting-unbound--dnsbl) ("Troubleshooting:
+Unbound / DNSBL") for background and `update.sh` for the exact sequence.
 
 **`firewallType=NONE` deployments**
 All OPNsense operations are skipped; `rules-manager` prints rules in human-readable form

@@ -2,6 +2,8 @@
 
 # TAPPaaS Backup, Disaster Recovery and High Availability Design
 
+> **Partially superseded.** Authoritative: [ADR-012 - backup enhancement](../ADR/ADR-012-backup-enhancement.md) and `src/foundation/backup/DESIGN.md`. Kept for the conceptual background.
+
 ## Introduction
 
 Backup, Disaster Recovery (DR) and High Availability (HA) goes hand in hand and is typical topics that are not well planned for SMB and Home use.

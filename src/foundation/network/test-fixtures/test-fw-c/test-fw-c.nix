@@ -6,8 +6,9 @@
 # SELF-CONTAINED (no cross-directory import). test-fw-c lives in its own subdir,
 # and update-os.sh only copies same-directory sibling .nix files to the VM — a
 # parent-relative `../test-fw-webserver.nix` import resolved to a non-existent
-# /etc/test-fw-webserver.nix and broke nixos-rebuild
-# (ISSUES/deep-test-trunk-and-nixbuild.md defect 2). The webserver is inlined here.
+# /etc/test-fw-webserver.nix and broke nixos-rebuild (historical defect 2 —
+# investigation log in git history: network/ISSUES/deep-test-trunk-and-nixbuild.md).
+# The webserver is inlined here. See also TEST.md's fixture guidance.
 
 { config, lib, pkgs, modulesPath, system, ... }:
 

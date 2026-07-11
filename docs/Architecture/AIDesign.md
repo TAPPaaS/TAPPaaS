@@ -2,6 +2,8 @@
 
 # AI design for TAPPaaS
 
+> **Needs refresh:** this concept doc predates the shipped AI stack — it names ollama as the server; the implemented stack is `vllm-amd` + `litellm` + `openwebui`.
+
 The current world of AI is moving at a fast phase so it is difficult to create a stable design
 
 However there are some patterns that emerges that allow us to make some hopefully sensible design decisions

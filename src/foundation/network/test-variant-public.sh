@@ -12,7 +12,8 @@
 #
 # Trunk handling uses the SAME safe mechanism as firewall/update.sh
 # (vmnet_resolve_trunks "ALL" -> qm set --net0, preserving MAC/queues) — NOT the
-# broken legacy --deep logic (see ISSUES/deep-test-trunk-and-nixbuild.md).
+# broken legacy --deep logic (investigation log in git history:
+# network/ISSUES/deep-test-trunk-and-nixbuild.md).
 #
 # Gate (skips unless met): public DNS for <provider>.<variant-domain> resolves to
 # a public IP (you set up *.test3.tapaas.org -> your WAN). Variant uses

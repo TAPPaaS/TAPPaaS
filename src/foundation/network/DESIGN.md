@@ -331,6 +331,56 @@ teardown removes exactly what setup created.
 See [`docs/test-network-setup.md`](docs/test-network-setup.md) for the full
 setup/teardown runbook, options, verification, and troubleshooting.
 
+## Troubleshooting: Unbound / DNSBL
+
+**Symptom:** DNS resolution fails on the mgmt network (clients cannot resolve via
+`10.0.0.1`), typically during `zone-manager --execute` or right after a firewall
+update. Unbound logs show `ModuleNotFoundError: No module named 'dns'`.
+
+**Root cause (Python version mismatch):** OPNsense 25.x compiles Unbound against
+**Python 3.11** but ships dnspython only as **py313-dnspython** (py311-dnspython does
+not exist in the OPNsense repos). The `unbound.inc` PHP plugin *unconditionally* adds
+`python iterator` to the module-config and includes the DNSBL python script, so any
+operation that regenerates the Unbound config (zone-manager API calls, an OPNsense
+update) produces a config Unbound cannot load. The prebuilt image works only because it
+ships a pre-generated `/var/unbound/unbound.conf` — the failure appears on the first
+regeneration. This is why `update.sh` runs the OPNsense update + reboot **before**
+zone-manager, followed by a DNS health check.
+
+**Second root cause (working-directory path):** the DNSBL module is referenced by a
+relative path, and only one of the two Unbound start paths sets the working directory:
+
+| Method | Script | Has `cd /var/unbound/` | Result |
+|--------|--------|------------------------|--------|
+| `pluginctl -c unbound_start` | `/usr/local/opnsense/scripts/unbound/start.sh` | Yes | **Works** |
+| `service unbound restart` | `/usr/local/etc/rc.d/unbound` | No | **Fails** |
+
+Restarting via the `rc.d` script runs `unbound-checkconf` from the wrong directory:
+`pythonmod: can't open file unbound-dnsbl/dnsbl_module.py for reading`. The OPNsense
+API and configd use `pluginctl`, so API-driven restarts work.
+
+**Recovery** (on the firewall, csh):
+
+```csh
+pluginctl -c unbound_start
+```
+
+This uses `start.sh`, which handles the working directory correctly. Equivalent
+verbose form: `cd /var/unbound && /usr/local/sbin/unbound-checkconf
+/var/unbound/unbound.conf && service unbound restart`. To diagnose, `service unbound
+status` + `unbound-checkconf /var/unbound/unbound.conf` — running-but-checkconf-fails
+means the process holds an old working config and any restart will fail.
+
+**Permanent-fix options** (none applied yet — the update.sh ordering is the mitigation):
+
+1. Patch `unbound.inc` to drop the Python module from the module-config (disables DNSBL
+   integration; overwritten by OPNsense updates).
+2. Wait for OPNsense to fix the mismatch (ship py311-dnspython or rebuild Unbound
+   against Python 3.13).
+3. Patch `/usr/local/etc/rc.d/unbound` to `cd /var/unbound` before its checkconf calls
+   (fixes the path issue, not the version mismatch).
+4. Disable DNSBL entirely (removes DNS-level ad/malware blocking).
+
 ## Related files
 
 - [`aliases.json`](aliases.json) — global aliases shared across modules

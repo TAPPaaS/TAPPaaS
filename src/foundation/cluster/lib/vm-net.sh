@@ -177,7 +177,8 @@ vmnet_parse() {
 # "ALL") against zones.json, then a trunks-only `qm set --net0` that PRESERVES the
 # MAC, tag and queues (never recreates the NIC). Replaces the broken per-zone
 # logic in firewall/test.sh --deep that clobbered net0 to a single VLAN
-# (ISSUES/deep-test-trunk-and-nixbuild.md defect 1).
+# (historical defect 1 — investigation log in git history:
+# network/ISSUES/deep-test-trunk-and-nixbuild.md).
 #
 #   vmnet_sync_firewall_trunks <zones_file> <firewall_json>
 #

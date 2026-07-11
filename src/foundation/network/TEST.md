@@ -31,6 +31,7 @@
 - **Deep 10: reconcile prunes a removed ingress** — removes an ingress entry from deployed test-fw-b.json (Pattern A aware) and asserts `rules-manager reconcile` deletes ≥1 orphan rule.
 - **Deep 11: Caddy public + split-horizon (ADR-005 #316)** — external passthrough via public IP (NAT reflection + wildcard TLS + Caddy→upstream), internal split-horizon DNS resolves FQDN to the DMZ gateway, and internal reachability through Caddy. Gated/skipped if no public default-environment domain or the public A record doesn't resolve to a public IP.
 - Live resources exercised: Proxmox (VM provisioning), OPNsense (zones/VLANs, filter + alias reload, rules, NAT reflection), DNS/DHCP/Unbound, Caddy, and the switch/ap providers (file-only via the manual `generic` plugin — NO real switch/AP hardware).
+- **New test fixtures** must be self-contained `.nix` files (no parent-relative `imports` — `update-os.sh` only copies same-directory siblings to the VM) and need ≥ 2048 MB RAM in their module json, or `nixos-rebuild` gets OOM-killed.
 
 ## Coverage notes — plane/controller coverage matrix
 - **opnsense plane** — well covered: `zone-manager`, `rules-manager`, `caddy-manager`, `opnsense-firewall` exercised live in both Standard (summary/list/dry-run/NONE-mode) and Deep (real rules, aliases, NAT reflection, split-horizon, inter-VM connectivity). Strongest coverage of the four planes.

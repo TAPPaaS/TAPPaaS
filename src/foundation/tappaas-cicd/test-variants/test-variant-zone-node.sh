@@ -18,8 +18,9 @@
 # VLAN set but not new variant VLANs, so step 5 fails and the VM phase is SKIPPED
 # with that diagnosis — proving the bridge-vids fix is necessary but not sufficient
 # for off-firewall-node placement (the switch trunk is the remaining requirement).
-# See docs/design/zone-controller.md (design; the bash primitive is retired into
-# `network-manager zone add/delete`, ADR-007 Phase 7.5).
+# Design history: docs/design/zone-controller.md (removed in the #317 cleanup —
+# in git history; the bash primitive is retired into `network-manager zone
+# add/delete`, ADR-007 Phase 7.5 — see manager/network-manager/README.md).
 #
 # DEEP test: it creates and destroys a real zone (and a real VM only if the L2 path
 # is viable). Run as:

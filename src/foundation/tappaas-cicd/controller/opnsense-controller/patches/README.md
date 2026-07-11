@@ -94,19 +94,53 @@ curl -k -X POST -u "API_KEY:API_SECRET" \
 
 ## Deployment
 
-The `update.sh` script automatically copies these files to the firewall:
+The tappaas-cicd update (its `pre-update.sh`) automatically deploys these files to the
+firewall:
 
 ```bash
-cd /home/tappaas/TAPPaaS/src/foundation/30-tappaas-cicd
-./update.sh tappaas-cicd
+update-module.sh tappaas-cicd
 ```
 
-Manual deployment:
+Manual deployment (from tappaas-cicd):
 ```bash
-scp InterfaceAssignController.php root@firewall:/usr/local/opnsense/mvc/app/controllers/OPNsense/Interfaces/Api/
-scp ACL.xml root@firewall:/usr/local/opnsense/mvc/app/models/OPNsense/Interfaces/ACL/
-ssh root@firewall "configctl webgui restart"
+cd /home/tappaas/TAPPaaS/src/foundation/tappaas-cicd/controller/opnsense-controller/patches
+
+scp InterfaceAssignController.php \
+    root@firewall.mgmt.internal:/usr/local/opnsense/mvc/app/controllers/OPNsense/Interfaces/Api/
+
+scp ACL.xml \
+    root@firewall.mgmt.internal:/usr/local/opnsense/mvc/app/models/OPNsense/Interfaces/ACL/
+
+ssh root@firewall.mgmt.internal "configctl webgui restart"
 ```
+
+Then re-run `update-module.sh network`.
+
+## Fresh installs: expected 404 until the patch is deployed
+
+OPNsense ships **no** API for programmatic interface assignment — the
+`/api/interfaces/interface_assign/*` endpoints exist only once this controller is
+deployed. On a fresh OPNsense install from the prebuilt image the controller is absent,
+so `zone-manager --execute` fails interface assignment with:
+
+```
+ERROR: API call failed | Response: {'status_code': 404, ...
+'_content': b'{"errorMessage":"Endpoint not found"}'}
+```
+
+The standard bootstrap (`install.sh`) handles the ordering automatically:
+
+1. `config-firewall.sh` — creates the OPNsense VM from the prebuilt image
+2. `install-platform.sh` — creates the tappaas-cicd VM, runs `update-module.sh tappaas-cicd`
+3. tappaas-cicd's `pre-update.sh` deploys this controller patch to the firewall
+4. `update-module.sh network` — zone-manager now works
+
+The 404s therefore only occur when running `update-module.sh network` **before**
+`update-module.sh tappaas-cicd`, when deleting/reinstalling the firewall VM without
+re-running the tappaas-cicd update, or when manually testing against a fresh firewall
+that bypassed the standard install. They do not affect DNS or basic firewall operation —
+zones show "enabled" but get no firewall interfaces until the controller is deployed.
+Recover with the manual deployment above (or `update-module.sh tappaas-cicd`).
 
 ## History
 
@@ -121,7 +155,7 @@ ssh root@firewall "configctl webgui restart"
 - Endpoint: `/api/interfaces/interface_assign/addItem`
 - Status: ✅ Working in OPNsense 26.1
 - Fixed: February 2026
-- See: `ISSUES/opnsense-26.1-interface-assignment.md` for full investigation details
+- Full investigation log preserved in git history (`ISSUES/opnsense-26.1-interface-assignment.md`, ISSUES/ cleanup #317)
 
 ## Credits
 

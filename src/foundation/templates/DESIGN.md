@@ -47,6 +47,16 @@ Two things, deliberately kept together:
   `/etc/nixos/hardware-configuration.nix`, the cicd `bootstrap.sh` generates one from
   the running hardware before its first `nixos-rebuild`.
 
+## Hostname / DNS registration
+
+The NixOS baseline sets `networking.hostName = lib.mkDefault ""` so cloud-init (Proxmox
+`--name <vmname>`) owns the hostname, and ships a `tappaas-dhcp-hostname` oneshot that
+sets `ipv4.dhcp-hostname` and does a full NetworkManager re-acquire so the DHCP lease
+carries the correct name from first boot — even if the consumer overlay's
+`nixos-rebuild` never runs. VM DNS registration works via dnsmasq **leases** on the
+firewall (not `dns-manager` static pins). The full mechanism is documented inline in
+`tappaas-common.nix`.
+
 ## update.sh — version-gated template refresh
 
 `update.sh` keeps VM 8080 in sync with the version pinned in `tappaas-nixos.json`. It is

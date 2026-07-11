@@ -1,5 +1,7 @@
 # Proxmox Backup Server (PBS) implementation notes
 
+> **Partially superseded.** Authoritative: [ADR-012 - backup enhancement](../ADR/ADR-012-backup-enhancement.md) and `src/foundation/backup/DESIGN.md`. Kept for the conceptual background.
+
 Reflections on how to deploy the TAPPaaS PBS solution
 
 ## Introduction

@@ -1,5 +1,7 @@
 # ADR-007 Implementation Plan
 
+> **Status: implementation complete (2026-06-25).** Kept as the record of the build plan; deletion candidate once ADR007 is promoted to `stable`.
+
 **Issue**: #360
 **Status**: Draft
 **Version**: 0.2

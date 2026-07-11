@@ -47,4 +47,5 @@ firewall rules and the Caddy reverse proxy for every published service.
 For installation steps see [INSTALL.md](./INSTALL.md).
 
 Design and implementation detail: [DESIGN.md](./DESIGN.md). Test coverage:
-[TEST.md](./TEST.md). Known issues: [ISSUES.md](./ISSUES.md).
+[TEST.md](./TEST.md). Troubleshooting: the
+[Unbound / DNSBL section of DESIGN.md](./DESIGN.md#troubleshooting-unbound--dnsbl).

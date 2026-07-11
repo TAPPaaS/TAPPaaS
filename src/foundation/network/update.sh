@@ -13,7 +13,8 @@
 # 6. Remaining configuration (proxy, net0 trunks, etc.)
 #
 # This order ensures OPNsense updates are applied BEFORE zone-manager runs,
-# which triggers Unbound config regeneration. See ISSUES.md for background.
+# which triggers Unbound config regeneration. See DESIGN.md
+# ("Troubleshooting: Unbound / DNSBL") for background.
 #
 # When firewallType is "NONE" (no OPNsense deployed), this script skips all
 # OPNsense-specific operations and prints a reminder.
@@ -142,8 +143,9 @@ fi
 # ── Verify Unbound DNS is working ────────────────────────────────────
 #
 # After reboot, OPNsense regenerates Unbound config. If there's a
-# Python/dnspython version mismatch (see ISSUES.md), Unbound may fail
-# to start. We check DNS here to catch the problem early.
+# Python/dnspython version mismatch (see DESIGN.md, "Troubleshooting:
+# Unbound / DNSBL"), Unbound may fail to start. We check DNS here to
+# catch the problem early.
 
 debug "Verifying Unbound DNS is responding..."
 DNS_CHECK_RETRIES=6
@@ -153,7 +155,8 @@ while ! dig @10.0.0.1 firewall.mgmt.internal +short +timeout=5 >/dev/null 2>&1; 
     if [[ $DNS_CHECK_COUNT -ge $DNS_CHECK_RETRIES ]]; then
         warn "Unbound DNS not responding on 10.0.0.1 after ${DNS_CHECK_RETRIES} attempts"
         warn "This may indicate a Python/dnspython version mismatch in OPNsense."
-        warn "See src/foundation/network/ISSUES.md for recovery steps."
+        warn "See src/foundation/network/DESIGN.md (Troubleshooting: Unbound / DNSBL) for recovery steps."
+        warn "Quick recovery on the firewall: pluginctl -c unbound_start"
         warn "Attempting to continue, but zone-manager may fail..."
         break
     fi

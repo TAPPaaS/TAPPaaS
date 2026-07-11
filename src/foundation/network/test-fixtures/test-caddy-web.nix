@@ -2,8 +2,9 @@
 #
 # A small NixOS HTTP server returning a marker string on port 8080. Deliberately
 # SELF-CONTAINED — no cross-directory `imports` — so update-os.sh copies it to the
-# VM cleanly (avoids the parent-import nix-build failure documented in
-# ISSUES/deep-test-trunk-and-nixbuild.md). Used by firewall/test-caddy-public.sh.
+# VM cleanly (avoids the parent-import nix-build failure; investigation log in git
+# history: network/ISSUES/deep-test-trunk-and-nixbuild.md). Used by
+# firewall/test-caddy-public.sh. See also TEST.md's fixture guidance.
 
 { config, lib, pkgs, modulesPath, system, ... }:
 

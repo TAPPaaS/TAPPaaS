@@ -1,5 +1,7 @@
 # ADR-007 Implementation Tracker
 
+> **Status: execution log, all stages complete (2026-06-25).** Kept as the record of the implementation run; deletion candidate once ADR007 is promoted to `stable`.
+
 **Companion to**: [ADR-007-implementation.md](ADR-007-implementation.md) (the plan — *what* each stage delivers)
 **Purpose of this doc**: live execution state — *status, test results, commits, pushes* — for each stage in the [Implementation Sequence](ADR-007-implementation.md#implementation-sequence).
 **Driver**: the PM stage-gate workflow in [`.claude/skills/adr-007-driver/SKILL.md`](../../.claude/skills/adr-007-driver/SKILL.md).

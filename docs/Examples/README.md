@@ -42,5 +42,5 @@ Construct a 3 node system:
 
 ## Scale out
 
-Add servers as needed. Pangolin can act as a load balancer. CEPH can be added to have consistent storage across nodes. 
+Add servers as needed. The satellite reverse proxy (ADR-010) can spread public ingress across nodes. CEPH can be added to have consistent storage across nodes. 
 

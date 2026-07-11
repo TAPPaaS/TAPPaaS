@@ -2,6 +2,8 @@
 
 # TAPPaaS Network design
 
+> **Zone SSOT:** the operational zone definitions live in `src/foundation/tappaas-cicd/manager/network-manager/ZONES.md` + `zones.json`; the zone names in this concept doc predate them.
+
 ## Introduction
 
 There are a number of parts to the TAPPaaS network design:

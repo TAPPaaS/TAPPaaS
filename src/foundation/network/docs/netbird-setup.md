@@ -133,6 +133,45 @@ operator workaround is to reach them from a wired LAN (mgmt) connection instead.
 
 ---
 
+## macOS client setup
+
+On macOS (Sequoia and later), **use the NetBird.app directly — do not install
+the LaunchDaemon**. The LaunchDaemon approach is for headless servers
+(OPNsense, LXC containers), not desktop clients.
+
+1. **Register as a User Device via SSO** (not a setup key): open
+   `/Applications/NetBird.app` and log in with your account. This creates a
+   User Device entry in the NetBird dashboard, not a Server.
+2. **Auto-start:** System Settings → General → Login Items & Extensions →
+   Open at Login → add NetBird.app.
+3. **Connect** via the menu bar icon or `netbird up`.
+
+> **Why not the LaunchDaemon?** Two Sequoia-specific gotchas break it:
+>
+> - **Background Task Management (BTM)** rejects the daemon: the shipped plist
+>   lacks `AssociatedBundleIdentifiers`, and conflicting BTM registrations
+>   (legacy "Wiretrustee UG" vs. current "NetBird GmbH" signing identity) cause
+>   `backgroundtaskmanagementd` to actively remove the registration.
+>   `launchctl bootstrap` fails with `Bootstrap failed: 5: Input/output error`.
+> - **Symlinked binary path:** the plist points `ProgramArguments` at
+>   `/usr/local/bin/netbird`, a symlink into NetBird.app — Sequoia's launchd
+>   does not reliably follow symlinks for system daemons.
+
+To diagnose BTM interference, watch the system log while the daemon tries to
+register:
+
+```sh
+log show --predicate 'eventMessage contains[c] "netbird"' --last 2m --info
+# BTM rejection shows as: removing uuid=..., name=NetBird GmbH, type=developer
+```
+
+If the daemon does not start after a reboot (BTM approval may need re-granting
+after a fresh macOS install or major update): verify NetBird.app is still in
+Login Items, then start it manually with `open /Applications/NetBird.app`
+followed by `netbird up`, and check with `netbird status`.
+
+---
+
 ## Result
 
 After setup, an admin peer connecting to Netbird automatically receives:

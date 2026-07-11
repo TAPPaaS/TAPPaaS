@@ -299,7 +299,7 @@ network-manager add tenant1 --from-zone srvCust --variant tenant1
 network-manager delete tenant1
 ```
 
-The TS lifecycle keeps the whole sequence in one owner (author `zones.json` + the `mgmt.access-to` invariant, then reconcile **all four planes** — OPNsense, Proxmox trunks/bridge-vids, physical switch, APs — the `#372`/`#373` fix the bash version lacked) and auto-distributes `zones.json` to the nodes. Original design: [`docs/design/zone-controller.md`](../../../../docs/design/zone-controller.md) (retirement note at top); current behavior: [`../manager/network-manager/README.md`](../manager/network-manager/README.md).
+The TS lifecycle keeps the whole sequence in one owner (author `zones.json` + the `mgmt.access-to` invariant, then reconcile **all four planes** — OPNsense, Proxmox trunks/bridge-vids, physical switch, APs — the `#372`/`#373` fix the bash version lacked) and auto-distributes `zones.json` to the nodes. Original design: `docs/design/zone-controller.md` (removed in the #317 cleanup; in git history); current behavior: [`../manager/network-manager/README.md`](../manager/network-manager/README.md).
 
 **Deep test:** [`../test-variants/test-variant-zone-node.sh --deep`](../test-variants/test-variant-zone-node.sh) creates a variant zone, asserts the new VLAN reaches **every** node's bridge, places a `tvbase` VM on a non-firewall node (default `tappaas3`), and verifies it gets an IP and is reachable — the end-to-end regression for the bridge-vids gap.
 

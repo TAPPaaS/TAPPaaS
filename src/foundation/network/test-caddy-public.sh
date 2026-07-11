@@ -6,8 +6,9 @@
 # both from outside (public IP, TLS-terminated + proxied by Caddy) and from
 # inside via split-horizon DNS. Deliberately SAFE: it deploys a small NixOS
 # webserver in an ALREADY-ACTIVE zone (srvWork) — it does NOT activate zones or
-# touch the firewall VM's trunk config (unlike firewall/test.sh --deep, see
-# ISSUES/deep-test-trunk-and-nixbuild.md). It creates and destroys one real VM.
+# touch the firewall VM's trunk config (unlike firewall/test.sh --deep; the
+# trunk-clobber investigation log is in git history:
+# network/ISSUES/deep-test-trunk-and-nixbuild.md). It creates and destroys one real VM.
 #
 # Gate (skips unless both hold): the default variant "" has a real domain AND
 # public DNS for the service FQDN resolves to a public IP.
