@@ -11,13 +11,33 @@ Clients → LiteLLM :4000 → LLM Providers (vllm-amd, OpenRouter, Anthropic, �
                         → Redis       (response cache)
 ```
 
-- LiteLLM runs as a Podman container (`podman-litellm`) with host networking.
+- LiteLLM runs as a Podman container (`podman-litellm`) with host networking,
+  serving the proxy with 4 workers (`--num_workers 4` in `litellm.nix`).
 - PostgreSQL 17 and Redis 7 run natively on the NixOS VM, localhost-only.
 - Redis uses AOF persistence (`appendonly` + `appendfsync everysec`).
 - The master key is auto-generated on first boot (`generate-litellm-secrets`)
   and stored in `/etc/secrets/litellm.env`. Provider keys are stored in the
   database via the UI/API, not in the env file.
 - VM firewall opens ports 22 (SSH) and 4000 (LiteLLM API) only.
+- Besides `vllm-amd` and cloud providers, any other OpenAI-compatible backend
+  (e.g. an Ollama or vLLM instance running on another machine on the network)
+  can be added as a provider via the UI — LiteLLM fronts them all behind the
+  single port-4000 endpoint and its virtual keys.
+
+## Using the API
+
+LiteLLM is a drop-in OpenAI replacement. From any zone with a pinhole, point
+an OpenAI client at the proxy with a virtual key:
+
+    from openai import OpenAI
+    client = OpenAI(
+        base_url="http://litellm.srvWork.internal:4000/v1",
+        api_key="<virtual key>",
+    )
+    client.chat.completions.create(model="<model name>", messages=[...])
+
+Model names are whatever is configured in the UI (AI Hub); usage is tracked
+per virtual key.
 
 ## Sizing
 

@@ -11,6 +11,10 @@ README or the install guide.
   (session state, cache, WebSocket streaming) run natively on the NixOS VM.
 - Redis uses AOF persistence — data survives container restarts.
 - Secrets are auto-generated on first boot (no placeholder values).
+- PostgreSQL uses trust authentication, bound to localhost only
+  (`127.0.0.1`/`::1`, see `openwebui.nix`). This is acceptable because the
+  database is not reachable from outside the VM; configure password
+  authentication before ever exposing PostgreSQL beyond localhost.
 - Service port: 8080. Exposed to the `home` zone through `network:proxy`
   (`proxyAllowedZones: ["home"]` in `openwebui.json`).
 

@@ -11,34 +11,16 @@ boot preconfigured, and the bootstrap scripts chain together — so most steps a
 > Anywhere a default is mentioned, it can be changed — see
 > [Appendix: install options](#appendix-install-options).
 
----
-
-## 1. Prerequisites
-
-You are installing **either a single-node system or a cluster** (you can add
-nodes later, **up to 9** — `tappaas1`…`tappaas9`, which the firewall reserves
-`10.0.0.10`–`10.0.0.18` and DNS names for). You need:
-
-- **Hardware:** 1 node (or 3) capable of running Proxmox VE 9, each with **two
-  NICs** (one WAN, one LAN). A 3-node cluster also needs a switch between the
-  nodes — an **unmanaged switch** works out of the box, or a **managed switch**
-  if you configure VLAN trunking (see [the network section](#network--cutting-over-to-the-firewall)).
-- **An existing network** (your home/office LAN) with a **free IP** for the first
-  node and a working DHCP server + internet. After the firewall is switched in,
-  that same network hands the firewall's WAN an address via **DHCP**.
-- **A registered domain** with API-accessible DNS (used for automatic TLS
-  certificates): this is not a hard requirement, but useful for TAPPaaS to expose
-  services — you can also configure TAPPaaS with a domain you have not yet registered.
-- A **strong password** for Proxmox and the firewall. You will be asked for it
-  several times during install.
-
-That's it. Everything else is created by the install.
+**Before you start:** hardware sizing, network plan, domain/DNS, credentials and
+branch selection are covered in the preparation guide on the documentation site:
+<https://tappaas.org/installation/preparation/>. This document assumes preparation
+is done and concentrates on the install itself.
 
 ---
 
-## 2. Bootstrap: cluster nodes, firewall, CICD mothership
+## 1. Bootstrap: cluster nodes, firewall, CICD mothership
 
-### 2.1 First node + firewall
+### 1.1 First node + firewall
 
 1. **Install Proxmox VE 9.1** on the first machine. Note TAPPaaS does not
    support PVE 9.2 yet. Two ways:
@@ -70,7 +52,7 @@ That's it. Everything else is created by the install.
 
    > **Disk standard:** the PVE system goes on a **dedicated boot disk**
    > (ext4/LVM — the default). The `tankXY` data pools live on **other**
-   > disks and are created later by the platform (§2.1 step [1/5] /
+   > disks and are created later by the platform (§1.1 step [1/5] /
    > `config-storage.sh`), never by the installer.
 
    **Option B — stock ISO, manual screens.** Download the ISO and create a
@@ -114,7 +96,7 @@ That's it. Everything else is created by the install.
      **organisation** in the identity provider. If omitted you'll be prompted.
    - **`--domain`** — your **public domain**; the reverse proxy is configured for
      `<service>.yourdomain.com`. If omitted you'll be prompted. You don't need the
-     domain's DNS-01 API token yet — that comes in §2.3.
+     domain's DNS-01 API token yet — that comes in §1.3.
 
    On the **first node** this runs the whole foundation bring-up **end-to-end** as
    a 5-step chain — you run it once and watch:
@@ -144,7 +126,7 @@ That's it. Everything else is created by the install.
 
    > **One name, everywhere:** `<orgname>` = the Proxmox cluster name = `site.json`
    > `.name` = the default environment name = your organisation name. You set it
-   > once with `--name`; the **organisation itself** isn't created until §3
+   > once with `--name`; the **organisation itself** isn't created until §2
    > (`rest-of-foundation.sh`, after the identity provider is up).
 
    The domain you passed configures the reverse proxy. To stop earlier, pass
@@ -157,7 +139,7 @@ That's it. Everything else is created by the install.
    `https://10.0.0.10:8006`, firewall GUI at `https://10.0.0.1`) — not required,
    since the node also keeps its upstream IP until you harden it later.
 
-### 2.2 Add additional nodes (skip for single-node)
+### 1.2 Add additional nodes (skip for single-node)
 
 Do this **after** the first node's bootstrap has finished (cicd is up).
 Follow-on nodes install **over the network, fully unattended** — no USB stick,
@@ -220,16 +202,16 @@ update-tappaas --force
 > `node add <name> --pxe` command) is otherwise identical, the answer still
 > comes from the mothership over HTTP.
 >
-> **Manual install instead?** Install from a stock ISO or the §2.1 option A
+> **Manual install instead?** Install from a stock ISO or the §1.1 option A
 > stick, give the node its standard mgmt IP (or let it DHCP), then run
 > `site-manager node add tappaas2` (no `--pxe`) — it finds the Proxmox at
 > the node's designated IP and runs the same join + capture pipeline.
 > The underlying tools remain available for surgery: `node-provisioner
 > register/enable/disable/status` and `dhcp-manager pxe/host`.
 
-### 2.3 Set up TLS certificates
+### 1.3 Set up TLS certificates
 
-Your domain is already configured (you passed `--domain` in §2.1). The default
+Your domain is already configured (you passed `--domain` in §1.1). The default
 TLS strategy (`proxyTls: dns01`) issues **one wildcard certificate per TAPPaaS
 domain** via ACME **DNS-01**, then binds it to every module's reverse-proxy
 entry through Caddy's `CustomCertificate` (issue #254). DNS-01 needs no
@@ -289,7 +271,7 @@ want a per-domain cert via HTTP-01 because the service is publicly reachable on
 :80 and you don't want it to share the wildcard), set `proxyTls: http01` on
 that module. The two strategies coexist per-module.
 
-Skipping §2.3 is fine if you only use TAPPaaS internally — every service stays
+Skipping §1.3 is fine if you only use TAPPaaS internally — every service stays
 reachable on the LAN; only the public HTTPS endpoint of `dns01` modules will
 lack a certificate until you run `acme-setup.sh`. *(The public domain now lives
 per-environment, not in `site.json`. To change the default environment's domain
@@ -298,7 +280,7 @@ re-run `acme-setup.sh`.)*
 
 ---
 
-## 3. Install the rest of the foundation
+## 2. Install the rest of the foundation
 
 From here on you work **from the cicd mothership** (`ssh tappaas@tappaas-cicd`).
 One command does two things:
@@ -311,7 +293,7 @@ rest-of-foundation.sh
    logging** — then runs a final system update + tests.
 2. **Bootstraps your people domain** — once the identity provider (Authentik) is
    up and `config/people/` is still empty (first install), it creates the
-   **organisation `<orgname>`** (the same name from §2.1), the `users` group and
+   **organisation `<orgname>`** (the same name from §1.1), the `users` group and
    **your installer user** (from `site.json`'s email), and pushes them into
    Authentik. So **this is where your organisation is actually created** — the
    earlier `--name` only reserved the name; the org entity is materialised here.
@@ -332,7 +314,7 @@ When it finishes you'll see a **"🎉 your TAPPaaS foundation is installed"** su
 
 ---
 
-## 4. Add Stacks (apps + community modules)
+## 3. Add Stacks (apps + community modules)
 
 Functionality beyond the foundation comes from **modules** — first-party ones in
 this repo (`src/apps/`) and ones from **community module stores** (other repos).
@@ -369,7 +351,7 @@ proxy + firewall rules registered automatically. Install others the same way
 ## Network — cutting over to the firewall
 
 Putting the firewall (a VM on `tappaas1`, at `10.0.0.1`) inline as the gateway is
-done **for you** by the bootstrap (§2.1 step 2.3) — `config-network.sh
+done **for you** by the bootstrap (§1.1 step [3/5]) — `config-network.sh
 --swap-gateway`. You normally never run it by hand; this section explains what it
 does. Each node has **two NICs**, wired at install time and left in place:
 
@@ -532,7 +514,7 @@ tmux attach -t install
 
 ### 4. Run the install
 
-Run the bootstrap command from §2.1:
+Run the bootstrap command from §1.1:
 
 ```bash
 REPO="https://raw.githubusercontent.com/TAPPaaS/TAPPaaS/"; BRANCH="main"

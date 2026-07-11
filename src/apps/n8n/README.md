@@ -8,7 +8,9 @@ services and AI models.
 > Status: placeholder. This module is not implemented yet — there is no
 > `n8n.json`, no install/update/test scripts, and no VM configuration. The
 > planned approach (from the original notes) is a VM running Docker, with a
-> Docker Compose setup of n8n and PostgreSQL.
+> Docker Compose setup of n8n and PostgreSQL. AI access is planned to go
+> through the LiteLLM gateway (`litellm:models`), like the other AI clients
+> (see `docs/Architecture/AIDesign.md`).
 
 ## What you get
 

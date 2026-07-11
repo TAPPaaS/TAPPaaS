@@ -71,6 +71,16 @@ HAOS manages its own runtime updates via the web UI — do not update via TAPPaa
 (`haos_ova-17.3` in `hass.json`); HAOS self-updates from there. The module's `update.sh`
 only re-asserts the trusted-proxy configuration and reports access info.
 
+## Backups
+
+Full-system recovery is covered by scheduled PBS VM snapshots (`backup:vm`), with the
+QEMU guest agent's freeze-fs-on-backup enabled by `lib/appliance-ssh.sh` for consistent
+snapshots. Home Assistant's built-in backups (Settings -> System -> Backups) can
+supplement this with granular, HA-native restore of configuration and add-ons; download
+them off the VM if you want an extra off-site copy. Note that the TAPPaaS bootstrap
+credentials/LLAT (`/mnt/data/tappaas/hass.env`) are deliberately outside the HA backup
+set (#344) — they are covered by PBS only.
+
 ## Historical deployment note (PR #278)
 
 Earlier deployments used a zone named `srv_home`; underscores in zone names broke
