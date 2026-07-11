@@ -1,118 +1,81 @@
-# TAPPaaS Module Dependency Graph
+# TAPPaaS Module Dependency Model
 
-Arrows point from a **consumer** module to the **provider** module it depends on, labeled with the service used (`dependsOn: "provider:service"`). Foundation/provider modules sit at the bottom; applications at the top.
+Computed from every module's `<module>.json` (`dependsOn: "provider:service"`).
+Three views: the platform plumbing every module uses, the application topology
+worth drawing, and the complete per-module reference.
 
-_Generated: 2026-07-11 by generate-module-dependencies.sh — do not edit by hand._
+_Generated: 2026-07-11 by generate-module-dependencies.sh from 20 modules / 84 dependencies — do not edit by hand._
+
+## 1. Platform plumbing
+
+These foundation services are consumed near-universally; drawing them would
+bury the interesting structure. A module uses them unless its entry in the
+reference below says otherwise.
+
+| Service | Consumers (of 20 modules) |
+|---------|----------|
+| `cluster:vm` | 15 |
+| `backup:vm` | 14 |
+| `network:proxy` | 12 |
+| `templates:nixos` | 10 |
+| `network:rules` | 7 |
+| `cluster:ha` | 5 |
+
+## 2. Application topology
+
+Everything that is *not* plumbing — the dependencies that shape the platform.
+Multiple services between the same pair are merged into one labeled edge;
+providers marked `(external)` have no module in this repo yet.
 
 ```mermaid
 graph TD
-    subgraph Applications
-        coturn
-        deconz
-        euro-office
-        hass
-        litellm
-        netbird-client
-        nextcloud-hpb
-        nextcloud
-        openwebui
-        vaultwarden
-        vllm-amd
-        windows-server
-    end
-    subgraph Foundation
-        backup
-        cluster
-        identity
-        logging
-        network
-        satellite
-        tappaas-cicd
-        templates
-    end
-
-    coturn -->|vm| backup
-    coturn -->|vm| cluster
-    coturn -->|rules| network
-    coturn -->|fileservice| nextcloud
-    coturn -->|nixos| templates
-    deconz -->|vm| cluster
-    deconz -->|nixos| templates
-    deconz -->|vm| backup
-    deconz -->|proxy| firewall
-    deconz -->|rules| firewall
-    euro-office -->|vm| cluster
-    euro-office -->|nixos| templates
-    euro-office -->|vm| backup
-    euro-office -->|proxy| network
-    euro-office -->|rules| network
-    euro-office -->|fileservice| nextcloud
-    hass -->|vm| cluster
-    hass -->|vm| backup
-    hass -->|proxy| network
-    hass -->|rules| network
-    hass -->|ui| alfen
-    hass -->|discovery| alfen
-    hass -->|modbus| alfen
-    hass -->|audio| sonos
-    hass -->|airplay| sonos
-    hass -->|rtsp| reolink
-    litellm -->|vm| cluster
-    litellm -->|nixos| templates
-    litellm -->|vm| backup
-    litellm -->|identity| identity
-    litellm -->|proxy| network
-    litellm -->|rules| network
-    litellm -->|inference| vllm-amd
-    netbird-client -->|vm| cluster
-    netbird-client -->|ha| cluster
-    netbird-client -->|debian| templates
-    netbird-client -->|vm| backup
-    netbird-client -->|identity| identity
-    netbird-client -->|proxy| network
-    nextcloud-hpb -->|vm| backup
-    nextcloud-hpb -->|vm| cluster
-    nextcloud-hpb -->|turn| coturn
-    nextcloud-hpb -->|proxy| network
-    nextcloud-hpb -->|rules| network
-    nextcloud-hpb -->|fileservice| nextcloud
-    nextcloud-hpb -->|nixos| templates
-    nextcloud -->|vm| cluster
-    nextcloud -->|nixos| templates
-    nextcloud -->|vm| backup
-    nextcloud -->|proxy| network
-    nextcloud -->|rules| network
-    nextcloud -->|identity| identity
-    openwebui -->|vm| cluster
-    openwebui -->|nixos| templates
-    openwebui -->|vm| backup
-    openwebui -->|proxy| network
-    openwebui -->|models| litellm
-    openwebui -->|rules| network
-    vaultwarden -->|vm| cluster
-    vaultwarden -->|ha| cluster
-    vaultwarden -->|nixos| templates
-    vaultwarden -->|vm| backup
-    vaultwarden -->|identity| identity
-    vaultwarden -->|proxy| network
-    vllm-amd -->|lxc| cluster
-    vllm-amd -->|vm| backup
-    windows-server -->|vm| cluster
-    windows-server -->|windows| templates
-    windows-server -->|vm| backup
-    windows-server -->|proxy| network
-    identity -->|vm| cluster
-    identity -->|ha| cluster
-    identity -->|nixos| templates
-    identity -->|vm| backup
-    identity -->|proxy| network
-    logging -->|vm| cluster
-    logging -->|nixos| templates
-    logging -->|vm| backup
-    logging -->|proxy| network
-    network -->|vm| cluster
-    network -->|ha| cluster
-    network -->|proxy| network
-    tappaas-cicd -->|vm| cluster
-    tappaas-cicd -->|ha| cluster
+    coturn -->|"fileservice"| nextcloud
+    deconz -->|"proxy, rules"| firewall
+    euro-office -->|"fileservice"| nextcloud
+    hass -->|"audio, airplay"| sonos
+    hass -->|"rtsp"| reolink
+    hass -->|"ui, discovery, modbus"| alfen
+    litellm -->|"identity"| identity
+    litellm -->|"inference"| vllm-amd
+    netbird-client -->|"debian"| templates
+    netbird-client -->|"identity"| identity
+    nextcloud -->|"identity"| identity
+    nextcloud-hpb -->|"fileservice"| nextcloud
+    nextcloud-hpb -->|"turn"| coturn
+    openwebui -->|"models"| litellm
+    vaultwarden -->|"identity"| identity
+    vllm-amd -->|"lxc"| cluster
+    windows-server -->|"windows"| templates
+    alfen["alfen (external)"]:::ext
+    classDef ext stroke-dasharray: 5 5
+    firewall["firewall (external)"]:::ext
+    reolink["reolink (external)"]:::ext
+    sonos["sonos (external)"]:::ext
 ```
+
+## 3. Complete reference
+
+Every dependency of every module, verbatim from the json contracts.
+
+| Module | Depends on |
+|--------|------------|
+| **backup** | — |
+| **cluster** | — |
+| **coturn** | `backup:vm` `cluster:vm` `network:rules` `nextcloud:fileservice` `templates:nixos`  |
+| **deconz** | `cluster:vm` `templates:nixos` `backup:vm` `firewall:proxy` `firewall:rules`  |
+| **euro-office** | `cluster:vm` `templates:nixos` `backup:vm` `network:proxy` `network:rules` `nextcloud:fileservice`  |
+| **hass** | `cluster:vm` `backup:vm` `network:proxy` `network:rules` `alfen:ui` `alfen:discovery` `alfen:modbus` `sonos:audio` `sonos:airplay` `reolink:rtsp`  |
+| **identity** | `cluster:vm` `cluster:ha` `templates:nixos` `backup:vm` `network:proxy`  |
+| **litellm** | `cluster:vm` `templates:nixos` `backup:vm` `identity:identity` `network:proxy` `network:rules` `vllm-amd:inference`  |
+| **logging** | `cluster:vm` `templates:nixos` `backup:vm` `network:proxy`  |
+| **netbird-client** | `cluster:vm` `cluster:ha` `templates:debian` `backup:vm` `identity:identity` `network:proxy`  |
+| **network** | `cluster:vm` `cluster:ha` `network:proxy`  |
+| **nextcloud** | `cluster:vm` `templates:nixos` `backup:vm` `network:proxy` `network:rules` `identity:identity`  |
+| **nextcloud-hpb** | `backup:vm` `cluster:vm` `coturn:turn` `network:proxy` `network:rules` `nextcloud:fileservice` `templates:nixos`  |
+| **openwebui** | `cluster:vm` `templates:nixos` `backup:vm` `network:proxy` `litellm:models` `network:rules`  |
+| **satellite** | — |
+| **tappaas-cicd** | `cluster:vm` `cluster:ha`  |
+| **templates** | — |
+| **vaultwarden** | `cluster:vm` `cluster:ha` `templates:nixos` `backup:vm` `identity:identity` `network:proxy`  |
+| **vllm-amd** | `cluster:lxc` `backup:vm`  |
+| **windows-server** | `cluster:vm` `templates:windows` `backup:vm` `network:proxy`  |
