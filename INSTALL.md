@@ -18,101 +18,119 @@ is done and concentrates on the install itself.
 
 ---
 
-## 1. Bootstrap: cluster nodes, firewall, CICD mothership
+## The four steps
 
-### 1.1 First node + firewall
+| Step | What happens | Done when |
+|------|--------------|-----------|
+| [**1**](#step-1--first-node-proxmox-firewall-platform) | First node: Proxmox install, then one command bootstraps firewall, network cut-over and the CICD mothership | `tappaas1` runs behind the firewall; `tappaas-cicd` owns the platform |
+| [**2**](#step-2--add-additional-nodes-optional-skip-for-single-node) | Additional nodes join over the network, unattended *(optional)* | all nodes in the cluster |
+| [**3**](#step-3--set-up-tls-certificates) | TLS certificates via your DNS provider's API | wildcard cert issued and bound |
+| [**4**](#step-4--complete-the-foundation) | Remaining foundation modules + your organisation | the 🎉 foundation summary prints |
 
-1. **Install Proxmox VE 9.1** on the first machine. Note TAPPaaS does not
-   support PVE 9.2 yet. Two ways:
+---
 
-   **Option A — preconfigured install media (recommended).** Build a USB stick
-   that installs Proxmox with **one question asked on the target itself** (the
-   boot disk, chosen from the machine's real disks); everything else is
-   answered at build time (email, locale, root password) with TAPPaaS defaults
-   for the rest. The build runs on **your laptop** — no Proxmox needed: on
-   Linux the Proxmox assistant is fetched automatically, on macOS the script
-   re-runs itself in a Debian container (Docker required; run it from the
-   directory holding the ISO):
+## Step 1 — First node: Proxmox, firewall, platform
 
-   ```bash
-   src/foundation/cluster/make-install-media.sh --iso proxmox-ve_9.1.iso \
+### 1a. Install Proxmox VE 9.1 on the first machine
+
+Note TAPPaaS does not support PVE 9.2 yet. **Two ways — pick one option, then
+continue with step 1b:**
+
+#### Option A — preconfigured install media (recommended)
+
+Build a USB stick
+that installs Proxmox with **one question asked on the target itself** (the
+boot disk, chosen from the machine's real disks); everything else is
+answered at build time (email, locale, root password) with TAPPaaS defaults
+for the rest. The build runs on **your laptop** — no Proxmox needed: on
+Linux the Proxmox assistant is fetched automatically, on macOS the script
+re-runs itself in a Debian container (Docker required; run it from the
+directory holding the ISO):
+
+```bash
+src/foundation/cluster/make-install-media.sh --iso proxmox-ve_9.1.iso \
        --fqdn tappaas1.mgmt.internal
-   # prompts for email / country / keyboard / timezone / root password,
-   # VALIDATES the answer, writes proxmox-ve_9.1-tappaas-auto.iso
-   dd if=proxmox-ve_9.1-tappaas-auto.iso of=/dev/<usb> bs=4M status=progress
-   ```
+# prompts for email / country / keyboard / timezone / root password,
+# VALIDATES the answer, writes proxmox-ve_9.1-tappaas-auto.iso
+dd if=proxmox-ve_9.1-tappaas-auto.iso of=/dev/<usb> bs=4M status=progress
+```
 
-   Boot the target from the stick with the NIC to your **upstream router**
-   connected — network comes from **DHCP**, exactly like the PXE flow (the
-   management addressing is applied later by the TAPPaaS install). Pick the
-   boot disk when the console asks; the rest is hands-off and WIPES that
-   disk. Pass `--disk <dev>` at build time for a zero-keystroke install.
-   ⚠ The stick embeds the root password — treat the media like a credential
-   and rewrite it after use.
+Boot the target from the stick with the NIC to your **upstream router**
+connected — network comes from **DHCP**, exactly like the PXE flow (the
+management addressing is applied later by the TAPPaaS install). Pick the
+boot disk when the console asks; the rest is hands-off and WIPES that
+disk. Pass `--disk <dev>` at build time for a zero-keystroke install.
+⚠ The stick embeds the root password — treat the media like a credential
+and rewrite it after use.
 
-   > **Disk standard:** the PVE system goes on a **dedicated boot disk**
-   > (ext4/LVM — the default). The `tankXY` data pools live on **other**
-   > disks and are created later by the platform (§1.1 step [1/5] /
-   > `config-storage.sh`), never by the installer.
+> **Disk standard:** the PVE system goes on a **dedicated boot disk**
+> (ext4/LVM — the default). The `tankXY` data pools live on **other**
+> disks and are created later by the platform (Step 1, [1/5] /
+> `config-storage.sh`), never by the installer.
 
-   **Option B — stock ISO, manual screens.** Download the ISO and create a
-   bootable USB per the official guide:
-   <https://pve.proxmox.com/wiki/Installation>.
+#### Option B — stock ISO, manual screens
 
-    On the installer screens:
-   - **Network Nic** select the one you have connected to the upstream router. Initially this is the Lan port but it will eventually become the "wan" port of the TAPPaaS firewall. For secondary TAPPaaS nodes this is will stay lan port, as these nodes wil connect directly via the switch to the lan side of the firewall we create in the first node.
-   - **Hostname (FQDN):** `tappaas1.mgmt.internal` — TAPPaaS uses the internal
+Download the ISO and create a
+bootable USB per the official guide:
+<https://pve.proxmox.com/wiki/Installation>.
+
+On the installer screens:
+- **Network Nic** select the one you have connected to the upstream router. Initially this is the Lan port but it will eventually become the "wan" port of the TAPPaaS firewall. For secondary TAPPaaS nodes this is will stay lan port, as these nodes wil connect directly via the switch to the lan side of the firewall we create in the first node.
+- **Hostname (FQDN):** `tappaas1.mgmt.internal` — TAPPaaS uses the internal
      management domain `mgmt.internal`, **not** your public domain. (Your public
-     domain is supplied with `--domain` in step 2.)
-   - **Email:** a **working** address you actually monitor — Proxmox sends
+     domain is supplied with `--domain` in step 1b.)
+- **Email:** a **working** address you actually monitor — Proxmox sends
      system/health notifications here, and TAPPaaS reuses it as the admin email.
-   - **Management interface / IP / netmask / gateway / DNS:** must be **valid for
+- **Management interface / IP / netmask / gateway / DNS:** must be **valid for
      your existing network** — use a free IP (the proxmox installer is not using DHCP), and the real gateway and DNS
      server of the network this node currently sits on (so it has internet for
      the bootstrap).
 
-2. **Run the one-shot bootstrap** from the Proxmox **node console/shell**.
+### 1b. Run the one-shot bootstrap
 
-   Notes:
-   - **Prefer the console** — use the **xterm.js** shell option in the tappaas1 menu; it gives more scrollback and persistence on the install output.
-   - **SSH works too** — see [Appendix: Installing via SSH](#appendix-installing-via-ssh) for setup steps (known_hosts, locale, tmux).
-   - **⚠ Run from a client that is NOT on `10.0.0.0/24`.** The cutover puts the
+Whichever option you used above, continue here: run the bootstrap from the
+Proxmox **node console/shell**.
+
+Notes:
+- **Prefer the console** — use the **xterm.js** shell option in the tappaas1 menu; it gives more scrollback and persistence on the install output.
+- **SSH works too** — see [Appendix: Installing via SSH](#appendix-installing-via-ssh) for setup steps (known_hosts, locale, tmux).
+- **⚠ Run from a client that is NOT on `10.0.0.0/24`.** The cutover puts the
      management network (`10.0.0.0/24`) on the node, so a browser/SSH client that
      sits in that subnet loses its return path to the node and freezes. Drive the
      install from a client on your **install/upstream network**, or from a true
      **out-of-band console** (IPMI/iKVM) — not from a `10.0.0.x` laptop. (The node
      keeps its install IP throughout, so such a client never loses it.)
 
-   ```bash
-   REPO="https://raw.githubusercontent.com/TAPPaaS/TAPPaaS/"; BRANCH="main"
-   curl -fsSL ${REPO}${BRANCH}/src/foundation/install.sh >install.sh
-   chmod +x install.sh && ./install.sh "$REPO" "$BRANCH" --name <orgname> --domain "yourdomain.com"
-   ```
+```bash
+REPO="https://raw.githubusercontent.com/TAPPaaS/TAPPaaS/"; BRANCH="main"
+curl -fsSL ${REPO}${BRANCH}/src/foundation/install.sh >install.sh
+chmod +x install.sh && ./install.sh "$REPO" "$BRANCH" --name <orgname> --domain "yourdomain.com"
+```
 
-   Pass two things up front:
-   - **`--name <orgname>`** — your organisation / system name (lowercase, ≤15
+Pass two things up front:
+- **`--name <orgname>`** — your organisation / system name (lowercase, ≤15
      chars). This is **the one name** for the whole install: it names the **Proxmox
      cluster**, the **`site.json`**, the **default environment**, and (later) the
      **organisation** in the identity provider. If omitted you'll be prompted.
-   - **`--domain`** — your **public domain**; the reverse proxy is configured for
+- **`--domain`** — your **public domain**; the reverse proxy is configured for
      `<service>.yourdomain.com`. If omitted you'll be prompted. You don't need the
-     domain's DNS-01 API token yet — that comes in §1.3.
+     domain's DNS-01 API token yet — that comes in Step 3.
 
-   On the **first node** this runs the whole foundation bring-up **end-to-end** as
-   a 5-step chain — you run it once and watch:
+On the **first node** this runs the whole foundation bring-up **end-to-end** as
+a 5-step chain — you run it once and watch:
 
-   1. **[1/5] Node** — Proxmox post-install, the `lan`/`wan` bridges (auto-detected:
+1. **[1/5] Node** — Proxmox post-install, the `lan`/`wan` bridges (auto-detected:
       the install NIC with internet becomes **WAN**; the other, to your downstream
       switch, becomes **LAN**), the Proxmox **cluster named `<orgname>`**, and the
       ZFS pools.
-   2. **[2/5] Firewall** — downloads and boots the **prebuilt OPNsense image** at
+2. **[2/5] Firewall** — downloads and boots the **prebuilt OPNsense image** at
       `10.0.0.1`, self-configured with unique credentials (no GUI, no installer).
-   3. **[3/5] Gateway cutover** — adds this node's management IP `10.0.0.10` and
+3. **[3/5] Gateway cutover** — adds this node's management IP `10.0.0.10` and
       points its default route + DNS at the firewall. **Additive and
       non-disruptive**: the upstream IP is *kept*, **no cables move**, your session
       is **not** dropped.
-   4. **[4/5] Sanity check** — gateway, DNS, internet.
-   5. **[5/5] Platform** — imports the prebuilt **NixOS template** and builds the
+4. **[4/5] Sanity check** — gateway, DNS, internet.
+5. **[5/5] Platform** — imports the prebuilt **NixOS template** and builds the
       **`tappaas-cicd` mothership** (`bootstrap.sh` clone+nixos-rebuild → reboot →
       `install.sh`). The cicd's `install.sh` then **writes the system's
       configuration**, automatically:
@@ -124,22 +142,22 @@ is done and concentrates on the install itself.
       - the **foundation modules** (cluster, templates, network, tappaas-cicd) and
         the **Caddy** reverse proxy
 
-   > **One name, everywhere:** `<orgname>` = the Proxmox cluster name = `site.json`
-   > `.name` = the default environment name = your organisation name. You set it
-   > once with `--name`; the **organisation itself** isn't created until §2
-   > (`rest-of-foundation.sh`, after the identity provider is up).
+> **One name, everywhere:** `<orgname>` = the Proxmox cluster name = `site.json`
+> `.name` = the default environment name = your organisation name. You set it
+> once with `--name`; the **organisation itself** isn't created until Step 4
+> (`rest-of-foundation.sh`, after the identity provider is up).
 
-   The domain you passed configures the reverse proxy. To stop earlier, pass
-   `--skip-firewall` or `--skip-platform`; to drive the in-VM cicd install by hand,
-   see [Appendix: install options](#appendix-install-options).
+The domain you passed configures the reverse proxy. To stop earlier, pass
+`--skip-firewall` or `--skip-platform`; to drive the in-VM cicd install by hand,
+see [Appendix: install options](#appendix-install-options).
 
-   When it finishes, `tappaas1` is at `10.0.0.10` behind the firewall and
-   `tappaas-cicd` owns the platform. Optionally move your admin laptop onto the
-   **downstream switch** (you'll get a `10.0.0.x` lease; Proxmox at
-   `https://10.0.0.10:8006`, firewall GUI at `https://10.0.0.1`) — not required,
-   since the node also keeps its upstream IP until you harden it later.
+When it finishes, `tappaas1` is at `10.0.0.10` behind the firewall and
+`tappaas-cicd` owns the platform. Optionally move your admin laptop onto the
+**downstream switch** (you'll get a `10.0.0.x` lease; Proxmox at
+`https://10.0.0.10:8006`, firewall GUI at `https://10.0.0.1`) — not required,
+since the node also keeps its upstream IP until you harden it later.
 
-### 1.2 Add additional nodes (skip for single-node)
+## Step 2 — Add additional nodes (optional; skip for single-node)
 
 Do this **after** the first node's bootstrap has finished (cicd is up).
 Follow-on nodes install **over the network, fully unattended** — no USB stick,
@@ -202,16 +220,16 @@ update-tappaas --force
 > `node add <name> --pxe` command) is otherwise identical, the answer still
 > comes from the mothership over HTTP.
 >
-> **Manual install instead?** Install from a stock ISO or the §1.1 option A
+> **Manual install instead?** Install from a stock ISO or the Step 1 Option A
 > stick, give the node its standard mgmt IP (or let it DHCP), then run
 > `site-manager node add tappaas2` (no `--pxe`) — it finds the Proxmox at
 > the node's designated IP and runs the same join + capture pipeline.
 > The underlying tools remain available for surgery: `node-provisioner
 > register/enable/disable/status` and `dhcp-manager pxe/host`.
 
-### 1.3 Set up TLS certificates
+## Step 3 — Set up TLS certificates
 
-Your domain is already configured (you passed `--domain` in §1.1). The default
+Your domain is already configured (you passed `--domain` in Step 1). The default
 TLS strategy (`proxyTls: dns01`) issues **one wildcard certificate per TAPPaaS
 domain** via ACME **DNS-01**, then binds it to every module's reverse-proxy
 entry through Caddy's `CustomCertificate` (issue #254). DNS-01 needs no
@@ -271,7 +289,7 @@ want a per-domain cert via HTTP-01 because the service is publicly reachable on
 :80 and you don't want it to share the wildcard), set `proxyTls: http01` on
 that module. The two strategies coexist per-module.
 
-Skipping §1.3 is fine if you only use TAPPaaS internally — every service stays
+Skipping Step 3 is fine if you only use TAPPaaS internally — every service stays
 reachable on the LAN; only the public HTTPS endpoint of `dns01` modules will
 lack a certificate until you run `acme-setup.sh`. *(The public domain now lives
 per-environment, not in `site.json`. To change the default environment's domain
@@ -280,7 +298,7 @@ re-run `acme-setup.sh`.)*
 
 ---
 
-## 2. Install the rest of the foundation
+## Step 4 — Complete the foundation
 
 From here on you work **from the cicd mothership** (`ssh tappaas@tappaas-cicd`).
 One command does two things:
@@ -293,7 +311,7 @@ rest-of-foundation.sh
    logging** — then runs a final system update + tests.
 2. **Bootstraps your people domain** — once the identity provider (Authentik) is
    up and `config/people/` is still empty (first install), it creates the
-   **organisation `<orgname>`** (the same name from §1.1), the `users` group and
+   **organisation `<orgname>`** (the same name from Step 1), the `users` group and
    **your installer user** (from `site.json`'s email), and pushes them into
    Authentik. So **this is where your organisation is actually created** — the
    earlier `--name` only reserved the name; the org entity is materialised here.
@@ -314,44 +332,19 @@ When it finishes you'll see a **"🎉 your TAPPaaS foundation is installed"** su
 
 ---
 
-## 3. Add Stacks (apps + community modules)
-
-Functionality beyond the foundation comes from **modules** — first-party ones in
-this repo (`src/apps/`) and ones from **community module stores** (other repos).
-
-**1. Add the community module store** (once), with `repository.sh` — it registers
-the repo and clones it under `/home/tappaas/`:
-
-```bash
-repository.sh add github.com/TAPPaaS/Community --branch main
-repository.sh list
-```
-
-Its modules are then installable just like the built-in ones.
-
-**2. Install a module.** `cd` into the module's directory (the one holding its
-`<module>.json`) and run `install-module.sh`. E.g. add LiteLLM:
-
-```bash
-cd ~/TAPPaaS/src/apps/litellm && install-module.sh litellm
-# a community module lives under its repo, e.g.:
-# cd ~/Community/<contributer>/<module> && install-module.sh <module>
-```
-
-That's it — the module is placed on the right VLAN/zone and gets its reverse
-proxy + firewall rules registered automatically. Install others the same way
-(`nextcloud`, `homeassistant`, `openwebui`, …) to build out your stacks.
-
-> The verb-aligned front door `module-manager module add <module>` is equivalent
-> to `install-module.sh <module>` (the manager delegates to these scripts); use
-> whichever you prefer.
-
 ---
+
+## Next steps
+
+The foundation is complete. Everything from here is covered on the documentation
+site: **add environments**, **add a satellite**, **add stacks** (each module's
+install guide), and day-to-day **operation** — start at
+<https://tappaas.org/installation/>.
 
 ## Network — cutting over to the firewall
 
 Putting the firewall (a VM on `tappaas1`, at `10.0.0.1`) inline as the gateway is
-done **for you** by the bootstrap (§1.1 step [3/5]) — `config-network.sh
+done **for you** by the bootstrap (Step 1, [3/5]) — `config-network.sh
 --swap-gateway`. You normally never run it by hand; this section explains what it
 does. Each node has **two NICs**, wired at install time and left in place:
 
@@ -514,7 +507,7 @@ tmux attach -t install
 
 ### 4. Run the install
 
-Run the bootstrap command from §1.1:
+Run the bootstrap command from Step 1:
 
 ```bash
 REPO="https://raw.githubusercontent.com/TAPPaaS/TAPPaaS/"; BRANCH="main"
