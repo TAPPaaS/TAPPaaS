@@ -49,5 +49,18 @@
 | **Realization level** | **Stack** (Manager over ≥2 aggregated Modules) vs **Module** (single). Promote to Stack only on genuine ≥2-Module aggregation — **not** runtime coordination. |
 | **Tiering rule** | aggregation ≠ coordination. A Manager that merely coordinates scripts at runtime is a Module, not a Stack. |
 
+## D. Component naming decisions (#167, decided)
+
+The coordinate for a capability is **`<module>:<service>`** — the middle level is a *function
+exposed as a service* (per the #171 metamodel; `module-fields.json` `provides` defines the
+services), never the kind of product behind it.
+
+| Decision | Record |
+|----------|--------|
+| **`firewall` module → `network`** | The OPNsense module was renamed `network` in the ADR-007 refactor. The name under-described the implementation (an NGFW/UTM-class component also doing routing, DNS, DHCP, proxy — the #167 finding), and `network` names the *function domain* rather than one product capability. |
+| **No rename to `gateway`** | Considered and rejected (#167 comment, 2026-05-31). |
+| **`firewall:firewall` is gone** | The self-named coordinate was the symptom. Firewall pass rules are simply **`network:rules`**; the other services follow the same pattern (`network:proxy`, `network:dns`, `network:nat`, `network:discovery`). *(Cleanup candidates: `network.json` `provides` still lists a legacy `firewall` service, and deconz still depends on `firewall:*` names — see #413.)* |
+| **Kind-of-component vocabulary** | Classifying *what the implementation is* (NGFW, reverse proxy, IdP…) is descriptive prose for READMEs/DESIGN docs — it never enters the coordinate. |
+
 > All terms here are **TAPPaaS-native**. Other organisations that consume this ontology map it via a
 > one-way crosswalk maintained on **their** side — never in this repository.
