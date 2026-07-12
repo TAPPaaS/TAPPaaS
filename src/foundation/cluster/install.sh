@@ -98,7 +98,7 @@ header_info
 # ── Arguments ────────────────────────────────────────────────────────
 # Backward-compatible with the documented `install.sh <REPO> <BRANCH>`:
 # REPO/BRANCH remain positional. New optional flags drive the config phases.
-REPO="https://raw.githubusercontent.com/TAPPaaS/"
+REPO="https://codeberg.org/TAPPaaS/TAPPaaS/raw/branch/"
 BRANCH="stable"
 CLUSTER_MODE="auto"        # auto | create | join | none
 SKIP_NETWORK=0

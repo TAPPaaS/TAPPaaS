@@ -48,7 +48,7 @@ die()   { error "$*"; exit 1; }
 usage() { sed -n '2,/^set -euo/p' "$0" | sed 's/^# \{0,1\}//; /^set -euo/d'; }
 
 # ── Arguments ────────────────────────────────────────────────────────
-REPO="https://raw.githubusercontent.com/TAPPaaS/TAPPaaS/"
+REPO="https://codeberg.org/TAPPaaS/TAPPaaS/raw/branch/"
 BRANCH="main"
 DOMAIN=""
 ORGNAME=""        # org/system name (--name) — forwarded to the cicd install.sh
@@ -218,7 +218,7 @@ print_manual_cicd() { # print_manual_cicd <vmid> <domain>
   1. ${BL}ssh tappaas@tappaas-cicd${CL}   (or its DHCP address; see 'qm guest cmd ${cicdid} network-get-interfaces')
   2. Bootstrap the checkout + system config:
         ${BL}curl -fsSL ${REPO}${BRANCH}/src/foundation/tappaas-cicd/bootstrap.sh -o /tmp/bootstrap.sh${CL}
-        ${BL}bash /tmp/bootstrap.sh "https://github.com/TAPPaaS/TAPPaaS.git" "${BRANCH}"${CL}
+        ${BL}bash /tmp/bootstrap.sh "https://codeberg.org/TAPPaaS/TAPPaaS.git" "${BRANCH}"${CL}
         ${BL}sudo reboot${CL}   (then reconnect)
   3. Install the platform tooling:
         ${BL}cd TAPPaaS/src/foundation/tappaas-cicd${CL}
@@ -308,7 +308,7 @@ build_cicd() {
 
   # B.1 — clone the repo + rebuild the NixOS system (bootstrap.sh).
   info "Running bootstrap.sh on cicd (git clone + nixos-rebuild switch)..."
-  if ! cicd_ssh "curl -fsSL '${REPO}${BRANCH}/src/foundation/tappaas-cicd/bootstrap.sh' -o /tmp/bootstrap.sh && bash /tmp/bootstrap.sh 'https://github.com/TAPPaaS/TAPPaaS.git' '${BRANCH}'"; then
+  if ! cicd_ssh "curl -fsSL '${REPO}${BRANCH}/src/foundation/tappaas-cicd/bootstrap.sh' -o /tmp/bootstrap.sh && bash /tmp/bootstrap.sh 'https://codeberg.org/TAPPaaS/TAPPaaS.git' '${BRANCH}'"; then
     warn "bootstrap.sh failed on cicd. Finish manually:"
     print_manual_cicd "$cicdid" "$dom"
     return 0

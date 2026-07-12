@@ -59,7 +59,7 @@ Usage: $(basename "$0") [OPTIONS]
 Create or update TAPPaaS configuration.json by discovering the running cluster.
 
 Named Arguments (all optional, defaults apply):
-    --upstream-git URL    Git repository URL (default: github.com/TAPPaaS/TAPPaaS)
+    --upstream-git URL    Git repository URL (default: codeberg.org/TAPPaaS/TAPPaaS)
     --branch NAME         Git branch to track (default: stable)
     --domain DOMAIN       Primary domain for TAPPaaS (default: from existing config or CHANGE-domain.tld)
     --email EMAIL         Admin email address (default: from Proxmox root@pam user or existing config)
@@ -82,7 +82,7 @@ Examples:
     $(basename "$0")                                                    # All defaults
     $(basename "$0") --update --domain newdomain.com                    # Update only domain
     $(basename "$0") --domain my.dev --email admin@my.dev               # Create with specific domain/email
-    $(basename "$0") github.com/TAPPaaS/TAPPaaS main my.dev a@my.dev weekly   # Positional (legacy)
+    $(basename "$0") codeberg.org/TAPPaaS/TAPPaaS main my.dev a@my.dev weekly   # Positional (legacy)
 EOF
 }
 
@@ -155,7 +155,7 @@ parse_args() {
     # Detect argument style: if $1 starts with -- or no args, use named-arg mode
     if [[ $# -eq 0 ]] || [[ "${1:-}" == --* ]] || [[ "${1:-}" == -h ]]; then
         # Named argument mode — start with defaults
-        UPSTREAM_GIT="github.com/TAPPaaS/TAPPaaS"
+        UPSTREAM_GIT="codeberg.org/TAPPaaS/TAPPaaS"
         BRANCH="stable"
         DOMAIN="CHANGE-domain.tld"
         EMAIL="${DISCOVERED_EMAIL:-CHANGE-admin@domain.tld}"

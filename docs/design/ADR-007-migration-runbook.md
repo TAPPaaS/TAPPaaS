@@ -110,7 +110,7 @@ is **expected** (the live `zones.json` is still pre-migration) — the relink+bu
 happen first; the script verifies the result.
 
 ```bash
-REPO="https://raw.githubusercontent.com/TAPPaaS/TAPPaaS/"; BRANCH="ADR007"
+REPO="https://codeberg.org/TAPPaaS/TAPPaaS/raw/branch/"; BRANCH="ADR007"
 curl -fsSL ${REPO}${BRANCH}/src/foundation/tappaas-cicd/scripts/migrate-bootstrap.sh -o /tmp/migrate-bootstrap.sh
 bash /tmp/migrate-bootstrap.sh          # --branch/--repo-dir overridable
 ```

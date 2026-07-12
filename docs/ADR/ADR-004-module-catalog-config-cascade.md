@@ -70,7 +70,7 @@ Add `managed` and `catalog` to each repository entry:
     "repositories": [
       {
         "name": "TAPPaaS",
-        "url": "github.com/TAPPaaS/TAPPaaS",
+        "url": "codeberg.org/TAPPaaS/TAPPaaS",
         "branch": "main",
         "path": "/home/tappaas/TAPPaaS",
         "managed": "full",

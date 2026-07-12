@@ -18,7 +18,7 @@ msg_ok()   { if [ "${TAPPAAS_DEBUG:-0}" = "1" ]; then echo "DEBUG: $*"; fi; }
 # Find the repo version of TAPPaaS to use
 msg_info "Determining TAPPaaS repo to use"
 if [ -z "${1:-}" ]; then
-  REPOTOCLONE="https://github.com/TAPPaaS/TAPPaaS.git"
+  REPOTOCLONE="https://codeberg.org/TAPPaaS/TAPPaaS.git"
 else
   REPOTOCLONE="$1"
 fi

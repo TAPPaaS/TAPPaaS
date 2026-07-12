@@ -50,7 +50,7 @@ of objects, and there is **no** site-wide domain/DNS/identityProvider (those are
   "automaticReboot": true,
   "snapshotRetention": 5,
   "repositories": [
-    { "name": "TAPPaaS", "url": "https://github.com/TAPPaaS/TAPPaaS.git", "branch": "stable", "path": "/home/tappaas/TAPPaaS" }
+    { "name": "TAPPaaS", "url": "https://codeberg.org/TAPPaaS/TAPPaaS.git", "branch": "stable", "path": "/home/tappaas/TAPPaaS" }
   ],
   "organizations": []
 }

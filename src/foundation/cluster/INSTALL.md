@@ -32,7 +32,7 @@ the foundation bootstrap. The full first-node story is in the repo-root
 this module's `install.sh` as step [1/5], then chains firewall, gateway cutover, sanity
 check and platform:
 
-    REPO="https://raw.githubusercontent.com/TAPPaaS/TAPPaaS/"; BRANCH="main"
+    REPO="https://codeberg.org/TAPPaaS/TAPPaaS/raw/branch/"; BRANCH="main"
     curl -fsSL ${REPO}${BRANCH}/src/foundation/install.sh >install.sh
     chmod +x install.sh
     ./install.sh "$REPO" "$BRANCH" --name <orgname> --domain "yourdomain.com"

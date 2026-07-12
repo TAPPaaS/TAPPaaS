@@ -62,7 +62,7 @@ fetch() {
 }
 
 # ── Arguments ─────────────────────────────────────────────────────────
-REPO="https://raw.githubusercontent.com/TAPPaaS/"
+REPO="https://codeberg.org/TAPPaaS/TAPPaaS/raw/branch/"
 BRANCH="stable"
 ORGNAME=""
 DOMAIN=""

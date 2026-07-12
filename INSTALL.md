@@ -102,7 +102,7 @@ Notes:
      keeps its install IP throughout, so such a client never loses it.)
 
 ```bash
-REPO="https://raw.githubusercontent.com/TAPPaaS/TAPPaaS/"; BRANCH="main"
+REPO="https://codeberg.org/TAPPaaS/TAPPaaS/raw/branch/"; BRANCH="main"
 curl -fsSL ${REPO}${BRANCH}/src/foundation/install.sh >install.sh
 chmod +x install.sh && ./install.sh "$REPO" "$BRANCH" --name <orgname> --domain "yourdomain.com"
 ```
@@ -510,7 +510,7 @@ tmux attach -t install
 Run the bootstrap command from Step 1:
 
 ```bash
-REPO="https://raw.githubusercontent.com/TAPPaaS/TAPPaaS/"; BRANCH="main"
+REPO="https://codeberg.org/TAPPaaS/TAPPaaS/raw/branch/"; BRANCH="main"
 curl -fsSL ${REPO}${BRANCH}/src/foundation/install.sh >install.sh
 chmod +x install.sh && ./install.sh "$REPO" "$BRANCH" --name <orgname> --domain "yourdomain.com"
 ```

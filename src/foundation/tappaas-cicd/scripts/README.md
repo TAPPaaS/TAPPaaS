@@ -343,7 +343,7 @@ create-configuration.sh <upstreamGit> <branch> <domain> <email> <schedule> [week
 
 | Argument | Description | Default |
 |----------|-------------|---------|
-| `--upstream-git` | Git repository URL | `github.com/TAPPaaS/TAPPaaS` |
+| `--upstream-git` | Git repository URL | `codeberg.org/TAPPaaS/TAPPaaS` |
 | `--branch` | Git branch to track | `stable` |
 | `--domain` | Primary domain for TAPPaaS | From Proxmox node FQDN, or existing config |
 | `--email` | Admin email for SSL and notifications | From Proxmox `root@pam` user, or existing config |
@@ -376,7 +376,7 @@ create-configuration.sh --update --domain newdomain.com
 create-configuration.sh --update
 
 # Legacy positional syntax
-create-configuration.sh github.com/TAPPaaS/TAPPaaS main my.dev admin@my.dev weekly
+create-configuration.sh codeberg.org/TAPPaaS/TAPPaaS main my.dev admin@my.dev weekly
 ```
 
 **What it does:**

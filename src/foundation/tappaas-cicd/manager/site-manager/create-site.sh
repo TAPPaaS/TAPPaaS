@@ -52,7 +52,7 @@
 #                        (also the default zone / default environment name).
 #   --domain DOMAIN      Public domain (NOT written to site.json; per-environment).
 #   --branch NAME        Git branch to track (default: stable).
-#   --upstream-git URL   Module-catalog git repo (default: github.com/TAPPaaS/TAPPaaS).
+#   --upstream-git URL   Module-catalog git repo (default: codeberg.org/TAPPaaS/TAPPaaS).
 #   --email EMAIL        Installer/admin email (default: Proxmox root@pam / existing).
 #   --primary-node FQDN  Primary node FQDN for cluster discovery (default: tappaas1).
 #   --schedule FREQ      Update frequency: monthly|weekly|daily|none (default: weekly).
@@ -109,7 +109,7 @@ CONFIG_DIR="${TAPPAAS_CONFIG:-/home/tappaas/config}"
 NAME=""
 DOMAIN=""            # accepted, NOT written to site.json (per-environment)
 BRANCH="stable"
-UPSTREAM_GIT="github.com/TAPPaaS/TAPPaaS"
+UPSTREAM_GIT="codeberg.org/TAPPaaS/TAPPaaS"
 EMAIL=""
 PRIMARY_NODE_OVERRIDE=""
 UPDATE_SCHEDULE="weekly"

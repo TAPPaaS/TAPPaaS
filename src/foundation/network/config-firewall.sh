@@ -61,7 +61,7 @@ trap cleanup EXIT INT TERM
 usage() { sed -n '2,/^set -euo/p' "$0" | sed 's/^# \{0,1\}//; /^set -euo/d'; }
 
 # ── Arguments ────────────────────────────────────────────────────────
-REPO="https://raw.githubusercontent.com/TAPPaaS/TAPPaaS/"
+REPO="https://codeberg.org/TAPPaaS/TAPPaaS/raw/branch/"
 BRANCH="main"
 ROOT_PW=""
 # Bootstrap root password baked into the prebuilt image (see workflow). Override

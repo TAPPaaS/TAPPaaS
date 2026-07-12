@@ -117,7 +117,7 @@ derive_repo_name() {
 
 # Normalize a user-supplied repo URL to the BARE form this module stores and the
 # `https://${url}` call sites expect (site.json stores e.g.
-# "github.com/TAPPaaS/TAPPaaS"). Operators may paste a full URL — strip an
+# "codeberg.org/TAPPaaS/TAPPaaS"). Operators may paste a full URL — strip an
 # http(s):// scheme (and a trailing slash) so we never build
 # "https://https://…". A bare URL passes through unchanged.
 # Arguments: <url>

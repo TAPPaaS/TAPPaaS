@@ -31,7 +31,7 @@ function site(repos: Repository[]): Site {
 
 const TAPPAAS: Repository = {
   name: "TAPPaaS",
-  url: "github.com/TAPPaaS/TAPPaaS",
+  url: "codeberg.org/TAPPaaS/TAPPaaS",
   branch: "stable",
   path: "/home/tappaas/TAPPaaS",
 };

@@ -791,7 +791,7 @@ Site.json contains **site-wide** settings only. Domain, DNS, and identity are **
   "repositories": [
     {
       "name": "tappaas-official",
-      "url": "https://github.com/TAPPaaS/TAPPaaS",
+      "url": "https://codeberg.org/TAPPaaS/TAPPaaS",
       "updateChannel": "stable"
     },
     {

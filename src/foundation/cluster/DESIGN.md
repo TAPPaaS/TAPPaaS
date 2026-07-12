@@ -67,7 +67,7 @@ install.sh [REPO] [BRANCH] --name <orgname>
 
 | Flag | Effect |
 |------|--------|
-| `REPO` `BRANCH` | Positional; default `https://raw.githubusercontent.com/TAPPaaS/` + `stable`. |
+| `REPO` `BRANCH` | Positional; default `https://codeberg.org/TAPPaaS/TAPPaaS/raw/branch/` + `stable`. |
 | `--name` | Org/system name → the Proxmox **cluster name** (falls back to `TAPPaaS` when run standalone without `--name`). |
 | `--cluster` | Force-create the cluster on this node. |
 | `--join` | Force this node to join an existing cluster (interactive). |

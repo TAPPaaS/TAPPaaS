@@ -122,7 +122,7 @@ setup_fixture() {
     "repositories": [
         {
             "name": "TAPPaaS",
-            "url": "github.com/TAPPaaS/TAPPaaS",
+            "url": "codeberg.org/TAPPaaS/TAPPaaS",
             "branch": "main",
             "path": "/home/tappaas/TAPPaaS",
             "managed": "full",
@@ -188,7 +188,7 @@ echo "Test Group 3: Add Command Validation"
 
 run_test "add-no-url" "fail" repo add
 run_test "add-invalid-url" "fail" repo add "invalid-url-does-not-exist.example.com/foo/bar"
-run_test "add-duplicate-name" "fail" repo add "github.com/TAPPaaS/TAPPaaS"
+run_test "add-duplicate-name" "fail" repo add "codeberg.org/TAPPaaS/TAPPaaS"
 echo ""
 
 # ── Test 4: site.json add/modify/remove (no network) ────────────────

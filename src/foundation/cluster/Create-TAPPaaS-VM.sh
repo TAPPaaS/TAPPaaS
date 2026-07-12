@@ -73,16 +73,16 @@ function create_vm_descriptions_html() {
   <h2 style='font-size: 24px; margin: 20px 0;'>$TEXT</h2>
 
   <span style='margin: 0 10px;'>
-    <i class="fa fa-github fa-fw" style="color: #f5f5f5;"></i>
-    <a href='https://github.com/TAPpaas/TAPpaas' target='_blank' rel='noopener noreferrer' style='text-decoration: none; color: #00617f;'>GitHub</a>
+    <i class="fa fa-code-fork fa-fw" style="color: #f5f5f5;"></i>
+    <a href='https://codeberg.org/TAPPaaS/TAPPaaS' target='_blank' rel='noopener noreferrer' style='text-decoration: none; color: #00617f;'>Codeberg</a>
   </span>
   <span style='margin: 0 10px;'>
     <i class="fa fa-comments fa-fw" style="color: #f5f5f5;"></i>
-    <a href='https://github.com/TAPpaas/TAPpaas/discussions' target='_blank' rel='noopener noreferrer' style='text-decoration: none; color: #00617f;'>Discussions</a>
+    <a href='https://github.com/TAPPaaS/TAPPaaS/discussions' target='_blank' rel='noopener noreferrer' style='text-decoration: none; color: #00617f;'>Discussions</a>
   </span>
   <span style='margin: 0 10px;'>
     <i class="fa fa-exclamation-circle fa-fw" style="color: #f5f5f5;"></i>
-    <a href='https://github.com/TAPpaas/TAPpaas/issues' target='_blank' rel='noopener noreferrer' style='text-decoration: none; color: #00617f;'>Issues</a>
+    <a href='https://codeberg.org/TAPPaaS/TAPPaaS/issues' target='_blank' rel='noopener noreferrer' style='text-decoration: none; color: #00617f;'>Issues</a>
   </span>
   <br>
   <br>

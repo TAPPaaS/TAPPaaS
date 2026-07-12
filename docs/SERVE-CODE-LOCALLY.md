@@ -2,8 +2,8 @@
 
 The first-node installer (`src/foundation/install.sh` and everything it
 chains) downloads each script individually from
-`raw.githubusercontent.com`. Repeated install runs — e.g. wipe-and-reinstall
-testing — trip GitHub's per-IP throttle on that CDN and start failing with
+`codeberg.org/…/raw/branch/…`. Repeated install runs — e.g. wipe-and-reinstall
+testing — can trip the forge's per-IP rate limiting and start failing with
 `curl: (22) ... error: 429`. Serving the repo from a machine on your LAN
 avoids the rate limit entirely, is faster, and lets you install a branch
 that only exists locally.
@@ -16,7 +16,7 @@ plain HTTP server exposing a directory *named after the branch* works.
 Fresh clone of one working branch (shallow, fast):
 
 ```bash
-git clone -b ADR007 --single-branch https://github.com/TAPPaaS/TAPPaaS.git ~/src/TAPPaaS
+git clone -b ADR007 --single-branch https://codeberg.org/TAPPaaS/TAPPaaS.git ~/src/TAPPaaS
 ```
 
 (Already have a clone? `git -C ~/src/TAPPaaS fetch origin && git -C ~/src/TAPPaaS checkout ADR007` is enough.)
