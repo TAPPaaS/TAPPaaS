@@ -100,6 +100,49 @@ Legend: ☐ todo · ◐ in progress · ☑ done · ⏸ deferred (post-2.0 cutove
 - [ ] ⏸ Add "migrated to Codeberg" note + archive/settings on GitHub
 - [ ] ⏸ Move build images off GitHub — [#414](https://github.com/TAPPaaS/TAPPaaS/issues/414) (Woodpecker port, FreeBSD/UFS on Codeberg runners, image host choice)
 
+## How to build an image release today (interim runbook)
+
+Both image pipelines run on **GitHub Actions** until self-hosted Woodpecker runners exist
+([Codeberg #415](https://codeberg.org/TAPPaaS/TAPPaaS/issues/415)); the assets land on
+**GitHub Releases** (where all consumers fetch them). Dev lives on Codeberg, so the ONE
+special step is getting the trigger to GitHub:
+
+1. **Make sure the commit you want to build is on Codeberg `main`** (normal workflow).
+2. **Tag it and push the tag to the `github` remote** — pushing a tag also pushes every
+   object it needs, so this works even though `github/main` is stale; Actions triggers on
+   the tag push and checks out the tag:
+
+   ```bash
+   # NixOS VM template image (.github/workflows/build-nixos-template-image.yml)
+   git tag nixos-template-v1.4            # next after the current nixos-template-v1.3
+   git push github nixos-template-v1.4    # ← github remote, NOT origin
+
+   # Preconfigured OPNsense/Proxmox-firewall image (.github/workflows/build-opnsense-image.yml)
+   git tag opnsense-firewall-v1.2         # next after the current opnsense-firewall-v1.1
+   git push github opnsense-firewall-v1.2
+   ```
+
+   Pushing the same tag to `origin` (Codeberg) too is fine for bookkeeping — nothing
+   triggers there anymore.
+3. **Watch the run** under github.com/TAPPaaS/TAPPaaS → Actions. On success the release
+   appears under GitHub → Releases with the stable asset name
+   (`tappaas-nixos.qcow2.zst` / `tappaas-firewall.qcow2.zst` — the release TAG carries
+   the version).
+4. **Point the consumers at the new version** (on Codeberg, normal commit):
+   - `src/foundation/templates/tappaas-nixos.json` → `imageLocation` … `nixos-template-v<new>`
+   - `src/foundation/network/network.json` → `imageLocation` … `opnsense-firewall-v<new>`
+
+   (`install-platform.sh` also probes `api.github.com/...releases/latest` as a fallback.)
+
+**Alternative trigger (no tag):** GitHub → Actions → select the workflow →
+*Run workflow* (`workflow_dispatch`), entering the version label by hand. Note it builds
+from the branch you select on **GitHub**, so push that branch to the `github` remote
+first if it must include recent Codeberg commits.
+
+**Note on the OPNsense base:** bumping the OPNsense major means updating
+`OPNSENSE_BASE_URL` in `build-opnsense-image.yml` (pinned maurice-w base image) — that
+edit must also reach the `github` remote before tagging.
+
 ## Risks
 
 1. **Conflict-heavy merge** — the 21 `main`-only app commits overlap the ADR-007 refactor; new modules must be *adapted* to the named-module/manager-controller model, not merely merged. Largest effort + risk.
