@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 #
-# deconz:bridge install-service — no provider-side work.
+# deconz:hue-bridge install-service — no provider-side work.
 #
-# The 'bridge' service is the native Hue-compatible API (replaces HA emulated_hue).
+# The 'hue-bridge' service is diyHue's Hue API (genuine-grade bridge; replaces deCONZ-direct emulation which free@home rejected).
 # Declarative: it exposes its ports via pinhole.json so cross-zone consumers
 # (e.g. SysAP in iotCloud) are granted access by auto-pinhole (#173). The
 # consumer's firewall:rules install-service compiles it. NB cross-zone SSDP
@@ -19,4 +19,4 @@ if [[ -z "${CONSUMER}" ]]; then
     exit 1
 fi
 
-info "deconz:bridge install-service for consumer '${CONSUMER}' — no provider-side work needed (auto-pinhole via consumer firewall:rules; SSDP relay via firewall:discovery)."
+info "deconz:hue-bridge install-service for consumer '${CONSUMER}' — no provider-side work needed (auto-pinhole via consumer firewall:rules; SSDP relay via firewall:discovery)."

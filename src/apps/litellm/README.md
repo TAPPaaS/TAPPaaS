@@ -28,6 +28,21 @@ tracking, caching, and access control.
 - NixOS template (`templates:nixos`)
 - 4 vCPU, 4 GB RAM, 32 GB disk by default (sizing guidance in DESIGN.md)
 
+## Operations
+
+Provider credentials (OpenRouter, Perplexity, Abacus, etc.) are managed as
+named, referenceable objects — models point at a credential by name rather
+than embedding the key, so rotating a key updates every model that uses it
+in one step.
+
+| Task | Command |
+|---|---|
+| See models, credentials, virtual keys, teams (no secrets shown) | `scripts/litellm-credentials.sh inspect` |
+| Register a new provider credential | `scripts/litellm-credentials.sh add --name <name> --provider <provider>` |
+| Rotate an existing credential's value | `scripts/litellm-credentials.sh rotate --name <name>` |
+| Wire a model to a credential | `scripts/litellm-credentials.sh assign-model --model <model> --credential <name>` |
+| Full end-to-end key rotation (env file + credential + restart) | `scripts/rotate-provider-key.sh --vmname <vmname>` |
+
 ## Dependencies
 
 | Depends on | Purpose |

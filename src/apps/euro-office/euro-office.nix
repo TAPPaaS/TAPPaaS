@@ -55,7 +55,12 @@
   # NETWORKING
   # ============================================================================
 
-  networking.hostName = lib.mkDefault "euro-office";
+  # Read vmname from companion JSON (deployed by update-os.sh to /etc/nixos/euro-office.json).
+  networking.hostName = let
+    cfg = if builtins.pathExists ./euro-office.json
+          then builtins.fromJSON (builtins.readFile ./euro-office.json)
+          else {};
+  in lib.mkDefault (cfg.vmname or "euro-office");
   networking.networkmanager.enable = true;
   # Match ethernet by type, not interface name (ens18/eth0/enp0s18 varies)
   networking.networkmanager.ensureProfiles.profiles.tappaas-ethernet = {

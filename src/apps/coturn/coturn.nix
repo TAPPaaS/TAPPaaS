@@ -68,7 +68,11 @@ in
   # NETWORKING
   # ============================================================================
 
-  networking.hostName = lib.mkDefault "coturn";
+  networking.hostName = let
+    cfg = if builtins.pathExists ./coturn.json
+          then builtins.fromJSON (builtins.readFile ./coturn.json)
+          else {};
+  in lib.mkDefault (cfg.vmname or "coturn");
   networking.networkmanager.enable = true;
   networking.networkmanager.ensureProfiles.profiles.tappaas-ethernet = {
     connection = { id = "tappaas-ethernet"; type = "ethernet"; autoconnect = "true"; autoconnect-priority = "100"; };

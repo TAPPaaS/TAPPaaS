@@ -16,11 +16,25 @@ fi
 VMNAME="${1:-vllm-amd}"
 CONFIG_FILE="${SCRIPT_DIR}/${VMNAME}.json"
 VMID=$(jq -r '.vmid' "$CONFIG_FILE")
-NODE=$(jq -r '.node // "tappaas2"' "$CONFIG_FILE")
+
+# Resolve live node and wrap pct as SSH call (pct only exists on Proxmox nodes)
+_PRIMARY="tappaas1.mgmt.internal"
+LXC_NODE="$(ssh -o ConnectTimeout=8 -o StrictHostKeyChecking=accept-new "root@${_PRIMARY}" \
+    "pvesh get /cluster/resources --type vm --output-format json 2>/dev/null" \
+    | jq -r --argjson id "${VMID}" '.[] | select(.vmid==$id) | .node' 2>/dev/null)"
+[[ -n "${LXC_NODE:-}" ]] || { echo "ERROR: cannot resolve node for LXC ${VMID}"; exit 1; }
+# Use printf %q to shell-quote each arg before SSH join, preventing word-split
+# of multi-word bash -c arguments across the ssh→pct double-hop.
+pct() {
+    local q
+    printf -v q '%q ' "$@"
+    ssh -n -o ConnectTimeout=30 -o StrictHostKeyChecking=accept-new \
+        "root@${LXC_NODE}.mgmt.internal" "pct ${q}"
+}
 
 echo ""
 echo "=== Updating vLLM AMD Module ==="
-echo "VM: ${VMNAME} (VMID: ${VMID})"
+echo "VM: ${VMNAME} (VMID: ${VMID}, node: ${LXC_NODE})"
 
 # Step 0: Bootstrap Docker + /opt/vllm (idempotent)
 echo ""
@@ -49,7 +63,7 @@ if [ ! -f /opt/vllm/docker-compose.yml ]; then
     cat > /opt/vllm/docker-compose.yml <<EOF
 services:
   vllm:
-    image: kyuz0/vllm-therock-gfx1151:latest
+    image: kyuz0/vllm-therock-gfx1151@sha256:f56f8d66c3efcf2de024251f6ff2328c5aa94b3ae34b2f74a36740b970f98d9c
     container_name: vllm
     restart: unless-stopped
     entrypoint: ["python", "-m", "vllm.entrypoints.openai.api_server"]
@@ -73,6 +87,22 @@ EOF
     echo "docker-compose.yml created — set your model path!"
 fi
 '
+
+# Step 0b: Pin image digest in live docker-compose.yml (idempotent).
+# Uses SSH heredoc to the Proxmox node to avoid pct-wrapper word-split issues
+# when passing complex sed replacement strings through the SSH→pct chain.
+echo ""
+echo "=== Pin Image Digest ==="
+PINNED_IMAGE="kyuz0/vllm-therock-gfx1151@sha256:f56f8d66c3efcf2de024251f6ff2328c5aa94b3ae34b2f74a36740b970f98d9c"
+ssh -o ConnectTimeout=15 -o StrictHostKeyChecking=accept-new \
+    "root@${LXC_NODE}.mgmt.internal" << NODEEOF
+if pct exec ${VMID} -- test -f /opt/vllm/docker-compose.yml 2>/dev/null; then
+    pct exec ${VMID} -- sed -i 's|image: kyuz0/vllm-therock-gfx1151.*|image: ${PINNED_IMAGE}|' /opt/vllm/docker-compose.yml
+    echo "Pinned: \$(pct exec ${VMID} -- grep 'image:' /opt/vllm/docker-compose.yml)"
+else
+    echo "WARNING: /opt/vllm/docker-compose.yml not found in LXC ${VMID}"
+fi
+NODEEOF
 
 # Step 1: OS updates inside LXC
 echo ""

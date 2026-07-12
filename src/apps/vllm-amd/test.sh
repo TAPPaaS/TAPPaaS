@@ -60,13 +60,34 @@ pct exec "${VMID}" -- echo "ok" > /dev/null 2>&1
 check "Can exec into container" "$?"
 
 # Test 3: GPU device access
+# Part A: device node presence via ls (verifies the bind-mount exists inside the LXC).
+# Part B: cgroup allow-list check — run directly on the Proxmox host, not via pct exec.
+#   ls passes even when the cgroup deny blocks open(); this check catches the
+#   "stale major after reboot" failure mode (VLLM-004/005) by comparing the LIVE
+#   device major against what is actually in the LXC conf.
 echo ""
 echo "--- GPU Access ---"
+
 pct exec "${VMID}" -- ls /dev/kfd > /dev/null 2>&1
-check "/dev/kfd accessible" "$?"
+check "/dev/kfd device node present in LXC" "$?"
 
 pct exec "${VMID}" -- ls /dev/dri/renderD128 > /dev/null 2>&1
-check "/dev/dri/renderD128 accessible" "$?"
+check "/dev/dri/renderD128 device node present in LXC" "$?"
+
+_node() { ssh -n -o ConnectTimeout=8 -o StrictHostKeyChecking=accept-new "root@${LXC_NODE}.mgmt.internal" "$@"; }
+
+KFD_HEX=$(_node stat -c '%t' /dev/kfd 2>/dev/null || echo "0")
+KFD_CGROUP_RC=0
+_node grep -qF "cgroup2.devices.allow: c $((16#${KFD_HEX})):0 rwm" "/etc/pve/lxc/${VMID}.conf" \
+    > /dev/null 2>&1 || KFD_CGROUP_RC=$?
+check "/dev/kfd cgroup allow matches live major ($((16#${KFD_HEX})):0)" "$KFD_CGROUP_RC"
+
+REN_MAJ=$(_node stat -c '%t' /dev/dri/renderD128 2>/dev/null || echo "0")
+REN_MIN=$(_node stat -c '%T' /dev/dri/renderD128 2>/dev/null || echo "0")
+REN_CGROUP_RC=0
+_node grep -qF "cgroup2.devices.allow: c $((16#${REN_MAJ})):$((16#${REN_MIN})) rwm" "/etc/pve/lxc/${VMID}.conf" \
+    > /dev/null 2>&1 || REN_CGROUP_RC=$?
+check "/dev/dri/renderD128 cgroup allow matches live major:minor ($((16#${REN_MAJ})):$((16#${REN_MIN})))" "$REN_CGROUP_RC"
 
 # Test 4: Docker running
 echo ""
@@ -80,6 +101,20 @@ echo "--- vLLM Service ---"
 VLLM_RUNNING=$(pct exec "${VMID}" -- docker ps --filter name=vllm --format "{{.Status}}" 2>/dev/null || echo "")
 if [[ "$VLLM_RUNNING" == *"Up"* ]]; then
     check "vLLM container running" "0"
+
+    # Test 5b: GPU HIP compute — check via rocm-smi (no shell quoting issues through
+    # SSH→pct chain; python3 -c with semicolons breaks because the remote shell splits on ';').
+    # rocm-smi queries /dev/kfd directly; exit non-zero if cgroup or device unavailable.
+    ROCM_RC=0
+    pct exec "${VMID}" -- docker exec vllm rocm-smi > /dev/null 2>&1 || ROCM_RC=$?
+    if [[ "$ROCM_RC" -eq 0 ]]; then
+        check "GPU HIP compute accessible in container (rocm-smi)" "0"
+    elif pct exec "${VMID}" -- docker exec vllm which rocm-smi > /dev/null 2>&1; then
+        check "GPU HIP compute accessible in container (rocm-smi)" "1"
+        echo "  (Run patch-host-gpu.sh vllm-amd on tappaas2 and restart the container)"
+    else
+        warn "rocm-smi not in container PATH — GPU compute validated by inference test below"
+    fi
 else
     check "vLLM container running" "1"
     echo "  (Start with: pct exec ${VMID} -- bash -c 'cd /opt/vllm && docker compose up -d')"

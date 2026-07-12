@@ -19,6 +19,7 @@ Tested models (reference):
 |-------|------|--------------|-------|
 | Qwen2.5-7B-Instruct | 7B | FP16 | Default — fast, good quality |
 | Qwen3-14B-AWQ | 14B | AWQ | Good balance speed/quality |
+| Qwen3-30B-A3B-GPTQ-Int4 | 30B | GPTQ-4bit | Mixture-of-experts, low active params |
 | Qwen3-Coder-30B-GPTQ-Int4 | 30B | GPTQ-4bit | Code generation |
 | openai/gpt-oss-120b | 120B | AWQ | Largest tested |
 
@@ -50,3 +51,9 @@ FP8 is not supported on gfx1151. Use AWQ or GPTQ for large models.
 | `backup:vm` | Container snapshots |
 
 For installation steps see [INSTALL.md](./INSTALL.md).
+
+## External references
+
+- [Framework Community: vLLM on Strix Halo](https://community.frame.work/t/how-to-compiling-vllm-from-source-on-strix-halo/77241)
+- [kyuz0/amd-strix-halo-vllm-toolboxes](https://github.com/kyuz0/amd-strix-halo-vllm-toolboxes)
+- [LLM Tracker: Strix Halo Performance](https://llm-tracker.info/AMD-Strix-Halo-(Ryzen-AI-Max+-395)-GPU-Performance)

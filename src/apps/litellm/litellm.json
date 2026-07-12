@@ -1,7 +1,7 @@
 {
   "description": "TAPPaaS LiteLLM",
-  "version": "0.6.0",
-  "releaseDate": "2026-06-15",
+  "version": "0.7.0",
+  "releaseDate": "2026-07-02",
   "maintainer": "@ErikDaniel007",
   "status": "Development",
   "tier": "app",
@@ -14,7 +14,6 @@
     "cluster:vm",
     "templates:nixos",
     "backup:vm",
-    "identity:identity",
     "network:proxy",
     "network:rules",
     "vllm-amd:inference"

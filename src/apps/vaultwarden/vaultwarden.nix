@@ -61,7 +61,11 @@ in
   # NETWORKING
   # ============================================================================
 
-  networking.hostName = lib.mkDefault "vaultwarden";
+  networking.hostName = let
+    cfg = if builtins.pathExists ./vaultwarden.json
+          then builtins.fromJSON (builtins.readFile ./vaultwarden.json)
+          else {};
+  in lib.mkDefault (cfg.vmname or "vaultwarden");
   networking.networkmanager.enable = true;
   networking.networkmanager.ensureProfiles.profiles.tappaas-ethernet = {
     connection = { id = "tappaas-ethernet"; type = "ethernet"; autoconnect = "true"; autoconnect-priority = "100"; };

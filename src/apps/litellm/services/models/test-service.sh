@@ -70,7 +70,7 @@ LIST=\$(curl -sf "http://localhost:4000/key/list?return_full_object=true" \
     -H "Authorization: Bearer \${MASTER}" 2>/dev/null || echo '{}')
 FOUND=\$(echo "\${LIST}" | jq -r --arg a "\${ALIAS}" \
     '.keys[]? | select(.key_alias == \$a) | .token' 2>/dev/null | head -1)
-if [[ -n "\${FOUND}" && -f "\${KEYSTORE}" ]]; then echo "ok:\${FOUND}"
+if [[ -n "\${FOUND}" ]] && sudo test -f "\${KEYSTORE}"; then echo "ok:\${FOUND}"
 elif [[ -n "\${FOUND}" ]]; then echo "alias_no_file"
 else echo "missing"; fi
 EOSH
@@ -125,7 +125,7 @@ MODEL_CHECK=$(ssh "${SSH_OPTS[@]}" "tappaas@${LITELLM_HOST}" 'bash -s' <<EOSH 2>
 MASTER="${MASTER}"
 curl -sf "http://localhost:4000/model/info" \
     -H "Authorization: Bearer \${MASTER}" 2>/dev/null \
-| jq '[.data[] | {name: .model_name, id: .model_info.id, has_key: (.litellm_params.api_key != null)}]' \
+| jq '[.data[] | {name: .model_name, id: .model_info.id, has_key: ((.litellm_params.api_key != null) or (.litellm_params.litellm_credential_name != null))}]' \
 2>/dev/null || echo "[]"
 EOSH
 ) || MODEL_CHECK="[]"
