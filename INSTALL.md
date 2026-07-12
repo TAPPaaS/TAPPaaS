@@ -42,18 +42,25 @@ Build a USB stick
 that installs Proxmox with **one question asked on the target itself** (the
 boot disk, chosen from the machine's real disks); everything else is
 answered at build time (email, locale, root password) with TAPPaaS defaults
-for the rest. The build runs on **your laptop** — no Proxmox needed: on
-Linux the Proxmox assistant is fetched automatically, on macOS the script
-re-runs itself in a Debian container (Docker required; run it from the
-directory holding the ISO):
+for the rest. The build runs on **your laptop** — no Proxmox needed and **no
+repo checkout needed**: the script is self-contained (on Linux it fetches the
+Proxmox assistant automatically; on macOS it re-runs itself in a Debian
+container — Docker required). Fetch it with curl and run it from the
+directory holding the ISO:
 
 ```bash
-src/foundation/cluster/make-install-media.sh --iso proxmox-ve_9.1.iso \
+curl -fsSL "https://codeberg.org/TAPPaaS/TAPPaaS/raw/branch/main/src/foundation/cluster/make-install-media.sh" \
+     -o make-install-media.sh && chmod +x make-install-media.sh
+./make-install-media.sh --iso proxmox-ve_9.1.iso \
        --fqdn tappaas1.mgmt.internal
 # prompts for email / country / keyboard / timezone / root password,
 # VALIDATES the answer, writes proxmox-ve_9.1-tappaas-auto.iso
 dd if=proxmox-ve_9.1-tappaas-auto.iso of=/dev/<usb> bs=4M status=progress
 ```
+
+(If you already have — or prefer — a full checkout:
+`git clone https://codeberg.org/TAPPaaS/TAPPaaS.git` and run
+`src/foundation/cluster/make-install-media.sh` from it instead.)
 
 Boot the target from the stick with the NIC to your **upstream router**
 connected — network comes from **DHCP**, exactly like the PXE flow (the

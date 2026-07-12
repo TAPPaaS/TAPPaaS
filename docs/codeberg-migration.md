@@ -11,7 +11,7 @@ Migrating the TAPPaaS **code** repository from GitHub to Codeberg. Tracking issu
 | Decision | Choice | Rationale |
 |----------|--------|-----------|
 | Build-image hosting | **Stay on GitHub Releases (for now)** | Codeberg has per-repo storage quotas and discourages large-binary CDN use; the qcow2 images are multi-GB. Moving them off GitHub is deferred — [#414](https://github.com/TAPPaaS/TAPPaaS/issues/414). |
-| Image build pipelines | **Hybrid**: nixos-template build ported to Codeberg Woodpecker (`.woodpecker/build-nixos-template-image.yaml`, publishes to GitHub Releases via a PAT secret); OPNsense build **stays GitHub Actions** | The OPNsense image needs a FreeBSD VM to write UFS2 (`mdconfig`/`growfs`) — impossible on container-based shared Woodpecker runners; its `opnsense-firewall-v*` tags are pushed to the `github` remote. Full port (self-hosted KVM agent) tracked in [#414](https://github.com/TAPPaaS/TAPPaaS/issues/414). The GHA nixos workflow is kept as fallback until the Woodpecker pipeline produces one good release. |
+| Image build pipelines | **Both stay on GitHub Actions** until self-hosted Woodpecker runners exist | Tried live (2026-07-12): the nixos disk-image derivation `requiredSystemFeatures = ["kvm"]` and Codeberg's shared runners expose no `/dev/kvm` (build refused); the OPNsense image additionally needs a FreeBSD VM for UFS2 write. Both blocked on shared runners ⇒ **all image-build tags (`nixos-template-v*`, `opnsense-firewall-v*`) are pushed to the `github` remote**. The Woodpecker port (nixos pipeline was written and is in git history at `1123c65`:`.woodpecker/build-nixos-template-image.yaml`) resumes when self-hosted KVM-capable runners are set up — see [Codeberg #415](https://codeberg.org/TAPPaaS/TAPPaaS/issues/415) + [#414](https://github.com/TAPPaaS/TAPPaaS/issues/414). |
 | GitHub repo fate | **Push mirror — only after a fully-tested stable 2.0** | Keeps discoverability/SEO without drift. Until then GitHub stays live but goes stale (Codeberg is the dev home). |
 | "Migrated" note / archive on GitHub | **Deferred to the 2.0 cutover** | Same gate as the mirror. |
 | New long-lived release branch | **Reuse `stable`** (not a new `stage`) | Promoting `ADR007` (the 2.0 manager/controller paradigm) to `stable` is the pending promote-to-stable step; existing tooling already references `stable`. |
@@ -78,9 +78,7 @@ Legend: ☐ todo · ◐ in progress · ☑ done · ⏸ deferred (post-2.0 cutove
 ### Phase 3 — Reference rewrite + build pipelines *(edits only; operator commits)*
 - [x] Rewrite source-fetch refs to Codeberg (expanded table above — sweep found 8 more files than first scoped)
 - [x] Verify `imageLocation` / `releases/latest` / third-party refs untouched (grep-verified; composed raw URL live-probed → HTTP 200)
-- [x] Port the nixos-template image build to Codeberg Woodpecker (`.woodpecker/build-nixos-template-image.yaml`) — publishes to GitHub Releases; GHA copy kept as fallback until first good Woodpecker release
-- [ ] Enable Woodpecker CI for the repo on Codeberg + add the `github_release_token` secret (PAT, contents:write) *(operator, web UI)*
-- [ ] OPNsense image build: stays on GitHub Actions (FreeBSD/UFS2 constraint) — tags go to the `github` remote; Woodpecker port needs a self-hosted KVM agent ([#414](https://github.com/TAPPaaS/TAPPaaS/issues/414))
+- [x] ~~Port the nixos-template image build to Codeberg Woodpecker~~ — **attempted and reverted**: the pipeline ran (Woodpecker CI enabled, `github_release_token` secret in place) but the disk-image build requires KVM, absent on Codeberg's shared runners. Pipeline removed again (history: `1123c65`); **both image builds stay on GitHub Actions**, tags → `github` remote. Resume on self-hosted runners ([Codeberg #415](https://codeberg.org/TAPPaaS/TAPPaaS/issues/415) + [#414](https://github.com/TAPPaaS/TAPPaaS/issues/414))
 - [x] **Documentation repo** (`codeberg.org/TAPPaaS/Documentation`, staging.tappaas.org) — same rewrite: `scripts/sync-source.py` now pulls the source tarball from Codeberg (`…/archive/<ref>.tar.gz`), rewrites synced links to `src/branch`/`raw/branch`, and pins **ref `main`** (was `ADR007`; flip to `stable` at Phase 6); `mkdocs.yml` repo button + social link, `overrides/home.html` "Source code" button, and all content deep-links (`blob|tree/ADR007` → `src/branch/main`, issues/milestones/org/LICENSE) → Codeberg. Sync **live-verified against Codeberg@main**; rewritten link styles probe HTTP 200 (incl. `/milestones`). Discussions links stay on GitHub (Forgejo has none — revisit at Phase 7). Next staging build regenerates `docs/generated/` from the promoted 2.0 `main`.
 
 ### Phase 4 — One more test
@@ -93,8 +91,9 @@ Legend: ☐ todo · ◐ in progress · ☑ done · ⏸ deferred (post-2.0 cutove
 - [ ] Update `stable` → tested `main` (the pending ADR-007 promote-to-stable); push to Codeberg
 
 ### Phase 7 — Community repo
-- [ ] Mirror `TAPPaaS/Community` to Codeberg
-- [ ] Rewrite `github.com/TAPPaaS/Community` refs (e.g. `docs/ADR/ADR-004-module-catalog-config-cascade.md`)
+- [x] Mirror `TAPPaaS/Community` to Codeberg *(operator, 2026-07-12)*
+- [x] Rewrite `github.com/TAPPaaS/Community` refs (`docs/ADR/ADR-004-module-catalog-config-cascade.md`)
+- [x] Community modules made ADR-007/main-compliant: all `firewall:{proxy,rules,discovery}` deps/config → `network:*` (13 modules; mailserver was already compliant), kebab-case zones → canonical camelCase (`srv-home`→`srvHome`, `iot-cloud`→`iotCloud`, `iot-local`→`iotLocal`, `iot-cams`→`iotCams`, incl. FQDNs and service scripts/pinholes). All github refs in Community are third-party (nixpkgs, Euro-Office, wp-cli, …) — correctly left. Verified: JSONs valid, zone0 ∈ zones.json, capabilities resolve against providers, `bash -n` clean.
 
 ### Deferred — post-2.0 cutover
 - [ ] ⏸ Set up GitHub ← Codeberg **push mirror** (only after a fully-tested stable 2.0)
@@ -104,7 +103,7 @@ Legend: ☐ todo · ◐ in progress · ☑ done · ⏸ deferred (post-2.0 cutove
 ## Risks
 
 1. **Conflict-heavy merge** — the 21 `main`-only app commits overlap the ADR-007 refactor; new modules must be *adapted* to the named-module/manager-controller model, not merely merged. Largest effort + risk.
-2. **Interim image-tag gotcha** — `nixos-template-v*` tags now go to **Codeberg** (Woodpecker builds, publishes to GitHub Releases — needs the `github_release_token` secret + one live validation of runner disk limits); `opnsense-firewall-v*` tags must still be pushed to the **`github`** remote (FreeBSD/UFS2 build stays on GitHub Actions).
+2. **Interim image-tag gotcha** — **both** image-build tag families (`nixos-template-v*`, `opnsense-firewall-v*`) must be pushed to the **`github`** remote specifically to trigger builds (both pipelines stay on GitHub Actions until self-hosted Woodpecker runners exist — KVM / FreeBSD constraints on shared runners).
 3. **Codeberg raw path scheme** — `/raw/branch/<branch>/…`, not a host swap; every `REPO=` base and its concatenation pattern changes, not just the domain.
 4. **Issue-link references** — see the open question above.
 5. **`stable` jumps far** — it currently sits at old PR #145; promoting it to 2.0 is a large release-line jump (intended, but wide blast radius).

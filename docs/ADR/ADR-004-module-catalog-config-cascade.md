@@ -78,7 +78,7 @@ Add `managed` and `catalog` to each repository entry:
       },
       {
         "name": "Community",
-        "url": "github.com/TAPPaaS/Community",
+        "url": "codeberg.org/TAPPaaS/Community",
         "branch": "stable",
         "path": "/home/tappaas/Community",
         "managed": "full",
