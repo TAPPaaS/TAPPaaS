@@ -127,6 +127,15 @@ if step vms; then
       # later `zpool destroy` blocks. `qm stop` is a hard stop (fine for teardown).
       run qm stop "$id" --skiplock
       run qm destroy "$id" --purge --destroy-unreferenced-disks --skiplock
+      # `qm destroy` can FAIL (run() only warns and continues) when the VM's
+      # backing storage is already gone/inaccessible — leaving an orphaned
+      # /etc/pve/qemu-server/<id>.conf. That stale config makes the NEXT install
+      # abort with "VM <id> already exists" (observed after a partial wipe). Force
+      # -remove any residual config so teardown is idempotent regardless of disk state.
+      if [[ $DRY_RUN -eq 0 && -e "/etc/pve/qemu-server/${id}.conf" ]]; then
+        warn "  VM ${id}: config survived qm destroy (backing storage gone?) — removing it directly."
+        run rm -f "/etc/pve/qemu-server/${id}.conf" "/etc/pve/qemu-server/${id}.conf.lock"
+      fi
     done
   fi
 fi

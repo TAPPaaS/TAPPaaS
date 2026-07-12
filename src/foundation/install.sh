@@ -61,6 +61,33 @@ fetch() {
   mkdir -p "$(dirname "$dest")"; mv "$tmp" "$dest"; chmod "$mode" "$dest"
 }
 
+# ── Survive an SSH drop: run inside tmux ──────────────────────────────
+# The install reconfigures networking (the firewall step especially) and can drop
+# the operator's SSH session; run in the foreground, that disconnect kills the
+# whole install mid-flight (a real foot-gun — hit in the field). Re-exec inside a
+# persistent tmux session so a drop merely DETACHES it: reconnect to the node and
+# `tmux attach`. Full interactivity is preserved (tmux is a real TTY). Skipped
+# with --no-tmux (or $TAPPAAS_NO_TMUX), when already in tmux/screen, or with no TTY
+# (piped curl|bash), and re-entrantly (the wrapped call passes --no-tmux).
+if [[ -z "${TMUX:-}${STY:-}${TAPPAAS_NO_TMUX:-}" && -t 0 && -t 1 \
+      && " $* " != *" --no-tmux "* && " $* " != *" -h "* && " $* " != *" --help "* ]]; then
+  if command -v tmux >/dev/null 2>&1; then
+    _sess="tappaas-install"
+    _cmd="bash $(printf '%q' "$0")"
+    for _a in "$@"; do _cmd+=" $(printf '%q' "$_a")"; done
+    _cmd+=" --no-tmux"
+    echo -e "${GN}${BOLD}Running the install inside tmux session '${_sess}' so an SSH drop won't abort it.${CL}"
+    echo -e "If you get disconnected: reconnect to this node and run  ${BOLD}tmux attach -t ${_sess}${CL}\n"
+    tmux kill-session -t "${_sess}" 2>/dev/null || true
+    exec tmux new-session -s "${_sess}" \
+      "${_cmd}; _ec=\$?; printf '\n[TAPPaaS install exited %s — press any key to close this pane]' \"\$_ec\"; read -rn1"
+  else
+    echo -e "${YW}[warn] tmux not found — running attached. If your SSH connection drops, the install will ABORT.${CL}"
+    echo -e "${YW}       For a resilient remote install, run under 'screen'/'tmux' or from a stable console.${CL}"
+    sleep 3
+  fi
+fi
+
 # ── Arguments ─────────────────────────────────────────────────────────
 REPO="https://codeberg.org/TAPPaaS/TAPPaaS/raw/branch/"
 BRANCH="stable"
@@ -78,6 +105,7 @@ while [ $# -gt 0 ]; do
     --skip-firewall)   SKIP_FIREWALL=1 ;;
     --skip-platform)   SKIP_PLATFORM=1 ;;
     --non-interactive) NONINTERACTIVE=1; NODE_ARGS+=("--non-interactive") ;;
+    --no-tmux)         ;;   # consumed by the tmux wrapper above; ignore here
     --cluster|--join|--no-cluster|--skip-network|--skip-storage) NODE_ARGS+=("$1") ;;
     # Unattended config-phase selectors (F1) — forwarded verbatim to the node
     # step, which hands them to config-network.sh / config-storage.sh. --pool may

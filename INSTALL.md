@@ -114,6 +114,11 @@ curl -fsSL ${REPO}${BRANCH}/src/foundation/install.sh >install.sh
 chmod +x install.sh && ./install.sh "$REPO" "$BRANCH" --name <orgname> --domain "yourdomain.com"
 ```
 
+> The install **re-launches itself inside a `tmux` session** (`tappaas-install`) so a
+> dropped SSH connection won't abort it — the firewall step reconfigures networking
+> and can briefly cut your session. If you get disconnected, reconnect to the node and
+> run `tmux attach -t tappaas-install`. (Opt out with `--no-tmux`.)
+
 Pass two things up front:
 - **`--name <orgname>`** — your organisation / system name (lowercase, ≤15
      chars). This is **the one name** for the whole install: it names the **Proxmox
