@@ -13,8 +13,8 @@
     "cluster:vm",
     "templates:nixos",
     "backup:vm",
-    "firewall:proxy",
-    "firewall:rules"
+    "network:proxy",
+    "network:rules"
   ],
   "provides": [
     "zigbee",
@@ -31,13 +31,13 @@
       "image": "8080",
       "bridge0": "lan"
     },
-    "firewall:proxy": {
+    "network:proxy": {
       "proxyPort": 8080,
       "proxyAllowedZones": [
         "mgmt"
       ]
     },
-    "firewall:rules": {
+    "network:rules": {
       "ports": [
         {
           "port": 8080,

@@ -4,7 +4,7 @@
 #
 # The 'zigbee' service (deCONZ REST+websocket for Home Assistant) is declarative:
 # it exposes its ports via pinhole.json so consumers are granted access by
-# auto-pinhole (#173). The consumer's firewall:rules install-service compiles it.
+# auto-pinhole (#173). The consumer's network:rules install-service compiles it.
 #
 # Usage: install-service.sh <consumer-module-name>
 
@@ -17,4 +17,4 @@ if [[ -z "${CONSUMER}" ]]; then
     exit 1
 fi
 
-info "deconz:zigbee install-service for consumer '${CONSUMER}' — no provider-side work needed (auto-pinhole via consumer firewall:rules)."
+info "deconz:zigbee install-service for consumer '${CONSUMER}' — no provider-side work needed (auto-pinhole via consumer network:rules)."

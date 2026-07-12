@@ -95,7 +95,7 @@ deCONZ keeps **iotCloud internet egress** so it can pull Zigbee OTA bulb-firmwar
 | `cluster:vm` | the NixOS VM (clone of the golden template) |
 | `templates:nixos` | NixOS base image |
 | `backup:vm` | full-VM PBS backup (includes the Zigbee DB + diyHue config) |
-| `firewall:proxy` | Phoscon admin UI behind the reverse proxy (mgmt only) |
-| `firewall:rules` | pinholes for the `zigbee` + `hue-bridge` services |
+| `network:proxy` | Phoscon admin UI behind the reverse proxy (mgmt only) |
+| `network:rules` | pinholes for the `zigbee` + `hue-bridge` services |
 
 For installation steps see [INSTALL.md](./INSTALL.md); upgrades see [UPGRADE.md](./UPGRADE.md).

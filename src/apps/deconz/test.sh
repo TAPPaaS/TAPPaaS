@@ -12,7 +12,7 @@ set -euo pipefail
 
 VMNAME="$(get_config_value 'vmname' "${1:-deconz}")"
 ZONE0NAME="$(get_config_value 'zone0' 'iotCloud')"
-HTTP_PORT="$(get_config_value 'config.firewall:proxy.proxyPort' '8080')"
+HTTP_PORT="$(get_config_value 'config.network:proxy.proxyPort' '8080')"
 FQDN="${VMNAME}.${ZONE0NAME}.internal"
 
 fail=0
