@@ -15,7 +15,7 @@ Migrating the TAPPaaS **code** repository from GitHub to Codeberg. Tracking issu
 | GitHub repo fate | **Push mirror — only after a fully-tested stable 2.0** | Keeps discoverability/SEO without drift. Until then GitHub stays live but goes stale (Codeberg is the dev home). |
 | "Migrated" note / archive on GitHub | **Deferred to the 2.0 cutover** | Same gate as the mirror. |
 | New long-lived release branch | **Reuse `stable`** (not a new `stage`) | Promoting `ADR007` (the 2.0 manager/controller paradigm) to `stable` is the pending promote-to-stable step; existing tooling already references `stable`. |
-| Release sequence | tag `main` → `v1.1`, merge `ADR007`→`main`, retest, update `stable` | `v1.1` is the final 1.x checkpoint; 2.0 lands on `main` then `stable`. |
+| Release sequence | Codeberg push first, then tag `main` `v1.1` + point `stable` at it → merge `ADR007`→`main` → retest → promote staging → promote `stable` | `v1.1` is the final 1.x checkpoint (`stable` = 1.1 on Codeberg); 2.0 lands on `main` then `stable`. All release work happens on Codeberg. |
 
 ## Reference-rewrite scope
 
@@ -51,29 +51,33 @@ depends on if Forgejo's issue import preserves numbers. Decide at cutover; leave
 Legend: ☐ todo · ◐ in progress · ☑ done · ⏸ deferred (post-2.0 cutover)
 
 ### Phase 0 — Pre-flight
-- [ ] Reconcile the 21 `main`-only commits vs `ADR007` (litellm, vllm-amd, openwebui, deconz, vaultwarden, nixos-canon C2 fixes) — confirm none are lost by the merge
+- [x] Reconcile the 21 `main`-only commits vs `ADR007` (litellm, vllm-amd, openwebui, deconz, vaultwarden, nixos-canon C2 fixes) — confirm none are lost by the merge
 - [x] Create this tracking doc and issue [#414](https://github.com/TAPPaaS/TAPPaaS/issues/414)
 
-### Phase 1 — Release 1.1 + merge ADR007 → main *(operator commits/pushes)*
+### Phase 1 — Push to Codeberg *(operator)* — ☑ done
+- [x] Create `TAPPaaS/TAPPaaS` on Codeberg; add `codeberg` remote
+- [x] Push all branches + tags to Codeberg (Codeberg becomes origin/dev-home) — from here on every change below happens **only on Codeberg**, never visible on GitHub
+
+### Phase 2 — Release 1.1 + merge ADR007 → main *(operator commits/pushes)*
 - [ ] Tag current `main` as `v1.1` (final 1.x checkpoint), push tag
+- [ ] Move `stable` to the head of `main` (= `v1.1`) — so `stable` on Codeberg is the 1.1 release (the current GitHub `main` HEAD)
 - [ ] Merge `ADR007` → `main` — **conflict-resolution merge** (238 vs 21 commits, many files "changed in both"); adapt the 21 app modules to the named-module paradigm
 - [ ] Operator commits the resolved merge
 
-### Phase 2 — Reference rewrite *(edits only; operator commits)*
+### Phase 3 — Reference rewrite *(edits only; operator commits)*
 - [ ] Rewrite source-fetch refs to Codeberg (table above)
 - [ ] Verify `imageLocation` / `releases/latest` / third-party refs untouched
-
-### Phase 3 — Push to Codeberg *(operator)*
-- [ ] Create `TAPPaaS/TAPPaaS` on Codeberg; add `codeberg` remote
-- [ ] Push all branches + tags to Codeberg (Codeberg becomes origin/dev-home)
 
 ### Phase 4 — One more test
 - [ ] Full install/test on the test system (tappaas1 → tappaas-cicd): node provisions clean, source pulled from Codeberg, images still download from GitHub Releases
 
-### Phase 5 — Promote `stable` *(operator)*
+### Phase 5 — Promote staging → production *(operator)*
+- [ ] Promote `staging.tappaas.org` to `tappaas.org` (site production-domain cutover)
+
+### Phase 6 — Promote `stable` *(operator)*
 - [ ] Update `stable` → tested `main` (the pending ADR-007 promote-to-stable); push to Codeberg
 
-### Phase 6 — Community repo
+### Phase 7 — Community repo
 - [ ] Mirror `TAPPaaS/Community` to Codeberg
 - [ ] Rewrite `github.com/TAPPaaS/Community` refs (e.g. `docs/ADR/ADR-004-module-catalog-config-cascade.md`)
 
