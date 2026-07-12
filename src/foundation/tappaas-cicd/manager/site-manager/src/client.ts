@@ -156,4 +156,10 @@ export class CliSiteClient implements SiteClient {
     if (force) args.push("--force");
     return runStreaming(REPOSITORY_SH, args);
   }
+
+  repositoryModify(args: string[]): number {
+    // repository.sh modify <name> [--url <u>] [--branch <b>] — re-points origin
+    // (forge migration) / switches branch on the live checkout, then edits site.json.
+    return runStreaming(REPOSITORY_SH, ["modify", ...args]);
+  }
 }

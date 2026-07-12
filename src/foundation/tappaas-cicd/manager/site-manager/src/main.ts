@@ -7,7 +7,7 @@
 // Entity model (the entity is the first arg):
 //   site       (SINGLETON) → show | modify
 //   node                   → list | add | delete
-//   repository             → list | add | delete | reconcile
+//   repository             → list | add | modify | delete | reconcile
 // Plus top-level lifecycle verbs:
 //   add        create the site singleton (= create-site.sh: cluster discovery)
 //   validate   validate site.json well-formed (= validate-site.sh)
@@ -51,6 +51,9 @@ const HELP: HelpSpec = {
       options: [["--apply", "Register nodes that joined the cluster (default is preview)."]] },
     { usage: "repository list [--json]", note: "(alias: repo)" },
     { usage: "repository add <url> [--branch <b>] [--managed full|tracked] [--catalog <p>]" },
+    { usage: "repository modify <name> [--url <u>] [--branch <b>]",
+      options: [["--url <u>", "Re-point the repo at a new forge/URL in place (e.g. github.com→codeberg.org)."],
+                ["--branch <b>", "Switch the checked-out branch."]] },
     { usage: "repository delete <name> [--force]",
       options: [["--force", "Forward to repository.sh remove --force."]] },
     { usage: "repository reconcile [--apply]",
@@ -69,8 +72,8 @@ const HELP: HelpSpec = {
   ],
   notes: [
     "Owns config/site.json (the Site singleton). add (create-site.sh), repository\n" +
-      "add/delete (repository.sh) are thin delegations to the still-live bash tools;\n" +
-      "validate wraps validate-site.sh. TS owns config CRUD + validate + reconcile.",
+      "add/modify/delete (repository.sh) are thin delegations to the still-live bash\n" +
+      "tools; validate wraps validate-site.sh. TS owns config CRUD + validate + reconcile.",
     "site modify fields:\n" +
       "  --displayName --owner --email --automaticReboot --snapshotRetention\n" +
       "  --backupTarget --backupOffsite\n" +
@@ -375,7 +378,7 @@ function collectPools(o: Opts, name: string): string[] {
 // ── `repository` CRUD + reconcile ──────────────────────────────────────
 function cmdRepository(o: Opts, client: SiteClient): void {
   const sub = o.rest[0];
-  if (!sub) die("repository: expected 'list' | 'add' | 'delete' | 'reconcile'");
+  if (!sub) die("repository: expected 'list' | 'add' | 'modify' | 'delete' | 'reconcile'");
   const siteFile = siteFileOf(o);
 
   if (sub === "list") {
@@ -392,13 +395,39 @@ function cmdRepository(o: Opts, client: SiteClient): void {
     return;
   }
 
+  // Rebuild "--key value" pairs from parsed flags for the bash delegations
+  // (parseOpts captures valued flags into o.flags, so o.rest holds positionals
+  // only — forwarding o.rest alone would silently drop --url/--branch/etc.).
+  const fwdFlags = (keys: string[]): string[] => {
+    const out: string[] = [];
+    for (const k of keys) {
+      const v = o.flags.get(k);
+      if (v !== undefined) out.push(k, v);
+    }
+    return out;
+  };
+
   if (sub === "add") {
     // Thin delegation: repository.sh still owns URL validation, git clone +
     // checkout, catalog validation, and the VMID/name conflict scan, and writes
-    // the site.json .repositories entry. We forward the args verbatim
-    // (<url> [--branch b] [--managed full|tracked] [--catalog p]).
-    const rc = client.repositoryAdd(o.rest.slice(1));
+    // the site.json .repositories entry. Forward <url> + its valued flags.
+    const url = o.rest[1];
+    if (!url) die("repository add: expected <url>");
+    const rc = client.repositoryAdd([url, ...fwdFlags(["--branch", "--managed", "--catalog"])]);
     if (rc !== 0) throw new DieError(`repository.sh add exited ${rc}`);
+    return;
+  }
+
+  if (sub === "modify") {
+    const name = o.rest[1];
+    if (!name) die("repository modify: expected <name> [--url <url>] [--branch <branch>]");
+    // Thin delegation: repository.sh modify re-points origin (forge migration:
+    // github.com -> codeberg.org) and/or switches branch on the live checkout,
+    // then edits site.json. Forward <name> + --url/--branch.
+    const flags = fwdFlags(["--url", "--branch"]);
+    if (flags.length === 0) die("repository modify: expected --url and/or --branch");
+    const rc = client.repositoryModify([name, ...flags]);
+    if (rc !== 0) throw new DieError(`repository.sh modify exited ${rc}`);
     return;
   }
 

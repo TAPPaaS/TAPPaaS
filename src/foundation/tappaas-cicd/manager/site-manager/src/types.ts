@@ -160,8 +160,10 @@ export interface SiteClient {
   // CRUD + validate + reconcile and shells out for these.
   //   site add        → create-site.sh <args>
   createSite(args: string[]): number;
-  //   repository add  → repository.sh add <args>
+  //   repository add    → repository.sh add <args>
   repositoryAdd(args: string[]): number;
-  //   repository del  → repository.sh remove <name> [--force]
+  //   repository modify → repository.sh modify <name> [--url u] [--branch b]
+  repositoryModify(args: string[]): number;
+  //   repository del    → repository.sh remove <name> [--force]
   repositoryRemove(name: string, force: boolean): number;
 }

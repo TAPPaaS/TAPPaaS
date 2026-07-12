@@ -5,6 +5,7 @@
 set -euo pipefail
 
 . /home/tappaas/TAPPaaS/src/foundation/tappaas-cicd/lib/common-install-routines.sh
+. /home/tappaas/TAPPaaS/src/foundation/tappaas-cicd/lib/repo-sync.sh
 
 VMNAME="$(get_config_value 'vmname' "$1")"
 NODE="$(get_config_value 'node' "$(get_node_hostname 0)")"
@@ -41,21 +42,17 @@ if [ "$REPO_COUNT" -gt 0 ]; then
     REPO_NAME=$(echo "$REPOS_JSON" | jq -r ".[$i].name")
     REPO_PATH=$(echo "$REPOS_JSON" | jq -r ".[$i].path")
     REPO_BRANCH=$(echo "$REPOS_JSON" | jq -r ".[$i].branch")
+    REPO_URL=$(echo "$REPOS_JSON" | jq -r ".[$i].url")
     if [ -d "$REPO_PATH" ]; then
-      info "  Pulling ${REPO_NAME} (branch: ${REPO_BRANCH})..."
+      info "  Syncing ${REPO_NAME} -> ${REPO_URL} (branch: ${REPO_BRANCH})..."
+      # reconcile_repo_checkout (lib/repo-sync.sh) re-points `origin` when the
+      # site.json url changed forge/repo, then checks out the branch at the
+      # remote tip — so a hand-edited OR `repository modify`-driven change to the
+      # repo's url/branch is actually applied here (was: fetch+checkout+pull on
+      # the OLD origin, which silently pulled the wrong forge — Codeberg incident).
       (
-        cd "$REPO_PATH" || exit 0
-        git fetch origin || warn "  fetch failed for ${REPO_NAME}"
-        # Auto-stash local changes before switching branches. A lingering edit to
-        # a tracked file makes `git checkout <branch>` abort — silently leaving the
-        # system on the OLD branch while the run still looks successful (a real
-        # migration foot-gun: hit during the ADR-007 migration test, where it left
-        # the node un-migrated). Stash preserves the change (recover via git stash).
-        if [ -n "$(git status --porcelain 2>/dev/null)" ]; then
-          warn "  ${REPO_NAME}: local changes present — auto-stashing before checkout (recover via 'git -C ${REPO_PATH} stash list')"
-          git stash push -u -m "tappaas pre-update auto-stash $(date +%Y%m%d-%H%M%S)" || warn "  stash failed — checkout may not switch branch"
-        fi
-        git checkout "$REPO_BRANCH" && git pull origin "$REPO_BRANCH" || warn "Failed to pull ${REPO_NAME}"
+        reconcile_repo_checkout "$REPO_PATH" "$REPO_URL" "$REPO_BRANCH" \
+          || warn "Failed to sync ${REPO_NAME}"
       ) 2>&1 | while IFS= read -r _l; do
         # Keep tagged log lines ([Info]/[Warning]/[Error]); route raw git output to [Debug].
         case "$_l" in

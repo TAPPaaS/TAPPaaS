@@ -860,6 +860,11 @@ update-module.sh --debug openwebui
 
 Manages module repositories for the TAPPaaS platform. Supports adding, removing, modifying, and listing external module repositories alongside the main TAPPaaS repository.
 
+> **Front door:** operators normally use the site-manager verbs
+> `site-manager repository add|modify|delete|list` (alias `repo`), which delegate
+> `add`/`modify`/`delete` to this script and keep `site.json` in sync. `repository.sh`
+> is the underlying implementation; both accept the same options.
+
 **Usage:**
 ```bash
 repository.sh <command> [options]
@@ -871,7 +876,7 @@ repository.sh <command> [options]
 |---------|-------------|
 | `add <url> [--branch <branch>]` | Add a new module repository |
 | `remove <name> [--force]` | Remove a module repository |
-| `modify <name> [--url <url>] [--branch <branch>]` | Modify a repository |
+| `modify <name> [--url <url>] [--branch <branch>]` | Switch branch, or **re-point the repo at a new forge/URL in place** (e.g. github.com → codeberg.org) without re-cloning; then update `site.json` |
 | `list` | List all tracked repositories |
 
 **Examples:**
@@ -885,11 +890,16 @@ repository.sh add github.com/someone/tappaas-community --branch develop
 # List all repositories
 repository.sh list
 
-# Switch a repository to a different branch
-repository.sh modify tappaas-community --branch stable
+# Switch a repository to a different branch (via the site-manager front door)
+site-manager repository modify tappaas-community --branch stable
 
-# Change a repository's URL
-repository.sh modify tappaas-community --url github.com/other/repo --branch main
+# Migrate a repo to a new forge in place — re-points origin on the existing
+# checkout (no re-clone), switches branch, and updates site.json. This is the
+# supported way to move the primary TAPPaaS repo github.com -> codeberg.org:
+site-manager repository modify TAPPaaS --url codeberg.org/TAPPaaS/TAPPaaS --branch main
+
+# (equivalent low-level call)
+repository.sh modify tappaas-community --url codeberg.org/other/repo --branch main
 
 # Remove a repository
 repository.sh remove tappaas-community

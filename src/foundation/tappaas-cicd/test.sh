@@ -299,6 +299,19 @@ else
     skip "lib/test-config-readers.sh not found"
 fi
 
+# Test 9c: repo-sync reconciler (forge/branch switch) — the fix for a site.json
+# repository url/branch change silently pulling the OLD forge. Temp bare repos only.
+info "${BOLD}Test 9c: repo-sync reconcile (forge + branch switch)${CL}"
+if [[ -x "${SCRIPT_DIR}/lib/test-repo-sync.sh" ]]; then
+    if "${SCRIPT_DIR}/lib/test-repo-sync.sh" >/dev/null 2>&1; then
+        pass "repo-sync: re-points origin + checks out branch at new forge tip"
+    else
+        fail "repo-sync test failed (run lib/test-repo-sync.sh)"
+    fi
+else
+    skip "lib/test-repo-sync.sh not found"
+fi
+
 # update-module.sh wires cleanup into the success path (prune_snapshots calls
 # snapshot-vm.sh --cleanup); guard against the wiring silently disappearing.
 if grep -q 'snapshot-vm.sh.*--cleanup' /home/tappaas/bin/update-module.sh; then

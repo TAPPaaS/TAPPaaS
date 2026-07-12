@@ -57,6 +57,13 @@ warn()  { echo -e "${YW}[WARN]${CL} $*"; }
 error() { echo -e "${RD}[ERROR]${CL} $*" >&2; }
 die()   { error "$@"; exit 1; }
 
+# Shared repo-checkout reconciler (re-point origin + checkout branch) — also used
+# by the routine update path (pre-update.sh) so `modify` and `update-tappaas`
+# apply a url/branch change identically. Sourced after logging so it reuses ours.
+_REPO_SYNC_LIB="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")" && pwd)/../../lib/repo-sync.sh"
+# shellcheck source=/dev/null
+[ -r "${_REPO_SYNC_LIB}" ] && . "${_REPO_SYNC_LIB}"
+
 # ── Usage ────────────────────────────────────────────────────────────
 
 usage() {
@@ -716,6 +723,8 @@ cmd_modify() {
             die "Repository directory not found: ${current_path}"
         fi
 
+        # Branch-only switch stays on the EXISTING origin (the url is unchanged);
+        # only a --url change re-points (see the URL path below).
         info "  Fetching from origin..."
         if ! (cd "${current_path}" && git fetch origin 2>&1 | sed 's/^/  /'); then
             die "Failed to fetch from origin"
@@ -808,31 +817,39 @@ cmd_modify() {
         info "  No installed modules from this repository"
     fi
 
-    # ── Step 4: Replace repository ───────────────────────────────────
-    info "\n${BOLD}Step 4: Replace repository${CL}"
+    # ── Step 4: Repoint repository ───────────────────────────────────
+    info "\n${BOLD}Step 4: Repoint repository${CL}"
 
     local new_name
     new_name=$(derive_repo_name "${new_url}")
     local new_path="${CLONE_DIR}/${new_name}"
 
-    # Remove old clone
-    if [[ -d "${current_path}" ]]; then
-        info "  Removing old clone: ${current_path}"
-        rm -rf "${current_path}"
+    if [[ "${new_path}" == "${current_path}" && -d "${current_path}/.git" ]]; then
+        # Checkout location is unchanged (the primary /home/tappaas/TAPPaaS repo,
+        # or any repo whose derived name is unchanged): RE-POINT IN PLACE. Never
+        # rm -rf a live checkout just to change its forge — that would destroy the
+        # working tree the whole system runs from. This is the forge-migration case
+        # (e.g. github.com/TAPPaaS/TAPPaaS -> codeberg.org/TAPPaaS/TAPPaaS).
+        info "  Re-pointing existing checkout ${current_path} at the new origin..."
+        if ! reconcile_repo_checkout "${current_path}" "${new_url}" "${target_branch}"; then
+            die "Failed to re-point ${current_path} at https://${new_url} (${target_branch})"
+        fi
+        info "  ${GN}✓${CL} Repository re-pointed in place"
+    else
+        # The checkout MOVES (repo name changed): remove the old clone, clone anew.
+        if [[ -d "${current_path}" ]]; then
+            info "  Removing old clone: ${current_path}"
+            rm -rf "${current_path}"
+        fi
+        info "  Cloning new repository to ${new_path} ..."
+        if ! git clone "https://${new_url}" "${new_path}" 2>&1 | sed 's/^/  /'; then
+            die "Failed to clone new repository"
+        fi
+        if ! (cd "${new_path}" && git checkout "${target_branch}" 2>&1 | sed 's/^/  /'); then
+            die "Failed to checkout branch '${target_branch}'"
+        fi
+        info "  ${GN}✓${CL} New repository cloned"
     fi
-
-    # Clone new repo
-    info "  Cloning new repository to ${new_path} ..."
-    if ! git clone "https://${new_url}" "${new_path}" 2>&1 | sed 's/^/  /'; then
-        die "Failed to clone new repository"
-    fi
-
-    info "  Checking out branch '${target_branch}'..."
-    if ! (cd "${new_path}" && git checkout "${target_branch}" 2>&1 | sed 's/^/  /'); then
-        die "Failed to checkout branch '${target_branch}'"
-    fi
-
-    info "  ${GN}✓${CL} New repository cloned"
 
     # ── Step 5: Update module locations ──────────────────────────────
     if [[ -n "${installed_modules}" ]]; then

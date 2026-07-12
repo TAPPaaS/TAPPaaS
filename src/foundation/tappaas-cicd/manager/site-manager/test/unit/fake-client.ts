@@ -80,6 +80,10 @@ export class FakeSiteClient implements SiteClient {
     this.log.push(`repository.sh add ${args.join(" ")}`);
     return this.delegateRc;
   }
+  repositoryModify(args: string[]): number {
+    this.log.push(`repository.sh modify ${args.join(" ")}`);
+    return this.delegateRc;
+  }
   repositoryRemove(name: string, force: boolean): number {
     this.log.push(`repository.sh remove ${name}${force ? " --force" : ""}`);
     return this.delegateRc;
