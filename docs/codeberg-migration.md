@@ -58,11 +58,11 @@ Legend: ☐ todo · ◐ in progress · ☑ done · ⏸ deferred (post-2.0 cutove
 - [x] Create `TAPPaaS/TAPPaaS` on Codeberg; add `codeberg` remote
 - [x] Push all branches + tags to Codeberg (Codeberg becomes origin/dev-home) — from here on every change below happens **only on Codeberg**, never visible on GitHub
 
-### Phase 2 — Release 1.1 + merge ADR007 → main *(operator commits/pushes)*
-- [ ] Tag current `main` as `v1.1` (final 1.x checkpoint), push tag
-- [ ] Move `stable` to the head of `main` (= `v1.1`) — so `stable` on Codeberg is the 1.1 release (the current GitHub `main` HEAD)
-- [ ] Merge `ADR007` → `main` — **conflict-resolution merge** (238 vs 21 commits, many files "changed in both"); adapt the 21 app modules to the named-module paradigm
-- [ ] Operator commits the resolved merge
+### Phase 2 — Release 1.1 + merge ADR007 → main — ☑ done *(on Codeberg)*
+- [x] Tag current `main` as `v1.1` (final 1.x checkpoint), push tag — `v1.1` → `889c61a`
+- [x] Move `stable` to the head of `main` (= `v1.1`) — `stable`: `fda21af`→`889c61a` (fast-forward); `stable` on Codeberg is now the 1.1 release
+- [x] Merge `ADR007` → `main` — **fast-forward** (`889c61a`→`30b6b87`): `main` was already an ancestor of `ADR007` after the Phase-0 reconcile, so no conflicts here; the 21 app modules were adapted during that reconcile
+- [x] Resolved merge already committed in the reconcile (`369cab6` + `b734fca`)
 
 ### Phase 3 — Reference rewrite *(edits only; operator commits)*
 - [ ] Rewrite source-fetch refs to Codeberg (table above)
