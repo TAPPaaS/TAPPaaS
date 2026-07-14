@@ -1,12 +1,13 @@
 #!/usr/bin/env bash
 # discover.sh — TAPPaaS hardware discovery for ollama-nvidia module
-# Runs FROM management host / tappaas-cicd, discovers hardware ON tappaas1 via SSH
+# Runs FROM management host / tappaas-cicd, discovers hardware ON the module's
+# node (read from <module>.json) via SSH
 #
 # Unlike vllm-amd's discover.sh (hardcoded to one exact AMD APU model), this
 # validates a minimum VRAM floor and minimum driver version rather than an
-# exact GPU model string — the P100 in this box is explicitly expected to be
-# upgraded to newer NVIDIA hardware later, and the module should keep working
-# after that swap without an edit.
+# exact GPU model string — the module works on any NVIDIA card meeting the
+# floors (min_vram_mb / min_driver_version in the meta), so a GPU upgrade
+# needs no code change, just a re-run of discovery.
 
 set -euo pipefail
 
@@ -21,7 +22,8 @@ OUT_META="ollama-nvidia.meta.json"
 [ -f "${1}.meta.json" ] || { echo "❌ Not found: ${1}.meta.json — cannot merge discovery into it"; exit 1; }
 
 MODULE="$1"
-NODE=$(jq -r '.node // "tappaas1"' "${MODULE}.json")
+NODE=$(jq -r '.node // empty' "${MODULE}.json")
+[ -n "$NODE" ] || { echo "❌ No 'node' set in ${MODULE}.json — set the target Proxmox node first"; exit 1; }
 TARGET="root@${NODE}.mgmt.internal"
 
 REQUIRED_VRAM_MIN_MB=$(jq -r '.min_vram_mb // 8192' "${MODULE}.meta.json")
@@ -49,11 +51,16 @@ if command -v nvidia-smi &>/dev/null; then
   fi
 fi
 
+# /dev/nvidia-uvm is created lazily (on first CUDA context / nvidia_uvm module
+# load), so on a freshly booted host it's often absent even though the driver
+# is fine. Load it before checking devices; patch-host-gpu.sh makes this
+# persistent across reboots via modules-load.d.
+nvidia-modprobe -u -c=0 2>/dev/null || modprobe nvidia_uvm 2>/dev/null || true
+
 dev_majmin() {
   # $1: device path -> prints "major minor" or "0 0" if absent
   if [ -c "$1" ]; then
-    printf '%d %d' "0x$(stat -c '%t' "$1")" "0x$(stat -c '%T' "$1")" 2>/dev/null \
-      || printf '%d %d' "$(printf '%d' "0x$(stat -c '%t' "$1")")" "$(printf '%d' "0x$(stat -c '%T' "$1")")"
+    printf '%d %d' "0x$(stat -c '%t' "$1")" "0x$(stat -c '%T' "$1")"
   else
     echo "0 0"
   fi
@@ -148,7 +155,10 @@ ok "/dev/nvidia-uvm"    "${UVM_MAJ}:${UVM_MIN}"
 echo ""
 
 # --- Merge discovered values into the existing meta.json (same discipline as
-# vllm-amd: NEVER touch the curated <module>.json, merge-not-overwrite meta) ---
+# vllm-amd: NEVER touch the curated <module>.json, merge-not-overwrite meta).
+# The key is nvidia_gpu, NOT gpu: Create-TAPPaaS-LXC.sh fires its AMD-shaped
+# passthrough block on any non-empty .gpu key and would write malformed conf
+# lines (empty kfd/render majors) that break pct start. ---
 tmp=$(mktemp)
 jq --arg name "$GPU_NAME" --argjson vram "${VRAM_MB:-0}" \
    --arg cc "$COMPUTE_CAP" --arg drv "$DRIVER_VERSION" \
@@ -157,11 +167,11 @@ jq --arg name "$GPU_NAME" --argjson vram "${VRAM_MB:-0}" \
    --argjson uvmmaj "${UVM_MAJ:-0}" --argjson uvmmin "${UVM_MIN:-0}" \
    --argjson uvmtmaj "${UVMT_MAJ:-0}" --argjson uvmtmin "${UVMT_MIN:-0}" \
    --argjson ram "${RAM_MB}" \
-   '.gpu.name = $name | .gpu.vram_mb = $vram | .gpu.compute_cap = $cc | .gpu.driver_version = $drv
-    | .gpu.nvidia0_major = $nv0maj | .gpu.nvidia0_minor = $nv0min
-    | .gpu.nvidiactl_major = $nvctlmaj | .gpu.nvidiactl_minor = $nvctlmin
-    | .gpu.uvm_major = $uvmmaj | .gpu.uvm_minor = $uvmmin
-    | .gpu.uvm_tools_major = $uvmtmaj | .gpu.uvm_tools_minor = $uvmtmin
+   '.nvidia_gpu.name = $name | .nvidia_gpu.vram_mb = $vram | .nvidia_gpu.compute_cap = $cc | .nvidia_gpu.driver_version = $drv
+    | .nvidia_gpu.nvidia0_major = $nv0maj | .nvidia_gpu.nvidia0_minor = $nv0min
+    | .nvidia_gpu.nvidiactl_major = $nvctlmaj | .nvidia_gpu.nvidiactl_minor = $nvctlmin
+    | .nvidia_gpu.uvm_major = $uvmmaj | .nvidia_gpu.uvm_minor = $uvmmin
+    | .nvidia_gpu.uvm_tools_major = $uvmtmaj | .nvidia_gpu.uvm_tools_minor = $uvmtmin
     | .host_ram_mb = $ram' \
    "$OUT_META" > "$tmp" && mv "$tmp" "$OUT_META"
 

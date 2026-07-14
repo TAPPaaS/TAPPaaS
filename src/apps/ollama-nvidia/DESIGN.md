@@ -2,27 +2,61 @@
 
 Implementation and tuning detail moved out of README/INSTALL (Diataxis: explanation).
 
-## Why Ollama, not vLLM, on this hardware
+## Why Ollama, not vLLM
 
-vLLM hard-requires CUDA compute capability ≥7.0
+vLLM hard-requires CUDA compute capability ≥7.0 (Volta or newer)
 ([vLLM#1284](https://github.com/vllm-project/vllm/issues/1284),
-[vLLM#1431](https://github.com/vllm-project/vllm/issues/1431)). The Tesla P100 in this box
-is Pascal, compute capability 6.0 — vLLM will not initialize on it at any model size, full
-stop. This isn't a `vllm-amd` clone with a different vendor string; it's a different
-serving engine because vLLM is categorically unusable here.
+[vLLM#1431](https://github.com/vllm-project/vllm/issues/1431)) — Pascal-era cards
+(Tesla P100/P40, GTX 10-series, compute capability 6.x) cannot run it at any model size,
+full stop. This isn't a `vllm-amd` clone with a different vendor string; it's a different
+serving engine because vLLM is categorically unusable on the hardware class this module
+was built to support.
 
 Ollama (llama.cpp) supports compute capability ≥5.0 (driver ≥570 required for the
-5.0–6.2 range) and has been benchmarked on exactly this card. More importantly for this
-host's profile — old GPU, huge system RAM — Ollama does **hybrid GPU+CPU layer offload**:
-when a model doesn't fully fit in VRAM, remaining layers run on the CPU instead of the
-engine refusing to start. `vllm-amd`'s single-shot "whole model must fit in accelerator
-memory" model has no equivalent capability. `pull-model.sh large` (llama3.1:70b, ~40GB Q4
-on a 12GB card) exists specifically to exercise and prove this.
+5.0–6.2 range) and has been benchmarked on Pascal datacenter cards. More importantly for
+the hardware profile this module targets — an older/smaller GPU paired with abundant
+system RAM — Ollama does **hybrid GPU+CPU layer offload**: when a model doesn't fully
+fit in VRAM, remaining layers run on the CPU instead of the engine refusing to start.
+`vllm-amd`'s single-shot "whole model must fit in accelerator memory" model has no
+equivalent capability. `pull-model.sh large` (llama3.1:70b, ~40GB Q4) exists specifically
+to exercise and prove this on a card whose VRAM the model far exceeds.
 
-Footnote: GP100 (unlike consumer Pascal cards such as the GTX 10-series) has full-rate
-FP16 throughput, so llama.cpp's FP16 KV-cache/GEMM paths aren't crippled here the way
-they'd be on a desktop Pascal card — a small but real point in this GPU's favor for this
-workload.
+The module is not Pascal-only: `discover.sh` validates configurable floors
+(`min_vram_mb`, `min_driver_version` in the meta), not a GPU model, so it runs unchanged
+on any newer NVIDIA card. On compute capability ≥7.0 hardware a vLLM-based module is a
+reasonable alternative for high-throughput batched serving; Ollama's edge is flexibility
+and modest hardware.
+
+Footnote for GP100-class cards specifically (e.g. Tesla P100): unlike consumer Pascal,
+GP100 has full-rate FP16 throughput, so llama.cpp's FP16 KV-cache/GEMM paths aren't
+crippled the way they'd be on a GTX 10-series part — a small but real point in that
+card's favor for this workload.
+
+## Performance tuning
+
+Defaults set in the compose file (both the repo reference copy and the scaffold
+`update.sh` writes — keep them in sync):
+
+- `OLLAMA_KEEP_ALIVE=24h`, `OLLAMA_MAX_LOADED_MODELS=4` — sized for the RAM-rich host
+  profile this module targets (LXC memory = 75% of host RAM per the discover.sh
+  formula): re-loading a tens-of-GB model from disk costs minutes, keeping it resident
+  costs nothing that's scarce. On a RAM-constrained host, lower both.
+- `OLLAMA_LOAD_TIMEOUT=15m` — first load of a large hybrid-offload model streams tens of
+  GB from disk; on spinning-disk pools Ollama's default 5m load timeout can abort it
+  mid-load. Subsequent loads come from page cache and are fast.
+
+Opt-in knobs documented in the compose file but deliberately left unset until measured on
+the actual card (support and benefit vary by GPU generation — on Pascal in particular,
+flash-attention kernels run but aren't the fast path): `OLLAMA_FLASH_ATTENTION=1` (lower
+VRAM for context), `OLLAMA_KV_CACHE_TYPE=q8_0` (quantized KV cache frees VRAM for more
+GPU-resident layers; requires FA), `OLLAMA_NUM_PARALLEL=4` (throughput for multi-user
+LiteLLM traffic at the cost of context headroom).
+
+Evaluated and rejected for the target profile: SSD/L2ARC caching for the model store
+(when host RAM comfortably exceeds the model working set, the page cache holds every
+realistically-sized model after first read — see Storage below) and NUMA pinning (on
+dual-socket hosts llama.cpp has NUMA options but Ollama doesn't expose them — revisit
+only if CPU-offload throughput disappoints in practice).
 
 ## Stack
 
@@ -43,16 +77,16 @@ workload.
 
 ## No cache layer for model storage
 
-Checked `tappaas1`'s actual disk layout during design: 376GB RAM (334GB free at the time),
-`tanka1` (ZFS mirror, 2×1.2TB 10K SAS, 1.06TB free), `tankb1` (3.26TB free), and a 120GB
-enterprise SATA SSD (`rpool`, 99GB free, OS-only). Model files are small relative to free
-RAM and access is sequential (model load), not random — the case bcache/L2ARC solves
-(working set exceeds RAM) doesn't apply; the Linux page cache alone keeps every
-realistically-sized model resident after the first load. Models are bind-mounted from
-`/mnt/tanka1/ollama-models` — same pool, same convention as `vllm-amd`, no new storage
-component introduced. (Same caveat as `vllm-amd`: a container with `bindMounts` can't use
-`pct snapshot` — no rollback for this module; backups come from `backup:vm`'s PBS job
-instead.)
+On the host profile this module targets (RAM comfortably exceeding the model working
+set), an SSD/bcache/L2ARC layer in front of a spinning-disk pool buys nothing: model
+files are small relative to free RAM and access is sequential (model load), not random —
+the case cache layers solve (working set exceeds RAM) doesn't apply, and the Linux page
+cache alone keeps every realistically-sized model resident after the first load. Models
+are bind-mounted from a directory on a standard TAPPaaS storage pool (default
+`/mnt/tanka1/ollama-models`, configurable via `bindMounts` in the meta) — same convention
+as `vllm-amd`, no new storage component introduced. (Same caveat as `vllm-amd`: a
+container with `bindMounts` can't use `pct snapshot` — no rollback for this module;
+backups come from `backup:vm`'s PBS job instead.)
 
 ## Discovery and the meta file
 
@@ -62,29 +96,46 @@ structure), same discipline as `vllm-amd` — it never touches `ollama-nvidia.js
 
 Unlike `vllm-amd`'s discovery (hardcoded to one exact AMD APU model string), this validates
 a **minimum VRAM floor** (`min_vram_mb`, default 8192) and **minimum driver version**
-(`min_driver_version`, default 570) rather than an exact GPU model — this host's GPU is
-explicitly expected to be upgraded later, and the module should keep working after that
-swap without a code change, just a re-run of `discover.sh`.
+(`min_driver_version`, default 570) rather than an exact GPU model — the module works on
+any NVIDIA card meeting the floors, and a GPU upgrade needs no code change, just a
+re-run of `discover.sh`.
 
 Device majors (`/dev/nvidia0` etc.) are boot-dynamic exactly like `/dev/kfd` is for
 `vllm-amd` — `discover.sh` must be re-run before every (re)install, and
 `patch-host-gpu.sh` re-syncs the LXC's cgroup allow list to the live majors on every run,
 restarting the container only when something actually changed.
 
-One structural difference from `vllm-amd`: `Create-TAPPaaS-LXC.sh` (the foundation
-`cluster:lxc` provisioner) auto-writes the *initial* cgroup/mount lines from a module's
-`.meta.json` `gpu` block at container-create time — but that logic is keyed to AMD's
-`kfd_major`/`render_node` field names and doesn't recognize this module's NVIDIA-shaped
-`gpu` block. `patch-host-gpu.sh` here is therefore fully self-sufficient: it appends the
-cgroup/mount lines on first sight and replaces them (matching by minor, which is stable
-across reboots — only the major shifts) on every subsequent run, rather than assuming
-`Create-TAPPaaS-LXC.sh` already seeded them. If a future refactor teaches the foundation
-provisioner to recognize both device-block shapes, this fallback stays correct either way
-(the "append if missing" branch simply stops firing).
+One structural difference from `vllm-amd`, and it's sharper than "not recognized":
+`Create-TAPPaaS-LXC.sh` (the foundation `cluster:lxc` provisioner) fires its GPU
+passthrough block on **any non-empty `.gpu` key** in the meta — without checking the
+shape. Its handler then reads AMD's `kfd_major`/`render_node` fields, which resolve to
+empty strings for an NVIDIA-shaped block (`get_meta` returns `""` for missing keys), and
+writes malformed conf lines (`lxc.cgroup2.devices.allow: c :  rwm`, a bind of `/dev/dri/`)
+that break `pct start` at first install. This module's meta therefore deliberately names
+its device block **`nvidia_gpu`**, not `gpu`, so the provisioner's AMD handler never
+fires — the meta.json schema is explicitly unvalidated, so a differently-named block is
+legal. `patch-host-gpu.sh` is consequently the *sole owner* of the passthrough conf: it
+manages a sentinel-delimited block (`# BEGIN/END ollama-nvidia GPU passthrough`) in
+`/etc/pve/lxc/<vmid>.conf`, rebuilt from live device state on every run and rewritten
+only when the content changed. A managed block, rather than per-line patching, is
+required here because match-by-minor replacement is ambiguous on NVIDIA: `/dev/nvidia0`
+(major 195, minor 0) and `/dev/nvidia-uvm` (dynamic major, minor 0) share a minor. Only
+`nvidia_uvm`'s major is dynamic (195 is a registered, stable major), so in practice the
+re-sync matters after host reboots for the uvm pair specifically.
+
+Related boot-time gotcha handled by `patch-host-gpu.sh` (step 1b/1c): `/dev/nvidia-uvm`
+is created *lazily* — on first CUDA context or `nvidia_uvm` module load — so after a host
+reboot it's often absent even with a healthy driver, and the LXC would silently lose GPU
+compute (Ollama falls back to CPU without erroring). The patch script loads `nvidia_uvm`
+immediately, persists it via `/etc/modules-load.d/ollama-nvidia.conf`, and enables
+`nvidia-persistenced` when available (keeps the GPU initialized between contexts,
+avoiding multi-second driver re-init on the first request after idle). `discover.sh`
+performs the same modprobe before its device checks so a fresh host doesn't fail
+discovery spuriously.
 
 ## NVIDIA driver installed in two places, deliberately
 
-- **Host (Proxmox, `tappaas1`)**: the full driver (kernel module + userspace), installed
+- **Host (the target Proxmox node)**: the full driver (kernel module + userspace), installed
   once, out of band, before this module is ever installed (see INSTALL.md prerequisites).
 - **Inside the LXC**: userspace libraries only, installed via the same `.run` installer
   with `--no-kernel-module` — the LXC shares the host kernel (which already has the real

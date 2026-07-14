@@ -60,7 +60,9 @@ pct exec "${VMID}" -- docker exec ollama ollama pull "${TAG}"
 
 echo ""
 echo "=== Smoke test: ${TAG} ==="
-RESPONSE=$(pct exec "${VMID}" -- curl -s --connect-timeout 30 --max-time 300 \
+# First load of a large hybrid-offload model streams tens of GB from disk
+# into RAM/VRAM before the first token — give it 10 minutes, not 60s.
+RESPONSE=$(pct exec "${VMID}" -- curl -s --connect-timeout 30 --max-time 600 \
     -X POST "http://127.0.0.1:11434/v1/chat/completions" \
     -H "Content-Type:application/json" \
     -d "'{\"model\":\"${TAG}\",\"messages\":[{\"role\":\"user\",\"content\":\"Say hello in exactly 3 words.\"}],\"max_tokens\":20}'" \

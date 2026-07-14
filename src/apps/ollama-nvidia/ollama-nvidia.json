@@ -1,6 +1,6 @@
 {
   "type": "vm",
-  "description": "Ollama NVIDIA CUDA inference — Tesla P100 12GB (tappaas1)",
+  "description": "Ollama NVIDIA CUDA inference — any NVIDIA GPU, compute capability >= 5.0",
   "version": "0.1.0",
   "releaseDate": "2026-07-14",
   "maintainer": "@ErikDaniel007",

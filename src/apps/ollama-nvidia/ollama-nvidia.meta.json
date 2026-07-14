@@ -1,7 +1,8 @@
 {
   "version": "0.1.0",
   "module": "ollama-nvidia",
-  "gpu": {
+  "_comment_nvidia_gpu": "Deliberately NOT named 'gpu': Create-TAPPaaS-LXC.sh fires its AMD-shaped passthrough block on any non-empty .gpu key and would write malformed conf lines (empty kfd/render majors) that break pct start. This module's patch-host-gpu.sh owns the NVIDIA passthrough conf instead.",
+  "nvidia_gpu": {
     "name": null,
     "vram_mb": null,
     "compute_cap": null,

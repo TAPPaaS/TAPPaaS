@@ -45,21 +45,25 @@ echo ""
 echo "=== Testing Ollama NVIDIA Module (VMID: ${VMID}) ==="
 echo ""
 
+# Every probed command uses the `RC=0; cmd || RC=$?` capture pattern: a bare
+# `cmd; check "$?"` under set -e aborts the whole script on the first failing
+# probe, so FAIL counts would never be reported.
+
 # Test 1: Container running
 echo "--- LXC Container ---"
-pct status "${VMID}" | grep -q "running"
-check "LXC container is running" "$?"
+RC=0; pct status "${VMID}" 2>/dev/null | grep -q "running" || RC=$?
+check "LXC container is running" "$RC"
 
 # Test 2: exec access
-pct exec "${VMID}" -- echo "ok" > /dev/null 2>&1
-check "Can exec into container" "$?"
+RC=0; pct exec "${VMID}" -- echo "ok" > /dev/null 2>&1 || RC=$?
+check "Can exec into container" "$RC"
 
 # Test 3: GPU device access
 echo ""
 echo "--- GPU Access ---"
 for dev in /dev/nvidia0 /dev/nvidiactl /dev/nvidia-uvm; do
-    pct exec "${VMID}" -- ls "$dev" > /dev/null 2>&1
-    check "$dev device node present in LXC" "$?"
+    RC=0; pct exec "${VMID}" -- ls "$dev" > /dev/null 2>&1 || RC=$?
+    check "$dev device node present in LXC" "$RC"
 done
 
 _node() { ssh -n -o ConnectTimeout=8 -o StrictHostKeyChecking=accept-new "root@${LXC_NODE}.mgmt.internal" "$@"; }
@@ -75,8 +79,8 @@ done
 # Test 4: Docker running
 echo ""
 echo "--- Docker ---"
-pct exec "${VMID}" -- docker ps > /dev/null 2>&1
-check "Docker daemon running" "$?"
+RC=0; pct exec "${VMID}" -- docker ps > /dev/null 2>&1 || RC=$?
+check "Docker daemon running" "$RC"
 
 # Test 5: Ollama container
 echo ""

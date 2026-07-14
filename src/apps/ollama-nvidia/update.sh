@@ -46,7 +46,7 @@ echo "VM: ${VMNAME} (VMID: ${VMID}, node: ${LXC_NODE})"
 LOCAL_META="/root/tappaas/${VMNAME}.meta.json"
 HOST_DRIVER_VERSION=""
 if [[ -f "$LOCAL_META" ]]; then
-    HOST_DRIVER_VERSION="$(jq -r '.gpu.driver_version // empty' "$LOCAL_META")"
+    HOST_DRIVER_VERSION="$(jq -r '.nvidia_gpu.driver_version // empty' "$LOCAL_META")"
 fi
 
 # Step 0: Bootstrap Docker + nvidia-container-toolkit + /opt/ollama (idempotent)
@@ -101,6 +101,7 @@ services:
       - NVIDIA_DRIVER_CAPABILITIES=compute,utility
       - OLLAMA_MAX_LOADED_MODELS=4
       - OLLAMA_KEEP_ALIVE=24h
+      - OLLAMA_LOAD_TIMEOUT=15m
     deploy:
       resources:
         reservations:
@@ -132,13 +133,17 @@ if [[ -n "$HOST_DRIVER_VERSION" ]]; then
             echo 'Matching NVIDIA userspace driver already present.'
         else
             cd /tmp
-            URL=\"https://us.download.nvidia.com/tesla/${HOST_DRIVER_VERSION}/NVIDIA-Linux-x86_64-${HOST_DRIVER_VERSION}.run\"
-            if curl -fsSL -o nvidia-driver.run \"\$URL\"; then
+            # Datacenter drivers (Tesla/A/H-series) are hosted under /tesla/,
+            # consumer drivers (GeForce/RTX) under /XFree86/ — try both so the
+            # module works regardless of which card class the host has.
+            URL_DC=\"https://us.download.nvidia.com/tesla/${HOST_DRIVER_VERSION}/NVIDIA-Linux-x86_64-${HOST_DRIVER_VERSION}.run\"
+            URL_CONSUMER=\"https://us.download.nvidia.com/XFree86/Linux-x86_64/${HOST_DRIVER_VERSION}/NVIDIA-Linux-x86_64-${HOST_DRIVER_VERSION}.run\"
+            if curl -fsSL -o nvidia-driver.run \"\$URL_DC\" || curl -fsSL -o nvidia-driver.run \"\$URL_CONSUMER\"; then
                 sh nvidia-driver.run --no-kernel-module --silent --no-nouveau-check --no-cc-version-check || \
                     echo 'WARNING: driver .run install reported errors — check /var/log/nvidia-installer.log'
                 rm -f nvidia-driver.run
             else
-                echo \"WARNING: could not fetch \$URL — verify the version/branch matches the host and install manually if needed.\"
+                echo \"WARNING: could not fetch the ${HOST_DRIVER_VERSION} .run from either NVIDIA download path — install the matching userspace driver manually (see INSTALL.md).\"
             fi
         fi
     "

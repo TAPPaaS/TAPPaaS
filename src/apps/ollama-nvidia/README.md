@@ -1,30 +1,36 @@
 # ollama-nvidia
 
 Primary audience: developers and services needing a local, OpenAI-compatible LLM endpoint
-on hardware too old for `vllm-amd`.
+on NVIDIA hardware — including cards too old for vLLM.
 
-Local LLM inference on an NVIDIA GPU (currently a Tesla P100 12GB, Pascal) via Ollama — an
+Local LLM inference on any NVIDIA GPU (compute capability ≥5.0) via Ollama — an
 OpenAI-compatible API for LiteLLM or direct clients, with no data leaving your network.
 
-## Why this exists, not just "vLLM but NVIDIA"
+## Why Ollama, not vLLM
 
-`vllm-amd` requires the whole model to fit in accelerator memory in one shot, and vLLM
-itself hard-requires CUDA compute capability ≥7.0 — the Tesla P100 in this box is compute
-capability 6.0 and simply cannot run vLLM at all, at any size. Ollama (llama.cpp) instead
-does **hybrid GPU+CPU layer offload**: when a model doesn't fully fit in the GPU's VRAM,
-the remaining layers run on the CPU/system RAM instead of failing outright. Combined with
-this host's large RAM, that turns "12GB of old VRAM" into "12GB fast + a few hundred GB
-slow" — a capability tier `vllm-amd` cannot offer on comparable hardware.
+vLLM hard-requires CUDA compute capability ≥7.0 (Volta or newer), which rules out
+Pascal-era cards (Tesla P100/P40, GTX 10-series) entirely — not slow, unusable. Ollama
+(llama.cpp) supports compute capability ≥5.0 and additionally does **hybrid GPU+CPU
+layer offload**: when a model doesn't fully fit in VRAM, the remaining layers run on the
+CPU/system RAM instead of failing outright. On a host with plentiful system RAM, that
+turns a small or old VRAM budget into "VRAM fast + RAM slow" — models far beyond the
+card's VRAM remain usable.
+
+Users with a newer card (compute capability ≥7.0) can use this module as-is — it works
+on any NVIDIA GPU — but for high-throughput multi-user serving on modern hardware, a
+vLLM-based module (analogous to `vllm-amd`, using the official CUDA vLLM image) is worth
+considering as an alternative; Ollama's strength is flexibility and modest hardware, not
+batched throughput.
 
 ## What you get
 
 | Capability | Access from | How |
 |------------|-------------|-----|
 | OpenAI-compatible inference API | Internal network / consumers of `ollama-nvidia:inference` | `http://ollama-nvidia.<zone>.internal:11434` (TCP 11434 pinhole for cross-zone consumers) |
-| Hybrid GPU+CPU model support | API | Models well beyond 12GB VRAM run (slower) via CPU offload |
-| Dynamic multi-model serving | API | Multiple models can be pulled and swapped on demand — no single baked-in `--model` like vLLM |
+| Hybrid GPU+CPU model support | API | Models beyond the card's VRAM run (slower) via CPU offload |
+| Dynamic multi-model serving | API | Multiple models pulled and swapped on demand — no single baked-in `--model` like vLLM |
 
-Sizing tiers (reference — GPU/VRAM will change once this host's card is upgraded):
+Sizing tiers (examples assume a 12GB-class card — scale by your VRAM):
 
 | Tier | Example | Where it runs | Speed |
 |------|---------|----------------|-------|
@@ -37,7 +43,7 @@ Reference models (via `./pull-model.sh`):
 | Command | Model | Tier |
 |---------|-------|------|
 | `smoke` | qwen2.5:3b | Quick validation |
-| `prod`  | qwen2.5:14b | Fully GPU-resident |
+| `prod`  | qwen2.5:14b | Fully GPU-resident on 12GB+ cards |
 | `large` | llama3.1:70b | Hybrid CPU+GPU offload demo |
 
 ## What is not included
@@ -53,12 +59,16 @@ Reference models (via `./pull-model.sh`):
 
 ## Requirements
 
-- An NVIDIA GPU, ≥8GB VRAM, driver ≥570 — currently a Tesla P100 12GB on `tappaas1`.
-  `discover.sh` validates a floor, not an exact model, since this card is expected to be
-  upgraded later.
+- Any NVIDIA GPU with ≥8GB VRAM and a host driver ≥570. Both floors are configurable in
+  `ollama-nvidia.meta.json` (`min_vram_mb`, `min_driver_version`) — `discover.sh`
+  validates floors, not an exact GPU model, so a GPU upgrade needs no code change, just
+  a re-run of discovery. (The 570 floor is what Ollama requires for older compute
+  capability 5.0–6.2 cards; newer cards satisfy it with any current production driver.)
 - 32GB+ storage for OS + Docker + models.
-- `srvWork` zone; LXC sizing (defaults from `ollama-nvidia.json`): 24 cores, ~282GB RAM,
-  32GB disk.
+- LXC sizing: use the reference formula `discover.sh` prints (cores = host cores − 8
+  when >16, memory = 75% of host RAM). The defaults in `ollama-nvidia.json` reflect one
+  reference host — adjust `node`, `vmid`, and sizing for your environment by copying the
+  json to `/home/tappaas/config` before installing.
 
 ## Dependencies
 

@@ -26,11 +26,28 @@ services:
       - OLLAMA_MODELS=/models
       - NVIDIA_VISIBLE_DEVICES=all
       - NVIDIA_DRIVER_CAPABILITIES=compute,utility
-      # Generous defaults — this host has 288GB+ RAM available to the LXC, so
-      # there's no memory-pressure reason to aggressively evict warm models
-      # the way a RAM-constrained box would need to.
+      # Generous defaults, sized for a RAM-rich host (LXC memory = 75% of host
+      # RAM per the discover.sh formula) — no memory-pressure reason to evict
+      # warm models. Lower both on RAM-constrained hosts.
       - OLLAMA_MAX_LOADED_MODELS=${OLLAMA_MAX_LOADED_MODELS:-4}
       - OLLAMA_KEEP_ALIVE=${OLLAMA_KEEP_ALIVE:-24h}
+      # First load of a large hybrid-offload model reads tens of GB from disk —
+      # on spinning-disk pools Ollama's default 5m load timeout can abort it
+      # mid-load.
+      - OLLAMA_LOAD_TIMEOUT=${OLLAMA_LOAD_TIMEOUT:-15m}
+      # Tunables worth experimenting with on this hardware (leave unset until
+      # verified on the actual card — support on Pascal is model/version
+      # dependent):
+      #   OLLAMA_FLASH_ATTENTION=1     — lower VRAM use for context; llama.cpp
+      #                                  FA kernels on Pascal work but are not
+      #                                  the fast path — measure before keeping.
+      #   OLLAMA_KV_CACHE_TYPE=q8_0    — quantized KV cache, frees VRAM for
+      #                                  more GPU-resident layers; requires
+      #                                  flash attention to be enabled.
+      #   OLLAMA_NUM_PARALLEL=4        — concurrent request slots per model;
+      #                                  raises throughput for multi-user
+      #                                  LiteLLM traffic at the cost of
+      #                                  context-size headroom.
     deploy:
       resources:
         reservations:
