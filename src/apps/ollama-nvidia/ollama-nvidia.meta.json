@@ -1,0 +1,29 @@
+{
+  "version": "0.1.0",
+  "module": "ollama-nvidia",
+  "gpu": {
+    "name": null,
+    "vram_mb": null,
+    "compute_cap": null,
+    "driver_version": null,
+    "nvidia0_major": null,
+    "nvidia0_minor": null,
+    "nvidiactl_major": null,
+    "nvidiactl_minor": null,
+    "uvm_major": null,
+    "uvm_minor": null,
+    "uvm_tools_major": null,
+    "uvm_tools_minor": null
+  },
+  "bindMounts": [
+    { "src": "/mnt/tanka1/ollama-models", "dst": "/opt/ollama/models" }
+  ],
+  "lxcOptions": { "unprivileged": 0, "features": "nesting=1", "swap": 0 },
+  "host_ram_mb": null,
+  "min_driver_version": 570,
+  "min_vram_mb": 8192,
+  "ollama_image": "ollama/ollama:latest",
+  "author": "@ErikDaniel007",
+  "releaseDate": "2026-07-14",
+  "status": "Development"
+}

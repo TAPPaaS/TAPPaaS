@@ -1,0 +1,6 @@
+{
+  "_comment": "Auto-On pinhole for ollama-nvidia. When a consumer in a different zone declares dependsOn ['ollama-nvidia:inference'] and the zone-policy permits a pinhole, rules-manager synthesises an ingress rule for each port listed below.",
+  "ports": [
+    { "port": 11434, "protocol": "TCP", "description": "Ollama OpenAI-compatible inference API" }
+  ]
+}

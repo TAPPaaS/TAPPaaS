@@ -1,0 +1,43 @@
+# TAPPaaS Module: ollama-nvidia — reference compose file
+#
+# Deploy to: /opt/ollama/docker-compose.yml inside the LXC container
+# (update.sh writes this same content there if the file doesn't exist yet —
+# keep the two in sync when editing).
+#
+# Requires nvidia-container-toolkit configured for Docker inside the LXC
+# (`nvidia-ctk runtime configure --runtime=docker`, done by update.sh's
+# bootstrap step) — the `deploy.resources.reservations.devices` stanza below
+# is NVIDIA's documented Compose GPU-reservation syntax and works with plain
+# `docker compose up`, no Swarm required.
+#
+# Unlike vllm-amd (one model baked into --model at container start), Ollama
+# serves models dynamically — no model path to edit here before first start.
+services:
+  ollama:
+    image: ollama/ollama:latest
+    container_name: ollama
+    restart: unless-stopped
+    volumes:
+      - /opt/ollama/models:/models
+      - ollama-data:/root/.ollama
+    ports:
+      - "11434:11434"
+    environment:
+      - OLLAMA_MODELS=/models
+      - NVIDIA_VISIBLE_DEVICES=all
+      - NVIDIA_DRIVER_CAPABILITIES=compute,utility
+      # Generous defaults — this host has 288GB+ RAM available to the LXC, so
+      # there's no memory-pressure reason to aggressively evict warm models
+      # the way a RAM-constrained box would need to.
+      - OLLAMA_MAX_LOADED_MODELS=${OLLAMA_MAX_LOADED_MODELS:-4}
+      - OLLAMA_KEEP_ALIVE=${OLLAMA_KEEP_ALIVE:-24h}
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+
+volumes:
+  ollama-data:
