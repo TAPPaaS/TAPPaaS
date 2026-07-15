@@ -1,5 +1,4 @@
 {
-  "type": "vm",
   "description": "Ollama NVIDIA CUDA inference — any NVIDIA GPU, compute capability >= 5.0",
   "version": "0.1.0",
   "releaseDate": "2026-07-14",

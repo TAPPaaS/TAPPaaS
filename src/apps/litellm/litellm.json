@@ -15,8 +15,7 @@
     "templates:nixos",
     "backup:vm",
     "network:proxy",
-    "network:rules",
-    "vllm-amd:inference"
+    "network:rules"
   ],
   "provides": [
     "models"

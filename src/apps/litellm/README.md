@@ -53,6 +53,18 @@ in one step.
 | `identity:identity` | Secrets management |
 | `network:proxy` | HTTPS reverse proxy |
 | `network:rules` | Internal firewall pinholes |
-| `vllm-amd:inference` | Local LLM inference backend |
+
+**No hard dependency on an inference backend — deliberately.** LiteLLM is
+backend-agnostic: install whichever local backend matches your hardware —
+`vllm-amd` (AMD unified-memory APUs), `ollama-nvidia` (any NVIDIA GPU), both
+(LiteLLM fronts them all and routes by model name), or none (cloud providers
+only) — then register its URL as a provider in the AI Hub UI
+(e.g. `http://vllm-amd.srvWork.internal:8000` or
+`http://ollama-nvidia.srvWork.internal:11434`). A hard `dependsOn` on one
+specific backend would block installation on clusters without that vendor's
+hardware. Caveat: if you deploy LiteLLM in a *different zone* than a backend,
+add `<backend>:inference` to `dependsOn` (via the `/home/tappaas/config`
+override) so rules-manager opens the cross-zone pinhole — in the default
+same-zone (`srvWork`) layout no pinhole is needed.
 
 For installation steps see [INSTALL.md](./INSTALL.md).

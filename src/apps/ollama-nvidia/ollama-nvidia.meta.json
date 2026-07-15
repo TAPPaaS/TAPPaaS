@@ -3,26 +3,35 @@
   "module": "ollama-nvidia",
   "_comment_nvidia_gpu": "Deliberately NOT named 'gpu': Create-TAPPaaS-LXC.sh fires its AMD-shaped passthrough block on any non-empty .gpu key and would write malformed conf lines (empty kfd/render majors) that break pct start. This module's patch-host-gpu.sh owns the NVIDIA passthrough conf instead.",
   "nvidia_gpu": {
-    "name": null,
-    "vram_mb": null,
-    "compute_cap": null,
-    "driver_version": null,
-    "nvidia0_major": null,
-    "nvidia0_minor": null,
-    "nvidiactl_major": null,
-    "nvidiactl_minor": null,
-    "uvm_major": null,
-    "uvm_minor": null,
-    "uvm_tools_major": null,
-    "uvm_tools_minor": null
+    "name": "Tesla P100-PCIE-12GB",
+    "vram_mb": 12288,
+    "compute_cap": "6.0",
+    "driver_version": "580.173.02",
+    "nvidia0_major": 195,
+    "nvidia0_minor": 0,
+    "nvidiactl_major": 195,
+    "nvidiactl_minor": 255,
+    "uvm_major": 508,
+    "uvm_minor": 0,
+    "uvm_tools_major": 508,
+    "uvm_tools_minor": 1
   },
   "bindMounts": [
-    { "src": "/mnt/tanka1/ollama-models", "dst": "/opt/ollama/models" }
+    {
+      "src": "/mnt/tanka1/ollama-models",
+      "dst": "/opt/ollama/models"
+    }
   ],
-  "lxcOptions": { "unprivileged": 0, "features": "nesting=1", "swap": 0 },
-  "host_ram_mb": null,
+  "lxcOptions": {
+    "unprivileged": 0,
+    "features": "nesting=1",
+    "swap": 0
+  },
+  "host_ram_mb": 385571,
   "min_driver_version": 570,
   "min_vram_mb": 8192,
+  "_comment_host_driver_pin": "Driver version patch-host-gpu.sh auto-installs when the host has an NVIDIA GPU but no working driver. R580 is the last branch supporting Pascal/Volta; bump for newer cards.",
+  "host_driver_pin": "580.173.02",
   "ollama_image": "ollama/ollama:latest",
   "author": "@ErikDaniel007",
   "releaseDate": "2026-07-14",

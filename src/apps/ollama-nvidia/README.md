@@ -59,11 +59,13 @@ Reference models (via `./pull-model.sh`):
 
 ## Requirements
 
-- Any NVIDIA GPU with ≥8GB VRAM and a host driver ≥570. Both floors are configurable in
-  `ollama-nvidia.meta.json` (`min_vram_mb`, `min_driver_version`) — `discover.sh`
-  validates floors, not an exact GPU model, so a GPU upgrade needs no code change, just
-  a re-run of discovery. (The 570 floor is what Ollama requires for older compute
-  capability 5.0–6.2 cards; newer cards satisfy it with any current production driver.)
+- Any NVIDIA GPU with ≥8GB VRAM. Both floors are configurable in
+  `ollama-nvidia.meta.json` (`min_vram_mb`, `min_driver_version`) — discovery validates
+  floors, not an exact GPU model, so a GPU upgrade needs no code change. **The host
+  NVIDIA driver is installed automatically** during `install-module.sh` if missing
+  (pinned via `host_driver_pin` in the meta; default is the newest branch that still
+  supports Pascal/Volta — bump it for newer cards). The ≥570 driver floor is what Ollama
+  requires for older compute capability 5.0–6.2 cards.
 - 32GB+ storage for OS + Docker + models.
 - LXC sizing: use the reference formula `discover.sh` prints (cores = host cores − 8
   when >16, memory = 75% of host RAM). The defaults in `ollama-nvidia.json` reflect one
@@ -76,6 +78,12 @@ Reference models (via `./pull-model.sh`):
 |------------|---------|
 | `cluster:lxc` | LXC container provisioning |
 | `backup:vm` | Container snapshots |
+
+**Deliberately no `cluster:ha`**: GPU device passthrough is node-bound — the container
+binds `/dev/nvidia*` on the node that physically holds the card, so failing over to a
+GPU-less node would start a container without its GPU. The container restarts with the
+node (`onboot`), and consumers (LiteLLM) should treat this backend as best-effort,
+falling back to their other providers when it's down.
 
 For installation steps see [INSTALL.md](./INSTALL.md). For design rationale and the
 hybrid-offload/storage decisions, see [DESIGN.md](./DESIGN.md).

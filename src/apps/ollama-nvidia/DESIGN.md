@@ -135,8 +135,13 @@ discovery spuriously.
 
 ## NVIDIA driver installed in two places, deliberately
 
-- **Host (the target Proxmox node)**: the full driver (kernel module + userspace), installed
-  once, out of band, before this module is ever installed (see INSTALL.md prerequisites).
+- **Host (the target Proxmox node)**: the full driver (kernel module + userspace),
+  auto-installed by `patch-host-gpu.sh` when it finds an NVIDIA GPU on PCI with no
+  working driver: build prerequisites via apt (gcc/make/dkms/kernel headers), `nouveau`
+  blacklisted and unloaded live (no reboot needed when nothing holds it — on headless
+  Proxmox hosts the console is usually on the BMC's graphics chip, not the GPU), then
+  the `.run` installer for the `host_driver_pin` version from the meta, registered with
+  dkms so kernel updates rebuild it. Idempotent: a working driver skips the whole step.
 - **Inside the LXC**: userspace libraries only, installed via the same `.run` installer
   with `--no-kernel-module` — the LXC shares the host kernel (which already has the real
   module loaded), it only needs matching userspace libs so `nvidia-container-toolkit` has

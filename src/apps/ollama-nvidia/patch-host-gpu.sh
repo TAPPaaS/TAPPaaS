@@ -31,12 +31,64 @@ echo ""
 # --- Read device info from meta.json ---
 MODELS_SRC=$(jq -r '.bindMounts[0].src // empty' "$META")
 
-# --- Step 1: Check the host NVIDIA driver actually works ---
+# --- Step 1: Ensure a working host NVIDIA driver (auto-install if missing) ---
+# Unlike ROCm (in-kernel), the NVIDIA driver is an out-of-tree module that has
+# to be installed on the Proxmox host. Rather than failing with a manual
+# prerequisite, detect the situation and fix it: if an NVIDIA GPU is visible on
+# PCI but nvidia-smi doesn't work, install the pinned driver (.run + dkms)
+# right here. Idempotent — a working driver skips all of this.
 if command -v nvidia-smi &>/dev/null && nvidia-smi &>/dev/null; then
   ok "nvidia-smi reports a working driver"
 else
-  err "nvidia-smi" "not working — install/reload the NVIDIA driver on this host first"
-  die "host NVIDIA driver required"
+  lspci -n 2>/dev/null | grep -qi ' 10de:' \
+    || die "no NVIDIA GPU found on PCI — wrong node? (check 'node' in ${MODULE}.json)"
+  DRIVER_PIN=$(jq -r '.host_driver_pin // "580.126.20"' "$META")
+  echo "  NVIDIA GPU present but no working driver — auto-installing ${DRIVER_PIN}..."
+
+  # Build prerequisites (dkms rebuilds the module on future kernel updates).
+  export DEBIAN_FRONTEND=noninteractive
+  apt-get update -qq
+  apt-get install -y -qq gcc make dkms pkg-config >/dev/null
+  apt-get install -y -qq "proxmox-headers-$(uname -r)" >/dev/null 2>&1 \
+    || apt-get install -y -qq "pve-headers-$(uname -r)" >/dev/null \
+    || die "no kernel headers package found for $(uname -r)"
+  ok "build prerequisites installed (gcc, make, dkms, headers)"
+
+  # Keep nouveau off this GPU now and after reboots.
+  if [ ! -f /etc/modprobe.d/blacklist-nouveau.conf ]; then
+    printf 'blacklist nouveau\noptions nouveau modeset=0\n' > /etc/modprobe.d/blacklist-nouveau.conf
+    update-initramfs -u >/dev/null 2>&1 || true
+    ok "nouveau blacklisted for future boots"
+  fi
+  # Capture lsmod first: 'lsmod | grep -q' is a false negative under set -o
+  # pipefail (grep -q exits on first match, lsmod gets SIGPIPE) — same trap
+  # documented in vllm-amd's patch-host-gpu.sh.
+  LOADED_MODS="$(lsmod)"
+  if grep -q '^nouveau' <<< "$LOADED_MODS"; then
+    modprobe -r nouveau 2>/dev/null \
+      || die "nouveau is loaded and in use — reboot the host to release it, then re-run"
+    ok "nouveau unloaded (live, no reboot needed)"
+  fi
+
+  # Datacenter cards live under /tesla/, consumer cards under /XFree86/.
+  RUN_FILE="/tmp/NVIDIA-Linux-x86_64-${DRIVER_PIN}.run"
+  URL_DC="https://us.download.nvidia.com/tesla/${DRIVER_PIN}/NVIDIA-Linux-x86_64-${DRIVER_PIN}.run"
+  URL_CONSUMER="https://us.download.nvidia.com/XFree86/Linux-x86_64/${DRIVER_PIN}/NVIDIA-Linux-x86_64-${DRIVER_PIN}.run"
+  curl -fsSL -o "$RUN_FILE" "$URL_DC" || curl -fsSL -o "$RUN_FILE" "$URL_CONSUMER" \
+    || die "could not download driver ${DRIVER_PIN} from either NVIDIA path — check host_driver_pin in the meta"
+  ok "driver ${DRIVER_PIN} downloaded"
+
+  echo "  Building and installing (takes a few minutes)..."
+  sh "$RUN_FILE" --dkms --silent --no-questions 2>/dev/null \
+    || sh "$RUN_FILE" --dkms --silent \
+    || die "driver install failed — see /var/log/nvidia-installer.log"
+  rm -f "$RUN_FILE"
+
+  if nvidia-smi &>/dev/null; then
+    ok "driver ${DRIVER_PIN} installed and working"
+  else
+    die "driver installed but nvidia-smi still failing — see /var/log/nvidia-installer.log"
+  fi
 fi
 
 # --- Step 1b: Ensure nvidia_uvm is loaded now and at every boot ---

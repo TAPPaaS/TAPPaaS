@@ -22,7 +22,7 @@ die() { printf "${RD}  ❌ FATAL: %s${CL}\n" "$1"; exit 1; }
 
 [ -z "${1:-}" ]         && die "Usage: ./install.sh <module>  (e.g. ./install.sh ollama-nvidia)"
 [ -f "${1}.json" ]      || die "Not found: ${1}.json"
-[ -f "${1}.meta.json" ] || die "Not found: ${1}.meta.json — run discover.sh first"
+[ -f "${1}.meta.json" ] || die "Not found: ${1}.meta.json (ships with the module — restore it from the repo)"
 
 MODULE="$1"
 NODE=$(jq -r '.node'   "${MODULE}.json")
@@ -47,12 +47,20 @@ scp "${MODULE}.meta.json"             "${TARGET}:${TAPPAAS_DIR}/${MODULE}.meta.j
 scp "${SCRIPT_DIR}/patch-host-gpu.sh" "${TARGET}:${TAPPAAS_DIR}/patch-host-gpu.sh"
 scp "${SCRIPT_DIR}/update.sh"         "${TARGET}:${TAPPAAS_DIR}/update.sh"
 
-# Step 1: Prepare host GPU (devices, permissions, models dir).
-echo "  [1/2] Patching host GPU on $NODE..."
+# Step 1: Prepare host GPU (auto-installs the NVIDIA driver if the GPU is
+# present but driverless, then devices, permissions, models dir).
+echo "  [1/3] Patching host GPU on $NODE..."
 ssh "$TARGET" "bash ${TAPPAAS_DIR}/patch-host-gpu.sh ${MODULE}"
 
-# Step 2: Install Docker + nvidia-container-toolkit + Ollama inside the container.
-echo "  [2/2] Installing Docker + Ollama inside the container..."
+# Step 2: Discovery — now that the driver is guaranteed working, validate the
+# GPU against the module's floors and record VRAM/driver/device info into the
+# meta, then re-ship it so update.sh reads fresh values (not the seed's nulls).
+echo "  [2/3] Running hardware discovery against $NODE..."
+(cd "$SCRIPT_DIR" && ./discover.sh "$MODULE")
+scp "${SCRIPT_DIR}/${MODULE}.meta.json" "${TARGET}:${TAPPAAS_DIR}/${MODULE}.meta.json"
+
+# Step 3: Install Docker + nvidia-container-toolkit + Ollama inside the container.
+echo "  [3/3] Installing Docker + Ollama inside the container..."
 ssh "$TARGET" "bash ${TAPPAAS_DIR}/update.sh ${MODULE}"
 
 # Cleanup shipped files.

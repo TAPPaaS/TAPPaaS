@@ -24,6 +24,11 @@ YW=$'\033[33m'; BL=$'\033[36m'; RD=$'\033[01;31m'
 BGN=$'\033[4;92m'; GN=$'\033[1;92m'; DGN=$'\033[32m'; CL=$'\033[m'; BOLD=$'\033[1m'
 
 info()  { echo -e "${DGN}[Info]${CL} $*"; }
+# This script runs standalone on the target node (shipped by install-service.sh),
+# so common-install-routines.sh's debug() is not available — define a matching
+# TAPPAAS_DEBUG-gated one here or every get_config_value call prints
+# "debug: command not found".
+debug() { [[ "${TAPPAAS_DEBUG:-0}" -eq 1 ]] && echo -e "${DGN}[Debug]${CL} $*" || true; }
 warn()  { echo -e "${YW}[Warning]${CL} $*"; }
 errln() { echo -e "${RD}[ERROR]${CL} $*" >&2; }
 

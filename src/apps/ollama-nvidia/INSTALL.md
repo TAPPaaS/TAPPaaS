@@ -2,41 +2,38 @@
 
 ## Prerequisites
 
-1. **Host NVIDIA driver, installed and working, BEFORE running discover.sh/install.sh.**
-   This module does not install the host-level driver for you — that's a one-time,
-   host-specific step:
-   - Blacklist `nouveau` (`/etc/modprobe.d/blacklist-nouveau.conf`, then
-     `update-initramfs -u`, then reboot).
-   - Install the NVIDIA production-branch driver, **version ≥570**. The 570 floor is
-     what Ollama requires for older compute capability 5.0–6.2 GPUs (e.g. Tesla P100);
-     newer cards satisfy it with any current production driver. If the distro-packaged
-     `nvidia-driver` (Debian's `non-free` component) isn't new enough, use NVIDIA's
-     official `.run` installer instead.
-   - If the host uses Secure Boot, the out-of-tree kernel module must be MOK-signed (or
-     Secure Boot disabled) — check with `mokutil --sb-state`. Legacy-boot hosts are
-     unaffected.
-   - Verify with `nvidia-smi` on the Proxmox host before proceeding.
-   - If `pve-nvidia-vgpu-helper` is present on the host (Proxmox ships it for vGPU
-     mediated-device setups), it's unrelated to the whole-GPU LXC passthrough this
-     module uses — confirm no vGPU profile is actively claiming the card before
-     installing the driver.
+1. An NVIDIA GPU (compute capability ≥5.0, ≥8GB VRAM) in the target node, set as `node`
+   in `ollama-nvidia.json`.
 2. `cluster:lxc` and `backup:vm` already installed on the target node.
+
+**The host NVIDIA driver is installed automatically.** If `install.sh` finds an NVIDIA
+GPU on PCI with no working driver, it installs the version pinned as `host_driver_pin`
+in `ollama-nvidia.meta.json` (dkms build, `nouveau` blacklisted and unloaded live — no
+reboot needed unless `nouveau` is actively in use, e.g. driving the console). The pin
+defaults to the newest datacenter branch that still supports Pascal/Volta; users with a
+newer card can bump it. Caveats where the automatic path can't help:
+
+- **Secure Boot**: the out-of-tree kernel module must be MOK-signed (or Secure Boot
+  disabled) — check `mokutil --sb-state`. Legacy-boot hosts are unaffected.
+- **vGPU**: if `pve-nvidia-vgpu-helper` has a vGPU profile actively claiming the card,
+  release it first — this module uses whole-GPU passthrough.
 
 ## Install
 
 ```bash
-./discover.sh ollama-nvidia
 install-module.sh ollama-nvidia
 ```
 
-`discover.sh` validates the GPU (≥8GB VRAM, driver ≥570, required character devices
-present) and merges the findings into `ollama-nvidia.meta.json`. Like `vllm-amd`, the
-device majors are boot-dynamic — **re-run `discover.sh` before every (re)install.**
-
-`install-module.sh` runs `cluster:lxc`'s provisioning, then this module's `install.sh`,
-which patches the host GPU devices and bootstraps Docker + `nvidia-container-toolkit` +
+That's the whole flow. `install-module.sh` runs `cluster:lxc`'s provisioning, then this
+module's `install.sh`, which: (1) prepares the host GPU — auto-installing the driver if
+needed — (2) runs `discover.sh` to validate the GPU against the module's floors (≥8GB
+VRAM, driver ≥570, both configurable in the meta) and record the hardware into
+`ollama-nvidia.meta.json`, and (3) bootstraps Docker + `nvidia-container-toolkit` +
 Ollama inside the container. No manual model-path editing step is needed (unlike
 `vllm-amd`) — Ollama manages models dynamically.
+
+`./discover.sh ollama-nvidia` can also be run standalone at any time as a read-mostly
+hardware check (it only writes the meta file).
 
 To deviate from the defaults in `./ollama-nvidia.json` (target node, vmid, LXC sizing —
 the shipped values reflect one reference host), copy the json to `/home/tappaas/config`

@@ -33,7 +33,7 @@
     "network:proxy": {
       "proxyPort": 8080,
       "proxyAllowedZones": [
-        "home"
+        "tappaas-private"
       ]
     }
   }
