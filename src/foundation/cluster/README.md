@@ -75,9 +75,7 @@ provides the `vm`, `lxc` and `ha` services (the module's `provides` in
   remain a roadmap option for synchronous cross-node replication.
 
 Source: the TAPPaaS curation criteria (Design Principles, tappaas.org
-What → Principles) and
-[StorageDesign.md](../../../docs/Architecture/StorageDesign.md). Depth: see
-[DESIGN.md](./DESIGN.md).
+What → Principles). Depth: see [DESIGN.md](./DESIGN.md).
 
 ## Dependencies
 

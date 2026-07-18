@@ -37,4 +37,4 @@ a scaled out system will have nodes: "tappaasa1", "tappaasa2", "tappaasb1", tapp
 
 # Data pools
 
-the nodes have storage pools and they follow the same naming conventions as the node names with "a", "b" and "c" indicating the type of storage. See [Storage](./StorageDesign.md) for details
+the nodes have storage pools and they follow the same naming conventions as the node names with "a", "b" and "c" indicating the type of storage. See the cluster module's [DESIGN.md](../../src/foundation/cluster/DESIGN.md#pool-tiers) for details

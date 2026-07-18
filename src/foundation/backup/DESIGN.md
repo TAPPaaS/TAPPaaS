@@ -5,11 +5,62 @@ issue #247). Catalog info: [README.md](./README.md); install: [INSTALL.md](./INS
 operations: [QUICKREF.md](./QUICKREF.md); test coverage: [TEST.md](./TEST.md). Design
 rationale: [ADR-012](../../../docs/ADR/ADR-012-backup-enhancement.md).
 
+## Backup strategy & disaster recovery
+
+TAPPaaS follows the **3-2-1 principle**: 3 copies of data, in 2 different formats, with 1 copy
+off-site. It rests on one design choice — **all configuration and user data lives inside the module
+VMs** (and the instance's own config lives in the `tappaas-cicd` VM) — so backing up the VMs backs up
+everything that matters. Three layers deliver it:
+
+1. **Local snapshots (primary).** PBS snapshots the managed VM list on a schedule (default daily),
+   with compression + deduplication and the retention defaults below (4/14d/8w/12m/6y) — enough
+   history to recover from a slow-burn compromise or a late-noticed deletion. A local PBS is **not
+   mandatory**: the placement policy (§Placement) lets small or single-node sites run `remote-only`
+   and push straight off-site.
+2. **Off-site copy.** A remote PBS — a TAPPaaS *buddy* (any TAPPaaS system can be another's PBS;
+   backups are encrypted, so you need not trust the remote operator), your own cloud PBS, or an
+   ADR-010 satellite with S3 Object-Lock. The pull/push/subset/immutability model is in §"Off-site
+   symmetry".
+3. **Personal export.** A user can back up their own data to detachable media (e.g. USB) in each
+   application's native format — which also lets them leave a TAPPaaS system without losing data.
+
+### Disaster recovery
+
+Four disaster classes are in scope: hardware/environmental loss (fire, power), a bad software
+update, a hostile intrusion, and accidental deletion by a user or admin. High availability (owned by
+the **cluster** module) blunts some of these; when it can't, TAPPaaS recovers by one of three
+methods:
+
+1. **Rebuild from backup** — restore the VMs onto TAPPaaS hardware (the implemented, tested path).
+2. **Borrow a peer** — re-establish the services from backup on another TAPPaaS system, in isolated
+   zones.
+3. **Rent cloud** — re-establish the VMs on cloud VPCs.
+
+(Plus the personal export above, to re-home an individual account on another TAPPaaS.)
+
 ## Not a VM
 
 Unlike most foundation modules, PBS is installed **via apt directly on a Proxmox node**
 (`imageType: "apt"`), not as a VM — the datastore needs direct access to a `tankc` ZFS
 pool. The `backup.mgmt.internal` DNS name points at that node.
+
+## Why native apt, not a VM
+
+Four PBS deployment methods were weighed; TAPPaaS chose **native**:
+
+| Option | Verdict | Rationale |
+|--------|---------|-----------|
+| **Dedicated** physical PBS host | rejected | fullest separation + native disk access (can double as a cluster quorum node), but a second machine per site — too costly/complex for small systems |
+| **Native** — apt on a PVE node | **chosen** | direct native disk access, shares the PVE kernel (resource-light), runs on a single-node system, trivial to keep current (`apt`) |
+| **LXC** on a node | rejected | shares the kernel, but disk passthrough is still not truly native and is fiddlier than apt-on-host |
+| **VM** on a node | rejected | disk access is very indirect, restore-after-hardware-failure is complex, and Proxmox advises against it |
+
+Native's trade-offs are accepted: PBS and PVE share a kernel (fine — TAPPaaS tracks conservative
+Proxmox releases), and a running backup loads the node (mitigated by keeping backup nodes to
+HA-failover / low-priority roles). The datastore is the `tankc` ZFS pool the **cluster** module
+creates — reserved for backup data only, so a production-disk failure never touches backups. Local
+ZFS is favoured over NFS/iSCSI/S3 for the on-site datastore; the off-site **S3 Object-Lock** tier is
+an ADR-010 satellite's role, not the local PBS's.
 
 ## Placement (ADR-012 P1/P2)
 

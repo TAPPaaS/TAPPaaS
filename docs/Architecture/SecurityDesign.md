@@ -48,7 +48,7 @@ General setup is:
 
 ## Network segmentation
 
-see [Network](./NetworkDesign.md) design
+see the [network module design](../../src/foundation/network/DESIGN.md) and [zones](../../src/foundation/tappaas-cicd/manager/network-manager/ZONES.md)
 
 ## Inbound Internet Access security
 
@@ -74,6 +74,6 @@ The two main designs principles for resiliency in TAPPaaS is:
 - segmentation of TAPPaaS network: so breach of one service or one VM does not imidiately leads to breach of other VMs
   - and importantly the root access accounts for management resides on a segment that can not be accessed from the other segments
 - extensive backups, including backups to external site that have completely different security setups
-  - see [Backup](./BackupDesign.md)
+  - see the backup module's [DESIGN.md](../../src/foundation/backup/DESIGN.md)
 
 

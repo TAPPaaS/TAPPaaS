@@ -173,8 +173,7 @@ disks and a topology (existing pools are skipped).
 
 ## Storage design decisions
 
-Migrated from the documentation site's solution-design "Storage" page; conceptual
-background in [StorageDesign.md](../../../docs/Architecture/StorageDesign.md).
+The rationale for the ZFS-based storage model and the pool tiers.
 
 **ZFS as the storage manager.** ZFS meets the criteria for an efficient, scalable,
 redundant, flexible and trustworthy storage solution, combined here with a standard
@@ -204,6 +203,23 @@ for large installations.
 | `tankc` | Backup — the PBS datastore | cost-optimized, mostly single-stream write; typically on one node only (`tappaas3` in a 3-node cluster) |
 
 Letters `d`, `e`, … remain free for specialized storage characteristics.
+
+## High Availability
+
+HA keeps services running when a component fails. The cluster module covers the failure classes it
+owns; the network-layer ones (firewall failover, load-balancing, internet/DNS survival) belong to
+the **network** module.
+
+| Failure | Protection |
+|---------|-----------|
+| **Disk failure** | ZFS redundancy within the pool — mirror for `tanka` (§Pool tiers) |
+| **Node / hardware failure, planned reboots** | On a 3+-node cluster each HA-enabled service has a default fail-over node; Proxmox restarts it there from the replicated `tanka` copy (`cluster:ha`), typically within minutes |
+| **Failover data gap** | replication is asynchronous, so up to the `replicationSchedule` window may be lost on failover (§Storage design decisions); a synchronous option (Ceph/Garage) is a roadmap item for large sites only |
+
+A cluster is **optional** (a single node has no fail-over) but recommended beyond a small setup.
+Outside the cluster's remit: **UPS / power paths** are site-specific and out of scope; **OPNsense
+failover, reverse-proxy load-balancing, and internet-outage DNS survival** are the network module's
+concern.
 
 ## Adding more nodes
 

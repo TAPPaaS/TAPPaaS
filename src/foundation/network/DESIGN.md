@@ -381,6 +381,24 @@ means the process holds an old working config and any restart will fail.
    (fixes the path issue, not the version mismatch).
 4. Disable DNSBL entirely (removes DNS-level ad/malware blocking).
 
+## Resilience & ingress without a public IP
+
+**Public ingress with no public IP.** The default ingress path terminates at Caddy on the OPNsense
+firewall on a routable WAN IP. A site behind CGNAT / dynamic IP / no-inbound instead publishes via a
+**satellite** ([ADR-010](../../../docs/ADR/ADR-010-vps-satellite-reverse-proxy-backup.md)): an
+operator-owned VPS runs a blind TLS-passthrough reverse-proxy and forwards `:443` over a WireGuard
+tunnel to Caddy at home — no commercial tunnel SaaS, and TLS keys stay on-site. The satellite is
+optional and non-invasive (a site with a public IP needs none); see the `satellite` foundation module.
+
+**Internet-outage survival.** OPNsense runs a caching recursive resolver (Unbound), so the local
+TAPPaaS ecosystem keeps resolving and functioning when the internet link drops (§"Troubleshooting:
+Unbound / DNSBL"). Local-network redundancy via B.A.T.M.A.N. was considered but is not implemented.
+
+**Firewall failover.** OPNsense can run active-active (CARP) for firewall HA, but that requires an
+Ethernet-connection handover and is **out of scope** for a standard TAPPaaS install; single-firewall
+is the supported topology. Node/service HA and disk redundancy are the cluster module's concern —
+see `cluster/DESIGN.md` §"High Availability".
+
 ## Related files
 
 - [`aliases.json`](aliases.json) — global aliases shared across modules

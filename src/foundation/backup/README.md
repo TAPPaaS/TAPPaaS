@@ -78,8 +78,8 @@ job, while `remote`/`external` implement the multi-source vault.
 - PBS in an LXC — shares the kernel like the native install, but hard-disk passthrough
   is more complicated and LXC is not the TAPPaaS default deployment.
 
-Chosen: native PBS install alongside PVE on a cluster node. Source:
-[PBS-Implementation.md](../../../docs/Architecture/PBS-Implementation.md). Depth: see [DESIGN.md](./DESIGN.md).
+Chosen: native PBS install alongside PVE on a cluster node. Rationale + depth: see
+[DESIGN.md](./DESIGN.md).
 
 ## Dependencies
 
