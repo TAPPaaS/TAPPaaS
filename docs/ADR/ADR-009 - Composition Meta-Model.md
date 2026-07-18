@@ -6,7 +6,7 @@
 | **Version** | 0.3 |
 | **Date** | 2026-06-16 |
 | **Author** | Erik Daniel |
-| **Related** | **#171** (metamodel refine) · **#167** (component taxonomy) · #161, #151 (closed spikes) · #297 (catalog); **classification:** [ADR-007](<ADR-007 - TAPPaaS Taxonomy.md>); **glossary SSOT:** [ontology.md](<../Architecture/ontology.md>); **realization:** [ADR-007f](<ADR-007f - Realization.md>); **existing docs:** [Capabilities](<../Architecture/Capabilities.md>) + ArchiMate appendix + [foundation module-designs](https://tappaas.org/architecture/module-designs/foundation/) |
+| **Related** | **#171** (metamodel refine) · **#167** (component taxonomy) · #161, #151 (closed spikes) · #297 (catalog); **classification:** [ADR-007](<ADR-007 - TAPPaaS Taxonomy.md>); **glossary SSOT:** [ontology.md](<../Architecture/ontology.md>); **realization:** [ADR-007f](<ADR-007f - Realization.md>); **existing docs:** ArchiMate appendix + [foundation module-designs](https://tappaas.org/architecture/module-designs/foundation/) |
 | **Changelog** | v0.3 — Node/Device direction confirmed (Option B, meeting 2026-06-15); App≡Module equivalence added to Terms. v0.2 — glossary-SSOT link (ontology.md) + Terms selection; cross-links to ADR-007f and foundation module-designs |
 
 How a deployable unit is **built**. The companion to [ADR-007](<ADR-007 - TAPPaaS Taxonomy.md>):
