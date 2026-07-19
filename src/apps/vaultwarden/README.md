@@ -35,7 +35,7 @@ Bitwarden-compatible password manager, published to the internet from the DMZ zo
 - Official Bitwarden server — Vaultwarden is the audited Rust rewrite of the server part;
   Bitwarden/Vaultwarden is judged the only true open-source self-hostable password manager.
 
-Source: [SecurityDesign.md](../../../docs/Architecture/SecurityDesign.md). Depth: see [DESIGN.md](./DESIGN.md).
+Source: the [Security design](https://tappaas.org/what/security-design/). Depth: see [DESIGN.md](./DESIGN.md).
 
 ## Dependencies
 
