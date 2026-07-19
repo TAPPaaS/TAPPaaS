@@ -83,7 +83,7 @@ All Managers live under `tappaas-cicd/manager/<x>-manager/` (TypeScript); Contro
 > A `manager/TEMPLATE/` + `controller/TEMPLATE/` + a P10 contract test encode the per-component contract
 > (a Manager has `validate`; a Controller does not).
 
-> **Realization layers** (terms → [ontology.md](<../Architecture/ontology.md>)): **classification domain** →
+> **Realization layers** (terms → [GLOSSARY.md](<../../GLOSSARY.md>)): **classification domain** →
 > **Manager** (TS control-plane orchestrator, verb surface) → **level** (Stack if ≥2 Modules, else Module) →
 > **Module** → **Controller** (Python/bash, live I/O for one plane) → **Services** (the `.sh`/TS Components).
 > This containment makes the grouping MECE (every component in exactly one Module under one Manager) and DRY.

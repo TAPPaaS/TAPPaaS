@@ -102,7 +102,7 @@ bare name.
 ## Why tier and source are separate
 
 7/9 platforms (Debian, Ubuntu, HACS, Nextcloud, Synology, Umbrel, YunoHost) model curated-vs-community
-as **source**, separate from lifecycle **tier**. Evidence: [taxonomy.md](<../Architecture/taxonomy.md>) → A.7.
+as **source**, separate from lifecycle **tier**. Evidence: [ADR-007 Appendix A.7](<ADR-007 - TAPPaaS Taxonomy.md#appendix-a-industry-evidence>).
 
 ## Acceptance
 

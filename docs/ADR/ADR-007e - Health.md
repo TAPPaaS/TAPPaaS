@@ -39,7 +39,7 @@ A module that *observes everything* cannot be MECE-assigned to a single classifi
 classification domain would break ADR-007's "exactly one classification domain per artifact" invariant. As a lens it
 overlays all three classification domains without partitioning them. Industry: Health is universally tracked but
 variably positioned — TAPPaaS chooses *lens* over *classification domain* for prosumer UX. Evidence:
-[Architecture/taxonomy.md](<../Architecture/taxonomy.md>) → A.1.
+[ADR-007 Appendix A.1](<ADR-007 - TAPPaaS Taxonomy.md#appendix-a-industry-evidence>).
 
 ## Acceptance
 

@@ -24,6 +24,7 @@
 | **Health** | A cross-cutting **lens** (observability overlay) — applies across all classification terms, not a term itself. |
 | **tier** | App lifecycle class: `foundation` (cannot uninstall) · `app` (user-installable). |
 | **source** | App origin/trust: `official` · `community` · `private` · `local`. |
+| **Tenant** | Architecture term for an isolated customer of a multi-tenant system. *Not* a UI term — the UI says **Organization**. |
 
 ## B. Composition terms (ADR-009 / ArchiMate)
 

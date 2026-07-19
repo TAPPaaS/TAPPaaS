@@ -116,7 +116,7 @@ The minimal bootstrap install creates three roles — `root`, `admin`, `user` �
 
 12/12 IAM systems (LDAP, AD, Authentik, Keycloak, AWS/Azure/GCP IAM, Okta, Auth0, K8s RBAC, Backstage)
 use **Group**; Team is a collaboration-tool label. Group covers all 7 TAPPaaS use cases; Team does
-not. Evidence: [Architecture/taxonomy.md](<../Architecture/taxonomy.md>) → A.3.
+not. Evidence: [ADR-007 Appendix A.3](<ADR-007 - TAPPaaS Taxonomy.md#appendix-a-industry-evidence>).
 
 ## Acceptance
 

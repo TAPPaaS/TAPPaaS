@@ -55,7 +55,7 @@ module docs — #247 updates them to match this table.
 Reporting a defect or proposing a change? ......... GitHub issue
 Recording a significant decision? ................. ADR (docs/ADR/)
 Describing HOW an accepted decision is built? ..... Design doc (docs/design/)
-Defining a term / classification? ................. docs/Architecture/ (ontology SSOT)
+Defining a term / classification? ................. GLOSSARY.md (glossary SSOT, repo root)
 Explaining a module to its end user? .............. that module's README.md
 Telling an admin how to install/operate it? ....... that module's INSTALL.md
 Telling the world / marketing / guided journeys? .. Documentation repo (site)
@@ -116,5 +116,5 @@ Consequences for authors in **this** repo:
    them in-repo)?
 2. Obligation level for module docs: is README+INSTALL a **MUST** for catalog inclusion
    (aligning with ADR-011's SHOULD-with-linting approach), or SHOULD?
-3. Does `docs/Architecture/` fold into the site sync allow-list (ontology/taxonomy are
-   arguably public-worthy)?
+3. Does `docs/Architecture/` fold into the site sync allow-list? (The glossary is now `GLOSSARY.md`
+   at the repo root and is already synced; the remaining concept docs are arguably public-worthy.)

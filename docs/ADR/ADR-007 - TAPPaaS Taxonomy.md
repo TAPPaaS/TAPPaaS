@@ -7,7 +7,7 @@
 | **Date** | 2026-06-30 |
 | **Author** | Erik Daniel |
 | **Supersedes** | ADR-007 v1.1 (monolithic) — decomposed into this overview + 007a–007e + ADR-009 |
-| **Related** | #320 (taxonomy); **details:** [007a People](<ADR-007a - People.md>) · [007b Apps](<ADR-007b - Apps.md>) · [007c Environments](<ADR-007c - Environments.md>) · [007d Site](<ADR-007d - Site.md>) · [007e Health](<ADR-007e - Health.md>); **realization:** [ADR-007f](<ADR-007f - Realization.md>); **composition:** [ADR-009](<ADR-009 - Composition Meta-Model.md>) + #171; **glossary (SSOT):** [Architecture/ontology.md](<../Architecture/ontology.md>); **evidence + samples:** [Architecture/taxonomy.md](<../Architecture/taxonomy.md>); **build state + decisions:** [design/ADR-007-implementation-tracker.md](<../design/ADR-007-implementation-tracker.md>), [design/ADR-007-verb-alignment.md](<../design/ADR-007-verb-alignment.md>) |
+| **Related** | #320 (taxonomy); **details:** [007a People](<ADR-007a - People.md>) · [007b Apps](<ADR-007b - Apps.md>) · [007c Environments](<ADR-007c - Environments.md>) · [007d Site](<ADR-007d - Site.md>) · [007e Health](<ADR-007e - Health.md>); **realization:** [ADR-007f](<ADR-007f - Realization.md>); **composition:** [ADR-009](<ADR-009 - Composition Meta-Model.md>) + #171; **glossary (SSOT):** [GLOSSARY.md](<../../GLOSSARY.md>); **evidence:** [Appendix A](#appendix-a-industry-evidence); **build state + decisions:** [design/ADR-007-implementation-tracker.md](<../design/ADR-007-implementation-tracker.md>), [design/ADR-007-verb-alignment.md](<../design/ADR-007-verb-alignment.md>) |
 | **Changelog** | v2.4 — **updated to the as-built design** after implementation on the `ADR007` branch (2026-06-30): the model held; the sub-ADRs are corrected where the realization diverged (Role is now a first-class People entity 007a; `network.zone` is singular + `dnsMode` + runtime cert-refid 007c; the real `site.json` 007d; `firewall`→`network`, 7 TypeScript managers + 6 controllers 007f). v2.3 — "bucket" → "classification domain" throughout; sub-ADR table column renamed (2026-06-17). v2.2 — added the consolidated ontology glossary SSOT (`Architecture/ontology.md`). v2.1 — added ADR-007f (realization mapping SSOT) |
 
 ---
@@ -23,7 +23,7 @@ deployable unit is *built* (composition) is **ADR-009**. This ADR answers *which
 a thing is in — never *how it is built*.
 
 This model is MECE, DRY, and matches industry-standard naming (Apple, GCP, GitHub, Authentik,
-Backstage, Debian, HACS). Evidence: [Architecture/taxonomy.md](<../Architecture/taxonomy.md>).
+Backstage, Debian, HACS). Evidence: [Appendix A](#appendix-a-industry-evidence).
 
 ---
 
@@ -59,7 +59,7 @@ separate from composition (#171), which @larsrossen asked to keep small and disc
 - **DRY** — each concept lives in one classification domain only; references by name, not duplication.
 - **Apple-test** — a non-technical user understands the top nav in 30 seconds.
 - **Ubiquiti-test** — scales from 1 site to many without changing the model.
-- **Industry-aligned** — matches K8s, Coolify, Vercel, GCP, Apple BM, UniFi (evidence: [taxonomy.md](<../Architecture/taxonomy.md>)).
+- **Industry-aligned** — matches K8s, Coolify, Vercel, GCP, Apple BM, UniFi (evidence: [Appendix A](#appendix-a-industry-evidence)).
 
 ---
 
@@ -85,8 +85,8 @@ A status / metric / alarm? .......... Health (lens)    → 007e Health
 | [007d](<ADR-007d - Site.md>) | 🏢 Site | the perimeter; `site.json`; config split |
 | [007e](<ADR-007e - Health.md>) | 🩺 Health | the cross-cutting lens |
 
-A full worked example (SOHO setup), all sample JSON files, the industry-evidence data points, and the
-glossary live in **[Architecture/taxonomy.md](<../Architecture/taxonomy.md>)** (living reference).
+The industry-evidence data points are in **[Appendix A](#appendix-a-industry-evidence)**; the glossary
+is the **[glossary](<../../GLOSSARY.md>)** SSOT; the sample JSON files live in each sub-ADR.
 
 ---
 
@@ -154,5 +154,33 @@ naming, be B1-English, and feel Apple/Ubiquiti-opinionated. This ADR family is t
 ## Acceptance (overview)
 
 Accepted when all sub-ADRs (007a–007e) are accepted and ADR-009's classification-coupling is
-consistent. Per-domain acceptance criteria live in each sub-ADR; the reference doc holds the sample
-files used to validate them.
+consistent. Per-domain acceptance criteria and the sample JSON files live in each sub-ADR.
+
+---
+
+## Appendix A: Industry evidence
+
+Data points behind the **People · Apps · Environments + Health-lens** choice.
+
+**A.1 — Top-level concepts across 18 platforms:** Identity/People 18/18; App/Workload 18/18;
+Environment 8/10; Project/Site 8/10; Health-as-separate-classification-domain 7/10 (variably
+positioned → TAPPaaS chooses *lens*). → justifies **People · Apps · Environments + Health lens**.
+
+**A.2 — Organization vs Tenant:** "Organization/Org" used by GCP, GitHub, Okta, Salesforce, HashiCorp,
+Google Workspace, Apple BM, AWS Orgs, Auth0, Microsoft = **10**; "Tenant" = 4 (architecture term only).
+
+**A.3 — Group vs Team:** 12/12 IAM systems (LDAP, AD, Authentik, Keycloak, AWS/Azure/GCP IAM, Okta,
+Auth0, Linux, K8s RBAC, Backstage) use **Group**. Group covers all 7 TAPPaaS use cases; Team does not.
+
+**A.4 — Comparable hierarchies:** Backstage Domain→System→Component; Coolify Server→Project→Env→Resource;
+Vercel Team→Project→Env; K8s Cluster→Namespace→Workload; UniFi Account→Site→Devices; AWS Org→Account→Resource;
+GCP Org→Folder→Project. TAPPaaS is intentionally flatter (Site → 3 classification domains) for prosumer UX.
+
+**A.5 — "Environment" adoption:** de-facto term in every multi-env-capable platform (K8s, Coolify,
+Vercel, GCP/AWS/Azure, Heroku); single-env appliances (Synology, YunoHost, Umbrel, CasaOS) omit it.
+
+**A.6 — Multi-Org-on-one-host:** maps to cloud Organizations, MSP multi-tenant, holding-company IT,
+indie-hacker domains, Authentik/Keycloak realms. Common at enterprise scale, gap in prosumer FOSS.
+
+**A.7 — Source vs Tier:** 7/9 platforms (Debian, Ubuntu, HACS, Nextcloud, Synology, Umbrel, YunoHost)
+model curated-vs-community as **source**, separate from lifecycle **tier**. Both dimensions needed.

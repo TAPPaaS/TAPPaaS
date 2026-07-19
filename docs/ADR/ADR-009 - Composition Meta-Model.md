@@ -6,7 +6,7 @@
 | **Version** | 0.3 |
 | **Date** | 2026-06-16 |
 | **Author** | Erik Daniel |
-| **Related** | **#171** (metamodel refine) · **#167** (component taxonomy) · #161, #151 (closed spikes) · #297 (catalog); **classification:** [ADR-007](<ADR-007 - TAPPaaS Taxonomy.md>); **glossary SSOT:** [ontology.md](<../Architecture/ontology.md>); **realization:** [ADR-007f](<ADR-007f - Realization.md>); **existing docs:** ArchiMate appendix + [foundation module-designs](https://tappaas.org/architecture/module-designs/foundation/) |
+| **Related** | **#171** (metamodel refine) · **#167** (component taxonomy) · #161, #151 (closed spikes) · #297 (catalog); **classification:** [ADR-007](<ADR-007 - TAPPaaS Taxonomy.md>); **glossary SSOT:** [GLOSSARY.md](<../../GLOSSARY.md>); **realization:** [ADR-007f](<ADR-007f - Realization.md>); **existing docs:** ArchiMate appendix + [foundation module-designs](https://tappaas.org/architecture/module-designs/foundation/) |
 | **Changelog** | v0.3 — Node/Device direction confirmed (Option B, meeting 2026-06-15); App≡Module equivalence added to Terms. v0.2 — glossary-SSOT link (ontology.md) + Terms selection; cross-links to ADR-007f and foundation module-designs |
 
 How a deployable unit is **built**. The companion to [ADR-007](<ADR-007 - TAPPaaS Taxonomy.md>):
@@ -29,9 +29,9 @@ Artifact:     Implementation  →realizes→  Component/Module   (swappable)
 Every **Module** is classified by exactly one ADR-007 classification domain (+ `tier` + `source`). One model composes,
 the other classifies.
 
-## Terms (selection — full glossary: [ontology.md](<../Architecture/ontology.md>) §B)
+## Terms (selection — full glossary: [GLOSSARY.md](<../../GLOSSARY.md>) §B)
 
-The composition vocabulary is defined **once** in ontology.md (the term SSOT); the terms this ADR
+The composition vocabulary is defined **once** in `GLOSSARY.md` (the term SSOT); the terms this ADR
 decides on:
 
 | Term | Definition |
