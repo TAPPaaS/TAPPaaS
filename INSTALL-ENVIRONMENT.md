@@ -1,30 +1,8 @@
-# Installing into an Environment (multi-tenant) — worked example
+# Installing Modules into an Environment
 
-An **environment** is a per-tenant / per-context **deployment target**: it gives a
-set of modules their own public **domain**, their own dedicated network **zone**,
-its own DNS/cert mode, and an owning organization. Environments replace the
-retired ADR-005 *variant* system — there is no `variant-manager` anymore. See
-`docs/design/ADR-007-implementation.md` (package P3 and ADR-007c) for the design.
+when ever you install a module you ahve the option to specify an environment that the modules should be installed into. a TAPPaaS system can have any numbers of environments and they are isolated from each other. Consider it a Tenant concept of TAPPaaS. 
 
-An environment is just a small JSON file under `config/environments/<env>.json`
-(on the target system, i.e. `/home/tappaas/config/`):
-
-```json
-{
-  "name": "client1",
-  "displayName": "Client One",
-  "ownerOrg": "client1-company",
-  "domains": { "primary": "client1.tappaas.org", "dnsMode": "wildcard" },
-  "network": { "zone": "client1" }
-}
-```
-
-Key fields: `network.zone` (which zone its VMs run in — validated against
-`zones.json`), `domains.primary` (the public domain), `domains.dnsMode`
-(`per-service` default, or `wildcard`), and `ownerOrg` (a People Organization,
-validated). These files are managed by **`environment-manager`** (CRUD,
-validate); zones are owned by **`network-manager`** (see
-`src/foundation/tappaas-cicd/manager/network-manager/ZONES.md`).
+Before installing applicaiton stacks consider if you need to create new environments for the modules.
 
 ### The always-present environments
 
