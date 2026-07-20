@@ -75,7 +75,7 @@ consumer modules depend on; the VM itself is created and kept highly available b
 ## What is not included
 
 - TLS certificate issuance — run `acme-setup.sh` on the mothership after bootstrap
-  (repo-root [INSTALL.md](../../../INSTALL.md) §2.3).
+  (repo-root [INSTALL.md](../INSTALL.md) §2.3).
 - Managing a non-OPNsense firewall: with `firewallType: "NONE"` the tooling only prints
   the rules for manual entry into your own firewall.
 - Vendor automation for switches/APs beyond the shipped plugins (UniFi; `manual.sh` is

@@ -63,7 +63,7 @@ provides the `vm`, `lxc` and `ha` services (the module's `provides` in
 - An existing network with a free IP, DHCP and internet for the bootstrap.
 - Multi-node: a switch between the nodes — unmanaged works out of the box; a managed
   switch needs VLAN trunking configured first (see the repo-root
-  [INSTALL.md](../../../INSTALL.md)).
+  [INSTALL.md](../INSTALL.md)).
 
 ## Alternatives considered
 

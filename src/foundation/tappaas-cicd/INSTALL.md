@@ -4,7 +4,7 @@ Primary audience: TAPPaaS admin.
 
 The mothership is **not** installed with `install-module.sh` (it is the VM that
 *provides* that tooling). It is built as step [5/5] of the first-node foundation
-bootstrap (see the repo-root [INSTALL.md](../../../INSTALL.md) §2.1).
+bootstrap (see the repo-root [INSTALL.md](../INSTALL.md) §2.1).
 
 ## Prerequisites
 
@@ -42,7 +42,7 @@ customised `zones.json`. Completion is marked by `~/config/.tappaas-cicd-install
 ## Post-install
 
 1. Set up TLS certificates: `ssh tappaas@tappaas-cicd` then `acme-setup.sh` (interactive
-   DNS-01 wildcard; repo-root [INSTALL.md](../../../INSTALL.md) §2.3). Optional for
+   DNS-01 wildcard; repo-root [INSTALL.md](../INSTALL.md) §2.3). Optional for
    internal-only use.
 2. Install the rest of the foundation (backup → identity → logging) and bootstrap your
    organisation/user: `rest-of-foundation.sh` (idempotent).

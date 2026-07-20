@@ -4,7 +4,7 @@ Primary audience: TAPPaaS admin.
 
 The network module is **not** installed with `install-module.sh` — the firewall VM is
 stood up **during foundation bootstrap, before tappaas-cicd exists**, as step [2/5] of
-`foundation/install.sh` (see the repo-root [INSTALL.md](../../../INSTALL.md) §2.1). The
+`foundation/install.sh` (see the repo-root [INSTALL.md](../INSTALL.md) §2.1). The
 zone/proxy/rules layer is then configured by the tappaas-cicd install.
 
 ## Prerequisites
@@ -44,7 +44,7 @@ If the firewall is unreachable when tappaas-cicd installs, the module is deploye
 ## Post-install
 
 - Set up TLS certificates: run `acme-setup.sh` on the mothership (repo-root
-  [INSTALL.md](../../../INSTALL.md) §2.3). Skippable for internal-only use.
+  [INSTALL.md](../INSTALL.md) §2.3). Skippable for internal-only use.
 - Register physical switches (`setup-switches.sh`) and WiFi SSIDs/passphrases
   (`setup-wlan-secrets.sh`) if your site has managed switches or APs — see
   [scripts/README.md](scripts/README.md).

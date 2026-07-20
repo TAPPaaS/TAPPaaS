@@ -4,7 +4,7 @@ Primary audience: TAPPaaS admin.
 
 The cluster module is **not** installed with `install-module.sh` — it is the node step of
 the foundation bootstrap. The full first-node story is in the repo-root
-[INSTALL.md](../../../INSTALL.md); this page covers the cluster part.
+[INSTALL.md](../INSTALL.md); this page covers the cluster part.
 
 ## Prerequisites
 
