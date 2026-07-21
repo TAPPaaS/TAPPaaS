@@ -13,41 +13,14 @@ A TAPPaaS module typically runs in its own VM and provides a specific service or
 
 ## Creating a New Module
 
-### Step 1: Copy the Template
+The step-by-step path — copy the template, rename, configure, `module-manager module add` —
+is the quick start in **[DEVELOP.md](DEVELOP.md)**. This page is the reference behind it:
+every file, field and convention in detail.
 
-Decide on a name for your module. Typically this is the name of the main software product or the capability being delivered.
-
-```bash
-cp -r 00-Template myModule
-cd myModule
-```
-
-### Step 2: Rename Files
-
-Replace template files with your module name:
-
-```bash
-mv README-template.md README.md
-mv template.json myModule.json
-```
-
-Optionally record authorship in `AUTHORS.md` (edit the placeholder line, or delete
-the file — it is optional; see `src/foundation/schemas/README.md` for the
-contributor/author/maintainer role model).
-
-For NixOS-based modules, rename the .nix file:
-```bash
-mv template.nix myModule.nix
-```
-
-For non-NixOS modules, remove it:
-```bash
-rm template.nix
-```
-
-### Step 3: Configure the Module
-
-Edit each file as described below.
+Pick a module name (typically the main software product or the capability delivered);
+it becomes the VM name, hostname and DNS name. Optionally record authorship in
+`AUTHORS.md` (edit the placeholder line, or delete the file — it is optional; see
+`src/foundation/schemas/README.md` for the contributor/author/maintainer role model).
 
 ## Module Files
 
@@ -91,7 +64,7 @@ Modify it to set good defaults for your module. Installers can further customize
 
 #### Template dependencies and `autoInstall`
 
-Some modules clone from a **VM template** rather than downloading an image directly (e.g. `windows-server` clones from `tappaas-winserver`, VMID 8081). If the template doesn't exist when you run `install-module.sh`, TAPPaaS checks the template JSON for the `autoInstall` flag:
+Some modules clone from a **VM template** rather than downloading an image directly (e.g. `windows-server` clones from `tappaas-winserver`, VMID 8081). If the template doesn't exist when you run `module-manager module add`, TAPPaaS checks the template JSON for the `autoInstall` flag:
 
 | `autoInstall` | What happens |
 |---------------|-------------|

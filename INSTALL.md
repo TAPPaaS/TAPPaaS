@@ -67,8 +67,8 @@ VPS now via [the satellite install](src/foundation/satellite/INSTALL.md).
 ## Stage 6 — Add Stacks
 
 Install the workloads you chose in stage 1. First-party modules install with
-`install-module.sh <module>` from the module's directory; community module stores register once with
-`repository.sh add <repo> --branch <branch>`, after which their modules install the same way.
+`module-manager module add <module>`; community module stores register once with
+`site-manager repository add <repo> --branch <branch>`, after which their modules install the same way.
 
 | Stack | What you get |
 |-------|--------------|
