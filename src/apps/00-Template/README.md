@@ -6,6 +6,11 @@ This is a template module that serves as a starting point for creating new TAPPa
 
 A TAPPaaS module typically runs in its own VM and provides a specific service or capability. The module name becomes the VM name, hostname, and DNS name.
 
+> **Where will your module be maintained?** Before you start, decide which repository your module
+> will live in — the open-source TAPPaaS repo (contributed via a Pull Request), a community
+> repository, or a private/downstream one — because that shapes your development workflow. See
+> [Git & repository topology](../../foundation/tappaas-cicd/DESIGN-GIT.md).
+
 ## Creating a New Module
 
 ### Step 1: Copy the Template
@@ -140,6 +145,43 @@ NixOS configuration file for NixOS-based modules.
 
 - Used by the default `install.sh` to rebuild the VM configuration
 - Remove this file for non-NixOS modules
+
+## Providing a service
+
+Beyond installing itself, a module can **provide services** that *other* modules depend on (declared
+in its `provides`; consumed via another module's `dependsOn`). A provider implements lifecycle hooks
+under `services/<service-name>/`, which TAPPaaS runs **on the provider** whenever a dependent module
+is installed or updated.
+
+```
+<module>/
+├── <module>.json
+├── install.sh                    # the module's own install
+├── update.sh                     # the module's own update
+└── services/
+    └── <service-name>/
+        ├── install-service.sh    # run when a dependent installs
+        └── update-service.sh     # run when a dependent updates
+```
+
+`install-service.sh` is called with the **dependent** module's name; it reads that module's config
+from `/home/tappaas/config/<dependent>.json`, provisions what the dependent needs, and configures the
+service to support it. `update-service.sh` is the same for updates. (Deletion runs the dependency
+chain in reverse — see [ADR-003](<../../../docs/ADR/ADR-003 - Dependency management in TAPPaaS.md>).)
+
+Writing a service script:
+
+1. Create `<module>/services/<service-name>/`.
+2. Add `install-service.sh` (initial provisioning) and `update-service.sh` (ongoing updates).
+3. `source` the shared helpers (`common-install-routines.sh`) for `get_config_value`, `check_json`, …
+4. Read the dependent's fields with `get_config_value` (respecting defaults).
+5. Use `set -euo pipefail` for strict error handling.
+
+Real examples to copy from: `cluster/services/vm/install-service.sh` (creates a VM for a dependent),
+`cluster/services/ha/update-service.sh` (HA / ZFS replication), and
+`network/services/proxy/install-service.sh` (Caddy reverse-proxy registration for a dependent's
+`network:proxy`). The full field reference for what a dependent can pass is
+[module-fields.json](../../foundation/schemas/module-fields.json).
 
 ## Module Locations
 

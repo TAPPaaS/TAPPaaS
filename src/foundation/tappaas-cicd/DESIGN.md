@@ -4,7 +4,9 @@ The TAPPaaS "mothership" control plane. This document describes the **internal
 component contract** and the **three-level dispatch** that drives every manager and
 controller uniformly (ADR-007 P10 deliverable #5). For the catalog entry see
 [README.md](./README.md); for installation see [INSTALL.md](./INSTALL.md); for test
-coverage see [TEST.md](./TEST.md).
+coverage see [TEST.md](./TEST.md). How the mothership *pulls* its updates and the repository
+patterns behind it (basic / community / downstream / private, and the developer workflows) are a
+separate design note: [DESIGN-GIT.md](./DESIGN-GIT.md).
 
 For the full rationale see
 [`docs/design/ADR-007-implementation.md`](../../../docs/design/ADR-007-implementation.md)
