@@ -15,6 +15,7 @@ Usage:
 import argparse
 import sys
 
+from .cli_globals import parse_with_globals
 from .config import Config
 from .syslog_manager import (
     LEVELS,
@@ -267,14 +268,15 @@ Examples:
     subparsers.add_parser("list", parents=[global_parser], help="List all destinations")
     subparsers.add_parser("reconfigure", parents=[global_parser], help="Apply pending changes")
 
-    # The shared parent uses argument_default=SUPPRESS so a global flag
-    # given BEFORE the subcommand is not clobbered by the subparser's
-    # defaults (argparse parents gotcha — bit caddy-manager on the
-    # production cluster: --no-ssl-verify was silently ignored).
-    parser.set_defaults(firewall="firewall.mgmt.internal", api_port=None,
-                        credential_file=None, no_ssl_verify=False,
-                        debug=False, check_mode=False)
-    args = parser.parse_args()
+    # Seed the global-option defaults into the namespace before parsing. The
+    # shared parent uses argument_default=SUPPRESS, so a global flag given on
+    # EITHER side of the subcommand survives (argparse parents gotcha #379 —
+    # set_defaults here was clobbered by the subparser merge). See cli_globals.py.
+    args = parse_with_globals(parser, {
+        "firewall": "firewall.mgmt.internal", "api_port": None,
+        "credential_file": None, "no_ssl_verify": False,
+        "debug": False, "check_mode": False,
+    })
     if not args.command:
         parser.print_help()
         sys.exit(1)

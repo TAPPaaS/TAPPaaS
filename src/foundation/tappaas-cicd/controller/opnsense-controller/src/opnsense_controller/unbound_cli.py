@@ -18,6 +18,7 @@ Commands:
 import argparse
 import sys
 
+from .cli_globals import make_global_parent, parse_with_globals
 from .config import Config
 from .dhcp_manager import DhcpManager  # reused only as a connected-Client provider
 
@@ -106,8 +107,18 @@ def list_overrides(args) -> bool:
 
 
 def main():
+    # Global options work on either side of the subcommand (#379); see cli_globals.py.
+    gp = make_global_parent()
+    gp.add_argument("--firewall", help="Firewall IP/hostname (default: firewall.mgmt.internal)")
+    gp.add_argument("--port", type=int, help="API port (default: probe 443/8443)")
+    gp.add_argument("--credential-file", help="Path to credential file")
+    gp.add_argument("--no-ssl-verify", action="store_true", help="Disable SSL verification")
+    gp.add_argument("--debug", action="store_true", help="Enable debug logging")
+    gp.add_argument("--check-mode", action="store_true", help="Dry-run (no changes)")
+
     parser = argparse.ArgumentParser(
         description="OPNsense Unbound host-override management (split-horizon DNS)",
+        parents=[gp],
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
@@ -117,29 +128,26 @@ Examples:
   unbound-manager list
 """,
     )
-    parser.add_argument("--firewall", default="firewall.mgmt.internal",
-                        help="Firewall IP/hostname (default: firewall.mgmt.internal)")
-    parser.add_argument("--port", type=int, default=None, help="API port (default: probe 443/8443)")
-    parser.add_argument("--credential-file", help="Path to credential file")
-    parser.add_argument("--no-ssl-verify", action="store_true", help="Disable SSL verification")
-    parser.add_argument("--debug", action="store_true", help="Enable debug logging")
-    parser.add_argument("--check-mode", action="store_true", help="Dry-run (no changes)")
 
     sub = parser.add_subparsers(dest="command", help="Command")
 
-    p_add = sub.add_parser("add", help="Add/update an Unbound host override")
+    p_add = sub.add_parser("add", parents=[gp], help="Add/update an Unbound host override")
     p_add.add_argument("hostname", help="Hostname (use '*' for a wildcard)")
     p_add.add_argument("domain", help="Domain (e.g., tappaas.org)")
     p_add.add_argument("ip", help="IP address (A record target)")
     p_add.add_argument("--description", help="Description (default: hostname.domain)")
 
-    p_del = sub.add_parser("delete", help="Delete an Unbound host override")
+    p_del = sub.add_parser("delete", parents=[gp], help="Delete an Unbound host override")
     p_del.add_argument("hostname", help="Hostname (use '*' for a wildcard)")
     p_del.add_argument("domain", help="Domain")
 
-    sub.add_parser("list", help="List Unbound host overrides")
+    sub.add_parser("list", parents=[gp], help="List Unbound host overrides")
 
-    args = parser.parse_args()
+    args = parse_with_globals(parser, {
+        "firewall": "firewall.mgmt.internal", "port": None,
+        "credential_file": None, "no_ssl_verify": False,
+        "debug": False, "check_mode": False,
+    })
     if not args.command:
         parser.print_help()
         sys.exit(1)

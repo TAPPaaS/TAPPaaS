@@ -44,6 +44,16 @@ if ! ssh -o ConnectTimeout=5 -o BatchMode=yes root@"$FIREWALL_FQDN" echo "ok" >/
 fi
 debug "SSH access confirmed"
 
+# Load OPNsense API credentials up front. Used by Step 1c (enable os-acme-client)
+# and Step 4 (enable Caddy). Raw config.xml writes don't update the MVC model, so
+# every plugin toggle must go through the API with these credentials.
+CRED_FILE="/home/tappaas/.opnsense-credentials.txt"
+if [[ ! -f "$CRED_FILE" ]]; then
+    die "OPNsense credentials not found: $CRED_FILE"
+fi
+API_KEY=$(grep '^key=' "$CRED_FILE" | cut -d= -f2-)
+API_SECRET=$(grep '^secret=' "$CRED_FILE" | cut -d= -f2-)
+
 # Step 1: Install os-caddy package
 info "Step 1: Installing os-caddy package..."
 if ssh root@"$FIREWALL_FQDN" "/bin/sh -c 'pkg info os-caddy'" &>/dev/null; then
@@ -88,22 +98,25 @@ for pkg in os-acme-client os-ddclient; do
     fi
 done
 
-# Step 1c: Enable os-acme-client plugin (issue #267).
+# Step 1c: Enable os-acme-client plugin (issue #267, #379).
 # The plugin ships disabled by default (<enabled>0</enabled> in model.xml); cert
 # signing fails with status=400 if the plugin isn't enabled before issuance.
+# Use the standard API credentials — the old `/var/db/api_token` path does not
+# exist on a fresh OPNsense, so the enable step silently failed and left the
+# plugin disabled (#379). The web GUI is still on :443 here (Step 2 moves it to
+# :8443), so the API base is the default HTTPS port.
 info "Step 1c: Enabling os-acme-client plugin..."
-ACME_ENABLE_RESP=$(ssh root@"$FIREWALL_FQDN" \
-    "curl -sk -X POST -H 'Content-Type: application/json' \
-         -u \"\$(cat /var/db/api_token)\" \
-         -d '{\"settings\":{\"enabled\":\"1\"}}' \
-         'https://127.0.0.1/api/acmeclient/settings/set'" 2>/dev/null) || true
+ACME_API_BASE="https://${FIREWALL_FQDN}/api"
+ACME_ENABLE_RESP=$(curl -sk -u "${API_KEY}:${API_SECRET}" \
+    -X POST -H 'Content-Type: application/json' \
+    -d '{"settings":{"enabled":"1"}}' \
+    "${ACME_API_BASE}/acmeclient/settings/set" 2>/dev/null) || true
 if echo "$ACME_ENABLE_RESP" | grep -q '"result":"saved"'; then
     debug "  os-acme-client plugin enabled"
     # Reconfigure to apply the change
-    ssh root@"$FIREWALL_FQDN" \
-        "curl -sk -X POST -H 'Content-Type: application/json' \
-             -u \"\$(cat /var/db/api_token)\" \
-             'https://127.0.0.1/api/acmeclient/service/reconfigure'" >/dev/null 2>&1 || true
+    curl -sk -u "${API_KEY}:${API_SECRET}" \
+        -X POST -H 'Content-Type: application/json' \
+        "${ACME_API_BASE}/acmeclient/service/reconfigure" >/dev/null 2>&1 || true
 else
     warn "  Could not enable os-acme-client via API (response: ${ACME_ENABLE_RESP:-empty})"
     warn "  The plugin may already be enabled or manual intervention may be required"
@@ -273,12 +286,9 @@ info "Step 4: Enabling Caddy and configuring ACME settings..."
 # Use OPNsense API to enable Caddy and set ACME email.
 # The MVC model (OPNsense.Caddy) requires API calls — raw config.xml writes
 # don't update the model, so rc.conf.d/caddy won't be regenerated.
-CRED_FILE="/home/tappaas/.opnsense-credentials.txt"
-if [[ ! -f "$CRED_FILE" ]]; then
-    die "OPNsense credentials not found: $CRED_FILE"
-fi
-API_KEY=$(grep '^key=' "$CRED_FILE" | cut -d= -f2-)
-API_SECRET=$(grep '^secret=' "$CRED_FILE" | cut -d= -f2-)
+# Credentials were loaded up front. The web GUI now lives on :8443 (moved in
+# Step 2) and Caddy owns :443, so the API must ALWAYS target :8443 — a :443
+# fallback would silently hit Caddy instead of OPNsense (#379).
 API_BASE="https://${FIREWALL_FQDN}:8443/api"
 
 # Set Caddy general settings via API
@@ -286,17 +296,8 @@ debug "Enabling Caddy via API..."
 api_result=$(curl -sk -u "${API_KEY}:${API_SECRET}" \
     -X POST "${API_BASE}/caddy/general/set" \
     -H "Content-Type: application/json" \
-    -d "{\"caddy\":{\"general\":{\"enabled\":\"1\",\"TlsEmail\":\"${EMAIL}\"}}}" 2>&1) || {
-    # If port 8443 isn't ready yet, try default port 443
-    debug "Retrying API on port 443..."
-    API_BASE="https://${FIREWALL_FQDN}/api"
-    api_result=$(curl -sk -u "${API_KEY}:${API_SECRET}" \
-        -X POST "${API_BASE}/caddy/general/set" \
-        -H "Content-Type: application/json" \
-        -d "{\"caddy\":{\"general\":{\"enabled\":\"1\",\"TlsEmail\":\"${EMAIL}\"}}}" 2>&1) || {
-        die "Failed to enable Caddy via API: ${api_result}"
-    }
-}
+    -d "{\"caddy\":{\"general\":{\"enabled\":\"1\",\"TlsEmail\":\"${EMAIL}\"}}}" 2>&1) || \
+    die "Failed to enable Caddy via API: ${api_result}"
 debug "API response: ${api_result}"
 
 # Apply Caddy settings — reconfigures rc.conf.d, generates Caddyfile, starts service

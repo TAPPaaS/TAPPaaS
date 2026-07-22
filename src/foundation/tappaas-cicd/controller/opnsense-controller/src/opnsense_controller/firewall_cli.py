@@ -16,6 +16,7 @@ import json
 import os
 import sys
 
+from .cli_globals import make_global_parent, parse_with_globals
 from .config import Config
 from .firewall_manager import (
     FirewallManager,
@@ -254,44 +255,49 @@ def cmd_test(args) -> int:
         return 1
 
 
-def add_common_args(parser: argparse.ArgumentParser) -> None:
-    """Add common arguments to a parser."""
-    parser.add_argument(
+def make_globals() -> argparse.ArgumentParser:
+    """Build the shared global-option parent (works on either side of the
+    subcommand, #379; see cli_globals.py). No ``default=`` — the parent's
+    SUPPRESS default plus parse_with_globals seeding supplies the real values.
+    """
+    gp = make_global_parent()
+    gp.add_argument(
         "--firewall",
-        default="firewall.mgmt.internal",
         help="Firewall IP/hostname (default: firewall.mgmt.internal)",
     )
-    parser.add_argument(
+    gp.add_argument(
         "--port",
         type=int,
-        default=None,
         help="API port (default: auto-detect by probing 443, then 8443)",
     )
-    parser.add_argument(
+    gp.add_argument(
         "--credential-file",
         help="Path to credential file",
     )
-    parser.add_argument(
+    gp.add_argument(
         "--no-ssl-verify",
         action="store_true",
         help="Disable SSL certificate verification",
     )
-    parser.add_argument(
+    gp.add_argument(
         "--debug",
         action="store_true",
         help="Enable debug logging",
     )
-    parser.add_argument(
+    gp.add_argument(
         "--json",
         action="store_true",
         help="Output in JSON format",
     )
+    return gp
 
 
 def main():
     """Main entry point for the firewall CLI."""
+    gp = make_globals()
     parser = argparse.ArgumentParser(
         description="OPNsense Firewall Rule Manager",
+        parents=[gp],
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
     subparsers = parser.add_subparsers(dest="command", help="Available commands")
@@ -299,10 +305,10 @@ def main():
     # create-rule command
     create_parser = subparsers.add_parser(
         "create-rule",
+        parents=[gp],
         help="Create a firewall rule",
         description="Create a new firewall rule on OPNsense",
     )
-    add_common_args(create_parser)
     create_parser.add_argument(
         "--description", "-d",
         required=True,
@@ -387,10 +393,10 @@ def main():
     # list-rules command
     list_parser = subparsers.add_parser(
         "list-rules",
+        parents=[gp],
         help="List firewall rules",
         description="List all firewall rules on OPNsense",
     )
-    add_common_args(list_parser)
     list_parser.add_argument(
         "--search",
         help="Filter rules by description",
@@ -400,10 +406,10 @@ def main():
     # delete-rule command
     delete_parser = subparsers.add_parser(
         "delete-rule",
+        parents=[gp],
         help="Delete a firewall rule",
         description="Delete a firewall rule on OPNsense",
     )
-    add_common_args(delete_parser)
     delete_group = delete_parser.add_mutually_exclusive_group(required=True)
     delete_group.add_argument(
         "--description", "-d",
@@ -423,22 +429,29 @@ def main():
     # apply command
     apply_parser = subparsers.add_parser(
         "apply",
+        parents=[gp],
         help="Apply pending firewall changes",
         description="Apply any pending firewall configuration changes",
     )
-    add_common_args(apply_parser)
     apply_parser.set_defaults(func=cmd_apply)
 
     # test command
     test_parser = subparsers.add_parser(
         "test",
+        parents=[gp],
         help="Test connection to OPNsense",
         description="Test the connection to OPNsense firewall",
     )
-    add_common_args(test_parser)
     test_parser.set_defaults(func=cmd_test)
 
-    args = parser.parse_args()
+    args = parse_with_globals(parser, {
+        "firewall": "firewall.mgmt.internal",
+        "port": None,
+        "credential_file": None,
+        "no_ssl_verify": False,
+        "debug": False,
+        "json": False,
+    })
 
     if not args.command:
         parser.print_help()

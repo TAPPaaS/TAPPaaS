@@ -131,6 +131,44 @@ route to OPNsense), so allowing the whole overlay CIDR at Caddy is safe.
 If you prefer not to expose proxied services to the overlay at all, the
 operator workaround is to reach them from a wired LAN (mgmt) connection instead.
 
+## 6. Firewall: let the overlay reach OPNsense itself
+
+Section 5 covers traffic Caddy **forwards** to other hosts. Traffic that
+*terminates on OPNsense itself* — DNS on port 53 (the NetBird nameserver from
+§3), ICMP ping, and the web GUI — is a different case:
+
+> **Why a rule is needed.** Forwarded traffic works because the routing peer's
+> masquerade rewrites it. Traffic **terminating on OPNsense** has no forwarding
+> hop to masquerade, so it arrives on the NetBird WireGuard interface with the
+> peer's real `100.64.x.x` source and hits the interface's **default-deny**.
+> Without an explicit pass rule, NetBird peers cannot resolve DNS through
+> OPNsense, ping it, or reach its GUI — even though proxied services work.
+
+Add a **floating pass rule** for the overlay CIDR:
+
+- **Firewall → Rules → Floating → +**
+  - **Action**: Pass
+  - **Interface**: the NetBird/WireGuard interface (leave unset for a true
+    floating rule that matches on all interfaces)
+  - **Direction**: in
+  - **TCP/IP Version**: IPv4
+  - **Protocol**: any (or restrict to TCP/UDP + ICMP if you prefer)
+  - **Source**: `100.64.0.0/10` (NetBird's full CGNAT range — see the Default
+    CIDR note in §5; narrow only if you deliberately shrink the overlay)
+  - **Destination**: `This Firewall` (self)
+  - **Description**: `TAPPaaS: allow NetBird overlay to OPNsense`
+  - **Apply changes.**
+
+Per-peer authorization still lives in NetBird's own access policies (§4 — only
+`Admins` get the route to OPNsense), so admitting the whole overlay CIDR at the
+firewall is safe.
+
+> **Not yet automated.** The `opnsense-firewall` CLI creates only
+> interface-bound rules; a NetBird overlay pass rule must currently be a
+> *floating* rule (the WireGuard interface is not an assigned OPNsense
+> interface), so create it via the GUI above or the firewall filter API until
+> the CLI grows floating-rule support.
+
 ---
 
 ## macOS client setup

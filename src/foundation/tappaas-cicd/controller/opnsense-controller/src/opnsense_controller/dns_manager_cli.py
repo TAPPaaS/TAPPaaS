@@ -9,6 +9,7 @@ import argparse
 import json
 import sys
 
+from .cli_globals import make_global_parent, parse_with_globals
 from .config import Config
 from .dhcp_manager import DhcpHost, DhcpManager
 
@@ -308,8 +309,40 @@ def list_dhcp_leases(
 
 def main():
     """Main entry point for DNS manager CLI."""
+    # Global options work on either side of the subcommand (#379); see cli_globals.py.
+    gp = make_global_parent()
+    gp.add_argument(
+        "--firewall",
+        help="Firewall IP/hostname (default: firewall.mgmt.internal)",
+    )
+    gp.add_argument(
+        "--port",
+        type=int,
+        help="API port (default: auto-detect by probing 443, then 8443)",
+    )
+    gp.add_argument(
+        "--credential-file",
+        help="Path to credential file (default: $HOME/.opnsense-credentials.txt)",
+    )
+    gp.add_argument(
+        "--no-ssl-verify",
+        action="store_true",
+        help="Disable SSL certificate verification",
+    )
+    gp.add_argument(
+        "--debug",
+        action="store_true",
+        help="Enable debug logging",
+    )
+    gp.add_argument(
+        "--check-mode",
+        action="store_true",
+        help="Dry-run mode (don't make actual changes)",
+    )
+
     parser = argparse.ArgumentParser(
         description="DNS Host Management for OPNsense Dnsmasq",
+        parents=[gp],
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
@@ -334,43 +367,11 @@ Examples:
         """,
     )
 
-    # Global options
-    parser.add_argument(
-        "--firewall",
-        default="firewall.mgmt.internal",
-        help="Firewall IP/hostname (default: firewall.mgmt.internal)",
-    )
-    parser.add_argument(
-        "--port",
-        type=int,
-        default=None,
-        help="API port (default: auto-detect by probing 443, then 8443)",
-    )
-    parser.add_argument(
-        "--credential-file",
-        help="Path to credential file (default: $HOME/.opnsense-credentials.txt)",
-    )
-    parser.add_argument(
-        "--no-ssl-verify",
-        action="store_true",
-        help="Disable SSL certificate verification",
-    )
-    parser.add_argument(
-        "--debug",
-        action="store_true",
-        help="Enable debug logging",
-    )
-    parser.add_argument(
-        "--check-mode",
-        action="store_true",
-        help="Dry-run mode (don't make actual changes)",
-    )
-
     # Subcommands
     subparsers = parser.add_subparsers(dest="command", help="Command to execute")
 
     # Add command
-    add_parser = subparsers.add_parser("add", help="Add or update a DNS host entry")
+    add_parser = subparsers.add_parser("add", parents=[gp], help="Add or update a DNS host entry")
     add_parser.add_argument("hostname", help="Hostname without domain (e.g., backup)")
     add_parser.add_argument("domain", help="Domain name (e.g., mgmt.internal)")
     add_parser.add_argument("ip", help="IP address")
@@ -386,16 +387,17 @@ Examples:
     )
 
     # Delete command
-    delete_parser = subparsers.add_parser("delete", help="Delete a DNS host entry by hostname and domain")
+    delete_parser = subparsers.add_parser("delete", parents=[gp], help="Delete a DNS host entry by hostname and domain")
     delete_parser.add_argument("hostname", help="Hostname without domain (e.g., backup)")
     delete_parser.add_argument("domain", help="Domain name (e.g., mgmt.internal)")
 
     # List command
-    subparsers.add_parser("list", help="List all DNS host entries")
+    subparsers.add_parser("list", parents=[gp], help="List all DNS host entries")
 
     # Check-range command (issue #251)
     check_range_parser = subparsers.add_parser(
         "check-range",
+        parents=[gp],
         help="Check whether an IP is inside a DHCP pool (exit 1 if it is)",
     )
     check_range_parser.add_argument("ip", help="IP address to check")
@@ -404,13 +406,20 @@ Examples:
     # reconciler uses `leases --mac <MAC>` as a guest-agent-independent way to
     # find a VM's IP after a zone/subnet change.
     leases_parser = subparsers.add_parser(
-        "leases", help="List active DHCP leases (optionally filter by --mac/--ip)"
+        "leases", parents=[gp], help="List active DHCP leases (optionally filter by --mac/--ip)"
     )
     leases_parser.add_argument("--mac", help="Only the lease for this MAC (prints its IP)")
     leases_parser.add_argument("--ip", help="Only the lease for this IP")
     leases_parser.add_argument("--json", action="store_true", help="Emit JSON")
 
-    args = parser.parse_args()
+    args = parse_with_globals(parser, {
+        "firewall": "firewall.mgmt.internal",
+        "port": None,
+        "credential_file": None,
+        "no_ssl_verify": False,
+        "debug": False,
+        "check_mode": False,
+    })
 
     if not args.command:
         parser.print_help()

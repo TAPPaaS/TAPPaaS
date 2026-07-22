@@ -21,6 +21,7 @@ import json
 import os
 import sys
 
+from .cli_globals import make_global_parent, parse_with_globals
 from .config import Config
 from .test_network_manager import TestNetworkManager
 
@@ -106,8 +107,32 @@ def cmd_status(args) -> int:
         return 1
 
 
-def add_common_args(parser: argparse.ArgumentParser) -> None:
-    """Connection + addressing arguments shared by all subcommands."""
+def make_globals() -> argparse.ArgumentParser:
+    """Build the shared global-option parent (works on either side of the
+    subcommand, #379; see cli_globals.py). No ``default=`` — the parent's
+    SUPPRESS default plus parse_with_globals seeding supplies the real values.
+    """
+    gp = make_global_parent()
+    gp.add_argument(
+        "--firewall",
+        help="Firewall IP/hostname (default: firewall.mgmt.internal)",
+    )
+    gp.add_argument(
+        "--port", type=int,
+        help="API port (default: auto-detect by probing 443, then 8443)",
+    )
+    gp.add_argument("--credential-file", help="Path to credential file")
+    gp.add_argument("--no-ssl-verify", action="store_true",
+                    help="Disable SSL certificate verification")
+    gp.add_argument("--debug", action="store_true", help="Enable debug logging")
+    gp.add_argument("--json", action="store_true", help="Output in JSON format")
+    gp.add_argument("--check-mode", action="store_true",
+                    help="Dry run: report planned changes without applying")
+    return gp
+
+
+def add_addressing_args(parser: argparse.ArgumentParser) -> None:
+    """Device + addressing arguments shared by all subcommands."""
     parser.add_argument(
         "--device", required=True,
         help="Guest network device backing the test net (e.g. vtnet2)",
@@ -127,43 +152,38 @@ def add_common_args(parser: argparse.ArgumentParser) -> None:
         help="OPNsense interface the mgmt net arrives on (default: lan)",
     )
     parser.add_argument("--domain", default="test.internal", help="DHCP domain")
-    parser.add_argument(
-        "--firewall", default="firewall.mgmt.internal",
-        help="Firewall IP/hostname (default: firewall.mgmt.internal)",
-    )
-    parser.add_argument(
-        "--port", type=int, default=None,
-        help="API port (default: auto-detect by probing 443, then 8443)",
-    )
-    parser.add_argument("--credential-file", help="Path to credential file")
-    parser.add_argument("--no-ssl-verify", action="store_true",
-                        help="Disable SSL certificate verification")
-    parser.add_argument("--debug", action="store_true", help="Enable debug logging")
-    parser.add_argument("--json", action="store_true", help="Output in JSON format")
-    parser.add_argument("--check-mode", action="store_true",
-                        help="Dry run: report planned changes without applying")
 
 
 def main():
+    gp = make_globals()
     parser = argparse.ArgumentParser(
         description="OPNsense test-network manager (TAPPaaS issue #225)",
+        parents=[gp],
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
     subparsers = parser.add_subparsers(dest="command", help="Available commands")
 
-    create_parser = subparsers.add_parser("create", help="Create the test network")
-    add_common_args(create_parser)
+    create_parser = subparsers.add_parser("create", parents=[gp], help="Create the test network")
+    add_addressing_args(create_parser)
     create_parser.set_defaults(func=cmd_create)
 
-    delete_parser = subparsers.add_parser("delete", help="Tear down the test network")
-    add_common_args(delete_parser)
+    delete_parser = subparsers.add_parser("delete", parents=[gp], help="Tear down the test network")
+    add_addressing_args(delete_parser)
     delete_parser.set_defaults(func=cmd_delete)
 
-    status_parser = subparsers.add_parser("status", help="Show test network status")
-    add_common_args(status_parser)
+    status_parser = subparsers.add_parser("status", parents=[gp], help="Show test network status")
+    add_addressing_args(status_parser)
     status_parser.set_defaults(func=cmd_status)
 
-    args = parser.parse_args()
+    args = parse_with_globals(parser, {
+        "firewall": "firewall.mgmt.internal",
+        "port": None,
+        "credential_file": None,
+        "no_ssl_verify": False,
+        "debug": False,
+        "json": False,
+        "check_mode": False,
+    })
     if not args.command:
         parser.print_help()
         return 1

@@ -21,6 +21,7 @@ import argparse
 import json
 import sys
 
+from .cli_globals import make_global_parent, parse_with_globals
 from .config import Config
 from .wg_manager import WgPeer, WgServer, WireGuardManager
 
@@ -33,22 +34,26 @@ def _config(args) -> Config:
 
 
 def main(argv=None) -> int:
-    p = argparse.ArgumentParser(prog="opnsense-wg", description="ADR-010 home-side WireGuard (scaffold)")
-    p.add_argument("--firewall", default="firewall.mgmt.internal")
-    p.add_argument("--no-ssl-verify", action="store_true")
-    p.add_argument("--debug", action="store_true")
+    # Global options work on either side of the subcommand (#379); see cli_globals.py.
+    gp = make_global_parent()
+    gp.add_argument("--firewall")
+    gp.add_argument("--no-ssl-verify", action="store_true")
+    gp.add_argument("--debug", action="store_true")
+
+    p = argparse.ArgumentParser(prog="opnsense-wg", description="ADR-010 home-side WireGuard (scaffold)",
+                                parents=[gp])
     p.add_argument("--dry-run", action="store_true", default=True,
                    help="record intended ops only (default; live binding pending P2 deep test)")
     p.add_argument("--execute", dest="dry_run", action="store_false",
                    help="apply against OPNsense (raises until the os-wireguard binding is confirmed)")
     sub = p.add_subparsers(dest="cmd", required=True)
 
-    s = sub.add_parser("ensure-server")
+    s = sub.add_parser("ensure-server", parents=[gp])
     s.add_argument("--name", required=True)
     s.add_argument("--address", required=True)
     s.add_argument("--listen-port", type=int, default=51820)
 
-    pe = sub.add_parser("ensure-peer")
+    pe = sub.add_parser("ensure-peer", parents=[gp])
     pe.add_argument("--server", required=True)
     pe.add_argument("--name", required=True)
     pe.add_argument("--public-key", required=True)
@@ -56,13 +61,17 @@ def main(argv=None) -> int:
     pe.add_argument("--allowed-ips", required=True, help="comma-separated")
     pe.add_argument("--keepalive", type=int, default=25)
 
-    rp = sub.add_parser("remove-peer")
+    rp = sub.add_parser("remove-peer", parents=[gp])
     rp.add_argument("--server", required=True)
     rp.add_argument("--name", required=True)
 
-    sub.add_parser("apply")
+    sub.add_parser("apply", parents=[gp])
 
-    args = p.parse_args(argv)
+    args = parse_with_globals(p, {
+        "firewall": "firewall.mgmt.internal",
+        "no_ssl_verify": False,
+        "debug": False,
+    }, argv)
     mgr = WireGuardManager(_config(args), dry_run=args.dry_run)
     try:
         with mgr:

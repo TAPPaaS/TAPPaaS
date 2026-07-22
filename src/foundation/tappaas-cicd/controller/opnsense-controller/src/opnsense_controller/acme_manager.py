@@ -438,14 +438,20 @@ class AcmeManager:
         """
         deadline = time.time() + timeout
         last: AcmeCertInfo | None = None
+        poll = 0
         while time.time() < deadline:
             last = self.certificate_get(uuid)
             if last.status_code == 200 and last.cert_refid:
                 return last
-            if 400 <= last.status_code < 600:
+            # A fresh `sign` may not have cleared a previous attempt's error
+            # status yet, so tolerate a 4xx/5xx on the FIRST poll only — it gives
+            # acme.sh one poll_interval to update the status. A 4xx/5xx that
+            # persists to any later poll is a genuine failure (#379).
+            if 400 <= last.status_code < 600 and poll > 0:
                 raise RuntimeError(
                     f"certificate {uuid} ({last.name}) failed: status={last.status_code}"
                 )
+            poll += 1
             time.sleep(poll_interval)
         raise TimeoutError(
             f"certificate {uuid} ({last.name if last else '?'}) did not issue "

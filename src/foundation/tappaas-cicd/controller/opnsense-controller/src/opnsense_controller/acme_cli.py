@@ -39,6 +39,7 @@ from .acme_manager import (
     AcmeValidation,
     PluginDisabledError,
 )
+from .cli_globals import make_global_parent, parse_with_globals
 from .config import Config
 
 
@@ -189,21 +190,25 @@ def cmd_status(mgr: AcmeManager, args: argparse.Namespace) -> int:
 
 
 def main(argv: list[str] | None = None) -> int:
+    # Global options work on either side of the subcommand (#379); see cli_globals.py.
+    gp = make_global_parent()
+    gp.add_argument("--firewall")
+    gp.add_argument("--port", type=int)
+    gp.add_argument("--credential-file")
+    gp.add_argument("--no-ssl-verify", action="store_true")
+    gp.add_argument("--debug", action="store_true")
+
     parser = argparse.ArgumentParser(
         prog="acme-manager",
         description="Drive OPNsense os-acme-client end-to-end (issue #254).",
+        parents=[gp],
     )
-    # Shared connection args (mirrors the other TAPPaaS CLIs).
-    parser.add_argument("--firewall", default=os.environ.get("OPNSENSE_HOST", "firewall.mgmt.internal"))
-    parser.add_argument("--port", type=int, default=None)
-    parser.add_argument("--credential-file", default=None)
-    parser.add_argument("--no-ssl-verify", action="store_true")
-    parser.add_argument("--debug", action="store_true")
 
     sub = parser.add_subparsers(dest="command", required=True)
 
     p_setup = sub.add_parser(
         "setup",
+        parents=[gp],
         help="Idempotently provision LE account + DNS-01 validation + caddy-reload "
         "action + wildcard cert; sign and wait. Prints the OPNsense Trust refid.",
     )
@@ -234,12 +239,18 @@ def main(argv: list[str] | None = None) -> int:
                          help="Seconds to wait for issuance (default 180)")
     p_setup.set_defaults(handler=cmd_setup)
 
-    p_status = sub.add_parser("status",
+    p_status = sub.add_parser("status", parents=[gp],
                               help="Show the current state of the wildcard certificate")
     p_status.add_argument("--domain", required=True)
     p_status.set_defaults(handler=cmd_status)
 
-    args = parser.parse_args(argv)
+    args = parse_with_globals(parser, {
+        "firewall": os.environ.get("OPNSENSE_HOST", "firewall.mgmt.internal"),
+        "port": None,
+        "credential_file": None,
+        "no_ssl_verify": False,
+        "debug": False,
+    }, argv)
 
     config_kwargs: dict = {
         "firewall": args.firewall,

@@ -30,6 +30,7 @@ import os
 import subprocess
 import sys
 
+from .cli_globals import make_global_parent, parse_with_globals
 from .config import Config
 from .dhcp_manager import DhcpManager
 from .log import error, info
@@ -292,8 +293,41 @@ def host_del(manager: DhcpManager, name: str, domain: str | None,
 
 def main():
     """Main entry point for the DHCP manager CLI."""
+    # Global options work on either side of the (nested) subcommand (#379);
+    # see cli_globals.py.
+    gp = make_global_parent()
+    gp.add_argument(
+        "--firewall",
+        help="Firewall IP/hostname (default: firewall.mgmt.internal)",
+    )
+    gp.add_argument(
+        "--port",
+        type=int,
+        help="API port (default: auto-detect by probing 443, then 8443)",
+    )
+    gp.add_argument(
+        "--credential-file",
+        help="Path to credential file (default: $HOME/.opnsense-credentials.txt)",
+    )
+    gp.add_argument(
+        "--no-ssl-verify",
+        action="store_true",
+        help="Disable SSL certificate verification",
+    )
+    gp.add_argument(
+        "--debug",
+        action="store_true",
+        help="Enable debug logging",
+    )
+    gp.add_argument(
+        "--check-mode",
+        action="store_true",
+        help="Dry-run mode (don't make actual changes)",
+    )
+
     parser = argparse.ArgumentParser(
         description="DHCP scope management for OPNsense Dnsmasq (PXE boot options)",
+        parents=[gp],
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
@@ -312,48 +346,16 @@ Examples:
         """,
     )
 
-    # Global options (same family as dns-manager)
-    parser.add_argument(
-        "--firewall",
-        default="firewall.mgmt.internal",
-        help="Firewall IP/hostname (default: firewall.mgmt.internal)",
-    )
-    parser.add_argument(
-        "--port",
-        type=int,
-        default=None,
-        help="API port (default: auto-detect by probing 443, then 8443)",
-    )
-    parser.add_argument(
-        "--credential-file",
-        help="Path to credential file (default: $HOME/.opnsense-credentials.txt)",
-    )
-    parser.add_argument(
-        "--no-ssl-verify",
-        action="store_true",
-        help="Disable SSL certificate verification",
-    )
-    parser.add_argument(
-        "--debug",
-        action="store_true",
-        help="Enable debug logging",
-    )
-    parser.add_argument(
-        "--check-mode",
-        action="store_true",
-        help="Dry-run mode (don't make actual changes)",
-    )
-
     subparsers = parser.add_subparsers(dest="command", help="Command to execute")
 
     # pxe command group
     pxe_parser = subparsers.add_parser(
-        "pxe", help="PXE boot options on a zone's DHCP scope"
+        "pxe", parents=[gp], help="PXE boot options on a zone's DHCP scope"
     )
     pxe_sub = pxe_parser.add_subparsers(dest="pxe_command", help="PXE action")
 
     enable_parser = pxe_sub.add_parser(
-        "enable", help="Set next-server + bootfile on the zone's DHCP scope"
+        "enable", parents=[gp], help="Set next-server + bootfile on the zone's DHCP scope"
     )
     enable_parser.add_argument(
         "--next-server", required=True,
@@ -379,23 +381,23 @@ Examples:
     )
 
     disable_parser = pxe_sub.add_parser(
-        "disable", help="Clear the TAPPaaS PXE boot options"
+        "disable", parents=[gp], help="Clear the TAPPaaS PXE boot options"
     )
     disable_parser.add_argument("--zone", default=DEFAULT_ZONE)
 
     status_parser = pxe_sub.add_parser(
-        "status", help="Show PXE state (exit 0 = enabled, 1 = disabled)"
+        "status", parents=[gp], help="Show PXE state (exit 0 = enabled, 1 = disabled)"
     )
     status_parser.add_argument("--zone", default=DEFAULT_ZONE)
 
     # host command group — node MAC -> standard-IP reservations
     host_parser = subparsers.add_parser(
-        "host", help="Static DHCP reservations for TAPPaaS nodes"
+        "host", parents=[gp], help="Static DHCP reservations for TAPPaaS nodes"
     )
     host_sub = host_parser.add_subparsers(dest="host_command", help="Action")
 
     hset = host_sub.add_parser(
-        "set", help="Reserve a node's standard mgmt IP for its MAC(s)"
+        "set", parents=[gp], help="Reserve a node's standard mgmt IP for its MAC(s)"
     )
     hset.add_argument("name", help="Node name (e.g. tappaas4)")
     hset.add_argument("--ip", required=True,
@@ -408,12 +410,19 @@ Examples:
                            "(default: mgmt.internal)")
 
     hdel = host_sub.add_parser(
-        "del", help="Clear a node's MAC pinning (DNS entry kept)")
+        "del", parents=[gp], help="Clear a node's MAC pinning (DNS entry kept)")
     hdel.add_argument("name", help="Node name (e.g. tappaas4)")
     hdel.add_argument("--domain", default="mgmt.internal",
                       help="DNS domain of the entry (default: mgmt.internal)")
 
-    args = parser.parse_args()
+    args = parse_with_globals(parser, {
+        "firewall": "firewall.mgmt.internal",
+        "port": None,
+        "credential_file": None,
+        "no_ssl_verify": False,
+        "debug": False,
+        "check_mode": False,
+    })
 
     if not args.command:
         parser.print_help()

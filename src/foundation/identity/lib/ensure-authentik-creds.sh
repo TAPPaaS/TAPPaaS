@@ -35,6 +35,44 @@ _authentik_identity_endpoints() {
     fi
     AUTHENTIK_IDENTITY_FQDN="${vmname}.${zone0}.internal"
     AUTHENTIK_IDENTITY_API="http://${AUTHENTIK_IDENTITY_FQDN}:9000"
+    # Host actually used to reach the VM (API + ssh). Defaults to the FQDN;
+    # _authentik_resolve_identity_host() may swap it for an IP on a DNS race.
+    AUTHENTIK_IDENTITY_HOST="${AUTHENTIK_IDENTITY_FQDN}"
+}
+
+# Guard against the DNS-registration race (#379): the identity VM's
+# <vmname>.<zone0>.internal record is registered with OPNsense asynchronously, so
+# this bootstrap can run before it resolves. Wait for the hostname to resolve;
+# if it never does, fall back to a configured IP (identity.json .ip) so the
+# install can proceed instead of failing on an unresolvable host.
+_authentik_resolve_identity_host() {
+    local fqdn="${AUTHENTIK_IDENTITY_FQDN}" i ip=""
+
+    # 1) DNS readiness — give the OPNsense DNS registration time to propagate.
+    for i in $(seq 1 24); do   # up to ~2 min at 5s intervals
+        if getent hosts "${fqdn}" >/dev/null 2>&1; then
+            [[ $i -gt 1 ]] && info "  ${GN}✓${CL} ${fqdn} resolved"
+            AUTHENTIK_IDENTITY_HOST="${fqdn}"
+            AUTHENTIK_IDENTITY_API="http://${fqdn}:9000"
+            return 0
+        fi
+        [[ $i -eq 1 ]] && info "${BOLD}Waiting for ${fqdn} to resolve in DNS (up to 2 min)...${CL}"
+        sleep 5
+    done
+
+    warn "${fqdn} did not resolve in DNS — attempting IP fallback (DNS-registration race, #379)"
+
+    # 2) IP fallback — an explicit static IP from identity.json, if provided.
+    local identity_cfg="${CONFIG_DIR}/identity.json"
+    if [[ -f "${identity_cfg}" ]]; then
+        ip="$(jq -r '.ip // empty' "${identity_cfg}" 2>/dev/null)"
+    fi
+
+    [[ -n "${ip}" ]] || die "${fqdn} is not resolvable and no fallback IP is available. Remediation: register the identity VM in OPNsense DNS ('dns-manager add ${fqdn%%.*} ${fqdn#*.} <ip>') or set .ip in identity.json, then re-run."
+
+    info "  ${GN}✓${CL} Using identity VM IP ${ip} (DNS not yet propagated)"
+    AUTHENTIK_IDENTITY_HOST="${ip}"
+    AUTHENTIK_IDENTITY_API="http://${ip}:9000"
 }
 
 # Fetch the bootstrap token from the identity VM and (re)write the credentials
@@ -90,7 +128,11 @@ ensure_authentik_credentials() {
         warn "${cred_file} missing — bootstrapping from ${AUTHENTIK_IDENTITY_FQDN}"
     fi
 
-    _authentik_write_credentials "${cred_file}" "${AUTHENTIK_IDENTITY_API}" "${AUTHENTIK_IDENTITY_FQDN}"
+    # Resolve the identity host (DNS-readiness wait + IP fallback) before the
+    # API/ssh calls so a DNS-registration race doesn't fail the bootstrap (#379).
+    _authentik_resolve_identity_host
+
+    _authentik_write_credentials "${cred_file}" "${AUTHENTIK_IDENTITY_API}" "${AUTHENTIK_IDENTITY_HOST}"
 
     # Authentik's worker binds AUTHENTIK_BOOTSTRAP_TOKEN to akadmin asynchronously
     # on first boot — the API may be up before the token is valid. Poll up to 3 min.
