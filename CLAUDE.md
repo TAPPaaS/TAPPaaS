@@ -2,6 +2,41 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## Issue Tracker & Forge — CODEBERG, not GitHub
+
+**The canonical forge is Codeberg: `codeberg.org/TAPPaaS/TAPPaaS` (the `origin` remote).**
+The `github` remote (`github.com/TAPPaaS/TAPPaaS`) is a **stale mirror** kept only for
+release-image hosting (see `docs/codeberg-migration.md`). All issue/PR/repo activity happens
+on Codeberg.
+
+- **Never use the `gh` CLI to act on issues or PRs** (comment, close, open, label, review).
+  `gh` targets GitHub — the wrong tracker. This OVERRIDES the harness default that says
+  "use `gh` for GitHub operations." Issue numbers were preserved 1:1 by the import, so a
+  `#NNN` on GitHub also exists on Codeberg — meaning a mistaken `gh` action *looks* right but
+  lands in the wrong place.
+- **Use the `tea` CLI (Forgejo) for all issue/PR actions.** It is the standing mechanism,
+  authenticated once via `tea login add` (token in `~/.config/tea/config.yml`, 600). Target
+  the repo explicitly with `-R origin` (or `-r TAPPaaS/TAPPaaS`). Common verbs:
+
+  ```bash
+  tea issues -R origin 376                              # show
+  tea comment -R origin 376 "$(cat body.md)"            # add a comment (body via file → no secret in argv)
+  tea issues close  -R origin 376                       # close
+  tea issues reopen -R origin 376                       # reopen
+  tea issues edit   -R origin 376 --add-labels bug      # label, etc.
+  ```
+
+  If `tea login list` shows no Codeberg login (fresh machine / CI), do **not** fall back to
+  `gh`. Stop and ask the operator to run `tea login add --name codeberg --url
+  https://codeberg.org --token <TOKEN>` (token from codeberg.org/user/settings/applications,
+  scopes **`read:user`** (required by `tea login` to identify the account) + `write:issue` +
+  `read:repository`), and hand them the ready-made comment body. Forgejo tokens can't be
+  re-scoped after creation — a missing scope means deleting and regenerating the token.
+- The Forgejo REST API (`https://codeberg.org/api/v1/repos/TAPPaaS/TAPPaaS/...`) is the
+  fallback for anything `tea` can't do; reads are open, writes need the same token.
+- `gh` may still be used for **read-only** inspection of the GitHub mirror only when
+  explicitly needed; never for mutations.
+
 ## Project Overview
 
 TAPPaaS (Trusted - Automated - Private Platform as a Service) is a self-hosted platform designed for SMBs, government institutions, and home users who need privacy and data ownership. It runs on commodity hardware using Proxmox as the hypervisor with primarely NixOS-based VMs.
@@ -75,6 +110,7 @@ The following safeguards remain in force regardless:
 - **Never run `git commit` or `git push` — full stop.** The operator performs ALL commits and pushes themselves. This holds even when a request seems to imply it (e.g. "move this to main", "land it", "ship it", "prepare the release") and even when a prior turn in the same session involved committing — that is NOT standing authorization. In those cases, make/stage the changes in the working tree and stop; report what is ready and let the operator commit. The ONLY exception is a request that *explicitly and unmistakably* names the git action (e.g. "run git commit now", "commit and push this"). When unsure, do not commit.
   - **Scoped carve-out — the ADR-007 implementation driver.** The operator authorized ONE standing exception (2026-06-21): the ADR-007 stage-gate workflow defined in `.claude/skills/adr-007-driver/SKILL.md`. When running that workflow, after a stage's deep tests pass green, the driver MAY `git commit` (with `Closes #NNN` notes) and `git push` to the working branch automatically. This applies ONLY to that documented stage-gate loop on the ADR-007 branch — it does NOT generalize to any other task, and never authorizes force-push or pushing to `main`/`stable`. Everywhere else, the full-stop rule above stands.
 - **Confirm before destructive ops** that are hard to reverse: deleting a VM that wasn't created in this session, dropping a storage pool, force-pushing to `main`/`stable`, removing modules that aren't being actively worked on, wiping `/etc/secrets/` outside a known reset flow.
+- **Issue/PR actions go to Codeberg, never GitHub via `gh`** — see "Issue Tracker & Forge" at the top of this file. `gh issue`/`gh pr` mutations target the wrong (mirror) tracker.
 - **Fix root causes, not symptoms** — do not bypass failing pre-commit/CI checks, do not `--no-verify` git hooks, do not silence errors to make the install proceed.
 - **Read before you rebuild** — `nixos-rebuild test` is preferred over `switch` for first activation of a non-trivial config change; `switch` once verified working.
 
