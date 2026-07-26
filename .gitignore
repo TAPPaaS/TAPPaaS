@@ -17,10 +17,3 @@ src/foundation/tappaas-cicd/opnsense-controller/result-2
 src/foundation/tappaas-cicd/opnsense-controller/result-3
 src/foundation/tappaas-cicd/opnsense-controller/result-4
 result
-.claude/scheduled_tasks.lock
-
-# gridtefy DW agents (private IP — never upstream)
-.claude/agents/agent-tappaas-devops-dw.md
-.claude/agents/agent-tappaas-po-dw.md
-.claude/skills/tappaas-commission-creator
-.claude/
