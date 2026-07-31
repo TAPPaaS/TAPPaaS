@@ -56,7 +56,10 @@ msg_error() { echo -e "${BFR} ${CROSS} ${RD}${1}${CL}"; }
 fetch() {
   local url="$1" dest="$2" mode="${3:-644}" tmp
   tmp="$(mktemp)" || { msg_error "mktemp failed"; exit 1; }
-  if ! curl -fsSL "$url" -o "$tmp"; then rm -f "$tmp"; msg_error "Download failed: ${url}"; exit 1; fi
+  # Retry + HTTP/1.1: Codeberg's HTTP/2 front end intermittently resets streams
+  # (curl 92 / "CANCEL err 8"), which otherwise aborts the install mid-chain.
+  if ! curl -fsSL --http1.1 --retry 4 --retry-delay 2 --retry-all-errors \
+            --connect-timeout 15 "$url" -o "$tmp"; then rm -f "$tmp"; msg_error "Download failed: ${url}"; exit 1; fi
   [ -s "$tmp" ] || { rm -f "$tmp"; msg_error "Empty download: ${url}"; exit 1; }
   mkdir -p "$(dirname "$dest")"; mv "$tmp" "$dest"; chmod "$mode" "$dest"
 }

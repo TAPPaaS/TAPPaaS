@@ -74,7 +74,12 @@ msg_error() {
 fetch() {
   local url="$1" dest="$2" mode="${3:-644}" tmp
   tmp="$(mktemp)" || { msg_error "mktemp failed"; exit 1; }
-  if ! curl -fsSL "$url" -o "$tmp"; then
+  # Codeberg's HTTP/2 front end intermittently resets streams mid-transfer
+  # (curl exit 92 / "CANCEL err 8"), which aborted whole installs. Retry
+  # transient failures and force HTTP/1.1, which sidesteps that error class
+  # entirely (raw single-file fetches gain nothing from HTTP/2 multiplexing).
+  if ! curl -fsSL --http1.1 --retry 4 --retry-delay 2 --retry-all-errors \
+            --connect-timeout 15 "$url" -o "$tmp"; then
     rm -f "$tmp"
     msg_error "Download failed for ${url}"
     exit 1

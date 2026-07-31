@@ -91,7 +91,10 @@ mkdir -p "$TAPPAAS_DIR"
 
 fetch() { # fetch <url> <dest> [mode]  (fatal on failure)
   local tmp; tmp="$(mktemp)"
-  curl -fsSL "$1" -o "$tmp" && [[ -s "$tmp" ]] || { rm -f "$tmp"; die "Download failed: $1"; }
+  # Retry + HTTP/1.1: Codeberg's HTTP/2 front end intermittently resets streams
+  # (curl 92 / "CANCEL err 8"), which otherwise aborts the install (see cluster/install.sh).
+  curl -fsSL --http1.1 --retry 4 --retry-delay 2 --retry-all-errors --connect-timeout 15 \
+       "$1" -o "$tmp" && [[ -s "$tmp" ]] || { rm -f "$tmp"; die "Download failed: $1"; }
   mv "$tmp" "$2"; chmod "${3:-644}" "$2"
 }
 

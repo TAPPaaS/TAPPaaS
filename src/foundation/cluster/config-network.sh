@@ -261,6 +261,38 @@ done
 info "Physical ports found: ${#PORTS[@]}"
 for i in "${!PORTS[@]}"; do echo "    ${BL}${PORTS[$i]}${CL}  ${PORT_DESCS[$i]}"; done
 
+# ── Idempotency: is the node network already built? (early, clean no-op) ──
+# Once `lan` holds this node's mgmt IP with both bridges present, the node's
+# network model is already in place and a re-run must change nothing. Bail HERE,
+# BEFORE role detection: detect_node_role() keys off the presence of a 10.0.0.x
+# address, so after a good first-node build it would report "secondary" (correct
+# by its own definition) and invert the LAN/WAN planning. Exiting early keeps the
+# re-run an unambiguous no-op — no misleading "secondary" banner, no wrong-default
+# port prompts. Only reached in the default bridge-build mode (--swap-gateway /
+# --drop-upstream returned above). A --dry-run still falls through to preview the
+# plan; a genuine rebuild still proceeds if either bridge is missing or the mgmt IP
+# differs (partial / mis-config self-heals).
+# Comma-separated list of a bridge's member ports ("" if none), glob-based so it
+# needs no `ls` parsing and is safe on an empty bridge.
+bridge_members() {
+  local p out=""
+  for p in "/sys/class/net/$1/brif"/*; do
+    [[ -e "$p" ]] || continue
+    out+="${out:+,}${p##*/}"
+  done
+  printf '%s' "$out"
+}
+if [[ "$DRY_RUN" != "1" ]] && ip link show lan &>/dev/null && ip link show wan &>/dev/null; then
+  want_mgmt="$(node_mgmt_ip)/24"
+  cur_lan_ip="$(ip -o -4 addr show lan 2>/dev/null | awk '{print $4; exit}')"
+  if [[ "$cur_lan_ip" == "$want_mgmt" ]]; then
+    lan_ports="$(bridge_members lan)"; wan_ports="$(bridge_members wan)"
+    info "${GN}✓${CL} Node network already configured — nothing to do (idempotent re-run)."
+    info "  lan=${BL}${lan_ports:-<none>}${CL} (${cur_lan_ip})   wan=${BL}${wan_ports:-<none>}${CL}"
+    exit 0
+  fi
+fi
+
 valid_port() { local p="$1" x; for x in "${PORTS[@]}"; do [[ "$x" == "$p" ]] && return 0; done; return 1; }
 other_port() { local exclude="$1" p; for p in "${PORTS[@]}"; do [[ "$p" == "$exclude" ]] || { echo "$p"; return 0; }; done; return 1; }
 
@@ -478,18 +510,9 @@ if [[ "$INTERACTIVE" == "1" ]]; then
 fi
 
 # ── Backup + write ───────────────────────────────────────────────────
-# Check if the network is already configured correctly (skip apply if so).
-# We check if the lan bridge exists with the correct IP rather than comparing
-# config files, since role detection can change between runs.
-if ip link show lan &>/dev/null && ip link show wan &>/dev/null; then
-  CURRENT_LAN_IP="$(ip -o -4 addr show lan 2>/dev/null | awk '{print $4}' | head -1 || true)"
-  if [[ "$CURRENT_LAN_IP" == "$LAN_MGMT_IP" ]]; then
-    info "${GN}✓${CL} Network already configured (lan=${CURRENT_LAN_IP}, bridges exist) — skipping apply."
-    info "  role=${ROLE}  lan=${LAN_PORT} (${LAN_MGMT_IP})  wan=${WAN_PORT:-none}"
-    exit 0
-  fi
-fi
-
+# The "already configured → no-op" fast path is handled earlier (the idempotency
+# guard right after the port inventory, before role detection). Reaching here
+# means the config genuinely needs to be (re)built.
 BACKUP="${INTERFACES}.tappaas.$(date +%Y%m%d-%H%M%S).bak"
 cp -a "$INTERFACES" "$BACKUP"
 info "Backed up current config → ${BACKUP}"
