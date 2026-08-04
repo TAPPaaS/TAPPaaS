@@ -145,8 +145,15 @@ caddy_list=$(caddy-manager list --no-ssl-verify 2>/dev/null) || true
 info "  Check 1: Caddy domain entry"
 if echo "${caddy_list}" | grep -q "${PROXY_DOMAIN}"; then
     pass "Domain '${PROXY_DOMAIN}' exists in Caddy"
-else
+elif [[ "${TLS_CONFIGURED}" == "1" ]]; then
+    # Public TLS IS set up (acme-setup.sh has run) → the reverse-proxy vhost
+    # should already exist, so a missing domain is a genuine regression.
     fail "Domain '${PROXY_DOMAIN}' not found in Caddy"
+else
+    # Public TLS/proxy was never set up (no cert refid): the module has not been
+    # publicly exposed yet, so a missing Caddy vhost is expected — internal/LAN
+    # access is unaffected. Warn, never fail (mirrors the HTTPS/TLS checks below).
+    warn "    Domain '${PROXY_DOMAIN}' not in Caddy yet — public reverse proxy/TLS not set up (run acme-setup.sh); warning, not a failure"
 fi
 
 # ── Test 2: Handler exists in Caddy ─────────────────────────────────
@@ -154,8 +161,10 @@ fi
 info "  Check 2: Caddy handler entry"
 if echo "${caddy_list}" | grep -q "${UPSTREAM}"; then
     pass "Handler for '${UPSTREAM}' exists in Caddy"
-else
+elif [[ "${TLS_CONFIGURED}" == "1" ]]; then
     fail "Handler for '${UPSTREAM}' not found in Caddy"
+else
+    warn "    Handler for '${UPSTREAM}' not in Caddy yet — public reverse proxy/TLS not set up (run acme-setup.sh); warning, not a failure"
 fi
 
 # ── Test 3: HTTPS endpoint responds ─────────────────────────────────
