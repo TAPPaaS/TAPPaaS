@@ -15,6 +15,7 @@ VM, LXC and HA services every other TAPPaaS module builds on.
 | HA placement + replication (`cluster:ha`) | consumer modules | `dependsOn: ["cluster:ha"]` → `services/ha/` hooks |
 | `lan`/`wan` bridge model (VLAN-aware trunk) | nodes | built by `config-network.sh` at install |
 | ZFS data pools (`tankXY`) | nodes | built by `config-storage.sh` at install |
+| Shared, foundation-owned storage (`cluster:storage`) | consumer modules | `dependsOn: ["cluster:storage"]` → NFS today (CephFS deferred); admin-provisioned once via `nfs-manager.sh`, mountable by any number of modules concurrently |
 | Controlled node/cluster reboots | TAPPaaS admin | `reboot-node.sh` / `reboot-cluster.sh` |
 
 A guest is **either** a VM **or** an LXC container, never both.
@@ -26,6 +27,7 @@ flowchart TB
     subgraph Capabilities
         Compute[Compute Capability]
         HA[High Availability Capability]
+        Storage[Shared Storage Capability]
     end
 
     subgraph ClusterModule["cluster module"]
@@ -33,13 +35,16 @@ flowchart TB
         VMService([vm service])
         LXCService([lxc service])
         HAService([ha service])
+        StorageService(["storage service — nfs-manager.sh"])
         VMService -.->|provided by| PVE
         LXCService -.->|provided by| PVE
         HAService -.->|provided by| PVE
+        StorageService -.->|provided by| PVE
     end
 
     Compute -.->|realized by| PVE
     HA -.->|realized by| PVE
+    Storage -.->|realized by| PVE
 ```
 
 The Compute and High Availability capabilities are realized by Proxmox VE, which

@@ -204,6 +204,163 @@ for large installations.
 
 Letters `d`, `e`, … remain free for specialized storage characteristics.
 
+## Shared storage (`cluster:storage`)
+
+A different layer from `config-storage.sh`'s `tankXY` pools above: those hold
+**VM virtual disks** (one disk, one VM owner). `cluster:storage` instead
+gives **multiple modules** concurrent access to a **named, foundation-owned
+share** — no module owns the underlying disk or export. First backend: NFS,
+via `nfs-manager.sh`. CephFS is a documented, deferred future backend (see
+`~/.claude/plans/TODO-ceph-s3.md`) — nothing below changes when it lands; a
+module only ever declares a share *name*, never a backend.
+
+### Using it — three commands, in order
+
+```bash
+nfs-manager.sh init-zone                          # 1. once per site — provisions the storage VLAN
+nfs-manager.sh add media --node tappaas1 --tank tankc1 --quota 500G --backup
+                                                   # 2. once per share — ZFS dataset + export + registry + backup
+nfs-manager.sh wire-module <module>.json media     # 3. once per consuming module — dependsOn + sharedStorage + .nix marker
+```
+
+Then `install-module.sh`/`update-module.sh <module>` as normal — no hand
+editing of `zones.json`, module JSON, or `.nix` files anywhere in the loop.
+Each command is idempotent (safe to re-run) and self-checking: `init-zone`
+leaves an existing zone untouched, `wire-module` refuses to touch a `.nix`
+file whose target mount point is already used elsewhere, and verifies its
+own edit with `nix-instantiate --parse` before accepting it. A module can
+declare more than one share — just call `wire-module` again with a different
+share name; `dependsOn`/the marker are only ever added once, `sharedStorage`
+accumulates.
+
+### Component & dependency diagram
+
+```mermaid
+flowchart TB
+    subgraph Provisioning["Provisioning — nfs-manager.sh (operator, once each)"]
+        direction TB
+        InitZone(["init-zone"])
+        Add(["add / add-external"])
+        BackupCmd(["backup --enable"])
+        Wire(["wire-module"])
+    end
+
+    Zones["config/zones.json"]
+    ZM["zone-manager --execute"]
+    Shares["config/nfs-shares.json"]
+    NodeExport["Node: ZFS dataset + NFS export\n(config-storage-zone.sh → storage zone, VLAN 100)"]
+    PBSJob["PBS backup\n(pbs-job.sh / pbs-namespace.sh)"]
+    ModJSON["module.json\ndependsOn + sharedStorage"]
+    ModNix["module.nix\ncluster:storage marker"]
+
+    InitZone --> Zones --> ZM
+    Add --> Shares
+    Add --> NodeExport
+    BackupCmd --> PBSJob
+    Wire --> ModJSON
+    Wire --> ModNix
+
+    subgraph Consumption["Consumption — install-module.sh / update-module.sh"]
+        direction TB
+        Dispatcher["services/storage/*-service.sh\n(dispatcher)"]
+        Common["storage-common.sh"]
+        Params["services/nfs/mount-params.sh"]
+    end
+
+    ModJSON -.->|dependsOn triggers| Dispatcher
+    Dispatcher --> Common --> Params
+    Params -.->|resolves share + node IP| Shares
+    Dispatcher -->|fills the marker| ModNix
+    ModNix -->|nixos-rebuild| LiveMount(("Live NFS mount\non the consumer VM"))
+    NodeExport -.->|serves| LiveMount
+```
+
+**Concurrent multi-module access is a first-class property, not a side
+effect**: two independent modules can mount the same share simultaneously,
+each able to read what the other writes, with no single module's
+install/delete lifecycle affecting another's mount.
+
+### Directory permissions
+
+`nfs-manager.sh add ... --layout` pre-creates the declared folder structure
+as `1777` (world rwx + sticky, like `/tmp`), not `root:root 755`. Every
+consuming module runs its own unprivileged service account, uncoordinated
+across VMs (no shared uid/gid scheme) — a locked-down root-owned tree would
+let only root write, defeating the point of a share multiple non-root
+modules write into. The sticky bit still stops one module's account from
+deleting files it doesn't own.
+
+### Network: the `storage` zone
+
+A bare Proxmox node hosting an NFS export is not itself a VM/LXC, so it
+can't get a zone IP the normal way (`cluster:vm`/`cluster:lxc`'s
+tap/veth-plus-`trunks=` mechanism). Reaching it from a consumer zone
+(`srvHome`, etc.) without exposing the whole `mgmt` control-plane subnet
+(Tier-0 — no inbound pinholes, ever, see `zones.json`'s
+`isolation_invariant`) needs a dedicated zone instead: `storage` (VLAN 100,
+`10.1.0.0/24`).
+
+Giving a node presence on this zone is split across the two canonical,
+already-existing tools rather than any bespoke script:
+
+- `proxmox-manager bridge-vids --apply` — the zones.json-driven bridge-trunk
+  reconciler (already existed for VM trunks; also reconciles every node's
+  own `lan` bridge-vids to the active VLAN set).
+- `config-network.sh --zone-presence <name> --vlan-id <N> --zone-ip <CIDR>
+  [--zone-gateway <ip>]` — the node's own tagged sub-interface + IP + policy
+  routing, using the same backup/apply conventions as every other
+  `config-network.sh` mode (idempotent, `ifreload`-applied, not a
+  hand-rolled `ip`/`bridge` side script).
+
+`cluster/config-storage-zone.sh` orchestrates both from `tappaas-cicd`:
+resolves the zone's VLAN/CIDR from `zones.json` (`lib/storage-zone.sh`),
+copies the current `config-network.sh` to the node and invokes
+`--zone-presence`, then re-syncs the firewall VM's own trunk list
+(`proxmox-manager trunks --apply`, same reconcile `network/update.sh`
+already runs after any zone change, #194/#335).
+
+**Optional dedicated NIC.** By default the storage zone rides a VLAN
+sub-interface (`lan.100`) on the node's existing shared trunk — same physical
+link as every other zone, including `mgmt`'s corosync heartbeat. All zones
+share one physical NIC by default; there is no bandwidth isolation between
+them. For heavier storage loads (large media transfers today; Ceph OSD
+replication later, which can saturate a shared link fast with NVMe-backed
+OSDs), a node can declare `hardware.nodes[].storageNic` in `site.json` — an
+extra physical NIC dedicated to the `storage` zone's traffic only.
+`config-network.sh --zone-presence` then takes `--physical-nic <ifname>` and
+builds the VLAN sub-interface on that NIC instead of `lan`
+(`config-storage-zone.sh` reads `storageNic` and passes it through
+automatically when set). Purely additive — omitting the field keeps the
+default shared-trunk behavior unchanged. The switch port the dedicated NIC
+lands on still needs to carry the VLAN; for Ceph's own inter-node OSD mesh
+(not this zone) the cheaper option at small node counts is direct-attach
+cabling between nodes instead of a switch capable of the same throughput —
+see `~/.claude/plans/TODO-ceph-s3.md`.
+
+### Backup (optional, per-share, PBS-linked)
+
+Backup is a property of the **share**, not any consuming module — set once,
+independent of every module's own `backup:vm`:
+
+```bash
+nfs-manager.sh backup <name> --enable [--keep-daily N --keep-weekly N --keep-monthly N --keep-yearly N]
+nfs-manager.sh backup <name> --disable   # pauses the schedule only — never deletes PBS history
+```
+
+Reuses `backup/lib/pbs-job.sh` + `pbs-namespace.sh` unchanged — the same
+helpers `backup/services/external/install-service.sh` already uses to
+onboard a non-VM backup source. A raw ZFS dataset has no VMID, so this is
+`proxmox-backup-client`'s directory-backup mode (`backup <name>.pxar:<path>`),
+not the VZDump path `backup:vm` uses. Provisioning creates a dedicated PBS
+user (`nfs-<name>@pbs`) scoped to its own namespace
+(`cluster-storage/<name>`), an admin-owned prune job, and a systemd
+timer/template pair (`cluster-storage-backup@<name>.{service,timer}`, shared
+across all shares via `%i` templating) that runs
+`proxmox-backup-client backup` daily. The share's PBS credentials
+(including the cert fingerprint — `proxmox-backup-client` reads
+`PBS_FINGERPRINT` from its environment, there is no `--fingerprint` CLI flag)
+live in `/root/.cluster-storage-pbs/<name>.env` on the node, mode 700.
+
 ## High Availability
 
 HA keeps services running when a component fails. The cluster module covers the failure classes it

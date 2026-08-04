@@ -17,6 +17,31 @@
 - **cluster:lxc provisioner + drift reconcile (#203)** — installs disposable Debian CT `test-lxcdrift` (VMID 922) on `srvHome/210`; asserts container `net0` bound to VLAN tag 210 (proves zone→tag for LXC), post-install "in sync", DNS record registered; induces cores drift `1→2` (asserts detect + live `pct config` cores=2). Exercises live LXC provisioning + reconcile + DNS.
 - Each deep block has its own `trap`-based cleanup (`delete-module.sh --force` + `dns-manager delete`), run on EXIT and after the block.
 
+## `cluster:storage` coverage
+
+Not exercised by `cluster`'s own `test.sh` above — `cluster:storage` has no
+guests of its own to provision. Its dispatcher (`services/storage/test-service.sh`)
+runs per **consuming** module instead, via that module's own `test-module.sh`:
+for each declared `sharedStorage` entry it confirms the share is still
+registered in a backend registry, the mount is live (`mountpoint -q`), a
+write probe succeeds for `rw` shares, and reports `df -h`.
+
+**Manually verified, not yet automated as a regression test:**
+- **Concurrent multi-module access** — two independent modules mounting the
+  same share simultaneously; a file written by one was immediately read
+  back by the other, both directions.
+- **PBS-linked backup** — `nfs-manager.sh backup media --enable` end-to-end
+  (PBS user/namespace/prune-job/timer provisioned, a real
+  `proxmox-backup-client backup` push confirmed via `snapshot list`).
+- **Storage-zone node networking** — `config-storage-zone.sh` idempotent
+  re-run (bridge-vids via `proxmox-manager`, node zone presence via
+  `config-network.sh --zone-presence`) confirmed non-disruptive to an
+  already-live NFS mount.
+
+None of these have a scripted deep-tier test yet (unlike `cluster:vm`/`ha`/`lxc`'s
+`TAPPAAS_TEST_DEEP` drift reconcilers above) — a gap for a future pass, not
+covered by re-running `./test.sh` today.
+
 ## Coverage notes
 - When `TAPPAAS_TEST_DEEP` is unset, all three deep drift reconcilers are skipped — fast mode only confirms script presence, the vm-net unit suite, and a single read-only `--check`. The HA and LXC reconcile apply-paths are entirely unverified without the deep tier.
 - Deep HA test intentionally does NOT exercise live VM migration / placement-migrate (logic-only) to keep runtime down.

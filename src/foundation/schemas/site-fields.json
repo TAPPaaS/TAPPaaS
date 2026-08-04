@@ -114,6 +114,12 @@
                 },
                 "uniqueItems": true,
                 "default": []
+              },
+              "storageNic": {
+                "description": "Optional dedicated physical NIC for this node's presence on the foundation `storage` zone (cluster:storage), instead of a VLAN sub-interface on the shared `lan` trunk. Bandwidth isolation: storage traffic (NFS today; Ceph OSD replication later, which can saturate a shared link fast with NVMe-backed OSDs) no longer competes with other zones' traffic — including corosync heartbeat, which rides the same shared `lan` bridge on `mgmt`. Omit to keep the default (a `lan.<vid>` sub-interface, sharing the node's existing trunk NIC).",
+                "type": ["string", "null"],
+                "default": null,
+                "example": "eth2"
               }
             }
           }

@@ -9,6 +9,7 @@
   "provides": [
     "vm",
     "lxc",
-    "ha"
+    "ha",
+    "storage"
   ]
 }

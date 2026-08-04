@@ -34,11 +34,37 @@
 #   --drop-upstream  Hardening (run later): remove the node's upstream (wan-side)
 #                    host IP so Proxmox is reachable only on the mgmt net / via the
 #                    firewall (or netbird).
+#   --zone-presence <name> --vlan-id <N> --zone-ip <CIDR> [--zone-gateway <ip>]
+#                    [--physical-nic <ifname>]
+#                    Give THIS node an additional tagged sub-interface + IP on a
+#                    non-mgmt zone VLAN, for bare-host services (e.g.
+#                    cluster:storage's NFS export) that must be reachable from a
+#                    consumer zone without exposing the whole mgmt subnet (mgmt is
+#                    Tier-0 — no inbound pinholes, see zones.json's
+#                    isolation_invariant). Does NOT touch bridge-vlan trunk
+#                    membership — that's `proxmox-manager bridge-vids --apply`
+#                    (zones.json-driven); this mode only adds the node's own
+#                    address once the trunk already carries the VLAN. Caller
+#                    resolves the zone's vlantag/CIDR from zones.json (this
+#                    script has no zones.json access of its own — see
+#                    cluster/config-storage-zone.sh for the orchestrating side).
+#                    --physical-nic: use a DEDICATED physical NIC instead of a
+#                    sub-interface on the shared `lan` trunk (default). Isolates
+#                    the zone's traffic (bandwidth AND any noisy-neighbor effect
+#                    on corosync heartbeat, which rides `lan` on `mgmt`) onto its
+#                    own link — matches site.json's optional per-node
+#                    `hardware.nodes[].storageNic`. The NIC still carries the
+#                    zone VLAN tagged (802.1q), same as the default path — this
+#                    only changes WHICH physical interface it rides, not the
+#                    tagging model. The switch port it lands on must still trunk
+#                    (or dedicate) that VLAN.
 #
 # Usage:
 #   config-network.sh [--lan-port <ifname>] [--wan-port <ifname>]
 #                     [--mgmt-ip <CIDR>] [--gateway <ip>] [--fw-ip <ip>]
 #                     [--swap-gateway [--admin-route <CIDR>] | --drop-upstream]
+#                     [--zone-presence <name> --vlan-id <N> --zone-ip <CIDR>
+#                      [--zone-gateway <ip>] [--physical-nic <ifname>]]
 #                     [--no-rollback] [--apply|--dry-run] [--non-interactive]
 #                     [-h|--help]
 #
@@ -70,6 +96,7 @@ usage() { sed -n '2,/^set -euo/p' "$0" | sed 's/^# \{0,1\}//; /^set -euo/d'; }
 LAN_PORT="" WAN_PORT="" MGMT_IP="" GATEWAY="" ADMIN_ROUTE=""
 DO_ROLLBACK=1 INTERACTIVE=1 DRY_RUN=0 ROLLBACK_SECS=90
 SWAP_GATEWAY=0 DROP_UPSTREAM=0 FW_IP="${MGMT_SUBNET}.1"
+ZONE_PRESENCE="" ZONE_VLAN_ID="" ZONE_IP="" ZONE_GATEWAY="" ZONE_PHYSICAL_NIC=""
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -81,6 +108,11 @@ while [[ $# -gt 0 ]]; do
     --admin-route)     ADMIN_ROUTE="${2:-}"; shift 2 ;;
     --drop-upstream)   DROP_UPSTREAM=1; shift ;;
     --fw-ip)           FW_IP="${2:-}"; shift 2 ;;
+    --zone-presence)   ZONE_PRESENCE="${2:-}"; shift 2 ;;
+    --vlan-id)         ZONE_VLAN_ID="${2:-}"; shift 2 ;;
+    --zone-ip)         ZONE_IP="${2:-}"; shift 2 ;;
+    --zone-gateway)    ZONE_GATEWAY="${2:-}"; shift 2 ;;
+    --physical-nic)    ZONE_PHYSICAL_NIC="${2:-}"; shift 2 ;;
     --no-rollback)     DO_ROLLBACK=0; shift ;;
     --dry-run)         DRY_RUN=1; shift ;;
     --apply)           DRY_RUN=0; shift ;;
@@ -232,8 +264,77 @@ drop_upstream() {
   info "${GN}Upstream IP removed.${CL} Reach this node at $(node_mgmt_ip) on the mgmt net."
 }
 
+# ── Mode: zone presence (node-level secondary-zone IP) ────────────────
+# See the --zone-presence usage block above. Idempotent: re-running with the
+# same arguments after a good apply changes nothing.
+zone_presence() {
+  local name="$ZONE_PRESENCE" vid="$ZONE_VLAN_ID" ip_cidr="$ZONE_IP" gw="$ZONE_GATEWAY"
+  local base_if="${ZONE_PHYSICAL_NIC:-lan}"
+  [[ -n "$vid" && -n "$ip_cidr" ]] || die "--zone-presence requires --vlan-id and --zone-ip"
+  local iface="${base_if}.${vid}"
+
+  ip link show "$base_if" &>/dev/null \
+    || die "'${base_if}' not found — $([[ -n "$ZONE_PHYSICAL_NIC" ]] && echo "check --physical-nic matches a real interface" || echo "run config-network.sh (default mode) first")."
+
+  info "${BOLD}Zone presence${CL}: ${name} (VLAN ${vid}, ${ip_cidr}) via ${iface}${ZONE_PHYSICAL_NIC:+ (dedicated NIC)}"
+
+  # A dedicated NIC added after this node's initial config-network.sh bootstrap
+  # has no stanza of its own yet (the default mode only lists ports seen at
+  # that time) — give it a plain manual-mode parent stanza, same as every
+  # other physical port gets, before the VLAN sub-interface references it.
+  if [[ -n "$ZONE_PHYSICAL_NIC" ]] && ! grep -qE "^iface ${base_if} inet" "$INTERFACES" 2>/dev/null; then
+    cp -a "$INTERFACES" "${INTERFACES}.tappaas.$(date +%Y%m%d-%H%M%S).bak"
+    printf '\niface %s inet manual\n' "$base_if" >>"$INTERFACES"
+    info "  ${GN}✓${CL} ${base_if} parent stanza persisted to ${INTERFACES}"
+  fi
+
+  if ip -o -4 addr show "$iface" 2>/dev/null | grep -qF "${ip_cidr}" \
+     && grep -qF "iface ${iface} inet static" "$INTERFACES" 2>/dev/null; then
+    info "  ${GN}✓${CL} ${iface} already present with ${ip_cidr}"
+  else
+    ip link show "$iface" &>/dev/null || ip link add link "$base_if" name "$iface" type vlan id "$vid"
+    ip link set "$iface" up
+    ip -o -4 addr show "$iface" 2>/dev/null | grep -qF "${ip_cidr}" || ip addr add "${ip_cidr}" dev "$iface"
+    info "  ${GN}✓${CL} ${iface} up with ${ip_cidr}"
+
+    cp -a "$INTERFACES" "${INTERFACES}.tappaas.$(date +%Y%m%d-%H%M%S).bak"
+    if ! grep -qF "iface ${iface} inet static" "$INTERFACES"; then
+      cat >>"$INTERFACES" <<EOF
+
+auto ${iface}
+iface ${iface} inet static
+	address ${ip_cidr}
+	vlan-raw-device ${base_if}
+EOF
+      info "  ${GN}✓${CL} ${iface} stanza persisted to ${INTERFACES}"
+    fi
+    ifreload -a 2>/dev/null || systemctl restart networking || warn "network reload returned non-zero"
+  fi
+
+  # Policy routing: replies to zone-sourced traffic must exit via this
+  # interface/gateway, not the node's mgmt default route.
+  if [[ -n "$gw" ]]; then
+    local table="zone${vid}"
+    local rt_file="/etc/iproute2/rt_tables.d/${table}.conf"
+    local node_ip="${ip_cidr%/*}"
+    if [[ ! -f "$rt_file" ]]; then
+      mkdir -p "$(dirname "$rt_file")"
+      echo "${vid} ${table}" > "$rt_file"
+      info "  ${GN}✓${CL} routing table '${table}' declared"
+    fi
+    ip route show table "$table" 2>/dev/null | grep -qF "default via ${gw}" \
+      || ip route replace default via "$gw" dev "$iface" table "$table"
+    ip rule show | grep -qF "from ${node_ip} lookup ${table}" \
+      || ip rule add from "$node_ip" table "$table" priority 100
+    info "  ${GN}✓${CL} policy routing: from ${node_ip} → table ${table} (default via ${gw})"
+  fi
+
+  info "${GN}${name} zone presence complete${CL} (${iface} ${ip_cidr})"
+}
+
 if [[ "$SWAP_GATEWAY" == "1" ]]; then swap_gateway; exit 0; fi
 if [[ "$DROP_UPSTREAM" == "1" ]]; then drop_upstream; exit 0; fi
+if [[ -n "$ZONE_PRESENCE" ]]; then zone_presence; exit 0; fi
 
 # ── Physical port inventory ──────────────────────────────────────────
 # A physical port has a backing device under /sys/class/net/<n>/device,

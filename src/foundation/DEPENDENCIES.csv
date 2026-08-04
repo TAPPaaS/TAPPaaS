@@ -333,7 +333,7 @@ src/main.ts,network/scripts/switch-controller/,zones.json
 # === network/services/proxy ===
 access-list.sh,network/services/proxy/,caddy-manager; zones.json
 install-service.sh,network/services/proxy/,common-install-routines.sh; access-list.sh; caddy-manager; unbound-manager; site.json; network.json; zones.json
-update-service.sh,network/services/proxy/,common-install-routines.sh; access-list.sh; caddy-manager; site.json; network.json; zones.json
+update-service.sh,network/services/proxy/,common-install-routines.sh; access-list.sh; caddy-manager; site.json; network.json; zones.json; identity/services/accessControl/update-service.sh (re-chained when dependsOn includes identity:accessControl)
 delete-service.sh,network/services/proxy/,common-install-routines.sh; caddy-manager; unbound-manager; site.json; network.json
 test-service.sh,network/services/proxy/,common-install-routines.sh; caddy-manager; site.json; network.json
 #
@@ -380,11 +380,13 @@ install.sh,foundation/,cluster/install.sh; config-firewall.sh; config-network.sh
 # === cluster ===
 capture.sh,cluster/,
 config-network.sh,cluster/,
+config-storage-zone.sh,cluster/,common-install-routines.sh; lib/storage-zone.sh; zones.json; proxmox-manager; config-network.sh; site.json
 config-storage.sh,cluster/,
 Create-TAPPaaS-LXC.sh,cluster/,zones.json
 Create-TAPPaaS-VM.sh,cluster/,zones.json
 install-platform.sh,cluster/,Create-TAPPaaS-VM.sh; bootstrap.sh; install.sh
 install.sh,cluster/,config-network.sh; config-storage.sh; setup-ssd-lifecycle.sh; setup-realtek-nic.sh; Create-TAPPaaS-VM.sh; Create-TAPPaaS-LXC.sh; .cluster-role; zones.json
+nfs-manager.sh,cluster/,common-install-routines.sh; config-storage-zone.sh; zones.json; site.json; backup/lib/pbs-job.sh; backup/lib/pbs-namespace.sh; backup.json
 reboot-cluster.sh,cluster/,common-install-routines.sh; reboot-node-lib.sh; reboot-node.sh; site.json
 reboot-node.sh,cluster/,common-install-routines.sh; reboot-node-lib.sh
 sanity-check.sh,cluster/,
@@ -395,6 +397,7 @@ update.sh,cluster/,common-install-routines.sh; Create-TAPPaaS-VM.sh; Create-TAPP
 #
 # === cluster/lib ===
 reboot-node-lib.sh,cluster/lib/,
+storage-zone.sh,cluster/lib/,common-install-routines.sh; zones.json
 test-vm-net.sh,cluster/lib/,vm-net.sh; zones.json
 vm-net.sh,cluster/lib/,zones.json
 #
@@ -403,6 +406,16 @@ install-service.sh,cluster/services/ha/,update-service.sh
 update-service.sh,cluster/services/ha/,common-install-routines.sh; site.json
 delete-service.sh,cluster/services/ha/,common-install-routines.sh
 test-service.sh,cluster/services/ha/,common-install-routines.sh
+#
+# === cluster/services/nfs ===
+mount-params.sh,cluster/services/nfs/,common-install-routines.sh; lib/storage-zone.sh; nfs-shares.json
+#
+# === cluster/services/storage ===
+storage-common.sh,cluster/services/storage/,common-install-routines.sh; nfs-shares.json
+install-service.sh,cluster/services/storage/,common-install-routines.sh; storage-common.sh; services/nfs/mount-params.sh
+update-service.sh,cluster/services/storage/,common-install-routines.sh; storage-common.sh; services/nfs/mount-params.sh
+delete-service.sh,cluster/services/storage/,common-install-routines.sh; storage-common.sh
+test-service.sh,cluster/services/storage/,common-install-routines.sh; storage-common.sh
 #
 # === cluster/services/lxc ===
 install-service.sh,cluster/services/lxc/,common-install-routines.sh; Create-TAPPaaS-LXC.sh; dns-manager

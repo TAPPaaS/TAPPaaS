@@ -229,11 +229,11 @@ class AuthentikManager:
             "external_host": app.external_host,
             "mode": "forward_single",
             # Authentik's own default (1 hour) is too short for forward-auth in
-            # front of any UI that polls itself via XHR (e.g. qBittorrent's
+            # front of any UI that polls itself via XHR (e.g. a torrent client
             # WebUI, ~every 1.5s): once the session expires mid-use, every poll
             # silently gets redirected to the login flow instead of real data,
             # and the page looks frozen/stale until a manual full reload forces
-            # re-auth (issue found via mediamanager/qBittorrent).
+            # re-auth.
             "access_token_validity": "hours=24",
         }
         if existing_provider:

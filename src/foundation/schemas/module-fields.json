@@ -69,6 +69,7 @@
     "egress",
     "aliases",
     "natRules",
+    "sharedStorage",
     "dependsOn",
     "provides"
   ],
@@ -1244,6 +1245,43 @@
         }
       ],
       "note": "Activated when network:nat is in dependsOn. Rules are created as rdr-pass on the WAN interface, so no separate network:rules ingress entry is needed for the forwarded port."
+    },
+    "sharedStorage": {
+      "description": "Named foundation shared-storage mounts (cluster:storage) this module uses. Named 'sharedStorage', not 'storage', to avoid colliding with the existing cluster:vm/cluster:lxc 'storage' field (that one names a ZFS pool for this module's own disk — a completely different concept). Backend-agnostic by design: the named share must already exist in exactly one backend registry (config/nfs-shares.json today; config/cephfs-shares.json once cluster:cephfs lands), provisioned once by an operator via that backend's own manager script (nfs-manager.sh add / add-external, etc.), independently of any module install. This module never knows or declares which backend serves a given name — cluster:storage's dispatcher resolves that from the registries. No module owns the underlying disk or export.",
+      "type": "array",
+      "requiredBy": [],
+      "usedBy": [
+        "cluster:storage"
+      ],
+      "default": [],
+      "items": {
+        "type": "object",
+        "fields": {
+          "name": {
+            "description": "Name of the foundation share (must already be registered in a backend's registry).",
+            "type": "string",
+            "required": true
+          },
+          "mountPoint": {
+            "description": "Where to mount the share inside this module's VM.",
+            "type": "string",
+            "required": true
+          },
+          "access": {
+            "description": "Mount access mode.",
+            "type": "string",
+            "values": {
+              "rw": "Read-write (default)",
+              "ro": "Read-only"
+            },
+            "default": "rw"
+          }
+        }
+      },
+      "example": [
+        { "name": "media", "mountPoint": "/media", "access": "rw" }
+      ],
+      "note": "Activated when cluster:storage is in dependsOn. The dispatcher (cluster/services/storage/*.sh) writes the real fileSystems entry into this module's own .nix source, between '# BEGIN cluster:storage' / '# END cluster:storage' marker comments that must already be present."
     },
     "dependsOn": {
       "description": "List of services this module depends on. Each entry is a 'module:service' pair identifying which module delivers the service.",
