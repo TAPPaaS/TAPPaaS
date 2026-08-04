@@ -9,10 +9,14 @@
 #   caddy-manager add-handler ... --access-list "<name>"
 #
 # proxyAllowedZones semantics:
-#   - absent  → internal default: every Active "Service" zone plus home, work,
+#   - absent  → internal default: every Active "Service" or "Client" zone plus
 #               mgmt and the netbird overlay (NOT the internet) — zero-trust-by-
 #               default. netbird (#367) admits WireGuard tunnel peers, which reach
-#               Caddy with their own overlay source IP.
+#               Caddy with their own overlay source IP. Matched by zones.json's
+#               own `type` field, NOT by zone name — every TAPPaaS deployment
+#               names its zones differently (e.g. one site's trusted-client zone
+#               might be "mandaffaaord-private", another's "home"), so the
+#               default must never hardcode a specific deployment's zone names.
 #   - a list  → exactly those zones. Include the literal "internet" to publish
 #               the service publicly (no restriction); include "netbird" to keep
 #               tunnel access on a service that otherwise narrows its zones.
@@ -62,14 +66,15 @@ proxy_resolve_access_list() {
             # mgmt is the control plane; netbird is the WireGuard admin overlay whose
             # peers terminate on OPNsense with their own 100.70.x.x source (issue #367)
             # — without it tunnel peers are 403'd by Caddy. Plus every Active Service
-            # zone and the home/work client zones.
+            # or Client zone, matched by TYPE (portable across deployments) — never
+            # by a hardcoded zone NAME, since every site names its zones differently.
             mapfile -t zones < <(jq -r '
                 to_entries[]
                 | select(
                     .key == "mgmt"
                     or .key == "netbird"
                     or (.value.state == "Active"
-                        and (.value.type == "Service" or .key == "home" or .key == "work"))
+                        and (.value.type == "Service" or .value.type == "Client"))
                   )
                 | .key' "${zones_file}" 2>/dev/null)
         fi

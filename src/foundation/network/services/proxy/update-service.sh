@@ -199,4 +199,24 @@ if command -v dig &>/dev/null; then
     fi
 fi
 
+# ── Re-chain identity:accessControl if this module depends on it ────
+#
+# `add-handler` above just REPLACED the whole Caddy handler for this domain
+# (that's how caddy-manager reconciles port/upstream/access-list changes) —
+# which silently wipes any forward_auth block identity:accessControl had
+# layered on top in a previous run. A module depending on both services is
+# only ever safe when they run in dependsOn order via update-module.sh; a
+# standalone call to this script must not leave a gated app unauthenticated,
+# so re-apply identity:accessControl's own reconcile here too when relevant.
+if jq -e '.dependsOn // [] | index("identity:accessControl")' "${MODULE_JSON}" >/dev/null 2>&1; then
+    IDENTITY_DIR="$(get_module_dir identity 2>/dev/null || true)"
+    IDENTITY_SVC="${IDENTITY_DIR}/services/accessControl/update-service.sh"
+    if [[ -n "${IDENTITY_DIR}" && -x "${IDENTITY_SVC}" ]]; then
+        debug "  '${MODULE}' also depends on identity:accessControl — re-applying its forward_auth wiring"
+        "${IDENTITY_SVC}" "${MODULE}" || die "identity:accessControl re-apply failed for ${MODULE} — Caddy handler may be unauthenticated, do not leave as-is"
+    else
+        warn "  '${MODULE}' depends on identity:accessControl but its update-service.sh was not found — re-run it manually or the Caddy handler may be unauthenticated"
+    fi
+fi
+
 debug "${GN}network:proxy update-service completed for ${MODULE}${CL}"
