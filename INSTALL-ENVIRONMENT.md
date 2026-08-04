@@ -1,8 +1,8 @@
 # Installing Modules into an Environment
 
-when ever you install a module you ahve the option to specify an environment that the modules should be installed into. a TAPPaaS system can have any numbers of environments and they are isolated from each other. Consider it a Tenant concept of TAPPaaS. 
+Whenever you install a module you have the option to specify an environment that the modules should be installed into. a TAPPaaS system can have any numbers of environments and they are isolated from each other. Consider it a Tenant concept of TAPPaaS. It can be used to have say an environment for test and one for production or an environment for guests separate from the environment for employees. If TAPPaaS is installed at a home that run business it can separate TAPPaaS modules for home use (private nextcloud and home assistant) from the business modules (say a business nextcloud, euro office and an AI stack)
 
-Before installing applicaiton stacks consider if you need to create new environments for the modules.
+Before installing application stacks consider if you need to create new environments for the modules.
 
 ### The always-present environments
 

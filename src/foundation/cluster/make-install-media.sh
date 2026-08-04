@@ -72,12 +72,18 @@ if ! command -v proxmox-auto-install-assistant >/dev/null 2>&1; then
       command -v docker >/dev/null 2>&1 \
         || die "proxmox-auto-install-assistant is Linux-only and Docker is not available — install Docker Desktop, or run this script on any Linux box."
       info "assistant not found — re-running inside a Debian container (mounting \$PWD)..."
-      exec docker run --rm -it -v "$PWD:/work" -w /work debian:trixie bash -c "
+      # Force linux/amd64: the assistant and prepare-iso ship amd64-only, so on
+      # Apple-Silicon Macs the container must run x86_64 (via Docker/Colima
+      # emulation — slower, but this is a one-off build). Harmless on Intel Macs.
+      # Install only the base tools here, then re-exec: inside the container the
+      # script hits the Linux branch below, which fetches the assistant .deb
+      # DIRECTLY (no apt repo). We do NOT add the Proxmox apt repo — Debian
+      # trixie's apt (sqv verifier) rejects '[trusted=yes]', and Proxmox ships no
+      # 'proxmox-release-trixie.gpg' key to pin with 'signed-by', so an apt
+      # install of the assistant fails. The direct .deb fetch needs no key.
+      exec docker run --rm -it --platform linux/amd64 -v "$PWD:/work" -w /work debian:trixie bash -c "
         apt-get update -qq >/dev/null &&
         apt-get install -y -qq wget ca-certificates zstd cpio xorriso >/dev/null &&
-        echo 'deb [trusted=yes] http://download.proxmox.com/debian/pve trixie pve-no-subscription' > /etc/apt/sources.list.d/pve.list &&
-        apt-get update -qq >/dev/null &&
-        apt-get install -y -qq proxmox-auto-install-assistant >/dev/null &&
         exec ./$(basename "$0") $(printf '%q ' "${ORIG_ARGS[@]}")"
       ;;
     Linux)
@@ -86,8 +92,17 @@ if ! command -v proxmox-auto-install-assistant >/dev/null 2>&1; then
       _pve_base="http://download.proxmox.com/debian/pve"
       _pkg=""
       for _codename in trixie bookworm; do
+        # Pick the LATEST version's .deb — the Packages file lists every pooled
+        # version, and grabbing the first Filename yields a STALE build (e.g.
+        # 9.0.6, which wants the old underscore answer keys and rejects the
+        # kebab-case answer this script writes; the current 9.2.x wants kebab).
         _pkg="$(wget -qO- "${_pve_base}/dists/${_codename}/pve-no-subscription/binary-amd64/Packages" 2>/dev/null \
-                | awk '/^Package: proxmox-auto-install-assistant$/{f=1} f&&/^Filename:/{print $2; exit}')" \
+                | awk '
+                    /^Package: proxmox-auto-install-assistant$/ {inpkg=1; ver=""; next}
+                    /^Package: / {inpkg=0}
+                    inpkg && /^Version: / {ver=$2}
+                    inpkg && /^Filename: / {print ver"\t"$2}
+                  ' | sort -V | tail -1 | cut -f2)" \
           && [[ -n "$_pkg" ]] && break
       done
       [[ -n "$_pkg" ]] || die "could not locate proxmox-auto-install-assistant in the Proxmox repo — install it manually."
@@ -247,12 +262,40 @@ ASKBLOCK
   _pad=$(( (4 - _sz % 4) % 4 ))
   [[ "$_pad" -gt 0 ]] && head -c "$_pad" /dev/zero >> "${AW}/initrd.img"
   (cd "$AW" && echo init | cpio -o -H newc --quiet >> initrd.img)
-  # Swap the initrd inside the ISO, preserving bootability (El Torito/EFI).
-  xorriso -indev "$OUT" -outdev "${OUT}.tmp.iso" \
-    -map "${AW}/initrd.img" /boot/initrd.img -boot_image any replay >/dev/null 2>&1 \
-    || die "xorriso initrd swap failed."
+  # Reseal the ISO with the patched initrd. PVE 9.2 ships a hybrid MBR+GPT+APM
+  # installer ISO for which the old in-place swap (`xorriso -map ... -boot_image
+  # any replay`) — and even a verbatim replay of the ISO's own build options —
+  # aborts with "libisofs: Overlapping MBR partition entries requested". So we
+  # rebuild instead: read the ISO's boot layout from its own -report_el_torito,
+  # drop the single option that triggers the overlap (-part_like_isohybrid; the
+  # resulting MBR/GPT/APM boot structure is otherwise identical — verified), then
+  # extract the tree, swap in the patched initrd, and re-author. Reading the
+  # options from the ISO keeps this robust across PVE ISO-layout changes.
+  # The tree extract lands in a temp dir (container-internal /tmp on macOS, i.e.
+  # off the slow Docker bind mount).
+  _bootopts=()
+  while IFS= read -r _line; do
+    [[ -z "$_line" ]] && continue
+    # Split the ISO's own report line into args. xorriso single-quotes each value
+    # (paths, volume id), so shell tokenisation via eval is the reliable parse —
+    # `xargs -n1` silently mangles the `-e '/efi.img'` pair. Trusted input: it is
+    # the ISO we just built from a stock Proxmox ISO.
+    # shellcheck disable=SC2294
+    eval "_toks=( $_line )"
+    for _tok in "${_toks[@]}"; do
+      [[ "$_tok" == "-part_like_isohybrid" ]] && continue
+      _bootopts+=("$_tok")
+    done
+  done < <(xorriso -indev "$OUT" -report_el_torito as_mkisofs 2>/dev/null)
+  [[ ${#_bootopts[@]} -gt 0 ]] || die "could not read the ISO boot layout (xorriso -report_el_torito)."
+  _tree="$(mktemp -d)"
+  xorriso -osirrox on -indev "$OUT" -extract / "$_tree" >/dev/null 2>&1 \
+    || die "could not extract the ISO tree for reseal."
+  cp "${AW}/initrd.img" "${_tree}/boot/initrd.img"
+  xorriso -as mkisofs "${_bootopts[@]}" -o "${OUT}.tmp.iso" "$_tree" >/dev/null 2>&1 \
+    || die "ISO reseal (rebuild) failed."
   mv "${OUT}.tmp.iso" "$OUT"
-  rm -rf "$AW"
+  rm -rf "$_tree" "$AW"
   info "boot-disk console prompt injected."
 fi
 

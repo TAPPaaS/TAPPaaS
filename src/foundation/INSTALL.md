@@ -18,25 +18,24 @@ is done and concentrates on the install itself.
 
 ---
 
-## The four steps
+## The five steps
 
 | Step | What happens | Done when |
 |------|--------------|-----------|
-| [**1**](#step-1--first-node-proxmox-firewall-platform) | First node: Proxmox install, then one command bootstraps firewall, network cut-over and the CICD mothership | `tappaas1` runs behind the firewall; `tappaas-cicd` owns the platform |
-| [**2**](#step-2--add-additional-nodes-optional-skip-for-single-node) | Additional nodes join over the network, unattended *(optional)* | all nodes in the cluster |
-| [**3**](#step-3--set-up-tls-certificates) | TLS certificates via your DNS provider's API | wildcard cert issued and bound |
-| [**4**](#step-4--complete-the-foundation) | Remaining foundation modules + your organisation | the 🎉 foundation summary prints |
+| [**1**](#step-1--install-proxmox-ve-on-the-first-node) | First node: install Proxmox VE (preconfigured media, or stock ISO) | Proxmox VE running on `tappaas1` |
+| [**2**](#step-2--bootstrap-minimal-tappaas-on-the-first-node-mothership) | First node: one command bootstraps minimal TAPPaaS — firewall, network cut-over and the CICD mothership | `tappaas1` runs behind the firewall; `tappaas-cicd` owns the platform |
+| [**3**](#step-3--add-additional-nodes-optional-skip-for-single-node) | Additional nodes join over the network, unattended *(optional)* | all nodes in the cluster |
+| [**4**](#step-4--set-up-certificates-for-the-default-domain-optional) | Certificates for the default domain *(optional)* — wildcard, or per-service | cert strategy configured (or deliberately skipped) |
+| [**5**](#step-5--complete-the-foundation) | Remaining foundation modules + your organisation | the 🎉 foundation summary prints |
 
 ---
 
-## Step 1 — First node: Proxmox, firewall, platform
+## Step 1 — Install Proxmox VE on the first node
 
-### 1a. Install Proxmox VE 9.1 on the first machine
+Install **Proxmox VE 9.2** on the first machine. **Two ways — pick one option,**
+then continue with [Step 2](#step-2--bootstrap-minimal-tappaas-on-the-first-node-mothership).
 
-Note TAPPaaS does not support PVE 9.2 yet. **Two ways — pick one option, then
-continue with step 1b:**
-
-#### Option A — preconfigured install media (recommended)
+### Option A — preconfigured install media (recommended)
 
 Build a USB stick
 that installs Proxmox with **one question asked on the target itself** (the
@@ -44,18 +43,30 @@ boot disk, chosen from the machine's real disks); everything else is
 answered at build time (email, locale, root password) with TAPPaaS defaults
 for the rest. The build runs on **your laptop** — no Proxmox needed and **no
 repo checkout needed**: the script is self-contained (on Linux it fetches the
-Proxmox assistant automatically; on macOS it re-runs itself in a Debian
-container — Docker required). Fetch it with curl and run it from the
-directory holding the ISO:
+Proxmox assistant automatically; **on macOS it re-runs itself in a Debian
+container, so Docker Desktop must be installed and running**).
+
+**First, download the stock Proxmox VE ISO** from the official site —
+<https://www.proxmox.com/en/downloads/proxmox-virtual-environment> (or fetch it
+directly from the mirror as shown). Then fetch the build script and run it from
+the directory holding the ISO:
 
 ```bash
+# 1. Download the stock Proxmox VE 9.2 ISO (~1.5 GB)
+curl -fSLO "https://enterprise.proxmox.com/iso/proxmox-ve_9.2-1.iso"
+
+# 2. Fetch the TAPPaaS build script
 curl -fsSL "https://codeberg.org/TAPPaaS/TAPPaaS/raw/branch/main/src/foundation/cluster/make-install-media.sh" \
      -o make-install-media.sh && chmod +x make-install-media.sh
-./make-install-media.sh --iso proxmox-ve_9.1.iso \
+
+# 3. Build the preconfigured install ISO
+./make-install-media.sh --iso proxmox-ve_9.2-1.iso \
        --fqdn tappaas1.mgmt.internal
 # prompts for email / country / keyboard / timezone / root password,
-# VALIDATES the answer, writes proxmox-ve_9.1-tappaas-auto.iso
-dd if=proxmox-ve_9.1-tappaas-auto.iso of=/dev/<usb> bs=4M status=progress
+# VALIDATES the answer, writes proxmox-ve_9.2-1-tappaas-auto.iso
+
+# 4. Write it to a USB stick (find the device with: diskutil list / lsblk)
+dd if=proxmox-ve_9.2-1-tappaas-auto.iso of=/dev/<usb> bs=4M status=progress
 ```
 
 (If you already have — or prefer — a full checkout:
@@ -72,10 +83,10 @@ and rewrite it after use.
 
 > **Disk standard:** the PVE system goes on a **dedicated boot disk**
 > (ext4/LVM — the default). The `tankXY` data pools live on **other**
-> disks and are created later by the platform (Step 1, [1/5] /
+> disks and are created later by the platform (Step 2, [1/5] /
 > `config-storage.sh`), never by the installer.
 
-#### Option B — stock ISO, manual screens
+### Option B — stock ISO, manual screens
 
 Download the ISO and create a
 bootable USB per the official guide:
@@ -85,7 +96,7 @@ On the installer screens:
 - **Network Nic** select the one you have connected to the upstream router. Initially this is the Lan port but it will eventually become the "wan" port of the TAPPaaS firewall. For secondary TAPPaaS nodes this is will stay lan port, as these nodes wil connect directly via the switch to the lan side of the firewall we create in the first node.
 - **Hostname (FQDN):** `tappaas1.mgmt.internal` — TAPPaaS uses the internal
      management domain `mgmt.internal`, **not** your public domain. (Your public
-     domain is supplied with `--domain` in step 1b.)
+     domain is supplied with `--domain` in Step 2.)
 - **Email:** a **working** address you actually monitor — Proxmox sends
      system/health notifications here, and TAPPaaS reuses it as the admin email.
 - **Management interface / IP / netmask / gateway / DNS:** must be **valid for
@@ -93,10 +104,116 @@ On the installer screens:
      server of the network this node currently sits on (so it has internet for
      the bootstrap).
 
-### 1b. Run the one-shot bootstrap
+### Option C — PXE / network-boot the first node (advanced; no USB stick)
 
-Whichever option you used above, continue here: run the bootstrap from the
-Proxmox **node console/shell**.
+When the target can't boot from USB, or you want to reinstall it repeatedly,
+netboot it from your Mac. This stands up a **temporary PXE service** on the Mac —
+`dnsmasq` in **proxy-DHCP + TFTP** mode (it does *not* hand out IP leases; your
+existing router keeps doing DHCP), which chainloads **iPXE**, which then pulls the
+same preconfigured installer as Option A over HTTP. It reuses the exact netboot
+repack TAPPaaS uses for follow-on nodes (validated against the PVE 9.2 ISO).
+
+**Prerequisites:** Docker Desktop + Homebrew on the Mac; the Mac and the target on
+the **same wired L2 network** (no VLAN/managed-switch separation between them); the
+target set to **UEFI network boot**.
+
+**1. Build the preconfigured ISO** as in Option A, but **bake in the boot disk**
+(`--disk <dev>`) so the netboot install is fully hands-off (a console disk prompt
+over PXE is fiddly):
+
+```bash
+./make-install-media.sh --iso proxmox-ve_9.2-1.iso \
+    --fqdn tappaas1.mgmt.internal --disk /dev/nvme0n1
+# → proxmox-ve_9.2-1-tappaas-auto.iso  (answer + boot disk embedded)
+```
+
+**2. Stage the netboot assets** — extract the installer kernel + initrd and append
+the whole ISO to the initrd (a Linux operation; run it in a container):
+
+```bash
+mkdir -p pxe
+docker run --rm -v "$PWD:/work" -w /work debian:trixie bash -c '
+  apt-get update -qq && apt-get install -y -qq xorriso cpio >/dev/null
+  iso=proxmox-ve_9.2-1-tappaas-auto.iso
+  xorriso -osirrox on -indev "$iso" \
+    -extract /boot/linux26    pxe/linux26 \
+    -extract /boot/initrd.img pxe/initrd >/dev/null 2>&1
+  cp "$iso" pxe/proxmox.iso
+  sz=$(stat -c %s pxe/initrd); pad=$(( (4 - sz % 4) % 4 ))
+  [ "$pad" -gt 0 ] && head -c "$pad" /dev/zero >> pxe/initrd
+  ( cd pxe && echo proxmox.iso | cpio -L -H newc -o >> initrd )
+  chmod 644 pxe/*'
+```
+
+**3. Fetch iPXE and write its boot script** (point it at your Mac's LAN IP):
+
+```bash
+cd pxe
+curl -fSLO http://boot.ipxe.org/ipxe.efi        # UEFI targets (most machines)
+curl -fSLO http://boot.ipxe.org/undionly.kpxe   # legacy-BIOS targets (optional)
+MAC_IP=$(ipconfig getifaddr en0)                # your Mac's LAN interface → IP
+cat > boot.ipxe <<EOF
+#!ipxe
+echo TAPPaaS: booting the Proxmox VE auto-installer
+kernel http://${MAC_IP}:8080/linux26 ro ramdisk_size=16777216 rw splash=silent proxmox-start-auto-installer
+initrd http://${MAC_IP}:8080/initrd
+boot
+EOF
+cd ..
+```
+
+**4. Serve the assets over HTTP** (the initrd is ~1.5 GB — HTTP, not TFTP):
+
+```bash
+( cd pxe && python3 -m http.server 8080 )        # leave running; Ctrl-C when done
+```
+
+**5. Start proxy-DHCP + TFTP** in another terminal — fill in your LAN subnet, the
+absolute `pxe/` path, your interface and Mac IP:
+
+```bash
+brew install dnsmasq
+cat > pxe/dnsmasq-pxe.conf <<'EOF'
+port=0                                  # DNS off — PXE only
+interface=en0                           # your Mac's LAN interface
+bind-interfaces
+log-dhcp
+dhcp-range=192.168.2.0,proxy            # YOUR lan subnet + 'proxy' (hands out NO leases)
+enable-tftp
+tftp-root=/absolute/path/to/pxe
+dhcp-userclass=set:ipxe,iPXE
+dhcp-match=set:efi,option:client-arch,7
+dhcp-match=set:efi,option:client-arch,9
+dhcp-boot=tag:!ipxe,tag:efi,ipxe.efi          # firmware → iPXE (UEFI)
+dhcp-boot=tag:!ipxe,tag:!efi,undionly.kpxe    # firmware → iPXE (legacy BIOS)
+dhcp-boot=tag:ipxe,http://192.168.2.10:8080/boot.ipxe   # iPXE → our script (your Mac IP)
+EOF
+sudo dnsmasq --no-daemon --conf-file=pxe/dnsmasq-pxe.conf   # Ctrl-C when done
+```
+
+> **macOS firewall:** allow `dnsmasq` (UDP 67/69 and 4011) and the HTTP port, or
+> turn the firewall off on a trusted lab network. `port=0` stops dnsmasq clashing
+> with anything already on port 53.
+
+**6. Boot the target from the network** — enter its UEFI boot menu (F12/F11/F8,
+board-dependent) and pick **Network / PXE (IPv4)**. It chainloads iPXE →
+`boot.ipxe` → the kernel + initrd over HTTP, then runs the **unattended**
+installer, which **WIPES the baked `--disk`** and reboots into Proxmox.
+
+**7. Tear down** — once PVE is up (it takes a normal DHCP lease from your router),
+`Ctrl-C` both `dnsmasq` and the HTTP server, then continue with
+[Step 2](#step-2--bootstrap-minimal-tappaas-on-the-first-node).
+
+> Same version caveat as Option A: this uses the PVE netboot repack (kernel/initrd
+> + ISO-in-initramfs) that follow-on nodes also use. The extract step fails loudly
+> if `/boot/linux26` or `/boot/initrd.img` ever move in a future PVE release.
+
+## Step 2 — Bootstrap minimal TAPPaaS on the first node
+
+One command turns the bare Proxmox node from Step 1 into a minimal, running
+TAPPaaS — the firewall, the network cut-over, and the CICD mothership that owns
+the platform. Whichever install option you used in Step 1, continue here: run
+the bootstrap from the Proxmox **node console/shell**.
 
 Notes:
 - **Prefer the console** — use the **xterm.js** shell option in the tappaas1 menu; it gives more scrollback and persistence on the install output.
@@ -126,10 +243,10 @@ Pass two things up front:
      **organisation** in the identity provider. If omitted you'll be prompted.
 - **`--domain`** — your **public domain**; the reverse proxy is configured for
      `<service>.yourdomain.com`. If omitted you'll be prompted. You don't need the
-     domain's DNS-01 API token yet — that comes in Step 3.
+     domain's DNS-01 API token yet — that comes in Step 4.
 
 On the **first node** this runs the whole foundation bring-up **end-to-end** as
-a 5-step chain — you run it once and watch:
+a five-phase chain — you run it once and watch:
 
 1. **[1/5] Node** — Proxmox post-install, the `lan`/`wan` bridges (auto-detected:
       the install NIC with internet becomes **WAN**; the other, to your downstream
@@ -156,7 +273,7 @@ a 5-step chain — you run it once and watch:
 
 > **One name, everywhere:** `<orgname>` = the Proxmox cluster name = `site.json`
 > `.name` = the default environment name = your organisation name. You set it
-> once with `--name`; the **organisation itself** isn't created until Step 4
+> once with `--name`; the **organisation itself** isn't created until Step 5
 > (`rest-of-foundation.sh`, after the identity provider is up).
 
 The domain you passed configures the reverse proxy. To stop earlier, pass
@@ -169,7 +286,7 @@ When it finishes, `tappaas1` is at `10.0.0.10` behind the firewall and
 `https://10.0.0.10:8006`, firewall GUI at `https://10.0.0.1`) — not required,
 since the node also keeps its upstream IP until you harden it later.
 
-## Step 2 — Add additional nodes (optional; skip for single-node)
+## Step 3 — Add additional nodes (optional; skip for single-node)
 
 Do this **after** the first node's bootstrap has finished (cicd is up).
 Follow-on nodes install **over the network, fully unattended** — no USB stick,
@@ -239,11 +356,27 @@ update-tappaas --force
 > The underlying tools remain available for surgery: `node-provisioner
 > register/enable/disable/status` and `dhcp-manager pxe/host`.
 
-## Step 3 — Set up TLS certificates
+## Step 4 — Set up certificates for the default domain (optional)
 
-Your domain is already configured (you passed `--domain` in Step 1). The default
-TLS strategy (`proxyTls: dns01`) issues **one wildcard certificate per TAPPaaS
-domain** via ACME **DNS-01**, then binds it to every module's reverse-proxy
+**This step is optional** — it provisions the HTTPS certificate that lets your
+TAPPaaS services be reached over TLS on `<service>.yourdomain.com`. **Skip it if:**
+
+- you **don't want any external access** to the TAPPaaS system — internal / LAN-only
+  use is fully supported; every service stays reachable on the LAN, only the
+  *public* HTTPS endpoint of `dns01` modules lacks a certificate; **or**
+- you want to **set it up later** — it can be run any time after the foundation is up.
+
+Your domain is already configured (you passed `--domain` in Step 2). Pick one of the
+two certificate strategies below.
+
+> *(The public domain lives per-environment. To change the default environment's
+> domain later: `environment-manager modify <system-name> --domain <yourdomain>`,
+> then set up certificates.)*
+
+### Option A — one wildcard certificate via DNS-01 (recommended)
+
+The default TLS strategy (`proxyTls: dns01`) issues **one wildcard certificate per
+TAPPaaS domain** via ACME **DNS-01**, then binds it to every module's reverse-proxy
 entry through Caddy's `CustomCertificate` (issue #254). DNS-01 needs no
 inbound :80 traffic, so internal-only services get a public cert too.
 
@@ -273,11 +406,8 @@ The script:
    `proxyTls: dns01` module install reads this refid and binds the wildcard via
    `CustomCertificate` automatically.
 
-**Cloudflare token scope** (recommended): create a custom token at
-<https://dash.cloudflare.com/profile/api-tokens> with permissions `Zone → Zone →
-Read` and `Zone → DNS → Edit`, restricted to your domain. Optionally allow only
-the firewall WAN IPv4 *and* IPv6 (or skip the IP filter — the token is already
-zone-scoped).
+**Using Cloudflare?** Its DNS-01 token needs specific scopes — see
+[Appendix: Cloudflare API token scope](#appendix-cloudflare-api-token-scope).
 
 ```bash
 # Non-Cloudflare? Pass the provider name; the script asks for that provider's fields:
@@ -296,21 +426,31 @@ untrusted certs, no rate limits); then re-run without `--staging` for the
 trusted prod cert (the script swaps the cert in place — Caddy picks up the new
 one automatically via the registered `caddy-reload` action).
 
-If you'd rather **not** use the wildcard for a particular service (e.g. you
-want a per-domain cert via HTTP-01 because the service is publicly reachable on
-:80 and you don't want it to share the wildcard), set `proxyTls: http01` on
-that module. The two strategies coexist per-module.
+### Option B — per-service certificates via HTTP-01 (no DNS API needed)
 
-Skipping Step 3 is fine if you only use TAPPaaS internally — every service stays
-reachable on the LAN; only the public HTTPS endpoint of `dns01` modules will
-lack a certificate until you run `acme-setup.sh`. *(The public domain now lives
-per-environment, not in `site.json`. To change the default environment's domain
-later: `environment-manager modify <system-name> --domain <yourdomain>`, then
-re-run `acme-setup.sh`.)*
+Choose this if you **don't have ACME / DNS-01 API access to your DNS provider** —
+i.e. you can't (or don't want to) issue an API token that lets TAPPaaS edit DNS
+records, which Option A's DNS-01 requires. HTTP-01 validates each service over
+inbound **port 80** instead of via DNS, so it needs **no DNS API token** — but each
+publicly-reachable service gets its **own per-domain certificate** (no shared
+wildcard), and that service **must be reachable from the internet on :80** for
+issuance and renewal.
+
+There is no wildcard to provision, so you **don't run `acme-setup.sh`**. Instead set
+the TLS mode to `http01` on each module you want publicly reachable, in its
+`<module>.json`:
+
+```json
+{ "proxyTls": "http01" }
+```
+
+Caddy then obtains and renews a per-domain certificate for that service via the ACME
+HTTP-01 `:80` challenge. The two strategies **coexist per module**, so you can keep
+the wildcard (Option A) for most services and use HTTP-01 for a specific public one.
 
 ---
 
-## Step 4 — Complete the foundation
+## Step 5 — Complete the foundation
 
 From here on you work **from the cicd mothership** (`ssh tappaas@tappaas-cicd`).
 One command does two things:
@@ -323,7 +463,7 @@ rest-of-foundation.sh
    logging** — then runs a final system update + tests.
 2. **Bootstraps your people domain** — once the identity provider (Authentik) is
    up and `config/people/` is still empty (first install), it creates the
-   **organisation `<orgname>`** (the same name from Step 1), the `users` group and
+   **organisation `<orgname>`** (the same name from Step 2), the `users` group and
    **your installer user** (from `site.json`'s email), and pushes them into
    Authentik. So **this is where your organisation is actually created** — the
    earlier `--name` only reserved the name; the org entity is materialised here.
@@ -356,7 +496,7 @@ install guide), and day-to-day **operation** — start at
 ## Network — cutting over to the firewall
 
 Putting the firewall (a VM on `tappaas1`, at `10.0.0.1`) inline as the gateway is
-done **for you** by the bootstrap (Step 1, [3/5]) — `config-network.sh
+done **for you** by the bootstrap (Step 2, [3/5]) — `config-network.sh
 --swap-gateway`. You normally never run it by hand; this section explains what it
 does. Each node has **two NICs**, wired at install time and left in place:
 
@@ -417,6 +557,18 @@ the `lan` NIC can go to your existing LAN or any switch.)*
 
 ---
 
+## Appendix: Cloudflare API token scope
+
+*(Extra detail — only relevant if you chose **Cloudflare** as the DNS provider for the
+wildcard certificate in Step 4, Option A.)*
+
+Create a **custom token** at <https://dash.cloudflare.com/profile/api-tokens> with
+permissions `Zone → Zone → Read` and `Zone → DNS → Edit`, restricted to your domain.
+Optionally allow only the firewall WAN IPv4 *and* IPv6 (or skip the IP filter — the
+token is already zone-scoped).
+
+---
+
 ## Appendix: install options
 
 Defaults are chosen so the commands above "just work". Override as needed:
@@ -428,7 +580,7 @@ Defaults are chosen so the commands above "just work". Override as needed:
 | Management subnet `10.0.0.0/24`, gateway/firewall `10.0.0.1` | `config-network.sh --mgmt-ip <CIDR> --gateway <ip>`; firewall LAN lives in `src/foundation/network/firewall-config.xml.template`. |
 | Org / system / cluster name | `install.sh --name <orgname>` (the one name: Proxmox cluster, `site.json`, default environment, organisation; lowercase, ≤15 chars; prompted if omitted). |
 | Auto cluster create/join | `install.sh --cluster` / `--join` / `--no-cluster`. |
-| Chained first-node install (node→firewall→cutover→sanity→platform) | The entry point `foundation/install.sh` runs all 5 steps on the first node by default; stop earlier with `--skip-firewall` or `--skip-platform`. The node step alone is `cluster/install.sh`. |
+| Chained first-node install (node→firewall→cutover→sanity→platform) | The entry point `foundation/install.sh` runs all 5 phases on the first node by default; stop earlier with `--skip-firewall` or `--skip-platform`. The node step alone is `cluster/install.sh`. |
 | Gateway cutover (route via firewall) | Done automatically by the bootstrap; manual: `config-network.sh --swap-gateway` (additive — keeps the upstream IP). |
 | Take Proxmox off the upstream net (hardening) | `config-network.sh --drop-upstream` (run later, once you manage via the mgmt net / netbird). |
 | Platform install branch / domain | `install-platform.sh --branch <name> --domain <domain>`. |
@@ -519,7 +671,7 @@ tmux attach -t install
 
 ### 4. Run the install
 
-Run the bootstrap command from Step 1:
+Run the bootstrap command from Step 2:
 
 ```bash
 REPO="https://codeberg.org/TAPPaaS/TAPPaaS/raw/branch/"; BRANCH="main"
