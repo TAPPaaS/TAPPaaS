@@ -352,8 +352,15 @@ step_backfill_environment() {
     fi
     local _rm="/home/tappaas/bin/resolve-module.sh"
     [[ -x "$_rm" ]] || _rm="$(tool resolve-module.sh)"
+    # Fall back to the in-checkout copy: on a clean install's FIRST update-tappaas
+    # run, resolve-module.sh is not yet symlinked into ~/bin (the cicd module
+    # installs that symlink later THIS same run), but the checkout always carries
+    # it. Using it here lets the backfill RUN — a clean no-op when every module
+    # config already has .environment (a fresh ADR-007 install) — instead of
+    # skipping and FALSELY marking the migration INCOMPLETE on a brand-new system.
+    [[ -x "$_rm" ]] || _rm="${TAPPAAS_REPO:-/home/tappaas/TAPPaaS}/src/foundation/tappaas-cicd/manager/module-manager/resolve-module.sh"
     if [[ -z "$_rm" || ! -x "$_rm" ]]; then
-        warn "  resolve-module.sh not on PATH — skipping .environment backfill (re-run once cicd is updated)."; NEEDS_ACTION=1; return 0
+        warn "  resolve-module.sh not found — skipping .environment backfill (re-run once cicd is updated)."; NEEDS_ACTION=1; return 0
     fi
     local default_env; default_env="$(jq -r '.name // empty' "$SITE" 2>/dev/null || true)"
     local f m cur tier env tmp changed=0
