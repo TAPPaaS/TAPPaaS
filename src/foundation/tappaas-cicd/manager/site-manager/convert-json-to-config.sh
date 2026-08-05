@@ -17,7 +17,10 @@
 #   1. Header-pinned (HEADER_PINNED below): stay at top.
 #   2. usedBy == ["general"]:                  stay at top.
 #   3. Field not present in schema:            stay at top + warn (unknown).
-#   4. usedBy ∩ dependsOn == ∅:                stay at top + warn (orphan).
+#   4. usedBy ∩ dependsOn == ∅:                stay at top + warn (orphan),
+#      UNLESS a usedBy service is one the module `provides` (self-consumed: the
+#      module reads the field from the flattened top level and does not depend on
+#      its own service) — then stay at top, no warning.
 #   5. usedBy ∩ dependsOn has ≥1 match:        config.<first-match-in-dependsOn-order>
 #
 # After grouping, top-level keys are reordered per .fieldOrder in
@@ -86,6 +89,7 @@ regroup_to_pattern_a() {
     warnings="$(jq -r --slurpfile schema "${_CONVERT_SCHEMA_FILE}" --argjson pinned "${_CONVERT_HEADER_PINNED}" '
         ($schema[0].fields) as $fields
         | (.dependsOn // []) as $deps
+        | (.provides // []) as $prov
         | [ keys[]
             | select(. as $k | ($pinned | index($k)) | not)
             | . as $k
@@ -96,7 +100,14 @@ regroup_to_pattern_a() {
                 empty
               else
                 [ $u[] | select(. as $s | $deps | index($s)) ] as $m
-                | if ($m | length) == 0 then
+                # Self-consumed: a usedBy coordinate "<mod>:<svc>" whose <svc> is
+                # one THIS module provides. The module reads such a field from the
+                # flattened top level (it does not — and should not — depend on its
+                # own service), so it legitimately stays top-level and is NOT an
+                # orphan. (e.g. network provides "rules"; its ingress/ports are
+                # usedBy=["network:rules"].)
+                | [ $u[] | select((. | split(":")[1]) as $svc | $prov | index($svc)) ] as $self
+                | if (($m | length) == 0 and ($self | length) == 0) then
                     {kind: "orphan", field: $k, usedBy: $u}
                   else empty end
               end
