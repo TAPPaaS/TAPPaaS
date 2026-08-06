@@ -37,15 +37,17 @@ export function defaultRenameFile(): string {
   return join(defaultConfigDir(), "zones.rename.json");
 }
 
-// Resolve the installation/site name from ${CONFIG_DIR}/site.json's `.name`.
-// This is the slug zones-init/zones-merge rename to (srv→<name>, …). Throws a
-// clear error if site.json is missing / unreadable / lacks a string `.name`,
-// since the rename namespace is undefined without it.
+// Resolve the default-environment name — the slug zones-init/zones-merge rename
+// `srv` to — from ${CONFIG_DIR}/site.json's `.defaultEnvironment` (#426: the
+// zone/env name, decoupled from the neutral site code `.name`; a pre-#426
+// site.json falls back to `.name`, which WAS the org/env name). Merge MUST resolve
+// the same name init used, or it would rename into a different namespace. Throws a
+// clear error if site.json is missing / unreadable / names nothing.
 export function readSiteName(configDir: string = defaultConfigDir()): string {
   const site = join(configDir, "site.json");
   if (!existsSync(site)) {
     throw new Error(
-      `site.json not found: ${site} — cannot resolve the installation name for the zones rename`,
+      `site.json not found: ${site} — cannot resolve the default-environment name for the zones rename`,
     );
   }
   let parsed: unknown;
@@ -57,11 +59,19 @@ export function readSiteName(configDir: string = defaultConfigDir()): string {
   if (parsed === null || typeof parsed !== "object" || Array.isArray(parsed)) {
     throw new Error(`site.json must be a JSON object: ${site}`);
   }
-  const name = (parsed as Record<string, unknown>)["name"];
-  if (typeof name !== "string" || name.length === 0) {
-    throw new Error(`site.json has no string '.name' field: ${site}`);
+  const rec = parsed as Record<string, unknown>;
+  const def = rec["defaultEnvironment"];
+  const name = rec["name"];
+  const resolved =
+    typeof def === "string" && def.length > 0
+      ? def
+      : typeof name === "string" && name.length > 0
+        ? name
+        : undefined;
+  if (resolved === undefined) {
+    throw new Error(`site.json has no string '.defaultEnvironment' or '.name' field: ${site}`);
   }
-  return name;
+  return resolved;
 }
 
 // The distributed zones.json TEMPLATE shipped alongside the bin. The compiled

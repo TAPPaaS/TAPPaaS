@@ -244,12 +244,18 @@ step_zones_and_envs() {
         NEEDS_ACTION=1; return 0
     fi
 
+    # Scope init/add to THIS orchestrator's --config-dir. Without --out/--config-dir
+    # both tools default to the LIVE /home/tappaas/config, so a migrate run pointed
+    # at any other config dir (a test/copy) would clobber the live zones + write a
+    # stray default environment there. Passing them explicitly is a no-op for the
+    # production live run and makes --config-dir actually isolating.
     run "$nm" init --name "$name" --force \
+        --out "${CONFIG_DIR}/zones.json" --config-dir "${CONFIG_DIR}" \
         || { warn "  init reported a non-zero rc — continuing."; NEEDS_ACTION=1; }
 
     # `environment-manager add` with no positional <env> seeds the minimal set
     # (the retired create-minimal-environments.sh — ADR-007 refactor Phase 8.1).
-    local args=(add --name "$name")
+    local args=(add --name "$name" --config-dir "${CONFIG_DIR}")
     [[ -n "$domain" ]] && args+=(--domain "$domain")
     run "$em" "${args[@]}" \
         || { warn "  environment bootstrap (environment-manager add) reported a non-zero rc — continuing."; NEEDS_ACTION=1; }
