@@ -42,7 +42,7 @@ import { existsSync, readFileSync, unlinkSync } from "fs";
 import { join } from "path";
 
 // The two always-required bootstrap environments are protected from delete:
-// 'mgmt' and the default <N> environment (= site.json '.name'). The `add`
+// 'mgmt' and the default <N> environment (= site.json '.defaultEnvironment'). The `add`
 // minimal-set bootstrap (src/bootstrap.ts — the retired
 // create-minimal-environments.sh, ported) is their single owner.
 const RESERVED_MGMT = "mgmt";
@@ -119,8 +119,8 @@ const HELP: HelpSpec = {
   notes: [
     "Notes:\n" +
       "  add with no positional <env> seeds the minimal environment set (mgmt +\n" +
-      "  the default <N> environment). --name <N> gives the system name explicitly\n" +
-      "  (else it derives from site.json '.name'); --domain sets the default env's\n" +
+      "  the default <N> environment). --name <N> gives the default-env name explicitly\n" +
+      "  (else it derives from site.json '.defaultEnvironment'); --domain sets the default env's\n" +
       "  domains.primary. With a positional <env> it creates that single environment.\n" +
       "  delete refuses to remove 'mgmt', the default <N> environment, or an env still\n" +
       "  consumed by deployed modules — unless --force.",
@@ -339,8 +339,8 @@ function cmdAdd(opts: Opts): void {
   const single = opts.rest[0];
   // No positional env ⇒ seed the minimal set (the create-minimal-environments.sh
   // bootstrap, now native — ADR-007 refactor Phase 8.1). --name passes the
-  // system name <N> explicitly (the install.sh / migrate path, where site.json
-  // may not carry it yet); without it the name derives from site.json '.name'.
+  // default-env name <N> explicitly (the install.sh / migrate path, where site.json
+  // may not carry it yet); without it the name derives from site.json '.defaultEnvironment'.
   if (!single) {
     const res = bootstrap({
       configDir: opts.configDir,
@@ -411,7 +411,7 @@ function cmdModify(opts: Opts): void {
 
 // ── delete ────────────────────────────────────────────────────────────
 // Guard rails: refuse to delete the bootstrap environments ('mgmt' and the
-// default <N> environment = site.json '.name'), and refuse when deployed modules
+// default <N> environment = site.json '.defaultEnvironment'), and refuse when deployed modules
 // still consume the env — UNLESS --force. The `add` minimal-set bootstrap is the
 // single owner of the bootstrap files, so they are never casually removed.
 function cmdDelete(opts: Opts, mod: ModuleClient): void {
@@ -430,7 +430,7 @@ function cmdDelete(opts: Opts, mod: ModuleClient): void {
     }
     if (defaultEnv && name === defaultEnv) {
       die(
-        `Refusing to delete the default environment '${name}' (= site.json '.name'; use --force to override).`,
+        `Refusing to delete the default environment '${name}' (= site.json '.defaultEnvironment'; use --force to override).`,
       );
     }
     // Dependent-module check.

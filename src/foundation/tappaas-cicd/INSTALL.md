@@ -27,10 +27,11 @@ drives the in-VM install end-to-end over SSH:
 1. `bootstrap.sh <repo> <branch>` — clones the TAPPaaS repo, generates
    `hardware-configuration.nix`, `nixos-rebuild switch --flake .#tappaas-cicd`,
    creates the tappaas SSH keypair. Then the VM is rebooted.
-2. `install.sh [--name N] [--branch NAME] [--domain DOMAIN]` — installs the cicd's SSH
-   key on every node, links the toolbox into `~/bin`, writes `site.json`
-   (`create-site.sh`), transforms `zones.json` (`network-manager init`), creates the
-   `mgmt` + `<name>` environments, deploys the cluster/templates/network/tappaas-cicd
+2. `install.sh [--name SITE-CODE] [--organization ORG] [--branch NAME] [--domain DOMAIN]`
+   — installs the cicd's SSH key on every node, links the toolbox into `~/bin`, writes
+   `site.json` (`create-site.sh`; `--name` = neutral site code, `--organization` = default
+   env/org, #426), transforms `zones.json` (`network-manager init`), creates the
+   `mgmt` + `<org>` environments, deploys the cluster/templates/network/tappaas-cicd
    module configs, runs their updates, stages the PXE netboot assets, installs Caddy on
    the firewall (`setup-caddy.sh`) and sets up the admin-vpn OPNsense termination.
 

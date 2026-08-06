@@ -100,7 +100,7 @@ resolve_effective_module_name() {
     local default_env=""
     if [[ -n "$env" ]]; then
         if [[ -f "$site_file" ]]; then
-            default_env="$(jq -r '.name // empty' "$site_file" 2>/dev/null)"
+            default_env="$(jq -r '.defaultEnvironment // .name // empty' "$site_file" 2>/dev/null)"
         fi
         if [[ "$env" != "mgmt" && ( -z "$default_env" || "$env" != "$default_env" ) ]]; then
             printf '%s\n' "${mod}-${env}"

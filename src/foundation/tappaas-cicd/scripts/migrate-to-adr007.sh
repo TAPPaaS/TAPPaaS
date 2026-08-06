@@ -12,7 +12,7 @@
 #
 # Steps (in order; each is skipped when its result already exists):
 #   1. configuration.json -> site.json          (migrate-configuration.sh)
-#   2. init --name <site.name>             (network-manager; org-zone setup)
+#   2. init --name <org>                   (network-manager; org-zone setup)
 #   3. mgmt + <name> environments                (environment-manager add)
 #   3b. client-zone cleanup                       (legacy <name>-private/-guest -> home/guest; #425)
 #   4. firewall -> network (deployed)            (OPT-IN/supervised; default: detect + warn)
@@ -119,11 +119,16 @@ run() {
     "$@"
 }
 
-# Derive the installation name: prefer site.json .name, fall back to the first
-# label of configuration.json .tappaas.domain (the transition source).
+# Derive the default org/environment/zone name (#426): prefer site.json
+# .defaultEnvironment; on a pre-#426 site.json fall back to .name (which WAS the
+# org/env name before the site-code decoupling); finally the first label of
+# configuration.json .tappaas.domain (the transition source).
 derive_name() {
     local n=""
-    [[ -f "$SITE" ]] && n="$(jq -r '.name // empty' "$SITE" 2>/dev/null || true)"
+    if [[ -f "$SITE" ]]; then
+        n="$(jq -r '.defaultEnvironment // empty' "$SITE" 2>/dev/null || true)"
+        [[ -n "$n" ]] || n="$(jq -r '.name // empty' "$SITE" 2>/dev/null || true)"
+    fi
     if [[ -z "$n" && -f "$CONFIGURATION" ]]; then
         n="$(jq -r '.tappaas.domain // empty' "$CONFIGURATION" 2>/dev/null | cut -d. -f1)"
     fi
@@ -215,8 +220,8 @@ step_zones_and_envs() {
     name="$(derive_name)"
     domain="$(derive_domain)"
     if [[ -z "$name" ]]; then
-        if [[ $DRY_RUN -eq 1 ]]; then name="<site.name>"; else
-            warn "Steps 2-3/5: cannot derive installation name (no site.json .name yet) — skipping; re-run after Step 1 lands."
+        if [[ $DRY_RUN -eq 1 ]]; then name="<default-env>"; else
+            warn "Steps 2-3/5: cannot derive default org/environment name (no site.json .defaultEnvironment/.name yet) — skipping; re-run after Step 1 lands."
             NEEDS_ACTION=1; return 0
         fi
     fi
@@ -304,13 +309,14 @@ step_validate() {
     if [[ -f "$SITE" ]]; then
         jq empty "$SITE" 2>/dev/null || issues+=("site.json is not valid JSON")
         [[ -n "$(jq -r '.name // empty' "$SITE" 2>/dev/null)" ]] || issues+=("site.json has no .name")
+        [[ -n "$(jq -r '.defaultEnvironment // empty' "$SITE" 2>/dev/null)" ]] || issues+=("site.json has no .defaultEnvironment (#426)")
     else
         issues+=("site.json missing")
     fi
 
     local name; name="$(derive_name)"
     [[ -f "${ENV_DIR}/mgmt.json" ]] || issues+=("environments/mgmt.json missing")
-    if [[ -n "$name" && "$name" != "<site.name>" ]]; then
+    if [[ -n "$name" && "$name" != "<default-env>" ]]; then
         [[ -f "${ENV_DIR}/${name}.json" ]] || issues+=("environments/${name}.json missing")
     fi
 
@@ -363,7 +369,7 @@ step_backfill_environment() {
     if [[ -z "$_rm" || ! -x "$_rm" ]]; then
         warn "  resolve-module.sh not found — skipping .environment backfill (re-run once cicd is updated)."; NEEDS_ACTION=1; return 0
     fi
-    local default_env; default_env="$(jq -r '.name // empty' "$SITE" 2>/dev/null || true)"
+    local default_env; default_env="$(derive_name)"
     local f m cur tier env tmp changed=0
     for f in "${CONFIG_DIR}"/*.json; do
         [[ -e "$f" ]] || continue
@@ -373,7 +379,7 @@ step_backfill_environment() {
         tier="$("$_rm" "$m" --config-dir "${CONFIG_DIR}" --field tier 2>/dev/null || true)"
         [[ -n "$tier" ]] || continue  # not a catalog module (site.json/zones.json/…) — skip
         if [[ "$tier" == "foundation" ]]; then env="mgmt"; else env="${default_env}"; fi
-        [[ -n "$env" ]] || { warn "  ${m}: no default environment (site .name unset) — skipping"; NEEDS_ACTION=1; continue; }
+        [[ -n "$env" ]] || { warn "  ${m}: no default environment (site .defaultEnvironment/.name unset) — skipping"; NEEDS_ACTION=1; continue; }
         if [[ $DRY_RUN -eq 1 ]]; then
             info "  (dry-run) would set ${m}.environment = ${env}  (tier=${tier})"; continue
         fi
@@ -406,11 +412,12 @@ step_people_bootstrap() {
         return 0
     fi
     if [[ ! -f "$SITE" ]]; then
-        if [[ $DRY_RUN -eq 1 ]]; then info "  (dry-run) would bootstrap the owner org from site.json (org=<site.name>)"; return 0; fi
+        if [[ $DRY_RUN -eq 1 ]]; then info "  (dry-run) would bootstrap the owner org from site.json (org=<defaultEnvironment>)"; return 0; fi
         warn "  no site.json yet — skipping people bootstrap (re-run after Step 1)."; NEEDS_ACTION=1; return 0
     fi
     local org email user
-    org="$(jq -r '.name // empty' "$SITE" 2>/dev/null || true)"
+    # The owner org is the default org/environment (#426), not the site code.
+    org="$(derive_name)"
     email="$(jq -r '.email // empty' "$SITE" 2>/dev/null || true)"
     user="${email%@*}"
     user="$(printf '%s' "$user" | tr '[:upper:]' '[:lower:]' | tr -c 'a-z0-9-' '-' | sed 's/^-*//;s/-*$//')"
@@ -444,7 +451,7 @@ step_people_bootstrap() {
 step_client_zone_cleanup() {
     debug "Step (zones): legacy client-zone cleanup (<name>-private/-guest → home/guest)"
     local name; name="$(derive_name)"
-    [[ -n "$name" && "$name" != "<site.name>" ]] || { debug "  no name yet — skipping (re-run after Step 1)."; return 0; }
+    [[ -n "$name" && "$name" != "<default-env>" ]] || { debug "  no name yet — skipping (re-run after Step 1)."; return 0; }
     [[ -f "$ZONES" ]] || { debug "  no zones.json — nothing to clean."; return 0; }
 
     local priv="${name}-private" guest="${name}-guest"
@@ -489,6 +496,31 @@ step_client_zone_cleanup() {
     fi
 }
 
+# ── Step (site): backfill site.json .defaultEnvironment (#426) ───────
+# Pre-#426 site.json coupled the org/environment name to .name. The schema now
+# REQUIRES a separate .defaultEnvironment; backfill it (from derive_name, i.e.
+# the pre-#426 .name) so a migrated site validates and the org/env/zone name is
+# anchored independently of the (now neutral) site code. Idempotent; never
+# clobbers an operator-set value.
+step_backfill_default_environment() {
+    debug "Step (site): backfill site.json .defaultEnvironment (#426)"
+    [[ -f "$SITE" ]] || { debug "  no site.json yet — skipping (re-run after Step 1)."; return 0; }
+    local cur; cur="$(jq -r '.defaultEnvironment // empty' "$SITE" 2>/dev/null || true)"
+    [[ -z "$cur" ]] || { debug "  .defaultEnvironment already set ('${cur}') — skipping."; return 0; }
+    local name; name="$(derive_name)"
+    [[ -n "$name" ]] || { warn "  cannot derive default-environment name — skipping .defaultEnvironment backfill."; NEEDS_ACTION=1; return 0; }
+    if [[ $DRY_RUN -eq 1 ]]; then
+        info "  (dry-run) would set site.json .defaultEnvironment = ${name}"
+        return 0
+    fi
+    local tmp; tmp="$(mktemp "${SITE}.XXXXXX")"
+    if jq --arg e "$name" '.defaultEnvironment = $e' "$SITE" > "$tmp" 2>/dev/null && jq empty "$tmp" >/dev/null 2>&1; then
+        mv "$tmp" "$SITE"; info "  site.json .defaultEnvironment = ${name}"
+    else
+        command rm -f "$tmp"; warn "  failed to backfill .defaultEnvironment"; NEEDS_ACTION=1
+    fi
+}
+
 main() {
     # NB: $DRY_RUN is 0/1 — both non-empty — so ${DRY_RUN:+…} always expands. Use a
     # numeric test so the header only says "dry-run" when actually dry-running.
@@ -497,6 +529,7 @@ main() {
     [[ $DRY_RUN -eq 1 ]] && info "  DRY RUN — no changes will be made."
 
     step_site
+    step_backfill_default_environment
     step_backfill_environment
     step_zones_and_envs
     step_client_zone_cleanup

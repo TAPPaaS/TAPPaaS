@@ -251,7 +251,7 @@ main() {
     if [[ -n "${OPT_ENVIRONMENT}" && "${OPT_ENVIRONMENT}" != "mgmt" ]]; then
         local _default_env=""
         [[ -f "${CONFIG_DIR}/site.json" ]] && \
-            _default_env="$(jq -r '.name // empty' "${CONFIG_DIR}/site.json" 2>/dev/null)"
+            _default_env="$(jq -r '.defaultEnvironment // .name // empty' "${CONFIG_DIR}/site.json" 2>/dev/null)"
         if [[ "${OPT_ENVIRONMENT}" != "${_default_env}" ]]; then
             local _eff="${module}-${OPT_ENVIRONMENT}"
             if [[ ! -f "${CONFIG_DIR}/${module}.json" && -f "${CONFIG_DIR}/${_eff}.json" ]]; then

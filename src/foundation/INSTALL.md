@@ -263,10 +263,11 @@ a five-phase chain — you run it once and watch:
       **`tappaas-cicd` mothership** (`bootstrap.sh` clone+nixos-rebuild → reboot →
       `install.sh`). The cicd's `install.sh` then **writes the system's
       configuration**, automatically:
-      - **`site.json`** — the site singleton (nodes, domain, email, repos), via
-        `create-site.sh --name <orgname>`
+      - **`site.json`** — the site singleton (nodes, email, repos), via
+        `create-site.sh --name <site-code> --organization <org>` (#426: the site
+        code is the neutral cluster name; the org names the default env/zone)
       - **`zones.json`** — the network zones, via `network-manager init`
-      - the **`mgmt` + default `<orgname>` environments**, via
+      - the **`mgmt` + default `<org>` environments**, via
         `environment-manager add` (the minimal-set bootstrap)
       - the **foundation modules** (cluster, templates, network, tappaas-cicd) and
         the **Caddy** reverse proxy

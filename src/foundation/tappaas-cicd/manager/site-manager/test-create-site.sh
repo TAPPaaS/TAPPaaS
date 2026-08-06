@@ -9,7 +9,8 @@
 #
 # Covers:
 #   - create-site.sh --name testsite writes site.json (isolated config dir)
-#   - site.json .name == "testsite"
+#   - site.json .name == "testsite"; .defaultEnvironment defaults to --name (#426)
+#   - --organization decouples .defaultEnvironment/.owner/.organizations from .name
 #   - site.json validates against site-fields.json (validate-site.sh)
 #   - NO configuration.json is created in the temp dir (site-native)
 #   - hardware.nodes[] non-empty when the cluster is reachable (else skip)
@@ -74,9 +75,11 @@ if [[ ! -f "$C1/configuration.json.bak" ]]; then ok "no configuration.json.bak c
 
 # .name == testsite
 [[ "$(jqv "$SITE" '.name')" == "testsite" ]] && ok ".name == testsite" || bad ".name wrong (got '$(jqv "$SITE" '.name')')"
-# displayName / owner derived from name
+# .defaultEnvironment defaults to --name when --organization omitted (#426)
+[[ "$(jqv "$SITE" '.defaultEnvironment')" == "testsite" ]] && ok ".defaultEnvironment defaults to name" || bad ".defaultEnvironment wrong (got '$(jqv "$SITE" '.defaultEnvironment')')"
+# displayName from name; owner from org (== name here)
 [[ "$(jqv "$SITE" '.displayName')" == "testsite" ]] && ok ".displayName derived from name" || bad ".displayName wrong"
-[[ "$(jqv "$SITE" '.owner')" == "testsite" ]] && ok ".owner derived from name" || bad ".owner wrong"
+[[ "$(jqv "$SITE" '.owner')" == "testsite" ]] && ok ".owner derived from org (==name)" || bad ".owner wrong"
 
 # schema validation
 if run_validate "$SITE"; then ok "site.json validates against site-fields.json"; else bad "site.json failed schema validation"; fi
@@ -85,9 +88,9 @@ if run_validate "$SITE"; then ok "site.json validates against site-fields.json";
 [[ "$(jqv "$SITE" '.repositories[0].name')" == "TAPPaaS" ]] && ok "repositories[0].name = TAPPaaS" || bad "repositories not built"
 [[ "$(jqv "$SITE" '.repositories[0].branch')" == "stable" ]] && ok "repositories[0].branch = stable (default)" || bad "branch default wrong"
 
-# organizations empty (later steps populate); environments are NOT a site field
+# organizations reference the owner org file; environments are NOT a site field
 [[ "$(jqv "$SITE" 'has("environments")')" == "false" ]] && ok "no .environments field" || bad ".environments should not be written"
-[[ "$(jqv "$SITE" '.organizations | length')" == "0" ]] && ok "organizations = []" || bad "organizations not empty"
+[[ "$(jqv "$SITE" '.organizations[0]')" == "config/people/organizations/testsite.json" ]] && ok "organizations references the owner org file" || bad "organizations not keyed on owner (got '$(jqv "$SITE" '.organizations[0]')')"
 
 # hardware.nodes[] non-empty IFF cluster reachable, else skip
 NODE_COUNT="$(jqv "$SITE" '.hardware.nodes | length')"
@@ -121,6 +124,28 @@ run_validate "$SITE" && ok "site.json still valid after --force" || bad "site.js
 [[ "$(jqv "$SITE" '.name')" == "testsite" ]] && ok ".name still testsite after --force" || bad ".name changed after --force"
 # still no configuration.json after force
 [[ ! -f "$C1/configuration.json" ]] && ok "still no configuration.json after --force" || bad "configuration.json appeared after --force"
+
+# --- Case 4: --organization decouples the org/env name from the site code (#426) ---
+C4="${WORK}/case4"
+mkdir -p "$C4"
+"$CREATE" --name warmelo1 --organization warmelo --config-dir "$C4" >"$C4/run.log" 2>&1
+S4="$C4/site.json"
+if [[ -f "$S4" ]]; then ok "create-site --name + --organization writes site.json"; else bad "site.json not created (see $C4/run.log)"; fi
+[[ "$(jqv "$S4" '.name')" == "warmelo1" ]]                                         && ok ".name == site code (warmelo1)"                 || bad ".name wrong (got '$(jqv "$S4" '.name')')"
+[[ "$(jqv "$S4" '.defaultEnvironment')" == "warmelo" ]]                            && ok ".defaultEnvironment == org (warmelo)"          || bad ".defaultEnvironment wrong (got '$(jqv "$S4" '.defaultEnvironment')')"
+[[ "$(jqv "$S4" '.owner')" == "warmelo" ]]                                         && ok ".owner == org (decoupled from .name)"          || bad ".owner wrong (got '$(jqv "$S4" '.owner')')"
+[[ "$(jqv "$S4" '.organizations[0]')" == "config/people/organizations/warmelo.json" ]] && ok "organizations keyed on org, not site code" || bad "organizations wrong (got '$(jqv "$S4" '.organizations[0]')')"
+[[ "$(jqv "$S4" '.displayName')" == "warmelo1" ]]                                  && ok ".displayName from site code"                  || bad ".displayName wrong"
+run_validate "$S4" && ok "decoupled site.json validates against site-fields.json" || bad "decoupled site.json failed schema validation"
+
+# --- Case 5: invalid --organization (uppercase) is rejected ---
+C5="${WORK}/case5"
+mkdir -p "$C5"
+if "$CREATE" --name testsite --organization "BadOrg" --config-dir "$C5" >/dev/null 2>&1; then
+    bad "invalid --organization 'BadOrg' should be rejected"
+else
+    ok "invalid --organization is rejected (slug validation)"
+fi
 
 echo ""
 echo "Results: ${PASS} passed, ${FAIL} failed, ${SKIP} skipped"

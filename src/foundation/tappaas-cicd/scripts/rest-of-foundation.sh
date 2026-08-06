@@ -87,7 +87,7 @@ if [[ " ${FAILED[*]} " != *" identity "* ]]; then
     # (get_site_value) — all fall back to configuration.json.
     inst_email="$(installer_email)"
     inst_domain="$(jq -r '.domain // ""' <<<"$(get_variant_config "" 2>/dev/null || echo '{}')")"
-    inst_org="$(get_site_value '.name' 'name')"
+    inst_org="$(get_site_value '.defaultEnvironment // .name' 'name')"  # default org (#426), not the site code
     [[ -n "$inst_org" ]] || inst_org="${inst_domain%%.*}"   # first domain label
     inst_user="${inst_email%@*}"                            # email local-part
     inst_user="$(printf '%s' "$inst_user" | tr '[:upper:]' '[:lower:]' | tr -c 'a-z0-9-' '-' | sed 's/^-*//;s/-*$//')"

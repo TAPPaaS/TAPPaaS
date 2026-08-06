@@ -32,7 +32,7 @@ trap 'rm -rf "${TMPROOT}"' EXIT
 
 # ── Case 1: already-migrated layout → no-op, exit 0, "fully converged" ──
 C1="${TMPROOT}/migrated"; mkdir -p "${C1}/environments"
-echo '{ "name": "acme", "version": "1.0" }' > "${C1}/site.json"
+echo '{ "name": "acme", "defaultEnvironment": "acme", "version": "1.0" }' > "${C1}/site.json"
 echo '{ "name": "mgmt" }'                   > "${C1}/environments/mgmt.json"
 echo '{ "name": "acme" }'                   > "${C1}/environments/acme.json"
 echo '{ "vmname": "network", "vmid": 110 }' > "${C1}/network.json"
@@ -58,7 +58,7 @@ ck_contains "validation lists pending"    "site.json missing"                   
 
 # ── Case 3: half-migrated (both firewall.json AND network.json) → flagged ──
 C3="${TMPROOT}/half"; mkdir -p "${C3}/environments"
-echo '{ "name": "acme" }'                   > "${C3}/site.json"
+echo '{ "name": "acme", "defaultEnvironment": "acme" }' > "${C3}/site.json"
 echo '{ "name": "mgmt" }'                   > "${C3}/environments/mgmt.json"
 echo '{ "name": "acme" }'                   > "${C3}/environments/acme.json"
 echo '{ "vmname": "network", "vmid": 110 }' > "${C3}/network.json"
@@ -126,6 +126,8 @@ ck "cleanup: mgmt refs rewritten to home"  "true"  "$(jq '(.mgmt["access-to"]|in
 ck "cleanup: default zone acme untouched"  "true"  "$(jq 'has("acme")' "${z7}" 2>/dev/null)"
 ck "cleanup: _README doc block preserved"  "true"  "$(jq 'has("_README")' "${z7}" 2>/dev/null)"
 ck "cleanup: baseline zones.json.orig converged too" "true" "$(jq 'has("home") and (has("acme-private")|not)' "${C7}/zones.json.orig" 2>/dev/null)"
+# #426: the run backfills site.json .defaultEnvironment (was absent → derived from .name).
+ck "backfill: site.json .defaultEnvironment set" "acme" "$(jq -r '.defaultEnvironment // ""' "${C7}/site.json" 2>/dev/null)"
 a7="$(cat "${z7}")"
 bash "${ORCH}" --config-dir "${C7}" --yes >/dev/null 2>&1 || true
 ck "cleanup is idempotent (second run no-op)" "${a7}" "$(cat "${z7}")"

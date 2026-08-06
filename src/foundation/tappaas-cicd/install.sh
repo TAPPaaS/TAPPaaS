@@ -3,13 +3,15 @@
 # install tappass-cicd foundation in a barebone nixos vm
 #
 # Usage:
-#   install.sh [--name N] [--branch NAME] [--domain DOMAIN]
+#   install.sh [--name SITE-CODE] [--organization ORG] [--branch NAME] [--domain DOMAIN]
 #
 # Site-native install (ADR-007): writes site.json (create-site.sh) + transforms
-# zones.json (network-manager init --name) + creates the mgmt/default
-# environments (environment-manager add). No configuration.json.
-# --name is the TAPPaaS system name (= default zone & default environment name);
-# if omitted it is derived from --domain's first label.
+# zones.json (network-manager init) + creates the mgmt/default environments
+# (environment-manager add). No configuration.json.
+# --name is the SITE CODE (site.json .name = Proxmox cluster name). --organization
+# is the default org/environment/zone name (site.json .defaultEnvironment),
+# decoupled from the site code (#426); it defaults to the site code. The site code
+# is derived from --domain's first label when --name is omitted.
 
 # Strict mode: exit on error, undefined vars, pipe failures
 set -euo pipefail
@@ -26,41 +28,46 @@ if [ "$(hostname)" != "tappaas-cicd" ]; then
 fi
 
 # ── Argument parsing ─────────────────────────────────────────────────
-# --domain/--branch pass through to create-site.sh; --name sets the TAPPaaS
-# system name (site.json .name = default zone & environment name).
+# --domain/--branch pass through to create-site.sh; --name is the SITE CODE
+# (site.json .name = cluster name); --organization is the default org/environment/
+# zone name (site.json .defaultEnvironment), decoupled from the site code (#426).
 DOMAIN=""
 BRANCH=""
-NAME=""
+SITE_CODE=""
+ORG=""
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
-    --name)    NAME="${2:-}"; shift 2 ;;
-    --domain)  DOMAIN="${2:-}"; shift 2 ;;
-    --branch)  BRANCH="${2:-}"; shift 2 ;;
-    *)         shift ;;  # Ignore unknown args
+    --name)               SITE_CODE="${2:-}"; shift 2 ;;
+    --organization|--org) ORG="${2:-}"; shift 2 ;;
+    --domain)             DOMAIN="${2:-}"; shift 2 ;;
+    --branch)             BRANCH="${2:-}"; shift 2 ;;
+    *)                    shift ;;  # Ignore unknown args
   esac
 done
 
-# Resolve the TAPPaaS system name. It becomes site.json .name, the default zone
-# name, and the default environment name, so it must be a valid zone name
-# (^[a-z][a-zA-Z0-9]*$ — camelCase, no hyphens). Derive from --domain's first
-# label when --name is omitted; sanitise either way.
-if [[ -z "$NAME" ]]; then
+# Resolve the SITE CODE (site.json .name = Proxmox cluster name). Derive from
+# --domain's first label when --name is omitted. Must match the site .name pattern.
+if [[ -z "$SITE_CODE" ]]; then
   if [[ -n "$DOMAIN" ]]; then
-    NAME="${DOMAIN%%.*}"
-    _info "No --name given; deriving TAPPaaS system name '$NAME' from domain '$DOMAIN'."
+    SITE_CODE="${DOMAIN%%.*}"
+    _info "No --name given; deriving site code '$SITE_CODE' from domain '$DOMAIN'."
   else
-    NAME="tappaas"
-    _warn "No --name or --domain given; defaulting TAPPaaS system name to '$NAME' (override with --name)."
+    SITE_CODE="tappaas"
+    _warn "No --name or --domain given; defaulting site code to '$SITE_CODE' (override with --name)."
   fi
 fi
-# Sanitise to a valid zone/env name: strip non-alphanumerics, lowercase the
-# leading character. (init validates again and will fail loudly if empty.)
-NAME="$(printf '%s' "$NAME" | tr -cd '[:alnum:]')"
-NAME="$(printf '%s' "${NAME:0:1}" | tr '[:upper:]' '[:lower:]')${NAME:1}"
-[[ "$NAME" =~ ^[a-z][a-zA-Z0-9]*$ ]] \
-  || { _error "Cannot form a valid TAPPaaS system name (^[a-z][a-zA-Z0-9]*\$) from '--name'/'--domain'. Pass --name explicitly."; exit 1; }
-_info "TAPPaaS system name: ${NAME}"
+[[ "$SITE_CODE" =~ ^[A-Za-z0-9_.-]+$ ]] \
+  || { _error "Site code '$SITE_CODE' invalid (must match ^[A-Za-z0-9_.-]+\$). Pass --name explicitly."; exit 1; }
+
+# Resolve the ORGANIZATION (default env/zone/org name). Defaults to the site code
+# (single-name install). It becomes the default zone + environment via
+# network-manager init / environment-manager add, so it must be a valid zone/env
+# slug (^[a-z][a-z0-9-]*$ — lowercase, digits, hyphens; start with a letter).
+[[ -n "$ORG" ]] || ORG="$SITE_CODE"
+[[ "$ORG" =~ ^[a-z][a-z0-9-]*$ ]] \
+  || { _error "Organization '$ORG' invalid (^[a-z][a-z0-9-]*\$). Pass --organization explicitly."; exit 1; }
+_info "Site code: ${SITE_CODE}; default org/environment: ${ORG}"
 
 #
 # Bootstrap default: use tappaas1 as the primary node for initial cluster discovery.
@@ -110,7 +117,7 @@ done
 # create site.json (site-native — no configuration.json). create-site.sh
 # discovers the cluster and writes site.json; it validates via its sibling
 # validate-site.sh, so it works here before the ~/bin symlinks exist.
-CREATE_SITE_ARGS=(--name "$NAME")
+CREATE_SITE_ARGS=(--name "$SITE_CODE" --organization "$ORG")
 [[ -n "$DOMAIN" ]] && CREATE_SITE_ARGS+=(--domain "$DOMAIN")
 [[ -n "$BRANCH" ]] && CREATE_SITE_ARGS+=(--branch "$BRANCH")
 # Idempotent resume: create-site.sh refuses to overwrite an existing site.json
@@ -194,33 +201,33 @@ done
 # ── Site-native zones + environments (ADR-007 S6) ────────────────────
 # The managers are built+linked now (above), so transform zones.json for THIS
 # installation — network-manager init renames the distributed 'srv' zone to
-# the system name, inactivates the unused legacy zones, and rewrites references —
-# and create the always-required mgmt + default (<NAME>) environments.
+# the ORG name, inactivates the unused legacy zones, and rewrites references —
+# and create the always-required mgmt + default (<ORG>) environments. The default
+# zone/environment are named after the ORGANIZATION, not the site code (#426).
 #
 # ADR-007 "Design A": init now seeds ALL THREE files in the renamed
 # namespace — zones.json (current), zones.json.orig (merge baseline), and
 # zones.rename.json (the renamed source). So the raw zones.json/zones.json.orig
 # seeded above are BOTH overwritten with the renamed version, giving
 # current == orig == rename on a fresh install. This is what stops the daily
-# `merge` from re-introducing srv/home/guest (the old duplicate-VLAN
-# corruption). Guarded on the default environment file so a re-run does not
-# clobber a customised zones.json.
-if [ ! -f "/home/tappaas/config/environments/${NAME}.json" ]; then
-  _info "Initialising zones for '${NAME}' (network-manager init)..."
-  /home/tappaas/bin/network-manager init --name "$NAME" --force \
+# `merge` from re-introducing srv (the old duplicate-VLAN corruption). Guarded on
+# the default environment file so a re-run does not clobber a customised zones.json.
+if [ ! -f "/home/tappaas/config/environments/${ORG}.json" ]; then
+  _info "Initialising zones for '${ORG}' (network-manager init)..."
+  /home/tappaas/bin/network-manager init --name "$ORG" --force \
     || _error "  init reported a non-zero rc"
-  _info "Creating the mgmt + ${NAME} environments..."
+  _info "Creating the mgmt + ${ORG} environments..."
   # `environment-manager add` with no positional <env> seeds the minimal set
-  # (mgmt + <NAME>) — the retired create-minimal-environments.sh, native since
+  # (mgmt + <ORG>) — the retired create-minimal-environments.sh, native since
   # the ADR-007 refactor (Phase 8.1). The TS bin IS on PATH at this point: the
   # manager/install.sh dispatch loop above already nix-built + linked the
   # managers ("linking manager/ components...").
-  CME_ARGS=(--name "$NAME")
+  CME_ARGS=(--name "$ORG")
   [[ -n "$DOMAIN" ]] && CME_ARGS+=(--domain "$DOMAIN")
   /home/tappaas/bin/environment-manager add "${CME_ARGS[@]}" \
     || _error "  environment bootstrap (environment-manager add) reported a non-zero rc"
 else
-  _info "Environments already initialised (config/environments/${NAME}.json exists) — skipping init/environments."
+  _info "Environments already initialised (config/environments/${ORG}.json exists) — skipping init/environments."
 fi
 
 # Install the cluster and network jsons

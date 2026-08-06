@@ -46,7 +46,8 @@ mk(join(root, "environments"));
 mk(join(root, "people", "organizations"));
 jw(join(root, "people", "organizations", "acme.json"), { name: "acme" });
 jw(join(root, "people", "organizations", "zeta.json"), { name: "zeta" });
-jw(join(root, "site.json"), { name: "demo" });
+// site code (.name) is decoupled from the default env/org (.defaultEnvironment) — #426.
+jw(join(root, "site.json"), { name: "warmelo1", defaultEnvironment: "demo" });
 jw(join(root, "zones.json"), { mgmt: {}, demo: {}, foo: {} });
 // A deployed module config consuming the 'demo' environment.
 jw(join(root, "nextcloud.json"), { name: "nextcloud", environment: "demo" });
@@ -56,8 +57,8 @@ try {
   // firstOrg = sorted first org slug.
   check(firstOrg(root) === "acme", "firstOrg returns the sorted-first organization");
 
-  // resolveName = site.json '.name'.
-  check(resolveName(root) === "demo", "resolveName derives <N> from site.json");
+  // resolveName = site.json '.defaultEnvironment' (NOT '.name' — decoupled, #426).
+  check(resolveName(root) === "demo", "resolveName derives <N> from site.json .defaultEnvironment");
 
   // bootstrap seeds mgmt + demo.
   const res = bootstrap({ configDir: root, force: false });

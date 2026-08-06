@@ -42,12 +42,13 @@ assert_eq() {
 echo "test-variant-config: get_variant_config + resolve_provider_module (ADR-007)"
 
 # ── Fixtures ─────────────────────────────────────────────────────────
-# site.json names the default environment (.name = "foo"), plus two environment
-# files: the default ("foo") and a named one ("demo"). The default env's cert
-# refid lives in the runtime cert-refids.json keyed by env name.
+# site.json .defaultEnvironment names the default environment ("foo"; .name is the
+# neutral site code — #426), plus two environment files: the default ("foo") and a
+# named one ("demo"). The default env's cert refid lives in the runtime
+# cert-refids.json keyed by env name.
 mkdir -p "${CONFIG_DIR}/environments"
 cat > "${CONFIG_DIR}/site.json" <<'JSON'
-{ "name": "foo", "displayName": "Foo", "owner": "test2",
+{ "name": "foo-site1", "defaultEnvironment": "foo", "displayName": "Foo", "owner": "test2",
   "email": "admin@foo.org",
   "hardware": { "nodes": [ { "name": "tappaas1" } ] } }
 JSON
@@ -65,7 +66,7 @@ cat > "${CONFIG_DIR}/cert-refids.json" <<'JSON'
 { "foo": "abc", "demo": "def" }
 JSON
 
-# ── VM-12: default environment ("" -> site.json .name = foo) ──────────
+# ── VM-12: default environment ("" -> site.json .defaultEnvironment = foo) ──
 out="$(get_variant_config "")"
 if [[ "$(jq -r '.domain' <<<"${out}")" == "foo.org" \
    && "$(jq -r '.tlsCertRefid' <<<"${out}")" == "abc" ]]; then

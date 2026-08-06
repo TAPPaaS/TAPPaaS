@@ -12,6 +12,7 @@
 #
 # Field mapping (configuration.json -> site.json):
 #   name              <- .tappaas.name, else first DNS label of .tappaas.domain
+#   defaultEnvironment<- owner (the default org/env; decoupled from .name — #426)
 #   displayName       <- .tappaas.displayName, else name
 #   owner             <- first org slug under config/people/organizations/,
 #                        else "" (operator must set it; a warning is emitted)
@@ -246,6 +247,9 @@ main() {
         ($cfg[0].tappaas // {}) as $t
         | {
             name: $name,
+            # defaultEnvironment = the default org/environment (== owner). Decoupled
+            # from the site code .name (#426); required by site-fields.json.
+            defaultEnvironment: $owner,
             displayName: $displayName,
             owner: $owner,
             email: ($t.email // ""),

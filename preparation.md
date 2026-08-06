@@ -48,11 +48,17 @@ the automated updates — the choice you make here is the risk profile you keep.
 
 ## 5. Solution naming
 
-Two names define your installation — pick them now:
+Three inputs define your installation — pick them now:
 
-- [ ] **Organisation name** (`--name`): lowercase, ≤15 characters. This **one name**
-  becomes the Proxmox cluster, the site, the default environment and your
-  default organisation in the identity provider.
+- [ ] **Site code** (`--name`): lowercase, ≤15 characters. A neutral code (e.g.
+  `warmelo1` — place plus number) that becomes the Proxmox **cluster name** and
+  `site.json .name`. It is set once at cluster creation and is not reused to name
+  anything else (#426).
+- [ ] **Organisation name** (`--organization`): lowercase (hyphens allowed). Names
+  your default **environment**, its network **zone**, and your default
+  **organisation** in the identity provider. Defaults to the site code if omitted.
+  Decoupled from the site code so it can differ and so a site can host several
+  organisations.
 - [ ] **Public domain** (`--domain`): As default services are published as
   `<service>.yourdomain.com` by the reverse proxy (the domain from point 2).
 

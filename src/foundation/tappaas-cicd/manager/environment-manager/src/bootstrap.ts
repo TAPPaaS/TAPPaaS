@@ -5,9 +5,10 @@
 // Every TAPPaaS system requires two environments:
 //   - mgmt          : the management environment (foundation modules, internal
 //                     DNS only). network.zone = mgmt, NO domains.
-//   - <N>           : the DEFAULT tenant environment, named after the TAPPaaS
-//                     system name <N> (= site.json.name = default-zone name =
-//                     default-environment name). network.zone = <N>. A domain is
+//   - <N>           : the DEFAULT tenant environment, named after the default
+//                     org/environment <N> (= site.json.defaultEnvironment =
+//                     default-zone name; decoupled from site.json.name — #426).
+//                     network.zone = <N>. A domain is
 //                     added only when --domain is given.
 //
 // This module is the SINGLE OWNER of these two files. Idempotent: an existing
@@ -22,7 +23,7 @@ import { writeFileSync } from "fs";
 
 export interface BootstrapOptions {
   configDir: string;
-  name?: string; // explicit --name; else derived from site.json '.name'
+  name?: string; // explicit --name; else derived from site.json '.defaultEnvironment'
   domain?: string; // --domain for the default env's domains.primary
   force: boolean;
 }
@@ -48,15 +49,18 @@ export function firstOrg(configDir: string): string {
   return names[0] ?? "";
 }
 
-// Resolve the TAPPaaS system name <N>: explicit name, else site.json '.name'.
-// Returns null when none is derivable.
+// Resolve the default-environment name <N>: explicit name, else site.json
+// '.defaultEnvironment' (NOT '.name' — the site code is decoupled from the
+// org/environment name, #426). Returns null when none is derivable.
 export function resolveName(configDir: string, explicit?: string): string | null {
   if (explicit) return explicit;
   const site = join(configDir, "site.json");
   if (existsSync(site)) {
     try {
       const o = JSON.parse(readFileSync(site, "utf8")) as Record<string, unknown>;
-      if (typeof o.name === "string" && o.name) return o.name;
+      if (typeof o.defaultEnvironment === "string" && o.defaultEnvironment) {
+        return o.defaultEnvironment;
+      }
     } catch {
       // fall through
     }
@@ -100,7 +104,7 @@ export function bootstrap(opts: BootstrapOptions): BootstrapResult {
   const name = resolveName(configDir, opts.name);
   if (!name) {
     throw new Error(
-      "Cannot determine the TAPPaaS system name. Pass --name <N>, or provide a site.json with '.name'.",
+      "Cannot determine the default-environment name. Pass --name <N>, or provide a site.json with '.defaultEnvironment'.",
     );
   }
   if (!SLUG_RE.test(name)) {

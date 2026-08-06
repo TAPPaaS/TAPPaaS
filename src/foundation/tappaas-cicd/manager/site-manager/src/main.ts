@@ -58,7 +58,7 @@ const HELP: HelpSpec = {
       options: [["--force", "Forward to repository.sh remove --force."]] },
     { usage: "repository reconcile [--apply]",
       options: [["--apply", "Commit (default is preview)."]] },
-    { usage: "add --name <N> [create-site options]" },
+    { usage: "add --name <site-code> [--organization <org>] [create-site options]" },
     { usage: "validate [FILE] [--schema-dir PATH]" },
     { usage: "reconcile [--apply] [--deep]",
       options: [
@@ -531,8 +531,8 @@ function printPlan(plan: { actions: { kind: string; target: string }[]; warnings
 // cluster-discovery write (ssh pvesh node/pool discovery, tz/locale detection,
 // version-from-git, Proxmox email discovery, force-preserve-on-rerun) stays in
 // create-site.sh. We forward the args verbatim so its full flag set
-// (--name/--domain/--branch/--upstream-git/--email/--primary-node/--schedule/
-// --weekday/--hour/--config-dir/--force) keeps working unchanged.
+// (--name/--organization/--domain/--branch/--upstream-git/--email/--primary-node/
+// --schedule/--weekday/--hour/--config-dir/--force) keeps working unchanged.
 function cmdAdd(args: string[], client: SiteClient): void {
   const rc = client.createSite(args);
   if (rc !== 0) throw new DieError(`create-site.sh exited ${rc}`);

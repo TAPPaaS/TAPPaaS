@@ -96,7 +96,7 @@ foundation/install.sh  --name <orgname> --domain <d>     <- entry orchestrator
   [5/5] install-platform.sh --name <orgname> --domain <d>
           -> tappaas-cicd/bootstrap.sh   (clone + nixos-rebuild)
           -> tappaas-cicd/install.sh --name <orgname>   (the cicd platform install)
-               -> create-site.sh --name <orgname>            => site.json
+               -> create-site.sh --name <site-code> --organization <org>   => site.json
                -> network-manager init --name <orgname> => zones.json
                -> environment-manager add --name <orgname>   => mgmt + <orgname> envs
                -> copy-update-json.sh + update-module.sh (cluster/templates/network/tappaas-cicd)

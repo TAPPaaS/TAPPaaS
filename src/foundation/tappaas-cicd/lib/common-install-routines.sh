@@ -58,12 +58,14 @@ die()   { error "$@"; exit 1; }
 _site_json_path() { printf '%s\n' "${CONFIG_DIR}/site.json"; }
 
 # Resolve the default environment name: the single non-mgmt environment, i.e.
-# site.json .name. Falls back to "default" when site.json is absent or unnamed.
+# site.json .defaultEnvironment (#426 — decoupled from the site code .name; a
+# pre-#426 site.json falls back to .name, which WAS the org/env name). Falls back
+# to "default" when site.json is absent or unnamed.
 default_environment_name() {
     local site name=""
     site="$(_site_json_path)"
     if [[ -f "$site" ]]; then
-        name="$(jq -r '.name // empty' "$site" 2>/dev/null)" || name=""
+        name="$(jq -r '.defaultEnvironment // .name // empty' "$site" 2>/dev/null)" || name=""
     fi
     [[ -n "$name" ]] || name="default"
     printf '%s\n' "$name"

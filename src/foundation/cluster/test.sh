@@ -78,7 +78,7 @@ resolve_default_zone_and_vlan() {
     local site="${CONFIG_DIR}/site.json" zones="${CONFIG_DIR}/zones.json"
     local name state vlan
     [[ -f "$site" && -f "$zones" ]] || return 1
-    name="$(jq -r '.name // empty' "$site" 2>/dev/null)"
+    name="$(jq -r '.defaultEnvironment // .name // empty' "$site" 2>/dev/null)"
     [[ -n "$name" && "$name" != "mgmt" ]] || return 1
     state="$(jq -r --arg z "$name" '.[$z].state // empty' "$zones" 2>/dev/null)"
     vlan="$(jq -r --arg z "$name" '.[$z].vlantag // empty' "$zones" 2>/dev/null)"

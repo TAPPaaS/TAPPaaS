@@ -215,13 +215,14 @@ else
     bad "bootstrap environments should validate"
 fi
 
-# 6b. --name omitted → derive from site.json '.name'
+# 6b. --name omitted → derive from site.json '.defaultEnvironment' (#426; NOT .name)
 CFG3="${WORK}/bootstrap-site"
 mkdir -p "${CFG3}/people/organizations"
 cp "${FIX}/people/organizations/test2.json" "${CFG3}/people/organizations/test2.json"
 cp "${CFG2}/zones.json" "${CFG3}/zones.json"   # has acme + base zones
+# .name is the neutral site code; .defaultEnvironment names the default env (#426).
 cat > "${CFG3}/site.json" <<'JSON'
-{ "name": "acme", "displayName": "Acme Site", "owner": "test2",
+{ "name": "acme-site1", "defaultEnvironment": "acme", "displayName": "Acme Site", "owner": "test2",
   "location": { "country": "NL", "timezone": "Europe/Amsterdam" },
   "hardware": { "nodes": [ { "name": "tappaas1" } ] },
   "repositories": [ { "name": "core", "url": "https://example/repo" } ] }
@@ -231,7 +232,7 @@ if run_bootstrap --config-dir "$CFG3"; then
 else
     bad "add bootstrap should derive name from site.json"
 fi
-[[ -f "${CFG3}/environments/acme.json" ]] && ok "derived default env acme.json from site.json.name" || bad "expected acme.json derived from site.json"
+[[ -f "${CFG3}/environments/acme.json" ]] && ok "derived default env acme.json from site.json.defaultEnvironment" || bad "expected acme.json derived from site.json"
 [[ "$(jq -r '.network.zone' "${CFG3}/environments/acme.json" 2>/dev/null)" == "acme" ]] \
     && ok "derived acme.json network.zone=acme" || bad "derived acme.json zone"
 

@@ -102,8 +102,8 @@ EOF
 # name <N>), NOT mgmt. Resolution order:
 #
 #   1. explicit .zone0 in the module JSON          (handled by the caller — wins)
-#   2. site.json '.name'                           (when site.json exists AND that
-#                                                    zone exists in zones.json)
+#   2. site.json '.defaultEnvironment' (pre-#426: '.name')  (when site.json exists
+#                                                    AND that zone exists in zones.json)
 #   3. the single non-mgmt environment's network.zone
 #                                                  (when exactly one such env exists)
 #   4. fall back to "mgmt" (today's behaviour)     (pre-cutover: no site.json /
@@ -115,10 +115,10 @@ resolve_default_zone() {
     local site_file="${CONFIG_DIR}/site.json"
     local env_dir="${CONFIG_DIR}/environments"
 
-    # (2) site.json.name, when it names a zone that exists in zones.json.
+    # (2) site.json .defaultEnvironment (pre-#426: .name), when it names a zone that exists in zones.json.
     if [[ -f "$site_file" ]]; then
         local site_name
-        site_name="$(jq -r '.name // empty' "$site_file" 2>/dev/null)"
+        site_name="$(jq -r '.defaultEnvironment // .name // empty' "$site_file" 2>/dev/null)"
         if [[ -n "$site_name" && "$site_name" != "mgmt" ]]; then
             if [[ -f "$zones_file" ]] && \
                jq -e --arg z "$site_name" 'has($z)' "$zones_file" >/dev/null 2>&1; then
@@ -162,17 +162,17 @@ resolve_default_zone() {
 
 # Echo the name of the default (non-mgmt) environment, or empty if none is
 # resolvable. Resolution order mirrors resolve_default_zone():
-#   1. site.json '.name'                 (when it names an existing env file, or
-#                                          there is no environments dir yet)
+#   1. site.json '.defaultEnvironment' (pre-#426: '.name')  (when it names an
+#                                          existing env file, or no environments dir yet)
 #   2. the single non-mgmt environment   (when exactly one such env file exists)
 resolve_default_environment() {
     local site_file="${CONFIG_DIR}/site.json"
     local env_dir="${CONFIG_DIR}/environments"
 
-    # (1) site.json.name (the site/system name == default-env name per S6/N6).
+    # (1) site.json .defaultEnvironment (the default-env name per S6/N6; pre-#426: .name).
     if [[ -f "$site_file" ]]; then
         local site_name
-        site_name="$(jq -r '.name // empty' "$site_file" 2>/dev/null)"
+        site_name="$(jq -r '.defaultEnvironment // .name // empty' "$site_file" 2>/dev/null)"
         if [[ -n "$site_name" && "$site_name" != "mgmt" ]]; then
             printf '%s\n' "$site_name"
             return 0

@@ -57,6 +57,7 @@ export function loadSite(siteFile: string): Site {
 
   const site: Site = {
     name: asString(raw.name),
+    defaultEnvironment: asString(raw.defaultEnvironment),
     displayName: asString(raw.displayName),
     owner: asString(raw.owner),
     email: typeof raw.email === "string" ? raw.email : undefined,

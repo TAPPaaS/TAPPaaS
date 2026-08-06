@@ -11,10 +11,14 @@
 #
 # Field mapping (CLI/discovery -> site.json), matching site-fields.json and the
 # migrate-configuration.sh target shape:
-#   name              <- --name (REQUIRED)               [schema: name]
+#   name              <- --name (REQUIRED)   the neutral SITE CODE = Proxmox
+#                        cluster name (aligned at creation, informational after —
+#                        ADR-007d #426)                      [schema: name]
+#   defaultEnvironment<- --organization (default: --name)  names the default
+#                        environment, its zone, and the owner org  [schema: defaultEnvironment]
 #   displayName       <- --name                          [schema: displayName]
-#   owner             <- --name (single owner org keyed on the site name; an org
-#                        file may be created later by people-manager)  [schema: owner]
+#   owner             <- --organization (the owning org, keyed on the org name; an
+#                        org file may be created later by people-manager)  [schema: owner]
 #   email             <- --email / Proxmox root@pam user / existing  [schema: email]
 #   version           <- git describe of /home/tappaas/TAPPaaS, else "1.0"
 #   location.country  <- derived from system timezone region (fallback NL)
@@ -30,7 +34,8 @@
 #   snapshotRetention <- preserved from existing site.json, else 5
 #   repositories[]    <- built from --upstream-git/--branch (default TAPPaaS repo),
 #                        preserving any existing operator-set repositories
-#   organizations     <- []  (people-manager populates this later)
+#   organizations     <- [config/people/organizations/<org>.json]
+#                        (people-manager may extend this later)
 #   (environments are NOT a site.json field — they are enumerated from
 #    config/environments/*.json; the site singleton keeps no list.)
 #
@@ -48,8 +53,11 @@
 # Usage: create-site.sh --name <N> [OPTIONS]
 #
 # Options:
-#   --name N             REQUIRED. TAPPaaS system name -> site.json .name
-#                        (also the default zone / default environment name).
+#   --name N             REQUIRED. Neutral SITE CODE -> site.json .name (= the
+#                        Proxmox cluster name; aligned at creation, informational
+#                        afterwards — ADR-007d #426).
+#   --organization ORG   Default organization/environment/zone name -> site.json
+#                        .defaultEnvironment + .owner (default: --name).
 #   --domain DOMAIN      Public domain (NOT written to site.json; per-environment).
 #   --branch NAME        Git branch to track (default: stable).
 #   --upstream-git URL   Module-catalog git repo (default: codeberg.org/TAPPaaS/TAPPaaS).
@@ -107,6 +115,7 @@ MGMT="mgmt"
 # Defaults (overridable by flags)
 CONFIG_DIR="${TAPPAAS_CONFIG:-/home/tappaas/config}"
 NAME=""
+ORG=""               # default organization/environment/zone name (default: NAME)
 DOMAIN=""            # accepted, NOT written to site.json (per-environment)
 BRANCH="stable"
 UPSTREAM_GIT="codeberg.org/TAPPaaS/TAPPaaS"
@@ -119,10 +128,10 @@ FORCE=false
 
 # Track explicitly-set flags (so existing values are preserved otherwise)
 _set_branch=false _set_upstream=false _set_email=false
-_set_schedule=false _set_weekday=false _set_hour=false
+_set_schedule=false _set_weekday=false _set_hour=false _set_org=false
 
 usage() {
-    sed -n '2,62p' "$_SELF" | sed 's/^# \{0,1\}//'
+    sed -n '2,71p' "$_SELF" | sed 's/^# \{0,1\}//'
 }
 
 # ---------------------------------------------------------------------------
@@ -145,6 +154,9 @@ parse_args() {
             --name)
                 [[ -n "${2:-}" ]] || die "--name requires a value"
                 NAME="$2"; shift 2 ;;
+            --organization|--org)
+                [[ -n "${2:-}" ]] || die "--organization requires a value"
+                ORG="$2"; _set_org=true; shift 2 ;;
             --domain)
                 [[ -n "${2:-}" ]] || die "--domain requires a value"
                 DOMAIN="$2"; shift 2 ;;
@@ -181,6 +193,13 @@ parse_args() {
     [[ -n "$NAME" ]] || { error "--name <N> is required."; usage; exit 1; }
     # name must satisfy site-fields.json .name pattern ^[A-Za-z0-9_.-]+$
     [[ "$NAME" =~ ^[A-Za-z0-9_.-]+$ ]] || die "--name '${NAME}' invalid (must match ^[A-Za-z0-9_.-]+\$)."
+
+    # ORG defaults to the site code when --organization is omitted (single-name
+    # install; org == site). It names the default environment + its zone, so it
+    # must satisfy the zone/environment slug ^[a-z][a-z0-9-]*$.
+    [[ -n "$ORG" ]] || ORG="$NAME"
+    [[ "$ORG" =~ ^[a-z][a-z0-9-]*$ ]] \
+        || die "--organization '${ORG}' invalid (lowercase letters/digits/hyphen, must start with a letter)."
 }
 
 # ---------------------------------------------------------------------------
@@ -472,18 +491,22 @@ build_and_write_site() {
     # a stray literal '}' (bash parses ${X:-{} + }) and breaks the jq input.
     local existing="${EXISTING_SITE:-}"
     [[ -n "$existing" ]] || existing='{}'
-    local automaticReboot snapshotRetention owner displayName backup network location organizations
+    local automaticReboot snapshotRetention owner displayName backup network location organizations defaultEnvironment
     automaticReboot="$(jq -r 'if .automaticReboot != null then (.automaticReboot|tostring) else "true" end' <<<"$existing")"
     snapshotRetention="$(jq -r 'if .snapshotRetention != null then (.snapshotRetention|tostring) else "5" end' <<<"$existing")"
-    # owner + organizations default to the site-named owning org (matching the
-    # org a fresh install creates, named after the site). Treat an EMPTY value as
-    # unset too (not just null) so a --force re-run heals a migrated site.json
-    # that was left owner="" / organizations=[].
-    owner="$(jq -r --arg n "$NAME" 'if (.owner // "") == "" then $n else .owner end' <<<"$existing")"
+    # defaultEnvironment / owner / organizations all key on the ORG (the default
+    # organization/environment/zone), decoupled from the site code (#426). An
+    # explicit --organization overrides; otherwise an existing value is preserved
+    # (EMPTY treated as unset so a --force re-run heals a migrated site.json), and
+    # a fresh install falls back to ORG (== NAME when --organization is omitted).
+    defaultEnvironment="$(jq -r --arg o "$ORG" --argjson set "$_set_org" \
+        'if $set then $o elif (.defaultEnvironment // "") != "" then .defaultEnvironment else $o end' <<<"$existing")"
+    owner="$(jq -r --arg o "$ORG" --argjson set "$_set_org" \
+        'if $set then $o elif (.owner // "") != "" then .owner else $o end' <<<"$existing")"
     displayName="$(jq -r --arg n "$NAME" '.displayName // $n' <<<"$existing")"
     backup="$(jq -c '.backup // null' <<<"$existing")"
     network="$(jq -c '.network // {isp: null, publicIp: "auto"}' <<<"$existing")"
-    organizations="$(jq -c --arg p "config/people/organizations/${NAME}.json" 'if ((.organizations // []) | length) == 0 then [$p] else .organizations end' <<<"$existing")"
+    organizations="$(jq -c --arg p "config/people/organizations/${owner}.json" 'if ((.organizations // []) | length) == 0 then [$p] else .organizations end' <<<"$existing")"
     # location: keep existing if present, else freshly-detected
     location="$(jq -c --arg c "$country" --arg t "$tz" --arg l "$locale" \
         '.location // {country: $c, timezone: $t, locale: $l}' <<<"$existing")"
@@ -493,6 +516,7 @@ build_and_write_site() {
 
     jq -n \
         --arg name "$NAME" \
+        --arg defaultEnvironment "$defaultEnvironment" \
         --arg displayName "$displayName" \
         --arg owner "$owner" \
         --arg email "$email" \
@@ -508,6 +532,7 @@ build_and_write_site() {
         --argjson organizations "$organizations" \
         '{
             name: $name,
+            defaultEnvironment: $defaultEnvironment,
             displayName: $displayName,
             owner: $owner,
             email: $email,
@@ -566,10 +591,10 @@ main() {
     run_validation
 
     echo ""
-    info "${GN:-}✓${CL:-} site.json created for '${NAME}' (${#NODES[@]} node(s) discovered)."
+    info "${GN:-}✓${CL:-} site.json created — site code '${NAME}', default org/environment '${ORG}' (${#NODES[@]} node(s) discovered)."
     info "Next steps:"
     info "  1. Review: cat ${SITE_FILE}"
-    info "  2. Create the mgmt + default environments (environment-manager add) with domain '${DOMAIN:-<set later>}'."
+    info "  2. Create the mgmt + '${ORG}' environments (environment-manager add) with domain '${DOMAIN:-<set later>}'."
 }
 
 main "$@"

@@ -18,15 +18,17 @@
 # passwords. Use --manual-cicd to instead just print the in-VM steps.
 #
 # Usage:
-#   install-platform.sh [--name ORG] [--domain DOMAIN] [--branch NAME] [--repo URL]
+#   install-platform.sh [--name SITE-CODE] [--organization ORG] [--domain DOMAIN]
+#                       [--branch NAME] [--repo URL]
 #                       [--skip-template] [--skip-cicd] [--manual-cicd]
 #                       [--non-interactive]
 #
 # Notes:
-#   --name    TAPPaaS system / organisation name. Becomes the Proxmox cluster
-#             name, the default environment, and the default network zone, and is
-#             forwarded to the cicd install.sh. If omitted it is derived from
-#             --domain. Recommended: pass it explicitly (e.g. --name test4).
+#   --name    SITE CODE. Becomes the Proxmox cluster name + site.json .name, and
+#             is forwarded to the cicd install.sh. If omitted it is derived from
+#             --domain. Recommended: pass it explicitly (e.g. --name warmelo1).
+#   --organization  Default org/environment/zone name (site.json .defaultEnvironment).
+#             Forwarded to the cicd install.sh; defaults to the site code there.
 #   --domain  REQUIRED (the platform's Caddy reverse proxy is configured for
 #             <service>.<domain>, so it cannot be set up without a real domain).
 #             Prompted if omitted interactively; an error in --non-interactive.
@@ -51,7 +53,8 @@ usage() { sed -n '2,/^set -euo/p' "$0" | sed 's/^# \{0,1\}//; /^set -euo/d'; }
 REPO="https://codeberg.org/TAPPaaS/TAPPaaS/raw/branch/"
 BRANCH="main"
 DOMAIN=""
-ORGNAME=""        # org/system name (--name) — forwarded to the cicd install.sh
+ORGNAME=""        # site code (--name) — forwarded to the cicd install.sh
+ORG=""            # default org/environment (--organization) — forwarded to cicd
 SKIP_TEMPLATE=0 SKIP_CICD=0 INTERACTIVE=1 MANUAL_CICD=0
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -59,6 +62,7 @@ while [[ $# -gt 0 ]]; do
     --branch)          BRANCH="${2:-}"; shift 2 ;;
     --domain)          DOMAIN="${2:-}"; shift 2 ;;
     --name)            ORGNAME="${2:-}"; shift 2 ;;
+    --organization|--org) ORG="${2:-}"; shift 2 ;;
     --skip-template)   SKIP_TEMPLATE=1; shift ;;
     --skip-cicd)       SKIP_CICD=1; shift ;;
     --manual-cicd)     MANUAL_CICD=1; shift ;;
@@ -225,7 +229,7 @@ print_manual_cicd() { # print_manual_cicd <vmid> <domain>
         ${BL}sudo reboot${CL}   (then reconnect)
   3. Install the platform tooling:
         ${BL}cd TAPPaaS/src/foundation/tappaas-cicd${CL}
-        ${BL}./install.sh --name "${ORGNAME:-<orgname>}" --branch "${BRANCH}" --domain "${dom}"${CL}
+        ${BL}./install.sh --name "${ORGNAME:-<site-code>}" --organization "${ORG:-${ORGNAME:-<org>}}" --branch "${BRANCH}" --domain "${dom}"${CL}
 
 Once cicd is up it owns the platform: zone-manager / caddy-manager / rules-manager
 configure VLANs, the reverse proxy and firewall rules (using the firewall API key
@@ -343,8 +347,9 @@ build_cicd() {
   #        (the org/system name → site.json + default environment; forwarded from
   #        the orchestrator. If omitted, cicd install.sh derives it from the domain).
   local name_arg=""; [[ -n "$ORGNAME" ]] && name_arg="--name '${ORGNAME}' "
-  local install2_cmd="cd TAPPaaS/src/foundation/tappaas-cicd && ./install.sh ${name_arg}--branch '${BRANCH}' --domain '${DOMAIN}'"
-  info "Running install.sh on cicd (name ${ORGNAME:-<from-domain>}, domain ${DOMAIN})..."
+  local org_arg="";  [[ -n "$ORG" ]]     && org_arg="--organization '${ORG}' "
+  local install2_cmd="cd TAPPaaS/src/foundation/tappaas-cicd && ./install.sh ${name_arg}${org_arg}--branch '${BRANCH}' --domain '${DOMAIN}'"
+  info "Running install.sh on cicd (site ${ORGNAME:-<from-domain>}, org ${ORG:-<=site>}, domain ${DOMAIN})..."
   if ! cicd_ssh "$install2_cmd"; then
     warn "install.sh reported errors — review on cicd (ssh tappaas@${CICD_IP})."
     return 1

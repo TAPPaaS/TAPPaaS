@@ -42,6 +42,9 @@ export interface Repository {
 // The canonical Site document (singleton).
 export interface Site {
   name: string;
+  // The default org/environment/zone name — decoupled from the site code `name`
+  // so the site can be renamed without touching any environment/org/zone (#426).
+  defaultEnvironment: string;
   displayName: string;
   owner: string;
   email?: string;

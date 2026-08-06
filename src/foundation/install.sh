@@ -12,25 +12,29 @@
 # This is the script the install guide downloads + runs on the FIRST Proxmox node.
 # It drives the whole first-node bring-up as a 5-step chain:
 #   [1/5] node     — cluster/install.sh: Proxmox post-install, lan/wan bridges,
-#                    cluster create named <orgname>, ZFS pools
+#                    cluster create named <site-code>, ZFS pools
 #   [2/5] firewall — config-firewall.sh: prebuilt OPNsense boots at 10.0.0.1
 #   [3/5] cutover  — config-network.sh --swap-gateway: route via firewall (additive)
 #   [4/5] sanity   — sanity-check.sh
 #   [5/5] platform — install-platform.sh: NixOS template + tappaas-cicd, whose own
-#                    install.sh then creates site.json + zones + the mgmt/<orgname>
+#                    install.sh then creates site.json + zones + the mgmt/<org>
 #                    environments (the organization is created later, by
 #                    rest-of-foundation.sh).
 #
-# <orgname> is the ONE name threaded everywhere: the Proxmox CLUSTER name, the
-# site.json `.name`, the default ENVIRONMENT name, and (later) the ORGANIZATION
-# name. Pass it with --name (prompted when omitted). It must be known up front
-# because it names the cluster at create time.
+# Two names (decoupled — ADR-007d #426):
+#   --name <site-code>   the SITE CODE = the Proxmox CLUSTER name + site.json
+#                        `.name`. Rigid: capped at 15 chars, fixed at cluster
+#                        create, informational afterwards. Prompted when omitted.
+#   --organization <org> the default ORGANIZATION = default ENVIRONMENT = default
+#                        ZONE name (site.json `.defaultEnvironment`/`.owner`).
+#                        Free-form; defaults to the site code when omitted.
+# The site code must be known up front because it names the cluster at create time.
 #
 # On a SECONDARY node (joining an existing cluster) only [1/5] runs — the firewall,
 # gateway and platform already exist — and the chain stops after the join.
 #
 # Usage:
-#   install.sh [REPO] [BRANCH] --name <orgname> [--domain <d>]
+#   install.sh [REPO] [BRANCH] --name <site-code> [--organization <org>] [--domain <d>]
 #              [--cluster|--join|--no-cluster] [--skip-network] [--skip-storage]
 #              [--lan-port <if>] [--wan-port <if>] [--pool <name=topo:disks>]...
 #              [--skip-firewall] [--skip-platform] [--non-interactive]
@@ -94,7 +98,8 @@ fi
 # ── Arguments ─────────────────────────────────────────────────────────
 REPO="https://codeberg.org/TAPPaaS/TAPPaaS/raw/branch/"
 BRANCH="stable"
-ORGNAME=""
+SITE_CODE=""
+ORG=""
 DOMAIN=""
 NONINTERACTIVE=0
 SKIP_FIREWALL=0
@@ -103,7 +108,8 @@ NODE_ARGS=()              # pass-through to the node step (cluster/install.sh)
 _pos=()
 while [ $# -gt 0 ]; do
   case "$1" in
-    --name)            ORGNAME="${2:-}"; shift ;;
+    --name)            SITE_CODE="${2:-}"; shift ;;
+    --organization|--org) ORG="${2:-}"; shift ;;
     --domain)          DOMAIN="${2:-}"; shift ;;
     --skip-firewall)   SKIP_FIREWALL=1 ;;
     --skip-platform)   SKIP_PLATFORM=1 ;;
@@ -117,18 +123,19 @@ while [ $# -gt 0 ]; do
     --lan-port|--wan-port) NODE_ARGS+=("$1" "${2:-}"); shift ;;
     --pool)                NODE_ARGS+=("$1" "${2:-}"); shift ;;
     -h|--help)
-      echo "Usage: install.sh [REPO] [BRANCH] --name <orgname> [--domain <d>]"
+      echo "Usage: install.sh [REPO] [BRANCH] --name <site-code> [--organization <org>] [--domain <d>]"
       echo "                  [--cluster|--join|--no-cluster] [--skip-network] [--skip-storage]"
       echo "                  [--lan-port <if>] [--wan-port <if>] [--pool <name=topo:disks>]..."
       echo "                  [--skip-firewall] [--skip-platform] [--non-interactive]"
       echo ""
       echo "The first-node entry point. Runs the 5-step chain: node → firewall →"
-      echo "gateway cutover → sanity → platform. --name is the org/system name and"
-      echo "names the cluster, site.json, the default environment and the organization."
+      echo "gateway cutover → sanity → platform. --name is the SITE CODE (= the Proxmox"
+      echo "cluster name + site.json .name, ≤15 chars). --organization names the default"
+      echo "environment/zone/org (site.json .defaultEnvironment); defaults to the site code."
       echo ""
       echo "Unattended example (no prompts):"
-      echo "  install.sh \"\$REPO\" ADR007 --name acme --domain acme.org --non-interactive \\"
-      echo "             --lan-port nic0 --wan-port nic4 --pool 'tanka1=single:nvme1n1'"
+      echo "  install.sh \"\$REPO\" ADR007 --name warmelo1 --organization warmelo --domain warmelo.org \\"
+      echo "             --non-interactive --lan-port nic0 --wan-port nic4 --pool 'tanka1=single:nvme1n1'"
       exit 0 ;;
     --*) msg_error "Unknown option: $1"; exit 2 ;;
     *)   _pos+=("$1") ;;
@@ -139,30 +146,44 @@ done
 [ "${#_pos[@]}" -ge 2 ] && BRANCH="${_pos[1]}"
 NONINT_ARG=""; [ "$NONINTERACTIVE" = 1 ] && NONINT_ARG="--non-interactive"
 
-# ── Resolve <orgname> (the one name; needed before the cluster is created) ──
-if [ -z "$ORGNAME" ]; then
+# ── Resolve the SITE CODE (names the cluster; needed before cluster create) ──
+if [ -z "$SITE_CODE" ]; then
   if [ "$NONINTERACTIVE" = 0 ] && [ -t 0 ]; then
-    read -r -p "TAPPaaS org / system name (names the cluster, site, default environment & org): " ORGNAME
+    read -r -p "TAPPaaS site code (names the Proxmox cluster + site.json, ≤15 chars): " SITE_CODE
   fi
-  [ -n "$ORGNAME" ] || { msg_error "--name <orgname> is required (it names the cluster/site/environment/org)."; exit 2; }
+  [ -n "$SITE_CODE" ] || { msg_error "--name <site-code> is required (it names the cluster + site.json)."; exit 2; }
 fi
-if ! printf '%s' "$ORGNAME" | grep -qE '^[a-z][a-z0-9-]*$'; then
-  msg_error "orgname '${ORGNAME}' invalid — use lowercase letters/digits/hyphen, starting with a letter."
+if ! printf '%s' "$SITE_CODE" | grep -qE '^[a-z][a-z0-9-]*$'; then
+  msg_error "site code '${SITE_CODE}' invalid — use lowercase letters/digits/hyphen, starting with a letter."
   exit 2
 fi
-# The Proxmox cluster name (corosync) is capped at 15 chars; the orgname becomes
+# The Proxmox cluster name (corosync) is capped at 15 chars; the site code becomes
 # that name, so enforce it up front rather than fail confusingly at pvecm create.
-if [ "${#ORGNAME}" -gt 15 ]; then
-  msg_error "orgname '${ORGNAME}' is ${#ORGNAME} chars — max 15 (it becomes the Proxmox cluster name)."
+if [ "${#SITE_CODE}" -gt 15 ]; then
+  msg_error "site code '${SITE_CODE}' is ${#SITE_CODE} chars — max 15 (it becomes the Proxmox cluster name)."
+  exit 2
+fi
+
+# ── Resolve the ORGANIZATION (default env/zone/org; free-form) ──
+# Decoupled from the site code (#426). Defaults to the site code when omitted, so
+# a single-name install still works. Not the cluster name, so no 15-char cap.
+if [ -z "$ORG" ]; then
+  if [ "$NONINTERACTIVE" = 0 ] && [ -t 0 ]; then
+    read -r -p "Default organization name (names the default environment/zone) [${SITE_CODE}]: " ORG
+  fi
+  [ -n "$ORG" ] || ORG="$SITE_CODE"
+fi
+if ! printf '%s' "$ORG" | grep -qE '^[a-z][a-z0-9-]*$'; then
+  msg_error "organization '${ORG}' invalid — use lowercase letters/digits/hyphen, starting with a letter."
   exit 2
 fi
 
 mkdir -p ~/tappaas
 
 # ── [1/5] node ──────────────────────────────────────────────────────────
-echo -e "\n${GN}=== [1/5] Node (post-install, bridges, cluster '${ORGNAME}', storage) ===${CL}"
+echo -e "\n${GN}=== [1/5] Node (post-install, bridges, cluster '${SITE_CODE}', storage) ===${CL}"
 fetch "${REPO}${BRANCH}/src/foundation/cluster/install.sh" ~/tappaas/cluster-install.sh 755
-~/tappaas/cluster-install.sh "$REPO" "$BRANCH" --name "$ORGNAME" ${NODE_ARGS[@]+"${NODE_ARGS[@]}"} \
+~/tappaas/cluster-install.sh "$REPO" "$BRANCH" --name "$SITE_CODE" ${NODE_ARGS[@]+"${NODE_ARGS[@]}"} \
   || { msg_error "node step (cluster/install.sh) failed — fix it, then re-run."; exit 1; }
 
 # Primary (created the cluster) vs secondary (joined/member): cluster/install.sh
@@ -200,13 +221,13 @@ fetch "${REPO}${BRANCH}/src/foundation/cluster/sanity-check.sh" ~/tappaas/sanity
 
 # ── [5/5] platform: NixOS template + tappaas-cicd ─────────────────────
 if [ "$SKIP_PLATFORM" = 1 ]; then
-  msg_ok "Skipping platform (--skip-platform). Run later: ~/tappaas/install-platform.sh --name ${ORGNAME} --domain <d>"; exit 0
+  msg_ok "Skipping platform (--skip-platform). Run later: ~/tappaas/install-platform.sh --name ${SITE_CODE} --organization ${ORG} --domain <d>"; exit 0
 fi
 echo -e "\n${GN}=== [5/5] Platform (NixOS template + tappaas-cicd) ===${CL}"
 fetch "${REPO}${BRANCH}/src/foundation/cluster/install-platform.sh" ~/tappaas/install-platform.sh 755
 dom_arg=(); [ -n "$DOMAIN" ] && dom_arg=(--domain "$DOMAIN")
-~/tappaas/install-platform.sh --repo "$REPO" --branch "$BRANCH" --name "$ORGNAME" "${dom_arg[@]}" ${NONINT_ARG} \
-  || { msg_error "install-platform.sh did not complete — re-run ~/tappaas/install-platform.sh --name ${ORGNAME} --domain <yourdomain>."; exit 1; }
+~/tappaas/install-platform.sh --repo "$REPO" --branch "$BRANCH" --name "$SITE_CODE" --organization "$ORG" "${dom_arg[@]}" ${NONINT_ARG} \
+  || { msg_error "install-platform.sh did not complete — re-run ~/tappaas/install-platform.sh --name ${SITE_CODE} --organization ${ORG} --domain <yourdomain>."; exit 1; }
 
 # ── Done ───────────────────────────────────────────────────────────────
 echo ""
@@ -215,7 +236,8 @@ echo "  ╔═══════════════════════
 echo "  ║   Congratulations! TAPPaaS foundation (first node) is installed.       ║"
 echo "  ╚═══════════════════════════════════════════════════════════════════════╝"
 echo -e "${CL}"
-echo -e "  System name: ${BL}${ORGNAME}${CL}  (cluster = site.json .name = default environment = organization)"
+echo -e "  Site code: ${BL}${SITE_CODE}${CL}  (Proxmox cluster = site.json .name)"
+echo -e "  Organization / default environment: ${BL}${ORG}${CL}  (site.json .defaultEnvironment)"
 echo ""
 echo -e "  ${BOLD}Next steps (from tappaas-cicd — ssh tappaas@tappaas-cicd):${CL}"
 echo -e "  1. Additional nodes: install PVE, re-run this installer on each (auto-joins),"
@@ -223,5 +245,5 @@ echo -e "     then ${BL}update-tappaas --force${CL} to configure HA + replicatio
 echo -e "  2. Physical switch(es): ${BL}setup-switches.sh${CL}"
 echo -e "  3. TLS certificates:    ${BL}acme-setup.sh${CL}"
 echo -e "  4. Rest of foundation:  ${BL}rest-of-foundation.sh${CL}"
-echo -e "       installs backup / identity / logging, then creates the ${BL}${ORGNAME}${CL} organization."
+echo -e "       installs backup / identity / logging, then creates the ${BL}${ORG}${CL} organization."
 echo ""

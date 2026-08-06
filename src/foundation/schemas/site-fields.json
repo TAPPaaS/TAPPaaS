@@ -7,6 +7,7 @@
   "additionalProperties": false,
   "required": [
     "name",
+    "defaultEnvironment",
     "displayName",
     "owner",
     "location",
@@ -15,9 +16,14 @@
   ],
   "properties": {
     "name": {
-      "description": "Slug identifier for the site (e.g. foobar-site).",
+      "description": "Neutral site code (e.g. warmelo1 — place plus number). Aligned with the Proxmox cluster name at creation, informational afterwards (ADR-007d #426). Not used to name any environment, organization, or zone — those key on defaultEnvironment.",
       "type": "string",
       "pattern": "^[A-Za-z0-9_.-]+$"
+    },
+    "defaultEnvironment": {
+      "description": "Name of the default (tenant) environment — also its network zone and owner organization. Decoupled from the site code so site.name can be renamed with a single edit without touching any environment/org/zone (ADR-007d #426). Must be a valid zone/environment slug.",
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9-]*$"
     },
     "displayName": {
       "description": "Human-readable site name.",

@@ -21,6 +21,7 @@ function check(cond: boolean, msg: string): void {
 function site(repos: Repository[]): Site {
   return {
     name: "demo",
+    defaultEnvironment: "demo",
     displayName: "Demo",
     owner: "demo",
     location: { country: "NL", timezone: "Europe/Amsterdam" },

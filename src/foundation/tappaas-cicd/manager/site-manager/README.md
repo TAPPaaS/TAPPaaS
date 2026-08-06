@@ -37,7 +37,7 @@ repository         repository list [--json]
                    repository add <url> [--branch <b>] [--managed full|tracked] [--catalog <p>]
                    repository delete <name> [--force]
                    repository reconcile [--apply]
-top-level          add --name <N> [create-site options]   (= create-site.sh)
+top-level          add --name <site-code> [--organization <org>] [create-site options]  (= create-site.sh)
                    validate [FILE] [--schema-dir PATH]     (= validate-site.sh)
                    reconcile [--apply] [--deep]
 ```
