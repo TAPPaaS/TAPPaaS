@@ -17,7 +17,13 @@ import { copyFileSync, existsSync, mkdtempSync, readFileSync, writeFileSync } fr
 import { join } from "path";
 import { tmpdir } from "os";
 import { PLANE_ORDER } from "../../src/types";
-import { parseTemplate, renameTemplateFile, validateName, zonesInit } from "../../src/zonesinit";
+import {
+  mergeInitWithExisting,
+  parseTemplate,
+  renameTemplateFile,
+  validateName,
+  zonesInit,
+} from "../../src/zonesinit";
 import { mergeZones, runZonesMerge } from "../../src/zonesmerge";
 import {
   authorZone,
@@ -908,6 +914,69 @@ function tmpZones(): string {
     saveZones(f, doc);
     doc = loadZones(f);
     check(getZone(doc, "dmz")?.state === "Inactive", "forced Mandatory change persists");
+  }
+}
+
+// ── 14. init preserves existing configured zones (#427) ───────────────
+// mergeInitWithExisting reconciles the freshly-rendered renamed template with an
+// EXISTING live zones.json so an init re-run never rebuilds a live file from
+// template defaults: operator zones survive verbatim, in-use zones keep their
+// state, references are not redirected, a not-yet-renamed 'srv' carries its
+// config to '<N>', and only genuinely-new template zones are added.
+{
+  const tpl = process.env.NM_TEMPLATE;
+  if (!tpl) {
+    check(false, "NM_TEMPLATE env must point at the distributed template (init-preserve tests)");
+  } else {
+    const renamedTemplate = renameTemplateFile(tpl, "acme").raw;
+
+    // A live doc: a not-yet-renamed 'srv' (operator set Active + custom access),
+    // a custom zone absent from the template, an in-use client 'home' whose
+    // access-to still points at srvHome, and 'work' left Active by the operator.
+    const existing: Record<string, unknown> = {
+      _README: "keep me",
+      srv: { type: "Service", state: "Active", vlantag: 200, "access-to": ["internet", "dmz"] },
+      lab: { type: "Service", state: "Active", vlantag: 250, "access-to": ["internet"] },
+      home: { type: "Client", state: "Active", vlantag: 310, "access-to": ["internet", "srvHome"] },
+      work: { type: "Client", state: "Active", vlantag: 320, "access-to": ["srv"] },
+    };
+
+    const m = mergeInitWithExisting(renamedTemplate, existing, "acme");
+
+    // srv carried over to <N>, keeping the operator's Active state + config.
+    check("acme" in m.raw && !("srv" in m.raw), "existing srv renamed to <N> (carried over)");
+    check((m.raw["acme"] as Record<string, unknown>).state === "Active", "renamed <N> keeps the operator's Active state (not template default)");
+    check(m.renamedFromSrv, "renamedFromSrv reported for the carried-over srv");
+
+    // custom zone absent from the template is NOT dropped.
+    check("lab" in m.raw, "custom zone 'lab' (absent from template) is preserved, not dropped");
+
+    // in-use client zone keeps its Active state (not deactivated).
+    check((m.raw["work"] as Record<string, unknown>).state === "Active", "in-use 'work' keeps Active (not inactivated by the template)");
+
+    // home's reference to srvHome is NOT redirected (kept verbatim); its 'srv'
+    // ref is renamed to <N> like every other reference.
+    const homeAccess = (m.raw["home"] as Record<string, unknown>)["access-to"] as string[];
+    check(homeAccess.includes("srvHome"), "existing home keeps its srvHome reference (not redirected)");
+    check((m.raw["work"] as Record<string, unknown>)["access-to"] instanceof Array &&
+      ((m.raw["work"] as Record<string, unknown>)["access-to"] as string[]).includes("acme"),
+      "existing refs are srv→<N> renamed (work.access-to now lists <N>)");
+
+    // preserved lists the existing zones; a template-only zone is ADDED.
+    check(m.preserved.includes("acme") && m.preserved.includes("lab") && m.preserved.includes("home"), "preserved lists the discovered existing zones");
+    check(m.added.includes("guest") && m.added.includes("srvHome"), "template-only zones (guest, srvHome) are added");
+    check(!m.added.includes("lab") && !m.preserved.includes("guest"), "added vs preserved are disjoint by origin");
+
+    // doc block survives.
+    check(m.raw["_README"] === "keep me", "_README doc block preserved through the merge");
+
+    // fresh-install parity: merging the renamed template with an EMPTY existing
+    // doc yields exactly the renamed template (no spurious adds/drops).
+    const fresh = mergeInitWithExisting(renamedTemplate, {}, "acme");
+    check(
+      JSON.stringify(fresh.raw) === JSON.stringify(renamedTemplate) && fresh.preserved.length === 0,
+      "merging with an empty existing doc == the pure renamed template (fresh-install parity)",
+    );
   }
 }
 

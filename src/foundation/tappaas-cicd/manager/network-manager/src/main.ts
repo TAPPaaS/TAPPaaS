@@ -43,7 +43,8 @@ import {
   zoneExists,
 } from "./zones";
 import { addZone, deleteZone } from "./zonelifecycle";
-import { parseTemplate, renameTemplateFile, zonesInit } from "./zonesinit";
+import { existsSync } from "fs";
+import { mergeInitWithExisting, parseTemplate, renameTemplateFile, zonesInit } from "./zonesinit";
 import { zonesCheck, occupiedZones } from "./zonescheck";
 import { distributeZones, shouldAutoDistribute } from "./distribute";
 import { runZonesMerge } from "./zonesmerge";
@@ -485,15 +486,51 @@ function cmdZonesInit(opts: Opts): void {
     return;
   }
 
-  // Design A 3-file seeding. The renamed template is the canonical seed for all
-  // three files so a fresh install has current == orig in the renamed namespace
-  // (which is exactly what makes zones-merge stable — see zonesmerge.ts). When
-  // --out targets the live ${CONFIG_DIR}/zones.json we also materialise
-  // zones.rename.json + zones.json.orig beside it; when --out is a custom/test
-  // path we seed the siblings relative to that path's directory so tests stay
-  // self-contained and never touch live config.
-  writeJsonAtomic(out, result.raw);
+  // #427: make init NON-DESTRUCTIVE on a re-run / migration. If the target file
+  // already holds configured zones, reconcile the freshly-rendered template with
+  // it so operator zones SURVIVE — kept verbatim (state, access-to, DHCP ranges;
+  // custom zones absent from the template are not dropped; in-use zones are not
+  // deactivated; references are not redirected). The template only contributes
+  // zones that do not already exist. A fresh install (no existing file) is
+  // unchanged: finalRaw stays the pure renamed template.
+  let finalRaw = result.raw;
+  let preserved: string[] = [];
+  let added: string[] = [];
+  if (existsSync(out)) {
+    try {
+      const existing = parseTemplate(out); // strict raw-object parser (reused)
+      const merged = mergeInitWithExisting(result.raw, existing, name);
+      finalRaw = merged.raw;
+      preserved = merged.preserved;
+      added = merged.added;
+    } catch (e) {
+      warn(
+        `  init: could not read existing '${out}' to preserve its zones ` +
+          `(${(e as Error).message}) — writing the template result`,
+      );
+    }
+  }
+
+  // Design A 3-file seeding. zones.json (current) carries the preserved+template
+  // result; zones.rename.json / zones.json.orig are seeded from the PURE renamed
+  // template — the merge source/baseline, so zones-merge keeps operator zones as
+  // "only in current" and pins operator field edits (state is always pinned).
+  // On a fresh install all three are identical, which keeps zones-merge stable
+  // (see zonesmerge.ts). For a non-live --out the siblings are seeded relative to
+  // that path's directory so tests stay self-contained and never touch live config.
+  writeJsonAtomic(out, finalRaw);
   info(`  ${GN}✓${CL} init: wrote '${out}' (default zone '${name}'; home/guest kept as site-local role zones)`);
+
+  if (preserved.length) {
+    warn(
+      `  ${YW}!${CL} init: discovered ${preserved.length} pre-existing zone(s) in '${out}' — ` +
+        `PRESERVED as-is (config/state kept, NOT rebuilt from template):`,
+    );
+    for (const z of preserved) warn(`      - ${z}`);
+  }
+  if (added.length) {
+    info(`  init: added ${added.length} zone(s) from the template not already present: ${added.join(", ")}`);
+  }
 
   const outDir = dirname(out);
   const renameFile = out === defaultZonesFile() ? defaultRenameFile() : join(outDir, "zones.rename.json");

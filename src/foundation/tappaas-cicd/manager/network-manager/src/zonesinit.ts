@@ -240,3 +240,77 @@ export function renameTemplateFile(
 ): ZonesInitResult {
   return zonesInit(parseTemplate(templateFile), name, true, keepActive);
 }
+
+// Is `v` a zone object (vs a "_*" doc block or a scalar/array)?
+function isZoneObject(v: unknown): v is Record<string, unknown> {
+  return v !== null && typeof v === "object" && !Array.isArray(v);
+}
+
+export interface ZonesInitPreserveResult {
+  // The final document to write: existing zones preserved, template zones added.
+  raw: Record<string, unknown>;
+  // Pre-existing operator zones kept verbatim (the caller warns, listing each).
+  preserved: string[];
+  // Zones the template contributed that did not already exist.
+  added: string[];
+  // True when an existing (not-yet-renamed) 'srv' was carried over as '<name>'.
+  renamedFromSrv: boolean;
+}
+
+// Make an init re-run non-destructive (#427). `zonesInit` renders the pure
+// renamed template; this reconciles it with the EXISTING live zones.json so
+// operator-configured zones survive:
+//   - existing zones WIN — kept verbatim (state, access-to, DHCP ranges, custom
+//     zones absent from the template are NOT dropped; in-use zones are NOT
+//     deactivated; references are NOT redirected), so a re-run never silently
+//     rebuilds a live file from template defaults;
+//   - the srv→<name> rename is applied to the existing doc too (keys + refs), so
+//     a not-yet-renamed mainline 'srv' becomes '<name>' carrying its config
+//     rather than duplicating the template's '<name>';
+//   - the template only contributes zones that do not yet exist (a genuinely new
+//     zone in a release is added with its template defaults).
+// Pure: neither input is mutated.
+export function mergeInitWithExisting(
+  renamedTemplate: Record<string, unknown>,
+  existing: Record<string, unknown>,
+  name: string,
+): ZonesInitPreserveResult {
+  const renames = new Map<string, string>([["srv", name]]);
+
+  // 1. Carry the existing doc forward, renaming srv→<name> (keys + refs) and
+  //    cloning each zone so we never mutate the caller's object.
+  const out: Record<string, unknown> = {};
+  const preserved: string[] = [];
+  let renamedFromSrv = false;
+  for (const [key, val] of Object.entries(existing)) {
+    if (isDocKey(key)) {
+      out[key] = val; // carry doc blocks (e.g. _README) through untouched
+      continue;
+    }
+    let newKey = key;
+    if (key === "srv") {
+      newKey = name;
+      renamedFromSrv = true;
+    }
+    let zone: unknown = val;
+    if (isZoneObject(val)) {
+      const copy: Record<string, unknown> = {};
+      for (const [f, v] of Object.entries(val)) copy[f] = Array.isArray(v) ? [...v] : v;
+      rewriteZoneRefs(copy, renames);
+      zone = copy;
+    }
+    out[newKey] = zone;
+    if (isZoneObject(zone)) preserved.push(newKey);
+  }
+
+  // 2. Add any template zone (and doc block) that the existing doc lacks — the
+  //    existing value always wins for keys present in both.
+  const added: string[] = [];
+  for (const [key, val] of Object.entries(renamedTemplate)) {
+    if (key in out) continue;
+    out[key] = val;
+    if (!isDocKey(key) && isZoneObject(val)) added.push(key);
+  }
+
+  return { raw: out, preserved, added, renamedFromSrv };
+}
