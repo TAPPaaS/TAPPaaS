@@ -7,8 +7,9 @@
 //   - current  = zones.json        (live, renamed namespace, e.g. myOrg)
 //   - baseline = zones.json.orig    (the version of source `current` last merged from)
 //   - source   = zones.rename.json  (the repo template with this install's rename
-//                                    applied — regenerated each run; never re-adds
-//                                    srv/home/guest because they are renamed away)
+//                                    applied — regenerated each run; srv is renamed
+//                                    to <name> so it is never re-added, while home
+//                                    and guest keep their names and merge in place)
 //
 // Flow (every update-tappaas, replacing apply-zones-merge.sh):
 //   1. read the repo template → apply the §B rename (name from site.json .name)
@@ -24,8 +25,9 @@
 //   Zone-level:
 //     - in source, absent in current → ADD (release introduced a new zone).
 //     - in current, absent in source → KEEP + warn (operator-added or
-//       release-removed but the operator still wants it; the documented
-//       one-time surgical cleanup of stale srv/home/guest is NOT the merge's job).
+//       release-removed but the operator still wants it; the documented one-time
+//       surgical cleanup of stale zones — srv, or on installs migrated with the
+//       old code the legacy <name>-private/<name>-guest — is NOT the merge's job).
 //     - same vlantag, different name → flag a possible rename; do NOT auto-rename.
 //   Backfill: if baseline (.orig) is missing, treat source as the baseline (so a
 //     first merge pins operator customizations).

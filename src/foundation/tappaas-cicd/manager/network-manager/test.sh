@@ -76,7 +76,7 @@ if [[ -f "${UNIT_TSCONFIG}" ]]; then
         ZINIT_CFG="$(mktemp -d)"
         if run_ts "NM_TEMPLATE='${HERE}/zones.json' node '${DIST_TEST}/manager/network-manager/src/main.js' init --name acme --from '${HERE}/zones.json' --out '${ZINIT_OUT}' --config-dir '${ZINIT_CFG}'" >/dev/null 2>&1 \
             && [[ -f "${ZINIT_OUT}" ]] \
-            && run_ts "node -e 'const z=require(\"${ZINIT_OUT}\"); process.exit((z.acme&&!z.srv&&z[\"acme-private\"]&&z[\"acme-guest\"]&&z.acme.state===\"Active\"&&z.srvWork.state===\"Inactive\"&&!z[\"acme-private\"][\"access-to\"].includes(\"srvHome\")&&z[\"acme-private\"][\"access-to\"].includes(\"acme\"))?0:1)'" >/dev/null 2>&1; then
+            && run_ts "node -e 'const z=require(\"${ZINIT_OUT}\"); process.exit((z.acme&&!z.srv&&z.home&&z.guest&&z.acme.state===\"Active\"&&z.srvWork.state===\"Inactive\"&&!z.home[\"access-to\"].includes(\"srvHome\")&&z.home[\"access-to\"].includes(\"acme\"))?0:1)'" >/dev/null 2>&1; then
             ok "init CLI transforms template to temp --out (renames + inactivations + ref-integrity)"
         else
             bad "init CLI smoke FAILED"

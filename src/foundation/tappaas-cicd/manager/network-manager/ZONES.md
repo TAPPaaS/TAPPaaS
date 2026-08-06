@@ -43,8 +43,9 @@ copy lives at `${TAPPAAS_CONFIG:-/home/tappaas/config}/zones.json`.
 | `SSID` | Optional WiFi network name broadcast on this zone's VLAN. |
 
 Auto-allocated VLANs use the 60–99 window within each type band. Zone keys match
-`^[a-z][a-z0-9-]*$` (camelCase template zones like `srvHome`/`iotCams`; renamed
-per-installation zones use hyphens, e.g. `myOrg-private`).
+`^[a-z][a-z0-9-]*$` (camelCase template zones like `srvHome`/`iotCams`;
+org-scoped zones may use hyphens, e.g. `biz-guest` when a second organisation adds
+its own guest zone — client `home`/`guest` themselves stay unprefixed, #425).
 
 ### Zone types
 
@@ -137,17 +138,21 @@ The distributed template encodes the generic, org-agnostic zones (`srv`, `home`,
 `network-manager init --name <N>` once to stamp the zones for the
 installation named `<N>`:
 
-- **rename** `srv` → `<N>` (forced **Active** — the default service zone),
-  `home` → `<N>-private`, `guest` → `<N>-guest`;
+- **rename** `srv` → `<N>` (forced **Active** — the default service zone). `home`
+  and `guest` are **site-local client-role zones** and keep their template names —
+  there is one of each per site, so an org prefix would not distinguish anything,
+  and the zone key drives the client DNS domain `<zone>.internal` (#425). Its
+  `home` `access-to` reference to the now-inactivated `srvHome` is redirected to
+  the active `<N>` default zone;
 - **state → Inactive** on the per-category zones it supersedes (`srvHome`,
   `srvWork`, `srvCust`, `srvDev`, `work`), **except** any zone still referenced by
   a deployed module's `zone0` (the occupancy guard, so a live service is never
   silently de-provisioned);
 - **rewrite every zone-name reference** (`access-to`, `pinhole-allowed-from`, …)
-  through the rename map.
+  through the rename map (`srv` → `<N>`).
 
-So a brand-new `myOrg` system has an Active footprint of `myOrg`, `myOrg-private`,
-`myOrg-guest`, `iotLocal`, `iotCloud`, `iotCams` (+ `dmz` Mandatory; `mgmt`/`netbird`
+So a brand-new `myOrg` system has an Active footprint of `myOrg`, `home`,
+`guest`, `iotLocal`, `iotCloud`, `iotCams` (+ `dmz` Mandatory; `mgmt`/`netbird`
 Manual); everything else is Inactive/Disabled — defined, ready to activate.
 
 ### Zone stability — installed modules stay put

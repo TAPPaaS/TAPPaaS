@@ -14,6 +14,7 @@
 #   1. configuration.json -> site.json          (migrate-configuration.sh)
 #   2. init --name <site.name>             (network-manager; org-zone setup)
 #   3. mgmt + <name> environments                (environment-manager add)
+#   3b. client-zone cleanup                       (legacy <name>-private/-guest -> home/guest; #425)
 #   4. firewall -> network (deployed)            (OPT-IN/supervised; default: detect + warn)
 #   5. validate: zones-check + structure audit   (loud on a half-migrated result)
 #
@@ -429,6 +430,65 @@ step_people_bootstrap() {
     fi
 }
 
+# ── Step (zones): client-zone cleanup for installs migrated with OLD code ──
+# The pre-#425 network-manager init renamed home→<name>-private and
+# guest→<name>-guest (and rewrote refs to match). #425 keeps those site-local
+# role names, so an install already migrated with the OLD code carries legacy
+# <name>-private/<name>-guest that the new zones-merge would DUPLICATE (the
+# template ships home/guest → "only in source" → re-added on the same VLAN).
+# Rename them back to home/guest — keys AND references — in zones.json and the
+# merge baseline zones.json.orig, so the next merge converges. Idempotent: a
+# no-op when neither legacy zone is present (fresh / new-code installs, e.g. a
+# system that has not yet migrated). Config-only; apply on OPNsense afterwards
+# via `network-manager reconcile --apply`.
+step_client_zone_cleanup() {
+    debug "Step (zones): legacy client-zone cleanup (<name>-private/-guest → home/guest)"
+    local name; name="$(derive_name)"
+    [[ -n "$name" && "$name" != "<site.name>" ]] || { debug "  no name yet — skipping (re-run after Step 1)."; return 0; }
+    [[ -f "$ZONES" ]] || { debug "  no zones.json — nothing to clean."; return 0; }
+
+    local priv="${name}-private" guest="${name}-guest"
+    if ! jq -e --arg p "$priv" --arg g "$guest" 'has($p) or has($g)' "$ZONES" >/dev/null 2>&1; then
+        debug "  no legacy ${priv}/${guest} in zones.json — nothing to clean."
+        return 0
+    fi
+
+    if [[ $DRY_RUN -eq 1 ]]; then
+        info "  (dry-run) would rename ${priv}→home and ${guest}→guest in zones.json (+ zones.json.orig), rewriting refs."
+        return 0
+    fi
+
+    backup_state
+    local f tmp changed=0
+    for f in "$ZONES" "${ZONES}.orig"; do
+        [[ -f "$f" ]] || continue
+        jq -e --arg p "$priv" --arg g "$guest" 'has($p) or has($g)' "$f" >/dev/null 2>&1 || continue
+        tmp="$(mktemp "${f}.XXXXXX")"
+        # Two passes: (1) rename matching top-level zone keys; (2) rewrite exact
+        # string refs inside each zone's fields (arrays + bare strings). Doc keys
+        # ("_*") are left untouched; rws replaces only EXACT full-string matches so
+        # descriptions/comments are safe.
+        if jq --arg priv "$priv" --arg guest "$guest" '
+              ({ ($priv): "home", ($guest): "guest" }) as $rm
+              | def rws: if type=="string" then ($rm[.] // .) else . end;
+                def rwzone: map_values(if type=="array" then map(rws) elif type=="string" then rws else . end);
+                with_entries(if (.key|startswith("_")) then . else (.key |= ($rm[.] // .)) end)
+                | with_entries(if (.key|startswith("_")) then . elif (.value|type)=="object" then (.value |= rwzone) else . end)
+            ' "$f" > "$tmp" 2>/dev/null && jq empty "$tmp" >/dev/null 2>&1; then
+            mv "$tmp" "$f"
+            info "  ${f##*/}: renamed ${priv}→home, ${guest}→guest (refs rewritten)."
+            changed=1
+        else
+            command rm -f "$tmp"
+            warn "  ${f##*/}: cleanup jq transform failed — left unchanged."; NEEDS_ACTION=1
+        fi
+    done
+    # NB: plain `if` (not `&&`) so this last line always returns 0 under `set -e`.
+    if [[ $changed -eq 1 ]]; then
+        info "  Apply on OPNsense when ready: network-manager reconcile --apply"
+    fi
+}
+
 main() {
     # NB: $DRY_RUN is 0/1 — both non-empty — so ${DRY_RUN:+…} always expands. Use a
     # numeric test so the header only says "dry-run" when actually dry-running.
@@ -439,6 +499,7 @@ main() {
     step_site
     step_backfill_environment
     step_zones_and_envs
+    step_client_zone_cleanup
     step_people_bootstrap
     step_firewall
     step_validate

@@ -248,21 +248,28 @@ function tmpZones(): string {
 
     check(!alreadyInitialised, "transforming the distributed template is not a no-op");
 
-    // renames
+    // renames — only srv is renamed; home/guest are site-local role zones (#425)
     check("acme" in raw && !("srv" in raw), "srv renamed to <N> (acme); srv key gone");
-    check("acme-private" in raw && !("home" in raw), "home renamed to <N>-private; home key gone");
-    check("acme-guest" in raw && !("guest" in raw), "guest renamed to <N>-guest; guest key gone");
+    check("home" in raw && !("acme-private" in raw), "home kept (site-local role zone; not renamed)");
+    check("guest" in raw && !("acme-guest" in raw), "guest kept (site-local role zone; not renamed)");
 
     // <N> carried srv's config + state Active
     const acme = raw["acme"] as Record<string, unknown>;
     check(acme["type"] === "Service" && acme["vlantag"] === 200, "<N> carried srv's config (type/vlan)");
     check(acme["state"] === "Active", "<N> state forced Active");
 
-    // <N>-private access-to has <N> and NOT srvHome
-    const priv = raw["acme-private"] as Record<string, unknown>;
-    const privAccess = priv["access-to"] as string[];
-    check(privAccess.includes("acme"), "<N>-private access-to contains <N> (was srvHome)");
-    check(!privAccess.includes("srvHome"), "<N>-private access-to no longer references srvHome");
+    // home access-to has <N> (redirected from srvHome) and NOT srvHome
+    const home = raw["home"] as Record<string, unknown>;
+    const homeAccess = home["access-to"] as string[];
+    check(homeAccess.includes("acme"), "home access-to contains <N> (redirected from srvHome)");
+    check(!homeAccess.includes("srvHome"), "home access-to no longer references srvHome (inactivated)");
+
+    // guest is left fully untouched (same object as the template): its client DNS
+    // domain (guest.internal) and isolation must survive the transform (#425).
+    check(
+      JSON.stringify(raw["guest"]) === JSON.stringify(template["guest"]),
+      "guest zone is byte-identical to the template (untouched)",
+    );
 
     // inactivations
     for (const z of ["srvHome", "srvWork", "srvCust", "srvDev", "work"]) {
@@ -282,7 +289,7 @@ function tmpZones(): string {
     );
 
     // referential integrity: NO zone's access-to / pinhole-allowed-from still
-    // references the bare srv / home / guest keys.
+    // references the bare srv key (home/guest are kept, so they remain valid refs).
     let refOk = true;
     for (const [k, v] of Object.entries(raw)) {
       if (k.startsWith("_")) continue;
@@ -291,20 +298,20 @@ function tmpZones(): string {
         const arr = zone[field];
         if (Array.isArray(arr)) {
           for (const ref of arr) {
-            if (ref === "srv" || ref === "home" || ref === "guest") {
+            if (ref === "srv") {
               refOk = false;
             }
           }
         }
       }
     }
-    check(refOk, "no zone references bare srv/home/guest after transform (referential integrity)");
+    check(refOk, "no zone references bare srv after transform (srv renamed; home/guest kept)");
 
-    // mgmt access-to was rewritten srv→acme, home→acme-private, guest→acme-guest
+    // mgmt access-to: srv→acme rewritten; home/guest kept as-is
     const mgmtAccess = (raw["mgmt"] as Record<string, unknown>)["access-to"] as string[];
     check(
-      mgmtAccess.includes("acme") && mgmtAccess.includes("acme-private") && mgmtAccess.includes("acme-guest"),
-      "mgmt.access-to rewritten to the renamed zone names",
+      mgmtAccess.includes("acme") && mgmtAccess.includes("home") && mgmtAccess.includes("guest"),
+      "mgmt.access-to: srv→<N> rewritten; home/guest kept",
     );
     // other srvHome refs preserved (NOT globally rewritten to <N>)
     check(mgmtAccess.includes("srvHome"), "mgmt.access-to still lists srvHome (not globally rewritten)");
@@ -655,7 +662,8 @@ function tmpZones(): string {
 
 // ── 12. zones-merge: rename-aware 3-way reconciliation (Design A) ─────
 // The whole point: after a renamed install (current==orig==renamed source),
-// a merge must NOT re-introduce srv/home/guest, and must be stable. Then we
+// a merge must NOT re-introduce srv (home/guest are kept and converge in place),
+// and must be stable. Then we
 // exercise the per-field rules and --diff. All on temp dirs; NM_TEMPLATE points
 // at the real distributed template; never touches live config.
 {
@@ -692,8 +700,9 @@ function tmpZones(): string {
       return [...seen.entries()].filter(([, n]) => n > 1).map(([vt]) => vt);
     }
 
-    // (a) THE CORE BUG: a merge on a fresh renamed install does NOT re-add
-    //     srv/home/guest and introduces no duplicate vlantags.
+    // (a) THE CORE BUG: a merge on a fresh renamed install does NOT re-add srv
+    //     (home/guest are kept in both source and current → converge, not
+    //     re-added) and introduces no duplicate vlantags.
     {
       const dir = freshRenamedConfig();
       const rc = runZonesMerge(
@@ -703,8 +712,8 @@ function tmpZones(): string {
       );
       const merged = readJson(join(dir, "zones.json"));
       check(rc === 0, "zones-merge on a fresh renamed install returns rc=0");
-      check(!("srv" in merged) && !("home" in merged) && !("guest" in merged), "merge does NOT re-add srv/home/guest (the core bug)");
-      check("myorg" in merged && "myorg-private" in merged && "myorg-guest" in merged, "renamed zones remain present after merge");
+      check(!("srv" in merged), "merge does NOT re-add srv (renamed away — the core bug)");
+      check("myorg" in merged && "home" in merged && "guest" in merged, "renamed default zone + kept home/guest present after merge");
       check(dupVlans(merged).length === 0, `merge introduces no duplicate vlantags (got dups ${JSON.stringify(dupVlans(merged))})`);
       // and it is stable: a SECOND merge changes nothing.
       const after1 = readFileSync(join(dir, "zones.json"), "utf8");
@@ -826,8 +835,8 @@ function tmpZones(): string {
     const renamed = renameTemplateFile(tpl, "myorg").raw;
     // The renamed source has the renamed zones and NOT the originals.
     check("myorg" in renamed && !("srv" in renamed), "renamed source has myorg, not srv");
-    check("myorg-private" in renamed && !("home" in renamed), "renamed source has myorg-private, not home");
-    check("myorg-guest" in renamed && !("guest" in renamed), "renamed source has myorg-guest, not guest");
+    check("home" in renamed && !("myorg-private" in renamed), "renamed source keeps home (site-local role zone)");
+    check("guest" in renamed && !("myorg-guest" in renamed), "renamed source keeps guest (site-local role zone)");
     // Seeding current/orig/rename from the same renamed doc ⇒ identical content
     // ⇒ a subsequent merge is a no-op (already asserted in §12a); here we just
     // confirm the seed values are byte-identical, which is the property zones-init

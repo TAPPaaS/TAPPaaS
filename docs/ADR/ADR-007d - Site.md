@@ -87,6 +87,16 @@ There is **no fallback to `configuration.json`** on a fresh install (no dual-rea
 migration runs once (config→site), the env/zone bootstrap runs (`init` + `create-minimal-environments`),
 then `configuration.json` is dropped — see the [migration runbook](<../design/ADR-007-migration-runbook.md>).
 
+### Client zone naming (#425)
+
+Client zones are **site-local role names**: `home` and `guest` keep their template names and are **not**
+org-prefixed (`network-manager init` renames only `srv` → the default-zone name). There is one `home` and
+one `guest` per site, so an org prefix would not distinguish anything — and the zone key drives the client
+DNS domain (`<zone>.internal`), so renaming it would re-domain every client device and de-converge
+`zones-merge`. **Org-scoped zone names are used only when a second instance of that role exists** (e.g. a
+site hosting a second organisation). An install migrated with the older org-prefixing code is converged
+back to `home`/`guest` by the migration's one-time client-zone cleanup step.
+
 ## Acceptance
 
 - [x] `site.json` validated by `site-manager validate` (`schemas/site-fields.json`).

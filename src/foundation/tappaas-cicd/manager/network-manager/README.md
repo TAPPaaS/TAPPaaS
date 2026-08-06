@@ -105,8 +105,8 @@ Used at install time to stamp a fresh `zones.json` named for the TAPPaaS system.
 network-manager init --name acme
 ```
 
-- `--name <N>` (required) — system name; renames the template's `srv` → `<N>`,
-  `home` → `<N>-private`, `guest` → `<N>-guest`.
+- `--name <N>` (required) — system name; renames the template's `srv` → `<N>`.
+  `home` and `guest` are site-local client-role zones and keep their names (#425).
 - `--from <tpl>` — source template (default: the `zones.json` shipped with the
   bin).
 - `--out <file>` — output (default `$TAPPAAS_CONFIG/zones.json`).

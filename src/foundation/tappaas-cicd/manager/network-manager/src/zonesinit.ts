@@ -11,14 +11,18 @@
 //
 // Rules (operator-specified):
 //   - rename  srv   → <N>            (default zone; keep config; state Active)
-//   - rename  home  → <N>-private    (and in ITS access-to: srvHome → <N>)
-//   - rename  guest → <N>-guest
+//   - KEEP    home, guest            (site-local client-role zones — there is one
+//                                     of each per site, so an org prefix would not
+//                                     distinguish anything; renaming them gives
+//                                     every client device a new <zone>.internal
+//                                     domain and de-converges zones-merge — #425)
+//   - in home's access-to: srvHome → <N>  (client-home reaches the now-active flat
+//                                     service zone, since srvHome is inactivated)
 //   - state Inactive on: srvHome, srvWork, srvCust, srvDev, work
-//   - leave untouched: srvTest, iot*, dmz, netbird, test, mgmt (+ renamed)
-//   - referential integrity (global): rewrite refs to a RENAMED key in
-//     access-to / pinhole-allowed-from / any zone-name array|string field:
-//       srv→<N>, home→<N>-private, guest→<N>-guest
-//     (NOT a global srvHome→<N> — only the explicit one inside <N>-private.)
+//   - leave untouched: srvTest, iot*, dmz, netbird, test, mgmt, home, guest (+ renamed)
+//   - referential integrity (global): rewrite refs to the RENAMED key (srv→<N>) in
+//     access-to / pinhole-allowed-from / any zone-name array|string field.
+//     (NOT a global srvHome→<N> — only the explicit one inside home's access-to.)
 //   - idempotent: if <N> present and srv absent → no-op ("already initialised")
 //
 // Dependency-free TS (strict tsc, ambient env.d.ts), mirroring the rest of the
@@ -137,15 +141,12 @@ export function zonesInit(
     }
   }
 
-  const privateName = `${name}-private`;
-  const guestName = `${name}-guest`;
-
-  // The global rename map for referential integrity.
-  const renames = new Map<string, string>([
-    ["srv", name],
-    ["home", privateName],
-    ["guest", guestName],
-  ]);
+  // The global rename map for referential integrity. Only srv is renamed to the
+  // site name; home and guest are site-local client-role zones and keep their
+  // names (#425 — renaming them would rename every client's <zone>.internal
+  // domain and de-converge zones-merge, which re-adds the template's home/guest
+  // on every run).
+  const renames = new Map<string, string>([["srv", name]]);
 
   // Build the output preserving key ORDER: walk the template's keys, emit each
   // (renamed where applicable) so the structure / doc-block placement is kept.
@@ -158,8 +159,6 @@ export function zonesInit(
 
     let newKey = key;
     if (key === "srv") newKey = name;
-    else if (key === "home") newKey = privateName;
-    else if (key === "guest") newKey = guestName;
 
     // Deep-ish clone of the zone object (one level + arrays) so we never mutate
     // the input template.
@@ -184,12 +183,14 @@ export function zonesInit(
     (defZone as Record<string, unknown>).state = "Active";
   }
 
-  // 2. <N>-private (was home): the EXPLICIT srvHome→<N> swap in its access-to.
-  const privZone = out[privateName];
-  if (privZone !== null && typeof privZone === "object" && !Array.isArray(privZone)) {
-    const pz = privZone as Record<string, unknown>;
-    if (Array.isArray(pz["access-to"])) {
-      pz["access-to"] = (pz["access-to"] as unknown[]).map((el) =>
+  // 2. home (kept): the EXPLICIT srvHome→<N> swap in its access-to. srvHome is
+  //    inactivated below, so client-home is redirected to the now-active flat
+  //    service zone <N>.
+  const homeZone = out["home"];
+  if (homeZone !== null && typeof homeZone === "object" && !Array.isArray(homeZone)) {
+    const hz = homeZone as Record<string, unknown>;
+    if (Array.isArray(hz["access-to"])) {
+      hz["access-to"] = (hz["access-to"] as unknown[]).map((el) =>
         el === "srvHome" ? name : el,
       );
     }

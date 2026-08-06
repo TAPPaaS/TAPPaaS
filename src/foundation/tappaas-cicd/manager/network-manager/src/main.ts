@@ -98,7 +98,7 @@ const HELP: HelpSpec = {
       note: "(alias: zones-init)",
       name: "init (install-time template transform; offline)",
       options: [
-        ["--name <N>", "TAPPaaS system name; renames srv→<N>, home→<N>-private,\n                guest→<N>-guest and parameterises the distributed template"],
+        ["--name <N>", "TAPPaaS system name; renames srv→<N> (home/guest are kept\n                as site-local role zones) and parameterises the distributed template"],
         ["--from <tpl>", "source template (default: zones.json shipped with the bin)"],
         ["--out <f>", "output file (default: $TAPPAAS_CONFIG/zones.json)"],
         ["--force", "re-apply from the template even if already initialised"],
@@ -493,7 +493,7 @@ function cmdZonesInit(opts: Opts): void {
   // path we seed the siblings relative to that path's directory so tests stay
   // self-contained and never touch live config.
   writeJsonAtomic(out, result.raw);
-  info(`  ${GN}✓${CL} init: wrote '${out}' (default zone '${name}', '${name}-private', '${name}-guest')`);
+  info(`  ${GN}✓${CL} init: wrote '${out}' (default zone '${name}'; home/guest kept as site-local role zones)`);
 
   const outDir = dirname(out);
   const renameFile = out === defaultZonesFile() ? defaultRenameFile() : join(outDir, "zones.rename.json");
