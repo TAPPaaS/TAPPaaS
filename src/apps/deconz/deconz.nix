@@ -624,6 +624,14 @@ in
   # restartTriggers: recreate the container when the bind-mounted adapter changes —
   # otherwise the running container keeps the OLD nix-store file resolved at create
   # time (changing environment.etc content alone does NOT restart an oci-container).
+  # NB: do NOT add network-online.target here -- virtualisation.oci-containers
+  # already sets After=/Wants=network-online.target on every podman-* unit, and
+  # it was ALREADY ACTIVE during the 2026-08-07 cold start when diyHue's SSDP
+  # threads died anyway (OSError 19 "No such device" / 101 "Network is
+  # unreachable"). nm-online defaults to a 30s timeout; a gateway VM on another
+  # node needs far longer to boot and serve DHCP, so the gate released the unit
+  # and diyHue started address-less. Ordering here is measured-insufficient, not
+  # merely theoretically weak. The watchdog below is the actual guarantee.
   systemd.services.podman-diyhue = {
     after = [ "deconz.service" ];
     requires = [ "deconz.service" ];
@@ -631,6 +639,44 @@ in
       config.environment.etc."diyhue/deconz.py".source
       config.environment.etc."diyhue/Group.py".source
     ];
+  };
+
+  # ── diyHue SSDP watchdog ─────────────────────────────────────────────────────
+  # When the SSDP threads die, Flask keeps serving and the container keeps
+  # running -- the unit stays "active" and the existing Restart=always never
+  # fires (measured: NRestarts=0 after two days in exactly this state). Neither
+  # ordering nor restart policy can observe it. So check the OBSERVABLE END
+  # CONDITION instead: is diyHue's SSDP responder actually bound to UDP 1900?
+  # Ownership is part of the condition -- "something is on 1900" would report
+  # health during the very failure this guards against (deCONZ runs --upnp=0 so
+  # that ONLY diyHue advertises; if that ever regresses, deCONZ could take 1900).
+  systemd.services.diyhue-ssdp-watchdog = {
+    description = "Restart diyHue when its SSDP responder (UDP 1900) is not bound";
+    after = [ "podman-diyhue.service" ];
+    serviceConfig.Type = "oneshot";
+    path = [ pkgs.iproute2 pkgs.gnugrep pkgs.systemd ];
+    script = ''
+      # -p prints the owning process; require it to be diyHue's python, not just
+      # any listener. podman runs diyHue with host networking, so the socket is
+      # visible in the host namespace.
+      if ss -ulnpH 'sport = :1900' | grep -q 'python'; then
+        exit 0
+      fi
+      echo "diyHue SSDP responder not bound on UDP 1900 -- restarting podman-diyhue"
+      systemctl restart podman-diyhue.service
+    '';
+  };
+
+  systemd.timers.diyhue-ssdp-watchdog = {
+    wantedBy = [ "timers.target" ];
+    timerConfig = {
+      # OnBootSec bounds the post-boot degraded window; OnUnitActiveSec bounds
+      # any later regression. Both are the worst-case outage, chosen against the
+      # consequence (wall switches dead until the next tick), not by default.
+      OnBootSec = "1min";
+      OnUnitActiveSec = "5min";
+      Unit = "diyhue-ssdp-watchdog.service";
+    };
   };
 
   # ── diyHue <- deCONZ backend link (authoritative method) ─────────────────────
