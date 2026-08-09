@@ -173,6 +173,50 @@ def load_config() -> dict:
         return {}
 
 
+def ensure_default_environment(
+    config: dict, dry_run: bool, config_path: Path = CONFIG_PATH
+) -> None:
+    """Backfill a missing site.json .defaultEnvironment (ADR-007d #426).
+
+    #426 made defaultEnvironment a required field, but a site.json written
+    before it — the schema migration only fires on the configuration.json →
+    site.json conversion, so an already-migrated file is skipped — lacks it and
+    fails the tappaas-cicd post-update schema validation. Mirror
+    migrate-configuration.sh / create-site.sh: default it to .owner (falling
+    back to .name). Mutates `config` in place and rewrites site.json. Idempotent
+    — a no-op once the field is present.
+    """
+    if str(config.get("defaultEnvironment") or "").strip():
+        return
+    value = str(config.get("owner") or config.get("name") or "").strip()
+    if not value:
+        log.warning(
+            "site.json missing defaultEnvironment and no owner/name to derive it "
+            "from — leaving as-is (fix manually)"
+        )
+        return
+    if dry_run:
+        log.info(
+            "Phase 0 - would backfill site.json defaultEnvironment=%s (was missing)",
+            value,
+        )
+        return
+    config["defaultEnvironment"] = value
+    try:
+        with open(config_path, "w") as f:
+            json.dump(config, f, indent=2)
+            f.write("\n")
+        log.info(
+            "Backfilled site.json defaultEnvironment=%s (was missing; ADR-007d #426)",
+            value,
+        )
+    except OSError as e:
+        log.warning(
+            "Could not write backfilled defaultEnvironment to %s: %s — continuing",
+            config_path, e,
+        )
+
+
 def parse_schedule(schedule: list) -> tuple[str, int | None, int]:
     """Parse updateSchedule list into (frequency, weekday, hour)."""
     if not schedule or len(schedule) < 3:
@@ -496,6 +540,11 @@ def main():
     if not args.force and not should_update_now(config, current_hour):
         log.info("Not scheduled for update at this time")
         sys.exit(0)
+
+    # Backfill a missing site.json defaultEnvironment (ADR-007d #426) before any
+    # module runs, so the tappaas-cicd post-update schema validation passes on
+    # sites whose site.json predates the field. Idempotent; honours --dry-run.
+    ensure_default_environment(config, args.dry_run)
 
     apps = get_installed_apps()
     sorted_apps = topological_sort(apps)
