@@ -204,10 +204,63 @@ if [[ ${#CAND_NAME[@]} -eq 0 ]]; then
   exit 0
 fi
 
+# ── Release active holders (LVM / mdraid / swap / mounts) on a disk ───
+# A disk that still carries an ACTIVE holder — most often a leftover LVM volume
+# group from a previous OS install (e.g. a `pve-OLD-*` VG on a reused node) — is
+# "busy": wipefs, sgdisk and even `zpool create -f` fail with EBUSY. Because
+# wipe_disk() silences those errors (|| true), the wipe would silently no-op and
+# pool creation then fails downstream (this is exactly how tankc1 failed to
+# materialise on a reinstalled tappaas3). Tear the holders down first so the disk
+# is genuinely free before we wipe it. This is self-limiting: an in-use VG (open
+# LVs — e.g. the running root) refuses `vgchange -an`/`vgremove`, so only fully
+# idle leftovers are removed; the live system is never touched.
+release_holders() {
+  local d="$1" n vg lvp md
+  # All block nodes backed by this disk: the disk itself + its partitions.
+  local -a nodes=("$d")
+  while read -r n; do [[ -n "$n" ]] && nodes+=("$n"); done \
+    < <(lsblk -rno NAME "/dev/$d" 2>/dev/null | tail -n +2)
+
+  # 1) LVM: drop every volume group that has a physical volume on this disk.
+  if command -v pvs >/dev/null 2>&1; then
+    local -A seen=()
+    for n in "${nodes[@]}"; do
+      vg="$(pvs --noheadings -o vg_name "/dev/$n" 2>/dev/null | tr -d '[:space:]')"
+      [[ -n "$vg" && -z "${seen[$vg]:-}" ]] || continue
+      seen[$vg]=1
+      warn "    releasing LVM volume group '${vg}' (PV on /dev/${n}) before wipe"
+      while read -r lvp; do
+        [[ -n "$lvp" ]] || continue
+        swapoff "$lvp" 2>/dev/null || true
+        umount  "$lvp" 2>/dev/null || true
+      done < <(lvs --noheadings -o lv_path "$vg" 2>/dev/null | tr -d ' ')
+      vgchange -an "$vg"     >/dev/null 2>&1 || true
+      vgremove -f  "$vg"     >/dev/null 2>&1 || true
+      pvremove -ff "/dev/$n" >/dev/null 2>&1 || true
+    done
+  fi
+
+  # 2) mdraid: stop any array assembled from a partition of this disk.
+  if command -v mdadm >/dev/null 2>&1; then
+    for md in $(lsblk -rno NAME "/dev/$d" 2>/dev/null | awk '/^md/{print $1}'); do
+      mdadm --stop "/dev/$md" >/dev/null 2>&1 || true
+    done
+  fi
+
+  # 3) Any remaining direct mounts / swap on the disk or its partitions.
+  for n in "${nodes[@]}"; do
+    swapoff "/dev/$n" 2>/dev/null || true
+    umount  "/dev/$n" 2>/dev/null || true
+  done
+}
+
 # ── Wipe helper (destructive; gated by confirmation) ─────────────────
 wipe_disk() {
   local d="$1"
   info "  Wiping ${BL}/dev/${d}${CL} ..."
+  # Free active holders (LVM/mdraid/swap/mounts) FIRST — otherwise the disk is
+  # busy and every step below no-ops under `|| true`, leaving the disk intact.
+  release_holders "$d"
   # Tear down any ZFS label first, then signatures + partition table.
   zpool labelclear -f "/dev/${d}" >/dev/null 2>&1 || true
   local p
