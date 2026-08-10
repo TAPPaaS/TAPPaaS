@@ -259,6 +259,21 @@ Because `update.sh` re-runs the enforcer every cycle and DKMS rebuilds `r8127` f
 new kernel, ordinary updates **maintain** the fix rather than overwrite it; a
 from-scratch reinstall re-applies it automatically via `install.sh`.
 
+DKMS only rebuilds on a kernel upgrade when **matching kernel headers** are installed, so
+the script installs the `proxmox-default-headers` **meta**-package (which tracks
+`proxmox-default-kernel`) and not just version-pinned headers for the kernel of the day.
+Without the meta-package the failure is silent and delayed: a later `apt dist-upgrade`
+pulls a new `proxmox-kernel-*` with no headers behind it, DKMS skips the `r8127` build,
+and — because `r8169` is blacklisted — the node reboots with **no driver at all** for the
+RTL8127. On a node where that NIC is the WAN uplink, the `wan` bridge loses its only
+physical port and the cluster comes up with no internet, with no error logged anywhere
+(`ifupdown` raises none for a bridge with a missing port). `sanity-check.sh` checks both
+conditions; to verify by hand before rebooting a node after a kernel upgrade:
+
+```bash
+dkms status -m r8127 | grep "$(uname -r)"
+```
+
 ## Related issues
 
 - #140 — automate cluster create/join in `install.sh`

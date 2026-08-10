@@ -75,6 +75,45 @@ if curl -fsS -o /dev/null --max-time 8 https://1.1.1.1/ 2>/dev/null || ping -c1 
   pass "Internet is reachable"
 else fail "No internet egress (firewall WAN / routing?)"; fi
 
+# 8. Every bridge member named in /etc/network/interfaces actually exists as a
+#    link. ifupdown brings a bridge up perfectly happily with a missing port, so
+#    a NIC whose driver failed to load leaves the bridge with no uplink and no
+#    error anywhere — the usual cause of check 7 failing on a healthy firewall.
+missing_ports=""
+while read -r _ ports; do
+  for p in $ports; do
+    [[ "$p" == "none" ]] && continue
+    [[ -e "/sys/class/net/$p" ]] || missing_ports+=" $p"
+  done
+done < <(grep -E '^[[:space:]]*bridge-ports[[:space:]]' /etc/network/interfaces 2>/dev/null)
+if [[ -z "$missing_ports" ]]; then pass "All bridge members in /etc/network/interfaces exist"
+else fail "Bridge member(s) absent from this node:${missing_ports} — that bridge has no uplink (NIC renamed, or its driver did not load?)"; fi
+
+# 9. Out-of-tree drivers are built for the RUNNING kernel, and the headers
+#    meta-package is present so they stay built across future kernel upgrades.
+#    A DKMS NIC driver that silently missed a rebuild only shows up as a dead
+#    interface after the next reboot — see "Node hardware quirks" in DESIGN.md.
+krel="$(uname -r)"
+if command -v dkms >/dev/null 2>&1; then
+  dkms_mods="$(dkms status 2>/dev/null | sed -nE 's#^([^/,]+)[/,].*#\1#p' | sort -u)"
+  if [[ -z "$dkms_mods" ]]; then
+    pass "No DKMS modules registered on this node"
+  else
+    stale=""
+    for m in $dkms_mods; do
+      modinfo -k "$krel" "$m" >/dev/null 2>&1 || stale+=" $m"
+    done
+    if [[ -z "$stale" ]]; then pass "DKMS modules built for running kernel ${krel}:$(echo " $dkms_mods" | tr '\n' ' ')"
+    else fail "DKMS module(s) NOT built for running kernel ${krel}:${stale} — install kernel headers and run 'dkms autoinstall -k ${krel}'"; fi
+
+    if dpkg-query -W -f='${Status}' proxmox-default-headers 2>/dev/null | grep -q '^install ok installed'; then
+      pass "proxmox-default-headers installed — DKMS will rebuild on kernel upgrades"
+    else
+      warn "proxmox-default-headers NOT installed — the next kernel upgrade will arrive without headers and DKMS will silently skip the rebuild (apt-get install proxmox-default-headers)"
+    fi
+  fi
+fi
+
 echo ""
 info "Results: ${GN}${PASS} passed${CL}, ${RD}${FAIL} failed${CL}, ${YW}${WARN} warnings${CL}"
 [[ "$FAIL" -eq 0 ]] && { info "${GN}Sanity checks passed.${CL}"; exit 0; }
