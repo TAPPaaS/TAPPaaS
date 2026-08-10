@@ -8,13 +8,13 @@
 #   1. lets you set/confirm the real SSID NAME in zones.json (replacing the
 #      <PLACEHOLDER> shipped in the template), and
 #   2. collects the WPA passphrase into a SEPARATE 0600 secrets file
-#      (~/.wlan-secrets.txt by default) that ap-manager's vendor plugins read
+#      (~/.wlan-secrets.txt by default) that ap-controller's vendor plugins read
 #      at apply time. The passphrase is NEVER written to zones.json (which is a
 #      committed config), only to the secrets file.
 #
 # A blank passphrase means "open network / leave unchanged" — no secret stored.
-# Security level (open/personal/enterprise) is chosen per-SSID in the ap-manager
-# inventory (`ap-manager ssid <ap> add ... --security`); this script only owns
+# Security level (open/personal/enterprise) is chosen per-SSID in the ap-controller
+# inventory (`ap-controller ssid <ap> add ... --security`); this script only owns
 # the SSID name (in zones.json) and the passphrase (in the secrets file).
 #
 # Usage:
@@ -203,8 +203,8 @@ cmd_interactive() {
 
     if [[ "${changed}" -eq 1 ]]; then
         info "${GN}Done.${CL} Next steps:"
-        info "  1. Add each SSID to your AP:   ap-manager ssid <ap> add <ssid> --zone <zone> --security wpa2-personal"
-        info "  2. Push to the controller:     ap-manager reconcile --apply"
+        info "  1. Add each SSID to your AP:   ap-controller ssid <ap> add <ssid> --zone <zone> --security wpa2-personal"
+        info "  2. Push to the controller:     ap-controller reconcile --apply"
     else
         info "No changes made."
     fi

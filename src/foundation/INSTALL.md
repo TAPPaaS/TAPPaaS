@@ -18,7 +18,10 @@ is done and concentrates on the install itself.
 
 ---
 
-## The five steps
+## The six steps
+
+Steps 3, 4, and 6 are optional — a single-node, internal-only site with no managed
+switches needs only steps 1, 2, and 5.
 
 | Step | What happens | Done when |
 |------|--------------|-----------|
@@ -27,6 +30,7 @@ is done and concentrates on the install itself.
 | [**3**](#step-3--add-additional-nodes-optional-skip-for-single-node) | Additional nodes join over the network, unattended *(optional)* | all nodes in the cluster |
 | [**4**](#step-4--set-up-certificates-for-the-default-domain-optional) | Certificates for the default domain *(optional)* — wildcard, or per-service | cert strategy configured (or deliberately skipped) |
 | [**5**](#step-5--complete-the-foundation) | Remaining foundation modules + your organisation | the 🎉 foundation summary prints |
+| [**6**](#step-6--managed-switches-and-wi-fi-aps-optional) | Managed switches and Wi-Fi APs *(optional)* — register inventory, then reconcile | switch/AP VLANs + SSIDs in sync with `zones.json` |
 
 ---
 
@@ -484,6 +488,86 @@ When it finishes you'll see a **"🎉 your TAPPaaS foundation is installed"** su
 > *(Module sizing/zones are defaults — see appendix.)*
 
 ---
+
+---
+
+## Step 6 — Managed switches and Wi-Fi APs (optional)
+
+Skip this entirely if you have **unmanaged switches and no TAPPaaS-driven APs** —
+an unmanaged switch passes tagged frames transparently, so nothing to configure
+(see [Network — cutting over to the firewall](#network--cutting-over-to-the-firewall)
+for the inter-node trunk story). Do this step if you have **managed switches** or
+**Wi-Fi access points** whose per-zone VLANs/SSIDs you want TAPPaaS to keep in sync.
+
+TAPPaaS treats switches and APs as two more reconcile *providers* alongside OPNsense
+and Proxmox — all driven from `zones.json` (the VLAN tags and the per-zone `SSID`
+field). Unlike the firewall/Proxmox planes, **these are not applied automatically**
+by `rest-of-foundation.sh` or `update-tappaas`: they need an inventory you register
+once, and (for hardware without a vendor plugin) a manual "tag these VLANs" step. Run
+everything below **from the mothership** (`ssh tappaas@tappaas-cicd`).
+
+### 6a — Switches
+
+Fastest path is the interactive bootstrap, which registers each brand/switch/uplink
+port and then applies:
+
+```bash
+setup-switches.sh          # interactive; ends by running `switch-controller reconcile --apply`
+```
+
+Or register by hand with the `switch-controller` CLI, then reconcile:
+
+```bash
+# A manual switch with two node-uplink (trunk) ports:
+switch-controller add-switch core --vendor tplink --managed manual
+switch-controller add-port  core 9  --type node --target tappaas1 --target-port eth0
+switch-controller add-port  core 10 --type node --target tappaas2 --target-port eth0
+switch-controller reconcile --apply     # manual switch → prints the VLANs to tag (and records them)
+#   …tag those VLANs on ports 9 & 10 in the switch UI…
+```
+
+- `--managed manual` → TAPPaaS **prints** the VLANs to tag; you apply them on the
+  device (no separate `confirm` needed — `reconcile --apply` already records intent).
+- `--managed auto` → a vendor plugin (currently **UniFi OS**) programs the switch over
+  its API on `reconcile --apply`. Auto/controller brands read
+  `~/.unifi-os-credentials.txt` (`url`/`username`/`password`, mode 0600).
+- Check state any time: `switch-controller list-ports` (per-port config + drift vs
+  `zones.json`), or `network-manager reconcile --only switch` for a dry-run.
+
+### 6b — Wi-Fi access points
+
+First set the real SSID **names** and WPA **passphrases** (they replace the
+`<…_SSID>` placeholders in `zones.json`; secrets go to a 0600 file, never committed):
+
+```bash
+setup-wlan-secrets.sh          # set SSID names + passphrases  (→ ~/.wlan-secrets.txt)
+setup-wlan-secrets.sh --list   # show SSIDs and whether a secret is set
+```
+
+Then register the AP(s) and map each SSID to a zone, and reconcile:
+
+```bash
+ap-controller add livingroom --vendor unifi --ip 10.0.0.21
+ap-controller ssid livingroom add HomeWiFi  --zone home  --security wpa2-personal
+ap-controller ssid livingroom add GuestWiFi --zone guest --security wpa2-personal
+ap-controller link livingroom --switch core --port 5      # the AP's uplink port
+ap-controller reconcile --apply
+```
+
+- With a **UniFi controller**, `switch-controller interrogate` auto-populates the AP
+  inventory and marks the AP's uplink port as a WiFi-VLAN trunk — so adopting a
+  controller wires most of this up for you.
+- `security`: `open | wpa2-personal | wpa3-personal | wpa2-enterprise | wpa3-enterprise`
+  (enterprise needs a RADIUS profile — currently a manual step).
+
+### Re-running
+
+All of the above is idempotent. After the initial setup, a full
+`network-manager reconcile --apply` re-converges every plane (OPNsense, Proxmox,
+switch, ap) against `zones.json`; add `--only switch` / `--only ap` to scope it.
+Manual switches always report as "needs-manual" on apply (they can't self-program)
+— that's expected, not an error. Full reference:
+[network/scripts/README.md](../foundation/network/scripts/README.md) (ADR-008).
 
 ---
 

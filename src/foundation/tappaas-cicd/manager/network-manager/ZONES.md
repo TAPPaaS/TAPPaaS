@@ -252,7 +252,7 @@ that zone's VLAN. It is consumed by the ADR-008 WiFi tooling (see
 - **`setup-wlan-secrets.sh`** walks the active zones that declare an `SSID`, lets
   you set the real name (replacing the shipped `<PLACEHOLDER>`), and stores the
   WPA passphrase in a 0600 secrets file (never in `zones.json`).
-- **`ap-manager`** maps each SSID to its zone's VLAN on the WiFi controller.
+- **`ap-controller`** maps each SSID to its zone's VLAN on the WiFi controller.
 
 The passphrase and per-SSID security level are **not** stored here — only the
 SSID name and (via `vlantag`) its VLAN.

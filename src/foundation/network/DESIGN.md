@@ -269,10 +269,10 @@ into `~/bin`):
 
 | Script | Role |
 |--------|------|
-| `zone-reconcile` | orchestrator — runs every provider in order (`opnsense → proxmox → switch → ap`) |
+| `network-manager reconcile` | orchestrator — runs every provider in order (`opnsense → proxmox → switch → ap`) |
 | `switch-controller` | physical switches (controllers / switches / ports → trunk + access VLANs) |
-| `ap-manager` | WiFi APs (SSID → VLAN via the vendor controller) |
-| `proxmox-manager` | node bridge-vids + per-VM trunks (#335) |
+| `ap-controller` | WiFi APs (SSID → VLAN via the vendor controller) |
+| `proxmox-controller` | node bridge-vids + per-VM trunks (#335) |
 | `setup-switches.sh` | interactive switch registration (bootstrap step #351) |
 | `setup-wlan-secrets.sh` | set WiFi SSID names (in `zones.json`) + passphrases (0600 secrets file) |
 
@@ -403,8 +403,9 @@ see `cluster/DESIGN.md` §"High Availability".
 
 - [`aliases.json`](aliases.json) — global aliases shared across modules
 - [`services/`](services/) — capability lifecycle scripts (proxy, rules, …)
-- [`scripts/`](scripts/) — network orchestration (zone-reconcile, switch-controller,
-  ap-manager, setup-*) — see [`scripts/README.md`](scripts/README.md)
+- [`scripts/`](scripts/) — network orchestration (switch-controller,
+  ap-controller, setup-*; orchestrated by `network-manager reconcile`) — see
+  [`scripts/README.md`](scripts/README.md)
 - `tappaas-cicd/controller/opnsense-controller/` — `rules-manager` implementation
 - [`../tappaas-cicd/manager/network-manager/ZONES.md`](../tappaas-cicd/manager/network-manager/ZONES.md) — zone reference
 - [`../../../docs/ADR/ADR-008-switch-module-network-infrastructure.md`](../../../docs/ADR/ADR-008-switch-module-network-infrastructure.md) — design
