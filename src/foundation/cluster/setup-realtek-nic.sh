@@ -80,6 +80,29 @@ fi
 export DEBIAN_FRONTEND=noninteractive
 KREL="$(uname -r)"
 
+# Headers META package — this is what keeps DKMS working across FUTURE kernel
+# upgrades, and it must be installed even when the running kernel already has
+# headers. Version-pinned header packages (proxmox-headers-X.Y.Z-N-pve) satisfy
+# the kernel of the day and nothing more: a later `apt dist-upgrade` then pulls a
+# new proxmox-kernel with no headers behind it, DKMS silently skips the r8127
+# build, and the node reboots with r8169 blacklisted and NO driver for the NIC —
+# on an MS-S1 MAX that is the WAN uplink, so the node comes up with no internet.
+# proxmox-default-headers tracks proxmox-default-kernel, so every future kernel
+# arrives with matching headers and `dkms autoinstall` keeps succeeding.
+ensure_headers_meta() {
+    if dpkg-query -W -f='${Status}' proxmox-default-headers 2>/dev/null \
+        | grep -q '^install ok installed'; then
+        return 0
+    fi
+    info "Installing proxmox-default-headers so DKMS rebuilds on future kernel upgrades..."
+    apt-get update -qq || true
+    apt-get install -y proxmox-default-headers >/dev/null 2>&1 \
+        || warn "Could not install proxmox-default-headers — DKMS may not rebuild after the next kernel upgrade."
+}
+
+# Headers for the RUNNING kernel — a hard requirement for the build below. The
+# meta package tracks the newest kernel in the series, which is not the running
+# one when the node has not rebooted since an upgrade, so this stays separate.
 ensure_headers() {
     if [[ -d "/lib/modules/${KREL}/build" ]]; then
         return 0
@@ -94,6 +117,7 @@ ensure_headers() {
     [[ -d "/lib/modules/${KREL}/build" ]]
 }
 
+ensure_headers_meta
 if ! ensure_headers; then
     err "Kernel headers for ${KREL} not available — cannot build the r8127 DKMS module. Aborting (r8169 left in place)."
     exit 1
