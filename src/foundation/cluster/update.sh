@@ -92,6 +92,17 @@ while read -r node; do
     scp -q "${SCRIPT_DIR}/Create-TAPPaaS-VM.sh" root@"$NODE_FQDN":/root/tappaas/
     scp -q "${SCRIPT_DIR}/Create-TAPPaaS-LXC.sh" root@"$NODE_FQDN":/root/tappaas/
 
+    # The mothership's SSH public key, distributed as the canonical
+    # tappaas-cicd.pub. Create-TAPPaaS-VM.sh injects it (--sshkey) so cloud-init
+    # VMs created on ANY node authorize the controller. tappaas-cicd/install.sh
+    # seeds it only on the nodes present at mothership-install time; a node added
+    # later (join/--pxe) would otherwise lack it, and image/cloud-init VMs placed
+    # there fail SSH provisioning ("Permission denied (publickey)"). Re-pushing
+    # here on every update keeps every node — including new ones — self-healed.
+    if [ -f /home/tappaas/.ssh/id_ed25519.pub ]; then
+        scp -q /home/tappaas/.ssh/id_ed25519.pub root@"$NODE_FQDN":/root/tappaas/tappaas-cicd.pub
+    fi
+
     # Debian/Ubuntu cloud-init vendor-data snippet (issue #147). Must live at
     # /var/lib/vz/snippets/ to be referenced as 'local:snippets/...' in qm.
     info "Deploying Debian vendor-data snippet to $node..."
