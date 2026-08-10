@@ -6,7 +6,7 @@
 | **Version** | 0.1 |
 | **Date** | 2026-08-10 |
 | **Author** | drafted by Claude for Lars Rossen |
-| **Related** | [ADR-013](<ADR-013 - Documentation Structure and Standards.md>) (doc taxonomy — governance files are the "meta" layer it doesn't cover); [ADR-011](<ADR-011 - SBOM Governance.md>) (supply-chain governance, referenced by SECURITY); [ADR-007](<ADR-007 - TAPPaaS Taxonomy.md>) (module/namespace model that CODEOWNERS routes); `docs/codeberg-migration.md` (forge = Codeberg); the external `CLAUDE.md` Codeberg-etiquette section (the human-facing form of which belongs in an in-repo `CONTRIBUTING.md`) |
+| **Related** | **#363** (module lifecycle blueprint — the per-*module* required-artifact set; the **companion** to this ADR's repo/org-level files: `CONTRIBUTING.md` points contributors at #363's module contract, but the two scopes stay distinct); [ADR-013](<ADR-013 - Documentation Structure and Standards.md>) (doc taxonomy — governance files are the "meta" layer it doesn't cover); [ADR-011](<ADR-011 - SBOM Governance.md>) (supply-chain governance, referenced by SECURITY); [ADR-007](<ADR-007 - TAPPaaS Taxonomy.md>) (module/namespace model that CODEOWNERS routes); `docs/codeberg-migration.md` (forge = Codeberg); the external `CLAUDE.md` Codeberg-etiquette section (the human-facing form of which belongs in an in-repo `CONTRIBUTING.md`) |
 | **Changelog** | v0.1 — initial draft: gap analysis, canonical file set, per-repo placement, content outlines, phased rollout |
 
 ## Context
@@ -63,23 +63,34 @@ org-wide default-health-file mechanism** like GitHub's `.github` repo), designat
 tailored `CONTRIBUTING.md` + `CODEOWNERS` and **link back** to the canonical
 `CODE_OF_CONDUCT`, `SECURITY`, and `GOVERNANCE`.
 
-| File | Canonical location | Community | Documentation |
-|------|--------------------|-----------|---------------|
-| `LICENSE` (MPL-2.0) | each repo (self-contained) | own copy | own copy |
-| `CONTRIBUTING.md` | `TAPPaaS/TAPPaaS` (root) | own (namespace/module rules) → links core | own (docs workflow) → links core |
-| `CODE_OF_CONDUCT.md` | `TAPPaaS/TAPPaaS` (root) | link | link |
-| `SECURITY.md` | `TAPPaaS/TAPPaaS` (root) | link | link |
-| `SUPPORT.md` | `TAPPaaS/TAPPaaS` (root) | link | (community pages already) |
-| `GOVERNANCE.md` | `TAPPaaS/TAPPaaS` (root) | link | link |
-| `CODEOWNERS` | each repo (paths differ) | **required** (namespace routing) | own |
-| `.forgejo/issue_template/`, `.forgejo/PULL_REQUEST_TEMPLATE.md` | each repo | each repo | each repo |
-| `CHANGELOG.md` | `TAPPaaS/TAPPaaS` (root) | optional | n/a |
+**Placement rule (within each repo):** keep the **root minimal** — only `LICENSE.md`
+(and the repo's `README.md`, unchanged). All **prose governance/contribution files live
+under `docs/`**; **issue/PR templates and `CODEOWNERS` live under `.forgejo/`**. Forgejo
+auto-detects the health files in `docs/` (as well as root / `.forgejo`), so the Codeberg
+UI still surfaces them — the root stays uncluttered.
+
+| File | Location (per repo) | Canonical home | Community | Documentation |
+|------|---------------------|----------------|-----------|---------------|
+| `LICENSE.md` (MPL-2.0) | **root** | each repo (self-contained) | own copy | own copy |
+| `CONTRIBUTING.md` | **`docs/`** | `TAPPaaS/TAPPaaS` | own (namespace/module rules) → links core | own (docs workflow) → links core |
+| `CODE_OF_CONDUCT.md` | **`docs/`** | `TAPPaaS/TAPPaaS` | link | link |
+| `SECURITY.md` | **`docs/`** | `TAPPaaS/TAPPaaS` | link | link |
+| `SUPPORT.md` | **`docs/`** | `TAPPaaS/TAPPaaS` | link | (community pages already) |
+| `GOVERNANCE.md` | **`docs/`** | `TAPPaaS/TAPPaaS` | link | link |
+| `CODEOWNERS` | **`.forgejo/`** | each repo (paths differ) | **required** (namespace routing) | own |
+| `issue_template/`, `PULL_REQUEST_TEMPLATE.md` | **`.forgejo/`** | each repo | each repo | each repo |
+| `CHANGELOG.md` | `docs/` (or root) | `TAPPaaS/TAPPaaS` | optional | n/a |
+
+> The existing root `LICENSE` file should be renamed to **`LICENSE.md`** (Forgejo detects
+> both; `.md` is chosen for consistency with the rest of the set).
 
 ### D2 — Locations and Codeberg/Forgejo specifics
 
-- Health files may sit in **repo root** or a **`docs/`** subdir; Forgejo also honors
-  **`.forgejo/`** (and legacy `.gitea/`). **Use repo root** for the prose files
-  (discoverable, conventional) and **`.forgejo/`** for issue/PR templates + `CODEOWNERS`.
+- Forgejo auto-detects health files in **root**, **`.forgejo/`** (legacy `.gitea/`), and
+  **`docs/`**. TAPPaaS uses that flexibility to keep the **root minimal — only `LICENSE.md`
+  + `README.md`** — with all **prose governance/contribution files under `docs/`** and
+  **issue/PR templates + `CODEOWNERS` under `.forgejo/`**. The Codeberg UI still links the
+  `docs/`-hosted files.
 - **Templates target Codeberg**, not GitHub: `.forgejo/issue_template/*.yaml` +
   `.forgejo/PULL_REQUEST_TEMPLATE.md`, with an `issue_template/config.yaml` routing
   questions to the issue tracker (TAPPaaS has no Discussions — Forgejo lacks the feature;
@@ -122,9 +133,11 @@ tailored `CONTRIBUTING.md` + `CODEOWNERS` and **link back** to the canonical
 
 ### D4 — Relationship to ADR-013 and the external `CLAUDE.md`
 
-- These files are **governance/meta**, complementary to ADR-013's *documentation* taxonomy:
-  ADR-013 governs `docs/`, module READMEs, and the site; ADR-015 governs the root-level
-  contributor-facing contract. No overlap, no conflict.
+- These files are **governance/meta** — forge-detected community-health files — complementary
+  to ADR-013's *documentation* taxonomy: ADR-013 governs documentation *content* (module
+  READMEs, design docs, the site); ADR-015 governs the contributor-facing *contract*. They
+  co-locate under `docs/` (consistent with ADR-013's "every document has one home") but serve
+  distinct purposes; no overlap, no conflict.
 - The **human-facing** subset of the `CLAUDE.md` Codeberg-etiquette rules is **copied into
   `CONTRIBUTING.md`** so contributors without the AI tooling get the same norms. `CLAUDE.md`
   stays external (AI-tooling config, per the tappaas-claude split) and simply references
@@ -132,8 +145,9 @@ tailored `CONTRIBUTING.md` + `CODEOWNERS` and **link back** to the canonical
 
 ### D5 — Phased rollout (minimal-first)
 
-1. **Phase 1 (now):** `TAPPaaS/TAPPaaS` — `CONTRIBUTING.md`, `CODE_OF_CONDUCT.md`,
-   `SECURITY.md`. These are the highest-leverage and unblock external contribution safely.
+1. **Phase 1 (now):** `TAPPaaS/TAPPaaS` — `docs/CONTRIBUTING.md`, `docs/CODE_OF_CONDUCT.md`,
+   `docs/SECURITY.md`, and rename `LICENSE` → `LICENSE.md`. These are the highest-leverage and
+   unblock external contribution safely.
 2. **Phase 2:** `TAPPaaS/Community` — `CONTRIBUTING.md` (namespace/module rules) +
    `CODEOWNERS` (per-namespace routing); `SUPPORT.md` and `.forgejo/` templates in core.
 3. **Phase 3:** `GOVERNANCE.md`, `MAINTAINERS`, templates in the other repos, `CHANGELOG.md`
@@ -151,11 +165,15 @@ tailored `CONTRIBUTING.md` + `CODEOWNERS` and **link back** to the canonical
 
 ## Acceptance criteria
 
-- [ ] Phase-1 files present in `TAPPaaS/TAPPaaS`, discoverable in the Codeberg repo header.
-- [ ] `CONTRIBUTING.md` documents the module contract, catalog registration, PR workflow,
-      and the Codeberg-etiquette norms (human-attribution, concise commits, minimize load).
-- [ ] `SECURITY.md` names a private disclosure channel and links ADR-011.
-- [ ] `TAPPaaS/Community` has `CODEOWNERS` routing every `src/<contributor>/` namespace.
+- [ ] Root stays minimal: only `LICENSE.md` (+ `README.md`); the existing `LICENSE` is
+      renamed to `LICENSE.md`.
+- [ ] Phase-1 prose files present under **`docs/`** in `TAPPaaS/TAPPaaS` and surfaced in the
+      Codeberg repo UI.
+- [ ] `docs/CONTRIBUTING.md` documents the module contract (points to #363), catalog
+      registration, PR workflow, and the Codeberg-etiquette norms (human-attribution,
+      concise commits, minimize load).
+- [ ] `docs/SECURITY.md` names a private disclosure channel and links ADR-011.
+- [ ] `TAPPaaS/Community` has `.forgejo/CODEOWNERS` routing every `src/<contributor>/` namespace.
 - [ ] Issue/PR templates live under `.forgejo/` (not `.github/`) and reference Codeberg.
 - [ ] No file or link points contributors at the GitHub mirror.
 
