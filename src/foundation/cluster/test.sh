@@ -608,6 +608,179 @@ else
     skip "storage drift test (use TAPPAAS_TEST_DEEP=1 to run)"
 fi
 
+# ── Test: cloud-init orphan sweep (#146) ────────────────────────────
+#
+# A cloud-init volume stranded on a node by an HA recovery aborts every
+# subsequent migration back to it ("volume already exists", allow_rename=0),
+# leaving the CRM to retry every ~10s forever. Standard mode checks the sweep
+# runs and classifies live volumes correctly; deep mode stages a real orphan.
+
+info "${BOLD}Test: cloud-init orphan sweep${CL}"
+SWEEP="${SCRIPT_DIR}/cloudinit-orphans.sh"
+
+if [[ -x "${SWEEP}" ]]; then
+    pass "cloudinit-orphans.sh present and executable"
+
+    if "${SWEEP}" --help >/dev/null 2>&1; then
+        pass "cloudinit-orphans.sh --help works"
+    else
+        fail "cloudinit-orphans.sh --help failed"
+    fi
+
+    # rc 0 = clean, rc 2 = orphans found (a real finding, not a test failure);
+    # rc 1 = the sweep itself broke.
+    sweep_rc=0
+    sweep_out=$("${SWEEP}" 2>&1) || sweep_rc=$?
+    case "${sweep_rc}" in
+        0) pass "cluster-wide sweep clean — no orphaned cloud-init volumes" ;;
+        2) pass "sweep ran; orphans found (see below) — run --execute to clear"
+           printf '%s\n' "${sweep_out}" | grep -E 'ORPHAN|UNOWNED' | indent ;;
+        *) fail "cloudinit-orphans.sh exited ${sweep_rc}"
+           printf '%s\n' "${sweep_out}" | indent ;;
+    esac
+
+    # Live cloud-init volumes whose VM is on that same node must be classified
+    # 'inuse' and never touched — the guard that keeps the sweep safe to
+    # automate. Debug output lists them.
+    if TAPPAAS_DEBUG=1 "${SWEEP}" 2>&1 | grep -q 'is on this node'; then
+        pass "in-use cloud-init volumes classified 'inuse' (left alone)"
+    else
+        skip "no in-use cloud-init volumes to classify"
+    fi
+else
+    fail "cloudinit-orphans.sh not found at ${SWEEP}"
+fi
+
+# rn_wait_ha_settled's parser must treat only the resting states as settled.
+if (
+    # shellcheck source=lib/reboot-node-lib.sh disable=SC1091
+    . "${SCRIPT_DIR}/lib/reboot-node-lib.sh" 2>/dev/null
+    parse() {
+        sed -n 's/^service \([^ ]*\) (\([^,]*\), \([^)]*\))$/\1 \3/p' \
+        | while read -r sid state; do
+              [[ " ${RN_STEADY_STATES} " == *" ${state} "* ]] || echo "${sid}=${state}"
+          done
+    }
+    got=$(printf 'service vm:110 (tappaas1, started)\nservice vm:130 (tappaas2, migrate)\nservice vm:140 (tappaas1, freeze)\n' | parse)
+    [[ "${got}" == "vm:130=migrate" ]]
+); then
+    pass "rn_wait_ha_settled parser flags only transitional services"
+else
+    fail "rn_wait_ha_settled parser misclassified HA states"
+fi
+
+if [[ "${DEEP}" == "1" ]]; then
+    info "${BOLD}Deep Test: staged cloud-init orphan${CL}"
+
+    # Pick a VM that HA does NOT manage, so staging a volume for it on another
+    # node cannot interfere with a real migration.
+    _co_node1=$(get_all_node_hostnames | head -1)
+    # shellcheck disable=SC2086
+    _co_ha=$(ssh ${SSH_OPTS} "root@${_co_node1}.${MGMT}.internal" \
+        "ha-manager status 2>/dev/null | sed -n 's/^service vm:\([0-9]*\).*/\1/p'" 2>/dev/null || true)
+    # shellcheck disable=SC2086
+    _co_vms=$(ssh ${SSH_OPTS} "root@${_co_node1}.${MGMT}.internal" \
+        "pvesh get /cluster/resources --type vm --output-format json" 2>/dev/null \
+        | jq -r '.[] | select(.template != 1) | "\(.vmid) \(.node)"' 2>/dev/null || true)
+
+    _co_vmid=""; _co_owner=""
+    while read -r _id _nd; do
+        [[ -n "${_id}" ]] || continue
+        printf '%s\n' "${_co_ha}" | grep -qx "${_id}" && continue
+        _co_vmid="${_id}"; _co_owner="${_nd}"; break
+    done <<< "${_co_vms}"
+
+    # Stage the orphan on a node that is NOT the VM's owner.
+    _co_target=$(get_all_node_hostnames | grep -vx "${_co_owner}" | head -1 || true)
+
+    if [[ -z "${_co_vmid}" || -z "${_co_target}" ]]; then
+        skip "no non-HA VM + spare node available to stage an orphan"
+    else
+        _co_vol="tanka1:vm-${_co_vmid}-cloudinit"
+        _co_cleanup() {
+            # shellcheck disable=SC2086,SC2029
+            ssh ${SSH_OPTS} "root@${_co_target}.${MGMT}.internal" \
+                "pvesm free ${_co_vol}" >/dev/null 2>&1 || true
+        }
+        trap _co_cleanup EXIT
+
+        info "  Staging ${_co_vol} on ${_co_target} (VM ${_co_vmid} lives on ${_co_owner})"
+        # shellcheck disable=SC2086,SC2029
+        if ssh ${SSH_OPTS} "root@${_co_target}.${MGMT}.internal" \
+               "pvesm alloc tanka1 ${_co_vmid} vm-${_co_vmid}-cloudinit 4M" >/dev/null 2>&1; then
+
+            # 1. Dry-run must report it and exit 2, without deleting anything.
+            _co_rc=0; _co_out=$("${SWEEP}" "${_co_target}" 2>&1) || _co_rc=$?
+            if [[ "${_co_rc}" -eq 2 ]] && printf '%s' "${_co_out}" | grep -q "ORPHAN.*${_co_vol}"; then
+                pass "dry-run detected staged orphan (exit 2, not freed)"
+            else
+                fail "dry-run did not report the staged orphan (rc ${_co_rc})"
+                printf '%s\n' "${_co_out}" | indent
+            fi
+            # shellcheck disable=SC2086
+            if ssh ${SSH_OPTS} "root@${_co_target}.${MGMT}.internal" \
+                   "pvesm list tanka1" 2>/dev/null | grep -q "vm-${_co_vmid}-cloudinit"; then
+                pass "dry-run left the volume in place"
+            else
+                fail "dry-run deleted the volume — must be report-only"
+            fi
+
+            # 2. --execute frees it.
+            if "${SWEEP}" --execute "${_co_target}" >/dev/null 2>&1; then
+                pass "--execute freed the staged orphan"
+            else
+                fail "--execute did not complete cleanly"
+            fi
+            # shellcheck disable=SC2086
+            if ssh ${SSH_OPTS} "root@${_co_target}.${MGMT}.internal" \
+                   "pvesm list tanka1" 2>/dev/null | grep -q "vm-${_co_vmid}-cloudinit"; then
+                fail "orphan still present after --execute"
+            else
+                pass "volume gone from ${_co_target} after --execute"
+            fi
+
+            # 3. Re-run is clean and idempotent.
+            if "${SWEEP}" "${_co_target}" >/dev/null 2>&1; then
+                pass "re-run reports clean (idempotent)"
+            else
+                fail "re-run still reports orphans"
+            fi
+        else
+            skip "could not allocate a staged orphan on ${_co_target}"
+        fi
+        trap - EXIT
+        _co_cleanup
+    fi
+
+    # An 'unowned' volume (no VM config anywhere) must be reported, never freed.
+    _uo_vmid=9999
+    _uo_node=$(get_all_node_hostnames | head -1)
+    # shellcheck disable=SC2086,SC2029
+    if ssh ${SSH_OPTS} "root@${_uo_node}.${MGMT}.internal" \
+           "test ! -e /etc/pve/nodes/*/qemu-server/${_uo_vmid}.conf && pvesm alloc tanka1 ${_uo_vmid} vm-${_uo_vmid}-cloudinit 4M" >/dev/null 2>&1; then
+        if "${SWEEP}" --execute "${_uo_node}" 2>&1 | grep -q "UNOWNED.*vm-${_uo_vmid}-cloudinit"; then
+            pass "unowned volume reported, not freed"
+        else
+            fail "unowned volume was not reported as UNOWNED"
+        fi
+        # shellcheck disable=SC2086
+        if ssh ${SSH_OPTS} "root@${_uo_node}.${MGMT}.internal" \
+               "pvesm list tanka1" 2>/dev/null | grep -q "vm-${_uo_vmid}-cloudinit"; then
+            pass "unowned volume survived --execute (report-only guard holds)"
+        else
+            fail "unowned volume was deleted — the guard failed"
+        fi
+        # shellcheck disable=SC2086,SC2029
+        ssh ${SSH_OPTS} "root@${_uo_node}.${MGMT}.internal" \
+            "pvesm free tanka1:vm-${_uo_vmid}-cloudinit" >/dev/null 2>&1 || true
+    else
+        skip "could not stage an unowned cloud-init volume"
+    fi
+else
+    info "${BOLD}Deep Test: staged cloud-init orphan${CL}"
+    skip "orphan staging test (use TAPPAAS_TEST_DEEP=1 to run)"
+fi
+
 # ── Summary ─────────────────────────────────────────────────────────
 
 info "  Results: ${GN}${PASS} passed${CL}, ${RD}${FAIL} failed${CL}, ${YW}${SKIP} skipped${CL}"

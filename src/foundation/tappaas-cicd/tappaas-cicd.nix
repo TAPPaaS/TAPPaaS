@@ -139,6 +139,51 @@ in
     };
   };
 
+  # ----------------------------------------
+  # check-ha-health — systemd timer (issue #146)
+  # ----------------------------------------
+  # A failed HA failback leaves the CRM retrying a migration every ~10s
+  # indefinitely, freezing the guest filesystem on every attempt. Nothing
+  # surfaced that for 27 hours, so poll for services stuck in a transitional
+  # state. --repair runs the cloud-init orphan sweep, which is the known cause
+  # (issue #146 / https://bugzilla.proxmox.com/show_bug.cgi?id=7608).
+  #
+  # Runs as tappaas: the check SSHes to the nodes with the operator key, the
+  # same way reboot-node.sh and the other cluster tooling do.
+  systemd.services.check-ha-health = {
+    description = "TAPPaaS HA health check — detect wedged HA services";
+    serviceConfig = {
+      Type = "oneshot";
+      User = "tappaas";
+      ExecStart = "/home/tappaas/bin/check-ha-health.sh --quiet --repair";
+      # rc 2 = a wedged service was found and reported; that is a successful
+      # detection, not a unit failure, so don't spam systemd with failed units.
+      SuccessExitStatus = [ 0 2 ];
+      Environment = [
+        ("PATH=/home/tappaas/bin:/run/wrappers/bin:/home/tappaas/.nix-profile/bin"
+          + ":/etc/profiles/per-user/tappaas/bin:/nix/var/nix/profiles/default/bin"
+          + ":/run/current-system/sw/bin")
+      ];
+      NoNewPrivileges = true;
+      ProtectSystem = "strict";
+      ReadWritePaths = [ "/var/lib/tappaas" ];
+      PrivateTmp = true;
+      ProtectKernelTunables = true;
+      ProtectKernelModules = true;
+      ProtectControlGroups = true;
+    };
+  };
+
+  systemd.timers.check-ha-health = {
+    description = "Periodic trigger for check-ha-health";
+    wantedBy = [ "timers.target" ];
+    timerConfig = {
+      OnBootSec = "10min";          # let the cluster settle after a reboot
+      OnUnitActiveSec = "5min";
+      RandomizedDelaySec = "30s";
+    };
+  };
+
   # cron was replaced by the systemd timer above (issue #150). Disable it
   # explicitly so a stale crontab entry can never resurrect a dual scheduler.
   services.cron.enable = false;
@@ -217,6 +262,9 @@ in
   # dir must exist for the systemd mount-namespacing step to succeed.
   systemd.tmpfiles.rules = [
     "d /var/lib/promtail 0750 promtail promtail -"
+    # check-ha-health.sh records when each HA service entered a transitional
+    # state, so it can alert on duration rather than on the state alone (#146).
+    "d /var/lib/tappaas 0750 tappaas users -"
   ];
 
   nix.settings.trusted-users = [ "root" "@wheel" ]; # Allow remote updates

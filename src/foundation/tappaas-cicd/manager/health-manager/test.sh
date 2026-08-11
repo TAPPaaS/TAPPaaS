@@ -22,6 +22,68 @@ for f in "${here}"/*.sh; do
 done
 
 echo ""
+echo "== check-ha-health threshold logic (offline, #146) =="
+# Exercises the wedge detector without touching the cluster: TAPPAAS_HA_STATUS_FILE
+# substitutes a canned `ha-manager status`, TAPPAAS_HA_STATE isolates the history.
+CHH="${here}/check-ha-health.sh"
+if [[ -x "$CHH" ]]; then
+    _tmp="$(mktemp -d)"
+    _status="${_tmp}/status"
+    _state="${_tmp}/state"
+
+    # A steady cluster must be silent and exit 0.
+    cat >"${_status}" <<'EOF'
+quorum OK
+master tappaas3 (active, Tue Aug 11 15:50:33 2026)
+service vm:110 (tappaas1, started)
+service vm:130 (tappaas1, started)
+EOF
+    # Run the checker and report the exit code we got vs the one we wanted.
+    _chh() {  # _chh <expected-rc> <label> [extra args...]
+        local want="$1" label="$2"; shift 2
+        local got=0
+        TAPPAAS_HA_STATUS_FILE="${_status}" TAPPAAS_HA_STATE="${_state}" \
+            "$CHH" --quiet "$@" >/dev/null 2>&1 || got=$?
+        if [[ "$got" -eq "$want" ]]; then ok "${label}"; else bad "${label} (rc ${got}, want ${want})"; fi
+    }
+
+    _chh 0 "steady cluster → exit 0"
+
+    # A service that has JUST entered 'migrate' is within the grace period.
+    cat >"${_status}" <<'EOF'
+service vm:110 (tappaas1, started)
+service vm:130 (tappaas2, migrate)
+EOF
+    _chh 0 "new 'migrate' within threshold → exit 0" --threshold 600
+    if grep -q 'vm:130' "${_state}"; then ok "transitional state recorded in history"
+    else bad "history did not record vm:130"; fi
+
+    # Backdate the first-seen stamp: the same state is now wedged.
+    awk -F'\t' 'BEGIN{OFS="\t"} {print $1, $2, $3 - 4000}' "${_state}" >"${_state}.bak" \
+        && mv "${_state}.bak" "${_state}"
+    _chh 2 "long-running 'migrate' → exit 2 (wedged)" --threshold 600
+
+    # Once it settles, the history is cleared so the next episode starts fresh.
+    cat >"${_status}" <<'EOF'
+service vm:110 (tappaas1, started)
+service vm:130 (tappaas1, started)
+EOF
+    _chh 0 "settled service → exit 0"
+    if [[ -s "${_state}" ]]; then bad "history not cleared after settling"
+    else ok "history cleared after settling"; fi
+
+    # 'freeze' is deliberate (node maintenance), not a wedge — even at threshold 0.
+    cat >"${_status}" <<'EOF'
+service vm:130 (tappaas1, freeze)
+EOF
+    _chh 0 "'freeze' treated as steady → exit 0" --threshold 0
+
+    rm -rf -- "${_tmp}"
+else
+    bad "check-ha-health.sh not executable"
+fi
+
+echo ""
 echo "== health-manager TypeScript unit tests =="
 
 run_ts() {

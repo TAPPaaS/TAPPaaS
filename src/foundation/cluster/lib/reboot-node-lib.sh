@@ -16,6 +16,10 @@
 
 MGMT_SUFFIX=".mgmt.internal"
 
+# Directory holding this library, so sibling module scripts (../cloudinit-orphans.sh)
+# resolve regardless of the caller's cwd.
+RN_LIB_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
 # FQDN of a node on the management network.
 rn_node_fqdn() { echo "${1}${MGMT_SUFFIX}"; }
 
@@ -80,6 +84,55 @@ rn_ha_vms_on_node() {
         | grep "service vm:" | grep "${node}" | awk '{print $2}' || true
 }
 
+# Free cloud-init volumes stranded on a node that has just rebooted (#146).
+#
+# A completed migration removes its own source copy, so the drain at the start
+# of reboot_one_node leaves nothing behind. But if the node was fenced — or the
+# drain aborted partway — a `vm-<id>-cloudinit` volume survives here, and it
+# will abort every failback attempt with "volume already exists", leaving the
+# CRM to retry every ~10s indefinitely. Sweep before leaving maintenance mode,
+# while no HA service is trying to move onto this node yet.
+#
+# Non-fatal: a failed sweep must not abort an otherwise healthy reboot.
+rn_sweep_cloudinit_orphans() {
+    local node="$1"
+    local sweep="${RN_LIB_DIR}/../cloudinit-orphans.sh"
+
+    if [[ ! -x "$sweep" ]]; then
+        debug "  cloudinit-orphans.sh not found — skipping stale-volume sweep"
+        return 0
+    fi
+
+    info "  Sweeping stale cloud-init volumes on ${node}..."
+    if "$sweep" --execute --quiet "$node"; then
+        info "  ${GN}✓${CL} No stale cloud-init volumes on ${node}"
+    else
+        # rc 1 = sweep error, rc 2 cannot occur with --execute.
+        warn "  Stale cloud-init sweep on ${node} reported problems — check before relying on failback"
+    fi
+    return 0
+}
+
+# HA service states that are stable resting places; anything else means the CRM
+# is still working. Kept in sync with health-manager/check-ha-health.sh.
+RN_STEADY_STATES="started stopped disabled ignored freeze"
+
+# Block until no HA service is in a transitional state, or <max> seconds pass.
+# Returns non-zero on timeout, echoing the offending services.
+rn_wait_ha_settled() {
+    local node="$1" max="${2:-${RN_HA_SETTLE_MAX:-180}}" n=0 stuck
+    while :; do
+        stuck=$(rn_node_ssh "$node" "ha-manager status 2>/dev/null" 2>/dev/null \
+            | sed -n 's/^service \([^ ]*\) (\([^,]*\), \([^)]*\))$/\1 \3/p' \
+            | while read -r sid state; do
+                  [[ " ${RN_STEADY_STATES} " == *" ${state} "* ]] || echo "${sid}=${state}"
+              done)
+        [[ -n "$stuck" ]] || return 0
+        [[ $n -lt $max ]] || { echo "$stuck"; return 1; }
+        sleep 5; (( n+=5 ))
+    done
+}
+
 # Perform a controlled reboot of a single node. Returns 0 on success; non-zero
 # on any failure (caller decides whether to abort the run). Assumes the caller
 # has already confirmed/authorised the action.
@@ -87,7 +140,7 @@ rn_ha_vms_on_node() {
 # Arguments: <node>
 reboot_one_node() {
     local node="$1"
-    local latest active local_wait=0 new_running
+    local latest active local_wait=0 new_running stuck
 
     info "${BOLD}Rebooting ${node}${CL}"
 
@@ -139,10 +192,28 @@ reboot_one_node() {
         warn "  ${node} running ${new_running} (expected ${latest}) — check grub default"
     fi
 
+    # Clear any cloud-init volume stranded here, so failback cannot wedge (#146).
+    rn_sweep_cloudinit_orphans "$node"
+
     # Leave maintenance mode → HA migrates VMs back.
     info "  Disabling HA maintenance mode..."
     rn_node_ssh "$node" "ha-manager crm-command node-maintenance disable ${node}" \
         || warn "Failed to disable maintenance mode on ${node} — run manually: ha-manager crm-command node-maintenance disable ${node}"
+
+    # Verify the failback actually converged. Without this the reboot reports
+    # success while the CRM retries a failing migration forever (#146) — which
+    # is exactly how a 27-hour retry loop went unnoticed.
+    info "  Waiting for HA to settle..."
+    if stuck=$(rn_wait_ha_settled "$node"); then
+        info "  ${GN}✓${CL} HA settled — no services in transition"
+    else
+        warn "  HA did not settle after ${RN_HA_SETTLE_MAX:-180}s; still in transition:"
+        while IFS= read -r _svc; do
+            [[ -n "$_svc" ]] && warn "      ${_svc}"
+        done <<< "${stuck}"
+        warn "  Check for a stale cloud-init volume blocking migration:"
+        warn "    ${RN_LIB_DIR}/../cloudinit-orphans.sh"
+    fi
 
     info "  ${GN}✓${CL} ${node} reboot complete"
     return 0
