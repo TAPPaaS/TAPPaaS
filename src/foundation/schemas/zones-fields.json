@@ -14,6 +14,10 @@
                     "description": "TAPPaaS nodes and self-management zone. Must be locked down with no access from other zones or the Internet. Typically only one zone named 'mgmt'.",
                     "typeId": 0
                 },
+                "WAN": {
+                    "description": "ISP hand-off segment shared by the WAN modem and every node's 'wan' bridge NIC, so the HA firewall VM keeps its uplink after failing over to another node. Switch-internal only: always state=Manual with a VLAN tag, which keeps it out of every trunk (vmnet_all_active_tags) and stops zone-manager creating an interface or DHCP server — the ISP modem is the sole DHCP server on the segment. See zones.json 'wan'.",
+                    "typeId": 1
+                },
                 "Service": {
                     "description": "Zone where service modules live. Multiple service zones can exist to serve different user bases (e.g., separate business units or home/business separation).",
                     "typeId": 2
@@ -71,6 +75,7 @@
             "required": true,
             "values": {
                 "0": "Management",
+                "1": "WAN",
                 "2": "Service",
                 "3": "Client",
                 "4": "IoT",

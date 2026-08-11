@@ -104,6 +104,19 @@
     "_comment": "ADR-010 admin-vpn landing zone (Q3 RESOLVED, validated live 2026-07-01). The operator's admin WireGuard session TERMINATES on OPNsense (a dedicated 'tappaas-admin' WG server on port 51821, tunneladdress 10.255.1.1/24); the satellite only blind-relays the UDP (or the admin device connects direct to the cluster WAN — the OPNsense side is identical). access-to: ['mgmt'] is realised NOT by zone-manager (which skips Overlay/vlantag=0 zones) but by a single explicit least-privilege firewall pass rule on the 'wireguard' interface: 10.255.1.0/24 -> 10.0.0.0/24, created idempotently by 'satellite-manager admin setup' (lib/admin-vpn.sh). NetBird (the 'netbird' overlay) remains independent for many-peer mesh; admin-vpn covers the single-operator case with plain WireGuard and no control plane. Peers are managed with 'satellite-manager admin add-peer'. Full runbook: tappaas-cicd/ADMIN-VPN.md.",
     "description": "ADR-010 admin-vpn landing (mgmt tunnel; see ADMIN-VPN.md)"
   },
+  "wan": {
+    "type": "WAN",
+    "state": "Manual",
+    "typeId": "1",
+    "subId": "0",
+    "vlantag": 100,
+    "ip": "10.1.0.0/24",
+    "bridge": "lan",
+    "access-to": [],
+    "pinhole-allowed-from": [],
+    "_comment": "ISP hand-off segment, switch-internal ONLY. Exists so the WAN modem and EVERY node's 'wan' bridge NIC share one L2 segment, letting the HA firewall VM (net1 bridge=wan, fixed MAC) keep the ISP lease when it fails over to another node. MUST stay state=Manual: (1) Manual is excluded from vmnet_all_active_tags, so VLAN 100 is never added to a node uplink trunk or a Proxmox VM NIC — the segment stays isolated; (2) Manual is not 'enabled', so zone-manager creates NO OPNsense interface and NO DHCP server — the ISP modem is the only DHCP server on this segment and a second one would break WAN. Do NOT set Active: zone-manager would immediately stand up an interface + DHCP server on the ISP segment. 'ip' is a placeholder for schema conformance; no interface is ever created from it. The switch ports are plain untagged ACCESS ports (switch-controller --type device --zone wan); modem and node NICs are untagged — VLAN 100 exists only inside the switch. Distinct from the 'bridge' field value 'wan', which names the physical WAN interface.",
+    "description": "ISP hand-off L2 segment (modem + node WAN NICs); switch-only, no interface, no DHCP"
+  },
   "srv": {
     "type": "Service",
     "state": "Inactive",
