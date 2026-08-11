@@ -64,6 +64,7 @@ validate-module-tier-source.sh,/home/tappaas/bin/validate-module-tier-source.sh,
 #
 # --- manager/health-manager/ (legacy verb scripts wrapped by health-manager) --------------
 check-disk-threshold.sh,/home/tappaas/bin/check-disk-threshold.sh,tappaas-cicd/manager/health-manager/check-disk-threshold.sh,script
+check-ha-health.sh,/home/tappaas/bin/check-ha-health.sh,tappaas-cicd/manager/health-manager/check-ha-health.sh,script
 inspect-cluster.sh,/home/tappaas/bin/inspect-cluster.sh,tappaas-cicd/manager/health-manager/inspect-cluster.sh,script
 inspect-vm.sh,/home/tappaas/bin/inspect-vm.sh,tappaas-cicd/manager/health-manager/inspect-vm.sh,script
 update-os.sh,/home/tappaas/bin/update-os.sh,tappaas-cicd/manager/health-manager/update-os.sh,script

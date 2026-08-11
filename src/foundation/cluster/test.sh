@@ -642,7 +642,12 @@ if [[ -x "${SWEEP}" ]]; then
     # Live cloud-init volumes whose VM is on that same node must be classified
     # 'inuse' and never touched — the guard that keeps the sweep safe to
     # automate. Debug output lists them.
-    if TAPPAAS_DEBUG=1 "${SWEEP}" 2>&1 | grep -q 'is on this node'; then
+    #
+    # Capture first, then grep: piping straight into `grep -q` makes grep exit
+    # on the first match, SIGPIPEs the sweep, and `set -o pipefail` then reports
+    # the whole pipeline as failed — a false "skip".
+    dbg_out=$(TAPPAAS_DEBUG=1 "${SWEEP}" 2>&1) || true
+    if grep -q 'is on this node' <<< "${dbg_out}"; then
         pass "in-use cloud-init volumes classified 'inuse' (left alone)"
     else
         skip "no in-use cloud-init volumes to classify"

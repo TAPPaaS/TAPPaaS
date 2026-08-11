@@ -104,8 +104,10 @@ rn_sweep_cloudinit_orphans() {
     fi
 
     info "  Sweeping stale cloud-init volumes on ${node}..."
+    # --quiet keeps routine "nothing found" chatter out of the reboot log; any
+    # volume actually freed is still reported by the sweep itself.
     if "$sweep" --execute --quiet "$node"; then
-        info "  ${GN}✓${CL} No stale cloud-init volumes on ${node}"
+        info "  ${GN}✓${CL} Cloud-init sweep clean on ${node}"
     else
         # rc 1 = sweep error, rc 2 cannot occur with --execute.
         warn "  Stale cloud-init sweep on ${node} reported problems — check before relying on failback"

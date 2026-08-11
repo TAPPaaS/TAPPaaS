@@ -100,8 +100,27 @@ fi
 # Compare against the recorded transitional-state history
 ###############################################################################
 now=$(date +%s)
-mkdir -p "$(dirname "${STATE_FILE}")" 2>/dev/null || true
-touch "${STATE_FILE}" 2>/dev/null || die "Cannot write state file: ${STATE_FILE}"
+
+# /var/lib/tappaas is created by a tmpfiles rule in tappaas-cicd.nix, but the
+# check must still work when run by hand before that rebuild has landed (or as
+# a user who cannot write there). Fall back to the user's state dir rather than
+# refusing to run — losing history only costs one grace period.
+ensure_state_file() {
+    local candidate
+    for candidate in "${STATE_FILE}" \
+                     "${XDG_STATE_HOME:-${HOME}/.local/state}/tappaas/ha-health.state"; do
+        mkdir -p "$(dirname "${candidate}")" 2>/dev/null || continue
+        if touch "${candidate}" 2>/dev/null; then
+            printf '%s' "${candidate}"
+            return 0
+        fi
+    done
+    return 1
+}
+
+STATE_PATH=$(ensure_state_file) || die "Cannot write a state file (tried ${STATE_FILE})"
+[[ "${STATE_PATH}" == "${STATE_FILE}" ]] \
+    || debug "Using fallback state file ${STATE_PATH}"
 
 new_state=""
 wedged=0
@@ -120,7 +139,7 @@ while read -r sid node state; do
 
     # First seen in this transitional state, or continuing an earlier one?
     first_seen=$(awk -F'\t' -v s="${sid}" -v st="${state}" \
-                     '$1 == s && $2 == st {print $3; exit}' "${STATE_FILE}")
+                     '$1 == s && $2 == st {print $3; exit}' "${STATE_PATH}")
     if [[ -z "${first_seen}" ]]; then
         first_seen="${now}"
         say "  ${YW}…${CL} ${sid} entered '${state}' on ${node}"
@@ -139,7 +158,7 @@ done < <(printf '%s\n' "${ha_status}" \
 
 # Rewrite the state file with only the currently-transitional services, so a
 # service that settles forgets its history and gets a fresh grace period.
-printf '%s' "${new_state}" > "${STATE_FILE}"
+printf '%s' "${new_state}" > "${STATE_PATH}"
 
 ###############################################################################
 # Report / repair
