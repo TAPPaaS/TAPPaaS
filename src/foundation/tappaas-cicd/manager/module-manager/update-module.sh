@@ -377,10 +377,11 @@ main() {
 
     local depends_on
     depends_on=$(read_module_config "${module}" | jq -r '.dependsOn // [] | .[]' 2>/dev/null)
-    # Variant of the consuming module — used to resolve same-variant providers
-    # (e.g. "nextcloud:fileservice" → "nextcloud-test" when variant=="test").
-    local module_variant
-    module_variant=$(read_module_config "${module}" | jq -r '.variant // ""' 2>/dev/null) || module_variant=""
+    # Environment of the consuming module — used to resolve same-environment
+    # providers (e.g. "nextcloud:fileservice" → "nextcloud-test" when
+    # environment=="test"). Was .variant until that field was retired (#438).
+    local module_environment
+    module_environment=$(read_module_config "${module}" | jq -r '.environment // ""' 2>/dev/null) || module_environment=""
 
     if [[ -z "${depends_on}" ]]; then
         debug "  No dependency services to call"
@@ -395,8 +396,8 @@ main() {
             local service_name="${dep##*:}"
             local provider_dir
 
-            # Prefer the same-variant provider when it exists (issue #344).
-            provider_module="$(resolve_provider_module "${provider_module}" "${module_variant}")"
+            # Prefer the same-environment provider when it exists (#344, #438).
+            provider_module="$(resolve_provider_module "${provider_module}" "${module_environment}")"
 
             if ! provider_dir=$(get_module_dir "${provider_module}" 2>/dev/null); then
                 fatal_with_rollback "${module}" "${snapshot_created}" \

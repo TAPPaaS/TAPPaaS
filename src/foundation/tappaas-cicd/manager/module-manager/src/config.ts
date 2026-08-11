@@ -255,11 +255,26 @@ export function getModuleDir(configDir: string, module: string): string | null {
   return location;
 }
 
-// ── Provider-name resolution (bash resolve_provider_module port, no-variant
-// form). Prefer the named provider's own deployed config; else its legacy
-// firewall<->network counterpart if THAT is the one actually deployed; else
-// echo the name back (the caller handles the miss).
-export function resolveProviderModule(configDir: string, provider: string): string {
+// ── Provider-name resolution (bash resolve_provider_module port). Prefer the
+// provider serving the CONSUMING module's environment; else the named
+// provider's own deployed config; else its legacy firewall<->network
+// counterpart if THAT is the one actually deployed; else echo the name back
+// (the caller handles the miss).
+//
+// #438: this was ported in the "no-variant form" — it took no environment at
+// all, so `module-manager reconcile` re-applied every consumer against the
+// SHARED provider even when a dedicated one served its environment. Keep the
+// signature aligned with the bash: environment last, optional, file-existence
+// guarded (so mgmt / the default environment, whose configs are unsuffixed by
+// design, correctly fall through to the base name).
+export function resolveProviderModule(
+  configDir: string,
+  provider: string,
+  environment = "",
+): string {
+  if (environment && existsSync(join(configDir, `${provider}-${environment}.json`))) {
+    return `${provider}-${environment}`;
+  }
   if (existsSync(join(configDir, `${provider}.json`))) return provider;
   const alias = provider === "network" ? "firewall" : provider === "firewall" ? "network" : "";
   if (alias && existsSync(join(configDir, `${alias}.json`))) return alias;

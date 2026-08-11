@@ -8,15 +8,18 @@
 
 set -euo pipefail
 
-# Derive all hosts from the (variant-aware) effective config, never hardcode base/zone.
+# Derive all hosts from the (environment-aware) effective config, never hardcode
+# base/zone.
 MODULE="${1:-nextcloud-hpb}"
 CFG_DIR="/home/tappaas/config"
 EFF_JSON="${CFG_DIR}/${MODULE}.json"
-VARIANT="$(jq -r '.variant // empty' "${EFF_JSON}" 2>/dev/null || true)"
+ENVIRONMENT="$(jq -r '.environment // empty' "${EFF_JSON}" 2>/dev/null || true)"
 TARGET="$(jq -r '.vmname' "${EFF_JSON}" 2>/dev/null).$(jq -r '.zone0' "${EFF_JSON}" 2>/dev/null).internal"
-# Nextcloud provider — pair with the same variant; fall back to base for production.
+# Nextcloud provider — pair with the same environment; fall back to the shared
+# config otherwise. Was .variant until that field was retired (#438). Inline
+# rather than via resolve_provider_module: this script does not source the lib.
 NC_JSON="${CFG_DIR}/nextcloud.json"
-[[ -n "${VARIANT}" && -f "${CFG_DIR}/nextcloud-${VARIANT}.json" ]] && NC_JSON="${CFG_DIR}/nextcloud-${VARIANT}.json"
+[[ -n "${ENVIRONMENT}" && -f "${CFG_DIR}/nextcloud-${ENVIRONMENT}.json" ]] && NC_JSON="${CFG_DIR}/nextcloud-${ENVIRONMENT}.json"
 NEXTCLOUD_HOST="$(jq -r '.vmname' "${NC_JSON}" 2>/dev/null || echo nextcloud).$(jq -r '.zone0' "${NC_JSON}" 2>/dev/null || echo srv).internal"
 SSH_CMD="ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 -o BatchMode=yes tappaas@${TARGET}"
 # proxyDomain lives in the network:proxy config block (variant registry sets it there); fall back to top-level.

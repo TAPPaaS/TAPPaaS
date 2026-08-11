@@ -169,6 +169,12 @@ function doReconcile(moduleArg: string, opts: ReconcileOptions): void {
     ? cfg.dependsOn.filter((d): d is string => typeof d === "string")
     : [];
 
+  // The CONSUMING module's environment drives provider resolution below (#438).
+  // Read it from the DEPLOYED config rather than opts.environment: reconcile is
+  // routinely invoked without --environment on an already-suffixed module name,
+  // and the persisted field is the authority either way.
+  const moduleEnvironment = typeof cfg.environment === "string" ? cfg.environment : "";
+
   if (dependsOn.length === 0) {
     info("  No dependency services to re-apply");
   } else {
@@ -178,7 +184,7 @@ function doReconcile(moduleArg: string, opts: ReconcileOptions): void {
       const providerName = colon === -1 ? dep : dep.slice(0, colon); // ${dep%%:*}
       const serviceName = dep.slice(dep.lastIndexOf(":") + 1); // ${dep##*:}
 
-      const providerModule = resolveProviderModule(configDir, providerName);
+      const providerModule = resolveProviderModule(configDir, providerName, moduleEnvironment);
       const providerDir = getModuleDir(configDir, providerModule);
       if (!providerDir) {
         warn(`  Cannot find provider '${providerModule}' location — skipping ${dep}`);

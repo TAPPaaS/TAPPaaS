@@ -292,9 +292,15 @@ main() {
         environment="${variant}"
         warn "  --variant is deprecated; treating '--variant ${variant}' as '--environment ${variant}' (ADR-007 P5)"
     fi
-    # The legacy variant value is not used past this point — the P5 environment
-    # path is registry-free. Keep it empty for the dependency-resolution helpers.
-    variant=""
+    # ${variant} is consumed above (deprecated alias → environment) and is dead
+    # from here on: the P5 environment path is registry-free, and dependency
+    # resolution takes ${environment} as resolved in Step 0.
+    #
+    # LOAD-BEARING (#438): this used to read `variant=""` and forward THAT to
+    # resolve_provider_module in Steps 3 and 5, so every consumer resolved its
+    # dependencies against the shared provider no matter which environment it
+    # was being installed into — silently wrong where a shared provider also
+    # existed, a hard "provider not installed" where only the environment's did.
 
     # ── Step 0: Classify tier/source and resolve the target environment ──
     info "${BOLD}Step 0: Classify (tier/source) and resolve environment${CL}"
@@ -559,7 +565,7 @@ main() {
         debug "  No dependencies declared"
     else
         for dep in ${depends_on}; do
-            if check_service_available "${dep}" "install-service.sh" "${variant}"; then
+            if check_service_available "${dep}" "install-service.sh" "${environment}"; then
                 info "  ${GN}✓${CL} ${dep}"
             else
                 dep_errors=$((dep_errors + 1))
@@ -599,11 +605,12 @@ main() {
         debug "  No dependency services to call"
     else
         for dep in ${depends_on}; do
-            # Resolve the provider honoring variant preference, identically to the
-            # Step 3 availability check, so a variant install calls the variant
-            # provider's install-service.sh (#292).
+            # Resolve the provider honoring same-environment preference,
+            # identically to the Step 3 availability check, so an environment
+            # install calls that environment's provider install-service.sh
+            # (#292, #438).
             local provider_module
-            provider_module="$(resolve_provider_module "${dep%%:*}" "${variant}")"
+            provider_module="$(resolve_provider_module "${dep%%:*}" "${environment}")"
             local service_name="${dep##*:}"
             local provider_dir
 

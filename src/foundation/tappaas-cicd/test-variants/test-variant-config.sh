@@ -4,7 +4,8 @@
 #
 # Covers:
 #   - get_variant_config        (VM-12, VM-13, VM-13b) — reads config/environments/
-#   - resolve_provider_module   (#292 same-environment preference / fallback)
+#   - resolve_provider_module   (#292 same-environment preference / fallback,
+#                                #438 dedicated-only provider + unsuffixed envs)
 #
 # These exercise the library functions in common-install-routines.sh against a
 # throwaway CONFIG_DIR fixture, so they are fast and require no cluster. The
@@ -93,8 +94,8 @@ else
     pass "VM-13b get_variant_config ghost fails cleanly (no config/environments/ghost.json)"
 fi
 
-# ── #292: resolve_provider_module preference/fallback ────────────────
-: > "${CONFIG_DIR}/litellm.json"          # base provider config exists
+# ── #292/#438: resolve_provider_module preference/fallback ───────────
+: > "${CONFIG_DIR}/litellm.json"          # shared provider config exists
 : > "${CONFIG_DIR}/litellm-demo.json"     # same-environment provider config exists
 
 assert_eq "$(resolve_provider_module litellm demo)"    "litellm-demo" "#292 resolve litellm+demo -> litellm-demo (same-environment)"
@@ -102,6 +103,21 @@ assert_eq "$(resolve_provider_module litellm "")"      "litellm"      "#292 reso
 assert_eq "$(resolve_provider_module litellm staging)" "litellm"      "#292 resolve litellm+staging -> litellm (no env cfg, fallback)"
 # Foundation-style dep with an environment: no cluster-demo.json -> falls back to cluster.
 assert_eq "$(resolve_provider_module cluster demo)"    "cluster"      "#292 resolve cluster+demo -> cluster (foundation, env-agnostic)"
+
+# #438: a DEDICATED provider with NO shared counterpart. Before the fix the
+# callers forwarded "" here, which resolved to the (absent) shared name and made
+# install-module die "provider module 'coturn' is not installed" even though the
+# environment's provider was deployed and healthy.
+: > "${CONFIG_DIR}/coturn-demo.json"      # ONLY the environment's provider exists
+assert_eq "$(resolve_provider_module coturn demo)" "coturn-demo" "#438 resolve coturn+demo -> coturn-demo (no shared coturn.json at all)"
+assert_eq "$(resolve_provider_module coturn "")"   "coturn"      "#438 resolve coturn+\"\" -> coturn (the pre-fix answer: a config that does not exist)"
+
+# #438: mgmt and the DEFAULT environment are unsuffixed by design, so forwarding
+# their name must still land on the base config (this is what makes it safe to
+# forward ${environment} unconditionally from install-module.sh).
+: > "${CONFIG_DIR}/identity.json"
+assert_eq "$(resolve_provider_module identity mgmt)" "identity" "#438 resolve identity+mgmt -> identity (mgmt configs are unsuffixed)"
+assert_eq "$(resolve_provider_module identity foo)"  "identity" "#438 resolve identity+foo -> identity (foo is the default env, unsuffixed)"
 
 echo "  Results: ${PASS} passed, ${FAIL} failed"
 [[ "${FAIL}" -eq 0 ]]

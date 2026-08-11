@@ -15,14 +15,14 @@ set -euo pipefail
 
 . /home/tappaas/bin/common-install-routines.sh
 
-# Variant-aware: derive hosts/URLs from the deployed configs, never hardcode the
-# zone (modules deploy to srv, srvWork, srvCust …). Pair Nextcloud by variant.
+# Environment-aware: derive hosts/URLs from the deployed configs, never hardcode
+# the zone (modules deploy to srv, srvWork, srvCust …). Pair Nextcloud by
+# environment. Was .variant until that field was retired (#438).
 MODULE="${1:-euro-office}"
 CONFIG_DIR="/home/tappaas/config"
 EO_JSON="${CONFIG_DIR}/${MODULE}.json"
-VARIANT="$(jq -r '.variant // empty' "${EO_JSON}" 2>/dev/null || true)"
-NC_JSON="${CONFIG_DIR}/nextcloud.json"
-[[ -n "${VARIANT}" && -f "${CONFIG_DIR}/nextcloud-${VARIANT}.json" ]] && NC_JSON="${CONFIG_DIR}/nextcloud-${VARIANT}.json"
+ENVIRONMENT="$(jq -r '.environment // empty' "${EO_JSON}" 2>/dev/null || true)"
+NC_JSON="${CONFIG_DIR}/$(resolve_provider_module nextcloud "${ENVIRONMENT}").json"
 
 _fqdn()  { echo "$(jq -r '.vmname' "$1").$(jq -r '.zone0' "$1").internal"; }
 _proxy() { jq -r '.config["network:proxy"].proxyDomain // .proxyDomain // empty' "$1"; }

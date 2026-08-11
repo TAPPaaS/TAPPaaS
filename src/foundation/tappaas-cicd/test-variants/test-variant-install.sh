@@ -7,8 +7,9 @@
 # deprecated alias for --environment.
 #
 # Offline (always): copy-update-json.sh suffixes the effective module name for a
-# non-default environment and persists .environment/.variant; install-module.sh
-# rejects an unregistered environment (no config/environments/<env>.json).
+# non-default environment and persists .environment (and ONLY .environment —
+# the legacy .variant mirror was retired in #438); install-module.sh rejects an
+# unregistered environment (no config/environments/<env>.json).
 #
 # Integration (only when TAPPAAS_TEST_DEEP=1): authors a 'vitest' environment,
 # installs the tvbase fixture against it on the mgmt zone, verifies the derived
@@ -53,16 +54,16 @@ JSON
 cp "${FIX}/tvbase.json" "${OSRC}/tvbase.json"
 
 # VI-04: --environment demo suffixes the effective module name and persists the
-# environment (and mirrors .variant for a non-default, non-mgmt environment).
+# environment. It must NOT write .variant — that mirror was retired in #438.
 (
     cd "${OSRC}" || exit 1
     CONFIG_DIR="${OWORK}" "${SCRIPTS}/copy-update-json.sh" tvbase --environment demo --vmid 8901 >/dev/null 2>&1
 )
 D="${OWORK}/tvbase-demo.json"
 if [[ -f "${D}" ]]; then
-    assert_eq "$(jq -r '.environment' "${D}")" "demo" "VI-04a .environment persisted = demo"
-    assert_eq "$(jq -r '.variant' "${D}")"     "demo" "VI-04b .variant mirrored = demo (non-default env)"
-    assert_eq "$(jq -r '.vmid' "${D}")"        "8901" "VI-04c explicit --vmid override applied"
+    assert_eq "$(jq -r '.environment' "${D}")"     "demo"  "VI-04a .environment persisted = demo"
+    assert_eq "$(jq -r 'has("variant")' "${D}")"   "false" "VI-04b .variant NOT written (#438 — the mirror is retired)"
+    assert_eq "$(jq -r '.vmid' "${D}")"            "8901"  "VI-04c explicit --vmid override applied"
 else
     fail "VI-04 copy-update-json did not produce ${D}"
 fi

@@ -135,12 +135,15 @@ apply_three_way_merge() {
         return 1
     fi
 
-    # Determine variant + base module name. Prefer the .variant field; fall
-    # back to a filename heuristic for installs that predate the field.
-    local variant base
-    variant="$(jq -r '.variant // ""' "${current}")"
-    if [[ -n "${variant}" ]]; then
-        base="${eff%-"${variant}"}"
+    # Determine the environment + base module name. .environment is the suffix
+    # the effective name carries for a non-default environment (#438; was
+    # .variant until the field was retired). Unsuffixed names — mgmt and the
+    # default environment — strip to themselves, so this is a no-op there. The
+    # filename heuristic below still covers installs that predate the field.
+    local environment base
+    environment="$(jq -r '.environment // ""' "${current}")"
+    if [[ -n "${environment}" ]]; then
+        base="${eff%-"${environment}"}"
     else
         base="${eff}"
     fi

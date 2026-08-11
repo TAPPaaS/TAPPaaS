@@ -387,15 +387,26 @@ dmz_gateway_ip() {
     printf '%s\n' "${gw}"
 }
 
-# Resolve a dependency's provider module name, honoring variant preference
-# (#292, ADR-005 §4). Given a bare provider name and the installing module's
-# variant, prefer an installed same-variant provider `<provider>-<variant>.json`
-# and otherwise fall back to the base `<provider>.json`. Always echoes a name:
-# the same-variant name when its config exists, else the base name (the caller
-# validates that the resolved config actually exists). With an empty variant this
-# is a no-op that returns the base name, so default installs behave exactly as
-# before.
-#   resolve_provider_module <provider> [variant]
+# Resolve a dependency's provider module name, honoring same-environment
+# preference (#292, ADR-005 §4; environment-driven since #438). Given a bare
+# provider name and the CONSUMING module's environment, prefer an installed
+# same-environment provider `<provider>-<environment>.json` and otherwise fall
+# back to the shared `<provider>.json`. Always echoes a name: the
+# same-environment name when its config exists, else the base name (the caller
+# validates that the resolved config actually exists).
+#
+# The fallback is load-bearing, not lenient: environment-agnostic foundation
+# providers (cluster, network, identity, ...) are deployed once, unsuffixed, and
+# every environment's consumers must reach that single instance. It is also what
+# makes mgmt and the DEFAULT environment work — their configs are unsuffixed by
+# design (see install-module.sh "effective module name"), so `<provider>-mgmt`
+# never exists and resolution correctly lands on the base name.
+#
+# #438: callers MUST forward the consuming module's environment. Passing "" (as
+# install-module.sh did until #438) silently resolves every consumer to the
+# shared provider, and hard-fails where only an environment-specific provider is
+# deployed.
+#   resolve_provider_module <provider> [environment]
 # ADR-007 P8: the "firewall" module was renamed to "network". A dependency may
 # name either prefix, and a system may be deployed under either config name
 # (network.json on a fresh/migrated system; firewall.json on a not-yet-migrated
@@ -409,9 +420,9 @@ _legacy_module_alias() {
 }
 
 resolve_provider_module() {
-    local provider="$1" variant="${2:-}"
-    if [[ -n "${variant}" && -f "${CONFIG_DIR}/${provider}-${variant}.json" ]]; then
-        echo "${provider}-${variant}"
+    local provider="$1" environment="${2:-}"
+    if [[ -n "${environment}" && -f "${CONFIG_DIR}/${provider}-${environment}.json" ]]; then
+        echo "${provider}-${environment}"
         return
     fi
     # Prefer the named provider's own config; else fall back to its firewall<->
@@ -432,18 +443,24 @@ resolve_provider_module() {
 check_service_available() {
     local dep="$1"
     local required_script="${2:-install-service.sh}"
-    # Optional installing-variant: when set, a same-variant provider config is
-    # preferred over the base one (#292). Empty → legacy behavior (base only).
-    local variant="${3:-}"
+    # The CONSUMING module's environment: a same-environment provider config is
+    # preferred over the shared one (#292). Empty → base only.
+    local environment="${3:-}"
     local service_name="${dep##*:}"
     local provider_module
-    provider_module="$(resolve_provider_module "${dep%%:*}" "${variant}")"
+    provider_module="$(resolve_provider_module "${dep%%:*}" "${environment}")"
     local provider_json="${CONFIG_DIR}/${provider_module}.json"
 
     # Check the provider module is installed (JSON in config dir)
     if [[ ! -f "${provider_json}" ]]; then
         error "Dependency '${dep}': provider module '${provider_module}' is not installed"
         error "  Expected config: ${provider_json}"
+        # #438: name BOTH candidates so the operator can tell "nothing is
+        # deployed" apart from "the environment was not forwarded" — the latter
+        # used to surface as this same message pointing at the shared name.
+        if [[ -n "${environment}" ]]; then
+            error "  Looked for (environment '${environment}'): ${CONFIG_DIR}/${dep%%:*}-${environment}.json, then ${CONFIG_DIR}/${dep%%:*}.json"
+        fi
         return 1
     fi
 

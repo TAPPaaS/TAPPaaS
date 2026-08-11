@@ -20,8 +20,8 @@ PROXY_DOMAIN="$(get_config_value 'proxyDomain' '')"
 if [[ -z "${PROXY_DOMAIN}" ]]; then
     # Domain from the module's environment (config/environments/<env>.json via
     # get_variant_config), falling back to legacy configuration.json .tappaas.domain.
-    _NC_VARIANT="$(get_config_value 'variant' '')"
-    _TAPPAAS_DOMAIN=$(jq -r '.domain // empty' <<<"$(get_variant_config "${_NC_VARIANT}" 2>/dev/null || echo '{}')")
+    _NC_ENV="$(get_config_value 'environment' '')"
+    _TAPPAAS_DOMAIN=$(jq -r '.domain // empty' <<<"$(get_variant_config "${_NC_ENV}" 2>/dev/null || echo '{}')")
     [[ -z "${_TAPPAAS_DOMAIN}" ]] && _TAPPAAS_DOMAIN=$(jq -r '.tappaas.domain // empty' \
         "/home/tappaas/config/configuration.json" 2>/dev/null)
     PROXY_DOMAIN="${VMNAME}.${_TAPPAAS_DOMAIN}"

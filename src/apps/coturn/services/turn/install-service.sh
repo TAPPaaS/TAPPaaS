@@ -16,17 +16,15 @@ MODULE="${1:-}"
 readonly CONFIG_DIR="/home/tappaas/config"
 readonly CONSUMER_JSON="${CONFIG_DIR}/${MODULE}.json"
 
-# Resolve coturn's own config variant-awarely. A consumer deployed as a variant
-# (e.g. nextcloud-hpb-test) pairs with the SAME-variant provider (coturn-test);
-# there may be no base coturn.json at all. Fall back to the base for production.
-VARIANT=""
+# Resolve coturn's own config environment-awarely. A consumer deployed into an
+# environment (e.g. nextcloud-hpb-test) pairs with the SAME-environment provider
+# (coturn-test); there may be no base coturn.json at all. Falls back to the
+# shared config otherwise. Was .variant until that field was retired (#438).
+CONSUMER_ENV=""
 [[ -n "${MODULE}" && -f "${CONSUMER_JSON}" ]] && \
-    VARIANT=$(jq -r '.variant // empty' "${CONSUMER_JSON}" 2>/dev/null || true)
-if [[ -n "${VARIANT}" && -f "${CONFIG_DIR}/coturn-${VARIANT}.json" ]]; then
-    readonly COTURN_JSON="${CONFIG_DIR}/coturn-${VARIANT}.json"
-else
-    readonly COTURN_JSON="${CONFIG_DIR}/coturn.json"
-fi
+    CONSUMER_ENV=$(jq -r '.environment // empty' "${CONSUMER_JSON}" 2>/dev/null || true)
+COTURN_JSON="${CONFIG_DIR}/$(resolve_provider_module coturn "${CONSUMER_ENV}").json"
+readonly COTURN_JSON
 
 VMNAME=$(jq -r '.vmname' "${COTURN_JSON}")
 ZONE=$(jq -r '.zone0' "${COTURN_JSON}")

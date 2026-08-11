@@ -30,9 +30,9 @@ CONSUMING_JSON="${CONFIG_DIR}/${CONSUMING_MODULE}.json"
 [[ -f "${CONSUMING_JSON}" ]] || die "consuming module config not found: ${CONSUMING_JSON}"
 
 CONSUMING_VMNAME="$(jq -r '.vmname'  "${CONSUMING_JSON}")"
-CONSUMING_VARIANT="$(jq -r '.variant // ""' "${CONSUMING_JSON}")"
+CONSUMING_ENV="$(jq -r '.environment // ""' "${CONSUMING_JSON}")"
 
-PROVIDER_MODULE="$(resolve_provider_module "litellm" "${CONSUMING_VARIANT}")"
+PROVIDER_MODULE="$(resolve_provider_module "litellm" "${CONSUMING_ENV}")"
 PROVIDER_JSON="${CONFIG_DIR}/${PROVIDER_MODULE}.json"
 [[ -f "${PROVIDER_JSON}" ]] || die "litellm provider config not found: ${PROVIDER_JSON}"
 

@@ -68,8 +68,8 @@ if [[ -z "${VMNAME}" ]]; then
 fi
 
 ZONE="${TAPPAAS_ZONE0_OVERRIDE:-$(get_config_value 'zone0' 'srv-home')}"  # override: issue #196
-_V=$(get_config_value 'variant' '' 2>/dev/null || echo '')
-TAPPAAS_DOMAIN=$(jq -r '.domain // empty' <<<"$(get_variant_config "${_V}" 2>/dev/null || echo '{}')")
+_ENV=$(get_config_value 'environment' '' 2>/dev/null || echo '')
+TAPPAAS_DOMAIN=$(jq -r '.domain // empty' <<<"$(get_variant_config "${_ENV}" 2>/dev/null || echo '{}')")
 # Legacy fallback: configuration.json is retired (ADR-007) and absent on a fresh
 # install; guard with -f + `|| true` so a missing file cannot abort under set -e.
 if [[ -z "${TAPPAAS_DOMAIN}" && -f "${SYSTEM_CONFIG}" ]]; then
@@ -112,9 +112,9 @@ fi
 # refid is resolvable, acme-setup.sh has not run and Caddy cannot serve a valid
 # public cert, so a dead HTTPS endpoint is "not configured yet" (a warning), NOT a
 # failure that should block every proxy-dependent module's install/update.
-TLS_CERT_REFID="$(jq -r '.tlsCertRefid // ""' <<<"$(get_variant_config "${_V}" 2>/dev/null || echo '{}')" 2>/dev/null || echo '')"
+TLS_CERT_REFID="$(jq -r '.tlsCertRefid // ""' <<<"$(get_variant_config "${_ENV}" 2>/dev/null || echo '{}')" 2>/dev/null || echo '')"
 if [[ -z "${TLS_CERT_REFID}" ]]; then
-    _env_name="${_V:-$(default_environment_name 2>/dev/null || echo '')}"
+    _env_name="${_ENV:-$(default_environment_name 2>/dev/null || echo '')}"
     [[ -n "${_env_name}" ]] && TLS_CERT_REFID="$(cert_refid_for_env "${_env_name}" 2>/dev/null || echo '')"
 fi
 if [[ -z "${TLS_CERT_REFID}" && -f "${SYSTEM_CONFIG}" ]]; then

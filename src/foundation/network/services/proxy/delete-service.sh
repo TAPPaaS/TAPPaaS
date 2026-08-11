@@ -57,8 +57,8 @@ if [[ "${FIREWALL_TYPE}" == "NONE" ]]; then
         [[ -z "${VMNAME}" ]] && VMNAME="${MODULE}"
         PROXY_DOMAIN=$(get_config_value 'proxyDomain' '')
         if [[ -z "${PROXY_DOMAIN}" ]]; then
-            _V=$(get_config_value 'variant' '' 2>/dev/null || echo '')
-            TAPPAAS_DOMAIN=$(jq -r '.domain // empty' <<<"$(get_variant_config "${_V}" 2>/dev/null || echo '{}')")
+            _ENV=$(get_config_value 'environment' '' 2>/dev/null || echo '')
+            TAPPAAS_DOMAIN=$(jq -r '.domain // empty' <<<"$(get_variant_config "${_ENV}" 2>/dev/null || echo '{}')")
             # Legacy fallback: configuration.json is retired (ADR-007) and absent on
             # a fresh install; guard with -f + `|| true` so a missing file cannot
             # abort under set -e.
@@ -102,8 +102,8 @@ if [[ -f "${MODULE_JSON}" ]]; then
 
     PROXY_DOMAIN=$(get_config_value 'proxyDomain' '')
     if [[ -z "${PROXY_DOMAIN}" ]]; then
-        _V=$(get_config_value 'variant' '' 2>/dev/null || echo '')
-        TAPPAAS_DOMAIN=$(jq -r '.domain // empty' <<<"$(get_variant_config "${_V}" 2>/dev/null || echo '{}')")
+        _ENV=$(get_config_value 'environment' '' 2>/dev/null || echo '')
+        TAPPAAS_DOMAIN=$(jq -r '.domain // empty' <<<"$(get_variant_config "${_ENV}" 2>/dev/null || echo '{}')")
         if [[ -z "${TAPPAAS_DOMAIN}" ]] && [[ -f "${SYSTEM_CONFIG}" ]]; then
             TAPPAAS_DOMAIN=$(jq -r '.tappaas.domain // empty' "${SYSTEM_CONFIG}" 2>/dev/null)
         fi
@@ -139,8 +139,8 @@ if [[ -n "${PROXY_DOMAIN}" ]]; then
     # mode created a per-module Dnsmasq entry; wildcard mode shares one entry
     # owned by acme-setup, so we must NOT remove that here. Deleting a
     # non-existent host is a harmless no-op.
-    VARIANT=$(get_config_value 'variant' '' 2>/dev/null || echo '')
-    VCFG="$(get_variant_config "${VARIANT}" 2>/dev/null || echo '{}')"
+    ENVIRONMENT=$(get_config_value 'environment' '' 2>/dev/null || echo '')
+    VCFG="$(get_variant_config "${ENVIRONMENT}" 2>/dev/null || echo '{}')"
     if [[ "$(jq -r '.dnsMode // "wildcard"' <<<"${VCFG}")" == "per-service" ]]; then
         DNS_HOST="${PROXY_DOMAIN%%.*}"
         DNS_ZONE="${PROXY_DOMAIN#*.}"

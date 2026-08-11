@@ -400,7 +400,7 @@ else
     # that derivation (environment-aware via the env file) so this check validates
     # against the real public domain instead of an empty value.
     if [ -z "${EXPECT_DOMAIN}" ]; then
-        _variant=$(jq -r '.environment // .variant // ""' "${MODULE_JSON}" 2>/dev/null || echo "")
+        _variant=$(jq -r '.environment // ""' "${MODULE_JSON}" 2>/dev/null || echo "")
         # Domain from the env file (config/environments/<env>.json), where env is
         # the persisted environment or the default env (site.json .name). The
         # legacy configuration.json variant registry is retired (ADR-007 Phase D).

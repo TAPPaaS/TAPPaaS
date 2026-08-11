@@ -14,16 +14,14 @@ set -euo pipefail
 MODULE="${1:-}"
 readonly CONFIG_DIR="/home/tappaas/config"
 readonly CONSUMER_JSON="${CONFIG_DIR}/${MODULE}.json"
-# Resolve Nextcloud's config variant-awarely: a consumer deployed as a variant
-# pairs with the same-variant provider; fall back to the base for production.
-VARIANT=""
+# Resolve Nextcloud's config environment-awarely: a consumer deployed into an
+# environment pairs with the same-environment provider; fall back to the shared
+# config otherwise. Was .variant until that field was retired (#438).
+CONSUMER_ENV=""
 [[ -n "${MODULE}" && -f "${CONSUMER_JSON}" ]] && \
-    VARIANT=$(jq -r '.variant // empty' "${CONSUMER_JSON}" 2>/dev/null || true)
-if [[ -n "${VARIANT}" && -f "${CONFIG_DIR}/nextcloud-${VARIANT}.json" ]]; then
-    readonly NEXTCLOUD_JSON="${CONFIG_DIR}/nextcloud-${VARIANT}.json"
-else
-    readonly NEXTCLOUD_JSON="${CONFIG_DIR}/nextcloud.json"
-fi
+    CONSUMER_ENV=$(jq -r '.environment // empty' "${CONSUMER_JSON}" 2>/dev/null || true)
+NEXTCLOUD_JSON="${CONFIG_DIR}/$(resolve_provider_module nextcloud "${CONSUMER_ENV}").json"
+readonly NEXTCLOUD_JSON
 
 VMNAME=$(jq -r '.vmname' "${NEXTCLOUD_JSON}")
 ZONE=$(jq -r '.zone0' "${NEXTCLOUD_JSON}")
@@ -47,7 +45,7 @@ fi
 #   - we write the 4-var contract to /etc/secrets/onlyoffice.env on the Nextcloud VM; the
 #     declarative nextcloud-configure-eurooffice.service applies it idempotently via occ.
 # Generic: any onlyoffice consumer reuses this; non-declaring consumers are a no-op.
-# CONSUMER_JSON already resolved (readonly) above for the variant-aware provider lookup.
+# CONSUMER_JSON already resolved (readonly) above for the environment-aware provider lookup.
 CONNECTOR=""
 # Read 'connector' from EITHER the raw manifest (nested under the dependency
 # capability) OR the flattened on-disk canonical form (#207): install-module
@@ -64,8 +62,10 @@ if [[ "${CONNECTOR}" == "onlyoffice" ]]; then
     EO_ZONE=$(jq -r '.zone0' "${CONSUMER_JSON}")
     # Base domain from the consumer's environment (config/environments/<env>.json
     # via get_variant_config), falling back to legacy configuration.json.
-    _EO_VARIANT=$(jq -r '.variant // ""' "${CONSUMER_JSON}" 2>/dev/null || echo '')
-    TAPPAAS_DOMAIN=$(jq -r '.domain // empty' <<<"$(get_variant_config "${_EO_VARIANT}" 2>/dev/null || echo '{}')")
+    # get_variant_config takes an ENVIRONMENT name — it read .variant until that
+    # field was retired (#438), which resolved a non-default consumer to the
+    # DEFAULT environment's domain whenever the mirror was absent.
+    TAPPAAS_DOMAIN=$(jq -r '.domain // empty' <<<"$(get_variant_config "${CONSUMER_ENV}" 2>/dev/null || echo '{}')")
     [[ -z "${TAPPAAS_DOMAIN}" ]] && TAPPAAS_DOMAIN=$(jq -r '.tappaas.domain // empty' "${CONFIG_DIR}/configuration.json" 2>/dev/null || true)
     EO_HOST="${EO_VMNAME}.${EO_ZONE}.internal"
     NC_HOST="${VMNAME}.${ZONE}.internal"

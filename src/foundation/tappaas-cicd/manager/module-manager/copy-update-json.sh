@@ -151,7 +151,7 @@ field_destination() {
         --slurpfile schema "${SCHEMA_FILE}" \
         --slurpfile mod "${dest_json}" \
         --arg f "${field}" \
-        --argjson pinned '["vmname","vmid","vmtag","node","zone0","zone1","mac0","mac1","dependsOn","provides","config","variant","environment"]' '
+        --argjson pinned '["vmname","vmid","vmtag","node","zone0","zone1","mac0","mac1","dependsOn","provides","config","environment"]' '
         ($schema[0].fields[$f]) as $fdef
         | (($mod[0].dependsOn // [])) as $deps
         | if $fdef == null then
@@ -367,17 +367,16 @@ main() {
     # from the release source.
     if [[ -n "${environment}" ]]; then
         tmp_file=$(mktemp)
-        # Canonical: record the target environment. For a NON-default, non-mgmt
-        # environment (i.e. one that suffixes the module name) also mirror it into
-        # the legacy .variant field, which is still read by update-os, the 3-way
-        # merge, and many app service scripts (nextcloud-hpb/coturn/euro-office/…).
-        # A default or mgmt install leaves .variant untouched so legacy
-        # (non-variant) behaviour is preserved.
-        local _persist_expr='.environment = $e'
-        if [[ "${environment}" != "mgmt" \
-              && ( -z "${default_env}" || "${environment}" != "${default_env}" ) ]]; then
-            _persist_expr='.environment = $e | .variant = $e'
-        fi
+        # .environment is the ONLY environment field written (#438). It used to be
+        # mirrored into the legacy .variant for suffixed environments, because
+        # update-os, the 3-way merge and several app service scripts still read
+        # .variant — that mirror is what made the ADR-007 gate "no config carries
+        # .variant" unachievable, and it masked the resolution bug in #438. Those
+        # readers now take .environment; the mirror is gone.
+        #
+        # `del(.variant)` is deliberate, not defensive: a release source that
+        # still carries the retired field must not reintroduce it on install.
+        local _persist_expr='.environment = $e | del(.variant)'
         if jq --arg e "${environment}" "${_persist_expr}" "${dest_json}" > "${tmp_file}"; then
             mv "${tmp_file}" "${dest_json}"
             debug "  Persisted environment = ${environment}"

@@ -253,22 +253,23 @@ update_nixos() {
     wait_for_provisioning "${vm_ip}"
 
     # Resolve NixOS config. For plain deploys: ./<vmname>.nix.
-    # For variant deploys (<vmname> = <source>-<variant>): the source module
-    # only ships <source>.nix. When <vmname>.nix is absent, read the "variant"
-    # field from the installed config and fall back to <source>.nix. Fixes #286.
+    # For environment deploys (<vmname> = <source>-<environment>): the source
+    # module only ships <source>.nix. When <vmname>.nix is absent, read the
+    # "environment" field from the installed config and fall back to
+    # <source>.nix. Fixes #286 (read .variant until it was retired in #438).
     local nix_config="./${vmname}.nix"
     local _source_vmname="${vmname}"
 
     if [[ ! -f "${nix_config}" ]]; then
         local _cfg="${CONFIG_DIR}/${vmname}.json"
         if [[ -f "${_cfg}" ]]; then
-            local _variant
-            _variant=$(jq -r '.variant // empty' "${_cfg}" 2>/dev/null)
-            if [[ -n "${_variant}" ]]; then
-                _source_vmname="${vmname%-"${_variant}"}"
+            local _env
+            _env=$(jq -r '.environment // empty' "${_cfg}" 2>/dev/null)
+            if [[ -n "${_env}" ]]; then
+                _source_vmname="${vmname%-"${_env}"}"
                 local _fallback_nix="./${_source_vmname}.nix"
                 if [[ -f "${_fallback_nix}" ]]; then
-                    info "Variant '${_variant}': using ${_fallback_nix} for ${vmname}"
+                    info "Environment '${_env}': using ${_fallback_nix} for ${vmname}"
                     nix_config="${_fallback_nix}"
                 fi
             fi

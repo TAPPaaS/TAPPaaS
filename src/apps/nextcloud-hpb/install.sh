@@ -26,16 +26,15 @@
 # base module json in pwd (which carries the base vmname/zone).
 EFFECTIVE="${1:-nextcloud-hpb}"
 EFFECTIVE_JSON="/home/tappaas/config/${EFFECTIVE}.json"
-VARIANT="$(jq -r '.variant // empty' "${EFFECTIVE_JSON}" 2>/dev/null || true)"
+ENVIRONMENT="$(jq -r '.environment // empty' "${EFFECTIVE_JSON}" 2>/dev/null || true)"
 
-# Own host from the effective (variant) config.
+# Own host from the effective (environment) config.
 HPB_HOST="$(jq -r '.vmname' "${EFFECTIVE_JSON}").$(jq -r '.zone0' "${EFFECTIVE_JSON}").internal"
 
-# Nextcloud provider — pair with the SAME variant (nextcloud-test ↔ nextcloud-hpb-test);
-# fall back to the base config for a production deploy.
-NC_JSON="/home/tappaas/config/nextcloud.json"
-[[ -n "${VARIANT}" && -f "/home/tappaas/config/nextcloud-${VARIANT}.json" ]] && \
-    NC_JSON="/home/tappaas/config/nextcloud-${VARIANT}.json"
+# Nextcloud provider — pair with the SAME environment (nextcloud-test ↔
+# nextcloud-hpb-test); fall back to the shared config otherwise. Was .variant
+# until that field was retired (#438).
+NC_JSON="/home/tappaas/config/$(resolve_provider_module nextcloud "${ENVIRONMENT}").json"
 NEXTCLOUD_HOST="$(jq -r '.vmname' "${NC_JSON}" 2>/dev/null || echo nextcloud).$(jq -r '.zone0' "${NC_JSON}" 2>/dev/null || echo srv).internal"
 PROXY_DOMAIN="$(get_config_value 'proxyDomain')"
 HPB_HOST_PART="${PROXY_DOMAIN%%.*}"
@@ -106,13 +105,11 @@ NEXTCLOUD_PROXY="$(jq -r '.config["network:proxy"].proxyDomain // .proxyDomain /
 # HPB backend allow-list points at Nextcloud's real PUBLIC URL — otherwise it stays at
 # the nix placeholder and Talk rejects signaling with invalid_backend.
 if [[ -z "${NEXTCLOUD_PROXY}" ]]; then
-    _nc_dom="$(get_variant_config "${VARIANT}" 2>/dev/null | jq -r '.domain // empty')"
+    _nc_dom="$(get_variant_config "${ENVIRONMENT}" 2>/dev/null | jq -r '.domain // empty')"
     _nc_vm="$(jq -r '.vmname // "nextcloud"' "${NC_JSON}" 2>/dev/null || echo nextcloud)"
     [[ -n "${_nc_dom}" ]] && NEXTCLOUD_PROXY="${_nc_vm}.${_nc_dom}"
 fi
-_coturn_cfg="/home/tappaas/config/coturn.json"
-[[ -n "${VARIANT}" && -f "/home/tappaas/config/coturn-${VARIANT}.json" ]] && \
-    _coturn_cfg="/home/tappaas/config/coturn-${VARIANT}.json"
+_coturn_cfg="/home/tappaas/config/$(resolve_provider_module coturn "${ENVIRONMENT}").json"
 _coturn_pub="$(jq -r '.publicDomain // empty' "${_coturn_cfg}" 2>/dev/null || true)"
 COTURN_TURN_HOST="${_coturn_pub:-$(jq -r '.vmname' "${_coturn_cfg}").$(jq -r '.zone0' "${_coturn_cfg}").internal}"
 if [[ -n "${NEXTCLOUD_PROXY}" ]]; then
@@ -134,9 +131,7 @@ info "${BOLD}Configuring Nextcloud Talk signaling backend…${CL}"
 
 # Coturn TURN/STUN endpoint for Nextcloud Talk. External call participants must reach
 # it, so prefer coturn's public domain; fall back to the internal host (in-network/test).
-COTURN_CFG="/home/tappaas/config/coturn.json"
-[[ -n "${VARIANT}" && -f "/home/tappaas/config/coturn-${VARIANT}.json" ]] && \
-    COTURN_CFG="/home/tappaas/config/coturn-${VARIANT}.json"
+COTURN_CFG="/home/tappaas/config/$(resolve_provider_module coturn "${ENVIRONMENT}").json"
 COTURN_PUBLIC="$(jq -r '.publicDomain // empty' "${COTURN_CFG}" 2>/dev/null || true)"
 if [[ -n "${COTURN_PUBLIC}" ]]; then
     TURN_SERVER="${COTURN_PUBLIC}:3478"

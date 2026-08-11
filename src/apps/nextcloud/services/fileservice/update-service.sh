@@ -18,16 +18,14 @@ MODULE="${1:-unknown}"
 
 readonly CONFIG_DIR="/home/tappaas/config"
 readonly CONSUMER_JSON="${CONFIG_DIR}/${MODULE}.json"
-# Resolve Nextcloud's config variant-awarely: a consumer deployed as a variant
-# pairs with the same-variant provider; fall back to the base for production.
-VARIANT=""
+# Resolve Nextcloud's config environment-awarely: a consumer deployed into an
+# environment pairs with the same-environment provider; fall back to the shared
+# config otherwise. Was .variant until that field was retired (#438).
+CONSUMER_ENV=""
 [[ -n "${MODULE}" && -f "${CONSUMER_JSON}" ]] && \
-    VARIANT=$(jq -r '.variant // empty' "${CONSUMER_JSON}" 2>/dev/null || true)
-if [[ -n "${VARIANT}" && -f "${CONFIG_DIR}/nextcloud-${VARIANT}.json" ]]; then
-    readonly NEXTCLOUD_JSON="${CONFIG_DIR}/nextcloud-${VARIANT}.json"
-else
-    readonly NEXTCLOUD_JSON="${CONFIG_DIR}/nextcloud.json"
-fi
+    CONSUMER_ENV=$(jq -r '.environment // empty' "${CONSUMER_JSON}" 2>/dev/null || true)
+NEXTCLOUD_JSON="${CONFIG_DIR}/$(resolve_provider_module nextcloud "${CONSUMER_ENV}").json"
+readonly NEXTCLOUD_JSON
 
 VMNAME=$(jq -r '.vmname' "${NEXTCLOUD_JSON}")
 ZONE=$(jq -r '.zone0' "${NEXTCLOUD_JSON}")

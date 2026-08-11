@@ -65,18 +65,20 @@ JSON="$(normalize_module_config < "${MODULE_JSON}")"
 VMNAME="$(get_config_value 'vmname' '')"
 ZONE0="$(get_config_value 'zone0' '')"
 PROXY_DOMAIN="$(get_config_value 'proxyDomain' '')"
-VARIANT="$(get_config_value 'variant' '')"
+ENVIRONMENT="$(get_config_value 'environment' '')"
 # Derive proxyDomain when a module doesn't hardcode it — the Nextcloud pattern
 # ("no proxyDomain is hardcoded"; the public domain is <vmname>.<domain>). Mirror
 # network:proxy's derivation so the OIDC redirect URIs match the reverse proxy's
-# domain, taking <domain> from the module's variant registry (default variant for
-# unsuffixed installs) to stay correct under ADR-005.
+# domain, taking <domain> from the module's environment (the default environment
+# for unsuffixed installs) to stay correct under ADR-007. Read .environment, not
+# the retired .variant (#438) — with the latter gone, this silently derived every
+# non-default module's OIDC redirect URIs from the DEFAULT environment's domain.
 if [[ -z "${PROXY_DOMAIN}" ]]; then
-    _DERIVED_DOMAIN="$(get_variant_config "${VARIANT}" 2>/dev/null | jq -r '.domain // empty')"
+    _DERIVED_DOMAIN="$(get_variant_config "${ENVIRONMENT}" 2>/dev/null | jq -r '.domain // empty')"
     [[ -n "${_DERIVED_DOMAIN}" && -n "${VMNAME}" ]] && PROXY_DOMAIN="${VMNAME}.${_DERIVED_DOMAIN}"
 fi
 [[ -n "${VMNAME}" && -n "${ZONE0}" && -n "${PROXY_DOMAIN}" ]] \
-    || die "module ${MODULE} must set vmname, zone0, proxyDomain (or set the variant domain so it derives as <vmname>.<domain>)"
+    || die "module ${MODULE} must set vmname, zone0, proxyDomain (or set the environment domain so it derives as <vmname>.<domain>)"
 
 # identity.* contract (with Nextcloud-friendly defaults).
 PROVIDES_ADMIN="$(echo "${JSON}" | jq -r '.identity.providesAdminRole // false')"
@@ -84,10 +86,11 @@ mapfile -t REDIRECT_PATHS < <(echo "${JSON}" | jq -r '(.identity.oidcRedirectPat
 mapfile -t OIDC_SCOPES   < <(echo "${JSON}" | jq -r '(.identity.scopes // [])[]')
 CONFIGURE_SERVICE="$(echo "${JSON}" | jq -r '.identity.configureService // ""')"
 
-# The base module name (strip the -<variant> suffix) — used for the VM secrets
-# path and the module-admin group, so a variant install shares the base name.
+# The base module name (strip the -<environment> suffix) — used for the VM
+# secrets path and the module-admin group, so an environment install shares the
+# base name.
 MODULE_BASE="${MODULE}"
-[[ -n "${VARIANT}" && "${MODULE}" == *"-${VARIANT}" ]] && MODULE_BASE="${MODULE%-"${VARIANT}"}"
+[[ -n "${ENVIRONMENT}" && "${MODULE}" == *"-${ENVIRONMENT}" ]] && MODULE_BASE="${MODULE%-"${ENVIRONMENT}"}"
 SECRETS_ENV="$(echo "${JSON}" | jq -r --arg d "/etc/secrets/${MODULE_BASE}.env" '.identity.secretsEnv // $d')"
 # Default the configure unit to the convention <base>-configure-oidc.service so a
 # module needn't declare it (Nextcloud ships nextcloud-configure-oidc.service).
@@ -104,7 +107,7 @@ DEFAULT_DOMAIN="$(get_variant_config '' | jq -r '.domain')"
 DISCOVERY_URI="https://identity.${DEFAULT_DOMAIN}/application/o/${SLUG}/.well-known/openid-configuration"
 
 debug "${BOLD}identity:identity (OIDC): wiring ${BL}${MODULE}${CL}"
-debug "  scope '${VARIANT:-<default>}'  app/slug '${SLUG}'  upstream ${UPSTREAM}"
+debug "  scope '${ENVIRONMENT:-<default>}'  app/slug '${SLUG}'  upstream ${UPSTREAM}"
 
 command -v "${AUTHENTIK_MANAGER%% *}" >/dev/null 2>&1 || [[ -x "${AUTHENTIK_MANAGER}" ]] \
     || die "authentik-manager not available (rebuild opnsense-controller)"

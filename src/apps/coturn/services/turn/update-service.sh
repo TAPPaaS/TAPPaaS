@@ -15,16 +15,14 @@ MODULE="${1:-unknown}"
 readonly CONFIG_DIR="/home/tappaas/config"
 readonly CONSUMER_JSON="${CONFIG_DIR}/${MODULE}.json"
 
-# Resolve coturn's config variant-awarely (same as install-service.sh): a variant
-# consumer pairs with the same-variant provider; base may not exist.
-VARIANT=""
+# Resolve coturn's config environment-awarely (same as install-service.sh): an
+# environment consumer pairs with the same-environment provider; base may not
+# exist. Was .variant until that field was retired (#438).
+CONSUMER_ENV=""
 [[ -n "${MODULE}" && -f "${CONSUMER_JSON}" ]] && \
-    VARIANT=$(jq -r '.variant // empty' "${CONSUMER_JSON}" 2>/dev/null || true)
-if [[ -n "${VARIANT}" && -f "${CONFIG_DIR}/coturn-${VARIANT}.json" ]]; then
-    readonly COTURN_JSON="${CONFIG_DIR}/coturn-${VARIANT}.json"
-else
-    readonly COTURN_JSON="${CONFIG_DIR}/coturn.json"
-fi
+    CONSUMER_ENV=$(jq -r '.environment // empty' "${CONSUMER_JSON}" 2>/dev/null || true)
+COTURN_JSON="${CONFIG_DIR}/$(resolve_provider_module coturn "${CONSUMER_ENV}").json"
+readonly COTURN_JSON
 
 VMNAME=$(jq -r '.vmname' "${COTURN_JSON}")
 ZONE=$(jq -r '.zone0' "${COTURN_JSON}")

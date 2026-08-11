@@ -138,14 +138,15 @@
       "note": "Automatically set on each update. Format: YYYYMMDD-HH:MM:SS (local time)"
     },
     "variant": {
-      "description": "Variant name when this module was installed as a variant (e.g., 'staging'). Persisted by copy-update-json.sh so update-module.sh can resolve the source module file. Not present for vanilla installs.",
+      "description": "RETIRED (#438) — superseded by 'environment'. Never write this field. Retained here only so a pre-migration config that still carries it is classified rather than reported as unknown; installs strip it (copy-update-json.sh del(.variant)).",
       "type": "string",
+      "deprecated": true,
       "requiredBy": [],
       "usedBy": [
         "general"
       ],
       "example": "staging",
-      "note": "Set automatically when --variant <name> is used at install time (#207). Treated as an auto-managed field by the 3-way merge — never adopted from the release source."
+      "note": "Was set when --variant <name> was used at install time (#207), and until #438 was also MIRRORED from --environment for suffixed environments. Everything that read it (provider pairing, name-suffix stripping) now reads 'environment'. A migrated site should carry no .variant at all: strip it with scripts/migrate-drop-variant.sh."
     },
     "environment": {
       "description": "Target environment this module was installed into (ADR-007 P5). Persisted by copy-update-json.sh when --environment <name> is used so update-module.sh/delete-module.sh can resolve the source module file and the environment. Not present for legacy/no-environment installs.",
@@ -155,7 +156,7 @@
         "general"
       ],
       "example": "foo",
-      "note": "Set automatically when --environment <name> is used at install time. Auto-managed by the 3-way merge — never adopted from the release source. The successor to 'variant'."
+      "note": "Set automatically when --environment <name> is used at install time. Auto-managed by the 3-way merge — never adopted from the release source. The successor to 'variant', which is RETIRED (#438). Also carries the name suffix for a non-default environment (<module>-<environment>.json) and selects the same-environment provider in resolve_provider_module."
     },
     "maintainer": {
       "description": "Maintainer of the module",

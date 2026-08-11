@@ -78,10 +78,10 @@ fi
 ZONE=$(get_config_value 'zone0' 'srvHome')
 # Domain comes from the module's environment (variant); get_variant_config reads
 # config/environments/<env>.json and falls back to configuration.json. Read it
-# here against the module's variant so PROXY_DOMAIN defaulting works; the
-# variant-specific read below (VCFG) reuses the same source for dnsMode/refid.
-_VARIANT_EARLY=$(get_config_value 'variant' '')
-TAPPAAS_DOMAIN=$(jq -r '.domain // empty' <<<"$(get_variant_config "${_VARIANT_EARLY}" 2>/dev/null || echo '{}')")
+# here against the module's environment so PROXY_DOMAIN defaulting works; the
+# environment-specific read below (VCFG) reuses the same source for dnsMode/refid.
+_ENV_EARLY=$(get_config_value 'environment' '')
+TAPPAAS_DOMAIN=$(jq -r '.domain // empty' <<<"$(get_variant_config "${_ENV_EARLY}" 2>/dev/null || echo '{}')")
 if [[ -z "${TAPPAAS_DOMAIN}" && -f "${SYSTEM_CONFIG}" ]]; then
     # Last-ditch legacy fallback: configuration.json is retired (ADR-007) and
     # ABSENT on a fresh install; guard with -f + `|| true` so a missing file
@@ -90,7 +90,7 @@ if [[ -z "${TAPPAAS_DOMAIN}" && -f "${SYSTEM_CONFIG}" ]]; then
 fi
 
 if [[ -z "${TAPPAAS_DOMAIN}" ]]; then
-    die "No domain resolved for environment '${_VARIANT_EARLY:-default}' (config/environments/ or configuration.json)"
+    die "No domain resolved for environment '${_ENV_EARLY:-default}' (config/environments/ or configuration.json)"
 fi
 
 # Resolve proxyDomain: explicit in module JSON, or default to <vmname>.<domain>
@@ -158,16 +158,16 @@ fi
 
 # The variant's dnsMode drives cert handling; an explicit per-module proxyTls
 # (issue #254) overrides it (dns01->wildcard, http01->per-service):
-#   wildcard    → bind the variant's wildcard cert (variants[<v>].tlsCertRefid,
+#   wildcard    → bind the environment's wildcard cert (its .tlsCertRefid,
 #                 issued by acme-setup.sh) via Caddy's per-domain CustomCertificate.
 #                 The wildcard's split-horizon DNS is registered once by acme-setup.
 #   per-service → no wildcard; register this module's own split-horizon DNS entry
 #                 (<host>.<domain> -> DMZ gateway) and let Caddy issue a per-domain
 #                 cert via ACME HTTP-01. No DNS API needed (#269, #289).
-VARIANT=$(get_config_value 'variant' '')
-VCFG="$(get_variant_config "${VARIANT}" 2>/dev/null || echo '{}')"
+ENVIRONMENT=$(get_config_value 'environment' '')
+VCFG="$(get_variant_config "${ENVIRONMENT}" 2>/dev/null || echo '{}')"
 DNS_MODE="$(jq -r '.dnsMode // "wildcard"' <<<"${VCFG}")"
-VARIANT_REFID="$(jq -r '.tlsCertRefid // ""' <<<"${VCFG}")"
+ENV_REFID="$(jq -r '.tlsCertRefid // ""' <<<"${VCFG}")"
 
 # Explicit proxyTls override (back-compat with #254).
 PROXY_TLS=$(get_config_value 'proxyTls' '')
@@ -197,9 +197,9 @@ else
     # wildcard: prefer the variant's refid (sourced from cert-refids.json via
     # get_variant_config), then the runtime cert-refids.json for the env, then
     # the legacy global one in configuration.json.
-    TLS_CERT_REFID="${VARIANT_REFID}"
+    TLS_CERT_REFID="${ENV_REFID}"
     if [[ -z "${TLS_CERT_REFID}" ]]; then
-        _ENV_NAME="${VARIANT}"
+        _ENV_NAME="${ENVIRONMENT}"
         [[ -z "${_ENV_NAME}" ]] && _ENV_NAME="$(default_environment_name)"
         TLS_CERT_REFID="$(cert_refid_for_env "${_ENV_NAME}")"
     fi
@@ -213,8 +213,8 @@ else
         debug "  TLS: DNS-01 wildcard (dnsMode=wildcard) — refid ${TLS_CERT_REFID}"
         CADDY_DOMAIN_ARGS=(--custom-certificate "${TLS_CERT_REFID}")
     else
-        debug "  TLS: wildcard but no tlsCertRefid for variant '${VARIANT:-default}' yet."
-        debug "       Run: acme-setup.sh --variant '${VARIANT}' (internal LAN access still works meanwhile)."
+        debug "  TLS: wildcard but no tlsCertRefid for environment '${ENVIRONMENT:-default}' yet."
+        debug "       Run: acme-setup.sh --variant '${ENVIRONMENT}' (flag name unchanged; internal LAN access still works meanwhile)."
     fi
 fi
 

@@ -68,8 +68,8 @@ fi
 ZONE=$(get_config_value 'zone0' 'srvHome')
 # Domain from the module's environment (config/environments/<env>.json via
 # get_variant_config), falling back to legacy configuration.json .tappaas.domain.
-VARIANT=$(get_config_value 'variant' '')
-VCFG="$(get_variant_config "${VARIANT}" 2>/dev/null || echo '{}')"
+ENVIRONMENT=$(get_config_value 'environment' '')
+VCFG="$(get_variant_config "${ENVIRONMENT}" 2>/dev/null || echo '{}')"
 TAPPAAS_DOMAIN=$(jq -r '.domain // empty' <<<"${VCFG}")
 # Legacy fallback: configuration.json is retired (ADR-007) and ABSENT on a fresh
 # install; guard the read with -f + `|| true` so a missing file cannot abort the
@@ -79,7 +79,7 @@ if [[ -z "${TAPPAAS_DOMAIN}" && -f "${SYSTEM_CONFIG}" ]]; then
 fi
 
 if [[ -z "${TAPPAAS_DOMAIN}" ]]; then
-    die "No domain resolved for environment '${VARIANT:-default}' (config/environments/ or configuration.json)"
+    die "No domain resolved for environment '${ENVIRONMENT:-default}' (config/environments/ or configuration.json)"
 fi
 
 PROXY_DOMAIN=$(get_config_value 'proxyDomain' '')
@@ -134,7 +134,7 @@ if [[ "${PROXY_TLS}" == "dns01" ]]; then
     # runtime cert-refids.json directly, then the legacy global configuration.json.
     TLS_CERT_REFID=$(jq -r '.tlsCertRefid // ""' <<<"${VCFG}")
     if [[ -z "${TLS_CERT_REFID}" ]]; then
-        _ENV_NAME="${VARIANT}"
+        _ENV_NAME="${ENVIRONMENT}"
         [[ -z "${_ENV_NAME}" ]] && _ENV_NAME="$(default_environment_name)"
         TLS_CERT_REFID="$(cert_refid_for_env "${_ENV_NAME}")"
     fi
