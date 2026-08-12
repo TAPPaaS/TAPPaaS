@@ -981,61 +981,18 @@ snapshot-vm.sh vaultwarden --restore 1
 
 ---
 
-### inspect-cluster.sh
+### inspect-cluster.sh, inspect-vm.sh — RETIRED (ADR-007 refactor)
 
-Compares actual running VMs across the Proxmox cluster against module configurations.
+Both scripts were ported to native TypeScript and deleted, so there is no command
+to invoke:
 
-**Usage:**
-```bash
-inspect-cluster.sh
-```
-
-**What it does:**
-1. Discovers reachable Proxmox nodes from `configuration.json` (falls back to scanning tappaas1–9)
-2. Queries cluster-wide VM list via `pvesh get /cluster/resources`
-3. Reads all `~/config/*.json` files that define a `vmid`
-4. Displays a table of all running VMs with their config status
-5. Lists configured modules whose VMs are not running
-
-**Output:**
-- VMs with a matching config show green "yes"
-- VMs not in any config show yellow "NOT IN CONFIG"
-- Configured modules with no running VM show red "NOT RUNNING"
-
----
-
-### inspect-vm.sh
-
-Generates a 3-column comparison table for a module's VM showing config, git, and actual values.
-
-**Usage:**
-```bash
-inspect-vm.sh <module-name>
-```
-
-**Parameters:**
-
-| Parameter | Description | Example |
-|-----------|-------------|---------|
-| `module-name` | Name of the module to inspect | `openwebui` |
-
-**Example:**
-```bash
-inspect-vm.sh openwebui
-inspect-vm.sh vaultwarden
-```
-
-**What it does:**
-1. Reads deployed config from `~/config/<module>.json` (normalized to flat regardless of Pattern A / flat on-disk shape; #207)
-2. Reads git source JSON from the module's `location` directory (also normalized)
-3. Queries actual VM config from Proxmox via `qm config`
-4. Displays a comparison table with color-coded differences
-
-**Color coding:**
-- **Yellow** — config value differs from git value (config drift from source)
-- **Red** — actual VM value differs from config value (VM out of sync)
-
-**Fields compared:** vmname, vmid, node, cores, memory, diskSize, storage, bios, cputype, bridge0, zone0 (with VLAN resolution), mac0, HANode, description, vmtag
+- `inspect-vm.sh` (Phase 7.3) → `module-manager reconcile <m>` for the read-only
+  three-way drift report on one module, and `module-manager list --diff` for the
+  rollup. Implemented in `manager/module-manager/src/inspect.ts`.
+- `inspect-cluster.sh` (Phase 7.1) → ported to TS as health-manager's `list vm`;
+  that verb has since moved out of health-manager, and no replacement for the
+  unmanaged-guest overview (`[external]` / `NOT IN CONFIG`) is currently
+  documented on any manager.
 
 ---
 
@@ -1308,8 +1265,6 @@ scripts/
 ├── copy-update-json.sh          # Copy and modify module JSON configs
 ├── create-configuration.sh      # Create or update system configuration.json
 ├── delete-module.sh             # Delete a module with dependency-aware teardown
-├── inspect-cluster.sh           # Compare running VMs against module configs
-├── inspect-vm.sh                # 3-column config/git/actual VM comparison
 ├── install-module.sh            # Install a module with dependency validation
 ├── migrate-node.sh              # Evacuate or return all VMs on a node
 ├── migrate-vm.sh                # Migrate VMs between nodes (live or offline)

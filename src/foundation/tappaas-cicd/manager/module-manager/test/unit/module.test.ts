@@ -153,7 +153,7 @@ const CONFIG =
 
 // ── 8. reconcile: DEFAULT = read-only inspect; --apply = leaf converge ──────
 {
-  // DEFAULT (no --apply) is the read-only three-way drift inspect (inspect-vm.sh).
+  // DEFAULT (no --apply) is the read-only three-way drift inspect (src/inspect.ts).
   const ci = new FakeModuleClient();
   run(["module", "reconcile", "nextcloud"], ci);
   check(
@@ -161,7 +161,7 @@ const CONFIG =
     "reconcile (no --apply) runs the read-only inspect (NOT reconcile-module)",
   );
 
-  // --apply delegates to reconcile-module.sh (its OWN leaf converge, NOT modify).
+  // --apply delegates to the native reconcile (its OWN leaf converge, NOT modify).
   const c = new FakeModuleClient();
   run(["module", "reconcile", "nextcloud", "--apply", "--environment", "foo"], c);
   check(

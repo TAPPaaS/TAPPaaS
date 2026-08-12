@@ -15,8 +15,8 @@
 # Lifecycle mode (issue #215):
 #   --archive      (DEFAULT, safe) Remove the VM from the cluster but KEEP the
 #                  module config (marked "status": "archived") and KEEP its PBS
-#                  backup entry — the module is restorable and inspect-cluster.sh
-#                  shows it as [archived] rather than NOT RUNNING.
+#                  backup entry — the module is restorable and its config keeps
+#                  "status": "archived" rather than reading as NOT RUNNING.
 #   --remove       (destructive) Remove the VM, remove its VMID from the PBS
 #                  backup job, AND delete the module config. Requires
 #                  confirmation (unless --yes/--force). Intended for test VMs and
@@ -79,8 +79,8 @@ Arguments:
 
 Lifecycle mode (default: --archive):
     --archive      Remove the VM but KEEP the config (status=archived) and its
-                   PBS backup entry — restorable; shown as [archived] by
-                   inspect-cluster.sh.
+                   PBS backup entry — restorable; the config keeps
+                   status=archived.
     --remove       Remove the VM, drop its PBS backup entry, and DELETE the
                    config. Requires confirmation (unless --yes/--force).
 

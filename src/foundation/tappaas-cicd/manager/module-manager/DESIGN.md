@@ -9,7 +9,7 @@
   `result/bin/module-manager`). It owns the CONFIG-layer verbs in-process and
   delegates the LIFECYCLE verbs to the bash scripts.
 - **Underlying lifecycle scripts:** Bash, unchanged. `install-module.sh`,
-  `update-module.sh`, `delete-module.sh`, `reconcile-module.sh`,
+  `update-module.sh`, `delete-module.sh`,
   `test-module.sh`, `snapshot-vm.sh` + helpers (`copy-update-json.sh`,
   `module-format.sh`, `validate-module-tier-source.sh`,
   `test-validate-module-tier-source.sh`). They stay the source of truth until a
@@ -32,7 +32,7 @@ injected `ModuleClient` (production `CliModuleClient`; tests inject a fake):
 | `add` | bash | `install-module.sh` |
 | `modify` | bash | `update-module.sh` (release update) |
 | `delete` | bash | `delete-module.sh` |
-| `reconcile` | bash | `reconcile-module.sh` (leaf converge — see below) |
+| `reconcile` | TS (lifecycle) | `src/reconcile.ts` (leaf converge — see below) |
 | `test` | bash | `test-module.sh` |
 | `snapshot-vm` | bash | `snapshot-vm.sh` (special VM op) |
 
@@ -53,7 +53,7 @@ vmid/vmname) are still enumerated (shown without vmid/node, not filtered out).
 
 ### `reconcile` vs `modify` — two distinct verbs
 
-`reconcile` (`reconcile-module.sh`) is the **leaf converge** the
+`reconcile` (`src/reconcile.ts`) is the **leaf converge** the
 `site/environment reconcile --deep` cascade walks down to: it re-applies the
 module's **current** config to its VM/service — re-running each dependency's
 idempotent `install-service.sh` then the module's own `update.sh`/`install.sh` —

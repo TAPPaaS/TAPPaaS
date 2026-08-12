@@ -35,7 +35,7 @@ later retire phase).
 | `module add <m>` | `install-module.sh` | create + provision |
 | `module modify <m>` | `update-module.sh` | release update (snapshot + test + 3-way merge) |
 | `module delete <m>` | `delete-module.sh` | `--archive` (default) / `--remove` |
-| `module reconcile <m>` | `reconcile-module.sh` | **leaf converge** — re-apply current config |
+| `module reconcile <m>` | `src/reconcile.ts` (TS) | **leaf converge** — re-apply current config |
 | `module test <m>` | `test-module.sh` | `--deep`, `--vmid`, `--zone0` |
 | `module snapshot-vm <m>` | `snapshot-vm.sh` | special VM op (not CRUD) |
 
@@ -108,20 +108,6 @@ delete-module.sh <module-name> [--archive|--remove] [--vmid <id>]
 - `--environment <name>` (alias `--variant`).
 - `--yes` / `-y` — skip the confirmation prompt.
 - `--force` — skip dependency checks; **required** for `tier:foundation` modules.
-
-### `reconcile-module.sh` — re-apply (converge) a module's current config
-
-```
-reconcile-module.sh [--environment <name>] [--debug] [--silent] <module-name>
-```
-
-The **leaf** of the `reconcile` cascade (`module reconcile`). Re-applies an
-already-installed module's current config to its VM/service, idempotently:
-re-runs each dependency's `install-service.sh` (the idempotent ensure/apply
-entry) then the module's own `update.sh` (or `install.sh`). It deliberately does
-**no snapshot, no pre/post tests, no 3-way merge, and no `updateTime` bump** —
-that is what distinguishes it from `update-module.sh` (a release update). Safe to
-run anytime.
 
 ### `test-module.sh` — run a module's tests
 

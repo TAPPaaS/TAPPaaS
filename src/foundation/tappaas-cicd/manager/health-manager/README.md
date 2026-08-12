@@ -20,13 +20,18 @@ documented delegation pending the `update-os.sh` port.
 ## Verb surface
 
 ```
-health-manager list vm [--diff] [--json] [--config-dir DIR]
-health-manager show vm <name> [--json] [--config-dir DIR]
 health-manager validate [--threshold PCT] [--config-dir DIR]
 health-manager update-os <name> <vmid> <node>
 ```
 
-### `list vm` — cluster overview (native port of the retired inspect-cluster.sh)
+> **MOVED (ADR-007):** the per-VM three-way drift inspect is no longer a
+> health-manager verb. It is now `module-manager reconcile <m>` (the read-only
+> report for one module) and `module-manager list --diff` (the rollup), native TS
+> in `module-manager/src/inspect.ts` — the port of the retired `inspect-vm.sh`.
+> The three sections below describe that behaviour and are kept here until the
+> prose is relocated to module-manager's README.
+
+### `list vm` — cluster overview (moved; was the port of the retired inspect-cluster.sh)
 
 Read-only. Lists every running guest (VM/CT) across the Proxmox cluster (VMID,
 name, node, type, status) and classifies each against the module configs in
@@ -36,7 +41,7 @@ distinguishing genuinely-missing from `[archived]` (#215) and `[external]`-down.
 This is a **report** — it does not exit non-zero on a discrepancy (that is what
 `validate` is for).
 
-### `list vm --diff` — per-VM three-way rollup
+### `list vm --diff` — per-VM three-way rollup (moved; now `module-manager list --diff`)
 
 Runs the `show vm` three-way comparison (**orig/config/running**) for **every
 managed module** and rolls up the drift, printing only the fields that differ per
@@ -45,7 +50,7 @@ not yet provisioned) is reported as *unreachable* rather than aborting the whole
 rollup. Bare `list vm` stays the running-vs-config basics; `--diff` is the
 drift view.
 
-### `show vm <name>` — three-way diff for one module (= inspect-vm.sh)
+### `show vm <name>` — three-way diff for one module (moved; now `module-manager reconcile <m>`)
 
 Prints a 3-column table for a module's VM: **Released** (the git source JSON via
 the module's `location`), **Desired** (`config/<module>.json`), and **Actual**
@@ -123,9 +128,9 @@ source:
   trunks / MAC) — requires porting `cluster/lib/vm-net.sh` (`vmnet_parse`,
   `vmnet_resolve_trunks`, `vmnet_zone_vlantag`: zone→VLAN resolution + `ALL`
   trunk-sentinel expansion). HANode / description rows fold in here too.
-- **Nested-config normalizer** — `inspect-vm.sh` runs each JSON through the bash
-  `normalize_module_config` ("Pattern A → flat"); the TS port reads flat keys
-  only, so nested/variant-shaped configs are not yet flattened.
+- **Nested-config normalizer** — the retired `inspect-vm.sh` ran each JSON through
+  the bash `normalize_module_config` ("Pattern A → flat"); the TS port reads flat
+  keys only, so nested/variant-shaped configs are not yet flattened.
 - **`cluster` / `node` entities** — ADR-007 lists them alongside `vm`; their
   entity model (a node/cluster resource summary) is not yet defined.
 - **Guest-agent liveness** — the `service-liveness` gate currently checks

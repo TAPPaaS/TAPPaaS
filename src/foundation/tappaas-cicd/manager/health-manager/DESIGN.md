@@ -21,9 +21,9 @@ are **N/A**. The surface:
 
 | Verb | Maps to | Notes |
 |------|---------|-------|
-| `list vm` | `inspect-cluster.sh` (retired, Phase 7.1) | running-guest-vs-config overview (basics) |
-| `list vm --diff` | per-VM `show vm` rollup | orig/config/running drift across every managed module |
-| `show vm <name>` | `inspect-vm.sh` | three-way drift table for one module |
+| `list vm` | — | **MOVED out of health-manager** (was the port of the retired `inspect-cluster.sh`) |
+| `list vm --diff` | — | **MOVED** → `module-manager list --diff` (per-module drift rollup) |
+| `show vm <name>` | — | **MOVED** → `module-manager reconcile <m>` (read-only), native `module-manager/src/inspect.ts` |
 | `validate` | the `check-*.sh` gates | **special**: asserts the *live* system is healthy (below) |
 | `update-os <name> <vmid> <node>` | `update-os.sh` | special **action**; thin pass-through to the script |
 

@@ -54,7 +54,6 @@ copy-update-json.sh,/home/tappaas/bin/copy-update-json.sh,tappaas-cicd/manager/m
 delete-module.sh,/home/tappaas/bin/delete-module.sh,tappaas-cicd/manager/module-manager/delete-module.sh,script
 install-module.sh,/home/tappaas/bin/install-module.sh,tappaas-cicd/manager/module-manager/install-module.sh,script
 module-format.sh,/home/tappaas/bin/module-format.sh,tappaas-cicd/manager/module-manager/module-format.sh,script
-reconcile-module.sh,/home/tappaas/bin/reconcile-module.sh,tappaas-cicd/manager/module-manager/reconcile-module.sh,script
 snapshot-vm.sh,/home/tappaas/bin/snapshot-vm.sh,tappaas-cicd/manager/module-manager/snapshot-vm.sh,script
 test-module.sh,/home/tappaas/bin/test-module.sh,tappaas-cicd/manager/module-manager/test-module.sh,script
 test-validate-module-tier-source.sh,/home/tappaas/bin/test-validate-module-tier-source.sh,tappaas-cicd/manager/module-manager/test-validate-module-tier-source.sh,script
@@ -65,8 +64,6 @@ validate-module-tier-source.sh,/home/tappaas/bin/validate-module-tier-source.sh,
 # --- manager/health-manager/ (legacy verb scripts wrapped by health-manager) --------------
 check-disk-threshold.sh,/home/tappaas/bin/check-disk-threshold.sh,tappaas-cicd/manager/health-manager/check-disk-threshold.sh,script
 check-ha-health.sh,/home/tappaas/bin/check-ha-health.sh,tappaas-cicd/manager/health-manager/check-ha-health.sh,script
-inspect-cluster.sh,/home/tappaas/bin/inspect-cluster.sh,tappaas-cicd/manager/health-manager/inspect-cluster.sh,script
-inspect-vm.sh,/home/tappaas/bin/inspect-vm.sh,tappaas-cicd/manager/health-manager/inspect-vm.sh,script
 update-os.sh,/home/tappaas/bin/update-os.sh,tappaas-cicd/manager/health-manager/update-os.sh,script
 #
 # --- controller/proxmox-controller/ -------------------------------------------------------

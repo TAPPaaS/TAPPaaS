@@ -100,7 +100,7 @@ src/config.ts,tappaas-cicd/manager/module-manager/,update-module.sh; site.json
 src/validate.ts,tappaas-cicd/manager/module-manager/,validate-module.sh; validate-module-tier-source.sh
 src/types.ts,tappaas-cicd/manager/module-manager/,
 copy-update-json.sh,tappaas-cicd/manager/module-manager/,common-install-routines.sh; convert-json-to-config.sh
-delete-module.sh,tappaas-cicd/manager/module-manager/,common-install-routines.sh; inspect-cluster.sh
+delete-module.sh,tappaas-cicd/manager/module-manager/,common-install-routines.sh
 install-module.sh,tappaas-cicd/manager/module-manager/,common-install-routines.sh; copy-update-json.sh; validate-module-tier-source.sh; backup-manager
 module-format.sh,tappaas-cicd/manager/module-manager/,common-install-routines.sh
 snapshot-vm.sh,tappaas-cicd/manager/module-manager/,common-install-routines.sh; update-module.sh; update-os.sh
@@ -133,12 +133,10 @@ src/main.ts,tappaas-cicd/manager/health-manager/,update-os.sh; backup-manager; s
 src/checks.ts,tappaas-cicd/manager/health-manager/,check-disk-threshold.sh; backup-manager
 src/inspect.ts,tappaas-cicd/manager/health-manager/,(native)
 src/client.ts,tappaas-cicd/manager/health-manager/,(native ssh/pvesh via lib/ts cluster.ts)
-src/config.ts,tappaas-cicd/manager/health-manager/,inspect-cluster.sh; inspect-vm.sh; site.json
+src/config.ts,tappaas-cicd/manager/health-manager/,site.json
 src/types.ts,tappaas-cicd/manager/health-manager/,
 check-disk-threshold.sh,tappaas-cicd/manager/health-manager/,
 check-ha-health.sh,tappaas-cicd/manager/health-manager/,common-install-routines.sh; cloudinit-orphans.sh; site.json
-inspect-cluster.sh,tappaas-cicd/manager/health-manager/,common-install-routines.sh
-inspect-vm.sh,tappaas-cicd/manager/health-manager/,common-install-routines.sh; vm-net.sh
 update-os.sh,tappaas-cicd/manager/health-manager/,common-install-routines.sh
 install.sh,tappaas-cicd/manager/health-manager/,health-manager; update-os.sh; validate.sh
 test.sh,tappaas-cicd/manager/health-manager/,validate.sh

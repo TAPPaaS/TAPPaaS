@@ -105,10 +105,10 @@ export interface ModuleClient {
   modify(module: string, opts: ModifyOptions): number;
   // delete-module.sh <module> [...]
   delete(module: string, opts: DeleteOptions): number;
-  // reconcile-module.sh [opts] <module>  (the LEAF converge: re-apply current
-  // config — NO snapshot/test/merge/updateTime; distinct from modify)
+  // src/reconcile.ts (native TS, in-process)  (the LEAF converge: re-apply
+  // current config — NO snapshot/test/merge/updateTime; distinct from modify)
   reconcile(module: string, opts: ReconcileOptions): number;
-  // inspect-vm.sh <module>  (READ-ONLY three-way drift report:
+  // src/inspect.ts (native TS, in-process)  (READ-ONLY three-way drift report:
   // Released[git] / Desired[~/config] / Actual[running VM]; config-only fallback
   // when the module has no vmid). Backs `reconcile` WITHOUT --apply and, per
   // module, the `list --diff` rollup.

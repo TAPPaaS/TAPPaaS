@@ -115,8 +115,10 @@ module-manager (TS)                  <- the verb-aligned front door
     update-module.sh    -> apply-json-merge.sh -> convert-json-to-config.sh
                         -> snapshot-vm.sh -> update-module.sh / update-os.sh
     delete-module.sh    -> common-install-routines.sh
-    reconcile-module.sh -> install-module.sh / update-module.sh
     test-module.sh
+  src/main.ts runs in-process (native TS, ADR-007 refactor Phase 7.3):
+    src/reconcile.ts    -> <provider>/install-service.sh -> module update.sh / install.sh
+    src/inspect.ts      -> (read-only: qm/pvesh queries + config JSON, no scripts)
 ```
 
 ### 2. Site / environment bootstrap (site-native, ADR-007)
@@ -157,7 +159,7 @@ network/services/dns/*-service.sh    -> dns-manager  (+ network.json)
 
 ```
 health-manager (TS)  src/main.ts spawns: update-os.sh,
-                     inspect-vm.sh, check-disk-threshold.sh, backup-manager
+                     check-disk-threshold.sh, backup-manager
 backup-manager (TS)  src/main.ts spawns: backup-controller,
                      foundation backup/restore.sh (restore verb)
 health-manager (TS) checks.ts -> backup-manager list --json
@@ -238,7 +240,7 @@ graph TD
     MM["module-manager (TS)"] --> IM["install-module.sh"]
     MM --> UM["update-module.sh"]
     MM --> DM["delete-module.sh"]
-    MM --> RM["reconcile-module.sh"]
+    MM --> RT["src/reconcile.ts (TS, in-process)"]
     MM --> TM["test-module.sh"]
     IM --> CIR["common-install-routines.sh"]
     IM --> CUJ["copy-update-json.sh"]
@@ -248,8 +250,8 @@ graph TD
     UM --> SV["snapshot-vm.sh"]
     AJM --> CJC
     SV --> UM
-    RM --> IM
-    RM --> UM
+    RT --> ISS["dependsOn install-service.sh"]
+    RT --> MUS["module update.sh / install.sh"]
     DM --> CIR
 ```
 
@@ -288,7 +290,6 @@ graph TD
 ```mermaid
 graph TD
     HM["health-manager (TS)"] --> UOS["update-os.sh"]
-    HM --> IV["inspect-vm.sh"]
     HM --> CDT["check-disk-threshold.sh"]
     HM --> BM["backup-manager (TS)"]
     BM --> BC["backup-controller"]
@@ -329,7 +330,6 @@ production script/program executes the legacy verb itself.
 | `install-module.sh` | module-manager | module-manager (TS); `cluster/services/vm/install-service.sh` (template build) | mostly MANAGER, 1 DIRECT |
 | `update-module.sh` | module-manager | module-manager (TS); `install.sh`; `update-tappaas` (nightly); `network/update.sh`* | MANAGER + **2 DIRECT** |
 | `delete-module.sh` | module-manager | module-manager / environment-manager (TS); `cluster/services/{lxc,vm}/delete-service.sh`** | MANAGER (service-plane callbacks) |
-| `reconcile-module.sh` | module-manager | module-manager / environment-manager (TS) only | MANAGER (clean) |
 | `copy-update-json.sh` | module-manager | module-manager (TS); `install.sh`; `backup/install.sh` | MANAGER + **2 DIRECT** |
 | `snapshot-vm.sh` | module-manager | module-manager (TS); `common-install-routines.sh` (lib) | MANAGER (lib-internal) |
 | `create-site.sh` | site-manager | site-manager (TS); `install.sh` (bootstrap) | MANAGER + **1 DIRECT** |
@@ -338,7 +338,6 @@ production script/program executes the legacy verb itself.
 | `validate-configuration.sh` | site-manager | validate-site.sh; people validate.sh; `cluster/update.sh` | MANAGER + **1 DIRECT** |
 | `validate-people.sh` | people-manager | people-manager flow | MANAGER (clean) |
 | `update-os.sh` | health-manager | health-manager (TS); `templates/services/{nixos,debian}/update-service.sh` | MANAGER + **2 DIRECT** |
-| `inspect-vm.sh` | module-manager | module-manager (TS) | MANAGER (lib-internal) |
 | `check-disk-threshold.sh` | health-manager | health-manager (TS) only | MANAGER (clean) |
 | `backup-controller` | (backup-manager wraps) | backup-manager (TS) only | MANAGER (clean) |
 
@@ -366,7 +365,7 @@ below the manager, not bypassing it.
 remain** (the environments + people bootstraps moved onto the manager verbs —
 `environment-manager add` / `people-manager bootstrap` — in the ADR-007
 refactor Phase 8). The read-only/backup verbs (`validate-*`, `backup-controller`,
-`reconcile-module`, `check-disk-threshold`) are reached **only** through their
+`check-disk-threshold`) are reached **only** through their
 managers — clean (the backup bash layer — `backup-restore`/`backup-status` —
 was retired outright in the ADR-007 refactor Phase 7.4, absorbed into the TS
 `backup-manager`). The holdouts cluster in two predictable places:
