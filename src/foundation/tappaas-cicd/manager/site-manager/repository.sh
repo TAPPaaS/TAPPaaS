@@ -16,7 +16,7 @@
 # Commands:
 #   add <url> [--branch <branch>]      Add a new module repository
 #   remove <name> [--force]            Remove a module repository
-#   modify <name> [--url <url>] [--branch <branch>]  Modify a repository
+#   modify <name> [--url <url>] [--branch <branch>] [--force]  Modify a repository
 #   list                               List all tracked repositories
 #
 # Examples:
@@ -87,10 +87,14 @@ Commands:
         Remove a module repository. Blocked if installed modules
         depend on the repository (use --force to override).
 
-    modify <name> [--url <new-url>] [--branch <new-branch>]
+    modify <name> [--url <new-url>] [--branch <new-branch>] [--force]
         Modify a repository's URL and/or branch. If only changing
         branch, fetches and checks out the new branch in place.
         If changing URL, re-clones and updates module locations.
+        A URL change converges the checkout with a hard reset; it is
+        refused when the branch carries commits that exist only there
+        (use --force to snapshot them to a repo-sync/pre-reset-*
+        branch and reset anyway).
 
     list
         List all tracked repositories with name, URL, branch,
@@ -105,6 +109,7 @@ Examples:
     ${SCRIPT_NAME} remove tappaas-community
     ${SCRIPT_NAME} modify tappaas-community --branch stable
     ${SCRIPT_NAME} modify tappaas-community --url github.com/other/repo --branch main
+    ${SCRIPT_NAME} modify tappaas-community --url codeberg.org/other/repo --force
     ${SCRIPT_NAME} list
 EOF
 }
@@ -644,10 +649,15 @@ cmd_modify() {
     local name=""
     local new_url=""
     local new_branch=""
+    local force=false
 
     # Parse arguments
     while [[ $# -gt 0 ]]; do
         case "$1" in
+            --force)
+                force=true
+                shift
+                ;;
             --url)
                 if [[ -z "${2:-}" ]]; then
                     die "Option --url requires a value"
@@ -831,7 +841,18 @@ cmd_modify() {
         # working tree the whole system runs from. This is the forge-migration case
         # (e.g. github.com/TAPPaaS/TAPPaaS -> codeberg.org/TAPPaaS/TAPPaaS).
         info "  Re-pointing existing checkout ${current_path} at the new origin..."
-        if ! reconcile_repo_checkout "${current_path}" "${new_url}" "${target_branch}"; then
+        # Converging on a new origin is a hard reset. Only an operator who has seen
+        # the listed commits may authorise discarding them (--force); unattended
+        # runs (pre-update.sh) never can. rc 2 == blocked on exactly that (#433).
+        local allow_discard=0
+        if [[ "${force}" == "true" ]]; then allow_discard=1; fi
+        # `|| rc=$?` (not a bare call) — set -e would abort before we can tell
+        # "blocked, needs --force" apart from a hard failure.
+        local rc=0
+        reconcile_repo_checkout "${current_path}" "${new_url}" "${target_branch}" "${allow_discard}" || rc=$?
+        if [[ ${rc} -eq 2 ]]; then
+            die "Refused: '${target_branch}' carries commits that exist only in ${current_path} (listed above). Push them, or re-run with --force to snapshot and discard them."
+        elif [[ ${rc} -ne 0 ]]; then
             die "Failed to re-point ${current_path} at https://${new_url} (${target_branch})"
         fi
         info "  ${GN}✓${CL} Repository re-pointed in place"
