@@ -23,7 +23,7 @@ scripts read independently. The mirror is now gone, `install-module.sh` forwards
 Two symptoms this fixes:
 
 | Shared `<provider>.json` | Before | After |
-|---|---|---|
+| --- | --- | --- |
 | exists | consumer silently used the **shared** provider instead of its environment's | uses its environment's provider |
 | absent | install **died** `provider module 'X' is not installed` | installs correctly |
 
@@ -36,8 +36,8 @@ had a `.variant` reader — `mailserver-hub`'s mailbox install-service. Both rep
 carry a branch of the same name and **both must be switched together**:
 
 ```bash
-cd ~/TAPPaaS   && git checkout fix/438-variant-to-environment
-cd ~/Community && git checkout fix/438-variant-to-environment
+site-manager repository modify TAPPaaS   --branch fix/438-variant-to-environment
+site-manager repository modify Community --branch fix/438-variant-to-environment
 ```
 
 If you do not run `mailserver-hub`, the Community branch is a no-op for you — but
@@ -67,19 +67,19 @@ steps back to back.
 
 ## Steps
 
-### 1. Switch to the branch
+### 1. Switch both repos to the branch
 
 ```bash
-cd ~/TAPPaaS
-git fetch origin
-git checkout fix/438-variant-to-environment
+site-manager repository modify TAPPaaS   --branch fix/438-variant-to-environment
+site-manager repository modify Community --branch fix/438-variant-to-environment
 ```
 
-Foundation scripts are symlinked from `~/bin` into this checkout, so the new code
-is live immediately. If the TS managers need rebuilding on your site:
+`repository modify --branch` fetches and checks out in place. Foundation scripts
+are symlinked from `~/bin` into the checkout, so the new code is live
+immediately. If the TS managers need rebuilding on your site:
 
 ```bash
-src/foundation/tappaas-cicd/manager/module-manager/install.sh
+~/TAPPaaS/src/foundation/tappaas-cicd/manager/module-manager/install.sh
 ```
 
 ### 2. Dry-run the migration
@@ -93,7 +93,7 @@ Read-only. Prints a per-config plan and writes nothing.
 Each module config is classified:
 
 | Row | Meaning | Action taken by `--apply` |
-|---|---|---|
+| --- | --- | --- |
 | `drop` | `.environment` present and equal to `.variant` | remove `.variant` |
 | `adopt` | no `.environment`, but the filename suffix `<base>-<variant>.json` proves the environment | set `.environment`, then remove `.variant` |
 | `blocked` | see below | **skipped** — needs your decision |
@@ -123,7 +123,7 @@ It prompts before writing (`--yes` to skip), backs up every changed file to
 Afterwards it re-checks **every** module's `dependsOn` and reports any dependency
 that no longer resolves to a deployed provider. That check must come back clean:
 
-```
+```text
 Verifying dependency resolution
   ✓ every dependency resolves to a deployed provider
 ```
@@ -148,23 +148,34 @@ jq -r '.environment' ~/config/<consumer>.json          # -> <env>
 ls ~/config/<provider>-<env>.json                      # the intended provider
 ```
 
-### 5. Update a module and verify
+### 5. General update
 
-Pick one module that previously mis-resolved — a customer-tenant consumer of
-`litellm`, or a test-tier consumer of `nextcloud`/`coturn`:
+```bash
+update-tappaas --dry-run
+update-tappaas --force
+```
+
+Watch a module that previously mis-resolved — your `litellm-tenant1` consumer, or
+a test-tier consumer of `nextcloud`/`coturn`. In `Update Step 4: Call dependency
+service updaters` the provider named should be the environment's instance, not
+the shared one.
+
+To exercise a single module instead of the whole site:
 
 ```bash
 module-manager modify <module>
 ```
 
-Watch `Update Step 4: Call dependency service updaters`. The provider it names
-should be the environment's instance (`litellm-tenant1`), not the shared one.
-
 ### 6. Report back
 
 Say which modules moved from shared to dedicated providers, and paste anything
-`blocked` you had to resolve by hand. Then the branch can be merged to `main` and
-both sites switched back.
+`blocked` you had to resolve by hand. Then the branch is merged to `main` and
+both sites go back:
+
+```bash
+site-manager repository modify TAPPaaS   --branch main
+site-manager repository modify Community --branch main
+```
 
 ---
 
@@ -172,7 +183,8 @@ both sites switched back.
 
 ```bash
 cp ~/config/.variant-migration-<timestamp>/*.json ~/config/
-git checkout main
+site-manager repository modify TAPPaaS   --branch main
+site-manager repository modify Community --branch main
 ```
 
 Restores both the configs and the code. Safe because the migration only ever
@@ -184,7 +196,7 @@ touched.
 ## What was changed in the code
 
 | Area | Files |
-|---|---|
+| --- | --- |
 | resolver + dependency check | `lib/common-install-routines.sh` |
 | forwarding (the actual defect) | `manager/module-manager/install-module.sh` |
 | stopped writing the mirror | `manager/module-manager/copy-update-json.sh` |
