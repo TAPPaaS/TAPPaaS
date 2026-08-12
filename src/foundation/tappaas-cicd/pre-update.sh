@@ -51,8 +51,18 @@ if [ "$REPO_COUNT" -gt 0 ]; then
       # repo's url/branch is actually applied here (was: fetch+checkout+pull on
       # the OLD origin, which silently pulled the wrong forge — Codeberg incident).
       (
-        reconcile_repo_checkout "$REPO_PATH" "$REPO_URL" "$REPO_BRANCH" \
-          || warn "Failed to sync ${REPO_NAME}"
+        # allow_discard is NOT passed: an unattended run must never orphan commits
+        # that exist only in the checkout. rc 2 == blocked on that decision (#433);
+        # the repo is left untouched and re-reported every run until a human acts.
+        # `|| _rc=$?` (not a bare call) — set -e would abort the subshell on rc 2
+        # before we could tell "blocked" apart from "failed".
+        _rc=0
+        reconcile_repo_checkout "$REPO_PATH" "$REPO_URL" "$REPO_BRANCH" || _rc=$?
+        case "${_rc}" in
+          0) ;;
+          2) error "${REPO_NAME}: NOT synced — unpushed commits block the origin change (see above). Push them, or run: site-manager repository modify ${REPO_NAME} --url ${REPO_URL} --force" ;;
+          *) warn "Failed to sync ${REPO_NAME}" ;;
+        esac
       ) 2>&1 | while IFS= read -r _l; do
         # Keep tagged log lines ([Info]/[Warning]/[Error]); route raw git output to [Debug].
         case "$_l" in
