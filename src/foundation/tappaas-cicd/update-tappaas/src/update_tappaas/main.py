@@ -340,6 +340,58 @@ def get_installed_apps() -> list[str]:
     return apps
 
 
+# ── Update lifecycle membership (#441) ───────────────────────────────
+#
+# Statuses that take a module OUT of the update sweep:
+#   archived (#215) — delete-module.sh --archive removed the VM but kept the
+#                     config (and its PBS backups) so the module stays restorable.
+#   external (#216) — a guest managed OUTSIDE TAPPaaS; per module-fields.json,
+#                     "no install/update/test/delete lifecycle applies".
+#
+# Both keep `kind`/`vmname`, so the module selectors above still match them and
+# they used to enter Phase 1/2, where the pre-update snapshot found no VM and the
+# pre-update test then aborted the module with exit 2 — counting an intentionally
+# decommissioned module as a sweep FAILURE.
+#
+# `Deprecated` is deliberately NOT here: unmaintained is not decommissioned. Its
+# VM is still running and still needs its OS patches.
+NON_LIFECYCLE_STATUSES = {"archived", "external"}
+
+
+def module_status(module_name: str) -> str:
+    """Return a module's `.status`, lowercased. '' when absent or unreadable."""
+    try:
+        with open(CONFIG_DIR / f"{module_name}.json") as f:
+            return str(json.load(f).get("status") or "").strip().lower()
+    except (OSError, ValueError):
+        return ""
+
+
+def partition_by_lifecycle(modules: list[str]) -> tuple[list[str], list[tuple[str, str]]]:
+    """Split module names into (to_update, [(name, status), ...] skipped).
+
+    Status matching is case-insensitive: module-fields.json spells the lifecycle
+    values lowercase (archived/external) but the development ones capitalised
+    (Production/Testing/…), so neither casing can be assumed.
+    """
+    active: list[str] = []
+    skipped: list[tuple[str, str]] = []
+    for name in modules:
+        status = module_status(name)
+        if status in NON_LIFECYCLE_STATUSES:
+            skipped.append((name, status))
+        else:
+            active.append(name)
+    return active, skipped
+
+
+def log_skipped(skipped: list[tuple[str, str]]) -> None:
+    """Report decommissioned modules. Skipping is visible, never silent — an
+    operator reading the plan must still see that the module exists."""
+    for name, status in skipped:
+        log.info("  (skipped: %s — status=%s, not in the update lifecycle)", name, status)
+
+
 def get_module_dependencies(module_name: str) -> list[str]:
     """Get provider module names from a module's dependsOn field."""
     json_path = CONFIG_DIR / f"{module_name}.json"
@@ -546,18 +598,21 @@ def main():
     # sites whose site.json predates the field. Idempotent; honours --dry-run.
     ensure_default_environment(config, args.dry_run)
 
-    apps = get_installed_apps()
+    # Decommissioned modules (archived/external) are dropped BEFORE the
+    # topological sort (#441), so a dependent of an archived provider simply
+    # loses that edge instead of being ordered behind a module we never run.
+    apps, skipped_apps = partition_by_lifecycle(get_installed_apps())
     sorted_apps = topological_sort(apps)
 
     # Resolve each canonical foundation module to its deployed config name,
     # honouring the ADR-007 P8 legacy alias (network → firewall). The deployed name
     # is passed to `module-manager module modify` so a not-yet-migrated firewall.json
     # updates correctly in the network slot.
-    installed_foundation = [
+    installed_foundation, skipped_foundation = partition_by_lifecycle([
         name
         for m in FOUNDATION_MODULES
         if (name := deployed_foundation_name(m)) is not None
-    ]
+    ])
 
     # automaticReboot (default true) gates the Phase 3 node reboot pass.
     # site.json is flat (ADR-007): .automaticReboot (was .tappaas.automaticReboot).
@@ -571,9 +626,10 @@ def main():
         log.info("Phase 1 - Foundation update order:")
         for i, mod in enumerate(installed_foundation, 1):
             log.info("  %d. module-manager module modify %s", i, mod)
-        skipped = [m for m in FOUNDATION_MODULES if deployed_foundation_name(m) is None]
-        if skipped:
-            log.info("  (not installed: %s)", ", ".join(skipped))
+        log_skipped(skipped_foundation)
+        not_installed = [m for m in FOUNDATION_MODULES if deployed_foundation_name(m) is None]
+        if not_installed:
+            log.info("  (not installed: %s)", ", ".join(not_installed))
         log.info("Phase 2 - App update order (%d module(s)):", len(sorted_apps))
         if sorted_apps:
             for i, app in enumerate(sorted_apps, 1):
@@ -582,6 +638,7 @@ def main():
                 log.info("  %d. module-manager module modify %s%s", i, app, dep_str)
         else:
             log.info("  (no app modules installed)")
+        log_skipped(skipped_apps)
         log.info("Phase 3 - Node reboot pass (automaticReboot=%s):", automatic_reboot)
         reboot_pass(automatic_reboot, dry_run=True)
         log.info("To run these updates: update-tappaas --force")
@@ -613,6 +670,7 @@ def main():
 
     # Phase 1: Foundation modules in fixed order
     log.info("Phase 1: Updating foundation modules")
+    log_skipped(skipped_foundation)
 
     for module in installed_foundation:
         # No "[i/N] Updating <module>" line — update-module.sh's own banner
@@ -623,6 +681,7 @@ def main():
 
     # Phase 2: App modules in dependency order
     log.info("Phase 2: Updating app modules")
+    log_skipped(skipped_apps)
 
     if sorted_apps:
         for app in sorted_apps:
@@ -645,8 +704,9 @@ def main():
 
     log.info("=" * 60)
     log.info(
-        "update-tappaas completed: %s | total=%d succeeded=%d failed=%d reboot=%s",
+        "update-tappaas completed: %s | total=%d succeeded=%d failed=%d skipped=%d reboot=%s",
         end_time, total, succeeded, len(failed_modules),
+        len(skipped_foundation) + len(skipped_apps),
         "ok" if reboot_ok else "failed",
     )
 

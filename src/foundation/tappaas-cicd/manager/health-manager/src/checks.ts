@@ -12,7 +12,7 @@
 
 import { spawnSync } from "child_process";
 import { join } from "path";
-import { loadConfigModules, readModuleJson } from "./config";
+import { isManaged, loadConfigModules, readModuleJson } from "./config";
 import { CheckResult, CheckStatus, ClusterClient, HealthReport } from "./types";
 
 // Resolve a guest's `<vmname>.<zone0>.internal` target, as check-disk-threshold.sh
@@ -37,7 +37,7 @@ export function checkDiskThreshold(
   defaultNode: string,
   threshold: number,
 ): CheckResult {
-  const modules = loadConfigModules(configDir, defaultNode).filter((m) => m.status === "");
+  const modules = loadConfigModules(configDir, defaultNode).filter(isManaged);
   const over: string[] = [];
   let probed = 0;
   for (const m of modules) {
@@ -123,13 +123,21 @@ export function checkServiceLiveness(
   const running = new Set(
     client.clusterResources().filter((g) => g.status === "running").map((g) => g.vmid),
   );
-  const down = loadConfigModules(configDir, defaultNode)
-    .filter((m) => m.status === "" && !running.has(m.vmid))
-    .map((m) => m.module);
+  const managed = loadConfigModules(configDir, defaultNode).filter(isManaged);
+  const down = managed.filter((m) => !running.has(m.vmid)).map((m) => m.module);
   if (down.length > 0) {
     return { name: "service-liveness", status: "fail", detail: `not running: ${down.join(", ")}` };
   }
-  return { name: "service-liveness", status: "pass", detail: "all managed modules running" };
+  // Report the population, not just the verdict: a bare "all managed modules
+  // running" over an EMPTY set read as PASS for as long as #441 was live.
+  if (managed.length === 0) {
+    return { name: "service-liveness", status: "skip", detail: "no managed modules configured" };
+  }
+  return {
+    name: "service-liveness",
+    status: "pass",
+    detail: `${managed.length} managed module(s) running`,
+  };
 }
 
 export interface ValidateOpts {

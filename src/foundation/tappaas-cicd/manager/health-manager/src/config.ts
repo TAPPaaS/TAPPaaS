@@ -87,6 +87,21 @@ export function loadConfigModules(configDir: string, defaultNode: string): Confi
   return out;
 }
 
+// Statuses that take a module OUT of the managed lifecycle: `archived` (#215 —
+// delete-module.sh --archive removed the VM but kept the config for restore) and
+// `external` (#216 — guest managed outside TAPPaaS). Every other value is
+// managed, INCLUDING `Deprecated`: unmaintained is not decommissioned, and such
+// a VM still has to pass liveness and disk checks.
+//
+// Do NOT test `status === ""` here (#441): configs carry Production/Testing/
+// Development routinely, so an empty-string test excludes every real module and
+// silently empties the gates.
+const UNMANAGED_STATUSES = new Set(["archived", "external"]);
+
+export function isManaged(m: ConfigModule): boolean {
+  return !UNMANAGED_STATUSES.has(m.status.trim().toLowerCase());
+}
+
 // Resolve the git source JSON for a module via its `location` field — the
 // Released column in the three-way diff. Tries <location>/<module>.json then
 // <location>/<vmname>.json (matching inspect-vm.sh). Returns null when absent.

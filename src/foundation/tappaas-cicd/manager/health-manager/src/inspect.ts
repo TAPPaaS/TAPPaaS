@@ -7,7 +7,7 @@
 // inject a fake cluster and assert the classification without any SSH.
 
 import { join } from "path";
-import { loadConfigModules, readModuleJson, resolveGitJson } from "./config";
+import { isManaged, loadConfigModules, readModuleJson, resolveGitJson } from "./config";
 import {
   ClusterClient,
   ClusterDiff,
@@ -189,7 +189,7 @@ export function clusterDiff(
   configDir: string,
   defaultNode: string,
 ): ClusterDiff {
-  const managed = loadConfigModules(configDir, defaultNode).filter((m) => m.status === "");
+  const managed = loadConfigModules(configDir, defaultNode).filter(isManaged);
   const vms: VmInspection[] = [];
   const unreachable: { module: string; error: string }[] = [];
   let warnings = 0;

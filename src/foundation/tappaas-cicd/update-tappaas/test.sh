@@ -72,5 +72,72 @@ else
     echo "  ⊘ backfill unit test skipped (source or env python not found)"
 fi
 
+# ── 3) Unit: decommissioned modules stay out of the sweep (#441) ─────
+# archived (#215) and external (#216) configs keep their kind/vmname, so the
+# module selectors still match them and they used to enter Phase 1/2 — where the
+# snapshot found no VM and the pre-update test aborted them as FAILED updates.
+if [[ -f "$main_py" && -x "$py" ]]; then
+    if "$py" - "$main_py" <<'PY'
+import importlib.util, json, sys, tempfile, logging
+from pathlib import Path
+logging.disable(logging.CRITICAL)
+spec = importlib.util.spec_from_file_location("m", sys.argv[1])
+m = importlib.util.module_from_spec(spec); spec.loader.exec_module(m)
+
+d = Path(tempfile.mkdtemp())
+m.CONFIG_DIR = d
+def w(name, **kw):
+    (d / f"{name}.json").write_text(json.dumps({"kind": "module", "vmname": name, **kw}))
+
+# Apps: two decommissioned, four that must still be swept.
+w("gone",       status="archived", dependsOn=["cluster:vm"])
+w("pfsense",    status="external")
+w("shouty",     status="Archived")            # case-insensitive
+w("nextcloud",  status="Production", dependsOn=["cluster:vm"])
+w("beta",       status="Testing")
+w("old",        status="Deprecated")          # unmaintained != decommissioned
+w("plain")                                    # no status at all
+
+apps, skipped = m.partition_by_lifecycle(m.get_installed_apps())
+assert sorted(apps) == ["beta", "nextcloud", "old", "plain"], f"apps kept: {sorted(apps)}"
+assert sorted(n for n, _ in skipped) == ["gone", "pfsense", "shouty"], f"skipped: {skipped}"
+assert all(s in ("archived", "external") for _, s in skipped), "skip reason is the status"
+
+# Foundation loop is filtered by the same predicate (it selects on file
+# existence alone, so an archived foundation module entered Phase 1 too).
+w("logging", status="archived")
+w("identity", status="Production")
+found = [n for f in m.FOUNDATION_MODULES if (n := m.deployed_foundation_name(f))]
+active, skipped_f = m.partition_by_lifecycle(found)
+assert active == ["identity"], f"foundation kept: {active}"
+assert [n for n, _ in skipped_f] == ["logging"], f"foundation skipped: {skipped_f}"
+
+# An archived PROVIDER must not distort the order of what remains: filtering
+# happens before the sort, so the dependent just loses that edge.
+d2 = Path(tempfile.mkdtemp()); m.CONFIG_DIR = d2
+(d2 / "litellm.json").write_text(json.dumps({"kind": "module", "vmname": "litellm", "status": "archived"}))
+(d2 / "openwebui.json").write_text(json.dumps(
+    {"kind": "module", "vmname": "openwebui", "status": "Production", "dependsOn": ["litellm:models"]}))
+apps2, skipped2 = m.partition_by_lifecycle(m.get_installed_apps())
+order = m.topological_sort(apps2)
+assert order == ["openwebui"], f"dependent still planned exactly once: {order}"
+assert [n for n, _ in skipped2] == ["litellm"], f"archived provider skipped: {skipped2}"
+
+# An unreadable/absent config must not crash the partition (defaults to active,
+# so a malformed config is still attempted rather than silently dropped).
+assert m.module_status("does-not-exist") == "", "missing config -> no status"
+(d2 / "broken.json").write_text("{ not json")
+assert m.module_status("broken") == "", "unparseable config -> no status"
+PY
+    then
+        passed=$((passed + 1))
+    else
+        echo "  ✗ #441 decommissioned-module skip unit test FAILED"
+        failed=$((failed + 1))
+    fi
+else
+    echo "  ⊘ #441 skip unit test skipped (source or env python not found)"
+fi
+
 echo "update-tappaas test: $passed passed, $failed failed"
 [[ "$failed" -eq 0 ]]

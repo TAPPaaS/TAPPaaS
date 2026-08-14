@@ -267,6 +267,31 @@ main() {
     fi
     info "${BOLD}╚══════════════════════════════════════════════╝${CL}"
 
+    # ── Lifecycle guard (#441) ───────────────────────────────────────
+    # archived (#215) and external (#216) modules are not in the update
+    # lifecycle: the first has no VM (delete-module.sh --archive removed it and
+    # kept the config for restore), the second is managed outside TAPPaaS. Both
+    # used to run the whole update: Step 0 rewrote the config and advanced its
+    # .orig baseline, Step 1's snapshot failed with only a warning, and Step 2's
+    # pre-update test then aborted with exit 2 — so a decommissioned module was
+    # reported as a FAILED update after its config had already been rewritten.
+    #
+    # Must sit BEFORE Step 0; that is the step doing the write. exit 0, because
+    # "correctly not updated" is a success for every caller (update-tappaas
+    # counts a non-zero rc as a failed module). --force is the escape hatch for
+    # a deliberate restore-then-update.
+    local module_status
+    module_status="$(read_module_config "${module}" | jq -r '.status // ""' | tr '[:upper:]' '[:lower:]')"
+    if [[ "${module_status}" == "archived" || "${module_status}" == "external" ]]; then
+        if [[ "${OPT_FORCE}" -eq 1 ]]; then
+            warn "Module '${module}' has status=${module_status} — updating anyway (--force)"
+        else
+            info "  Module '${module}' has ${BL}status=${module_status}${CL} — not in the update lifecycle; skipping."
+            info "  Use ${YW}--force${CL} to update it anyway (e.g. after restoring an archived VM)."
+            exit 0
+        fi
+    fi
+
     # ── Step 0: 3-way merge module config against new release source (#207) ──
     # Reconciles operator customizations with release updates BEFORE we
     # snapshot or run hooks, so the snapshot and all hooks see the merged

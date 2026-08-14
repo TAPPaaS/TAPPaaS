@@ -135,6 +135,67 @@ function testGates(): void {
   check(skip.status === "skip", "disk-threshold skip when no guest reachable");
 }
 
+// ── #441: the gates must select on "not archived/external", not status=="" ──
+// The old filter was `m.status === ""`, so every config carrying a routine
+// status (Production/Testing/Development) fell out and both gates ran over an
+// EMPTY set — service-liveness reported PASS while VMs were down. The shipped
+// fixtures all lack a status, which is exactly why that never failed a test;
+// these cases stage configs that DO carry one.
+function testGateStatusSelection(): void {
+  const dir = mkdtempSync(join(process.env.TMPDIR ?? "/tmp", "health-status-"));
+  const mod = (name: string, vmid: string, status?: string): void =>
+    writeFileSync(
+      join(dir, `${name}.json`),
+      JSON.stringify({ vmname: name, vmid, node: "tappaas1", ...(status ? { status } : {}) }),
+    );
+  mod("prod", "401", "Production");
+  mod("dev", "402", "Development");
+  mod("deprecated", "403", "Deprecated"); // unmaintained, still managed
+  mod("nostatus", "404");
+  mod("gone", "405", "archived");
+  mod("pfsense", "406", "external");
+  mod("shouty", "407", "ARCHIVED"); // case-insensitive
+
+  const c = new FakeClusterClient();
+  // Only the four managed VMs run; both decommissioned ones are absent.
+  c.guests = [
+    guest(401, "prod", "running"),
+    guest(402, "dev", "running"),
+    guest(403, "deprecated", "running"),
+    guest(404, "nostatus", "running"),
+  ];
+  const live = checkServiceLiveness(c, dir, "tappaas1");
+  check(live.status === "pass", "liveness passes with archived/external absent");
+  check(/4 managed/.test(live.detail), `liveness counts the 4 managed modules (got: ${live.detail})`);
+
+  // The regression itself: a Production VM going down MUST fail the gate.
+  c.guests = c.guests.filter((g) => g.vmid !== 401);
+  const dead = checkServiceLiveness(c, dir, "tappaas1");
+  check(dead.status === "fail", "liveness FAILS when a Production module is down (#441)");
+  check(/\bprod\b/.test(dead.detail), "the down Production module is named");
+  check(!/gone|pfsense|shouty/.test(dead.detail), "archived/external never reported as down");
+
+  // Deprecated is unmaintained, not decommissioned — it must still be gated.
+  const c3 = new FakeClusterClient();
+  c3.guests = [guest(401, "prod", "running"), guest(402, "dev", "running"), guest(404, "nostatus", "running")];
+  const dep = checkServiceLiveness(c3, dir, "tappaas1");
+  check(dep.status === "fail" && /deprecated/.test(dep.detail), "Deprecated stays inside the gate");
+
+  // disk-threshold selects the same population.
+  const c4 = new FakeClusterClient();
+  c4.diskUsage.set("prod.mgmt.internal", 95);
+  c4.diskUsage.set("gone.mgmt.internal", 99); // archived — must not be probed
+  const disk = checkDiskThreshold(c4, dir, "tappaas1", 80);
+  check(disk.status === "fail" && /prod/.test(disk.detail), "disk-threshold sees Production guests");
+  check(!/gone/.test(disk.detail), "disk-threshold skips archived guests");
+
+  // An all-archived config dir is an empty gate — say so rather than PASS.
+  const empty = mkdtempSync(join(process.env.TMPDIR ?? "/tmp", "health-empty-"));
+  writeFileSync(join(empty, "gone.json"), JSON.stringify({ vmname: "gone", vmid: "410", status: "archived" }));
+  const none = checkServiceLiveness(new FakeClusterClient(), empty, "tappaas1");
+  check(none.status === "skip", "empty managed set reports skip, not a vacuous pass");
+}
+
 // ── list vm --diff (= clusterDiff three-way rollup) ───────────────────
 function testClusterDiff(): void {
   // Stage a config dir with TWO managed modules + one archived (skipped) one.
@@ -192,6 +253,7 @@ check(existsSync(FIXTURES), "fixtures present");
 testInspectCluster();
 testInspectVm();
 testGates();
+testGateStatusSelection();
 testClusterDiff();
 testSiteNodes();
 
