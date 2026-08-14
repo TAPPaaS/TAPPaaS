@@ -124,4 +124,62 @@ else
     bad "unit test tsconfig not found: ${UNIT_TSCONFIG}"
 fi
 
+echo ""
+echo "== resolve_nixos_config: N-part vmname resolution (offline, #440) =="
+UPDATE_OS="${here}/update-os.sh"
+if [[ -f "$UPDATE_OS" ]]; then
+    _tmp="$(mktemp -d)"
+    _cfgdir="${_tmp}/config"
+    mkdir -p "${_cfgdir}"
+
+    # Sourced in a subshell each call: update-os.sh has `set -euo pipefail`,
+    # which would otherwise leak into the rest of this test file once sourced
+    # and silently change how later sections handle non-zero exit codes.
+    _rnc() {  # _rnc <label> <vmname> <expect-basename-or-empty>
+        local label="$1" vmname="$2" expect="$3" got
+        got=$(
+            source "$UPDATE_OS"
+            resolve_nixos_config "${vmname}" "${_tmp}" "${_cfgdir}"
+        ) 2>/dev/null || got=""
+        if [[ -z "$expect" ]]; then
+            [[ -z "$got" ]] && ok "${label}" || bad "${label} (got '${got}', want unresolved)"
+        else
+            [[ "$(basename "${got}" 2>/dev/null)" == "${expect}" ]] && ok "${label}" \
+                || bad "${label} (got '${got}', want basename ${expect})"
+        fi
+    }
+
+    # 1. Direct match: vmname's own .nix file exists.
+    : > "${_tmp}/euro-office-test.nix"
+    _rnc "direct match: ./<vmname>.nix" "euro-office-test" "euro-office-test.nix"
+    rm -f "${_tmp}/euro-office-test.nix"
+
+    # 2. Legacy 2-part fallback (regression guard for #286's original fix):
+    # <source>-<environment>, source module ships only <source>.nix.
+    : > "${_tmp}/euro-office.nix"
+    cat > "${_cfgdir}/euro-office-test.json" <<'EOF'
+{"environment": "test"}
+EOF
+    _rnc "legacy 2-part fallback (<source>-<environment>)" "euro-office-test" "euro-office.nix"
+    rm -f "${_tmp}/euro-office.nix" "${_cfgdir}/euro-office-test.json"
+
+    # 3. The actual #440 bug: 3-part vmname <source>-<environment>-<instance>.
+    # environment sits BEFORE the instance name here, so the legacy
+    # suffix-strip can never match it (it only strips a trailing component) —
+    # this only resolves correctly via the `location` field.
+    : > "${_tmp}/hermes.nix"
+    cat > "${_cfgdir}/hermes-gridtefy-bizops.json" <<'EOF'
+{"environment": "gridtefy", "location": "/home/tappaas/repos/gdty-apps/src/apps/tappaas/private/hermes"}
+EOF
+    _rnc "3-part vmname resolves via location (#440)" "hermes-gridtefy-bizops" "hermes.nix"
+    rm -f "${_tmp}/hermes.nix" "${_cfgdir}/hermes-gridtefy-bizops.json"
+
+    # 4. Genuinely unresolvable: no .nix, no config, no location.
+    _rnc "unresolvable vmname returns nothing" "totally-unknown-thing" ""
+
+    rm -rf -- "${_tmp}"
+else
+    bad "update-os.sh not found"
+fi
+
 exit "${rc}"

@@ -240,6 +240,56 @@ wait_for_provisioning() {
     info "  ${GN}✓${CL} cloud-init done and passwordless sudo ready"
 }
 
+# resolve_nixos_config <vmname> [nix_dir] [config_dir]
+#
+# Resolves the NixOS config file for a module. Plain deploys: <nix_dir>/<vmname>.nix.
+# Resolution order once that's absent:
+#   1. Basename of the module's declared `location` field. Works regardless of
+#      how many hyphenated components vmname has -- <source>, <source>-<env>,
+#      or <source>-<env>-<instance> alike (#440: the old suffix-strip below
+#      only ever handled the 2-part case, and silently no-op'd on 3-part
+#      vmnames like <source>-<env>-<instance>, since environment there sits
+#      before the instance name, not at the end).
+#   2. Legacy fallback: strip a trailing -<environment> suffix from vmname
+#      (#286, read .variant until it was retired in #438). Only correct for
+#      the 2-part case; kept for modules without a `location` field.
+# Echoes the resolved path and returns 0, or returns 1 with no output.
+resolve_nixos_config() {
+    local vmname="$1" nix_dir="${2:-.}" config_dir="${3:-${CONFIG_DIR:-}}"
+    local nix_config="${nix_dir}/${vmname}.nix"
+    if [[ -f "${nix_config}" ]]; then
+        echo "${nix_config}"
+        return 0
+    fi
+
+    local cfg="${config_dir}/${vmname}.json"
+    [[ -f "${cfg}" ]] || return 1
+
+    local location source_vmname candidate
+    location=$(jq -r '.location // empty' "${cfg}" 2>/dev/null)
+    if [[ -n "${location}" ]]; then
+        source_vmname="$(basename "${location}")"
+        candidate="${nix_dir}/${source_vmname}.nix"
+        if [[ -f "${candidate}" ]]; then
+            echo "${candidate}"
+            return 0
+        fi
+    fi
+
+    local env
+    env=$(jq -r '.environment // empty' "${cfg}" 2>/dev/null)
+    if [[ -n "${env}" ]]; then
+        source_vmname="${vmname%-"${env}"}"
+        candidate="${nix_dir}/${source_vmname}.nix"
+        if [[ -f "${candidate}" ]]; then
+            echo "${candidate}"
+            return 0
+        fi
+    fi
+
+    return 1
+}
+
 # Update NixOS VM
 update_nixos() {
     local vmname="$1"
@@ -252,33 +302,15 @@ update_nixos() {
     # first-attempt failure where SSH is up but provisioning isn't (#309 ask 2).
     wait_for_provisioning "${vm_ip}"
 
-    # Resolve NixOS config. For plain deploys: ./<vmname>.nix.
-    # For environment deploys (<vmname> = <source>-<environment>): the source
-    # module only ships <source>.nix. When <vmname>.nix is absent, read the
-    # "environment" field from the installed config and fall back to
-    # <source>.nix. Fixes #286 (read .variant until it was retired in #438).
-    local nix_config="./${vmname}.nix"
-    local _source_vmname="${vmname}"
-
-    if [[ ! -f "${nix_config}" ]]; then
-        local _cfg="${CONFIG_DIR}/${vmname}.json"
-        if [[ -f "${_cfg}" ]]; then
-            local _env
-            _env=$(jq -r '.environment // empty' "${_cfg}" 2>/dev/null)
-            if [[ -n "${_env}" ]]; then
-                _source_vmname="${vmname%-"${_env}"}"
-                local _fallback_nix="./${_source_vmname}.nix"
-                if [[ -f "${_fallback_nix}" ]]; then
-                    info "Environment '${_env}': using ${_fallback_nix} for ${vmname}"
-                    nix_config="${_fallback_nix}"
-                fi
-            fi
-        fi
+    local nix_config
+    if ! nix_config=$(resolve_nixos_config "${vmname}" "."); then
+        die "NixOS configuration file not found: ./${vmname}.nix (tried location + variant fallback)"
     fi
-
-    if [[ ! -f "${nix_config}" ]]; then
-        die "NixOS configuration file not found: ${nix_config} (tried variant fallback)"
-    fi
+    # Source module name (e.g. "hermes"), used below for the companion JSON
+    # copied to the VM -- always the resolved .nix file's own basename, so it
+    # stays correct for both the direct-match and any fallback-resolved case.
+    local _source_vmname
+    _source_vmname="$(basename "${nix_config}" .nix)"
 
     info "Using NixOS config: ${nix_config}"
     info "Running nixos-rebuild ON the target VM (not --target-host)..."
@@ -617,4 +649,9 @@ main() {
     info "VM: ${vmname} (${vm_ip})"
 }
 
-main "$@"
+# Skip execution when sourced (e.g. to unit-test resolve_nixos_config in
+# isolation) -- only run when invoked directly, same idiom as the rest of the
+# foundation scripts.
+if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
+    main "$@"
+fi
