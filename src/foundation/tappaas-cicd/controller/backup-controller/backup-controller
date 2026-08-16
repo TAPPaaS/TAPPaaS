@@ -32,7 +32,7 @@
 # (retention args, namespace paths) are unit-testable via --selftest.
 set -euo pipefail
 
-HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+HERE="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")" && pwd)"
 CONFIG_DIR="${CONFIG_DIR:-/home/tappaas/config}"
 export CONFIG_DIR
 
