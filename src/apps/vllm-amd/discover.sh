@@ -11,7 +11,15 @@ MGMT="mgmt.internal"
 TARGET="root@${NODE}.${MGMT}"
 # discover only updates the meta (GPU majors are boot-dynamic); the curated
 # cluster:lxc <module>.json is left untouched (issue #203).
+#
+# OUT_META is a GENERATED, UNTRACKED artifact: template + this host's hardware.
+# It used to be tracked, so every discover run dirtied the working tree with one
+# node's GPU/RAM and whatever got committed became another site's default (#452).
+# IN_TEMPLATE holds the host-free structure — bindMounts, lxcOptions, vllm_image
+# — and is the only half that belongs in git. Rebuilding from it on every run
+# also means a released vllm_image bump actually reaches an existing checkout.
 OUT_META="vllm-amd.meta.json"
+IN_TEMPLATE="vllm-amd.meta.template.json"
 
 REQUIRED_CPU_PATTERN="Ryzen AI MAX\+ 395"
 REQUIRED_VRAM_MIN_MB=32768
@@ -138,13 +146,16 @@ chk "LXC memory"       "${LXC_MEM_MB}MB / $(( LXC_MEM_MB / 1024 ))GB"  "$LXC_MEM
   || err "GPU render node" "not found" "required for GPU passthrough"
 echo ""
 
-# --- Merge discovered values into the existing meta.json (issue #203) ---
+# --- Generate meta.json: template + discovered values (issues #203, #452) ---
 # /dev/kfd's major is assigned dynamically at boot and changes across reboots,
-# so it MUST be (re)discovered before each install. We MERGE into the existing
-# <module>.meta.json to preserve the cluster:lxc structure (bindMounts,
-# lxcOptions, vllm_image, ...) rather than overwriting with a flat blob, and we
-# do NOT touch <module>.json (it is the curated cluster:lxc module config).
-[ -f "$OUT_META" ] || { echo "❌ ${OUT_META} not found — cannot merge discovery into it"; exit 1; }
+# so it MUST be (re)discovered before each install. Rebuild from the tracked
+# template each run rather than merging in place: the template carries the
+# cluster:lxc structure (bindMounts, lxcOptions, vllm_image, ...) and this file
+# carries only what this host reports, so the result is fully derived and never
+# accumulates another node's values. <module>.json is left untouched — it is the
+# curated cluster:lxc module config.
+[ -f "$IN_TEMPLATE" ] || { echo "❌ ${IN_TEMPLATE} not found — cannot build ${OUT_META} without it"; exit 1; }
+cp "$IN_TEMPLATE" "$OUT_META"
 tmp=$(mktemp)
 jq --argjson vram "${VRAM_MB}" --argjson gtt "${GTT_MB}" \
    --argjson kfdmaj "${KFD_MAJOR}" --argjson kfdmin "${KFD_MINOR}" \
@@ -161,7 +172,7 @@ jq --argjson vram "${VRAM_MB}" --argjson gtt "${GTT_MB}" \
    "$OUT_META" > "$tmp" && mv "$tmp" "$OUT_META"
 
 echo ""
-echo "✅ Hardware OK — merged GPU discovery into: $OUT_META"
+echo "✅ Hardware OK — generated ${OUT_META} from ${IN_TEMPLATE} + this host's GPU"
 echo "   /dev/kfd ${KFD_MAJOR}:${KFD_MINOR}, ${RENDER_NODE} ${RENDER_MAJOR}:${RENDER_MINOR}"
 echo "   (LXC sizing reference: ${LXC_CORES} vCPUs, ${LXC_MEM_MB}MB; set in vllm-amd.json)"
 echo "Next: run install-module.sh vllm-amd"

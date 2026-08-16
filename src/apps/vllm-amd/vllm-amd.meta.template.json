@@ -2,14 +2,7 @@
   "version": "0.6.0",
   "module": "vllm-amd",
   "gpu": {
-    "apu": "Ryzen AI MAX+ 395",
-    "vram_mb": 2048,
-    "gtt_mb": 31979,
-    "kfd_major": 511,
-    "kfd_minor": 0,
-    "render_node": "renderD128",
-    "render_major": 226,
-    "render_minor": 128
+    "apu": "Ryzen AI MAX+ 395"
   },
   "bindMounts": [
     {
@@ -22,7 +15,6 @@
     "features": "nesting=1",
     "swap": 0
   },
-  "host_ram_mb": 63935,
   "rocm_gfx_target": "gfx1151",
   "vllm_image": "kyuz0/vllm-therock-gfx1151:latest",
   "author": "@ErikDaniel007",

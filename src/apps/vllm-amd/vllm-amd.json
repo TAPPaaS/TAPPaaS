@@ -1,5 +1,4 @@
 {
-  "type": "vm",
   "description": "vLLM AMD ROCm inference — Ryzen AI MAX+ 395 (tappaas2)",
   "version": "0.8.0",
   "releaseDate": "2026-07-02",

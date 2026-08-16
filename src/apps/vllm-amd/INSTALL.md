@@ -15,6 +15,12 @@ Primary audience: TAPPaaS admin.
    so re-run `discover.sh` before every (re)install. The install aborts if the meta file is
    missing.
 
+   `vllm-amd.meta.json` is **generated and git-ignored** — it is this host's hardware, so it
+   never belongs in the repo. The tracked half is `vllm-amd.meta.template.json`, which holds
+   the host-free structure (`bindMounts`, `lxcOptions`, `vllm_image`). `discover.sh` rebuilds
+   the meta from that template on every run, so edit the *template* to change the container
+   image or bind mounts — edits to the generated file are overwritten.
+
 > To deviate from the defaults in `./vllm-amd.json` (target node, storage,
 > zone/VLAN, sizing), copy the json to `/home/tappaas/config` and edit it
 > before installing.
