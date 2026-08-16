@@ -27,10 +27,24 @@ MODEL_DIR_NAME="Qwen2.5-3B-Instruct"
 # --- Read config ---
 NODE=$(jq -r '.node'             "${MODULE}.json")
 VMID=$(jq -r '.vmid'             "${MODULE}.json")
-MODELS_DST=$(jq -r '.models_bind_dst' "${MODULE}.meta.json")
+# Models directory as seen inside the LXC: the dst of the models bind mount that
+# discover.sh records. There is no .models_bind_dst key — reading it yielded the
+# string "null", so every path became "null/<model>" and the download landed
+# outside the mount (or failed outright).
+MODELS_DST=$(jq -r '.bindMounts[0].dst' "${MODULE}.meta.json")
+[ -n "${MODELS_DST}" ] && [ "${MODELS_DST}" != "null" ] \
+  || die "No models bind mount in ${MODULE}.meta.json (.bindMounts[0].dst) — run discover.sh"
 GFX_TARGET=$(jq -r '.rocm_gfx_target' "${MODULE}.meta.json")
 TARGET="root@${NODE}.mgmt.internal"
+# Two different paths for the same files, do not mix them up:
+#   MODEL_PATH      — LXC side, where hf download writes (the bind mount)
+#   MODEL_PATH_CTR  — Docker side, what vLLM sees; compose maps the mount to /models
 MODEL_PATH="${MODELS_DST}/${MODEL_DIR_NAME}"
+MODEL_PATH_CTR="/models/${MODEL_DIR_NAME}"
+# What the OpenAI API answers to. vLLM serves under --served-model-name, not
+# under the model's path, so a request keyed by either path above gets a 404.
+# Must match --served-model-name in the compose template (update.sh).
+SERVED_NAME="vllm"
 
 echo ""
 echo "=== TAPPaaS test-model: $MODEL_ID ==="
@@ -39,25 +53,34 @@ echo "    path : $MODEL_PATH"
 echo ""
 
 # --- Step 1: Install huggingface_hub in LXC ---
-echo "  [1/4] Installing huggingface-cli in LXC..."
+echo "  [1/4] Installing hf CLI in LXC..."
 ssh "$TARGET" "pct exec $VMID -- bash -c '
   apt-get install -y -qq python3-pip > /dev/null 2>&1
-  pip3 install -q huggingface_hub[cli]
-'" && ok "huggingface-cli ready" || die "huggingface-cli install failed"
+  pip3 install -q --break-system-packages huggingface_hub
+'" && ok "hf CLI ready" || die "huggingface_hub install failed"
 
 # --- Step 2: Download model ---
 echo "  [2/4] Downloading $MODEL_ID (~3GB, please wait)..."
+# pct exec runs a non-login shell whose PATH is /sbin:/bin:/usr/sbin:/usr/bin —
+# pip puts the hf CLI in /usr/local/bin, which is absent from it.
+# `hf`, not `huggingface-cli`: the latter is deprecated and hard-fails on
+# huggingface_hub >= 1.0. --local-dir-use-symlinks went away in the same release.
 ssh "$TARGET" "pct exec $VMID -- bash -c '
-  huggingface-cli download $MODEL_ID \
-    --local-dir $MODEL_PATH \
-    --local-dir-use-symlinks False
+  export PATH=/usr/local/bin:\$PATH
+  hf download $MODEL_ID --local-dir $MODEL_PATH
 '" && ok "model downloaded: $MODEL_PATH" || die "model download failed"
 
 # --- Step 3: Update docker-compose.yml with model path ---
 echo "  [3/4] Updating docker-compose.yml with model path..."
+# Rewrite whatever --model currently points at, then VERIFY. The old pattern
+# matched '--model /opt/models/your-model-name', a string the compose template
+# never writes (it emits '--model /models/YOUR_MODEL_HERE'), so the sed was a
+# silent no-op that still reported success — vLLM then started on the
+# placeholder and the failure only surfaced as an unhealthy container.
 ssh "$TARGET" "pct exec $VMID -- bash -c '
-  sed -i \"s|--model /opt/models/your-model-name|--model $MODEL_PATH|\" /opt/vllm/docker-compose.yml
-'" && ok "docker-compose.yml updated" || die "sed on docker-compose.yml failed"
+  sed -i -E \"s|--model[[:space:]]+\\S+|--model $MODEL_PATH_CTR|\" /opt/vllm/docker-compose.yml
+  grep -qF -- \"--model $MODEL_PATH_CTR\" /opt/vllm/docker-compose.yml
+'" && ok "docker-compose.yml updated → $MODEL_PATH_CTR" || die "could not set --model in docker-compose.yml"
 
 # --- Step 4: Start vLLM ---
 echo "  [4/4] Starting vLLM..."
@@ -92,7 +115,7 @@ RESPONSE=$(ssh "$TARGET" "pct exec $VMID -- bash -c '
   curl -s http://localhost:8000/v1/chat/completions \
     -H \"Content-Type: application/json\" \
     -d \"{
-      \\\"model\\\": \\\"$MODEL_PATH\\\",
+      \\\"model\\\": \\\"$SERVED_NAME\\\",
       \\\"messages\\\": [{\\\"role\\\": \\\"user\\\", \\\"content\\\": \\\"Reply with one word: working\\\"}],
       \\\"max_tokens\\\": 10
     }\"

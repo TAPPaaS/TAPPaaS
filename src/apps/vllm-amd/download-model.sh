@@ -11,8 +11,8 @@
 #
 # TAPPaaS Module: vllm-amd — Model Downloader
 #
-# Downloads models to /mnt/models/ for vLLM serving.
-# Run INSIDE the LXC container (or anywhere with huggingface-cli).
+# Downloads models into the vLLM models bind mount (/opt/vllm/models) for serving.
+# Run INSIDE the LXC container (or anywhere with the hf CLI).
 #
 # Usage:
 #   ./download-model.sh smoke      — Qwen2.5-3B (quick validation, ~2GB)
@@ -22,12 +22,22 @@
 
 set -euo pipefail
 
-MODEL_DIR="/mnt/models"
+# Must match the models bind mount dst that discover.sh records in
+# <module>.meta.json (.bindMounts[0].dst). /mnt/models is not mounted — models
+# written there stay inside the container's rootfs, invisible to vLLM and off
+# the backing storage. Override with MODEL_DIR= for a non-standard layout.
+MODEL_DIR="${MODEL_DIR:-/opt/vllm/models}"
 
-# Ensure huggingface-cli is available
-if ! command -v huggingface-cli &> /dev/null; then
+# Ensure the `hf` CLI is available. Debian 12's Python is PEP 668
+# externally-managed, so a bare `pip install` aborts; this LXC is dedicated to
+# vLLM, so installing into the system environment is fine. The CLI is `hf` —
+# `huggingface-cli` is deprecated and hard-fails on huggingface_hub >= 1.0.
+if ! command -v hf &> /dev/null; then
     echo "Installing huggingface_hub..."
-    pip install -q huggingface_hub
+    pip install -q --break-system-packages huggingface_hub
+    # pip installs console scripts into /usr/local/bin, which is absent from a
+    # non-login shell's PATH (as used by `pct exec ... bash -c`).
+    export PATH="/usr/local/bin:${PATH}"
 fi
 
 download() {
@@ -37,7 +47,7 @@ download() {
     echo "=== Downloading: ${repo} ==="
     echo "    Target: ${MODEL_DIR}/${target}"
     echo ""
-    huggingface-cli download "$repo" --local-dir "${MODEL_DIR}/${target}"
+    hf download "$repo" --local-dir "${MODEL_DIR}/${target}"
     echo "=== Done: ${repo} → ${MODEL_DIR}/${target} ==="
 }
 

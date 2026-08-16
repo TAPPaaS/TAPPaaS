@@ -73,7 +73,11 @@ services:
     group_add:
       - render
     volumes:
-      - /mnt/models:/models
+      # Must be the LXC-side models bind mount that discover.sh records in
+      # <module>.meta.json (.bindMounts[0].dst) and cluster:lxc creates as mp0.
+      # /mnt/models is not mounted — it is plain container rootfs, so models
+      # written there are invisible to vLLM and never reach the backing storage.
+      - /opt/vllm/models:/models
     ports:
       - "8000:8000"
     environment:
