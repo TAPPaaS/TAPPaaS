@@ -24,6 +24,7 @@ are marked, never deleted. If you want to know *why* the platform is the way it 
 | [ADR-008 — Switch module / network infrastructure](<ADR-008-switch-module-network-infrastructure.md>) | Physical switches and APs become managed parts of the platform. |
 | [ADR-010 — VPS satellite](<ADR-010-vps-satellite-reverse-proxy-backup.md>) | The optional off-premises satellite: public ingress, off-site backup, admin VPN. |
 | [ADR-012 — Backup enhancement](<ADR-012-backup-enhancement.md>) | The managed backup-policy model (site → environment → module cascade). |
+| [ADR-016 — Source NAT for subnet-filtering devices](<ADR-016 - Source NAT for subnet-filtering devices.md>) | Masquerade into a zone for IoT appliances that only accept sessions from their own subnet: zone-owned `snat-allowed-from` gate, module-local `snat.json`, `network-manager snat` verbs. |
 
 ## Governance
 
