@@ -52,6 +52,16 @@
     };
   };
 
+  # cloud-init writes /etc/systemd/network/10-cloud-init-eth0.network (DHCP=ipv4)
+  # into every clone, but systemd-networkd is not installed on these images — the
+  # file is inert and NetworkManager above is the real owner. Force the unit off
+  # so a module never ships two half-owners of the same interface: when neither
+  # side actually takes DHCP ownership the address simply expires with its lease
+  # and the VM goes dark with nothing logged (#446). Keep this in any module you
+  # copy from this template.
+  systemd.network.enable = lib.mkForce false;
+  systemd.network.wait-online.enable = lib.mkForce false;
+
   # Set your time zone.
   time.timeZone = lib.mkDefault "Europe/Amsterdam";
 

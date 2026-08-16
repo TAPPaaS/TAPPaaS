@@ -50,6 +50,26 @@ in
   networking.hostName = lib.mkDefault "tappaas-cicd"; # Define your hostname.
   networking.networkmanager.enable = true;  # Easiest to use and most distros use this by default.
 
+  # Declare who owns the NIC (#446). Enabling NetworkManager above is not enough:
+  # without a profile it left the interface "connected (externally)", carrying the
+  # address cloud-init brought up once at first boot with nothing renewing it. The
+  # kernel valid_lft (~24h) then expired silently and the mothership went dark for
+  # ~50 minutes, with no trace in any log. cloud-init writes
+  # /etc/systemd/network/10-cloud-init-eth0.network (DHCP=ipv4), but
+  # systemd-networkd is not installed here, so that file is inert — force the unit
+  # off rather than leave two half-owners of the same interface on disk.
+  #
+  # Matching by type, not name: Proxmox virtio NICs come up as eth0 or ens18
+  # depending on how the udev/cloud-init rename race lands on a given boot.
+  networking.networkmanager.ensureProfiles.profiles.tappaas-ethernet = {
+    connection = { id = "tappaas-ethernet"; type = "ethernet"; autoconnect = "true"; autoconnect-priority = "100"; };
+    ipv4 = { method = "auto"; };
+    ipv6 = { method = "auto"; addr-gen-mode = "default"; };
+  };
+
+  systemd.network.enable = lib.mkForce false;
+  systemd.network.wait-online.enable = lib.mkForce false;
+
   # DNS-independent control plane (#307). The mothership reaches the firewall and
   # the Proxmox nodes by their mgmt FQDNs to run updates AND to roll a snapshot
   # back when a post-update test fails. But the cluster resolver IS the firewall's
