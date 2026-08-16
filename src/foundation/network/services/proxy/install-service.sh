@@ -89,13 +89,21 @@ if [[ -z "${TAPPAAS_DOMAIN}" && -f "${SYSTEM_CONFIG}" ]]; then
     TAPPAAS_DOMAIN=$(jq -r '.tappaas.domain // empty' "${SYSTEM_CONFIG}" 2>/dev/null) || TAPPAAS_DOMAIN=""
 fi
 
+# An environment with no domains.primary (e.g. mgmt, internal-only and reached
+# at <vmname>.<zone>.internal) has no public name to publish — there is nothing
+# to expose, so skip rather than fail the caller's module install. Before #438
+# this was unreachable: the domain came from .variant, empty on foundation
+# modules, so it fell back to the DEFAULT environment's domain. Reading
+# .environment made "mgmt" explicit and turned this into a hard stop for every
+# mgmt module depending on network:proxy.
 if [[ -z "${TAPPAAS_DOMAIN}" ]]; then
-    die "No domain resolved for environment '${_ENV_EARLY:-default}' (config/environments/ or configuration.json)"
+    warn "No domain configured for environment '${_ENV_EARLY:-default}' — skipping reverse-proxy setup for '${MODULE}'"
+    exit 0
 fi
 
 # Resolve proxyDomain: explicit in module JSON, or default to <vmname>.<domain>
 PROXY_DOMAIN=$(get_config_value 'proxyDomain' '')
-if [[ -z "${PROXY_DOMAIN}" ]]; then
+if [[ -z "${PROXY_DOMAIN}" && -n "${TAPPAAS_DOMAIN}" ]]; then
     PROXY_DOMAIN="${VMNAME}.${TAPPAAS_DOMAIN}"
 fi
 

@@ -307,6 +307,22 @@ in
     };
   };
 
+  # Survive a slow NIC at boot. Loki's memberlist-kv module resolves its
+  # advertise address by scanning [eth0 en0 lo] (common.ring.instance_addr above
+  # does NOT cover memberlist), and dies in ~80ms if none carry an address yet.
+  # NetworkManager-wait-online can fail while network-online.target is still
+  # reported as reached, so `After=network-online.target` is not a guarantee.
+  #
+  # The stock budget — Restart=always, RestartSec=100ms, 5 starts per 10s — is
+  # spent in under a second by a process that fails this fast, after which
+  # systemd gives up for good. That is what took Loki down on 2026-08-10 and
+  # kept it down for five days: log ingestion stopped, nothing restarted it.
+  # Back off and keep retrying instead, so a transient boot race self-heals.
+  systemd.services.loki = {
+    serviceConfig.RestartSec = "5s";
+    unitConfig.StartLimitIntervalSec = 0;   # 0 = no start-rate limit; retry forever
+  };
+
   # ============================================================================
   # PROMTAIL — local receiver (journal + OPNsense syslog)
   # ============================================================================

@@ -143,7 +143,12 @@ caddy_list=$(caddy-manager list --no-ssl-verify 2>/dev/null) || true
 # ── Test 1: Domain exists in Caddy ──────────────────────────────────
 
 info "  Check 1: Caddy domain entry"
-if echo "${caddy_list}" | grep -q "${PROXY_DOMAIN}"; then
+if [[ -z "${PROXY_DOMAIN}" ]]; then
+    # No domain resolvable for this module's environment (see Check 3). An empty
+    # needle makes `grep -q ""` match every line, which reported a meaningless
+    # "Domain '' exists in Caddy" pass — check nothing rather than pass falsely.
+    warn "    No domain configured for this environment — skipping Caddy domain check"
+elif echo "${caddy_list}" | grep -q "${PROXY_DOMAIN}"; then
     pass "Domain '${PROXY_DOMAIN}' exists in Caddy"
 elif [[ "${TLS_CONFIGURED}" == "1" ]]; then
     # Public TLS IS set up (acme-setup.sh has run) → the reverse-proxy vhost
@@ -171,7 +176,14 @@ fi
 
 info "  Check 3: HTTPS endpoint"
 if [[ -z "${PROXY_DOMAIN}" ]]; then
-    fail "Cannot determine proxy domain"
+    # An environment with no domains.primary (e.g. mgmt, which is internal-only
+    # and reached at <vmname>.<zone>.internal) has no public name to test. Skip,
+    # mirroring Checks 1 and 2 — a module that was never publicly exposed is not
+    # a regression. Before #438 this branch was unreachable: the domain was read
+    # from .variant, empty on foundation modules, so it fell back to the default
+    # environment's domain. Reading .environment made "mgmt" explicit, and this
+    # hard fail then blocked every mgmt module that depends on network:proxy.
+    warn "    No domain configured for this environment — skipping HTTPS check"
 elif [[ -z "${FIREWALL_IP}" ]]; then
     # Without the firewall's internal IP we cannot reach Caddy without hitting
     # the un-hairpinned WAN IP, so skip rather than report a false failure.
