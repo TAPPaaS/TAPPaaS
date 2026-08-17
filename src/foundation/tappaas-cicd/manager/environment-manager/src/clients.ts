@@ -9,12 +9,17 @@
 import { existsSync, readFileSync, readdirSync } from "fs";
 import { basename, join } from "path";
 import { captureResult } from "../../../lib/ts/src/exec";
-import { ModuleClient, NetworkClient } from "./types";
+import { ModuleClient, NetworkClient, NetworkUnreachable } from "./types";
 
-export class NetworkUnreachable extends Error {}
+// Re-exported: NetworkUnreachable now lives in types.ts (the client boundary
+// contract) so the pure reconcile engine can distinguish "binary missing" from
+// "target ran and failed" — see #454.
+export { NetworkUnreachable };
 
-const NETWORK_MANAGER_BIN = process.env.NETWORK_MANAGER_BIN ?? "network-manager";
-const MODULE_MANAGER_BIN = process.env.MODULE_MANAGER_BIN ?? "module-manager";
+// Resolved per call, not at import time, so a test can point either binary at a
+// stub after this module is loaded.
+const NETWORK_MANAGER_BIN = (): string => process.env.NETWORK_MANAGER_BIN ?? "network-manager";
+const MODULE_MANAGER_BIN = (): string => process.env.MODULE_MANAGER_BIN ?? "module-manager";
 
 // Run + capture via the shared exec helper, mapping a spawn failure (binary
 // missing on PATH) to the manager-specific NetworkUnreachable so the reconcile
@@ -33,8 +38,8 @@ function run(bin: string, args: string[]): string {
 export class CliNetworkClient implements NetworkClient {
   zoneExists(zone: string): boolean {
     // network-manager exists <name> — exit 0 if present, non-zero otherwise.
-    const r = captureResult(NETWORK_MANAGER_BIN, ["exists", zone]);
-    if (!r.ran) throw new NetworkUnreachable(`${NETWORK_MANAGER_BIN} exists: ${r.stderr}`);
+    const r = captureResult(NETWORK_MANAGER_BIN(), ["exists", zone]);
+    if (!r.ran) throw new NetworkUnreachable(`${NETWORK_MANAGER_BIN()} exists: ${r.stderr}`);
     return r.rc === 0;
   }
 
@@ -42,7 +47,7 @@ export class CliNetworkClient implements NetworkClient {
     // network-manager reconcile [--apply] — converges all planes/zones.
     const args = ["reconcile"];
     if (apply) args.push("--apply");
-    run(NETWORK_MANAGER_BIN, args);
+    run(NETWORK_MANAGER_BIN(), args);
   }
 }
 
@@ -79,14 +84,13 @@ export class CliModuleClient implements ModuleClient {
   }
 
   reconcileModule(module: string, apply: boolean): void {
-    // TODO(question): module-manager is not yet ported to TS and exposes no
-    // `module <name> reconcile` verb today (it still ships install/update/
-    // delete-module.sh). The contract assumed here is
-    // `module-manager <module> reconcile [--apply]`. Verify the final CLI shape
-    // when module-manager is ported (the ADR-007 sequencing ports module BEFORE
-    // environment, so this binding should be re-checked then).
-    const args = [module, "reconcile"];
+    // module-manager reconcile <module> [--apply] — VERB FIRST (#454). The
+    // module-first form this used to build was an assumption made before
+    // module-manager was ported; the shipped CLI dispatches on argv[0], so it
+    // exited 1 with "Unknown verb: <module>" and stalled the --deep cascade at
+    // its first module. The unit test below pins the argument vector.
+    const args = ["reconcile", module];
     if (apply) args.push("--apply");
-    run(MODULE_MANAGER_BIN, args);
+    run(MODULE_MANAGER_BIN(), args);
   }
 }

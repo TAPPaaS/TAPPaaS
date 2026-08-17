@@ -15,9 +15,12 @@
 
 import {
   Action,
+  ApplyFailure,
+  ApplyResult,
   Environment,
   ModuleClient,
   NetworkClient,
+  NetworkUnreachable,
   Plan,
 } from "./types";
 
@@ -63,25 +66,42 @@ export function computePlan(
   return { actions, warnings };
 }
 
-// Apply a plan via the clients. Returns count applied.
+// Apply a plan via the clients. Returns the count applied plus any targets that
+// ran and failed.
+//
+// Module failures are COLLECTED, not thrown (#454): a module that fails to
+// converge is recorded and the cascade continues with the next one, so one bad
+// module no longer strands every module planned after it. Two failures still
+// abort the whole pass, because neither is a fault of the target:
+//   - NetworkUnreachable — a manager binary is missing on PATH, so every
+//     remaining target would fail identically; the caller dies with the
+//     "unreachable" message instead of reporting N identical failures.
+//   - a failing network reconcile — the shared prerequisite for everything
+//     planned after it.
 export function applyPlan(
   _env: Environment,
   plan: Plan,
   net: NetworkClient,
   mod: ModuleClient,
   apply: boolean,
-): number {
-  let n = 0;
+): ApplyResult {
+  let applied = 0;
+  const failures: ApplyFailure[] = [];
   for (const a of plan.actions) {
     if (a.kind === "reconcile-network") {
       net.reconcileNetwork(apply);
-      n++;
+      applied++;
     } else if (a.kind === "reconcile-module") {
       // target is `module '<name>'` — recover the name.
       const m = a.target.replace(/^module '/, "").replace(/'$/, "");
-      mod.reconcileModule(m, apply);
-      n++;
+      try {
+        mod.reconcileModule(m, apply);
+        applied++;
+      } catch (e) {
+        if (e instanceof NetworkUnreachable) throw e;
+        failures.push({ target: m, error: e instanceof Error ? e.message : String(e) });
+      }
     }
   }
-  return n;
+  return { applied, failures };
 }

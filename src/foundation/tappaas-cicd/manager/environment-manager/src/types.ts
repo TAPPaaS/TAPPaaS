@@ -65,6 +65,14 @@ export interface RefSources {
   orgNames: Set<string>;
 }
 
+// ── Client boundary errors ────────────────────────────────────────────
+// Raised when a manager binary cannot be SPAWNED at all (missing on PATH) — an
+// environment fault, not a fault of the target being reconciled. It lives here
+// rather than in clients.ts so the pure reconcile engine can tell it apart from
+// a target that ran and failed, without depending on the CLI implementation.
+// clients.ts re-exports it for existing importers.
+export class NetworkUnreachable extends Error {}
+
 // ── NetworkClient — the network-manager boundary (shallow reconcile) ──
 // `environment reconcile` converges the environment's associated zone by
 // shelling out to network-manager. The engine depends only on this interface;
@@ -100,4 +108,20 @@ export interface Action {
 export interface Plan {
   actions: Action[];
   warnings: string[];
+}
+
+// One planned target that ran and failed. Collected rather than thrown so a
+// single bad module no longer strands every module planned after it (#454).
+export interface ApplyFailure {
+  // The module name (or action target) that failed.
+  target: string;
+  // The child process's error, as reported by the client.
+  error: string;
+}
+
+export interface ApplyResult {
+  // Targets successfully reconciled.
+  applied: number;
+  // Targets that ran and failed, in plan order. Empty ⇒ full convergence.
+  failures: ApplyFailure[];
 }

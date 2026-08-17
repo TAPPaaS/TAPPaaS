@@ -6,7 +6,7 @@
 // (rootDir is the cicd root, so emit mirrors the tree):
 //   node dist-test/manager/environment-manager/test/unit/reconcile.test.js
 
-import { Environment } from "../../src/types";
+import { Environment, NetworkUnreachable } from "../../src/types";
 import { applyPlan, computePlan } from "../../src/reconcile";
 import { FakeModuleClient, FakeNetworkClient } from "./fake-clients";
 
@@ -79,12 +79,66 @@ function env(name: string, zone: string): Environment {
   mod.seedModule("foo", "nextcloud");
   const e = env("foo", "foo");
   const plan = computePlan(e, net, mod, true);
-  const n = applyPlan(e, plan, net, mod, true);
+  const res = applyPlan(e, plan, net, mod, true);
   check(
-    n === 2 &&
+    res.applied === 2 &&
+      res.failures.length === 0 &&
       eqJson(net.log, ["reconcile-network apply"]) &&
       eqJson(mod.log, ["reconcile-module nextcloud apply"]),
     "applyPlan drives network then module clients",
+  );
+}
+
+// #454: one failing module no longer strands the modules planned after it.
+{
+  const net = new FakeNetworkClient();
+  net.seedZone("foo");
+  const mod = new FakeModuleClient();
+  mod.seedModule("foo", "alpha");
+  mod.seedModule("foo", "beta");
+  mod.seedModule("foo", "gamma");
+  mod.seedFailure("beta", new Error("module-manager reconcile beta failed (exit 1): boom"));
+  const e = env("foo", "foo");
+  const plan = computePlan(e, net, mod, true);
+  const res = applyPlan(e, plan, net, mod, true);
+  check(
+    eqJson(mod.log, [
+      "reconcile-module alpha apply",
+      "reconcile-module beta apply",
+      "reconcile-module gamma apply",
+    ]),
+    "a failing module does not stop the cascade",
+  );
+  check(
+    res.applied === 3 && res.failures.length === 1,
+    `partial converge is counted (applied=${res.applied}, failures=${res.failures.length})`,
+  );
+  check(
+    res.failures[0].target === "beta" && res.failures[0].error.includes("boom"),
+    "the failing module is named, with its child error",
+  );
+}
+
+// #454: an unspawnable binary is NOT a per-module fault — it still aborts.
+{
+  const net = new FakeNetworkClient();
+  net.seedZone("foo");
+  const mod = new FakeModuleClient();
+  mod.seedModule("foo", "alpha");
+  mod.seedModule("foo", "beta");
+  mod.seedFailure("alpha", new NetworkUnreachable("module-manager reconcile: ENOENT"));
+  const e = env("foo", "foo");
+  const plan = computePlan(e, net, mod, true);
+  let threw = false;
+  try {
+    applyPlan(e, plan, net, mod, true);
+  } catch (err) {
+    threw = err instanceof NetworkUnreachable;
+  }
+  check(threw, "NetworkUnreachable propagates instead of being collected");
+  check(
+    eqJson(mod.log, ["reconcile-module alpha apply"]),
+    "no further modules are attempted once the binary is unreachable",
   );
 }
 

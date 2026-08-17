@@ -448,7 +448,7 @@ function cmdDelete(opts: Opts, mod: ModuleClient): void {
 }
 
 // ── reconcile ─────────────────────────────────────────────────────────
-function cmdReconcile(opts: Opts, net: NetworkClient, mod: ModuleClient): void {
+function cmdReconcile(opts: Opts, net: NetworkClient, mod: ModuleClient): number {
   const name = opts.rest[0];
   if (!name) die("reconcile: expected <env>");
   const env = loadEnvironment(opts.configDir, name);
@@ -474,12 +474,25 @@ function cmdReconcile(opts: Opts, net: NetworkClient, mod: ModuleClient): void {
   if (!opts.apply) {
     info("");
     info("Preview only (no --apply): no changes made.");
-    return;
+    return 0;
   }
   try {
-    const n = applyPlan(env, plan, net, mod, opts.apply);
+    const res = applyPlan(env, plan, net, mod, opts.apply);
     info("");
-    info(`${GN}Reconciled ${n} target(s).${CL}`);
+    // A module that ran and failed is named here rather than propagated as a
+    // raw error (#454); the rest of the cascade already ran.
+    for (const f of res.failures) {
+      warn(`module '${f.target}' failed to reconcile: ${f.error}`);
+    }
+    if (res.failures.length > 0) {
+      info(
+        `${RD}Reconciled ${res.applied} target(s); ${res.failures.length} module(s) failed: ` +
+          `${res.failures.map((f) => f.target).join(", ")}.${CL}`,
+      );
+      return 1;
+    }
+    info(`${GN}Reconciled ${res.applied} target(s).${CL}`);
+    return 0;
   } catch (e) {
     if (e instanceof NetworkUnreachable) die(`reconcile failed: ${e.message}`);
     throw e;
@@ -515,8 +528,7 @@ export function run(argv: string[], net: NetworkClient, mod: ModuleClient): numb
         cmdDelete(opts, mod);
         return 0;
       case "reconcile":
-        cmdReconcile(opts, net, mod);
-        return 0;
+        return cmdReconcile(opts, net, mod);
       default:
         usage();
         die(`Unknown command: ${cmd}`);

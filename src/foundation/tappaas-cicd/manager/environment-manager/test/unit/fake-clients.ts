@@ -23,6 +23,8 @@ export class FakeModuleClient implements ModuleClient {
   // env name → deployed module names
   byEnv = new Map<string, string[]>();
   log: string[] = [];
+  // module name → error thrown by reconcileModule (#454 partial-failure tests).
+  failures = new Map<string, Error>();
 
   seedModule(env: string, module: string): void {
     const arr = this.byEnv.get(env) ?? [];
@@ -30,10 +32,18 @@ export class FakeModuleClient implements ModuleClient {
     this.byEnv.set(env, arr);
   }
 
+  // Make reconcileModule(module) throw — models a module-manager child that ran
+  // and exited non-zero.
+  seedFailure(module: string, err: Error): void {
+    this.failures.set(module, err);
+  }
+
   modulesForEnvironment(env: string): string[] {
     return [...(this.byEnv.get(env) ?? [])].sort();
   }
   reconcileModule(module: string, apply: boolean): void {
     this.log.push(`reconcile-module ${module} ${apply ? "apply" : "preview"}`);
+    const err = this.failures.get(module);
+    if (err) throw err;
   }
 }

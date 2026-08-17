@@ -6,7 +6,7 @@
 //
 // Uses a throwaway config tree under the OS temp dir.
 
-import { existsSync, mkdirSync, rmSync, writeFileSync } from "fs";
+import { chmodSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "fs";
 import { join } from "path";
 import { tmpdir } from "os";
 import {
@@ -126,6 +126,30 @@ try {
     mc.modulesForEnvironment("none").length === 0,
     "modulesForEnvironment returns empty for an unused env",
   );
+
+  // CliModuleClient argument vector (#454): the shipped module-manager CLI
+  // dispatches on argv[0], so the verb MUST come first. This used to build
+  // `<module> reconcile`, which exited 1 with "Unknown verb: <module>" and
+  // stalled the whole --deep --apply cascade at its first module. A stub
+  // binary records what was actually spawned.
+  const argvLog = join(root, "module-manager-argv");
+  const stub = join(root, "stub-module-manager");
+  writeFileSync(stub, `#!/usr/bin/env bash\nprintf '%s\\n' "$*" > '${argvLog}'\n`);
+  chmodSync(stub, 0o755);
+  const prevBin = process.env.MODULE_MANAGER_BIN;
+  process.env.MODULE_MANAGER_BIN = stub;
+  try {
+    mc.reconcileModule("backup", true);
+    const applyArgv = readFileSync(argvLog, "utf8").trim();
+    check(applyArgv === "reconcile backup --apply", `reconcileModule(apply) spawns verb-first (got: ${applyArgv})`);
+
+    mc.reconcileModule("backup", false);
+    const previewArgv = readFileSync(argvLog, "utf8").trim();
+    check(previewArgv === "reconcile backup", `reconcileModule(preview) spawns verb-first (got: ${previewArgv})`);
+  } finally {
+    if (prevBin === undefined) delete process.env.MODULE_MANAGER_BIN;
+    else process.env.MODULE_MANAGER_BIN = prevBin;
+  }
 
   // idempotent bootstrap: existing files left untouched (no force).
   const res2 = bootstrap({ configDir: root, force: false });
