@@ -34,16 +34,46 @@ for arg in "$@"; do
     esac
 done
 
+# Reuse install-module.sh's OWN zone gate (validate_zone_active) rather than
+# re-deriving the deployable set here — if the two ever disagree, this suite
+# would either attempt installs that are guaranteed to abort, or skip cases that
+# would in fact have run.
+# shellcheck source=../lib/common-install-routines.sh disable=SC1091
+. /home/tappaas/bin/common-install-routines.sh
+
+# Is this case's target zone deployable on THIS site? A case pinned to a zone
+# the site has not activated is NOT a failure — the site simply cannot host it.
+# Echoes the zone state on stdout; returns non-zero when the case must be
+# skipped. (validate_zone_active prints its own operator guidance, which is
+# noise here, so its output is suppressed and we report a one-line reason.)
+zone_unavailable_reason() {
+    local name="$1"
+    local json="${SCRIPT_DIR}/${name}.json"
+    local zone state
+
+    [ -f "$json" ] || return 0          # no config → let the install fail loudly
+    zone=$(jq -r '.zone0 // empty' "$json" 2>/dev/null)
+    [ -n "$zone" ] || return 0          # no zone0 → nothing to pre-check
+
+    if validate_zone_active "$zone" >/dev/null 2>&1; then
+        return 0
+    fi
+    state=$(jq -r --arg z "$zone" '.[$z].state // "not in zones.json"' \
+                 "/home/tappaas/config/zones.json" 2>/dev/null)
+    echo "zone ${zone} is ${state}"
+    return 1
+}
+
 # Test cases: name:type:test_script
 # Installation is handled by install-module.sh (dependency-aware)
 # Optimized test matrix:
 # - test-debian: Debian on mgmt zone (tappaas1)
 # - test-deb-nonode: Debian with no explicit node (defaults from configuration.json)
 # - test-deb-n3noha: Debian on tappaas3, no cluster:ha in dependsOn
-# - test-deb-vlannode: Debian on srv VLAN on different node (tappaas3)
+# - test-deb-vlannode: Debian on the srvTest VLAN, different node (tappaas3)
 # - test-nixos: NixOS on mgmt zone with HA (tappaas1 -> tappaas3)
-# - test-nix-vlannode: NixOS on srv VLAN on different node (tappaas2)
-# - test-ubuntu-vlan: Ubuntu on srv VLAN (tappaas2) - unchanged per request
+# - test-nix-vlannode: NixOS on the srvTest VLAN, different node (tappaas2)
+# - test-ubuntu-vlan: Ubuntu on the srvTest VLAN (tappaas2)
 declare -a ALL_TESTS=(
     "test-debian:debian:test-vm.sh"
     "test-deb-nonode:debian:test-vm.sh"
@@ -124,6 +154,21 @@ for test_entry in "${TESTS[@]}"; do
     INSTALL_STATUS="skipped"
     TEST_STATUS="pending"
 
+    # Environment pre-check: a case pinned to a zone this site has not activated
+    # cannot run here. Report it as UNAVAILABLE, distinct from a real failure —
+    # attempting the install would abort in install-module.sh's zone gate and
+    # look identical to a provisioning regression.
+    if [ "$SKIP_INSTALL" = false ]; then
+        if ! UNAVAIL_REASON=$(zone_unavailable_reason "$TEST_NAME"); then
+            INSTALL_STATUS="unavailable"
+            TEST_STATUS="unavailable"
+            echo -e "${YELLOW}UNAVAILABLE${NC} (${UNAVAIL_REASON})"
+            INSTALL_RESULTS+=("$INSTALL_STATUS")
+            TEST_RESULTS+=("$TEST_STATUS")
+            continue
+        fi
+    fi
+
     # Install phase
     if [ "$SKIP_INSTALL" = false ]; then
         echo -n "Installing... "
@@ -181,6 +226,7 @@ printf "%-20s %-10s %-10s %-10s %-10s\n" "----" "----" "----" "-------" "----"
 i=0
 TOTAL_PASS=0
 TOTAL_FAIL=0
+TOTAL_SKIP=0
 
 for test_entry in "${TESTS[@]}"; do
     IFS=':' read -r NAME TYPE _ <<< "$test_entry"
@@ -200,6 +246,7 @@ for test_entry in "${TESTS[@]}"; do
     case $INST in
         pass) INST_FMT="${GREEN}PASS${NC}" ;;
         fail) INST_FMT="${RED}FAIL${NC}" ;;
+        unavailable) INST_FMT="${YELLOW}N/A${NC}" ;;
         *) INST_FMT="${YELLOW}SKIP${NC}" ;;
     esac
 
@@ -212,6 +259,11 @@ for test_entry in "${TESTS[@]}"; do
         fail)
             TST_FMT="${YELLOW}PARTIAL${NC}"
             TOTAL_FAIL=$((TOTAL_FAIL + 1))
+            ;;
+        unavailable)
+            # NOT a failure: the site cannot host this case (inactive zone).
+            TST_FMT="${YELLOW}N/A${NC}"
+            TOTAL_SKIP=$((TOTAL_SKIP + 1))
             ;;
         *)
             TST_FMT="${RED}SKIP${NC}"
@@ -227,7 +279,13 @@ done
 
 echo ""
 echo "=============================================="
-echo -e "Total: ${GREEN}${TOTAL_PASS} passed${NC}, ${RED}${TOTAL_FAIL} failed${NC}"
+echo -e "Total: ${GREEN}${TOTAL_PASS} passed${NC}, ${RED}${TOTAL_FAIL} failed${NC}, ${YELLOW}${TOTAL_SKIP} unavailable${NC}"
+if [ "$TOTAL_SKIP" -gt 0 ]; then
+    echo ""
+    echo "  ${TOTAL_SKIP} case(s) need a zone this site has not activated — coverage GAP,"
+    echo "  not a pass. To exercise them: network-manager enable srvTest &&"
+    echo "  network-manager reconcile --apply   (srvTest is the designated QA zone)."
+fi
 echo "Logs saved to: ${LOG_DIR}/"
 echo "=============================================="
 
