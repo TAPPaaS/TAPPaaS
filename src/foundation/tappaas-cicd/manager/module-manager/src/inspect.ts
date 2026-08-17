@@ -14,19 +14,36 @@
 // A module WITHOUT a vmid (provider-only / non-VM module) degrades to a
 // two-way Released-vs-Desired config diff (Actual = N/A) and still exits 0 —
 // this is a report, not a failure. Drift never fails the command either (the
-// bash exited 0 after printing the summary); only a missing config or an
-// unreachable Proxmox node returns 1.
+// bash exited 0 after printing the summary); only a missing config, an
+// unreachable Proxmox node, or a dependency-service check that could not RUN
+// returns 1.
+//
+// Neither table covers the state a module's dependsOn providers provision
+// OUTSIDE the VM (firewall rules, NAT rules, discovery relays). For a
+// policy-only module that state is the ENTIRE module, so a field-clean report
+// read as "no drift" while declared rules were missing (#458). The
+// dependency-service section (src/services.ts, delegating to each provider's
+// read-only test-service.sh) closes that gap on BOTH paths; when the caller
+// opts out, the summary NAMES what it did not check instead of claiming clean.
 //
 // STRUCTURE: everything above the I/O line is PURE (string/JSON in → lines +
 // counters out) so the diff/render logic is unit-testable offline
 // (test/unit/inspect.test.ts); inspectModule() at the bottom is the only part
-// that touches the filesystem and ssh.
+// that touches the filesystem, ssh, and the test-service.sh children.
 
 import { existsSync, readFileSync } from "fs";
 import { join } from "path";
 import { mgmtDomain, ssh } from "../../../lib/ts/src/cluster";
 import { readJsonObject } from "../../../lib/ts/src/config-io";
 import { defaultConfigDir, normalizeModuleConfig } from "./config";
+import {
+  ServiceSection,
+  buildServiceSection,
+  checkDependencyServices,
+  serviceExitCode,
+  serviceSummaryLines,
+} from "./services";
+import { InspectOptions } from "./types";
 import { BL, BOLD, CL, GN, RD, YW, error, info, warn } from "./shlog";
 
 // ── pure: jq-compatible field access ───────────────────────────────────
@@ -255,6 +272,7 @@ export function buildConfigOnlyReport(
   module: string,
   cfg: Record<string, unknown>,
   git: Record<string, unknown> | null,
+  svc: ServiceSection = buildServiceSection(dependsOnOf(cfg), null),
 ): InspectReport {
   const t = new Table();
   t.lines.push({
@@ -275,22 +293,41 @@ export function buildConfigOnlyReport(
     kind: "warn",
     text: "no VM (vmid) — running/Actual column N/A (config-only Released-vs-Desired diff)",
   });
-  if (t.warnings === 0) {
+  t.lines.push(...svc.lines);
+  if (t.warnings > 0) {
+    t.lines.push({
+      kind: "warn",
+      text: `${t.warnings} field(s) differ between config and git (${YW}yellow${CL})`,
+    });
+  } else if (svc.deps.length === 0) {
+    // Nothing outside the fields to cover — the historical wording still holds.
     t.lines.push({
       kind: "info",
       text: `${GN}Config inspection passed — no config-vs-git discrepancies found${CL}`,
     });
   } else {
-    t.lines.push({
-      kind: "warn",
-      text: `${t.warnings} field(s) differ between config and git (${YW}yellow${CL})`,
-    });
+    // Deps exist, so the field verdict is only PART of the picture — say exactly
+    // that much and let the service summary below carry the rest (#458).
+    t.lines.push({ kind: "info", text: `${GN}Config fields match git${CL}` });
   }
-  return { lines: t.lines, warnings: t.warnings, errors: t.errors };
+  t.lines.push(...serviceSummaryLines(module, svc));
+  return {
+    lines: t.lines,
+    warnings: t.warnings,
+    errors: t.errors + svc.drift + svc.unknown,
+  };
+}
+
+// The module's dependsOn coordinates (string entries only), from a normalized
+// config — what the dependency-service section reports on.
+export function dependsOnOf(cfg: Record<string, unknown>): string[] {
+  const d = cfg.dependsOn;
+  return Array.isArray(d) ? d.filter((x): x is string => typeof x === "string") : [];
 }
 
 // Everything the VM three-way table needs, gathered by the I/O layer.
 export interface VmInspectInputs {
+  module: string; // deployed (effective) module name — used in the summary hints
   vmid: string;
   cfg: Record<string, unknown>; // normalized deployed config
   git: Record<string, unknown> | null; // normalized git source (null = not found)
@@ -298,10 +335,14 @@ export interface VmInspectInputs {
   actual: Record<string, string>; // parsed `qm config`
   vmStatus: string;
   actualNode: string;
+  // Dependency-service state (#458). Omitted = not checked; the summary then
+  // names the uncovered deps rather than reporting a bare clean.
+  svc?: ServiceSection;
 }
 
 export function buildVmReport(inp: VmInspectInputs): InspectReport {
   const { vmid, cfg, git, zones, actual, vmStatus, actualNode } = inp;
+  const svc = inp.svc ?? buildServiceSection(dependsOnOf(cfg), null);
   const cfgF = (k: string): string => getField(cfg, k);
   const gitF = (k: string): string => getField(git, k);
   const t = new Table();
@@ -395,10 +436,21 @@ export function buildVmReport(inp: VmInspectInputs): InspectReport {
   }
 
   t.raw("");
+  t.lines.push(...svc.lines);
 
   // Summary
   if (t.warnings === 0 && t.errors === 0) {
-    t.lines.push({ kind: "info", text: `${GN}VM inspection passed — no discrepancies found${CL}` });
+    // A VM module's dependsOn services provision state outside the VM too, so
+    // the unqualified "no discrepancies" only holds when there is nothing else to
+    // cover, or when what there is was checked and came back clean (#458).
+    const svcClean = svc.checked && svc.drift === 0 && svc.unknown === 0;
+    t.lines.push({
+      kind: "info",
+      text:
+        svc.deps.length === 0 || svcClean
+          ? `${GN}VM inspection passed — no discrepancies found${CL}`
+          : `${GN}VM inspection passed — no config/VM field discrepancies found${CL}`,
+    });
   } else {
     if (t.warnings > 0) {
       t.lines.push({
@@ -413,7 +465,12 @@ export function buildVmReport(inp: VmInspectInputs): InspectReport {
       });
     }
   }
-  return { lines: t.lines, warnings: t.warnings, errors: t.errors };
+  t.lines.push(...serviceSummaryLines(inp.module, svc));
+  return {
+    lines: t.lines,
+    warnings: t.warnings,
+    errors: t.errors + svc.drift + svc.unknown,
+  };
 }
 
 // ── I/O: gather inputs (files + ssh) and print ─────────────────────────
@@ -443,7 +500,11 @@ function readNormalized(path: string): Record<string, unknown> | null {
 // The full inspect verb: prints the report, returns the exit code. Errors are
 // RETURNED (1), never thrown, so the `list --diff` rollup keeps iterating past
 // an unreachable module — matching the bash script's per-module exit code.
-export function inspectModule(module: string): number {
+//
+// opts.checkServices runs the dependency-service drift check (#458): ON for a
+// single `reconcile <module>`, OFF for the fleet rollup / cascade preview, which
+// would otherwise pay one firewall round-trip per dependency per module.
+export function inspectModule(module: string, opts: InspectOptions = {}): number {
   const configDir = defaultConfigDir();
   const moduleJson = join(configDir, `${module}.json`);
 
@@ -467,6 +528,19 @@ export function inspectModule(module: string): number {
   const vmid = getField(cfg, "vmid");
   const node = getField(cfg, "node") || "tappaas1";
   const vmname = getField(cfg, "vmname") || module;
+
+  // Dependency-service drift. The CONSUMING module's persisted environment
+  // drives provider resolution, exactly as reconcile.ts does (#438) — reconcile
+  // is routinely invoked on an already-suffixed module name without
+  // --environment, and the persisted field is the authority either way.
+  // Deferred so the (slow, network-touching) verifiers run only after the rest
+  // of the report's inputs are gathered — i.e. in printed order.
+  const deps = dependsOnOf(cfg);
+  const moduleEnvironment = getField(cfg, "environment");
+  const serviceSection = (): ServiceSection =>
+    opts.checkServices && deps.length > 0
+      ? checkDependencyServices(configDir, module, deps, moduleEnvironment)
+      : buildServiceSection(deps, null);
 
   // Locate the git source JSON via the module's .location:
   // <location>/<module>.json, else <location>/<vmname>.json.
@@ -492,9 +566,12 @@ export function inspectModule(module: string): number {
   }
 
   // ── Config-only fallback: NON-VM module (no vmid) ────────────────
+  // This is the policy-only case from #458: the field diff below is a small part
+  // of such a module, so the dependency-service section is the substance.
   if (!vmid) {
-    emit(buildConfigOnlyReport(module, cfg, git).lines);
-    return 0;
+    const svc = serviceSection();
+    emit(buildConfigOnlyReport(module, cfg, git, svc).lines);
+    return serviceExitCode(svc);
   }
 
   info(`${BOLD}TAPPaaS VM Inspection: ${BL}${vmname}${CL} (VMID: ${vmid}) on ${node}`);
@@ -532,6 +609,7 @@ export function inspectModule(module: string): number {
     }
   }
 
-  emit(buildVmReport({ vmid, cfg, git, zones, actual, vmStatus, actualNode }).lines);
-  return 0;
+  const svc = serviceSection();
+  emit(buildVmReport({ module, vmid, cfg, git, zones, actual, vmStatus, actualNode, svc }).lines);
+  return serviceExitCode(svc);
 }

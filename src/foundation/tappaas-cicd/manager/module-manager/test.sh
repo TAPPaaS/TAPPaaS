@@ -388,6 +388,54 @@ else
     bad "delete: app module wrongly hit the foundation gate"
 fi
 
+# ---------------------------------------------------------------------------
+# TypeScript unit tests (the module-manager CLI itself: config-layer verbs, the
+# inspect report + the dependency-service drift check). Offline — a
+# FakeModuleClient and fixture configs, no cluster, no bash scripts. Same
+# run_ts/dist-test pattern people-manager/test.sh uses; tsc/node come from the
+# environment when present, else nix-shell.
+# ---------------------------------------------------------------------------
+echo ""
+echo "== module-manager TypeScript unit tests =="
+
+run_ts() {
+    if command -v tsc >/dev/null 2>&1 && command -v node >/dev/null 2>&1; then
+        bash -c "$1"
+    elif command -v nix-shell >/dev/null 2>&1; then
+        nix-shell -p typescript nodejs_22 --run "$1"
+    else
+        return 127
+    fi
+}
+
+UNIT_TSCONFIG="${HERE}/test/unit/tsconfig.json"
+DIST_TEST="${HERE}/dist-test"
+if [[ -f "$UNIT_TSCONFIG" ]]; then
+    rm -rf -- "$DIST_TEST"
+    if run_ts "tsc --noEmit -p '${HERE}/tsconfig.json'" >/dev/null 2>&1; then
+        ok "tsc --noEmit clean (src)"
+    else
+        bad "tsc --noEmit reported type errors (src)"
+    fi
+    if run_ts "tsc -p '${UNIT_TSCONFIG}'" >/dev/null 2>&1; then
+        ok "TypeScript unit tests compile"
+        # tsconfig rootDir is the tappaas-cicd root (shared lib/ts base), so the
+        # compiled tree mirrors manager/module-manager/ under dist-test.
+        for unit in module inspect; do
+            if run_ts "node '${DIST_TEST}/manager/module-manager/test/unit/${unit}.test.js'" >/dev/null 2>&1; then
+                ok "TypeScript ${unit} unit tests pass"
+            else
+                bad "TypeScript ${unit} unit tests FAILED (rerun: node ${DIST_TEST}/manager/module-manager/test/unit/${unit}.test.js)"
+            fi
+        done
+    else
+        bad "TypeScript unit tests do not compile"
+    fi
+    rm -rf -- "$DIST_TEST"
+else
+    bad "missing ${UNIT_TSCONFIG}"
+fi
+
 # --- run the standalone lint test suite and fold its result in -------------
 if [[ -x "${HERE}/test-validate-module-tier-source.sh" ]]; then
     echo ""

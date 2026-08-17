@@ -9,6 +9,7 @@
 import {
   AddOptions,
   DeleteOptions,
+  InspectOptions,
   ModifyOptions,
   ModuleClient,
   ReconcileOptions,
@@ -20,12 +21,13 @@ import {
 export interface Invocation {
   verb: "add" | "modify" | "delete" | "reconcile" | "inspect" | "test" | "snapshot";
   module: string;
-  // The forwarded options, captured for assertions. `inspect` forwards no
-  // options (it is a bare read-only inspect call), so it is optional.
+  // The forwarded options, captured for assertions (for `inspect` that is the
+  // dependency-service check decision, #458).
   opts?:
     | AddOptions
     | ModifyOptions
     | DeleteOptions
+    | InspectOptions
     | ReconcileOptions
     | TestOptions
     | SnapshotAction;
@@ -55,8 +57,8 @@ export class FakeModuleClient implements ModuleClient {
     this.log.push({ verb: "reconcile", module, opts });
     return this.rc;
   }
-  inspect(module: string): number {
-    this.log.push({ verb: "inspect", module });
+  inspect(module: string, opts: InspectOptions = {}): number {
+    this.log.push({ verb: "inspect", module, opts });
     return this.rc;
   }
   test(module: string, opts: TestOptions): number {

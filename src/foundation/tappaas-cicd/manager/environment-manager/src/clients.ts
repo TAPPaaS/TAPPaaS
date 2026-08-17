@@ -89,8 +89,14 @@ export class CliModuleClient implements ModuleClient {
     // module-manager was ported; the shipped CLI dispatches on argv[0], so it
     // exited 1 with "Unknown verb: <module>" and stalled the --deep cascade at
     // its first module. The unit test below pins the argument vector.
+    //
+    // PREVIEW (no --apply) runs module-manager's read-only inspect, whose
+    // dependency-service check is ON by default (#458) — opt out here: a --deep
+    // preview walks EVERY consuming module, and one firewall round-trip per
+    // dependency per module is not what a preview should cost. The full picture
+    // comes from `module-manager reconcile <module>` on the single module.
     const args = ["reconcile", module];
-    if (apply) args.push("--apply");
+    args.push(apply ? "--apply" : "--no-services");
     run(MODULE_MANAGER_BIN(), args);
   }
 }

@@ -88,6 +88,17 @@ export interface ReconcileOptions {
   silent?: boolean;
 }
 
+// Options for the READ-ONLY inspect (`reconcile` without --apply, and each
+// module of `list --diff`).
+export interface InspectOptions {
+  // Check the state each dependsOn provider provisions outside the VM (firewall
+  // rules, NAT rules, discovery relays) by running its read-only
+  // test-service.sh (#458). Costs one child process — usually one firewall API
+  // round-trip — per dependency, hence ON for a single-module reconcile and OFF
+  // for the `list --diff` rollup / the reconcile --deep preview cascade.
+  checkServices?: boolean;
+}
+
 export type SnapshotAction =
   | { kind: "create" }
   | { kind: "list" }
@@ -110,9 +121,10 @@ export interface ModuleClient {
   reconcile(module: string, opts: ReconcileOptions): number;
   // src/inspect.ts (native TS, in-process)  (READ-ONLY three-way drift report:
   // Released[git] / Desired[~/config] / Actual[running VM]; config-only fallback
-  // when the module has no vmid). Backs `reconcile` WITHOUT --apply and, per
-  // module, the `list --diff` rollup.
-  inspect(module: string): number;
+  // when the module has no vmid, plus the dependency-service state on both
+  // paths). Backs `reconcile` WITHOUT --apply and, per module, the `list --diff`
+  // rollup.
+  inspect(module: string, opts?: InspectOptions): number;
   // test-module.sh [opts] <module>
   test(module: string, opts: TestOptions): number;
   // snapshot-vm.sh <module> [action]

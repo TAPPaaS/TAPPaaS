@@ -49,10 +49,11 @@ const HELP: HelpSpec = {
   tagline: "TAPPaaS module lifecycle manager (ADR-007 #3)",
   verbs: [
     {
-      usage: "list [--diff] [--json]",
+      usage: "list [--diff] [--services] [--json]",
       name: "list",
       options: [
         ["--diff", "Per-module three-way (released/desired/running) drift rollup across every module."],
+        ["--services", "--diff: also check each module's dependency-service state (one firewall/API round-trip per dependency — OFF by default across the fleet)."],
       ],
     },
     { usage: "show <module> [--json]", name: "show" },
@@ -96,12 +97,13 @@ const HELP: HelpSpec = {
       ],
     },
     {
-      usage: "reconcile <module> [--apply] [--environment ENV] [--no-snapshot]",
+      usage: "reconcile <module> [--apply] [--environment ENV] [--no-snapshot] [--no-services]",
       name: "reconcile",
       options: [
         ["--apply", "Converge the module's config → VM/service. Default is a read-only three-way (released/desired/running) drift INSPECT."],
         ["--environment ENV", "Target environment to reconcile."],
         ["--no-snapshot", "Skip any pre-change VM snapshot (--apply; leaf re-apply is idempotent)."],
+        ["--no-services", "INSPECT only: skip the dependency-service drift check (declared firewall/NAT/discovery state), which is ON by default."],
       ],
     },
     {
@@ -148,6 +150,10 @@ interface Opts {
   json: boolean;
   diff: boolean;
   apply: boolean;
+  // Dependency-service drift check (#458). TRI-STATE: undefined = the verb's
+  // default (on for `reconcile <module>`, off for the `list --diff` rollup),
+  // true = --services, false = --no-services.
+  services?: boolean;
   // lifecycle flags
   environment?: string;
   allowFork: boolean;
@@ -226,6 +232,10 @@ function parseOpts(args: string[]): Opts {
       o.reinstall = true;
     } else if (a === "--no-snapshot") {
       o.noSnapshot = true;
+    } else if (a === "--services") {
+      o.services = true;
+    } else if (a === "--no-services") {
+      o.services = false;
     } else if (a === "--debug") {
       o.debug = true;
     } else if (a === "--silent") {
@@ -395,11 +405,20 @@ function cmdListDiff(opts: Opts, client: ModuleClient): number {
     return 0;
   }
   info(`${GN}Per-module three-way drift (Released[git] / Desired[~/config] / Actual[running VM]):${CL}`);
+  // Dependency-service checks are OFF by default here: one firewall/API
+  // round-trip per dependency per module does not belong in a fleet rollup. Say
+  // so once, rather than letting every module's report look fully covered (#458).
+  const checkServices = opts.services === true;
+  if (!checkServices) {
+    info(
+      `${YW}(dependency-service state NOT checked — pass --services to include it, at one check per dependency per module)${CL}`,
+    );
+  }
   let worst = 0;
   for (const m of mods) {
     info("");
     info(`${GN}── ${m.name} ──${CL}`);
-    const rc = client.inspect(m.name);
+    const rc = client.inspect(m.name, { checkServices });
     if (rc !== 0) worst = rc;
   }
   return worst;
@@ -494,11 +513,15 @@ function cmdTest(opts: Opts, client: ModuleClient): number {
 }
 
 // reconcile — DEFAULT (no --apply) is a READ-ONLY three-way drift INSPECT:
-// Released[git/source] / Desired[~/config] / Actual[running VM]. This is the
-// inspect that used to live in `health-manager show vm <module>` (and in the
-// retired inspect-vm.sh; now native TS in src/inspect.ts, Phase 7.3); for a
-// non-VM module (no vmid) it falls back to a config-only Released-vs-Desired
-// diff (there is no running VM) and still exits 0.
+// Released[git/source] / Desired[~/config] / Actual[running VM], PLUS the state
+// the module's dependsOn providers hold outside the VM (firewall/NAT/discovery),
+// checked via each provider's read-only test-service.sh (#458; --no-services
+// opts out). This is the inspect that used to live in `health-manager show vm
+// <module>` (and in the retired inspect-vm.sh; now native TS in src/inspect.ts,
+// Phase 7.3); for a non-VM module (no vmid) the field diff falls back to
+// config-only Released-vs-Desired (there is no running VM) and the
+// dependency-service section carries the substance. Detected drift still exits
+// 0 — a check that could not RUN exits 1.
 //
 // WITH --apply it is the LEAF re-apply (current config → VM/service). Per ADR-007
 // that is distinct from `modify`: reconcile re-applies the EXISTING config
@@ -515,8 +538,11 @@ function cmdReconcile(opts: Opts, client: ModuleClient): number {
   const module = opts.rest[0];
   if (!module) die("reconcile: expected <module>");
   if (!opts.apply) {
-    // Read-only three-way drift report (inspect-vm.sh). No config change.
-    return client.inspect(module);
+    // Read-only three-way drift report (inspect-vm.sh). No config change. The
+    // dependency-service check is ON here — one explicit module, and without it
+    // a policy-only module's report covers almost nothing (#458). --no-services
+    // opts out (what the fleet rollup and the --deep preview cascade pass).
+    return client.inspect(module, { checkServices: opts.services !== false });
   }
   const r: ReconcileOptions = {
     environment: opts.environment,

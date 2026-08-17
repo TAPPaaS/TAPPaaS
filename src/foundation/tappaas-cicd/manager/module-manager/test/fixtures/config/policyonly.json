@@ -1,0 +1,10 @@
+{
+  "description": "Policy-only module: no VM — all of its state lives in its dependency services (#458 fixture)",
+  "kind": "module",
+  "tier": "app",
+  "source": "official",
+  "zone0": "acme",
+  "environment": "acme",
+  "location": "/nonexistent/src/apps/policyonly",
+  "dependsOn": ["network:rules", "network:nat"]
+}

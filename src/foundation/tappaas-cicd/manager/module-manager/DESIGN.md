@@ -32,7 +32,7 @@ injected `ModuleClient` (production `CliModuleClient`; tests inject a fake):
 | `add` | bash | `install-module.sh` |
 | `modify` | bash | `update-module.sh` (release update) |
 | `delete` | bash | `delete-module.sh` |
-| `reconcile` | TS (lifecycle) | `src/reconcile.ts` (leaf converge — see below) |
+| `reconcile` | TS (lifecycle) | `src/inspect.ts` + `src/services.ts` (read-only drift report, default) / `src/reconcile.ts` (`--apply`: leaf converge) — see below |
 | `test` | bash | `test-module.sh` |
 | `snapshot-vm` | bash | `snapshot-vm.sh` (special VM op) |
 
@@ -50,6 +50,40 @@ the co-located state files (`zones.json`, `site.json`, `module-fields.json`,
 `location` present. The heuristic intentionally does **not** require `vmname`, so
 provider-only modules (e.g. `templates`: `provides:["nixos","debian"]`, no
 vmid/vmname) are still enumerated (shown without vmid/node, not filtered out).
+
+### `reconcile` — the read-only report (default) and its scope
+
+`reconcile <module>` without `--apply` is the READ-ONLY inspect (`src/inspect.ts`).
+It reports two things, and the summary states which of them it actually covered:
+
+- the **config-field** diff (`Released[git]` / `Desired[~/config]` /
+  `Actual[running VM]`; Actual is N/A for a module with no `vmid`), and
+- the **dependency-service state** (`src/services.ts`): for each `dependsOn`
+  entry, that provider's read-only `services/<service>/test-service.sh <module>` —
+  the same verifier `test-module.sh` Step 3 runs, delegated to rather than
+  reimplemented, so `rules-manager verify-rules` and friends stay the single
+  source of truth for what "no drift" means on each plane.
+
+The second part exists because the field diff alone described almost nothing about
+a **policy-only** module — no VM, all state provisioned by its providers (firewall
+rules, NAT rules, discovery relays) — and so reported a confident clean while
+declared rules were missing (#458).
+
+Contracts worth keeping in mind:
+
+- **Drift exits 0.** The inspect is a report; `list --diff` and the
+  `site/environment reconcile --deep` cascade propagate its rc, so drift must not
+  fail them. A check that could not RUN exits 1 (unknown ≠ clean), the same rule
+  already applied to an unreachable Proxmox node.
+- **Never a silent pass.** A provider with no `test-service.sh` (today:
+  `backup:external`, `backup:push`, `backup:remote`, `identity:accessControl`,
+  `templates:debian`, `coturn:turn`, `vllm-amd:inference`) renders as *NOT
+  checked*, and a report that skipped the checks entirely names the deps it left
+  uncovered instead of printing a bare "no discrepancies found".
+- **Who pays.** One child process (usually one firewall API round-trip) per
+  dependency: ON for a single `reconcile <module>`, OFF for `list --diff`
+  (`--services` opts in, and the header says so when it did not) and for the
+  `environment reconcile` PREVIEW cascade (which passes `--no-services`).
 
 ### `reconcile` vs `modify` — two distinct verbs
 
@@ -98,7 +132,12 @@ pass, foundation+community fail, app+any pass, invalid enums fail, `--allow-fork
 override); the foundation→non-mgmt and foundation+community rejections; the
 `--variant`→`--environment` alias; the delete-foundation `--force` gate; and
 back-compat (a tier-less app module with no site/environments). It folds in the
-standalone `test-validate-module-tier-source.sh` lint suite. The **deep**
+standalone `test-validate-module-tier-source.sh` lint suite, and it now also
+compiles and runs the **TypeScript unit tests** (`test/unit/module.test.ts`,
+`test/unit/inspect.test.ts` — the inspect report, the dependency-service drift
+check, and the CLI wiring that decides who pays for it) via the same
+`run_ts`/`dist-test` pattern `people-manager/test.sh` uses; before that they
+existed but were never executed by `test.sh`. The **deep**
 (`TAPPAAS_TEST_DEEP=1`) path currently runs the same checks — no live provisioning
 tier has been added yet.
 

@@ -143,9 +143,15 @@ try {
     const applyArgv = readFileSync(argvLog, "utf8").trim();
     check(applyArgv === "reconcile backup --apply", `reconcileModule(apply) spawns verb-first (got: ${applyArgv})`);
 
+    // The PREVIEW opts out of module-manager's dependency-service check (#458):
+    // a --deep preview walks every consuming module, so it must not pay one
+    // firewall round-trip per dependency per module.
     mc.reconcileModule("backup", false);
     const previewArgv = readFileSync(argvLog, "utf8").trim();
-    check(previewArgv === "reconcile backup", `reconcileModule(preview) spawns verb-first (got: ${previewArgv})`);
+    check(
+      previewArgv === "reconcile backup --no-services",
+      `reconcileModule(preview) spawns verb-first and skips service checks (got: ${previewArgv})`,
+    );
   } finally {
     if (prevBin === undefined) delete process.env.MODULE_MANAGER_BIN;
     else process.env.MODULE_MANAGER_BIN = prevBin;

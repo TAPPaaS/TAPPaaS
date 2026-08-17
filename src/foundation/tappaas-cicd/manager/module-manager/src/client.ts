@@ -25,6 +25,7 @@ import { reconcileModule } from "./reconcile";
 import {
   AddOptions,
   DeleteOptions,
+  InspectOptions,
   ModifyOptions,
   ModuleClient,
   ReconcileOptions,
@@ -109,9 +110,11 @@ export class CliModuleClient implements ModuleClient {
   // `reconcile`, no --apply), ported from the retired inspect-vm.sh. Prints the
   // Released/Desired/Actual table for a VM module (reading the live VM over
   // ssh/qm via lib/ts cluster helpers) and a config-only Released/Desired diff
-  // for a non-VM module (no vmid).
-  inspect(module: string): number {
-    return inspectModule(module);
+  // for a non-VM module (no vmid). With opts.checkServices it also reports the
+  // state each dependsOn provider provisions outside the VM, by running that
+  // provider's read-only test-service.sh (#458).
+  inspect(module: string, opts: InspectOptions = {}): number {
+    return inspectModule(module, opts);
   }
 
   test(module: string, opts: TestOptions): number {

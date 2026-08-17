@@ -35,26 +35,52 @@ later retire phase).
 | `module add <m>` | `install-module.sh` | create + provision |
 | `module modify <m>` | `update-module.sh` | release update (snapshot + test + 3-way merge) |
 | `module delete <m>` | `delete-module.sh` | `--archive` (default) / `--remove` |
-| `module reconcile <m>` | `src/reconcile.ts` (TS) | **leaf converge** — re-apply current config |
+| `module reconcile <m>` | `src/inspect.ts` (TS) | read-only drift report (default); `--apply` → **leaf converge** (`src/reconcile.ts`) |
 | `module test <m>` | `test-module.sh` | `--deep`, `--vmid`, `--zone0` |
 | `module snapshot-vm <m>` | `snapshot-vm.sh` | special VM op (not CRUD) |
 
 Common options: `--config-dir <dir>`, `--json` (list/show/validate), `-h`.
 The leading `module` entity keyword is optional (it is the only entity).
 
-**`reconcile` vs `modify`** — `reconcile` re-applies the *existing* config
+**`reconcile` vs `modify`** — `reconcile --apply` re-applies the *existing* config
 (idempotent converge: dependency `*-service.sh` applies + the module's own
 `update.sh`/`install.sh`), with **no snapshot, no tests, no 3-way merge, and no
 `updateTime` bump**. `modify` (`update-module.sh`) *changes* the config via a
 release update and does all of those. `reconcile` is the leaf the
 `site/environment reconcile --deep` cascade walks down to.
 
+**What `reconcile <m>` (no `--apply`) reports** — a read-only drift report in two
+parts:
+
+1. **Config fields** — three-way `Released[git]` / `Desired[~/config]` /
+   `Actual[running VM]`; for a module with no `vmid` the Actual column is N/A and
+   the diff degrades to Released-vs-Desired.
+2. **Dependency-service state** — for each `dependsOn` entry, that provider's
+   read-only `services/<service>/test-service.sh <module>` (the same verifier
+   `module test` runs): declared firewall rules, NAT rules, discovery relays. For
+   a policy-only module (no VM) this is the whole module, so without it a clean
+   field diff said nothing (#458). `--no-services` skips it.
+
+Detected drift **exits 0** — this is a report, and `list --diff` plus the
+`--deep` cascade propagate the rc. A check that could not *run* (missing or
+non-executable `test-service.sh`) exits 1: unknown state is not clean. A provider
+that ships no `test-service.sh` is reported as **NOT checked**, never as passing.
+
+The service checks cost one child process — usually one firewall API round-trip —
+per dependency, so they are **on** for a single `reconcile <m>` and **off** for
+the fleet/cascade paths: `list --diff` needs `--services` to include them (and
+says so when it does not), and the `environment reconcile` preview passes
+`--no-services`.
+
 ```bash
 module-manager module list
 module-manager module show nextcloud --json
 module-manager module validate --allow-fork
 module-manager module add nextcloud --environment acme
-module-manager module reconcile nextcloud
+module-manager module reconcile nextcloud                # report: fields + dependency services
+module-manager module reconcile nextcloud --no-services   # report: fields only
+module-manager module reconcile nextcloud --apply        # converge to the current config
+module-manager module list --diff --services             # fleet rollup, services included
 ```
 
 ## Underlying scripts
