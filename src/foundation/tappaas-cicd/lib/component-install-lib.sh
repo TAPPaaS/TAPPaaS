@@ -15,7 +15,7 @@
 
 # build_and_link_nix_component <component-dir> <name> [tool ...]
 #
-# Nix-build <component-dir>/default.nix (-A default) with a GC-rooted
+# Build the component as a flake package (<flake-root>#<name>) with a GC-rooted
 # --out-link under ${TAPPAAS_GCROOTS:-~/.tappaas-gcroots}/<name> — the root
 # keeps nix-collect-garbage from deleting the build out from under the ~/bin
 # symlinks — then link each <tool> (default: just <name>) from the build's
@@ -28,18 +28,31 @@ build_and_link_nix_component() {
     local bin="${TAPPAAS_BIN:-/home/tappaas/bin}"
     local gcroots="${TAPPAAS_GCROOTS:-${HOME}/.tappaas-gcroots}"
     mkdir -p "${bin}" "${gcroots}"
-    echo "  building ${name} (nix-build)..."
-    # nix-build prints the store path on stdout (captured into $out) and the
+    echo "  building ${name} (nix build, flake-pinned)..."
+    # nix build --print-out-paths writes the store path to stdout (captured into
+    # $out) and the
     # BUILD LOG on stderr — dot-per-line it to the terminal (house style) and
     # keep the full log for post-mortem. The dot filter writes to fd 2 so the
     # captured stdout stays exactly the store path.
+    # Build through the flake, not `nix-build default.nix`, so pkgs comes from
+    # the nixpkgs pinned in flake.lock instead of the ambient <nixpkgs> search
+    # path. That path is unset under systemd — so the nightly never built these
+    # at all, logging only a warning — and interactively it resolves via the
+    # network flake registry, which hangs on HTTP 429 once the registry cache
+    # goes stale. Same revision as the system closure, and no network. (#467)
+    local flake_root="${dir}"
+    while [ ! -f "${flake_root}/flake.nix" ]; do
+        [ "${flake_root}" = "/" ] && { echo "  ERROR: no flake.nix above ${dir}" >&2; return 1; }
+        flake_root="$(dirname "${flake_root}")"
+    done
+
     local out log="/tmp/tappaas-build-${name}.log"
     out="$(
-        cd "${dir}" && nix-build -A default default.nix --out-link "${gcroots}/${name}" \
+        nix build "${flake_root}#${name}" --print-out-paths --out-link "${gcroots}/${name}" \
             2> >(tee "${log}" | while IFS= read -r _; do printf '.' >&2; done)
     )" || {
         echo "" >&2
-        echo "  ERROR: nix-build failed for ${name} — log tail (full log: ${log}):" >&2
+        echo "  ERROR: nix build failed for ${name} — log tail (full log: ${log}):" >&2
         tail -8 "${log}" >&2 2>/dev/null || true
         return 1
     }

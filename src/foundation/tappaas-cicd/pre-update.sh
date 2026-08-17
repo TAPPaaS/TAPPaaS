@@ -119,17 +119,18 @@ done
 # unchanged. A component build failure WARNS and the update continues with the
 # previous (stale) bins — the Test-11 smoke slice is what surfaces a broken
 # build, so a bad component never blocks the fleet update.
+_comp_failed=0
 for _disp in manager controller; do
   if [ -x "${_disp}/install.sh" ]; then
     info "  linking ${_disp}/ components..."
-    "./${_disp}/install.sh" || warn "  ${_disp}/install.sh reported non-zero rc"
+    "./${_disp}/install.sh" || { warn "  ${_disp}/install.sh reported non-zero rc"; _comp_failed=$((_comp_failed + 1)); }
   fi
 done
 
 # update-tappaas lives OUTSIDE manager/ + controller/ (it drives them), so no
 # dispatcher covers it — build + link it via its own contract install.sh.
 if [ -x update-tappaas/install.sh ]; then
-  ./update-tappaas/install.sh || warn "  update-tappaas/install.sh reported non-zero rc"
+  ./update-tappaas/install.sh || { warn "  update-tappaas/install.sh reported non-zero rc"; _comp_failed=$((_comp_failed + 1)); }
 fi
 
 # (The legacy zone-controller/zone-state bash scripts are retired — their verbs
@@ -274,4 +275,12 @@ fi
 # patch/plugin/credentials state into `opnsense-ensure-patches`, called above
 # before the zone-key migration — Phase 5 / D5.)
 
-info "${GN}✓${CL} All TAPPaaS-CICD programs and scripts installed successfully."
+# Report what actually happened. A failed component build stays non-fatal (see
+# the dispatch rationale above), but claiming success afterwards is what let
+# #467 run unnoticed: every nightly logged two warnings and then this ✓ line,
+# so the mothership's own managers went unbuilt for weeks with no visible signal.
+if [ "${_comp_failed}" -gt 0 ]; then
+  warn "TAPPaaS-CICD scripts installed, but ${_comp_failed} component group(s) failed to build — those bins are STALE (see warnings above)."
+else
+  info "${GN}✓${CL} All TAPPaaS-CICD programs and scripts installed successfully."
+fi
