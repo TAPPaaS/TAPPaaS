@@ -3,10 +3,10 @@
 ## Current implementation
 
 - Debian cloud-image VM (`templates:debian`, cloud-init), 1 vCPU / 1 GB / 4 GB.
-- `install.sh` provisions the VM via `install-vm.sh`, runs `apt update/upgrade`
-  and installs `curl`, then registers HA via `update-HA.sh`. The actual
-  NetBird package installation line is present but commented out, so the
-  client must be installed manually (see INSTALL.md Post-install).
+- VM creation is handled by `cluster:vm` and HA registration by `cluster:ha`
+  (both declared in `dependsOn` and run by the install engine before
+  `install.sh`); the module `install.sh` itself only runs `update.sh`. The
+  actual NetBird package install is still manual (see INSTALL.md Post-install).
 - This client is different from the NetBird client installed by default on
   the `mgmt` network for TAPPaaS management access. This one is for business
   or home users who want a VPN connection into their solution/installation.
@@ -22,7 +22,4 @@ Preserved from the previous README:
 
 ## Repository housekeeping
 
-- `install copy.sh` appears to be a stale copy of an older install script
-  (pre-`install-vm.sh` flow, using `Create-TAPPaaS-VM.sh` directly) and is a
-  candidate for removal.
 - The module has no `test.sh` yet.
