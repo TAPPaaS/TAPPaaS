@@ -348,6 +348,22 @@ else
     skip "scripts/test/test-dispatch-contract.sh not found"
 fi
 
+# ── Test 10b: post-reboot module readiness gate (#468) ───────────────────────
+# Offline: temp fixtures only, no VM contact (the port-probe branch needs a live
+# guest and is exercised by a real module update instead).
+
+info "${BOLD}Test 10b: module readiness gate${CL}"
+
+if [[ -x "${SCRIPT_DIR}/scripts/test/test-module-ready.sh" ]]; then
+    if "${SCRIPT_DIR}/scripts/test/test-module-ready.sh" >/dev/null 2>&1; then
+        pass "readiness port list + ready.sh polling behave (module_ready_ports/wait_for_module_ready)"
+    else
+        fail "module readiness test failed (run scripts/test/test-module-ready.sh)"
+    fi
+else
+    skip "scripts/test/test-module-ready.sh not found"
+fi
+
 # ── Test 11: ADR-007 component smoke (lightweight, non-disruptive) ───────────
 # A sub-second sanity check that the new ADR-007 components' BASIC functionality
 # is present — using the already-built bins. NO compile, NO nix-build, NO live

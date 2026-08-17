@@ -452,6 +452,11 @@ update_nixos() {
         # Wait for sshd to come back (replaces fixed sleep 60 — issue #376).
         update_ssh_known_hosts "${vm_ip}"
         wait_for_ssh "${vm_ip}" 120 || warn "sshd unreachable after 120 s — subsequent service updaters may fail"
+        # sshd answering is NOT the module being able to serve (#468): it comes
+        # up seconds after boot while the module's own service may need far
+        # longer, and the post-update tests run straight after this returns.
+        wait_for_module_ready "${vmname}" "${vm_ip}" 180 \
+            || warn "  post-update tests may run against a still-starting '${vmname}'"
     else
         warn "automaticReboot=false — skipping reboot of VM ${vmid} (${vmname})."
         warn "  The new NixOS generation is active, but a reboot is needed to apply kernel/bootloader changes."

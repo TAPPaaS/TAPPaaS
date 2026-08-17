@@ -446,6 +446,14 @@ if [[ ${REBOOT_NEEDED} -eq 1 ]]; then
                 || debug "  no stale DNS to remove for ${VMNAME}.${old_zone}.internal"
         fi
     fi
+
+    # An IP in the new subnet means the guest has re-DHCPed, not that the module
+    # can serve (#468). Same gate as the update-os.sh reboot path — shared
+    # helper, so the two reboot sites cannot drift apart.
+    if [[ -n "${new_ip}" ]]; then
+        wait_for_module_ready "${MODULE}" "${new_ip}" 180 \
+            || warn "  '${MODULE}' not ready after the subnet-change reboot — later steps may see a starting service"
+    fi
 fi
 
 debug "  ${GN}✓${CL} cluster:vm update-service completed"

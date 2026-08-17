@@ -807,6 +807,125 @@ function read_module_config() {
   normalize_module_config < "$p"
 }
 
+# The ports that must accept a connection before a module counts as ready
+# (#468). Port 22 is ALWAYS first: it reproduces today's sshd-only gate, so a
+# module that declares nothing degrades to exactly the previous behaviour and
+# this can never be a regression. After it come the module's own declarations —
+# .proxyPort, then .ports[].port — deduped, order preserved.
+#
+# Port RANGES ("8000:8010") are skipped: there is no single port to connect to,
+# and probing a whole range would be slow and meaningless as a readiness signal.
+#
+# Usage: module_ready_ports <module>
+# Output: one port per line.
+function module_ready_ports() {
+  local m="$1"
+  local cfg
+  cfg="$(read_module_config "$m" 2>/dev/null)" || cfg='{}'
+  # `22` is prepended here, not in the caller, so every consumer of this list
+  # inherits the sshd floor.
+  printf '22\n'
+  # NB: dedupe via reduce, NOT unique_by — unique_by also SORTS, which would
+  # throw away the declaration order and probe an arbitrary port first.
+  # (`index` returning 0 is truthy in jq, so the first element dedupes fine.)
+  jq -r '
+      [ (.proxyPort? // empty) ]
+      + [ (.ports? // []) | .[]? | .port? // empty ]
+      | map(select(type == "number" or (type == "string" and test("^[0-9]+$"))))
+      | map(tostring)
+      | reduce .[] as $p ([]; if index($p) then . else . + [$p] end)
+      | .[]
+  ' <<<"$cfg" 2>/dev/null | grep -vx '22' || true
+}
+
+# Wait until a module is actually able to serve (#468).
+#
+# The problem this solves: after a reboot the orchestrator used to continue as
+# soon as sshd answered, which is seconds after boot — but the module's own
+# service can need far longer (litellm's uvicorn needed 24 s after its container
+# started). Post-update tests then ran against an app that was still booting and
+# failed on a perfectly healthy module.
+#
+# Two strategies, in order:
+#   1. <module_dir>/ready.sh — polled until it exits 0. The module owns the
+#      definition of "ready", so it can assert real service health (an HTTP
+#      endpoint answering) rather than a socket merely being open.
+#   2. otherwise the declared ports from module_ready_ports() — ALL of them must
+#      accept a connection. Port 22 is probed from here; the rest are probed on
+#      the VM against localhost, so the result does not depend on inter-zone
+#      firewall rules.
+#
+# Returns 0 when ready, 1 on timeout. Callers WARN rather than die: a readiness
+# timeout means "tests may be flaky", not "the update failed".
+#
+# Usage: wait_for_module_ready <module> <vm_ip> [timeout_seconds]
+function wait_for_module_ready() {
+  local module="$1"
+  local vm_ip="$2"
+  local max_wait="${3:-180}"
+  local waited=0 interval=5
+
+  local module_dir="" ready_hook=""
+  module_dir="$(get_module_dir "${module}" 2>/dev/null)" || module_dir=""
+  [[ -n "${module_dir}" && -f "${module_dir}/ready.sh" ]] && ready_hook="${module_dir}/ready.sh"
+
+  if [[ -n "${ready_hook}" ]]; then
+    info "Waiting for '${module}' to report ready (${ready_hook})..."
+    while ! bash "${ready_hook}" "${module}" "${vm_ip}" >/dev/null 2>&1; do
+      sleep "${interval}"
+      waited=$((waited + interval))
+      if [[ ${waited} -ge ${max_wait} ]]; then
+        warn "  '${module}' not ready after ${max_wait}s (${ready_hook} never exited 0)"
+        return 1
+      fi
+    done
+    info "  ${module} is ready (${waited}s)"
+    return 0
+  fi
+
+  local ports
+  ports="$(module_ready_ports "${module}" | tr '\n' ' ')"
+  ports="${ports% }"
+  info "Waiting for '${module}' ports to accept: ${ports}"
+
+  while ! _module_ports_open "${vm_ip}" "${ports}"; do
+    sleep "${interval}"
+    waited=$((waited + interval))
+    if [[ ${waited} -ge ${max_wait} ]]; then
+      warn "  '${module}' ports [${ports}] not all accepting after ${max_wait}s"
+      return 1
+    fi
+  done
+  info "  ${module} is ready (${waited}s)"
+  return 0
+}
+
+# True when EVERY port in the space-separated list accepts a connection.
+# Port 22 is probed from here (it is the gate that lets us probe the rest);
+# every other port is probed on the VM itself against 127.0.0.1 in ONE ssh
+# round-trip, so a slow module costs one connection per poll, not one per port.
+function _module_ports_open() {
+  local vm_ip="$1"
+  local ports="$2"
+  local p remote=""
+
+  for p in ${ports}; do
+    if [[ "$p" == "22" ]]; then
+      timeout 3 bash -c "exec 3<>/dev/tcp/${vm_ip}/22" 2>/dev/null || return 1
+    else
+      remote+="${p} "
+    fi
+  done
+  [[ -z "${remote}" ]] && return 0
+
+  # ${remote} is expanded HERE (it is our own digit-validated list); \$p is
+  # escaped so it expands on the VM instead.
+  ssh -o ConnectTimeout=5 -o StrictHostKeyChecking=accept-new -o BatchMode=yes \
+      "tappaas@${vm_ip}" \
+      "for p in ${remote}; do (exec 3<>/dev/tcp/127.0.0.1/\$p) 2>/dev/null || exit 1; done; exit 0" \
+      >/dev/null 2>&1
+}
+
 # Apply a jq filter against a module's installed config and write the result
 # back atomically (#207). Always reads in Pattern A or flat, writes in the
 # canonical Pattern A form via convert-json-to-config.sh (sourced on demand).
