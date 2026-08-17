@@ -19,12 +19,26 @@ else
     # Pipe to dots but preserve nixos-rebuild's real exit code via PIPESTATUS —
     # a bare `cmd | while read` reports the while-loop's status, masking a
     # failed rebuild (issue #201). set +e keeps the pipe from aborting first.
+    #
+    # Tee to a log as well: the dots alone discarded stderr entirely, so a failed
+    # rebuild surfaced only as "exit 1" with no cause. That hid this step twice
+    # (2026-08-04 and 2026-08-17) — and this module updates the controller VM
+    # itself, which #352 excludes from pre-update snapshots, so a failure here is
+    # already unrecoverable without the error text. Same fix as update-os.sh's
+    # run_quiet (issue #309 ask 1).
+    _log="$(mktemp /tmp/tappaas-rebuild-"${VMNAME}".XXXXXX.log)"
     set +e
-    sudo nixos-rebuild switch --flake ".#${VMNAME}" --impure 2>&1 | while IFS= read -r _; do printf "."; done
+    sudo nixos-rebuild switch --flake ".#${VMNAME}" --impure 2>&1 \
+        | tee "${_log}" | while IFS= read -r _; do printf "."; done
     rc=${PIPESTATUS[0]}
     set -e
     echo ""
-    [[ "${rc}" -eq 0 ]] || die "nixos-rebuild failed (exit ${rc})"
+    if [[ "${rc}" -ne 0 ]]; then
+        error "nixos-rebuild failed (exit ${rc}) — last 20 lines:"
+        tail -n 20 "${_log}" | sed 's/^/    /' >&2
+        die "nixos-rebuild failed (exit ${rc}); full output in ${_log}"
+    fi
+    rm -f "${_log}"
 fi
 
 # update-tappaas is scheduled declaratively via systemd.timers.update-tappaas
