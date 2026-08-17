@@ -389,6 +389,153 @@ else
 fi
 
 # ---------------------------------------------------------------------------
+# resolve-module.sh — catalog resolution (#459) and tier resolution (#460).
+# Fixture repositories + fixture site.json; the live config is never read.
+# ---------------------------------------------------------------------------
+echo ""
+echo "== resolve-module.sh catalog/tier resolution (#459, #460) =="
+
+RM="${HERE}/resolve-module.sh"
+RW="${WORK}/resolve"
+mkdir -p "${RW}/cfg" "${RW}/legacy/src/apps/legacymod" "${RW}/current/src/apps/curmod" "${RW}/custom/catalogs" "${RW}/custom/mods/custmod"
+
+# A repo whose catalog carries the LEGACY name (src/modules.json). `repository
+# add` accepts such a repo and records catalog="src/modules.json"; before #459
+# resolve-module.sh looked only at src/module-catalog.json and found nothing.
+cat > "${RW}/legacy/src/modules.json" <<'EOF'
+{"applicationModules":[{"moduleName":"legacymod","moduleJson":"src/apps/legacymod/legacymod.json","tier":"app"}]}
+EOF
+echo '{"description":"legacy"}' > "${RW}/legacy/src/apps/legacymod/legacymod.json"
+
+# A repo at the conventional path (the case that always worked).
+cat > "${RW}/current/src/module-catalog.json" <<'EOF'
+{"foundationModules":[{"moduleName":"curmod","legacyName":"oldmod","moduleJson":"src/apps/curmod/curmod.json","tier":"foundation"}]}
+EOF
+echo '{"description":"current"}' > "${RW}/current/src/apps/curmod/curmod.json"
+
+# A repo whose catalog is at a wholly non-conventional declared path.
+cat > "${RW}/custom/catalogs/mine.json" <<'EOF'
+{"applicationModules":[{"moduleName":"custmod","moduleJson":"mods/custmod/custmod.json","tier":"app"}]}
+EOF
+echo '{"description":"custom"}' > "${RW}/custom/mods/custmod/custmod.json"
+
+cat > "${RW}/cfg/site.json" <<EOF
+{"repositories":[
+  {"name":"Legacy","url":"x","path":"${RW}/legacy","managed":"full","catalog":"src/modules.json"},
+  {"name":"Current","url":"x","path":"${RW}/current","managed":"full"},
+  {"name":"Custom","url":"x","path":"${RW}/custom","managed":"full","catalog":"catalogs/mine.json"},
+  {"name":"Tracked","url":"x","path":"${RW}/legacy","managed":"tracked"}
+]}
+EOF
+
+got="$("$RM" legacymod --config-dir "${RW}/cfg" 2>/dev/null || true)"
+[[ "$got" == "${RW}/legacy/src/apps/legacymod" ]] \
+    && ok "resolve-module: legacy src/modules.json catalog resolves (#459)" \
+    || bad "resolve-module: legacy catalog not resolved (got: '${got}')"
+
+got="$("$RM" custmod --config-dir "${RW}/cfg" 2>/dev/null || true)"
+[[ "$got" == "${RW}/custom/mods/custmod" ]] \
+    && ok "resolve-module: declared non-conventional catalog path is read (#459)" \
+    || bad "resolve-module: declared catalog path ignored (got: '${got}')"
+
+got="$("$RM" curmod --config-dir "${RW}/cfg" 2>/dev/null || true)"
+[[ "$got" == "${RW}/current/src/apps/curmod" ]] \
+    && ok "resolve-module: conventional catalog still resolves" \
+    || bad "resolve-module: conventional catalog regressed (got: '${got}')"
+
+got="$("$RM" oldmod --config-dir "${RW}/cfg" --field repo 2>/dev/null || true)"
+[[ "$got" == "Current" ]] \
+    && ok "resolve-module: legacyName lookup still resolves" \
+    || bad "resolve-module: legacyName lookup regressed (got: '${got}')"
+
+# A `full` repo with no readable catalog is a misconfiguration; a `tracked` one
+# is not. The whole-repository skip used to be silent either way (#459).
+warns="$("$RM" nosuch --config-dir "${RW}/cfg" 2>&1 >/dev/null || true)"
+if grep -q "no readable module catalog" <<< "$warns"; then
+    bad "resolve-module: warned about a catalog that is actually readable"
+else
+    ok "resolve-module: no spurious catalog warning when all catalogs resolve"
+fi
+
+RW2="${WORK}/resolve2"; mkdir -p "${RW2}/cfg" "${RW2}/empty/src" "${RW2}/tracked/src"
+cat > "${RW2}/cfg/site.json" <<EOF
+{"repositories":[
+  {"name":"NoPath","url":"x","managed":"full"},
+  {"name":"NoCatalog","url":"x","path":"${RW2}/empty","managed":"full"},
+  {"name":"Tracked","url":"x","path":"${RW2}/tracked","managed":"tracked"}
+]}
+EOF
+warns="$("$RM" nosuch --config-dir "${RW2}/cfg" 2>&1 >/dev/null || true)"
+grep -q "repository 'NoPath' has no .path" <<< "$warns" \
+    && ok "resolve-module: a repository with no .path is reported, not silently skipped" \
+    || bad "resolve-module: missing .path still skipped silently (got: '${warns}')"
+grep -q "repository 'NoCatalog' declares no readable module catalog" <<< "$warns" \
+    && ok "resolve-module: a 'full' repo with no catalog is reported" \
+    || bad "resolve-module: unreadable catalog on a full repo not reported"
+grep -q "Tracked" <<< "$warns" \
+    && bad "resolve-module: 'managed: tracked' repo wrongly warned about (no catalog is its normal state)" \
+    || ok "resolve-module: 'managed: tracked' repo does not warn"
+
+# --field tier: the deployed config outranks the catalog, which is the only
+# source that works for a module located via .location rather than a catalog.
+echo '{"kind":"module","tier":"app","location":"/somewhere/thermostat"}' > "${RW}/cfg/thermostat.json"
+got="$("$RM" thermostat --config-dir "${RW}/cfg" --field tier 2>/dev/null || true)"
+[[ "$got" == "app" ]] \
+    && ok "resolve-module: tier resolves from the deployed config for a .location-only module (#460)" \
+    || bad "resolve-module: tier empty for a .location-only module (got: '${got}')"
+
+echo '{"kind":"module","tier":"foundation"}' > "${RW}/cfg/curmod.json"
+got="$("$RM" curmod --config-dir "${RW}/cfg" --field tier 2>/dev/null || true)"
+[[ "$got" == "foundation" ]] \
+    && ok "resolve-module: deployed-config tier wins over the catalog" \
+    || bad "resolve-module: deployed-config tier not preferred (got: '${got}')"
+
+rm -f "${RW}/cfg/curmod.json"
+got="$("$RM" curmod --config-dir "${RW}/cfg" --field tier 2>/dev/null || true)"
+[[ "$got" == "foundation" ]] \
+    && ok "resolve-module: catalog tier is still the fallback" \
+    || bad "resolve-module: catalog tier fallback broken (got: '${got}')"
+
+# ---------------------------------------------------------------------------
+# get_module_dir exit codes (#460): 0 found, 1 no .location recorded,
+# 2 recorded but the directory is gone. 0/1 keep their historical meaning.
+# ---------------------------------------------------------------------------
+echo ""
+echo "== get_module_dir failure distinction (#460) =="
+
+GMD="${WORK}/gmd.sh"
+{
+    echo 'CONFIG_DIR="$1"'
+    sed -n '/^get_module_dir() {/,/^}/p' "${HERE}/../../lib/common-install-routines.sh"
+    echo 'out="$(get_module_dir "$2")"; rc=$?; echo "rc=${rc} out=${out}"'
+} > "$GMD"
+
+GW="${WORK}/gmd"; mkdir -p "${GW}/real"
+echo "{\"location\":\"${GW}/real\"}" > "${GW}/good.json"
+echo '{"location":"/definitely/not/here"}'  > "${GW}/gone.json"
+echo '{"kind":"module"}'                     > "${GW}/noloc.json"
+
+got="$(bash "$GMD" "$GW" good 2>/dev/null)"
+[[ "$got" == "rc=0 out=${GW}/real" ]] \
+    && ok "get_module_dir: existing directory → rc 0" \
+    || bad "get_module_dir: expected rc 0, got '${got}'"
+
+got="$(bash "$GMD" "$GW" noloc 2>/dev/null)"
+[[ "$got" == "rc=1 out=" ]] \
+    && ok "get_module_dir: no .location recorded → rc 1 (unchanged)" \
+    || bad "get_module_dir: expected rc 1, got '${got}'"
+
+got="$(bash "$GMD" "$GW" missing 2>/dev/null)"
+[[ "$got" == "rc=1 out=" ]] \
+    && ok "get_module_dir: no deployed config → rc 1 (unchanged)" \
+    || bad "get_module_dir: expected rc 1, got '${got}'"
+
+got="$(bash "$GMD" "$GW" gone 2>/dev/null)"
+[[ "$got" == "rc=2 out=/definitely/not/here" ]] \
+    && ok "get_module_dir: recorded directory missing → rc 2, path still echoed" \
+    || bad "get_module_dir: expected rc 2 with the path, got '${got}'"
+
+# ---------------------------------------------------------------------------
 # TypeScript unit tests (the module-manager CLI itself: config-layer verbs, the
 # inspect report + the dependency-service drift check). Offline — a
 # FakeModuleClient and fixture configs, no cluster, no bash scripts. Same

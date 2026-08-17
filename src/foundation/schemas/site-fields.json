@@ -188,11 +188,11 @@
       "default": 5
     },
     "repositories": {
-      "description": "Module catalog repositories.",
+      "description": "Registry of checked-out repositories whose module catalogs back NAME-based module resolution (resolve-module.sh, ADR-004). This is NOT the only way a module is located and NOT required for a module to work: install-module.sh takes the current directory first, recording the module's source dir as .location in its deployed config, so a module installed from an unregistered path resolves through .location alone (issue #460).",
       "type": "array",
       "items": {
         "type": "object",
-        "additionalProperties": true,
+        "additionalProperties": false,
         "required": [
           "name",
           "url"
@@ -205,6 +205,28 @@
           "url": {
             "description": "Repository URL.",
             "type": "string"
+          },
+          "branch": {
+            "description": "Branch tracked by the local checkout.",
+            "type": "string"
+          },
+          "path": {
+            "description": "Absolute path of the local checkout. Load-bearing: resolve-module.sh skips any entry without it, so a repository lacking path contributes no modules to name-based resolution. Not in `required` only so site.json files written before it was declared still validate.",
+            "type": "string"
+          },
+          "managed": {
+            "description": "full = the repository carries TAPPaaS modules and its catalog is validated on add; tracked = registered without catalog requirements.",
+            "type": "string",
+            "enum": [
+              "full",
+              "tracked"
+            ],
+            "default": "full"
+          },
+          "catalog": {
+            "description": "Module catalog path, relative to the repository root. Written by `repository add` as the path it actually found (which may be the legacy src/modules.json) and read by resolve-module.sh. Absent means: try src/module-catalog.json, then legacy src/modules.json.",
+            "type": "string",
+            "default": "src/module-catalog.json"
           },
           "updateChannel": {
             "description": "Update channel (stable | main | etc.).",

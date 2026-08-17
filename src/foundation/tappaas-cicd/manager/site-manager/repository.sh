@@ -64,6 +64,19 @@ _REPO_SYNC_LIB="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")" && pwd)/.
 # shellcheck source=/dev/null
 [ -r "${_REPO_SYNC_LIB}" ] && . "${_REPO_SYNC_LIB}"
 
+# repo_catalog_file() comes from lib/module-catalog-lib.sh so that this script
+# and resolve-module.sh cannot disagree about where a repository's catalog is —
+# that disagreement WAS #459. The lib defines only these functions (no logging,
+# no colors), so sourcing it here cannot replace this script's own.
+for _mcl in /home/tappaas/bin/module-catalog-lib.sh \
+            "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/../../lib/module-catalog-lib.sh"; do
+    # shellcheck source=/dev/null
+    if [[ -r "${_mcl}" ]]; then . "${_mcl}"; break; fi
+done
+unset _mcl
+declare -F repo_catalog_file >/dev/null 2>&1 \
+    || die "module-catalog-lib.sh not found (expected /home/tappaas/bin/module-catalog-lib.sh)"
+
 # ── Usage ────────────────────────────────────────────────────────────
 
 usage() {
@@ -213,29 +226,13 @@ validate_git_url() {
     fi
 }
 
-# Resolve a repository's module-catalog file path (issue #305).
-# Prefers the current name (src/module-catalog.json) and falls back to the legacy
-# name (src/modules.json) so external module repos that have not migrated yet
-# keep working. Echoes the path of whichever exists, else the preferred (new)
-# path so callers can emit a clear "not found" message.
-# Arguments: <repo-path>
-repo_catalog_file() {
-    local repo_path="$1"
-    if [[ -f "${repo_path}/src/module-catalog.json" ]]; then
-        echo "${repo_path}/src/module-catalog.json"
-    elif [[ -f "${repo_path}/src/modules.json" ]]; then
-        echo "${repo_path}/src/modules.json"
-    else
-        echo "${repo_path}/src/module-catalog.json"
-    fi
-}
-
 # Count modules in a repository's module catalog
-# Arguments: <repo-path>
+# Arguments: <repo-path> [declared-catalog]
 # Outputs: module count
 count_repo_modules() {
     local repo_path="$1"
-    local modules_json; modules_json="$(repo_catalog_file "${repo_path}")"
+    local declared="${2:-}"
+    local modules_json; modules_json="$(repo_catalog_file "${repo_path}" "${declared}")"
     if [[ -f "${modules_json}" ]]; then
         jq '[
             (.foundationModules // []),
@@ -249,11 +246,12 @@ count_repo_modules() {
 }
 
 # List module names from a repository's module catalog
-# Arguments: <repo-path>
+# Arguments: <repo-path> [declared-catalog]
 # Outputs: module names (one per line)
 list_repo_modules() {
     local repo_path="$1"
-    local modules_json; modules_json="$(repo_catalog_file "${repo_path}")"
+    local declared="${2:-}"
+    local modules_json; modules_json="$(repo_catalog_file "${repo_path}" "${declared}")"
     if [[ -f "${modules_json}" ]]; then
         jq -r '[
             (.foundationModules // []),
@@ -265,11 +263,12 @@ list_repo_modules() {
 }
 
 # Get all VMIDs from a repository's module catalog
-# Arguments: <repo-path>
+# Arguments: <repo-path> [declared-catalog]
 # Outputs: VMIDs (one per line)
 get_repo_vmids() {
     local repo_path="$1"
-    local modules_json; modules_json="$(repo_catalog_file "${repo_path}")"
+    local declared="${2:-}"
+    local modules_json; modules_json="$(repo_catalog_file "${repo_path}" "${declared}")"
     if [[ -f "${modules_json}" ]]; then
         jq -r '[
             (.foundationModules // []),
@@ -454,7 +453,7 @@ cmd_add() {
         catalog="${modules_json#"${repo_path}/"}"
 
         local module_count
-        module_count=$(count_repo_modules "${repo_path}")
+        module_count=$(count_repo_modules "${repo_path}" "${catalog}")
         info "  ${GN}✓${CL} Found ${module_count} module(s) in ${catalog}"
     fi
 
@@ -463,7 +462,7 @@ cmd_add() {
 
     # Check VMID conflicts
     local new_vmids
-    new_vmids=$(get_repo_vmids "${repo_path}")
+    new_vmids=$(get_repo_vmids "${repo_path}" "${catalog}")
     local has_conflicts=false
 
     # Snapshot the existing repositories (site.json, config fallback) once.
@@ -478,8 +477,10 @@ cmd_add() {
         existing_path=$(echo "${repos_json}" | jq -r ".[${i}].path")
         local existing_name
         existing_name=$(echo "${repos_json}" | jq -r ".[${i}].name")
+        local existing_catalog
+        existing_catalog=$(echo "${repos_json}" | jq -r ".[${i}].catalog // \"\"")
         local existing_vmids
-        existing_vmids=$(get_repo_vmids "${existing_path}")
+        existing_vmids=$(get_repo_vmids "${existing_path}" "${existing_catalog}")
 
         for vmid in ${new_vmids}; do
             if echo "${existing_vmids}" | grep -qx "${vmid}"; then
@@ -491,14 +492,16 @@ cmd_add() {
 
     # Check module name conflicts
     local new_modules
-    new_modules=$(list_repo_modules "${repo_path}")
+    new_modules=$(list_repo_modules "${repo_path}" "${catalog}")
     for i in $(seq 0 $(( repo_count - 1 ))); do
         local existing_path
         existing_path=$(echo "${repos_json}" | jq -r ".[${i}].path")
         local existing_name
         existing_name=$(echo "${repos_json}" | jq -r ".[${i}].name")
+        local existing_catalog
+        existing_catalog=$(echo "${repos_json}" | jq -r ".[${i}].catalog // \"\"")
         local existing_modules
-        existing_modules=$(list_repo_modules "${existing_path}")
+        existing_modules=$(list_repo_modules "${existing_path}" "${existing_catalog}")
 
         for mod in ${new_modules}; do
             if echo "${existing_modules}" | grep -qx "${mod}"; then
@@ -543,7 +546,7 @@ cmd_add() {
     info "${GN}${BOLD}╚══════════════════════════════════════════════╝${CL}"
     echo ""
     info "Available modules:"
-    list_repo_modules "${repo_path}" | sed 's/^/  - /'
+    list_repo_modules "${repo_path}" "${catalog}" | sed 's/^/  - /'
 }
 
 # Remove a repository
@@ -945,14 +948,15 @@ cmd_list() {
     printf "  %-20s %-45s %-12s %-8s\n" "----" "---" "------" "-------"
 
     for i in $(seq 0 $(( repo_count - 1 ))); do
-        local r_name r_url r_branch r_path r_modules
+        local r_name r_url r_branch r_path r_catalog r_modules
         r_name=$(echo "${repos_json}" | jq -r ".[${i}].name")
         r_url=$(echo "${repos_json}" | jq -r ".[${i}].url")
         r_branch=$(echo "${repos_json}" | jq -r ".[${i}].branch")
         r_path=$(echo "${repos_json}" | jq -r ".[${i}].path")
+        r_catalog=$(echo "${repos_json}" | jq -r ".[${i}].catalog // \"\"")
 
         if [[ -d "${r_path}" ]]; then
-            r_modules=$(count_repo_modules "${r_path}")
+            r_modules=$(count_repo_modules "${r_path}" "${r_catalog}")
         else
             r_modules="N/A"
         fi

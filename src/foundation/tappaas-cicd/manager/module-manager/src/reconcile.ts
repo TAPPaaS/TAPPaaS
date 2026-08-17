@@ -38,6 +38,7 @@ import { stream } from "../../../lib/ts/src/exec";
 import {
   defaultConfigDir,
   getModuleDir,
+  getModuleDirResult,
   normalizeModuleConfig,
   resolveEffectiveModuleName,
   resolveProviderModule,
@@ -220,7 +221,8 @@ function doReconcile(moduleArg: string, opts: ReconcileOptions): void {
   console.log("");
   info(`${BOLD}Step 3: Re-apply the module${CL}`);
 
-  const moduleDir = getModuleDir(configDir, module);
+  const moduleDirResult = getModuleDirResult(configDir, module);
+  const moduleDir = moduleDirResult.kind === "found" ? moduleDirResult.dir : null;
   if (moduleDir) {
     ensureScriptsExecutable(moduleDir);
     // Prefer update.sh (the steady-state converge) over install.sh. NO
@@ -241,8 +243,13 @@ function doReconcile(moduleArg: string, opts: ReconcileOptions): void {
     } else {
       info("  No update.sh/install.sh in module directory — nothing to re-apply in-VM");
     }
+  } else if (moduleDirResult.kind === "missing-dir") {
+    // #460: recorded but gone — a moved/removed checkout, not a module that
+    // never had a directory. Naming the path is the difference between a
+    // fixable report and a shrug.
+    warn(`Module directory recorded but missing: ${moduleDirResult.dir} — skipping in-VM re-apply`);
   } else {
-    warn("Cannot find module directory (missing .location) — skipping in-VM re-apply");
+    warn("Cannot find module directory (no .location in config) — skipping in-VM re-apply");
   }
 
   console.log("");

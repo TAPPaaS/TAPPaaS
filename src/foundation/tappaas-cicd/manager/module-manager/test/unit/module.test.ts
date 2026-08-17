@@ -5,12 +5,19 @@
 // config tree. Tiny assert harness (no test framework). Run via the test/unit
 // tsconfig (see test.sh).
 
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "fs";
+import { tmpdir } from "os";
 import { join } from "path";
 import {
+  classifyModuleResolution,
+  getModuleDir,
+  getModuleDirResult,
   listModules,
   loadModule,
+  repoCatalogFile,
   resolveDefaultEnvironment,
   resolveEffectiveModuleName,
+  resolveViaCatalog,
 } from "../../src/config";
 import { validateModules } from "../../src/validate";
 import { AddOptions, DeleteOptions } from "../../src/types";
@@ -311,6 +318,115 @@ function captureList(client: FakeModuleClient, extraArgs: string[] = []): string
   );
   check(/nextcloud(\s+\S+){2}\s+\S+\s+340/.test(out), "config-only fallback still lists modules");
   check(!/Unexpected VMs/.test(out), "no orphan section when there is no live data");
+}
+
+// ── Module resolution: the three tracking paths (#459, #460) ────────────
+// Self-contained temp tree so the shared fixtures stay untouched.
+{
+  const tmp = mkdtempSync(join(tmpdir(), "mm-resolution-"));
+  const cfg = join(tmp, "config");
+  const legacyRepo = join(tmp, "legacyrepo");
+  const elsewhere = join(tmp, "elsewhere", "thermostat");
+  mkdirSync(cfg, { recursive: true });
+  mkdirSync(join(legacyRepo, "src", "apps", "catmod"), { recursive: true });
+  mkdirSync(elsewhere, { recursive: true });
+
+  // A repository whose catalog carries the LEGACY name. `repository add`
+  // records catalog="src/modules.json"; before #459 nothing read that back.
+  writeFileSync(
+    join(legacyRepo, "src", "modules.json"),
+    JSON.stringify({
+      applicationModules: [
+        { moduleName: "catmod", moduleJson: "src/apps/catmod/catmod.json", tier: "app" },
+      ],
+    }),
+  );
+  writeFileSync(join(legacyRepo, "src", "apps", "catmod", "catmod.json"), "{}");
+  writeFileSync(
+    join(cfg, "site.json"),
+    JSON.stringify({
+      repositories: [
+        { name: "Legacy", url: "x", path: legacyRepo, managed: "full", catalog: "src/modules.json" },
+      ],
+    }),
+  );
+
+  // One deployed config per tracking path.
+  writeFileSync(join(cfg, "thermostat.json"), JSON.stringify({ kind: "module", tier: "app", location: elsewhere }));
+  writeFileSync(join(cfg, "catmod.json"), JSON.stringify({ kind: "module", dependsOn: ["network:rules"] }));
+  writeFileSync(join(cfg, "stale.json"), JSON.stringify({ kind: "module", tier: "app", location: "/gone/moved-away" }));
+  writeFileSync(join(cfg, "shelly-fleet.json"), JSON.stringify({ kind: "module", installTime: "20260101-10:00:00", dependsOn: ["network:rules"] }));
+
+  // getModuleDirResult keeps the three failures apart.
+  check(
+    getModuleDirResult(cfg, "thermostat").kind === "found",
+    "getModuleDirResult: existing .location → found",
+  );
+  check(
+    getModuleDirResult(cfg, "shelly-fleet").kind === "no-location",
+    "getModuleDirResult: no .location recorded → no-location",
+  );
+  check(
+    getModuleDirResult(cfg, "nosuchmodule").kind === "not-installed",
+    "getModuleDirResult: no deployed config → not-installed",
+  );
+  const stale = getModuleDirResult(cfg, "stale");
+  check(
+    stale.kind === "missing-dir" && stale.dir === "/gone/moved-away",
+    "getModuleDirResult: recorded directory gone → missing-dir, carrying the path",
+  );
+
+  // The legacy string|null wrapper is unchanged for every existing caller.
+  check(
+    getModuleDir(cfg, "stale") === "/gone/moved-away",
+    "getModuleDir: still returns the recorded path when the directory is gone (back-compat)",
+  );
+  check(getModuleDir(cfg, "shelly-fleet") === null, "getModuleDir: still null with no .location");
+
+  // repoCatalogFile precedence: declared > convention > legacy.
+  check(
+    repoCatalogFile(legacyRepo, "src/modules.json") === join(legacyRepo, "src", "modules.json"),
+    "repoCatalogFile: a declared catalog path is used",
+  );
+  check(
+    repoCatalogFile(legacyRepo, "") === join(legacyRepo, "src", "modules.json"),
+    "repoCatalogFile: falls back to the legacy name when the conventional one is absent",
+  );
+  check(
+    repoCatalogFile(legacyRepo, "does/not/exist.json") === join(legacyRepo, "src", "modules.json"),
+    "repoCatalogFile: a declared-but-absent catalog falls through, it does not dead-end",
+  );
+
+  const hit = resolveViaCatalog(cfg, "catmod");
+  check(
+    hit !== null && hit.repo === "Legacy" && hit.tier === "app",
+    "resolveViaCatalog: a legacy-named catalog resolves (#459)",
+  );
+  check(resolveViaCatalog(cfg, "shelly-fleet") === null, "resolveViaCatalog: absent module → null");
+
+  // The four verdicts.
+  check(classifyModuleResolution(cfg, "thermostat").path === "location", "classify: .location outside any repo → location");
+  check(classifyModuleResolution(cfg, "catmod").path === "catalog", "classify: no .location but catalogued → catalog");
+  check(classifyModuleResolution(cfg, "stale").path === "broken-location", "classify: recorded directory gone → broken-location");
+  check(classifyModuleResolution(cfg, "shelly-fleet").path === "unresolvable", "classify: neither path → unresolvable");
+
+  // Tier: the deployed config outranks the catalog, and is the ONLY source for
+  // a module located via .location (#460).
+  check(
+    classifyModuleResolution(cfg, "thermostat").tierSource === "config",
+    "classify: tier comes from the deployed config when set",
+  );
+  const catmodRes = classifyModuleResolution(cfg, "catmod");
+  check(
+    catmodRes.tier === "app" && catmodRes.tierSource === "catalog",
+    "classify: tier falls back to the catalog when the config declares none",
+  );
+  check(
+    classifyModuleResolution(cfg, "shelly-fleet").tier === null,
+    "classify: an unresolvable module reports no tier rather than a wrong one",
+  );
+
+  rmSync(tmp, { recursive: true, force: true });
 }
 
 console.log("");

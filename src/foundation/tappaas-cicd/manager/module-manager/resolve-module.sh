@@ -4,10 +4,20 @@
 #
 # Removes the install-module.sh CWD dependency: given a bare <module> name, it
 # searches every repository declared in site.json (.repositories[]) for that
-# module's entry in the repo's src/module-catalog.json (by moduleName OR
-# legacyName), and resolves the module's source path from the entry's
-# `moduleJson`. WARNS on a name clash (the same module name in more than one
-# repo) and selects the first repository in site.json order.
+# module's entry in the repo's module catalog (by moduleName OR legacyName),
+# and resolves the module's source path from the entry's `moduleJson`. WARNS on
+# a name clash (the same module name in more than one repo) and selects the
+# first repository in site.json order.
+#
+# The catalog path comes from the entry's `catalog` field when set, else
+# src/module-catalog.json, else the legacy src/modules.json — the same
+# repo_catalog_file() `repository add` used to validate and record it (#459).
+#
+# NOTE: the catalog is only ONE of the ways a module is located (#460).
+# install-module.sh takes the current directory first and records it as
+# .location in the deployed config, so a module installed from an unregistered
+# path resolves through .location alone and is legitimately absent here.
+# `module-manager list --resolution` reports which path each module uses.
 #
 # Usage:
 #   resolve-module.sh <module> [--config-dir DIR] [--field dir|json|tier|repo]
@@ -30,35 +40,77 @@ while [[ $# -gt 0 ]]; do
   case "$1" in
     --config-dir) [[ -n "${2:-}" ]] || { echo "resolve-module.sh: --config-dir requires a value" >&2; exit 2; }; CONFIG_DIR="$2"; shift 2 ;;
     --field)      [[ -n "${2:-}" ]] || { echo "resolve-module.sh: --field requires a value" >&2; exit 2; }; FIELD="$2"; shift 2 ;;
-    -h|--help)    sed -n '2,25p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
+    -h|--help)    sed -n '2,32p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
     -*)           echo "resolve-module.sh: unknown option '$1'" >&2; exit 2 ;;
     *)            [[ -z "$MODULE" ]] || { echo "resolve-module.sh: unexpected argument '$1'" >&2; exit 2; }; MODULE="$1"; shift ;;
   esac
 done
 [[ -n "$MODULE" ]] || { echo "resolve-module.sh: <module> is required" >&2; exit 2; }
 
+case "$FIELD" in
+  dir|json|tier|repo) ;;
+  *) echo "resolve-module.sh: unknown --field '${FIELD}' (dir|json|tier|repo)" >&2; exit 2 ;;
+esac
+
 command -v jq >/dev/null 2>&1 || { echo "resolve-module.sh: jq is required" >&2; exit 2; }
+
+# Catalog-location helpers (#459). Side-effect-free lib: no logging, no colors,
+# so it cannot disturb this script's own output contract.
+for _mcl in /home/tappaas/bin/module-catalog-lib.sh \
+            "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/../../lib/module-catalog-lib.sh"; do
+  # shellcheck source=/dev/null
+  if [[ -r "${_mcl}" ]]; then . "${_mcl}"; break; fi
+done
+unset _mcl
+declare -F repo_catalog_file >/dev/null 2>&1 \
+  || { echo "resolve-module.sh: module-catalog-lib.sh not found (expected /home/tappaas/bin/module-catalog-lib.sh)" >&2; exit 2; }
 
 SITE="${CONFIG_DIR%/}/site.json"
 [[ -f "$SITE" ]] || { echo "resolve-module.sh: site.json not found: ${SITE}" >&2; exit 1; }
 
+# --field tier: the module's OWN deployed config is authoritative and is the
+# only source that works for a module resolved via .location rather than a
+# catalog (#460). install-module.sh already reads tier from the authored JSON
+# this way; catalog lookup below stays as the fallback.
+if [[ "$FIELD" == "tier" ]]; then
+  deployed_tier="$(jq -r '.tier // empty' "${CONFIG_DIR%/}/${MODULE}.json" 2>/dev/null || true)"
+  if [[ -n "$deployed_tier" ]]; then
+    printf '%s\n' "$deployed_tier"
+    exit 0
+  fi
+fi
+
 # Resolved matches, one per line: "<repo>\t<abs-json>\t<tier>".
+#
+# The repository feed is \001-separated, NOT tab: `read` treats runs of IFS
+# WHITESPACE as one delimiter, so an entry with an empty .path and .catalog
+# would silently shift .managed into $rpath. \001 is not whitespace, so empty
+# fields are preserved.
 matches=()
-while IFS=$'\t' read -r rname rpath; do
-  [[ -n "$rpath" ]] || continue
-  catalog="${rpath%/}/src/module-catalog.json"
-  [[ -f "$catalog" ]] || continue
-  # Find the module by moduleName OR legacyName; emit "<moduleJson>\t<tier>".
-  entry="$(jq -r --arg m "$MODULE" '
-      (((.foundationModules // []) + (.applicationModules // []))
-       | map(select(.moduleName == $m or .legacyName == $m))
-       | .[0]) as $e
-      | if $e == null then empty else "\($e.moduleJson)\t\($e.tier // "app")" end
-    ' "$catalog" 2>/dev/null || true)"
+while IFS=$'\001' read -r rname rpath rcatalog rmanaged; do
+  if [[ -z "$rpath" || "$rpath" == "null" ]]; then
+    # A repository with no .path contributes nothing to name resolution. That
+    # used to be a silent skip; say so, since it is a misconfiguration (#459).
+    [[ "$rmanaged" == "tracked" ]] \
+      || echo "resolve-module.sh: WARNING — repository '${rname:-?}' has no .path in site.json; skipped" >&2
+    continue
+  fi
+  [[ "$rcatalog" == "null" ]] && rcatalog=""
+  catalog="$(repo_catalog_file "$rpath" "$rcatalog")"
+  if [[ ! -f "$catalog" ]]; then
+    # `managed: tracked` repos are registered WITHOUT catalog requirements
+    # (ADR-004) — no catalog is their normal state. For a `full` repo it is not.
+    [[ "$rmanaged" == "tracked" ]] \
+      || echo "resolve-module.sh: WARNING — repository '${rname}' declares no readable module catalog (looked for ${catalog}); skipped" >&2
+    continue
+  fi
+  entry="$(repo_catalog_entry "$catalog" "$MODULE" || true)"
   [[ -n "$entry" ]] || continue
   mjson="${entry%%$'\t'*}"; tier="${entry##*$'\t'}"
   matches+=("${rname}"$'\t'"${rpath%/}/${mjson}"$'\t'"${tier}")
-done < <(jq -r '.repositories[]? | [.name, .path] | @tsv' "$SITE" 2>/dev/null)
+done < <(jq -r '.repositories[]?
+                | [(.name // ""), (.path // ""), (.catalog // ""), (.managed // "")]
+                | join("\u0001")' "$SITE" 2>/dev/null)
 
 if [[ ${#matches[@]} -eq 0 ]]; then
   echo "resolve-module.sh: module '${MODULE}' not found in any repository catalog (site: ${SITE})" >&2
@@ -79,5 +131,4 @@ case "$FIELD" in
   json) printf '%s\n' "$r_json" ;;
   tier) printf '%s\n' "$r_tier" ;;
   repo) printf '%s\n' "$r_repo" ;;
-  *)    echo "resolve-module.sh: unknown --field '${FIELD}' (dir|json|tier|repo)" >&2; exit 2 ;;
 esac

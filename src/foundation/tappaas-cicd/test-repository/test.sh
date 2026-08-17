@@ -19,7 +19,9 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-REPO_SCRIPT="/home/tappaas/bin/repository.sh"
+# Overridable so a branch checkout can be tested without deploying it first:
+#   REPO_SCRIPT=/path/to/branch/repository.sh test-repository/test.sh
+REPO_SCRIPT="${REPO_SCRIPT:-/home/tappaas/bin/repository.sh}"
 LOG_DIR="/home/tappaas/logs"
 TIMESTAMP=$(date +%Y%m%d_%H%M%S)
 LOG_FILE="${LOG_DIR}/${TIMESTAMP}_test-repository.log"

@@ -24,6 +24,7 @@
 
 import { CliModuleClient } from "./client";
 import {
+  classifyModuleResolution,
   defaultConfigDir,
   listModules,
   loadModule,
@@ -49,11 +50,12 @@ const HELP: HelpSpec = {
   tagline: "TAPPaaS module lifecycle manager (ADR-007 #3)",
   verbs: [
     {
-      usage: "list [--diff] [--services] [--json]",
+      usage: "list [--diff] [--services] [--resolution] [--json]",
       name: "list",
       options: [
         ["--diff", "Per-module three-way (released/desired/running) drift rollup across every module."],
         ["--services", "--diff: also check each module's dependency-service state (one firewall/API round-trip per dependency — OFF by default across the fleet)."],
+        ["--resolution", "Which path locates each module's source directory (.location / repository catalog / neither). Offline; flags modules nothing can resolve."],
       ],
     },
     { usage: "show <module> [--json]", name: "show" },
@@ -168,6 +170,8 @@ interface Opts {
   zone0?: string;
   archive: boolean;
   remove: boolean;
+  // list --resolution: which of the three tracking paths locates each module (#460)
+  resolution: boolean;
   // snapshot-vm sub-action
   snapList: boolean;
   snapCleanup?: number;
@@ -193,6 +197,7 @@ function parseOpts(args: string[]): Opts {
     deep: false,
     archive: false,
     remove: false,
+    resolution: false,
     snapList: false,
     rest: [],
     passthrough: [],
@@ -248,6 +253,8 @@ function parseOpts(args: string[]): Opts {
       o.archive = true;
     } else if (a === "--remove") {
       o.remove = true;
+    } else if (a === "--resolution") {
+      o.resolution = true;
     } else if (a === "--list") {
       o.snapList = true;
     } else if (a.startsWith("--")) {
@@ -273,6 +280,86 @@ function parseIntStrict(s: string, flag: string): number {
   return n;
 }
 
+// list --resolution — which of the three INDEPENDENT tracking paths locates
+// each deployed module's source directory (#460). Offline: config/*.json plus
+// the repository catalogs, no cluster.
+//
+// site-fields.json described repositories[] as THE way modules are located,
+// but install-module.sh takes the current directory first and records it as
+// .location, so a module installed from an unregistered path is located by
+// .location alone. A module reachable by neither used to be invisible until
+// some operation finally needed its directory — this reports it up front, and
+// exits non-zero so a caller can gate on it.
+function cmdListResolution(opts: Opts): number {
+  const mods = listModules(opts.configDir);
+  const rows = mods.map((m) => classifyModuleResolution(opts.configDir, m.name));
+  const unresolvable = rows.filter((r) => r.path === "unresolvable" || r.path === "broken-location");
+
+  if (opts.json) {
+    info(JSON.stringify({ modules: rows, unresolvable: unresolvable.map((r) => r.module) }, null, 2));
+    return unresolvable.length > 0 ? 1 : 0;
+  }
+
+  if (rows.length === 0) {
+    info(`(no deployed modules in ${opts.configDir})`);
+    return 0;
+  }
+
+  const headers = ["NAME", "RESOLVES VIA", "TIER", "TIER SRC", "CATALOG REPO", "DIRECTORY"];
+  const body = rows.map((r) => [
+    r.module,
+    r.path,
+    r.tier ?? "-",
+    r.tierSource ?? "-",
+    r.catalogRepo ?? "-",
+    r.dir ?? "-",
+  ]);
+  const widths = headers.map((h, i) =>
+    Math.max(h.length, ...body.map((row) => row[i].length)),
+  );
+  const line = (cells: string[]): string =>
+    cells.map((c, i) => c.padEnd(widths[i])).join("  ").trimEnd();
+  info(line(headers));
+  info(line(widths.map((w) => "-".repeat(w))));
+  for (const row of body) info(line(row));
+
+  const counts = new Map<string, number>();
+  for (const r of rows) counts.set(r.path, (counts.get(r.path) ?? 0) + 1);
+  console.log("");
+  info(
+    [...counts.entries()]
+      .sort((a, b) => a[0].localeCompare(b[0]))
+      .map(([k, v]) => `${k}: ${v}`)
+      .join("   "),
+  );
+
+  // Two distinct failures, reported separately: a recorded-but-gone directory
+  // is a repairable checkout problem; "unresolvable" means no mechanism has
+  // ever been able to find this module's source.
+  const broken = rows.filter((r) => r.path === "broken-location");
+  const none = rows.filter((r) => r.path === "unresolvable");
+  if (broken.length > 0) {
+    console.log("");
+    warn(
+      `${broken.length} module(s) record a .location that no longer exists: ` +
+        broken.map((r) => `${r.module} (${r.dir})`).join(", "),
+    );
+    warn("The checkout moved or was removed — restore it, or re-install the module.");
+  }
+  if (none.length > 0) {
+    console.log("");
+    warn(
+      `${none.length} module(s) cannot be located by any tracking path: ` +
+        none.map((r) => r.module).join(", "),
+    );
+    warn(
+      "No .location recorded and no repository catalog entry. Any operation needing " +
+        "the source directory will fail at that point rather than here (#460).",
+    );
+  }
+  return unresolvable.length > 0 ? 1 : 0;
+}
+
 // ── CONFIG-layer verbs (pure TS over config/*.json) ────────────────────
 // The DEFAULT `list` is now a SUPERSET of the (removed) `health-manager list vm`
 // (a live running-guest-vs-config overview) PLUS module-manager's own config
@@ -288,6 +375,7 @@ function parseIntStrict(s: string, flag: string): number {
 // query yields nothing it degrades to the CONFIG-ONLY table (RUN STATE "-") with a
 // single warning, still exit 0.
 function cmdList(opts: Opts, client: ModuleClient): number {
+  if (opts.resolution) return cmdListResolution(opts);
   if (opts.diff) return cmdListDiff(opts, client);
   const mods = listModules(opts.configDir);
 
