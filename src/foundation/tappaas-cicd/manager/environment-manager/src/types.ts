@@ -74,15 +74,20 @@ export interface RefSources {
 export class NetworkUnreachable extends Error {}
 
 // ── NetworkClient — the network-manager boundary (shallow reconcile) ──
-// `environment reconcile` converges the environment's associated zone by
-// shelling out to network-manager. The engine depends only on this interface;
-// tests inject a fake, production uses CliNetworkClient (spawnSync).
+// `environment reconcile` triggers a network convergence by shelling out to
+// network-manager. The engine depends only on this interface; tests inject a
+// fake, production uses CliNetworkClient (spawnSync).
 export interface NetworkClient {
   // Whether a zone with this key exists in zones.json (network-manager exists).
   zoneExists(zone: string): boolean;
   // Converge the network planes. apply=false ⇒ dry-run/preview (the default).
-  // network-manager reconciles ALL zones at once (no per-zone reconcile today);
-  // the environment's zone is converged as part of that pass.
+  //
+  // SYSTEM-WIDE (#461): network-manager reconcile takes no zone or environment
+  // filter — it converges every zone on every plane, and none of the four plane
+  // bins (zone-manager, proxmox-controller, switch-controller, ap-controller)
+  // accepts a zone selector either. Callers must NOT present this as scoped to
+  // one environment, and must not repeat it per environment: N environments
+  // means N identical whole-system passes. See --skip-network.
   reconcileNetwork(apply: boolean): void;
 }
 
@@ -99,8 +104,15 @@ export interface ModuleClient {
 // ── Reconcile plan ────────────────────────────────────────────────────
 export type ActionKind = "reconcile-network" | "reconcile-module";
 
+// How much of the system an action actually touches (#461). "environment" =
+// scoped to the environment being reconciled; "system-wide" = converges the
+// whole platform and merely includes this environment. The plan summary prints
+// it so an operator never reads a system-wide action as a narrow one.
+export type ActionScope = "system-wide" | "environment";
+
 export interface Action {
   kind: ActionKind;
+  scope: ActionScope;
   // Human-readable target description for the plan summary.
   target: string;
 }
@@ -108,6 +120,9 @@ export interface Action {
 export interface Plan {
   actions: Action[];
   warnings: string[];
+  // Operator prose that is neither an action nor a fault: what a planned action
+  // really covers, why one was skipped. Printed plain, not as a yellow warning.
+  notes: string[];
 }
 
 // One planned target that ran and failed. Collected rather than thrown so a

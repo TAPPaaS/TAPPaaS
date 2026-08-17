@@ -1,11 +1,12 @@
 // environment-manager — TAPPaaS Environment manager (ADR-007 P3, #3 port).
 //
 // Owns config/environments/<env>.json (CRUD + validate) and the reconcile
-// cascade. `environment reconcile` converges the environment's associated zone
-// by shelling out to network-manager; `--deep` additionally reconciles every
-// module that consumes the environment (shell out to module-manager). NO plane
-// or module logic is reimplemented — it is a thin orchestration boundary,
-// exactly as people-manager shells out to authentik-manager.
+// cascade. `environment reconcile` triggers a network convergence by shelling
+// out to network-manager — a SYSTEM-WIDE pass, not a per-environment one
+// (#461); `--deep` additionally reconciles every module that consumes the
+// environment (shell out to module-manager). NO plane or module logic is
+// reimplemented — it is a thin orchestration boundary, exactly as
+// people-manager shells out to authentik-manager.
 //
 // Entity: `environment`. Verbs:
 //   environment list
@@ -17,7 +18,7 @@
 //                   the system name explicitly, else it derives from site.json)
 //   environment modify <env> [--domain <d>] [--owner <org>] [--zone <z>] [--display <d>]
 //   environment delete <env>
-//   environment reconcile <env> [--deep] [--apply]
+//   environment reconcile <env> [--deep] [--apply] [--skip-network]
 //
 // Exit codes: ok=0, error=1.
 
@@ -104,11 +105,15 @@ const HELP: HelpSpec = {
       options: [["--force", "add: overwrite existing; delete: override guard rails."]],
     },
     {
-      usage: "reconcile <env> [--deep] [--apply]",
+      usage: "reconcile <env> [--deep] [--apply] [--skip-network]",
       name: "reconcile",
       options: [
         ["--deep", "reconcile: also reconcile every module consuming this env."],
         ["--apply", "reconcile: commit (default = preview / dry-run)."],
+        [
+          "--skip-network",
+          "reconcile: omit the system-wide network pass (the caller already ran it).",
+        ],
       ],
     },
   ],
@@ -143,6 +148,7 @@ interface Opts {
   quiet: boolean;
   deep: boolean;
   apply: boolean;
+  skipNetwork: boolean;
   force: boolean;
   json: boolean;
   rest: string[];
@@ -154,6 +160,7 @@ export function parseOpts(args: string[]): Opts {
     quiet: false,
     deep: false,
     apply: false,
+    skipNetwork: false,
     force: false,
     json: false,
     rest: [],
@@ -208,6 +215,9 @@ export function parseOpts(args: string[]): Opts {
         break;
       case "--apply":
         o.apply = true;
+        break;
+      case "--skip-network":
+        o.skipNetwork = true;
         break;
       case "--force":
         o.force = true;
@@ -456,7 +466,7 @@ function cmdReconcile(opts: Opts, net: NetworkClient, mod: ModuleClient): number
 
   let plan;
   try {
-    plan = computePlan(env, net, mod, opts.deep);
+    plan = computePlan(env, net, mod, { deep: opts.deep, skipNetwork: opts.skipNetwork });
   } catch (e) {
     if (e instanceof NetworkUnreachable) die(`network-manager unreachable: ${e.message}`);
     throw e;
@@ -467,9 +477,12 @@ function cmdReconcile(opts: Opts, net: NetworkClient, mod: ModuleClient): number
       `${plan.actions.length} action(s), ${plan.warnings.length} warning(s)`,
   );
   for (const w of plan.warnings) warn(w);
+  // The scope tag is load-bearing (#461): it is what stops an operator reading
+  // the system-wide network pass as an environment-sized one.
   for (const a of plan.actions) {
-    info(`  ${opts.apply ? "" : "[preview] "}${a.kind}: ${a.target}`);
+    info(`  ${opts.apply ? "" : "[preview] "}${a.kind} [${a.scope}]: ${a.target}`);
   }
+  for (const n of plan.notes) info(`  note: ${n}`);
 
   if (!opts.apply) {
     info("");

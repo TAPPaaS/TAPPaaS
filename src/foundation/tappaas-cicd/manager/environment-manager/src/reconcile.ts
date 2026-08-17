@@ -1,17 +1,22 @@
 // reconcile.ts — the environment reconcile engine (ADR-007 P3 cascade).
 //
 // `environment reconcile <env>`:
-//   shallow (default) → reconcile the environment setup + its associated zone,
-//                        by shelling out to network-manager (the network plane
-//                        owner). network-manager converges all zones in one
-//                        pass; the environment's zone is part of that.
+//   shallow (default) → trigger a network convergence by shelling out to
+//                        network-manager (the network plane owner).
 //   --deep            → the above + reconcile EVERY module that consumes this
 //                        environment (module reconcile, the leaf re-apply),
 //                        shelling out to module-manager per module.
 //
+// The network half is SYSTEM-WIDE, not per-environment (#461): network-manager
+// reconcile has no zone or environment filter, so it converges every zone on
+// every plane and this environment's zone is merely included. The plan says so,
+// and `--skip-network` lets a caller that has already run the system-wide pass
+// (site-manager's --deep cascade) avoid repeating it once per environment.
+//
 // Each `reconcile` is idempotent, so re-touching a shared dependency (the
-// network) is harmless. The engine depends only on the NetworkClient /
-// ModuleClient interfaces (injected) — pure planning, then apply.
+// network) is harmless — it is wasteful, not wrong. The engine depends only on
+// the NetworkClient / ModuleClient interfaces (injected) — pure planning, then
+// apply.
 
 import {
   Action,
@@ -24,17 +29,26 @@ import {
   Plan,
 } from "./types";
 
+export interface ReconcileOpts {
+  // --deep: also reconcile every module that consumes this environment.
+  deep: boolean;
+  // --skip-network: omit the system-wide network reconcile because the caller
+  // already ran it. Only safe when that is actually true — see site-manager.
+  skipNetwork: boolean;
+}
+
 // Compute the reconcile plan for one environment.
-//   deep=false → just the network reconcile (env + its zone).
+//   deep=false → just the (system-wide) network reconcile.
 //   deep=true  → network reconcile + one module reconcile per consuming module.
 export function computePlan(
   env: Environment,
   net: NetworkClient,
   mod: ModuleClient,
-  deep: boolean,
+  opts: ReconcileOpts,
 ): Plan {
   const actions: Action[] = [];
   const warnings: string[] = [];
+  const notes: string[] = [];
 
   const zone = env.network.zone;
   if (!zone) {
@@ -48,22 +62,39 @@ export function computePlan(
     );
   }
 
-  actions.push({
-    kind: "reconcile-network",
-    target: `network (zone '${zone || "?"}' of environment '${env.name}')`,
-  });
+  if (opts.skipNetwork) {
+    notes.push(
+      "network reconcile SKIPPED (--skip-network): the system-wide network pass is the caller's " +
+        `responsibility this run; zone '${zone || "?"}' converges there, not here.`,
+    );
+  } else {
+    // NOT scoped to this environment — say so in the label itself (#461). The
+    // zone is named as what the pass happens to include, never as its extent.
+    actions.push({
+      kind: "reconcile-network",
+      scope: "system-wide",
+      target:
+        "network — ALL zones, ALL planes (system-wide; " +
+        `zone '${zone || "?"}' of environment '${env.name}' converges as part of it)`,
+    });
+    notes.push(
+      "the network reconcile is system-wide: network-manager takes no zone or environment " +
+        "filter, so one run converges the whole platform. Running it once per environment " +
+        "repeats the identical operation — use --skip-network when a caller already ran it.",
+    );
+  }
 
-  if (deep) {
+  if (opts.deep) {
     const modules = mod.modulesForEnvironment(env.name);
     for (const m of modules) {
-      actions.push({ kind: "reconcile-module", target: `module '${m}'` });
+      actions.push({ kind: "reconcile-module", scope: "environment", target: `module '${m}'` });
     }
     if (modules.length === 0) {
       warnings.push(`environment '${env.name}': no deployed modules consume it (--deep: nothing downstream)`);
     }
   }
 
-  return { actions, warnings };
+  return { actions, warnings, notes };
 }
 
 // Apply a plan via the clients. Returns the count applied plus any targets that

@@ -90,6 +90,19 @@ const TAPPAAS: Repository = {
       "cascade-people,cascade-network,cascade-environment,cascade-environment",
     "cascade order = people, network, then environments",
   );
+  // #461: the network leg must state that its ONE pass covers every
+  // environment, and the environment legs must show they skip theirs.
+  const netAction = cascade.find((a) => a.kind === "cascade-network")!;
+  check(
+    netAction.target.includes("system-wide") && netAction.target.includes("all 2 environment(s)"),
+    `network cascade reports 1 system-wide pass for all environments (got: ${netAction.target})`,
+  );
+  check(
+    cascade
+      .filter((a) => a.kind === "cascade-environment")
+      .every((a) => a.target.includes("--skip-network")),
+    "each environment cascade skips the already-run network pass",
+  );
   applyPlan(c, plan);
   check(
     c.log.filter((l) => l.startsWith("cascade")).join("|") ===
@@ -210,6 +223,35 @@ const TAPPAAS: Repository = {
     !plan.actions.some((a) => a.kind === "update-node-pools") &&
       plan.warnings.some((w) => w.includes("not auto-changed")),
     "non-empty declared pools that mismatch discovery → warning only",
+  );
+}
+
+// A cascade that ran and FAILED must be counted as a failure, not as applied —
+// and must not strand the cascades planned after it. Before this, stream()
+// handed back the child's rc, nothing looked at it, and a --deep run that
+// converged nothing still reported "Applied N action(s)".
+{
+  const c = new FakeSiteClient();
+  c.seedClone(TAPPAAS.path!, "stable");
+  c.environments = ["home", "work"];
+  c.cascadeRc.set("home", 1);
+  const plan = computePlan(site([TAPPAAS]), c, { deep: true, apply: true, siteFile: "x" });
+  const res = applyPlan(c, plan);
+  check(
+    res.failures.length === 1 && res.failures[0].error === "exit 1",
+    `a non-zero cascade rc is a failure (applied=${res.applied}, failures=${res.failures.length})`,
+  );
+  check(
+    res.failures[0].target.includes("environment home"),
+    "the failing cascade is named by its target",
+  );
+  check(
+    res.applied === plan.actions.length - 1,
+    "every other action still counts as applied",
+  );
+  check(
+    c.log.some((l) => l === "cascade environment work apply"),
+    "a failing environment does not stop the cascade",
   );
 }
 

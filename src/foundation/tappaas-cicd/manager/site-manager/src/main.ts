@@ -283,9 +283,10 @@ function cmdNode(o: Opts, client: SiteClient): void {
     });
     printPlan(plan, o.apply);
     if (o.apply && plan.actions.length > 0) {
-      const n = applyPlan(client, plan);
+      const res = applyPlan(client, plan);
       info("");
-      info(`${GN}Applied ${n} action(s) — declare storage pools for new nodes before installing modules on them.${CL}`);
+      for (const f of res.failures) warn(`${f.target} failed: ${f.error}`);
+      info(`${GN}Applied ${res.applied} action(s) — declare storage pools for new nodes before installing modules on them.${CL}`);
     }
     return;
   }
@@ -476,8 +477,9 @@ function cmdRepository(o: Opts, client: SiteClient): void {
     if (plan.actions.length === 0) {
       info(`${GN}Converged — every repository is present and on its declared branch. Nothing to do.${CL}`);
     } else if (o.apply) {
-      const n = applyPlan(client, plan);
-      info(`${GN}Applied ${n} action(s).${CL}`);
+      const res = applyPlan(client, plan);
+      for (const f of res.failures) warn(`${f.target} failed: ${f.error}`);
+      info(`${GN}Applied ${res.applied} action(s).${CL}`);
     } else {
       info(`${plan.actions.length} change(s) needed — re-run with --apply to perform them.`);
     }
@@ -501,17 +503,29 @@ function cmdValidate(o: Opts, client: SiteClient): void {
   die(`site.json has ${errs.length} validation error(s)`);
 }
 
-// `reconcile` — converge site config → live (+ --deep cascade).
-function cmdReconcile(o: Opts, client: SiteClient): void {
+// `reconcile` — converge site config → live (+ --deep cascade). Returns the
+// exit code: 1 when any action (notably a cascade) failed to converge.
+function cmdReconcile(o: Opts, client: SiteClient): number {
   const siteFile = siteFileOf(o);
   const site = loadSite(siteFile);
   const plan = computePlan(site, client, { deep: o.deep, apply: o.apply, siteFile });
   printPlan(plan, o.apply);
-  if (o.apply && plan.actions.length > 0) {
-    const n = applyPlan(client, plan);
-    info("");
-    info(`${GN}Applied ${n} action(s).${CL}`);
+  if (!o.apply || plan.actions.length === 0) return 0;
+
+  const res = applyPlan(client, plan);
+  info("");
+  // A cascade that ran and failed is named here rather than swallowed: the
+  // whole point is that `Applied N action(s)` must stop being printed over a
+  // run where nothing converged.
+  for (const f of res.failures) warn(`${f.target} failed: ${f.error}`);
+  if (res.failures.length > 0) {
+    info(
+      `${RD}Applied ${res.applied} action(s); ${res.failures.length} failed.${CL}`,
+    );
+    return 1;
   }
+  info(`${GN}Applied ${res.applied} action(s).${CL}`);
+  return 0;
 }
 
 function printPlan(plan: { actions: { kind: string; target: string }[]; warnings: string[] }, apply: boolean): void {
@@ -567,8 +581,7 @@ export function run(argv: string[], client: SiteClient): number {
         cmdValidate(o, client);
         return 0;
       case "reconcile":
-        cmdReconcile(o, client);
-        return 0;
+        return cmdReconcile(o, client);
       default:
         usage();
         die(`Unknown command: ${cmd}`);

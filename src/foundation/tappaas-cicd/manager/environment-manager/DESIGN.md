@@ -47,14 +47,22 @@ Standardized ADR-007 verbs, all on `config/environments/<env>.json`:
 
 ### Reconcile cascade
 
-- **shallow** (`reconcile <env>`): reconcile the environment setup **and its
-  associated zone** by shelling out to `network-manager reconcile [--apply]`
-  (the network owner converges that zone in its pass).
+- **shallow** (`reconcile <env>`): shell out to `network-manager reconcile
+  [--apply]`. This is a **system-wide** pass, not a per-environment one:
+  network-manager takes no zone or environment filter, so it converges every
+  zone on every plane and this environment's zone is merely included. The plan
+  labels the action `[system-wide]` and says so (#461) — an operator must never
+  read it as narrow.
 - **`--deep`**: the above **plus** every deployed module that consumes this
   environment → `module-manager <module> reconcile [--apply]`. Consumers are the
   deployed `config/*.json` whose `.environment === <env>`. `--apply` commits;
   default is preview. Each reconcile is idempotent, so re-touching the shared
   network is harmless.
+- **`--skip-network`**: omit the network action because the caller already ran
+  the system-wide pass. Without it, driving N environments performs N identical
+  whole-platform network runs; `site-manager reconcile --deep` passes it after
+  running the pass once itself. The zone-reference check (and its warning) still
+  runs — that is about config correctness, not about who converges.
 
 ### `delete` guard rails
 

@@ -22,16 +22,19 @@ import { capture as run, captureResult, stream as runStreaming } from "../../../
 import { loadRaw, writeSite } from "./config";
 import { SiteClient } from "./types";
 
-// Bin names (overridable via env for tests / relocations).
-const GIT = process.env.SITE_GIT_BIN ?? "git";
-const VALIDATE_SITE = process.env.SITE_VALIDATE_BIN ?? "validate-site.sh";
-const PEOPLE_BIN = process.env.SITE_PEOPLE_BIN ?? "people-manager";
-const NETWORK_BIN = process.env.SITE_NETWORK_BIN ?? "network-manager";
-// environment-manager exposes `<env> reconcile --deep` (finalized in parallel).
-const ENVIRONMENT_BIN = process.env.SITE_ENVIRONMENT_BIN ?? "environment-manager";
+// Bin names (overridable via env for tests / relocations). Resolved LAZILY, as
+// in environment-manager/src/clients.ts: a module-level const would freeze the
+// value at import time, so a test could not point a bin at a stub without
+// controlling import order.
+const GIT = (): string => process.env.SITE_GIT_BIN ?? "git";
+const VALIDATE_SITE = (): string => process.env.SITE_VALIDATE_BIN ?? "validate-site.sh";
+const PEOPLE_BIN = (): string => process.env.SITE_PEOPLE_BIN ?? "people-manager";
+const NETWORK_BIN = (): string => process.env.SITE_NETWORK_BIN ?? "network-manager";
+// environment-manager exposes `reconcile <env> --deep` (verb-first, ADR-007).
+const ENVIRONMENT_BIN = (): string => process.env.SITE_ENVIRONMENT_BIN ?? "environment-manager";
 // The still-live bash tools `site add` / `repository <verb>` delegate to.
-const CREATE_SITE = process.env.SITE_CREATE_BIN ?? "create-site.sh";
-const REPOSITORY_SH = process.env.SITE_REPOSITORY_BIN ?? "repository.sh";
+const CREATE_SITE = (): string => process.env.SITE_CREATE_BIN ?? "create-site.sh";
+const REPOSITORY_SH = (): string => process.env.SITE_REPOSITORY_BIN ?? "repository.sh";
 
 export class CliSiteClient implements SiteClient {
   // The schema-dir to pass to validate-site.sh, if known.
@@ -43,13 +46,13 @@ export class CliSiteClient implements SiteClient {
   }
 
   cloneRepo(url: string, path: string, branch: string): void {
-    run(GIT, ["clone", `https://${url}`, path]);
-    run(GIT, ["-C", path, "checkout", branch]);
+    run(GIT(), ["clone", `https://${url}`, path]);
+    run(GIT(), ["-C", path, "checkout", branch]);
   }
 
   currentBranch(path: string): string | null {
     try {
-      const out = run(GIT, ["-C", path, "rev-parse", "--abbrev-ref", "HEAD"]).trim();
+      const out = run(GIT(), ["-C", path, "rev-parse", "--abbrev-ref", "HEAD"]).trim();
       return out.length > 0 ? out : null;
     } catch {
       return null;
@@ -57,15 +60,15 @@ export class CliSiteClient implements SiteClient {
   }
 
   checkoutRepo(path: string, branch: string): void {
-    run(GIT, ["-C", path, "fetch", "origin"]);
-    run(GIT, ["-C", path, "checkout", branch]);
+    run(GIT(), ["-C", path, "fetch", "origin"]);
+    run(GIT(), ["-C", path, "checkout", branch]);
   }
 
   validateSite(siteFile: string): string[] {
     const args = ["--quiet"];
     if (this.schemaDir) args.push("--schema-dir", this.schemaDir);
     args.push(siteFile);
-    const r = captureResult(VALIDATE_SITE, args);
+    const r = captureResult(VALIDATE_SITE(), args);
     if (!r.ran) return [`validate-site.sh not runnable: ${r.stderr}`];
     if (r.rc === 0) return [];
     // validate-site.sh prints "[Error] VALIDATION: ..." lines to stderr.
@@ -113,15 +116,15 @@ export class CliSiteClient implements SiteClient {
   }
 
   // ── (2) --deep cascade ──────────────────────────────────────────────
-  cascade(manager: "people" | "network", apply: boolean): void {
+  cascade(manager: "people" | "network", apply: boolean): number {
     if (manager === "people") {
       // people-manager reconcile: preview by DEFAULT, --apply commits (same as
       // network below and every other manager).
-      runStreaming(PEOPLE_BIN, apply ? ["reconcile", "--apply"] : ["reconcile"]);
-      return;
+      return runStreaming(PEOPLE_BIN(), apply ? ["reconcile", "--apply"] : ["reconcile"]);
     }
-    // network
-    runStreaming(NETWORK_BIN, apply ? ["reconcile", "--apply"] : ["reconcile"]);
+    // network — system-wide (all zones, all planes). This is THE network pass
+    // for the whole cascade; the per-environment legs skip theirs (#461).
+    return runStreaming(NETWORK_BIN(), apply ? ["reconcile", "--apply"] : ["reconcile"]);
   }
 
   listEnvironments(): string[] {
@@ -136,30 +139,36 @@ export class CliSiteClient implements SiteClient {
       .sort();
   }
 
-  cascadeEnvironment(env: string, apply: boolean): void {
-    const args = [env, "reconcile", "--deep"];
+  cascadeEnvironment(env: string, apply: boolean): number {
+    // VERB FIRST. environment-manager dispatches on argv[0], so the old
+    // `<env> reconcile --deep` form died with "Unknown command: <env>" on every
+    // environment — the same defect as #454, and silent because nothing looked
+    // at the rc. --skip-network: cascade() already ran the one system-wide
+    // network pass; repeating it per environment is N identical whole-system
+    // runs (#461).
+    const args = ["reconcile", env, "--deep", "--skip-network"];
     if (apply) args.push("--apply");
-    runStreaming(ENVIRONMENT_BIN, args);
+    return runStreaming(ENVIRONMENT_BIN(), args);
   }
 
   // ── (3) thin delegations to the still-live bash tools ────────────────
   createSite(args: string[]): number {
-    return runStreaming(CREATE_SITE, args);
+    return runStreaming(CREATE_SITE(), args);
   }
 
   repositoryAdd(args: string[]): number {
-    return runStreaming(REPOSITORY_SH, ["add", ...args]);
+    return runStreaming(REPOSITORY_SH(), ["add", ...args]);
   }
 
   repositoryRemove(name: string, force: boolean): number {
     const args = ["remove", name];
     if (force) args.push("--force");
-    return runStreaming(REPOSITORY_SH, args);
+    return runStreaming(REPOSITORY_SH(), args);
   }
 
   repositoryModify(args: string[]): number {
     // repository.sh modify <name> [--url <u>] [--branch <b>] — re-points origin
     // (forge migration) / switches branch on the live checkout, then edits site.json.
-    return runStreaming(REPOSITORY_SH, ["modify", ...args]);
+    return runStreaming(REPOSITORY_SH(), ["modify", ...args]);
   }
 }

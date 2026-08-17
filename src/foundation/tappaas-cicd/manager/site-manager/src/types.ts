@@ -102,13 +102,35 @@ export interface SiteAction {
   kind: SiteActionKind;
   // Human-readable description for the plan summary.
   target: string;
-  // Apply this action via the injected client.
-  apply(client: SiteClient): void;
+  // Apply this action via the injected client. Returns the exit code of the
+  // work: 0 = converged. Cascades return the child manager's rc, which MUST be
+  // honoured — a cascade that fails is not an applied action (#461 follow-on:
+  // the environment leg failed silently for as long as it existed, because
+  // stream() returns the rc without throwing and nothing looked at it).
+  // Local fs/git actions throw on failure and so always return 0.
+  apply(client: SiteClient): number;
 }
 
 export interface SitePlan {
   actions: SiteAction[];
   warnings: string[];
+}
+
+// One planned action that ran and failed. Collected rather than thrown so a
+// single failing cascade no longer strands every action planned after it —
+// the shape environment-manager already uses for module failures (#454).
+export interface SiteApplyFailure {
+  // The action's target description.
+  target: string;
+  // What went wrong (child exit code, or the thrown error's message).
+  error: string;
+}
+
+export interface SiteApplyResult {
+  // Actions that completed successfully.
+  applied: number;
+  // Actions that ran and failed, in plan order. Empty ⇒ full convergence.
+  failures: SiteApplyFailure[];
 }
 
 // ── SiteClient — the side-effecting boundary the engine depends on ─────
@@ -146,17 +168,21 @@ export interface SiteClient {
   // (2) --deep cascade — shell out to a dependent manager's `reconcile`.
   // `apply` toggles preview vs commit (maps to the manager's --apply/--dry-run).
   //   people  → people-manager reconcile   (renamed from sync; now exists)
-  //   network → network-manager reconcile
+  //   network → network-manager reconcile  (system-wide: all zones, all planes)
   // Environments are enumerated then driven per-env via cascadeEnvironment().
-  cascade(manager: "people" | "network", apply: boolean): void;
+  // Returns the child manager's exit code.
+  cascade(manager: "people" | "network", apply: boolean): number;
 
   // The environment names registered for this site (config/environments/*.json)
   // — drives the per-environment leg of the --deep cascade.
   listEnvironments(): string[];
 
-  // Drive one environment's deep reconcile:
-  //   environment-manager <env> reconcile --deep [--apply]
-  cascadeEnvironment(env: string, apply: boolean): void;
+  // Drive one environment's deep reconcile, verb-first:
+  //   environment-manager reconcile <env> --deep --skip-network [--apply]
+  // --skip-network because the network cascade above already ran the one
+  // system-wide pass; without it each environment repeats it (#461).
+  // Returns the child manager's exit code.
+  cascadeEnvironment(env: string, apply: boolean): number;
 
   // ── (3) thin delegations to the still-live bash tools ────────────────
   // The heavy git/cluster I/O stays in the .sh for this pass; TS owns config

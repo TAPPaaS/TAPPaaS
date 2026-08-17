@@ -61,10 +61,16 @@ drift). `--deep` walks the dependent managers in dependency order:
 ```
 site reconcile --deep
   → people-manager  reconcile
-  → network-manager reconcile
+  → network-manager reconcile          (ONE system-wide pass: all zones, all planes)
   → for each environment in config/environments/*.json:
-       environment-manager <env> reconcile --deep
+       environment-manager reconcile <env> --deep --skip-network
 ```
+
+The network leg runs **once for the whole site**. `network-manager reconcile`
+accepts no zone or environment filter, so each environment's leg would repeat
+the identical whole-platform operation — hence `--skip-network` on the
+per-environment legs (#461). That flag is only correct because the network leg
+above runs first: if `CASCADE_ORDER` ever drops `network`, it must go too.
 
 people/network are single bins (`people-manager reconcile` was renamed from
 `sync` and now exists); environments are enumerated from

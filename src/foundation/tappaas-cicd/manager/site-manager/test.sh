@@ -34,8 +34,24 @@ ok()  { echo "  ok: $*";   PASS=$((PASS + 1)); }
 bad() { echo "  FAIL: $*"; FAIL=$((FAIL + 1)); }
 
 WORK="$(mktemp -d "${TMPDIR:-/tmp}/site-test.XXXXXX")"
-cleanup() { [[ -n "${WORK:-}" && -d "$WORK" ]] && rm -rf -- "$WORK"; return 0; }
+DIST_TEST="${HERE}/dist-test"
+cleanup() {
+    [[ -n "${WORK:-}" && -d "$WORK" ]] && rm -rf -- "$WORK"
+    [[ -n "${DIST_TEST:-}" && -d "$DIST_TEST" ]] && rm -rf -- "$DIST_TEST"
+    return 0
+}
 trap cleanup EXIT INT TERM
+
+run_ts() {
+    # Run a command, preferring a tsc/node already on PATH, else nix-shell.
+    if command -v tsc >/dev/null 2>&1 && command -v node >/dev/null 2>&1; then
+        bash -c "$1"
+    elif command -v nix-shell >/dev/null 2>&1; then
+        nix-shell -p typescript nodejs_22 --run "$1"
+    else
+        return 127
+    fi
+}
 
 run_migrate()  { "$MIGRATE"  --config-dir "$1" "${@:2}" >/dev/null 2>&1; }
 run_validate() { "$VALIDATE" --schema-dir "$SCHEMA_DIR" --quiet "$1" >/dev/null 2>&1; }
@@ -47,6 +63,35 @@ jqv() { jq -r "$2" "$1" 2>/dev/null; }
 [[ -f "$FIXTURE"  ]] || { echo "FATAL: fixture configuration.json missing"; exit 1; }
 [[ -f "$SCHEMA_DIR/site-fields.json" ]] || { echo "FATAL: site-fields.json schema missing"; exit 1; }
 
+# ===========================================================================
+# A. TypeScript build + unit tests (the reconcile engine and the CliSiteClient
+#    argument vectors). Mirrors environment-manager/test.sh.
+# ===========================================================================
+echo "== site-manager TypeScript build + unit tests =="
+
+UNIT_TSCONFIG="${HERE}/test/unit/tsconfig.json"
+rm -rf -- "$DIST_TEST"
+if run_ts "tsc --noEmit -p '${HERE}/tsconfig.json'" >/dev/null 2>&1; then
+    ok "tsc --noEmit clean (src)"
+else
+    bad "tsc --noEmit reported type errors (src)"
+fi
+if run_ts "tsc -p '${UNIT_TSCONFIG}'" >/dev/null 2>&1; then
+    ok "TypeScript unit tests compile"
+    # tsconfig rootDir is the tappaas-cicd root (shared lib/ts base), so the
+    # compiled tree mirrors manager/site-manager/ under dist-test.
+    for t in reconcile client; do
+        if run_ts "node '${DIST_TEST}/manager/site-manager/test/unit/${t}.test.js'" >/dev/null 2>&1; then
+            ok "TypeScript ${t} unit tests pass"
+        else
+            bad "TypeScript ${t} unit tests FAILED"
+        fi
+    done
+else
+    bad "TypeScript unit tests failed to compile"
+fi
+
+echo ""
 echo "== FAST tests (temp copy of fixture; live config untouched) =="
 
 # --- Case 1: plain migration (no people/organizations present) ---

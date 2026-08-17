@@ -102,14 +102,21 @@ subset of the same engine.
 ```
 site reconcile --deep
   → people-manager  reconcile          (people → Authentik)
-  → network-manager reconcile          (the 4 network planes)
+  → network-manager reconcile          (the 4 network planes — ONE system-wide pass)
   → for each environment in config/environments/*.json:
-       environment-manager <env> reconcile --deep
+       environment-manager reconcile <env> --deep --skip-network
 ```
 
 people/network are single bins; environments fan out — one deep reconcile per
-registered environment. Every leg is idempotent, so re-running is safe; this is
+registered environment. The **network pass runs once for the whole site**:
+`network-manager reconcile` has no zone or environment filter, so letting each
+environment run its own would repeat the identical whole-platform operation once
+per environment (#461). Every leg is idempotent, so re-running is safe; this is
 the natural whole-platform converge after `update-tappaas`.
+
+A cascade that exits non-zero is reported by name and makes `site reconcile`
+exit 1 — the remaining legs still run, so one bad environment does not strand
+the rest.
 
 ### Build
 

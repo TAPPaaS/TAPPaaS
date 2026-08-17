@@ -15,13 +15,21 @@
 //       order: people → network → (every) environment. We do NOT reimplement
 //       them (people-manager / network-manager / environment-manager own that
 //       logic). Environments are enumerated from the site (config/environments/
-//       *.json) and each is driven via `environment-manager <env> reconcile
-//       --deep`.
+//       *.json) and each is driven via `environment-manager reconcile <env>
+//       --deep --skip-network` — verb-first, and skipping the network pass the
+//       network leg above already ran system-wide (#461).
 //
 // The engine depends only on SiteClient (injected) — pure planning + apply,
 // exactly like people-manager/src/reconcile.ts.
 
-import { Site, SiteAction, SiteClient, SitePlan } from "./types";
+import {
+  Site,
+  SiteAction,
+  SiteApplyFailure,
+  SiteApplyResult,
+  SiteClient,
+  SitePlan,
+} from "./types";
 
 // The single-bin dependent managers a `--deep` site reconcile drives first, in
 // order. Environments follow (per-env fan-out — see computePlan), so the full
@@ -81,7 +89,10 @@ export function computePlan(site: Site, client: SiteClient, opts: ReconcileOpts)
           actions.push({
             kind: "register-node",
             target: `node ${n} → register in site.json (${poolTxt})`,
-            apply: (c) => c.registerNode(opts.siteFile, n, pools),
+            apply: (c) => {
+              c.registerNode(opts.siteFile, n, pools);
+              return 0;
+            },
           });
         }
       }
@@ -103,7 +114,10 @@ export function computePlan(site: Site, client: SiteClient, opts: ReconcileOpts)
           actions.push({
             kind: "update-node-pools",
             target: `node ${n} → fill storagePools [${livePoolList.join(", ")}] (discovered; was empty)`,
-            apply: (c) => c.setNodePools(opts.siteFile, n, livePoolList),
+            apply: (c) => {
+              c.setNodePools(opts.siteFile, n, livePoolList);
+              return 0;
+            },
           });
         } else if (
           declared.length > 0 &&
@@ -129,7 +143,10 @@ export function computePlan(site: Site, client: SiteClient, opts: ReconcileOpts)
       actions.push({
         kind: "clone-repo",
         target: `repository ${repo.name} → clone ${repo.url} @ ${branch}`,
-        apply: (c) => c.cloneRepo(repo.url, path, branch),
+        apply: (c) => {
+          c.cloneRepo(repo.url, path, branch);
+          return 0;
+        },
       });
       continue;
     }
@@ -138,7 +155,10 @@ export function computePlan(site: Site, client: SiteClient, opts: ReconcileOpts)
       actions.push({
         kind: "checkout-repo",
         target: `repository ${repo.name} → checkout ${branch} (was ${cur})`,
-        apply: (c) => c.checkoutRepo(path, branch),
+        apply: (c) => {
+          c.checkoutRepo(path, branch);
+          return 0;
+        },
       });
     }
   }
@@ -148,17 +168,28 @@ export function computePlan(site: Site, client: SiteClient, opts: ReconcileOpts)
   // bins; environments fan out, one deep reconcile per registered environment.
   if (opts.deep) {
     const apply = opts.apply;
+    const envs = client.listEnvironments();
     for (const mgr of CASCADE_ORDER) {
+      // Say what the network leg actually covers (#461): it is ONE system-wide
+      // pass over every zone and plane, not one pass per environment. The
+      // per-environment legs below depend on this leg running first — if
+      // CASCADE_ORDER ever drops "network", their --skip-network must go too.
+      const scope =
+        mgr === "network"
+          ? ` (system-wide: 1 pass over all zones/planes, covering all ${envs.length} environment(s))`
+          : "";
       actions.push({
         kind: ("cascade-" + mgr) as SiteAction["kind"],
-        target: `cascade → ${mgr} reconcile${apply ? " --apply" : " (preview)"}`,
+        target: `cascade → ${mgr} reconcile${apply ? " --apply" : " (preview)"}${scope}`,
         apply: (c) => c.cascade(mgr, apply),
       });
     }
-    for (const env of client.listEnvironments()) {
+    for (const env of envs) {
       actions.push({
         kind: "cascade-environment",
-        target: `cascade → environment ${env} reconcile --deep${apply ? " --apply" : " (preview)"}`,
+        target:
+          `cascade → environment ${env} reconcile --deep --skip-network` +
+          `${apply ? " --apply" : " (preview)"}`,
         apply: (c) => c.cascadeEnvironment(env, apply),
       });
     }
@@ -167,8 +198,24 @@ export function computePlan(site: Site, client: SiteClient, opts: ReconcileOpts)
   return { actions, warnings };
 }
 
-// Apply a plan via the client. Returns count applied.
-export function applyPlan(client: SiteClient, plan: SitePlan): number {
-  for (const a of plan.actions) a.apply(client);
-  return plan.actions.length;
+// Apply a plan via the client. Returns what converged and what did not.
+//
+// A failing action is COLLECTED, not thrown: the cascade continues so one bad
+// environment does not strand the ones planned after it (the #454 lesson). A
+// non-zero rc from a cascade counts as a failure — previously every action was
+// counted as applied regardless, so a --deep run that converged nothing still
+// printed "Applied N action(s)".
+export function applyPlan(client: SiteClient, plan: SitePlan): SiteApplyResult {
+  let applied = 0;
+  const failures: SiteApplyFailure[] = [];
+  for (const a of plan.actions) {
+    try {
+      const rc = a.apply(client);
+      if (rc === 0) applied++;
+      else failures.push({ target: a.target, error: `exit ${rc}` });
+    } catch (e) {
+      failures.push({ target: a.target, error: e instanceof Error ? e.message : String(e) });
+    }
+  }
+  return { applied, failures };
 }

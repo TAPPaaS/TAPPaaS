@@ -13,6 +13,10 @@ export class FakeSiteClient implements SiteClient {
   validationErrors: string[] = []; // what validateSite() returns
   environments: string[] = []; // what listEnvironments() returns
   delegateRc = 0; // exit code returned by the .sh delegations
+  // Non-zero exit codes for cascade targets, keyed by manager ("people" /
+  // "network") or environment name — models a child manager that ran and
+  // failed. Absent ⇒ 0.
+  cascadeRc = new Map<string, number>();
 
   log: string[] = [];
 
@@ -63,14 +67,16 @@ export class FakeSiteClient implements SiteClient {
   setNodePools(_siteFile: string, name: string, pools: string[]): void {
     this.log.push(`set-node-pools ${name} [${pools.join(",")}]`);
   }
-  cascade(manager: "people" | "network", apply: boolean): void {
+  cascade(manager: "people" | "network", apply: boolean): number {
     this.log.push(`cascade ${manager} ${apply ? "apply" : "preview"}`);
+    return this.cascadeRc.get(manager) ?? 0;
   }
   listEnvironments(): string[] {
     return [...this.environments];
   }
-  cascadeEnvironment(env: string, apply: boolean): void {
+  cascadeEnvironment(env: string, apply: boolean): number {
     this.log.push(`cascade environment ${env} ${apply ? "apply" : "preview"}`);
+    return this.cascadeRc.get(env) ?? 0;
   }
   createSite(args: string[]): number {
     this.log.push(`create-site ${args.join(" ")}`);

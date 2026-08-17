@@ -55,14 +55,20 @@ schema enum; this closes the last field that previously required a hand-edit.
 
 ### Reconcile cascade
 
-- **Shallow** (`reconcile <env>`): reconcile the environment setup **and its
-  associated zone**, by shelling out to `network-manager reconcile [--apply]`
-  (the network owner converges the zone as part of its pass).
+- **Shallow** (`reconcile <env>`): shell out to `network-manager reconcile
+  [--apply]`. **This pass is system-wide, not scoped to the environment** —
+  network-manager has no zone or environment filter, so it converges every zone
+  on every plane; `<env>`'s zone is simply part of it. The plan tags the action
+  `[system-wide]` so the label matches what actually happens (#461).
 - **Deep** (`reconcile <env> --deep`): the above **plus** every deployed module
   that consumes this environment — `module-manager <module> reconcile [--apply]`
   per module. Consuming modules are enumerated as the deployed `config/*.json`
   files whose `.environment` field equals `<env>`. Each reconcile is idempotent,
   so re-touching the shared network is harmless.
+- **`--skip-network`**: drop the network action when the caller has already run
+  the system-wide pass. Reconciling N environments otherwise repeats one
+  identical whole-platform operation N times — which is what
+  `site-manager reconcile --deep` used to do.
 
 ### `delete` guard rails
 
