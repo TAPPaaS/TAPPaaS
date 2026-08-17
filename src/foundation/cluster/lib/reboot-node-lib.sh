@@ -20,6 +20,18 @@ MGMT_SUFFIX=".mgmt.internal"
 # resolve regardless of the caller's cwd.
 RN_LIB_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
+# The one `ha-manager status` parser (#434). This file grew two of its own — a
+# sed for the settle check and a grep|grep|awk for the per-node list — alongside
+# copies in snapshot-vm and migrate-vm that disagreed with both. Falls back to
+# the repo copy on a system that has not re-run pre-update.sh since it landed.
+if [[ -r /home/tappaas/bin/ha-vm-lib.sh ]]; then
+    # shellcheck source=../../tappaas-cicd/lib/ha-vm-lib.sh disable=SC1091
+    . /home/tappaas/bin/ha-vm-lib.sh
+else
+    # shellcheck source=../../tappaas-cicd/lib/ha-vm-lib.sh disable=SC1091
+    . "${RN_LIB_DIR}/../../tappaas-cicd/lib/ha-vm-lib.sh"
+fi
+
 # FQDN of a node on the management network.
 rn_node_fqdn() { echo "${1}${MGMT_SUFFIX}"; }
 
@@ -77,11 +89,15 @@ rn_ha_active_count() {
         | grep -cE "lrm .* \((active|idle)" || true
 }
 
-# Names of HA-managed VMs currently started on a node.
+# Names of HA-managed VMs currently on a node.
+#
+# Restricted to `vm:` service ids, as it always has been — HA-managed containers
+# (`ct:`) are not listed here, and reboot-node.sh's impact preview accounts for
+# them under its separate `pct list` section.
 rn_ha_vms_on_node() {
     local node="$1"
-    rn_node_ssh "$node" "ha-manager status 2>/dev/null" 2>/dev/null \
-        | grep "service vm:" | grep "${node}" | awk '{print $2}' || true
+    havm_ha_services_on_node "$(rn_node_fqdn "$node")" "$node" 2>/dev/null \
+        | awk '$1 ~ /^vm:/ { print $1 }' || true
 }
 
 # Free cloud-init volumes stranded on a node that has just rebooted (#146).
@@ -115,20 +131,15 @@ rn_sweep_cloudinit_orphans() {
     return 0
 }
 
-# HA service states that are stable resting places; anything else means the CRM
-# is still working. Kept in sync with health-manager/check-ha-health.sh.
-RN_STEADY_STATES="started stopped disabled ignored freeze"
-
 # Block until no HA service is in a transitional state, or <max> seconds pass.
 # Returns non-zero on timeout, echoing the offending services.
+#
+# The steady-state list and the parsing both live in ha-vm-lib now
+# (HAVM_STEADY_STATES / havm_ha_unsettled); this is the retry loop around them.
 rn_wait_ha_settled() {
     local node="$1" max="${2:-${RN_HA_SETTLE_MAX:-180}}" n=0 stuck
     while :; do
-        stuck=$(rn_node_ssh "$node" "ha-manager status 2>/dev/null" 2>/dev/null \
-            | sed -n 's/^service \([^ ]*\) (\([^,]*\), \([^)]*\))$/\1 \3/p' \
-            | while read -r sid state; do
-                  [[ " ${RN_STEADY_STATES} " == *" ${state} "* ]] || echo "${sid}=${state}"
-              done)
+        stuck=$(havm_ha_unsettled "$(rn_node_fqdn "$node")" 2>/dev/null || true)
         [[ -n "$stuck" ]] || return 0
         [[ $n -lt $max ]] || { echo "$stuck"; return 1; }
         sleep 5; (( n+=5 ))
@@ -165,7 +176,10 @@ reboot_one_node() {
     rn_node_ssh "$node" "ha-manager crm-command node-maintenance enable ${node}" \
         || { error "Failed to enable HA maintenance mode on ${node}"; return 1; }
 
-    while rn_node_ssh "$node" "ha-manager status 2>/dev/null" | grep "service vm:" | grep -q "${node}.*started"; do
+    # Drain: wait until no HA service is still 'started' on this node. The old
+    # `grep "${node}.*started"` matched the node name anywhere on the line;
+    # havm_ha_services_on_node compares the node and state fields exactly.
+    while [[ -n "$(havm_ha_services_on_node "$(rn_node_fqdn "$node")" "$node" started 2>/dev/null || true)" ]]; do
         sleep 5; (( local_wait+=5 ))
         if [[ $local_wait -ge 120 ]]; then
             error "HA migration timeout on ${node} after 120s"

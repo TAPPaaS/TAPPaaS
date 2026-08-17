@@ -26,7 +26,9 @@ test.sh,tappaas-cicd/,common-install-routines.sh; create-site.sh; validate-site.
 apply-json-merge.sh,tappaas-cicd/lib/,common-install-routines.sh; convert-json-to-config.sh
 audit-jq-readers.sh,tappaas-cicd/lib/,
 common-install-routines.sh,tappaas-cicd/lib/,convert-json-to-config.sh; copy-update-json.sh; snapshot-vm.sh
+ha-vm-lib.sh,tappaas-cicd/lib/,snapshot-vm.sh; migrate-vm.sh; reboot-node-lib.sh; check-ha-health.sh; test-service.sh
 test-config-readers.sh,tappaas-cicd/lib/,common-install-routines.sh
+test-ha-vm-lib.sh,tappaas-cicd/lib/,ha-vm-lib.sh
 #
 # === tappaas-cicd/scripts ===
 acme-setup.sh,tappaas-cicd/scripts/,common-install-routines.sh
@@ -103,7 +105,7 @@ copy-update-json.sh,tappaas-cicd/manager/module-manager/,common-install-routines
 delete-module.sh,tappaas-cicd/manager/module-manager/,common-install-routines.sh
 install-module.sh,tappaas-cicd/manager/module-manager/,common-install-routines.sh; copy-update-json.sh; validate-module-tier-source.sh; backup-manager
 module-format.sh,tappaas-cicd/manager/module-manager/,common-install-routines.sh
-snapshot-vm.sh,tappaas-cicd/manager/module-manager/,common-install-routines.sh; update-module.sh; update-os.sh
+snapshot-vm.sh,tappaas-cicd/manager/module-manager/,common-install-routines.sh; ha-vm-lib.sh; update-module.sh; update-os.sh
 update-module.sh,tappaas-cicd/manager/module-manager/,common-install-routines.sh; apply-json-merge.sh; snapshot-vm.sh
 validate-module.sh,tappaas-cicd/manager/module-manager/,
 validate-module-tier-source.sh,tappaas-cicd/manager/module-manager/,common-install-routines.sh
@@ -136,7 +138,7 @@ src/client.ts,tappaas-cicd/manager/health-manager/,(native ssh/pvesh via lib/ts 
 src/config.ts,tappaas-cicd/manager/health-manager/,site.json
 src/types.ts,tappaas-cicd/manager/health-manager/,
 check-disk-threshold.sh,tappaas-cicd/manager/health-manager/,
-check-ha-health.sh,tappaas-cicd/manager/health-manager/,common-install-routines.sh; cloudinit-orphans.sh; site.json
+check-ha-health.sh,tappaas-cicd/manager/health-manager/,common-install-routines.sh; ha-vm-lib.sh; cloudinit-orphans.sh; site.json
 update-os.sh,tappaas-cicd/manager/health-manager/,common-install-routines.sh
 install.sh,tappaas-cicd/manager/health-manager/,health-manager; update-os.sh; validate.sh
 test.sh,tappaas-cicd/manager/health-manager/,validate.sh
@@ -170,7 +172,7 @@ update.sh,tappaas-cicd/controller/,
 #
 # === tappaas-cicd/controller/proxmox-controller ===
 migrate-node.sh,tappaas-cicd/controller/proxmox-controller/,common-install-routines.sh
-migrate-vm.sh,tappaas-cicd/controller/proxmox-controller/,common-install-routines.sh
+migrate-vm.sh,tappaas-cicd/controller/proxmox-controller/,common-install-routines.sh; ha-vm-lib.sh
 resize-disk.sh,tappaas-cicd/controller/proxmox-controller/,common-install-routines.sh
 test-proxmox-manager.sh,tappaas-cicd/controller/proxmox-controller/,zones.json
 install.sh,tappaas-cicd/controller/proxmox-controller/,validate.sh
@@ -394,7 +396,7 @@ test.sh,cluster/,common-install-routines.sh; vm-net.sh; test-vm-net.sh; install-
 update.sh,cluster/,common-install-routines.sh; Create-TAPPaaS-VM.sh; Create-TAPPaaS-LXC.sh; reboot-node.sh; zones.json; site.json
 #
 # === cluster/lib ===
-reboot-node-lib.sh,cluster/lib/,cloudinit-orphans.sh
+reboot-node-lib.sh,cluster/lib/,cloudinit-orphans.sh; ha-vm-lib.sh
 test-vm-net.sh,cluster/lib/,vm-net.sh; zones.json
 vm-net.sh,cluster/lib/,zones.json
 #
@@ -402,7 +404,7 @@ vm-net.sh,cluster/lib/,zones.json
 install-service.sh,cluster/services/ha/,update-service.sh
 update-service.sh,cluster/services/ha/,common-install-routines.sh; site.json
 delete-service.sh,cluster/services/ha/,common-install-routines.sh
-test-service.sh,cluster/services/ha/,common-install-routines.sh
+test-service.sh,cluster/services/ha/,common-install-routines.sh; ha-vm-lib.sh
 #
 # === cluster/services/lxc ===
 install-service.sh,cluster/services/lxc/,common-install-routines.sh; Create-TAPPaaS-LXC.sh; dns-manager

@@ -24,6 +24,17 @@ set -euo pipefail
 
 . /home/tappaas/bin/common-install-routines.sh
 
+# The one `ha-manager status` parser (#434). Falls back to the repo copy on a
+# system that has not re-run pre-update.sh since it landed.
+if [[ -r /home/tappaas/bin/ha-vm-lib.sh ]]; then
+    # shellcheck source=../../../tappaas-cicd/lib/ha-vm-lib.sh disable=SC1091
+    . /home/tappaas/bin/ha-vm-lib.sh
+else
+    _SELF="$(readlink -f "${BASH_SOURCE[0]}")"
+    # shellcheck source=../../../tappaas-cicd/lib/ha-vm-lib.sh disable=SC1091
+    . "$(dirname "${_SELF}")/../../../tappaas-cicd/lib/ha-vm-lib.sh"
+fi
+
 MODULE="${1:-}"
 if [[ -z "${MODULE}" ]]; then
     echo "Usage: $0 <module-name>"
@@ -84,14 +95,12 @@ QUERY_FQDN="${QUERY_NODE}.${MGMT}.internal"
 
 info "  Check 1: HA resource status"
 HA_ABSENT=0
-ha_output=$(ssh -o ConnectTimeout=10 -o BatchMode=yes -o LogLevel=ERROR \
-    "root@${QUERY_FQDN}" "ha-manager status" 2>/dev/null) || true
+# Exact service-id match. The previous `grep "vm:${VMID}"` was unanchored, so on
+# a cluster that also runs vm:1300 a check of vm:130 read the wrong service's
+# state (#434) — the same defect that was in migrate-vm.sh.
+ha_state=$(havm_ha_state "${QUERY_FQDN}" "vm:${VMID}")
 
-ha_line=$(echo "${ha_output}" | grep "vm:${VMID}" || true)
-
-if [[ -n "${ha_line}" ]]; then
-    # Format: "service vm:130 (tappaas1, started)" — extract state without trailing paren
-    ha_state=$(echo "${ha_line}" | grep -oP ',\s*\K[a-z]+' || true)
+if [[ -n "${ha_state}" ]]; then
     if [[ "${ha_state}" == "started" ]]; then
         pass "HA resource vm:${VMID} is started"
     else

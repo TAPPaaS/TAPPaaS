@@ -973,7 +973,14 @@ snapshot-vm.sh vaultwarden --restore 1
 
 **Notes:**
 - Snapshot names follow the format `tappaas-YYYYMMDD-HHMMSS`
-- Restore stops the VM, rolls back, then starts it again
+- Restore stops the VM, rolls back, then starts it again — each step confirmed
+  before the next begins, and the exit status reflects the VM's real end state
+  (#434). HA-managed VMs are driven through `ha-manager set --state`, not
+  `qm stop`/`qm start`, because on an HA resource those only queue a CRM command
+  the script would otherwise race. A stop, start, or guest-agent readiness check
+  that times out FAILS the restore rather than reporting success; if the run
+  aborts after the stop, the resource is handed back to HA with requested state
+  `started` so it is never left down silently
 - Cleanup deletes oldest snapshots first
 - `--cleanup` is invoked automatically by `update-module.sh` after a successful
   update, keeping `tappaas.snapshotRetention` snapshots (default `5`), so chains
@@ -1050,6 +1057,12 @@ migrate-vm.sh --node tappaas1
 **Notes:**
 - Live migration may fail on clusters with different CPU architectures (e.g., Intel + AMD). The script handles this gracefully by falling back to offline migration
 - HA affinity rules are saved and restored automatically
+- The offline path stops the VM through `ha-vm-lib` and CONFIRMS it stopped
+  before issuing `qm migrate`, and confirms it is running on the target
+  afterwards (#434). On an HA-managed VM a bare `qm stop` only queues a CRM
+  command, so the previous fixed-poll wait could migrate — or give up — while
+  the stop was still pending. A stop or start that does not complete now aborts
+  the migration instead of continuing
 - The `--node` mode shows a summary of migrated/skipped/failed VMs
 
 ---

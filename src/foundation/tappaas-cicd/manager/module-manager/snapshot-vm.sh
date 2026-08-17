@@ -29,6 +29,18 @@ set -euo pipefail
 # shellcheck source=common-install-routines.sh
 . /home/tappaas/bin/common-install-routines.sh
 
+# ha-vm-lib.sh is new (#434). A system that has not re-run pre-update.sh since it
+# landed has no /home/tappaas/bin symlink for it yet, so fall back to the repo
+# copy next to this script rather than failing the restore that needs it.
+if [[ -r /home/tappaas/bin/ha-vm-lib.sh ]]; then
+    # shellcheck source=../../lib/ha-vm-lib.sh disable=SC1091
+    . /home/tappaas/bin/ha-vm-lib.sh
+else
+    _SELF="$(readlink -f "${BASH_SOURCE[0]}")"
+    # shellcheck source=../../lib/ha-vm-lib.sh disable=SC1091
+    . "$(dirname "${_SELF}")/../../lib/ha-vm-lib.sh"
+fi
+
 # ── Usage ────────────────────────────────────────────────────────────
 
 usage() {
@@ -56,6 +68,15 @@ shift
 
 MODULE_JSON="${CONFIG_DIR}/${MODULE}.json"
 readonly MGMT="mgmt"
+
+# Restore-path timeouts (#434). The stop/start budgets cover the CRM's own
+# latency — it can take tens of seconds just to observe a queued command — plus
+# the guest's shutdown or boot. Each is a hard bound: exceeding it fails the
+# restore rather than continuing on an unverified assumption.
+readonly STOP_TIMEOUT=180
+readonly START_TIMEOUT=180
+readonly READY_TIMEOUT=180
+readonly BOOT_GRACE=45
 
 # ── Validate module config ───────────────────────────────────────────
 
@@ -211,18 +232,42 @@ case "${ACTION}" in
         warn "Restoring VM ${VMNAME} (${VMID}) to snapshot: ${BOLD}${TARGET}${CL}"
         warn "This will stop the VM and roll back to the snapshot state."
 
-        # Stop VM before rollback
+        # Stop → rollback → start, each step CONFIRMED before the next begins
+        # (#434). The previous version issued `qm stop`, discarded its exit
+        # status, slept 3s and carried on — but on an HA-managed VM `qm stop` only
+        # queues a CRM command. The stop completed after the start had gone by,
+        # HA settled the service on the 'stopped' it had been asked for, and the
+        # VM stayed down while the run reported success. ha-vm-lib drives HA
+        # resources through `ha-manager set --state` and polls actual state.
+        HA_RID="$(havm_resource_id "${VM_TYPE}" "${VMID}")"
+
+        # Any abort between the stop and the start leaves the CRM's requested
+        # state at 'stopped', which holds the VM down until an operator notices.
+        # Hand it back to HA on every path that does not reach a running VM.
+        # HAVM_LAST_STOP_WAS_HA is set by havm_stop before it starts waiting, so
+        # this fires for a stop that was requested but never completed too.
+        restore_ha_on_abort() {
+            [[ "${HAVM_LAST_STOP_WAS_HA}" -eq 1 ]] || return 0
+            warn "Restore did not complete — handing ${HA_RID} back to HA (requested state 'started')"
+            havm_release_ha_stop "${NODE_FQDN}" "${HA_RID}"
+        }
+        trap restore_ha_on_abort EXIT
+
         info "  Stopping VM ${VMID}..."
-        ssh root@"${NODE_FQDN}" "${CMD} stop ${VMID}" 2>/dev/null || true
-        sleep 3
+        havm_stop "${NODE_FQDN}" "${VMID}" "${VM_TYPE}" "${STOP_TIMEOUT}" \
+            || die "Failed to stop VM ${VMID} — NOT rolling back to '${TARGET}' (a rollback over a running VM fails or corrupts the disk)"
 
         info "  Rolling back to snapshot: ${BL}${TARGET}${CL}"
         ssh root@"${NODE_FQDN}" "${CMD} rollback ${VMID} '${TARGET}'" \
             || die "Failed to rollback to snapshot '${TARGET}'"
 
         info "  Starting VM ${VMID}..."
-        ssh root@"${NODE_FQDN}" "${CMD} start ${VMID}" \
-            || die "Failed to start VM after rollback"
+        havm_start "${NODE_FQDN}" "${VMID}" "${VM_TYPE}" "${START_TIMEOUT}" \
+            || die "VM ${VMID} did not start after rollback to '${TARGET}'"
+        # Started and confirmed running; HA's requested state is 'started' again,
+        # so the abort hand-back is no longer needed (and must not re-fire).
+        HAVM_LAST_STOP_WAS_HA=0
+        trap - EXIT
 
         # A restore must return a USABLE VM, not merely a started one. Otherwise
         # the caller's post-restore verification races the guest boot and a
@@ -242,7 +287,7 @@ case "${ACTION}" in
             info "  Waiting for guest agent on VM ${VMID} to respond..."
             waited=0
             up=0
-            while [[ "${waited}" -lt 180 ]]; do
+            while [[ "${waited}" -lt "${READY_TIMEOUT}" ]]; do
                 if ssh root@"${NODE_FQDN}" "qm guest cmd ${VMID} ping" >/dev/null 2>&1; then
                     up=1
                     break
@@ -254,13 +299,22 @@ case "${ACTION}" in
                 info "  ${GN}Guest agent responding after ${waited}s — settling...${CL}"
                 sleep 20
             else
-                warn "  Guest agent did not respond within 180s — proceeding anyway"
+                # A timeout here IS the "not usable" condition described above,
+                # so it fails the restore rather than being downgraded to a
+                # warning (#434). The VM is left running — HA's requested state
+                # is 'started' — so an operator inherits a booting VM, not a
+                # stopped one.
+                die "Guest agent on VM ${VMID} did not respond within ${READY_TIMEOUT}s of the rollback to '${TARGET}' — the VM is running but not verified usable"
             fi
         else
-            info "  No guest agent detected — waiting 45s grace period for boot..."
-            sleep 45
+            info "  No guest agent detected — waiting ${BOOT_GRACE}s grace period for boot..."
+            sleep "${BOOT_GRACE}"
         fi
 
-        info "${GN}VM ${VMNAME} restored to snapshot '${TARGET}' and started${CL}"
+        # Report the VM's actual state, not the sequence of commands we issued.
+        FINAL_STATUS="$(havm_status "${NODE_FQDN}" "${VMID}")"
+        [[ "${FINAL_STATUS}" == "running" ]] \
+            || die "VM ${VMNAME} rolled back to '${TARGET}' but is ${FINAL_STATUS:-unknown}, not running"
+        info "${GN}VM ${VMNAME} restored to snapshot '${TARGET}' — status: ${FINAL_STATUS}${CL}"
         ;;
 esac

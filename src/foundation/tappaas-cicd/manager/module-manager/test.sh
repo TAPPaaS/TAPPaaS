@@ -447,6 +447,41 @@ if [[ -x "${HERE}/test-validate-module-tier-source.sh" ]]; then
     fi
 fi
 
+# ---------------------------------------------------------------------------
+# Guard: snapshot-vm.sh --restore drives the VM through ha-vm-lib (#434).
+#
+# The behaviour is unit-tested in lib/test-ha-vm-lib.sh; what is asserted here is
+# that the restore path still CALLS it. The outage came from raw `qm stop … ||
+# true` + `sleep 3` + unverified `qm start`, and reverting to that shape is the
+# one regression these checks exist to catch.
+# ---------------------------------------------------------------------------
+SNAP="${HERE}/snapshot-vm.sh"
+# The restore branch only — `create` legitimately has no stop/start.
+RESTORE_BODY="$(awk '/^    restore\)/{f=1} f{print} f&&/^        ;;/{exit}' "$SNAP")"
+
+if grep -q 'ha-vm-lib.sh' "$SNAP"; then
+    ok "snapshot-vm.sh sources ha-vm-lib.sh"
+else
+    bad "snapshot-vm.sh no longer sources ha-vm-lib.sh (#434)"
+fi
+for fn in havm_stop havm_start havm_status; do
+    if grep -q "${fn}" <<< "$RESTORE_BODY"; then
+        ok "snapshot-vm.sh restore calls ${fn}"
+    else
+        bad "snapshot-vm.sh restore no longer calls ${fn} (#434)"
+    fi
+done
+if grep -qE '(qm|pct|\$\{CMD\}) stop .*\|\| *true' <<< "$RESTORE_BODY"; then
+    bad "snapshot-vm.sh restore discards the stop's exit status (#434)"
+else
+    ok "snapshot-vm.sh restore does not discard the stop's exit status"
+fi
+if grep -q 'proceeding anyway' <<< "$RESTORE_BODY"; then
+    bad "snapshot-vm.sh restore still downgrades the readiness timeout to a warning (#434)"
+else
+    ok "snapshot-vm.sh restore fails on a readiness timeout"
+fi
+
 echo ""
 echo "Results: ${PASS} passed, ${FAIL} failed"
 [[ "$FAIL" -eq 0 ]] || exit 1

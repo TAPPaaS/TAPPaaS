@@ -34,6 +34,17 @@ set -euo pipefail
 # shellcheck source=common-install-routines.sh disable=SC1091
 . /home/tappaas/bin/common-install-routines.sh
 
+# HA-aware stop/start + the one `ha-manager status` parser (#434). Falls back to
+# the repo copy on a system that has not re-run pre-update.sh since it landed.
+if [[ -r /home/tappaas/bin/ha-vm-lib.sh ]]; then
+    # shellcheck source=../../lib/ha-vm-lib.sh disable=SC1091
+    . /home/tappaas/bin/ha-vm-lib.sh
+else
+    _SELF="$(readlink -f "${BASH_SOURCE[0]}")"
+    # shellcheck source=../../lib/ha-vm-lib.sh disable=SC1091
+    . "$(dirname "${_SELF}")/../../lib/ha-vm-lib.sh"
+fi
+
 readonly YW=$'\033[33m'
 readonly RD=$'\033[01;31m'
 readonly GN=$'\033[1;92m'
@@ -131,8 +142,7 @@ try_live_migration() {
     # to avoid HA intercepting the migrate command
     local ha_managed=false
     local ha_state=""
-    ha_state=$(ssh root@"${source_node}.${MGMT}.internal" \
-        "ha-manager status 2>/dev/null" | grep "vm:${vmid}" | awk '{print $3}' || true)
+    ha_state=$(havm_ha_state "${source_node}.${MGMT}.internal" "vm:${vmid}")
 
     if [[ -n "${ha_state}" ]]; then
         ha_managed=true
@@ -175,89 +185,46 @@ do_offline_migration() {
     # Check if VM is managed by HA
     local ha_managed=false
     local ha_state=""
-    ha_state=$(ssh root@"${source_node}.${MGMT}.internal" \
-        "ha-manager status 2>/dev/null" | grep "vm:${vmid}" | awk '{print $3}' || true)
+    local source_fqdn="${source_node}.${MGMT}.internal"
+    ha_state=$(havm_ha_state "${source_fqdn}" "vm:${vmid}")
 
     if [[ -n "${ha_state}" ]]; then
         ha_managed=true
         save_ha_state "${vmid}" "${source_node}"
+    fi
 
-        # Use HA to stop the VM (avoids lock conflicts)
-        info "  Stopping VM via HA manager..."
-        ssh root@"${source_node}.${MGMT}.internal" \
-            "ha-manager set vm:${vmid} --state stopped" 2>/dev/null || true
+    # Stop and CONFIRM stopped before migrating. havm_stop routes an HA resource
+    # through the CRM (a bare `qm stop` there only queues a command) and polls
+    # real state — the hand-rolled version here issued the HA stop with its exit
+    # status discarded and gave up quietly after 30 polls (#434).
+    info "  Stopping VM ${vmid} before migration..."
+    if [[ "${ha_managed}" == "false" ]]; then
+        # Not HA-managed — try a graceful guest shutdown first; havm_stop below
+        # falls back to a hard stop and is what actually confirms the result.
+        ssh root@"${source_fqdn}" "qm shutdown ${vmid} --timeout 90" 2>&1 \
+            || warn "Graceful shutdown failed — forcing stop"
+    fi
+    havm_stop "${source_fqdn}" "${vmid}" qemu 120 \
+        || die "VM ${vmid} did not stop — aborting migration to ${target_node}"
 
-        # Wait for HA to stop the VM (query any reachable node via cluster API)
-        local query_node
-        query_node=$(find_reachable_node) || die "No Proxmox nodes reachable"
-        local ha_retries=0
-        while [[ ${ha_retries} -lt 30 ]]; do
-            local vm_status
-            vm_status=$(ssh root@"${query_node}.${MGMT}.internal" \
-                "pvesh get /cluster/resources --type vm --output-format json" 2>/dev/null \
-                | jq -r --argjson id "${vmid}" \
-                    '.[] | select(.vmid == $id and .type == "qemu") | .status // empty' 2>/dev/null || true)
-            if [[ "${vm_status}" == "stopped" ]]; then
-                break
-            fi
-            sleep 3
-            ha_retries=$((ha_retries + 1))
-        done
-
+    if [[ "${ha_managed}" == "true" ]]; then
         info "  Removing from HA..."
         remove_ha "${vmid}" "${source_node}"
         sleep 2
-    else
-        # Not HA-managed — shutdown directly
-        info "  Shutting down VM ${vmid}..."
-        local shutdown_ok=true
-        ssh root@"${source_node}.${MGMT}.internal" \
-            "qm shutdown ${vmid} --timeout 90" 2>&1 || shutdown_ok=false
-
-        if [[ "${shutdown_ok}" == "false" ]]; then
-            warn "Graceful shutdown failed — forcing stop"
-            ssh root@"${source_node}.${MGMT}.internal" "qm stop ${vmid}" 2>&1 || true
-        fi
     fi
-
-    # Wait for VM to stop (use cluster API to avoid config-not-found errors)
-    local query_node2
-    query_node2=$(find_reachable_node) || die "No Proxmox nodes reachable"
-    local retries=0
-    while [[ ${retries} -lt 30 ]]; do
-        local status
-        status=$(ssh root@"${query_node2}.${MGMT}.internal" \
-            "pvesh get /cluster/resources --type vm --output-format json" 2>/dev/null \
-            | jq -r --argjson id "${vmid}" \
-                '.[] | select(.vmid == $id and .type == "qemu") | .status // empty' 2>/dev/null || true)
-        if [[ "${status}" == "stopped" ]]; then
-            break
-        fi
-        sleep 2
-        retries=$((retries + 1))
-    done
-
-    local final_status
-    final_status=$(ssh root@"${query_node2}.${MGMT}.internal" \
-        "pvesh get /cluster/resources --type vm --output-format json" 2>/dev/null \
-        | jq -r --argjson id "${vmid}" \
-            '.[] | select(.vmid == $id and .type == "qemu") | .status // empty' 2>/dev/null || true)
-    if [[ "${final_status}" != "stopped" ]]; then
-        die "VM ${vmid} did not stop within timeout (status: ${final_status:-unknown})"
-    fi
-    info "  VM stopped"
 
     # Migrate
     info "  Migrating VM ${vmid} to ${target_node}..."
-    ssh root@"${source_node}.${MGMT}.internal" \
+    ssh root@"${source_fqdn}" \
         "qm migrate ${vmid} ${target_node}" 2>&1 || die "Offline migration failed for VM ${vmid}"
     info "  ${GN}✓${CL} Migration completed"
 
-    # Start on target
+    # Start on target and confirm it is RUNNING — a `qm start` that returns 0
+    # only means the command was accepted. The VM is out of HA at this point, so
+    # havm_start takes the plain qm path and polls the cluster API.
     info "  Starting VM ${vmid} on ${target_node}..."
-    ssh root@"${target_node}.${MGMT}.internal" "qm start ${vmid}" 2>&1 || {
-        die "Failed to start VM ${vmid} on ${target_node}"
-    }
+    havm_start "${target_node}.${MGMT}.internal" "${vmid}" qemu 120 \
+        || die "VM ${vmid} is not running on ${target_node} after migration"
     info "  ${GN}✓${CL} VM started on ${target_node}"
 
     # Restore HA on target node
@@ -580,4 +547,9 @@ main() {
     info "${GN}${BOLD}Migration completed${CL}"
 }
 
-main "$@"
+# Only run when executed directly — allows test-migrate-vm.sh to source this and
+# exercise do_offline_migration/try_live_migration against a stubbed cluster,
+# the same guard proxmox-controller uses.
+if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
+    main "$@"
+fi

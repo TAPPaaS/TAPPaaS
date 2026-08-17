@@ -312,6 +312,20 @@ else
     skip "lib/test-repo-sync.sh not found"
 fi
 
+# Test 9d: HA-aware stop/start (#434) — a stop against a slow CRM must be waited
+# out and confirmed, and a transition that never happens must fail rather than
+# report success. Stubbed cluster only; no ssh, no node, no VM.
+info "${BOLD}Test 9d: HA-aware VM stop/start (#434)${CL}"
+if [[ -x "${SCRIPT_DIR}/lib/test-ha-vm-lib.sh" ]]; then
+    if "${SCRIPT_DIR}/lib/test-ha-vm-lib.sh" >/dev/null 2>&1; then
+        pass "ha-vm-lib: CRM stop/start confirmed, timeouts fail loudly"
+    else
+        fail "ha-vm-lib test failed (run lib/test-ha-vm-lib.sh)"
+    fi
+else
+    skip "lib/test-ha-vm-lib.sh not found"
+fi
+
 # update-module.sh wires cleanup into the success path (prune_snapshots calls
 # snapshot-vm.sh --cleanup); guard against the wiring silently disappearing.
 if grep -q 'snapshot-vm.sh.*--cleanup' /home/tappaas/bin/update-module.sh; then

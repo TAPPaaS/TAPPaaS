@@ -36,14 +36,25 @@ set -euo pipefail
 # shellcheck source=/home/tappaas/bin/common-install-routines.sh disable=SC1091
 . /home/tappaas/bin/common-install-routines.sh
 
-readonly SSH_OPTS="-o BatchMode=yes -o ConnectTimeout=10 -o StrictHostKeyChecking=accept-new"
+# The one `ha-manager status` parser, and the steady-state list this file used to
+# keep its own copy of (#434). Falls back to the repo copy on a system that has
+# not re-run pre-update.sh since it landed.
+if [[ -r /home/tappaas/bin/ha-vm-lib.sh ]]; then
+    # shellcheck source=../../lib/ha-vm-lib.sh disable=SC1091
+    . /home/tappaas/bin/ha-vm-lib.sh
+else
+    _SELF="$(readlink -f "${BASH_SOURCE[0]}")"
+    # shellcheck source=../../lib/ha-vm-lib.sh disable=SC1091
+    . "$(dirname "${_SELF}")/../../lib/ha-vm-lib.sh"
+fi
+
 readonly STATE_FILE="${TAPPAAS_HA_STATE:-/var/lib/tappaas/ha-health.state}"
 
-# HA service states that are stable resting places. Anything else means the CRM
-# is actively working on the service, which is only healthy for a short while.
+# Steady states now live in the library as HAVM_STEADY_STATES:
 #   freeze — HA management deliberately paused (node maintenance/reboot)
 #   ignored/disabled — operator opted the service out
-readonly STEADY_STATES="started stopped disabled ignored freeze"
+# Anything else means the CRM is actively working on the service, which is only
+# healthy for a short while.
 
 THRESHOLD=600
 REPAIR=0
@@ -78,23 +89,26 @@ say() { [[ "${QUIET}" -eq 1 ]] || info "$@"; }
 ###############################################################################
 # Collect HA status from the first reachable node
 ###############################################################################
-ha_status=""
+# havm_ha_services yields `<sid> <node> <state>` per service and returns non-zero
+# only when the QUERY failed. That distinction matters here: a healthy cluster
+# with no HA services configured produces no output at all, and the old
+# "non-empty status text" test only tolerated it because `ha-manager status`
+# happens to print quorum/master/lrm lines alongside the services.
+# TAPPAAS_HA_STATUS_FILE (the offline test hook) is honoured inside the library.
+ha_services=""
+got_status=0
 if [[ -n "${TAPPAAS_HA_STATUS_FILE:-}" ]]; then
-    # Test hook: read a canned `ha-manager status` instead of querying the
-    # cluster, so the threshold/alert logic can be exercised offline (test.sh).
-    ha_status=$(cat "${TAPPAAS_HA_STATUS_FILE}")
+    ha_services=$(havm_ha_services "") && got_status=1
 else
     for node in $(get_all_node_hostnames); do
-        # shellcheck disable=SC2086  # SSH_OPTS is intentionally word-split
-        if ha_status=$(ssh ${SSH_OPTS} "root@${node}.mgmt.internal" \
-                           "ha-manager status" 2>/dev/null); then
+        if ha_services=$(havm_ha_services "${node}.mgmt.internal"); then
+            got_status=1
             break
         fi
-        ha_status=""
     done
 fi
 
-[[ -n "${ha_status}" ]] || { error "Could not read ha-manager status from any node"; exit 1; }
+[[ "${got_status}" -eq 1 ]] || { error "Could not read ha-manager status from any node"; exit 1; }
 
 ###############################################################################
 # Compare against the recorded transitional-state history
@@ -126,11 +140,10 @@ new_state=""
 wedged=0
 transitioning=0
 
-# `ha-manager status` prints e.g.:  service vm:130 (tappaas2, migrate)
 while read -r sid node state; do
     [[ -n "${sid}" ]] || continue
 
-    if [[ " ${STEADY_STATES} " == *" ${state} "* ]]; then
+    if [[ " ${HAVM_STEADY_STATES} " == *" ${state} "* ]]; then
         debug "  ${sid} ${state} on ${node}"
         continue
     fi
@@ -153,8 +166,7 @@ while read -r sid node state; do
     else
         say "  ${YW}…${CL} ${sid} in '${state}' on ${node} for ${elapsed}s (within threshold)"
     fi
-done < <(printf '%s\n' "${ha_status}" \
-         | sed -n 's/^service \([^ ]*\) (\([^,]*\), \([^)]*\))$/\1 \2 \3/p')
+done < <(printf '%s\n' "${ha_services}")
 
 # Rewrite the state file with only the currently-transitional services, so a
 # service that settles forgets its history and gets a fresh grace period.

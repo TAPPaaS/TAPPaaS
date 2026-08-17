@@ -656,23 +656,61 @@ else
     fail "cloudinit-orphans.sh not found at ${SWEEP}"
 fi
 
-# rn_wait_ha_settled's parser must treat only the resting states as settled.
+# reboot-node-lib's HA readers now go through ha-vm-lib's single parser (#434).
+# Exercised against a stubbed `ha-manager status`, so no cluster is touched.
+# This asserts the real code path, not a copy of the parser pasted into the test
+# — the previous version of this check re-implemented the sed it was verifying,
+# so it would have passed no matter what the library did.
+_ha_stub_dir="$(mktemp -d "${TMPDIR:-/tmp}/rn-ha-stub.XXXXXX")"
+cat > "${_ha_stub_dir}/exec" <<'STUB'
+#!/usr/bin/env bash
+# $1 = node fqdn, $2 = remote command. Only `ha-manager status` is stubbed.
+[[ "$2" == "ha-manager status" ]] || exit 1
+cat <<'OUT'
+quorum OK
+master tappaas1 (active, Mon Aug 17 12:00:00 2026)
+lrm tappaas1 (idle, Mon Aug 17 12:00:00 2026)
+service vm:1100 (tappaas3, error)
+service vm:110 (tappaas1, started)
+service vm:130 (tappaas2, migrate)
+service vm:140 (tappaas1, freeze)
+service vm:150 (tappaas10, started)
+service ct:200 (tappaas1, started)
+OUT
+STUB
+chmod +x "${_ha_stub_dir}/exec"
+
 if (
     # shellcheck source=lib/reboot-node-lib.sh disable=SC1091
     . "${SCRIPT_DIR}/lib/reboot-node-lib.sh" 2>/dev/null
-    parse() {
-        sed -n 's/^service \([^ ]*\) (\([^,]*\), \([^)]*\))$/\1 \3/p' \
-        | while read -r sid state; do
-              [[ " ${RN_STEADY_STATES} " == *" ${state} "* ]] || echo "${sid}=${state}"
-          done
-    }
-    got=$(printf 'service vm:110 (tappaas1, started)\nservice vm:130 (tappaas2, migrate)\nservice vm:140 (tappaas1, freeze)\n' | parse)
-    [[ "${got}" == "vm:130=migrate" ]]
+    export TAPPAAS_HAVM_EXEC="${_ha_stub_dir}/exec"
+
+    # Only transitional services are reported; 'freeze' and 'started' rest.
+    [[ "$(havm_ha_unsettled tappaas1.mgmt.internal)" \
+        == "$(printf 'vm:1100=error\nvm:130=migrate')" ]] || exit 1
+
+    # Per-node listing is exact on the node field — 'vm:130' sits on tappaas2,
+    # 'vm:150' on tappaas10 (which a substring match on "tappaas1" would wrongly
+    # sweep in), and the ct: service is filtered out here.
+    [[ "$(rn_ha_vms_on_node tappaas1)" == "$(printf 'vm:110\nvm:140')" ]] || exit 1
+
+    # The drain predicate sees the one service still 'started' on tappaas1...
+    [[ -n "$(havm_ha_services_on_node tappaas1.mgmt.internal tappaas1 started)" ]] || exit 1
+    # ...and nothing 'started' on tappaas2, whose only service is migrating.
+    [[ -z "$(havm_ha_services_on_node tappaas1.mgmt.internal tappaas2 started)" ]] || exit 1
+
+    # Per-resource state must match the service id EXACTLY. vm:1100 is listed
+    # first and on another node: a substring or regex match (migrate-vm.sh's old
+    # `grep "vm:${vmid}"`) answers 'error' for vm:110 and picks the wrong node.
+    [[ "$(havm_ha_state tappaas1.mgmt.internal vm:110)"  == "started" ]] || exit 1
+    [[ "$(havm_ha_state tappaas1.mgmt.internal vm:1100)" == "error" ]]   || exit 1
+    [[ "$(havm_ha_state tappaas1.mgmt.internal vm:11)"   == "" ]]        || exit 1
 ); then
-    pass "rn_wait_ha_settled parser flags only transitional services"
+    pass "reboot-node-lib HA readers use ha-vm-lib's parser (states, node, exact ids)"
 else
-    fail "rn_wait_ha_settled parser misclassified HA states"
+    fail "reboot-node-lib HA readers misparsed ha-manager status"
 fi
+rm -rf "${_ha_stub_dir}"
 
 if [[ "${DEEP}" == "1" ]]; then
     info "${BOLD}Deep Test: staged cloud-init orphan${CL}"
