@@ -59,7 +59,7 @@ PROVIDER_ALIASES = {
     "powerdns": "dns_pdns",
     "njalla": "dns_njalla",
     "inwx": "dns_inwx",
-    "gandi": "dns_gandi",
+    "gandi": "dns_gandi_livedns",
     "he": "dns_he",
 }
 

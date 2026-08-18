@@ -715,7 +715,7 @@ resolve_dns_service() {
         powerdns)    printf 'dns_pdns\n' ;;
         njalla)      printf 'dns_njalla\n' ;;
         inwx)        printf 'dns_inwx\n' ;;
-        gandi)       printf 'dns_gandi\n' ;;
+        gandi)       printf 'dns_gandi_livedns\n' ;;
         he)          printf 'dns_he\n' ;;
         *)           printf 'dns_%s\n' "$provider" ;;
     esac

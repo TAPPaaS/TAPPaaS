@@ -32,6 +32,7 @@ assert_eq "$(resolve_dns_service cloudflare)" "dns_cf"   "cloudflare (default) -
 assert_eq "$(resolve_dns_service route53)"    "dns_aws"  "route53 -> dns_aws"
 assert_eq "$(resolve_dns_service aws)"        "dns_aws"  "aws -> dns_aws"
 assert_eq "$(resolve_dns_service powerdns)"   "dns_pdns" "powerdns -> dns_pdns"
+assert_eq "$(resolve_dns_service gandi)"      "dns_gandi_livedns" "gandi -> dns_gandi_livedns"
 
 # Friendly names that resolve to dns_<name> verbatim.
 assert_eq "$(resolve_dns_service desec)"      "dns_desec"   "desec -> dns_desec"
@@ -39,7 +40,7 @@ assert_eq "$(resolve_dns_service hetzner)"    "dns_hetzner" "hetzner -> dns_hetz
 
 # A raw os-acme-client key passes through unchanged.
 assert_eq "$(resolve_dns_service dns_cf)"     "dns_cf"      "raw dns_cf passes through"
-assert_eq "$(resolve_dns_service dns_gandi)"  "dns_gandi"   "raw dns_gandi passes through"
+assert_eq "$(resolve_dns_service dns_gandi_livedns)" "dns_gandi_livedns" "raw dns_gandi_livedns passes through"
 
 # Unknown friendly name best-effort falls back to dns_<name> (acme-manager would
 # then reject it cleanly — the preflight is not the place to validate provider names).
