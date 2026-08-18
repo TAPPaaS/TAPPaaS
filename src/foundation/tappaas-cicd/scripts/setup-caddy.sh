@@ -107,9 +107,12 @@ done
 # :8443), so the API base is the default HTTPS port.
 info "Step 1c: Enabling os-acme-client plugin..."
 ACME_API_BASE="https://${FIREWALL_FQDN}/api"
+# Payload MUST be nested under the model root ("acmeclient"): the flat
+# {"settings":{"enabled":"1"}} still returns {"result":"saved"} but leaves
+# enabled=0, so the plugin silently stayed disabled and issuance failed 400.
 ACME_ENABLE_RESP=$(curl -sk -u "${API_KEY}:${API_SECRET}" \
     -X POST -H 'Content-Type: application/json' \
-    -d '{"settings":{"enabled":"1"}}' \
+    -d '{"acmeclient":{"settings":{"enabled":"1"}}}' \
     "${ACME_API_BASE}/acmeclient/settings/set" 2>/dev/null) || true
 if echo "$ACME_ENABLE_RESP" | grep -q '"result":"saved"'; then
     debug "  os-acme-client plugin enabled"
