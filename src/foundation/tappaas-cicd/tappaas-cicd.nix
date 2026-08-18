@@ -146,11 +146,40 @@ in
       Environment = [
         ("PATH=/run/wrappers/bin:/nix/var/nix/profiles/default/bin"
           + ":/run/current-system/sw/bin")
+        # Root-owned HOME holding the safe.directory grant above; nix also puts
+        # its eval cache under it, which is why it must be writable.
+        "HOME=/var/lib/tappaas-rebuild"
       ];
       # A rebuild of a large closure can outrun the default 90s.
       TimeoutStartSec = "60min";
     };
   };
+
+  # nixos-rebuild resolves `.#<vm>` to the git flake at /home/tappaas/TAPPaaS,
+  # and nix refuses to open a repository owned by another user. Interactively
+  # this never bites: `sudo` exports SUDO_UID=1000, and libgit2 (which nix uses)
+  # treats a repo owned by the sudo-invoking user as trusted. A systemd unit has
+  # no SUDO_UID, so the same rebuild fails with
+  #
+  #   error: opening Git repository "/home/tappaas/TAPPaaS": repository path
+  #   '/home/tappaas/TAPPaaS' is not owned by current user
+  #
+  # The repo is therefore declared trusted through git's safe.directory. Measured
+  # on this host, nix's libgit2 honours that ONLY from $HOME/.gitconfig — both
+  # GIT_CONFIG_GLOBAL and GIT_CONFIG_SYSTEM are ignored, so `programs.git.config`
+  # (which writes /etc/gitconfig) does not reach it. The helper unit is given a
+  # root-owned HOME carrying exactly that one setting.
+  #
+  # NOTE for ADR-017: D3 runs the rebuild from `ExecStartPre=+`, also as root and
+  # also without SUDO_UID, so this stays necessary once the helper unit retires.
+  #
+  # `path:` would sidestep the ownership check, but a path flake copies the
+  # directory verbatim while a git flake sees only tracked files — that changes
+  # which files are part of the build, so it is not a drop-in substitute.
+  environment.etc."tappaas-rebuild-gitconfig".text = ''
+    [safe]
+    	directory = /home/tappaas/TAPPaaS
+  '';
 
   # Let tappaas start (only) the rebuild helper without an interactive agent.
   # Scoped to the unit prefix and to the start verb: this grants the operator
@@ -351,6 +380,11 @@ in
     # check-ha-health.sh records when each HA service entered a transitional
     # state, so it can alert on duration rather than on the state alone (#146).
     "d /var/lib/tappaas 0750 tappaas users -"
+    # HOME for tappaas-rebuild@: root-owned, writable (nix caches there), and
+    # carrying only the safe.directory grant that lets root open the operator's
+    # git checkout. See the comment on environment.etc."tappaas-rebuild-gitconfig".
+    "d /var/lib/tappaas-rebuild 0700 root root -"
+    "L+ /var/lib/tappaas-rebuild/.gitconfig - - - - /etc/tappaas-rebuild-gitconfig"
   ];
 
   nix.settings.trusted-users = [ "root" "@wheel" ]; # Allow remote updates
