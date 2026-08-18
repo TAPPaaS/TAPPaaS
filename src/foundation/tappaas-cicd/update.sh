@@ -8,37 +8,67 @@ set -euo pipefail
 
 VMNAME="$(get_config_value 'vmname' "$1")"
 
-# Rebuild the NixOS configuration. The NixOS version is pinned in ./flake.lock
-# (declared in git), not the imperative root nix-channel. --impure is required
-# only because tappaas-cicd.nix imports the machine-specific
-# /etc/nixos/hardware-configuration.nix (root/boot by-uuid).
+# Rebuild the NixOS configuration through the privileged helper unit
+# tappaas-rebuild@<vm>.service (declared in tappaas-cicd.nix).
+#
+# Calling `sudo nixos-rebuild` directly CANNOT work when update-tappaas runs
+# from its systemd timer: update-tappaas.service sets NoNewPrivileges=true, and
+# that kernel latch is inherited by every descendant and cannot be cleared, so
+# setuid binaries stop conferring privilege and sudo refuses outright. This
+# failed every scheduled run (2026-08-04, 08-11, 08-17, 08-18) while every
+# manual run passed, because a login shell carries no such latch — so the
+# repair reflex (`update-tappaas --force`) was exactly the path that could not
+# reproduce the fault. `systemctl start` is authorised by polkit on the
+# caller's uid instead, which the latch does not affect, so this single path
+# behaves identically from the timer and from a shell.
+#
+# Interim fix for #471; ADR-017 hoists the rebuild into an `ExecStartPre=+`
+# line on update-tappaas.service and retires this indirection entirely.
+#
+# The NixOS version is pinned in ./flake.lock (declared in git), not the
+# imperative root nix-channel; --impure is required only because
+# tappaas-cicd.nix imports the machine-specific
+# /etc/nixos/hardware-configuration.nix (root/boot by-uuid). Both now live on
+# the unit's ExecStart.
+_unit="tappaas-rebuild@${VMNAME}.service"
+# Bound the failure dump to THIS invocation so an earlier run's errors can
+# never be reported as this one's.
+_since="$(date '+%Y-%m-%d %H:%M:%S')"
 info "  Rebuilding NixOS configuration..."
 if [[ "${OPT_DEBUG:-0}" -eq 1 ]]; then
-    sudo nixos-rebuild switch --flake ".#${VMNAME}" --impure || die "nixos-rebuild failed"
-else
-    # Pipe to dots but preserve nixos-rebuild's real exit code via PIPESTATUS —
-    # a bare `cmd | while read` reports the while-loop's status, masking a
-    # failed rebuild (issue #201). set +e keeps the pipe from aborting first.
-    #
-    # Tee to a log as well: the dots alone discarded stderr entirely, so a failed
-    # rebuild surfaced only as "exit 1" with no cause. That hid this step twice
-    # (2026-08-04 and 2026-08-17) — and this module updates the controller VM
-    # itself, which #352 excludes from pre-update snapshots, so a failure here is
-    # already unrecoverable without the error text. Same fix as update-os.sh's
-    # run_quiet (issue #309 ask 1).
-    _log="$(mktemp /tmp/tappaas-rebuild-"${VMNAME}".XXXXXX.log)"
+    journalctl -u "${_unit}" --since "${_since}" -f --no-pager -o cat &
+    _follow=$!
     set +e
-    sudo nixos-rebuild switch --flake ".#${VMNAME}" --impure 2>&1 \
-        | tee "${_log}" | while IFS= read -r _; do printf "."; done
-    rc=${PIPESTATUS[0]}
+    systemctl start --wait "${_unit}"
+    rc=$?
+    set -e
+    kill "${_follow}" 2>/dev/null || true
+    [[ "${rc}" -eq 0 ]] || die "nixos-rebuild failed (exit ${rc}); see journalctl -u ${_unit}"
+else
+    # Dots while the unit runs. `systemctl start --wait` exits with the unit's
+    # own result, so the real status is preserved directly — issue #201's
+    # PIPESTATUS problem cannot arise here because there is no pipe.
+    set +e
+    systemctl start --wait "${_unit}" &
+    _pid=$!
+    while kill -0 "${_pid}" 2>/dev/null; do printf "."; sleep 2; done
+    wait "${_pid}"
+    rc=$?
     set -e
     echo ""
     if [[ "${rc}" -ne 0 ]]; then
+        # Same diagnostic contract as 3c6379a — name the cause, never report a
+        # bare exit code. The output is in the journal now rather than a temp
+        # file, which PrivateTmp=true destroyed with the namespace anyway (the
+        # 2026-08-18 failure pointed at a log that no longer existed). This
+        # module updates the controller VM itself, which #352 excludes from
+        # pre-update snapshots, so a failure here is unrecoverable without the
+        # error text.
         error "nixos-rebuild failed (exit ${rc}) — last 20 lines:"
-        tail -n 20 "${_log}" | sed 's/^/    /' >&2
-        die "nixos-rebuild failed (exit ${rc}); full output in ${_log}"
+        journalctl -u "${_unit}" --since "${_since}" -n 20 --no-pager -o cat \
+            | sed 's/^/    /' >&2
+        die "nixos-rebuild failed (exit ${rc}); full output: journalctl -u ${_unit}"
     fi
-    rm -f "${_log}"
 fi
 
 # update-tappaas is scheduled declaratively via systemd.timers.update-tappaas

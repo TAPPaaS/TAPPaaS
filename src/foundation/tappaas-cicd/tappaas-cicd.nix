@@ -104,6 +104,72 @@ in
   # Enable passwordless sudo for tappaas
   security.sudo.wheelNeedsPassword = false;
 
+  # ----------------------------------------
+  # tappaas-rebuild@ — privileged helper for the mothership's own rebuild
+  # ----------------------------------------
+  # update-tappaas.service runs as tappaas under NoNewPrivileges=true. The
+  # kernel's no_new_privs latch is inherited by every descendant and cannot be
+  # cleared, so setuid binaries stop conferring privilege and the `sudo
+  # nixos-rebuild` in this module's update.sh aborts before doing anything:
+  #
+  #   sudo: The "no new privileges" flag is set, which prevents sudo from
+  #   running as root.
+  #
+  # That made the tappaas-cicd module fail on EVERY scheduled run (2026-08-04,
+  # 08-11, 08-17, 08-18) while succeeding on every manual one — a login shell
+  # carries no such latch — so the repair reflex (`update-tappaas --force`) was
+  # precisely the path that could not reproduce the fault.
+  #
+  # The rebuild therefore moves into this root unit, which update.sh triggers
+  # over D-Bus. polkit authorises on the CALLER'S UID rather than via setuid, so
+  # NoNewPrivileges does not block it — verified on the reference cluster: a
+  # `systemctl start` issued from inside the hardened sandbox and from a plain
+  # shell produce a byte-identical polkit response.
+  #
+  # %i is the cicd VM name, so the flake attribute stays exactly what update.sh
+  # resolved from the module config. This is the INTERIM fix for #471; ADR-017
+  # replaces it with an `ExecStartPre=+` line on update-tappaas.service and
+  # removes this unit and its polkit rule.
+  systemd.services."tappaas-rebuild@" = {
+    description = "TAPPaaS mothership NixOS rebuild for %i (privileged helper)";
+    serviceConfig = {
+      Type = "oneshot";
+      # Runs as root: no User=, and deliberately none of update-tappaas's
+      # sandboxing — nixos-rebuild must write /nix, /boot, /etc and
+      # /run/current-system.
+      WorkingDirectory = "/home/tappaas/TAPPaaS/src/foundation/tappaas-cicd";
+      # --impure is required only because tappaas-cicd.nix imports the
+      # machine-specific /etc/nixos/hardware-configuration.nix; nixpkgs itself
+      # stays pinned by flake.lock.
+      ExecStart = "/run/current-system/sw/bin/nixos-rebuild switch --flake .#%i --impure";
+      # nixos-rebuild shells out to nix, git and systemd tooling.
+      Environment = [
+        ("PATH=/run/wrappers/bin:/nix/var/nix/profiles/default/bin"
+          + ":/run/current-system/sw/bin")
+      ];
+      # A rebuild of a large closure can outrun the default 90s.
+      TimeoutStartSec = "60min";
+    };
+  };
+
+  # Let tappaas start (only) the rebuild helper without an interactive agent.
+  # Scoped to the unit prefix and to the start verb: this grants the operator
+  # nothing it did not already have through passwordless sudo, it only makes it
+  # reachable from a NoNewPrivileges context.
+  security.polkit.enable = true;
+  security.polkit.extraConfig = ''
+    polkit.addRule(function(action, subject) {
+      if (action.id == "org.freedesktop.systemd1.manage-units" &&
+          subject.user == "tappaas" &&
+          action.lookup("verb") == "start") {
+        var unit = action.lookup("unit");
+        if (unit && unit.indexOf("tappaas-rebuild@") == 0) {
+          return polkit.Result.YES;
+        }
+      }
+    });
+  '';
+
   # Essential Services
   services.openssh = {
         enable = true;
