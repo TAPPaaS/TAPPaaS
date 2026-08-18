@@ -254,6 +254,18 @@ if [[ "$DNS_MODE" == "wildcard" ]]; then
     echo
     info "${BOLD}Registering split-horizon wildcard DNS (Unbound)${CL}"
     if DMZ_GW="$(dmz_gateway_ip)"; then
+        # The wildcard installs `local-zone: "<domain>" redirect`, and Unbound
+        # then rejects any per-name local-data in that zone (it must sit at the
+        # apex). Pre-existing per-service overrides for this domain (e.g.
+        # logging.<domain>, authored before wildcard mode) therefore make
+        # unbound-checkconf fatal and stop the resolver — taking cluster DNS
+        # down. Drop them first; the wildcard supersedes them (same DMZ target).
+        unbound-manager --no-ssl-verify list 2>/dev/null \
+            | awk -v d="${DOMAIN}" 'NR>1 && $2==d && $1!="*" {print $1}' \
+            | while read -r _h; do
+                info "  removing per-service override ${_h}.${DOMAIN} (wildcard supersedes)"
+                unbound-manager --no-ssl-verify delete "${_h}" "${DOMAIN}" >/dev/null 2>&1 || true
+            done
         if unbound-manager --no-ssl-verify add "*" "${DOMAIN}" "${DMZ_GW}" \
                 --description "TAPPaaS: ${VARIANT:-default} wildcard -> Caddy (DMZ)"; then
             info "  ${GN}✓${CL} *.${DOMAIN} -> ${DMZ_GW} (DMZ gateway, Unbound)"
