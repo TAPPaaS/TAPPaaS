@@ -35,6 +35,11 @@ export interface ReconcileOpts {
   // --skip-network: omit the system-wide network reconcile because the caller
   // already ran it. Only safe when that is actually true — see site-manager.
   skipNetwork: boolean;
+  // The organization to adopt when this environment has no ownerOrg. The caller
+  // resolves it (and confirms it exists) so the engine stays pure. Undefined =
+  // no candidate could be resolved, in which case an empty ownerOrg is reported
+  // as a warning rather than silently left alone.
+  ownerOrgCandidate?: string;
 }
 
 // Compute the reconcile plan for one environment.
@@ -84,6 +89,29 @@ export function computePlan(
     );
   }
 
+  // ownerOrg backfill. The bootstrap writes "" because it runs before any
+  // organization exists; the only other repair (rest-of-foundation.sh) is
+  // nested inside a "config/people is empty" guard, so it can fire exactly once
+  // and never again. Nothing on the update path checks the field at all, which
+  // is how an environment can stay schema-invalid indefinitely. Reconcile is
+  // the convergence verb, so it is where the repair belongs.
+  if (!env.ownerOrg) {
+    if (opts.ownerOrgCandidate) {
+      actions.push({
+        kind: "backfill-owner-org",
+        scope: "environment",
+        target: `ownerOrg = '${opts.ownerOrgCandidate}' on environment '${env.name}' (was empty)`,
+        value: opts.ownerOrgCandidate,
+      });
+    } else {
+      warnings.push(
+        `environment '${env.name}': ownerOrg is empty and no organization could be resolved ` +
+          `— create one under people/organizations/, or set it with ` +
+          `\`environment-manager modify ${env.name} --owner <org>\``,
+      );
+    }
+  }
+
   if (opts.deep) {
     const modules = mod.modulesForEnvironment(env.name);
     for (const m of modules) {
@@ -110,11 +138,16 @@ export function computePlan(
 //   - a failing network reconcile — the shared prerequisite for everything
 //     planned after it.
 export function applyPlan(
-  _env: Environment,
+  env: Environment,
   plan: Plan,
   net: NetworkClient,
   mod: ModuleClient,
   apply: boolean,
+  // Persist the environment after an in-memory field change. Injected so the
+  // engine stays free of filesystem access, exactly like the two clients.
+  // Omitted → a planned backfill is reported as a failure rather than silently
+  // dropped, because the caller asked for a repair and did not get one.
+  writeEnv?: (env: Environment) => void,
 ): ApplyResult {
   let applied = 0;
   const failures: ApplyFailure[] = [];
@@ -131,6 +164,28 @@ export function applyPlan(
       } catch (e) {
         if (e instanceof NetworkUnreachable) throw e;
         failures.push({ target: m, error: e instanceof Error ? e.message : String(e) });
+      }
+    } else if (a.kind === "backfill-owner-org") {
+      if (!a.value) {
+        failures.push({ target: `ownerOrg on '${env.name}'`, error: "no organization in the planned action" });
+        continue;
+      }
+      if (!writeEnv) {
+        failures.push({
+          target: `ownerOrg on '${env.name}'`,
+          error: "no environment writer available — backfill planned but not applied",
+        });
+        continue;
+      }
+      try {
+        env.ownerOrg = a.value;
+        writeEnv(env);
+        applied++;
+      } catch (e) {
+        failures.push({
+          target: `ownerOrg on '${env.name}'`,
+          error: e instanceof Error ? e.message : String(e),
+        });
       }
     }
   }

@@ -102,7 +102,14 @@ export interface ModuleClient {
 }
 
 // ── Reconcile plan ────────────────────────────────────────────────────
-export type ActionKind = "reconcile-network" | "reconcile-module";
+export type ActionKind =
+  | "reconcile-network"
+  | "reconcile-module"
+  // Repair a bootstrap environment left with an empty ownerOrg. The
+  // environment bootstrap necessarily runs before any organization can
+  // exist, so it writes ownerOrg:"" and the schema rejects the result;
+  // reconcile is the verb that can close the gap once an org exists.
+  | "backfill-owner-org";
 
 // How much of the system an action actually touches (#461). "environment" =
 // scoped to the environment being reconciled; "system-wide" = converges the
@@ -115,6 +122,10 @@ export interface Action {
   scope: ActionScope;
   // Human-readable target description for the plan summary.
   target: string;
+  // Machine-readable payload for actions that carry one (backfill-owner-org:
+  // the org to adopt). Kept separate from `target` so apply never has to parse
+  // prose back out of a display string.
+  value?: string;
 }
 
 export interface Plan {

@@ -464,9 +464,28 @@ function cmdReconcile(opts: Opts, net: NetworkClient, mod: ModuleClient): number
   const env = loadEnvironment(opts.configDir, name);
   if (!env) die(`environment '${name}' not found in ${environmentsDir(opts.configDir)}`);
 
+  // Resolve the org to adopt if this environment's ownerOrg is empty. Preference
+  // order: an explicit --owner, then site.json '.defaultEnvironment' when an org
+  // of that name exists (the ADR-007 convention — the default org and the default
+  // environment share a name, #426), then the sole organization if there is only
+  // one. With several orgs and no signal we resolve nothing and let computePlan
+  // warn, rather than guessing an ownership claim.
+  let ownerOrgCandidate: string | undefined;
+  if (!env.ownerOrg) {
+    const { orgNames } = loadRefSources(opts.configDir);
+    const siteDefault = resolveName(opts.configDir);
+    if (opts.owner && orgNames.has(opts.owner)) ownerOrgCandidate = opts.owner;
+    else if (siteDefault && orgNames.has(siteDefault)) ownerOrgCandidate = siteDefault;
+    else if (orgNames.size === 1) ownerOrgCandidate = firstOrg(opts.configDir);
+  }
+
   let plan;
   try {
-    plan = computePlan(env, net, mod, { deep: opts.deep, skipNetwork: opts.skipNetwork });
+    plan = computePlan(env, net, mod, {
+      deep: opts.deep,
+      skipNetwork: opts.skipNetwork,
+      ownerOrgCandidate,
+    });
   } catch (e) {
     if (e instanceof NetworkUnreachable) die(`network-manager unreachable: ${e.message}`);
     throw e;
@@ -490,7 +509,9 @@ function cmdReconcile(opts: Opts, net: NetworkClient, mod: ModuleClient): number
     return 0;
   }
   try {
-    const res = applyPlan(env, plan, net, mod, opts.apply);
+    const res = applyPlan(env, plan, net, mod, opts.apply, (e) =>
+      writeEnvironment(opts.configDir, e)
+    );
     info("");
     // A module that ran and failed is named here rather than propagated as a
     // raw error (#454); the rest of the cascade already ran.
