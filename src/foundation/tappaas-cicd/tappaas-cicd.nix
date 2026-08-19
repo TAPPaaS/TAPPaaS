@@ -40,6 +40,20 @@ in
   services.cloud-init = {
         enable = true;
         network.enable = false; # We handle networking ourselves with DHCP
+        # Keep this VM's SSH host identity across re-provisioning (#473).
+        # cloud-init's cc_ssh module is a PER-INSTANCE module: whenever the
+        # NoCloud seed presents an instance-id it has not seen before, it deletes
+        # /etc/ssh/ssh_host_* and generates fresh keys. That fired on 2026-08-10
+        # and every client with a cached known_hosts entry got a host-key-changed
+        # warning. NixOS already generates the host keys (sshd-keygen.service);
+        # cloud-init still injects the per-clone authorized user key.
+        #
+        # This duplicates tappaas-common.nix verbatim, because this config does
+        # not source the common baseline — remove it once #324 makes it do so.
+        settings = {
+          ssh_deletekeys = false;
+          ssh_genkeytypes = [ ];
+        };
   };
 
   # Use the systemd-boot EFI boot loader.
