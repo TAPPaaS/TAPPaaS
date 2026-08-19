@@ -239,6 +239,48 @@ export function computePlan(m: PeopleModel, snap: AkSnapshot): Plan {
   return { actions, warnings };
 }
 
+// ── deletion push (issue #482) ────────────────────────────────────────
+// computePlan is driven by what config CONTAINS, so an entity whose JSON file
+// was just removed is simply absent from the managed set — reconcile treats it
+// as foreign and leaves it in Authentik forever. Deleting therefore needs its
+// own explicit push, which is what this is.
+//
+// Groups Authentik ships itself are NEVER deleted from Authentik: `authentik
+// Admins` is the superuser group TAPPaaS adopts (issue #476) and holds akadmin,
+// so removing it would strip the last route into the admin UI. Dropping such a
+// group from config/people is allowed — it just stops being TAPPaaS-managed.
+export const AUTHENTIK_OWNED_GROUPS = new Set(["authentik Admins", "authentik Read-only"]);
+
+export interface DeletionPush {
+  pushed: boolean;
+  reason: string; // why it was skipped (empty when pushed)
+}
+
+export function pushEntityDeletion(
+  client: PrimitiveClient,
+  kind: string,
+  name: string,
+): DeletionPush {
+  switch (kind) {
+    case "user":
+      client.deleteUser(name);
+      return { pushed: true, reason: "" };
+    case "group":
+      if (AUTHENTIK_OWNED_GROUPS.has(name)) {
+        return { pushed: false, reason: `'${name}' is one of Authentik's own groups — removed from config/people only` };
+      }
+      client.deleteGroup(name);
+      return { pushed: true, reason: "" };
+    case "role":
+      client.deleteRole(name);
+      return { pushed: true, reason: "" };
+    default:
+      // An Organization is a TAPPaaS-only grouping — it has no Authentik object
+      // (computePlan never creates one), so there is nothing there to delete.
+      return { pushed: false, reason: `an organization has no Authentik object` };
+  }
+}
+
 // Fetch the Authentik snapshot the planner needs, via the list-* primitives.
 export function snapshot(client: PrimitiveClient): AkSnapshot {
   return {

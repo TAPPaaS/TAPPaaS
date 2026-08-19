@@ -23,10 +23,10 @@ import {
 } from "./entity";
 import { CliPrimitiveClient, AuthentikUnreachable } from "./primitives";
 import { childOrgs, deepGroup, deepOrg, groupsOfOrg, orgRoots, usersOfGroup } from "./queries";
-import { applyPlan, computePlan, snapshot } from "./reconcile";
+import { applyPlan, computePlan, pushEntityDeletion, snapshot } from "./reconcile";
 import { PeopleModel, PrimitiveClient } from "./types";
 import { HelpSpec, renderHelp } from "../../../lib/ts/src/help";
-import { CL, GN, RD, die, guarded, info, warn } from "../../../lib/ts/src/cli";
+import { CL, DieError, GN, RD, die, guarded, info, warn } from "../../../lib/ts/src/cli";
 
 const VERSION = "0.1.0";
 
@@ -73,27 +73,30 @@ const HELP: HelpSpec = {
       options: [["--json", "structured output (default is human-readable)"]],
     },
     {
-      usage: "<kind> add <name> [field flags] [--force]",
+      usage: "<kind> add <name> [field flags] [--force] [--no-reconcile]",
       name: "<kind> add",
       options: [["--force", "overwrite an existing entity"]],
     },
-    { usage: "<kind> modify <name> [field flags]" },
+    { usage: "<kind> modify <name> [field flags] [--no-reconcile]" },
     {
-      usage: "<kind> delete <name> [--force]",
+      usage: "<kind> delete <name> [--force] [--no-reconcile]",
       name: "<kind> delete",
       options: [["--force", "delete despite the reference guard"]],
     },
   ],
-  common: [["--config-dir DIR", "People directory (default: $TAPPAAS_CONFIG/people)"]],
+  common: [
+    ["--config-dir DIR", "People directory (default: $TAPPAAS_CONFIG/people)"],
+    ["--no-reconcile", "add/modify/delete: write config only, do NOT push to identity"],
+  ],
   notes: [
     "where <kind> is one of: role | org (alias organization) | group | user",
-    `Field flags (write the validated config; Authentik is NOT touched):
+    `Field flags (write the validated config, then push it to the identity service):
   role:  --displayName V  --description V
   org:   --displayName V  --type V  --owner USER  --parentOrg ORG
   group: --displayName V  --type V  --ownerOrg ORG  --roles "a,b"  --add-roles R  --remove-roles R
   user:  --displayName V  --email ADDR  --state planned|active|suspended|terminated
          --roles "a,b"  --groups "g1,g2"  --add-roles R  --remove-roles R  --add-groups G  --remove-groups G`,
-    "After a successful add/modify/delete, run 'people-manager reconcile --apply' to push to the identity service. Writes never call Authentik directly.",
+    "add/modify/delete RECONCILE by default — the change is live in the identity service when the command returns. Pass --no-reconcile to stage config only (then push with 'people-manager reconcile --apply').",
   ],
 };
 
@@ -108,6 +111,7 @@ interface Opts {
   dryRun: boolean;
   json: boolean;
   deep: boolean;
+  noReconcile: boolean;
   rest: string[];
 }
 function parseOpts(args: string[]): Opts {
@@ -116,6 +120,7 @@ function parseOpts(args: string[]): Opts {
   let dryRun = false;
   let json = false;
   let deep = false;
+  let noReconcile = false;
   const rest: string[] = [];
   for (let i = 0; i < args.length; i++) {
     const a = args[i];
@@ -130,6 +135,8 @@ function parseOpts(args: string[]): Opts {
       json = true;
     } else if (a === "--deep") {
       deep = true;
+    } else if (a === "--no-reconcile") {
+      noReconcile = true;
     } else if (a === "--config-dir") {
       const v = args[i + 1];
       if (!v) die("--config-dir requires a path argument");
@@ -139,7 +146,7 @@ function parseOpts(args: string[]): Opts {
       rest.push(a);
     }
   }
-  return { configDir, apply, dryRun, json, deep, rest };
+  return { configDir, apply, dryRun, json, deep, noReconcile, rest };
 }
 
 // `bootstrap` — seed the minimal People domain from the minimal-org/ templates
@@ -348,9 +355,54 @@ function takeForce(args: string[]): { force: boolean; rest: string[] } {
   return { force, rest };
 }
 
-function reconcileReminder(): void {
+// A write verb pushes to the identity service by DEFAULT (issue #482): a change
+// an operator has made should be live, not staged behind a second command they
+// have to remember. --no-reconcile keeps the old config-only behaviour for
+// staging several edits, or for editing while Authentik is down.
+//
+// The push is a full reconcile, not just this entity's actions: config/people is
+// the desired state, so the one moment we are already talking to Authentik is
+// the right moment to converge all of it.
+//
+// Ordering matters for delete. computePlan only knows what config CONTAINS, so
+// the just-deleted entity is invisible to it — `push` removes that entity
+// explicitly first, then the reconcile converges everything else.
+function pushAfterWrite(
+  opts: Opts,
+  client: PrimitiveClient,
+  push?: { kind: string; name: string },
+): void {
   info("");
-  info(`Config written. Run '${GN}people-manager reconcile${CL}' to push to the identity service.`);
+  if (opts.noReconcile) {
+    info(
+      `Config written (--no-reconcile). Run '${GN}people-manager reconcile --apply${CL}' ` +
+        `to push to the identity service.`,
+    );
+    return;
+  }
+
+  try {
+    if (push) {
+      const res = pushEntityDeletion(client, push.kind, push.name);
+      if (res.pushed) info(`Removed ${push.kind} '${push.name}' from the identity service.`);
+      else info(`Not removed from the identity service: ${res.reason}.`);
+    }
+    cmdSync({ ...opts, apply: true, dryRun: false }, client);
+  } catch (e) {
+    // The config write already succeeded and is on disk — say so plainly, so the
+    // operator knows the fix is to re-run the push, NOT to redo the edit.
+    // cmdSync already printed its own [Error] line before throwing DieError;
+    // anything else (a failing delete primitive) has not been reported yet.
+    if (e instanceof AuthentikUnreachable) {
+      warn(`identity service unreachable — ${e.message}`);
+    } else if (e instanceof Error && !(e instanceof DieError)) {
+      warn(e.message);
+    }
+    die(
+      `config was written, but pushing it to the identity service failed. ` +
+        `Re-run '${GN}people-manager reconcile --apply${CL}' once the identity service is reachable.`,
+    );
+  }
 }
 
 // ── --deep output ──────────────────────────────────────────────────────
@@ -386,7 +438,7 @@ function printEntity(kind: string, name: string, v: Record<string, unknown>): vo
   }
 }
 
-function cmdEntity(kind: string, opts: Opts): void {
+function cmdEntity(kind: string, opts: Opts, client: PrimitiveClient): void {
   const sub = opts.rest[0];
   if (!sub) die(`${kind}: expected one of list|show|add|modify|delete`);
 
@@ -431,32 +483,34 @@ function cmdEntity(kind: string, opts: Opts): void {
     return;
   }
 
-  // ── write verbs (config-only; NEVER call Authentik) ──────────────────
+  // ── write verbs: write the config, then push it (issue #482) ─────────
+  // The write itself is transactional (validate-then-atomic-write); the push
+  // happens only after it succeeds, so a rejected edit never reaches Authentik.
   if (sub === "add" || sub === "modify" || sub === "delete") {
     const name = opts.rest[1];
     if (!name) die(`${kind} ${sub}: expected <name>`);
     const { force, rest } = takeForce(opts.rest.slice(2));
+    let deleted = false;
     try {
       if (sub === "add") {
         const fa = parseFieldArgs(rest);
         const r = addEntity(opts.configDir, kind, name, fa, force);
         info(`Added ${kind} '${name}' → ${r.path}`);
-        reconcileReminder();
       } else if (sub === "modify") {
         const fa = parseFieldArgs(rest);
         const r = modifyEntity(opts.configDir, kind, name, fa);
         info(`Modified ${kind} '${name}' → ${r.path}`);
-        reconcileReminder();
       } else {
         if (rest.length > 0) die(`${kind} delete: unexpected argument '${rest[0]}'`);
         const r = deleteEntity(opts.configDir, kind, name, force);
         info(`Deleted ${kind} '${name}' (${r.path})`);
-        reconcileReminder();
+        deleted = true;
       }
     } catch (e) {
       if (e instanceof EntityError) die(e.message);
       throw e;
     }
+    pushAfterWrite(opts, client, deleted ? { kind, name } : undefined);
     return;
   }
 
@@ -490,7 +544,7 @@ export function run(argv: string[], client: PrimitiveClient): number {
       case "organization":
       case "group":
       case "user":
-        cmdEntity(cmd, opts);
+        cmdEntity(cmd, opts, client);
         return 0;
       default:
         usage();

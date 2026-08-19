@@ -65,6 +65,8 @@ In Authentik a *role* is a group marked as a role; the CLI offers both spellings
 | `group-ensure <name> [--parent <p>] [--superuser] [--attr k=v ...]` | Create/update a group; `--superuser` marks `is_superuser`. |
 | `ensure-group --name <n> --display <d>` | Create a group if missing. |
 | `ensure-role --name <n> --display <d>` | Create a role-marked group if missing. |
+| `delete-group --name <n>` | Delete a group (idempotent; no-op if absent). Refuses a role-marked group. |
+| `delete-role --name <n>` | Delete a role-marked group (idempotent). Refuses an ordinary group. |
 | `list-groups` | JSON array of `{name, displayName}` (excludes roles). |
 | `list-roles` | JSON array of role-marked groups. |
 | `add-member --user <u> --group <g>` | Add a user to a group. |

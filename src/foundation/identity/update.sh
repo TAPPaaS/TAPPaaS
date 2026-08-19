@@ -202,16 +202,19 @@ if [[ -d "${PEOPLE_DIR}/organizations" ]]; then
     else
         info "${BOLD}Granting Authentik admin to the site owner '${OWNER_USER}'${CL}"
         # Config first, so the membership survives every later reconcile.
+        # --no-reconcile (issue #482): a people write normally pushes itself, but
+        # these two are incidental to a MODULE update, not an operator's people
+        # edit — a module update must not push whatever else an operator has
+        # staged in config/people, nor reconcile while identity is mid-setup.
         if [[ ! -f "${PEOPLE_DIR}/groups/${AK_ADMIN_GROUP}.json" ]]; then
-            people-manager group add "${AK_ADMIN_GROUP}" \
+            people-manager group add "${AK_ADMIN_GROUP}" --no-reconcile \
                 --displayName "Authentik Admins" --type access-set --ownerOrg "${OWNER_ORG}" \
                 || warn "  people-manager group add '${AK_ADMIN_GROUP}' failed"
         fi
-        people-manager user modify "${OWNER_USER}" --add-groups "${AK_ADMIN_GROUP}" \
+        people-manager user modify "${OWNER_USER}" --add-groups "${AK_ADMIN_GROUP}" --no-reconcile \
             || warn "  people-manager user modify ${OWNER_USER} --add-groups failed"
-        # Then converge just this membership in Authentik. A targeted call, not a
-        # full `reconcile --apply`: a module update must not push whatever else an
-        # operator has staged in config/people.
+        # Then converge just this membership in Authentik — the targeted call the
+        # skipped reconcile would otherwise have made.
         if authentik-manager get-user --name "${OWNER_USER}" | jq -e '. != null' >/dev/null 2>&1; then
             authentik-manager add-member --user "${OWNER_USER}" --group "${AK_ADMIN_GROUP}" >/dev/null \
                 && info "  ${GN}✓${CL} ${OWNER_USER} ∈ ${AK_ADMIN_GROUP}" \

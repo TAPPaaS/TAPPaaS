@@ -28,23 +28,25 @@
 src/main.ts        CLI: arg parsing + subcommand dispatch
 src/bootstrap.ts   `bootstrap` — seed config/people from minimal-org/ (the retired user-setup.sh)
 src/config.ts      load config/people/* (per-kind decoders); reference-integrity checks (validateRefs)
-src/entity.ts      config-only entity CRUD (add/modify/delete) — validated atomic writes
+src/entity.ts      entity CRUD (add/modify/delete) — validated atomic config writes
 src/queries.ts     pure relationship queries for the --deep list views
 src/types.ts       Role / Org / Group / User models + the PrimitiveClient interface
 src/reconcile.ts   snapshot-and-plan reconcile engine (compute plan, then apply)
 src/primitives.ts  CliPrimitiveClient — talks to the identity controller
 ```
 
-### Entity CRUD (config-only)
+### Entity CRUD
 
 `src/entity.ts` implements `add` / `modify` / `delete` for the four kinds
 (`role`, `org`, `group`, `user`). These are the ADR-007 #5 verbs — admins drive
 the config through them and never hand-edit JSON. Key properties:
 
-- **Config-only — never calls the identity service.** A write only produces a
-  validated JSON file under `config/people/<dir>/<name>.json`. Pushing to
-  Authentik is a separate, explicit `reconcile`. `main.ts` prints a reminder
-  after every successful write.
+- **The write itself is config-only**, producing a validated JSON file under
+  `config/people/<dir>/<name>.json`. The *push* is `main.ts`'s job: since issue
+  #482 every successful write is followed by a reconcile, so an operator's change
+  is live when the command returns. `--no-reconcile` stages the write instead.
+  Keeping the two separable is what lets a rejected edit never reach Authentik,
+  and lets `entity.ts` stay testable without a client.
 - **Validated before write.** The op loads the on-disk model, merges the
   candidate entity (or removes it, for delete), runs the same `validateRefs`
   integrity gate `reconcile` uses, and refuses on any error. So a write can never
@@ -78,6 +80,17 @@ in-memory fake (`test/unit/fake-client.ts`); production uses `CliPrimitiveClient
 - **Lifecycle:** `planned` users get no identity presence; `active` are present
   with full access; `suspended` are disabled and stripped of managed roles;
   `terminated` are deleted (the only governed deletion).
+- **Deletion is pushed separately (#482).** The plan is computed from what
+  `config/people/` *contains*, so an entity whose file was just deleted is not in
+  the managed set at all — the plan cannot see it, and the foreign-entity guard
+  would leave it in the identity service forever. `pushEntityDeletion` closes
+  that gap: `<kind> delete` removes the entity explicitly (`delete-user` /
+  `delete-group` / `delete-role`) *before* the reconcile converges the rest.
+  Exceptions: an Organization has no identity-service object, and the groups
+  Authentik ships itself (`AUTHENTIK_OWNED_GROUPS` — `authentik Admins`,
+  `authentik Read-only`) are dropped from config only. Deleting `authentik
+  Admins` would strip the last route into the admin UI (see the identity
+  module's DESIGN.md, issue #476).
 
 ## How it talks to controllers
 
@@ -86,8 +99,8 @@ out (via `spawnSync`) to the identity controller's CLI, `authentik-manager`
 (which must be on `PATH`; override with `AUTHENTIK_MANAGER_BIN`). It calls
 read primitives (`list-users`, `list-groups`, `list-roles`) and, when
 applying, mutating primitives (`ensure-user`, `disable-user`, `delete-user`,
-`ensure-group`, `ensure-role`, `add-member` / `remove-member`,
-`assign-role` / `unassign-role`). This keeps people-manager (config owner) and the
+`ensure-group`, `ensure-role`, `delete-group`, `delete-role`,
+`add-member` / `remove-member`, `assign-role` / `unassign-role`). This keeps people-manager (config owner) and the
 identity controller (runtime owner) cleanly separated.
 
 ## Validation

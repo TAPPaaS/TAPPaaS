@@ -75,22 +75,44 @@ Options:
 - `--config-dir DIR` — the People directory to read/write (default
   `$TAPPAAS_CONFIG/people`).
 
-#### Write-then-reconcile workflow
+#### Write-and-push workflow
 
-`add` / `modify` / `delete` are **config-only**: they write the validated JSON
-under `config/people/<dir>/<name>.json` and **never** call the identity service.
-Each write is gated by the same `validateRefs` integrity check `reconcile` runs
-(an unknown role/org reference, a dangling `memberOf`, etc. is rejected and *no*
-file is written), and is atomic (`mktemp` + `rename`). After a successful write
-the command prints a reminder to run `reconcile`. Admins thus drive everything
-through verbs and never hand-edit JSON — see `docs/design/ADR-007-verb-alignment.md`
-("admins drive verbs, not JSON").
+`add` / `modify` / `delete` write the validated JSON under
+`config/people/<dir>/<name>.json` **and then push it to the identity service**
+(issue #482) — a change is live when the command returns, with no second command
+to remember. Admins thus drive everything through verbs and never hand-edit JSON
+— see `docs/design/ADR-007-verb-alignment.md` ("admins drive verbs, not JSON").
 
 ```
-people-manager <kind> add|modify|delete ...   # writes validated config
-people-manager reconcile                       # preview the plan (default)
-people-manager reconcile --apply               # then pushes config → identity service
+people-manager <kind> add|modify|delete ...                  # write + push
+people-manager <kind> add|modify|delete ... --no-reconcile   # write only (stage)
+people-manager reconcile [--apply]                            # preview / push
 ```
+
+Order of operations, and why it is that order:
+
+1. **Validate, then write.** Each write is gated by the same `validateRefs`
+   integrity check `reconcile` runs (an unknown role/org reference, a dangling
+   `memberOf`, etc. is rejected and *no* file is written), and is atomic
+   (`mktemp` + `rename`). A rejected edit therefore never reaches the identity
+   service.
+2. **`delete` pushes the removal explicitly** *before* reconciling. `reconcile`
+   is driven by what config **contains**, so an entity whose file was just
+   removed is invisible to the plan — without this step it would live on in
+   Authentik forever. Users, groups and roles are removed; an Organization has no
+   Authentik object, so there is nothing to push. Groups Authentik ships itself
+   (`authentik Admins`, `authentik Read-only`) are dropped from config only,
+   never deleted from Authentik.
+3. **Then a full reconcile**, not just this entity's actions: `config/people` is
+   the desired state, so the moment we are already talking to the identity
+   service is the right moment to converge all of it.
+
+If the push fails (identity service down, a rejected action), the command exits
+non-zero and says so — **the config write stays on disk**. The fix is to re-run
+`people-manager reconcile --apply`, not to redo the edit.
+
+`--no-reconcile` keeps the old config-only behaviour, for staging several edits
+into one push or for editing while the identity service is down.
 
 #### Field flags
 
@@ -117,6 +139,7 @@ people-manager user add jan --email jan@foo.nl --roles user --groups foo__users
 people-manager user modify jan --add-roles admin --remove-groups foo__users
 people-manager group delete foo__users          # refused if any user is a member
 people-manager role delete editor --force        # delete despite references
+people-manager user add jan --email jan@foo.nl --no-reconcile   # stage, do not push
 people-manager reconcile                          # preview the plan (default)
 people-manager reconcile --apply                  # apply to the identity service
 ```

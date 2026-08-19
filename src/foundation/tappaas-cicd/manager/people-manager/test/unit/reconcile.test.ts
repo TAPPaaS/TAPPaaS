@@ -15,6 +15,7 @@ import {
   applyPlan,
   computePlan,
   desiredRolesForUser,
+  pushEntityDeletion,
   snapshot,
 } from "../../src/reconcile";
 import { FakeClient } from "./fake-client";
@@ -397,6 +398,58 @@ function syncOnce(m: PeopleModel, c: FakeClient): number {
   check(plan.actions.length > 0, "dry-run computed a non-empty plan");
   check(c.log.length === 0, "dry-run applied NO mutations (log empty)");
   check(!c.users.has("ivan"), "dry-run did not create the user");
+}
+
+// ── 11. deletion push (issue #482) ─────────────────────────────────────
+// A config file that has been removed is invisible to computePlan, so the
+// entity would otherwise live on in Authentik forever. Prove BOTH halves: the
+// plan really is blind to it, and pushEntityDeletion is what removes it.
+{
+  const c = new FakeClient();
+  c.seedUser({
+    name: "gone",
+    active: true,
+    email: "gone@x.io",
+    displayName: "Gone",
+    groups: [],
+    roles: [],
+  });
+  // Config no longer mentions 'gone' — an empty model stands in for "deleted".
+  const empty = model({ roles: [], orgs: [], groups: [], users: [] });
+  const plan = computePlan(empty, snapshot(c));
+  applyPlan(c, plan);
+  check(
+    c.users.has("gone"),
+    "reconcile alone does NOT remove a deleted entity (it is foreign to the plan)",
+  );
+
+  const res = pushEntityDeletion(c, "user", "gone");
+  check(res.pushed && !c.users.has("gone"), "pushEntityDeletion removes the user (#482)");
+
+  c.seedGroup("orgA__team");
+  const g = pushEntityDeletion(c, "group", "orgA__team");
+  check(g.pushed && !c.groups.has("orgA__team"), "pushEntityDeletion removes a group");
+
+  c.seedRole("editor");
+  const r = pushEntityDeletion(c, "role", "editor");
+  check(r.pushed && !c.roles.has("editor"), "pushEntityDeletion removes a role");
+
+  // Authentik's own groups are never deleted from Authentik: 'authentik Admins'
+  // holds akadmin, so dropping it would strip the last route into the admin UI.
+  c.seedGroup("authentik Admins");
+  const owned = pushEntityDeletion(c, "group", "authentik Admins");
+  check(
+    !owned.pushed && c.groups.has("authentik Admins"),
+    "pushEntityDeletion refuses to delete Authentik's own 'authentik Admins' (#476)",
+  );
+
+  // An Organization has no Authentik object at all — nothing to push.
+  const before = c.log.length;
+  const org = pushEntityDeletion(c, "org", "orgA");
+  check(
+    !org.pushed && c.log.length === before,
+    "pushEntityDeletion is a no-op for an org (no Authentik object)",
+  );
 }
 
 console.log("");

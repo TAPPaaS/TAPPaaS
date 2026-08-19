@@ -74,6 +74,16 @@ export class FakeClient implements PrimitiveClient {
     this.log.push(`ensure-role ${name}`);
     this.roles.add(name);
   }
+  deleteGroup(name: string): void {
+    this.log.push(`delete-group ${name}`);
+    this.groups.delete(name);
+    for (const u of this.users.values()) u.groups = u.groups.filter((g) => g !== name);
+  }
+  deleteRole(name: string): void {
+    this.log.push(`delete-role ${name}`);
+    this.roles.delete(name);
+    for (const u of this.users.values()) u.roles = u.roles.filter((r) => r !== name);
+  }
   addMember(user: string, group: string): void {
     this.log.push(`add-member ${user} ${group}`);
     const u = this.users.get(user);

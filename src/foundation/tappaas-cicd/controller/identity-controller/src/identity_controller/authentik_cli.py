@@ -29,6 +29,7 @@ People PRIMITIVES (S2b-2 — JSON to stdout, for the TypeScript people-manager):
   ensure-user --name --email --display [--inactive]
   disable-user --name | delete-user --name
   ensure-group --name --display | ensure-role --name --display
+  delete-group --name | delete-role --name
   add-member --user --group | remove-member --user --group
   assign-role --user --role | unassign-role --user --role
 See ``people_primitives.py`` for the Authentik role-mapping decision.
@@ -310,6 +311,14 @@ def cmd_ensure_role(mgr: AuthentikManager, args: argparse.Namespace) -> int:
     return _emit(pp.ensure_role(mgr, name=args.name, display=args.display))
 
 
+def cmd_delete_group(mgr: AuthentikManager, args: argparse.Namespace) -> int:
+    return _emit({"name": args.name, "deleted": pp.delete_group(mgr, name=args.name)})
+
+
+def cmd_delete_role(mgr: AuthentikManager, args: argparse.Namespace) -> int:
+    return _emit({"name": args.name, "deleted": pp.delete_role(mgr, name=args.name)})
+
+
 def cmd_add_member(mgr: AuthentikManager, args: argparse.Namespace) -> int:
     return _emit(pp.add_member(mgr, user=args.user, group=args.group))
 
@@ -470,6 +479,14 @@ def main(argv: list[str] | None = None) -> int:
     er.add_argument("--name", required=True)
     er.add_argument("--display", required=True)
     er.set_defaults(handler=cmd_ensure_role)
+
+    dg = sub.add_parser("delete-group", help="delete a group (idempotent; no-op if absent)")
+    dg.add_argument("--name", required=True)
+    dg.set_defaults(handler=cmd_delete_group)
+
+    dr = sub.add_parser("delete-role", help="delete a role/marked group (idempotent; no-op if absent)")
+    dr.add_argument("--name", required=True)
+    dr.set_defaults(handler=cmd_delete_role)
 
     am = sub.add_parser("add-member", help="add a user to a group (idempotent)")
     am.add_argument("--user", required=True)

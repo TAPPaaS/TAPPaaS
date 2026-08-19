@@ -223,6 +223,31 @@ def ensure_role(mgr: "AuthentikManager", *, name: str, display: str) -> dict:
     return {"name": g["name"], "displayName": _display_name(g)}
 
 
+def delete_group(mgr: "AuthentikManager", *, name: str) -> bool:
+    """Delete the group. Returns ``False`` if it was already absent (no-op).
+
+    Refuses a ROLE-marked group: roles and groups share Authentik's core-group
+    plumbing but are distinct concepts to the manager, so deleting one through
+    the other's verb would be a category error the caller cannot see.
+    """
+    existing = mgr.group_get(name)
+    if existing is not None and _is_role_group(existing):
+        raise RuntimeError(f"{name!r} is a role, not a group — use delete-role")
+    return mgr.group_delete(name)
+
+
+def delete_role(mgr: "AuthentikManager", *, name: str) -> bool:
+    """Delete the role (a marked group). ``False`` if already absent (no-op).
+
+    Refuses an ORDINARY group, for the same reason ``delete_group`` refuses a
+    role.
+    """
+    existing = mgr.group_get(name)
+    if existing is not None and not _is_role_group(existing):
+        raise RuntimeError(f"{name!r} is a group, not a role — use delete-group")
+    return mgr.group_delete(name)
+
+
 # ── memberships (group) & role assignment (role-group) ────────────────────
 
 def _membership(

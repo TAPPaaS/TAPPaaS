@@ -72,6 +72,14 @@ export class CliPrimitiveClient implements PrimitiveClient {
     run(["ensure-role", "--name", name, "--display", display]);
   }
 
+  deleteGroup(name: string): void {
+    run(["delete-group", "--name", name]);
+  }
+
+  deleteRole(name: string): void {
+    run(["delete-role", "--name", name]);
+  }
+
   addMember(user: string, group: string): void {
     run(["add-member", "--user", user, "--group", group]);
   }

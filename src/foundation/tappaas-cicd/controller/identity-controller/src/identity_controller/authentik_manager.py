@@ -504,6 +504,18 @@ class AuthentikManager:
             return user
         return self._patch_json(f"/core/users/{user['pk']}/", {"groups": keep})
 
+    def group_delete(self, name: str) -> bool:
+        """Delete a group (ordinary group OR role-group) by name.
+
+        Returns False if it didn't exist. Authentik cascades the membership
+        rows, so callers need not unlink members first.
+        """
+        group = self.group_get(name)
+        if not group:
+            return False
+        self._delete(f"/core/groups/{group['pk']}/")
+        return True
+
     def user_delete(self, username: str) -> bool:
         """Delete a user entirely. Returns False if the user didn't exist."""
         user = self.user_get(username)

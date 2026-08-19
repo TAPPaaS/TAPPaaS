@@ -14,7 +14,8 @@
 #      Includes bootstrap.test.ts (`people-manager bootstrap` — the retired
 #      user-setup.sh: copy + substitution shape, validateRefs, the non-empty
 #      guard, bad-args) plus a compiled-CLI drive of the bootstrap verb whose
-#      result must pass validate.sh.
+#      result must pass validate.sh, and write-push.test.ts (#482: add/modify/
+#      delete push to the identity service by default; --no-reconcile stages).
 #   C. LIVE integration test (scoped to zztest- names, self-cleaning) against
 #      real Authentik via `people-manager sync` + `authentik-manager`. SKIPS
 #      gracefully if Authentik is unreachable; NEVER touches non-zztest- entities.
@@ -229,6 +230,11 @@ if [[ -f "$UNIT_TSCONFIG" ]]; then
             ok "TypeScript bootstrap unit tests pass"
         else
             bad "TypeScript bootstrap unit tests FAILED"
+        fi
+        if run_ts "node '${DIST_TEST}/manager/people-manager/test/unit/write-push.test.js'"; then
+            ok "TypeScript write-verb push unit tests pass (#482)"
+        else
+            bad "TypeScript write-verb push unit tests FAILED (#482)"
         fi
 
         # Compiled-CLI drive of the bootstrap verb (the retired user-setup.sh —

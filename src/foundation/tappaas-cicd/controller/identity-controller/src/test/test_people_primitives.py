@@ -195,6 +195,46 @@ class TestPeoplePrimitivesLive(unittest.TestCase):
         # Idempotent: second delete is a no-op returning False.
         self.assertFalse(pp.delete_user(self.mgr, name))
 
+    def test_delete_group_and_role_remove_and_are_idempotent(self):
+        """delete-group / delete-role (issue #482) — the verbs that let a
+        `people-manager group|role delete` actually reach Authentik."""
+        gname = f"{PREFIX}group-del"
+        rname = f"{PREFIX}role-del"
+        self.addCleanup(self._cleanup_group, gname)
+        self.addCleanup(self._cleanup_group, rname)
+
+        pp.ensure_group(self.mgr, name=gname, display="ZZ group del")
+        self.assertIn(gname, [g["name"] for g in pp.list_groups(self.mgr)])
+        self.assertTrue(pp.delete_group(self.mgr, name=gname))
+        self.assertNotIn(gname, [g["name"] for g in pp.list_groups(self.mgr)])
+        # Idempotent: a second delete is a no-op returning False.
+        self.assertFalse(pp.delete_group(self.mgr, name=gname))
+
+        pp.ensure_role(self.mgr, name=rname, display="ZZ role del")
+        self.assertIn(rname, [r["name"] for r in pp.list_roles(self.mgr)])
+        self.assertTrue(pp.delete_role(self.mgr, name=rname))
+        self.assertNotIn(rname, [r["name"] for r in pp.list_roles(self.mgr)])
+        self.assertFalse(pp.delete_role(self.mgr, name=rname))
+
+    def test_delete_group_refuses_a_role_and_vice_versa(self):
+        """Roles and groups share Authentik's core-group plumbing, so the verbs
+        must refuse each other's entities rather than silently cross-delete."""
+        gname = f"{PREFIX}group-kind"
+        rname = f"{PREFIX}role-kind"
+        self.addCleanup(self._cleanup_group, gname)
+        self.addCleanup(self._cleanup_group, rname)
+
+        pp.ensure_group(self.mgr, name=gname, display="ZZ group kind")
+        pp.ensure_role(self.mgr, name=rname, display="ZZ role kind")
+
+        with self.assertRaises(RuntimeError):
+            pp.delete_role(self.mgr, name=gname)
+        with self.assertRaises(RuntimeError):
+            pp.delete_group(self.mgr, name=rname)
+        # Both survive the refused calls.
+        self.assertIn(gname, [g["name"] for g in pp.list_groups(self.mgr)])
+        self.assertIn(rname, [r["name"] for r in pp.list_roles(self.mgr)])
+
     def test_lists_return_arrays(self):
         self.assertIsInstance(pp.list_users(self.mgr), list)
         self.assertIsInstance(pp.list_groups(self.mgr), list)

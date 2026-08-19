@@ -73,6 +73,8 @@ export interface PrimitiveClient {
   deleteUser(name: string): void;
   ensureGroup(name: string, display: string): void;
   ensureRole(name: string, display: string): void;
+  deleteGroup(name: string): void;
+  deleteRole(name: string): void;
   addMember(user: string, group: string): void;
   removeMember(user: string, group: string): void;
   assignRole(user: string, role: string): void;
