@@ -227,14 +227,35 @@ The same command is the **password reset** path — for someone else, or for you
 authentik-manager user-set-password jane
 ```
 
-Nicer when the Authentik brand has a recovery flow configured (`brand.flow_recovery`) —
-print a one-time enrollment/recovery link instead of a password, and send them that:
+Nicer: print a **one-time reset link** instead of a password, and send them that. The
+person picks their own password and you never see it:
 
 ```bash
 authentik-manager user-recovery-link jane
 ```
 
-Without a recovery flow it exits 2 and tells you to fall back to `user-set-password`.
+This works out of the box — `identity/update.sh` installs the recovery flow it needs and
+points the default Authentik brand at it (`brand.flow_recovery`). The flow is deliberately
+minimal: the link carries a one-time `flow_token` identifying the account, so the person
+lands straight on "set a new password" — **no SMTP anywhere in the path**. Re-run it by
+hand any time with:
+
+```bash
+authentik-manager recovery-flow-ensure     # idempotent; identity/update.sh runs it for you
+```
+
+Three things worth knowing about the link:
+
+- **It is a bearer credential.** Anyone holding the URL can set that account's password
+  until the token expires. Send it over a channel you trust, same as a password.
+- **Its hostname is the one the API was called on** — `authentik-manager` talks to
+  `http://identity.mgmt.internal:9000`, so the printed URL is internal-only. Swap the host
+  for `https://identity.<domain>` when the person is coming in from outside.
+- **It does not disable the old password.** Until they use the link, the existing
+  credential still works; use `user-set-password` when you need to cut access *now*.
+
+If `user-recovery-link` exits 2, the flow or the brand wiring is missing — run
+`authentik-manager recovery-flow-ensure`, or fall back to `user-set-password`.
 
 `authentik-manager` reads its URL + API token from `~/.authentik-credentials.txt`
 (bootstrapped automatically; `url=` + `token=`), so no extra flags are needed. Override

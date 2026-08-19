@@ -21,6 +21,11 @@ from identity_controller.authentik_manager import (
     EMBEDDED_OUTPOST_NAME,
     DEFAULT_AUTHORIZATION_FLOW_SLUG,
     DEFAULT_INVALIDATION_FLOW_SLUG,
+    RECOVERY_FLOW_SLUG,
+    RECOVERY_PROMPT_STAGE_NAME,
+    RECOVERY_WRITE_STAGE_NAME,
+    RECOVERY_PROMPT_PASSWORD,
+    RECOVERY_PROMPT_PASSWORD_REPEAT,
 )
 
 
@@ -496,6 +501,119 @@ class TestCheckSelfConfig(unittest.TestCase):
         self.assertTrue(by["provider.proxy.external_host"])
         self.assertFalse(by["provider.oauth2.redirect_uris"])
         self.assertTrue(by["outpost.authentik_host"])
+
+
+class TestRecoveryFlowEnsure(unittest.TestCase):
+    """The password-recovery flow: admin-issued link, no SMTP."""
+
+    BRAND = {"brand_uuid": "BRAND", "domain": "authentik-default",
+             "default": True, "flow_recovery": None}
+
+    def _fresh_routes(self) -> dict:
+        """Nothing exists yet — every ensure has to create."""
+        return {
+            ("GET", "/flows/instances/"): {"results": []},
+            ("POST", "/flows/instances/"): {"pk": "FLOW"},
+            ("GET", "/stages/prompt/prompts/"): {"results": []},
+            ("POST", "/stages/prompt/prompts/"): {"pk": "PROMPT"},
+            ("GET", "/stages/prompt/stages/"): {"results": []},
+            ("POST", "/stages/prompt/stages/"): {"pk": "PSTAGE"},
+            ("GET", "/stages/user_write/"): {"results": []},
+            ("POST", "/stages/user_write/"): {"pk": "WSTAGE"},
+            ("GET", "/flows/bindings/"): {"results": []},
+            ("POST", "/flows/bindings/"): {"pk": "BINDING"},
+            ("GET", "/core/brands/"): {"results": [dict(self.BRAND)]},
+        }
+
+    def _converged_routes(self) -> dict:
+        """Everything already in place, brand already pointing at the flow."""
+        return {
+            ("GET", "/flows/instances/"): {"results": [
+                {"pk": "FLOW", "slug": RECOVERY_FLOW_SLUG, "designation": "recovery"}]},
+            ("GET", "/stages/prompt/prompts/"): {"results": [
+                {"pk": "P1", "name": RECOVERY_PROMPT_PASSWORD},
+                {"pk": "P2", "name": RECOVERY_PROMPT_PASSWORD_REPEAT}]},
+            ("GET", "/stages/prompt/stages/"): {"results": [
+                {"pk": "PSTAGE", "name": RECOVERY_PROMPT_STAGE_NAME}]},
+            ("GET", "/stages/user_write/"): {"results": [
+                {"pk": "WSTAGE", "name": RECOVERY_WRITE_STAGE_NAME}]},
+            ("GET", "/flows/bindings/"): {"results": [
+                {"pk": "B1", "target": "FLOW", "stage": "PSTAGE", "order": 10},
+                {"pk": "B2", "target": "FLOW", "stage": "WSTAGE", "order": 20}]},
+            ("GET", "/core/brands/"): {"results": [dict(self.BRAND, flow_recovery="FLOW")]},
+        }
+
+    def test_creates_recovery_flow_and_points_brand_at_it(self):
+        mgr, calls = _make_manager(self._fresh_routes())
+        res = mgr.recovery_flow_ensure()
+        self.assertTrue(res["created"])
+        flow = next(c for c in calls if c["method"] == "POST" and c["path"] == "/flows/instances/")
+        self.assertEqual(flow["json"]["designation"], "recovery")
+        self.assertEqual(flow["json"]["slug"], RECOVERY_FLOW_SLUG)
+        brand = next(c for c in calls if c["method"] == "PATCH" and c["path"] == "/core/brands/BRAND/")
+        self.assertEqual(brand["json"], {"flow_recovery": "FLOW"})
+        self.assertTrue(res["brand_changed"])
+
+    def test_binds_prompt_then_write_in_order(self):
+        mgr, calls = _make_manager(self._fresh_routes())
+        res = mgr.recovery_flow_ensure()
+        self.assertEqual(res["bindings_created"], 2)
+        bindings = [c["json"] for c in calls
+                    if c["method"] == "POST" and c["path"] == "/flows/bindings/"]
+        self.assertEqual([b["stage"] for b in bindings], ["PSTAGE", "WSTAGE"])
+        self.assertEqual([b["order"] for b in bindings], [10, 20])
+        self.assertTrue(all(b["target"] == "FLOW" for b in bindings))
+
+    def test_prompt_asks_for_password_twice(self):
+        # Two password-type fields is what makes Authentik enforce the match.
+        mgr, calls = _make_manager(self._fresh_routes())
+        mgr.recovery_flow_ensure()
+        prompts = [c["json"] for c in calls
+                   if c["method"] == "POST" and c["path"] == "/stages/prompt/prompts/"]
+        self.assertEqual([p["field_key"] for p in prompts], ["password", "password_repeat"])
+        self.assertTrue(all(p["type"] == "password" and p["required"] for p in prompts))
+
+    def test_user_write_stage_never_creates_users(self):
+        # Safety: without a flow_token there is no pending user, and this stage
+        # must fail the flow rather than mint an account.
+        mgr, calls = _make_manager(self._fresh_routes())
+        mgr.recovery_flow_ensure()
+        write = next(c for c in calls
+                     if c["method"] == "POST" and c["path"] == "/stages/user_write/")
+        self.assertEqual(write["json"]["user_creation_mode"], "never_create")
+
+    def test_idempotent_second_run_creates_nothing(self):
+        mgr, calls = _make_manager(self._converged_routes())
+        res = mgr.recovery_flow_ensure()
+        self.assertFalse(res["created"])
+        self.assertEqual(res["bindings_created"], 0)
+        self.assertFalse(res["brand_changed"])
+        self.assertFalse([c for c in calls if c["method"] == "POST"],
+                         "a converged instance must not create anything")
+
+    def test_moves_a_binding_left_at_the_wrong_order(self):
+        routes = self._converged_routes()
+        routes[("GET", "/flows/bindings/")] = {"results": [
+            {"pk": "B1", "target": "FLOW", "stage": "PSTAGE", "order": 10},
+            {"pk": "B2", "target": "FLOW", "stage": "WSTAGE", "order": 5}]}
+        mgr, calls = _make_manager(routes)
+        mgr.recovery_flow_ensure()
+        patch = next(c for c in calls if c["method"] == "PATCH" and c["path"] == "/flows/bindings/B2/")
+        self.assertEqual(patch["json"], {"order": 20})
+
+    def test_no_brand_leaves_the_brand_alone(self):
+        mgr, calls = _make_manager(self._fresh_routes())
+        res = mgr.recovery_flow_ensure(attach_to_brand=False)
+        self.assertFalse(res["attached_to_brand"])
+        self.assertFalse([c for c in calls if c["path"].startswith("/core/brands/")
+                          and c["method"] == "PATCH"])
+
+    def test_brand_lookup_requires_a_default_brand(self):
+        routes = self._fresh_routes()
+        routes[("GET", "/core/brands/")] = {"results": [dict(self.BRAND, default=False)]}
+        mgr, _ = _make_manager(routes)
+        with self.assertRaises(RuntimeError):
+            mgr.recovery_flow_ensure()
 
 
 if __name__ == "__main__":

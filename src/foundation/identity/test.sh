@@ -101,6 +101,31 @@ else
     fail "site owner '${OWNER_USER}' is NOT in '${AK_ADMIN_GROUP}' — re-run identity update.sh"
 fi
 
+# ── 2c. password recovery is wired (brand.flow_recovery → a recovery flow) ──
+# Without this, `authentik-manager user-recovery-link <user>` exits 2 and the
+# only reset path is handing out a password. Asserted from the API (no token is
+# minted here — that would be a side effect on a real user).
+section "2c: password recovery flow wired to the default brand"
+BRAND_RECOVERY="$(api '/core/brands/?page_size=100' | jq -r '[.results[]|select(.default==true)][0].flow_recovery // empty')"
+if [[ -z "${BRAND_RECOVERY}" ]]; then
+    fail "default brand has no flow_recovery — run identity update.sh (or authentik-manager recovery-flow-ensure)"
+else
+    pass "default brand flow_recovery set (${BRAND_RECOVERY:0:8}…)"
+    RECOVERY_FLOW="$(api "/flows/instances/?page_size=1000" \
+        | jq -r --arg pk "${BRAND_RECOVERY}" '.results[]|select(.pk==$pk)')"
+    [[ "$(jq -r '.designation // empty' <<<"${RECOVERY_FLOW}")" == "recovery" ]] \
+        && pass "it points at a flow with designation=recovery" \
+        || fail "brand.flow_recovery does not point at a recovery-designation flow"
+    # The write stage must never create users: an untokened visit to the flow
+    # URL has no pending user and must fail, not mint an account.
+    if api '/stages/user_write/?page_size=100' \
+        | jq -e 'any(.results[]; .name=="tappaas-recovery-write" and .user_creation_mode=="never_create")' >/dev/null 2>&1; then
+        pass "tappaas-recovery-write is never_create (no account minting)"
+    else
+        fail "tappaas-recovery-write missing or not never_create"
+    fi
+fi
+
 # ── 3. OIDC allow-list points at the role groups (offline assertion) ─────────
 # install-service.sh must gate OIDC apps on the people-manager role groups
 # the `users` membership group (the OIDC groups claim carries memberships, not the

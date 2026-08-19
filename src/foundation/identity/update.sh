@@ -17,6 +17,9 @@
 #   5. Set the embedded outpost's authentik_host to the public identity URL
 #   6. Create/update the identity self-application + Proxy Provider and attach
 #      it to the embedded outpost (so https://identity.<domain>/outpost.* works)
+#   7. Create/update the password-recovery flow and point the default brand's
+#      flow_recovery at it, so `authentik-manager user-recovery-link <user>`
+#      returns a one-time reset link (no SMTP involved)
 #
 # Re-running is safe: every step is reconcile-in-place.
 #
@@ -148,6 +151,22 @@ authentik-manager proxy-app-ensure identity \
     --description "TAPPaaS identity self-app (#45)" \
     --attach-outpost
 
+# ── Password recovery: flow + brand wiring ──────────────────────────────────
+# Authentik ships NO recovery flow, and `/core/users/<pk>/recovery/` returns a
+# link only when the default brand has flow_recovery set — so without this step
+# `authentik-manager user-recovery-link <user>` exits 2 and the only reset path
+# is handing out a password. The flow we install is deliberately minimal (prompt
+# for a new password → write it): the flow_token in the link carries the pending
+# user, so there is no e-mail stage and nothing here waits on SMTP.
+# Non-fatal: a failure costs the link, not the install — user-set-password still
+# works.
+info "${BOLD}Ensuring the password-recovery flow (brand.flow_recovery)${CL}"
+if authentik-manager recovery-flow-ensure; then
+    info "  ${GN}✓${CL} 'authentik-manager user-recovery-link <user>' returns a reset link"
+else
+    warn "  recovery-flow-ensure failed — password resets fall back to 'authentik-manager user-set-password <user>'"
+fi
+
 # ── ADR-007: role groups are owned by people-manager ────────────────────────
 # The role groups (user/admin/root) and the team group `users` are reconciled
 # into Authentik by `people-manager sync` (run at foundation install and on
@@ -232,3 +251,4 @@ info "  VM: ${VMNAME} (VMID: ${VMID})  Node: ${NODE}  Zone: ${ZONE0NAME}"
 info "  Authentik UI : ${IDENTITY_PUBLIC}"
 info "  Admin login  : the site owner (member of '${AK_ADMIN_GROUP}') — break-glass: akadmin / (see /etc/secrets/authentik.env on ${IDENTITY_FQDN}: AUTHENTIK_BOOTSTRAP_PASSWORD)"
 info "  Per-app SSO  : every consumer with dependsOn: identity:accessControl gets forward-auth wired automatically"
+info "  Password reset: authentik-manager user-recovery-link <user>  (one-time link; the URL's host is the one the API was called on)"

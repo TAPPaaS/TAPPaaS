@@ -26,6 +26,16 @@ DEFAULT_AUTHORIZATION_FLOW_SLUG = "default-provider-authorization-implicit-conse
 DEFAULT_INVALIDATION_FLOW_SLUG = "default-provider-invalidation-flow"
 EMBEDDED_OUTPOST_NAME = "authentik Embedded Outpost"
 
+# TAPPaaS password-recovery flow (see recovery_flow_ensure). Authentik ships NO
+# recovery flow, so these objects are ours: name-keyed, reconciled in place.
+RECOVERY_FLOW_SLUG = "tappaas-recovery"
+RECOVERY_FLOW_NAME = "TAPPaaS Password Recovery"
+RECOVERY_FLOW_TITLE = "Set a new password"
+RECOVERY_PROMPT_STAGE_NAME = "tappaas-recovery-prompt"
+RECOVERY_WRITE_STAGE_NAME = "tappaas-recovery-write"
+RECOVERY_PROMPT_PASSWORD = "tappaas-recovery-field-password"
+RECOVERY_PROMPT_PASSWORD_REPEAT = "tappaas-recovery-field-password-repeat"
+
 
 @dataclass
 class AuthentikConfig:
@@ -545,6 +555,192 @@ class AuthentikManager:
             return None          # brand has no flow_recovery set → caller falls back
         r.raise_for_status()
         return r.json().get("link")
+
+    # ── Password recovery: admin-issued link, no SMTP (option B) ────────
+    #
+    # ``/core/users/<pk>/recovery/`` only returns a link when the BRAND has
+    # ``flow_recovery`` set, and Authentik ships no recovery flow at all — its
+    # stock one is an unapplied example blueprint that fronts the password
+    # prompt with an e-mail verification stage, i.e. dead weight until SMTP
+    # exists. So TAPPaaS owns a minimal one: prompt for a new password, write
+    # it. The ``flow_token`` in the link IS the authentication (it carries the
+    # pending user), which is why no identification or e-mail stage is needed.
+    #
+    # Every object below is keyed by NAME and reconciled in place, so
+    # identity/update.sh can re-run this on every install and update. Owning
+    # our own stage objects (rather than reusing Authentik's stock
+    # ``default-password-change-*`` ones) keeps password recovery working even
+    # if an operator edits the built-in password-change flow.
+
+    def _prompt_ensure(self, name: str, *, field_key: str, label: str, order: int) -> str:
+        """Create/update one password Prompt field by name. Returns its pk."""
+        rows = self._get_json("/stages/prompt/prompts/", page_size=1000).get("results", [])
+        existing = self._find_by_name(rows, name)
+        body = {
+            "name": name,
+            "field_key": field_key,
+            "label": label,
+            "type": "password",
+            "required": True,
+            "placeholder": label,
+            "order": order,
+        }
+        if existing:
+            # Reconcile in place; the pk is the one we already looked up.
+            self._patch_json(f"/stages/prompt/prompts/{existing['pk']}/", body)
+            return existing["pk"]
+        return self._post_json("/stages/prompt/prompts/", body)["pk"]
+
+    def _prompt_stage_ensure(self, name: str, field_pks: list[str]) -> str:
+        """Create/update a Prompt stage holding exactly ``field_pks``.
+
+        Two password-type fields make Authentik enforce the "passwords match"
+        check itself — that is why the repeat field is not cosmetic.
+        """
+        rows = self._get_json("/stages/prompt/stages/", page_size=1000).get("results", [])
+        existing = self._find_by_name(rows, name)
+        body = {"name": name, "fields": field_pks}
+        if existing:
+            # Reconcile in place; the pk is the one we already looked up.
+            self._patch_json(f"/stages/prompt/stages/{existing['pk']}/", body)
+            return existing["pk"]
+        return self._post_json("/stages/prompt/stages/", body)["pk"]
+
+    def _user_write_stage_ensure(self, name: str) -> str:
+        """Create/update the user_write stage that commits the new password.
+
+        ``never_create``: this stage can only write to the user the flow_token
+        restored. Someone opening the flow URL without a token gets an invalid
+        stage, never a newly created account.
+        """
+        rows = self._get_json("/stages/user_write/", page_size=1000).get("results", [])
+        existing = self._find_by_name(rows, name)
+        body = {"name": name, "user_creation_mode": "never_create"}
+        if existing:
+            # Reconcile in place; the pk is the one we already looked up.
+            self._patch_json(f"/stages/user_write/{existing['pk']}/", body)
+            return existing["pk"]
+        return self._post_json("/stages/user_write/", body)["pk"]
+
+    def _flow_binding_ensure(self, flow_pk: str, stage_pk: str, order: int) -> bool:
+        """Bind a stage into a flow at ``order`` (idempotent). True if created.
+
+        Authentik ignores ?target= here as elsewhere, so the (target, stage)
+        pair is matched client-side; a binding that exists at the wrong order
+        is moved rather than duplicated.
+        """
+        rows = self._get_json("/flows/bindings/", page_size=1000).get("results", [])
+        for b in rows:
+            if b.get("target") == flow_pk and b.get("stage") == stage_pk:
+                if b.get("order") != order:
+                    self._patch_json(f"/flows/bindings/{b['pk']}/", {"order": order})
+                return False
+        self._post_json("/flows/bindings/", {
+            "target": flow_pk,
+            "stage": stage_pk,
+            "order": order,
+            # Mirrors Authentik's own default-password-change bindings.
+            "evaluate_on_plan": False,
+            "re_evaluate_policies": True,
+        })
+        return True
+
+    def brand_default(self) -> dict:
+        """The brand every request falls back to (the one with ``default``).
+
+        A stock install has exactly one, domain ``authentik-default``.
+        """
+        rows = self._get_json("/core/brands/", page_size=1000).get("results", [])
+        brand = next((b for b in rows if b.get("default")), None)
+        if not brand:
+            raise RuntimeError("no default brand in Authentik (expected one with default=true)")
+        return brand
+
+    def brand_set_recovery_flow(self, flow_pk: str) -> tuple[bool, str]:
+        """Point the default brand's flow_recovery at ``flow_pk``.
+
+        Returns (changed, brand_domain).
+        """
+        brand = self.brand_default()
+        if brand.get("flow_recovery") == flow_pk:
+            return False, brand.get("domain", "")
+        self._patch_json(f"/core/brands/{brand['brand_uuid']}/", {"flow_recovery": flow_pk})
+        return True, brand.get("domain", "")
+
+    def recovery_flow_ensure(
+        self,
+        *,
+        slug: str = RECOVERY_FLOW_SLUG,
+        title: str = RECOVERY_FLOW_TITLE,
+        authentication: str = "none",
+        attach_to_brand: bool = True,
+    ) -> dict:
+        """Create/reconcile the recovery flow and point the brand at it.
+
+        ``authentication`` is the flow's entry requirement:
+
+          ``none``                    — the default. The flow_token is the gate,
+                                        so a user with a live Authentik session
+                                        can still use the link (Authentik's own
+                                        password-change flow likewise re-writes
+                                        a password without asking for the old
+                                        one, so this adds no new exposure).
+          ``require_unauthenticated`` — upstream's stricter setting: the link
+                                        then only works in a logged-out browser.
+
+        Returns a dict describing what the reconcile did.
+        """
+        rows = self._get_json("/flows/instances/", page_size=1000).get("results", [])
+        existing = self._find_by_field(rows, "slug", slug)
+        body = {
+            "name": RECOVERY_FLOW_NAME,
+            "slug": slug,
+            "title": title,
+            "designation": "recovery",
+            "authentication": authentication,
+            "denied_action": "message_continue",
+            "layout": "stacked",
+            "policy_engine_mode": "any",
+            "compatibility_mode": False,
+        }
+        if existing:
+            flow_pk = existing["pk"]
+            self._patch_json(f"/flows/instances/{slug}/", body)
+            created = False
+        else:
+            flow_pk = self._post_json("/flows/instances/", body)["pk"]
+            created = True
+        self._flow_cache[slug] = flow_pk
+
+        password_pk = self._prompt_ensure(
+            RECOVERY_PROMPT_PASSWORD, field_key="password", label="New password", order=300,
+        )
+        repeat_pk = self._prompt_ensure(
+            RECOVERY_PROMPT_PASSWORD_REPEAT, field_key="password_repeat",
+            label="New password (repeat)", order=301,
+        )
+        prompt_stage_pk = self._prompt_stage_ensure(
+            RECOVERY_PROMPT_STAGE_NAME, [password_pk, repeat_pk],
+        )
+        write_stage_pk = self._user_write_stage_ensure(RECOVERY_WRITE_STAGE_NAME)
+
+        bindings_created = 0
+        bindings_created += self._flow_binding_ensure(flow_pk, prompt_stage_pk, 10)
+        bindings_created += self._flow_binding_ensure(flow_pk, write_stage_pk, 20)
+
+        brand_changed, brand_domain = False, ""
+        if attach_to_brand:
+            brand_changed, brand_domain = self.brand_set_recovery_flow(flow_pk)
+
+        return {
+            "slug": slug,
+            "flow_pk": flow_pk,
+            "created": created,
+            "bindings_created": bindings_created,
+            "attached_to_brand": attach_to_brand,
+            "brand_changed": brand_changed,
+            "brand_domain": brand_domain,
+        }
 
     # ── Access bindings: group → Application (ADR-006 §5) ────────────────
 

@@ -22,6 +22,10 @@ Subcommands:
   app-delete <slug>                         — remove an app + its provider
   outpost-attach <slug>                     — attach the app's provider to the embedded outpost
   outpost-set-authentik-host <url>          — set the public URL the outpost redirects to
+  recovery-flow-ensure                      — create/reconcile the password-recovery flow
+                                              and point the default brand at it
+  user-set-password <user> [--password …]   — set a password directly
+  user-recovery-link <user>                 — one-time password-reset link (needs the flow above)
 
 People PRIMITIVES (S2b-2 — JSON to stdout, for the TypeScript people-manager):
   list-users | list-groups | list-roles    — JSON arrays
@@ -53,6 +57,8 @@ from .authentik_manager import (
     AuthentikManager,
     OidcApp,
     ProxyApp,
+    RECOVERY_FLOW_SLUG,
+    RECOVERY_FLOW_TITLE,
 )
 
 
@@ -217,9 +223,30 @@ def cmd_user_recovery_link(mgr: AuthentikManager, args: argparse.Namespace) -> i
     if link:
         print(link)
         return 0
-    print("no recovery flow configured on the brand (set brand.flow_recovery) — "
-          "use 'user-set-password' as a fallback", file=sys.stderr)
+    print("no recovery flow configured on the brand — run "
+          "'authentik-manager recovery-flow-ensure' (identity/update.sh does this "
+          "for you), or use 'user-set-password' as a fallback", file=sys.stderr)
     return 2
+
+
+def cmd_recovery_flow_ensure(mgr: AuthentikManager, args: argparse.Namespace) -> int:
+    """Create/reconcile the TAPPaaS password-recovery flow (idempotent)."""
+    res = mgr.recovery_flow_ensure(
+        slug=args.slug,
+        title=args.title,
+        authentication=args.authentication,
+        attach_to_brand=not args.no_brand,
+    )
+    verb = "created" if res["created"] else "reconciled"
+    print(f"==> recovery flow '{res['slug']}' {verb} "
+          f"({res['bindings_created']} new stage binding(s))")
+    if res["attached_to_brand"]:
+        state = "→ set" if res["brand_changed"] else "already set"
+        print(f"    ✓ brand '{res['brand_domain']}' flow_recovery {state} to '{res['slug']}'")
+        print("    'user-recovery-link <username>' now returns a one-time reset link")
+    else:
+        print("    brand left untouched (--no-brand); 'user-recovery-link' still exits 2")
+    return 0
 
 
 def cmd_app_bind_groups(mgr: AuthentikManager, args: argparse.Namespace) -> int:
@@ -384,6 +411,20 @@ def main(argv: list[str] | None = None) -> int:
     cs.add_argument("--external-host", required=True,
                     help="expected public URL, e.g. https://identity.<domain>")
     cs.set_defaults(handler=cmd_check_self_config)
+
+    rf = sub.add_parser("recovery-flow-ensure",
+                        help="create/reconcile the password-recovery flow + point the brand at it")
+    rf.add_argument("--slug", default=RECOVERY_FLOW_SLUG,
+                    help=f"flow slug (default: {RECOVERY_FLOW_SLUG})")
+    rf.add_argument("--title", default=RECOVERY_FLOW_TITLE,
+                    help="heading shown above the password prompt")
+    rf.add_argument("--authentication", default="none",
+                    choices=["none", "require_unauthenticated"],
+                    help="flow entry requirement; 'require_unauthenticated' makes a "
+                         "recovery link work only in a logged-out browser (default: none)")
+    rf.add_argument("--no-brand", action="store_true",
+                    help="create the flow but leave brand.flow_recovery alone")
+    rf.set_defaults(handler=cmd_recovery_flow_ensure)
 
     # ── Groups / Users / Roles (ADR-006) ────────────────────────────────
     ge = sub.add_parser("group-ensure", help="create/update a group (role)")

@@ -54,7 +54,13 @@ the desired state).
 | `disable-user --name <n>` | Set `is_active=false`. |
 | `user-delete <username>` / `delete-user --name <n>` | Delete a user. |
 | `user-set-password <username> [--password <p>]` | Set a password (generates and prints one if `--password` omitted). |
-| `user-recovery-link <username>` | Print a one-time recovery/enrollment link. |
+| `user-recovery-link <username>` | Print a one-time password-reset link (needs the recovery flow below; exits 2 without it). |
+
+### Password recovery
+
+| Command | Purpose |
+|---------|---------|
+| `recovery-flow-ensure [--slug <s>] [--title <t>] [--authentication none\|require_unauthenticated] [--no-brand]` | Create/reconcile the minimal password-recovery flow (prompt for a new password → write it) and point the default brand's `flow_recovery` at it, which is what makes `user-recovery-link` work. Idempotent; run by `identity/update.sh`. No SMTP involved — the link's `flow_token` carries the account. `--no-brand` builds the flow without touching the brand. |
 
 ### Groups & roles
 
