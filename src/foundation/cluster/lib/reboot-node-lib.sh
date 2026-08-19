@@ -45,23 +45,42 @@ rn_node_ssh() {
 
 # Block until a node answers SSH again, returning non-zero after <max> seconds.
 # Default max is RN_WAIT_MAX (180s in production; lowered by tests).
+#
+# With <old-boot-id>, the node counts as back only once it reports a DIFFERENT
+# boot id. A node that has been told to reboot but has not finished shutting
+# down yet still answers SSH, so without this check the first probe succeeds and
+# the caller declares the node back — then reads the PRE-reboot kernel and warns
+# about the boot loader while the node is only just going down. Omitting the
+# argument keeps the old behaviour (any SSH answer means back).
 rn_wait_for_node() {
-    local node="$1" max="${2:-${RN_WAIT_MAX:-180}}" n=0
+    local node="$1" max="${2:-${RN_WAIT_MAX:-180}}" old_boot_id="${3:-}" n=0 boot_id
     info "  Waiting for ${node} to return..."
-    until ssh -n -o BatchMode=yes -o ConnectTimeout=5 "root@$(rn_node_fqdn "$node")" "true" 2>/dev/null; do
+    while :; do
+        boot_id=$(ssh -n -o BatchMode=yes -o ConnectTimeout=5 "root@$(rn_node_fqdn "$node")" \
+            "cat /proc/sys/kernel/random/boot_id" 2>/dev/null || true)
+        if [[ -n "$boot_id" && "$boot_id" != "$old_boot_id" ]]; then
+            return 0
+        fi
         sleep 5; (( n+=5 ))
         [[ $n -lt $max ]] || return 1
     done
-    return 0
 }
 
 # Currently-running kernel on a node.
 rn_running_kernel() { rn_node_ssh "$1" "uname -r" 2>/dev/null || true; }
 
-# Newest installed pve-kernel package version on a node (without the +pmx suffix).
+# Newest installed kernel on a node, in `uname -r` form (e.g. 7.0.14-12-pve).
+#
+# Read from the installed kernel PACKAGE NAMES, not their version fields:
+#   - the package prefix changed from pve-kernel-* to proxmox-kernel-*, so both
+#     are matched; querying only the old prefix returned nothing and silently
+#     disabled the whole reboot pass.
+#   - proxmox-kernel-helper carries an unrelated version (9.2.0), so the version
+#     column cannot be sorted on.
+#   - the -signed suffix is stripped so the result compares directly to uname -r.
 rn_latest_kernel() {
     rn_node_ssh "$1" \
-        "dpkg -l 'pve-kernel-*' 2>/dev/null | awk '/^ii/{print \$3}' | sort -V | tail -1 | sed 's/+.*//'" \
+        "dpkg -l 'proxmox-kernel-*' 'pve-kernel-*' 2>/dev/null | awk '/^ii/ && \$2 ~ /^(proxmox|pve)-kernel-[0-9]/ {v=\$2; sub(/^(proxmox|pve)-kernel-/, \"\", v); sub(/-signed\$/, \"\", v); print v}' | sort -V | tail -1" \
         2>/dev/null || true
 }
 
@@ -70,7 +89,8 @@ rn_kernel_gap() {
     local node="$1" running latest
     running=$(rn_running_kernel "$node")
     latest=$(rn_latest_kernel "$node")
-    [[ -n "$running" && -n "$latest" && "$running" != *"$latest"* ]]
+    # Both values are in uname -r form, so compare them exactly.
+    [[ -n "$running" && -n "$latest" && "$running" != "$latest" ]]
 }
 
 # Number of cluster nodes whose HA local resource manager is ALIVE — i.e. LRM
@@ -153,7 +173,7 @@ rn_wait_ha_settled() {
 # Arguments: <node>
 reboot_one_node() {
     local node="$1"
-    local latest active local_wait=0 new_running stuck
+    local latest active local_wait=0 new_running stuck old_boot_id
 
     info "${BOLD}Rebooting ${node}${CL}"
 
@@ -188,11 +208,14 @@ reboot_one_node() {
     done
     info "  ${GN}✓${CL} HA VMs migrated off ${node}"
 
-    # Reboot — the SSH connection drops, which is expected.
+    # Reboot — the SSH connection drops, which is expected. Remember the boot id
+    # first, so the wait can tell a node that has really rebooted from one that
+    # is merely slow to go down and still answering SSH.
+    old_boot_id=$(rn_node_ssh "$node" "cat /proc/sys/kernel/random/boot_id" 2>/dev/null || true)
     info "  Issuing reboot..."
     rn_node_ssh "$node" "reboot" || true
     sleep 15
-    if ! rn_wait_for_node "$node"; then
+    if ! rn_wait_for_node "$node" "" "$old_boot_id"; then
         error "Node ${node} did not return after reboot (left in maintenance mode so HA keeps its VMs elsewhere)"
         return 1
     fi
@@ -202,7 +225,7 @@ reboot_one_node() {
     new_running=$(rn_running_kernel "$node")
     if [[ -z "$latest" ]]; then
         info "  ${GN}✓${CL} Running kernel: ${new_running} (no newer kernel pending)"
-    elif [[ "$new_running" == *"$latest"* ]]; then
+    elif [[ "$new_running" == "$latest" ]]; then
         info "  ${GN}✓${CL} New kernel active: ${new_running}"
     else
         warn "  ${node} running ${new_running} (expected ${latest}) — check grub default"

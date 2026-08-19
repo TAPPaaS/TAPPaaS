@@ -67,12 +67,16 @@ while read -r node; do
     info "$node package update completed."
 
     # Detect pending kernel reboot — Proxmox does not create /var/run/reboot-required.
-    # Compare running kernel with latest installed pve-kernel package.
+    # Compare the running kernel with the newest installed kernel package. The
+    # version read comes from the package NAMES (prefix is proxmox-kernel-* on
+    # current Proxmox, pve-kernel-* on older ones); proxmox-kernel-helper has an
+    # unrelated version, so the version column cannot be sorted on. Keep this in
+    # step with rn_latest_kernel() in lib/reboot-node-lib.sh.
     _running=$(ssh -n -o StrictHostKeyChecking=no root@"$NODE_FQDN" "uname -r" 2>/dev/null || true)
     _latest=$(ssh -n -o StrictHostKeyChecking=no root@"$NODE_FQDN" \
-        "dpkg -l 'pve-kernel-*' 2>/dev/null | awk '/^ii/{print \$3}' | sort -V | tail -1 | sed 's/+.*//'" \
+        "dpkg -l 'proxmox-kernel-*' 'pve-kernel-*' 2>/dev/null | awk '/^ii/ && \$2 ~ /^(proxmox|pve)-kernel-[0-9]/ {v=\$2; sub(/^(proxmox|pve)-kernel-/, \"\", v); sub(/-signed\$/, \"\", v); print v}' | sort -V | tail -1" \
         2>/dev/null || true)
-    if [[ -n "$_running" && -n "$_latest" && "$_running" != *"$_latest"* ]]; then
+    if [[ -n "$_running" && -n "$_latest" && "$_running" != "$_latest" ]]; then
         warn "Node ${node}: kernel ${_latest} installed, ${_running} running — reboot required"
         warn "  Kernel modules (e.g. amdgpu, network drivers) are stale until reboot."
         warn "  Schedule a maintenance window and run:"
