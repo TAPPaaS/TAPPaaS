@@ -132,12 +132,44 @@ LIST_OUTPUT=$(caddy-manager list --no-ssl-verify 2>&1) || true
 
 CHANGES_MADE=false
 
-# proxyTls (issue #254): dns01 = bind the os-acme-client wildcard via Caddy's
-# CustomCertificate refid; http01 = let Caddy issue per-domain via ACME HTTP-01
-# (requires the domain be publicly reachable on :80). Either reconciles in place.
-PROXY_TLS=$(get_config_value 'proxyTls' 'dns01')
+# TLS strategy: the environment's dnsMode is the base and an explicit per-module
+# proxyTls (issue #254) overrides it — the SAME precedence install-service.sh
+# uses. This block previously defaulted proxyTls to "dns01" and never consulted
+# dnsMode, so install and update disagreed on every per-service environment:
+# install issued an HTTP-01 cert and registered split-horizon DNS, then the next
+# update reconciled the same domain as a wildcard against a refid that does not
+# exist — leaving a published domain with no usable certificate.
+#   wildcard    → bind the environment's wildcard cert via CustomCertificate.
+#   per-service → Caddy issues per-domain via ACME HTTP-01 (needs the domain
+#                 publicly reachable on :80) + a split-horizon Unbound override.
+DNS_MODE="$(jq -r '.dnsMode // "per-service"' <<<"${VCFG}")"
+PROXY_TLS=$(get_config_value 'proxyTls' '')
+case "${PROXY_TLS}" in
+    dns01)  DNS_MODE="wildcard" ;;
+    http01) DNS_MODE="per-service" ;;
+esac
+
 CADDY_DOMAIN_ARGS=()
-if [[ "${PROXY_TLS}" == "dns01" ]]; then
+if [[ "${DNS_MODE}" == "per-service" ]]; then
+    debug "  TLS: per-service HTTP-01 (dnsMode=per-service) — Caddy issues a cert for ${PROXY_DOMAIN}"
+    # Reconcile the split-horizon override as well. install-service.sh creates
+    # it, but only update runs against an already-installed module, so without
+    # this a record that was deleted — or never created, as for every module
+    # installed before #438 — is never restored. unbound-manager add is
+    # idempotent, so re-running is safe.
+    if DMZ_GW="$(dmz_gateway_ip)"; then
+        DNS_HOST="${PROXY_DOMAIN%%.*}"
+        DNS_ZONE="${PROXY_DOMAIN#*.}"
+        if unbound-manager --no-ssl-verify add "${DNS_HOST}" "${DNS_ZONE}" "${DMZ_GW}" --description "${DESCRIPTION}"; then
+            debug "  ${GN}✓${CL} split-horizon DNS ${DNS_HOST}.${DNS_ZONE} -> ${DMZ_GW} (DMZ, Unbound)"
+        else
+            warn "  Could not register ${PROXY_DOMAIN} in Unbound — register manually:"
+            warn "    unbound-manager --no-ssl-verify add '${DNS_HOST}' '${DNS_ZONE}' '${DMZ_GW}'"
+        fi
+    else
+        warn "  Could not derive DMZ gateway — register ${PROXY_DOMAIN} DNS manually"
+    fi
+else
     # Prefer the env's refid from get_variant_config (cert-refids.json), then the
     # runtime cert-refids.json directly, then the legacy global configuration.json.
     TLS_CERT_REFID=$(jq -r '.tlsCertRefid // ""' <<<"${VCFG}")
@@ -153,9 +185,11 @@ if [[ "${PROXY_TLS}" == "dns01" ]]; then
         TLS_CERT_REFID=$(jq -r '.tappaas.tlsCertRefid // ""' "${CONFIG_DIR}/configuration.json" 2>/dev/null) || TLS_CERT_REFID=""
     fi
     if [[ -n "${TLS_CERT_REFID}" ]]; then
+        debug "  TLS: DNS-01 wildcard (dnsMode=wildcard) — refid ${TLS_CERT_REFID}"
         CADDY_DOMAIN_ARGS=(--custom-certificate "${TLS_CERT_REFID}")
     else
-        debug "  proxyTls=dns01 but tappaas.tlsCertRefid not set (run acme-setup.sh) — public TLS unavailable until then"
+        debug "  TLS: wildcard but no tlsCertRefid for environment '${ENVIRONMENT:-default}' yet."
+        debug "       Run: acme-setup.sh --variant '${ENVIRONMENT}' — internal LAN access still works meanwhile."
     fi
 fi
 
