@@ -253,6 +253,24 @@ def _emit(obj) -> int:
     return 0
 
 
+def cmd_check_self_config(mgr: AuthentikManager, args: argparse.Namespace) -> int:
+    """Report drift of the identity self-config vs the expected public host (#474)."""
+    findings = mgr.check_self_config(args.external_host)
+    drift = [f for f in findings if not f["in_sync"]]
+    for f in findings:
+        mark = "ok" if f["in_sync"] else "DRIFT"
+        print(f"  [{mark}] {f['field']}: expected={f['expected']!r} actual={f['actual']!r}")
+    if drift:
+        print(
+            f"{len(drift)} identity self-config object(s) drifted from "
+            f"{args.external_host} — run: module reconcile identity --apply",
+            file=sys.stderr,
+        )
+        return 1
+    print(f"identity self-config in sync with {args.external_host}")
+    return 0
+
+
 def cmd_list_users(mgr: AuthentikManager, _args: argparse.Namespace) -> int:
     return _emit(pp.list_users(mgr))
 
@@ -351,6 +369,12 @@ def main(argv: list[str] | None = None) -> int:
                         help="set the embedded outpost's authentik_host (public URL for redirects)")
     oh.add_argument("host", help="full URL, e.g. https://identity.example.org")
     oh.set_defaults(handler=cmd_outpost_set_authentik_host)
+
+    cs = sub.add_parser("check-self-config",
+                        help="report drift of the identity self-config vs the expected public host (#474)")
+    cs.add_argument("--external-host", required=True,
+                    help="expected public URL, e.g. https://identity.<domain>")
+    cs.set_defaults(handler=cmd_check_self_config)
 
     # ── Groups / Users / Roles (ADR-006) ────────────────────────────────
     ge = sub.add_parser("group-ensure", help="create/update a group (role)")

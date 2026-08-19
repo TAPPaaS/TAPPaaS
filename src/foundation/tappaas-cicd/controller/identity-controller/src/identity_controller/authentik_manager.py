@@ -331,6 +331,56 @@ class AuthentikManager:
         cfg["authentik_host"] = authentik_host
         self._patch_json(f"/outposts/instances/{outpost['pk']}/", {"config": cfg})
 
+    @staticmethod
+    def _drift_finding(field: str, expected, actual) -> dict:
+        return {"field": field, "expected": expected, "actual": actual,
+                "in_sync": actual == expected}
+
+    def check_self_config(self, external_host: str, name: str = "identity") -> list[dict]:
+        """Report drift of the identity self-config vs the expected public host.
+
+        Reads the four domain-bearing objects (identity application launch URL,
+        proxy provider external_host, oauth2 provider redirect_uris, embedded
+        outpost authentik_host) and compares them to ``external_host``
+        (``https://identity.<domain>``) WITHOUT mutating anything — the detector
+        for a domain change that was not reconciled (#474). Returns one finding
+        per object: ``{field, expected, actual, in_sync}``.
+        """
+        findings: list[dict] = []
+
+        app = self._find_by_name(self._applications(), name)
+        findings.append(self._drift_finding(
+            "application.meta_launch_url", external_host,
+            (app or {}).get("meta_launch_url"),
+        ))
+
+        proxy = self._find_by_name(
+            self._get_json("/providers/proxy/").get("results", []), name)
+        findings.append(self._drift_finding(
+            "provider.proxy.external_host", external_host,
+            (proxy or {}).get("external_host"),
+        ))
+
+        oauth = self._find_by_name(
+            self._get_json("/providers/oauth2/", page_size=1000).get("results", []), name)
+        uris = [u.get("url", "") for u in (oauth or {}).get("redirect_uris", [])]
+        stale = [u for u in uris if not u.startswith(external_host)]
+        findings.append({
+            "field": "provider.oauth2.redirect_uris",
+            "expected": f"all under {external_host}",
+            "actual": uris,
+            "in_sync": bool(uris) and not stale,
+        })
+
+        outpost = self._find_by_name(
+            self._get_json("/outposts/instances/").get("results", []),
+            EMBEDDED_OUTPOST_NAME)
+        findings.append(self._drift_finding(
+            "outpost.authentik_host", external_host,
+            ((outpost or {}).get("config") or {}).get("authentik_host"),
+        ))
+        return findings
+
     # ── Groups / Roles (ADR-006) ────────────────────────────────────────
 
     def groups_list(self) -> list[dict]:

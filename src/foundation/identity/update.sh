@@ -130,6 +130,14 @@ ssh -o StrictHostKeyChecking=accept-new "root@${FIREWALL_FQDN}" "/bin/sh -c 'con
 
 # ── Phase B step 7-8: outpost + identity self-app ───────────────────────────
 
+# Report any drift of the identity self-config (app launch URL, proxy
+# external_host, oauth2 redirect_uris, outpost authentik_host) against the
+# expected public host BEFORE converging it, so a reconcile surfaces what a
+# domain change left stale (#474). Non-fatal: the ensures below fix it.
+info "${BOLD}Checking identity self-config for drift (expected ${IDENTITY_PUBLIC})${CL}"
+authentik-manager check-self-config --external-host "${IDENTITY_PUBLIC}" \
+    || info "  drift detected — the steps below converge it to ${IDENTITY_PUBLIC}"
+
 info "${BOLD}Configuring the Authentik embedded outpost (authentik_host=${IDENTITY_PUBLIC})${CL}"
 authentik-manager outpost-set-authentik-host "${IDENTITY_PUBLIC}"
 
