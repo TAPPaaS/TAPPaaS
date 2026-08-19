@@ -71,6 +71,46 @@ Placement is expressed as config, not code: `backup.json` gains an explicit **pl
 - `remote-only` **+ a satellite** → single-node/small site with **no local datastore**; the local side **pushes** straight to the satellite (or any remote PBS). The satellite is then the *only* copy, so its append-only hardening (§3.5) is mandatory.
 - `shim` → a placeholder that becomes either of the above once storage or a satellite exists (§4).
 
+#### 1.2 Workload placement taxonomy (companion — `#456`)
+
+Separately from the policy enum above, `#456` asked whether *placement itself* —
+independent of `backup` specifically — needs a shared taxonomy across any workload
+TAPPaaS is aware of. Refined answer below, classifying a workload — a VM, LXC,
+container, or service, TAPPaaS-wrapped or not — by whether this Site tracks it,
+whether this Site (or another Site) manages it, and, if this Site manages it,
+where it sits in this Site's own cluster and zone model:
+
+| Term | Description | Site-tracked? | Site-managed? | Cluster member? | Zone | Example |
+|---|---|---|---|---|---|---|
+| `node` | A workload that's a full member of this Site's own cluster. | Yes | this Site | Yes | local zone (e.g. `mgmt`) | reference 2-3 node install |
+| `standalone` | A workload that's part of this Site, but stands on its own outside the cluster. | Yes | this Site | No | local zone (e.g. `mgmt`) | a PBS + witness node outside the cluster |
+| `satellite` | A workload at this Site's own outpost beyond the local zone, reachable only through a tunnel — the entry point for reaching this Site from outside. | Yes | this Site | No | dedicated `edge` zone (tunnel-only) | ADR-010 VPS |
+| `external` | A workload that's tracked but not managed by this Site. | Yes | No | n/a | n/a | pre-migration Proxmox VM/LXC; third-party push-in |
+| `remote` | A workload that lives at a different, independently-managed TAPPaaS Site. | Yes | another Site | n/a | n/a | `remote/<name>` buddy's PBS (§3.1); dev Site vs prod Site |
+| `rogue` | A workload that's neither tracked nor managed by this Site. | No | No | n/a | n/a | undiscovered workload |
+
+`node`/`standalone` also carry an orthogonal `-pending` status (storage not yet
+provisioned) — this is what `shim` maps onto, not a 5th peer value.
+
+**The `external` case worth spelling out**: an operator with a working Proxmox
+cluster who wants to adopt TAPPaaS doesn't have to migrate everything at once.
+They back up their existing VMs/LXCs, install TAPPaaS, and restore. Until each
+workload is migrated onto `node`/`standalone`/`satellite` canon, TAPPaaS's only
+job is to *recognize it exists* (`external`) — enough to avoid resource
+conflicts, nothing more. `external` can never itself be a cluster member: cluster
+membership is the compliant end-state it migrates toward, not a state it can
+already hold.
+
+It already lines up with this ADR's own vocabulary: `satellite` is ADR-010's
+role, and `remote`/`external` reuse the exact PBS namespace names from §3.1, so
+no renaming is proposed.
+
+This is offered as a **companion reference**, not a replacement for the
+`auto`/`node:<name>`/`shim`/`remote-only` policy enum above, which is already
+implemented (P1–P9) and stays as-is here. Whether and how the two should converge
+— e.g. `shim` mapping onto the taxonomy's `-pending` status rather than being its
+own policy value — is left for a future revision, not decided by this PR.
+
 ### 2. Node-join reconciles the backup client (#382)
 
 Installing the per-node `proxmox-backup-client` becomes an **idempotent reconcile**, not a one-shot at PBS-install time:
