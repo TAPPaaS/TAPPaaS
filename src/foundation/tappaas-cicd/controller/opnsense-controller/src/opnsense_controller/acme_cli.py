@@ -88,11 +88,14 @@ def _parse_fields(items: list[str]) -> dict[str, str]:
 
 def cmd_setup(mgr: AcmeManager, args: argparse.Namespace) -> int:
     """Provision the full wildcard-cert chain (idempotent)."""
-    # Fail fast if the plugin is disabled (issue #267).
+    # Enable os-acme-client if it shipped disabled (issue #475/#267); abort with
+    # guidance only if it cannot be enabled.
     print("==> Checking os-acme-client plugin status...")
     try:
-        mgr.require_plugin_enabled()
-        print("    ✓ plugin is enabled")
+        if mgr.ensure_plugin_enabled():
+            print("    ✓ os-acme-client was disabled — enabled it")
+        else:
+            print("    ✓ plugin is enabled")
     except PluginDisabledError as e:
         print(f"\n{e}", file=sys.stderr)
         return 1

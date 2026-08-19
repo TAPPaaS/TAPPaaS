@@ -17,6 +17,7 @@ from opnsense_controller.acme_manager import (
     AcmeCertificate,
     AcmeManager,
     AcmeValidation,
+    PluginDisabledError,
 )
 
 
@@ -240,6 +241,42 @@ class TestPluginEnabled(unittest.TestCase):
             ("Settings", "get"): {"settings": {"enabled": "1"}},
         })
         self.assertTrue(mgr.is_plugin_enabled())
+
+
+class TestEnsurePluginEnabled(unittest.TestCase):
+    """ensure_plugin_enabled self-heals a plugin that shipped disabled (#475)."""
+
+    def test_noop_when_already_enabled(self):
+        mgr = _make_manager({
+            ("Settings", "get"): {"acmeclient": {"settings": {"enabled": "1"}}},
+        })
+        self.assertFalse(mgr.ensure_plugin_enabled())
+        # No write when already enabled.
+        self.assertFalse(any(c["command"] == "set" for c in mgr.client.calls))
+
+    def test_enables_when_disabled(self):
+        mgr = _make_manager({
+            ("Settings", "set"): {"result": "saved"},
+            ("Service", "reconfigure"): {"status": "ok"},
+        })
+        # get: disabled first (pre-check), enabled after the write (verify).
+        mgr.is_plugin_enabled = MagicMock(side_effect=[False, True])  # noqa: SLF001
+        self.assertTrue(mgr.ensure_plugin_enabled())
+        # Payload must be nested under the model root, not flat.
+        set_call = next(c for c in mgr.client.calls if c["command"] == "set")
+        self.assertEqual(set_call["data"], {"acmeclient": {"settings": {"enabled": "1"}}})
+        # And the change is applied.
+        self.assertTrue(any(c["command"] == "reconfigure" for c in mgr.client.calls))
+
+    def test_raises_when_enable_does_not_take(self):
+        mgr = _make_manager({
+            ("Settings", "set"): {"result": "saved"},
+            ("Service", "reconfigure"): {"status": "ok"},
+        })
+        # Still disabled after the write attempt.
+        mgr.is_plugin_enabled = MagicMock(side_effect=[False, False])  # noqa: SLF001
+        with self.assertRaises(PluginDisabledError):
+            mgr.ensure_plugin_enabled()
 
 
 class TestActionEnsure(unittest.TestCase):

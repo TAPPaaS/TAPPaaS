@@ -248,25 +248,47 @@ class AcmeManager:
         enabled = node.get("settings", {}).get("enabled", "0")
         return enabled == "1"
 
-    def require_plugin_enabled(self) -> None:
-        """Verify the plugin is enabled; raise a helpful error if not.
+    def enable_plugin(self) -> None:
+        """Enable the os-acme-client plugin and apply the change.
 
-        Call this before any certificate operations to fail fast with a
-        clear message instead of the opaque status=400 from os-acme-client.
+        The payload MUST be nested under the model root ("acmeclient"): a flat
+        {"settings": {"enabled": "1"}} is accepted with {"result": "saved"} but
+        leaves enabled=0 (issue #475; same fix as setup-caddy.sh 15cab38). The
+        following Service/reconfigure applies it.
+        """
+        self._api_post("Settings", "set", {"acmeclient": {"settings": {"enabled": "1"}}})
+        self.service_reconfigure()
+
+    def ensure_plugin_enabled(self) -> bool:
+        """Enable os-acme-client if it is disabled; no-op if already enabled.
+
+        Returns True if it had to enable the plugin, False if it was already on.
+        Raises PluginDisabledError only if the enable did not take effect — so a
+        plugin that shipped disabled (issue #475) self-heals wherever setup runs
+        instead of aborting the whole run.
+        """
+        if self.is_plugin_enabled():
+            return False
+        self.enable_plugin()
+        self.require_plugin_enabled()  # raises with guidance if it still didn't take
+        return True
+
+    def require_plugin_enabled(self) -> None:
+        """Raise PluginDisabledError if os-acme-client is disabled.
+
+        `ensure_plugin_enabled` calls this to verify an enable attempt took, so
+        the error now means automatic enabling failed. Cert operations fail with
+        status 400 if the plugin isn't enabled.
         """
         if not self.is_plugin_enabled():
             raise PluginDisabledError(
-                "The os-acme-client plugin is disabled on OPNsense.\n"
+                "os-acme-client is disabled and could not be enabled automatically.\n"
                 "\n"
-                "To enable it:\n"
+                "Enable it manually:\n"
                 "  1. OPNsense GUI: Services → ACME Client → Settings → Enable plugin\n"
-                "  2. Or run: acme-manager enable-plugin (if available)\n"
-                "  3. Or via API: POST /api/acmeclient/settings/set "
-                '{"settings":{"enabled":"1"}}\n'
-                "\n"
-                "The TAPPaaS setup-caddy.sh script should have enabled this automatically.\n"
-                "If you're seeing this error, the enable step may have failed — check\n"
-                "the setup-caddy.sh output or enable the plugin manually via the GUI."
+                "  2. Or via API: POST /api/acmeclient/settings/set "
+                '{"acmeclient":{"settings":{"enabled":"1"}}}\n'
+                "     then POST /api/acmeclient/service/reconfigure\n"
             )
 
     # ── search helpers (find existing by name; case-sensitive) ──────────
