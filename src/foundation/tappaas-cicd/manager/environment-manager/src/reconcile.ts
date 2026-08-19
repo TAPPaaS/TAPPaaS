@@ -40,6 +40,11 @@ export interface ReconcileOpts {
   // no candidate could be resolved, in which case an empty ownerOrg is reported
   // as a warning rather than silently left alone.
   ownerOrgCandidate?: string;
+  // Whether the environment being reconciled is the DEFAULT environment
+  // (site.json .defaultEnvironment). The identity module's public self-config
+  // tracks the default environment's domain, so a --deep reconcile of the
+  // default env must also re-point it (#474). Absent ⇒ false.
+  isDefaultEnv?: boolean;
 }
 
 // Compute the reconcile plan for one environment.
@@ -119,6 +124,21 @@ export function computePlan(
     }
     if (modules.length === 0) {
       warnings.push(`environment '${env.name}': no deployed modules consume it (--deep: nothing downstream)`);
+    }
+    // The identity module lives in the mgmt zone (environment: null), so it is
+    // never in modulesForEnvironment(<app env>) — yet its Authentik self-config
+    // (app launch URL, proxy external_host, oauth2 redirect_uris, outpost
+    // authentik_host) is built from the DEFAULT environment's domain. Reconcile
+    // it here when the default environment is the one changing, so a domain
+    // change re-points those objects (#474). Idempotent, guarded on deployment,
+    // and de-duplicated in case identity is ever tied to this env directly.
+    if (opts.isDefaultEnv && !modules.includes("identity") && mod.moduleDeployed("identity")) {
+      actions.push({ kind: "reconcile-module", scope: "environment", target: "module 'identity'" });
+      notes.push(
+        "identity is reconciled because this is the default environment: its Authentik " +
+          "self-config (app launch URL, proxy external_host, oauth2 redirect_uris, outpost " +
+          "authentik_host) tracks this environment's domain (#474).",
+      );
     }
   }
 

@@ -470,12 +470,15 @@ function cmdReconcile(opts: Opts, net: NetworkClient, mod: ModuleClient): number
   // environment share a name, #426), then the sole organization if there is only
   // one. With several orgs and no signal we resolve nothing and let computePlan
   // warn, rather than guessing an ownership claim.
+  // The default environment (site.json .defaultEnvironment): its domain feeds
+  // the identity module's Authentik self-config, so reconcile identity too (#474).
+  const defaultEnvName = resolveName(opts.configDir);
+
   let ownerOrgCandidate: string | undefined;
   if (!env.ownerOrg) {
     const { orgNames } = loadRefSources(opts.configDir);
-    const siteDefault = resolveName(opts.configDir);
     if (opts.owner && orgNames.has(opts.owner)) ownerOrgCandidate = opts.owner;
-    else if (siteDefault && orgNames.has(siteDefault)) ownerOrgCandidate = siteDefault;
+    else if (defaultEnvName && orgNames.has(defaultEnvName)) ownerOrgCandidate = defaultEnvName;
     else if (orgNames.size === 1) ownerOrgCandidate = firstOrg(opts.configDir);
   }
 
@@ -485,6 +488,7 @@ function cmdReconcile(opts: Opts, net: NetworkClient, mod: ModuleClient): number
       deep: opts.deep,
       skipNetwork: opts.skipNetwork,
       ownerOrgCandidate,
+      isDefaultEnv: !!defaultEnvName && name === defaultEnvName,
     });
   } catch (e) {
     if (e instanceof NetworkUnreachable) die(`network-manager unreachable: ${e.message}`);

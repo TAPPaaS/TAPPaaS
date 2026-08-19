@@ -97,6 +97,10 @@ export interface NetworkClient {
 export interface ModuleClient {
   // Enumerate the deployed modules whose `environment` field == env.
   modulesForEnvironment(env: string): string[];
+  // Whether a module of this name is deployed at all (its <config>/<name>.json
+  // exists), regardless of which environment it declares. Used to reconcile the
+  // mgmt-zone identity module on a default-environment domain change (#474).
+  moduleDeployed(module: string): boolean;
   // Re-apply a deployed module's current config to its VM/service.
   reconcileModule(module: string, apply: boolean): void;
 }

@@ -83,6 +83,13 @@ export class CliModuleClient implements ModuleClient {
     return out.sort();
   }
 
+  moduleDeployed(module: string): boolean {
+    // A deployed module has a flat <config>/<module>.json. Used to reconcile the
+    // mgmt-zone identity module on a default-env domain change without failing
+    // on systems where identity was never installed (#474).
+    return existsSync(join(this.configDir, `${module}.json`));
+  }
+
   reconcileModule(module: string, apply: boolean): void {
     // module-manager reconcile <module> [--apply] — VERB FIRST (#454). The
     // module-first form this used to build was an assumption made before

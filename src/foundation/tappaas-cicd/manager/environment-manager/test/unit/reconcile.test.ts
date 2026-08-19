@@ -139,6 +139,76 @@ function envNoOwner(name: string, zone: string): Environment {
   );
 }
 
+// #474: a --deep reconcile of the DEFAULT environment also reconciles the
+// mgmt-zone identity module (whose Authentik self-config tracks this domain).
+{
+  const net = new FakeNetworkClient();
+  net.seedZone("foo");
+  const mod = new FakeModuleClient();
+  mod.seedDeployed("identity"); // deployed, environment: null (not a consumer)
+  const plan = computePlan(env("foo", "foo"), net, mod, {
+    deep: true,
+    skipNetwork: false,
+    isDefaultEnv: true,
+  });
+  check(
+    eqJson(plan.actions.map((a) => a.target).filter((t) => t.includes("identity")), [
+      "module 'identity'",
+    ]),
+    "default-env deep reconcile adds a reconcile-module for identity (#474)",
+  );
+}
+
+// #474: a NON-default environment does NOT reconcile identity.
+{
+  const net = new FakeNetworkClient();
+  net.seedZone("foo");
+  const mod = new FakeModuleClient();
+  mod.seedDeployed("identity");
+  const plan = computePlan(env("foo", "foo"), net, mod, {
+    deep: true,
+    skipNetwork: false,
+    isDefaultEnv: false,
+  });
+  check(
+    !plan.actions.some((a) => a.target.includes("identity")),
+    "non-default env deep reconcile does NOT touch identity (#474)",
+  );
+}
+
+// #474: if identity is not deployed, it is not added (no failure on identity-less systems).
+{
+  const net = new FakeNetworkClient();
+  net.seedZone("foo");
+  const mod = new FakeModuleClient(); // identity not seeded
+  const plan = computePlan(env("foo", "foo"), net, mod, {
+    deep: true,
+    skipNetwork: false,
+    isDefaultEnv: true,
+  });
+  check(
+    !plan.actions.some((a) => a.target.includes("identity")),
+    "default-env deep reconcile skips identity when it is not deployed (#474)",
+  );
+}
+
+// #474: identity is not duplicated if it is ever also a direct consumer.
+{
+  const net = new FakeNetworkClient();
+  net.seedZone("foo");
+  const mod = new FakeModuleClient();
+  mod.seedModule("foo", "identity"); // already a consumer of this env
+  const plan = computePlan(env("foo", "foo"), net, mod, {
+    deep: true,
+    skipNetwork: false,
+    isDefaultEnv: true,
+  });
+  check(
+    plan.actions.filter((a) => a.target === "module 'identity'").length === 1,
+    "identity is reconciled exactly once even as default-env consumer (#474)",
+  );
+}
+
 // unknown zone → warning, but still plans the network reconcile.
 {
   const net = new FakeNetworkClient(); // no zones seeded
