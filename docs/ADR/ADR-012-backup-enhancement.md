@@ -75,11 +75,10 @@ Placement is expressed as config, not code: `backup.json` gains an explicit **pl
 
 Separately from the policy enum above, `#456` asked whether *placement itself* —
 independent of `backup` specifically — needs a shared taxonomy across any workload
-TAPPaaS is aware of. Refined answer (full rationale: gdty-vsm
-`Specification-backup-placement-taxonomy-2026-08-19.md`), classifying a workload
-— a VM, LXC, container, or service, TAPPaaS-wrapped or not — by whether this Site
-tracks it, whether this Site (or another Site) manages it, and, if this Site
-manages it, where it sits in this Site's own cluster and zone model:
+TAPPaaS is aware of. Refined answer below, classifying a workload — a VM, LXC,
+container, or service, TAPPaaS-wrapped or not — by whether this Site tracks it,
+whether this Site (or another Site) manages it, and, if this Site manages it,
+where it sits in this Site's own cluster and zone model:
 
 | Term | Description | Site-tracked? | Site-managed? | Cluster member? | Zone | Example |
 |---|---|---|---|---|---|---|
