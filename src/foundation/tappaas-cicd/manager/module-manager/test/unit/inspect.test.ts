@@ -14,6 +14,9 @@ import {
   buildConfigOnlyReport,
   buildVmReport,
   dependsOnOf,
+  guestTypeFromDeps,
+  parseQmConfig,
+  vmnetParse,
 } from "../../src/inspect";
 import {
   ServiceCheck,
@@ -323,6 +326,118 @@ function text(lines: { text: string }[]): string {
   check(
     /1 dependency service\(s\) report no drift/.test(text(clean.lines)),
     "the VM report states how many dependency services were verified",
+  );
+}
+
+// ── 7b. the LXC guest path reads pct-shaped keys (#465) ────────────────
+{
+  check(
+    guestTypeFromDeps({ dependsOn: ["cluster:lxc", "backup:vm"] }) === "lxc",
+    "a cluster:lxc module falls back to the pct path",
+  );
+  check(
+    guestTypeFromDeps({ dependsOn: ["cluster:vm", "cluster:ha"] }) === "qemu" &&
+      guestTypeFromDeps({ dependsOn: ["backup:vm"] }) === "qemu" &&
+      guestTypeFromDeps({}) === "qemu",
+    "cluster:vm, cluster:ha and a module with no cluster:* dep all stay on qm",
+  );
+
+  // Verbatim `pct config 312` output for the vllm-amd container (#465): an LXC
+  // names the guest `hostname`, keeps its root volume in `rootfs` (no disk
+  // bus), carries the MAC as hwaddr=, and has no bios/cpu key at all.
+  const actual = parseQmConfig(
+    [
+      "arch: amd64",
+      "cores: 24",
+      "features: nesting=1",
+      "hostname: vllm-amd",
+      "memory: 47104",
+      "net0: name=eth0,bridge=lan,hwaddr=02:C5:EC:06:CD:22,ip=dhcp,tag=200,type=veth",
+      "onboot: 1",
+      "ostype: debian",
+      "rootfs: tanka1:subvol-312-disk-0,size=32G",
+      "swap: 0",
+    ].join("\n"),
+  );
+  check(
+    vmnetParse(actual.net0, "mac") === "02:C5:EC:06:CD:22" &&
+      vmnetParse(actual.net0, "bridge") === "lan" &&
+      vmnetParse(actual.net0, "tag") === "200",
+    "vmnetParse reads the LXC hwaddr= NIC form as well as the QEMU model= one",
+  );
+
+  const cfg = {
+    vmname: "vllm-amd",
+    vmid: 312,
+    node: "tappaas2",
+    cores: 24,
+    memory: 47104,
+    diskSize: "32G",
+    bridge0: "lan",
+    mac0: "02:C5:EC:06:CD:22",
+    dependsOn: ["cluster:lxc"],
+  };
+  const lxc = text(
+    buildVmReport({
+      module: "vllm-amd",
+      vmid: "312",
+      cfg,
+      git: cfg,
+      zones: null,
+      actual,
+      vmStatus: "running",
+      actualNode: "tappaas2",
+      guest: "lxc",
+    }).lines,
+  );
+  check(
+    /vmname\s+vllm-amd\s+.*vllm-amd.*vllm-amd/.test(lxc.replace(/\u001b\[[0-9;]*m/g, "")),
+    "the LXC report fills vmname from `hostname`, not the absent `name` key",
+  );
+  check(/diskSize.*32G/.test(lxc), "the LXC report reads diskSize out of rootfs");
+  check(/mac0.*02:C5:EC:06:CD:22/.test(lxc), "the LXC report reads mac0 out of hwaddr=");
+  check(!/seabios/.test(lxc), "a container is never given a fabricated seabios firmware");
+
+  // A container with a bios in config: the empty Actual cell must NOT read as
+  // drift — the whole point of not defaulting to seabios. Compared against the
+  // same report without the bios field, so only the bios row's contribution is
+  // measured (the fixture's other rows drift or not on their own merits).
+  const lxcInputs = {
+    module: "vllm-amd",
+    vmid: "312",
+    cfg,
+    git: cfg,
+    zones: null,
+    actual,
+    vmStatus: "running",
+    actualNode: "tappaas2",
+    guest: "lxc" as const,
+  };
+  const biosCfg = { ...cfg, bios: "ovmf" };
+  const withBios = buildVmReport({ ...lxcInputs, cfg: biosCfg, git: biosCfg });
+  check(
+    withBios.errors === buildVmReport(lxcInputs).errors,
+    "an LXC module declaring bios reports no phantom firmware drift",
+  );
+
+  // The QEMU shape is untouched: same report, qm-shaped keys, guest omitted.
+  const qemu = text(
+    buildVmReport({
+      module: "network",
+      vmid: "110",
+      cfg: { vmname: "network", vmid: 110, node: "tappaas1", diskSize: "32G" },
+      git: null,
+      zones: null,
+      actual: parseQmConfig(
+        ["name: network", "cores: 4", "scsi0: tanka1:vm-110-disk-0,size=32G"].join("\n"),
+      ),
+      vmStatus: "running",
+      actualNode: "tappaas1",
+    }).lines,
+  );
+  check(
+    /name.*network|vmname.*network/.test(qemu) && /32G/.test(qemu) && /seabios/.test(qemu),
+    "the QEMU path is unchanged when guest is omitted (name, disk bus, seabios default)",
   );
 }
 

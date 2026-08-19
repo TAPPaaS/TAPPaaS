@@ -5,7 +5,8 @@
 // Generates a 3-column comparison table for a module's VM showing:
 //   1. Released (Git)     — from the source module JSON (the module's .location)
 //   2. Desired (~/config) — from config/<module>.json (deployed config)
-//   3. Actual             — from the running VM via Proxmox (ssh qm/pvesh)
+//   3. Actual             — from the running guest via Proxmox (ssh qm/pct/pvesh;
+//                           qm for a QEMU VM, pct for an LXC container — #465)
 //
 // Color coding (same rules as the bash):
 //   Yellow — Desired differs from Released (config drift; counts a warning)
@@ -75,8 +76,11 @@ export function parseQmConfig(text: string): Record<string, string> {
   return out;
 }
 
-// Extract one field from a live `qm config` netN value, e.g.
-// "virtio=02:..,bridge=lan,tag=210". The model=MAC token yields the mac.
+// Extract one field from a live netN value. QEMU spells it
+// "virtio=02:..,bridge=lan,tag=210" (the model=MAC token yields the mac); LXC
+// spells the same NIC "name=eth0,bridge=lan,hwaddr=02:..,ip=dhcp,tag=200"
+// (#465) — bridge/tag/trunks are shared, only the MAC token differs, so the
+// mac lookup accepts either form and every caller stays type-agnostic.
 const NIC_MODELS = new Set(["virtio", "e1000", "e1000e", "rtl8139", "vmxnet3"]);
 export function vmnetParse(
   line: string,
@@ -87,7 +91,7 @@ export function vmnetParse(
     const k = eq === -1 ? part : part.slice(0, eq);
     const v = eq === -1 ? part : part.slice(eq + 1);
     if (field === "mac") {
-      if (NIC_MODELS.has(k)) return v;
+      if (NIC_MODELS.has(k) || k === "hwaddr") return v;
     } else if (k === field) {
       return v;
     }
@@ -325,6 +329,24 @@ export function dependsOnOf(cfg: Record<string, unknown>): string[] {
   return Array.isArray(d) ? d.filter((x): x is string => typeof x === "string") : [];
 }
 
+// ── pure: Proxmox guest type ───────────────────────────────────────────
+// Which Proxmox CLI owns a guest, and which config keys its `config` output
+// uses: `qm` for a QEMU VM, `pct` for an LXC container (#465). Against an LXC
+// vmid `qm config` fails outright, so the whole live half of the report died
+// for a container that was in fact up and healthy.
+export type GuestType = "qemu" | "lxc";
+
+// FALLBACK discriminator, for when the cluster-resources query could not answer
+// (unreachable node, bad JSON, guest not in the cluster listing). The live
+// query is the authority — a module's declared dependsOn is a statement of
+// intent, not of what Proxmox actually holds. cluster:lxc is the only LXC
+// marker; every other form (cluster:vm, cluster:ha, or no cluster:* dep at all
+// — plenty of deployed modules declare none) keeps the qm path it has always
+// taken, so this is additive for every VM module.
+export function guestTypeFromDeps(cfg: Record<string, unknown>): GuestType {
+  return dependsOnOf(cfg).includes("cluster:lxc") ? "lxc" : "qemu";
+}
+
 // Everything the VM three-way table needs, gathered by the I/O layer.
 export interface VmInspectInputs {
   module: string; // deployed (effective) module name — used in the summary hints
@@ -332,9 +354,12 @@ export interface VmInspectInputs {
   cfg: Record<string, unknown>; // normalized deployed config
   git: Record<string, unknown> | null; // normalized git source (null = not found)
   zones: ZonesFile;
-  actual: Record<string, string>; // parsed `qm config`
+  actual: Record<string, string>; // parsed `qm config` / `pct config`
   vmStatus: string;
   actualNode: string;
+  // Which CLI produced `actual` — decides how its keys are read (#465).
+  // Omitted = "qemu", the shape every caller produced before LXC support.
+  guest?: GuestType;
   // Dependency-service state (#458). Omitted = not checked; the summary then
   // names the uncovered deps rather than reporting a bare clean.
   svc?: ServiceSection;
@@ -342,6 +367,8 @@ export interface VmInspectInputs {
 
 export function buildVmReport(inp: VmInspectInputs): InspectReport {
   const { vmid, cfg, git, zones, actual, vmStatus, actualNode } = inp;
+  const guest = inp.guest ?? "qemu";
+  const isLxc = guest === "lxc";
   const svc = inp.svc ?? buildServiceSection(dependsOnOf(cfg), null);
   const cfgF = (k: string): string => getField(cfg, k);
   const gitF = (k: string): string => getField(git, k);
@@ -349,7 +376,7 @@ export function buildVmReport(inp: VmInspectInputs): InspectReport {
   t.header();
 
   // VM identity
-  t.row("vmname", cfgF("vmname"), gitF("vmname"), actual.name ?? "");
+  t.row("vmname", cfgF("vmname"), gitF("vmname"), (isLxc ? actual.hostname : actual.name) ?? "");
   t.row("vmid", cfgF("vmid"), gitF("vmid"), vmid);
   t.row("node", cfgF("node"), gitF("node"), actualNode);
   t.row("status", "-", "-", vmStatus);
@@ -359,9 +386,11 @@ export function buildVmReport(inp: VmInspectInputs): InspectReport {
   t.row("memory", cfgF("memory"), gitF("memory"), actual.memory ?? "");
 
   // Storage / disk — actual size parsed from the first present disk bus
-  // (e.g. "tanka1:vm-311-disk-0,size=32G").
+  // (e.g. "tanka1:vm-311-disk-0,size=32G"). An LXC has no bus: its root volume
+  // is the single `rootfs` key ("tanka1:subvol-312-disk-0,size=32G"), same
+  // size= token (#465).
   let actualDisk = "";
-  for (const key of ["scsi0", "virtio0", "ide0", "sata0"]) {
+  for (const key of isLxc ? ["rootfs"] : ["scsi0", "virtio0", "ide0", "sata0"]) {
     if (actual[key]) {
       const m = /size=([^,]+)/.exec(actual[key]);
       actualDisk = m ? m[1] : "";
@@ -371,9 +400,12 @@ export function buildVmReport(inp: VmInspectInputs): InspectReport {
   t.row("diskSize", cfgF("diskSize"), gitF("diskSize"), actualDisk);
   t.row("storage", cfgF("storage"), gitF("storage"), "");
 
-  // BIOS / CPU type
-  t.row("bios", cfgF("bios"), gitF("bios"), actual.bios || "seabios");
-  t.row("cputype", cfgF("cputype"), gitF("cputype"), actual.cpu ?? "");
+  // BIOS / CPU type — QEMU-only concepts. A container has neither, so the
+  // Actual cells stay EMPTY rather than defaulting to "seabios": an invented
+  // firmware would read as real drift against any LXC module that sets bios
+  // (the empty cell is exempt from the red actual-vs-config rule) (#465).
+  t.row("bios", cfgF("bios"), gitF("bios"), isLxc ? "" : actual.bios || "seabios");
+  t.row("cputype", cfgF("cputype"), gitF("cputype"), (isLxc ? "" : actual.cpu) ?? "");
 
   // Network — net0 and net1 (TAPPaaS allows at most two NICs per VM). For each
   // NIC: bridge, zone (by name AND by VLAN tag — two views of the same thing),
@@ -574,23 +606,16 @@ export function inspectModule(module: string, opts: InspectOptions = {}): number
     return serviceExitCode(svc);
   }
 
-  info(`${BOLD}TAPPaaS VM Inspection: ${BL}${vmname}${CL} (VMID: ${vmid}) on ${node}`);
-  console.log("");
-
   const fqdn = `${node}.${mgmtDomain()}`;
 
-  const rCfg = ssh("root", fqdn, `qm config ${vmid}`);
-  if (!rCfg.ran || rCfg.rc !== 0) {
-    error(`Failed to get VM config from Proxmox (VMID: ${vmid} on ${node})`);
-    return 1;
-  }
-  const actual = parseQmConfig(rCfg.stdout);
-
-  const rStat = ssh("root", fqdn, `qm status ${vmid}`);
-  const vmStatus =
-    !rStat.ran || rStat.rc !== 0 ? "unknown" : rStat.stdout.trim().split(/\s+/)[1] ?? "";
-
+  // Cluster resources FIRST (#465). This one query answers two questions — the
+  // node the guest actually runs on, and whether it is a QEMU VM or an LXC
+  // container (`--type vm` lists both, each tagged type: "qemu" | "lxc") — so
+  // it is hoisted above the config fetch that has to know which CLI to shell.
+  // Ground truth beats the module's declared dependsOn, which is only the
+  // fallback when this query cannot answer.
   let actualNode = "";
+  let liveGuest: GuestType | null = null;
   const rRes = ssh("root", fqdn, "pvesh get /cluster/resources --type vm --output-format json");
   if (rRes.ran && rRes.rc === 0) {
     try {
@@ -598,18 +623,40 @@ export function inspectModule(module: string, opts: InspectOptions = {}): number
       if (Array.isArray(arr)) {
         for (const e of arr) {
           const o = e as Record<string, unknown>;
-          if (Number(o.vmid) === Number(vmid) && typeof o.node === "string") {
-            actualNode = o.node;
-            break;
-          }
+          if (Number(o.vmid) !== Number(vmid)) continue;
+          if (typeof o.node === "string") actualNode = o.node;
+          if (o.type === "qemu" || o.type === "lxc") liveGuest = o.type;
+          break;
         }
       }
     } catch {
       actualNode = "";
     }
   }
+  const guest = liveGuest ?? guestTypeFromDeps(cfg);
+  const cli = guest === "lxc" ? "pct" : "qm";
+
+  info(
+    `${BOLD}TAPPaaS ${guest === "lxc" ? "LXC" : "VM"} Inspection: ` +
+      `${BL}${vmname}${CL} (VMID: ${vmid}) on ${node}`,
+  );
+  console.log("");
+
+  const rCfg = ssh("root", fqdn, `${cli} config ${vmid}`);
+  if (!rCfg.ran || rCfg.rc !== 0) {
+    error(`Failed to get VM config from Proxmox (VMID: ${vmid} on ${node}, via ${cli})`);
+    return 1;
+  }
+  const actual = parseQmConfig(rCfg.stdout);
+
+  const rStat = ssh("root", fqdn, `${cli} status ${vmid}`);
+  const vmStatus =
+    !rStat.ran || rStat.rc !== 0 ? "unknown" : rStat.stdout.trim().split(/\s+/)[1] ?? "";
 
   const svc = serviceSection();
-  emit(buildVmReport({ module, vmid, cfg, git, zones, actual, vmStatus, actualNode, svc }).lines);
+  emit(
+    buildVmReport({ module, vmid, cfg, git, zones, actual, vmStatus, actualNode, guest, svc })
+      .lines,
+  );
   return serviceExitCode(svc);
 }

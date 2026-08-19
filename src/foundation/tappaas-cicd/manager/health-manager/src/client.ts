@@ -9,8 +9,8 @@
 // Mirrors inspect-cluster.sh / inspect-vm.sh / check-disk-threshold.sh:
 //   reachableNodes() : site.json node list, ping-probed; tappaas{1..9} scan fallback
 //   clusterResources(): ssh root@<node> pvesh get /cluster/resources --type vm --output-format json
-//   vmConfig()       : ssh root@<node> qm config <vmid>
-//   vmStatus()       : ssh root@<node> qm status <vmid>           → status word
+//   vmConfig()       : ssh root@<node> qm|pct config <vmid>       (#465)
+//   vmStatus()       : ssh root@<node> qm|pct status <vmid>       → status word
 //   actualNode()     : pvesh /cluster/resources | select vmid
 //   diskUsagePct()   : ssh tappaas@<target> df / | tail -1 | awk '{print $5}'
 
@@ -50,8 +50,13 @@ export class CliClusterClient implements ClusterClient {
     }));
   }
 
+  // `qm` answers for a QEMU VM, `pct` for an LXC container; against the wrong
+  // kind of guest the CLI fails outright (#465). This client has no guest-type
+  // input of its own, so it tries qm and falls back to pct — the module-manager
+  // inspect path derives the type from pvesh instead, which it already queries.
   vmConfig(node: string, vmid: number): Record<string, string> {
-    const r = ssh("root", `${node}.${mgmtDomain()}`, `qm config ${vmid}`);
+    let r = ssh("root", `${node}.${mgmtDomain()}`, `qm config ${vmid}`);
+    if (!r.ran || r.rc !== 0) r = ssh("root", `${node}.${mgmtDomain()}`, `pct config ${vmid}`);
     if (!r.ran || r.rc !== 0) {
       throw new Error(`Failed to get VM config from Proxmox (VMID: ${vmid} on ${node})`);
     }
@@ -67,7 +72,8 @@ export class CliClusterClient implements ClusterClient {
   }
 
   vmStatus(node: string, vmid: number): string {
-    const r = ssh("root", `${node}.${mgmtDomain()}`, `qm status ${vmid}`);
+    let r = ssh("root", `${node}.${mgmtDomain()}`, `qm status ${vmid}`);
+    if (!r.ran || r.rc !== 0) r = ssh("root", `${node}.${mgmtDomain()}`, `pct status ${vmid}`);
     if (!r.ran || r.rc !== 0) return "unknown";
     // "status: running" → "running"
     const parts = r.stdout.trim().split(/\s+/);
