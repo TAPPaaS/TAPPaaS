@@ -37,9 +37,77 @@ def _client(args):
     return DhcpManager(Config(**config_kwargs))
 
 
+def _find_a_overrides(mgr, hostname: str, domain: str) -> list:
+    """Existing A host-overrides for <hostname>.<domain>, newest API shape."""
+    result = mgr.client.run_module(
+        "raw",
+        params={
+            "module": "unbound",
+            "controller": "settings",
+            "command": "searchHostOverride",
+            "action": "get",
+        },
+    )
+    rows = result.get("result", {}).get("response", {}).get("rows", []) or []
+    return [
+        r for r in rows
+        if r.get("hostname") == hostname
+        and r.get("domain") == domain
+        and str(r.get("rr", "")).startswith("A")
+    ]
+
+
+def _delete_all_a_overrides(mgr, args, hostname: str, domain: str) -> int:
+    """Remove every A override for <hostname>.<domain>. Returns how many went.
+
+    `unbound_host` state=absent removes ONE row per call, so duplicates need a
+    loop. Bounded so a delete that silently fails cannot spin forever.
+    """
+    removed = 0
+    for _ in range(20):
+        if not _find_a_overrides(mgr, hostname, domain):
+            break
+        res = mgr.client.run_module(
+            "unbound_host",
+            check_mode=args.check_mode,
+            params={
+                "hostname": hostname,
+                "domain": domain,
+                "record_type": "A",
+                "state": "absent",
+                "match_fields": ["hostname", "domain", "record_type"],
+            },
+        )
+        if res.get("error") or not (res.get("result") or {}).get("changed"):
+            break
+        removed += 1
+    return removed
+
+
 def add_override(args) -> bool:
     desc = args.description or f"{args.hostname}.{args.domain}"
     with _client(args) as mgr:
+        # Converge, do not accumulate. The underlying `unbound_host` module does
+        # NOT reliably match an existing row on re-add — two identical calls
+        # produce two rows with different uuids — so a caller that runs on every
+        # reconcile (network:proxy's update-service.sh) would add one duplicate
+        # per run, without bound. state=absent also removes only one row per
+        # call, so duplicates never self-heal either.
+        #
+        # Decide here, where the match is explicit, rather than relying on the
+        # module's default match_fields (which the delete path already had to
+        # override for the same reason): exactly-right is a no-op, anything else
+        # is flattened to a single correct row.
+        existing = _find_a_overrides(mgr, args.hostname, args.domain)
+        if len(existing) == 1 and existing[0].get("server") == args.ip:
+            print(f"Already up to date: {args.hostname}.{args.domain} -> "
+                  f"{args.ip} (Unbound host override)")
+            return True
+        if existing:
+            n = _delete_all_a_overrides(mgr, args, args.hostname, args.domain)
+            if n:
+                print(f"Removed {n} stale/duplicate A override(s) for "
+                      f"{args.hostname}.{args.domain}")
         result = mgr.client.run_module(
             "unbound_host",
             check_mode=args.check_mode,

@@ -63,7 +63,6 @@
     "network:proxy": {
       "proxyPort": 8443,
       "proxyUpstreamTls": "true",
-      "proxyTls": "dns01",
       "proxyAllowedZones": [
         "mgmt"
       ]

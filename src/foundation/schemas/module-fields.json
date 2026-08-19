@@ -896,13 +896,12 @@
       }
     },
     "proxyTls": {
-      "description": "How network:proxy obtains the public TLS certificate for this domain. 'dns01' (default) binds the TAPPaaS-wide wildcard certificate issued by os-acme-client (see acme-setup.sh, issue #254) to this domain via Caddy's per-domain CustomCertificate — no inbound HTTP-01 validation, no per-module DNS API call (one wildcard serves every dns01 module). 'http01' uses classic ACME HTTP-01: Caddy obtains a per-domain cert via the :80 challenge, so the domain MUST be reachable from the internet on port 80 — useful for genuinely public services where DNS-API access is not available. For dns01 to deliver a certificate, the wildcard must already be in OPNsense Trust (run acme-setup.sh on the cicd at INSTALL.md §2.3); until then the module's LAN endpoint still works but the public HTTPS endpoint has no cert.",
+      "description": "How network:proxy obtains the public TLS certificate for this domain. OMIT IT to inherit the environment's domains.dnsMode (config/environments/<env>.json) — that is the normal case and the only way one setting governs a whole environment. Set it only to override that environment-wide choice for this one module. 'dns01' binds the TAPPaaS-wide wildcard certificate issued by os-acme-client (acme-setup.sh, issue #254) via Caddy's per-domain CustomCertificate, and requires a DNS provider that supports DNS-01 plus the wildcard already being in OPNsense Trust; until it is, the public HTTPS endpoint has no cert while the LAN endpoint still works. 'http01' uses classic ACME HTTP-01: Caddy obtains a per-domain cert via the :80 challenge, so the domain MUST be reachable from the internet on port 80, and no DNS API is needed.",
       "type": "string",
       "requiredBy": [],
       "usedBy": [
         "network:proxy"
       ],
-      "default": "dns01",
       "values": {
         "dns01": "Wildcard certificate via os-acme-client; bound by refid through Caddy CustomCertificate (no per-module ACME, works for internal-only services)",
         "http01": "Per-domain ACME HTTP-01 via Caddy itself (no DNS-API needed, but the domain must be reachable from the internet on :80)"
