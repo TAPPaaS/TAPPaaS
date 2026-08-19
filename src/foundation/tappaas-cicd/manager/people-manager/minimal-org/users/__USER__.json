@@ -2,6 +2,6 @@
   "name": "__USER__",
   "displayName": "__USER__",
   "primaryEmail": "__EMAIL__",
-  "memberOf": ["users"],
+  "memberOf": ["users", "authentik Admins"],
   "roles": ["admin", "user"]
 }

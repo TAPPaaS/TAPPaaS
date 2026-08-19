@@ -40,6 +40,10 @@ Everything is automated. Beyond creating the VM, the install:
    `X-Authentik-*` copy-headers.
 4. Sets the embedded outpost's `authentik_host` to `https://identity.<domain>` and
    registers the identity self-application + Proxy Provider.
+5. Adopts Authentik's built-in **`authentik Admins`** group (`is_superuser`) and puts the
+   **site owner** in it (issue #476), so that person can administer users in the Authentik
+   UI. On a fresh install the group + membership come from the people bootstrap; on an
+   existing install `update.sh` adds them to `config/people/` and applies the membership.
 
 Role groups (`user`/`admin`/`root`) and the `users` team group are reconciled into
 Authentik by `people-manager sync` — run by `rest-of-foundation.sh` at first install and
@@ -47,8 +51,12 @@ on update.
 
 ## Post-install
 
-None. Admin access if you need the Authentik admin UI directly: user `akadmin`, password
-in `/etc/secrets/authentik.env` on the identity VM (`AUTHENTIK_BOOTSTRAP_PASSWORD`).
+None. Log in to `https://identity.<domain>` as the **site owner** — the owner user of the
+organization that owns the default environment (`site.json` `.owner` →
+`config/people/organizations/<org>.json` `.owner`) — to reach the admin UI.
+
+Break-glass only: user `akadmin`, password in `/etc/secrets/authentik.env` on the identity
+VM (`AUTHENTIK_BOOTSTRAP_PASSWORD`). It is the sole admin if the owner account is lost.
 
 Every consumer module with `dependsOn: identity:accessControl` (forward-auth) or
 `identity:identity` (OIDC) gets its SSO wiring automatically when it installs — no
@@ -66,6 +74,7 @@ Fast tier asserts Authentik connectivity, role groups and the OIDC allow-list;
 | Browse `https://identity.<domain>` | Authentik login page |
 | `authentik-manager test` (on tappaas-cicd) | exits 0 — API reachable, token accepted |
 | Log in as `akadmin` (password from the VM's `/etc/secrets/authentik.env`) | Authentik admin interface |
+| `authentik-manager list-users \| jq '.[] \| select(.name=="<site-owner>") \| .groups'` | includes `authentik Admins` |
 
 ## Troubleshooting
 

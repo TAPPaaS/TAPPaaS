@@ -16,11 +16,20 @@
 //
 // Result (ADR-007 people model):
 //   * 1 organization  <ORG>            owner = <USER>
-//   * 1 group         users (team)     ownerOrg <ORG>, roles [user]
+//   * 2 groups        users (team)             ownerOrg <ORG>, roles [user]
+//                     authentik Admins         ownerOrg <ORG>, no roles
 //   * 3 roles         admin, user, root
-//   * 2 users, both memberOf [users]:
-//       root    roles [admin, user, root]   email root@<domain-of-installer>
-//       <USER>  roles [admin, user]         email <installer email>
+//   * 2 users:
+//       root    roles [admin, user, root]   memberOf [users]
+//               email root@<domain-of-installer>
+//       <USER>  roles [admin, user]         memberOf [users, authentik Admins]
+//               email <installer email>
+//
+// `authentik Admins` is Authentik's OWN built-in superuser group (is_superuser),
+// not one TAPPaaS invents — naming it here adopts it, so reconcile puts <USER>
+// (the site/default-environment owner) in it and that person can administer
+// users in the Authentik UI without the akadmin break-glass login (issue #476).
+// root is deliberately NOT a member: it stays a label-only break-glass account.
 //
 // Guard (matches the retired bash): a non-empty destination is REFUSED unless
 // force — the caller-facing idempotency contract is "skip once populated"

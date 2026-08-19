@@ -73,6 +73,34 @@ for g in user admin root; do
     group_present "$g" && pass "group ${g} present" || fail "group ${g} missing"
 done
 
+# ── 2b. the Authentik admin group is superuser + holds the site owner (#476) ─
+# Membership in an is_superuser group is the ONLY thing that grants the Authentik
+# admin UI, so assert BOTH halves: the group carries the flag, and the site owner
+# is in it. Group-flag check is unconditional; the membership check is skipped
+# when no site owner can be resolved (people tree not bootstrapped yet).
+section "2b: 'authentik Admins' is superuser and holds the site owner (#476)"
+AK_ADMIN_GROUP="authentik Admins"
+if api '/core/groups/?page_size=1000' \
+    | jq -e --arg n "${AK_ADMIN_GROUP}" 'any(.results[]; .name==$n and .is_superuser==true)' >/dev/null 2>&1; then
+    pass "group '${AK_ADMIN_GROUP}' present with is_superuser=true"
+else
+    fail "group '${AK_ADMIN_GROUP}' missing or not is_superuser — nobody but akadmin can administer Authentik"
+fi
+
+PEOPLE_DIR="${TAPPAAS_CONFIG:-${CONFIG_DIR:-/home/tappaas/config}}/people"
+OWNER_ORG="$(get_site_value '.owner' 2>/dev/null || true)"
+OWNER_USER=""
+[[ -n "${OWNER_ORG}" ]] && OWNER_USER="$(jq -r '.owner // empty' \
+    "${PEOPLE_DIR}/organizations/${OWNER_ORG}.json" 2>/dev/null || true)"
+if [[ -z "${OWNER_USER}" ]]; then
+    warn "  no site owner resolved (people tree not bootstrapped?) — skipping the membership check"
+elif ${AUTHENTIK_MANAGER} get-user --name "${OWNER_USER}" 2>/dev/null \
+    | jq -e --arg g "${AK_ADMIN_GROUP}" '.groups // [] | index($g) != null' >/dev/null 2>&1; then
+    pass "site owner '${OWNER_USER}' is a member of '${AK_ADMIN_GROUP}'"
+else
+    fail "site owner '${OWNER_USER}' is NOT in '${AK_ADMIN_GROUP}' — re-run identity update.sh"
+fi
+
 # ── 3. OIDC allow-list points at the role groups (offline assertion) ─────────
 # install-service.sh must gate OIDC apps on the people-manager role groups
 # the `users` membership group (the OIDC groups claim carries memberships, not the

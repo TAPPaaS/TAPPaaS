@@ -153,10 +153,79 @@ authentik-manager proxy-app-ensure identity \
 # into Authentik by `people-manager sync` (run at foundation install and on
 # update from config/people/). This script no longer ensures them here.
 
+# ── Authentik admin rights for the site owner (issue #476) ──────────────────
+# The ONLY thing that grants the Authentik admin UI is membership in a group
+# with is_superuser — TAPPaaS's own `admin`/`root` ROLES are labels passed to
+# apps and confer nothing here. So adopt Authentik's built-in "authentik Admins"
+# group and put the site owner in it, and day-2 user administration stops
+# needing the akadmin break-glass login.
+#
+# Two halves, both idempotent and both safe to re-run:
+#   Authentik side  — group-ensure --superuser ADOPTS the built-in group, and
+#                     re-creates it WITH is_superuser if it was deleted. Without
+#                     this, people-manager's ensure-group would recreate a plain
+#                     group of the same name and the grant would silently become
+#                     a no-op.
+#   config/people   — a FRESH install inherits the group + membership from
+#                     people-manager's minimal-org bootstrap (which runs later,
+#                     in rest-of-foundation.sh). An EXISTING install has neither,
+#                     so add them here through the manager verbs and converge the
+#                     membership now.
+AK_ADMIN_GROUP="authentik Admins"
+
+info "${BOLD}Ensuring the Authentik admin group '${AK_ADMIN_GROUP}' (is_superuser)${CL}"
+authentik-manager group-ensure "${AK_ADMIN_GROUP}" --superuser >/dev/null \
+    || warn "  group-ensure '${AK_ADMIN_GROUP}' failed — the site owner will not get Authentik admin rights"
+
+# Site owner = the owner USER of the organization that owns the default
+# environment (site.json .owner is that same organization). People files are the
+# source of truth; an empty/absent people tree means a fresh install, where the
+# bootstrap does this instead — so skip quietly rather than guess.
+PEOPLE_DIR="${TAPPAAS_CONFIG:-${CONFIG_DIR}}/people"
+if [[ -d "${PEOPLE_DIR}/organizations" ]]; then
+    # NB: every read is `|| true`-guarded — under `set -e` a jq that finds no
+    # file, or a `[[ ]] && assign` whose test is false, would abort the install.
+    OWNER_ORG="$(get_site_value '.owner' || true)"
+    if [[ -z "${OWNER_ORG}" ]]; then
+        DEFAULT_ENV="$(get_site_value '.defaultEnvironment' || true)"
+        OWNER_ORG="$(jq -r '.ownerOrg // empty' \
+            "${CONFIG_DIR}/environments/${DEFAULT_ENV}.json" 2>/dev/null || true)"
+    fi
+    OWNER_USER=""
+    if [[ -n "${OWNER_ORG}" ]]; then
+        OWNER_USER="$(jq -r '.owner // empty' \
+            "${PEOPLE_DIR}/organizations/${OWNER_ORG}.json" 2>/dev/null || true)"
+    fi
+
+    if [[ -z "${OWNER_USER}" ]]; then
+        warn "  no site-owner user resolved (site.json .owner → organizations/<org>.json .owner) — skipping the ${AK_ADMIN_GROUP} grant"
+    else
+        info "${BOLD}Granting Authentik admin to the site owner '${OWNER_USER}'${CL}"
+        # Config first, so the membership survives every later reconcile.
+        if [[ ! -f "${PEOPLE_DIR}/groups/${AK_ADMIN_GROUP}.json" ]]; then
+            people-manager group add "${AK_ADMIN_GROUP}" \
+                --displayName "Authentik Admins" --type access-set --ownerOrg "${OWNER_ORG}" \
+                || warn "  people-manager group add '${AK_ADMIN_GROUP}' failed"
+        fi
+        people-manager user modify "${OWNER_USER}" --add-groups "${AK_ADMIN_GROUP}" \
+            || warn "  people-manager user modify ${OWNER_USER} --add-groups failed"
+        # Then converge just this membership in Authentik. A targeted call, not a
+        # full `reconcile --apply`: a module update must not push whatever else an
+        # operator has staged in config/people.
+        if authentik-manager get-user --name "${OWNER_USER}" | jq -e '. != null' >/dev/null 2>&1; then
+            authentik-manager add-member --user "${OWNER_USER}" --group "${AK_ADMIN_GROUP}" >/dev/null \
+                && info "  ${GN}✓${CL} ${OWNER_USER} ∈ ${AK_ADMIN_GROUP}" \
+                || warn "  add-member ${OWNER_USER} → ${AK_ADMIN_GROUP} failed"
+        else
+            info "  ${OWNER_USER} not in Authentik yet — 'people-manager reconcile --apply' will create it and apply the membership"
+        fi
+    fi
+fi
+
 echo
 info "${BOLD}Installation Complete${CL}"
 info "  VM: ${VMNAME} (VMID: ${VMID})  Node: ${NODE}  Zone: ${ZONE0NAME}"
 [[ -n "${HANODE}" ]] && info "  HA Node: ${HANODE}"
 info "  Authentik UI : ${IDENTITY_PUBLIC}"
-info "  Admin login  : akadmin / (see /etc/secrets/authentik.env on ${IDENTITY_FQDN}: AUTHENTIK_BOOTSTRAP_PASSWORD)"
+info "  Admin login  : the site owner (member of '${AK_ADMIN_GROUP}') — break-glass: akadmin / (see /etc/secrets/authentik.env on ${IDENTITY_FQDN}: AUTHENTIK_BOOTSTRAP_PASSWORD)"
 info "  Per-app SSO  : every consumer with dependsOn: identity:accessControl gets forward-auth wired automatically"

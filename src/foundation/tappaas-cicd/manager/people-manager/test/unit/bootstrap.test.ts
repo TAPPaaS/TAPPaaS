@@ -60,13 +60,17 @@ const OPTS = {
 {
   const d = tmpPeople();
   const res = bootstrapPeople({ peopleDir: d, ...OPTS });
-  check(res.written.length === 7, `writes the 7 template files (got ${res.written.length})`);
+  check(res.written.length === 8, `writes the 8 template files (got ${res.written.length})`);
   check(res.rootEmail === "root@example.com", "derives root email from the installer domain");
   check(res.minimalOrgDir === MINIMAL_ORG, "PM_MINIMAL_ORG_DIR override is honoured");
   check(existsSync(join(d, "organizations", "acme-site.json")), "org file named after --org");
   check(existsSync(join(d, "users", "lars.json")), "installer user file named after --user");
   check(existsSync(join(d, "users", "root.json")), "root user file present");
-  check(existsSync(join(d, "groups", "users.json")), "the single 'users' group present");
+  check(existsSync(join(d, "groups", "users.json")), "the 'users' group present");
+  check(
+    existsSync(join(d, "groups", "authentik Admins.json")),
+    "the 'authentik Admins' group present (issue #476)",
+  );
   for (const r of ["admin", "user", "root"]) {
     check(existsSync(join(d, "roles", `${r}.json`)), `role '${r}' present`);
   }
@@ -92,12 +96,25 @@ const OPTS = {
       root.memberOf.includes("users"),
     "root user: roles [admin,user,root], root@ email, memberOf [users]",
   );
+  const akAdmins = JSON.parse(readFileSync(join(d, "groups", "authentik Admins.json"), "utf8"));
+  check(
+    akAdmins.name === "authentik Admins" && akAdmins.ownerOrg === "acme-site",
+    "group 'authentik Admins': keeps Authentik's own name (space included), ownerOrg acme-site",
+  );
   const lars = JSON.parse(readFileSync(join(d, "users", "lars.json"), "utf8"));
   check(
     lars.primaryEmail === "lars@example.com" &&
       [...lars.roles].sort().join(",") === "admin,user" &&
       lars.memberOf.includes("users"),
     "installer user: roles [admin,user], installer email, memberOf [users]",
+  );
+  check(
+    lars.memberOf.includes("authentik Admins"),
+    "installer user (site owner) is in 'authentik Admins' — grants the Authentik UI (#476)",
+  );
+  check(
+    !root.memberOf.includes("authentik Admins"),
+    "root is NOT in 'authentik Admins' — stays a label-only break-glass account",
   );
 
   check(validateRefs(loadPeople(d)).length === 0, "bootstrap result passes validateRefs");
@@ -113,7 +130,7 @@ const OPTS = {
 
   // ── 3. --force overwrites (and still validates) ────────────────────────
   const res2 = bootstrapPeople({ peopleDir: d, ...OPTS, force: true });
-  check(res2.written.length === 7, "--force re-run overwrites");
+  check(res2.written.length === 8, "--force re-run overwrites");
   check(
     res2.warnings.some((w) => w.includes("--force")),
     "--force re-run warns about the non-empty destination",

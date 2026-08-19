@@ -26,9 +26,16 @@ identity presence), `active` (full access), `suspended` (disabled + roles
 stripped), `terminated` (deleted).
 
 The repo also ships `minimal-org/` — the canonical bootstrap content (3 roles, 1
-org, the `users` group, and 2 users: `root` + the installer) with `__ORG__` /
-`__USER__` / `__EMAIL__` / `__ROOT_EMAIL__` placeholders, seeded by
-`people-manager bootstrap`.
+org, the `users` and `authentik Admins` groups, and 2 users: `root` + the
+installer) with `__ORG__` / `__USER__` / `__EMAIL__` / `__ROOT_EMAIL__`
+placeholders, seeded by `people-manager bootstrap`.
+
+`authentik Admins` is **Authentik's own built-in superuser group**, adopted by
+name rather than invented (issue #476). Membership in an `is_superuser` group is
+the only thing that grants the Authentik admin UI — the `admin`/`root` *roles*
+are labels TAPPaaS passes to apps and confer nothing there. The installer (= the
+site / default-environment owner) is a member, so day-2 user administration does
+not need the `akadmin` break-glass login; `root` is deliberately not.
 
 ## Commands
 
@@ -94,9 +101,11 @@ people-manager reconcile --apply               # then pushes config → identity
 | `group` | `--displayName`, `--type`, `--ownerOrg` (an org) | `--roles` |
 | `user`  | `--displayName`, `--email` (→ `primaryEmail`), `--state` (`planned`/`active`/`suspended`/`terminated`) | `--roles`, `--groups` (→ `memberOf`) |
 
-List flags accept a comma/space-separated value to **replace** the whole list
+List flags accept a comma-separated value to **replace** the whole list
 (`--roles "admin,user"`), or `--add-<field>` / `--remove-<field>` (repeatable) to
-incrementally add/remove a member (set semantics — adds dedupe).
+incrementally add/remove a member (set semantics — adds dedupe). Only the comma
+separates: a `Group.name` may contain internal spaces so that an Authentik-created
+group can be named, so `--add-groups "authentik Admins"` is one member, not two.
 
 Examples:
 

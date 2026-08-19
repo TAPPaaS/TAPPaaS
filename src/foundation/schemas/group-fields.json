@@ -12,9 +12,9 @@
   ],
   "properties": {
     "name": {
-      "description": "Group identifier, e.g. myOrg__admins. Used as the Authentik group identifier. Identity key.",
+      "description": "Group identifier, e.g. myOrg__admins. Used as the Authentik group identifier — so it must be able to name a group Authentik itself created: internal spaces are allowed for exactly that reason (the built-in \"authentik Admins\" superuser group TAPPaaS adopts, issue #476). Identity key.",
       "type": "string",
-      "pattern": "^[A-Za-z0-9_-]+$"
+      "pattern": "^[A-Za-z0-9]([A-Za-z0-9 _-]*[A-Za-z0-9_-])?$"
     },
     "type": {
       "description": "Group kind.",

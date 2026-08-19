@@ -88,10 +88,14 @@ export function parseFieldArgs(args: string[]): FieldArgs {
   return { scalars, adds, removes };
 }
 
-// Comma-or-space split for list-valued scalar flags (e.g. --roles "admin,user").
+// Comma split for list-valued scalar flags (e.g. --roles "admin,user").
+// Deliberately NOT whitespace-separated: a Group.name may contain internal
+// spaces so that Authentik-created groups can be named (the built-in
+// "authentik Admins", issue #476), and splitting on spaces would shred
+// `--add-groups "authentik Admins"` into two dangling references.
 function splitList(v: string): string[] {
   return v
-    .split(/[,\s]+/)
+    .split(",")
     .map((s) => s.trim())
     .filter((s) => s.length > 0);
 }

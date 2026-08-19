@@ -193,6 +193,34 @@ function newTree(): string {
     !loadPeople(d).users.get("alice")!.memberOf!.includes("acme__admins"),
     "modify --remove-groups removes a membership",
   );
+
+  // A group name with an internal space (Authentik's built-in "authentik
+  // Admins", issue #476) must survive the list-flag split as ONE item — a
+  // whitespace split would silently store two dangling refs.
+  addEntity(
+    d,
+    "group",
+    "authentik Admins",
+    parseFieldArgs(["--ownerOrg", "acme", "--displayName", "Authentik Admins"]),
+    false,
+  );
+  modifyEntity(d, "user", "alice", parseFieldArgs(["--add-groups", "authentik Admins"]));
+  check(
+    loadPeople(d).users.get("alice")!.memberOf!.includes("authentik Admins"),
+    "--add-groups keeps a space-containing group name intact (#476)",
+  );
+  modifyEntity(d, "user", "alice", parseFieldArgs(["--remove-groups", "authentik Admins"]));
+  check(
+    !loadPeople(d).users.get("alice")!.memberOf!.includes("authentik Admins"),
+    "--remove-groups matches a space-containing group name (#476)",
+  );
+
+  // Comma still separates, and surrounding whitespace is still trimmed.
+  modifyEntity(d, "user", "alice", parseFieldArgs(["--roles", "admin, user"]));
+  check(
+    [...loadPeople(d).users.get("alice")!.roles!].sort().join(",") === "admin,user",
+    "--roles \"admin, user\" still splits on the comma and trims",
+  );
 }
 
 // ── 5. modify: errors on absent, and validation-reject ──────────────────

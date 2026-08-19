@@ -1,0 +1,7 @@
+{
+  "name": "authentik Admins",
+  "type": "access-set",
+  "displayName": "Authentik Admins",
+  "ownerOrg": "__ORG__",
+  "roles": []
+}

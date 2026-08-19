@@ -9,6 +9,7 @@
 ## Standard (fast) tests
 - Section 1 — Connectivity: asserts `authentik-manager test` succeeds (can reach Authentik); fatal exit 2 otherwise.
 - Section 2 — Role groups present: for each of `user`, `admin`, `root`, runs `group-ensure` then asserts the group exists in Authentik (`/core/groups/`). These are the people-manager-reconciled role groups.
+- Section 2b — Authentik admin group (#476): asserts Authentik's built-in `authentik Admins` group exists **with `is_superuser=true`** (the only thing that grants the admin UI — a same-named group without the flag would be a silent no-op), then resolves the site owner (`site.json` `.owner` → `organizations/<org>.json` `.owner`) and asserts they are a member. The membership check warns-and-skips when no site owner resolves (people tree not bootstrapped yet); the group-flag check always runs.
 - Section 3 — OIDC allow-list (offline grep of `services/identity/install-service.sh`):
   - asserts default `ALLOW_GROUPS=("users")` (the org membership group);
   - asserts no retired group names remain (`tappaas-installers`, `${PREFIX}-users`, `${PREFIX}-admins`);
