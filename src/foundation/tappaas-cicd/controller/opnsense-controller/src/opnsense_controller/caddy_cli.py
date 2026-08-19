@@ -430,6 +430,36 @@ def list_all(manager: CaddyManager) -> bool:
     return True
 
 
+def prune_domains_cmd(
+    manager: CaddyManager,
+    description: str,
+    keep: str,
+    check_mode: bool = False,
+) -> bool:
+    """Delete stale routes for a module after a domain change (#474).
+
+    Removes every domain (and its handler) whose description matches but whose
+    FQDN differs from `keep` — i.e. the old `<svc>.<olddomain>` left behind when
+    network:proxy re-adds `<svc>.<newdomain>`. Idempotent.
+    """
+    stale = [
+        d
+        for d in manager.list_domains()
+        if d.description == description and d.domain != keep
+    ]
+    if not stale:
+        print(f"No stale domains for '{description}' (keeping '{keep}')")
+        return True
+    if check_mode:
+        for d in stale:
+            print(f"Would delete stale domain: {d.domain} (uuid={d.uuid}) (dry-run)")
+        return True
+    removed = manager.prune_domains_by_description(description, keep)
+    for r in removed:
+        print(f"Deleted stale domain: {r}")
+    return True
+
+
 def reconfigure_cmd(manager: CaddyManager, check_mode: bool = False) -> bool:
     """Reconfigure Caddy (regenerate Caddyfile and reload).
 
@@ -598,6 +628,14 @@ Examples:
     delete_handler_group.add_argument("--description", help="Handler description to match")
     delete_handler_group.add_argument("--uuid", help="Handler UUID to delete directly")
 
+    # prune-domains (remove stale <svc>.<olddomain> routes after a domain change, #474)
+    prune_parser = subparsers.add_parser(
+        "prune-domains", parents=[global_parser],
+        help="Delete domains+handlers with a description whose FQDN != --keep",
+    )
+    prune_parser.add_argument("--description", required=True, help="Module description to match (e.g. 'TAPPaaS: nextcloud')")
+    prune_parser.add_argument("--keep", required=True, help="The current FQDN to keep")
+
     # list
     subparsers.add_parser("list", parents=[global_parser], help="List all domains and handlers")
 
@@ -670,6 +708,10 @@ Examples:
                 success = delete_access_list_cmd(manager, args.name, args.check_mode)
             elif args.command == "delete-domain":
                 success = delete_domain_cmd(manager, args.domain, args.check_mode)
+            elif args.command == "prune-domains":
+                success = prune_domains_cmd(
+                    manager, args.description, args.keep, args.check_mode,
+                )
             elif args.command == "delete-handler":
                 success = delete_handler_cmd(
                     manager,

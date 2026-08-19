@@ -492,6 +492,35 @@ class CaddyManager:
         """
         return self._api_post("ReverseProxy", "delHandle", url_params=[uuid])
 
+    def prune_domains_by_description(
+        self, description: str, keep_domain: str
+    ) -> list[str]:
+        """Delete stale routes sharing a description but not the kept FQDN.
+
+        Both the domain and its handler carry the module description
+        (``TAPPaaS: <module>``). On a domain change, network:proxy re-adds
+        ``<svc>.<newdomain>`` but the old ``<svc>.<olddomain>`` route (same
+        description, old FQDN) is otherwise orphaned (#474). This removes every
+        domain with ``description`` whose FQDN != ``keep_domain``, along with any
+        handler bound to it. Idempotent: returns the FQDNs removed (empty = none).
+        """
+        stale = [
+            d
+            for d in self.list_domains()
+            if d.description == description and d.domain != keep_domain
+        ]
+        if not stale:
+            return []
+        handlers = self.list_handlers()
+        removed: list[str] = []
+        for d in stale:
+            for h in handlers:
+                if h.domain_uuid == d.uuid:
+                    self.delete_handler(h.uuid)
+            self.delete_domain(d.uuid)
+            removed.append(d.domain)
+        return removed
+
     # =========================================================================
     # Access List Operations (issue #206)
     # =========================================================================

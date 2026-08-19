@@ -99,5 +99,60 @@ class TestAddHandlerForwardAuth(unittest.TestCase):
         self.assertEqual(captured[-1]["data"]["handle"]["ForwardAuth"], "0")
 
 
+class TestPruneDomainsByDescription(unittest.TestCase):
+    """Stale <svc>.<olddomain> cleanup on a domain change (#474)."""
+
+    def _mgr(self, domains, handlers):
+        from opnsense_controller.caddy_manager import (  # noqa: PLC0415
+            CaddyDomainInfo,
+            CaddyHandlerInfo,
+        )
+        mgr = CaddyManager(config=MagicMock())
+        mgr._client = MagicMock()  # noqa: SLF001
+        mgr.list_domains = MagicMock(  # noqa: SLF001
+            return_value=[CaddyDomainInfo(*d) for d in domains]
+        )
+        mgr.list_handlers = MagicMock(  # noqa: SLF001
+            return_value=[CaddyHandlerInfo(**h) for h in handlers]
+        )
+        mgr.delete_domain = MagicMock(return_value={"result": "deleted"})  # noqa: SLF001
+        mgr.delete_handler = MagicMock(return_value={"result": "deleted"})  # noqa: SLF001
+        return mgr
+
+    def _handler(self, uuid, domain_uuid, description):
+        return dict(
+            uuid=uuid, domain_uuid=domain_uuid, upstream_domain="u",
+            upstream_port="80", description=description, enabled=True,
+        )
+
+    def test_removes_only_stale_same_description(self):
+        mgr = self._mgr(
+            domains=[
+                ("OLD", "app.old.example", "TAPPaaS: app", True),
+                ("NEW", "app.new.example", "TAPPaaS: app", True),
+                ("OTH", "other.new.example", "TAPPaaS: other", True),
+            ],
+            handlers=[
+                self._handler("HOLD", "OLD", "TAPPaaS: app"),
+                self._handler("HNEW", "NEW", "TAPPaaS: app"),
+            ],
+        )
+        removed = mgr.prune_domains_by_description("TAPPaaS: app", "app.new.example")
+        self.assertEqual(removed, ["app.old.example"])
+        mgr.delete_domain.assert_called_once_with("OLD")   # not NEW, not OTH
+        mgr.delete_handler.assert_called_once_with("HOLD")  # the old domain's handler
+
+    def test_noop_when_only_current_present(self):
+        mgr = self._mgr(
+            domains=[("NEW", "app.new.example", "TAPPaaS: app", True)],
+            handlers=[self._handler("HNEW", "NEW", "TAPPaaS: app")],
+        )
+        self.assertEqual(
+            mgr.prune_domains_by_description("TAPPaaS: app", "app.new.example"), []
+        )
+        mgr.delete_domain.assert_not_called()
+        mgr.delete_handler.assert_not_called()
+
+
 if __name__ == "__main__":
     unittest.main()

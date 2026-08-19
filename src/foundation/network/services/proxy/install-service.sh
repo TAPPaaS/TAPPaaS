@@ -281,6 +281,17 @@ run_caddy add-handler "${PROXY_DOMAIN}" \
     "${PRESERVE_HOST_ARGS[@]+"${PRESERVE_HOST_ARGS[@]}"}" \
     --no-ssl-verify || die "Failed to create Caddy handler"
 
+# ── Prune stale routes from a previous domain (#474) ────────────────
+# Domains/handlers are keyed by DESCRIPTION (TAPPaaS: <module>). When the
+# environment domain changes, the add-domain/add-handler above create the new
+# <svc>.<newdomain> route but leave the old <svc>.<olddomain> orphaned (matched
+# only by FQDN, so a re-run never revisits it). Remove any route with this
+# module's description whose FQDN is not the current one. Idempotent no-op when
+# the domain is unchanged.
+debug "  Pruning stale reverse-proxy routes for ${MODULE}..."
+run_caddy prune-domains --description "${DESCRIPTION}" --keep "${PROXY_DOMAIN}" \
+    --no-ssl-verify || warn "Could not prune stale Caddy routes for ${MODULE} (non-fatal)"
+
 # ── Reconfigure Caddy ───────────────────────────────────────────────
 
 debug "  Applying Caddy configuration..."
