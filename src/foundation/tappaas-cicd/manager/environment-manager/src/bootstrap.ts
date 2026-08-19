@@ -3,8 +3,11 @@
 // with no positional <env> is the bootstrap entry point).
 //
 // Every TAPPaaS system requires two environments:
-//   - mgmt          : the management environment (foundation modules, internal
-//                     DNS only). network.zone = mgmt, NO domains.
+//   - mgmt          : the management environment (foundation modules).
+//                     network.zone = mgmt. Takes the site domain on the same
+//                     terms as the default environment below, so an mgmt module
+//                     declaring `dependsOn network:proxy` can actually be
+//                     published; without it network:proxy skips the reconcile.
 //   - <N>           : the DEFAULT tenant environment, named after the default
 //                     org/environment <N> (= site.json.defaultEnvironment =
 //                     default-zone name; decoupled from site.json.name — #426).
@@ -89,7 +92,18 @@ export function buildBootstrapEnvironments(
     ownerOrg: owner,
     network: { zone: name },
   };
-  if (domain) def.domains = { primary: domain };
+  // mgmt gets the site domain on the same terms as the default environment.
+  // Without it, get_variant_config resolves domain="" for every mgmt module and
+  // network:proxy's install/update service skips the reverse-proxy reconcile
+  // outright — so a module that declares `dependsOn network:proxy` plus a
+  // proxyPort (identity, logging, network all do) states an intent to be
+  // published that is then silently discarded. Publishing still requires a DNS
+  // record per host under the default dnsMode=per-service, so this grants the
+  // capability, not the exposure.
+  if (domain) {
+    mgmt.domains = { primary: domain };
+    def.domains = { primary: domain };
+  }
   return { mgmt, def };
 }
 

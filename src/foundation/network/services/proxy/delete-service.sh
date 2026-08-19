@@ -141,7 +141,7 @@ if [[ -n "${PROXY_DOMAIN}" ]]; then
     # non-existent host is a harmless no-op.
     ENVIRONMENT=$(get_config_value 'environment' '' 2>/dev/null || echo '')
     VCFG="$(get_variant_config "${ENVIRONMENT}" 2>/dev/null || echo '{}')"
-    if [[ "$(jq -r '.dnsMode // "wildcard"' <<<"${VCFG}")" == "per-service" ]]; then
+    if [[ "$(jq -r '.dnsMode // "per-service"' <<<"${VCFG}")" == "per-service" ]]; then
         DNS_HOST="${PROXY_DOMAIN%%.*}"
         DNS_ZONE="${PROXY_DOMAIN#*.}"
         debug "  Removing per-service Unbound override ${DNS_HOST}.${DNS_ZONE}..."

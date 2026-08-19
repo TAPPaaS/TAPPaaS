@@ -249,7 +249,7 @@ info "  ${GN}✓${CL} cert-refids.json[\"${ENV_NAME}\"] = ${REFID}"
 # Must be Unbound (the resolver on 10.0.0.1:53) — Dnsmasq host entries are not
 # served for public domains and cannot express a wildcard. Unbound supports a "*"
 # wildcard host override.
-DNS_MODE="$(jq -r '.dnsMode // "wildcard"' <<<"$VCFG")"
+DNS_MODE="$(jq -r '.dnsMode // "per-service"' <<<"$VCFG")"
 if [[ "$DNS_MODE" == "wildcard" ]]; then
     echo
     info "${BOLD}Registering split-horizon wildcard DNS (Unbound)${CL}"

@@ -341,10 +341,18 @@ get_variant_config() {
     # Source: environment file + runtime cert-refids.json.
     if env_file="$(environment_file "$env")"; then
         refid="$(cert_refid_for_env "$env")"
+        # dnsMode defaults to per-service, matching environment-fields.json
+        # ("default": "per-service"), environment-manager's config.ts and
+        # INSTALL-ENVIRONMENT.md. The shell readers defaulted to "wildcard",
+        # so an environment that simply omitted dnsMode — every one authored so
+        # far — silently took the wildcard path: acme-setup wants a DNS-01
+        # capable provider to issue *.<domain>, and where the registrar cannot
+        # do that, no cert and no split-horizon DNS are ever registered. The
+        # services then look configured while resolving nowhere.
         jq -c --arg refid "$refid" '
             { domain:       (.domains.primary // ""),
               tlsCertRefid: $refid,
-              dnsMode:      (.domains.dnsMode // "wildcard"),
+              dnsMode:      (.domains.dnsMode // "per-service"),
               zone:         (.network.zone // null),
               description:  (.displayName // "") }' "$env_file"
         return 0

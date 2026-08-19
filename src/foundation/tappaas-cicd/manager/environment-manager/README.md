@@ -11,7 +11,8 @@ retention, and legal processor. Environments live at
 `config/environments/*.json` (default
 `${TAPPAAS_CONFIG:-/home/tappaas/config}/environments/`), validated against
 `environment-fields.json`. Mandatory fields: `name`, `displayName`, `ownerOrg`,
-`network.zone`. `domains` is optional (the `mgmt` environment omits it);
+`network.zone`. `domains` is optional in the schema, though bootstrap seeds it
+on `mgmt` and the default environment alike when a site domain is known;
 `domains.dnsMode` defaults to `per-service`. The schema is
 `additionalProperties:false`, so an authored `tlsCertRefid` is **rejected** — a
 cert refid is runtime state, not authored config.

@@ -203,10 +203,15 @@ else
 fi
 if [[ -f "$M" ]]; then
     [[ "$(jq -r '.network.zone' "$M")" == "mgmt" ]] && ok "mgmt.json network.zone=mgmt" || bad "mgmt.json zone"
-    if jq -e 'has("domains")' "$M" | grep -q true; then
-        bad "mgmt.json should have NO domains"
+    # mgmt takes the site domain on the same terms as the default environment:
+    # without it every mgmt module resolves domain="" and network:proxy skips
+    # the reverse-proxy reconcile, silently discarding a declared dependsOn
+    # network:proxy + proxyPort. Publishing still needs a per-host DNS record
+    # under dnsMode=per-service, so this is capability, not exposure.
+    if [[ "$(jq -r '.domains.primary // ""' "$M")" == "acme.example.net" ]]; then
+        ok "mgmt.json domains.primary follows --domain (same as default env)"
     else
-        ok "mgmt.json has NO domains (internal-DNS only)"
+        bad "mgmt.json domains.primary should follow --domain (got: $(jq -c '.domains // "absent"' "$M"))"
     fi
 fi
 if run_validate "$CFG2"; then

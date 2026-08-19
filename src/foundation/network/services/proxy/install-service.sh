@@ -174,7 +174,7 @@ fi
 #                 cert via ACME HTTP-01. No DNS API needed (#269, #289).
 ENVIRONMENT=$(get_config_value 'environment' '')
 VCFG="$(get_variant_config "${ENVIRONMENT}" 2>/dev/null || echo '{}')"
-DNS_MODE="$(jq -r '.dnsMode // "wildcard"' <<<"${VCFG}")"
+DNS_MODE="$(jq -r '.dnsMode // "per-service"' <<<"${VCFG}")"
 ENV_REFID="$(jq -r '.tlsCertRefid // ""' <<<"${VCFG}")"
 
 # Explicit proxyTls override (back-compat with #254).
