@@ -37,7 +37,6 @@
     "network:proxy"
   ],
   "provides": [
-    "firewall",
     "proxy",
     "rules",
     "discovery",
