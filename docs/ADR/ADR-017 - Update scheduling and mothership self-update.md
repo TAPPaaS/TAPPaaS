@@ -158,6 +158,38 @@ never runs, so nine modules can no longer be updated by half-updated tooling. An
 launches the *newly linked* `update-tappaas`, instead of old code relinking its own binary
 mid-flight.
 
+**A third defect closes here too, not separately: `#467`.** `tappaas-self-prepare` is exactly
+the "repo pull + 11 component builds" step above — the same step whose `default.nix` files
+currently resolve `pkgs` from the ambient `<nixpkgs>` (via `NIX_PATH`), which a systemd unit
+never sets. `#467`'s own thread already names the preferred fix — pin `pkgs` to a locked
+`nixpkgs` instead of an ambient lookup — but it was not implemented before that issue closed;
+`default.nix` still reads `pkgs ? import <nixpkgs> { }` as of this writing. Since D3 is already
+restructuring this exact step, closing `#467` here avoids implementing `ExecStartPre` on top
+of a build step that still ambiently depends on who last ran `nix-channel --update`:
+
+```nix
+# lib/nix/pinned-pkgs.nix — new, single source of truth
+import (
+  let lock = (builtins.fromJSON (builtins.readFile ../../flake.lock)).nodes.nixpkgs.locked;
+  in fetchTarball {
+    url = "https://github.com/${lock.owner}/${lock.repo}/archive/${lock.rev}.tar.gz";
+    sha256 = lock.narHash;
+  }
+) { }
+```
+
+`../../flake.lock` reaches `tappaas-cicd/flake.lock` — the repo's own baseline pin, checked in
+and version-controlled, not `/etc/nixos/flake.lock` (host-local, not git-tracked, resolves
+`nixpkgs` independently per install). Pinning to the repo's own lock is what makes this
+portable across sites rather than trading one ambient dependency for a different host-local
+one. Each of the 11 `default.nix` files changes one line — `pkgs ? import <nixpkgs> { }`
+becomes `pkgs ? import ../../lib/nix/pinned-pkgs.nix`. Deterministic regardless of caller
+(systemd or interactive), no new dependency (`flake-compat` was considered and is unnecessary
+here — it solves the harder problem of a flake-unaware *consumer* needing full flake outputs;
+this only needs the *pinned nixpkgs revision itself*, which `flake.lock` already states
+directly). `#467` should be reopened, or closed again against this ADR's implementation once
+D3 lands.
+
 ### D4 — `site-manager site update` becomes the official operator path
 
 ```
@@ -330,6 +362,9 @@ in `update.sh`.
 ## Acceptance (draft — becomes a checklist on Accepted)
 
 - [ ] A scheduled run completes `tappaas-cicd` with no `sudo` in the path.
+- [ ] All 11 manager/controller `default.nix` files resolve `pkgs` from `lib/nix/pinned-pkgs.nix`
+      (flake-locked), not ambient `<nixpkgs>`; a scheduled run under systemd builds all 11
+      cleanly (`#467` closed against this, not the "fail loudly" fix alone).
 - [ ] `systemd.timers.update-tappaas` no longer exists in `tappaas-cicd.nix`.
 - [ ] `update-tappaas-schedule.service` renders `/run/systemd/system/update-tappaas.timer`, and `systemctl show update-tappaas.timer` reports the `OnCalendar` implied by `site.json` for all four frequencies.
 - [ ] `updateSchedule: ["none", …]` results in no active timer.
