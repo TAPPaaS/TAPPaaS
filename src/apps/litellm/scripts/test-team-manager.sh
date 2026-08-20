@@ -37,6 +37,8 @@ LITELLM_HOST="litellm.example.internal"
 die() { echo "$*"; }
 # shellcheck disable=SC1090
 eval "$(sed -n '/^_api_fail()/,/^}/p' "${TARGET}")"
+# shellcheck disable=SC1090
+eval "$(sed -n '/^_team_blockers()/,/^}/p' "${TARGET}")"
 
 API_FAIL_KIND="transport"; API_FAIL_STATUS=""; API_FAIL_BODY=""
 out="$(_api_fail 'team/delete')"
@@ -144,6 +146,116 @@ check "every jq in key delete has an input" \
 
 check "usage documents key delete" \
   "$(bash "${TARGET}" --help 2>&1 | grep -q 'key delete' && echo yes)" "yes"
+
+# ── team delete must not orphan what points at the team ─────────────────────
+# The old prompt WARNED — "Virtual keys scoped to this team will lose their
+# budget scope" — and then deleted anyway. A warning the operator must act on
+# correctly, every time, under a [y/N], is not a guard.
+#
+# _team_blockers is pure on purpose: it takes the two API payloads and answers
+# "what still points at this team". That makes the rule drivable offline, which
+# is the difference between testing the guard and testing that a grep matches.
+#
+# canon-traverse on "destructive operation guard referential integrity delete"
+# returned: "nothing resolved — the canon genuinely does not exist yet". So the
+# rule is asserted here, not cited.
+check "the guard exists as a pure function" "$(type -t _team_blockers)" "function"
+
+TID="28b2befa-7052-4ab4-b4c3-abe9155e796e"
+KEYS_ON='{"keys":[{"key_alias":"worker@vm","team_id":"'"${TID}"'"}]}'
+KEYS_OFF='{"keys":[{"key_alias":"other@vm","team_id":"11111111-0000-0000-0000-000000000000"}]}'
+KEYS_SLUG='{"keys":[{"key_alias":"legacy@vm","team_id":"some-slug"}]}'
+INFO_EMPTY='{"team_info":{},"team_memberships":[]}'
+INFO_MEMBER='{"team_info":{},"team_memberships":[{"user_id":"u1","role":"admin"}]}'
+
+_team_blockers "${TID}" "${KEYS_ON}" "${INFO_EMPTY}" >/dev/null 2>&1
+check "a key scoped to the team blocks"               "$?" "1"
+check "...and the refusal names that key"             "$(_team_blockers "${TID}" "${KEYS_ON}" "${INFO_EMPTY}" 2>&1 | grep -c 'worker@vm')" "1"
+
+_team_blockers "${TID}" "${KEYS_OFF}" "${INFO_EMPTY}" >/dev/null 2>&1
+check "a key on ANOTHER team does not block"          "$?" "0"
+
+# A key whose team_id is a slug rather than a UUID is scoped to no real team —
+# it is a separate defect and must not make an unrelated team undeletable.
+_team_blockers "${TID}" "${KEYS_SLUG}" "${INFO_EMPTY}" >/dev/null 2>&1
+check "a slug-scoped key does not block this team"    "$?" "0"
+
+_team_blockers "${TID}" '{"keys":[]}' "${INFO_MEMBER}" >/dev/null 2>&1
+check "a remaining member blocks"                     "$?" "1"
+check "...and the refusal names that member"          "$(_team_blockers "${TID}" '{"keys":[]}' "${INFO_MEMBER}" 2>&1 | grep -c 'u1')" "1"
+
+_team_blockers "${TID}" '{"keys":[]}' "${INFO_EMPTY}" >/dev/null 2>&1
+check "an empty team is not blocked"                  "$?" "0"
+
+# Order matters: refuse before asking. Prompting [y/N] about a delete that will
+# be refused teaches the operator that the prompt is noise.
+_del="$(sed -n '/^cmd_delete()/,/^}/p' "${TARGET}")"
+_blk="$(grep -n '_team_blockers' <<< "${_del}" | head -1 | cut -d: -f1)"
+_ask="$(grep -n 'ASSUME_YES' <<< "${_del}" | head -1 | cut -d: -f1)"
+check "the guard runs BEFORE the confirmation" \
+  "$([[ -n "${_blk}" && -n "${_ask}" && ${_blk} -lt ${_ask} ]] && echo yes)" "yes"
+
+check "the refusal says what to remove first" \
+  "$(grep -c 'key delete' <<< "${_del}")" "1"
+
+# ── _api failure detail must survive to the caller ──────────────────────────
+# Measured against the live instance: `team delete` reported
+#   "team/delete: <host> answered HTTP "
+# with an EMPTY status. Cause: _api was called as `x="$(_api ...)"`, a command
+# substitution, which is a SUBSHELL — the API_FAIL_* globals it sets there never
+# reach the parent, so _api_fail read empty values and fell to its catch-all.
+#
+# The earlier tests drove _api_fail directly with hand-set globals. They proved
+# the classifier maps correctly and said nothing about whether it ever RECEIVES
+# anything — the classifier was right and the path was broken.
+#
+# So the rule is structural: _api's body comes back in a global, never through a
+# command substitution, because its failure detail cannot cross one.
+check "no call site invokes _api in a command substitution" \
+  "$(code | grep -cE '=\"?\$\(_api ')" "0"
+# Counting call sites against API_BODY mentions was arithmetic, not a rule — a
+# call that does not need the body (the revoke) made it wrong. State the rule
+# instead: _api hands the body over through the global and never through stdout.
+_apibody="$(sed -n '/^_api()/,/^}/p' "${TARGET}")"
+check "_api assigns the body to API_BODY" \
+  "$(grep -c 'API_BODY="\${API_FAIL_BODY}"' <<< "${_apibody}")" "1"
+check "_api never prints the body to stdout" \
+  "$(grep -cE "printf '%s' \"\\\$\{API_FAIL_BODY\}\"" <<< "${_apibody}")" "0"
+
+# ── team/delete takes POST, not DELETE ─────────────────────────────────────
+# The endpoint answers 405 Method Not Allowed to an HTTP DELETE. That is the
+# root cause of the failure this whole change started from, and it stayed hidden
+# for as long as curl -sf discarded the status: the tool reported the host
+# unreachable while the host was answering "wrong method". /key/delete already
+# used POST, which is why revoking worked and deleting never did.
+check "team/delete is called with POST" \
+  "$(code | grep -c '_api POST /team/delete')" "1"
+check "...and no longer with DELETE" \
+  "$(code | grep -c '_api DELETE /team/delete')" "0"
+
+# ── the prompt must claim only what was measured ────────────────────────────
+# The guard checks two things: keys carrying this team's id, and memberships.
+# It said "Nothing points at it" — a claim about the whole estate. Measured on
+# Gridtefy BizOps: it printed that while a key named gridtefy-ops@… carries the
+# team_id "gridtefy-bizops", a SLUG matching neither the uuid nor the alias
+# ("Gridtefy BizOps" differs in case and spacing). Such a key is scoped to no
+# team at all — a separate defect — but the operator should not read a narrow
+# check as a broad all-clear.
+check "the prompt states what was checked, not an all-clear" \
+  "$(sed -n '/^cmd_delete()/,/^}/p' "${TARGET}" | grep -c 'Nothing points at it')" "0"
+check "...and names keys and members explicitly" \
+  "$(sed -n '/^cmd_delete()/,/^}/p' "${TARGET}" | grep -c 'No keys or members')" "1"
+
+# ── the success check must match what the API returns ──────────────────────
+# Measured live: /team/delete answered {"deleted_teams":["<id>"]} — plural — and
+# the team WAS removed, while the script asserted `.deleted_team` singular and
+# reported "delete failed". A false negative on a destructive verb is its own
+# hazard: the operator retries, or believes a deletion did not happen when it
+# did. Pre-existing; surfaced only once the endpoint could succeed at all.
+check "the delete result is checked as deleted_teams" \
+  "$(code | grep -c 'deleted_teams')" "1"
+check "...and not as the singular the API never sends" \
+  "$(code | grep -cE '\.deleted_team[^s]')" "0"
 
 echo "  ${pass}/$((pass+fail)) passed"
 [ "${fail}" -eq 0 ]

@@ -102,14 +102,20 @@ _master_key() {
 # positional arguments to `bash -s`, the same way the original heredocs did.
 #
 # Usage: _api <METHOD> <path> [<body-json>]
-#   success: echoes the response body, returns 0
+#   success: response body in ${API_BODY}, returns 0
 #   failure: returns 1 with API_FAIL_* set — pass them to _api_fail
-API_FAIL_KIND=""; API_FAIL_STATUS=""; API_FAIL_BODY=""
+#
+# The body comes back in a GLOBAL, never on stdout, and that is not a style
+# choice. `x="$(_api ...)"` is a command substitution, which is a SUBSHELL: the
+# API_FAIL_* values set inside it never reach the caller, so _api_fail read
+# empty ones and reported `answered HTTP ` with no status — the exact class of
+# blind failure this helper exists to remove. Measured live on team/delete.
+API_FAIL_KIND=""; API_FAIL_STATUS=""; API_FAIL_BODY=""; API_BODY=""
 
 _api() {
     local method="$1" rpath="$2" body="${3:-}"
     local master body_b64 out status
-    API_FAIL_KIND=""; API_FAIL_STATUS=""; API_FAIL_BODY=""
+    API_FAIL_KIND=""; API_FAIL_STATUS=""; API_FAIL_BODY=""; API_BODY=""
 
     master="$(_master_key)" || { API_FAIL_KIND="transport"; return 1; }
     [[ -n "${master}" ]] || { API_FAIL_KIND="masterkey"; return 1; }
@@ -140,7 +146,7 @@ EOSH
     API_FAIL_STATUS="${status}"
 
     case "${status}" in
-        2??) printf '%s' "${API_FAIL_BODY}"; API_FAIL_BODY=""; return 0 ;;
+        2??) API_BODY="${API_FAIL_BODY}"; API_FAIL_BODY=""; return 0 ;;
         *)   API_FAIL_KIND="http"; return 1 ;;
     esac
 }
@@ -158,10 +164,43 @@ _api_fail() {
 # Resolve team_id from alias — returns empty string if not found.
 _team_id_for_alias() {
     local alias="$1" raw
-    raw="$(_api GET /team/list)" || _api_fail "team/list"
+    _api GET /team/list || _api_fail "team/list"
+    raw="${API_BODY}"
     printf '%s' "${raw}" \
         | jq -r --arg a "${alias}" '.[] | select(.team_alias == $a) | .team_id' \
         | head -1
+}
+
+# What still points at a team. Pure by design: given the two payloads it answers
+# the question and nothing else — no network, no globals, no output but the
+# answer. That is what lets the rule be driven directly by a test instead of
+# inferred from a grep.
+#
+# WHY a guard and not a warning: cmd_delete used to print "Virtual keys scoped to
+# this team will lose their budget scope" inside its own [y/N] and then delete
+# regardless. A key that outlives its team keeps working with no budget scope,
+# which is worse than either keeping the team or removing the key first. A
+# warning the operator must act on correctly, every time, under a prompt, is not
+# a guard.
+#
+# A key whose team_id is a SLUG rather than this team's id is scoped to no real
+# team. That is its own defect; it must not make an unrelated team undeletable.
+#
+# Usage: _team_blockers <team-id> <keys-json> <team-info-json>
+#   0 = nothing points at it
+#   1 = blocked; one reason per line on stdout
+_team_blockers() {
+    local tid="$1" keys="$2" info="$3" k m rc=0
+
+    k="$(jq -r --arg t "${tid}" \
+        '.keys[]? | select(.team_id == $t) | "  key    " + (.key_alias // "(no alias)")' \
+        <<<"${keys}" 2>/dev/null || true)"
+    m="$(jq -r '.team_memberships[]? | "  member " + (.user_id // "(unknown)")' \
+        <<<"${info}" 2>/dev/null || true)"
+
+    if [[ -n "${k}" ]]; then printf '%s\n' "${k}"; rc=1; fi
+    if [[ -n "${m}" ]]; then printf '%s\n' "${m}"; rc=1; fi
+    return "${rc}"
 }
 
 # ── list ───────────────────────────────────────────────────────────────────
@@ -170,7 +209,8 @@ cmd_list() {
     echo ""
 
     local raw
-    raw="$(_api GET /team/list)" || _api_fail "team/list"
+    _api GET /team/list || _api_fail "team/list"
+    raw="${API_BODY}"
     printf '%s' "${raw}" \
         | jq -r '.[] | "  \(.team_alias)\t\(.team_id)\tspend=\(.spend // 0)\tbudget=\(.max_budget // "unlimited")\tblocked=\(.blocked)"' \
         | column -t -s $'\t'
@@ -189,8 +229,8 @@ cmd_new() {
 
     info "Creating team '${ALIAS}' on ${LITELLM_HOST}..."
     local result
-    result="$(_api POST /team/new "$(jq -cn --arg a "${ALIAS}" '{team_alias: $a}')")" \
-        || _api_fail "team/new"
+    _api POST /team/new "$(jq -cn --arg a "${ALIAS}" '{team_alias: $a}')" || _api_fail "team/new"
+    result="${API_BODY}"
 
     local team_id
     team_id="$(echo "${result}" | jq -r '.team_id // empty')"
@@ -210,7 +250,8 @@ cmd_info() {
     echo ""
 
     local raw
-    raw="$(_api GET "/team/info?team_id=${team_id}")" || _api_fail "team/info"
+    _api GET "/team/info?team_id=${team_id}" || _api_fail "team/info"
+    raw="${API_BODY}"
 
     echo "${raw}" | jq '{
         team_alias: .team_info.team_alias,
@@ -231,8 +272,21 @@ cmd_delete() {
     team_id="$(_team_id_for_alias "${ALIAS}")"
     [[ -n "${team_id}" ]] || die "team '${ALIAS}' not found — use 'team list' to see all teams"
 
+    # Refuse before asking. Prompting [y/N] about a delete that will be refused
+    # teaches the operator that the prompt is noise.
+    local keys_raw info_raw blockers
+    _api GET '/key/list?return_full_object=true' || _api_fail "key/list"
+    keys_raw="${API_BODY}"
+    _api GET "/team/info?team_id=${team_id}" || _api_fail "team/info"
+    info_raw="${API_BODY}"
+    if ! blockers="$(_team_blockers "${team_id}" "${keys_raw}" "${info_raw}")"; then
+        error "team '${ALIAS}' (${team_id}) still has:"
+        printf '%s\n' "${blockers}" >&2
+        die "remove these first — a key outlives its team and keeps working with no budget scope. For a key: ${SCRIPT_NAME} key delete --alias <alias>"
+    fi
+
     if [[ "${ASSUME_YES}" -ne 1 ]]; then
-        printf 'Delete team "%s" (%s)? Virtual keys scoped to this team will lose their budget scope. [y/N] ' \
+        printf 'Delete team "%s" (%s)? No keys or members are scoped to it. [y/N] ' \
             "${ALIAS}" "${team_id}" >&2
         read -r CONFIRM
         [[ "${CONFIRM}" =~ ^[Yy]$ ]] || { info "Aborted — no change made."; exit 0; }
@@ -240,11 +294,13 @@ cmd_delete() {
 
     info "Deleting team '${ALIAS}' (${team_id})..."
     local result
-    result="$(_api DELETE /team/delete "$(jq -cn --arg id "${team_id}" '{team_ids: [$id]}')")" \
-        || _api_fail "team/delete"
+    _api POST /team/delete "$(jq -cn --arg id "${team_id}" '{team_ids: [$id]}')" || _api_fail "team/delete"
+    result="${API_BODY}"
 
-    echo "${result}" | jq -e '.deleted_team' >/dev/null 2>&1 \
-        || die "delete failed — unexpected response: ${result}"
+    # The API answers {"deleted_teams":[<id>]} — plural, and a list. Asserting the
+    # singular reported "delete failed" on a delete that had in fact succeeded.
+    jq -e --arg id "${team_id}" '(.deleted_teams // []) | index($id)' >/dev/null 2>&1 <<<"${result}" \
+        || die "delete reported no removal of ${team_id} — response: ${result}"
     info "${GN}✓${CL} Team '${ALIAS}' deleted."
 }
 
@@ -263,7 +319,8 @@ cmd_delete() {
 
 cmd_key_list() {
     local raw n
-    raw="$(_api GET '/key/list?return_full_object=true')" || _api_fail "key/list"
+    _api GET '/key/list?return_full_object=true' || _api_fail "key/list"
+    raw="${API_BODY}"
     n="$(printf '%s' "${raw}" | jq --arg a "${ALIAS}" \
         '[ .keys[]? | select($a == "" or .key_alias == $a) ] | length')"
 
@@ -284,7 +341,8 @@ cmd_key_list() {
 cmd_key_info() {
     [[ -n "${ALIAS}" ]] || die "--alias is required"
     local raw entry
-    raw="$(_api GET '/key/list?return_full_object=true')" || _api_fail "key/list"
+    _api GET '/key/list?return_full_object=true' || _api_fail "key/list"
+    raw="${API_BODY}"
     entry="$(printf '%s' "${raw}" | jq -c --arg a "${ALIAS}" \
         'first(.keys[]? | select(.key_alias == $a)) // empty')"
 
@@ -310,7 +368,8 @@ cmd_key_delete() {
     [[ -n "${ALIAS}" ]] || die "--alias is required"
 
     local raw entry token created team
-    raw="$(_api GET '/key/list?return_full_object=true')" || _api_fail "key/list"
+    _api GET '/key/list?return_full_object=true' || _api_fail "key/list"
+    raw="${API_BODY}"
     entry="$(printf '%s' "${raw}" | jq -c --arg a "${ALIAS}" \
         'first(.keys[]? | select(.key_alias == $a)) // empty')"
     [[ -n "${entry}" ]] || die "key '${ALIAS}' does not exist on ${LITELLM_HOST}"
@@ -329,7 +388,7 @@ cmd_key_delete() {
     fi
 
     info "Revoking key '${ALIAS}' on ${LITELLM_HOST}..."
-    _api POST /key/delete "$(jq -cn --arg t "${token}" '{keys: [$t]}')" >/dev/null \
+    _api POST /key/delete "$(jq -cn --arg t "${token}" '{keys: [$t]}')" \
         || _api_fail "key/delete"
     info "${GN}✓${CL} Key '${ALIAS}' revoked."
 }
