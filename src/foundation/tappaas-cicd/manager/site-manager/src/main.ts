@@ -78,7 +78,8 @@ const HELP: HelpSpec = {
       "  --displayName --owner --email --automaticReboot --snapshotRetention\n" +
       "  --backupTarget --backupOffsite\n" +
       "  --locationCountry --locationTimezone --locationLocale\n" +
-      "  --networkIsp --networkPublicIp",
+      "  --networkIsp --networkPublicIp\n" +
+      "  --updateFrequency <daily|weekly|monthly|none> --updateWeekday <Day> --updateHour <0-23>",
   ],
 };
 
@@ -243,6 +244,39 @@ function cmdSite(o: Opts): void {
     setStr("--locationLocale", ["location", "locale"]);
     setStr("--networkIsp", ["network", "isp"]);
     setStr("--networkPublicIp", ["network", "publicIp"]);
+
+    // updateSchedule is a [frequency, weekday, hour] tuple, not a scalar. Edit it
+    // by component so a partial change (e.g. only --updateFrequency daily) keeps
+    // the rest. daily/none carry no weekday — normalised to null.
+    const freq = o.flags.get("--updateFrequency");
+    const wday = o.flags.get("--updateWeekday");
+    const hour = o.flags.get("--updateHour");
+    if (freq !== undefined || wday !== undefined || hour !== undefined) {
+      const cur = Array.isArray(raw.updateSchedule)
+        ? [...(raw.updateSchedule as unknown[])]
+        : ["monthly", "Thursday", 2];
+      let [f, d, h] = [cur[0], cur[1], cur[2]];
+      if (freq !== undefined) {
+        const FREQS = ["daily", "weekly", "monthly", "none"];
+        if (!FREQS.includes(freq)) die(`--updateFrequency must be one of: ${FREQS.join(", ")}`);
+        f = freq;
+      }
+      if (wday !== undefined) {
+        const DAYS = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
+        if (!DAYS.includes(wday)) die(`--updateWeekday must be one of: ${DAYS.join(", ")}`);
+        d = wday;
+      }
+      if (hour !== undefined) {
+        const n = parseInt(hour, 10);
+        if (!Number.isInteger(n) || n < 0 || n > 23) die("--updateHour must be an integer 0-23");
+        h = n;
+      }
+      // daily/none run every day / never — a weekday would be meaningless.
+      if (f === "daily" || f === "none") d = null;
+      else if (d == null || d === "") die(`--updateWeekday is required for a '${f}' schedule`);
+      setDeep(raw, ["updateSchedule"], [f, d, h]);
+      changed++;
+    }
 
     if (changed === 0) die("site modify: no recognised --<field> given (see --help)");
     writeSite(siteFile, raw);
