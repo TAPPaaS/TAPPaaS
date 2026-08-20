@@ -260,6 +260,69 @@ else
     no "av_ensure_wan_rule controller invocation"
 fi
 
+# 24-26. av_setup must VERIFY the live rule set, not assert what it intended, and must
+#        enable WireGuard before binding a rule to the `wireguard` group interface
+#        (OPNsense rejects a rule on an interface it has not registered yet). A live
+#        cluster was found with server+WAN present but admin->mgmt MISSING while setup
+#        had reported "ready" -- these pin that regression.
+#        av_setup is driven with stubs; ORDER records the call sequence.
+_av_setup_probe() {  # <mgmt-rule-present:0|1> <wan-rule-present:0|1> <order-file>
+    local mgmt="$1" wan="$2" order="$3"
+    (
+        . "${here}/lib/admin-vpn.sh" >/dev/null 2>&1
+        av_ensure_server()   { echo "uuid-1"; }
+        av_server_pubkey()   { echo "PUBKEY="; }
+        av_enable_wg()       { printf 'enable\n'  >> "${order}"; echo enabled; }
+        av_ensure_mgmt_rule() { printf 'mgmt\n'   >> "${order}"; echo ok; }
+        av_ensure_wan_rule()  { printf 'wan\n'    >> "${order}"; echo ok; }
+        av_apply()           { printf 'apply\n'   >> "${order}"; echo applied; }
+        av_rule_uuid()       { [[ "${mgmt}" == 1 ]] && echo "r-uuid" || true; }
+        av_wan_rule_uuid()   { [[ "${wan}"  == 1 ]] && echo "w-uuid" || true; }
+        av_setup
+    )
+}
+
+# 24. mgmt rule absent -> non-zero, and the missing rule is named on stderr.
+ORDER="${tmp}/av_order_24.txt"; : > "${ORDER}"
+rc=0; out="$(_av_setup_probe 0 1 "${ORDER}" 2>&1)" || rc=$?
+if [[ "${rc}" -ne 0 ]] && grep -q "setup incomplete" <<< "${out}" \
+   && grep -q "admin->mgmt" <<< "${out}" && ! grep -q "admin-vpn ready" <<< "${out}"; then
+    ok "av_setup fails loudly when the admin->mgmt rule is absent"
+else
+    no "av_setup should fail when admin->mgmt is missing (rc=${rc})"
+fi
+
+# 25. both rules present -> exit 0 and the ready banner.
+ORDER="${tmp}/av_order_25.txt"; : > "${ORDER}"
+rc=0; out="$(_av_setup_probe 1 1 "${ORDER}" 2>&1)" || rc=$?
+if [[ "${rc}" -eq 0 ]] && grep -q "admin-vpn ready" <<< "${out}"; then
+    ok "av_setup succeeds when both rules are present"
+else
+    no "av_setup should succeed when both rules exist (rc=${rc})"
+fi
+
+# 26. WireGuard is enabled BEFORE the mgmt rule is created (the ordering bug).
+if [[ "$(grep -n -m1 '^enable$' "${ORDER}" | cut -d: -f1)" -lt \
+      "$(grep -n -m1 '^mgmt$'   "${ORDER}" | cut -d: -f1)" ]]; then
+    ok "av_setup enables WireGuard before creating the admin->mgmt rule"
+else
+    no "av_setup must enable WireGuard before the mgmt rule (order: $(tr '\n' ',' < "${ORDER}"))"
+fi
+
+# 27. av_apply still enables WireGuard (add-peer/remove-peer rely on it) and applies filters.
+APPLY_OUT="${tmp}/av_apply.txt"; : > "${APPLY_OUT}"
+(
+    . "${here}/lib/admin-vpn.sh" >/dev/null 2>&1
+    av_enable_wg() { printf 'enable\n' >> "${APPLY_OUT}"; }
+    _ow_api() { printf '%s\n' "$*" >> "${APPLY_OUT}"; }
+    av_apply >/dev/null 2>&1
+)
+if grep -q '^enable$' "${APPLY_OUT}" && grep -q 'filter/apply' "${APPLY_OUT}"; then
+    ok "av_apply enables WireGuard and applies filter changes"
+else
+    no "av_apply behaviour changed"
+fi
+
 echo ""
 echo "satellite-manager fast tests: ${pass} passed, ${fail} failed"
 [[ "${fail}" -eq 0 ]]

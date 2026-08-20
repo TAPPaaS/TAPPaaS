@@ -189,9 +189,18 @@ av_ensure_wan_rule() {
 }
 
 # ── apply ────────────────────────────────────────────────────────────────────
-av_apply() {
+# Enable WireGuard and reconfigure the service. This is also what makes OPNsense
+# register the `wireguard` GROUP INTERFACE — which a filter rule bound to
+# ${AV_WG_IFACE} needs to already exist. Split out of av_apply so av_setup can run
+# it BEFORE creating that rule (see av_setup).
+av_enable_wg() {
     _ow_api -X POST -H 'Content-Type: application/json' -d '{"general":{"enabled":"1"}}' /api/wireguard/general/set >/dev/null
     _ow_api -X POST /api/wireguard/service/reconfigure >/dev/null
+    echo "enabled"
+}
+
+av_apply() {
+    av_enable_wg >/dev/null
     _ow_api -X POST /api/firewall/filter/apply >/dev/null
     echo "applied"
 }
@@ -200,9 +209,37 @@ av_apply() {
 av_setup() {
     local srv; srv="$(av_ensure_server)"
     [[ -n "${srv}" ]] || { echo "ERROR: could not ensure admin WG server" >&2; return 1; }
-    av_ensure_mgmt_rule >/dev/null
-    av_ensure_wan_rule >/dev/null
+
+    # Enable + reconfigure WireGuard FIRST. OPNsense only registers the
+    # `wireguard` group interface once the service is up, and a filter rule bound
+    # to an unregistered interface is rejected. Creating the rule before this ran
+    # is why a first bootstrap left `wan` present but `admin->mgmt` MISSING (the
+    # WAN rule targets `wan`, which always exists), while a manual re-run worked.
+    av_enable_wg >/dev/null
+
+    # Neither ensure path can report failure reliably: _ow_api is `curl -sk` (no
+    # -f), so an OPNsense error response is exit 0 with an error body, and the raw
+    # REST fallback ends in `| jq -r`, whose status is jq's. So do not trust their
+    # exit codes -- verify observed state below instead.
+    av_ensure_mgmt_rule >/dev/null || true
+    av_ensure_wan_rule >/dev/null || true
     av_apply >/dev/null
+
+    # Verify against the LIVE rule set rather than asserting what we intended.
+    # This is what `admin list` already does, and what makes install.sh's
+    # `|| warn "admin-vpn setup encountered issues"` guard reachable at all.
+    local missing=()
+    [[ -n "$(av_rule_uuid)" ]]     || missing+=("admin->mgmt (${AV_PEER_SUBNET} -> ${AV_MGMT_SUBNET}, interface ${AV_WG_IFACE})")
+    [[ -n "$(av_wan_rule_uuid)" ]] || missing+=("WAN UDP ${SAT_ADMIN_WGPORT} -> This Firewall (interface ${AV_WAN_IFACE})")
+
+    if (( ${#missing[@]} > 0 )); then
+        echo "ERROR: admin-vpn setup incomplete -- server is up but these rules are absent:" >&2
+        local m; for m in "${missing[@]}"; do echo "  - ${m}" >&2; done
+        echo "The tunnel would handshake and then reach nothing. Re-run 'satellite-manager admin setup'," >&2
+        echo "then confirm with 'satellite-manager admin list'." >&2
+        return 1
+    fi
+
     echo "admin-vpn ready: server=${AV_SERVER_NAME} port=${SAT_ADMIN_WGPORT} pubkey=$(av_server_pubkey "${srv}")"
     echo "  rule: ${AV_PEER_SUBNET} -> ${AV_MGMT_SUBNET} (interface ${AV_WG_IFACE})"
     echo "  wan : UDP ${SAT_ADMIN_WGPORT} -> This Firewall (interface ${AV_WAN_IFACE}) — direct/Topology-B reach"
