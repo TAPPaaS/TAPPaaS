@@ -113,7 +113,7 @@ network-manager snat add <module> [--check]      # apply snat.json ∩ zone gate
 network-manager snat delete <module> [--check]   # remove this module's rules
 network-manager snat list [--json]               # live rules + owning module + reason
 network-manager snat verify <module>             # declared == live AND enforced
-network-manager snat mode [--set hybrid|manual]  # read/set the OPNsense prerequisite
+network-manager snat mode [--set automatic|hybrid|manual]  # read/set the OPNsense prerequisite
 ```
 
 - `add` is idempotent — rules are keyed by description (D4) and matched before insert.
@@ -121,7 +121,12 @@ network-manager snat mode [--set hybrid|manual]  # read/set the OPNsense prerequ
   even though the rule exists. This is the specific hole that made #239 fail silently.
 - `--check` is dry-run everywhere, consistent with `network-manager add|delete`.
 - `snat` participates in `network-manager reconcile --only snat`, so drift is pruned like
-  every other plane.
+  every other plane — including, per D4, `snat_mode` itself in the safe direction.
+- `mode --set automatic` first calls `list` and **refuses if any live rule exists at all**
+  — owned or unowned. A still-declared, TAPPaaS-owned rule would silently stop being
+  enforced under `automatic` while looking present in config; that is the exact failure
+  class this ADR exists to close, so `automatic` is only safe to set when the rule set is
+  genuinely empty, not merely unowned-rule-free.
 
 ### D4 — Pushing to OPNsense via `opnsense-controller`
 
@@ -158,16 +163,40 @@ removes by the `tappaas-snat:<module>:` prefix, matching how `rules-manager` and
 **The `snat_mode` prerequisite is part of this decision, not a footnote.** `add` MUST:
 
 1. read `.filter.general.snat_mode`;
-2. **refuse** with a named error if it is `automatic` or `disabled` — never write a rule
-   that cannot take effect;
-3. proceed on `hybrid` or `manual`;
-4. verify the rule is present *after* `apply`, and fail if it is not (the defect behind
+2. if `automatic`, **auto-flip to `hybrid`** before proceeding — this transition is
+   additive (OPNsense keeps generating its automatic per-interface rules unchanged; it
+   only starts also evaluating custom ones alongside them), so nothing existing is at
+   risk. Report the flip in output; do not do it silently;
+3. **refuse** with a named error if it is `disabled` — an unusual, deliberate state,
+   never touched automatically;
+4. proceed on `hybrid` or `manual`;
+5. verify the rule is present *after* `apply`, and fail if it is not (the defect behind
    Community#3).
 
-Changing the mode is **never implicit**. `network-manager snat mode --set hybrid` is an
-explicit operator action, because it changes how *all* source NAT is generated on the
-instance. `hybrid` is the recommended value: it keeps OPNsense's automatic per-interface
-rules and lets custom rules coexist.
+Only the `automatic → hybrid` transition is safe to automate — it never removes existing
+rule generation. `manual` transitions stay **explicit, human-only** operator actions via
+`network-manager snat mode --set`, because `manual` *replaces* automatic generation
+entirely; moving into or out of it without accounting for every existing rule can break
+outbound connectivity site-wide. `hybrid` remains the recommended target: it keeps
+OPNsense's automatic per-interface rules and lets custom rules coexist.
+
+**The reverse direction is also automatable, guarded by the same ownership check `mode
+--set automatic` uses.** `network-manager reconcile --only snat`, after pruning any
+TAPPaaS-owned rule whose module or zone no longer declares it, auto-reverts `hybrid` →
+`automatic` when zero TAPPaaS-owned rules remain **and** `snat list` shows no unowned
+rule present. An unowned rule found at that point blocks the revert and surfaces a
+warning instead of silently discarding something TAPPaaS never declared — the same
+`tappaas-nat:*`-unowned case §Consequences already names for the Community migration,
+reused here as the safety gate rather than a one-off note.
+
+**This follows the same inspect-vs-apply convention every manager already uses**
+(`module-manager list --diff`, `<manager> reconcile [--apply]`): `network-manager
+reconcile --only snat` **without** `--apply` is read-only — it reports the same
+rogue/unowned-rule finding and the would-be revert decision without changing anything,
+so an operator can inspect drift before ever risking a mutation. `--apply` is what
+actually prunes and reverts. Rogue detection is therefore not only an internal safety
+gate inside `mode --set automatic` — it is directly inspectable on demand, the same way
+every other plane's drift already is.
 
 ### D5 — Module lifecycle hooks
 
@@ -234,8 +263,12 @@ than presence.
   zone-level gate make it a deliberate, recorded choice rather than a side effect.
   Traffic *out* of the zone is unaffected: a device shipping syslog to `mgmt` still carries
   its real source address.
-- **`snat_mode` must be `hybrid` (or `manual`) site-wide.** A one-time, explicit operator
-  action, refused-by-default in tooling, surfaced by `snat verify` and `snat mode`.
+- **`snat_mode` moves to `hybrid` automatically** the first time a module's request is
+  applied, and **reverts to `automatic` automatically** once no TAPPaaS-owned request
+  remains and no unowned rule blocks it — no explicit operator action needed for this
+  transition, only visibility (`snat mode`, `snat list`). `manual` stays a deliberate,
+  human-only choice, since it replaces automatic generation entirely rather than adding
+  to it.
 - **Existing hand-made rules** (`tappaas-nat:alfen:*` on sites that ran the Community
   implementation) are not adopted. `snat list` reports them as unowned; the migration is to
   delete them and re-run `install.sh` with this ADR's hook.
@@ -257,15 +290,30 @@ than presence.
   each source zone.
 - **OPNsense firewall-log attribution** under SNAT (pre- vs post-translation addresses in
   the filter log shipped to `logging`) is unverified.
+- **Whether `firewall/source_nat/searchRule` cleanly separates automatically-generated
+  per-interface rules from manually/API-added custom ones** is assumed from OPNsense's
+  documented Hybrid-mode semantics, not confirmed live against this instance — the rogue-
+  detection gate (`mode --set automatic`, `reconcile --only snat`'s auto-revert) depends on
+  this distinction being reliable. Verify empirically in a test/staging window before
+  relying on it in production.
 
 ## Acceptance (draft — becomes a checklist on Accepted)
 
 - [ ] `snat-allowed-from` in `zones-fields.json`; R1 enforced by `network-manager validate`.
 - [ ] `network-manager snat add|delete|list|verify|mode` implemented, `--check` on mutators.
-- [ ] `snat add` refuses on `snat_mode ∈ {automatic, disabled}` with a named error.
+- [ ] `snat add` auto-flips `automatic` → `hybrid` (reported, not silent) and refuses only
+      on `disabled`, with a named error.
 - [ ] `snat add` verifies rule presence after `apply` and fails when absent.
 - [ ] `snat verify` fails on a present-but-unenforced rule.
 - [ ] `reconcile --only snat` prunes rules whose module or zone gate no longer declares them.
+- [ ] `snat mode --set automatic` refuses if any live rule exists at all, owned or
+      unowned — not only on an unowned one.
+- [ ] `reconcile --only snat` auto-reverts `hybrid` → `automatic` when no TAPPaaS-owned
+      rule remains and no unowned rule is present; otherwise warns and leaves the mode
+      unchanged.
+- [ ] `reconcile --only snat` **without** `--apply` reports the rogue-rule finding and the
+      would-be revert decision read-only, matching every other manager's inspect-vs-apply
+      convention.
 - [ ] A request naming a zone outside `snat-allowed-from` is refused, not trimmed.
 - [ ] `alfen` migrated to `snat.json`; `services/nat/` removed; #239 and Community#3 closed.
 - [ ] Alfen reachable from `home` (phone app) and `srvHome` (HA) with no hand-made rules.
