@@ -14,10 +14,12 @@
 #
 #   litellm-team-manager.sh key list [--alias <alias>] [--vmname <name>]
 #   litellm-team-manager.sh key info  --alias <alias> [--vmname <name>]
+#   litellm-team-manager.sh key delete --alias <alias> [--yes] [--vmname <name>]
 #
 # The bare verbs are team verbs and keep working unchanged. `key` is a second
-# entity, read-only: minting belongs to the installer that owns the consumer and
-# revoking to its delete-service, which already does both.
+# entity. Minting and routine revoking stay with the install and delete services
+# that own the consumer; `key delete` is the cleanup path for what those can no
+# longer reach — an ORPHAN, whose consumer is gone.
 #
 # Examples:
 #   litellm-team-manager.sh list
@@ -26,6 +28,7 @@
 #   litellm-team-manager.sh delete --alias gridtefy-itops --yes
 #   litellm-team-manager.sh key list
 #   litellm-team-manager.sh key info --alias litellm-svc-openwebui
+#   litellm-team-manager.sh key delete --alias stale-worker@retired-vm --yes
 
 set -euo pipefail
 
@@ -68,7 +71,7 @@ while [[ $# -gt 0 ]]; do
     esac
 done
 
-[[ -n "${VERB}" ]] || die "verb required: list | new | info | delete, or key list|info (use --help)"
+[[ -n "${VERB}" ]] || die "verb required: list | new | info | delete, or key list|info|delete (use --help)"
 
 MODULE_JSON="${CONFIG_DIR}/${VMNAME}.json"
 [[ -f "${MODULE_JSON}" ]] || die "module config not found: ${MODULE_JSON}"
@@ -294,11 +297,49 @@ cmd_key_info() {
     }'
 }
 
+# Deleting a key is the one WRITE this entity carries, and it exists for a single
+# case the read verbs surface: an ORPHAN — a key whose consumer no longer exists,
+# so no delete-service will ever revoke it. That case is not hypothetical: a
+# virtual key outlived the teardown of both its consumer and its VM, and until
+# now nothing on the manager surface could remove it.
+#
+# Routine revoking is still NOT here. A consumer that exists has a delete-service
+# that owns its key lifecycle; reaching around that from here would give one key
+# two owners.
+cmd_key_delete() {
+    [[ -n "${ALIAS}" ]] || die "--alias is required"
+
+    local raw entry token created team
+    raw="$(_api GET '/key/list?return_full_object=true')" || _api_fail "key/list"
+    entry="$(printf '%s' "${raw}" | jq -c --arg a "${ALIAS}" \
+        'first(.keys[]? | select(.key_alias == $a)) // empty')"
+    [[ -n "${entry}" ]] || die "key '${ALIAS}' does not exist on ${LITELLM_HOST}"
+
+    # The handle is read into a variable and used only in the payload below. It
+    # is never echoed, never logged, and never part of a projection.
+    token="$(jq -r '.token' <<<"${entry}")"
+    created="$(jq -r '.created_at // "unknown"' <<<"${entry}")"
+    team="$(jq -r '.team_id // "-"' <<<"${entry}")"
+
+    if [[ "${ASSUME_YES}" -ne 1 ]]; then
+        printf 'Delete key "%s" (team %s, created %s)? It cannot be restored, only re-minted. [y/N] ' \
+            "${ALIAS}" "${team}" "${created}" >&2
+        read -r CONFIRM
+        [[ "${CONFIRM}" =~ ^[Yy]$ ]] || { info "Aborted — no change made."; exit 0; }
+    fi
+
+    info "Revoking key '${ALIAS}' on ${LITELLM_HOST}..."
+    _api POST /key/delete "$(jq -cn --arg t "${token}" '{keys: [$t]}')" >/dev/null \
+        || _api_fail "key/delete"
+    info "${GN}✓${CL} Key '${ALIAS}' revoked."
+}
+
 # ── Main ──────────────────────────────────────────────────────────────────
 case "${ENTITY}:${VERB}" in
     key:list)   cmd_key_list ;;
     key:info)   cmd_key_info ;;
-    key:*)      die "unknown verb 'key ${VERB}' (expected: list | info)" ;;
+    key:delete) cmd_key_delete ;;
+    key:*)      die "unknown verb 'key ${VERB}' (expected: list | info | delete)" ;;
     *:list)     cmd_list ;;
     *:new)      cmd_new ;;
     *:info)     cmd_info ;;
