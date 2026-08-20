@@ -134,14 +134,20 @@ av_rule_uuid() {
 
 # Ensure the pass rule admin(10.255.1.0/24) -> mgmt(10.0.0.0/24) on the WG iface.
 av_ensure_mgmt_rule() {
-    local cli; cli="$(av_fw_cli)"
+    local cli err; cli="$(av_fw_cli)"
     if [[ -n "${cli}" ]]; then
-        "${cli}" create-rule --firewall "${OPNSENSE_HOST}" --no-ssl-verify \
+        # Pin --port to the same value the raw-REST path uses (opnsense-wg.sh's
+        # OPNSENSE_PORT, default 8443). Without it the CLI auto-detects, probing
+        # 443 first and latching onto whatever answers a TLS handshake there —
+        # during bootstrap os-caddy binds :443, so the probe returns Caddy's port,
+        # never the API, and every call fails. That port drift from the REST path
+        # is #418. Capture stderr and surface it on failure so it stays diagnosable.
+        if err="$("${cli}" create-rule --firewall "${OPNSENSE_HOST}" --port "${OPNSENSE_PORT}" --no-ssl-verify \
             --description "${AV_RULE_DESC}" --interface "${AV_WG_IFACE}" \
             --action pass --protocol any --no-log \
             --source "${AV_PEER_SUBNET}" --destination "${AV_MGMT_SUBNET}" \
-            --no-apply >/dev/null 2>&1 && { echo "ok"; return 0; }
-        echo "opnsense-firewall create-rule (admin->mgmt) failed; falling back to raw REST" >&2
+            --no-apply 2>&1)"; then echo "ok"; return 0; fi
+        echo "opnsense-firewall create-rule (admin->mgmt) failed; falling back to raw REST: ${err}" >&2
     fi
     local uuid; uuid="$(av_rule_uuid)"
     if [[ -n "${uuid}" ]]; then echo "exists"; return 0; fi
@@ -164,14 +170,16 @@ av_wan_rule_uuid() {
 # That is why bootstrap opens it (ADR-010 §6). The satellite is never required for
 # the termination to exist; it only relays UDP for CGNAT sites.
 av_ensure_wan_rule() {
-    local cli; cli="$(av_fw_cli)"
+    local cli err; cli="$(av_fw_cli)"
     if [[ -n "${cli}" ]]; then
-        "${cli}" create-rule --firewall "${OPNSENSE_HOST}" --no-ssl-verify \
+        # See av_ensure_mgmt_rule: pin --port (== OPNSENSE_PORT) so the CLI does not
+        # auto-detect onto Caddy's :443, and surface stderr on failure (#418).
+        if err="$("${cli}" create-rule --firewall "${OPNSENSE_HOST}" --port "${OPNSENSE_PORT}" --no-ssl-verify \
             --description "${AV_WAN_RULE_DESC}" --interface "${AV_WAN_IFACE}" \
             --action pass --protocol udp --log \
             --source any --destination wanip --destination-port "${SAT_ADMIN_WGPORT}" \
-            --no-apply >/dev/null 2>&1 && { echo "ok"; return 0; }
-        echo "opnsense-firewall create-rule (WAN :${SAT_ADMIN_WGPORT}) failed; falling back to raw REST" >&2
+            --no-apply 2>&1)"; then echo "ok"; return 0; fi
+        echo "opnsense-firewall create-rule (WAN :${SAT_ADMIN_WGPORT}) failed; falling back to raw REST: ${err}" >&2
     fi
     local uuid; uuid="$(av_wan_rule_uuid)"
     if [[ -n "${uuid}" ]]; then echo "exists"; return 0; fi
