@@ -234,11 +234,24 @@ fi
 
 # ── DNS validation (warning only) ───────────────────────────────────
 
-if command -v dig &>/dev/null; then
-    DNS_RESULT=$(dig +short A "${PROXY_DOMAIN}" 2>/dev/null || true)
-    if [[ -z "${DNS_RESULT}" ]]; then
-        warn "No DNS A record found for ${PROXY_DOMAIN}"
-    fi
-fi
+# Checked against the zone's authoritative nameservers, NOT the local resolver:
+# under per-service we register a split-horizon override for this very name a
+# few lines above, so a local lookup would answer with our own record and this
+# check could never fail (see public_a_record).
+# `x="$(f)"` inherits f's exit status, which under `set -e` aborts the script
+# the moment a domain has no public record — the very case this check exists to
+# report (same hazard the jq guards above call out). Capture the code instead.
+_dns_rc=0
+DNS_RESULT="$(public_a_record "${PROXY_DOMAIN}")" || _dns_rc=$?
+case "${_dns_rc}" in
+    0) debug "  public DNS A: ${BL}${DNS_RESULT}${CL}" ;;
+    1) warn "No PUBLIC DNS A record for ${PROXY_DOMAIN} (authoritative nameservers asked, not the local resolver)"
+       if [[ "${DNS_MODE}" == "per-service" ]]; then
+           warn "  ACME HTTP-01 cannot validate it, so this domain gets no certificate until a public A record exists"
+       else
+           warn "  the wildcard certificate is unaffected, but the name is not reachable from the internet"
+       fi ;;
+    *) debug "  public DNS A: not checked (no dig, or no resolver reachable)" ;;
+esac
 
 debug "${GN}network:proxy update-service completed for ${MODULE}${CL}"

@@ -383,6 +383,53 @@ get_variant_config() {
     return 1
 }
 
+# Resolve the PUBLIC A record for a name, deliberately bypassing the local
+# resolver.
+#
+# ACME HTTP-01 validation is performed by the CA from the internet, so the
+# record that decides whether a certificate can issue is the public one. A bare
+# `dig` asks 10.0.0.1 (Unbound), which under dnsMode=per-service holds the
+# split-horizon override that network:proxy registers for this very name
+# earlier in the same run — so a local lookup answers with the record we just
+# created ourselves and can never fail. That silently suppressed the "no A
+# record" warning for every domain that has no public DNS at all.
+#
+# Prefer the zone's authoritative nameservers: no third-party dependency, and
+# immune to the negative caching a public resolver applies after an NXDOMAIN.
+# Fall back to public resolvers, then give up rather than warn on a guess.
+#
+# Echoes the answer when found. Exit: 0 = resolved, 1 = definitively absent,
+# 2 = could not check (no dig, or no resolver reachable) — callers must not
+# report 2 as a missing record.
+public_a_record() {
+    local fqdn="$1"
+    local zone="${fqdn#*.}"
+    local ns answer reached=0
+    local -a servers=()
+
+    command -v dig >/dev/null 2>&1 || return 2
+
+    while read -r ns; do
+        [ -n "${ns}" ] && servers+=("${ns%.}")
+    done < <(dig +short +time=3 +tries=1 NS "${zone}" 2>/dev/null || true)
+    servers+=(1.1.1.1 8.8.8.8)
+
+    for ns in "${servers[@]}"; do
+        # dig exits non-zero only when the server could not be reached; an
+        # empty answer with rc 0 is a real "no such record".
+        if answer="$(dig +short +time=3 +tries=1 A "${fqdn}" "@${ns}" 2>/dev/null)"; then
+            reached=1
+            if [ -n "${answer}" ]; then
+                printf '%s\n' "${answer}"
+                return 0
+            fi
+        fi
+    done
+
+    [ "${reached}" -eq 1 ] && return 1
+    return 2
+}
+
 # Push the deployed zones.json to every Proxmox node's /root/tappaas/zones.json so
 # node-side tooling (Create-TAPPaaS-VM.sh) can resolve a newly-added zone's VLAN
 # tag. Without this, installing a module into a freshly-created zone fails with

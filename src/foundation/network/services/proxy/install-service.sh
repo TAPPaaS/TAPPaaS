@@ -150,17 +150,20 @@ fi
 
 # ── DNS validation (warning only) ───────────────────────────────────
 
-if command -v dig &>/dev/null; then
-    DNS_RESULT=$(dig +short A "${PROXY_DOMAIN}" 2>/dev/null || true)
-    if [[ -z "${DNS_RESULT}" ]]; then
-        warn "No DNS A record found for ${PROXY_DOMAIN}"
-        warn "Let's Encrypt certificate issuance may fail until DNS is configured"
-    else
-        debug "  DNS A:    ${BL}${DNS_RESULT}${CL}"
-    fi
-else
-    warn "dig not available — skipping DNS validation"
-fi
+# Authoritative nameservers, not the local resolver — a split-horizon override
+# for this name would otherwise satisfy the check (see public_a_record). This
+# runs before DNS_MODE is resolved, so the message covers both strategies.
+# `x="$(f)"` inherits f's exit status, which under `set -e` aborts the script
+# the moment a domain has no public record — the very case this check exists to
+# report (same hazard the jq guards above call out). Capture the code instead.
+_dns_rc=0
+DNS_RESULT="$(public_a_record "${PROXY_DOMAIN}")" || _dns_rc=$?
+case "${_dns_rc}" in
+    0) debug "  public DNS A: ${BL}${DNS_RESULT}${CL}" ;;
+    1) warn "No PUBLIC DNS A record for ${PROXY_DOMAIN} (authoritative nameservers asked, not the local resolver)"
+       warn "  under dnsMode=per-service ACME HTTP-01 cannot validate, so no certificate will issue" ;;
+    *) debug "  public DNS A: not checked (no dig, or no resolver reachable)" ;;
+esac
 
 # ── TLS certificate strategy: variant dnsMode (ADR-005 §5/§6), proxyTls override ─
 
