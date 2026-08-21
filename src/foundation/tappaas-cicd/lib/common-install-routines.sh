@@ -230,9 +230,29 @@ get_default_ha_node() {
 
 # ── Module helper functions ──────────────────────────────────────────
 
+# Module-catalog location helpers (repo_catalog_file, repo_catalog_entry) live
+# in their own side-effect-free lib so standalone scripts with their own
+# logging can source them without inheriting ours (#459). Re-exported here so
+# the ~160 scripts that already source this file keep getting them.
+for _mcl in /home/tappaas/bin/module-catalog-lib.sh \
+            "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/module-catalog-lib.sh"; do
+    # shellcheck source=/dev/null
+    if [[ -r "${_mcl}" ]]; then . "${_mcl}"; break; fi
+done
+unset _mcl
+
 # Get the module directory from the .location field in its deployed config JSON.
 # Arguments: <module-name>
-# Outputs the absolute directory path or returns 1 if not found.
+# Outputs the absolute directory path on success.
+#
+# Exit codes (#460) — the three failures used to collapse into a single 1, so
+# no caller could tell "this module has no directory" from "its directory is
+# gone". 0 and 1 keep their historical meaning, so every existing
+# `if ! dir=$(get_module_dir "$m")` behaves exactly as before:
+#   0  found; directory path on stdout
+#   1  not resolvable: no deployed config, or no .location recorded
+#   2  .location IS recorded but that directory does not exist; the recorded
+#      path is still echoed so the caller can name it in the error
 get_module_dir() {
     local module="$1"
     local module_json="${CONFIG_DIR}/${module}.json"
@@ -258,6 +278,7 @@ get_module_dir() {
     fi
 
     echo "${location}"
+    [[ -d "${location}" ]] || return 2
     return 0
 }
 

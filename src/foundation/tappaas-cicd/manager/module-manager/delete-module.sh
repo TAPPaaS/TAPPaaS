@@ -391,8 +391,9 @@ main() {
     # ── Step 4: Run the module's own delete.sh ───────────────────────
     info "\n${BOLD}Step 4: Run module delete.sh${CL}"
 
-    local module_dir
-    if module_dir=$(get_module_dir "${module}"); then
+    local module_dir _gmd_rc=0
+    module_dir=$(get_module_dir "${module}") || _gmd_rc=$?
+    if [[ "${_gmd_rc}" -eq 0 ]]; then
         ensure_scripts_executable "${module_dir}"
         if [[ -x "${module_dir}/delete.sh" ]]; then
             info "  Running ${module_dir}/delete.sh..."
@@ -402,8 +403,12 @@ main() {
         else
             info "  No delete.sh found in module directory — skipping"
         fi
+    elif [[ "${_gmd_rc}" -eq 2 ]]; then
+        # #460: recorded but gone — a moved/removed checkout, not a module that
+        # never had a directory. Say which, so the operator can restore it.
+        warn "Module directory recorded but missing: ${module_dir} — skipping delete.sh"
     else
-        warn "Cannot find module directory (missing .location in config) — skipping delete.sh"
+        warn "Cannot find module directory (no .location in config) — skipping delete.sh"
     fi
 
     # ── Step 5: Call dependency delete-service.sh scripts (reverse) ──

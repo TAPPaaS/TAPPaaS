@@ -25,8 +25,9 @@ test.sh,tappaas-cicd/,common-install-routines.sh; create-site.sh; validate-site.
 # === tappaas-cicd/lib ===
 apply-json-merge.sh,tappaas-cicd/lib/,common-install-routines.sh; convert-json-to-config.sh
 audit-jq-readers.sh,tappaas-cicd/lib/,
-common-install-routines.sh,tappaas-cicd/lib/,convert-json-to-config.sh; copy-update-json.sh; snapshot-vm.sh
+common-install-routines.sh,tappaas-cicd/lib/,convert-json-to-config.sh; copy-update-json.sh; snapshot-vm.sh; module-catalog-lib.sh
 ha-vm-lib.sh,tappaas-cicd/lib/,snapshot-vm.sh; migrate-vm.sh; reboot-node-lib.sh; check-ha-health.sh; test-service.sh
+module-catalog-lib.sh,tappaas-cicd/lib/,
 test-config-readers.sh,tappaas-cicd/lib/,common-install-routines.sh
 test-ha-vm-lib.sh,tappaas-cicd/lib/,ha-vm-lib.sh
 #
@@ -75,7 +76,7 @@ convert-json-to-config.sh,tappaas-cicd/manager/site-manager/,copy-update-json.sh
 create-configuration.sh,tappaas-cicd/manager/site-manager/,common-install-routines.sh; validate-configuration.sh
 create-site.sh,tappaas-cicd/manager/site-manager/,common-install-routines.sh; validate-site.sh
 migrate-configuration.sh,tappaas-cicd/manager/site-manager/,common-install-routines.sh
-repository.sh,tappaas-cicd/manager/site-manager/,
+repository.sh,tappaas-cicd/manager/site-manager/,module-catalog-lib.sh
 validate-configuration.sh,tappaas-cicd/manager/site-manager/,common-install-routines.sh
 validate-site.sh,tappaas-cicd/manager/site-manager/,common-install-routines.sh; validate-configuration.sh; site.json
 install.sh,tappaas-cicd/manager/site-manager/,site-manager; validate-site.sh
@@ -103,8 +104,9 @@ src/validate.ts,tappaas-cicd/manager/module-manager/,validate-module.sh; validat
 src/types.ts,tappaas-cicd/manager/module-manager/,
 copy-update-json.sh,tappaas-cicd/manager/module-manager/,common-install-routines.sh; convert-json-to-config.sh
 delete-module.sh,tappaas-cicd/manager/module-manager/,common-install-routines.sh
-install-module.sh,tappaas-cicd/manager/module-manager/,common-install-routines.sh; copy-update-json.sh; validate-module-tier-source.sh; backup-manager
+install-module.sh,tappaas-cicd/manager/module-manager/,common-install-routines.sh; copy-update-json.sh; validate-module-tier-source.sh; resolve-module.sh; backup-manager
 module-format.sh,tappaas-cicd/manager/module-manager/,common-install-routines.sh
+resolve-module.sh,tappaas-cicd/manager/module-manager/,module-catalog-lib.sh; site.json
 snapshot-vm.sh,tappaas-cicd/manager/module-manager/,common-install-routines.sh; ha-vm-lib.sh; update-module.sh; update-os.sh
 update-module.sh,tappaas-cicd/manager/module-manager/,common-install-routines.sh; apply-json-merge.sh; snapshot-vm.sh
 validate-module.sh,tappaas-cicd/manager/module-manager/,

@@ -7,7 +7,7 @@
 // tests pass an explicit dir (a fixture tree).
 
 import { existsSync, readFileSync, readdirSync, statSync } from "fs";
-import { basename, join } from "path";
+import { basename, dirname, join } from "path";
 import { defaultConfigDir } from "../../../lib/ts/src/config-io";
 import { ModuleConfig } from "./types";
 
@@ -237,22 +237,41 @@ function isDirectory(p: string): boolean {
   }
 }
 
-export function getModuleDir(configDir: string, module: string): string | null {
+// The three ways resolution fails used to collapse into a single `null`, so no
+// caller could tell "this module has no directory" from "its directory is
+// gone" (#460). ModuleDirResult keeps them apart; `dir` carries the RECORDED
+// path on "missing-dir" so callers can name it.
+export type ModuleDirResult =
+  | { kind: "found"; dir: string }
+  | { kind: "not-installed" }
+  | { kind: "no-location" }
+  | { kind: "missing-dir"; dir: string };
+
+export function getModuleDirResult(configDir: string, module: string): ModuleDirResult {
   const file = join(configDir, `${module}.json`);
-  if (!existsSync(file)) return null;
+  if (!existsSync(file)) return { kind: "not-installed" };
   let raw: Record<string, unknown>;
   try {
     raw = JSON.parse(readFileSync(file, "utf8")) as Record<string, unknown>;
   } catch {
-    return null;
+    return { kind: "not-installed" };
   }
   let location = typeof raw.location === "string" ? raw.location : "";
-  if (!location) return null;
+  if (!location) return { kind: "no-location" };
   if (!isDirectory(location) && location.endsWith("/firewall")) {
     const renamed = location.slice(0, -"/firewall".length) + "/network";
     if (isDirectory(renamed)) location = renamed;
   }
-  return location;
+  return isDirectory(location) ? { kind: "found", dir: location } : { kind: "missing-dir", dir: location };
+}
+
+// Legacy signature, unchanged in behaviour: the recorded .location is returned
+// whether or not the directory still exists (bash `get_module_dir` likewise
+// still ECHOES the path when it exits 2). Callers that need to tell the two
+// apart use getModuleDirResult; the rest keep working untouched.
+export function getModuleDir(configDir: string, module: string): string | null {
+  const r = getModuleDirResult(configDir, module);
+  return r.kind === "found" || r.kind === "missing-dir" ? r.dir : null;
 }
 
 // ── Provider-name resolution (bash resolve_provider_module port). Prefer the
@@ -279,4 +298,151 @@ export function resolveProviderModule(
   const alias = provider === "network" ? "firewall" : provider === "firewall" ? "network" : "";
   if (alias && existsSync(join(configDir, `${alias}.json`))) return alias;
   return provider;
+}
+
+// ── Module-resolution classification (#460) ───────────────────────────
+// A module's source directory is found by one of three INDEPENDENT paths, and
+// only the first was ever described in site-fields.json:
+//
+//   A  the repository module catalogs   (resolve-module.sh, needs registration)
+//   B  the deployed config's .location  (install-module.sh records the CWD it
+//      installed from — works with no repository registered at all)
+//   C  neither — nothing can locate it, which today surfaces only when some
+//      operation finally needs the directory
+//
+// This is the reporting side: `module-manager list --resolution` names each
+// module's path so C is visible up front instead of at first use.
+
+export interface SiteRepository {
+  name: string;
+  path: string;
+  catalog: string;
+  managed: string;
+}
+
+// site.json .repositories[], normalized. Entries with no .path are kept: they
+// are a misconfiguration worth reporting, not worth hiding.
+export function siteRepositories(configDir: string): SiteRepository[] {
+  const siteFile = join(configDir, "site.json");
+  if (!existsSync(siteFile)) return [];
+  let raw: Record<string, unknown>;
+  try {
+    raw = JSON.parse(readFileSync(siteFile, "utf8")) as Record<string, unknown>;
+  } catch {
+    return [];
+  }
+  const repos = raw.repositories;
+  if (!Array.isArray(repos)) return [];
+  const out: SiteRepository[] = [];
+  for (const r of repos) {
+    if (!r || typeof r !== "object") continue;
+    const o = r as Record<string, unknown>;
+    out.push({
+      name: asString(o.name) ?? "",
+      path: asString(o.path) ?? "",
+      catalog: asString(o.catalog) ?? "",
+      managed: asString(o.managed) ?? "full",
+    });
+  }
+  return out;
+}
+
+// Port of repo_catalog_file (lib/module-catalog-lib.sh): the DECLARED catalog
+// path wins, then the current convention, then the legacy name (#305, #459).
+export function repoCatalogFile(repoPath: string, declared: string): string {
+  const root = repoPath.replace(/\/+$/, "");
+  const declaredAbs = declared ? join(root, declared) : "";
+  if (declaredAbs && existsSync(declaredAbs)) return declaredAbs;
+  const current = join(root, "src", "module-catalog.json");
+  if (existsSync(current)) return current;
+  const legacy = join(root, "src", "modules.json");
+  if (existsSync(legacy)) return legacy;
+  return current;
+}
+
+export interface CatalogHit {
+  repo: string;
+  moduleJson: string;
+  tier: string;
+}
+
+// Port of resolve-module.sh's catalog scan: first repository in site.json order
+// carrying the module (by moduleName OR legacyName) wins.
+export function resolveViaCatalog(configDir: string, module: string): CatalogHit | null {
+  for (const repo of siteRepositories(configDir)) {
+    if (!repo.path) continue;
+    const catalogFile = repoCatalogFile(repo.path, repo.catalog);
+    if (!existsSync(catalogFile)) continue;
+    let cat: Record<string, unknown>;
+    try {
+      cat = JSON.parse(readFileSync(catalogFile, "utf8")) as Record<string, unknown>;
+    } catch {
+      continue;
+    }
+    const entries = [
+      ...(Array.isArray(cat.foundationModules) ? cat.foundationModules : []),
+      ...(Array.isArray(cat.applicationModules) ? cat.applicationModules : []),
+    ];
+    for (const e of entries) {
+      if (!e || typeof e !== "object") continue;
+      const o = e as Record<string, unknown>;
+      if (o.moduleName !== module && o.legacyName !== module) continue;
+      const moduleJson = asString(o.moduleJson) ?? "";
+      return {
+        repo: repo.name,
+        moduleJson: moduleJson ? join(repo.path.replace(/\/+$/, ""), moduleJson) : "",
+        tier: asString(o.tier) ?? "app",
+      };
+    }
+  }
+  return null;
+}
+
+// Which path (if any) locates this module.
+//   location        .location resolves to a real directory
+//   catalog         no usable .location, but a repository catalog carries it
+//   broken-location .location recorded, directory gone, catalog does not cover it
+//   unresolvable    no .location and no catalog entry — nothing can find it
+export type ResolutionPath = "location" | "catalog" | "broken-location" | "unresolvable";
+
+export interface ModuleResolution {
+  module: string;
+  path: ResolutionPath;
+  dir: string | null;
+  /** Repository whose catalog carries it, independent of `path`. */
+  catalogRepo: string | null;
+  tier: string | null;
+  /** Where `tier` came from — the deployed config outranks the catalog (#460). */
+  tierSource: "config" | "catalog" | null;
+}
+
+export function classifyModuleResolution(configDir: string, module: string): ModuleResolution {
+  const dirResult = getModuleDirResult(configDir, module);
+  const hit = resolveViaCatalog(configDir, module);
+  const cfg = loadModule(configDir, module);
+
+  let path: ResolutionPath;
+  let dir: string | null = null;
+  if (dirResult.kind === "found") {
+    path = "location";
+    dir = dirResult.dir;
+  } else if (hit) {
+    path = "catalog";
+    dir = hit.moduleJson ? dirname(hit.moduleJson) : null;
+  } else if (dirResult.kind === "missing-dir") {
+    path = "broken-location";
+    dir = dirResult.dir;
+  } else {
+    path = "unresolvable";
+  }
+
+  const configTier = cfg?.tier ?? null;
+  return {
+    module,
+    path,
+    dir,
+    catalogRepo: hit ? hit.repo : null,
+    tier: configTier ?? hit?.tier ?? null,
+    tierSource: configTier ? "config" : hit ? "catalog" : null,
+  };
 }
