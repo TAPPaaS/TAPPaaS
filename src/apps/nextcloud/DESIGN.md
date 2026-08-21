@@ -41,11 +41,25 @@ config-derived at deploy time.
 
 ## Trusted domains and public URL
 
-`install.sh` sets `trusted_domains` (internal FQDN, public domain, localhost), `overwrite.cli.url`
-and `overwriteprotocol=https` via `nextcloud-occ` after deploy. Nix intentionally does not pin
-`trusted_domains`, so these occ values persist. `nextcloud-occ` must be called directly (it
-self-switches to the nextcloud user); wrapping it in `systemd-run` nests systemd-run as a
-non-root user and polkit denies it.
+`update.sh` sets `trusted_domains` (internal FQDN and public domain), `overwrite.cli.url` and
+`overwriteprotocol=https` via `nextcloud-occ`. `install.sh` sources `update.sh` and calls the same
+function once the VM is up. `localhost` is not written: loopback is always trusted.
+
+**These occ values do not survive a NixOS rebuild.** Nix does not pin `trusted_domains`, but a
+rebuild rewrites `/var/lib/nextcloud/config/config.php` and the occ-set keys are lost. That is why
+the converge lives in `update.sh` rather than `install.sh`: `update-module.sh` runs the dependency
+updaters — including the `templates:nixos` rebuild — *before* the module's `update.sh`, so the
+domain is restored after every rebuild on the sanctioned update path. A path that rebuilds without
+running `update.sh` afterwards leaves the instance answering HTTP 400 "Access through untrusted
+domain" on its declared public route.
+
+The write is verified by reading `config.php` back, and the converge fails if the value is absent.
+`nextcloud-occ` exits 0 over a non-TTY SSH session while relaying no output at all, so its exit
+code is not evidence that anything was written. `test.sh` asserts the module's `proxyDomain` is
+present in `trusted_domains`, and `update-module.sh` runs that suite before and after every update.
+
+`nextcloud-occ` must be called directly (it self-switches to the nextcloud user); wrapping it in
+`systemd-run` nests systemd-run as a non-root user and polkit denies it.
 
 ## Backup design
 
