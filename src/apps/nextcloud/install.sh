@@ -16,16 +16,9 @@
 
 VMNAME="$(get_config_value 'vmname' "${1:-nextcloud}")"
 ZONE0NAME="$(get_config_value 'zone0' 'srv')"
-PROXY_DOMAIN="$(get_config_value 'proxyDomain' '')"
-if [[ -z "${PROXY_DOMAIN}" ]]; then
-    # Domain from the module's environment (config/environments/<env>.json via
-    # get_variant_config), falling back to legacy configuration.json .tappaas.domain.
-    _NC_ENV="$(get_config_value 'environment' '')"
-    _TAPPAAS_DOMAIN=$(jq -r '.domain // empty' <<<"$(get_variant_config "${_NC_ENV}" 2>/dev/null || echo '{}')")
-    [[ -z "${_TAPPAAS_DOMAIN}" ]] && _TAPPAAS_DOMAIN=$(jq -r '.tappaas.domain // empty' \
-        "/home/tappaas/config/configuration.json" 2>/dev/null)
-    PROXY_DOMAIN="${VMNAME}.${_TAPPAAS_DOMAIN}"
-fi
+# resolve_proxy_domain() comes from update.sh, sourced above — one implementation,
+# so install and converge can never disagree about the public route.
+PROXY_DOMAIN="$(resolve_proxy_domain)"
 
 # ── Copy admin password to local secrets file ─────────────────────────────────
 echo ""
@@ -51,29 +44,11 @@ else
     warn "    ssh tappaas@${NEXTCLOUD_HOST} 'sudo cat /var/lib/nextcloud/admin-pass'"
 fi
 
-# ── Configure trusted domains + public URL via occ ─────────────────────────────
-# Call nextcloud-occ DIRECTLY (it self-switches to the nextcloud user). Do NOT wrap it in
-# `systemd-run -p User=nextcloud` — nextcloud-occ runs systemd-run internally, so wrapping it
-# nests systemd-run as a non-root user, which polkit denies during/after activation (exit 1).
-# Nix no longer pins trusted_domains, so these occ values persist (no override.config.php shadow).
-# Index 0 = hostName (auto-added by NixOS); we append the internal FQDN, the environment/public
-# domain, and localhost.
-if [[ -n "${PROXY_DOMAIN}" ]]; then
-    info "${BOLD}Configuring trusted domains + public URL…${CL}"
-    if occ_out=$(ssh -o BatchMode=yes -o ConnectTimeout=15 -o StrictHostKeyChecking=no \
-        "tappaas@${NEXTCLOUD_HOST}" \
-        "sudo nextcloud-occ config:system:set trusted_domains 1 --value='${NEXTCLOUD_HOST}' && \
-         sudo nextcloud-occ config:system:set trusted_domains 2 --value='${PROXY_DOMAIN}' && \
-         sudo nextcloud-occ config:system:set trusted_domains 3 --value='localhost' && \
-         sudo nextcloud-occ config:system:set overwrite.cli.url --value='https://${PROXY_DOMAIN}' && \
-         sudo nextcloud-occ config:system:set overwriteprotocol --value='https'" 2>&1)
-    then
-        info "  ${GN}✓${CL} Trusted domains + public URL configured (https://${PROXY_DOMAIN})"
-    else
-        warn "  Domain config failed (deploy continues) — occ output:"
-        warn "    ${occ_out}"
-    fi
-fi
+# ── Configure trusted domains + public URL ────────────────────────────────────
+# Delegated to converge_nextcloud_domains() in update.sh. It is called again here
+# because update.sh is sourced BEFORE the VM exists, where it defers. This call
+# runs once the VM is up. The converge verifies its own write.
+converge_nextcloud_domains || warn "  Domain config failed — installation continues; see the error above."
 
 echo ""
 info "${GN}✓${CL} nextcloud installation completed successfully."
