@@ -436,6 +436,49 @@ else
 fi
 
 # ============================================================================
+# Test 13: Public Domain Is Trusted (trusted_domains)
+# ============================================================================
+# The module declares a public route via network:proxy.proxyDomain, and the
+# reverse proxy serves it — but Nextcloud rejects any Host it does not list in
+# trusted_domains with HTTP 400 "Access through untrusted domain". A green
+# reverse-proxy check does NOT cover this: the proxy is happy, Nextcloud is not.
+# Only loopback is trusted automatically (Nextcloud admin manual, Trusted
+# Domains), so a proxyDomain must be written explicitly and must survive a
+# converge, not only a first install.
+header "Test 13: Public Domain Is Trusted (trusted_domains)"
+
+TD_EXPECT=$(jq -r '.config["network:proxy"].proxyDomain // .proxyDomain // empty' "${MODULE_JSON}" 2>/dev/null || echo "")
+if [ -z "${TD_EXPECT}" ]; then
+    # Mirror the install-time derivation: <vmname>.<environment domain>.
+    _td_env=$(jq -r '.environment // ""' "${MODULE_JSON}" 2>/dev/null || echo "")
+    [ -z "${_td_env}" ] && _td_env=$(jq -r '.name // empty' "${CONFIG_DIR}/site.json" 2>/dev/null || echo "")
+    _td_dom=""
+    if [ -n "${_td_env}" ] && [ -f "${CONFIG_DIR}/environments/${_td_env}.json" ]; then
+        _td_dom=$(jq -r '.domains.primary // empty' "${CONFIG_DIR}/environments/${_td_env}.json" 2>/dev/null || echo "")
+    fi
+    [ -n "${_td_dom}" ] && TD_EXPECT="${VMNAME}.${_td_dom}"
+fi
+
+TD_CONF="/var/lib/nextcloud/config/config.php"
+TD_OVERRIDE="/var/lib/nextcloud/config/override.config.php"
+TD_READABLE=$(remote "sudo -u nextcloud test -r ${TD_CONF} && echo ok" || echo "")
+# Search BOTH the mutable config and the Nix-managed override: either may carry the key.
+TD_BLOCK=$(remote "sudo -u nextcloud sed -n \"/'trusted_domains'/,/^[[:space:]]*)/p\" ${TD_CONF} ${TD_OVERRIDE} 2>/dev/null" || echo "")
+
+if [ -z "${TD_EXPECT}" ]; then
+    skip "No proxyDomain declared or derivable for ${MODULE} — no public route to verify"
+elif [ "${TD_READABLE}" != "ok" ]; then
+    fail "Could not read ${TD_CONF} — cannot verify trusted_domains"
+elif [ -z "${TD_BLOCK}" ]; then
+    fail "trusted_domains is absent from Nextcloud config entirely — every public Host, including '${TD_EXPECT}', gets HTTP 400 'Access through untrusted domain'"
+elif printf '%s' "${TD_BLOCK}" | grep -qF "'${TD_EXPECT}'"; then
+    pass "Public domain ${TD_EXPECT} is present in trusted_domains"
+else
+    fail "Public domain '${TD_EXPECT}' is NOT in trusted_domains — Nextcloud will answer HTTP 400 'Access through untrusted domain' on the declared public route"
+    log "  trusted_domains currently: $(printf '%s' "${TD_BLOCK}" | tr -d '\n' | sed 's/  */ /g')"
+fi
+
+# ============================================================================
 # Summary
 # ============================================================================
 header "Test Summary"
