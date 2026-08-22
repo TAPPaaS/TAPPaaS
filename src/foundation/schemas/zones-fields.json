@@ -148,6 +148,33 @@
             "items": "string"
         },
 
+        "tier": {
+            "description": "Trust rank in the ADR-014 strict lattice (0 = most trusted). Governs the direction of 'access-to': an edge may only run downward. Authored (stamped by the archetype), never derived — it records declared security intent so a zone configured against its intent can be caught. Absent on the types listed in 'tier_exempt_types'.",
+            "type": "integer",
+            "required": false,
+            "minimum": 0,
+            "maximum": 6,
+            "note": "Tier 5 is reserved for the 'internet' boundary token and is never authored on a real zone. See 'tier_model' and 'invariants.I1' below.",
+            "example": 2
+        },
+
+        "isolated": {
+            "description": "Inbound quarantine flag. An isolated zone accepts NO zone-wide 'access-to' from anyone (the 'mgmt' control-plane exception aside); inbound reach is granted exclusively per-module via 'pinhole-allowed-from'. Orthogonal to 'tier' — iotCams (tier 6) and iotUntrust (tier 3) are both isolated.",
+            "type": "boolean",
+            "required": false,
+            "default": false,
+            "note": "This is the ADR-007 isolation invariant expressed as a field rather than prose. Enforced by 'invariants.I2'."
+        },
+
+        "serves": {
+            "description": "The ENVIRONMENT whose service zone this Client or IoT zone consumes. A symbolic reference resolved on every reconcile against config/environments/<env>.json '.network.zone' — so it survives the install-time 'srv' -> '<defaultEnvironment>' rename that strands literal service-zone names (issue #424).",
+            "type": "string",
+            "required": false,
+            "appliesTo": ["Client", "IoT", "Guest"],
+            "example": "warmelo",
+            "note": "Authored once via 'network-manager bind <zone> --environment <env>'. Resolution ADDS the environment's service zone to this zone's effective 'access-to', and adds this zone to that service zone's effective 'pinhole-allowed-from'. An isolated zone contributes ONLY the pinhole direction, never an inbound 'access-to' (R2 is preserved). The derived edges are rendered into zones.effective.json and are NEVER written back into zones.json, which stays purely authored."
+        },
+
         "DHCP-start": {
             "description": "Starting offset for DHCP range within the subnet",
             "type": "integer",
@@ -176,10 +203,73 @@
         }
     },
 
+    "tier_model": {
+        "description": "The ADR-014 strict trust lattice. 'access-to' is the coarse, zone-wide, DOWNWARD trust flow; everything that must go UPWARD is a narrow per-module pinhole. This replaces the descriptive tier prose that used to live in zones.json._README.tier_model, which could not be machine-checked because its own edges violated it.",
+        "rule": "R1 — for every edge 'A access-to B', tier(A) <= tier(B). Never upward.",
+        "tiers": {
+            "0": { "name": "Control plane", "egress": "all zones", "ingress": "none — no inbound at all", "members": ["mgmt"] },
+            "1": { "name": "Service backend", "egress": "internet, dmz, IoT-controlled", "ingress": "pinhole from clients + reverse proxy", "members": ["<defaultEnvironment>"] },
+            "2": { "name": "Trusted client", "egress": "internet, own IoT-controlled", "ingress": "direct (its own devices)", "members": ["home", "work"] },
+            "3": { "name": "Untrusted edge", "egress": "internet only", "ingress": "none", "members": ["guest", "iotCloud", "iotUntrust"] },
+            "4": { "name": "DMZ (internet-exposed)", "egress": "internet only", "ingress": "pinhole from internet", "members": ["dmz"] },
+            "5": { "name": "Internet (boundary token)", "egress": "n/a", "ingress": "n/a", "members": [], "note": "Not a real zone — the rank of the literal 'internet' in access-to." },
+            "6": { "name": "Isolated / no-egress", "egress": "none", "ingress": "pinhole only when 'isolated'", "members": ["iotCams", "iotLocal"] }
+        }
+    },
+
+    "tier_exempt_types": {
+        "description": "Zone types that carry no 'tier' and are SKIPPED by the tier invariants I1, I3 and I4. Overlay zones are non-VLAN WireGuard segments with no meaningful trust rank (and 'admin' legitimately carries access-to: ['mgmt'], an upward edge into tier 0); WAN is the switch-internal ISP hand-off with no interface, DHCP or rules.",
+        "types": ["Overlay", "WAN"]
+    },
+
+    "archetypes": {
+        "description": "The single source of tier-correct zone defaults. 'network-manager add <name> --archetype <A>' stamps type/typeId/tier/isolated and the access-to seed, then auto-allocates subId/vlantag/ip. Also the conformance target for invariant I4: every zone's (type, tier, isolated) triple must match one of these.",
+        "catalog": {
+            "control":        { "type": "Management", "typeId": 0, "tier": 0, "isolated": false, "access-to": ["all"],           "reference": "mgmt",       "description": "Control plane: hypervisors, backup, firewall, identity, cicd" },
+            "service":        { "type": "Service",    "typeId": 2, "tier": 1, "isolated": false, "access-to": ["internet", "dmz"], "reference": "srv",       "description": "Application/service modules for one environment" },
+            "trusted-client": { "type": "Client",     "typeId": 3, "tier": 2, "isolated": false, "access-to": ["internet"],       "reference": "home",       "description": "Trusted end-user devices; reaches its service zone by pinhole" },
+            "guest":          { "type": "Guest",      "typeId": 5, "tier": 3, "isolated": false, "access-to": ["internet"],       "reference": "guest",      "description": "Visitors: internet only, fully isolated" },
+            "iot-cloud":      { "type": "IoT",        "typeId": 4, "tier": 3, "isolated": false, "access-to": ["internet"],       "reference": "iotCloud",   "description": "Internet-dependent trusted IoT: appliances, media, monitoring" },
+            "iot-untrust":    { "type": "IoT",        "typeId": 4, "tier": 3, "isolated": true,  "access-to": ["internet"],       "reference": "iotUntrust", "description": "Untrusted IoT: internet-only, fully quarantined" },
+            "dmz":            { "type": "DMZ",        "typeId": 6, "tier": 4, "isolated": false, "access-to": ["internet"],       "reference": "dmz",        "description": "Public-facing: reverse proxy, internet-exposed services" },
+            "iot-local":      { "type": "IoT",        "typeId": 4, "tier": 6, "isolated": false, "access-to": [],                 "reference": "iotLocal",   "description": "Local-only IoT: no internet, automation devices" },
+            "iot-cams":       { "type": "IoT",        "typeId": 4, "tier": 6, "isolated": true,  "access-to": [],                 "reference": "iotCams",    "description": "Surveillance: cameras + NVR, fully isolated" }
+        }
+    },
+
+    "invariants": {
+        "description": "Machine-checkable security gates run by 'network-manager validate' (zones-check). Each is a WARNING by default and an error under --strict. They promote the old zones.json._README.pr_review_checklist from human review to code.",
+        "I1": {
+            "name": "Monotonic access-to",
+            "rule": "For every edge 'A access-to B': tier(A) <= tier(B). 'internet' counts as tier 5.",
+            "exempt": "The 'mgmt' control plane (tier 0) reaches every zone for operational visibility; zones whose type is in tier_exempt_types; any zone with no authored tier (reported as a note until back-filled).",
+            "remedy": "An upward edge must be expressed as a per-module pinhole instead — add the source to the target's pinhole-allowed-from and declare the specific IP/port rule in the module."
+        },
+        "I2": {
+            "name": "Isolation floor",
+            "rule": "A zone with 'isolated': true must not appear in ANY zone's access-to.",
+            "exempt": "'mgmt' only.",
+            "remedy": "Grant reach per-module via the isolated zone's pinhole-allowed-from."
+        },
+        "I3": {
+            "name": "Egress boundary",
+            "rule": "A tier-6 (no-egress) zone must not list 'internet' in its access-to.",
+            "exempt": "Types in tier_exempt_types.",
+            "remedy": "If the devices genuinely need internet, the zone is iot-cloud or iot-untrust (tier 3), not iot-local/iot-cams."
+        },
+        "I4": {
+            "name": "Archetype conformance",
+            "rule": "Every zone's (type, tier, isolated) triple must match an entry in archetypes.catalog.",
+            "exempt": "Types in tier_exempt_types; any zone with no authored tier.",
+            "remedy": "Either correct the zone's fields to its declared intent, or create it with 'add --archetype <A>'."
+        }
+    },
+
     "zone_key": {
         "description": "The key for each zone entry in zones.json",
         "type": "string",
-        "pattern": "^[a-z][a-z0-9-]*$",
-        "examples": ["mgmt", "srv", "dmz", "client", "guest", "iot-cameras"]
+        "pattern": "^[a-z][a-zA-Z0-9]*$",
+        "note": "camelCase only — no underscores or hyphens (#278). This is what network-manager authorZone() enforces; the schema previously allowed hyphens, which no code path would accept.",
+        "examples": ["mgmt", "srv", "dmz", "home", "guest", "iotCams"]
     }
 }

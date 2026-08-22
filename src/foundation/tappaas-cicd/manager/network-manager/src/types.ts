@@ -21,6 +21,17 @@ export interface Zone {
   state?: string; // Active | Inactive | Manual | Mandatory | Disabled
   "access-to"?: string[];
   "pinhole-allowed-from"?: string[];
+  // ADR-014: the security dimension, orthogonal to `type`.
+  //   tier     — trust rank in the strict lattice (0 = most trusted). `access-to`
+  //              may only run downward (R1); everything upward is a pinhole.
+  //   isolated — inbound quarantine: accepts NO zone-wide access-to (R2).
+  //   serves   — for Client/IoT zones, the ENVIRONMENT whose service zone this
+  //              zone consumes. Symbolic, so it survives the srv→<env> rename
+  //              that strands literal service-zone names (#424).
+  // All three are optional: a zones.json predating ADR-014 keeps working.
+  tier?: number;
+  isolated?: boolean;
+  serves?: string;
   description?: string;
   parent?: string;
   variant?: string;

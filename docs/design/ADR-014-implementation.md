@@ -3,7 +3,7 @@
 **Companion to:** [ADR-014 — Zone ↔ Environment Lifecycle & Operations](<../ADR/ADR-014 - Zone and Environment Lifecycle.md>) (the *why* + the decided design)
 **Closes:** #424 (client/IoT zones ↔ environments undefined) · #419 (stale zone references not resolved)
 **Purpose of this doc:** one place that (1) records **implementation-level decisions** (including the three forks ADR-014 flagged for confirmation), (2) breaks the work into **packages** with deliverables/dependencies/test criteria, and (3) **tracks live execution state**.
-**Status:** Planning — no package started
+**Status:** In progress — P0 ✅, P1 ✅, P2 next
 **Branch:** `feat/adr-014-zone-lifecycle`, cut from `main`
 **Started:** 2026-08-22
 
@@ -100,7 +100,7 @@ Verified against `main`. Several of these contradict what ADR-014 assumes, and t
 - Branch `feat/adr-014-zone-lifecycle` off `main`.
 - Point this system at it: `site-manager repository modify TAPPaaS --branch feat/adr-014-zone-lifecycle` then `site-manager repository reconcile --apply`. `pre-update.sh` picks the branch up via `reconcile_repo_checkout` ([pre-update.sh:60](../../src/foundation/tappaas-cicd/pre-update.sh#L60)), so every subsequent `update-tappaas` tracks the branch.
 - Baseline capture: copy `config/{zones.json,zones.json.orig,zones.rename.json,site.json}` and `config/environments/` to a dated archive; record `network-manager validate` and `network-manager list` output as the "before" artefact.
-- Proxmox snapshot of `tappaas-cicd` (the rollback point for the whole campaign).
+- Proxmox snapshot of `tappaas-cicd` — **deferred to immediately before Stage 1** (P9). Taken now it would go stale across P1–P8 and protect nothing; the meaningful rollback point is the moment before the first `update-tappaas` onto this branch. The config baseline above is captured now and is what P1–P8 could ever need.
 
 **Test criteria** — `site-manager repository list` shows the branch; a no-op `update-tappaas` run completes and leaves `zones.json` byte-identical.
 
@@ -119,6 +119,10 @@ Purely additive. No behaviour change; nothing reads the new fields yet.
 - `zonesmerge.ts` field policy — **decision:** `serves` joins `AUTO_FIELDS` (operator-authored via `bind`, must never be adopted from the release template); `tier` and `isolated` follow the normal rule (archetype-stamped design intent, so a release correction should land).
 
 **Test criteria** — `tsc --noEmit` clean; existing `network-manager/test.sh` fast tier green unchanged; a `zones.json` carrying the new fields round-trips losslessly through `loadZones`/`saveZones` and through `merge --diff` with no reported change.
+
+**Outcome (2026-08-22): ✅ green — 160 unit + 15 CLI, `tsc --noEmit` clean.** 12 new assertions cover load/save round-trip, the merge field policy (`serves` pinned, `tier` adoptable but pinned when operator-edited), and the rename transform carrying the new fields. Two notes from the build:
+- `zone_key` in the schema was tightened from `^[a-z][a-z0-9-]*$` to `^[a-z][a-zA-Z0-9]*$` (C9). This is documentation catching up with enforcement — `authorZone` has always rejected hyphens — and `zones-fields.json` has no programmatic consumer today, so nothing could have relied on the looser pattern. ZONES.md's contradicting "org-scoped zones may use hyphens, e.g. `biz-guest`" sentence was corrected.
+- The schema gained `tier_exempt_types: ["Overlay", "WAN"]` as a first-class block rather than a hardcoded list in P2, so R2's exemption is data the checks read. `WAN` is exempted alongside `Overlay` for the same reason: `wan` is the switch-internal ISP hand-off with no interface, DHCP or rules, and no meaningful trust rank.
 
 ---
 
@@ -233,9 +237,9 @@ See [Rollout campaign](#rollout-campaign) — three staged tests, gated on P0–
 
 | # | Package | Depends on | Status | Tests | Notes |
 |---|---------|-----------|--------|-------|-------|
-| P0 | Branch + repo pointing + baseline | — | ⬜ | — | |
-| P1 | Schema foundation (`tier`/`isolated`/`serves` + archetypes) | P0 | ⬜ | — | additive only |
-| P2 | Read-side: I1–I4 + filtered `list` | P1 | ⬜ | — | diagnosis before mutation |
+| P0 | Branch + repo pointing + baseline | — | ✅ | baseline captured | branch live at `2f0ffd0`; system tracks it; snapshot deferred to Stage 1 (see note) |
+| P1 | Schema foundation (`tier`/`isolated`/`serves` + archetypes) | P0 | ✅ | 160 unit + 15 CLI, `tsc` clean | additive only; +12 new tests |
+| P2 | Read-side: I1–I4 + filtered `list` | P1 | 🟦 | — | diagnosis before mutation |
 | P3 | `serves` + `bind` + effective rendering | P1, P2 | ⬜ | — | carries D-C4; closes #424 core |
 | P4 | Archetypes on `add` | P1 | ⬜ | — | subsumes D3 |
 | P5 | `environment add --create-zone` / reconcile materialise | P3 | ⬜ | — | env-mgr seam |

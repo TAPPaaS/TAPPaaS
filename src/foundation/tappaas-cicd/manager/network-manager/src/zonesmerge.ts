@@ -20,7 +20,8 @@
 //
 // Merge rules (preserved exactly from apply-zones-merge.sh):
 //   Per-field within a zone present in BOTH current and source:
-//     - `state` is an AUTO_FIELD: operator-pinned, NEVER adopted from source.
+//     - `state` and `serves` are AUTO_FIELDS: operator-pinned, NEVER adopted
+//       from source (see AUTO_FIELDS below for why `serves` joined them).
 //     - every other field: current==orig → adopt source; else pin current.
 //   Zone-level:
 //     - in source, absent in current → ADD (release introduced a new zone).
@@ -40,7 +41,17 @@ import { dirname, join } from "path";
 import { isDocKey } from "./zones";
 
 // Operator-pinned fields per zone — never adopted from the release source (#209).
-const AUTO_FIELDS = new Set<string>(["state"]);
+//
+// `serves` (ADR-014 D2) joins `state` here: it is authored per-installation by
+// `network-manager bind <zone> --environment <env>` and names an environment
+// that exists only on THIS system. The shipped template can never hold a
+// meaningful value for it, so adopting it from source would clobber the
+// operator's binding with an empty/foreign one on every update.
+//
+// `tier` and `isolated` are deliberately NOT here: they are archetype-stamped
+// declared security intent, so a release that corrects a tier SHOULD land (via
+// the normal current==orig rule, which still pins a deliberate local edit).
+const AUTO_FIELDS = new Set<string>(["state", "serves"]);
 
 // A parsed zones document: the full raw object (doc blocks included). Unlike
 // zones.ts's loadZones we keep EVERYTHING (incl. "_*") so writes round-trip the

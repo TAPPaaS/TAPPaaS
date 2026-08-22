@@ -980,6 +980,102 @@ function tmpZones(): string {
   }
 }
 
+// ── 16. ADR-014 P1: tier / isolated / serves are carried, not mangled ──
+// P1 is a PURE schema addition: nothing reads the three new fields yet, so the
+// only thing to prove is that they survive every existing code path untouched —
+// load→save round-trip, the 3-way merge, and the rename transform — and that
+// `serves` is operator-pinned like `state`.
+{
+  const d = mkdtempSync(join(tmpdir(), "nm-adr014-"));
+
+  // A zone doc carrying all three new fields, on the zone kinds that use them.
+  const authored = {
+    _README: "doc block",
+    mgmt: {
+      type: "Management", state: "Manual", typeId: "0", subId: "0", vlantag: 0,
+      ip: "10.0.0.0/24", bridge: "lan", tier: 0,
+      "access-to": ["internet", "acme", "home", "iotCams", "dmz"], "pinhole-allowed-from": [],
+    },
+    acme: {
+      type: "Service", state: "Active", typeId: "2", subId: "0", vlantag: 200,
+      ip: "10.2.0.0/24", bridge: "lan", tier: 1,
+      "access-to": ["internet", "dmz"], "pinhole-allowed-from": ["dmz"],
+    },
+    home: {
+      type: "Client", state: "Active", typeId: "3", subId: "10", vlantag: 310,
+      ip: "10.3.10.0/24", bridge: "lan", tier: 2, serves: "acme",
+      "access-to": ["internet"], "pinhole-allowed-from": [],
+    },
+    iotCams: {
+      type: "IoT", state: "Active", typeId: "4", subId: "30", vlantag: 430,
+      ip: "10.4.30.0/24", bridge: "lan", tier: 6, isolated: true, serves: "acme",
+      "access-to": [], "pinhole-allowed-from": [],
+    },
+    dmz: {
+      type: "DMZ", state: "Mandatory", typeId: "6", subId: "10", vlantag: 610,
+      ip: "10.6.0.0/24", bridge: "lan", tier: 4,
+      "access-to": ["internet"], "pinhole-allowed-from": ["internet"],
+    },
+  };
+
+  // (a) load → save round-trips the new fields losslessly.
+  const f = join(d, "zones.json");
+  writeFileSync(f, JSON.stringify(authored, null, 4) + "\n", "utf8");
+  const doc = loadZones(f);
+  const home = getZone(doc, "home");
+  const cams = getZone(doc, "iotCams");
+  check(home?.tier === 2 && home?.serves === "acme", "P1: loadZones surfaces tier + serves on a Client zone");
+  check(cams?.tier === 6 && cams?.isolated === true && cams?.serves === "acme", "P1: loadZones surfaces tier + isolated + serves on an IoT zone");
+  check(getZone(doc, "acme")?.isolated === undefined, "P1: absent `isolated` stays absent (not defaulted on load)");
+
+  const g = join(d, "roundtrip.json");
+  saveZones(g, doc);
+  check(
+    JSON.stringify(JSON.parse(readFileSync(g, "utf8"))) === JSON.stringify(authored),
+    "P1: load→save round-trips a tier/isolated/serves doc byte-for-byte (by value)",
+  );
+
+  // (b) the new fields do not disturb the existing checks — a conforming doc
+  //     still passes zones-check with no errors (P1 adds no new gate).
+  const res = runChecks(loadZones(f), d, false);
+  check(res.errors === 0, "P1: zones-check still reports 0 errors on an ADR-014-annotated doc");
+
+  // (c) 3-way merge: `serves` is operator-pinned; `tier` is adoptable.
+  //     current has the operator's binding + an old tier; source (a later
+  //     release) drops serves and corrects the tier; baseline == source for tier
+  //     so the correction is adoptable, while serves must survive regardless.
+  const current = { home: { state: "Active", tier: 9, serves: "acme", "access-to": ["internet"] } };
+  const baseline = { home: { state: "Active", tier: 9, "access-to": ["internet"] } };
+  const source = { home: { state: "Inactive", tier: 2, "access-to": ["internet"] } };
+  const m = mergeZones(current, baseline, source);
+  const merged = m.merged["home"] as Record<string, unknown>;
+  check(merged["serves"] === "acme", "P1: merge PINS `serves` — a release without it cannot clear the operator's binding");
+  check(merged["state"] === "Active", "P1: merge still pins `state` (unchanged #209 behaviour)");
+  check(merged["tier"] === 2, "P1: merge ADOPTS a corrected `tier` when the operator has not edited it");
+
+  // and an operator-edited tier is pinned like any other field.
+  const m2 = mergeZones(
+    { home: { state: "Active", tier: 5 } },
+    { home: { state: "Active", tier: 9 } },
+    { home: { state: "Active", tier: 2 } },
+  );
+  check((m2.merged["home"] as Record<string, unknown>)["tier"] === 5, "P1: an operator-edited `tier` is pinned over the release value");
+
+  // (d) the rename transform carries the new fields through untouched, and does
+  //     NOT rewrite a `serves` value (it names an environment, not a zone — a
+  //     zone named the same as the renamed key must not drag it along).
+  const tpl = {
+    srv: { type: "Service", state: "Inactive", typeId: "2", vlantag: 200, tier: 1, "access-to": ["internet"], "pinhole-allowed-from": [] },
+    home: { type: "Client", state: "Active", typeId: "3", vlantag: 310, tier: 2, serves: "srv", "access-to": ["internet", "srv"], "pinhole-allowed-from": [] },
+    guest: { type: "Guest", state: "Active", typeId: "5", vlantag: 510, tier: 3, "access-to": ["internet"], "pinhole-allowed-from": [] },
+  };
+  const r = zonesInit(tpl, "acme", false);
+  const rHome = r.raw["home"] as Record<string, unknown>;
+  check((r.raw["acme"] as Record<string, unknown>)["tier"] === 1, "P1: rename carries `tier` onto the renamed default zone");
+  check(rHome["tier"] === 2, "P1: rename leaves an untouched zone's `tier` alone");
+  check((rHome["access-to"] as string[]).includes("acme"), "P1: rename still rewrites zone-name refs in access-to");
+}
+
 console.log("");
 console.log(`Results: ${passed} passed, ${failed} failed`);
 if (failed > 0) process.exit(1);

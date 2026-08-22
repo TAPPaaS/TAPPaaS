@@ -38,14 +38,19 @@ copy lives at `${TAPPAAS_CONFIG:-/home/tappaas/config}/zones.json`.
 | `bridge` | VLAN trunk interface (`lan` / `wan` / `opt1` / `opt2`). |
 | `access-to` | Zones (and `internet`) this zone may reach, subnet-to-subnet. |
 | `pinhole-allowed-from` | Zones that may open per-module pinholes into this zone. |
+| `tier` | Trust rank 0–6 in the strict lattice (0 = most trusted). `access-to` may only run **downward**. Optional; absent on `Overlay`/`WAN`. |
+| `isolated` | Inbound quarantine: accepts **no** zone-wide `access-to`; pinhole-only. Orthogonal to `tier`. Default `false`. |
+| `serves` | For a Client/IoT zone: the **environment** whose service zone it consumes. Symbolic — survives the `srv` → `<env>` rename (#424). |
 | `DHCP-start` / `DHCP-end` | DHCP range offsets within the subnet (default 50–250). |
 | `description` | Human-readable purpose. |
 | `SSID` | Optional WiFi network name broadcast on this zone's VLAN. |
 
 Auto-allocated VLANs use the 60–99 window within each type band. Zone keys match
-`^[a-z][a-z0-9-]*$` (camelCase template zones like `srvHome`/`iotCams`;
-org-scoped zones may use hyphens, e.g. `biz-guest` when a second organisation adds
-its own guest zone — client `home`/`guest` themselves stay unprefixed, #425).
+`^[a-z][a-zA-Z0-9]*$` — **camelCase only, no hyphens or underscores** (#278), as in
+`srvHome` / `iotCams`. This is what `network-manager add` has always enforced; the
+schema previously advertised a hyphenated form that no code path would accept.
+The client role zones `home` / `guest` stay unprefixed (#425) — the zone key drives
+the client DNS domain `<zone>.internal`, so renaming one re-domains every device.
 
 ### Zone types
 
@@ -69,49 +74,136 @@ its own guest zone — client `home`/`guest` themselves stay unprefixed, #425).
 | **Disabled** | Same as Inactive. |
 | **Manual** | network-manager neither creates nor removes it — managed externally/by the operator (e.g. `mgmt`, `netbird`). |
 
-## Access Model: Tiers and the Isolation Invariant
+## Access Model: the Trust Lattice, Isolation, and `serves`
 
 Two independent mechanisms control reachability between zones:
 
-| Mechanism | Scope | Set by |
-|---|---|---|
-| `access-to` | Entire source subnet → entire target subnet | Zone designer, in `zones.json` (baseline) |
-| `pinhole-allowed-from` + module `install.sh` | Specific source VM IP → specific port | Module author (runtime) |
-
-Zones are organised into trust tiers:
-
-| Tier | Zones | Default egress | Ingress mechanism |
+| Mechanism | Scope | Direction | Set by |
 |---|---|---|---|
-| 0 — Control plane | `mgmt` | All zones | No inbound pinholes |
-| 1 — Service backends | `srvHome` `srvWork` `srvCust` `srvDev` `srvTest` `dmz` | Internet (+ declared IoT) | Module pinholes via `pinhole-allowed-from` |
-| 2 — Trusted clients | `home` `work` | Internet + own service zone | Direct |
-| 3 — IoT controlled | `iotLocal` `iotCloud` | `iotCloud`: internet; `iotLocal`: none | Zone-wide from `srvHome`/`home` |
-| **4 — IoT isolated** | **`iotCams` `iotUntrust`** | **`iotCams`: none; `iotUntrust`: internet** | **Pinhole-only — no exceptions** |
-| 5 — Untrusted clients | `guest` | Internet only | No inbound pinholes |
+| `access-to` | Entire source subnet → entire target subnet | **Downward only** | Zone designer, in `zones.json` (baseline) |
+| `pinhole-allowed-from` + module `install.sh` | Specific source VM IP → specific port | **The only way trust flows up** | Module author (runtime) |
 
-**Isolation invariant.** Tier-4 zones (`iotCams`, `iotUntrust`) have
-`"access-to": []` and **must never appear in any zone's `access-to`**. Access
-into them is granted only by per-module pinhole declaration. Adding an isolation
-zone to a non-`mgmt` `access-to` would nullify the pinhole mechanism — every host
-in the source subnet would gain unconditional zone-wide reach. `iotCams` in
-particular must stay purpose-limited (GDPR Art. 25). The sole exception is
-`mgmt` (Tier-0 control plane), which reaches all zones for operational visibility.
+### The lattice (ADR-014)
 
-Access matrix (`✅` access-to · `🔓` pinhole-only · `❌` deny):
+`tier` is a **strict trust rank**, not a label. It exists so the access model can be
+machine-checked rather than reviewed by eye:
 
-| → | internet | srvHome | srvWork | srvCust | iotLocal | iotCloud | iotCams | iotUntrust |
-|---|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|
-| `mgmt` | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
-| `srvHome` | ✅ | — | ❌ | ❌ | ✅ | ✅ | 🔓 | ❌ |
-| `srvWork` | ✅ | ❌ | — | ❌ | ❌ | ❌ | 🔓 | ❌ |
-| `home` | ✅ | ✅ | ❌ | ❌ | ✅ | ✅ | ❌ | ❌ |
-| `work` | ✅ | ❌ | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ |
-| `guest` | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ |
+> **R1 (monotonic `access-to`)** — for every edge `A access-to B`, `tier(A) ≤ tier(B)`.
+> Never upward. `internet` counts as tier 5.
 
-The canonical, machine-adjacent version of this model — including the PR review
-checklist, mDNS policy, and IoT classification decision aid — lives in the
-`_README` block at the top of [`zones.json`](zones.json). Keys beginning with `_`
-are documentation and are ignored by all consumers.
+| Tier | Name | `access-to` (downward baseline) | Reached from above via | Members |
+|---|---|---|---|---|
+| **0** | Control plane | all zones | *nothing — no inbound at all* | `mgmt` |
+| **1** | Service backend | ↓ internet, dmz, IoT-controlled | **pinhole** from clients + reverse proxy | `<defaultEnvironment>` |
+| **2** | Trusted client | ↓ internet, own IoT-controlled | direct (its own devices) | `home`, `work` |
+| **3** | Untrusted edge | ↓ internet only | — | `guest`, `iotCloud`, `iotUntrust` |
+| **4** | DMZ (exposed) | ↓ internet only | **pinhole** from internet | `dmz` |
+| **5** | *Internet* | — (the boundary) | — | *(token, not a zone)* |
+| **6** | Isolated / no-egress | *(none)* | **pinhole** only when `isolated` | `iotCams`, `iotLocal` |
+
+Two consequences worth stating plainly:
+
+- **DMZ is not a service peer.** A DMZ host is internet-exposed and assume-breach, so
+  it sits *below* an internal backend (tier 4, not 1). `service → dmz` is a legal
+  downward edge; `dmz` reaches nothing internal.
+- **Service sits above trusted clients.** A client reaching its service is an **upward
+  pinhole** (`home` → `<env>`:port), not a zone-wide `access-to`. The backend is the
+  crown jewel; clients get specific ports, not the subnet.
+
+`tier` and `type` are genuinely orthogonal — a `Guest` client and an `iotCloud` IoT
+zone share tier 3 (identical outbound, no inbound), which is exactly why tier cannot
+be derived from type.
+
+**`Overlay` and `WAN` zones carry no tier** and are skipped by the tier checks:
+overlays are non-VLAN WireGuard segments with no meaningful rank (`admin` legitimately
+reaches `mgmt`), and `wan` is the switch-internal ISP hand-off with no interface or rules.
+
+### Isolation is a flag, not a tier
+
+> **R2 (isolation floor)** — a zone with `"isolated": true` must not appear in **any**
+> zone's `access-to` (the `mgmt` exception aside).
+
+Isolation is orthogonal to trust rank: `iotCams` (tier 6, no egress) and `iotUntrust`
+(tier 3, internet egress) are both quarantined yet sit at different ranks — so it could
+never be a single tier row. Inbound reach is granted only by per-module pinhole. Adding
+an isolated zone to a non-`mgmt` `access-to` would nullify the pinhole mechanism: every
+host in the source subnet would gain unconditional zone-wide reach. `iotCams` in
+particular must stay purpose-limited (GDPR Art. 25).
+
+`iotLocal` shares tier 6 with `iotCams` (both no-egress) but is **not** `isolated`: its
+serving zone reaches it zone-wide (Home Assistant → local IoT), which R2 forbids for
+`iotCams`.
+
+### Archetypes
+
+An archetype is a named bundle of tier-correct defaults. `network-manager add <name>
+--archetype <A>` stamps `type`/`typeId`/`tier`/`isolated` and the `access-to` seed, then
+auto-allocates `subId`/`vlantag`/`ip` — so a correctly-classified zone is one command,
+not a copy-paste of a template block.
+
+| Archetype | type | tier | isolated | `access-to` seed | reference zone |
+|---|---|---|:---:|---|---|
+| `control` | Management | 0 | no | all | `mgmt` |
+| `service` | Service | 1 | no | internet, dmz | `srv` → `<env>` |
+| `trusted-client` | Client | 2 | no | internet (service via **pinhole**) | `home`, `work` |
+| `guest` | Guest | 3 | no | internet | `guest` |
+| `iot-cloud` | IoT | 3 | no | internet | `iotCloud` |
+| `iot-untrust` | IoT | 3 | **yes** | internet | `iotUntrust` |
+| `dmz` | DMZ | 4 | no | internet (inbound via **pinhole**) | `dmz` |
+| `iot-local` | IoT | 6 | no | *(none)* | `iotLocal` |
+| `iot-cams` | IoT | 6 | **yes** | *(none)* | `iotCams` |
+
+The catalog is authoritative in
+[`schemas/zones-fields.json`](../../../schemas/zones-fields.json) (`archetypes.catalog`),
+which is also what invariant I4 checks against.
+
+### `serves` — linking a client or IoT zone to an environment
+
+A client zone reaches its services, and an IoT zone is reached by them. Writing that as a
+**literal** service-zone name is what issue #424 is about: `network-manager init` renames
+`srv` → `<defaultEnvironment>`, and every literal reference is stranded.
+
+`serves` names the **environment** instead, and is resolved on every reconcile:
+
+```jsonc
+"home": {
+    "type": "Client", "state": "Active", "vlantag": 310, "ip": "10.3.10.0/24",
+    "tier": 2,
+    "serves": "warmelo",          // ← the environment, not "srvHome"
+    "access-to": ["internet"],    // ← the service-zone edge is DERIVED, not listed
+    "pinhole-allowed-from": []
+}
+```
+
+Resolution reads `config/environments/<env>.json` `.network.zone` and contributes the
+environment edge **on top of** the authored baseline. Because the edge is derived from the
+environment's *current* zone, a rename can never strand it.
+
+Set it with `network-manager bind <zone> --environment <env>` (`--unbind` clears it) —
+no JSON editing. An `isolated` zone contributes **only** the pinhole direction, never an
+inbound `access-to`, so R2 holds regardless of `serves`.
+
+> **Authored vs. effective.** Derived edges are **never** written back into `zones.json`,
+> which stays purely authored — otherwise the 3-way merge would see them as operator edits
+> and pin them, stranding the edges of a `serves` link that was later cleared. `reconcile`
+> renders `config/zones.effective.json` instead, and the consumers (`zone-manager`,
+> `rules_manager`, the Caddy access lists) read that. It is generated, never hand-edited,
+> and regenerated on every run.
+
+### Security invariants (`network-manager validate`)
+
+The checks below promote what used to be a human PR checklist into code. Each is a
+**warning by default** and an error under `--strict`:
+
+| ID | Rule | Notes |
+|---|---|---|
+| **I1** | R1 — monotonic `access-to`: `tier(A) ≤ tier(B)` | `mgmt` exempt; `Overlay`/`WAN` skipped; a missing `tier` is a note, not a warning |
+| **I2** | R2 — isolation floor: an `isolated` zone is in nobody's `access-to` | `mgmt` exempt |
+| **I3** | Egress boundary: a tier-6 zone must not list `internet` | `Overlay`/`WAN` skipped |
+| **I4** | Archetype conformance: `(type, tier, isolated)` matches a catalog entry | catches a zone configured against its declared intent |
+
+`pinhole-allowed-from` is deliberately **not** tier-gated — upward is what pinholes are
+*for*. It is validated per-module against the target zone's list, as today.
 
 ## network-manager commands (the zones lifecycle)
 
@@ -181,8 +273,10 @@ all in the installation's renamed namespace:
 
 1. read the current repo template → apply the same rename algorithm → (re)write
    `zones.rename.json` (re-basing upstream changes into the renamed namespace);
-2. 3-way merge *current* vs *baseline* vs *source* — per field: `state` is
-   **operator-pinned, never adopted**; every other field adopts the source when
+2. 3-way merge *current* vs *baseline* vs *source* — per field: `state` and
+   `serves` are **operator-pinned, never adopted** (`serves` names an environment
+   that exists only on this system, so the shipped template can never hold a
+   meaningful value for it); every other field adopts the source when
    `current == orig`, else the local edit wins. Zone-level: source-only → **ADD**;
    current-only → **keep + warn**; same `vlantag` / different name → **flag a
    possible rename (do not auto-rename)**;
@@ -204,21 +298,37 @@ closes the recurring duplicate-VLAN corruption the old `apply-zones-merge.sh` ha
         "vlantag": 0,
         "ip": "10.0.0.0/24",
         "bridge": "lan",
-        "access-to": ["internet", "srvHome", "srvWork", "home", "dmz"],
+        "tier": 0,
+        "access-to": ["internet", "warmelo", "home", "iotCams", "dmz"],
         "pinhole-allowed-from": [],
         "description": "Control plane: hypervisors, backup, firewall, identity, cicd"
     },
-    "srvHome": {
+    "warmelo": {
         "type": "Service",
         "state": "Active",
         "typeId": "2",
-        "subId": "10",
-        "vlantag": 210,
-        "ip": "10.2.10.0/24",
+        "subId": "0",
+        "vlantag": 200,
+        "ip": "10.2.0.0/24",
         "bridge": "lan",
+        "tier": 1,
+        "access-to": ["internet", "iotCloud", "iotLocal", "dmz"],
+        "pinhole-allowed-from": ["dmz"],
+        "description": "Service zone for the warmelo environment"
+    },
+    "home": {
+        "type": "Client",
+        "state": "Active",
+        "typeId": "3",
+        "subId": "10",
+        "vlantag": 310,
+        "ip": "10.3.10.0/24",
+        "bridge": "lan",
+        "tier": 2,
+        "serves": "warmelo",
         "access-to": ["internet", "iotCloud", "iotLocal"],
         "pinhole-allowed-from": [],
-        "description": "Personal services: home automation, personal apps"
+        "description": "Trusted personal devices: laptops, phones, tablets"
     },
     "iotCams": {
         "type": "IoT",
@@ -228,15 +338,24 @@ closes the recurring duplicate-VLAN corruption the old `apply-zones-merge.sh` ha
         "vlantag": 430,
         "ip": "10.4.30.0/24",
         "bridge": "lan",
+        "tier": 6,
+        "isolated": true,
+        "serves": "warmelo",
         "access-to": [],
-        "pinhole-allowed-from": ["srvHome", "srvWork"],
+        "pinhole-allowed-from": [],
         "description": "Surveillance: cameras + NVR, fully isolated"
     }
 }
 ```
 
-Note `iotCams.access-to` is `[]`: an NVR in `srvHome`/`srvWork` reaches the
-cameras only through an explicit per-module pinhole, never via `access-to`.
+Note `iotCams.access-to` is `[]` and `isolated` is `true`: an NVR in the `warmelo`
+service zone reaches the cameras only through an explicit per-module pinhole, never
+via `access-to`. Its `serves` link records *which* environment's modules may open
+that pinhole — it never grants zone-wide reach (R2).
+
+Note also that neither `home` nor `iotCams` names a service zone literally. `home`
+gets `warmelo` added to its effective `access-to`, and `iotCams` gets `warmelo` added
+to its effective `pinhole-allowed-from`, both derived from `serves` at reconcile time.
 
 ## Computed Values
 
@@ -264,7 +383,9 @@ validation rules, see
 [`schemas/zones-fields.json`](../../../schemas/zones-fields.json):
 all available fields and their types, valid values for enumerated fields
 (including the `state` enum), defaults, computed-field formulas, and the special
-access-control values.
+access-control values. It also carries the machine-readable **`tier_model`**,
+**`archetypes.catalog`**, **`invariants`** (I1–I4) and **`tier_exempt_types`** blocks
+that this document describes in prose — those are the authoritative copies.
 
 ## Per-Module Firewall Rules
 
