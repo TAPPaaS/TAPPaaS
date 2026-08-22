@@ -40,7 +40,9 @@ Standardized ADR-007 verbs, all on `config/environments/<env>.json`:
   ⇒ seed the minimal set (`mgmt` + default `<N>`) via the bootstrap — `--name`
   gives `<N>` explicitly, else it derives from `site.json '.name'`; otherwise a
   single env. `--owner` defaults to the first org under `people/organizations/`;
-  `--zone` defaults to `<env>`.
+  `--zone` defaults to `<env>`. **`--create-zone`** (ADR-014 D1) authors the
+  Service zone before validating/writing the environment, so the pair is created
+  in one command; opt-in, so a typo'd `--zone` cannot mint a stray zone.
 - **`modify`** — change an env, preserving un-flagged fields.
 - **`delete`** — remove an env, guard-railed (below).
 - **`reconcile [--deep] [--apply]`** — converge config → live (below).
@@ -61,7 +63,8 @@ Standardized ADR-007 verbs, all on `config/environments/<env>.json`:
 - **`--skip-network`**: omit the network action because the caller already ran
   the system-wide pass. Without it, driving N environments performs N identical
   whole-platform network runs; `site-manager reconcile --deep` passes it after
-  running the pass once itself. The zone-reference check (and its warning) still
+  running the pass once itself. The zone-reference check (now the ADR-014 D1
+  materialization, below) still
   runs — that is about config correctness, not about who converges.
 
 ### `delete` guard rails
@@ -80,6 +83,24 @@ removal.
   `legal`. Schema `environment-fields.json` is `additionalProperties:false`. This
   is the single source of truth (the `configuration.json` `.tappaas.variants`
   registry is retired, ADR-007 Phase D).
+### Zone materialization (ADR-014 D1)
+
+`computePlan` resolves `network.zone` into one of three outcomes:
+
+| zones.json | outcome |
+|---|---|
+| absent | plan a **`create-service-zone`** action — authored via the network client *before* the network pass (order is load-bearing and unit-asserted) |
+| present, `type: Service` | nothing to do |
+| present, other type | a **hard error** on the plan; reconcile is refused in preview *and* apply |
+
+The third case is the one ADR-014 calls out: an environment pointed at a
+client/IoT zone is a configuration mistake, and silently authoring a second zone
+underneath the operator would hide it. `Plan.errors` carries these (distinct from
+`warnings`, which reconcile proceeds through).
+
+`NetworkClient` grew `zoneType()` and `createServiceZone()` for this. Both stay
+on the shell-out seam — environment-manager never writes `zones.json`.
+
 - Cross-referenced state it validates against: `config/zones.json` (for
   `network.zone`) and `config/people/organizations/*.json` (for `ownerOrg`).
 

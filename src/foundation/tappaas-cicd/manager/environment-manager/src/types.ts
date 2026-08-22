@@ -80,6 +80,16 @@ export class NetworkUnreachable extends Error {}
 export interface NetworkClient {
   // Whether a zone with this key exists in zones.json (network-manager exists).
   zoneExists(zone: string): boolean;
+  // The `type` of an existing zone (Service / Client / IoT / ...), or undefined
+  // when the zone does not exist. ADR-014 D1 needs it to tell "the zone is
+  // missing, materialize it" from "the environment points at a client/IoT zone,
+  // which is a configuration mistake".
+  zoneType(zone: string): string | undefined;
+  // Author a Service zone (ADR-014 D1). Idempotent: a zone that already exists
+  // is left untouched. environment-manager NEVER writes zones.json itself — this
+  // shells out to `network-manager add <Z> --archetype service`, keeping
+  // network-manager the sole writer (the ownership boundary ADR-014 restates).
+  createServiceZone(zone: string): void;
   // Converge the network planes. apply=false ⇒ dry-run/preview (the default).
   //
   // SYSTEM-WIDE (#461): network-manager reconcile takes no zone or environment
@@ -113,7 +123,11 @@ export type ActionKind =
   // environment bootstrap necessarily runs before any organization can
   // exist, so it writes ownerOrg:"" and the schema rejects the result;
   // reconcile is the verb that can close the gap once an org exists.
-  | "backfill-owner-org";
+  | "backfill-owner-org"
+  // ADR-014 D1: materialize the Service zone an environment names but that does
+  // not yet exist in zones.json. Previously reconcile only WARNED about this,
+  // leaving an environment permanently unable to converge.
+  | "create-service-zone";
 
 // How much of the system an action actually touches (#461). "environment" =
 // scoped to the environment being reconciled; "system-wide" = converges the
@@ -138,6 +152,12 @@ export interface Plan {
   // Operator prose that is neither an action nor a fault: what a planned action
   // really covers, why one was skipped. Printed plain, not as a yellow warning.
   notes: string[];
+  // HARD faults in the plan itself (ADR-014 D1): a configuration mistake that
+  // reconcile must not paper over, e.g. an environment whose network.zone names
+  // a Client/IoT zone. A plan with errors is reported and REFUSED — unlike a
+  // warning, which reconcile proceeds through. Absent on plans built before
+  // D1 introduced the concept, so treat undefined as empty.
+  errors?: string[];
 }
 
 // One planned target that ran and failed. Collected rather than thrown so a

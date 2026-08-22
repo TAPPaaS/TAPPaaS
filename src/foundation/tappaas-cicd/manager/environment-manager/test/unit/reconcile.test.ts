@@ -209,15 +209,62 @@ function envNoOwner(name: string, zone: string): Environment {
   );
 }
 
-// unknown zone → warning, but still plans the network reconcile.
+// ADR-014 D1: a MISSING zone is now materialized, not merely warned about.
+// Before D1 this only warned, so an environment could name a zone that never
+// existed and never converge — the operator had to know to run
+// `network-manager add` first (an undocumented ordering trap).
 {
   const net = new FakeNetworkClient(); // no zones seeded
   const mod = new FakeModuleClient();
   const plan = computePlan(env("foo", "foo"), net, mod, { deep: false, skipNetwork: false });
+  const create = plan.actions.filter((a) => a.kind === "create-service-zone");
   check(
-    plan.actions.length === 1 &&
-      plan.warnings.some((w) => w.includes("not present in zones.json")),
-    "unknown zone warns but still reconciles the network",
+    create.length === 1 && create[0].value === "foo",
+    "D1: a missing zone is PLANNED for creation, not warned about",
+  );
+  check(
+    plan.actions.some((a) => a.kind === "reconcile-network"),
+    "D1: the network reconcile is still planned alongside the zone creation",
+  );
+  check((plan.errors ?? []).length === 0, "D1: a missing zone is not an error — it is materialized");
+}
+
+// ADR-014 D1: an environment pointed at a NON-Service zone is a hard error.
+// This is the case the ADR calls out — reconcile must not paper over it by
+// minting a second zone underneath the operator.
+{
+  const net = new FakeNetworkClient();
+  net.seedZone("foo", "Client"); // the environment names a CLIENT zone
+  const mod = new FakeModuleClient();
+  const plan = computePlan(env("foo", "foo"), net, mod, { deep: false, skipNetwork: false });
+  check(
+    (plan.errors ?? []).some((e) => e.includes("is a Client zone, not a Service zone")),
+    "D1: an environment bound to a Client zone is a hard ERROR",
+  );
+  check(
+    !plan.actions.some((a) => a.kind === "create-service-zone"),
+    "D1: a wrongly-typed zone is NOT silently replaced by a new one",
+  );
+}
+
+// ADR-014 D1: applying the plan authors the zone through the network client —
+// environment-manager never writes zones.json itself.
+{
+  const net = new FakeNetworkClient();
+  const mod = new FakeModuleClient();
+  const e = env("foo", "foo");
+  const plan = computePlan(e, net, mod, { deep: false, skipNetwork: false });
+  const res = applyPlan(e, plan, net, mod, true);
+  check(
+    net.log.includes("create-service-zone foo"),
+    "D1: apply authors the zone via network-manager (the ownership boundary holds)",
+  );
+  check(net.zoneExists("foo") && res.failures.length === 0, "D1: the zone exists after apply");
+  // ORDER IS LOAD-BEARING: the zone must be authored BEFORE the network pass,
+  // or the reconcile converges a zones.json that does not yet contain it.
+  check(
+    eqJson(net.log, ["create-service-zone foo", "reconcile-network apply"]),
+    "D1: the zone is authored BEFORE the network converges, not after",
   );
 }
 
@@ -364,15 +411,20 @@ function envNoOwner(name: string, zone: string): Environment {
   check(eqJson(net.log, []), "--skip-network never calls network-manager");
 }
 
-// #461: --skip-network still checks the zone reference (the warning is about
-// config correctness, not about who runs the pass).
+// #461 + ADR-014 D1: --skip-network still resolves the zone reference. Skipping
+// the (system-wide) network PASS says nothing about whether this environment's
+// zone is correctly configured, so the D1 materialization is still planned.
 {
   const net = new FakeNetworkClient(); // no zones seeded
   const mod = new FakeModuleClient();
   const plan = computePlan(env("foo", "foo"), net, mod, { deep: false, skipNetwork: true });
   check(
-    plan.warnings.some((w) => w.includes("not present in zones.json")),
-    "--skip-network keeps the unknown-zone warning",
+    plan.actions.some((a) => a.kind === "create-service-zone"),
+    "--skip-network still plans the missing zone's creation",
+  );
+  check(
+    !plan.actions.some((a) => a.kind === "reconcile-network"),
+    "--skip-network still omits the system-wide network pass",
   );
 }
 

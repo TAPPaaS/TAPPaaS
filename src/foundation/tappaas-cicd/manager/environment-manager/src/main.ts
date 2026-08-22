@@ -68,12 +68,16 @@ const HELP: HelpSpec = {
     },
     {
       usage: "add [<env>] [--name N] [--domain D] [--owner ORG]\n" +
-        "                          [--zone Z] [--display D] [--dns-mode M] [--force]",
+        "                          [--zone Z] [--create-zone] [--display D]\n" +
+        "                          [--dns-mode M] [--force]",
       name: "add",
       options: [
         ["--domain D", "Public primary domain (add/modify)."],
         ["--owner ORG", "Owning organization (add/modify; default = first org)."],
         ["--zone Z", "network.zone reference (add/modify; default = <env>)."],
+        ["--create-zone", "add: author the Service zone first if it does not exist\n" +
+          "                   (ADR-014 D1) — one command yields env + zone.\n" +
+          "                   Opt-in so a typo'd --zone cannot mint a stray zone."],
         ["--display D", "displayName (add/modify)."],
         [
           "--dns-mode M",
@@ -141,6 +145,8 @@ interface Opts {
   domain?: string;
   owner?: string;
   zone?: string;
+  // ADR-014 D1: author the environment's Service zone in the same command.
+  createZone: boolean;
   display?: string;
   dnsMode?: "per-service" | "wildcard";
   schemaDir?: string;
@@ -162,6 +168,7 @@ export function parseOpts(args: string[]): Opts {
     apply: false,
     skipNetwork: false,
     force: false,
+    createZone: false,
     json: false,
     rest: [],
   };
@@ -188,6 +195,9 @@ export function parseOpts(args: string[]): Opts {
         break;
       case "--zone":
         o.zone = need("--zone");
+        break;
+      case "--create-zone":
+        o.createZone = true;
         break;
       case "--display":
         o.display = need("--display");
@@ -390,9 +400,47 @@ function cmdAdd(opts: Opts): void {
       ...(opts.dnsMode ? { dnsMode: opts.dnsMode } : {}),
     };
   }
+
+  // ── ADR-014 D1: --create-zone materializes the service zone FIRST ──
+  // The zone must exist before the environment is validated (validate checks
+  // network.zone against zones.json) and before it is written, so a single
+  // command yields a working environment + service zone. Opt-in by design
+  // (ADR-014 resolved choice #1): default-on would let a typo'd --zone silently
+  // mint a stray zone.
+  //
+  // network-manager stays the sole writer of zones.json — this shells across
+  // the existing clients.ts seam rather than editing zones directly.
+  if (opts.createZone) {
+    const zone = env.network.zone;
+    const net = new CliNetworkClient();
+    try {
+      if (net.zoneExists(zone)) {
+        const t = net.zoneType(zone);
+        if (t !== undefined && t !== "Service") {
+          die(
+            `--create-zone: zone '${zone}' already exists and is a ${t} zone, not a Service zone. ` +
+              `An environment binds to a service segment — pick another --zone.`,
+          );
+        }
+        info(`Zone '${zone}' already exists — left untouched.`);
+      } else {
+        net.createServiceZone(zone);
+        info(`${GN}Authored service zone '${zone}'${CL} (network-manager add --archetype service)`);
+      }
+    } catch (e) {
+      if (e instanceof NetworkUnreachable) die(`--create-zone: network-manager unreachable: ${e.message}`);
+      die(`--create-zone: could not author zone '${zone}': ${e instanceof Error ? e.message : String(e)}`);
+    }
+  }
+
   assertValid(opts, env, env);
   const written = writeEnvironment(opts.configDir, env);
   info(`${GN}Wrote ${written}${CL}`);
+  if (opts.createZone) {
+    info("");
+    info("  To converge the new zone on the planes, run:");
+    info("    network-manager reconcile --apply");
+  }
 }
 
 // ── modify ────────────────────────────────────────────────────────────
@@ -495,11 +543,23 @@ function cmdReconcile(opts: Opts, net: NetworkClient, mod: ModuleClient): number
     throw e;
   }
 
+  const planErrors = plan.errors ?? [];
   info(
     `Reconcile environment '${name}' (zone '${env.network.zone}'${opts.deep ? ", --deep" : ""}): ` +
-      `${plan.actions.length} action(s), ${plan.warnings.length} warning(s)`,
+      `${plan.actions.length} action(s), ${plan.warnings.length} warning(s)` +
+      (planErrors.length > 0 ? `, ${RD}${planErrors.length} error(s)${CL}` : ""),
   );
   for (const w of plan.warnings) warn(w);
+  // ADR-014 D1: a hard fault in the plan is refused in BOTH preview and apply —
+  // an environment bound to a Client/IoT zone must be re-pointed by the
+  // operator, never "fixed" by minting a second zone underneath it.
+  if (planErrors.length > 0) {
+    for (const e of planErrors) warn(e);
+    die(
+      `environment '${name}' cannot be reconciled: ${planErrors.length} configuration error(s) — ` +
+        `fix the environment and re-run`,
+    );
+  }
   // The scope tag is load-bearing (#461): it is what stops an operator reading
   // the system-wide network pass as an environment-sized one.
   for (const a of plan.actions) {

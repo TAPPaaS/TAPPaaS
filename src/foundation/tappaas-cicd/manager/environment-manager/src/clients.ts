@@ -43,6 +43,28 @@ export class CliNetworkClient implements NetworkClient {
     return r.rc === 0;
   }
 
+  zoneType(zone: string): string | undefined {
+    // network-manager show <zone> --json — the zone object, or non-zero if absent.
+    const r = captureResult(NETWORK_MANAGER_BIN(), ["show", zone, "--json"]);
+    if (!r.ran) throw new NetworkUnreachable(`${NETWORK_MANAGER_BIN()} show: ${r.stderr}`);
+    if (r.rc !== 0) return undefined;
+    try {
+      const o = JSON.parse(r.stdout) as Record<string, unknown>;
+      return typeof o.type === "string" ? o.type : undefined;
+    } catch {
+      return undefined;
+    }
+  }
+
+  createServiceZone(zone: string): void {
+    // ADR-014 D1/D5: author via the `service` archetype so the new zone lands
+    // tier-correct (type/typeId/tier + access-to seed) rather than with bare
+    // defaults. --no-activate keeps zone authoring separate from plane
+    // convergence: the caller's own reconcile pass converges it, so we do not
+    // trigger a second whole-system pass here (#461).
+    run(NETWORK_MANAGER_BIN(), ["add", zone, "--archetype", "service", "--no-activate"]);
+  }
+
   reconcileNetwork(apply: boolean): void {
     // network-manager reconcile [--apply] — converges all planes/zones.
     const args = ["reconcile"];

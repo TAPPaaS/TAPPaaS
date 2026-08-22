@@ -37,6 +37,7 @@ environment-manager modify <env> [--domain D] [--owner ORG] [--zone Z]
                         [--display D] [--dns-mode M] [--config-dir DIR]
 environment-manager delete <env> [--force] [--config-dir DIR]
 environment-manager reconcile <env> [--deep] [--apply] [--config-dir DIR]
+                                   [--skip-network]
 ```
 
 | Verb | Behaviour |
@@ -52,9 +53,41 @@ the cert strategy: `per-service` (default; Caddy per-host HTTP-01) or `wildcard`
 (one `*.<primary>` OPNsense-ACME cert for the environment). Validated against the
 schema enum; this closes the last field that previously required a hand-edit.
 | `delete <env>` | Remove an environment file — **guard-railed** (see below). |
-| `reconcile <env>` | Converge the environment → live. `--apply` commits (default = preview). `--deep` cascades (see below). |
+| `reconcile <env>` | Converge the environment → live. `--apply` commits (default = preview). `--deep` cascades (see below). Also **materializes a missing service zone** and **hard-errors on a wrongly-typed one** — see "Env ↔ service zone" below. |
 
 ### Reconcile cascade
+
+### Env ↔ service zone (ADR-014 D1)
+
+An Environment binds to **exactly one** service zone (`network.zone`, defaulting
+to the environment's own name). Making that binding real used to be two steps in
+a specific order, and getting it wrong failed quietly:
+
+- **`add <env> --create-zone`** authors the Service zone *first* (if it does not
+  already exist), then writes the environment — one command yields a working
+  pair. Opt-in on purpose: default-on would let a typo'd `--zone` silently mint
+  a stray zone.
+- **`reconcile <env>`** no longer merely warns that `network.zone` is absent —
+  it **plans the zone's creation** and authors it before the network pass. An
+  environment naming a zone that never existed could previously never converge.
+- If the zone **exists but is not a Service zone** (the operator pointed the
+  environment at a client/IoT segment), that is a **hard error** in both preview
+  and apply. Reconcile will not paper over it by minting a second zone; re-point
+  the environment with `modify <env> --zone <serviceZone>`, or — if you meant the
+  client zone to *consume* the environment — bind it the other way round with
+  `network-manager bind <zone> --environment <env>`.
+
+```bash
+environment-manager add acme --create-zone          # env + service zone 'acme'
+environment-manager add acme --zone shared --create-zone
+network-manager reconcile --apply                   # converge the new zone
+```
+
+**Ownership boundary (unchanged).** `network-manager` remains the sole writer of
+`zones.json`; environment-manager *requests* zone creation across the existing
+client seam (`network-manager add <Z> --archetype service`), never editing zones
+itself. The `service` archetype means the new zone lands tier-correct rather than
+with bare defaults.
 
 - **Shallow** (`reconcile <env>`): shell out to `network-manager reconcile
   [--apply]`. **This pass is system-wide, not scoped to the environment** —

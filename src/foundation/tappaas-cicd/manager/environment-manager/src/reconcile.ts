@@ -59,17 +59,49 @@ export function computePlan(
   const actions: Action[] = [];
   const warnings: string[] = [];
   const notes: string[] = [];
+  // Hard errors: a plan carrying any of these must NOT be applied (ADR-014 D1).
+  const errors: string[] = [];
 
+  // ── ADR-014 D1: materialize the service zone, don't just complain ──
+  //
+  // Before D1 a missing zone was only a WARNING, so an environment could point
+  // at a zone that never existed and never converge — the operator had to know
+  // to run `network-manager add` first, an undocumented ordering trap.
+  //
+  // The ADR says "create a missing Service zone, hard-error on a missing
+  // non-Service zone". A zone that is missing has no type to inspect, so the
+  // check that is actually implementable — and what the ADR's own parenthetical
+  // describes ("the operator pointed an environment at a client/IoT zone") — is:
+  //   - zone absent          → CREATE it as a Service zone (that is the intent);
+  //   - zone present, Service→ nothing to do;
+  //   - zone present, other  → HARD ERROR (an environment's zone must be a
+  //                            Service zone; pointing it at a client/IoT zone is
+  //                            a configuration mistake, not something to fix by
+  //                            silently minting a second zone).
   const zone = env.network.zone;
   if (!zone) {
     warnings.push(`environment '${env.name}': no network.zone — nothing to reconcile`);
   } else if (!net.zoneExists(zone)) {
-    // The zone the environment points at is not in zones.json. The bash
-    // validate path errors here; for reconcile we surface a warning and still
-    // run the network reconcile (which is the owner of zone convergence).
-    warnings.push(
-      `environment '${env.name}': zone '${zone}' not present in zones.json — network reconcile may not converge it`,
+    actions.push({
+      kind: "create-service-zone",
+      scope: "environment",
+      target: `service zone '${zone}' for environment '${env.name}' (absent from zones.json)`,
+      value: zone,
+    });
+    notes.push(
+      `zone '${zone}' does not exist and will be authored as a Service zone ` +
+        `(ADR-014 D1). It converges in the network pass below.`,
     );
+  } else {
+    const t = net.zoneType(zone);
+    if (t !== undefined && t !== "Service") {
+      errors.push(
+        `environment '${env.name}': network.zone '${zone}' is a ${t} zone, not a Service zone. ` +
+          `An environment binds to a service segment; a client/IoT zone consumes one ` +
+          `(bind it with \`network-manager bind ${zone} --environment ${env.name}\`). ` +
+          `Re-point the environment with \`environment-manager modify ${env.name} --zone <serviceZone>\`.`,
+      );
+    }
   }
 
   if (opts.skipNetwork) {
@@ -142,7 +174,7 @@ export function computePlan(
     }
   }
 
-  return { actions, warnings, notes };
+  return { actions, warnings, notes, errors };
 }
 
 // Apply a plan via the clients. Returns the count applied plus any targets that
@@ -184,6 +216,18 @@ export function applyPlan(
       } catch (e) {
         if (e instanceof NetworkUnreachable) throw e;
         failures.push({ target: m, error: e instanceof Error ? e.message : String(e) });
+      }
+    } else if (a.kind === "create-service-zone") {
+      if (!a.value) {
+        failures.push({ target: "create-service-zone", error: "no zone in the planned action" });
+        continue;
+      }
+      try {
+        net.createServiceZone(a.value);
+        applied++;
+      } catch (e) {
+        if (e instanceof NetworkUnreachable) throw e;
+        failures.push({ target: `zone '${a.value}'`, error: e instanceof Error ? e.message : String(e) });
       }
     } else if (a.kind === "backfill-owner-org") {
       if (!a.value) {

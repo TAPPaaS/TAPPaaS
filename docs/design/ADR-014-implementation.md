@@ -3,7 +3,7 @@
 **Companion to:** [ADR-014 — Zone ↔ Environment Lifecycle & Operations](<../ADR/ADR-014 - Zone and Environment Lifecycle.md>) (the *why* + the decided design)
 **Closes:** #424 (client/IoT zones ↔ environments undefined) · #419 (stale zone references not resolved)
 **Purpose of this doc:** one place that (1) records **implementation-level decisions** (including the three forks ADR-014 flagged for confirmation), (2) breaks the work into **packages** with deliverables/dependencies/test criteria, and (3) **tracks live execution state**.
-**Status:** In progress — P0 ✅, P1 ✅, P2 ✅, P3 ✅, P4 ✅, P5 next
+**Status:** In progress — P0 ✅, P1 ✅, P2 ✅, P3 ✅, P4 ✅, P5 ✅, P6 next
 **Branch:** `feat/adr-014-zone-lifecycle`, cut from `main`
 **Started:** 2026-08-22
 
@@ -252,6 +252,24 @@ Two findings from running the all-archetype document through the P2 checks:
 
 **Test criteria** — `add --create-zone` yields a working environment + Service zone in one command; `reconcile` materialises a missing Service zone and hard-errors on a missing non-Service zone; both idempotent; `--check`/dry-run mutates nothing.
 
+**Outcome (2026-08-22): ✅ green — 27 environment-manager tests (+7), network-manager still 205/15, `tsc` clean.**
+
+**D1 semantics clarified.** The ADR says "create a missing **Service** zone; a missing **non-Service** zone stays a hard error" — but a zone that is *missing* has no type to inspect, so that reading is not implementable as written. The implementable rule, and what the ADR's own parenthetical describes ("the operator pointed an environment at a client/IoT zone"), keys on the zone's **presence**:
+
+| `zones.json` | outcome |
+|---|---|
+| absent | **create** it as a Service zone — that is the intent |
+| present, `type: Service` | nothing to do |
+| present, any other type | **hard error**, refused in preview *and* apply |
+
+The third case must not be "fixed" by minting a second zone underneath the operator; the error names both repairs (`modify --zone`, or `network-manager bind` if the client zone was meant to *consume* the environment).
+
+Mechanics: `Plan` gained an `errors[]` distinct from `warnings[]` (reconcile proceeds through warnings, refuses errors). `NetworkClient` gained `zoneType()` and `createServiceZone()`, both on the existing shell-out seam — environment-manager still never writes `zones.json`, and the new zone is authored via `--archetype service` so it lands tier-correct. **Ordering is load-bearing and unit-asserted:** the zone is authored *before* the network pass, or the reconcile would converge a `zones.json` that does not yet contain it.
+
+Two pre-existing tests asserted the old warn-only contract (`"unknown zone warns but still reconciles the network"`, `"--skip-network keeps the unknown-zone warning"`) and were rewritten to the D1 contract rather than deleted — the `--skip-network` case still resolves the zone, because skipping the system-wide *pass* says nothing about whether this environment's zone is configured correctly.
+
+Docs updated with the package (per the policy note above): `environment-manager/README.md` gained an "Env ↔ service zone" section; `DESIGN.md` gained the three-outcome table and the client-seam note.
+
 ---
 
 ### P6 — D7 composable `init` profiles + template cleanup + legacy retirement
@@ -291,10 +309,8 @@ The heaviest package: it rewrites `zonesinit.ts` and carries F3.
 > `network-manager/README.md`, `network-manager/DESIGN.md` (P4).
 >
 > **Still open, and owned by the package that changes them:** `environment-manager/README.md`
-> + `DESIGN.md` (P5), `network/README.md`'s per-module rules section (P7), and a decision on
-> the **`tier` name collision** — `GLOSSARY.md` already defines `tier` as an *App lifecycle
-> class* (`foundation` / `app`), which is unrelated to a zone's trust rank. Both meanings now
-> ship. See [Still open](#still-open).
+> + `DESIGN.md` (P5), `network/README.md`'s per-module rules section (P7), and `network/README.md`'s
+> per-module rules section (P7). The `tier` name collision is **resolved** — see [Still open](#still-open).
 
 ### P8 — Docs, ADR reconciliation, issue closure
 
@@ -322,8 +338,8 @@ See [Rollout campaign](#rollout-campaign) — three staged tests, gated on P0–
 | P2 | Read-side: I1–I4 + filtered `list` | P1 | ✅ | 176 unit + 15 CLI, `tsc` clean; live gate exit 0 | +16 tests; new `src/archetypes.ts` |
 | P3 | `serves` + `bind` + effective rendering | P1, P2 | ✅ | 197 unit + 15 CLI; live F2 proof green | +21 tests; new `src/serves.ts`; **D2 corrected — see D-LOCAL** |
 | P4 | Archetypes on `add` | P1 | ✅ | 205 unit + 15 CLI, `tsc` clean | +8 tests; fixed a pre-existing `all`-wildcard bug |
-| P5 | `environment add --create-zone` / reconcile materialise | P3 | 🟦 | — | env-mgr seam |
-| P6 | `init` profiles + template cleanup + `retire` | P3, P4 | ⬜ | — | heaviest; carries F3 |
+| P5 | `environment add --create-zone` / reconcile materialise | P3 | ✅ | 27 env-mgr + 205/15 net-mgr, `tsc` clean | +7 tests; D1 semantics clarified |
+| P6 | `init` profiles + template cleanup + `retire` | P3, P4 | 🟦 | — | heaviest; carries F3 |
 | P7 | #419 module refs + validation gates | P6 | ⬜ | — | closes #419 |
 | P8 | Docs + ADR-014 → Accepted + issue closure | P1–P7 | ⬜ | — | |
 | P9 | Rollout campaign (3 stages) | P8 | ⬜ | — | |
@@ -380,4 +396,6 @@ Settled by the operator, 2026-08-22, in answer to this doc's original open quest
 
 1. **Converting `home access-to <env>` to per-module pinholes** — the F2 deferral. Needs its own issue, sized after Stage 1 shows how many modules a client actually reaches. Nothing in P0–P9 depends on it.
 
-2. **The `tier` name collision.** `GLOSSARY.md` defines **tier** as an *App lifecycle class* (`foundation` = cannot uninstall, `app` = user-installable), used by `module-manager`'s classification lint. ADR-014 introduces **tier** as a *zone trust rank* (0–6). The two are unrelated and now both ship, on different objects (`module.json` vs `zones.json`), so nothing breaks mechanically — but "tier" in a sentence is now ambiguous. Options: leave it and disambiguate in prose ("zone tier" / "app tier"); rename the zone field (`trust`, `trustTier`); or rename the app field. **Cheapest moment to rename the zone field is now, before P6 back-fills it onto every install.** Flagged for the operator.
+2. ~~**The `tier` name collision.**~~ **RESOLVED (operator, 2026-08-22): keep `tier` for zones.** The word carries two concepts — zone trust rank (`zones.json`) and App lifecycle class (`module.json`, `foundation`/`app`) — and context disambiguates them; they never appear on the same object. Renaming the *App* one is optional future tidying, not a blocker. Original note kept below for the rationale trail.
+
+   **The `tier` name collision (original).** `GLOSSARY.md` defines **tier** as an *App lifecycle class* (`foundation` = cannot uninstall, `app` = user-installable), used by `module-manager`'s classification lint. ADR-014 introduces **tier** as a *zone trust rank* (0–6). The two are unrelated and now both ship, on different objects (`module.json` vs `zones.json`), so nothing breaks mechanically — but "tier" in a sentence is now ambiguous. Options: leave it and disambiguate in prose ("zone tier" / "app tier"); rename the zone field (`trust`, `trustTier`); or rename the app field. **Cheapest moment to rename the zone field is now, before P6 back-fills it onto every install.** Flagged for the operator.
