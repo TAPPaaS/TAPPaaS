@@ -22,6 +22,13 @@
 src/main.ts          CLI: arg parsing + subcommand dispatch
 src/types.ts         Zone model, ZonesDoc, the PlaneClient interface, Plan/report shapes
 src/zones.ts         load/CRUD zones.json + VLAN allocation + the mgmt.access-to invariant
+src/archetypes.ts    ADR-014 trust lattice + the zone archetype catalog + tier exemptions
+                     (the OPERATIVE copy of schemas/zones-fields.json; the nix
+                     builder cannot see foundation/schemas/, and resolving it at
+                     run time would make `validate` depend on a deployed file —
+                     a unit test pins the two together so drift fails the build)
+src/serves.ts        ADR-014 `serves` resolution + the authored -> effective render
+                     + the one-time migration back-fill (run from merge)
 src/zonelifecycle.ts add/delete (always includes the switch plane)
 src/zonesinit.ts     init template transform (rename srv/home/guest to the system name)
 src/zonesmerge.ts    merge: the rename-aware 3-way zones.json reconciliation
@@ -32,6 +39,25 @@ src/distribute.ts    distribute: push zones.json to the Proxmox nodes
 src/planes.ts        CliPlaneClient — spawnSync the four plane controllers; rc -> status
 src/reconcile.ts     the dependency-ordered 4-plane reconcile
 ```
+
+## Authored vs. effective state (ADR-014 D-C4)
+
+`zones.json` holds only what the operator authored. A Client/IoT/Guest zone may
+name an environment via `serves`; the access-to / pinhole-allowed-from edge that
+implies is **derived**, and is rendered into `zones.effective.json` rather than
+written back. The reason is the 3-way merge: a derived value written into
+`zones.json` is indistinguishable from an operator edit, so the merge would pin
+it and clearing the `serves` link would strand its edges forever.
+
+The derivation obeys a **locality rule** — `serves` only ever modifies the zone
+that declares it (Client/Guest gain `access-to += <service zone>`; IoT gain
+`pinhole-allowed-from += <service zone>`). A symmetric derivation was tried
+first and rejected: it invented edges the authored document never had, including
+a new zone-wide pass rule. See the `serves.ts` header for the full rationale.
+
+Consumers of the effective document: `zone-manager` (via `ReconcileOpts.effectiveFile`),
+`rules_manager.py` (search-order preference), and the proxy access lists. All
+fall back to the authored file on a system that predates ADR-014.
 
 Cross-manager plumbing (colors, `info`/`warn`/`die`, `--help` rendering,
 config-root resolution, atomic JSON writes, spawn env, ambient Node types)

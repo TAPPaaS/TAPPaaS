@@ -11,14 +11,7 @@
       "access-to": "Baseline reachability set by the zone designer in this file. Grants the ENTIRE source subnet access to the ENTIRE target subnet.",
       "pinhole-allowed-from": "Lists the zones that MAY open per-module pinholes into this zone. The actual narrow rule (specific source VM IP -> specific port) is declared at install time by the module's install.sh, not here."
     },
-    "tier_model": [
-      "Tier 0 - Control plane: mgmt. Egress: all zones. Ingress: no inbound pinholes.",
-      "Tier 1 - Service backends: srvHome, srvWork, srvCust, srvDev, srvTest, dmz. Egress: internet (+ declared IoT). Ingress: module pinholes via pinhole-allowed-from.",
-      "Tier 2 - Trusted clients: home, work. Egress: internet + own service zone. Ingress: direct.",
-      "Tier 3 - IoT controlled: iotLocal, iotCloud. Egress: iotCloud=internet, iotLocal=none. Ingress: zone-wide from srvHome/home via access-to.",
-      "Tier 4 - IoT isolated: iotCams, iotUntrust. Egress: iotCams=none, iotUntrust=internet. Ingress: pinhole-only, no exceptions (see isolation_invariant).",
-      "Tier 5 - Untrusted clients: guest. Egress: internet only. Ingress: no inbound pinholes."
-    ],
+    "tier_model": "SUPERSEDED BY ADR-014 — the tier model is now STATE, not prose. Each zone carries a 'tier' (0-6) and an 'isolated' flag, and `network-manager validate` enforces them (I1 monotonic access-to, I2 isolation floor, I3 egress boundary, I4 archetype conformance). The authoritative definition lives in schemas/zones-fields.json ('tier_model', 'archetypes', 'invariants', 'tier_exempt_types'), explained in network-manager/ZONES.md. The prose that used to sit here described a DIFFERENT, pre-ADR-014 ranking (dmz at tier 1, guest at tier 5, isolated IoT at tier 4) and was removed rather than left to contradict the enforced model.",
     "mdns_policy": "Multicast service discovery (Sonos/SSDP, Chromecast) does not cross VLAN boundaries on its own. Where a trusted client or service zone must discover devices in iotCloud, run udpbroadcastrelay to forward UDP port 1900 (SSDP) between the relevant interfaces. Referenced by iotCloud._comment.",
     "iot_classification": {
       "_comment": "Decision aid for placing a new IoT device into iotLocal / iotCloud / iotCams / iotUntrust. Referenced by iotUntrust._comment.",
@@ -29,11 +22,14 @@
       ]
     },
     "pr_review_checklist": [
-      "No Tier-4 zone (iotCams, iotUntrust) appears in any non-mgmt zone's access-to.",
-      "Every new non-internet access-to entry is justified with a named use case in the PR.",
-      "Isolation-zone access is declared per-module in install.sh (pinhole-allowed-from), not via access-to here.",
-      "Every zone has both _comment and description; operational instructions live in _comment only."
-    ]
+      "MACHINE-CHECKED (network-manager validate): no isolated zone appears in any non-mgmt access-to, and no non-mgmt zone holds the 'all' wildcard (I2).",
+      "MACHINE-CHECKED: every access-to edge flows downward, tier(A) <= tier(B) (I1); a tier-6 zone claims no internet egress (I3); every zone matches a defined archetype (I4).",
+      "STILL HUMAN: every new non-internet access-to entry is justified with a named use case in the PR.",
+      "STILL HUMAN: isolation-zone access is declared per-module in install.sh (pinhole-allowed-from), not via access-to here.",
+      "STILL HUMAN: every zone has both _comment and description; operational instructions live in _comment only.",
+      "Prefer `network-manager add <name> --archetype <A>` over copying a block: it stamps a tier-correct type/tier/isolated/access-to seed and auto-allocates the VLAN/IP."
+    ],
+    "authored_vs_effective": "THIS FILE IS AUTHORED STATE. A Client/IoT/Guest zone may carry 'serves: <environment>' (ADR-014 D2); the resulting access-to / pinhole-allowed-from edge is DERIVED on every reconcile into zones.effective.json, which is what zone-manager, rules_manager and the Caddy access lists actually read. Never hand-edit zones.effective.json, and never expect a derived edge to appear here - keeping it out is what lets a `serves` link be cleared without stranding its edges."
   },
   "mgmt": {
     "type": "Management",
@@ -99,7 +95,9 @@
     "vlantag": 0,
     "ip": "10.255.1.0/24",
     "bridge": "lan",
-    "access-to": ["mgmt"],
+    "access-to": [
+      "mgmt"
+    ],
     "pinhole-allowed-from": [],
     "_comment": "ADR-010 admin-vpn landing zone (Q3 RESOLVED, validated live 2026-07-01). The operator's admin WireGuard session TERMINATES on OPNsense (a dedicated 'tappaas-admin' WG server on port 51821, tunneladdress 10.255.1.1/24); the satellite only blind-relays the UDP (or the admin device connects direct to the cluster WAN — the OPNsense side is identical). access-to: ['mgmt'] is realised NOT by zone-manager (which skips Overlay/vlantag=0 zones) but by a single explicit least-privilege firewall pass rule on the 'wireguard' interface: 10.255.1.0/24 -> 10.0.0.0/24, created idempotently by 'satellite-manager admin setup' (lib/admin-vpn.sh). NetBird (the 'netbird' overlay) remains independent for many-peer mesh; admin-vpn covers the single-operator case with plain WireGuard and no control plane. Peers are managed with 'satellite-manager admin add-peer'. Full runbook: tappaas-cicd/ADMIN-VPN.md.",
     "description": "ADR-010 admin-vpn landing (mgmt tunnel; see ADMIN-VPN.md)"

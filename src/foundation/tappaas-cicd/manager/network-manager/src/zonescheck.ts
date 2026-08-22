@@ -227,7 +227,11 @@ function checkReferentialIntegrity(doc: ZonesDoc, rep: Reporter): void {
       if (!Array.isArray(arr)) continue;
       for (const ref of arr) {
         if (typeof ref !== "string") continue;
-        if (ref === "internet") continue;
+        // `internet` and `all` are the two documented special values in
+        // schemas/zones-fields.json (access-to.special_values) — destinations,
+        // not zone names. `all` was previously missing here, so any zone using
+        // the documented wildcard was reported as a dangling reference.
+        if (ref === "internet" || ref === "all") continue;
         const target = doc.zones.get(ref);
         if (target === undefined) {
           rep.err(`refs: zone '${name}' ${String(field)} references unknown zone '${ref}'`);
@@ -358,6 +362,18 @@ function checkTierInvariants(doc: ZonesDoc, rep: Reporter): void {
               `the pinhole mechanism (every host in '${name}' would gain unconditional ` +
               `zone-wide reach). Grant access per-module via ` +
               `'${ref}'.pinhole-allowed-from instead.`,
+          );
+          i2++;
+        }
+        // The `all` wildcard compiles to a destination-any pass rule, so it
+        // reaches every isolated zone without ever naming one. Only the control
+        // plane may hold it.
+        if (ref === "all") {
+          rep.warn(
+            `I2: zone '${name}' has the 'all' wildcard in access-to, which reaches ` +
+              `every isolated zone (${Array.from(isolated).sort().join(", ")}) without ` +
+              `naming it. Only the '${CONTROL_PLANE_ZONE}' control plane may use 'all'; ` +
+              `list the specific zones this one needs.`,
           );
           i2++;
         }

@@ -46,7 +46,7 @@ import { addZone, deleteZone } from "./zonelifecycle";
 import { existsSync } from "fs";
 import { mergeInitWithExisting, parseTemplate, renameTemplateFile, zonesInit } from "./zonesinit";
 import { zonesCheck, occupiedZones } from "./zonescheck";
-import { zoneTier } from "./archetypes";
+import { archetypeByName, archetypeNames, zoneTier } from "./archetypes";
 import {
   SERVES_ALLOWED_TYPES,
   effectiveFileFor,
@@ -86,6 +86,11 @@ const HELP: HelpSpec = {
       usage: "add <name> [options]",
       name: "add",
       options: [
+        ["--archetype <A>", "tier-correct preset (ADR-014 D5) — one of:\n" +
+          "                control, service, trusted-client, guest, dmz,\n" +
+          "                iot-local, iot-cloud, iot-cams, iot-untrust.\n" +
+          "                Stamps type/typeId/tier/isolated + the access-to seed."],
+        ["--serves <env>", "bind the new Client/IoT/Guest zone to an environment"],
         ["--from-zone <src>", "inherit type/typeId/bridge/access-to/pinhole from <src>"],
         ["--type <T>", "zone type (default: Service)"],
         ["--typeId <N>", "numeric type band (default: 2)"],
@@ -222,6 +227,9 @@ interface Opts {
   // bind
   environment?: string;
   unbind: boolean;
+  // add --archetype / --serves (ADR-014 D5 / D2)
+  archetype?: string;
+  serves?: string;
 }
 
 function isPlane(s: string): s is Plane {
@@ -305,6 +313,12 @@ function parseOpts(args: string[]): Opts {
         break;
       case "--unbind":
         o.unbind = true;
+        break;
+      case "--archetype":
+        o.archetype = next();
+        break;
+      case "--serves":
+        o.serves = next();
         break;
       case "--tier": {
         const t = parseInt(next(), 10);
@@ -433,14 +447,57 @@ function cmdZone(sub: string, opts: Opts): void {
 function cmdZoneAdd(opts: Opts, client: PlaneClient = new CliPlaneClient()): void {
   const name = opts.rest[0];
   if (!name) die("add: expected <name>");
+
+  // ADR-014 D5: --archetype is the high-level path; --type/--typeId/--from-zone
+  // are the low-level escapes. Mixing them is ambiguous about which wins, so
+  // refuse rather than silently preferring one.
+  if (opts.archetype) {
+    const a = archetypeByName(opts.archetype);
+    if (!a) {
+      die(`add: unknown archetype '${opts.archetype}' (known: ${archetypeNames().join(", ")})`);
+    }
+    const clash = [
+      opts.fromZone ? "--from-zone" : "",
+      opts.type ? "--type" : "",
+      opts.typeId ? "--typeId" : "",
+    ].filter(Boolean);
+    if (clash.length > 0) {
+      die(
+        `add: --archetype cannot be combined with ${clash.join(", ")} — the archetype ` +
+          `already defines type/typeId/tier/isolated. Drop the archetype to author by hand.`,
+      );
+    }
+    if (opts.serves && !SERVES_ALLOWED_TYPES.has((a as { type: string }).type)) {
+      die(
+        `add: --serves is only meaningful for a Client, IoT or Guest zone; ` +
+          `archetype '${opts.archetype}' creates a ${(a as { type: string }).type} zone.`,
+      );
+    }
+  } else if (opts.serves) {
+    die("add: --serves requires --archetype (or bind the zone afterwards with `bind`)");
+  }
+  if (opts.serves) {
+    const svc = environmentZone(dirname(opts.zonesFile), opts.serves);
+    if (svc === undefined) {
+      die(`add: environment '${opts.serves}' has no readable environments/${opts.serves}.json with a '.network.zone'`);
+    }
+  }
+
   const dtag = opts.check ? " [dry-run]" : "";
-  info(`zone-add '${name}'${opts.fromZone ? ` (from ${opts.fromZone})` : ""}${dtag}`);
+  const via = opts.archetype
+    ? ` (archetype ${opts.archetype})`
+    : opts.fromZone
+      ? ` (from ${opts.fromZone})`
+      : "";
+  info(`zone-add '${name}'${via}${dtag}`);
   const res = addZone(client, opts.zonesFile, name, {
     fromZone: opts.fromZone,
     type: opts.type,
     typeId: opts.typeId,
     vlan: opts.vlan,
     variant: opts.variant,
+    archetype: opts.archetype,
+    serves: opts.serves,
     dryRun: opts.check,
     noActivate: opts.noActivate,
     noDistribute: opts.noDistribute,

@@ -1358,6 +1358,92 @@ function tmpZones(): string {
   }
 }
 
+// ── 20. ADR-014 P4: every archetype produces a conforming zone ────────
+// The acceptance line from the ADR: `add --archetype <A>` yields a zone with
+// the correct type/tier/isolated/access-to seed and an auto-allocated vlan/ip,
+// with NO hand editing — and that zone must pass the P2 invariants.
+{
+  const d = mkdtempSync(join(tmpdir(), "nm-p4-"));
+  mkdirSync(join(d, "environments"), { recursive: true });
+  writeFileSync(join(d, "environments", "warmelo.json"),
+    JSON.stringify({ name: "warmelo", network: { zone: "warmelo" } }), "utf8");
+
+  // A minimal but conforming starting document.
+  const seed = {
+    mgmt: { type: "Management", state: "Manual", typeId: "0", subId: "0", vlantag: 0, ip: "10.0.0.0/24", tier: 0, "access-to": ["internet"], "pinhole-allowed-from": [] },
+    warmelo: { type: "Service", state: "Active", typeId: "2", subId: "0", vlantag: 200, ip: "10.2.0.0/24", tier: 1, "access-to": ["internet"], "pinhole-allowed-from": [] },
+    // the `service` archetype seeds access-to: [internet, dmz], so dmz must exist
+    dmz: { type: "DMZ", state: "Mandatory", typeId: "6", subId: "10", vlantag: 610, ip: "10.6.0.0/24", tier: 4, "access-to": ["internet"], "pinhole-allowed-from": ["internet"] },
+  };
+  const f = join(d, "zones.json");
+  writeFileSync(f, JSON.stringify(seed, null, 2), "utf8");
+
+  // Author one zone per archetype into a single doc (they must coexist: each
+  // gets its own VLAN out of its type band).
+  const doc = loadZones(f);
+  let allOk = true;
+  const created: string[] = [];
+  for (const a of ARCHETYPES) {
+    // camelCase the archetype name into a legal zone key: iot-cams -> zIotCams
+    const zn = "z" + a.name.split("-").map((p) => p[0].toUpperCase() + p.slice(1)).join("");
+    try {
+      const z = authorZone(doc, zn, {
+        archetype: a.name,
+        serves: a.type === "Client" || a.type === "IoT" || a.type === "Guest" ? "warmelo" : undefined,
+      });
+      created.push(zn);
+      const good =
+        z.type === a.type &&
+        z.typeId === String(a.typeId) &&
+        z.tier === a.tier &&
+        (a.isolated ? z.isolated === true : z.isolated === undefined) &&
+        JSON.stringify(z["access-to"]) === JSON.stringify(a.accessTo) &&
+        typeof z.vlantag === "number" && z.vlantag > 0 &&
+        typeof z.ip === "string" && z.ip.startsWith(`10.${a.typeId}.`);
+      if (!good) {
+        allOk = false;
+        console.log(`    (archetype ${a.name} produced ${JSON.stringify(z)})`);
+      }
+    } catch (e) {
+      allOk = false;
+      console.log(`    (archetype ${a.name} threw: ${(e as Error).message})`);
+    }
+  }
+  check(created.length === ARCHETYPES.length, `P4: every archetype authors a zone (${created.length}/${ARCHETYPES.length})`);
+  check(allOk, "P4: each archetype stamps the right type/typeId/tier/isolated/access-to + auto vlan/ip");
+
+  // The whole set must pass the P2 invariants with no edits — this is what
+  // "tier-correct by construction" has to mean.
+  saveZones(f, doc);
+  const res = runChecks(loadZones(f), d, false);
+  if (res.errors !== 0) for (const l of res.lines) if (l.includes("✗")) console.log(`    ${l}`);
+  check(res.errors === 0, `P4: an all-archetype document has no errors (got ${res.errors})`);
+  // `control` is a SINGLETON archetype: it seeds access-to: ["all"], and I2
+  // permits that wildcard only on the real `mgmt` control plane. A second
+  // control zone therefore trips I2 by design — that is the check earning its
+  // keep, not a defect, so it is the one expected warning here.
+  const i2OnControl = res.lines.filter((l) => l.includes("I2:") && l.includes("zControl")).length;
+  check(i2OnControl === 1, "P4: a SECOND control-plane zone trips I2 (the 'all' wildcard is mgmt-only)");
+  check(res.warnings === 1, `P4: no archetype other than the control singleton trips an invariant (got ${res.warnings} warning(s))`);
+
+  // --serves composes with --archetype, and R2 still holds for the isolated ones.
+  {
+    const eff = renderEffective(loadZones(f), d);
+    const cams = eff.raw["zIotCams"] as Record<string, unknown>;
+    check((cams["pinhole-allowed-from"] as string[]).includes("warmelo"), "P4: --archetype + --serves binds the new zone in one command");
+    const svc = eff.raw["warmelo"] as Record<string, unknown>;
+    check(!(svc["access-to"] as string[]).includes("zIotCams"), "P4 R2: an isolated archetype zone is in nobody's access-to");
+  }
+
+  // An unknown archetype is refused, not silently defaulted.
+  {
+    const d2 = loadZones(f);
+    let threw = false;
+    try { authorZone(d2, "zNope", { archetype: "not-a-thing" }); } catch { threw = true; }
+    check(threw, "P4: an unknown archetype is rejected");
+  }
+}
+
 console.log("");
 console.log(`Results: ${passed} passed, ${failed} failed`);
 if (failed > 0) process.exit(1);

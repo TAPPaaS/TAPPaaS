@@ -3,7 +3,7 @@
 **Companion to:** [ADR-014 — Zone ↔ Environment Lifecycle & Operations](<../ADR/ADR-014 - Zone and Environment Lifecycle.md>) (the *why* + the decided design)
 **Closes:** #424 (client/IoT zones ↔ environments undefined) · #419 (stale zone references not resolved)
 **Purpose of this doc:** one place that (1) records **implementation-level decisions** (including the three forks ADR-014 flagged for confirmation), (2) breaks the work into **packages** with deliverables/dependencies/test criteria, and (3) **tracks live execution state**.
-**Status:** In progress — P0 ✅, P1 ✅, P2 ✅, P3 ✅, P4 next
+**Status:** In progress — P0 ✅, P1 ✅, P2 ✅, P3 ✅, P4 ✅, P5 next
 **Branch:** `feat/adr-014-zone-lifecycle`, cut from `main`
 **Started:** 2026-08-22
 
@@ -232,6 +232,15 @@ The effective file is re-rendered on every authored write (zone add/delete/state
 
 **Test criteria** — every archetype produces a zone that passes I1–I4 with zero edits and a correctly auto-allocated VLAN/IP; `--archetype` + `--type` conflict is rejected.
 
+**Outcome (2026-08-22): ✅ green — 205 unit + 15 CLI, `tsc` clean.** All nine archetypes author a conforming zone in one command; `--serves` composes with `--archetype`; `--archetype` + `--type`/`--typeId`/`--from-zone` is refused rather than silently preferring one. A zone authored the low-level way (`--type`/`--from-zone`) is deliberately left **untiered** — `validate` notes it — rather than being given a guessed rank.
+
+Two findings from running the all-archetype document through the P2 checks:
+
+- **Pre-existing bug fixed.** `access-to` has two documented special values in `zones-fields.json` — `internet` **and** `all` — but `checkReferentialIntegrity` only ever exempted `internet`. Any zone using the documented `all` wildcard was reported as a dangling reference to a zone named "all". Now both are exempt.
+- **New isolation hole closed.** The `all` wildcard compiles to a destination-any pass rule, so it reaches every `isolated` zone *without naming one* — an R2 bypass that I2 could not see. I2 now flags `all` on any non-`mgmt` zone. This makes `control` a **singleton archetype**: a second control-plane zone trips I2 by design, which the test asserts explicitly rather than working around.
+
+> **Operational caution (learned the hard way).** `add --no-activate` skips the plane reconcile but **not** the node distribute: `shouldAutoDistribute` treats "the file equals `$TAPPAAS_CONFIG/zones.json`" as live, and `enumerateNodes` reads the *real* node list from whatever `site.json` sits beside it. Testing against a scratch `TAPPAAS_CONFIG` seeded from a copy of `config/` therefore scp'd the scratch file to all three Proxmox nodes. Detected immediately, and repaired by re-running `distribute` against the authentic `config/zones.json` (nodes verified byte-identical afterwards; the cicd config was never touched). **Always set `NM_NO_DISTRIBUTE=1` when exercising the CLI against a copied config root.**
+
 ---
 
 ### P5 — D1 env ↔ service zone materialisation
@@ -274,6 +283,19 @@ The heaviest package: it rewrites `zonesinit.ts` and carries F3.
 
 ---
 
+> **Docs are updated per-package, not batched into P8.** The original plan deferred all
+> documentation to P8; that was wrong in one respect — a doc that *contradicts* shipped
+> behaviour is worse than one that is merely incomplete. From P4 on, each package updates
+> the docs it invalidates, and P8 keeps only the cross-cutting work (ADR-014 itself, the
+> migration runbook, issue closure). Done so far: `ZONES.md` (P1), `zones.json._README`,
+> `network-manager/README.md`, `network-manager/DESIGN.md` (P4).
+>
+> **Still open, and owned by the package that changes them:** `environment-manager/README.md`
+> + `DESIGN.md` (P5), `network/README.md`'s per-module rules section (P7), and a decision on
+> the **`tier` name collision** — `GLOSSARY.md` already defines `tier` as an *App lifecycle
+> class* (`foundation` / `app`), which is unrelated to a zone's trust rank. Both meanings now
+> ship. See [Still open](#still-open).
+
 ### P8 — Docs, ADR reconciliation, issue closure
 
 **Deliverables**
@@ -299,8 +321,8 @@ See [Rollout campaign](#rollout-campaign) — three staged tests, gated on P0–
 | P1 | Schema foundation (`tier`/`isolated`/`serves` + archetypes) | P0 | ✅ | 160 unit + 15 CLI, `tsc` clean | additive only; +12 new tests |
 | P2 | Read-side: I1–I4 + filtered `list` | P1 | ✅ | 176 unit + 15 CLI, `tsc` clean; live gate exit 0 | +16 tests; new `src/archetypes.ts` |
 | P3 | `serves` + `bind` + effective rendering | P1, P2 | ✅ | 197 unit + 15 CLI; live F2 proof green | +21 tests; new `src/serves.ts`; **D2 corrected — see D-LOCAL** |
-| P4 | Archetypes on `add` | P1 | 🟦 | — | subsumes D3 |
-| P5 | `environment add --create-zone` / reconcile materialise | P3 | ⬜ | — | env-mgr seam |
+| P4 | Archetypes on `add` | P1 | ✅ | 205 unit + 15 CLI, `tsc` clean | +8 tests; fixed a pre-existing `all`-wildcard bug |
+| P5 | `environment add --create-zone` / reconcile materialise | P3 | 🟦 | — | env-mgr seam |
 | P6 | `init` profiles + template cleanup + `retire` | P3, P4 | ⬜ | — | heaviest; carries F3 |
 | P7 | #419 module refs + validation gates | P6 | ⬜ | — | closes #419 |
 | P8 | Docs + ADR-014 → Accepted + issue closure | P1–P7 | ⬜ | — | |
@@ -357,3 +379,5 @@ Settled by the operator, 2026-08-22, in answer to this doc's original open quest
 ## Still open
 
 1. **Converting `home access-to <env>` to per-module pinholes** — the F2 deferral. Needs its own issue, sized after Stage 1 shows how many modules a client actually reaches. Nothing in P0–P9 depends on it.
+
+2. **The `tier` name collision.** `GLOSSARY.md` defines **tier** as an *App lifecycle class* (`foundation` = cannot uninstall, `app` = user-installable), used by `module-manager`'s classification lint. ADR-014 introduces **tier** as a *zone trust rank* (0–6). The two are unrelated and now both ship, on different objects (`module.json` vs `zones.json`), so nothing breaks mechanically — but "tier" in a sentence is now ambiguous. Options: leave it and disambiguate in prose ("zone tier" / "app tier"); rename the zone field (`trust`, `trustTier`); or rename the app field. **Cheapest moment to rename the zone field is now, before P6 back-fills it onto every install.** Flagged for the operator.

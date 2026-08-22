@@ -10,6 +10,7 @@ import { existsSync, readFileSync } from "fs";
 import { join } from "path";
 import { defaultConfigDir, writeJsonAtomic } from "../../../lib/ts/src/config-io";
 import { Zone, ZonesDoc } from "./types";
+import { archetypeByName, archetypeNames } from "./archetypes";
 
 // Dynamic-allocation VLAN window within a type band (10.<typeId>.<sub>.0/24).
 // Matches zone-controller.sh so zone choices are unchanged.
@@ -162,6 +163,13 @@ export interface AddZoneOpts {
   typeId?: string;
   vlan?: number;
   variant?: string;
+  // ADR-014 D5/D3: stamp type/typeId/tier/isolated + the access-to seed from a
+  // named archetype instead of copy-pasting a template block. Subsumes D3's
+  // `--class` for IoT.
+  archetype?: string;
+  // ADR-014 D2: bind the new Client/IoT/Guest zone to an environment in the
+  // same command.
+  serves?: string;
 }
 
 // Author a new zone entry into the doc (in memory; caller persists). Ports
@@ -183,8 +191,26 @@ export function authorZone(doc: ZonesDoc, name: string, opts: AddZoneOpts): Zone
   let accessTo: string[];
   let pinhole: string[];
   let parent = "";
+  let tier: number | undefined;
+  let isolated = false;
 
-  if (opts.fromZone) {
+  if (opts.archetype) {
+    // Archetype wins over the low-level knobs; main.ts rejects the combination
+    // up front, so reaching here with both is a programming error.
+    const a = archetypeByName(opts.archetype);
+    if (!a) {
+      throw new Error(
+        `unknown archetype '${opts.archetype}' (known: ${archetypeNames().join(", ")})`,
+      );
+    }
+    type = a.type;
+    typeId = String(a.typeId);
+    bridge = "lan";
+    accessTo = [...a.accessTo];
+    pinhole = [];
+    tier = a.tier;
+    isolated = a.isolated;
+  } else if (opts.fromZone) {
     const src = getZone(doc, opts.fromZone);
     if (!src) throw new Error(`--from-zone '${opts.fromZone}' not found`);
     typeId = opts.typeId ?? String(src.typeId ?? "");
@@ -219,9 +245,12 @@ export function authorZone(doc: ZonesDoc, name: string, opts: AddZoneOpts): Zone
   const sub = vt % 100;
   const ip = `10.${typeIdNum}.${sub}.0/24`;
   const variant = opts.variant ?? "";
+  const arch = opts.archetype ? archetypeByName(opts.archetype) : undefined;
   const descr = variant
     ? `Variant zone for ${variant}${parent ? ` (inherited from ${parent})` : ""}`
-    : `Zone ${name}${parent ? ` (inherited from ${parent})` : ""}`;
+    : arch
+      ? arch.description
+      : `Zone ${name}${parent ? ` (inherited from ${parent})` : ""}`;
 
   const zone: Zone = {
     name,
@@ -236,6 +265,12 @@ export function authorZone(doc: ZonesDoc, name: string, opts: AddZoneOpts): Zone
     "pinhole-allowed-from": pinhole,
     description: descr,
   };
+  // ADR-014: only stamp the security fields when an archetype supplied them —
+  // a --from-zone/--type zone stays untiered (validate notes it) rather than
+  // being given a guessed rank.
+  if (tier !== undefined) zone.tier = tier;
+  if (isolated) zone.isolated = true;
+  if (opts.serves) zone.serves = opts.serves;
   if (parent) zone.parent = parent;
   if (variant) zone.variant = variant;
 
