@@ -18,6 +18,7 @@
 // ap) plane is ALWAYS included.
 
 import { distributeZones, shouldAutoDistribute } from "./distribute";
+import { effectiveFileFor, refreshEffective } from "./serves";
 import { reconcileAll } from "./reconcile";
 import { PlaneClient, ReconcileReport, Zone } from "./types";
 import {
@@ -37,6 +38,19 @@ import {
 function maybeDistribute(zonesFile: string, noDistribute: boolean): void {
   if (!shouldAutoDistribute(zonesFile, noDistribute)) return;
   distributeZones(zonesFile);
+}
+
+// Re-render zones.effective.json after an authored write, so the planes (and
+// any module install that reads it) see the CURRENT resolution of every
+// `serves` link. Non-fatal by design: a missing environment file must not
+// break a zone add — `reconcile`/`validate` are what report that.
+function refreshEffectiveQuietly(zonesFile: string): string {
+  try {
+    refreshEffective(zonesFile);
+  } catch {
+    // fall through — the planes read the authored file below
+  }
+  return effectiveFileFor(zonesFile);
 }
 
 export interface LifecycleResult {
@@ -71,6 +85,7 @@ export function addZone(
   // Persist the authored entry (+ mgmt.access-to invariant) atomically, then
   // distribute the live zones.json to the Proxmox nodes (N3).
   saveZones(zonesFile, doc);
+  const effAdd = refreshEffectiveQuietly(zonesFile);
   maybeDistribute(zonesFile, opts.noDistribute ?? false);
 
   if (opts.noActivate) {
@@ -78,7 +93,7 @@ export function addZone(
   }
 
   // Reconcile ALL planes in dependency order (opnsense → proxmox → switch → ap).
-  const report = reconcileAll(client, { apply: true, zonesFile });
+  const report = reconcileAll(client, { apply: true, zonesFile, effectiveFile: effAdd });
   return { zone: name, vlantag: zone.vlantag, report, dryRun: false };
 }
 
@@ -110,15 +125,17 @@ export function deleteZone(
   // (removeMgmtAccess happens with removeZone below; disable first so the
   // reconcile of the still-present-but-Disabled zone drops its resources.)
   saveZones(zonesFile, doc);
+  const effDel = refreshEffectiveQuietly(zonesFile);
 
   // 2. reconcile ALL planes (apply) — drops OPNsense iface + Proxmox trunk;
   //    switch + ap always included (the #372/#373 fix).
-  const report = reconcileAll(client, { apply: true, zonesFile });
+  const report = reconcileAll(client, { apply: true, zonesFile, effectiveFile: effDel });
 
   // 3. remove the key (+ mgmt.access-to) and persist, then distribute the
   //    final live zones.json to the Proxmox nodes (N3).
   removeZone(doc, name);
   saveZones(zonesFile, doc);
+  refreshEffectiveQuietly(zonesFile);
   maybeDistribute(zonesFile, opts.noDistribute ?? false);
 
   return { zone: name, vlantag: vt, report, dryRun: false };

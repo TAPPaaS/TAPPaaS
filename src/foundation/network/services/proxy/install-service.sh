@@ -50,7 +50,15 @@ if [[ -f "${CONFIG_DIR}/network.json" ]]; then
 else
     readonly FIREWALL_JSON="${CONFIG_DIR}/firewall.json"
 fi
-readonly ZONES_FILE="${CONFIG_DIR}/zones.json"
+# ADR-014 D-C4: prefer the EFFECTIVE zones document (zones.json with every
+# `serves` link resolved) so a zone reachable only via its environment link
+# still resolves to a CIDR here. Falls back to the authored file on a system
+# that predates ADR-014 or has not rendered one yet.
+if [[ -f "${CONFIG_DIR}/zones.effective.json" ]]; then
+    readonly ZONES_FILE="${CONFIG_DIR}/zones.effective.json"
+else
+    readonly ZONES_FILE="${CONFIG_DIR}/zones.json"
+fi
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 readonly SCRIPT_DIR
 # shellcheck source=access-list.sh disable=SC1091

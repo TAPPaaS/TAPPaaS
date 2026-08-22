@@ -1536,9 +1536,16 @@ def _canonical_part(description: str) -> str:
 def _find_zones_file(explicit: str | None) -> Path:
     if explicit:
         return Path(explicit)
+    # ADR-014 D-C4: zones.json is the AUTHORED document; `serves` links are
+    # resolved into zones.effective.json by network-manager. Pinhole and egress
+    # validation must see the RESOLVED graph, or an edge a client zone gets via
+    # its `serves` link would look absent here. Fall back to the authored file on
+    # a system that predates ADR-014 (or before the first render).
     candidates = [
+        Path("/home/tappaas/config/zones.effective.json"),
         Path("/home/tappaas/config/zones.json"),
         DEFAULT_ZONES_FILE,
+        Path("zones.effective.json"),
         Path("zones.json"),
         Path("src/foundation/tappaas-cicd/manager/network-manager/zones.json"),
     ]

@@ -47,6 +47,12 @@ import { existsSync } from "fs";
 import { mergeInitWithExisting, parseTemplate, renameTemplateFile, zonesInit } from "./zonesinit";
 import { zonesCheck, occupiedZones } from "./zonescheck";
 import { zoneTier } from "./archetypes";
+import {
+  SERVES_ALLOWED_TYPES,
+  effectiveFileFor,
+  environmentZone,
+  refreshEffective,
+} from "./serves";
 import { distributeZones, shouldAutoDistribute } from "./distribute";
 import { runZonesMerge } from "./zonesmerge";
 import { HelpSpec, renderHelp } from "../../../lib/ts/src/help";
@@ -90,6 +96,19 @@ const HELP: HelpSpec = {
       ],
     },
     { usage: "delete <name> [--check]" },
+    {
+      usage: "bind <zone> --environment <env> | --unbind",
+      name: "bind (link a Client/IoT/Guest zone to an environment — ADR-014 D2)",
+      options: [
+        ["--environment <env>", "the environment whose service zone this zone consumes"],
+        ["--unbind", "clear the link"],
+      ],
+      note:
+        "Sets the zone's `serves` field. The access-to / pinhole-allowed-from edges\n" +
+        "are DERIVED from it on every reconcile (into zones.effective.json), so they\n" +
+        "survive the install-time srv→<environment> rename — this is what closes #424.\n" +
+        "zones.json itself stays purely authored.",
+    },
     {
       usage: "enable|disable|manual <name> [--force]",
       name:
@@ -200,6 +219,9 @@ interface Opts {
   // verbs never run together.
   state?: string;
   tier?: number;
+  // bind
+  environment?: string;
+  unbind: boolean;
 }
 
 function isPlane(s: string): s is Plane {
@@ -220,6 +242,7 @@ function parseOpts(args: string[]): Opts {
     noDistribute: false,
     diff: false,
     json: false,
+    unbind: false,
   };
   for (let i = 0; i < args.length; i++) {
     const a = args[i];
@@ -275,6 +298,13 @@ function parseOpts(args: string[]): Opts {
         break;
       case "--state":
         o.state = next();
+        break;
+      case "--environment":
+      case "--env":
+        o.environment = next();
+        break;
+      case "--unbind":
+        o.unbind = true;
         break;
       case "--tier": {
         const t = parseInt(next(), 10);
@@ -474,14 +504,106 @@ function cmdZoneState(verb: string, opts: Opts): void {
   info(`    network-manager reconcile --apply`);
 }
 
+// ── bind / unbind (ADR-014 D2) ─────────────────────────────────────────
+// Authors the `serves` link on a Client/IoT/Guest zone. Deliberately does NOT
+// reconcile: like enable/disable, it mutates zones.json and tells the operator
+// how to apply. The effective document IS re-rendered so `show`/`validate` and
+// any module install see the new resolution immediately.
+function cmdBind(opts: Opts): void {
+  const name = opts.rest[0];
+  if (!name) die("bind: expected <zone> --environment <env> | --unbind");
+  if (!opts.unbind && !opts.environment) {
+    die("bind: expected --environment <env> (or --unbind to clear the link)");
+  }
+  if (opts.unbind && opts.environment) {
+    die("bind: --environment and --unbind are mutually exclusive");
+  }
+
+  const doc = loadZones(opts.zonesFile);
+  const z = getZone(doc, name);
+  if (!z) die(`bind: zone '${name}' not found in ${opts.zonesFile}`);
+  const type = typeof z.type === "string" ? z.type : "";
+  if (!SERVES_ALLOWED_TYPES.has(type)) {
+    die(
+      `bind: zone '${name}' is type ${type || "(unset)"} — only Client, IoT and Guest ` +
+        `zones consume an environment. A Service zone IS an environment's zone; ` +
+        `bind its clients to the environment instead.`,
+    );
+  }
+
+  const configDir = dirname(opts.zonesFile);
+  const before = typeof z.serves === "string" ? z.serves : "";
+
+  if (opts.unbind) {
+    if (!before) {
+      info(`${name}: no 'serves' link — no change`);
+      return;
+    }
+    delete z.serves;
+    const rawZone = doc.raw[name] as Record<string, unknown>;
+    delete rawZone.serves;
+    saveZones(opts.zonesFile, doc);
+    info(`${name}: serves '${before}' → ${GN}(cleared)${CL}`);
+  } else {
+    const env = opts.environment as string;
+    // Resolve up front so a typo is caught here, not three commands later.
+    const svc = environmentZone(configDir, env);
+    if (svc === undefined) {
+      die(
+        `bind: environment '${env}' has no readable ${join(configDir, "environments", `${env}.json`)} ` +
+          `with a '.network.zone' — create it first (\`environment-manager add ${env}\`).`,
+      );
+    }
+    if (!zoneExists(doc, svc)) {
+      die(`bind: environment '${env}' names service zone '${svc}', which is not defined in zones.json`);
+    }
+    if (before === env) {
+      info(`${name}: already serves '${env}' — no change`);
+      return;
+    }
+    z.serves = env;
+    (doc.raw[name] as Record<string, unknown>).serves = env;
+    saveZones(opts.zonesFile, doc);
+    info(`${name}: serves ${before ? `'${before}' → ` : ""}${GN}'${env}'${CL} (service zone '${svc}')`);
+  }
+
+  // Re-render and show what the link derives, so the operator sees the effect
+  // rather than having to reason about it.
+  const eff = refreshEffective(opts.zonesFile);
+  const mine = eff.edges.filter((e) => e.zone === name);
+  for (const e of mine) {
+    for (const a of e.added) info(`  derived: ${a}`);
+  }
+  for (const err of eff.errors) warn(`  ${err}`);
+  info("");
+  info("  To apply on the planes, run:");
+  info(`    network-manager reconcile --apply`);
+}
+
 // ── reconcile command ──────────────────────────────────────────────────
 function cmdReconcile(opts: Opts, client: PlaneClient = new CliPlaneClient()): void {
   // Validate zones.json is readable before touching any plane.
   loadZones(opts.zonesFile);
+
+  // ADR-014 D-C4: resolve every `serves` link into zones.effective.json and hand
+  // THAT to the planes. zones.json stays purely authored. A broken link is fatal
+  // here (unlike on a zone add) — reconcile is the verb that converges the
+  // firewall, so a link that cannot resolve would silently drop an edge.
+  const eff = refreshEffective(opts.zonesFile);
+  if (eff.errors.length > 0) {
+    for (const e of eff.errors) warn(e);
+    die(`unresolved 'serves' link(s): ${eff.errors.length} — fix the binding(s) and re-run`);
+  }
+  for (const e of eff.edges) {
+    info(`serves: ${e.zone} → environment '${e.environment}' (zone '${e.serviceZone}')`);
+    for (const a of e.added) info(`  ${a}`);
+  }
+
   const report = reconcileAll(client, {
     apply: opts.apply,
     only: opts.only,
     zonesFile: opts.zonesFile,
+    effectiveFile: effectiveFileFor(opts.zonesFile),
   });
   printReport(report);
   if (report.failed.length > 0) {
@@ -638,7 +760,7 @@ function cmdZonesMerge(opts: Opts): number {
   // a live service's Active state through the merge's state-pin.
   const keepActive = occupiedZones(cfg);
   const template = opts.from ?? defaultTemplateFile();
-  return runZonesMerge(
+  const rc = runZonesMerge(
     {
       current: join(cfg, "zones.json"),
       orig: join(cfg, "zones.json.orig"),
@@ -647,10 +769,21 @@ function cmdZonesMerge(opts: Opts): number {
       name,
       keepActive,
       diff: opts.diff,
+      configDir: cfg,
     },
     { info, warn },
     (tpl, n, ka) => renameTemplateFile(tpl, n, ka).raw,
   );
+  // The merge rewrote the AUTHORED zones.json; re-render the effective document
+  // so the planes and any module install see the current resolution.
+  if (rc === 0 && !opts.diff) {
+    try {
+      refreshEffective(join(cfg, "zones.json"));
+    } catch (e) {
+      warn(`merge: could not render zones.effective.json (${(e as Error).message})`);
+    }
+  }
+  return rc;
 }
 
 export function run(argv: string[], client?: PlaneClient): number {
@@ -688,6 +821,9 @@ export function run(argv: string[], client?: PlaneClient): number {
       case "disable":
       case "manual":
         cmdZoneState(cmd, opts);
+        return 0;
+      case "bind":
+        cmdBind(opts);
         return 0;
       case "reconcile":
         cmdReconcile(opts, client ?? new CliPlaneClient());

@@ -35,6 +35,7 @@ import { join } from "path";
 import { CL, GN, RD, YW } from "../../../lib/ts/src/cli";
 import { Zone, ZonesDoc } from "./types";
 import { loadZones } from "./zones";
+import { resolveServes } from "./serves";
 import {
   CONTROL_PLANE_ZONE,
   TIER_INTERNET,
@@ -406,6 +407,36 @@ function checkTierInvariants(doc: ZonesDoc, rep: Reporter): void {
   if (i4 === 0) rep.ok("I4: every tiered zone conforms to a defined archetype");
 }
 
+// ── 7. `serves` link resolution (ADR-014 D2) ─────────────────────────
+// A link that cannot resolve is a hard ERROR, not a warning: the derived edge
+// simply would not exist, so the operator's declared reachability is silently
+// absent. Same for `serves` on a zone type that must not carry it.
+function checkServes(doc: ZonesDoc, configDir: string, rep: Reporter): void {
+  const linked = Array.from(doc.zones.values()).filter(
+    (z) => typeof z.serves === "string" && z.serves.length > 0,
+  );
+  if (linked.length === 0) {
+    rep.note("serves: no zone declares a 'serves' link (pre-ADR-014, or all links are literal)");
+    return;
+  }
+  const scratch: Record<string, unknown> = {};
+  for (const [k, v] of Object.entries(doc.raw)) {
+    if (v !== null && typeof v === "object" && !Array.isArray(v)) {
+      scratch[k] = { ...(v as Record<string, unknown>) };
+    } else {
+      scratch[k] = v;
+    }
+  }
+  const r = resolveServes(doc, scratch, configDir);
+  for (const e of r.errors) rep.err(`serves: ${e}`);
+  if (r.errors.length === 0) {
+    rep.ok(
+      `serves: ${r.edges.length} link(s) resolve — ` +
+        r.edges.map((e) => `${e.zone}→${e.environment}(${e.serviceZone})`).join(", "),
+    );
+  }
+}
+
 export interface ZonesCheckOpts {
   zonesFile: string;
   configDir: string;
@@ -422,6 +453,7 @@ export function runChecks(doc: ZonesDoc, configDir: string, strict: boolean): Ch
   checkMgmtInvariant(doc, rep);
   checkInstallation(doc, configDir, rep);
   checkTierInvariants(doc, rep);
+  checkServes(doc, configDir, rep);
   return result;
 }
 

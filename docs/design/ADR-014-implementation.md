@@ -3,7 +3,7 @@
 **Companion to:** [ADR-014 — Zone ↔ Environment Lifecycle & Operations](<../ADR/ADR-014 - Zone and Environment Lifecycle.md>) (the *why* + the decided design)
 **Closes:** #424 (client/IoT zones ↔ environments undefined) · #419 (stale zone references not resolved)
 **Purpose of this doc:** one place that (1) records **implementation-level decisions** (including the three forks ADR-014 flagged for confirmation), (2) breaks the work into **packages** with deliverables/dependencies/test criteria, and (3) **tracks live execution state**.
-**Status:** In progress — P0 ✅, P1 ✅, P2 ✅, P3 next
+**Status:** In progress — P0 ✅, P1 ✅, P2 ✅, P3 ✅, P4 next
 **Branch:** `feat/adr-014-zone-lifecycle`, cut from `main`
 **Started:** 2026-08-22
 
@@ -171,7 +171,56 @@ The effective file is **generated, never hand-edited, never merged** — regener
 - Errors: `serves` naming a missing environment is a hard error at reconcile; `serves` on a Service/Management/Overlay zone is a hard error at validate.
 - `merge` back-fill: for each Client/IoT zone whose literal `access-to`/`pinhole-allowed-from` references a zone that is the `network.zone` of a known environment, set `serves` and drop the now-derived literal. Idempotent — a converged install re-runs it as a no-op. (**Resolves ADR-014's one open item**: the back-fill runs *inside* `merge`, because merge is already the rename-aware step that holds the environment context.)
 
-**Test criteria** — unit: `serves` renders the right edges both directions; an `isolated` target never gains an inbound `access-to`; clearing `serves` drops the edges on the next render; back-fill is idempotent. **Regression (the ADR's own acceptance line):** after `init` renames `srv → <env>`, a `serves`-linked client zone stays converged across `merge` with no stale service reference.
+**Test criteria** — unit: `serves` renders the right edges; an `isolated` target never gains an inbound `access-to`; clearing `serves` drops the edges on the next render; back-fill is idempotent. **Regression (the ADR's own acceptance line):** after `init` renames `srv → <env>`, a `serves`-linked client zone stays converged across `merge` with no stale service reference.
+
+**Outcome (2026-08-22): ✅ green — 197 unit + 15 CLI, `tsc` clean; F2 invariant proven on live data.**
+
+#### D-LOCAL — ADR-014 D2's symmetric derivation is wrong; corrected to a locality rule
+
+D2's prose derives a **pair** of edges: "add the environment's `network.zone` to this client zone's effective `access-to`; **and** add this zone to that service zone's `pinhole-allowed-from`." Implemented literally, and run against a copy of this system's real config, it **invented edges the authored document never had**:
+
+```
+rossen.access-to:            [dmz, internet]  ->  [dmz, internet, iot]      # a NEW zone-wide pass rule
+rossen.pinhole-allowed-from: [dmz]            ->  [dmz, home]               # a NEW declared permission
+```
+
+That is an F2 violation — the branch must re-cut no firewall rule — and it was caught only because the live check compared effective-before against effective-after rather than trusting the unit fixtures. **The corrected rule:**
+
+> **`serves` only ever modifies the zone that DECLARES it.**
+> Client/Guest `Z serves E` → `Z.access-to += S`. IoT `Z serves E` → `Z.pinhole-allowed-from += S`.
+
+Each reproduces exactly the literal the template wired by hand, so the back-fill is authored-only. Two edges are deliberately **not** derived:
+- `S.pinhole-allowed-from += Z` (client side) — unnecessary while the client reaches `S` zone-wide, and it is precisely what the deferred F2 conversion adds. Deriving it now would pre-empt a decision this branch defers.
+- `S.access-to += Z` (non-isolated IoT) — that edge is **authored on the service zone** and is already rename-safe: what `init` renames is the service zone's own *key*, while the IoT names it lists are stable. #424 is about references *to* the renamed zone, which is the direction `serves` handles.
+
+Side benefit: **R2 becomes structural rather than conditional.** The IoT branch touches only `pinhole-allowed-from`, so an isolated zone cannot gain an inbound `access-to` by any code path — there is no `isolated` test to get wrong.
+
+#### Live verification (the F2 proof)
+
+`merge` on a copy of `config/` linked exactly two zones and left the effective graph byte-identical:
+
+```
+serves back-fill: 2 zone(s) linked to an environment
+    iot  → serves 'rossen' (dropped literal 'rossen' from pinhole-allowed-from)
+    home → serves 'rossen' (dropped literal 'rossen' from access-to)
+
+EFFECTIVE GRAPH IDENTICAL: True
+validate: serves: 2 link(s) resolve — iot→rossen(rossen), home→rossen(rossen)
+          10 ok, 0 warning(s), 0 error(s)
+```
+
+The four `srv*`-referencing literals (`iotLocal`, `iotCloud`, `iotCams` pinholes, `work.access-to`) are correctly **left alone**: they name retired zones, not environment zones, so they are stale rather than links. Pruning them is `retire`'s job in P6, not the merge's.
+
+#### Consumer wiring (D-C4)
+
+| Consumer | Change |
+|---|---|
+| `zone-manager` (opnsense plane) | `reconcile` renders first and passes `zones.effective.json` via the new `ReconcileOpts.effectiveFile` |
+| `rules_manager.py` | `zones.effective.json` prepended to `_find_zones_file`'s search order, authored file as fallback |
+| proxy `install-service.sh` / `update-service.sh` | `ZONES_FILE` prefers the effective doc when present |
+| `distribute` | unchanged — nodes need only `vlantag`/`ip` |
+
+The effective file is re-rendered on every authored write (zone add/delete/state, `bind`, `merge`) and at the start of `reconcile`. A broken link is **non-fatal** on a zone add (a missing environment file must not block zone authoring) but **fatal** to `reconcile` and an **error** in `validate` — those are the verbs that converge and audit.
 
 ---
 
@@ -249,8 +298,8 @@ See [Rollout campaign](#rollout-campaign) — three staged tests, gated on P0–
 | P0 | Branch + repo pointing + baseline | — | ✅ | baseline captured | branch live at `2f0ffd0`; system tracks it; snapshot deferred to Stage 1 (see note) |
 | P1 | Schema foundation (`tier`/`isolated`/`serves` + archetypes) | P0 | ✅ | 160 unit + 15 CLI, `tsc` clean | additive only; +12 new tests |
 | P2 | Read-side: I1–I4 + filtered `list` | P1 | ✅ | 176 unit + 15 CLI, `tsc` clean; live gate exit 0 | +16 tests; new `src/archetypes.ts` |
-| P3 | `serves` + `bind` + effective rendering | P1, P2 | 🟦 | — | carries D-C4; closes #424 core |
-| P4 | Archetypes on `add` | P1 | ⬜ | — | subsumes D3 |
+| P3 | `serves` + `bind` + effective rendering | P1, P2 | ✅ | 197 unit + 15 CLI; live F2 proof green | +21 tests; new `src/serves.ts`; **D2 corrected — see D-LOCAL** |
+| P4 | Archetypes on `add` | P1 | 🟦 | — | subsumes D3 |
 | P5 | `environment add --create-zone` / reconcile materialise | P3 | ⬜ | — | env-mgr seam |
 | P6 | `init` profiles + template cleanup + `retire` | P3, P4 | ⬜ | — | heaviest; carries F3 |
 | P7 | #419 module refs + validation gates | P6 | ⬜ | — | closes #419 |

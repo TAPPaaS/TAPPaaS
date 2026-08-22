@@ -24,6 +24,11 @@ export interface ReconcileOpts {
   apply: boolean;
   only?: Plane; // run a single plane
   zonesFile: string;
+  // The document the PLANES consume (ADR-014 D-C4). zones.json is the AUTHORED
+  // source; `serves` links are resolved into zones.effective.json, and that is
+  // what zone-manager must see or the derived edges would never reach the
+  // firewall. Defaults to zonesFile when a caller renders nothing.
+  effectiveFile?: string;
 }
 
 // Run the reconcile pass. Returns a structured report; the CLI prints it.
@@ -31,7 +36,7 @@ export function reconcileAll(client: PlaneClient, opts: ReconcileOpts): Reconcil
   const planes = opts.only ? [opts.only] : PLANE_ORDER;
   const results: PlaneResult[] = [];
   for (const plane of planes) {
-    results.push(client.reconcile(plane, opts.apply, opts.zonesFile));
+    results.push(client.reconcile(plane, opts.apply, opts.effectiveFile ?? opts.zonesFile));
   }
   const failed = computeFailed(results, opts.apply);
   return { apply: opts.apply, results, failed };

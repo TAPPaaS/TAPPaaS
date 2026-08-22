@@ -39,6 +39,7 @@
 import { existsSync, readFileSync, writeFileSync, renameSync, mkdtempSync } from "fs";
 import { dirname, join } from "path";
 import { isDocKey } from "./zones";
+import { backfillServes } from "./serves";
 
 // Operator-pinned fields per zone — never adopted from the release source (#209).
 //
@@ -250,6 +251,9 @@ export interface ZonesMergeOpts {
   name: string; // installation/site name (rename target)
   keepActive?: ReadonlySet<string>; // occupancy guard for the rename
   diff?: boolean; // show changes, write nothing
+  // Config root holding environments/ — enables the ADR-014 `serves` back-fill.
+  // Absent ⇒ the back-fill is skipped (tests that only exercise merge rules).
+  configDir?: string;
 }
 
 export interface Logger {
@@ -351,6 +355,20 @@ export function runZonesMerge(
   if (opts.diff) {
     log.info("  --diff: no changes written");
     return 0;
+  }
+
+  // 4.5 ADR-014 D2 back-fill: turn literal service-zone references into
+  //     symbolic `serves` links. Runs here because merge already holds the
+  //     rename context and runs on every update. The AUTHORED doc changes; the
+  //     EFFECTIVE doc (what the planes see) does not.
+  if (opts.configDir !== undefined) {
+    const bf = backfillServes(r.merged, opts.configDir);
+    if (bf.changes.length > 0) {
+      log.info(`  serves back-fill: ${bf.changes.length} zone(s) linked to an environment`);
+      for (const c of bf.changes) {
+        log.info(`      ${c.zone} → serves '${c.environment}' (dropped literal '${c.serviceZone}' from ${c.droppedFrom})`);
+      }
+    }
   }
 
   // 5. write merged current (only if it changed) + advance baseline ← source.
