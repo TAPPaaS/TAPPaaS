@@ -134,27 +134,22 @@ else
   exit 1
 fi
 
-# Seed zones.json from the canonical source (network-manager) only on first install.
-# Existing /home/tappaas/config/zones.json may contain operator customizations and
-# must not be overwritten here; ongoing release drift is reconciled by
-# `network-manager merge` (run from pre-update.sh on every update-tappaas;
-# #209 / ADR-007 Design A). NOTE: on a fresh install the `init --name`
-# step further below OVERWRITES both this raw zones.json and zones.json.orig with
-# the renamed-namespace version (and writes zones.rename.json), so the raw seed
-# here is only a transient pre-rename placeholder.
-if [ ! -f /home/tappaas/config/zones.json ]; then
-  cp /home/tappaas/TAPPaaS/src/foundation/tappaas-cicd/manager/network-manager/zones.json /home/tappaas/config/zones.json
-  _info "Seeded /home/tappaas/config/zones.json from network-manager"
-else
+# zones.json is NOT raw-copied here (ADR-014 D7). `network-manager init core`
+# further below CREATES it from the core profile — a raw copy would plant every
+# zone the template carries (including the opt-in IoT set), and since profiles are
+# additive and existing-wins, those zones would then be preserved forever as if
+# the operator had chosen them. An existing zones.json is left untouched: it may
+# hold operator customizations, and release drift is reconciled by
+# `network-manager merge` on every update-tappaas (#209 / ADR-007 Design A).
+if [ -f /home/tappaas/config/zones.json ]; then
   _info "Preserving existing /home/tappaas/config/zones.json (not overwriting)"
+else
+  _info "zones.json will be created by 'network-manager init core' below"
 fi
-# Seed zones.json.orig as the merge baseline (#209). Always set to the source
-# at install time, so the first post-#209 update preserves any existing
-# operator customizations (current diverged from orig=source → pinned).
-if [ ! -f /home/tappaas/config/zones.json.orig ]; then
-  cp /home/tappaas/TAPPaaS/src/foundation/tappaas-cicd/manager/network-manager/zones.json /home/tappaas/config/zones.json.orig
-  _info "Seeded /home/tappaas/config/zones.json.orig (3-way merge baseline)"
-fi
+# zones.json.orig (the 3-way merge baseline) and zones.rename.json are ALSO
+# seeded by init, from the FULL renamed template — the merge source must contain
+# every zone the release ships, whichever profiles are installed, or a field fix
+# to an uninstalled zone could never be adopted later.
 
 # --- Install scripts as symlinks into /home/tappaas/bin/ ---
 echo ""
@@ -213,8 +208,13 @@ done
 # `merge` from re-introducing srv (the old duplicate-VLAN corruption). Guarded on
 # the default environment file so a re-run does not clobber a customised zones.json.
 if [ ! -f "/home/tappaas/config/environments/${ORG}.json" ]; then
-  _info "Initialising zones for '${ORG}' (network-manager init)..."
-  /home/tappaas/bin/network-manager init --name "$ORG" --force \
+  _info "Initialising zones for '${ORG}' (network-manager init core)..."
+  # ADR-014 D7: `core` is the minimal coherent install — mgmt, wan, the three
+  # overlays, the renamed <ORG> service zone, home, guest and dmz. The IoT
+  # segment set is OPT-IN: run `network-manager init iot --name <ORG>` on a site
+  # that has smart-home/IoT devices. init also seeds zones.rename.json and
+  # zones.json.orig from the full renamed template (Design A).
+  /home/tappaas/bin/network-manager init core --name "$ORG" --force \
     || _error "  init reported a non-zero rc"
   _info "Creating the mgmt + ${ORG} environments..."
   # `environment-manager add` with no positional <env> seeds the minimal set

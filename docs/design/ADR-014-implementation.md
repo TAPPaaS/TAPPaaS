@@ -3,7 +3,7 @@
 **Companion to:** [ADR-014 — Zone ↔ Environment Lifecycle & Operations](<../ADR/ADR-014 - Zone and Environment Lifecycle.md>) (the *why* + the decided design)
 **Closes:** #424 (client/IoT zones ↔ environments undefined) · #419 (stale zone references not resolved)
 **Purpose of this doc:** one place that (1) records **implementation-level decisions** (including the three forks ADR-014 flagged for confirmation), (2) breaks the work into **packages** with deliverables/dependencies/test criteria, and (3) **tracks live execution state**.
-**Status:** In progress — P0 ✅, P1 ✅, P2 ✅, P3 ✅, P4 ✅, P5 ✅, P6 next
+**Status:** In progress — P0–P6 ✅, P7 next
 **Branch:** `feat/adr-014-zone-lifecycle`, cut from `main`
 **Started:** 2026-08-22
 
@@ -285,6 +285,50 @@ The heaviest package: it rewrites `zonesinit.ts` and carries F3.
 
 **Test criteria** — `init core` then `init iot` is order-independent and idempotent; neither ships a test zone nor any `srv{Home,…}`; a re-run over a live `zones.json` preserves operator-configured zones (#427 regression); `retire --apply` on a fixture deletes exactly the unoccupied set, **keeps an Active-or-occupied `iot`** (R1's guard), and leaves no dangling reference (P2's I-checks pass afterwards); `srv` survives every run.
 
+**Outcome (2026-08-22): ✅ green — 236 unit (+42) + 16 CLI, `tsc` clean; the full migration rehearsed against a copy of this system's live config.**
+
+#### Template
+
+Now ships **13 zones**, down from 24. Dropped: `srvHome`/`srvWork`/`srvCust`/`srvDev`/`srvTest`, `work`, `iot`, and the four `test*`. Every remaining zone carries `tier`; `iotCams`/`iotUntrust` carry `isolated`; `home` and the three controlled IoT zones carry the `serves: "srv"` placeholder. A new `_profiles` block declares the bundles — install-time metadata, read from the shipped template and deliberately never copied into a live `zones.json`.
+
+`work` is dropped from the template (D7: a second client segment is generated on demand) but is **never retired** from an existing install — it is a legitimate client zone that is merely switched off.
+
+#### Three implementation decisions the ADR did not settle
+
+1. **Profiles need `grants`.** D7 says a profile "only ever adds/activates its zones", but an IoT install must also give the service and client zones *reach* to the devices — an edge the zone definitions alone cannot express, because the targets belong to another profile. So a profile may declare `grants: { <zone>: [refs] }`, applied additively and skipped entirely when the target zone is absent (a grant never authors a dangling reference). `iot` grants `mgmt` visibility of all four, `<env>` reach to `iotLocal`/`iotCloud`, and `home` reach to `iotCloud`/`iotLocal` — exactly what the retired `srvHome` used to carry.
+2. **`wan` belongs in `core`.** The ADR's D7 table omits it entirely — an oversight: it is the switch-internal ISP hand-off that keeps the HA firewall's uplink across failover, and no install works without it. It ships Manual alongside the three overlays.
+3. **The merge source stays the FULL renamed template**, not the installed profile subset. If the source were profile-scoped, a field fix to an uninstalled zone could never be adopted later. So `zones.rename.json` == `zones.json.orig` == the whole renamed template, while the live `zones.json` is the installed subset — which changes the old "current == orig == rename on a fresh install" invariant to "current ⊆ rename == orig". The shell test was updated to assert the new shape.
+
+#### `validate --effective` — a blind spot found and closed
+
+Moving the client→service edge out of the authored file and into the render meant `validate` stopped being able to see it: a fresh `init core` reported a **completely clean** graph while the rendered graph carried the known upward `home → <env>` edge. Reporting clean would have been misleading, so `validate` gained `--effective` (render the links, then audit) and the authored-scope run now emits a scope note naming how many links it could not judge.
+
+```
+validate              → 9 ok, 0 warnings   + "1 zone(s) carry a 'serves' link … re-run with --effective"
+validate --effective  → 8 ok, 1 warning    I1: home (tier 2) → acme (tier 1), an UPWARD edge
+```
+
+Exactly one warning on a brand-new install, and it is the deferred F2 item — honestly reported rather than hidden by where the edge is stored.
+
+#### Live migration rehearsal (against a copy of `config/`)
+
+`merge` → `retire --apply` on a copy of this system: **24 zones → 14**, all 10 F3 candidates removed (and `work`, `srv` untouched), every stale reference stripped, `tier` back-filled by the merge on all but `work`, four `serves` links resolving.
+
+**The F2 invariant, stated precisely:**
+
+| | before | after |
+|---|---|---|
+| **`access-to`** (the only field compiling to pass rules) | — | **byte-identical** |
+| **`pinhole-allowed-from`** (a policy gate; creates no rule) | `iotCams: [srvHome, srvWork]`, `iotLocal: [srvHome]`, `iotCloud: [home, srvHome]` | `[rossen]`, `[rossen]`, `[home, rossen]` |
+
+**Zero firewall rules change.** The pinhole lists change, and that change *is* #424 landing: those zones previously named a renamed-away ghost, so a module in `rossen` literally could not declare a pinhole into `iotLocal` or `iotCams`. Now it can.
+
+`validate --effective` on the migrated result: **9 ok, 1 warning, 0 errors** — the single warning being the known F2 edge.
+
+#### install.sh
+
+Stops raw-copying the template to `config/zones.json`; `init core` creates it. The raw copy would have planted every zone the template carries — including the opt-in IoT set — and since profiles are additive and existing-wins, those would then have been preserved forever as if the operator had chosen them. `init` also seeds `zones.rename.json`/`zones.json.orig` from the full renamed template, so nothing is lost.
+
 ---
 
 ### P7 — #419: stale module references + validation gates
@@ -339,8 +383,8 @@ See [Rollout campaign](#rollout-campaign) — three staged tests, gated on P0–
 | P3 | `serves` + `bind` + effective rendering | P1, P2 | ✅ | 197 unit + 15 CLI; live F2 proof green | +21 tests; new `src/serves.ts`; **D2 corrected — see D-LOCAL** |
 | P4 | Archetypes on `add` | P1 | ✅ | 205 unit + 15 CLI, `tsc` clean | +8 tests; fixed a pre-existing `all`-wildcard bug |
 | P5 | `environment add --create-zone` / reconcile materialise | P3 | ✅ | 27 env-mgr + 205/15 net-mgr, `tsc` clean | +7 tests; D1 semantics clarified |
-| P6 | `init` profiles + template cleanup + `retire` | P3, P4 | 🟦 | — | heaviest; carries F3 |
-| P7 | #419 module refs + validation gates | P6 | ⬜ | — | closes #419 |
+| P6 | `init` profiles + template cleanup + `retire` | P3, P4 | ✅ | 236 unit + 16 CLI, `tsc` clean; live migration verified | +42 tests; new `src/retire.ts`; `validate --effective` added |
+| P7 | #419 module refs + validation gates | P6 | 🟦 | — | closes #419 |
 | P8 | Docs + ADR-014 → Accepted + issue closure | P1–P7 | ⬜ | — | |
 | P9 | Rollout campaign (3 stages) | P8 | ⬜ | — | |
 

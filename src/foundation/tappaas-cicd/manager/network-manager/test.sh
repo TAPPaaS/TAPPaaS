@@ -70,23 +70,39 @@ if [[ -f "${UNIT_TSCONFIG}" ]]; then
         # (rootDir is the tappaas-cicd root, shared lib/ts included); run the real CLI
         # entry against a temp output and assert the transformed file on disk.
         ZINIT_OUT="$(mktemp -d)/z.json"
-        # Isolate --config-dir to an empty dir so the occupancy scan finds no
-        # tenants (default configDir is the LIVE config, which would keep occupied
-        # legacy zones Active). With no occupancy, srvWork is inactivated as asserted.
+        # Isolate --config-dir to an empty dir so the occupancy scan finds no tenants
+        # (the default configDir is the LIVE config).
         ZINIT_CFG="$(mktemp -d)"
-        if run_ts "NM_TEMPLATE='${HERE}/zones.json' node '${DIST_TEST}/manager/network-manager/src/main.js' init --name acme --from '${HERE}/zones.json' --out '${ZINIT_OUT}' --config-dir '${ZINIT_CFG}'" >/dev/null 2>&1 \
+        # ADR-014 D7: `init core` emits exactly the core set — renamed srv -> acme
+        # (Active), home/guest kept, dmz Mandatory — and ships NO IoT or test zones
+        # and none of the retired srv* zones. home's service edge is DERIVED from
+        # `serves`, so the authored access-to must NOT list acme.
+        if run_ts "NM_TEMPLATE='${HERE}/zones.json' node '${DIST_TEST}/manager/network-manager/src/main.js' init core --name acme --from '${HERE}/zones.json' --out '${ZINIT_OUT}' --config-dir '${ZINIT_CFG}'" >/dev/null 2>&1 \
             && [[ -f "${ZINIT_OUT}" ]] \
-            && run_ts "node -e 'const z=require(\"${ZINIT_OUT}\"); process.exit((z.acme&&!z.srv&&z.home&&z.guest&&z.acme.state===\"Active\"&&z.srvWork.state===\"Inactive\"&&!z.home[\"access-to\"].includes(\"srvHome\")&&z.home[\"access-to\"].includes(\"acme\"))?0:1)'" >/dev/null 2>&1; then
-            ok "init CLI transforms template to temp --out (renames + inactivations + ref-integrity)"
+            && run_ts "node -e 'const z=require(\"${ZINIT_OUT}\"); const gone=[\"srv\",\"srvHome\",\"srvWork\",\"srvCust\",\"srvDev\",\"srvTest\",\"work\",\"iot\",\"test\",\"testAllowA\",\"testAllowB\",\"testPinhole\",\"iotLocal\",\"iotCloud\",\"iotCams\",\"iotUntrust\"]; const ok = z.acme&&z.home&&z.guest&&z.dmz&&z.mgmt&&z.acme.state===\"Active\"&&z.home.serves===\"acme\"&&!z.home[\"access-to\"].includes(\"acme\")&&gone.every(k=>!(k in z))&&!(\"_profiles\" in z); process.exit(ok?0:1)'" >/dev/null 2>&1; then
+            ok "init core CLI: exact core set, srv->acme Active, serves-bound home, no iot/test/legacy zones"
         else
             bad "init CLI smoke FAILED"
         fi
+
+        # ── init iot composes on top (offline) ──
+        if run_ts "NM_TEMPLATE='${HERE}/zones.json' node '${DIST_TEST}/manager/network-manager/src/main.js' init iot --name acme --from '${HERE}/zones.json' --out '${ZINIT_OUT}' --config-dir '${ZINIT_CFG}'" >/dev/null 2>&1 \
+            && run_ts "node -e 'const z=require(\"${ZINIT_OUT}\"); const ok = z.iotLocal&&z.iotCloud&&z.iotCams&&z.iotUntrust&&z.acme&&z.home&&z.iotUntrust.state===\"Active\"&&z.acme[\"access-to\"].includes(\"iotLocal\")&&z.acme[\"access-to\"].includes(\"iotCloud\")&&z.mgmt[\"access-to\"].includes(\"iotCams\")&&z.iotCams.isolated===true; process.exit(ok?0:1)'" >/dev/null 2>&1; then
+            ok "init iot CLI: composes onto core, adds the 4 IoT zones + the grants they need"
+        else
+            bad "init iot compose FAILED"
+        fi
         # Design A: init also seeds zones.rename.json + zones.json.orig
         # beside a custom --out, all in the renamed namespace (current==orig==rename).
+        # Design A, re-cut for D7: the merge SOURCE/baseline are the FULL renamed
+        # template (every zone the release ships, whichever profiles are installed)
+        # — so rename == orig, and the live zones.json is the installed SUBSET.
+        # If the source were profile-scoped, a field fix to an uninstalled zone
+        # could never be adopted later.
         ZINIT_DIR="$(dirname "${ZINIT_OUT}")"
         if [[ -f "${ZINIT_DIR}/zones.rename.json" && -f "${ZINIT_DIR}/zones.json.orig" ]] \
-            && run_ts "node -e 'const fs=require(\"fs\");const a=fs.readFileSync(\"${ZINIT_OUT}\",\"utf8\");const r=fs.readFileSync(\"${ZINIT_DIR}/zones.rename.json\",\"utf8\");const o=fs.readFileSync(\"${ZINIT_DIR}/zones.json.orig\",\"utf8\");const rj=JSON.parse(r);process.exit((a===r&&a===o&&rj.acme&&!rj.srv)?0:1)'" >/dev/null 2>&1; then
-            ok "init seeds zones.rename.json + zones.json.orig (current==orig==rename, renamed namespace)"
+            && run_ts "node -e 'const fs=require(\"fs\");const r=fs.readFileSync(\"${ZINIT_DIR}/zones.rename.json\",\"utf8\");const o=fs.readFileSync(\"${ZINIT_DIR}/zones.json.orig\",\"utf8\");const rj=JSON.parse(r);const cur=JSON.parse(fs.readFileSync(\"${ZINIT_OUT}\",\"utf8\"));const curZones=Object.keys(cur).filter(k=>!k.startsWith(\"_\"));process.exit((r===o&&rj.acme&&!rj.srv&&curZones.every(k=>k in rj))?0:1)'" >/dev/null 2>&1; then
+            ok "init seeds zones.rename.json == zones.json.orig (full renamed template; live doc is a subset)"
         else
             bad "init 3-file seeding (Design A) FAILED"
         fi
@@ -111,8 +127,14 @@ if [[ -f "${UNIT_TSCONFIG}" ]]; then
         # Good fixture (the distributed template, default-active mgmt) exits 0;
         # a fixture with a dangling access-to ref exits non-zero. The temp
         # config-dir holds only zones.json so the installation check is a no-op.
+        # The raw template is NOT a valid live config: `srv` is pre-rename and its
+        # `serves` placeholders name an environment that only exists after init.
+        # Build a real one — init core, plus the environment its zones are bound to.
         ZC_DIR="$(mktemp -d)"
-        cp "${HERE}/zones.json" "${ZC_DIR}/zones.json"
+        mkdir -p "${ZC_DIR}/environments"
+        printf '{"name":"acme","displayName":"Acme","ownerOrg":"o","network":{"zone":"acme"}}\n' \
+            > "${ZC_DIR}/environments/acme.json"
+        run_ts "NM_TEMPLATE='${HERE}/zones.json' node '${DIST_TEST}/manager/network-manager/src/main.js' init core --name acme --from '${HERE}/zones.json' --out '${ZC_DIR}/zones.json' --config-dir '${ZC_DIR}'" >/dev/null 2>&1
         if run_ts "node '${DIST_TEST}/manager/network-manager/src/main.js' zones-check --zones '${ZC_DIR}/zones.json' --config-dir '${ZC_DIR}'" >/dev/null 2>&1; then
             ok "zones-check CLI exits 0 on a well-formed zones.json"
         else

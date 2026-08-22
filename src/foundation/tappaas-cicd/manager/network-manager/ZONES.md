@@ -215,47 +215,93 @@ One compiled CLI, `network-manager`, owns every flow that touches `zones.json`:
 | `add <n> [--from-zone S] [--vlan N] [--check]` | Author a new zone **and reconcile all four planes** (so the VLAN reaches everything). `--from-zone` inherits type/bridge/access. |
 | `delete <n> [--check]` | Disable the zone, reconcile all planes, then drop the key. |
 | `reconcile [--apply] [--only <plane>]` | The 4-plane converge loop — `opnsense \| proxmox \| switch \| ap`. Default is a non-mutating dry-run (exit 2 = drift). |
-| `init --name <N>` _(alias `zones-init`)_ | Install-time template transform (the per-installation rename, see below). |
+| `init [<profile>] --name <N>` _(alias `zones-init`)_ | Apply a composable install profile (`core` / `iot`) — additive, idempotent, order-independent (see below). |
+| `retire [--apply]` | Remove zones a release stopped shipping, under the liveness + occupancy guard. |
+| `bind <n> --environment <env>` | Link a Client/IoT/Guest zone to an environment (`serves`). |
 | `merge [--diff]` _(alias `zones-merge`)_ | Rename-aware 3-way reconciliation against the upstream template; run on every `update-tappaas` (replaces `apply-zones-merge.sh`). |
-| `validate [--strict]` _(alias `zones-check`)_ | Offline consistency audit (dangling refs, missing fields, lost zones). |
+| `validate [--strict] [--effective]` _(alias `zones-check`)_ | Offline consistency audit (dangling refs, missing fields, the tier invariants I1–I4). `--effective` audits the rendered graph rather than the authored file. |
 | `distribute [--dry-run]` _(alias `zones-distribute`)_ | Push the live `zones.json` to every Proxmox node so VMs can be created in its zones. |
 
 `environment-manager` calls `network-manager` when an environment needs a zone
 created or checked; domain/cert lifecycle stays with `environment-manager`.
 
-## The per-installation rename and the three-file model
+## Install profiles and the per-installation rename
 
-The distributed template encodes the generic, org-agnostic zones (`srv`, `home`,
-`guest`, the per-category `srvHome`/`srvWork`/… etc.). A fresh install runs
-`network-manager init --name <N>` once to stamp the zones for the
-installation named `<N>`:
+The distributed template carries every zone the release ships. A fresh install
+applies one or more **profiles** — additive, idempotent bundles — rather than
+taking the whole template and switching off what it does not want:
 
-- **rename** `srv` → `<N>` (forced **Active** — the default service zone). `home`
-  and `guest` are **site-local client-role zones** and keep their template names —
-  there is one of each per site, so an org prefix would not distinguish anything,
-  and the zone key drives the client DNS domain `<zone>.internal` (#425). Its
-  `home` `access-to` reference to the now-inactivated `srvHome` is redirected to
-  the active `<N>` default zone;
-- **state → Inactive** on the per-category zones it supersedes (`srvHome`,
-  `srvWork`, `srvCust`, `srvDev`, `work`), **except** any zone still referenced by
-  a deployed module's `zone0` (the occupancy guard, so a live service is never
-  silently de-provisioned);
-- **rewrite every zone-name reference** (`access-to`, `pinhole-allowed-from`, …)
-  through the rename map (`srv` → `<N>`).
+| Profile | Zones |
+|---------|-------|
+| **`core`** (default) | `mgmt` · `wan` · the `netbird`/`edge`/`admin` overlays · `<N>` (the renamed `srv`, forced Active) · `home` · `guest` · `dmz` (Mandatory) |
+| **`iot`** | `iotLocal` · `iotCloud` · `iotCams` · `iotUntrust` — all Active, each `serves` the default environment |
 
-So a brand-new `myOrg` system has an Active footprint of `myOrg`, `home`,
-`guest`, `iotLocal`, `iotCloud`, `iotCams` (+ `dmz` Mandatory; `mgmt`/`netbird`
-Manual); everything else is Inactive/Disabled — defined, ready to activate.
+```bash
+network-manager init core --name acme     # the minimal coherent install
+network-manager init iot  --name acme     # opt in to the IoT segment set
+```
+
+`core` is all a headless/server TAPPaaS needs. A site with no smart-home devices
+never runs `init iot` and never carries those zones. Extra service zones, a
+second client segment and so on are generated on demand with
+`add --archetype …` or `environment add --create-zone` — **no dormant
+"Available" zones are shipped**, because dormant zones were pure surface area
+and the `srv*` ones were exactly the stale-reference surface of #424.
+
+Profiles are **additive** (a profile only adds its own zones, plus the
+`access-to` entries those zones need on zones from another profile),
+**idempotent** (re-applying is a byte-level no-op), **order-independent**, and
+**non-destructive** — existing zones always win, so an init re-run can never
+rebuild a live file from template defaults (#427).
+
+### The rename: `srv → <N>`, and nothing else
+
+`init` stamps the installation name `<N>` (= `site.defaultEnvironment`) into the
+zone namespace:
+
+- **rename** `srv` → `<N>`, forced **Active** — the default service zone every
+  app module lands in unless its JSON names another;
+- **`home` and `guest` keep their names.** They are site-local client-*role*
+  zones — there is one of each per site, so an org prefix would distinguish
+  nothing, and the zone key drives the client DNS domain `<zone>.internal`, so
+  renaming one re-domains every device (#425);
+- **every zone-name reference is rewritten** through the same map — `access-to`,
+  `pinhole-allowed-from`, and the `serves` placeholder.
+
+That last point is what makes a shipped client/IoT zone come out of `init`
+already bound: the template writes `serves: "srv"`, and after the rename it
+reads `serves: "<N>"` — the default *environment*, which shares its name with
+the default service zone by construction (ADR-007d/#426). No literal
+service-zone reference is left to go stale.
+
+### Retiring what a release stopped shipping
+
+Dropping a zone from the template does **not** remove it from an existing
+install — the 3-way merge deliberately keeps anything present locally but absent
+upstream, so a release can never silently delete an operator's zone. Removal is
+therefore an explicit, guarded step:
+
+```bash
+network-manager retire            # dry-run
+network-manager retire --apply
+```
+
+`retire` considers an **explicit list** (`srvHome`, `srvWork`, `srvCust`,
+`srvDev`, `srvTest`, `iot`, `test`, `testAllowA`, `testAllowB`, `testPinhole`) —
+never "everything Inactive" — and removes one only when it is **both** not
+Active/Mandatory/Manual **and** not named by any installed module's
+`zone`/`zone0`. Anything else is kept with the reason. `srv` (the rename source)
+and `work` (a client zone that is merely switched off) are never retired.
 
 ### Zone stability — installed modules stay put
 
-A zone kept Active by the occupancy guard (a legacy zone such as `srvWork` still
-hosting deployed modules) is the **intended steady state**, not a migration TODO.
-Already-installed modules **stay in their zone**; the network lifecycle never moves
-a running service to another zone and never auto-inactivates a zone that has live
-services. To relocate a module to a different zone, **back up its data, uninstall
-it, and reinstall it in the target zone** — there is no in-place re-home (a zone
-change means a new VLAN/subnet/IP and re-wired dependents).
+A retired-set zone kept by the occupancy guard (still hosting deployed modules)
+is the **intended steady state**, not a migration TODO. Already-installed modules
+**stay in their zone**; the network lifecycle never moves a running service and
+never auto-inactivates a zone that has live services. To relocate a module, back
+up its data, uninstall it, and reinstall it in the target zone — there is no
+in-place re-home (a zone change means a new VLAN/subnet/IP and re-wired
+dependents).
 
 ### Three files, run on every update (rename-aware 3-way merge)
 
@@ -265,9 +311,11 @@ all in the installation's renamed namespace:
 - **`zones.json`** — *current*: the live, per-installation zones.
 - **`zones.json.orig`** — *baseline*: the version of the source the current was
   last merged from.
-- **`zones.rename.json`** — *source*: the upstream repo template **with this
-  installation's rename applied** (regenerated on demand from `site.json .name`;
-  never hand-edited).
+- **`zones.rename.json`** — *source*: the **full** upstream template with this
+  installation's rename applied (regenerated on demand; never hand-edited). It
+  carries every zone the release ships, whichever profiles are installed — a
+  profile-scoped source would mean a field fix to an uninstalled zone could
+  never be adopted later.
 
 `network-manager merge` runs on every `update-tappaas`:
 

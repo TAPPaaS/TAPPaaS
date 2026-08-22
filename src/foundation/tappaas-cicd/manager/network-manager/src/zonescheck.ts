@@ -35,7 +35,7 @@ import { join } from "path";
 import { CL, GN, RD, YW } from "../../../lib/ts/src/cli";
 import { Zone, ZonesDoc } from "./types";
 import { loadZones } from "./zones";
-import { resolveServes } from "./serves";
+import { renderEffective, resolveServes } from "./serves";
 import {
   CONTROL_PLANE_ZONE,
   TIER_INTERNET,
@@ -423,6 +423,20 @@ function checkTierInvariants(doc: ZonesDoc, rep: Reporter): void {
   if (i4 === 0) rep.ok("I4: every tiered zone conforms to a defined archetype");
 }
 
+// Index a RENDERED raw document the same way loadZones indexes a file, so the
+// checks can run over the effective graph without a round-trip through disk.
+function indexRendered(raw: Record<string, unknown>): Map<string, Zone> {
+  const zones = new Map<string, Zone>();
+  for (const [k, v] of Object.entries(raw)) {
+    if (k.startsWith("_")) continue;
+    if (v === null || typeof v !== "object" || Array.isArray(v)) continue;
+    const o = v as Record<string, unknown>;
+    if (!("state" in o) && !("vlantag" in o)) continue;
+    zones.set(k, { ...(o as Zone), name: k });
+  }
+  return zones;
+}
+
 // ── 7. `serves` link resolution (ADR-014 D2) ─────────────────────────
 // A link that cannot resolve is a hard ERROR, not a warning: the derived edge
 // simply would not exist, so the operator's declared reachability is silently
@@ -457,6 +471,12 @@ export interface ZonesCheckOpts {
   zonesFile: string;
   configDir: string;
   strict: boolean;
+  // Audit the EFFECTIVE document (zones.json with every `serves` link resolved)
+  // instead of the authored one. Without this the tier checks cannot see a
+  // DERIVED edge — and since ADR-014 moves the client→service edge out of the
+  // authored file and into the render, a plain `validate` would report a clean
+  // graph while the firewall carries an upward edge. See the note emitted below.
+  effective?: boolean;
 }
 
 // Run every check against an already-loaded doc + config dir. Pure (no I/O on
@@ -482,17 +502,48 @@ export function zonesCheck(
   let doc: ZonesDoc;
   try {
     doc = loadZones(opts.zonesFile);
+    void doc;
   } catch (e) {
     log(`  ${RD}✗${CL} well-formed: ${(e as Error).message}`);
     log(`zones-check: 0 ok, 0 warning(s), 1 error(s)`);
     return 1;
   }
 
-  log(`zones-check: ${opts.zonesFile} (config-dir ${opts.configDir})`);
+  // --effective: audit the rendered graph the planes actually consume.
+  let scope = "authored";
+  if (opts.effective) {
+    const eff = renderEffective(doc, opts.configDir);
+    for (const e of eff.errors) {
+      log(`  ${RD}✗${CL} serves: ${e}`);
+    }
+    if (eff.errors.length > 0) {
+      log(`zones-check: cannot render the effective document (${eff.errors.length} unresolved link(s))`);
+      return 1;
+    }
+    doc = { raw: eff.raw, zones: indexRendered(eff.raw) };
+    scope = "effective";
+  }
+
+  log(`zones-check: ${opts.zonesFile} [${scope}] (config-dir ${opts.configDir})`);
   const result = runChecks(doc, opts.configDir, opts.strict);
   for (const line of result.lines) log(line);
 
   const okCount = result.lines.filter((l) => l.includes("✓")).length;
+  // A `serves` link contributes an edge that exists ONLY in the rendered graph,
+  // so an authored-scope run cannot have judged it. Say so rather than let the
+  // clean result read as a verdict on the whole firewall.
+  if (!opts.effective) {
+    const linked = Array.from(doc.zones.values()).filter(
+      (z) => typeof z.serves === "string" && z.serves.length > 0,
+    ).length;
+    if (linked > 0) {
+      log(
+        `  ${YW}·${CL} scope: ${linked} zone(s) carry a 'serves' link whose derived edge is NOT ` +
+          `part of this authored-scope check — re-run with --effective to audit the graph the ` +
+          `planes actually receive`,
+      );
+    }
+  }
   log(
     `zones-check: ${okCount} ok, ${result.warnings} warning(s), ${result.errors} error(s)`,
   );

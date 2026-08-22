@@ -18,7 +18,8 @@
 //   network-manager delete <name> [--check]
 //   network-manager enable|disable|manual <name> [--force]   (was zone-state.sh)
 //   network-manager reconcile [--apply] [--only <plane>]
-//   network-manager init --name <N> [--from <tpl>] [--out <f>] [--force]
+//   network-manager init [<profile>] --name <N> [--from <tpl>] [--out <f>] [--force]
+//   network-manager retire [--apply]
 //   network-manager merge [--diff] [--config-dir <dir>] [--template <tpl>]
 //   network-manager distribute [--zones <file>] [--dry-run]
 //
@@ -44,7 +45,8 @@ import {
 } from "./zones";
 import { addZone, deleteZone } from "./zonelifecycle";
 import { existsSync } from "fs";
-import { mergeInitWithExisting, parseTemplate, renameTemplateFile, zonesInit } from "./zonesinit";
+import { initProfile, parseTemplate, profileNames, renameTemplateFile, zonesInit } from "./zonesinit";
+import { RETIRED_ZONES, retireZones, saveRetired } from "./retire";
 import { zonesCheck, occupiedZones } from "./zonescheck";
 import { archetypeByName, archetypeNames, zoneTier } from "./archetypes";
 import {
@@ -133,15 +135,31 @@ const HELP: HelpSpec = {
       ],
     },
     {
-      usage: "init --name <N> [--from <tpl>] [--out <f>] [--force]",
+      usage: "init [<profile>] --name <N> [--from <tpl>] [--out <f>] [--force]",
       note: "(alias: zones-init)",
-      name: "init (install-time template transform; offline)",
+      name: "init (install-time profile bundles; offline, additive, idempotent)",
       options: [
+        ["<profile>", "core (default) — mgmt, wan, overlays, <N>, home, guest, dmz\n" +
+          "                iot          — iotLocal, iotCloud, iotCams, iotUntrust\n" +
+          "                Profiles compose: `init core` then later `init iot`."],
         ["--name <N>", "TAPPaaS system name; renames srv→<N> (home/guest are kept\n                as site-local role zones) and parameterises the distributed template"],
         ["--from <tpl>", "source template (default: zones.json shipped with the bin)"],
         ["--out <f>", "output file (default: $TAPPAAS_CONFIG/zones.json)"],
-        ["--force", "re-apply from the template even if already initialised"],
+        ["--force", "re-stamp this profile's zones from the template (default:\n                existing zones always win — a re-run is non-destructive, #427)"],
       ],
+    },
+    {
+      usage: "retire [--apply]",
+      name: "retire (remove zones a release stopped shipping — ADR-014 D7)",
+      options: [
+        ["--apply", "commit (default is a dry-run listing)"],
+      ],
+      note:
+        "Removes " + RETIRED_ZONES.join(", ") + " —\n" +
+        "but ONLY where the zone is not Active/Mandatory/Manual AND hosts no\n" +
+        "installed module. Anything else is kept and reported. References to a\n" +
+        "retired zone are stripped from every other zone. `work` and `srv` are\n" +
+        "never retired.",
     },
     {
       usage: "merge [--diff] [--config-dir <dir>] [--template <tpl>]",
@@ -159,13 +177,14 @@ const HELP: HelpSpec = {
       ],
     },
     {
-      usage: "validate [--zones <file>] [--config-dir <dir>] [--strict]",
+      usage: "validate [--zones <file>] [--config-dir <dir>] [--strict] [--effective]",
       note: "(alias: zones-check)",
       name: "zones-check (offline consistency audit; read-only; run at update)",
       options: [
         ["--zones <file>", "zones.json to check (default $TAPPAAS_CONFIG/zones.json)"],
         ["--config-dir <dir>", "installed module configs to cross-check (default $TAPPAAS_CONFIG)"],
         ["--strict", "promote warnings to errors"],
+        ["--effective", "audit the RENDERED graph (serves links resolved) — the\n                      document the planes actually receive, not the authored file"],
       ],
     },
     {
@@ -224,6 +243,8 @@ interface Opts {
   // verbs never run together.
   state?: string;
   tier?: number;
+  // validate --effective
+  effective: boolean;
   // bind
   environment?: string;
   unbind: boolean;
@@ -251,6 +272,7 @@ function parseOpts(args: string[]): Opts {
     diff: false,
     json: false,
     unbind: false,
+    effective: false,
   };
   for (let i = 0; i < args.length; i++) {
     const a = args[i];
@@ -270,6 +292,9 @@ function parseOpts(args: string[]): Opts {
         break;
       case "--strict":
         o.strict = true;
+        break;
+      case "--effective":
+        o.effective = true;
         break;
       case "--apply":
         o.apply = true;
@@ -699,77 +724,94 @@ function cmdZonesInit(opts: Opts): void {
     die((e as Error).message);
   }
 
-  // Occupancy guard: never inactivate a legacy zone that still hosts deployed
-  // modules (would orphan them). Cross-check the installed module configs.
-  const occupied = occupiedZones(opts.configDir);
-
-  let result: { raw: Record<string, unknown>; alreadyInitialised: boolean; keptActive: string[] };
-  try {
-    result = zonesInit(template, name, opts.force, occupied);
-  } catch (e) {
-    die((e as Error).message);
+  // ADR-014 D7: `init <profile>`. The profile defaults to `core` so the legacy
+  // call shape (`init --name <N>`, still used by install.sh's older revisions)
+  // keeps working and means "the minimal coherent install".
+  const profile = opts.rest[0] ?? "core";
+  const known = profileNames(template);
+  if (!known.includes(profile)) {
+    die(`init: unknown profile '${profile}' (known: ${known.join(", ") || "none"})`);
   }
 
-  if (result.alreadyInitialised) {
-    info(`init: '${out}' source already initialised for '${name}' — no-op (use --force to re-apply from template)`);
-    return;
-  }
-
-  // #427: make init NON-DESTRUCTIVE on a re-run / migration. If the target file
-  // already holds configured zones, reconcile the freshly-rendered template with
-  // it so operator zones SURVIVE — kept verbatim (state, access-to, DHCP ranges;
-  // custom zones absent from the template are not dropped; in-use zones are not
-  // deactivated; references are not redirected). The template only contributes
-  // zones that do not already exist. A fresh install (no existing file) is
-  // unchanged: finalRaw stays the pure renamed template.
-  let finalRaw = result.raw;
-  let preserved: string[] = [];
-  let added: string[] = [];
+  // The existing document, if any. Profiles are ADDITIVE: existing zones win, so
+  // a re-run can never rebuild a live file from template defaults (#427).
+  let existing: Record<string, unknown> = {};
   if (existsSync(out)) {
     try {
-      const existing = parseTemplate(out); // strict raw-object parser (reused)
-      const merged = mergeInitWithExisting(result.raw, existing, name);
-      finalRaw = merged.raw;
-      preserved = merged.preserved;
-      added = merged.added;
+      existing = parseTemplate(out); // strict raw-object parser (reused)
     } catch (e) {
       warn(
-        `  init: could not read existing '${out}' to preserve its zones ` +
-          `(${(e as Error).message}) — writing the template result`,
+        `  init: could not read existing '${out}' (${(e as Error).message}) — ` +
+          `treating this as a fresh install`,
       );
     }
   }
 
-  // Design A 3-file seeding. zones.json (current) carries the preserved+template
-  // result; zones.rename.json / zones.json.orig are seeded from the PURE renamed
-  // template — the merge source/baseline, so zones-merge keeps operator zones as
-  // "only in current" and pins operator field edits (state is always pinned).
-  // On a fresh install all three are identical, which keeps zones-merge stable
-  // (see zonesmerge.ts). For a non-live --out the siblings are seeded relative to
-  // that path's directory so tests stay self-contained and never touch live config.
-  writeJsonAtomic(out, finalRaw);
-  info(`  ${GN}✓${CL} init: wrote '${out}' (default zone '${name}'; home/guest kept as site-local role zones)`);
+  let result;
+  try {
+    result = initProfile(template, existing, name, profile, opts.force);
+  } catch (e) {
+    die((e as Error).message);
+  }
 
-  if (preserved.length) {
-    warn(
-      `  ${YW}!${CL} init: discovered ${preserved.length} pre-existing zone(s) in '${out}' — ` +
-        `PRESERVED as-is (config/state kept, NOT rebuilt from template):`,
+  writeJsonAtomic(out, result.raw);
+  info(
+    `  ${GN}✓${CL} init ${profile}: wrote '${out}' ` +
+      `(default zone '${name}'; home/guest kept as site-local role zones)`,
+  );
+  if (result.renamedFromSrv) {
+    info(`  init: carried the existing 'srv' zone forward as '${name}' (config preserved)`);
+  }
+  if (result.added.length) {
+    info(`  init: added ${result.added.length} zone(s): ${result.added.join(", ")}`);
+  } else {
+    info(`  init: profile '${profile}' already applied — no zone added (idempotent)`);
+  }
+  if (result.granted.length) {
+    info(`  init: granted reach needed by this profile:`);
+    for (const g of result.granted) info(`      ${g}`);
+  }
+  const untouched = result.preserved.filter((z) => !result.added.includes(z));
+  if (untouched.length) {
+    info(
+      `  init: ${untouched.length} pre-existing zone(s) PRESERVED as-is ` +
+        `(config/state kept, not rebuilt from template)`,
     );
-    for (const z of preserved) warn(`      - ${z}`);
-  }
-  if (added.length) {
-    info(`  init: added ${added.length} zone(s) from the template not already present: ${added.join(", ")}`);
   }
 
+  // Design A 3-file seeding. zones.json (current) carries the additive result;
+  // zones.rename.json / zones.json.orig are seeded from the FULL renamed template
+  // — the merge source/baseline must contain every zone the release ships,
+  // whichever profiles are installed, or a field fix would never be adopted.
+  // For a non-live --out the siblings are seeded relative to that path's
+  // directory so tests stay self-contained and never touch live config.
+  let fullRenamed: Record<string, unknown>;
+  try {
+    fullRenamed = zonesInit(template, name, true, occupiedZones(opts.configDir)).raw;
+  } catch (e) {
+    die((e as Error).message);
+  }
   const outDir = dirname(out);
   const renameFile = out === defaultZonesFile() ? defaultRenameFile() : join(outDir, "zones.rename.json");
   const origFile = out === defaultZonesFile() ? defaultOrigFile() : join(outDir, "zones.json.orig");
-  writeJsonAtomic(renameFile, result.raw);
-  writeJsonAtomic(origFile, result.raw);
+  writeJsonAtomic(renameFile, fullRenamed);
+  writeJsonAtomic(origFile, fullRenamed);
   info(`  ${GN}✓${CL} init: seeded '${renameFile}' (renamed source) and '${origFile}' (merge baseline)`);
 
-  if (result.keptActive.length) {
-    warn(`  kept Active (still host deployed modules): ${result.keptActive.join(", ")} — legacy-zone sunset deferred; migrate their modules to '${name}' (or an environment) later`);
+  // Render the effective document so a `serves`-bound shipped zone resolves
+  // immediately. Non-fatal: on the install path the environments do not exist
+  // yet (install.sh runs `init` BEFORE `environment-manager add`), so the links
+  // legitimately do not resolve for another few seconds.
+  try {
+    refreshEffective(out);
+  } catch {
+    /* the environment set is not written yet — merge/reconcile render it later */
+  }
+
+  if (profile === "core") {
+    info("");
+    info("  IoT segments are opt-in. To add them:");
+    info(`    network-manager init iot --name ${name}`);
   }
 
   // N3: push the freshly-written live zones.json to the Proxmox nodes. Skipped
@@ -778,6 +820,59 @@ function cmdZonesInit(opts: Opts): void {
   if (shouldAutoDistribute(out, opts.noDistribute)) {
     distributeZones(out, { info, warn });
   }
+}
+
+// ── retire command (ADR-014 D7 / F3) ─────────────────────────────────
+// Remove the zones a release stopped shipping, under the occupancy + liveness
+// guard. Dry-run by default; --apply commits. Does not reconcile.
+function cmdRetire(opts: Opts): number {
+  const doc = loadZones(opts.zonesFile);
+  const res = retireZones(doc, opts.configDir, opts.apply);
+
+  const shown = res.items.filter((i) => i.verdict !== "absent");
+  if (shown.length === 0) {
+    info(`retire: none of the retired zone set is present in '${opts.zonesFile}' — nothing to do`);
+    return 0;
+  }
+
+  info(`retire: ${opts.apply ? "applying" : "dry-run"} against '${opts.zonesFile}'`);
+  for (const i of shown) {
+    if (i.verdict === "retired") {
+      info(`  ${GN}✓${CL} ${i.zone} — ${opts.apply ? "removed" : "would remove"} (${i.detail})`);
+      for (const t of i.strippedFrom) {
+        info(`      ${opts.apply ? "stripped" : "would strip"} the reference in '${t}'`);
+      }
+    } else {
+      warn(`  ${i.zone} — KEPT: ${i.detail}`);
+    }
+  }
+
+  if (!opts.apply) {
+    info("");
+    info(`  ${res.retired.length} zone(s) would be retired, ${res.kept.length} kept.`);
+    info("  Re-run with --apply to commit.");
+    return 0;
+  }
+
+  if (res.changed) {
+    saveRetired(opts.zonesFile, doc);
+    try {
+      refreshEffective(opts.zonesFile);
+    } catch {
+      /* non-fatal: reconcile re-renders */
+    }
+    info("");
+    info(`  ${GN}Retired ${res.retired.length} zone(s).${CL}`);
+    info("  To apply on the planes, run:");
+    info("    network-manager reconcile --apply");
+    if (shouldAutoDistribute(opts.zonesFile, opts.noDistribute)) {
+      distributeZones(opts.zonesFile, { info, warn });
+    }
+  } else {
+    info("");
+    info("  Nothing eligible — no change written.");
+  }
+  return 0;
 }
 
 // ── zones-distribute command (push the live zones.json to every node — N3) ──
@@ -793,7 +888,12 @@ function cmdZonesDistribute(opts: Opts): number {
 // Returns the check exit code (0 ok / warnings-only; 1 on hard errors).
 function cmdZonesCheck(opts: Opts): number {
   return zonesCheck(
-    { zonesFile: opts.zonesFile, configDir: opts.configDir, strict: opts.strict },
+    {
+      zonesFile: opts.zonesFile,
+      configDir: opts.configDir,
+      strict: opts.strict,
+      effective: opts.effective,
+    },
     info,
   );
 }
@@ -889,6 +989,8 @@ export function run(argv: string[], client?: PlaneClient): number {
       case "zones-init":
         cmdZonesInit(opts);
         return 0;
+      case "retire":
+        return cmdRetire(opts);
       case "merge": // primary verb; zones-merge kept as fall-through alias
       case "zones-merge":
         return cmdZonesMerge(opts);

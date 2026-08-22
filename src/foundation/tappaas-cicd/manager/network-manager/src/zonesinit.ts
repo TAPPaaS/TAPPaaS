@@ -1,29 +1,40 @@
-// zonesinit.ts — the install-time zones.json transform (ADR-007 "S6 N2").
+// zonesinit.ts — the install-time zones.json transform (ADR-007 "S6 N2",
+// re-cut for ADR-014 D7).
 //
-// Turns the DISTRIBUTED zones.json template (keyed srv / home / guest / srv*…)
-// into an INSTALL-SPECIFIC zones.json parameterised by the TAPPaaS system name
-// <N>. It is a pure, offline document transform: read template → apply the
-// operator-specified rules → return the new raw document. The caller (main.ts)
-// persists it atomically via zones.ts's saveZones, which preserves the
-// `_README` doc block and overall structure (doc-block keys are carried through
-// untouched because we transform doc.raw in place and never index/drop "_*"
-// keys here).
+// TWO OPERATIONS share one rename:
 //
-// Rules (operator-specified):
-//   - rename  srv   → <N>            (default zone; keep config; state Active)
-//   - KEEP    home, guest            (site-local client-role zones — there is one
-//                                     of each per site, so an org prefix would not
-//                                     distinguish anything; renaming them gives
-//                                     every client device a new <zone>.internal
-//                                     domain and de-converges zones-merge — #425)
-//   - in home's access-to: srvHome → <N>  (client-home reaches the now-active flat
-//                                     service zone, since srvHome is inactivated)
-//   - state Inactive on: srvHome, srvWork, srvCust, srvDev, work
-//   - leave untouched: srvTest, iot*, dmz, netbird, test, mgmt, home, guest (+ renamed)
-//   - referential integrity (global): rewrite refs to the RENAMED key (srv→<N>) in
-//     access-to / pinhole-allowed-from / any zone-name array|string field.
-//     (NOT a global srvHome→<N> — only the explicit one inside home's access-to.)
-//   - idempotent: if <N> present and srv absent → no-op ("already initialised")
+//   1. initProfile()        — apply a composable PROFILE bundle (`core`, `iot`)
+//                             to the live document. Additive and idempotent: a
+//                             profile only ever ADDS its zones (plus the
+//                             access-to `grants` its zones need on zones from
+//                             another profile), never removes or deactivates
+//                             anything. Existing zones WIN, so a re-run can
+//                             never rebuild a live file from template defaults
+//                             (#427).
+//   2. renameTemplateFile() — render the WHOLE template into this install's
+//                             renamed namespace. This is the merge SOURCE
+//                             (zones.rename.json): merge must see every zone the
+//                             release ships, whichever profiles are installed,
+//                             or a field fix would never be adopted.
+//
+// The rename map is `srv -> <N>` and nothing else (#425: home/guest are
+// site-local client-role zones whose key drives the client DNS domain
+// `<zone>.internal`; renaming one re-domains every device). It is applied to
+// zone KEYS, to every zone-name reference, to a `serves` value, and to the
+// `grants` keys — one map, one place.
+//
+// `serves: "srv"` in the template is a deliberate placeholder: after the rename
+// it reads `serves: "<N>"`, the DEFAULT ENVIRONMENT, which shares its name with
+// the default service zone by construction (site.defaultEnvironment drives both
+// — ADR-007d/#426). That is how a shipped client/IoT zone comes out of `init`
+// already bound to the environment, with no literal service-zone reference to
+// go stale (#424).
+//
+// WHAT CHANGED FROM THE PRE-D7 VERSION: there is no longer a hardcoded
+// INACTIVATE list (the five srv* zones it inactivated are no longer shipped —
+// see `retire` for their removal from EXISTING installs), and the
+// "already initialised" marker is no longer "the template still has srv"
+// (profiles are naturally idempotent: a zone already present is simply kept).
 //
 // Dependency-free TS (strict tsc, ambient env.d.ts), mirroring the rest of the
 // component.
@@ -31,20 +42,13 @@
 import { readFileSync } from "fs";
 import { isDocKey } from "./zones";
 
-// Zones whose `state` is forced Inactive by the transform.
-const INACTIVATE = ["srvHome", "srvWork", "srvCust", "srvDev", "work"];
-
-// The doc-block / comment keys (isDocKey, from zones.ts): never treated as
-// zones, carried through as-is.
-
 export interface ZonesInitResult {
   // The transformed raw document (ready to JSON-serialise / hand to saveZones).
   raw: Record<string, unknown>;
   // True when the input was already transformed and we made a safe no-op.
   alreadyInitialised: boolean;
-  // Legacy zones that WOULD have been set Inactive but were kept Active because
-  // they still host deployed modules (the caller warns about these). Safety: the
-  // transform must never inactivate a zone that has tenants (would orphan them).
+  // Occupied zones present in the rendered document. Informational since D7:
+  // the transform no longer inactivates anything, so there is nothing to guard.
   keptActive: string[];
 }
 
@@ -111,134 +115,235 @@ function rewriteZoneRefs(zone: Record<string, unknown>, renames: Map<string, str
   }
 }
 
-// Apply the install-time transform. Pure: takes the raw template object,
-// returns a new raw object (the input is not mutated). `force` re-applies from
-// the template even if the input already looks transformed.
+// The one rename map this install uses. Kept in a single function so init,
+// merge and the profile engine cannot diverge on it.
+export function renameMap(name: string): Map<string, string> {
+  return new Map<string, string>([["srv", name]]);
+}
+
+// Deep-ish clone of one zone object (fields + array fields), so no transform
+// ever mutates its input template/document.
+function cloneZone(v: Record<string, unknown>): Record<string, unknown> {
+  const copy: Record<string, unknown> = {};
+  for (const [f, fv] of Object.entries(v)) copy[f] = Array.isArray(fv) ? [...fv] : fv;
+  return copy;
+}
+
+// Render the WHOLE template into this install's renamed namespace. This is the
+// merge SOURCE — every zone the release ships, regardless of installed profiles.
+// The renamed default zone is forced Active (it is the zone modules land in).
 export function zonesInit(
   template: Record<string, unknown>,
   name: string,
   force: boolean,
-  // Zones that must stay Active even if on the INACTIVATE list — typically those
-  // that still host deployed modules. Inactivating an occupied zone would orphan
-  // its tenants, so the caller passes the occupied set here.
+  // Retained for signature compatibility with the pre-D7 callers (merge passes
+  // the occupancy set). There is no longer an INACTIVATE list for it to guard —
+  // retiring a legacy zone is `network-manager retire`'s job, which applies the
+  // same occupancy rule — so it is accepted and reported, never acted on.
   keepActive: ReadonlySet<string> = new Set<string>(),
 ): ZonesInitResult {
   validateName(name);
 
-  // Idempotency / already-initialised check (only meaningful without --force):
-  // a transformed doc has <N> present and `srv` absent.
+  // Idempotency (only meaningful without --force): already renamed ⇒ no-op.
   if (!force && name in template && !("srv" in template)) {
     return { raw: template, alreadyInitialised: true, keptActive: [] };
   }
-
-  // Validate the template has the expected distributed keys before we touch it.
-  for (const required of ["srv", "home", "guest"]) {
-    if (!(required in template)) {
-      throw new Error(
-        `template missing expected key '${required}' — is this the distributed ` +
-          `zones.json? (${force ? "--force given but " : ""}cannot transform)`,
-      );
-    }
+  if (!("srv" in template)) {
+    throw new Error(
+      `template missing expected key 'srv' — is this the distributed zones.json? ` +
+        `(${force ? "--force given but " : ""}cannot transform)`,
+    );
   }
 
-  // The global rename map for referential integrity. Only srv is renamed to the
-  // site name; home and guest are site-local client-role zones and keep their
-  // names (#425 — renaming them would rename every client's <zone>.internal
-  // domain and de-converge zones-merge, which re-adds the template's home/guest
-  // on every run).
-  const renames = new Map<string, string>([["srv", name]]);
-
-  // Build the output preserving key ORDER: walk the template's keys, emit each
-  // (renamed where applicable) so the structure / doc-block placement is kept.
+  const renames = renameMap(name);
   const out: Record<string, unknown> = {};
   for (const [key, val] of Object.entries(template)) {
     if (isDocKey(key)) {
       out[key] = val; // carry doc blocks (e.g. _README) through untouched
       continue;
     }
-
-    let newKey = key;
-    if (key === "srv") newKey = name;
-
-    // Deep-ish clone of the zone object (one level + arrays) so we never mutate
-    // the input template.
-    let zone: unknown = val;
-    if (val !== null && typeof val === "object" && !Array.isArray(val)) {
-      const src = val as Record<string, unknown>;
-      const copy: Record<string, unknown> = {};
-      for (const [f, v] of Object.entries(src)) {
-        copy[f] = Array.isArray(v) ? [...v] : v;
-      }
-      zone = copy;
-    }
-
-    out[newKey] = zone;
+    const newKey = renames.get(key) ?? key;
+    out[newKey] = isZoneObject(val) ? cloneZone(val) : val;
   }
 
-  // ── per-zone field edits (operate on the OUTPUT) ────────────────────
-
-  // 1. The renamed default zone (<N>, was srv): ensure state Active.
+  // The renamed default zone is the one modules deploy into: force it Active.
   const defZone = out[name];
-  if (defZone !== null && typeof defZone === "object" && !Array.isArray(defZone)) {
-    (defZone as Record<string, unknown>).state = "Active";
-  }
+  if (isZoneObject(defZone)) defZone.state = "Active";
 
-  // 2. home (kept): the EXPLICIT srvHome→<N> swap in its access-to. srvHome is
-  //    inactivated below, so client-home is redirected to the now-active flat
-  //    service zone <N>.
-  const homeZone = out["home"];
-  if (homeZone !== null && typeof homeZone === "object" && !Array.isArray(homeZone)) {
-    const hz = homeZone as Record<string, unknown>;
-    if (Array.isArray(hz["access-to"])) {
-      hz["access-to"] = (hz["access-to"] as unknown[]).map((el) =>
-        el === "srvHome" ? name : el,
-      );
-    }
-  }
-
-  // 3. Force state Inactive on the listed zones (only if present) — EXCEPT any
-  //    that are occupied (keepActive): inactivating a zone with tenants would
-  //    orphan them, so we leave it Active and report it for a warning.
-  const keptActive: string[] = [];
-  for (const z of INACTIVATE) {
-    const zone = out[z];
-    if (zone !== null && typeof zone === "object" && !Array.isArray(zone)) {
-      if (keepActive.has(z)) {
-        keptActive.push(z);
-        continue; // leave its current state untouched (occupied)
-      }
-      (zone as Record<string, unknown>).state = "Inactive";
-    }
-  }
-
-  // 4. GLOBAL referential integrity: rewrite refs to renamed keys everywhere.
-  //    (srvHome is NOT in the rename map, so other srvHome refs are preserved
-  //    pointing at the now-Inactive srvHome — exactly as specified.)
+  // GLOBAL referential integrity: rewrite refs (and `serves`) to renamed keys.
   for (const [key, val] of Object.entries(out)) {
     if (isDocKey(key)) continue;
-    if (val !== null && typeof val === "object" && !Array.isArray(val)) {
-      rewriteZoneRefs(val as Record<string, unknown>, renames);
-    }
+    if (isZoneObject(val)) rewriteZoneRefs(val, renames);
   }
 
+  const keptActive = Array.from(keepActive).filter((z) => z in out).sort();
   return { raw: out, alreadyInitialised: false, keptActive };
 }
 
-// Convenience wrapper that both zones-init and zones-merge use: read the repo
-// template from disk and apply the pure §B rename transform, returning the
-// renamed raw document. This is the single shared entry point so the two
-// lifecycle commands cannot diverge on how the rename is computed.
+// ── ADR-014 D7: composable profiles ──────────────────────────────────
+
+export interface ProfileSpec {
+  description: string;
+  zones: string[];
+  // zone -> access-to entries this profile contributes to it. Lets the `iot`
+  // profile give the service and client zones reach to the devices — the one
+  // edge the zone definitions alone cannot express, because the target zones
+  // belong to another profile. Keys are renamed like any zone reference.
+  grants?: Record<string, string[]>;
+}
+
+// Read the `_profiles` block from a template. Install-time metadata: it is read
+// from the SHIPPED template and deliberately never copied into a live zones.json.
+export function readProfiles(template: Record<string, unknown>): Map<string, ProfileSpec> {
+  const out = new Map<string, ProfileSpec>();
+  const block = template["_profiles"];
+  if (!isZoneObject(block)) return out;
+  for (const [key, val] of Object.entries(block)) {
+    if (isDocKey(key) || !isZoneObject(val)) continue;
+    const zones = Array.isArray(val["zones"])
+      ? (val["zones"] as unknown[]).filter((z): z is string => typeof z === "string")
+      : [];
+    const grantsRaw = val["grants"];
+    let grants: Record<string, string[]> | undefined;
+    if (isZoneObject(grantsRaw)) {
+      grants = {};
+      for (const [z, refs] of Object.entries(grantsRaw)) {
+        if (Array.isArray(refs)) {
+          grants[z] = refs.filter((r): r is string => typeof r === "string");
+        }
+      }
+    }
+    out.set(key, {
+      description: typeof val["description"] === "string" ? (val["description"] as string) : "",
+      zones,
+      ...(grants ? { grants } : {}),
+    });
+  }
+  return out;
+}
+
+export function profileNames(template: Record<string, unknown>): string[] {
+  return Array.from(readProfiles(template).keys());
+}
+
+export interface InitProfileResult {
+  raw: Record<string, unknown>; // the full document to write
+  profile: string;
+  added: string[]; // zones this run contributed
+  preserved: string[]; // pre-existing zones kept verbatim
+  granted: string[]; // "zone.access-to += ref" edges this profile contributed
+  renamedFromSrv: boolean; // an existing un-renamed `srv` was carried to <name>
+}
+
+// Apply one profile to the live document.
 //
-// `force` is always true here: zones-merge re-bases the upstream template into
-// the renamed namespace every run, and the template (which still ships
-// srv/home/guest) is never "already initialised". keepActive is the occupancy
-// guard (legacy zones still hosting deployed modules stay Active).
-export function renameTemplateFile(
-  templateFile: string,
+// ADDITIVE and IDEMPOTENT by construction:
+//   - the existing document is carried forward first, with the srv -> <name>
+//     rename applied to keys AND references, so a not-yet-renamed mainline
+//     `srv` becomes `<name>` carrying its config rather than duplicating;
+//   - the profile then contributes ONLY the zones that are not already present
+//     (unless `force`, which re-stamps this profile's zones from the template);
+//   - `grants` add access-to entries, never remove any;
+//   - nothing is ever deleted or deactivated. Retiring a zone is `retire`'s job.
+//
+// Pure: neither input is mutated.
+export function initProfile(
+  template: Record<string, unknown>,
+  existing: Record<string, unknown>,
   name: string,
-  keepActive: ReadonlySet<string> = new Set<string>(),
-): ZonesInitResult {
-  return zonesInit(parseTemplate(templateFile), name, true, keepActive);
+  profile: string,
+  force = false,
+): InitProfileResult {
+  validateName(name);
+
+  const profiles = readProfiles(template);
+  const spec = profiles.get(profile);
+  if (!spec) {
+    throw new Error(
+      `unknown profile '${profile}' (known: ${Array.from(profiles.keys()).join(", ") || "none"})`,
+    );
+  }
+
+  const renames = renameMap(name);
+  const out: Record<string, unknown> = {};
+  const preserved: string[] = [];
+  const added: string[] = [];
+  const granted: string[] = [];
+  let renamedFromSrv = false;
+
+  // 1. carry the existing document forward, renamed.
+  for (const [key, val] of Object.entries(existing)) {
+    if (isDocKey(key)) {
+      // `_profiles` is install-time metadata: never carried into a live file.
+      if (key !== "_profiles") out[key] = val;
+      continue;
+    }
+    const newKey = renames.get(key) ?? key;
+    if (newKey !== key) renamedFromSrv = true;
+    if (isZoneObject(val)) {
+      const copy = cloneZone(val);
+      rewriteZoneRefs(copy, renames);
+      out[newKey] = copy;
+      preserved.push(newKey);
+    } else {
+      out[newKey] = val;
+    }
+  }
+
+  // A profile naming a zone the template does not define is a BROKEN TEMPLATE,
+  // not something to work around: skipping it silently would produce a
+  // half-installed profile whose missing zone only surfaces later as a dangling
+  // reference. (This replaces the pre-D7 "template must contain srv/home/guest"
+  // check with one that actually tracks what the profiles need.)
+  const missing = spec.zones.filter((z) => !isZoneObject(template[z]));
+  if (missing.length > 0) {
+    throw new Error(
+      `template is missing ${missing.length} zone(s) named by profile '${profile}': ` +
+        `${missing.join(", ")} — is this the distributed zones.json?`,
+    );
+  }
+
+  // 2. contribute this profile's zones (existing wins unless --force).
+  for (const key of spec.zones) {
+    const src = template[key];
+    if (!isZoneObject(src)) continue;
+    const newKey = renames.get(key) ?? key;
+    if (newKey in out && !force) continue;
+    const copy = cloneZone(src);
+    rewriteZoneRefs(copy, renames);
+    // The renamed default zone is what modules deploy into: ship it Active.
+    if (newKey === name) copy.state = "Active";
+    const isNew = !(newKey in out);
+    out[newKey] = copy;
+    if (isNew) added.push(newKey);
+  }
+
+  // 3. grants: additive access-to edges onto zones from another profile.
+  for (const [rawZone, refs] of Object.entries(spec.grants ?? {})) {
+    const zoneKey = renames.get(rawZone) ?? rawZone;
+    const target = out[zoneKey];
+    if (!isZoneObject(target)) continue; // that profile is not installed — skip
+    const cur = Array.isArray(target["access-to"]) ? (target["access-to"] as unknown[]).slice() : [];
+    for (const ref of refs) {
+      const refKey = renames.get(ref) ?? ref;
+      // Only grant reach to a zone that actually exists after step 2 — never
+      // author a dangling reference.
+      if (!isZoneObject(out[refKey])) continue;
+      if (cur.includes(refKey)) continue;
+      cur.push(refKey);
+      granted.push(`${zoneKey}.access-to += ${refKey}`);
+    }
+    target["access-to"] = cur;
+  }
+
+  // 4. carry any doc block the template has and the existing file lacks
+  //    (again: never `_profiles`).
+  for (const [key, val] of Object.entries(template)) {
+    if (!isDocKey(key) || key === "_profiles" || key in out) continue;
+    out[key] = val;
+  }
+
+  return { raw: out, profile, added, preserved, granted, renamedFromSrv };
 }
 
 // Is `v` a zone object (vs a "_*" doc block or a scalar/array)?
@@ -246,71 +351,21 @@ function isZoneObject(v: unknown): v is Record<string, unknown> {
   return v !== null && typeof v === "object" && !Array.isArray(v);
 }
 
-export interface ZonesInitPreserveResult {
-  // The final document to write: existing zones preserved, template zones added.
-  raw: Record<string, unknown>;
-  // Pre-existing operator zones kept verbatim (the caller warns, listing each).
-  preserved: string[];
-  // Zones the template contributed that did not already exist.
-  added: string[];
-  // True when an existing (not-yet-renamed) 'srv' was carried over as '<name>'.
-  renamedFromSrv: boolean;
-}
+// NOTE: `mergeInitWithExisting` (the #427 non-destructive re-run) is RETIRED —
+// `initProfile` subsumes it: it carries the existing document forward with the
+// rename applied, and contributes only zones that are not already present. The
+// guarantee is unchanged and is still unit-asserted; it now lives in one code
+// path instead of two.
 
-// Make an init re-run non-destructive (#427). `zonesInit` renders the pure
-// renamed template; this reconciles it with the EXISTING live zones.json so
-// operator-configured zones survive:
-//   - existing zones WIN — kept verbatim (state, access-to, DHCP ranges, custom
-//     zones absent from the template are NOT dropped; in-use zones are NOT
-//     deactivated; references are NOT redirected), so a re-run never silently
-//     rebuilds a live file from template defaults;
-//   - the srv→<name> rename is applied to the existing doc too (keys + refs), so
-//     a not-yet-renamed mainline 'srv' becomes '<name>' carrying its config
-//     rather than duplicating the template's '<name>';
-//   - the template only contributes zones that do not yet exist (a genuinely new
-//     zone in a release is added with its template defaults).
-// Pure: neither input is mutated.
-export function mergeInitWithExisting(
-  renamedTemplate: Record<string, unknown>,
-  existing: Record<string, unknown>,
+// Convenience wrapper used by zones-merge: read the repo template from disk and
+// render it into the renamed namespace. `force` is always true here — merge
+// re-bases upstream every run, and the template (which still ships `srv`) is
+// never "already initialised". This is the single shared entry point so init and
+// merge cannot diverge on how the rename is computed.
+export function renameTemplateFile(
+  templateFile: string,
   name: string,
-): ZonesInitPreserveResult {
-  const renames = new Map<string, string>([["srv", name]]);
-
-  // 1. Carry the existing doc forward, renaming srv→<name> (keys + refs) and
-  //    cloning each zone so we never mutate the caller's object.
-  const out: Record<string, unknown> = {};
-  const preserved: string[] = [];
-  let renamedFromSrv = false;
-  for (const [key, val] of Object.entries(existing)) {
-    if (isDocKey(key)) {
-      out[key] = val; // carry doc blocks (e.g. _README) through untouched
-      continue;
-    }
-    let newKey = key;
-    if (key === "srv") {
-      newKey = name;
-      renamedFromSrv = true;
-    }
-    let zone: unknown = val;
-    if (isZoneObject(val)) {
-      const copy: Record<string, unknown> = {};
-      for (const [f, v] of Object.entries(val)) copy[f] = Array.isArray(v) ? [...v] : v;
-      rewriteZoneRefs(copy, renames);
-      zone = copy;
-    }
-    out[newKey] = zone;
-    if (isZoneObject(zone)) preserved.push(newKey);
-  }
-
-  // 2. Add any template zone (and doc block) that the existing doc lacks — the
-  //    existing value always wins for keys present in both.
-  const added: string[] = [];
-  for (const [key, val] of Object.entries(renamedTemplate)) {
-    if (key in out) continue;
-    out[key] = val;
-    if (!isDocKey(key) && isZoneObject(val)) added.push(key);
-  }
-
-  return { raw: out, preserved, added, renamedFromSrv };
+  keepActive: ReadonlySet<string> = new Set<string>(),
+): ZonesInitResult {
+  return zonesInit(parseTemplate(templateFile), name, true, keepActive);
 }

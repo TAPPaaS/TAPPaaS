@@ -28,8 +28,10 @@ network-manager delete <name>       [--check]
 network-manager enable|disable|manual <name> [--force]
 network-manager bind <zone>         --environment <env> | --unbind
 network-manager reconcile           [--apply] [--only <plane>]
-network-manager init        --name <N> [--from <tpl>] [--out <file>] [--force]
+network-manager init  [<profile>] --name <N> [--from <tpl>] [--out <f>] [--force]
+network-manager retire      [--apply]
 network-manager validate    [--zones <file>] [--config-dir <dir>] [--strict]
+                            [--effective]
 network-manager merge       [--diff] [--config-dir <dir>] [--template <tpl>]
 network-manager distribute  [--zones <file>] [--dry-run]
 network-manager -h | --help
@@ -155,23 +157,66 @@ non-mutating dry-run. Exit `0` = in sync, `2` = drift reported (dry-run, not a
 failure), `1` = a hard error (a plane errored, or Proxmox still drifts after
 `--apply`).
 
-### `init` (alias `zones-init`) — initialise zones.json from a template
+### `init [<profile>]` (alias `zones-init`) — composable install profiles
 
-Used at install time to stamp a fresh `zones.json` named for the TAPPaaS system.
-`zones-init` is kept as an alias.
+`init` applies an **additive, idempotent profile bundle** to `zones.json`
+(ADR-014 D7). It replaces the old single flat transform that shipped ~23 zones
+and then inactivated the ones it did not want.
+
+| Profile | Zones |
+|---------|-------|
+| **`core`** (default) | `mgmt` · `wan` · `netbird`/`edge`/`admin` overlays · `<N>` (the renamed `srv`, Active) · `home` · `guest` · `dmz` (Mandatory) |
+| **`iot`** | `iotLocal` · `iotCloud` · `iotCams` · `iotUntrust` — all Active, each bound to the default environment |
 
 ```bash
-network-manager init --name acme
+network-manager init core --name acme     # the minimal coherent install
+network-manager init iot  --name acme     # opt in to the IoT segment set
 ```
 
-- `--name <N>` (required) — system name; renames the template's `srv` → `<N>`.
-  `home` and `guest` are site-local client-role zones and keep their names (#425).
-- `--from <tpl>` — source template (default: the `zones.json` shipped with the
-  bin).
-- `--out <file>` — output (default `$TAPPAAS_CONFIG/zones.json`).
-- `--force` — re-apply even if already initialised.
+Properties, all unit-asserted:
 
-Writing to a non-live `--out` automatically skips distribution.
+- **Additive** — a profile only ever adds its zones, plus the `access-to`
+  entries its zones need on zones from another profile (`init iot` gives the
+  service and client zones reach to the devices). It never removes or
+  deactivates anything.
+- **Idempotent** — re-applying a profile is a byte-level no-op.
+- **Order-independent** — `core` then `iot` == `iot` then `core`.
+- **Non-destructive (#427)** — existing zones always win. A re-run can never
+  rebuild a live file from template defaults; operator zones, custom states and
+  edited access lists survive. `--force` re-stamps *this profile's* zones from
+  the template.
+- **`srv → <N>`** is the only rename, applied to keys, to every zone reference,
+  and to the `serves` placeholder. `home`/`guest` keep their names (#425): the
+  zone key drives the client DNS domain `<zone>.internal`.
+
+A site with no smart-home devices simply never runs `init iot` and never carries
+those zones. Extra service zones, a second client segment and so on come from
+`add --archetype` or `environment add --create-zone`, not from dormant template
+entries.
+
+### `retire` — remove zones a release stopped shipping
+
+Deleting a zone from the template does **not** remove it from an existing
+install: the 3-way merge keeps anything present locally but absent upstream
+(which is right — it is what stops a release silently deleting an operator's
+zone). `retire` is the explicit, guarded cleanup.
+
+```bash
+network-manager retire            # dry-run: what would go, and what is kept
+network-manager retire --apply    # commit
+```
+
+It considers exactly `srvHome`, `srvWork`, `srvCust`, `srvDev`, `srvTest`,
+`iot`, `test`, `testAllowA`, `testAllowB`, `testPinhole` — an **explicit list,
+never "everything Inactive"**. A zone is removed only when it is **both**
+
+- not `Active`/`Mandatory`/`Manual` (it provisions nothing today), **and**
+- not named by any installed module's `zone`/`zone0`.
+
+Anything else is kept and reported with the reason. References to a retired zone
+are stripped from every other zone's `access-to`/`pinhole-allowed-from`.
+`srv` (the rename source) and `work` (a legitimate client zone that is merely
+switched off) are **never** retired.
 
 ### `validate` (alias `zones-check`) — offline consistency audit
 
@@ -189,6 +234,21 @@ network-manager validate --strict          # warnings become errors
 - `--strict` — promote warnings to errors.
 
 Exit `0` ok, `1` on dangling references / missing required fields / lost zones.
+
+### `validate --effective` — audit the graph the planes actually receive
+
+`validate` audits the **authored** `zones.json` by default. A `serves` link
+contributes an edge that exists only in the rendered document, so an
+authored-scope run cannot judge it — and says so in its output. Add
+`--effective` to render the links and check the real graph:
+
+```bash
+network-manager validate               # authored: authoring mistakes
+network-manager validate --effective   # rendered: what zone-manager receives
+```
+
+This matters for the tier checks: a client zone's edge to its service zone lives
+only in the render, so `--effective` is where I1 can see it.
 
 ### `distribute` (alias `zones-distribute`) — push zones.json to the Proxmox nodes
 

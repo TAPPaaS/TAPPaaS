@@ -18,7 +18,7 @@ import { join } from "path";
 import { tmpdir } from "os";
 import { PLANE_ORDER } from "../../src/types";
 import {
-  mergeInitWithExisting,
+  initProfile,
   parseTemplate,
   renameTemplateFile,
   validateName,
@@ -40,6 +40,7 @@ import { addZone, deleteZone } from "../../src/zonelifecycle";
 import { runChecks } from "../../src/zonescheck";
 import { ARCHETYPES, TIER_EXEMPT_TYPES, archetypeNames } from "../../src/archetypes";
 import { backfillServes, renderEffective } from "../../src/serves";
+import { RETIRED_ZONES, retireZones } from "../../src/retire";
 import {
   distributeZones,
   enumerateNodes,
@@ -242,10 +243,12 @@ function tmpZones(): string {
   check(readFileSync(f, "utf8") === before, "zone delete --check mutates nothing on disk");
 }
 
-// ── 8. zones-init transform (offline; against the REAL distributed template) ─
-// NM_TEMPLATE points at the canonical manager/network-manager/zones.json. We
-// transform it in memory (the CLI's atomic write to --out is exercised by the
-// shell tier); here we assert the transform rules + referential integrity.
+// ── 8. the rename transform (offline; against the REAL distributed template) ─
+// NM_TEMPLATE points at the canonical manager/network-manager/zones.json.
+// `zonesInit` now renders the WHOLE template into the renamed namespace — this
+// is the MERGE SOURCE, not what a fresh install writes (that is `initProfile`,
+// section 21). The D7 template no longer ships srv{Home,…}/work/iot/test*, so
+// the old "force these Inactive" assertions are gone with them.
 {
   const tplPath = process.env.NM_TEMPLATE;
   if (!tplPath) {
@@ -265,71 +268,54 @@ function tmpZones(): string {
     const acme = raw["acme"] as Record<string, unknown>;
     check(acme["type"] === "Service" && acme["vlantag"] === 200, "<N> carried srv's config (type/vlan)");
     check(acme["state"] === "Active", "<N> state forced Active");
+    check(acme["tier"] === 1, "<N> carries the service tier (ADR-014)");
 
-    // home access-to has <N> (redirected from srvHome) and NOT srvHome
-    const home = raw["home"] as Record<string, unknown>;
-    const homeAccess = home["access-to"] as string[];
-    check(homeAccess.includes("acme"), "home access-to contains <N> (redirected from srvHome)");
-    check(!homeAccess.includes("srvHome"), "home access-to no longer references srvHome (inactivated)");
+    // D7: the retired zones are GONE from the shipped template.
+    for (const z of ["srvHome", "srvWork", "srvCust", "srvDev", "srvTest", "work",
+                     "iot", "test", "testAllowA", "testAllowB", "testPinhole"]) {
+      check(!(z in raw), `D7: '${z}' is no longer shipped in the template`);
+    }
 
-    // guest is left fully untouched (same object as the template): its client DNS
-    // domain (guest.internal) and isolation must survive the transform (#425).
+    // guest is left fully untouched: its client DNS domain (guest.internal) and
+    // isolation must survive the transform (#425).
     check(
       JSON.stringify(raw["guest"]) === JSON.stringify(template["guest"]),
       "guest zone is byte-identical to the template (untouched)",
     );
 
-    // inactivations
-    for (const z of ["srvHome", "srvWork", "srvCust", "srvDev", "work"]) {
-      const zz = raw[z] as Record<string, unknown>;
-      check(zz !== undefined && zz["state"] === "Inactive", `${z} state forced Inactive`);
-    }
+    // `serves` is a PLACEHOLDER in the template and must follow the rename: the
+    // default environment shares its name with the default service zone
+    // (ADR-007d/#426), so `serves: "srv"` becomes `serves: "<N>"`. This is how a
+    // shipped client/IoT zone comes out of init already bound — no literal
+    // service-zone reference left to go stale (#424).
+    check((raw["home"] as Record<string, unknown>)["serves"] === "acme",
+      "home.serves follows the rename: srv → <N> (the default environment)");
+    check((raw["iotCams"] as Record<string, unknown>)["serves"] === "acme",
+      "iotCams.serves follows the rename too");
 
-    // untouched zones still present
-    for (const z of ["srvTest", "iotLocal", "iotCloud", "iotCams", "mgmt", "dmz", "netbird", "test"]) {
-      check(z in raw, `${z} still present (untouched)`);
-    }
-    // srvTest state unchanged from template
-    check(
-      (raw["srvTest"] as Record<string, unknown>)["state"] ===
-        (template["srvTest"] as Record<string, unknown>)["state"],
-      "srvTest state unchanged",
-    );
-
-    // referential integrity: NO zone's access-to / pinhole-allowed-from still
-    // references the bare srv key (home/guest are kept, so they remain valid refs).
+    // referential integrity: NO zone still references the bare srv key.
     let refOk = true;
     for (const [k, v] of Object.entries(raw)) {
       if (k.startsWith("_")) continue;
       const zone = v as Record<string, unknown>;
       for (const field of ["access-to", "pinhole-allowed-from"]) {
         const arr = zone[field];
-        if (Array.isArray(arr)) {
-          for (const ref of arr) {
-            if (ref === "srv") {
-              refOk = false;
-            }
-          }
-        }
+        if (Array.isArray(arr) && arr.includes("srv")) refOk = false;
       }
     }
     check(refOk, "no zone references bare srv after transform (srv renamed; home/guest kept)");
 
-    // mgmt access-to: srv→acme rewritten; home/guest kept as-is
     const mgmtAccess = (raw["mgmt"] as Record<string, unknown>)["access-to"] as string[];
     check(
       mgmtAccess.includes("acme") && mgmtAccess.includes("home") && mgmtAccess.includes("guest"),
       "mgmt.access-to: srv→<N> rewritten; home/guest kept",
     );
-    // other srvHome refs preserved (NOT globally rewritten to <N>)
-    check(mgmtAccess.includes("srvHome"), "mgmt.access-to still lists srvHome (not globally rewritten)");
 
     // idempotency: re-running on the transformed doc (srv absent, acme present) is a no-op
     const second = zonesInit(raw, "acme", false);
     check(second.alreadyInitialised, "second zones-init run on transformed doc is a no-op");
 
-    // --force re-applies (but the transformed doc lacks srv → expected to error
-    // since the template keys are gone); confirm it throws rather than silently no-op.
+    // --force on an already-transformed doc errors (the srv key is gone).
     let forceThrew = false;
     try {
       zonesInit(raw, "acme", true);
@@ -338,7 +324,6 @@ function tmpZones(): string {
     }
     check(forceThrew, "--force on an already-transformed doc errors (template keys gone)");
 
-    // doc-block preserved
     check("_README" in raw, "_README doc block preserved through the transform");
   }
 }
@@ -364,17 +349,33 @@ function tmpZones(): string {
     check(!threw, `valid --name '${good}' is accepted`);
   }
 
-  // edge fixture: a minimal template missing 'guest' → clear error
+  // edge fixture: a template with no `srv` cannot be renamed.
   const d = mkdtempSync(join(tmpdir(), "nm-init-"));
   const edge = join(d, "edge.json");
-  writeFileSync(edge, JSON.stringify({ srv: { state: "Inactive" }, home: { "access-to": ["srvHome"] } }), "utf8");
+  writeFileSync(edge, JSON.stringify({ home: { state: "Active" } }), "utf8");
   let edgeThrew = false;
   try {
     zonesInit(parseTemplate(edge), "acme", false);
   } catch {
     edgeThrew = true;
   }
-  check(edgeThrew, "template missing the 'guest' key is rejected with a clear error");
+  check(edgeThrew, "a template with no 'srv' key is rejected with a clear error");
+
+  // D7: a profile naming a zone the template does not define is a broken
+  // template — it must fail loudly, not silently install half a profile.
+  const broken = join(d, "broken.json");
+  writeFileSync(broken, JSON.stringify({
+    _profiles: { core: { zones: ["srv", "home", "nosuch"] } },
+    srv: { state: "Inactive" },
+    home: { state: "Active" },
+  }), "utf8");
+  let brokenThrew = "";
+  try {
+    initProfile(parseTemplate(broken), {}, "acme", "core");
+  } catch (e) {
+    brokenThrew = (e as Error).message;
+  }
+  check(brokenThrew.includes("nosuch"), "a profile naming an undefined zone is rejected, naming it");
 }
 
 // ── 10. zones-check consistency audit (offline; temp fixtures) ────────
@@ -765,19 +766,18 @@ function tmpZones(): string {
       check((r.merged["myorg"] as Record<string, unknown>)["description"] === "OPERATOR EDIT", "an operator edit (current!=orig) is pinned over the upstream change");
     }
 
-    // (d) `state` is ALWAYS pinned to current (occupancy preserved): a current
-    //     'srvWork' Active stays Active even though the renamed source has it
-    //     Inactive.
+    // (d) `state` is ALWAYS pinned to current (occupancy preserved): an operator
+    //     who disabled a shipped zone keeps it disabled across a release that
+    //     ships it Active. (Was expressed with srvWork, retired by D7.)
     {
       const renamed = renameRaw();
       const orig = JSON.parse(JSON.stringify(renamed)) as Record<string, unknown>;
       const source = JSON.parse(JSON.stringify(renamed)) as Record<string, unknown>;
       const current = JSON.parse(JSON.stringify(renamed)) as Record<string, unknown>;
-      // renamed source has srvWork Inactive; operator/occupancy kept it Active.
-      check((source["srvWork"] as Record<string, unknown>)["state"] === "Inactive", "precondition: renamed source has srvWork Inactive");
-      (current["srvWork"] as Record<string, unknown>)["state"] = "Active";
+      check((source["guest"] as Record<string, unknown>)["state"] === "Active", "precondition: the renamed source ships guest Active");
+      (current["guest"] as Record<string, unknown>)["state"] = "Inactive";
       const r = mergeZones(current, orig, source);
-      check((r.merged["srvWork"] as Record<string, unknown>)["state"] === "Active", "state is always pinned to current (srvWork stays Active — occupancy preserved)");
+      check((r.merged["guest"] as Record<string, unknown>)["state"] === "Inactive", "state is always pinned to current (an operator-disabled zone stays disabled)");
     }
 
     // (e) --diff writes nothing.
@@ -919,22 +919,21 @@ function tmpZones(): string {
   }
 }
 
-// ── 14. init preserves existing configured zones (#427) ───────────────
-// mergeInitWithExisting reconciles the freshly-rendered renamed template with an
-// EXISTING live zones.json so an init re-run never rebuilds a live file from
-// template defaults: operator zones survive verbatim, in-use zones keep their
-// state, references are not redirected, a not-yet-renamed 'srv' carries its
-// config to '<N>', and only genuinely-new template zones are added.
+// ── 15. init preserves existing configured zones (#427, now via initProfile) ─
+// `initProfile` subsumes the retired mergeInitWithExisting: it carries the
+// EXISTING live document forward (with the srv → <N> rename applied to keys AND
+// references) and contributes only zones that are not already present. An init
+// re-run therefore never rebuilds a live file from template defaults.
 {
   const tpl = process.env.NM_TEMPLATE;
   if (!tpl) {
     check(false, "NM_TEMPLATE env must point at the distributed template (init-preserve tests)");
   } else {
-    const renamedTemplate = renameTemplateFile(tpl, "acme").raw;
+    const template = parseTemplate(tpl);
 
     // A live doc: a not-yet-renamed 'srv' (operator set Active + custom access),
     // a custom zone absent from the template, an in-use client 'home' whose
-    // access-to still points at srvHome, and 'work' left Active by the operator.
+    // access-to still points at the retired srvHome, and 'work' left Active.
     const existing: Record<string, unknown> = {
       _README: "keep me",
       srv: { type: "Service", state: "Active", vlantag: 200, "access-to": ["internet", "dmz"] },
@@ -943,7 +942,7 @@ function tmpZones(): string {
       work: { type: "Client", state: "Active", vlantag: 320, "access-to": ["srv"] },
     };
 
-    const m = mergeInitWithExisting(renamedTemplate, existing, "acme");
+    const m = initProfile(template, existing, "acme", "core");
 
     // srv carried over to <N>, keeping the operator's Active state + config.
     check("acme" in m.raw && !("srv" in m.raw), "existing srv renamed to <N> (carried over)");
@@ -953,32 +952,111 @@ function tmpZones(): string {
     // custom zone absent from the template is NOT dropped.
     check("lab" in m.raw, "custom zone 'lab' (absent from template) is preserved, not dropped");
 
-    // in-use client zone keeps its Active state (not deactivated).
-    check((m.raw["work"] as Record<string, unknown>).state === "Active", "in-use 'work' keeps Active (not inactivated by the template)");
+    // 'work' is no longer shipped, but an existing one is NEVER removed by init —
+    // it is a legitimate client zone that is merely switched off elsewhere.
+    check("work" in m.raw && (m.raw["work"] as Record<string, unknown>).state === "Active",
+      "a zone the template dropped is PRESERVED by init (removal is `retire`'s job)");
 
-    // home's reference to srvHome is NOT redirected (kept verbatim); its 'srv'
-    // ref is renamed to <N> like every other reference.
+    // home's reference to the retired srvHome is NOT redirected (kept verbatim);
+    // its 'srv' ref is renamed to <N> like every other reference.
     const homeAccess = (m.raw["home"] as Record<string, unknown>)["access-to"] as string[];
     check(homeAccess.includes("srvHome"), "existing home keeps its srvHome reference (not redirected)");
-    check((m.raw["work"] as Record<string, unknown>)["access-to"] instanceof Array &&
-      ((m.raw["work"] as Record<string, unknown>)["access-to"] as string[]).includes("acme"),
+    check(((m.raw["work"] as Record<string, unknown>)["access-to"] as string[]).includes("acme"),
       "existing refs are srv→<N> renamed (work.access-to now lists <N>)");
 
     // preserved lists the existing zones; a template-only zone is ADDED.
     check(m.preserved.includes("acme") && m.preserved.includes("lab") && m.preserved.includes("home"), "preserved lists the discovered existing zones");
-    check(m.added.includes("guest") && m.added.includes("srvHome"), "template-only zones (guest, srvHome) are added");
-    check(!m.added.includes("lab") && !m.preserved.includes("guest"), "added vs preserved are disjoint by origin");
+    check(m.added.includes("guest") && m.added.includes("dmz"), "core-profile zones absent from the live doc are added");
+    check(!m.added.includes("lab"), "added vs preserved are disjoint by origin");
 
-    // doc block survives.
-    check(m.raw["_README"] === "keep me", "_README doc block preserved through the merge");
+    // an existing zone is never re-stamped from the template without --force.
+    check((m.raw["home"] as Record<string, unknown>)["serves"] === undefined,
+      "an existing zone is NOT re-stamped from the template (no serves injected)");
 
-    // fresh-install parity: merging the renamed template with an EMPTY existing
-    // doc yields exactly the renamed template (no spurious adds/drops).
-    const fresh = mergeInitWithExisting(renamedTemplate, {}, "acme");
+    // doc block survives; install-time metadata does not leak into the live file.
+    check(m.raw["_README"] === "keep me", "_README doc block preserved through init");
+    check(!("_profiles" in m.raw), "_profiles is install-time metadata and is NOT written to the live doc");
+  }
+}
+
+// ── 15b. ADR-014 D7: composable, additive, idempotent profiles ────────
+{
+  const tpl = process.env.NM_TEMPLATE;
+  if (!tpl) {
+    check(false, "NM_TEMPLATE env must point at the distributed template (profile tests)");
+  } else {
+    const template = parseTemplate(tpl);
+    const zonesOf = (r: Record<string, unknown>) =>
+      Object.keys(r).filter((k) => !k.startsWith("_")).sort();
+
+    // core on a FRESH install: exactly the core set, renamed.
+    const core = initProfile(template, {}, "acme", "core");
     check(
-      JSON.stringify(fresh.raw) === JSON.stringify(renamedTemplate) && fresh.preserved.length === 0,
-      "merging with an empty existing doc == the pure renamed template (fresh-install parity)",
+      zonesOf(core.raw).join(",") === ["mgmt", "wan", "netbird", "edge", "admin", "acme", "home", "guest", "dmz"].sort().join(","),
+      `init core emits exactly the core set (got ${zonesOf(core.raw).join(",")})`,
     );
+    check(!zonesOf(core.raw).some((z) => z.startsWith("iot")), "init core ships NO IoT zones (opt-in)");
+    check(!zonesOf(core.raw).some((z) => z.startsWith("test")), "init core ships NO test zones");
+
+    // a core-only doc must be referentially clean — no dangling IoT references.
+    {
+      const doc = { raw: core.raw, zones: new Map(Object.entries(core.raw).filter(([k, v]) => !k.startsWith("_") && !!v).map(([k, v]) => [k, { ...(v as object), name: k }])) };
+      let dangling: string[] = [];
+      for (const [k, v] of Object.entries(core.raw)) {
+        if (k.startsWith("_")) continue;
+        for (const f of ["access-to", "pinhole-allowed-from"]) {
+          const arr = (v as Record<string, unknown>)[f];
+          if (!Array.isArray(arr)) continue;
+          for (const r of arr) {
+            if (typeof r === "string" && r !== "internet" && r !== "all" && !(r in core.raw)) dangling.push(`${k}.${f}→${r}`);
+          }
+        }
+      }
+      check(dangling.length === 0, `init core has no dangling references (${dangling.join(", ") || "clean"})`);
+      void doc;
+    }
+
+    // iot composes ON TOP, adding its zones and the reach they need.
+    const both = initProfile(template, core.raw, "acme", "iot");
+    check(
+      ["iotLocal", "iotCloud", "iotCams", "iotUntrust"].every((z) => z in both.raw),
+      "init iot adds the four IoT zones on top of core",
+    );
+    check(
+      ["mgmt", "acme", "home", "guest", "dmz"].every((z) => z in both.raw),
+      "init iot leaves the core zones in place",
+    );
+    const acmeAccess = (both.raw["acme"] as Record<string, unknown>)["access-to"] as string[];
+    check(acmeAccess.includes("iotLocal") && acmeAccess.includes("iotCloud"),
+      "init iot grants the service zone reach to the controlled IoT zones");
+    const mgmtAccess2 = (both.raw["mgmt"] as Record<string, unknown>)["access-to"] as string[];
+    check(["iotLocal", "iotCloud", "iotCams", "iotUntrust"].every((z) => mgmtAccess2.includes(z)),
+      "init iot grants the control plane visibility of the IoT zones");
+    check((both.raw["iotUntrust"] as Record<string, unknown>)["state"] === "Active",
+      "D7: iotUntrust ships Active with the profile (isolated anyway)");
+
+    // ORDER-INDEPENDENT: iot then core == core then iot.
+    const iotFirst = initProfile(template, {}, "acme", "iot");
+    const thenCore = initProfile(template, iotFirst.raw, "acme", "core");
+    check(zonesOf(thenCore.raw).join(",") === zonesOf(both.raw).join(","),
+      "profiles are order-independent (iot→core == core→iot)");
+
+    // IDEMPOTENT: re-applying adds nothing and changes nothing.
+    const again = initProfile(template, both.raw, "acme", "iot");
+    check(again.added.length === 0, "re-applying a profile adds no zone (idempotent)");
+    check(JSON.stringify(again.raw) === JSON.stringify(both.raw), "re-applying a profile is a byte-level no-op");
+
+    // grants never author a dangling reference: applying `iot` when a granted
+    // target is absent must skip it rather than point at nothing.
+    const noHome = { ...core.raw };
+    delete (noHome as Record<string, unknown>)["home"];
+    const g = initProfile(template, noHome, "acme", "iot");
+    check(!("home" in g.raw), "a zone the operator deleted is not resurrected by a grant");
+
+    // an unknown profile is refused, with the known set named.
+    let threwUnknown = false;
+    try { initProfile(template, {}, "acme", "nope"); } catch (e) { threwUnknown = (e as Error).message.includes("core"); }
+    check(threwUnknown, "an unknown profile is rejected and names the known ones");
   }
 }
 
@@ -1442,6 +1520,105 @@ function tmpZones(): string {
     try { authorZone(d2, "zNope", { archetype: "not-a-thing" }); } catch { threw = true; }
     check(threw, "P4: an unknown archetype is rejected");
   }
+}
+
+// ── 21. ADR-014 D7 / F3: `retire` — remove what a release stopped shipping ─
+{
+  const d = mkdtempSync(join(tmpdir(), "nm-retire-"));
+  const mk = (zones: Record<string, unknown>) => {
+    const f = join(d, `z-${Math.random().toString(36).slice(2)}.json`);
+    writeFileSync(f, JSON.stringify(zones, null, 2), "utf8");
+    return f;
+  };
+  const zone = (o: Record<string, unknown> = {}) => ({
+    type: "Service", state: "Inactive", typeId: "2", subId: "9", vlantag: 299,
+    ip: "10.2.99.0/24", "access-to": [], "pinhole-allowed-from": [], ...o,
+  });
+
+  // (a) an Inactive, unoccupied retired zone is removed, and every reference to
+  //     it is stripped from the zones that named it.
+  {
+    const f = mk({
+      mgmt: zone({ type: "Management", state: "Manual", "access-to": ["internet", "acme", "srvHome", "iot"] }),
+      acme: zone({ state: "Active", "access-to": ["internet"], "pinhole-allowed-from": ["srvHome"] }),
+      srvHome: zone({ state: "Inactive" }),
+      iot: zone({ type: "IoT", state: "Inactive" }),
+    });
+    const doc = loadZones(f);
+    const res = retireZones(doc, join(d, "no-config"), true);
+    check(res.retired.sort().join(",") === "iot,srvHome", `retire removes the eligible set (got ${res.retired.join(",")})`);
+    check(!zoneExists(doc, "srvHome") && !zoneExists(doc, "iot"), "retire deletes the zone keys");
+    const mgmtAccess = getZone(doc, "mgmt")?.["access-to"] as string[];
+    check(!mgmtAccess.includes("srvHome") && !mgmtAccess.includes("iot") && mgmtAccess.includes("acme"),
+      "retire strips references to the retired zones and leaves the others");
+    check(!(getZone(doc, "acme")?.["pinhole-allowed-from"] as string[]).includes("srvHome"),
+      "retire strips pinhole-allowed-from references too");
+  }
+
+  // (b) THE GUARD: a live zone is never retired automatically.
+  {
+    const f = mk({ mgmt: zone({ type: "Management", state: "Manual" }), srvWork: zone({ state: "Active" }) });
+    const doc = loadZones(f);
+    const res = retireZones(doc, join(d, "no-config"), true);
+    check(res.retired.length === 0 && res.kept.includes("srvWork"), "an ACTIVE retired-set zone is kept, not deleted");
+    check(zoneExists(doc, "srvWork"), "the live zone survives");
+    check(res.items.some((i) => i.zone === "srvWork" && i.detail.includes("disable")), "the keep reason tells the operator how to proceed");
+  }
+
+  // (c) THE GUARD: a zone still hosting a deployed module is never retired.
+  {
+    const cfg = mkdtempSync(join(tmpdir(), "nm-retire-cfg-"));
+    writeFileSync(join(cfg, "nextcloud.json"), JSON.stringify({ zone0: "srvCust" }), "utf8");
+    const f = mk({ mgmt: zone({ type: "Management", state: "Manual" }), srvCust: zone({ state: "Inactive" }) });
+    const doc = loadZones(f);
+    const res = retireZones(doc, cfg, true);
+    check(res.retired.length === 0 && res.kept.includes("srvCust"), "an OCCUPIED retired-set zone is kept, not deleted");
+    check(zoneExists(doc, "srvCust"), "the occupied zone survives (its module is not orphaned)");
+  }
+
+  // (d) THE SET IS EXPLICIT: `work` and `srv` are Inactive+unoccupied here and
+  //     must still be untouched — retire is a named list, never "everything off".
+  {
+    const f = mk({
+      mgmt: zone({ type: "Management", state: "Manual" }),
+      work: zone({ type: "Client", state: "Inactive" }),
+      srv: zone({ state: "Inactive" }),
+      lab: zone({ state: "Inactive" }),
+    });
+    const doc = loadZones(f);
+    const res = retireZones(doc, join(d, "no-config"), true);
+    check(res.retired.length === 0, "retire touches nothing outside its explicit set");
+    check(zoneExists(doc, "work") && zoneExists(doc, "srv") && zoneExists(doc, "lab"),
+      "work, srv and an operator zone all survive retire");
+  }
+
+  // (e) dry-run mutates nothing but reports the same verdicts.
+  {
+    const f = mk({ mgmt: zone({ type: "Management", state: "Manual", "access-to": ["srvHome"] }), srvHome: zone({ state: "Inactive" }) });
+    const before = readFileSync(f, "utf8");
+    const doc = loadZones(f);
+    const res = retireZones(doc, join(d, "no-config"), false);
+    check(res.retired.includes("srvHome"), "dry-run reports what would be retired");
+    check(res.items.find((i) => i.zone === "srvHome")?.strippedFrom.includes("mgmt") === true,
+      "dry-run reports which zones would lose a reference");
+    check(res.changed === false, "dry-run reports changed=false");
+    check(readFileSync(f, "utf8") === before, "dry-run does not touch the file");
+    check(zoneExists(doc, "srvHome"), "dry-run does not mutate the in-memory doc either");
+  }
+
+  // (f) idempotent: a second apply finds nothing.
+  {
+    const f = mk({ mgmt: zone({ type: "Management", state: "Manual" }), srvDev: zone({ state: "Inactive" }) });
+    const doc = loadZones(f);
+    retireZones(doc, join(d, "no-config"), true);
+    const second = retireZones(doc, join(d, "no-config"), true);
+    check(second.retired.length === 0 && second.kept.length === 0, "a second retire pass is a no-op (idempotent)");
+  }
+
+  // (g) the retired set never includes the rename source or a client zone.
+  check(!RETIRED_ZONES.includes("srv") && !RETIRED_ZONES.includes("work") &&
+        !RETIRED_ZONES.includes("home") && !RETIRED_ZONES.includes("guest"),
+    "the retired set excludes srv (rename source) and the client/role zones");
 }
 
 console.log("");
