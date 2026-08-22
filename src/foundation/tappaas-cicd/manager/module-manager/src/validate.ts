@@ -15,6 +15,8 @@
 //
 // Pure: depends only on the loaded ModuleConfig(s).
 
+import { join } from "path";
+import { ServiceFs, parseDependency } from "./services";
 import { ModuleConfig, ValidateFinding, ValidateReport } from "./types";
 
 export const VALID_TIERS = ["foundation", "app"] as const;
@@ -22,6 +24,10 @@ export const VALID_SOURCES = ["official", "community", "private", "local"] as co
 
 export interface ValidateOptions {
   allowFork?: boolean;
+  // Filesystem probe for the dependsOn reference-integrity check (#495 follow-up).
+  // Omit it and that check is SKIPPED — the tier/source lint stays pure and
+  // usable without a tree. main.ts always supplies realServiceFs(configDir).
+  fs?: ServiceFs;
 }
 
 // Lint one module config; append findings to `out`.
@@ -66,11 +72,69 @@ export function validateModule(
     warn(`source:community — peer-reviewed but not officially supported (🟡)`);
   }
 
+  // dependsOn reference integrity — see validateDependsOn.
+  if (opts.fs) validateDependsOn(m, opts.fs, out);
+
   // TODO(question): the bash stub also intended a SCHEMA check (every field
-  // against module-fields.json) and reference-integrity (dependsOn providers
-  // exist among deployed modules), mirroring people-manager's validateRefs.
-  // PARKED — see main.ts. This first pass ports only the tier/source lint, which
-  // is the only validator that actually exists in bash today.
+  // against module-fields.json). PARKED — see main.ts. The reference-integrity
+  // half of that TODO is now implemented above.
+}
+
+// dependsOn reference integrity (#495 follow-up).
+//
+// Both `reconcile --apply` and `modify` SKIP a dependency whose provider ships no
+// services/<service>/update-service.sh, rather than aborting. That skip is the
+// right runtime behaviour — one module's broken declaration must not block a
+// converge — but it means a dependency that can never be satisfied produces no
+// runtime signal at all. Several deployed modules declare providers that have no
+// services/ directory whatsoever (sonos:audio, sonos:airplay, reolink:rtsp,
+// alfen:ui, alfen:modbus, alfen:discovery), so the declaration silently does
+// nothing. `validate` is where that belongs: a dependsOn naming a provider that
+// cannot serve it is a CONFIG error, reported once, at the time you ask.
+//
+// Provider resolution is environment-aware, exactly as reconcile does it, so a
+// consumer in environment 'test' pairs with <provider>-test when that exists.
+export function validateDependsOn(
+  m: ModuleConfig,
+  fs: ServiceFs,
+  out: ValidateFinding[],
+): void {
+  const deps = Array.isArray(m.dependsOn) ? m.dependsOn : [];
+  const environment = typeof m.environment === "string" ? m.environment : "";
+
+  for (const dep of deps) {
+    if (typeof dep !== "string" || dep === "") continue;
+    const { provider, service } = parseDependency(dep);
+
+    // A bare "provider" with no ":service" cannot name a service script at all.
+    if (!dep.includes(":")) {
+      out.push({
+        module: m.name,
+        severity: "error",
+        message: `dependsOn '${dep}' has no ':<service>' — a dependency must name a provider AND a service (e.g. '${provider}:vm')`,
+      });
+      continue;
+    }
+
+    const { module: providerModule, dir } = fs.providerDir(provider, environment);
+    if (!dir) {
+      out.push({
+        module: m.name,
+        severity: "error",
+        message: `dependsOn '${dep}' names provider '${providerModule}', which is not deployed (or its config has no .location) — this dependency is never applied`,
+      });
+      continue;
+    }
+
+    const svcScript = join(dir, "services", service, "update-service.sh");
+    if (!fs.exists(svcScript)) {
+      out.push({
+        module: m.name,
+        severity: "error",
+        message: `dependsOn '${dep}' cannot be converged: provider '${providerModule}' ships no ${service}/update-service.sh (${svcScript}) — reconcile and modify SKIP it silently`,
+      });
+    }
+  }
 }
 
 // Validate a set of module configs; returns the aggregated report.

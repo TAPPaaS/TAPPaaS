@@ -19,7 +19,7 @@ import {
   resolveEffectiveModuleName,
   resolveViaCatalog,
 } from "../../src/config";
-import { validateModules } from "../../src/validate";
+import { validateDependsOn, validateModules } from "../../src/validate";
 import { AddOptions, DeleteOptions } from "../../src/types";
 import { FakeModuleClient } from "./fake-client";
 import { run } from "../../src/main";
@@ -427,6 +427,133 @@ function captureList(client: FakeModuleClient, extraArgs: string[] = []): string
   );
 
   rmSync(tmp, { recursive: true, force: true });
+}
+
+
+
+// ── dependsOn reference integrity (#495 follow-up) ──────────────────────
+// reconcile/modify SKIP an unservable dependency at runtime, so validate is the
+// only place a dangling declaration is reported. Fake ServiceFs — no real tree.
+{
+  const mkFs = (providers: Record<string, string | null>, files: Set<string>) => ({
+    providerDir(provider: string, environment: string) {
+      // Mirror the environment-aware resolution: <provider>-<env> wins if known.
+      const scoped = environment ? `${provider}-${environment}` : "";
+      const name = scoped && scoped in providers ? scoped : provider;
+      return { module: name, dir: providers[name] ?? null };
+    },
+    exists: (p: string) => files.has(p),
+  });
+
+  const findings = (m: Record<string, unknown>, fs: ReturnType<typeof mkFs>) => {
+    const out: { module: string; severity: string; message: string }[] = [];
+    validateDependsOn(m as never, fs, out as never);
+    return out;
+  };
+
+  // 1. Fully satisfied dependency — no finding.
+  {
+    const fs = mkFs({ cluster: "/src/cluster" }, new Set(["/src/cluster/services/vm/update-service.sh"]));
+    const f = findings({ name: "app", dependsOn: ["cluster:vm"] }, fs);
+    check(f.length === 0, "validate: a satisfiable dependsOn produces no finding");
+  }
+
+  // 2. Provider deployed but ships no update-service.sh — the sonos/alfen case.
+  {
+    const fs = mkFs({ sonos: "/src/sonos" }, new Set());
+    const f = findings({ name: "app", dependsOn: ["sonos:audio"] }, fs);
+    check(f.length === 1 && f[0].severity === "error", "validate: provider with no update-service.sh is an error");
+    check(
+      f[0].message.includes("audio/update-service.sh") && f[0].message.includes("SKIP"),
+      "validate: the finding names the missing script and says it is skipped silently",
+    );
+  }
+
+  // 3. Provider not deployed at all.
+  {
+    const fs = mkFs({}, new Set());
+    const f = findings({ name: "app", dependsOn: ["ghost:thing"] }, fs);
+    check(f.length === 1 && f[0].message.includes("not deployed"), "validate: undeployed provider is an error");
+  }
+
+  // 4. Malformed entry with no ':service'.
+  {
+    const fs = mkFs({ cluster: "/src/cluster" }, new Set());
+    const f = findings({ name: "app", dependsOn: ["cluster"] }, fs);
+    check(f.length === 1 && f[0].message.includes("no ':<service>'"), "validate: a bare provider with no service is an error");
+  }
+
+  // 5. Environment-aware resolution: a consumer in 'test' pairs with <provider>-test.
+  {
+    const fs = mkFs(
+      { nextcloud: "/src/nc", "nextcloud-test": "/src/nc" },
+      new Set(["/src/nc/services/fileservice/update-service.sh"]),
+    );
+    const f = findings(
+      { name: "euro-office-test", environment: "test", dependsOn: ["nextcloud:fileservice"] },
+      fs,
+    );
+    check(f.length === 0, "validate: provider resolution is environment-aware");
+  }
+
+  // 6. Every dependency is reported, not just the first.
+  {
+    const fs = mkFs({ a: "/src/a", b: "/src/b" }, new Set());
+    const f = findings({ name: "app", dependsOn: ["a:one", "b:two"] }, fs);
+    check(f.length === 2, "validate: each unsatisfiable dependency is reported");
+  }
+
+  // 7. Omitting fs skips the check entirely (tier/source lint stays pure).
+  {
+    const report = validateModules(
+      [{ name: "app", tier: "app", source: "official", dependsOn: ["ghost:thing"] } as never],
+      {},
+    );
+    check(report.errors === 0, "validate: without an fs probe, reference integrity is skipped");
+  }
+}
+
+
+// ── add: --vmid / --zone0 reach install-module.sh as field overrides ────
+// These two are the ONLY schema fields that are also recognised flags, so the
+// parser used to swallow them on `add` and the override vanished with no error
+// (#495 follow-up — it cost two failed nextcloud installs).
+{
+  const addOpts = (argv: string[]): AddOptions => {
+    const fake = new FakeModuleClient();
+    run(argv, fake);
+    const entry = fake.log.find((l) => l.verb === "add");
+    return entry!.opts as AddOptions;
+  };
+
+  {
+    const p = addOpts(["add", "nextcloud", "--zone0", "rossen"]).passthrough;
+    check(
+      p.includes("--zone0") && p[p.indexOf("--zone0") + 1] === "rossen",
+      "add: --zone0 reaches install-module.sh as a field override",
+    );
+  }
+  {
+    const p = addOpts(["add", "demo", "--vmid", "412"]).passthrough;
+    check(
+      p.includes("--vmid") && p[p.indexOf("--vmid") + 1] === "412",
+      "add: --vmid reaches install-module.sh as a field override",
+    );
+  }
+  {
+    // Ordinary (non-colliding) overrides must still work, and coexist.
+    const p = addOpts(["add", "demo", "--memory", "16384", "--zone0", "srvHome"]).passthrough;
+    check(
+      p.includes("--memory") && p[p.indexOf("--memory") + 1] === "16384" &&
+        p.includes("--zone0") && p[p.indexOf("--zone0") + 1] === "srvHome",
+      "add: a colliding and a non-colliding override coexist",
+    );
+  }
+  {
+    // Absent flags must not inject empty overrides.
+    const p = addOpts(["add", "demo"]).passthrough;
+    check(!p.includes("--zone0") && !p.includes("--vmid"), "add: no spurious overrides when the flags are absent");
+  }
 }
 
 console.log("");

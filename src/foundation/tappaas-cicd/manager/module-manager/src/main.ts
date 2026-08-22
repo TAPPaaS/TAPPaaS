@@ -40,6 +40,7 @@ import {
   SnapshotAction,
   TestOptions,
 } from "./types";
+import { realServiceFs } from "./services";
 import { validateModules } from "./validate";
 
 const VERSION = "0.1.0";
@@ -533,7 +534,13 @@ function cmdValidate(opts: Opts): number {
   } else {
     mods = listModules(opts.configDir);
   }
-  const report = validateModules(mods, { allowFork: opts.allowFork });
+  // realServiceFs supplies the dependsOn reference-integrity probe (#495
+  // follow-up): reconcile/modify skip an unservable dependency silently, so
+  // validate is the one place that reports it.
+  const report = validateModules(mods, {
+    allowFork: opts.allowFork,
+    fs: realServiceFs(opts.configDir),
+  });
   if (opts.json) {
     info(JSON.stringify(report, null, 2));
     return report.errors > 0 ? 1 : 0;
@@ -561,9 +568,29 @@ function cmdAdd(opts: Opts, client: ModuleClient): number {
     allowFork: opts.allowFork,
     force: opts.force,
     reinstall: opts.reinstall,
-    passthrough: opts.passthrough,
+    passthrough: addFieldOverrides(opts),
   };
   return client.add(module, a);
+}
+
+// `add` takes `--<field> <value>` JSON overrides, which parseArgs collects into
+// opts.passthrough for every flag it does not recognise. Two schema fields are
+// ALSO recognised flags — `--vmid` and `--zone0`, both defined for `test`
+// (and `--vmid` for `delete`) — so the parser consumed them and the override was
+// silently dropped: no error, the install simply used the authored value. That
+// cost two failed nextcloud installs before it was spotted (#495 follow-up).
+// Of the 71 fields in module-fields.json these are the only two affected;
+// `--environment`/`--variant` also shadow fields but are re-forwarded explicitly
+// by client.add(), so they already reach install-module.sh.
+//
+// NOTE: this special-cases the two known collisions. A future option whose name
+// matches a schema field would reintroduce the same silent drop — parsing the
+// option set per-verb would fix the whole class.
+function addFieldOverrides(opts: Opts): string[] {
+  const passthrough = [...opts.passthrough];
+  if (opts.vmid !== undefined) passthrough.push("--vmid", opts.vmid);
+  if (opts.zone0 !== undefined) passthrough.push("--zone0", opts.zone0);
+  return passthrough;
 }
 
 function cmdModify(opts: Opts, client: ModuleClient): number {
