@@ -171,10 +171,23 @@ if [[ "$IMAGETYPE" == "clone" ]]; then
     fi
 fi
 
-# Copy the VM config and create VM hardware
-scp "/home/tappaas/config/$1.json" "root@${NODE}.${MGMT}.internal:/root/tappaas/$1.json"
-ssh "root@${NODE}.${MGMT}.internal" "/root/tappaas/Create-TAPPaaS-VM.sh $1"
-ssh "root@${NODE}.${MGMT}.internal" "rm /root/tappaas/$1.json"
+# Copy the VM config and create VM hardware.
+# Idempotent re-runs (install-module --force, and every `module reconcile --apply`,
+# which by definition only ever runs against an ALREADY-installed module #495):
+# Create-TAPPaaS-VM.sh intentionally refuses to overwrite an existing VMID and exits 1,
+# so without this guard those re-runs abort here. If a VM with this VMID already exists
+# AND carries the expected name, it is ours — skip creation and proceed to configuration.
+# A same-VMID VM with a DIFFERENT name is a real collision: fall through to
+# Create-TAPPaaS-VM.sh, which refuses and reports it.
+_existing_vm_name=$(ssh -n -o BatchMode=yes -o ConnectTimeout=10 "root@${NODE}.${MGMT}.internal" \
+    "qm config ${VMID} 2>/dev/null | sed -n 's/^name: //p'" 2>/dev/null || true)
+if [[ -n "${_existing_vm_name}" && "${_existing_vm_name}" == "${VMNAME}" ]]; then
+    info "VM ${VMNAME} (VMID ${VMID}) already exists on ${NODE} — skipping creation (idempotent re-run)."
+else
+    scp "/home/tappaas/config/$1.json" "root@${NODE}.${MGMT}.internal:/root/tappaas/$1.json"
+    ssh "root@${NODE}.${MGMT}.internal" "/root/tappaas/Create-TAPPaaS-VM.sh $1"
+    ssh "root@${NODE}.${MGMT}.internal" "rm /root/tappaas/$1.json"
+fi
 
 # For Windows clone VMs: inject OOBE setup via the QEMU guest agent.
 # Windows post-sysprep does NOT read answer files from CDROMs — only from

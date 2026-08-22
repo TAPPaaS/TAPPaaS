@@ -125,7 +125,7 @@ else
 fi
 
 echo ""
-echo "== resolve_nixos_config: N-part vmname resolution (offline, #440) =="
+echo "== resolve_nixos_config: N-part vmname + location-dir resolution (offline, #440/#495) =="
 UPDATE_OS="${here}/update-os.sh"
 if [[ -f "$UPDATE_OS" ]]; then
     _tmp="$(mktemp -d)"
@@ -174,7 +174,38 @@ EOF
     _rnc "3-part vmname resolves via location (#440)" "hermes-gridtefy-bizops" "hermes.nix"
     rm -f "${_tmp}/hermes.nix" "${_cfgdir}/hermes-gridtefy-bizops.json"
 
-    # 4. Genuinely unresolvable: no .nix, no config, no location.
+    # 4. #495: the .nix lives at the module `location`, NOT in the caller's
+    # directory. This is the cwd dependency that made `module reconcile --apply`
+    # fail from anywhere but the module dir, while update-module.sh (which cd's
+    # there first) always worked. nix_dir here is deliberately EMPTY.
+    _locdir="${_tmp}/modules/nextcloud"
+    mkdir -p "${_locdir}"
+    : > "${_locdir}/nextcloud.nix"
+    cat > "${_cfgdir}/nextcloud-test.json" <<EOF
+{"environment": "test", "location": "${_locdir}"}
+EOF
+    _rnc "location-dir resolution, cwd has no .nix (#495)" "nextcloud-test" "nextcloud.nix"
+
+    # 4b. Same layout, instance-named .nix at the location dir: prefer it over
+    # the source-named one, so a per-instance override is honoured.
+    : > "${_locdir}/nextcloud-test.nix"
+    _rnc "instance-named .nix at location wins (#495)" "nextcloud-test" "nextcloud-test.nix"
+    rm -rf -- "${_locdir}" "${_cfgdir}/nextcloud-test.json"
+
+    # 4c. Legacy -<environment> strip also searches the location dir (#495).
+    # The location BASENAME deliberately differs from the .nix name, so neither
+    # the direct match nor the location-basename branch can resolve it — only
+    # the env-strip candidate under the location dir does.
+    _locdir2="${_tmp}/modules/eo-src"
+    mkdir -p "${_locdir2}"
+    : > "${_locdir2}/euro-office.nix"
+    cat > "${_cfgdir}/euro-office-test.json" <<EOF
+{"environment": "test", "location": "${_locdir2}"}
+EOF
+    _rnc "env-strip fallback searches the location dir (#495)" "euro-office-test" "euro-office.nix"
+    rm -rf -- "${_locdir2}" "${_cfgdir}/euro-office-test.json"
+
+    # 5. Genuinely unresolvable: no .nix, no config, no location.
     _rnc "unresolvable vmname returns nothing" "totally-unknown-thing" ""
 
     rm -rf -- "${_tmp}"

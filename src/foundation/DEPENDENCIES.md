@@ -117,7 +117,7 @@ module-manager (TS)                  <- the verb-aligned front door
     delete-module.sh    -> common-install-routines.sh
     test-module.sh
   src/main.ts runs in-process (native TS, ADR-007 refactor Phase 7.3):
-    src/reconcile.ts    -> <provider>/install-service.sh -> module update.sh / install.sh
+    src/reconcile.ts    -> <provider>/update-service.sh -> module update.sh / install.sh
     src/inspect.ts      -> (read-only: qm/pvesh queries + config JSON, no scripts)
 ```
 
@@ -250,7 +250,7 @@ graph TD
     UM --> SV["snapshot-vm.sh"]
     AJM --> CJC
     SV --> UM
-    RT --> ISS["dependsOn install-service.sh"]
+    RT --> ISS["dependsOn update-service.sh"]
     RT --> MUS["module update.sh / install.sh"]
     DM --> CIR
 ```

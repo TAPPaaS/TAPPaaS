@@ -43,11 +43,21 @@ Common options: `--config-dir <dir>`, `--json` (list/show/validate), `-h`.
 The leading `module` entity keyword is optional (it is the only entity).
 
 **`reconcile` vs `modify`** — `reconcile --apply` re-applies the *existing* config
-(idempotent converge: dependency `*-service.sh` applies + the module's own
-`update.sh`/`install.sh`), with **no snapshot, no tests, no 3-way merge, and no
-`updateTime` bump**. `modify` (`update-module.sh`) *changes* the config via a
-release update and does all of those. `reconcile` is the leaf the
-`site/environment reconcile --deep` cascade walks down to.
+(idempotent converge: each dependency's `update-service.sh` + the module's own
+`update.sh`/`install.sh`, all run from the module directory), with **no snapshot,
+no tests, no 3-way merge, and no `updateTime` bump**. `modify`
+(`update-module.sh`) *changes* the config via a release update, then performs the
+**same** apply by delegating to `reconcile --apply`, wrapped in snapshot + pre/post
+tests + rollback. `reconcile` is the leaf the `site/environment reconcile --deep`
+cascade walks down to.
+
+**Service contract** — `services/<svc>/update-service.sh` is the converge for an
+already-installed module and every service must ship one (enforced by `test.sh`).
+`install-service.sh` is create-only prerequisites; where a service has no
+create-only work it simply `exec`s `update-service.sh`. There is no fallback from
+one to the other: `install-service.sh` has create semantics (`cluster:vm`'s calls
+`Create-TAPPaaS-VM.sh`, which refuses an existing VMID), which is why reconcile
+failed on every VM-backed module before #495.
 
 **What `reconcile <m>` (no `--apply`) reports** — a read-only drift report in two
 parts:

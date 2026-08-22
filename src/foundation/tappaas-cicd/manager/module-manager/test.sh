@@ -568,7 +568,7 @@ if [[ -f "$UNIT_TSCONFIG" ]]; then
         ok "TypeScript unit tests compile"
         # tsconfig rootDir is the tappaas-cicd root (shared lib/ts base), so the
         # compiled tree mirrors manager/module-manager/ under dist-test.
-        for unit in module inspect; do
+        for unit in module inspect reconcile; do
             if run_ts "node '${DIST_TEST}/manager/module-manager/test/unit/${unit}.test.js'" >/dev/null 2>&1; then
                 ok "TypeScript ${unit} unit tests pass"
             else
@@ -581,6 +581,85 @@ if [[ -f "$UNIT_TSCONFIG" ]]; then
     rm -rf -- "$DIST_TEST"
 else
     bad "missing ${UNIT_TSCONFIG}"
+fi
+
+# ---------------------------------------------------------------------------
+# Contract: every provider service ships an update-service.sh (#495).
+#
+# `module modify` and `module reconcile --apply` both invoke a provider through
+# services/<svc>/update-service.sh — that script IS the converge for an
+# already-installed module. A service that ships only install-service.sh cannot
+# be converged, and used to force reconcile into a create-semantics fallback
+# that fails (or, for backup:push, blocks on a password prompt).
+#
+# Purely structural: no cluster, no provider is executed.
+# ---------------------------------------------------------------------------
+echo ""
+echo "== service contract: update-service.sh present for every service =="
+SRC_ROOT="$(cd "${HERE}/../../../.." && pwd)"
+if [[ -d "$SRC_ROOT" ]]; then
+    _missing=()
+    _unparseable=()
+    while IFS= read -r svc_dir; do
+        [[ -n "$svc_dir" ]] || continue
+        if [[ ! -f "${svc_dir}/update-service.sh" ]]; then
+            _missing+=("${svc_dir#"${SRC_ROOT}/"}")
+            continue
+        fi
+        bash -n "${svc_dir}/update-service.sh" 2>/dev/null || _unparseable+=("${svc_dir#"${SRC_ROOT}/"}")
+    done < <(find "$SRC_ROOT" -type d -path '*/services/*' \
+                \( -name '*' \) -exec test -e '{}/install-service.sh' -o -e '{}/update-service.sh' \; -print 2>/dev/null | sort)
+
+    if [[ ${#_missing[@]} -eq 0 ]]; then
+        ok "every services/*/ ships an update-service.sh"
+    else
+        bad "services with no update-service.sh: ${_missing[*]}"
+    fi
+    if [[ ${#_unparseable[@]} -eq 0 ]]; then
+        ok "every update-service.sh parses"
+    else
+        bad "update-service.sh does not parse: ${_unparseable[*]}"
+    fi
+else
+    bad "could not locate src root from ${HERE}"
+fi
+
+# ---------------------------------------------------------------------------
+# Guard: `modify` delegates its apply to `reconcile --apply` (#495).
+#
+# update-module.sh must NOT carry its own copy of the dependency-service loop +
+# module update.sh call. Two copies of the apply is what let reconcile rot
+# undetected while modify kept working. Structural only — nothing is executed.
+# ---------------------------------------------------------------------------
+echo ""
+echo "== modify delegates its apply to reconcile (#495) =="
+UPD="${HERE}/update-module.sh"
+if [[ -f "$UPD" ]]; then
+    if grep -qE 'module-manager reconcile "\$\{module\}" --apply' "$UPD"; then
+        ok "update-module.sh applies via module-manager reconcile --apply"
+    else
+        bad "update-module.sh does not delegate its apply to reconcile --apply"
+    fi
+    # The re-implemented loop is gone: no direct services/<svc>/update-service.sh
+    # invocation, and no direct ./update.sh call, left in update-module.sh.
+    if grep -q 'services/\${service_name}/update-service.sh' "$UPD"; then
+        bad "update-module.sh still re-implements the dependency-service loop"
+    else
+        ok "update-module.sh no longer re-implements the dependency-service loop"
+    fi
+    if grep -qE '^\s*if \./update\.sh "\$\{module\}"' "$UPD"; then
+        bad "update-module.sh still calls the module's update.sh directly"
+    else
+        ok "update-module.sh no longer calls the module's update.sh directly"
+    fi
+    # …but the safety machinery that makes modify MORE than a re-apply stays.
+    _kept_ok=1
+    for _needle in apply_three_way_merge snapshot_created "Post-update test" prune_snapshots finalize_config; do
+        grep -q "$_needle" "$UPD" || { bad "update-module.sh lost '${_needle}' — modify must keep its safety wrapper"; _kept_ok=0; }
+    done
+    (( _kept_ok == 1 )) && ok "modify keeps merge + snapshot + tests + rollback + prune"
+else
+    bad "update-module.sh not found"
 fi
 
 # --- run the standalone lint test suite and fold its result in -------------

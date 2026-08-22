@@ -34,8 +34,9 @@
 #   1. Create pre-update VM snapshot
 #   2. Run pre-update tests (test-module.sh)
 #   3. Run pre-update.sh hook (if present)
-#   4. Call dependency update-service.sh scripts
-#   5. Run module update.sh
+#   4+5. Apply the merged config via `module-manager reconcile --apply`
+#        (each dependency's update-service.sh, then the module's update.sh) —
+#        the SAME apply reconcile performs, not a second copy of it (#495)
 #   6. Run post-update tests (rollback on fatal failure)
 #   7. On success, prune old snapshots to tappaas.snapshotRetention (#353)
 #
@@ -397,73 +398,33 @@ main() {
         info "  Module location not set — skipping"
     fi
 
-    # ── Step 4: Call dependency update-service.sh scripts ─────────────
-    info "${BOLD}Update Step 4: Call dependency service updaters${CL}"
+    # ── Steps 4+5: Apply the (now merged) config — delegated to reconcile ──
+    #
+    # `module reconcile --apply` IS this apply: it calls each dependency's
+    # update-service.sh from the module directory, then the module's own
+    # update.sh. This used to be re-implemented here, which is how the two paths
+    # drifted apart — reconcile called install-service.sh (create semantics) and
+    # was broken on every VM-backed module while this one worked (#495).
+    # One apply, one place, exercised by both verbs.
+    #
+    # What stays HERE is everything that makes `modify` more than a re-apply:
+    # the 3-way merge (Step 0), the snapshot, the pre/post tests, rollback, the
+    # updateTime bump and snapshot pruning. reconcile deliberately does none of
+    # those — see DESIGN.md, "reconcile vs modify".
+    #
+    # Behaviour delta worth knowing: this loop used to abort the update when a
+    # provider shipped no update-service.sh. reconcile SKIPS such a dependency
+    # instead (several dependsOn entries name providers with no services/
+    # directory at all, e.g. sonos:audio, alfen:ui — those modules could not be
+    # modified at all before). A dependency naming a provider that cannot serve
+    # it is a config error, reported by `module validate`, not a runtime abort.
+    info "${BOLD}Update Steps 4+5: Apply config via reconcile${CL}"
 
-    local depends_on
-    depends_on=$(read_module_config "${module}" | jq -r '.dependsOn // [] | .[]' 2>/dev/null)
-    # Environment of the consuming module — used to resolve same-environment
-    # providers (e.g. "nextcloud:fileservice" → "nextcloud-test" when
-    # environment=="test"). Was .variant until that field was retired (#438).
-    local module_environment
-    module_environment=$(read_module_config "${module}" | jq -r '.environment // ""' 2>/dev/null) || module_environment=""
-
-    if [[ -z "${depends_on}" ]]; then
-        debug "  No dependency services to call"
-    else
-        # cd to the module directory so service scripts can find module files
-        if [[ -n "${module_dir}" ]]; then
-            cd "${module_dir}"
-        fi
-
-        for dep in ${depends_on}; do
-            local provider_module="${dep%%:*}"
-            local service_name="${dep##*:}"
-            local provider_dir
-
-            # Prefer the same-environment provider when it exists (#344, #438).
-            provider_module="$(resolve_provider_module "${provider_module}" "${module_environment}")"
-
-            if ! provider_dir=$(get_module_dir "${provider_module}" 2>/dev/null); then
-                fatal_with_rollback "${module}" "${snapshot_created}" \
-                    "Cannot find provider module '${provider_module}' for dependency '${dep}'"
-            fi
-
-            ensure_scripts_executable "${provider_dir}"
-            local svc_script="${provider_dir}/services/${service_name}/update-service.sh"
-
-            if [[ ! -x "${svc_script}" ]]; then
-                fatal_with_rollback "${module}" "${snapshot_created}" \
-                    "Missing update-service.sh for dependency '${dep}': ${svc_script}"
-            fi
-
-            info "  Calling ${BL}${dep}${CL} update-service.sh for module '${module}'..."
-            if "${svc_script}" "${module}"; then
-                debug "  ${GN}✓${CL} ${dep} update-service completed"
-            else
-                fatal_with_rollback "${module}" "${snapshot_created}" "Service updater failed: ${dep}"
-            fi
-        done
+    if ! module-manager reconcile "${module}" --apply; then
+        fatal_with_rollback "${module}" "${snapshot_created}" \
+            "Apply failed (reconcile --apply did not converge '${module}')"
     fi
-
-    # ── Step 5: Call the module's own update.sh ───────────────────────
-    info "${BOLD}Update Step 5: Run module update.sh: ${BL}${module}${CL}"
-
-    if [[ -n "${module_dir}" ]]; then
-        if [[ -x "${module_dir}/update.sh" ]]; then
-            debug "  Running ${module_dir}/update.sh..."
-            cd "${module_dir}"
-            if ./update.sh "${module}"; then
-                debug "  ${GN}✓${CL} Module update.sh completed"
-            else
-                fatal_with_rollback "${module}" "${snapshot_created}" "Module update.sh failed"
-            fi
-        else
-            info "  No executable update.sh found — skipping"
-        fi
-    else
-        warn "Cannot find module directory for '${module}' — skipping update.sh"
-    fi
+    debug "  ${GN}✓${CL} reconcile --apply converged"
 
     # ── Step 6: Post-update test ──────────────────────────────────────
     info "${BOLD}Update Step 6: Run post-update tests: ${BL}${module}${CL}"

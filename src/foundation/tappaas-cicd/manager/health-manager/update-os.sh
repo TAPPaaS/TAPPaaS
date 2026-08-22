@@ -244,15 +244,22 @@ wait_for_provisioning() {
 #
 # Resolves the NixOS config file for a module. Plain deploys: <nix_dir>/<vmname>.nix.
 # Resolution order once that's absent:
-#   1. Basename of the module's declared `location` field. Works regardless of
-#      how many hyphenated components vmname has -- <source>, <source>-<env>,
-#      or <source>-<env>-<instance> alike (#440: the old suffix-strip below
-#      only ever handled the 2-part case, and silently no-op'd on 3-part
-#      vmnames like <source>-<env>-<instance>, since environment there sits
-#      before the instance name, not at the end).
-#   2. Legacy fallback: strip a trailing -<environment> suffix from vmname
+#   1. The module's declared `location` DIRECTORY, by instance name then by the
+#      location basename (#495). This is where the .nix actually lives for a
+#      deployed instance; searching only `nix_dir` made resolution depend on the
+#      caller's working directory, so `module reconcile --apply` failed from
+#      anywhere but the module's own directory while `update-module.sh` (which
+#      cd's to the module dir first) always worked.
+#   2. Basename of `location`, under nix_dir. Works regardless of how many
+#      hyphenated components vmname has -- <source>, <source>-<env>, or
+#      <source>-<env>-<instance> alike (#440: the old suffix-strip below only
+#      ever handled the 2-part case, and silently no-op'd on 3-part vmnames
+#      like <source>-<env>-<instance>, since environment there sits before the
+#      instance name, not at the end).
+#   3. Legacy fallback: strip a trailing -<environment> suffix from vmname
 #      (#286, read .variant until it was retired in #438). Only correct for
-#      the 2-part case; kept for modules without a `location` field.
+#      the 2-part case; kept for modules without a `location` field. Searched
+#      under the location dir first, then nix_dir.
 # Echoes the resolved path and returns 0, or returns 1 with no output.
 resolve_nixos_config() {
     local vmname="$1" nix_dir="${2:-.}" config_dir="${3:-${CONFIG_DIR:-}}"
@@ -269,22 +276,29 @@ resolve_nixos_config() {
     location=$(jq -r '.location // empty' "${cfg}" 2>/dev/null)
     if [[ -n "${location}" ]]; then
         source_vmname="$(basename "${location}")"
-        candidate="${nix_dir}/${source_vmname}.nix"
-        if [[ -f "${candidate}" ]]; then
-            echo "${candidate}"
-            return 0
-        fi
+        # Location dir first (#495), then nix_dir (preserves the #440 behaviour
+        # for a recorded location whose directory is not present locally).
+        for candidate in "${location}/${vmname}.nix" \
+                         "${location}/${source_vmname}.nix" \
+                         "${nix_dir}/${source_vmname}.nix"; do
+            if [[ -f "${candidate}" ]]; then
+                echo "${candidate}"
+                return 0
+            fi
+        done
     fi
 
     local env
     env=$(jq -r '.environment // empty' "${cfg}" 2>/dev/null)
     if [[ -n "${env}" ]]; then
         source_vmname="${vmname%-"${env}"}"
-        candidate="${nix_dir}/${source_vmname}.nix"
-        if [[ -f "${candidate}" ]]; then
-            echo "${candidate}"
-            return 0
-        fi
+        for candidate in "${location:+${location}/${source_vmname}.nix}" \
+                         "${nix_dir}/${source_vmname}.nix"; do
+            if [[ -n "${candidate}" && -f "${candidate}" ]]; then
+                echo "${candidate}"
+                return 0
+            fi
+        done
     fi
 
     return 1
@@ -304,7 +318,7 @@ update_nixos() {
 
     local nix_config
     if ! nix_config=$(resolve_nixos_config "${vmname}" "."); then
-        die "NixOS configuration file not found: ./${vmname}.nix (tried location + variant fallback)"
+        die "NixOS configuration file not found for '${vmname}' (searched the module's .location directory, then ./${vmname}.nix, then the location-basename and -<environment> fallbacks)"
     fi
     # Source module name (e.g. "hermes"), used below for the companion JSON
     # copied to the VM -- always the resolved .nix file's own basename, so it

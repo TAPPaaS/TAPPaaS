@@ -89,12 +89,30 @@ Contracts worth keeping in mind:
 
 `reconcile` (`src/reconcile.ts`) is the **leaf converge** the
 `site/environment reconcile --deep` cascade walks down to: it re-applies the
-module's **current** config to its VM/service — re-running each dependency's
-idempotent `install-service.sh` then the module's own `update.sh`/`install.sh` —
-with **no snapshot, no pre/post tests, no 3-way merge, and no `updateTime`
-bump**. `modify` (`update-module.sh`) *changes* the config via a release update
-and does all of those. Because `reconcile` mutates no config and is idempotent,
+module's **current** config to its VM/service — running each dependency's
+`update-service.sh`, then the module's own `update.sh`/`install.sh`, both from
+the module directory — with **no snapshot, no pre/post tests, no 3-way merge,
+and no `updateTime` bump**. Because it mutates no config and is idempotent,
 re-running it (or a shared dependency) anytime is safe.
+
+`modify` (`update-module.sh`) *changes* the config via a release update and then
+performs the **same** apply by calling `module-manager reconcile --apply`,
+wrapped in snapshot + pre/post tests + rollback + the `updateTime` bump. There is
+exactly one apply implementation, exercised by both verbs — before #495 there
+were two, and only the `modify` one worked.
+
+**Service contract.** `services/<svc>/update-service.sh` is the converge and
+every service must ship one (enforced by `test.sh`); `install-service.sh` holds
+only create-only prerequisites and `exec`s `update-service.sh` when it has none.
+Reconcile never falls back from one to the other: `install-service.sh` has create
+semantics — `cluster:vm`'s runs `Create-TAPPaaS-VM.sh`, which refuses an existing
+VMID — which is exactly why reconcile failed on every VM-backed module until #495.
+
+**Step 3 always runs.** A Step 2 (dependency) failure no longer aborts before the
+module's own re-apply. Some providers perform destructive re-applies — a NixOS
+rebuild rewrites in-VM state that only the module's `update.sh` restores — so
+bailing out mid-way left instances *less* converged than before the command ran.
+Failures are accumulated and reported after Step 3, and still exit non-zero.
 
 ## Config state
 

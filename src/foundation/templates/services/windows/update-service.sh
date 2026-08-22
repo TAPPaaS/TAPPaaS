@@ -1,10 +1,18 @@
 #!/usr/bin/env bash
 #
-# TAPPaaS Templates Windows Service - Update
+# TAPPaaS Templates Windows Service - Update (the converge)
 #
-# Runs security-only Windows Updates on the VM.
-# Automatic Windows Update is disabled between runs; this is the sole update path.
-# A Proxmox snapshot is created before rebooting (by update-module.sh).
+# The provider-side converge for an already-provisioned Windows VM, invoked by
+# both `module modify` and `module reconcile --apply`. Two parts:
+#   1. The shared convergent baseline (windows-baseline.sh): hostname/network
+#      profile, C: extended to the configured disk, VirtIO guest agent, RDP set
+#      to windows.enableRDP, tappaas account. These used to run on INSTALL ONLY
+#      (#495), so flipping windows.enableRDP or growing diskSize never took
+#      effect on an existing VM.
+#   2. Security-only Windows Updates + the reboot/wait flow this script owns.
+#      Automatic Windows Update is disabled between runs; this is the sole
+#      update path. A Proxmox snapshot is created before rebooting (by
+#      update-module.sh) — reconcile deliberately takes no snapshot.
 #
 # Usage: update-service.sh <module-name>
 #
@@ -27,8 +35,39 @@ NODE="$(get_config_value 'node' "$(get_node_hostname 0)")"
 ZONE0="$(get_config_value 'zone0' 'srv')"
 VM_HOST="${VMNAME}.${ZONE0}.internal"
 
-readonly SSH_OPTS="-o ConnectTimeout=30 -o BatchMode=yes -o LogLevel=ERROR"
+# Same ssh/scp options install-service.sh uses against this host — the shared
+# baseline steps below rely on both, and a recreated VM presents a new host key.
+readonly SSH_OPTS="-o ConnectTimeout=30 -o StrictHostKeyChecking=accept-new -o UserKnownHostsFile=/dev/null -o LogLevel=ERROR -o BatchMode=yes"
+readonly SCP_OPTS="${SSH_OPTS}"
 
+ENABLE_RDP="$(read_module_config "${VMNAME}" | jq -r '.windows.enableRDP // false')"
+readonly ENABLE_RDP
+
+# ── Part 1: the shared convergent baseline ────────────────────────────
+_WIN_SVC_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=windows-baseline.sh disable=SC1091
+. "${_WIN_SVC_DIR}/windows-baseline.sh"
+
+debug "=== Windows baseline converge: ${VMNAME} (VMID ${VMID}) ==="
+debug "RDP: ${ENABLE_RDP}"
+
+# step_windows_update is deliberately NOT in this list: the security-update +
+# reboot flow below is this script's own, and is more complete for the update case.
+_baseline_failed=()
+for _step in hostname_fix disk_extend virtio_agent rdp_setup tappaas_account; do
+    if "step_${_step}"; then
+        debug "  ✓ ${_step}"
+    else
+        error "  ✗ ${_step} failed"
+        _baseline_failed+=("${_step}")
+    fi
+done
+if [[ ${#_baseline_failed[@]} -gt 0 ]]; then
+    error "Windows baseline converge FAILED: ${_baseline_failed[*]}"
+    exit 1
+fi
+
+# ── Part 2: security-only Windows Updates ─────────────────────────────
 debug "=== Windows Security Update: ${VMNAME} (VMID ${VMID}) ==="
 
 debug "  Enabling Windows Update service..."

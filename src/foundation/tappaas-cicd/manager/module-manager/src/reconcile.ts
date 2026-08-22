@@ -7,8 +7,10 @@
 // `reconcile --deep` cascade depends on (site → environment → module), so it
 // MUST be safe to run anytime and converge to the same state.
 //
-// It deliberately does LESS than update-module.sh — that distinction is the
-// whole point of `reconcile` vs `modify`:
+// Since #495 this IS the apply for both verbs: update-module.sh (= `module
+// modify`) merges the release source into the config, then calls
+// `module-manager reconcile --apply` for the apply itself, wrapped in the
+// safety machinery a config CHANGE needs and a re-apply does not:
 //
 //   reconcile (this)               update-module.sh (= `module modify`)
 //   ────────────────               ────────────────────────────────────
@@ -16,18 +18,23 @@
 //   NO pre/post tests              pre + post test-module.sh
 //   NO 3-way merge of config       3-way merge release source into config
 //   NO updateTime bump             bumps updateTime
-//   re-apply current config only   release update of the module
+//   re-apply current config only   release update, then delegates here
 //
 // What it DOES (in order), exactly as the bash did:
 //   1. Validate the module config exists (and is well-formed JSON — the full
 //      module-fields.json schema lint stays with install/modify; deliberate
 //      delta vs the bash check_json call).
-//   2. Call each dependsOn provider's install-service.sh <module> — the
-//      idempotent ensure/apply scripts (VM present, proxy wired, rules applied,
-//      backup registered, …). Re-running them converges the live plane to the
-//      module's current config.
+//   2. Call each dependsOn provider's update-service.sh <module> — the converge
+//      scripts (VM hardware reconciled, proxy wired, rules swept, backup
+//      registered, …), run FROM the module directory. Re-running them converges
+//      the live plane to the module's current config. This is the SAME entry
+//      point update-module.sh uses, so `modify` and `reconcile --apply` apply
+//      identically (#495).
 //   3. Run the module's own update.sh (preferred) or install.sh as the in-VM
 //      converge step, against the existing config, from the module directory.
+//      Step 3 runs even when Step 2 reported failures — some providers perform
+//      destructive re-applies (a NixOS rebuild) that only the module's own
+//      update.sh repairs, so skipping it left instances WORSE than before (#495).
 //
 // Exit codes: 0 = converged; 1 = a converge step failed.
 
@@ -161,6 +168,17 @@ function doReconcile(moduleArg: string, opts: ReconcileOptions): void {
   if (!raw) fail(`JSON validation failed for ${module}`);
   info(`  ${GN}✓${CL} ${moduleJson}`);
 
+  // The module directory is resolved BEFORE Step 2, not just for Step 3: the
+  // dependency service scripts must run FROM it (#495). update-module.sh has
+  // always cd'd there first ("so service scripts can find module files"), and
+  // the TS port dropped that, which is why templates:nixos could not find the
+  // module's .nix unless reconcile happened to be invoked from the module's own
+  // directory. The underlying resolver is fixed too (update-os.sh
+  // resolve_nixos_config now searches .location), but a converge must not depend
+  // on the caller's cwd in the first place.
+  const moduleDirResult = getModuleDirResult(configDir, module);
+  const moduleDir = moduleDirResult.kind === "found" ? moduleDirResult.dir : null;
+
   // ── Step 2: Re-apply dependency services (idempotent ensure/apply) ──
   console.log("");
   info(`${BOLD}Step 2: Re-apply dependency services${CL}`);
@@ -176,10 +194,17 @@ function doReconcile(moduleArg: string, opts: ReconcileOptions): void {
   // and the persisted field is the authority either way.
   const moduleEnvironment = typeof cfg.environment === "string" ? cfg.environment : "";
 
+  // Step 2 failures are ACCUMULATED, not thrown (#495). Aborting here used to
+  // skip Step 3 entirely, and that is actively destructive: a provider such as
+  // templates:nixos performs a rebuild that rewrites in-VM state which only the
+  // module's own update.sh restores. Bailing out after the rebuild left the
+  // instance LESS converged than before the command ran. A re-apply must never
+  // do that, so Step 3 always gets its chance and the failure is reported after.
+  const depFailures: string[] = [];
+
   if (dependsOn.length === 0) {
     info("  No dependency services to re-apply");
   } else {
-    let failures = 0;
     for (const dep of dependsOn) {
       const colon = dep.indexOf(":");
       const providerName = colon === -1 ? dep : dep.slice(0, colon); // ${dep%%:*}
@@ -193,27 +218,31 @@ function doReconcile(moduleArg: string, opts: ReconcileOptions): void {
       }
       ensureScriptsExecutable(providerDir);
 
-      // install-service.sh is the idempotent ensure/apply entry (the same one
-      // install-module.sh calls). Re-running it converges the plane to the
-      // module's current config. Skip cleanly when a provider has none.
-      const svcScript = join(providerDir, "services", serviceName, "install-service.sh");
+      // update-service.sh is THE converge entry point for an already-installed
+      // module — the same one update-module.sh (`module modify`) calls (#495).
+      // reconcile used to call install-service.sh instead, which has CREATE
+      // semantics: cluster:vm's went straight to Create-TAPPaaS-VM.sh, which
+      // exits 1 on an existing VMID, so reconcile failed on every VM-backed
+      // module and could never converge VM hardware drift (cores/memory/disk/
+      // net/migrate live only in update-service.sh). There is deliberately NO
+      // fallback to install-service.sh: a service that cannot converge is a
+      // contract violation, caught by test.sh, not something to paper over at
+      // runtime. Skip cleanly when a provider ships no service script at all
+      // (several dependsOn entries name providers with no services/ directory).
+      const svcScript = join(providerDir, "services", serviceName, "update-service.sh");
       if (!existsSync(svcScript)) {
-        info(`  ${dep}: no install-service.sh — skipping`);
+        info(`  ${dep}: no update-service.sh — skipping`);
         continue;
       }
 
       info(`  Re-applying ${BL}${dep}${CL} for '${module}'...`);
-      if (runScript(svcScript, [module]) === 0) {
+      // Run from the module directory (#495) — same cwd update-module.sh uses.
+      if (runScript(svcScript, [module], moduleDir ?? undefined) === 0) {
         info(`  ${GN}✓${CL} ${dep} converged`);
       } else {
         error(`  ✗ ${dep} re-apply failed`);
-        failures++;
+        depFailures.push(dep);
       }
-    }
-    if (failures > 0) {
-      fail(
-        `${failures} dependency service(s) failed to re-apply — reconcile of '${module}' did not converge`,
-      );
     }
   }
 
@@ -221,8 +250,6 @@ function doReconcile(moduleArg: string, opts: ReconcileOptions): void {
   console.log("");
   info(`${BOLD}Step 3: Re-apply the module${CL}`);
 
-  const moduleDirResult = getModuleDirResult(configDir, module);
-  const moduleDir = moduleDirResult.kind === "found" ? moduleDirResult.dir : null;
   if (moduleDir) {
     ensureScriptsExecutable(moduleDir);
     // Prefer update.sh (the steady-state converge) over install.sh. NO
@@ -231,13 +258,13 @@ function doReconcile(moduleArg: string, opts: ReconcileOptions): void {
     if (existsSync(join(moduleDir, "update.sh"))) {
       info(`  Running ${moduleDir}/update.sh (converge)...`);
       if (runScript("./update.sh", [module], moduleDir) !== 0) {
-        fail("Module update.sh failed during reconcile");
+        fail(stepFailure("Module update.sh failed during reconcile", depFailures));
       }
       info(`  ${GN}✓${CL} module update.sh converged`);
     } else if (existsSync(join(moduleDir, "install.sh"))) {
       info(`  No update.sh — running ${moduleDir}/install.sh (idempotent re-apply)...`);
       if (runScript("./install.sh", [module], moduleDir) !== 0) {
-        fail("Module install.sh failed during reconcile");
+        fail(stepFailure("Module install.sh failed during reconcile", depFailures));
       }
       info(`  ${GN}✓${CL} module install.sh converged`);
     } else {
@@ -253,5 +280,20 @@ function doReconcile(moduleArg: string, opts: ReconcileOptions): void {
   }
 
   console.log("");
+  if (depFailures.length > 0) {
+    // Step 3 ran regardless, so the module's own converge has had its chance —
+    // but the dependency planes did not converge, so this is still a failure.
+    fail(
+      `${depFailures.length} dependency service(s) failed to re-apply ` +
+        `(${depFailures.join(", ")}) — reconcile of '${module}' did not converge. ` +
+        `The module's own re-apply (Step 3) was still run.`,
+    );
+  }
   info(`${GN}${BOLD}Module '${module}' reconciled (converged to current config)${CL}`);
+}
+
+// Compose a Step 3 failure message that does not hide Step 2 failures behind it.
+function stepFailure(msg: string, depFailures: string[]): string {
+  if (depFailures.length === 0) return msg;
+  return `${msg} (and ${depFailures.length} dependency service(s) had already failed: ${depFailures.join(", ")})`;
 }

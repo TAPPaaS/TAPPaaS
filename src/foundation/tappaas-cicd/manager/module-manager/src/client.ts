@@ -101,7 +101,7 @@ export class CliModuleClient implements ModuleClient {
 
   // NATIVE TS (Phase 7.3): the leaf converge, ported from the retired
   // reconcile-module.sh. It still shells out to the KEPT scripts underneath
-  // (each dependency's install-service.sh + the module's update.sh/install.sh).
+  // (each dependency's update-service.sh + the module's update.sh/install.sh).
   reconcile(module: string, opts: ReconcileOptions): number {
     return reconcileModule(module, opts);
   }
