@@ -16,6 +16,13 @@
 //   4. mgmt invariant   — a `mgmt` zone exists and is Active.
 //   5. Installation     — every zone named by an installed module config's
 //      consistency       `zone`/`zone0` field exists and is Active.
+//   6. Tier invariants  — the ADR-014 security gates I1-I4 (R1 monotonic
+//      (I1-I4)            access-to, R2 isolation floor, egress boundary,
+//                         archetype conformance). These promote what used to be
+//                         the human `_README.pr_review_checklist` into code.
+//                         WARN-only by default; `--strict` makes them errors.
+//                         Nothing in the install or update path is wired to
+//                         `--strict` — no check here can fail a deployment.
 //
 // Exit code: 0 if no errors (warnings allowed); non-zero only on hard errors.
 // `--strict` promotes warnings to errors. NEVER writes zones.json.
@@ -28,6 +35,14 @@ import { join } from "path";
 import { CL, GN, RD, YW } from "../../../lib/ts/src/cli";
 import { Zone, ZonesDoc } from "./types";
 import { loadZones } from "./zones";
+import {
+  CONTROL_PLANE_ZONE,
+  TIER_INTERNET,
+  archetypeForTriple,
+  isTierExempt,
+  zoneIsolated,
+  zoneTier,
+} from "./archetypes";
 
 // A zone is considered "active" for reference/installation purposes when its
 // state is one that zone-manager actually provisions an interface for. Inactive
@@ -272,6 +287,125 @@ function checkInstallation(doc: ZonesDoc, configDir: string, rep: Reporter): voi
   }
 }
 
+// ── 6. the ADR-014 tier invariants (I1-I4) ───────────────────────────
+//
+// All four are WARNINGS by default. A zone with no authored `tier` is reported
+// once as a note and then skipped — an un-back-filled zones.json must not drown
+// the operator in warnings for a field it has never had.
+function checkTierInvariants(doc: ZonesDoc, rep: Reporter): void {
+  // Index the tier of every zone that has one, and note the ones that do not.
+  const tiers = new Map<string, number>();
+  const untiered: string[] = [];
+  for (const [name, z] of doc.zones) {
+    if (isTierExempt(z.type)) continue; // Overlay / WAN are outside the model
+    const t = zoneTier(z.tier);
+    if (t === undefined) untiered.push(name);
+    else tiers.set(name, t);
+  }
+  if (untiered.length > 0) {
+    rep.note(
+      `tier: ${untiered.length} zone(s) carry no 'tier' and are skipped by I1/I3/I4 ` +
+        `(back-fill with \`add --archetype\` or a release update): ${untiered.sort().join(", ")}`,
+    );
+  }
+
+  // Resolve a reference's tier: the literal "internet" is the boundary token;
+  // an exempt or untiered target yields undefined (the edge is not checkable).
+  const refTier = (ref: string): number | undefined =>
+    ref === "internet" ? TIER_INTERNET : tiers.get(ref);
+
+  // ── I1 — monotonic access-to: tier(A) <= tier(B), never upward. ──
+  let i1 = 0;
+  for (const [name, z] of doc.zones) {
+    if (name === CONTROL_PLANE_ZONE) continue; // control plane reaches everything
+    const from = tiers.get(name);
+    if (from === undefined) continue;
+    const arr = z["access-to"];
+    if (!Array.isArray(arr)) continue;
+    for (const ref of arr) {
+      if (typeof ref !== "string" || ref === "all") continue;
+      const to = refTier(ref);
+      if (to === undefined) continue;
+      if (from > to) {
+        rep.warn(
+          `I1: zone '${name}' (tier ${from}) has access-to '${ref}' (tier ${to}) — ` +
+            `an UPWARD edge. Zone-wide access-to may only flow downward; express ` +
+            `this as a per-module pinhole instead (add '${name}' to ` +
+            `'${ref}'.pinhole-allowed-from and declare the IP/port rule in the module).`,
+        );
+        i1++;
+      }
+    }
+  }
+  if (i1 === 0) rep.ok("I1: every access-to edge flows downward (tier(A) <= tier(B))");
+
+  // ── I2 — isolation floor: an isolated zone is in nobody's access-to. ──
+  const isolated = new Set<string>();
+  for (const [name, z] of doc.zones) {
+    if (zoneIsolated(z.isolated)) isolated.add(name);
+  }
+  let i2 = 0;
+  if (isolated.size > 0) {
+    for (const [name, z] of doc.zones) {
+      if (name === CONTROL_PLANE_ZONE) continue; // the documented exception
+      const arr = z["access-to"];
+      if (!Array.isArray(arr)) continue;
+      for (const ref of arr) {
+        if (typeof ref === "string" && isolated.has(ref)) {
+          rep.warn(
+            `I2: zone '${name}' has access-to isolated zone '${ref}' — this nullifies ` +
+              `the pinhole mechanism (every host in '${name}' would gain unconditional ` +
+              `zone-wide reach). Grant access per-module via ` +
+              `'${ref}'.pinhole-allowed-from instead.`,
+          );
+          i2++;
+        }
+      }
+    }
+  }
+  if (i2 === 0) {
+    rep.ok(
+      isolated.size === 0
+        ? "I2: isolation floor holds (no zone is marked isolated)"
+        : `I2: isolation floor holds (${isolated.size} isolated zone(s) reachable only by pinhole)`,
+    );
+  }
+
+  // ── I3 — egress boundary: a tier-6 (no-egress) zone must not list internet. ──
+  let i3 = 0;
+  for (const [name, z] of doc.zones) {
+    if (tiers.get(name) !== 6) continue;
+    const arr = z["access-to"];
+    if (Array.isArray(arr) && arr.includes("internet")) {
+      rep.warn(
+        `I3: zone '${name}' is tier 6 (no egress) but lists 'internet' in access-to — ` +
+          `a zone whose devices need the internet is tier 3 (iot-cloud / iot-untrust), not tier 6.`,
+      );
+      i3++;
+    }
+  }
+  if (i3 === 0) rep.ok("I3: no tier-6 (no-egress) zone claims internet egress");
+
+  // ── I4 — archetype conformance on the (type, tier, isolated) triple. ──
+  let i4 = 0;
+  for (const [name, z] of doc.zones) {
+    if (isTierExempt(z.type)) continue;
+    const t = tiers.get(name);
+    if (t === undefined) continue;
+    const iso = zoneIsolated(z.isolated);
+    if (archetypeForTriple(z.type, t, iso) === undefined) {
+      rep.warn(
+        `I4: zone '${name}' has (type=${String(z.type)}, tier=${t}, isolated=${iso}) — ` +
+          `no archetype defines that combination, so the zone is configured against ` +
+          `its declared intent. Correct the fields, or recreate it with ` +
+          `\`add --archetype <A>\`.`,
+      );
+      i4++;
+    }
+  }
+  if (i4 === 0) rep.ok("I4: every tiered zone conforms to a defined archetype");
+}
+
 export interface ZonesCheckOpts {
   zonesFile: string;
   configDir: string;
@@ -287,6 +421,7 @@ export function runChecks(doc: ZonesDoc, configDir: string, strict: boolean): Ch
   checkReferentialIntegrity(doc, rep);
   checkMgmtInvariant(doc, rep);
   checkInstallation(doc, configDir, rep);
+  checkTierInvariants(doc, rep);
   return result;
 }
 

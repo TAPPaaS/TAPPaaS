@@ -38,6 +38,7 @@ import {
 import { reconcileAll } from "../../src/reconcile";
 import { addZone, deleteZone } from "../../src/zonelifecycle";
 import { runChecks } from "../../src/zonescheck";
+import { ARCHETYPES, TIER_EXEMPT_TYPES, archetypeNames } from "../../src/archetypes";
 import {
   distributeZones,
   enumerateNodes,
@@ -1074,6 +1075,143 @@ function tmpZones(): string {
   check((r.raw["acme"] as Record<string, unknown>)["tier"] === 1, "P1: rename carries `tier` onto the renamed default zone");
   check(rHome["tier"] === 2, "P1: rename leaves an untouched zone's `tier` alone");
   check((rHome["access-to"] as string[]).includes("acme"), "P1: rename still rewrites zone-name refs in access-to");
+}
+
+// ── 17. ADR-014 P2: the archetype catalog matches the shipped schema ──
+// archetypes.ts is the OPERATIVE copy (the nix build cannot see foundation/
+// schemas/), so this test pins it to the documented one. If they ever diverge,
+// this fails rather than shipping two disagreeing definitions of the model.
+{
+  // fixtures -> test -> network-manager -> manager -> tappaas-cicd -> foundation
+  const schemaPath = join(
+    FIXTURE_DIR, "..", "..", "..", "..", "..", "schemas", "zones-fields.json",
+  );
+  if (!existsSync(schemaPath)) {
+    check(false, `P2: zones-fields.json reachable for the drift check (looked in ${schemaPath})`);
+  } else {
+    const schema = JSON.parse(readFileSync(schemaPath, "utf8")) as Record<string, any>;
+    const cat = schema["archetypes"]["catalog"] as Record<string, any>;
+
+    check(
+      Object.keys(cat).sort().join(",") === archetypeNames().sort().join(","),
+      "P2: archetype NAMES match schemas/zones-fields.json",
+    );
+    const mismatched = ARCHETYPES.filter((a) => {
+      const c = cat[a.name];
+      return !c || c.type !== a.type || c.typeId !== a.typeId || c.tier !== a.tier ||
+        c.isolated !== a.isolated ||
+        JSON.stringify(c["access-to"]) !== JSON.stringify(a.accessTo);
+    }).map((a) => a.name);
+    check(mismatched.length === 0, `P2: every archetype's type/typeId/tier/isolated/access-to matches the schema${mismatched.length ? ` (drift: ${mismatched.join(", ")})` : ""}`);
+    check(
+      JSON.stringify((schema["tier_exempt_types"]["types"] as string[]).slice().sort()) ===
+        JSON.stringify(Array.from(TIER_EXEMPT_TYPES).sort()),
+      "P2: tier_exempt_types matches the schema",
+    );
+  }
+}
+
+// ── 18. ADR-014 P2: the tier invariants I1-I4 ─────────────────────────
+{
+  const d = mkdtempSync(join(tmpdir(), "nm-p2-"));
+  // Write a doc and run ONLY the check pass over it (no config dir → the
+  // installation check is a note, not an error).
+  const run = (zones: Record<string, unknown>, strict = false) => {
+    const f = join(d, `z-${Math.random().toString(36).slice(2)}.json`);
+    writeFileSync(f, JSON.stringify(zones, null, 2), "utf8");
+    return runChecks(loadZones(f), join(d, "no-such-config"), strict);
+  };
+  const hits = (r: { lines: string[] }, id: string) => r.lines.filter((l) => l.includes(`${id}:`) && !l.includes("✓")).length;
+
+  const mgmt = {
+    type: "Management", state: "Manual", typeId: "0", subId: "0", vlantag: 0,
+    ip: "10.0.0.0/24", tier: 0, "access-to": ["internet"], "pinhole-allowed-from": [],
+  };
+  const svc = {
+    type: "Service", state: "Active", typeId: "2", subId: "0", vlantag: 200,
+    ip: "10.2.0.0/24", tier: 1, "access-to": ["internet"], "pinhole-allowed-from": [],
+  };
+
+  // (a) a conforming doc trips nothing.
+  {
+    const r = run({
+      mgmt, acme: svc,
+      home: { type: "Client", state: "Active", typeId: "3", subId: "10", vlantag: 310, ip: "10.3.10.0/24", tier: 2, "access-to": ["internet"], "pinhole-allowed-from": [] },
+      iotCams: { type: "IoT", state: "Active", typeId: "4", subId: "30", vlantag: 430, ip: "10.4.30.0/24", tier: 6, isolated: true, "access-to": [], "pinhole-allowed-from": ["acme"] },
+    });
+    check(r.warnings === 0 && r.errors === 0, "P2: a conforming ADR-014 doc trips no invariant");
+  }
+
+  // (b) I1 — an upward edge (client tier 2 → service tier 1) warns, not errors.
+  {
+    const z = {
+      mgmt, acme: svc,
+      home: { type: "Client", state: "Active", typeId: "3", subId: "10", vlantag: 310, ip: "10.3.10.0/24", tier: 2, "access-to": ["internet", "acme"], "pinhole-allowed-from": [] },
+    };
+    const r = run(z);
+    check(hits(r, "I1") === 1, "P2 I1: an upward access-to edge is flagged");
+    check(r.errors === 0 && r.warnings > 0, "P2 I1: it is a WARNING, not an error (R3 — warn-only by default)");
+    const rs = run(z, true);
+    check(rs.errors > 0, "P2 I1: --strict promotes it to an error");
+  }
+
+  // (c) I1 — mgmt is exempt: it reaches everything by design.
+  {
+    const r = run({
+      mgmt: { ...mgmt, "access-to": ["internet", "acme", "iotCams"] },
+      acme: svc,
+      iotCams: { type: "IoT", state: "Active", typeId: "4", subId: "30", vlantag: 430, ip: "10.4.30.0/24", tier: 6, isolated: true, "access-to": [], "pinhole-allowed-from": [] },
+    });
+    check(hits(r, "I1") === 0 && hits(r, "I2") === 0, "P2 I1/I2: the mgmt control plane is exempt from both");
+  }
+
+  // (d) I1/I3/I4 — Overlay and WAN are skipped entirely (R2). `admin` carries
+  //     access-to:["mgmt"], an upward edge into tier 0, and must NOT be flagged.
+  {
+    const r = run({
+      mgmt, acme: svc,
+      admin: { type: "Overlay", state: "Manual", typeId: "7", subId: "2", vlantag: 0, ip: "10.255.1.0/24", "access-to": ["mgmt"], "pinhole-allowed-from": [] },
+      wan: { type: "WAN", state: "Manual", typeId: "1", subId: "0", vlantag: 100, ip: "10.1.0.0/24", "access-to": [], "pinhole-allowed-from": [] },
+    });
+    check(hits(r, "I1") === 0, "P2 R2: an Overlay's upward access-to ['mgmt'] is NOT flagged by I1");
+    check(hits(r, "I4") === 0, "P2 R2: Overlay/WAN are skipped by archetype conformance");
+    check(r.lines.some((l) => l.includes("tier:") && l.includes("skipped")) === false ||
+      !r.lines.some((l) => l.includes("admin")), "P2 R2: exempt zones are not listed as untiered");
+  }
+
+  // (e) I2 — an isolated zone in someone's access-to.
+  {
+    const r = run({
+      mgmt, acme: { ...svc, "access-to": ["internet", "iotCams"] },
+      iotCams: { type: "IoT", state: "Active", typeId: "4", subId: "30", vlantag: 430, ip: "10.4.30.0/24", tier: 6, isolated: true, "access-to": [], "pinhole-allowed-from": [] },
+    });
+    check(hits(r, "I2") === 1, "P2 I2: an isolated zone appearing in a non-mgmt access-to is flagged");
+  }
+
+  // (f) I3 — a tier-6 zone claiming internet egress. It is also an I4 miss
+  //     (IoT/6/false with internet is still the iot-local triple, so I4 passes).
+  {
+    const r = run({
+      mgmt, acme: svc,
+      iotLocal: { type: "IoT", state: "Active", typeId: "4", subId: "10", vlantag: 410, ip: "10.4.10.0/24", tier: 6, "access-to": ["internet"], "pinhole-allowed-from": [] },
+    });
+    check(hits(r, "I3") === 1, "P2 I3: a tier-6 zone listing internet is flagged");
+  }
+
+  // (g) I4 — a Service zone mis-tiered as 3 matches no archetype.
+  {
+    const r = run({ mgmt, acme: { ...svc, tier: 3 } });
+    check(hits(r, "I4") === 1, "P2 I4: a Service zone at tier 3 matches no archetype");
+  }
+
+  // (h) an untiered doc (every pre-ADR-014 zones.json) produces ONE note and no
+  //     warnings — the back-fill must not drown the operator.
+  {
+    const bare = (o: Record<string, unknown>) => { const c = { ...o }; delete c.tier; delete c.isolated; return c; };
+    const r = run({ mgmt: bare(mgmt), acme: bare(svc) });
+    check(r.warnings === 0, "P2: a pre-ADR-014 (untiered) doc produces NO tier warnings");
+    check(r.lines.filter((l) => l.includes("tier:") && l.includes("carry no 'tier'")).length === 1, "P2: untiered zones are reported once, as a single note");
+  }
 }
 
 console.log("");

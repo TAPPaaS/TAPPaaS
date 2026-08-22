@@ -46,6 +46,7 @@ import { addZone, deleteZone } from "./zonelifecycle";
 import { existsSync } from "fs";
 import { mergeInitWithExisting, parseTemplate, renameTemplateFile, zonesInit } from "./zonesinit";
 import { zonesCheck, occupiedZones } from "./zonescheck";
+import { zoneTier } from "./archetypes";
 import { distributeZones, shouldAutoDistribute } from "./distribute";
 import { runZonesMerge } from "./zonesmerge";
 import { HelpSpec, renderHelp } from "../../../lib/ts/src/help";
@@ -59,7 +60,20 @@ const HELP: HelpSpec = {
   version: VERSION,
   tagline: "TAPPaaS network owner + orchestrator (ADR-007 P4 / ADR-008)",
   verbs: [
-    { usage: "list [--json]" },
+    {
+      usage: "list [--state S] [--type T] [--tier N] [--json]",
+      name: "list (filtered zone view — ADR-014 D4)",
+      options: [
+        ["--state <S>", "Active | Inactive | Manual | Mandatory | Disabled"],
+        ["--type <T>", "Management | Service | Client | IoT | Guest | DMZ | Overlay | WAN"],
+        ["--tier <N>", "trust rank 0-6 (see ZONES.md)"],
+        ["--json", "emit the matching zone names as a JSON array"],
+      ],
+      note:
+        "`--type Client|IoT` adds tier + serves columns. Enabling/disabling a zone\n" +
+        "is `enable|disable|manual <name>` — `list --state Inactive` is how you find\n" +
+        "the candidates.",
+    },
     { usage: "exists <name>" },
     { usage: "show <name> [--json]", note: "(alias: get)" },
     {
@@ -182,6 +196,10 @@ interface Opts {
   diff: boolean;
   // read commands: structured vs human output
   json: boolean;
+  // list filters (ADR-014 D4). `type` is shared with `add` — harmless, the two
+  // verbs never run together.
+  state?: string;
+  tier?: number;
 }
 
 function isPlane(s: string): s is Plane {
@@ -255,6 +273,15 @@ function parseOpts(args: string[]): Opts {
       case "--variant":
         o.variant = next();
         break;
+      case "--state":
+        o.state = next();
+        break;
+      case "--tier": {
+        const t = parseInt(next(), 10);
+        if (!Number.isInteger(t)) die("--tier must be numeric");
+        o.tier = t;
+        break;
+      }
       case "--name":
         o.name = next();
         break;
@@ -300,20 +327,43 @@ function cmdZone(sub: string, opts: Opts): void {
 
   if (sub === "list") {
     const doc = loadZones(opts.zonesFile);
-    const names = listZoneNames(doc);
+    // ADR-014 D4: filter the existing view. The capability to enable/disable a
+    // zone already existed; what was missing was a way to SEE which zones are
+    // defined-but-off, or which client zones belong to which environment.
+    const names = listZoneNames(doc).filter((n) => {
+      const z = getZone(doc, n);
+      if (opts.state !== undefined && String(z?.state ?? "") !== opts.state) return false;
+      if (opts.type !== undefined && String(z?.type ?? "") !== opts.type) return false;
+      if (opts.tier !== undefined && zoneTier(z?.tier) !== opts.tier) return false;
+      return true;
+    });
     // Default is human-readable (name + state + vlan); --json emits the name
     // array (was always-JSON — the flag is now meaningful, matching site/people).
     if (opts.json) {
       info(JSON.stringify(names, null, 2));
-    } else if (names.length === 0) {
-      info("(no zones)");
-    } else {
-      for (const n of names) {
-        const z = getZone(doc, n);
-        const state = z?.state ?? "";
-        const vlan = typeof z?.vlantag === "number" && z.vlantag > 0 ? `vlan ${z.vlantag}` : "";
-        info(`${n.padEnd(16)} ${String(state).padEnd(9)} ${vlan}`.trimEnd());
+      return;
+    }
+    if (names.length === 0) {
+      const filtered = opts.state !== undefined || opts.type !== undefined || opts.tier !== undefined;
+      info(filtered ? "(no zones match the filter)" : "(no zones)");
+      return;
+    }
+    // Client/IoT rows answer "which environment does this belong to?", so show
+    // tier + serves for them (ADR-014 D4). Also shown whenever --tier was used.
+    const showTrust =
+      opts.tier !== undefined || (opts.type !== undefined && ["Client", "IoT", "Guest"].includes(opts.type));
+    for (const n of names) {
+      const z = getZone(doc, n);
+      const state = z?.state ?? "";
+      const vlan = typeof z?.vlantag === "number" && z.vlantag > 0 ? `vlan ${z.vlantag}` : "";
+      let line = `${n.padEnd(16)} ${String(state).padEnd(9)} ${vlan.padEnd(9)}`;
+      if (showTrust) {
+        const t = zoneTier(z?.tier);
+        const iso = z?.isolated === true ? " isolated" : "";
+        line += ` ${(t === undefined ? "tier -" : `tier ${t}`).padEnd(7)}` +
+          ` ${(typeof z?.serves === "string" && z.serves ? `serves ${z.serves}` : "").padEnd(18)}${iso}`;
       }
+      info(line.trimEnd());
     }
     return;
   }

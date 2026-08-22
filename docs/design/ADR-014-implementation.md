@@ -3,7 +3,7 @@
 **Companion to:** [ADR-014 — Zone ↔ Environment Lifecycle & Operations](<../ADR/ADR-014 - Zone and Environment Lifecycle.md>) (the *why* + the decided design)
 **Closes:** #424 (client/IoT zones ↔ environments undefined) · #419 (stale zone references not resolved)
 **Purpose of this doc:** one place that (1) records **implementation-level decisions** (including the three forks ADR-014 flagged for confirmation), (2) breaks the work into **packages** with deliverables/dependencies/test criteria, and (3) **tracks live execution state**.
-**Status:** In progress — P0 ✅, P1 ✅, P2 next
+**Status:** In progress — P0 ✅, P1 ✅, P2 ✅, P3 next
 **Branch:** `feat/adr-014-zone-lifecycle`, cut from `main`
 **Started:** 2026-08-22
 
@@ -88,7 +88,9 @@ Verified against `main`. Several of these contradict what ADR-014 assumes, and t
   | `iot` | `pinhole-allowed-from` | `["rossen"]` | renamed but zone is Inactive |
   | `mgmt` | `access-to` | lists all five `srv*` + `iot` + tests | noise |
 
-  Five `srv*` zones, `iot`, and four `test*` zones are all Inactive with zero modules — **all eleven qualify for F3 auto-retirement.** This is the concrete before/after for the P9 Stage 1 test.
+  Five `srv*` zones, `iot`, and four `test*` zones are all Inactive with zero modules — **all ten qualify for F3 auto-retirement.** This is the concrete before/after for the P9 Stage 1 test.
+
+  `work` (Client, Inactive, tier 2) is **not** a retirement candidate despite also being Inactive and unoccupied: it is a legitimate trusted-client zone that is merely switched off, and `enable work` must keep working. The retired set is an explicit list, never "everything Inactive".
 
 ---
 
@@ -137,6 +139,13 @@ Ships the diagnosis before any mutation, so P9 Stage 1 can measure the live dama
 - `main.ts` `list`: `--state`, `--type`, `--tier` filters; `tier` + `serves` columns when `--type Client|IoT`.
 
 **Test criteria** — unit fixtures for each of I1–I4 (violating + conforming); `--strict` exits non-zero on an upward edge and zero on the conforming fixture; an `Overlay` fixture with an upward `access-to` is **not** flagged; `list --state Inactive` and `list --type Client` filter correctly. **Live gate:** `network-manager validate` against this system's `config/zones.json` produces the C10 findings and **exits 0** (warnings only).
+
+**Outcome (2026-08-22): ✅ green — 176 unit + 15 CLI, `tsc --noEmit` clean; live gate exit 0, 0 warnings.**
+
+- **New module `src/archetypes.ts`** holds the lattice constants, the nine-archetype catalog and the exemption rule. It is the *operative* copy: the nix builder narrows the source to `lib/ts` + the component, so `foundation/schemas/` is unreachable at build time, and resolving it at **run** time would make `validate` depend on a deployed file that may be missing or stale on exactly the systems it audits. A unit test reads `schemas/zones-fields.json` from the source tree and pins the two together field-for-field, so drift fails the build instead of shipping.
+- **Live gate:** `validate` on `config/zones.json` exits 0 with **zero warnings** and one aggregated note — "20 zone(s) carry no `tier`" (24 zones minus the 4 exempt `Overlay`/`WAN`). The un-back-filled-config path produces no noise, as required.
+- **Forward preview (the useful result).** Stamping the archetype tiers onto a *copy* of the live config shows what P6's back-fill will surface: **exactly two I1 warnings**, both the known F2 client→service edges — `home → rossen` and `work → srvWork` — with I2, I3 and I4 all clean, exit 0. That is the predicted Stage 1 output, and it confirms the F2 deferral is two edges wide, not a fleet-wide cleanup.
+- The four `test*` zones carry `type: "Test"`, which is in neither the schema's type enum nor the archetype catalog, so they are skipped as untiered rather than flagged. They are retired in P6, so no archetype is invented for them.
 
 ---
 
@@ -239,8 +248,8 @@ See [Rollout campaign](#rollout-campaign) — three staged tests, gated on P0–
 |---|---------|-----------|--------|-------|-------|
 | P0 | Branch + repo pointing + baseline | — | ✅ | baseline captured | branch live at `2f0ffd0`; system tracks it; snapshot deferred to Stage 1 (see note) |
 | P1 | Schema foundation (`tier`/`isolated`/`serves` + archetypes) | P0 | ✅ | 160 unit + 15 CLI, `tsc` clean | additive only; +12 new tests |
-| P2 | Read-side: I1–I4 + filtered `list` | P1 | 🟦 | — | diagnosis before mutation |
-| P3 | `serves` + `bind` + effective rendering | P1, P2 | ⬜ | — | carries D-C4; closes #424 core |
+| P2 | Read-side: I1–I4 + filtered `list` | P1 | ✅ | 176 unit + 15 CLI, `tsc` clean; live gate exit 0 | +16 tests; new `src/archetypes.ts` |
+| P3 | `serves` + `bind` + effective rendering | P1, P2 | 🟦 | — | carries D-C4; closes #424 core |
 | P4 | Archetypes on `add` | P1 | ⬜ | — | subsumes D3 |
 | P5 | `environment add --create-zone` / reconcile materialise | P3 | ⬜ | — | env-mgr seam |
 | P6 | `init` profiles + template cleanup + `retire` | P3, P4 | ⬜ | — | heaviest; carries F3 |
@@ -261,7 +270,7 @@ The system is already pointed at the branch (P0), so this is a real `update-tapp
 1. Snapshot `tappaas-cicd`; confirm the P0 baseline artefacts exist.
 2. `update-tappaas` — `pre-update.sh` pulls the branch, rebuilds the managers, runs `network-manager merge` (which performs the P3 `serves` back-fill) then `network-manager validate`.
 3. **Assert (the F2 invariant): `zones.json` gains `tier`/`isolated`/`serves` and loses its stale literals, and NOT ONE firewall rule changes.** Diff the OPNsense rule set before/after; any delta is a bug.
-4. `network-manager retire --check` → expect the eleven C10 candidates. Review, then `retire --apply`.
+4. `network-manager retire --check` → expect the ten C10 candidates (and **not** `work`). Review, then `retire --apply`.
 5. `network-manager validate` → clean; `validate --strict`, run by hand → the known I1 warning for `home → rossen`, documented as expected under F2. It gates nothing (R3).
 6. Reachability spot-check from `home`: a service in `rossen`, `iotLocal`/`iotCloud` devices, and Caddy-proxied `hass` (the C7 module) all behave exactly as before.
 7. Regression: full `test.sh` deep tier for `network-manager`, `environment-manager`, `module-manager`, `network`.
