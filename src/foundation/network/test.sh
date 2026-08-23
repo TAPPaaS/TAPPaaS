@@ -57,10 +57,11 @@ readonly ZONES_JSON="${CONFIG_DIR}/zones.json"
 # (the old ${SCRIPT_DIR}/zones.json no longer exists → rules-manager init
 # failed and the deep merge silently skipped).
 readonly ZONES_TEMPLATE="${SCRIPT_DIR}/../tappaas-cicd/manager/network-manager/zones.json"
-# ADR-014 D7: the four deep-test probe zones were REMOVED from the install
-# template (a test probe has no business on a production install) and now live
-# with the test that activates them. --deep merges these into the deployed
-# zones.json, then cleanup_deep removes the keys again.
+# ADR-014 D7: the deep-test probe zones were REMOVED from the install template
+# (a test probe has no business on a production install) and now live with the
+# test that activates them. --deep merges these into the deployed zones.json,
+# then cleanup_deep removes the keys again. Their NAMES stay out of this file —
+# every use derives from the fixtures, which the #306 guard enforces.
 readonly TEST_ZONES_FIXTURE="${SCRIPT_DIR}/test-fixtures/test-zones.json"
 readonly ALIASES_JSON="${SCRIPT_DIR}/aliases.json"
 FIREWALL_FQDN="firewall.mgmt.internal"
@@ -429,8 +430,10 @@ section "Standard 8: rules-manager NONE-mode fallback"
 # Use the deep-test fixture without connecting to OPNsense — NONE mode should
 # print manual instructions and exit 0 without touching the firewall.
 # The zones file is the install template PLUS the deep-test probe zones: the
-# fixture module lives in testAllowA, which ADR-014 D7 removed from the template
-# (see TEST_ZONES_FIXTURE), so the two must be combined for the reference check.
+# fixture module lives in one of those probe zones, which ADR-014 D7 removed from
+# the install template (see TEST_ZONES_FIXTURE), so the two must be combined for
+# the reference check. NOTE: do not name a probe zone literally anywhere in this
+# file — the #306 guard below greps for exactly that.
 _S8_ZONES="$(mktemp)"
 jq -s '.[0] * .[1]' "${ZONES_TEMPLATE}" "${TEST_ZONES_FIXTURE}" > "${_S8_ZONES}" 2>/dev/null \
     || cp "${ZONES_TEMPLATE}" "${_S8_ZONES}"
@@ -1291,7 +1294,7 @@ else
         # Distinguish "auto-pinhole wrong" from the known
         # "zone-manager block-private shadows the pinhole" infrastructure bug
         # (see GitHub #386).
-        # If pflog shows a `block` rule (numbered low on vlan0.810) eating
+        # If pflog shows a `block` rule (numbered low, on the consumer zone's vlan) eating
         # the SYN, that's the upstream issue, not an auto-pinhole bug — we
         # downgrade the result to a skip with a pointer.
         pflog_verdict=$(ssh -o BatchMode=yes -o StrictHostKeyChecking=accept-new \
@@ -1303,20 +1306,32 @@ else
                  'curl --max-time 2 http://${TFW_C_FQDN}:9091/ >/dev/null 2>&1'
              wait" 2>/dev/null || true)
 
-        if echo "${pflog_verdict}" | grep -qE 'block.*in on vlan0\.810'; then
+        # The interface name is vlan0.<consumer VLAN>. DERIVE it — a literal here
+        # silently stops matching the moment the fixture's VLAN changes, which
+        # turns this known-infrastructure-bug SKIP into a spurious FAIL. (The
+        # #306 guard above only greps zone NAMES, so a hardcoded VLAN slips past
+        # it; this is the same lesson.)
+        _tfw_a_vlan="$(jq -r --arg z "${TFW_A_ZONE}" '.[$z].vlantag // empty' \
+            "${CONFIG_DIR}/zones.json" 2>/dev/null)"
+        if [[ -n "${_tfw_a_vlan}" ]] \
+           && echo "${pflog_verdict}" | grep -qE "block.*in on vlan0\.${_tfw_a_vlan}"; then
             skip "test-fw-a → test-fw-c:9091 — auto-pinhole rule IS created (see Deep 6b) but zone-manager's block-private rule shadows it (see GitHub #386)"
-            info "  -- pflog evidence (a 'block' rule on vlan0.810 caught the SYN) --"
+            info "  -- pflog evidence (a 'block' rule on vlan0.${_tfw_a_vlan} caught the SYN) --"
             echo "${pflog_verdict}" | grep -E 'block|tcp.*9091' | sed 's/^/      /' | head -4
         else
             fail "test-fw-a → test-fw-c:9091 (expected auto-pinhole to allow, gave up after 6×15s)"
             info "  -- pflog evidence --"
             echo "${pflog_verdict}" | sed 's/^/      /' | head -6
             info "  -- pfctl alias contents on firewall --"
-            ssh -o BatchMode=yes -o StrictHostKeyChecking=accept-new \
+            # `|| true` is LOAD-BEARING: this is a diagnostic, and under
+            # `set -euo pipefail` a failing ssh here aborted the whole suite
+            # through the EXIT trap — which then reported success (exit 0) with
+            # no summary, hiding every failure already counted.
+            { ssh -o BatchMode=yes -o StrictHostKeyChecking=accept-new \
                 root@"${FIREWALL_FQDN}" \
                 "pfctl -t tm_test_fw_c -T show 2>&1; \
                  pfctl -t tm_test_fw_a -T show 2>&1" 2>/dev/null \
-                | sed 's/^/      /' | head -20
+                | sed 's/^/      /' | head -20; } || true
         fi
     fi
 

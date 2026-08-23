@@ -1541,11 +1541,33 @@ def _find_zones_file(explicit: str | None) -> Path:
     # validation must see the RESOLVED graph, or an edge a client zone gets via
     # its `serves` link would look absent here. Fall back to the authored file on
     # a system that predates ADR-014 (or before the first render).
+    #
+    # STALENESS GUARD: the effective document is only trustworthy while it is at
+    # least as new as the authored one. Anything that writes zones.json WITHOUT
+    # going through network-manager leaves it behind — an operator hand-edit, or
+    # network/test.sh --deep, which jq-merges its probe zones straight into
+    # zones.json. Preferring a stale render there would validate module rules
+    # against a zone graph that no longer exists. When it is older we use the
+    # authored file: its only loss is the `serves`-derived edges, which is far
+    # safer than a wholesale out-of-date view.
+    for eff, authored in (
+        (Path("/home/tappaas/config/zones.effective.json"), Path("/home/tappaas/config/zones.json")),
+        (Path("zones.effective.json"), Path("zones.json")),
+    ):
+        if eff.is_file() and authored.is_file():
+            if eff.stat().st_mtime >= authored.stat().st_mtime:
+                return eff
+            warn(
+                f"{eff} is older than {authored} — using the authored file. "
+                "Run `network-manager reconcile` to re-render it."
+            )
+            return authored
+        if eff.is_file():
+            return eff
+
     candidates = [
-        Path("/home/tappaas/config/zones.effective.json"),
         Path("/home/tappaas/config/zones.json"),
         DEFAULT_ZONES_FILE,
-        Path("zones.effective.json"),
         Path("zones.json"),
         Path("src/foundation/tappaas-cicd/manager/network-manager/zones.json"),
     ]

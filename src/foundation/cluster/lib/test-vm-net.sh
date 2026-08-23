@@ -23,32 +23,28 @@ error() { echo "ERR: $*" >&2; }
 # shellcheck source=vm-net.sh disable=SC1091
 . "${SCRIPT_DIR}/vm-net.sh"
 
-# Prefer the source-tree zones TEMPLATE (canonical, always in-tree with this test:
-# it has the full pre-zones-init zone set incl. srvHome=Active/210). Falls back to
-# the deployed config, then a bundled fixture. This decouples the unit test from
-# the live operator state, where zones-init has renamed/inactivated zones (#237).
-# NOTE: the template moved from firewall/ to network-manager/ in the firewall→network
-# rename; pointing at the old firewall/zones.json silently fell through to the live
-# config, where srvHome is Inactive → the 'srvHome → 210' assertion failed.
-ZONES_REPO_SRC="$(cd "${SCRIPT_DIR}/../.." && pwd)/tappaas-cicd/manager/network-manager/zones.json"
-ZONES_DEPLOYED="/home/tappaas/config/zones.json"
-TMP_ZONES=""
-if [[ -f "${ZONES_REPO_SRC}" ]]; then
-    ZONES="${ZONES_REPO_SRC}"
-elif [[ -f "${ZONES_DEPLOYED}" ]]; then
-    ZONES="${ZONES_DEPLOYED}"
-else
-    TMP_ZONES="$(mktemp)"
-    cat > "${TMP_ZONES}" <<'JSON'
+# HERMETIC FIXTURE. This is a unit test of vmnet_zone_vlantag / vmnet_zone_for_tag
+# / vmnet_all_active_tags — pure lookup logic — so it supplies its own zones file
+# and depends on no external state at all.
+#
+# It used to prefer the shipped install TEMPLATE, on the reasoning that the
+# template is "always in-tree with this test" and so more stable than the live
+# config (#237). That traded one coupling for another: ADR-014 D7 slimmed the
+# template (srvHome and the other legacy service zones are no longer shipped) and
+# this test broke, in a module that has nothing to do with the zone catalog. The
+# assertions below only need SOME zone in each state, so they now name fixture
+# zones that exist purely here.
+TMP_ZONES="$(mktemp)"
+cat > "${TMP_ZONES}" <<'JSON'
 {
-  "mgmt":     { "state": "Manual",   "vlantag": 0,   "bridge": "lan" },
-  "srvHome": { "state": "Active",   "vlantag": 210, "bridge": "lan" },
-  "dmz":      { "state": "Mandatory","vlantag": 610, "bridge": "lan" },
-  "old":      { "state": "Inactive", "vlantag": 999, "bridge": "lan" }
+  "mgmt":    { "state": "Manual",    "vlantag": 0,   "bridge": "lan" },
+  "svcA":    { "state": "Active",    "vlantag": 210, "bridge": "lan" },
+  "svcB":    { "state": "Active",    "vlantag": 220, "bridge": "lan" },
+  "dmz":     { "state": "Mandatory", "vlantag": 610, "bridge": "lan" },
+  "old":     { "state": "Inactive",  "vlantag": 999, "bridge": "lan" }
 }
 JSON
-    ZONES="${TMP_ZONES}"
-fi
+ZONES="${TMP_ZONES}"
 trap '[[ -n "${TMP_ZONES}" ]] && rm -f "${TMP_ZONES}"' EXIT
 
 PASS=0
@@ -62,8 +58,8 @@ ck() {
     fi
 }
 
-# zone → tag (srvHome is the Active 210 zone post-#178)
-ck "zone srvHome → 210"  "210" "$(vmnet_zone_vlantag srvHome "${ZONES}")"
+# zone → tag
+ck "zone svcA → 210"  "210" "$(vmnet_zone_vlantag svcA "${ZONES}")"
 ck "zone mgmt → 0"        "0"   "$(vmnet_zone_vlantag mgmt "${ZONES}")"
 # undefined / inactive zones fail (return non-zero)
 if vmnet_zone_vlantag nope "${ZONES}" >/dev/null 2>&1; then
@@ -73,7 +69,7 @@ else
 fi
 
 # tag → zone (reverse)
-ck "tag 210 → srvHome"  "srvHome"  "$(vmnet_zone_for_tag 210 "${ZONES}")"
+ck "tag 210 → svcA"  "svcA"  "$(vmnet_zone_for_tag 210 "${ZONES}")"
 ck "tag 0 → mgmt"        "mgmt"      "$(vmnet_zone_for_tag 0 "${ZONES}")"
 
 # all-active tags + "ALL" sentinel (issue #194). Compare to an independent jq
@@ -105,7 +101,7 @@ cat > "${EXPLICIT_FIXTURE}" <<'JSON'
 {
   "mgmt":     { "state": "Manual",    "vlantag": 0,   "bridge": "lan" },
   "srv":      { "state": "Active",    "vlantag": 200, "bridge": "lan" },
-  "srvHome": { "state": "Active",    "vlantag": 210, "bridge": "lan" },
+  "svcA":    { "state": "Active",    "vlantag": 210, "bridge": "lan" },
   "dmz":      { "state": "Mandatory", "vlantag": 610, "bridge": "lan" },
   "manual-z": { "state": "Manual",    "vlantag": 700, "bridge": "lan" },
   "iot-off":  { "state": "Disabled",  "vlantag": 440, "bridge": "lan" },

@@ -44,7 +44,13 @@ fi
 # `serves` link resolved) so a zone reachable only via its environment link
 # still resolves to a CIDR here. Falls back to the authored file on a system
 # that predates ADR-014 or has not rendered one yet.
-if [[ -f "${CONFIG_DIR}/zones.effective.json" ]]; then
+# STALENESS GUARD: only trust the render while it is at least as new as the
+# authored file. Anything writing zones.json outside network-manager (an operator
+# hand-edit, or network/test.sh --deep merging its probe zones) leaves it behind,
+# and resolving an allow-list against an out-of-date zone graph would silently
+# produce the wrong CIDRs.
+if [[ -f "${CONFIG_DIR}/zones.effective.json" \
+      && ! "${CONFIG_DIR}/zones.json" -nt "${CONFIG_DIR}/zones.effective.json" ]]; then
     readonly ZONES_FILE="${CONFIG_DIR}/zones.effective.json"
 else
     readonly ZONES_FILE="${CONFIG_DIR}/zones.json"
