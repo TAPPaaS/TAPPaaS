@@ -12,7 +12,17 @@
 # TAPPaaS Module: vllm-amd — Model Downloader
 #
 # Downloads models into the vLLM models bind mount (/opt/vllm/models) for serving.
-# Run INSIDE the LXC container (or anywhere with the hf CLI).
+#
+# This MUST run inside the vllm-amd LXC: /opt/vllm/models is the container's bind
+# mount, so running it anywhere else writes to a same-named directory on the
+# caller instead — and the caller (tappaas-cicd, NixOS) has no pip, which used to
+# surface as a bare "line 37: pip: command not found".
+#
+# Run it from the module directory on tappaas-cicd and it re-dispatches itself
+# into the LXC automatically (via pct on the node recorded in the module config),
+# so the download always lands on the container's storage — a dataset on the
+# node-local pool, i.e. local I/O for model loading. Running it inside the LXC
+# directly also works and skips the dispatch.
 #
 # Usage:
 #   ./download-model.sh smoke      — Qwen2.5-3B (quick validation, ~2GB)
@@ -21,6 +31,36 @@
 #   ./download-model.sh <hf-repo>  — Any HuggingFace model
 
 set -euo pipefail
+
+# ── Re-dispatch into the LXC when invoked from outside it ────────────────────
+# Detected by the absence of the bind mount: inside the container /opt/vllm/models
+# exists (mp0); on tappaas-cicd it does not. TAPPAAS_IN_LXC guards against a loop.
+if [[ ! -d /opt/vllm/models && -z "${TAPPAAS_IN_LXC:-}" ]]; then
+    _here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+    _cfg="/home/tappaas/config/vllm-amd.json"
+    [[ -f "${_cfg}" ]] || _cfg="${_here}/vllm-amd.json"
+    if [[ ! -f "${_cfg}" ]]; then
+        echo "ERROR: not inside the vllm-amd LXC and no vllm-amd.json found to locate it." >&2
+        echo "       Run this inside the LXC, or from the module directory on tappaas-cicd." >&2
+        exit 1
+    fi
+    _node="$(jq -r '.node // empty' "${_cfg}")"
+    _vmid="$(jq -r '.vmid // empty' "${_cfg}")"
+    if [[ -z "${_node}" || -z "${_vmid}" ]]; then
+        echo "ERROR: could not read .node/.vmid from ${_cfg}" >&2
+        exit 1
+    fi
+    echo "Not inside the LXC — dispatching to ${_node} (LXC ${_vmid})..."
+    # pct push the current script so the repo stays the single source of truth,
+    # rather than relying on a stale copy inside the container.
+    scp -q -o BatchMode=yes -o StrictHostKeyChecking=accept-new \
+        "${BASH_SOURCE[0]}" "root@${_node}.mgmt.internal:/tmp/download-model.sh" || {
+        echo "ERROR: could not copy the script to ${_node}" >&2; exit 1; }
+    exec ssh -o BatchMode=yes -o StrictHostKeyChecking=accept-new "root@${_node}.mgmt.internal" \
+        "pct push ${_vmid} /tmp/download-model.sh /root/download-model.sh --perms 755 && \
+         pct exec ${_vmid} -- env TAPPAAS_IN_LXC=1 PATH=/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin \
+           bash /root/download-model.sh $(printf '%q ' "$@")"
+fi
 
 # Must match the models bind mount dst that discover.sh records in
 # <module>.meta.json (.bindMounts[0].dst). /mnt/models is not mounted — models

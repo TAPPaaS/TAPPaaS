@@ -37,13 +37,34 @@ compose setup (`/opt/vllm/docker-compose.yml`) inside the container.
 
 vLLM ships without a model — one manual step is required:
 
-1. Download a model into the models directory (run inside the LXC, or anywhere with
-   `huggingface-cli`):
+1. Download a model. Run this **from the module directory on tappaas-cicd**; the
+   script re-dispatches itself into the LXC automatically (it reads `.node` and
+   `.vmid` from the module config and goes in via `pct`):
 
        ./download-model.sh smoke      # Qwen2.5-3B  (~2 GB, quick validation)
        ./download-model.sh prod       # Qwen2.5-14B (~28 GB, production)
        ./download-model.sh eagle      # 14B + EAGLE-3 draft (~31 GB, speculative decoding)
        ./download-model.sh <hf-repo>  # any HuggingFace model
+
+   It has to run inside the container because `/opt/vllm/models` is the LXC's bind
+   mount — running it on tappaas-cicd would write to a same-named local directory
+   instead, and tappaas-cicd (NixOS) has no `pip`, which used to surface as a bare
+   `line 37: pip: command not found`. Running it inside the LXC directly also
+   works and skips the dispatch.
+
+   **Storage:** models land on the LXC's `mp0` bind mount, which must point at a
+   dataset on the node-local pool so model loading is local I/O:
+
+       pct config <vmid> | grep ^mp0
+       # expect e.g.  mp0: /tanka1/vllm-models,mp=/opt/vllm/models
+
+   If it points somewhere under `/mnt/...` that is not a real pool mountpoint,
+   models are being written to the Proxmox host's **root disk**. Check with
+   `df -h /opt/vllm/models` inside the LXC — the filesystem should be the pool
+   (e.g. `tanka1/vllm-models`), not `/dev/mapper/pve-root`. To correct it, create
+   the dataset (`zfs create -o mountpoint=/tanka1/vllm-models tanka1/vllm-models`),
+   copy the existing models across, then `pct set <vmid> -mp0
+   /tanka1/vllm-models,mp=/opt/vllm/models` and restart the container.
 
 2. Set the model path in `/opt/vllm/docker-compose.yml` inside the LXC (replace the
    `--model` placeholder).
