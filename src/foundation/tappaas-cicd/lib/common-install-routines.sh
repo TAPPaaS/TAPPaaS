@@ -729,6 +729,91 @@ validate_zone_active() {
     error "         install-module.sh <module> --zone0 <active-zone>"
     return 1
 }
+# Rewrite a zone reference that a per-installation RENAME has stranded (#419).
+# `network-manager init` renames the distributed `srv` zone to the site's
+# defaultEnvironment, so a module JSON (or a deployed config) written before the
+# rename still names `srv` and resolves to nothing. This maps the one documented
+# rename forward. Echoes the (possibly rewritten) zone name; never fails.
+# Arguments:
+#   $1  zone name as written in the module config
+resolve_renamed_zone() {
+    local zone="$1"
+    local zones_file="${CONFIG_DIR}/zones.json"
+    local site_file="${CONFIG_DIR}/site.json"
+
+    # Only act when the name does NOT resolve — an existing zone is never rewritten.
+    [[ -f "$zones_file" ]] || { printf '%s\n' "$zone"; return 0; }
+    if jq -e --arg z "$zone" 'has($z)' "$zones_file" >/dev/null 2>&1; then
+        printf '%s\n' "$zone"; return 0
+    fi
+    [[ "$zone" == "srv" ]] || { printf '%s\n' "$zone"; return 0; }
+
+    local target=""
+    [[ -f "$site_file" ]] && target="$(jq -r '.defaultEnvironment // .name // empty' "$site_file" 2>/dev/null)"
+    if [[ -n "$target" ]] && jq -e --arg z "$target" 'has($z)' "$zones_file" >/dev/null 2>&1; then
+        warn "  zone '${zone}' was renamed to '${target}' at install time — using '${target}'" >&2
+        printf '%s\n' "$target"; return 0
+    fi
+    printf '%s\n' "$zone"
+}
+
+# Pre-flight: validate EVERY zone reference a module declares, before any
+# resource is created (#419). zone0 has its own deployability check
+# (validate_zone_active); this covers the two reference lists that used to fail
+# late or degrade silently:
+#   - proxyAllowedZones : an unresolvable entry used to be dropped with a
+#                         warning, so the module deployed with a REDUCED
+#                         allow-list (see network/services/proxy/access-list.sh)
+#   - egress[].to       : a zone name that resolves to nothing produced no rule
+# A reference may also be the literal "internet"/"all", another MODULE's name
+# (resolved to a host alias at rule-compile time), or "alias:<name>" — none of
+# which are zone names, so they are skipped here.
+# Arguments:
+#   $1  path to the module JSON (flat/normalized)
+#   $2  module name (for messages)
+# Returns 1 if any zone reference does not resolve.
+validate_module_zone_refs() {
+    local module_json="$1" module="$2"
+    local zones_file="${CONFIG_DIR}/zones.json"
+    local -a bad=()
+    local ref
+
+    [[ -f "$zones_file" && -f "$module_json" ]] || return 0
+
+    _zref_known() {
+        local r="$1"
+        [[ "$r" == "internet" || "$r" == "all" ]] && return 0
+        [[ "$r" == alias:* ]] && return 0
+        # another module deployed on this system → resolved to a host alias later
+        [[ -f "${CONFIG_DIR}/${r}.json" ]] && return 0
+        jq -e --arg z "$r" 'has($z)' "$zones_file" >/dev/null 2>&1
+    }
+
+    while IFS= read -r ref; do
+        [[ -n "$ref" ]] || continue
+        _zref_known "$ref" || bad+=("proxyAllowedZones:${ref}")
+    done < <(jq -r '(.proxyAllowedZones // []) | .[]' "$module_json" 2>/dev/null)
+
+    while IFS= read -r ref; do
+        [[ -n "$ref" ]] || continue
+        _zref_known "$ref" || bad+=("egress.to:${ref}")
+    done < <(jq -r '(.egress // []) | .[].to // empty' "$module_json" 2>/dev/null)
+
+    unset -f _zref_known
+
+    if [[ ${#bad[@]} -gt 0 ]]; then
+        error "Module '${YW}${module}${CL}' references ${#bad[@]} zone(s) that do not exist in zones.json:"
+        for ref in "${bad[@]}"; do error "    ${ref}"; done
+        error ""
+        error "  These are checked BEFORE any resource is created, so nothing has been provisioned."
+        error "  A stale name usually means the zone was renamed or retired. Check:"
+        error "    network-manager list"
+        return 1
+    fi
+    debug "  ${GN}✓${CL} all zone references in '${module}' resolve"
+    return 0
+}
+
 
 # ── OPNsense module alias naming (#300, ADR-005 #316) ────────────────
 # network:rules provisions an OPNsense alias `tm_<vmname>` for a module. OPNsense

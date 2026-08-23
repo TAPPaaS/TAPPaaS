@@ -57,6 +57,11 @@ readonly ZONES_JSON="${CONFIG_DIR}/zones.json"
 # (the old ${SCRIPT_DIR}/zones.json no longer exists → rules-manager init
 # failed and the deep merge silently skipped).
 readonly ZONES_TEMPLATE="${SCRIPT_DIR}/../tappaas-cicd/manager/network-manager/zones.json"
+# ADR-014 D7: the four deep-test probe zones were REMOVED from the install
+# template (a test probe has no business on a production install) and now live
+# with the test that activates them. --deep merges these into the deployed
+# zones.json, then cleanup_deep removes the keys again.
+readonly TEST_ZONES_FIXTURE="${SCRIPT_DIR}/test-fixtures/test-zones.json"
 readonly ALIASES_JSON="${SCRIPT_DIR}/aliases.json"
 FIREWALL_FQDN="firewall.mgmt.internal"
 readonly TIMESTAMP=$(date '+%Y-%m-%d_%H%M%S')
@@ -423,11 +428,17 @@ section "Standard 8: rules-manager NONE-mode fallback"
 
 # Use the deep-test fixture without connecting to OPNsense — NONE mode should
 # print manual instructions and exit 0 without touching the firewall.
+# The zones file is the install template PLUS the deep-test probe zones: the
+# fixture module lives in testAllowA, which ADR-014 D7 removed from the template
+# (see TEST_ZONES_FIXTURE), so the two must be combined for the reference check.
+_S8_ZONES="$(mktemp)"
+jq -s '.[0] * .[1]' "${ZONES_TEMPLATE}" "${TEST_ZONES_FIXTURE}" > "${_S8_ZONES}" 2>/dev/null \
+    || cp "${ZONES_TEMPLATE}" "${_S8_ZONES}"
 if command -v rules-manager >/dev/null 2>&1 && [[ -f "${FIXTURES_DIR}/test-fw-a.json" ]]; then
     if rules-manager add-rules test-fw-a \
             --firewall-type NONE \
             --modules-dir "${FIXTURES_DIR}" \
-            --zones-file "${ZONES_TEMPLATE}" \
+            --zones-file "${_S8_ZONES}" \
             --aliases-file "${ALIASES_JSON}" \
             --check-mode \
             >/dev/null 2>&1; then
@@ -438,6 +449,7 @@ if command -v rules-manager >/dev/null 2>&1 && [[ -f "${FIXTURES_DIR}/test-fw-a.
 else
     skip "rules-manager or fixture missing — NONE-mode test skipped"
 fi
+rm -f "${_S8_ZONES}"
 
 section "Standard 9: Auto-pinhole compile (issue #177 → #173)"
 
@@ -922,15 +934,15 @@ else
 
     trap cleanup_deep EXIT
 
-    # MERGE the test zones from the canonical SOURCE into the DEPLOYED zones.json
+    # MERGE the test zones from the deep-test FIXTURE into the DEPLOYED zones.json
     # (set Active), preserving every other zone. We must NOT overwrite the runtime
     # config wholesale — that destroys runtime-only zones such as variant zones
     # (historical defect 4 — investigation log in git history:
     # network/ISSUES/deep-test-trunk-and-nixbuild.md). cleanup_deep removes
     # these test-zone keys again afterwards.
-    if [[ -f "${ZONES_TEMPLATE}" && -f "${CONFIG_DIR}/zones.json" ]]; then
+    if [[ -f "${TEST_ZONES_FIXTURE}" && -f "${CONFIG_DIR}/zones.json" ]]; then
         tmp=$(mktemp)
-        if jq --slurpfile src "${ZONES_TEMPLATE}" \
+        if jq --slurpfile src "${TEST_ZONES_FIXTURE}" \
               --arg za "${TFW_A_ZONE}" --arg zb "${TFW_B_ZONE}" --arg zc "${TFW_C_ZONE}" '
               ($src[0]) as $s
               | reduce ([$za, $zb, $zc][]) as $z

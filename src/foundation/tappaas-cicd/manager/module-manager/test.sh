@@ -708,6 +708,141 @@ else
     ok "snapshot-vm.sh restore fails on a readiness timeout"
 fi
 
+# ---------------------------------------------------------------------------
+# Unit: ADR-014 P7 / #419 — zone-reference resolution and the pre-flight gate.
+# Both helpers live in lib/common-install-routines.sh; extract and run them in
+# isolation with stubbed logging, exactly as resolve_default_zone is tested above.
+# ---------------------------------------------------------------------------
+LIB="$(cd "$(dirname "${INSTALL}")/../.." && pwd)/lib/common-install-routines.sh"
+if [[ -f "$LIB" ]]; then
+    ok "located lib/common-install-routines.sh"
+else
+    bad "could not locate lib/common-install-routines.sh"
+fi
+
+ZREF_FN="${WORK}/zref.fn.sh"
+awk '/^resolve_renamed_zone\(\) \{/{f=1} f{print} f&&/^\}/{exit}' "$LIB"  > "$ZREF_FN"
+awk '/^validate_module_zone_refs\(\) \{/{f=1} f{print} f&&/^\}/{exit}' "$LIB" >> "$ZREF_FN"
+if grep -q 'resolve_renamed_zone' "$ZREF_FN" && grep -q 'validate_module_zone_refs' "$ZREF_FN"; then
+    ok "extracted resolve_renamed_zone + validate_module_zone_refs"
+else
+    bad "could not extract the #419 zone-reference helpers"
+fi
+
+# Run one of the helpers against a fixture CONFIG_DIR.
+run_zref() {
+    local cfg="$1"; shift
+    CONFIG_DIR="$cfg" bash -c '
+        set -uo pipefail
+        BL=""; CL=""; YW=""; GN=""
+        warn() { :; }; info() { :; }; debug() { :; }; error() { :; }
+        . "'"$ZREF_FN"'"
+        "$@"
+    ' _ "$@"
+}
+
+ZR="${WORK}/zref"; mkdir -p "$ZR"
+cat > "${ZR}/zones.json" <<'JSON'
+{
+  "acme": { "type": "Service", "state": "Active", "ip": "10.2.0.0/24" },
+  "mgmt": { "type": "Management", "state": "Manual", "ip": "10.0.0.0/24" },
+  "home": { "type": "Client", "state": "Active", "ip": "10.3.10.0/24" }
+}
+JSON
+printf '{"name":"acme","defaultEnvironment":"acme"}\n' > "${ZR}/site.json"
+
+# (1) the documented srv -> <defaultEnvironment> rename is mapped forward
+[[ "$(run_zref "$ZR" resolve_renamed_zone srv)" == "acme" ]] \
+    && ok "#419: a stale 'srv' reference resolves to the renamed default zone" \
+    || bad "#419: 'srv' was not mapped to the renamed default zone"
+
+# (2) an EXISTING zone is never rewritten
+[[ "$(run_zref "$ZR" resolve_renamed_zone home)" == "home" ]] \
+    && ok "#419: an existing zone is passed through untouched" \
+    || bad "#419: an existing zone was rewritten"
+
+# (3) an unknown name that is not the rename source is passed through unchanged
+#     (it must fail validation loudly, not be silently redirected somewhere)
+[[ "$(run_zref "$ZR" resolve_renamed_zone srvWork)" == "srvWork" ]] \
+    && ok "#419: an unrelated stale name is NOT silently redirected" \
+    || bad "#419: an unrelated stale name was redirected"
+
+# (4) pre-flight PASSES on a module whose references all resolve
+cat > "${ZR}/good.json" <<'JSON'
+{ "vmname": "good", "proxyAllowedZones": ["mgmt", "home", "internet"],
+  "egress": [ { "to": "acme", "ports": [443] }, { "to": "alias:x", "ports": [443] } ] }
+JSON
+run_zref "$ZR" validate_module_zone_refs "${ZR}/good.json" good \
+    && ok "#419 pre-flight: a module whose zone references all resolve passes" \
+    || bad "#419 pre-flight: rejected a valid module"
+
+# (5) pre-flight FAILS on a stale proxyAllowedZones entry — the silent-degradation
+#     case from the issue (hass shipped with 'home' dropped, locking clients out)
+cat > "${ZR}/badproxy.json" <<'JSON'
+{ "vmname": "badproxy", "proxyAllowedZones": ["mgmt", "srvHome"] }
+JSON
+run_zref "$ZR" validate_module_zone_refs "${ZR}/badproxy.json" badproxy \
+    && bad "#419 pre-flight: a stale proxyAllowedZones entry was accepted" \
+    || ok "#419 pre-flight: a stale proxyAllowedZones entry is REJECTED (was: dropped with a warning)"
+
+# (6) pre-flight FAILS on a stale egress target
+cat > "${ZR}/badegress.json" <<'JSON'
+{ "vmname": "badegress", "egress": [ { "to": "srvWork", "ports": [443] } ] }
+JSON
+run_zref "$ZR" validate_module_zone_refs "${ZR}/badegress.json" badegress \
+    && bad "#419 pre-flight: a stale egress target was accepted" \
+    || ok "#419 pre-flight: a stale egress target is REJECTED"
+
+# (7) a MODULE name as an egress peer is legal (resolved to a host alias later)
+printf '{"vmname":"peer"}\n' > "${ZR}/peer.json"
+cat > "${ZR}/modpeer.json" <<'JSON'
+{ "vmname": "modpeer", "egress": [ { "to": "peer", "ports": [443] } ] }
+JSON
+run_zref "$ZR" validate_module_zone_refs "${ZR}/modpeer.json" modpeer \
+    && ok "#419 pre-flight: a module-name egress peer is accepted (not a zone)" \
+    || bad "#419 pre-flight: rejected a legal module-name egress peer"
+
+# ---------------------------------------------------------------------------
+# Repo hygiene (#419): no shipped module JSON may reference a zone the install
+# template no longer provides. This is the regression guard for the whole issue.
+# ---------------------------------------------------------------------------
+TPL="$(cd "$(dirname "${INSTALL}")/../.." && pwd)/manager/network-manager/zones.json"
+REPO_ROOT="$(cd "$(dirname "${INSTALL}")/../../../../.." && pwd)"
+if [[ -f "$TPL" ]]; then
+    STALE="$(python3 - "$TPL" "$REPO_ROOT" <<'PY'
+import json,sys,glob,os
+tpl,root=sys.argv[1],sys.argv[2]
+shipped=set(k for k in json.load(open(tpl)) if not k.startswith('_')) | {"internet","all"}
+# `srv` is renamed away at install: a shipped module must not name it either.
+shipped.discard("srv")
+bad=[]
+for f in glob.glob(os.path.join(root,'src/apps/**/*.json'), recursive=True):
+    if os.sep+'test' in f: continue
+    try: d=json.load(open(f))
+    except Exception: continue
+    if not isinstance(d,dict) or 'vmname' not in d: continue
+    z=d.get('zone0')
+    if isinstance(z,str) and z not in shipped: bad.append(f"{os.path.basename(f)}:zone0={z}")
+    def w(o):
+        if isinstance(o,dict):
+            for k,v in o.items():
+                if k=='proxyAllowedZones' and isinstance(v,list):
+                    for r in v:
+                        if isinstance(r,str) and r not in shipped: bad.append(f"{os.path.basename(f)}:proxyAllowedZones={r}")
+                else: w(v)
+        elif isinstance(o,list):
+            for v in o: w(v)
+    w(d)
+print(" ".join(sorted(set(bad))))
+PY
+)"
+    if [[ -z "$STALE" ]]; then
+        ok "#419: no shipped app module references a retired/renamed zone"
+    else
+        bad "#419: shipped app modules reference zones the template does not provide: ${STALE}"
+    fi
+fi
+
 echo ""
 echo "Results: ${PASS} passed, ${FAIL} failed"
 [[ "$FAIL" -eq 0 ]] || exit 1

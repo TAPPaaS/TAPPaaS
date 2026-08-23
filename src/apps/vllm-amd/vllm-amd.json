@@ -9,7 +9,6 @@
   "vmid": 312,
   "vmtag": "TAPPaaS,AI,GPU,vLLM",
   "node": "tappaas2",
-  "zone0": "srvWork",
   "dependsOn": [
     "cluster:lxc",
     "backup:vm"

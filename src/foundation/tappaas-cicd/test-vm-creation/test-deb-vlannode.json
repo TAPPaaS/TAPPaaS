@@ -4,7 +4,6 @@
   "vmid": 902,
   "vmtag": "TAPPaaS,Test",
   "vmname": "test-deb-vlannode",
-  "zone0": "srvTest",
   "dependsOn": [
     "cluster:vm",
     "templates:debian"

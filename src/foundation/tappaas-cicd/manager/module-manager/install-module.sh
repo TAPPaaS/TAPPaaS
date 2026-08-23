@@ -485,6 +485,23 @@ main() {
     # consumer (the module's own install.sh, network provisioning) sees it.
     local zone0
     zone0=$(jq -r '.zone0 // empty' "${module_json}")
+    # #419 back-compat: a module JSON (or a deployed config) written before this
+    # installation's `srv -> <defaultEnvironment>` rename still names `srv`, which
+    # resolves to nothing and used to fail the install outright. Map the one
+    # documented rename forward and persist it, so the config converges instead of
+    # needing a hand edit. A zone that already exists is never rewritten.
+    if [[ -n "$zone0" ]]; then
+        local _z0r
+        _z0r="$(resolve_renamed_zone "$zone0")"
+        if [[ "$_z0r" != "$zone0" ]]; then
+            zone0="$_z0r"
+            local _ztmp
+            _ztmp="$(mktemp "${module_json}.XXXXXX")"
+            jq --arg z "$zone0" '.zone0 = $z' "${module_json}" > "${_ztmp}" \
+                && mv "${_ztmp}" "${module_json}" \
+                || { rm -f "${_ztmp}"; die "Failed to write the renamed zone0 into ${module_json}"; }
+        fi
+    fi
     if [[ -z "$zone0" && -n "${environment}" ]]; then
         zone0="$(resolve_zone_for_environment "${environment}")"
         if [[ -n "$zone0" ]]; then
@@ -508,6 +525,12 @@ main() {
     if [[ -n "$zone0" ]]; then
         validate_zone_active "$zone0" || die "Zone validation failed — install aborted before any resources were created"
     fi
+    # #419: zone0 is not the only zone reference a module makes. Validate
+    # proxyAllowedZones and egress[].to here too — BEFORE any resource exists —
+    # so a stale name fails fast instead of degrading the allow-list silently
+    # (proxy) or producing no rule at all (egress).
+    validate_module_zone_refs "${module_json}" "${effective_module}" \
+        || die "Zone reference validation failed — install aborted before any resources were created"
 
     # Resolve + persist the effective backup policy (ADR-007 P9). The
     # Site -> Environment -> Module cascade is computed by the TS backup-manager

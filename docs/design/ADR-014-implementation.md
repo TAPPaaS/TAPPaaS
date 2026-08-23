@@ -3,7 +3,7 @@
 **Companion to:** [ADR-014 — Zone ↔ Environment Lifecycle & Operations](<../ADR/ADR-014 - Zone and Environment Lifecycle.md>) (the *why* + the decided design)
 **Closes:** #424 (client/IoT zones ↔ environments undefined) · #419 (stale zone references not resolved)
 **Purpose of this doc:** one place that (1) records **implementation-level decisions** (including the three forks ADR-014 flagged for confirmation), (2) breaks the work into **packages** with deliverables/dependencies/test criteria, and (3) **tracks live execution state**.
-**Status:** In progress — P0–P6 ✅, P7 next
+**Status:** In progress — P0–P7 ✅, P8 next
 **Branch:** `feat/adr-014-zone-lifecycle`, cut from `main`
 **Started:** 2026-08-22
 
@@ -343,6 +343,39 @@ Stops raw-copying the template to `config/zones.json`; `init core` creates it. T
 
 **Test criteria** — every module JSON in the repo resolves against a freshly `init core`-ed `zones.json`; a deliberately stale `proxyAllowedZones` entry fails the install with a clear message (was: warn + reduced allow-list); pre-flight rejects a stale `zone0` before the VM is touched; a fixture install carrying `zone0: srv` converges to `<env>` through the merge.
 
+**Outcome (2026-08-22): ✅ green — module-manager 13 + 89, network-manager 236 + 16, environment-manager 27; all shellcheck findings on the changed scripts are pre-existing. Closes #419.**
+
+#### What was already right
+
+`zone0` **already had** a fail-fast pre-flight (`validate_zone_active`, called before any resource is created) — the issue's "install fails outright" is the *correct* behaviour, not the defect. And `zone0` is not a merge AUTO_FIELD, so the repo fix propagates to existing installs on the next `update-module` for anyone who has not customised it (C5).
+
+#### Module JSONs — deleted, not rewritten (C6)
+
+`zone0` was **removed** from 20 files rather than pointed at a new literal: an unset `zone0` falls back to the target environment's `network.zone`, so the stale-name class disappears instead of moving. Covers the five app modules #419 names, plus `litellm`/`vllm-amd`/`windows-server`/`00-Template` and 11 test fixtures. `netbird-client` (`home`), `deconz` (`iotCloud`), `coturn`/`vaultwarden` (`dmz`) keep theirs — those are deliberate placements, still valid under F1.
+
+Verified end to end: against a real `init core` + `init iot` install, **all 13 shipped app modules resolve** — no missing zone0, no unresolvable `proxyAllowedZones` or `egress.to`.
+
+#### Two gates added
+
+- **The silent drop is now a hard error** (C7). `access-list.sh` used to skip an unresolvable `proxyAllowedZones` entry with a warning and continue, so `hass` deployed "successfully" with `home` dropped and every private-zone client locked out. It now collects the unresolvable entries and refuses, naming them — a reduced allow-list is a security-relevant divergence from declared intent.
+- **Pre-flight now covers every zone reference**, not just `zone0`. New `validate_module_zone_refs()` checks `proxyAllowedZones` and `egress[].to` *before* any resource exists. It correctly skips the non-zone forms: `internet`/`all`, `alias:<name>`, and another deployed module's name (resolved to a host alias at rule-compile time).
+
+#### Back-compat for existing installs
+
+New `resolve_renamed_zone()` maps the one documented rename (`srv` → `site.defaultEnvironment`) forward when the written name does not resolve, and persists it — so a deployed config predating the rename converges instead of needing a hand edit. An **existing** zone is never rewritten, and an unrelated stale name (`srvWork`) is deliberately **not** redirected: it must fail loudly rather than be silently pointed somewhere plausible.
+
+#### Consequence of D7 the plan had not anticipated
+
+The deep firewall test sourced its four probe zones **from the shipped template**, which P6 emptied — so `--deep` would have failed at "Merge test zones". They now live in a dedicated `network/test-fixtures/test-zones.json` next to the test that activates them, typed and tiered so the ADR-014 invariants hold while they are temporarily live (`testPinhole` is Service/tier 1 reached only by pinhole, which is exactly the auto-pinhole path #173 exercises). The Standard-8 NONE-mode check merges template + fixture for its reference resolution.
+
+#### Regression guard
+
+`module-manager/test.sh` now fails if **any** shipped app module references a zone the install template does not provide — including `srv`, which is renamed away at install. That is the guard that keeps #419 closed.
+
+#### Left alone, deliberately
+
+13 `get_config_value 'zone0' 'srv'|'srvHome'` fallback defaults remain in module `update.sh`/`test.sh` scripts. They are dead code on a correctly-installed system (install-module.sh always writes the resolved `zone0` back), so they are latent rather than live. Two that were *unambiguously* broken — `srv-work` and `srv-home`, hyphenated names #278 outlawed and the camelCase migration removed — were fixed to `mgmt`. Sweeping the remaining 13 is follow-up tidying, not part of #419.
+
 ---
 
 > **Docs are updated per-package, not batched into P8.** The original plan deferred all
@@ -384,8 +417,8 @@ See [Rollout campaign](#rollout-campaign) — three staged tests, gated on P0–
 | P4 | Archetypes on `add` | P1 | ✅ | 205 unit + 15 CLI, `tsc` clean | +8 tests; fixed a pre-existing `all`-wildcard bug |
 | P5 | `environment add --create-zone` / reconcile materialise | P3 | ✅ | 27 env-mgr + 205/15 net-mgr, `tsc` clean | +7 tests; D1 semantics clarified |
 | P6 | `init` profiles + template cleanup + `retire` | P3, P4 | ✅ | 236 unit + 16 CLI, `tsc` clean; live migration verified | +42 tests; new `src/retire.ts`; `validate --effective` added |
-| P7 | #419 module refs + validation gates | P6 | 🟦 | — | closes #419 |
-| P8 | Docs + ADR-014 → Accepted + issue closure | P1–P7 | ⬜ | — | |
+| P7 | #419 module refs + validation gates | P6 | ✅ | 89+13 module-mgr, 236+16 net-mgr, 27 env-mgr | +8 tests; **closes #419** |
+| P8 | Docs + ADR-014 → Accepted + issue closure | P1–P7 | 🟦 | — | |
 | P9 | Rollout campaign (3 stages) | P8 | ⬜ | — | |
 
 ---

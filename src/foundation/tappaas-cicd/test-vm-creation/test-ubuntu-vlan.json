@@ -4,7 +4,6 @@
   "vmid": 905,
   "vmtag": "TAPPaaS,Test",
   "vmname": "test-ubuntu-vlan",
-  "zone0": "srvTest",
   "dependsOn": [
     "cluster:vm",
     "templates:debian"

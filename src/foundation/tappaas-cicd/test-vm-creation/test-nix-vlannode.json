@@ -5,7 +5,6 @@
   "vmid": 912,
   "vmtag": "TAPPaaS,Test",
   "node": "tappaas3",
-  "zone0": "srvTest",
   "dependsOn": [
     "cluster:vm",
     "templates:nixos"

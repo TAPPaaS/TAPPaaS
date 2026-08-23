@@ -9,7 +9,6 @@
   "vmid": 310,
   "vmtag": "TAPPaaS,App,AI",
   "node": "tappaas2",
-  "zone0": "srvWork",
   "dependsOn": [
     "cluster:vm",
     "templates:nixos",

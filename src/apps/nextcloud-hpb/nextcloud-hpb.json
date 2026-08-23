@@ -9,7 +9,6 @@
   "vmid": 342,
   "vmtag": "TAPPaaS,App",
   "node": "tappaas2",
-  "zone0": "srv",
   "dependsOn": [
     "backup:vm",
     "cluster:vm",

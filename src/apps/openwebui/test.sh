@@ -38,7 +38,7 @@ done
 
 VMNAME="$(get_config_value 'vmname' "${_MODULE}")"
 VMID="${_OVERRIDE_VMID:-$(get_config_value 'vmid')}"
-ZONE0NAME="${_OVERRIDE_ZONE:-$(get_config_value 'zone0' 'srv-work')}"
+ZONE0NAME="${_OVERRIDE_ZONE:-$(get_config_value 'zone0' 'mgmt')}"
 EXPECTED_VERSION="$(get_config_value 'appVersion')"
 readonly VMNAME VMID ZONE0NAME EXPECTED_VERSION
 

@@ -67,7 +67,7 @@ if [[ -z "${VMNAME}" ]]; then
     VMNAME="${MODULE}"
 fi
 
-ZONE="${TAPPAAS_ZONE0_OVERRIDE:-$(get_config_value 'zone0' 'srv-home')}"  # override: issue #196
+ZONE="${TAPPAAS_ZONE0_OVERRIDE:-$(get_config_value 'zone0' 'mgmt')}"  # override: issue #196
 _ENV=$(get_config_value 'environment' '' 2>/dev/null || echo '')
 TAPPAAS_DOMAIN=$(jq -r '.domain // empty' <<<"$(get_variant_config "${_ENV}" 2>/dev/null || echo '{}')")
 # Legacy fallback: configuration.json is retired (ADR-007) and absent on a fresh

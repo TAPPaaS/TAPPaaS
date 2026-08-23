@@ -8,7 +8,6 @@
   "vmname": "hass",
   "vmid": 210,
   "vmtag": "TAPPaaS,App,HomeAutomation",
-  "zone0": "srvHome",
   "dependsOn": [
     "cluster:vm",
     "backup:vm",

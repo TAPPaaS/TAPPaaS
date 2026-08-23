@@ -90,15 +90,32 @@ proxy_resolve_access_list() {
     done
 
     # Resolve zone names → CIDRs from zones.json.
+    #
+    # An UNRESOLVABLE ENTRY IS A HARD ERROR (issue #419). This used to warn and
+    # continue, so a module with a stale zone name deployed "successfully" while
+    # silently granting access to FEWER zones than it declared — e.g. hass with
+    # proxyAllowedZones ["mgmt","home"] on a system where 'home' had been renamed
+    # away installed clean and locked every private-zone client out of Home
+    # Assistant. A reduced allow-list is a security-relevant divergence from the
+    # declared intent, and the operator must be told, not left to discover it.
     local cidrs="" cidr
+    local -a unresolved=()
     for z in "${zones[@]}"; do
         cidr=$(jq -r --arg z "${z}" '.[$z].ip // empty' "${zones_file}" 2>/dev/null)
         if [[ -z "${cidr}" ]]; then
-            warn "  zone '${z}' not found in zones.json — skipping" >&2
+            unresolved+=("${z}")
             continue
         fi
         cidrs="${cidrs:+${cidrs},}${cidr}"
     done
+
+    if [[ ${#unresolved[@]} -gt 0 ]]; then
+        error "proxyAllowedZones for '${module}' names ${#unresolved[@]} zone(s) that do not resolve in ${zones_file}: ${unresolved[*]}" >&2
+        error "  A partial allow-list would silently grant access to fewer zones than declared, so this is refused." >&2
+        error "  Fix the module's proxyAllowedZones, or check the zone name against:" >&2
+        error "    network-manager list" >&2
+        return 1
+    fi
 
     if [[ -z "${cidrs}" ]]; then
         error "proxyAllowedZones for '${module}' resolved to no networks — refusing to create an empty allow-list (it would block everything)" >&2

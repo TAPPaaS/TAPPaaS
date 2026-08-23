@@ -1,0 +1,62 @@
+{
+  "_README": {
+    "_comment": "Deep-test-only zone definitions for the firewall/network test suite. These four zones used to ship in the INSTALL template (manager/network-manager/zones.json); ADR-014 D7 removed them from it — a test probe has no business on a production install — and they live here instead, next to the test that activates them. network/test.sh --deep merges these into the DEPLOYED zones.json (state Active), runs the inter-zone rule validation, then removes the keys again in cleanup_deep. Nothing else reads this file.",
+    "tier_note": "Typed and tiered like any other zone so the ADR-014 invariants (I1 monotonic access-to, I2 isolation floor, I4 archetype conformance) hold while they are temporarily live: testAllowA/B are trusted-client-shaped (tier 2) and testPinhole is a service-shaped target (tier 1) reached ONLY by pinhole — which is exactly the auto-pinhole path #173 exercises."
+  },
+  "testAllowA": {
+    "type": "Client",
+    "state": "Inactive",
+    "typeId": "3",
+    "subId": "80",
+    "vlantag": 380,
+    "ip": "10.3.80.0/24",
+    "bridge": "lan",
+    "access-to": [
+      "internet",
+      "testAllowB"
+    ],
+    "pinhole-allowed-from": [
+      "testAllowB"
+    ],
+    "tier": 2,
+    "_comment": "Activated by network test.sh --deep. Bidirectional access with testAllowB validates inter-zone allow rules in both directions.",
+    "description": "Deep-test zone A: bidirectional allow validation"
+  },
+  "testAllowB": {
+    "type": "Client",
+    "state": "Inactive",
+    "typeId": "3",
+    "subId": "81",
+    "vlantag": 381,
+    "ip": "10.3.81.0/24",
+    "bridge": "lan",
+    "access-to": [
+      "internet",
+      "testAllowA"
+    ],
+    "pinhole-allowed-from": [
+      "testAllowA"
+    ],
+    "tier": 2,
+    "_comment": "Activated by network test.sh --deep. Peer of testAllowA.",
+    "description": "Deep-test zone B: bidirectional allow validation"
+  },
+  "testPinhole": {
+    "type": "Service",
+    "state": "Inactive",
+    "typeId": "2",
+    "subId": "80",
+    "vlantag": 280,
+    "ip": "10.2.80.0/24",
+    "bridge": "lan",
+    "access-to": [
+      "internet"
+    ],
+    "pinhole-allowed-from": [
+      "testAllowA"
+    ],
+    "tier": 1,
+    "_comment": "Activated by network test.sh --deep. testAllowA appears ONLY in pinhole-allowed-from, never in any access-to — that is what makes this the auto-pinhole path (#173): the consumer reaches it via a per-module rule, not zone-wide. Service-typed at tier 1 so the client->service reach is an UPWARD edge, exactly as the ADR-014 lattice intends.",
+    "description": "Deep-test zone: pinhole-only path validation (#173)"
+  }
+}
