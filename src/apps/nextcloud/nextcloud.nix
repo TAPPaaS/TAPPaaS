@@ -42,10 +42,33 @@ let
   # (33 → 34 → 35). The eurooffice connector pin lives in eurooffice-nextcloud.nix; the
   # nixpkgs template rev is pinned engine-side (update-os.sh). See UPGRADE.md.
   ncMajor = 33;
+  # Codeberg re-generated its `archive/<tag>.tar.gz` tarballs, changing the
+  # container bytes (gzip/git version) while the tagged CONTENT is unchanged.
+  # Every nixpkgs pin that fetches such an archive by FILE hash therefore fails
+  # with a fixed-output hash mismatch — including uppush 2.4.0 pinned here, and
+  # (verified) nixpkgs master's own newer 2.5.0 pin, so bumping nixpkgs does not
+  # help. The served 2.4.0 tarball was checked against a fresh `git clone` of tag
+  # 2.4.0: 86 files, byte-identical content, pure repackaging.
+  #
+  # Fix the CLASS, not the instance: refetch via fetchFromGitea, which is a
+  # fetchzip — it hashes the UNPACKED tree, so archive repackaging cannot break
+  # it again. Drop this override once nixpkgs ships a fetcher that does the same.
+  uppushSrc = pkgs.fetchFromGitea {
+    domain = "codeberg.org";
+    owner  = "NextPush";
+    repo   = "uppush";
+    rev    = "2.4.0";
+    hash   = "sha256-vV/4A7fC8rfRWdeAbiW0lfTc3Ptxm9QWVH356xZKjTw=";
+  };
+
   versions = {
     postgresPkg   = pkgs.postgresql_15;
     nextcloudPkg  = pkgs."nextcloud${toString ncMajor}";
-    nextcloudApps = pkgs."nextcloud${toString ncMajor}Packages".apps;
+    nextcloudApps = (pkgs."nextcloud${toString ncMajor}Packages".apps) // {
+      uppush = pkgs."nextcloud${toString ncMajor}Packages".apps.uppush.overrideAttrs (_: {
+        src = uppushSrc;
+      });
+    };
   };
 
 in
