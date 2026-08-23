@@ -450,6 +450,76 @@ EOF
     };
   };
 
+
+  # ----------------------------------------
+  # Reconcile OpenWebUI's PERSISTED OpenAI connection
+  # ----------------------------------------
+  #
+  # OPENAI_API_BASE_URL / OPENAI_API_KEY are only applied as INITIAL DEFAULTS.
+  # OpenWebUI persists them into its `config` table on first start, and from then
+  # on the DATABASE wins — changing the env afterwards has no effect at all.
+  #
+  # That is not a corner case: on a fresh deploy the container starts before
+  # litellm:models has provisioned the virtual key, so OpenWebUI persists its
+  # built-in defaults (api.openai.com with an empty key). Every later converge
+  # then wrote the correct env, restarted the container, reported success — and
+  # the UI still showed no models, because the DB still pointed at OpenAI.
+  #
+  # So the connection has to be reconciled where it actually lives. The config
+  # table is a simple key/value store; api_base_urls and api_keys are parallel
+  # arrays indexed together. Idempotent: it compares first and only writes (and
+  # only restarts the container) when the stored value actually differs.
+  systemd.services.openwebui-apply-connection = {
+    description = "Point OpenWebUI's stored OpenAI connection at the provider";
+    wantedBy = [ "multi-user.target" ];
+    after = [ "postgresql.service" "openwebui-wrapper.service" ];
+    requires = [ "postgresql.service" ];
+    serviceConfig = {
+      Type = "oneshot";
+      RemainAfterExit = true;
+      ExecStart = pkgs.writeShellScript "openwebui-apply-connection" ''
+        set -uo pipefail
+        PATH="${pkgs.coreutils}/bin:${pkgs.gnugrep}/bin:${pkgs.util-linux}/bin:${pkgs.systemd}/bin:${versions.postgresPkg}/bin:$PATH"
+        SRC=/etc/secrets/openwebui-integrations.env
+
+        readvar() { [ -f "$1" ] && grep -m1 "^$2=" "$1" 2>/dev/null | cut -d= -f2- || true; }
+        BASE="$(readvar "$SRC" OPENAI_API_BASE_URL)"
+        KEY="$(readvar "$SRC" OPENAI_API_KEY)"
+        if [ -z "$BASE" ] || [ -z "$KEY" ]; then
+          echo "apply-connection: no provider endpoint recorded yet — skipping"
+          exit 0
+        fi
+
+        q() { runuser -u postgres -- psql -d openwebui -tAc "$1" 2>/dev/null; }
+
+        # Nothing to reconcile until OpenWebUI has created its config table.
+        HAVE="$(q "SELECT to_regclass('public.config')")"
+        [ -n "$HAVE" ] || { echo "apply-connection: config table not present yet — skipping"; exit 0; }
+
+        CUR_B="$(q "SELECT value::text FROM config WHERE key = 'openai.api_base_urls'")"
+        CUR_K="$(q "SELECT value::text FROM config WHERE key = 'openai.api_keys'")"
+
+        if [ "$CUR_B" = "[\"$BASE\"]" ] && [ "$CUR_K" = "[\"$KEY\"]" ]; then
+          echo "apply-connection: stored connection already correct"
+          exit 0
+        fi
+
+        runuser -u postgres -- psql -d openwebui -v ON_ERROR_STOP=1 \
+          -c "INSERT INTO config (key, value, updated_at) VALUES ('openai.api_base_urls', to_json(ARRAY['$BASE']::text[]), extract(epoch from now())::bigint) ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = EXCLUDED.updated_at" \
+          -c "INSERT INTO config (key, value, updated_at) VALUES ('openai.api_keys', to_json(ARRAY['$KEY']::text[]), extract(epoch from now())::bigint) ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = EXCLUDED.updated_at" \
+          -c "INSERT INTO config (key, value, updated_at) VALUES ('openai.enable', 'true'::json, extract(epoch from now())::bigint) ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = EXCLUDED.updated_at" \
+          >/dev/null 2>&1 \
+          && echo "apply-connection: stored connection now points at $BASE" \
+          || { echo "apply-connection: failed to update stored connection" >&2; exit 0; }
+
+        # The running container caches the connection; restart so it re-reads.
+        if systemctl is-active --quiet openwebui-wrapper.service; then
+          systemctl restart openwebui-wrapper.service || true
+        fi
+      '';
+    };
+  };
+
   # Template only — actual secrets are auto-generated above
   environment.etc."secrets/openwebui-template.env".text = ''
     DATABASE_URL=postgresql://openwebui@127.0.0.1:5432/openwebui

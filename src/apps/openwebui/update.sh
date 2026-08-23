@@ -225,6 +225,7 @@ REMOTE
                     "sudo install -d -m 700 /etc/secrets && \
                      sudo install -m600 -o root -g root /dev/stdin /etc/secrets/openwebui-owner.env && \
                      sudo systemctl restart openwebui-integrations.service && \
+                     sudo systemctl restart openwebui-apply-connection.service && \
                      sudo systemctl restart openwebui-seed-admin.service" 2>/dev/null
             then
                 info "  ${GN}✓${CL} owner identity pushed; admin seeded if the instance has no accounts yet"
