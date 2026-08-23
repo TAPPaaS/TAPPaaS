@@ -20,8 +20,12 @@ fail=0
 # Gate 1 — deCONZ REST/Hue-compat API answers on the http port (/api/config is
 # unauthenticated and returns the bridge descriptor).
 info "Gate 1: deCONZ API http://${FQDN}:${HTTP_PORT}/api/config"
+# `|| echo 000` inside the substitution concatenates with curl's own "000",
+# yielding "000000" — harmless against an `== "200"` test but it makes the
+# reported code meaningless. Assign the fallback outside.
 code="$(curl -s -m 10 -o /tmp/deconz_config.json -w '%{http_code}' \
-  "http://${FQDN}:${HTTP_PORT}/api/config" 2>/dev/null || echo 000)"
+  "http://${FQDN}:${HTTP_PORT}/api/config" 2>/dev/null)" || code=000
+[[ -n "${code}" ]] || code=000
 if [[ "${code}" == "200" ]]; then
   name="$(jq -r '.name // .bridgeid // "?"' /tmp/deconz_config.json 2>/dev/null || echo '?')"
   info "  ${GN}PASS${CL} — API 200 (bridge: ${name})"

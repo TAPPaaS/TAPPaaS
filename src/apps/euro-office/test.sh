@@ -174,7 +174,9 @@ info "Testing DocumentServer HTTP response on http://localhost/..."
 if [ "$CONTAINER_OK" = false ]; then
     skip "HTTP health check skipped — container is not running"
 else
-    HTTP_CODE=$(remote "curl -s -o /dev/null -w '%{http_code}' --max-time 15 http://localhost/" || echo "000")
+    # `$(cmd || echo 000)` CONCATENATES curl's own "000" (it writes the code even on failure) with the fallback, giving "000000" — which then compares unequal to "000" and defeats every downstream check. Assign the fallback OUTSIDE the substitution.
+    HTTP_CODE=$(remote "curl -s -o /dev/null -w '%{http_code}' --max-time 15 http://localhost/") || HTTP_CODE="000"
+    [[ -n "${HTTP_CODE}" ]] || HTTP_CODE="000"
     info "HTTP status code: ${HTTP_CODE}"
 
     if [ "$HTTP_CODE" = "200" ]; then
@@ -200,8 +202,10 @@ info "Testing the endpoints the Nextcloud connector relies on..."
 if [ "$CONTAINER_OK" = false ]; then
     skip "Connector endpoint check skipped — container is not running"
 else
-    HC_CODE=$(remote "curl -s -o /dev/null -w '%{http_code}' --max-time 15 http://localhost/healthcheck" || echo "000")
-    API_CODE=$(remote "curl -s -o /dev/null -w '%{http_code}' --max-time 15 http://localhost/web-apps/apps/api/documents/api.js" || echo "000")
+    HC_CODE=$(remote "curl -s -o /dev/null -w '%{http_code}' --max-time 15 http://localhost/healthcheck") || HC_CODE="000"
+    [[ -n "${HC_CODE}" ]] || HC_CODE="000"
+    API_CODE=$(remote "curl -s -o /dev/null -w '%{http_code}' --max-time 15 http://localhost/web-apps/apps/api/documents/api.js") || API_CODE="000"
+    [[ -n "${API_CODE}" ]] || API_CODE="000"
     info "/healthcheck: ${HC_CODE}   /web-apps api.js: ${API_CODE}"
 
     if [ "$HC_CODE" = "200" ]; then

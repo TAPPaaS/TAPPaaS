@@ -94,7 +94,8 @@ echo "  Waiting for vLLM API to be ready (max 60s)..."
 READY=0
 for i in $(seq 1 12); do
   STATUS=$(ssh "$TARGET" "pct exec $VMID -- bash -c \
-    'curl -s -o /dev/null -w \"%{http_code}\" http://localhost:8000/health || echo 000'")
+    'curl -s -o /dev/null -w \"%{http_code}\" http://localhost:8000/health'") || STATUS=000
+  [ -n "$STATUS" ] || STATUS=000
   if [ "$STATUS" = "200" ]; then
     READY=1
     break

@@ -33,10 +33,15 @@ for _a in "$@"; do [[ "${_a}" == "--deep" ]] && RUN_DEEP=1; done
 
 DEEPMOD="zzzmod"          # throwaway module name for the deep module-admin role
 
-PASS=0; FAIL=0
+PASS=0; FAIL=0; SKIP=0
 section() { echo; info "${BOLD}═══ $* ═══${CL}"; }
 pass() { PASS=$((PASS+1)); info "    ${GN}✓${CL} $*"; }
 fail() { FAIL=$((FAIL+1)); error "    ✗ $*"; }
+# This suite had no `skip`, so a precondition guard that called it errored with
+# "skip: command not found" and the check silently vanished — neither passed nor
+# reported. A skipped check must always be VISIBLE and counted, or a run with
+# unexercised assertions reads exactly like a clean one.
+skip() { SKIP=$((SKIP+1)); info "    ${YW:-}⊘${CL:-} SKIP: $*"; }
 
 CREDS="${HOME}/.authentik-credentials.txt"
 [[ -f "${CREDS}" ]] || { error "no ${CREDS}"; exit 2; }
@@ -183,15 +188,72 @@ if [[ "${RUN_DEEP}" -eq 1 ]]; then
         section "6-7 (deep): identity integration — SKIPPED"
         warn "  default domain or install/delete-module.sh unavailable; skipping VM integration"
     else
+# ── proxy-reachability precondition (identity deep 6/7) ───────────────
+# Both deep checks publish an EPHEMERAL hostname (test-idfa/test-idoidc.<domain>)
+# and then fetch it through Caddy. Under dnsMode=per-service that hostname has no
+# public DNS A record, so ACME HTTP-01 cannot validate, no certificate is issued,
+# and the TLS handshake fails outright — curl returns an empty body and the
+# assertion fails for a reason that has nothing to do with identity.
+#
+# (Measured on such a host: a long-lived name gives http=302/ssl_verify_result=20,
+# an unpublished one gives http=000/ssl_verify_result=1.)
+#
+# Under dnsMode=wildcard a single *.<domain> cert covers these names and both
+# checks run for real. So: probe first, and SKIP with the precondition when the
+# proxy path cannot serve TLS for the name — never silently pass.
+proxy_tls_usable() {   # $1 = fqdn
+    local code
+    # NOTE the fallback form: `$(curl ... || echo 000)` concatenates curl's own
+    # "000" with the echoed one ("000000"), which then compares unequal to "000"
+    # and silently defeats this guard. Assign the fallback OUTSIDE the
+    # substitution instead.
+    code="$(curl -ksS -o /dev/null -w '%{http_code}' --max-time 20 "https://$1/" 2>/dev/null)" || code=000
+    [[ -n "${code}" && "${code}" != "000" ]]
+}
+
+# Fetch through Caddy, WAITING for the upstream to come up. A freshly installed
+# module's webserver is not serving the instant install-module.sh returns, and
+# neither of these checks waited — they fired one curl and reported the empty
+# body as a functional failure. Caddy answers immediately (so the TLS probe
+# above passes) while the upstream is still starting, which is exactly the
+# 502-with-empty-body we were misreading.
+#
+# Echoes "<http_code>|<body>"; retries while the code says "upstream not ready".
+proxy_fetch() {        # $1 = fqdn, $2 = attempts (default 12 -> ~60s)
+    local fqdn="$1" tries="${2:-12}" i code body tmp
+    tmp="$(mktemp)"
+    for ((i = 1; i <= tries; i++)); do
+        code="$(curl -ksSL -o "${tmp}" -w '%{http_code}' --max-time 20 "https://${fqdn}/" 2>/dev/null)" || code=000
+        [[ -n "${code}" ]] || code=000
+        body="$(cat "${tmp}" 2>/dev/null)"
+        # 502/503/504 = Caddy up, upstream not yet answering. Keep waiting.
+        case "${code}" in
+            502|503|504|000) ;;
+            *) [[ -n "${body}" ]] && break ;;
+        esac
+        sleep 5
+    done
+    rm -f "${tmp}"
+    printf '%s|%s' "${code}" "${body}"
+}
+
         # ── 6. forward-auth (identity:accessControl) GATES the webserver ──
         section "6 (deep): forward-auth — Authentik gates the webserver"
         FA_FQDN="test-idfa.${DOMAIN}"
         if ( cd "${FIXTURES}/test-idfa" && "${INSTALL_MODULE}" test-idfa --proxyDomain "${FA_FQDN}" ) >/tmp/idfa-install.log 2>&1; then
             pass "test-idfa installed (forward-auth)"
-            body="$(curl -ksSL --max-time 25 "https://${FA_FQDN}/" 2>/dev/null)"
-            { ! grep -q "tappaas-idfa-ok" <<<"${body}" && grep -qi "authentik" <<<"${body}"; } \
-                && pass "unauthenticated request gated → Authentik login served, marker withheld" \
-                || fail "forward-auth NOT gating (marker leaked or non-Authentik response)"
+            if ! proxy_tls_usable "${FA_FQDN}"; then
+                skip "forward-auth gating — Caddy cannot serve TLS for ${FA_FQDN} (dnsMode=$(jq -r '.domains.dnsMode // "?"' "${CONFIG_DIR}/environments/$(jq -r '.defaultEnvironment // .name' "${CONFIG_DIR}/site.json").json" 2>/dev/null): no public A record ⇒ no ACME cert). Use dnsMode=wildcard, or publish the record, to exercise this."
+            else
+                _r="$(proxy_fetch "${FA_FQDN}")"; _code="${_r%%|*}"; body="${_r#*|}"
+                if { ! grep -q "tappaas-idfa-ok" <<<"${body}" && grep -qi "authentik" <<<"${body}"; }; then
+                    pass "unauthenticated request gated → Authentik login served, marker withheld"
+                elif grep -q "tappaas-idfa-ok" <<<"${body}"; then
+                    fail "forward-auth NOT gating — the marker LEAKED (http ${_code}); the outpost is not in front of the upstream"
+                else
+                    fail "forward-auth: no Authentik response (http ${_code}, ${#body} bytes): $(head -c 120 <<<"${body}" | tr '\n' ' ')"
+                fi
+            fi
             [[ "$(api '/core/applications/?superuser_full_list=true&page_size=1000' | jq -r '[.results[]|select(.slug=="test-idfa")]|length')" -ge 1 ]] \
                 && pass "Authentik proxy app 'test-idfa' present" || fail "no Authentik proxy app for test-idfa"
             "${DELETE_MODULE}" test-idfa --force >/dev/null 2>&1 \
@@ -205,10 +267,14 @@ if [[ "${RUN_DEEP}" -eq 1 ]]; then
         OIDC_FQDN="test-idoidc.${DOMAIN}"
         if ( cd "${FIXTURES}/test-idoidc" && "${INSTALL_MODULE}" test-idoidc --proxyDomain "${OIDC_FQDN}" ) >/tmp/idoidc-install.log 2>&1; then
             pass "test-idoidc installed (OIDC)"
-            body="$(curl -ksSL --max-time 25 "https://${OIDC_FQDN}/" 2>/dev/null)"
-            grep -q "tappaas-idoidc-ok" <<<"${body}" \
-                && pass "webserver reachable — OIDC mode does NOT gate (Caddy passthrough)" \
-                || fail "OIDC webserver not reachable (got: $(head -c 80 <<<"${body}"))"
+            if ! proxy_tls_usable "${OIDC_FQDN}"; then
+                skip "OIDC passthrough — Caddy cannot serve TLS for ${OIDC_FQDN} (no public A record under dnsMode=per-service ⇒ no ACME cert). Use dnsMode=wildcard, or publish the record, to exercise this."
+            else
+                _r="$(proxy_fetch "${OIDC_FQDN}")"; _code="${_r%%|*}"; body="${_r#*|}"
+                grep -q "tappaas-idoidc-ok" <<<"${body}" \
+                    && pass "webserver reachable — OIDC mode does NOT gate (Caddy passthrough)" \
+                    || fail "OIDC webserver not reachable (http ${_code}, ${#body} bytes): $(head -c 120 <<<"${body}" | tr '\n' ' ')"
+            fi
             oapp="$(api '/core/applications/?superuser_full_list=true&page_size=1000' | jq -r '.results[]|select(.slug=="test-idoidc")|.pk')"
             [[ -n "${oapp}" ]] && pass "Authentik OIDC application present" || fail "no OIDC application for test-idoidc"
             [[ "$(api '/providers/oauth2/?page_size=1000' | jq -r '[.results[]|select(.name=="test-idoidc")]|length')" -ge 1 ]] \
@@ -242,6 +308,9 @@ fi
 
 # ── summary ─────────────────────────────────────────────────────────────────
 section "Summary"
-info "  ${GN}Passed:${CL} ${PASS}   ${RD:-}${BOLD}Failed:${CL} ${FAIL}"
-[[ "${FAIL}" -eq 0 ]] && { info "${GN}${BOLD}All identity tests passed.${CL}"; exit 0; }
+info "  ${GN}Passed:${CL} ${PASS}   ${RD:-}${BOLD}Failed:${CL} ${FAIL}   ${YW:-}Skipped:${CL:-} ${SKIP}"
+if [[ "${SKIP}" -gt 0 ]]; then
+    info "  ${YW:-}Note:${CL:-} ${SKIP} check(s) were NOT exercised — see the SKIP lines above."
+fi
+[[ "${FAIL}" -eq 0 ]] && { info "${GN}${BOLD}All identity tests passed${CL}${SKIP:+ (${SKIP} skipped)}."; exit 0; }
 error "${BOLD}${FAIL} identity test(s) failed.${CL}"; exit 1

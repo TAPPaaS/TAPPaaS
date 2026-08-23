@@ -1425,12 +1425,44 @@ else
     # this test flaky.
     ssh-keygen -R "${TFW_C_FQDN}" >/dev/null 2>&1 || true
 
-    ssh -o BatchMode=yes -o StrictHostKeyChecking=accept-new \
-        root@"${FIREWALL_FQDN}" \
-        "configctl filter reload >/dev/null 2>&1; \
-         /usr/local/etc/rc.update_alias_tables.sh >/dev/null 2>&1 || true; \
-         configctl alias reload >/dev/null 2>&1 || true" \
-        >/dev/null 2>&1 || true
+    # Force the FQDN alias tables to repopulate. The two commands used here
+    # before DO NOT EXIST on current OPNsense (26.1 measured):
+    #   /usr/local/etc/rc.update_alias_tables.sh  → file missing
+    #   configctl alias reload                    → "Action not allowed or missing"
+    # Both were swallowed (`|| true`), so this poke was a NO-OP and the test just
+    # hoped a periodic refresh would land inside the retry window — which is the
+    # whole of #386 ("rule created, traffic blocked, pfctl alias table empty").
+    # `configctl filter refresh_aliases` is the working entry point; it returns
+    # {"status": "ok"}. Verify it rather than swallowing it.
+    # Assert the EFFECT, not the command's stdout: `configctl filter
+    # refresh_aliases` returns {"status":"ok"} only sometimes (empty when a
+    # refresh is already in flight), so grepping its output is flaky. What
+    # actually matters is that the pf table behind the FQDN alias holds an
+    # address — that is the precondition for the auto-pinhole rule to match.
+    # Verified by hand: flush tm_<mod> -> 0 entries, refresh -> 1 entry.
+    _alias_refresh() {   # $1 = alias name to wait for (optional)
+        local want="${1:-}" n
+        ssh -o BatchMode=yes -o StrictHostKeyChecking=accept-new \
+            root@"${FIREWALL_FQDN}" \
+            "configctl filter reload >/dev/null 2>&1; configctl filter refresh_aliases >/dev/null 2>&1" \
+            >/dev/null 2>&1 || return 1
+        [[ -z "${want}" ]] && return 0
+        for _ in 1 2 3 4 5 6; do
+            n="$(ssh -o BatchMode=yes -o StrictHostKeyChecking=accept-new \
+                    root@"${FIREWALL_FQDN}" \
+                    "pfctl -t ${want} -T show 2>/dev/null | wc -l" 2>/dev/null | tr -d ' ')"
+            [[ "${n:-0}" -gt 0 ]] && return 0
+            sleep 5
+        done
+        return 1
+    }
+    # tm_<vmname with - replaced by _> is the alias the auto-pinhole targets.
+    _tfw_c_alias="tm_$(echo "test-fw-c" | tr '-' '_')"
+    if _alias_refresh "${_tfw_c_alias}"; then
+        pass "FQDN alias table ${_tfw_c_alias} populated on the firewall"
+    else
+        fail "FQDN alias table ${_tfw_c_alias} is EMPTY — the auto-pinhole destination matches nothing (this is #386)"
+    fi
 
     autopinhole_curl_ok=0
     for attempt in 1 2 3 4 5 6; do
@@ -1441,12 +1473,10 @@ else
             autopinhole_curl_ok=1
             break
         fi
-        # Re-poke alias reload between attempts — handles update_tables.py cron
-        # cadence that may not have fired since rule creation.
-        ssh -o BatchMode=yes -o StrictHostKeyChecking=accept-new \
-            root@"${FIREWALL_FQDN}" \
-            "/usr/local/etc/rc.update_alias_tables.sh >/dev/null 2>&1 || true" \
-            >/dev/null 2>&1 || true
+        # Re-poke between attempts, via the entry point that actually exists
+        # (see _alias_refresh above — the old rc.update_alias_tables.sh path is
+        # absent on current OPNsense, so this retry did nothing at all).
+        _alias_refresh || true
         sleep 15
     done
 

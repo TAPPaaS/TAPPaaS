@@ -143,7 +143,9 @@ info "Connection established."
 header "Test 2: Nextcloud HTTP Response"
 info "Checking HTTP response from http://${TARGET}:80/ ..."
 
-HTTP_CODE=$(remote "curl -s -o /dev/null -w '%{http_code}' --max-time 10 http://localhost:80/" || echo "000")
+# `$(cmd || echo 000)` CONCATENATES curl's own "000" (it writes the code even on failure) with the fallback, giving "000000" — which then compares unequal to "000" and defeats every downstream check. Assign the fallback OUTSIDE the substitution.
+HTTP_CODE=$(remote "curl -s -o /dev/null -w '%{http_code}' --max-time 10 http://localhost:80/") || HTTP_CODE="000"
+[[ -n "${HTTP_CODE}" ]] || HTTP_CODE="000"
 
 if [ "$HTTP_CODE" = "200" ] || [[ "$HTTP_CODE" =~ ^30[0-9]$ ]]; then
     pass "HTTP response code $HTTP_CODE (OK or redirect)"
@@ -427,7 +429,8 @@ else
     fi
 
     # 2. DocumentServerUrl (the editor the browser loads) must be publicly reachable.
-    DS_HEALTH=$(curl -s -o /dev/null -w '%{http_code}' --max-time 10 "${DS_URL%/}/healthcheck" 2>/dev/null || echo "000")
+    DS_HEALTH=$(curl -s -o /dev/null -w '%{http_code}' --max-time 10 "${DS_URL%/}/healthcheck" 2>/dev/null) || DS_HEALTH="000"
+    [[ -n "${DS_HEALTH}" ]] || DS_HEALTH="000"
     if [ "$DS_HEALTH" = "200" ]; then
         pass "OnlyOffice DocumentServerUrl publicly reachable (${DS_URL%/}/healthcheck -> 200)"
     else
