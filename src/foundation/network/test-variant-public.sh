@@ -155,7 +155,10 @@ trap cleanup EXIT
 
 # ── Step 1: create dedicated zone + author the environment file ──────
 info "${BOLD}Step 1: network-manager zone add ${VARIANT} + author environment ${VARIANT}${CL}"
-if /home/tappaas/bin/network-manager zone add "${VARIANT}" --from-zone srvWork --variant "${VARIANT}"; then
+# ADR-014 D7 retired srvWork (and its siblings); `--from-zone srvWork` fails on a
+# converged install. `--archetype service` is the post-ADR-014 way to author a
+# tier-correct service zone with no donor zone required.
+if /home/tappaas/bin/network-manager zone add "${VARIANT}" --archetype service --variant "${VARIANT}"; then
     pass "environment zone '${VARIANT}' created"
 else
     fail "network-manager zone add ${VARIANT} failed"

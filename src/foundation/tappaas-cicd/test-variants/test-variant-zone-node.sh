@@ -42,7 +42,13 @@ readonly FIX="${SCRIPT_DIR}/fixtures"
 # ── parameters ───────────────────────────────────────────────────────
 readonly VAR="zcnode"                       # environment + dedicated-zone name
 readonly DOMAIN="zcnode.test2.tapaas.org"
-readonly FROM_ZONE="srvCust"
+# ADR-014 D7 retired the srvHome/srvWork/srvCust/srvDev/srvTest set: they are no
+# longer shipped, and `network-manager retire` removes them from existing
+# installs. `--from-zone srvCust` therefore fails on any converged system. The
+# test only needs SOME Service-typed source to inherit type/bridge/access from,
+# so create the zone from the `service` ARCHETYPE instead — which is the
+# post-ADR-014 way to author a tier-correct service zone and needs no donor.
+readonly FROM_ARCHETYPE="service"
 readonly DEST_NODE="${TAPPAAS_TEST_NODE:-tappaas3}"   # the non-firewall destination
 readonly MODULE="tvbase"                    # minimal fixture VM (deps: cluster:vm, templates:debian)
 readonly VMID="8950"                        # fixture VMID band 8900-8999
@@ -113,8 +119,8 @@ fi
     || skip "firewall also runs on ${DEST_NODE}; co-located placement masks the bridge-vids gap"
 
 # ── 1. create the dedicated zone (network-manager) + author the environment ──
-section "1. network-manager zone add ${VAR} --from-zone ${FROM_ZONE} + author environment ${VAR}"
-if network-manager zone add "${VAR}" --from-zone "${FROM_ZONE}" --variant "${VAR}" >/dev/null 2>&1; then
+section "1. network-manager zone add ${VAR} --archetype ${FROM_ARCHETYPE} + author environment ${VAR}"
+if network-manager zone add "${VAR}" --archetype "${FROM_ARCHETYPE}" --variant "${VAR}" >/dev/null 2>&1; then
     pass "dedicated zone '${VAR}' created"
 else
     fail "network-manager zone add failed"; exit 1
