@@ -15,7 +15,8 @@
     "backup:vm",
     "network:proxy",
     "network:rules",
-    "vllm-amd:inference"
+    "vllm-amd:inference",
+    "identity:identity"
   ],
   "provides": [
     "models"
@@ -34,5 +35,17 @@
     "network:proxy": {
       "proxyPort": 4000
     }
+  },
+  "identity": {
+    "oidcRedirectPaths": [
+      "/sso/callback"
+    ],
+    "scopes": [
+      "openid",
+      "email",
+      "profile"
+    ],
+    "secretsEnv": "/etc/secrets/litellm-oidc.env",
+    "configureService": "litellm-integrations.service"
   }
 }

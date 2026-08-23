@@ -1475,6 +1475,36 @@ else
         pass "FQDN alias table ${_tfw_c_alias} populated on the firewall"
     else
         fail "FQDN alias table ${_tfw_c_alias} is EMPTY — the auto-pinhole destination matches nothing (this is #386)"
+        # LIVE EVIDENCE, captured while the VMs still exist. Everything about
+        # this failure has had to be reconstructed after teardown until now:
+        # whether the alias was created, what it points at, and whether the
+        # firewall can resolve that name. Print all three.
+        info "  -- alias evidence (captured while the VMs are still up) --"
+        # The firewall's root shell is csh: a compound `sh`-style command sent
+        # over ssh silently fails there. Ship a script and run it with sh.
+        _ev="$(mktemp)"
+        cat > "${_ev}" <<EVIDENCE
+#!/bin/sh
+echo "alias-defined-count: \$(grep -c '${_tfw_c_alias}' /conf/config.xml 2>/dev/null)"
+echo "alias-content:"
+grep -A 10 "<name>${_tfw_c_alias}</name>" /conf/config.xml 2>/dev/null | grep -E "<content>|<type>|<proto>" | head -3
+echo "resolves-from-firewall:"
+drill -Q ${TFW_C_FQDN} 2>/dev/null | head -2 || host ${TFW_C_FQDN} 2>/dev/null | head -2
+echo "pf-table:"
+pfctl -t ${_tfw_c_alias} -T show 2>&1 | head -3
+echo "alias-refresh-rc:"
+configctl filter refresh_aliases >/dev/null 2>&1; echo \$?
+sleep 5
+echo "pf-table-after-refresh:"
+pfctl -t ${_tfw_c_alias} -T show 2>&1 | head -3
+EVIDENCE
+        scp -q -o BatchMode=yes -o StrictHostKeyChecking=accept-new \
+            "${_ev}" root@"${FIREWALL_FQDN}":/tmp/_tappaas_alias_evidence.sh 2>/dev/null \
+          && ssh -o BatchMode=yes -o StrictHostKeyChecking=accept-new \
+            root@"${FIREWALL_FQDN}" "sh /tmp/_tappaas_alias_evidence.sh" 2>/dev/null \
+            | sed 's/^/       /' \
+          || info "       (could not collect evidence from ${FIREWALL_FQDN})"
+        rm -f "${_ev}"
     fi
 
     autopinhole_curl_ok=0

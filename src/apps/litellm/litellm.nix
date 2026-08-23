@@ -352,7 +352,7 @@ EOF
     environment = {
       STORE_MODEL_IN_DB = "True";
     };
-    environmentFiles = [ "/etc/secrets/litellm.env" ];
+    environmentFiles = [ "/etc/secrets/litellm.env" "/etc/secrets/litellm-integrations.env" ];
     extraOptions = [ 
       "--network=host"           # Access localhost PostgreSQL/Redis
       "--log-driver=journald"    # Logs to systemd journal
@@ -367,8 +367,251 @@ EOF
 
   # Ensure LiteLLM starts after dependencies are ready
   systemd.services.podman-litellm = {
-    after = [ "postgresql.service" "redis-litellm.service" ];
-    requires = [ "postgresql.service" "redis-litellm.service" ];
+    after = [ "postgresql.service" "redis-litellm.service" "litellm-integrations.service" ];
+    requires = [ "postgresql.service" "redis-litellm.service" "litellm-integrations.service" ];
+  };
+
+  # ============================================================================
+  # PROVIDER INTEGRATIONS — Authentik SSO (#503)
+  # ============================================================================
+  #
+  # identity:identity writes OIDC_CLIENT_ID/SECRET/DISCOVERY_URI to
+  # /etc/secrets/litellm-oidc.env. LiteLLM does not read those names, and does
+  # not consume a discovery document — it wants the three endpoints separately as
+  # GENERIC_*. This translates one into the other and writes the env-file the
+  # container loads.
+  #
+  # The endpoints are READ FROM the discovery document rather than assembled by
+  # string surgery on the issuer URL, so a change in Authentik's URL layout does
+  # not silently produce endpoints that 404.
+  #
+  # Runs before the container (podman fails on a missing --env-file, so the file
+  # is created unconditionally, even empty) and is the identity.configureService
+  # that identity:identity restarts after writing new OIDC secrets.
+  systemd.services.litellm-integrations = {
+    description = "Translate provider secrets into LiteLLM settings";
+    wantedBy = [ "multi-user.target" ];
+    after = [ "local-fs.target" "network-online.target" ];
+    wants = [ "network-online.target" ];
+    serviceConfig = {
+      Type = "oneshot";
+      RemainAfterExit = true;
+      ExecStart = pkgs.writeShellScript "litellm-integrations" ''
+        set -uo pipefail
+        PATH="${pkgs.coreutils}/bin:${pkgs.gnugrep}/bin:${pkgs.curl}/bin:${pkgs.jq}/bin:${pkgs.systemd}/bin:$PATH"
+        OUT=/etc/secrets/litellm-integrations.env
+        OIDC=/etc/secrets/litellm-oidc.env
+        # update.sh owns this file (owner identity + public URL); keeping the
+        # public URL out of the OIDC file avoids depending on identity:identity
+        # preserving foreign keys when it rewrites its own.
+        OWNER=/etc/secrets/litellm-owner.env
+
+        mkdir -p /etc/secrets
+        readvar() { [ -f "$1" ] && grep -m1 "^$2=" "$1" 2>/dev/null | cut -d= -f2- || true; }
+
+        NEW=""
+        add() { NEW="$NEW$1"$'\n'; }
+
+        CID="$(readvar "$OIDC" OIDC_CLIENT_ID)"
+        CSE="$(readvar "$OIDC" OIDC_CLIENT_SECRET)"
+        DIS="$(readvar "$OIDC" OIDC_DISCOVERY_URI)"
+        PUB="$(readvar "$OWNER" LITELLM_PUBLIC_URL)"
+
+        if [ -n "$CID" ] && [ -n "$CSE" ] && [ -n "$DIS" ]; then
+          DOC="$(curl -fsS --max-time 20 "$DIS" 2>/dev/null || true)"
+          AUTH_EP="$(printf '%s' "$DOC" | jq -r '.authorization_endpoint // empty' 2>/dev/null)"
+          TOK_EP="$(printf '%s' "$DOC" | jq -r '.token_endpoint // empty' 2>/dev/null)"
+          INFO_EP="$(printf '%s' "$DOC" | jq -r '.userinfo_endpoint // empty' 2>/dev/null)"
+          if [ -n "$AUTH_EP" ] && [ -n "$TOK_EP" ] && [ -n "$INFO_EP" ]; then
+            add "GENERIC_CLIENT_ID=$CID"
+            add "GENERIC_CLIENT_SECRET=$CSE"
+            add "GENERIC_AUTHORIZATION_ENDPOINT=$AUTH_EP"
+            add "GENERIC_TOKEN_ENDPOINT=$TOK_EP"
+            add "GENERIC_USERINFO_ENDPOINT=$INFO_EP"
+            add "GENERIC_SCOPE=openid email profile"
+            # LiteLLM builds its SSO redirect_uri from PROXY_BASE_URL; without it
+            # the callback points at localhost and Authentik rejects the redirect.
+            [ -n "$PUB" ] && add "PROXY_BASE_URL=$PUB"
+          else
+            echo "litellm-integrations: discovery document unreadable at $DIS — SSO left unconfigured" >&2
+          fi
+        fi
+
+        # See openwebui: empty content and a missing file compare equal, so
+        # existence must be its own condition or podman fails to start.
+        OLD="$(cat "$OUT" 2>/dev/null || true)"
+        if [ ! -f "$OUT" ] || [ "$OLD" != "$NEW" ]; then
+          T="$(mktemp /etc/secrets/.litellm-int.XXXXXX)"
+          printf '%s' "$NEW" > "$T"
+          chmod 600 "$T"
+          mv -f "$T" "$OUT"
+          echo "litellm-integrations: settings updated"
+          if systemctl is-active --quiet podman-litellm.service; then
+            systemctl restart podman-litellm.service || true
+          fi
+        else
+          echo "litellm-integrations: no change"
+        fi
+      '';
+    };
+  };
+
+
+  # ============================================================================
+  # vLLM MODEL REGISTRATION (#503)
+  # ============================================================================
+  #
+  # config.yaml carries NO model_list — LiteLLM is configured with
+  # load_models_from_db, so models live in the database and were previously added
+  # by hand through the UI. A fresh deploy therefore served ZERO models: the
+  # vllm-amd:inference dependency was declared and the firewall pinhole opened,
+  # but nothing ever registered the backend, and every consumer (OpenWebUI) got
+  # an empty model list while all checks reported converged.
+  #
+  # vllm-amd:inference now writes /etc/secrets/vllm-inference.env (endpoint,
+  # served model id, key). This registers that backend through LiteLLM's own API
+  # if it is not already present — never a direct DB insert, so it stays correct
+  # across LiteLLM schema changes.
+  #
+  # Idempotent: it checks /model/info first and does nothing when the model is
+  # already registered, so a reconcile does not create duplicates.
+  systemd.services.litellm-register-vllm = {
+    description = "Register the vLLM backend as a LiteLLM model";
+    wantedBy = [ "multi-user.target" ];
+    after = [ "podman-litellm.service" ];
+    serviceConfig = {
+      Type = "oneshot";
+      RemainAfterExit = true;
+      ExecStart = pkgs.writeShellScript "litellm-register-vllm" ''
+        set -uo pipefail
+        PATH="${pkgs.coreutils}/bin:${pkgs.gnugrep}/bin:${pkgs.curl}/bin:${pkgs.jq}/bin:$PATH"
+        SRC=/etc/secrets/vllm-inference.env
+
+        readvar() { [ -f "$1" ] && grep -m1 "^$2=" "$1" 2>/dev/null | cut -d= -f2- || true; }
+
+        BASE="$(readvar "$SRC" VLLM_BASE_URL)"
+        MODEL="$(readvar "$SRC" VLLM_MODEL_ID)"
+        KEY="$(readvar "$SRC" VLLM_API_KEY)"
+        if [ -z "$BASE" ] || [ -z "$MODEL" ]; then
+          echo "register-vllm: no vLLM endpoint recorded yet — skipping"
+          exit 0
+        fi
+        # LiteLLM requires an explicit api_key on every DB model (a check
+        # test-service.sh enforces). vLLM here is unauthenticated, so send the
+        # literal placeholder rather than leaving the field unset.
+        [ -n "$KEY" ] || KEY="none"
+
+        MK="$(grep -m1 '^LITELLM_MASTER_KEY=' /etc/secrets/litellm.env | cut -d= -f2-)"
+        [ -n "$MK" ] || { echo "register-vllm: no master key yet — skipping"; exit 0; }
+
+        # Wait for the proxy to answer before asking it anything.
+        i=0
+        while [ "$i" -lt 60 ]; do
+          curl -fsS -o /dev/null --max-time 5 http://127.0.0.1:4000/health/readiness && break
+          i=$((i + 1)); sleep 5
+        done
+
+        # Register the key as a NAMED CREDENTIAL and have the model reference it,
+        # rather than embedding api_key in litellm_params. Two reasons:
+        #   * it is this module's documented pattern (scripts/litellm-credentials.sh),
+        #     so rotation is a one-touch operation that every referencing model picks up
+        #   * /model/info does NOT return api_key (it is stored encrypted and reported
+        #     as null), so an embedded key is invisible to verification —
+        #     services/models/test-service.sh reads it as "no explicit api_key" and
+        #     fails, even though the key is present in the database.
+        CRED="vllm-amd"
+        if ! curl -fsS -o /dev/null --max-time 20 -H "Authorization: Bearer $MK" \
+               "http://127.0.0.1:4000/credentials/by_name/$CRED" 2>/dev/null; then
+          curl -fsS --max-time 20 -X POST http://127.0.0.1:4000/credentials \
+            -H "Authorization: Bearer $MK" -H 'Content-Type: application/json' \
+            -d "$(jq -nc --arg n "$CRED" --arg k "$KEY" \
+                  '{credential_name:$n, credential_values:{api_key:$k}, credential_info:{custom_llm_provider:"openai"}}')" \
+            >/dev/null 2>&1 \
+            && echo "register-vllm: created credential '$CRED'" \
+            || echo "register-vllm: could not create credential '$CRED'" >&2
+        fi
+
+        EXISTING="$(curl -fsS --max-time 20 -H "Authorization: Bearer $MK" \
+                      http://127.0.0.1:4000/model/info 2>/dev/null \
+                    | jq -r --arg m "$MODEL" '[.data[]? | select(.model_name == $m)] | length' 2>/dev/null)"
+        if [ "''${EXISTING:-0}" != "0" ]; then
+          echo "register-vllm: model '$MODEL' already registered — nothing to do"
+          exit 0
+        fi
+
+        if curl -fsS --max-time 30 -X POST http://127.0.0.1:4000/model/new \
+             -H "Authorization: Bearer $MK" -H 'Content-Type: application/json' \
+             -d "$(jq -nc --arg m "$MODEL" --arg b "$BASE" --arg c "$CRED" \
+                   '{model_name: $m, litellm_params: {model: ("openai/" + $m), api_base: $b, litellm_credential_name: $c}}')" \
+             >/dev/null
+        then
+          echo "register-vllm: registered '$MODEL' -> $BASE (credential '$CRED')"
+        else
+          echo "register-vllm: failed to register '$MODEL' — will retry on next converge" >&2
+        fi
+      '';
+    };
+  };
+
+  # ============================================================================
+  # ADMIN = ENVIRONMENT OWNER (#503)
+  # ============================================================================
+  #
+  # LiteLLM's admin UI authenticates via SSO once GENERIC_* is configured, but any
+  # SSO user lands as a plain internal user. This promotes the environment owner
+  # to proxy_admin so the person who owns the environment owns the LiteLLM admin
+  # UI, rather than whoever signs in first.
+  #
+  # The email is pushed by update.sh, which resolves it on the TAPPaaS side:
+  #   environment.ownerOrg -> org.owner -> user.primaryEmail
+  #
+  # Idempotent: existing users are updated in place rather than duplicated.
+  systemd.services.litellm-seed-admin = {
+    description = "Make the environment owner a LiteLLM proxy admin";
+    wantedBy = [ "multi-user.target" ];
+    after = [ "podman-litellm.service" ];
+    serviceConfig = {
+      Type = "oneshot";
+      RemainAfterExit = true;
+      ExecStart = pkgs.writeShellScript "litellm-seed-admin" ''
+        set -uo pipefail
+        PATH="${pkgs.coreutils}/bin:${pkgs.gnugrep}/bin:${pkgs.curl}/bin:${pkgs.jq}/bin:$PATH"
+        OWNER=/etc/secrets/litellm-owner.env
+
+        EMAIL="$(grep -m1 '^LITELLM_OWNER_EMAIL=' "$OWNER" 2>/dev/null | cut -d= -f2-)"
+        if [ -z "$EMAIL" ]; then
+          echo "seed-admin: no owner email recorded yet — skipping"
+          exit 0
+        fi
+
+        MK="$(grep -m1 '^LITELLM_MASTER_KEY=' /etc/secrets/litellm.env | cut -d= -f2-)"
+        [ -n "$MK" ] || { echo "seed-admin: no master key yet — skipping"; exit 0; }
+
+        i=0
+        while [ "$i" -lt 60 ]; do
+          curl -fsS -o /dev/null --max-time 5 http://127.0.0.1:4000/health/readiness && break
+          i=$((i + 1)); sleep 5
+        done
+
+        FOUND="$(curl -fsS --max-time 20 -H "Authorization: Bearer $MK" \
+                   "http://127.0.0.1:4000/user/info?user_id=$EMAIL" 2>/dev/null \
+                 | jq -r '.user_id // empty' 2>/dev/null)"
+
+        if [ -n "$FOUND" ]; then
+          curl -fsS --max-time 20 -X POST http://127.0.0.1:4000/user/update \
+            -H "Authorization: Bearer $MK" -H 'Content-Type: application/json' \
+            -d "$(jq -nc --arg e "$EMAIL" '{user_id: $e, user_role: "proxy_admin"}')" >/dev/null \
+            && echo "seed-admin: $EMAIL confirmed as proxy_admin" \
+            || echo "seed-admin: could not update $EMAIL" >&2
+        else
+          curl -fsS --max-time 20 -X POST http://127.0.0.1:4000/user/new \
+            -H "Authorization: Bearer $MK" -H 'Content-Type: application/json' \
+            -d "$(jq -nc --arg e "$EMAIL" '{user_id: $e, user_email: $e, user_role: "proxy_admin", auto_create_key: false}')" >/dev/null \
+            && echo "seed-admin: created $EMAIL as proxy_admin" \
+            || echo "seed-admin: could not create $EMAIL — will retry on next converge" >&2
+        fi
+      '';
+    };
   };
 
   # ============================================================================
