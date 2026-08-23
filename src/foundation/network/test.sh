@@ -763,7 +763,11 @@ cleanup_deep() {
             >/dev/null 2>&1 || warn "zone-manager teardown returned non-zero"
         tmp=$(mktemp)
         jq --arg za "${TFW_A_ZONE}" --arg zb "${TFW_B_ZONE}" --arg zc "${TFW_C_ZONE}" \
-           'del(.[$za]) | del(.[$zb]) | del(.[$zc])' \
+           'del(.[$za]) | del(.[$zb]) | del(.[$zc])
+            # Also withdraw the control-plane grant added for the run, or
+            # mgmt.access-to keeps naming zones that no longer exist — the exact
+            # dangling-reference class ADR-014 set out to eliminate.
+            | .mgmt["access-to"] = ((.mgmt["access-to"] // []) - [$za, $zb, $zc])' \
             "${CONFIG_DIR}/zones.json" > "${tmp}" \
             && mv "${tmp}" "${CONFIG_DIR}/zones.json"
         info "Deactivated and removed test zones ${TFW_A_ZONE}/${TFW_B_ZONE}/${TFW_C_ZONE} from deployed zones.json"
@@ -1111,7 +1115,16 @@ else
               --arg za "${TFW_A_ZONE}" --arg zb "${TFW_B_ZONE}" --arg zc "${TFW_C_ZONE}" '
               ($src[0]) as $s
               | reduce ([$za, $zb, $zc][]) as $z
-                  (.; .[$z] = (($s[$z] // {}) + { state: "Active" }))' \
+                  (.; .[$z] = (($s[$z] // {}) + { state: "Active" }))
+              # The control plane must REACH the probe zones: this host drives the
+              # installs over ssh (nixos-rebuild for the NixOS fixture), and that
+              # needs a mgmt -> <zone> pass rule, which comes from mgmt.access-to.
+              # The pre-ADR-014 template listed these zones there; `retire` correctly
+              # stripped those references when the zones were removed from the
+              # template, so the test must now grant the reach itself instead of
+              # inheriting it. Without this the VMs boot and get DHCP/DNS but ssh
+              # times out, and every downstream assertion fails for the wrong reason.
+              | .mgmt["access-to"] = ((.mgmt["access-to"] // []) + [$za, $zb, $zc] | unique)' \
               "${CONFIG_DIR}/zones.json" > "${tmp}" && jq empty "${tmp}" 2>/dev/null; then
             mv "${tmp}" "${CONFIG_DIR}/zones.json"
             info "Merged test zones ${TFW_A_ZONE}/${TFW_B_ZONE}/${TFW_C_ZONE} (Active) into deployed zones.json (runtime-only zones preserved)"
