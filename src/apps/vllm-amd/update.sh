@@ -59,6 +59,15 @@ fi
 mkdir -p /opt/vllm
 
 # docker-compose.yml aanmaken als niet aanwezig
+#
+# --enable-auto-tool-choice + --tool-call-parser are REQUIRED for OpenWebUI (and
+# any OpenAI-compatible client that sends tools). Without them vLLM rejects every
+# request carrying tool_choice:"auto" with
+#   BadRequestError: "auto" tool choice requires --enable-auto-tool-choice and
+#                    --tool-call-parser to be set
+# which surfaces to the user as a failed chat, not as a configuration problem.
+# `hermes` is the parser for Qwen2.5-style models (the qwen3_* parsers are for
+# Qwen3). Change it if you serve a model family with a different tool format.
 if [ ! -f /opt/vllm/docker-compose.yml ]; then
     cat > /opt/vllm/docker-compose.yml <<EOF
 services:
@@ -87,6 +96,8 @@ services:
       --served-model-name vllm
       --host 0.0.0.0
       --port 8000
+      --enable-auto-tool-choice
+      --tool-call-parser hermes
 EOF
     echo "docker-compose.yml created — set your model path!"
 fi
