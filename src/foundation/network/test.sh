@@ -720,6 +720,18 @@ fi
 
 cleanup_deep() {
     local rc=$?
+    # TRUNCATION GUARD. This trap is the only code guaranteed to run on an abort,
+    # so the "did the deep tier actually finish?" check belongs HERE, not in the
+    # summary block (which an abort never reaches). Twice now a stray non-zero
+    # under `set -euo pipefail` unwound through this trap and the run reported
+    # SUCCESS with no summary and every counted failure discarded.
+    if [[ "${DEEP:-0}" == "1" && "${DEEP_COMPLETED:-0}" != "1" ]]; then
+        echo "" >&2
+        error "${RD}${BOLD}DEEP TIER ABORTED before completion${CL} — results are TRUNCATED."
+        error "  ${PASS:-0} passed / ${FAIL:-0} failed were counted before the abort; later sections never ran."
+        error "  Exit status is forced non-zero so this can never read as a pass."
+        [[ "${rc}" -eq 0 ]] && rc=1
+    fi
     if [[ "${NO_CLEANUP}" == "1" ]]; then
         warn "Skipping cleanup (TAPPAAS_TEST_NO_CLEANUP=1). test-fw-{a,b,c} left in place."
         return ${rc}
@@ -761,7 +773,12 @@ cleanup_deep() {
     # this, leaving the firewall config clobbered after a run).
     vmnet_sync_firewall_trunks "${CONFIG_DIR}/zones.json" "${FIREWALL_JSON}" \
         || warn "Could not restore firewall net0 trunks — verify manually"
-    return ${rc}
+    # An EXIT trap's RETURN value does not set the script's exit status — only an
+    # explicit `exit` does. Without this the truncation guard above printed its
+    # warning and the run still exited 0, which is the exact failure mode it
+    # exists to prevent. Clear the trap first so `exit` cannot re-enter it.
+    trap - EXIT
+    exit ${rc}
 }
 
 # ─────────────────────────────────────────────────────────────────────
@@ -1540,7 +1557,12 @@ else
     [[ -n "${DEF_DOMAIN}" ]] && PROXY_FQDN="test-fw-a.${DEF_DOMAIN}"
     PUBLIC_IP=""
     if [[ -n "${PROXY_FQDN}" ]]; then
-        PUBLIC_IP="$(dig +short @1.1.1.1 A "${PROXY_FQDN}" 2>/dev/null | grep -E '^[0-9.]+$' | tail -1)"
+        # `|| true` is LOAD-BEARING: NOT resolving is an expected outcome here —
+        # the gate below explicitly skips when PUBLIC_IP is empty. But `grep`
+        # exits 1 on no match, and under `set -euo pipefail` that aborted the
+        # WHOLE suite at this line, so Deep 11 never ran on any system without a
+        # public A record for the test FQDN, and everything after it was lost.
+        PUBLIC_IP="$(dig +short @1.1.1.1 A "${PROXY_FQDN}" 2>/dev/null | grep -E '^[0-9.]+$' | tail -1 || true)"
     fi
 
     # ── Gate: default-environment domain set AND public DNS -> a public IP ────
@@ -1589,12 +1611,12 @@ fi
 # ─────────────────────────────────────────────────────────────────────
 # Summary
 # ─────────────────────────────────────────────────────────────────────
+# NOTE: the completeness/truncation check now lives in cleanup_deep (the EXIT
+# trap), because everything below is skipped when the run aborts.
 
 echo ""
-# ── Completeness gates (see DEEP_COMPLETED above) ───────────────────
-if [[ "${DEEP}" == "1" && "${DEEP_COMPLETED:-0}" != "1" ]]; then
-    fail "deep tier did NOT run to completion — the results below are TRUNCATED and must not be read as a pass"
-fi
+# ── Assertion-count floor ───────────────────────────────────────────
+# (truncation itself is caught by cleanup_deep's EXIT trap, above)
 # Floor on the number of assertions actually executed. Catches a block that
 # silently stops contributing results — e.g. a renamed CLI whose errors are
 # swallowed by `|| true`, which hid 11 failing switch/ap assertions for ~10 weeks.

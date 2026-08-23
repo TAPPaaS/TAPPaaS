@@ -19,7 +19,22 @@ readonly SCRIPT_NAME
 
 # ── Configuration ─────────────────────────────────────────────────────
 
-VMNAME="$(get_config_value 'vmname' "${1:-}")"
+# get_config_value reads the module config out of the global $JSON, which
+# install-module.sh sets before sourcing install/update.sh. A STANDALONE test.sh
+# has no such caller, so it must load the config itself — without this, $JSON is
+# unbound and every lookup falls through to its default. That is silent for the
+# keys that have one, but `vmid` has none, so the suite aborted on line 1 with
+# "Missing required key 'vmid'" and never ran a single assertion.
+MODULE_NAME="$(basename "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)")"
+# A positional module name is optional — this IS the ${MODULE_NAME} module's test,
+# so it defaults to itself. A leading FLAG (e.g. --deep, which the sweep passes)
+# is never a module name.
+ARG_MODULE=""
+[[ -n "${1:-}" && "${1:-}" != -* ]] && ARG_MODULE="$1"
+JSON="$(read_module_config "${ARG_MODULE:-${MODULE_NAME}}" 2>/dev/null || echo '{}')"
+export JSON
+
+VMNAME="$(get_config_value 'vmname' "${ARG_MODULE:-${MODULE_NAME}}")"
 # vmid/zone0 may be overridden to test a non-default instance (issue #196).
 VMID="${TAPPAAS_VMID_OVERRIDE:-$(get_config_value 'vmid')}"
 ZONE0NAME="${TAPPAAS_ZONE0_OVERRIDE:-$(get_config_value 'zone0' 'mgmt')}"
@@ -171,8 +186,10 @@ main() {
         exit 0
     fi
 
-    if [[ -z "${1:-}" ]]; then
-        error "Module name is required"
+    # No positional module name needed: it defaults to this module (see above).
+    # Only a name that was GIVEN but has no config on disk is an error.
+    if [[ -n "${ARG_MODULE}" && ! -f "${CONFIG_DIR}/${ARG_MODULE}.json" ]]; then
+        error "Module '${ARG_MODULE}' has no config at ${CONFIG_DIR}/${ARG_MODULE}.json"
         usage
         exit 1
     fi

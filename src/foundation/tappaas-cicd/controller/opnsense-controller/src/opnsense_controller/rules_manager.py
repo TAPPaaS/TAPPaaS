@@ -1557,9 +1557,14 @@ def _find_zones_file(explicit: str | None) -> Path:
         if eff.is_file() and authored.is_file():
             if eff.stat().st_mtime >= authored.stat().st_mtime:
                 return eff
-            warn(
-                f"{eff} is older than {authored} — using the authored file. "
-                "Run `network-manager reconcile` to re-render it."
+            # STDERR, not warn(): warn() prints to STDOUT, and this function is
+            # reached in `--output json` mode too — a warning line prepended to
+            # the JSON makes it unparseable. That corrupted the machine-readable
+            # output and aborted the deep suite at the first `jq` that read it.
+            print(
+                f"[Warning] {eff} is older than {authored} — using the authored file. "
+                "Run `network-manager reconcile` to re-render it.",
+                file=sys.stderr,
             )
             return authored
         if eff.is_file():

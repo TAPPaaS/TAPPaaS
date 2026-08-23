@@ -1,7 +1,8 @@
 {
   "_README": {
     "_comment": "Deep-test-only zone definitions for the firewall/network test suite. These four zones used to ship in the INSTALL template (manager/network-manager/zones.json); ADR-014 D7 removed them from it — a test probe has no business on a production install — and they live here instead, next to the test that activates them. network/test.sh --deep merges these into the DEPLOYED zones.json (state Active), runs the inter-zone rule validation, then removes the keys again in cleanup_deep. Nothing else reads this file.",
-    "tier_note": "Typed and tiered like any other zone so the ADR-014 invariants (I1 monotonic access-to, I2 isolation floor, I4 archetype conformance) hold while they are temporarily live: testAllowA/B are trusted-client-shaped (tier 2) and testPinhole is a service-shaped target (tier 1) reached ONLY by pinhole — which is exactly the auto-pinhole path #173 exercises."
+    "tier_note": "Typed and tiered like any other zone so the ADR-014 invariants (I1 monotonic access-to, I2 isolation floor, I4 archetype conformance) hold while they are temporarily live: testAllowA/B are trusted-client-shaped (tier 2) and testPinhole is a service-shaped target (tier 1) reached ONLY by pinhole — which is exactly the auto-pinhole path #173 exercises.",
+    "dmz_note": "testAllowA/B keep dmz in BOTH access-to and pinhole-allowed-from because the test-fw-a fixture declares `ingress from dmz` (the reverse-proxy path) and rules-manager validates every ingress against the target zone's pinhole-allowed-from. Dropping it makes test-fw-a un-installable — which is exactly what happened when these zones were first lifted out of the install template."
   },
   "testAllowA": {
     "type": "Client",
@@ -13,10 +14,12 @@
     "bridge": "lan",
     "access-to": [
       "internet",
-      "testAllowB"
+      "testAllowB",
+      "dmz"
     ],
     "pinhole-allowed-from": [
-      "testAllowB"
+      "testAllowB",
+      "dmz"
     ],
     "tier": 2,
     "_comment": "Activated by network test.sh --deep. Bidirectional access with testAllowB validates inter-zone allow rules in both directions.",
@@ -32,10 +35,12 @@
     "bridge": "lan",
     "access-to": [
       "internet",
-      "testAllowA"
+      "testAllowA",
+      "dmz"
     ],
     "pinhole-allowed-from": [
-      "testAllowA"
+      "testAllowA",
+      "dmz"
     ],
     "tier": 2,
     "_comment": "Activated by network test.sh --deep. Peer of testAllowA.",
