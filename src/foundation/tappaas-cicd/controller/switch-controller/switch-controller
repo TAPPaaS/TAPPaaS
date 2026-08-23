@@ -78,7 +78,8 @@ Reconciliation (five-verb provider contract, run in this order):
   update-desired          actual topology + zones.json -> desired.json
   delta                   desired-vs-actual VLAN differences per port
   apply                   push delta via plugin (manual plugin prints steps)
-  confirm                 record applied VLAN config in actual.json
+  confirm [<switch>...]   record applied VLAN config in actual.json (all, or just
+                          the named switches — use after hand-tagging a manual one)
   reconcile [--apply]     run all five in order (apply only with --apply)
 
 managed:manual switches are configured by hand (manual.sh prints what to tag);
@@ -490,6 +491,8 @@ cmd_delta() {
 }
 
 # ── Verb 4: apply (plugin push / manual print) ──────────────────────
+APPLY_APPLIED_SWITCHES=()
+APPLY_MANUAL_SWITCHES=()
 cmd_apply() {
     local delta sw changes plugin rc manual=0 applied=0
     delta=$(compute_delta)
@@ -502,29 +505,57 @@ cmd_apply() {
         rc=0
         # shellcheck disable=SC1090
         ( . "${plugin}"; plugin_apply "${sw}" "${changes}" ) || rc=$?
-        if [[ "${rc}" -eq 0 ]]; then info "  ${GN}✓${CL} ${sw}: applied via $(basename "${plugin}" .sh)"; applied=$((applied+1))
-        else manual=$((manual+1)); fi
+        if [[ "${rc}" -eq 0 ]]; then
+            info "  ${GN}✓${CL} ${sw}: applied via $(basename "${plugin}" .sh)"
+            applied=$((applied+1))
+            # Only a switch a plugin actually PROGRAMMED may be confirmed.
+            APPLY_APPLIED_SWITCHES+=("${sw}")
+        else
+            manual=$((manual+1))
+            APPLY_MANUAL_SWITCHES+=("${sw}")
+        fi
     done < <(echo "${delta}" | jq -r 'keys[]')
     APPLY_MANUAL="${manual}"; APPLY_DONE="${applied}"
     return 0
 }
 
 # ── Verb 5: confirm (record applied VLAN config into actual) ────────
+# confirm [<switch>...] — record the applied VLAN config in actual.json.
+#
+# actual.json is the record of what is ON THE HARDWARE. Confirming a switch whose
+# VLANs a human has not yet tagged writes a FALSE record: the drift disappears
+# from `delta`, and the controller reports in-sync while the physical switch is
+# still on the old VLANs. So confirmation is opt-in per switch:
+#   - `reconcile --apply` confirms ONLY the switches a plugin actually programmed;
+#   - a MANUAL switch is confirmed by the operator running `confirm <switch>`
+#     after they have tagged the VLANs by hand.
+# With no arguments every switch is confirmed (the operator asserting "the
+# hardware now matches"), which is the historical behaviour and stays available.
 cmd_confirm() {
-    info "${BOLD}confirm${CL} (record applied VLAN config in actual.json)"
+    local -a only=("$@")
+    if [[ ${#only[@]} -gt 0 ]]; then
+        info "${BOLD}confirm${CL} (record applied VLAN config for: ${only[*]})"
+    else
+        info "${BOLD}confirm${CL} (record applied VLAN config in actual.json)"
+    fi
     ensure_files
-    local tmp; tmp="$(mktemp)"
+    local tmp filter; tmp="$(mktemp)"
+    # jq array of the switches to confirm; empty ⇒ all.
+    filter=$(printf '%s\n' "${only[@]+"${only[@]}"}" | jq -R . | jq -s -c 'map(select(. != ""))')
     # Overlay each desired port's computed VLAN config (mode/nativeVlan/taggedVlans)
     # onto the matching actual port, preserving the actual topology annotations.
-    jq --slurpfile d "${DESIRED}" '
+    jq --slurpfile d "${DESIRED}" --argjson only "${filter}" '
         ($d[0].switches // {}) as $des
         | .switches |= (to_entries | map(
             .key as $sw | .value as $s
-            | {key:$sw, value: ($s + {ports: (($s.ports // {}) | to_entries | map(
-                .key as $pk | .value as $p
-                | {key:$pk, value: ($p + (($des[$sw].ports[$pk] // {})
-                    | {mode, nativeVlan, taggedVlans} | with_entries(select(.value != null))))}
-              ) | from_entries)})}
+            | if (($only | length) > 0 and (($only | index($sw)) == null)) then {key:$sw, value:$s}
+              else
+                {key:$sw, value: ($s + {ports: (($s.ports // {}) | to_entries | map(
+                  .key as $pk | .value as $p
+                  | {key:$pk, value: ($p + (($des[$sw].ports[$pk] // {})
+                      | {mode, nativeVlan, taggedVlans} | with_entries(select(.value != null))))}
+                ) | from_entries)})}
+              end
           ) | from_entries)' "${ACTUAL}" > "${tmp}" && mv "${tmp}" "${ACTUAL}"
     info "  ${GN}✓${CL} actual.json updated to match applied desired state"
     return 0
@@ -538,17 +569,27 @@ cmd_reconcile() {
     cmd_update_desired; echo ""
     cmd_delta; echo ""
     if [[ "${apply}" -eq 1 ]]; then
+        APPLY_APPLIED_SWITCHES=(); APPLY_MANUAL_SWITCHES=()
         SM_AUTOCONFIRM=1 cmd_apply; echo ""   # confirm runs right after → tell manual.sh not to ask for it
-        # Record the intended config into actual.json for EVERY switch, including
-        # manual ones: auto switches were just programmed by their plugin; for
-        # manual switches the VLANs to tag were printed above and we record the
-        # intent (you apply them on the hardware). So `reconcile --apply` always
-        # updates actual — no separate `confirm` needed (it remains available).
-        cmd_confirm; echo ""
-        if [[ "${APPLY_MANUAL:-0}" -gt 0 ]]; then
-            warn "switch-controller: ${APPLY_MANUAL} manual switch(es) — apply the VLANs printed above on the hardware (actual.json now records the intended config)."
+        # Confirm ONLY what a plugin actually programmed. A manual switch has had
+        # its VLANs PRINTED, not applied — recording those in actual.json would be
+        # a false confirm: the drift would vanish from `delta` while the hardware
+        # still carries the old VLANs, and the controller would report in-sync.
+        # The operator runs `confirm <switch>` once they have tagged them.
+        if [[ ${#APPLY_APPLIED_SWITCHES[@]} -gt 0 ]]; then
+            cmd_confirm "${APPLY_APPLIED_SWITCHES[@]}"; echo ""
         fi
-        info "${GN}switch-controller: applied${CL} (${APPLY_DONE:-0} via plugin, ${APPLY_MANUAL:-0} manual)"
+        if [[ "${APPLY_MANUAL:-0}" -gt 0 ]]; then
+            warn "switch-controller: ${APPLY_MANUAL} manual switch(es) still need hand configuration:"
+            warn "  tag the VLANs printed above on: ${APPLY_MANUAL_SWITCHES[*]}"
+            warn "  then record it with: switch-controller confirm ${APPLY_MANUAL_SWITCHES[*]}"
+            info "${GN}switch-controller: applied${CL} (${APPLY_DONE:-0} via plugin, ${APPLY_MANUAL:-0} awaiting manual)"
+            # rc 2 = needs-manual, the five-verb provider contract. network-manager
+            # (planes.ts classify()) maps it to "needs-manual" and surfaces it
+            # instead of reporting a converged plane.
+            return 2
+        fi
+        info "${GN}switch-controller: applied${CL} (${APPLY_DONE:-0} via plugin)"
         return 0
     fi
     if [[ "${DELTA_TOTAL:-0}" -gt 0 ]]; then
@@ -583,7 +624,7 @@ main() {
         update-desired)    cmd_update_desired ;;
         delta)             cmd_delta ;;
         apply)             cmd_apply ;;
-        confirm)           cmd_confirm ;;
+        confirm)           cmd_confirm "$@" ;;
         reconcile)
             local apply=0
             [[ "${1:-}" == "--apply" ]] && apply=1

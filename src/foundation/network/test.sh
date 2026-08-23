@@ -62,6 +62,7 @@ readonly ZONES_TEMPLATE="${SCRIPT_DIR}/../tappaas-cicd/manager/network-manager/z
 # test that activates them. --deep merges these into the deployed zones.json,
 # then cleanup_deep removes the keys again. Their NAMES stay out of this file —
 # every use derives from the fixtures, which the #306 guard enforces.
+DEEP_COMPLETED=0
 readonly TEST_ZONES_FIXTURE="${SCRIPT_DIR}/test-fixtures/test-zones.json"
 readonly ALIASES_JSON="${SCRIPT_DIR}/aliases.json"
 FIREWALL_FQDN="firewall.mgmt.internal"
@@ -803,11 +804,30 @@ deep_test_adr008_providers() {
 
     # vendor 'generic' has no plugin → manual fallback (an "equipment type that
     # does not exist" as far as automation is concerned).
-    env CONFIG_DIR="${T}" switch-controller add testcore --vendor generic --ip 10.0.0.99 >/dev/null 2>&1 || true
-    env CONFIG_DIR="${T}" switch-controller port testcore 1 --mode trunk --source zones \
-        --connected-to node:tappaas1:nic0:lan >/dev/null 2>&1 || true
-    env CONFIG_DIR="${T}" switch-controller port testcore 5 --mode access --zone swdeepA \
-        --connected-to device:test-printer >/dev/null 2>&1 || true
+    #
+    # SETUP MUST FAIL LOUDLY. These were `>/dev/null 2>&1 || true`, which is how
+    # this whole block silently rotted: #351 renamed the verbs (add → add-switch,
+    # port → add-port/update-port, --source/--connected-to → --type/--target) the
+    # day after the block was written, every call started printing
+    # "Unknown command: add", the swallow hid it, the switch was never registered
+    # and all 11 downstream assertions failed against a switch that did not
+    # exist. A setup failure is not a test result — abort the block instead.
+    _swsetup() { # description, then the switch-controller args
+        local _desc="$1"; shift
+        if ! env CONFIG_DIR="${T}" switch-controller "$@" >/dev/null 2>&1; then
+            fail "Deep A setup: ${_desc} failed — \`switch-controller $1\` rejected its arguments"
+            echo "      $(env CONFIG_DIR="${T}" switch-controller "$@" 2>&1 | head -2)" >&2
+            return 1
+        fi
+    }
+    if ! _swsetup "register switch"      add-switch testcore --vendor generic --managed manual --ip 10.0.0.99 \
+       || ! _swsetup "add node trunk port"  add-port testcore 1 --type node --target tappaas1 \
+                --target-port nic0 --mode trunk \
+       || ! _swsetup "add device access port" add-port testcore 5 --type device --target test-printer \
+                --mode access --zone swdeepA; then
+        warn "Deep A: setup failed — skipping the rest of the switch/ap provider block"
+        rm -rf "${T}"; set -e; return 0
+    fi
 
     # ── A1: add zones → update-desired pulls the new VLANs into desired.json ──
     env CONFIG_DIR="${T}" switch-controller update-desired >/dev/null 2>&1 || true
@@ -819,11 +839,16 @@ deep_test_adr008_providers() {
     # ── A2: phases — actual.json only changes after confirm ──────────────────
     env CONFIG_DIR="${T}" switch-controller interrogate >/dev/null 2>&1 || true   # manual → actual stays empty
     out="$(env CONFIG_DIR="${T}" switch-controller delta 2>&1 || true)"
-    _dgrep "Deep A2: delta reports ports need configuring (actual empty)" "configure-port" "${out}"
-    if jq -e '.switches.testcore' "${AF}" >/dev/null 2>&1; then
-        fail "Deep A2: actual.json must NOT contain testcore before confirm"
+    # delta names the CHANGE KIND now ("trunk-vlans:" / "access-vlan:"); the old
+    # generic "configure-port" wording is gone.
+    _dgrep "Deep A2: delta reports ports need configuring (actual empty)" "trunk-vlans" "${out}"
+    # The switch and its port TOPOLOGY are recorded in actual.json at add-switch
+    # time (that file is the inventory — see `switch-controller --help`). What
+    # must NOT be there before confirm is the APPLIED VLAN state, i.e. taggedVlans.
+    if jq -e '.switches.testcore.ports["1"].taggedVlans' "${AF}" >/dev/null 2>&1; then
+        fail "Deep A2: actual.json must NOT carry applied VLAN state before confirm"
     else
-        pass "Deep A2: actual.json has no testcore before confirm"
+        pass "Deep A2: actual.json has no applied VLAN state before confirm"
     fi
     env CONFIG_DIR="${T}" switch-controller confirm >/dev/null 2>&1 || true
     _djq "Deep A2: confirm wrote applied state into actual.json" \
@@ -850,14 +875,129 @@ deep_test_adr008_providers() {
 
     # ── A5: unknown equipment type → manual instructions cite real port/VLAN ─
     out="$(env CONFIG_DIR="${T}" switch-controller reconcile --apply 2>&1)"; rc=$?
-    _dgrep "Deep A5: manual plugin engaged for unknown vendor 'generic'" "MANUAL CONFIGURATION REQUIRED" "${out}"
+    _dgrep "Deep A5: manual plugin engaged for unknown vendor 'generic'" "MANUAL CONFIGURATION" "${out}"
     _dgrep "Deep A5: manual instructions cite the affected port (port 1)" "port 1" "${out}"
     _dgrep "Deep A5: manual instructions cite the new VLAN (965)" "965" "${out}"
-    if [[ "${rc}" -eq 2 ]]; then pass "Deep A5: reconcile --apply returns needs-manual (rc 2)"; else fail "Deep A5: expected rc 2 (needs-manual), got ${rc}"; fi
+    # OPEN CONTRACT QUESTION (deliberately still asserted, so it stays visible):
+    # a manual switch that printed hand-configuration steps currently exits 0.
+    # The five-verb provider contract says rc 2 = needs-manual, and network-manager
+    # maps rc 2 → "needs-manual" (planes.ts classify()). Either the controller
+    # should return 2, or the contract should say manual-apply is a success. This
+    # is a REAL behavioural question for the operator, not a stale test string.
+    if [[ "${rc}" -eq 2 ]]; then pass "Deep A5: reconcile --apply returns needs-manual (rc 2)"; else fail "Deep A5: expected rc 2 (needs-manual), got ${rc} — see the contract note above"; fi
     if jq -e '.switches.testcore.ports["1"].taggedVlans | index(965)' "${AF}" >/dev/null 2>&1; then
         fail "Deep A5: actual.json must stay unchanged after a manual (unapplied) reconcile"
     else
         pass "Deep A5: actual.json unchanged after manual reconcile (no false confirm)"
+    fi
+
+    section "Deep C: LIVE hardware — interrogate the real switch/AP (read-only)"
+
+    # Deep A/B above are hardware-free: `--vendor generic` forces the manual
+    # fallback in a temp CONFIG_DIR, so they prove the BOOKKEEPING (desired /
+    # actual / delta / confirm) and never touch a vendor plugin. That was the
+    # gap versus what #339 set out to test — the UniFi trunk-prune defect
+    # (tagged_vlan_mgmt:"custom", fixed in 826d14c) was found by hand on the live
+    # controller, not here. This block closes the read-only half: interrogate the
+    # REAL registered equipment through its real plugin and check the result
+    # against the recorded inventory. Read-only — it never writes to a switch.
+    #
+    # Runs against the LIVE CONFIG_DIR (not the temp one), and skips cleanly on a
+    # system with no registered switch.
+    if ! command -v switch-controller >/dev/null 2>&1; then
+        skip "Deep C: switch-controller not on PATH"
+    elif ! switch-controller list >/dev/null 2>&1 \
+         || [[ -z "$(jq -r '.switches // {} | keys[]?' "${CONFIG_DIR}/switch-configuration-actual.json" 2>/dev/null)" ]]; then
+        skip "Deep C: no switch registered — run setup-switches.sh to enable live-hardware coverage"
+    else
+        _live_sw="$(jq -r '.switches | keys[0]' "${CONFIG_DIR}/switch-configuration-actual.json")"
+        _managed="$(jq -r --arg s "${_live_sw}" '.switches[$s].managed' "${CONFIG_DIR}/switch-configuration-actual.json")"
+        info "  live switch: '${_live_sw}' (managed: ${_managed})"
+
+        # C1: interrogate must reach the real controller and return cleanly. This
+        # is the assertion that would have caught a broken vendor plugin.
+        if switch-controller interrogate >/dev/null 2>&1; then
+            pass "Deep C1: interrogate reached the live equipment via its vendor plugin"
+        else
+            fail "Deep C1: interrogate against the live switch failed (vendor plugin or controller unreachable)"
+        fi
+
+        # C2: the plugin must report the ports the inventory records. A plugin
+        # that silently returns nothing (the failure mode behind the trunk-prune
+        # bug) shows up here as a port count of zero.
+        _np="$(jq -r --arg s "${_live_sw}" '.switches[$s].ports // {} | length' "${CONFIG_DIR}/switch-configuration-actual.json")"
+        if [[ "${_np}" -gt 0 ]]; then
+            pass "Deep C2: interrogate reports ${_np} port(s) for '${_live_sw}'"
+        else
+            fail "Deep C2: interrogate returned NO ports for '${_live_sw}' — plugin silently produced nothing"
+        fi
+
+        # C3: every port the operator declared a topology for must carry live VLAN
+        # state. A managed port with no actual VLAN data means interrogate did not
+        # really read the hardware.
+        _blind="$(jq -r --arg s "${_live_sw}" '
+            .switches[$s].ports // {} | to_entries
+            | map(select(.value.type != null and .value.mode != null
+                         and (.value.taggedVlans == null and .value.nativeVlan == null)))
+            | map(.key) | join(",")' "${CONFIG_DIR}/switch-configuration-actual.json")"
+        if [[ -z "${_blind}" ]]; then
+            pass "Deep C3: every managed port carries live VLAN state from the hardware"
+        else
+            fail "Deep C3: managed port(s) ${_blind} have topology but NO live VLAN state — interrogate did not read them"
+        fi
+
+        # C4: desired-vs-actual on the real switch. Not a pass/fail on drift
+        # itself (an operator may legitimately be mid-change) — it asserts the
+        # comparison RUNS and reports a definite verdict.
+        _drc=0; switch-controller delta >/dev/null 2>&1 || _drc=$?
+        if [[ "${_drc}" -eq 0 ]]; then
+            pass "Deep C4: live switch is in sync with zones.json"
+        elif [[ "${_drc}" -eq 2 ]]; then
+            skip "Deep C4: live switch has pending drift (rc 2) — converge with: switch-controller reconcile --apply"
+        else
+            fail "Deep C4: delta against the live switch errored (rc ${_drc})"
+        fi
+
+        # C5: LIVE APPLY — the other half of the gap, and the only part that
+        # WRITES to real hardware. Deliberately opt-in: point
+        # TAPPAAS_TEST_SWITCH_SPARE_PORT at a port that is unmanaged and has
+        # nothing plugged into it. The test records the port's current trunk,
+        # applies a change through the real vendor plugin, verifies it stuck, and
+        # restores the original — the same method used by hand to find the
+        # trunk-prune defect (826d14c), now automated.
+        if [[ -z "${TAPPAAS_TEST_SWITCH_SPARE_PORT:-}" ]]; then
+            skip "Deep C5: live-apply not run — set TAPPAAS_TEST_SWITCH_SPARE_PORT=<unused port> to exercise the vendor plugin's write path"
+        elif [[ "${_managed}" != "auto" ]]; then
+            skip "Deep C5: live switch is managed:${_managed} — no vendor plugin write path to test"
+        else
+            _sp="${TAPPAAS_TEST_SWITCH_SPARE_PORT}"
+            _sp_type="$(jq -r --arg s "${_live_sw}" --arg p "${_sp}" '.switches[$s].ports[$p].type // "unmanaged"' "${CONFIG_DIR}/switch-configuration-actual.json")"
+            if [[ "${_sp_type}" != "unmanaged" ]]; then
+                fail "Deep C5: port ${_sp} is managed as '${_sp_type}' — refusing to write to a port in use. Pick an unused port."
+            else
+                info "  Deep C5: exercising the vendor plugin write path on unused port ${_sp} (will be restored)"
+                _before="$(jq -rc --arg s "${_live_sw}" --arg p "${_sp}" '.switches[$s].ports[$p] // {}' "${CONFIG_DIR}/switch-configuration-actual.json")"
+                _restore_spare() {
+                    switch-controller remove-port "${_live_sw}" "${_sp}" >/dev/null 2>&1 || true
+                    switch-controller reconcile --apply >/dev/null 2>&1 || true
+                    info "  Deep C5: port ${_sp} restored (was: ${_before})"
+                }
+                if switch-controller add-port "${_live_sw}" "${_sp}" --type device --target tappaas-test-probe \
+                        --mode access --zone mgmt >/dev/null 2>&1 \
+                   && switch-controller reconcile --apply >/dev/null 2>&1; then
+                    switch-controller interrogate >/dev/null 2>&1 || true
+                    _nv="$(jq -r --arg s "${_live_sw}" --arg p "${_sp}" '.switches[$s].ports[$p].nativeVlan // empty' "${CONFIG_DIR}/switch-configuration-actual.json")"
+                    if [[ -n "${_nv}" ]]; then
+                        pass "Deep C5: vendor plugin applied a real VLAN change (port ${_sp} native ${_nv}) and it read back"
+                    else
+                        fail "Deep C5: apply reported success but the change did NOT read back from the hardware (the trunk-prune failure mode)"
+                    fi
+                else
+                    fail "Deep C5: apply through the vendor plugin failed on port ${_sp}"
+                fi
+                _restore_spare
+            fi
+        fi
     fi
 
     section "Deep B: ap-manager — SSID tracking + cross-provider uplink validation (#339)"
@@ -876,8 +1016,13 @@ deep_test_adr008_providers() {
     _dgrep "Deep B2: validation flags uplink port not carrying the SSID VLAN" "does not carry VLAN 965" "${out}"
 
     # Fix the uplink: switch port 9 trunk must carry 965 → validation clears.
-    env CONFIG_DIR="${T}" switch-controller port testcore 9 --mode trunk --tagged 965 \
-        --connected-to ap:testap >/dev/null 2>&1 || true
+    env CONFIG_DIR="${T}" switch-controller add-port testcore 9 --type ap --target testap \
+        --mode trunk --tagged 965 >/dev/null 2>&1 || true
+    # add-port records the port in the INVENTORY (actual.json); the cross-provider
+    # uplink check reads the switch's DESIRED trunk, so the switch side has to
+    # regenerate it before ap-manager can see the VLAN. Without this the
+    # validation can never clear and the assertion below is unsatisfiable.
+    env CONFIG_DIR="${T}" switch-controller update-desired >/dev/null 2>&1 || true
     out="$(env CONFIG_DIR="${T}" ap-manager delta 2>&1 || true)"
     if grep -qF "does not carry VLAN 965" <<< "${out}"; then
         fail "Deep B2: uplink validation should clear once port 9 carries VLAN 965"
@@ -1432,6 +1577,13 @@ else
             fail "Deep 11c: not reachable internally via split-horizon (needs DMZ access from this host + Caddy->upstream:8080)"
         fi
     fi
+
+    # Reached only if the deep block ran to completion. The summary asserts it:
+    # an early abort (a stray non-zero under `set -euo pipefail`, an ssh that
+    # died) unwinds through the EXIT trap and used to report SUCCESS with no
+    # summary at all — 13 counted failures vanished that way. A truncated run
+    # must never be mistaken for a clean one.
+    DEEP_COMPLETED=1
 fi
 
 # ─────────────────────────────────────────────────────────────────────
@@ -1439,6 +1591,18 @@ fi
 # ─────────────────────────────────────────────────────────────────────
 
 echo ""
+# ── Completeness gates (see DEEP_COMPLETED above) ───────────────────
+if [[ "${DEEP}" == "1" && "${DEEP_COMPLETED:-0}" != "1" ]]; then
+    fail "deep tier did NOT run to completion — the results below are TRUNCATED and must not be read as a pass"
+fi
+# Floor on the number of assertions actually executed. Catches a block that
+# silently stops contributing results — e.g. a renamed CLI whose errors are
+# swallowed by `|| true`, which hid 11 failing switch/ap assertions for ~10 weeks.
+if [[ "${DEEP}" == "1" ]]; then _expected_min=70; else _expected_min=40; fi
+if (( PASS + FAIL + SKIP < _expected_min )); then
+    fail "only $(( PASS + FAIL + SKIP )) assertion(s) ran; expected >= ${_expected_min} — the suite is not exercising what it claims"
+fi
+
 info "${BOLD}═══════════════════════════════════════════════════════════════${CL}"
 info "${BOLD}  Firewall test summary${CL}"
 info "${BOLD}═══════════════════════════════════════════════════════════════${CL}"

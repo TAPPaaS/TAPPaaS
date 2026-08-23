@@ -57,13 +57,28 @@ ck "update-port missing (rc)"        "1"        "$(rc_of "${SM}" update-port cor
 ck "desired port is trunk"           "trunk"     "$(jq -r '.switches.core.ports["4"].mode' "${DES}")"
 ck "desired tags active set"         "200,310,610" "$(jq -rc '.switches.core.ports["4"].taggedVlans | join(",")' "${DES}")"
 
-# ── delta wants the VLANs tagged; apply prints manual; confirm syncs ─
+# ── delta wants the VLANs tagged; apply prints manual; the OPERATOR confirms ─
 ck "delta detects drift (rc)"        "2"      "$(rc_of "${SM}" reconcile)"
-# reconcile --apply prints the manual VLANs to tag AND records the intended config
-# into actual in one step (manual switches included), then reports converged.
-ck "reconcile --apply rc 0"          "0"      "$(rc_of "${SM}" reconcile --apply)"
-ck "reconcile --apply updated actual" "200,310,610" "$(jq -rc '.switches.core.ports["4"].taggedVlans // [] | join(",")' "${ACT}")"
-ck "after apply in sync (rc)"        "0"      "$(rc_of "${SM}" reconcile)"
+
+# A MANUAL switch is not programmed by `--apply` — the VLANs are printed for a
+# human to tag. Recording them in actual.json at that moment would be a FALSE
+# CONFIRM: the drift would vanish from `delta` and the controller would report
+# in-sync while the hardware still carries the old VLANs. So `--apply`:
+#   - returns rc 2 (needs-manual, the five-verb provider contract — network-manager
+#     planes.ts classify() maps it to "needs-manual"), and
+#   - leaves actual.json untouched.
+# These three assertions previously pinned the opposite (rc 0 + confirmed), which
+# is how the defect survived: the test asserted the bug.
+ck "reconcile --apply rc 2 (needs-manual)" "2" "$(rc_of "${SM}" reconcile --apply)"
+ck "reconcile --apply left actual UNCHANGED (no false confirm)" "" \
+   "$(jq -rc '.switches.core.ports["4"].taggedVlans // [] | join(",")' "${ACT}")"
+ck "still drifting until a human confirms (rc)" "2" "$(rc_of "${SM}" reconcile)"
+
+# The operator tags the VLANs by hand, then records it.
+"${SM}" confirm core >/dev/null 2>&1
+ck "operator confirm records the applied config" "200,310,610" \
+   "$(jq -rc '.switches.core.ports["4"].taggedVlans // [] | join(",")' "${ACT}")"
+ck "after operator confirm, in sync (rc)" "0" "$(rc_of "${SM}" reconcile)"
 # standalone confirm still works (re-records desired→actual; idempotent).
 ck "standalone confirm rc 0"         "0"      "$(rc_of "${SM}" confirm)"
 
