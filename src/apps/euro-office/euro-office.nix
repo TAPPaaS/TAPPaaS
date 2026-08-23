@@ -225,13 +225,68 @@ EOF
 
     volumes = [
       "/var/lib/euro-office/data:/var/www/onlyoffice/Data"  # Persistent document storage
+      # Welcome/example surface, made replaceable so the splash page can be
+      # pointed at the Nextcloud that consumes this document server (see
+      # euro-office-init-welcome below). Bind-mounted, so rewriting the host
+      # file + `nginx -s reload` takes effect without restarting the container
+      # and interrupting live editing sessions.
+      "/etc/euro-office/ds-example.conf:/etc/nginx/includes/ds-example.conf:ro"
     ];
   };
 
-  # Ensure the container starts only after secrets have been generated
+  # Ensure the container starts only after secrets and the welcome include exist.
+  # The include MUST exist before first start: podman would otherwise create a
+  # DIRECTORY at the bind-mount source, and nginx would fail to load it.
   systemd.services."podman-euro-office" = {
-    requires = [ "euro-office-init-secrets.service" ];
-    after    = [ "euro-office-init-secrets.service" ];
+    requires = [ "euro-office-init-secrets.service" "euro-office-init-welcome.service" ];
+    after    = [ "euro-office-init-secrets.service" "euro-office-init-welcome.service" ];
+  };
+
+  # ============================================================================
+  # WELCOME PAGE INCLUDE
+  # ============================================================================
+  #
+  # The stock image serves a "Docs installed — now integrate me" splash at
+  # /welcome/ (and redirects / to it). On a TAPPaaS deployment that page is
+  # noise: the document server exists only to serve a Nextcloud, and when the
+  # module is published the splash is reachable from the internet.
+  #
+  # This seeds the include with the stock behaviour, so nothing changes until a
+  # consumer wires it. The nextcloud:fileservice provider then rewrites this file
+  # to redirect /welcome/ at the Nextcloud it just connected — it is the side
+  # that knows the Nextcloud public URL (ADR-COM-0002: the provider owns the
+  # wiring, URLs derived from the manifests).
+  #
+  # Only ds-example.conf is replaced — never ds-docservice.conf, which carries
+  # the actual document service routing.
+  #
+  # Written if ABSENT only, so a wired redirect survives a rebuild.
+  systemd.services.euro-office-init-welcome = {
+    description = "Seed the Euro-Office welcome nginx include";
+    wantedBy = [ "multi-user.target" ];
+    after    = [ "local-fs.target" ];
+
+    unitConfig.ConditionPathExists = "!/etc/euro-office/ds-example.conf";
+
+    serviceConfig = {
+      Type = "oneshot";
+      RemainAfterExit = true;
+      ExecStart = pkgs.writeShellScript "euro-office-init-welcome" ''
+        ${pkgs.coreutils}/bin/mkdir -p /etc/euro-office
+        cat > /etc/euro-office/ds-example.conf <<'EOF'
+# Seeded by euro-office-init-welcome (stock behaviour: serve the splash page).
+# Replaced by nextcloud:fileservice update-service.sh with a redirect to the
+# Nextcloud this document server serves. The stock /example/ block is omitted
+# deliberately — EXAMPLE_ENABLED=false, so the example app is not running.
+location ~ ^(\/welcome\/.*)$ {
+  expires 365d;
+  alias /var/www/euro-office/documentserver-example$1;
+  index docker.html;
+}
+EOF
+        ${pkgs.coreutils}/bin/chmod 644 /etc/euro-office/ds-example.conf
+      '';
+    };
   };
 
   # ============================================================================

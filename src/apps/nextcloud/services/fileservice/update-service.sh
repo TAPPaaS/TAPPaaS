@@ -113,6 +113,82 @@ if [[ "${CONNECTOR}" == "onlyoffice" ]]; then
                  sudo systemctl restart nextcloud-configure-eurooffice.service"
         then
             info "${GN}✓${CL} onlyoffice connector wired for ${MODULE}"
+
+            # ── Verify the integration actually works ──────────────────────
+            # Writing the env and restarting the configure service is NOT proof
+            # the connector works. The document server must also be able to pull
+            # a document back OUT of Nextcloud (StorageUrl); when it cannot, the
+            # connector stores `settings_error` and HIDES the editor entirely —
+            # no "open in Euro-Office" action appears, while every service here
+            # still reports converged. That exact state survived a full
+            # `reconcile --apply` (the error was stale from when Nextcloud was
+            # still internal-only), which is precisely what a converge must not
+            # allow: success reported over a broken integration.
+            #
+            # `onlyoffice:documentserver --check` re-runs the round trip and
+            # rewrites settings_error. Its stdout is swallowed by the NixOS
+            # nextcloud-occ wrapper (systemd-run) when there is no TTY, and its
+            # exit code is not a reliable failure signal, so read the resulting
+            # settings_error straight from the DB — the authoritative state, and
+            # the same route test-service.sh already uses.
+            _oo_err=""
+            for _attempt in 1 2 3; do
+                ssh -o BatchMode=yes -o ConnectTimeout=15 -o StrictHostKeyChecking=accept-new \
+                    "tappaas@${NC_HOST}" "sudo nextcloud-occ onlyoffice:documentserver --check" \
+                    >/dev/null 2>&1 || true
+                _oo_err=$(ssh -o BatchMode=yes -o ConnectTimeout=15 -o StrictHostKeyChecking=accept-new \
+                    "tappaas@${NC_HOST}" \
+                    "sudo -u postgres psql -d nextcloud -tAc \"SELECT configvalue FROM oc_appconfig WHERE appid='onlyoffice' AND configkey='settings_error'\"" \
+                    2>/dev/null | tr -d '[:space:]') || _oo_err=""
+                [[ -z "${_oo_err}" ]] && break
+                # The document server may still be booting on a fresh install.
+                [[ "${_attempt}" -lt 3 ]] && sleep 15
+            done
+
+            if [[ -z "${_oo_err}" ]]; then
+                info "${GN}✓${CL} onlyoffice document server round-trip verified"
+
+                # ── Point the document server's splash page at this Nextcloud ──
+                # The stock image serves a "Docs installed — now integrate me"
+                # page at /welcome/ (and redirects / to it). On a TAPPaaS deploy
+                # that is noise, and it is internet-facing whenever the module is
+                # published. We own the wiring here (ADR-COM-0002), and this is
+                # the only side that knows the Nextcloud public URL.
+                #
+                # euro-office.nix bind-mounts /etc/euro-office/ds-example.conf
+                # over the container's nginx include, so rewriting it + reloading
+                # nginx applies without restarting the container (which would cut
+                # off live editing sessions). Only rewrite when the content
+                # actually changes, so a reconcile is not disruptive.
+                _eo_conf=$(printf '%s\n' \
+                    "# Managed by nextcloud:fileservice update-service.sh." \
+                    "# Redirects the document server's splash page at the Nextcloud it serves." \
+                    "location ~ ^(\\/welcome\\/.*)\$ { return 302 https://${NEXTCLOUD_PUBLIC_URL}/; }")
+
+                _eo_remote=$(ssh -o BatchMode=yes -o ConnectTimeout=15 -o StrictHostKeyChecking=accept-new \
+                    "tappaas@${EO_HOST}" "cat /etc/euro-office/ds-example.conf 2>/dev/null" 2>/dev/null || true)
+
+                if [[ "${_eo_remote}" != "${_eo_conf}" ]]; then
+                    if printf '%s\n' "${_eo_conf}" | ssh -o BatchMode=yes -o ConnectTimeout=15 \
+                            -o StrictHostKeyChecking=accept-new "tappaas@${EO_HOST}" \
+                            "sudo install -m644 -o root -g root /dev/stdin /etc/euro-office/ds-example.conf && \
+                             sudo podman exec euro-office nginx -s reload" >/dev/null 2>&1
+                    then
+                        info "  ${GN}✓${CL} document server splash redirects to https://${NEXTCLOUD_PUBLIC_URL}/"
+                    else
+                        # Non-fatal: cosmetic. The integration itself is verified above.
+                        warn "  could not point the document server splash at Nextcloud on ${EO_HOST} (editing is unaffected)"
+                    fi
+                fi
+            else
+                error "  onlyoffice connector is wired but NOT working: ${_oo_err}"
+                error "  Nextcloud hides the editor while this is set. Most often the document"
+                error "  server cannot reach Nextcloud at StorageUrl — check that ${MODULE} and"
+                error "  the Nextcloud module can reach each other (network:rules egress, and"
+                error "  network:proxy proxyAllowedZones on BOTH, since the browser loads the"
+                error "  editor from the document server's own URL)."
+                exit 1
+            fi
         else
             warn "  failed to apply onlyoffice.env on ${NC_HOST} — re-run after both VMs are up"
         fi
