@@ -175,6 +175,65 @@ REMOTE
         info "No unused images to prune"
     fi
 
+    # ── Environment owner → OpenWebUI admin ───────────────────────────
+    #
+    # OpenWebUI makes the FIRST account an admin, so without this the instance is
+    # owned by whoever logs in first. Resolve the environment's owner on the
+    # TAPPaaS side (the VM has no access to people data) and push the identity
+    # down; openwebui-seed-admin.service creates the account before anyone can
+    # log in, and OAUTH_MERGE_ACCOUNTS_BY_EMAIL adopts it at the owner's first
+    # SSO login.
+    #
+    # Chain: <module>.environment -> environments/<env>.json .ownerOrg
+    #        -> people org .owner -> user .primaryEmail
+    #
+    # Runs on every converge, so a changed owner propagates (it only takes effect
+    # on an instance with no accounts yet — see the seeding service).
+    #
+    # `restart`, NOT `start`: both units are Type=oneshot with RemainAfterExit,
+    # so once they have run at boot they stay "active" and `systemctl start` is a
+    # silent no-op. Seeding then never happens — the owner file lands on the VM
+    # and nothing consumes it, with every step still reporting success.
+    echo ""
+    info "Step 4: Push environment-owner identity"
+
+    local _env _owner_org _owner_user _owner_email _owner_name
+    _env="$(get_config_value 'environment' '')"
+    _owner_org="$(get_variant_config "${_env}" 2>/dev/null | jq -r '.ownerOrg // empty' 2>/dev/null || true)"
+    [[ -z "${_owner_org}" ]] && _owner_org="$(jq -r '.owner // empty' /home/tappaas/config/site.json 2>/dev/null || true)"
+
+    _owner_user=""
+    if [[ -n "${_owner_org}" ]]; then
+        _owner_user="$(people-manager org show "${_owner_org}" 2>/dev/null \
+            | awk -F': *' '/^[[:space:]]*owner:/{print $2; exit}' | tr -d '[:space:]')"
+    fi
+
+    if [[ -z "${_owner_user}" ]]; then
+        warn "  Could not resolve an environment owner (env='${_env:-default}', org='${_owner_org:-unset}') — admin seeding skipped"
+    else
+        _owner_email="$(people-manager user show "${_owner_user}" 2>/dev/null \
+            | awk -F': *' '/^[[:space:]]*primaryEmail:/{print $2; exit}' | tr -d '[:space:]')"
+        _owner_name="$(people-manager user show "${_owner_user}" 2>/dev/null \
+            | awk -F': *' '/^[[:space:]]*displayName:/{print $2; exit}' | sed 's/[[:space:]]*$//')"
+        if [[ -z "${_owner_email}" ]]; then
+            warn "  Owner '${_owner_user}' has no primaryEmail — admin seeding skipped"
+        else
+            info "  Owner: ${BL}${_owner_user}${CL} <${_owner_email}>"
+            if printf 'OPENWEBUI_OWNER_EMAIL=%s\nOPENWEBUI_OWNER_NAME=%s\n' \
+                    "${_owner_email}" "${_owner_name:-${_owner_user}}" \
+                | ssh ${SSH_OPTS} "tappaas@${VM_HOST}" \
+                    "sudo install -d -m 700 /etc/secrets && \
+                     sudo install -m600 -o root -g root /dev/stdin /etc/secrets/openwebui-owner.env && \
+                     sudo systemctl restart openwebui-integrations.service && \
+                     sudo systemctl restart openwebui-seed-admin.service" 2>/dev/null
+            then
+                info "  ${GN}✓${CL} owner identity pushed; admin seeded if the instance has no accounts yet"
+            else
+                warn "  Could not push owner identity to ${VM_HOST} (is the VM up?)"
+            fi
+        fi
+    fi
+
     # ── Done ──────────────────────────────────────────────────────────
     echo ""
     info "=== Update Complete ==="

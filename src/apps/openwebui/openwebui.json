@@ -15,7 +15,8 @@
     "backup:vm",
     "network:proxy",
     "litellm:models",
-    "network:rules"
+    "network:rules",
+    "identity:identity"
   ],
   "provides": [],
   "appVersion": "0.10.2",
@@ -35,5 +36,17 @@
         "home"
       ]
     }
+  },
+  "identity": {
+    "oidcRedirectPaths": [
+      "/oauth/oidc/callback"
+    ],
+    "scopes": [
+      "openid",
+      "email",
+      "profile"
+    ],
+    "secretsEnv": "/etc/secrets/openwebui-oidc.env",
+    "configureService": "openwebui-integrations.service"
   }
 }

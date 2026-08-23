@@ -204,13 +204,15 @@ in
         --network=host \
         --log-driver=journald \
         --env-file=/etc/secrets/openwebui.env \
+        --env-file=/etc/secrets/openwebui-integrations.env \
         -v /var/lib/openwebui/data:/app/backend/data \
         -v /var/lib/openwebui/models:/app/backend/data/models \
         docker.io/openwebui/open-webui:${versions.openwebui}
     '';
   in {
     description = "OpenWebUI via Podman wrapper";
-    after = [ "network.target" ];
+    after = [ "network.target" "openwebui-integrations.service" ];
+    requires = [ "openwebui-integrations.service" ];
     wantedBy = [ "multi-user.target" ];
     serviceConfig = {
       ExecStart = "${startScript}";
@@ -270,6 +272,180 @@ REDIS_KEY_PREFIX=openwebui
 EOF
         chmod 600 /etc/secrets/openwebui.env
         echo "OpenWebUI secrets generated."
+      '';
+    };
+  };
+
+
+  # ----------------------------------------
+  # Provider integrations — LiteLLM + Authentik OIDC
+  # ----------------------------------------
+  #
+  # Both providers already deliver their secrets to this VM, but under THEIR
+  # variable names, and OpenWebUI reads neither:
+  #   litellm:models    -> /etc/secrets/litellm-svckey.env  (LITELLM_API_KEY, LITELLM_BASE_URL)
+  #   identity:identity -> /etc/secrets/openwebui-oidc.env  (OIDC_CLIENT_ID/SECRET/DISCOVERY_URI)
+  #
+  # Before this, litellm:models wired a virtual key and then told the operator to
+  # "configure OpenWebUI admin -> Settings -> Connections" BY HAND, and there was
+  # no OIDC at all. This service translates both into the names OpenWebUI expects
+  # and writes a single env-file the container loads.
+  #
+  # It runs BEFORE the wrapper (podman needs every --env-file to exist, so the
+  # file is always created, even empty), and is the `identity.configureService`
+  # that identity:identity restarts after writing new OIDC secrets — so a
+  # credential rotation regenerates this file and restarts the container.
+  # The restart is guarded on content actually changing, so a reconcile that
+  # changes nothing does not bounce the service.
+  systemd.services.openwebui-integrations = {
+    description = "Translate provider secrets into OpenWebUI settings";
+    wantedBy = [ "multi-user.target" ];
+    after = [ "local-fs.target" ];
+    serviceConfig = {
+      Type = "oneshot";
+      RemainAfterExit = true;
+      ExecStart = pkgs.writeShellScript "openwebui-integrations" ''
+        set -uo pipefail
+        PATH="${pkgs.coreutils}/bin:${pkgs.gnugrep}/bin:${pkgs.systemd}/bin:$PATH"
+        OUT=/etc/secrets/openwebui-integrations.env
+        LITELLM=/etc/secrets/litellm-svckey.env
+        OIDC=/etc/secrets/openwebui-oidc.env
+        OWNER=/etc/secrets/openwebui-owner.env
+
+        mkdir -p /etc/secrets
+
+        # Read a KEY=value from a file without sourcing it (values may contain
+        # characters that would be re-interpreted by the shell).
+        readvar() { [ -f "$1" ] && grep -m1 "^$2=" "$1" 2>/dev/null | cut -d= -f2- || true; }
+
+        NEW=""
+        add() { NEW="$NEW$1"$'\n'; }
+
+        # ── LiteLLM: the OpenAI-compatible endpoint OpenWebUI talks to ──
+        LK="$(readvar "$LITELLM" LITELLM_API_KEY)"
+        LB="$(readvar "$LITELLM" LITELLM_BASE_URL)"
+        if [ -n "$LK" ] && [ -n "$LB" ]; then
+          add "OPENAI_API_KEY=$LK"
+          add "OPENAI_API_BASE_URL=$LB"
+          add "ENABLE_OPENAI_API=true"
+        fi
+
+        # ── Authentik OIDC ──
+        CID="$(readvar "$OIDC" OIDC_CLIENT_ID)"
+        CSE="$(readvar "$OIDC" OIDC_CLIENT_SECRET)"
+        DIS="$(readvar "$OIDC" OIDC_DISCOVERY_URI)"
+        if [ -n "$CID" ] && [ -n "$CSE" ] && [ -n "$DIS" ]; then
+          add "ENABLE_OAUTH_SIGNUP=true"
+          # Merge by email so the pre-seeded owner account (see
+          # openwebui-seed-admin) is adopted by the owner's first SSO login
+          # instead of a second, non-admin account being created alongside it.
+          add "OAUTH_MERGE_ACCOUNTS_BY_EMAIL=true"
+          add "OAUTH_CLIENT_ID=$CID"
+          add "OAUTH_CLIENT_SECRET=$CSE"
+          add "OPENID_PROVIDER_URL=$DIS"
+          add "OAUTH_PROVIDER_NAME=TAPPaaS"
+          add "OAUTH_SCOPES=openid email profile"
+        fi
+
+        # Owner email is informational for the container; the seeding service
+        # below is what actually uses it.
+        OE="$(readvar "$OWNER" OPENWEBUI_OWNER_EMAIL)"
+        [ -n "$OE" ] && add "OPENWEBUI_OWNER_EMAIL=$OE"
+
+        # The file must EXIST unconditionally: podman --env-file fails hard on a
+        # missing file, so an instance with no provider secrets yet (first boot,
+        # before litellm:models/identity:identity have run) must still get an
+        # empty one. Comparing content alone is not enough — empty content and a
+        # missing file compare equal, which is what broke the first install.
+        OLD="$(cat "$OUT" 2>/dev/null || true)"
+        if [ ! -f "$OUT" ] || [ "$OLD" != "$NEW" ]; then
+          T="$(mktemp /etc/secrets/.owui-int.XXXXXX)"
+          printf '%s' "$NEW" > "$T"
+          chmod 600 "$T"
+          mv -f "$T" "$OUT"
+          echo "openwebui-integrations: settings updated"
+          # Only bounce the container when it is already running: at boot the
+          # wrapper has not started yet and requires this unit, so restarting it
+          # here would deadlock.
+          if systemctl is-active --quiet openwebui-wrapper.service; then
+            systemctl restart openwebui-wrapper.service || true
+          fi
+        else
+          echo "openwebui-integrations: no change"
+        fi
+      '';
+    };
+  };
+
+
+  # ----------------------------------------
+  # Seed the admin account as the environment owner
+  # ----------------------------------------
+  #
+  # OpenWebUI makes the FIRST account to sign up an admin; every later account
+  # gets DEFAULT_USER_ROLE. Left alone that means whoever happens to log in first
+  # owns the instance — on a fresh deploy, quite possibly not the environment
+  # owner. This seeds the owner's account before anyone can log in, so the admin
+  # is deterministic.
+  #
+  # The email is pushed by update.sh, which resolves it on the TAPPaaS side:
+  #   environment.ownerOrg -> org.owner -> user.primaryEmail
+  #
+  # Signup goes through OpenWebUI's OWN API rather than direct DB inserts, so it
+  # stays correct across schema changes between versions. The password is random
+  # and deliberately discarded: the owner signs in via SSO, and
+  # OAUTH_MERGE_ACCOUNTS_BY_EMAIL adopts this account on first login.
+  #
+  # Runs once — it does nothing as soon as any account exists, so it can never
+  # take an instance over from real users.
+  systemd.services.openwebui-seed-admin = {
+    description = "Seed the OpenWebUI admin account as the environment owner";
+    wantedBy = [ "multi-user.target" ];
+    after = [ "openwebui-wrapper.service" "postgresql.service" ];
+    serviceConfig = {
+      Type = "oneshot";
+      RemainAfterExit = true;
+      ExecStart = pkgs.writeShellScript "openwebui-seed-admin" ''
+        set -uo pipefail
+        PATH="${pkgs.coreutils}/bin:${pkgs.curl}/bin:${pkgs.util-linux}/bin:${versions.postgresPkg}/bin:$PATH"
+        OWNER=/etc/secrets/openwebui-owner.env
+
+        EMAIL="$(grep -m1 '^OPENWEBUI_OWNER_EMAIL=' "$OWNER" 2>/dev/null | cut -d= -f2-)"
+        NAME="$(grep -m1 '^OPENWEBUI_OWNER_NAME=' "$OWNER" 2>/dev/null | cut -d= -f2-)"
+        if [ -z "$EMAIL" ]; then
+          echo "seed-admin: no owner email recorded yet — skipping"
+          exit 0
+        fi
+        [ -n "$NAME" ] || NAME="$EMAIL"
+
+        # Already have accounts? Then the instance is in use; never interfere.
+        COUNT="$(runuser -u postgres -- psql -d openwebui -tAc 'SELECT COUNT(*) FROM auth' 2>/dev/null | tr -d '[:space:]')"
+        if [ -z "$COUNT" ]; then
+          echo "seed-admin: database not ready — skipping (will retry on next converge)"
+          exit 0
+        fi
+        if [ "$COUNT" != "0" ]; then
+          echo "seed-admin: $COUNT account(s) already exist — nothing to do"
+          exit 0
+        fi
+
+        # Wait for the API to answer; the container may still be starting.
+        i=0
+        while [ "$i" -lt 60 ]; do
+          curl -fsS -o /dev/null --max-time 5 http://127.0.0.1:8080/health && break
+          i=$((i + 1)); sleep 5
+        done
+
+        PW="$(head -c 32 /dev/urandom | od -An -tx1 | tr -d ' \n')"
+        if curl -fsS --max-time 20 -X POST http://127.0.0.1:8080/api/v1/auths/signup \
+             -H 'Content-Type: application/json' \
+             -d "{\"name\":\"$NAME\",\"email\":\"$EMAIL\",\"password\":\"$PW\"}" >/dev/null
+        then
+          echo "seed-admin: created $EMAIL as the first account (admin)"
+        else
+          echo "seed-admin: signup failed for $EMAIL — will retry on next converge" >&2
+        fi
+        unset PW
       '';
     };
   };
