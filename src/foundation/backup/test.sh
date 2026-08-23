@@ -26,10 +26,17 @@ done
 if [[ "${TAPPAAS_TEST_DEEP:-0}" == "1" ]]; then
     echo "== backup (deep): live PBS reachability =="
     if command -v backup-controller >/dev/null 2>&1; then
-        if backup-controller list >/dev/null 2>&1; then
-            echo "  ✓ backup-controller reaches PBS (datastore listable)"
+        # `list` takes a MODULE argument (`list <module>`), so a bare `list` is a
+        # usage error, not a reachability result — it exited non-zero on every
+        # healthy system and reported "could not reach PBS". Probe with verbs that
+        # genuinely query PBS and need no arguments.
+        if backup-controller job-status >/dev/null 2>&1 \
+           && backup-controller namespaces >/dev/null 2>&1; then
+            echo "  ✓ backup-controller reaches PBS (job + namespaces queryable)"
         else
-            echo "  ✗ backup-controller could not reach/list PBS"
+            echo "  ✗ backup-controller could not reach PBS"
+            backup-controller job-status 2>&1 | tail -3 | sed 's/^/      /'
+            backup-controller namespaces 2>&1 | tail -3 | sed 's/^/      /' 
             rc=1
         fi
     else

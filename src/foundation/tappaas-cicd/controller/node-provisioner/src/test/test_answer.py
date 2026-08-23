@@ -57,17 +57,40 @@ class TestRenderAnswer(unittest.TestCase):
     def test_network_from_dhcp(self):
         self.assertIn('source = "from-dhcp"', self._render())
 
-    def test_zfs_raid0_for_declared_single_pool(self):
-        out = self._render()
-        self.assertIn('filesystem = "zfs"', out)
-        self.assertIn('zfs.raid = "raid0"', out)
-        self.assertIn('disk-list = ["nvme0n1"]', out)
+    # ── The installer NEVER touches declared data pools ──────────────
+    #
+    # These three tests used to assert the opposite: that a declared pool drove
+    # the installer's filesystem/zfs.raid (single -> raid0, mirror -> raid1) and
+    # that disk-list held the POOL's disks. That contract is superseded — see
+    # answer.py ("declared pools are post-join data pools ... the installer only
+    # ever formats the boot disk (ext4/LVM)") and registry.py. The installer now
+    # always lays down the TAPPaaS standard boot layout, and pools are created
+    # post-join by the storage plane.
+    #
+    # The safety property worth pinning is the INVARIANT, not the strings: an
+    # answer.toml must never instruct the installer to format a data-pool disk,
+    # because doing so would wipe it during an unattended install.
 
-    def test_mirror_maps_to_raid1_and_extra_pools_noted(self):
+    def test_boot_disk_only_ext4_regardless_of_declared_pools(self):
+        out = self._render()  # POOL = single:nvme0n1
+        self.assertIn('filesystem = "ext4"', out)
+        self.assertIn('disk-list = ["sda"]', out, "installer must target the BOOT disk")
+        self.assertNotIn("zfs.raid", out, "installer must not configure a data-pool raid level")
+
+    def test_declared_pool_disks_are_never_in_disk_list(self):
+        """The regression that matters: a pool disk in disk-list would be wiped."""
         out = self._render(pools=[MIRROR, POOL])
-        self.assertIn('zfs.raid = "raid1"', out)
-        self.assertIn('disk-list = ["sdb", "sdc"]', out)
-        self.assertIn("tanka1", out)  # extra pool noted as post-join work
+        disk_list = [ln for ln in out.splitlines() if ln.startswith("disk-list")]
+        self.assertEqual(len(disk_list), 1, "exactly one disk-list line")
+        for pool_disk in ("sdb", "sdc", "nvme0n1"):
+            self.assertNotIn(pool_disk, disk_list[0],
+                             f"data-pool disk {pool_disk} must never be handed to the installer")
+
+    def test_declared_pools_are_recorded_as_a_post_join_note(self):
+        out = self._render(pools=[MIRROR, POOL])
+        self.assertIn("NOT created by the installer", out)
+        self.assertIn("tankb1=mirror:sdb+sdc", out)
+        self.assertIn("tanka1=single:nvme0n1", out)
 
     def test_no_pools_falls_back_to_ext4_with_todo(self):
         out = self._render(pools=[])
@@ -161,7 +184,14 @@ class TestHandleAnswerPost(unittest.TestCase):
         self.assertEqual(status, 200)
         self.assertIn('fqdn = "tappaas3.mgmt.internal"', body)
         self.assertIn('country = "dk"', body)
-        self.assertIn('zfs.raid = "raid0"', body)
+        # The served answer lays down the standard boot layout and records the
+        # declared pool as post-join work — it must never hand a data-pool disk
+        # to the installer. (Was: assertIn 'zfs.raid = "raid0"', the superseded
+        # contract where a declared pool drove the installer's raid level.)
+        self.assertIn('filesystem = "ext4"', body)
+        self.assertNotIn("zfs.raid", body)
+        self.assertNotIn("nvme0n1", body.split("disk-list")[1].split("\n")[0])
+        self.assertIn("tanka1=single:nvme0n1", body)  # noted, not installed
 
         # secret stored, registration one-shot consumed
         secret = self.secrets / "tappaas3.pw"

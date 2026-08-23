@@ -24,7 +24,11 @@ set -uo pipefail
 
 AUTHENTIK_MANAGER="${AUTHENTIK_MANAGER:-authentik-manager}"
 
+# TESTING.md: the deep tier is "gated by TAPPAAS_TEST_DEEP=1 and/or --deep".
+# This honoured ONLY --deep, so a sweep driving the documented env var ran just
+# the fast tier and reported a clean pass while every deep assertion was skipped.
 RUN_DEEP=0
+[[ "${TAPPAAS_TEST_DEEP:-0}" == "1" ]] && RUN_DEEP=1
 for _a in "$@"; do [[ "${_a}" == "--deep" ]] && RUN_DEEP=1; done
 
 DEEPMOD="zzzmod"          # throwaway module name for the deep module-admin role
@@ -211,7 +215,17 @@ if [[ "${RUN_DEEP}" -eq 1 ]]; then
                 && pass "OAuth2/OpenID provider present" || fail "no oauth2 provider for test-idoidc"
             nb="$(api '/policies/bindings/?page_size=1000' | jq -r --arg t "${oapp}" '[.results[]|select(.target==$t)]|length')"
             [[ "${nb:-0}" -ge 1 ]] && pass "access binding present (${nb}) — gate applied" || fail "OIDC app has NO access binding (allow-all)"
-            ver="$(ssh -o StrictHostKeyChecking=accept-new -o ConnectTimeout=10 "tappaas@test-idoidc.srvWork.internal" 'cat /var/lib/test-idoidc/oidc-verified 2>/dev/null' 2>/dev/null)"
+            # DERIVE the internal FQDN from the module's DEPLOYED zone. This was
+            # hardcoded to `test-idoidc.srvWork.internal`; ADR-014 D7 retired the
+            # srv* zones, and the fixture no longer pins zone0 at all (it resolves
+            # to the target environment's zone), so the hardcoded name stopped
+            # resolving and the env-delivery check could never pass.
+            _oz="$(jq -r '.zone0 // empty' "${CONFIG_DIR}/test-idoidc.json" 2>/dev/null)"
+            [[ -n "${_oz}" ]] || _oz="$(jq -r '.network.zone // empty' \
+                "${CONFIG_DIR}/environments/$(jq -r '.defaultEnvironment // .name' "${CONFIG_DIR}/site.json" 2>/dev/null).json" 2>/dev/null)"
+            _ohost="test-idoidc.${_oz:-mgmt}.internal"
+            info "  OIDC VM internal FQDN: ${_ohost}"
+            ver="$(ssh -o StrictHostKeyChecking=accept-new -o ConnectTimeout=10 "tappaas@${_ohost}" 'cat /var/lib/test-idoidc/oidc-verified 2>/dev/null' 2>/dev/null)"
             grep -qE "^client_id=.+" <<<"${ver}" \
                 && pass "OIDC env delivered to the VM + configure-service ran (client_id present)" \
                 || fail "OIDC env not delivered/verified on the VM"

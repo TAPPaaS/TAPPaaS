@@ -13,7 +13,14 @@ set -uo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")" && pwd)"
 AM="${SCRIPT_DIR}/ap-controller"
-SM="${SCRIPT_DIR}/switch-controller"
+# switch-controller lives in its OWN component dir, not next to ap-controller.
+# This pointed at ${SCRIPT_DIR}/switch-controller, which does not exist — so every
+# ${SM} call below was a silent no-op (they are all `>/dev/null 2>&1`), the uplink
+# switch port was never created, the uplink validation never cleared, and the
+# final "in sync" assertion failed. That is the whole of tracker D3
+# (`test-ap-manager` 16/1, "not triaged yet"). Fail loudly if it moves again.
+SM="${SCRIPT_DIR}/../switch-controller/switch-controller"
+[[ -x "${SM}" ]] || { echo "FATAL: switch-controller not found at ${SM}" >&2; exit 1; }
 
 TMP="$(mktemp -d)"
 export CONFIG_DIR="${TMP}"

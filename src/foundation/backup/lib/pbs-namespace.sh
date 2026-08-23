@@ -85,7 +85,14 @@ REMOTE
 pbs_ns_list() {
     local store
     store="$(pbs_storage_name)"
-    _pbs_node_run "proxmox-backup-debug api get /admin/datastore/${store}/namespace --output-format json" \
+    # SEPARATE ARGUMENTS, not one string: _pbs_node_run shell-quotes each argument
+    # with %q before handing them to ssh, so a whole command passed as a single
+    # string becomes one quoted word — the remote then looks for a binary literally
+    # named "proxmox-backup-debug api get ..." and exits 127. Every other caller in
+    # this file already passes separate args; this one did not, which is why
+    # `backup-controller namespaces` always failed.
+    _pbs_node_run proxmox-backup-debug api get \
+        "/admin/datastore/${store}/namespace" --output-format json \
         2>/dev/null | jq -r '.[].ns'
 }
 
