@@ -3,7 +3,7 @@
 **Companion to:** [ADR-014 — Zone ↔ Environment Lifecycle & Operations](<../ADR/ADR-014 - Zone and Environment Lifecycle.md>) (the *why* + the decided design)
 **Closes:** #424 (client/IoT zones ↔ environments undefined) · #419 (stale zone references not resolved)
 **Purpose of this doc:** one place that (1) records **implementation-level decisions** (including the three forks ADR-014 flagged for confirmation), (2) breaks the work into **packages** with deliverables/dependencies/test criteria, and (3) **tracks live execution state**.
-**Status:** In progress — P0–P7 ✅, P8 next
+**Status:** In progress — P0–P8 ✅; P9 (rollout) is the only package left, and it is the operator's call when to start
 **Branch:** `feat/adr-014-zone-lifecycle`, cut from `main`
 **Started:** 2026-08-22
 
@@ -391,6 +391,29 @@ The deep firewall test sourced its four probe zones **from the shipped template*
 
 ### P8 — Docs, ADR reconciliation, issue closure
 
+**Outcome (2026-08-23): ✅ done.**
+
+- **ADR-014 → v1.0 / Accepted.** Folded in F1–F3 and, more importantly, the four places the draft was
+  wrong or silent, each marked inline as a `v1.0 correction` rather than quietly rewritten — the draft's
+  reasoning stays legible next to what replaced it:
+  - **D2's derivation is local, not symmetric.** The symmetric form invented firewall rules.
+  - **D1 keys on the zone's presence,** not its type — a missing zone has no type to inspect.
+  - **D7 needs `grants`,** and **`wan` belongs in `core`** (the draft's table omitted it entirely).
+  - **New D8** — authored vs. effective documents, the question D2 never answered.
+- The D2 open item (where the back-fill runs) is **resolved**: inside `merge`. The two v0.3 forks are
+  confirmed as written. Eight new entries were added to the rationale trail (items 8–15), including the
+  `tier` naming collision being knowingly accepted.
+- **All twelve acceptance boxes checked**, each backed by an automated test and two by the production-
+  config rehearsal. The `home → private` box is struck rather than ticked.
+- Purged the contradictions the F1 decision left behind — `private` survived in the D5 lattice table,
+  the archetype table, the D2 worked example and resolved-choice 5, where it would have contradicted the
+  decision recorded four sections away.
+- **Migration runbook** written (`ADR-014-migration-runbook.md`): what changes and what provably does
+  not, the three steps, verification, rollback, and a troubleshooting table keyed by the actual error
+  strings.
+- **Issue comments drafted, NOT posted** — `tea` is not installed on this host, and CLAUDE.md forbids
+  falling back to `gh` (it targets the stale GitHub mirror). Bodies are ready for the operator.
+
 **Deliverables**
 - Update **ADR-014 to v1.0 / Accepted**, folding in F1–F3: strike the `home → private` rename and its #425/ADR-007d migration note; restate D6 enforcement as phased (F2); add the retirement verb to D7 and the command-surface table; record D-C4 (authored vs. effective) in Schema changes; close the "merge back-fill ordering" open item (it runs inside `merge`).
 - `ZONES.md`: `serves`, `bind`, archetypes, the tier lattice + R1/R2, the authored/effective split, and that `enable|disable|manual` already exist (D4's real gap was discoverability).
@@ -418,7 +441,7 @@ See [Rollout campaign](#rollout-campaign) — three staged tests, gated on P0–
 | P5 | `environment add --create-zone` / reconcile materialise | P3 | ✅ | 27 env-mgr + 205/15 net-mgr, `tsc` clean | +7 tests; D1 semantics clarified |
 | P6 | `init` profiles + template cleanup + `retire` | P3, P4 | ✅ | 236 unit + 16 CLI, `tsc` clean; live migration verified | +42 tests; new `src/retire.ts`; `validate --effective` added |
 | P7 | #419 module refs + validation gates | P6 | ✅ | 89+13 module-mgr, 236+16 net-mgr, 27 env-mgr | +8 tests; **closes #419** |
-| P8 | Docs + ADR-014 → Accepted + issue closure | P1–P7 | 🟦 | — | |
+| P8 | Docs + ADR-014 → Accepted + issue closure | P1–P7 | ✅ | all suites green; links verified | ADR → v1.0 Accepted; runbook written; issue comments drafted, NOT posted |
 | P9 | Rollout campaign (3 stages) | P8 | ⬜ | — | |
 
 ---
