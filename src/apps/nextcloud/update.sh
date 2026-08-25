@@ -50,16 +50,30 @@ resolve_proxy_domain() {
     printf '%s\n' "${VMNAME}.${tappaas_domain}"
 }
 
-# Is the domain actually recorded in Nextcloud's config? Read config.php
-# directly — `nextcloud-occ` runs `systemd-run --pty` internally and relays no
-# output over a non-TTY SSH session, so its output cannot be trusted as proof.
+# Is the domain actually accepted by Nextcloud? Probe it over HTTP rather than
+# reading a config file.
+#
+# Grepping config.php stopped working once trusted_domains became declarative:
+# the Nix-declared settings live in a JSON in the store that override.config.php
+# merges at runtime (array_replace_recursive over nix_decode_json_file), so the
+# effective value is in none of the config/*.php files and the grep found
+# nothing — failing every update while the site served correctly.
+#
+# occ output cannot be used as proof either: nextcloud-occ runs `systemd-run
+# --pty` internally and relays nothing over a non-TTY SSH session.
+#
+# An untrusted Host answers HTTP 400 "Access through untrusted domain", so the
+# request itself is the check — independent of WHERE the value is stored, and
+# testing what actually matters rather than a proxy for it.
 trusted_domain_present() {
-    local host="$1" domain="$2"
-    ssh -o BatchMode=yes -o ConnectTimeout=15 -o StrictHostKeyChecking=no \
+    local host="$1" domain="$2" code
+    code=$(ssh -o BatchMode=yes -o ConnectTimeout=15 -o StrictHostKeyChecking=no \
         "tappaas@${host}" \
-        "sudo -u nextcloud sed -n \"/'trusted_domains'/,/^[[:space:]]*)/p\" \
-            ${NEXTCLOUD_CONFIG_PHP} 2>/dev/null" 2>/dev/null \
-        | grep -qF "'${domain}'"
+        "curl -s -o /dev/null -w '%{http_code}' --max-time 10 \
+             -H 'Host: ${domain}' http://localhost/" 2>/dev/null)
+    # 2xx/3xx = trusted. 400 = untrusted domain. Anything else (000, 5xx) is a
+    # broken probe, not proof of trust — treat as not present.
+    [[ "${code}" =~ ^[23] ]]
 }
 
 apply_domain_config() {
