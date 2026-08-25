@@ -443,20 +443,20 @@ in
       server = {
         http_addr = "0.0.0.0";
         http_port = grafanaPort;
-        # root_url left to Grafana defaults; Caddy passes X-Forwarded-* headers
-        # so links resolve to the public proxyDomain. Override here if links break.
+        # Explicit (not left to defaults): Grafana computes the OAuth
+        # redirect_uri from root_url, and it must exactly match what's
+        # registered in Authentik (identity:identity registers
+        # https://logging.tappaas.qualiware.com/login/generic_oauth).
+        root_url = "https://logging.tappaas.qualiware.com/";
       };
 
       security = {
         admin_user = "admin";
         admin_password = "$__file{/etc/secrets/grafana-admin-password}";
-        # cookie_secure = false for v1: this VM is reachable on internal
-        # http://logging.mgmt.internal:3000. With cookie_secure=true the
-        # browser refuses to persist the auth cookie over plain HTTP, so login
-        # appears to succeed then bounces back to /login.
-        # v2 (when HTTPS via Caddy + Let's Encrypt is live for every admin
-        # access path): set cookie_secure = true and access only through Caddy.
-        cookie_secure = false;
+        # v2: HTTPS via Caddy is live for logging (confirmed reachable at
+        # https://logging.tappaas.qualiware.com), so the auth cookie now
+        # persists correctly — required for OIDC login below to actually work.
+        cookie_secure = true;
         cookie_samesite = "lax";
       };
 
@@ -465,8 +465,23 @@ in
       analytics.check_for_updates = false;
       news.news_feed_enabled = false;
 
-      # v2: replace with OIDC against Authentik
-      # "auth.generic_oauth" = { ... };
+      "auth.generic_oauth" = {
+        enabled = true;
+        name = "Authentik";
+        client_id = "$__file{/etc/secrets/logging-oidc-client-id}";
+        client_secret = "$__file{/etc/secrets/logging-oidc-client-secret}";
+        scopes = "openid email profile groups";
+        auth_url = "https://identity.tappaas.qualiware.com/application/o/authorize/";
+        token_url = "https://identity.tappaas.qualiware.com/application/o/token/";
+        api_url = "https://identity.tappaas.qualiware.com/application/o/userinfo/";
+        use_pkce = true;
+        allow_sign_up = true;
+        # groups claim -> Grafana role: logging-admins => GrafanaAdmin, everyone
+        # else in the required `users` group => Viewer (day-2 access is via
+        # Grafana's own sharing/permissions, not broad Editor by default).
+        role_attribute_path = "contains(groups[*], 'logging-admins') && 'GrafanaAdmin' || 'Viewer'";
+        allow_assign_grafana_admin = true;
+      };
     };
 
     provision = {
@@ -486,8 +501,93 @@ in
   };
 
   systemd.services.grafana = {
-    after = [ "loki.service" "generate-grafana-secrets.service" ];
-    requires = [ "generate-grafana-secrets.service" ];
+    after = [ "loki.service" "generate-grafana-secrets.service" "generate-logging-oidc-placeholder.service" ];
+    requires = [ "generate-grafana-secrets.service" "generate-logging-oidc-placeholder.service" ];
+  };
+
+  # ============================================================================
+  # AUTHENTIK OIDC INTEGRATION (ADR-006) — v2, closing the placeholder above
+  # ============================================================================
+  #
+  # identity:identity (logging.json's "identity" block) writes generic
+  # OIDC_CLIENT_ID / OIDC_CLIENT_SECRET / OIDC_DISCOVERY_URI into
+  # /etc/secrets/logging.env and restarts logging-configure-oidc.service by
+  # TAPPaaS convention (<module>-configure-oidc.service). Grafana's
+  # auth.generic_oauth block below reads client_id/secret via Grafana's own
+  # $__file{path} secret substitution (same mechanism as admin_password
+  # above), which needs each secret in its OWN file — so this splits the two
+  # values out of the shared env file rather than pointing at it directly.
+  #
+  # auth_url/token_url/api_url are Authentik's fixed, non-app-specific OAuth2
+  # endpoints (one Authentik for the whole cluster) — unlike the discovery
+  # URI, Grafana's generic_oauth provider has no auto-discovery, so these are
+  # written directly rather than derived at runtime.
+  #
+  # Admin mapping: the "groups" claim (the TAPPaaS-wide scope mapping created
+  # for this, ADR-006) carries the user's Authentik group names — members of
+  # `logging-admins` (created because logging.json sets
+  # identity.providesAdminRole=true) land in Grafana's GrafanaAdmin role,
+  # everyone else in `users` gets Viewer.
+  systemd.services.generate-logging-oidc-placeholder = {
+    description = "Create placeholder Grafana OIDC secret files if missing";
+    wantedBy    = [ "multi-user.target" ];
+    # Must run after tmpfiles has set /etc/secrets to 0750 root:grafana — this
+    # unit's own `mkdir -p` would otherwise sometimes win the race and create
+    # it with a stricter ambient-umask mode first, leaving grafana (group,
+    # not owner) unable to even traverse the directory (observed live
+    # 2026-08-26: /etc/secrets ended up 0700, grafana.service crash-looped on
+    # "permission denied" reading its own admin-password file).
+    after       = [ "local-fs.target" "systemd-tmpfiles-setup.service" ];
+    before      = [ "grafana.service" ];
+    unitConfig.ConditionPathExists = "!/etc/secrets/logging-oidc-client-secret";
+    serviceConfig = {
+      Type            = "oneshot";
+      RemainAfterExit = true;
+      ExecStart = pkgs.writeShellScript "generate-logging-oidc-placeholder" ''
+        set -euo pipefail
+        ${pkgs.coreutils}/bin/mkdir -p /etc/secrets
+        for f in logging-oidc-client-id logging-oidc-client-secret; do
+          [ -f "/etc/secrets/$f" ] || ${pkgs.coreutils}/bin/install -m 0600 -o grafana -g grafana \
+            /dev/stdin "/etc/secrets/$f" <<< "unconfigured"
+        done
+      '';
+    };
+  };
+
+  systemd.services.logging-configure-oidc = {
+    description = "Configure Authentik OIDC login in Grafana";
+    wantedBy    = [ "multi-user.target" ];
+    after       = [ "generate-logging-oidc-placeholder.service" ];
+    # Deliberately no `before = [ "grafana.service" ]`: this unit's own
+    # ExecStart restarts grafana.service (to pick up new OIDC secret files).
+    # Ordering it before grafana would deadlock — systemd won't start grafana
+    # until this unit exits, but this unit is itself waiting on that same
+    # grafana-start job to complete (same bug hit live on openwebui
+    # 2026-08-25 — see openwebui.nix's openwebui-configure-oidc for the
+    # postmortem note).
+
+    serviceConfig = {
+      Type            = "oneshot";
+      RemainAfterExit = true;
+      ExecStart = pkgs.writeShellScript "logging-configure-oidc" ''
+        set -euo pipefail
+        ENV_FILE=/etc/secrets/logging.env
+
+        if ! ${pkgs.gnugrep}/bin/grep -q '^OIDC_CLIENT_ID=' "$ENV_FILE" 2>/dev/null; then
+          echo "No Authentik OIDC credentials in $ENV_FILE yet — skipping (identity:identity hasn't wired this module)."
+          exit 0
+        fi
+
+        CLIENT_ID="$(${pkgs.gnugrep}/bin/grep '^OIDC_CLIENT_ID=' "$ENV_FILE" | cut -d= -f2-)"
+        CLIENT_SECRET="$(${pkgs.gnugrep}/bin/grep '^OIDC_CLIENT_SECRET=' "$ENV_FILE" | cut -d= -f2-)"
+
+        ${pkgs.coreutils}/bin/install -m 0600 -o grafana -g grafana /dev/stdin /etc/secrets/logging-oidc-client-id <<< "$CLIENT_ID"
+        ${pkgs.coreutils}/bin/install -m 0600 -o grafana -g grafana /dev/stdin /etc/secrets/logging-oidc-client-secret <<< "$CLIENT_SECRET"
+
+        echo "Grafana OIDC login configured."
+        ${pkgs.systemd}/bin/systemctl try-restart grafana.service || true
+      '';
+    };
   };
 
   # ============================================================================

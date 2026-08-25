@@ -9,13 +9,20 @@
   "vmid": 150,
   "vmtag": "TAPPaaS,Foundation",
   "zone0": "mgmt",
+  "proxyDomain": "logging.tappaas.qualiware.com",
   "dependsOn": [
     "cluster:vm",
     "templates:nixos",
     "backup:vm",
-    "network:proxy"
+    "network:proxy",
+    "identity:identity"
   ],
   "provides": [],
+  "identity": {
+    "providesAdminRole": true,
+    "oidcRedirectPaths": ["/login/generic_oauth"],
+    "scopes": ["openid", "email", "profile", "groups"]
+  },
   "config": {
     "cluster:vm": {
       "cores": 2,
