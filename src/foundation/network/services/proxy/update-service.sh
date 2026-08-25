@@ -169,12 +169,20 @@ if [[ "${DNS_MODE}" == "per-service" ]]; then
     # Reconcile the split-horizon override as well. install-service.sh creates
     # it, but only update runs against an already-installed module, so without
     # this a record that was deleted — or never created, as for every module
-    # installed before #438 — is never restored. unbound-manager add is
-    # idempotent, so re-running is safe.
+    # installed before #438 — is never restored.
     if DMZ_GW="$(dmz_gateway_ip)"; then
         DNS_HOST="${PROXY_DOMAIN%%.*}"
         DNS_ZONE="${PROXY_DOMAIN#*.}"
-        if unbound-manager --no-ssl-verify add "${DNS_HOST}" "${DNS_ZONE}" "${DMZ_GW}" --description "${DESCRIPTION}"; then
+        # A per-service override under a domain that already has a wildcard
+        # "redirect" zone is FATAL to Unbound (#474): a redirect zone permits
+        # local-data only at the apex, so "<host>.<zone> IN A ..." fails
+        # unbound-checkconf and stops the resolver — taking cluster DNS down.
+        # The wildcard already resolves <host>.<zone> to the DMZ, so skip the
+        # colliding per-service entry. Mirrors the guard in install-service.sh.
+        if unbound-manager --no-ssl-verify list 2>/dev/null \
+             | awk -v z="${DNS_ZONE}" '$1=="*" && $2==z {f=1} END{exit !f}'; then
+            debug "  ${GN}✓${CL} wildcard *.${DNS_ZONE} already covers ${DNS_HOST}.${DNS_ZONE} — skipping per-service override"
+        elif unbound-manager --no-ssl-verify add "${DNS_HOST}" "${DNS_ZONE}" "${DMZ_GW}" --description "${DESCRIPTION}"; then
             debug "  ${GN}✓${CL} split-horizon DNS ${DNS_HOST}.${DNS_ZONE} -> ${DMZ_GW} (DMZ, Unbound)"
         else
             warn "  Could not register ${PROXY_DOMAIN} in Unbound — register manually:"
