@@ -253,28 +253,43 @@ DNS_MODE="$(jq -r '.dnsMode // "per-service"' <<<"$VCFG")"
 if [[ "$DNS_MODE" == "wildcard" ]]; then
     echo
     info "${BOLD}Registering split-horizon wildcard DNS (Unbound)${CL}"
-    if DMZ_GW="$(dmz_gateway_ip)"; then
+    # #504 (interim): resolve the wildcard to the environment's own service-zone
+    # gateway — the firewall interface on that zone's subnet, self-traffic for its
+    # clients — rather than the DMZ gateway, which client zones such as home/work
+    # cannot reach (ADR-005 §6). A wildcard is a single Unbound "redirect" zone
+    # with one apex target, so it still cannot be correct for EVERY client zone at
+    # once; a subnet-aware answer needs Unbound access-control-view (follow-up).
+    # This just stops pointing at a zone non-dmz clients cannot reach. Falls back
+    # to the DMZ gateway when the environment declares no resolvable zone.
+    WC_ZONE="$(jq -r '.zone // ""' <<<"$VCFG")"
+    WC_GW=""
+    [[ -n "$WC_ZONE" ]] && WC_GW="$(zone_gateway_ip "$WC_ZONE" 2>/dev/null || true)"
+    if [[ -z "$WC_GW" ]]; then
+        WC_ZONE="dmz"
+        WC_GW="$(dmz_gateway_ip 2>/dev/null || true)"
+    fi
+    if [[ -n "$WC_GW" ]]; then
         # The wildcard installs `local-zone: "<domain>" redirect`, and Unbound
         # then rejects any per-name local-data in that zone (it must sit at the
         # apex). Pre-existing per-service overrides for this domain (e.g.
         # logging.<domain>, authored before wildcard mode) therefore make
         # unbound-checkconf fatal and stop the resolver — taking cluster DNS
-        # down. Drop them first; the wildcard supersedes them (same DMZ target).
+        # down. Drop them first; the wildcard supersedes them.
         unbound-manager --no-ssl-verify list 2>/dev/null \
             | awk -v d="${DOMAIN}" 'NR>1 && $2==d && $1!="*" {print $1}' \
             | while read -r _h; do
                 info "  removing per-service override ${_h}.${DOMAIN} (wildcard supersedes)"
                 unbound-manager --no-ssl-verify delete "${_h}" "${DOMAIN}" >/dev/null 2>&1 || true
             done
-        if unbound-manager --no-ssl-verify add "*" "${DOMAIN}" "${DMZ_GW}" \
-                --description "TAPPaaS: ${VARIANT:-default} wildcard -> Caddy (DMZ)"; then
-            info "  ${GN}✓${CL} *.${DOMAIN} -> ${DMZ_GW} (DMZ gateway, Unbound)"
+        if unbound-manager --no-ssl-verify add "*" "${DOMAIN}" "${WC_GW}" \
+                --description "TAPPaaS: ${VARIANT:-default} wildcard -> Caddy (${WC_ZONE})"; then
+            info "  ${GN}✓${CL} *.${DOMAIN} -> ${WC_GW} (${WC_ZONE} gateway, Unbound)"
         else
             warn "  Could not register *.${DOMAIN} in Unbound — register manually:"
-            warn "    unbound-manager --no-ssl-verify add '*' '${DOMAIN}' '${DMZ_GW}'"
+            warn "    unbound-manager --no-ssl-verify add '*' '${DOMAIN}' '${WC_GW}'"
         fi
     else
-        warn "  Skipped wildcard DNS — could not derive DMZ gateway from zones.json"
+        warn "  Skipped wildcard DNS — could not derive a gateway from zones.json"
     fi
 fi
 

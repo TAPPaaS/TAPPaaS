@@ -141,16 +141,19 @@ acme-setup.sh --environment client1        # never use --staging (see #329)
 ```
 
 This issues the wildcard cert on the firewall, and **also** registers the
-split-horizon override `*.client1.tappaas.org → DMZ gateway` in **Unbound** so
-internal clients resolve the environment's services to the reverse proxy. (A
-wildcard is a single Unbound "redirect" zone with one target, so it shares the
-DMZ gateway across all zones; per-service mode — Option B — is instead zone-aware,
-resolving each service to its own client-zone gateway.)
+split-horizon override `*.client1.tappaas.org → <environment service-zone gateway>`
+in **Unbound** so internal clients resolve the environment's services to the reverse
+proxy. (A wildcard is a single Unbound "redirect" zone with one target, so — unlike
+per-service, Option B — it cannot be self-traffic for *every* client zone at once;
+as an interim it points at the environment's own service-zone gateway rather than
+the DMZ gateway (#504), and a fully subnet-aware answer awaits Unbound
+`access-control-view`. It falls back to the DMZ gateway if the environment declares
+no resolvable zone.)
 
 **What this changes:** the wildcard cert lands in OPNsense Trust and an Unbound
-host override for `client1.tappaas.org → <DMZ gateway>` is created. The cert's
-OPNsense **refid** is reconciler-populated runtime state owned by the network/cert
-layer — it is **not** written into `environment.json`.
+host override for `client1.tappaas.org → <environment service-zone gateway>` is
+created. The cert's OPNsense **refid** is reconciler-populated runtime state owned
+by the network/cert layer — it is **not** written into `environment.json`.
 
 ### Option B — Per-service certificates (dnsMode=per-service, the default)
 
@@ -220,8 +223,8 @@ environment-manager list              # all environments at a glance
 curl -fsSI https://nextcloud.client1.tappaas.org/ | head -1
 
 # Internal split-horizon: clients resolve to an internal firewall interface, not
-# the WAN — per-service resolves to the client-zone gateway (#504); a wildcard
-# environment resolves to the shared DMZ gateway.
+# the WAN — per-service resolves to each service's client-zone gateway; a wildcard
+# environment resolves to the environment's service-zone gateway (#504).
 getent hosts nextcloud.client1.tappaas.org      # -> an internal gateway IP, not the WAN
 ```
 

@@ -125,5 +125,18 @@ assert_eq "$(get_variant_config tenant   | jq -r '.dnsMode')" "per-service" "ten
 assert_eq "$(get_variant_config ""       | jq -r '.tlsCertRefid')" "abc"    "wildcard env carries a tlsCertRefid"
 assert_eq "$(get_variant_config tenant   | jq -r '.tlsCertRefid')" ""       "per-service env has no tlsCertRefid"
 
+# ── #504 interim: wildcard split-horizon = env service-zone gateway, not DMZ ──
+# acme-setup.sh derives the wildcard target as zone_gateway_ip(env's .network.zone).
+# Verify that composition against the home/work/mgmt/dmz zones.json from above.
+cat > "${WORK}/environments/wild.json" <<'JSON'
+{ "name": "wild", "displayName": "Wild", "ownerOrg": "t",
+  "domains": { "primary": "wild.example", "dnsMode": "wildcard" },
+  "network": { "zone": "work" } }
+JSON
+WILD_ZONE="$(get_variant_config wild | jq -r '.zone')"
+assert_eq "${WILD_ZONE}" "work" "wildcard env exposes its service zone"
+assert_eq "$(zone_gateway_ip "${WILD_ZONE}")" "10.3.20.1" \
+    "wildcard split-horizon -> env service-zone gateway (#504 interim), not the DMZ 10.6.0.1"
+
 echo "  Results: ${PASS} passed, ${FAIL} failed"
 [[ "${FAIL}" -eq 0 ]]
