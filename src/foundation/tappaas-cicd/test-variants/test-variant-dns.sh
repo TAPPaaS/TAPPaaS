@@ -54,6 +54,51 @@ else
     pass "dmz_gateway_ip fails cleanly when no dmz zone present"
 fi
 
+# ── zone_gateway_ip (generic; #504) ──────────────────────────────────
+cat > "${WORK}/zones.json" <<'JSON'
+{ "home": { "type": "Client",  "ip": "10.3.10.0/24" },
+  "work": { "type": "Client",  "ip": "10.3.20.0/24" },
+  "mgmt": { "type": "Service", "ip": "10.0.0.0/24" },
+  "dmz":  { "type": "DMZ",     "ip": "10.6.0.0/24" } }
+JSON
+assert_eq "$(zone_gateway_ip home)" "10.3.10.1" "zone_gateway_ip home -> 10.3.10.1"
+assert_eq "$(zone_gateway_ip mgmt)" "10.0.0.1"  "zone_gateway_ip mgmt -> 10.0.0.1"
+assert_eq "$(dmz_gateway_ip)"       "10.6.0.1"  "dmz_gateway_ip still derives via zone_gateway_ip"
+if zone_gateway_ip nosuchzone >/dev/null 2>&1; then
+    fail "zone_gateway_ip should fail for an unknown zone"
+else
+    pass "zone_gateway_ip fails cleanly for an unknown zone"
+fi
+
+# ── proxy_split_horizon_gateway (#504) ───────────────────────────────
+# shellcheck disable=SC1091
+. "${SCRIPT_DIR}/../../network/services/proxy/access-list.sh"
+ZF="${WORK}/zones.json"
+mk_mod() { printf '{ "config": { "network:proxy": { "proxyAllowedZones": %s } } }' "$1" > "${WORK}/mod.json"; }
+
+# Single client zone -> that zone's gateway (NOT the DMZ gateway, the #504 bug).
+mk_mod '["mgmt"]'
+assert_eq "$(proxy_split_horizon_gateway "${WORK}/mod.json" "${ZF}" 2>/dev/null)" "10.0.0.1" \
+    "per-service ['mgmt'] -> mgmt gateway, not DMZ"
+
+# Multi-zone -> primary (first) zone's gateway; still succeeds (warns on stderr).
+mk_mod '["work","home"]'
+assert_eq "$(proxy_split_horizon_gateway "${WORK}/mod.json" "${ZF}" 2>/dev/null)" "10.3.20.1" \
+    "per-service ['work','home'] -> primary 'work' gateway"
+
+# Default (empty) -> home preferred.
+mk_mod '[]'
+assert_eq "$(proxy_split_horizon_gateway "${WORK}/mod.json" "${ZF}" 2>/dev/null)" "10.3.10.1" \
+    "per-service default -> home gateway"
+
+# internet-only -> no client zone -> non-zero (caller falls back / warns).
+mk_mod '["internet"]'
+if proxy_split_horizon_gateway "${WORK}/mod.json" "${ZF}" >/dev/null 2>&1; then
+    fail "proxy_split_horizon_gateway should fail for internet-only"
+else
+    pass "proxy_split_horizon_gateway fails cleanly for internet-only"
+fi
+
 # ── dnsMode surfaced by the environment files + cert-refids.json ─────
 mkdir -p "${WORK}/environments"
 cat > "${WORK}/site.json" <<'JSON'

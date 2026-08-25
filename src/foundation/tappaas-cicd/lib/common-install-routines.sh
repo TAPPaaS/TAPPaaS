@@ -449,18 +449,27 @@ distribute_zones_to_nodes() {
     [[ "${pushed}" -gt 0 ]]
 }
 
-# Compute the DMZ gateway IP (the firewall's DMZ interface, where the os-caddy
-# reverse proxy listens) from zones.json — e.g. dmz ip 10.6.0.0/24 -> 10.6.0.1.
-# Used for split-horizon DNS so internal clients reach Caddy over the DMZ instead
-# of routing out via the WAN and tripping Caddy's zone ACL (#269, ADR-005 §6).
-# Never hardcode the IP — it is derived from the live zones.json.
-dmz_gateway_ip() {
-    local zones="${CONFIG_DIR}/zones.json"
-    [[ -f "${zones}" ]] || { error "zones.json not found at ${zones}"; return 1; }
+# Derive a zone's OPNsense gateway IP — the first host of its subnet, <net>.1 —
+# from a zones file (e.g. "10.3.10.0/24" → "10.3.10.1"). This is the split-horizon
+# DNS target for that zone's clients (ADR-005 §6, amended 2026-06-17): the firewall
+# interface IP ON THE CLIENT'S OWN SUBNET is self-traffic and crosses no inter-zone
+# rule, unlike the DMZ gateway which home/work cannot reach (#504).
+#   zone_gateway_ip <zone> [zones_file]   (zones_file defaults to CONFIG_DIR/zones.json)
+zone_gateway_ip() {
+    local zone="$1"
+    local zones="${2:-${CONFIG_DIR}/zones.json}"
+    [[ -n "${zone}" ]] || { error "zone_gateway_ip: no zone given"; return 1; }
+    [[ -f "${zones}" ]] || { error "zones file not found at ${zones}"; return 1; }
     local gw
-    gw="$(jq -r '(.dmz.ip // "") | if . == "" then "" else (split("/")[0] | split(".") | .[0:3] | join(".") + ".1") end' "${zones}")"
-    [[ -n "${gw}" ]] || { error "could not derive DMZ gateway IP from ${zones} (no dmz zone?)"; return 1; }
+    gw="$(jq -r --arg z "${zone}" '(.[$z].ip // "") | if . == "" then "" else (split("/")[0] | split(".") | .[0:3] | join(".") + ".1") end' "${zones}")"
+    [[ -n "${gw}" ]] || { error "could not derive gateway IP for zone '${zone}' from ${zones}"; return 1; }
     printf '%s\n' "${gw}"
+}
+
+# The DMZ zone's gateway — the split-horizon target for the wildcard path
+# (acme-setup). Thin wrapper over zone_gateway_ip; never hardcode the IP.
+dmz_gateway_ip() {
+    zone_gateway_ip dmz
 }
 
 # Prune a stale per-service Unbound host override (#505). Deletes only the

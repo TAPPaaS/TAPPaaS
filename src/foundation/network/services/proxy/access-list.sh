@@ -153,3 +153,44 @@ proxy_resolve_access_list() {
 
     printf '%s' "${al_name}"
 }
+
+# proxy_split_horizon_gateway <module_json> <zones_file>
+#
+# Echo the split-horizon DNS target for a per-service module: the OPNsense
+# gateway IP of its PRIMARY authorized client zone (ADR-005 §6, #504) — NOT the
+# DMZ gateway, which home/work cannot reach. Primary = the first client zone in
+# proxyAllowedZones (author order); for the default (empty) set, home → work →
+# mgmt. "internet" and "netbird" are not subnets and are skipped.
+#
+# unbound-manager holds ONE IP per host, so only the primary zone gets a working
+# split-horizon entry. When more than one client zone is authorized we warn:
+# the rest need Unbound access-control-view (not yet implemented) and their
+# clients will 403 until then. Progress/warnings go to stderr so stdout carries
+# only the gateway IP. Returns non-zero if no client-zone gateway can be derived.
+proxy_split_horizon_gateway() {
+    local module_json="$1" zones_file="$2"
+    local -a zones=()
+    mapfile -t zones < <(normalize_module_config < "${module_json}" 2>/dev/null | jq -r '.proxyAllowedZones // [] | .[]' 2>/dev/null)
+
+    local -a client=()
+    local z
+    if [[ ${#zones[@]} -eq 0 ]]; then
+        # Default set → prefer home, then work, then mgmt (ADR-005 §6 default).
+        for z in home work mgmt; do
+            [[ -n "$(jq -r --arg z "${z}" '.[$z].ip // empty' "${zones_file}" 2>/dev/null)" ]] && client+=("${z}")
+        done
+    else
+        for z in "${zones[@]}"; do
+            [[ "${z}" == "internet" || "${z}" == "netbird" ]] && continue
+            [[ -n "$(jq -r --arg z "${z}" '.[$z].ip // empty' "${zones_file}" 2>/dev/null)" ]] && client+=("${z}")
+        done
+    fi
+
+    [[ ${#client[@]} -eq 0 ]] && return 1
+
+    local primary="${client[0]}"
+    if [[ ${#client[@]} -gt 1 ]]; then
+        warn "  split-horizon: ${#client[@]} client zone(s) authorized (${client[*]}) but unbound holds one IP per host — registering only the primary '${primary}'. Other zones need Unbound access-control-view (not yet implemented) and will 403 until then." >&2
+    fi
+    zone_gateway_ip "${primary}" "${zones_file}"
+}
