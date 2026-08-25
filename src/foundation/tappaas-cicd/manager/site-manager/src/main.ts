@@ -29,6 +29,8 @@ import { DieError, GN, RD, YW, CL, die, guarded, info, warn } from "../../../lib
 import { applyPlan, computePlan } from "./reconcile";
 import { adoptNode, provisionNode } from "./provision";
 import { Site, SiteClient, SiteNode } from "./types";
+import { spawnSync } from "child_process";
+import { existsSync } from "fs";
 
 const VERSION = "0.1.0";
 
@@ -47,6 +49,11 @@ const HELP: HelpSpec = {
         ["--config-only", "Only write the site.json entry (no machine contact)."],
       ] },
     { usage: "node delete <name>" },
+    { usage: "node reboot <name> [--apply]",
+      options: [
+        ["(default)", "Preview the reboot's impact — which HA services drain where. Changes nothing."],
+        ["--apply", "Perform the controlled reboot (drain HA services, reboot, rejoin, fail back)."],
+      ] },
     { usage: "node reconcile [--apply]",
       options: [["--apply", "Register nodes that joined the cluster (default is preview)."]] },
     { usage: "repository list [--json]", note: "(alias: repo)" },
@@ -301,7 +308,7 @@ function setDeep(obj: Record<string, unknown>, path: string[], value: unknown): 
 // ── `node` CRUD + reconcile (hardware.nodes[]) ─────────────────────────
 function cmdNode(o: Opts, client: SiteClient): void {
   const sub = o.rest[0];
-  if (!sub) die("node: expected 'list' | 'add' | 'delete' | 'reconcile'");
+  if (!sub) die("node: expected 'list' | 'add' | 'delete' | 'reconcile' | 'reboot'");
   const siteFile = siteFileOf(o);
 
   if (sub === "reconcile") {
@@ -396,7 +403,64 @@ function cmdNode(o: Opts, client: SiteClient): void {
     return;
   }
 
+  if (sub === "reboot") {
+    const name = o.rest[1];
+    if (!name) die("node reboot: expected <name>");
+
+    // Refuse a node this site does not own, rather than letting the script
+    // discover it later: site.json is the register of what belongs here, and a
+    // typo should not reach a command that drains HA services.
+    const raw = loadRaw(siteFile);
+    const hw = (raw.hardware ?? {}) as Record<string, unknown>;
+    const nodes = (Array.isArray(hw.nodes) ? hw.nodes : []) as SiteNode[];
+    if (!nodes.some((n) => n.name === name)) {
+      die(`node '${name}' not found in ${siteFile} (site-manager node list)`);
+    }
+
+    const script = rebootNodeScript();
+    if (!script) {
+      die("reboot-node.sh not found — is the cluster module installed? (module-manager show cluster)");
+    }
+
+    // --apply maps to the script's --execute; anything else previews. The
+    // script's own default is --dry-run, and so is ours: a reboot drains HA
+    // services off a node, which is not something to do by omission.
+    // o.apply, not o.flags: the parser lifts --apply into a dedicated boolean
+    // (same field `node reconcile` and `site reconcile` read), so it never
+    // appears in the generic flags map.
+    const apply = o.apply;
+    const mode = apply ? "--execute" : "--dry-run";
+    info(`${apply ? "" : "[preview] "}node reboot '${name}' → ${script} ${mode}`);
+
+    // stdio inherit: the operator watches the drain/reboot/failback live, and
+    // --execute prompts for confirmation in the script itself.
+    const r = spawnSync(script, [mode, name], { stdio: "inherit" });
+    const rc = r.status ?? -1;
+    if (rc !== 0) die(`reboot-node.sh exited ${rc}`);
+    return;
+  }
+
   die(`node ${sub}: unknown subcommand`);
+}
+
+// Locate cluster/reboot-node.sh. It is not on PATH and has no ~/bin symlink
+// (unlike most TAPPaaS tooling), so resolve it from the cluster module's
+// recorded location the same way update-tappaas resolves reboot-cluster.sh.
+function rebootNodeScript(): string | null {
+  const r = spawnSync("module-manager", ["show", "cluster", "--json"], { encoding: "utf8" });
+  if (r.status === 0 && r.stdout) {
+    try {
+      const loc = (JSON.parse(r.stdout) as Record<string, unknown>).location;
+      if (typeof loc === "string" && loc) {
+        const p = `${loc}/reboot-node.sh`;
+        if (existsSync(p)) return p;
+      }
+    } catch {
+      // fall through to the well-known path
+    }
+  }
+  const fallback = "/home/tappaas/TAPPaaS/src/foundation/cluster/reboot-node.sh";
+  return existsSync(fallback) ? fallback : null;
 }
 
 function collectPools(o: Opts, name: string): string[] {
