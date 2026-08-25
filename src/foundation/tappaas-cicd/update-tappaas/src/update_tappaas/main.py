@@ -22,6 +22,10 @@ from pathlib import Path
 
 CONFIG_PATH = Path("/home/tappaas/config/site.json")
 CONFIG_DIR = Path("/home/tappaas/config")
+# Journal-free outcome of the last REAL sweep (#506). The hourly no-op run exits
+# at the schedule gate before a sweep, so this file is never overwritten by a
+# no-op — unlike the systemd unit's Result, which the no-op clobbers to success.
+RESULT_PATH = CONFIG_DIR / "last-update-result.json"
 # The verb-aligned front door (ADR-007 #3/#5). `module module modify <m>` delegates
 # to update-module.sh, so behaviour is unchanged — we just stop calling the script
 # directly. Override for tests with MODULE_MANAGER_CMD.
@@ -559,6 +563,27 @@ def reboot_pass(automatic_reboot: bool, dry_run: bool) -> bool:
         return False
 
 
+# ── Result artefact ──────────────────────────────────────────────────
+
+
+def write_result_artifact(result: dict) -> None:
+    """Persist the outcome of a real sweep to a journal-free artefact (#506).
+
+    Written atomically (temp + replace) so a reader never sees a half-written
+    file. Only real sweeps reach the call site — a not-due hourly run exits at
+    the schedule gate first — so the file always reflects the last sweep that
+    actually ran. Query it with e.g. `jq .ok /home/tappaas/config/last-update-result.json`.
+    """
+    try:
+        tmp = RESULT_PATH.with_name(RESULT_PATH.name + ".tmp")
+        with open(tmp, "w") as f:
+            json.dump(result, f, indent=2)
+            f.write("\n")
+        os.replace(tmp, RESULT_PATH)
+    except OSError as e:
+        log.warning("Could not write result artefact %s: %s", RESULT_PATH, e)
+
+
 # ── Main ─────────────────────────────────────────────────────────────
 
 
@@ -709,6 +734,22 @@ def main():
         len(skipped_foundation) + len(skipped_apps),
         "ok" if reboot_ok else "failed",
     )
+
+    # Persist a journal-free result artefact (#506). This is the durable,
+    # queryable record of the last real sweep; the systemd unit's own Result is
+    # unreliable because the next hourly no-op run overwrites it with success.
+    write_result_artifact({
+        "start_time": start_time,
+        "end_time": end_time,
+        "forced": args.force,
+        "total": total,
+        "succeeded": succeeded,
+        "failed": len(failed_modules),
+        "failed_modules": failed_modules,
+        "skipped": len(skipped_foundation) + len(skipped_apps),
+        "reboot": "ok" if reboot_ok else "failed",
+        "ok": not failed_modules and reboot_ok,
+    })
 
     if failed_modules or not reboot_ok:
         if failed_modules:

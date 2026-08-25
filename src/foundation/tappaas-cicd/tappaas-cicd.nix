@@ -232,6 +232,12 @@ in
   # so journald (and Promtail → Loki) tag entries with the right severity.
   systemd.services.update-tappaas = {
     description = "TAPPaaS scheduler — update foundation and app modules";
+    # #506: a failed sweep must stay visible without reading the journal.
+    # main.py writes config/last-update-result.json on every real sweep, but a
+    # hard crash exits before that — and the hourly no-op run then clobbers this
+    # unit's Result back to success. OnFailure fires on ANY non-zero exit and
+    # leaves a durable breadcrumb the operator/monitoring can see.
+    unitConfig.OnFailure = "update-tappaas-failure.service";
     serviceConfig = {
       Type = "oneshot";
       User = "tappaas";
@@ -255,6 +261,25 @@ in
       ProtectKernelTunables = true;
       ProtectKernelModules = true;
       ProtectControlGroups = true;
+    };
+  };
+
+  # #506: OnFailure handler for update-tappaas.service. Appends a timestamped
+  # line to config/update-tappaas.failures and logs to the journal, so a failed
+  # (or crashed) sweep leaves a durable signal that the next hourly no-op run
+  # cannot erase. The authoritative detail is config/last-update-result.json.
+  systemd.services.update-tappaas-failure = {
+    description = "Surface a failed update-tappaas sweep (OnFailure handler, #506)";
+    serviceConfig = {
+      Type = "oneshot";
+      User = "tappaas";
+      ExecStart = pkgs.writeShellScript "update-tappaas-failure" ''
+        printf '%s update-tappaas.service FAILED — see config/last-update-result.json (journalctl -u update-tappaas for detail)\n' \
+          "$(${pkgs.coreutils}/bin/date -Is)" >> /home/tappaas/config/update-tappaas.failures
+        echo "update-tappaas sweep FAILED — see /home/tappaas/config/last-update-result.json" >&2
+      '';
+      ProtectSystem = "strict";
+      ReadWritePaths = [ "/home/tappaas/config" ];
     };
   };
 
