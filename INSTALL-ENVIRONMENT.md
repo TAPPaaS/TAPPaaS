@@ -100,9 +100,10 @@ reverse proxy). VLAN is auto-allocated in the type band unless you pass `--vlan`
 
 ## Step 2 — Public DNS
 
-Internal split-horizon DNS (so cluster clients reach Caddy over the DMZ rather
-than hair-pinning out the WAN) is handled **automatically** in Step 3/4 — you only
-need to set up the **public** records here. Point them at your firewall's WAN IP.
+Internal split-horizon DNS (so cluster clients reach Caddy on an internal
+firewall interface rather than hair-pinning out the WAN) is handled
+**automatically** in Step 3/4 — you only need to set up the **public** records
+here. Point them at your firewall's WAN IP.
 
 **Option A — wildcard record** (simplest; works with either cert mode):
 
@@ -141,7 +142,10 @@ acme-setup.sh --environment client1        # never use --staging (see #329)
 
 This issues the wildcard cert on the firewall, and **also** registers the
 split-horizon override `*.client1.tappaas.org → DMZ gateway` in **Unbound** so
-internal clients resolve the environment's services to the reverse proxy.
+internal clients resolve the environment's services to the reverse proxy. (A
+wildcard is a single Unbound "redirect" zone with one target, so it shares the
+DMZ gateway across all zones; per-service mode — Option B — is instead zone-aware,
+resolving each service to its own client-zone gateway.)
 
 **What this changes:** the wildcard cert lands in OPNsense Trust and an Unbound
 host override for `client1.tappaas.org → <DMZ gateway>` is created. The cert's
@@ -152,9 +156,13 @@ layer — it is **not** written into `environment.json`.
 
 Do **nothing** here. With `dnsMode=per-service`, each module's `firewall:proxy`
 install (Step 4) makes Caddy issue that domain's own certificate via Let's Encrypt
-**HTTP-01**, and registers a per-service Unbound split-horizon override
-(`nextcloud.client1.tappaas.org → DMZ gateway`). No `acme-setup.sh`, no DNS API —
-but the names must be publicly reachable on `:80`.
+**HTTP-01**, and registers a per-service Unbound split-horizon override pointing at
+the service's authorized **client-zone gateway** — the firewall interface on that
+zone's own subnet, so the request is self-traffic and crosses no inter-zone rule
+(`nextcloud.client1.tappaas.org → <client-zone gateway>`; ADR-005 §6, #504). It is
+deliberately **not** the DMZ gateway, which client zones such as `home`/`work`
+cannot reach. No `acme-setup.sh`, no DNS API — but the names must be publicly
+reachable on `:80`.
 
 ---
 
@@ -211,8 +219,10 @@ environment-manager list              # all environments at a glance
 # External (from anywhere): the client's public URL serves the app over HTTPS
 curl -fsSI https://nextcloud.client1.tappaas.org/ | head -1
 
-# Internal split-horizon: cluster clients resolve to the DMZ gateway, not the WAN
-getent hosts nextcloud.client1.tappaas.org      # -> the DMZ gateway IP
+# Internal split-horizon: clients resolve to an internal firewall interface, not
+# the WAN — per-service resolves to the client-zone gateway (#504); a wildcard
+# environment resolves to the shared DMZ gateway.
+getent hosts nextcloud.client1.tappaas.org      # -> an internal gateway IP, not the WAN
 ```
 
 Both `nextcloud-client1` and `euro-office-client1` VMs run in the `client1` zone,
