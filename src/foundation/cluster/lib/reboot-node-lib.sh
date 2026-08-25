@@ -66,6 +66,65 @@ rn_wait_for_node() {
     done
 }
 
+# True once <node> is a functioning CLUSTER MEMBER again, not merely reachable.
+#
+# rn_wait_for_node returns as soon as sshd answers with a new boot id, but sshd
+# starts early in boot while pve-cluster (pmxcfs), corosync and pve-ha-lrm come
+# up seconds later. `ha-manager` reads cluster state from /etc/pve, so any call
+# made in that window fails with:
+#
+#   no such cluster node '<node>'
+#
+# which is precisely how tappaas1 was left in maintenance mode for 13 hours on
+# 2026-08-25: the disable fired 3.4s before the node rejoined corosync, the
+# failure was only warned about, and the run reported reboot=ok. Same class as
+# #468 (sshd answering treated as readiness) one layer up, at node scope.
+#
+# The node's own LRM appearing in `ha-manager status` is the precondition for
+# the very command we are about to run, so it is what we test.
+rn_node_is_cluster_member() {
+    local node="$1"
+    rn_node_ssh "$node" "ha-manager status 2>/dev/null" 2>/dev/null \
+        | grep -qE "^lrm ${node} "
+}
+
+# True while <node>'s LRM reports maintenance mode.
+rn_node_in_maintenance() {
+    local node="$1"
+    rn_node_ssh "$node" "ha-manager status 2>/dev/null" 2>/dev/null \
+        | grep -qE "^lrm ${node} \(maintenance"
+}
+
+# Block until <node> is a cluster member again. Non-zero on timeout.
+rn_wait_cluster_member() {
+    local node="$1" max="${2:-${RN_CLUSTER_WAIT_MAX:-120}}" n=0
+    info "  Waiting for ${node} to rejoin the cluster..."
+    while :; do
+        rn_node_is_cluster_member "$node" && return 0
+        [[ $n -lt $max ]] || return 1
+        sleep 5; (( n+=5 ))
+    done
+}
+
+# Clear maintenance mode and CONFIRM it actually cleared.
+#
+# Two failure modes are covered. The command can be rejected outright (the race
+# above), and it can be accepted while the CRM has not yet applied it — the flag
+# clears a cycle or two later, so a bare exit status proves nothing. Re-issue
+# the command up to <tries> times, polling the flag between attempts.
+rn_disable_maintenance() {
+    local node="$1" tries="${2:-${RN_MAINT_DISABLE_TRIES:-3}}" i n out
+    for (( i=1; i<=tries; i++ )); do
+        out="$(rn_node_ssh "$node" "ha-manager crm-command node-maintenance disable ${node}" 2>&1)" || true
+        [[ -n "${out}" ]] && debug "    disable attempt ${i}/${tries}: ${out}"
+        for (( n=0; n<4; n++ )); do
+            rn_node_in_maintenance "$node" || return 0
+            sleep 5
+        done
+    done
+    return 1
+}
+
 # Currently-running kernel on a node.
 rn_running_kernel() { rn_node_ssh "$1" "uname -r" 2>/dev/null || true; }
 
@@ -231,6 +290,17 @@ reboot_one_node() {
     fi
     info "  ${GN}✓${CL} ${node} is back online"
 
+    # "Answers SSH" is not "is a cluster member" — see rn_node_is_cluster_member.
+    # Everything below this point talks to the HA stack, so gate on membership
+    # rather than reachability, or the maintenance-disable races the boot.
+    if ! rn_wait_cluster_member "$node"; then
+        error "${node} rebooted but did not rejoin the cluster within ${RN_CLUSTER_WAIT_MAX:-120}s"
+        error "  It is STILL IN MAINTENANCE MODE and excluded from HA placement. Investigate, then clear with:"
+        error "    ha-manager crm-command node-maintenance disable ${node}"
+        return 1
+    fi
+    info "  ${GN}✓${CL} ${node} rejoined the cluster"
+
     # Verify the new kernel is the one actually running.
     new_running=$(rn_running_kernel "$node")
     if [[ -z "$latest" ]]; then
@@ -245,9 +315,19 @@ reboot_one_node() {
     rn_sweep_cloudinit_orphans "$node"
 
     # Leave maintenance mode → HA migrates VMs back.
+    #
+    # This used to warn and continue, so a node that never left maintenance was
+    # reported as a successful reboot and silently sat out of the cluster — 13
+    # hours, in the case that prompted this. A node short of HA placement is a
+    # failed reboot, so say so and return non-zero.
     info "  Disabling HA maintenance mode..."
-    rn_node_ssh "$node" "ha-manager crm-command node-maintenance disable ${node}" \
-        || warn "Failed to disable maintenance mode on ${node} — run manually: ha-manager crm-command node-maintenance disable ${node}"
+    if ! rn_disable_maintenance "$node"; then
+        error "Could not clear maintenance mode on ${node} — it is still excluded from HA placement."
+        error "  The cluster is running one node short. Clear it with:"
+        error "    ha-manager crm-command node-maintenance disable ${node}"
+        return 1
+    fi
+    info "  ${GN}✓${CL} maintenance mode cleared"
 
     # Verify the failback actually converged. Without this the reboot reports
     # success while the CRM retries a failing migration forever (#146) — which
