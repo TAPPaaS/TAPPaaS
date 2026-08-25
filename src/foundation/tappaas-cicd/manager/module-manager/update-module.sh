@@ -437,16 +437,22 @@ main() {
     # still starting after the OnlyOffice connector was re-wired, and passed
     # when re-checked seconds later.
     #
-    # Same helper as the reboot sites, so the three cannot drift apart: a module
-    # with a ready.sh asserts real service health, otherwise its declared ports
-    # must accept. A timeout WARNS — "tests may be flaky", not "the update
-    # failed" — matching how the reboot callers treat it.
+    # hook-only: a module with a ready.sh asserts real service health; one
+    # without is not held up. The generic port fallback is the module's DECLARED
+    # surface, not a readiness contract — unifi-os declares UDP ports a TCP
+    # connect can never satisfy, network's 80/443 live on the firewall — so
+    # after EVERY apply it costs the full timeout and still proves nothing (both
+    # burned 180s here and then passed their own tests). The reboot callers keep
+    # the port fallback, where it is a reasonable "did the guest come back".
+    #
+    # A timeout WARNS — "tests may be flaky", not "the update failed" —
+    # matching how the reboot callers treat it.
     local ready_host ready_vm ready_zone
     ready_vm="$(read_module_config "${module}" | jq -r '.vmname // empty')"
     ready_zone="$(read_module_config "${module}" | jq -r '.zone0 // empty')"
     if [[ -n "${ready_vm}" && -n "${ready_zone}" ]]; then
         ready_host="${ready_vm}.${ready_zone}.internal"
-        wait_for_module_ready "${module}" "${ready_host}" 180 \
+        wait_for_module_ready "${module}" "${ready_host}" 180 hook-only \
             || warn "  '${module}' not ready after apply — post-update tests may see a starting service"
     else
         debug "  no vmname/zone0 for '${module}' — skipping the post-apply readiness gate"

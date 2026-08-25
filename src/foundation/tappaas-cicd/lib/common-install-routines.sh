@@ -1047,16 +1047,37 @@ function module_ready_ports() {
 # Returns 0 when ready, 1 on timeout. Callers WARN rather than die: a readiness
 # timeout means "tests may be flaky", not "the update failed".
 #
-# Usage: wait_for_module_ready <module> <vm_ip> [timeout_seconds]
+# <mode> selects which strategies are eligible:
+#   any       (default) ready.sh if present, else the declared ports.
+#   hook-only ready.sh if present, otherwise report ready immediately.
+#
+# hook-only exists because the port fallback is not a "can this module serve"
+# test at the granularity some callers need. `ports` is the module's DECLARED
+# surface, not its readiness contract: unifi-os declares 3478/UDP and
+# 10001/UDP, which a TCP connect can never satisfy, so the probe cannot pass at
+# all; network's 80/443 are Caddy on the firewall rather than sockets the VM
+# holds. On the reboot paths that rarely bites because everything has settled by
+# then, but a caller that runs after EVERY apply pays the full timeout for a
+# check that was never going to succeed (#509: two modules burned 180s each and
+# then passed their own tests). Modules that need the guarantee ship a ready.sh;
+# hook-only callers should not block on the rest.
+#
+# Usage: wait_for_module_ready <module> <vm_ip> [timeout_seconds] [mode]
 function wait_for_module_ready() {
   local module="$1"
   local vm_ip="$2"
   local max_wait="${3:-180}"
+  local mode="${4:-any}"
   local waited=0 interval=5
 
   local module_dir="" ready_hook=""
   module_dir="$(get_module_dir "${module}" 2>/dev/null)" || module_dir=""
   [[ -n "${module_dir}" && -f "${module_dir}/ready.sh" ]] && ready_hook="${module_dir}/ready.sh"
+
+  if [[ -z "${ready_hook}" && "${mode}" == "hook-only" ]]; then
+    debug "  '${module}' declares no ready.sh — nothing to assert (hook-only)"
+    return 0
+  fi
 
   if [[ -n "${ready_hook}" ]]; then
     info "Waiting for '${module}' to report ready (${ready_hook})..."
