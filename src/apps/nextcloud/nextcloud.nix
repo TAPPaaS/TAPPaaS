@@ -85,11 +85,12 @@ let
   ncProxyDomain = ncProxyCfg.proxyDomain or (moduleCfg.proxyDomain or "");
   ncInternalFqdn = if ncZone0 != "" then "${ncVmName}.${ncZone0}.internal" else "";
 
-  # hostName first: nextcloud-setup.service writes it to index 0 on every boot,
-  # so keeping it here means the declared list and the boot-time write agree.
+  # hostName is deliberately NOT listed: the NixOS nextcloud module prepends
+  # services.nextcloud.hostName to whatever settings.trusted_domains declares,
+  # so including it here yields a duplicate index (observed: nextcloud,
+  # nextcloud, <fqdn>, <domain>). Contribute only what the module does not.
   ncTrustedDomains = lib.unique (
-    [ ncVmName ]
-    ++ lib.optional (ncInternalFqdn != "") ncInternalFqdn
+    lib.optional (ncInternalFqdn != "") ncInternalFqdn
     ++ lib.optional (ncProxyDomain != "") ncProxyDomain
   );
 
