@@ -289,6 +289,77 @@ EOF
   '';
 
   # ----------------------------------------
+  # Authentik OIDC integration (ADR-006)
+  # ----------------------------------------
+  # identity:identity (see openwebui.json's "identity" block) writes generic
+  # OIDC_CLIENT_ID / OIDC_CLIENT_SECRET / OIDC_DISCOVERY_URI into
+  # /etc/secrets/openwebui.env (the same file openwebui-wrapper already reads
+  # as its --env-file) and restarts this service by TAPPaaS convention
+  # (<module>-configure-oidc.service). OpenWebUI itself expects different
+  # variable names (OAUTH_*/OPENID_*), so this translates and merges them into
+  # the SAME file, preserving the other co-managed keys (WEBUI_SECRET_KEY,
+  # DATABASE_URL, …), then restarts the container so it picks them up.
+  #
+  # Admin mapping: identity:identity's "groups" claim (a TAPPaaS-wide scope
+  # mapping, ADR-006) carries the user's Authentik group names — members of
+  # the module-admin group `openwebui-admins` (created because openwebui.json
+  # sets identity.providesAdminRole=true) land in Open WebUI's own admin role.
+  systemd.services.openwebui-configure-oidc = {
+    description = "Configure Authentik OIDC login in OpenWebUI";
+    wantedBy    = [ "multi-user.target" ];
+    after       = [ "generate-openwebui-secrets.service" ];
+    # Deliberately no `before = [ "openwebui-wrapper.service" ]`: this unit's
+    # own ExecStart restarts openwebui-wrapper.service (to pick up new OIDC
+    # vars). Ordering it before the wrapper would deadlock — systemd won't
+    # start the wrapper until this unit exits, but this unit is itself
+    # waiting on that same wrapper-start job to complete (#observed 2026-08-25:
+    # openwebui-configure-oidc stuck "activating" with `systemctl try-restart
+    # openwebui-wrapper.service` hung as its child, wrapper left inactive).
+
+    serviceConfig = {
+      Type            = "oneshot";
+      RemainAfterExit = true;
+      ExecStart = pkgs.writeShellScript "openwebui-configure-oidc" ''
+        set -euo pipefail
+        ENV_FILE=/etc/secrets/openwebui.env
+
+        if ! ${pkgs.gnugrep}/bin/grep -q '^OIDC_CLIENT_ID=' "$ENV_FILE" 2>/dev/null; then
+          echo "No Authentik OIDC credentials in $ENV_FILE yet — skipping (identity:identity hasn't wired this module)."
+          exit 0
+        fi
+
+        CLIENT_ID="$(${pkgs.gnugrep}/bin/grep '^OIDC_CLIENT_ID=' "$ENV_FILE" | cut -d= -f2-)"
+        CLIENT_SECRET="$(${pkgs.gnugrep}/bin/grep '^OIDC_CLIENT_SECRET=' "$ENV_FILE" | cut -d= -f2-)"
+        DISCOVERY_URI="$(${pkgs.gnugrep}/bin/grep '^OIDC_DISCOVERY_URI=' "$ENV_FILE" | cut -d= -f2-)"
+
+        umask 077
+        TMP="$(${pkgs.coreutils}/bin/mktemp /etc/secrets/.openwebui-oidc.XXXXXX)"
+        ${pkgs.gnugrep}/bin/grep -vE '^(ENABLE_OAUTH|ENABLE_OAUTH_SIGNUP|OAUTH_AUTO_REDIRECT|OAUTH_CLIENT_ID|OAUTH_CLIENT_SECRET|OPENID_PROVIDER_URL|OPENID_REDIRECT_URI|OAUTH_PROVIDER_NAME|OAUTH_SCOPES|OAUTH_MERGE_ACCOUNTS_BY_EMAIL|ENABLE_OAUTH_ROLE_MANAGEMENT|OAUTH_ROLES_CLAIM|OAUTH_ALLOWED_ROLES|OAUTH_ADMIN_ROLES)=' "$ENV_FILE" > "$TMP" || true
+        cat >> "$TMP" <<EOF
+ENABLE_OAUTH=true
+ENABLE_OAUTH_SIGNUP=true
+OAUTH_AUTO_REDIRECT=true
+OAUTH_CLIENT_ID=$CLIENT_ID
+OAUTH_CLIENT_SECRET=$CLIENT_SECRET
+OPENID_PROVIDER_URL=$DISCOVERY_URI
+OAUTH_PROVIDER_NAME=Authentik
+OAUTH_SCOPES=openid email profile groups
+OAUTH_MERGE_ACCOUNTS_BY_EMAIL=true
+ENABLE_OAUTH_ROLE_MANAGEMENT=true
+OAUTH_ROLES_CLAIM=groups
+OAUTH_ALLOWED_ROLES=users,openwebui-admins
+OAUTH_ADMIN_ROLES=openwebui-admins
+EOF
+        chmod 600 "$TMP"
+        mv -f "$TMP" "$ENV_FILE"
+
+        echo "OpenWebUI OIDC login configured."
+        ${pkgs.systemd}/bin/systemctl try-restart openwebui-wrapper.service || true
+      '';
+    };
+  };
+
+  # ----------------------------------------
   # Data directories
   # ----------------------------------------
   systemd.tmpfiles.rules = [

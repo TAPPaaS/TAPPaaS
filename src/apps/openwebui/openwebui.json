@@ -16,10 +16,16 @@
     "backup:vm",
     "network:proxy",
     "litellm:models",
-    "network:rules"
+    "network:rules",
+    "identity:identity"
   ],
   "provides": [],
   "appVersion": "0.10.2",
+  "identity": {
+    "providesAdminRole": true,
+    "oidcRedirectPaths": ["/oauth/oidc/callback"],
+    "scopes": ["openid", "email", "profile", "groups"]
+  },
   "config": {
     "cluster:vm": {
       "cores": 2,
@@ -31,10 +37,7 @@
       "bridge0": "lan"
     },
     "network:proxy": {
-      "proxyPort": 8080,
-      "proxyAllowedZones": [
-        "home"
-      ]
+      "proxyPort": 8080
     }
   }
 }

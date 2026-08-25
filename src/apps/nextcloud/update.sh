@@ -76,6 +76,17 @@ apply_domain_config() {
          sudo nextcloud-occ config:system:set overwrite.cli.url --value='https://${domain}' && \
          sudo nextcloud-occ config:system:set overwriteprotocol --value='https'" >/dev/null 2>&1 \
         || true
+
+    # Persist the same two values on the VM so nextcloud-configure-trusted-domains.service
+    # (nextcloud.nix) can re-apply them on every future boot/rebuild, not just this one —
+    # closing the "rebuild without a following update.sh" gap (see DESIGN.md).
+    ssh -o BatchMode=yes -o ConnectTimeout=15 -o StrictHostKeyChecking=no \
+        "tappaas@${host}" \
+        "printf 'NEXTCLOUD_INTERNAL_HOST=%s\nNEXTCLOUD_PUBLIC_DOMAIN=%s\n' '${host}' '${domain}' \
+           | sudo tee /etc/secrets/nextcloud-domain.env > /dev/null \
+         && sudo chmod 600 /etc/secrets/nextcloud-domain.env \
+         && sudo chown root:root /etc/secrets/nextcloud-domain.env" >/dev/null 2>&1 \
+        || true
 }
 
 # Converge trusted domains + public URL. Idempotent: fixed indices, same values.

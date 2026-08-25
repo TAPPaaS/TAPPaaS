@@ -9,7 +9,7 @@
   "vmid": 340,
   "vmtag": "TAPPaaS,App",
   "node": "tappaas1",
-  "zone0": "srv",
+  "zone0": "srvWork",
   "dependsOn": [
     "cluster:vm",
     "templates:nixos",
@@ -23,7 +23,7 @@
   ],
   "egress": [
     {
-      "to": "home",
+      "to": "srvHome",
       "ports": [
         443
       ],

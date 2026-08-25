@@ -45,13 +45,21 @@ config-derived at deploy time.
 `overwriteprotocol=https` via `nextcloud-occ`. `install.sh` sources `update.sh` and calls the same
 function once the VM is up. `localhost` is not written: loopback is always trusted.
 
-**These occ values do not survive a NixOS rebuild.** Nix does not pin `trusted_domains`, but a
-rebuild rewrites `/var/lib/nextcloud/config/config.php` and the occ-set keys are lost. That is why
-the converge lives in `update.sh` rather than `install.sh`: `update-module.sh` runs the dependency
-updaters — including the `templates:nixos` rebuild — *before* the module's `update.sh`, so the
-domain is restored after every rebuild on the sanctioned update path. A path that rebuilds without
-running `update.sh` afterwards leaves the instance answering HTTP 400 "Access through untrusted
-domain" on its declared public route.
+**These occ values do not survive a NixOS rebuild by themselves.** Nix does not pin
+`trusted_domains`, and a rebuild rewrites `/var/lib/nextcloud/config/config.php`, losing the
+occ-set keys. That is why the converge lives in `update.sh` rather than `install.sh`:
+`update-module.sh` runs the dependency updaters — including the `templates:nixos` rebuild —
+*before* the module's `update.sh`, so the domain is restored after every rebuild on the sanctioned
+update path.
+
+To close the gap for rebuilds that happen *outside* that path (an OS auto-update, a manual
+`nixos-rebuild`, a `--force` run whose post-step never got to run), `apply_domain_config()` also
+writes the resolved internal FQDN and public domain to `/etc/secrets/nextcloud-domain.env` on the
+VM. The declarative `nextcloud-configure-trusted-domains.service` (`nextcloud.nix`) reads that file
+and re-applies the same `occ` calls after `nextcloud-setup.service` on *every* boot — the same
+self-healing pattern used for the HPB signaling config (`nextcloud-configure-hpb`). A rebuild that
+never went through `update.sh` still self-heals on its own next boot, once the env file has been
+written at least once.
 
 The write is verified by reading `config.php` back, and the converge fails if the value is absent.
 `nextcloud-occ` exits 0 over a non-TTY SSH session while relaying no output at all, so its exit

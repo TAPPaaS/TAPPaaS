@@ -439,6 +439,46 @@ in
     requires = [ "postgresql.service" "redis-nextcloud.service" ];
   };
 
+  # ── Trusted domains + public URL (survives every rebuild) ────────────────
+  # nextcloud-setup.service (NixOS-native, runs above) resets trusted_domains
+  # to just the bare hostName on EVERY rebuild — occ-set values do not survive
+  # it. Previously the only thing that re-added the internal FQDN + public
+  # domain was update.sh, run externally by update-module.sh AFTER the rebuild.
+  # Any rebuild that skipped that step (an OS auto-update, a manual
+  # nixos-rebuild, a --force run whose post-step failed) left the instance
+  # answering HTTP 400 "Access through untrusted domain" until someone next
+  # ran the full TAPPaaS update pipeline.
+  #
+  # Same self-healing pattern as nextcloud-configure-hpb below: update.sh/
+  # install.sh write the two values into /etc/secrets/nextcloud-domain.env on
+  # the VM (in addition to applying them immediately over SSH), and this
+  # service re-asserts them from that file on every boot — independent of
+  # whether the external orchestrator runs afterward.
+  systemd.services.nextcloud-configure-trusted-domains = {
+    description = "Configure Nextcloud trusted_domains + public URL";
+    wantedBy    = [ "multi-user.target" ];
+    after       = [ "nextcloud-setup.service" ];
+
+    unitConfig.ConditionPathExists = "/etc/secrets/nextcloud-domain.env";
+
+    serviceConfig = {
+      Type            = "oneshot";
+      RemainAfterExit = true;
+      EnvironmentFile = "/etc/secrets/nextcloud-domain.env";
+      ExecStart = pkgs.writeShellScript "nextcloud-configure-trusted-domains" ''
+        set -euo pipefail
+        export PATH="/run/current-system/sw/bin:${pkgs.coreutils}/bin:$PATH"
+
+        nextcloud-occ config:system:set trusted_domains 1 --value="$NEXTCLOUD_INTERNAL_HOST"
+        nextcloud-occ config:system:set trusted_domains 2 --value="$NEXTCLOUD_PUBLIC_DOMAIN"
+        nextcloud-occ config:system:set overwrite.cli.url --value="https://$NEXTCLOUD_PUBLIC_DOMAIN"
+        nextcloud-occ config:system:set overwriteprotocol --value="https"
+
+        echo "Trusted domains + public URL configured ($NEXTCLOUD_INTERNAL_HOST, $NEXTCLOUD_PUBLIC_DOMAIN)."
+      '';
+    };
+  };
+
   # ============================================================================
   # AUTHENTIK OIDC INTEGRATION
   # ============================================================================
@@ -504,6 +544,11 @@ in
           --mapping-groups="groups" \
           --check-bearer=1 \
           --send-id-token-hint=1
+
+        # Auto-redirect straight to Authentik instead of showing Nextcloud's own
+        # login form first — safe because Authentik is the only login backend
+        # configured here. Bypass: https://<domain>/login?direct=1
+        nextcloud-occ config:app:set --type=string --value=0 user_oidc allow_multiple_user_backends
 
         echo "Authentik OIDC provider configured successfully."
       '';
