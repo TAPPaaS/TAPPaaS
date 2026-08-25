@@ -463,6 +463,25 @@ dmz_gateway_ip() {
     printf '%s\n' "${gw}"
 }
 
+# Prune a stale per-service Unbound host override (#505). Deletes only the
+# specific <host>.<zone> record — never the shared '*' wildcard, which is owned
+# by acme-setup — and is a harmless no-op when the record is absent. Used when a
+# wildcard now covers <host>.<zone>, so a lingering per-service record is
+# redundant and, inside a wildcard "redirect" zone, FATAL to Unbound (#474):
+# a redirect zone permits local-data only at the apex. Nothing else pruned these
+# overrides on a mode change, so they stranded until manual teardown (#505).
+#   unbound_prune_host_override <host> <zone>
+unbound_prune_host_override() {
+    local host="$1" zone="$2"
+    [[ -z "${host}" || "${host}" == "*" ]] && return 0
+    if unbound-manager --no-ssl-verify list 2>/dev/null \
+         | awk -v h="${host}" -v z="${zone}" '$1==h && $2==z {f=1} END{exit !f}'; then
+        debug "  Pruning stale per-service Unbound override ${host}.${zone}..."
+        unbound-manager --no-ssl-verify delete "${host}" "${zone}" >/dev/null 2>&1 \
+            || warn "  Could not prune Unbound override ${host}.${zone} (may not exist)"
+    fi
+}
+
 # Resolve a dependency's provider module name, honoring same-environment
 # preference (#292, ADR-005 §4; environment-driven since #438). Given a bare
 # provider name and the CONSUMING module's environment, prefer an installed

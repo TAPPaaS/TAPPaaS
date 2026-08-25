@@ -326,6 +326,20 @@ else
     skip "lib/test-ha-vm-lib.sh not found"
 fi
 
+# Test 9e: stale per-service Unbound override pruning (#505) — a wildcard now
+# covering a host must have any leftover per-service <host>.<zone> record pruned,
+# without ever deleting the shared '*' wildcard. Stubbed unbound-manager only.
+info "${BOLD}Test 9e: Unbound stale per-service override pruning (#505)${CL}"
+if [[ -x "${SCRIPT_DIR}/lib/test-unbound-prune.sh" ]]; then
+    if "${SCRIPT_DIR}/lib/test-unbound-prune.sh" >/dev/null 2>&1; then
+        pass "unbound-prune: prunes stale <host>.<zone>, never the '*' wildcard"
+    else
+        fail "unbound-prune test failed (run lib/test-unbound-prune.sh)"
+    fi
+else
+    skip "lib/test-unbound-prune.sh not found"
+fi
+
 # update-module.sh wires cleanup into the success path (prune_snapshots calls
 # snapshot-vm.sh --cleanup); guard against the wiring silently disappearing.
 if grep -q 'snapshot-vm.sh.*--cleanup' /home/tappaas/bin/update-module.sh; then

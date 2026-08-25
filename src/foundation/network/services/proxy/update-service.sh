@@ -182,6 +182,9 @@ if [[ "${DNS_MODE}" == "per-service" ]]; then
         if unbound-manager --no-ssl-verify list 2>/dev/null \
              | awk -v z="${DNS_ZONE}" '$1=="*" && $2==z {f=1} END{exit !f}'; then
             debug "  ${GN}✓${CL} wildcard *.${DNS_ZONE} already covers ${DNS_HOST}.${DNS_ZONE} — skipping per-service override"
+            # #505: a wildcard covers this host, so any per-service record here is
+            # stale and collides with the redirect zone — prune it if present.
+            unbound_prune_host_override "${DNS_HOST}" "${DNS_ZONE}"
         elif unbound-manager --no-ssl-verify add "${DNS_HOST}" "${DNS_ZONE}" "${DMZ_GW}" --description "${DESCRIPTION}"; then
             debug "  ${GN}✓${CL} split-horizon DNS ${DNS_HOST}.${DNS_ZONE} -> ${DMZ_GW} (DMZ, Unbound)"
         else
@@ -192,6 +195,12 @@ if [[ "${DNS_MODE}" == "per-service" ]]; then
         warn "  Could not derive DMZ gateway — register ${PROXY_DOMAIN} DNS manually"
     fi
 else
+    # #505: this module resolves to wildcard TLS. If it previously ran under
+    # per-service mode it left a per-service Unbound override behind; the wildcard
+    # *.<zone> now resolves <host>.<zone>, so that record is stale and — inside a
+    # redirect zone — FATAL to Unbound (#474). Nothing pruned it on the mode flip
+    # until now. Prune it here (never the shared '*' wildcard).
+    unbound_prune_host_override "${PROXY_DOMAIN%%.*}" "${PROXY_DOMAIN#*.}"
     # Prefer the env's refid from get_variant_config (cert-refids.json), then the
     # runtime cert-refids.json directly, then the legacy global configuration.json.
     TLS_CERT_REFID=$(jq -r '.tlsCertRefid // ""' <<<"${VCFG}")

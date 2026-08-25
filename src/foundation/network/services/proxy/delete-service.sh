@@ -135,19 +135,13 @@ if [[ -n "${PROXY_DOMAIN}" ]]; then
     caddy-manager delete-domain "${PROXY_DOMAIN}" \
         --no-ssl-verify || warn "Could not delete domain ${PROXY_DOMAIN}"
 
-    # Per-service split-horizon DNS cleanup (ADR-005 §6, #269). Only per-service
-    # mode created a per-module Dnsmasq entry; wildcard mode shares one entry
-    # owned by acme-setup, so we must NOT remove that here. Deleting a
-    # non-existent host is a harmless no-op.
-    ENVIRONMENT=$(get_config_value 'environment' '' 2>/dev/null || echo '')
-    VCFG="$(get_variant_config "${ENVIRONMENT}" 2>/dev/null || echo '{}')"
-    if [[ "$(jq -r '.dnsMode // "per-service"' <<<"${VCFG}")" == "per-service" ]]; then
-        DNS_HOST="${PROXY_DOMAIN%%.*}"
-        DNS_ZONE="${PROXY_DOMAIN#*.}"
-        debug "  Removing per-service Unbound override ${DNS_HOST}.${DNS_ZONE}..."
-        unbound-manager --no-ssl-verify delete "${DNS_HOST}" "${DNS_ZONE}" >/dev/null 2>&1 \
-            || warn "Could not remove Unbound override ${DNS_HOST}.${DNS_ZONE} (may not exist)"
-    fi
+    # Per-service split-horizon DNS cleanup (ADR-005 §6, #269). #505: this used
+    # to be gated on the *current* dnsMode, so an override created under
+    # per-service mode was stranded once the environment later flipped to
+    # wildcard. Removal is unconditional now — we delete only the specific
+    # <host>.<zone> record, never the shared '*' wildcard (owned by acme-setup),
+    # and deleting a non-existent host is a harmless no-op.
+    unbound_prune_host_override "${PROXY_DOMAIN%%.*}" "${PROXY_DOMAIN#*.}"
 else
     warn "Cannot determine proxy domain — manual cleanup may be needed"
 fi
