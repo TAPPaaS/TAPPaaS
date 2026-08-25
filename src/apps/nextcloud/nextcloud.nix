@@ -71,6 +71,28 @@ let
     };
   };
 
+  # ── trusted_domains, derived from the module config (#508) ────────────────
+  # Same companion JSON the hostName below reads: update-os.sh deploys it to
+  # /etc/nixos/nextcloud.json, and it carries the site's proxyDomain and zone —
+  # so the public domain IS available declaratively, which the old comment here
+  # assumed it was not.
+  moduleCfg = if builtins.pathExists ./nextcloud.json
+              then builtins.fromJSON (builtins.readFile ./nextcloud.json)
+              else {};
+  ncVmName      = moduleCfg.vmname or "nextcloud";
+  ncZone0       = moduleCfg.zone0 or "";
+  ncProxyCfg    = (moduleCfg.config or {})."network:proxy" or {};
+  ncProxyDomain = ncProxyCfg.proxyDomain or (moduleCfg.proxyDomain or "");
+  ncInternalFqdn = if ncZone0 != "" then "${ncVmName}.${ncZone0}.internal" else "";
+
+  # hostName first: nextcloud-setup.service writes it to index 0 on every boot,
+  # so keeping it here means the declared list and the boot-time write agree.
+  ncTrustedDomains = lib.unique (
+    [ ncVmName ]
+    ++ lib.optional (ncInternalFqdn != "") ncInternalFqdn
+    ++ lib.optional (ncProxyDomain != "") ncProxyDomain
+  );
+
 in
 {
   # ============================================================================
@@ -401,12 +423,26 @@ in
       # Required for Authentik (same srv zone) to be reachable as OIDC provider
       allow_local_remote_servers = true;
 
-      # trusted_domains: deliberately NOT pinned in Nix. The NixOS module auto-adds the hostName;
-      # install.sh appends the internal FQDN, the environment/public domain, and localhost via
-      # nextcloud-occ. Pinning a list here writes override.config.php, which SHADOWS occ-set values
-      # — so the environment/public domain would never become trusted (operator cannot log in via
-      # the site domain). TODO: propagate the environment domain declaratively (ADR-007
-      # Environment.domain → module), then this can move back to Nix.
+      # trusted_domains: pinned here, derived from the module config above (#508).
+      #
+      # It used to be left to nextcloud-occ on the grounds that the public domain
+      # was not available declaratively. It is — the companion JSON deployed to
+      # /etc/nixos/nextcloud.json carries proxyDomain and zone0, and the hostName
+      # a few lines up already reads that same file.
+      #
+      # Leaving it imperative meant nextcloud-setup.service, which runs on EVERY
+      # boot, reset the list to just the hostName:
+      #
+      #   System config value trusted_domains => 0 set to string nextcloud
+      #
+      # wiping the public domain and internal FQDN, so every reboot of this VM
+      # answered HTTP 400 "Access through untrusted domain" on the site domain
+      # until the next update-tappaas run happened to converge it (observed
+      # 2026-08-25, twice). Pinning it writes override.config.php, which takes
+      # precedence over config.php — so the boot-time reset becomes harmless
+      # rather than an outage. That shadowing was the original objection to
+      # pinning; it is exactly what makes this correct.
+      trusted_domains = ncTrustedDomains;
 
       # trusted_proxies: Caddy runs on the OPNsense firewall which holds the
       # gateway IP of every TAPPaaS zone (10.x.y.1). Including 10.0.0.0/8
