@@ -426,6 +426,32 @@ main() {
     fi
     debug "  ${GN}✓${CL} reconcile --apply converged"
 
+    # ── Step 5.5: Wait for the module to be able to serve again (#509) ──
+    #
+    # The apply above can restart the module's services — a dependency's
+    # update-service.sh re-wiring an integration, or the module's own update.sh
+    # — and the post-update tests run immediately after. Readiness was only ever
+    # gated on the REBOOT paths (cluster:vm subnet change, update-os), so a
+    # restart triggered mid-apply had no gate at all: euro-office failed its own
+    # /healthcheck with HTTP 502 on 2026-08-25 while the DocumentServer was
+    # still starting after the OnlyOffice connector was re-wired, and passed
+    # when re-checked seconds later.
+    #
+    # Same helper as the reboot sites, so the three cannot drift apart: a module
+    # with a ready.sh asserts real service health, otherwise its declared ports
+    # must accept. A timeout WARNS — "tests may be flaky", not "the update
+    # failed" — matching how the reboot callers treat it.
+    local ready_host ready_vm ready_zone
+    ready_vm="$(read_module_config "${module}" | jq -r '.vmname // empty')"
+    ready_zone="$(read_module_config "${module}" | jq -r '.zone0 // empty')"
+    if [[ -n "${ready_vm}" && -n "${ready_zone}" ]]; then
+        ready_host="${ready_vm}.${ready_zone}.internal"
+        wait_for_module_ready "${module}" "${ready_host}" 180 \
+            || warn "  '${module}' not ready after apply — post-update tests may see a starting service"
+    else
+        debug "  no vmname/zone0 for '${module}' — skipping the post-apply readiness gate"
+    fi
+
     # ── Step 6: Post-update test ──────────────────────────────────────
     info "${BOLD}Update Step 6: Run post-update tests: ${BL}${module}${CL}"
 

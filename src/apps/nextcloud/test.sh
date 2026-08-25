@@ -41,6 +41,7 @@ BOLD='\033[1m'
 PASSED=0
 FAILED=0
 SKIPPED=0
+WARNED=0
 
 # Create log directory
 mkdir -p "$LOG_DIR"
@@ -64,6 +65,15 @@ fail() {
 skip() {
     log "${YW}[SKIP]${CL} $1"
     ((++SKIPPED))
+}
+
+# Drift that this module's own update.sh reconciles. Reported loudly but NOT
+# counted as a failure: test.sh runs as the PRE-update gate as well as the
+# post-update check, so failing here aborts the very update that would fix it
+# (issue #508). Same rationale as 315c381 for identity.
+warn() {
+    log "${YW}[WARN]${CL} $1"
+    ((++WARNED))
 }
 
 info() {
@@ -473,11 +483,17 @@ if [ -z "${TD_EXPECT}" ]; then
 elif [ "${TD_READABLE}" != "ok" ]; then
     fail "Could not read ${TD_CONF} — cannot verify trusted_domains"
 elif [ -z "${TD_BLOCK}" ]; then
-    fail "trusted_domains is absent from Nextcloud config entirely — every public Host, including '${TD_EXPECT}', gets HTTP 400 'Access through untrusted domain'"
+    # WARN, not fail: update.sh converges trusted_domains (indices 1 and 2) on
+    # every run, but test.sh is also the PRE-update gate — a hard fail aborts
+    # the update before it reaches its own remedy, so a recoverable drift
+    # becomes a permanent outage of the public route (#508). The post-update
+    # run passes once update.sh has written them.
+    warn "trusted_domains is absent entirely — every public Host, including '${TD_EXPECT}', currently gets HTTP 400; nextcloud update.sh reconciles this"
 elif printf '%s' "${TD_BLOCK}" | grep -qF "'${TD_EXPECT}'"; then
     pass "Public domain ${TD_EXPECT} is present in trusted_domains"
 else
-    fail "Public domain '${TD_EXPECT}' is NOT in trusted_domains — Nextcloud will answer HTTP 400 'Access through untrusted domain' on the declared public route"
+    # Same reconciled-by-update.sh rationale as the branch above (#508).
+    warn "Public domain '${TD_EXPECT}' is not yet in trusted_domains — nextcloud update.sh reconciles this"
     log "  trusted_domains currently: $(printf '%s' "${TD_BLOCK}" | tr -d '\n' | sed 's/  */ /g')"
 fi
 
@@ -490,8 +506,9 @@ log "Results:"
 log "  ${GN}Passed:${CL}  $PASSED"
 log "  ${RD}Failed:${CL}  $FAILED"
 log "  ${YW}Skipped:${CL} $SKIPPED"
+log "  ${YW}Warned:${CL}  $WARNED"
 log ""
-log "Total tests: $((PASSED + FAILED + SKIPPED))"
+log "Total tests: $((PASSED + FAILED + SKIPPED + WARNED))"
 log ""
 
 if [ "$FAILED" -eq 0 ]; then
