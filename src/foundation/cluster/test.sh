@@ -149,6 +149,20 @@ else
     fail "lib/test-vm-net.sh not found or not executable"
 fi
 
+# reboot_one_node drain-timeout must disable HA maintenance mode, not strand the
+# node (#507). Stubbed cluster calls; no ssh/Proxmox.
+info "${BOLD}Test 2b: reboot-node-lib drain-timeout HA maintenance (#507)${CL}"
+if [[ -x "${SCRIPT_DIR}/lib/test-reboot-node-lib.sh" ]]; then
+    if rn_out=$("${SCRIPT_DIR}/lib/test-reboot-node-lib.sh" 2>&1); then
+        pass "$(tail -1 <<< "${rn_out}")"
+    else
+        fail "reboot-node-lib unit tests failed"
+        indent <<< "${rn_out}"
+    fi
+else
+    fail "lib/test-reboot-node-lib.sh not found or not executable"
+fi
+
 # ── Test 3: drift --check against an installed VM (read-only) ───────
 
 info "${BOLD}Test 3: Drift reconciler --check (read-only)${CL}"

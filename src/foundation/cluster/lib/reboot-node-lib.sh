@@ -203,6 +203,16 @@ reboot_one_node() {
         sleep 5; (( local_wait+=5 ))
         if [[ $local_wait -ge 120 ]]; then
             error "HA migration timeout on ${node} after 120s"
+            # #507: the reboot has NOT happened yet, so the VMs are still on this
+            # node — restore the pre-attempt HA state rather than stranding it in
+            # maintenance. Leaving it on here is how a CPU-heterogeneous cluster
+            # (guests pinned to cputype host, HA unable to live-migrate) accrues a
+            # stuck maintenance flag on every reboot attempt. Unlike the
+            # post-reboot-unreachable path below, keeping maintenance here buys
+            # nothing: the node never went down.
+            info "  Disabling HA maintenance mode (drain timed out; node not rebooted)..."
+            rn_node_ssh "$node" "ha-manager crm-command node-maintenance disable ${node}" \
+                || warn "  Could not disable maintenance mode on ${node} — run manually: ha-manager crm-command node-maintenance disable ${node}"
             return 1
         fi
     done
