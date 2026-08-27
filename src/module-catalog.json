@@ -95,6 +95,17 @@
   ],
   "applicationModules": [
     {
+      "moduleName": "hass",
+      "repo": "application",
+      "moduleJson": "src/apps/hass/hass.json",
+      "vmid": 210,
+      "stack": "home-automation",
+      "category": "automation",
+      "status": "beta",
+      "tier": "app",
+      "source": "official"
+    },
+    {
       "moduleName": "litellm",
       "repo": "application",
       "moduleJson": "src/apps/litellm/litellm.json",
