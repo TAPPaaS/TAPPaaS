@@ -411,6 +411,9 @@ main() {
                 local tmp_file
                 tmp_file=$(mktemp)
 
+                local field_type
+                field_type=$(get_field_type "${field}")
+
                 if should_be_number "${field}" "${value}"; then
                     # Validate it's actually a valid integer
                     if ! [[ "${value}" =~ ^-?[0-9]+$ ]]; then
@@ -418,6 +421,21 @@ main() {
                         die "Field '${field}' expects an integer, got '${value}'"
                     fi
                     # Store as number
+                    if ! jq --arg f "${field}" --argjson v "${value}" '.[$f] = $v' "${dest_json}" > "${tmp_file}"; then
+                        rm -f "${tmp_file}"
+                        die "Failed to update field '${field}' with value '${value}'"
+                    fi
+                elif [[ "${field_type}" == "array" || "${field_type}" == "object" ]]; then
+                    # Structured field (dependsOn, provides, config, ports, …): the
+                    # value is a JSON literal applied verbatim via --argjson, so it
+                    # lands as a real array/object — NOT the stringified scalar that
+                    # --arg would produce (which silently corrupts the config and
+                    # breaks every downstream `jq '.dependsOn[]'`). Validate it parses
+                    # AND matches the declared type before writing.
+                    if ! printf '%s' "${value}" | jq -e "type == \"${field_type}\"" >/dev/null 2>&1; then
+                        rm -f "${tmp_file}"
+                        die "Field '${field}' expects a JSON ${field_type}, got '${value}'"
+                    fi
                     if ! jq --arg f "${field}" --argjson v "${value}" '.[$f] = $v' "${dest_json}" > "${tmp_file}"; then
                         rm -f "${tmp_file}"
                         die "Failed to update field '${field}' with value '${value}'"
