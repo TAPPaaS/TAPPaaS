@@ -185,7 +185,24 @@ configure_cluster() {
   if pvecm status >/dev/null 2>&1; then
     msg_ok "Node is already a cluster member"
     pvecm status 2>/dev/null | grep -E 'Name:|Nodes:|Quorate:' || true
-    CLUSTER_ROLE="member"
+    # Already clustered → this is a RE-RUN. Recover the FOUNDING intent instead of
+    # blindly recording "member". Otherwise a first node whose first run created the
+    # cluster but then failed later (e.g. a storage misconfig aborting AFTER pvecm
+    # create) re-runs as "member", and the orchestrator — which continues to the
+    # firewall/platform chain only on role "created" — mistakes it for a secondary
+    # node and skips that chain. Reuse the SAME create/join decision as a fresh run:
+    # the founder is tappaas1 (or an explicit --cluster); anything else joined, so it
+    # stays a plain member and the orchestrator stops — unchanged secondary behavior.
+    local rerun_mode="$CLUSTER_MODE"
+    if [ "$rerun_mode" = "auto" ]; then
+      if [ "$host" = "tappaas1" ]; then rerun_mode="create"; else rerun_mode="join"; fi
+    fi
+    if [ "$rerun_mode" = "create" ]; then
+      CLUSTER_ROLE="created"
+      msg_ok "This node FOUNDED the cluster — resuming the first-node chain (firewall/platform)."
+    else
+      CLUSTER_ROLE="member"
+    fi
     return 0
   fi
 

@@ -134,6 +134,31 @@ else
     fail "an update-service.sh is not executable"
 fi
 
+# cluster:ha apply order: migrate BEFORE pvesr. `pvesr create-local-job` takes
+# its source from the node the guest is on, and Proxmox rejects source ==
+# target — so a VM that has drifted onto its own failover node can only get a
+# replication job after the migrate that moves it off. With the two the other
+# way round, reconcile died on "Source and target must not be identical" with
+# the fix for it still queued behind. Asserted on source order because the live
+# case needs a two-node failover to reproduce (deep test-hadrift territory).
+HA_UPSVC="${SCRIPT_DIR}/services/ha/update-service.sh"
+ha_code_line() { grep -n "$1" "${HA_UPSVC}" | grep -vE '^[0-9]+:[[:space:]]*#' | tail -1 | cut -d: -f1; }
+mig_ln=$(ha_code_line 'crm-command migrate')
+repl_ln=$(ha_code_line 'pvesr create-local-job')
+if [[ -n "${mig_ln}" && -n "${repl_ln}" && "${mig_ln}" -lt "${repl_ln}" ]]; then
+    pass "cluster:ha applies placement before replication (pvesr source != target)"
+else
+    fail "cluster:ha would create the replication job before migrating (line ${repl_ln:-?} before ${mig_ln:-?})"
+fi
+
+# ... and when the migrate cannot run (primary offline), the identical
+# source/target case must be named by us, not by a bare pvesr error.
+if grep -q 'is on its failover node' "${HA_UPSVC}"; then
+    pass "cluster:ha names the identical source/target case when it cannot migrate"
+else
+    fail "cluster:ha has no guard for 'guest sits on its own replication target'"
+fi
+
 # ── Test 2: vm-net.sh helper unit tests ─────────────────────────────
 
 info "${BOLD}Test 2: vm-net.sh helper unit tests${CL}"
