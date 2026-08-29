@@ -85,7 +85,15 @@ if printf '%s\n' "${CONTENT}" | ssh -o BatchMode=yes -o ConnectTimeout=15 \
 then
     info "  ${GN}✓${CL} wrote /etc/secrets/vllm-inference.env on ${CONSUMER_HOST}"
 else
-    die "failed to write /etc/secrets/vllm-inference.env on ${CONSUMER_HOST} (is the VM up?)"
+    # Warn, don't die: this hook runs during a CONSUMER's reconcile --apply (it
+    # depends on vllm-amd:inference), and a die here is fatal to that reconcile —
+    # fatal_with_rollback would roll back the consumer's own update for a
+    # transient SSH blip to vllm-amd's host, unrelated to the consumer's
+    # convergence. The write self-heals on the next reconcile, so degrade
+    # gracefully — matching the model-discovery warn-and-continue above. (#512)
+    warn "  failed to write /etc/secrets/vllm-inference.env on ${CONSUMER_HOST} (is the VM up?)"
+    warn "  skipping consumer re-apply; will self-heal on the next reconcile"
+    exit 0
 fi
 
 # Let the consumer re-apply immediately when it ships a hook for it (LiteLLM
