@@ -421,7 +421,13 @@ def topological_sort(apps: list[str]) -> list[str]:
     deps = {}
     for app in apps:
         providers = get_module_dependencies(app)
-        deps[app] = [p for p in providers if p in app_set]
+        # Exclude self-references: a module may list its own provided
+        # capability in dependsOn to sequence its per-service scripts (e.g.
+        # alfen -> alfen:nat). That is not a scheduling edge — keeping it would
+        # be a self-loop whose in-degree never reaches 0, falsely flagging the
+        # module (and its dependents) as a cycle. dependsOn is left untouched in
+        # get_module_dependencies, so per-service invocation still sees it. (#514)
+        deps[app] = [p for p in providers if p in app_set and p != app]
 
     in_degree = {app: len(deps[app]) for app in apps}
     dependents = {app: [] for app in apps}

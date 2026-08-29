@@ -128,6 +128,21 @@ assert [n for n, _ in skipped2] == ["litellm"], f"archived provider skipped: {sk
 assert m.module_status("does-not-exist") == "", "missing config -> no status"
 (d2 / "broken.json").write_text("{ not json")
 assert m.module_status("broken") == "", "unparseable config -> no status"
+
+# A module that lists one of its OWN provided capabilities in dependsOn (to
+# sequence its per-service scripts) must not self-loop into a false circular-
+# dependency flag — nor strand modules that legitimately depend on it. (#514)
+d3 = Path(tempfile.mkdtemp()); m.CONFIG_DIR = d3
+(d3 / "alfen.json").write_text(json.dumps(
+    {"kind": "module", "vmname": "alfen", "status": "Production",
+     "dependsOn": ["cluster:vm", "alfen:nat"]}))
+(d3 / "hassanova.json").write_text(json.dumps(
+    {"kind": "module", "vmname": "hassanova", "status": "Production",
+     "dependsOn": ["alfen:nat", "alfen:mqtt", "alfen:modbus"]}))
+apps3, _ = m.partition_by_lifecycle(m.get_installed_apps())
+order3 = m.topological_sort(apps3)
+assert set(order3) == {"alfen", "hassanova"}, f"both planned: {order3}"
+assert order3.index("alfen") < order3.index("hassanova"), f"alfen before hassanova: {order3}"
 PY
     then
         passed=$((passed + 1))
