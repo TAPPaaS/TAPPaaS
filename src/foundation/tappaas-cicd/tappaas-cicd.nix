@@ -211,6 +211,24 @@ in
         }
       }
     });
+
+    // Grant wheel polkit authority over systemd unit management, matching the
+    // NOPASSWD sudo trust it already holds (security.sudo.wheelNeedsPassword =
+    // false). Without this, `systemctl restart/stop/enable ...` as a wheel user
+    // (tappaas) hits an auth_admin prompt for a password that cannot exist —
+    // the account is key-only (no hashedPassword), so no input ever succeeds.
+    // Not an escalation: wheel is already root via sudo on this host; this only
+    // makes the same authority reachable over D-Bus/polkit. YES (not
+    // allow_active) because SSH sessions are often classified inactive on a
+    // single-admin, key-only host. manage-unit-files covers enable/disable/
+    // mask, which are a separate action id from manage-units. (#515)
+    polkit.addRule(function(action, subject) {
+      if ((action.id == "org.freedesktop.systemd1.manage-units" ||
+           action.id == "org.freedesktop.systemd1.manage-unit-files") &&
+          subject.isInGroup("wheel")) {
+        return polkit.Result.YES;
+      }
+    });
   '';
 
   # Essential Services
