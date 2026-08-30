@@ -47,7 +47,10 @@ info "${BOLD}litellm:models test-service${CL}: ${BL}${CONSUMING_MODULE}${CL}"
 # ── SSH setup ────────────────────────────────────────────────────────────────
 ssh-keygen -R "${LITELLM_HOST}" >/dev/null 2>&1 || true
 ssh-keygen -R "${CONSUMING_HOST}" >/dev/null 2>&1 || true
-SSH_OPTS=(-o StrictHostKeyChecking=accept-new -o ConnectTimeout=10)
+# -i/-o IdentitiesOnly=yes (ADR-018, #518/#519/#520): under sudo -n SSH's
+# default identity search looks in /root/.ssh (empty), never at $HOME. All 6
+# call sites below share this one array, so this one edit covers all of them.
+SSH_OPTS=(-o StrictHostKeyChecking=accept-new -o ConnectTimeout=10 -o IdentitiesOnly=yes -i "$(tappaas_ssh_identity)")
 
 # ── Read master key ───────────────────────────────────────────────────────────
 MASTER=$(ssh "${SSH_OPTS[@]}" "tappaas@${LITELLM_HOST}" 'bash -s' <<'EOSH' 2>/dev/null

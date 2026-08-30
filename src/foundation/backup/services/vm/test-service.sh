@@ -72,7 +72,7 @@ info "  ${BOLD}backup:vm tests for ${BL}${VMNAME}${CL} (VMID ${VMID} on ${NODE})
 QUERY_NODE=""
 for candidate in "${NODE}" $(get_all_node_hostnames); do
     candidate_fqdn="${candidate}.${MGMT}.internal"
-    if ssh -o ConnectTimeout=5 -o BatchMode=yes -o LogLevel=ERROR \
+    if tappaas_ssh -o LogLevel=ERROR \
         "root@${candidate_fqdn}" "true" &>/dev/null; then
         QUERY_NODE="${candidate}"
         break
@@ -90,7 +90,7 @@ QUERY_FQDN="${QUERY_NODE}.${MGMT}.internal"
 
 info "  Check 1: PBS storage '${STORAGE_NAME}' configured on ${NODE}"
 
-storage_status=$(ssh -o ConnectTimeout=10 -o BatchMode=yes -o LogLevel=ERROR \
+storage_status=$(tappaas_ssh -o LogLevel=ERROR \
     "root@${QUERY_FQDN}" \
     "pvesm status --storage ${STORAGE_NAME} 2>/dev/null" 2>/dev/null) || true
 
@@ -114,7 +114,7 @@ fi
 
 info "  Check 2: Backup exists for VMID ${VMID}"
 
-backup_list=$(ssh -o ConnectTimeout=10 -o BatchMode=yes -o LogLevel=ERROR \
+backup_list=$(tappaas_ssh -o LogLevel=ERROR \
     "root@${QUERY_FQDN}" \
     "pvesh get /nodes/${QUERY_NODE}/storage/${STORAGE_NAME}/content --vmid ${VMID} --content backup --output-format json" 2>/dev/null) || true
 
@@ -156,7 +156,7 @@ if [[ "${DEEP}" -eq 1 ]]; then
 
     # Test 4: Backup job covers this VM
     info "  Check 4: Backup job exists for VMID ${VMID}"
-    backup_jobs=$(ssh -o ConnectTimeout=10 -o BatchMode=yes -o LogLevel=ERROR \
+    backup_jobs=$(tappaas_ssh -o LogLevel=ERROR \
         "root@${QUERY_FQDN}" \
         "pvesh get /cluster/backup --output-format json" 2>/dev/null) || true
 
