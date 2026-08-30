@@ -122,7 +122,7 @@ A local PBS plus a pulling satellite is a classic **3-2-1**.
 
 **Do we need an "append-only push" between backup systems? No.** Every inter-PBS copy is a pull, so there is never a source→destination write path to harden. The old draft's append-only *push receiver* existed only to make such a push safe — but that push is unnecessary: an off-site that can pull (a satellite over the tunnel, or a peer) covers every supported topology, and a site with no local PBS simply has its clients push to the external PBS directly (still write-no-delete). *(A pure push-only third-party target that refuses to pull is the sole case a PBS→PBS push would serve; it is **out of scope** for TAPPaaS topologies.)*
 
-- **Immutability is datastore hardening, not push safety.** Optional immutable history (remote-side ZFS snapshots, or S3 Object Lock on a satellite's backend per ADR-010 §7.3) still has value — but reframed: it protects a datastore against deletion via its *own* admin plane (an attacker who reaches PBS root), which matters most for the copy a compromised node can actually reach. It is belt-and-suspenders on top of the structural pull/write-no-delete isolation, not the thing that makes off-site safe.
+- **At-rest immutability is a separate, optional layer — and deferred.** The structural pull + write-no-delete isolation above is what makes the off-site copy safe. Freezing a datastore against tampering via its *own* admin plane (PBS/node root) is an *additional* hardening layer, **not** part of this guarantee — it is left to [Future improvements](#future-improvements), so deferring it does not weaken §1.4.
 - Backups are **client-side encrypted with the local key**; any PBS holding a copy stores ciphertext only and never holds the decryption key (ADR-010 §3.2).
 
 Because each PBS owns retention over its own datastore, an off-site copy naturally runs its own (typically longer) retention independent of the source (§3.3), and the invariant is preserved.
@@ -229,22 +229,23 @@ The changes touch three groups in [`schemas/module-fields.json`](../../src/found
 | `pbsUrl` | **new** | The PBS the clients push to (§1.4). **Default `backup.mgmt.internal`** (local PBS DNS); overridden to the external PBS's URL when `placementState:external` (§1.3). Credential prompted-not-stored. |
 | `pushTarget` | **deprecate** | Subsumed by `placementState:external` + `pbsUrl` — the external PBS is simply the configured target clients push to. Read for one release, then removed. |
 | `pbsStorageName` | keep | PBS datastore / Proxmox storage name. |
-| `immutableSnapshots` | keep, **reword** | Reframed as **datastore-at-rest hardening** (§1.4.1), not push safety. |
 | `alwaysBackup` | **deprecate** | See the note below. |
+
+*(`immutableSnapshots` is **not** part of this change — at-rest immutability is deferred to [Future improvements](#future-improvements).)*
 
 **B. The per-module `backup` policy object** (authored on *any* module, the Site→Env→Module cascade leaf) — extend the existing `enabled`/`retention`/`exclude` with:
 
 | Sub-field | Change | Detail |
 |---|---|---|
-| `type` | **new** | `vm` (default) \| `filesystem` \| `userdata` \| `dataset` — the backup-type taxonomy (§3.1). |
-| `schedule` | **new** | The module's own schedule; inherits the Site→Env cascade (default once/day) when absent; **must be ≤ once/day** (§3.2). `userdata` cadence is module-defined. |
-| `filesystemPaths` | **new** | `type:filesystem` only — the named guest paths to capture (guest-OS-type gated). |
-| `exporter` | **new** | `type:userdata` only — the command/contract that writes the open-format export file (§3.1). |
+| `schedule` | **new** | The module's own schedule; inherits the Site→Env cascade (default once/day) when absent; **must be ≤ once/day** (§3.2). |
+| `filesystemPaths` | **new** | For a `dependsOn: backup:filesystem` module only — the named guest paths to capture (guest-OS-type gated). |
+
+There is **no `type` field** — the backup kind is a `dependsOn` capability (`backup:vm` / `backup:filesystem`, §3.1).
 
 **C. `provides` capabilities** (on `backup.json`):
 
 - Today `["vm", "remote", "external"]`. A repo-wide check shows **only `backup:vm` is ever depended on** — nothing declares `dependsOn: backup:remote` or `backup:external`.
-- **Change to `provides: ["vm"]`.** The `remote`/`external` roles are **runtime peer relationships** registered via `backup-manage.sh` (§1.4/§2.6), not dependency capabilities — and dropping `external` from `provides` removes the clash with the new `placementState: external`. All states (`node:<name>`/`shim`/`external`) still `provides: ["vm"]`, which is exactly what lets a **shim satisfy `dependsOn: backup:vm`** (§1.1).
+- **Change to `provides: ["vm", "filesystem"]`.** Add **`filesystem`** so a module can `dependsOn: backup:filesystem` (§3.1). Drop `remote`/`external`: those are **runtime peer relationships** registered via `backup-manage.sh` (§1.4/§2.6), not dependency capabilities — and dropping `external` also removes the clash with the new `placementState: external`. All states (`node:<name>`/`shim`/`external`) still provide both, which is what lets a **shim satisfy `dependsOn: backup:vm`/`backup:filesystem`** (§1.1).
 
 **Schema hygiene (KI-1).** Land the `provides`-aware normalizer fix (implementation-doc KI-1) with these edits — otherwise the `backup:vm` self-capability fields (`placementState`, `pbsUrl`, `pbsStorageName`, …) keep tripping the false "orphan field" warnings.
 
@@ -256,23 +257,21 @@ The changes touch three groups in [`schemas/module-fields.json`](../../src/found
 
 ## 3. Configuring clients & backups
 
-This section is the **client side**: what each module backs up, and how the schedule is expressed. A module opts into backup through its JSON; this ADR adds a **backup-type taxonomy** so a module declares *what kind* of backup it needs, not just on/off.
+This section is the **client side**: what each module backs up, and how the schedule is expressed. A module declares the *kind* of backup it needs — and opts in at all — through a **`dependsOn`** relationship on a backup capability, **not** a `type` field.
 
-### 3.1 Backup-type taxonomy
+### 3.1 Backup types are capabilities you `dependsOn`
 
-| Type | What is captured | Restore target | Where supported | Format |
+The `backup` module `provides` one capability per supported backup type (§2.7); a module picks its kind by depending on the matching capability. **Two are supported:**
+
+| Capability | Declared as | What is captured | Restore target | Where supported |
 |---|---|---|---|---|
-| **`vm`** (full VM / LXC) | the whole VM or LXC — a PBS snapshot of the guest | same or a new VM/LXC | any Proxmox guest | PBS native |
-| **`filesystem`** (subset inside a VM) | a **named subset** of the guest filesystem | into a running guest | **only known/supported guest OS types** (needs the guest agent + a known layout) | PBS native (file-level) |
-| **`userdata`** (application data export) | an application-level export of the module's **user data** to a **named file** on the backup system | restorable on a **different** system | modules that implement an **exporter** | **open format** — e.g. a zip of the application's data |
-| **`dataset`** (Proxmox dataset) | a Proxmox storage dataset | the dataset | sites with **external / NFS-served** data | PBS / dataset native |
+| **`backup:vm`** (full VM / LXC) | `dependsOn: ["backup:vm"]` | the whole VM or LXC — a PBS snapshot of the guest | same or a new VM/LXC | any Proxmox guest |
+| **`backup:filesystem`** (subset inside a guest) | `dependsOn: ["backup:filesystem"]` | a **named subset** of the guest filesystem | into a running guest | **only known/supported guest OS types** (guest agent + a known layout) |
 
-Notes:
-
-- **`vm`** is today's default — a full-guest snapshot, the safest general case.
-- **`filesystem`** narrows a VM backup to a known subset of files; only offered where TAPPaaS knows the guest OS layout well enough to select and restore it reliably.
-- **`userdata`** is deliberately **portable**: the module's exporter writes an **open-format** archive (a zip of the application's data) to a named file on the backup system, so it can be **restored onto a different system** — not tied to the original VM. It is the escape hatch from PBS-native lock-in for the data that matters most.
-- **`dataset`** exists for the case where data is **not** inside a TAPPaaS-managed guest — e.g. external NFS-served storage attached as a Proxmox dataset.
+- **`backup:vm`** is the default, safest general case — a full-guest snapshot.
+- **`backup:filesystem`** narrows to a known subset of files; the paths come from the module's `backup.filesystemPaths` (§2.7), and it's only offered where TAPPaaS knows the guest OS layout well enough to select and restore reliably.
+- A module that wants **no** backup (hardware modules, test/scratch modules) simply depends on **neither** — backup stays opt-in (§2.7, #501).
+- Two further types — **`userdata`** (portable open-format export) and **`dataset`** (Proxmox / external-NFS dataset) — are on the roadmap but **not yet specified**; see [Future improvements](#future-improvements).
 
 ### 3.2 How a backup is specified — the schedule cascade
 
@@ -284,8 +283,6 @@ Backup frequency resolves through the **Site → Environment → Module cascade*
 - **Hard ceiling: never more than once per day.** A module cannot request a sub-daily schedule. Once-a-day is the maximum frequency the platform backs anything up.
 
 The common case is therefore: **most modules inherit the site default (once/day); a few rarely-changing modules pin a longer interval.**
-
-**Exception — `userdata`.** The `userdata` export is **not** governed by the site cascade. Because only the module knows when its application data is in a consistent, exportable state, its cadence is **module-defined** (the module owns the exporter). The same **once/day ceiling** still applies.
 
 ### 3.3 Subset + independent off-site retention (#389)
 
@@ -332,8 +329,31 @@ When the PBS itself moves (old node → a new `tankc`, or external → a new loc
 1. **State backfill** — `update.sh` maps legacy `placementState`/`placement` values to the new states (§4.1); idempotent; covered by a unit test with legacy fixtures.
 2. **`#456` adoption path** — install-forced `external` + `pbsUrl` registers an existing PBS as storage without provisioning; verify existing snapshots remain restorable (§4.2).
 3. **Relocation runbook** — document + script the pull-seed → cut-over → decommission flow (§4.3) in `QUICKREF.md`; gate decommission on a test restore.
-4. **Deprecation window** — `pushTarget`/`alwaysBackup` read-then-drop; emit a one-line deprecation notice on update; remove the fields and the `alwaysBackup` code path once the opt-out `backup` policy (§2.7) is the membership source.
+4. **Deprecation window** — `pushTarget`/`alwaysBackup` read-then-drop; emit a one-line deprecation notice on update; remove the fields and the `alwaysBackup` code path once `integratesWith` (#501) covers the foundation VMs (§2.7).
 5. **Migration tests** — legacy-fixture upgrade, #456 adoption preserving snapshots, and relocation-by-pull preserving history (see §Testing).
+
+---
+
+## Future improvements
+
+Deliberately **deferred** — kept on the roadmap but **not specified or decided** by this ADR. Each needs its own design pass (and likely its own issue) before implementation; none of them is required for the compromise-isolation guarantee (§1.4.1).
+
+### F.1 Datastore at-rest immutability (`immutableSnapshots`)
+
+An opt-in WORM-ish tier that freezes backup *history* against tampering through a datastore's **own admin plane** — a threat the structural pull + write-no-delete model (§1.4.1) does **not** cover (it protects the off-site copy from a *source* compromise, not a datastore from its own root). Two tiers:
+
+- **ZFS snapshots** (in-cluster): a systemd timer on the PBS node takes periodic **read-only ZFS snapshots** of the datastore's dataset, pruned to `keep`. Survives credential-holder tampering and PBS prune/GC — **but not node-local root** (`zfs destroy`). The weaker tier.
+- **S3 Object Lock / WORM** (satellite-side, ADR-010 §7.3): enforced by the object store independent of any host root — even node/PBS root cannot rewrite the past. The stronger tier; out of the backup module's scope.
+
+Proposed (deferred) shape: a `backup.json` field `immutableSnapshots { enabled, schedule, keep }` driving the ZFS tier. Deferring it does not weaken §1.4.
+
+### F.2 `userdata` backup — portable application-data export
+
+An application-level export of a module's **user data** to a **named file** on the backup system, in an **open format** (e.g. a zip of the app's data), restorable **onto a different system** — the escape hatch from PBS-native lock-in for the data that matters most. **Underspecified:** the exporter/importer contract, file naming/placement, scheduling (likely module-defined, since only the module knows when its data is consistent — still ≤ once/day), and whether it rides the PBS job or is a side artifact. Kept because it is a real requirement; deferred because it is not yet designed. Would be exposed as a `backup:userdata` capability (§3.1).
+
+### F.3 `dataset` backup — Proxmox / external-NFS datasets
+
+Backing up a Proxmox storage **dataset** — e.g. external NFS-served data that is **not** inside a TAPPaaS-managed guest. **Underspecified:** how the dataset is selected, whether it rides the PBS job or a separate mechanism, retention, and restore. Kept for the external-NFS case; deferred pending design. Would be exposed as a `backup:dataset` capability (§3.1).
 
 ---
 
@@ -345,9 +365,9 @@ When the PBS itself moves (old node → a new `tankc`, or external → a new loc
 - **`dependsOn: backup` never blocks an install** even when no datastore is realised; the shim (§1.1) keeps the graph satisfiable and promotes later in place (§2.3).
 - **Adding a node no longer silently breaks its VMs' backups** — the client reconcile (§2.4) heals membership drift on the normal update cadence.
 - **Off-site backup works for small sites** (single-node push, §1.3/§1.4), not just clusters big enough to host PBS.
-- **The compromise invariant is explicit and testable** — off-site is pull-only, clients push with write-no-delete credentials, retention is owned by each PBS, optional immutable history (§1.4).
+- **The compromise invariant is explicit and testable** — off-site is pull-only, clients push with write-no-delete credentials, retention is owned by each PBS (§1.4).
 - **One model, every topology** — any PBS (local, satellite, external, local-external) is a symmetric peer with **identical credential setup** (§1.4/§2.5), consumed by URL, and driven by the same `backup-manager`/`backup-controller` (§2.6).
-- **Modules declare *what* to back up** — the taxonomy (§3.1) distinguishes a full snapshot from a portable, open-format `userdata` export, and the schedule cascade (§3.2) gives sensible defaults with per-module override.
+- **Modules declare *what* to back up** — the `dependsOn: backup:vm` / `backup:filesystem` capabilities (§3.1) let a module pick its backup kind (or opt out entirely), and the schedule cascade (§3.2) gives sensible defaults with per-module override.
 - **Reuse over invention** — leans on the existing #227 namespace/pull/push machinery, ADR-010's satellite, and PBS roles rather than new mechanisms.
 
 ### Negative / costs

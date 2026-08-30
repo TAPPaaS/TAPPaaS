@@ -51,7 +51,12 @@ done
 [[ -d "${PROVIDER_DIR}" ]]   || { echo "ABORT: provider fixture missing: ${PROVIDER_DIR}"; exit 2; }
 
 WORK="$(mktemp -d "${TMPDIR:-/tmp}/depdelta-e2e.XXXXXX")"
-MARKER="${WORK}/probe.log"
+# Stable marker + update logs OUTSIDE ${WORK} so they survive cleanup for
+# diagnosis, and so a marker written by a child that lost the env still lands
+# where we look.
+MARKER="/tmp/tappaas-511-marker.log"
+LOG_ADD="/tmp/tappaas-511-update-add.log"
+LOG_DEL="/tmp/tappaas-511-update-del.log"
 export TAPPAAS_PROBE_MARKER="${MARKER}"
 : > "${MARKER}"
 
@@ -114,17 +119,35 @@ else
     ok "consumer starts WITHOUT ${DEP}"
 fi
 
+# The consumer VM must be reachable before we update it: update-module.sh Step 2
+# runs the cluster:vm test-service, which pings <vm>.mgmt.internal and treats a
+# miss as FATAL. A freshly-cloned VM needs a moment to boot + register DNS, so
+# wait here rather than lose the ADD case to a readiness race (the REMOVE case
+# runs later, once the VM is up, and is unaffected).
+say "Step B.1: wait for ${CONSUMER} to become reachable (update pre-test readiness)"
+ready=0
+for _i in $(seq 1 48); do
+    if ping -c1 -W1 "${CONSUMER}.mgmt.internal" >/dev/null 2>&1; then ready=1; break; fi
+    sleep 5
+done
+[[ "${ready}" -eq 1 ]] && ok "${CONSUMER}.mgmt.internal is pingable (VM ready)" \
+                       || bad "${CONSUMER}.mgmt.internal not reachable after ~240s — pre-tests will abort the update"
+
 # ─────────────────────────────────────────────────────────────────────────
 say "Step C: release ADDS ${DEP} → expect install-service.sh (create)"
 # Simulate the module author extending the shipped dependsOn.
 tmp="$(mktemp)"; jq --arg d "${DEP}" '.dependsOn += [$d]' "${CONSUMER_JSON}" > "${tmp}" && mv "${tmp}" "${CONSUMER_JSON}"
 grep -q "${DEP}" "${CONSUMER_JSON}" && ok "injected ${DEP} into shipped ${CONSUMER}.json" || bad "failed to inject dep"
 
-run_update "${WORK}/update-add.log"; add_rc=$?
-[[ "${add_rc}" -eq 0 ]] && ok "update-module.sh (add) exited 0" \
-                       || bad "update-module.sh (add) exited ${add_rc} — see ${WORK}/update-add.log"
+run_update "${LOG_ADD}"; add_rc=$?
+if [[ "${add_rc}" -eq 0 ]]; then
+    ok "update-module.sh (add) exited 0"
+else
+    bad "update-module.sh (add) exited ${add_rc}"
+    echo "  ---- tail ${LOG_ADD} ----"; tail -n 45 "${LOG_ADD}" | sed 's/^/    | /'
+fi
 
-grep -q "Changed the released value of dependsOn" "${WORK}/update-add.log" \
+grep -q "Changed the released value of dependsOn" "${LOG_ADD}" \
     && ok "Step 0 WARNED about the changed released dependsOn (#511 reporting)" \
     || bad "no 'Changed the released value of dependsOn' warning in output"
 
@@ -147,9 +170,13 @@ say "Step D: release REMOVES ${DEP} → expect delete-service.sh (teardown)"
 cp "${CONSUMER_JSON_BAK}" "${CONSUMER_JSON}"   # restore shipped list to [cluster:vm]
 grep -q "${DEP}" "${CONSUMER_JSON}" && bad "dep still present after restore" || ok "restored shipped ${CONSUMER}.json (dep removed)"
 
-run_update "${WORK}/update-del.log"; del_rc=$?
-[[ "${del_rc}" -eq 0 ]] && ok "update-module.sh (remove) exited 0" \
-                       || bad "update-module.sh (remove) exited ${del_rc} — see ${WORK}/update-del.log"
+run_update "${LOG_DEL}"; del_rc=$?
+if [[ "${del_rc}" -eq 0 ]]; then
+    ok "update-module.sh (remove) exited 0"
+else
+    bad "update-module.sh (remove) exited ${del_rc}"
+    echo "  ---- tail ${LOG_DEL} ----"; tail -n 45 "${LOG_DEL}" | sed 's/^/    | /'
+fi
 
 grep -qx "delete ${CONSUMER}" "${MARKER}" \
     && ok "Step 3.5 ran delete-service.sh (teardown) for the removed dep" \
