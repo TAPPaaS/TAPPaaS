@@ -282,7 +282,24 @@ in
         shellcheck   # bash script linting for module *.sh validation (#265)
         # OPNsense controller tools (opnsense-controller, opnsense-firewall, zone-manager, dns-manager)
         opnsenseController.default
+        # Secret scanning (#378) — system binary used by local pre-commit hooks.
+        # Avoids per-repo Go source downloads (17K files) that bloat ~/.cache.
+        gitleaks
+        pre-commit
   ];
+
+  # Global git template dir — every repo init/clone on this host auto-installs
+  # the gitleaks pre-commit hook. Per-repo .pre-commit-config.yaml uses
+  # `repo: local` to call the system binary; no source download ever needed.
+  # (#378)
+  programs.git.config = {
+    init.templateDir = "/etc/git-templates";
+  };
+
+  environment.etc."git-templates/hooks/pre-commit" = {
+    source = /home/tappaas/TAPPaaS/src/foundation/tappaas-cicd/templates/pre-commit-hook;
+    mode = "0755";
+  };
 
   # Enable automatic garbage collection
   nix.gc = {

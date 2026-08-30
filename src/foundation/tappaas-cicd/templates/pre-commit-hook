@@ -1,0 +1,16 @@
+#!/usr/bin/env bash
+# Installed via git init.templateDir by tappaas-cicd NixOS config (#378).
+# Runs gitleaks on staged changes using the system binary — no source download.
+# Requires: gitleaks in PATH (provided by tappaas-cicd environment.systemPackages).
+set -euo pipefail
+
+if ! command -v gitleaks &>/dev/null; then
+  echo "gitleaks not found — skipping secret scan (install via NixOS systemPackages)" >&2
+  exit 0
+fi
+
+if [ -f .pre-commit-config.yaml ]; then
+  pre-commit run --hook-stage pre-commit
+else
+  gitleaks protect --staged --redact
+fi
