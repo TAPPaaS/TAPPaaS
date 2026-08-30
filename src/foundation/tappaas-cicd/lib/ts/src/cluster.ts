@@ -16,18 +16,43 @@ export function mgmtDomain(): string {
   return process.env.TAPPAAS_MGMT_DOMAIN ?? "mgmt.internal";
 }
 
-// The SSH identity ssh() authenticates outbound calls with. Explicit, not
-// ambient-$HOME-derived (root-cause analysis: sudo -n's identity gap, 2026-08-27).
-// `sudo -n <manager-cmd>` sets $HOME=/root, which has no identity
-// of its own (/root/.ssh/ holds only authorized_keys + known_hosts), hiding
-// the tappaas user's own key — the one actually trusted as `root` on every
-// node, and the same key check-ha-health.service already authenticates with
-// (unprivileged, no agent, its own static key). Relying on SSH's default
-// identity-file resolution made every ssh() call silently depend on which
-// $HOME the caller happened to have, rather than on which key the nodes
-// actually trust. Overridable for tests and relocated sites.
+// The operator whose on-disk SSH identity authorizes root@<node>. ssh() logs
+// in as root, but the key that authorizes that login belongs to the operator
+// who invoked sudo (SUDO_USER), not to root — root has none of its own.
+// Resolving this dynamically, rather than hardcoding one operator name, is
+// what keeps sshIdentity()'s default portable to a site whose operator
+// account isn't named "tappaas". TAPPAAS_OPERATOR_HOME overrides for tests /
+// relocated installs; SUDO_USER is exported by every sudo invocation. Returns
+// undefined when not under sudo, or when already running as root directly —
+// the inherited HOME is already correct and needs no resolution.
+export function operatorHome(): string | undefined {
+  const override = process.env.TAPPAAS_OPERATOR_HOME;
+  if (override) return override;
+  const sudoUser = process.env.SUDO_USER;
+  if (sudoUser && sudoUser !== "root") return `/home/${sudoUser}`;
+  return undefined;
+}
+
+// The SSH identity ssh() authenticates outbound calls with. Explicit —
+// passed directly as -i, never left to SSH's own default identity-file
+// resolution. That resolution looks up the process's real UID in the passwd
+// database (getpwuid), not $HOME — confirmed live, and matches OpenSSH's own
+// documented tilde-expansion behavior. So overriding $HOME alone never
+// redirects it: under `sudo -n` the effective UID is root, and ssh always
+// ends up back in /root/.ssh/, which holds no identity of its own (only
+// authorized_keys + known_hosts). An explicit -i bypasses that lookup
+// entirely — it is the only mechanism that actually works under sudo -n.
+// The default is derived from the invoking operator (operatorHome()), so it
+// isn't tied to one site's operator username — it falls back to the same
+// "tappaas" convention this codebase's other defaults already assume
+// (CONFIG_DIR, TAPPAAS_REPO, ...) only when not running under sudo. Still
+// overridable via TAPPAAS_SSH_IDENTITY for a site whose operator key isn't
+// ed25519, or isn't at the default path.
 export function sshIdentity(): string {
-  return process.env.TAPPAAS_SSH_IDENTITY ?? "/home/tappaas/.ssh/id_ed25519";
+  const explicit = process.env.TAPPAAS_SSH_IDENTITY;
+  if (explicit) return explicit;
+  const home = operatorHome() ?? "/home/tappaas";
+  return `${home}/.ssh/id_ed25519`;
 }
 
 export interface RemoteResult {
