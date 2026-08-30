@@ -148,13 +148,13 @@ info "VM: $VMNAME (VMID: $VMID)"
 info "Threshold: ${THRESHOLD}%"
 
 # Check if VM is reachable
-if ! ssh -o StrictHostKeyChecking=no -o ConnectTimeout=5 -o BatchMode=yes "tappaas@${TARGET}" "exit 0" &>/dev/null; then
+if ! tappaas_ssh "tappaas@${TARGET}" "exit 0" &>/dev/null; then
   warn "VM $VMNAME is not reachable via SSH. Skipping check."
   exit 0
 fi
 
 # Get current disk usage percentage
-DISK_USAGE=$(ssh -o StrictHostKeyChecking=no "tappaas@${TARGET}" \
+DISK_USAGE=$(tappaas_ssh "tappaas@${TARGET}" \
   "df / | tail -1 | awk '{print \$5}'" 2>/dev/null | tr -d '%')
 
 if [ -z "$DISK_USAGE" ]; then

@@ -174,7 +174,7 @@ wait_for_ssh() {
     local waited=0
 
     info "Waiting for SSH to become available on ${ip}..."
-    while ! ssh -o ConnectTimeout=3 -o StrictHostKeyChecking=accept-new -o BatchMode=yes "tappaas@${ip}" "exit 0" &>/dev/null; do
+    while ! ssh -o IdentitiesOnly=yes -i "$(tappaas_ssh_identity)" -o ConnectTimeout=3 -o StrictHostKeyChecking=accept-new -o BatchMode=yes "tappaas@${ip}" "exit 0" &>/dev/null; do
         sleep 3
         waited=$((waited + 3))
         if [[ $waited -ge $max_wait ]]; then
@@ -191,13 +191,13 @@ detect_os_type() {
     local ip="$1"
 
     # Try to detect NixOS
-    if ssh -o ConnectTimeout=10 -o StrictHostKeyChecking=accept-new "tappaas@${ip}" "test -f /etc/NIXOS" 2>/dev/null; then
+    if ssh -o IdentitiesOnly=yes -i "$(tappaas_ssh_identity)" -o ConnectTimeout=10 -o StrictHostKeyChecking=accept-new "tappaas@${ip}" "test -f /etc/NIXOS" 2>/dev/null; then
         echo "nixos"
         return 0
     fi
 
     # Try to detect Debian/Ubuntu
-    if ssh -o ConnectTimeout=10 -o StrictHostKeyChecking=accept-new "tappaas@${ip}" "test -f /etc/debian_version" 2>/dev/null; then
+    if ssh -o IdentitiesOnly=yes -i "$(tappaas_ssh_identity)" -o ConnectTimeout=10 -o StrictHostKeyChecking=accept-new "tappaas@${ip}" "test -f /etc/debian_version" 2>/dev/null; then
         echo "debian"
         return 0
     fi
@@ -210,7 +210,7 @@ wait_for_cloud_init() {
     local ip="$1"
 
     info "Waiting for cloud-init to finish..."
-    ssh "tappaas@${ip}" "cloud-init status --wait" 2>/dev/null || true
+    ssh -o IdentitiesOnly=yes -i "$(tappaas_ssh_identity)" "tappaas@${ip}" "cloud-init status --wait" 2>/dev/null || true
 }
 
 # Wait until the VM is actually ready for privileged provisioning: cloud-init
@@ -226,10 +226,10 @@ wait_for_provisioning() {
     local waited=0
 
     info "Waiting for cloud-init to finish on ${ip}..."
-    ssh -o BatchMode=yes "tappaas@${ip}" "cloud-init status --wait" >/dev/null 2>&1 || true
+    ssh -o IdentitiesOnly=yes -i "$(tappaas_ssh_identity)" -o BatchMode=yes "tappaas@${ip}" "cloud-init status --wait" >/dev/null 2>&1 || true
 
     info "Waiting for passwordless sudo on ${ip}..."
-    while ! ssh -o BatchMode=yes "tappaas@${ip}" "sudo -n true" 2>/dev/null; do
+    while ! ssh -o IdentitiesOnly=yes -i "$(tappaas_ssh_identity)" -o BatchMode=yes "tappaas@${ip}" "sudo -n true" 2>/dev/null; do
         sleep 3
         waited=$((waited + 3))
         if [[ ${waited} -ge ${max} ]]; then
@@ -344,9 +344,9 @@ update_nixos() {
     remote_nix_path="/etc/nixos/${nix_basename}"
 
     info "Copying ${nix_config} to ${vm_ip}:${remote_nix_path}"
-    scp -q -o StrictHostKeyChecking=accept-new -o BatchMode=yes "${nix_config}" "tappaas@${vm_ip}:/tmp/${nix_basename}" \
+    scp -o IdentitiesOnly=yes -i "$(tappaas_ssh_identity)" -q -o StrictHostKeyChecking=accept-new -o BatchMode=yes "${nix_config}" "tappaas@${vm_ip}:/tmp/${nix_basename}" \
         || die "failed to scp ${nix_config} to ${vm_ip}"
-    ssh -o BatchMode=yes "tappaas@${vm_ip}" "sudo install -m 0644 /tmp/${nix_basename} ${remote_nix_path} && rm -f /tmp/${nix_basename}" \
+    ssh -o IdentitiesOnly=yes -i "$(tappaas_ssh_identity)" -o BatchMode=yes "tappaas@${vm_ip}" "sudo install -m 0644 /tmp/${nix_basename} ${remote_nix_path} && rm -f /tmp/${nix_basename}" \
         || die "failed to install ${remote_nix_path} on ${vm_ip}"
 
     # Copy sibling .nix helpers the main .nix imports via pkgs.callPackage.
@@ -357,9 +357,9 @@ update_nixos() {
         _sib_base="$(basename "${_sib}")"
         [[ "${_sib_base}" == "${nix_basename}" ]] && continue
         local _sib_remote="/etc/nixos/${_sib_base}"
-        scp -q -o StrictHostKeyChecking=accept-new -o BatchMode=yes "${_sib}" "tappaas@${vm_ip}:/tmp/${_sib_base}" \
+        scp -o IdentitiesOnly=yes -i "$(tappaas_ssh_identity)" -q -o StrictHostKeyChecking=accept-new -o BatchMode=yes "${_sib}" "tappaas@${vm_ip}:/tmp/${_sib_base}" \
             || { warn "failed to scp sibling ${_sib} — continuing"; continue; }
-        ssh -o BatchMode=yes "tappaas@${vm_ip}" "sudo install -m 0644 /tmp/${_sib_base} ${_sib_remote} && rm -f /tmp/${_sib_base}" \
+        ssh -o IdentitiesOnly=yes -i "$(tappaas_ssh_identity)" -o BatchMode=yes "tappaas@${vm_ip}" "sudo install -m 0644 /tmp/${_sib_base} ${_sib_remote} && rm -f /tmp/${_sib_base}" \
             || warn "failed to install sibling ${_sib_remote} — continuing"
     done
 
@@ -380,9 +380,9 @@ update_nixos() {
             cp "${_companion_local}" "${_flat_tmp}"
         fi
         info "Copying JSON config to ${vm_ip}:${_companion_remote}"
-        scp -q -o StrictHostKeyChecking=accept-new -o BatchMode=yes "${_flat_tmp}" "tappaas@${vm_ip}:/tmp/${_source_vmname}.json" \
+        scp -o IdentitiesOnly=yes -i "$(tappaas_ssh_identity)" -q -o StrictHostKeyChecking=accept-new -o BatchMode=yes "${_flat_tmp}" "tappaas@${vm_ip}:/tmp/${_source_vmname}.json" \
             || { rm -f "${_flat_tmp}"; die "failed to scp JSON config to ${vm_ip}"; }
-        ssh -o BatchMode=yes "tappaas@${vm_ip}" "sudo install -m 0644 /tmp/${_source_vmname}.json ${_companion_remote} && rm -f /tmp/${_source_vmname}.json" \
+        ssh -o IdentitiesOnly=yes -i "$(tappaas_ssh_identity)" -o BatchMode=yes "tappaas@${vm_ip}" "sudo install -m 0644 /tmp/${_source_vmname}.json ${_companion_remote} && rm -f /tmp/${_source_vmname}.json" \
             || { rm -f "${_flat_tmp}"; die "failed to install JSON config on ${vm_ip}"; }
         rm -f "${_flat_tmp}"
     fi
@@ -392,7 +392,7 @@ update_nixos() {
     # resolves on the FIRST rebuild. Idempotent: bootstrap.sh follows the same
     # pattern for tappaas-cicd; we extend the convention to every module install.
     info "Ensuring /etc/nixos/hardware-configuration.nix exists on ${vm_ip}"
-    ssh -o BatchMode=yes "tappaas@${vm_ip}" '
+    ssh -o IdentitiesOnly=yes -i "$(tappaas_ssh_identity)" -o BatchMode=yes "tappaas@${vm_ip}" '
         test -f /etc/nixos/hardware-configuration.nix && exit 0
         sudo nixos-generate-config --show-hardware-config 2>/dev/null \
           | sudo tee /etc/nixos/hardware-configuration.nix >/dev/null
@@ -428,10 +428,10 @@ update_nixos() {
         # subshell — set -e in the parent would otherwise terminate before we
         # reach the retry. Capture rc with || so set -e doesn't fire here.
         if [[ "${OPT_DEBUG:-0}" -eq 1 ]]; then
-            ( ssh -o BatchMode=yes "tappaas@${vm_ip}" "sudo nixos-rebuild switch ${nixpkgs_arg} -I nixos-config=${remote_nix_path}" ) || rc=$?
+            ( ssh -o IdentitiesOnly=yes -i "$(tappaas_ssh_identity)" -o BatchMode=yes "tappaas@${vm_ip}" "sudo nixos-rebuild switch ${nixpkgs_arg} -I nixos-config=${remote_nix_path}" ) || rc=$?
         else
             ( run_quiet "nixos-rebuild on ${vm_ip} (attempt ${attempt}/3)" \
-                ssh -o BatchMode=yes "tappaas@${vm_ip}" "sudo nixos-rebuild switch ${nixpkgs_arg} -I nixos-config=${remote_nix_path}" ) || rc=$?
+                ssh -o IdentitiesOnly=yes -i "$(tappaas_ssh_identity)" -o BatchMode=yes "tappaas@${vm_ip}" "sudo nixos-rebuild switch ${nixpkgs_arg} -I nixos-config=${remote_nix_path}" ) || rc=$?
         fi
         if [[ "$rc" -eq 0 ]]; then
             rebuilt=1; break
@@ -490,23 +490,23 @@ update_debian() {
 
     info "Updating package lists..."
     if [[ "${OPT_DEBUG:-0}" -eq 1 ]]; then
-        ssh "tappaas@${vm_ip}" "sudo apt-get update" || die "apt-get update failed"
+        ssh -o IdentitiesOnly=yes -i "$(tappaas_ssh_identity)" "tappaas@${vm_ip}" "sudo apt-get update" || die "apt-get update failed"
     else
-        run_quiet "apt-get update" ssh "tappaas@${vm_ip}" "sudo apt-get update"
+        run_quiet "apt-get update" ssh -o IdentitiesOnly=yes -i "$(tappaas_ssh_identity)" "tappaas@${vm_ip}" "sudo apt-get update"
     fi
 
     info "Upgrading packages..."
     if [[ "${OPT_DEBUG:-0}" -eq 1 ]]; then
-        ssh "tappaas@${vm_ip}" "sudo DEBIAN_FRONTEND=noninteractive apt-get upgrade -y" || die "apt-get upgrade failed"
+        ssh -o IdentitiesOnly=yes -i "$(tappaas_ssh_identity)" "tappaas@${vm_ip}" "sudo DEBIAN_FRONTEND=noninteractive apt-get upgrade -y" || die "apt-get upgrade failed"
     else
-        run_quiet "apt-get upgrade" ssh "tappaas@${vm_ip}" "sudo DEBIAN_FRONTEND=noninteractive apt-get upgrade -y"
+        run_quiet "apt-get upgrade" ssh -o IdentitiesOnly=yes -i "$(tappaas_ssh_identity)" "tappaas@${vm_ip}" "sudo DEBIAN_FRONTEND=noninteractive apt-get upgrade -y"
     fi
 
     info "Installing/updating QEMU guest agent..."
     if [[ "${OPT_DEBUG:-0}" -eq 1 ]]; then
-        ssh "tappaas@${vm_ip}" "sudo apt-get install -y qemu-guest-agent && sudo systemctl enable --now qemu-guest-agent" || die "qemu-guest-agent install failed"
+        ssh -o IdentitiesOnly=yes -i "$(tappaas_ssh_identity)" "tappaas@${vm_ip}" "sudo apt-get install -y qemu-guest-agent && sudo systemctl enable --now qemu-guest-agent" || die "qemu-guest-agent install failed"
     else
-        run_quiet "qemu-guest-agent install" ssh "tappaas@${vm_ip}" "sudo apt-get install -y qemu-guest-agent && sudo systemctl enable --now qemu-guest-agent"
+        run_quiet "qemu-guest-agent install" ssh -o IdentitiesOnly=yes -i "$(tappaas_ssh_identity)" "tappaas@${vm_ip}" "sudo apt-get install -y qemu-guest-agent && sudo systemctl enable --now qemu-guest-agent"
     fi
 }
 
@@ -521,8 +521,8 @@ fix_dhcp_hostname() {
     local eth_connection
     local eth_device
 
-    eth_connection=$(ssh "tappaas@${vm_ip}" "nmcli -t -f NAME,TYPE connection show 2>/dev/null" | grep ethernet | cut -d: -f1 | head -1) || true
-    eth_device=$(ssh "tappaas@${vm_ip}" "nmcli -t -f DEVICE,TYPE device status 2>/dev/null" | grep ethernet | cut -d: -f1 | head -1) || true
+    eth_connection=$(ssh -o IdentitiesOnly=yes -i "$(tappaas_ssh_identity)" "tappaas@${vm_ip}" "nmcli -t -f NAME,TYPE connection show 2>/dev/null" | grep ethernet | cut -d: -f1 | head -1) || true
+    eth_device=$(ssh -o IdentitiesOnly=yes -i "$(tappaas_ssh_identity)" "tappaas@${vm_ip}" "nmcli -t -f DEVICE,TYPE device status 2>/dev/null" | grep ethernet | cut -d: -f1 | head -1) || true
 
     if [[ -n "${eth_connection}" ]] && [[ -n "${eth_device}" ]]; then
         debug "  Using NetworkManager for DHCP hostname fix"
@@ -532,19 +532,19 @@ fix_dhcp_hostname() {
         # Resolve nmcli's absolute path on the target (NixOS:
         # /run/current-system/sw/bin, Debian: /usr/bin).
         local nmcli_path
-        nmcli_path=$(ssh "tappaas@${vm_ip}" "command -v nmcli" 2>/dev/null) || nmcli_path=nmcli
+        nmcli_path=$(ssh -o IdentitiesOnly=yes -i "$(tappaas_ssh_identity)" "tappaas@${vm_ip}" "command -v nmcli" 2>/dev/null) || nmcli_path=nmcli
 
         # 1. Set the advertised hostname to vmname (not $(hostname): NM may have a
         #    stale transient hostname from a prior DHCP cycle that masks the static
         #    NixOS hostname — using vmname directly is always authoritative).
-        ssh "tappaas@${vm_ip}" "sudo ${nmcli_path} connection modify '${eth_connection}' ipv4.dhcp-hostname '${vmname}'" || true
+        ssh -o IdentitiesOnly=yes -i "$(tappaas_ssh_identity)" "tappaas@${vm_ip}" "sudo ${nmcli_path} connection modify '${eth_connection}' ipv4.dhcp-hostname '${vmname}'" || true
 
         # 2. Soft DHCP re-acquire via 'nmcli device reapply'. Unlike disconnect/
         #    connect, reapply does NOT drop the link — the SSH session survives,
         #    DNS stays live, and OPNsense Unbound updates within a few seconds.
         #    (The older disconnect/connect approach caused a DNS blackout of 30-90 s
         #    that blocked subsequent identity:identity service updates — issue #376.)
-        if ssh "tappaas@${vm_ip}" "sudo ${nmcli_path} device reapply ${eth_device}" 2>/dev/null; then
+        if ssh -o IdentitiesOnly=yes -i "$(tappaas_ssh_identity)" "tappaas@${vm_ip}" "sudo ${nmcli_path} device reapply ${eth_device}" 2>/dev/null; then
             debug "  DHCP hostname re-applied to: ${vmname} (reapply succeeded)"
         else
             warn "  nmcli device reapply failed — DHCP hostname may not be registered until next lease renewal"
@@ -554,13 +554,13 @@ fix_dhcp_hostname() {
 
     # Method 2: Try systemd-networkd (netplan/networkd)
     local networkd_active
-    networkd_active=$(ssh "tappaas@${vm_ip}" "systemctl is-active systemd-networkd 2>/dev/null") || true
+    networkd_active=$(ssh -o IdentitiesOnly=yes -i "$(tappaas_ssh_identity)" "tappaas@${vm_ip}" "systemctl is-active systemd-networkd 2>/dev/null") || true
 
     if [[ "${networkd_active}" == "active" ]]; then
         debug "  Using systemd-networkd for DHCP hostname fix"
         # Find the .network file for the primary ethernet interface
         local network_file
-        network_file=$(ssh "tappaas@${vm_ip}" "ls /run/systemd/network/*.network /etc/systemd/network/*.network 2>/dev/null | head -1") || true
+        network_file=$(ssh -o IdentitiesOnly=yes -i "$(tappaas_ssh_identity)" "tappaas@${vm_ip}" "ls /run/systemd/network/*.network /etc/systemd/network/*.network 2>/dev/null | head -1") || true
 
         if [[ -n "${network_file}" ]]; then
             local network_basename
@@ -568,8 +568,8 @@ fix_dhcp_hostname() {
             local dropin_dir="/etc/systemd/network/${network_basename}.d"
 
             debug "  Creating drop-in for ${network_basename}"
-            ssh "tappaas@${vm_ip}" "sudo mkdir -p '${dropin_dir}' && printf '[DHCPv4]\nSendHostname=yes\nHostname=${vmname}\n' | sudo tee '${dropin_dir}/hostname.conf' >/dev/null" || true
-            ssh "tappaas@${vm_ip}" "sudo systemctl restart systemd-networkd" || true
+            ssh -o IdentitiesOnly=yes -i "$(tappaas_ssh_identity)" "tappaas@${vm_ip}" "sudo mkdir -p '${dropin_dir}' && printf '[DHCPv4]\nSendHostname=yes\nHostname=${vmname}\n' | sudo tee '${dropin_dir}/hostname.conf' >/dev/null" || true
+            ssh -o IdentitiesOnly=yes -i "$(tappaas_ssh_identity)" "tappaas@${vm_ip}" "sudo systemctl restart systemd-networkd" || true
             debug "  DHCP hostname updated to: ${vmname}"
             return 0
         fi

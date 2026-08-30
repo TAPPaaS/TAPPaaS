@@ -97,7 +97,7 @@ MAX_WAIT=30
 WAITED=0
 
 # Wait for VM to be reachable
-while ! ssh -o StrictHostKeyChecking=no -o ConnectTimeout=2 -o BatchMode=yes "tappaas@${TARGET}" "exit 0" &>/dev/null; do
+while ! ssh -o StrictHostKeyChecking=accept-new -o ConnectTimeout=2 -o BatchMode=yes -o IdentitiesOnly=yes -i "$(tappaas_ssh_identity)" "tappaas@${TARGET}" "exit 0" &>/dev/null; do
   sleep 2
   WAITED=$((WAITED + 2))
   if [ $WAITED -ge $MAX_WAIT ]; then
@@ -108,12 +108,12 @@ while ! ssh -o StrictHostKeyChecking=no -o ConnectTimeout=2 -o BatchMode=yes "ta
 done
 
 # Detect OS type
-OS_ID=$(ssh -o StrictHostKeyChecking=no "tappaas@${TARGET}" \
+OS_ID=$(tappaas_ssh "tappaas@${TARGET}" \
   "grep '^ID=' /etc/os-release | cut -d= -f2 | tr -d '\"'" 2>/dev/null)
 info "Detected OS: $OS_ID"
 
 # Find root device (resolve UUID symlinks)
-ROOT_DEV=$(ssh -o StrictHostKeyChecking=no "tappaas@${TARGET}" "
+ROOT_DEV=$(tappaas_ssh "tappaas@${TARGET}" "
   dev=\$(findmnt -n -o SOURCE /)
   if [[ \"\$dev\" == /dev/disk/by-* ]]; then
     readlink -f \"\$dev\"
@@ -138,32 +138,32 @@ fi
 info "Disk: $DISK, Partition: $PARTNUM"
 
 # Detect filesystem type
-FSTYPE=$(ssh -o StrictHostKeyChecking=no "tappaas@${TARGET}" "findmnt -n -o FSTYPE /" 2>/dev/null)
+FSTYPE=$(tappaas_ssh "tappaas@${TARGET}" "findmnt -n -o FSTYPE /" 2>/dev/null)
 info "Filesystem type: $FSTYPE"
 
 # Resize based on OS
 case "$OS_ID" in
   nixos)
     info "Resizing partition on NixOS using sfdisk..."
-    ssh -o StrictHostKeyChecking=no "tappaas@${TARGET}" "
+    tappaas_ssh "tappaas@${TARGET}" "
       echo ', +' | sudo sfdisk --no-reread -N ${PARTNUM} ${DISK} 2>/dev/null || true
       sudo partprobe ${DISK} 2>/dev/null || sudo partx -u ${DISK} 2>/dev/null || true
     " 2>/dev/null
     if [ "$FSTYPE" == "ext4" ]; then
       info "Resizing ext4 filesystem..."
-      ssh -o StrictHostKeyChecking=no "tappaas@${TARGET}" "sudo resize2fs ${ROOT_DEV}" 2>/dev/null
+      tappaas_ssh "tappaas@${TARGET}" "sudo resize2fs ${ROOT_DEV}" 2>/dev/null
     else
       warn "Unsupported filesystem $FSTYPE, partition resized but filesystem not expanded"
     fi
     ;;
   debian|ubuntu)
     info "Resizing partition on Debian/Ubuntu using growpart..."
-    ssh -o StrictHostKeyChecking=no "tappaas@${TARGET}" "
+    tappaas_ssh "tappaas@${TARGET}" "
       sudo growpart ${DISK} ${PARTNUM} 2>/dev/null || true
     " 2>/dev/null
     if [ "$FSTYPE" == "ext4" ]; then
       info "Resizing ext4 filesystem..."
-      ssh -o StrictHostKeyChecking=no "tappaas@${TARGET}" "sudo resize2fs ${ROOT_DEV}" 2>/dev/null
+      tappaas_ssh "tappaas@${TARGET}" "sudo resize2fs ${ROOT_DEV}" 2>/dev/null
     else
       warn "Unsupported filesystem $FSTYPE, partition resized but filesystem not expanded"
     fi
@@ -176,7 +176,7 @@ case "$OS_ID" in
 esac
 
 # Verify new size
-NEW_FS_SIZE=$(ssh -o StrictHostKeyChecking=no "tappaas@${TARGET}" "df -BG / | tail -1 | awk '{print \$2}'" 2>/dev/null | tr -d 'G')
+NEW_FS_SIZE=$(tappaas_ssh "tappaas@${TARGET}" "df -BG / | tail -1 | awk '{print \$2}'" 2>/dev/null | tr -d 'G')
 info "New filesystem size: ${NEW_FS_SIZE}G"
 
 # Update JSON configuration with new size (Pattern A-aware write; #207)

@@ -77,13 +77,19 @@ Two independent implementations of the same fix, kept in lockstep on purpose:
 
 ## Scope
 
-`root@<proxmox-node>.mgmt.internal` calls only — the domain both the original bug
-and this fix are confirmed against. Calls targeting `tappaas@`/`debian@<guest-VM-ip>`
-may authenticate via a different key entirely (the module's own generated/cloud-init
-key, not the operator's) and are **explicitly not covered** by this decision —
-applying the same default there without first verifying that assumption would be
-exactly the kind of unfalsified claim this initiative exists to avoid. Investigated,
-not assumed, as its own phase (see Consequences, Phase 5).
+Confirmed to cover three identity domains: `root@<proxmox-node>.mgmt.internal`,
+`root@firewall` (OPNsense, via `tappaas_fw_ssh()`), and `tappaas@`/`debian@<guest-VM>`
+(Phase 5, closed 2026-08-30 — see Consequences). The guest-VM domain was
+investigated, not assumed: traced to `foundation/cluster/Create-TAPPaaS-VM.sh`,
+which seeds every application-module VM's cloud-init with `~/tappaas/tappaas-cicd.pub`
+— confirmed (via `install.sh`) to be a copy of the same `id_ed25519.pub`
+`tappaas_ssh_identity()` already resolves. Live-falsified against two real,
+independently-provisioned VMs (`ebh-mcp`, `deconz`) under the actual `sudo -n`
+bug context before generalizing — a first test target (`backup`) initially looked
+like a refutation until its config was checked and found to be `vmid: null`, a
+stub with no real VM, not a counter-example. `tappaas-cicd`'s own VM is the one
+confirmed exception — it uses the Proxmox node's own key for its own
+chicken-and-egg bootstrap (`install-platform.sh` Phase B), not this pattern.
 
 ## Consequences
 
@@ -113,9 +119,16 @@ Closure is phased, same branch, each phase independently verified before the nex
    `_tunnel_ssh()` and `lib/ha-vm-lib.sh`'s `havm_exec()`.
 4. **Phase 4**: the remaining ~17 files, same pattern, file-by-file (real variance
    in existing flags across them — no single mechanical find/replace).
-5. **Phase 5**: the `tappaas@`/`debian@<guest>` identity-domain question —
-   investigation first, fix only once the actual authenticating key is confirmed,
-   which may turn out to need no change at all.
+5. **Phase 5** (closed 2026-08-30): the `tappaas@`/`debian@<guest>` identity
+   domain — confirmed to use the same operator key (see Scope), no new resolver
+   needed. Reused `tappaas_ssh()`/`tappaas_ssh_identity()` directly — that
+   function takes the full `user@host` target, so nothing guest-VM-specific
+   was required. Closed the two remaining `-o StrictHostKeyChecking=no` sites
+   on this domain alongside it (`resize-disk.sh`, `check-disk-threshold.sh`),
+   matching Phase 2's reasoning. ~34 call sites across `resize-disk.sh`,
+   `check-disk-threshold.sh`, `update-os.sh`, `test-vm.sh`. Live-verified: the
+   actual patched `check-disk-threshold.sh` run end-to-end against a real VM
+   (`deconz`) under `sudo -n`, real disk-usage reading returned.
 
 Does **not** give `root` a standing SSH identity of its own — that remains a
 deliberate, separate, not-yet-made site-level decision (raised, and explicitly

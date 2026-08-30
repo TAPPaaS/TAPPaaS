@@ -123,10 +123,10 @@ ssh-keygen -R "$VMIP" 2>/dev/null || true
 ssh-keyscan -H "$VMIP" >> ~/.ssh/known_hosts 2>/dev/null
 
 # Try SSH - different users for Debian vs NixOS
-if ssh -o ConnectTimeout=10 -o BatchMode=yes "tappaas@${VMIP}" "echo 'SSH OK'" >/dev/null 2>&1; then
+if ssh -o ConnectTimeout=10 -o BatchMode=yes -o StrictHostKeyChecking=accept-new -o IdentitiesOnly=yes -i "$(tappaas_ssh_identity)" "tappaas@${VMIP}" "echo 'SSH OK'" >/dev/null 2>&1; then
     test_result "SSH access as tappaas user" 0
     SSH_USER="tappaas"
-elif ssh -o ConnectTimeout=10 -o BatchMode=yes "debian@${VMIP}" "echo 'SSH OK'" >/dev/null 2>&1; then
+elif ssh -o ConnectTimeout=10 -o BatchMode=yes -o StrictHostKeyChecking=accept-new -o IdentitiesOnly=yes -i "$(tappaas_ssh_identity)" "debian@${VMIP}" "echo 'SSH OK'" >/dev/null 2>&1; then
     test_result "SSH access as debian user" 0
     SSH_USER="debian"
 else
@@ -137,7 +137,7 @@ fi
 # Test 5: Hostname verification
 echo "5. Hostname verification..."
 if [ -n "$SSH_USER" ]; then
-    ACTUAL_HOSTNAME=$(ssh -o ConnectTimeout=10 "${SSH_USER}@${VMIP}" "hostname" 2>/dev/null)
+    ACTUAL_HOSTNAME=$(ssh -o ConnectTimeout=10 -o IdentitiesOnly=yes -i "$(tappaas_ssh_identity)" "${SSH_USER}@${VMIP}" "hostname" 2>/dev/null)
     if [ "$ACTUAL_HOSTNAME" = "$VMNAME" ]; then
         test_result "Hostname is $VMNAME" 0
     else
@@ -151,7 +151,7 @@ fi
 # Test 6: Internet access from VM
 echo "6. Internet access test..."
 if [ -n "$SSH_USER" ]; then
-    if ssh -o ConnectTimeout=10 "${SSH_USER}@${VMIP}" "ping -c 2 -W 5 1.1.1.1" >/dev/null 2>&1; then
+    if ssh -o ConnectTimeout=10 -o IdentitiesOnly=yes -i "$(tappaas_ssh_identity)" "${SSH_USER}@${VMIP}" "ping -c 2 -W 5 1.1.1.1" >/dev/null 2>&1; then
         test_result "VM can ping 1.1.1.1 (internet)" 0
     else
         test_result "VM can ping 1.1.1.1 (internet)" 1
@@ -163,7 +163,7 @@ fi
 # Test 7: DNS from VM
 echo "7. DNS resolution from VM..."
 if [ -n "$SSH_USER" ]; then
-    if ssh -o ConnectTimeout=10 "${SSH_USER}@${VMIP}" "ping -c 2 -W 5 google.com" >/dev/null 2>&1; then
+    if ssh -o ConnectTimeout=10 -o IdentitiesOnly=yes -i "$(tappaas_ssh_identity)" "${SSH_USER}@${VMIP}" "ping -c 2 -W 5 google.com" >/dev/null 2>&1; then
         test_result "VM can resolve and ping google.com" 0
     else
         test_result "VM can resolve and ping google.com" 1
@@ -179,7 +179,7 @@ EXPECTED_DISK_SIZE="$(get_config_value 'diskSize' '8G')"
 EXPECTED_SIZE_NUM="${EXPECTED_DISK_SIZE%[GMTK]}"
 if [ -n "$SSH_USER" ]; then
     # Get actual root filesystem size in GB (rounded)
-    ACTUAL_SIZE=$(ssh -o ConnectTimeout=10 "${SSH_USER}@${VMIP}" "df -BG / | tail -1 | awk '{print \$2}'" 2>/dev/null | tr -d 'G')
+    ACTUAL_SIZE=$(ssh -o ConnectTimeout=10 -o IdentitiesOnly=yes -i "$(tappaas_ssh_identity)" "${SSH_USER}@${VMIP}" "df -BG / | tail -1 | awk '{print \$2}'" 2>/dev/null | tr -d 'G')
     if [ -n "$ACTUAL_SIZE" ]; then
         # Allow 10% tolerance for filesystem overhead
         MIN_EXPECTED=$((EXPECTED_SIZE_NUM * 85 / 100))
