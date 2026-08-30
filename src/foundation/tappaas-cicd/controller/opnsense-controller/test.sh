@@ -31,6 +31,12 @@ PYTHONPATH="${here}/src" "${py}" -m unittest discover -s "${here}/src/test" -v
 # see it (rc 0), disable must remove it (status rc 1). Never touches an
 # operator-enabled PXE setup (skips if already enabled).
 if [ "${TAPPAAS_TEST_DEEP:-0}" = "1" ]; then
+    # tappaas_fw_ssh() (ADR-018, firewall identity domain): under sudo -n
+    # SSH's default identity search looks in /root/.ssh (empty), never $HOME.
+    if ! declare -F tappaas_fw_ssh >/dev/null 2>&1 && [ -f /home/tappaas/bin/common-install-routines.sh ]; then
+        # shellcheck source=/home/tappaas/bin/common-install-routines.sh disable=SC1091
+        . /home/tappaas/bin/common-install-routines.sh ""
+    fi
     echo "== DEEP: dhcp-manager pxe round-trip (live firewall, self-cleaning) =="
     if command -v dhcp-manager >/dev/null 2>&1 \
        && ping -c 1 -W 1 "${TAPPAAS_FIREWALL_FQDN:-firewall.mgmt.internal}" >/dev/null 2>&1; then
@@ -49,7 +55,7 @@ if [ "${TAPPAAS_TEST_DEEP:-0}" = "1" ]; then
             # stock-iPXE self-download loop — inexpressible via the API,
             # stage-1 finding).
             if printf 'grep -q "tag:!tappaas-ipxe" /usr/local/etc/dnsmasq.conf.d/tappaas-pxe.conf && echo NEGATED\n' \
-                 | ssh -o BatchMode=yes "root@${_fw}" 'sh -s' 2>/dev/null | grep -q NEGATED; then
+                 | tappaas_fw_ssh "root@${_fw}" 'sh -s' 2>/dev/null | grep -q NEGATED; then
                 echo "  ok: drop-in carries the negated iPXE tag"
             else
                 echo "[Error]   drop-in lacks the negated tag (or is missing)" >&2; _pxe_ok=0
@@ -58,19 +64,19 @@ if [ "${TAPPAAS_TEST_DEEP:-0}" = "1" ]; then
             # the PXE drop-in (that is the whole point of conf.d).
             # Guard: skip if tappaas9 is a REAL pinned node on this site.
             if printf 'grep -E "dhcp-host=.*tappaas9" /usr/local/etc/dnsmasq.conf && echo REAL\n' \
-                 | ssh -o BatchMode=yes "root@${_fw}" 'sh -s' 2>/dev/null | grep -q REAL; then
+                 | tappaas_fw_ssh "root@${_fw}" 'sh -s' 2>/dev/null | grep -q REAL; then
                 echo "  SKIP: tappaas9 has a live MAC pinning — not touching it"
             else
                 if dhcp-manager --no-ssl-verify host set tappaas9 --ip 10.0.0.18 --mac de:ad:be:ef:99:99 >/dev/null 2>&1 \
                    && printf 'grep -q "de:ad:be:ef:99:99" /usr/local/etc/dnsmasq.conf && echo PINNED\n' \
-                        | ssh -o BatchMode=yes "root@${_fw}" 'sh -s' 2>/dev/null | grep -q PINNED; then
+                        | tappaas_fw_ssh "root@${_fw}" 'sh -s' 2>/dev/null | grep -q PINNED; then
                     echo "  ok: host set renders a dhcp-host reservation"
                 else
                     echo "[Error]   host set did not render a reservation" >&2; _pxe_ok=0
                 fi
                 dhcp-manager --no-ssl-verify host del tappaas9 >/dev/null 2>&1 || _pxe_ok=0
                 if printf 'grep -q "de:ad:be:ef:99:99" /usr/local/etc/dnsmasq.conf || echo CLEARED\n' \
-                     | ssh -o BatchMode=yes "root@${_fw}" 'sh -s' 2>/dev/null | grep -q CLEARED; then
+                     | tappaas_fw_ssh "root@${_fw}" 'sh -s' 2>/dev/null | grep -q CLEARED; then
                     echo "  ok: host del clears the pinning again"
                 else
                     echo "[Error]   host del left the reservation behind" >&2; _pxe_ok=0

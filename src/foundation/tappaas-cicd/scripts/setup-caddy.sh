@@ -39,7 +39,7 @@ debug "Email: $EMAIL"
 
 # Check SSH access to firewall
 debug "Checking SSH access to firewall..."
-if ! ssh -o ConnectTimeout=5 -o BatchMode=yes root@"$FIREWALL_FQDN" echo "ok" >/dev/null 2>&1; then
+if ! tappaas_fw_ssh root@"$FIREWALL_FQDN" echo "ok" >/dev/null 2>&1; then
     die "Cannot connect to firewall via SSH. Please ensure SSH is enabled and keys are configured."
 fi
 debug "SSH access confirmed"
@@ -56,15 +56,15 @@ API_SECRET=$(grep '^secret=' "$CRED_FILE" | cut -d= -f2-)
 
 # Step 1: Install os-caddy package
 info "Step 1: Installing os-caddy package..."
-if ssh root@"$FIREWALL_FQDN" "/bin/sh -c 'pkg info os-caddy'" &>/dev/null; then
+if tappaas_fw_ssh root@"$FIREWALL_FQDN" "/bin/sh -c 'pkg info os-caddy'" &>/dev/null; then
     debug "  os-caddy already installed"
 else
     if [[ "${OPT_DEBUG:-0}" -eq 1 ]]; then
-        ssh root@"$FIREWALL_FQDN" "/bin/sh -c 'pkg install -y os-caddy'" || {
+        tappaas_fw_ssh root@"$FIREWALL_FQDN" "/bin/sh -c 'pkg install -y os-caddy'" || {
             warn "os-caddy installation failed or returned non-zero"
         }
     else
-        ssh root@"$FIREWALL_FQDN" "/bin/sh -c 'pkg install -y os-caddy'" 2>&1 | while IFS= read -r _; do printf "."; done || {
+        tappaas_fw_ssh root@"$FIREWALL_FQDN" "/bin/sh -c 'pkg install -y os-caddy'" 2>&1 | while IFS= read -r _; do printf "."; done || {
             echo ""
             warn "os-caddy installation failed or returned non-zero"
         }
@@ -72,7 +72,7 @@ else
     fi
 
     # Verify the package actually got installed
-    if ! ssh root@"$FIREWALL_FQDN" "/bin/sh -c 'pkg info os-caddy'" &>/dev/null; then
+    if ! tappaas_fw_ssh root@"$FIREWALL_FQDN" "/bin/sh -c 'pkg info os-caddy'" &>/dev/null; then
         die "os-caddy package installation failed — package is not present on the firewall."
     fi
 fi
@@ -84,15 +84,15 @@ fi
 # wildcard for internal services — actually gets a public cert). Both are
 # additive: no impact on the running Caddy or webgui.
 for pkg in os-acme-client os-ddclient; do
-    if ssh root@"$FIREWALL_FQDN" "/bin/sh -c 'pkg info $pkg'" &>/dev/null; then
+    if tappaas_fw_ssh root@"$FIREWALL_FQDN" "/bin/sh -c 'pkg info $pkg'" &>/dev/null; then
         debug "  $pkg already installed"
     else
         info "Step 1b: Installing $pkg..."
-        ssh root@"$FIREWALL_FQDN" "/bin/sh -c 'pkg install -y $pkg'" 2>&1 \
+        tappaas_fw_ssh root@"$FIREWALL_FQDN" "/bin/sh -c 'pkg install -y $pkg'" 2>&1 \
             | while IFS= read -r _; do printf "."; done || \
             warn "$pkg installation returned non-zero"
         echo ""
-        if ! ssh root@"$FIREWALL_FQDN" "/bin/sh -c 'pkg info $pkg'" &>/dev/null; then
+        if ! tappaas_fw_ssh root@"$FIREWALL_FQDN" "/bin/sh -c 'pkg info $pkg'" &>/dev/null; then
             die "$pkg installation failed"
         fi
     fi
@@ -129,7 +129,7 @@ fi
 info "Step 2: Reconfiguring OPNsense web GUI to port 8443..."
 # Pipe PHP script via stdin to avoid csh heredoc issues on OPNsense (csh).
 # Capture the output and route it to [Debug] (the "OK" marker is noise).
-_s2out="$(ssh root@"$FIREWALL_FQDN" /bin/sh -c 'php /dev/stdin' 2>&1 << 'EOFPHP'
+_s2out="$(tappaas_fw_ssh root@"$FIREWALL_FQDN" /bin/sh -c 'php /dev/stdin' 2>&1 << 'EOFPHP'
 <?php
 require_once("config.inc");
 require_once("util.inc");
@@ -153,7 +153,7 @@ if [ -n "$_s2out" ]; then while IFS= read -r _l; do debug "  $_l"; done <<<"$_s2
 debug "Restarting web GUI on port 8443..."
 # Suppress BOTH streams: configctl prints "OK" to stdout, and the GUI restart
 # drops the SSH session (trailing blank lines) — all console noise.
-ssh root@"$FIREWALL_FQDN" 'configctl webgui restart' >/dev/null 2>&1 || true
+tappaas_fw_ssh root@"$FIREWALL_FQDN" 'configctl webgui restart' >/dev/null 2>&1 || true
 # Wait for the web GUI to come back up on the new port
 sleep 3
 
@@ -208,7 +208,7 @@ else
     warn "opnsense-firewall CLI not found, falling back to SSH/PHP method..."
 
     # Fallback: Create firewall rules using PHP on OPNsense
-    ssh root@"$FIREWALL_FQDN" /bin/sh -c 'php /dev/stdin' << 'EOFPHP' || {
+    tappaas_fw_ssh root@"$FIREWALL_FQDN" /bin/sh -c 'php /dev/stdin' << 'EOFPHP' || {
 <?php
 require_once("config.inc");
 require_once("filter.inc");
@@ -278,7 +278,7 @@ EOFPHP
 
     # Apply firewall filter rules
     debug "Applying firewall filter rules..."
-    ssh root@"$FIREWALL_FQDN" 'configctl filter reload' || {
+    tappaas_fw_ssh root@"$FIREWALL_FQDN" 'configctl filter reload' || {
         warn "Could not reload filter rules"
     }
 fi
@@ -316,7 +316,7 @@ sleep 3
 # Step 5: Verify Caddy is running
 info "Step 5: Verifying Caddy service..."
 sleep 2
-if ssh root@"$FIREWALL_FQDN" 'configctl caddy status' 2>/dev/null | grep -qi "running"; then
+if tappaas_fw_ssh root@"$FIREWALL_FQDN" 'configctl caddy status' 2>/dev/null | grep -qi "running"; then
     info "  ${GN}✓${CL} Caddy service is running"
 else
     warn "Caddy service does not appear to be running."
@@ -337,8 +337,8 @@ echo ""
 PATCH_SCRIPT="/home/tappaas/TAPPaaS/src/foundation/tappaas-cicd/controller/opnsense-controller/patches/apply-caddy-isdnsname.sh"
 if [[ -f "${PATCH_SCRIPT}" ]]; then
     info "Applying os-caddy ToDomain underscore patch..."
-    scp -q "${PATCH_SCRIPT}" root@"$FIREWALL_FQDN":/tmp/apply-caddy-isdnsname.sh
-    ssh root@"$FIREWALL_FQDN" 'sh /tmp/apply-caddy-isdnsname.sh' \
+    scp -q -o IdentitiesOnly=yes -i "$(tappaas_fw_ssh_identity)" "${PATCH_SCRIPT}" root@"$FIREWALL_FQDN":/tmp/apply-caddy-isdnsname.sh
+    tappaas_fw_ssh root@"$FIREWALL_FQDN" 'sh /tmp/apply-caddy-isdnsname.sh' \
         | while IFS= read -r line; do info "  $line"; done \
         || warn "  os-caddy patch reported an error"
 else

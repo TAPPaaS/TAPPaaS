@@ -107,5 +107,39 @@ check "identity value resolves the operator's key" \
     "$(echo "${argv}" | grep -A1 '^-i$' | tail -1)" "/home/tappaas/.ssh/id_ed25519"
 rm -rf "${STUBDIR}"
 
+# ── tappaas_fw_ssh_identity() — prefer tappaas-fw, fall back to operator key ──
+FWHOME="$(mktemp -d "${TMPDIR:-/tmp}/tappaas-fw-test.XXXXXX")"
+trap 'restore_env; rm -rf "${STUBDIR}" "${FWHOME}"' EXIT
+mkdir -p "${FWHOME}/.ssh"
+
+setenv "TAPPAAS_OPERATOR_HOME=${FWHOME}"
+check "no tappaas-fw file -> falls back to the operator's own key" \
+    "$(tappaas_fw_ssh_identity)" "${FWHOME}/.ssh/id_ed25519"
+
+: > "${FWHOME}/.ssh/tappaas-fw"
+check "tappaas-fw present -> preferred over the operator's own key" \
+    "$(tappaas_fw_ssh_identity)" "${FWHOME}/.ssh/tappaas-fw"
+rm -rf "${FWHOME}"
+
+setenv "TAPPAAS_SSH_IDENTITY=/custom/path/id_rsa"
+check "TAPPAAS_SSH_IDENTITY override reaches the fallback path too" \
+    "$(tappaas_fw_ssh_identity)" "/custom/path/id_rsa"
+
+# ── tappaas_fw_ssh() builds the same flag set, firewall identity ─────────
+setenv "SUDO_USER=tappaas"
+STUBDIR="$(mktemp -d "${TMPDIR:-/tmp}/tappaas-fw-ssh-test.XXXXXX")"
+trap 'restore_env; rm -rf "${STUBDIR}"' EXIT
+cat > "${STUBDIR}/ssh" <<'STUB'
+#!/usr/bin/env bash
+printf '%s\n' "$@"
+STUB
+chmod +x "${STUBDIR}/ssh"
+argv="$(PATH="${STUBDIR}:${PATH}" tappaas_fw_ssh root@firewall.mgmt.internal "true")"
+check "fw: passes explicit -i" "$(echo "${argv}" | grep -c '^-i$')" "1"
+check "fw: passes IdentitiesOnly=yes" "$(echo "${argv}" | grep -c 'IdentitiesOnly=yes')" "1"
+check "fw: no tappaas-fw file -> resolves the operator's key" \
+    "$(echo "${argv}" | grep -A1 '^-i$' | tail -1)" "/home/tappaas/.ssh/id_ed25519"
+rm -rf "${STUBDIR}"
+
 echo "Results: ${pass} passed, ${fail} failed"
 [ "${fail}" -eq 0 ]

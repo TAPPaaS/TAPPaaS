@@ -292,19 +292,19 @@ if [[ "$FIREWALL_AVAILABLE" == "true" ]]; then
     # Install and enable QEMU guest agent on OPNsense (FreeBSD)
     # This allows Proxmox to communicate with the firewall VM via the guest agent
     info "Installing QEMU guest agent on OPNsense..."
-    if ssh $SSH_ACCEPT root@"$FIREWALL_FQDN" "/bin/sh -c 'pkg info os-qemu-guest-agent'" &>/dev/null; then
+    if tappaas_fw_ssh root@"$FIREWALL_FQDN" "/bin/sh -c 'pkg info os-qemu-guest-agent'" &>/dev/null; then
         info "  QEMU guest agent already installed"
     else
-        run_quiet ssh $SSH_ACCEPT root@"$FIREWALL_FQDN" "/bin/sh -c 'pkg install -y os-qemu-guest-agent'" || {
+        run_quiet tappaas_fw_ssh root@"$FIREWALL_FQDN" "/bin/sh -c 'pkg install -y os-qemu-guest-agent'" || {
             warn "QEMU guest agent installation failed. Install manually via OPNsense UI."
         }
     fi
     info "Enabling QEMU guest agent service..."
-    run_quiet ssh $SSH_ACCEPT root@"$FIREWALL_FQDN" "/bin/sh -c 'sysrc qemu_guest_agent_enable=YES'" || true
-    if ssh $SSH_ACCEPT root@"$FIREWALL_FQDN" "/bin/sh -c 'service qemu-guest-agent status'" &>/dev/null; then
+    run_quiet tappaas_fw_ssh root@"$FIREWALL_FQDN" "/bin/sh -c 'sysrc qemu_guest_agent_enable=YES'" || true
+    if tappaas_fw_ssh root@"$FIREWALL_FQDN" "/bin/sh -c 'service qemu-guest-agent status'" &>/dev/null; then
         info "  QEMU guest agent service is already running"
     else
-        run_quiet ssh $SSH_ACCEPT root@"$FIREWALL_FQDN" "/bin/sh -c 'service qemu-guest-agent start'" || {
+        run_quiet tappaas_fw_ssh root@"$FIREWALL_FQDN" "/bin/sh -c 'service qemu-guest-agent start'" || {
             warn "QEMU guest agent service could not be started. Enable manually in OPNsense."
         }
     fi

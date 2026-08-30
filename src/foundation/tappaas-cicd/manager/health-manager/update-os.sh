@@ -118,7 +118,7 @@ get_vm_ip_dhcp() {
     # Query DHCP leases on firewall
     local mac_lower
     mac_lower=$(echo "${vm_mac}" | tr '[:upper:]' '[:lower:]')
-    ssh "root@firewall.${MGMT}.internal" "grep -i '${mac_lower}' /var/db/dnsmasq.leases" 2>/dev/null | awk '{print $3}'
+    tappaas_fw_ssh "root@firewall.${MGMT}.internal" "grep -i '${mac_lower}' /var/db/dnsmasq.leases" 2>/dev/null | awk '{print $3}'
 }
 
 # Wait for VM to get IP address using multiple methods

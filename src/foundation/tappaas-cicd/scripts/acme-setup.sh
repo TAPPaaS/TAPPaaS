@@ -174,10 +174,10 @@ fi
 DNS_HOOK="$(resolve_dns_service "$PROVIDER").sh"
 echo
 info "${BOLD}Ensuring acme.sh DNS hooks on ${FIREWALL}${CL}"
-ssh -o ConnectTimeout=5 root@"${FIREWALL}" \
+tappaas_fw_ssh root@"${FIREWALL}" \
     'sh /usr/local/opnsense/scripts/OPNsense/AcmeClient/setup.sh' 2>/dev/null \
     || warn "  could not run os-acme-client setup.sh on ${FIREWALL} (continuing to verify)"
-if ! ssh -o ConnectTimeout=5 root@"${FIREWALL}" \
+if ! tappaas_fw_ssh root@"${FIREWALL}" \
         "test -e /var/etc/acme-client/home/dnsapi/${DNS_HOOK}"; then
     die "acme.sh DNS hook ${DNS_HOOK} missing on ${FIREWALL} after setup.sh (see #327)"
 fi

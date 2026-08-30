@@ -659,6 +659,45 @@ tappaas_ssh() {
         "$@"
 }
 
+# ── SSH identity helper (root@firewall — OPNsense domain) ────────────
+#
+# A THIRD identity domain, distinct from root@<proxmox-node> above.
+# install-platform.sh::grant_cicd_firewall_access() (added 2026-05-25,
+# #226) copies the Proxmox node's own root key to
+# ~/.ssh/tappaas-fw and routes firewall SSH through it via an
+# ~/.ssh/config Host block — the documented, intended design. But that
+# provisioning step runs ONCE, during initial cluster bootstrap, and does
+# NOT retroactively apply to a site bootstrapped before #226 existed. Such
+# a site's firewall was authorized with the operator's own key instead
+# (config-firewall.sh's NODE_PUBKEY_FILE search), which is what
+# tappaas_ssh_identity() already resolves — confirmed live, 2026-08-30.
+#
+# Prefer the dedicated tappaas-fw key when present (matches the documented
+# design and any site where #226's provisioning actually ran); fall back to
+# the operator key otherwise (matches a pre-#226 site's confirmed reality).
+# Same override/fallback shape as tappaas_ssh_identity() above, by design.
+tappaas_fw_ssh_identity() {
+    local home fwkey
+    home="$(tappaas_operator_home)"
+    fwkey="${home:-/home/tappaas}/.ssh/tappaas-fw"
+    if [[ -f "${fwkey}" ]]; then
+        echo "${fwkey}"
+    else
+        tappaas_ssh_identity
+    fi
+}
+
+# ssh root@firewall "<remote>" — drop-in wrapper, same flags as
+# tappaas_ssh(), firewall-specific identity resolution.
+tappaas_fw_ssh() {
+    ssh -o ConnectTimeout=5 \
+        -o BatchMode=yes \
+        -o StrictHostKeyChecking=accept-new \
+        -o IdentitiesOnly=yes \
+        -i "$(tappaas_fw_ssh_identity)" \
+        "$@"
+}
+
 # Check whether a VM with the given VMID exists anywhere in the Proxmox cluster.
 # VMIDs are cluster-wide, so a VM created on any node makes the ID unavailable —
 # this queries /cluster/resources rather than a single node's `qm status`.

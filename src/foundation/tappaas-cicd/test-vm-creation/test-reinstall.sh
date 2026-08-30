@@ -28,7 +28,9 @@ readonly SCRIPT_DIR
 MODULE="${1:-test-debian}"
 readonly MODULE
 readonly CONFIG_DIR="/home/tappaas/config"
-readonly SSH_OPTS="-o ConnectTimeout=5 -o StrictHostKeyChecking=accept-new -o UserKnownHostsFile=/dev/null -o LogLevel=ERROR -o BatchMode=yes"
+# -i/-o IdentitiesOnly=yes (ADR-018, #518/#519/#520): under sudo -n SSH's
+# default identity search looks in /root/.ssh (empty), never at $HOME.
+readonly SSH_OPTS="-o ConnectTimeout=5 -o StrictHostKeyChecking=accept-new -o UserKnownHostsFile=/dev/null -o LogLevel=ERROR -o BatchMode=yes -o IdentitiesOnly=yes -i $(tappaas_ssh_identity)"
 
 PASS=0
 FAIL=0

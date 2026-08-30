@@ -50,7 +50,33 @@ if [[ "$FORCE" -ne 1 && -f /var/lib/tappaas-pxe/boot.ipxe && -f /var/lib/tappaas
   exit 0
 fi
 
-_ssh() { ssh -o BatchMode=yes -o ConnectTimeout=8 -o StrictHostKeyChecking=accept-new "root@${NODE}" "$@"; }
+# ── SSH identity helper (root@<node> Proxmox-host domain only) ──────────
+# Mirrors lib/common-install-routines.sh's tappaas_ssh() exactly (ADR-018,
+# #518/#519/#520) — duplicated here rather than sourcing the shared lib,
+# matching this script's own existing self-contained design (it already
+# defines its own info/warn/die rather than sourcing common-install-routines.sh).
+function tappaas_operator_home() {
+  if [ -n "${TAPPAAS_OPERATOR_HOME:-}" ]; then
+    echo "${TAPPAAS_OPERATOR_HOME}"
+    return 0
+  fi
+  if [ -n "${SUDO_USER:-}" ] && [ "${SUDO_USER}" != "root" ]; then
+    echo "/home/${SUDO_USER}"
+    return 0
+  fi
+  echo ""
+}
+function tappaas_ssh_identity() {
+  if [ -n "${TAPPAAS_SSH_IDENTITY:-}" ]; then
+    echo "${TAPPAAS_SSH_IDENTITY}"
+    return 0
+  fi
+  local home
+  home="$(tappaas_operator_home)"
+  echo "${home:-/home/tappaas}/.ssh/id_ed25519"
+}
+
+_ssh() { ssh -o BatchMode=yes -o ConnectTimeout=8 -o StrictHostKeyChecking=accept-new -o IdentitiesOnly=yes -i "$(tappaas_ssh_identity)" "root@${NODE}" "$@"; }
 
 _ssh true 2>/dev/null || die "cannot reach root@${NODE} — pass --node <a-PVE-node> (the assistant must run on a PVE box)"
 
@@ -85,7 +111,7 @@ _ssh "proxmox-auto-install-assistant prepare-iso /root/${ISO_NAME} \
 
 # 3. Copy to the mothership + stage the netboot assets.
 info "copying the prepared ISO to ${DEST_ISO} (~1.5 GB)..."
-scp -q -o BatchMode=yes "root@${NODE}:${PREPARED}" "${DEST_ISO}" \
+scp -q -o BatchMode=yes -o IdentitiesOnly=yes -i "$(tappaas_ssh_identity)" "root@${NODE}:${PREPARED}" "${DEST_ISO}" \
   || die "copying the prepared ISO failed"
 sudo node-provisioner prepare --iso "${DEST_ISO}" \
   || die "node-provisioner prepare failed"

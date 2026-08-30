@@ -73,7 +73,7 @@ skip() { warn "  ⊘ $1 (skipped)"; SKIP=$((SKIP + 1)); }
 section() { echo; info "${BOLD:-}${1}${CL}"; }
 
 # Firewall node (where the firewall VM lives) — for the "co-located vs not" point.
-FW_NODE="$(ssh -o ConnectTimeout=6 root@"$(get_node_hostname 0)".mgmt.internal \
+FW_NODE="$(tappaas_ssh root@"$(get_node_hostname 0)".mgmt.internal \
     "pvesh get /cluster/resources --type vm --output-format json 2>/dev/null | jq -r '.[]|select(.name==\"firewall\")|.node'" 2>/dev/null || echo "")"
 
 # ── cleanup (idempotent; runs on any exit) ───────────────────────────
@@ -84,7 +84,7 @@ cleanup() {
         exit "${rc}"
     fi
     section "─── cleanup ───"
-    if [[ -f "${CONFIG_DIR}/${MODULE}-${VAR}.json" ]] || ssh -o ConnectTimeout=6 root@"${DEST_NODE}".mgmt.internal "qm status ${VMID}" >/dev/null 2>&1; then
+    if [[ -f "${CONFIG_DIR}/${MODULE}-${VAR}.json" ]] || tappaas_ssh root@"${DEST_NODE}".mgmt.internal "qm status ${VMID}" >/dev/null 2>&1; then
         info "Removing module ${MODULE}-${VAR} (VM ${VMID})…"
         /home/tappaas/bin/delete-module.sh "${MODULE}-${VAR}" --force >/dev/null 2>&1 \
             || warn "  delete-module ${MODULE}-${VAR} returned non-zero — check VM ${VMID} on ${DEST_NODE}"
@@ -109,7 +109,7 @@ if [[ "${DEEP}" != "1" ]]; then
 fi
 command -v network-manager >/dev/null 2>&1 || { fail "network-manager not on PATH"; exit 2; }
 [[ -f "${FIX}/${MODULE}.json" ]] || { fail "fixture ${MODULE}.json missing"; exit 2; }
-ssh -o ConnectTimeout=6 root@"${DEST_NODE}".mgmt.internal true >/dev/null 2>&1 \
+tappaas_ssh root@"${DEST_NODE}".mgmt.internal true >/dev/null 2>&1 \
     || { fail "destination node ${DEST_NODE} unreachable over mgmt"; exit 2; }
 if jq -e --arg z "${VAR}" 'has($z)' "${ZONES_FILE}" >/dev/null 2>&1; then
     fail "zone '${VAR}' already exists — a previous run did not clean up"; exit 2
@@ -148,7 +148,7 @@ if proxmox-manager bridge-vids 2>&1 | grep -q "Proxmox network in sync"; then
 else
     fail "bridge-vids drift remains after add — the gap is NOT closed"
 fi
-if ssh -o ConnectTimeout=6 root@"${DEST_NODE}".mgmt.internal \
+if tappaas_ssh root@"${DEST_NODE}".mgmt.internal \
         "bridge vlan show | grep -qw ${VLAN}" >/dev/null 2>&1; then
     pass "VLAN ${VLAN} present on ${DEST_NODE} lan bridge"
 else
@@ -161,7 +161,7 @@ fi
 # cheaply (no VM): put the destination host on the new VLAN and ping the firewall
 # gateway. This isolates a switch-trunk gap from the node bridge-vids fix.
 section "3. inter-node L2 — does VLAN ${VLAN} reach the firewall gateway ${SUBNET}.1 from ${DEST_NODE}?"
-L2_RC="$(ssh -o ConnectTimeout=8 root@"${DEST_NODE}".mgmt.internal "
+L2_RC="$(tappaas_ssh root@"${DEST_NODE}".mgmt.internal "
     bridge vlan add vid ${VLAN} dev lan self 2>/dev/null
     ip link add link lan name zcp${VLAN} type vlan id ${VLAN} 2>/dev/null
     ip addr add ${SUBNET}.222/24 dev zcp${VLAN} 2>/dev/null
@@ -193,7 +193,7 @@ else
         fail "install-module failed despite a viable L2 path — see ${INSTALL_LOG}:"
         tail -n 12 "${INSTALL_LOG}" 2>/dev/null | sed 's/^/        | /' >&2
     fi
-    VM_IP="$(ssh -o ConnectTimeout=6 root@"${DEST_NODE}".mgmt.internal \
+    VM_IP="$(tappaas_ssh root@"${DEST_NODE}".mgmt.internal \
         "qm guest cmd ${VMID} network-get-interfaces 2>/dev/null" \
         | grep -oE "${SUBNET}\.[0-9]+" | head -1 || true)"
     [[ -n "${VM_IP}" ]] \
