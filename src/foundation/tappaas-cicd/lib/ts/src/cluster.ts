@@ -17,8 +17,8 @@ export function mgmtDomain(): string {
 }
 
 // The SSH identity ssh() authenticates outbound calls with. Explicit, not
-// ambient-$HOME-derived — see rca-manager-root-ssh-identity-gap-2026-08-27
-// (gdty-vsm). `sudo -n <manager-cmd>` sets $HOME=/root, which has no identity
+// ambient-$HOME-derived (root-cause analysis: sudo -n's identity gap, 2026-08-27).
+// `sudo -n <manager-cmd>` sets $HOME=/root, which has no identity
 // of its own (/root/.ssh/ holds only authorized_keys + known_hosts), hiding
 // the tappaas user's own key — the one actually trusted as `root` on every
 // node, and the same key check-ha-health.service already authenticates with
