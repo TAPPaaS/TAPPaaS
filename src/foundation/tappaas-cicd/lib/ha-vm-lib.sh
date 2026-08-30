@@ -57,6 +57,15 @@ havm_exec() {
         # site's own ConnectTimeout=10/-n/LogLevel=ERROR are deliberate for
         # CRM timing and ssh's first--o-wins semantics would silently drop
         # ConnectTimeout=10 back to tappaas_ssh()'s fixed 5.
+        #
+        # Defensive guard, not just the comment above: a future caller that
+        # forgets the sourcing order would otherwise hit an opaque "command
+        # not found: tappaas_ssh_identity" on the real (non-stubbed) path only
+        # — exactly the path the mock-based test suite above doesn't exercise.
+        if ! declare -F tappaas_ssh_identity >/dev/null; then
+            error "havm_exec: tappaas_ssh_identity() is not defined — source lib/common-install-routines.sh before lib/ha-vm-lib.sh (ADR-018)"
+            return 1
+        fi
         ssh -n -o ConnectTimeout=10 -o BatchMode=yes -o LogLevel=ERROR \
             -o StrictHostKeyChecking=accept-new \
             -o IdentitiesOnly=yes -i "$(tappaas_ssh_identity)" \

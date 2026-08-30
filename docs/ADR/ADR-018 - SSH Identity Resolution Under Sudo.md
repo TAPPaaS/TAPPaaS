@@ -125,3 +125,16 @@ for automation access) — this ADR closes the acute bug class within the curren
 model; #142 is Lars's/the community's call on whether that model should persist at
 all. Findings from this sweep are intended to be fed to #142 as evidence once this
 initiative is far enough along to be worth surfacing.
+
+**Open follow-up, not blocking this ADR**: the identity-resolution precedence
+(`TAPPAAS_SSH_IDENTITY`/`TAPPAAS_OPERATOR_HOME` → `$SUDO_USER` → fallback) now
+exists in four places kept in sync by commit-message discipline alone —
+`lib/ts/src/cluster.ts` (canonical TypeScript), `lib/common-install-routines.sh`
+(canonical bash), and two deliberate bash duplicates
+(`manager/health-manager/check-disk-threshold.sh`,
+`scripts/prepare-netboot.sh` — each self-contained by design, avoiding a new
+shared-lib dependency). Nothing currently detects the four drifting apart.
+Independent chief-architect ratification review (2026-08-30) flagged this as
+the most legitimate structural risk in the whole initiative — not urgent
+enough to block, but worth a tracked follow-up (a parity-check test, or at
+minimum a checklist item) before it's forgotten.

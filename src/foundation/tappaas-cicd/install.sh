@@ -81,6 +81,16 @@ export FIREWALL_FQDN="firewall.$MGMTVLAN.internal"  # Used by sourced scripts
 SSH_ACCEPT="-o StrictHostKeyChecking=accept-new"
 
 # copy the public keys to the root account of every proxmox host
+#
+# The bare `ssh`/`scp` calls below are OUT OF SCOPE for ADR-018's sudo -n
+# identity fix, not an oversight: this loop runs before
+# common-install-routines.sh is even sourced (below, "Source
+# common-install-routines.sh to replace the minimal _info/_warn/_error"), as
+# part of install.sh's own bootstrap — invoked directly as the tappaas
+# operator (via install-platform.sh's cicd_ssh), never under sudo -n. ADR-018's
+# bug requires sudo -n's UID change; it structurally cannot apply here. The
+# key material is what this loop IS installing, so ssh-copy-id/scp already
+# reference /home/tappaas/.ssh/id_ed25519(.pub) explicitly by path anyway.
 echo ""
 _info "Installing SSH keys on Proxmox nodes..."
 while read -r node; do

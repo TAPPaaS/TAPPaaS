@@ -611,8 +611,8 @@ check_service_available() {
 # resolution; IdentitiesOnly=yes stops ssh from also racing a forwarded
 # agent key first. Only applies to the root@<proxmox-node> domain — guest-VM
 # calls (tappaas@/debian@<ip>) may authenticate via a different key
-# entirely and are NOT covered by this helper (see ADR-XXX-tappaas-ssh-
-# identity.md Phase 5 — investigation, not assumed).
+# entirely and are NOT covered by this helper (see "ADR-018 - SSH Identity
+# Resolution Under Sudo.md" Phase 5 — investigation, not assumed).
 
 # The operator whose on-disk SSH identity authorizes root@<node>.
 # TAPPAAS_OPERATOR_HOME overrides for tests / relocated installs; SUDO_USER
