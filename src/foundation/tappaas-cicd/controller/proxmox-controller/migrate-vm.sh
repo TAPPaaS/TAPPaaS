@@ -277,6 +277,26 @@ remove_ha() {
         "ha-manager remove vm:${vmid}" 2>/dev/null || true
 }
 
+# Re-point a node-affinity node list at `prefer`, keeping the same membership.
+# Input/output shape is PVE's own: "nodeA:2,nodeB:1", higher priority preferred.
+# The preferred node gets 2, every other member 1; a node list that does not
+# contain `prefer` is returned unchanged (nothing sensible to re-point).
+ha_nodes_prefer() {
+    local nodes="$1" prefer="$2" out="" entry name
+    [[ ",${nodes}," == *",${prefer}:"* ]] || { printf '%s' "${nodes}"; return; }
+    local IFS=','
+    for entry in ${nodes}; do
+        name="${entry%%:*}"
+        [[ -z "${name}" ]] && continue
+        if [[ "${name}" == "${prefer}" ]]; then
+            out="${out:+${out},}${name}:2"
+        else
+            out="${out:+${out},}${name}:1"
+        fi
+    done
+    printf '%s' "${out}"
+}
+
 # Restore HA resource and affinity rule for a VM after migration.
 restore_ha() {
     local vmid="$1"
@@ -289,11 +309,17 @@ restore_ha() {
         return
     }
 
-    # Restore affinity rule if one was saved
+    # Restore the affinity rule if one was saved, with the priorities re-pointed
+    # at where the VM now is (#528). Replaying the pre-migration string leaves
+    # the source node preferred, so the CRM immediately tries to move the VM
+    # back — an online migration that cannot succeed on a CPU-heterogeneous
+    # cluster, leaving the service stuck in 'migrate'. Higher priority wins.
     if [[ -n "${_HA_RULE_NAME}" && -n "${_HA_RULE_NODES}" ]]; then
-        info "  Restoring HA rule: ${_HA_RULE_NAME} (nodes: ${_HA_RULE_NODES})"
+        local nodes
+        nodes="$(ha_nodes_prefer "${_HA_RULE_NODES}" "${node}")"
+        info "  Restoring HA rule: ${_HA_RULE_NAME} (nodes: ${nodes})"
         ssh root@"${node}.${MGMT}.internal" \
-            "pvesh create /cluster/ha/rules --rule ${_HA_RULE_NAME} --type node-affinity --resources vm:${vmid} --nodes '${_HA_RULE_NODES}'" 2>/dev/null || {
+            "pvesh create /cluster/ha/rules --rule ${_HA_RULE_NAME} --type node-affinity --resources vm:${vmid} --nodes '${nodes}'" 2>/dev/null || {
             warn "Could not restore HA rule '${_HA_RULE_NAME}' — please recreate manually"
         }
     fi
