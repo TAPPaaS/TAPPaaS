@@ -2,12 +2,12 @@
 
 | | |
 |---|---|
-| **Status** | **Draft** — Phase 1 implemented and locally verified; not yet published/reviewed; held per Lars's own request for a deep code review, not yet available until Monday evening. Not on `main`. |
-| **Version** | 0.1 |
+| **Status** | **Draft** — full closure (Phases 1–5, firewall domain, mutation-tested, independently ratified) implemented and locally verified on `fix/tappaas-ssh-identity-hardening-phase1`; not yet published/reviewed/merged. Held per Lars's own request for a deep code review. Not on `main`. |
+| **Version** | 0.5 |
 | **Date** | 2026-08-30 |
 | **Author** | Erik Daniel |
-| **Related** | **#518** (root cause, originally surfaced), **#519** (first attempted fix — `$HOME` override — closed but did not actually resolve #518), **#520** (confirms #519 didn't work; the real fix, merged), **PR #521** (the fix, TypeScript side, `lib/ts/src/cluster.ts`); **#142** (open, 2026-04-15 — the same pattern at the architecture level: whether SSH+sudo should remain the AI-agent/automation access model at all); **owner:** `lib/common-install-routines.sh` (bash side, this ADR), `lib/ts/src/cluster.ts` (TypeScript side, already merged) |
-| **Changelog** | v0.1 — initial draft, written alongside Phase 1's implementation (`tappaas_operator_home`/`tappaas_ssh_identity`/`tappaas_ssh` in `common-install-routines.sh`, mirroring the already-merged TypeScript fix). |
+| **Related** | **#518** (root cause, originally surfaced), **#519** (first attempted fix — `$HOME` override — closed but did not actually resolve #518), **#520** (confirms #519 didn't work; the real fix, merged), **PR #521** (the fix, TypeScript side, `lib/ts/src/cluster.ts`); **#226** (2026-05-25, `grant_cicd_firewall_access()` — the firewall's own dedicated-key mechanism, load-bearing context for the firewall-domain closure below); **#142** (open, 2026-04-15 — the same pattern at the architecture level: whether SSH+sudo should remain the AI-agent/automation access model at all); **owner:** `lib/common-install-routines.sh` (bash side, this ADR), `lib/ts/src/cluster.ts` (TypeScript side, already merged) |
+| **Changelog** | v0.1 — initial draft, Phase 1 only. v0.2 — Phase 2 (weak host-key checking). v0.3 — Phase 3 (`havm_exec()`; `_tunnel_ssh()` investigated and excluded, see Consequences), Phase 4 (remaining node-domain files). v0.4 — firewall domain closed (`tappaas_fw_ssh()`), tree re-swept twice; mutation-tested all three identity guarantees (test-quality audit, see Consequences); independently ratified by a fresh chief-architect + cybersecurity-specialist review (architect: REFINE, 4 items, all addressed; security: APPROVE). v0.5 — Phase 5 closed (guest-VM domain, confirmed via the actual cloud-init provisioning path, no new resolver needed). All five phases plus the firewall domain now closed; scope is the full estate, not a subset. |
 
 ## Context
 
@@ -72,8 +72,10 @@ Two independent implementations of the same fix, kept in lockstep on purpose:
   `ssh()`): merged on `main`, PR #521, live-verified against real production
   modules on both cluster nodes.
 - **Bash** (`lib/common-install-routines.sh` — `tappaas_operator_home()`,
-  `tappaas_ssh_identity()`, `tappaas_ssh()`): this ADR, Phase 1 of a 5-phase
-  closure (see Consequences).
+  `tappaas_ssh_identity()`, `tappaas_ssh()`): this ADR. Phase 1 of what became
+  a full-estate closure across five phases plus a distinct firewall domain
+  (see Consequences) — the 5-phase estimate at Phase 1's own start turned out
+  to undercount the actual scope once the tree was swept twice.
 
 ## Scope
 
@@ -114,12 +116,47 @@ Closure is phased, same branch, each phase independently verified before the nex
    instead of rejecting it, unlike `accept-new` used everywhere else) — a real,
    separate, currently-live security weakness, prioritized to keep the exposure
    window short.
-3. **Phase 3**: two pre-existing wrapper functions with the same bug, found as a
-   bonus during the sweep — `manager/satellite-manager/lib/tunnel.sh`'s
-   `_tunnel_ssh()` and `lib/ha-vm-lib.sh`'s `havm_exec()`.
-4. **Phase 4**: the remaining ~17 files, same pattern, file-by-file (real variance
-   in existing flags across them — no single mechanical find/replace).
-5. **Phase 5** (closed 2026-08-30): the `tappaas@`/`debian@<guest>` identity
+3. **Phase 3** (partial, by design): two pre-existing wrapper functions found as
+   a bonus during the sweep, investigated as *two different identity domains*,
+   not one — `lib/ha-vm-lib.sh`'s `havm_exec()` (confirmed same
+   `root@<proxmox-node>` domain — **fixed**) and
+   `manager/satellite-manager/lib/tunnel.sh`'s `_tunnel_ssh()` (confirmed a
+   *different* domain — the satellite's dedicated, out-of-band operator key,
+   documented by `satellite-manager install --sshkey`'s own help text as
+   explicitly "NOT a tappaas-cicd key" — **excluded**, deliberately, not
+   deferred: applying this ADR's default there would have been wrong, not
+   just unverified).
+4. **Phase 4**: the remaining node-domain files (11, not the originally
+   estimated ~17 — some of the original sweep's 19 files turned out to already
+   be covered by Phases 1–3, or to belong to the firewall domain below), same
+   pattern, file-by-file (real variance in existing flags across them — no
+   single mechanical find/replace). A second sweep after this phase found four
+   more files the first sweep had missed (`test-variants/`,
+   `test-vm-creation/test-vm.sh`/`test-reinstall.sh`, `prepare-netboot.sh`) —
+   fixed alongside the firewall domain below.
+5. **Firewall domain** (a third identity domain, found mid-initiative, not
+   originally in the 5-phase estimate): `root@firewall` (OPNsense). Closed via
+   a new `tappaas_fw_ssh()`/`tappaas_fw_ssh_identity()` pair — prefer the
+   dedicated `~/.ssh/tappaas-fw` key `#226` provisions when present, fall back
+   to the operator key otherwise (falsified against this site's actual
+   provisioning dates before deciding: both predate `#226` by weeks, and its
+   provisioning step is run-once, non-retroactive — this site's operator-key
+   fallback is expected, not drift). ~26 call sites across 11 files.
+6. **Test-quality audit**: none of the above had been mutation-tested until
+   audited and closed — green alone proves a guarantee holds, not that the
+   test fails for the right reason. Closed by actually stripping `-i`/
+   `IdentitiesOnly=yes` from all three identity guarantees (`tappaas_ssh()`,
+   `tappaas_fw_ssh()`, `havm_exec()`) in turn, confirming the right test (and
+   only that test) went red, restoring, and confirming green and
+   byte-identical again.
+7. **Independent ratification**: a fresh chief-architect + cybersecurity-
+   specialist review (each inspecting the diffs directly, re-running every
+   test suite and the mutation test themselves, rather than trusting a prior
+   summary) — security: **APPROVE**; architect: **REFINE**, four small,
+   concrete items (a stale cross-reference, an undocumented exclusion, a
+   comment-only sourcing-order contract, a tracked follow-up for the
+   duplicated identity-resolution logic) — all four addressed and re-verified.
+8. **Phase 5** (closed 2026-08-30): the `tappaas@`/`debian@<guest>` identity
    domain — confirmed to use the same operator key (see Scope), no new resolver
    needed. Reused `tappaas_ssh()`/`tappaas_ssh_identity()` directly — that
    function takes the full `user@host` target, so nothing guest-VM-specific
@@ -129,6 +166,13 @@ Closure is phased, same branch, each phase independently verified before the nex
    `check-disk-threshold.sh`, `update-os.sh`, `test-vm.sh`. Live-verified: the
    actual patched `check-disk-threshold.sh` run end-to-end against a real VM
    (`deconz`) under `sudo -n`, real disk-usage reading returned.
+
+**Satellite domain**: deliberately excluded throughout (see Phase 3) — a
+genuinely separate identity model, not part of this closure. **Full-tree
+re-sweep after Phase 5** (every domain: node, HA, firewall, guest-VM) found
+zero remaining unmigrated `ssh`/`scp` call sites — every residual hit is a
+comment, a `warn`/`die` string, a test string-literal, or already fixed via a
+variable that bakes the identity flags in.
 
 Does **not** give `root` a standing SSH identity of its own — that remains a
 deliberate, separate, not-yet-made site-level decision (raised, and explicitly
