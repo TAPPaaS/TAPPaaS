@@ -94,7 +94,7 @@ find_reachable_node() {
 # Output: JSON array with vmid, name, node, status
 get_cluster_vms() {
     local query_node="$1"
-    ssh root@"${query_node}.${MGMT}.internal" \
+    tappaas_ssh root@"${query_node}.${MGMT}.internal" \
         "pvesh get /cluster/resources --type vm --output-format json" 2>/dev/null
 }
 

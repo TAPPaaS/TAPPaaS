@@ -103,7 +103,7 @@ get_vm_current_node() {
     # Find a reachable node to query the cluster
     first_node=$(find_reachable_node) || die "No Proxmox nodes reachable"
 
-    ssh root@"${first_node}.${MGMT}.internal" \
+    tappaas_ssh root@"${first_node}.${MGMT}.internal" \
         "pvesh get /cluster/resources --type vm --output-format json" 2>/dev/null \
         | jq -r --argjson id "${vmid}" \
             '.[] | select(.vmid == $id and .type == "qemu") | .node // empty'
@@ -153,7 +153,7 @@ try_live_migration() {
     fi
 
     local migrate_result=0
-    ssh root@"${source_node}.${MGMT}.internal" \
+    tappaas_ssh root@"${source_node}.${MGMT}.internal" \
         "qm migrate ${vmid} ${target_node} --online 1 --with-local-disks 1" 2>&1 \
         || migrate_result=$?
 
@@ -201,7 +201,7 @@ do_offline_migration() {
     if [[ "${ha_managed}" == "false" ]]; then
         # Not HA-managed — try a graceful guest shutdown first; havm_stop below
         # falls back to a hard stop and is what actually confirms the result.
-        ssh root@"${source_fqdn}" "qm shutdown ${vmid} --timeout 90" 2>&1 \
+        tappaas_ssh root@"${source_fqdn}" "qm shutdown ${vmid} --timeout 90" 2>&1 \
             || warn "Graceful shutdown failed — forcing stop"
     fi
     havm_stop "${source_fqdn}" "${vmid}" qemu 120 \
@@ -215,7 +215,7 @@ do_offline_migration() {
 
     # Migrate
     info "  Migrating VM ${vmid} to ${target_node}..."
-    ssh root@"${source_fqdn}" \
+    tappaas_ssh root@"${source_fqdn}" \
         "qm migrate ${vmid} ${target_node}" 2>&1 || die "Offline migration failed for VM ${vmid}"
     info "  ${GN}✓${CL} Migration completed"
 
@@ -246,7 +246,7 @@ save_ha_state() {
 
     # Find any HA affinity rule that references this VM
     local rule_json
-    rule_json=$(ssh root@"${any_node}.${MGMT}.internal" \
+    rule_json=$(tappaas_ssh root@"${any_node}.${MGMT}.internal" \
         "pvesh get /cluster/ha/rules --output-format json" 2>/dev/null || echo "[]")
 
     _HA_RULE_NAME=$(echo "${rule_json}" | jq -r \
@@ -268,12 +268,12 @@ remove_ha() {
 
     # Remove affinity rule first (if saved)
     if [[ -n "${_HA_RULE_NAME}" ]]; then
-        ssh root@"${any_node}.${MGMT}.internal" \
+        tappaas_ssh root@"${any_node}.${MGMT}.internal" \
             "pvesh delete /cluster/ha/rules/${_HA_RULE_NAME}" 2>/dev/null || true
     fi
 
     # Remove HA resource
-    ssh root@"${any_node}.${MGMT}.internal" \
+    tappaas_ssh root@"${any_node}.${MGMT}.internal" \
         "ha-manager remove vm:${vmid}" 2>/dev/null || true
 }
 
@@ -283,7 +283,7 @@ restore_ha() {
     local node="$2"
 
     info "  Re-adding VM ${vmid} to HA on ${node}..."
-    ssh root@"${node}.${MGMT}.internal" \
+    tappaas_ssh root@"${node}.${MGMT}.internal" \
         "ha-manager add vm:${vmid} --state started" 2>/dev/null || {
         warn "Could not re-add VM ${vmid} to HA — please add manually"
         return
@@ -292,7 +292,7 @@ restore_ha() {
     # Restore affinity rule if one was saved
     if [[ -n "${_HA_RULE_NAME}" && -n "${_HA_RULE_NODES}" ]]; then
         info "  Restoring HA rule: ${_HA_RULE_NAME} (nodes: ${_HA_RULE_NODES})"
-        ssh root@"${node}.${MGMT}.internal" \
+        tappaas_ssh root@"${node}.${MGMT}.internal" \
             "pvesh create /cluster/ha/rules --rule ${_HA_RULE_NAME} --type node-affinity --resources vm:${vmid} --nodes '${_HA_RULE_NODES}'" 2>/dev/null || {
             warn "Could not restore HA rule '${_HA_RULE_NAME}' — please recreate manually"
         }

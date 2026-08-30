@@ -17,9 +17,6 @@
 # captured by the disk snapshot that update-module.sh takes before updating.
 readonly RBT_SENTINEL="/root/tappaas-rollback-test.state"
 
-# BatchMode so a missing host key fails fast instead of prompting.
-readonly RBT_SSH_OPTS="-o ConnectTimeout=5 -o StrictHostKeyChecking=accept-new -o BatchMode=yes"
-
 # Resolve vmid/node from the installed module config (written by install-module.sh).
 rbt_vmid() {
     local m="${1:-rollback-test}"
@@ -38,8 +35,8 @@ rbt_node() {
 rbt_wait_agent() {
     local vmid="$1" node="$2" timeout="${3:-150}" waited=0
     while [[ "${waited}" -lt "${timeout}" ]]; do
-        # shellcheck disable=SC2029,SC2086  # vmid expands locally; SSH_OPTS split on purpose
-        if ssh ${RBT_SSH_OPTS} "root@${node}.mgmt.internal" \
+        # shellcheck disable=SC2029  # vmid expands locally, intended
+        if tappaas_ssh "root@${node}.mgmt.internal" \
                 "qm guest cmd ${vmid} ping" >/dev/null 2>&1; then
             return 0
         fi
@@ -55,7 +52,7 @@ rbt_write_sentinel() {
     local vmid="$1" node="$2" value="$3"
     rbt_wait_agent "${vmid}" "${node}" || { error "guest agent never came up on VM ${vmid}"; return 1; }
     # shellcheck disable=SC2029,SC2086  # vmid/value expand locally; SSH_OPTS split on purpose
-    ssh ${RBT_SSH_OPTS} "root@${node}.mgmt.internal" \
+    tappaas_ssh "root@${node}.mgmt.internal" \
         "qm guest exec ${vmid} -- /bin/sh -c 'echo ${value} > ${RBT_SENTINEL}; sync'" >/dev/null
 }
 
@@ -64,8 +61,8 @@ rbt_write_sentinel() {
 rbt_read_sentinel() {
     local vmid="$1" node="$2"
     rbt_wait_agent "${vmid}" "${node}" || return 0
-    # shellcheck disable=SC2029,SC2086  # vmid expands locally; SSH_OPTS split on purpose
-    ssh ${RBT_SSH_OPTS} "root@${node}.mgmt.internal" \
+    # shellcheck disable=SC2029  # vmid expands locally, intended
+    tappaas_ssh "root@${node}.mgmt.internal" \
         "qm guest exec ${vmid} -- /bin/sh -c 'cat ${RBT_SENTINEL} 2>/dev/null'" 2>/dev/null \
         | jq -r '."out-data" // empty' 2>/dev/null | tr -d '[:space:]'
 }

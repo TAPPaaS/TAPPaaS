@@ -366,7 +366,7 @@ check_cluster() {
     log_info "  Connecting to primary node: $primary_fqdn"
 
     local cluster_nodes
-    cluster_nodes=$(ssh -o ConnectTimeout=5 -o BatchMode=yes "root@${primary_fqdn}" \
+    cluster_nodes=$(tappaas_ssh "root@${primary_fqdn}" \
         "pvesh get /nodes --output-format=json 2>/dev/null | jq -r '.[].node'" 2>/dev/null || true)
 
     if [[ -z "$cluster_nodes" ]]; then

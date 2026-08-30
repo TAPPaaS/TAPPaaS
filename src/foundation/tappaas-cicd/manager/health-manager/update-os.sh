@@ -97,7 +97,7 @@ get_vm_ip_guest_agent() {
     local node="$1"
     local vmid="$2"
 
-    ssh "root@${node}.${MGMT}.internal" "qm guest cmd ${vmid} network-get-interfaces" 2>/dev/null | \
+    tappaas_ssh "root@${node}.${MGMT}.internal" "qm guest cmd ${vmid} network-get-interfaces" 2>/dev/null | \
         jq -r '.[] | select(.name | test("^lo$") | not) | ."ip-addresses"[]? | select(."ip-address-type" == "ipv4") | ."ip-address"' 2>/dev/null | \
         head -1
 }
@@ -109,7 +109,7 @@ get_vm_ip_dhcp() {
 
     # Get the VM's MAC address
     local vm_mac
-    vm_mac=$(ssh "root@${node}.${MGMT}.internal" "qm config ${vmid} | grep 'net0' | sed -n 's/.*virtio=\([^,]*\).*/\\1/p'" 2>/dev/null)
+    vm_mac=$(tappaas_ssh "root@${node}.${MGMT}.internal" "qm config ${vmid} | grep 'net0' | sed -n 's/.*virtio=\([^,]*\).*/\\1/p'" 2>/dev/null)
 
     if [[ -z "${vm_mac}" ]]; then
         return 1
@@ -461,7 +461,7 @@ update_nixos() {
         warn "  Reboot under supervision when ready: ssh root@${node}.${MGMT}.internal 'qm reboot ${vmid}'"
     elif automatic_reboot_enabled; then
         info "Rebooting VM to apply configuration..."
-        ssh "root@${node}.${MGMT}.internal" "qm reboot ${vmid}"
+        tappaas_ssh "root@${node}.${MGMT}.internal" "qm reboot ${vmid}"
 
         # Wait for sshd to come back (replaces fixed sleep 60 — issue #376).
         update_ssh_known_hosts "${vm_ip}"

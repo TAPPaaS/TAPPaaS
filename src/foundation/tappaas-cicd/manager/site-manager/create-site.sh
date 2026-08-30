@@ -279,7 +279,7 @@ DISCOVERED_EMAIL=""
 discover_node_email() {
     local primary_node="$1"
     local user_cfg
-    user_cfg=$(ssh -o ConnectTimeout=5 -o BatchMode=yes -o StrictHostKeyChecking=accept-new "root@${primary_node}" \
+    user_cfg=$(tappaas_ssh "root@${primary_node}" \
         "grep '^user:root@pam:' /etc/pve/user.cfg 2>/dev/null" 2>/dev/null || true)
     if [[ -n "$user_cfg" ]]; then
         local pve_email
@@ -335,13 +335,13 @@ discover_cluster() {
 
     # Node list via pvesh JSON API (most reliable).
     local cluster_nodes=""
-    cluster_nodes=$(ssh -o ConnectTimeout=5 -o BatchMode=yes -o StrictHostKeyChecking=accept-new "root@${primary_node}" \
+    cluster_nodes=$(tappaas_ssh "root@${primary_node}" \
         "pvesh get /cluster/status --output-format=json 2>/dev/null | jq -r '[.[] | select(.type==\"node\")] | sort_by(.nodeid) | .[].name' | grep -v '^null$'" 2>/dev/null || true)
 
     # Fallback: pvecm nodes text parsing (handles the Qdevice/local layouts).
     if [[ -z "$cluster_nodes" ]]; then
         debug "  Falling back to pvecm nodes..."
-        cluster_nodes=$(ssh -o ConnectTimeout=5 -o BatchMode=yes -o StrictHostKeyChecking=accept-new "root@${primary_node}" \
+        cluster_nodes=$(tappaas_ssh "root@${primary_node}" \
             "pvecm nodes 2>/dev/null" 2>/dev/null | awk '
                 /Name/ { for (i=1; i<=NF; i++) if ($i == "Name") name_col=i; next }
                 /^[[:space:]]*[0-9]/ && name_col { print $name_col }
@@ -367,7 +367,7 @@ discover_cluster() {
         # cluster-wide even when not physically present on a node.
         local node_fqdn="${node}.${MGMT}.internal"
         local pools
-        pools=$(ssh -o ConnectTimeout=5 -o BatchMode=yes -o StrictHostKeyChecking=accept-new "root@${node_fqdn}" \
+        pools=$(tappaas_ssh "root@${node_fqdn}" \
             "zpool list -H -o name 2>/dev/null" 2>/dev/null | grep -E '^tank' | LC_ALL=C sort || true)
         NODE_POOLS["$node"]="$pools"
         debug "  ${node}: pools=[${pools//$'\n'/, }]"

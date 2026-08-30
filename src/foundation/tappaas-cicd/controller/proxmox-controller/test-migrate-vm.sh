@@ -129,9 +129,31 @@ run_migrate() {
     (
         export TAPPAAS_HAVM_EXEC="${W}/stub"
         export HAVM_POLL_INTERVAL=1
+        # Pre-define tappaas_ssh()/tappaas_ssh_identity() from THIS worktree
+        # (ADR-018, #518/#519/#520) before MIGRATE's own sourcing of the
+        # deployed /home/tappaas/bin/common-install-routines.sh — matching
+        # test-common-install-routines.sh/test-ha-vm-lib.sh's own convention
+        # of testing worktree code, not whatever is currently deployed. The
+        # stale deployed copy re-sourced below redefines info/warn/error but
+        # has no tappaas_ssh of its own to clobber these with.
+        # shellcheck source=../../lib/common-install-routines.sh disable=SC1091
+        . "${HERE}/../../lib/common-install-routines.sh" "" >/dev/null 2>&1
         # shellcheck source=migrate-vm.sh disable=SC1091
         . "${MIGRATE}" >/dev/null 2>&1
-        ssh() { local host="$1"; shift; "${W}/stub" "${host#root@}" "$*"; }
+        # Mock ssh — must tolerate leading -o/-i flags: tappaas_ssh() puts
+        # them before the host, unlike the plain `ssh root@host cmd` this
+        # mock originally only had to parse.
+        ssh() {
+            local host=""
+            while [[ $# -gt 0 ]]; do
+                case "$1" in
+                    -o|-i) shift 2 ;;
+                    -*) shift ;;
+                    *) host="$1"; shift; break ;;
+                esac
+            done
+            "${W}/stub" "${host#root@}" "$*"
+        }
         # The poll LOOPS are what is under test, not wall-clock patience: a
         # no-op sleep runs a full 120s timeout budget in milliseconds while the
         # stub still advances one CRM tick per command, so the "waits it out"

@@ -142,7 +142,7 @@ domain="$(jq -r '.domain // "<not set>"' <<<"$(get_variant_config "" 2>/dev/null
 nodes="$(pvesh get /cluster/resources --type node --output-format json 2>/dev/null \
           | jq -r '.[].node' 2>/dev/null | paste -sd', ' - 2>/dev/null || true)"
 if [[ -z "$nodes" ]]; then
-  nodes="$(ssh -o ConnectTimeout=5 -o StrictHostKeyChecking=accept-new root@tappaas1.mgmt.internal \
+  nodes="$(tappaas_ssh root@tappaas1.mgmt.internal \
             'pvesh get /cluster/resources --type node --output-format json' 2>/dev/null \
             | jq -r '.[].node' 2>/dev/null | paste -sd', ' - || true)"
 fi

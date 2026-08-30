@@ -97,7 +97,7 @@ fi
 NODE_FQDN="${NODE}.${MGMT}.internal"
 
 # Detect whether VMID is a QEMU VM or LXC container
-VM_TYPE=$(ssh -o ConnectTimeout=5 -o BatchMode=yes -o LogLevel=ERROR root@"${NODE_FQDN}" \
+VM_TYPE=$(tappaas_ssh -o LogLevel=ERROR root@"${NODE_FQDN}" \
     "pvesh get /cluster/resources --type vm --output-format json" 2>/dev/null \
     | jq -r --argjson id "${VMID}" \
         '.[] | select(.vmid == $id) | .type // empty' 2>/dev/null || true)
@@ -148,7 +148,7 @@ get_snapshot_names() {
     # qm/pct listsnapshot outputs lines like:
     #   `-> snapname   date   description
     # Filter out "current" which is not a real snapshot
-    ssh root@"${NODE_FQDN}" "${CMD} listsnapshot ${VMID}" 2>/dev/null \
+    tappaas_ssh root@"${NODE_FQDN}" "${CMD} listsnapshot ${VMID}" 2>/dev/null \
         | grep -v '^\s*$' \
         | sed 's/^[[:space:]`|>+\-]*//g' \
         | awk '{print $1}' \
@@ -172,7 +172,7 @@ case "${ACTION}" in
         SNAP_NAME="tappaas-$(date +'%Y%m%d-%H%M%S')"
         SNAP_DESC="TAPPaaS snapshot for ${MODULE}"
         info "  Creating snapshot: ${BL}${SNAP_NAME}${CL}"
-        ssh root@"${NODE_FQDN}" "${CMD} snapshot ${VMID} '${SNAP_NAME}' --description '${SNAP_DESC}'" \
+        tappaas_ssh root@"${NODE_FQDN}" "${CMD} snapshot ${VMID} '${SNAP_NAME}' --description '${SNAP_DESC}'" \
             || die "Failed to create snapshot"
         info "${GN}Snapshot '${SNAP_NAME}' created successfully${CL}"
         ;;
@@ -180,7 +180,7 @@ case "${ACTION}" in
     list)
         info "  Snapshots for VM ${VMNAME} (${VMID}):"
         echo ""
-        ssh root@"${NODE_FQDN}" "${CMD} listsnapshot ${VMID}" 2>/dev/null || die "Failed to list snapshots"
+        tappaas_ssh root@"${NODE_FQDN}" "${CMD} listsnapshot ${VMID}" 2>/dev/null || die "Failed to list snapshots"
         echo ""
         ;;
 
@@ -202,7 +202,7 @@ case "${ACTION}" in
         while IFS= read -r snap; do
             [[ -z "${snap}" ]] && continue
             info "  Deleting snapshot: ${BL}${snap}${CL}"
-            ssh root@"${NODE_FQDN}" "${CMD} delsnapshot ${VMID} '${snap}'" \
+            tappaas_ssh root@"${NODE_FQDN}" "${CMD} delsnapshot ${VMID} '${snap}'" \
                 || warn "Failed to delete snapshot '${snap}'"
         done <<< "${TO_DELETE}"
 
@@ -258,7 +258,7 @@ case "${ACTION}" in
             || die "Failed to stop VM ${VMID} — NOT rolling back to '${TARGET}' (a rollback over a running VM fails or corrupts the disk)"
 
         info "  Rolling back to snapshot: ${BL}${TARGET}${CL}"
-        ssh root@"${NODE_FQDN}" "${CMD} rollback ${VMID} '${TARGET}'" \
+        tappaas_ssh root@"${NODE_FQDN}" "${CMD} rollback ${VMID} '${TARGET}'" \
             || die "Failed to rollback to snapshot '${TARGET}'"
 
         info "  Starting VM ${VMID}..."
@@ -279,7 +279,7 @@ case "${ACTION}" in
         # LXC fall back to a fixed grace period.
         agent_on=0
         if [[ "${CMD}" == "qm" ]] \
-           && ssh root@"${NODE_FQDN}" "qm config ${VMID}" 2>/dev/null \
+           && tappaas_ssh root@"${NODE_FQDN}" "qm config ${VMID}" 2>/dev/null \
                 | grep -q '^agent:.*1'; then
             agent_on=1
         fi
@@ -288,7 +288,7 @@ case "${ACTION}" in
             waited=0
             up=0
             while [[ "${waited}" -lt "${READY_TIMEOUT}" ]]; do
-                if ssh root@"${NODE_FQDN}" "qm guest cmd ${VMID} ping" >/dev/null 2>&1; then
+                if tappaas_ssh root@"${NODE_FQDN}" "qm guest cmd ${VMID} ping" >/dev/null 2>&1; then
                     up=1
                     break
                 fi

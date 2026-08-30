@@ -151,7 +151,12 @@ check_reverse_dependencies() {
     return "${dependents_found}"
 }
 
-readonly SSH_OPTS_DM="-o ConnectTimeout=5 -o StrictHostKeyChecking=accept-new -o UserKnownHostsFile=/dev/null -o LogLevel=ERROR -o BatchMode=yes"
+# -i/-o IdentitiesOnly=yes (ADR-018, #518/#519/#520): under sudo -n SSH's
+# default identity search looks in /root/.ssh (empty), never at $HOME. Kept as
+# a direct addition rather than tappaas_ssh() — this call site's own
+# UserKnownHostsFile=/dev/null/LogLevel=ERROR are deliberate and not part of
+# that wrapper's fixed flag set.
+readonly SSH_OPTS_DM="-o ConnectTimeout=5 -o StrictHostKeyChecking=accept-new -o UserKnownHostsFile=/dev/null -o LogLevel=ERROR -o BatchMode=yes -o IdentitiesOnly=yes -i $(tappaas_ssh_identity)"
 
 # List every qemu VM in the cluster whose name matches $1.
 # Emits one line per match: "<vmid> <node> <status>". Empty if none/unreachable.
