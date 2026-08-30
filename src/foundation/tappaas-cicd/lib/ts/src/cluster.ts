@@ -16,41 +16,17 @@ export function mgmtDomain(): string {
   return process.env.TAPPAAS_MGMT_DOMAIN ?? "mgmt.internal";
 }
 
-export interface RemoteResult {
-  rc: number;
-  stdout: string;
-  stderr: string;
-  // false when the binary could not be spawned at all.
-  ran: boolean;
-}
-
-function runLocal(
-  cmd: string,
-  args: string[],
-  env?: Record<string, string | undefined>,
-): RemoteResult {
-  const r = spawnSync(cmd, args, {
-    encoding: "utf8",
-    maxBuffer: 64 * 1024 * 1024,
-    ...(env ? { env } : {}),
-  });
-  if (r.error) return { rc: -1, stdout: "", stderr: r.error.message, ran: false };
-  return { rc: r.status ?? -1, stdout: r.stdout ?? "", stderr: r.stderr ?? "", ran: true };
-}
-
-// The operator whose on-disk SSH identity authorizes root@<node>. These
-// helpers ssh as root to the Proxmox nodes, but the key that authorizes that
-// login belongs to the operator (tappaas), not to root. Under `sudo -n`
-// module/site-manager the process runs AS root with HOME reset to /root and
-// no ssh-agent (env_reset drops SSH_AUTH_SOCK) — so ssh looks in /root/.ssh
-// (empty) and every qm/pvesh call fails fleet-wide (#518), while an
-// interactive `ssh root@node` as tappaas succeeds. Resolve the invoking
-// operator's home so the ssh child reads their ~/.ssh/{config,known_hosts,
-// id_*} exactly as the interactive session does. TAPPAAS_OPERATOR_HOME
-// overrides for tests / relocated installs; SUDO_USER is exported by every
-// sudo invocation. Returns undefined when not under sudo — the inherited HOME
-// is already the operator's and needs no override. Exported for unit tests;
-// not part of the manager-facing API.
+// The operator whose on-disk SSH identity authorizes root@<node>. ssh() logs
+// in as root, but the key that authorizes that login belongs to the operator
+// who invoked sudo (SUDO_USER), not to root — root has none of its own.
+// Resolving this dynamically, rather than hardcoding one operator name, is
+// what keeps sshIdentity()'s default portable to a site whose operator
+// account isn't named "tappaas". TAPPAAS_OPERATOR_HOME overrides for tests /
+// relocated installs; SUDO_USER is exported by every sudo invocation. Returns
+// undefined when not under sudo, or when already running as root directly —
+// the inherited HOME is already correct and needs no resolution. Covered by
+// module-manager/test/unit/cluster.test.ts (unchanged by this fix — the
+// function's behavior is identical; only how ssh() uses it changed, below).
 export function operatorHome(): string | undefined {
   const override = process.env.TAPPAAS_OPERATOR_HOME;
   if (override) return override;
@@ -59,39 +35,72 @@ export function operatorHome(): string | undefined {
   return undefined;
 }
 
-// Env for the ssh child: the ambient env with HOME pinned to the operator's
-// home when we ran under sudo, so ssh's default ~/.ssh lookup finds the
-// operator's identity and known_hosts instead of root's. undefined when no
-// override is needed, so runLocal keeps inheriting process.env verbatim.
-function sshEnv(): Record<string, string | undefined> | undefined {
-  const home = operatorHome();
-  if (!home) return undefined;
-  return { ...process.env, HOME: home };
+// The SSH identity ssh() authenticates outbound calls with. Explicit —
+// passed directly as -i, never left to SSH's own default identity-file
+// resolution. That resolution looks up the process's real UID in the passwd
+// database (getpwuid), not $HOME — confirmed live, and matches OpenSSH's own
+// documented tilde-expansion behavior. So overriding $HOME alone (this
+// module's own prior approach, via an sshEnv() that set HOME on the spawned
+// process) never redirects it: under `sudo -n` the effective UID is root,
+// and ssh always ends up back in /root/.ssh/, which holds no identity of its
+// own (only authorized_keys + known_hosts). An explicit -i bypasses that
+// lookup entirely — it is the only mechanism that actually works under
+// sudo -n. The default is derived from the invoking operator (operatorHome()),
+// so it isn't tied to one site's operator username — it falls back to the
+// same "tappaas" convention this codebase's other defaults already assume
+// (CONFIG_DIR, TAPPAAS_REPO, ...) only when not running under sudo. Still
+// overridable via TAPPAAS_SSH_IDENTITY for a site whose operator key isn't
+// ed25519, or isn't at the default path.
+export function sshIdentity(): string {
+  const explicit = process.env.TAPPAAS_SSH_IDENTITY;
+  if (explicit) return explicit;
+  const home = operatorHome() ?? "/home/tappaas";
+  return `${home}/.ssh/id_ed25519`;
+}
+
+export interface RemoteResult {
+  rc: number;
+  stdout: string;
+  stderr: string;
+  // false when the binary could not be spawned at all.
+  ran: boolean;
+}
+
+function runLocal(cmd: string, args: string[]): RemoteResult {
+  const r = spawnSync(cmd, args, { encoding: "utf8", maxBuffer: 64 * 1024 * 1024 });
+  if (r.error) return { rc: -1, stdout: "", stderr: r.error.message, ran: false };
+  return { rc: r.status ?? -1, stdout: r.stdout ?? "", stderr: r.stderr ?? "", ran: true };
 }
 
 // ssh <user>@<host> "<remote>" with a short connect timeout + batch mode (no
 // interactive prompts). host is a full hostname/FQDN — callers append
-// mgmtDomain() themselves where applicable. Runs with the operator's HOME
-// (see operatorHome) so key auth works under `sudo -n` as well as interactively.
+// mgmtDomain() themselves where applicable.
 export function ssh(user: string, host: string, remote: string): RemoteResult {
-  return runLocal(
-    "ssh",
-    [
-      "-o",
-      "ConnectTimeout=5",
-      "-o",
-      "BatchMode=yes",
-      // accept-new: a freshly (re)installed node has an unknown host key and
-      // strict batch mode made every query against it fail (bit the N1 pool
-      // discovery twice). CHANGED keys are still rejected — a reprovisioned
-      // node needs its stale entry cleared (node add does this itself).
-      "-o",
-      "StrictHostKeyChecking=accept-new",
-      `${user}@${host}`,
-      remote,
-    ],
-    sshEnv(),
-  );
+  return runLocal("ssh", [
+    "-o",
+    "ConnectTimeout=5",
+    "-o",
+    "BatchMode=yes",
+    // accept-new: a freshly (re)installed node has an unknown host key and
+    // strict batch mode made every query against it fail (bit the N1 pool
+    // discovery twice). CHANGED keys are still rejected — a reprovisioned
+    // node needs its stale entry cleared (node add does this itself).
+    "-o",
+    "StrictHostKeyChecking=accept-new",
+    // Explicit identity (sshIdentity()) — see its own comment. IdentitiesOnly
+    // stops ssh from also offering a forwarded agent key first: under sudo -n
+    // an operator's own forwarded key gets offered, correctly rejected by the
+    // node (never authorized there), and only then does the client fall back
+    // to searching $HOME for a default identity — the exact failure this fix
+    // closes. Explicit -i without IdentitiesOnly would still race that same
+    // agent-offer-first behavior.
+    "-o",
+    "IdentitiesOnly=yes",
+    "-i",
+    sshIdentity(),
+    `${user}@${host}`,
+    remote,
+  ]);
 }
 
 // Ping-probe candidate node names (bare names, probed at <name>.<mgmtDomain>)
