@@ -38,6 +38,43 @@ function error() {
   exit 1
 }
 
+# ── SSH identity helper (root@<node> Proxmox-host domain only) ──────────
+# Mirrors lib/common-install-routines.sh's tappaas_ssh() exactly (ADR-018,
+# #518/#519/#520) — duplicated here rather than sourcing the shared lib,
+# matching this script's own existing self-contained design (it already
+# defines its own get_config_value/info/warn rather than sourcing
+# common-install-routines.sh, presumably for cron-invocation portability).
+# Only used for this script's one root@<node> call; its tappaas@<guest>
+# calls are a different identity domain, out of scope here (ADR-018 Phase 5).
+function tappaas_operator_home() {
+  if [ -n "${TAPPAAS_OPERATOR_HOME:-}" ]; then
+    echo "${TAPPAAS_OPERATOR_HOME}"
+    return 0
+  fi
+  if [ -n "${SUDO_USER:-}" ] && [ "${SUDO_USER}" != "root" ]; then
+    echo "/home/${SUDO_USER}"
+    return 0
+  fi
+  echo ""
+}
+function tappaas_ssh_identity() {
+  if [ -n "${TAPPAAS_SSH_IDENTITY:-}" ]; then
+    echo "${TAPPAAS_SSH_IDENTITY}"
+    return 0
+  fi
+  local home
+  home="$(tappaas_operator_home)"
+  echo "${home:-/home/tappaas}/.ssh/id_ed25519"
+}
+function tappaas_ssh() {
+  ssh -o ConnectTimeout=5 \
+      -o BatchMode=yes \
+      -o StrictHostKeyChecking=accept-new \
+      -o IdentitiesOnly=yes \
+      -i "$(tappaas_ssh_identity)" \
+      "$@"
+}
+
 # Check hostname
 if [ "$(hostname)" != "tappaas-cicd" ]; then
   error "This script must be run on the TAPPaaS-CICD host (hostname tappaas-cicd)."
@@ -135,7 +172,7 @@ fi
 info "${YW}Disk usage (${DISK_USAGE}%) exceeds threshold (${THRESHOLD}%)!${CL}"
 
 # Get current disk size from Proxmox
-ACTUAL_SIZE=$(ssh -o StrictHostKeyChecking=no "root@${NODE}.mgmt.internal" \
+ACTUAL_SIZE=$(tappaas_ssh "root@${NODE}.mgmt.internal" \
   "qm config $VMID | grep -oP 'scsi0:.*size=\K[0-9]+[GMTK]?'" 2>/dev/null || echo "$CURRENT_SIZE")
 
 info "Current disk size: $ACTUAL_SIZE"

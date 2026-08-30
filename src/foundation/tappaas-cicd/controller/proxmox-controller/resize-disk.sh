@@ -70,7 +70,7 @@ info "Current configured size: $CURRENT_SIZE"
 info "New size: $NEW_SIZE"
 
 # Get actual current disk size from Proxmox
-ACTUAL_SIZE=$(ssh -o StrictHostKeyChecking=no "root@${NODE}.mgmt.internal" \
+ACTUAL_SIZE=$(tappaas_ssh "root@${NODE}.mgmt.internal" \
   "qm config $VMID | grep -oP 'scsi0:.*size=\K[0-9]+[GMTK]?'" 2>/dev/null || echo "unknown")
 info "Actual Proxmox disk size: $ACTUAL_SIZE"
 
@@ -84,7 +84,7 @@ fi
 
 # Resize disk in Proxmox
 info "Resizing disk in Proxmox from $ACTUAL_SIZE to $NEW_SIZE..."
-ssh -o StrictHostKeyChecking=no "root@${NODE}.mgmt.internal" \
+tappaas_ssh "root@${NODE}.mgmt.internal" \
   "qm resize $VMID scsi0 $NEW_SIZE" >/dev/null
 
 info "Proxmox disk resize complete."
