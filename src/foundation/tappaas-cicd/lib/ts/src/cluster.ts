@@ -24,7 +24,11 @@ export interface RemoteResult {
   ran: boolean;
 }
 
-function runLocal(cmd: string, args: string[], env?: NodeJS.ProcessEnv): RemoteResult {
+function runLocal(
+  cmd: string,
+  args: string[],
+  env?: Record<string, string | undefined>,
+): RemoteResult {
   const r = spawnSync(cmd, args, {
     encoding: "utf8",
     maxBuffer: 64 * 1024 * 1024,
@@ -59,7 +63,7 @@ export function operatorHome(): string | undefined {
 // home when we ran under sudo, so ssh's default ~/.ssh lookup finds the
 // operator's identity and known_hosts instead of root's. undefined when no
 // override is needed, so runLocal keeps inheriting process.env verbatim.
-function sshEnv(): NodeJS.ProcessEnv | undefined {
+function sshEnv(): Record<string, string | undefined> | undefined {
   const home = operatorHome();
   if (!home) return undefined;
   return { ...process.env, HOME: home };
