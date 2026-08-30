@@ -58,11 +58,18 @@ SSH_ACCESS="$(get_config_value 'sshAccess' 'true')"
 if [[ "${VMNAME}" == "firewall" || "${VMNAME}" == "network" ]]; then
     SSH_USER="root"
     VM_HOST="firewall.${ZONE0NAME}.internal"
+    SSH_IDENTITY_FN="tappaas_fw_ssh_identity"
 else
     SSH_USER="tappaas"
+    SSH_IDENTITY_FN="tappaas_ssh_identity"
 fi
 
-readonly SSH_OPTS="-o ConnectTimeout=10 -o StrictHostKeyChecking=accept-new -o UserKnownHostsFile=/dev/null -o LogLevel=ERROR -o BatchMode=yes"
+# -i/-o IdentitiesOnly=yes (ADR-018, #518/#519/#520): under sudo -n SSH's
+# default identity search looks in /root/.ssh (empty), never at $HOME. This
+# check's own silent-failure mode made that bug invisible: an empty
+# vm_status from a failed ssh read as "VM is not running" (line 97), a false
+# negative indistinguishable from the VM actually being down.
+readonly SSH_OPTS="-o ConnectTimeout=10 -o StrictHostKeyChecking=accept-new -o UserKnownHostsFile=/dev/null -o LogLevel=ERROR -o BatchMode=yes -o IdentitiesOnly=yes -i $(${SSH_IDENTITY_FN})"
 
 DEEP="${TAPPAAS_TEST_DEEP:-0}"
 PASS=0
@@ -81,7 +88,7 @@ info "  Check 1: VM status in Proxmox"
 vm_status=""
 for node_candidate in "${NODE}" $(get_all_node_hostnames); do
     candidate_fqdn="${node_candidate}.${MGMT}.internal"
-    vm_status=$(ssh -o ConnectTimeout=5 -o BatchMode=yes -o LogLevel=ERROR \
+    vm_status=$(tappaas_ssh -o LogLevel=ERROR \
         "root@${candidate_fqdn}" \
         "pvesh get /cluster/resources --type vm --output-format json" 2>/dev/null \
         | jq -r --argjson id "${VMID}" \
