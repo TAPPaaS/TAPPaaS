@@ -49,8 +49,17 @@ havm_exec() {
         # -n: never read local stdin. These are all command-only calls, and a
         # caller with an interactive confirmation (reboot-node.sh) would
         # otherwise have its prompt eaten by ssh.
+        # -i/-o IdentitiesOnly=yes (ADR-018, #518/#519/#520): under sudo -n
+        # SSH's default identity search looks in /root/.ssh (empty), never at
+        # $HOME. Every caller here already sources common-install-routines.sh
+        # before this file, so tappaas_ssh_identity() is in scope. Kept as a
+        # direct addition rather than a swap to tappaas_ssh() — this call
+        # site's own ConnectTimeout=10/-n/LogLevel=ERROR are deliberate for
+        # CRM timing and ssh's first--o-wins semantics would silently drop
+        # ConnectTimeout=10 back to tappaas_ssh()'s fixed 5.
         ssh -n -o ConnectTimeout=10 -o BatchMode=yes -o LogLevel=ERROR \
             -o StrictHostKeyChecking=accept-new \
+            -o IdentitiesOnly=yes -i "$(tappaas_ssh_identity)" \
             "root@${node_fqdn}" "${cmd}"
     fi
 }
