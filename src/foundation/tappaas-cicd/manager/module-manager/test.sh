@@ -844,5 +844,85 @@ PY
 fi
 
 echo ""
+echo "== module-manager dependsOn-delta tests (#511) =="
+# Exercises the REAL apply_dependson_delta from update-module.sh (extracted with
+# the same awk idiom as resolve_default_zone above), driven against a fake
+# provider whose service scripts just append a marker line. Asserts the correct
+# lifecycle verb fires on the delta: install-service.sh for an ADDED dependency,
+# delete-service.sh for a REMOVED one, and neither when the list is unchanged
+# (reconcile converges those via update-service.sh). No VMs, no live config.
+UPD_MOD="${HERE}/update-module.sh"
+DFN="${WORK}/delta.fn.sh"
+awk '/^apply_dependson_delta\(\) \{/{f=1} f{print} f&&/^\}/{exit}' "$UPD_MOD" > "$DFN"
+if [[ -s "$DFN" ]] && bash -n "$DFN" 2>/dev/null; then
+    ok "extracted apply_dependson_delta from update-module.sh"
+else
+    bad "could not extract apply_dependson_delta from update-module.sh"
+fi
+
+# Fake provider 'prov' exposing service 'testsvc' with all three verb scripts.
+DROOT="${WORK}/delta"; PROV="${DROOT}/prov"; MARKER="${DROOT}/marker.log"
+mkdir -p "${PROV}/services/testsvc"
+for verb in install update delete; do
+    cat > "${PROV}/services/testsvc/${verb}-service.sh" <<EOF
+#!/usr/bin/env bash
+echo "${verb} \$1" >> "${MARKER}"
+EOF
+    chmod +x "${PROV}/services/testsvc/${verb}-service.sh"
+done
+
+# Drive the extracted function with stubbed resolvers + logging. resolve_provider
+# _module is identity (returns the raw provider name); get_module_dir returns the
+# fake provider dir; fatal_with_rollback surfaces a marker instead of exiting.
+run_delta() {
+    local before="$1" after="$2"
+    : > "${MARKER}"
+    bash -c '
+        set -uo pipefail
+        BL=""; GN=""; CL=""
+        info(){ :; }; debug(){ :; }; warn(){ echo "WARN:$*" >&2; }
+        resolve_provider_module(){ printf "%s\n" "$1"; }
+        get_module_dir(){ printf "%s\n" "'"${PROV}"'"; }
+        ensure_scripts_executable(){ :; }
+        fatal_with_rollback(){ echo "ROLLBACK:$3" >&2; exit 2; }
+        . "'"$DFN"'"
+        apply_dependson_delta "testmod" "false" "" "'"$before"'" "'"$after"'"
+    '
+}
+
+# (a) ADD prov:testsvc → install-service.sh runs; update/delete do not.
+run_delta "" "prov:testsvc" >/dev/null 2>&1
+if grep -qx "install testmod" "${MARKER}" 2>/dev/null && ! grep -q "delete " "${MARKER}"; then
+    ok "(a) added dependsOn entry → install-service.sh runs (create verb)"
+else
+    bad "(a) expected 'install testmod'; got: $(tr '\n' ';' < "${MARKER}" 2>/dev/null)"
+fi
+
+# (b) REMOVE prov:testsvc → delete-service.sh runs; install does not.
+run_delta "prov:testsvc" "" >/dev/null 2>&1
+if grep -qx "delete testmod" "${MARKER}" 2>/dev/null && ! grep -q "install " "${MARKER}"; then
+    ok "(b) removed dependsOn entry → delete-service.sh runs"
+else
+    bad "(b) expected 'delete testmod'; got: $(tr '\n' ';' < "${MARKER}" 2>/dev/null)"
+fi
+
+# (c) UNCHANGED → neither install nor delete (reconcile converges via update-service).
+run_delta "prov:testsvc" "prov:testsvc" >/dev/null 2>&1
+if [[ ! -s "${MARKER}" ]]; then
+    ok "(c) unchanged dependsOn → no install/delete (left to reconcile update-service.sh)"
+else
+    bad "(c) expected no markers; got: $(tr '\n' ';' < "${MARKER}" 2>/dev/null)"
+fi
+
+# (d) ADD a dep whose provider ships no install-service.sh → skipped cleanly, no crash.
+rm -f "${PROV}/services/testsvc/install-service.sh"
+run_delta "" "prov:testsvc" >/dev/null 2>&1; delta_rc=$?
+if [[ "${delta_rc}" -eq 0 && ! -s "${MARKER}" ]]; then
+    ok "(d) added dep, provider has no install-service.sh → skipped without failure"
+else
+    bad "(d) expected clean skip (rc=0, no markers); rc=${delta_rc}, markers=$(tr '\n' ';' < "${MARKER}" 2>/dev/null)"
+fi
+
+echo ""
 echo "Results: ${PASS} passed, ${FAIL} failed"
 [[ "$FAIL" -eq 0 ]] || exit 1
