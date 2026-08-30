@@ -327,5 +327,28 @@ else
     no "lib must work standalone under set -e with no caller-supplied logging functions"
 fi
 
+# ── havm_exec()'s real ssh path (ADR-018, #518/#519/#520) ────────────
+# Every test above runs through TAPPAAS_HAVM_EXEC, which bypasses havm_exec()'s
+# real `ssh` branch entirely — none of them would catch a regression in its
+# explicit -i/IdentitiesOnly=yes. Exercise that branch directly: unset the
+# stub seam, stub the real `ssh` binary via PATH instead, and capture argv.
+(
+    unset TAPPAAS_HAVM_EXEC
+    # shellcheck source=common-install-routines.sh disable=SC1091
+    . "${HERE}/common-install-routines.sh" ""   # tappaas_ssh_identity()
+    STUBDIR="$(mktemp -d "${TMPDIR:-/tmp}/havm-exec-ssh-test.XXXXXX")"
+    trap 'rm -rf "${STUBDIR}"' EXIT
+    cat > "${STUBDIR}/ssh" <<'STUB'
+#!/usr/bin/env bash
+printf '%s\n' "$@"
+STUB
+    chmod +x "${STUBDIR}/ssh"
+    PATH="${STUBDIR}:${PATH}" havm_exec tappaas1.mgmt.internal "true"
+) > "${W}/havm_exec_ssh_argv" 2>/dev/null
+check "havm_exec: passes explicit -i" \
+    "$(grep -cx -- '-i' "${W}/havm_exec_ssh_argv")" "1"
+check "havm_exec: passes IdentitiesOnly=yes" \
+    "$(grep -cx -- 'IdentitiesOnly=yes' "${W}/havm_exec_ssh_argv")" "1"
+
 echo "Results: ${pass} passed, ${fail} failed"
 [ "${fail}" -eq 0 ]
