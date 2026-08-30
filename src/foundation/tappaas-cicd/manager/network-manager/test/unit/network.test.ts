@@ -13,7 +13,7 @@
 //
 // Tiny assert harness (no test framework).
 
-import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "fs";
+import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, writeFileSync } from "fs";
 import { join } from "path";
 import { tmpdir } from "os";
 import { PLANE_ORDER } from "../../src/types";
@@ -1619,6 +1619,59 @@ function tmpZones(): string {
   check(!RETIRED_ZONES.includes("srv") && !RETIRED_ZONES.includes("work") &&
         !RETIRED_ZONES.includes("home") && !RETIRED_ZONES.includes("guest"),
     "the retired set excludes srv (rename source) and the client/role zones");
+}
+
+// ── §14. writeJsonAtomic leaves no temp directory behind (#527) ────────
+// The atomic write creates a temp dir, writes into it and renames the file out.
+// Before the fix the directory itself was never removed, so every merge and
+// every init leaked one empty .zones-merge-* directory into the config dir —
+// 28 of them had accumulated on the reference install over three weeks.
+{
+  console.log("");
+  console.log("== §14. atomic write leaves no temp directory (#527) ==");
+
+  const tpl14 = process.env.NM_TEMPLATE;
+  if (!tpl14) {
+    check(false, "NM_TEMPLATE env must point at the distributed zones.json template (#527 tests)");
+  } else {
+    const NAME14 = "myorg";
+    const silent14 = { info: () => {}, warn: () => {} };
+    const renameRaw14 = () => renameTemplateFile(tpl14, NAME14, new Set<string>()).raw;
+    const freshCfg14 = (): string => {
+      const dir = mkdtempSync(join(tmpdir(), "nm-527-"));
+      const txt = JSON.stringify(renameTemplateFile(tpl14, NAME14).raw, null, 4) + "\n";
+      writeFileSync(join(dir, "site.json"), JSON.stringify({ name: NAME14 }), "utf8");
+      writeFileSync(join(dir, "zones.json"), txt, "utf8");
+      writeFileSync(join(dir, "zones.json.orig"), txt, "utf8");
+      writeFileSync(join(dir, "zones.rename.json"), txt, "utf8");
+      return dir;
+    };
+    const leaked = (dir: string) => readdirSync(dir).filter((e) => e.startsWith(".zones-merge-"));
+    const merge14 = (dir: string) => runZonesMerge(
+      { current: join(dir, "zones.json"), orig: join(dir, "zones.json.orig"), rename: join(dir, "zones.rename.json"), template: tpl14, name: NAME14 },
+      silent14,
+      renameRaw14,
+    );
+
+    // (a) a merge leaves the config dir clean.
+    {
+      const dir = freshCfg14();
+      check(leaked(dir).length === 0, "no leftover temp dir before the merge (baseline)");
+      const rc = merge14(dir);
+      check(rc === 0, "merge returns rc=0");
+      check(leaked(dir).length === 0,
+        `merge leaves no .zones-merge-* temp dir behind (found ${JSON.stringify(leaked(dir))})`);
+    }
+
+    // (b) repeated writes do not accumulate — this is what made it visible in
+    //     the field: one directory per call, growing without bound.
+    {
+      const dir = freshCfg14();
+      for (let i = 0; i < 3; i++) merge14(dir);
+      check(leaked(dir).length === 0,
+        `three merges leave no temp dirs (found ${leaked(dir).length})`);
+    }
+  }
 }
 
 console.log("");
