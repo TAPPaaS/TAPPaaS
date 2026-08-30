@@ -34,6 +34,8 @@
 #   1. Create pre-update VM snapshot
 #   2. Run pre-update tests (test-module.sh)
 #   3. Run pre-update.sh hook (if present)
+#   3.5. Apply the dependsOn delta with the right verb: install-service.sh for a
+#        newly-added dependency, delete-service.sh for a removed one (#511)
 #   4+5. Apply the merged config via `module-manager reconcile --apply`
 #        (each dependency's update-service.sh, then the module's update.sh) —
 #        the SAME apply reconcile performs, not a second copy of it (#495)
@@ -197,6 +199,95 @@ prune_snapshots() {
     fi
 }
 
+# Apply the dependsOn delta between two states with the correct lifecycle verb
+# (#511). reconcile (update-module Steps 4+5) runs update-service.sh — a RE-WIRE
+# — blanket over the whole current dependsOn list. That is correct for a
+# dependency already provisioned on this install, but wrong for one the release
+# just ADDED: it has never been set up here, so it needs install-service.sh
+# (create) first; one the release REMOVED needs delete-service.sh to tear the
+# integration down. Both run here — called after the snapshot so an
+# install-service failure rolls back — before the blanket reconcile, which then
+# converges the freshly-created integration via update-service.sh as usual.
+# Adopting the released list itself is unchanged; the merge already reported it.
+#
+# Args: <module> <snapshot_created> <dep_env> <deps_before> <deps_after>
+#   deps_before/deps_after: newline-separated dependsOn entries (provider:service),
+#   as captured either side of the Step 0 merge.
+apply_dependson_delta() {
+    local module="$1" snap_created="$2" dep_env="$3" deps_before="$4" deps_after="$5"
+
+    # added = in deps_after, not in deps_before (order preserved from deps_after).
+    local deps_added deps_removed dep
+    deps_added=""
+    if [[ -n "${deps_after}" ]]; then
+        while IFS= read -r dep; do
+            [[ -n "${dep}" ]] || continue
+            grep -Fxq -- "${dep}" <<<"${deps_before}" || deps_added+="${dep}"$'\n'
+        done <<<"${deps_after}"
+    fi
+    deps_removed=""
+    if [[ -n "${deps_before}" ]]; then
+        while IFS= read -r dep; do
+            [[ -n "${dep}" ]] || continue
+            grep -Fxq -- "${dep}" <<<"${deps_after}" || deps_removed+="${dep}"$'\n'
+        done <<<"${deps_before}"
+    fi
+
+    if [[ -z "${deps_added}${deps_removed}" ]]; then
+        debug "  No dependsOn changes — nothing to install or delete"
+        return 0
+    fi
+
+    # Removed first: tear the old integration down before the module re-converges.
+    while IFS= read -r dep; do
+        [[ -n "${dep}" ]] || continue
+        local rprovider rservice rdir rscript
+        rprovider="$(resolve_provider_module "${dep%%:*}" "${dep_env}")"
+        rservice="${dep##*:}"
+        if ! rdir="$(get_module_dir "${rprovider}" 2>/dev/null)"; then
+            warn "  Cannot find provider '${rprovider}' for removed dependency '${dep}' — skipping delete-service.sh"
+            continue
+        fi
+        ensure_scripts_executable "${rdir}"
+        rscript="${rdir}/services/${rservice}/delete-service.sh"
+        if [[ ! -x "${rscript}" ]]; then
+            info "  ${dep}: removed, but provider ships no delete-service.sh — skipping"
+            continue
+        fi
+        info "  Removed dependency ${BL}${dep}${CL} — running delete-service.sh for '${module}'..."
+        if "${rscript}" "${module}"; then
+            info "  ${GN}✓${CL} ${dep} delete-service completed"
+        else
+            warn "  ${dep} delete-service returned non-zero (continuing)"
+        fi
+    done <<<"${deps_removed}"
+
+    # Added next: create the integration so reconcile's update-service.sh converges it.
+    while IFS= read -r dep; do
+        [[ -n "${dep}" ]] || continue
+        local aprovider aservice adir ascript
+        aprovider="$(resolve_provider_module "${dep%%:*}" "${dep_env}")"
+        aservice="${dep##*:}"
+        if ! adir="$(get_module_dir "${aprovider}" 2>/dev/null)"; then
+            warn "  Cannot find provider '${aprovider}' for added dependency '${dep}' — skipping install-service.sh"
+            continue
+        fi
+        ensure_scripts_executable "${adir}"
+        ascript="${adir}/services/${aservice}/install-service.sh"
+        if [[ ! -x "${ascript}" ]]; then
+            info "  ${dep}: added, but provider ships no install-service.sh — reconcile will converge via update-service.sh"
+            continue
+        fi
+        info "  Newly-added dependency ${BL}${dep}${CL} — running install-service.sh (create) for '${module}'..."
+        if "${ascript}" "${module}"; then
+            info "  ${GN}✓${CL} ${dep} install-service completed"
+        else
+            fatal_with_rollback "${module}" "${snap_created}" \
+                "install-service.sh failed for newly-added dependency '${dep}'"
+        fi
+    done <<<"${deps_added}"
+}
+
 # ── Main ─────────────────────────────────────────────────────────────
 
 main() {
@@ -301,6 +392,12 @@ main() {
     # current release. If .orig is missing (pre-#207 install) we backfill it
     # from source so existing customizations remain pinned.
     info "${BOLD}Update Step 0: Reconcile module config (3-way merge)${CL}"
+    # Capture dependsOn BEFORE the merge so Step 3.5 can act on the delta with the
+    # correct verb: a newly-added dependency has never been provisioned on this
+    # install, so it needs install-service.sh (create), not the update-service.sh
+    # re-wire reconcile runs blanket over the whole list (#511).
+    local deps_before
+    deps_before="$(read_module_config "${module}" 2>/dev/null | jq -r '.dependsOn // [] | .[]' 2>/dev/null || true)"
     if module_dir_pre=$(get_module_dir "${module}" 2>/dev/null); then
         if [[ -f /home/tappaas/bin/apply-json-merge.sh ]]; then
             # shellcheck disable=SC1091
@@ -316,6 +413,10 @@ main() {
     else
         info "  Module location not resolved — skipping (first-update before location was set)"
     fi
+
+    # dependsOn AFTER the merge — the delta vs deps_before is applied in Step 3.5.
+    local deps_after
+    deps_after="$(read_module_config "${module}" 2>/dev/null | jq -r '.dependsOn // [] | .[]' 2>/dev/null || true)"
 
     # ── Step 1: Pre-update snapshot (only for modules with a VM) ─────
     info "${BOLD}Update Step 1: Create pre-update snapshot: ${BL}${module}${CL}"
@@ -397,6 +498,16 @@ main() {
     else
         info "  Module location not set — skipping"
     fi
+
+    # ── Step 3.5: Apply the dependsOn delta with the correct verb (#511) ──
+    # The delta between the pre-merge and post-merge dependsOn is applied here —
+    # install-service.sh for an added dependency, delete-service.sh for a removed
+    # one — after the snapshot (so a failure rolls back) and before the blanket
+    # reconcile. See apply_dependson_delta for the full rationale.
+    info "${BOLD}Update Step 3.5: Apply dependsOn delta (install added / delete removed)${CL}"
+    local dep_env
+    dep_env="$(read_module_config "${module}" 2>/dev/null | jq -r '.environment // ""')"
+    apply_dependson_delta "${module}" "${snapshot_created}" "${dep_env}" "${deps_before}" "${deps_after}"
 
     # ── Steps 4+5: Apply the (now merged) config — delegated to reconcile ──
     #

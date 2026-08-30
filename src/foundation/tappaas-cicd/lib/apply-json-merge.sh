@@ -237,8 +237,10 @@ apply_three_way_merge() {
                     # No actual change — adopt silently.
                     .result = (.result | setpath($p; $sv))
                 else
+                    # #511: the module author changed a field the operator never
+                    # touched — capture before/after so it is reported, not silent.
                     .result = (.result | setpath($p; $sv))
-                    | .adopted += [$p | join(".")]
+                    | .adopted += [{ field: ($p | join(".")), before: $cv, after: $sv }]
                 end
               else
                 # Rule 5: operator-pinned (current diverged from orig, or no
@@ -269,9 +271,17 @@ apply_three_way_merge() {
 
     debug "  Merge: ${n_adopted} adopted, ${n_pinned} pinned, ${n_added} added, ${n_kept} kept (orphan)"
     if [[ "${n_adopted}" -gt 0 ]]; then
-        local adopted_list
-        adopted_list=$(jq -r '.adopted | join(", ")' <<<"${merged_with_report}")
-        debug "    adopted: ${adopted_list}"
+        # #511: adopting a CHANGED released value is NOT silent — the module
+        # author changed a field the operator never customized, and the operator
+        # must see it with before/after. (Unchanged adoptions never reach
+        # .adopted, so this only fires on real release-value changes.)
+        local _adopted_line
+        while IFS= read -r _adopted_line; do
+            warn "  ${_adopted_line}"
+        done < <(jq -r '
+            .adopted[]
+            | "Changed the released value of \(.field): \(.before|tojson) -> \(.after|tojson)"
+        ' <<<"${merged_with_report}")
     fi
     if [[ "${n_pinned}" -gt 0 ]]; then
         local pinned_list

@@ -24,7 +24,9 @@ export function mgmtDomain(): string {
 // account isn't named "tappaas". TAPPAAS_OPERATOR_HOME overrides for tests /
 // relocated installs; SUDO_USER is exported by every sudo invocation. Returns
 // undefined when not under sudo, or when already running as root directly —
-// the inherited HOME is already correct and needs no resolution.
+// the inherited HOME is already correct and needs no resolution. Covered by
+// module-manager/test/unit/cluster.test.ts (unchanged by this fix — the
+// function's behavior is identical; only how ssh() uses it changed, below).
 export function operatorHome(): string | undefined {
   const override = process.env.TAPPAAS_OPERATOR_HOME;
   if (override) return override;
@@ -37,14 +39,15 @@ export function operatorHome(): string | undefined {
 // passed directly as -i, never left to SSH's own default identity-file
 // resolution. That resolution looks up the process's real UID in the passwd
 // database (getpwuid), not $HOME — confirmed live, and matches OpenSSH's own
-// documented tilde-expansion behavior. So overriding $HOME alone never
-// redirects it: under `sudo -n` the effective UID is root, and ssh always
-// ends up back in /root/.ssh/, which holds no identity of its own (only
-// authorized_keys + known_hosts). An explicit -i bypasses that lookup
-// entirely — it is the only mechanism that actually works under sudo -n.
-// The default is derived from the invoking operator (operatorHome()), so it
-// isn't tied to one site's operator username — it falls back to the same
-// "tappaas" convention this codebase's other defaults already assume
+// documented tilde-expansion behavior. So overriding $HOME alone (this
+// module's own prior approach, via an sshEnv() that set HOME on the spawned
+// process) never redirects it: under `sudo -n` the effective UID is root,
+// and ssh always ends up back in /root/.ssh/, which holds no identity of its
+// own (only authorized_keys + known_hosts). An explicit -i bypasses that
+// lookup entirely — it is the only mechanism that actually works under
+// sudo -n. The default is derived from the invoking operator (operatorHome()),
+// so it isn't tied to one site's operator username — it falls back to the
+// same "tappaas" convention this codebase's other defaults already assume
 // (CONFIG_DIR, TAPPAAS_REPO, ...) only when not running under sudo. Still
 // overridable via TAPPAAS_SSH_IDENTITY for a site whose operator key isn't
 // ed25519, or isn't at the default path.

@@ -87,12 +87,21 @@ fi
 # above, refresh the manager/ + controller/ components by running each parent
 # dispatcher's update verb (idempotent rebuild + bin relink — every component,
 # compiled ones included, now ships its own install/update.sh). A component
-# failure warns, it does not abort the cicd update.
+# failure does NOT abort the loop (every component still gets its chance to
+# rebuild), but it MUST NOT be masked: if any dispatcher fails, this update did
+# not fully succeed and the final status has to say so (#519 — a build break
+# left 7 managers on stale binaries while the run reported success).
 _cicd_dir="/home/tappaas/TAPPaaS/src/foundation/tappaas-cicd"
+_failed_disp=()
 for _disp in manager controller; do
     if [[ -x "${_cicd_dir}/${_disp}/update.sh" ]]; then
-        "${_cicd_dir}/${_disp}/update.sh" || warn "  ${_disp}/update.sh reported non-zero rc"
+        "${_cicd_dir}/${_disp}/update.sh" \
+            || { _failed_disp+=("${_disp}"); warn "  ${_disp}/update.sh reported non-zero rc — some components kept their previous binaries"; }
     fi
 done
+
+if [[ ${#_failed_disp[@]} -gt 0 ]]; then
+    die "VM rebuilt, but component group(s) failed to refresh: ${_failed_disp[*]} — shared managers may be stale (see warnings above). NOT reporting success."
+fi
 
 info "  ${GN}✓${CL} VM update completed successfully"

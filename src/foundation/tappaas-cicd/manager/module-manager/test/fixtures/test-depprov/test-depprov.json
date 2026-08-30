@@ -1,0 +1,9 @@
+{
+  "description": "Test fixture: dependsOn-delta provider (issue #511). Disposable, no-VM module that offers a harmless 'probe' service whose install/update/delete-service.sh scripts only append a marker line. Used by ../../test-dependson-delta-e2e.sh; safe to delete.",
+  "version": "0.1",
+  "vmname": "test-depprov",
+  "dependsOn": [],
+  "provides": [
+    "probe"
+  ]
+}
