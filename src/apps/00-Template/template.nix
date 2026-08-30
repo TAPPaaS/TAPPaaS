@@ -52,6 +52,10 @@
     };
   };
 
+  # Prevent systemd-networkd conflicts with NetworkManager (C4 — required on all TAPPaaS NixOS VMs)
+  systemd.network.enable             = lib.mkForce false;
+  systemd.network.wait-online.enable = lib.mkForce false;
+
   # Set your time zone.
   time.timeZone = lib.mkDefault "Europe/Amsterdam";
 
@@ -139,12 +143,11 @@
 # TODO: the following service definitions are templates only, they need to be adopted/customized for tappaas use
 
 
-  # Firewall configuration
-  # Open ports in the firewall.
-  # networking.firewall.allowedTCPPorts = [ ... ];
-  # networking.firewall.allowedUDPPorts = [ ... ];
-  # Or disable the firewall altogether.
-  # networking.firewall.enable = false;
+  # Firewall — SSH always allowed; add service ports in derived module
+  networking.firewall = {
+    enable          = true;
+    allowedTCPPorts = [ 22 ];  # extend per module: e.g. [ 22 8080 ]
+  };
 
   # This option defines the first version of NixOS you have installed on this particular machine,
   # and is used to maintain compatibility with application data (e.g. databases) created on older NixOS versions.
