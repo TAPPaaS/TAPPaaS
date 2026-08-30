@@ -24,30 +24,70 @@ export interface RemoteResult {
   ran: boolean;
 }
 
-function runLocal(cmd: string, args: string[]): RemoteResult {
-  const r = spawnSync(cmd, args, { encoding: "utf8", maxBuffer: 64 * 1024 * 1024 });
+function runLocal(cmd: string, args: string[], env?: NodeJS.ProcessEnv): RemoteResult {
+  const r = spawnSync(cmd, args, {
+    encoding: "utf8",
+    maxBuffer: 64 * 1024 * 1024,
+    ...(env ? { env } : {}),
+  });
   if (r.error) return { rc: -1, stdout: "", stderr: r.error.message, ran: false };
   return { rc: r.status ?? -1, stdout: r.stdout ?? "", stderr: r.stderr ?? "", ran: true };
 }
 
+// The operator whose on-disk SSH identity authorizes root@<node>. These
+// helpers ssh as root to the Proxmox nodes, but the key that authorizes that
+// login belongs to the operator (tappaas), not to root. Under `sudo -n`
+// module/site-manager the process runs AS root with HOME reset to /root and
+// no ssh-agent (env_reset drops SSH_AUTH_SOCK) — so ssh looks in /root/.ssh
+// (empty) and every qm/pvesh call fails fleet-wide (#518), while an
+// interactive `ssh root@node` as tappaas succeeds. Resolve the invoking
+// operator's home so the ssh child reads their ~/.ssh/{config,known_hosts,
+// id_*} exactly as the interactive session does. TAPPAAS_OPERATOR_HOME
+// overrides for tests / relocated installs; SUDO_USER is exported by every
+// sudo invocation. Returns undefined when not under sudo — the inherited HOME
+// is already the operator's and needs no override. Exported for unit tests;
+// not part of the manager-facing API.
+export function operatorHome(): string | undefined {
+  const override = process.env.TAPPAAS_OPERATOR_HOME;
+  if (override) return override;
+  const sudoUser = process.env.SUDO_USER;
+  if (sudoUser && sudoUser !== "root") return `/home/${sudoUser}`;
+  return undefined;
+}
+
+// Env for the ssh child: the ambient env with HOME pinned to the operator's
+// home when we ran under sudo, so ssh's default ~/.ssh lookup finds the
+// operator's identity and known_hosts instead of root's. undefined when no
+// override is needed, so runLocal keeps inheriting process.env verbatim.
+function sshEnv(): NodeJS.ProcessEnv | undefined {
+  const home = operatorHome();
+  if (!home) return undefined;
+  return { ...process.env, HOME: home };
+}
+
 // ssh <user>@<host> "<remote>" with a short connect timeout + batch mode (no
 // interactive prompts). host is a full hostname/FQDN — callers append
-// mgmtDomain() themselves where applicable.
+// mgmtDomain() themselves where applicable. Runs with the operator's HOME
+// (see operatorHome) so key auth works under `sudo -n` as well as interactively.
 export function ssh(user: string, host: string, remote: string): RemoteResult {
-  return runLocal("ssh", [
-    "-o",
-    "ConnectTimeout=5",
-    "-o",
-    "BatchMode=yes",
-    // accept-new: a freshly (re)installed node has an unknown host key and
-    // strict batch mode made every query against it fail (bit the N1 pool
-    // discovery twice). CHANGED keys are still rejected — a reprovisioned
-    // node needs its stale entry cleared (node add does this itself).
-    "-o",
-    "StrictHostKeyChecking=accept-new",
-    `${user}@${host}`,
-    remote,
-  ]);
+  return runLocal(
+    "ssh",
+    [
+      "-o",
+      "ConnectTimeout=5",
+      "-o",
+      "BatchMode=yes",
+      // accept-new: a freshly (re)installed node has an unknown host key and
+      // strict batch mode made every query against it fail (bit the N1 pool
+      // discovery twice). CHANGED keys are still rejected — a reprovisioned
+      // node needs its stale entry cleared (node add does this itself).
+      "-o",
+      "StrictHostKeyChecking=accept-new",
+      `${user}@${host}`,
+      remote,
+    ],
+    sshEnv(),
+  );
 }
 
 // Ping-probe candidate node names (bare names, probed at <name>.<mgmtDomain>)

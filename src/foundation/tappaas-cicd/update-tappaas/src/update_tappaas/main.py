@@ -15,8 +15,10 @@ import argparse
 import json
 import logging
 import os
+import socket
 import subprocess
 import sys
+import time
 from datetime import datetime
 from pathlib import Path
 
@@ -30,6 +32,10 @@ RESULT_PATH = CONFIG_DIR / "last-update-result.json"
 # to update-module.sh, so behaviour is unchanged — we just stop calling the script
 # directly. Override for tests with MODULE_MANAGER_CMD.
 MODULE_MANAGER_CMD = os.environ.get("MODULE_MANAGER_CMD", "/home/tappaas/bin/module-manager")
+# unbound-manager, used only to capture deterministic evidence (the validator
+# output) when the between-module check finds the resolver down (#516/#517).
+# Override for tests with UNBOUND_MANAGER_CMD.
+UNBOUND_MANAGER_CMD = os.environ.get("UNBOUND_MANAGER_CMD", "/home/tappaas/bin/unbound-manager")
 
 # ADR-007 P2: the Phase-0 migration orchestrator (ADR-007 P1). Run before the
 # foundation loop so ordering is deterministic (not a side-effect of tappaas-cicd
@@ -471,6 +477,163 @@ def update_module(module_name: str) -> bool:
         return False
 
 
+# ── Between-module shared-dependency invariant (#517) ────────────────
+
+# Every module reaches the same resolver, proxy and firewall through the same
+# hooks. When one of those shared services dies mid-sweep the remaining modules
+# fail one by one with different-looking messages — the run ends with dozens of
+# failures that have one cause. Probing the shared dependencies BETWEEN modules
+# lets the sweep name the boundary (the module whose update coincided with the
+# outage) and stop, instead of reporting each dependent module's symptom
+# separately. IP literals only: the probe must never depend on the resolver it
+# is checking (mirrors zone_manager's pre/post-flight checks). Override the
+# firewall mgmt IP for a relocated site with TAPPAAS_FIREWALL_MGMT_IP.
+FIREWALL_MGMT_IP = os.environ.get("TAPPAAS_FIREWALL_MGMT_IP", "10.0.0.1")
+
+
+def _probe_unbound_dns(retries: int = 1, delay: float = 2.0) -> bool:
+    """True if Unbound answers a UDP query on <mgmt-ip>:53. Retries tolerate a
+    resolver still stabilising right after the network module reloads it (the
+    same reason zone_manager's _check_unbound_dns and update.sh's dig retry)."""
+    # Minimal DNS query for firewall.mgmt.internal A (ID 0x1234, standard query).
+    query = (
+        b"\x12\x34\x01\x00\x00\x01\x00\x00\x00\x00\x00\x00"
+        b"\x08firewall\x04mgmt\x08internal\x00\x00\x01\x00\x01"
+    )
+    attempts = max(1, retries)
+    for attempt in range(attempts):
+        sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        try:
+            sock.settimeout(2.0)
+            sock.sendto(query, (FIREWALL_MGMT_IP, 53))
+            response, _ = sock.recvfrom(512)
+            if len(response) >= 12:  # a DNS header at minimum
+                return True
+        except socket.timeout:
+            pass
+        except OSError:
+            return False
+        finally:
+            sock.close()
+        if attempt < attempts - 1:
+            time.sleep(delay)
+    return False
+
+
+def _probe_tcp(port: int, retries: int = 1, delay: float = 2.0, timeout: float = 3.0) -> bool:
+    """True if a TCP connection to <mgmt-ip>:<port> opens. Retries absorb a
+    brief OPNsense API bounce during the network module's own reconfigure."""
+    for attempt in range(max(1, retries)):
+        try:
+            with socket.create_connection((FIREWALL_MGMT_IP, port), timeout=timeout):
+                return True
+        except OSError:
+            pass
+        if attempt < retries - 1:
+            time.sleep(delay)
+    return False
+
+
+def _opnsense_reachable(retries: int = 1) -> bool:
+    return _probe_tcp(443, retries=retries) or _probe_tcp(8443, retries=retries)
+
+
+def check_shared_dependencies() -> list[dict]:
+    """Probe the shared services a mid-sweep outage cascades from.
+
+    Returns a list of failures (empty list == healthy); each is a dict with
+    `dependency` and `detail`. Kept deliberately small: the resolver (whose
+    death silently fails every .internal name, #516/#517) and OPNsense API
+    reachability (the "Cannot reach OPNsense" cascade).
+
+    Fast path first: single-attempt probes, so a healthy sweep pays ~no latency
+    between modules. Only when something looks down do we re-probe with retries
+    — that absorbs the transient reload the network module causes during its own
+    update before declaring a real outage (avoids a false boundary)."""
+    dns_ok = _probe_unbound_dns()
+    opn_ok = _opnsense_reachable()
+    if dns_ok and opn_ok:
+        return []
+    failures: list[dict] = []
+    if not dns_ok and not _probe_unbound_dns(retries=5, delay=2.0):
+        failures.append({
+            "dependency": "unbound-dns",
+            "detail": f"Unbound DNS ({FIREWALL_MGMT_IP}:53) is not answering",
+        })
+    if not opn_ok and not _opnsense_reachable(retries=3):
+        failures.append({
+            "dependency": "opnsense",
+            "detail": f"OPNsense at {FIREWALL_MGMT_IP} unreachable on 443/8443",
+        })
+    return failures
+
+
+def collect_dependency_evidence(failures: list[dict]) -> dict:
+    """Best-effort, deterministic evidence for a shared-dependency outage.
+
+    For a dead resolver, run the Unbound validator on the firewall
+    (`unbound-manager checkconf`, which ssh-es by IP) to capture the exact fatal
+    config line — e.g. "local-data in redirect zone must reside at top of zone"
+    (#474) — far more actionable than the rotated firewall log (#516/#517).
+    Returns a dict of evidence (empty when there is nothing to collect); never
+    raises, so a missing/slow validator never derails the sweep summary."""
+    evidence: dict = {}
+    if any(f.get("dependency") == "unbound-dns" for f in failures):
+        try:
+            r = subprocess.run([UNBOUND_MANAGER_CMD, "checkconf"],
+                               text=True, capture_output=True, timeout=30)
+            out = ((r.stdout or "") + (r.stderr or "")).strip()
+            if out:
+                evidence["unbound_checkconf"] = out
+        except (subprocess.SubprocessError, FileNotFoundError, OSError) as e:
+            evidence["unbound_checkconf"] = f"could not run unbound-manager checkconf: {e}"
+    return evidence
+
+
+def run_update_phase(
+    modules: list[str], phase_label: str, failed_modules: list[str], dep: dict
+) -> list[str]:
+    """Update each module in order, asserting the shared-dependency invariant
+    between modules (#517).
+
+    `dep` is the shared mutable dependency-state carried across both phases:
+    {"down": bool, "culprit": str|None, "last_good": str|None, "failures": list}.
+    On the first probe failure the boundary is recorded (culprit = the module
+    just updated, last_good = the previous healthy module) and the phase HALTS:
+    the remaining modules reach the same downed service and would only add
+    same-cause noise. Returns the modules NOT attempted (already-down entry, or
+    everything after the boundary)."""
+    not_attempted: list[str] = []
+    for module in modules:
+        if dep["down"]:
+            not_attempted.append(module)
+            continue
+        if not update_module(module):
+            log.error("FAILED: %s", module)
+            failed_modules.append(module)
+        # Between-module invariant: did this module's update take a shared
+        # dependency down? Retries inside the probes tolerate a transient reload.
+        failures = check_shared_dependencies()
+        if failures:
+            dep["down"] = True
+            dep["culprit"] = module
+            dep["failures"] = failures
+            dep["evidence"] = collect_dependency_evidence(failures)
+            detail = "; ".join(f["detail"] for f in failures)
+            log.error("SHARED DEPENDENCY DOWN after updating '%s' (%s phase): %s",
+                      module, phase_label, detail)
+            log.error("Last module after which shared services were healthy: %s",
+                      dep["last_good"] or "(none — down before the first module)")
+            checkconf = dep["evidence"].get("unbound_checkconf")
+            if checkconf:
+                log.error("unbound-checkconf on the firewall reports: %s", checkconf)
+            log.error("Halting the remaining %s modules — they reach the same "
+                      "service and would fail with this one root cause.", phase_label)
+        else:
+            dep["last_good"] = module
+    return not_attempted
+
+
 # ── Phase 0: ADR-007 migration pass (ADR-007 P2 / orchestrator P1) ───
 
 
@@ -699,26 +862,35 @@ def main():
     except (subprocess.SubprocessError, FileNotFoundError) as e:
         log.warning("site-manager node reconcile could not run (%s) — continuing", e)
 
+    # Shared-dependency state carried across both phases (#517). A baseline probe
+    # first: if the resolver/OPNsense are ALREADY down before we touch anything,
+    # the outage is not attributable to a module and every module is skipped
+    # (updating against a dead shared service cannot succeed).
+    dep = {"down": False, "culprit": None, "last_good": None, "failures": [], "evidence": {}}
+    baseline = check_shared_dependencies()
+    if baseline:
+        dep["down"] = True
+        dep["failures"] = baseline
+        dep["evidence"] = collect_dependency_evidence(baseline)
+        detail = "; ".join(f["detail"] for f in baseline)
+        log.error("Shared dependencies are DOWN before the sweep started (not "
+                  "attributed to any module): %s — skipping all module updates.", detail)
+        checkconf = dep["evidence"].get("unbound_checkconf")
+        if checkconf:
+            log.error("unbound-checkconf on the firewall reports: %s", checkconf)
+
     # Phase 1: Foundation modules in fixed order
+    # No "[i/N] Updating <module>" line — update-module.sh's own banner
+    # ("TAPPaaS Module Update: <module>") immediately repeats it.
     log.info("Phase 1: Updating foundation modules")
     log_skipped(skipped_foundation)
-
-    for module in installed_foundation:
-        # No "[i/N] Updating <module>" line — update-module.sh's own banner
-        # ("TAPPaaS Module Update: <module>") immediately repeats it.
-        if not update_module(module):
-            log.error("FAILED: %s", module)
-            failed_modules.append(module)
+    not_attempted = run_update_phase(installed_foundation, "foundation", failed_modules, dep)
 
     # Phase 2: App modules in dependency order
     log.info("Phase 2: Updating app modules")
     log_skipped(skipped_apps)
-
     if sorted_apps:
-        for app in sorted_apps:
-            if not update_module(app):
-                log.error("FAILED: %s", app)
-                failed_modules.append(app)
+        not_attempted += run_update_phase(sorted_apps, "app", failed_modules, dep)
     else:
         log.info("No app modules found to update")
 
@@ -731,12 +903,15 @@ def main():
     # Summary
     end_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     total = len(installed_foundation) + len(sorted_apps)
-    succeeded = total - len(failed_modules)
+    # not_attempted modules never ran (halted at the boundary / baseline-down),
+    # so they are neither successes nor per-module failures.
+    succeeded = total - len(failed_modules) - len(not_attempted)
 
     log.info("=" * 60)
     log.info(
-        "update-tappaas completed: %s | total=%d succeeded=%d failed=%d skipped=%d reboot=%s",
-        end_time, total, succeeded, len(failed_modules),
+        "update-tappaas completed: %s | total=%d succeeded=%d failed=%d "
+        "not_attempted=%d skipped=%d reboot=%s",
+        end_time, total, succeeded, len(failed_modules), len(not_attempted),
         len(skipped_foundation) + len(skipped_apps),
         "ok" if reboot_ok else "failed",
     )
@@ -744,7 +919,7 @@ def main():
     # Persist a journal-free result artefact (#506). This is the durable,
     # queryable record of the last real sweep; the systemd unit's own Result is
     # unreliable because the next hourly no-op run overwrites it with success.
-    write_result_artifact({
+    artifact = {
         "start_time": start_time,
         "end_time": end_time,
         "forced": args.force,
@@ -752,12 +927,33 @@ def main():
         "succeeded": succeeded,
         "failed": len(failed_modules),
         "failed_modules": failed_modules,
+        "not_attempted": len(not_attempted),
         "skipped": len(skipped_foundation) + len(skipped_apps),
         "reboot": "ok" if reboot_ok else "failed",
-        "ok": not failed_modules and reboot_ok,
-    })
+        "ok": not failed_modules and not dep["down"] and reboot_ok,
+    }
+    # When a shared service went down mid-sweep, carry the boundary so the run is
+    # attributable to one root cause instead of N per-module symptoms (#517).
+    if dep["down"]:
+        artifact["shared_dependency_down"] = {
+            "failures": dep["failures"],
+            "culprit_module": dep["culprit"],
+            "last_good_module": dep["last_good"],
+            "not_attempted_modules": not_attempted,
+            "evidence": dep.get("evidence", {}),
+        }
+    write_result_artifact(artifact)
 
-    if failed_modules or not reboot_ok:
+    if failed_modules or dep["down"] or not reboot_ok:
+        if dep["down"]:
+            detail = "; ".join(f["detail"] for f in dep["failures"])
+            if dep["culprit"]:
+                log.error("Root cause: shared dependency down after '%s' (%s) — "
+                          "%d module(s) not attempted.",
+                          dep["culprit"], detail, len(not_attempted))
+            else:
+                log.error("Root cause: shared dependency down before the sweep (%s) "
+                          "— %d module(s) not attempted.", detail, len(not_attempted))
         if failed_modules:
             log.error("Failed modules: %s", ", ".join(failed_modules))
         sys.exit(1)

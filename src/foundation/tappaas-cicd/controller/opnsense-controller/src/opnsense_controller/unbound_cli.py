@@ -16,11 +16,13 @@ Commands:
 """
 
 import argparse
+import ipaddress
 import sys
 
 from .cli_globals import make_global_parent, parse_with_globals
 from .config import Config
 from .dhcp_manager import DhcpManager  # reused only as a connected-Client provider
+from .service_health import check_unbound_dns, unbound_checkconf
 
 
 def _client(args):
@@ -35,6 +37,55 @@ def _client(args):
     if args.credential_file:
         config_kwargs["credential_file"] = args.credential_file
     return DhcpManager(Config(**config_kwargs))
+
+
+def _verify_resolver_after_write(firewall: str, what: str) -> bool:
+    """Confirm Unbound still answers after a host-override write, else fail loud.
+
+    An `unbound_host` write can return changed=True while leaving the resolver
+    DEAD: a per-service override under a wildcard "redirect" zone permits
+    local-data only at the apex, so it fails `unbound-checkconf` and stops the
+    daemon — taking cluster DNS down (#474). OPNsense's API reports success
+    anyway and the fatal line lands only in the firewall's /var/log/resolver, so
+    the write silently returns 0 and the damage surfaces in later modules (#516).
+
+    Probes the resolver (retries tolerate the normal post-write reload). On
+    failure prints the service state + where to find the cause and returns False,
+    so the caller exits non-zero at the write that broke DNS instead of much
+    later. `firewall` is the OPNsense host we just wrote to; we probe its :53 by
+    IP literal — probing a hostname would need the very resolver we are testing.
+    """
+    probe_ip = _resolver_probe_ip(firewall)
+    if check_unbound_dns(host=probe_ip, label="POST-WRITE", retries=5, delay=2.0):
+        return True
+    # Resolver is down. Run the validator on the firewall to surface the exact
+    # cause deterministically (#474: "local-data in redirect zone must reside at
+    # top of zone") rather than leaving the operator to hunt the rotated log.
+    valid, checkconf_out = unbound_checkconf(probe_ip)
+    cause = (checkconf_out or "unbound-checkconf produced no output").strip()
+    print(
+        f"ERROR: {what} was applied but Unbound at {probe_ip}:53 stopped "
+        f"answering — the write broke the resolver config (typically a "
+        f"per-service override colliding with a wildcard redirect zone: "
+        f"local-data must sit at the zone apex, #474). Cluster DNS is DOWN.\n"
+        f"  unbound-checkconf on the firewall reports:\n"
+        f"    {cause}\n"
+        f"  Recover via the firewall's mgmt IP ({probe_ip}), NOT by name — name "
+        f"resolution is what just broke.",
+        file=sys.stderr,
+    )
+    return False
+
+
+def _resolver_probe_ip(firewall: str) -> str:
+    """The IP to probe :53 on. If `firewall` is already an IP literal use it;
+    otherwise fall back to the canonical resolver mgmt IP (10.0.0.1, the default
+    firewall.mgmt.internal target) — a hostname would need the resolver first."""
+    try:
+        ipaddress.ip_address(firewall)
+        return firewall
+    except ValueError:
+        return "10.0.0.1"
 
 
 def _find_a_overrides(mgr, hostname: str, domain: str) -> list:
@@ -126,6 +177,10 @@ def add_override(args) -> bool:
     changed = (result.get("result") or {}).get("changed")
     print(f"{'Created/updated' if changed else 'Already up to date'}: "
           f"{args.hostname}.{args.domain} -> {args.ip} (Unbound host override)")
+    # Only a real change can have broken the resolver; a no-op skips the probe.
+    if changed:
+        return _verify_resolver_after_write(
+            args.firewall, f"host override {args.hostname}.{args.domain} -> {args.ip}")
     return True
 
 
@@ -149,6 +204,10 @@ def delete_override(args) -> bool:
         return False
     changed = (result.get("result") or {}).get("changed")
     print(f"{'Deleted' if changed else 'Not present'}: {args.hostname}.{args.domain}")
+    # A delete reloads Unbound too; verify it came back (a no-op skips the probe).
+    if changed:
+        return _verify_resolver_after_write(
+            args.firewall, f"host override delete {args.hostname}.{args.domain}")
     return True
 
 
@@ -172,6 +231,27 @@ def list_overrides(args) -> bool:
         print(f"{r.get('hostname',''):<20} {r.get('domain',''):<28} "
               f"{r.get('rr',''):<6} {r.get('server',''):<16} {r.get('description','')}")
     return True
+
+
+def checkconf(args) -> bool:
+    """Validate the firewall's live Unbound config (unbound-checkconf over ssh).
+
+    Prints the validator output and exits 0 when valid, non-zero when the config
+    is broken or the validator could not be run. update-tappaas's between-module
+    health check calls this to capture the deterministic cause of a resolver
+    outage into the sweep artifact (#516/#517). No OPNsense API — pure ssh — so
+    it still works when the API is up but the resolver daemon is dead.
+    """
+    probe_ip = _resolver_probe_ip(args.firewall)
+    valid, out = unbound_checkconf(probe_ip)
+    if out:
+        print(out)
+    if valid:
+        print(f"unbound-checkconf: config on {probe_ip} is valid")
+    else:
+        print(f"unbound-checkconf: config on {probe_ip} is INVALID or the "
+              f"validator could not run", file=sys.stderr)
+    return valid
 
 
 def main():
@@ -211,6 +291,9 @@ Examples:
 
     sub.add_parser("list", parents=[gp], help="List Unbound host overrides")
 
+    sub.add_parser("checkconf", parents=[gp],
+                   help="Validate the firewall's live Unbound config (unbound-checkconf)")
+
     args = parse_with_globals(parser, {
         "firewall": "firewall.mgmt.internal", "port": None,
         "credential_file": None, "no_ssl_verify": False,
@@ -227,6 +310,8 @@ Examples:
             ok = delete_override(args)
         elif args.command == "list":
             ok = list_overrides(args)
+        elif args.command == "checkconf":
+            ok = checkconf(args)
         else:
             parser.print_help()
             ok = False

@@ -154,5 +154,64 @@ else
     echo "  ⊘ #441 skip unit test skipped (source or env python not found)"
 fi
 
+# ── 4) Unit: between-module shared-dependency invariant (#517) ───────
+# Drive run_update_phase with stubbed update_module / probes: a healthy sweep
+# updates everything and records last_good; a probe that flips to DOWN after
+# module "b" halts the phase, names the boundary, and leaves "c" not attempted.
+if [[ -f "$main_py" && -x "$py" ]]; then
+    if "$py" - "$main_py" <<'PY'
+import importlib.util, sys, logging
+logging.disable(logging.CRITICAL)
+spec = importlib.util.spec_from_file_location("m", sys.argv[1])
+m = importlib.util.module_from_spec(spec); spec.loader.exec_module(m)
+
+# Keep the test hermetic: stub the evidence collector (it would ssh a validator).
+m.collect_dependency_evidence = lambda failures: {"unbound_checkconf": "STUB"}
+
+def newdep():
+    return {"down": False, "culprit": None, "last_good": None, "failures": [], "evidence": {}}
+
+# All modules update fine; shared deps stay healthy.
+m.update_module = lambda name: True
+m.check_shared_dependencies = lambda: []
+failed = []; dep = newdep()
+na = m.run_update_phase(["a", "b", "c"], "app", failed, dep)
+assert failed == [] and na == [], f"healthy: failed={failed} not_attempted={na}"
+assert dep["down"] is False and dep["last_good"] == "c", f"healthy last_good: {dep}"
+assert dep["evidence"] == {}, f"healthy sweep collects no evidence: {dep}"
+
+# Resolver dies right after "b": boundary is b, last_good a, c not attempted.
+calls = {"n": 0}
+def flip():
+    calls["n"] += 1
+    # healthy after "a" (call 1); down after "b" (call 2 onward)
+    return [] if calls["n"] < 2 else [{"dependency": "unbound-dns", "detail": "down"}]
+m.update_module = lambda name: True
+m.check_shared_dependencies = flip
+failed = []; dep = newdep()
+na = m.run_update_phase(["a", "b", "c"], "app", failed, dep)
+assert dep["down"] is True, f"expected down: {dep}"
+assert dep["culprit"] == "b", f"culprit should be b: {dep}"
+assert dep["last_good"] == "a", f"last_good should be a: {dep}"
+assert na == ["c"], f"c should be not attempted: {na}"
+assert failed == [], f"no per-module failures on a clean update: {failed}"
+assert dep["evidence"] == {"unbound_checkconf": "STUB"}, f"evidence captured: {dep}"
+
+# Once dep is down entering a phase, every module is not attempted.
+m.check_shared_dependencies = lambda: []  # would be healthy, but dep is already down
+failed = []; dep = {"down": True, "culprit": "x", "last_good": "w", "failures": [], "evidence": {}}
+na = m.run_update_phase(["p", "q"], "foundation", failed, dep)
+assert na == ["p", "q"] and failed == [], f"already-down phase skips all: na={na}"
+PY
+    then
+        passed=$((passed + 1))
+    else
+        echo "  ✗ #517 shared-dependency invariant unit test FAILED"
+        failed=$((failed + 1))
+    fi
+else
+    echo "  ⊘ #517 invariant unit test skipped (source or env python not found)"
+fi
+
 echo "update-tappaas test: $passed passed, $failed failed"
 [[ "$failed" -eq 0 ]]

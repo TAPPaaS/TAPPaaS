@@ -118,4 +118,28 @@ dns-manager --no-ssl-verify add "${VMNAME}" "${DOMAIN}" "${DNS_IP}" \
     --description "${DESCRIPTION}" \
     || die "dns-manager add failed for ${VMNAME}.${DOMAIN}"
 
+# ── Post-write health check (#516) ──────────────────────────────────
+# A host entry that makes dnsmasq fail to reload stops it serving .internal
+# names — taking cluster DNS down while the `add` above still returned 0, so
+# the damage would otherwise surface only in a later module. Confirm the name
+# now resolves; if it does not, the resolver is broken — fail loud HERE.
+FQDN="${VMNAME}.${DOMAIN}"
+if command -v dig &>/dev/null; then
+    resolved=""
+    for _ in 1 2 3 4 5; do
+        resolved="$(dig +short A "${FQDN}" 2>/dev/null | head -1)"
+        [[ -n "${resolved}" ]] && break
+        sleep 2
+    done
+    if [[ -z "${resolved}" ]]; then
+        die "DNS write for ${FQDN} returned 0 but the name does not resolve — dnsmasq may have failed to reload (cluster .internal DNS is DOWN). On the firewall: 'configctl dnsmasq status' and the dnsmasq log."
+    elif [[ -n "${DNS_IP}" && "${DNS_IP}" != "null" && "${resolved}" != "${DNS_IP}" ]]; then
+        warn "  ${FQDN} resolves to ${resolved}, expected ${DNS_IP} (resolver alive — investigate the record)."
+    else
+        debug "  ${GN}✓${CL} post-write check: ${FQDN} resolves (${resolved})"
+    fi
+else
+    warn "  dig not found — skipping post-write DNS resolution check for ${FQDN}."
+fi
+
 debug "${GN}network:dns install-service completed for ${MODULE}${CL}"
