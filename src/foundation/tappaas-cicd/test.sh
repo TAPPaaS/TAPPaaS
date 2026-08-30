@@ -147,13 +147,10 @@ fi
 
 info "${BOLD}Test 5: SSH connectivity to Proxmox nodes${CL}"
 
-readonly SSH_OPTS="-o ConnectTimeout=5 -o StrictHostKeyChecking=accept-new -o UserKnownHostsFile=/dev/null -o LogLevel=ERROR -o BatchMode=yes"
-
 nodes_reachable=0
 for node in $(get_all_node_hostnames); do
     fqdn="${node}.mgmt.internal"
-    # shellcheck disable=SC2086
-    if ssh ${SSH_OPTS} "root@${fqdn}" "true" &>/dev/null; then
+    if tappaas_ssh "root@${fqdn}" "true" &>/dev/null; then
         pass "SSH to ${node}"
         nodes_reachable=$((nodes_reachable + 1))
     else
@@ -338,6 +335,21 @@ if [[ -x "${SCRIPT_DIR}/lib/test-unbound-prune.sh" ]]; then
     fi
 else
     skip "lib/test-unbound-prune.sh not found"
+fi
+
+# Test 9f: SSH identity helpers (#518/#519/#520) — tappaas_operator_home/
+# tappaas_ssh_identity must resolve dynamically per-operator (not hardcoded),
+# and tappaas_ssh must pass an explicit -i + IdentitiesOnly=yes, never the
+# weak StrictHostKeyChecking=no. Offline, hermetic — no ssh, no cluster.
+info "${BOLD}Test 9f: SSH identity helpers (#518/#519/#520)${CL}"
+if [[ -x "${SCRIPT_DIR}/lib/test-common-install-routines.sh" ]]; then
+    if "${SCRIPT_DIR}/lib/test-common-install-routines.sh" >/dev/null 2>&1; then
+        pass "SSH identity: tappaas_ssh_identity resolves per-operator, tappaas_ssh forces explicit -i"
+    else
+        fail "SSH identity test failed (run lib/test-common-install-routines.sh)"
+    fi
+else
+    skip "lib/test-common-install-routines.sh not found"
 fi
 
 # update-module.sh wires cleanup into the success path (prune_snapshots calls

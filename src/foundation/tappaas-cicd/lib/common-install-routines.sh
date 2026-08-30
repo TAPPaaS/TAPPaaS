@@ -595,6 +595,70 @@ check_service_available() {
     return 0
 }
 
+# ── SSH identity helpers (root@<node> Proxmox-host domain) ───────────
+#
+# `ssh root@<node>` calls made under `sudo -n` (module-manager, site-manager,
+# and every script that sources this file as root) fail: OpenSSH's default
+# identity-file resolution consults the LOCAL process's real UID via
+# getpwuid(), never $HOME — so under sudo -n (effective UID root) it always
+# searches /root/.ssh/ (empty; holds only authorized_keys + known_hosts), no
+# matter what $HOME is set to. The key that actually authorizes root@<node>
+# belongs to the operator who invoked sudo (tappaas), not to root.
+#
+# This mirrors lib/ts/src/cluster.ts's operatorHome()/sshIdentity()/ssh()
+# exactly (fixed there first — #518/#519/#520, PR #521) — same precedence,
+# same flags. Pass an explicit -i, never rely on ssh's own default
+# resolution; IdentitiesOnly=yes stops ssh from also racing a forwarded
+# agent key first. Only applies to the root@<proxmox-node> domain — guest-VM
+# calls (tappaas@/debian@<ip>) may authenticate via a different key
+# entirely and are NOT covered by this helper (see ADR-XXX-tappaas-ssh-
+# identity.md Phase 5 — investigation, not assumed).
+
+# The operator whose on-disk SSH identity authorizes root@<node>.
+# TAPPAAS_OPERATOR_HOME overrides for tests / relocated installs; SUDO_USER
+# is exported by every sudo invocation. Echoes nothing (empty) when not
+# under sudo, or when already running as root directly — the inherited
+# $HOME is already correct and needs no resolution.
+tappaas_operator_home() {
+    if [[ -n "${TAPPAAS_OPERATOR_HOME:-}" ]]; then
+        echo "${TAPPAAS_OPERATOR_HOME}"
+        return 0
+    fi
+    if [[ -n "${SUDO_USER:-}" && "${SUDO_USER}" != "root" ]]; then
+        echo "/home/${SUDO_USER}"
+        return 0
+    fi
+    echo ""
+}
+
+# The SSH identity tappaas_ssh() authenticates outbound calls with.
+# TAPPAAS_SSH_IDENTITY overrides outright for a site whose operator key
+# isn't ed25519, or isn't at the default path. Falls back to the same
+# "tappaas" convention this file's own CONFIG_DIR default already assumes
+# only when tappaas_operator_home is empty (not running under sudo).
+tappaas_ssh_identity() {
+    if [[ -n "${TAPPAAS_SSH_IDENTITY:-}" ]]; then
+        echo "${TAPPAAS_SSH_IDENTITY}"
+        return 0
+    fi
+    local home
+    home="$(tappaas_operator_home)"
+    echo "${home:-/home/tappaas}/.ssh/id_ed25519"
+}
+
+# ssh root@<node> "<remote>" — drop-in wrapper. Same flags as cluster.ts's
+# ssh(): explicit -i (never ambient default resolution), IdentitiesOnly=yes,
+# accept-new (never StrictHostKeyChecking=no — that silently updates a
+# CHANGED host key instead of rejecting it).
+tappaas_ssh() {
+    ssh -o ConnectTimeout=5 \
+        -o BatchMode=yes \
+        -o StrictHostKeyChecking=accept-new \
+        -o IdentitiesOnly=yes \
+        -i "$(tappaas_ssh_identity)" \
+        "$@"
+}
+
 # Check whether a VM with the given VMID exists anywhere in the Proxmox cluster.
 # VMIDs are cluster-wide, so a VM created on any node makes the ID unavailable —
 # this queries /cluster/resources rather than a single node's `qm status`.
@@ -610,7 +674,7 @@ vm_exists_on_cluster() {
     local node_fqdn="$2"
     local found_node
 
-    found_node=$(ssh -o ConnectTimeout=5 root@"${node_fqdn}" \
+    found_node=$(tappaas_ssh root@"${node_fqdn}" \
         "pvesh get /cluster/resources --type vm --output-format json 2>/dev/null" \
         | jq -r --argjson id "${vmid}" '.[] | select(.vmid == $id) | .node // empty' 2>/dev/null) \
         || found_node=""
