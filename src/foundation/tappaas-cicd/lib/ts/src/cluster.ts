@@ -16,6 +16,20 @@ export function mgmtDomain(): string {
   return process.env.TAPPAAS_MGMT_DOMAIN ?? "mgmt.internal";
 }
 
+// The SSH identity ssh() authenticates outbound calls with. Explicit, not
+// ambient-$HOME-derived — see rca-manager-root-ssh-identity-gap-2026-08-27
+// (gdty-vsm). `sudo -n <manager-cmd>` sets $HOME=/root, which has no identity
+// of its own (/root/.ssh/ holds only authorized_keys + known_hosts), hiding
+// the tappaas user's own key — the one actually trusted as `root` on every
+// node, and the same key check-ha-health.service already authenticates with
+// (unprivileged, no agent, its own static key). Relying on SSH's default
+// identity-file resolution made every ssh() call silently depend on which
+// $HOME the caller happened to have, rather than on which key the nodes
+// actually trust. Overridable for tests and relocated sites.
+export function sshIdentity(): string {
+  return process.env.TAPPAAS_SSH_IDENTITY ?? "/home/tappaas/.ssh/id_ed25519";
+}
+
 export interface RemoteResult {
   rc: number;
   stdout: string;
@@ -45,6 +59,17 @@ export function ssh(user: string, host: string, remote: string): RemoteResult {
     // node needs its stale entry cleared (node add does this itself).
     "-o",
     "StrictHostKeyChecking=accept-new",
+    // Explicit identity (sshIdentity()) — see its own comment. IdentitiesOnly
+    // stops ssh from also offering a forwarded agent key first: under sudo -n
+    // an operator's own forwarded key gets offered, correctly rejected by the
+    // node (never authorized there), and only then does the client fall back
+    // to searching $HOME for a default identity — the exact failure this fix
+    // closes. Explicit -i without IdentitiesOnly would still race that same
+    // agent-offer-first behavior.
+    "-o",
+    "IdentitiesOnly=yes",
+    "-i",
+    sshIdentity(),
     `${user}@${host}`,
     remote,
   ]);
