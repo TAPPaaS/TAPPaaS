@@ -39,7 +39,7 @@ STAGING=0
 PROVIDER_OVERRIDE=""
 SAVE_CREDS=1
 VARIANT=""
-DNS_SLEEP=45
+DNS_SLEEP=150
 
 usage() {
     cat <<'EOF'
@@ -60,7 +60,10 @@ Options:
                          environment = site.json .name).
   --variant <name>       DEPRECATED alias for --environment (compat period).
   --dns-sleep <secs>     Seconds to wait for DNS-01 TXT propagation before LE
-                         validation (default 45; raise for slow providers). #328
+                         validation (default 150; raise for slow providers).
+                         45 was enough until Let's Encrypt widened its
+                         multi-perspective validation; secondary perspectives
+                         then began failing with "No TXT record found". #328
   --help                 Show this help
 
 Credentials file (~/.acme-dns-credentials.txt, chmod 600), one KEY=VALUE per line:
@@ -207,9 +210,14 @@ info "${BOLD}Running acme-manager setup${CL}  (drives os-acme-client end-to-end;
 LOG_FILE="$(mktemp /tmp/acme-setup.XXXXXX.log)"
 trap 'rm -f "$LOG_FILE"' EXIT
 
+# --dns-sleep is the propagation wait os-acme-client applies BEFORE asking the
+# CA to validate; --timeout is only how long we then poll for the result. Passing
+# it to --timeout alone (the shape before this fix) left the validation object on
+# its 45s default, so raising the flag could not affect the outcome it documents.
 if ! acme-manager --firewall "$FIREWALL" --no-ssl-verify setup \
         --domain "$DOMAIN" --email "$EMAIL" \
         --provider "$PROVIDER" \
+        --dns-sleep "$DNS_SLEEP" \
         --timeout "$(( DNS_SLEEP + 180 ))" \
         "${ACCOUNT_ARG[@]}" \
         "${PROV_ARGS[@]}" \
