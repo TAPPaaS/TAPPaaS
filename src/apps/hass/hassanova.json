@@ -1,0 +1,46 @@
+{
+  "description": "Home Assistant legacy VM (hassanova) — Frigate camera access rules only",
+  "version": "0.2.0",
+  "releaseDate": "2026-08-31",
+  "maintainer": "@ErikDaniel007",
+  "status": "Production",
+  "tier": "app",
+  "vmname": "hassanova",
+  "vmid": 200,
+  "dependsOn": [
+    "backup:vm",
+    "reolink:rtsp",
+    "reolink:api",
+    "hue:bridge",
+    "network:proxy",
+    "firewall:rules",
+    "sonos:audio",
+    "sonos:airplay",
+    "alfen:ui",
+    "alfen:discovery",
+    "alfen:modbus",
+    "litellm:models",
+    "zehnder:api"
+  ],
+  "provides": [],
+  "config": {
+    "cluster:vm": {
+      "_comment": "Documents current live state for disaster-recovery reference. NOT a from-scratch redeploy recipe -- hassanova predates the imageType=img install path (no image/imageLocation captured); recreating from zero would need the hass module's fresh-install path (vmid 210/211), not this block.",
+      "bios": "ovmf",
+      "ostype": "l26",
+      "cores": 4,
+      "memory": "8192",
+      "diskSize": "128G",
+      "storage": "tanka1",
+      "bridge0": "lan"
+    },
+    "firewall:proxy": {
+      "proxyPort": 8123,
+      "proxyAllowedZones": [
+        "mgmt",
+        "home",
+        "netbird"
+      ]
+    }
+  }
+}
