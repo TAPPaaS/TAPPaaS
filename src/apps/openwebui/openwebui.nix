@@ -12,10 +12,32 @@
 # TAPPaaS
 # Name: Open webui
 # Type: APP
-# Version: 0.10.2
-# Date: 2026-07-02
+# Version: 0.11.2
+# Date: 2026-08-31
 # Author: @ErikDaniel007 (Tappaas)
 # Products: openwebui, postgres, redis
+#
+# Changelog v0.11.2 (2026-08-31):
+# - Upgraded OpenWebUI 0.10.2 -> 0.11.2, with an out-of-process migration step
+#   added to the wrapper's ExecStartPre to work around upstream #29280.
+# - 0.11.x CANNOT MIGRATE ITSELF. config.py calls run_migrations() during its
+#   own import, and alembic's env.py imports back into the half-built config
+#   module for ENABLE_LOCAL_WEB_FETCH (defined later in that same file):
+#     ImportError: cannot import name 'ENABLE_LOCAL_WEB_FETCH' from partially
+#     initialized module 'open_webui.config'
+#   The error is caught and merely logged, so the app serves against an
+#   unmigrated schema and every chat query 500s with "column chat.variables
+#   does not exist" — presenting as the frontend-only error page, which looks
+#   like a proxy problem and is not one.
+# - Fix is in ExecStartPre (see the comment there): import config first so its
+#   internal attempt fails harmlessly and completes the module, then call
+#   run_migrations() again. Verified 2026-08-31 applying 10 revisions,
+#   42e2978c7933 -> d4c1a8e37b62. Self-neutralising once upstream fixes it.
+# - Two earlier notes in this file were WRONG and are corrected here: 0.11 does
+#   require a migration (it adds chat.variables / current_message_id /
+#   timer_at), and 0.11.1 is NOT on Docker Hub (404) — 0.11.0 and 0.11.2 are.
+# - Carries the 0.11.0 security and access-control fixes, which matter here
+#   because this instance is published with proxyAllowedZones ["internet"].
 #
 # Changelog v0.10.2 (2026-07-02):
 # - Upgraded OpenWebUI 0.9.6 → 0.10.2
@@ -47,7 +69,7 @@ let
   # Change versions in one place only
   # ----------------------------------------
   versions = {
-    openwebui   = "0.10.2";              # OpenWebUI container version (Docker Hub, no v-prefix)
+    openwebui   = "0.11.2";              # OpenWebUI container version (Docker Hub, no v-prefix)
     postgresPkg = pkgs.postgresql_17;   # PostgreSQL version
     redisPkg    = pkgs.redis;           # Redis version
   };
@@ -211,8 +233,10 @@ in
     '';
   in {
     description = "OpenWebUI via Podman wrapper";
-    after = [ "network.target" "openwebui-integrations.service" ];
-    requires = [ "openwebui-integrations.service" ];
+    # postgresql is required because ExecStartPre now migrates the schema before
+    # the app starts; without it the migration races the database on boot.
+    after = [ "network.target" "openwebui-integrations.service" "postgresql.service" ];
+    requires = [ "openwebui-integrations.service" "postgresql.service" ];
     wantedBy = [ "multi-user.target" ];
     serviceConfig = {
       ExecStart = "${startScript}";
@@ -226,6 +250,49 @@ in
           echo "Image $IMAGE already present locally, skipping pull."
         fi
         ${pkgs.podman}/bin/podman rm -f openwebui || true
+
+        # ── Run DB migrations in a SEPARATE process, before the app starts ──
+        #
+        # WHY: 0.11.x cannot migrate itself. open_webui/config.py calls
+        # run_migrations() at line ~74, i.e. DURING its own import, and alembic's
+        # env.py imports back into config (via models.calendar ->
+        # utils.automations -> events -> retrieval.web.utils) for symbols such as
+        # ENABLE_LOCAL_WEB_FETCH that are defined LATER in that same file. The
+        # result is "cannot import name ... from partially initialized module".
+        #
+        # That failure is caught and only logged, so the app then serves happily
+        # against an UNMIGRATED schema — every chat query 500s with
+        # "column chat.variables does not exist" and the UI shows the
+        # frontend-only error page. Silent, and easy to misread as a proxy fault.
+        # Upstream: open-webui#29280 (open, confirmed), #29290, #29291.
+        #
+        # THE FIX: import config FIRST and let its internal attempt fail
+        # harmlessly, which completes the module; then call run_migrations()
+        # again, now that config is whole and the import chain resolves. This is
+        # the same mechanism as upstream's proposed patch (move the call into
+        # main.py) but needs no forked image, and becomes a harmless no-op the
+        # moment they ship a fix — alembic simply reports nothing to do.
+        echo "Running OpenWebUI DB migrations (out-of-process; see open-webui#29280)..."
+        ${pkgs.podman}/bin/podman run --rm --name openwebui-migrate \
+          --network=host \
+          --env-file=/etc/secrets/openwebui.env \
+          --env-file=/etc/secrets/openwebui-integrations.env \
+          -v /var/lib/openwebui/data:/app/backend/data \
+          -w /app/backend \
+          --entrypoint python3 \
+          "$IMAGE" -c '
+import sys
+import open_webui.config as c
+try:
+    c.run_migrations()
+except Exception as e:
+    print("FATAL: migration failed: %s: %s" % (type(e).__name__, e), flush=True)
+    sys.exit(1)
+print("OpenWebUI migrations applied.", flush=True)
+'
+        # Deliberately NOT tolerated with `|| true`. A wrong schema makes the
+        # app look alive while failing every query — the exact failure mode that
+        # cost hours here. Better a unit that visibly fails in systemctl status.
       '';
       TimeoutStartSec = 600;
       Restart = "always";
@@ -320,6 +387,64 @@ EOF
 
         NEW=""
         add() { NEW="$NEW$1"$'\n'; }
+
+        # This instance is published to the internet, so local signup is off —
+        # upstream defaults it on, which would let anyone register. Set outside
+        # the OIDC block below so missing secrets fail closed. Real users arrive
+        # via ENABLE_OAUTH_SIGNUP through Authentik.
+        add "ENABLE_SIGNUP=false"
+
+        # Direct Ollama access stays OFF. Every model must arrive through
+        # LiteLLM, which strips the tools array for models that reject it —
+        # phi4 and gemma3 return 400 "does not support tools" when a tools array
+        # reaches Ollama natively. Enabling this listed the same models twice,
+        # and picking the Ollama copy broke the chat with that error and left
+        # the thread stuck on "error in the previous response".
+        # It also bypasses LiteLLM's keys, budgets and routing.
+        add "ENABLE_OLLAMA_API=false"
+
+        # ── Built-in tools: everything on, deliberately ─────────────────────
+        #
+        # This is a test box; the point is to exercise the full 0.11 feature
+        # surface on a 12.3 GB P100. Expect small models to cope badly with ~20
+        # tool definitions per request (raw tool JSON as chat text, or calling
+        # ask_user and stalling) — that is the measurement, not a regression.
+        #
+        # meta.builtinTools defaults to true per category, but five of them
+        # (time, user_input, knowledge, chats, tasks) have NO global switch, so
+        # DEFAULT_MODEL_METADATA is the only place to control them. All sixteen
+        # are listed so the set cannot drift when upstream adds one. To narrow
+        # it for one model, set meta.builtinTools in Workspace -> Models; those
+        # win over this default.
+        # image_generation is the one exception: no backend is configured, and
+        # the self-hosted engines (ComfyUI/A1111) would fight Ollama for the
+        # same 12.3 GB of VRAM. Offering a tool that always fails is worse than
+        # not offering it.
+        add 'DEFAULT_MODEL_METADATA={"builtinTools":{"time":true,"web_search":true,"code_interpreter":true,"files":true,"user_input":true,"knowledge":true,"chats":true,"tasks":true,"notes":true,"memory":true,"channels":true,"image_generation":false,"subagents":true,"automations":true,"calendar":true,"notifications":true}}'
+
+        # Most categories need BOTH the per-model flag above and a global gate.
+        add "ENABLE_CALENDAR=true"
+        add "ENABLE_AUTOMATIONS=true"
+        add "ENABLE_CHANNELS=true"
+        add "ENABLE_NOTES=true"
+        add "ENABLE_CODE_INTERPRETER=true"
+        add "ENABLE_WEB_SEARCH=true"
+        add "WEB_SEARCH_ENGINE=duckduckgo"   # keyless; no account to manage
+
+        # Knowledge-base embeddings via Ollama rather than the bundled
+        # sentence-transformers default. all-MiniLM-L6-v2 caps at 256 tokens,
+        # and chunk_size is 1000 characters (~250 tokens), so token-dense
+        # content silently loses the tail of every chunk — no error, just worse
+        # retrieval. nomic-embed-text is already pulled, 768-dim, 2048+ context.
+        # Changing this later means re-embedding every document, since vectors
+        # from different models are not comparable.
+        # RAG keeps its OWN Ollama URL, separate from the chat connection above
+        # and unaffected by ENABLE_OLLAMA_API. It must be set explicitly: the
+        # upstream default is host.docker.internal, which does not resolve here,
+        # so embedding would fail silently at upload time.
+        add "RAG_EMBEDDING_ENGINE=ollama"
+        add "RAG_EMBEDDING_MODEL=nomic-embed-text"
+        add "RAG_OLLAMA_BASE_URL=http://ollama-nvidia.srvWork.internal:11434"
 
         # ── LiteLLM: the OpenAI-compatible endpoint OpenWebUI talks to ──
         LK="$(readvar "$LITELLM" LITELLM_API_KEY)"

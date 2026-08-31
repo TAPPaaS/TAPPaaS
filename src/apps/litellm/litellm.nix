@@ -11,8 +11,8 @@
 # ============================================================================
 # TAPPaaS - LiteLLM AI proxy
 # ============================================================================
-# Version: 1.85.0
-# Date: 2026-05-20
+# Version: 1.98.0
+# Date: 2026-08-31
 # Author: @ErikDaniel007 (TAPPaaS)
 # Product: LiteLLM proxy with PostgreSQL + Redis backend
 #
@@ -34,6 +34,18 @@
 # - Upgraded LiteLLM 1.81.14 → 1.85.0; switched registry GHCR → Docker Hub
 # - Upgraded PostgreSQL 15 → 17 (fresh DB, no migration needed)
 # - Added Redis AOF persistence (appendonly + appendfsync everysec)
+#
+# Changelog v1.98.0 (2026-08-31):
+# - Upgraded LiteLLM 1.85.0 → 1.98.0 (no PostgreSQL change; already on 17).
+#   Upstream's only flagged breaking change is Langfuse metadata now sourced
+#   from StandardLoggingPayload — no Langfuse callback is configured here.
+# - Pinned default_internal_user_params.user_role to internal_user; the upstream
+#   default (internal_user_viewer) cannot create even its own keys.
+# - Access is now gated in Authentik, not here: identity.adminOnly binds only the
+#   litellm-admins group, so the 5-seat SSO cap is spent on admins rather than on
+#   whoever opens the UI first. Devs reach models via OpenWebUI or a virtual key,
+#   neither of which consumes a seat.
+# - GENERIC_SCOPE now derives from identity.scopes instead of being hardcoded.
 # ============================================================================
 
 { config, lib, pkgs, modulesPath, system, ... }:
@@ -41,7 +53,7 @@
 let
   # Version pinning - change versions here only
   versions = {
-    litellm     = "v1.85.0";
+    litellm     = "v1.98.0";
     postgresPkg = pkgs.postgresql_17;
     redisPkg    = pkgs.redis;
   };
@@ -285,6 +297,11 @@ in
           port: 6379
           max_connections: 100
         load_models_from_db: true
+        # Upstream seats new SSO arrivals as internal_user_viewer, which cannot
+        # create even its own keys. internal_user can create and revoke its own
+        # keys and see its own spend; registering models stays proxy_admin.
+        default_internal_user_params:
+          user_role: "internal_user"
         set_verbose: true
         json_logs: true
         request_timeout: 300
@@ -388,7 +405,17 @@ EOF
   # Runs before the container (podman fails on a missing --env-file, so the file
   # is created unconditionally, even empty) and is the identity.configureService
   # that identity:identity restarts after writing new OIDC secrets.
-  systemd.services.litellm-integrations = {
+  # GENERIC_SCOPE derives from identity.scopes rather than being hardcoded:
+  # identity:identity attaches one provider property mapping per scope name it
+  # finds there, so hardcoding a different list here silently requests scopes
+  # that yield no claim, or omits ones that were mapped. One list, both sides.
+  systemd.services.litellm-integrations = let
+    modCfg = if builtins.pathExists ./litellm.json
+             then builtins.fromJSON (builtins.readFile ./litellm.json)
+             else {};
+    oidcScopes = lib.concatStringsSep " "
+      (modCfg.identity.scopes or [ "openid" "email" "profile" ]);
+  in {
     description = "Translate provider secrets into LiteLLM settings";
     wantedBy = [ "multi-user.target" ];
     after = [ "local-fs.target" "network-online.target" ];
@@ -428,7 +455,7 @@ EOF
             add "GENERIC_AUTHORIZATION_ENDPOINT=$AUTH_EP"
             add "GENERIC_TOKEN_ENDPOINT=$TOK_EP"
             add "GENERIC_USERINFO_ENDPOINT=$INFO_EP"
-            add "GENERIC_SCOPE=openid email profile"
+            add "GENERIC_SCOPE=${oidcScopes}"
             # LiteLLM builds its SSO redirect_uri from PROXY_BASE_URL; without it
             # the callback points at localhost and Authentik rejects the redirect.
             [ -n "$PUB" ] && add "PROXY_BASE_URL=$PUB"
@@ -566,6 +593,117 @@ EOF
   #   environment.ownerOrg -> org.owner -> user.primaryEmail
   #
   # Idempotent: existing users are updated in place rather than duplicated.
+  # ----------------------------------------
+  # SSO group -> LiteLLM role mapping
+  # ----------------------------------------
+  #
+  # Makes membership of the `litellm-admins` Authentik group actually MEAN
+  # admin inside LiteLLM. Without this the group only controls whether you may
+  # log in (that gate is the Authentik policy binding); once through, everyone
+  # lands on default_internal_user_params.user_role — internal_user — and a
+  # real admin has to be promoted by hand, one account at a time.
+  #
+  # This cannot live in config.yaml: LiteLLM stores SSO role_mappings in the
+  # DATABASE (SSOConfigRepository), and proxy_server.py explicitly pops
+  # "role_mappings" out of file-based settings. The supported surface is
+  # PATCH /update/sso_settings, so it is applied here on every boot — which
+  # also means a restored/rebuilt VM re-establishes it rather than silently
+  # losing admin mapping into undeclared DB state.
+  #
+  # Requires "groups" in identity.scopes (litellm.json) — group_claim reads the
+  # groups claim from the SSO token. Idempotent: writes the same document each
+  # time. default_role keeps non-admins as internal_user, which can create and
+  # revoke its own keys but cannot administer the proxy.
+  # ----------------------------------------
+  # Ollama pull, exposed through LiteLLM
+  # ----------------------------------------
+  #
+  # LiteLLM is a router, not a model host: it holds no weights and has no
+  # native "pull". Getting a new model therefore needed SSH to the Ollama LXC,
+  # which the dev fleet has no reason (or access) to have.
+  #
+  # A configurable pass-through endpoint closes that gap: LiteLLM forwards
+  # /ollama/api/pull straight to Ollama's own pull API, so a developer can add
+  # a model with the same virtual key they already use for chat, over the same
+  # host, with the request counted against the same auth. auth defaults to
+  # true, so the route is NOT open — an unauthenticated call gets 401.
+  #
+  # Note this only fetches the weights. The model still needs a LiteLLM route
+  # (POST /model/new) before it is visible to OpenWebUI; pull-model.sh in the
+  # ollama-nvidia module does both halves in one command.
+  systemd.services.litellm-ollama-passthrough = {
+    description = "Expose Ollama's pull API through LiteLLM";
+    wantedBy = [ "multi-user.target" ];
+    after = [ "podman-litellm.service" ];
+    serviceConfig = {
+      Type = "oneshot";
+      RemainAfterExit = true;
+      ExecStart = pkgs.writeShellScript "litellm-ollama-passthrough" ''
+        set -uo pipefail
+        PATH="${pkgs.coreutils}/bin:${pkgs.gnugrep}/bin:${pkgs.curl}/bin:${pkgs.jq}/bin:$PATH"
+
+        MK="$(grep -m1 '^LITELLM_MASTER_KEY=' /etc/secrets/litellm.env | cut -d= -f2-)"
+        [ -n "$MK" ] || { echo "ollama-passthrough: no master key yet — skipping"; exit 0; }
+
+        i=0
+        while [ "$i" -lt 60 ]; do
+          curl -fsS -o /dev/null --max-time 5 http://127.0.0.1:4000/health/readiness && break
+          i=$((i + 1)); sleep 5
+        done
+
+        TARGET="http://ollama-nvidia.srvWork.internal:11434/api/pull"
+        if curl -fsS --max-time 20 -X POST http://127.0.0.1:4000/config/pass_through_endpoint \
+             -H "Authorization: Bearer $MK" -H 'Content-Type: application/json' \
+             -d "$(jq -nc --arg t "$TARGET" '{path:"/ollama/api/pull", target:$t, headers:{}}')" \
+             >/dev/null 2>&1
+        then
+          echo "ollama-passthrough: /ollama/api/pull -> $TARGET"
+        else
+          # Already present is the common case on a reconcile, and is not an error.
+          echo "ollama-passthrough: endpoint already present or could not be created"
+        fi
+      '';
+    };
+  };
+
+  systemd.services.litellm-sso-role-mappings = {
+    description = "Map the litellm-admins SSO group to the LiteLLM proxy_admin role";
+    wantedBy = [ "multi-user.target" ];
+    after = [ "podman-litellm.service" ];
+    serviceConfig = {
+      Type = "oneshot";
+      RemainAfterExit = true;
+      ExecStart = pkgs.writeShellScript "litellm-sso-role-mappings" ''
+        set -uo pipefail
+        PATH="${pkgs.coreutils}/bin:${pkgs.gnugrep}/bin:${pkgs.curl}/bin:${pkgs.jq}/bin:$PATH"
+
+        MK="$(grep -m1 '^LITELLM_MASTER_KEY=' /etc/secrets/litellm.env | cut -d= -f2-)"
+        [ -n "$MK" ] || { echo "sso-role-mappings: no master key yet — skipping"; exit 0; }
+
+        i=0
+        while [ "$i" -lt 60 ]; do
+          curl -fsS -o /dev/null --max-time 5 http://127.0.0.1:4000/health/readiness && break
+          i=$((i + 1)); sleep 5
+        done
+
+        BODY="$(jq -nc '{
+          role_mappings: {
+            provider: "generic",
+            group_claim: "groups",
+            default_role: "internal_user",
+            roles: { proxy_admin: ["litellm-admins"] }
+          }
+        }')"
+
+        curl -fsS --max-time 20 -X PATCH http://127.0.0.1:4000/update/sso_settings \
+          -H "Authorization: Bearer $MK" -H 'Content-Type: application/json' \
+          -d "$BODY" >/dev/null \
+          && echo "sso-role-mappings: litellm-admins -> proxy_admin applied" \
+          || echo "sso-role-mappings: could not apply role mappings" >&2
+      '';
+    };
+  };
+
   systemd.services.litellm-seed-admin = {
     description = "Make the environment owner a LiteLLM proxy admin";
     wantedBy = [ "multi-user.target" ];

@@ -19,7 +19,7 @@
     "identity:identity"
   ],
   "provides": [],
-  "appVersion": "0.10.2",
+  "appVersion": "0.11.2",
   "config": {
     "cluster:vm": {
       "cores": 2,
@@ -33,7 +33,7 @@
     "network:proxy": {
       "proxyPort": 8080,
       "proxyAllowedZones": [
-        "home"
+        "internet"
       ]
     }
   },

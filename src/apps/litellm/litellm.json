@@ -21,11 +21,11 @@
   "provides": [
     "models"
   ],
-  "appVersion": "1.85.0",
+  "appVersion": "1.98.0",
   "config": {
     "cluster:vm": {
       "cores": 4,
-      "memory": "4096",
+      "memory": "12288",
       "diskSize": "32G",
       "storage": "tanka1",
       "imageType": "clone",
@@ -37,13 +37,15 @@
     }
   },
   "identity": {
+    "providesAdminRole": true,
     "oidcRedirectPaths": [
       "/sso/callback"
     ],
     "scopes": [
       "openid",
       "email",
-      "profile"
+      "profile",
+      "groups"
     ],
     "secretsEnv": "/etc/secrets/litellm-oidc.env",
     "configureService": "litellm-integrations.service"

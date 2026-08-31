@@ -88,6 +88,28 @@ else
     fi
 fi
 
+# ── Narrow the Authentik access gate (LiteLLM's 5-seat SSO cap) ──────────────
+# identity:identity binds `users` — every org member — to every app it wires,
+# and app-bind-groups is additive, so it comes back on EVERY reconcile. LiteLLM
+# is the one module where that is actively harmful: its open-source SSO path
+# allows five user rows, and a row is created the first time someone logs in.
+# Anyone who opens the UI once out of curiosity permanently spends a seat.
+#
+# This runs here, not in identity:identity, because the cap is LiteLLM's alone
+# and the shared foundation should not carry one app's licence quirk. It must
+# run AFTER dependency services are re-applied (update-module.sh Step 2), which
+# is precisely where this script sits — running it any earlier would be undone.
+if [[ -x "${SCRIPT_DIR}/scripts/narrow-access-gate.sh" ]]; then
+    info "${BOLD}Narrowing Authentik access gate to litellm-admins${CL}"
+    if ! "${SCRIPT_DIR}/scripts/narrow-access-gate.sh" "${VMNAME}" users; then
+        # Non-fatal: a too-wide gate is a seat-consumption problem, not an
+        # outage, and must not fail an otherwise good deployment. It is loud
+        # because the symptom (seats quietly exhausted weeks later) is not.
+        warn "  Could not narrow the access gate — 'users' may still be bound;"
+        warn "  check Authentik → Applications → ${VMNAME} → Policy bindings"
+    fi
+fi
+
 echo ""
 info "${BOLD}Installation Complete${CL}"
 info "  VM: ${VMNAME} (VMID: ${VMID})"

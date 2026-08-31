@@ -103,10 +103,30 @@ check_ssh() {
 
 check_container() {
     info "Check 2: OpenWebUI container is running"
-    local status
-    # shellcheck disable=SC2086
-    status=$(ssh ${SSH_OPTS} "tappaas@${VM_HOST}" \
-        "sudo podman ps --filter name=openwebui --format '{{.Status}}'" 2>/dev/null) || true
+    local status i
+    # RETRY, like check_http below. A single probe here made this check race the
+    # container's own creation and fail a perfectly healthy deploy: on 0.11.2 the
+    # wrapper's ExecStartPre now runs the DB migration in a throwaway container
+    # BEFORE creating the app container (see openwebui.nix), so `podman ps` can
+    # legitimately report nothing for ~30-60s after the unit starts.
+    #
+    # This was not theoretical — it rolled back two good 0.11.2 deployments on
+    # 2026-08-31. The tell was that Check 2 reported "not found" while Check 2b,
+    # running the SAME `podman ps` moments later, successfully read the image
+    # name and Check 3 got HTTP 200 on attempt 12/15. A check that disagrees with
+    # its own neighbours is measuring timing, not health.
+    #
+    # --filter name= is a SUBSTRING match, so it would also match the transient
+    # `openwebui-migrate` container; the --format output is filtered to the exact
+    # name to keep the two from being confused.
+    for i in $(seq 1 15); do
+        # shellcheck disable=SC2086
+        status=$(ssh ${SSH_OPTS} "tappaas@${VM_HOST}" \
+            "sudo podman ps --filter name=openwebui --format '{{.Names}}\t{{.Status}}' \
+             | awk -F'\t' '\$1==\"openwebui\"{print \$2}'" 2>/dev/null) || true
+        [[ "${status}" == *"Up"* ]] && break
+        [[ $i -lt 15 ]] && sleep 4
+    done
     if [[ "${status}" == *"Up"* ]]; then
         check_pass "Container is running (${status})"
     else
