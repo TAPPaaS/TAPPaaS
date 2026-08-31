@@ -25,6 +25,8 @@ are marked, never deleted. If you want to know *why* the platform is the way it 
 | [ADR-010 — VPS satellite](<ADR-010-vps-satellite-reverse-proxy-backup.md>) | The optional off-premises satellite: public ingress, off-site backup, admin VPN. |
 | [ADR-012 — Backup enhancement](<ADR-012-backup-enhancement.md>) | The managed backup-policy model (site → environment → module cascade). |
 | [ADR-016 — Source NAT for subnet-filtering devices](<ADR-016 - Source NAT for subnet-filtering devices.md>) | Masquerade into a zone for IoT appliances that only accept sessions from their own subnet: zone-owned `snat-allowed-from` gate, module-local `snat.json`, `network-manager snat` verbs. |
+| [ADR-017 — Update scheduling and mothership self-update](<ADR-017 - Update scheduling and mothership self-update.md>) | When the sweep runs and how the mothership updates itself (systemd `ExecStartPre=+`, schedule from `site.json`). |
+| [ADR-019 — HA and Cross-Node VM Migration Policy](<ADR-019 - HA and Cross-Node VM Migration Policy.md>) | *Proposed.* The full `migrate-vm.sh` matrix — HA/non-HA, live-vs-offline by CPU compatibility (`--force` for downtime), `strict`/`comment` round-trip, when `module.json.node` is rewritten. |
 
 ## Governance
 
