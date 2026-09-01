@@ -6,10 +6,11 @@
 // shells out to authentik-manager. NO plane/module logic is reimplemented here:
 // these are thin FFI boundaries.
 
-import { existsSync, readFileSync, readdirSync } from "fs";
+import { existsSync, readFileSync, readdirSync, writeFileSync } from "fs";
 import { basename, join } from "path";
-import { captureResult } from "../../../lib/ts/src/exec";
-import { ModuleClient, NetworkClient, NetworkUnreachable } from "./types";
+import { captureResult, stream } from "../../../lib/ts/src/exec";
+import { defaultConfigDir } from "../../../lib/ts/src/config-io";
+import { DnsTlsClient, ModuleClient, NetworkClient, NetworkUnreachable, WildcardDnsState } from "./types";
 
 // Re-exported: NetworkUnreachable now lives in types.ts (the client boundary
 // contract) so the pure reconcile engine can distinguish "binary missing" from
@@ -20,6 +21,9 @@ export { NetworkUnreachable };
 // stub after this module is loaded.
 const NETWORK_MANAGER_BIN = (): string => process.env.NETWORK_MANAGER_BIN ?? "network-manager";
 const MODULE_MANAGER_BIN = (): string => process.env.MODULE_MANAGER_BIN ?? "module-manager";
+const UNBOUND_MANAGER_BIN = (): string => process.env.UNBOUND_MANAGER_BIN ?? "unbound-manager";
+const ACME_MANAGER_BIN = (): string => process.env.ACME_MANAGER_BIN ?? "acme-manager";
+const ACME_SETUP_BIN = (): string => process.env.ACME_SETUP_BIN ?? "acme-setup.sh";
 
 // Run + capture via the shared exec helper, mapping a spawn failure (binary
 // missing on PATH) to the manager-specific NetworkUnreachable so the reconcile
@@ -127,5 +131,167 @@ export class CliModuleClient implements ModuleClient {
     const args = ["reconcile", module];
     args.push(apply ? "--apply" : "--no-services");
     run(MODULE_MANAGER_BIN(), args);
+  }
+}
+
+// Derive a zone's OPNsense gateway IP — the first host of its subnet, <net>.1 —
+// from zones.json (e.g. "10.3.10.0/24" → "10.3.10.1"). Mirrors the bash
+// zone_gateway_ip (common-install-routines.sh): the firewall interface ON THE
+// CLIENT'S OWN SUBNET is self-traffic and crosses no inter-zone rule (#504).
+// Returns undefined when the zone (or its subnet) is absent from zones.json.
+function zoneGatewayIp(configDir: string, zone: string): string | undefined {
+  if (!zone) return undefined;
+  const zonesFile = join(configDir, "zones.json");
+  if (!existsSync(zonesFile)) return undefined;
+  let z: Record<string, unknown>;
+  try {
+    z = JSON.parse(readFileSync(zonesFile, "utf8")) as Record<string, unknown>;
+  } catch {
+    return undefined;
+  }
+  const entry = z[zone];
+  const ip = entry && typeof entry === "object" ? (entry as Record<string, unknown>).ip : undefined;
+  if (typeof ip !== "string" || ip === "") return undefined;
+  const octets = ip.split("/")[0].split(".");
+  if (octets.length < 3) return undefined;
+  return `${octets.slice(0, 3).join(".")}.1`;
+}
+
+// CliDnsTlsClient — the wildcard DNS + cert-refid runtime-state boundary (#537).
+//
+// DNS is materialized by shelling `unbound-manager` (split-horizon overrides on
+// the OPNsense resolver); the cert refid is READ non-interactively via
+// `acme-manager status` and PERSISTED to config/cert-refids.json; issuance (when
+// no cert exists yet and creds are on disk) is delegated to scripts/acme-setup.sh
+// — the one credential-bearing step. NO ACME/DNS logic is reimplemented here:
+// thin FFI, exactly like CliNetworkClient.
+export class CliDnsTlsClient implements DnsTlsClient {
+  // configDir defaults to the resolved config root; tests inject a temp dir so
+  // cert-refids.json / zones.json reads and writes stay offline.
+  constructor(private configDir: string = defaultConfigDir()) {}
+
+  private certRefidsPath(): string {
+    return join(this.configDir, "cert-refids.json");
+  }
+
+  wildcardDnsState(domain: string, zone: string): WildcardDnsState {
+    // Desired target: the env's own service-zone gateway, else the dmz gateway
+    // (ADR-005 §6, #504). undefined ⇒ neither could be derived.
+    let gatewayZone = zone;
+    let gatewayIp = zoneGatewayIp(this.configDir, zone);
+    if (!gatewayIp) {
+      gatewayZone = "dmz";
+      gatewayIp = zoneGatewayIp(this.configDir, "dmz");
+    }
+
+    // Current overrides. `unbound-manager list` prints a header row then
+    // `HOST DOMAIN TYPE VALUE DESCRIPTION` (whitespace-aligned columns).
+    let currentTarget: string | undefined;
+    const collidingHosts: string[] = [];
+    const r = captureResult(UNBOUND_MANAGER_BIN(), ["--no-ssl-verify", "list"]);
+    if (!r.ran) throw new NetworkUnreachable(`${UNBOUND_MANAGER_BIN()} list: ${r.stderr}`);
+    if (r.rc === 0) {
+      const lines = r.stdout.split("\n").slice(1); // drop the header row
+      for (const line of lines) {
+        const cols = line.trim().split(/\s+/);
+        if (cols.length < 4) continue;
+        const [host, dom, type, value] = cols;
+        if (dom !== domain || !type.startsWith("A")) continue;
+        if (host === "*") currentTarget = value;
+        else collidingHosts.push(host);
+      }
+    }
+    return {
+      gatewayIp: gatewayIp ?? undefined,
+      gatewayZone: gatewayIp ? gatewayZone : undefined,
+      currentTarget,
+      collidingHosts,
+    };
+  }
+
+  registerWildcard(domain: string, gatewayIp: string, zone: string, envName: string): void {
+    // Prune colliding per-service overrides first — a wildcard `redirect` zone
+    // permits local-data only at the apex, so a stray host.<domain> makes
+    // unbound-checkconf fatal and takes cluster DNS down (#474). The wildcard
+    // supersedes them.
+    const st = this.wildcardDnsState(domain, zone);
+    for (const host of st.collidingHosts) {
+      const d = captureResult(UNBOUND_MANAGER_BIN(), ["--no-ssl-verify", "delete", host, domain]);
+      if (!d.ran) throw new NetworkUnreachable(`${UNBOUND_MANAGER_BIN()} delete: ${d.stderr}`);
+      // A delete that fails (already gone) is non-fatal — the add below is what
+      // matters; mirror acme-setup's `|| true` tolerance.
+    }
+    run(UNBOUND_MANAGER_BIN(), [
+      "--no-ssl-verify",
+      "add",
+      "*",
+      domain,
+      gatewayIp,
+      "--description",
+      `TAPPaaS: ${envName} wildcard -> Caddy (${zone})`,
+    ]);
+  }
+
+  issuedCertRefid(domain: string): string | undefined {
+    // `acme-manager status --domain <d>` prints `certRefId : <refid>` for an
+    // issued cert and exits non-zero when none is configured. No DNS-API creds
+    // needed — it just queries the OPNsense Certificates API.
+    const r = captureResult(ACME_MANAGER_BIN(), ["--no-ssl-verify", "status", "--domain", domain]);
+    if (!r.ran) throw new NetworkUnreachable(`${ACME_MANAGER_BIN()} status: ${r.stderr}`);
+    if (r.rc !== 0) return undefined; // "no certificate '*.<d>' configured"
+    for (const line of r.stdout.split("\n")) {
+      const m = /^\s*certRefId\s*:\s*(\S+)/.exec(line);
+      if (m && m[1]) return m[1];
+    }
+    return undefined;
+  }
+
+  private readCertRefids(): Record<string, string> {
+    const p = this.certRefidsPath();
+    if (!existsSync(p)) return {};
+    try {
+      const o = JSON.parse(readFileSync(p, "utf8"));
+      return o && typeof o === "object" ? (o as Record<string, string>) : {};
+    } catch {
+      return {};
+    }
+  }
+
+  recordedCertRefid(envName: string): string | undefined {
+    const v = this.readCertRefids()[envName];
+    return typeof v === "string" && v !== "" ? v : undefined;
+  }
+
+  writeCertRefid(envName: string, refid: string): void {
+    const map = this.readCertRefids();
+    map[envName] = refid;
+    writeFileSync(this.certRefidsPath(), JSON.stringify(map, null, 2) + "\n");
+  }
+
+  acmeCredsAvailable(): boolean {
+    // acme-setup.sh reads ~/.acme-dns-credentials.txt; $HOME resolves the same
+    // path without depending on os.homedir (the repo's `types: []` node shim does
+    // not declare it).
+    const home = process.env.HOME ?? "";
+    return home !== "" && existsSync(join(home, ".acme-dns-credentials.txt"));
+  }
+
+  issueWildcardCert(envName: string): string {
+    // Delegate issuance to acme-setup.sh (the sole credential-bearing step); it
+    // runs non-interactively when ~/.acme-dns-credentials.txt is present, and
+    // itself registers the wildcard DNS + writes cert-refids.json. Stream its
+    // (multi-minute) progress to the operator's terminal.
+    const rc = stream(ACME_SETUP_BIN(), ["--environment", envName]);
+    if (rc !== 0) {
+      throw new Error(`${ACME_SETUP_BIN()} --environment ${envName} failed (exit ${rc})`);
+    }
+    // acme-setup.sh wrote the refid; read it back rather than re-parsing output.
+    const refid = this.recordedCertRefid(envName);
+    if (!refid) {
+      throw new Error(
+        `${ACME_SETUP_BIN()} reported success but cert-refids.json['${envName}'] is still empty`,
+      );
+    }
+    return refid;
   }
 }

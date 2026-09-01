@@ -22,6 +22,7 @@ import {
   Action,
   ApplyFailure,
   ApplyResult,
+  DnsTlsClient,
   Environment,
   ModuleClient,
   NetworkClient,
@@ -47,6 +48,109 @@ export interface ReconcileOpts {
   isDefaultEnv?: boolean;
 }
 
+// Plan the wildcard DNS + cert-refid runtime state for one environment (#537).
+// A no-op for non-wildcard environments and for environments with no primary
+// domain set. Pushes into the caller's action/warning/note arrays so it slots
+// into computePlan's single plan.
+function planWildcardState(
+  env: Environment,
+  dt: DnsTlsClient | undefined,
+  actions: Action[],
+  warnings: string[],
+  notes: string[],
+): void {
+  const domains = env.domains;
+  if (!domains || domains.dnsMode !== "wildcard") return; // per-service: nothing here
+
+  const domain = domains.primary;
+  if (!domain || domain.startsWith("CHANGE")) {
+    warnings.push(
+      `environment '${env.name}': dnsMode=wildcard but domains.primary is unset — ` +
+        `no wildcard DNS/cert to reconcile`,
+    );
+    return;
+  }
+  if (!dt) {
+    warnings.push(
+      `environment '${env.name}': dnsMode=wildcard but no DNS/TLS client available — ` +
+        `wildcard DNS and cert refid were NOT reconciled`,
+    );
+    return;
+  }
+
+  // ── TLS: record an issued cert's refid, or issue it (creds permitting) ──
+  // Decide this first because ISSUING (via acme-setup.sh) also registers the
+  // wildcard DNS itself, so we skip the separate DNS action in that case.
+  let issuing = false;
+  const issued = dt.issuedCertRefid(domain);
+  const recorded = dt.recordedCertRefid(env.name);
+  if (issued) {
+    if (issued !== recorded) {
+      actions.push({
+        kind: "record-cert-refid",
+        scope: "environment",
+        target: `cert-refids.json['${env.name}'] = ${issued}  (*.${domain})`,
+        value: issued,
+        domain,
+      });
+    } else {
+      notes.push(`cert-refids.json already records ${issued} for '${env.name}' — no change.`);
+    }
+  } else if (dt.acmeCredsAvailable()) {
+    issuing = true;
+    actions.push({
+      kind: "issue-wildcard-cert",
+      scope: "environment",
+      target:
+        `issue *.${domain} via acme-setup.sh --environment ${env.name} ` +
+        `(ACME creds present), then record its refid`,
+      domain,
+    });
+  } else {
+    warnings.push(
+      `environment '${env.name}': no *.${domain} wildcard cert issued and ` +
+        `~/.acme-dns-credentials.txt is absent — run ` +
+        `\`acme-setup.sh --environment ${env.name}\` once (needs DNS-API credentials) to issue it.`,
+    );
+  }
+
+  // ── DNS: converge the split-horizon wildcard override ──
+  // Skipped when issuing, because acme-setup.sh registers it as part of issuance.
+  if (issuing) {
+    notes.push(
+      `wildcard DNS for *.${domain} is registered as part of certificate issuance (acme-setup.sh).`,
+    );
+    return;
+  }
+  const st = dt.wildcardDnsState(domain, env.network.zone ?? "");
+  if (!st.gatewayIp) {
+    warnings.push(
+      `environment '${env.name}': could not derive a gateway IP for *.${domain} ` +
+        `(zone '${env.network.zone}' has no subnet in zones.json, and no dmz fallback) — ` +
+        `wildcard DNS not reconciled.`,
+    );
+    return;
+  }
+  if (st.currentTarget !== st.gatewayIp || st.collidingHosts.length > 0) {
+    const collide =
+      st.collidingHosts.length > 0
+        ? `; prune ${st.collidingHosts.length} colliding per-service override(s)`
+        : "";
+    actions.push({
+      kind: "register-wildcard-dns",
+      scope: "environment",
+      target: `*.${domain} -> ${st.gatewayIp} (${st.gatewayZone} gateway, Unbound)${collide}`,
+      value: st.gatewayIp,
+      domain,
+      zone: st.gatewayZone,
+    });
+  } else {
+    notes.push(
+      `wildcard *.${domain} already resolves to ${st.gatewayIp} (${st.gatewayZone}) — no DNS change.`,
+    );
+  }
+}
+
 // Compute the reconcile plan for one environment.
 //   deep=false → just the (system-wide) network reconcile.
 //   deep=true  → network reconcile + one module reconcile per consuming module.
@@ -55,6 +159,11 @@ export function computePlan(
   net: NetworkClient,
   mod: ModuleClient,
   opts: ReconcileOpts,
+  // #537: the wildcard DNS + cert-refid boundary. Optional so non-wildcard
+  // reconciles (and the offline engine tests that use non-wildcard envs) need
+  // not inject it; a wildcard-mode environment without it is reported as a
+  // warning rather than silently skipped.
+  dt?: DnsTlsClient,
 ): Plan {
   const actions: Action[] = [];
   const warnings: string[] = [];
@@ -149,6 +258,19 @@ export function computePlan(
     }
   }
 
+  // ── #537: wildcard DNS + cert-refid runtime state (ADR-007c v1.4) ──
+  //
+  // For a `dnsMode: wildcard` environment two artefacts are reconciler-populated
+  // runtime state, not authored config: the split-horizon `*.<primary>` Unbound
+  // override (pointed at the env's service-zone gateway) and cert-refids.json's
+  // refid for the issued cert. Until #537 both were written ONLY by the manual
+  // acme-setup.sh, so an environment created after site bootstrap never got them
+  // and its modules failed at runtime. Reconcile is the convergence verb, so it
+  // is where materializing them belongs.
+  //
+  // Scope is always "environment": these touch exactly this env's domain.
+  planWildcardState(env, dt, actions, warnings, notes);
+
   if (opts.deep) {
     const modules = mod.modulesForEnvironment(env.name);
     for (const m of modules) {
@@ -200,6 +322,9 @@ export function applyPlan(
   // Omitted → a planned backfill is reported as a failure rather than silently
   // dropped, because the caller asked for a repair and did not get one.
   writeEnv?: (env: Environment) => void,
+  // #537: the wildcard DNS + cert-refid boundary. Omitted → a planned DNS/TLS
+  // action is reported as a failure rather than silently dropped.
+  dt?: DnsTlsClient,
 ): ApplyResult {
   let applied = 0;
   const failures: ApplyFailure[] = [];
@@ -250,6 +375,51 @@ export function applyPlan(
           target: `ownerOrg on '${env.name}'`,
           error: e instanceof Error ? e.message : String(e),
         });
+      }
+    } else if (a.kind === "register-wildcard-dns") {
+      if (!dt) {
+        failures.push({ target: `*.${a.domain ?? "?"}`, error: "no DNS/TLS client available" });
+        continue;
+      }
+      if (!a.value || !a.domain) {
+        failures.push({ target: "register-wildcard-dns", error: "no gateway/domain in the planned action" });
+        continue;
+      }
+      try {
+        dt.registerWildcard(a.domain, a.value, a.zone ?? "", env.name);
+        applied++;
+      } catch (e) {
+        if (e instanceof NetworkUnreachable) throw e;
+        failures.push({ target: `*.${a.domain}`, error: e instanceof Error ? e.message : String(e) });
+      }
+    } else if (a.kind === "record-cert-refid") {
+      if (!dt) {
+        failures.push({ target: `cert-refids['${env.name}']`, error: "no DNS/TLS client available" });
+        continue;
+      }
+      if (!a.value) {
+        failures.push({ target: `cert-refids['${env.name}']`, error: "no refid in the planned action" });
+        continue;
+      }
+      try {
+        dt.writeCertRefid(env.name, a.value);
+        applied++;
+      } catch (e) {
+        failures.push({ target: `cert-refids['${env.name}']`, error: e instanceof Error ? e.message : String(e) });
+      }
+    } else if (a.kind === "issue-wildcard-cert") {
+      if (!dt) {
+        failures.push({ target: `*.${a.domain ?? "?"}`, error: "no DNS/TLS client available" });
+        continue;
+      }
+      try {
+        // acme-setup.sh issues, registers the wildcard DNS, and writes
+        // cert-refids.json; issueWildcardCert returns the resulting refid.
+        dt.issueWildcardCert(env.name);
+        applied++;
+      } catch (e) {
+        if (e instanceof NetworkUnreachable) throw e;
+        failures.push({ target: `*.${a.domain ?? "?"}`, error: e instanceof Error ? e.message : String(e) });
       }
     }
   }

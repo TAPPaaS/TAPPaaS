@@ -33,10 +33,10 @@ import {
   writeEnvironment,
 } from "./config";
 import { bootstrap, firstOrg, resolveName } from "./bootstrap";
-import { CliModuleClient, CliNetworkClient, NetworkUnreachable } from "./clients";
+import { CliDnsTlsClient, CliModuleClient, CliNetworkClient, NetworkUnreachable } from "./clients";
 import { applyPlan, computePlan } from "./reconcile";
 import { runValidate } from "./validate";
-import { Environment, ModuleClient, NetworkClient } from "./types";
+import { DnsTlsClient, Environment, ModuleClient, NetworkClient } from "./types";
 import { HelpSpec, renderHelp } from "../../../lib/ts/src/help";
 import { RD, GN, CL, die, guarded, info, warn } from "../../../lib/ts/src/cli";
 import { existsSync, readFileSync, unlinkSync } from "fs";
@@ -506,7 +506,7 @@ function cmdDelete(opts: Opts, mod: ModuleClient): void {
 }
 
 // ── reconcile ─────────────────────────────────────────────────────────
-function cmdReconcile(opts: Opts, net: NetworkClient, mod: ModuleClient): number {
+function cmdReconcile(opts: Opts, net: NetworkClient, mod: ModuleClient, dt: DnsTlsClient): number {
   const name = opts.rest[0];
   if (!name) die("reconcile: expected <env>");
   const env = loadEnvironment(opts.configDir, name);
@@ -537,9 +537,11 @@ function cmdReconcile(opts: Opts, net: NetworkClient, mod: ModuleClient): number
       skipNetwork: opts.skipNetwork,
       ownerOrgCandidate,
       isDefaultEnv: !!defaultEnvName && name === defaultEnvName,
-    });
+    }, dt);
   } catch (e) {
-    if (e instanceof NetworkUnreachable) die(`network-manager unreachable: ${e.message}`);
+    // A manager binary missing on PATH (network-manager, unbound-manager,
+    // acme-manager) — an environment fault, reported as a clean line.
+    if (e instanceof NetworkUnreachable) die(`a manager binary is unreachable: ${e.message}`);
     throw e;
   }
 
@@ -574,7 +576,7 @@ function cmdReconcile(opts: Opts, net: NetworkClient, mod: ModuleClient): number
   }
   try {
     const res = applyPlan(env, plan, net, mod, opts.apply, (e) =>
-      writeEnvironment(opts.configDir, e)
+      writeEnvironment(opts.configDir, e), dt
     );
     info("");
     // A module that ran and failed is named here rather than propagated as a
@@ -597,7 +599,7 @@ function cmdReconcile(opts: Opts, net: NetworkClient, mod: ModuleClient): number
   }
 }
 
-export function run(argv: string[], net: NetworkClient, mod: ModuleClient): number {
+export function run(argv: string[], net: NetworkClient, mod: ModuleClient, dt: DnsTlsClient): number {
   if (argv.length === 0 || argv[0] === "-h" || argv[0] === "--help") {
     usage();
     return 0;
@@ -626,7 +628,7 @@ export function run(argv: string[], net: NetworkClient, mod: ModuleClient): numb
         cmdDelete(opts, mod);
         return 0;
       case "reconcile":
-        return cmdReconcile(opts, net, mod);
+        return cmdReconcile(opts, net, mod, dt);
       default:
         usage();
         die(`Unknown command: ${cmd}`);
@@ -647,7 +649,8 @@ if (require.main === module) {
       const opts = parseOpts(argv.slice(1));
       const net = new CliNetworkClient();
       const mod = new CliModuleClient(opts.configDir);
-      return run(argv, net, mod);
+      const dt = new CliDnsTlsClient(opts.configDir);
+      return run(argv, net, mod, dt);
     }),
   );
 }

@@ -8,7 +8,7 @@
 
 import { Environment, NetworkUnreachable } from "../../src/types";
 import { applyPlan, computePlan } from "../../src/reconcile";
-import { FakeModuleClient, FakeNetworkClient } from "./fake-clients";
+import { FakeDnsTlsClient, FakeModuleClient, FakeNetworkClient } from "./fake-clients";
 
 let passed = 0;
 let failed = 0;
@@ -426,6 +426,394 @@ function envNoOwner(name: string, zone: string): Environment {
     !plan.actions.some((a) => a.kind === "reconcile-network"),
     "--skip-network still omits the system-wide network pass",
   );
+}
+
+// ── #537: wildcard DNS + cert-refid runtime state ─────────────────────
+// A wildcard-mode environment created after site bootstrap must get its
+// split-horizon `*.<domain>` override and its cert refid from reconcile, not
+// only from the manual acme-setup.sh.
+function wildcardEnv(name: string, zone: string, domain: string): Environment {
+  return {
+    name,
+    displayName: name,
+    ownerOrg: "acme",
+    network: { zone },
+    domains: { primary: domain, dnsMode: "wildcard" },
+  };
+}
+
+// A per-service (non-wildcard) or domain-less environment plans NO DNS/TLS work.
+{
+  const net = new FakeNetworkClient();
+  net.seedZone("foo");
+  const mod = new FakeModuleClient();
+  const dt = new FakeDnsTlsClient();
+  dt.seedGateway("foo", "10.9.0.1");
+  const plan = computePlan(env("foo", "foo"), net, mod, { deep: false, skipNetwork: true }, dt);
+  check(
+    !plan.actions.some((a) =>
+      ["register-wildcard-dns", "record-cert-refid", "issue-wildcard-cert"].includes(a.kind),
+    ),
+    "a non-wildcard environment plans no DNS/TLS actions",
+  );
+}
+
+// TLS: an issued cert whose refid is not yet recorded → a record-cert-refid
+// action carrying the refid; DNS already correct so no DNS action.
+{
+  const net = new FakeNetworkClient();
+  net.seedZone("foo");
+  const mod = new FakeModuleClient();
+  const dt = new FakeDnsTlsClient();
+  dt.seedGateway("foo", "10.9.0.1");
+  dt.seedWildcard("app.example.com", "10.9.0.1"); // DNS already converged
+  dt.seedIssuedCert("app.example.com", "REFID-ABC"); // cert exists on the firewall
+  const plan = computePlan(
+    wildcardEnv("foo", "foo", "app.example.com"),
+    net,
+    mod,
+    { deep: false, skipNetwork: true },
+    dt,
+  );
+  const rec = plan.actions.find((a) => a.kind === "record-cert-refid");
+  check(
+    rec !== undefined && rec.value === "REFID-ABC" && rec.scope === "environment",
+    "an issued-but-unrecorded refid plans a record-cert-refid carrying it",
+  );
+  check(
+    !plan.actions.some((a) => a.kind === "register-wildcard-dns"),
+    "no DNS action when the wildcard already resolves correctly",
+  );
+}
+
+// TLS: cert issued AND already recorded → idempotent, no TLS action, a note.
+{
+  const net = new FakeNetworkClient();
+  net.seedZone("foo");
+  const mod = new FakeModuleClient();
+  const dt = new FakeDnsTlsClient();
+  dt.seedGateway("foo", "10.9.0.1");
+  dt.seedWildcard("app.example.com", "10.9.0.1");
+  dt.seedIssuedCert("app.example.com", "REFID-ABC");
+  dt.seedRecordedRefid("foo", "REFID-ABC");
+  const plan = computePlan(
+    wildcardEnv("foo", "foo", "app.example.com"),
+    net,
+    mod,
+    { deep: false, skipNetwork: true },
+    dt,
+  );
+  check(
+    !plan.actions.some((a) => a.kind === "record-cert-refid") &&
+      plan.notes.some((n) => n.includes("already records REFID-ABC")),
+    "a matching recorded refid is left alone (idempotent) with a note",
+  );
+}
+
+// TLS: no cert issued + creds present → an issue-wildcard-cert action, and the
+// separate DNS action is SKIPPED because acme-setup.sh registers DNS itself.
+{
+  const net = new FakeNetworkClient();
+  net.seedZone("foo");
+  const mod = new FakeModuleClient();
+  const dt = new FakeDnsTlsClient();
+  dt.seedGateway("foo", "10.9.0.1"); // DNS underived-target would otherwise plan
+  dt.credsPresent = true;
+  const plan = computePlan(
+    wildcardEnv("foo", "foo", "app.example.com"),
+    net,
+    mod,
+    { deep: false, skipNetwork: true },
+    dt,
+  );
+  check(
+    plan.actions.some((a) => a.kind === "issue-wildcard-cert"),
+    "no cert + creds present plans an issue-wildcard-cert",
+  );
+  check(
+    !plan.actions.some((a) => a.kind === "register-wildcard-dns") &&
+      plan.notes.some((n) => n.includes("as part of certificate issuance")),
+    "issuance bundles DNS registration, so no separate DNS action is planned",
+  );
+}
+
+// TLS: no cert issued + NO creds → a warning (never silently succeeds); DNS is
+// still evaluated independently.
+{
+  const net = new FakeNetworkClient();
+  net.seedZone("foo");
+  const mod = new FakeModuleClient();
+  const dt = new FakeDnsTlsClient();
+  dt.seedGateway("foo", "10.9.0.1"); // wildcard missing → DNS action expected
+  const plan = computePlan(
+    wildcardEnv("foo", "foo", "app.example.com"),
+    net,
+    mod,
+    { deep: false, skipNetwork: true },
+    dt,
+  );
+  check(
+    !plan.actions.some((a) => a.kind === "issue-wildcard-cert") &&
+      plan.warnings.some((w) => w.includes("acme-dns-credentials.txt is absent")),
+    "no cert + no creds warns to run acme-setup, never issues",
+  );
+  check(
+    plan.actions.some((a) => a.kind === "register-wildcard-dns"),
+    "the wildcard DNS is still planned even when the cert cannot be issued",
+  );
+}
+
+// DNS: wildcard override missing/wrong → a register-wildcard-dns action pointed
+// at the env's own service-zone gateway.
+{
+  const net = new FakeNetworkClient();
+  net.seedZone("foo");
+  const mod = new FakeModuleClient();
+  const dt = new FakeDnsTlsClient();
+  dt.seedGateway("foo", "10.9.0.1");
+  dt.seedIssuedCert("app.example.com", "R"); // isolate: TLS already settled
+  dt.seedRecordedRefid("foo", "R");
+  const plan = computePlan(
+    wildcardEnv("foo", "foo", "app.example.com"),
+    net,
+    mod,
+    { deep: false, skipNetwork: true },
+    dt,
+  );
+  const dns = plan.actions.find((a) => a.kind === "register-wildcard-dns");
+  check(
+    dns !== undefined && dns.value === "10.9.0.1" && dns.zone === "foo" && dns.scope === "environment",
+    "a missing wildcard override plans register-wildcard-dns at the service-zone gateway",
+  );
+}
+
+// DNS: target correct but a colliding per-service override exists → still plans
+// the register (which prunes the collision).
+{
+  const net = new FakeNetworkClient();
+  net.seedZone("foo");
+  const mod = new FakeModuleClient();
+  const dt = new FakeDnsTlsClient();
+  dt.seedGateway("foo", "10.9.0.1");
+  dt.seedWildcard("app.example.com", "10.9.0.1"); // target already correct
+  dt.seedCollisions("app.example.com", ["logging"]); // but a collision lingers
+  dt.seedIssuedCert("app.example.com", "R");
+  dt.seedRecordedRefid("foo", "R");
+  const plan = computePlan(
+    wildcardEnv("foo", "foo", "app.example.com"),
+    net,
+    mod,
+    { deep: false, skipNetwork: true },
+    dt,
+  );
+  const dns = plan.actions.find((a) => a.kind === "register-wildcard-dns");
+  check(
+    dns !== undefined && dns.target.includes("prune 1 colliding"),
+    "a lingering per-service collision still plans a wildcard register (to prune it)",
+  );
+}
+
+// DNS: already correct, no collisions → no DNS action, just a note.
+{
+  const net = new FakeNetworkClient();
+  net.seedZone("foo");
+  const mod = new FakeModuleClient();
+  const dt = new FakeDnsTlsClient();
+  dt.seedGateway("foo", "10.9.0.1");
+  dt.seedWildcard("app.example.com", "10.9.0.1");
+  dt.seedIssuedCert("app.example.com", "R");
+  dt.seedRecordedRefid("foo", "R");
+  const plan = computePlan(
+    wildcardEnv("foo", "foo", "app.example.com"),
+    net,
+    mod,
+    { deep: false, skipNetwork: true },
+    dt,
+  );
+  check(
+    !plan.actions.some((a) => a.kind === "register-wildcard-dns") &&
+      plan.notes.some((n) => n.includes("already resolves to 10.9.0.1")),
+    "an already-correct wildcard override plans no DNS action (idempotent)",
+  );
+}
+
+// DNS: no gateway derivable (zone has no subnet, no dmz fallback) → a warning,
+// no DNS action.
+{
+  const net = new FakeNetworkClient();
+  net.seedZone("foo");
+  const mod = new FakeModuleClient();
+  const dt = new FakeDnsTlsClient(); // no gateways seeded → underivable
+  dt.seedIssuedCert("app.example.com", "R");
+  dt.seedRecordedRefid("foo", "R");
+  const plan = computePlan(
+    wildcardEnv("foo", "foo", "app.example.com"),
+    net,
+    mod,
+    { deep: false, skipNetwork: true },
+    dt,
+  );
+  check(
+    !plan.actions.some((a) => a.kind === "register-wildcard-dns") &&
+      plan.warnings.some((w) => w.includes("could not derive a gateway IP")),
+    "an underivable gateway warns instead of planning a broken DNS record",
+  );
+}
+
+// DNS falls back to the dmz gateway when the env's own zone has no subnet.
+{
+  const net = new FakeNetworkClient();
+  net.seedZone("foo");
+  const mod = new FakeModuleClient();
+  const dt = new FakeDnsTlsClient();
+  dt.seedGateway("dmz", "10.6.0.1"); // only dmz has a gateway
+  dt.seedIssuedCert("app.example.com", "R");
+  dt.seedRecordedRefid("foo", "R");
+  const plan = computePlan(
+    wildcardEnv("foo", "foo", "app.example.com"),
+    net,
+    mod,
+    { deep: false, skipNetwork: true },
+    dt,
+  );
+  const dns = plan.actions.find((a) => a.kind === "register-wildcard-dns");
+  check(
+    dns !== undefined && dns.value === "10.6.0.1" && dns.zone === "dmz",
+    "the wildcard falls back to the dmz gateway when the service zone has no subnet",
+  );
+}
+
+// wildcard mode but domains.primary unset → a warning, no actions.
+{
+  const net = new FakeNetworkClient();
+  net.seedZone("foo");
+  const mod = new FakeModuleClient();
+  const dt = new FakeDnsTlsClient();
+  const e = wildcardEnv("foo", "foo", "");
+  const plan = computePlan(e, net, mod, { deep: false, skipNetwork: true }, dt);
+  check(
+    plan.warnings.some((w) => w.includes("domains.primary is unset")) &&
+      !plan.actions.some((a) =>
+        ["register-wildcard-dns", "record-cert-refid", "issue-wildcard-cert"].includes(a.kind),
+      ),
+    "wildcard mode with no primary domain warns and plans nothing",
+  );
+}
+
+// wildcard mode but NO DnsTlsClient injected → a warning, never silent.
+{
+  const net = new FakeNetworkClient();
+  net.seedZone("foo");
+  const mod = new FakeModuleClient();
+  const plan = computePlan(
+    wildcardEnv("foo", "foo", "app.example.com"),
+    net,
+    mod,
+    { deep: false, skipNetwork: true },
+    // no dt
+  );
+  check(
+    plan.warnings.some((w) => w.includes("no DNS/TLS client available")),
+    "wildcard mode without a DNS/TLS client warns rather than silently skipping",
+  );
+}
+
+// apply: register-wildcard-dns drives the client (prunes collisions + sets target).
+{
+  const net = new FakeNetworkClient();
+  net.seedZone("foo");
+  const mod = new FakeModuleClient();
+  const dt = new FakeDnsTlsClient();
+  dt.seedGateway("foo", "10.9.0.1");
+  dt.seedCollisions("app.example.com", ["logging"]);
+  dt.seedIssuedCert("app.example.com", "R");
+  dt.seedRecordedRefid("foo", "R");
+  const e = wildcardEnv("foo", "foo", "app.example.com");
+  const plan = computePlan(e, net, mod, { deep: false, skipNetwork: true }, dt);
+  const res = applyPlan(e, plan, net, mod, true, undefined, dt);
+  check(
+    res.failures.length === 0 &&
+      dt.log.some((l) => l.startsWith("register-wildcard app.example.com -> 10.9.0.1")) &&
+      dt.log.some((l) => l.includes("prune=[logging]")),
+    "apply registers the wildcard and prunes the colliding override",
+  );
+}
+
+// apply: record-cert-refid persists the refid via the client.
+{
+  const net = new FakeNetworkClient();
+  net.seedZone("foo");
+  const mod = new FakeModuleClient();
+  const dt = new FakeDnsTlsClient();
+  dt.seedGateway("foo", "10.9.0.1");
+  dt.seedWildcard("app.example.com", "10.9.0.1");
+  dt.seedIssuedCert("app.example.com", "REFID-XYZ");
+  const e = wildcardEnv("foo", "foo", "app.example.com");
+  const plan = computePlan(e, net, mod, { deep: false, skipNetwork: true }, dt);
+  const res = applyPlan(e, plan, net, mod, true, undefined, dt);
+  check(
+    res.failures.length === 0 &&
+      dt.recordedCertRefid("foo") === "REFID-XYZ" &&
+      dt.log.includes("write-cert-refid foo=REFID-XYZ"),
+    "apply records the issued cert's refid in cert-refids.json",
+  );
+}
+
+// apply: issue-wildcard-cert delegates to the client (acme-setup.sh).
+{
+  const net = new FakeNetworkClient();
+  net.seedZone("foo");
+  const mod = new FakeModuleClient();
+  const dt = new FakeDnsTlsClient();
+  dt.seedGateway("foo", "10.9.0.1");
+  dt.credsPresent = true;
+  const e = wildcardEnv("foo", "foo", "app.example.com");
+  const plan = computePlan(e, net, mod, { deep: false, skipNetwork: true }, dt);
+  const res = applyPlan(e, plan, net, mod, true, undefined, dt);
+  check(
+    res.failures.length === 0 &&
+      dt.log.includes("issue-wildcard-cert foo") &&
+      dt.recordedCertRefid("foo") === "REFID-ISSUED",
+    "apply issues the wildcard cert and records the resulting refid",
+  );
+}
+
+// apply: a planned DNS/TLS action with NO client is a loud failure, not a drop.
+{
+  const net = new FakeNetworkClient();
+  net.seedZone("foo");
+  const mod = new FakeModuleClient();
+  const dt = new FakeDnsTlsClient();
+  dt.seedGateway("foo", "10.9.0.1");
+  dt.seedIssuedCert("app.example.com", "REFID-XYZ"); // → a record-cert-refid action
+  const e = wildcardEnv("foo", "foo", "app.example.com");
+  const plan = computePlan(e, net, mod, { deep: false, skipNetwork: true }, dt);
+  const res = applyPlan(e, plan, net, mod, true); // no dt passed to apply
+  check(
+    res.failures.some((f) => f.error.includes("no DNS/TLS client available")),
+    "a planned DNS/TLS action fails loudly when apply has no client",
+  );
+}
+
+// A firewall/manager binary missing on PATH aborts (NetworkUnreachable), like
+// the network/module clients — it is an environment fault, not a per-item one.
+{
+  const net = new FakeNetworkClient();
+  net.seedZone("foo");
+  const mod = new FakeModuleClient();
+  const dt = new FakeDnsTlsClient();
+  dt.seedGateway("foo", "10.9.0.1");
+  dt.credsPresent = true;
+  dt.issueError = new NetworkUnreachable("acme-setup.sh: ENOENT");
+  const e = wildcardEnv("foo", "foo", "app.example.com");
+  const plan = computePlan(e, net, mod, { deep: false, skipNetwork: true }, dt);
+  let threw = false;
+  try {
+    applyPlan(e, plan, net, mod, true, undefined, dt);
+  } catch (err) {
+    threw = err instanceof NetworkUnreachable;
+  }
+  check(threw, "an unreachable issuance binary propagates instead of being collected");
 }
 
 console.log(`\n${passed} passed, ${failed} failed.`);

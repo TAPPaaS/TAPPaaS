@@ -101,6 +101,66 @@ export interface NetworkClient {
   reconcileNetwork(apply: boolean): void;
 }
 
+// ── DnsTlsClient — the wildcard DNS + cert-refid runtime-state boundary ─
+// ADR-007c v1.4: for a `dnsMode: wildcard` environment two pieces of runtime
+// state are reconciler-populated, NOT authored config (#537):
+//   1. the split-horizon wildcard `*.<primary>` Unbound override, pointed at the
+//      environment's own service-zone gateway (ADR-005 §6, #504);
+//   2. `config/cert-refids.json[<env>]` — the OPNsense Trust refid of the issued
+//      `*.<primary>` cert, read back by the proxy install to bind Caddy's
+//      CustomCertificate.
+// Until #537 these were written ONLY by the manual scripts/acme-setup.sh, so an
+// environment created after site bootstrap never got them. This boundary lets
+// the reconcile engine materialize both. Reads are cheap enough for one
+// environment (they mirror what acme-setup already does); tests inject a fake.
+export interface WildcardDnsState {
+  // The IP the wildcard SHOULD resolve to: the environment's service-zone
+  // gateway (<subnet>.1), falling back to the dmz gateway. undefined ⇒ no subnet
+  // for the zone in zones.json, so no gateway could be derived.
+  gatewayIp?: string;
+  // The zone the gateway was derived from (the env's own zone, or "dmz"). Used
+  // only for the human description on the Unbound override.
+  gatewayZone?: string;
+  // What the `*` override currently resolves to in Unbound, or undefined when no
+  // wildcard override exists for this domain yet.
+  currentTarget?: string;
+  // Per-service host overrides under this domain (host names, excluding `*`).
+  // A wildcard installs a `redirect` local-zone that permits local-data only at
+  // the apex, so these collide and are FATAL to Unbound (#474) — they must be
+  // pruned when the wildcard is (re)registered.
+  collidingHosts: string[];
+}
+
+export interface DnsTlsClient {
+  // ── DNS (Unbound split-horizon wildcard) ──
+  // Inspect the current wildcard/collision state for <domain> given the env's
+  // service <zone> (used to derive the desired gateway target).
+  wildcardDnsState(domain: string, zone: string): WildcardDnsState;
+  // Converge the wildcard: prune any colliding per-service overrides, then
+  // add/update `*.<domain>` → <gatewayIp> (idempotent). <zone> and <envName>
+  // feed the override description only.
+  registerWildcard(domain: string, gatewayIp: string, zone: string, envName: string): void;
+
+  // ── TLS (cert refid runtime state) ──
+  // The OPNsense Trust refid of an already-issued `*.<domain>` cert, or undefined
+  // when no cert is issued yet (queried non-interactively via `acme-manager
+  // status` — no DNS-API credentials needed).
+  issuedCertRefid(domain: string): string | undefined;
+  // The refid currently recorded in cert-refids.json for this environment, or
+  // undefined when the file/key is absent.
+  recordedCertRefid(envName: string): string | undefined;
+  // Persist a refid into cert-refids.json[<envName>] (merge; create if absent).
+  writeCertRefid(envName: string, refid: string): void;
+  // Whether ACME DNS-API credentials are on disk (~/.acme-dns-credentials.txt),
+  // which is what lets acme-setup.sh run non-interactively.
+  acmeCredsAvailable(): boolean;
+  // Issue the wildcard cert for this environment via acme-setup.sh (needs creds),
+  // returning the resulting Trust refid. acme-setup.sh also (idempotently)
+  // registers the wildcard DNS and writes cert-refids.json itself. Throws on
+  // failure.
+  issueWildcardCert(envName: string): string;
+}
+
 // ── ModuleClient — the module-manager boundary (--deep cascade) ───────
 // `environment reconcile --deep` additionally re-applies every module that was
 // deployed into this environment (module reconcile, the leaf re-apply).
@@ -127,7 +187,16 @@ export type ActionKind =
   // ADR-014 D1: materialize the Service zone an environment names but that does
   // not yet exist in zones.json. Previously reconcile only WARNED about this,
   // leaving an environment permanently unable to converge.
-  | "create-service-zone";
+  | "create-service-zone"
+  // #537: register/converge the split-horizon `*.<domain>` Unbound override for
+  // a wildcard-mode environment, pointed at its service-zone gateway.
+  | "register-wildcard-dns"
+  // #537: record an already-issued `*.<domain>` cert's OPNsense Trust refid into
+  // cert-refids.json[<env>] (runtime state — ADR-007c v1.4).
+  | "record-cert-refid"
+  // #537: issue the `*.<domain>` wildcard cert via acme-setup.sh when none exists
+  // yet and ACME DNS-API credentials are on disk, then record its refid.
+  | "issue-wildcard-cert";
 
 // How much of the system an action actually touches (#461). "environment" =
 // scoped to the environment being reconciled; "system-wide" = converges the
@@ -141,9 +210,16 @@ export interface Action {
   // Human-readable target description for the plan summary.
   target: string;
   // Machine-readable payload for actions that carry one (backfill-owner-org:
-  // the org to adopt). Kept separate from `target` so apply never has to parse
-  // prose back out of a display string.
+  // the org to adopt; register-wildcard-dns: the gateway IP; record-cert-refid:
+  // the refid). Kept separate from `target` so apply never has to parse prose
+  // back out of a display string.
   value?: string;
+  // #537 DNS/TLS actions carry the domain the action operates on (the env's
+  // domains.primary), so apply never re-parses it from `target`.
+  domain?: string;
+  // #537 register-wildcard-dns: the zone the gateway was derived from, for the
+  // Unbound override description only.
+  zone?: string;
 }
 
 export interface Plan {
