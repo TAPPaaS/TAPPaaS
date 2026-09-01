@@ -50,8 +50,11 @@ run_case 0 "clean tree passes --check" "${BASE[@]}" TAPPAAS_OPERATOR="$ME" -- --
 # 4. drift (owner == nobody-owns-these) → --check exits 1
 run_case 1 "drift detected by --check" "${BASE[@]}" TAPPAAS_OPERATOR="nobody" -- --check
 
-# 5. repair mode never hard-fails even when it cannot chown (unknown owner) → 0
-run_case 0 "repair mode is best-effort (rc 0)" "${BASE[@]}" TAPPAAS_OPERATOR="nobody" --
+# 5. repair mode on a clean tree exits 0 without touching anything. (We do NOT
+# force a real repair here: on a host where the operator has passwordless sudo
+# the chown would actually run and mutate the fixture. Exercising the true
+# chown-back path is a privileged live test, not a hermetic one.)
+run_case 0 "repair mode on clean tree exits 0" "${BASE[@]}" TAPPAAS_OPERATOR="$ME" --
 
 # 6. config dir outside HOME_ROOT is skipped, not chowned (bounding).
 OUT="$(env CONFIG_DIR=/etc TAPPAAS_HOME_ROOT="$TMP" TAPPAAS_OPERATOR="nobody" \
