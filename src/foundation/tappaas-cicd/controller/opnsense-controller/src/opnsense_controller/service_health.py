@@ -6,11 +6,11 @@ zone-manager pre/post-flight gates and the unbound-manager post-write guard
 the resolver must never itself depend on the resolver.
 """
 
-import os
 import socket
 import subprocess
 import time
 
+from .firewall_identity import FIREWALL_KEY, firewall_key_present
 from .log import debug, warn
 
 # The Unbound config + validator on OPNsense. checkconf MUST run from
@@ -22,9 +22,6 @@ from .log import debug, warn
 _UNBOUND_CHECKCONF = (
     "cd /var/unbound && /usr/local/sbin/unbound-checkconf /var/unbound/unbound.conf"
 )
-# The operator's dedicated firewall key (config-firewall.sh wires it; the general
-# id_ed25519 is NOT authorized on the firewall — see dhcp_manager_cli._fw_sh).
-_FIREWALL_KEY = "/home/tappaas/.ssh/tappaas-fw"
 
 
 def check_unbound_dns(host: str = "10.0.0.1", label: str = "",
@@ -88,8 +85,8 @@ def _firewall_ssh(host: str, script: str, timeout: float = 15.0) -> subprocess.C
     """
     cmd = ["ssh", "-o", "BatchMode=yes", "-o", "ConnectTimeout=5",
            "-o", "StrictHostKeyChecking=accept-new"]
-    if os.path.isfile(_FIREWALL_KEY):
-        cmd += ["-i", _FIREWALL_KEY, "-o", "IdentitiesOnly=yes"]
+    if firewall_key_present():  # warns once (#536) when unprovisioned
+        cmd += ["-i", FIREWALL_KEY, "-o", "IdentitiesOnly=yes"]
     cmd += [f"root@{host}", "sh -s"]
     return subprocess.run(cmd, input=script, text=True,
                           capture_output=True, timeout=timeout)

@@ -21,6 +21,10 @@ declare const process: {
   pid: number;
   stdout: { write(s: string): void };
   stderr: { write(s: string): void };
+  // getuid: POSIX-only (undefined on non-POSIX platforms). Used by the #533
+  // preflight guard (cli.ts requireOperator) to refuse running as root.
+  // Optional to match Node's own typing and the `typeof … === "function"` guard.
+  getuid?(): number;
 };
 
 // __dirname is available under CommonJS output.

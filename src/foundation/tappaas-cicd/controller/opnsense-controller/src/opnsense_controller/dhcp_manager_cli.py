@@ -33,6 +33,7 @@ import sys
 from .cli_globals import make_global_parent, parse_with_globals
 from .config import Config
 from .dhcp_manager import DhcpManager
+from .firewall_identity import FIREWALL_KEY, firewall_key_present
 from .log import error, info
 from .vlan_manager import VlanManager
 
@@ -73,9 +74,10 @@ def _fw_sh(config: Config, script: str) -> subprocess.CompletedProcess:
     cmd = ["ssh", "-o", "BatchMode=yes",
            "-o", "StrictHostKeyChecking=accept-new"]
     if os.geteuid() == 0:
-        fw_key = "/home/tappaas/.ssh/tappaas-fw"
-        if os.path.isfile(fw_key):
-            cmd += ["-i", fw_key, "-o", "IdentitiesOnly=yes"]
+        # root@cicd holds no firewall key; use the dedicated tappaas-fw key.
+        # firewall_key_present() warns once (#536) when it is unprovisioned.
+        if firewall_key_present():
+            cmd += ["-i", FIREWALL_KEY, "-o", "IdentitiesOnly=yes"]
     cmd += [f"root@{config.firewall}", "sh -s"]
     return subprocess.run(cmd, input=script, text=True, capture_output=True)
 
