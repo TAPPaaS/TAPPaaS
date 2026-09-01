@@ -195,10 +195,14 @@ class VerifyResult:
     present: int = 0
     missing: list[str] = field(default_factory=list)
     extra: list[str] = field(default_factory=list)
+    # Aliases a compiled rule matches on whose pf table has no members (#542):
+    # the rule is present and correctly ordered, yet the traffic it permits is
+    # silently dropped. A non-empty list makes verify fail.
+    empty_tables: list[str] = field(default_factory=list)
 
     @property
     def ok(self) -> bool:
-        return not self.missing and not self.extra
+        return not self.missing and not self.extra and not self.empty_tables
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -565,9 +569,73 @@ class RulesManager:
         result.missing = sorted(desired_descs - existing_descs)
         result.extra = sorted(existing_descs - desired_descs)
 
+        # #542 (verification half): a rule can be present and correctly ordered
+        # while the pf table its alias matches on is empty — an FQDN that never
+        # resolved, or an alias that was stored but never reconfigured into pf.
+        # Every presence check above still passes, so the dead path reports
+        # green. Read each referenced alias table and fail, naming it, when one
+        # a rule depends on has no members.
+        for alias_name in self._referenced_alias_names(module, desired):
+            addresses = self._alias_table_addresses(alias_name)
+            if addresses is not None and not addresses:
+                result.empty_tables.append(alias_name)
+        result.empty_tables.sort()
+
         if deep:
             debug("--deep connectivity probing is not yet implemented")
         return result
+
+    def _referenced_alias_names(
+        self, module: ModuleSpec, desired: list[ModuleFirewallRule]
+    ) -> list[str]:
+        """Alias names a compiled rule matches on (source or destination).
+
+        A rule's ``source_net``/``destination_net`` is ``any``, a CIDR, or an
+        alias name. Keep only the values that are known aliases — the module's
+        own and peer FQDN aliases (``tm_*``), module-local aliases, and
+        referenced globals — since those are the ones backed by a pf table that
+        can come up empty. CIDRs and ``any`` are literals in the rule and need
+        no table.
+        """
+        universe: set[str] = set(self._module_aliases_to_provision(module))
+        universe.update(module.aliases)
+        universe.update(self._referenced_global_aliases(module))
+        referenced: set[str] = set()
+        for r in desired:
+            for net in (r.source_net, r.destination_net):
+                if net in universe:
+                    referenced.add(net)
+        return sorted(referenced)
+
+    def _alias_table_addresses(self, alias_name: str) -> list[str] | None:
+        """Return the live pf-table entries for ``alias_name``.
+
+        Reads ``/api/firewall/alias_util/list/<alias>``. A populated host alias
+        returns its resolved addresses; an alias whose FQDN did not resolve, or
+        that was stored but never reconfigured into pf, returns an empty list —
+        the silent-drop condition of #542. Returns ``None`` when the table
+        cannot be read (not connected, or the API call failed) so the caller
+        degrades to "unknown" rather than a false empty.
+        """
+        if self._fw is None:
+            return None
+        try:
+            result = self.fw.client.run_module(
+                "raw",
+                params={
+                    "module": "firewall",
+                    "controller": "alias_util",
+                    "command": f"list/{alias_name}",
+                    "action": "get",
+                },
+            )
+        except Exception as exc:  # network/API error — treat as unknown
+            debug(f"could not read pf table for alias '{alias_name}': {exc}")
+            return None
+        rows = result.get("result", {}).get("response", {}).get("rows", [])
+        if not isinstance(rows, list):
+            return None
+        return [row.get("ip", "") for row in rows if isinstance(row, dict)]
 
     def create_alias(
         self, name: str, alias_type: str, addresses: list[str], description: str = ""
@@ -1807,14 +1875,18 @@ def _dispatch(args: argparse.Namespace, manager: RulesManager) -> int:
     if cmd == "verify-rules":
         result = manager.verify_rules(args.module, deep=args.deep)
         info(f"{result.module}: desired={result.desired} present={result.present} "
-             f"missing={len(result.missing)} extra={len(result.extra)}")
+             f"missing={len(result.missing)} extra={len(result.extra)} "
+             f"empty_tables={len(result.empty_tables)}")
         for d in result.missing:
             warn(f"  missing: {d}")
         for d in result.extra:
             warn(f"  extra:   {d}")
+        for d in result.empty_tables:
+            error(f"  empty table: {d} — rule matches on it but pf table has no members")
         _output({"module": result.module, "desired": result.desired,
                   "present": result.present, "missing": result.missing,
-                  "extra": result.extra, "ok": result.ok}, args)
+                  "extra": result.extra, "empty_tables": result.empty_tables,
+                  "ok": result.ok}, args)
         return 0 if result.ok else 1
 
     if cmd == "list-rules":

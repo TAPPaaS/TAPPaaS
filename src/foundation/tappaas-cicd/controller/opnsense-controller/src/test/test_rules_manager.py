@@ -554,6 +554,166 @@ class TestVerifyAndPruneSuffix(unittest.TestCase):
 
 
 # ─────────────────────────────────────────────────────────────────────────────
+# Alias pf tables (#542)
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+def _raw_reconfigure_calls(fw) -> list:
+    """The firewall/alias/reconfigure raw calls recorded on a MagicMock client."""
+    calls = []
+    for call in fw.client.run_module.call_args_list:
+        args, kwargs = call
+        if args and args[0] != "raw":
+            continue
+        params = kwargs.get("params", {})
+        if (params.get("controller") == "alias"
+                and params.get("command") == "reconfigure"):
+            calls.append(params)
+    return calls
+
+
+class TestReconfigureAliases(unittest.TestCase):
+    """The population half of #542: aliases must be resolved into pf tables.
+
+    Storing an alias (reload=False) writes config.xml but leaves its pf table
+    empty; a filter reload rewrites rules, not tables. The apply pipeline must
+    fire firewall/alias/reconfigure once, after the alias set is upserted and
+    before rules are applied, or the rule matches an empty table.
+    """
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.dir = Path(self.tmp.name)
+        (self.dir / "litellm.json").write_text(json.dumps(LITELLM_FIXTURE))
+        (self.dir / "vllm.json").write_text(json.dumps(VLLM_FIXTURE))
+        self.mgr = _make_manager(modules_dir=self.dir)
+        self.mgr._write_sequence_map = lambda *a, **k: None
+
+    def tearDown(self):
+        self.tmp.cleanup()
+
+    def test_apply_reconfigures_aliases_exactly_once(self):
+        fw = MagicMock()
+        fw.create_savepoint.return_value = "rev"
+        self.mgr._fw = fw
+        self.mgr._apply("litellm", prune=False)
+        self.assertEqual(len(_raw_reconfigure_calls(fw)), 1)
+
+    def test_reconfigure_precedes_rule_apply(self):
+        # The table must be populated before the rules that match on it are
+        # applied — assert reconfigure lands ahead of the first create_rule.
+        events = []
+        fw = MagicMock()
+        fw.create_savepoint.return_value = "rev"
+        fw.create_rule.side_effect = lambda *a, **k: events.append("rule")
+        def _run_module(name, **kwargs):
+            params = kwargs.get("params", {})
+            if (params.get("controller") == "alias"
+                    and params.get("command") == "reconfigure"):
+                events.append("reconfigure")
+            return MagicMock()
+        fw.client.run_module.side_effect = _run_module
+        self.mgr._fw = fw
+        self.mgr._apply("litellm", prune=False)
+        self.assertIn("reconfigure", events)
+        self.assertIn("rule", events)
+        self.assertLess(events.index("reconfigure"), events.index("rule"))
+
+    def test_reconfigure_skipped_in_check_mode(self):
+        fw = MagicMock()
+        self.mgr._fw = fw
+        self.mgr.check_mode = True
+        self.mgr.reconfigure_aliases()
+        self.assertEqual(_raw_reconfigure_calls(fw), [])
+
+
+class _FakeAliasTableClient:
+    """Stub OPNsense client returning canned alias_util/list tables."""
+
+    def __init__(self, tables: dict[str, list[str]]):
+        self._tables = tables
+
+    def run_module(self, name, **kwargs):
+        params = kwargs.get("params", {})
+        command = params.get("command", "")
+        if params.get("controller") == "alias_util" and command.startswith("list/"):
+            alias = command[len("list/"):]
+            addrs = self._tables.get(alias, [])
+            rows = [{"ip": a} for a in addrs]
+            return {"result": {"response": {"rows": rows}}}
+        return {"result": {"response": {}}}
+
+
+class TestEmptyTableVerification(unittest.TestCase):
+    """The verification half of #542: verify-rules fails and names the empty
+    table when a rule matches on an alias whose pf table has no members."""
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.dir = Path(self.tmp.name)
+        (self.dir / "litellm.json").write_text(json.dumps(LITELLM_FIXTURE))
+        (self.dir / "vllm.json").write_text(json.dumps(VLLM_FIXTURE))
+        self.mgr = _make_manager(modules_dir=self.dir)
+        # Make presence checks pass so only the table state drives the outcome.
+        desired, _ = self.mgr._compile(load_module(self.dir, "litellm"))
+        self.desired = desired
+        self.mgr._list_owned_rules = lambda name: _live_from_compiled(self.mgr, desired)
+
+    def tearDown(self):
+        self.tmp.cleanup()
+
+    def _connect_tables(self, tables: dict[str, list[str]]):
+        fw = MagicMock()
+        fw.client = _FakeAliasTableClient(tables)
+        self.mgr._fw = fw
+
+    def test_referenced_alias_names_are_the_rule_tables(self):
+        names = self.mgr._referenced_alias_names(
+            load_module(self.dir, "litellm"), self.desired
+        )
+        self.assertEqual(
+            set(names), {"tm_litellm", "tm_vllm", "llm_providers"}
+        )
+
+    def test_empty_referenced_table_fails_verify(self):
+        # tm_vllm resolves to nothing — the classic silent-drop case.
+        self._connect_tables({
+            "tm_litellm": ["10.2.10.5"],
+            "llm_providers": ["93.184.216.34"],
+            "tm_vllm": [],
+        })
+        result = self.mgr.verify_rules("litellm")
+        self.assertEqual(result.missing, [])       # rule is present…
+        self.assertIn("tm_vllm", result.empty_tables)  # …but its table is empty
+        self.assertFalse(result.ok)
+
+    def test_all_tables_populated_verifies_clean(self):
+        self._connect_tables({
+            "tm_litellm": ["10.2.10.5"],
+            "llm_providers": ["93.184.216.34"],
+            "tm_vllm": ["10.2.10.9"],
+        })
+        result = self.mgr.verify_rules("litellm")
+        self.assertEqual(result.empty_tables, [])
+        self.assertTrue(result.ok)
+
+    def test_unreadable_table_does_not_false_fail(self):
+        # Not connected → tables unknown → verify must not invent an empty one.
+        self.mgr._fw = None
+        result = self.mgr.verify_rules("litellm")
+        self.assertEqual(result.empty_tables, [])
+        self.assertTrue(result.ok)
+
+    def test_alias_table_addresses_parses_rows(self):
+        self._connect_tables({"tm_vllm": ["10.2.10.9", "10.2.10.10"]})
+        self.assertEqual(
+            self.mgr._alias_table_addresses("tm_vllm"),
+            ["10.2.10.9", "10.2.10.10"],
+        )
+        self.assertEqual(self.mgr._alias_table_addresses("tm_absent"), [])
+
+
+# ─────────────────────────────────────────────────────────────────────────────
 # Auto-pinholes (issue #173)
 # ─────────────────────────────────────────────────────────────────────────────
 
