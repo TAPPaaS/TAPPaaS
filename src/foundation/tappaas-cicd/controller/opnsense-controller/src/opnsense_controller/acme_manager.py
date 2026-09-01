@@ -136,6 +136,7 @@ class AcmeCertInfo:
     status_code: int   # 200 = issued; 100 = initial; 400+ = error
     cert_refid: str    # the OPNsense Trust store refid (stable across renewals)
     last_update: str
+    status_last_update: int  # unix ts the statusCode was written (0 = never/unknown)
     account_uuid: str
     validation_uuid: str
 
@@ -443,6 +444,7 @@ class AcmeManager:
             status_code=int(d.get("statusCode") or 0),
             cert_refid=d.get("certRefId") or "",
             last_update=str(d.get("lastUpdate") or ""),
+            status_last_update=int(d.get("statusLastUpdate") or 0),
             account_uuid=selected("account"),
             validation_uuid=selected("validationMethod"),
         )
@@ -452,28 +454,41 @@ class AcmeManager:
         uuid: str,
         timeout: int = 180,
         poll_interval: int = 5,
+        prior_status_update: int | None = None,
     ) -> AcmeCertInfo:
         """Poll until cert is issued (status 200) or timeout. Raises on error/timeout.
 
         ``poll_interval`` is short because DNS-01 propagation + LE issuance is
         typically <15 s for Cloudflare (PoC observed <10 s).
+
+        ``prior_status_update`` is the cert's ``statusLastUpdate`` captured
+        *before* signing was triggered. A non-200 status is only this run's
+        result when its ``statusLastUpdate`` is newer than that baseline; an
+        equal/older value is a previous attempt's residue that acme.sh has not
+        yet overwritten — it is still in its dns_sleep and hasn't asked the CA
+        to validate — so we ignore it and keep polling (#540). This replaces the
+        old "first poll only" tolerance (#379), which false-failed within
+        seconds because dns_sleep (~150 s) far exceeds one poll_interval. When
+        ``prior_status_update`` is None the freshness gate is disabled and any
+        4xx/5xx fails immediately. Using the OPNsense-supplied timestamp on both
+        sides keeps the comparison free of cicd↔firewall clock skew; a missing
+        statusLastUpdate parses to 0, so an undatable error is left to time out
+        rather than false-fail (a recoverable timeout beats abandoning a good
+        cert).
         """
         deadline = time.time() + timeout
         last: AcmeCertInfo | None = None
-        poll = 0
         while time.time() < deadline:
             last = self.certificate_get(uuid)
             if last.status_code == 200 and last.cert_refid:
                 return last
-            # A fresh `sign` may not have cleared a previous attempt's error
-            # status yet, so tolerate a 4xx/5xx on the FIRST poll only — it gives
-            # acme.sh one poll_interval to update the status. A 4xx/5xx that
-            # persists to any later poll is a genuine failure (#379).
-            if 400 <= last.status_code < 600 and poll > 0:
+            if 400 <= last.status_code < 600 and (
+                prior_status_update is None
+                or last.status_last_update > prior_status_update
+            ):
                 raise RuntimeError(
                     f"certificate {uuid} ({last.name}) failed: status={last.status_code}"
                 )
-            poll += 1
             time.sleep(poll_interval)
         raise TimeoutError(
             f"certificate {uuid} ({last.name if last else '?'}) did not issue "

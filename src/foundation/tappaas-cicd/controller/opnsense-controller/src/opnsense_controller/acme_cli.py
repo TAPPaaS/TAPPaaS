@@ -161,8 +161,16 @@ def cmd_setup(mgr: AcmeManager, args: argparse.Namespace) -> int:
     print(f"    propagation, then the CA validates and issues. This is a live round-trip")
     print(f"    to Let's Encrypt and can take from ~30s to a couple of minutes — please")
     print(f"    be patient. Polling every 5s for up to {args.timeout}s; it will not hang.")
+    # Capture the pre-sign statusLastUpdate so certificate_wait can tell a stale
+    # error status (a previous attempt's residue) from this run's result (#540).
+    prior_status_update = mgr.certificate_get(cert_uuid).status_last_update
     mgr.certificate_sign(cert_uuid)
-    info = mgr.certificate_wait(cert_uuid, timeout=args.timeout, poll_interval=5)
+    info = mgr.certificate_wait(
+        cert_uuid,
+        timeout=args.timeout,
+        poll_interval=5,
+        prior_status_update=prior_status_update,
+    )
     print(f"    ✓ issued; refid={info.cert_refid}  status={info.status_code}")
 
     print()

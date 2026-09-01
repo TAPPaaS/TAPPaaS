@@ -220,6 +220,48 @@ class TestCertificateWaitParsesSelectField(unittest.TestCase):
             mgr.certificate_wait("anything", timeout=1, poll_interval=0)
 
 
+class TestCertificateWaitFreshnessGate(unittest.TestCase):
+    """A non-200 status only fails the wait when it post-dates the sign (#540)."""
+
+    def _mgr(self, status_code: str, status_last_update: str):
+        return _make_manager({
+            ("Certificates", "get"): {"certificate": {
+                "name": "*.example.org", "statusCode": status_code,
+                "certRefId": "", "lastUpdate": "",
+                "statusLastUpdate": status_last_update,
+                "account": {}, "validationMethod": {},
+            }},
+        })
+
+    def test_stale_error_is_ignored_and_times_out(self):
+        # statusLastUpdate == the pre-sign baseline → previous attempt's residue.
+        # acme.sh is still in dns_sleep, so we must not report a failure; the wait
+        # should keep polling and ultimately time out rather than false-fail.
+        mgr = self._mgr("400", "1000")
+        with self.assertRaises(TimeoutError):
+            mgr.certificate_wait(
+                "anything", timeout=1, poll_interval=0, prior_status_update=1000,
+            )
+
+    def test_fresh_error_raises(self):
+        # statusLastUpdate newer than the baseline → this run genuinely failed.
+        mgr = self._mgr("400", "2000")
+        with self.assertRaises(RuntimeError):
+            mgr.certificate_wait(
+                "anything", timeout=1, poll_interval=0, prior_status_update=1000,
+            )
+
+    def test_missing_timestamp_does_not_false_fail(self):
+        # An OPNsense build that omits statusLastUpdate parses to 0; with a 0
+        # baseline the gate can't date the error, so it times out (recoverable)
+        # rather than abandoning a possibly-good issuance.
+        mgr = self._mgr("400", "")
+        with self.assertRaises(TimeoutError):
+            mgr.certificate_wait(
+                "anything", timeout=1, poll_interval=0, prior_status_update=0,
+            )
+
+
 class TestPluginEnabled(unittest.TestCase):
     """settings/get wraps the payload in the model root ("acmeclient")."""
 
