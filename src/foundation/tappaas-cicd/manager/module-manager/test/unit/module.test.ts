@@ -556,6 +556,77 @@ function captureList(client: FakeModuleClient, extraArgs: string[] = []): string
   }
 }
 
+// ── 15. --help/-h in ANY position prints usage and NEVER writes (#534) ──
+// The flag used to be swallowed by parseOpts once a verb occupied argv[0], so a
+// help probe ran the verb as a real write. Every mutating verb must now short-
+// circuit to help (rc 0) with ZERO client invocations, for both spellings and
+// with the flag before OR after the module positional.
+{
+  const captureRun = (argv: string[]): { rc: number; out: string; log: number } => {
+    const real = console.log;
+    let out = "";
+    console.log = (...a: unknown[]): void => {
+      out += a.map(String).join(" ") + "\n";
+    };
+    const c = new FakeModuleClient();
+    let rc: number;
+    try {
+      rc = run(argv, c);
+    } finally {
+      console.log = real;
+    }
+    return { rc, out, log: c.log.length };
+  };
+
+  // Every mutating verb × both spellings × flag after the module positional.
+  const mutating = ["modify", "delete", "reconcile", "test", "snapshot-vm", "add"];
+  for (const verb of mutating) {
+    for (const flag of ["--help", "-h"]) {
+      const r = captureRun([verb, "nextcloud", flag]);
+      check(
+        r.rc === 0 && r.log === 0,
+        `${verb} nextcloud ${flag}: exits 0 and performs NO client invocation (no write)`,
+      );
+      check(r.out.includes(verb), `${verb} ${flag}: prints ${verb}'s usage`);
+    }
+  }
+
+  // Flag BEFORE the module positional must be honoured too (`-h` would otherwise
+  // become the module name).
+  {
+    const r = captureRun(["modify", "--help", "nextcloud"]);
+    check(r.rc === 0 && r.log === 0, "modify --help <module> (flag first): exits 0, no write");
+  }
+  {
+    const r = captureRun(["modify", "-h"]);
+    check(r.rc === 0 && r.log === 0, "modify -h with NO module: exits 0, no write (not a module named -h)");
+  }
+
+  // The optional `module` entity keyword must not defeat the guard.
+  {
+    const r = captureRun(["module", "delete", "nextcloud", "--remove", "--help"]);
+    check(
+      r.rc === 0 && r.log === 0,
+      "module delete <m> --remove --help: help wins over the destructive verb",
+    );
+  }
+
+  // A bare help token with no verb still prints the full help, rc 0.
+  {
+    const r = captureRun(["--help"]);
+    check(r.rc === 0 && r.log === 0 && r.out.includes("Usage:"), "bare --help prints full help, no write");
+  }
+
+  // Verb-specific help shows THAT verb's options, not another verb's.
+  {
+    const r = captureRun(["modify", "nextcloud", "--help"]);
+    check(
+      r.out.includes("--no-snapshot") && !r.out.includes("--reinstall"),
+      "modify --help renders modify's options (not add's)",
+    );
+  }
+}
+
 console.log("");
 console.log(`Results: ${passed} passed, ${failed} failed`);
 process.exit(failed === 0 ? 0 : 1);

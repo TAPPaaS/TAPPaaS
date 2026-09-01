@@ -72,3 +72,25 @@ export function renderHelp(s: HelpSpec): string {
   for (const n of s.notes ?? []) lines.push("", n);
   return lines.join("\n");
 }
+
+// renderVerbHelp — the usage + options for ONE verb (what `<cli> <verb> --help`
+// should print). Falls back to the full renderHelp() when the token is not a
+// known verb (e.g. `<cli> --help` with no verb, or a typo), so a help request
+// always prints SOMETHING useful and exits 0.
+export function renderVerbHelp(s: HelpSpec, verbName: string): string {
+  const v = s.verbs.find((x) => (x.name ?? deriveName(x.usage)) === verbName);
+  if (!v) return renderHelp(s);
+  const lines: string[] = [
+    `${s.name} ${s.version} — ${s.tagline}`,
+    "",
+    "Usage:",
+    `  ${s.name} ${v.usage}${v.note ? `   ${v.note}` : ""}`,
+  ];
+  if (v.options && v.options.length > 0) {
+    lines.push("", `${v.name ?? deriveName(v.usage)} options:`);
+    lines.push(...renderOptions(v.options));
+  }
+  const common: Array<[string, string]> = [...(s.common ?? []), ["-h, --help", "Show this help"]];
+  lines.push("", "common:", ...renderOptions(common));
+  return lines.join("\n");
+}

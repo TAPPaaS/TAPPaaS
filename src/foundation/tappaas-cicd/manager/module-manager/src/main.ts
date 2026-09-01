@@ -29,7 +29,7 @@ import {
   listModules,
   loadModule,
 } from "./config";
-import { HelpSpec, renderHelp } from "../../../lib/ts/src/help";
+import { HelpSpec, renderHelp, renderVerbHelp } from "../../../lib/ts/src/help";
 import { CL, GN, RD, YW, die, guarded, info, preflightGuard, warn } from "../../../lib/ts/src/cli";
 import {
   AddOptions,
@@ -727,6 +727,17 @@ export function run(argv: string[], client: ModuleClient): number {
     return 0;
   }
   const verb = rest[0];
+  // #534: a help request must NEVER mutate state, and must be honoured in ANY
+  // flag position. The argv[0] check above only catches a LEADING flag; placed
+  // after a verb (`modify <module> --help`) the flag used to fall through to
+  // parseOpts, which drops -h/--help into passthrough (or a positional for -h),
+  // and the verb then ran as a real write. Intercept it here — BEFORE
+  // preflightGuard and dispatch — and print that verb's usage. A bare help
+  // token (e.g. `module --help`) falls back to the full help via renderVerbHelp.
+  if (rest.some((a) => a === "-h" || a === "--help")) {
+    info(renderVerbHelp(HELP, verb));
+    return 0;
+  }
   // guarded() maps THROWN errors the standard way (DieError → 1, already
   // printed; any other Error → a clean `[Error] <msg>` + 1). Child exit codes
   // are RETURNED by dispatch(), not thrown, so they propagate unchanged.
