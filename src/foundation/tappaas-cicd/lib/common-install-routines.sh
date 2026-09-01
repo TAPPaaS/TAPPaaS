@@ -322,22 +322,21 @@ get_module_dir() {
 ensure_scripts_executable() {
     local dir="$1"
 
-    if [[ ! -d "${dir}" ]]; then
-        return 0
-    fi
+    [[ -d "${dir}" ]] || return 0
 
-    # Root-level .sh files
-    for script in "${dir}"/*.sh; do
-        if [[ -f "${script}" ]]; then
-            chmod +x "${script}"
-        fi
-    done
-
-    # Service scripts
-    for script in "${dir}"/services/*/*.sh; do
-        if [[ -f "${script}" ]]; then
-            chmod +x "${script}"
-        fi
+    # chmod +x only when needed, and NEVER abort the caller (#524): a file that
+    # already carries the executable bit is skipped (the common case — most .sh
+    # arrive from git already 0755), and a chmod that genuinely cannot succeed
+    # (e.g. a root-owned file left behind by an earlier sudo run) warns instead
+    # of killing an unrelated lifecycle op under `set -euo pipefail`. The #533
+    # guard + repair keep such root-owned files from arising in the first place;
+    # this is the belt-and-suspenders so a stray one degrades to a warning.
+    local script
+    for script in "${dir}"/*.sh "${dir}"/services/*/*.sh; do
+        [[ -f "${script}" ]] || continue          # unmatched glob or non-file
+        [[ -x "${script}" ]] && continue          # already executable — nothing to do
+        chmod +x "${script}" 2>/dev/null \
+            || warn "ensure_scripts_executable: cannot chmod +x '${script}' (not owner?) — skipping"
     done
 }
 
