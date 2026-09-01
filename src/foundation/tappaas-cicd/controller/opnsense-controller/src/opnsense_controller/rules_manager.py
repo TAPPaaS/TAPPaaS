@@ -638,6 +638,12 @@ class RulesManager:
             )
             result.aliases_created += 1
 
+        # 1b. Resolve those aliases into their pf tables. Rules are applied
+        #     under a savepoint below; aliases have no equivalent step, and a
+        #     rule whose table is empty matches nothing while looking correct
+        #     in every listing.
+        self.reconfigure_aliases()
+
         # 2. Apply rules atomically with a savepoint
         revision = self.fw.create_savepoint()
         try:
@@ -1302,7 +1308,15 @@ class RulesManager:
     def _upsert_alias(
         self, name: str, alias_type: str, addresses: list[str], description: str
     ) -> None:
-        """Create or update an OPNsense alias (idempotent — matched by name)."""
+        """Create or update an OPNsense alias (idempotent — matched by name).
+
+        `reload` stays False deliberately: it triggers a filter reload, which
+        rewrites the RULES and does not resolve an alias into its pf table.
+        Table population is a separate job (`update_tables.py`, reached through
+        the alias reconfigure endpoint) — see `reconfigure_aliases`, which the
+        apply pipeline calls once after the whole alias set rather than paying
+        for a reload per alias.
+        """
         if self.check_mode:
             info(f"[check] +alias {name} ({alias_type}) → {addresses}")
             return
@@ -1315,6 +1329,34 @@ class RulesManager:
             "reload": False,
         }
         self.fw.client.run_module("alias", params=params)
+
+    def reconfigure_aliases(self) -> None:
+        """Resolve stored alias definitions into their pf tables.
+
+        Storing an alias is not the same as applying it. A host alias only
+        reaches the pf table its rules match on when the alias configuration is
+        reconfigured; a filter reload rewrites rules and leaves the tables
+        untouched. Without this call an alias can be correct in config.xml
+        while its table is empty, and then every presence check passes — the
+        rule is listed, correctly ordered — while the traffic it should permit
+        is silently dropped.
+
+        Measured before this was added: 7 module alias tables held zero
+        addresses on one site, two of them referenced by live rules, with
+        `verify-rules` reporting `missing=0` throughout.
+        """
+        if self.check_mode:
+            info("[check] reconfigure aliases (resolve pf tables)")
+            return
+        self.fw.client.run_module(
+            "raw",
+            params={
+                "module": "firewall",
+                "controller": "alias",
+                "command": "reconfigure",
+                "action": "post",
+            },
+        )
 
     def _delete_alias(self, name: str) -> bool:
         if self.check_mode:
