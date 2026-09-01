@@ -195,6 +195,24 @@
             "example": "250 means .250 address in the subnet"
         },
 
+        "tftp-server-name": {
+            "description": "DHCP option 66 (tftp-server-name / next-server). IP or hostname of the TFTP/PXE server advertised to clients in this zone. When set, zone-manager configures both the BOOTP header (dnsmasq dhcp-boot next-server/sname) and an explicit dhcp-option 66 on the zone's DHCP scope. Must be set together with 'bootfile-name' — one without the other is not a usable boot configuration.",
+            "type": "string",
+            "required": false,
+            "default": "",
+            "requires": "bootfile-name",
+            "example": "10.4.0.10"
+        },
+
+        "bootfile-name": {
+            "description": "DHCP option 67 (bootfile-name). Boot file handed to PXE clients in this zone (DHCP 'file' field), e.g. 'pxelinux.0' or 'ipxe.efi'. When set, zone-manager configures both the BOOTP header (dnsmasq dhcp-boot filename) and an explicit dhcp-option 67 on the zone's DHCP scope. Must be set together with 'tftp-server-name'.",
+            "type": "string",
+            "required": false,
+            "default": "",
+            "requires": "tftp-server-name",
+            "example": "pxelinux.0"
+        },
+
         "description": {
             "description": "Human-readable description of the zone's purpose",
             "type": "string",

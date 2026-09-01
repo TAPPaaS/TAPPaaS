@@ -36,6 +36,11 @@ export interface Zone {
   parent?: string;
   variant?: string;
   SSID?: string;
+  // DHCP boot options 66/67 (#546): the TFTP server + boot file advertised to
+  // clients in this zone. Both-or-neither; zone-manager stamps the BOOTP header
+  // and the explicit dhcp-option 66/67 when both are present.
+  "tftp-server-name"?: string;
+  "bootfile-name"?: string;
   // Preserve any unknown fields so a load→edit→save round-trips losslessly.
   [k: string]: unknown;
 }

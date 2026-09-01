@@ -728,5 +728,106 @@ class TestPreflightChecks(unittest.TestCase):
         self.assertFalse(preflight_checks(skip_egress=True))
 
 
+class TestZoneBootOptions(unittest.TestCase):
+    """Zone.from_json parsing + _reconcile_boot_options (DHCP 66/67, #546)."""
+
+    def _zm(self) -> ZoneManager:
+        # zones_file is never loaded here — we call the reconcile helper directly.
+        return ZoneManager(config=MagicMock(), zones_file="/nonexistent.json")
+
+    def _boot_zone(self, tftp: str, bootfile: str) -> Zone:
+        return Zone.from_json("iotLocal", {
+            "type": "IoT", "state": "Active", "typeId": "4", "subId": "0",
+            "vlantag": 400, "ip": "10.4.0.0/24", "bridge": "lan",
+            "tftp-server-name": tftp, "bootfile-name": bootfile,
+        })
+
+    def test_from_json_parses_and_strips(self):
+        z = self._boot_zone("  10.4.0.10 ", " pxelinux.0 ")
+        self.assertEqual(z.tftp_server_name, "10.4.0.10")
+        self.assertEqual(z.bootfile_name, "pxelinux.0")
+        self.assertTrue(z.has_boot_options)
+
+    def test_has_boot_options_needs_both(self):
+        self.assertFalse(self._boot_zone("10.4.0.10", "").has_boot_options)
+        self.assertFalse(self._boot_zone("", "pxelinux.0").has_boot_options)
+
+    def test_reconcile_sets_bootp_and_options_ip_server(self):
+        zm = self._zm()
+        mgr = MagicMock()
+        zone = self._boot_zone("10.4.0.10", "pxelinux.0")
+        changed, result = zm._reconcile_boot_options(mgr, zone, "opt1", False)
+        self.assertTrue(changed)
+        self.assertEqual(result["boot"], "set")
+        # BOOTP header: an IP tftp server → address (siaddr), empty servername.
+        mgr.set_boot_entry.assert_called_once()
+        kw = mgr.set_boot_entry.call_args.kwargs
+        self.assertEqual(kw["filename"], "pxelinux.0")
+        self.assertEqual(kw["address"], "10.4.0.10")
+        self.assertEqual(kw["servername"], "")
+        self.assertEqual(kw["interface"], "opt1")
+        self.assertEqual(kw["description"], "iotLocal boot")
+        # Explicit dhcp-option 66 + 67.
+        opts = {c.kwargs["option"]: c.kwargs for c in mgr.create_set_option.call_args_list}
+        self.assertEqual(opts["66"]["value"], "10.4.0.10")
+        self.assertEqual(opts["66"]["description"], "iotLocal option66")
+        self.assertEqual(opts["67"]["value"], "pxelinux.0")
+        self.assertEqual(opts["67"]["description"], "iotLocal option67")
+
+    def test_reconcile_hostname_server_uses_servername(self):
+        zm = self._zm()
+        mgr = MagicMock()
+        zone = self._boot_zone("tftp.internal", "pxelinux.0")
+        zm._reconcile_boot_options(mgr, zone, "opt1", False)
+        kw = mgr.set_boot_entry.call_args.kwargs
+        self.assertEqual(kw["address"], "")
+        self.assertEqual(kw["servername"], "tftp.internal")
+        # option 66 still carries the raw value regardless.
+        opt66 = [c.kwargs for c in mgr.create_set_option.call_args_list
+                 if c.kwargs["option"] == "66"][0]
+        self.assertEqual(opt66["value"], "tftp.internal")
+
+    def test_reconcile_absent_and_clean_is_noop(self):
+        zm = self._zm()
+        mgr = MagicMock()
+        mgr.get_boot_by_description.return_value = None
+        mgr.list_dhcp_options.return_value = []
+        zone = self._boot_zone("", "")
+        changed, result = zm._reconcile_boot_options(mgr, zone, "opt1", False)
+        self.assertFalse(changed)
+        self.assertEqual(result["boot"], "none")
+        mgr.set_boot_entry.assert_not_called()
+        mgr.delete_boot_entry.assert_not_called()
+
+    def test_reconcile_absent_self_heals_stale(self):
+        zm = self._zm()
+        mgr = MagicMock()
+        # A boot entry lingers from a previous config where the zone had options.
+        mgr.get_boot_by_description.side_effect = (
+            lambda d: {"uuid": "u"} if d == "iotLocal boot" else None
+        )
+        mgr.list_dhcp_options.return_value = [
+            {"uuid": "o66", "description": "iotLocal option66"},
+        ]
+        zone = self._boot_zone("", "")
+        changed, result = zm._reconcile_boot_options(mgr, zone, "opt1", False)
+        self.assertTrue(changed)
+        self.assertEqual(result["boot"], "cleared")
+        mgr.delete_boot_entry.assert_called_once_with(
+            "iotLocal boot", reconfigure=False)
+        deleted = {c.args[0] for c in mgr.delete_option_by_description.call_args_list}
+        self.assertEqual(deleted, {"iotLocal option66", "iotLocal option67"})
+
+    def test_reconcile_check_mode_makes_no_writes(self):
+        zm = self._zm()
+        mgr = MagicMock()
+        zone = self._boot_zone("10.4.0.10", "pxelinux.0")
+        changed, result = zm._reconcile_boot_options(mgr, zone, "opt1", True)
+        self.assertFalse(changed)
+        self.assertEqual(result["boot"], "would_set")
+        mgr.set_boot_entry.assert_not_called()
+        mgr.create_set_option.assert_not_called()
+
+
 if __name__ == "__main__":
     unittest.main()

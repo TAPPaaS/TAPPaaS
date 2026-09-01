@@ -170,6 +170,11 @@ export interface AddZoneOpts {
   // ADR-014 D2: bind the new Client/IoT/Guest zone to an environment in the
   // same command.
   serves?: string;
+  // #546: DHCP boot options 66/67. On --from-zone these are inherited from the
+  // source zone; these flags override (or set) them on the new zone. Both-or-
+  // neither — validate rejects a half-configured pair.
+  tftpServerName?: string;
+  bootfileName?: string;
 }
 
 // Author a new zone entry into the doc (in memory; caller persists). Ports
@@ -193,6 +198,9 @@ export function authorZone(doc: ZonesDoc, name: string, opts: AddZoneOpts): Zone
   let parent = "";
   let tier: number | undefined;
   let isolated = false;
+  // #546: DHCP boot options — inherited on --from-zone, then overridable.
+  let tftpServer = "";
+  let bootfile = "";
 
   if (opts.archetype) {
     // Archetype wins over the low-level knobs; main.ts rejects the combination
@@ -221,6 +229,10 @@ export function authorZone(doc: ZonesDoc, name: string, opts: AddZoneOpts): Zone
       ? [...(src["pinhole-allowed-from"] as string[])]
       : [];
     parent = opts.fromZone;
+    // Inherit the source zone's boot options (a clone of a PXE-serving zone
+    // should serve PXE too, unless overridden below).
+    if (typeof src["tftp-server-name"] === "string") tftpServer = src["tftp-server-name"];
+    if (typeof src["bootfile-name"] === "string") bootfile = src["bootfile-name"];
   } else {
     typeId = opts.typeId ?? "2";
     type = opts.type ?? "Service";
@@ -273,6 +285,18 @@ export function authorZone(doc: ZonesDoc, name: string, opts: AddZoneOpts): Zone
   if (opts.serves) zone.serves = opts.serves;
   if (parent) zone.parent = parent;
   if (variant) zone.variant = variant;
+
+  // #546: boot options — flags override the inherited (--from-zone) values.
+  if (opts.tftpServerName !== undefined) tftpServer = opts.tftpServerName;
+  if (opts.bootfileName !== undefined) bootfile = opts.bootfileName;
+  if (Boolean(tftpServer) !== Boolean(bootfile)) {
+    throw new Error(
+      "boot options must be set together: --tftp-server-name (DHCP option 66) " +
+        "and --bootfile-name (DHCP option 67) are both-or-neither",
+    );
+  }
+  if (tftpServer) zone["tftp-server-name"] = tftpServer;
+  if (bootfile) zone["bootfile-name"] = bootfile;
 
   doc.raw[name] = stripName(zone);
   doc.zones.set(name, zone);

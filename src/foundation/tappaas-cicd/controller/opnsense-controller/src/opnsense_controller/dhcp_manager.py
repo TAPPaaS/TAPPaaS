@@ -982,6 +982,59 @@ class DhcpManager:
             self.reconfigure()
         return {"changed": True, "uuid": response.get("uuid")}
 
+    def create_set_option(
+        self,
+        option: str,
+        value: str,
+        description: str,
+        interface: str | None = None,
+        reconfigure: bool = True,
+    ) -> dict:
+        """Create a dnsmasq *set* option that advertises a value (dhcp-option).
+
+        Renders dnsmasq ``dhcp-option=[interface,]<option>,<value>`` — the
+        client-facing counterpart to create_match_option. Used for the
+        explicit boot options 66 (tftp-server-name) and 67 (bootfile-name)
+        on a zone's DHCP scope, alongside the BOOTP header set via
+        set_boot_entry.
+
+        Idempotent by description (delete-then-add, same idiom as the range
+        and boot-entry operations).
+
+        Args:
+            option: DHCP option number as a string (e.g. "66", "67").
+            value: Option value handed to the client (TFTP server / bootfile).
+            description: Ownership key (e.g. "<zone> option66").
+            interface: OPNsense interface identifier to scope the option to
+                (e.g. 'lan', 'opt1'); None/'' = all interfaces.
+            reconfigure: Apply immediately (False to stage a batch).
+        """
+        self.delete_option_by_description(description, reconfigure=False)
+        option_payload = {
+            "type": "set",
+            "option": option,
+            "value": value,
+            "description": description,
+        }
+        if interface:
+            option_payload["interface"] = interface
+        result = self.client.run_module(
+            "raw",
+            params={
+                "module": "dnsmasq",
+                "controller": "settings",
+                "command": "addOption",
+                "action": "post",
+                "data": {"option": option_payload},
+            },
+        )
+        response = result.get("result", {}).get("response", {})
+        if response.get("result") != "saved":
+            raise RuntimeError(f"addOption failed for '{description}': {response}")
+        if reconfigure:
+            self.reconfigure()
+        return {"changed": True, "uuid": response.get("uuid")}
+
     def delete_option_by_description(
         self,
         description: str,

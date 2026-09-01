@@ -98,6 +98,8 @@ const HELP: HelpSpec = {
         ["--typeId <N>", "numeric type band (default: 2)"],
         ["--vlan <tag>", "explicit VLAN tag (else auto-allocated 60-99 in band)"],
         ["--variant <name>", "tag the zone with this variant (metadata)"],
+        ["--tftp-server-name <s>", "DHCP option 66 (TFTP server) — inherited on --from-zone"],
+        ["--bootfile-name <s>", "DHCP option 67 (boot file); both-or-neither with --tftp-server-name"],
         ["--no-activate", "author zones.json only; skip the all-plane reconcile"],
         ["--check", "dry-run: show actions, mutate nothing"],
       ],
@@ -251,6 +253,9 @@ interface Opts {
   // add --archetype / --serves (ADR-014 D5 / D2)
   archetype?: string;
   serves?: string;
+  // add --tftp-server-name / --bootfile-name (DHCP options 66/67, #546)
+  tftpServerName?: string;
+  bootfileName?: string;
 }
 
 function isPlane(s: string): s is Plane {
@@ -344,6 +349,12 @@ function parseOpts(args: string[]): Opts {
         break;
       case "--serves":
         o.serves = next();
+        break;
+      case "--tftp-server-name":
+        o.tftpServerName = next();
+        break;
+      case "--bootfile-name":
+        o.bootfileName = next();
         break;
       case "--tier": {
         const t = parseInt(next(), 10);
@@ -523,6 +534,8 @@ function cmdZoneAdd(opts: Opts, client: PlaneClient = new CliPlaneClient()): voi
     variant: opts.variant,
     archetype: opts.archetype,
     serves: opts.serves,
+    tftpServerName: opts.tftpServerName,
+    bootfileName: opts.bootfileName,
     dryRun: opts.check,
     noActivate: opts.noActivate,
     noDistribute: opts.noDistribute,

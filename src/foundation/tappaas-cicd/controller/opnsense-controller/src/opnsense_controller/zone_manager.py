@@ -126,6 +126,8 @@ class Zone:
     ssid: str | None = None
     dhcp_start_offset: int = 50
     dhcp_end_offset: int = 250
+    tftp_server_name: str = ""
+    bootfile_name: str = ""
 
     @classmethod
     def from_json(cls, name: str, data: dict) -> "Zone":
@@ -145,6 +147,8 @@ class Zone:
             ssid=data.get("SSID"),
             dhcp_start_offset=data.get("DHCP-start", 50),
             dhcp_end_offset=data.get("DHCP-end", 250),
+            tftp_server_name=(data.get("tftp-server-name") or "").strip(),
+            bootfile_name=(data.get("bootfile-name") or "").strip(),
         )
 
     @property
@@ -203,6 +207,26 @@ class Zone:
     def dhcp_description(self) -> str:
         """Get the standard DHCP range description for this zone."""
         return f"{self.name} DHCP"
+
+    @property
+    def has_boot_options(self) -> bool:
+        """True when this zone declares BOTH DHCP boot options (66 and 67)."""
+        return bool(self.tftp_server_name) and bool(self.bootfile_name)
+
+    @property
+    def boot_description(self) -> str:
+        """Ownership key for this zone's BOOTP-header boot entry."""
+        return f"{self.name} boot"
+
+    @property
+    def option66_description(self) -> str:
+        """Ownership key for this zone's explicit dhcp-option 66."""
+        return f"{self.name} option66"
+
+    @property
+    def option67_description(self) -> str:
+        """Ownership key for this zone's explicit dhcp-option 67."""
+        return f"{self.name} option67"
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -1064,6 +1088,110 @@ class ZoneManager:
 
         return results
 
+    def _reconcile_boot_options(
+        self,
+        manager: "DhcpManager",
+        zone: "Zone",
+        dhcp_interface: str | None,
+        check_mode: bool,
+    ) -> tuple[bool, dict]:
+        """Reconcile DHCP boot options (66/67) for a single zone.
+
+        When the zone declares both tftp-server-name and bootfile-name, this
+        stamps BOTH the BOOTP header (dnsmasq dhcp-boot next-server/sname +
+        bootfile, via set_boot_entry) AND the explicit dhcp-option 66/67 (via
+        create_set_option) on the zone's DHCP scope. When the zone declares
+        neither, any previously-stamped entries are removed — so clearing the
+        fields in zones.json self-heals on the next reconcile. All writes are
+        staged (reconfigure=False); the caller applies one reconfigure.
+
+        Returns (changed, result) — result is folded into the zone's report.
+        """
+        descs = (
+            zone.boot_description,
+            zone.option66_description,
+            zone.option67_description,
+        )
+
+        # A half-configured pair (only one of 66/67) is a config error — flagged
+        # by `network-manager validate` (checkBootOptions). Here we refuse to
+        # stamp a partial, unusable entry and treat it as "no boot options"
+        # (falling through to the self-heal path below), warning loudly.
+        if bool(zone.tftp_server_name) != bool(zone.bootfile_name):
+            warn(
+                f"  {zone.name}: only one of tftp-server-name/bootfile-name set "
+                f"— DHCP options 66/67 are both-or-neither; ignoring (run "
+                f"`network-manager validate`)"
+            )
+
+        if not zone.has_boot_options:
+            # Self-heal: remove any stale entries this zone previously owned.
+            present = [
+                d for d in descs
+                if manager.get_boot_by_description(d)
+                or any(o.get("description") == d for o in manager.list_dhcp_options())
+            ]
+            if not present:
+                return False, {"boot": "none"}
+            if check_mode:
+                return False, {"boot": "would_clear"}
+            manager.delete_boot_entry(zone.boot_description, reconfigure=False)
+            manager.delete_option_by_description(
+                zone.option66_description, reconfigure=False
+            )
+            manager.delete_option_by_description(
+                zone.option67_description, reconfigure=False
+            )
+            return True, {"boot": "cleared"}
+
+        tftp = zone.tftp_server_name
+        bootfile = zone.bootfile_name
+        # DHCP option 66 (next-server/siaddr) needs an IPv4 in the BOOTP
+        # header 'address'; a hostname goes in the 'servername' (sname) field.
+        # The explicit dhcp-option 66 carries the raw value either way.
+        try:
+            ipaddress.IPv4Address(tftp)
+            address, servername = tftp, ""
+        except ValueError:
+            address, servername = "", tftp
+
+        if check_mode:
+            return False, {
+                "boot": "would_set",
+                "tftp-server-name": tftp,
+                "bootfile-name": bootfile,
+                "interface": dhcp_interface or "any",
+            }
+
+        manager.set_boot_entry(
+            filename=bootfile,
+            description=zone.boot_description,
+            address=address,
+            servername=servername,
+            interface=dhcp_interface,
+            reconfigure=False,
+        )
+        manager.create_set_option(
+            option="66",
+            value=tftp,
+            description=zone.option66_description,
+            interface=dhcp_interface,
+            reconfigure=False,
+        )
+        manager.create_set_option(
+            option="67",
+            value=bootfile,
+            description=zone.option67_description,
+            interface=dhcp_interface,
+            reconfigure=False,
+        )
+        return True, {
+            "boot": "set",
+            "tftp-server-name": tftp,
+            "bootfile-name": bootfile,
+            "interface": dhcp_interface or "any",
+        }
+
     def configure_dhcp(self, check_mode: bool = True) -> dict[str, dict]:
         """Configure DHCP ranges for all enabled zones.
 
@@ -1121,6 +1249,21 @@ class ZoneManager:
                 else:
                     debug(f"  {zone.name}: DHCP range not found (nothing to delete)")
                     results[zone.name] = {"status": "not_found"}
+
+                # A disabled zone must not advertise boot options either —
+                # force-clear any it previously owned (idempotent).
+                if not check_mode:
+                    for d in (
+                        zone.boot_description,
+                        zone.option66_description,
+                        zone.option67_description,
+                    ):
+                        boot_gone = manager.delete_boot_entry(d, reconfigure=False)
+                        opt_gone = manager.delete_option_by_description(
+                            d, reconfigure=False
+                        )
+                        if boot_gone.get("changed") or opt_gone.get("changed"):
+                            changed = True
 
             # Remove ORPHAN TAPPaaS ranges — descriptions following the
             # "<name> DHCP" convention whose <name> matches NO zone in the config.
@@ -1184,6 +1327,24 @@ class ZoneManager:
                     if bridge_lower in ("lan", "wan") or bridge_lower.startswith("opt"):
                         dhcp_interface = zone.bridge
 
+                # Reconcile DHCP boot options (66/67) independently of the
+                # range's skip/create state — they are keyed by their own
+                # descriptions and idempotent. Stash the report in a local and
+                # fold it into whatever the range branch below sets, so neither
+                # clobbers the other.
+                boot_report: dict | None = None
+                try:
+                    boot_changed, boot_result = self._reconcile_boot_options(
+                        manager, zone, dhcp_interface, check_mode
+                    )
+                    if boot_changed:
+                        changed = True
+                    if boot_result.get("boot") not in (None, "none"):
+                        boot_report = boot_result
+                except Exception as e:
+                    boot_report = {"status": "error", "error": str(e)}
+                    error(f"{zone.name} boot options: {e}")
+
                 existing = existing_by_desc.get(dhcp_desc)
                 existing_iface = (existing.get("interface") or "") if existing else ""
 
@@ -1202,6 +1363,8 @@ class ZoneManager:
                         "range": f"{existing.get('start_addr')}-{existing.get('end_addr')}",
                         "interface": existing_iface or "any",
                     }
+                    if boot_report is not None:
+                        results[zone.name]["boot_options"] = boot_report
                     continue
 
                 dhcp_range = DhcpRange(
@@ -1242,6 +1405,9 @@ class ZoneManager:
                         # masked issue #179).
                         results[zone.name] = {"status": "error", "error": str(e)}
                         error(f"{zone.name}: {e}")
+
+                if boot_report is not None:
+                    results[zone.name]["boot_options"] = boot_report
 
             # Apply all staged DHCP changes in a single reconfigure.
             if changed and not check_mode:

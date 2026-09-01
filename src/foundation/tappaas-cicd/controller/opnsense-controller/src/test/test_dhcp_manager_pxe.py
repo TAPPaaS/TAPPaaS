@@ -177,6 +177,55 @@ class TestTagsAndMatchOptions(unittest.TestCase):
         self.assertEqual(opt["set_tag"], "tag-uuid")
 
 
+class TestSetOption(unittest.TestCase):
+    """create_set_option — explicit dhcp-option 66/67 (#546)."""
+
+    def test_set_option_payload(self):
+        manager = _make_manager()
+        manager.create_set_option(
+            option="66", value="10.4.0.10",
+            description="iotLocal option66", interface="opt1",
+            reconfigure=False,
+        )
+        (add,) = _calls(manager, "addOption")
+        opt = add["data"]["option"]
+        self.assertEqual(opt["type"], "set")
+        self.assertEqual(opt["option"], "66")
+        self.assertEqual(opt["value"], "10.4.0.10")
+        self.assertEqual(opt["interface"], "opt1")
+        # not applied when reconfigure=False
+        self.assertEqual(_calls(manager, "reconfigure"), [])
+
+    def test_set_option_idempotent_replaces(self):
+        manager = _make_manager(option_rows=[
+            {"uuid": "old-66", "description": "iotLocal option66"},
+        ])
+        manager.create_set_option(
+            option="66", value="10.4.0.10",
+            description="iotLocal option66", reconfigure=False,
+        )
+        (delete,) = _calls(manager, "delOption")
+        self.assertEqual(delete["params"], ["old-66"])
+        self.assertEqual(len(_calls(manager, "addOption")), 1)
+
+    def test_set_option_no_interface_omits_field(self):
+        manager = _make_manager()
+        manager.create_set_option(
+            option="67", value="pxelinux.0",
+            description="iotLocal option67", reconfigure=False,
+        )
+        (add,) = _calls(manager, "addOption")
+        self.assertNotIn("interface", add["data"]["option"])
+
+    def test_set_option_failure_raises(self):
+        manager = _make_manager(fail_add_option=True)
+        with self.assertRaises(RuntimeError):
+            manager.create_set_option(
+                option="66", value="x", description="iotLocal option66",
+                reconfigure=False,
+            )
+
+
 def _fake_fw(responses=None):
     """A _fw_sh replacement recording scripts, answering by content."""
     scripts = []

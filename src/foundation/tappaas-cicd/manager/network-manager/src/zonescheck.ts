@@ -292,6 +292,39 @@ function checkInstallation(doc: ZonesDoc, configDir: string, rep: Reporter): voi
   }
 }
 
+// 5b. Boot options (#546): DHCP option 66 (tftp-server-name) and 67
+//     (bootfile-name) are both-or-neither — a boot file with no server (or
+//     vice versa) is not a usable configuration. A half-configured pair is a
+//     hard ERROR: zone-manager would silently stamp nothing.
+function checkBootOptions(doc: ZonesDoc, rep: Reporter): void {
+  let declared = 0;
+  let bad = 0;
+  for (const [name, z] of doc.zones) {
+    const tftp = z["tftp-server-name"];
+    const boot = z["bootfile-name"];
+    const hasTftp = typeof tftp === "string" && tftp.length > 0;
+    const hasBoot = typeof boot === "string" && boot.length > 0;
+    if (!hasTftp && !hasBoot) continue;
+    if (hasTftp !== hasBoot) {
+      rep.err(
+        `boot-options: zone '${name}' sets only ` +
+          `'${hasTftp ? "tftp-server-name" : "bootfile-name"}' — options 66 and 67 ` +
+          `must be set together (both-or-neither).`,
+      );
+      bad++;
+      continue;
+    }
+    declared++;
+  }
+  if (bad === 0) {
+    rep.ok(
+      declared === 0
+        ? "boot-options: no zone declares DHCP options 66/67"
+        : `boot-options: ${declared} zone(s) declare a well-formed 66/67 pair`,
+    );
+  }
+}
+
 // ── 6. the ADR-014 tier invariants (I1-I4) ───────────────────────────
 //
 // All four are WARNINGS by default. A zone with no authored `tier` is reported
@@ -488,6 +521,7 @@ export function runChecks(doc: ZonesDoc, configDir: string, strict: boolean): Ch
   checkReferentialIntegrity(doc, rep);
   checkMgmtInvariant(doc, rep);
   checkInstallation(doc, configDir, rep);
+  checkBootOptions(doc, rep);
   checkTierInvariants(doc, rep);
   checkServes(doc, configDir, rep);
   return result;

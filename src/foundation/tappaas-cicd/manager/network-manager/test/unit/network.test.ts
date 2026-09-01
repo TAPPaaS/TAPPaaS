@@ -1674,6 +1674,77 @@ function tmpZones(): string {
   }
 }
 
+// ── DHCP boot options 66/67 (#546): authoring, clone, override, validate ──
+{
+  // authoring with both flags stamps the two zone fields
+  const f = tmpZones();
+  let doc = loadZones(f);
+  const z = authorZone(doc, "pxeZone", {
+    tftpServerName: "10.4.0.10",
+    bootfileName: "pxelinux.0",
+  });
+  check(
+    z["tftp-server-name"] === "10.4.0.10" && z["bootfile-name"] === "pxelinux.0",
+    "authorZone stamps tftp-server-name + bootfile-name from flags",
+  );
+
+  // --from-zone inherits both boot options from the source zone
+  const clone = authorZone(doc, "pxeClone", { fromZone: "pxeZone" });
+  check(
+    clone["tftp-server-name"] === "10.4.0.10" && clone["bootfile-name"] === "pxelinux.0",
+    "clone (--from-zone) inherits both boot options",
+  );
+
+  // flags OVERRIDE the inherited values on clone
+  const over = authorZone(doc, "pxeClone2", {
+    fromZone: "pxeZone",
+    tftpServerName: "10.9.9.9",
+    bootfileName: "grubx64.efi",
+  });
+  check(
+    over["tftp-server-name"] === "10.9.9.9" && over["bootfile-name"] === "grubx64.efi",
+    "clone flags override the inherited boot options",
+  );
+
+  // a half-configured pair is rejected at authoring time
+  let threw = false;
+  try {
+    authorZone(doc, "pxeBad", { tftpServerName: "10.4.0.10" });
+  } catch {
+    threw = true;
+  }
+  check(threw, "authoring only one of tftp-server-name/bootfile-name is rejected");
+}
+
+// ── validate (runChecks) catches a hand-edited half-configured pair ───
+{
+  function bootDoc(bootZone: Record<string, unknown>): { zonesFile: string; configDir: string } {
+    const d = mkdtempSync(join(tmpdir(), "nm-boot-"));
+    const raw: Record<string, unknown> = {
+      mgmt: {
+        type: "Management", state: "Active", typeId: "0", subId: "0",
+        vlantag: 0, ip: "10.0.0.0/24", bridge: "lan",
+        "access-to": ["internet"], "pinhole-allowed-from": [],
+      },
+      iotLocal: {
+        type: "IoT", state: "Active", typeId: "4", subId: "0",
+        vlantag: 400, ip: "10.4.0.0/24", bridge: "lan",
+        "access-to": [], "pinhole-allowed-from": [],
+        ...bootZone,
+      },
+    };
+    const zonesFile = join(d, "zones.json");
+    writeFileSync(zonesFile, JSON.stringify(raw, null, 2), "utf8");
+    return { zonesFile, configDir: d };
+  }
+
+  const both = bootDoc({ "tftp-server-name": "10.4.0.10", "bootfile-name": "pxelinux.0" });
+  const rOk = runChecks(loadZones(both.zonesFile), both.configDir, false);
+  const half = bootDoc({ "tftp-server-name": "10.4.0.10" });
+  const rBad = runChecks(loadZones(half.zonesFile), half.configDir, false);
+  check(rBad.errors > rOk.errors, `half-configured boot pair → hard error (ok=${rOk.errors}, half=${rBad.errors})`);
+}
+
 console.log("");
 console.log(`Results: ${passed} passed, ${failed} failed`);
 if (failed > 0) process.exit(1);
