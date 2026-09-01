@@ -2,260 +2,227 @@
 
 | | |
 |---|---|
-| **Status** | **Proposed** — draft (design before the fix; not implemented) |
-| **Version** | 0.1 |
-| **Date** | 2026-08-31 |
+| **Status** | **Proposed** — design for the full restructure. The tactical fix (**#528 → PR #529**) is applied first as an interim step; this ADR is the target it is superseded by. |
+| **Version** | 0.3 |
+| **Date** | 2026-09-01 |
 | **Author** | Lars Rossen |
-| **Parent** | [ADR-007f Realization](<ADR-007f - Realization.md>) (managers/controllers own the imperative cluster actions) |
-| **Refines** | [ADR-007d Site](<ADR-007d - Site.md>) (module config as the declared source of truth), [ADR-009 Composition Meta-Model](<ADR-009 - Composition Meta-Model.md>) (`<module>:<service>` — here `cluster:vm` and the `ha` service) |
-| **Related** | **#528** (restore_ha replays pre-migration priorities → stuck `migrate`), **PR #529** (narrow fix: re-point priorities at the target), the adjacent gap this ADR also covers (`strict`/`comment` dropped on rule recreate); **owner:** `proxmox-controller` (`migrate-vm.sh`), `cluster:vm` / `cluster:ha` services, `module.json` schema |
-| **Numbering note** | ADR-018 is reserved by the pending SSH-identity PR #523 ("SSH Identity Resolution Under Sudo"). This ADR takes **019** to avoid the collision; renumber if #523 lands differently. |
-| **Changelog** | v0.1 — initial draft: define the full migration matrix (HA / non-HA × live-possible / not × in-policy / not), make offline (stop+start) migration an explicit `--force` action rather than a silent fallback, define when `module.json.node` is rewritten, and require the **full** HA rule (nodes+priorities+`strict`+`comment`) to round-trip. <br> v0.2 — resolve open questions with operator input: `cputype: host` is **too coarse** a live-migration test (tappaas1→tappaas3 migrate live today despite differing CPUs) — a real compatibility test is required and needs its own study; establish the **layering** (proxmox-controller migration primitive ← `module-manager` `modify`/force-migrate ← `site-manager` evacuate); re-homing an HA VM becomes a `module-manager modify` of `.node`/`.HANode`, not a migrate flag; **short term = ship PR #529**, target architecture lands with the `module-manager modify` work; add a **Testing** section (fast stub matrix extending `test-migrate-vm.sh` + a `--deep` live tier that closes the `TESTING.md` "live migration not exercised" gap and runs the CPU-compat experiment). |
+| **Parent** | [ADR-007f Realization](<ADR-007f - Realization.md>) (managers orchestrate; controllers do the imperative cluster actions) |
+| **Refines** | [ADR-007d Site](<ADR-007d - Site.md>) (module config as the declared source of truth), [ADR-009 Composition Meta-Model](<ADR-009 - Composition Meta-Model.md>) (`cluster:vm`, the `ha` service), [ADR-017 Update scheduling](<ADR-017 - Update scheduling and mothership self-update.md>) (the reboot pass that evacuates nodes) |
+| **Related** | **#528** (restore_ha replayed pre-migration priorities → stuck `migrate`) — **fixed by PR #529** (`ha_nodes_prefer`), applied after the hrossen.dk health check; **#434** (stop-before-migrate sequencing); **#207** (config normalization); the `strict`/`comment` round-trip gap (open). **owner:** proxmox-controller (migration primitive), `module-manager` (`modify`, `migrate`), `site-manager` (`evacuate`) |
+| **Numbering note** | ADR-018 is reserved by the SSH-identity PR #523. This ADR is **019**. |
+| **Changelog** | v0.1 initial matrix. v0.2 operator input: `cputype: host` too coarse (needs a real compat test), layering established, re-home = `modify`. v0.3 restructure: treat #528/#529 as done; **goal = node placement and HA management reachable only through the managers**; document how Proxmox HA pinning fails over **and back**; split scenarios A/B into `modify` vs `migrate`; add site-manager **evacuate** as scenario C (incl. the "on its HANode, being evacuated" case); catalogue the **known challenges** already fixed so re-implementation does not reintroduce them. |
 
 ## Context
 
-`migrate-vm.sh` (proxmox-controller) moves a module's VM between Proxmox nodes. Two independent
-facts make "just move it" wrong more often than right on a real TAPPaaS cluster:
+`migrate-vm.sh` (proxmox-controller) moves a module's VM between Proxmox nodes. Two independent facts
+make "just move it" wrong more often than right on a real TAPPaaS cluster:
 
-1. **The cluster is CPU-heterogeneous and VMs run `cputype: host`.** On the reference cluster the
-   three nodes are three different AMD generations — tappaas1 (EPYC 4464P, Zen 4), tappaas2
-   (Ryzen AI MAX+ 395, Zen 5), tappaas3 (Ryzen 7 5825U, Zen 3). `cputype: host` (the schema
-   default, chosen for performance) passes the physical CPU's flags into the guest, so a **live**
-   migration between two nodes *can* fail — the running guest would see its CPU change underneath it
-   — and then the move needs a **stop → migrate → start** (offline), i.e. real downtime. But this is
-   **pair-specific, not universal**: tappaas1 → tappaas3 live-migrates fine today despite the
-   generation gap. So the platform needs a real per-pair compatibility test, not the blunt assumption
-   "`host` ⇒ offline" (Decision 3 / Open Questions).
+1. **Heterogeneous CPUs + `cputype: host`.** The reference cluster's three nodes are three AMD
+   generations — tappaas1 (EPYC 4464P, Zen 4), tappaas2 (Ryzen AI MAX+ 395, Zen 5), tappaas3
+   (Ryzen 7 5825U, Zen 3). `cputype: host` passes the physical flags into the guest, so a **live**
+   migration *can* fail (the guest would see its CPU change) and then the move needs a stop → migrate
+   → start (downtime). But this is **pair-specific, not universal**: tappaas1 → tappaas3 live-migrates
+   fine today. A real per-pair compatibility test is needed, not the blunt "`host` ⇒ offline".
 
-2. **Some VMs are HA-managed with node-affinity rules that encode placement policy.** e.g.
-   `ha-network` pins the OPNsense VM (`vm:110`) to `tappaas1:2,tappaas3:1` with `strict 1` and the
-   comment *"WAN-capable nodes only: tappaas2 has no WAN cable."* The rule is not just a
-   preference — `strict 1` is a hard constraint, and the priorities decide where the CRM keeps the
-   VM. Get them wrong and the CRM fights the operator.
+2. **HA-managed VMs carry placement policy in Proxmox node-affinity rules.** e.g. `ha-network` pins
+   OPNsense (`vm:110`) to `tappaas1:2,tappaas3:1`, `strict 1`, comment *"WAN-capable nodes only:
+   tappaas2 has no WAN cable."* Get the priorities or `strict` wrong and the CRM fights the operator —
+   which is exactly #528.
 
-Today's script sits awkwardly between these. It **requires** a `HANode` in `module.json` and dies
-without one (no path for a non-HA VM); it **toggles** the VM between `.node` and `.HANode`; and on a
-live-migration failure it **silently falls back to a disruptive offline migration** with no operator
-consent. #528 exposed the sharpest edge: `restore_ha()` recreated the affinity rule from the
-*pre-migration* snapshot, so after a move the rule still preferred the source node, the CRM tried to
-live-migrate the VM straight back, that return trip failed on the CPU mismatch, and the service stuck
-in state `migrate` until the priorities were fixed by hand. PR #529 fixes that one direction; it does
-not define the policy for the rest of the matrix, and it does not preserve `strict`/`comment` when it
-recreates the rule (so a `migrate-vm.sh` on `vm:110` silently drops the WAN pin — HA could then place
-OPNsense on tappaas2, which has no WAN).
+The current script grew ad-hoc: it **requires** `HANode`, **toggles** the VM between `.node` and
+`.HANode`, **silently falls back** to a disruptive offline migration, and lets callers pass a raw
+target node. This ADR replaces that with one policy and one ownership model.
 
-This ADR defines the whole policy **before** widening the fix.
+**Goal: node placement and HA management are reachable *only* through the managers.** No operator or
+script drives `qm migrate` / `ha-manager` / `pvesh …/ha/rules` directly. Placement *intent* lives in
+`module.json` (`.node`, `.HANode`, `cputype`, the `ha` service); the managers realize it; the
+proxmox-controller is the only thing that touches the cluster.
+
+## How Proxmox HA pinning works (failover *and* failback)
+
+TAPPaaS pins an HA VM with a **node-affinity rule** so the CRM both fails it over when a node dies and
+brings it back when the node returns — automatically, without an operator in the loop:
+
+- **Rule shape:** `nodes = <n1>:<prio>,<n2>:<prio>,…`. **Higher priority wins**; the CRM keeps the VM
+  on the highest-priority *online* node in the list. e.g. `tappaas1:2,tappaas3:1` ⇒ "run on tappaas1;
+  if tappaas1 is down, run on tappaas3."
+- **Failover:** node with the running VM goes down → CRM starts it on the next-highest-priority online
+  node (tappaas1 dies → VM comes up on tappaas3).
+- **Failback:** the higher-priority node returns → CRM migrates the VM back to it (tappaas1 back ⇒ VM
+  returns to tappaas1). This automatic return is *desired* for failover, and is exactly the trip that
+  #528 turned pathological when the priorities were left pointing at the wrong node after a *manual*
+  migration.
+- **`strict 1`:** the node list is a hard boundary — the VM may run **only** on listed nodes (never a
+  node absent from the rule). This is what keeps OPNsense off tappaas2 (no WAN).
+- **`comment`:** documents the rule's intent; load-bearing for humans, must survive edits.
+
+**Consequence for this ADR:** a *manual* placement change must re-point the priorities so they agree
+with where the VM now belongs — otherwise the CRM's automatic failback immediately undoes the move.
+Manager code owns that reconciliation; it is never left to the operator.
 
 ## The two sources of truth
 
 | | Declared (config) | Runtime (cluster) |
 |---|---|---|
-| **Home node** | `module.json.node` — where the VM belongs / is (re)installed | the node it is currently running on |
-| **HA placement** | `module.json.HANode` + `services: [… , ha]` + `cputype` | the HA node-affinity rule in `rules.cfg` (nodes, priorities, `strict`, `comment`) |
+| **Home / target nodes** | `module.json.node` (primary), `module.json.HANode` (HA secondary) | the node the VM runs on |
+| **HA placement** | `services: […, ha]`, `cputype` | the node-affinity rule (nodes, priorities, `strict`, `comment`) |
 
-Principle: **config is the declared intent; the runtime rule is derived from it.** Migration
-reconciles runtime toward a requested placement and updates whichever source of truth is
-authoritative for *that kind* of move (see "When `module.json.node` is rewritten").
+Config is intent; the runtime rule is **derived** from it. The rule's membership = `{.node, .HANode}`,
+its `strict`/`comment` fixed by policy, its priorities re-pointed to wherever the VM currently belongs.
 
-## Decision
-
-1. **Offline migration is an explicit, consented action — never a silent fallback.** A live
-   migration is attempted only when it can succeed (CPU-compatible, see §3). When live is impossible
-   or fails, the script **refuses** and tells the operator to rerun with `--force` (which performs the
-   stop → migrate → start, incurring downtime). `--offline` remains as the explicit "skip the live
-   attempt" form and implies the same consent as `--force`.
-
-2. **`strict`/`comment` and every rule referencing the VM round-trip in full.** `save_ha_state`
-   captures the complete node-affinity rule (name, nodes, priorities, `strict`, `comment`) — and any
-   other rule (e.g. resource-affinity) that references the VM — and `restore_ha` recreates them
-   faithfully, only **re-pointing the node-affinity priorities** at the destination (#528/#529). A
-   strict rule's membership is never silently changed.
-
-3. **Live-vs-offline is decided by a real CPU-compatibility test — not by `cputype` alone.**
-   `cputype: host` is **too coarse** to mean "cannot live-migrate": on the reference cluster a live
-   migration tappaas1 → tappaas3 succeeds today even though the CPUs differ (EPYC Zen 4 vs Ryzen
-   Zen 3). So the naive "host ⇒ incompatible" rule would wrongly force downtime on moves that work.
-   The gate must be an **actual compatibility check** for the specific source→target pair — and
-   getting that right needs its own study (see Open Questions). Until that test exists, keep the
-   current live-first-then-report behavior but **stop the silent disruptive fallback** (Decision 1):
-   attempt live; if it genuinely fails, refuse and ask for `--force`, rather than stopping the VM
-   unasked. `cputype != host` remains trivially live-OK.
-
-4. **`strict` node-affinity is a hard boundary.** Migration to a node **not** in a strict rule's
-   membership is refused outright (not overridable by `--force`) — the operator must change the rule
-   first. This is what keeps OPNsense off a WAN-less node.
-
-5. **A migration never leaves the VM stopped or the HA resource removed.** Every path ends with the
-   VM running on exactly one node and its HA registration + rules restored; a failure rolls back to
-   the source.
-
-## Realization & ownership (layering)
-
-Migration is not one script's job — it splits across the three ADR-007f layers, so the imperative
-mechanism stays thin and the policy/orchestration lives in the managers:
+## Realization & ownership (the layering — this is the goal)
 
 | Layer | Owns | Responsibility |
 |---|---|---|
-| **proxmox-controller** (VM controller) | the migration **primitive** | `migrate-vm.sh` (folded into the proxmox-controller) does exactly one thing: move *this* VM from A to B — live if the compatibility test passes, else offline under `--force` — and round-trip the full HA rule. No config knowledge, no fleet logic. |
-| **module-manager** | per-module **orchestration + config** | `modify` (below) applies a `.json` change to a live installation and takes the deploy action it implies; a **force-migrate verb** moves an HA-protected module to its declared `HANode` (and back). Calls the controller primitive. |
-| **site-manager** | site/fleet **orchestration** | **evacuate a node**: enumerate the modules on `<node>` and, for each, call the *module-manager* migrate code (never the controller directly) so per-module policy (HA rules, `strict`, compat) is honored. |
+| **proxmox-controller** (VM controller) | the migration **primitive** | move *this* VM A→B: live if the compat test passes, else offline under `--force`; round-trip the **full** HA rule (nodes+priorities+`strict`+`comment`). No config knowledge, no fleet logic. `migrate-vm.sh` folds in here. |
+| **module-manager** | per-module orchestration + config | **`modify`** — change any `module.json` field on a live install (incl. `.node`/`.HANode`) and take the deploy action it implies. **`migrate`** — realize the *current* config placement (no node argument). Calls the controller primitive; owns the rule reconciliation. |
+| **site-manager** | site/fleet orchestration | **`evacuate <node>`** — clear a node, calling *module-manager* per module (never the controller directly), honoring HA policy. Used by ADR-017's reboot pass. |
 
-**`module-manager modify` is where re-homing happens.** Every module `.json` field is modifiable on a
-live installation, and `node` + `HANode` are among them. `module-manager modify <module> --set node=…`
-(and `HANode=…`) rewrites the config **and takes the appropriate deploy action** — which for a node
-change *is* a migration. So:
+## The verb model — `modify` vs `migrate`
 
-- A **temporary** move (maintenance, failover) = a **migrate** (force-migrate verb / evacuate): runtime
-  placement changes, the affinity priorities re-point, but the declared `.node` is unchanged.
-- A **permanent** re-home = a **`modify`** of `.node`/`.HANode`: config changes, and the modify drives
-  the migration + rule update to realize it.
+- **`module-manager modify <module> --set node=… [--set HANode=…]`** changes *intent*. It rewrites
+  `module.json` (as `tappaas`, never root) **and drives the deploy action** to realize it — for a node
+  change, that is a migration plus a rule-membership/priority update. **This is the only way to place a
+  VM on a node it wasn't already configured for.**
+- **`module-manager migrate <module>`** changes *runtime placement only*, within the already-declared
+  `{.node, .HANode}`. **It takes no node argument.** Semantics: if the VM is on its primary `.node`,
+  move it to `.HANode` (planned failover, e.g. for maintenance); if it is on `.HANode`, move it back to
+  `.node` (failback). To go anywhere else, `modify` first. (This replaces the old `migrate-vm.sh
+  --node <node>` fleet helper, which is renamed/absorbed — see `evacuate`.)
 
-This resolves the earlier "does a migrate rewrite `.node`?" question: **migrate does not, modify does.**
-(Scenario A's "rewrite `.node`" for non-HA VMs therefore belongs to `modify`, once it exists — see
-Phasing.)
-
-### Phasing
-
-- **Short term (now):** ship **PR #529** — the priority-re-point (`ha_nodes_prefer`) that unsticks the
-  #528 `migrate` loop. No architecture change; keep the current `migrate-vm.sh` entry point.
-- **Target:** land this policy **with the `module-manager modify` work** — the controller primitive,
-  the `modify` verb (incl. `node`/`HANode`), the force-migrate verb, and site-manager evacuate — plus
-  the real CPU-compatibility test. Track under that issue.
+Rule of thumb: **migrate never invents a destination; modify never leaves config and reality
+disagreeing.**
 
 ## Scenarios
 
-Legend: **HA?** = module declares the `ha` service / has an affinity rule. **live-OK** = the
-CPU-compatibility test (Decision 3, TBD) says this source→target pair can live-migrate — *not* simply
-`cputype == host`. `cputype != host` is always live-OK.
+`live-OK` = the CPU-compat test (see Open Questions) says this source→target pair can live-migrate —
+*not* merely `cputype == host`. `cputype != host` is always live-OK.
 
-### A. Non-HA VM (no `ha` service, no affinity rule)
+### A. Non-HA module (no `ha` service, no affinity rule)
 
-| # | Situation | Policy |
-|---|---|---|
-| A1 | Non-HA VM, target reachable, **live-OK** | Plain `qm migrate --online`. On success **rewrite `module.json.node = target`** (this *is* a re-home; the config becomes authoritative so a later reconcile/reinstall lands it there). |
-| A2 | Non-HA VM, **live impossible** (compat test / live attempt fails), no `--force` | **Refuse**: "live migration to <target> isn't possible for this VM — rerun with `--force` for a stop/start migration (service downtime)." No silent offline. |
-| A3 | Non-HA VM, live impossible, **`--force`/`--offline`** | Stop → `qm migrate` (offline) → start → confirm RUNNING → **rewrite `module.json.node = target`**. |
-| A4 | Non-HA VM currently **stopped** | Offline migrate (no live question); start only if it was meant to be running; rewrite `.node`. |
-| A5 | Non-HA VM, **`cputype != host`** | Live migrate even across generations; rewrite `.node`. |
-| A6 | Target == current node | No-op. |
-
-> Today's script cannot do A at all (it dies on a missing `HANode`). Supporting non-HA migration —
-> and having it update `module.json.node` — is a new capability this ADR authorizes. The config
-> write happens **as `tappaas`** (never root); see the ownership rule in the SSH/preflight work.
-
-### B. HA VM (`ha` service + node-affinity rule), healthy/running
+**A via `modify` (`.node` changed → re-home):**
 
 | # | Situation | Policy |
 |---|---|---|
-| B1 | On primary (`.node`), migrate to **HANode**, live-OK | Live migrate; **re-point the affinity priorities** so HANode:2, others:1 (#528). Preserve `strict`/`comment`. **Do NOT rewrite `.node`** — this is a runtime placement (e.g. maintenance), the declared home is unchanged. |
-| B2 | On HANode, migrate **back to primary**, live-OK | Symmetric to B1: priorities re-pointed to primary; `.node` unchanged. |
-| B3 | HA move, **live impossible**, no `--force` | Refuse (as A2). The return-trip-that-cannot-succeed is exactly #528's stuck-`migrate`; never trigger it implicitly. |
-| B4 | HA move, live impossible, **`--force`** | HA-aware offline: **remove HA resource → stop → migrate → start → re-add HA → recreate the full rule** with priorities pointed at the target. All-or-nothing; roll back to source on any failure. |
-| B5 | Target **not in a `strict` rule's membership** (e.g. `vm:110` → tappaas2) | **Refuse, not overridable.** "target is outside the strict node-affinity rule (WAN-capable nodes only) — change the rule first." |
-| B6 | Target in membership but a **non-strict** rule | Allowed; re-point priorities; optionally warn if target has priority 1 (a lower-preference node). |
-| B7 | VM already on target | No-op, but **reconcile the rule** if its priorities don't already prefer the current node (heals a rule left wrong by a pre-#529 run). |
-| B8 | Multiple rules reference the VM (node- **and** resource-affinity) | Save/restore **all**; only node-affinity priorities are re-pointed; resource-affinity is preserved verbatim. |
+| A-M1 | `--set node=<new>`, live-OK | Rewrite `.node`; live-migrate to `<new>`. No HA rule exists to touch. |
+| A-M2 | `--set node=<new>`, **not** live-OK, no `--force` | Rewrite refused *before* acting (or staged): "moving to `<new>` needs a stop/start (downtime) — rerun with `--force`." No silent offline. |
+| A-M3 | `--set node=<new>`, `--force` | Rewrite `.node`; stop → migrate → start → confirm RUNNING. |
 
-### C. HA VM, unhealthy or stopped
+**A via `migrate`:** a non-HA module has no `.HANode`, so `migrate` has no second node to move to →
+**refuse**: "module has no HANode; use `modify --set node=…` to relocate a non-HA VM." (No silent
+invention of a target.)
 
-| # | Situation | Policy |
-|---|---|---|
-| C1 | VM **stopped** | No live question — offline migrate; re-point priorities to target; start (or leave stopped if it was administratively stopped). Still `--force`-gated? No: there is no running service to disrupt, so offline is the only mode and needs no downtime consent — but confirm the VM was not mid-transition. |
-| C2 | VM in HA state **`migrate`/`error`** (e.g. a prior #528 victim) | First **stabilize**: correct the rule to prefer the current node so the CRM stops fighting, confirm it settles to `started`, *then* perform the requested migration. Migrating a VM the CRM is already fighting just deepens the stuck state. |
-| C3 | Requested source node **unreachable** / fenced | This is a failover, not a migration — out of scope for `migrate-vm.sh`; leave it to HA. The script refuses and points at `ha-manager`. |
+### B. HA module (`ha` service + node-affinity rule), healthy
 
-### D. Fleet / node-level
+**B via `migrate` (runtime only, config unchanged):**
 
 | # | Situation | Policy |
 |---|---|---|
-| D1 | **Evacuate a node** (maintenance) — `migrate_to_node` / a `--evacuate <node>` | Move every VM off `<node>` to a policy-valid, **live-OK** target; HA VMs re-pointed; VMs whose only valid target is CPU-incompatible are reported as **requiring `--force`** (downtime) rather than silently stopped. Respect `strict` membership. |
-| D2 | **Return VMs home** after maintenance | Move each VM whose `.node`/HANode is `<node>` back; re-point HA priorities home. This is the healthy inverse of D1 and must not itself trigger a bounce. |
-| D3 | Interaction with the update sweep's reboot pass (ADR-017 Phase 3) | The reboot pass must use this policy (or delegate to it), not raw `ha-manager`/`qm migrate`, so a heterogeneous-CPU node reboot doesn't strand an HA VM in `migrate`. |
+| B-G1 | on `.node`, `migrate` → `.HANode`, live-OK | Live-migrate; **re-point priorities** so `.HANode:2`, `.node:1`; preserve `strict`/`comment`. `.node` unchanged. |
+| B-G2 | on `.HANode`, `migrate` → `.node`, live-OK | Symmetric: priorities re-pointed to `.node`. |
+| B-G3 | `migrate`, **not** live-OK, no `--force` | **Refuse** — never trigger the return trip that cannot run (#528). |
+| B-G4 | `migrate`, `--force` | HA-aware offline: remove HA → stop → migrate → start → re-add HA → recreate the **full** rule pointing at the target. Roll back to source on any failure. |
+| B-G5 | already on the target of the toggle | No-op — but **reconcile** the rule if its priorities don't already prefer the current node (heals a pre-#529 rule). |
 
-### E. Config / edge
+**B via `modify` (intent changed):**
 
 | # | Situation | Policy |
 |---|---|---|
-| E1 | **Re-home** an HA VM (change its declared primary) | This is a **`module-manager modify`** of `.node`/`.HANode` (see Realization), which rewrites the config **and** drives the migration + rule-membership update to realize it. A plain `migrate`/force-migrate never silently re-homes an HA VM — it only changes runtime placement. |
-| E2 | `module.json` missing `vmid` | Die early (can't act). |
-| E3 | Config write-back blocked because `config/` is root-owned | Fail with the same guidance as the preflight work: "`chown -R tappaas:users ~/config`; don't use sudo." Never write config as root. |
-| E4 | `cputype` is `host` but operator asserts nodes are compatible | Allow an explicit `--assume-live-ok` escape hatch (logged), for a genuinely homogeneous sub-pair — but default to safe refusal. |
+| B-M1 | `--set HANode=<new>` | Rewrite `.HANode`; update the rule **membership** to `{.node, <new>}` (keep `strict`/`comment`); no migration unless the VM currently sits on the node being removed, in which case migrate it to a surviving member first. |
+| B-M2 | `--set node=<new>` (re-home primary) | Rewrite `.node`; rule membership `{<new>, .HANode}`; migrate the VM to `<new>` (live-OK / `--force` rules apply) and re-point priorities to it. |
+| B-M3 | `modify` that would place the VM outside a `strict` rule | Allowed **only** through `modify` (it edits the rule membership too); a bare `migrate` to a non-member is still refused (scenario C/B invariants). |
+
+### C. site-manager `evacuate <node>` (node maintenance)
+
+Clear every VM off `<node>`, per module, honoring HA policy. For each module currently on `<node>`:
+
+| # | Situation | Policy |
+|---|---|---|
+| C1 | `<node>` is the module's **primary** `.node`; `.HANode` is up & live-OK | `module-manager migrate` → move to `.HANode` (planned failover). Priorities re-pointed to `.HANode`. |
+| C2 | `<node>` is the module's **`.HANode`**; primary `.node` is up & live-OK | `migrate` → back to `.node`. |
+| C3 | **`<node>` is the module's `.HANode` AND the VM is currently on its `.HANode`** (it had already failed over here) | **This is the case to guard.** The VM is at its failover location; evacuating `<node>` means sending it to `.node`. Allowed **only if** `.node` is online and live-OK. If `.node` is **down/unreachable**, there is **nowhere valid** — `evacuate` must **refuse for this module and report it**: "vm:X is on its HANode (`<node>`) and its primary (`.node`) is unavailable — restore the primary or `modify` its placement before evacuating." Never strand it on an ad-hoc node. |
+| C4 | `strict` rule and `<node>` was the last online member | **Refuse** — cannot satisfy `strict`; report it. Do not break `strict` to make room. |
+| C5 | non-HA VM on `<node>` | Cannot auto-`migrate` (no `.HANode`); **report as requiring `modify --set node=…`** (a re-home decision), or move only if the operator supplies a target via modify. Not silently relocated. |
+| C6 | any module needs `--force` (not live-OK) to leave | **Report as blocked on `--force`** (downtime) rather than silently stopping it. Evacuate proceeds for the rest and returns a clear per-module summary. |
+
+`evacuate` is all-or-summary: it migrates what it safely can, and returns a per-module verdict
+(moved / blocked-on-force / refused-no-valid-target / refused-strict / needs-modify) so the reboot
+pass (ADR-017) can decide whether the node is safe to take down.
+
+## Known challenges — regression guards (do not reintroduce on re-implementation)
+
+The current `migrate-vm.sh`/`test-migrate-vm.sh` already encode hard-won invariants. The rewrite MUST
+carry them forward (and keep their tests green):
+
+| Guard | Origin | Invariant to preserve |
+|---|---|---|
+| Restored rule prefers where the VM **now is** | **#528 / PR #529** (`ha_nodes_prefer`) | After a move the affinity priorities point at the destination, so the CRM does not immediately fail it back. |
+| Stop-before-migrate, confirmed | **#434** | The VM is **confirmed stopped** before `qm migrate`; a stop that never completes **aborts** (no migrate, no HA-remove); the stop result is confirmed, not discarded after N polls. |
+| Config read once, flat/Pattern-A agnostic | **#207** | Normalize `module.json` once (`read_module_config`); don't re-parse or assume flat vs nested. |
+| Non-HA VM stays non-HA | test invariants | A VM with no `ha` service is never removed from HA, never reported HA-managed, and **never has an affinity rule invented**. |
+| HA status parsed exactly | test invariants | `ha-manager status` parsing must not mistake a node name for a state, and a decoy VMID (`vm:1300`) must not answer for `vm:130` (no substring matches). |
+| **Full rule round-trip** | this ADR (gap today) | `save`/`restore` carry `strict` **and** `comment` (and any second rule, e.g. resource-affinity) — not just `nodes`. Today they are dropped; on `ha-network` that silently removes the WAN pin. |
+| No silent disruptive fallback | this ADR | Live-impossible ⇒ **refuse and require `--force`**, never a surprise stop/start. |
+| Never leave the VM stopped / de-HA'd | this ADR | Every path ends VM-running-on-one-node with HA + rules restored; failure rolls back to source. |
 
 ## Testing (fast + `--deep`)
 
-Testing follows the two-tier convention (ADR-013 / `src/foundation/TESTING.md`): a **fast** offline
-tier (default) and a **deep** live tier gated by `TAPPAAS_TEST_DEEP=1` / `--deep`. There is already a
-foundation here to expand, not start from scratch — `proxmox-controller/test-migrate-vm.sh` is a
-stub-based unit test that sources `migrate-vm.sh` with `ssh()` and `TAPPAAS_HAVM_EXEC` pointed at a
-`stub` script modelling the CRM (`ha-manager`, `pvesh …/ha/rules`, `qm migrate`, `pvesh get
-resources`), asserting on the **logged command sequence**. PR #529 already extended it (configurable
-rules response; three priority-direction assertions). Note the gap this closes: `TESTING.md` records
-cluster's deep tier as *"live migration not exercised."*
+Two tiers (ADR-013 / `src/foundation/TESTING.md`): **fast** offline (default) and **deep** live
+(`TAPPAAS_TEST_DEEP=1` / `--deep`). Build on the existing `proxmox-controller/test-migrate-vm.sh`
+stub (sources the script with a `ssh()`/`TAPPAAS_HAVM_EXEC` stub modelling the CRM, asserts on the
+command log; PR #529 already added a configurable rules response + the priority-direction assertions).
+`TESTING.md` currently records cluster's deep tier as *"live migration not exercised"* — the deep tier
+below closes that.
 
-**Fast tier — extend the `test-migrate-vm.sh` stub to cover the whole matrix (no cluster).** The stub
-already ticks a CRM per command; grow it to model a node-affinity rule with **priorities + `strict` +
-`comment`**, and to let a test inject the live-compat verdict and per-node `cputype`. Then assert, per
-scenario, on the command log (each is a one-line invariant):
+**Fast tier — extend the stub to the whole matrix (no cluster).** Model a rule with priorities +
+`strict` + `comment`, and let a test inject the live-compat verdict + per-node `cputype`. Assert, per
+scenario, on the log (one-line invariants):
 
-| Scenario | Fast assertion |
+| Case | Fast assertion |
 |---|---|
-| A1/A5 non-HA, live-OK | `qm migrate --online` issued; HA never touched (already asserted at L200); config-write of `.node` once `modify` exists |
-| A2 non-HA, live-impossible, no `--force` | **refuses** — no `qm migrate`, VM never stopped |
-| A3 non-HA, `--force` | stop → migrate → start; VM **confirmed stopped before** `qm migrate` (existing #434 invariant) |
-| B1/B2 HA, live-OK | priorities re-pointed to target (#529); **`strict` + `comment` present in the recreated rule** — new assertion; today they're dropped |
-| B3 HA, live-impossible, no `--force` | **refuses** — the un-runnable return trip (#528) is never triggered |
-| B4 HA, `--force` | remove → stop → migrate → start → add → recreate **full** rule at target |
-| B5 target outside a `strict` rule | **refused, even with `--force`** |
-| B7 already on target with a wrong rule | rule **reconciled** to prefer the current node |
-| B8 multiple rules on the VM | all saved/restored; only node-affinity priorities re-pointed |
-| Rollback | inject a `qm migrate` failure → VM ends **running on source**, HA restored |
+| A-M1/A-M3 | `.node` rewritten; migrate issued; HA never touched |
+| A-M2, B-G3 | **refuses** without `--force`; VM never stopped; no `qm migrate` |
+| A-migrate, C5 | non-HA `migrate` refused ("no HANode; use modify") |
+| B-G1/B-G2 | priorities re-pointed to target (#529) **and `strict`+`comment` present in the recreated rule** |
+| B-G4 | remove → stop → migrate → start → add → recreate full rule |
+| B-M1/B-M2 | membership updated to the new `{.node,.HANode}`; migrate only when the VM sits on a removed node |
+| C3 (primary down) | evacuate **refuses that module** with the "on HANode, primary unavailable" message |
+| C4 | `strict` last-member evacuation refused |
+| Rollback | injected `qm migrate` failure → VM ends **running on source**, HA restored |
+| #434, #207, non-HA, decoy-VMID | existing guards stay green |
 
-Keep the PRs' **mutation-testing** discipline: strip each guarantee (drop the `strict` carry-over, the
-refuse-without-`--force`, the re-point) and confirm the *specific* new assertion — and only it — goes
-red, so every test is proven to fail for the right reason.
+Keep the **mutation-testing** discipline: strip each guarantee (the `strict` carry-over, the
+refuse-without-`--force`, the re-point) and confirm the *specific* assertion — and only it — goes red.
 
-**Deep tier (`--deep`, live cluster, disposable fixture VM).** Closes the `TESTING.md` gap:
+**Deep tier (`--deep`, live, disposable fixture VM):**
 
-1. Create a throwaway HA VM with a node-affinity rule on a **known-compatible** pair, migrate it via
-   the module-manager verb, and assert it lands on the target, the rule prefers the target, `strict`
-   + `comment` survive, and `ha-manager status` settles to `started` (never stuck in `migrate`). Tear
-   it down. Run read-only/self-cleaning, like the existing storage-drift deep test in `cluster/test.sh`.
-2. **CPU-compatibility experiment (feeds Open Question 1).** For each ordered node pair, attempt a live
-   migrate of a `cputype: host` fixture and record success/failure → the empirical compat matrix that
-   the real live-vs-offline predicate is built from (this is how we learn tappaas1 ↔ tappaas3 is fine
-   while some other pair may not be). Cluster-specific, run rarely, never on production VMs.
+1. Create a throwaway HA VM with a node-affinity rule on a **known-compatible** pair; `migrate` it via
+   the module-manager verb; assert it lands on the target, the rule prefers the target, `strict` +
+   `comment` survive, and `ha-manager status` settles to `started` (never stuck `migrate`). Self-clean,
+   like `cluster/test.sh`'s storage-drift deep test.
+2. **CPU-compatibility experiment (feeds Open Question 1):** for each ordered node pair, attempt a live
+   migrate of a `cputype: host` fixture and record success/failure → the empirical matrix the real
+   live-vs-offline predicate is built from. Cluster-specific, run rarely, never on production VMs.
 
 ## Consequences
 
-- **Positive:** one coherent policy for every migration; no silent downtime; #528's stuck-`migrate`
-  becomes structurally impossible (a move that would need the bad return trip is refused up front);
-  the WAN pin (`strict`/`comment`) survives migration; non-HA VMs become migratable and their config
-  stays truthful.
-- **Cost:** `migrate-vm.sh` grows a CPU-compatibility check and a config-write path (as `tappaas`),
-  and gains `--force` semantics — a behavior change from today's silent offline fallback (operators
-  who relied on that must add `--force`). PR #529's `ha_nodes_prefer` is retained as the priority
-  re-pointing primitive; `save_ha_state`/`restore_ha` grow to carry the full rule set.
-- **Superseded behavior:** the current "require `HANode`, toggle `.node`↔`.HANode`, silently fall
-  back to offline" flow. `HANode` remains meaningful (the declared HA secondary) but is no longer a
-  precondition for migrating at all.
+- **Positive:** one policy; placement and HA reachable only through managers (auditable, testable);
+  #528's stuck-`migrate` structurally impossible; the WAN pin survives migration; non-HA VMs become
+  relocatable via `modify`; `evacuate` refuses unsafe moves instead of stranding a VM.
+- **Cost:** `migrate` loses its node argument (callers move to `modify` for relocation); the silent
+  offline fallback becomes an explicit `--force`; `save`/`restore` grow to the full rule; a real
+  compat test must be built. `ha_nodes_prefer` (PR #529) is retained as the re-pointing primitive.
+- **Superseded:** the current "require `HANode`, toggle, raw `--node`, silent offline" flow.
 
 ## Open questions
 
-1. **CPU-compatibility test (needs its own study — the key open item).** `cputype: host` is too
-   coarse: tappaas1 ↔ tappaas3 live-migrate today despite different CPUs, so a blanket "host ⇒
-   offline" is wrong. We need a real per-pair predicate. Candidate inputs to study: the intersection
-   of each node's advertised CPU flags (`/nodes/<n>/capabilities/qemu/cpu`, `qm cpu` / `kvm -cpu ?`),
-   QEMU/KVM's own live-migration compatibility check, or a cheap **dry-run probe** (attempt the live
-   migrate with a short timeout and roll back). Until this exists, follow Decision 3 (attempt live;
-   on genuine failure refuse and ask for `--force`) rather than guessing from `cputype`.
-
-*(Resolved by operator input, moved into the design above:)*
-
-- ~~Non-HA re-home always vs `--rehome`~~ → **re-home is a `module-manager modify` of `.node`**, not a
-  migrate flag; a plain migrate never re-homes (see Realization / E1).
-- ~~Where evacuate/return orchestration lives~~ → **site-manager evacuates, calling module-manager's
-  migrate; module-manager calls the proxmox-controller primitive** (see Realization). Ties into
-  ADR-017's reboot pass, which must go through this path.
-
-2. **`strict` override** — is there ever a legitimate `--break-strict`, or must a strict rule always be
-   changed via `module-manager modify` first? Draft says modify-first only.
+1. **CPU-compatibility test (the key study).** `cputype: host` is too coarse — tappaas1 ↔ tappaas3
+   live-migrate today. Study candidates: intersect per-node advertised CPU flags
+   (`/nodes/<n>/capabilities/qemu/cpu`), KVM's own migration-compat check, or a short-timeout live
+   **dry-run + rollback** probe. Until it exists: attempt live, and on genuine failure refuse + ask
+   for `--force` (never silent offline).
+2. **`strict` override** — is there ever a legitimate `--break-strict`, or must a strict rule always
+   change via `module-manager modify` first? Draft: modify-first only.
+3. **`evacuate` return-home** — does the reboot pass auto-`migrate` VMs back after the node returns, or
+   rely on the CRM's own failback (which the re-pointed priorities now make correct)? Prefer letting
+   HA fail back; `evacuate --return` only for non-HA VMs that were `modify`-relocated.
