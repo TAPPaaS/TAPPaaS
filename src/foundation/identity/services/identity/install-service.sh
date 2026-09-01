@@ -95,7 +95,14 @@ SECRETS_ENV="$(echo "${JSON}" | jq -r --arg d "/etc/secrets/${MODULE_BASE}.env" 
 # Default the configure unit to the convention <base>-configure-oidc.service so a
 # module needn't declare it (Nextcloud ships nextcloud-configure-oidc.service).
 # Restart is best-effort (warns if absent → applies on next rebuild/boot).
-[[ -z "${CONFIGURE_SERVICE}" ]] && CONFIGURE_SERVICE="${MODULE_BASE}-configure-oidc.service"
+# A module that registers the provider itself (e.g. via the app's API, like
+# Portainer on a Debian VM) sets configureService to "none" to opt out — there is
+# no systemd unit to restart, so the default convention would only warn.
+if [[ "${CONFIGURE_SERVICE}" == "none" ]]; then
+    CONFIGURE_SERVICE=""
+elif [[ -z "${CONFIGURE_SERVICE}" ]]; then
+    CONFIGURE_SERVICE="${MODULE_BASE}-configure-oidc.service"
+fi
 
 SLUG="${MODULE}"                                  # unique per variant
 UPSTREAM="${VMNAME}.${ZONE0}.internal"

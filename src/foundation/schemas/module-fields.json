@@ -1343,7 +1343,7 @@
           "default": ""
         },
         "configureService": {
-          "description": "systemd unit on the module VM to restart after writing the env so the app registers the provider (e.g. nextcloud-configure-oidc.service). Empty = applies on next nixos-rebuild/boot.",
+          "description": "systemd unit on the module VM to restart after writing the env so the app registers the provider (e.g. nextcloud-configure-oidc.service). Empty defaults to <base>-configure-oidc.service (best-effort restart; warns if absent). Set to \"none\" for modules that register the provider themselves via the app's API (e.g. Portainer on Debian) — no unit is restarted.",
           "type": "string",
           "default": ""
         }
