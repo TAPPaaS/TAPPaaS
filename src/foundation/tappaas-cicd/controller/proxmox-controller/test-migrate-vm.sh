@@ -82,7 +82,15 @@ case "$cmd" in
         rd crm_delay 0 > "$D/pending_count" ;;
     "ha-manager remove "*)      : > "$D/ha_rid" ;;
     "ha-manager add "*)         echo "vm:$(rd vmid)" > "$D/ha_rid"; echo started > "$D/ha_state" ;;
-    "pvesh get /cluster/ha/rules"*) echo "[]" ;;
+    "pvesh get /cluster/ha/rules"*)
+        # ha_rule_nodes set => serve one node-affinity rule for the VM under
+        # test, so save_ha_state/restore_ha are exercised (#528).
+        if [[ -n "$(rd ha_rule_nodes)" ]]; then
+            printf '[{"rule":"ha-testvm","type":"node-affinity","resources":"vm:%s","nodes":"%s"}]' \
+                "$(rd vmid 130)" "$(rd ha_rule_nodes)"
+        else
+            echo "[]"
+        fi ;;
     "pvesh delete /cluster/ha/rules"*|"pvesh create /cluster/ha/rules"*) : ;;
     "pvesh get /cluster/resources"*)
         printf '[{"vmid":%s,"type":"qemu","status":"%s","node":"%s"}]' \
@@ -198,6 +206,46 @@ setup "" "" running
 out="$(run_migrate try_live_migration 130 tappaas1 tappaas2 2>&1)"
 if grep -q 'HA-managed' <<< "${out}"; then no "non-HA VM must not be reported HA-managed"; else ok; fi
 if logged "ha-manager remove"; then no "non-HA VM must not be removed from HA"; else ok; fi
+
+# ── The restored affinity rule must prefer the node the VM moved TO (#528) ──
+# migrate-vm replayed the pre-migration rule verbatim, so after a move the
+# priorities still favoured the node just left. On a CPU-heterogeneous cluster
+# the CRM's resulting return trip is an online migration that cannot succeed,
+# and the service stays in 'migrate'. Higher priority wins in PVE.
+setup "vm:130" started running
+printf 'tappaas1:2,tappaas2:1' > "${MV_TEST_DIR}/ha_rule_nodes"   # tappaas1 preferred
+printf 'tappaas1'              > "${MV_TEST_DIR}/node"            # VM starts on tappaas1
+printf 'tappaas2'              > "${MV_TEST_DIR}/target"
+run_migrate do_offline_migration 130 tappaas1 tappaas2 testvm >/dev/null 2>&1
+created="$(grep -o "pvesh create /cluster/ha/rules.*" "${MV_TEST_DIR}/log" | tail -1)"
+if [[ -z "${created}" ]]; then
+    no "a saved affinity rule must be recreated after the migration"
+else
+    ok
+    # After moving to tappaas2, tappaas2 must be the preferred node.
+    if grep -qE "tappaas2:2" <<< "${created}"; then ok
+    else no "restored rule must prefer the migration TARGET (got: ${created})"; fi
+    if grep -qE "tappaas1:1" <<< "${created}"; then ok
+    else no "restored rule must demote the node the VM left (got: ${created})"; fi
+fi
+
+# Symmetry: moving back must flip the preference back, not hard-code a node.
+setup "vm:130" started running
+printf 'tappaas1:1,tappaas2:2' > "${MV_TEST_DIR}/ha_rule_nodes"   # tappaas2 preferred
+printf 'tappaas2'              > "${MV_TEST_DIR}/node"            # VM starts on tappaas2
+printf 'tappaas1'              > "${MV_TEST_DIR}/target"
+run_migrate do_offline_migration 130 tappaas2 tappaas1 testvm >/dev/null 2>&1
+created="$(grep -o "pvesh create /cluster/ha/rules.*" "${MV_TEST_DIR}/log" | tail -1)"
+if grep -qE "tappaas1:2" <<< "${created}"; then ok
+else no "migrating back must prefer tappaas1 again (got: ${created})"; fi
+
+# A VM with no affinity rule must not gain one.
+setup "vm:130" started running
+: > "${MV_TEST_DIR}/ha_rule_nodes"
+run_migrate do_offline_migration 130 tappaas1 tappaas2 testvm >/dev/null 2>&1
+if logged "pvesh create /cluster/ha/rules"; then
+    no "a VM without an affinity rule must not have one invented"
+else ok; fi
 
 echo "Results: ${pass} passed, ${fail} failed"
 [ "${fail}" -eq 0 ]
