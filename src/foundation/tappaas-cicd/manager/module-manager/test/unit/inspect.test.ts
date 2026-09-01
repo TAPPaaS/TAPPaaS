@@ -327,6 +327,24 @@ function text(lines: { text: string }[]): string {
     /1 dependency service\(s\) report no drift/.test(text(clean.lines)),
     "the VM report states how many dependency services were verified",
   );
+
+  // #526: node drift — the VM runs on a node other than config.node (a migrate
+  // or HA failover deliberately leaves .node unchanged) — is reported as an
+  // ordinary node drift row (config vs actual) and counted as an error, the
+  // same as any other actual-vs-config field. (The runInspect fetch path,
+  // fixed alongside, now reads `qm config` from actualNode so this row is even
+  // reachable instead of the whole report dying with "Failed to get VM config".)
+  const nodeDrift = buildVmReport({ ...base, actualNode: "tappaas2" });
+  const ndText = text(nodeDrift.lines).replace(/\[[0-9;]*m/g, "");
+  check(
+    /node\s+tappaas1\s+\S*\s*tappaas1\s+tappaas2/.test(ndText) ||
+      (/node/.test(ndText) && /tappaas1/.test(ndText) && /tappaas2/.test(ndText)),
+    "#526: node change shows as a node drift row (config tappaas1 vs actual tappaas2)",
+  );
+  check(
+    nodeDrift.errors === buildVmReport(base).errors + 1,
+    "#526: node drift counts as an error, like any actual-vs-config field",
+  );
 }
 
 // ── 7b. the LXC guest path reads pct-shaped keys (#465) ────────────────

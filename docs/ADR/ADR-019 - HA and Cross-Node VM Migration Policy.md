@@ -8,7 +8,7 @@
 | **Author** | Lars Rossen |
 | **Parent** | [ADR-007f Realization](<ADR-007f - Realization.md>) (managers orchestrate; controllers do the imperative cluster actions) |
 | **Refines** | [ADR-007d Site](<ADR-007d - Site.md>) (module config as the declared source of truth), [ADR-009 Composition Meta-Model](<ADR-009 - Composition Meta-Model.md>) (`cluster:vm`, the `ha` service), [ADR-017 Update scheduling](<ADR-017 - Update scheduling and mothership self-update.md>) (the reboot pass that evacuates nodes) |
-| **Related** | **#528** (restore_ha replayed pre-migration priorities → stuck `migrate`) — **fixed by PR #529** (`ha_nodes_prefer`), applied after the hrossen.dk health check; **#434** (stop-before-migrate sequencing); **#207** (config normalization); the `strict`/`comment` round-trip gap (open). **owner:** proxmox-controller (migration primitive), `module-manager` (`modify`, `migrate`), `site-manager` (`evacuate`) |
+| **Related** | **#528** (restore_ha replayed pre-migration priorities → stuck `migrate`) — **fixed by PR #529** (`ha_nodes_prefer`), applied after the hrossen.dk health check; **#434** (stop-before-migrate sequencing); **#207** (config normalization); the `strict`/`comment` round-trip gap (open); **#525 / #533** (the sudo→root ownership drift the "run as `tappaas`" ownership invariant depends on — the SSH-family root cause, not the migration mechanics); **#526** (reconcile must report node drift — the observability counterpart of this policy) **/ #498** (the missing change-`.node` verb, provided here by `modify`). **owner:** proxmox-controller (migration primitive), `module-manager` (`modify`, `migrate`), `site-manager` (`evacuate`) |
 | **Numbering note** | ADR-018 is reserved by the SSH-identity PR #523. This ADR is **019**. |
 | **Changelog** | v0.1 initial matrix. v0.2 operator input: `cputype: host` too coarse (needs a real compat test), layering established, re-home = `modify`. v0.3 restructure: treat #528/#529 as done; **goal = node placement and HA management reachable only through the managers**; document how Proxmox HA pinning fails over **and back**; split scenarios A/B into `modify` vs `migrate`; add site-manager **evacuate** as scenario C (incl. the "on its HANode, being evacuated" case); catalogue the **known challenges** already fixed so re-implementation does not reintroduce them. |
 
@@ -92,6 +92,30 @@ its `strict`/`comment` fixed by policy, its priorities re-pointed to wherever th
 
 Rule of thumb: **migrate never invents a destination; modify never leaves config and reality
 disagreeing.**
+
+**Ownership invariant (why these run as `tappaas`, never under `sudo`).** `modify` rewrites
+`.node`/`.HANode` through `copy-update-json.sh`, which writes each `module.json` via `mktemp`+`mv` at
+mode `0600` owned by the calling uid. Run under `sudo`, that leaves the config **root-owned and
+unreadable** to `tappaas` — and since `update-tappaas` builds its module list from the *readable*
+configs, the module then **silently drops out of the sweep with no error line** (#525). The same
+elevated run also re-owns the git checkout (#525, `repo-sync.sh`). This is the shared "a manager was
+run under `sudo`" root cause behind the SSH-identity family (#518–#523) — *not* the #528/#529
+migration mechanics — and it is why placement/HA changes go only through the managers as `tappaas`.
+The enforcing guard — *warn-then-repair* ownership over `config/` and the repos, plus a hard
+*refuse-to-run-as-root* — is specified in **#533**; this ADR assumes it in place.
+
+**Observability invariant (reconcile must show node drift).** A `migrate` deliberately leaves
+`.node` unchanged (B-G1), and an HA failover does the same — so `config.node ≠ actual node` is a
+*normal, expected* state under this policy, not an error. `module-manager reconcile` must report it as
+an ordinary node drift row (config vs actual), the way it reports every other field. Today it fetches
+`qm config` against `config.node` and errors `Failed to get VM config from Proxmox` when the VM runs
+elsewhere — the one form of drift it cannot show (#526). The fix is small and local: `inspect.ts`
+already learns the VM's real node from the cluster-wide `pvesh get /cluster/resources` query
+(`actualNode`); it must target *that* node for the detail fetch instead of `config.node`. (That same
+error string is also emitted by the sudo-SSH failure #518 and by a genuinely unreachable node — three
+causes, one message — so the drift path should say "running on `<actualNode>`, not `<config.node>`",
+distinct from "cannot reach `<node>`".) Paired with **#498** (no verb to change `.node` — provided
+here by `modify`).
 
 ## Scenarios
 

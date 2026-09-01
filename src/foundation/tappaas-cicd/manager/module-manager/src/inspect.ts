@@ -606,18 +606,20 @@ export function inspectModule(module: string, opts: InspectOptions = {}): number
     return serviceExitCode(svc);
   }
 
-  const fqdn = `${node}.${mgmtDomain()}`;
+  const cfgFqdn = `${node}.${mgmtDomain()}`;
 
   // Cluster resources FIRST (#465). This one query answers two questions — the
   // node the guest actually runs on, and whether it is a QEMU VM or an LXC
   // container (`--type vm` lists both, each tagged type: "qemu" | "lxc") — so
   // it is hoisted above the config fetch that has to know which CLI to shell.
   // Ground truth beats the module's declared dependsOn, which is only the
-  // fallback when this query cannot answer.
+  // fallback when this query cannot answer. The query is cluster-wide, so any
+  // reachable node answers it; we ask config.node.
   let actualNode = "";
   let liveGuest: GuestType | null = null;
-  const rRes = ssh("root", fqdn, "pvesh get /cluster/resources --type vm --output-format json");
-  if (rRes.ran && rRes.rc === 0) {
+  const rRes = ssh("root", cfgFqdn, "pvesh get /cluster/resources --type vm --output-format json");
+  const clusterQueryOk = rRes.ran && rRes.rc === 0;
+  if (clusterQueryOk) {
     try {
       const arr = JSON.parse(rRes.stdout);
       if (Array.isArray(arr)) {
@@ -636,20 +638,40 @@ export function inspectModule(module: string, opts: InspectOptions = {}): number
   const guest = liveGuest ?? guestTypeFromDeps(cfg);
   const cli = guest === "lxc" ? "pct" : "qm";
 
+  // `qm/pct config` is NODE-LOCAL, so it must run on the node the VM actually
+  // runs on — which #526 showed can differ from config.node (a migrate / HA
+  // failover deliberately leaves .node unchanged). Fetching from config.node
+  // would fail for a healthy VM that lives elsewhere and hide the node drift;
+  // the node row (buildVmReport) then reports config.node vs actualNode like
+  // any other field. Fall back to config.node only when the cluster query could
+  // not locate the VM.
+  const liveNode = actualNode || node;
+  const liveFqdn = `${liveNode}.${mgmtDomain()}`;
+
   info(
     `${BOLD}TAPPaaS ${guest === "lxc" ? "LXC" : "VM"} Inspection: ` +
-      `${BL}${vmname}${CL} (VMID: ${vmid}) on ${node}`,
+      `${BL}${vmname}${CL} (VMID: ${vmid}) on ${liveNode}`,
   );
   console.log("");
 
-  const rCfg = ssh("root", fqdn, `${cli} config ${vmid}`);
+  const rCfg = ssh("root", liveFqdn, `${cli} config ${vmid}`);
   if (!rCfg.ran || rCfg.rc !== 0) {
-    error(`Failed to get VM config from Proxmox (VMID: ${vmid} on ${node}, via ${cli})`);
+    // Distinguish the three causes the old single "Failed to get VM config"
+    // message conflated (#526): a config.node that could not be queried at all,
+    // a VM absent from the whole cluster, and a detail fetch that failed on the
+    // node the VM demonstrably runs on.
+    if (!clusterQueryOk) {
+      error(`Could not query the cluster via ${node} to locate VMID ${vmid} — is ${node} reachable?`);
+    } else if (!actualNode) {
+      error(`VMID ${vmid} is not present on any node in the cluster (config declares ${node}) — is the VM created?`);
+    } else {
+      error(`Failed to read ${cli} config for VMID ${vmid} on ${liveNode} (where the cluster reports it running)`);
+    }
     return 1;
   }
   const actual = parseQmConfig(rCfg.stdout);
 
-  const rStat = ssh("root", fqdn, `${cli} status ${vmid}`);
+  const rStat = ssh("root", liveFqdn, `${cli} status ${vmid}`);
   const vmStatus =
     !rStat.ran || rStat.rc !== 0 ? "unknown" : rStat.stdout.trim().split(/\s+/)[1] ?? "";
 
