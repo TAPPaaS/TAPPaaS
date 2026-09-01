@@ -25,7 +25,7 @@
 import { defaultConfigDir, defaultSchemaDir, loadRaw, loadSite, writeSite } from "./config";
 import { CliSiteClient } from "./client";
 import { HelpSpec, renderHelp } from "../../../lib/ts/src/help";
-import { DieError, GN, RD, YW, CL, die, guarded, info, warn } from "../../../lib/ts/src/cli";
+import { DieError, GN, RD, YW, CL, die, guarded, info, preflightGuard, warn } from "../../../lib/ts/src/cli";
 import { applyPlan, computePlan } from "./reconcile";
 import { adoptNode, provisionNode } from "./provision";
 import { Site, SiteClient, SiteNode } from "./types";
@@ -660,6 +660,7 @@ export function run(argv: string[], client: SiteClient): number {
   const o = parseOpts(argv.slice(1));
 
   return guarded(() => {
+    preflightGuard(); // #533: refuse root; self-heal config/repo ownership
     switch (cmd) {
       case "site":
         cmdSite(o);

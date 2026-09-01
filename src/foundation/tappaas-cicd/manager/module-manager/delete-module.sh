@@ -66,6 +66,10 @@ OPT_ENVIRONMENT=""        # ADR-007 P5: target environment
 # shellcheck source=common-install-routines.sh disable=SC1091
 . /home/tappaas/bin/common-install-routines.sh
 
+# #533: managers run as the tappaas operator, never root — under sudo, SSH
+# resolves identity from /root/.ssh and fails (ADR-018). Refuse root up front.
+tappaas_require_operator
+
 # ── Usage ────────────────────────────────────────────────────────────
 
 usage() {

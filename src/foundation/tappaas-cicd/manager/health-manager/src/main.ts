@@ -24,7 +24,7 @@ import { CliClusterClient } from "./client";
 import { runHealthGates } from "./checks";
 import { ClusterClient } from "./types";
 import { HelpSpec, renderHelp } from "../../../lib/ts/src/help";
-import { CL, GN, RD, YW, die, guarded, info } from "../../../lib/ts/src/cli";
+import { CL, GN, RD, YW, die, guarded, info, preflightGuard } from "../../../lib/ts/src/cli";
 
 const VERSION = "0.1.0";
 
@@ -124,6 +124,7 @@ export function run(argv: string[], client: ClusterClient): number {
   const opts = parseOpts(argv.slice(1));
 
   return guarded(() => {
+    preflightGuard(); // #533: refuse root; self-heal config/repo ownership
     switch (cmd) {
       case "validate":
         return cmdValidate(opts, client);

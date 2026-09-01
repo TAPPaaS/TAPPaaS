@@ -39,6 +39,10 @@ if [[ "${TAPPAAS_OS_AS_DEBUG:-0}" == "1" ]]; then
     info() { debug "$@"; }
 fi
 
+# #533: managers run as the tappaas operator, never root — under sudo, SSH
+# resolves identity from /root/.ssh and fails (ADR-018). Refuse root up front.
+tappaas_require_operator
+
 # Run a command quietly (progress dots in place of its output) while preserving
 # its REAL exit code, and die on failure. A bare `cmd 2>&1 | while read; do
 # printf .; done` pipeline reports the while-loop's exit status (always 0), so

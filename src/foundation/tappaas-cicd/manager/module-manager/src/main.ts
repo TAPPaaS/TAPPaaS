@@ -30,7 +30,7 @@ import {
   loadModule,
 } from "./config";
 import { HelpSpec, renderHelp } from "../../../lib/ts/src/help";
-import { CL, GN, RD, YW, die, guarded, info, warn } from "../../../lib/ts/src/cli";
+import { CL, GN, RD, YW, die, guarded, info, preflightGuard, warn } from "../../../lib/ts/src/cli";
 import {
   AddOptions,
   DeleteOptions,
@@ -731,6 +731,7 @@ export function run(argv: string[], client: ModuleClient): number {
   // printed; any other Error → a clean `[Error] <msg>` + 1). Child exit codes
   // are RETURNED by dispatch(), not thrown, so they propagate unchanged.
   return guarded(() => {
+    preflightGuard(); // #533: refuse root; self-heal config/repo ownership
     const opts = parseOpts(rest.slice(1));
     return dispatch(verb, opts, client);
   });

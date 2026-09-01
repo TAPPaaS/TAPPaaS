@@ -36,6 +36,10 @@ set -euo pipefail
 # shellcheck source=/home/tappaas/bin/common-install-routines.sh disable=SC1091
 . /home/tappaas/bin/common-install-routines.sh
 
+# #533: managers run as the tappaas operator, never root — under sudo, SSH
+# resolves identity from /root/.ssh and fails (ADR-018). Refuse root up front.
+tappaas_require_operator
+
 # The one `ha-manager status` parser, and the steady-state list this file used to
 # keep its own copy of (#434). Falls back to the repo copy on a system that has
 # not re-run pre-update.sh since it landed.

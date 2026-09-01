@@ -3,6 +3,9 @@
 // Replaces the per-manager vendored copies (ADR-007 post-implementation
 // refactor, Phase 3).
 
+import { existsSync } from "fs";
+import { spawnSync } from "child_process";
+
 export const YW = "\x1b[01;33m";
 export const RD = "\x1b[01;31m";
 export const GN = "\x1b[1;92m";
@@ -40,5 +43,41 @@ export function guarded(fn: () => number): number {
       return 1;
     }
     throw e;
+  }
+}
+
+// ── Preflight guard (#533) ─────────────────────────────────────────────
+// current process uid, or -1 where unavailable. A separate helper so tests can
+// call requireOperator(uid) with a simulated value.
+export function currentUid(): number {
+  return typeof process.getuid === "function" ? process.getuid() : -1;
+}
+
+// TAPPaaS managers must run as the 'tappaas' operator, never root. Under sudo
+// (uid 0) OpenSSH resolves its identity from /root/.ssh via getpwuid() and never
+// finds the operator key (ADR-018), and any file the manager writes becomes
+// root-owned — the trap that makes the next operator reach for sudo. Refuse root
+// outright (die() throws DieError → guarded() maps it to exit 1).
+export function requireOperator(uid: number = currentUid()): void {
+  if (uid === 0) {
+    const want = process.env.TAPPAAS_OPERATOR ?? "tappaas";
+    die(
+      `TAPPaaS managers must run as the '${want}' operator, not root — do not use sudo. ` +
+        `If a config or repo file is root-owned, repair it as ${want}: tappaas-repair-ownership.sh`,
+    );
+  }
+}
+
+// preflightGuard — refuse root, then self-heal ownership drift best-effort by
+// invoking the shared repair script when present (absent in dev/test → skipped).
+export function preflightGuard(uid: number = currentUid()): void {
+  requireOperator(uid);
+  const repair = "/home/tappaas/bin/tappaas-repair-ownership.sh";
+  if (existsSync(repair)) {
+    try {
+      spawnSync(repair, [], { stdio: "inherit" });
+    } catch {
+      // best-effort; never block the command
+    }
   }
 }

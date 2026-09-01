@@ -47,6 +47,40 @@ error() { echo -e "${RD}[Error]${CL} $*" >&2; }
 fatal() { echo -e "${RD}${BOLD}[Fatal]${CL} $*" >&2; }
 die()   { error "$@"; exit 1; }
 
+# ── Preflight guard (#533) ───────────────────────────────────────────
+# TAPPaaS managers must run as the 'tappaas' operator, never root. Running a
+# manager under sudo (EUID 0) is both unnecessary — once the config dir and git
+# checkouts are tappaas-owned, tappaas can read them directly — and actively
+# harmful: as root, OpenSSH resolves its identity from /root/.ssh via getpwuid()
+# and never finds the operator's key (ADR-018), and any file the manager writes
+# becomes root-owned, which is exactly what traps the next operator into sudo.
+# Refuse root outright. The ownership drift itself is healed separately, by
+# scripts/tappaas-repair-ownership.sh (run from update-tappaas ExecStartPre=+
+# and, best-effort, by tappaas_preflight_guard below).
+
+# tappaas_require_operator — abort if running as root; warn if not the operator.
+tappaas_require_operator() {
+    local want="${TAPPAAS_OPERATOR:-tappaas}"
+    if [[ "${EUID:-$(id -u)}" -eq 0 ]]; then
+        fatal "TAPPaaS managers must run as the '${want}' operator, not root — do not use sudo."
+        error "If a config or repo file is root-owned, repair it as ${want}:"
+        error "  tappaas-repair-ownership.sh"
+        exit 1
+    fi
+    local me; me="$(id -un)"
+    if [[ "$me" != "$want" ]]; then
+        warn "running as '${me}', but TAPPaaS expects '${want}'; ownership targets '${want}'."
+    fi
+}
+
+# tappaas_preflight_guard — for top-level entrypoints: refuse root, then
+# self-heal ownership drift best-effort (never blocks the actual command).
+tappaas_preflight_guard() {
+    tappaas_require_operator
+    local repair=/home/tappaas/bin/tappaas-repair-ownership.sh
+    [[ -x "$repair" ]] && "$repair" || true
+}
+
 # ── Shared helper functions ──────────────────────────────────────────
 
 # ── site.json source-of-truth helpers (ADR-007 reader cutover) ───────

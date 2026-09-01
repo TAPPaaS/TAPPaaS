@@ -213,5 +213,39 @@ else
     echo "  ⊘ #517 invariant unit test skipped (source or env python not found)"
 fi
 
+# ── 5) Unit: preflight guard refuses root (#533) ─────────────────────
+# require_operator() must exit(1) when euid is 0 (a manual `sudo update-tappaas`)
+# and be a no-op otherwise. os.geteuid is monkeypatched so the test needs no
+# actual root.
+if [[ -f "$main_py" && -x "$py" ]]; then
+    if "$py" - "$main_py" <<'PY'
+import importlib.util, sys, logging
+logging.disable(logging.CRITICAL)
+spec = importlib.util.spec_from_file_location("m", sys.argv[1])
+m = importlib.util.module_from_spec(spec); spec.loader.exec_module(m)
+
+# non-root euid -> returns without raising
+m.os.geteuid = lambda: 1000
+m.require_operator()
+
+# root euid -> SystemExit(1)
+m.os.geteuid = lambda: 0
+raised = None
+try:
+    m.require_operator()
+except SystemExit as e:
+    raised = e
+assert raised is not None and raised.code == 1, f"root must exit(1), got {raised!r}"
+PY
+    then
+        passed=$((passed + 1))
+    else
+        echo "  ✗ #533 require_operator guard unit test FAILED"
+        failed=$((failed + 1))
+    fi
+else
+    echo "  ⊘ #533 guard unit test skipped (source or env python not found)"
+fi
+
 echo "update-tappaas test: $passed passed, $failed failed"
 [[ "$failed" -eq 0 ]]

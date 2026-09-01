@@ -756,8 +756,29 @@ def write_result_artifact(result: dict) -> None:
 # ── Main ─────────────────────────────────────────────────────────────
 
 
+def require_operator() -> None:
+    """#533: update-tappaas must run as the tappaas operator, never root.
+
+    Under sudo (euid 0) OpenSSH resolves its identity from /root/.ssh via
+    getpwuid() and never finds the operator key (ADR-018), and the managers this
+    spawns inherit root and write root-owned config — the trap that makes the
+    next run need sudo. The systemd unit already runs as User=tappaas; this
+    refuses a manual `sudo update-tappaas`.
+    """
+    operator = os.environ.get("TAPPAAS_OPERATOR", "tappaas")
+    if hasattr(os, "geteuid") and os.geteuid() == 0:
+        log.error(
+            "update-tappaas must run as the '%s' operator, not root — do not use "
+            "sudo. If a config or repo file is root-owned, repair it as %s: "
+            "tappaas-repair-ownership.sh",
+            operator, operator,
+        )
+        sys.exit(1)
+
+
 def main():
     setup_logging()
+    require_operator()  # #533: refuse root before touching config or spawning managers
 
     parser = argparse.ArgumentParser(
         description="TAPPaaS update scheduler - updates foundation and app modules across all nodes"

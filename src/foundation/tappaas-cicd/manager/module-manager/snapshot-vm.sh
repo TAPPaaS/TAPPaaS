@@ -29,6 +29,10 @@ set -euo pipefail
 # shellcheck source=common-install-routines.sh
 . /home/tappaas/bin/common-install-routines.sh
 
+# #533: managers run as the tappaas operator, never root — under sudo, SSH
+# resolves identity from /root/.ssh and fails (ADR-018). Refuse root up front.
+tappaas_require_operator
+
 # ha-vm-lib.sh is new (#434). A system that has not re-run pre-update.sh since it
 # landed has no /home/tappaas/bin symlink for it yet, so fall back to the repo
 # copy next to this script rather than failing the restore that needs it.

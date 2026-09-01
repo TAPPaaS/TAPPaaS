@@ -259,6 +259,14 @@ in
     serviceConfig = {
       Type = "oneshot";
       User = "tappaas";
+      # #533: before the sweep, repair any root-owned config/repo files back to
+      # the tappaas operator. The `+` prefix runs this one step as root (needed
+      # to chown, and to reach outside ReadWritePaths/ProtectSystem); the `-`
+      # keeps a missing or failing repair from blocking the update. This is the
+      # automated arm of the ownership guard — the managers refuse to run as
+      # root, and this heals the drift that made anyone reach for sudo in the
+      # first place. See scripts/tappaas-repair-ownership.sh.
+      ExecStartPre = "+-/home/tappaas/bin/tappaas-repair-ownership.sh";
       ExecStart = "/home/tappaas/bin/update-tappaas";
       # Mirror the operator's login PATH. Without this the service runs with
       # NixOS's minimal default service PATH (no bash), so update-module.sh's
