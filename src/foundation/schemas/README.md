@@ -54,9 +54,13 @@ field `module-fields.json` says it owns, using the classes the schema defines. A
 service with no `fields.json` has not been migrated to the contract yet and is
 skipped.
 
-The operator-facing surface it unlocks — `modify <module> --set field=value`,
-`--force` vs the per-module `rebootOk` — is documented in the module-manager
-README.
+The operator-facing surface it unlocks is documented in the module-manager
+README: `modify <module> --set field=value`, which refuses an `immutable` or
+`recreate` field before it writes anything and rejects a mixed `--set` whole; and
+the two — only two — ways to authorize a change that needs downtime, `modify
+--force` (an operator, now) and the per-module `rebootOk` (a standing permission
+honoured only in the scheduled sweep). `update-tappaas --force` is neither: it
+means "run the sweep now" and is never forwarded as permission to reboot.
 
 ### Objects without a schema in this directory
 

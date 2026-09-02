@@ -616,7 +616,7 @@ if [[ -f "$UNIT_TSCONFIG" ]]; then
         ok "TypeScript unit tests compile"
         # tsconfig rootDir is the tappaas-cicd root (shared lib/ts base), so the
         # compiled tree mirrors manager/module-manager/ under dist-test.
-        for unit in module inspect reconcile cluster manifest resolve drift report; do
+        for unit in module inspect reconcile cluster manifest resolve drift report modify; do
             if run_ts "node '${DIST_TEST}/manager/module-manager/test/unit/${unit}.test.js'" >/dev/null 2>&1; then
                 ok "TypeScript ${unit} unit tests pass"
             else
@@ -683,7 +683,11 @@ echo ""
 echo "== modify delegates its apply to reconcile (#495) =="
 UPD="${HERE}/update-module.sh"
 if [[ -f "$UPD" ]]; then
-    if grep -qE 'module-manager reconcile "\$\{module\}" --apply' "$UPD"; then
+    # The args are built into an array now, because ADR-020 P4 appends --force
+    # to authorize a disruptive converge. Match the delegation, not one exact
+    # spelling of the argv — the invariant is "one apply, via reconcile".
+    if grep -qE 'module-manager reconcile "\$\{reconcile_args\[@\]\}"|module-manager reconcile "\$\{module\}" --apply' "$UPD" \
+       && grep -qE 'reconcile_args=\("\$\{module\}" --apply\)|reconcile "\$\{module\}" --apply' "$UPD"; then
         ok "update-module.sh applies via module-manager reconcile --apply"
     else
         bad "update-module.sh does not delegate its apply to reconcile --apply"

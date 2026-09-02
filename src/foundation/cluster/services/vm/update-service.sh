@@ -39,7 +39,11 @@
 #   --apply-drift FILE   Apply a drift record that was computed elsewhere. The
 #                        default is to ask the manager for one — every existing
 #                        caller invokes this script bare and must keep working.
-#   --force              Authorize a disruptive change (ADR-020 D8).
+#   --force              Authorize a disruptive change — a guest reboot or an
+#                        offline migrate (ADR-020 D8). Without it, and without
+#                        rebootOk in the scheduled pass, such a change is
+#                        deferred with a DEFERRED: line and the converge still
+#                        exits 0.
 #
 # Exit codes:
 #   0  In sync, or all applicable drift applied (deferrals included — a deferred
@@ -272,12 +276,40 @@ converge_side_effect_dns() {
     return 0
 }
 
-# ── Converge ─────────────────────────────────────────────────────────
-# ALLOW_DISRUPTION is 1 here: before ADR-020 this script rebooted for a subnet
-# change without asking, and P3 preserves behaviour. ADR-020 P4 replaces this
-# with the real gate — `modify --force`, or `rebootOk` in the ADR-017 scheduled
-# pass — and an unauthorized disruptive change is then DEFERRED, not applied.
-ALLOW_DISRUPTION=1
+# ── Disruption authorization (ADR-020 D8) ────────────────────────────
+#
+# A field's change class says a change NEEDS disruption — a guest reboot for a
+# subnet change, an offline migrate. This says whether we are ALLOWED to cause
+# it. Two levers, and only two:
+#
+#   --force            an operator, now. `module modify --force` and
+#                      `reconcile --apply --force` forward it here.
+#   rebootOk + the     a standing per-module permission, honoured only inside
+#   scheduled pass     the unattended sweep, where the site has already said
+#                      (site.json automaticReboot) that it accepts downtime in
+#                      the window. update-tappaas exports TAPPAAS_SCHEDULED_PASS
+#                      for exactly this.
+#
+# `update-tappaas --force` is NOT one of them. It means "run the sweep now" — a
+# scheduling override — and forwarding it as disruption authority would let a
+# routine update reboot production guests. update-tappaas therefore never passes
+# --force to `module modify`, and this script never reads its own environment
+# for one.
+#
+# Unauthorized disruptive drift is DEFERRED by converge-lib: everything else
+# applies, a machine-parseable DEFERRED: line is printed, and the converge still
+# exits 0. Not applying a change is not a failure; pretending it applied would be.
+REBOOT_OK="$(module-manager module resolve "${MODULE}" --json 2>/dev/null \
+             | jq -r '(.fields.rebootOk.value) // "false"')"
+SCHEDULED_PASS="${TAPPAAS_SCHEDULED_PASS:-0}"
+
+ALLOW_DISRUPTION=0
+if [[ "${FORCE}" == "1" ]]; then
+    ALLOW_DISRUPTION=1
+elif [[ "${REBOOT_OK}" == "true" && "${SCHEDULED_PASS}" == "1" ]]; then
+    debug "  rebootOk=true in the scheduled pass — disruptive changes are authorized"
+    ALLOW_DISRUPTION=1
+fi
 
 converge_apply "${MODULE}" "${SCRIPT_DIR}" "${DRIFT_FILE}" "${CHECK_MODE}" "${ALLOW_DISRUPTION}" "${FORCE}" || exit 1
 

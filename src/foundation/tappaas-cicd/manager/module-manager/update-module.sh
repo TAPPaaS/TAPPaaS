@@ -14,7 +14,9 @@
 #
 # Options:
 #   -h, --help       Show this help message
-#   --force          Proceed even if pre-update test fails
+#   --force          Proceed even if pre-update test fails, AND authorize a
+#                    disruptive change (guest reboot / offline migrate) during
+#                    the converge — see ADR-020 D8
 #   --no-snapshot    Skip pre-update test, snapshot, and rollback
 #   --debug          Show Debug-level messages
 #   --silent         Suppress Info-level messages
@@ -79,7 +81,8 @@ Options:
                           <module>.json otherwise. Equivalent to naming the
                           suffixed module directly.
     --variant <name>      DEPRECATED alias for --environment.
-    --force           Proceed even if pre-update test fails
+    --force           Proceed even if pre-update test fails, and authorize a
+                      disruptive converge (reboot / offline migrate)
     --no-snapshot     Skip pre-update test, snapshot, and rollback
     --debug           Show Debug-level messages
     --silent          Suppress Info-level messages
@@ -560,7 +563,16 @@ main() {
     # it is a config error, reported by `module validate`, not a runtime abort.
     info "${BOLD}Update Steps 4+5: Apply config via reconcile${CL}"
 
-    if ! module-manager reconcile "${module}" --apply; then
+    # --force here is the operator's DISRUPTION authorization (ADR-020 D8), not
+    # just "ignore a failing pre-test": forwarded, it lets a change whose class
+    # needs downtime — a subnet change that reboots, an offline migrate — apply
+    # now instead of being deferred to a maintenance window. update-tappaas
+    # deliberately does NOT pass --force to `module modify`, so an unattended
+    # sweep never acquires that authority by accident.
+    reconcile_args=("${module}" --apply)
+    [[ "${OPT_FORCE}" -eq 1 ]] && reconcile_args+=(--force)
+
+    if ! module-manager reconcile "${reconcile_args[@]}"; then
         fatal_with_rollback "${module}" "${snapshot_created}" \
             "Apply failed (reconcile --apply did not converge '${module}')"
     fi

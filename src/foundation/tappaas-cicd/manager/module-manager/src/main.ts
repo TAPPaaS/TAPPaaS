@@ -45,7 +45,8 @@ import {
   TestOptions,
 } from "./types";
 import { loadModuleFields } from "../../../lib/ts/src/desired";
-import { cmdDrift } from "./converge";
+import { stream } from "../../../lib/ts/src/exec";
+import { cmdDrift, parseSetArg, preGateSet } from "./converge";
 import { cmdResolve } from "./resolve";
 import { realServiceFs } from "./services";
 import { validateModules } from "./validate";
@@ -102,11 +103,18 @@ const HELP: HelpSpec = {
       ],
     },
     {
-      usage: "modify <module> [--environment ENV] [--force] [--no-snapshot] [--debug] [--silent]",
+      usage: "modify <module> [--set field=value]... [--environment ENV] [--force] [--no-snapshot] [--debug] [--silent]",
       name: "modify",
       options: [
+        [
+          "--set field=value",
+          "Change a declared field, then converge (repeatable). Rejected up front if the field cannot change in place.",
+        ],
         ["--environment ENV", "Target environment to modify."],
-        ["--force", "Proceed despite warnings during the re-apply."],
+        [
+          "--force",
+          "Proceed despite warnings during the re-apply, AND authorize a disruptive change (reboot / offline migrate).",
+        ],
         ["--no-snapshot", "Skip the pre-change VM snapshot."],
         ["--debug", "Verbose diagnostic output."],
         ["--silent", "Suppress non-essential output."],
@@ -125,10 +133,11 @@ const HELP: HelpSpec = {
       ],
     },
     {
-      usage: "reconcile <module> [--apply] [--environment ENV] [--no-snapshot] [--no-services]",
+      usage: "reconcile <module> [--apply] [--force] [--environment ENV] [--no-snapshot] [--no-services]",
       name: "reconcile",
       options: [
         ["--apply", "Converge the module's config → VM/service. Default is a read-only three-way (released/desired/running) drift INSPECT."],
+        ["--force", "--apply: authorize a disruptive change (reboot / offline migrate). Without it such a change is deferred, not applied."],
         ["--environment ENV", "Target environment to reconcile."],
         ["--no-snapshot", "Skip any pre-change VM snapshot (--apply; leaf re-apply is idempotent)."],
         ["--no-services", "INSPECT only: skip the dependency-service drift check (declared firewall/NAT/discovery state), which is ON by default."],
@@ -205,6 +214,8 @@ interface Opts {
   remove: boolean;
   // list --resolution: which of the three tracking paths locates each module (#460)
   resolution: boolean;
+  // `modify --set field=value`, repeatable (ADR-020 D2 step 0).
+  sets: string[];
   // snapshot-vm sub-action
   snapList: boolean;
   snapCleanup?: number;
@@ -231,6 +242,7 @@ function parseOpts(args: string[]): Opts {
     archive: false,
     remove: false,
     resolution: false,
+    sets: [],
     snapList: false,
     rest: [],
     passthrough: [],
@@ -270,6 +282,8 @@ function parseOpts(args: string[]): Opts {
       o.reinstall = true;
     } else if (a === "--no-snapshot") {
       o.noSnapshot = true;
+    } else if (a === "--set") {
+      o.sets.push(next());
     } else if (a === "--service") {
       o.service = next();
     } else if (a === "--services") {
@@ -674,9 +688,26 @@ function addFieldOverrides(opts: Opts): string[] {
   return passthrough;
 }
 
+// modify — ONE verb (ADR-020 D2). Bare, it is the release update
+// `update-tappaas` already calls. With `--set field=value` it is the operator
+// field change (#557), which adds exactly one step in front: write the value
+// into the deployed config, then let the SAME core algorithm realize it —
+// snapshot → 3-way merge → converge → test → updateTime. No second apply
+// engine to keep in sync with the first.
+//
+// The write is gated first. `immutable` and `recreate` fields are refused here,
+// before a single byte is written, because config that claims something reality
+// can never match would drift forever; and a mixed --set is rejected WHOLE, so
+// config and cluster always move together (Resolved Questions 4 and 5).
 function cmdModify(opts: Opts, client: ModuleClient): number {
   const module = opts.rest[0];
   if (!module) die("modify: expected <module>");
+
+  if (opts.sets.length > 0) {
+    const rc = applySets(module, opts);
+    if (rc !== 0) return rc;
+  }
+
   const m: ModifyOptions = {
     environment: opts.environment,
     force: opts.force,
@@ -685,6 +716,51 @@ function cmdModify(opts: Opts, client: ModuleClient): number {
     silent: opts.silent,
   };
   return client.modify(module, m);
+}
+
+// Pre-gate every --set, then write them all. Returns 0 to continue into the
+// converge, non-zero to stop with nothing written.
+function applySets(module: string, opts: Opts): number {
+  const requests = [];
+  for (const raw of opts.sets) {
+    const parsed = parseSetArg(raw);
+    if (!parsed) {
+      console.error(`${RD}[Error]${CL} --set '${raw}' is not field=value`);
+      return 1;
+    }
+    requests.push(parsed);
+  }
+
+  const gate = preGateSet(opts.configDir, module, requests, loadModuleFields(opts.configDir));
+  for (const w of gate.warnings) warn(w);
+  if (!gate.ok) {
+    for (const r of gate.rejections) {
+      console.error(`${RD}[Error]${CL} --set ${r.field}: ${r.reason}`);
+    }
+    console.error(
+      `${RD}[Error]${CL} nothing was written — a modify either applies every --set or none of them`,
+    );
+    return 1;
+  }
+
+  for (const p of gate.plan) {
+    const where = p.coordinate ? `${p.coordinate}, ${p.class}` : "config-only";
+    info(`  ${p.field}=${p.value}  (${where})`);
+  }
+
+  // The write itself is bash: it must be Pattern-A aware and must run as the
+  // operator, never root (#525). See set-module-field.sh.
+  const args = [module];
+  for (const p of gate.plan) args.push("--set", `${p.field}=${p.value}`);
+  const rc = stream(process.env.TAPPAAS_SET_FIELD_BIN ?? "set-module-field.sh", args);
+  if (rc !== 0) {
+    console.error(
+      `${RD}[Error]${CL} writing the --set fields failed — the config may be partially updated; ` +
+        `check 'module-manager module show ${module}'`,
+    );
+    return rc;
+  }
+  return 0;
 }
 
 function cmdDelete(opts: Opts, client: ModuleClient): number {
@@ -744,6 +820,7 @@ function cmdReconcile(opts: Opts, client: ModuleClient): number {
     environment: opts.environment,
     debug: opts.debug,
     silent: opts.silent,
+    force: opts.force,
   };
   return client.reconcile(module, r);
 }

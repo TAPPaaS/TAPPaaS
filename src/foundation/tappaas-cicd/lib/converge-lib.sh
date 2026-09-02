@@ -129,9 +129,17 @@ converge_apply() {
     while IFS="${CONVERGE_FS}" read -r name unit_class apply hook setflag disruptive; do
         [[ -n "${name}" ]] || continue
 
+        # REPORT FIRST, decide second. A change that will be deferred is still
+        # drift, and a --check that stayed silent about it would say "in sync"
+        # about a guest that is not — the same "we did not look" ≠ "clean"
+        # confusion #458 had to fix on the dependency-service side.
+        local summary
+        summary="$(converge_change_summary "${drift_file}" "${name}")"
+
         # D8: a disruptive change without authorization is DEFERRED, not failed.
         # Everything else in the record still applies.
         if [[ "${disruptive}" == "true" && "${allow_disruption}" != "1" ]]; then
+            converge_report "  ${name}: ${summary} [needs disruption authorization — deferred]"
             deferred_names+=("${name}")
             CONVERGE_DEFERRED=$((CONVERGE_DEFERRED + 1))
             continue
@@ -143,7 +151,7 @@ converge_apply() {
                 value="$(jq -r --arg n "${name}" \
                     '.units[] | select(.name == $n) | .fields[0].desired' "${drift_file}")"
                 set_args+=("${setflag}" "${value}")
-                converge_report "  ${name}: $(converge_change_summary "${drift_file}" "${name}")"
+                converge_report "  ${name}: ${summary}"
                 ;;
             hook)
                 # A `migrate` unit RELOCATES the guest, which invalidates the
@@ -155,7 +163,7 @@ converge_apply() {
                 else
                     hook_units+=("${name}")
                 fi
-                converge_report "  ${name}: $(converge_change_summary "${drift_file}" "${name}") [${hook}]"
+                converge_report "  ${name}: ${summary} [${hook}]"
                 ;;
             *)
                 error "  ${name}: apply mode '${apply}' cannot be dispatched"
@@ -215,8 +223,15 @@ converge_apply() {
             rc=1
             continue
         fi
+        # The unit PLUS the record's actual state. A hook needs both: the
+        # fields that drifted, and the live values no module field declares —
+        # the MAC to preserve when none is pinned, the queues that must never be
+        # hot-changed (#194), and the vmid/node that say where the guest is.
+        # Handing over the unit alone leaves a hook unable to reach the guest at
+        # all.
         unit_file="$(mktemp "${TMPDIR:-/tmp}/converge-unit.XXXXXX.json")"
-        jq --arg n "${name}" '.units[] | select(.name == $n)' "${drift_file}" > "${unit_file}"
+        jq --arg n "${name}" '. as $r | $r.units[] | select(.name == $n) | . + {actual: $r.actual}' \
+            "${drift_file}" > "${unit_file}"
 
         local -a hook_args=("${module}" --unit "${unit_file}")
         [[ "${force}" == "1" ]] && hook_args+=(--force)

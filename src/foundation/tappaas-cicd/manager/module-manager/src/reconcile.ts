@@ -237,8 +237,13 @@ function doReconcile(moduleArg: string, opts: ReconcileOptions): void {
     }
 
     info(`  Re-applying ${BL}${dep}${CL} for '${module}'...`);
+    // --force is DISRUPTION AUTHORIZATION (ADR-020 D8), not "ignore errors":
+    // without it a change that needs a reboot or an offline migrate is deferred
+    // rather than applied. Forwarded verbatim so the decision is made once, by
+    // the operator, and every provider sees the same answer.
+    const svcArgs = opts.force ? [module, "--force"] : [module];
     // Run from the module directory (#495) — same cwd update-module.sh uses.
-    if (runScript(svcScript, [module], moduleDir ?? undefined) === 0) {
+    if (runScript(svcScript, svcArgs, moduleDir ?? undefined) === 0) {
       info(`  ${GN}✓${CL} ${dep} converged`);
     } else {
       error(`  ✗ ${dep} re-apply failed`);

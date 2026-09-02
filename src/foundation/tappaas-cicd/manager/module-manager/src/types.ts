@@ -101,6 +101,15 @@ export interface ReconcileOptions {
   environment?: string;
   debug?: boolean;
   silent?: boolean;
+  // AUTHORIZE DISRUPTION (ADR-020 D8): let a converge reboot the guest or
+  // migrate it offline to apply a change whose class needs downtime. Forwarded
+  // to each provider's update-service.sh as --force. Without it such a change
+  // is DEFERRED — applied nowhere, reported, and the converge still exits 0.
+  //
+  // This is NOT `update-tappaas --force`, which means "run the sweep now" and
+  // is deliberately never forwarded here: a scheduling override must not become
+  // permission to reboot production guests.
+  force?: boolean;
 }
 
 // Options for the READ-ONLY inspect (`reconcile` without --apply, and each

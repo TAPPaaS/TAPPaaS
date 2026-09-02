@@ -35,7 +35,7 @@ later retire phase).
 | `module drift <m>` | `src/converge.ts` (TS) | that desired state **vs the live guest**, per service. `--service cluster:vm --json` prints the record a converge applies |
 | `module validate [<m>]` | tier/source lint (TS) | all modules, or one; `--allow-fork` |
 | `module add <m>` | `install-module.sh` | create + provision |
-| `module modify <m>` | `update-module.sh` | release update (snapshot + test + 3-way merge) |
+| `module modify <m>` | `update-module.sh` | release update (snapshot + test + 3-way merge). `--set field=value` also **changes a declared field** first (ADR-020) |
 | `module delete <m>` | `delete-module.sh` | `--archive` (default) / `--remove` |
 | `module reconcile <m>` | `src/inspect.ts` (TS) | read-only drift report (default); `--apply` → **leaf converge** (`src/reconcile.ts`) |
 | `module test <m>` | `test-module.sh` | `--deep`, `--vmid`, `--zone0` |
@@ -55,6 +55,61 @@ reported desired value and the applied one cannot diverge (ADR-020 D1, #550).
 > Not to be confused with `resolve-module.sh`, which answers a different
 > question — *where* a module's source directory is. `list --resolution` is that
 > one's reporting front door.
+
+### Changing a field: `modify --set` (ADR-020)
+
+```
+module-manager module modify nextcloud --set cores=8 --set memory=16384
+module-manager module modify nextcloud --set zone0=iot --force
+```
+
+One verb, one algorithm. Bare, `modify` is the release update `update-tappaas`
+already runs. With `--set` it writes the field into the deployed config first and
+then runs that *same* algorithm — snapshot, 3-way merge, converge, test,
+`updateTime`. There is no second apply path to keep in step with the first.
+
+**What it refuses, and when.** A change is refused up front only when the schema
+alone can say so:
+
+| Class | Example | What happens |
+|---|---|---|
+| `in-place` | `cores`, `memory`, `cputype`, `vmtag` | applied live, no downtime |
+| `grow-only` | `diskSize` | a grow applies; a **shrink** is refused at apply time |
+| `in-place-reboot` | `zone0`, `bridge0` | needs a guest reboot → **deferred** unless authorized |
+| `migrate` | `node` | relocates the guest → deferred unless authorized |
+| `manual` | `storage` | reported; moving a disk stays an operator action |
+| `immutable` / `recreate` | `vmid`, `bios`, `image*` | **rejected before anything is written** |
+
+A `--set` naming an immutable field is rejected *whole* — if any field in one
+command cannot be applied, none of them are written, so config and cluster never
+move apart. A field none of the module's services use is also rejected: writing
+it would change the config and nothing else.
+
+### `--force` vs `rebootOk` — three levers that no longer collide
+
+Some changes need downtime. Whether we are *allowed* to cause it is a separate
+question from whether the change needs it, and it has exactly two answers:
+
+- **`module modify <m> --force`** — an operator, now.
+- **`rebootOk: true` on the module**, honoured only inside the unattended sweep,
+  and only because the site already accepts downtime in that window
+  (`automaticReboot`). Default `false`: silence never authorizes a reboot.
+
+**`update-tappaas --force` is neither.** It means "run the sweep now" — a
+scheduling override — and is deliberately never forwarded, or a routine hourly
+update could reboot production guests.
+
+When a disruptive change is not authorized the converge applies everything else,
+prints a machine-parseable line, and **still exits 0** — not applying a change is
+not a failure:
+
+```
+⚠ DEFERRED: nextcloud net0 needs a disruptive change (reboot/offline migrate) that is not authorized
+  Apply in a maintenance window:  module-manager module modify nextcloud --force
+```
+
+`update-tappaas` collects those and ends the sweep with one summary of what is
+still pending.
 
 **`reconcile` vs `drift`** — both compare declared state with reality, for
 different readers. `reconcile <m>` is the operator's three-way report

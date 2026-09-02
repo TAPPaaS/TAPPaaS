@@ -459,13 +459,45 @@ if [[ "${DEEP}" -eq 1 && -n "${DEFAULT_ZONE}" ]]; then
         fi
     fi
 
-    # 5. Apply the reconcile (qm set net0 tag=${DEFAULT_VLAN}, reboot, wait IP, DNS).
+    # 5a. UNAUTHORIZED: a subnet change reboots the guest, and ADR-020 D8 says a
+    #     converge may not do that unattended. Without --force (and with no
+    #     rebootOk on this fixture) it must DEFER: apply nothing disruptive, say
+    #     so in a machine-parseable line, and still exit 0 — not applying a
+    #     change is not a failure.
     if [[ "${deep_ok}" -eq 1 ]]; then
-        info "  Applying reconcile (this reboots the VM)..."
+        info "  Applying reconcile WITHOUT --force (must defer)..."
         reconcile_out=$("${UPSVC}" "${TVM}" 2>&1); reconcile_rc=$?
         indent <<< "${reconcile_out}"
         if [[ "${reconcile_rc}" -eq 0 ]]; then
-            pass "reconcile applied without error"
+            pass "an unauthorized disruptive change exits 0 (a deferral is not a failure)"
+        else
+            fail "deferred converge should exit 0, got ${reconcile_rc}"; deep_ok=0
+        fi
+        if grep -q "DEFERRED: ${TVM} net0" <<< "${reconcile_out}"; then
+            pass "…and prints the DEFERRED: line update-tappaas summarises"
+        else
+            fail "no DEFERRED: line for net0"
+        fi
+        # The guest must be untouched: deferring means NOT applying.
+        vmrow=$(find_vm 920) || true
+        vmnode="${vmrow%% *}"
+        # shellcheck disable=SC2086
+        net0=$(ssh ${SSH_OPTS} "root@${vmnode}.${MGMT}.internal" "qm config 920 | grep '^net0'" 2>/dev/null) || true
+        if grep -q "tag=${DEFAULT_VLAN}" <<< "${net0}"; then
+            fail "the deferred change was applied anyway (net0 is tagged ${DEFAULT_VLAN})"
+        else
+            pass "…and the guest is untouched — the NIC was not moved"
+        fi
+    fi
+
+    # 5b. AUTHORIZED: with --force the same change applies — qm set net0
+    #     tag=${DEFAULT_VLAN}, reboot, wait for a lease in the new subnet, DNS.
+    if [[ "${deep_ok}" -eq 1 ]]; then
+        info "  Applying reconcile WITH --force (this reboots the VM)..."
+        reconcile_out=$("${UPSVC}" --force "${TVM}" 2>&1); reconcile_rc=$?
+        indent <<< "${reconcile_out}"
+        if [[ "${reconcile_rc}" -eq 0 ]]; then
+            pass "reconcile --force applied without error"
         else
             fail "reconcile apply failed"; deep_ok=0
         fi

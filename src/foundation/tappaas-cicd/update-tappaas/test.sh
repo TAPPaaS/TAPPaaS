@@ -72,6 +72,66 @@ else
     echo "  ⊘ backfill unit test skipped (source or env python not found)"
 fi
 
+# ── 2b) Unit: the ADR-020 D8 deferral contract ───────────────────────
+# Two invariants that are easy to break and expensive to notice:
+#   - update-tappaas NEVER passes --force to `module modify`. Its own --force
+#     means "run the sweep now"; forwarding it as DISRUPTION authority would let
+#     a routine hourly update reboot production guests.
+#   - a converge's DEFERRED: lines are collected, so the sweep can end with one
+#     summary of what is still pending instead of leaving them in per-module logs.
+if [[ -f "$main_py" && -x "$py" ]]; then
+    if "$py" - "$main_py" <<'PYDEFER'
+import importlib.util, sys, logging
+logging.disable(logging.CRITICAL)
+spec = importlib.util.spec_from_file_location("m", sys.argv[1])
+m = importlib.util.module_from_spec(spec); spec.loader.exec_module(m)
+
+seen = {}
+
+class R:
+    def __init__(self, rc=0, out="", err=""):
+        self.returncode, self.stdout, self.stderr = rc, out, err
+
+def fake_run(argv, **kw):
+    seen["argv"] = argv
+    return R(0,
+             "  applying cores\n"
+             "[Warning] DEFERRED: demo net0 needs a disruptive change that is not authorized\n",
+             "[Warning] DEFERRED: demo node needs downtime\n")
+
+m.subprocess.run = fake_run
+m.DEFERRED_CHANGES.clear()
+assert m.update_module("demo") is True, "a deferral is not a failure"
+
+argv = seen["argv"]
+assert "--force" not in argv, "update-tappaas must never forward --force: %r" % (argv,)
+assert argv[1:3] == ["module", "modify"], "unexpected invocation: %r" % (argv,)
+
+# Both streams are scanned: a provider may warn on either.
+assert len(m.DEFERRED_CHANGES) == 2, m.DEFERRED_CHANGES
+assert m.DEFERRED_CHANGES[0].startswith("demo net0"), m.DEFERRED_CHANGES
+assert any(d.startswith("demo node") for d in m.DEFERRED_CHANGES), m.DEFERRED_CHANGES
+
+# A clean converge adds nothing.
+m.subprocess.run = lambda argv, **kw: R(0, "  in sync\n", "")
+m.DEFERRED_CHANGES.clear()
+m.update_module("demo")
+assert m.DEFERRED_CHANGES == [], "a clean converge must not invent deferrals"
+
+# A real failure is still a failure.
+m.subprocess.run = lambda argv, **kw: R(1, "", "boom")
+assert m.update_module("demo") is False, "a non-zero converge is a failed module"
+PYDEFER
+    then
+        passed=$((passed + 1))
+    else
+        echo "  ✗ ADR-020 deferral / no-force-forwarding unit test FAILED"
+        failed=$((failed + 1))
+    fi
+else
+    echo "  ⊘ deferral unit test skipped (source or env python not found)"
+fi
+
 # ── 3) Unit: decommissioned modules stay out of the sweep (#441) ─────
 # archived (#215) and external (#216) configs keep their kind/vmname, so the
 # module selectors still match them and they used to enter Phase 1/2 — where the

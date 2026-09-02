@@ -29,6 +29,7 @@ import {
   unitSideEffects,
 } from "../../../lib/ts/src/drift";
 import {
+  CHANGE_CLASSES,
   ManifestFinding,
   ServiceFieldManifest,
   manifestRelPath,
@@ -155,6 +156,172 @@ export function coordinatesWithManifests(configDir: string, module: string): str
     if (existsSync(join(dir, manifestRelPath(service)))) out.push(dep);
   }
   return out;
+}
+
+// ── the static pre-gate (ADR-020 D2 step 0) ────────────────────────────
+//
+// `modify --set field=value` writes into the deployed config and lets the
+// normal converge realize it. Before it writes ANYTHING it checks each field's
+// change class, and rejects the WHOLE command if any of them can never be
+// applied in place.
+//
+// WHY REJECT UP FRONT, and why only these. A refusal that needs live state — a
+// disk shrink, a migrate that would need downtime — can only be found at apply
+// time, and the snapshot wrapper rolls that back. But `immutable` and
+// `recreate` are knowable from the schema alone, and letting them through would
+// leave config claiming something reality can never match: every later
+// reconcile would report drift that nothing can fix. So they are refused before
+// the write (Resolved Question 4), and a mixed `--set` is rejected whole
+// (Resolved Question 5) so config and cluster always move together.
+
+export interface SetRequest {
+  field: string;
+  value: string;
+}
+
+export interface SetPlanEntry extends SetRequest {
+  // The coordinate whose manifest classified this field, "" for a field no
+  // provider service owns (a policy-only change — the #557 case).
+  coordinate: string;
+  class: string;
+}
+
+export interface SetRejection {
+  field: string;
+  reason: string;
+}
+
+export type PreGateResult =
+  | { ok: true; plan: SetPlanEntry[]; warnings: string[] }
+  | { ok: false; rejections: SetRejection[]; warnings: string[] };
+
+// Parse `field=value`. The value may contain '=' (a netopts string, a URL), so
+// only the FIRST separator splits.
+export function parseSetArg(arg: string): SetRequest | null {
+  const eq = arg.indexOf("=");
+  if (eq <= 0) return null;
+  return { field: arg.slice(0, eq), value: arg.slice(eq + 1) };
+}
+
+export function preGateSet(
+  configDir: string,
+  module: string,
+  requests: SetRequest[],
+  schema: Record<string, { usedBy?: string[] } | undefined>,
+): PreGateResult {
+  const rejections: SetRejection[] = [];
+  const warnings: string[] = [];
+  const plan: SetPlanEntry[] = [];
+
+  // Without the schema the gate knows nothing: not which fields exist, not
+  // which service owns them, not what changing one costs. Refusing is the safe
+  // answer, but it must say WHY — blaming each field name for a missing file
+  // sends the operator hunting for a typo that is not there.
+  if (Object.keys(schema).length === 0) {
+    return {
+      ok: false,
+      warnings,
+      rejections: [
+        {
+          field: requests.map((r) => r.field).join(", "),
+          reason:
+            `module-fields.json is not readable from ${configDir} — without it no field can be ` +
+            `validated or classified, so nothing is written`,
+        },
+      ],
+    };
+  }
+
+  const desired = resolveModuleFromConfig(module, configDir);
+  if (!desired) {
+    return {
+      ok: false,
+      warnings,
+      rejections: requests.map((r) => ({ field: r.field, reason: `module '${module}' is not deployed` })),
+    };
+  }
+  const environment = desired.fields.environment?.value ?? "";
+  const declared = new Set([...desired.dependsOn, ...desired.integratesWith]);
+
+  // Manifests are loaded once per coordinate, not once per field.
+  const manifests = new Map<string, ServiceFieldManifest | null>();
+  const manifestFor = (coordinate: string): ServiceFieldManifest | null => {
+    if (manifests.has(coordinate)) return manifests.get(coordinate) ?? null;
+    const { provider, service } = parseDependency(coordinate);
+    const dir = getModuleDir(configDir, resolveProviderModule(configDir, provider, environment));
+    const m = dir ? loadServiceManifest(dir, service).manifest : null;
+    manifests.set(coordinate, m);
+    return m;
+  };
+
+  for (const req of requests) {
+    const spec = schema[req.field];
+    if (!spec) {
+      rejections.push({
+        field: req.field,
+        reason: `not a field module-fields.json declares — check the spelling`,
+      });
+      continue;
+    }
+
+    const usedBy = Array.isArray(spec.usedBy) ? spec.usedBy : [];
+    // A 'general' field (or one with no usedBy at all) belongs to the module
+    // itself, not to a provider service: no manifest classifies it, and the
+    // converge has nothing to apply. That is the plain #557 case — correcting a
+    // policy field without a reinstall — so it is allowed, not rejected.
+    if (usedBy.length === 0 || usedBy.includes("general")) {
+      plan.push({ ...req, coordinate: "", class: "config-only" });
+      continue;
+    }
+
+    const owners = usedBy.filter((u) => declared.has(u));
+    if (owners.length === 0) {
+      // Writing it would be a silent no-op: no service the module declares uses
+      // this field, so nothing would ever apply it. Saying so is the point of
+      // having the ownership data at all.
+      rejections.push({
+        field: req.field,
+        reason:
+          `'${module}' declares none of the services that use it (${usedBy.join(", ")}) — ` +
+          `setting it would change the config and nothing else`,
+      });
+      continue;
+    }
+
+    let rejected = false;
+    for (const coordinate of owners) {
+      const manifest = manifestFor(coordinate);
+      if (!manifest) {
+        warnings.push(
+          `${req.field}: ${coordinate} has no field manifest yet, so its change class is unknown — ` +
+            `the converge may refuse this change at apply time`,
+        );
+        continue;
+      }
+      const entry = manifest.fields[req.field];
+      if (!entry) {
+        warnings.push(`${req.field}: ${coordinate}'s manifest does not classify it`);
+        continue;
+      }
+      const spec2 = CHANGE_CLASSES[entry.class];
+      if (spec2?.preGate) {
+        rejections.push({
+          field: req.field,
+          reason:
+            `${entry.class} under ${coordinate} — ${spec2.summary}. ` +
+            `Use 'module-manager module delete ${module}' then 'add' to change it.`,
+        });
+        rejected = true;
+        break;
+      }
+      if (!rejected) plan.push({ ...req, coordinate, class: entry.class });
+    }
+  }
+
+  // Reject the WHOLE command: no partial write across one modify, so config and
+  // cluster never move independently (Resolved Question 5).
+  if (rejections.length > 0) return { ok: false, rejections, warnings };
+  return { ok: true, plan, warnings };
 }
 
 // ── rendering ──────────────────────────────────────────────────────────

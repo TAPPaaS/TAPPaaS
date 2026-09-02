@@ -34,8 +34,12 @@ info()  { LOG+="INFO:$*"$'\n'; }
 debug() { LOG+="DEBUG:$*"$'\n'; }
 warn()  { LOG+="WARN:$*"$'\n'; }
 error() { LOG+="ERROR:$*"$'\n'; }
-GN=""; CL=""
-# shellcheck disable=SC2034  # read by the sourced lib
+# Colour vars the sourced lib references (assigned here, read there).
+# shellcheck disable=SC2034
+GN=""
+# shellcheck disable=SC2034
+CL=""
+# shellcheck disable=SC2034
 BL=""
 
 # shellcheck source=converge-lib.sh
@@ -113,12 +117,32 @@ run() { converge_apply demo "${W}" "${W}/drift.json" "${1:-0}" "${2:-1}" "${3:-0
     mk_record "[$(unit_hook node update-node.sh migrate true '[]'),$(unit_hook net0 update-net.sh in-place-reboot true '["reboot"]')]"
     run; rc=$?
     check "hook units converge cleanly" "${rc}" "0"
-    order="$(grep '^HOOK ' "${CMDLOG}" | sed 's/ .*//;s/HOOK //')"
     check "a migrate runs LAST, after every node-local change" \
         "$(grep -o 'update-net.sh\|update-node.sh' <<< "$(grep '^HOOK ' "${CMDLOG}" | awk '{print $2}')" | paste -sd, -)" \
         "update-net.sh,update-node.sh"
     contains "a hook is handed the module and a unit file" "$(cat "${CMDLOG}")" "demo --unit"
     contains "…plus the single-field trio, so it is runnable by hand" "$(cat "${CMDLOG}")" "--field net0 --desired b --actual a"
+}
+
+# ── 2b. what is IN the unit file ─────────────────────────────────────
+# The deep tier caught this: the runner handed over the unit alone, so every
+# hook lost the record's actual state — the live MAC and queues it must
+# preserve, and the vmid/node that say where the guest even is. A hook that
+# cannot reach the guest fails the whole converge, and no stub hook notices,
+# so the CONTENT of the file is asserted here rather than just its presence.
+{
+    reset
+    cat > "${W}/capture-unit.sh" <<EOF
+#!/usr/bin/env bash
+while [[ \$# -gt 0 ]]; do [[ "\$1" == "--unit" ]] && cp "\$2" "${W}/seen-unit.json"; shift; done
+exit 0
+EOF
+    chmod +x "${W}/capture-unit.sh"
+    mk_record "[$(unit_hook net0 capture-unit.sh in-place-reboot true '["reboot"]')]"
+    run >/dev/null
+    check "the unit file carries the drifted fields"         "$(jq -r '.fields[0].field' "${W}/seen-unit.json" 2>/dev/null)" "net0"
+    check "…and the record's actual state, so a hook can reach the guest"         "$(jq -r '.actual.vmid' "${W}/seen-unit.json" 2>/dev/null)" "300"
+    check "…including the node it is really on"         "$(jq -r '.actual.node' "${W}/seen-unit.json" 2>/dev/null)" "tappaas1"
 }
 
 # ── 3. side effects: once, in order, only after something applied ────

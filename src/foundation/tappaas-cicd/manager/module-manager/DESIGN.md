@@ -109,6 +109,28 @@ gets the values no module field declares: the MAC to preserve when the module
 pins none, and the `queues` that must never be hot-changed on a running NIC
 (#194).
 
+### Changing a field: the pre-gate and the disruption gate (ADR-020 P4)
+
+`modify --set field=value` adds exactly one step in front of the existing
+algorithm: write the value into the deployed config (`set-module-field.sh` —
+Pattern-A aware, typed from the schema, run as the operator so the file never
+becomes root-owned, #525), then converge as usual.
+
+Two gates, and the division between them is the whole design:
+
+- The **static pre-gate** (`preGateSet` in `src/converge.ts`) refuses only what
+  the schema alone can settle — `immutable` and `recreate` — because writing
+  those would leave config claiming something reality can never match. A mixed
+  `--set` is rejected whole: no partial write across one modify.
+- Everything whose refusal needs LIVE state — is this size change a shrink? does
+  this migrate need downtime? — passes the gate and is decided by the converge,
+  where the snapshot wrapper can roll back.
+
+The **disruption gate** is separate again: a class says a change *needs*
+downtime, `--force` or `rebootOk` + `TAPPAAS_SCHEDULED_PASS` says we are
+*allowed* to cause it. Unauthorized disruptive drift is deferred, reported, and
+exits 0.
+
 ### Service field manifests (ADR-020 D3/D4)
 
 Each provider service declares the change semantics of the fields it owns in
@@ -277,12 +299,12 @@ tier has been added yet.
 - **ADR-020 is partly built.** P0 (manifests + `rebootOk` + the coverage lint),
   P1 (the one resolver + `module resolve`), P2 (`report-service.sh` for
   cluster:vm and cluster:lxc, the shared normalizers + differ, `inspect` off its
-  own `qm config` parsing) and P3 (`converge-lib.sh`, `--apply-drift`, the three
-  `update-<field>.sh` hooks, the `cfg()` ladder deleted) are in. Not yet:
-  `modify --set` with the static pre-gate and the `rebootOk` deferral (P4) —
-  the runner's disruption gate is built and tested, but `cluster:vm` still
-  passes `ALLOW_DISRUPTION=1` so behaviour is unchanged; the rollout to the
-  other 23 services and `network-manager` (P5); the dead-code sweep (P6).
+  own `qm config` parsing), P3 (`converge-lib.sh`, `--apply-drift`, the three
+  `update-<field>.sh` hooks, the `cfg()` ladder deleted) and P4 (`modify --set`
+  + the static pre-gate, the armed `--force`/`rebootOk` disruption gate, the
+  sweep's deferral summary) are in — **#498 and #557 are closed for
+  cluster:vm**. Not yet: the rollout to the other 23 services and
+  `network-manager` (P5); the dead-code sweep (P6).
 - **`install.sh` does not build/link the TS bin yet** (next phase). Today it
   only relinks the `*.sh` scripts; the `module-manager` bin is built manually via
   `default.nix`.

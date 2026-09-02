@@ -464,13 +464,42 @@ def topological_sort(apps: list[str]) -> list[str]:
     return result
 
 
+# Disruptive changes a converge held back for want of authorization (ADR-020
+# D8). Each provider prints a machine-parseable "DEFERRED: <module> <unit> …"
+# line and still exits 0 — not applying a change is not a failure — so the sweep
+# collects them and says so once at the end. Without that they would scroll past
+# in a per-module log nobody reads, which is the same as not reporting them.
+DEFERRED_CHANGES: list[str] = []
+_DEFERRED_PREFIX = "DEFERRED:"
+
+
 def update_module(module_name: str) -> bool:
     """Update a single module via `module-manager module modify` (which delegates
-    to update-module.sh — same behaviour, through the verb-aligned front door)."""
+    to update-module.sh — same behaviour, through the verb-aligned front door).
+
+    NOTE the absent --force. `update-tappaas --force` means "run the sweep NOW",
+    a scheduling override; `module modify --force` AUTHORIZES DISRUPTION. Passing
+    one as the other would let a routine hourly update reboot production guests,
+    which is exactly the conflation ADR-020 D8 exists to prevent. Standing
+    permission is expressed per module, by rebootOk, and honoured only because
+    TAPPAAS_SCHEDULED_PASS is exported below."""
     try:
         result = subprocess.run(
-            [MODULE_MANAGER_CMD, "module", "modify", module_name], text=True
+            [MODULE_MANAGER_CMD, "module", "modify", module_name],
+            text=True,
+            capture_output=True,
         )
+        # Stream through, exactly as before capture_output was needed: the
+        # operator watches this live and the per-module banners are the shape of
+        # the log.
+        if result.stdout:
+            sys.stdout.write(result.stdout)
+        if result.stderr:
+            sys.stderr.write(result.stderr)
+        for line in (result.stdout or "").splitlines() + (result.stderr or "").splitlines():
+            idx = line.find(_DEFERRED_PREFIX)
+            if idx != -1:
+                DEFERRED_CHANGES.append(line[idx + len(_DEFERRED_PREFIX):].strip())
         return result.returncode == 0
     except (subprocess.SubprocessError, FileNotFoundError) as e:
         log.error("Error running 'module-manager module modify %s': %s", module_name, e)
@@ -900,6 +929,16 @@ def main():
         if checkconf:
             log.error("unbound-checkconf on the firewall reports: %s", checkconf)
 
+    # ADR-020 D8: inside the unattended sweep, a module that declares rebootOk
+    # may have a disruptive change applied — but only because the SITE has
+    # already accepted downtime in this window (automaticReboot, the same
+    # setting that gates the Phase 3 node reboots). Both must be true; neither
+    # is `--force`, which stays a scheduling override.
+    if automatic_reboot:
+        os.environ["TAPPAAS_SCHEDULED_PASS"] = "1"
+    else:
+        os.environ.pop("TAPPAAS_SCHEDULED_PASS", None)
+
     # Phase 1: Foundation modules in fixed order
     # No "[i/N] Updating <module>" line — update-module.sh's own banner
     # ("TAPPaaS Module Update: <module>") immediately repeats it.
@@ -929,6 +968,18 @@ def main():
     succeeded = total - len(failed_modules) - len(not_attempted)
 
     log.info("=" * 60)
+    if DEFERRED_CHANGES:
+        log.warning(
+            "%d module(s) have pending disruptive changes, deferred for want of "
+            "authorization:", len(DEFERRED_CHANGES),
+        )
+        for d in DEFERRED_CHANGES:
+            log.warning("  %s", d)
+        log.warning(
+            "Apply one in a maintenance window with: module-manager module modify "
+            "<module> --force   (or set rebootOk on the module to permit it in the "
+            "scheduled pass)"
+        )
     log.info(
         "update-tappaas completed: %s | total=%d succeeded=%d failed=%d "
         "not_attempted=%d skipped=%d reboot=%s",
@@ -951,6 +1002,11 @@ def main():
         "not_attempted": len(not_attempted),
         "skipped": len(skipped_foundation) + len(skipped_apps),
         "reboot": "ok" if reboot_ok else "failed",
+        # Deferrals are recorded, not counted as failures (ADR-020 D8): the
+        # converge did everything it was allowed to do. They belong in the
+        # artefact so "what is still pending" survives the log.
+        "deferred": len(DEFERRED_CHANGES),
+        "deferred_changes": DEFERRED_CHANGES,
         "ok": not failed_modules and not dep["down"] and reboot_ok,
     }
     # When a shared service went down mid-sweep, carry the boundary so the run is
