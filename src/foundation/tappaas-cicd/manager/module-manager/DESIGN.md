@@ -82,6 +82,33 @@ The reporter's exit codes are part of the contract: 4 cluster-unreachable, 5
 guest-absent, 6 located-but-unreadable. #526 was one message standing for all
 three, so they stay separable end to end.
 
+### The converge: how a drift record becomes actions (ADR-020 P3)
+
+`cluster:vm/update-service.sh` no longer computes drift. It asks the manager for
+a record (`module drift <m> --service cluster:vm --json`) and hands it to
+`tappaas-cicd/lib/converge-lib.sh`, the one runner:
+
+- every `set` field is batched into ONE `qm set`, as before;
+- each `hook` unit goes to `update-net.sh` / `update-disk.sh` / `update-node.sh`
+  over a uniform CLI (`--unit <file>`, exit `0`/`10`/`20`/`1`), so each is
+  runnable and testable on its own;
+- a `migrate` unit runs LAST — it relocates the guest, and `qm set` is
+  node-local;
+- side effects are sequenced ONCE across the record, reboot → wait-ip → dns, so
+  two changed NICs still produce one reboot and one DNS pass.
+
+What stayed in `update-service.sh` is what is genuinely cluster:vm's and is not
+field drift: the provider callbacks (`converge_apply_set`,
+`converge_side_effect_*`) that know how to reach Proxmox, wait for a DHCP lease
+in the target subnet, and register DNS. That is ADR-020 D7's migration
+discipline — extract the drift loop, keep everything else — and it is why the
+script shrank from 460 lines to ~285 rather than disappearing.
+
+The record carries the `actual` state it was computed from, which is how a hook
+gets the values no module field declares: the MAC to preserve when the module
+pins none, and the `queues` that must never be hot-changed on a running NIC
+(#194).
+
 ### Service field manifests (ADR-020 D3/D4)
 
 Each provider service declares the change semantics of the fields it owns in
@@ -248,14 +275,14 @@ tier has been added yet.
   implemented; still **not** ported: a full JSON **schema** check of every field
   against `module-fields.json` (flagged in `src/validate.ts`).
 - **ADR-020 is partly built.** P0 (manifests + `rebootOk` + the coverage lint),
-  P1 (the one resolver + `module resolve`) and P2 (`report-service.sh` for
+  P1 (the one resolver + `module resolve`), P2 (`report-service.sh` for
   cluster:vm and cluster:lxc, the shared normalizers + differ, `inspect` off its
-  own `qm config` parsing) are in. Not yet: the manifest-driven converge on
-  `cluster:vm` — `converge-lib.sh`, `--apply-drift` and the `update-<field>.sh`
-  hooks (P3); `modify --set` with the static pre-gate and the `rebootOk`
-  deferral (P4); the rollout to the other 23 services and `network-manager`
-  (P5); the dead-code sweep (P6), which still has `vmnet_build_netopts`'s
-  converge-side use and the `cfg()` ladder to retire.
+  own `qm config` parsing) and P3 (`converge-lib.sh`, `--apply-drift`, the three
+  `update-<field>.sh` hooks, the `cfg()` ladder deleted) are in. Not yet:
+  `modify --set` with the static pre-gate and the `rebootOk` deferral (P4) —
+  the runner's disruption gate is built and tested, but `cluster:vm` still
+  passes `ALLOW_DISRUPTION=1` so behaviour is unchanged; the rollout to the
+  other 23 services and `network-manager` (P5); the dead-code sweep (P6).
 - **`install.sh` does not build/link the TS bin yet** (next phase). Today it
   only relinks the `*.sh` scripts; the `module-manager` bin is built manually via
   `default.nix`.

@@ -32,6 +32,7 @@ later retire phase).
 | `module list` | — (TS) | enumerate deployed modules (`--json` for the cascade) |
 | `module show <m>` | — (TS) | one deployed config in full (`--json`) |
 | `module resolve <m>` | `src/resolve.ts` (TS) | **desired state**: the config *plus* the schema defaults it does not declare (`--json`) |
+| `module drift <m>` | `src/converge.ts` (TS) | that desired state **vs the live guest**, per service. `--service cluster:vm --json` prints the record a converge applies |
 | `module validate [<m>]` | tier/source lint (TS) | all modules, or one; `--allow-fork` |
 | `module add <m>` | `install-module.sh` | create + provision |
 | `module modify <m>` | `update-module.sh` | release update (snapshot + test + 3-way merge) |
@@ -54,6 +55,15 @@ reported desired value and the applied one cannot diverge (ADR-020 D1, #550).
 > Not to be confused with `resolve-module.sh`, which answers a different
 > question — *where* a module's source directory is. `list --resolution` is that
 > one's reporting front door.
+
+**`reconcile` vs `drift`** — both compare declared state with reality, for
+different readers. `reconcile <m>` is the operator's three-way report
+(Released[git] / Desired[~/config] / Actual), field by field, plus the
+dependency-service section. `drift <m>` is the two-way record a CONVERGE acts
+on: which apply unit each change belongs to, what class it is, which hook takes
+it, and what side effects it drags along. `drift --service <p:s> --json` is
+literally the input to `update-service.sh --apply-drift`, so what you read is
+what would be applied — there is one differ behind both (ADR-020 D7).
 
 **`reconcile` vs `modify`** — `reconcile --apply` re-applies the *existing* config
 (idempotent converge: each dependency's `update-service.sh` + the module's own

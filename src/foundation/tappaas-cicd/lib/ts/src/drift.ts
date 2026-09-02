@@ -247,6 +247,12 @@ export interface DriftUnit {
   // actually changed, never the declared ceiling. This is what keeps "changing
   // mac0 does not reboot the guest, changing zone0 does" true.
   class: string;
+  // Whether applying THIS unit can require disruption (a guest reboot, an
+  // offline migrate) and so needs authorization (ADR-020 D8). Derived from the
+  // effective class and CARRIED in the record, so the bash runner never
+  // re-derives it: a second list of "which classes are disruptive" living in a
+  // jq program is exactly the kind of twin this ADR exists to remove.
+  disruptive: boolean;
   apply: string;
   hook?: string;
   liveKey?: string;
@@ -260,6 +266,17 @@ export interface DriftUnit {
 export interface DriftRecord {
   module: string;
   service: string;
+  // The ACTUAL state this record was computed from, verbatim as the service's
+  // report-service.sh emitted it. Carried for two reasons:
+  //
+  //   - it makes the record SELF-CONTAINED, so `update-service.sh --apply-drift
+  //     <file>` needs nothing else and a saved record can be audited later
+  //     against what was actually seen; and
+  //   - hooks need live-only values that no module field declares — the MAC to
+  //     preserve when the module pins none, the `queues` that must never be
+  //     hot-changed on a running NIC (#194), and the node the guest is really
+  //     on. Those exist only here.
+  actual: Record<string, string>;
   // Units the converge can and should apply.
   units: DriftUnit[];
   // Changed, but the class says the converge must not act: immutable, recreate
@@ -335,6 +352,7 @@ export function computeDrift(
   const record: DriftRecord = {
     module: desired.module,
     service: manifest.service,
+    actual: { ...actual },
     units: [],
     unreconciled: [],
     inSync: [],
@@ -416,6 +434,7 @@ export function computeDrift(
       name,
       kind: composite ? "composite" : "field",
       class: effClass,
+      disruptive: CHANGE_CLASSES[effClass]?.disruptive === true,
       apply: effectiveApply(entry),
       hook: entry.hook,
       liveKey: entry.liveKey ?? (composite ? name : name),

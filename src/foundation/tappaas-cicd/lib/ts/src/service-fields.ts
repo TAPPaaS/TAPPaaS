@@ -461,6 +461,13 @@ export function defaultIsDesired(e: FieldEntry | CompositeEntry): boolean {
   return e.defaultIsDesired !== false;
 }
 
+// Where a service's manifest lives, relative to the PROVIDER MODULE's source
+// directory. One helper so `validate` (which lints manifests) and the converge
+// (which applies them) can never look in different places.
+export function manifestRelPath(service: string): string {
+  return `services/${service}/fields.json`;
+}
+
 // The fields module-fields.json says a coordinate owns: its `usedBy` set. Kept
 // here (not in the caller) so validate, resolve and the converge all agree on
 // what "owned" means.

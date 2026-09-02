@@ -34,3 +34,13 @@ export function warn(msg: string): void {
 export function error(msg: string): void {
   console.error(`${RD}[Error]${CL} ${msg}`);
 }
+
+// MACHINE output: the bytes a caller parses, never a log line. info() here
+// carries a green "[Info] " prefix for bash parity, which silently corrupts any
+// --json payload routed through it (it did, for `resolve --json`, until the
+// ADR-020 drift record needed to be piped into `update-service.sh`). Anything a
+// program reads goes through this, and is exempt from TAPPAAS_SILENT: a caller
+// that asked for data must get data or an error, never silence.
+export function emitJson(value: unknown): void {
+  process.stdout.write(`${JSON.stringify(value, null, 2)}\n`);
+}

@@ -53,16 +53,19 @@ export function reporterPath(
   return existsSync(path) ? path : null;
 }
 
-// Run one reporter and classify the result.
-export function runReporter(
+// Run ANY provider service's reporter and classify the result. The guest-typed
+// wrapper below is the cluster-specific case; every other provider that grows a
+// reporter (P5) is reached through this one.
+export function runServiceReporter(
   configDir: string,
   module: string,
-  guest: GuestType,
+  provider: string,
+  service: string,
   environment: string,
+  guest: GuestType = "qemu",
 ): ReportOutcome {
-  const service = SERVICE_FOR[guest];
-  const path = reporterPath(configDir, "cluster", service, environment);
-  if (!path) return { kind: "no-reporter", path: `cluster/services/${service}/report-service.sh` };
+  const path = reporterPath(configDir, provider, service, environment);
+  if (!path) return { kind: "no-reporter", path: `${provider}/services/${service}/report-service.sh` };
 
   const r = captureResult(path, [module]);
   if (!r.ran) return { kind: "error", rc: -1, detail: r.stderr.trim() || "spawn failed" };
@@ -97,6 +100,16 @@ export function runReporter(
     actual[k] = typeof v === "string" ? v : v === null || v === undefined ? "" : String(v);
   }
   return { kind: "ok", actual, guest };
+}
+
+// The cluster case: pick the reporter by guest type.
+export function runReporter(
+  configDir: string,
+  module: string,
+  guest: GuestType,
+  environment: string,
+): ReportOutcome {
+  return runServiceReporter(configDir, module, "cluster", SERVICE_FOR[guest], environment, guest);
 }
 
 // Report a guest whose TYPE is only declared, not observed.

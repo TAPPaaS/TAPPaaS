@@ -1,42 +1,56 @@
 #!/usr/bin/env bash
 #
-# TAPPaaS Cluster VM Service - Update (drift reconciler)
+# TAPPaaS Cluster VM Service - Update (drift converge)
 #
 # Reconciles a module's live Proxmox VM with its desired configuration.
-# Called by update-module.sh (Step 4) for any module that dependsOn cluster:vm.
+# Called by update-module.sh (Step 4) and `module reconcile --apply` for any
+# module that dependsOn cluster:vm.
 #
-# Desired state : /home/tappaas/config/<module>.json  (+ zones.json for VLANs)
-# Current state : live `qm config <vmid>` on the VM's actual node
+# ADR-020 SHAPE. This script no longer computes drift. It used to hold a bespoke
+# drift loop — its own `cfg()` default ladder, its own `qm config` parser, its
+# own comparison rules — which meant the value it would APPLY could differ from
+# the value `reconcile` REPORTED (#550). Now:
 #
-# For each parameter that drifts it applies the safe change; network/zone
-# changes trigger a reboot so the VM renews DHCP in the new subnet, then DNS
-# is (re)registered as <vmname>.<zone0>.internal. Resolves issue #192.
+#   desired = module-manager module resolve   [the one resolver]
+#   actual  = ./report-service.sh             [extract only]
+#   drift   = module-manager module drift     [the one differ]
+#   apply   = converge_apply (converge-lib.sh) → the batched `qm set`
+#             + update-net.sh / update-disk.sh / update-node.sh
 #
-# Handled (auto-applied):
-#   net0/net1 (bridge,zone->tag,trunks; MAC preserved) -> qm set; a bridge/tag
-#     change additionally reboots + waits for IP + updates DNS (trunk/MAC-only
-#     changes apply live, no reboot)
-#   cores, memory, cputype, vmtag, vmname               -> qm set
-#   diskSize (grow only)                                -> resize-disk.sh
-#   node (only if module does NOT dependOn cluster:ha)  -> qm migrate
+# What lives HERE is what is genuinely cluster:vm's and is NOT field drift: the
+# provider callbacks (how to run a batched `qm set`; how to reboot, wait for an
+# address and register DNS) and the ordering between them. That split is ADR-020
+# D7's migration discipline — extract the drift loop, keep everything else.
 #
-# Reported but not auto-applied:
-#   storage drift                  -> warn (move-disk left to the operator)
-#   bios drift                     -> fatal (requires power-off / reinstall)
-#   vmid / image* / os / cloudInit -> not reconcilable here (implies reinstall)
-#   node drift on HA modules       -> deferred to cluster:ha drift handling
+# Handled (auto-applied), unchanged from before the refactor:
+#   net0/net1 (bridge, zone→tag, trunks; MAC + queues preserved) -> update-net.sh
+#   cores, memory, cputype, vmtag, vmname                        -> one qm set
+#   diskSize (grow only)                                         -> update-disk.sh
+#   node (only if the module does NOT dependOn cluster:ha)       -> update-node.sh
 #
-# Usage: update-service.sh [--check] <module-name>
-#   --check   Report drift without applying (also via TAPPAAS_CHECK=1)
+# Reported but not auto-applied (the manifest's classes say so):
+#   storage           -> manual   : warn; move-disk is left to the operator
+#   bios / ostype     -> recreate : fatal; needs power-off / reinstall
+#   vmid/image*/os/cloudInit -> immutable : fatal; implies reinstall
+#   node on HA modules -> deferred to cluster:ha (inside update-node.sh)
+#
+# Usage: update-service.sh [--check] [--apply-drift <file>] [--force] <module>
+#   --check              Report drift without applying (also via TAPPAAS_CHECK=1)
+#   --apply-drift FILE   Apply a drift record that was computed elsewhere. The
+#                        default is to ask the manager for one — every existing
+#                        caller invokes this script bare and must keep working.
+#   --force              Authorize a disruptive change (ADR-020 D8).
 #
 # Exit codes:
-#   0  In sync, or all detected drift applied successfully
-#   1  Drift detected but could not be safely applied (fatal)
+#   0  In sync, or all applicable drift applied (deferrals included — a deferred
+#      disruptive change is not a failure, ADR-020 D8)
+#   1  Drift detected that could not be safely applied
 #
 
-# Remote `qm`/`pvesh` commands intentionally embed locally-computed values
-# (VMID, node, sizes) that expand client-side before being sent over ssh.
-# shellcheck disable=SC2029
+# The provider callbacks below (converge_apply_set, converge_side_effect_*) are
+# invoked BY NAME from converge-lib.sh; cleanup() runs from the EXIT trap.
+# ShellCheck sees neither call site.
+# shellcheck disable=SC2329
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -49,6 +63,8 @@ readonly MGMT="mgmt"
 . /home/tappaas/bin/common-install-routines.sh
 # shellcheck source=../../lib/vm-net.sh disable=SC1091
 . "${SCRIPT_DIR}/../../lib/vm-net.sh"
+# shellcheck source=../../../tappaas-cicd/lib/converge-lib.sh disable=SC1091
+. "${SCRIPT_DIR}/../../../tappaas-cicd/lib/converge-lib.sh"
 
 SSH_OPTS=(-o ConnectTimeout=10 -o StrictHostKeyChecking=accept-new
           -o UserKnownHostsFile=/dev/null -o LogLevel=ERROR -o BatchMode=yes)
@@ -56,323 +72,119 @@ SSH_OPTS=(-o ConnectTimeout=10 -o StrictHostKeyChecking=accept-new
 # ── Arguments ────────────────────────────────────────────────────────
 
 CHECK_MODE="${TAPPAAS_CHECK:-0}"
+DRIFT_FILE=""
+FORCE=0
 MODULE=""
 while [[ $# -gt 0 ]]; do
     case "$1" in
-        --check)   CHECK_MODE=1 ;;
-        -h|--help) echo "Usage: $0 [--check] <module-name>"; exit 0 ;;
-        *)         MODULE="$1" ;;
+        --check)       CHECK_MODE=1 ;;
+        --apply-drift) DRIFT_FILE="${2:-}"; shift ;;
+        --force)       FORCE=1 ;;
+        -h|--help)     echo "Usage: $0 [--check] [--apply-drift <file>] [--force] <module-name>"; exit 0 ;;
+        -*)            echo "update-service.sh: unknown option '$1'" >&2; exit 1 ;;
+        *)             MODULE="$1" ;;
     esac
     shift
 done
 
 if [[ -z "${MODULE}" ]]; then
-    echo "Usage: $0 [--check] <module-name>"
+    echo "Usage: $0 [--check] [--apply-drift <file>] [--force] <module-name>"
     exit 1
 fi
 
 check_json "${CONFIG_DIR}/${MODULE}.json" || exit 1
 
-# Load the module config into $JSON for get_config_value. The library's
-# source-time auto-loader keys off the script's first arg, which may be a flag
-# (e.g. --check), so set it explicitly now that the module name is known.
-# Normalize Pattern-A configs (nested under .config."<module>:<service>") to flat form.
-JSON="$(normalize_module_config < "${CONFIG_DIR}/${MODULE}.json")"
-
-# get_config_value exits when a required (empty-default) key is missing, so all
-# optional reads pass an explicit default (sentinel "__none__" = unset).
-cfg() { get_config_value "$1" "$2"; }
-
-# ── Desired state (from module.json + zones.json) ────────────────────
-
-VMID="$(get_config_value 'vmid')"
-VMNAME="$(cfg 'vmname' "${MODULE}")"
-DESIRED_NODE="$(cfg 'node' "$(get_node_hostname 0)")"
-[[ "${DESIRED_NODE}" == "null" || -z "${DESIRED_NODE}" ]] && DESIRED_NODE="$(get_node_hostname 0)"
-
-ZONE0="$(cfg 'zone0' 'mgmt')"
-BRIDGE0="$(cfg 'bridge0' 'lan')"
-MAC0_CFG="$(cfg 'mac0' '__none__')"
-TRUNKS0_CFG="$(cfg 'trunks0' 'NONE')"
-
-BRIDGE1="$(cfg 'bridge1' 'NONE')"
-ZONE1="$(cfg 'zone1' 'mgmt')"
-MAC1_CFG="$(cfg 'mac1' '__none__')"
-TRUNKS1_CFG="$(cfg 'trunks1' 'NONE')"
-
-CORES="$(cfg 'cores' '2')"
-MEMORY="$(cfg 'memory' '4096')"
-CPUTYPE="$(cfg 'cputype' 'host')"
-VMTAG="$(cfg 'vmtag' '__none__')"
-DISKSIZE="$(cfg 'diskSize' '__none__')"
-STORAGE="$(cfg 'storage' '__none__')"
-BIOS="$(cfg 'bios' '__none__')"
-
-debug "${BOLD}cluster:vm update-service: reconciling ${BL}${MODULE}${CL} (VMID ${VMID})"
+debug "${BOLD}cluster:vm update-service: reconciling ${BL}${MODULE}${CL}"
 [[ "${CHECK_MODE}" == "1" ]] && warn "  CHECK MODE — drift will be reported, not applied"
+CONVERGE_CHECK="${CHECK_MODE}"
 
-# In --check mode the drift verdict IS the output (reporting is the whole
-# point of check mode), so emit it at info level; in apply mode keep it at
-# debug so the normal update-tappaas console stays compact.
-report_verdict() { if [[ "${CHECK_MODE}" == "1" ]]; then info "$@"; else debug "$@"; fi; }
+# ── The drift record ─────────────────────────────────────────────────
+# Bare invocation asks the manager for one. That keeps every existing caller
+# (update-module.sh, reconcile --apply, an operator at a prompt) working exactly
+# as before while there is still only ONE differ, in the manager.
 
-# Resolve desired VLAN tags (errors out on undefined/inactive zone).
-DESIRED_TAG0="$(vmnet_zone_vlantag "${ZONE0}" "${ZONES_FILE}")" || die "Cannot resolve zone0 '${ZONE0}'"
-DESIRED_TRUNKS0=""
-[[ "${TRUNKS0_CFG}" != "NONE" ]] && DESIRED_TRUNKS0="$(vmnet_resolve_trunks "${TRUNKS0_CFG}" "${ZONES_FILE}")"
+OWN_DRIFT_FILE=""
+cleanup() { [[ -n "${OWN_DRIFT_FILE}" ]] && rm -f -- "${OWN_DRIFT_FILE}"; return 0; }
+trap cleanup EXIT INT TERM
 
-# ── Locate the VM's actual node + status (cluster-wide) ──────────────
-
-actual_node=""
-vm_status=""
-# shellcheck disable=SC2046  # word-splitting of hostnames is intended
-for cand in "${DESIRED_NODE}" $(get_all_node_hostnames); do
-    row=$(ssh "${SSH_OPTS[@]}" "root@${cand}.${MGMT}.internal" \
-        "pvesh get /cluster/resources --type vm --output-format json" 2>/dev/null \
-        | jq -r --argjson id "${VMID}" \
-            '.[] | select(.vmid == $id and .type == "qemu") | "\(.node) \(.status)"' 2>/dev/null) || true
-    if [[ -n "${row}" ]]; then
-        actual_node="${row%% *}"
-        vm_status="${row##* }"
-        break
+if [[ -z "${DRIFT_FILE}" ]]; then
+    OWN_DRIFT_FILE="$(mktemp "${TMPDIR:-/tmp}/cluster-vm-drift.XXXXXX.json")"
+    DRIFT_FILE="${OWN_DRIFT_FILE}"
+    drift_err="$(mktemp "${TMPDIR:-/tmp}/cluster-vm-drift-err.XXXXXX")"
+    if ! module-manager module drift "${MODULE}" --service cluster:vm --json \
+            > "${DRIFT_FILE}" 2> "${drift_err}"; then
+        # A STALE module-manager is the one failure an operator cannot guess
+        # from "could not compute drift": pre-update.sh warns and continues when
+        # a component build fails, which leaves this script newer than the CLI
+        # it depends on. Name that case explicitly.
+        if grep -q "Unknown verb" "${drift_err}" 2>/dev/null; then
+            error "The installed module-manager has no 'module drift' verb — it is older than this service script."
+            error "Rebuild it:  ${SCRIPT_DIR}/../../../tappaas-cicd/manager/module-manager/install.sh"
+            rm -f -- "${drift_err}"
+            exit 1
+        fi
+        error "Could not compute drift for '${MODULE}':"
+        sed 's/^/    /' "${drift_err}" >&2
+        rm -f -- "${drift_err}"
+        die "module-manager module drift ${MODULE} --service cluster:vm failed"
     fi
-done
+    rm -f -- "${drift_err}"
+fi
 
-[[ -z "${actual_node}" ]] && die "VM ${VMID} (${MODULE}) not found on the cluster — is it installed?"
-NODE_FQDN="${actual_node}.${MGMT}.internal"
-debug "  VM ${VMID} is on node ${BL}${actual_node}${CL} (status: ${vm_status})"
+# ── Provider callbacks (the converge-lib contract) ───────────────────
+# The runner decides WHAT to do and in what order; these are the only places
+# that talk to Proxmox.
 
-# ── Read live config ─────────────────────────────────────────────────
+# Facts the callbacks need, read once from the record's actual state so they
+# cannot disagree with what the drift was computed against.
+VMID="$(jq -r '(.actual.vmid) // ""'   "${DRIFT_FILE}")"
+NODE="$(jq -r '(.actual.node) // ""'   "${DRIFT_FILE}")"
+VMSTATUS="$(jq -r '(.actual.status) // ""' "${DRIFT_FILE}")"
+VMNAME="$(jq -r '(.actual.name) // ""' "${DRIFT_FILE}")"
+[[ -n "${VMNAME}" ]] || VMNAME="${MODULE}"
+ZONE0="$(module-manager module resolve "${MODULE}" --json 2>/dev/null | jq -r '(.fields.zone0.value) // "mgmt"')"
+NODE_FQDN="${NODE}.${MGMT}.internal"
 
-LIVE="$(ssh "${SSH_OPTS[@]}" "root@${NODE_FQDN}" "qm config ${VMID}" 2>/dev/null)" \
-    || die "Failed to read 'qm config ${VMID}' on ${actual_node}"
-
-live_field() { awk -F': ' -v k="$1" '$1==k {print $2; exit}' <<< "${LIVE}"; }
-
-# Proxmox stores tags lowercased, de-duplicated and ';'-joined, while module
-# JSON may use mixed case and ',' separators. Canonicalise both sides so the
-# comparison doesn't churn on cosmetic differences.
-normalize_tags() {
-    tr '[:upper:]' '[:lower:]' <<< "$1" | tr ',; ' '\n' | sed '/^$/d' | sort -u | paste -sd';' -
+# ONE batched `qm set` for every in-place field — preserved deliberately: it is
+# a single round-trip and a single atomic Proxmox change, where per-field calls
+# would multiply both the latency and the ways a converge can half-apply.
+# shellcheck disable=SC2029  # VMID/args expand client-side, intentionally
+converge_apply_set() {
+    debug "  Applying qm set on ${NODE}..."
+    ssh "${SSH_OPTS[@]}" "root@${NODE_FQDN}" \
+        "qm set ${VMID} $(printf '%q ' "$@")" >/dev/null
 }
 
-# ── Drift accumulation ───────────────────────────────────────────────
-
-declare -a QM_SET_ARGS=()   # args appended to a single `qm set`
-declare -a CHANGES=()       # human-readable summary
-REBOOT_NEEDED=0             # bridge/tag change (new subnet) → reboot + IP + DNS
-ZONE_CHANGED=0              # triggers stale-DNS cleanup
-FATAL=0
-QM_DELETE_NET1=0
-DISK_GROW=0
-NODE_MIGRATE=0
-
-plan_set() { QM_SET_ARGS+=("$1" "$2"); CHANGES+=("$3"); }
-
-# ── net0 ─────────────────────────────────────────────────────────────
-
-live_net0="$(live_field 'net0')"
-live_bridge0="$(vmnet_parse "${live_net0}" bridge)"
-live_tag0="$(vmnet_parse "${live_net0}" tag)"
-live_trunks0="$(vmnet_parse "${live_net0}" trunks)"
-live_mac0="$(vmnet_parse "${live_net0}" mac)"
-live_queues0="$(vmnet_parse "${live_net0}" queues)"
-OLD_TAG0="${live_tag0:-0}"
-
-# Preserve the live MAC unless the module explicitly pins mac0.
-desired_mac0="${live_mac0}"
-[[ "${MAC0_CFG}" != "__none__" ]] && desired_mac0="${MAC0_CFG}"
-
-if [[ "${live_bridge0}" != "${BRIDGE0}" \
-   || "${live_tag0:-0}" != "${DESIRED_TAG0:-0}" \
-   || "${live_trunks0}" != "${DESIRED_TRUNKS0}" \
-   || ( "${MAC0_CFG}" != "__none__" && "${live_mac0}" != "${MAC0_CFG}" ) ]]; then
-    # Preserve the live queues value — never change queues on a running NIC
-    # (it forces a disruptive hot-replug; see issue #194).
-    netopts="$(vmnet_build_netopts "${BRIDGE0}" "${desired_mac0}" "${DESIRED_TAG0}" "${DESIRED_TRUNKS0}" "${live_queues0}")"
-    plan_set "--net0" "${netopts}" \
-        "net0: bridge=${live_bridge0}→${BRIDGE0}, tag=${live_tag0:-0}→${DESIRED_TAG0:-0} (zone ${ZONE0})"
-    # Only a bridge or tag change moves the VM to a new subnet (needs reboot to
-    # renew DHCP). A trunk- or MAC-only change applies live on the bridge.
-    if [[ "${live_bridge0}" != "${BRIDGE0}" || "${live_tag0:-0}" != "${DESIRED_TAG0:-0}" ]]; then
-        REBOOT_NEEDED=1
-    fi
-    [[ "${live_tag0:-0}" != "${DESIRED_TAG0:-0}" ]] && ZONE_CHANGED=1
-fi
-
-# ── net1 (add / modify / remove) ─────────────────────────────────────
-
-live_net1="$(live_field 'net1')"
-if [[ "${BRIDGE1}" != "NONE" ]]; then
-    desired_tag1="$(vmnet_zone_vlantag "${ZONE1}" "${ZONES_FILE}")" || die "Cannot resolve zone1 '${ZONE1}'"
-    desired_trunks1=""
-    [[ "${TRUNKS1_CFG}" != "NONE" ]] && desired_trunks1="$(vmnet_resolve_trunks "${TRUNKS1_CFG}" "${ZONES_FILE}")"
-    live_bridge1="$(vmnet_parse "${live_net1}" bridge)"
-    live_tag1="$(vmnet_parse "${live_net1}" tag)"
-    live_trunks1="$(vmnet_parse "${live_net1}" trunks)"
-    live_mac1="$(vmnet_parse "${live_net1}" mac)"
-    live_queues1="$(vmnet_parse "${live_net1}" queues)"
-    desired_mac1="${live_mac1}"
-    [[ "${MAC1_CFG}" != "__none__" ]] && desired_mac1="${MAC1_CFG}"
-    if [[ -z "${live_net1}" \
-       || "${live_bridge1}" != "${BRIDGE1}" \
-       || "${live_tag1:-0}" != "${desired_tag1:-0}" \
-       || "${live_trunks1}" != "${desired_trunks1}" \
-       || ( "${MAC1_CFG}" != "__none__" && "${live_mac1}" != "${MAC1_CFG}" ) ]]; then
-        # Preserve live queues (see issue #194 — never hot-change queues).
-        netopts1="$(vmnet_build_netopts "${BRIDGE1}" "${desired_mac1}" "${desired_tag1}" "${desired_trunks1}" "${live_queues1}")"
-        plan_set "--net1" "${netopts1}" \
-            "net1: bridge=${live_bridge1:-none}→${BRIDGE1}, tag=${live_tag1:-0}→${desired_tag1:-0} (zone ${ZONE1})"
-        # Adding the NIC, or changing its bridge/tag, needs a reboot; a
-        # trunk/MAC-only change applies live.
-        if [[ -z "${live_net1}" || "${live_bridge1}" != "${BRIDGE1}" \
-           || "${live_tag1:-0}" != "${desired_tag1:-0}" ]]; then
-            REBOOT_NEEDED=1
-        fi
-    fi
-elif [[ -n "${live_net1}" ]]; then
-    # Module no longer declares a second NIC but the VM has one → remove it.
-    CHANGES+=("net1: removing (no bridge1 in config)")
-    REBOOT_NEEDED=1
-    QM_DELETE_NET1=1
-fi
-
-# ── cores / memory / cputype ─────────────────────────────────────────
-
-live_cores="$(live_field 'cores')"; live_cores="${live_cores:-1}"
-[[ "${live_cores}" != "${CORES}" ]] && plan_set "--cores" "${CORES}" "cores: ${live_cores}→${CORES}"
-
-live_mem="$(live_field 'memory')"; live_mem="${live_mem:-512}"
-[[ "${live_mem}" != "${MEMORY}" ]] && plan_set "--memory" "${MEMORY}" "memory: ${live_mem}→${MEMORY}"
-
-live_cpu="$(live_field 'cpu')"; live_cpu="${live_cpu:-kvm64}"
-[[ "${live_cpu}" != "${CPUTYPE}" ]] && plan_set "--cpu" "${CPUTYPE}" "cputype: ${live_cpu}→${CPUTYPE}"
-
-# ── tags ─────────────────────────────────────────────────────────────
-
-if [[ "${VMTAG}" != "__none__" ]]; then
-    live_tags="$(live_field 'tags')"
-    if [[ "$(normalize_tags "${live_tags}")" != "$(normalize_tags "${VMTAG}")" ]]; then
-        plan_set "--tags" "${VMTAG}" "tags: ${live_tags:-none}→${VMTAG}"
-    fi
-fi
-
-# ── name ─────────────────────────────────────────────────────────────
-
-live_name="$(live_field 'name')"
-[[ -n "${live_name}" && "${live_name}" != "${VMNAME}" ]] \
-    && plan_set "--name" "${VMNAME}" "name: ${live_name}→${VMNAME}"
-
-# ── bios (immutable while running) ───────────────────────────────────
-
-if [[ "${BIOS}" != "__none__" ]]; then
-    live_bios="$(live_field 'bios')"; live_bios="${live_bios:-seabios}"
-    if [[ "${live_bios}" != "${BIOS}" ]]; then
-        error "  bios drift (${live_bios}→${BIOS}) cannot be applied to a live VM — requires power-off / reinstall"
-        FATAL=1
-    fi
-fi
-
-# ── storage (report only) ────────────────────────────────────────────
-
-if [[ "${STORAGE}" != "__none__" ]]; then
-    live_scsi0="$(live_field 'scsi0')"
-    live_storage="${live_scsi0%%:*}"
-    [[ -n "${live_storage}" && "${live_storage}" != "${STORAGE}" ]] \
-        && warn "  storage drift (${live_storage}→${STORAGE}) not auto-applied — use 'qm move-disk' manually"
-fi
-
-# ── diskSize (grow only) ─────────────────────────────────────────────
-
-if [[ "${DISKSIZE}" != "__none__" ]]; then
-    live_size="$(sed -n 's/.*size=\([0-9]\+[GMTK]\?\).*/\1/p' <<< "$(live_field 'scsi0')")"
-    if [[ -n "${live_size}" && "${live_size}" != "${DISKSIZE}" ]]; then
-        CHANGES+=("diskSize: ${live_size}→${DISKSIZE} (via resize-disk.sh)")
-        DISK_GROW=1
-    fi
-fi
-
-# ── node (HA-aware) ──────────────────────────────────────────────────
-
-if [[ "${DESIRED_NODE}" != "${actual_node}" ]]; then
-    if read_module_config "${MODULE}" | jq -e '(.dependsOn // []) | index("cluster:ha") != null' >/dev/null 2>&1; then
-        warn "  node drift (${actual_node}→${DESIRED_NODE}) deferred to cluster:ha drift handling"
-    else
-        CHANGES+=("node: ${actual_node}→${DESIRED_NODE} (qm migrate)")
-        NODE_MIGRATE=1
-    fi
-fi
-
-# ── Report ───────────────────────────────────────────────────────────
-
-if [[ ${#CHANGES[@]} -eq 0 && ${FATAL} -eq 0 ]]; then
-    report_verdict "  ${GN}✓${CL} VM is in sync with config — no changes needed"
-    exit 0
-fi
-
-report_verdict "  Detected drift:"
-for c in "${CHANGES[@]}"; do report_verdict "    • ${c}"; done
-
-[[ ${FATAL} -eq 1 ]] && die "Unreconcilable drift detected — aborting (see errors above)"
-
-if [[ "${CHECK_MODE}" == "1" ]]; then
-    debug "  CHECK MODE — no changes applied"
-    exit 0
-fi
-
-# ── Apply ────────────────────────────────────────────────────────────
-
-if [[ ${#QM_SET_ARGS[@]} -gt 0 ]]; then
-    debug "  Applying qm set on ${actual_node}..."
-    ssh "${SSH_OPTS[@]}" "root@${NODE_FQDN}" \
-        "qm set ${VMID} $(printf '%q ' "${QM_SET_ARGS[@]}")" >/dev/null || die "qm set failed"
-fi
-
-if [[ ${QM_DELETE_NET1} -eq 1 ]]; then
-    ssh "${SSH_OPTS[@]}" "root@${NODE_FQDN}" "qm set ${VMID} --delete net1" >/dev/null \
-        || die "qm set --delete net1 failed"
-fi
-
-if [[ ${DISK_GROW} -eq 1 ]]; then
-    debug "  Growing disk to ${DISKSIZE}..."
-    /home/tappaas/bin/resize-disk.sh "${VMNAME}" "${DISKSIZE}" || die "resize-disk.sh failed"
-fi
-
-if [[ ${NODE_MIGRATE} -eq 1 ]]; then
-    debug "  Migrating VM ${VMID} ${actual_node}→${DESIRED_NODE}..."
-    online_flag=0
-    [[ "${vm_status}" == "running" ]] && online_flag=1
-    ssh "${SSH_OPTS[@]}" "root@${NODE_FQDN}" \
-        "qm migrate ${VMID} ${DESIRED_NODE} --online ${online_flag}" >/dev/null || die "qm migrate failed"
-    actual_node="${DESIRED_NODE}"
-    NODE_FQDN="${actual_node}.${MGMT}.internal"
-fi
-
-# ── Subnet change: reboot so the guest renews DHCP in the new subnet ─
-# Only bridge/tag changes get here; trunk- and MAC-only net changes were
-# already applied above via qm set and need no reboot.
-
-if [[ ${REBOOT_NEEDED} -eq 1 ]]; then
-    if [[ "${vm_status}" != "running" ]]; then
+# shellcheck disable=SC2029
+converge_side_effect_reboot() {
+    if [[ "${VMSTATUS}" != "running" ]]; then
         warn "  VM not running — network change applied to config; DNS will register on next boot"
-        debug "  ${GN}✓${CL} cluster:vm update-service completed"
-        exit 0
+        REBOOT_SKIPPED=1
+        return 0
     fi
+    debug "  Rebooting VM ${VMID} to apply the network change..."
+    ssh "${SSH_OPTS[@]}" "root@${NODE_FQDN}" "qm reboot ${VMID}" >/dev/null
+}
 
-    debug "  Rebooting VM ${VMID} to apply network change..."
-    ssh "${SSH_OPTS[@]}" "root@${NODE_FQDN}" "qm reboot ${VMID}" >/dev/null || die "qm reboot failed"
-
+# Wait for the guest to report an address IN THE TARGET SUBNET.
+#
+# Both discovery sources can surface a STALE address from the old subnet — the
+# dnsmasq lease table keeps the previous lease until it expires, and the guest
+# may briefly still report it — which would register a wrong, cross-zone DNS
+# record. So derive the target /24 prefix and prefer a match.
+NEW_IP=""
+IP_SRC=""
+REBOOT_SKIPPED=0
+# shellcheck disable=SC2029
+converge_side_effect_wait_ip() {
+    [[ "${REBOOT_SKIPPED}" == "1" ]] && return 0
     debug "  Waiting for VM to come back with an IP..."
-    # The reboot moves the VM into ZONE0's subnet, so we want its address IN THAT
-    # subnet. Both discovery sources can surface a STALE address from the old
-    # subnet — the dnsmasq lease table keeps the previous lease until it expires,
-    # and the guest may briefly still report it — which would register a wrong,
-    # cross-zone DNS record. Derive the target /24 prefix and prefer a match.
+    local zone_cidr zone_prefix cands qm_iface ga_ips le_ips desired_mac
     zone_cidr="$(jq -r --arg z "${ZONE0}" '.[$z].ip // empty' "${ZONES_FILE}" 2>/dev/null)"
     zone_prefix=""
     [[ "${zone_cidr}" =~ ^([0-9]+\.[0-9]+\.[0-9]+)\. ]] && zone_prefix="${BASH_REMATCH[1]}."
-    new_ip=""
-    ip_src=""
+    desired_mac="$(jq -r '(.actual["net0.mac"]) // ""' "${DRIFT_FILE}")"
+
     # 90×4s = up to 360s: a NixOS guest can be slow to boot AND to re-DHCP into
     # a new subnet after a VLAN change (it must drop the old-subnet lease first).
     for _ in $(seq 1 90); do
@@ -383,78 +195,91 @@ if [[ ${REBOOT_NEEDED} -eq 1 ]]; then
         qm_iface=$(ssh "${SSH_OPTS[@]}" "root@${NODE_FQDN}" \
             "qm guest cmd ${VMID} network-get-interfaces" 2>/dev/null) || qm_iface=""
         if [[ -n "${qm_iface}" ]]; then
-            # `|| true`: under `set -e`+pipefail a no-match jq/grep must not abort
-            # the whole reconcile mid-wait — an empty result just means "not yet".
+            # `|| true`: under `set -e`+pipefail a no-match jq must not abort the
+            # whole converge mid-wait — an empty result just means "not yet".
             ga_ips=$(jq -r '.[] | select(.name | test("^(lo|docker)") | not)
                              | ."ip-addresses"[]?
                              | select(."ip-address-type" == "ipv4")
                              | ."ip-address"' <<< "${qm_iface}" 2>/dev/null || true)
-            [[ -n "${ga_ips}" ]] && cands+="${ga_ips}"$'\n' && [[ -z "${ip_src}" ]] && ip_src="guest-agent"
+            [[ -n "${ga_ips}" ]] && cands+="${ga_ips}"$'\n' && [[ -z "${IP_SRC}" ]] && IP_SRC="guest-agent"
         fi
         # 2) dnsmasq DHCP lease by MAC — guest-agent-independent (recovers the
         #    common case where the agent is missing/silent but the guest has
         #    already leased). `dns-manager` prints a connection banner ("OK") on
         #    stdout, so match the IPv4 shape rather than taking the first line.
-        if [[ -n "${desired_mac0}" && "${desired_mac0}" != "__none__" ]]; then
+        if [[ -n "${desired_mac}" ]]; then
             # `|| true`: a no-match grep (MAC not currently leased — e.g. right
             # after the guest sends a DHCP RELEASE on reboot) returns 1, which
-            # under `set -e`+pipefail would otherwise abort the reconcile.
-            le_ips=$(dns-manager --no-ssl-verify leases --mac "${desired_mac0}" 2>/dev/null \
+            # under `set -e`+pipefail would otherwise abort the converge.
+            le_ips=$(dns-manager --no-ssl-verify leases --mac "${desired_mac}" 2>/dev/null \
                      | grep -oE '^[0-9]{1,3}(\.[0-9]{1,3}){3}$' || true)
-            [[ -n "${le_ips}" ]] && cands+="${le_ips}"$'\n' && [[ -z "${ip_src}" ]] && ip_src="dhcp-lease"
+            [[ -n "${le_ips}" ]] && cands+="${le_ips}"$'\n' && [[ -z "${IP_SRC}" ]] && IP_SRC="dhcp-lease"
         fi
         cands=$(grep -vE '^(127\.|$)' <<< "${cands}" || true)
         [[ -z "${cands}" ]] && continue
         # Prefer an address in the target subnet; if only a stale old-subnet
         # address is visible so far, keep waiting for the new lease to appear.
         if [[ -n "${zone_prefix}" ]]; then
-            # `|| true`: no target-subnet match yet is the normal "keep waiting"
-            # case; under pipefail the grep's non-zero would otherwise abort.
-            new_ip=$(grep -F "${zone_prefix}" <<< "${cands}" | head -1 || true)
+            NEW_IP=$(grep -F "${zone_prefix}" <<< "${cands}" | head -1 || true)
         else
-            new_ip=$(head -1 <<< "${cands}")   # no subnet known — best effort
+            NEW_IP=$(head -1 <<< "${cands}")   # no subnet known — best effort
         fi
-        [[ -n "${new_ip}" ]] && break
+        [[ -n "${NEW_IP}" ]] && break
     done
+    return 0
+}
 
-    # ── DNS ──────────────────────────────────────────────────────────────
-    # The VLAN change is already applied. If we resolved an IP in the target
-    # subnet, register the static fast-path record. If not (a slow guest that
-    # has not yet re-DHCPed into the new subnet), DO NOT fail: dnsmasq resolves
-    # <vmname>.<zone>.internal from the guest's lease once it appears (masqdns —
-    # exactly how cluster:lxc and every leased VM already resolve), so warn and
-    # let masqdns take over rather than aborting a reconcile that succeeded.
-    new_domain="${ZONE0}.internal"
-    if [[ -z "${new_ip}" ]]; then
-        warn "  VM did not report an IPv4 in ${ZONE0} (${zone_cidr:-?}) within the wait window (no guest-agent report and no matching DHCP lease for MAC ${desired_mac0:-net0})."
+# Register the new record, drop the stale one, then gate on the module actually
+# being able to serve (#468).
+#
+# NOT reaching an IP is NOT a failure: the VLAN change IS applied, and dnsmasq
+# resolves <vmname>.<zone>.internal from the guest's lease once it appears
+# (masqdns — how cluster:lxc and every leased VM already resolve). Warn and let
+# masqdns take over rather than aborting a converge that succeeded.
+converge_side_effect_dns() {
+    [[ "${REBOOT_SKIPPED}" == "1" ]] && return 0
+    local new_domain="${ZONE0}.internal" old_tag old_zone
+    if [[ -z "${NEW_IP}" ]]; then
+        warn "  VM did not report an IPv4 in ${ZONE0} within the wait window (no guest-agent report and no matching DHCP lease)."
         warn "  The net0 VLAN change IS applied; ${VMNAME}.${new_domain} will resolve via masqdns once the guest re-DHCPs. Skipping the static DNS fast-path."
     else
-        debug "  VM came up with IP ${BL}${new_ip}${CL} (via ${ip_src:-?})"
-        debug "  Registering DNS: ${VMNAME}.${new_domain} → ${new_ip}"
-        dns-manager --no-ssl-verify add "${VMNAME}" "${new_domain}" "${new_ip}" \
-            --description "${MODULE} (cluster:vm reconcile)" \
+        debug "  VM came up with IP ${BL}${NEW_IP}${CL} (via ${IP_SRC:-?})"
+        debug "  Registering DNS: ${VMNAME}.${new_domain} → ${NEW_IP}"
+        dns-manager --no-ssl-verify add "${VMNAME}" "${new_domain}" "${NEW_IP}" \
+            --description "${MODULE} (cluster:vm converge)" \
             || warn "  dns-manager add failed for ${VMNAME}.${new_domain}"
     fi
 
-    if [[ ${ZONE_CHANGED} -eq 1 ]]; then
-        old_zone="$(vmnet_zone_for_tag "${OLD_TAG0}" "${ZONES_FILE}")"
-        if [[ -n "${old_zone}" && "${old_zone}" != "${ZONE0}" ]]; then
-            debug "  Removing stale DNS: ${VMNAME}.${old_zone}.internal"
-            # A missing old record is normal (install-service registers no DNS),
-            # so a failure here is informational, not a warning.
-            dns-manager --no-ssl-verify delete "${VMNAME}" "${old_zone}.internal" \
-                || debug "  no stale DNS to remove for ${VMNAME}.${old_zone}.internal"
-        fi
+    # Stale record from the zone the guest LEFT. The record's actual state holds
+    # the pre-change tag, so the old zone is derivable without a second read.
+    old_tag="$(jq -r '(.actual["net0.tag"]) // ""' "${DRIFT_FILE}")"
+    old_zone="$(vmnet_zone_for_tag "${old_tag:-0}" "${ZONES_FILE}")"
+    if [[ -n "${old_zone}" && "${old_zone}" != "${ZONE0}" ]]; then
+        debug "  Removing stale DNS: ${VMNAME}.${old_zone}.internal"
+        # A missing old record is normal (install-service registers no DNS), so
+        # a failure here is informational, not a warning.
+        dns-manager --no-ssl-verify delete "${VMNAME}" "${old_zone}.internal" \
+            || debug "  no stale DNS to remove for ${VMNAME}.${old_zone}.internal"
     fi
 
     # An IP in the new subnet means the guest has re-DHCPed, not that the module
     # can serve (#468). Same gate as the update-os.sh reboot path — shared
     # helper, so the two reboot sites cannot drift apart.
-    if [[ -n "${new_ip}" ]]; then
-        wait_for_module_ready "${MODULE}" "${new_ip}" 180 \
+    if [[ -n "${NEW_IP}" ]]; then
+        wait_for_module_ready "${MODULE}" "${NEW_IP}" 180 \
             || warn "  '${MODULE}' not ready after the subnet-change reboot — later steps may see a starting service"
     fi
-fi
+    return 0
+}
+
+# ── Converge ─────────────────────────────────────────────────────────
+# ALLOW_DISRUPTION is 1 here: before ADR-020 this script rebooted for a subnet
+# change without asking, and P3 preserves behaviour. ADR-020 P4 replaces this
+# with the real gate — `modify --force`, or `rebootOk` in the ADR-017 scheduled
+# pass — and an unauthorized disruptive change is then DEFERRED, not applied.
+ALLOW_DISRUPTION=1
+
+converge_apply "${MODULE}" "${SCRIPT_DIR}" "${DRIFT_FILE}" "${CHECK_MODE}" "${ALLOW_DISRUPTION}" "${FORCE}" || exit 1
 
 debug "  ${GN}✓${CL} cluster:vm update-service completed"
 exit 0

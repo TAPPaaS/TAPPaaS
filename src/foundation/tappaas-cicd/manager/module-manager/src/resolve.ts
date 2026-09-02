@@ -28,7 +28,7 @@
 
 import { existsSync, readFileSync } from "fs";
 import { join } from "path";
-import { CL, GN, YW, error, info } from "./shlog";
+import { CL, GN, YW, emitJson, error, info } from "./shlog";
 import { loadModuleFields, resolveModule, ResolvedModule } from "../../../lib/ts/src/desired";
 import { normalizeModuleConfig } from "./config";
 
@@ -122,7 +122,7 @@ export function cmdResolve(module: string, opts: ResolveOptions): number {
     return 1;
   }
   if (opts.json) {
-    info(JSON.stringify(r, null, 2));
+    emitJson(r);
     return 0;
   }
   for (const l of renderResolved(r)) info(l);

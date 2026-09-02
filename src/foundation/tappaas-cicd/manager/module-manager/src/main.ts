@@ -8,6 +8,7 @@
 //   module list              = enumerate deployed module configs    [NEW, TS]
 //   module show <module>     = one deployed module config in detail [NEW, TS]
 //   module resolve <module>  = DESIRED state: config + schema defaults [ADR-020]
+//   module drift <module>    = DESIRED vs ACTUAL, per service           [ADR-020]
 //   module validate [<m>]    = tier/source lint (all, or one)        [TS port]
 //   module reconcile <m>     = re-apply this module's config → VM/service [leaf]
 //   module test <module>     = test-module.sh
@@ -44,6 +45,7 @@ import {
   TestOptions,
 } from "./types";
 import { loadModuleFields } from "../../../lib/ts/src/desired";
+import { cmdDrift } from "./converge";
 import { cmdResolve } from "./resolve";
 import { realServiceFs } from "./services";
 import { validateModules } from "./validate";
@@ -65,6 +67,14 @@ const HELP: HelpSpec = {
       ],
     },
     { usage: "show <module> [--json]", name: "show" },
+    {
+      usage: "drift <module> [--service <provider:service>] [--json]",
+      name: "drift",
+      options: [
+        ["--service P:S", "One coordinate (e.g. cluster:vm). Default: every dependency that ships a field manifest."],
+        ["--json", "The drift RECORD — with --service, exactly what 'update-service.sh --apply-drift' consumes."],
+      ],
+    },
     {
       usage: "resolve <module> [--json]",
       name: "resolve",
@@ -154,6 +164,7 @@ const HELP: HelpSpec = {
   add=install-module  modify=update-module  delete=delete-module
   test=test-module    validate=tier/source lint
   resolve=desired state (config + schema defaults), the one resolver (ADR-020)
+  drift=that desired state vs the live guest, per service (ADR-020)
   reconcile=inspect drift (default) / --apply=leaf re-apply (was health show vm)
   list [--diff] reads config/*.json (+ live drift with --diff). snapshot-vm is special.`,
   ],
@@ -169,6 +180,11 @@ interface Opts {
   json: boolean;
   diff: boolean;
   apply: boolean;
+  // `drift --service <provider:service>`: ONE coordinate. Distinct from the
+  // boolean --services/--no-services below, which toggle the dependency-service
+  // CHECK on inspect — an unfortunate near-collision of names, kept because both
+  // spellings are already established.
+  service?: string;
   // Dependency-service drift check (#458). TRI-STATE: undefined = the verb's
   // default (on for `reconcile <module>`, off for the `list --diff` rollup),
   // true = --services, false = --no-services.
@@ -254,6 +270,8 @@ function parseOpts(args: string[]): Opts {
       o.reinstall = true;
     } else if (a === "--no-snapshot") {
       o.noSnapshot = true;
+    } else if (a === "--service") {
+      o.service = next();
     } else if (a === "--services") {
       o.services = true;
     } else if (a === "--no-services") {
@@ -552,6 +570,17 @@ function cmdResolveVerb(opts: Opts): number {
   return cmdResolve(name, { configDir: opts.configDir, json: opts.json });
 }
 
+// drift — DESIRED (resolve) vs ACTUAL (the provider's report-service.sh), diffed
+// by the one differ (ADR-020 D7). `reconcile <module>` renders a three-way
+// report for a human; this renders the two-way record a SERVICE applies, and
+// with --service --json it IS that record: `update-service.sh --apply-drift`
+// reads exactly this. Same computation either way — that is the point.
+function cmdDriftVerb(opts: Opts): number {
+  const name = opts.rest[0];
+  if (!name) die("drift: expected <module>");
+  return cmdDrift(name, { configDir: opts.configDir, json: opts.json, service: opts.service });
+}
+
 // The repositories site.json declares, for validateSourceLocation. Returns []
 // when site.json is absent or malformed: the check then reports nothing rather
 // than reporting everything, because "no declarations" is not evidence that a
@@ -748,6 +777,8 @@ function dispatch(verb: string, opts: Opts, client: ModuleClient): number {
       return cmdShow(opts);
     case "resolve":
       return cmdResolveVerb(opts);
+    case "drift":
+      return cmdDriftVerb(opts);
     case "validate":
       return cmdValidate(opts);
     case "add":

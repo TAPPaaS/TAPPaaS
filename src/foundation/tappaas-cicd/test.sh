@@ -326,6 +326,20 @@ else
     skip "lib/test-ha-vm-lib.sh not found"
 fi
 
+# Test 9dd: the ADR-020 drift-record runner — what it batches, what it
+# dispatches, in what order, and what verdict it returns. Stubbed provider
+# callbacks and stub hooks only; no cluster.
+info "${BOLD}Test 9dd: converge-lib drift-record runner (ADR-020)${CL}"
+if [[ -x "${SCRIPT_DIR}/lib/test-converge-lib.sh" ]]; then
+    if "${SCRIPT_DIR}/lib/test-converge-lib.sh" >/dev/null 2>&1; then
+        pass "converge-lib: one batched set, migrate last, side effects once, deferral is not failure"
+    else
+        fail "converge-lib test failed (run lib/test-converge-lib.sh)"
+    fi
+else
+    skip "lib/test-converge-lib.sh not found"
+fi
+
 # Test 9e: stale per-service Unbound override pruning (#505) — a wildcard now
 # covering a host must have any leftover per-service <host>.<zone> record pruned,
 # without ever deleting the shared '*' wildcard. Stubbed unbound-manager only.
