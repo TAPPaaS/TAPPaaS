@@ -810,6 +810,19 @@ export function inspectModule(module: string, opts: InspectOptions = {}): number
     if (!clusterQueryOk) {
       error(`Could not query the cluster via ${node} to locate VMID ${vmid} — is ${node} reachable?`);
     } else if (!actualNode) {
+      // An 'archived' module intends to have NO VM: delete-module.sh --archive
+      // removed the guest and kept the config as the archive record (#215). Its
+      // absence is the correct state, so report it as informational and stay
+      // green — the way vmid-less config-only modules already do (#556). Only
+      // 'archived' is exempt: 'external'/'Deprecated' etc. still expect a VM, so
+      // for them an absence remains a real error worth surfacing.
+      if (cfg.status === "archived") {
+        info(
+          `${YW}[archived]${CL} VMID ${vmid} not on any node — VM intentionally removed ` +
+            `(delete-module.sh --archive); config kept as the archive record, no VM expected.`,
+        );
+        return 0;
+      }
       error(`VMID ${vmid} is not present on any node in the cluster (config declares ${node}) — is the VM created?`);
     } else {
       error(`Failed to read ${cli} config for VMID ${vmid} on ${liveNode} (where the cluster reports it running)`);

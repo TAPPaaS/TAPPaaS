@@ -20,7 +20,7 @@ import {
   resolveViaCatalog,
 } from "../../src/config";
 import { validateConfigBlock, validateDependsOn, validateModules } from "../../src/validate";
-import { AddOptions, DeleteOptions, ValidateFinding } from "../../src/types";
+import { AddOptions, DeleteOptions, ModuleConfig, ValidateFinding, ValidateReport } from "../../src/types";
 import { FakeModuleClient } from "./fake-client";
 import { run } from "../../src/main";
 
@@ -117,6 +117,25 @@ const CONFIG =
     report.findings.some((f) => f.module === "badfork" && f.severity === "warning"),
     "--allow-fork turns the foundation fork into a warning",
   );
+}
+
+// ── 4b. validate: status value is checked against MODULE_STATUS_VALUES (#556)
+{
+  const mk = (status: string): ModuleConfig =>
+    ({ name: "s", tier: "app", source: "official", status } as unknown as ModuleConfig);
+  const rep = (status: string): ValidateReport => validateModules([mk(status)], {});
+  // A permitted value (archived) produces no status finding.
+  check(
+    !rep("archived").findings.some((f) => /unknown status/.test(f.message)),
+    "known status 'archived' is not flagged",
+  );
+  // A value outside the set WARNS (not an error — status is descriptive metadata).
+  const bad = rep("Archived"); // wrong casing → unknown
+  check(
+    bad.findings.some((f) => f.severity === "warning" && /unknown status 'Archived'/.test(f.message)),
+    "unknown status value WARNS",
+  );
+  check(bad.errors === 0, "unknown status is a warning, never an error");
 }
 
 // ── 5. effective-name resolution (env suffix rules) ─────────────────────

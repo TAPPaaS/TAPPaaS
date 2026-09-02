@@ -12,6 +12,20 @@
 // ── Module config entity (a deployed config/<module>.json) ────────────
 // A deployed module config. The shape is open (modules carry many bespoke
 // fields per module-fields.json); these are the ones list/show/validate read.
+// Permitted `status` values — the single TS-side source of truth, mirroring the
+// `status.values` set in schemas/module-fields.json (#556). `archived` = VM
+// removed via delete-module.sh --archive, config kept as the archive record
+// (#215); `external` = guest managed outside TAPPaaS (#216).
+export const MODULE_STATUS_VALUES = [
+  "Development",
+  "Testing",
+  "Production",
+  "Deprecated",
+  "archived",
+  "external",
+] as const;
+export type ModuleStatus = (typeof MODULE_STATUS_VALUES)[number];
+
 // `name` is the config basename (the deployed/effective module name).
 export interface ModuleConfig {
   name: string; // basename of config/<name>.json (effective module name)
@@ -24,7 +38,7 @@ export interface ModuleConfig {
   zone1?: string | null;
   tier?: string | null; // foundation | app  (default app when absent)
   source?: string | null; // official | community | private | local (default official)
-  status?: string | null; // e.g. archived | Testing | Development
+  status?: ModuleStatus | null; // permitted set: MODULE_STATUS_VALUES (validated in validate.ts)
   environment?: string | null;
   location?: string | null; // module source dir (where install/update/test.sh live)
   installTime?: string | null;

@@ -9,7 +9,7 @@
 import { existsSync, readFileSync, readdirSync, statSync } from "fs";
 import { basename, dirname, join } from "path";
 import { defaultConfigDir } from "../../../lib/ts/src/config-io";
-import { ModuleConfig } from "./types";
+import { ModuleConfig, ModuleStatus } from "./types";
 
 // Config-root resolution comes from the shared lib (TAPPAAS_CONFIG, then
 // CONFIG_DIR, then /home/tappaas/config). Re-exported for main.ts/client.ts.
@@ -96,7 +96,9 @@ function toModuleConfig(name: string, raw: Record<string, unknown>): ModuleConfi
     zone1: asString(raw.zone1) ?? null,
     tier: asString(raw.tier) ?? null,
     source: asString(raw.source) ?? null,
-    status: asString(raw.status) ?? null,
+    // Kept as-loaded (round-trips any value); validate.ts warns on one outside
+    // MODULE_STATUS_VALUES rather than dropping it here.
+    status: (asString(raw.status) ?? null) as ModuleStatus | null,
     environment: asString(raw.environment) ?? null,
     location: asString(raw.location) ?? null,
     installTime: asString(raw.installTime) ?? null,

@@ -17,7 +17,7 @@
 
 import { join } from "path";
 import { ServiceFs, parseDependency } from "./services";
-import { ModuleConfig, ValidateFinding, ValidateReport } from "./types";
+import { MODULE_STATUS_VALUES, ModuleConfig, ValidateFinding, ValidateReport } from "./types";
 
 export const VALID_TIERS = ["foundation", "app"] as const;
 export const VALID_SOURCES = ["official", "community", "private", "local"] as const;
@@ -70,6 +70,15 @@ export function validateModule(
   // community is valid but unsupported — surface a warning.
   if (source === "community") {
     warn(`source:community — peer-reviewed but not officially supported (🟡)`);
+  }
+
+  // status — descriptive, so an out-of-range value is a WARNING (not an error
+  // like tier/source): erroring would fail-validate legacy fleets with variant
+  // casing. Before #556 the permitted set lived only in a code comment, so no
+  // check on the VALUE was possible; MODULE_STATUS_VALUES now makes it one.
+  const status = m.status ?? "";
+  if (status && !(MODULE_STATUS_VALUES as readonly string[]).includes(status)) {
+    warn(`unknown status '${status}' — expected one of: ${MODULE_STATUS_VALUES.join(" ")}`);
   }
 
   // config-block structural rules (#161/#549) — pure, no fs needed.
