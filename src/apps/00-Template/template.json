@@ -1,6 +1,7 @@
 {
   "description": "TAPPaaS template VM",
   "version": "0.5",
+  "tier": "app",
   "vmname": "template",
   "vmid": 999,
   "vmtag": "TAPPaaS,Test",

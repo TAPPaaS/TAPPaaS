@@ -32,7 +32,9 @@ mv template.json myapp.json        # + template.nix -> myapp.nix, or delete it
 ```
 
 Edit `myapp.json` — at minimum a free `vmid`, sizing (`cores`, `memory`, `diskSize`)
-and the zone (`zone0`, typically `srv`). Then:
+and the zone (`zone0`, typically `srv`). The template ships `tier: "app"`; leave it
+unless this is a critical platform module, in which case set `tier: "foundation"`
+(mgmt-only, single-instance, `--force` to delete — see [module-fields.json](../../foundation/schemas/module-fields.json)). Then:
 
 ```bash
 module-manager module add myapp
