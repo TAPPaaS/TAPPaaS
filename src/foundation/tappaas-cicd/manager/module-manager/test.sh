@@ -1016,6 +1016,79 @@ out="$("$RESOLVE" absent --config-dir "$TIERDIR" --field tier 2>/dev/null || tru
 rm -rf -- "$TIERDIR"
 
 
+# ── validate-modules-mandatory.sh: severity follows the sanctioned
+# convention — error only where the tool cannot proceed (#561) ────────
+#
+# validate-module-tier-source.sh sets the rule and this lint inherits it:
+#   lint_error (exit 1) : an explicitly invalid value — the tool CANNOT proceed
+#   lint_warn  (exit 0) : an absent field WITH a documented default — it can
+# So the two requirement kinds in module-fields.json map onto the two levels:
+#   requiredBy: [block]     no default exists -> a VM cannot be built -> ERROR
+#   prose-mandated w/default (tier)          -> resolvable -> WARNING
+# Every message names the remedy, as the existing lint does ("set tier:
+# foundation|app explicitly"), so the log is actionable and not just a count.
+MANDLINT="${HERE}/validate-modules-mandatory.sh"
+MDIR="$(mktemp -d "${TMPDIR:-/tmp}/mandatory-test.XXXXXX")"
+mkdir -p "${MDIR}/cfg"
+cat > "${MDIR}/schema.json" <<'JSON'
+{ "fields": {
+    "tier": { "requiredOnModule": true, "default": "app", "requiredBy": [],
+              "note": "Mandatory in authored module JSON (ADR-007b CR-04)." },
+    "vmid": { "requiredBy": ["cluster:vm"] }
+} }
+JSON
+cat > "${MDIR}/cfg/good.json"         <<'JSON'
+{ "vmname": "good", "tier": "app", "config": { "cluster:vm": { "vmid": 101 } } }
+JSON
+cat > "${MDIR}/cfg/notier.json"       <<'JSON'
+{ "vmname": "notier", "config": { "cluster:vm": { "vmid": 102 } } }
+JSON
+cat > "${MDIR}/cfg/novmid.json"       <<'JSON'
+{ "vmname": "novmid", "tier": "app", "config": { "cluster:vm": { } } }
+JSON
+cat > "${MDIR}/cfg/notamodule.json"   <<'JSON'
+{ "description": "no vmname — a schema or state file, not a module" }
+JSON
+run_mand() { bash "$MANDLINT" --config-dir "${MDIR}/cfg" --schema "${MDIR}/schema.json" 2>&1; }
+
+out="$(run_mand || true)"
+grep -qE 'WARNING.*notier|notier.*[Ww]arning' <<<"$out"     && ok "mandatory: an absent defaulted field is a WARNING, per the lint convention"     || bad "mandatory: 'notier' should be reported as a warning; got: $(tr '\n' ';' <<<"$out" | cut -c1-90)"
+
+grep -qE 'ERROR.*novmid|novmid.*[Ee]rror' <<<"$out"     && ok "mandatory: a block-required field with no default is an ERROR"     || bad "mandatory: 'novmid' should be reported as an error"
+
+grep -qE "set tier|tier:" <<<"$out"     && ok "mandatory: the warning names the remedy, not just the fault"     || bad "mandatory: the message must be actionable (name the field to set)"
+
+grep -q 'notamodule' <<<"$out"     && bad "mandatory: a config with no vmname must not be reported as a module"     || ok "mandatory: a config with no vmname is not reported"
+
+bash "$MANDLINT" --config-dir "${MDIR}/cfg" --schema "${MDIR}/schema.json" >/dev/null 2>&1     && bad "mandatory: an ERROR must exit non-zero (cannot proceed)"     || ok "mandatory: an error exits non-zero"
+
+# warnings alone must NOT block — that is the whole point of the convention
+rm -f "${MDIR}/cfg/novmid.json"
+bash "$MANDLINT" --config-dir "${MDIR}/cfg" --schema "${MDIR}/schema.json" >/dev/null 2>&1     && ok "mandatory: warnings alone exit 0 — the tool can proceed"     || bad "mandatory: a warning must not block; only errors exit non-zero"
+
+out="$(run_mand || true)"
+grep -qE 'ok|0 error' <<<"$out"     && ok "mandatory: a line is emitted even when there is nothing to report"     || bad "mandatory: silence must not be the pass signal"
+
+# The lint carries NO field list of its own: both rule kinds are derived from
+# the schema at run time, so a new mandate is a schema edit and zero code.
+# Guaranteed here rather than asserted in a comment.
+cat > "${MDIR}/schema2.json" <<'JSON'
+{ "fields": {
+    "tier":      { "requiredOnModule": true, "default": "app", "requiredBy": [] },
+    "brandnew":  { "requiredOnModule": true, "default": "zzz", "requiredBy": [] },
+    "vmid":      { "requiredBy": ["cluster:vm"] }
+} }
+JSON
+out2="$(bash "$MANDLINT" --config-dir "${MDIR}/cfg" --schema "${MDIR}/schema2.json" 2>&1 || true)"
+grep -q "brandnew" <<<"$out2" \
+    && ok "mandatory: a field added to the schema is enforced with no code change" \
+    || bad "mandatory: a new schema field must be picked up automatically"
+grep -q "zzz" <<<"$out2" \
+    && ok "mandatory: the new field's own default is reported, not a hardcoded one" \
+    || bad "mandatory: the default must come from the schema entry"
+
+rm -rf -- "$MDIR"
+
 echo ""
 echo "Results: ${PASS} passed, ${FAIL} failed"
 [[ "$FAIL" -eq 0 ]] || exit 1

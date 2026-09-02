@@ -191,6 +191,7 @@
     "tier": {
       "description": "Lifecycle role of the module (ADR-007b). Answers 'Can it be uninstalled?'. Orthogonal to 'source' — never collapsed into one enum (MECE). 'foundation' modules are critical platform components: they may only be installed into the 'mgmt' environment, are single-instance, and require --force to delete. 'app' modules are tenant-facing and deploy into any environment.",
       "type": "string",
+      "requiredOnModule": true,
       "requiredBy": [],
       "usedBy": [
         "general"
