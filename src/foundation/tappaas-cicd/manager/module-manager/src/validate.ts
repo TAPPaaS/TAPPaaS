@@ -28,6 +28,10 @@ export interface ValidateOptions {
   // Omit it and that check is SKIPPED — the tier/source lint stays pure and
   // usable without a tree. main.ts always supplies realServiceFs(configDir).
   fs?: ServiceFs;
+  // Declared repositories from site.json. Optional so a hand-built call still
+  // works; main.ts supplies them, and without them the source-ref check is a
+  // no-op rather than a false pass.
+  repos?: readonly { name: string; path: string; branch: string }[];
 }
 
 // Lint one module config; append findings to `out`.
@@ -88,9 +92,64 @@ export function validateModule(
   if (opts.fs) validateDependsOn(m, opts.fs, out);
   if (opts.fs) validateIntegratesWith(m, opts.fs, out);
 
+  // source-ref derivability — see validateSourceLocation.
+  if (opts.repos) validateSourceLocation(m, opts.repos, out);
+
   // TODO(question): the bash stub also intended a SCHEMA check (every field
   // against module-fields.json). PARKED — see main.ts. The reference-integrity
   // half of that TODO is now implemented above.
+}
+
+// A module's source REF, derived rather than stored.
+//
+// `.location` is set automatically by copy-update-json.sh and records WHERE the
+// module directory is — an absolute path, never which ref it came from. A ref
+// exists one level up, on site.json `.repositories[].branch`, so it is
+// derivable exactly while `.location` resolves inside a declared repository,
+// and unknowable when it does not.
+//
+// That distinction is invisible in a single-environment estate: one repository,
+// one branch, so path and ref coincide and the omission costs nothing. It
+// surfaces the moment a site runs dev or test alongside production, because a
+// module deployed from a feature branch into a test environment is CORRECT
+// behaviour that the model cannot express. The absent ref then carries two
+// opposite meanings — deliberately on a branch, or left on a stale checkout —
+// and nothing distinguishes them. Same shape as an absent `tier` meaning both
+// "deliberately app" and "never considered" (#561).
+//
+// Severity follows validate-module-tier-source.sh's rule — "can the tool
+// proceed correctly?". It can: the module resolves through `.location` and
+// works. So this is a WARNING, and the error level stays reserved for a
+// location that resolves to nothing at all.
+export function validateSourceLocation(
+  m: ModuleConfig,
+  repos: readonly { name: string; path: string; branch: string }[],
+  out: ValidateFinding[],
+): void {
+  const raw = m.raw as Record<string, unknown> | undefined;
+  const loc = typeof raw?.location === "string" ? raw.location : "";
+  // No .location at all: the module resolved through a repository catalog, and
+  // the catalog entry's repository supplies the ref. Not a finding.
+  if (!loc) return;
+
+  const inside = repos.some((r) => {
+    if (!r.path) return false;
+    const root = r.path.replace(/\/+$/, "");
+    // Equality OR a path SEPARATOR boundary: "/x/TAPPaaSX" must not count as
+    // inside "/x/TAPPaaS". A bare startsWith would say it does.
+    return loc === root || loc.startsWith(root + "/");
+  });
+  if (inside) return;
+
+  void out.push({
+    module: m.name,
+    severity: "warning",
+    message:
+      `source at '${loc}' is outside every repository declared in site.json — ` +
+      `its ref cannot be derived, so a deliberate deploy-from-a-branch is ` +
+      `indistinguishable from a checkout left behind. Declare the repository ` +
+      `(site-manager repository add) or redeploy the module from a declared path.`,
+  });
 }
 
 // config-block structural rules (#549). module-fields.json declares these as
