@@ -25,6 +25,42 @@ const UNBOUND_MANAGER_BIN = (): string => process.env.UNBOUND_MANAGER_BIN ?? "un
 const ACME_MANAGER_BIN = (): string => process.env.ACME_MANAGER_BIN ?? "acme-manager";
 const ACME_SETUP_BIN = (): string => process.env.ACME_SETUP_BIN ?? "acme-setup.sh";
 
+// A cert this close to expiry (or already expired) is treated by reconcile as
+// "needs (re)issuing", not "issued" (#548). 30 days mirrors os-acme-client's
+// own renewal timing for a 90-day Let's Encrypt cert (renewInterval 60 = renew
+// at ~30 days remaining), so the reconcile backstop and the auto-renew cron
+// (#547) agree on when a cert is due.
+export const CERT_RENEW_WINDOW_DAYS = 30;
+
+// Pure decision extracted for unit testing: given `acme-manager status` output,
+// the process exit code, and the current time (unix seconds), return the refid
+// of a VALID issued cert, or undefined when no cert is configured OR the cert
+// is expired / within the renewal window. Expiry is read from the `notAfter`
+// line (the Trust store's real notAfter), never inferred from statusCode which
+// stays 200 past expiry (#548). notAfter==0/absent means "unknown" → the refid
+// is trusted (we do NOT force a needless reissue on missing data, matching
+// #540's rule of not acting on an undatable status).
+export function refidFromAcmeStatus(
+  stdout: string,
+  rc: number,
+  nowSec: number,
+): string | undefined {
+  if (rc !== 0) return undefined; // "no certificate '*.<d>' configured"
+  let refid: string | undefined;
+  let notAfter = 0;
+  for (const line of stdout.split("\n")) {
+    const r = /^\s*certRefId\s*:\s*(\S+)/.exec(line);
+    if (r && r[1]) refid = r[1];
+    const n = /^\s*notAfter\s*:\s*(\d+)/.exec(line);
+    if (n && n[1]) notAfter = parseInt(n[1], 10);
+  }
+  if (!refid) return undefined;
+  if (notAfter > 0 && notAfter - nowSec <= CERT_RENEW_WINDOW_DAYS * 86400) {
+    return undefined; // expired or within the renewal window → plan a renewal
+  }
+  return refid;
+}
+
 // Run + capture via the shared exec helper, mapping a spawn failure (binary
 // missing on PATH) to the manager-specific NetworkUnreachable so the reconcile
 // verb can die with its "unreachable" message.
@@ -233,17 +269,12 @@ export class CliDnsTlsClient implements DnsTlsClient {
   }
 
   issuedCertRefid(domain: string): string | undefined {
-    // `acme-manager status --domain <d>` prints `certRefId : <refid>` for an
-    // issued cert and exits non-zero when none is configured. No DNS-API creds
-    // needed — it just queries the OPNsense Certificates API.
+    // `acme-manager status --domain <d>` prints `certRefId : <refid>` and
+    // `notAfter : <unix>` for an issued cert and exits non-zero when none is
+    // configured. No DNS-API creds needed — it just queries OPNsense.
     const r = captureResult(ACME_MANAGER_BIN(), ["--no-ssl-verify", "status", "--domain", domain]);
     if (!r.ran) throw new NetworkUnreachable(`${ACME_MANAGER_BIN()} status: ${r.stderr}`);
-    if (r.rc !== 0) return undefined; // "no certificate '*.<d>' configured"
-    for (const line of r.stdout.split("\n")) {
-      const m = /^\s*certRefId\s*:\s*(\S+)/.exec(line);
-      if (m && m[1]) return m[1];
-    }
-    return undefined;
+    return refidFromAcmeStatus(r.stdout, r.rc, Math.floor(Date.now() / 1000));
   }
 
   private readCertRefids(): Record<string, string> {

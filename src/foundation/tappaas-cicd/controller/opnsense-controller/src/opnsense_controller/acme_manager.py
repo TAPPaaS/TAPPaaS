@@ -83,9 +83,12 @@ class AcmeValidation:
     # Seconds acme.sh waits after writing the challenge TXT before triggering
     # Let's Encrypt validation. os-acme-client defaults this to 0, which fires
     # LE immediately — before the DNS provider has propagated the record — so
-    # issuance fails with "No TXT record found" (#328). 45s covers the common
-    # providers (deSEC, Cloudflare, Hetzner); raise per-provider if needed.
-    dns_sleep: int = 45
+    # issuance fails with "No TXT record found" (#328). 45s was once enough, but
+    # LE's widened multi-perspective validation made it too short (#539); 150s is
+    # the value acme-setup.sh forwards (#541). Keep this default aligned with the
+    # wrapper so a direct `acme-manager setup` call (or a cron renewal reusing
+    # the stored validation) isn't left with the known-too-short 45s.
+    dns_sleep: int = 150
     enabled: bool = True
 
 
@@ -462,30 +465,33 @@ class AcmeManager:
         typically <15 s for Cloudflare (PoC observed <10 s).
 
         ``prior_status_update`` is the cert's ``statusLastUpdate`` captured
-        *before* signing was triggered. A non-200 status is only this run's
-        result when its ``statusLastUpdate`` is newer than that baseline; an
-        equal/older value is a previous attempt's residue that acme.sh has not
-        yet overwritten — it is still in its dns_sleep and hasn't asked the CA
-        to validate — so we ignore it and keep polling (#540). This replaces the
-        old "first poll only" tolerance (#379), which false-failed within
+        *before* signing was triggered. A status (200 OR 4xx/5xx) is only this
+        run's result when its ``statusLastUpdate`` is newer than that baseline;
+        an equal/older value is a previous attempt's residue that acme.sh has
+        not yet overwritten — it is still in its dns_sleep and hasn't asked the
+        CA to validate — so we ignore it and keep polling. The freshness gate is
+        applied to BOTH branches: to the failure branch so a stale 4xx is not
+        reported as this run failing (#540), and to the success branch so a
+        stale 200 is not reported as this run succeeding (#548) — otherwise
+        re-signing an already-issued cert returns "done" in <1 s while the real
+        signing is still in dns_sleep and completes minutes later. This replaces
+        the old "first poll only" tolerance (#379), which false-failed within
         seconds because dns_sleep (~150 s) far exceeds one poll_interval. When
-        ``prior_status_update`` is None the freshness gate is disabled and any
-        4xx/5xx fails immediately. Using the OPNsense-supplied timestamp on both
-        sides keeps the comparison free of cicd↔firewall clock skew; a missing
-        statusLastUpdate parses to 0, so an undatable error is left to time out
-        rather than false-fail (a recoverable timeout beats abandoning a good
-        cert).
+        ``prior_status_update`` is None the gate is disabled: any 200 returns and
+        any 4xx/5xx fails immediately. Using the OPNsense-supplied timestamp on
+        both sides keeps the comparison free of cicd↔firewall clock skew; a
+        missing statusLastUpdate parses to 0, so an undatable status is left to
+        time out rather than being taken as this run's result (a recoverable
+        timeout beats a false success/failure).
         """
         deadline = time.time() + timeout
         last: AcmeCertInfo | None = None
         while time.time() < deadline:
             last = self.certificate_get(uuid)
-            if last.status_code == 200 and last.cert_refid:
+            fresh = prior_status_update is None or last.status_last_update > prior_status_update
+            if last.status_code == 200 and last.cert_refid and fresh:
                 return last
-            if 400 <= last.status_code < 600 and (
-                prior_status_update is None
-                or last.status_last_update > prior_status_update
-            ):
+            if 400 <= last.status_code < 600 and fresh:
                 raise RuntimeError(
                     f"certificate {uuid} ({last.name}) failed: status={last.status_code}"
                 )
@@ -494,6 +500,80 @@ class AcmeManager:
             f"certificate {uuid} ({last.name if last else '?'}) did not issue "
             f"within {timeout}s (last status={last.status_code if last else '?'})"
         )
+
+    # ── Auto-renewal cron (#547) ────────────────────────────────────────
+
+    def renewal_cron_uuid(self) -> str:
+        """Return the UUID of the wired auto-renewal cron job, or "" if none.
+
+        os-acme-client stores it in settings.UpdateCron (a ModelRelationField).
+        The field renders as {uuid_or_"": {"value": ..., "selected": 0|1}}; the
+        selected non-empty key is the cron job. "" (the "None" option) selected
+        means no cron is wired — the #547 symptom.
+        """
+        node = self._api_get("Settings", "get")
+        field = node.get("acmeclient", node).get("settings", {}).get("UpdateCron", {})
+        if isinstance(field, dict):
+            for key, opt in field.items():
+                if key and isinstance(opt, dict) and opt.get("selected") in (1, "1"):
+                    return key
+        return ""
+
+    def ensure_renewal_cron(self) -> dict:
+        """Create/select the os-acme-client auto-renewal cron job (idempotent).
+
+        os-acme-client writes autoRenewal=1 + renewInterval onto the certificate
+        but NEVER creates the cron that actually runs ``acme.sh --cron``; those
+        fields are permission-to-renew, not a trigger, so an issued cert expires
+        90 days later, unrenewed (#547). The plugin's own
+        ``Settings/fetchCronIntegration`` endpoint — what the GUI's cron toggle
+        calls — creates the daily ``acmeclient cron-auto-renew`` job (or
+        validates/repairs an existing one) and stores its UUID in
+        settings.UpdateCron. It self-heals on re-run, so existing installs are
+        fixed simply by re-running setup.
+
+        The endpoint only wires the cron when plugin-level autoRenewal is on, so
+        we ensure that first (it is the model default, but an operator may have
+        cleared it). Returns the endpoint result dict
+        ({"result": "new"|"no change"|...}).
+        """
+        self._ensure_setting_auto_renewal()
+        return self._api_post("Settings", "fetchCronIntegration")
+
+    def _ensure_setting_auto_renewal(self) -> None:
+        """Set the plugin-level settings.autoRenewal flag to 1 if it is not."""
+        node = self._api_get("Settings", "get")
+        cur = node.get("acmeclient", node).get("settings", {}).get("autoRenewal", "1")
+        if cur != "1":
+            # Nested under the model root, like enable_plugin (#475).
+            self._api_post("Settings", "set", {"acmeclient": {"settings": {"autoRenewal": "1"}}})
+
+    # ── Certificate expiry (Trust store; #548) ──────────────────────────
+
+    def cert_not_after(self, refid: str) -> int:
+        """Return the Trust-store cert's notAfter (unix ts) for <refid>, or 0.
+
+        os-acme-client does not record certificate validity — statusCode is
+        written at issuance and never revised, so it still reads 200 long after
+        the cert has expired (#548). The real expiry lives on the issued
+        certificate in the OPNsense Trust store (System → Trust), keyed by the
+        same refid. Returns 0 when the refid is empty/unknown or the field is
+        absent; callers treat 0 as "unknown", not "expired".
+        """
+        if not refid:
+            return 0
+        resp = self.client.run_module("raw", params={
+            "module": "trust",
+            "controller": "cert",
+            "command": "search",
+            "action": "post",
+            # Trust searchBase paginates; ask for enough rows to include ours.
+            "data": {"current": 1, "rowCount": 5000},
+        }).get("result", {}).get("response", {})
+        for row in resp.get("rows", []):
+            if row.get("refid") == refid:
+                return int(row.get("valid_to") or 0)
+        return 0
 
     # ── Service control ─────────────────────────────────────────────────
 

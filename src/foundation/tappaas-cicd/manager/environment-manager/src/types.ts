@@ -142,9 +142,12 @@ export interface DnsTlsClient {
   registerWildcard(domain: string, gatewayIp: string, zone: string, envName: string): void;
 
   // ── TLS (cert refid runtime state) ──
-  // The OPNsense Trust refid of an already-issued `*.<domain>` cert, or undefined
-  // when no cert is issued yet (queried non-interactively via `acme-manager
-  // status` — no DNS-API credentials needed).
+  // The OPNsense Trust refid of a VALID already-issued `*.<domain>` cert, or
+  // undefined when no cert is issued yet OR the issued cert is expired / within
+  // the renewal window (#548) — so reconcile plans a renewal for an expired
+  // cert, not only an absent one. Queried non-interactively via `acme-manager
+  // status` (no DNS-API credentials needed); expiry is read from the cert's
+  // notAfter, never inferred from statusCode.
   issuedCertRefid(domain: string): string | undefined;
   // The refid currently recorded in cert-refids.json for this environment, or
   // undefined when the file/key is absent.

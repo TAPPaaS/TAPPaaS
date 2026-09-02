@@ -143,16 +143,18 @@ class TestValidationCarriesProviderFields(unittest.TestCase):
         body = next(c["data"] for c in mgr.client.calls if c["command"] == "add")
         self.assertEqual(body["validation"]["dns_hetzner_token"], "HT")
 
-    def test_default_dns_sleep_is_nonzero(self):
+    def test_default_dns_sleep_matches_wrapper(self):
         # Regression for #328: os-acme-client defaults dns_sleep to 0, firing LE
-        # validation before the TXT propagates. Our default must be > 0.
+        # validation before the TXT propagates. Our default must be > 0 — and
+        # aligned with acme-setup.sh's 150 (#539/#541), since 45 proved too short
+        # for LE multi-perspective validation and cron renewals reuse this value.
         mgr = _make_manager({
             ("Validations", "search"): {"rows": []},
             ("Validations", "add"): {"uuid": "V3"},
         })
         mgr.validation_ensure(AcmeValidation(name="d", dns_service="dns_desec"))
         body = next(c["data"] for c in mgr.client.calls if c["command"] == "add")["validation"]
-        self.assertEqual(body["dns_sleep"], "45")
+        self.assertEqual(body["dns_sleep"], "150")
 
     def test_dns_sleep_override_lands_in_body(self):
         mgr = _make_manager({
@@ -260,6 +262,111 @@ class TestCertificateWaitFreshnessGate(unittest.TestCase):
             mgr.certificate_wait(
                 "anything", timeout=1, poll_interval=0, prior_status_update=0,
             )
+
+
+class TestCertificateWaitSuccessFreshnessGate(unittest.TestCase):
+    """A 200 counts as this run's success only when it post-dates the sign (#548)."""
+
+    def _mgr(self, status_last_update: str):
+        return _make_manager({
+            ("Certificates", "get"): {"certificate": {
+                "name": "*.example.org", "statusCode": "200",
+                "certRefId": "REF123", "lastUpdate": "",
+                "statusLastUpdate": status_last_update,
+                "account": {}, "validationMethod": {},
+            }},
+        })
+
+    def test_stale_200_is_not_taken_as_this_runs_success(self):
+        # statusLastUpdate == the pre-sign baseline → the previous issuance's
+        # 200, while this sign is still in dns_sleep. Returning it would report
+        # "done" in <1s with a stale cert; the wait must keep polling → timeout.
+        mgr = self._mgr("1000")
+        with self.assertRaises(TimeoutError):
+            mgr.certificate_wait(
+                "anything", timeout=1, poll_interval=0, prior_status_update=1000,
+            )
+
+    def test_fresh_200_returns_success(self):
+        # statusLastUpdate newer than the baseline → this run's issuance.
+        mgr = self._mgr("2000")
+        info = mgr.certificate_wait(
+            "anything", timeout=1, poll_interval=0, prior_status_update=1000,
+        )
+        self.assertEqual(info.status_code, 200)
+        self.assertEqual(info.cert_refid, "REF123")
+
+    def test_gate_disabled_returns_any_200(self):
+        # prior_status_update=None (legacy callers) → any 200 returns at once.
+        mgr = self._mgr("1000")
+        info = mgr.certificate_wait("anything", timeout=1, poll_interval=0)
+        self.assertEqual(info.cert_refid, "REF123")
+
+
+class TestRenewalCron(unittest.TestCase):
+    """setup wires the os-acme-client auto-renewal cron via fetchCronIntegration (#547)."""
+
+    def test_ensure_renewal_cron_calls_fetch_integration(self):
+        mgr = _make_manager({
+            ("Settings", "get"): {"acmeclient": {"settings": {"autoRenewal": "1"}}},
+            ("Settings", "fetchCronIntegration"): {"result": "new", "uuid": "CRON1"},
+        })
+        res = mgr.ensure_renewal_cron()
+        self.assertEqual(res.get("result"), "new")
+        cmds = [c["command"] for c in mgr.client.calls]
+        self.assertIn("fetchCronIntegration", cmds)
+        # autoRenewal already 1 → no needless settings/set write.
+        self.assertNotIn("set", cmds)
+
+    def test_ensure_renewal_cron_sets_autorenewal_when_off(self):
+        mgr = _make_manager({
+            ("Settings", "get"): {"acmeclient": {"settings": {"autoRenewal": "0"}}},
+            ("Settings", "fetchCronIntegration"): {"result": "new"},
+        })
+        mgr.ensure_renewal_cron()
+        set_call = next((c for c in mgr.client.calls if c["command"] == "set"), None)
+        self.assertIsNotNone(set_call)
+        self.assertEqual(set_call["data"]["acmeclient"]["settings"]["autoRenewal"], "1")
+
+    def test_renewal_cron_uuid_reads_selected(self):
+        mgr = _make_manager({
+            ("Settings", "get"): {"acmeclient": {"settings": {"UpdateCron": {
+                "": {"value": "None", "selected": 0},
+                "CRONUUID": {"value": "AcmeClient renewal", "selected": 1},
+            }}}},
+        })
+        self.assertEqual(mgr.renewal_cron_uuid(), "CRONUUID")
+
+    def test_renewal_cron_uuid_empty_when_only_none(self):
+        # The #547 symptom: UpdateCron offers only the "None" option, selected.
+        mgr = _make_manager({
+            ("Settings", "get"): {"acmeclient": {"settings": {"UpdateCron": {
+                "": {"value": "None", "selected": 1},
+            }}}},
+        })
+        self.assertEqual(mgr.renewal_cron_uuid(), "")
+
+
+class TestCertNotAfter(unittest.TestCase):
+    """Expiry comes from the Trust store, not the acme statusCode (#548)."""
+
+    def test_reads_valid_to_for_matching_refid(self):
+        mgr = _make_manager({
+            ("cert", "search"): {"rows": [
+                {"refid": "OTHER", "valid_to": "111"},
+                {"refid": "REF123", "valid_to": "1888888888"},
+            ]},
+        })
+        self.assertEqual(mgr.cert_not_after("REF123"), 1888888888)
+
+    def test_unknown_refid_returns_zero(self):
+        mgr = _make_manager({("cert", "search"): {"rows": []}})
+        self.assertEqual(mgr.cert_not_after("NOPE"), 0)
+
+    def test_empty_refid_short_circuits(self):
+        mgr = _make_manager({})
+        self.assertEqual(mgr.cert_not_after(""), 0)
+        self.assertEqual(mgr.client.calls, [])
 
 
 class TestPluginEnabled(unittest.TestCase):

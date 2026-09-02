@@ -173,6 +173,22 @@ def cmd_setup(mgr: AcmeManager, args: argparse.Namespace) -> int:
     )
     print(f"    ✓ issued; refid={info.cert_refid}  status={info.status_code}")
 
+    # Wire the auto-renewal cron (#547). os-acme-client sets autoRenewal on the
+    # cert but never creates the cron that runs acme.sh --cron, so without this
+    # the cert would expire in 90 days, unrenewed. Idempotent + self-healing, so
+    # a re-run of setup fixes an existing install.
+    print("==> auto-renewal cron")
+    result = mgr.ensure_renewal_cron()
+    if mgr.renewal_cron_uuid():
+        print(f"    ✓ renewal cron active ({result.get('result', 'ok')})")
+    else:
+        print(
+            "    ! WARNING: auto-renewal cron was NOT created — this certificate "
+            "will not renew automatically.\n"
+            "      Check Services → ACME Client → Settings (autoRenewal + cron).",
+            file=sys.stderr,
+        )
+
     print()
     print("==> NEXT STEP")
     print(f"    Save the refid in /home/tappaas/config/configuration.json under")
@@ -197,6 +213,9 @@ def cmd_status(mgr: AcmeManager, args: argparse.Namespace) -> int:
     print(f"statusCode  : {info.status_code}  (200 = issued)")
     print(f"certRefId   : {info.cert_refid}")
     print(f"lastUpdate  : {info.last_update}")
+    # notAfter is read from the Trust store, not inferred from statusCode which
+    # stays 200 past expiry (#548). 0 = unknown (no refid / not in Trust store).
+    print(f"notAfter    : {mgr.cert_not_after(info.cert_refid)}  (unix; 0 = unknown)")
     return 0
 
 
@@ -235,9 +254,10 @@ def main(argv: list[str] | None = None) -> int:
                          "Repeatable. Field names match os-acme-client's model.")
     p_setup.add_argument("--account-name", default="letsencrypt", help="ACME account name")
     p_setup.add_argument("--validation-name", default="acme-dns01", help="Validation name")
-    p_setup.add_argument("--dns-sleep", type=int, default=45,
+    p_setup.add_argument("--dns-sleep", type=int, default=150,
                          help="Seconds to wait for DNS-01 TXT propagation before "
-                         "triggering LE validation (os-acme-client dns_sleep; default 45). "
+                         "triggering LE validation (os-acme-client dns_sleep; default 150). "
+                         "45 was too short for LE multi-perspective validation (#539/#541); "
                          "0 reproduces the #328 race. Raise for slow DNS providers.")
     p_setup.add_argument("--action-name", default="caddy-reload", help="Action name")
     p_setup.add_argument("--staging", action="store_true",

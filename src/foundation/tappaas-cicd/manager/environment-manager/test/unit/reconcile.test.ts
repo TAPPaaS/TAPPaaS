@@ -8,6 +8,7 @@
 
 import { Environment, NetworkUnreachable } from "../../src/types";
 import { applyPlan, computePlan } from "../../src/reconcile";
+import { CERT_RENEW_WINDOW_DAYS, refidFromAcmeStatus } from "../../src/clients";
 import { FakeDnsTlsClient, FakeModuleClient, FakeNetworkClient } from "./fake-clients";
 
 let passed = 0;
@@ -814,6 +815,51 @@ function wildcardEnv(name: string, zone: string, domain: string): Environment {
     threw = err instanceof NetworkUnreachable;
   }
   check(threw, "an unreachable issuance binary propagates instead of being collected");
+}
+
+// ── #548: issuedCertRefid is expiry-aware (refidFromAcmeStatus) ───────
+// An expired cert must NOT be reported as "issued", so reconcile plans a
+// renewal for it. Expiry is read from `notAfter`, never from statusCode.
+{
+  const NOW = 1_800_000_000; // fixed reference time (unix seconds)
+  const day = 86400;
+  const status = (refid: string, notAfter: number): string =>
+    `name        : *.app.example.com\ncertRefId   : ${refid}\nnotAfter    : ${notAfter}\n`;
+
+  check(
+    refidFromAcmeStatus(status("REF1", NOW + 90 * day), 0, NOW) === "REF1",
+    "a valid cert (far from expiry) reports its refid as issued",
+  );
+  check(
+    refidFromAcmeStatus(status("REF1", NOW - day), 0, NOW) === undefined,
+    "an expired cert reports undefined → reconcile plans a renewal",
+  );
+  check(
+    refidFromAcmeStatus(status("REF1", NOW + (CERT_RENEW_WINDOW_DAYS - 1) * day), 0, NOW) ===
+      undefined,
+    "a cert within the renewal window reports undefined → renewal planned",
+  );
+  check(
+    refidFromAcmeStatus(status("REF1", NOW + (CERT_RENEW_WINDOW_DAYS + 5) * day), 0, NOW) ===
+      "REF1",
+    "a cert just outside the renewal window is still reported as issued",
+  );
+  check(
+    refidFromAcmeStatus("name : *.app.example.com\ncertRefId   : REF1\n", 0, NOW) === "REF1",
+    "an unknown notAfter (absent) trusts the refid — no needless reissue",
+  );
+  check(
+    refidFromAcmeStatus(status("REF1", 0), 0, NOW) === "REF1",
+    "notAfter=0 (unknown) trusts the refid — no needless reissue",
+  );
+  check(
+    refidFromAcmeStatus("no certificate '*.app.example.com' configured\n", 1, NOW) === undefined,
+    "a non-zero exit (no cert configured) reports undefined",
+  );
+  check(
+    refidFromAcmeStatus("name : *.app.example.com\n", 0, NOW) === undefined,
+    "output without a certRefId line reports undefined",
+  );
 }
 
 console.log(`\n${passed} passed, ${failed} failed.`);
