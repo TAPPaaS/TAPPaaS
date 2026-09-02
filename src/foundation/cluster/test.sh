@@ -223,6 +223,104 @@ else
     fi
 fi
 
+# ── Test 3b: report-service.sh — the actual-state reader (ADR-020) ──
+#
+# report-service.sh is the READ half of the ADR-020 D7 contract: the manager
+# resolves DESIRED, this reports ACTUAL, and the one differ in the manager
+# compares them. What is asserted here is the CONTRACT, not any particular
+# value: valid JSON, every declared key present, and the located node agreeing
+# with the cluster — because a consumer that cannot tell "the guest has no
+# net1" from "the reporter did not look" is exactly what this replaces.
+
+info "${BOLD}Test 3b: cluster:vm report-service.sh (actual-state contract)${CL}"
+
+REPORTER="${SCRIPT_DIR}/services/vm/report-service.sh"
+# The liveKeys fields.json declares, plus the three locator keys.
+readonly REPORT_KEYS="vmid node status name cores memory cpu tags bios ostype storage diskSize net0 net1"
+
+if [[ ! -x "${REPORTER}" ]]; then
+    fail "report-service.sh is missing or not executable"
+elif ! bash -n "${REPORTER}" 2>/dev/null; then
+    fail "report-service.sh does not parse"
+else
+    pass "report-service.sh parses and is executable"
+
+    # Usage contract: no module name is a usage error (2), not a crash.
+    "${REPORTER}" >/dev/null 2>&1
+    rc=$?
+    if [[ ${rc} -eq 2 ]]; then
+        pass "report-service.sh with no module exits 2 (usage)"
+    else
+        fail "report-service.sh with no module should exit 2, got ${rc}"
+    fi
+
+    # An unknown module is a READ failure (1) — state unknown, never a partial
+    # report that a caller could mistake for "the guest has nothing set".
+    "${REPORTER}" __no_such_module__ >/dev/null 2>&1
+    rc=$?
+    if [[ ${rc} -eq 1 ]]; then
+        pass "report-service.sh on an unknown module exits 1 (state unknown)"
+    else
+        fail "report-service.sh on an unknown module should exit 1, got ${rc}"
+    fi
+
+    if [[ "${node_reachable}" -eq 0 || -z "${target:-}" ]]; then
+        skip "live report (no reachable node / no installed cluster:vm module)"
+    else
+        report="$("${REPORTER}" "${target}" 2>/dev/null)"
+        rc=$?
+        if [[ ${rc} -ne 0 ]]; then
+            fail "report-service.sh ${target} exited ${rc}"
+        elif ! jq -e . >/dev/null 2>&1 <<< "${report}"; then
+            fail "report-service.sh ${target} did not emit valid JSON"
+        else
+            pass "report-service.sh ${target} emits valid JSON"
+
+            missing=""
+            for k in ${REPORT_KEYS}; do
+                jq -e --arg k "$k" 'has($k)' >/dev/null 2>&1 <<< "${report}" || missing+=" ${k}"
+            done
+            if [[ -z "${missing}" ]]; then
+                pass "every declared liveKey is present (absent values are empty, not omitted)"
+            else
+                fail "report-service.sh omitted key(s):${missing}"
+            fi
+
+            # Every value must be a STRING. The manager normalizes per the
+            # manifest's declared normalizer; a reporter that emitted a number
+            # for cores and a string for memory would make that comparison
+            # type-dependent.
+            if jq -e 'to_entries | all(.value | type == "string")' >/dev/null 2>&1 <<< "${report}"; then
+                pass "every reported value is a string (the manager normalizes, not the reporter)"
+            else
+                fail "report-service.sh emitted a non-string value"
+            fi
+
+            # The reported node must be where the cluster actually holds the
+            # guest — not config.node. That is what makes `node` drift visible
+            # at all (#526: a migrate leaves .node unchanged on purpose).
+            rvmid="$(jq -r '.vmid' <<< "${report}")"
+            rnode="$(jq -r '.node' <<< "${report}")"
+            cluster_row="$(find_vm "${rvmid}")" || cluster_row=""
+            if [[ -z "${cluster_row}" ]]; then
+                skip "cluster could not confirm the node for vmid ${rvmid}"
+            elif [[ "${cluster_row%% *}" == "${rnode}" ]]; then
+                pass "reported node (${rnode}) is where the cluster holds vmid ${rvmid}"
+            else
+                fail "reported node ${rnode} != cluster node ${cluster_row%% *} for vmid ${rvmid}"
+            fi
+
+            # net0 is mandatory on a TAPPaaS VM; net1 is optional and must be
+            # reported as an EMPTY STRING when the guest has one NIC.
+            if [[ -n "$(jq -r '.net0' <<< "${report}")" ]]; then
+                pass "net0 is reported for an installed VM"
+            else
+                fail "net0 was empty for ${target} — every TAPPaaS VM has a primary NIC"
+            fi
+        fi
+    fi
+fi
+
 # ── Deep Test: create a VM, induce zone drift, verify reconcile ─────
 
 deep_cleanup() {
