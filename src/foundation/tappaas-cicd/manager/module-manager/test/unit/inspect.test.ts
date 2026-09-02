@@ -11,11 +11,13 @@ import { chmodSync, mkdtempSync, rmSync, writeFileSync } from "fs";
 import { tmpdir } from "os";
 import { join } from "path";
 import {
+  appliedDefault,
   buildConfigOnlyReport,
   buildVmReport,
   dependsOnOf,
   guestTypeFromDeps,
   parseQmConfig,
+  resolveField,
   vmnetParse,
 } from "../../src/inspect";
 import {
@@ -345,6 +347,106 @@ function text(lines: { text: string }[]): string {
     nodeDrift.errors === buildVmReport(base).errors + 1,
     "#526: node drift counts as an error, like any actual-vs-config field",
   );
+}
+
+// ── 7b. #550: schema-driven defaults, <angle brackets>, .orig 3-way ─────
+{
+  // A trimmed module-fields.json .fields: real defaults gated by usedBy, plus a
+  // "<computed>" placeholder (never applied) and a section field for network:proxy.
+  const schema = {
+    cputype: { default: "host", usedBy: ["cluster:vm"] },
+    cores: { default: 2, usedBy: ["cluster:vm", "cluster:lxc"] },
+    memory: { default: 4096, usedBy: ["cluster:vm", "cluster:lxc"] },
+    vmname: { default: "<computed from module name + environment>", usedBy: ["cluster:vm"] },
+    proxyPort: { default: 80, usedBy: ["network:proxy"] },
+    status: { default: "Development", usedBy: ["general"] },
+  };
+
+  // ── pure resolver ──
+  check(appliedDefault("cputype", ["cluster:vm"], schema) === "host",
+    "#550: a usedBy-matched default applies (cputype→host for cluster:vm)");
+  check(appliedDefault("cputype", ["cluster:lxc"], schema) === "",
+    "#550: a default whose usedBy does not match the deps does NOT apply (cputype on LXC)");
+  check(appliedDefault("proxyPort", ["cluster:vm"], schema) === "",
+    "#550: a section default only applies when the module declares that dependency");
+  check(appliedDefault("proxyPort", ["network:proxy"], schema) === "80",
+    "#550: a dependsOn-section field defaults in for a module that declares it");
+  check(appliedDefault("vmname", ["cluster:vm"], schema) === "",
+    "#550: a '<computed>' placeholder default is never applied");
+  check(appliedDefault("status", [], schema) === "Development",
+    "#550: a usedBy:general default applies regardless of deps");
+  check(resolveField({ cputype: "kvm64" }, "cputype", ["cluster:vm"], schema).defaulted === false,
+    "#550: a declared value is used verbatim (not defaulted)");
+  check(resolveField({}, "cputype", ["cluster:vm"], schema).value === "host" &&
+    resolveField({}, "cputype", ["cluster:vm"], schema).defaulted === true,
+    "#550: an unset field resolves to the schema default, flagged defaulted");
+
+  // ── table rendering ──
+  const strip = (r: { lines: { text: string }[] }): string =>
+    text(r.lines).replace(/\[[0-9;]*m/g, "");
+  const base = {
+    module: "demo",
+    vmid: "410",
+    cfg: { vmname: "demo", vmid: 410, node: "tappaas1", dependsOn: ["cluster:vm"] },
+    git: null,
+    zones: null,
+    vmStatus: "running",
+    actualNode: "tappaas1",
+    schema,
+  };
+
+  // Unset cputype → Desired '<host>' (angle-bracketed default), and since Actual
+  // is host too, no drift.
+  const matching = buildVmReport({
+    ...base,
+    actual: parseQmConfig(["name: demo", "cores: 2", "cpu: host"].join("\n")),
+  });
+  check(/cputype\s+.*<host>\s+host/.test(strip(matching)),
+    "#550: an unset cputype renders Desired '<host>' (bracketed default), not '-'");
+  check(matching.errors === 0, "#550: actual matching the defaulted desired is no drift");
+
+  // Actual differs from the default → drift (the update path would qm-set it).
+  const drifting = buildVmReport({
+    ...base,
+    actual: parseQmConfig(["name: demo", "cores: 2", "cpu: x86-64-v2"].join("\n")),
+  });
+  check(drifting.errors >= 1, "#550: actual differing from the defaulted desired reports drift");
+
+  // Without a schema, behaviour is unchanged (no defaults, no brackets).
+  const noSchema = buildVmReport({ ...base, schema: undefined,
+    actual: parseQmConfig(["name: demo", "cpu: host"].join("\n")) });
+  check(!/<host>/.test(text(noSchema.lines)),
+    "#550: no schema → no defaulting (back-compat, literal values only)");
+
+  // ── .orig 3-way (on `node`, which always renders): an install-time override
+  //    is annotated, not flagged. cfg node=tappaas2 ≠ orig/release node=tappaas1.
+  const overridden = buildVmReport({
+    module: "demo", vmid: "410",
+    cfg: { vmname: "demo", vmid: 410, node: "tappaas2", dependsOn: ["cluster:vm"] },
+    git: { vmname: "demo", vmid: 410, node: "tappaas1", dependsOn: ["cluster:vm"] }, // release says tappaas1
+    orig: { vmname: "demo", vmid: 410, node: "tappaas1", dependsOn: ["cluster:vm"] }, // pre-image said tappaas1
+    zones: null,
+    actual: parseQmConfig(["name: demo"].join("\n")),
+    vmStatus: "running", actualNode: "tappaas2", schema,
+  });
+  check(/not tracking release state on purpose/.test(strip(overridden)),
+    "#550: a field overwritten at install (desired≠orig) is annotated as intentional");
+  check(overridden.warnings === 0,
+    "#550: the intentional override does not count as config drift (yellow suppressed)");
+
+  // Same release divergence but desired==orig → ordinary config drift (yellow),
+  // NOT annotated (the operator did not override; release moved under them).
+  const tracked = buildVmReport({
+    module: "demo", vmid: "410",
+    cfg: { vmname: "demo", vmid: 410, node: "tappaas2", dependsOn: ["cluster:vm"] },
+    git: { vmname: "demo", vmid: 410, node: "tappaas1", dependsOn: ["cluster:vm"] },
+    orig: { vmname: "demo", vmid: 410, node: "tappaas2", dependsOn: ["cluster:vm"] }, // pre-image already tappaas2
+    zones: null,
+    actual: parseQmConfig(["name: demo"].join("\n")),
+    vmStatus: "running", actualNode: "tappaas2", schema,
+  });
+  check(tracked.warnings >= 1 && !/not tracking release/.test(strip(tracked)),
+    "#550: desired==orig but ≠release is ordinary config drift (yellow), not annotated");
 }
 
 // ── 7b. the LXC guest path reads pct-shaped keys (#465) ────────────────

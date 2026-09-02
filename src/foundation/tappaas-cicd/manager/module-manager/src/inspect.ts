@@ -61,6 +61,58 @@ export function getField(o: Record<string, unknown> | null, key: string): string
   return o ? jqStr(o[key]) : "";
 }
 
+// ── pure: schema-driven field defaults (#550) ──────────────────────────
+// The desired state of a field the module does not declare is its
+// module-fields.json `default` — the SAME schema the install/update paths
+// resolve against — not a value hardcoded here. The inspection Desired/Released
+// columns surface that default (marked with <angle brackets>) so the table
+// shows the effective value instead of "-" and reports no-drift while an
+// effective value exists (#550: an undeclared cputype resolves to 'host').
+
+// One field's schema entry (only the parts this module reads).
+export interface FieldSchema {
+  default?: unknown;
+  usedBy?: string[];
+}
+export type ModuleFieldsSchema = Record<string, FieldSchema>;
+
+// The schema default that APPLIES to this module for `field`, or "" if none.
+// A default applies only when it is a concrete scalar (not empty, not a
+// "<computed…>" placeholder the schema uses for install-time-generated values)
+// AND the field belongs to a section the module actually has: usedBy is absent
+// or contains "general", or intersects the module's dependsOn. So a proxyPort
+// default only defaults in for a module that declares network:proxy, a cputype
+// only for a cluster:vm — never for a module that never uses the field.
+export function appliedDefault(
+  field: string,
+  deps: string[],
+  schema: ModuleFieldsSchema,
+): string {
+  const fs = schema[field];
+  if (!fs) return "";
+  const d = fs.default;
+  if (typeof d !== "string" && typeof d !== "number" && typeof d !== "boolean") return "";
+  const s = String(d);
+  if (s === "" || s.startsWith("<")) return ""; // empty, or a "<computed>" placeholder
+  const usedBy = Array.isArray(fs.usedBy) ? fs.usedBy : [];
+  const applies = usedBy.length === 0 || usedBy.includes("general") || usedBy.some((u) => deps.includes(u));
+  return applies ? s : "";
+}
+
+// Resolve a field to {value, defaulted}: the literal JSON value when present,
+// else the applied schema default (defaulted=true), else empty/not-defaulted.
+export function resolveField(
+  o: Record<string, unknown> | null,
+  field: string,
+  deps: string[],
+  schema: ModuleFieldsSchema,
+): { value: string; defaulted: boolean } {
+  const lit = getField(o, field);
+  if (lit !== "") return { value: lit, defaulted: false };
+  const def = appliedDefault(field, deps, schema);
+  return def !== "" ? { value: def, defaulted: true } : { value: "", defaulted: false };
+}
+
 // ── pure: qm-config / vm-net helpers (ports of cluster/lib/vm-net.sh) ──
 
 // Parse the `qm config <vmid>` key: value text into a map (the bash while-read
@@ -230,28 +282,50 @@ class Table {
     );
   }
 
-  row(field: string, configVal: string, gitVal: string, actualVal: string): void {
+  // configVal/gitVal/actualVal are RAW values (used for the drift comparison);
+  // opts carries the display + 3-way flags. Back-compatible: called with no opts
+  // it behaves exactly as before (raw values, no brackets, no suppression).
+  row(
+    field: string,
+    configVal: string,
+    gitVal: string,
+    actualVal: string,
+    opts: { cfgDefaulted?: boolean; gitDefaulted?: boolean; notTracking?: boolean } = {},
+  ): void {
     let cfgColor = CL;
     let gitColor = CL;
     let actColor = CL;
 
-    // Yellow: config differs from git
-    if (gitVal !== "" && configVal !== gitVal) {
+    // Yellow: Desired differs from Released — UNLESS the field was overwritten at
+    // install (Desired ≠ .orig). Then the divergence is intentional and the
+    // update path will not reconcile Desired back to Released, so it is annotated
+    // rather than flagged as drift (#550, larsrossen's 3-way merge note).
+    const wouldYellow = gitVal !== "" && configVal !== gitVal;
+    const suppressed = wouldYellow && !!opts.notTracking;
+    if (wouldYellow && !suppressed) {
       cfgColor = YW;
       gitColor = YW;
       this.warnings++;
     }
-    // Red: actual differs from config (only when both have values)
+    // Red: Actual differs from Desired (both have real values). Desired may be a
+    // schema default — comparing it to the live VM is the whole point of #550.
     if (actualVal !== "" && configVal !== "" && configVal !== "-" && actualVal !== configVal) {
       actColor = RD;
       cfgColor = RD;
       this.errors++;
     }
 
+    // A defaulted value is shown in <angle brackets> so an effective default is
+    // visibly distinct from a declared value; the comparison above used the RAW
+    // value, so the brackets never read as drift (#550).
+    const disp = (v: string, defaulted?: boolean): string =>
+      v === "" ? "-" : defaulted ? `<${v}>` : v;
+    const note = suppressed ? "  desired state is not tracking release state on purpose" : "";
+
     this.raw(
-      `  ${pad(field, 18)}  ${gitColor}${pad(gitVal || "-", 20)}${CL}  ` +
-        `${cfgColor}${pad(configVal || "-", 20)}${CL}  ` +
-        `${actColor}${pad(actualVal || "-", 20)}${CL}`,
+      `  ${pad(field, 18)}  ${gitColor}${pad(disp(gitVal, opts.gitDefaulted), 20)}${CL}  ` +
+        `${cfgColor}${pad(disp(configVal, opts.cfgDefaulted), 20)}${CL}  ` +
+        `${actColor}${pad(actualVal || "-", 20)}${CL}${note}`,
     );
   }
 }
@@ -363,6 +437,14 @@ export interface VmInspectInputs {
   // Dependency-service state (#458). Omitted = not checked; the summary then
   // names the uncovered deps rather than reporting a bare clean.
   svc?: ServiceSection;
+  // module-fields.json `.fields` — the source of the Desired/Released defaults
+  // (#550). Omitted = {} → NO defaulting, so the table reads literal values
+  // exactly as before (keeps back-compat for callers/tests that don't load it).
+  schema?: ModuleFieldsSchema;
+  // config/<module>.json.orig — the install-time pre-image. A field whose
+  // deployed value differs from it was overwritten on purpose, so Desired is
+  // intentionally off Released and that row is annotated, not flagged (#550).
+  orig?: Record<string, unknown> | null;
 }
 
 export function buildVmReport(inp: VmInspectInputs): InspectReport {
@@ -370,20 +452,44 @@ export function buildVmReport(inp: VmInspectInputs): InspectReport {
   const guest = inp.guest ?? "qemu";
   const isLxc = guest === "lxc";
   const svc = inp.svc ?? buildServiceSection(dependsOnOf(cfg), null);
-  const cfgF = (k: string): string => getField(cfg, k);
-  const gitF = (k: string): string => getField(git, k);
+
+  // Desired/Released resolve each field to its literal value, or — when the
+  // module does not declare it — its module-fields.json default, marked with
+  // <angle brackets> (#550). The schema (`usedBy`) gates which defaults apply,
+  // so section fields default in only for a module that has that dependency.
+  // Omitting the schema (schema={}) yields NO defaults → literal values exactly
+  // as before. The git default only applies when a git source exists.
+  const deps = dependsOnOf(cfg);
+  const schema = inp.schema ?? {};
+  const orig = inp.orig ?? null;
+  const rc = (k: string) => resolveField(cfg, k, deps, schema);
+  const rg = (k: string) => (git ? resolveField(git, k, deps, schema) : { value: "", defaulted: false });
+  // The deployed value overrode the release at install (differs from .orig), so
+  // Desired is intentionally off Released for this field (#550).
+  const notTrack = (k: string): boolean => orig !== null && getField(cfg, k) !== getField(orig, k);
+  // Emit a resolved row: cfg + git defaults + the 3-way flags, for `actualVal`.
+  const R = (field: string, key: string, actualVal: string): void => {
+    const c = rc(key);
+    const g = rg(key);
+    t.row(field, c.value, g.value, actualVal, {
+      cfgDefaulted: c.defaulted,
+      gitDefaulted: g.defaulted,
+      notTracking: notTrack(key),
+    });
+  };
+
   const t = new Table();
   t.header();
 
   // VM identity
-  t.row("vmname", cfgF("vmname"), gitF("vmname"), (isLxc ? actual.hostname : actual.name) ?? "");
-  t.row("vmid", cfgF("vmid"), gitF("vmid"), vmid);
-  t.row("node", cfgF("node"), gitF("node"), actualNode);
+  R("vmname", "vmname", (isLxc ? actual.hostname : actual.name) ?? "");
+  R("vmid", "vmid", vmid);
+  R("node", "node", actualNode);
   t.row("status", "-", "-", vmStatus);
 
   // CPU / memory
-  t.row("cores", cfgF("cores"), gitF("cores"), actual.cores ?? "");
-  t.row("memory", cfgF("memory"), gitF("memory"), actual.memory ?? "");
+  R("cores", "cores", actual.cores ?? "");
+  R("memory", "memory", actual.memory ?? "");
 
   // Storage / disk — actual size parsed from the first present disk bus
   // (e.g. "tanka1:vm-311-disk-0,size=32G"). An LXC has no bus: its root volume
@@ -397,74 +503,95 @@ export function buildVmReport(inp: VmInspectInputs): InspectReport {
       break;
     }
   }
-  t.row("diskSize", cfgF("diskSize"), gitF("diskSize"), actualDisk);
-  t.row("storage", cfgF("storage"), gitF("storage"), "");
+  R("diskSize", "diskSize", actualDisk);
+  R("storage", "storage", "");
 
-  // BIOS / CPU type — QEMU-only concepts. A container has neither, so the
-  // Actual cells stay EMPTY rather than defaulting to "seabios": an invented
-  // firmware would read as real drift against any LXC module that sets bios
-  // (the empty cell is exempt from the red actual-vs-config rule) (#465).
-  t.row("bios", cfgF("bios"), gitF("bios"), isLxc ? "" : actual.bios || "seabios");
-  t.row("cputype", cfgF("cputype"), gitF("cputype"), (isLxc ? "" : actual.cpu) ?? "");
+  // BIOS / CPU type — QEMU-only concepts. A container has neither (their schema
+  // usedBy is cluster:vm), so appliedDefault yields nothing for an LXC and the
+  // Actual cells stay EMPTY rather than a fabricated "seabios" (#465/#550).
+  R("bios", "bios", isLxc ? "" : actual.bios || "seabios");
+  R("cputype", "cputype", (isLxc ? "" : actual.cpu) ?? "");
 
   // Network — net0 and net1 (TAPPaaS allows at most two NICs per VM). For each
   // NIC: bridge, zone (by name AND by VLAN tag — two views of the same thing),
   // the trunk allow-list resolved to VLAN tags, and the MAC (issue #334).
   for (const i of [0, 1]) {
     const actualNet = actual[`net${i}`] ?? "";
-    const cfgBridge = cfgF(`bridge${i}`);
-    const gitBridge = gitF(`bridge${i}`);
-    const cfgZone = cfgF(`zone${i}`);
+    const cB = rc(`bridge${i}`);
+    const gB = rg(`bridge${i}`);
+    const cZ = rc(`zone${i}`);
+    const gZ = rg(`zone${i}`);
+    const cfgZone = cZ.value;
 
     // NIC absent from config, git, AND the live VM → single "none" line (#334).
-    if (!actualNet && !cfgBridge && !gitBridge) {
+    if (!actualNet && !cB.value && !gB.value) {
       t.raw(`  ${pad(`nic${i}`, 18)}  ${pad("none", 20)}  ${pad("none", 20)}  ${pad("none", 20)}`);
       continue;
     }
 
-    t.row(`bridge${i}`, cfgBridge, gitBridge, vmnetParse(actualNet, "bridge"));
+    t.row(`bridge${i}`, cB.value, gB.value, vmnetParse(actualNet, "bridge"), {
+      cfgDefaulted: cB.defaulted,
+      gitDefaulted: gB.defaulted,
+      notTracking: notTrack(`bridge${i}`),
+    });
 
     // Zone shown two ways: the (tag) row carries the zone NAME and catches a
     // config-vs-git name change; the (vlan) row carries the VLAN NUMBER and
-    // catches actual-vs-config drift (#334).
+    // catches actual-vs-config drift (#334). The (vlan) row is derived, so it is
+    // never angle-bracketed.
     const actualTag = vmnetParse(actualNet, "tag");
     const cfgVlan = cfgZone ? vmnetZoneVlantag(cfgZone, zones) ?? "" : "";
-    t.row(`zone${i} (tag)`, cfgZone, gitF(`zone${i}`), cfgZone);
+    t.row(`zone${i} (tag)`, cfgZone, gZ.value, cfgZone, {
+      cfgDefaulted: cZ.defaulted,
+      gitDefaulted: gZ.defaulted,
+      notTracking: notTrack(`zone${i}`),
+    });
     t.row(`zone${i} (vlan)`, fmtVlan(cfgVlan), fmtVlan(cfgVlan), fmtVlan(actualTag));
 
     // Trunks — resolve the zone-name/sentinel config form to VLAN tags so it
-    // lines up with the live list, and normalize ordering on both sides.
-    const cfgTrunksV = normTrunks(vmnetResolveTrunks(cfgF(`trunks${i}`), zones) ?? "");
-    const gitTrunksV = normTrunks(vmnetResolveTrunks(gitF(`trunks${i}`), zones) ?? "");
+    // lines up with the live list, and normalize ordering on both sides. The
+    // value shown is the resolved VLAN list, not the raw field, so it is not
+    // angle-bracketed.
+    const cfgTrunksV = normTrunks(vmnetResolveTrunks(rc(`trunks${i}`).value, zones) ?? "");
+    const gitTrunksV = normTrunks(vmnetResolveTrunks(rg(`trunks${i}`).value, zones) ?? "");
     const actTrunksV = normTrunks(vmnetParse(actualNet, "trunks"));
-    t.row(`trunks${i}`, cfgTrunksV, gitTrunksV, actTrunksV);
+    t.row(`trunks${i}`, cfgTrunksV, gitTrunksV, actTrunksV, { notTracking: notTrack(`trunks${i}`) });
 
-    t.row(`mac${i}`, cfgF(`mac${i}`), gitF(`mac${i}`), vmnetParse(actualNet, "mac"));
+    R(`mac${i}`, `mac${i}`, vmnetParse(actualNet, "mac"));
   }
 
   // HA
-  t.row("HANode", cfgF("HANode"), gitF("HANode"), "");
+  R("HANode", "HANode", "");
 
   // Description — Proxmox wraps it in HTML, so only config-vs-git is compared;
   // the Actual cell is info-only.
-  const cfgDesc = cfgF("description");
-  const gitDesc = gitF("description");
-  const descDrift = gitDesc !== "" && cfgDesc !== gitDesc;
+  const cfgDesc = rc("description").value;
+  const gitDesc = rg("description").value;
+  const descDrift = gitDesc !== "" && cfgDesc !== gitDesc && !notTrack("description");
   const dColor = descDrift ? YW : CL;
+  const descNote = gitDesc !== "" && cfgDesc !== gitDesc && notTrack("description")
+    ? "  desired state is not tracking release state on purpose"
+    : "";
   t.raw(
     `  ${pad("description", 18)}  ${dColor}${pad(gitDesc || "-", 20)}${CL}  ` +
-      `${dColor}${pad(cfgDesc || "-", 20)}${CL}  ${pad("(see Proxmox UI)", 20)}`,
+      `${dColor}${pad(cfgDesc || "-", 20)}${CL}  ${pad("(see Proxmox UI)", 20)}${descNote}`,
   );
   if (descDrift) t.warnings++;
 
   // Tags — Proxmox stores tags semicolon-separated lowercase sorted; when the
   // normalized forms match, echo the config spelling so it never reads as drift.
-  const cfgTag = cfgF("vmtag");
+  const cTag = rc("vmtag");
+  const gTag = rg("vmtag");
   const actualTags = actual.tags ?? "";
-  if (cfgTag && actualTags && normalizeTags(cfgTag) === normalizeTags(actualTags)) {
-    t.row("vmtag", cfgTag, gitF("vmtag"), cfgTag);
+  const tagOpts = {
+    cfgDefaulted: cTag.defaulted,
+    gitDefaulted: gTag.defaulted,
+    notTracking: notTrack("vmtag"),
+  };
+  if (cTag.value && actualTags && normalizeTags(cTag.value) === normalizeTags(actualTags)) {
+    t.row("vmtag", cTag.value, gTag.value, cTag.value, tagOpts);
   } else {
-    t.row("vmtag", cfgTag, gitF("vmtag"), actualTags);
+    t.row("vmtag", cTag.value, gTag.value, actualTags, tagOpts);
   }
 
   t.raw("");
@@ -529,6 +656,21 @@ function readNormalized(path: string): Record<string, unknown> | null {
   }
 }
 
+// Load module-fields.json `.fields` from the config dir (a symlink to the repo
+// schema on a deployed cicd). Returns {} when absent/unreadable so the report
+// simply shows no defaults rather than failing (#550).
+function loadModuleFields(configDir: string): ModuleFieldsSchema {
+  const path = join(configDir, "module-fields.json");
+  if (!existsSync(path)) return {};
+  try {
+    const raw = JSON.parse(readFileSync(path, "utf8"));
+    const fields = raw && typeof raw === "object" ? (raw as Record<string, unknown>).fields : null;
+    return fields && typeof fields === "object" ? (fields as ModuleFieldsSchema) : {};
+  } catch {
+    return {};
+  }
+}
+
 // The full inspect verb: prints the report, returns the exit code. Errors are
 // RETURNED (1), never thrown, so the `list --diff` rollup keeps iterating past
 // an unreachable module — matching the bash script's per-module exit code.
@@ -588,6 +730,11 @@ export function inspectModule(module: string, opts: InspectOptions = {}): number
     }
   }
   emit(gitSourceWarnings(git !== null, location));
+
+  // Schema (for Desired/Released defaults) and the install-time pre-image (for
+  // the 3-way "not tracking release on purpose" note) — both #550.
+  const schema = loadModuleFields(configDir);
+  const orig = readNormalized(join(configDir, `${module}.json.orig`));
 
   // zones.json for the zone→VLAN and trunk resolution (null when absent).
   let zones: ZonesFile = null;
@@ -677,7 +824,7 @@ export function inspectModule(module: string, opts: InspectOptions = {}): number
 
   const svc = serviceSection();
   emit(
-    buildVmReport({ module, vmid, cfg, git, zones, actual, vmStatus, actualNode, guest, svc })
+    buildVmReport({ module, vmid, cfg, git, zones, actual, vmStatus, actualNode, guest, svc, schema, orig })
       .lines,
   );
   return serviceExitCode(svc);

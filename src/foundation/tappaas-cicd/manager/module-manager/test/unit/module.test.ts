@@ -19,8 +19,8 @@ import {
   resolveEffectiveModuleName,
   resolveViaCatalog,
 } from "../../src/config";
-import { validateDependsOn, validateModules } from "../../src/validate";
-import { AddOptions, DeleteOptions } from "../../src/types";
+import { validateConfigBlock, validateDependsOn, validateModules } from "../../src/validate";
+import { AddOptions, DeleteOptions, ValidateFinding } from "../../src/types";
 import { FakeModuleClient } from "./fake-client";
 import { run } from "../../src/main";
 
@@ -510,6 +510,85 @@ function captureList(client: FakeModuleClient, extraArgs: string[] = []): string
       {},
     );
     check(report.errors === 0, "validate: without an fs probe, reference integrity is skipped");
+  }
+}
+
+
+// ── validateConfigBlock: the config ↔ dependsOn schema rules (#549) ─────
+// module-fields.json declares these rules and common-install-routines.sh (hence
+// reconcile) enforced them, but validate did not; now both agree.
+{
+  const findings = (raw: Record<string, unknown>): ValidateFinding[] => {
+    const out: ValidateFinding[] = [];
+    const m = {
+      name: typeof raw.name === "string" ? raw.name : "app",
+      dependsOn: Array.isArray(raw.dependsOn) ? raw.dependsOn : [],
+      raw,
+    } as never;
+    validateConfigBlock(m, out as never);
+    return out;
+  };
+
+  // Rule 1: a config block for a provider not in dependsOn is an error — the
+  // exact defect #549 measured (validate passed it, reconcile failed it).
+  {
+    const f = findings({ dependsOn: ["cluster:vm"], config: { "cluster:lxc": { cores: 4 } } });
+    check(
+      f.length === 1 &&
+        f[0].severity === "error" &&
+        f[0].message.includes("cluster:lxc") &&
+        f[0].message.includes("not a declared dependency"),
+      "validate: a config block for an undeclared dependency is an error (#549)",
+    );
+  }
+  // Rule 1: a config block for a declared dependency passes.
+  {
+    const f = findings({ dependsOn: ["cluster:vm"], config: { "cluster:vm": { cores: 4 } } });
+    check(f.length === 0, "validate: a config block for a declared dependency passes");
+  }
+  // Rule 2: a field in both the header and a config block is ambiguous.
+  {
+    const f = findings({ dependsOn: ["cluster:vm"], cores: 2, config: { "cluster:vm": { cores: 4 } } });
+    check(
+      f.some((x) => x.message.includes("cores") && x.message.includes("ambiguous")),
+      "validate: a field set in both header and a config block is ambiguous (#549)",
+    );
+  }
+  // Rule 2: the same field in two config blocks is ambiguous.
+  {
+    const f = findings({
+      dependsOn: ["a:one", "b:two"],
+      config: { "a:one": { memory: 1 }, "b:two": { memory: 2 } },
+    });
+    check(
+      f.some((x) => x.message.includes("memory") && x.message.includes("ambiguous")),
+      "validate: a field set in two config blocks is ambiguous (#549)",
+    );
+  }
+  // No config block → the rule is inapplicable (no finding), and a hand-built
+  // config without `raw` must not crash.
+  {
+    check(findings({ dependsOn: ["cluster:vm"], cores: 2 }).length === 0,
+      "validate: a module with no config block is unaffected");
+    const out: ValidateFinding[] = [];
+    validateConfigBlock({ name: "x", dependsOn: [] } as never, out as never);
+    check(out.length === 0, "validate: a ModuleConfig without raw is a safe no-op");
+  }
+  // End-to-end: validateModules now surfaces the config-block error.
+  {
+    const report = validateModules(
+      [
+        {
+          name: "bad",
+          tier: "app",
+          source: "official",
+          dependsOn: ["cluster:vm"],
+          raw: { dependsOn: ["cluster:vm"], config: { "network:rules": {} } },
+        } as never,
+      ],
+      {},
+    );
+    check(report.errors >= 1, "validate: validateModules surfaces the config-block error (#549)");
   }
 }
 

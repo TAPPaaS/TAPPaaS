@@ -72,12 +72,72 @@ export function validateModule(
     warn(`source:community — peer-reviewed but not officially supported (🟡)`);
   }
 
+  // config-block structural rules (#161/#549) — pure, no fs needed.
+  validateConfigBlock(m, out);
+
   // dependsOn reference integrity — see validateDependsOn.
   if (opts.fs) validateDependsOn(m, opts.fs, out);
 
   // TODO(question): the bash stub also intended a SCHEMA check (every field
   // against module-fields.json). PARKED — see main.ts. The reference-integrity
   // half of that TODO is now implemented above.
+}
+
+// config-block structural rules (#549). module-fields.json declares these as
+// schema rules for the `config` field and common-install-routines.sh enforces
+// them (so `reconcile` reports them), but `validate` did not — a module could
+// violate a documented schema rule and still pass validation, the weaker of the
+// two enforcing the same file (#549). The same missing declaration also gated
+// update-module.sh's pre-update snapshot (dependsOn must contain cluster:vm), so
+// one undeclared config block silently skipped snapshots for weeks. These two
+// checks mirror common-install-routines.sh's Pattern-C validation exactly, so
+// validate and reconcile now agree.
+export function validateConfigBlock(m: ModuleConfig, out: ValidateFinding[]): void {
+  // `raw` is the full parsed JSON on every loaded module; guard the field so a
+  // hand-built ModuleConfig (tests, callers that skip the loader) is a no-op
+  // rather than a crash.
+  const raw = m.raw as Record<string, unknown> | undefined;
+  if (!raw || typeof raw !== "object") return;
+  const config = raw.config;
+  if (config === null || typeof config !== "object" || Array.isArray(config)) return;
+  const blocks = config as Record<string, unknown>;
+  const deps = new Set(Array.isArray(m.dependsOn) ? m.dependsOn : []);
+
+  // Rule 1: every config-block key must be a declared dependency. A config block
+  // for a provider not in dependsOn is dropped on flatten and never applied.
+  for (const key of Object.keys(blocks)) {
+    if (!deps.has(key)) {
+      out.push({
+        module: m.name,
+        severity: "error",
+        message: `config block '${key}' is not a declared dependency — add it to dependsOn (#161)`,
+      });
+    }
+  }
+
+  // Rule 2: no field may appear in both the header and a config block, nor in
+  // two config blocks — it is ambiguous once flattened to the top level. Count
+  // every header key (except `config`) plus every field across all config
+  // blocks; any name seen more than once collides.
+  const counts = new Map<string, number>();
+  for (const k of Object.keys(raw)) {
+    if (k !== "config") counts.set(k, (counts.get(k) ?? 0) + 1);
+  }
+  for (const block of Object.values(blocks)) {
+    if (block === null || typeof block !== "object" || Array.isArray(block)) continue;
+    for (const f of Object.keys(block as Record<string, unknown>)) {
+      counts.set(f, (counts.get(f) ?? 0) + 1);
+    }
+  }
+  for (const [field, n] of counts) {
+    if (n > 1) {
+      out.push({
+        module: m.name,
+        severity: "error",
+        message: `field '${field}' is set in both the header and a config block (or in two config blocks) — ambiguous (#161)`,
+      });
+    }
+  }
 }
 
 // dependsOn reference integrity (#495 follow-up).
