@@ -16,6 +16,12 @@
 // Pure: depends only on the loaded ModuleConfig(s).
 
 import { join } from "path";
+import {
+  ManifestFinding,
+  lintServiceFieldManifest,
+  ownedFieldsFor,
+  parseServiceFieldManifest,
+} from "../../../lib/ts/src/service-fields";
 import { ServiceFs, parseDependency } from "./services";
 import { MODULE_STATUS_VALUES, ModuleConfig, ValidateFinding, ValidateReport } from "./types";
 
@@ -32,6 +38,12 @@ export interface ValidateOptions {
   // works; main.ts supplies them, and without them the source-ref check is a
   // no-op rather than a false pass.
   repos?: readonly { name: string; path: string; branch: string }[];
+  // module-fields.json `.fields` — needed by the ADR-020 service field-manifest
+  // lint, which checks a manifest against the schema's `usedBy` ownership.
+  // Omitted (or empty) and that check is SKIPPED: without the schema there is
+  // no ownership to check coverage against, and inventing one would report
+  // every field as unowned.
+  schema?: Record<string, { usedBy?: string[] } | undefined>;
 }
 
 // Lint one module config; append findings to `out`.
@@ -94,6 +106,9 @@ export function validateModule(
 
   // source-ref derivability — see validateSourceLocation.
   if (opts.repos) validateSourceLocation(m, opts.repos, out);
+
+  // ADR-020 service field manifests — see validateFieldManifests.
+  if (opts.fs && opts.schema) validateFieldManifests(m, opts.fs, opts.schema, out);
 
   // TODO(question): the bash stub also intended a SCHEMA check (every field
   // against module-fields.json). PARKED — see main.ts. The reference-integrity
@@ -323,6 +338,102 @@ export function validateIntegratesWith(
         module: m.name,
         severity: "warning",
         message: `integratesWith '${dep}': provider '${providerModule}' is installed but ships no ${service}/update-service.sh — the integration cannot converge`,
+      });
+    }
+  }
+}
+
+// ADR-020 service field manifests — the P0 coverage lint.
+//
+// A provider service declares the change semantics of every field it owns in
+// `services/<service>/fields.json` (ADR-020 D3/D4). That file is the ONLY home
+// for "what does changing field X cost", so a gap in it is a gap nothing else
+// can report: before this ADR the same knowledge lived inside one imperative
+// drift loop, where a field nobody had thought about simply fell through.
+//
+// WHAT IS CHECKED, and what deliberately is not:
+//
+//   - A provider service with NO fields.json is SKIPPED, silently. During the
+//     ADR-020 rollout most of the 25 services have not been migrated yet
+//     (P5), and erroring on the un-migrated majority would make `validate`
+//     useless for the whole transition. Absence means "not yet on the
+//     contract", not "broken".
+//   - A fields.json that EXISTS must be complete and well-formed: every field
+//     module-fields.json says the coordinate owns must be classified, every
+//     class must be one the taxonomy defines, and the apply wiring must be
+//     coherent. Those are ERRORS. Opting in is opting in fully.
+//
+// Reported once per (module, coordinate): a manifest is a property of the
+// PROVIDER, so the same fault surfaces on every consumer that declares the
+// dependency. That is intentional — a broken cluster:vm manifest genuinely
+// affects every module on cluster:vm — but the message names the provider, so
+// the repeated lines point at one file to fix.
+export function validateFieldManifests(
+  m: ModuleConfig,
+  fs: ServiceFs,
+  schema: Record<string, { usedBy?: string[] } | undefined>,
+  out: ValidateFinding[],
+): void {
+  const declaredFields = Object.keys(schema);
+  // Nothing to check ownership against — see ValidateOptions.schema.
+  if (declaredFields.length === 0) return;
+
+  const environment = typeof m.environment === "string" ? m.environment : "";
+  const deps = [
+    ...(Array.isArray(m.dependsOn) ? m.dependsOn : []),
+    ...(Array.isArray(m.integratesWith) ? m.integratesWith : []),
+  ];
+
+  const seen = new Set<string>();
+  for (const dep of deps) {
+    if (typeof dep !== "string" || !dep.includes(":")) continue;
+    const { provider, service } = parseDependency(dep);
+    const { module: providerModule, dir } = fs.providerDir(provider, environment);
+    // A provider that cannot be located is already reported by
+    // validateDependsOn; do not report the same absence twice in two voices.
+    if (!dir) continue;
+
+    // The manifest is keyed by the coordinate as the SCHEMA spells it — the
+    // canonical provider name, not the environment-scoped deployment. A
+    // 'network-test:proxy' consumer and a 'network:proxy' one share one
+    // manifest and one ownership set.
+    const coordinate = `${provider}:${service}`;
+    if (seen.has(coordinate)) continue;
+    seen.add(coordinate);
+
+    const path = join(dir, "services", service, "fields.json");
+    const text = fs.readFile(path);
+    if (text === null) continue; // not migrated to the contract yet — see above
+
+    const findings: ManifestFinding[] = [];
+    let doc: unknown;
+    try {
+      doc = JSON.parse(text);
+    } catch (e) {
+      out.push({
+        module: m.name,
+        severity: "error",
+        message: `${providerModule} '${path}' is not valid JSON: ${(e as Error).message}`,
+      });
+      continue;
+    }
+    const manifest = parseServiceFieldManifest(doc, findings);
+    if (manifest) {
+      lintServiceFieldManifest(
+        manifest,
+        {
+          coordinate,
+          ownedFields: ownedFieldsFor(coordinate, schema),
+          declaredFields,
+        },
+        findings,
+      );
+    }
+    for (const f of findings) {
+      out.push({
+        module: m.name,
+        severity: f.severity,
+        message: `${coordinate} field manifest (${path}): ${f.message}`,
       });
     }
   }

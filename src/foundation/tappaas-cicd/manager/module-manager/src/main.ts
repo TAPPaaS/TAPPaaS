@@ -42,6 +42,7 @@ import {
   SnapshotAction,
   TestOptions,
 } from "./types";
+import { loadModuleFields } from "./inspect";
 import { realServiceFs } from "./services";
 import { validateModules } from "./validate";
 
@@ -562,6 +563,10 @@ function cmdValidate(opts: Opts): number {
     allowFork: opts.allowFork,
     fs: realServiceFs(opts.configDir),
     repos: readDeclaredRepositories(opts.configDir),
+    // module-fields.json drives the ADR-020 field-manifest lint: the schema's
+    // `usedBy` is what says which fields a provider service owns, so it is what
+    // manifest coverage is measured against.
+    schema: loadModuleFields(opts.configDir),
   });
   if (opts.json) {
     info(JSON.stringify(report, null, 2));

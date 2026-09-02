@@ -11,6 +11,7 @@
     "updateTime",
     "maintainer",
     "status",
+    "rebootOk",
     "tier",
     "kind",
     "source",
@@ -187,6 +188,17 @@
         "external": "VM/guest that exists on the cluster but is managed OUTSIDE TAPPaaS (e.g. pfsense, hassosova). A minimal config ({vmid, vmname, status:external, description}) registers it as known-but-unmanaged: no install/update/test/delete lifecycle applies, backup:vm ignores it unless explicitly added, and inspect-cluster.sh shows it as [external] rather than NOT IN CONFIG. Mirrors zones.json state=Manual (issue #216)."
       },
       "example": "Development"
+    },
+    "rebootOk": {
+      "description": "May an UNATTENDED converge disrupt this module's guest \u2014 reboot it, or migrate it offline \u2014 in order to apply a declared change (ADR-020 D8)? A field's change class says a change NEEDS disruption; this says whether we are ALLOWED to cause it without a human present. It is therefore a property of the WORKLOAD, not of the field: a stateless front-end can be bounced at 03:00, a database only in a window. Default false, so silence never authorizes downtime.",
+      "type": "boolean",
+      "requiredBy": [],
+      "usedBy": [
+        "general"
+      ],
+      "default": false,
+      "example": true,
+      "note": "Disruption is authorized iff 'module-manager module modify --force' was passed (an operator, now), OR rebootOk is true AND the converge runs in the ADR-017 scheduled reboot pass. 'update-tappaas --force' means 'run the sweep NOW' \u2014 a scheduling override \u2014 and is NEVER forwarded as disruption authority. When a disruptive change is not authorized the converge applies everything else, prints a machine-parseable 'DEFERRED:' line and still exits 0; update-tappaas collects those into an end-of-sweep summary."
     },
     "tier": {
       "description": "Lifecycle role of the module (ADR-007b). Answers 'Can it be uninstalled?'. Orthogonal to 'source' — never collapsed into one enum (MECE). 'foundation' modules are critical platform components: they may only be installed into the 'mgmt' environment, are single-instance, and require --force to delete. 'app' modules are tenant-facing and deploy into any environment.",
@@ -743,16 +755,16 @@
       "note": "Zone names must exist in zones.json, camelCase only [a-zA-Z0-9]. Semicolon-delimited, no spaces. Sentinels: ALL/* expand to every Active zone; NONE = empty."
     },
     "bridge1": {
-      "description": "Proxmox bridge for the VM's second network interface (net1). If not present, only one NIC is configured.",
+      "description": "Proxmox bridge for the VM's second network interface (net1). The sentinel 'NONE' \u2014 which is also what an absent bridge1 resolves to \u2014 means the VM has only one NIC.",
       "type": "string",
       "requiredBy": [],
       "usedBy": [
         "cluster:vm",
         "cluster:lxc"
       ],
-      "default": "lan",
+      "default": "NONE",
       "example": "lan",
-      "note": "Only used if a second network interface is needed"
+      "note": "Only used if a second network interface is needed. The default was 'lan' until ADR-020 P1, which contradicted both acting paths \u2014 Create-TAPPaaS-VM.sh and cluster:vm/update-service.sh have always read it as 'NONE' \u2014 and made the drift report claim a desired second NIC that nothing would ever create. Declaring a bridge1 on a VM that has none ADDS the NIC; removing it (back to the 'NONE' default) DELETES the live net1, which reboots the guest."
     },
     "mac1": {
       "description": "MAC address for the net1 network port",

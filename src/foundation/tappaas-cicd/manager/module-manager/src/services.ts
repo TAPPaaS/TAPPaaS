@@ -24,7 +24,7 @@
 // filesystem lookups arrive through an injectable ServiceFs) so the planning and
 // rendering logic is unit-testable offline (test/unit/inspect.test.ts).
 
-import { existsSync } from "fs";
+import { existsSync, readFileSync } from "fs";
 import { join } from "path";
 import { captureResult } from "../../../lib/ts/src/exec";
 import { getModuleDir, resolveProviderModule } from "./config";
@@ -63,6 +63,11 @@ export interface ServiceFs {
   // .location from the deployed config). dir === null = provider not locatable.
   providerDir(provider: string, environment: string): { module: string; dir: string | null };
   exists(path: string): boolean;
+  // Read a file, or null when it is absent/unreadable. Added for the ADR-020
+  // service field-manifest lint, which must PARSE services/<svc>/fields.json —
+  // knowing that it exists is not enough. Injectable for the same reason the
+  // other two are: validate stays offline and testable with no tree.
+  readFile(path: string): string | null;
 }
 
 export function realServiceFs(configDir: string): ServiceFs {
@@ -72,6 +77,13 @@ export function realServiceFs(configDir: string): ServiceFs {
       return { module, dir: getModuleDir(configDir, module) };
     },
     exists: (p) => existsSync(p),
+    readFile: (p) => {
+      try {
+        return readFileSync(p, "utf8");
+      } catch {
+        return null;
+      }
+    },
   };
 }
 

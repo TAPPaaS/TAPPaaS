@@ -32,6 +32,32 @@ This directory holds the JSON-Schema (draft 2020-12) field definitions for every
 | **Module catalog** | `module-catalog-fields.json` | `src/module-catalog.json` (in each repo) | **site-manager** — `repository add`/`delete`/`list`/`reconcile` (registers/clones the repo that ships the catalog) |
 | **Zones** | `zones-fields.json` | `zones.json` | **network-manager** — `add`/`delete`/`list`/`show`/`exists` (the `zone` keyword is an optional legacy prefix); `validate` (alias `zones-check`); `init`/`merge`/`distribute` (aliases `zones-init`/`zones-merge`/`zones-distribute`); `reconcile [--apply] [--only <plane>]`. (No free-form `modify` — state + access-to are governed by the lifecycle + init/merge.) |
 
+### Service field manifests (`service-fields.json`)
+
+`service-fields.json` is the odd one out: it does not describe a `~/config/`
+object at all. It is the schema for **`services/<service>/fields.json`** — the
+per-provider manifest ADR-020 introduces, which lives in a module's SOURCE tree
+next to the scripts that perform the change.
+
+The two module schemas answer different questions and neither duplicates the
+other:
+
+| Question | Answered by |
+|---|---|
+| What fields exist, what do they mean, what is the default, and **which service uses each one** (`usedBy`)? | `module-fields.json` |
+| For that (field, service) pair — **what does changing it cost** after install, and how is the change applied? | `services/<service>/fields.json` |
+
+The change class is keyed by the **pair**, not the field, which is why the
+manifest sits with the service rather than in the field schema. `module-manager
+validate` lints it: a service that ships a `fields.json` must classify every
+field `module-fields.json` says it owns, using the classes the schema defines. A
+service with no `fields.json` has not been migrated to the contract yet and is
+skipped.
+
+The operator-facing surface it unlocks — `modify <module> --set field=value`,
+`--force` vs the per-module `rebootOk` — is documented in the module-manager
+README.
+
 ### Objects without a schema in this directory
 
 | Object | Live location | Owner / how it's written |

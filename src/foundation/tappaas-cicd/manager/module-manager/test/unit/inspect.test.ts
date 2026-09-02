@@ -84,6 +84,7 @@ function text(lines: { text: string }[]): string {
         : { module: provider, dir: `/src/${provider}` },
     // Only network:rules has a verifier in this fake tree.
     exists: (p) => p === "/src/network/services/rules/test-service.sh",
+    readFile: () => null,
   };
   const checks = planServiceChecks(
     ["network:rules", "network:nat", "ghost:thing"],
@@ -108,6 +109,7 @@ function text(lines: { text: string }[]): string {
       return { module: provider, dir: `/src/${provider}` };
     },
     exists: () => true,
+    readFile: () => null,
   };
   planServiceChecks(["network:rules"], "acme", fs);
   check(seen[0] === "network/acme", "the consuming module's environment drives provider resolution (#438)");

@@ -514,6 +514,7 @@ function captureList(client: FakeModuleClient, extraArgs: string[] = []): string
       return { module: name, dir: providers[name] ?? null };
     },
     exists: (p: string) => files.has(p),
+    readFile: () => null,
   });
 
   const findings = (m: Record<string, unknown>, fs: ReturnType<typeof mkFs>) => {
@@ -594,6 +595,7 @@ function captureList(client: FakeModuleClient, extraArgs: string[] = []): string
       return { module: name, dir: providers[name] ?? null };
     },
     exists: (p: string) => files.has(p),
+    readFile: () => null,
   });
   const findings = (m: Record<string, unknown>, fs: ReturnType<typeof mkFs>): ValidateFinding[] => {
     const out: ValidateFinding[] = [];

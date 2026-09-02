@@ -670,7 +670,7 @@ function readNormalized(path: string): Record<string, unknown> | null {
 // Load module-fields.json `.fields` from the config dir (a symlink to the repo
 // schema on a deployed cicd). Returns {} when absent/unreadable so the report
 // simply shows no defaults rather than failing (#550).
-function loadModuleFields(configDir: string): ModuleFieldsSchema {
+export function loadModuleFields(configDir: string): ModuleFieldsSchema {
   const path = join(configDir, "module-fields.json");
   if (!existsSync(path)) return {};
   try {

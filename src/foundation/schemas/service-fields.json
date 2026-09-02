@@ -1,0 +1,163 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "service-fields.json",
+  "title": "TAPPaaS Service Field Manifest",
+  "description": "Schema for services/<service>/fields.json — the per-(field, service) change manifest defined by ADR-020 (D3/D4). module-fields.json says WHICH service owns a field (usedBy); this manifest says what changing it costs (the change class) and how it is applied. One manifest per provider service; the change class is keyed by the (field, service) PAIR, so 'node' can be 'migrate' under cluster:vm and mean something else elsewhere. The vocabulary below is mirrored by lib/ts/src/service-fields.ts, which performs the lint that 'module-manager validate' runs; test/unit/manifest.test.ts asserts the two agree.",
+  "type": "object",
+  "required": ["service", "fields"],
+  "additionalProperties": false,
+  "properties": {
+    "$schema": {
+      "type": "string",
+      "description": "Relative path back to this file, for editor completion."
+    },
+    "service": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9_-]+:[A-Za-z0-9_-]+$",
+      "description": "The '<module>:<service>' coordinate this manifest belongs to, e.g. 'cluster:vm'. Must match the directory the file lives in; validate errors when it does not."
+    },
+    "description": {
+      "type": "string",
+      "description": "One-line human summary of what this service owns."
+    },
+    "_note": {
+      "type": "string",
+      "description": "Free-text commentary for humans — typically the provenance of the classifications (which existing script's behaviour they were read off). JSON has no comments; this is the sanctioned place for one."
+    },
+    "fields": {
+      "type": "object",
+      "description": "One entry per field module-fields.json says this coordinate owns (its usedBy set). Coverage is MANDATORY: a usedBy field with no entry here is a validate error.",
+      "additionalProperties": { "$ref": "#/$defs/fieldEntry" }
+    },
+    "composites": {
+      "type": "object",
+      "description": "Derived apply units assembled from several declared fields — e.g. cluster:vm's net0, built from bridge0/zone0/mac0/trunks0. The composite carries the change class, the hook and the side effects; each input field declares apply:'composite' and points back at it.",
+      "additionalProperties": { "$ref": "#/$defs/compositeEntry" }
+    }
+  },
+  "$defs": {
+    "changeClass": {
+      "type": "string",
+      "description": "What changing this field after install costs (ADR-020 D3). immutable/recreate are rejected by the static pre-gate before 'modify --set' writes anything; grow-only/migrate/in-place-reboot refuse (or defer) at apply time, where live state is known.",
+      "enum": [
+        "immutable",
+        "in-place",
+        "in-place-reboot",
+        "grow-only",
+        "migrate",
+        "manual",
+        "recreate"
+      ],
+      "enumDescriptions": {
+        "immutable": "Cannot change in place — requires delete + reinstall. Statically pre-gated.",
+        "in-place": "Safe live change, no downtime.",
+        "in-place-reboot": "Live change that needs a guest reboot to take effect. Disruptive: needs 'modify --force', or rebootOk in the scheduled pass.",
+        "grow-only": "One-way — a grow applies, a shrink is refused at apply time.",
+        "migrate": "Relocates or rebuilds runtime state (ADR-019). Disruptive unless the migrate is live-OK.",
+        "manual": "Reconcilable only by an operator action the tool will not take silently — reported, never applied.",
+        "recreate": "Takes effect only at guest creation. Statically pre-gated."
+      }
+    },
+    "applyMode": {
+      "type": "string",
+      "description": "How the converge realizes a change. Defaults to 'none' for a class that never applies (immutable/recreate/manual) and 'set' otherwise.",
+      "enum": ["set", "hook", "composite", "none"],
+      "enumDescriptions": {
+        "set": "Batched into ONE provider-level set call with every other 'set' field in the drift record (cluster:vm's single 'qm set').",
+        "hook": "Dispatched to services/<svc>/<hook> over the uniform hook CLI: --field/--desired/--actual [--check] [--force].",
+        "composite": "This field is an input of a composite; the composite carries the class and the hook.",
+        "none": "Never applied by the converge — reported and refused."
+      }
+    },
+    "normalizer": {
+      "type": "string",
+      "description": "Declared normalization, applied by the MANAGER to BOTH sides of the diff (ADR-020 D7). Services report raw values and never normalize, so there is one comparison rule per field rather than one per code path.",
+      "enum": ["string", "integer", "boolean", "tags", "trunks", "vlan", "size"],
+      "enumDescriptions": {
+        "string": "Trim only (the default).",
+        "integer": "Numeric comparison, so \"8\" equals 8.",
+        "boolean": "true/false/yes/no/1/0 collapse to true|false.",
+        "tags": "Lowercase, split on , ; or whitespace, dedupe, sort, join with ';' — matches how Proxmox stores tags.",
+        "trunks": "Zone-name list resolved to VLAN ids, sorted.",
+        "vlan": "VLAN tag; an absent tag equals 0.",
+        "size": "Size with a unit suffix compared as bytes, so \"8G\" equals \"8192M\"."
+      }
+    },
+    "sideEffect": {
+      "type": "string",
+      "description": "Work the converge must perform AFTER applying this change. The shared runner sequences the union of all side effects ONCE per drift record, so two changed NICs still produce exactly one reboot and one DNS pass.",
+      "enum": ["reboot", "dns", "wait-ip", "ha-repoint"],
+      "enumDescriptions": {
+        "reboot": "Reboot the guest so it picks the change up. Only valid on a disruptive class.",
+        "dns": "Re-register (and clean up the stale) DNS record.",
+        "wait-ip": "Wait for the guest to report an address in the target subnet before continuing.",
+        "ha-repoint": "Re-point the HA rule at the new node (ADR-019)."
+      }
+    },
+    "fieldEntry": {
+      "type": "object",
+      "required": ["class"],
+      "additionalProperties": false,
+      "properties": {
+        "class": { "$ref": "#/$defs/changeClass" },
+        "apply": { "$ref": "#/$defs/applyMode" },
+        "liveKey": {
+          "type": "string",
+          "description": "Key under which report-service.sh reports this field's ACTUAL value. Defaults to the field name; needed wherever the provider spells it differently (Proxmox calls cputype 'cpu', vmtag 'tags', vmname 'name')."
+        },
+        "setFlag": {
+          "type": "string",
+          "description": "apply:'set' only — the provider flag to batch, e.g. '--cores'. Defaults to '--<liveKey>'."
+        },
+        "hook": {
+          "type": "string",
+          "description": "apply:'hook' only — the script name, relative to the service directory, e.g. 'update-node.sh'.",
+          "pattern": "^[A-Za-z0-9._-]+$"
+        },
+        "composite": {
+          "type": "string",
+          "description": "apply:'composite' only — the composite this field is an input of. Must be declared under 'composites', and that composite must list this field in its 'inputs'."
+        },
+        "normalize": { "$ref": "#/$defs/normalizer" },
+        "sideEffects": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/sideEffect" }
+        },
+        "defaultIsDesired": {
+          "type": "boolean",
+          "default": true,
+          "description": "When the module does NOT declare this field, is its module-fields.json default DESIRED STATE (true, the default) or merely an install-time seed (false)? This is the declared form of the '__none__' sentinel the converge scripts hand-roll: cluster:vm reads an undeclared diskSize as 'leave the disk alone', not 'resize it to the schema's 8G'. The resolver still resolves the default, so the drift report shows the effective value; false means the CONVERGE must not act on it unless the module asked for it."
+        },
+        "note": {
+          "type": "string",
+          "description": "Why this class, when the reason is not obvious from the field name. Read by humans only."
+        }
+      }
+    },
+    "compositeEntry": {
+      "type": "object",
+      "required": ["class", "inputs"],
+      "additionalProperties": false,
+      "properties": {
+        "class": { "$ref": "#/$defs/changeClass" },
+        "apply": { "$ref": "#/$defs/applyMode" },
+        "liveKey": { "type": "string" },
+        "setFlag": { "type": "string" },
+        "hook": { "type": "string", "pattern": "^[A-Za-z0-9._-]+$" },
+        "inputs": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "type": "string" },
+          "description": "The declared fields this value is assembled from. Each must have a field entry with apply:'composite' pointing back here."
+        },
+        "normalize": { "$ref": "#/$defs/normalizer" },
+        "sideEffects": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/sideEffect" }
+        },
+        "defaultIsDesired": { "type": "boolean", "default": true },
+        "note": { "type": "string" }
+      }
+    }
+  }
+}
