@@ -202,22 +202,52 @@ info "Testing the endpoints the Nextcloud connector relies on..."
 if [ "$CONTAINER_OK" = false ]; then
     skip "Connector endpoint check skipped — container is not running"
 else
-    HC_CODE=$(remote "curl -s -o /dev/null -w '%{http_code}' --max-time 15 http://localhost/healthcheck") || HC_CODE="000"
-    [[ -n "${HC_CODE}" ]] || HC_CODE="000"
-    API_CODE=$(remote "curl -s -o /dev/null -w '%{http_code}' --max-time 15 http://localhost/web-apps/apps/api/documents/api.js") || API_CODE="000"
-    [[ -n "${API_CODE}" ]] || API_CODE="000"
-    info "/healthcheck: ${HC_CODE}   /web-apps api.js: ${API_CODE}"
+    # Poll rather than probe once. The DocumentServer runs in a container, and
+    # this test is reached by the very operations that restart it (update,
+    # reconcile, and the post-rollback run) — so a single request cannot tell
+    # "not ready yet" from "not working", and a healthy module gets failed and
+    # rolled back for being mid-startup. Same shape as the retry in
+    # foundation/identity/services/identity/install-service.sh.
+    #
+    # Bounded on purpose: an unbounded wait would hide a real outage, which is
+    # the opposite failure. On success the elapsed time is reported, so a slow
+    # start stays visible instead of being smoothed away.
+    ENDPOINT_RETRIES="${EURO_OFFICE_HEALTH_RETRIES:-6}"   # 6 × 10s ≈ 60s
+    ENDPOINT_WAIT="${EURO_OFFICE_HEALTH_WAIT:-10}"
+
+    probe_until_ready() { # probe_until_ready <url> — echo the last HTTP code
+        local url="$1" code="000" i
+        for ((i = 1; i <= ENDPOINT_RETRIES; i++)); do
+            code=$(remote "curl -s -o /dev/null -w '%{http_code}' --max-time 15 ${url}") || code="000"
+            [[ -n "${code}" ]] || code="000"
+            if [[ "${code}" == "200" ]]; then
+                printf '%s %s\n' "${code}" "$(( (i - 1) * ENDPOINT_WAIT ))"
+                return 0
+            fi
+            # `[[ cond ]] && cmd` as the last statement in the body returns 1 on the
+            # final iteration, which under `set -e` kills the subshell this function
+            # runs in — the caller's `read` then gets nothing. Use an if-block.
+            if [[ $i -lt ${ENDPOINT_RETRIES} ]]; then
+                sleep "${ENDPOINT_WAIT}"
+            fi
+        done
+        printf '%s %s\n' "${code}" "$(( (ENDPOINT_RETRIES - 1) * ENDPOINT_WAIT ))"
+    }
+
+    read -r HC_CODE HC_WAITED < <(probe_until_ready "http://localhost/healthcheck")
+    read -r API_CODE API_WAITED < <(probe_until_ready "http://localhost/web-apps/apps/api/documents/api.js")
+    info "/healthcheck: ${HC_CODE} (after ${HC_WAITED}s)   /web-apps api.js: ${API_CODE} (after ${API_WAITED}s)"
 
     if [ "$HC_CODE" = "200" ]; then
         pass "DocumentServer /healthcheck returned HTTP 200 (connector availability check)"
     else
-        fail "DocumentServer /healthcheck failed (HTTP ${HC_CODE}) — connector will report the server unavailable"
+        fail "DocumentServer /healthcheck failed (HTTP ${HC_CODE}) after ${HC_WAITED}s of retries — connector will report the server unavailable"
     fi
 
     if [ "$API_CODE" = "200" ]; then
         pass "Editor API /web-apps/apps/api/documents/api.js returned HTTP 200"
     else
-        fail "Editor API api.js failed (HTTP ${API_CODE}) — Nextcloud cannot load the editor"
+        fail "Editor API api.js failed (HTTP ${API_CODE}) after ${API_WAITED}s of retries — Nextcloud cannot load the editor"
     fi
 fi
 
