@@ -1,4 +1,11 @@
-# insert test for the module here
+#!/usr/bin/env bash
+# test.sh — verify the module is functioning (invoked by test-module.sh).
+#
+# Insert the module's tests here. A typical test first confirms the module is
+# running and that tappaas-cicd can ssh into it, then checks it does what it is
+# supposed to — e.g. for a web server, that it serves the expected content.
+# Exit non-zero on failure so the regression sweep flags it.
 
-typical test would start with verifying that that the module is running and that tappaaas-cicd can ssh into the module
-followed by more test to see if the module is doing what it is supposed to do, for example if it is a web server, you would test if it is serving the correct contents
+set -euo pipefail
+
+# TODO: implement module tests.

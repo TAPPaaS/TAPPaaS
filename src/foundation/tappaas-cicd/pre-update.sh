@@ -104,7 +104,9 @@ for script in scripts/*.sh lib/*.sh; do
     # chmod the resolved source, not the symlink: chmod follows symlinks,
     # so chmod'ing a /home/tappaas/bin/*.sh symlink that points into
     # /etc/static would still fail. The source lives in the writable repo.
-    chmod +x "$src"
+    # #565: only chmod files the repo tracks executable — a sourced lib
+    # (linked here so it can be `.`-sourced from ~/bin) stays 100644.
+    if tappaas_should_be_executable "$src"; then chmod +x "$src"; fi
     ln -s "$src" "$target"
   fi
 done

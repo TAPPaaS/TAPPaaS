@@ -602,6 +602,41 @@ else
     skip "variant architecture suite (use --deep to run)"
 fi
 
+# ── Deep Test: tracked exec-mode is authoritative (#565) ────────────
+# The lifecycle chmod paths must honour the tracked git mode: restore +x on a
+# script committed 100755, but never widen a sourced library committed 100644
+# (even one carrying a shebang) — widening shows as spurious `git` mode drift on
+# the control-plane checkout. Exercises the real ensure_scripts_executable in a
+# throwaway git repo, so it asserts behaviour, not just the tracked modes.
+info "${BOLD}Deep Test: tracked exec-mode is authoritative (#565)${CL}"
+if [[ "${DEEP}" == "1" ]]; then
+    _e565="$(mktemp -d)"
+    (
+        cd "${_e565}" || exit 1
+        git init -q && git config user.email t@t && git config user.name t
+        printf '#!/usr/bin/env bash\necho run\n' > runme.sh   # genuine executable
+        printf '#!/usr/bin/env bash\n: lib\n'    > lib.sh      # sourced lib — has a shebang
+        git add runme.sh lib.sh
+        git update-index --chmod=+x runme.sh                  # runme.sh tracked 100755
+        git commit -qm init
+        chmod -x runme.sh lib.sh                              # simulate a mode-losing checkout
+    )
+    ensure_scripts_executable "${_e565}"
+    if [[ -x "${_e565}/runme.sh" ]]; then
+        pass "tracked-755 script restored to executable"
+    else
+        fail "#565: tracked-755 script was left non-executable"
+    fi
+    if [[ -x "${_e565}/lib.sh" ]]; then
+        fail "#565: tracked-644 lib (with shebang) was wrongly widened to 755"
+    else
+        pass "tracked-644 lib left 644 (no spurious mode drift)"
+    fi
+    rm -rf "${_e565}"
+else
+    skip "tracked exec-mode guard (use --deep to run)"
+fi
+
 # ── Summary ─────────────────────────────────────────────────────────
 
 info "  Results: ${GN}${PASS} passed${CL}, ${RD}${FAIL} failed${CL}, ${YW}${SKIP} skipped${CL}"
