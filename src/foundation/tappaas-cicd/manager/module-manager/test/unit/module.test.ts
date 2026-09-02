@@ -24,6 +24,7 @@ import {
   validateDependsOn,
   validateIntegratesWith,
   validateModules,
+  validateSourceLocation,
 } from "../../src/validate";
 import { AddOptions, DeleteOptions, ModuleConfig, ValidateFinding, ValidateReport } from "../../src/types";
 import { FakeModuleClient } from "./fake-client";
@@ -454,6 +455,52 @@ function captureList(client: FakeModuleClient, extraArgs: string[] = []): string
 }
 
 
+
+// ── source-ref derivability ─────────────────────────────────────────────
+// .location records WHERE a module's source is, never WHICH REF it came from.
+// A ref exists one level up, on site.json .repositories[].branch, so it is
+// derivable only while .location resolves inside a declared repository. When it
+// does not, an absent ref means two opposite things -- deliberately deployed
+// from a branch, or left on a stale checkout -- and nothing tells them apart.
+// Invisible in a single-environment estate where path and ref coincide.
+{
+  const REPOS = [
+    { name: "TAPPaaS", path: "/home/tappaas/TAPPaaS", branch: "main" },
+    { name: "Community", path: "/home/tappaas/Community", branch: "main" },
+  ];
+  const locFindings = (m: Record<string, unknown>) => {
+    const out: { module: string; severity: string; message: string }[] = [];
+    validateSourceLocation(m as never, REPOS, out as never);
+    return out;
+  };
+
+  {
+    const f = locFindings({ name: "in", raw: { location: "/home/tappaas/TAPPaaS/src/apps/x" } });
+    check(f.length === 0, "source-ref: a location inside a declared repository produces no finding");
+  }
+  {
+    const f = locFindings({ name: "out", raw: { location: "/home/tappaas/repos/other/src/apps/x" } });
+    check(f.length === 1, "source-ref: a location outside every declared repository is reported");
+    check(f[0].severity === "warning", "source-ref: it is a WARNING — the module still resolves and works");
+    check(
+      f[0].message.includes("/home/tappaas/repos/other/src/apps/x"),
+      "source-ref: the finding names the offending path, not just the module",
+    );
+  }
+  {
+    const f = locFindings({ name: "nocatalog", raw: {} });
+    check(f.length === 0, "source-ref: a module with no .location is catalog-resolved, not a finding");
+  }
+  {
+    const f = locFindings({ name: "exact", raw: { location: "/home/tappaas/TAPPaaS" } });
+    check(f.length === 0, "source-ref: a location equal to the repository root is inside it");
+  }
+  {
+    // The prefix trap: TAPPaaSX is not inside TAPPaaS.
+    const f = locFindings({ name: "prefix", raw: { location: "/home/tappaas/TAPPaaSX/src/apps/x" } });
+    check(f.length === 1, "source-ref: a sibling path sharing a prefix is NOT inside the repository");
+  }
+}
 
 // ── dependsOn reference integrity (#495 follow-up) ──────────────────────
 // reconcile/modify SKIP an unservable dependency at runtime, so validate is the

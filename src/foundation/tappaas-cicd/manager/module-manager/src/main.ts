@@ -22,6 +22,8 @@
 //
 // Exit codes: ok=0, error / non-zero child rc = that rc (1 for config errors).
 
+import { readFileSync } from "fs";
+import { join } from "path";
 import { CliModuleClient } from "./client";
 import {
   classifyModuleResolution,
@@ -524,6 +526,25 @@ function cmdShow(opts: Opts): number {
   return 0;
 }
 
+// The repositories site.json declares, for validateSourceLocation. Returns []
+// when site.json is absent or malformed: the check then reports nothing rather
+// than reporting everything, because "no declarations" is not evidence that a
+// module's source is undeclared.
+function readDeclaredRepositories(
+  configDir: string,
+): { name: string; path: string; branch: string }[] {
+  try {
+    const raw = JSON.parse(readFileSync(join(configDir, "site.json"), "utf8")) as {
+      repositories?: { name?: string; path?: string; branch?: string }[];
+    };
+    return (raw.repositories ?? [])
+      .filter((r) => typeof r.path === "string" && r.path !== "")
+      .map((r) => ({ name: r.name ?? "", path: r.path as string, branch: r.branch ?? "" }));
+  } catch {
+    return [];
+  }
+}
+
 function cmdValidate(opts: Opts): number {
   const name = opts.rest[0];
   let mods;
@@ -540,6 +561,7 @@ function cmdValidate(opts: Opts): number {
   const report = validateModules(mods, {
     allowFork: opts.allowFork,
     fs: realServiceFs(opts.configDir),
+    repos: readDeclaredRepositories(opts.configDir),
   });
   if (opts.json) {
     info(JSON.stringify(report, null, 2));
