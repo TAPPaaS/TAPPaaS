@@ -33,6 +33,7 @@ import {
   ManifestFinding,
   ServiceFieldManifest,
   manifestRelPath,
+  needsActualState,
   parseServiceFieldManifest,
 } from "../../../lib/ts/src/service-fields";
 import { BL, CL, GN, RD, YW, emitJson, error, info, warn } from "./shlog";
@@ -111,6 +112,18 @@ export function driftForService(
     return findings.length > 0
       ? { ok: false, failure: { kind: "bad-manifest", path, findings } }
       : { ok: false, failure: { kind: "no-manifest", path } };
+  }
+
+  // A manifest whose fields are all apply:"reconcile" has nothing for the
+  // generic differ to compare, and demanding a report-service.sh from that
+  // provider would be asking it to re-express a firewall rule set as flat
+  // strings for no one's benefit. Diff what there is — which is nothing — and
+  // say so, rather than failing on a reporter that should not exist.
+  if (!needsActualState(manifest)) {
+    return {
+      ok: true,
+      record: computeDrift(desired, { manifest, actual: {}, zones: loadZones(configDir) }),
+    };
   }
 
   const outcome = runServiceReporter(configDir, module, provider, service, environment);
@@ -326,6 +339,15 @@ export function preGateSet(
 
 // ── rendering ──────────────────────────────────────────────────────────
 
+// Every reason a field was not compared, in words an operator can act on. The
+// differ records the reason precisely so this can be said instead of nothing.
+const SKIP_REASON_TEXT: Record<string, string> = {
+  "self-reconciling": "converged by the service itself, not diffed here",
+  "no-desired-value": "this module declares no value, and no schema default applies",
+  "seed-only": "the schema default is an install-time seed, not desired state",
+  "not-reported": "the service's reporter does not observe it",
+};
+
 function failureLines(coordinate: string, f: DriftFailure): string[] {
   switch (f.kind) {
     case "no-module":
@@ -353,9 +375,33 @@ function failureLines(coordinate: string, f: DriftFailure): string[] {
 export function renderDrift(coordinate: string, r: DriftRecord): string[] {
   const out: string[] = [`${GN}${coordinate}${CL}`];
   if (!hasChanges(r)) {
-    out.push(
-      `  ${GN}✓${CL} in sync (${r.inSync.length} field(s) compared, ${r.skipped.length} not compared)`,
-    );
+    // "Nothing compared" is NOT "in sync" — the same confusion #458 had to fix
+    // on the dependency-service side. A clean verdict is only honest when
+    // something was actually compared; otherwise say what was skipped and why,
+    // and name the check that DOES cover it.
+    if (r.inSync.length > 0) {
+      out.push(
+        `  ${GN}✓${CL} in sync (${r.inSync.length} field(s) compared, ${r.skipped.length} not compared)`,
+      );
+      return out;
+    }
+    const byReason = new Map<string, string[]>();
+    for (const s of r.skipped) {
+      const list = byReason.get(s.reason);
+      if (list) list.push(s.field);
+      else byReason.set(s.reason, [s.field]);
+    }
+    if (byReason.size === 0) {
+      out.push(`  ${GN}✓${CL} nothing to compare — this service owns no field of this module`);
+      return out;
+    }
+    out.push(`  ${YW}~${CL} nothing was compared here:`);
+    for (const [reason, fields] of byReason) {
+      out.push(`      ${SKIP_REASON_TEXT[reason] ?? reason}: ${fields.join(", ")}`);
+    }
+    if (byReason.has("self-reconciling")) {
+      out.push(`      → 'module-manager test ${r.module}' runs the verifier that does cover them`);
+    }
     return out;
   }
   for (const u of r.units) {
