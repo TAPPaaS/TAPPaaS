@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| **Status** | Draft |
+| **Status** | **Proposed** (operator sign-off 2026-09-02; pending cluster live tests) |
 | **Version** | 0.3 |
 | **Date** | 2026-08-29 |
 | **Author** | Lars Rossen |
@@ -461,7 +461,7 @@ Backing up a Proxmox storage **dataset** — e.g. external NFS-served data that 
 - [ ] **Documentation updated (§Impl 15)** — `backup/README.md` + `QUICKREF.md` + `TEST.md`, the `00-Template` module-authoring guide, and the migration + key export/import runbooks. — **not started (v0.3)**
 - [ ] **Compromise-isolation tests pass** — local compromise cannot delete/encrypt/rewrite the off-site copy. *(#389)* — **suite documented in `TEST.md`; runs on the 3-node cluster**
 - [ ] Restore-from-off-site proven **with** the key and fails **without** it. — **cluster-pending**
-- [x] `QUICKREF.md` / `TEST.md` updated (v0.2 baseline). Status advanced **Draft → Proposed** after operator review (still Draft — pending operator sign-off + cluster live tests).
+- [x] `QUICKREF.md` / `TEST.md` updated (v0.2 baseline). Status advanced **Draft → Proposed** (operator sign-off 2026-09-02; pending cluster live tests).
 
 ---
 
