@@ -1,6 +1,6 @@
 # ADR-006: Identity — Users, Roles & SSO Provisioning
 
-**Status:** accepted — **SSO plumbing still authoritative; people/role data-model & tooling superseded by [ADR-007a](<ADR-007a - People.md>)** (2026-06-30)
+**Status:** accepted — **SSO plumbing still authoritative; people/role data-model & tooling superseded by [ADR-007a](<ADR-007a - People.md>)** (2026-06-30; body reconciled 2026-09-02)
 **Date:** 2026-06-08
 **Deciders:** @LarsRossen
 **Related:** #56 (default user & role profiles); builds on #45 (accessControl forward-auth); the variant model in [ADR-005](ADR-005-variant-domain-architecture.md) is superseded; **people model now** [ADR-007a](<ADR-007a - People.md>)
@@ -14,8 +14,11 @@
 > (`tappaas-admins`/`<scope>-users`/`tappaas-installers`) are **retired** — SSO allow-lists now bind the
 > flat **`users`** group (a regression test asserts the old names are absent). **Role is now a first-class
 > entity** (`schemas/role-fields.json`; a Role = an Authentik group marked `kind=role`), and a **User has a
-> lifecycle** (`active`/`suspended`/`terminated`). So §2/§3 (prefix profiles + parent-per-scope naming) and
-> §8 (`user.sh`/`roles-ensure.sh`) below are **historical**; the data model is [ADR-007a](<ADR-007a - People.md>).
+> lifecycle** (`active`/`suspended`/`terminated`). So §2/§3 (prefix profiles + parent-per-scope naming), §7–§8
+> (`user.sh`/`roles-ensure.sh` + the enrollment tooling), the phased Implementation plan's ✅-then-retired
+> items, and the **SMTP-in-`configuration.json`** section below are **historical** — `configuration.json` is
+> itself retired (ADR-004/ADR-007) and the SMTP block was never relocated to `site.json` (still deferred).
+> The live data model is [ADR-007a](<ADR-007a - People.md>).
 
 ---
 
@@ -204,6 +207,8 @@ email once it is.
 
 ## SMTP — central config in `configuration.json`
 
+> **⚠ Historical / not implemented (2026-09-02).** `configuration.json` is **retired** (ADR-004/ADR-007); the `tappaas.smtp` block was **never relocated** to `site.json`, and no `smtp` field exists in `schemas/site-fields.json`. SMTP is still **deferred** (Phase 0), which is why enrollment stayed link-first. The mechanism below (one endpoint projected into each consumer) stands; only the config **location** is obsolete — when wired, `smtp` belongs on `site.json`.
+
 **What Proxmox actually does.** PVE's only notification target is the builtin
 `mail-to-root` of type **`sendmail`** → the local **postfix** (`relayhost=` empty) →
 **direct-to-MX delivery**. There is **no relay/smarthost** to reuse. It does work — the
@@ -347,7 +352,9 @@ as a regression guard.
 
 ## Implementation plan (phased)
 
-Status legend: ✅ implemented (branch `feat/56-identity-users-roles`), ⏸ deferred.
+Status legend: ✅ implemented (branch `feat/56-identity-users-roles`), ⏸ deferred, ⊘ shipped-then-**retired by ADR-007a**.
+
+> **⚠ Reconciled 2026-09-02.** Several ✅ items below shipped on `feat/56-identity-users-roles` and were **later retired/superseded by ADR-007a** (the people/role data model moved to `config/people/*` reconciled by `people-manager`→`identity-controller`; `user.sh`/`roles-ensure.sh` are gone; the variant-prefix groups were replaced by the flat `users` group, with a regression guard in `identity/test.sh`). They are marked ⊘ inline. The **SSO plumbing stays live**: Phase 1's Authentik API surface, Phase 4's `oidc-app-ensure` + the *mandatory* access binding, and Phase 5's fail-open binding test.
 
 - **Phase 0 — SMTP + recovery flow. ⏸ Deferred** (folded into the separate SMTP issue).
   The probe found no recovery flow on the brand and no cluster SMTP relay; both belong with
@@ -358,11 +365,13 @@ Status legend: ✅ implemented (branch `feat/56-identity-users-roles`), ⏸ defe
   `app_bind_groups`, and the real `oidc_app_ensure` + `authentik-manager` subcommands.
   Idempotent; validated live + 21 unit tests. (Also fixed `/core/applications/` visibility:
   a group-bound app is hidden from the admin list unless `superuser_full_list=true`.)
-- **Phase 2 — `roles-ensure.sh` reconcile. ✅** Guarantees `tappaas-installers` + the scope
-  groups for the current variant set; hooked into `identity/update.sh` and `variant-manager add`.
-- **Phase 3 — `user.sh` (verbs add/modify/delete/show/list). ✅** add/modify: ensure-user →
-  ensure-groups → add/remove memberships → credential (recovery link, else printed password);
-  delete removes the login. Default + variant scopes work.
+- **Phase 2 — `roles-ensure.sh` reconcile. ✅ → ⊘ retired (ADR-007a).** Shipped; since removed —
+  scope/role groups are now `config/people/{roles,groups}/*.json` reconciled by
+  `people-manager`→`identity-controller`, binding the flat `users` group (not the `tappaas-*`/`<scope>-*`
+  prefixes, which a regression test now asserts are absent).
+- **Phase 3 — `user.sh` (verbs add/modify/delete/show/list). ✅ → ⊘ retired (ADR-007a).** Shipped;
+  since removed — users are now `config/people/users/*.json` (with an `active`/`suspended`/`terminated`
+  lifecycle) reconciled by `people-manager`. `authentik-manager user-*` verbs remain for live account ops.
 - **Phase 4 — module integration & access bindings. ✅** `oidc-app-ensure` implemented and
   `services/identity/{install,update,delete,test}-service.sh` wired: roles-ensure → opt-in
   `<scope>-<module>-admins` (module-JSON `identity.providesAdminRole`) → OIDC provider/app →
