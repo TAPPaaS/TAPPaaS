@@ -72,11 +72,29 @@ SITE="${CONFIG_DIR%/}/site.json"
 # only source that works for a module resolved via .location rather than a
 # catalog (#460). install-module.sh already reads tier from the authored JSON
 # this way; catalog lookup below stays as the fallback.
+#
+# When the config exists, carries a `vmname` (so it IS a deployed module) but
+# declares no tier, remember that: validate-module-tier-source.sh already
+# decided what an absent tier means — it warns and defaults to 'app' ("back-
+# compat: untagged/legacy modules + test fixtures install as apps"). This
+# resolver did not share that decision and fell through to `exit 1` with an
+# empty result, so each caller invented its own reading of the silence.
+# migrate-to-adr007.sh:388 invented one, and it was wrong for 22 of 47 deployed
+# modules on a real site (#561). The default is applied only AFTER the catalog
+# lookup below fails, so a catalogued tier still wins.
+TIER_DEFAULTABLE=0
 if [[ "$FIELD" == "tier" ]]; then
-  deployed_tier="$(jq -r '.tier // empty' "${CONFIG_DIR%/}/${MODULE}.json" 2>/dev/null || true)"
+  _mjson="${CONFIG_DIR%/}/${MODULE}.json"
+  deployed_tier="$(jq -r '.tier // empty' "$_mjson" 2>/dev/null || true)"
   if [[ -n "$deployed_tier" ]]; then
     printf '%s\n' "$deployed_tier"
     exit 0
+  fi
+  # No tier. Only a DEPLOYED module defaults; a config without a vmname
+  # (site.json, zones.json, a field schema) must stay unresolved, or this
+  # resolver would start claiming they are modules.
+  if [[ -f "$_mjson" ]] && jq -e '.vmname' "$_mjson" >/dev/null 2>&1; then
+    TIER_DEFAULTABLE=1
   fi
 fi
 
@@ -113,6 +131,15 @@ done < <(jq -r '.repositories[]?
                 | join("\u0001")' "$SITE" 2>/dev/null)
 
 if [[ ${#matches[@]} -eq 0 ]]; then
+  # A deployed module with no tier and no catalog entry resolves to the
+  # documented default rather than to nothing (#561). Reported on stderr so the
+  # default is visible, never silent: a caller that discards stderr still gets
+  # a usable value instead of an empty string it has to interpret.
+  if [[ "$FIELD" == "tier" && "$TIER_DEFAULTABLE" -eq 1 ]]; then
+    echo "resolve-module.sh: '${MODULE}' declares no tier and is in no catalog — using the documented default 'app' (module-fields.json)" >&2
+    printf 'app\n'
+    exit 0
+  fi
   echo "resolve-module.sh: module '${MODULE}' not found in any repository catalog (site: ${SITE})" >&2
   exit 1
 fi

@@ -971,6 +971,124 @@ else
     bad "(d) expected clean skip (rc=0, no markers); rc=${delta_rc}, markers=$(tr '\n' ';' < "${MARKER}" 2>/dev/null)"
 fi
 
+# ── resolve-module.sh --field tier: an undeclared tier resolves to the
+# documented default (#561) ──────────────────────────────────────────
+#
+# validate-module-tier-source.sh already decided what an absent tier means:
+# it warns and defaults to 'app' ("back-compat: untagged/legacy modules ...").
+# resolve-module.sh did not share that decision — it fell through to the
+# catalog and exited 1 with an empty result, so every caller had to invent its
+# own reading of the silence. migrate-to-adr007.sh:388 invented one and it was
+# wrong for 22 of 47 deployed modules on a real site.
+RESOLVE="${HERE}/resolve-module.sh"
+TIERDIR="$(mktemp -d "${TMPDIR:-/tmp}/resolve-tier.XXXXXX")"
+cat > "${TIERDIR}/site.json" <<'JSON'
+{ "name": "acme", "repositories": [] }
+JSON
+# a DEPLOYED module (carries vmname) that declares no tier and is in no catalog
+cat > "${TIERDIR}/untiered.json" <<'JSON'
+{ "vmname": "untiered", "vmid": 999, "description": "deployed, no tier, no catalog entry" }
+JSON
+# a module that declares its tier explicitly — must be unaffected
+cat > "${TIERDIR}/tiered.json" <<'JSON'
+{ "vmname": "tiered", "vmid": 998, "tier": "foundation" }
+JSON
+# NOT a module: no vmname. Absence must stay unresolved here, or the resolver
+# would claim site.json and zones.json are modules.
+cat > "${TIERDIR}/notamodule.json" <<'JSON'
+{ "description": "a schema or state file, not a module" }
+JSON
+
+out="$("$RESOLVE" untiered --config-dir "$TIERDIR" --field tier 2>/dev/null || true)"
+[[ "$out" == "app" ]]     && ok "resolve tier: a deployed module with no tier resolves to the documented default 'app'"     || bad "resolve tier: expected 'app' for an untiered deployed module, got '${out:-<empty>}'"
+
+"$RESOLVE" untiered --config-dir "$TIERDIR" --field tier >/dev/null 2>&1     && ok "resolve tier: the defaulted lookup exits 0"     || bad "resolve tier: the defaulted lookup should exit 0, not signal not-found"
+
+out="$("$RESOLVE" tiered --config-dir "$TIERDIR" --field tier 2>/dev/null || true)"
+[[ "$out" == "foundation" ]]     && ok "resolve tier: an explicit tier is returned unchanged"     || bad "resolve tier: expected 'foundation', got '${out:-<empty>}'"
+
+out="$("$RESOLVE" notamodule --config-dir "$TIERDIR" --field tier 2>/dev/null || true)"
+[[ -z "$out" ]]     && ok "resolve tier: a config with no vmname is still unresolved (not a module)"     || bad "resolve tier: a non-module must not default; got '${out}'"
+
+out="$("$RESOLVE" absent --config-dir "$TIERDIR" --field tier 2>/dev/null || true)"
+[[ -z "$out" ]]     && ok "resolve tier: a module with no config file at all stays unresolved"     || bad "resolve tier: expected empty for a missing config, got '${out}'"
+
+rm -rf -- "$TIERDIR"
+
+
+# ── validate-modules-mandatory.sh: severity follows the sanctioned
+# convention — error only where the tool cannot proceed (#561) ────────
+#
+# validate-module-tier-source.sh sets the rule and this lint inherits it:
+#   lint_error (exit 1) : an explicitly invalid value — the tool CANNOT proceed
+#   lint_warn  (exit 0) : an absent field WITH a documented default — it can
+# So the two requirement kinds in module-fields.json map onto the two levels:
+#   requiredBy: [block]     no default exists -> a VM cannot be built -> ERROR
+#   prose-mandated w/default (tier)          -> resolvable -> WARNING
+# Every message names the remedy, as the existing lint does ("set tier:
+# foundation|app explicitly"), so the log is actionable and not just a count.
+MANDLINT="${HERE}/validate-modules-mandatory.sh"
+MDIR="$(mktemp -d "${TMPDIR:-/tmp}/mandatory-test.XXXXXX")"
+mkdir -p "${MDIR}/cfg"
+cat > "${MDIR}/schema.json" <<'JSON'
+{ "fields": {
+    "tier": { "requiredOnModule": true, "default": "app", "requiredBy": [],
+              "note": "Mandatory in authored module JSON (ADR-007b CR-04)." },
+    "vmid": { "requiredBy": ["cluster:vm"] }
+} }
+JSON
+cat > "${MDIR}/cfg/good.json"         <<'JSON'
+{ "vmname": "good", "tier": "app", "config": { "cluster:vm": { "vmid": 101 } } }
+JSON
+cat > "${MDIR}/cfg/notier.json"       <<'JSON'
+{ "vmname": "notier", "config": { "cluster:vm": { "vmid": 102 } } }
+JSON
+cat > "${MDIR}/cfg/novmid.json"       <<'JSON'
+{ "vmname": "novmid", "tier": "app", "config": { "cluster:vm": { } } }
+JSON
+cat > "${MDIR}/cfg/notamodule.json"   <<'JSON'
+{ "description": "no vmname — a schema or state file, not a module" }
+JSON
+run_mand() { bash "$MANDLINT" --config-dir "${MDIR}/cfg" --schema "${MDIR}/schema.json" 2>&1; }
+
+out="$(run_mand || true)"
+grep -qE 'WARNING.*notier|notier.*[Ww]arning' <<<"$out"     && ok "mandatory: an absent defaulted field is a WARNING, per the lint convention"     || bad "mandatory: 'notier' should be reported as a warning; got: $(tr '\n' ';' <<<"$out" | cut -c1-90)"
+
+grep -qE 'ERROR.*novmid|novmid.*[Ee]rror' <<<"$out"     && ok "mandatory: a block-required field with no default is an ERROR"     || bad "mandatory: 'novmid' should be reported as an error"
+
+grep -qE "set tier|tier:" <<<"$out"     && ok "mandatory: the warning names the remedy, not just the fault"     || bad "mandatory: the message must be actionable (name the field to set)"
+
+grep -q 'notamodule' <<<"$out"     && bad "mandatory: a config with no vmname must not be reported as a module"     || ok "mandatory: a config with no vmname is not reported"
+
+bash "$MANDLINT" --config-dir "${MDIR}/cfg" --schema "${MDIR}/schema.json" >/dev/null 2>&1     && bad "mandatory: an ERROR must exit non-zero (cannot proceed)"     || ok "mandatory: an error exits non-zero"
+
+# warnings alone must NOT block — that is the whole point of the convention
+rm -f "${MDIR}/cfg/novmid.json"
+bash "$MANDLINT" --config-dir "${MDIR}/cfg" --schema "${MDIR}/schema.json" >/dev/null 2>&1     && ok "mandatory: warnings alone exit 0 — the tool can proceed"     || bad "mandatory: a warning must not block; only errors exit non-zero"
+
+out="$(run_mand || true)"
+grep -qE 'ok|0 error' <<<"$out"     && ok "mandatory: a line is emitted even when there is nothing to report"     || bad "mandatory: silence must not be the pass signal"
+
+# The lint carries NO field list of its own: both rule kinds are derived from
+# the schema at run time, so a new mandate is a schema edit and zero code.
+# Guaranteed here rather than asserted in a comment.
+cat > "${MDIR}/schema2.json" <<'JSON'
+{ "fields": {
+    "tier":      { "requiredOnModule": true, "default": "app", "requiredBy": [] },
+    "brandnew":  { "requiredOnModule": true, "default": "zzz", "requiredBy": [] },
+    "vmid":      { "requiredBy": ["cluster:vm"] }
+} }
+JSON
+out2="$(bash "$MANDLINT" --config-dir "${MDIR}/cfg" --schema "${MDIR}/schema2.json" 2>&1 || true)"
+grep -q "brandnew" <<<"$out2" \
+    && ok "mandatory: a field added to the schema is enforced with no code change" \
+    || bad "mandatory: a new schema field must be picked up automatically"
+grep -q "zzz" <<<"$out2" \
+    && ok "mandatory: the new field's own default is reported, not a hardcoded one" \
+    || bad "mandatory: the default must come from the schema entry"
+
+rm -rf -- "$MDIR"
+
 echo ""
 echo "Results: ${PASS} passed, ${FAIL} failed"
 [[ "$FAIL" -eq 0 ]] || exit 1
