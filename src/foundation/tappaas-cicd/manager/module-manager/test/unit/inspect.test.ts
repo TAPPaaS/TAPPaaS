@@ -11,15 +11,17 @@ import { chmodSync, mkdtempSync, rmSync, writeFileSync } from "fs";
 import { tmpdir } from "os";
 import { join } from "path";
 import {
-  appliedDefault,
   buildConfigOnlyReport,
   buildVmReport,
-  dependsOnOf,
   guestTypeFromDeps,
   parseQmConfig,
-  resolveField,
   vmnetParse,
 } from "../../src/inspect";
+// The resolver is no longer inspect's own (ADR-020 D1) — it lives in lib/ts and
+// inspect is one of its consumers. Importing it from its real home here is part
+// of the assertion: if these tests could still reach it through ../../src/inspect,
+// a second copy could exist and they would not notice.
+import { appliedDefault, dependsOnOf, resolveField } from "../../../../lib/ts/src/desired";
 import {
   ServiceCheck,
   ServiceFs,

@@ -36,6 +36,15 @@ import { existsSync, readFileSync } from "fs";
 import { join } from "path";
 import { mgmtDomain, ssh } from "../../../lib/ts/src/cluster";
 import { readJsonObject } from "../../../lib/ts/src/config-io";
+import {
+  ModuleFieldsSchema,
+  dependsOnOf,
+  getField,
+  integratesWithOf,
+  jqStr,
+  loadModuleFields,
+  resolveField,
+} from "../../../lib/ts/src/desired";
 import { defaultConfigDir, normalizeModuleConfig } from "./config";
 import {
   ServiceSection,
@@ -47,71 +56,12 @@ import {
 import { InspectOptions } from "./types";
 import { BL, BOLD, CL, GN, RD, YW, error, info, warn } from "./shlog";
 
-// ── pure: jq-compatible field access ───────────────────────────────────
-// `jq -r '.[$k] // empty'` semantics: missing / null / false → "", numbers and
-// true → their string form, strings raw, containers as JSON.
-export function jqStr(v: unknown): string {
-  if (v === undefined || v === null || v === false) return "";
-  if (typeof v === "string") return v;
-  if (typeof v === "number" || typeof v === "boolean") return String(v);
-  return JSON.stringify(v);
-}
-
-export function getField(o: Record<string, unknown> | null, key: string): string {
-  return o ? jqStr(o[key]) : "";
-}
-
-// ── pure: schema-driven field defaults (#550) ──────────────────────────
-// The desired state of a field the module does not declare is its
-// module-fields.json `default` — the SAME schema the install/update paths
-// resolve against — not a value hardcoded here. The inspection Desired/Released
-// columns surface that default (marked with <angle brackets>) so the table
-// shows the effective value instead of "-" and reports no-drift while an
-// effective value exists (#550: an undeclared cputype resolves to 'host').
-
-// One field's schema entry (only the parts this module reads).
-export interface FieldSchema {
-  default?: unknown;
-  usedBy?: string[];
-}
-export type ModuleFieldsSchema = Record<string, FieldSchema>;
-
-// The schema default that APPLIES to this module for `field`, or "" if none.
-// A default applies only when it is a concrete scalar (not empty, not a
-// "<computed…>" placeholder the schema uses for install-time-generated values)
-// AND the field belongs to a section the module actually has: usedBy is absent
-// or contains "general", or intersects the module's dependsOn. So a proxyPort
-// default only defaults in for a module that declares network:proxy, a cputype
-// only for a cluster:vm — never for a module that never uses the field.
-export function appliedDefault(
-  field: string,
-  deps: string[],
-  schema: ModuleFieldsSchema,
-): string {
-  const fs = schema[field];
-  if (!fs) return "";
-  const d = fs.default;
-  if (typeof d !== "string" && typeof d !== "number" && typeof d !== "boolean") return "";
-  const s = String(d);
-  if (s === "" || s.startsWith("<")) return ""; // empty, or a "<computed>" placeholder
-  const usedBy = Array.isArray(fs.usedBy) ? fs.usedBy : [];
-  const applies = usedBy.length === 0 || usedBy.includes("general") || usedBy.some((u) => deps.includes(u));
-  return applies ? s : "";
-}
-
-// Resolve a field to {value, defaulted}: the literal JSON value when present,
-// else the applied schema default (defaulted=true), else empty/not-defaulted.
-export function resolveField(
-  o: Record<string, unknown> | null,
-  field: string,
-  deps: string[],
-  schema: ModuleFieldsSchema,
-): { value: string; defaulted: boolean } {
-  const lit = getField(o, field);
-  if (lit !== "") return { value: lit, defaulted: false };
-  const def = appliedDefault(field, deps, schema);
-  return def !== "" ? { value: def, defaulted: true } : { value: "", defaulted: false };
-}
+// ── the desired-state resolver: NOT here ───────────────────────────────
+// jqStr/getField/appliedDefault/resolveField and the ModuleFieldsSchema types
+// used to live in this file. ADR-020 D1 lifted them into lib/ts/src/desired.ts
+// so that the ACTING path resolves desired state the same way this REPORTING
+// path does — the root cause of #550 was that it did not. inspect is now one
+// consumer of that resolver, not its home.
 
 // ── pure: qm-config / vm-net helpers (ports of cluster/lib/vm-net.sh) ──
 
@@ -396,17 +346,6 @@ export function buildConfigOnlyReport(
   };
 }
 
-// The module's dependsOn coordinates (string entries only), from a normalized
-// config — what the dependency-service section reports on.
-export function dependsOnOf(cfg: Record<string, unknown>): string[] {
-  const d = cfg.dependsOn;
-  return Array.isArray(d) ? d.filter((x): x is string => typeof x === "string") : [];
-}
-// Optional integrations (#501).
-export function integratesWithOf(cfg: Record<string, unknown>): string[] {
-  const d = cfg.integratesWith;
-  return Array.isArray(d) ? d.filter((x): x is string => typeof x === "string") : [];
-}
 // Every coordinate the dependency-service section reports on: hard deps first,
 // then optional integrations. An integration whose provider is not installed
 // simply shows as skipped (~ NOT checked), never a failure.
@@ -662,21 +601,6 @@ function readNormalized(path: string): Record<string, unknown> | null {
     const raw = JSON.parse(readFileSync(path, "utf8"));
     if (raw === null || typeof raw !== "object" || Array.isArray(raw)) return {};
     return normalizeModuleConfig(raw as Record<string, unknown>);
-  } catch {
-    return {};
-  }
-}
-
-// Load module-fields.json `.fields` from the config dir (a symlink to the repo
-// schema on a deployed cicd). Returns {} when absent/unreadable so the report
-// simply shows no defaults rather than failing (#550).
-export function loadModuleFields(configDir: string): ModuleFieldsSchema {
-  const path = join(configDir, "module-fields.json");
-  if (!existsSync(path)) return {};
-  try {
-    const raw = JSON.parse(readFileSync(path, "utf8"));
-    const fields = raw && typeof raw === "object" ? (raw as Record<string, unknown>).fields : null;
-    return fields && typeof fields === "object" ? (fields as ModuleFieldsSchema) : {};
   } catch {
     return {};
   }

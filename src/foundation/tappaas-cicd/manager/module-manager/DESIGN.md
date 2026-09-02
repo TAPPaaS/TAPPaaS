@@ -28,7 +28,8 @@ injected `ModuleClient` (production `CliModuleClient`; tests inject a fake):
 | Verb | Layer | Maps to |
 |------|-------|---------|
 | `list` / `show` | TS (config) | enumerate / detail deployed modules (`--json`) |
-| `validate` | TS (config) | tier/source lint (ported from `validate-module-tier-source.sh`) |
+| `resolve` | TS (config) | `src/resolve.ts` — the desired-state document: config + `module-fields.json` defaults + the `.orig` flags (ADR-020 D1) |
+| `validate` | TS (config) | tier/source lint (ported from `validate-module-tier-source.sh`) + the ADR-020 service field-manifest lint |
 | `add` | bash | `install-module.sh` |
 | `modify` | bash | `update-module.sh` (release update) |
 | `delete` | bash | `delete-module.sh` |
@@ -36,8 +37,40 @@ injected `ModuleClient` (production `CliModuleClient`; tests inject a fake):
 | `test` | bash | `test-module.sh` |
 | `snapshot-vm` | bash | `snapshot-vm.sh` (special VM op) |
 
-Common options: `--config-dir`, `--json` (list/show/validate). The `module`
-entity keyword is optional.
+Common options: `--config-dir`, `--json` (list/show/resolve/validate). The
+`module` entity keyword is optional.
+
+### The one desired-state resolver (ADR-020 D1)
+
+`lib/ts/src/desired.ts` holds the ONLY answer to "what is field *f*'s desired
+value for module *m*?": the literal value in the deployed config, else the
+`module-fields.json` default — and only when the schema's `usedBy` says that
+default applies to this module. `inspect` consumes it; `module resolve` is its
+verb form; from ADR-020 P3 the converge consumes it too, and the service scripts
+stop carrying `cfg()` default ladders of their own.
+
+That single home is the point. #550 was two resolvers disagreeing — `inspect.ts`
+rendered an undeclared `cputype` as `-`, `cluster:vm/update-service.sh` defaulted
+it to `host` — so the reported desired value and the applied one were different.
+The unit suites assert the agreement structurally: mutate the resolver and both
+`inspect.test.ts` and `resolve.test.ts` go red.
+
+`ResolvedField` keeps `value` and `literal` apart on purpose. "Declared as the
+same thing as the default" and "not declared at all" are different facts, and a
+consumer that must preserve an acting-path sentinel (cluster:vm treats an
+undeclared `bridge1` as *no second NIC*, not as the schema's `lan`) needs the
+second one.
+
+### Service field manifests (ADR-020 D3/D4)
+
+Each provider service declares the change semantics of the fields it owns in
+`services/<service>/fields.json`: per field, a **change class** (what changing it
+costs after install) and how the change is **applied**. The vocabulary and the
+document lint live in `lib/ts/src/service-fields.ts`, the JSON schema in
+`schemas/service-fields.json`, and `module validate` enforces coverage — a
+service that ships a manifest must classify every field `module-fields.json`
+says it owns. A service with no manifest has not been migrated yet and is
+skipped, so the lint is usable throughout the rollout.
 
 ### Module identity — the `kind` tag
 
@@ -189,10 +222,15 @@ tier has been added yet.
   tier/source lint into `src/validate.ts` (foundation⇒official, enum checks,
   community warn, `--allow-fork`) and runs it over one or every deployed config.
   The legacy `validate-module.sh` wrapper name was retired (Phase 7.1); the
-  P10 `validate.sh` delegates straight to the TS verb. Still **not** ported: a JSON **schema** check
-  against `module-fields.json` and dependsOn **reference-integrity** (do the
-  named providers exist among deployed modules) — both flagged in
-  `src/validate.ts` as future work.
+  P10 `validate.sh` delegates straight to the TS verb. dependsOn/integratesWith
+  **reference-integrity** and the ADR-020 **field-manifest coverage** lint are
+  implemented; still **not** ported: a full JSON **schema** check of every field
+  against `module-fields.json` (flagged in `src/validate.ts`).
+- **ADR-020 is partly built.** P0 (manifests + `rebootOk` + the coverage lint)
+  and P1 (the one resolver + `module resolve`) are in. Not yet: the one differ
+  and `report-service.sh` (P2), the manifest-driven converge on `cluster:vm`
+  (P3), `modify --set` with the static pre-gate and the `rebootOk` deferral
+  (P4), the rollout to the other 24 services and `network-manager` (P5).
 - **`install.sh` does not build/link the TS bin yet** (next phase). Today it
   only relinks the `*.sh` scripts; the `module-manager` bin is built manually via
   `default.nix`.

@@ -7,6 +7,7 @@
 //   module delete <module>   = delete-module.sh    (archive/remove)
 //   module list              = enumerate deployed module configs    [NEW, TS]
 //   module show <module>     = one deployed module config in detail [NEW, TS]
+//   module resolve <module>  = DESIRED state: config + schema defaults [ADR-020]
 //   module validate [<m>]    = tier/source lint (all, or one)        [TS port]
 //   module reconcile <m>     = re-apply this module's config → VM/service [leaf]
 //   module test <module>     = test-module.sh
@@ -42,7 +43,8 @@ import {
   SnapshotAction,
   TestOptions,
 } from "./types";
-import { loadModuleFields } from "./inspect";
+import { loadModuleFields } from "../../../lib/ts/src/desired";
+import { cmdResolve } from "./resolve";
 import { realServiceFs } from "./services";
 import { validateModules } from "./validate";
 
@@ -63,6 +65,16 @@ const HELP: HelpSpec = {
       ],
     },
     { usage: "show <module> [--json]", name: "show" },
+    {
+      usage: "resolve <module> [--json]",
+      name: "resolve",
+      options: [
+        [
+          "--json",
+          "The resolved document as JSON — what the converge consumes (ADR-020 D1).",
+        ],
+      ],
+    },
     {
       usage: "validate [<module>] [--allow-fork]",
       name: "validate",
@@ -141,6 +153,7 @@ const HELP: HelpSpec = {
     `Verbs map (ADR-007 verb alignment):
   add=install-module  modify=update-module  delete=delete-module
   test=test-module    validate=tier/source lint
+  resolve=desired state (config + schema defaults), the one resolver (ADR-020)
   reconcile=inspect drift (default) / --apply=leaf re-apply (was health show vm)
   list [--diff] reads config/*.json (+ live drift with --diff). snapshot-vm is special.`,
   ],
@@ -527,6 +540,18 @@ function cmdShow(opts: Opts): number {
   return 0;
 }
 
+// resolve — the DESIRED-state document (ADR-020 D1). `show` prints the deployed
+// config verbatim; `resolve` prints what that config MEANS once the schema
+// defaults a module does not declare are filled in, which is the value the
+// converge will actually use. The difference between the two is exactly the
+// class of bug #550 was: a field that reads "-" in the config but converges to
+// 'host' on the cluster.
+function cmdResolveVerb(opts: Opts): number {
+  const name = opts.rest[0];
+  if (!name) die("resolve: expected <module>");
+  return cmdResolve(name, { configDir: opts.configDir, json: opts.json });
+}
+
 // The repositories site.json declares, for validateSourceLocation. Returns []
 // when site.json is absent or malformed: the check then reports nothing rather
 // than reporting everything, because "no declarations" is not evidence that a
@@ -721,6 +746,8 @@ function dispatch(verb: string, opts: Opts, client: ModuleClient): number {
       return cmdList(opts, client);
     case "show":
       return cmdShow(opts);
+    case "resolve":
+      return cmdResolveVerb(opts);
     case "validate":
       return cmdValidate(opts);
     case "add":

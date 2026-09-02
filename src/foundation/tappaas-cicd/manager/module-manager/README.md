@@ -31,6 +31,7 @@ later retire phase).
 |------|---------|-------|
 | `module list` | — (TS) | enumerate deployed modules (`--json` for the cascade) |
 | `module show <m>` | — (TS) | one deployed config in full (`--json`) |
+| `module resolve <m>` | `src/resolve.ts` (TS) | **desired state**: the config *plus* the schema defaults it does not declare (`--json`) |
 | `module validate [<m>]` | tier/source lint (TS) | all modules, or one; `--allow-fork` |
 | `module add <m>` | `install-module.sh` | create + provision |
 | `module modify <m>` | `update-module.sh` | release update (snapshot + test + 3-way merge) |
@@ -39,8 +40,20 @@ later retire phase).
 | `module test <m>` | `test-module.sh` | `--deep`, `--vmid`, `--zone0` |
 | `module snapshot-vm <m>` | `snapshot-vm.sh` | special VM op (not CRUD) |
 
-Common options: `--config-dir <dir>`, `--json` (list/show/validate), `-h`.
+Common options: `--config-dir <dir>`, `--json` (list/show/resolve/validate), `-h`.
 The leading `module` entity keyword is optional (it is the only entity).
+
+**`show` vs `resolve`** — `show` prints the deployed config verbatim; `resolve`
+prints what that config *means* once the `module-fields.json` defaults for
+fields it does not declare are filled in. That resolved value is what a converge
+actually uses, so the two differ exactly where a field is undeclared: `show`
+omits `cputype`, `resolve` reports `host` (marked `default`). There is one
+resolver behind it, shared by the drift report and the apply path, so the
+reported desired value and the applied one cannot diverge (ADR-020 D1, #550).
+
+> Not to be confused with `resolve-module.sh`, which answers a different
+> question — *where* a module's source directory is. `list --resolution` is that
+> one's reporting front door.
 
 **`reconcile` vs `modify`** — `reconcile --apply` re-applies the *existing* config
 (idempotent converge: each dependency's `update-service.sh` + the module's own
