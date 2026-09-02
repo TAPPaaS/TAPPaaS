@@ -536,6 +536,54 @@ got="$(bash "$GMD" "$GW" gone 2>/dev/null)"
     || bad "get_module_dir: expected rc 2 with the path, got '${got}'"
 
 # ---------------------------------------------------------------------------
+# integratesWith helpers (#501): the soft-guard + reverse-lookup primitives.
+# Offline — pure functions over a fixture CONFIG_DIR, no cluster.
+# ---------------------------------------------------------------------------
+echo ""
+echo "== integratesWith helpers (#501) =="
+
+IWLIB="${HERE}/../../lib/common-install-routines.sh"
+IWSH="${WORK}/iw.sh"
+{
+    echo 'CONFIG_DIR="$1"; shift'
+    echo 'info(){ :; }; debug(){ :; }; warn(){ :; }; error(){ :; }'
+    sed -n '/^_legacy_module_alias() {/,/^}/p' "$IWLIB"
+    sed -n '/^resolve_provider_module() {/,/^}/p' "$IWLIB"
+    sed -n '/^provider_module_installed() {/,/^}/p' "$IWLIB"
+    sed -n '/^find_integrateswith_consumers() {/,/^}/p' "$IWLIB"
+    echo '"$@"'
+} > "$IWSH"
+
+IWC="${WORK}/iwcfg"; mkdir -p "${IWC}" "${IWC}/vdir"
+echo '{"provides":["inference"],"location":"'"${IWC}/vdir"'"}'      > "${IWC}/vllm-amd.json"
+echo '{"provides":["inference"],"location":"'"${IWC}/vdir"'"}'      > "${IWC}/vllm-amd-dev.json"
+echo '{"integratesWith":["vllm-amd:inference"],"environment":""}'   > "${IWC}/litellm.json"
+echo '{"dependsOn":["vllm-amd:inference"]}'                         > "${IWC}/hardconsumer.json"
+echo '{"integratesWith":["vllm-amd:inference"],"environment":"dev"}'> "${IWC}/litellm-dev.json"
+
+# provider_module_installed: present → rc 0, absent → rc 1.
+bash "$IWSH" "$IWC" provider_module_installed "vllm-amd:inference" "" \
+    && ok "provider_module_installed: deployed provider → rc 0" \
+    || bad "provider_module_installed: deployed provider should be rc 0"
+bash "$IWSH" "$IWC" provider_module_installed "ghost:x" "" \
+    && bad "provider_module_installed: absent provider should be rc 1" \
+    || ok "provider_module_installed: absent provider → rc 1"
+
+# find_integrateswith_consumers: matches integratesWith, ignores dependsOn, env-aware.
+cons="$(bash "$IWSH" "$IWC" find_integrateswith_consumers "vllm-amd" "inference" | sort | tr '\n' ' ')"
+[[ "$cons" == "litellm " ]] \
+    && ok "find_integrateswith_consumers: finds the base-env integrator, ignores the dependsOn consumer and env-scoped one" \
+    || bad "find_integrateswith_consumers: expected 'litellm ', got '${cons}'"
+consdev="$(bash "$IWSH" "$IWC" find_integrateswith_consumers "vllm-amd-dev" "inference" | tr '\n' ' ')"
+[[ "$consdev" == "litellm-dev " ]] \
+    && ok "find_integrateswith_consumers: env-aware — a dev consumer matches vllm-amd-dev" \
+    || bad "find_integrateswith_consumers: expected 'litellm-dev ', got '${consdev}'"
+consnone="$(bash "$IWSH" "$IWC" find_integrateswith_consumers "vllm-amd" "othersvc" | tr '\n' ' ')"
+[[ -z "$consnone" ]] \
+    && ok "find_integrateswith_consumers: a service mismatch yields no consumers" \
+    || bad "find_integrateswith_consumers: expected none, got '${consnone}'"
+
+# ---------------------------------------------------------------------------
 # TypeScript unit tests (the module-manager CLI itself: config-layer verbs, the
 # inspect report + the dependency-service drift check). Offline — a
 # FakeModuleClient and fixture configs, no cluster, no bash scripts. Same

@@ -184,9 +184,12 @@ function doReconcile(moduleArg: string, opts: ReconcileOptions): void {
   info(`${BOLD}Step 2: Re-apply dependency services${CL}`);
 
   const cfg = normalizeModuleConfig(raw);
-  const dependsOn = Array.isArray(cfg.dependsOn)
-    ? cfg.dependsOn.filter((d): d is string => typeof d === "string")
-    : [];
+  const asStrings = (v: unknown): string[] =>
+    Array.isArray(v) ? v.filter((d): d is string => typeof d === "string") : [];
+  const dependsOn = asStrings(cfg.dependsOn);
+  // Optional integrations (#501): same converge path as dependsOn, but a provider
+  // that is not installed is skipped silently rather than warned about.
+  const integratesWith = asStrings(cfg.integratesWith);
 
   // The CONSUMING module's environment drives provider resolution below (#438).
   // Read it from the DEPLOYED config rather than opts.environment: reconcile is
@@ -202,48 +205,57 @@ function doReconcile(moduleArg: string, opts: ReconcileOptions): void {
   // do that, so Step 3 always gets its chance and the failure is reported after.
   const depFailures: string[] = [];
 
+  // Converge one coordinate via its provider's update-service.sh. `optional`
+  // (integratesWith) downgrades a not-installed provider from a warning to an
+  // info line and never records it as a failure — the whole point of the soft
+  // guard (#501). update-service.sh is THE converge entry point for an
+  // already-installed module — the same one update-module.sh (`module modify`)
+  // calls (#495). reconcile used to call install-service.sh instead, which has
+  // CREATE semantics: cluster:vm's went straight to Create-TAPPaaS-VM.sh, which
+  // exits 1 on an existing VMID, so reconcile failed on every VM-backed module.
+  // There is deliberately NO fallback to install-service.sh: a service that
+  // cannot converge is a contract violation caught by test.sh. Skip cleanly when
+  // a provider ships no service script at all.
+  const applyConverge = (dep: string, optional: boolean): void => {
+    const colon = dep.indexOf(":");
+    const providerName = colon === -1 ? dep : dep.slice(0, colon); // ${dep%%:*}
+    const serviceName = dep.slice(dep.lastIndexOf(":") + 1); // ${dep##*:}
+
+    const providerModule = resolveProviderModule(configDir, providerName, moduleEnvironment);
+    const providerDir = getModuleDir(configDir, providerModule);
+    if (!providerDir) {
+      if (optional) info(`  ${dep}: provider '${providerModule}' not installed — skipping optional integration`);
+      else warn(`  Cannot find provider '${providerModule}' location — skipping ${dep}`);
+      return;
+    }
+    ensureScriptsExecutable(providerDir);
+
+    const svcScript = join(providerDir, "services", serviceName, "update-service.sh");
+    if (!existsSync(svcScript)) {
+      info(`  ${dep}: no update-service.sh — skipping`);
+      return;
+    }
+
+    info(`  Re-applying ${BL}${dep}${CL} for '${module}'...`);
+    // Run from the module directory (#495) — same cwd update-module.sh uses.
+    if (runScript(svcScript, [module], moduleDir ?? undefined) === 0) {
+      info(`  ${GN}✓${CL} ${dep} converged`);
+    } else {
+      error(`  ✗ ${dep} re-apply failed`);
+      depFailures.push(dep);
+    }
+  };
+
   if (dependsOn.length === 0) {
     info("  No dependency services to re-apply");
   } else {
-    for (const dep of dependsOn) {
-      const colon = dep.indexOf(":");
-      const providerName = colon === -1 ? dep : dep.slice(0, colon); // ${dep%%:*}
-      const serviceName = dep.slice(dep.lastIndexOf(":") + 1); // ${dep##*:}
-
-      const providerModule = resolveProviderModule(configDir, providerName, moduleEnvironment);
-      const providerDir = getModuleDir(configDir, providerModule);
-      if (!providerDir) {
-        warn(`  Cannot find provider '${providerModule}' location — skipping ${dep}`);
-        continue;
-      }
-      ensureScriptsExecutable(providerDir);
-
-      // update-service.sh is THE converge entry point for an already-installed
-      // module — the same one update-module.sh (`module modify`) calls (#495).
-      // reconcile used to call install-service.sh instead, which has CREATE
-      // semantics: cluster:vm's went straight to Create-TAPPaaS-VM.sh, which
-      // exits 1 on an existing VMID, so reconcile failed on every VM-backed
-      // module and could never converge VM hardware drift (cores/memory/disk/
-      // net/migrate live only in update-service.sh). There is deliberately NO
-      // fallback to install-service.sh: a service that cannot converge is a
-      // contract violation, caught by test.sh, not something to paper over at
-      // runtime. Skip cleanly when a provider ships no service script at all
-      // (several dependsOn entries name providers with no services/ directory).
-      const svcScript = join(providerDir, "services", serviceName, "update-service.sh");
-      if (!existsSync(svcScript)) {
-        info(`  ${dep}: no update-service.sh — skipping`);
-        continue;
-      }
-
-      info(`  Re-applying ${BL}${dep}${CL} for '${module}'...`);
-      // Run from the module directory (#495) — same cwd update-module.sh uses.
-      if (runScript(svcScript, [module], moduleDir ?? undefined) === 0) {
-        info(`  ${GN}✓${CL} ${dep} converged`);
-      } else {
-        error(`  ✗ ${dep} re-apply failed`);
-        depFailures.push(dep);
-      }
-    }
+    for (const dep of dependsOn) applyConverge(dep, false);
+  }
+  // Optional integrations converge with the same code path (#501); a provider
+  // that is simply not installed is expected here, not an error.
+  if (integratesWith.length > 0) {
+    info("  Optional integrations (integratesWith):");
+    for (const dep of integratesWith) applyConverge(dep, true);
   }
 
   // ── Step 3: Re-apply the module itself (in-VM converge) ───────────

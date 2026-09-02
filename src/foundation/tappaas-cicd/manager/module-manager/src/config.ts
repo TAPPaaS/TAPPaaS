@@ -79,6 +79,7 @@ function isModuleConfig(raw: Record<string, unknown>): boolean {
   if (raw.kind === "module") return true;
   return (
     Array.isArray(raw.dependsOn) ||
+    Array.isArray(raw.integratesWith) ||
     Array.isArray(raw.provides) ||
     typeof raw.location === "string"
   );
@@ -104,6 +105,7 @@ function toModuleConfig(name: string, raw: Record<string, unknown>): ModuleConfi
     installTime: asString(raw.installTime) ?? null,
     updateTime: asString(raw.updateTime) ?? null,
     dependsOn: asStringArray(raw.dependsOn),
+    integratesWith: asStringArray(raw.integratesWith),
     provides: asStringArray(raw.provides),
     raw,
   };

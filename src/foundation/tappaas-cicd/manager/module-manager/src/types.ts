@@ -44,6 +44,7 @@ export interface ModuleConfig {
   installTime?: string | null;
   updateTime?: string | null;
   dependsOn?: string[];
+  integratesWith?: string[]; // optional deps: same wiring, silently skipped when absent (#501)
   provides?: string[];
   // Preserve any other fields so a load can round-trip / show in full.
   raw: Record<string, unknown>;

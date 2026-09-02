@@ -84,8 +84,9 @@ export function validateModule(
   // config-block structural rules (#161/#549) — pure, no fs needed.
   validateConfigBlock(m, out);
 
-  // dependsOn reference integrity — see validateDependsOn.
+  // dependsOn / integratesWith reference integrity — see the two functions.
   if (opts.fs) validateDependsOn(m, opts.fs, out);
+  if (opts.fs) validateIntegratesWith(m, opts.fs, out);
 
   // TODO(question): the bash stub also intended a SCHEMA check (every field
   // against module-fields.json). PARKED — see main.ts. The reference-integrity
@@ -110,7 +111,12 @@ export function validateConfigBlock(m: ModuleConfig, out: ValidateFinding[]): vo
   const config = raw.config;
   if (config === null || typeof config !== "object" || Array.isArray(config)) return;
   const blocks = config as Record<string, unknown>;
-  const deps = new Set(Array.isArray(m.dependsOn) ? m.dependsOn : []);
+  // A config block may key off a hard dependency OR an optional integration
+  // (#501) — both are "declared" for the purpose of Rule 1.
+  const deps = new Set([
+    ...(Array.isArray(m.dependsOn) ? m.dependsOn : []),
+    ...(Array.isArray(m.integratesWith) ? m.integratesWith : []),
+  ]);
 
   // Rule 1: every config-block key must be a declared dependency. A config block
   // for a provider not in dependsOn is dropped on flatten and never applied.
@@ -201,6 +207,63 @@ export function validateDependsOn(
         module: m.name,
         severity: "error",
         message: `dependsOn '${dep}' cannot be converged: provider '${providerModule}' ships no ${service}/update-service.sh (${svcScript}) — reconcile and modify SKIP it silently`,
+      });
+    }
+  }
+}
+
+// integratesWith reference integrity (#501) — the SOFT counterpart to
+// validateDependsOn. The defining difference: a provider that is NOT installed
+// is expected and produces NO finding (that is the whole point of an optional
+// integration). Only genuine misconfigurations are reported: a malformed
+// coordinate, a coordinate that also appears in dependsOn (a coordinate is hard
+// OR soft, never both), and — when the provider IS installed — a missing
+// update-service.sh, which is a soft warning rather than the hard error
+// dependsOn raises.
+export function validateIntegratesWith(
+  m: ModuleConfig,
+  fs: ServiceFs,
+  out: ValidateFinding[],
+): void {
+  const integ = Array.isArray(m.integratesWith) ? m.integratesWith : [];
+  if (integ.length === 0) return;
+  const hard = new Set(
+    (Array.isArray(m.dependsOn) ? m.dependsOn : []).filter((d): d is string => typeof d === "string"),
+  );
+  const environment = typeof m.environment === "string" ? m.environment : "";
+
+  for (const dep of integ) {
+    if (typeof dep !== "string" || dep === "") continue;
+    const { provider, service } = parseDependency(dep);
+
+    if (!dep.includes(":")) {
+      out.push({
+        module: m.name,
+        severity: "error",
+        message: `integratesWith '${dep}' has no ':<service>' — an integration must name a provider AND a service (e.g. '${provider}:inference')`,
+      });
+      continue;
+    }
+    if (hard.has(dep)) {
+      out.push({
+        module: m.name,
+        severity: "error",
+        message: `'${dep}' is listed in both dependsOn and integratesWith — a coordinate is hard OR optional, not both`,
+      });
+      continue;
+    }
+
+    const { module: providerModule, dir } = fs.providerDir(provider, environment);
+    // A provider that is not installed is the expected optional case — no finding.
+    if (!dir) continue;
+
+    // Installed but unable to wire the integration is worth a soft heads-up.
+    const svcScript = join(dir, "services", service, "update-service.sh");
+    if (!fs.exists(svcScript)) {
+      out.push({
+        module: m.name,
+        severity: "warning",
+        message: `integratesWith '${dep}': provider '${providerModule}' is installed but ships no ${service}/update-service.sh — the integration cannot converge`,
       });
     }
   }

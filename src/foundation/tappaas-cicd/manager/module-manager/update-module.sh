@@ -214,11 +214,17 @@ prune_snapshots() {
 # converges the freshly-created integration via update-service.sh as usual.
 # Adopting the released list itself is unchanged; the merge already reported it.
 #
-# Args: <module> <snapshot_created> <dep_env> <deps_before> <deps_after>
-#   deps_before/deps_after: newline-separated dependsOn entries (provider:service),
-#   as captured either side of the Step 0 merge.
+# Args: <module> <snapshot_created> <dep_env> <deps_before> <deps_after> [integ_after]
+#   deps_before/deps_after: newline-separated coordinates — the UNION of dependsOn
+#   and integratesWith (#501), so a coordinate that merely moves between the two
+#   lists is neither added nor removed. integ_after: the integratesWith subset,
+#   used only to soften an added coordinate's failure from rollback to a warning.
 apply_dependson_delta() {
     local module="$1" snap_created="$2" dep_env="$3" deps_before="$4" deps_after="$5"
+    # integ_after (#501): the coordinates that are OPTIONAL after the merge. An
+    # added coordinate in this set whose install-service.sh fails only warns —
+    # an optional integration must never roll back the whole update.
+    local integ_after="${6:-}"
 
     # added = in deps_after, not in deps_before (order preserved from deps_after).
     local deps_added deps_removed dep
@@ -282,12 +288,23 @@ apply_dependson_delta() {
             info "  ${dep}: added, but provider ships no install-service.sh — reconcile will converge via update-service.sh"
             continue
         fi
-        info "  Newly-added dependency ${BL}${dep}${CL} — running install-service.sh (create) for '${module}'..."
-        if "${ascript}" "${module}"; then
-            info "  ${GN}✓${CL} ${dep} install-service completed"
+        local a_optional=false
+        grep -Fxq -- "${dep}" <<<"${integ_after}" && a_optional=true
+        if [[ "${a_optional}" == "true" ]]; then
+            info "  Newly-added integration ${BL}${dep}${CL} — running install-service.sh (create) for '${module}'..."
+            if "${ascript}" "${module}"; then
+                info "  ${GN}✓${CL} ${dep} integration wired"
+            else
+                warn "  ${dep} install-service returned non-zero — optional integration not wired (continuing)"
+            fi
         else
-            fatal_with_rollback "${module}" "${snap_created}" \
-                "install-service.sh failed for newly-added dependency '${dep}'"
+            info "  Newly-added dependency ${BL}${dep}${CL} — running install-service.sh (create) for '${module}'..."
+            if "${ascript}" "${module}"; then
+                info "  ${GN}✓${CL} ${dep} install-service completed"
+            else
+                fatal_with_rollback "${module}" "${snap_created}" \
+                    "install-service.sh failed for newly-added dependency '${dep}'"
+            fi
         fi
     done <<<"${deps_added}"
 }
@@ -396,12 +413,16 @@ main() {
     # current release. If .orig is missing (pre-#207 install) we backfill it
     # from source so existing customizations remain pinned.
     info "${BOLD}Update Step 0: Reconcile module config (3-way merge)${CL}"
-    # Capture dependsOn BEFORE the merge so Step 3.5 can act on the delta with the
-    # correct verb: a newly-added dependency has never been provisioned on this
-    # install, so it needs install-service.sh (create), not the update-service.sh
-    # re-wire reconcile runs blanket over the whole list (#511).
+    # Capture dependsOn + integratesWith BEFORE the merge so Step 3.5 can act on
+    # the delta with the correct verb: a newly-added coordinate has never been
+    # provisioned on this install, so it needs install-service.sh (create), not
+    # the update-service.sh re-wire reconcile runs blanket over the list (#511).
+    # The delta is computed over the UNION of both lists so that RECLASSIFYING a
+    # coordinate dependsOn⇄integratesWith (e.g. #501 migrating vllm-amd:inference
+    # to optional) is a no-op — the wiring already in place is neither torn down
+    # nor recreated, only the guard semantics change (#501).
     local deps_before
-    deps_before="$(read_module_config "${module}" 2>/dev/null | jq -r '.dependsOn // [] | .[]' 2>/dev/null || true)"
+    deps_before="$(read_module_config "${module}" 2>/dev/null | jq -r '((.dependsOn // []) + (.integratesWith // [])) | .[]' 2>/dev/null || true)"
     if module_dir_pre=$(get_module_dir "${module}" 2>/dev/null); then
         if [[ -f /home/tappaas/bin/apply-json-merge.sh ]]; then
             # shellcheck disable=SC1091
@@ -418,9 +439,13 @@ main() {
         info "  Module location not resolved — skipping (first-update before location was set)"
     fi
 
-    # dependsOn AFTER the merge — the delta vs deps_before is applied in Step 3.5.
-    local deps_after
-    deps_after="$(read_module_config "${module}" 2>/dev/null | jq -r '.dependsOn // [] | .[]' 2>/dev/null || true)"
+    # dependsOn + integratesWith AFTER the merge — the delta vs deps_before is
+    # applied in Step 3.5. integ_after alone classifies which added coordinates
+    # are OPTIONAL, so their install-service.sh failure warns instead of rolling
+    # back the whole update (#501).
+    local deps_after integ_after
+    deps_after="$(read_module_config "${module}" 2>/dev/null | jq -r '((.dependsOn // []) + (.integratesWith // [])) | .[]' 2>/dev/null || true)"
+    integ_after="$(read_module_config "${module}" 2>/dev/null | jq -r '.integratesWith // [] | .[]' 2>/dev/null || true)"
 
     # ── Step 1: Pre-update snapshot (only for modules with a VM) ─────
     info "${BOLD}Update Step 1: Create pre-update snapshot: ${BL}${module}${CL}"
@@ -511,7 +536,7 @@ main() {
     info "${BOLD}Update Step 3.5: Apply dependsOn delta (install added / delete removed)${CL}"
     local dep_env
     dep_env="$(read_module_config "${module}" 2>/dev/null | jq -r '.environment // ""')"
-    apply_dependson_delta "${module}" "${snapshot_created}" "${dep_env}" "${deps_before}" "${deps_after}"
+    apply_dependson_delta "${module}" "${snapshot_created}" "${dep_env}" "${deps_before}" "${deps_after}" "${integ_after}"
 
     # ── Steps 4+5: Apply the (now merged) config — delegated to reconcile ──
     #

@@ -70,6 +70,7 @@
     "aliases",
     "natRules",
     "dependsOn",
+    "integratesWith",
     "provides"
   ],
   "fields": {
@@ -1261,6 +1262,21 @@
         "network:proxy"
       ],
       "note": "The installer validates that each referenced module is installed and provides the named service"
+    },
+    "integratesWith": {
+      "description": "List of OPTIONAL services this module integrates with if present. Same 'module:service' shape as dependsOn and wired by the same install/update/delete-service.sh scripts — but a provider that is not installed is silently ignored rather than blocking. When a provider is later added, its install auto-wires the pre-existing integrators (issue #501).",
+      "type": "array",
+      "requiredBy": [],
+      "usedBy": [
+        "general"
+      ],
+      "default": [],
+      "items": "string",
+      "format": "^[a-zA-Z][a-zA-Z0-9-]*:[a-zA-Z][a-zA-Z0-9-]*$",
+      "example": [
+        "vllm-amd:inference"
+      ],
+      "note": "Soft counterpart to dependsOn: missing provider = skip (no error); installed provider = same install-service.sh logic. Do NOT list a coordinate in both dependsOn and integratesWith."
     },
     "provides": {
       "description": "List of services this module provides. Service names only (the module is implicit from the JSON filename).",

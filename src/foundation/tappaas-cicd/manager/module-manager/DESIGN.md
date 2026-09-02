@@ -46,8 +46,8 @@ Pattern-A-aware `jq_module_write`). `module list`/`show` select on
 `.kind=="module"` — the authoritative way to distinguish a deployed module from
 the co-located state files (`zones.json`, `site.json`, `module-fields.json`,
 `switch-configuration-*`, `cert-refids.json`). For configs not yet re-installed
-(pre-tag) a **heuristic** fallback applies: any of `dependsOn`/`provides`/
-`location` present. The heuristic intentionally does **not** require `vmname`, so
+(pre-tag) a **heuristic** fallback applies: any of `dependsOn`/`integratesWith`/
+`provides`/`location` present. The heuristic intentionally does **not** require `vmname`, so
 provider-only modules (e.g. `templates`: `provides:["nixos","debian"]`, no
 vmid/vmname) are still enumerated (shown without vmid/node, not filtered out).
 
@@ -59,7 +59,8 @@ It reports two things, and the summary states which of them it actually covered:
 - the **config-field** diff (`Released[git]` / `Desired[~/config]` /
   `Actual[running VM]`; Actual is N/A for a module with no `vmid`), and
 - the **dependency-service state** (`src/services.ts`): for each `dependsOn`
-  entry, that provider's read-only `services/<service>/test-service.sh <module>` —
+  and `integratesWith` entry (#501), that provider's read-only
+  `services/<service>/test-service.sh <module>` —
   the same verifier `test-module.sh` Step 3 runs, delegated to rather than
   reimplemented, so `rules-manager verify-rules` and friends stay the single
   source of truth for what "no drift" means on each plane.
@@ -113,6 +114,29 @@ module's own re-apply. Some providers perform destructive re-applies — a NixOS
 rebuild rewrites in-VM state that only the module's `update.sh` restores — so
 bailing out mid-way left instances *less* converged than before the command ran.
 Failures are accumulated and reported after Step 3, and still exit non-zero.
+
+**`integratesWith` — optional dependencies (#501).** A soft sibling of `dependsOn`:
+identical `provider:service` coordinates and the same `install/update/delete-service.sh`
+wiring, but with the guard **inverted from hard-fail to silent-skip**. The differences,
+all reusing the `dependsOn` machinery rather than forking it:
+
+- *Install/reconcile*: a provider that is not installed is skipped without error
+  (`applyConverge(dep, optional=true)` in `reconcile.ts`; the soft loops in
+  `install-module.sh` / `update-module.sh`). An installed provider wires identically.
+- *Reverse auto-wire*: when a module that `provides: X` is installed, `install-module.sh`
+  Step 7 scans installed configs for `integratesWith: <this>:X` (`find_integrateswith_consumers`,
+  env-aware) and runs the provider's `install-service.sh` on each pre-existing integrator —
+  so install order does not matter.
+- *Migration is a no-op*: `update-module.sh` computes its lifecycle delta over the
+  **union** of `dependsOn` + `integratesWith`, so reclassifying a coordinate between the two
+  (e.g. moving `vllm-amd:inference` to optional) neither tears down nor recreates the wiring
+  already in place — only the guard semantics change.
+- *Delete*: `integratesWith` consumers never block a provider's deletion (unlike `dependsOn`);
+  they are un-wired first via the provider's `delete-service.sh`. A module's own optional
+  integrations are torn down alongside its hard deps.
+- *Validate*: `validateIntegratesWith` reports a malformed coordinate or one listed in **both**
+  fields as errors, an installed-but-unwireable provider as a warning, and a not-installed
+  provider as **nothing at all** — the whole point of an optional integration.
 
 ## Config state
 

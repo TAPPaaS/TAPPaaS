@@ -604,6 +604,24 @@ main() {
         die "${dep_errors} dependency check(s) failed — cannot install ${module}"
     fi
 
+    # integratesWith (#501): OPTIONAL providers. A provider that is not installed
+    # is silently skipped (never a dep_error); one that IS installed is validated
+    # like a hard dep, but a problem there warns rather than blocks.
+    local integrates_with
+    integrates_with=$(read_module_config "${effective_module}" | jq -r '.integratesWith // [] | .[]' 2>/dev/null)
+    if [[ -n "${integrates_with}" ]]; then
+        info "  Optional integrations (integratesWith):"
+        for dep in ${integrates_with}; do
+            if ! provider_module_installed "${dep}" "${environment}"; then
+                info "    ${dep}: provider not installed — skipping (optional)"
+            elif check_service_available "${dep}" "install-service.sh" "${environment}"; then
+                info "    ${GN}✓${CL} ${dep}"
+            else
+                warn "    ${dep}: provider installed but integration is not wireable — skipping"
+            fi
+        done
+    fi
+
     # ── Step 4: Validate provided services ───────────────────────────
     info "${BOLD}Step 4: Validate service scripts${CL}"
 
@@ -658,6 +676,38 @@ main() {
         done
     fi
 
+    # ── Step 5b: Wire this module's OPTIONAL integrations (#501) ──────
+    # Same install-service.sh logic as dependsOn, but a missing provider is
+    # skipped silently and a failure warns instead of aborting the install.
+    if [[ -n "${integrates_with}" ]]; then
+        info "${BOLD}Step 5b: Wire optional integrations${CL}"
+        for dep in ${integrates_with}; do
+            if ! provider_module_installed "${dep}" "${environment}"; then
+                info "  ${dep}: provider not installed — skipping optional integration"
+                continue
+            fi
+            local iprovider iservice iprovider_dir iscript
+            iprovider="$(resolve_provider_module "${dep%%:*}" "${environment}")"
+            iservice="${dep##*:}"
+            if ! iprovider_dir=$(get_module_dir "${iprovider}" 2>/dev/null); then
+                warn "  ${dep}: cannot locate provider '${iprovider}' — skipping"
+                continue
+            fi
+            ensure_scripts_executable "${iprovider_dir}"
+            iscript="${iprovider_dir}/services/${iservice}/install-service.sh"
+            if [[ ! -x "${iscript}" ]]; then
+                info "  ${dep}: provider ships no install-service.sh — skipping"
+                continue
+            fi
+            info "  Wiring ${BL}${dep}${CL} install-service.sh for '${effective_module}'..."
+            if "${iscript}" "${effective_module}"; then
+                info "  ${GN}✓${CL} ${dep} integration wired"
+            else
+                warn "  ${dep} install-service returned non-zero — optional integration not wired (continuing)"
+            fi
+        done
+    fi
+
     # ── Step 6: Call the module's own install.sh ─────────────────────
     info "${BOLD}Step 6: Run module install.sh${CL}"
 
@@ -682,6 +732,32 @@ main() {
         fi
     else
         info "  No install.sh found in module directory — skipping"
+    fi
+
+    # ── Step 7: Reverse auto-wire pre-existing optional integrators (#501) ─
+    # This module may PROVIDE a service that already-installed modules declared
+    # as integratesWith before we existed. Now that we are up, wire each of them
+    # on their behalf by calling OUR install-service.sh with the consumer's name.
+    # Runs AFTER Step 6 so the provider is fully installed before integrators bind.
+    if [[ -n "${provides}" ]]; then
+        info "${BOLD}Step 7: Wire pre-existing optional integrators${CL}"
+        local wired_any=false
+        for svc in ${provides}; do
+            local rscript="${module_dir}/services/${svc}/install-service.sh"
+            [[ -x "${rscript}" ]] || continue
+            local consumer
+            while IFS= read -r consumer; do
+                [[ -n "${consumer}" ]] || continue
+                wired_any=true
+                info "  ${BL}${effective_module}:${svc}${CL} — wiring pre-existing integrator '${consumer}'..."
+                if "${rscript}" "${consumer}"; then
+                    info "  ${GN}✓${CL} integrated '${consumer}'"
+                else
+                    warn "  install-service.sh failed for integrator '${consumer}' (continuing)"
+                fi
+            done < <(find_integrateswith_consumers "${effective_module}" "${svc}")
+        done
+        [[ "${wired_any}" == "false" ]] && info "  No pre-existing integrators found"
     fi
 
     # ── Done ─────────────────────────────────────────────────────────
