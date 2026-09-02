@@ -628,6 +628,48 @@ check_service_available() {
     return 0
 }
 
+# provider_module_installed — is the (environment-resolved) provider of a
+# coordinate actually deployed? The soft guard for integratesWith (#501): a
+# missing provider is not an error, just "nothing to wire yet".
+# Arguments: <provider:service coordinate> [environment]  → 0 if installed.
+provider_module_installed() {
+    local dep="$1" environment="${2:-}"
+    local provider_module
+    provider_module="$(resolve_provider_module "${dep%%:*}" "${environment}")"
+    [[ -f "${CONFIG_DIR}/${provider_module}.json" ]]
+}
+
+# find_integrateswith_consumers — print the installed modules that OPTIONALLY
+# integrate with <provider_module>:<service> (#501). Environment-aware: each
+# consumer's own .environment resolves its provider name, so a base coordinate
+# like "vllm-amd:inference" matches whichever env-specific provider is deployed.
+# Used to auto-wire pre-existing integrators when their provider is installed,
+# and to un-wire them before the provider is deleted.
+# Arguments: <provider_module> <service>   (one consumer name per line)
+find_integrateswith_consumers() {
+    local provider_module="$1" service="$2"
+    local config_file consumer c_env entry esvc eprov rprov
+    for config_file in "${CONFIG_DIR}"/*.json; do
+        [[ -f "${config_file}" ]] || continue
+        [[ "${config_file}" == *.orig ]] && continue
+        consumer="$(basename "${config_file}" .json)"
+        [[ "${consumer}" == "${provider_module}" ]] && continue
+        jq -e '.integratesWith' "${config_file}" >/dev/null 2>&1 || continue
+        c_env="$(jq -r '.environment // ""' "${config_file}" 2>/dev/null)"
+        while IFS= read -r entry; do
+            [[ -n "${entry}" ]] || continue
+            esvc="${entry##*:}"
+            [[ "${esvc}" == "${service}" ]] || continue
+            eprov="${entry%%:*}"
+            rprov="$(resolve_provider_module "${eprov}" "${c_env}")"
+            if [[ "${rprov}" == "${provider_module}" ]]; then
+                echo "${consumer}"
+                break
+            fi
+        done < <(jq -r '.integratesWith // [] | .[]' "${config_file}" 2>/dev/null)
+    done
+}
+
 # Check whether a VM with the given VMID exists anywhere in the Proxmox cluster.
 # VMIDs are cluster-wide, so a VM created on any node makes the ID unavailable —
 # this queries /cluster/resources rather than a single node's `qm status`.

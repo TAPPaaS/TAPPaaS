@@ -142,6 +142,16 @@ from `/home/tappaas/config/<dependent>.json`, provisions what the dependent need
 service to support it. `update-service.sh` is the same for updates. (Deletion runs the dependency
 chain in reverse — see [ADR-003](<../../../docs/ADR/ADR-003 - Dependency management in TAPPaaS.md>).)
 
+### Optional integrations — `integratesWith`
+
+`dependsOn` is a **hard** requirement: a provider that is not installed blocks the install.
+`integratesWith` (#501) is the **soft** counterpart — same `provider:service` shape, same
+`install/update/delete-service.sh` wiring — but a provider that is not installed is silently
+ignored instead of blocking, and when that provider is *later* installed it auto-wires the
+pre-existing integrators. Use it for a capability the module can run without (e.g. LiteLLM
+`integratesWith: ["vllm-amd:inference"]` — it uses a local inference backend if one exists,
+and functions fine if none is deployed). A coordinate belongs in exactly one of the two lists.
+
 Writing a service script:
 
 1. Create `<module>/services/<service-name>/`.

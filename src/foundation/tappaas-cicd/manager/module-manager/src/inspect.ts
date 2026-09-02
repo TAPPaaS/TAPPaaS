@@ -350,7 +350,7 @@ export function buildConfigOnlyReport(
   module: string,
   cfg: Record<string, unknown>,
   git: Record<string, unknown> | null,
-  svc: ServiceSection = buildServiceSection(dependsOnOf(cfg), null),
+  svc: ServiceSection = buildServiceSection(serviceDepsOf(cfg), null),
 ): InspectReport {
   const t = new Table();
   t.lines.push({
@@ -402,6 +402,17 @@ export function dependsOnOf(cfg: Record<string, unknown>): string[] {
   const d = cfg.dependsOn;
   return Array.isArray(d) ? d.filter((x): x is string => typeof x === "string") : [];
 }
+// Optional integrations (#501).
+export function integratesWithOf(cfg: Record<string, unknown>): string[] {
+  const d = cfg.integratesWith;
+  return Array.isArray(d) ? d.filter((x): x is string => typeof x === "string") : [];
+}
+// Every coordinate the dependency-service section reports on: hard deps first,
+// then optional integrations. An integration whose provider is not installed
+// simply shows as skipped (~ NOT checked), never a failure.
+export function serviceDepsOf(cfg: Record<string, unknown>): string[] {
+  return [...dependsOnOf(cfg), ...integratesWithOf(cfg)];
+}
 
 // ── pure: Proxmox guest type ───────────────────────────────────────────
 // Which Proxmox CLI owns a guest, and which config keys its `config` output
@@ -451,7 +462,7 @@ export function buildVmReport(inp: VmInspectInputs): InspectReport {
   const { vmid, cfg, git, zones, actual, vmStatus, actualNode } = inp;
   const guest = inp.guest ?? "qemu";
   const isLxc = guest === "lxc";
-  const svc = inp.svc ?? buildServiceSection(dependsOnOf(cfg), null);
+  const svc = inp.svc ?? buildServiceSection(serviceDepsOf(cfg), null);
 
   // Desired/Released resolve each field to its literal value, or — when the
   // module does not declare it — its module-fields.json default, marked with
@@ -708,8 +719,9 @@ export function inspectModule(module: string, opts: InspectOptions = {}): number
   // is routinely invoked on an already-suffixed module name without
   // --environment, and the persisted field is the authority either way.
   // Deferred so the (slow, network-touching) verifiers run only after the rest
-  // of the report's inputs are gathered — i.e. in printed order.
-  const deps = dependsOnOf(cfg);
+  // of the report's inputs are gathered — i.e. in printed order. Optional
+  // integrations are reported alongside hard deps (#501).
+  const deps = serviceDepsOf(cfg);
   const moduleEnvironment = getField(cfg, "environment");
   const serviceSection = (): ServiceSection =>
     opts.checkServices && deps.length > 0

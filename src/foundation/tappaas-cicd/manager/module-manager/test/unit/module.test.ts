@@ -19,7 +19,12 @@ import {
   resolveEffectiveModuleName,
   resolveViaCatalog,
 } from "../../src/config";
-import { validateConfigBlock, validateDependsOn, validateModules } from "../../src/validate";
+import {
+  validateConfigBlock,
+  validateDependsOn,
+  validateIntegratesWith,
+  validateModules,
+} from "../../src/validate";
 import { AddOptions, DeleteOptions, ModuleConfig, ValidateFinding, ValidateReport } from "../../src/types";
 import { FakeModuleClient } from "./fake-client";
 import { run } from "../../src/main";
@@ -532,6 +537,60 @@ function captureList(client: FakeModuleClient, extraArgs: string[] = []): string
   }
 }
 
+
+// ── validateIntegratesWith: the SOFT counterpart to dependsOn (#501) ────
+{
+  const mkFs = (providers: Record<string, string>, files: Set<string>) => ({
+    providerDir(provider: string, environment: string) {
+      const scoped = environment ? `${provider}-${environment}` : "";
+      const name = scoped && scoped in providers ? scoped : provider;
+      return { module: name, dir: providers[name] ?? null };
+    },
+    exists: (p: string) => files.has(p),
+  });
+  const findings = (m: Record<string, unknown>, fs: ReturnType<typeof mkFs>): ValidateFinding[] => {
+    const out: ValidateFinding[] = [];
+    validateIntegratesWith(m as never, fs, out as never);
+    return out;
+  };
+
+  // 1. Provider NOT installed → the whole point: silent, no finding.
+  {
+    const f = findings({ name: "litellm", integratesWith: ["vllm-amd:inference"] }, mkFs({}, new Set()));
+    check(f.length === 0, "validate: integratesWith with an absent provider is silent (no finding)");
+  }
+  // 2. Provider installed but ships no update-service.sh → soft WARNING, not error.
+  {
+    const fs = mkFs({ "vllm-amd": "/src/vllm" }, new Set());
+    const f = findings({ name: "litellm", integratesWith: ["vllm-amd:inference"] }, fs);
+    check(
+      f.length === 1 && f[0].severity === "warning",
+      "validate: installed integrator with no update-service.sh WARNS (soft)",
+    );
+  }
+  // 3. Provider installed and wireable → no finding.
+  {
+    const fs = mkFs({ "vllm-amd": "/src/vllm" }, new Set(["/src/vllm/services/inference/update-service.sh"]));
+    const f = findings({ name: "litellm", integratesWith: ["vllm-amd:inference"] }, fs);
+    check(f.length === 0, "validate: a wireable integration produces no finding");
+  }
+  // 4. Same coordinate in BOTH dependsOn and integratesWith → error.
+  {
+    const f = findings(
+      { name: "x", dependsOn: ["vllm-amd:inference"], integratesWith: ["vllm-amd:inference"] },
+      mkFs({}, new Set()),
+    );
+    check(
+      f.length === 1 && f[0].severity === "error" && /both dependsOn and integratesWith/.test(f[0].message),
+      "validate: a coordinate in both lists is an error",
+    );
+  }
+  // 5. Malformed (no ':service') → error.
+  {
+    const f = findings({ name: "x", integratesWith: ["vllm-amd"] }, mkFs({}, new Set()));
+    check(f.length === 1 && f[0].message.includes("no ':<service>'"), "validate: a bare integratesWith coordinate is an error");
+  }
+}
 
 // ── validateConfigBlock: the config ↔ dependsOn schema rules (#549) ─────
 // module-fields.json declares these rules and common-install-routines.sh (hence

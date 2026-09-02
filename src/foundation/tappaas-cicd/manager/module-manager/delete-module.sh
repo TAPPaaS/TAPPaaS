@@ -390,6 +390,28 @@ main() {
         else
             info "  ${GN}✓${CL} No other modules depend on this module's services"
         fi
+
+        # integratesWith consumers do NOT block deletion (they are optional) —
+        # instead un-wire each one now, while our service scripts still exist, by
+        # calling OUR delete-service.sh with the consumer's name (#501).
+        local module_dir_uw _uw_rc=0
+        module_dir_uw=$(get_module_dir "${module}") || _uw_rc=$?
+        if [[ "${_uw_rc}" -eq 0 ]]; then
+            for service in ${provides}; do
+                local uw_script="${module_dir_uw}/services/${service}/delete-service.sh"
+                [[ -x "${uw_script}" ]] || continue
+                local consumer
+                while IFS= read -r consumer; do
+                    [[ -n "${consumer}" ]] || continue
+                    info "  Un-wiring optional integrator '${consumer}' from ${BL}${module}:${service}${CL}..."
+                    if "${uw_script}" "${consumer}"; then
+                        info "  ${GN}✓${CL} un-wired '${consumer}'"
+                    else
+                        warn "  delete-service.sh returned non-zero for integrator '${consumer}' (continuing)"
+                    fi
+                done < <(find_integrateswith_consumers "${module}" "${service}")
+            done
+        fi
     fi
 
     # ── Step 4: Run the module's own delete.sh ───────────────────────
@@ -418,8 +440,10 @@ main() {
     # ── Step 5: Call dependency delete-service.sh scripts (reverse) ──
     info "\n${BOLD}Step 5: Call dependency service deleters (reverse order)${CL}"
 
+    # Tear down BOTH hard dependencies and optional integrations (#501): this
+    # module's outgoing wiring to its providers, in reverse order.
     local depends_on
-    depends_on=$(read_module_config "${module}" 2>/dev/null | jq -r '.dependsOn // [] | .[]' 2>/dev/null)
+    depends_on=$(read_module_config "${module}" 2>/dev/null | jq -r '((.dependsOn // []) + (.integratesWith // [])) | .[]' 2>/dev/null)
 
     if [[ -z "${depends_on}" ]]; then
         info "  No dependency services to call"
