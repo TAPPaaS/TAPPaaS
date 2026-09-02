@@ -971,6 +971,51 @@ else
     bad "(d) expected clean skip (rc=0, no markers); rc=${delta_rc}, markers=$(tr '\n' ';' < "${MARKER}" 2>/dev/null)"
 fi
 
+# ── resolve-module.sh --field tier: an undeclared tier resolves to the
+# documented default (#561) ──────────────────────────────────────────
+#
+# validate-module-tier-source.sh already decided what an absent tier means:
+# it warns and defaults to 'app' ("back-compat: untagged/legacy modules ...").
+# resolve-module.sh did not share that decision — it fell through to the
+# catalog and exited 1 with an empty result, so every caller had to invent its
+# own reading of the silence. migrate-to-adr007.sh:388 invented one and it was
+# wrong for 22 of 47 deployed modules on a real site.
+RESOLVE="${HERE}/resolve-module.sh"
+TIERDIR="$(mktemp -d "${TMPDIR:-/tmp}/resolve-tier.XXXXXX")"
+cat > "${TIERDIR}/site.json" <<'JSON'
+{ "name": "acme", "repositories": [] }
+JSON
+# a DEPLOYED module (carries vmname) that declares no tier and is in no catalog
+cat > "${TIERDIR}/untiered.json" <<'JSON'
+{ "vmname": "untiered", "vmid": 999, "description": "deployed, no tier, no catalog entry" }
+JSON
+# a module that declares its tier explicitly — must be unaffected
+cat > "${TIERDIR}/tiered.json" <<'JSON'
+{ "vmname": "tiered", "vmid": 998, "tier": "foundation" }
+JSON
+# NOT a module: no vmname. Absence must stay unresolved here, or the resolver
+# would claim site.json and zones.json are modules.
+cat > "${TIERDIR}/notamodule.json" <<'JSON'
+{ "description": "a schema or state file, not a module" }
+JSON
+
+out="$("$RESOLVE" untiered --config-dir "$TIERDIR" --field tier 2>/dev/null || true)"
+[[ "$out" == "app" ]]     && ok "resolve tier: a deployed module with no tier resolves to the documented default 'app'"     || bad "resolve tier: expected 'app' for an untiered deployed module, got '${out:-<empty>}'"
+
+"$RESOLVE" untiered --config-dir "$TIERDIR" --field tier >/dev/null 2>&1     && ok "resolve tier: the defaulted lookup exits 0"     || bad "resolve tier: the defaulted lookup should exit 0, not signal not-found"
+
+out="$("$RESOLVE" tiered --config-dir "$TIERDIR" --field tier 2>/dev/null || true)"
+[[ "$out" == "foundation" ]]     && ok "resolve tier: an explicit tier is returned unchanged"     || bad "resolve tier: expected 'foundation', got '${out:-<empty>}'"
+
+out="$("$RESOLVE" notamodule --config-dir "$TIERDIR" --field tier 2>/dev/null || true)"
+[[ -z "$out" ]]     && ok "resolve tier: a config with no vmname is still unresolved (not a module)"     || bad "resolve tier: a non-module must not default; got '${out}'"
+
+out="$("$RESOLVE" absent --config-dir "$TIERDIR" --field tier 2>/dev/null || true)"
+[[ -z "$out" ]]     && ok "resolve tier: a module with no config file at all stays unresolved"     || bad "resolve tier: expected empty for a missing config, got '${out}'"
+
+rm -rf -- "$TIERDIR"
+
+
 echo ""
 echo "Results: ${PASS} passed, ${FAIL} failed"
 [[ "$FAIL" -eq 0 ]] || exit 1
