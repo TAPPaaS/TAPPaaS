@@ -27,6 +27,7 @@ are marked, never deleted. If you want to know *why* the platform is the way it 
 | [ADR-016 — Source NAT for subnet-filtering devices](<ADR-016 - Source NAT for subnet-filtering devices.md>) | Masquerade into a zone for IoT appliances that only accept sessions from their own subnet: zone-owned `snat-allowed-from` gate, module-local `snat.json`, `network-manager snat` verbs. |
 | [ADR-017 — Update scheduling and mothership self-update](<ADR-017 - Update scheduling and mothership self-update.md>) | When the sweep runs and how the mothership updates itself (systemd `ExecStartPre=+`, schedule from `site.json`). |
 | [ADR-019 — HA and Cross-Node VM Migration Policy](<ADR-019 - HA and Cross-Node VM Migration Policy.md>) | *Proposed.* The full `migrate-vm.sh` matrix — HA/non-HA, live-vs-offline by CPU compatibility (`--force` for downtime), `strict`/`comment` round-trip, when `module.json.node` is rewritten. |
+| [ADR-020 — Declared-Field Change Model](<ADR-020 - Declared-Field Change Model (validate, drift, modify).md>) | *Proposed / Draft.* Unifies validate · drift · `modify` behind one desired-state resolver and one change-class taxonomy (immutable / in-place / grow-only / migrate / …); each `<provider>:<service>` declares + owns how to change (or refuse) its fields. Gives `modify --set field=value` a sanctioned path (#498/#557), scoped per service; generalizes to network-manager zones (#538); ADR-019 is its first change-hook. |
 
 ## Governance
 
