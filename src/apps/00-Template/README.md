@@ -22,6 +22,20 @@ it becomes the VM name, hostname and DNS name. Optionally record authorship in
 `AUTHORS.md` (edit the placeholder line, or delete the file — it is optional; see
 `src/foundation/schemas/README.md` for the contributor/author/maintainer role model).
 
+## Module documentation (ADR-013)
+
+Every module carries Diataxis-split documentation ([ADR-013](<../../../docs/ADR/ADR-013 - Documentation Structure and Standards.md>) §4). Copy the skeletons and fill them in:
+
+| File | Copy from | Audience | Required? |
+|------|-----------|----------|-----------|
+| `README.md` | [`README-template.md`](./README-template.md) | end user — *what / why / what-not* | **Mandatory** (catalog lint) |
+| `INSTALL.md` | [`INSTALL.md`](./INSTALL.md) | TAPPaaS admin — *how to install / operate* | **Mandatory** (catalog lint) |
+| `DESIGN.md` | [`DESIGN-template.md`](./DESIGN-template.md) | module developers — *how / why it is built* | Expected where internals are non-trivial |
+
+`README.md` and `INSTALL.md` are public web pages (synced to tappaas.org); `DESIGN.md` stays
+in-repo for contributors. The cross-module "how to build any module" walkthrough is
+[DEVELOP.md](./DEVELOP.md) — a different artifact from a module's own `DESIGN.md`.
+
 ## Module Files
 
 ### myModule.json
