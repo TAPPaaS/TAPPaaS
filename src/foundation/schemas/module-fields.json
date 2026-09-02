@@ -28,6 +28,7 @@
     "cputype",
     "cores",
     "memory",
+    "swap",
     "diskSize",
     "storage",
     "placementState",
@@ -386,6 +387,18 @@
       "minimum": 512,
       "example": 8192,
       "note": "Value in MB (e.g., 4096 = 4GB)"
+    },
+    "swap": {
+      "description": "Swap in MB for an LXC container. A container has no BIOS and no virtual disk controller, so its memory pressure is handled differently from a VM's \u2014 0 means the container may not swap at all, which is the TAPPaaS default.",
+      "type": "integer",
+      "requiredBy": [],
+      "usedBy": [
+        "cluster:lxc"
+      ],
+      "default": 0,
+      "minimum": 0,
+      "example": 512,
+      "note": "cluster:lxc's update-service.sh has always read this from config with a default of 0; it was simply never declared here, so no path could report or classify it. Declared in ADR-020 P5."
     },
     "diskSize": {
       "description": "Disk size with unit suffix",
@@ -759,20 +772,18 @@
       "type": "string",
       "requiredBy": [],
       "usedBy": [
-        "cluster:vm",
-        "cluster:lxc"
+        "cluster:vm"
       ],
       "default": "NONE",
       "example": "lan",
-      "note": "Only used if a second network interface is needed. The default was 'lan' until ADR-020 P1, which contradicted both acting paths \u2014 Create-TAPPaaS-VM.sh and cluster:vm/update-service.sh have always read it as 'NONE' \u2014 and made the drift report claim a desired second NIC that nothing would ever create. Declaring a bridge1 on a VM that has none ADDS the NIC; removing it (back to the 'NONE' default) DELETES the live net1, which reboots the guest."
+      "note": "cluster:vm only \u2014 a container has ONE NIC in TAPPaaS: neither Create-TAPPaaS-LXC.sh nor cluster:lxc's install/update service mentions net1, so the cluster:lxc claim these fields used to carry (bridge1/mac1/zone1/trunks1) was ownership that did not exist, removed in ADR-020 P5. Only used if a second network interface is needed. The default was 'lan' until ADR-020 P1, which contradicted both acting paths \u2014 Create-TAPPaaS-VM.sh and cluster:vm/update-service.sh have always read it as 'NONE' \u2014 and made the drift report claim a desired second NIC that nothing would ever create. Declaring a bridge1 on a VM that has none ADDS the NIC; removing it (back to the 'NONE' default) DELETES the live net1, which reboots the guest."
     },
     "mac1": {
       "description": "MAC address for the net1 network port",
       "type": "string",
       "requiredBy": [],
       "usedBy": [
-        "cluster:vm",
-        "cluster:lxc"
+        "cluster:vm"
       ],
       "default": "<randomly generated>",
       "format": "^([0-9A-Fa-f]{2}:){5}[0-9A-Fa-f]{2}$"
@@ -782,8 +793,7 @@
       "type": "string",
       "requiredBy": [],
       "usedBy": [
-        "cluster:vm",
-        "cluster:lxc"
+        "cluster:vm"
       ],
       "default": "mgmt",
       "format": "^[a-z][a-zA-Z0-9]*$",
@@ -794,8 +804,7 @@
       "type": "string",
       "requiredBy": [],
       "usedBy": [
-        "cluster:vm",
-        "cluster:lxc"
+        "cluster:vm"
       ],
       "default": "NONE",
       "format": "^([a-z][a-zA-Z0-9]*(;[a-z][a-zA-Z0-9]*)*|ALL|\\*|NONE)$",

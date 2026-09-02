@@ -220,6 +220,7 @@ export function normalizeValue(
 export type SkipReason =
   | "no-desired-value" // neither declared nor defaulted into scope
   | "seed-only" // defaultIsDesired:false and the value is only a default
+  | "self-reconciling" // apply:"reconcile" — the service converges it itself
   | "not-reported"; // the service's reporter does not observe this field
 
 export interface DriftField {
@@ -373,6 +374,16 @@ export function computeDrift(
     // never asked for this value, so the converge must not act on it.
     if (!defaultIsDesired(entry) && resolved.literal === "") {
       record.skipped.push({ field, reason: "seed-only" });
+      continue;
+    }
+
+    // The service converges this field inside its own idempotent reconcile
+    // (apply:"reconcile"). There is nothing for the generic differ to compare —
+    // a firewall rule set is not a scalar — and the comparison that matters is
+    // the domain-aware one its test-service.sh already performs. Recorded, so
+    // the report says WHY it was not diffed rather than staying silent.
+    if (effectiveApply(entry) === "reconcile") {
+      record.skipped.push({ field, reason: "self-reconciling" });
       continue;
     }
 

@@ -1,0 +1,15 @@
+{
+  "$schema": "../../../schemas/service-fields.json",
+  "service": "templates:windows",
+  "description": "The Windows template build inputs for a module that provisions from one.",
+
+  "_note": "The windows block describes how the template is BUILT (image, unattend, drivers). update-service.sh reconciles the template, not the consuming guest.",
+
+  "fields": {
+    "windows": {
+      "class": "in-place",
+      "apply": "reconcile",
+      "note": "The template build description. Changing it affects guests provisioned AFTERWARDS; an already-installed guest is not rebuilt, which is why this is not 'recreate' — nothing about the existing guest is claimed by it."
+    }
+  }
+}

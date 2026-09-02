@@ -130,8 +130,25 @@ export function isChangeClass(s: string): boolean {
 //   composite — the field is one INPUT of a derived value (net0 is built from
 //               bridge0/zone0/mac0/trunks0); the composite carries the class,
 //               the hook and the side effects, and the field points at it.
+//   reconcile — the SERVICE converges this field itself, as part of an
+//               idempotent reconcile it already performs; the runner applies
+//               nothing per-field.
 //   none      — never applied by the converge (immutable / recreate / manual).
-export const APPLY_MODES = ["set", "hook", "composite", "none"] as const;
+//
+// `reconcile` is what most non-cluster services need, and it is not a cop-out.
+// A firewall rule set, a Caddy handler, a PBS job membership are not scalars a
+// differ can compare and a hook can `set`: reconciling them means adding,
+// changing AND removing entries, which the plane controllers already do with
+// domain knowledge (`rules-manager reconcile`, the Caddy handler compare, the
+// PBS job re-assert). Flattening such a field to a string so the generic differ
+// could diff it would LOSE fidelity, not gain single-source-ness.
+//
+// What the manifest still buys for those fields is exactly what ADR-020 is for:
+// their change CLASS becomes declared, so `modify --set ingress=…` is permitted
+// and classified instead of being a hand-edit, and `validate` can insist the
+// service classify everything it owns. The apply just stays where the knowledge
+// already is.
+export const APPLY_MODES = ["set", "hook", "composite", "reconcile", "none"] as const;
 export type ApplyMode = (typeof APPLY_MODES)[number];
 
 // ── the normalizer vocabulary ──────────────────────────────────────────
@@ -351,7 +368,9 @@ export function lintServiceFieldManifest(
     // than letting the converge silently ignore the hook.
     if (!spec.applies && apply !== "none") {
       err(
-        `${what}: class '${e.class}' is never applied by the converge, but declares apply:'${apply}' — use apply:"none"`,
+        `${what}: class '${e.class}' is never applied by the converge, but declares apply:'${apply}' — ` +
+          `use apply:"none". (Not even apply:"reconcile": that would claim the service fixes ` +
+          `something the taxonomy says cannot be fixed in place.)`,
       );
     }
     if (spec.applies && apply === "none") {
@@ -459,6 +478,24 @@ export function lintServiceFieldManifest(
 // one place, so a consumer cannot accidentally treat `undefined` as false.
 export function defaultIsDesired(e: FieldEntry | CompositeEntry): boolean {
   return e.defaultIsDesired !== false;
+}
+
+// Does converging this manifest require reading ACTUAL state?
+//
+// Only a field the RUNNER applies per-field needs it — a `set` needs the live
+// value to know whether to write, a `hook` needs it to preserve what config
+// does not carry. A manifest whose fields are all `reconcile`/`none` is
+// self-converging: there is nothing for the generic differ to compare, so
+// demanding a report-service.sh from that provider would be asking it to
+// re-express a firewall rule set as flat strings for no one's benefit.
+export function needsActualState(m: ServiceFieldManifest): boolean {
+  const applied = (e: FieldEntry | CompositeEntry): boolean => {
+    const a = effectiveApply(e);
+    return a === "set" || a === "hook" || a === "composite";
+  };
+  return (
+    Object.values(m.fields).some(applied) || Object.values(m.composites).some(applied)
+  );
 }
 
 // Where a service's manifest lives, relative to the PROVIDER MODULE's source

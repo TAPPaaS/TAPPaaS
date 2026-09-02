@@ -1,0 +1,59 @@
+{
+  "$schema": "../../../schemas/service-fields.json",
+  "service": "network:proxy",
+  "description": "The module's public face: the domain Caddy serves it on, how it is reached upstream, and who is allowed to reach it.",
+
+  "_note": "update-service.sh already reconciles this properly against Caddy's own model: it creates a missing domain/handler and, when the handler configuration has changed, DELETES AND RECREATES it. That compare-and-recreate is one atomic decision across several fields — a generic per-field differ would have to re-derive it and could not express 'the handler as a whole is different'. So every field is apply:'reconcile' and the existing logic stays. What the manifest adds is the change CLASS, which is what makes 'modify --set proxyPort=8443' a sanctioned operation instead of a hand-edit (#557).",
+
+  "fields": {
+    "proxyDomain": {
+      "class": "in-place",
+      "apply": "reconcile",
+      "note": "The public hostname. Changing it re-issues the ACME certificate and moves the handler; the module itself is untouched, so no guest downtime — though clients on the old name stop resolving as soon as DNS follows."
+    },
+    "proxyPort": {
+      "class": "in-place",
+      "apply": "reconcile",
+      "normalize": "integer",
+      "note": "The upstream port Caddy forwards to. A handler rewrite, applied live."
+    },
+    "proxyUpstreamTls": {
+      "class": "in-place",
+      "apply": "reconcile",
+      "normalize": "boolean",
+      "note": "Whether the hop from Caddy to the module is itself TLS. Declared as a string in module-fields.json, so the boolean normalizer is what makes 'true' and true one value."
+    },
+    "proxyUpstreamHttp1": {
+      "class": "in-place",
+      "apply": "reconcile",
+      "normalize": "boolean",
+      "note": "Force HTTP/1.1 upstream, for a backend that cannot speak h2c."
+    },
+    "proxyPreserveHost": {
+      "class": "in-place",
+      "apply": "reconcile",
+      "normalize": "boolean",
+      "note": "Pass the original Host header through, for a backend that generates absolute URLs from it."
+    },
+    "proxyTls": {
+      "class": "in-place",
+      "apply": "reconcile",
+      "note": "Which certificate strategy serves the domain (per-service or the environment wildcard)."
+    },
+    "proxyAllowedZones": {
+      "class": "in-place",
+      "apply": "reconcile",
+      "note": "Which zones may reach the published name — the difference between an internal service and one exposed to the internet. A live firewall/Caddy change, and the field most worth being able to set through a verb rather than by hand."
+    },
+    "firewallType": {
+      "class": "in-place",
+      "apply": "reconcile",
+      "note": "Which firewall implementation serves this estate. 'NONE' makes the service print manual instructions instead of calling a controller; that branch is the non-field logic update-service.sh keeps."
+    },
+    "aliasType": {
+      "class": "in-place",
+      "apply": "reconcile",
+      "note": "How the module is addressed in the generated firewall alias (host vs network)."
+    }
+  }
+}

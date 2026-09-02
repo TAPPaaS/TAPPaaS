@@ -1,0 +1,15 @@
+{
+  "$schema": "../../../schemas/service-fields.json",
+  "service": "network:dns",
+  "description": "The module's DNS record on the TAPPaaS resolver.",
+
+  "_note": "update-service.sh execs install-service.sh, which is reconcile-in-place: it creates or updates the record and is safe to re-run. apply:'reconcile' says exactly that.",
+
+  "fields": {
+    "ip": {
+      "class": "in-place",
+      "apply": "reconcile",
+      "note": "The address the module's name resolves to. Re-pointing a record is a resolver update; nothing on the guest changes, so no reboot and no downtime. An absent ip means the module resolves from its DHCP lease via masqdns instead, which is the normal case."
+    }
+  }
+}

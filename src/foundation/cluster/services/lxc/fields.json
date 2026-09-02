@@ -1,0 +1,131 @@
+{
+  "$schema": "../../../schemas/service-fields.json",
+  "service": "cluster:lxc",
+  "description": "Change semantics for every module field cluster:lxc owns — the container sibling of cluster:vm.",
+
+  "_note": "Read off update-service.sh as it stands. A container is NOT a VM with different words, and the classes differ where the platform does: a container has one NIC, its rootfs is not grown in place by this service, and it is not live-migrated at all — an LXC with a GPU or a bind-mount cannot be moved safely, so `node` is a manual operation rather than cluster:vm's `migrate`. Where cluster:vm auto-applies, this warns; those fields are classed `manual`, which is exactly what 'reported, never applied silently' means.",
+
+  "fields": {
+    "vmname": {
+      "class": "in-place",
+      "apply": "set",
+      "liveKey": "hostname",
+      "setFlag": "--hostname",
+      "note": "Proxmox calls a container's name 'hostname'. It is also the DNS name the guest registers as."
+    },
+    "vmtag": {
+      "class": "in-place",
+      "apply": "set",
+      "liveKey": "tags",
+      "setFlag": "--tags",
+      "normalize": "tags",
+      "defaultIsDesired": false,
+      "note": "Same canonicalisation as cluster:vm. defaultIsDesired:false: a container that declares no vmtag keeps whatever tags it has."
+    },
+    "cores": {
+      "class": "in-place",
+      "apply": "set",
+      "liveKey": "cores",
+      "setFlag": "--cores",
+      "normalize": "integer",
+      "note": "Applied live — a container's cgroup limit changes without a restart."
+    },
+    "memory": {
+      "class": "in-place",
+      "apply": "set",
+      "liveKey": "memory",
+      "setFlag": "--memory",
+      "normalize": "integer",
+      "note": "Also live, for the same reason."
+    },
+    "swap": {
+      "class": "in-place",
+      "apply": "set",
+      "liveKey": "swap",
+      "setFlag": "--swap",
+      "normalize": "integer",
+      "note": "Container-only: a VM's swap is inside its guest, a container's is a host-side cgroup limit. Live, like cores and memory. TAPPaaS defaults it to 0 \u2014 a container that needs swap says so."
+    },
+
+    "bridge0": {
+      "class": "in-place-reboot",
+      "apply": "composite",
+      "composite": "net0",
+      "liveKey": "net0.bridge",
+      "note": "A bridge change moves the container to a different L2 segment, so it must re-DHCP — hence the restart."
+    },
+    "zone0": {
+      "class": "in-place-reboot",
+      "apply": "composite",
+      "composite": "net0",
+      "liveKey": "net0.tag",
+      "normalize": "vlan",
+      "note": "The zone resolves to net0's VLAN tag; a new tag is a new subnet, so the container restarts and re-registers DNS."
+    },
+    "mac0": {
+      "class": "in-place",
+      "apply": "composite",
+      "composite": "net0",
+      "liveKey": "net0.mac",
+      "note": "Spelled `hwaddr=` on a container. Preserved from the live NIC unless the module pins one — the same rule as cluster:vm, and the reason both reporters emit the MAC under one key."
+    },
+    "trunks0": {
+      "class": "in-place",
+      "apply": "composite",
+      "composite": "net0",
+      "liveKey": "net0.trunks",
+      "normalize": "trunks",
+      "note": "A trunk-only change applies live on the bridge — no restart."
+    },
+
+    "node": {
+      "class": "manual",
+      "apply": "none",
+      "liveKey": "node",
+      "note": "NOT cluster:vm's `migrate`. Live-migrating a container is unsafe when it has a GPU passed through or bind-mounts from the host — which is why TAPPaaS runs containers for exactly those workloads. The service reports the drift and leaves the move to an operator who can stop it, move it and start it deliberately."
+    },
+    "diskSize": {
+      "class": "manual",
+      "apply": "none",
+      "liveKey": "diskSize",
+      "defaultIsDesired": false,
+      "note": "A container's rootfs is not grown by this service (cluster:vm's grow-only path is `resize-disk.sh`, which is VM-specific). Reported; an operator resizes deliberately."
+    },
+    "storage": {
+      "class": "manual",
+      "apply": "none",
+      "liveKey": "storage",
+      "defaultIsDesired": false,
+      "note": "Moving a container's volume is an offline, IO-heavy operation, and for a bind-mounted CT it is not a move at all. Reported, never implicit."
+    },
+
+    "vmid": {
+      "class": "immutable",
+      "apply": "none",
+      "liveKey": "vmid",
+      "note": "The container's identity. A different vmid IS a different container."
+    },
+    "image": {
+      "class": "immutable",
+      "apply": "none",
+      "note": "The template the container was created from."
+    },
+    "imageType": {
+      "class": "immutable",
+      "apply": "none",
+      "note": "How it was built; not re-decidable in place."
+    }
+  },
+
+  "composites": {
+    "net0": {
+      "class": "in-place-reboot",
+      "apply": "hook",
+      "hook": "update-net.sh",
+      "liveKey": "net0",
+      "inputs": ["bridge0", "zone0", "mac0", "trunks0"],
+      "sideEffects": ["reboot", "wait-ip", "dns"],
+      "note": "The container's only NIC — TAPPaaS gives a CT one interface, which is why bridge1/mac1/zone1/trunks1 are cluster:vm-only. Proxmox spells it 'name=eth0,bridge=…,hwaddr=…,ip=dhcp[,tag=…]'. in-place-reboot is the CEILING: a MAC- or trunk-only change stays in-place, and only a bridge/zone change restarts the container."
+    }
+  }
+}

@@ -1,0 +1,15 @@
+{
+  "$schema": "../../../schemas/service-fields.json",
+  "service": "identity:identity",
+  "description": "The module's single sign-on wiring: its Authentik application/provider and the groups allowed to use it.",
+
+  "_note": "update-service.sh execs install-service.sh, which is fully reconcile-in-place (ADR-006 Phase 4, #56): it refreshes the OIDC app/provider, re-applies the access bindings and rewrites the VM secrets env, and is safe on every update cycle. There is no per-field drift loop to extract.",
+
+  "fields": {
+    "identity": {
+      "class": "in-place",
+      "apply": "reconcile",
+      "note": "The whole SSO block — provider type, redirect URIs, the groups bound to the application. Re-applying it updates Authentik; sessions already issued keep working, so there is no downtime to authorize."
+    }
+  }
+}

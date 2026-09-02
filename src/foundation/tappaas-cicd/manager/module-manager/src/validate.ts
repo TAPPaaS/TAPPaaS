@@ -19,6 +19,7 @@ import { join } from "path";
 import {
   ManifestFinding,
   lintServiceFieldManifest,
+  manifestRelPath,
   ownedFieldsFor,
   parseServiceFieldManifest,
 } from "../../../lib/ts/src/service-fields";
@@ -353,11 +354,17 @@ export function validateIntegratesWith(
 //
 // WHAT IS CHECKED, and what deliberately is not:
 //
-//   - A provider service with NO fields.json is SKIPPED, silently. During the
-//     ADR-020 rollout most of the 25 services have not been migrated yet
-//     (P5), and erroring on the un-migrated majority would make `validate`
-//     useless for the whole transition. Absence means "not yet on the
-//     contract", not "broken".
+//   - A provider service that owns NO declared field needs no manifest and is
+//     skipped silently. 14 of the 25 services are in that position: they do
+//     registration, wiring and app configuration, none of which is field drift,
+//     so there is nothing for a manifest to classify. Absence there is correct,
+//     not incomplete.
+//   - A service that DOES own fields (module-fields.json `usedBy` names it) and
+//     ships no manifest is an ERROR. That is ADR-020 P5's exit criterion made
+//     enforceable: the whole point is that no field's change semantics live
+//     only inside an imperative loop, and a missing manifest is exactly that
+//     state. Before P5 this was a silent skip, because erroring on the
+//     un-migrated majority would have made `validate` useless mid-rollout.
 //   - A fields.json that EXISTS must be complete and well-formed: every field
 //     module-fields.json says the coordinate owns must be classified, every
 //     class must be one the taxonomy defines, and the apply wiring must be
@@ -401,9 +408,23 @@ export function validateFieldManifests(
     if (seen.has(coordinate)) continue;
     seen.add(coordinate);
 
-    const path = join(dir, "services", service, "fields.json");
+    const owned = ownedFieldsFor(coordinate, schema);
+    const path = join(dir, manifestRelPath(service));
     const text = fs.readFile(path);
-    if (text === null) continue; // not migrated to the contract yet — see above
+    if (text === null) {
+      if (owned.length > 0) {
+        out.push({
+          module: m.name,
+          severity: "error",
+          message:
+            `${coordinate} owns ${owned.length} declared field(s) (${owned.join(", ")}) but ships no ` +
+            `${path} — their change semantics are undeclared, so nothing can say what changing one costs ` +
+            `(ADR-020 D4)`,
+        });
+      }
+      // Owns nothing: no manifest needed, and none expected.
+      continue;
+    }
 
     const findings: ManifestFinding[] = [];
     let doc: unknown;
@@ -419,15 +440,7 @@ export function validateFieldManifests(
     }
     const manifest = parseServiceFieldManifest(doc, findings);
     if (manifest) {
-      lintServiceFieldManifest(
-        manifest,
-        {
-          coordinate,
-          ownedFields: ownedFieldsFor(coordinate, schema),
-          declaredFields,
-        },
-        findings,
-      );
+      lintServiceFieldManifest(manifest, { coordinate, ownedFields: owned, declaredFields }, findings);
     }
     for (const f of findings) {
       out.push({

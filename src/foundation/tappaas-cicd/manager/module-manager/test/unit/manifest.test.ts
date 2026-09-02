@@ -18,8 +18,8 @@
 // No cluster, no bash, no config tree: the two JSON documents are read straight
 // from the repo, everything else is built inline.
 
-import { readFileSync } from "fs";
-import { join } from "path";
+import { existsSync, readFileSync, readdirSync, statSync } from "fs";
+import { basename, dirname, join } from "path";
 import {
   APPLY_MODES,
   CHANGE_CLASSES,
@@ -29,6 +29,7 @@ import {
   SIDE_EFFECTS,
   defaultIsDesired,
   effectiveApply,
+  needsActualState,
   lintServiceFieldManifest,
   ownedFieldsFor,
   parseServiceFieldManifest,
@@ -360,6 +361,60 @@ const BASE = {
   );
 }
 
+// Rule: apply:"reconcile" — the service converges the field itself. Valid on an
+// applicable class, meaningless on one that is never applied.
+{
+  const f = lint({
+    ...BASE,
+    fields: { ...BASE.fields, cores: { class: "in-place", apply: "reconcile" } },
+  });
+  check(f.length === 0, "apply:'reconcile' is valid on an applicable class");
+  const g = lint({
+    ...BASE,
+    fields: { ...BASE.fields, cores: { class: "immutable", apply: "reconcile" } },
+  });
+  check(
+    g.length === 1 && says(g, "is never applied by the converge"),
+    "…but not on a class the converge never applies — one error, naming the remedy",
+  );
+}
+
+// needsActualState: does converging this manifest require reading the provider?
+// Only a per-field apply does. This is what lets a policy service — a firewall
+// rule set, a Caddy handler — carry a manifest without being asked for a
+// report-service.sh that could only flatten its state and lose fidelity.
+{
+  const selfReconciling = parseServiceFieldManifest(
+    {
+      service: "network:rules",
+      fields: {
+        cores: { class: "in-place", apply: "reconcile" },
+        memory: { class: "in-place", apply: "reconcile" },
+      },
+    },
+    [],
+  )!;
+  check(!needsActualState(selfReconciling), "an all-reconcile manifest needs no actual state");
+
+  const withSet = parseServiceFieldManifest(
+    {
+      service: "cluster:vm",
+      fields: {
+        cores: { class: "in-place", apply: "set" },
+        memory: { class: "in-place", apply: "reconcile" },
+      },
+    },
+    [],
+  )!;
+  check(needsActualState(withSet), "one `set` field is enough to need a reporter");
+
+  const nothingApplies = parseServiceFieldManifest(
+    { service: "cluster:vm", fields: { vmid: { class: "immutable", apply: "none" } } },
+    [],
+  )!;
+  check(!needsActualState(nothingApplies), "a manifest that applies nothing needs no reporter either");
+}
+
 // Rule: unknown normalizer / side effect.
 {
   const f = lint({ ...BASE, fields: { ...BASE.fields, cores: { class: "in-place", normalize: "hex" } } });
@@ -412,12 +467,31 @@ const BASE = {
   };
   const VM = "/src/cluster/services/vm/fields.json";
 
-  check(run(mkFs({})).length === 0, "a service with no fields.json is silently skipped (not yet migrated)");
+  // P5 changed this: silence is correct only where there is nothing to declare.
+  check(
+    run(mkFs({}), ["cluster:vm"]).length === 1 &&
+      run(mkFs({}), ["cluster:vm"])[0].message.includes("ships no"),
+    "a service that OWNS fields but ships no manifest is an error (ADR-020 P5's exit criterion)",
+  );
 
   check(
     run(mkFs({ [VM]: JSON.stringify(BASE) })).length === 0,
     "a complete fields.json produces no finding",
   );
+
+  // A service that owns NO declared field needs no manifest, and none is
+  // expected: 14 of the 25 services do registration and wiring, which is not
+  // field drift. Reported as a gap it would be pure noise.
+  {
+    const out: ValidateFinding[] = [];
+    validateFieldManifests(
+      { name: "app", dependsOn: ["cluster:vm"] } as unknown as ModuleConfig,
+      mkFs({}),
+      { proxyPort: { usedBy: ["network:proxy"] } },
+      out,
+    );
+    check(out.length === 0, "a service that owns nothing needs no manifest and is not reported");
+  }
 
   {
     const f = run(mkFs({ [VM]: "{ not json" }));
@@ -445,6 +519,68 @@ const BASE = {
     const f = run(mkFs({ [VM]: "{ not json" }), ["cluster:vm", "cluster:vm"]);
     check(f.length === 1, "the same coordinate is linted once per module, not once per declaration");
   }
+}
+
+// ── 5. every field-owning service in the TREE ships a clean manifest ───
+//
+// ADR-020 P5's exit criterion, asserted against the repository rather than a
+// fixture: if module-fields.json says a coordinate owns a field, that service
+// must classify it. A service owning nothing needs no manifest — 14 of the 25
+// do registration and wiring, which is not field drift — so absence is only a
+// fault where ownership exists.
+{
+  // Every services/<svc>/update-service.sh under foundation/ and apps/ — the
+  // definition of "a provider service" the contract test already uses.
+  const services: string[] = [];
+  const walk = (dir: string, depth: number): void => {
+    if (depth > 6) return;
+    let entries: string[];
+    try {
+      entries = readdirSync(dir);
+    } catch {
+      return;
+    }
+    for (const e of entries) {
+      if (e === "node_modules" || e === ".git" || e.includes("fixture")) continue;
+      const p = join(dir, e);
+      let isDir = false;
+      try {
+        isDir = statSync(p).isDirectory();
+      } catch {
+        continue;
+      }
+      if (isDir) walk(p, depth + 1);
+      else if (e === "update-service.sh") services.push(p);
+    }
+  };
+  walk(FOUNDATION, 0);
+  walk(join(FOUNDATION, "..", "apps"), 0);
+
+  const missing: string[] = [];
+  const broken: string[] = [];
+  for (const script of services) {
+    const dir = dirname(script);
+    const coordinate = `${basename(dirname(dirname(dir)))}:${basename(dir)}`;
+    const owned = ownedFieldsFor(coordinate, schemaFields);
+    const manifestPath = join(dir, "fields.json");
+    if (!existsSync(manifestPath)) {
+      if (owned.length > 0) missing.push(`${coordinate} (owns ${owned.join(", ")})`);
+      continue;
+    }
+    const f: ManifestFinding[] = [];
+    const m = parseServiceFieldManifest(JSON.parse(readFileSync(manifestPath, "utf8")), f);
+    if (m) lintServiceFieldManifest(m, { coordinate, ownedFields: owned, declaredFields }, f);
+    if (f.length > 0) broken.push(`${coordinate}: ${f.map((x) => x.message).join("; ")}`);
+  }
+
+  check(
+    missing.length === 0,
+    `every service that owns declared fields ships a manifest${missing.length ? " — missing: " + missing.join(" | ") : ""}`,
+  );
+  check(
+    broken.length === 0,
+    `every manifest in the tree lints clean${broken.length ? " — " + broken.join(" | ") : ""}`,
+  );
 }
 
 console.log("");

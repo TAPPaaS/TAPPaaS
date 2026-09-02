@@ -1,0 +1,30 @@
+{
+  "$schema": "../../../schemas/service-fields.json",
+  "service": "network:rules",
+  "description": "A consuming module's firewall policy: what may reach it, what it may reach, and the aliases those rules are written against.",
+
+  "_note": "Every field here is apply:'reconcile'. rules-manager already reconciles this policy properly — it adds, changes AND REMOVES orphaned rules carrying the module's tappaas-module:<vmname>: prefix — and it does so against OPNsense's own model. A generic differ comparing the JSON text of an `ingress` array would be strictly worse: order-sensitive, blind to a rule that exists on the firewall but not in config, and unable to express a removal. So the manifest declares WHAT CHANGING COSTS (nothing: a rule swap is a live API call) and leaves the HOW where the domain knowledge is. Drift for these fields is verified by test-service.sh (rules-manager verify-rules), which the read-only reconcile already runs.",
+
+  "fields": {
+    "ingress": {
+      "class": "in-place",
+      "apply": "reconcile",
+      "note": "Who may reach this module. A rule swap on OPNsense takes effect immediately; no guest is touched, so there is no downtime to authorize."
+    },
+    "egress": {
+      "class": "in-place",
+      "apply": "reconcile",
+      "note": "What this module may reach (consumer egress, ADR-COM-0002). Same cost as ingress."
+    },
+    "ports": {
+      "class": "in-place",
+      "apply": "reconcile",
+      "note": "The module's declared service surface, from which the default ingress rules are derived."
+    },
+    "aliases": {
+      "class": "in-place",
+      "apply": "reconcile",
+      "note": "Named address/port groups the module's rules refer to. Changing one re-points every rule that uses it — still a live firewall change, still no downtime."
+    }
+  }
+}

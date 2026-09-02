@@ -1,0 +1,45 @@
+{
+  "$schema": "../../../schemas/service-fields.json",
+  "service": "backup:vm",
+  "description": "The module's membership of the shared PBS backup job, and the retention/placement policy that governs it.",
+
+  "_note": "update-service.sh re-asserts membership in the shared job and migrates a legacy --all job to the managed model — a set operation over the job's vmid list, plus a schedule/retention apply. That is a reconcile with domain knowledge (see lib/pbs-job.sh, lib/pbs-placement.sh), not a per-field set, so every field is apply:'reconcile'. Backup policy is also a CASCADE (site → environment → module, ADR-007 P9): the effective value is resolved by backup-manager, and a per-field differ here would compare only the module layer and call the rest drift.",
+
+  "fields": {
+    "backup": {
+      "class": "in-place",
+      "apply": "reconcile",
+      "note": "The module's layer of the retention/exclude/enabled cascade. Changing it changes future backups only; nothing already stored is touched, and no guest is disturbed."
+    },
+    "alwaysBackup": {
+      "class": "in-place",
+      "apply": "reconcile",
+      "note": "Set only on the backup module itself: the modules whose VMs are always in the job even though they cannot declare dependsOn backup:vm (the foundation VMs that bootstrap before the backup server)."
+    },
+    "pbsStorageName": {
+      "class": "in-place",
+      "apply": "reconcile",
+      "note": "Which PBS datastore the job writes to."
+    },
+    "immutableSnapshots": {
+      "class": "in-place",
+      "apply": "reconcile",
+      "note": "Periodic read-only ZFS snapshots of the datastore so backup history cannot be rewritten (ADR-012 §3.5). Enabling it provisions on the PBS node, not on the consuming guest."
+    },
+    "placement": {
+      "class": "in-place",
+      "apply": "reconcile",
+      "note": "Where the module's backups are allowed to live (auto / a named target)."
+    },
+    "placementState": {
+      "class": "in-place",
+      "apply": "reconcile",
+      "note": "The resolved outcome of that placement, recorded on the deployed config."
+    },
+    "pushTarget": {
+      "class": "in-place",
+      "apply": "reconcile",
+      "note": "An off-site datastore this module's backups are pushed to (ADR-010)."
+    }
+  }
+}

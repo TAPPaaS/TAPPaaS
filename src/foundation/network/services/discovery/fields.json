@@ -1,0 +1,20 @@
+{
+  "$schema": "../../../schemas/service-fields.json",
+  "service": "network:discovery",
+  "description": "Cross-zone service discovery: which mDNS services and UDP broadcasts are relayed to this module.",
+
+  "_note": "update-service.sh execs install-service.sh (reconcile-in-place). Both fields are relay declarations the discovery plane converges as a set.",
+
+  "fields": {
+    "discoveryMdns": {
+      "class": "in-place",
+      "apply": "reconcile",
+      "note": "mDNS service types relayed across zones so a client in one zone can find this module in another. A relay change is a firewall/avahi reload, not a guest change."
+    },
+    "discoveryUdpRelay": {
+      "class": "in-place",
+      "apply": "reconcile",
+      "note": "UDP broadcast ports relayed across zones (discovery protocols that predate mDNS). Same cost."
+    }
+  }
+}

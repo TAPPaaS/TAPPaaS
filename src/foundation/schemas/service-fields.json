@@ -61,11 +61,12 @@
     "applyMode": {
       "type": "string",
       "description": "How the converge realizes a change. Defaults to 'none' for a class that never applies (immutable/recreate/manual) and 'set' otherwise.",
-      "enum": ["set", "hook", "composite", "none"],
+      "enum": ["set", "hook", "composite", "reconcile", "none"],
       "enumDescriptions": {
         "set": "Batched into ONE provider-level set call with every other 'set' field in the drift record (cluster:vm's single 'qm set').",
         "hook": "Dispatched to services/<svc>/<hook> over the uniform hook CLI: --field/--desired/--actual [--check] [--force].",
         "composite": "This field is an input of a composite; the composite carries the class and the hook.",
+        "reconcile": "The SERVICE converges this field itself, inside an idempotent reconcile it already performs (rules-manager reconcile, the Caddy handler compare, the PBS job re-assert). The runner applies nothing per-field, and the provider needs no report-service.sh: a rule set is not a scalar the generic differ could compare without losing fidelity. Declaring the class still makes 'modify --set' possible and lets validate insist on coverage.",
         "none": "Never applied by the converge — reported and refused."
       }
     },

@@ -1,0 +1,15 @@
+{
+  "$schema": "../../../schemas/service-fields.json",
+  "service": "network:nat",
+  "description": "Port-forward / NAT rules published on the module's behalf.",
+
+  "_note": "nat-manager reconciles the rule set — including removing rules that are no longer declared — so this is apply:'reconcile' for the same reason network:rules is: a removal cannot be expressed as a scalar diff.",
+
+  "fields": {
+    "natRules": {
+      "class": "in-place",
+      "apply": "reconcile",
+      "note": "Each entry publishes an inside service on an outside address/port. A NAT change is a live firewall change: existing connections may reset, but no guest is rebooted, so it needs no disruption authorization."
+    }
+  }
+}
