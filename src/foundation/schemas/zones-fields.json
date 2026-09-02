@@ -1,293 +1,458 @@
 {
-    "$schema": "https://json-schema.org/draft/2020-12/schema",
-    "$id": "zones-fields.json",
-    "title": "TAPPaaS Zone Field Definitions",
-    "description": "Defines the structure and valid values for zone definitions in zones.json",
-
-    "fields": {
-        "type": {
-            "description": "The security zone type classification",
-            "type": "string",
-            "required": true,
-            "values": {
-                "Management": {
-                    "description": "TAPPaaS nodes and self-management zone. Must be locked down with no access from other zones or the Internet. Typically only one zone named 'mgmt'.",
-                    "typeId": 0
-                },
-                "WAN": {
-                    "description": "ISP hand-off segment shared by the WAN modem and every node's 'wan' bridge NIC, so the HA firewall VM keeps its uplink after failing over to another node. Switch-internal only: always state=Manual with a VLAN tag, which keeps it out of every trunk (vmnet_all_active_tags) and stops zone-manager creating an interface or DHCP server — the ISP modem is the sole DHCP server on the segment. See zones.json 'wan'.",
-                    "typeId": 1
-                },
-                "Service": {
-                    "description": "Zone where service modules live. Multiple service zones can exist to serve different user bases (e.g., separate business units or home/business separation).",
-                    "typeId": 2
-                },
-                "Client": {
-                    "description": "Zone for client devices. Multiple client zones can exist for different user populations.",
-                    "typeId": 3
-                },
-                "IoT": {
-                    "description": "Zone for IoT devices. Typically multiple zones for different types of (often insecure) devices.",
-                    "typeId": 4
-                },
-                "Guest": {
-                    "description": "Security zone for unauthorized or guest clients.",
-                    "typeId": 5
-                },
-                "DMZ": {
-                    "description": "Demilitarized zone for services that need controlled exposure.",
-                    "typeId": 6
-                },
-                "Overlay": {
-                    "description": "Non-VLAN overlay network (e.g. NetBird/WireGuard) whose peers carry their own source CIDR (e.g. 100.64.0.0/10). Has no interface, DHCP or firewall rules — always state=Manual with vlantag=0. Exists so consumers like network:proxy access-list.sh can resolve the overlay CIDR. See zones.json 'netbird' (issue #367).",
-                    "typeId": 7
-                }
-            }
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "zones-fields.json",
+  "title": "TAPPaaS Zone Field Definitions",
+  "description": "Defines the structure and valid values for zone definitions in zones.json",
+  "fields": {
+    "type": {
+      "description": "The security zone type classification",
+      "type": "string",
+      "required": true,
+      "values": {
+        "Management": {
+          "description": "TAPPaaS nodes and self-management zone. Must be locked down with no access from other zones or the Internet. Typically only one zone named 'mgmt'.",
+          "typeId": 0
         },
-
-        "state": {
-            "description": "The activation state of the zone in a TAPPaaS instance",
-            "type": "string",
-            "required": true,
-            "default": "Inactive",
-            "values": {
-                "Active": {
-                    "description": "Zone is created and configured by zone-manager (VLANs, DHCP)"
-                },
-                "Mandatory": {
-                    "description": "Same as Active; zone must exist and cannot be disabled"
-                },
-                "Inactive": {
-                    "description": "Zone is not created; if it exists it will be removed by zone-manager"
-                },
-                "Disabled": {
-                    "description": "Same as Inactive"
-                },
-                "Manual": {
-                    "description": "Zone is managed manually; zone-manager will neither create nor remove it"
-                }
-            }
+        "WAN": {
+          "description": "ISP hand-off segment shared by the WAN modem and every node's 'wan' bridge NIC, so the HA firewall VM keeps its uplink after failing over to another node. Switch-internal only: always state=Manual with a VLAN tag, which keeps it out of every trunk (vmnet_all_active_tags) and stops zone-manager creating an interface or DHCP server \u2014 the ISP modem is the sole DHCP server on the segment. See zones.json 'wan'.",
+          "typeId": 1
         },
-
-        "typeId": {
-            "description": "Unique number identifying the zone type category",
-            "type": "integer",
-            "required": true,
-            "values": {
-                "0": "Management",
-                "1": "WAN",
-                "2": "Service",
-                "3": "Client",
-                "4": "IoT",
-                "5": "Guest",
-                "6": "DMZ",
-                "7": "Overlay"
-            },
-            "note": "Should match the typeId from the 'type' field"
+        "Service": {
+          "description": "Zone where service modules live. Multiple service zones can exist to serve different user bases (e.g., separate business units or home/business separation).",
+          "typeId": 2
         },
-
-        "subId": {
-            "description": "Unique number (0-99) identifying the zone within its type category",
-            "type": "integer",
-            "required": true,
-            "minimum": 0,
-            "maximum": 99,
-            "default": 0
+        "Client": {
+          "description": "Zone for client devices. Multiple client zones can exist for different user populations.",
+          "typeId": 3
         },
-
-        "vlantag": {
-            "description": "Unique VLAN tag for the zone",
-            "type": "integer",
-            "required": true,
-            "minimum": 0,
-            "maximum": 4094,
-            "computed": "typeId * 100 + subId",
-            "note": "Value 0 means untagged traffic"
+        "IoT": {
+          "description": "Zone for IoT devices. Typically multiple zones for different types of (often insecure) devices.",
+          "typeId": 4
         },
-
-        "ip": {
-            "description": "IP range associated with the zone in CIDR notation",
-            "type": "string",
-            "required": true,
-            "format": "cidr",
-            "computed": "10.typeId.subId.0/24",
-            "example": "10.2.10.0/24"
+        "Guest": {
+          "description": "Security zone for unauthorized or guest clients.",
+          "typeId": 5
         },
-
-        "bridge": {
-            "description": "Network interface the zone is associated with (VLAN trunk)",
-            "type": "string",
-            "required": true,
-            "default": "lan",
-            "values": {
-                "lan": "Local area network interface",
-                "wan": "Wide area network interface",
-                "opt1": "Optional interface 1",
-                "opt2": "Optional interface 2"
-            }
+        "DMZ": {
+          "description": "Demilitarized zone for services that need controlled exposure.",
+          "typeId": 6
         },
-
-        "access-to": {
-            "description": "List of zones this zone can connect to. Used by zone-manager with --firewall-rules to create pass rules.",
-            "type": "array",
-            "required": false,
-            "default": [],
-            "items": "string",
-            "special_values": {
-                "internet": "Allows traffic to any destination (outbound internet access)",
-                "all": "Creates a wildcard pass rule (destination: any)"
-            },
-            "note": "Zone names (e.g., 'srv', 'dmz') allow traffic to that zone's network"
-        },
-
-        "pinhole-allowed-from": {
-            "description": "List of zones that can have pinhole connections to specific ports in this zone. Used to validate module-specific firewall rules against zone policies.",
-            "type": "array",
-            "required": false,
-            "default": [],
-            "items": "string"
-        },
-
-        "tier": {
-            "description": "Trust rank in the ADR-014 strict lattice (0 = most trusted). Governs the direction of 'access-to': an edge may only run downward. Authored (stamped by the archetype), never derived — it records declared security intent so a zone configured against its intent can be caught. Absent on the types listed in 'tier_exempt_types'.",
-            "type": "integer",
-            "required": false,
-            "minimum": 0,
-            "maximum": 6,
-            "note": "Tier 5 is reserved for the 'internet' boundary token and is never authored on a real zone. See 'tier_model' and 'invariants.I1' below.",
-            "example": 2
-        },
-
-        "isolated": {
-            "description": "Inbound quarantine flag. An isolated zone accepts NO zone-wide 'access-to' from anyone (the 'mgmt' control-plane exception aside); inbound reach is granted exclusively per-module via 'pinhole-allowed-from'. Orthogonal to 'tier' — iotCams (tier 6) and iotUntrust (tier 3) are both isolated.",
-            "type": "boolean",
-            "required": false,
-            "default": false,
-            "note": "This is the ADR-007 isolation invariant expressed as a field rather than prose. Enforced by 'invariants.I2'."
-        },
-
-        "serves": {
-            "description": "The ENVIRONMENT whose service zone this Client or IoT zone consumes. A symbolic reference resolved on every reconcile against config/environments/<env>.json '.network.zone' — so it survives the install-time 'srv' -> '<defaultEnvironment>' rename that strands literal service-zone names (issue #424).",
-            "type": "string",
-            "required": false,
-            "appliesTo": ["Client", "IoT", "Guest"],
-            "example": "warmelo",
-            "note": "Authored once via 'network-manager bind <zone> --environment <env>'. Resolution ADDS the environment's service zone to this zone's effective 'access-to', and adds this zone to that service zone's effective 'pinhole-allowed-from'. An isolated zone contributes ONLY the pinhole direction, never an inbound 'access-to' (R2 is preserved). The derived edges are rendered into zones.effective.json and are NEVER written back into zones.json, which stays purely authored."
-        },
-
-        "DHCP-start": {
-            "description": "Starting offset for DHCP range within the subnet",
-            "type": "integer",
-            "required": false,
-            "default": 50,
-            "minimum": 1,
-            "maximum": 254,
-            "example": "50 means .50 address in the subnet"
-        },
-
-        "DHCP-end": {
-            "description": "Ending offset for DHCP range within the subnet",
-            "type": "integer",
-            "required": false,
-            "default": 250,
-            "minimum": 1,
-            "maximum": 254,
-            "example": "250 means .250 address in the subnet"
-        },
-
-        "tftp-server-name": {
-            "description": "DHCP option 66 (tftp-server-name / next-server). IP or hostname of the TFTP/PXE server advertised to clients in this zone. When set, zone-manager configures both the BOOTP header (dnsmasq dhcp-boot next-server/sname) and an explicit dhcp-option 66 on the zone's DHCP scope. Must be set together with 'bootfile-name' — one without the other is not a usable boot configuration.",
-            "type": "string",
-            "required": false,
-            "default": "",
-            "requires": "bootfile-name",
-            "example": "10.4.0.10"
-        },
-
-        "bootfile-name": {
-            "description": "DHCP option 67 (bootfile-name). Boot file handed to PXE clients in this zone (DHCP 'file' field), e.g. 'pxelinux.0' or 'ipxe.efi'. When set, zone-manager configures both the BOOTP header (dnsmasq dhcp-boot filename) and an explicit dhcp-option 67 on the zone's DHCP scope. Must be set together with 'tftp-server-name'.",
-            "type": "string",
-            "required": false,
-            "default": "",
-            "requires": "tftp-server-name",
-            "example": "pxelinux.0"
-        },
-
-        "description": {
-            "description": "Human-readable description of the zone's purpose",
-            "type": "string",
-            "required": false,
-            "default": ""
+        "Overlay": {
+          "description": "Non-VLAN overlay network (e.g. NetBird/WireGuard) whose peers carry their own source CIDR (e.g. 100.64.0.0/10). Has no interface, DHCP or firewall rules \u2014 always state=Manual with vlantag=0. Exists so consumers like network:proxy access-list.sh can resolve the overlay CIDR. See zones.json 'netbird' (issue #367).",
+          "typeId": 7
         }
+      },
+      "changeClass": "immutable",
+      "changeNote": "A zone's type fixes its tier band and its whole rule posture. Changing it is a different zone: delete and re-add."
     },
-
-    "tier_model": {
-        "description": "The ADR-014 strict trust lattice. 'access-to' is the coarse, zone-wide, DOWNWARD trust flow; everything that must go UPWARD is a narrow per-module pinhole. This replaces the descriptive tier prose that used to live in zones.json._README.tier_model, which could not be machine-checked because its own edges violated it.",
-        "rule": "R1 — for every edge 'A access-to B', tier(A) <= tier(B). Never upward.",
-        "tiers": {
-            "0": { "name": "Control plane", "egress": "all zones", "ingress": "none — no inbound at all", "members": ["mgmt"] },
-            "1": { "name": "Service backend", "egress": "internet, dmz, IoT-controlled", "ingress": "pinhole from clients + reverse proxy", "members": ["<defaultEnvironment>"] },
-            "2": { "name": "Trusted client", "egress": "internet, own IoT-controlled", "ingress": "direct (its own devices)", "members": ["home", "work"] },
-            "3": { "name": "Untrusted edge", "egress": "internet only", "ingress": "none", "members": ["guest", "iotCloud", "iotUntrust"] },
-            "4": { "name": "DMZ (internet-exposed)", "egress": "internet only", "ingress": "pinhole from internet", "members": ["dmz"] },
-            "5": { "name": "Internet (boundary token)", "egress": "n/a", "ingress": "n/a", "members": [], "note": "Not a real zone — the rank of the literal 'internet' in access-to." },
-            "6": { "name": "Isolated / no-egress", "egress": "none", "ingress": "pinhole only when 'isolated'", "members": ["iotCams", "iotLocal"] }
-        }
-    },
-
-    "tier_exempt_types": {
-        "description": "Zone types that carry no 'tier' and are SKIPPED by the tier invariants I1, I3 and I4. Overlay zones are non-VLAN WireGuard segments with no meaningful trust rank (and 'admin' legitimately carries access-to: ['mgmt'], an upward edge into tier 0); WAN is the switch-internal ISP hand-off with no interface, DHCP or rules.",
-        "types": ["Overlay", "WAN"]
-    },
-
-    "archetypes": {
-        "description": "The single source of tier-correct zone defaults. 'network-manager add <name> --archetype <A>' stamps type/typeId/tier/isolated and the access-to seed, then auto-allocates subId/vlantag/ip. Also the conformance target for invariant I4: every zone's (type, tier, isolated) triple must match one of these.",
-        "catalog": {
-            "control":        { "type": "Management", "typeId": 0, "tier": 0, "isolated": false, "access-to": ["all"],           "reference": "mgmt",       "description": "Control plane: hypervisors, backup, firewall, identity, cicd" },
-            "service":        { "type": "Service",    "typeId": 2, "tier": 1, "isolated": false, "access-to": ["internet", "dmz"], "reference": "srv",       "description": "Application/service modules for one environment" },
-            "trusted-client": { "type": "Client",     "typeId": 3, "tier": 2, "isolated": false, "access-to": ["internet"],       "reference": "home",       "description": "Trusted end-user devices; reaches its service zone by pinhole" },
-            "guest":          { "type": "Guest",      "typeId": 5, "tier": 3, "isolated": false, "access-to": ["internet"],       "reference": "guest",      "description": "Visitors: internet only, fully isolated" },
-            "iot-cloud":      { "type": "IoT",        "typeId": 4, "tier": 3, "isolated": false, "access-to": ["internet"],       "reference": "iotCloud",   "description": "Internet-dependent trusted IoT: appliances, media, monitoring" },
-            "iot-untrust":    { "type": "IoT",        "typeId": 4, "tier": 3, "isolated": true,  "access-to": ["internet"],       "reference": "iotUntrust", "description": "Untrusted IoT: internet-only, fully quarantined" },
-            "dmz":            { "type": "DMZ",        "typeId": 6, "tier": 4, "isolated": false, "access-to": ["internet"],       "reference": "dmz",        "description": "Public-facing: reverse proxy, internet-exposed services" },
-            "iot-local":      { "type": "IoT",        "typeId": 4, "tier": 6, "isolated": false, "access-to": [],                 "reference": "iotLocal",   "description": "Local-only IoT: no internet, automation devices" },
-            "iot-cams":       { "type": "IoT",        "typeId": 4, "tier": 6, "isolated": true,  "access-to": [],                 "reference": "iotCams",    "description": "Surveillance: cameras + NVR, fully isolated" }
-        }
-    },
-
-    "invariants": {
-        "description": "Machine-checkable security gates run by 'network-manager validate' (zones-check). Each is a WARNING by default and an error under --strict. They promote the old zones.json._README.pr_review_checklist from human review to code.",
-        "I1": {
-            "name": "Monotonic access-to",
-            "rule": "For every edge 'A access-to B': tier(A) <= tier(B). 'internet' counts as tier 5.",
-            "exempt": "The 'mgmt' control plane (tier 0) reaches every zone for operational visibility; zones whose type is in tier_exempt_types; any zone with no authored tier (reported as a note until back-filled).",
-            "remedy": "An upward edge must be expressed as a per-module pinhole instead — add the source to the target's pinhole-allowed-from and declare the specific IP/port rule in the module."
+    "state": {
+      "description": "The activation state of the zone in a TAPPaaS instance",
+      "type": "string",
+      "required": true,
+      "default": "Inactive",
+      "values": {
+        "Active": {
+          "description": "Zone is created and configured by zone-manager (VLANs, DHCP)"
         },
-        "I2": {
-            "name": "Isolation floor",
-            "rule": "A zone with 'isolated': true must not appear in ANY zone's access-to.",
-            "exempt": "'mgmt' only.",
-            "remedy": "Grant reach per-module via the isolated zone's pinhole-allowed-from."
+        "Mandatory": {
+          "description": "Same as Active; zone must exist and cannot be disabled"
         },
-        "I3": {
-            "name": "Egress boundary",
-            "rule": "A tier-6 (no-egress) zone must not list 'internet' in its access-to.",
-            "exempt": "Types in tier_exempt_types.",
-            "remedy": "If the devices genuinely need internet, the zone is iot-cloud or iot-untrust (tier 3), not iot-local/iot-cams."
+        "Inactive": {
+          "description": "Zone is not created; if it exists it will be removed by zone-manager"
         },
-        "I4": {
-            "name": "Archetype conformance",
-            "rule": "Every zone's (type, tier, isolated) triple must match an entry in archetypes.catalog.",
-            "exempt": "Types in tier_exempt_types; any zone with no authored tier.",
-            "remedy": "Either correct the zone's fields to its declared intent, or create it with 'add --archetype <A>'."
+        "Disabled": {
+          "description": "Same as Inactive"
+        },
+        "Manual": {
+          "description": "Zone is managed manually; zone-manager will neither create nor remove it"
         }
+      },
+      "changeClass": "manual",
+      "changeNote": "Has its own verbs with the transition guards: `network-manager enable|disable|manual <zone>`. Leaving 'Mandatory' needs --force there, which a generic --set would bypass."
     },
-
-    "zone_key": {
-        "description": "The key for each zone entry in zones.json",
-        "type": "string",
-        "pattern": "^[a-z][a-zA-Z0-9]*$",
-        "note": "camelCase only — no underscores or hyphens (#278). This is what network-manager authorZone() enforces; the schema previously allowed hyphens, which no code path would accept.",
-        "examples": ["mgmt", "srv", "dmz", "home", "guest", "iotCams"]
+    "typeId": {
+      "description": "Unique number identifying the zone type category",
+      "type": "integer",
+      "required": true,
+      "values": {
+        "0": "Management",
+        "1": "WAN",
+        "2": "Service",
+        "3": "Client",
+        "4": "IoT",
+        "5": "Guest",
+        "6": "DMZ",
+        "7": "Overlay"
+      },
+      "note": "Should match the typeId from the 'type' field",
+      "changeClass": "immutable",
+      "changeNote": "The numeric type band. Paired with subId to derive the VLAN tag; not re-decidable in place."
+    },
+    "subId": {
+      "description": "Unique number (0-99) identifying the zone within its type category",
+      "type": "integer",
+      "required": true,
+      "minimum": 0,
+      "maximum": 99,
+      "default": 0,
+      "changeClass": "immutable",
+      "changeNote": "Identity within the type band."
+    },
+    "vlantag": {
+      "description": "Unique VLAN tag for the zone",
+      "type": "integer",
+      "required": true,
+      "minimum": 0,
+      "maximum": 4094,
+      "computed": "typeId * 100 + subId",
+      "note": "Value 0 means untagged traffic",
+      "changeClass": "immutable",
+      "changeNote": "The VLAN a zone IS. Changing it would strand every guest currently tagged into it \u2014 each one needs re-tagging and a new lease. Delete the zone and re-add it, moving its guests deliberately."
+    },
+    "ip": {
+      "description": "IP range associated with the zone in CIDR notation",
+      "type": "string",
+      "required": true,
+      "format": "cidr",
+      "computed": "10.typeId.subId.0/24",
+      "example": "10.2.10.0/24",
+      "changeClass": "immutable",
+      "changeNote": "The zone's subnet. Every guest in it is addressed from here, so a change re-addresses all of them; that is a migration, not a field edit."
+    },
+    "bridge": {
+      "description": "Network interface the zone is associated with (VLAN trunk)",
+      "type": "string",
+      "required": true,
+      "default": "lan",
+      "values": {
+        "lan": "Local area network interface",
+        "wan": "Wide area network interface",
+        "opt1": "Optional interface 1",
+        "opt2": "Optional interface 2"
+      },
+      "changeClass": "immutable",
+      "changeNote": "The physical trunk the zone rides. A change moves the whole zone to different hardware."
+    },
+    "access-to": {
+      "description": "List of zones this zone can connect to. Used by zone-manager with --firewall-rules to create pass rules.",
+      "type": "array",
+      "required": false,
+      "default": [],
+      "items": "string",
+      "special_values": {
+        "internet": "Allows traffic to any destination (outbound internet access)",
+        "all": "Creates a wildcard pass rule (destination: any)"
+      },
+      "note": "Zone names (e.g., 'srv', 'dmz') allow traffic to that zone's network",
+      "changeClass": "in-place",
+      "changeNote": "A zone-to-zone pass rule. Reconciling it rewrites firewall rules; nothing reboots and no address changes. This is the field #538 was raised about."
+    },
+    "pinhole-allowed-from": {
+      "description": "List of zones that can have pinhole connections to specific ports in this zone. Used to validate module-specific firewall rules against zone policies.",
+      "type": "array",
+      "required": false,
+      "default": [],
+      "items": "string",
+      "changeClass": "in-place",
+      "changeNote": "Which zones may open port-specific pinholes into this one. Same cost as access-to: a rule swap."
+    },
+    "tier": {
+      "description": "Trust rank in the ADR-014 strict lattice (0 = most trusted). Governs the direction of 'access-to': an edge may only run downward. Authored (stamped by the archetype), never derived \u2014 it records declared security intent so a zone configured against its intent can be caught. Absent on the types listed in 'tier_exempt_types'.",
+      "type": "integer",
+      "required": false,
+      "minimum": 0,
+      "maximum": 6,
+      "note": "Tier 5 is reserved for the 'internet' boundary token and is never authored on a real zone. See 'tier_model' and 'invariants.I1' below.",
+      "example": 2,
+      "changeClass": "in-place",
+      "changeNote": "Trust rank in the ADR-014 lattice. Changing it re-derives which access-to edges are legal, so a reconcile may DROP edges the new tier forbids. Reported by validate before it is applied."
+    },
+    "isolated": {
+      "description": "Inbound quarantine flag. An isolated zone accepts NO zone-wide 'access-to' from anyone (the 'mgmt' control-plane exception aside); inbound reach is granted exclusively per-module via 'pinhole-allowed-from'. Orthogonal to 'tier' \u2014 iotCams (tier 6) and iotUntrust (tier 3) are both isolated.",
+      "type": "boolean",
+      "required": false,
+      "default": false,
+      "note": "This is the ADR-007 isolation invariant expressed as a field rather than prose. Enforced by 'invariants.I2'.",
+      "changeClass": "in-place",
+      "changeNote": "Inbound quarantine. Turning it on withdraws every zone-wide pass INTO this zone at the next reconcile \u2014 disruptive to traffic, but not to any guest, and instantly reversible."
+    },
+    "serves": {
+      "description": "The ENVIRONMENT whose service zone this Client or IoT zone consumes. A symbolic reference resolved on every reconcile against config/environments/<env>.json '.network.zone' \u2014 so it survives the install-time 'srv' -> '<defaultEnvironment>' rename that strands literal service-zone names (issue #424).",
+      "type": "string",
+      "required": false,
+      "appliesTo": [
+        "Client",
+        "IoT",
+        "Guest"
+      ],
+      "example": "warmelo",
+      "note": "Authored once via 'network-manager bind <zone> --environment <env>'. Resolution ADDS the environment's service zone to this zone's effective 'access-to', and adds this zone to that service zone's effective 'pinhole-allowed-from'. An isolated zone contributes ONLY the pinhole direction, never an inbound 'access-to' (R2 is preserved). The derived edges are rendered into zones.effective.json and are NEVER written back into zones.json, which stays purely authored.",
+      "changeClass": "manual",
+      "changeNote": "Has its own verb: `network-manager bind <zone> --environment <env>` (or --unbind). bind resolves the environment first, so a typo fails at the command rather than three reconciles later (ADR-014 D2)."
+    },
+    "DHCP-start": {
+      "description": "Starting offset for DHCP range within the subnet",
+      "type": "integer",
+      "required": false,
+      "default": 50,
+      "minimum": 1,
+      "maximum": 254,
+      "example": "50 means .50 address in the subnet",
+      "changeClass": "in-place",
+      "changeNote": "The DHCP pool's low offset. Narrowing a pool below its live leases does not evict anyone; existing leases run to expiry."
+    },
+    "DHCP-end": {
+      "description": "Ending offset for DHCP range within the subnet",
+      "type": "integer",
+      "required": false,
+      "default": 250,
+      "minimum": 1,
+      "maximum": 254,
+      "example": "250 means .250 address in the subnet",
+      "changeClass": "in-place",
+      "changeNote": "The DHCP pool's high offset."
+    },
+    "tftp-server-name": {
+      "description": "DHCP option 66 (tftp-server-name / next-server). IP or hostname of the TFTP/PXE server advertised to clients in this zone. When set, zone-manager configures both the BOOTP header (dnsmasq dhcp-boot next-server/sname) and an explicit dhcp-option 66 on the zone's DHCP scope. Must be set together with 'bootfile-name' \u2014 one without the other is not a usable boot configuration.",
+      "type": "string",
+      "required": false,
+      "default": "",
+      "requires": "bootfile-name",
+      "example": "10.4.0.10",
+      "changeClass": "in-place",
+      "changeNote": "DHCP option 66. Picked up by clients at their next lease renewal."
+    },
+    "bootfile-name": {
+      "description": "DHCP option 67 (bootfile-name). Boot file handed to PXE clients in this zone (DHCP 'file' field), e.g. 'pxelinux.0' or 'ipxe.efi'. When set, zone-manager configures both the BOOTP header (dnsmasq dhcp-boot filename) and an explicit dhcp-option 67 on the zone's DHCP scope. Must be set together with 'tftp-server-name'.",
+      "type": "string",
+      "required": false,
+      "default": "",
+      "requires": "tftp-server-name",
+      "example": "pxelinux.0",
+      "changeClass": "in-place",
+      "changeNote": "DHCP option 67. Both-or-neither with tftp-server-name."
+    },
+    "description": {
+      "description": "Human-readable description of the zone's purpose",
+      "type": "string",
+      "required": false,
+      "default": "",
+      "changeClass": "in-place",
+      "changeNote": "Documentation only. Nothing on any plane depends on it."
     }
+  },
+  "tier_model": {
+    "description": "The ADR-014 strict trust lattice. 'access-to' is the coarse, zone-wide, DOWNWARD trust flow; everything that must go UPWARD is a narrow per-module pinhole. This replaces the descriptive tier prose that used to live in zones.json._README.tier_model, which could not be machine-checked because its own edges violated it.",
+    "rule": "R1 \u2014 for every edge 'A access-to B', tier(A) <= tier(B). Never upward.",
+    "tiers": {
+      "0": {
+        "name": "Control plane",
+        "egress": "all zones",
+        "ingress": "none \u2014 no inbound at all",
+        "members": [
+          "mgmt"
+        ]
+      },
+      "1": {
+        "name": "Service backend",
+        "egress": "internet, dmz, IoT-controlled",
+        "ingress": "pinhole from clients + reverse proxy",
+        "members": [
+          "<defaultEnvironment>"
+        ]
+      },
+      "2": {
+        "name": "Trusted client",
+        "egress": "internet, own IoT-controlled",
+        "ingress": "direct (its own devices)",
+        "members": [
+          "home",
+          "work"
+        ]
+      },
+      "3": {
+        "name": "Untrusted edge",
+        "egress": "internet only",
+        "ingress": "none",
+        "members": [
+          "guest",
+          "iotCloud",
+          "iotUntrust"
+        ]
+      },
+      "4": {
+        "name": "DMZ (internet-exposed)",
+        "egress": "internet only",
+        "ingress": "pinhole from internet",
+        "members": [
+          "dmz"
+        ]
+      },
+      "5": {
+        "name": "Internet (boundary token)",
+        "egress": "n/a",
+        "ingress": "n/a",
+        "members": [],
+        "note": "Not a real zone \u2014 the rank of the literal 'internet' in access-to."
+      },
+      "6": {
+        "name": "Isolated / no-egress",
+        "egress": "none",
+        "ingress": "pinhole only when 'isolated'",
+        "members": [
+          "iotCams",
+          "iotLocal"
+        ]
+      }
+    }
+  },
+  "tier_exempt_types": {
+    "description": "Zone types that carry no 'tier' and are SKIPPED by the tier invariants I1, I3 and I4. Overlay zones are non-VLAN WireGuard segments with no meaningful trust rank (and 'admin' legitimately carries access-to: ['mgmt'], an upward edge into tier 0); WAN is the switch-internal ISP hand-off with no interface, DHCP or rules.",
+    "types": [
+      "Overlay",
+      "WAN"
+    ]
+  },
+  "archetypes": {
+    "description": "The single source of tier-correct zone defaults. 'network-manager add <name> --archetype <A>' stamps type/typeId/tier/isolated and the access-to seed, then auto-allocates subId/vlantag/ip. Also the conformance target for invariant I4: every zone's (type, tier, isolated) triple must match one of these.",
+    "catalog": {
+      "control": {
+        "type": "Management",
+        "typeId": 0,
+        "tier": 0,
+        "isolated": false,
+        "access-to": [
+          "all"
+        ],
+        "reference": "mgmt",
+        "description": "Control plane: hypervisors, backup, firewall, identity, cicd"
+      },
+      "service": {
+        "type": "Service",
+        "typeId": 2,
+        "tier": 1,
+        "isolated": false,
+        "access-to": [
+          "internet",
+          "dmz"
+        ],
+        "reference": "srv",
+        "description": "Application/service modules for one environment"
+      },
+      "trusted-client": {
+        "type": "Client",
+        "typeId": 3,
+        "tier": 2,
+        "isolated": false,
+        "access-to": [
+          "internet"
+        ],
+        "reference": "home",
+        "description": "Trusted end-user devices; reaches its service zone by pinhole"
+      },
+      "guest": {
+        "type": "Guest",
+        "typeId": 5,
+        "tier": 3,
+        "isolated": false,
+        "access-to": [
+          "internet"
+        ],
+        "reference": "guest",
+        "description": "Visitors: internet only, fully isolated"
+      },
+      "iot-cloud": {
+        "type": "IoT",
+        "typeId": 4,
+        "tier": 3,
+        "isolated": false,
+        "access-to": [
+          "internet"
+        ],
+        "reference": "iotCloud",
+        "description": "Internet-dependent trusted IoT: appliances, media, monitoring"
+      },
+      "iot-untrust": {
+        "type": "IoT",
+        "typeId": 4,
+        "tier": 3,
+        "isolated": true,
+        "access-to": [
+          "internet"
+        ],
+        "reference": "iotUntrust",
+        "description": "Untrusted IoT: internet-only, fully quarantined"
+      },
+      "dmz": {
+        "type": "DMZ",
+        "typeId": 6,
+        "tier": 4,
+        "isolated": false,
+        "access-to": [
+          "internet"
+        ],
+        "reference": "dmz",
+        "description": "Public-facing: reverse proxy, internet-exposed services"
+      },
+      "iot-local": {
+        "type": "IoT",
+        "typeId": 4,
+        "tier": 6,
+        "isolated": false,
+        "access-to": [],
+        "reference": "iotLocal",
+        "description": "Local-only IoT: no internet, automation devices"
+      },
+      "iot-cams": {
+        "type": "IoT",
+        "typeId": 4,
+        "tier": 6,
+        "isolated": true,
+        "access-to": [],
+        "reference": "iotCams",
+        "description": "Surveillance: cameras + NVR, fully isolated"
+      }
+    }
+  },
+  "invariants": {
+    "description": "Machine-checkable security gates run by 'network-manager validate' (zones-check). Each is a WARNING by default and an error under --strict. They promote the old zones.json._README.pr_review_checklist from human review to code.",
+    "I1": {
+      "name": "Monotonic access-to",
+      "rule": "For every edge 'A access-to B': tier(A) <= tier(B). 'internet' counts as tier 5.",
+      "exempt": "The 'mgmt' control plane (tier 0) reaches every zone for operational visibility; zones whose type is in tier_exempt_types; any zone with no authored tier (reported as a note until back-filled).",
+      "remedy": "An upward edge must be expressed as a per-module pinhole instead \u2014 add the source to the target's pinhole-allowed-from and declare the specific IP/port rule in the module."
+    },
+    "I2": {
+      "name": "Isolation floor",
+      "rule": "A zone with 'isolated': true must not appear in ANY zone's access-to.",
+      "exempt": "'mgmt' only.",
+      "remedy": "Grant reach per-module via the isolated zone's pinhole-allowed-from."
+    },
+    "I3": {
+      "name": "Egress boundary",
+      "rule": "A tier-6 (no-egress) zone must not list 'internet' in its access-to.",
+      "exempt": "Types in tier_exempt_types.",
+      "remedy": "If the devices genuinely need internet, the zone is iot-cloud or iot-untrust (tier 3), not iot-local/iot-cams."
+    },
+    "I4": {
+      "name": "Archetype conformance",
+      "rule": "Every zone's (type, tier, isolated) triple must match an entry in archetypes.catalog.",
+      "exempt": "Types in tier_exempt_types; any zone with no authored tier.",
+      "remedy": "Either correct the zone's fields to its declared intent, or create it with 'add --archetype <A>'."
+    }
+  },
+  "zone_key": {
+    "description": "The key for each zone entry in zones.json",
+    "type": "string",
+    "pattern": "^[a-z][a-zA-Z0-9]*$",
+    "note": "camelCase only \u2014 no underscores or hyphens (#278). This is what network-manager authorZone() enforces; the schema previously allowed hyphens, which no code path would accept.",
+    "examples": [
+      "mgmt",
+      "srv",
+      "dmz",
+      "home",
+      "guest",
+      "iotCams"
+    ]
+  }
 }

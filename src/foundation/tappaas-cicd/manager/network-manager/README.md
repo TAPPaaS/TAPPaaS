@@ -15,6 +15,33 @@ treated as zones). A zone records its `type` / `typeId`, `vlantag`, `ip` (CIDR),
 (`pinhole-allowed-from`), and optional `variant`/`SSID`. Auto-allocated VLANs use
 the 60–99 window within each type band; zone names must be camelCase.
 
+## Changing a zone's policy — `modify --set` (#538)
+
+```
+network-manager modify rossen --set access-to=internet,mgmt
+network-manager modify rossen --set 'pinhole-allowed-from=["home","work"]'
+```
+
+A zone's policy fields — `access-to`, `pinhole-allowed-from`, `description`,
+`isolated`, `tier`, the DHCP options — are changed by a verb rather than by
+hand-editing `zones.json`, which is the anti-pattern ADR-014 D1 named. Lists
+take either the comma form or JSON.
+
+Like `enable`/`disable`/`bind`, this **authors `zones.json` only** and prints the
+`reconcile --apply` to run: the operator decides when the firewall changes.
+
+**What it refuses, and why the two refusals read differently** (ADR-020 D6):
+
+| Field | | |
+|---|---|---|
+| `vlantag`, `ip`, `type`, `typeId`, `subId`, `bridge` | `immutable` | The zone's identity. Changing a VLAN would strand every guest tagged into it — that is delete-and-re-add, with the guests moved deliberately. |
+| `state` | has a verb | `enable` / `disable` / `manual`, which guard the Mandatory transition. |
+| `serves` | has a verb | `bind --environment`, which resolves the environment first so a typo fails at the command. |
+
+A `--set` naming any of those is refused **before anything is written**, and a
+mixed `--set` is rejected whole — `zones.json` and the planes never move apart.
+Each field's cost is declared as `changeClass` in `schemas/zones-fields.json`.
+
 ## Commands
 
 One compiled CLI, `network-manager`:

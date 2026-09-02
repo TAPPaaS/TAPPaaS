@@ -1,37 +1,62 @@
 #!/usr/bin/env bash
 #
-# TAPPaaS Cluster LXC Service - Update (drift reconciler)
+# TAPPaaS Cluster LXC Service - Update (drift converge)
 #
-# Reconciles a module's live Proxmox LXC container with its desired config.
-# Sibling of the cluster:vm reconciler (#192); resolves the LXC half of #203.
+# Reconciles a module's live Proxmox container with its desired configuration.
+# Called by update-module.sh and `module reconcile --apply` for any module that
+# dependsOn cluster:lxc. The container sibling of cluster:vm (issue #203).
 #
-# Desired : /home/tappaas/config/<module>.json (+ zones.json for VLANs)
-# Current : live `pct config <vmid>` on the container's actual node
+# ADR-020 SHAPE. This script no longer computes drift — it had its own `cfg()`
+# default ladder, its own `pct config` parser and its own comparison rules, so
+# the value it would APPLY could differ from the value `reconcile` REPORTED
+# (#550). Now:
 #
-# Handled (auto-applied via pct set):
-#   cores, memory, swap, onboot                         -> live
-#   net0 (bridge, zone0->tag, trunks0; hwaddr preserved)-> pct set; a bridge/tag
-#     change additionally restarts the CT (renew DHCP in the new subnet) and
-#     re-registers DNS as <vmname>.<zone0>.internal
+#   desired = module-manager module resolve   [the one resolver]
+#   actual  = ./report-service.sh             [extract only]
+#   drift   = module-manager module drift     [the one differ]
+#   apply   = converge_apply (converge-lib.sh) → the batched `pct set`
+#             + update-net.sh
 #
-# Reported but not auto-applied:
-#   storage / rootfs size / GPU / bind-mounts           -> warn (need recreate)
-#   node drift                                          -> warn (LXC live-migrate
-#     is unsafe for GPU/bind-mount CTs; move manually)
+# WHERE A CONTAINER DIFFERS FROM A VM, and why the classes differ with it:
+#   - one NIC, never two (so no net1 anywhere in this service);
+#   - `node` is MANUAL, not `migrate`: live-migrating a container with a GPU
+#     passed through or a bind-mount from the host is unsafe, and those are
+#     exactly the workloads TAPPaaS runs in containers. Reported, never moved.
+#   - `diskSize`/`storage` are MANUAL for the same reason — a bind-mounted
+#     rootfs is not something to resize or move mid-sweep.
+#   - DNS follows the DHCP lease (masqdns), so the dns side effect REMOVES
+#     stale static pins rather than registering one.
 #
-# Usage: update-service.sh [--check] <module-name>
-#   --check   Report drift without applying (also via TAPPAAS_CHECK=1)
+# Retained here because it is NOT field drift (ADR-020 D7): the `onboot=1`
+# policy assertion, and the provider callbacks that know how to reach Proxmox.
+#
+# Usage: update-service.sh [--check] [--apply-drift <file>] [--force] <module>
+#   --check              Report drift without applying (also via TAPPAAS_CHECK=1)
+#   --apply-drift FILE   Apply a drift record computed elsewhere. The default is
+#                        to ask the manager for one, so every existing caller
+#                        keeps working unchanged.
+#   --force              Authorize a disruptive change (a container restart).
+#
+# Exit codes:
+#   0  In sync, or all applicable drift applied (deferrals included)
+#   1  Drift detected that could not be safely applied
 #
 
-# Remote pct commands embed locally-computed values that expand client-side.
-# shellcheck disable=SC2029
+# The provider callbacks below are invoked BY NAME from converge-lib.sh;
+# cleanup() runs from the EXIT trap. ShellCheck sees neither call site.
+# shellcheck disable=SC2329
 set -euo pipefail
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+readonly SCRIPT_DIR
 readonly CONFIG_DIR="/home/tappaas/config"
 readonly ZONES_FILE="${CONFIG_DIR}/zones.json"
 readonly MGMT="mgmt"
 
+# shellcheck source=/home/tappaas/bin/common-install-routines.sh
 . /home/tappaas/bin/common-install-routines.sh
+# shellcheck source=../../../tappaas-cicd/lib/converge-lib.sh disable=SC1091
+. "${SCRIPT_DIR}/../../../tappaas-cicd/lib/converge-lib.sh"
 
 SSH_OPTS=(-o ConnectTimeout=10 -o StrictHostKeyChecking=accept-new
           -o UserKnownHostsFile=/dev/null -o LogLevel=ERROR -o BatchMode=yes)
@@ -39,180 +64,170 @@ SSH_OPTS=(-o ConnectTimeout=10 -o StrictHostKeyChecking=accept-new
 # ── Arguments ────────────────────────────────────────────────────────
 
 CHECK_MODE="${TAPPAAS_CHECK:-0}"
+DRIFT_FILE=""
+FORCE=0
 MODULE=""
 while [[ $# -gt 0 ]]; do
     case "$1" in
-        --check)   CHECK_MODE=1 ;;
-        -h|--help) echo "Usage: $0 [--check] <module-name>"; exit 0 ;;
-        *)         MODULE="$1" ;;
+        --check)       CHECK_MODE=1 ;;
+        --apply-drift) DRIFT_FILE="${2:-}"; shift ;;
+        --force)       FORCE=1 ;;
+        -h|--help)     echo "Usage: $0 [--check] [--apply-drift <file>] [--force] <module-name>"; exit 0 ;;
+        -*)            echo "update-service.sh: unknown option '$1'" >&2; exit 1 ;;
+        *)             MODULE="$1" ;;
     esac
     shift
 done
-[[ -z "${MODULE}" ]] && { echo "Usage: $0 [--check] <module-name>"; exit 1; }
+
+[[ -n "${MODULE}" ]] || { echo "Usage: $0 [--check] [--apply-drift <file>] [--force] <module-name>"; exit 1; }
 
 check_json "${CONFIG_DIR}/${MODULE}.json" || exit 1
-# Normalize Pattern-A configs (nested under .config."<module>:<service>") to flat form.
-JSON="$(normalize_module_config < "${CONFIG_DIR}/${MODULE}.json")"
-cfg() { get_config_value "$1" "$2"; }
 
-# ── Desired state ────────────────────────────────────────────────────
-
-VMID="$(get_config_value 'vmid')"
-VMNAME="$(cfg 'vmname' "${MODULE}")"
-DESIRED_NODE="$(cfg 'node' "$(get_node_hostname 0)")"
-[[ "${DESIRED_NODE}" == "null" || -z "${DESIRED_NODE}" ]] && DESIRED_NODE="$(get_node_hostname 0)"
-ZONE0="$(cfg 'zone0' 'mgmt')"
-BRIDGE0="$(cfg 'bridge0' 'lan')"
-TRUNKS0_CFG="$(cfg 'trunks0' 'NONE')"
-CORES="$(cfg 'cores' '2')"
-MEMORY="$(cfg 'memory' '4096')"
-SWAP="$(cfg 'swap' '0')"
-
-# Zone → VLAN tag (and trunks) from zones.json.
-zone_tag() {
-    local t; t=$(jq -r --arg z "$1" '.[$z].vlantag // empty' "${ZONES_FILE}" 2>/dev/null)
-    [[ -z "${t}" ]] && die "Cannot resolve zone '$1' in ${ZONES_FILE}"
-    echo -n "${t}"
-}
-DESIRED_TAG0="$(zone_tag "${ZONE0}")"
-DESIRED_TRUNKS0=""
-if [[ "${TRUNKS0_CFG}" != "NONE" ]]; then
-    IFS=';' read -ra _zs <<< "${TRUNKS0_CFG}"
-    for _z in "${_zs[@]}"; do
-        [[ -z "${_z}" ]] && continue
-        DESIRED_TRUNKS0="${DESIRED_TRUNKS0:+${DESIRED_TRUNKS0};}$(zone_tag "${_z}")"
-    done
-fi
-
-debug "${BOLD}cluster:lxc update-service: reconciling ${BL}${MODULE}${CL} (VMID ${VMID})"
+debug "${BOLD}cluster:lxc update-service: reconciling ${BL}${MODULE}${CL}"
 [[ "${CHECK_MODE}" == "1" ]] && warn "  CHECK MODE — drift will be reported, not applied"
+CONVERGE_CHECK="${CHECK_MODE}"
 
-# In --check mode the drift verdict IS the output (reporting is the whole
-# point of check mode), so emit it at info level; in apply mode keep it at
-# debug so the normal update-tappaas console stays compact.
-report_verdict() { if [[ "${CHECK_MODE}" == "1" ]]; then info "$@"; else debug "$@"; fi; }
+# ── The drift record ─────────────────────────────────────────────────
 
-# ── Locate the container ─────────────────────────────────────────────
+OWN_DRIFT_FILE=""
+cleanup() { [[ -n "${OWN_DRIFT_FILE}" ]] && rm -f -- "${OWN_DRIFT_FILE}"; return 0; }
+trap cleanup EXIT INT TERM
 
-actual_node=""
-ct_status=""
-# shellcheck disable=SC2046
-for cand in "${DESIRED_NODE}" $(get_all_node_hostnames); do
-    row=$(ssh "${SSH_OPTS[@]}" "root@${cand}.${MGMT}.internal" \
-        "pvesh get /cluster/resources --type vm --output-format json" 2>/dev/null \
-        | jq -r --argjson id "${VMID}" \
-            '.[] | select(.vmid == $id and .type == "lxc") | "\(.node) \(.status)"' 2>/dev/null) || true
-    if [[ -n "${row}" ]]; then actual_node="${row%% *}"; ct_status="${row##* }"; break; fi
-done
-[[ -z "${actual_node}" ]] && die "LXC ${VMID} (${MODULE}) not found on the cluster — is it installed?"
-NODE_FQDN="${actual_node}.${MGMT}.internal"
-debug "  LXC ${VMID} is on node ${BL}${actual_node}${CL} (status: ${ct_status})"
-
-LIVE="$(ssh "${SSH_OPTS[@]}" "root@${NODE_FQDN}" "pct config ${VMID}" 2>/dev/null)" \
-    || die "Failed to read 'pct config ${VMID}' on ${actual_node}"
-live_field() { awk -F': ' -v k="$1" '$1==k {print $2; exit}' <<< "${LIVE}"; }
-# Tolerate a missing key (e.g. no trunks=) under set -e/pipefail — grep with no
-# match returns 1, which would otherwise abort the script.
-net_opt() { { grep -oE "$1=[^,]+" <<< "$2" || true; } | head -1 | cut -d= -f2; }
-
-# ── Drift accumulation ───────────────────────────────────────────────
-
-declare -a PCT_SET=()
-declare -a CHANGES=()
-RESTART_NEEDED=0
-ZONE_CHANGED=0
-plan() { PCT_SET+=("$1" "$2"); CHANGES+=("$3"); }
-
-# cores / memory / swap (live-applied)
-live_cores="$(live_field 'cores')"; live_cores="${live_cores:-1}"
-[[ "${live_cores}" != "${CORES}" ]] && plan "--cores" "${CORES}" "cores: ${live_cores}→${CORES}"
-live_mem="$(live_field 'memory')"; live_mem="${live_mem:-512}"
-[[ "${live_mem}" != "${MEMORY}" ]] && plan "--memory" "${MEMORY}" "memory: ${live_mem}→${MEMORY}"
-live_swap="$(live_field 'swap')"; live_swap="${live_swap:-0}"
-[[ "${live_swap}" != "${SWAP}" ]] && plan "--swap" "${SWAP}" "swap: ${live_swap}→${SWAP}"
-
-# onboot
-live_onboot="$(live_field 'onboot')"; live_onboot="${live_onboot:-0}"
-[[ "${live_onboot}" != "1" ]] && plan "--onboot" "1" "onboot: ${live_onboot}→1"
-
-# net0 (bridge / tag / trunks; preserve live hwaddr)
-live_net0="$(live_field 'net0')"
-live_bridge0="$(net_opt 'bridge' "${live_net0}")"
-live_tag0="$(net_opt 'tag' "${live_net0}")"
-live_trunks0="$(net_opt 'trunks' "${live_net0}")"
-live_hw0="$(net_opt 'hwaddr' "${live_net0}")"
-if [[ "${live_bridge0}" != "${BRIDGE0}" \
-   || "${live_tag0:-0}" != "${DESIRED_TAG0:-0}" \
-   || "${live_trunks0}" != "${DESIRED_TRUNKS0}" ]]; then
-    new_net0="name=eth0,bridge=${BRIDGE0}"
-    [[ -n "${live_hw0}" ]] && new_net0="${new_net0},hwaddr=${live_hw0}"
-    new_net0="${new_net0},ip=dhcp"
-    [[ "${DESIRED_TAG0:-0}" != "0" ]] && new_net0="${new_net0},tag=${DESIRED_TAG0}"
-    [[ -n "${DESIRED_TRUNKS0}" ]]     && new_net0="${new_net0},trunks=${DESIRED_TRUNKS0}"
-    plan "--net0" "${new_net0}" \
-        "net0: bridge=${live_bridge0}→${BRIDGE0}, tag=${live_tag0:-0}→${DESIRED_TAG0:-0} (zone ${ZONE0})"
-    if [[ "${live_bridge0}" != "${BRIDGE0}" || "${live_tag0:-0}" != "${DESIRED_TAG0:-0}" ]]; then
-        RESTART_NEEDED=1
-        [[ "${live_tag0:-0}" != "${DESIRED_TAG0:-0}" ]] && ZONE_CHANGED=1
+if [[ -z "${DRIFT_FILE}" ]]; then
+    OWN_DRIFT_FILE="$(mktemp "${TMPDIR:-/tmp}/cluster-lxc-drift.XXXXXX.json")"
+    DRIFT_FILE="${OWN_DRIFT_FILE}"
+    drift_err="$(mktemp "${TMPDIR:-/tmp}/cluster-lxc-drift-err.XXXXXX")"
+    if ! module-manager module drift "${MODULE}" --service cluster:lxc --json \
+            > "${DRIFT_FILE}" 2> "${drift_err}"; then
+        # A stale module-manager is the one failure an operator cannot guess
+        # from "could not compute drift" — pre-update.sh warns and continues
+        # when a component build fails, leaving this script newer than the CLI.
+        if grep -q "Unknown verb" "${drift_err}" 2>/dev/null; then
+            error "The installed module-manager has no 'module drift' verb — it is older than this service script."
+            error "Rebuild it:  ${SCRIPT_DIR}/../../../tappaas-cicd/manager/module-manager/install.sh"
+            rm -f -- "${drift_err}"
+            exit 1
+        fi
+        error "Could not compute drift for '${MODULE}':"
+        sed 's/^/    /' "${drift_err}" >&2
+        rm -f -- "${drift_err}"
+        die "module-manager module drift ${MODULE} --service cluster:lxc failed"
     fi
+    rm -f -- "${drift_err}"
 fi
 
-# node drift (report only — LXC live-migrate is unsafe for GPU/bind-mount CTs)
-[[ "${DESIRED_NODE}" != "${actual_node}" ]] \
-    && warn "  node drift (${actual_node}→${DESIRED_NODE}) not auto-applied — migrate the container manually"
+# ── Provider callbacks (the converge-lib contract) ───────────────────
 
-# ── Report ───────────────────────────────────────────────────────────
+VMID="$(jq -r '(.actual.vmid) // ""'    "${DRIFT_FILE}")"
+NODE="$(jq -r '(.actual.node) // ""'    "${DRIFT_FILE}")"
+CTSTATUS="$(jq -r '(.actual.status) // ""'   "${DRIFT_FILE}")"
+VMNAME="$(jq -r '(.actual.hostname) // ""'   "${DRIFT_FILE}")"
+[[ -n "${VMNAME}" ]] || VMNAME="${MODULE}"
+ZONE0="$(module-manager module resolve "${MODULE}" --json 2>/dev/null | jq -r '(.fields.zone0.value) // "mgmt"')"
+NODE_FQDN="${NODE}.${MGMT}.internal"
 
-if [[ ${#CHANGES[@]} -eq 0 ]]; then
-    report_verdict "  ${GN}✓${CL} LXC is in sync with config — no changes needed"
-    exit 0
-fi
-report_verdict "  Detected drift:"
-for c in "${CHANGES[@]}"; do report_verdict "    • ${c}"; done
-if [[ "${CHECK_MODE}" == "1" ]]; then
-    debug "  CHECK MODE — no changes applied"
-    exit 0
-fi
+# ONE batched `pct set` for every in-place field, as before the refactor.
+# shellcheck disable=SC2029
+converge_apply_set() {
+    debug "  Applying pct set on ${NODE}..."
+    ssh "${SSH_OPTS[@]}" "root@${NODE_FQDN}" \
+        "pct set ${VMID} $(printf '%q ' "$@")" >/dev/null
+}
 
-# ── Apply ────────────────────────────────────────────────────────────
-
-debug "  Applying pct set on ${actual_node}..."
-ssh "${SSH_OPTS[@]}" "root@${NODE_FQDN}" \
-    "pct set ${VMID} $(printf '%q ' "${PCT_SET[@]}")" >/dev/null || die "pct set failed"
-
-if [[ ${RESTART_NEEDED} -eq 1 ]]; then
-    if [[ "${ct_status}" != "running" ]]; then
+RESTART_SKIPPED=0
+# shellcheck disable=SC2029
+converge_side_effect_reboot() {
+    if [[ "${CTSTATUS}" != "running" ]]; then
         warn "  container not running — network change applied; DNS will register on next boot"
-        debug "  ${GN}✓${CL} cluster:lxc update-service completed"
-        exit 0
+        RESTART_SKIPPED=1
+        return 0
     fi
-    debug "  Restarting LXC ${VMID} to apply network change..."
-    ssh "${SSH_OPTS[@]}" "root@${NODE_FQDN}" "pct reboot ${VMID}" >/dev/null || die "pct reboot failed"
+    debug "  Restarting LXC ${VMID} to apply the network change..."
+    ssh "${SSH_OPTS[@]}" "root@${NODE_FQDN}" "pct reboot ${VMID}" >/dev/null
+}
 
-    debug "  Waiting for container to come back with an IP..."
-    new_ip=""
+# A container reports its own addresses directly — no guest agent needed, and
+# no DHCP-lease fallback, because `pct exec` reaches inside it.
+NEW_IP=""
+# shellcheck disable=SC2029
+converge_side_effect_wait_ip() {
+    [[ "${RESTART_SKIPPED}" == "1" ]] && return 0
+    debug "  Waiting for the container to come back with an IP..."
     for _ in $(seq 1 30); do
         sleep 4
-        new_ip=$(ssh "${SSH_OPTS[@]}" "root@${NODE_FQDN}" "pct exec ${VMID} -- hostname -I 2>/dev/null" 2>/dev/null \
+        NEW_IP=$(ssh "${SSH_OPTS[@]}" "root@${NODE_FQDN}" \
+                    "pct exec ${VMID} -- hostname -I 2>/dev/null" 2>/dev/null \
                  | tr ' ' '\n' | grep -E '^[0-9]+\.' | grep -v '^127\.' | head -1) || true
-        [[ -n "${new_ip}" ]] && break
+        [[ -n "${NEW_IP}" ]] && break
     done
-    [[ -z "${new_ip}" ]] && die "container did not report an IPv4 after restart — unhealthy"
-    debug "  Container came up with IP ${BL}${new_ip}${CL} — DNS via masqdns lease (${VMNAME}.${ZONE0}.internal)"
+    # A container that does not come back is UNHEALTHY, and unlike a VM there is
+    # no lease-table fallback that could still make its name resolve — so this
+    # fails the converge rather than warning, exactly as before the refactor.
+    [[ -n "${NEW_IP}" ]] || { error "  container did not report an IPv4 after restart — unhealthy"; return 1; }
+    debug "  Container came up with IP ${BL}${NEW_IP}${CL}"
+    return 0
+}
 
-    # masqdns model: the container leases under <vmname>, so DNS follows the live
-    # lease in the new subnet — no static pin to register. Clean up any LEGACY
-    # pin (current zone, and the old zone on a zone change) so a stale override
-    # can't shadow the live lease.
+# The masqdns model: a container leases under <vmname>, so DNS FOLLOWS the live
+# lease in the new subnet — there is no static record to register. What must
+# happen is the opposite of the VM path: remove any LEGACY static pin, in the
+# current zone and in the old one, so a stale override cannot shadow the lease.
+converge_side_effect_dns() {
+    [[ "${RESTART_SKIPPED}" == "1" ]] && return 0
+    debug "  DNS via masqdns lease (${VMNAME}.${ZONE0}.internal) — clearing any stale static pin"
     dns-manager --no-ssl-verify delete "${VMNAME}" "${ZONE0}.internal" >/dev/null 2>&1 || true
-    if [[ ${ZONE_CHANGED} -eq 1 && -n "${live_tag0:-}" && "${live_tag0}" != "0" ]]; then
-        old_zone="$(jq -r --argjson t "${live_tag0}" 'to_entries[] | select(.value.vlantag == $t) | .key' "${ZONES_FILE}" 2>/dev/null | head -1)"
+
+    local old_tag old_zone
+    old_tag="$(jq -r '(.actual["net0.tag"]) // ""' "${DRIFT_FILE}")"
+    if [[ -n "${old_tag}" && "${old_tag}" != "0" ]]; then
+        old_zone="$(jq -r --argjson t "${old_tag}" \
+            'to_entries[] | select(.value.vlantag == $t) | .key' "${ZONES_FILE}" 2>/dev/null | head -1)"
         if [[ -n "${old_zone}" && "${old_zone}" != "${ZONE0}" ]]; then
-            debug "  Removing any stale DNS pin from old zone: ${VMNAME}.${old_zone}.internal"
+            debug "  Removing any stale DNS pin from the old zone: ${VMNAME}.${old_zone}.internal"
             dns-manager --no-ssl-verify delete "${VMNAME}" "${old_zone}.internal" >/dev/null 2>&1 || true
         fi
     fi
+    return 0
+}
+
+# ── onboot: a policy, not a field ────────────────────────────────────
+# Every TAPPaaS container starts with its node. That is an estate rule, not a
+# per-module tunable, so it is NOT in module-fields.json and cannot ride the
+# drift record — and making it a field would invite per-module divergence
+# nothing asked for. Asserted here instead, which is what ADR-020 D7 means by
+# "logic that is not field drift stays in update-service.sh".
+# shellcheck disable=SC2029
+assert_onboot() {
+    local live
+    live="$(ssh "${SSH_OPTS[@]}" "root@${NODE_FQDN}" "pct config ${VMID}" 2>/dev/null \
+            | awk -F': ' '$1=="onboot" {print $2; exit}')" || return 0
+    [[ "${live:-0}" == "1" ]] && return 0
+    if [[ "${CHECK_MODE}" == "1" ]]; then
+        info "  onboot: ${live:-0}→1 (policy: TAPPaaS containers start with their node)"
+        return 0
+    fi
+    debug "  onboot: ${live:-0}→1"
+    ssh "${SSH_OPTS[@]}" "root@${NODE_FQDN}" "pct set ${VMID} --onboot 1" >/dev/null \
+        || warn "  could not set onboot=1 on ${VMID}"
+    return 0
+}
+
+# ── Converge ─────────────────────────────────────────────────────────
+# Disruption authorization, ADR-020 D8 — identical policy to cluster:vm.
+REBOOT_OK="$(module-manager module resolve "${MODULE}" --json 2>/dev/null \
+             | jq -r '(.fields.rebootOk.value) // "false"')"
+ALLOW_DISRUPTION=0
+if [[ "${FORCE}" == "1" ]]; then
+    ALLOW_DISRUPTION=1
+elif [[ "${REBOOT_OK}" == "true" && "${TAPPAAS_SCHEDULED_PASS:-0}" == "1" ]]; then
+    debug "  rebootOk=true in the scheduled pass — disruptive changes are authorized"
+    ALLOW_DISRUPTION=1
 fi
+
+rc=0
+converge_apply "${MODULE}" "${SCRIPT_DIR}" "${DRIFT_FILE}" "${CHECK_MODE}" "${ALLOW_DISRUPTION}" "${FORCE}" || rc=1
+assert_onboot
+[[ ${rc} -eq 0 ]] || exit 1
 
 debug "  ${GN}✓${CL} cluster:lxc update-service completed"
 exit 0

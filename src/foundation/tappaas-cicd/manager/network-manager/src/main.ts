@@ -44,7 +44,7 @@ import {
   zoneExists,
 } from "./zones";
 import { addZone, deleteZone } from "./zonelifecycle";
-import { existsSync } from "fs";
+import { existsSync, readFileSync } from "fs";
 import { initProfile, parseTemplate, profileNames, renameTemplateFile, zonesInit } from "./zonesinit";
 import { RETIRED_ZONES, retireZones, saveRetired } from "./retire";
 import { zonesCheck, occupiedZones } from "./zonescheck";
@@ -60,6 +60,13 @@ import { runZonesMerge } from "./zonesmerge";
 import { HelpSpec, renderHelp } from "../../../lib/ts/src/help";
 import { CL, DieError, GN, RD, YW, die, guarded, info, warn } from "../../../lib/ts/src/cli";
 import { writeJsonAtomic } from "../../../lib/ts/src/config-io";
+import {
+  ParsedSet,
+  ZonesFieldsSchema,
+  applyZoneSet,
+  parseSetArg,
+  preGateZoneSet,
+} from "./zonemodify";
 
 const VERSION = "0.1.0";
 
@@ -105,6 +112,24 @@ const HELP: HelpSpec = {
       ],
     },
     { usage: "delete <name> [--check]" },
+    {
+      usage: "modify <name> --set field=value [--set field=value]...",
+      name: "modify",
+      options: [
+        [
+          "--set field=value",
+          "Change a zone's policy (access-to, pinhole-allowed-from, description,\n" +
+            "                isolated, tier, the DHCP options). Repeatable. A field that\n" +
+            "                cannot change in place — vlantag, ip, type, bridge — is refused\n" +
+            "                before anything is written, and one that has its own verb points\n" +
+            "                at it. A list takes 'a,b' or JSON.",
+        ],
+      ],
+      note:
+        "Authors zones.json only, like enable/disable and bind — it prints the\n" +
+        "reconcile to run. Closes #538: a zone's policy was previously changeable\n" +
+        "only by hand-editing zones.json or delete-and-re-add.",
+    },
     {
       usage: "bind <zone> --environment <env> | --unbind",
       name: "bind (link a Client/IoT/Guest zone to an environment — ADR-014 D2)",
@@ -256,6 +281,8 @@ interface Opts {
   // add --tftp-server-name / --bootfile-name (DHCP options 66/67, #546)
   tftpServerName?: string;
   bootfileName?: string;
+  // modify --set field=value, repeatable (ADR-020 D6 / #538)
+  sets: string[];
 }
 
 function isPlane(s: string): s is Plane {
@@ -278,6 +305,7 @@ function parseOpts(args: string[]): Opts {
     json: false,
     unbind: false,
     effective: false,
+    sets: [],
   };
   for (let i = 0; i < args.length; i++) {
     const a = args[i];
@@ -340,6 +368,9 @@ function parseOpts(args: string[]): Opts {
       case "--environment":
       case "--env":
         o.environment = next();
+        break;
+      case "--set":
+        o.sets.push(next());
         break;
       case "--unbind":
         o.unbind = true;
@@ -597,6 +628,85 @@ function cmdZoneState(verb: string, opts: Opts): void {
   info("");
   info("  To apply on the planes, run:");
   info(`    network-manager reconcile --apply`);
+}
+
+// ── modify --set (ADR-020 D6, #538) ────────────────────────────────────
+//
+// The sibling of `module-manager module modify --set`, over the same change
+// model. Before this, a zone's POLICY — who it may reach, who may pinhole into
+// it — could only be changed by hand-editing zones.json or by delete-and-
+// re-add, the anti-pattern ADR-014 D1 named.
+//
+// Deliberately does NOT reconcile, matching enable/disable/bind: it authors the
+// change and prints the command that applies it. The operator decides when the
+// firewall changes.
+function cmdModifyZone(opts: Opts): void {
+  const name = opts.rest[0];
+  if (!name) die("modify: expected <zone> --set field=value");
+  if (opts.sets.length === 0) {
+    die("modify: expected at least one --set field=value (see 'network-manager modify --help')");
+  }
+
+  const doc = loadZones(opts.zonesFile);
+  const z = getZone(doc, name);
+  if (!z) die(`modify: zone '${name}' not found in ${opts.zonesFile}`);
+
+  const requests = [];
+  for (const raw of opts.sets) {
+    const parsed = parseSetArg(raw);
+    if (!parsed) die(`modify: --set '${raw}' is not field=value`);
+    requests.push(parsed);
+  }
+
+  const gate = preGateZoneSet(name, requests, loadZoneFieldSchema());
+  if (!gate.ok) {
+    for (const r of gate.rejections) {
+      console.error(`${RD}[Error]${CL} --set ${r.field}: ${r.reason}`);
+    }
+    die("nothing was written — a modify either applies every --set or none of them");
+  }
+
+  const rawZone = doc.raw[name] as Record<string, unknown>;
+  const before = new Map(
+    gate.plan.map((p: ParsedSet) => [p.field, JSON.stringify(rawZone[p.field] ?? null)]),
+  );
+  applyZoneSet(doc, name, gate.plan);
+
+  const changed = gate.plan.filter(
+    (p: ParsedSet) => before.get(p.field) !== JSON.stringify(p.parsed),
+  );
+  if (changed.length === 0) {
+    info(`${name}: already as requested — no change`);
+    return;
+  }
+
+  saveZones(opts.zonesFile, doc);
+  for (const p of changed) {
+    info(`${name}: ${p.field} ${before.get(p.field)} → ${GN}${JSON.stringify(p.parsed)}${CL} [${p.changeClass}]`);
+  }
+  info("");
+  info("  To apply on the planes, run:");
+  info(`    network-manager reconcile --apply`);
+}
+
+// zones-fields.json `.fields` — the change classes the pre-gate reads. Returns
+// {} when unreadable, which the gate turns into a refusal that names the
+// missing schema rather than blaming each field.
+function loadZoneFieldSchema(): ZonesFieldsSchema {
+  // Built to dist/manager/network-manager/src/, so five levels up is the
+  // foundation root. The absolute path is the deployed fallback.
+  for (const p of [
+    join(__dirname, "..", "..", "..", "..", "schemas", "zones-fields.json"),
+    "/home/tappaas/TAPPaaS/src/foundation/schemas/zones-fields.json",
+  ]) {
+    try {
+      const raw = JSON.parse(readFileSync(p, "utf8")) as { fields?: ZonesFieldsSchema };
+      if (raw.fields) return raw.fields;
+    } catch {
+      /* try the next candidate */
+    }
+  }
+  return {};
 }
 
 // ── bind / unbind (ADR-014 D2) ─────────────────────────────────────────
@@ -994,6 +1104,9 @@ export function run(argv: string[], client?: PlaneClient): number {
         return 0;
       case "bind":
         cmdBind(opts);
+        return 0;
+      case "modify":
+        cmdModifyZone(opts);
         return 0;
       case "reconcile":
         cmdReconcile(opts, client ?? new CliPlaneClient());

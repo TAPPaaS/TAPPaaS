@@ -40,6 +40,13 @@ import { addZone, deleteZone } from "../../src/zonelifecycle";
 import { runChecks } from "../../src/zonescheck";
 import { ARCHETYPES, TIER_EXEMPT_TYPES, archetypeNames } from "../../src/archetypes";
 import { backfillServes, renderEffective } from "../../src/serves";
+import {
+  ZonesFieldsSchema,
+  applyZoneSet,
+  coerce,
+  parseSetArg,
+  preGateZoneSet,
+} from "../../src/zonemodify";
 import { RETIRED_ZONES, retireZones } from "../../src/retire";
 import {
   distributeZones,
@@ -1743,6 +1750,128 @@ function tmpZones(): string {
   const half = bootDoc({ "tftp-server-name": "10.4.0.10" });
   const rBad = runChecks(loadZones(half.zonesFile), half.configDir, false);
   check(rBad.errors > rOk.errors, `half-configured boot pair → hard error (ok=${rOk.errors}, half=${rBad.errors})`);
+}
+
+// ── `modify --set` on a zone's policy (ADR-020 D6, #538) ───────────────
+//
+// The second-manager proof: the same declared-field change model, one manager
+// over. What is asserted is the PRE-GATE — which zone fields may be changed by
+// a verb at all — because that is what turns "hand-edit zones.json" into an
+// operation with a stated cost.
+//
+// Two kinds of refusal, deliberately worded differently:
+//   - `immutable` (vlantag, ip, type, bridge): a zone's identity. Changing it
+//     would strand every guest tagged into it, so it is delete-and-re-add.
+//   - `manual` (state, serves): these HAVE a verb, and that verb carries guards
+//     a generic --set would bypass — leaving Mandatory needs --force, binding
+//     resolves the environment first. The refusal names the verb.
+{
+  // The REAL schema — the change classes under test are the ones shipped, not a
+  // fixture's idea of them. FIXTURE_DIR is test/fixtures in the source tree, so
+  // three levels up is manager/, and two more reach foundation/schemas.
+  const schemaPath = join(
+    FIXTURE_DIR, "..", "..", "..", "..", "..", "schemas", "zones-fields.json",
+  );
+  const schema = (JSON.parse(readFileSync(schemaPath, "utf8")) as {
+    fields: ZonesFieldsSchema;
+  }).fields;
+
+  // A throwaway zones.json with one real zone to write into.
+  const mkZones = (): string => {
+    const d = mkdtempSync(join(tmpdir(), "nm-modify-"));
+    const f = join(d, "zones.json");
+    writeFileSync(
+      f,
+      JSON.stringify(
+        {
+          rossen: {
+            type: "Service", state: "Active", typeId: "2", subId: "0",
+            vlantag: 200, ip: "10.2.0.0/24", bridge: "lan",
+            "access-to": ["internet", "dmz"], "pinhole-allowed-from": ["dmz"],
+          },
+        },
+        null,
+        2,
+      ),
+      "utf8",
+    );
+    return f;
+  };
+
+  const gate = (...pairs: string[]) =>
+    preGateZoneSet("rossen", pairs.map((p) => parseSetArg(p)!), schema);
+  const why = (r: ReturnType<typeof gate>, needle: string): boolean =>
+    !r.ok && r.rejections.some((x) => x.reason.includes(needle));
+
+  // Every zone field carries a declared class — the coverage rule, applied to
+  // the real schema rather than a fixture.
+  const unclassified = Object.entries(schema)
+    .filter(([, v]) => !v.changeClass)
+    .map(([k]) => k);
+  check(unclassified.length === 0, `every zone field declares a changeClass${unclassified.length ? " — missing: " + unclassified.join(", ") : ""}`);
+
+  // The three fields #538 names.
+  check(gate("access-to=internet,mgmt").ok, "#538: access-to can be changed by a verb");
+  check(gate("pinhole-allowed-from=home").ok, "#538: pinhole-allowed-from can be changed by a verb");
+  check(gate("description=a new description").ok, "#538: description can be changed by a verb");
+
+  // Refusals that follow from the schema alone.
+  const vlan = gate("vlantag=250");
+  check(!vlan.ok, "vlantag is refused before anything is written");
+  check(why(vlan, "strand every guest"), "…and the message says what it would break, not just 'no'");
+  check(!gate("ip=10.9.0.0/24").ok, "a zone's subnet is refused — re-addressing every guest is a migration");
+  check(!gate("bridge=wan").ok, "a zone's trunk is refused");
+
+  // Refusals that point at the verb that does carry the guards.
+  const state = gate("state=Inactive");
+  check(!state.ok && why(state, "enable|disable|manual"), "state is refused, naming the verb that has the guards");
+  const serves = gate("serves=acme");
+  check(!serves.ok && why(serves, "bind"), "serves is refused, naming bind");
+
+  // Reject the WHOLE command, so zones.json and the planes never move apart.
+  const mixed = gate("description=fine", "vlantag=250");
+  check(!mixed.ok, "a mixed --set with one immutable field is rejected");
+  check(!mixed.ok && mixed.rejections.length === 1, "…naming only the field at fault");
+  check(!mixed.ok && !("plan" in mixed), "…and yielding no plan, so nothing is written");
+
+  const unknown = gate("nosuchfield=1");
+  check(!unknown.ok && why(unknown, "spelling"), "a field zones-fields.json does not declare is refused");
+
+  // Value coercion: a list field must not end up holding a string.
+  check(
+    JSON.stringify(coerce("internet,mgmt", "array")) === JSON.stringify({ ok: true, value: ["internet", "mgmt"] }),
+    "a list takes the comma form an operator actually types",
+  );
+  check(
+    JSON.stringify(coerce('["a","b"]', "array")) === JSON.stringify({ ok: true, value: ["a", "b"] }),
+    "…and JSON, for scripts",
+  );
+  check(
+    JSON.stringify(coerce("", "array")) === JSON.stringify({ ok: true, value: [] }),
+    "…and empty, which is how an access-to list is cleared",
+  );
+  // A value that LOOKS like JSON is held to it; anything else is a plain list
+  // token. That split matters: `access-to=[bad` is a typo worth refusing, while
+  // a bare word containing a bracket is just an (unknown) zone name, which
+  // validate reports later with far more context than a coercion error could.
+  check(coerce('["a", bad]', "array").ok === false, "a value that looks like JSON but is not is refused");
+  check(
+    JSON.stringify(coerce("weird[name", "array")) === JSON.stringify({ ok: true, value: ["weird[name"] }),
+    "…while a bare token is just a list entry, left for validate to judge",
+  );
+  check(coerce("lots", "integer").ok === false, "a non-number is refused for a numeric field");
+  check(coerce("maybe", "boolean").ok === false, "a non-boolean is refused for a boolean field");
+
+  // Applying the plan writes through to the document.
+  {
+    const doc = loadZones(mkZones());
+    const g = preGateZoneSet("rossen", [parseSetArg("access-to=internet,mgmt")!], schema);
+    if (g.ok) applyZoneSet(doc, "rossen", g.plan);
+    check(
+      JSON.stringify((doc.raw.rossen as Record<string, unknown>)["access-to"]) === '["internet","mgmt"]',
+      "the plan writes a real array into the zone document",
+    );
+  }
 }
 
 console.log("");
