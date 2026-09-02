@@ -2,8 +2,8 @@
 
 | | |
 |---|---|
-| **Status** | **Proposed / Draft** — design pass for #498. No code yet; this is the "decide in writing first" artifact. |
-| **Version** | 0.2 |
+| **Status** | **Proposed** — design pass for #498, all open questions resolved; realization detailed (v0.4). No code yet; this is the "decide in writing first" artifact, ready to implement. |
+| **Version** | 0.4 |
 | **Date** | 2026-09-02 |
 | **Author** | Lars Rossen |
 | **Parent** | [ADR-007f Realization](<ADR-007f - Realization.md>) (managers orchestrate / **plan**; controllers + service scripts do the imperative **act**) |
@@ -11,7 +11,7 @@
 | **Instantiated by** | [ADR-019 HA and Cross-Node VM Migration Policy](<ADR-019 - HA and Cross-Node VM Migration Policy.md>) — the `cluster:vm` `node`/`HANode` change is the first and hardest concrete change-hook; ADR-019 defines its policy, this ADR defines the frame it plugs into. |
 | **Closes / addresses** | **#498** (modify cannot change config values — the parent design issue), **#557** (modify edits only `--environment`; deployed config is authoritative; reconcile --apply is all-or-nothing across `dependsOn`), **#538** (network-manager has no `modify` for a zone's policy fields — the sibling-manager instance of the same gap). Builds on the just-closed **#549** (validate must enforce the same rules as reconcile) and **#550** (one schema-driven desired-state resolver, done on the *reporting* side — this ADR extends it to the *acting* side, exactly as #550's closing note deferred to #498). |
 | **Numbering note** | ADR-018 reserved by the SSH-identity PR #523; ADR-019 is HA/migration. This is **020**. |
-| **Changelog** | v0.1 initial draft: the planner/actor split, the change-class taxonomy, the per-service field-change hook contract. v0.2 (operator decision): **one** `modify` verb — `--set` writes the field into config first, then the *unchanged* core modify algorithm runs (3-way merge → converge via the module's own `update.sh` + every `dependsOn` `update-service.sh`). ADR-020's job is to make that converge field-change-aware, not to add a second scoped apply path. |
+| **Changelog** | v0.1 initial draft: the planner/actor split, the change-class taxonomy, the per-service field-change hook contract. v0.2 (operator decision): **one** `modify` verb — `--set` writes the field into config first, then the *unchanged* core modify algorithm runs (3-way merge → converge via the module's own `update.sh` + every `dependsOn` `update-service.sh`). ADR-020's job is to make that converge field-change-aware, not to add a second scoped apply path. v0.3 (operator resolved the 7 open questions): manifest = `services/<service>/fields.json`; change class keyed by the (field, service) **pair**; `modify` **never** writes back to the repo/release source (deployed-config-only, Released-drift is expected); a **static pre-gate** rejects an immutable/recreate `--set` before writing; a mixed `--set` set is **rejected whole**; the never-converge-provider edge is **out of scope for v1**; the resolver/converge core is **shared** in `lib/ts`. Status → Proposed. v0.4 (realization detailed — D7/D8): the **manager owns the single drift computation** (services only *report* actual and *apply* the drift the manager hands them); a per-service **`report-service.sh`** reports actual state (reused by test/health/update); provider-specific parse deleted from `inspect.ts`; disruption (reboot/offline-migrate) is authorized by a per-module **`rebootOk`** (default false) + an explicit `modify --force`, decoupled from `update-tappaas --force` ("run now"), and an unauthorized disruptive change is **deferred with a warning, exit 0**; every existing `update-service.sh` is migrated with **semantics preserved** (non-field-update logic stays put). |
 
 ## Context
 
@@ -44,15 +44,17 @@ There is exactly **one** function that answers "what is field *f*'s desired valu
 
 Crucially, the **acting** path stops defaulting on its own. Today `update-service.sh` has its private `cfg 'cputype' 'host'` ladder — the second copy of the defaults that #550 could only fix on the reporting side. Under this ADR the **manager resolves desired state once and hands each service its owned fields already resolved**; the service scripts no longer carry `cfg()` default ladders. This closes #550 at the root: there is one resolved value, computed once, and reporting and acting read the same one.
 
+The resolver is exposed as a subcommand — **`module-manager module resolve <name>`** (the module name is the verb's argument; `module-manager` takes no name before the verb) — which prints the resolved desired document: the *deployed* `config/<name>.json` (which, after the modify 3-way merge, already **is** the true desired state) **plus** the schema defaults for fields it does not declare, plus the `.orig` "not tracking release" flags. `resolve` does **not** run the merge (that is a modify step); it is a pure read+default, so `inspect` (no merge) and `modify` (post-merge) get the same answer. D7 makes it the input both the report and the apply paths diff against.
+
 > **Invariant (generalizes #549 + #550):** validate, drift, reconcile and modify derive every field's desired value, and every structural rule, from **one schema (`module-fields.json`) + one resolver**. Any intentional difference between two paths is *stated in the schema*, never an incidental artifact of a second code copy.
 
 ### D2. One `modify` verb — `--set` writes config first, then the *unchanged* core algorithm runs
 
 There is **one** `modify` verb, not two. `modify <m>` is exactly the release update `update-tappaas` already calls per module (via `module-manager module modify <m>` → `update-module.sh`). `modify <m> --set field=value …` is the operator field change (#557). They run the **same core algorithm**; `--set` only adds a first step:
 
-0. **(`--set` only)** write each `field=value` into the deployed `module.json` **first** — as `tappaas`, via `copy-update-json.sh` (ADR-019 ownership invariant: never under `sudo`, or the config becomes root-owned and drops out of the sweep, #525).
+0. **(`--set` only) static pre-gate, then write.** First run each `field=value` through a static change-class check (D3): if **any** field is `immutable` or `recreate`, reject the **whole** command before touching a single byte of config — no partial write (resolved: pre-gate + reject-whole). Otherwise write each `field=value` into the deployed `module.json` — as `tappaas`, via `copy-update-json.sh` (ADR-019 ownership invariant: never under `sudo`, or the config becomes root-owned and drops out of the sweep, #525). The pre-gate catches only what is knowable statically (immutable/recreate); every downtime/one-way decision (`in-place-reboot`, `migrate`-not-live-OK, `grow-only` shrink) still happens in the converge, where live state is known.
 1. pre-update **snapshot** (rollback point),
-2. **3-way merge** the release source into config (release ⇄ `.orig` ⇄ deployed — a `--set` field that differs from `.orig` is now an intentional override, exactly the #550 "not tracking release on purpose" case),
+2. **3-way merge** the release source into config (release ⇄ `.orig` ⇄ deployed — a `--set` field that differs from `.orig` is now an intentional override, exactly the #550 "not tracking release on purpose" case). `modify` **never writes back to the repo/release source** (resolved): the deployed config is the only thing it edits, and Desired-drifting-from-Released is the *expected*, annotated state — not something to auto-sync.
 3. **converge any drift** by running the module's own `update.sh` **and** every `dependsOn` provider's `update-service.sh`,
 4. pre/post **`test-module.sh`**,
 5. bump `updateTime`.
@@ -63,7 +65,7 @@ So `--set` introduces **no new apply path** — it seeds desired state into the 
 
 This is ADR-007f layering applied to field changes: intent lives in `module.json`; the manager (`modify`) realizes it; the service scripts / controllers are the only things that touch the cluster.
 
-> **On #557's all-or-nothing note.** The full `dependsOn` converge is *retained* (not scoped to the touched service). The all-or-nothing concern is instead answered by **idempotence + correct change handling**: a change-class-aware `update-service.sh` whose owned fields did not change is a no-op, and `reconcile.ts` already accumulates rather than aborts on a dep failure (so an unrelated provider's failure no longer blocks the others). The residual — a provider that can *never* converge (a hand-configured, powered-off appliance) still being *attempted* on every run — is a real edge this model does not by itself remove; see Open Question 6.
+> **On #557's all-or-nothing note.** The full `dependsOn` converge is *retained* (not scoped to the touched service). The all-or-nothing concern is instead answered by **idempotence + correct change handling**: a change-class-aware `update-service.sh` whose owned fields did not change is a no-op, and `reconcile.ts` already accumulates rather than aborts on a dep failure (so an unrelated provider's failure no longer blocks the others). The residual — a provider that can *never* converge (a hand-configured, powered-off appliance) still being *attempted* on every run — is a real edge this model does not by itself remove; see Resolved Question 6 (out of scope for v1).
 
 ### D3. The field-change taxonomy (change classes)
 
@@ -85,10 +87,12 @@ The classes compose with `--force`: `--force` upgrades an acknowledged-downtime 
 
 Change semantics live **next to the code that performs them**, per `<provider>:<service>`, not in a central switch (larsrossen's #498 note). Each service directory declares the fields it owns and how to change each one:
 
-- **A field manifest** — `services/<service>/fields.json` (or a structured header block in `update-service.sh`) declaring, for each field in the service's `usedBy` set, its **change class** (D3) and its **apply hook**. `module-fields.json.usedBy` already maps *field → service*; the manifest adds *field → (change class, hook)*. `validate` reads it: a `usedBy` field with no manifest entry, or a manifest naming a class the taxonomy doesn't define, is a config-schema error caught statically (a new lint, in the spirit of #549).
+- **A field manifest** — `services/<service>/fields.json` (resolved: a standalone file, adjacent to the hook scripts, so `validate` reads it without sourcing bash) declaring, for each field in the service's `usedBy` set, its **change class** (D3) and its **apply hook**. `module-fields.json.usedBy` already maps *field → service*; the manifest adds *(field, service) → (change class, hook)*. The change class is keyed by the **(field, service) pair** (resolved), not the field alone: `node` is `migrate` under `cluster:vm`, and the `cluster:vm` hook internally routes the HA-vs-non-HA case per ADR-019, so the manifest stays one entry per owning service. `validate` reads it: a `usedBy` field with no manifest entry, or a manifest naming a class the taxonomy doesn't define, is a config-schema error caught statically (a new lint, in the spirit of #549).
 - **An apply hook** per changeable field or change-class. For `cluster:vm`, the operator's named example: `services/vm/update-node.sh` — the hook for `node`/`HANode` — **essentially calls the scripts ADR-019 defines** (the proxmox-controller migrate primitive, the HA-rule re-point, the live-OK compat test). `modify --set node=…` → manager plans class `migrate` → dispatches `cluster:vm`'s `update-node` hook → ADR-019 scenarios A-M*/B-M*. Simpler fields share one generic hook (a scoped `qm set` for the `in-place` class).
 
 `update-service.sh` is **refactored to iterate the same manifest + hooks** (D2's step 3) rather than holding a bespoke drift loop. There is then exactly **one** converge path — driven by the manifest — shared by the release sweep (`modify`), the operator field change (`modify --set`), and `reconcile --apply`; and exactly one place per service where "how does field X change" is written. (This DRYs the acting side the way D1 DRYs the desired side.)
+
+**D7 is the realized mechanics of this contract.** It moves the *diff itself* off the bash side entirely: the manager computes the single drift and hands it to the service to apply, so `update-service.sh` neither reads actual nor decides what changed — it applies a drift record. The manifest, classes and hooks named here are exactly what D7 wires together.
 
 ### D5. The verb model — three views of one pipeline
 
@@ -99,11 +103,79 @@ Change semantics live **next to the code that performs them**, per `<provider>:<
 | **modify** `<m> [--set field=value …]` | schema + config + live | config + cluster | write | one verb (D2). Bare = the release update `update-tappaas` calls. `--set` writes the field(s) first, then the *same* core algorithm runs: snapshot → 3-way merge → converge (module `update.sh` + every `dependsOn` `update-service.sh`, now change-class-aware) → test → `updateTime`. |
 | **reconcile --apply** `<m>` | config + live | cluster | write | re-apply the *whole current* config (converge, no config change / snapshot / test). Shares the same manifest-driven converge (D4) — a lighter path over the same hooks. |
 
-`modify` gains the `--set field=value` surface #557 asks for as a pre-step, not a new engine: the field is written into `module.json` (as `tappaas`, `copy-update-json.sh`) and the existing core algorithm realizes it. An immutable/recreate field surfaces as a converge-time refusal from its owning `update-service.sh`, rolled back by the snapshot wrapper (see Open Question 4 on whether a pre-write `validate` should reject such a `--set` before touching the JSON at all).
+`modify` gains the `--set field=value` surface #557 asks for as a pre-step, not a new engine: an immutable/recreate `--set` is rejected by the **static pre-gate** before any write (D2 step 0); everything the converge can attempt is written into `module.json` (as `tappaas`, `copy-update-json.sh`) and realized by the existing core algorithm, with any remaining live-state refusal (shrink, downtime-without-`--force`) surfacing from the owning `update-service.sh` and rolled back by the snapshot wrapper.
 
 ### D6. Manager-agnostic — the same model closes #538
 
 The planner/actor split, the change-class taxonomy, and the field-manifest contract are **not module-specific**. `network-manager` is the second implementer: a zone's policy fields (`access-to`, `pinhole-allowed-from`, `description`) get change classes (all **in-place** — a firewall rule swap, no downtime), a field manifest, and `network-manager modify <zone> --set pinhole-allowed-from=…` that validates before it writes — the "same shape the sibling managers already present" that #538 asks for, and the alternative to hand-editing `zones.json` that ADR-014 D1 named as the anti-pattern. Every manager that owns declared fields exposes `modify <entity> --set field=value` over this frame.
+
+### D7. Realization — the manager owns the one differ; services *report* and *apply*
+
+The diff lives in **one** place: the TS manager. Services never compute drift — they *report* their actual state in a consistent shape and *apply* the drift the manager hands back. This is what makes "one drift computation" (and #550's single-source invariant) literally true rather than aspirational.
+
+**The manager pipeline (shared by `inspect` and `modify`):**
+
+```
+desired = module-manager module resolve <name>     # D1: merged config + schema defaults + .orig flags   [TS]
+actual  = <provider>/report-service.sh <name>       # a JSON map { field: liveValue } for the manifest    [bash, per service]
+drift   = diff(desired, actual)                     # declared normalization; THE one differ              [TS — inspect renders it, modify applies it]
+          <provider>/update-service.sh <name> --apply-drift <drift.json> [--force]                        # [bash, pure apply]
+```
+
+**Each service provides four thin things** (nothing more):
+
+| Artifact | Shape | Notes |
+|---|---|---|
+| `services/<svc>/fields.json` | the manifest (D3/D4): per field → `class`, `apply`, `normalize`, `inputs` | data; linted by `validate` |
+| `services/<svc>/report-service.sh <name>` | prints `{ field: liveValue }` for its manifest fields | provider-specific **extract only** — no diff. **Reused** by `test-service.sh` and the health checks (one read, three consumers) — resolved decision. |
+| `services/<svc>/update-service.sh <name> --apply-drift <file>` | applies the drift record: batches the `set` fields, dispatches the hooks | provider-specific **apply**; **retains any non-field-update logic it already had** (see migration discipline) |
+| `services/<svc>/update-<field>.sh` | one complex field each (`update-node.sh`, `update-disk.sh`, `update-net.sh`) | uniform CLI + exit protocol below |
+
+**Where every concern lives — nothing is implemented twice:**
+
+| Concern | Home | Why single-copy |
+|---|---|---|
+| Resolve desired (defaults, `.orig`) | manager (TS) | `module-manager module resolve` |
+| Normalize (declared `tags`/`trunks`/`vlan` rules) | manager (TS), applied to **both** sides | kills the `vm-net.sh` ↔ `inspect.ts` duplication (Decision 1) |
+| Diff | manager (TS) | shared by `inspect` (render) + `modify` (apply) — the one differ (Decision 2) |
+| Extract actual | service `report-service.sh` (bash) | provider-specific read; `inspect.ts` **gives up its own `qm config` parsing** and consumes this (approved) |
+| Build & apply (netopts string, `qm set`, migrate) | service + hooks (bash) | apply-side only; the TS side never builds |
+
+**The drift record** carries everything the bash apply needs, so it never re-reads or re-decides. For a composite field the manager assembles the finished desired value (it knows actual, so it preserves the live MAC/queues) and the hook just applies the string:
+
+```jsonc
+{ "cores": { "class": "in-place",  "liveKey": "cores", "desired": "8", "actual": "2" },
+  "net0":  { "class": "in-place-reboot", "hook": "update-net.sh",
+             "desired": "virtio=BC:..,bridge=lan,tag=210", "actual": "virtio=BC:..,bridge=lan,tag=200",
+             "sideEffects": ["reboot","dns"] },
+  "node":  { "class": "migrate", "hook": "update-node.sh", "desired": "tappaas3", "actual": "tappaas1" } }
+```
+
+**The shared runner** (`cicd/lib/converge-lib.sh`, one copy) parses the drift record → batches every `set` field into one `qm set` (batching preserved) → dispatches each hook → sequences side-effects **once** (one reboot+DNS pass even if `net0` and `net1` both changed) → aggregates exit codes. `update-service.sh --apply-drift` is a ~10-line wiring stub over it *plus* whatever non-field logic the service already carried.
+
+**The hook CLI/exit protocol** (uniform across all `update-<field>.sh`, so the runner treats them identically and each is independently runnable/testable, the `test-migrate-vm.sh` pattern):
+
+```
+update-<field>.sh <name> --field <name> --desired <v> --actual <v> [--check] [--force]
+```
+`0` applied / already in sync · `10` would change but needs disruption authorization · `20` refused (immutable/shrink) · `1` error. `update-node.sh` is the ADR-019 bridge: it routes HA-vs-non-HA internally and maps A-M*/B-M* onto these codes.
+
+**Migration discipline (a hard requirement of this ADR, not a nicety).** Every existing `update-service.sh` is migrated to this contract in the SAME change, and each migration must **preserve existing behaviour semantically** — the current scripts encode hard-won invariants (MAC/queue preservation, the single batched `qm set`, reboot→wait-IP→DNS ordering, HA deferral, ADR-019's guards). Before splitting a script, its behaviour is understood field-by-field and re-expressed as manifest entries + hooks with the same effect, kept green by its existing tests. **Any logic that is NOT field-update drift — setup, registration, side tasks a given `update-service.sh` performs beyond reconciling declared fields — stays in `update-service.sh`** around the `--apply-drift` call; it is not forced into the manifest/hook shape. The refactor extracts the field-drift loop, not the whole script.
+
+### D8. Disruption authorization — decoupling reboot from the two `--force`s
+
+`--force` means two different things and must not be conflated: on `module-manager module modify` it authorizes **disruption** (reboot / offline migrate); on `update-tappaas` it means **"run the sweep now"** (a scheduling override). Forwarding the sweep's `--force` as disruption authorization would let a routine update silently reboot production guests.
+
+- **A per-module `rebootOk`** (new `module-fields.json` field, **default `false`**): "may an unattended converge reboot/disrupt this guest to apply a change?" It is a property of the *workload* (a stateless front-end: yes; a database: only in a window), hence per-module — resolved. The field's *change class* says a change **needs** disruption; `rebootOk` says whether we are **allowed** to do it unattended.
+- **Disruption is authorized iff** `module modify --force` was passed **OR** (`rebootOk == true` **AND** we are in the ADR-017 scheduled reboot pass — the same signal that already authorizes node reboots). `update-tappaas --force` is **never** forwarded as disruption authorization.
+- **When a disruptive change is not authorized:** apply all non-disruptive drift, **skip** the reboot/offline-migrate, and **defer with a warning** — the converge still **exits 0** (resolved: not a failure) and prints a machine-parseable `DEFERRED:` line that `update-tappaas` collects into an end-of-sweep "N modules have pending disruptive changes" summary:
+  ```
+  ⚠ nextcloud: net0 subnet change needs a reboot — deferred (rebootOk=false).
+    Apply in a maintenance window:  module-manager module modify nextcloud --force
+  ```
+  Mechanically, a hook returning `10` (needs disruption) with authorization absent is treated as **deferred, not failed**.
+
+Three distinct levers that no longer collide: `update-tappaas --force` (schedule), `module modify --force` (authorize disruption now), `module.rebootOk` (standing per-module authorization for the scheduled pass).
 
 ## Scenarios (module-manager)
 
@@ -117,11 +189,11 @@ Let *live-OK* be as in ADR-019 (the CPU-compat verdict for a migrate). `--force`
 | M4 | `--set zone0=iot` | in-place-reboot | refuse without `--force` (subnet change reboots the guest); with `--force`: apply + reboot + DHCP + DNS re-register. |
 | M5 | `--set node=tappaas3`, live-OK | migrate | `.node` written; converge's `update-node` hook → ADR-019 A-M1/B-M2 (migrate + rule re-point). |
 | M6 | `--set node=tappaas3`, not live-OK, no `--force` | migrate | converge **refuses**: "moving to tappaas3 needs downtime — rerun with `--force`" (ADR-019 A-M2). |
-| M7 | `--set vmid=250` | immutable | converge **refuses**: "vmid cannot change in place — delete + reinstall." |
+| M7 | `--set vmid=250` | immutable | **static pre-gate rejects** before any write: "vmid cannot change in place — delete + reinstall." Config untouched. |
 | M8 | `--set description=…` / a `dependsOn` fix (no cluster field) | (config-only) | field written; converge is a no-op on the cluster; the corrected config is now authoritative. The bare #557 case — correct a policy-only field without reinstall. |
-| M9 | `--set proxyPort=8443` while the same module's `cluster:vm` carries unrelated pre-existing drift | in-place (network:proxy) | full converge runs: `network:proxy` applies the port; `cluster:vm`'s change-class-aware `update-service.sh` re-attempts its own drift too (not scoped away). Its owned fields' correctness is the point of D3; the residual "a provider that can never converge is still attempted" is Open Question 6. |
+| M9 | `--set proxyPort=8443` while the same module's `cluster:vm` carries unrelated pre-existing drift | in-place (network:proxy) | full converge runs: `network:proxy` applies the port; `cluster:vm`'s change-class-aware `update-service.sh` re-attempts its own drift too (not scoped away). Its owned fields' correctness is the point of D3; the residual "a provider that can never converge is still attempted" is deferred — Resolved Question 6 (out of scope for v1). |
 
-With `--set`, the field is written to `module.json` **before** the converge (D2 step 0), so a converge-time refusal (M3/M6/M7) leaves config ahead of reality until rolled back or corrected — which is why Open Question 4 asks whether a pre-write `validate` should reject an obviously-immutable `--set` before it touches the JSON.
+Two refusal points (D2 step 0): the **static pre-gate** rejects `immutable`/`recreate` (M7) before any write, so config is never left ahead of reality for those; the **converge** rejects the live-state cases it can only know at apply time (M3 shrink, M6 downtime-without-`--force`), after the write, and the snapshot wrapper rolls back. A mixed `--set` with any pre-gated field is rejected whole, before writing anything.
 
 ## Testing (fast + `--deep`)
 
@@ -133,16 +205,23 @@ Two tiers (ADR-013 / `TESTING.md`), mirroring ADR-019's structure:
 ## Consequences
 
 - **Positive.** One desired-state definition and one change-semantics home per service → validate/drift/reconcile/modify cannot silently disagree (the general form of #549/#550). Operators get a sanctioned `modify --set` for every declared field (#557) instead of hand-editing deployed config or reinstalling — over the *same* algorithm `update-tappaas` already trusts, so there is no second apply engine to keep in sync. The change taxonomy is declared and lint-checked, so a new provider states its field semantics instead of hiding them in an imperative loop, and `update-service.sh` handles a *changed* field correctly instead of by accident. The frame generalizes to `network-manager` (#538) and any future manager. ADR-019's `node` change becomes one hook in that frame rather than a special case.
-- **Cost.** Real work: lift the resolver out of `inspect.ts`; author a field manifest per existing service; refactor each `update-service.sh` from a bespoke drift loop into a manifest-driven, change-class-aware converge (must keep every ADR-019 regression guard green); add the `--set` pre-step + CLI surface. The acting bash scripts must consume manager-resolved desired values instead of their own `cfg()` defaults.
-- **Not solved by this ADR.** The full `dependsOn` converge is retained (D2), so #557's deeper edge — a provider that can *never* converge being *attempted* on every `modify` — is mitigated (idempotence, accumulate-don't-abort) but not removed; see Open Question 6.
+- **Cost.** Real work: lift the resolver into `module-manager module resolve`; move normalize+diff into the manager and delete `inspect.ts`'s own `qm config` parsing; author `fields.json` + `report-service.sh` per existing service; split each `update-service.sh` into `--apply-drift` + hooks; add the `--set` pre-step, `rebootOk`, and the disruption/deferral plumbing. **Every existing `update-service.sh` must be migrated with behaviour preserved and its non-field logic retained (D7 migration discipline)** — the largest and most delicate part of the work, gated by keeping each script's existing tests green.
+- **Cross-cutting benefit.** `report-service.sh` gives every service one honest actual-state read, reused by `modify`, `inspect`/`reconcile`, `test-service.sh` and the health checks — so those four stop each having their own idea of "what is actually running."
+- **Not solved by this ADR.** The full `dependsOn` converge is retained (D2), so #557's deeper edge — a provider that can *never* converge being *attempted* on every `modify` — is mitigated (idempotence, accumulate-don't-abort) but not removed; see Resolved Question 6 (out of scope for v1).
 - **Neutral / superseded.** `modify`'s current "only `--environment`" surface is *extended* by `--set field=value` (same verb, same core). `reconcile --apply` is unchanged in contract, but shares the new manifest-driven converge.
 
-## Open questions
+## Resolved questions (v0.3–v0.4)
 
-1. **Manifest location & format.** A standalone `services/<service>/fields.json`, or a declared header block parsed out of `update-service.sh`? The former is machine-clean and lets `validate` read it without sourcing bash; the latter keeps class + code literally adjacent. *Draft: `fields.json`, adjacent to the hook scripts.*
-2. **Change class per (field, service) vs per field.** `node` is `migrate` under `cluster:vm` but is *deferred to `cluster:ha`* when the module is HA (update-service.sh today). Is change class a property of the field alone, or of the (field, owning-service) pair, or does the owning service resolve HA-vs-non-HA internally in its `update-node` hook? *Draft: the pair; the `cluster:vm` `update-node` hook internally routes HA per ADR-019, so the manifest stays one entry.*
-3. **`--set` and the git source.** `modify` rewrites the *deployed* config (the authority, per #557). Does it also propagate to the git module source, or is drifting Desired-off-Released the expected, annotated state (#550's "not tracking release on purpose")? *Draft: deployed only; Released divergence is reported, not auto-synced — consistent with #550.*
-4. **Pre-write validate vs converge-time refusal.** `--set` writes the JSON *before* the converge (D2 step 0), so an immutable/recreate `--set` leaves config ahead of reality until the converge refuses and the snapshot rolls back. Should `modify` run the field's change class through `validate` **before** the write and reject an obviously-immutable `--set` up front — keeping set-first for everything the converge can actually attempt? *Draft: yes — a cheap static pre-gate for the `immutable`/`recreate` classes only; every downtime/one-way decision (`--force`) still happens in the converge where live state is known.*
-5. **Multi-field atomicity.** `modify --set a=… --set b=…` where `a` is in-place and `b` is refused — write+apply `a` and report `b`, or reject the whole set before writing anything? *Draft: reject-whole at the pre-gate (OQ4) — no partial write across one `modify`, so config and cluster move together.*
-6. **The never-converge provider (#557 residual).** A `dependsOn` provider describing a hand-configured, powered-off appliance can never converge, yet the retained full sweep attempts it on every `modify`. Do we need a per-dependency "advisory / do-not-converge" marker (a manifest flag on the *dependency*, not the field) so the sweep skips-and-reports it instead of failing? *Draft: out of scope for v1; revisit if it bites in practice — the accumulate-don't-abort behaviour keeps it from blocking other providers meanwhile.*
-7. **network-manager sharing.** Does the resolver/converge core live in `lib/ts` shared by both managers, or is it duplicated per manager with a shared *contract* only? *Draft: shared `lib/ts` core, per-manager manifests.*
+All decided; the resolutions are folded into the decisions above and restated here for the record. Items 1–7 were settled in v0.3; 8–11 in v0.4 (realization).
+
+1. **Manifest location & format → `fields.json`.** The manifest is a standalone `services/<service>/fields.json` adjacent to the hook scripts — machine-clean, so `validate` reads it without sourcing bash. Not a header block in `update-service.sh`.
+2. **Change class keyed by the (field, service) pair.** Not the field alone. `node` is `migrate` under `cluster:vm`; the `cluster:vm` hook routes the HA-vs-non-HA case internally per ADR-019, so the manifest stays one entry per owning service.
+3. **`--set` never writes the repo/release source.** `modify` edits only the *deployed* config (the authority, per #557). Desired drifting from Released is the **expected**, annotated state (#550's "not tracking release on purpose") — it is reported, never auto-synced back to the module's git source.
+4. **Static pre-gate for `immutable`/`recreate`.** Before writing, `modify` checks each `--set` field's change class and rejects an `immutable`/`recreate` change up front, so config is never left ahead of reality for a change the converge could only refuse afterward. Every downtime/one-way decision (`in-place-reboot`, `migrate`-not-live-OK, `grow-only` shrink) still happens in the converge, where live state is known.
+5. **Reject the whole command on a mixed set.** `modify --set a=… --set b=…` where any field is pre-gated (or otherwise rejectable up front) rejects the **entire** command before writing anything — no partial write across one `modify`, so config and cluster always move together.
+6. **The never-converge provider is out of scope for v1.** A `dependsOn` provider describing a hand-configured, powered-off appliance can never converge, yet the retained full sweep still attempts it on every `modify`. No per-dependency "do-not-converge" marker is introduced now; the accumulate-don't-abort behaviour (`reconcile.ts`) keeps it from blocking other providers. Revisit only if it bites in practice.
+7. **Shared `lib/ts` core.** The desired-state resolver (D1) and the manifest-driven converge core live in `lib/ts`, shared by `module-manager` and `network-manager`; each manager supplies its own per-service manifests.
+8. **Actual-state read → a dedicated `report-service.sh`.** Not a mode of `update-service.sh` and not folded into `test-service.sh`. A standalone per-service reporter, reused by `modify`, `inspect`/`reconcile`, `test-service.sh` and the health checks (D7).
+9. **`rebootOk` is a per-module config field.** Not per-field. Default `false` (D8).
+10. **A deferred disruptive change exits 0.** The converge is not marked failed; it prints a `DEFERRED:` line that `update-tappaas` summarizes at end of sweep (D8).
+11. **`inspect.ts` gives up its own actual parsing.** It consumes `report-service.sh` like `modify` does, so there is genuinely one actual-state read and one differ (D7). This touches current `inspect.ts` code and is explicitly in scope.
