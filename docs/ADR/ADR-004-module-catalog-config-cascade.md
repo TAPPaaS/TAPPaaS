@@ -1,13 +1,14 @@
 # ADR-004: Module catalog → desired-state config cascade
 
-**Status:** accepted — **Layer 2 (catalog) live; Layer 1 (config cascade) SUPERSEDED by ADR-007** (2026-06-30)
+**Status:** accepted — **Layer 2 (catalog) live (extended by ADR-007); Layer 1 (config cascade) retired/superseded by ADR-007; Layer 3 (zone folders) obsolete** (2026-06-30; body reconciled 2026-09-02)
 **Date:** 2026-06-04
 **Deciders:** @LarsRossen + @ErikDaniel007
 **Related:** #297, #305, repository.sh; **superseded in part by** [ADR-007d Site](<ADR-007d - Site.md>) + [ADR-007c Environments](<ADR-007c - Environments.md>)
 
-> **⚠ Partial supersession (2026-06-30).** **Layer 2** — the module *catalog* (`modules.json`→
+> **⚠ Partial supersession (2026-06-30; body reconciled 2026-09-02).** **Layer 2** — the module *catalog* (`modules.json`→
 > `module-catalog.json`, schema `schemas/module-catalog-fields.json`, the `stack`/`category`/`status`
-> taxonomy) — is **fully live and unchanged**. **Layer 1** — the `configuration.json` registry + config
+> taxonomy) — is **fully live**, and has since been **extended by ADR-007**: `tier`/`source`/`repo`/`legacyName`
+> now sit alongside `stack`/`category`/`status` in each entry. **Layer 1** — the `configuration.json` registry + config
 > cascade this ADR is built around — is **superseded by ADR-007**: `configuration.json` was **retired**
 > (migrated then deleted) and replaced by `config/site.json` (`schemas/site-fields.json`) +
 > `config/environments/*.json` (`environment-fields.json`); the `managed`/`catalog` repo fields were **not**
@@ -42,7 +43,7 @@ src/module-catalog.json            ← Layer 2: what CAN exist  (#305: renamed f
 ```
 
 **Reference schemas:**
-- Layer 1: `src/foundation/configuration-fields.json`
+- Layer 1: ~~`src/foundation/configuration-fields.json`~~ — **retired**; replaced by `schemas/site-fields.json` + `schemas/environment-fields.json` (ADR-007)
 - Layer 2: `src/foundation/schemas/module-catalog-fields.json` · `src/foundation/schemas/module-fields.json`
 - Layer 2 dependency graph: `src/module-dependencies.md`
 
@@ -112,7 +113,7 @@ Add cluster-wide timezone to `configuration.json`:
 
 `copy-update-json.sh` propagates it to instance configs as `timeZone`. `update-os.sh` injects it before `nixos-rebuild switch`. NixOS modules use `lib.mkDefault "UTC"` as fallback — no per-module `timeZone` field. See `src/foundation/configuration-fields.json` for field schema.
 
-`repository.sh add --managed <full|tracked>` is the authoritative tool for registering repos.
+`repository.sh add --managed <full|tracked>` is the authoritative tool for registering repos. *(Since relocated to `src/foundation/tappaas-cicd/manager/site-manager/repository.sh`; repos now live under `site.json.repositories`, ADR-007 — the `managed`/`catalog` fields were not carried across.)*
 
 ---
 
@@ -200,8 +201,8 @@ Required fields per entry *(NEW: `stack`, `category`, `status`)*:
 |---|---|---|
 | #297 | `module-catalog.json` rename + JSON Schema (`module-catalog-fields.json`) | ✅ done |
 | #305 | Rename `modules.json` → `module-catalog.json` (TAPPaaS + Community repos) | ✅ done |
-| TBD | `timezone` field in `configuration.json` + propagation | **to file** (deferred) |
-| TBD | Config directory zone-based folder structure | **to file** (deferred) |
+| — | `timezone` + propagation | ✅ **done** — relocated to `site.json` (`schemas/site-fields.json`), not `configuration.json` (ADR-007) |
+| — | Config directory zone-based folder structure | ⊘ **obsolete** — ADR-007 uses flat `config/<name>.json`; placement is per-environment, not per-zone-folder |
 
 ---
 
@@ -226,7 +227,7 @@ Required fields per entry *(NEW: `stack`, `category`, `status`)*:
 ### Implementation order
 
 1. ✅ Merge #297 + #305 (`module-catalog.json` rename + `module-catalog-fields.json` schema)
-2. ⏳ File + implement `timezone` issue *(deferred — own issue)*
-3. ✅ `repository.sh --managed` + `catalog` field in `configuration.json`
-4. ⏳ Config folder structure migration + `install-module.sh` update *(deferred — own issue)*
-5. ✅ Add `stack` + `category` + `status` to catalog entries
+2. ✅ `timezone` — relocated to `site.json` (ADR-007), not `configuration.json`
+3. ✅ `repository.sh --managed` + `catalog` field *(Layer 1 since superseded — repos now in `site.json.repositories`)*
+4. ⊘ Config folder structure — **obsolete** (ADR-007: flat `config/<name>.json`, per-environment placement)
+5. ✅ Add `stack` + `category` + `status` to catalog entries *(ADR-007 later added `tier`/`source`/`repo`/`legacyName`)*
