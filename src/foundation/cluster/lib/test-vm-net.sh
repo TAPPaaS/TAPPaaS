@@ -145,5 +145,13 @@ ck "parse mac"         "02:7A:7E:D3:24:D0" "$(vmnet_parse "${NET}" mac)"
 ck "parse missing tag" ""                  "$(vmnet_parse "virtio=02:7A,bridge=lan" tag)"
 ck "parse queues"      "4"                 "$(vmnet_parse 'virtio=02:7A,bridge=lan,trunks=210;610,queues=4' queues)"
 
+# An LXC NIC spells the MAC "hwaddr=" where a VM spells it in the model token
+# (#465). One parser must read both, or every container reports an empty MAC —
+# which is what happened until the cluster:lxc reporter exercised this path.
+LXCNET="name=eth0,bridge=lan,hwaddr=02:C5:EC:06:CD:22,ip=dhcp,tag=200,type=veth"
+ck "parse lxc mac"     "02:C5:EC:06:CD:22" "$(vmnet_parse "${LXCNET}" mac)"
+ck "parse lxc bridge"  "lan"               "$(vmnet_parse "${LXCNET}" bridge)"
+ck "parse lxc tag"     "200"               "$(vmnet_parse "${LXCNET}" tag)"
+
 echo "RESULT: ${PASS} passed, ${FAIL} failed"
 [[ ${FAIL} -eq 0 ]]

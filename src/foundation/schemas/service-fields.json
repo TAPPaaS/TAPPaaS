@@ -72,7 +72,7 @@
     "normalizer": {
       "type": "string",
       "description": "Declared normalization, applied by the MANAGER to BOTH sides of the diff (ADR-020 D7). Services report raw values and never normalize, so there is one comparison rule per field rather than one per code path.",
-      "enum": ["string", "integer", "boolean", "tags", "trunks", "vlan", "size"],
+      "enum": ["string", "integer", "boolean", "tags", "trunks", "vlan", "size", "optional"],
       "enumDescriptions": {
         "string": "Trim only (the default).",
         "integer": "Numeric comparison, so \"8\" equals 8.",
@@ -80,7 +80,8 @@
         "tags": "Lowercase, split on , ; or whitespace, dedupe, sort, join with ';' — matches how Proxmox stores tags.",
         "trunks": "Zone-name list resolved to VLAN ids, sorted.",
         "vlan": "VLAN tag; an absent tag equals 0.",
-        "size": "Size with a unit suffix compared as bytes, so \"8G\" equals \"8192M\"."
+        "size": "Size with a unit suffix compared as bytes, so \"8G\" equals \"8192M\".",
+        "optional": "The TAPPaaS \"NONE\" sentinel means not-set, so an undeclared optional value equals a component the guest does not have (bridge1: no second NIC)."
       }
     },
     "sideEffect": {

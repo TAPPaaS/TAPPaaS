@@ -254,14 +254,38 @@ else
         fail "report-service.sh with no module should exit 2, got ${rc}"
     fi
 
-    # An unknown module is a READ failure (1) — state unknown, never a partial
-    # report that a caller could mistake for "the guest has nothing set".
+    # Each failure mode has its OWN exit code, so a consumer never has to
+    # pattern-match stderr to tell "the cluster is down" from "this guest is
+    # gone" from "it is there but unreadable" (#526). An unknown module is 3:
+    # not deployed here.
     "${REPORTER}" __no_such_module__ >/dev/null 2>&1
     rc=$?
-    if [[ ${rc} -eq 1 ]]; then
-        pass "report-service.sh on an unknown module exits 1 (state unknown)"
+    if [[ ${rc} -eq 3 ]]; then
+        pass "report-service.sh on an undeployed module exits 3 (not deployed)"
     else
-        fail "report-service.sh on an unknown module should exit 1, got ${rc}"
+        fail "report-service.sh on an undeployed module should exit 3, got ${rc}"
+    fi
+
+    # A guest of the WRONG TYPE for this reporter is "not present on any node"
+    # (5), not a crash — that is the code module-manager retries the other
+    # reporter on, so a module whose dependsOn names the wrong cluster service
+    # is still reported.
+    lxc_probe=""
+    for j in "${CONFIG_DIR}"/*.json; do
+        if jq -e '(.dependsOn // []) | index("cluster:lxc") != null' "$j" >/dev/null 2>&1; then
+            lxc_probe="$(basename "$j" .json)"; break
+        fi
+    done
+    if [[ -n "${lxc_probe}" ]]; then
+        "${REPORTER}" "${lxc_probe}" >/dev/null 2>&1
+        rc=$?
+        if [[ ${rc} -eq 5 ]]; then
+            pass "the VM reporter says 'not present' (5) for a container, so the caller can retry"
+        else
+            fail "the VM reporter should exit 5 for a container, got ${rc}"
+        fi
+    else
+        skip "wrong-guest-type probe (no cluster:lxc module deployed)"
     fi
 
     if [[ "${node_reachable}" -eq 0 || -z "${target:-}" ]]; then
@@ -317,6 +341,58 @@ else
             else
                 fail "net0 was empty for ${target} — every TAPPaaS VM has a primary NIC"
             fi
+
+            # Each NIC is reported whole AND split, so the manager never parses
+            # a netopts string itself (ADR-020 Resolved Question 11).
+            if [[ "$(jq -r '."net0.bridge"' <<< "${report}")" \
+                  == "$(sed -n 's/.*bridge=\([^,]*\).*/\1/p' <<< "$(jq -r '.net0' <<< "${report}")")" ]]; then
+                pass "net0.bridge matches the bridge inside the whole net0 value"
+            else
+                fail "net0.bridge disagrees with the net0 string it was split from"
+            fi
+        fi
+    fi
+fi
+
+# The same contract for the LXC reporter. A container spells almost every key
+# differently (hostname/rootfs/hwaddr, no bios or cpu), so it is a separate
+# script over the shared mechanism — and a separate assertion.
+LXC_REPORTER="${SCRIPT_DIR}/services/lxc/report-service.sh"
+lxc_target=""
+for j in "${CONFIG_DIR}"/*.json; do
+    m=$(basename "$j" .json)
+    [[ "$m" == "test-lxcdrift" ]] && continue
+    if jq -e '(.dependsOn // []) | index("cluster:lxc") != null' "$j" >/dev/null 2>&1; then
+        lxc_target="$m"; break
+    fi
+done
+
+if [[ ! -x "${LXC_REPORTER}" ]]; then
+    fail "cluster:lxc report-service.sh is missing or not executable"
+elif [[ "${node_reachable}" -eq 0 || -z "${lxc_target}" ]]; then
+    skip "live LXC report (no reachable node / no installed cluster:lxc module)"
+else
+    lxc_report="$("${LXC_REPORTER}" "${lxc_target}" 2>/dev/null)"
+    if ! jq -e . >/dev/null 2>&1 <<< "${lxc_report}"; then
+        fail "cluster:lxc report-service.sh ${lxc_target} did not emit valid JSON"
+    else
+        pass "cluster:lxc report-service.sh ${lxc_target} emits valid JSON"
+        # hostname, not name; rootfs-derived size; and the hwaddr spelling of
+        # the MAC, which the shared parser had to learn to read (#465).
+        if [[ -n "$(jq -r '.hostname' <<< "${lxc_report}")" ]]; then
+            pass "a container reports 'hostname' (its spelling of the guest name)"
+        else
+            fail "cluster:lxc report omitted hostname"
+        fi
+        if [[ "$(jq -r '."net0.mac"' <<< "${lxc_report}")" =~ ^([0-9A-Fa-f]{2}:){5}[0-9A-Fa-f]{2}$ ]]; then
+            pass "a container's hwaddr= MAC is parsed by the same vm-net parser"
+        else
+            fail "cluster:lxc report-service.sh did not parse the container's hwaddr MAC"
+        fi
+        if [[ -n "$(jq -r '.diskSize' <<< "${lxc_report}")" ]]; then
+            pass "a container's rootfs size is reported as diskSize"
+        else
+            fail "cluster:lxc report omitted diskSize (rootfs)"
         fi
     fi
 fi

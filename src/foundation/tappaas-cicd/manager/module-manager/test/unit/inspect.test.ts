@@ -10,13 +10,14 @@
 import { chmodSync, mkdtempSync, rmSync, writeFileSync } from "fs";
 import { tmpdir } from "os";
 import { join } from "path";
-import {
-  buildConfigOnlyReport,
-  buildVmReport,
-  guestTypeFromDeps,
-  parseQmConfig,
-  vmnetParse,
-} from "../../src/inspect";
+// The live-state fixtures below are shaped as report-service.sh emits them, not
+// as `qm config` text: inspect no longer parses a Proxmox config (ADR-020
+// Resolved Question 11), so a test that fed it one would be testing a decoder
+// that has moved to the provider. `reportShape` builds that object from the same
+// verbatim `qm config`/`pct config` output the old fixtures used, so the inputs
+// stay recognisable and the parsing rule under test is the reporter's, asserted
+// in cluster/lib/test-vm-net.sh.
+import { buildConfigOnlyReport, buildVmReport, guestTypeFromDeps } from "../../src/inspect";
 // The resolver is no longer inspect's own (ADR-020 D1) — it lives in lib/ts and
 // inspect is one of its consumers. Importing it from its real home here is part
 // of the assertion: if these tests could still reach it through ../../src/inspect,
@@ -56,6 +57,70 @@ const CONFIG =
 // Report lines as one plain string (colors included — assertions match on text).
 function text(lines: { text: string }[]): string {
   return lines.map((l) => l.text).join("\n");
+}
+
+// Build a live-state object in the shape report-service.sh emits, from the same
+// verbatim `qm config` / `pct config` text the fixtures used before ADR-020.
+//
+// This is a TEST-ONLY mirror of what the two reporters do in bash, and it is
+// deliberately not shared with production code: the point of ADR-020 D7 is that
+// the DECODING lives in the provider, so a shared decoder here would recreate
+// the twin it removed. What it must stay faithful to is the SHAPE — flat keys,
+// every value a string, each NIC present both whole and split — which the
+// cluster test-suite asserts against the real scripts.
+function reportShape(
+  configText: string,
+  opts: { node: string; status?: string; guest?: "qemu" | "lxc" } = { node: "tappaas1" },
+): Record<string, string> {
+  const raw: Record<string, string> = {};
+  for (const line of configText.split("\n")) {
+    const i = line.indexOf(":");
+    if (i <= 0) continue;
+    raw[line.slice(0, i).trim()] = line.slice(i + 1).trim();
+  }
+  const isLxc = (opts.guest ?? "qemu") === "lxc";
+  const nicPart = (nic: string, part: string): string => {
+    for (const tok of nic.split(",")) {
+      const eq = tok.indexOf("=");
+      const k = eq === -1 ? tok : tok.slice(0, eq);
+      const v = eq === -1 ? tok : tok.slice(eq + 1);
+      if (part === "mac") {
+        if (["virtio", "e1000", "e1000e", "rtl8139", "vmxnet3", "hwaddr"].includes(k)) return v;
+      } else if (k === part) return v;
+    }
+    return "";
+  };
+  const disk = isLxc
+    ? raw.rootfs ?? ""
+    : raw.scsi0 ?? raw.virtio0 ?? raw.ide0 ?? raw.sata0 ?? "";
+  const out: Record<string, string> = {
+    vmid: raw.vmid ?? "",
+    node: opts.node,
+    status: opts.status ?? "running",
+    cores: raw.cores ?? (isLxc ? "1" : "1"),
+    memory: raw.memory ?? "512",
+    tags: raw.tags ?? "",
+    ostype: raw.ostype ?? "",
+    storage: disk.includes(":") ? disk.slice(0, disk.indexOf(":")) : "",
+    diskSize: /size=([^,]+)/.exec(disk)?.[1] ?? "",
+  };
+  if (isLxc) {
+    out.hostname = raw.hostname ?? "";
+  } else {
+    out.name = raw.name ?? "";
+    out.cpu = raw.cpu ?? "kvm64";
+    out.bios = raw.bios ?? "seabios";
+  }
+  for (const i of isLxc ? [0] : [0, 1]) {
+    const nic = raw[`net${i}`] ?? "";
+    out[`net${i}`] = nic;
+    out[`net${i}.bridge`] = nicPart(nic, "bridge");
+    out[`net${i}.tag`] = nicPart(nic, "tag");
+    out[`net${i}.trunks`] = nicPart(nic, "trunks");
+    out[`net${i}.mac`] = nicPart(nic, "mac");
+    if (!isLxc) out[`net${i}.queues`] = nicPart(nic, "queues");
+  }
+  return out;
 }
 
 // ── 1. dependency coordinate parsing (bash %%:* / ##*: parity) ──────────
@@ -403,7 +468,7 @@ function text(lines: { text: string }[]): string {
   // is host too, no drift.
   const matching = buildVmReport({
     ...base,
-    actual: parseQmConfig(["name: demo", "cores: 2", "cpu: host"].join("\n")),
+    actual: reportShape(["name: demo", "cores: 2", "memory: 4096", "cpu: host"].join("\n"), { node: "tappaas1" }),
   });
   check(/cputype\s+.*<host>\s+host/.test(strip(matching)),
     "#550: an unset cputype renders Desired '<host>' (bracketed default), not '-'");
@@ -412,13 +477,13 @@ function text(lines: { text: string }[]): string {
   // Actual differs from the default → drift (the update path would qm-set it).
   const drifting = buildVmReport({
     ...base,
-    actual: parseQmConfig(["name: demo", "cores: 2", "cpu: x86-64-v2"].join("\n")),
+    actual: reportShape(["name: demo", "cores: 2", "memory: 4096", "cpu: x86-64-v2"].join("\n"), { node: "tappaas1" }),
   });
   check(drifting.errors >= 1, "#550: actual differing from the defaulted desired reports drift");
 
   // Without a schema, behaviour is unchanged (no defaults, no brackets).
   const noSchema = buildVmReport({ ...base, schema: undefined,
-    actual: parseQmConfig(["name: demo", "cpu: host"].join("\n")) });
+    actual: reportShape(["name: demo", "cores: 2", "memory: 4096", "cpu: host"].join("\n"), { node: "tappaas1" }) });
   check(!/<host>/.test(text(noSchema.lines)),
     "#550: no schema → no defaulting (back-compat, literal values only)");
 
@@ -430,7 +495,7 @@ function text(lines: { text: string }[]): string {
     git: { vmname: "demo", vmid: 410, node: "tappaas1", dependsOn: ["cluster:vm"] }, // release says tappaas1
     orig: { vmname: "demo", vmid: 410, node: "tappaas1", dependsOn: ["cluster:vm"] }, // pre-image said tappaas1
     zones: null,
-    actual: parseQmConfig(["name: demo"].join("\n")),
+    actual: reportShape(["name: demo", "cores: 2", "memory: 4096", "cpu: host"].join("\n"), { node: "tappaas2" }),
     vmStatus: "running", actualNode: "tappaas2", schema,
   });
   check(/not tracking release state on purpose/.test(strip(overridden)),
@@ -446,7 +511,7 @@ function text(lines: { text: string }[]): string {
     git: { vmname: "demo", vmid: 410, node: "tappaas1", dependsOn: ["cluster:vm"] },
     orig: { vmname: "demo", vmid: 410, node: "tappaas2", dependsOn: ["cluster:vm"] }, // pre-image already tappaas2
     zones: null,
-    actual: parseQmConfig(["name: demo"].join("\n")),
+    actual: reportShape(["name: demo", "cores: 2", "memory: 4096", "cpu: host"].join("\n"), { node: "tappaas2" }),
     vmStatus: "running", actualNode: "tappaas2", schema,
   });
   check(tracked.warnings >= 1 && !/not tracking release/.test(strip(tracked)),
@@ -469,7 +534,7 @@ function text(lines: { text: string }[]): string {
   // Verbatim `pct config 312` output for the vllm-amd container (#465): an LXC
   // names the guest `hostname`, keeps its root volume in `rootfs` (no disk
   // bus), carries the MAC as hwaddr=, and has no bios/cpu key at all.
-  const actual = parseQmConfig(
+  const actual = reportShape(
     [
       "arch: amd64",
       "cores: 24",
@@ -482,12 +547,17 @@ function text(lines: { text: string }[]): string {
       "rootfs: tanka1:subvol-312-disk-0,size=32G",
       "swap: 0",
     ].join("\n"),
+    { node: "tappaas2", guest: "lxc" },
   );
   check(
-    vmnetParse(actual.net0, "mac") === "02:C5:EC:06:CD:22" &&
-      vmnetParse(actual.net0, "bridge") === "lan" &&
-      vmnetParse(actual.net0, "tag") === "200",
-    "vmnetParse reads the LXC hwaddr= NIC form as well as the QEMU model= one",
+    actual["net0.mac"] === "02:C5:EC:06:CD:22" &&
+      actual["net0.bridge"] === "lan" &&
+      actual["net0.tag"] === "200",
+    "a container's hwaddr= NIC is reported split, like a VM's model= one",
+  );
+  check(
+    actual.hostname === "vllm-amd" && actual.diskSize === "32G" && actual.bios === undefined,
+    "a container reports hostname + a rootfs-derived diskSize, and no bios at all",
   );
 
   const cfg = {
@@ -552,8 +622,9 @@ function text(lines: { text: string }[]): string {
       cfg: { vmname: "network", vmid: 110, node: "tappaas1", diskSize: "32G" },
       git: null,
       zones: null,
-      actual: parseQmConfig(
+      actual: reportShape(
         ["name: network", "cores: 4", "scsi0: tanka1:vm-110-disk-0,size=32G"].join("\n"),
+        { node: "tappaas1" },
       ),
       vmStatus: "running",
       actualNode: "tappaas1",

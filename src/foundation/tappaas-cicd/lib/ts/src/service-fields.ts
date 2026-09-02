@@ -148,6 +148,7 @@ export const NORMALIZERS = [
   "trunks", // zone-name list → resolved VLAN id list, sorted
   "vlan", // VLAN tag, absent == 0
   "size", // disk size with a unit suffix → bytes, so "8G" == "8192M"
+  "optional", // the "NONE" sentinel means absent, so it equals a missing value
 ] as const;
 export type Normalizer = (typeof NORMALIZERS)[number];
 

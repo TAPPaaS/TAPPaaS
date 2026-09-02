@@ -48,12 +48,14 @@
       "class": "in-place-reboot",
       "apply": "composite",
       "composite": "net0",
+      "liveKey": "net0.bridge",
       "note": "A bridge change moves the guest to a different L2 segment, so it must re-DHCP — hence the reboot."
     },
     "zone0": {
       "class": "in-place-reboot",
       "apply": "composite",
       "composite": "net0",
+      "liveKey": "net0.tag",
       "normalize": "vlan",
       "note": "The zone resolves to net0's VLAN tag; a new tag is a new subnet, so the guest must renew DHCP and re-register DNS."
     },
@@ -61,12 +63,14 @@
       "class": "in-place",
       "apply": "composite",
       "composite": "net0",
+      "liveKey": "net0.mac",
       "note": "Applies live on the bridge — no reboot. When the module pins no mac0 the LIVE MAC is preserved, which is why the manager (not the hook) assembles the finished netopts string."
     },
     "trunks0": {
       "class": "in-place",
       "apply": "composite",
       "composite": "net0",
+      "liveKey": "net0.trunks",
       "normalize": "trunks",
       "note": "A trunk-only change applies live on the bridge — no reboot."
     },
@@ -75,23 +79,28 @@
       "class": "in-place-reboot",
       "apply": "composite",
       "composite": "net1",
+      "liveKey": "net1.bridge",
+      "normalize": "optional",
       "note": "Also the ADD/REMOVE switch for the second NIC. Its module-fields.json default is the sentinel 'NONE', so an undeclared bridge1 resolves to 'no second NIC' — the same reading Create-TAPPaaS-VM.sh and update-service.sh have always had. 'NONE' with a live net1 means the NIC is removed, which likewise reboots."
     },
     "zone1": {
       "class": "in-place-reboot",
       "apply": "composite",
       "composite": "net1",
+      "liveKey": "net1.tag",
       "normalize": "vlan"
     },
     "mac1": {
       "class": "in-place",
       "apply": "composite",
-      "composite": "net1"
+      "composite": "net1",
+      "liveKey": "net1.mac"
     },
     "trunks1": {
       "class": "in-place",
       "apply": "composite",
       "composite": "net1",
+      "liveKey": "net1.trunks",
       "normalize": "trunks"
     },
 
@@ -110,7 +119,7 @@
       "hook": "update-node.sh",
       "liveKey": "node",
       "sideEffects": ["ha-repoint"],
-      "note": "The ADR-019 bridge. The hook routes HA-vs-non-HA internally: a module that dependsOn cluster:ha has its node drift handled by the HA rule (re-point), a plain module by qm migrate. Live-OK decides whether the migrate needs downtime, so this refuses (exit 10) rather than migrating offline without --force."
+      "note": "The ADR-019 bridge. The hook routes HA-vs-non-HA internally: a module that dependsOn cluster:ha has its node drift handled by the HA rule (re-point), a plain module by qm migrate. Live-OK decides whether the migrate needs downtime, so this refuses (exit 10) rather than migrating offline without --force. module-fields.json gives node NO default, so a module that declares none has no desired placement and is left where it runs. update-service.sh instead defaulted it to the FIRST site node, which would silently migrate an undeclared guest back to node 0 after any failover or manual move — a latent hazard that only stayed invisible because the estate's undeclared guests happen to sit on node 0. Expressing no placement is not the same as asking for node 0."
     },
 
     "storage": {

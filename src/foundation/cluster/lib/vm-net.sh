@@ -158,9 +158,13 @@ vmnet_parse() {
         v="${p#*=}"
         case "$field" in
             mac)
-                # model token: e.g. "virtio=02:7A:..". Match a known NIC model key.
+                # A QEMU NIC carries the MAC in its MODEL token ("virtio=02:7A:..");
+                # an LXC NIC spells the same fact "hwaddr=02:7A:.." (#465). Accept
+                # both so one parser serves both guest types — the TypeScript port
+                # in inspect.ts already did, and a parser that understood only the
+                # QEMU spelling silently reported an empty MAC for every container.
                 case "$k" in
-                    virtio|e1000|e1000e|rtl8139|vmxnet3) echo -n "$v"; return 0 ;;
+                    virtio|e1000|e1000e|rtl8139|vmxnet3|hwaddr) echo -n "$v"; return 0 ;;
                 esac
                 ;;
             bridge) [[ "$k" == "bridge" ]] && { echo -n "$v"; return 0; } ;;

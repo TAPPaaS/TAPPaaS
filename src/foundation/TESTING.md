@@ -13,7 +13,7 @@ run) and an optional **deep tier** (live, gated by `TAPPAAS_TEST_DEEP=1` and/or
 
 | Module | test.sh | Fast | Deep tier | Gap |
 |--------|:-------:|------|-----------|-----|
-| cluster | ✅ | script presence + `vm-net.sh` unit suite + `cluster:vm --check` | ✅ live vm/ha/lxc reconcile (#192/#193/#203) | live migration not exercised |
+| cluster | ✅ | script presence + `vm-net.sh` unit suite (incl. the LXC `hwaddr=` NIC form) + `cluster:vm --check` + **`report-service.sh` actual-state contract for vm AND lxc** (valid JSON on stdout only, every declared liveKey present, all values strings, reported node = cluster node, each NIC split consistently with its whole value) | ✅ live vm/ha/lxc reconcile (#192/#193/#203) | live migration not exercised; `--apply-drift` and the `update-<field>.sh` hooks land in ADR-020 P3 |
 | network | ✅ | zones audit + opnsense compile + **unifi-plugin unit (incl. `tagged_vlan_mgmt:custom` regression)** + plane-bin-resolves | ✅ live OPNsense rules/NAT/connectivity; switch+ap **5-verb lifecycle via generic/manual plugin only** | no live switch/AP hardware path; proxmox apply + top-level network-manager reconcile only smoke-tested |
 | identity | ✅ | Authentik reachable + role groups + allow-list grep | ✅ live forward-auth gating vs OIDC passthrough (fixture VMs) | §3 is a source grep, not enforcement |
 | logging | ✅ | **live** 8 health probes (Loki/Grafana/Promtail/syslog) | ❌ **none** | liveness-only; ingest assertion weak; no retention/dashboards/alerting |
@@ -28,7 +28,7 @@ run) and an optional **deep tier** (live, gated by `TAPPAAS_TEST_DEEP=1` and/or
 | people-manager | reconcile + entity CRUD (incl. ref guards) | ✅ **strong** — live Authentik OIDC/forward-auth via fixture VMs | — |
 | network-manager | reconcile orchestration (FakePlaneClient) + plane-bin-resolves | ✅ live reconcile **dry-run** | apply path not driven from the manager test (covered in network module) |
 | environment-manager | config CRUD + cascade | ✅ **light** — read-only-validates the live env | cascade apply not exercised live |
-| module-manager | list/show/validate + reconcile delegation (39 asserts) | ⚠️ gate exists but **same as fast (no live probes)** | no live install/update/reconcile probe |
+| module-manager | list/show/validate + reconcile delegation, plus the ADR-020 offline core: the one **resolver** (`resolve.test.ts`, incl. the mutation proof that one resolver change reddens both it and `inspect`), the **field manifests** (`manifest.test.ts` — vocabulary parity with `schemas/service-fields.json`, coverage, one mutation per lint rule), the one **differ** (`drift.test.ts` — every normalizer symmetric + idempotent, composite escalation, the real cluster:vm manifest against a real reporter payload), and the **reporter client's error model** (`report.test.ts` — exit 4/5/6 stay separable, #526) | ⚠️ gate exists but **same as fast (no live probes)** | no live install/update/reconcile probe; the deep `modify --set` tier arrives with ADR-020 P4 |
 | site-manager | validate + reconcile dispatch | ⚠️ **no extra deep** | cascade/`--deep` not live-tested |
 | backup-manager | cascade resolve + validate + modify (46 asserts) | ⚠️ **no live** (pure config — defensible) | the actual PBS push lives in backup-controller (see below) |
 | health-manager | inspect/gate unit tests (23 asserts) | ❌ **no deep gate at all** | the manager *reads the live cluster* (`list vm`, `validate`) yet has **no live tier** to exercise it |

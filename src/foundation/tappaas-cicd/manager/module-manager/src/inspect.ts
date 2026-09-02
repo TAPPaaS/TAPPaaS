@@ -34,17 +34,17 @@
 
 import { existsSync, readFileSync } from "fs";
 import { join } from "path";
-import { mgmtDomain, ssh } from "../../../lib/ts/src/cluster";
 import { readJsonObject } from "../../../lib/ts/src/config-io";
 import {
   ModuleFieldsSchema,
   dependsOnOf,
   getField,
   integratesWithOf,
-  jqStr,
   loadModuleFields,
   resolveField,
 } from "../../../lib/ts/src/desired";
+import { ZonesFile, normTags, normTrunks, normVlan } from "../../../lib/ts/src/drift";
+import { GuestType, reportGuest } from "./report";
 import { defaultConfigDir, normalizeModuleConfig } from "./config";
 import {
   ServiceSection,
@@ -63,136 +63,26 @@ import { BL, BOLD, CL, GN, RD, YW, error, info, warn } from "./shlog";
 // path does — the root cause of #550 was that it did not. inspect is now one
 // consumer of that resolver, not its home.
 
-// ── pure: qm-config / vm-net helpers (ports of cluster/lib/vm-net.sh) ──
+// ── the qm-config parsing and the normalizers: NOT here ────────────────
+//
+// This file used to hold a TypeScript port of cluster/lib/vm-net.sh — a
+// `qm config` parser, a netopts splitter, the zone→VLAN and trunk resolvers,
+// and the tag canonicaliser. Every one of them had a bash twin doing the same
+// job on the acting side, and the twins had already drifted apart: the bash
+// netopts parser did not understand a container's `hwaddr=` MAC, and the two
+// tag normalizers disagreed about duplicates and whitespace.
+//
+// ADR-020 D7 splits that work by WHO KNOWS WHAT, not by who happens to need it:
+//   - decoding a provider's own spelling  → the provider's report-service.sh
+//   - normalizing for comparison          → lib/ts/src/drift.ts, ONE copy,
+//                                           applied to both sides of the diff
+// inspect is now a consumer of both (Resolved Question 11). fmtVlan stays: it is
+// presentation, not comparison — "(untagged)" is how this table renders a 0.
 
-// Parse the `qm config <vmid>` key: value text into a map (the bash while-read
-// loop; keys up to the first colon, values trimmed).
-export function parseQmConfig(text: string): Record<string, string> {
-  const out: Record<string, string> = {};
-  for (const line of text.split("\n")) {
-    const idx = line.indexOf(":");
-    if (idx <= 0) continue;
-    const key = line.slice(0, idx).trim();
-    if (key) out[key] = line.slice(idx + 1).trim();
-  }
-  return out;
-}
-
-// Extract one field from a live netN value. QEMU spells it
-// "virtio=02:..,bridge=lan,tag=210" (the model=MAC token yields the mac); LXC
-// spells the same NIC "name=eth0,bridge=lan,hwaddr=02:..,ip=dhcp,tag=200"
-// (#465) — bridge/tag/trunks are shared, only the MAC token differs, so the
-// mac lookup accepts either form and every caller stays type-agnostic.
-const NIC_MODELS = new Set(["virtio", "e1000", "e1000e", "rtl8139", "vmxnet3"]);
-export function vmnetParse(
-  line: string,
-  field: "mac" | "bridge" | "tag" | "trunks" | "queues",
-): string {
-  for (const part of line.split(",")) {
-    const eq = part.indexOf("=");
-    const k = eq === -1 ? part : part.slice(0, eq);
-    const v = eq === -1 ? part : part.slice(eq + 1);
-    if (field === "mac") {
-      if (NIC_MODELS.has(k) || k === "hwaddr") return v;
-    } else if (k === field) {
-      return v;
-    }
-  }
-  return "";
-}
-
-// zones.json as parsed JSON (null when absent/unreadable — every lookup then
-// resolves to "undefined zone", exactly as jq against a missing file did).
-export type ZonesFile = Record<string, unknown> | null;
-
-function zoneEntry(zones: ZonesFile, zone: string): Record<string, unknown> | null {
-  if (!zones || !(zone in zones)) return null;
-  const z = zones[zone];
-  return z !== null && typeof z === "object" && !Array.isArray(z)
-    ? (z as Record<string, unknown>)
-    : {};
-}
-
-function zoneTag(entry: Record<string, unknown>): number {
-  const t = entry.vlantag;
-  return typeof t === "number" ? t : 0; // jq `.vlantag // 0`
-}
-
-// Resolve a zone name to its VLAN tag (vmnet_zone_vlantag). Returns null when
-// the zone is undefined or Inactive (the bash returned rc 1; inspect-vm.sh
-// discarded the error via `|| true` → empty value, which fmtVlan renders as
-// "(untagged)").
-export function vmnetZoneVlantag(zone: string, zones: ZonesFile): string | null {
-  const entry = zoneEntry(zones, zone);
-  if (!entry) return null;
-  if (jqStr(entry.state) === "Inactive") return null;
-  return String(zoneTag(entry));
-}
-
-// Every Active/Mandatory zone's non-zero tag, sorted, ';'-joined — the "ALL"
-// trunk-sentinel expansion (vmnet_all_active_tags, issue #194).
-export function vmnetAllActiveTags(zones: ZonesFile): string {
-  if (!zones) return "";
-  const tags: number[] = [];
-  for (const v of Object.values(zones)) {
-    if (v === null || typeof v !== "object" || Array.isArray(v)) continue;
-    const entry = v as Record<string, unknown>;
-    const state = jqStr(entry.state);
-    if (state !== "Active" && state !== "Mandatory") continue;
-    const tag = zoneTag(entry);
-    if (tag > 0) tags.push(tag);
-  }
-  return [...new Set(tags)].sort((a, b) => a - b).map(String).join(";");
-}
-
-// Convert a ';'-separated list of trunk ZONE NAMES to VLAN tags
-// (vmnet_resolve_trunks). "ALL"/"*" expands to every active zone tag. An
-// UNDEFINED zone is an error → null (the bash returned 1 and inspect-vm.sh's
-// `|| true` collapsed the value to ""). Non-trunkable (not
-// Active/Mandatory/Manual) and untagged (vlantag<=0) zones are skipped —
-// silently here: the bash warn lines were emitted INTO the command
-// substitution and polluted the captured value (a latent bug this port fixes).
-export function vmnetResolveTrunks(zoneList: string, zones: ZonesFile): string | null {
-  if (zoneList === "ALL" || zoneList === "*") return vmnetAllActiveTags(zones);
-  const out: string[] = [];
-  for (const name of zoneList.split(";")) {
-    if (!name) continue;
-    const entry = zoneEntry(zones, name);
-    if (!entry) return null; // undefined trunk zone (or no zones.json)
-    const state = jqStr(entry.state);
-    if (state !== "Active" && state !== "Mandatory" && state !== "Manual") continue;
-    const tag = zoneTag(entry);
-    if (tag <= 0) continue;
-    out.push(String(tag));
-  }
-  return out.join(";");
-}
-
-// Proxmox tag=0 means untagged — collapse 0/""/missing to "(untagged)" so they
+// Proxmox tag=0 means untagged — render 0/""/missing as "(untagged)" so they
 // never show up as spurious drift (issue #334).
 export function fmtVlan(t: string): string {
   return !t || t === "0" ? "(untagged)" : t;
-}
-
-// Sort a ';'-separated VLAN list numerically and drop blanks, so resolved
-// config trunks and the live trunk list compare equal regardless of order.
-export function normTrunks(s: string): string {
-  return s
-    .split(";")
-    .filter((x) => x !== "")
-    .sort((a, b) => Number(a) - Number(b))
-    .join(";");
-}
-
-// Proxmox stores tags semicolon-separated lowercase sorted — normalize both
-// sides to that before comparing.
-export function normalizeTags(s: string): string {
-  return s
-    .split(/[,;]/)
-    .map((x) => x.toLowerCase())
-    .filter(Boolean)
-    .sort()
-    .join(";");
 }
 
 // ── pure: table building / rendering ───────────────────────────────────
@@ -354,11 +244,10 @@ export function serviceDepsOf(cfg: Record<string, unknown>): string[] {
 }
 
 // ── pure: Proxmox guest type ───────────────────────────────────────────
-// Which Proxmox CLI owns a guest, and which config keys its `config` output
-// uses: `qm` for a QEMU VM, `pct` for an LXC container (#465). Against an LXC
-// vmid `qm config` fails outright, so the whole live half of the report died
-// for a container that was in fact up and healthy.
-export type GuestType = "qemu" | "lxc";
+// GuestType is declared in report.ts, which owns the choice of reporter. It is
+// re-exported here because buildVmReport takes it and several callers import it
+// alongside the report builders.
+export type { GuestType } from "./report";
 
 // FALLBACK discriminator, for when the cluster-resources query could not answer
 // (unreachable node, bad JSON, guest not in the cluster listing). The live
@@ -441,19 +330,16 @@ export function buildVmReport(inp: VmInspectInputs): InspectReport {
   R("cores", "cores", actual.cores ?? "");
   R("memory", "memory", actual.memory ?? "");
 
-  // Storage / disk — actual size parsed from the first present disk bus
-  // (e.g. "tanka1:vm-311-disk-0,size=32G"). An LXC has no bus: its root volume
-  // is the single `rootfs` key ("tanka1:subvol-312-disk-0,size=32G"), same
-  // size= token (#465).
-  let actualDisk = "";
-  for (const key of isLxc ? ["rootfs"] : ["scsi0", "virtio0", "ide0", "sata0"]) {
-    if (actual[key]) {
-      const m = /size=([^,]+)/.exec(actual[key]);
-      actualDisk = m ? m[1] : "";
-      break;
-    }
-  }
-  R("diskSize", "diskSize", actualDisk);
+  // Storage / disk. Which bus a guest boots from — scsi0/virtio0/ide0/sata0 for
+  // a VM, the single `rootfs` for a container (#465) — and how to pull the size
+  // out of it is PROVIDER knowledge, so report-service.sh does that and hands
+  // over a plain `diskSize`. This file no longer knows what a Proxmox disk
+  // string looks like (ADR-020 Resolved Question 11).
+  //
+  // `storage` keeps its empty Actual cell for now even though the reporter
+  // supplies it: surfacing it is a rendering change, and this step is a
+  // refactor whose whole point is that the report does not move.
+  R("diskSize", "diskSize", actual.diskSize ?? "");
   R("storage", "storage", "");
 
   // BIOS / CPU type — QEMU-only concepts. A container has neither (their schema
@@ -465,8 +351,14 @@ export function buildVmReport(inp: VmInspectInputs): InspectReport {
   // Network — net0 and net1 (TAPPaaS allows at most two NICs per VM). For each
   // NIC: bridge, zone (by name AND by VLAN tag — two views of the same thing),
   // the trunk allow-list resolved to VLAN tags, and the MAC (issue #334).
+  // The reporter splits each NIC into components ("net0.bridge", "net0.tag",
+  // "net0.trunks", "net0.mac") alongside the whole value, so nothing here parses
+  // a netopts string. That decoding — and the fact that a container spells its
+  // MAC `hwaddr=` where a VM uses the model token — lives once, in the
+  // provider's reporter, for every consumer (ADR-020 Resolved Question 11).
   for (const i of [0, 1]) {
     const actualNet = actual[`net${i}`] ?? "";
+    const nic = (part: string): string => actual[`net${i}.${part}`] ?? "";
     const cB = rc(`bridge${i}`);
     const gB = rg(`bridge${i}`);
     const cZ = rc(`zone${i}`);
@@ -479,7 +371,7 @@ export function buildVmReport(inp: VmInspectInputs): InspectReport {
       continue;
     }
 
-    t.row(`bridge${i}`, cB.value, gB.value, vmnetParse(actualNet, "bridge"), {
+    t.row(`bridge${i}`, cB.value, gB.value, nic("bridge"), {
       cfgDefaulted: cB.defaulted,
       gitDefaulted: gB.defaulted,
       notTracking: notTrack(`bridge${i}`),
@@ -489,8 +381,8 @@ export function buildVmReport(inp: VmInspectInputs): InspectReport {
     // config-vs-git name change; the (vlan) row carries the VLAN NUMBER and
     // catches actual-vs-config drift (#334). The (vlan) row is derived, so it is
     // never angle-bracketed.
-    const actualTag = vmnetParse(actualNet, "tag");
-    const cfgVlan = cfgZone ? vmnetZoneVlantag(cfgZone, zones) ?? "" : "";
+    const actualTag = nic("tag");
+    const cfgVlan = cfgZone ? normVlan(cfgZone, zones) : "";
     t.row(`zone${i} (tag)`, cfgZone, gZ.value, cfgZone, {
       cfgDefaulted: cZ.defaulted,
       gitDefaulted: gZ.defaulted,
@@ -502,12 +394,12 @@ export function buildVmReport(inp: VmInspectInputs): InspectReport {
     // lines up with the live list, and normalize ordering on both sides. The
     // value shown is the resolved VLAN list, not the raw field, so it is not
     // angle-bracketed.
-    const cfgTrunksV = normTrunks(vmnetResolveTrunks(rc(`trunks${i}`).value, zones) ?? "");
-    const gitTrunksV = normTrunks(vmnetResolveTrunks(rg(`trunks${i}`).value, zones) ?? "");
-    const actTrunksV = normTrunks(vmnetParse(actualNet, "trunks"));
+    const cfgTrunksV = normTrunks(rc(`trunks${i}`).value, zones);
+    const gitTrunksV = normTrunks(rg(`trunks${i}`).value, zones);
+    const actTrunksV = normTrunks(nic("trunks"), zones);
     t.row(`trunks${i}`, cfgTrunksV, gitTrunksV, actTrunksV, { notTracking: notTrack(`trunks${i}`) });
 
-    R(`mac${i}`, `mac${i}`, vmnetParse(actualNet, "mac"));
+    R(`mac${i}`, `mac${i}`, nic("mac"));
   }
 
   // HA
@@ -538,7 +430,7 @@ export function buildVmReport(inp: VmInspectInputs): InspectReport {
     gitDefaulted: gTag.defaulted,
     notTracking: notTrack("vmtag"),
   };
-  if (cTag.value && actualTags && normalizeTags(cTag.value) === normalizeTags(actualTags)) {
+  if (cTag.value && actualTags && normTags(cTag.value) === normTags(actualTags)) {
     t.row("vmtag", cTag.value, gTag.value, cTag.value, tagOpts);
   } else {
     t.row("vmtag", cTag.value, gTag.value, actualTags, tagOpts);
@@ -689,47 +581,63 @@ export function inspectModule(module: string, opts: InspectOptions = {}): number
     return serviceExitCode(svc);
   }
 
-  const cfgFqdn = `${node}.${mgmtDomain()}`;
+  // ACTUAL state comes from the provider's own reporter (ADR-020 D7). It
+  // locates the guest cluster-wide, reads its config on the node it is really
+  // on — which #526 showed can differ from config.node, because a migrate or an
+  // HA failover deliberately leaves .node unchanged — and returns one flat JSON
+  // object. This file no longer runs `qm config` or parses it (Resolved
+  // Question 11): the provider knows how it spells its own state, and every
+  // consumer of that state now reads the one answer.
+  const environment = getField(cfg, "environment");
+  const declaredGuest = guestTypeFromDeps(cfg);
+  const { outcome, declaredGuest: wrongDeclaration } = reportGuest(
+    configDir,
+    module,
+    declaredGuest,
+    environment,
+  );
 
-  // Cluster resources FIRST (#465). This one query answers two questions — the
-  // node the guest actually runs on, and whether it is a QEMU VM or an LXC
-  // container (`--type vm` lists both, each tagged type: "qemu" | "lxc") — so
-  // it is hoisted above the config fetch that has to know which CLI to shell.
-  // Ground truth beats the module's declared dependsOn, which is only the
-  // fallback when this query cannot answer. The query is cluster-wide, so any
-  // reachable node answers it; we ask config.node.
-  let actualNode = "";
-  let liveGuest: GuestType | null = null;
-  const rRes = ssh("root", cfgFqdn, "pvesh get /cluster/resources --type vm --output-format json");
-  const clusterQueryOk = rRes.ran && rRes.rc === 0;
-  if (clusterQueryOk) {
-    try {
-      const arr = JSON.parse(rRes.stdout);
-      if (Array.isArray(arr)) {
-        for (const e of arr) {
-          const o = e as Record<string, unknown>;
-          if (Number(o.vmid) !== Number(vmid)) continue;
-          if (typeof o.node === "string") actualNode = o.node;
-          if (o.type === "qemu" || o.type === "lxc") liveGuest = o.type;
-          break;
+  if (outcome.kind !== "ok") {
+    // The three causes the old single "Failed to get VM config" conflated
+    // (#526) are now three exit codes from the reporter, so each keeps its own
+    // diagnostic — and its own remedy.
+    switch (outcome.kind) {
+      case "cluster-unreachable":
+        error(`Could not query the cluster via ${node} to locate VMID ${vmid} — is ${node} reachable?`);
+        break;
+      case "not-present":
+        // An 'archived' module intends to have NO VM: delete-module.sh --archive
+        // removed the guest and kept the config as the archive record (#215). Its
+        // absence is the correct state, so report it as informational and stay
+        // green — the way vmid-less config-only modules already do (#556). Only
+        // 'archived' is exempt: 'external'/'Deprecated' etc. still expect a VM, so
+        // for them an absence remains a real error worth surfacing.
+        if (cfg.status === "archived") {
+          info(
+            `${YW}[archived]${CL} VMID ${vmid} not on any node — VM intentionally removed ` +
+              `(delete-module.sh --archive); config kept as the archive record, no VM expected.`,
+          );
+          return 0;
         }
-      }
-    } catch {
-      actualNode = "";
+        error(`VMID ${vmid} is not present on any node in the cluster (config declares ${node}) — is the VM created?`);
+        break;
+      case "unreadable":
+        error(`Failed to read the live config for VMID ${vmid} on the node the cluster reports it running`);
+        break;
+      case "no-reporter":
+        error(`No ${outcome.path} — this provider is not on the ADR-020 report contract yet`);
+        break;
+      default:
+        error(`report-service.sh failed for ${module} (rc ${outcome.rc}): ${outcome.detail}`);
     }
+    return 1;
   }
-  const guest = liveGuest ?? guestTypeFromDeps(cfg);
-  const cli = guest === "lxc" ? "pct" : "qm";
 
-  // `qm/pct config` is NODE-LOCAL, so it must run on the node the VM actually
-  // runs on — which #526 showed can differ from config.node (a migrate / HA
-  // failover deliberately leaves .node unchanged). Fetching from config.node
-  // would fail for a healthy VM that lives elsewhere and hide the node drift;
-  // the node row (buildVmReport) then reports config.node vs actualNode like
-  // any other field. Fall back to config.node only when the cluster query could
-  // not locate the VM.
+  const actual = outcome.actual;
+  const guest = outcome.guest;
+  const actualNode = actual.node;
   const liveNode = actualNode || node;
-  const liveFqdn = `${liveNode}.${mgmtDomain()}`;
+  const vmStatus = actual.status || "unknown";
 
   info(
     `${BOLD}TAPPaaS ${guest === "lxc" ? "LXC" : "VM"} Inspection: ` +
@@ -737,39 +645,16 @@ export function inspectModule(module: string, opts: InspectOptions = {}): number
   );
   console.log("");
 
-  const rCfg = ssh("root", liveFqdn, `${cli} config ${vmid}`);
-  if (!rCfg.ran || rCfg.rc !== 0) {
-    // Distinguish the three causes the old single "Failed to get VM config"
-    // message conflated (#526): a config.node that could not be queried at all,
-    // a VM absent from the whole cluster, and a detail fetch that failed on the
-    // node the VM demonstrably runs on.
-    if (!clusterQueryOk) {
-      error(`Could not query the cluster via ${node} to locate VMID ${vmid} — is ${node} reachable?`);
-    } else if (!actualNode) {
-      // An 'archived' module intends to have NO VM: delete-module.sh --archive
-      // removed the guest and kept the config as the archive record (#215). Its
-      // absence is the correct state, so report it as informational and stay
-      // green — the way vmid-less config-only modules already do (#556). Only
-      // 'archived' is exempt: 'external'/'Deprecated' etc. still expect a VM, so
-      // for them an absence remains a real error worth surfacing.
-      if (cfg.status === "archived") {
-        info(
-          `${YW}[archived]${CL} VMID ${vmid} not on any node — VM intentionally removed ` +
-            `(delete-module.sh --archive); config kept as the archive record, no VM expected.`,
-        );
-        return 0;
-      }
-      error(`VMID ${vmid} is not present on any node in the cluster (config declares ${node}) — is the VM created?`);
-    } else {
-      error(`Failed to read ${cli} config for VMID ${vmid} on ${liveNode} (where the cluster reports it running)`);
-    }
-    return 1;
+  // The guest is not the kind the module says it is. Worth saying out loud: the
+  // report below is correct — it describes the guest that exists — but the
+  // module's dependsOn is wrong, and every other path that trusts the
+  // declaration (install, converge, backup) will act on the wrong one.
+  if (wrongDeclaration) {
+    warn(
+      `${module} declares cluster:${wrongDeclaration === "lxc" ? "lxc" : "vm"} but VMID ${vmid} is ` +
+        `a ${guest === "lxc" ? "container" : "VM"} — reporting the guest that exists; fix dependsOn`,
+    );
   }
-  const actual = parseQmConfig(rCfg.stdout);
-
-  const rStat = ssh("root", liveFqdn, `${cli} status ${vmid}`);
-  const vmStatus =
-    !rStat.ran || rStat.rc !== 0 ? "unknown" : rStat.stdout.trim().split(/\s+/)[1] ?? "";
 
   const svc = serviceSection();
   emit(

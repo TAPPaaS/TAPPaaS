@@ -61,6 +61,27 @@ consumer that must preserve an acting-path sentinel (cluster:vm treats an
 undeclared `bridge1` as *no second NIC*, not as the schema's `lan`) needs the
 second one.
 
+### The one differ, and where actual state comes from (ADR-020 D7)
+
+`inspect` no longer runs `qm config` or parses it. ACTUAL state comes from the
+provider's own **`services/<svc>/report-service.sh`** (`src/report.ts` is the
+manager-side client), which locates the guest cluster-wide, reads it on the node
+it is really on, and returns one flat JSON object keyed by the manifest's
+`liveKey`s. Each NIC is reported both whole and split into
+`net0.bridge`/`.tag`/`.trunks`/`.mac`, so nothing above the provider decodes a
+netopts string (Resolved Question 11).
+
+That removed a twin that had already drifted: the bash netopts parser could not
+read a container's `hwaddr=` MAC while its TypeScript port could, and the two tag
+normalizers disagreed about duplicates and whitespace. Normalization now lives
+once, in `lib/ts/src/drift.ts`, and is applied to BOTH sides of every
+comparison — `computeDrift` is the single differ that `inspect` renders and (from
+P4) `modify` applies.
+
+The reporter's exit codes are part of the contract: 4 cluster-unreachable, 5
+guest-absent, 6 located-but-unreadable. #526 was one message standing for all
+three, so they stay separable end to end.
+
 ### Service field manifests (ADR-020 D3/D4)
 
 Each provider service declares the change semantics of the fields it owns in
@@ -226,11 +247,15 @@ tier has been added yet.
   **reference-integrity** and the ADR-020 **field-manifest coverage** lint are
   implemented; still **not** ported: a full JSON **schema** check of every field
   against `module-fields.json` (flagged in `src/validate.ts`).
-- **ADR-020 is partly built.** P0 (manifests + `rebootOk` + the coverage lint)
-  and P1 (the one resolver + `module resolve`) are in. Not yet: the one differ
-  and `report-service.sh` (P2), the manifest-driven converge on `cluster:vm`
-  (P3), `modify --set` with the static pre-gate and the `rebootOk` deferral
-  (P4), the rollout to the other 24 services and `network-manager` (P5).
+- **ADR-020 is partly built.** P0 (manifests + `rebootOk` + the coverage lint),
+  P1 (the one resolver + `module resolve`) and P2 (`report-service.sh` for
+  cluster:vm and cluster:lxc, the shared normalizers + differ, `inspect` off its
+  own `qm config` parsing) are in. Not yet: the manifest-driven converge on
+  `cluster:vm` — `converge-lib.sh`, `--apply-drift` and the `update-<field>.sh`
+  hooks (P3); `modify --set` with the static pre-gate and the `rebootOk`
+  deferral (P4); the rollout to the other 23 services and `network-manager`
+  (P5); the dead-code sweep (P6), which still has `vmnet_build_netopts`'s
+  converge-side use and the `cfg()` ladder to retire.
 - **`install.sh` does not build/link the TS bin yet** (next phase). Today it
   only relinks the `*.sh` scripts; the `module-manager` bin is built manually via
   `default.nix`.
