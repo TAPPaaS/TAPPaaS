@@ -60,11 +60,11 @@
       "note": "The zone resolves to net0's VLAN tag; a new tag is a new subnet, so the guest must renew DHCP and re-register DNS."
     },
     "mac0": {
-      "class": "in-place",
+      "class": "in-place-reboot",
       "apply": "composite",
       "composite": "net0",
       "liveKey": "net0.mac",
-      "note": "Applies live on the bridge — no reboot. When the module pins no mac0 the LIVE MAC is preserved, which is why the manager (not the hook) assembles the finished netopts string."
+      "note": "A new MAC is a NEW IDENTITY on the wire: the guest takes a fresh DHCP lease, very likely a different address, and its DNS record must follow \u2014 exactly the reboot \u2192 wait-for-lease \u2192 re-register chain net0 already declares. Classed in-place until ADR-020 P6, inherited from a comment that grouped 'trunk- or MAC-only' changes as live; the two are not alike, because trunks is a BRIDGE-side allow-list the guest never sees while the MAC is the guest's own NIC. #194 already established that a netN property needing device re-creation (queues) is a disruptive hot-replug, and the MAC takes the same path. When the module pins no mac0 the field has no desired value at all and the LIVE MAC is carried across, which is why the manager assembles the finished netopts \u2014 so this only bites a module that deliberately re-MACs a guest."
     },
     "trunks0": {
       "class": "in-place",
@@ -91,10 +91,11 @@
       "normalize": "vlan"
     },
     "mac1": {
-      "class": "in-place",
+      "class": "in-place-reboot",
       "apply": "composite",
       "composite": "net1",
-      "liveKey": "net1.mac"
+      "liveKey": "net1.mac",
+      "note": "As mac0: a new MAC means a new lease and a new DNS record, so it earns net1's reboot chain. Unpinned, the live MAC is preserved and nothing drifts."
     },
     "trunks1": {
       "class": "in-place",

@@ -224,10 +224,14 @@ const skipReason = (r: DriftRecord, f: string): string | undefined =>
     "a changed composite input produces ONE unit, the composite");
   check(macOnly.units[0].kind === "composite" && macOnly.units[0].hook === "update-net.sh",
     "…dispatched to the composite's hook");
+  // Synthetic manifest: what is under test is the ESCALATION MECHANISM — an
+  // input below the ceiling keeps the unit below it — not cluster:vm's own
+  // classes. (Real cluster:vm classes mac0 as in-place-reboot; its `trunks0`
+  // is the field that actually stays in-place, being bridge-side.)
   check(macOnly.units[0].class === "in-place",
-    "a MAC-only NIC change stays in-place — the declared ceiling is not the effective class");
+    "an input below the ceiling keeps the unit below the ceiling");
   check(macOnly.units[0].sideEffects.length === 0,
-    "…so no reboot and no DNS pass, which is what today's script does");
+    "…so a non-disruptive effective class earns no side effects");
   check(!needsDisruption(macOnly), "…and it needs no disruption authorization");
 
   // Bridge → in-place-reboot, and NOW the side effects apply.

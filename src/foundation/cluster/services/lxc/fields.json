@@ -63,11 +63,11 @@
       "note": "The zone resolves to net0's VLAN tag; a new tag is a new subnet, so the container restarts and re-registers DNS."
     },
     "mac0": {
-      "class": "in-place",
+      "class": "in-place-reboot",
       "apply": "composite",
       "composite": "net0",
       "liveKey": "net0.mac",
-      "note": "Spelled `hwaddr=` on a container. Preserved from the live NIC unless the module pins one — the same rule as cluster:vm, and the reason both reporters emit the MAC under one key."
+      "note": "Spelled `hwaddr=` on a container, and the same reasoning as cluster:vm's mac0: a new MAC is a new lease, and under masqdns the container's name follows that lease \u2014 so the restart and the stale-pin cleanup both matter. Preserved from the live NIC unless the module pins one, which is why both reporters emit the MAC under one key."
     },
     "trunks0": {
       "class": "in-place",
