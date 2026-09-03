@@ -213,4 +213,87 @@ else
     bad "update-os.sh not found"
 fi
 
+echo ""
+echo "== check-disk-threshold routes the grow through modify (ADR-020 D9) =="
+# The auto-grow must be expressed as a DECLARED-FIELD change, not as a direct
+# resize-disk.sh call. A direct call moves the cluster without moving the
+# config, and the converge then reads config-behind-actual as a SHRINK, which
+# `grow-only` refuses on that pass and on every pass after it — nothing in the
+# loop can move config forward. These assertions are what keep it from
+# regressing back to the side door.
+CDT="${here}/check-disk-threshold.sh"
+if [[ ! -x "${CDT}" ]]; then
+    bad "check-disk-threshold.sh not found"
+else
+    # Static: the side door is gone and the sanctioned verb is used. Comments
+    # are stripped first so the explanatory prose does not satisfy the grep.
+    _code="$(sed 's/#.*//' "${CDT}")"
+    if grep -q 'resize-disk\.sh' <<< "${_code}"; then
+        bad "check-disk-threshold.sh still calls resize-disk.sh directly"
+    else
+        ok "no direct resize-disk.sh call"
+    fi
+    if grep -qE 'module-manager module modify .* --set "?diskSize=' <<< "${_code}"; then
+        ok "the grow is issued as module modify --set diskSize="
+    else
+        bad "check-disk-threshold.sh does not issue module modify --set diskSize="
+    fi
+    # A disk-usage threshold must never authorize downtime (ADR-020 D8): a grow
+    # is grow-only and non-disruptive, so --force has no business here.
+    if grep -qE 'module-manager module modify[^|;&]*--force' <<< "${_code}"; then
+        bad "check-disk-threshold.sh forwards --force to modify (would authorize downtime)"
+    else
+        ok "modify is called without --force (a grow needs no disruption authorization)"
+    fi
+
+    # Behavioural: with a stub first on PATH, the real command line is captured
+    # and nothing is resized. Needs a reachable cluster:vm guest; skipped if
+    # none answers, because this asserts the CALL, not the cluster.
+    _probe=""
+    for _j in /home/tappaas/config/*.json; do
+        [[ -f "${_j}" ]] || continue
+        if jq -e '(.dependsOn // []) | index("cluster:vm") != null' "${_j}" >/dev/null 2>&1; then
+            _probe="$(basename "${_j}" .json)"; break
+        fi
+    done
+    if [[ -z "${_probe}" ]]; then
+        ok "SKIP stub call-through (no cluster:vm module deployed)"
+    else
+        _stub="$(mktemp -d)"
+        printf '#!/usr/bin/env bash\necho "CALL: $*" >> "%s/calls"\n' "${_stub}" > "${_stub}/module-manager"
+        chmod +x "${_stub}/module-manager"
+        # The script logs a success line on the stubbed (i.e. never-performed)
+        # grow. Snapshot the real log so the test restores it exactly, instead
+        # of deleting a file that may hold genuine resize history.
+        _rlog=/home/tappaas/logs/disk-resize.log
+        _rlog_bak=""
+        [[ -f "${_rlog}" ]] && { _rlog_bak="${_stub}/disk-resize.log.bak"; cp -p "${_rlog}" "${_rlog_bak}"; }
+        # threshold 1 => always over, so the grow path always runs.
+        PATH="${_stub}:${PATH}" bash "${CDT}" "${_probe}" 1 >/dev/null 2>&1 || true
+        if [[ ! -s "${_stub}/calls" ]]; then
+            ok "SKIP stub call-through (${_probe} unreachable — no grow attempted)"
+        elif grep -qE '^CALL: module modify '"${_probe}"' --set diskSize=[0-9]+G$' "${_stub}/calls"; then
+            ok "grow calls: $(cat "${_stub}/calls")"
+            # The new size must be derived from the LIVE disk, not from the
+            # schema's 8G default — deriving from actual is what also repairs a
+            # config that has fallen behind.
+            if grep -q 'diskSize=8G' "${_stub}/calls"; then
+                bad "new size looks like the schema default, not a grow from the live size"
+            else
+                ok "new size is derived from the live disk size"
+            fi
+        else
+            bad "unexpected grow call: $(cat "${_stub}/calls")"
+        fi
+        # Restore the log to exactly its pre-test state: the line the stubbed
+        # run appended describes a resize that never happened.
+        if [[ -n "${_rlog_bak}" ]]; then
+            cp -p "${_rlog_bak}" "${_rlog}"
+        else
+            rm -f "${_rlog}"
+        fi
+        rm -rf -- "${_stub}"
+    fi
+fi
+
 exit "${rc}"

@@ -5,9 +5,9 @@
 
 1 field — `in-place`, `apply: "reconcile"`.
 
-| Field | Why this class |
-|---|---|
-| `natRules` | Connections may reset; no guest reboots. |
+| Field | Class | Apply | Normalize | Why this class |
+|---|---|---|---|---|
+| `natRules` | in-place | reconcile | — | Connections may reset; no guest reboots. |
 
 Port-forward and redirect rules, reconciled against OPNsense the same way
 [`network:rules`](../rules/UPDATE-POLICY.md) reconciles filter rules: the whole

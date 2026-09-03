@@ -4,6 +4,10 @@
 # Checks if a VM's disk usage exceeds a threshold and automatically
 # expands the disk by 50% if needed.
 #
+# The grow is issued as `module-manager module modify <vm> --set diskSize=<new>`
+# so config and cluster move together (ADR-020 D9). This script owns the
+# DECISION to grow; it does not own the growing.
+#
 # Usage: ./check-disk-threshold.sh <vmname> <threshold>
 # Example: ./check-disk-threshold.sh nextcloud 80
 #
@@ -14,8 +18,6 @@
 # This script is designed to be run from cron for automatic disk management.
 
 set -e
-
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 # Color definitions
 YW=$(echo "\033[33m")    # Yellow
@@ -62,27 +64,24 @@ if ! [[ "$THRESHOLD" =~ ^[0-9]+$ ]] || [ "$THRESHOLD" -lt 1 ] || [ "$THRESHOLD" 
   error "Invalid threshold: $THRESHOLD. Must be a number between 1 and 99."
 fi
 
-# Load JSON configuration
+# Load JSON configuration.
+#
+# The shared helpers are sourced rather than reimplemented here. This script
+# previously carried its own get_config_value that read the raw file, which was
+# wrong twice over: it saw only FLAT top-level keys, so every Pattern-A module
+# (nextcloud keeps diskSize under .config["cluster:vm"]) silently fell through to
+# the default; and it never provided get_node_hostname, which line ~107 calls —
+# that call has been emitting "command not found" and yielding an empty node
+# fallback. common-install-routines.sh provides both, Pattern-A agnostic (#207),
+# and auto-loads $JSON normalized from $1.
+#
+# shellcheck source=common-install-routines.sh disable=SC1091
+. /home/tappaas/bin/common-install-routines.sh
+
 JSON_CONFIG="/home/tappaas/config/${VMNAME}.json"
 if [ ! -f "$JSON_CONFIG" ]; then
   error "Configuration file not found: $JSON_CONFIG"
 fi
-JSON=$(cat "$JSON_CONFIG")
-
-function get_config_value() {
-  local key="$1"
-  local default="$2"
-  local value
-  if ! echo "$JSON" | jq -e --arg K "$key" 'has($K)' >/dev/null; then
-    if [ -z "$default" ]; then
-      error "Missing required key '$key' in JSON configuration."
-    fi
-    value="$default"
-  else
-    value=$(echo "$JSON" | jq -r --arg KEY "$key" '.[$KEY]')
-  fi
-  echo -n "$value"
-}
 
 # Convert size string to number in GB
 size_to_gb() {
@@ -150,18 +149,33 @@ fi
 NEW_GB=$((CURRENT_GB + INCREASE_GB))
 NEW_SIZE="${NEW_GB}G"
 
+# Computed from the LIVE size, not config's diskSize: the disk is the truth
+# about the disk, and deriving from actual also repairs a config that has fallen
+# behind (e.g. a pre-D9 grow that never wrote config back).
 info "Calculated new size: ${NEW_SIZE} (50% increase from ${ACTUAL_SIZE})"
 
-# Call resize-disk.sh to perform the resize
-info "Initiating disk resize..."
-if "${SCRIPT_DIR}/resize-disk.sh" "$VMNAME" "$NEW_SIZE"; then
-  info "${BOLD}Disk resize completed successfully!${CL}"
-  info "VM $VMNAME disk expanded from $ACTUAL_SIZE to $NEW_SIZE"
+# Grow through `module modify --set`, NOT by calling resize-disk.sh directly
+# (ADR-020 D9). diskSize is a declared field, so growing it is a declared-field
+# change: `--set` writes the new size into the deployed config and then converges
+# it through the same gated path every other field change uses. Calling
+# resize-disk.sh here would move the CLUSTER without moving the CONFIG, and the
+# converge reads config-behind-actual as a SHRINK — which `grow-only` refuses
+# (update-disk.sh exit 20), on this pass and on every pass after it, with nothing
+# in the loop able to move config forward. This script decides WHEN to grow; the
+# change model does the growing.
+#
+# No --force: a grow is `grow-only` and non-disruptive, so it needs no disruption
+# authorization. Forwarding --force would authorize downtime that a disk-usage
+# threshold has no business authorizing (ADR-020 D8).
+info "Initiating disk grow via module-manager modify..."
+if module-manager module modify "$VMNAME" --set "diskSize=${NEW_SIZE}"; then
+  info "${BOLD}Disk grow completed successfully!${CL}"
+  info "VM $VMNAME disk expanded from $ACTUAL_SIZE to $NEW_SIZE (config and cluster both updated)"
 
   # Log the resize event
   LOG_FILE="/home/tappaas/logs/disk-resize.log"
   mkdir -p "$(dirname "$LOG_FILE")"
   echo "$(date '+%Y-%m-%d %H:%M:%S') - $VMNAME: Resized from $ACTUAL_SIZE to $NEW_SIZE (usage was ${DISK_USAGE}%, threshold ${THRESHOLD}%)" >> "$LOG_FILE"
 else
-  error "Disk resize failed for $VMNAME"
+  error "Disk grow failed for $VMNAME — config unchanged if the pre-gate refused, rolled back if the converge did"
 fi

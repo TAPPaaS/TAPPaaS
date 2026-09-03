@@ -5,10 +5,10 @@
 
 2 fields — all `in-place`, all `apply: "reconcile"`.
 
-| Field | Why this class |
-|---|---|
-| `discoveryMdns` | Cross-zone mDNS relays; a firewall/avahi reload. |
-| `discoveryUdpRelay` | Broadcast relays for protocols predating mDNS. |
+| Field | Class | Apply | Normalize | Why this class |
+|---|---|---|---|---|
+| `discoveryMdns` | in-place | reconcile | — | Cross-zone mDNS relays; a firewall/avahi reload. |
+| `discoveryUdpRelay` | in-place | reconcile | — | Broadcast relays for protocols predating mDNS. |
 
 Both are lists of zone pairs, reconciled by rewriting the relay configuration and
 reloading. Removing a relay is as ordinary as adding one, which is what puts them

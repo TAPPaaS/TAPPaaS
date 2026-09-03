@@ -189,6 +189,33 @@ else
     ssh "root@${NODE}.${MGMT}.internal" "rm /root/tappaas/$1.json"
 fi
 
+# ── record the firmware this guest was actually built with (ADR-020 D9) ──
+#
+# bios is `recreate`: config and reality can never be reconciled in place, so a
+# divergence fails the converge with no way out short of a rebuild. Everything
+# else in the model degrades to noise; this one degrades to a broken update.
+#
+# The schema default 'ovmf' is what Create-TAPPaaS-VM.sh builds with, so a guest
+# WE created always matches it. The gap is a guest built elsewhere and adopted
+# into TAPPaaS — imported, restored, hand-made — which may be on seabios while
+# declaring nothing. Recording what the guest actually has, at install, closes
+# that permanently: config carries the firmware from the moment it is managed.
+#
+# Proxmox OMITS the bios: line for seabios, so an absent value means seabios and
+# not "unknown" — the same decoding report-service.sh and the old update-service
+# both do. Only written when the module declares nothing; an explicit bios is the
+# operator's statement and is never overwritten.
+if ! read_module_config "$1" | jq -e 'has("bios")' >/dev/null 2>&1; then
+    _live_bios=$(ssh -n -o BatchMode=yes -o ConnectTimeout=10 "root@${NODE}.${MGMT}.internal" \
+        "qm config ${VMID} 2>/dev/null | sed -n 's/^bios: //p'" 2>/dev/null || true)
+    _live_bios="${_live_bios:-seabios}"
+    if jq_module_write "$1" --arg b "${_live_bios}" '.bios = $b'; then
+        info "Recorded bios=${_live_bios} in config (the firmware this guest was built with)"
+    else
+        warn "Could not record bios=${_live_bios} in config — an undeclared non-ovmf guest would drift"
+    fi
+fi
+
 # For Windows clone VMs: inject OOBE setup via the QEMU guest agent.
 # Windows post-sysprep does NOT read answer files from CDROMs — only from
 # C:\Windows\Panther\unattend.xml.  We bypass that entirely by running

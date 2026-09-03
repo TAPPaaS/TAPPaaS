@@ -8,12 +8,12 @@
 The module's firewall surface. Every change is a live OPNsense API call;
 established connections may reset, but nothing reboots.
 
-| Field | Why this class |
-|---|---|
-| `ingress` | Who may reach the module. A live API call. |
-| `egress` | What it may reach (ADR-COM-0002). |
-| `ports` | The declared surface the default rules derive from. |
-| `aliases` | Named groups; changing one re-points every rule using it. |
+| Field | Class | Apply | Normalize | Why this class |
+|---|---|---|---|---|
+| `ingress` | in-place | reconcile | — | Who may reach the module. A live API call. |
+| `egress` | in-place | reconcile | — | What it may reach (ADR-COM-0002). |
+| `ports` | in-place | reconcile | — | The declared surface the default rules derive from. |
+| `aliases` | in-place | reconcile | — | Named groups; changing one re-points every rule using it. |
 
 ## Why `reconcile`
 

@@ -332,7 +332,11 @@ if qm status $VMID &>/dev/null; then
 fi
 
 VMNAME="$(get_config_value 'vmname' "$1")"
-VMTAG="$(get_config_value 'vmtag')"
+# Optional, exactly as in Create-TAPPaaS-LXC.sh: an unspecified vmtag means the
+# schema default 'TAPPaaS' (module-fields.json). Reading it without a default
+# made this a hard error mid-install for a VM while the LXC path defaulted
+# silently — the same field behaving differently per guest type (ADR-020 D9).
+VMTAG="$(get_config_value 'vmtag' 'TAPPaaS')"
 BIOS="$(get_config_value 'bios' 'ovmf')"
 # Fail loudly on an unknown firmware rather than silently mis-provisioning (#341).
 case "$BIOS" in

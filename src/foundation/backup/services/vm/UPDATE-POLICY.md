@@ -10,15 +10,15 @@ A set operation over the shared PBS job's vmid list, plus a retention cascade
 resolved *above* the module.
 *See [recommendation 2](../../../tappaas-cicd/UPDATE-POLICY.md#2-split-backupvm--scalars-out-cascade-in).*
 
-| Field | Why this class |
-|---|---|
-| `backup` | The module's layer of the site → environment → module cascade. Future backups only. |
-| `alwaysBackup` | Set on the backup module: guests that cannot declare the dependency because they bootstrap first. |
-| `pbsStorageName` | Which datastore the job writes to. |
-| `immutableSnapshots` | WORM-ish ZFS snapshots, provisioned on the PBS node. |
-| `placement` | Where backups may live. |
-| `placementState` | The resolved outcome, recorded on the deployed config. |
-| `pushTarget` | An off-site datastore (ADR-010). |
+| Field | Class | Apply | Normalize | Why this class |
+|---|---|---|---|---|
+| `backup` | in-place | reconcile | — | The module's layer of the site → environment → module cascade. Future backups only. |
+| `alwaysBackup` | in-place | reconcile | — | Set on the backup module: guests that cannot declare the dependency because they bootstrap first. |
+| `pbsStorageName` | in-place | reconcile | — | Which datastore the job writes to. |
+| `immutableSnapshots` | in-place | reconcile | — | WORM-ish ZFS snapshots, provisioned on the PBS node. |
+| `placement` | in-place | reconcile | — | Where backups may live. |
+| `placementState` | in-place | reconcile | — | The resolved outcome, recorded on the deployed config. |
+| `pushTarget` | in-place | reconcile | — | An off-site datastore (ADR-010). |
 
 ## Why every change is `in-place`
 

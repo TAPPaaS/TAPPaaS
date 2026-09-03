@@ -197,15 +197,6 @@ export interface FieldEntry {
   // When the module does NOT declare this field, is its module-fields.json
   // default DESIRED STATE, or merely an install-time seed? Default true.
   //
-  // This is the declared form of the `__none__` sentinel every converge script
-  // hand-rolls today: `cluster:vm/update-service.sh` reads an undeclared
-  // `diskSize` as "leave the disk alone", not as "resize it to the schema's
-  // 8G". Both readings are defensible; what is not defensible is the reading
-  // living only inside one bash script, where the drift report cannot see it.
-  // The resolver still resolves the default (so `resolve` and `inspect` show
-  // the effective value); this says the CONVERGE must not act on it unless the
-  // module asked for it — the distinction `ResolvedField.literal` carries.
-  defaultIsDesired?: boolean;
   note?: string;
 }
 
@@ -220,7 +211,6 @@ export interface CompositeEntry {
   inputs: string[];
   normalize?: Normalizer;
   sideEffects?: SideEffect[];
-  defaultIsDesired?: boolean;
   note?: string;
 }
 
@@ -441,9 +431,6 @@ export function lintServiceFieldManifest(
       }
     }
 
-    if (e.defaultIsDesired !== undefined && typeof e.defaultIsDesired !== "boolean") {
-      err(`${what}: defaultIsDesired must be a boolean (got '${String(e.defaultIsDesired)}')`);
-    }
     if (e.normalize !== undefined && !(NORMALIZERS as readonly string[]).includes(e.normalize)) {
       err(`${what}: unknown normalize '${e.normalize}' — must be one of: ${NORMALIZERS.join(" ")}`);
     }
@@ -473,12 +460,6 @@ export function lintServiceFieldManifest(
   }
 }
 
-// Does a DEFAULTED (undeclared) value for this field participate in the
-// converge? Reading it through one helper keeps the "absent means true" rule in
-// one place, so a consumer cannot accidentally treat `undefined` as false.
-export function defaultIsDesired(e: FieldEntry | CompositeEntry): boolean {
-  return e.defaultIsDesired !== false;
-}
 
 // Does converging this manifest require reading ACTUAL state?
 //

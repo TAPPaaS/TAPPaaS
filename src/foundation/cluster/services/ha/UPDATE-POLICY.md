@@ -5,10 +5,10 @@
 
 2 fields — all `in-place`, all `apply: "reconcile"`.
 
-| Field | Why this class |
-|---|---|
-| `HANode` | Re-points the affinity rule and recreates the replication job. No downtime — but a full re-sync. *See [the gap in the taxonomy](../../../tappaas-cicd/UPDATE-POLICY.md#6-a-gap-in-the-taxonomy).* |
-| `replicationSchedule` | A `pvesr update`; changes when the next run happens. |
+| Field | Class | Apply | Normalize | Why this class |
+|---|---|---|---|---|
+| `HANode` | in-place | reconcile | — | Re-points the affinity rule and recreates the replication job. No downtime — but a full re-sync. *See [the gap in the taxonomy](../../../tappaas-cicd/UPDATE-POLICY.md#6-a-gap-in-the-taxonomy).* |
+| `replicationSchedule` | in-place | reconcile | — | A `pvesr update`; changes when the next run happens. |
 
 ## Why this service owns only two fields
 

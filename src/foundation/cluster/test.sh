@@ -223,6 +223,68 @@ else
     fi
 fi
 
+# ── Test 3a2: both create paths agree on the vmtag default (ADR-020 D9) ──
+#
+# An undeclared field is compared against its module-fields.json default, which
+# is only safe while the INSTALL path builds with that same default. vmtag is
+# where the two guest types had drifted apart: the VM path read it with NO
+# default, making a missing vmtag a hard error mid-install, while the LXC path
+# quietly defaulted. (That no manifest reintroduces a per-field opt-out is
+# asserted in module-manager's manifest.test.ts, across every field.)
+info "${BOLD}Test 3a2: the create paths agree with the schema default${CL}"
+
+_vm_tag="$(sed -n "s/^VMTAG=\"\$(get_config_value 'vmtag' *'\([^']*\)')\"/\1/p" "${SCRIPT_DIR}/Create-TAPPaaS-VM.sh")"
+_ct_tag="$(sed -n "s/^VMTAG=\"\$(get_config_value 'vmtag' *'\([^']*\)')\"/\1/p" "${SCRIPT_DIR}/Create-TAPPaaS-LXC.sh")"
+_schema_tag="$(jq -r '.fields.vmtag.default' "${SCRIPT_DIR}/../schemas/module-fields.json" 2>/dev/null)"
+
+if [[ -z "${_vm_tag}" ]]; then
+    fail "Create-TAPPaaS-VM.sh reads vmtag with no default — a missing vmtag would be a hard error"
+elif [[ "${_vm_tag}" != "${_ct_tag}" ]]; then
+    fail "create paths disagree on the vmtag default (VM='${_vm_tag}' LXC='${_ct_tag}')"
+elif [[ "${_vm_tag}" != "${_schema_tag}" ]]; then
+    fail "create paths default vmtag to '${_vm_tag}' but the schema says '${_schema_tag}'"
+else
+    pass "both create paths default vmtag to the schema's '${_schema_tag}'"
+fi
+
+# ── Test 3a3: no module can drift unfixably on bios (ADR-020 D9) ──
+#
+# bios is `recreate`: config and reality can never be reconciled in place, so a
+# divergence FAILS the converge with no way out short of a rebuild. Every other
+# field retired from the v0.5 opt-out degrades to noise; this one degrades to a
+# broken update, which is why it gets a HARD gate rather than an advisory check.
+#
+# A guest TAPPaaS created is on the schema default (ovmf), so the danger is a
+# guest built elsewhere and adopted while declaring nothing. install-service.sh
+# now records the observed firmware at install; this asserts the estate has no
+# pre-existing instance of the case that record exists to prevent.
+info "${BOLD}Test 3a3: bios is declared wherever it differs from the default${CL}"
+
+_bios_default="$(jq -r '.fields.bios.default' "${SCRIPT_DIR}/../schemas/module-fields.json" 2>/dev/null)"
+if [[ -z "${_bios_default}" || "${_bios_default}" == "null" ]]; then
+    fail "cannot read the bios schema default"
+elif [[ "${node_reachable}" -eq 0 ]]; then
+    skip "bios gate (no reachable node)"
+else
+    _bios_bad=""
+    for _cfg in "${CONFIG_DIR}"/*.json; do
+        [[ -f "${_cfg}" ]] || continue
+        _mod="$(basename "${_cfg}" .json)"
+        jq -e '.vmid != null and (.status // "") != "external"
+               and (((.dependsOn // []) | index("cluster:vm")) != null)' "${_cfg}" >/dev/null 2>&1 || continue
+        # Declared is always safe — the operator has stated the firmware.
+        jq -e '(.bios // .config."cluster:vm".bios) != null' "${_cfg}" >/dev/null 2>&1 && continue
+        _live="$("${SCRIPT_DIR}/services/vm/report-service.sh" "${_mod}" 2>/dev/null | jq -r '.bios // empty')"
+        [[ -z "${_live}" ]] && continue          # unreachable guest: not this test's verdict
+        [[ "${_live}" == "${_bios_default}" ]] || _bios_bad+=" ${_mod}(${_live})"
+    done
+    if [[ -z "${_bios_bad}" ]]; then
+        pass "every undeclared guest runs the schema default bios (${_bios_default})"
+    else
+        fail "undeclared bios != '${_bios_default}' — unfixable recreate drift:${_bios_bad}; declare it (module modify --set bios=...)"
+    fi
+fi
+
 # ── Test 3b: report-service.sh — the actual-state reader (ADR-020) ──
 #
 # report-service.sh is the READ half of the ADR-020 D7 contract: the manager
@@ -236,7 +298,11 @@ info "${BOLD}Test 3b: cluster:vm report-service.sh (actual-state contract)${CL}"
 
 REPORTER="${SCRIPT_DIR}/services/vm/report-service.sh"
 # The liveKeys fields.json declares, plus the three locator keys.
-readonly REPORT_KEYS="vmid node status name cores memory cpu tags bios ostype storage diskSize net0 net1"
+# `cloudInit` is here because it is ALWAYS observable (the cloud-init drive is
+# in the config text); `os` deliberately is NOT, because it comes from the guest
+# agent and is omitted when the agent cannot answer — see the os assertions
+# below, which check exactly that conditional contract.
+readonly REPORT_KEYS="vmid node status name cores memory cpu tags bios ostype storage diskSize net0 net1 cloudInit"
 
 if [[ ! -x "${REPORTER}" ]]; then
     fail "report-service.sh is missing or not executable"
@@ -336,6 +402,59 @@ else
 
             # net0 is mandatory on a TAPPaaS VM; net1 is optional and must be
             # reported as an EMPTY STRING when the guest has one NIC.
+            # ── cloudInit / os (ADR-020 D9) ──────────────────────────
+            #
+            # These two were `not-reported` until D9 pointed out that was a
+            # statement about the reporter, not about the fields. They are
+            # observed differently and so have DIFFERENT contracts, which is
+            # the whole point of the assertions below.
+
+            # cloudInit is read from the config text the reporter already
+            # holds, so it is observable for every guest, always — and must be
+            # a strict boolean string, never empty.
+            ci="$(jq -r '.cloudInit' <<< "${report}")"
+            if [[ "${ci}" == "true" || "${ci}" == "false" ]]; then
+                pass "cloudInit is reported as a boolean string (${ci})"
+            else
+                fail "cloudInit must be 'true' or 'false', got '${ci}'"
+            fi
+
+            # It must agree with the guest's actual cloud-init drive rather
+            # than being hardcoded: cross-check against the cluster directly.
+            if [[ -n "${rvmid:-}" && -n "${rnode:-}" ]]; then
+                ci_live=false
+                if ssh -o BatchMode=yes -o ConnectTimeout=10 \
+                       -o StrictHostKeyChecking=accept-new \
+                       "root@${rnode}.mgmt.internal" "qm config ${rvmid}" 2>/dev/null \
+                     | grep -qE "^[a-z]+[0-9]+:[^,]*vm-${rvmid}-cloudinit"; then
+                    ci_live=true
+                fi
+                if [[ "${ci}" == "${ci_live}" ]]; then
+                    pass "cloudInit (${ci}) matches the guest's actual cloud-init drive"
+                else
+                    fail "cloudInit reported ${ci} but the guest's drive says ${ci_live}"
+                fi
+            else
+                skip "cloudInit cross-check (no vmid/node resolved)"
+            fi
+
+            # os is agent-sourced. The contract is CONDITIONAL: present with a
+            # schema value when the agent answers, and OMITTED — not empty —
+            # when it cannot. An empty string would read as "the guest has no
+            # OS" and drift against every module that declares one, so the
+            # distinction is load-bearing, not cosmetic.
+            if jq -e 'has("os")' >/dev/null 2>&1 <<< "${report}"; then
+                ros="$(jq -r '.os' <<< "${report}")"
+                case "${ros}" in
+                    debian|ubuntu|nixos|windows|unknown)
+                        pass "os is reported in the schema vocabulary (${ros})" ;;
+                    "") fail "os is present but EMPTY — it must be omitted when unknown, not blank" ;;
+                    *)  fail "os '${ros}' is not a module-fields.json value (agent ids must be mapped)" ;;
+                esac
+            else
+                pass "os is omitted (agent unavailable) rather than reported empty"
+            fi
+
             if [[ -n "$(jq -r '.net0' <<< "${report}")" ]]; then
                 pass "net0 is reported for an installed VM"
             else

@@ -5,9 +5,9 @@
 
 1 field — `in-place`, `apply: "reconcile"`.
 
-| Field | Why this class |
-|---|---|
-| `windows` | Affects guests provisioned afterwards; an existing guest is not rebuilt. |
+| Field | Class | Apply | Normalize | Why this class |
+|---|---|---|---|---|
+| `windows` | in-place | reconcile | — | Affects guests provisioned afterwards; an existing guest is not rebuilt. |
 
 ## Why changing it is free
 

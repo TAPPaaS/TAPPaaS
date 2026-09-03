@@ -5,9 +5,9 @@
 
 1 field — `in-place`, `apply: "reconcile"`.
 
-| Field | Why this class |
-|---|---|
-| `identity` | The whole SSO block. Issued sessions keep working. *See [recommendation 5](../../../tappaas-cicd/UPDATE-POLICY.md#5-break-up-identityidentity).* |
+| Field | Class | Apply | Normalize | Why this class |
+|---|---|---|---|---|
+| `identity` | in-place | reconcile | — | The whole SSO block. Issued sessions keep working. *See [recommendation 5](../../../tappaas-cicd/UPDATE-POLICY.md#5-break-up-identityidentity).* |
 
 ## One field carrying a whole subsystem
 

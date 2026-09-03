@@ -2,9 +2,7 @@
   "$schema": "../../../schemas/service-fields.json",
   "service": "cluster:vm",
   "description": "Change semantics for every module field cluster:vm owns — the reference manifest for ADR-020 D3/D4.",
-
   "_note": "Every class below is a STATEMENT OF EXISTING BEHAVIOUR, read off update-service.sh as it stood before ADR-020: what it applies via the single batched `qm set`, what it grows, what it migrates, what it warns about and what it refuses. Nothing here changes what happens today; P3 makes update-service.sh read this file instead of hardcoding the same knowledge in an imperative drift loop.",
-
   "fields": {
     "vmname": {
       "class": "in-place",
@@ -19,8 +17,7 @@
       "liveKey": "tags",
       "setFlag": "--tags",
       "normalize": "tags",
-      "defaultIsDesired": false,
-      "note": "Proxmox stores tags lowercased, de-duplicated and ';'-joined; module JSON may use mixed case and commas. The 'tags' normalizer is that canonicalisation, moved from update-service.sh's normalize_tags into the one differ. defaultIsDesired:false is that script's `__none__` sentinel, declared: a module that does not set vmtag has its live tags LEFT ALONE, not overwritten with the schema's 'TAPPaaS'."
+      "note": "Proxmox stores tags lowercased, de-duplicated and ';'-joined; module JSON may use mixed case and commas. The 'tags' normalizer is that canonicalisation, moved from update-service.sh's normalize_tags into the one differ. The schema default 'TAPPaaS' is DESIRED state, not just a create-time seed (ADR-020 D9): an undeclared vmtag means the guest should carry exactly 'TAPPaaS', which is also what both create paths apply, so config and guest agree from install without an adoption step. qm set --tags REPLACES the list, so a tag added in the Proxmox UI is drift and the converge writes it back — intended: config is authoritative."
     },
     "cores": {
       "class": "in-place",
@@ -43,7 +40,6 @@
       "setFlag": "--cpu",
       "note": "Proxmox spells it 'cpu'. The undeclared default resolves to 'host' — from module-fields.json, via the one resolver, NOT from a cfg() ladder in this service (#550)."
     },
-
     "bridge0": {
       "class": "in-place-reboot",
       "apply": "composite",
@@ -64,7 +60,7 @@
       "apply": "composite",
       "composite": "net0",
       "liveKey": "net0.mac",
-      "note": "A new MAC is a NEW IDENTITY on the wire: the guest takes a fresh DHCP lease, very likely a different address, and its DNS record must follow \u2014 exactly the reboot \u2192 wait-for-lease \u2192 re-register chain net0 already declares. Classed in-place until ADR-020 P6, inherited from a comment that grouped 'trunk- or MAC-only' changes as live; the two are not alike, because trunks is a BRIDGE-side allow-list the guest never sees while the MAC is the guest's own NIC. #194 already established that a netN property needing device re-creation (queues) is a disruptive hot-replug, and the MAC takes the same path. When the module pins no mac0 the field has no desired value at all and the LIVE MAC is carried across, which is why the manager assembles the finished netopts \u2014 so this only bites a module that deliberately re-MACs a guest."
+      "note": "A new MAC is a NEW IDENTITY on the wire: the guest takes a fresh DHCP lease, very likely a different address, and its DNS record must follow — exactly the reboot → wait-for-lease → re-register chain net0 already declares. Classed in-place until ADR-020 P6, inherited from a comment that grouped 'trunk- or MAC-only' changes as live; the two are not alike, because trunks is a BRIDGE-side allow-list the guest never sees while the MAC is the guest's own NIC. #194 already established that a netN property needing device re-creation (queues) is a disruptive hot-replug, and the MAC takes the same path. When the module pins no mac0 the field has no desired value at all and the LIVE MAC is carried across, which is why the manager assembles the finished netopts — so this only bites a module that deliberately re-MACs a guest."
     },
     "trunks0": {
       "class": "in-place",
@@ -74,7 +70,6 @@
       "normalize": "trunks",
       "note": "A trunk-only change applies live on the bridge — no reboot."
     },
-
     "bridge1": {
       "class": "in-place-reboot",
       "apply": "composite",
@@ -104,39 +99,35 @@
       "liveKey": "net1.trunks",
       "normalize": "trunks"
     },
-
     "diskSize": {
       "class": "grow-only",
       "apply": "hook",
       "hook": "update-disk.sh",
       "liveKey": "diskSize",
       "normalize": "size",
-      "defaultIsDesired": false,
-      "note": "Grow goes through resize-disk.sh. A SHRINK is refused at apply time (hook exit 20), not by the static pre-gate: whether a change is a grow or a shrink is only knowable against the live size. defaultIsDesired:false because an undeclared diskSize means 'leave the disk alone' — resizing every undeclared guest to the schema's install-time 8G would be a shrink on almost all of them."
+      "note": "A grow goes through resize-disk.sh. The direction is only knowable against the live size, so a SHRINK is refused at apply time (hook exit 20), not by the static pre-gate. The schema default 8G is DESIRED state (ADR-020 D9): it is also what both create paths build with, so an undeclared guest is in sync from install. When the guest is later grown outside the config path — check-disk-threshold.sh, resize-disk.sh by hand, qm resize — config falls BEHIND actual, which reads as a shrink and would be refused on every converge forever. That case is now ADOPTED instead: the converge writes the observed size into config, touching nothing on the cluster. Excluding undeclared modules from the comparison, as v0.5 did, never helped here: a DECLARED module — which is all of them — got the permanent refusal anyway."
     },
     "node": {
       "class": "migrate",
       "apply": "hook",
       "hook": "update-node.sh",
       "liveKey": "node",
-      "sideEffects": ["ha-repoint"],
+      "sideEffects": [
+        "ha-repoint"
+      ],
       "note": "The ADR-019 bridge. The hook routes HA-vs-non-HA internally: a module that dependsOn cluster:ha has its node drift handled by the HA rule (re-point), a plain module by qm migrate. Live-OK decides whether the migrate needs downtime, so this refuses (exit 10) rather than migrating offline without --force. module-fields.json gives node NO default, so a module that declares none has no desired placement and is left where it runs. update-service.sh instead defaulted it to the FIRST site node, which would silently migrate an undeclared guest back to node 0 after any failover or manual move — a latent hazard that only stayed invisible because the estate's undeclared guests happen to sit on node 0. Expressing no placement is not the same as asking for node 0."
     },
-
     "storage": {
       "class": "manual",
       "apply": "none",
       "liveKey": "storage",
-      "defaultIsDesired": false,
-      "note": "A storage change means moving the disk. update-service.sh has always warned rather than acting, because an implicit qm move-disk is a long, IO-heavy operation an operator must schedule. NOT pre-gated: writing the intended storage into config and reporting the gap is useful, so only the apply refuses. defaultIsDesired:false — an undeclared storage is not a claim that the disk belongs on the schema's 'tanka1'."
+      "note": "A storage change means moving the disk, and update-service.sh has always WARNED rather than acting, because an implicit qm move-disk is a long, IO-heavy operation an operator must schedule. Not pre-gated: writing the intended storage into config and reporting the gap is useful, so only the apply refuses. The schema default 'tanka1' is DESIRED state (ADR-020 D9) — it is what both create paths build on, so an undeclared guest is in sync from install. Nothing in TAPPaaS ever moves a disk, so this can only diverge when an operator runs qm move-disk by hand, and reporting exactly that is what the manual class is for; Excluding undeclared modules from the comparison suppressed exactly that report, which is the opposite of what manual means."
     },
-
     "bios": {
       "class": "recreate",
       "apply": "none",
       "liveKey": "bios",
-      "defaultIsDesired": false,
-      "note": "Firmware is chosen when the guest is created; changing it on a live VM is refused today (the script's only FATAL). Pre-gated, so config is never left claiming a firmware the guest does not have. defaultIsDesired:false — an undeclared bios is not compared against the live firmware at all, which is what keeps a guest installed on seabios from reporting permanent drift against the schema's 'ovmf'."
+      "note": "Firmware is chosen when the guest is created; changing it on a live VM is refused (main's update-service made it the script's only FATAL). Pre-gated, so config is never left claiming a firmware the guest does not have. Proxmox OMITS the bios: line for seabios, so an absent value decodes to seabios rather than unknown. The schema default 'ovmf' is DESIRED state (ADR-020 D9) and is what Create-TAPPaaS-VM.sh builds with, so a guest TAPPaaS created always matches it. The residual risk is a guest built ELSEWHERE and adopted while declaring nothing — on seabios it would report recreate drift that fails the converge and can never be resolved in place. install-service.sh therefore records the observed firmware into config at install, which closes that case at the only moment it can be closed."
     },
     "ostype": {
       "class": "recreate",
@@ -156,7 +147,6 @@
       "normalize": "boolean",
       "note": "Seeds the cloud-init SSH configuration at creation."
     },
-
     "vmid": {
       "class": "immutable",
       "apply": "none",
@@ -166,7 +156,8 @@
     "os": {
       "class": "immutable",
       "apply": "none",
-      "note": "The installed operating system. Auto-detected from the image at install; changing it means reinstalling."
+      "note": "Auto-detected from the image at install and never changed in place. Reported from the QEMU guest agent (get-osinfo), whose distro id the reporter maps into this schema's vocabulary — Windows spells itself 'mswindows'. The agent only answers for a RUNNING guest with the agent installed; otherwise the reporter omits the key and the field records as not-reported rather than drifting against an empty actual.",
+      "liveKey": "os"
     },
     "imageType": {
       "class": "immutable",
@@ -184,18 +175,28 @@
     "cloudInit": {
       "class": "immutable",
       "apply": "none",
-      "note": "Whether the guest was provisioned via cloud-init — a property of how it was created."
+      "note": "How the guest was provisioned; not re-decidable in place. Observed as the presence of the '<storage>:vm-<vmid>-cloudinit' drive, which is always readable from qm config, so this is reported for every guest — 'false' means the guest genuinely has no cloud-init drive.",
+      "liveKey": "cloudInit",
+      "normalize": "boolean"
     }
   },
-
   "composites": {
     "net0": {
       "class": "in-place-reboot",
       "apply": "hook",
       "hook": "update-net.sh",
       "liveKey": "net0",
-      "inputs": ["bridge0", "zone0", "mac0", "trunks0"],
-      "sideEffects": ["reboot", "wait-ip", "dns"],
+      "inputs": [
+        "bridge0",
+        "zone0",
+        "mac0",
+        "trunks0"
+      ],
+      "sideEffects": [
+        "reboot",
+        "wait-ip",
+        "dns"
+      ],
       "note": "The primary NIC: one qm value 'virtio=<mac>,bridge=<b>,tag=<vlan>[,trunks=…][,queues=…]' assembled from four declared fields. The MANAGER builds the finished string because it must preserve two LIVE values the config never carries — the MAC when the module pins none, and queues, which must never change on a running NIC (#194). in-place-reboot is the CEILING: the runner escalates only when bridge0 or zone0 actually drifted; a MAC- or trunk-only change stays in-place, exactly as today."
     },
     "net1": {
@@ -203,8 +204,17 @@
       "apply": "hook",
       "hook": "update-net.sh",
       "liveKey": "net1",
-      "inputs": ["bridge1", "zone1", "mac1", "trunks1"],
-      "sideEffects": ["reboot", "wait-ip", "dns"],
+      "inputs": [
+        "bridge1",
+        "zone1",
+        "mac1",
+        "trunks1"
+      ],
+      "sideEffects": [
+        "reboot",
+        "wait-ip",
+        "dns"
+      ],
       "note": "The optional second NIC. Adding it, or changing its bridge/tag, reboots; a trunk- or MAC-only change applies live. Removing it (bridge1 gone from config while the guest still has net1) is a `qm set --delete net1` and also reboots."
     }
   }

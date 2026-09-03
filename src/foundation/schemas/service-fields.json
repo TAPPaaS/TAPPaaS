@@ -1,10 +1,9 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "service-fields.json",
-  "title": "TAPPaaS Service Field Manifest",
-  "description": "Schema for services/<service>/fields.json — the per-(field, service) change manifest defined by ADR-020 (D3/D4). module-fields.json says WHICH service owns a field (usedBy); this manifest says what changing it costs (the change class) and how it is applied. One manifest per provider service; the change class is keyed by the (field, service) PAIR, so 'node' can be 'migrate' under cluster:vm and mean something else elsewhere. The vocabulary below is mirrored by lib/ts/src/service-fields.ts, which performs the lint that 'module-manager validate' runs; test/unit/manifest.test.ts asserts the two agree.",
+  "title": "TAPPaaS Field Change Manifest",
+  "description": "Schema for a field-change manifest — services/<service>/fields.json, and schemas/fields.json for the module-level fields no service owns — the per-(field, service) change manifest defined by ADR-020 (D3/D4). module-fields.json says WHICH service owns a field (usedBy); this manifest says what changing it costs (the change class) and how it is applied. One manifest per provider service; the change class is keyed by the (field, service) PAIR, so 'node' can be 'migrate' under cluster:vm and mean something else elsewhere. The vocabulary below is mirrored by lib/ts/src/service-fields.ts, which performs the lint that 'module-manager validate' runs; test/unit/manifest.test.ts asserts the two agree. A manifest is scoped EITHER by 'service' (a provider coordinate) OR by 'scope' (currently only \"module\", for the module-level fields whose usedBy is empty or 'general'); exactly one of the two is required.",
   "type": "object",
-  "required": ["service", "fields"],
   "additionalProperties": false,
   "properties": {
     "$schema": {
@@ -27,12 +26,23 @@
     "fields": {
       "type": "object",
       "description": "One entry per field module-fields.json says this coordinate owns (its usedBy set). Coverage is MANDATORY: a usedBy field with no entry here is a validate error.",
-      "additionalProperties": { "$ref": "#/$defs/fieldEntry" }
+      "additionalProperties": {
+        "$ref": "#/$defs/fieldEntry"
+      }
     },
     "composites": {
       "type": "object",
       "description": "Derived apply units assembled from several declared fields — e.g. cluster:vm's net0, built from bridge0/zone0/mac0/trunks0. The composite carries the change class, the hook and the side effects; each input field declares apply:'composite' and points back at it.",
-      "additionalProperties": { "$ref": "#/$defs/compositeEntry" }
+      "additionalProperties": {
+        "$ref": "#/$defs/compositeEntry"
+      }
+    },
+    "scope": {
+      "type": "string",
+      "enum": [
+        "module"
+      ],
+      "description": "Set instead of 'service' for a manifest covering fields that no provider service owns — the module-level fields (usedBy empty or 'general') declared in schemas/fields.json. Such fields have no provider, so they have no liveKey and apply is 'none'."
     }
   },
   "$defs": {
@@ -61,7 +71,13 @@
     "applyMode": {
       "type": "string",
       "description": "How the converge realizes a change. Defaults to 'none' for a class that never applies (immutable/recreate/manual) and 'set' otherwise.",
-      "enum": ["set", "hook", "composite", "reconcile", "none"],
+      "enum": [
+        "set",
+        "hook",
+        "composite",
+        "reconcile",
+        "none"
+      ],
       "enumDescriptions": {
         "set": "Batched into ONE provider-level set call with every other 'set' field in the drift record (cluster:vm's single 'qm set').",
         "hook": "Dispatched to services/<svc>/<hook> over the uniform hook CLI: --field/--desired/--actual [--check] [--force].",
@@ -73,7 +89,16 @@
     "normalizer": {
       "type": "string",
       "description": "Declared normalization, applied by the MANAGER to BOTH sides of the diff (ADR-020 D7). Services report raw values and never normalize, so there is one comparison rule per field rather than one per code path.",
-      "enum": ["string", "integer", "boolean", "tags", "trunks", "vlan", "size", "optional"],
+      "enum": [
+        "string",
+        "integer",
+        "boolean",
+        "tags",
+        "trunks",
+        "vlan",
+        "size",
+        "optional"
+      ],
       "enumDescriptions": {
         "string": "Trim only (the default).",
         "integer": "Numeric comparison, so \"8\" equals 8.",
@@ -88,7 +113,12 @@
     "sideEffect": {
       "type": "string",
       "description": "Work the converge must perform AFTER applying this change. The shared runner sequences the union of all side effects ONCE per drift record, so two changed NICs still produce exactly one reboot and one DNS pass.",
-      "enum": ["reboot", "dns", "wait-ip", "ha-repoint"],
+      "enum": [
+        "reboot",
+        "dns",
+        "wait-ip",
+        "ha-repoint"
+      ],
       "enumDescriptions": {
         "reboot": "Reboot the guest so it picks the change up. Only valid on a disruptive class.",
         "dns": "Re-register (and clean up the stale) DNS record.",
@@ -98,11 +128,17 @@
     },
     "fieldEntry": {
       "type": "object",
-      "required": ["class"],
+      "required": [
+        "class"
+      ],
       "additionalProperties": false,
       "properties": {
-        "class": { "$ref": "#/$defs/changeClass" },
-        "apply": { "$ref": "#/$defs/applyMode" },
+        "class": {
+          "$ref": "#/$defs/changeClass"
+        },
+        "apply": {
+          "$ref": "#/$defs/applyMode"
+        },
         "liveKey": {
           "type": "string",
           "description": "Key under which report-service.sh reports this field's ACTUAL value. Defaults to the field name; needed wherever the provider spells it differently (Proxmox calls cputype 'cpu', vmtag 'tags', vmname 'name')."
@@ -120,15 +156,14 @@
           "type": "string",
           "description": "apply:'composite' only — the composite this field is an input of. Must be declared under 'composites', and that composite must list this field in its 'inputs'."
         },
-        "normalize": { "$ref": "#/$defs/normalizer" },
+        "normalize": {
+          "$ref": "#/$defs/normalizer"
+        },
         "sideEffects": {
           "type": "array",
-          "items": { "$ref": "#/$defs/sideEffect" }
-        },
-        "defaultIsDesired": {
-          "type": "boolean",
-          "default": true,
-          "description": "When the module does NOT declare this field, is its module-fields.json default DESIRED STATE (true, the default) or merely an install-time seed (false)? This is the declared form of the '__none__' sentinel the converge scripts hand-roll: cluster:vm reads an undeclared diskSize as 'leave the disk alone', not 'resize it to the schema's 8G'. The resolver still resolves the default, so the drift report shows the effective value; false means the CONVERGE must not act on it unless the module asked for it."
+          "items": {
+            "$ref": "#/$defs/sideEffect"
+          }
         },
         "note": {
           "type": "string",
@@ -138,28 +173,63 @@
     },
     "compositeEntry": {
       "type": "object",
-      "required": ["class", "inputs"],
+      "required": [
+        "class",
+        "inputs"
+      ],
       "additionalProperties": false,
       "properties": {
-        "class": { "$ref": "#/$defs/changeClass" },
-        "apply": { "$ref": "#/$defs/applyMode" },
-        "liveKey": { "type": "string" },
-        "setFlag": { "type": "string" },
-        "hook": { "type": "string", "pattern": "^[A-Za-z0-9._-]+$" },
+        "class": {
+          "$ref": "#/$defs/changeClass"
+        },
+        "apply": {
+          "$ref": "#/$defs/applyMode"
+        },
+        "liveKey": {
+          "type": "string"
+        },
+        "setFlag": {
+          "type": "string"
+        },
+        "hook": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9._-]+$"
+        },
         "inputs": {
           "type": "array",
           "minItems": 1,
-          "items": { "type": "string" },
+          "items": {
+            "type": "string"
+          },
           "description": "The declared fields this value is assembled from. Each must have a field entry with apply:'composite' pointing back here."
         },
-        "normalize": { "$ref": "#/$defs/normalizer" },
+        "normalize": {
+          "$ref": "#/$defs/normalizer"
+        },
         "sideEffects": {
           "type": "array",
-          "items": { "$ref": "#/$defs/sideEffect" }
+          "items": {
+            "$ref": "#/$defs/sideEffect"
+          }
         },
-        "defaultIsDesired": { "type": "boolean", "default": true },
-        "note": { "type": "string" }
+        "note": {
+          "type": "string"
+        }
       }
     }
-  }
+  },
+  "oneOf": [
+    {
+      "required": [
+        "service",
+        "fields"
+      ]
+    },
+    {
+      "required": [
+        "scope",
+        "fields"
+      ]
+    }
+  ]
 }

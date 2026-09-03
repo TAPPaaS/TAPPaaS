@@ -27,7 +27,6 @@ import {
   ManifestFinding,
   NORMALIZERS,
   SIDE_EFFECTS,
-  defaultIsDesired,
   effectiveApply,
   needsActualState,
   lintServiceFieldManifest,
@@ -59,6 +58,7 @@ const FOUNDATION = join(MODULE_MANAGER, "..", "..", "..");
 const SCHEMA_FILE = join(FOUNDATION, "schemas", "module-fields.json");
 const MANIFEST_SCHEMA_FILE = join(FOUNDATION, "schemas", "service-fields.json");
 const VM_MANIFEST_FILE = join(FOUNDATION, "cluster", "services", "vm", "fields.json");
+const MODULE_MANIFEST_FILE = join(FOUNDATION, "schemas", "fields.json");
 
 function readJson(path: string): Record<string, unknown> {
   return JSON.parse(readFileSync(path, "utf8")) as Record<string, unknown>;
@@ -161,18 +161,32 @@ const declaredFields = Object.keys(schemaFields);
     (schemaFields.bridge1 as { default?: unknown }).default === "NONE",
     "bridge1's schema default is the 'NONE' sentinel both acting paths already used",
   );
-  // The four `__none__` sentinels: an undeclared value is an install-time seed,
-  // not desired state the converge should act on.
-  const seedOnly = manifest
-    ? Object.keys(manifest.fields).filter((f) => !defaultIsDesired(manifest.fields[f])).sort()
+  // The four `__none__` sentinels this manifest was ported from are all gone
+  // (ADR-020 D9). Each was removed only after the question was actually asked of
+  // it — does the schema default differ from what install applies? — and for all
+  // four the answer was no: TAPPaaS's own creators build with exactly the schema
+  // default, so an undeclared guest is in sync from install and there was nothing
+  // for an opt-out to protect.
+  //
+  //   vmtag     "TAPPaaS" is what both create paths apply.
+  //   diskSize  8G likewise; the real hazard was config falling BEHIND a later
+  //             grow, which is now an adoption rather than a permanent refusal.
+  //   storage   "tanka1" likewise; nothing in TAPPaaS moves a disk, so
+  //             suppressing the manual-class report was the opposite of correct.
+  //   bios      "ovmf" likewise; the residual case — a guest built elsewhere on
+  //             seabios, declaring nothing — is closed by install-service.sh
+  //             recording the observed firmware at install.
+  //
+  // The whole vocabulary is gone with them, so the assertion is now structural:
+  // no manifest may reintroduce the key.
+  const reintroduced = manifest
+    ? Object.keys(manifest.fields).filter((f) =>
+        Object.prototype.hasOwnProperty.call(manifest.fields[f], "defaultIsDesired"),
+      )
     : [];
   check(
-    seedOnly.join(",") === "bios,diskSize,storage,vmtag",
-    "the four fields whose schema default is an install-time seed are declared as such",
-  );
-  check(
-    manifest !== null && defaultIsDesired(manifest.fields.cores),
-    "a field with no declaration defaults to defaultIsDesired:true (cores IS reconciled to 2)",
+    reintroduced.length === 0,
+    `no field carries defaultIsDesired — the flag is retired (found: ${reintroduced.join(",") || "none"})`,
   );
 }
 
@@ -344,22 +358,6 @@ const BASE = {
   );
 }
 
-// Rule: defaultIsDesired must be a boolean (it gates whether the converge acts,
-// so a truthy string like "no" silently meaning true would be dangerous).
-{
-  const f = lint({
-    ...BASE,
-    fields: { ...BASE.fields, cores: { class: "in-place", apply: "set", defaultIsDesired: "no" } },
-  });
-  check(
-    f.length === 1 && says(f, "defaultIsDesired must be a boolean"),
-    "vocabulary: a non-boolean defaultIsDesired is an error",
-  );
-  check(
-    defaultIsDesired({ class: "in-place" }) && !defaultIsDesired({ class: "in-place", defaultIsDesired: false }),
-    "defaultIsDesired defaults to true when absent",
-  );
-}
 
 // Rule: apply:"reconcile" — the service converges the field itself. Valid on an
 // applicable class, meaningless on one that is never applied.
@@ -581,6 +579,53 @@ const BASE = {
     broken.length === 0,
     `every manifest in the tree lints clean${broken.length ? " — " + broken.join(" | ") : ""}`,
   );
+}
+
+// ── 4. the MODULE-LEVEL manifest (schemas/fields.json) ─────────────────
+//
+// The 19 fields no provider service owns. This manifest is declaration only —
+// nothing consumes it at runtime yet (#567) — which is exactly why it needs a
+// test: an unread document rots silently, and the whole point of writing it
+// down was to stop these fields being the undeclared corner of the schema.
+{
+  const doc = readJson(MODULE_MANIFEST_FILE);
+  const schema = readJson(SCHEMA_FILE);
+  const schemaFields = schema.fields as Record<string, { usedBy?: string[] }>;
+  const entries = doc.fields as Record<string, Record<string, unknown>>;
+
+  check(doc.scope === "module", "schemas/fields.json is scoped 'module' (it has no service coordinate)");
+  check(doc.service === undefined, "schemas/fields.json declares no 'service' — scope and service are exclusive");
+
+  // COVERAGE, both ways. The set it must cover is derivable from
+  // module-fields.json alone: a field whose usedBy names no service.
+  const unowned = Object.keys(schemaFields)
+    .filter((f) => {
+      const u = schemaFields[f].usedBy;
+      return !Array.isArray(u) || u.length === 0 || (u.length === 1 && u[0] === "general");
+    })
+    .sort();
+  const declared = Object.keys(entries).sort();
+
+  const missing = unowned.filter((f) => !declared.includes(f));
+  const extra = declared.filter((f) => !unowned.includes(f));
+  check(missing.length === 0, `every module-level field is classified (missing: ${missing.join(", ") || "none"})`);
+  check(extra.length === 0, `no entry classifies a SERVICE-owned field (extra: ${extra.join(", ") || "none"})`);
+
+  // Same vocabulary as the service manifests — the point of one taxonomy.
+  const badClass = declared.filter((f) => !(String(entries[f].class) in CHANGE_CLASSES));
+  check(badClass.length === 0, `every class is in the shared taxonomy (bad: ${badClass.join(", ") || "none"})`);
+
+  // A module-level field has no provider, so it can have no reporter and
+  // nothing to apply. These two assertions stop the file drifting into
+  // claiming a liveKey or a set-flag that could never exist.
+  const notNone = declared.filter((f) => entries[f].apply !== "none");
+  check(notNone.length === 0, `apply is 'none' for every module-level field (offenders: ${notNone.join(", ") || "none"})`);
+  const withLiveKey = declared.filter((f) => entries[f].liveKey !== undefined);
+  check(withLiveKey.length === 0, `no module-level field claims a liveKey (offenders: ${withLiveKey.join(", ") || "none"})`);
+
+  // Rationale is the reason this document is worth having at all.
+  const noNote = declared.filter((f) => typeof entries[f].note !== "string" || !entries[f].note);
+  check(noNote.length === 0, `every module-level field carries a rationale (missing: ${noNote.join(", ") || "none"})`);
 }
 
 console.log("");

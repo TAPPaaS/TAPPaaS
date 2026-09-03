@@ -344,7 +344,6 @@ export function preGateSet(
 const SKIP_REASON_TEXT: Record<string, string> = {
   "self-reconciling": "converged by the service itself, not diffed here",
   "no-desired-value": "this module declares no value, and no schema default applies",
-  "seed-only": "the schema default is an install-time seed, not desired state",
   "not-reported": "the service's reporter does not observe it",
 };
 
@@ -415,6 +414,14 @@ export function renderDrift(coordinate: string, r: DriftRecord): string[] {
   for (const f of r.unreconciled) {
     out.push(
       `  ${RD}✗${CL} ${f.field} [${f.class}] ${f.actual || "-"} → ${f.desired} — not reconcilable in place`,
+    );
+  }
+  // Deliberately not an ✗: the guest is fine and bigger than asked for. What
+  // is wrong is the config, and the converge fixes that rather than failing.
+  for (const f of r.adopt) {
+    out.push(
+      `  ${YW}~${CL} ${f.field} [${f.class}] config says ${f.desired}, guest already has ${f.actual} — ` +
+        `config adopts ${f.actual} (nothing on the cluster changes)`,
     );
   }
   if (needsDisruption(r)) {

@@ -112,6 +112,34 @@ converge_apply() {
     done < <(jq -r --arg fs "${CONVERGE_FS}" \
         '.unreconciled[]? | [.field, .class, .desired, .actual] | join($fs)' "${drift_file}")
 
+    # ── adoption: config lags a completed grow ───────────────────────
+    # A grow-only field whose ACTUAL already exceeds desired cannot be applied —
+    # that direction is a shrink and update-disk.sh refuses it (exit 20). Before
+    # ADR-020 D9 that refusal repeated on every converge with no way out, and on
+    # main it was worse: `resize-disk.sh || die` aborted the whole update. The
+    # guest is not wrong here; CONFIG is behind, because something grew the disk
+    # outside the config path. So move config forward instead.
+    #
+    # This is the ONLY place the converge writes desired state, and it is safe
+    # precisely because it touches nothing on the cluster: no guest call, no
+    # data at risk, and the value written is the one the reporter just observed.
+    local af aclass adesired aactual
+    while IFS="${CONVERGE_FS}" read -r af aclass adesired aactual; do
+        [[ -n "${af}" ]] || continue
+        if [[ "${check}" == "1" ]]; then
+            converge_report "  ${af}: config says ${adesired}, guest already has ${aactual} — would adopt ${aactual}"
+            continue
+        fi
+        if jq_module_write "${module}" --arg f "${af}" --arg v "${aactual}" '.[$f] = $v'; then
+            converge_report "  ${GN}✓${CL} ${af}: adopted ${aactual} into config (was ${adesired}; the guest was already larger)"
+            CONVERGE_APPLIED=$((CONVERGE_APPLIED + 1))
+        else
+            error "  ${af}: could not adopt ${aactual} into config"
+            rc=1
+        fi
+    done < <(jq -r --arg fs "${CONVERGE_FS}" \
+        '.adopt[]? | [.field, .class, .desired, .actual] | join($fs)' "${drift_file}")
+
     if [[ "$(jq -r '.units | length' "${drift_file}")" -eq 0 ]]; then
         # In --check mode the verdict IS the output — reporting is the whole
         # point of check mode — so say it plainly rather than at debug level.

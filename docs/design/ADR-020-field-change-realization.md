@@ -186,7 +186,7 @@ not. Each of these was a real, silent divergence:
 | `bridge1`/`mac1`/`zone1`/`trunks1` claimed `cluster:lxc` | a container has one NIC; neither the LXC installer nor its updater mentions `net1` |
 | `swap` | read from config by `cluster:lxc` for its whole life, never declared |
 | `node` defaulted to the first site node | so a module declaring no placement would be migrated back to node 0 after any failover. Expressing no placement is not asking for node 0 |
-| `vmtag`/`diskSize`/`storage`/`bios` | schema defaults that are install-time **seeds**, which the converge deliberately does not act on — now declared as `defaultIsDesired: false` rather than living in a `__none__` sentinel |
+| `vmtag`/`diskSize`/`storage`/`bios` | the converge deliberately did not act on these when undeclared, on the assumption their defaults were only install-time starting values — but TAPPaaS's own creators build with exactly those defaults, so an undeclared guest already matches them and skipping was hiding a comparison that is free (ADR-020 D9) |
 | the bash netopts parser | could not read a container's `hwaddr=` MAC, while its TypeScript twin could |
 
 ## 7. Where the pieces live

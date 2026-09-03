@@ -84,6 +84,38 @@ disk_value="$(report_disk scsi0 virtio0 ide0 sata0)"
 net0="$(report_field 'net0')"
 net1="$(report_field 'net1')"
 
+# `cloudInit` is the presence of the guest's cloud-init drive — Proxmox always
+# names it "<storage>:vm-<vmid>-cloudinit" on whatever bus it is attached to.
+# Always observable from the config text we already hold, so it is always
+# reported: "false" here means the guest genuinely has no cloud-init drive
+# (network/OPNsense is the estate's one such guest), not that we did not look.
+cloud_init=false
+if grep -qE "^[a-z]+[0-9]+:[^,]*vm-${REPORT_VMID}-cloudinit" <<< "${REPORT_LIVE}"; then
+    cloud_init=true
+fi
+
+# `os` comes from the QEMU guest agent, which only answers while the guest is
+# RUNNING and has the agent installed. When it cannot answer, the `os` key is
+# OMITTED rather than emitted empty — an absent key is how this contract says
+# "not observed" (the manager records it as `not-reported`), whereas "" would
+# mean "the guest has no OS" and drift against every module that declares one.
+# The agent's id is the distro's own spelling, so it is MAPPED into the
+# module-fields.json vocabulary (debian/ubuntu/nixos/windows/unknown) here, in
+# the provider's reporter — decoding how a provider spells a value is exactly
+# what extraction is for, and Windows reports itself as "mswindows".
+vm_os=""
+has_os=false
+if [[ "${REPORT_STATUS}" == "running" ]]; then
+    agent_id="$(ssh "${REPORT_SSH_OPTS[@]}" "root@${REPORT_NODE}.${REPORT_MGMT}.internal" \
+        "qm agent ${REPORT_VMID} get-osinfo" 2>/dev/null | jq -r '.id // empty' 2>/dev/null)" || agent_id=""
+    case "${agent_id}" in
+        debian|ubuntu|nixos) vm_os="${agent_id}"; has_os=true ;;
+        mswindows)           vm_os="windows";    has_os=true ;;
+        "")                  : ;;
+        *)                   vm_os="unknown";    has_os=true ;;
+    esac
+fi
+
 # The jq program is deliberately single-quoted: $vmid and friends are JQ
 # variables bound by the --arg pairs below, not shell expansions.
 # shellcheck disable=SC2016
@@ -96,7 +128,9 @@ report_emit \
       "net0.mac": $net0m, "net0.queues": $net0q,
       net1: $net1,
       "net1.bridge": $net1b, "net1.tag": $net1t, "net1.trunks": $net1k,
-      "net1.mac": $net1m, "net1.queues": $net1q}' \
+      "net1.mac": $net1m, "net1.queues": $net1q,
+      cloudInit: $cloudInit}
+     + (if $hasOs then {os: $os} else {} end)' \
     --arg vmid     "${REPORT_VMID}" \
     --arg node     "${REPORT_NODE}" \
     --arg status   "${REPORT_STATUS}" \
@@ -120,4 +154,7 @@ report_emit \
     --arg net1t    "$(vmnet_parse "${net1}" tag)" \
     --arg net1k    "$(vmnet_parse "${net1}" trunks)" \
     --arg net1m    "$(vmnet_parse "${net1}" mac)" \
-    --arg net1q    "$(vmnet_parse "${net1}" queues)"
+    --arg net1q    "$(vmnet_parse "${net1}" queues)" \
+    --arg cloudInit "${cloud_init}" \
+    --arg os        "${vm_os}" \
+    --argjson hasOs "${has_os}"

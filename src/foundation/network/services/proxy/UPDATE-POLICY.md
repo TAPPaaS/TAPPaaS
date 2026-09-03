@@ -10,17 +10,17 @@ The module's public face. Nothing here touches a guest: the changes land on Cadd
 and the firewall, and the workload never notices.
 *The largest drift blind spot — see [recommendation 1](../../../tappaas-cicd/UPDATE-POLICY.md#1-give-networkproxy-a-reporter).*
 
-| Field | Normalize | Why this class |
-|---|---|---|
-| `proxyDomain` | — | Re-issues the certificate and moves the handler; no guest is touched. |
-| `proxyPort` | integer | A handler rewrite, applied live. |
-| `proxyUpstreamTls` | boolean | Declared a string in the schema; the normalizer makes `"true"` and `true` one value. |
-| `proxyUpstreamHttp1` | boolean | For a backend that cannot speak h2c. |
-| `proxyPreserveHost` | boolean | For a backend generating absolute URLs. |
-| `proxyTls` | — | Per-service vs the environment wildcard. |
-| `proxyAllowedZones` | — | Internal service vs exposed to the internet — the field most worth a verb. |
-| `firewallType` | — | `NONE` switches to printed instructions — the non-field branch the script keeps. |
-| `aliasType` | — | host vs network in the generated alias. |
+| Field | Class | Apply | Normalize | Why this class |
+|---|---|---|---|---|
+| `proxyDomain` | in-place | reconcile | — | Re-issues the certificate and moves the handler; no guest is touched. |
+| `proxyPort` | in-place | reconcile | integer | A handler rewrite, applied live. |
+| `proxyUpstreamTls` | in-place | reconcile | boolean | Declared a string in the schema; the normalizer makes `"true"` and `true` one value. |
+| `proxyUpstreamHttp1` | in-place | reconcile | boolean | For a backend that cannot speak h2c. |
+| `proxyPreserveHost` | in-place | reconcile | boolean | For a backend generating absolute URLs. |
+| `proxyTls` | in-place | reconcile | — | Per-service vs the environment wildcard. |
+| `proxyAllowedZones` | in-place | reconcile | — | Internal service vs exposed to the internet — the field most worth a verb. |
+| `firewallType` | in-place | reconcile | — | `NONE` switches to printed instructions — the non-field branch the script keeps. |
+| `aliasType` | in-place | reconcile | — | host vs network in the generated alias. |
 
 ## Why `reconcile` and not `set`
 

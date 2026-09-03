@@ -26,7 +26,6 @@ import {
   Normalizer,
   ServiceFieldManifest,
   SideEffect,
-  defaultIsDesired,
   effectiveApply,
   worstClass,
 } from "./service-fields";
@@ -219,7 +218,6 @@ export function normalizeValue(
 // not look" must never read as "in sync" (the #458 lesson, applied to fields).
 export type SkipReason =
   | "no-desired-value" // neither declared nor defaulted into scope
-  | "seed-only" // defaultIsDesired:false and the value is only a default
   | "self-reconciling" // apply:"reconcile" — the service converges it itself
   | "not-reported"; // the service's reporter does not observe this field
 
@@ -284,6 +282,14 @@ export interface DriftRecord {
   // (both also pre-gated on `modify --set`) and manual. Reported and refused,
   // never applied.
   unreconciled: DriftField[];
+  // Config LAGS reality on a grow-only field: actual already exceeds desired.
+  // Applying would be a shrink, which is refused — so the fix is to move CONFIG
+  // forward, not the guest. Adopting is safe here in a way it is nowhere else:
+  // nothing on the cluster is touched, no data is at risk, and the alternative
+  // is a converge that fails identically on every future pass with no path out
+  // (ADR-020 D9). The archetype is a disk grown by check-disk-threshold.sh, by
+  // resize-disk.sh, or by hand.
+  adopt: DriftField[];
   // Compared and equal.
   inSync: DriftField[];
   // Not compared, and why.
@@ -291,7 +297,7 @@ export interface DriftRecord {
 }
 
 export function hasChanges(r: DriftRecord): boolean {
-  return r.units.length > 0 || r.unreconciled.length > 0;
+  return r.units.length > 0 || r.unreconciled.length > 0 || r.adopt.length > 0;
 }
 
 // True when applying this record needs disruption authorization (ADR-020 D8):
@@ -356,6 +362,7 @@ export function computeDrift(
     actual: { ...actual },
     units: [],
     unreconciled: [],
+    adopt: [],
     inSync: [],
     skipped: [],
   };
@@ -372,10 +379,6 @@ export function computeDrift(
     // The schema default is an install-time seed for this (field, service), not
     // desired state — cluster:vm's `__none__` sentinel, declared. The module
     // never asked for this value, so the converge must not act on it.
-    if (!defaultIsDesired(entry) && resolved.literal === "") {
-      record.skipped.push({ field, reason: "seed-only" });
-      continue;
-    }
 
     // The service converges this field inside its own idempotent reconcile
     // (apply:"reconcile"). There is nothing for the generic differ to compare —
@@ -412,6 +415,20 @@ export function computeDrift(
     if (desiredNorm === actualNorm) {
       record.inSync.push(df);
       continue;
+    }
+
+    // Changed, and the change is BACKWARDS for a grow-only field: the guest is
+    // already bigger than config asks for. Never an apply — that direction is
+    // refused — and not a failure either, because config lagging a completed
+    // grow is an accounting gap, not a fault. Recorded as an adoption so the
+    // converge can close it instead of failing on it forever.
+    if (entry.class === "grow-only") {
+      const d = Number(desiredNorm);
+      const a = Number(actualNorm);
+      if (Number.isFinite(d) && Number.isFinite(a) && a > d) {
+        record.adopt.push(df);
+        continue;
+      }
     }
 
     // Changed. A class the converge never applies is reported and refused, not

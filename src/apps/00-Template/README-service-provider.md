@@ -77,10 +77,14 @@ behaviour nobody asked for.
 
 Two extras worth knowing:
 
-- **`defaultIsDesired: false`** — when the module does not declare the field, the
-  schema default is an install-time *seed*, not desired state. `cluster:vm` uses
-  it for `diskSize`: an undeclared disk size means "leave the disk alone", not
-  "resize every guest to 8G".
+- **undeclared fields are still compared.** A module that declares nothing for a
+  field gets the `module-fields.json` default as its desired value, gated by
+  `usedBy`. That is safe as long as your INSTALL path builds with the same
+  default — TAPPaaS's creators read `vmtag`, `diskSize`, `storage` and `bios`
+  from exactly those values, so an undeclared guest already matches. If your
+  provider can produce a guest that does *not* match the default, record what
+  you actually built in the deployed config at install (ADR-020 D9), the way
+  `cluster:vm/install-service.sh` records the observed firmware.
 - **composites** — when several declared fields become one provider value (a NIC
   built from bridge/zone/mac/trunks). The composite carries the class, the hook
   and the side effects; each input declares `apply: "composite"` and points at it.

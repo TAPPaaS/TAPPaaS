@@ -119,7 +119,7 @@ const SMALL = parseServiceFieldManifest(
     service: "t:svc",
     fields: {
       cores: { class: "in-place", apply: "set", liveKey: "cores", normalize: "integer" },
-      vmtag: { class: "in-place", apply: "set", liveKey: "tags", normalize: "tags", defaultIsDesired: false },
+      vmtag: { class: "in-place", apply: "set", liveKey: "tags", normalize: "tags" },
       vmid: { class: "immutable", apply: "none", liveKey: "vmid" },
       storage: { class: "manual", apply: "none", liveKey: "storage" },
       os: { class: "immutable", apply: "none" },
@@ -161,10 +161,13 @@ const skipReason = (r: DriftRecord, f: string): string | undefined =>
 {
   const r = drift(
     { cores: 4, vmid: 300, storage: "tanka1", bridge0: "lan" },
-    { cores: "4", vmid: "300", storage: "tanka1", tags: "", "net0.bridge": "lan", "net0.mac": "02:AA" },
+    { cores: "4", vmid: "300", storage: "tanka1", tags: "tappaas", "net0.bridge": "lan", "net0.mac": "02:AA" },
   );
   check(!hasChanges(r), "a VM matching its declared state has no drift");
-  check(r.inSync.map((f) => f.field).sort().join() === "bridge0,cores,storage,vmid",
+  // vmtag is in this list although the module declares nothing: its schema
+  // default is desired state, and the guest carries it because the creator
+  // applied the same default (ADR-020 D9). Before D9 it was skipped instead.
+  check(r.inSync.map((f) => f.field).sort().join() === "bridge0,cores,storage,vmid,vmtag",
     "the fields that were compared and matched are named");
 }
 
@@ -172,7 +175,7 @@ const skipReason = (r: DriftRecord, f: string): string | undefined =>
 {
   const r = drift(
     { cores: 8, vmid: 300, bridge0: "lan" },
-    { cores: "4", vmid: "300", storage: "tanka1", tags: "", "net0.bridge": "lan", "net0.mac": "02:AA" },
+    { cores: "4", vmid: "300", storage: "tanka1", tags: "tappaas", "net0.bridge": "lan", "net0.mac": "02:AA" },
   );
   check(r.units.length === 1 && r.units[0].name === "cores", "a changed in-place field is one apply unit");
   check(r.units[0].apply === "set" && r.units[0].setFlag === "--cores", "…dispatched as a batched set with its flag");
@@ -184,7 +187,7 @@ const skipReason = (r: DriftRecord, f: string): string | undefined =>
 {
   const r = drift(
     { cores: 4, vmid: 999, storage: "tankb1", bridge0: "lan" },
-    { cores: "4", vmid: "300", storage: "tanka1", tags: "", "net0.bridge": "lan", "net0.mac": "02:AA" },
+    { cores: "4", vmid: "300", storage: "tanka1", tags: "tappaas", "net0.bridge": "lan", "net0.mac": "02:AA" },
   );
   check(r.units.length === 0, "a class the converge never applies produces no apply unit");
   check(r.unreconciled.map((f) => f.field).sort().join() === "storage,vmid",
@@ -192,24 +195,43 @@ const skipReason = (r: DriftRecord, f: string): string | undefined =>
   check(hasChanges(r), "unreconciled drift still counts as drift — it is reported, not hidden");
 }
 
-// The three skip reasons, each recorded rather than silently dropped.
+// The skip reasons, each recorded rather than silently dropped. There used to be
+// a third — "seed-only", for a field whose schema default was an install-time
+// seed rather than desired state — retired with the flag behind it (ADR-020 D9).
 {
   const r = drift({ cores: 4, vmid: 300, bridge0: "lan" }, { cores: "4", vmid: "300", "net0.bridge": "lan" });
   check(skipReason(r, "os") === "no-desired-value", "a field with neither a value nor an applicable default is skipped");
   check(skipReason(r, "mac0") === "no-desired-value", "a '<computed>' default is not desired state");
-  check(skipReason(r, "vmtag") === "seed-only",
-    "defaultIsDesired:false + undeclared = an install-time seed, not something to converge");
   check(skipReason(r, "storage") === "not-reported", "a field the reporter does not observe is skipped as such");
+  check(
+    r.skipped.every((s) => s.reason !== ("seed-only" as unknown as typeof s.reason)),
+    "no field is skipped as an install-time seed — that reason no longer exists",
+  );
   check(r.skipped.length === 4, "every uncompared field is accounted for — none silently vanishes");
 }
 
-// vmtag with defaultIsDesired:false is compared once the module DECLARES it.
+// An UNDECLARED field whose schema default is desired state is now COMPARED, not
+// skipped. vmtag is the archetype: the default "TAPPaaS" is exactly what both
+// create paths apply, so the guest already matches it and comparing is free.
+{
+  const r = drift(
+    { cores: 4, vmid: 300, bridge0: "lan" },
+    { cores: "4", vmid: "300", tags: "tappaas", "net0.bridge": "lan", "net0.mac": "02:AA" },
+  );
+  check(skipReason(r, "vmtag") === undefined, "an undeclared vmtag is compared against the schema default");
+  check(
+    r.inSync.some((f) => f.field === "vmtag" && f.defaulted),
+    "…and matches the live 'tappaas', flagged as coming from the default",
+  );
+}
+
+// And it is still compared when the module DECLARES it.
 {
   const r = drift(
     { cores: 4, vmid: 300, bridge0: "lan", vmtag: "TAPPaaS,App" },
     { cores: "4", vmid: "300", storage: "tanka1", tags: "app;tappaas", "net0.bridge": "lan", "net0.mac": "02:AA" },
   );
-  check(skipReason(r, "vmtag") === undefined, "a DECLARED seed-only field is compared");
+  check(skipReason(r, "vmtag") === undefined, "a declared vmtag is compared");
   check(!hasChanges(r), "…and 'TAPPaaS,App' equals the live 'app;tappaas' after normalization");
 }
 
@@ -218,7 +240,7 @@ const skipReason = (r: DriftRecord, f: string): string | undefined =>
   // MAC only → in-place. No reboot, no DNS: exactly cluster:vm's behaviour.
   const macOnly = drift(
     { cores: 4, vmid: 300, bridge0: "lan", mac0: "02:BB" },
-    { cores: "4", vmid: "300", storage: "tanka1", tags: "", "net0.bridge": "lan", "net0.mac": "02:AA" },
+    { cores: "4", vmid: "300", storage: "tanka1", tags: "tappaas", "net0.bridge": "lan", "net0.mac": "02:AA" },
   );
   check(macOnly.units.length === 1 && macOnly.units[0].name === "net0",
     "a changed composite input produces ONE unit, the composite");
@@ -237,7 +259,7 @@ const skipReason = (r: DriftRecord, f: string): string | undefined =>
   // Bridge → in-place-reboot, and NOW the side effects apply.
   const bridgeChange = drift(
     { cores: 4, vmid: 300, bridge0: "iotbr", mac0: "02:AA" },
-    { cores: "4", vmid: "300", storage: "tanka1", tags: "", "net0.bridge": "lan", "net0.mac": "02:AA" },
+    { cores: "4", vmid: "300", storage: "tanka1", tags: "tappaas", "net0.bridge": "lan", "net0.mac": "02:AA" },
   );
   check(bridgeChange.units[0].class === "in-place-reboot", "a bridge change escalates the composite to in-place-reboot");
   check(bridgeChange.units[0].sideEffects.join() === "reboot,dns", "…and earns the declared reboot + DNS pass");
@@ -246,7 +268,7 @@ const skipReason = (r: DriftRecord, f: string): string | undefined =>
   // Both inputs changed: still ONE unit, escalated, with the effects once.
   const both = drift(
     { cores: 4, vmid: 300, bridge0: "iotbr", mac0: "02:BB" },
-    { cores: "4", vmid: "300", storage: "tanka1", tags: "", "net0.bridge": "lan", "net0.mac": "02:AA" },
+    { cores: "4", vmid: "300", storage: "tanka1", tags: "tappaas", "net0.bridge": "lan", "net0.mac": "02:AA" },
   );
   check(both.units.length === 1 && both.units[0].fields.length === 2,
     "two changed inputs are one composite unit carrying both");
@@ -258,11 +280,11 @@ const skipReason = (r: DriftRecord, f: string): string | undefined =>
 {
   const a = drift(
     { cores: 8, vmid: 300, bridge0: "iotbr" },
-    { cores: "4", vmid: "300", storage: "tanka1", tags: "", "net0.bridge": "lan", "net0.mac": "02:AA" },
+    { cores: "4", vmid: "300", storage: "tanka1", tags: "tappaas", "net0.bridge": "lan", "net0.mac": "02:AA" },
   );
   const b = drift(
     { bridge0: "iotbr", vmid: 300, cores: 8 },
-    { "net0.mac": "02:AA", tags: "", storage: "tanka1", vmid: "300", cores: "4", "net0.bridge": "lan" },
+    { "net0.mac": "02:AA", tags: "tappaas", storage: "tanka1", vmid: "300", cores: "4", "net0.bridge": "lan" },
   );
   check(
     JSON.stringify(a.units.map((u) => u.name)) === JSON.stringify(b.units.map((u) => u.name)),
@@ -361,6 +383,42 @@ const skipReason = (r: DriftRecord, f: string): string | undefined =>
   check(
     grown.units.length === 1 && grown.units[0].class === "grow-only" && !needsDisruption(grown),
     "a disk grow is one grow-only unit and needs no downtime",
+  );
+
+  // ── the other direction: config BEHIND a completed grow (ADR-020 D9) ──
+  //
+  // The guest is bigger than config asks for, because something grew it outside
+  // the config path. Applying that is a shrink, which update-disk.sh refuses
+  // (exit 20) — and used to refuse identically on every future pass, with no way
+  // out. It is now an ADOPTION: config moves forward, the cluster is untouched.
+  const lagging = computeDrift(
+    resolveModule("nextcloud", { ...cfg, diskSize: "40G" }, null, SCHEMA),
+    { manifest: VM_MANIFEST, actual, zones: ZONES },
+  );
+  check(
+    lagging.adopt.length === 1 && lagging.adopt[0].field === "diskSize",
+    "config behind a grown disk is recorded as an adoption",
+  );
+  check(
+    lagging.adopt[0].actual === "80G" && lagging.adopt[0].desired === "40G",
+    "…carrying the observed size to write into config",
+  );
+  check(
+    lagging.units.length === 0 && lagging.unreconciled.length === 0,
+    "…and is NOT dispatched as an apply, nor reported as unreconcilable",
+  );
+  check(hasChanges(lagging), "…but still counts as a change, so --check reports it");
+
+  // A shrink is only an adoption when actual genuinely EXCEEDS desired. Equal
+  // sizes spelled differently must stay in sync, not adopt: 80G vs 81920M is
+  // the same disk, and the size normalizer is what makes that true.
+  const sameSize = computeDrift(
+    resolveModule("nextcloud", { ...cfg, diskSize: "81920M" }, null, SCHEMA),
+    { manifest: VM_MANIFEST, actual, zones: ZONES },
+  );
+  check(
+    sameSize.adopt.length === 0 && sameSize.units.length === 0,
+    "80G and 81920M are the same disk — neither an apply nor an adoption",
   );
 }
 

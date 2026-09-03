@@ -5,9 +5,9 @@
 
 1 field — `in-place`, `apply: "reconcile"`.
 
-| Field | Why this class |
-|---|---|
-| `ip` | A resolver update. Absent means the module resolves from its DHCP lease via masqdns. |
+| Field | Class | Apply | Normalize | Why this class |
+|---|---|---|---|---|
+| `ip` | in-place | reconcile | — | A resolver update. Absent means the module resolves from its DHCP lease via masqdns. |
 
 Absence is meaningful here rather than merely undeclared: a module with no `ip`
 is not misconfigured, it has chosen the DHCP + masqdns path. This is why the

@@ -13,18 +13,18 @@ operation instead of a hand-edit. The decision is
 how it is built is
 [the realization doc](../../../docs/design/ADR-020-field-change-realization.md).
 
-Compiled from the 11 manifests and `schemas/module-fields.json`.
+Compiled from the 11 service manifests, the module-level manifest and `schemas/module-fields.json`.
 
-**This document is the vocabulary.** Sections 1–3 define the change classes, the
-apply modes, and the policy for fields no service owns. The per-service
-classifications live beside their manifests — see
+**This document is the vocabulary.** Sections 1 and 2 define the change classes
+and the apply modes. Every classification itself lives beside the manifest it
+describes — 11 per-service, plus one module-level — see
 [the index in section 4](#4-the-per-service-manifests).
 
 | | |
 |---|---:|
 | Schema fields | **74** |
 | — owned by at least one service, and classified | **55** |
-| — owned by none (section 3) | **19** |
+| — owned by none, declared module-level (section 3) | **19** |
 | Classified `(field, service)` pairs | **69** |
 | Services owning declared fields | **11** |
 | Services owning none (nothing to declare) | **14** |
@@ -117,6 +117,10 @@ calls a hook, and that has nothing to do with `cores` being `in-place` and
 | `composite` | an input to a derived provider string; several fields collapse into one call | yes | 12 |
 | `reconcile` | the service converges the field itself, inside an idempotent pass it already performs | **no** | 28 |
 | `none` | never applied — the value is recorded and compared, and that is all | no | 17 |
+
+The counts are the 69 `(field, service)` pairs. The 19 module-level fields of
+[section 3](#3-the-fields-no-service-owns) are `none` too, but for a different
+reason — they have no provider to apply them to at all.
 
 ### `set` and `hook` — the direct modes
 
@@ -222,116 +226,48 @@ So `apply: "none"` covers two quite different situations — "there is nothing t
 apply, ever" and "there is something to apply, but not by us." The **class** is
 what separates them; the mode only says the converge will not be the one to act.
 
-### `seed` — a modifier, not a mode
+### Undeclared fields
 
-`seed` appears in the per-service tables and is **not** one of the five modes; it
-is a per-field flag, `defaultIsDesired: false`, orthogonal to both class and
-apply. It answers a third question: *does the schema default count as desired
-state?*
+A module that declares nothing for a field still has a desired value: the
+schema default, gated by `usedBy` so it only applies to a module that actually
+uses the field. The converge compares and applies it like any other value.
 
-Normally it does. A module that declares no `cores` still has a desired `cores` —
-the schema's default — and the converge will apply it. `seed` says the default is
-an **install-time starting value only**: undeclared, the field has no desired
-value at all, nothing is compared, and the live value is left alone.
+That works because TAPPaaS's own creators build with **exactly** those defaults —
+`Create-TAPPaaS-VM.sh` and `Create-TAPPaaS-LXC.sh` read `vmtag`, `diskSize`,
+`storage` and `bios` through the same `module-fields.json` values the resolver
+uses. So a guest TAPPaaS created already matches its undeclared fields, and
+comparing them is free rather than a source of phantom drift.
 
-`cluster:vm diskSize` is the archetype. Its schema default is `8G`, which is what
-a new guest is built with. Without `seed`, every module that never mentions
-`diskSize` would appear to want 8G — and on an 80G guest that reads as a shrink,
-refused, on every converge, forever. With `seed`, an undeclared `diskSize` simply
-means "leave the disk alone".
+Two things keep that true where it could slip:
 
-Seven fields carry it, all on `cluster:vm` and `cluster:lxc`:
-
-| Field | Schema default | What `seed` prevents |
-|---|---|---|
-| `vmtag` | `TAPPaaS` | Overwriting an operator's tags with the default set |
-| `diskSize` | `8G` | A permanent phantom shrink on every larger guest |
-| `storage` | `tanka1` | Claiming every undeclared disk belongs on `tanka1` |
-| `bios` (vm only) | `ovmf` | Permanent drift on a guest legitimately installed on `seabios` |
-
-Read it as: **an omitted field is not a claim.** The distinction only matters for
-fields whose schema default is a sensible thing to *create* with but a damaging
-thing to *enforce*.
+- **Install records what it observed** when the guest might not have come from
+  those creators. `bios` is the case that matters: a guest built elsewhere and
+  adopted could be on `seabios` while declaring nothing, and `bios` is
+  `recreate`, so the divergence could never be resolved in place.
+  `install-service.sh` writes the observed firmware into config at install.
+- **A `grow-only` field whose actual exceeds desired is adopted, not refused.**
+  A disk grown outside the config path leaves config behind, which reads as a
+  shrink; the converge writes the observed size into config instead of failing
+  on it forever.
 
 ---
 
 ## 3. The fields no service owns
 
-The 11 manifests classify 55 of the schema's 74 fields. The other **19** belong to
-no provider service: they describe the module itself — its provenance, its
-lifecycle, its wiring — rather than anything a provider configures. No service
-owns them, so none of them has a change class, and the converge never applies
-one.
+The 11 service manifests classify 55 of the schema's 74 fields. The other **19**
+name no `<module>:<service>` coordinate in their `usedBy`: they describe the
+**module itself** — its provenance, its lifecycle, its wiring — rather than
+anything a provider configures.
 
-That is not the same as "safe to change." Several are read by the platform at run
-time, and a few are written *by* it.
+They are declared exactly the way everything else is, in a module-scoped manifest
+[`schemas/fields.json`](../schemas/fields.json) beside the schema, using this
+same vocabulary. Having no provider settles two entries for all of them: every
+one is `apply: "none"` (writing the config *is* the change) and none carries a
+`liveKey` (there is no reporter to ask, so there is no actual state and no
+drift). Both are lint-enforced.
 
-| Field | Authored where | Policy | What changing it does |
-|---|---|---|---|
-| `description` | source module file | **free** | Cosmetic. Set on the Proxmox summary page at creation and never pushed again — editing it after install changes the config, not the VM. |
-| `version` | source module file | **free** | Module semver. Read to decide whether an upgrade exists. |
-| `appVersion` | source module file | **free** | Upstream app version, informational; no format enforced. |
-| `releaseDate` | source module file | **free** | Informational. |
-| `maintainer` | source module file | **free** | Informational. |
-| `status` | source module file (+ tooling) | **operational** | `archived` and `external` take the module **out of the update lifecycle** — `update-module.sh` skips it unless `--force`. Set automatically by `delete-module.sh --archive`. |
-| `tier` | source module file | **operational** | `foundation` means mgmt-only, single-instance, and `--force` to delete; it also makes `source: official` a lint requirement. Changing it changes what the platform will let you do to the module. |
-| `source` | inferred at deploy; pinned only when the module file must | **operational** | Trust marker. A `foundation` module from a non-`official` source fails the tier/source lint unless `--allow-fork`. |
-| `rebootOk` | source module file | **operational** | The [D8 disruption authorization](#reading-the-columns). `false` (the default) means an unattended converge **defers** every `in-place-reboot` and `migrate` change instead of applying it. This is the one unowned field that directly gates the converge. |
-| `dependsOn` | source module file | **release-authored** | The service wiring. See the hazard below. |
-| `integratesWith` | source module file | **release-authored** | Optional wiring; a missing provider is ignored rather than fatal (#501). Same delta mechanism as `dependsOn`. |
-| `provides` | source module file | **release-authored** | What other modules may declare a dependency on. Removing an entry breaks every consumer's resolution. |
-| `config` | source module file | **structural** | Pattern-A nesting (#161). Normalized to the flat form at deploy and at validation, so it is an authoring convenience, not a distinct state. |
-| `environment` | tooling — `copy-update-json.sh --environment` | **tooling-written** | How `update-module.sh` and `delete-module.sh` resolve the source module file. A wrong value points the lifecycle at the wrong module. |
-| `location` | tooling — `copy-update-json.sh` | **tooling-written** | Absolute path to the module directory. `update-module.sh` finds `install.sh`, `update.sh` and the service scripts through it. |
-| `kind` | tooling — `install-module.sh` | **tooling-written** | Stamped `module` so `module-manager list/show` can tell a deployed module from other objects in `config/`. |
-| `installTime` | tooling — `copy-update-json.sh` | **tooling-written** | Reporting only. |
-| `updateTime` | tooling — `update-module.sh` | **tooling-written** | Reporting only. |
-| `variant` | — | **retired** | Superseded by `environment` (#438). Never write it; installs strip it. Retained in the schema only so a pre-migration config carrying it is classified rather than reported unknown. |
-
-### Two things this list does not protect against
-
-**The pre-gate accepts all 19 unconditionally.** A field with no service
-coordinate is classified `config-only` and written without consulting any
-manifest — which is right for `description` and wrong for the rest. All of these
-are accepted today:
-
-```
-$ module-manager module modify web --set kind=widget
-kind=widget  (config-only)
-[Info]   set kind=widget in /home/tappaas/config/web.json
-```
-
-`variant`, `installTime`, `location` and `environment` behave the same way. There
-is no operation that *needs* to write them by hand, and clobbering `location` or
-`environment` breaks the module's own lifecycle scripts.
-
-**`--set dependsOn=…` declares without wiring.** `install-service.sh` and
-`delete-service.sh` are driven by a **delta** that `update-module.sh` computes
-across the 3-way merge: the union of `dependsOn` + `integratesWith` before the
-merge, against the same union after. A `--set` writes the *deployed* side, so the
-merge sees an operator customization and pins it — before and after agree, the
-delta is empty, and **no service script runs**. The config ends up claiming a
-dependency that was never wired, or dropping one whose wiring is still in place.
-
-Dependencies are changed by editing the **source module file** and running
-`update-module.sh`, which is what makes the delta visible to the merge.
-
-### Recommendation: classify them too
-
-`zones-fields.json` already carries a per-field `changeClass` for exactly this
-reason (#538). Giving `module-fields.json` the same annotation for these 19 would
-let the existing pre-gate do its job without any new machinery:
-
-- `immutable` — `kind`, `installTime`, `updateTime`, `location`, `environment`
-  (tooling writes them; a hand-edit is always a mistake)
-- `manual` — `dependsOn`, `integratesWith`, `provides` (refuse with "edit the
-  source module file and run update-module.sh")
-- `immutable` — `variant`, with the retirement message
-- unclassified, as now — the six metadata fields, `tier`, `source`, `status`,
-  `rebootOk`, `config`
-
-*Cost: an annotation pass on `module-fields.json` and a branch in `preGateSet()`
-for fields with no service coordinate. No change to any manifest.*
+**The 19 classified, the two hazards the declaration does not yet prevent, and
+the enforcement gap (#567): [schemas/UPDATE-POLICY.md](../schemas/UPDATE-POLICY.md).**
 
 ---
 
@@ -353,6 +289,12 @@ author changing `fields.json` has the rationale in the same directory.
 | `network:dns` | 1 | `reconcile` | [network/services/dns](../network/services/dns/UPDATE-POLICY.md) |
 | `network:nat` | 1 | `reconcile` | [network/services/nat](../network/services/nat/UPDATE-POLICY.md) |
 | `templates:windows` | 1 | `reconcile` | [templates/services/windows](../templates/services/windows/UPDATE-POLICY.md) |
+
+Plus the module-level manifest, which is not a service at all:
+
+| Scope | Fields | Shape | Policy |
+|---|---:|---|---|
+| the module itself | 19 | all `none` | [schemas/](../schemas/UPDATE-POLICY.md) |
 
 Two services carry the whole apply-mode taxonomy between them, and 9 are pure
 reconcilers. That shape is the finding, not an accident of migration order: the
