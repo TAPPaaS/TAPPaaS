@@ -2,7 +2,7 @@
 
 **Companion to:** [ADR-010 — VPS Satellite for Reverse Proxy and Backup](../ADR/ADR-010-vps-satellite-reverse-proxy-backup.md) (the *why* + the decided design)
 **Purpose of this doc:** a single place that (1) records **implementation-level decisions**, (2) breaks the work into **packages** with deliverables/dependencies/test-criteria, and (3) **tracks live execution state** — status, tests, commits — per stage.
-**Status:** Planning (ADR still `draft`; no stage started)
+**Status:** **Implemented (Debian variant)** — `reverse-proxy` + `admin-vpn` live-validated (VPS `37.27.5.237`); `backup` implemented (official PBS on Debian, pull model), full pull round-trip pending a live home-PBS test. ADR-010 promoted draft → **Accepted** (2026-09-02). See the [stage tracker](#stage-tracker) for per-package state. _(This line previously read "Planning — no stage started"; stale.)_
 **Branch:** `ADR010`, **off `ADR007`** (not `main`) — see [Relationship to ADR-007](#relationship-to-adr-007--build-sequencing)
 **Started:** 2026-06-30
 

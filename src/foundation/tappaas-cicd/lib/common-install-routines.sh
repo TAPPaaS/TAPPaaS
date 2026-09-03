@@ -319,6 +319,22 @@ get_module_dir() {
 # Make all .sh scripts in a module directory executable.
 # Handles: root-level scripts (install.sh, update.sh, pre-update.sh, etc.)
 # and service scripts (services/*/install-service.sh, update-service.sh, etc.).
+# Is <file> meant to be executable? The tracked git mode is authoritative
+# (#565): a file committed 100755 is executable; 100644 is a sourced library
+# that must NOT be widened — widening it shows as spurious `git` mode drift on
+# the control-plane checkout. Falls back to shebang-presence when the file is
+# not under git (a module installed from a non-repo .location).
+tappaas_should_be_executable() {
+    local file="$1" mode
+    # -C the file's dir + match its BASENAME, so both absolute and relative
+    # <file> arguments resolve (a full path as a pathspec under -C would not).
+    if mode="$(git -C "$(dirname "${file}")" ls-files -s --error-unmatch -- "$(basename "${file}")" 2>/dev/null)"; then
+        [[ "${mode%% *}" == "100755" ]]
+        return
+    fi
+    [[ "$(head -c2 "${file}" 2>/dev/null)" == "#!" ]]
+}
+
 ensure_scripts_executable() {
     local dir="$1"
 
@@ -335,6 +351,7 @@ ensure_scripts_executable() {
     for script in "${dir}"/*.sh "${dir}"/services/*/*.sh; do
         [[ -f "${script}" ]] || continue          # unmatched glob or non-file
         [[ -x "${script}" ]] && continue          # already executable — nothing to do
+        tappaas_should_be_executable "${script}" || continue  # #565: never widen a tracked-644 sourced lib
         chmod +x "${script}" 2>/dev/null \
             || warn "ensure_scripts_executable: cannot chmod +x '${script}' (not owner?) — skipping"
     done

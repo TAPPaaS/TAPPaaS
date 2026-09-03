@@ -6,8 +6,9 @@ An operator-owned VPS with a stable public IP that gives a cluster behind CGNAT 
 IP / no inbound the public ingress, remote admin access, and off-site backup vault the
 rest of TAPPaaS assumes.
 
-> **Status:** scaffolding (ADR-010 implementation, package P1). Not yet functional — the
-> tunnel, provisioning, and per-role behaviour land in packages P2–P6.
+> **Status:** implemented (Debian variant). `reverse-proxy` and `admin-vpn` are live-validated;
+> the `backup` role is implemented (official PBS on Debian, pull model) with the full pull
+> round-trip pending a live home-PBS test.
 > Design: [ADR-010](../../../docs/ADR/ADR-010-vps-satellite-reverse-proxy-backup.md) ·
 > Tracker: [ADR-010-implementation.md](../../../docs/design/ADR-010-implementation.md)
 

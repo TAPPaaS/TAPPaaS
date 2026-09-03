@@ -95,7 +95,7 @@ with bare defaults.
   on every plane; `<env>`'s zone is simply part of it. The plan tags the action
   `[system-wide]` so the label matches what actually happens (#461).
 - **Deep** (`reconcile <env> --deep`): the above **plus** every deployed module
-  that consumes this environment — `module-manager <module> reconcile [--apply]`
+  that consumes this environment — `module-manager reconcile <module> [--apply]`
   per module. Consuming modules are enumerated as the deployed `config/*.json`
   files whose `.environment` field equals `<env>`. Each reconcile is idempotent,
   so re-touching the shared network is harmless.

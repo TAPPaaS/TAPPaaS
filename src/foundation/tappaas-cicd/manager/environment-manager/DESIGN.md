@@ -56,7 +56,7 @@ Standardized ADR-007 verbs, all on `config/environments/<env>.json`:
   labels the action `[system-wide]` and says so (#461) — an operator must never
   read it as narrow.
 - **`--deep`**: the above **plus** every deployed module that consumes this
-  environment → `module-manager <module> reconcile [--apply]`. Consumers are the
+  environment → `module-manager reconcile <module> [--apply]`. Consumers are the
   deployed `config/*.json` whose `.environment === <env>`. `--apply` commits;
   default is preview. Each reconcile is idempotent, so re-touching the shared
   network is harmless.
@@ -115,7 +115,7 @@ shells out for everything else (no plane/module logic is reimplemented, exactly
 as `people-manager` shells out to `authentik-manager`):
 
 - **`reconcile`** → `network-manager` (`zone exists`, `reconcile [--apply]`) for
-  the environment's zone, and `module-manager <module> reconcile [--apply]` per
+  the environment's zone, and `module-manager reconcile <module> [--apply]` per
   consuming module under `--deep`. These are injected `NetworkClient` /
   `ModuleClient` interfaces (`clients.ts`), so the engine is pure and the unit
   tests use fakes.

@@ -38,10 +38,10 @@
 //
 // Exit codes: 0 = converged; 1 = a converge step failed.
 
-import { chmodSync, existsSync, readdirSync, statSync } from "fs";
+import { chmodSync, existsSync, readFileSync, readdirSync, statSync } from "fs";
 import { join } from "path";
 import { readJsonObject } from "../../../lib/ts/src/config-io";
-import { stream } from "../../../lib/ts/src/exec";
+import { captureResult, stream } from "../../../lib/ts/src/exec";
 import {
   defaultConfigDir,
   getModuleDir,
@@ -60,9 +60,38 @@ function fail(msg: string): never {
   throw new ReconcileFailure(msg);
 }
 
-// Port of ensure_scripts_executable: chmod +x every root-level *.sh and every
-// services/*/*.sh in a module directory (they arrive from git without the
-// executable bit on some paths).
+// The tracked-100755 .sh basenames directly in `d` (git pathspec is scoped to
+// `d`, and the no-slash filter keeps only its immediate children). Returns null
+// when `d` is not a git checkout, so the caller falls back to shebang-presence
+// — mirroring the bash tappaas_should_be_executable (#565).
+function trackedExecutables(d: string): Set<string> | null {
+  const r = captureResult("git", ["-C", d, "ls-files", "-s", "--", "*.sh"]);
+  if (!r.ran || r.rc !== 0) return null;
+  const out = new Set<string>();
+  for (const line of r.stdout.split("\n")) {
+    if (!line.startsWith("100755 ")) continue; // tracked executable only
+    const tab = line.indexOf("\t");
+    if (tab === -1) continue;
+    const path = line.slice(tab + 1);
+    if (path.includes("/")) continue; // immediate children of `d` only
+    out.add(path);
+  }
+  return out;
+}
+
+function hasShebang(p: string): boolean {
+  try {
+    return readFileSync(p).subarray(0, 2).toString() === "#!";
+  } catch {
+    return false;
+  }
+}
+
+// Port of ensure_scripts_executable: set +x on the root-level *.sh and every
+// services/*/*.sh a module directory tracks as executable. #565: honour the
+// tracked git mode — a sourced library committed 100644 must NOT be widened,
+// or it shows as spurious mode drift on the control-plane checkout (the bash
+// path gates the same way). Falls back to shebang-presence for a non-repo dir.
 function ensureScriptsExecutable(dir: string): void {
   const chmodShFiles = (d: string): void => {
     let entries: string[];
@@ -71,11 +100,14 @@ function ensureScriptsExecutable(dir: string): void {
     } catch {
       return;
     }
+    const tracked = trackedExecutables(d); // null = not a git checkout
     for (const f of entries) {
       if (!f.endsWith(".sh")) continue;
       const p = join(d, f);
       try {
-        if (statSync(p).isFile()) chmodSync(p, 0o755);
+        if (!statSync(p).isFile()) continue;
+        const wants = tracked ? tracked.has(f) : hasShebang(p);
+        if (wants) chmodSync(p, 0o755);
       } catch {
         // best-effort, exactly like the bash loop
       }

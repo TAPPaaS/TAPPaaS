@@ -2,12 +2,12 @@
 
 | | |
 |---|---|
-| **Status** | Draft — for review (Lars / Erik) |
-| **Version** | 0.1 |
+| **Status** | **Accepted — implemented** (2026-09-02). The taxonomy (`docs/{ADR,design,Architecture}/`), `GLOSSARY.md`, the no-`Attic`/no-`ISSUES` rules, and the module Diataxis docs are all live and followed throughout the repo. Refreshed for the Codeberg migration. |
+| **Version** | 0.2 |
 | **Date** | 2026-07-10 |
 | **Author** | drafted by Claude for Lars Rossen (from #362, Erik's proposed fix) |
 | **Related** | **#362** (origin); **#317** (docs/ISSUES cleanup — executes §5); **#247** (Diataxis module templates — realizes §4); [ADR-007](<ADR-007 - TAPPaaS Taxonomy.md>) (taxonomy the docs describe); [Documentation repo ADR-001](https://codeberg.org/TAPPaaS/Documentation/src/branch/main/ADR/ADR001-rearchitect.md) (the site build that consumes §6) |
-| **Changelog** | v0.1 — initial draft covering artifact taxonomy, locations, lifecycle, site governance |
+| **Changelog** | v0.1 — initial draft covering artifact taxonomy, locations, lifecycle, site governance. v0.2 (2026-09-02) — promoted Draft → **Accepted (implemented)**; tracker corrected GitHub → **Codeberg** (post-migration, `docs/codeberg-migration.md`); the three review questions resolved (DESIGN.md stays in-repo; README+INSTALL **mandatory** for catalog inclusion; `docs/Architecture/` folds into the site sync allow-list). |
 
 Where TAPPaaS documentation lives, which artifact type serves which audience and
 lifecycle stage, and how content is retired — one governing rule instead of the current
@@ -16,7 +16,7 @@ scatter across `ISSUES/`, `docs/`, `src/` and the tappaas.org site.
 ## Context
 
 There is no ADR that specifies where documentation lives, how it is structured, and
-when a GitHub issue vs an ADR vs inline module docs is the right artifact (#362). The
+when a Codeberg issue vs an ADR vs inline module docs is the right artifact (#362). The
 symptoms are documented in #317 (stale `ISSUES/` directories, a now-removed `Attic/`)
 and #247 (module README/INSTALL templates with no structure or audience guidance).
 Meanwhile the tappaas.org site has been rebuilt (Documentation repo, ADR-001) around a
@@ -36,7 +36,7 @@ place (including the website) links to it or syncs from it. Git history is the a
 
 | Artifact | Audience | Lifecycle | Lives in |
 |----------|----------|-----------|----------|
-| **GitHub issue** | contributors | transient: opened → resolved/closed | github.com/TAPPaaS/TAPPaaS/issues |
+| **Codeberg issue** | contributors | transient: opened → resolved/closed | codeberg.org/TAPPaaS/TAPPaaS/issues (via `tea`; the GitHub mirror is stale — see `docs/codeberg-migration.md`) |
 | **ADR** | contributors, architecture reviewers | durable decision record: Draft → Accepted → Superseded (never deleted) | `docs/ADR/` |
 | **Design doc** | implementers of one ADR/feature | lives while the implementation is current; superseded note when not | `docs/design/` |
 | **Architecture SSOT** | contributors | continuously maintained (glossary, taxonomy evidence) | `docs/Architecture/` |
@@ -52,7 +52,7 @@ module docs — #247 updates them to match this table.
 ### 3. Choosing the artifact (decision tree)
 
 ```
-Reporting a defect or proposing a change? ......... GitHub issue
+Reporting a defect or proposing a change? ......... Codeberg issue (tea)
 Recording a significant decision? ................. ADR (docs/ADR/)
 Describing HOW an accepted decision is built? ..... Design doc (docs/design/)
 Defining a term / classification? ................. GLOSSARY.md (glossary SSOT, repo root)
@@ -68,16 +68,17 @@ Per #247 (Diataxis): `README.md` answers *why/what/what-not* for the end user;
 `INSTALL.md` answers *how* for the admin and documents **only** the steps automation
 cannot do. Implementation details stay in `DESIGN.md`. The `00-Template` module carries
 the canonical templates; a module is documentation-complete when all three exist and
-match their audiences.
+match their audiences. **`README.md` and `INSTALL.md` are mandatory for catalog inclusion** (a lint gate, per ADR-011's linting approach); `DESIGN.md` is expected wherever a module has non-trivial internals.
 
 ### 5. Lifecycle and archival rule
 
 - **No `Attic/`, ever.** Deleting is safe: git history preserves everything.
   (`src/foundation/Attic/` is already removed on the ADR007 branch.)
 - **`ISSUES/` directories are deprecated.** Each existing file must, within the current
-  release cycle, become one of: a GitHub issue (if actionable), content folded into the
+  release cycle, become one of: a Codeberg issue (if actionable), content folded into the
   proper home per §2 (if reference-worthy), or a deletion (if stale). New working notes
-  start as GitHub issues, not committed files. (#317 executes this.)
+  start as Codeberg issues, not committed files. (#317 executed this — no `ISSUES/`
+  directories remain in the tree.)
 - **ADRs are never deleted**; a replaced ADR gets `Status: Superseded by ADR-xxx`.
 - **Design docs** get a one-line superseded/obsolete banner when their implementation
   changes, or are deleted when the feature is gone.
@@ -89,7 +90,7 @@ The website (Documentation repo on Codeberg, ADR-001) publishes two kinds of con
 1. **Curated narrative** — landing, Why TAPPaaS, install journey, examples — authored
    in the Documentation repo.
 2. **Synced source docs** — INSTALL docs, manager/controller READMEs, zones, schemas,
-   the ADR-007 taxonomy — pulled at build time from a pinned ref of this repo by an
+   the ADR-007 taxonomy, and the `docs/Architecture/` concept docs — pulled at build time from a pinned ref of this repo by an
    explicit allow-list + glob rules (`scripts/sync-source.py` in the Documentation
    repo). Synced pages carry a "generated from source — edit upstream" banner.
 
@@ -110,11 +111,14 @@ Consequences for authors in **this** repo:
 - The Documentation repo's sync model is now sanctioned by an upstream decision rather
   than being a website-side convention.
 
-## Open questions for review
+## Resolved (v0.2, 2026-09-02)
 
-1. Should `DESIGN.md` files be published to the site (currently: no — contributors read
-   them in-repo)?
-2. Obligation level for module docs: is README+INSTALL a **MUST** for catalog inclusion
-   (aligning with ADR-011's SHOULD-with-linting approach), or SHOULD?
-3. Does `docs/Architecture/` fold into the site sync allow-list? (The glossary is now `GLOSSARY.md`
-   at the repo root and is already synced; the remaining concept docs are arguably public-worthy.)
+The three review questions are decided:
+
+1. **`DESIGN.md` is not published to the site.** It is the in-repo developer doc; internal
+   notes live there precisely *because* it is not synced (§6). Contributors read it in-repo.
+2. **`README.md` and `INSTALL.md` are MANDATORY for catalog inclusion** (a lint gate, per
+   ADR-011's linting approach) — not merely SHOULD. `DESIGN.md` remains expected-where-needed,
+   not a catalog gate.
+3. **`docs/Architecture/` folds into the site sync allow-list.** `GLOSSARY.md` (repo root) is
+   already synced; the remaining concept docs are public-worthy and join the allow-list (§6).
