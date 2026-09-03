@@ -39,9 +39,21 @@ declare const require: {
 declare const module: unknown;
 
 // ── node:fs ──────────────────────────────────────────────────────────
+// Minimal Buffer surface — only what the managers actually use. There is no
+// @types/node here on purpose (the managers build with types: []), so every
+// runtime type this code touches is declared explicitly.
+interface NodeBuffer {
+  subarray(start?: number, end?: number): NodeBuffer;
+  toString(encoding?: string): string;
+  readonly length: number;
+}
+
 declare module "fs" {
   export function existsSync(path: string): boolean;
   export function readFileSync(path: string, encoding: "utf8"): string;
+  // No encoding => raw bytes. Used by reconcile.ts hasShebang() to read the
+  // first two bytes of a script without decoding a possibly-binary file.
+  export function readFileSync(path: string): NodeBuffer;
   export function writeFileSync(path: string, data: string, encoding?: "utf8"): void;
   export function renameSync(oldPath: string, newPath: string): void;
   export function mkdtempSync(prefix: string): string;
