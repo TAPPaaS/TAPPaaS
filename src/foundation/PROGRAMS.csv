@@ -52,6 +52,7 @@ validate-site.sh,/home/tappaas/bin/validate-site.sh,tappaas-cicd/manager/site-ma
 # --- manager/module-manager/ (legacy verb scripts wrapped by module-manager) --------------
 copy-update-json.sh,/home/tappaas/bin/copy-update-json.sh,tappaas-cicd/manager/module-manager/copy-update-json.sh,script
 delete-module.sh,/home/tappaas/bin/delete-module.sh,tappaas-cicd/manager/module-manager/delete-module.sh,script
+set-module-field.sh,/home/tappaas/bin/set-module-field.sh,tappaas-cicd/manager/module-manager/set-module-field.sh,script
 install-module.sh,/home/tappaas/bin/install-module.sh,tappaas-cicd/manager/module-manager/install-module.sh,script
 module-format.sh,/home/tappaas/bin/module-format.sh,tappaas-cicd/manager/module-manager/module-format.sh,script
 snapshot-vm.sh,/home/tappaas/bin/snapshot-vm.sh,tappaas-cicd/manager/module-manager/snapshot-vm.sh,script

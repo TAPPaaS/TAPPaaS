@@ -1,6 +1,8 @@
 # TAPPaaS Foundation Layer - Dependency Documentation
 
-Generated: 2026-06-25
+Generated: 2026-06-25; refreshed 2026-09-02 for ADR-020 (the declared-field
+converge: `report-service.sh`, `converge-lib.sh`, the `update-<field>.sh` hooks
+and the per-service `fields.json` manifests).
 
 This document summarizes the direct dependencies between the scripts, the
 TypeScript managers/controllers, Python packages and configuration files under
@@ -40,14 +42,14 @@ A "direct dependency" is one of:
 | Directory | Files analyzed |
 |-----------|---------------:|
 | `tappaas-cicd/` (top level) | 5 |
-| `tappaas-cicd/lib/` | 4 |
+| `tappaas-cicd/lib/` | 14 |
 | `tappaas-cicd/scripts/` (+ `scripts/test/`) | 13 |
 | `tappaas-cicd/manager/` (dispatchers) | 3 |
 | `tappaas-cicd/manager/people-manager/` (6 ts + 5 sh) | 11 |
 | `tappaas-cicd/manager/site-manager/` (5 ts + 11 sh) | 16 |
 | `tappaas-cicd/manager/environment-manager/` (7 ts + 5 sh) | 12 |
-| `tappaas-cicd/manager/module-manager/` (5 ts + 13 sh) | 18 |
-| `tappaas-cicd/manager/network-manager/` (10 ts + 6 sh) | 16 |
+| `tappaas-cicd/manager/module-manager/` (12 ts + 16 sh) | 28 |
+| `tappaas-cicd/manager/network-manager/` (14 ts + 4 sh) | 18 |
 | `tappaas-cicd/manager/health-manager/` (6 ts + 8 sh) | 14 |
 | `tappaas-cicd/manager/backup-manager/` (8 ts + 4 sh) | 12 |
 | `tappaas-cicd/controller/` (dispatchers) | 3 |
@@ -118,8 +120,41 @@ module-manager (TS)                  <- the verb-aligned front door
     test-module.sh
   src/main.ts runs in-process (native TS, ADR-007 refactor Phase 7.3):
     src/reconcile.ts    -> <provider>/update-service.sh -> module update.sh / install.sh
-    src/inspect.ts      -> (read-only: qm/pvesh queries + config JSON, no scripts)
+    src/inspect.ts      -> <provider>/report-service.sh  (ADR-020: no qm/pct parsing here)
+    src/converge.ts     -> <provider>/report-service.sh  (the drift record)
+    set-module-field.sh <- `modify --set` writes the field before the converge
 ```
+
+### 1b. The declared-field converge (ADR-020)
+
+Since ADR-020 the converge is one pipeline, and the arrows show why: desired
+state and the diff are computed ONCE, in the manager, and a service only reports
+raw state and applies a record. The bash side no longer defaults, parses or
+compares.
+
+```
+module-manager module drift <m> --service <p>:<s>          [TS]
+  src/converge.ts
+    <- src/resolve.ts        -> lib/ts/src/desired.ts       the ONE resolver
+    <- services/<s>/fields.json                             the change classes
+    <- <provider>/services/<s>/report-service.sh            actual state, raw
+         -> cluster/lib/report-lib.sh -> common-install-routines.sh
+         -> cluster/lib/vm-net.sh        (NIC decoding, both guest types)
+    -> lib/ts/src/drift.ts                                  the ONE differ
+                                   |
+                            the drift record
+                                   v
+<provider>/services/<s>/update-service.sh [--apply-drift <file>]
+  -> tappaas-cicd/lib/converge-lib.sh          the ONE runner
+       -> converge_apply_set                   (one batched qm/pct set)
+       -> services/<s>/update-<field>.sh       update-net.sh / update-disk.sh /
+       |                                       update-node.sh -> resize-disk.sh
+       -> converge_side_effect_*                reboot -> wait-ip -> dns, once
+```
+
+A service whose fields are all `apply: "reconcile"` (network:proxy, network:rules,
+backup:vm, …) needs no `report-service.sh` and keeps its own idempotent reconcile;
+its `fields.json` declares the change classes only.
 
 ### 2. Site / environment bootstrap (site-native, ADR-007)
 

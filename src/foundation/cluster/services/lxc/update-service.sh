@@ -196,17 +196,19 @@ converge_side_effect_dns() {
 # drift record — and making it a field would invite per-module divergence
 # nothing asked for. Asserted here instead, which is what ADR-020 D7 means by
 # "logic that is not field drift stays in update-service.sh".
+# The live value comes from the RECORD, not a second `pct config`: the reporter
+# is the one read of the container's state, and asking twice invites the two
+# answers to disagree.
 # shellcheck disable=SC2029
 assert_onboot() {
     local live
-    live="$(ssh "${SSH_OPTS[@]}" "root@${NODE_FQDN}" "pct config ${VMID}" 2>/dev/null \
-            | awk -F': ' '$1=="onboot" {print $2; exit}')" || return 0
-    [[ "${live:-0}" == "1" ]] && return 0
+    live="$(jq -r '(.actual.onboot) // "0"' "${DRIFT_FILE}")"
+    [[ "${live}" == "1" ]] && return 0
     if [[ "${CHECK_MODE}" == "1" ]]; then
-        info "  onboot: ${live:-0}→1 (policy: TAPPaaS containers start with their node)"
+        info "  onboot: ${live}→1 (policy: TAPPaaS containers start with their node)"
         return 0
     fi
-    debug "  onboot: ${live:-0}→1"
+    debug "  onboot: ${live}→1"
     ssh "${SSH_OPTS[@]}" "root@${NODE_FQDN}" "pct set ${VMID} --onboot 1" >/dev/null \
         || warn "  could not set onboot=1 on ${VMID}"
     return 0

@@ -25,6 +25,12 @@
 #   net0: virtio=<MAC>,…        net0: name=eth0,…,hwaddr=<MAC>,ip=dhcp,…
 #   ostype: l26                 ostype: debian   (the DISTRO, not a kernel ABI)
 #
+# `onboot` is reported although NO module field declares it: cluster:lxc asserts
+# it as an estate policy (every TAPPaaS container starts with its node), and
+# reporting it here lets that assertion read the same actual state the drift was
+# computed from instead of making a second live query. A reporter is the ONE
+# read of a provider's state, not only of its declared fields.
+#
 # The keys emitted are those a container actually has. A consumer must not read
 # an absent key as "empty" — bios is not reported here at all, because a
 # container has no BIOS, and the manifest for cluster:lxc does not claim the
@@ -70,7 +76,8 @@ net0="$(report_field 'net0')"
 # shellcheck disable=SC2016
 report_emit \
     '{vmid: $vmid, node: $node, status: $status, hostname: $hostname,
-      cores: $cores, memory: $memory, swap: $swap, tags: $tags, ostype: $ostype,
+      cores: $cores, memory: $memory, swap: $swap, onboot: $onboot,
+      tags: $tags, ostype: $ostype,
       storage: $storage, diskSize: $diskSize,
       net0: $net0,
       "net0.bridge": $net0b, "net0.tag": $net0t, "net0.trunks": $net0k,
@@ -82,6 +89,7 @@ report_emit \
     --arg cores    "$(report_field_or 'cores' '1')" \
     --arg memory   "$(report_field_or 'memory' '512')" \
     --arg swap     "$(report_field_or 'swap' '0')" \
+    --arg onboot   "$(report_field_or 'onboot' '0')" \
     --arg tags     "$(report_field 'tags')" \
     --arg ostype   "$(report_field 'ostype')" \
     --arg storage  "$(report_disk_storage "${disk_value}")" \

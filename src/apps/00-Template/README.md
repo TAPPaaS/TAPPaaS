@@ -134,7 +134,8 @@ is installed or updated.
 └── services/
     └── <service-name>/
         ├── install-service.sh    # run when a dependent installs
-        └── update-service.sh     # run when a dependent updates
+        ├── update-service.sh     # run when a dependent updates
+        └── fields.json           # only if this service owns declared fields
 ```
 
 `install-service.sh` is called with the **dependent** module's name; it reads that module's config
@@ -159,6 +160,22 @@ Writing a service script:
 3. `source` the shared helpers (`common-install-routines.sh`) for `get_config_value`, `check_json`, …
 4. Read the dependent's fields with `get_config_value` (respecting defaults).
 5. Use `set -euo pipefail` for strict error handling.
+
+### If your service owns declared fields — `fields.json`
+
+A field in [module-fields.json](../../foundation/schemas/module-fields.json) whose
+`usedBy` names your `<module>:<service>` coordinate is **yours**, and you must
+declare what changing it costs after install: a `fields.json` alongside the
+scripts, or `module-manager validate` errors. That declaration is what lets an
+operator run `module modify <m> --set yourField=…` instead of hand-editing
+deployed config (ADR-020).
+
+Most services own nothing — fourteen of TAPPaaS's twenty-five do registration and
+wiring, which is not field drift — and need no `fields.json` at all.
+
+**→ [README-service-provider.md](README-service-provider.md)** walks through it:
+choosing a change class, when `apply: "reconcile"` is the right answer (usually),
+and when you additionally need a `report-service.sh`.
 
 Real examples to copy from: `cluster/services/vm/install-service.sh` (creates a VM for a dependent),
 `cluster/services/ha/update-service.sh` (HA / ZFS replication), and

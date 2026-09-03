@@ -23,6 +23,8 @@ update.sh,tappaas-cicd/,common-install-routines.sh
 test.sh,tappaas-cicd/,common-install-routines.sh; create-site.sh; validate-site.sh; validate-people.sh; repository.sh; copy-update-json.sh; snapshot-vm.sh; backup-controller; update-os.sh; check-disk-threshold.sh; site.json; zones.json
 #
 # === tappaas-cicd/lib ===
+converge-lib.sh,tappaas-cicd/lib/,common-install-routines.sh
+test-converge-lib.sh,tappaas-cicd/lib/,converge-lib.sh
 apply-json-merge.sh,tappaas-cicd/lib/,common-install-routines.sh; convert-json-to-config.sh
 audit-jq-readers.sh,tappaas-cicd/lib/,
 common-install-routines.sh,tappaas-cicd/lib/,convert-json-to-config.sh; copy-update-json.sh; snapshot-vm.sh; module-catalog-lib.sh
@@ -401,6 +403,7 @@ update.sh,cluster/,common-install-routines.sh; Create-TAPPaaS-VM.sh; Create-TAPP
 reboot-node-lib.sh,cluster/lib/,cloudinit-orphans.sh; ha-vm-lib.sh
 test-vm-net.sh,cluster/lib/,vm-net.sh; zones.json
 vm-net.sh,cluster/lib/,zones.json
+report-lib.sh,cluster/lib/,common-install-routines.sh; <module>.json
 #
 # === cluster/services/ha ===
 install-service.sh,cluster/services/ha/,update-service.sh
@@ -410,13 +413,19 @@ test-service.sh,cluster/services/ha/,common-install-routines.sh; ha-vm-lib.sh
 #
 # === cluster/services/lxc ===
 install-service.sh,cluster/services/lxc/,common-install-routines.sh; Create-TAPPaaS-LXC.sh; dns-manager
-update-service.sh,cluster/services/lxc/,common-install-routines.sh; dns-manager; zones.json
+update-service.sh,cluster/services/lxc/,common-install-routines.sh; converge-lib.sh; module-manager; dns-manager; zones.json; <module>.json
+report-service.sh,cluster/services/lxc/,common-install-routines.sh; vm-net.sh; report-lib.sh; <module>.json
+update-net.sh,cluster/services/lxc/,common-install-routines.sh
 delete-service.sh,cluster/services/lxc/,common-install-routines.sh; delete-module.sh; dns-manager
 test-service.sh,cluster/services/lxc/,common-install-routines.sh; zones.json
 #
 # === cluster/services/vm ===
 install-service.sh,cluster/services/vm/,common-install-routines.sh; Create-TAPPaaS-VM.sh; install-module.sh; dns-manager
-update-service.sh,cluster/services/vm/,common-install-routines.sh; vm-net.sh; dns-manager; zones.json
+update-service.sh,cluster/services/vm/,common-install-routines.sh; vm-net.sh; converge-lib.sh; module-manager; dns-manager; zones.json; <module>.json
+report-service.sh,cluster/services/vm/,common-install-routines.sh; vm-net.sh; report-lib.sh; <module>.json
+update-net.sh,cluster/services/vm/,common-install-routines.sh; vm-net.sh
+update-disk.sh,cluster/services/vm/,common-install-routines.sh; resize-disk.sh
+update-node.sh,cluster/services/vm/,common-install-routines.sh
 delete-service.sh,cluster/services/vm/,common-install-routines.sh; delete-module.sh; dns-manager
 test-service.sh,cluster/services/vm/,common-install-routines.sh
 #
