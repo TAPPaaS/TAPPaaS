@@ -2,19 +2,32 @@
   "$schema": "../../../schemas/service-fields.json",
   "service": "cluster:ha",
   "description": "High availability for the module's guest: which node it fails over to, and how often its disk is replicated there.",
-
   "_note": "cluster:ha is a drift reconciler, but NOT a per-field one, and the difference matters. Most of what it repairs has no module field behind it at all — the HA resource being absent or not 'started', the node-affinity rule missing, the replication job missing, the guest sitting on the wrong node — because those follow from DECLARING cluster:ha, not from any field's value. The drift record is keyed by field, so those units cannot be expressed in it. Its state also spans three Proxmox subsystems (/cluster/ha/resources, /cluster/ha/rules, /cluster/replication) that must be reconciled together: re-pointing HANode changes the affinity rule AND recreates the replication job, one decision across two planes. So the existing loop stays and both fields are apply:'reconcile'; what the manifest adds is the declared cost of changing them.",
-
   "fields": {
     "HANode": {
+      "description": "Secondary node for High Availability. Defaults to the first node in configuration.json that differs from 'node'. Must be different from 'node' and have the same storage defined. HA is only active when 'cluster:ha' is in dependsOn.",
+      "type": "string",
+      "usedBy": [
+        "cluster:ha"
+      ],
+      "default": null,
       "class": "in-place",
       "apply": "reconcile",
-      "note": "The failover node. Changing it re-points the node-affinity rule and recreates the ZFS replication job against the new target — which means a full initial re-sync, so it is IO-heavy and can take a long time. It is still in-place: the running guest is not moved, not rebooted, and stays served throughout. The move that DOES relocate a guest is cluster:vm's `node`, which defers to this service for an HA module."
+      "changeNote": "The failover node. Changing it re-points the node-affinity rule and recreates the ZFS replication job against the new target — which means a full initial re-sync, so it is IO-heavy and can take a long time. It is still in-place: the running guest is not moved, not rebooted, and stays served throughout. The move that DOES relocate a guest is cluster:vm's `node`, which defers to this service for an HA module."
     },
     "replicationSchedule": {
+      "description": "Cron-style schedule for HA replication interval",
+      "type": "string",
+      "requiredBy": [],
+      "usedBy": [
+        "cluster:ha"
+      ],
+      "default": "*/15",
+      "example": "*/15",
+      "note": "Default is every 15 minutes",
       "class": "in-place",
       "apply": "reconcile",
-      "note": "How often the guest's disk is replicated to the failover node — the bound on how much is lost if the primary dies. A `pvesr update`: it changes when the next run happens, nothing else."
+      "changeNote": "How often the guest's disk is replicated to the failover node — the bound on how much is lost if the primary dies. A `pvesr update`: it changes when the next run happens, nothing else."
     }
   }
 }

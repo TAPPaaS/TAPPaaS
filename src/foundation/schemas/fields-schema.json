@@ -1,0 +1,474 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "fields-schema.json",
+  "title": "TAPPaaS Field Definition Schema",
+  "description": "The meta-schema for a FIELD ENTRY, wherever it lives (#567). One entry now carries two things: the field's DEFINITION (what it is — type, default, allowed values) and, when a service owns it, its CHANGE SEMANTICS (what changing it costs — the ADR-020 class and apply mode). Both halves are described here so a single validator covers every tier: schemas/module-fields.json (the generic fields), <module>/fields.json (shared by a module's services), and <module>/services/<svc>/fields.json (owned by one service). The two halves each have a free-text note and they mean different things, so they have different names: 'note' explains what the FIELD is, 'changeNote' explains why that CHANGE CLASS. Validated by scripts/test/test-fields-schema.sh under --deep.",
+  "$defs": {
+    "definitionKeys": {
+      "type": "object",
+      "description": "The DEFINITION half — what the field is.",
+      "properties": {
+        "description": {
+          "type": "string",
+          "description": "What the field is, in one line. Shown by module-manager show/inspect."
+        },
+        "type": {
+          "enum": [
+            "string",
+            "integer",
+            "boolean",
+            "array",
+            "object"
+          ],
+          "description": "The JSON type of the field's value in a module config."
+        },
+        "usedBy": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "The '<module>:<service>' coordinates that consume this field, or ['general'] / [] for a field no service owns. This is what decides which tier the definition belongs in."
+        },
+        "requiredBy": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Coordinates for which the field is mandatory; [] when always optional."
+        },
+        "default": {
+          "description": "Applied when a module declares nothing (ADR-020 D9: this IS desired state, and install records what it used). A '<computed ...>' string is a placeholder, never applied."
+        },
+        "example": {
+          "description": "An illustrative value for documentation. Never applied."
+        },
+        "note": {
+          "type": "string",
+          "description": "Longer guidance about the FIELD — history, hazards, when to set it. Distinct from changeNote."
+        },
+        "format": {
+          "type": "string",
+          "description": "A format hint (e.g. 'date', 'semver'); advisory."
+        },
+        "values": {
+          "type": "object",
+          "description": "Allowed value -> what it means. The documented enum."
+        },
+        "enum": {
+          "type": "array",
+          "description": "Allowed values, when they need no per-value explanation."
+        },
+        "items": {
+          "description": "Element shape for an array field."
+        },
+        "properties": {
+          "type": "object",
+          "description": "Member shape for an object field."
+        },
+        "patternProperties": {
+          "type": "object",
+          "description": "Keyed-member shape for an object field."
+        },
+        "additionalProperties": {
+          "type": "boolean",
+          "description": "Whether unlisted members are allowed on an object field."
+        },
+        "minimum": {
+          "type": "integer"
+        },
+        "maximum": {
+          "type": "integer"
+        },
+        "pattern": {
+          "type": "string",
+          "description": "Regex the value must match."
+        },
+        "deprecated": {
+          "type": "boolean",
+          "description": "Retained so a pre-migration config carrying it is classified rather than reported unknown; never written."
+        },
+        "requiredOnModule": {
+          "type": "boolean"
+        },
+        "fields": {
+          "type": "object",
+          "description": "Nested sub-field definitions for a structured object field."
+        },
+        "common_values": {
+          "type": "object"
+        },
+        "by_imageType": {
+          "type": "object"
+        },
+        "examples": {
+          "type": "object"
+        },
+        "rules": {
+          "type": "array"
+        }
+      }
+    },
+    "changeKeys": {
+      "type": "object",
+      "description": "The CHANGE half — what changing it costs (ADR-020). Present only in a service or module manifest.",
+      "properties": {
+        "class": {
+          "$ref": "#/$defs/changeClass"
+        },
+        "apply": {
+          "$ref": "#/$defs/applyMode"
+        },
+        "liveKey": {
+          "type": "string",
+          "description": "Key under which report-service.sh reports this field's ACTUAL value. Defaults to the field name; needed wherever the provider spells it differently (Proxmox calls cputype 'cpu', vmtag 'tags', vmname 'name')."
+        },
+        "setFlag": {
+          "type": "string",
+          "description": "apply:'set' only — the provider flag to batch, e.g. '--cores'. Defaults to '--<liveKey>'."
+        },
+        "hook": {
+          "type": "string",
+          "description": "apply:'hook' only — the script name, relative to the service directory, e.g. 'update-node.sh'.",
+          "pattern": "^[A-Za-z0-9._-]+$"
+        },
+        "composite": {
+          "type": "string",
+          "description": "apply:'composite' only — the composite this field is an input of. Must be declared under 'composites', and that composite must list this field in its 'inputs'."
+        },
+        "normalize": {
+          "$ref": "#/$defs/normalizer"
+        },
+        "sideEffects": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/sideEffect"
+          }
+        },
+        "changeNote": {
+          "type": "string",
+          "description": "Why this change class, when the reason is not obvious from the field name. Named changeNote, not note: since #567 a merged entry also carries the field's SCHEMA definition, whose own 'note' explains what the field IS. Two different notes, two names."
+        }
+      }
+    },
+    "fieldEntry": {
+      "type": "object",
+      "description": "One field. Carries the definition half, plus the change half when a service owns it.",
+      "additionalProperties": false,
+      "properties": {
+        "description": {
+          "type": "string",
+          "description": "What the field is, in one line. Shown by module-manager show/inspect."
+        },
+        "type": {
+          "enum": [
+            "string",
+            "integer",
+            "boolean",
+            "array",
+            "object"
+          ],
+          "description": "The JSON type of the field's value in a module config."
+        },
+        "usedBy": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "The '<module>:<service>' coordinates that consume this field, or ['general'] / [] for a field no service owns. This is what decides which tier the definition belongs in."
+        },
+        "requiredBy": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Coordinates for which the field is mandatory; [] when always optional."
+        },
+        "default": {
+          "description": "Applied when a module declares nothing (ADR-020 D9: this IS desired state, and install records what it used). A '<computed ...>' string is a placeholder, never applied."
+        },
+        "example": {
+          "description": "An illustrative value for documentation. Never applied."
+        },
+        "note": {
+          "type": "string",
+          "description": "Longer guidance about the FIELD — history, hazards, when to set it. Distinct from changeNote."
+        },
+        "format": {
+          "type": "string",
+          "description": "A format hint (e.g. 'date', 'semver'); advisory."
+        },
+        "values": {
+          "type": "object",
+          "description": "Allowed value -> what it means. The documented enum."
+        },
+        "enum": {
+          "type": "array",
+          "description": "Allowed values, when they need no per-value explanation."
+        },
+        "items": {
+          "description": "Element shape for an array field."
+        },
+        "properties": {
+          "type": "object",
+          "description": "Member shape for an object field."
+        },
+        "patternProperties": {
+          "type": "object",
+          "description": "Keyed-member shape for an object field."
+        },
+        "additionalProperties": {
+          "type": "boolean",
+          "description": "Whether unlisted members are allowed on an object field."
+        },
+        "minimum": {
+          "type": "integer"
+        },
+        "maximum": {
+          "type": "integer"
+        },
+        "pattern": {
+          "type": "string",
+          "description": "Regex the value must match."
+        },
+        "deprecated": {
+          "type": "boolean",
+          "description": "Retained so a pre-migration config carrying it is classified rather than reported unknown; never written."
+        },
+        "requiredOnModule": {
+          "type": "boolean"
+        },
+        "fields": {
+          "type": "object",
+          "description": "Nested sub-field definitions for a structured object field."
+        },
+        "common_values": {
+          "type": "object"
+        },
+        "by_imageType": {
+          "type": "object"
+        },
+        "examples": {
+          "type": "object"
+        },
+        "rules": {
+          "type": "array"
+        },
+        "class": {
+          "$ref": "#/$defs/changeClass"
+        },
+        "apply": {
+          "$ref": "#/$defs/applyMode"
+        },
+        "liveKey": {
+          "type": "string",
+          "description": "Key under which report-service.sh reports this field's ACTUAL value. Defaults to the field name; needed wherever the provider spells it differently (Proxmox calls cputype 'cpu', vmtag 'tags', vmname 'name')."
+        },
+        "setFlag": {
+          "type": "string",
+          "description": "apply:'set' only — the provider flag to batch, e.g. '--cores'. Defaults to '--<liveKey>'."
+        },
+        "hook": {
+          "type": "string",
+          "description": "apply:'hook' only — the script name, relative to the service directory, e.g. 'update-node.sh'.",
+          "pattern": "^[A-Za-z0-9._-]+$"
+        },
+        "composite": {
+          "type": "string",
+          "description": "apply:'composite' only — the composite this field is an input of. Must be declared under 'composites', and that composite must list this field in its 'inputs'."
+        },
+        "normalize": {
+          "$ref": "#/$defs/normalizer"
+        },
+        "sideEffects": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/sideEffect"
+          }
+        },
+        "changeNote": {
+          "type": "string",
+          "description": "Why this change class, when the reason is not obvious from the field name. Named changeNote, not note: since #567 a merged entry also carries the field's SCHEMA definition, whose own 'note' explains what the field IS. Two different notes, two names."
+        }
+      }
+    },
+    "changeClass": {
+      "type": "string",
+      "description": "What changing this field after install costs (ADR-020 D3). immutable/recreate are rejected by the static pre-gate before 'modify --set' writes anything; grow-only/migrate/in-place-reboot refuse (or defer) at apply time, where live state is known.",
+      "enum": [
+        "immutable",
+        "in-place",
+        "in-place-reboot",
+        "grow-only",
+        "migrate",
+        "manual",
+        "recreate"
+      ],
+      "enumDescriptions": {
+        "immutable": "Cannot change in place — requires delete + reinstall. Statically pre-gated.",
+        "in-place": "Safe live change, no downtime.",
+        "in-place-reboot": "Live change that needs a guest reboot to take effect. Disruptive: needs 'modify --force', or rebootOk in the scheduled pass.",
+        "grow-only": "One-way — a grow applies, a shrink is refused at apply time.",
+        "migrate": "Relocates or rebuilds runtime state (ADR-019). Disruptive unless the migrate is live-OK.",
+        "manual": "Reconcilable only by an operator action the tool will not take silently — reported, never applied.",
+        "recreate": "Takes effect only at guest creation. Statically pre-gated."
+      }
+    },
+    "applyMode": {
+      "type": "string",
+      "description": "How the converge realizes a change. Defaults to 'none' for a class that never applies (immutable/recreate/manual) and 'set' otherwise.",
+      "enum": [
+        "set",
+        "hook",
+        "composite",
+        "reconcile",
+        "none"
+      ],
+      "enumDescriptions": {
+        "set": "Batched into ONE provider-level set call with every other 'set' field in the drift record (cluster:vm's single 'qm set').",
+        "hook": "Dispatched to services/<svc>/<hook> over the uniform hook CLI: --field/--desired/--actual [--check] [--force].",
+        "composite": "This field is an input of a composite; the composite carries the class and the hook.",
+        "reconcile": "The SERVICE converges this field itself, inside an idempotent reconcile it already performs (rules-manager reconcile, the Caddy handler compare, the PBS job re-assert). The runner applies nothing per-field, and the provider needs no report-service.sh: a rule set is not a scalar the generic differ could compare without losing fidelity. Declaring the class still makes 'modify --set' possible and lets validate insist on coverage.",
+        "none": "Never applied by the converge — reported and refused."
+      }
+    },
+    "normalizer": {
+      "type": "string",
+      "description": "Declared normalization, applied by the MANAGER to BOTH sides of the diff (ADR-020 D7). Services report raw values and never normalize, so there is one comparison rule per field rather than one per code path.",
+      "enum": [
+        "string",
+        "integer",
+        "boolean",
+        "tags",
+        "trunks",
+        "vlan",
+        "size",
+        "optional"
+      ],
+      "enumDescriptions": {
+        "string": "Trim only (the default).",
+        "integer": "Numeric comparison, so \"8\" equals 8.",
+        "boolean": "true/false/yes/no/1/0 collapse to true|false.",
+        "tags": "Lowercase, split on , ; or whitespace, dedupe, sort, join with ';' — matches how Proxmox stores tags.",
+        "trunks": "Zone-name list resolved to VLAN ids, sorted.",
+        "vlan": "VLAN tag; an absent tag equals 0.",
+        "size": "Size with a unit suffix compared as bytes, so \"8G\" equals \"8192M\".",
+        "optional": "The TAPPaaS \"NONE\" sentinel means not-set, so an undeclared optional value equals a component the guest does not have (bridge1: no second NIC)."
+      }
+    },
+    "sideEffect": {
+      "type": "string",
+      "description": "Work the converge must perform AFTER applying this change. The shared runner sequences the union of all side effects ONCE per drift record, so two changed NICs still produce exactly one reboot and one DNS pass.",
+      "enum": [
+        "reboot",
+        "dns",
+        "wait-ip",
+        "ha-repoint"
+      ],
+      "enumDescriptions": {
+        "reboot": "Reboot the guest so it picks the change up. Only valid on a disruptive class.",
+        "dns": "Re-register (and clean up the stale) DNS record.",
+        "wait-ip": "Wait for the guest to report an address in the target subnet before continuing.",
+        "ha-repoint": "Re-point the HA rule at the new node (ADR-019)."
+      }
+    }
+  },
+  "type": "object",
+  "properties": {
+    "$schema": {
+      "type": "string"
+    },
+    "$id": {
+      "type": "string"
+    },
+    "title": {
+      "type": "string"
+    },
+    "description": {
+      "type": "string"
+    },
+    "service": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9_-]+:[A-Za-z0-9_-]+$",
+      "description": "Service-tier manifest: the '<module>:<service>' this file belongs to."
+    },
+    "scope": {
+      "enum": [
+        "module"
+      ],
+      "description": "Module-tier manifest: fields no single service owns."
+    },
+    "_note": {
+      "type": "string"
+    },
+    "_migration_note": {
+      "type": "string"
+    },
+    "fieldOrder": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "module_structure": {
+      "type": "object"
+    },
+    "naming_conventions": {
+      "type": "object"
+    },
+    "composites": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "object",
+        "properties": {
+          "class": {
+            "$ref": "#/$defs/changeClass"
+          },
+          "apply": {
+            "$ref": "#/$defs/applyMode"
+          },
+          "liveKey": {
+            "type": "string"
+          },
+          "setFlag": {
+            "type": "string"
+          },
+          "hook": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9._-]+$"
+          },
+          "inputs": {
+            "type": "array",
+            "minItems": 1,
+            "items": {
+              "type": "string"
+            },
+            "description": "The declared fields this value is assembled from. Each must have a field entry with apply:'composite' pointing back here."
+          },
+          "normalize": {
+            "$ref": "#/$defs/normalizer"
+          },
+          "sideEffects": {
+            "type": "array",
+            "items": {
+              "$ref": "#/$defs/sideEffect"
+            }
+          },
+          "changeNote": {
+            "type": "string",
+            "description": "Why this change class, when the reason is not obvious from the field name. Named changeNote, not note: since #567 a merged entry also carries the field's SCHEMA definition, whose own 'note' explains what the field IS. Two different notes, two names."
+          }
+        }
+      }
+    },
+    "fields": {
+      "type": "object",
+      "additionalProperties": {
+        "$ref": "#/$defs/fieldEntry"
+      },
+      "description": "The field entries this tier defines."
+    }
+  },
+  "required": [
+    "fields"
+  ]
+}

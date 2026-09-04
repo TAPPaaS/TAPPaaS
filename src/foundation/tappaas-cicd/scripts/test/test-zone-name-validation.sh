@@ -55,7 +55,9 @@ cj() {
 
 echo "── test-zone-name-validation.sh ──"
 
-SCHEMA="${FOUNDATION_DIR}/schemas/module-fields.json"
+SCHEMA="$(mktemp)"
+# Composed (#567): zone0/zone1 are declared by cluster now, not globally.
+"${FOUNDATION_DIR}/tappaas-cicd/scripts/compose-fields.sh" "${FOUNDATION_DIR}" > "${SCHEMA}"
 [[ -f "${SCHEMA}" ]] || { fail "module-fields.json not found at ${SCHEMA}"; exit 1; }
 
 # Case 1: valid camelCase zone0 passes the format regex.

@@ -20,6 +20,7 @@
 
 import { existsSync, readFileSync, readdirSync, statSync } from "fs";
 import { basename, dirname, join } from "path";
+import { composeFields } from "../../../../lib/ts/src/compose-fields";
 import {
   APPLY_MODES,
   CHANGE_CLASSES,
@@ -55,7 +56,11 @@ function check(cond: boolean, msg: string): void {
 // fixtures. From there, up to src/foundation/ for the two real documents.
 const MODULE_MANAGER = join(__dirname, "..", "..", "..", "..", "..");
 const FOUNDATION = join(MODULE_MANAGER, "..", "..", "..");
-const SCHEMA_FILE = join(FOUNDATION, "schemas", "module-fields.json");
+// COMPOSED, not the raw file. Since #567 schemas/module-fields.json holds only
+// the 19 fields no service owns; linting a service manifest against it would
+// report every field it classifies as undeclared. The runtime composes too —
+// this is the same view module-manager sees.
+const COMPOSED = composeFields(FOUNDATION).schema as { fields: Record<string, unknown> };
 const MANIFEST_SCHEMA_FILE = join(FOUNDATION, "schemas", "service-fields.json");
 const VM_MANIFEST_FILE = join(FOUNDATION, "cluster", "services", "vm", "fields.json");
 const MODULE_MANIFEST_FILE = join(FOUNDATION, "schemas", "fields.json");
@@ -106,7 +111,7 @@ function readJson(path: string): Record<string, unknown> {
 }
 
 // ── 2. the REAL cluster:vm manifest, against the REAL schema ───────────
-const schemaFields = (readJson(SCHEMA_FILE).fields ?? {}) as Record<string, { usedBy?: string[] }>;
+const schemaFields = (COMPOSED.fields ?? {}) as Record<string, { usedBy?: string[] }>;
 const declaredFields = Object.keys(schemaFields);
 
 {
@@ -273,7 +278,7 @@ const BASE = {
     fields: { ...BASE.fields, coress: { class: "in-place", apply: "set" } },
   });
   check(
-    f.length === 1 && says(f, "not declared in module-fields.json"),
+    f.length === 1 && says(f, "not declared by any field tier"),
     "scope: a manifest entry naming an undeclared field is an error (a typo, not a field)",
   );
 }
@@ -589,7 +594,7 @@ const BASE = {
 // down was to stop these fields being the undeclared corner of the schema.
 {
   const doc = readJson(MODULE_MANIFEST_FILE);
-  const schema = readJson(SCHEMA_FILE);
+  const schema = COMPOSED;
   const schemaFields = schema.fields as Record<string, { usedBy?: string[] }>;
   const entries = doc.fields as Record<string, Record<string, unknown>>;
 
@@ -624,7 +629,7 @@ const BASE = {
   check(withLiveKey.length === 0, `no module-level field claims a liveKey (offenders: ${withLiveKey.join(", ") || "none"})`);
 
   // Rationale is the reason this document is worth having at all.
-  const noNote = declared.filter((f) => typeof entries[f].note !== "string" || !entries[f].note);
+  const noNote = declared.filter((f) => typeof entries[f].changeNote !== "string" || !entries[f].changeNote);
   check(noNote.length === 0, `every module-level field carries a rationale (missing: ${noNote.join(", ") || "none"})`);
 }
 

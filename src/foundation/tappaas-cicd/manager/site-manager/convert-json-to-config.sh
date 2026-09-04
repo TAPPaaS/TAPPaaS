@@ -49,7 +49,11 @@ fi
 
 # Guard against double-sourcing: readonly fails the second time.
 if [[ -z "${_CONVERT_SCHEMA_FILE:-}" ]]; then
-    readonly _CONVERT_SCHEMA_FILE="${TAPPAAS_SCHEMA_FILE:-/home/tappaas/TAPPaaS/src/foundation/schemas/module-fields.json}"
+    # Composed view (#567): definitions live per-service now. This file may be
+    # sourced WITHOUT common-install-routines, so fall back to the cache path
+    # rather than assuming the resolver is defined — and never to the raw
+    # schemas/module-fields.json, which since #567 holds only the generic 19.
+    readonly _CONVERT_SCHEMA_FILE="$(declare -F tappaas_schema_file >/dev/null 2>&1 && tappaas_schema_file || printf %s "${TAPPAAS_SCHEMA_FILE:-${CONFIG_DIR:-/home/tappaas/config}/module-fields.json}")"
     readonly _CONVERT_HEADER_PINNED='["vmname","vmid","vmtag","node","zone0","zone1","mac0","mac1","dependsOn","provides","config","variant"]'
 fi
 

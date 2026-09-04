@@ -36,10 +36,12 @@ set -euo pipefail
 SCRIPT_NAME="$(basename "${BASH_SOURCE[0]}")"
 readonly SCRIPT_NAME
 readonly CONFIG_DIR="${TAPPAAS_CONFIG:-/home/tappaas/config}"
-readonly SCHEMA_FILE="/home/tappaas/TAPPaaS/src/foundation/schemas/module-fields.json"
 
 # shellcheck source=/home/tappaas/bin/common-install-routines.sh
 . /home/tappaas/bin/common-install-routines.sh
+
+# Composed, not the raw schema: definitions live per-service since #567.
+readonly SCHEMA_FILE="$(tappaas_schema_file)"
 
 usage() {
     echo "Usage: ${SCRIPT_NAME} <module> --set <field>=<value> [--set <field>=<value>]..." >&2

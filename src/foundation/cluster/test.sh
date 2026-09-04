@@ -45,6 +45,14 @@ readonly CONFIG_DIR="/home/tappaas/config"
 readonly MGMT="mgmt"
 
 DEEP="${TAPPAAS_TEST_DEEP:-0}"
+# The composed field schema (#567). vmtag lives in cluster/fields.json and bios
+# in cluster/services/vm/fields.json now, so reading schemas/module-fields.json
+# would find neither — it holds only the 19 fields no service owns.
+CT_SCHEMA="$(mktemp)"
+trap 'rm -f "${CT_SCHEMA}"' EXIT
+"${SCRIPT_DIR}/../tappaas-cicd/scripts/compose-fields.sh" "${SCRIPT_DIR}/.." > "${CT_SCHEMA}" 2>/dev/null || true
+
+
 PASS=0
 FAIL=0
 SKIP=0
@@ -242,7 +250,7 @@ info "${BOLD}Test 3a2: the create paths agree with the schema default${CL}"
 
 _vm_tag="$(sed -n "s/^VMTAG=\"\$(get_config_value 'vmtag' *'\([^']*\)')\"/\1/p" "${SCRIPT_DIR}/Create-TAPPaaS-VM.sh")"
 _ct_tag="$(sed -n "s/^VMTAG=\"\$(get_config_value 'vmtag' *'\([^']*\)')\"/\1/p" "${SCRIPT_DIR}/Create-TAPPaaS-LXC.sh")"
-_schema_tag="$(jq -r '.fields.vmtag.default' "${SCRIPT_DIR}/../schemas/module-fields.json" 2>/dev/null)"
+_schema_tag="$(jq -r '.fields.vmtag.default' "${CT_SCHEMA}" 2>/dev/null)"
 
 if [[ -z "${_vm_tag}" ]]; then
     fail "Create-TAPPaaS-VM.sh reads vmtag with no default — a missing vmtag would be a hard error"
@@ -267,7 +275,7 @@ fi
 # pre-existing instance of the case that record exists to prevent.
 info "${BOLD}Test 3a3: bios is declared wherever it differs from the default${CL}"
 
-_bios_default="$(jq -r '.fields.bios.default' "${SCRIPT_DIR}/../schemas/module-fields.json" 2>/dev/null)"
+_bios_default="$(jq -r '.fields.bios.default' "${CT_SCHEMA}" 2>/dev/null)"
 if [[ -z "${_bios_default}" || "${_bios_default}" == "null" ]]; then
     fail "cannot read the bios schema default"
 elif [[ "${node_reachable}" -eq 0 ]]; then

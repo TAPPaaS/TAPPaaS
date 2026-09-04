@@ -2,19 +2,63 @@
   "$schema": "../../../schemas/service-fields.json",
   "service": "network:discovery",
   "description": "Cross-zone service discovery: which mDNS services and UDP broadcasts are relayed to this module.",
-
   "_note": "update-service.sh execs install-service.sh (reconcile-in-place). Both fields are relay declarations the discovery plane converges as a set.",
-
   "fields": {
     "discoveryMdns": {
+      "description": "Consumer zones to bridge with zone0 in the mDNS repeater (os-mdns-repeater). zone0 is always included as the provider zone.",
+      "type": "array",
+      "items": "string",
+      "requiredBy": [],
+      "usedBy": [
+        "network:discovery"
+      ],
+      "default": [],
+      "example": [
+        "home",
+        "srvHome"
+      ],
+      "note": "Requires network:discovery in dependsOn. Idempotently unions zone0 + declared consumer zones into the repeater interface list. Boolean true is deprecated.",
       "class": "in-place",
       "apply": "reconcile",
-      "note": "mDNS service types relayed across zones so a client in one zone can find this module in another. A relay change is a firewall/avahi reload, not a guest change."
+      "changeNote": "mDNS service types relayed across zones so a client in one zone can find this module in another. A relay change is a firewall/avahi reload, not a guest change."
     },
     "discoveryUdpRelay": {
+      "description": "UDP broadcast relay instances via os-udpbroadcastrelay. Each entry creates one relay identified by 'tappaas:<module>:<port>'.",
+      "type": "array",
+      "requiredBy": [],
+      "usedBy": [
+        "network:discovery"
+      ],
+      "default": [],
+      "items": {
+        "type": "object",
+        "fields": {
+          "port": {
+            "description": "UDP port to relay (e.g. 36549 for Alfen Nucleus discovery).",
+            "type": "integer",
+            "required": true
+          },
+          "zones": {
+            "description": "Zone names whose interfaces receive the relayed broadcast.",
+            "type": "array",
+            "items": "string",
+            "required": true
+          }
+        }
+      },
+      "example": [
+        {
+          "port": 36549,
+          "zones": [
+            "home",
+            "iotCloud"
+          ]
+        }
+      ],
+      "note": "Requires network:discovery in dependsOn. Idempotent: checks description before adding. Reload is triggered only when new entries are added.",
       "class": "in-place",
       "apply": "reconcile",
-      "note": "UDP broadcast ports relayed across zones (discovery protocols that predate mDNS). Same cost."
+      "changeNote": "UDP broadcast ports relayed across zones (discovery protocols that predate mDNS). Same cost."
     }
   }
 }

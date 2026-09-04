@@ -165,9 +165,9 @@
             "$ref": "#/$defs/sideEffect"
           }
         },
-        "note": {
+        "changeNote": {
           "type": "string",
-          "description": "Why this class, when the reason is not obvious from the field name. Read by humans only."
+          "description": "Why this change class, when the reason is not obvious from the field name. Named changeNote, not note: since #567 a merged entry also carries the field's SCHEMA definition, whose own 'note' explains what the field IS. Two different notes, two names."
         }
       }
     },
@@ -212,8 +212,9 @@
             "$ref": "#/$defs/sideEffect"
           }
         },
-        "note": {
-          "type": "string"
+        "changeNote": {
+          "type": "string",
+          "description": "Why this change class, when the reason is not obvious from the field name. Named changeNote, not note: since #567 a merged entry also carries the field's SCHEMA definition, whose own 'note' explains what the field IS. Two different notes, two names."
         }
       }
     }

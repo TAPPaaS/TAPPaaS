@@ -1,0 +1,221 @@
+{
+  "$schema": "../schemas/fields-schema.json",
+  "scope": "module",
+  "description": "Fields shared by cluster's services (cluster:lxc, cluster:vm).",
+  "_note": "MODULE TIER (#567). These fields are used by more than one of this module's services, so they belong to neither alone: cluster:vm and cluster:lxc are two guest types with the same identity, sizing and NIC vocabulary. Their CHANGE semantics still live per-service, because the same field can cost different things on a VM and on a container — `node` is `migrate` for a VM and `manual` for a container, which is exactly why the two halves are separable.",
+  "fields": {
+    "vmname": {
+      "description": "Name of the VM, also used as module name and OS hostname",
+      "type": "string",
+      "requiredBy": [],
+      "usedBy": [
+        "cluster:vm",
+        "cluster:lxc"
+      ],
+      "default": "<computed from module name + environment>",
+      "pattern": "^[a-zA-Z][a-zA-Z0-9-]*$",
+      "example": "nextcloud",
+      "note": "ADR-007 P5: vmname is COMPUTED at install time and need not be authored in the module JSON. The installer derives it from the module name and the target environment: '<module>' when the environment is the default environment, else '<module>-<environment>'. An explicit vmname in the JSON still wins (back-compat). The field is retained in the schema for legacy module configs."
+    },
+    "vmid": {
+      "description": "Unique VM ID across all TAPPaaS nodes",
+      "type": "integer",
+      "requiredBy": [
+        "cluster:vm",
+        "cluster:lxc"
+      ],
+      "usedBy": [
+        "cluster:vm",
+        "cluster:lxc"
+      ],
+      "minimum": 100,
+      "maximum": 999999,
+      "example": 200
+    },
+    "vmtag": {
+      "description": "Proxmox tags for the VM. Comma-separated list, no spaces.",
+      "type": "string",
+      "requiredBy": [],
+      "usedBy": [
+        "cluster:vm",
+        "cluster:lxc"
+      ],
+      "default": "TAPPaaS",
+      "format": "^[a-zA-Z0-9]+(,[a-zA-Z0-9]+)*$",
+      "example": "TAPPaaS,Foundation",
+      "common_values": {
+        "TAPPaaS": "Standard TAPPaaS module",
+        "TAPPaaS,Foundation": "Core infrastructure module",
+        "TAPPaaS,Test": "Test/development module"
+      }
+    },
+    "node": {
+      "description": "Name of the Proxmox/TAPPaaS node where the module should be installed. If null, defaults to the first node in configuration.json.",
+      "type": "string",
+      "requiredBy": [],
+      "usedBy": [
+        "cluster:vm",
+        "cluster:lxc"
+      ],
+      "default": null,
+      "example": "tappaas1"
+    },
+    "cores": {
+      "description": "Number of CPU cores allocated to the VM",
+      "type": "integer",
+      "requiredBy": [],
+      "usedBy": [
+        "cluster:vm",
+        "cluster:lxc"
+      ],
+      "default": 2,
+      "minimum": 1,
+      "maximum": 128,
+      "example": 4
+    },
+    "memory": {
+      "description": "RAM allocation in megabytes",
+      "type": "integer",
+      "requiredBy": [],
+      "usedBy": [
+        "cluster:vm",
+        "cluster:lxc"
+      ],
+      "default": 4096,
+      "minimum": 512,
+      "example": 8192,
+      "note": "Value in MB (e.g., 4096 = 4GB)"
+    },
+    "diskSize": {
+      "description": "Disk size with unit suffix",
+      "type": "string",
+      "requiredBy": [],
+      "usedBy": [
+        "cluster:vm",
+        "cluster:lxc"
+      ],
+      "default": "8G",
+      "pattern": "^[0-9]+[GMK]$",
+      "example": "32G",
+      "note": "G=gigabytes, M=megabytes, K=kilobytes"
+    },
+    "storage": {
+      "description": "Name of the storage pool for the module",
+      "type": "string",
+      "requiredBy": [],
+      "usedBy": [
+        "cluster:vm",
+        "cluster:lxc"
+      ],
+      "default": "tanka1",
+      "example": "tanka1",
+      "note": "Storage pool must exist on the target node"
+    },
+    "imageType": {
+      "description": "How the guest's image/rootfs is sourced. Applies to both VMs (cluster:vm) and containers (cluster:lxc); whether the guest is a VM or an LXC is determined by dependsOn (cluster:vm vs cluster:lxc), not by this field.",
+      "type": "string",
+      "requiredBy": [
+        "cluster:vm",
+        "cluster:lxc"
+      ],
+      "usedBy": [
+        "cluster:vm",
+        "cluster:lxc"
+      ],
+      "default": "clone",
+      "values": {
+        "clone": {
+          "description": "cluster:vm — VM cloned from an existing Proxmox VM template. cluster:lxc — container created (pct create) from a CT template in local:vztmpl, downloaded via pveam if absent.",
+          "image_field": "cluster:vm: VMID of the template to clone. cluster:lxc: CT template filename (e.g. debian-12-standard_12.12-1_amd64.tar.zst)"
+        },
+        "iso": {
+          "description": "VM is created with a CD-ROM drive attached to the ISO. ISO is downloaded and placed in local:iso. (VM only.)",
+          "image_field": "Name of the ISO file",
+          "requires": "imageLocation"
+        },
+        "img": {
+          "description": "VM disk imports the image (downloaded and unzipped if compressed). Image is discarded after import. (VM only.)",
+          "image_field": "Name of the image file",
+          "requires": "imageLocation"
+        },
+        "apt": {
+          "description": "Package is a simple apt package to be installed",
+          "image_field": "Name of the apt package(s) to install"
+        }
+      }
+    },
+    "image": {
+      "description": "Image identifier. Interpretation depends on imageType.",
+      "type": "string",
+      "requiredBy": [
+        "cluster:vm",
+        "cluster:lxc"
+      ],
+      "usedBy": [
+        "cluster:vm",
+        "cluster:lxc"
+      ],
+      "by_imageType": {
+        "clone": "cluster:vm — VMID of the Proxmox template to clone. cluster:lxc — CT template filename (downloaded via pveam if absent)",
+        "iso": "Filename of the ISO image",
+        "img": "Filename of the disk image",
+        "apt": "Name of apt package(s) to install"
+      },
+      "examples": {
+        "clone": "9000 (VM) or debian-12-standard_12.12-1_amd64.tar.zst (LXC)",
+        "iso": "ubuntu-24.04-live-server-amd64.iso",
+        "img": "OPNsense-25.7-nano-amd64.img.bz2",
+        "apt": "nginx"
+      }
+    },
+    "bridge0": {
+      "description": "Proxmox bridge for the VM's first network interface (net0)",
+      "type": "string",
+      "requiredBy": [],
+      "usedBy": [
+        "cluster:vm",
+        "cluster:lxc"
+      ],
+      "default": "lan",
+      "example": "lan"
+    },
+    "mac0": {
+      "description": "MAC address for the net0 network port",
+      "type": "string",
+      "requiredBy": [],
+      "usedBy": [
+        "cluster:vm",
+        "cluster:lxc"
+      ],
+      "default": "<randomly generated>",
+      "format": "^([0-9A-Fa-f]{2}:){5}[0-9A-Fa-f]{2}$",
+      "example": "BC:24:11:00:01:10"
+    },
+    "zone0": {
+      "description": "Security zone for net0. Must exist in zones.json.",
+      "type": "string",
+      "requiredBy": [],
+      "usedBy": [
+        "cluster:vm",
+        "cluster:lxc"
+      ],
+      "default": "mgmt",
+      "format": "^[a-z][a-zA-Z0-9]*$",
+      "example": "srvHome",
+      "note": "Zone determines VLAN tag. 'mgmt' is untagged traffic. camelCase only — no underscores or hyphens (#278). ADR-007 P5: when zone0 is unset it DEFAULTS to the target environment's network.zone (read from config/environments/<env>.json); pre-cutover (no site.json/environments) it falls back to resolve_default_zone()'s behaviour. An explicit zone0 in the module JSON always wins."
+    },
+    "trunks0": {
+      "description": "Semicolon-separated list of additional zone names to trunk on net0. Zone names are resolved to VLAN tags. Used when a VM needs to see traffic from multiple VLANs on a single NIC (e.g., the firewall).",
+      "type": "string",
+      "requiredBy": [],
+      "usedBy": [
+        "cluster:vm",
+        "cluster:lxc"
+      ],
+      "default": "NONE",
+      "format": "^([a-z][a-zA-Z0-9]*(;[a-z][a-zA-Z0-9]*)*|ALL|\\*|NONE)$",
+      "example": "srv;iot;dmz",
+      "note": "Zone names must exist in zones.json, camelCase only [a-zA-Z0-9]. Semicolon-delimited, no spaces. Sentinels: ALL/* expand to every Active zone; NONE = empty."
+    }
+  }
+}

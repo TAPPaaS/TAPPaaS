@@ -9,7 +9,7 @@
       "apply": "set",
       "liveKey": "hostname",
       "setFlag": "--hostname",
-      "note": "Proxmox calls a container's name 'hostname'. It is also the DNS name the guest registers as."
+      "changeNote": "Proxmox calls a container's name 'hostname'. It is also the DNS name the guest registers as."
     },
     "vmtag": {
       "class": "in-place",
@@ -17,7 +17,7 @@
       "liveKey": "tags",
       "setFlag": "--tags",
       "normalize": "tags",
-      "note": "Same canonicalisation and same rule as cluster:vm: the schema default 'TAPPaaS' is desired state, and it is what Create-TAPPaaS-LXC.sh applies when the module declares nothing, so an undeclared container is already in sync."
+      "changeNote": "Same canonicalisation and same rule as cluster:vm: the schema default 'TAPPaaS' is desired state, and it is what Create-TAPPaaS-LXC.sh applies when the module declares nothing, so an undeclared container is already in sync."
     },
     "cores": {
       "class": "in-place",
@@ -25,7 +25,7 @@
       "liveKey": "cores",
       "setFlag": "--cores",
       "normalize": "integer",
-      "note": "Applied live — a container's cgroup limit changes without a restart."
+      "changeNote": "Applied live — a container's cgroup limit changes without a restart."
     },
     "memory": {
       "class": "in-place",
@@ -33,22 +33,32 @@
       "liveKey": "memory",
       "setFlag": "--memory",
       "normalize": "integer",
-      "note": "Also live, for the same reason."
+      "changeNote": "Also live, for the same reason."
     },
     "swap": {
+      "description": "Swap in MB for an LXC container. A container has no BIOS and no virtual disk controller, so its memory pressure is handled differently from a VM's — 0 means the container may not swap at all, which is the TAPPaaS default.",
+      "type": "integer",
+      "requiredBy": [],
+      "usedBy": [
+        "cluster:lxc"
+      ],
+      "default": 0,
+      "minimum": 0,
+      "example": 512,
+      "note": "cluster:lxc's update-service.sh has always read this from config with a default of 0; it was simply never declared here, so no path could report or classify it. Declared in ADR-020 P5.",
       "class": "in-place",
       "apply": "set",
       "liveKey": "swap",
       "setFlag": "--swap",
       "normalize": "integer",
-      "note": "Container-only: a VM's swap is inside its guest, a container's is a host-side cgroup limit. Live, like cores and memory. TAPPaaS defaults it to 0 — a container that needs swap says so."
+      "changeNote": "Container-only: a VM's swap is inside its guest, a container's is a host-side cgroup limit. Live, like cores and memory. TAPPaaS defaults it to 0 — a container that needs swap says so."
     },
     "bridge0": {
       "class": "in-place-reboot",
       "apply": "composite",
       "composite": "net0",
       "liveKey": "net0.bridge",
-      "note": "A bridge change moves the container to a different L2 segment, so it must re-DHCP — hence the restart."
+      "changeNote": "A bridge change moves the container to a different L2 segment, so it must re-DHCP — hence the restart."
     },
     "zone0": {
       "class": "in-place-reboot",
@@ -56,14 +66,14 @@
       "composite": "net0",
       "liveKey": "net0.tag",
       "normalize": "vlan",
-      "note": "The zone resolves to net0's VLAN tag; a new tag is a new subnet, so the container restarts and re-registers DNS."
+      "changeNote": "The zone resolves to net0's VLAN tag; a new tag is a new subnet, so the container restarts and re-registers DNS."
     },
     "mac0": {
       "class": "in-place-reboot",
       "apply": "composite",
       "composite": "net0",
       "liveKey": "net0.mac",
-      "note": "Spelled `hwaddr=` on a container, and the same reasoning as cluster:vm's mac0: a new MAC is a new lease, and under masqdns the container's name follows that lease — so the restart and the stale-pin cleanup both matter. Preserved from the live NIC unless the module pins one, which is why both reporters emit the MAC under one key."
+      "changeNote": "Spelled `hwaddr=` on a container, and the same reasoning as cluster:vm's mac0: a new MAC is a new lease, and under masqdns the container's name follows that lease — so the restart and the stale-pin cleanup both matter. Preserved from the live NIC unless the module pins one, which is why both reporters emit the MAC under one key."
     },
     "trunks0": {
       "class": "in-place",
@@ -71,41 +81,41 @@
       "composite": "net0",
       "liveKey": "net0.trunks",
       "normalize": "trunks",
-      "note": "A trunk-only change applies live on the bridge — no restart."
+      "changeNote": "A trunk-only change applies live on the bridge — no restart."
     },
     "node": {
       "class": "manual",
       "apply": "none",
       "liveKey": "node",
-      "note": "NOT cluster:vm's `migrate`. Live-migrating a container is unsafe when it has a GPU passed through or bind-mounts from the host — which is why TAPPaaS runs containers for exactly those workloads. The service reports the drift and leaves the move to an operator who can stop it, move it and start it deliberately."
+      "changeNote": "NOT cluster:vm's `migrate`. Live-migrating a container is unsafe when it has a GPU passed through or bind-mounts from the host — which is why TAPPaaS runs containers for exactly those workloads. The service reports the drift and leaves the move to an operator who can stop it, move it and start it deliberately."
     },
     "diskSize": {
       "class": "manual",
       "apply": "none",
       "liveKey": "diskSize",
-      "note": "Not grown by this service. main's update-service.sh header promised a warn for 'rootfs size' that the code never implemented — it read only vmname/node/zone0/bridge0/trunks0/cores/memory/swap — so the rootfs size was invisible rather than reported. Classed manual, which restores the report. The schema default 8G is DESIRED state (ADR-020 D9): it is what Create-TAPPaaS-LXC.sh builds with, so an undeclared container is in sync from install. Unlike cluster:vm diskSize there is no path that grows it behind config's back — check-disk-threshold.sh calls resize-disk.sh, which is qm-only — so a divergence means an operator ran pct resize by hand, which is exactly what manual exists to surface. Reclassifying to grow-only so pct resize could grow it live is a capability change (recommendation 3), deliberately not bundled here."
+      "changeNote": "Not grown by this service. main's update-service.sh header promised a warn for 'rootfs size' that the code never implemented — it read only vmname/node/zone0/bridge0/trunks0/cores/memory/swap — so the rootfs size was invisible rather than reported. Classed manual, which restores the report. The schema default 8G is DESIRED state (ADR-020 D9): it is what Create-TAPPaaS-LXC.sh builds with, so an undeclared container is in sync from install. Unlike cluster:vm diskSize there is no path that grows it behind config's back — check-disk-threshold.sh calls resize-disk.sh, which is qm-only — so a divergence means an operator ran pct resize by hand, which is exactly what manual exists to surface. Reclassifying to grow-only so pct resize could grow it live is a capability change (recommendation 3), deliberately not bundled here."
     },
     "storage": {
       "class": "manual",
       "apply": "none",
       "liveKey": "storage",
-      "note": "As cluster:vm, and for a bind-mounted container this is not a move at all. The schema default 'tanka1' is what Create-TAPPaaS-LXC.sh builds on, so an undeclared container is in sync from install and the manual-class report is restored rather than suppressed (ADR-020 D9)."
+      "changeNote": "As cluster:vm, and for a bind-mounted container this is not a move at all. The schema default 'tanka1' is what Create-TAPPaaS-LXC.sh builds on, so an undeclared container is in sync from install and the manual-class report is restored rather than suppressed (ADR-020 D9)."
     },
     "vmid": {
       "class": "immutable",
       "apply": "none",
       "liveKey": "vmid",
-      "note": "The container's identity. A different vmid IS a different container."
+      "changeNote": "The container's identity. A different vmid IS a different container."
     },
     "image": {
       "class": "immutable",
       "apply": "none",
-      "note": "The template the container was created from."
+      "changeNote": "The template the container was created from."
     },
     "imageType": {
       "class": "immutable",
       "apply": "none",
-      "note": "How it was built; not re-decidable in place."
+      "changeNote": "How it was built; not re-decidable in place."
     }
   },
   "composites": {
@@ -125,7 +135,7 @@
         "wait-ip",
         "dns"
       ],
-      "note": "The container's only NIC — TAPPaaS gives a CT one interface, which is why bridge1/mac1/zone1/trunks1 are cluster:vm-only. Proxmox spells it 'name=eth0,bridge=…,hwaddr=…,ip=dhcp[,tag=…]'. in-place-reboot is the CEILING: a MAC- or trunk-only change stays in-place, and only a bridge/zone change restarts the container."
+      "changeNote": "The container's only NIC — TAPPaaS gives a CT one interface, which is why bridge1/mac1/zone1/trunks1 are cluster:vm-only. Proxmox spells it 'name=eth0,bridge=…,hwaddr=…,ip=dhcp[,tag=…]'. in-place-reboot is the CEILING: a MAC- or trunk-only change stays in-place, and only a bridge/zone change restarts the container."
     }
   }
 }

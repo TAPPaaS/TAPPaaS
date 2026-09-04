@@ -81,7 +81,11 @@ fi
 
 # jq_module_write: writes through Pattern A canonicalization
 echo '{"vmname":"m-write","dependsOn":["cluster:vm"],"cores":2}' > "${WORK}/m-write.json"
-export TAPPAAS_SCHEMA_FILE="${FOUNDATION_DIR}/schemas/module-fields.json"
+TAPPAAS_SCHEMA_FILE="$(mktemp)"
+# Composed, not schemas/module-fields.json: since #567 that file holds only
+# the 19 generic fields, and these cases resolve service-owned ones.
+"${FOUNDATION_DIR}/tappaas-cicd/scripts/compose-fields.sh" "${FOUNDATION_DIR}" > "${TAPPAAS_SCHEMA_FILE}"
+export TAPPAAS_SCHEMA_FILE
 if jq_module_write m-write '.cores = 8'; then
     # The on-disk shape must be Pattern A: cores under config.cluster:vm
     if [[ "$(jq -r '.config["cluster:vm"].cores' "${WORK}/m-write.json")" == "8" ]] \

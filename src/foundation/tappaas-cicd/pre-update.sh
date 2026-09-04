@@ -186,8 +186,27 @@ if [[ -f /home/tappaas/config/configuration.json && ! -f /home/tappaas/config/si
 fi
 
 # --- Install foundation config files into /home/tappaas/config/ ---
-# module-fields.json: symlink (read-only schema, always tracks git)
-if [ -f "../schemas/module-fields.json" ]; then
+# module-fields.json: the COMPOSED view, regenerated (#567).
+#
+# It used to be a symlink to schemas/module-fields.json. That file now holds
+# only the 19 fields no service owns; the other 55 definitions live with the
+# service that owns them, so the single document every reader still expects has
+# to be composed. Regenerated here on every update, and by tappaas_schema_file()
+# on demand for the window before this has run.
+#
+# A real file, not a symlink: it is derived, and a symlink would point at a
+# document that is now only part of the answer.
+if [ -x "./scripts/compose-fields.sh" ]; then
+  _cf_tmp="$(mktemp)"
+  if ./scripts/compose-fields.sh "$(realpath ..)" > "${_cf_tmp}" 2>/dev/null && [ -s "${_cf_tmp}" ]; then
+    rm -f /home/tappaas/config/module-fields.json 2>/dev/null || true
+    mv "${_cf_tmp}" /home/tappaas/config/module-fields.json
+    echo "  composed module-fields.json ($(jq -r '.fields|length' /home/tappaas/config/module-fields.json) fields)"
+  else
+    rm -f "${_cf_tmp}" 2>/dev/null || true
+    echo "  WARNING: could not compose module-fields.json — leaving the existing one" >&2
+  fi
+elif [ -f "../schemas/module-fields.json" ]; then
   rm -f /home/tappaas/config/module-fields.json 2>/dev/null || true
   ln -s "$(realpath ../schemas/module-fields.json)" /home/tappaas/config/module-fields.json
 fi

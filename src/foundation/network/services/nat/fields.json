@@ -2,14 +2,62 @@
   "$schema": "../../../schemas/service-fields.json",
   "service": "network:nat",
   "description": "Port-forward / NAT rules published on the module's behalf.",
-
   "_note": "nat-manager reconciles the rule set — including removing rules that are no longer declared — so this is apply:'reconcile' for the same reason network:rules is: a removal cannot be expressed as a scalar diff.",
-
   "fields": {
     "natRules": {
+      "description": "Destination-NAT (port-forward) mappings that expose an internal service port on the firewall's WAN interface. Each entry is compiled into an OPNsense rdr-pass rule (translate + allow in one rule). Use this for non-HTTP ports (e.g. SSH); use network:proxy for HTTP(S). All rules forward to this module's single target (its 'ip', or <vmname>.<zone0>.internal).",
+      "type": "array",
+      "requiredBy": [],
+      "usedBy": [
+        "network:nat"
+      ],
+      "default": [],
+      "items": {
+        "type": "object",
+        "fields": {
+          "externalPort": {
+            "description": "Port exposed on the firewall WAN interface (e.g. 2022).",
+            "type": "integer|string",
+            "required": true,
+            "minimum": 1,
+            "maximum": 65535
+          },
+          "internalPort": {
+            "description": "Service port on the target host. Defaults to externalPort when omitted.",
+            "type": "integer|string",
+            "required": false,
+            "minimum": 1,
+            "maximum": 65535
+          },
+          "protocol": {
+            "description": "Transport protocol for this port-forward.",
+            "type": "string",
+            "values": {
+              "TCP": "TCP only (default)",
+              "UDP": "UDP only",
+              "TCP/UDP": "Both TCP and UDP"
+            },
+            "default": "TCP"
+          },
+          "description": {
+            "description": "Human-readable purpose of this port-forward (audit/documentation). Combined with the module name to form the rule's identity.",
+            "type": "string",
+            "required": false
+          }
+        }
+      },
+      "example": [
+        {
+          "externalPort": 2022,
+          "internalPort": 22,
+          "protocol": "TCP",
+          "description": "SSH"
+        }
+      ],
+      "note": "Activated when network:nat is in dependsOn. Rules are created as rdr-pass on the WAN interface, so no separate network:rules ingress entry is needed for the forwarded port.",
       "class": "in-place",
       "apply": "reconcile",
-      "note": "Each entry publishes an inside service on an outside address/port. A NAT change is a live firewall change: existing connections may reset, but no guest is rebooted, so it needs no disruption authorization."
+      "changeNote": "Each entry publishes an inside service on an outside address/port. A NAT change is a live firewall change: existing connections may reset, but no guest is rebooted, so it needs no disruption authorization."
     }
   }
 }

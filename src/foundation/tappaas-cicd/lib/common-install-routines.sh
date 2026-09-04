@@ -1242,10 +1242,13 @@ function jq_module_write() {
   fi
   # Source the converter the first time we need it. Prefer the live ~/bin
   # symlink (refreshed by pre-update.sh) and fall back to the repo path.
+  # The repo path moved in the c2480cc reorg; this fallback still named the
+  # old one, so it only ever worked because the symlink was there — i.e. it
+  # was broken precisely in the case it exists for (#570).
   if ! declare -F regroup_to_pattern_a >/dev/null 2>&1; then
     local _cv
     for _cv in /home/tappaas/bin/convert-json-to-config.sh \
-               /home/tappaas/TAPPaaS/src/foundation/tappaas-cicd/scripts/convert-json-to-config.sh; do
+               /home/tappaas/TAPPaaS/src/foundation/tappaas-cicd/manager/site-manager/convert-json-to-config.sh; do
       if [[ -f "$_cv" ]]; then
         # shellcheck disable=SC1090
         . "$_cv" && break
@@ -1267,13 +1270,63 @@ function jq_module_write() {
   fi
 }
 
+# ── the composed field schema (#567) ─────────────────────────────────
+#
+# Field definitions live with the service that owns them now, across three
+# tiers. This returns the path to the COMPOSED view — the single document every
+# reader still expects — regenerating it when a tier file is newer.
+#
+#   TAPPAAS_SCHEMA_FILE   honoured first, so a test can point at a fixture
+#   $CONFIG_DIR/module-fields.json   the cache, rebuilt on demand
+#
+# The cache is a CACHE, not a source: it is derived from the tiers and safe to
+# delete. pre-update.sh refreshes it on every update; this function covers the
+# window before that has run, and any caller working from a bare checkout.
+#
+# Nothing on a Proxmox node calls this. Node-side scripts are self-contained —
+# they read the module JSON scp'd next to them and carry their own defaults —
+# so a node needs neither the repo nor this cache, including during bootstrap.
+tappaas_schema_file() {
+  if [[ -n "${TAPPAAS_SCHEMA_FILE:-}" ]]; then
+    printf '%s' "${TAPPAAS_SCHEMA_FILE}"
+    return 0
+  fi
+  local foundation="${TAPPAAS_FOUNDATION:-/home/tappaas/TAPPaaS/src/foundation}"
+  local composer="${foundation}/tappaas-cicd/scripts/compose-fields.sh"
+  local cache="${CONFIG_DIR:-/home/tappaas/config}/module-fields.json"
+
+  # No composer (bare node, or a checkout without tappaas-cicd) — fall back to
+  # whatever is already there rather than failing: a stale cache beats none.
+  if [[ ! -x "${composer}" ]]; then
+    printf '%s' "${cache}"
+    return 0
+  fi
+
+  local newest
+  newest="$(find "${foundation}/schemas/module-fields.json" \
+                 "${foundation}"/*/fields.json \
+                 "${foundation}"/*/services/*/fields.json \
+                 -newer "${cache}" -print -quit 2>/dev/null || true)"
+  if [[ ! -s "${cache}" || -n "${newest}" ]]; then
+    local tmp; tmp="$(mktemp "${TMPDIR:-/tmp}/module-fields.XXXXXX.json")"
+    if "${composer}" "${foundation}" > "${tmp}" 2>/dev/null && [[ -s "${tmp}" ]]; then
+      # A symlink is what this used to be; replace it with the real file.
+      rm -f "${cache}" 2>/dev/null || true
+      mv "${tmp}" "${cache}" 2>/dev/null || { printf '%s' "${tmp}"; return 0; }
+    else
+      rm -f "${tmp}" 2>/dev/null || true
+    fi
+  fi
+  printf '%s' "${cache}"
+}
+
 # Validate a module JSON file against module-fields.json schema
 # Usage: check_json <json_file> [schema_file]
 # Returns: 0 if valid, 1 if errors found
 # Outputs: Validation messages to stderr
 function check_json() {
   local json_file="$1"
-  local schema_file="${2:-/home/tappaas/TAPPaaS/src/foundation/schemas/module-fields.json}"
+  local schema_file="${2:-$(tappaas_schema_file)}"
   local errors=0
   local warnings=0
 

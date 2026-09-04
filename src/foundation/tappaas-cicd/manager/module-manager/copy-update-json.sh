@@ -36,12 +36,14 @@ set -euo pipefail
 : "${RD:=$'\033[01;31m'}"
 : "${DGN:=$'\033[32m'}"
 : "${CL:=$'\033[m'}"
-SCHEMA_FILE="/home/tappaas/TAPPaaS/src/foundation/schemas/module-fields.json"
 
 # Source common-install-routines.sh if not already loaded (provides info, warn, error, die)
 if ! declare -F info &>/dev/null; then
     if [[ -f /home/tappaas/bin/common-install-routines.sh ]]; then
         . /home/tappaas/bin/common-install-routines.sh
+
+# Composed, not the raw schema: definitions live per-service since #567.
+SCHEMA_FILE="$(tappaas_schema_file)"
     else
         # Minimal fallback for bootstrap before common-install-routines.sh exists
         info()  { echo -e "${DGN}[Info]${CL} $*"; }

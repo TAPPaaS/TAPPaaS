@@ -26,7 +26,6 @@ set -euo pipefail
 
 SCRIPT_NAME="$(basename "${BASH_SOURCE[0]}")"
 readonly SCRIPT_NAME
-readonly SCHEMA_FILE="/home/tappaas/TAPPaaS/src/foundation/schemas/module-fields.json"
 
 # Header-pinned fields: module identity / placement that is owned by the module
 # itself (read by several services), never nested under a single service.
@@ -34,6 +33,9 @@ readonly HEADER_PINNED='["vmname","vmid","vmtag","node","zone0","zone1","mac0","
 
 # shellcheck source=common-install-routines.sh disable=SC1091
 . /home/tappaas/bin/common-install-routines.sh 2>/dev/null || {
+
+# Composed, not the raw schema: definitions live per-service since #567.
+readonly SCHEMA_FILE="$(tappaas_schema_file)"
     info()  { echo "[Info] $*"; }
     warn()  { echo "[Warning] $*" >&2; }
     error() { echo "[Error] $*" >&2; }

@@ -197,7 +197,9 @@ export interface FieldEntry {
   // When the module does NOT declare this field, is its module-fields.json
   // default DESIRED STATE, or merely an install-time seed? Default true.
   //
-  note?: string;
+  // Why this change class. Named changeNote because a merged entry (#567) also
+  // carries the field's schema definition, whose own `note` says what the field IS.
+  changeNote?: string;
 }
 
 // A derived apply unit assembled from several declared fields. It owns the
@@ -211,7 +213,9 @@ export interface CompositeEntry {
   inputs: string[];
   normalize?: Normalizer;
   sideEffects?: SideEffect[];
-  note?: string;
+  // Why this change class. Named changeNote because a merged entry (#567) also
+  // carries the field's schema definition, whose own `note` says what the field IS.
+  changeNote?: string;
 }
 
 export interface ServiceFieldManifest {
@@ -408,7 +412,7 @@ export function lintServiceFieldManifest(
       const f = e as FieldEntry;
       if (!declared.has(name)) {
         err(
-          `${what}: not declared in module-fields.json — a manifest may only classify fields the schema defines`,
+          `${what}: not declared by any field tier — a manifest may only classify fields the schema defines (#567: schemas/module-fields.json + <module>/fields.json + this file)`,
         );
       }
       if (apply === "composite") {
@@ -454,7 +458,7 @@ export function lintServiceFieldManifest(
   const missing = opts.ownedFields.filter((f) => !m.fields[f]);
   if (missing.length > 0) {
     err(
-      `fields.json does not classify ${missing.length} field(s) module-fields.json says '${opts.coordinate}' owns: ` +
+      `fields.json does not classify ${missing.length} field(s) the composed schema says '${opts.coordinate}' owns: ` +
         `${missing.join(", ")} — every usedBy field needs a change class (ADR-020 D4)`,
     );
   }

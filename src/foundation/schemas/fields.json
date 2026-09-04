@@ -7,97 +7,97 @@
     "description": {
       "class": "in-place",
       "apply": "none",
-      "note": "Pushed to the Proxmox summary page when the guest is created and never pushed again, so an edit after install changes config only. Classed by what changing it COSTS (nothing, no disruption), not by today's gap — `qm set --description` works on a live VM, so a hook would make this a real `set` under cluster:vm."
+      "changeNote": "Pushed to the Proxmox summary page when the guest is created and never pushed again, so an edit after install changes config only. Classed by what changing it COSTS (nothing, no disruption), not by today's gap — `qm set --description` works on a live VM, so a hook would make this a real `set` under cluster:vm."
     },
     "version": {
       "class": "in-place",
       "apply": "none",
-      "note": "The module's own semver. Read to decide whether an upgrade exists; nothing on the cluster reflects it."
+      "changeNote": "The module's own semver. Read to decide whether an upgrade exists; nothing on the cluster reflects it."
     },
     "appVersion": {
       "class": "in-place",
       "apply": "none",
-      "note": "Upstream application version, informational. No format enforced, so nothing can validate it beyond being a string."
+      "changeNote": "Upstream application version, informational. No format enforced, so nothing can validate it beyond being a string."
     },
     "releaseDate": {
       "class": "in-place",
       "apply": "none",
-      "note": "Informational."
+      "changeNote": "Informational."
     },
     "maintainer": {
       "class": "in-place",
       "apply": "none",
-      "note": "Informational."
+      "changeNote": "Informational."
     },
     "status": {
       "class": "in-place",
       "apply": "none",
-      "note": "Cheap to change, consequential in effect: `archived` and `external` take the module OUT of the update lifecycle entirely — update-module.sh skips it unless --force. Set automatically by delete-module.sh --archive."
+      "changeNote": "Cheap to change, consequential in effect: `archived` and `external` take the module OUT of the update lifecycle entirely — update-module.sh skips it unless --force. Set automatically by delete-module.sh --archive."
     },
     "tier": {
       "class": "in-place",
       "apply": "none",
-      "note": "foundation ⇒ mgmt-only, single-instance, --force to delete, and `source` must be official (or --allow-fork). Changing it changes what the PLATFORM will permit, never the guest."
+      "changeNote": "foundation ⇒ mgmt-only, single-instance, --force to delete, and `source` must be official (or --allow-fork). Changing it changes what the PLATFORM will permit, never the guest."
     },
     "source": {
       "class": "in-place",
       "apply": "none",
-      "note": "Trust marker, normally inferred at deploy from the catalogue repository and pinned only when the module file must. A foundation module from a non-official source fails the tier/source lint."
+      "changeNote": "Trust marker, normally inferred at deploy from the catalogue repository and pinned only when the module file must. A foundation module from a non-official source fails the tier/source lint."
     },
     "rebootOk": {
       "class": "in-place",
       "apply": "none",
-      "note": "The ADR-020 D8 disruption authorization. Nothing APPLIES it — the converge READS it to decide whether an unattended pass may reboot or offline-migrate this guest. Default false, so silence never authorizes downtime."
+      "changeNote": "The ADR-020 D8 disruption authorization. Nothing APPLIES it — the converge READS it to decide whether an unattended pass may reboot or offline-migrate this guest. Default false, so silence never authorizes downtime."
     },
     "config": {
       "class": "in-place",
       "apply": "none",
-      "note": "The Pattern-A container (#161), not a value: normalized to the flat form at deploy and at validation, so it has no state of its own. Listed for coverage — every schema field is classified or the manifest is incomplete."
+      "changeNote": "The Pattern-A container (#161), not a value: normalized to the flat form at deploy and at validation, so it has no state of its own. Listed for coverage — every schema field is classified or the manifest is incomplete."
     },
     "dependsOn": {
       "class": "manual",
       "apply": "none",
-      "note": "install-service.sh and delete-service.sh run off the DELTA update-module.sh computes across the 3-way merge (the union of dependsOn+integratesWith before vs after). A `--set` writes the DEPLOYED side, so before and after agree, the delta is empty, and no service script runs — the config then claims a dependency that was never wired, or drops one whose wiring is still in place. Change it in the SOURCE module file and run update-module.sh."
+      "changeNote": "install-service.sh and delete-service.sh run off the DELTA update-module.sh computes across the 3-way merge (the union of dependsOn+integratesWith before vs after). A `--set` writes the DEPLOYED side, so before and after agree, the delta is empty, and no service script runs — the config then claims a dependency that was never wired, or drops one whose wiring is still in place. Change it in the SOURCE module file and run update-module.sh."
     },
     "integratesWith": {
       "class": "manual",
       "apply": "none",
-      "note": "As dependsOn, but optional: a provider that is not installed is ignored rather than blocking, and its install auto-wires pre-existing integrators (#501). Same delta mechanism, so the same caveat applies."
+      "changeNote": "As dependsOn, but optional: a provider that is not installed is ignored rather than blocking, and its install auto-wires pre-existing integrators (#501). Same delta mechanism, so the same caveat applies."
     },
     "provides": {
       "class": "manual",
       "apply": "none",
-      "note": "What OTHER modules may declare a dependency on. Removing an entry breaks every consumer's resolution, which is why this is not a free edit even though nothing local changes."
+      "changeNote": "What OTHER modules may declare a dependency on. Removing an entry breaks every consumer's resolution, which is why this is not a free edit even though nothing local changes."
     },
     "environment": {
       "class": "immutable",
       "apply": "none",
-      "note": "Written by copy-update-json.sh --environment (ADR-007 P5). update-module.sh and delete-module.sh resolve the SOURCE module file through it, so a wrong value points the lifecycle at the wrong module."
+      "changeNote": "Written by copy-update-json.sh --environment (ADR-007 P5). update-module.sh and delete-module.sh resolve the SOURCE module file through it, so a wrong value points the lifecycle at the wrong module."
     },
     "location": {
       "class": "immutable",
       "apply": "none",
-      "note": "Written by copy-update-json.sh. get_module_dir() reads it as the SOLE source of the module directory and returns success for any path that exists — so a wrong value does not fail loudly, it silently runs the lifecycle against the wrong directory."
+      "changeNote": "Written by copy-update-json.sh. get_module_dir() reads it as the SOLE source of the module directory and returns success for any path that exists — so a wrong value does not fail loudly, it silently runs the lifecycle against the wrong directory."
     },
     "kind": {
       "class": "immutable",
       "apply": "none",
-      "note": "Stamped 'module' by install-module.sh so module-manager list/show can tell a deployed module from the other objects in config/. Absent from authored source JSON by design."
+      "changeNote": "Stamped 'module' by install-module.sh so module-manager list/show can tell a deployed module from the other objects in config/. Absent from authored source JSON by design."
     },
     "installTime": {
       "class": "immutable",
       "apply": "none",
-      "note": "Stamped by copy-update-json.sh at install. Reporting only; never re-derived."
+      "changeNote": "Stamped by copy-update-json.sh at install. Reporting only; never re-derived."
     },
     "updateTime": {
       "class": "immutable",
       "apply": "none",
-      "note": "Bumped by update-module.sh on every successful update. Reporting only."
+      "changeNote": "Bumped by update-module.sh on every successful update. Reporting only."
     },
     "variant": {
       "class": "immutable",
       "apply": "none",
-      "note": "RETIRED (#438), superseded by `environment`. Never write it; installs strip it (copy-update-json.sh del(.variant)). Retained in module-fields.json only so a pre-migration config carrying it is classified rather than reported unknown."
+      "changeNote": "RETIRED (#438), superseded by `environment`. Never write it; installs strip it (copy-update-json.sh del(.variant)). Retained in module-fields.json only so a pre-migration config carrying it is classified rather than reported unknown."
     }
   }
 }

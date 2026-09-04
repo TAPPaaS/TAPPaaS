@@ -56,7 +56,11 @@ fi
 # Guard against double-sourcing: readonly fails the second time.
 if [[ -z "${_MERGE_CONFIG_DIR:-}" ]]; then
     readonly _MERGE_CONFIG_DIR="${TAPPAAS_MERGE_CONFIG_DIR:-/home/tappaas/config}"
-    readonly _MERGE_SCHEMA_FILE="${TAPPAAS_SCHEMA_FILE:-/home/tappaas/TAPPaaS/src/foundation/schemas/module-fields.json}"
+    # Composed view (#567): definitions live per-service now. This file may be
+    # sourced WITHOUT common-install-routines, so fall back to the cache path
+    # rather than assuming the resolver is defined — and never to the raw
+    # schemas/module-fields.json, which since #567 holds only the generic 19.
+    readonly _MERGE_SCHEMA_FILE="$(declare -F tappaas_schema_file >/dev/null 2>&1 && tappaas_schema_file || printf %s "${TAPPAAS_SCHEMA_FILE:-${CONFIG_DIR:-/home/tappaas/config}/module-fields.json}")"
     # Header fields never merged — always preserve the installed value.
     # Note: vmname/vmid/etc are NOT in this list — operator changes there ARE
     # meaningful and follow the standard pin-vs-adopt rule.
@@ -75,11 +79,15 @@ fi
 # Locate convert-json-to-config.sh — prefer the live ~/bin symlink, fall back
 # to the repo location (useful when this is invoked before pre-update.sh has
 # refreshed the symlinks).
+#
+# That repo location moved in the c2480cc reorg and this list was not updated,
+# so the fallback pointed at nothing: it worked only while the symlink existed,
+# which is the one situation it is not needed for (#570).
 _merge_locate_converter() {
     local candidates=(
         "/home/tappaas/bin/convert-json-to-config.sh"
         "$(dirname "${BASH_SOURCE[0]}")/convert-json-to-config.sh"
-        "/home/tappaas/TAPPaaS/src/foundation/tappaas-cicd/scripts/convert-json-to-config.sh"
+        "/home/tappaas/TAPPaaS/src/foundation/tappaas-cicd/manager/site-manager/convert-json-to-config.sh"
     )
     local p
     for p in "${candidates[@]}"; do

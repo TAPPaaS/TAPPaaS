@@ -8,7 +8,11 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # scripts/test → scripts → tappaas-cicd → foundation
 FOUNDATION_DIR="$(cd "${SCRIPT_DIR}/../../.." && pwd)"
-export TAPPAAS_SCHEMA_FILE="${FOUNDATION_DIR}/schemas/module-fields.json"
+TAPPAAS_SCHEMA_FILE="$(mktemp)"
+# Composed, not schemas/module-fields.json: since #567 that file holds only
+# the 19 generic fields, and these cases resolve service-owned ones.
+"${FOUNDATION_DIR}/tappaas-cicd/scripts/compose-fields.sh" "${FOUNDATION_DIR}" > "${TAPPAAS_SCHEMA_FILE}"
+export TAPPAAS_SCHEMA_FILE
 
 # shellcheck disable=SC1091
 . "${SCRIPT_DIR}/../../lib/common-install-routines.sh"
