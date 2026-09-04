@@ -62,7 +62,12 @@ if [ "${TAPPAAS_TEST_DEEP:-0}" = "1" ]; then
             printf '#!ipxe\n' > "${TAPPAAS_PXE_DIR}/boot.ipxe"
             # serve renders answers against site.json — seed a minimal one.
             printf '{"name":"zztest","hardware":{"nodes":[]},"repositories":[]}' > "${TAPPAAS_CONFIG}/site.json"
-            "${_np_bin}" register zztest-node --mac de:ad:be:ef:99:01 --pool 'tanka1=single:nvme0n1'
+            # --boot-disk is EXPLICIT here. Omitting it means "ask at the
+            # console" (added a day after this block was written), and the
+            # server then 409s an answer POST that carries no choice — which
+            # is what made this deep case fail from 2026-07-07 onward. The
+            # ask path is covered on its own below.
+            "${_np_bin}" register zztest-node --mac de:ad:be:ef:99:01 --pool 'tanka1=single:nvme0n1' --boot-disk sda
             "${_np_bin}" serve --port "${_np_port}" >"${_np_tmp}/serve.log" 2>&1 &
             _srv=$!
             trap 'kill "${_srv}" 2>/dev/null || true' EXIT
@@ -86,6 +91,20 @@ if [ "${TAPPAAS_TEST_DEEP:-0}" = "1" ]; then
             _code2="$(curl -s -o /dev/null -w '%{http_code}' -X POST -d "${_payload}" "http://127.0.0.1:${_np_port}/answer")"
             [ "${_code2}" = "404" ] || { echo "[Error] second POST returned ${_code2} (expected 404 — one-shot broken)" >&2; exit 1; }
             echo "  ok: registration consumed (second request 404)"
+
+            # --- ask-at-boot path (registration WITHOUT --boot-disk) ---------
+            # The operator standing at the machine picks the disk; the choice
+            # rides in as ?bootdisk=. A diskless POST must be refused WITHOUT
+            # consuming, so the node can re-post after a reboot.
+            "${_np_bin}" register zzask-node --mac de:ad:be:ef:99:02
+            _ask='{"network_interfaces":[{"mac":"de:ad:be:ef:99:02"}],"dmi":{"system":{"serial":"ZZASK"}}}'
+            _c="$(curl -s -o /dev/null -w '%{http_code}' -X POST -d "${_ask}" "http://127.0.0.1:${_np_port}/answer")"
+            [ "${_c}" = "409" ] || { echo "[Error] diskless POST to an ask-registration returned ${_c} (expected 409)" >&2; exit 1; }
+            echo "  ok: ask-registration refuses a diskless answer (409)"
+            _c="$(curl -s -o "${_np_tmp}/ask.toml" -w '%{http_code}' -X POST -d "${_ask}" "http://127.0.0.1:${_np_port}/answer?bootdisk=sdb")"
+            [ "${_c}" = "200" ] || { echo "[Error] console-chosen bootdisk returned ${_c} (expected 200 — the 409 consumed the registration?)" >&2; exit 1; }
+            grep -q 'disk-list = \["sdb"\]' "${_np_tmp}/ask.toml" || { echo "[Error] console choice sdb did not reach answer.toml" >&2; exit 1; }
+            echo "  ok: console choice wins and the earlier 409 did not consume"
         ) || { _np_rc=1; echo "--- serve.log ---" >&2; cat "${_np_tmp}/serve.log" >&2 2>/dev/null || true; }
         rm -rf "${_np_tmp}"
         [ "${_np_rc}" = "0" ] || exit 1
