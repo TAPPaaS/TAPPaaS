@@ -126,7 +126,34 @@ echo "--- API Health ---"
 # Query the vLLM API from INSIDE the container (127.0.0.1) via pct exec, so the
 # test does not depend on cicd→LXC network reachability.
 api() { pct exec "${VMID}" -- curl -s --connect-timeout 5 "$@" 2>/dev/null; }
-HTTP_CODE=$(pct exec "${VMID}" -- curl -s -o /dev/null -w "%{http_code}" --connect-timeout 5 "http://127.0.0.1:8000/v1/models" 2>/dev/null || echo "000")
+
+# Poll rather than probe once. vLLM loads a model before it binds, and this test
+# is reached by the very operation that restarts it — `update-tappaas` failed
+# vllm-amd on exactly this check while the container had been up 59 seconds and
+# answered 200 moments later. A single request cannot tell "not ready yet" from
+# "not working", so a healthy module gets failed for being mid-startup. Same
+# shape as euro-office's connector test (b6fb8e4).
+#
+# Bounded on purpose: an unbounded wait would hide a real outage, which is the
+# opposite failure. The elapsed time is reported on success, so a slow start
+# stays visible instead of being smoothed away.
+VLLM_API_RETRIES="${VLLM_API_RETRIES:-12}"   # 12 × 10s ≈ 120s; a model load is not instant
+VLLM_API_WAIT="${VLLM_API_WAIT:-10}"
+
+probe_api_until_ready() { # echo the last HTTP code
+    local code="000" i
+    for ((i = 1; i <= VLLM_API_RETRIES; i++)); do
+        code=$(pct exec "${VMID}" -- curl -s -o /dev/null -w "%{http_code}" \
+                 --connect-timeout 5 "http://127.0.0.1:8000/v1/models" 2>/dev/null || echo "000")
+        [[ "${code}" == "200" ]] && { VLLM_API_ELAPSED=$(( (i - 1) * VLLM_API_WAIT )); echo "${code}"; return 0; }
+        [[ $i -lt $VLLM_API_RETRIES ]] && sleep "${VLLM_API_WAIT}"
+    done
+    VLLM_API_ELAPSED=$(( VLLM_API_RETRIES * VLLM_API_WAIT ))
+    echo "${code}"
+}
+VLLM_API_ELAPSED=0
+HTTP_CODE="$(probe_api_until_ready)"
+[[ "${VLLM_API_ELAPSED}" -gt 0 ]] && echo "  (API became ready after ~${VLLM_API_ELAPSED}s)"
 if [[ "$HTTP_CODE" == "200" ]]; then
     check "vLLM API responding (127.0.0.1:8000)" "0"
 
