@@ -102,3 +102,35 @@ Install-WindowsFeature -Name Web-Server -IncludeManagementTools
 Write-Output "IIS installed"
 '
 ```
+
+## Why changing it is free
+
+This is template-time configuration: answer-file content, driver injection, the
+image the next Windows guest is built from. Changing it costs nothing on any
+running guest, because it is never re-applied to one — it is read the next time a
+guest is provisioned. That makes it `in-place` in the strictest sense: the
+converge writes it and no workload is touched.
+
+<!-- BEGIN GENERATED FIELDS -- edit the manifest, not this block -->
+
+## Fields
+
+`templates:windows` owns **1** declared field(s). Each table below carries the field's full definition and, where the service applies it, its ADR-020 change semantics.
+
+### `windows`
+
+Windows-specific configuration options for Windows Server clone VMs.
+
+| Attribute | Value |
+|---|---|
+| Type | `object` |
+| Default | *(none)* |
+| Example | `{"enableRDP": false}` |
+| Required by | *(none)* |
+| Used by | `templates:windows` |
+| Change class | `in-place` |
+| Apply mode | `reconcile` |
+
+**Why this change class.** The template build description. Changing it affects guests provisioned AFTERWARDS; an already-installed guest is not rebuilt, which is why this is not 'recreate' — nothing about the existing guest is claimed by it.
+
+<!-- END GENERATED FIELDS -->

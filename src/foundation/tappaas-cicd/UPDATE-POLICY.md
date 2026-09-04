@@ -267,34 +267,38 @@ one is `apply: "none"` (writing the config *is* the change) and none carries a
 drift). Both are lint-enforced.
 
 **The 19 classified, the two hazards the declaration does not yet prevent, and
-the enforcement gap (#567): [schemas/UPDATE-POLICY.md](../schemas/UPDATE-POLICY.md).**
+the enforcement gap (#567): [schemas/UPDATE-POLICY.md](../schemas/README.md).**
 
 ---
 
 ## 4. The per-service manifests
 
-The classification for each service lives beside its manifest, so a provider
-author changing `fields.json` has the rationale in the same directory.
+Each service documents its own fields in its **README**, beside the manifest they
+are declared in (#567). The field sections there are GENERATED from
+`fields.json` — one section per field, with the full definition and, where the
+service applies it, the change semantics — so the table cannot drift from the
+manifest the way a hand-kept copy would. The prose above each generated block is
+the service author's.
 
 | Service | Fields | Shape | Policy |
 |---|---:|---|---|
-| `cluster:vm` | 26 | 5 `set` · 8 `composite` · 2 `hook` · 11 `none` | [cluster/services/vm](../cluster/services/vm/UPDATE-POLICY.md) |
-| `cluster:lxc` | 15 | 5 `set` · 4 `composite` · 6 `none` | [cluster/services/lxc](../cluster/services/lxc/UPDATE-POLICY.md) |
-| `network:proxy` | 9 | all `reconcile` | [network/services/proxy](../network/services/proxy/UPDATE-POLICY.md) |
-| `backup:vm` | 7 | all `reconcile` | [backup/services/vm](../backup/services/vm/UPDATE-POLICY.md) |
-| `network:rules` | 4 | all `reconcile` | [network/services/rules](../network/services/rules/UPDATE-POLICY.md) |
-| `cluster:ha` | 2 | all `reconcile` | [cluster/services/ha](../cluster/services/ha/UPDATE-POLICY.md) |
-| `network:discovery` | 2 | all `reconcile` | [network/services/discovery](../network/services/discovery/UPDATE-POLICY.md) |
-| `identity:identity` | 1 | `reconcile` | [identity/services/identity](../identity/services/identity/UPDATE-POLICY.md) |
-| `network:dns` | 1 | `reconcile` | [network/services/dns](../network/services/dns/UPDATE-POLICY.md) |
-| `network:nat` | 1 | `reconcile` | [network/services/nat](../network/services/nat/UPDATE-POLICY.md) |
-| `templates:windows` | 1 | `reconcile` | [templates/services/windows](../templates/services/windows/UPDATE-POLICY.md) |
+| `cluster:vm` | 26 | 5 `set` · 8 `composite` · 2 `hook` · 11 `none` | [cluster/services/vm](../cluster/services/vm/README.md) |
+| `cluster:lxc` | 15 | 5 `set` · 4 `composite` · 6 `none` | [cluster/services/lxc](../cluster/services/lxc/README.md) |
+| `network:proxy` | 9 | all `reconcile` | [network/services/proxy](../network/services/proxy/README.md) |
+| `backup:vm` | 7 | all `reconcile` | [backup/services/vm](../backup/services/vm/README.md) |
+| `network:rules` | 4 | all `reconcile` | [network/services/rules](../network/services/rules/README.md) |
+| `cluster:ha` | 2 | all `reconcile` | [cluster/services/ha](../cluster/services/ha/README.md) |
+| `network:discovery` | 2 | all `reconcile` | [network/services/discovery](../network/services/discovery/README.md) |
+| `identity:identity` | 1 | `reconcile` | [identity/services/identity](../identity/services/identity/README.md) |
+| `network:dns` | 1 | `reconcile` | [network/services/dns](../network/services/dns/README.md) |
+| `network:nat` | 1 | `reconcile` | [network/services/nat](../network/services/nat/README.md) |
+| `templates:windows` | 1 | `reconcile` | [templates/services/windows](../templates/services/windows/README.md) |
 
 Plus the module-level manifest, which is not a service at all:
 
 | Scope | Fields | Shape | Policy |
 |---|---:|---|---|
-| the module itself | 19 | all `none` | [schemas/](../schemas/UPDATE-POLICY.md) |
+| the module itself | 19 | all `none` | [schemas/](../schemas/README.md) |
 
 Two services carry the whole apply-mode taxonomy between them, and 9 are pure
 reconcilers. That shape is the finding, not an accident of migration order: the

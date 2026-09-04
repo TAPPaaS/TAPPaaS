@@ -83,3 +83,33 @@ The scripts drive the `nat-manager` CLI (from the `opnsense-controller`
 package), which wraps the OPNsense `firewall/d_nat` API via the
 oxl-opnsense-client `raw` module. See
 `src/foundation/tappaas-cicd/opnsense-controller/src/opnsense_controller/nat_manager.py`.
+
+Port-forward and redirect rules, reconciled against OPNsense the same way
+[`network:rules`](../rules/README.md) reconciles filter rules: the whole
+set for this module is re-derived and anything no longer declared is removed.
+
+<!-- BEGIN GENERATED FIELDS -- edit the manifest, not this block -->
+
+## Fields
+
+`network:nat` owns **1** declared field(s). Each table below carries the field's full definition and, where the service applies it, its ADR-020 change semantics.
+
+### `natRules`
+
+Destination-NAT (port-forward) mappings that expose an internal service port on the firewall's WAN interface. Each entry is compiled into an OPNsense rdr-pass rule (translate + allow in one rule). Use this for non-HTTP ports (e.g. SSH); use network:proxy for HTTP(S). All rules forward to this module's single target (its 'ip', or <vmname>.<zone0>.internal).
+
+| Attribute | Value |
+|---|---|
+| Type | `array` |
+| Default | *(none)* |
+| Example | `[{"externalPort": 2022, "internalPort": 22, "protocol": "TCP", "description": "SSH"}]` |
+| Required by | *(none)* |
+| Used by | `network:nat` |
+| Change class | `in-place` |
+| Apply mode | `reconcile` |
+
+**About the field.** Activated when network:nat is in dependsOn. Rules are created as rdr-pass on the WAN interface, so no separate network:rules ingress entry is needed for the forwarded port.
+
+**Why this change class.** Each entry publishes an inside service on an outside address/port. A NAT change is a live firewall change: existing connections may reset, but no guest is rebooted, so it needs no disruption authorization.
+
+<!-- END GENERATED FIELDS -->
