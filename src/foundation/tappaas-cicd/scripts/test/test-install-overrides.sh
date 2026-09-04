@@ -9,6 +9,13 @@
 # tabletop tests under scripts/test/, runs in the same sweep, and produces
 # a `summary: N pass, M fail` line that matches their convention.
 #
+# NOTE: 10 of those cases are STALE — they assert vmname/zone0/proxyDomain
+# derivation that moved from copy-update-json.sh to install-module.sh with the
+# #438 variant retirement. See the header of test-vm-creation/test-variant.sh.
+# Until they are updated or retired, this wrapper is NOT in the suite sweep, and
+# that exclusion is listed explicitly in tappaas-cicd/test.sh rather than left
+# to silence.
+#
 # Coverage (43 cases as of this writing):
 #   - 5 variant scenarios on a flat-form fixture (Tests 1-5, 20 cases)
 #   - 7 Pattern A scenarios that lock in #264 behavior (Tests PA1-PA7, 23 cases)

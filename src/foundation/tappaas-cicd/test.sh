@@ -378,6 +378,68 @@ fi
 
 # ── Test 10: P10 manager/controller dispatch contract (ADR-007 S1) ───────────
 
+# ── Test 9z: every tabletop test under scripts/test/ ─────────────────────────
+#
+# A SWEEP, not a list. This suite used to name three of the eleven files in
+# scripts/test/ one `if [[ -x … ]]` block at a time, so the other eight ran
+# nowhere — including test-json-merge.sh, which had aborted at load since a file
+# move (#570), and test-migrate-zone-keys.sh, which failed 9 of 11 for the same
+# reason. Roughly 60 assertions were present in the tree and executed by nothing.
+#
+# Naming them individually is what made that possible: a file added to the
+# directory is not added here, and nothing notices. Sweeping the directory means
+# a new test runs the day it lands, and a test that stops working is a failure
+# rather than a silence.
+#
+# EXCLUSIONS are explicit and must carry a reason. An unexplained skip is the
+# same invisibility in a different costume.
+info "${BOLD}Test 9z: scripts/test tabletop suites${CL}"
+
+# test-install-overrides.sh: wraps test-vm-creation/test-variant.sh, 10 of whose
+# 43 cases assert vmname/zone0/proxyDomain derivation that moved out of
+# copy-update-json.sh with the #438 variant retirement. Re-include once those
+# are updated or retired.
+_TT_EXCLUDE=" test-install-overrides.sh "
+
+# The generated field sections in each service README must match the manifests
+# they come from. Generated docs that can drift are worse than none: they read
+# as authoritative (#567).
+if [[ -x "${SCRIPT_DIR}/scripts/gen-service-fields-doc.py" ]]; then
+    if "${SCRIPT_DIR}/scripts/gen-service-fields-doc.py" --check >/dev/null 2>&1; then
+        pass "service README field sections match their fields.json"
+    else
+        fail "service README field sections are stale — regenerate: scripts/gen-service-fields-doc.py"
+    fi
+fi
+
+_tt_dir="${SCRIPT_DIR}/scripts/test"
+if [[ ! -d "${_tt_dir}" ]]; then
+    fail "scripts/test/ not found"
+else
+    _tt_ran=0
+    for _tt in "${_tt_dir}"/test-*.sh; do
+        [[ -f "${_tt}" ]] || continue
+        _tt_name="$(basename "${_tt}")"
+        case "${_TT_EXCLUDE}" in *" ${_tt_name} "*) skip "${_tt_name} (excluded, see test.sh)"; continue ;; esac
+        _tt_ran=$((_tt_ran + 1))
+        if [[ ! -x "${_tt}" ]]; then
+            # #565 made the tracked mode authoritative; a test committed 100644
+            # would otherwise be skipped here and vanish from the count.
+            fail "${_tt_name} is not executable (commit it 100755)"
+        elif _tt_out="$("${_tt}" 2>&1)"; then
+            pass "${_tt_name}"
+        else
+            fail "${_tt_name} failed — rerun: scripts/test/${_tt_name}"
+            printf '%s\n' "${_tt_out}" | tail -12 | sed 's/^/      /' >&2
+        fi
+    done
+    if [[ "${_tt_ran}" -gt 0 ]]; then
+        pass "swept ${_tt_ran} tabletop suite(s) — a new one runs without being listed here"
+    else
+        fail "no tabletop suites found to run"
+    fi
+fi
+
 info "${BOLD}Test 10: P10 dispatch contract${CL}"
 
 if [[ -x "${SCRIPT_DIR}/scripts/test/test-dispatch-contract.sh" ]]; then

@@ -12,7 +12,7 @@
 set -uo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-MIGRATE="${SCRIPT_DIR}/../migrate-zone-keys-to-underscore.sh"
+MIGRATE="${SCRIPT_DIR}/../../../Deprecated/migrate-zone-keys-to-underscore.sh"
 
 # shellcheck disable=SC1091
 . "${SCRIPT_DIR}/../../lib/common-install-routines.sh"

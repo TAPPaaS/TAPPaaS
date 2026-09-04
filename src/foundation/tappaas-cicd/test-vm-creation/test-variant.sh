@@ -2,6 +2,18 @@
 #
 # TAPPaaS Variant Test Suite
 #
+# STALE IN PART — 10 of 43 cases assert behaviour that MOVED (#438 / ADR-007
+# Phase D). copy-update-json.sh no longer derives vmname/zone0/proxyDomain from
+# the variant name: install-module.sh now computes them from the environment
+# file and passes them as explicit --<field> overrides, and --variant is only a
+# deprecated alias for --environment. The 33 cases that assert copy-update's own
+# behaviour (field overrides, Pattern A placement, vmid selection) still hold.
+#
+# This was invisible until now: the file invoked ../scripts/copy-update-json.sh,
+# a path emptied by the c2480cc reorg, so every case died at rc 127 and the
+# scripts/test wrapper reported "0 pass, 0 fail" — a suite that looked present
+# and asserted nothing (#570's defect, third instance).
+#
 # Tests the --variant functionality of copy-update-json.sh by validating
 # the JSON transformation logic. Runs offline (no cluster required).
 #
@@ -11,6 +23,18 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+# copy-update-json.sh moved to manager/module-manager/ in the c2480cc reorg and
+# this path was left behind, so every case died at rc 127 before asserting
+# anything — 43 of them, reported by the scripts/test wrapper as "0 pass, 0 fail"
+# (#570's defect, third instance). Check once, loudly, instead of failing
+# case-by-case with a bare "command not found".
+COPY_UPDATE="${SCRIPT_DIR}/../manager/module-manager/copy-update-json.sh"
+[[ -x "${COPY_UPDATE}" ]] || {
+    echo "test-variant.sh: copy-update-json.sh not at ${COPY_UPDATE}" >&2
+    echo "  (it moved once already — fix this path if it moved again)" >&2
+    exit 1
+}
 
 # Source common helpers (#264) — we use normalize_module_config so assertions
 # see the same view of a config regardless of whether it's stored flat or in
@@ -133,7 +157,7 @@ echo "Test 1: Basic variant with all defaults"
 (
     cd "${MODULE_DIR}"
     export CONFIG_DIR
-    bash "${SCRIPT_DIR}/../scripts/copy-update-json.sh" testmod --variant staging
+    bash "${SCRIPT_DIR}/../manager/module-manager/copy-update-json.sh" testmod --variant staging
 ) > /dev/null 2>&1
 
 RESULT="${CONFIG_DIR}/testmod-staging.json"
@@ -181,7 +205,7 @@ echo "Test 2: Variant name matches a zone in zones.json (dmz)"
 (
     cd "${MODULE_DIR}"
     export CONFIG_DIR
-    bash "${SCRIPT_DIR}/../scripts/copy-update-json.sh" testmod --variant dmz
+    bash "${SCRIPT_DIR}/../manager/module-manager/copy-update-json.sh" testmod --variant dmz
 ) > /dev/null 2>&1
 
 RESULT="${CONFIG_DIR}/testmod-dmz.json"
@@ -209,7 +233,7 @@ echo "Test 3: Variant with explicit field overrides"
 (
     cd "${MODULE_DIR}"
     export CONFIG_DIR
-    bash "${SCRIPT_DIR}/../scripts/copy-update-json.sh" testmod --variant custom \
+    bash "${SCRIPT_DIR}/../manager/module-manager/copy-update-json.sh" testmod --variant custom \
         --vmname "my-custom-vm" --vmid 555 --zone0 "business" --proxyDomain "custom.example.com"
 ) > /dev/null 2>&1
 
@@ -241,7 +265,7 @@ echo "Test 4: Non-variant mode unchanged"
 (
     cd "${MODULE_DIR}"
     export CONFIG_DIR
-    bash "${SCRIPT_DIR}/../scripts/copy-update-json.sh" testmod --cores 4
+    bash "${SCRIPT_DIR}/../manager/module-manager/copy-update-json.sh" testmod --cores 4
 ) > /dev/null 2>&1
 
 RESULT="${CONFIG_DIR}/testmod.json"
@@ -269,7 +293,7 @@ echo "Test 5: Variant with only vmid override (other fields auto-derived)"
 (
     cd "${MODULE_DIR}"
     export CONFIG_DIR
-    bash "${SCRIPT_DIR}/../scripts/copy-update-json.sh" testmod --variant partial --vmid 600
+    bash "${SCRIPT_DIR}/../manager/module-manager/copy-update-json.sh" testmod --variant partial --vmid 600
 ) > /dev/null 2>&1
 
 RESULT="${CONFIG_DIR}/testmod-partial.json"
@@ -328,7 +352,7 @@ echo "Test PA1: Pattern A source — --proxyDomain lands under config['network:p
 (
     cd "${MODULE_DIR}"
     export CONFIG_DIR
-    bash "${SCRIPT_DIR}/../scripts/copy-update-json.sh" patmod --proxyDomain "pa1.override.example.com"
+    bash "${SCRIPT_DIR}/../manager/module-manager/copy-update-json.sh" patmod --proxyDomain "pa1.override.example.com"
 ) > /dev/null 2>&1
 
 RESULT="${CONFIG_DIR}/patmod.json"
@@ -351,7 +375,7 @@ echo "Test PA2: Pattern A source — --vmid stays at top level"
 (
     cd "${MODULE_DIR}"
     export CONFIG_DIR
-    bash "${SCRIPT_DIR}/../scripts/copy-update-json.sh" patmod --vmid 12345
+    bash "${SCRIPT_DIR}/../manager/module-manager/copy-update-json.sh" patmod --vmid 12345
 ) > /dev/null 2>&1
 if [[ -f "${RESULT}" ]]; then
     assert_eq "vmid = 12345 (normalized)" "12345" "$(get_field vmid "${RESULT}")"
@@ -365,7 +389,7 @@ echo "Test PA3: Pattern A source — --cores (integer) lands under config['clust
 (
     cd "${MODULE_DIR}"
     export CONFIG_DIR
-    bash "${SCRIPT_DIR}/../scripts/copy-update-json.sh" patmod --cores 16
+    bash "${SCRIPT_DIR}/../manager/module-manager/copy-update-json.sh" patmod --cores 16
 ) > /dev/null 2>&1
 if [[ -f "${RESULT}" ]]; then
     assert_eq "cores = 16 (normalized)" "16" "$(get_field cores "${RESULT}")"
@@ -398,7 +422,7 @@ EOF
 (
     cd "${MODULE_DIR}"
     export CONFIG_DIR
-    bash "${SCRIPT_DIR}/../scripts/copy-update-json.sh" patmod-noproxy --proxyDomain "pa4.added.example"
+    bash "${SCRIPT_DIR}/../manager/module-manager/copy-update-json.sh" patmod-noproxy --proxyDomain "pa4.added.example"
 ) > /dev/null 2>&1
 
 RESULT="${CONFIG_DIR}/patmod-noproxy.json"
@@ -417,7 +441,7 @@ echo "Test PA5: Pattern A source — multiple overrides land in correct blocks s
 (
     cd "${MODULE_DIR}"
     export CONFIG_DIR
-    bash "${SCRIPT_DIR}/../scripts/copy-update-json.sh" patmod \
+    bash "${SCRIPT_DIR}/../manager/module-manager/copy-update-json.sh" patmod \
         --cores 8 --memory 8192 --proxyPort 4000 --proxyDomain "pa5.multi.example"
 ) > /dev/null 2>&1
 
@@ -440,7 +464,7 @@ echo "Test PA6: Pattern A source + --variant staging + explicit override"
 (
     cd "${MODULE_DIR}"
     export CONFIG_DIR
-    bash "${SCRIPT_DIR}/../scripts/copy-update-json.sh" patmod \
+    bash "${SCRIPT_DIR}/../manager/module-manager/copy-update-json.sh" patmod \
         --variant staging --proxyDomain "pa6.from-override.example"
 ) > /dev/null 2>&1
 
@@ -479,7 +503,7 @@ EOF
 (
     cd "${MODULE_DIR}"
     export CONFIG_DIR
-    bash "${SCRIPT_DIR}/../scripts/copy-update-json.sh" patmod-lxc-first --cores 6
+    bash "${SCRIPT_DIR}/../manager/module-manager/copy-update-json.sh" patmod-lxc-first --cores 6
 ) > /dev/null 2>&1
 
 RESULT="${CONFIG_DIR}/patmod-lxc-first.json"

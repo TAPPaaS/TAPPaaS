@@ -13,14 +13,30 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # scripts/test → scripts → tappaas-cicd → foundation
 FOUNDATION_DIR="$(cd "${SCRIPT_DIR}/../../.." && pwd)"
 TAPPAAS_ROOT="${FOUNDATION_DIR}"
-export TAPPAAS_SCHEMA_FILE="${FOUNDATION_DIR}/schemas/module-fields.json"
+TAPPAAS_SCHEMA_FILE="$(mktemp)"
+# Composed, not schemas/module-fields.json: since #567 that file holds only
+# the 19 generic fields, and these cases resolve service-owned ones.
+"${FOUNDATION_DIR}/tappaas-cicd/scripts/compose-fields.sh" "${FOUNDATION_DIR}" > "${TAPPAAS_SCHEMA_FILE}"
+export TAPPAAS_SCHEMA_FILE
 
 # shellcheck disable=SC1091
 . "${SCRIPT_DIR}/../../lib/common-install-routines.sh"
 # shellcheck disable=SC1091
 . "${SCRIPT_DIR}/../../lib/apply-json-merge.sh"
-# shellcheck disable=SC1091
-. "${SCRIPT_DIR}/../convert-json-to-config.sh"
+# convert-json-to-config.sh moved to manager/site-manager/ in the c2480cc
+# manager/controller reorg; this source path was left pointing at
+# scripts/convert-json-to-config.sh, so the file aborted here before running a
+# single case (#570). Resolved from the REPO, deliberately: a test in the tree
+# must exercise the tree's code, not whatever /home/tappaas/bin is symlinked to.
+CONVERTER="${SCRIPT_DIR}/../../manager/site-manager/convert-json-to-config.sh"
+[[ -f "${CONVERTER}" ]] || {
+    echo "test-json-merge.sh: converter not found at ${CONVERTER}" >&2
+    echo "  (it moved once already — if it moved again, fix this path; do not" >&2
+    echo "   fall back to /home/tappaas/bin, which can be stale or absent)" >&2
+    exit 1
+}
+# shellcheck disable=SC1090
+. "${CONVERTER}"
 
 PASS=0
 FAIL=0
@@ -46,7 +62,11 @@ run_case() {
     # tabletop tests we replace it in a sub-shell by re-sourcing the script
     # with the readonly override-via-pre-set.
     (
-        export TAPPAAS_SCHEMA_FILE="${FOUNDATION_DIR}/schemas/module-fields.json"
+        TAPPAAS_SCHEMA_FILE="$(mktemp)"
+# Composed, not schemas/module-fields.json: since #567 that file holds only
+# the 19 generic fields, and these cases resolve service-owned ones.
+"${FOUNDATION_DIR}/tappaas-cicd/scripts/compose-fields.sh" "${FOUNDATION_DIR}" > "${TAPPAAS_SCHEMA_FILE}"
+export TAPPAAS_SCHEMA_FILE
         # Re-execute the merge by calling the function directly. We can't
         # change _MERGE_CONFIG_DIR (readonly), so we run via a worktree by
         # symlinking the per-case config dir as /home/tappaas/config is not
@@ -190,6 +210,33 @@ run_case "patternA-orig" \
     '{"vmname":"a","dependsOn":["cluster:vm"],"config":{"cluster:vm":{"cores":8}}}' \
     "a" "moda" \
     '.cores == 8'
+
+# ── The converter paths the libraries hard-code must EXIST (#570) ───────
+#
+# This file aborted at load for releases on end because a source path was left
+# behind by a file move. The same move left two more behind, in the FALLBACK
+# arms of apply-json-merge.sh and common-install-routines.sh — arms that only
+# run when /home/tappaas/bin is absent, so they were broken exactly in the
+# situation they exist for, and nothing noticed.
+#
+# So: every absolute REPO path either lib names for the converter must resolve.
+# A /home/tappaas/bin path is a symlink pre-update.sh refreshes and is not this
+# test's business; a path under the repo is.
+echo "  Case: hard-coded converter paths resolve"
+_bad=""
+for _lib in "${SCRIPT_DIR}/../../lib/apply-json-merge.sh" \
+            "${SCRIPT_DIR}/../../lib/common-install-routines.sh"; do
+    while read -r _p; do
+        [[ -n "${_p}" ]] || continue
+        case "${_p}" in /home/tappaas/bin/*) continue ;; esac
+        [[ -f "${_p}" ]] || _bad+=" $(basename "${_lib}"):${_p}"
+    done < <(grep -oE '/home/tappaas/[^"'"'"' ]*convert-json-to-config\.sh' "${_lib}" | sort -u)
+done
+if [[ -z "${_bad}" ]]; then
+    pass "every repo path the libs name for the converter exists"
+else
+    fail "converter path(s) that do not exist:${_bad}"
+fi
 
 echo
 echo "── summary: ${PASS} pass, ${FAIL} fail ──"
