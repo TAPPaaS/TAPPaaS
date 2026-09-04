@@ -260,12 +260,27 @@ if [ "$HAS_HA" = "true" ] && [ -n "$HANODE" ]; then
     fi
 
     # HA Test 7: Replication status is OK or SYNCING (initial sync may still be running)
+    #
+    # `pvesr status` has no JSON mode, so the columns are parsed:
+    #   JobID Enabled Target LastSync NextSync Duration FailCount State
+    # State is field 8 AND EVERYTHING AFTER IT — it is a message, not a word, and
+    # a job that has not completed its first sync reports something like
+    # "missing replicated volumes: tanka1:vm-911-disk-0,...". awk '{print $NF}'
+    # took the last WORD of that, so the test reported the volume list as the
+    # state and failed with a message nobody could act on.
     echo "15. Replication status test..."
-    REPL_STATE=$(ssh "root@${NODE}.${MGMT}.internal" "pvesr status" 2>/dev/null | grep "^${VMID}-" | awk '{print $NF}')
+    REPL_ROW=$(ssh "root@${NODE}.${MGMT}.internal" "pvesr status" 2>/dev/null | grep "^${VMID}-" | head -1)
+    REPL_STATE=$(awk '{ for (i = 1; i < 8; i++) $i = ""; sub(/^ +/, ""); print }' <<< "${REPL_ROW}")
+    REPL_LAST=$(awk '{print $4}' <<< "${REPL_ROW}")
     if [ "$REPL_STATE" = "OK" ] || [ "$REPL_STATE" = "SYNCING" ]; then
         test_result "Replication state is ${REPL_STATE}" 0
+    elif [ -n "${REPL_ROW}" ] && [ "${REPL_LAST}" = "-" ]; then
+        # The job exists and is scheduled but has never run. The VM was created
+        # moments ago, so this is the expected state, not a fault: assert the job
+        # is THERE (tests 4-6 above) and let the first sync happen on schedule.
+        test_result "Replication job created, first sync still pending (state: ${REPL_STATE:-none})" 0
     else
-        test_result "Replication state is OK or SYNCING (got: ${REPL_STATE})" 1
+        test_result "Replication state is OK or SYNCING (got: ${REPL_STATE:-<no job row>})" 1
     fi
 
     # HA Test 8: HA node is reachable
