@@ -1310,8 +1310,12 @@ tappaas_schema_file() {
   if [[ ! -s "${cache}" || -n "${newest}" ]]; then
     local tmp; tmp="$(mktemp "${TMPDIR:-/tmp}/module-fields.XXXXXX.json")"
     if "${composer}" "${foundation}" > "${tmp}" 2>/dev/null && [[ -s "${tmp}" ]]; then
-      # A symlink is what this used to be; replace it with the real file.
-      rm -f "${cache}" 2>/dev/null || true
+      # No rm before the mv. This used to be a symlink and the rm was there
+      # to clear it, but mv replaces a symlink just as happily as a file — all
+      # the rm added was a window in which the cache did not exist, and five
+      # bash readers now resolve through here. mktemp makes the file 0600; the
+      # cache is installed config every reader must be able to read.
+      chmod 644 "${tmp}" 2>/dev/null || true
       mv "${tmp}" "${cache}" 2>/dev/null || { printf '%s' "${tmp}"; return 0; }
     else
       rm -f "${tmp}" 2>/dev/null || true

@@ -199,7 +199,9 @@ fi
 if [ -x "./scripts/compose-fields.sh" ]; then
   _cf_tmp="$(mktemp)"
   if ./scripts/compose-fields.sh "$(realpath ..)" > "${_cf_tmp}" 2>/dev/null && [ -s "${_cf_tmp}" ]; then
-    rm -f /home/tappaas/config/module-fields.json 2>/dev/null || true
+    # mv alone: it replaces the old symlink as readily as a file, and the rm
+    # that used to precede it only opened a window with no schema on disk.
+    chmod 644 "${_cf_tmp}" 2>/dev/null || true
     mv "${_cf_tmp}" /home/tappaas/config/module-fields.json
     echo "  composed module-fields.json ($(jq -r '.fields|length' /home/tappaas/config/module-fields.json) fields)"
   else
