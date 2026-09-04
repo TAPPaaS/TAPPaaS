@@ -236,6 +236,39 @@ class Zone:
 # this at once means the loaded zone set is wrong, not that zones were renamed.
 ORPHAN_SWEEP_LIMIT = 2
 
+def plan_dnsmasq_interfaces(
+    current, desired, vlan_zones_expected: int
+) -> tuple[list[str], str]:
+    """Decide what to write as the dnsmasq listen-interface set.
+
+    set_dnsmasq_interfaces() overwrites the list wholesale, and the desired list
+    is rebuilt from scratch as ["lan"] + whatever get_zone_interface() resolves.
+    That lookup goes through the OPNsense interfacesInfo endpoint, so ONE
+    incomplete read resolves nothing, and the write collapses the set to "lan" —
+    dropping every VLAN interface. dnsmasq then cannot serve the ranges bound to
+    them, and the reconcile that follows deletes each range and fails to re-add
+    it. That is not hypothetical: it took DHCP and per-zone DNS down site-wide.
+
+    Returns (interfaces, refusal). A non-empty refusal means write NOTHING and
+    keep what is there. Dropping interfaces is legitimate when zones really were
+    disabled — but resolving NONE of the VLAN zones we still expect is an
+    incomplete read, not a configuration change.
+    """
+    dropped = [i for i in current if i not in desired]
+    if not dropped:
+        return desired, ""
+    resolved = [i for i in desired if i != "lan"]
+    if vlan_zones_expected and not resolved:
+        return list(current), (
+            f"Refusing to drop {len(dropped)} dnsmasq listen interface(s) "
+            f"({', '.join(dropped)}): {vlan_zones_expected} VLAN zone(s) are "
+            "enabled but NONE resolved to an interface — that is an incomplete "
+            "read of the interface assignments, not a zone change. Listen set "
+            "left as it was."
+        )
+    return desired, ""
+
+
 def select_orphan_ranges(
     existing_descriptions, known_descriptions
 ) -> tuple[list[str], str]:
@@ -1903,6 +1936,18 @@ class ZoneManager:
 
         try:
             with DhcpManager(self.config) as manager:
+                # Never write a set computed from a read that resolved nothing.
+                current = manager.get_dnsmasq_interfaces()
+                interfaces, refusal = plan_dnsmasq_interfaces(
+                    current, interfaces, len(self.get_vlan_zones())
+                )
+                if refusal:
+                    error(refusal)
+                    return {
+                        "status": "refused",
+                        "interfaces": current,
+                        "reason": refusal,
+                    }
                 result = manager.set_dnsmasq_interfaces(
                     interfaces=interfaces,
                     check_mode=check_mode,

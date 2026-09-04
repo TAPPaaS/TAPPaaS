@@ -1104,6 +1104,30 @@ class DhcpManager:
             params=params,
         )
 
+    def get_dnsmasq_interfaces(self) -> list[str]:
+        """Read the dnsmasq listen-interface list currently in OPNsense.
+
+        Needed because set_dnsmasq_interfaces() overwrites the list wholesale:
+        a caller that recomputes it from a partial read would otherwise silently
+        drop interfaces, and every DHCP range bound to one of them stops being
+        servable. Compare against this before writing.
+        """
+        result = self.client.run_module(
+            "raw",
+            params={
+                "module": "dnsmasq",
+                "controller": "settings",
+                "command": "get",
+                "action": "get",
+            },
+        )
+        response = result.get("result", {}).get("response", {})
+        raw = response.get("dnsmasq", {}).get("interface", "")
+        if isinstance(raw, dict):
+            # OPNsense returns a {value: {selected: 0|1}} map on some versions.
+            return [k for k, v in raw.items() if str(v.get("selected", 0)) == "1"]
+        return [i for i in str(raw).split(",") if i]
+
     def set_dnsmasq_interfaces(
         self,
         interfaces: list[str],

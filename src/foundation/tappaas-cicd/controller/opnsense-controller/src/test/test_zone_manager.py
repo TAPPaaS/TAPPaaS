@@ -21,6 +21,7 @@ from opnsense_controller.firewall_manager import (
 )
 from opnsense_controller.zone_manager import (
     ORPHAN_SWEEP_LIMIT,
+    plan_dnsmasq_interfaces,
     Zone,
     ValidationMessage,
     ZoneManager,
@@ -909,6 +910,45 @@ class TestZonesFileResolution(unittest.TestCase):
             src,
             "the old template-only search list is back",
         )
+
+
+class TestDnsmasqListenSet(unittest.TestCase):
+    """The listen set is written wholesale from a list rebuilt as
+    ["lan"] + resolved VLAN interfaces. One incomplete interfacesInfo read
+    resolves nothing and collapses it to "lan" — which is what actually took
+    DHCP and per-zone DNS down site-wide on 2026-09-04, not the orphan sweep.
+    """
+
+    LIVE = ["lan", "opt1", "opt3", "opt4", "opt5", "opt7", "opt8", "opt9"]
+
+    def test_refuses_the_collapse_to_lan(self):
+        ifaces, refusal = plan_dnsmasq_interfaces(self.LIVE, ["lan"], 7)
+        self.assertEqual(ifaces, self.LIVE, "the live set must be kept intact")
+        self.assertIn("Refusing to drop 7", refusal)
+
+    def test_normal_growth_is_written(self):
+        desired = self.LIVE + ["opt11"]
+        ifaces, refusal = plan_dnsmasq_interfaces(self.LIVE, desired, 8)
+        self.assertEqual(ifaces, desired)
+        self.assertEqual(refusal, "")
+
+    def test_no_change_is_written(self):
+        ifaces, refusal = plan_dnsmasq_interfaces(self.LIVE, list(self.LIVE), 7)
+        self.assertEqual(ifaces, self.LIVE)
+        self.assertEqual(refusal, "")
+
+    def test_a_real_zone_disable_still_shrinks(self):
+        """Some zones still resolved, so the read was good — honour the drop."""
+        desired = ["lan", "opt1", "opt3", "opt4", "opt5", "opt7", "opt8"]
+        ifaces, refusal = plan_dnsmasq_interfaces(self.LIVE, desired, 6)
+        self.assertEqual(ifaces, desired)
+        self.assertEqual(refusal, "")
+
+    def test_no_vlan_zones_at_all_may_shrink_to_lan(self):
+        """A site with no VLAN zones legitimately listens only on lan."""
+        ifaces, refusal = plan_dnsmasq_interfaces(self.LIVE, ["lan"], 0)
+        self.assertEqual(ifaces, ["lan"])
+        self.assertEqual(refusal, "")
 
 
 if __name__ == "__main__":
