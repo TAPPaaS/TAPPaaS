@@ -74,6 +74,32 @@ else
     fail "non-numeric adopt did not round-trip"
 fi
 
+
+# ── Every call site, not just this one ────────────────────────────────────
+#
+# Two sites shipped in a663fec with jq's arguments before the filter, and the
+# second was only found after the first was fixed and the deep tier failed the
+# same way again. A grep is the right shape of test for that: the mistake is
+# visible in the source, and per-call-site tests would never have covered the
+# one nobody thought of.
+echo "  Case: no call site passes jq's arguments before the filter"
+_bad=""
+while IFS= read -r _hit; do
+    [[ -n "${_hit}" ]] || continue
+    _bad+=$'\n      '"${_hit}"
+done < <(grep -rn 'jq_module_write ' --include='*.sh' "${SCRIPT_DIR}/../../.." \
+         | grep -v '/Deprecated/' \
+         | grep -v 'test-converge-adopt.sh' \
+         | grep -v 'function jq_module_write' \
+         | grep -vE '^\S+:[0-9]+:\s*#' \
+         | grep -E 'jq_module_write[[:space:]]+("[^"]*"|[^[:space:]]+)[[:space:]]+--' \
+         | sed 's|.*/src/foundation/||')
+if [[ -z "${_bad}" ]]; then
+    pass "every jq_module_write call puts the filter second"
+else
+    fail "call site(s) with jq args before the filter:${_bad}"
+fi
+
 echo
 echo "── summary: ${PASS} pass, ${FAIL} fail ──"
 exit "${FAIL}"

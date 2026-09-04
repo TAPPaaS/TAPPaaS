@@ -302,8 +302,10 @@ class TestNetworkManager:
                 if ifname:
                     interfaces = self._get_dnsmasq_interfaces(dhcp)
                     if ifname in interfaces:
+                        # Removing OUR interface is the point of teardown.
                         dhcp.set_dnsmasq_interfaces(
-                            [i for i in interfaces if i != ifname]
+                            [i for i in interfaces if i != ifname],
+                            allow_shrink=True,
                         )
 
         # 3. Unassign the interface last.

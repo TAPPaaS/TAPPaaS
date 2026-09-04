@@ -209,7 +209,9 @@ if ! read_module_config "$1" | jq -e 'has("bios")' >/dev/null 2>&1; then
     _live_bios=$(ssh -n -o BatchMode=yes -o ConnectTimeout=10 "root@${NODE}.${MGMT}.internal" \
         "qm config ${VMID} 2>/dev/null | sed -n 's/^bios: //p'" 2>/dev/null || true)
     _live_bios="${_live_bios:-seabios}"
-    if jq_module_write "$1" --arg b "${_live_bios}" '.bios = $b'; then
+    # Filter SECOND — jq_module_write is <module> <filter> [jq-args...]. With
+    # --arg first, "--arg" becomes the filter and the write always fails.
+    if jq_module_write "$1" '.bios = $b' --arg b "${_live_bios}"; then
         info "Recorded bios=${_live_bios} in config (the firmware this guest was built with)"
     else
         warn "Could not record bios=${_live_bios} in config — an undeclared non-ovmf guest would drift"

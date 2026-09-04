@@ -1948,9 +1948,12 @@ class ZoneManager:
                         "interfaces": current,
                         "reason": refusal,
                     }
+                # plan_dnsmasq_interfaces above already refused an unintended
+                # shrink; whatever survives it is deliberate.
                 result = manager.set_dnsmasq_interfaces(
                     interfaces=interfaces,
                     check_mode=check_mode,
+                    allow_shrink=True,
                 )
                 debug(f"  Updated dnsmasq to listen on {len(interfaces)} interfaces")
 

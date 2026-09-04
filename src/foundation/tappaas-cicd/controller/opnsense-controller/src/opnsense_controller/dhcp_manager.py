@@ -1132,6 +1132,7 @@ class DhcpManager:
         self,
         interfaces: list[str],
         check_mode: bool = False,
+        allow_shrink: bool = False,
     ) -> dict:
         """Set dnsmasq interfaces using direct API call.
 
@@ -1148,6 +1149,39 @@ class DhcpManager:
         """
         if check_mode:
             return {"changed": True, "check_mode": True, "interfaces": interfaces}
+
+        # ── The choke point every writer passes through ──────────────────
+        #
+        # This call OVERWRITES the listen set. Twice on 2026-09-04 it was handed
+        # ["lan"] — built from a read that had resolved nothing — and dnsmasq
+        # stopped serving every VLAN zone, taking DHCP and per-zone DNS down
+        # site-wide. Neither occurrence left any record of which caller did it,
+        # which is why it took three wrong guesses to find. So: attribute every
+        # shrink, and refuse the ones nobody asked for.
+        try:
+            _current = self.get_dnsmasq_interfaces()
+        except Exception:          # a failed read must not become a refusal
+            _current = []
+        _dropped = [i for i in _current if i not in interfaces]
+        if _dropped:
+            _caller = "unknown"
+            for _fr in reversed(traceback.extract_stack()[:-1]):
+                if not _fr.filename.endswith("dhcp_manager.py"):
+                    _caller = f"{_fr.filename.rsplit('/', 1)[-1]}:{_fr.lineno} in {_fr.name}"
+                    break
+            if not allow_shrink:
+                msg = (
+                    f"Refusing to drop dnsmasq listen interface(s) "
+                    f"{', '.join(_dropped)} — {_caller} asked to write "
+                    f"[{','.join(interfaces)}] over [{','.join(_current)}] "
+                    "without allow_shrink=True. Every DHCP range bound to a "
+                    "dropped interface stops being servable."
+                )
+                error(msg)
+                return {"changed": False, "status": "refused", "reason": msg,
+                        "interfaces": _current, "caller": _caller}
+            info(f"  dnsmasq listen set: dropping {', '.join(_dropped)} "
+                 f"(deliberate, from {_caller})")
 
         iface_str = ",".join(interfaces)
 
