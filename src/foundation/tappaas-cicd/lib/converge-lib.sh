@@ -130,7 +130,17 @@ converge_apply() {
             converge_report "  ${af}: config says ${adesired}, guest already has ${aactual} — would adopt ${aactual}"
             continue
         fi
-        if jq_module_write "${module}" --arg f "${af}" --arg v "${aactual}" '.[$f] = $v'; then
+        # Filter SECOND, jq's own args after it — jq_module_write is
+        # <module> <filter> [jq-args...] and shifts them in that order. Passing
+        # --arg first made "--arg" the filter, so adopt has never once written.
+        #
+        # --argjson for a number, --arg otherwise: every grow-only field today is
+        # an integer (diskSize, memory, cores), and --arg would adopt "64" as a
+        # STRING into a field the schema types as integer.
+        local _vflag=--arg
+        [[ "${aactual}" =~ ^-?[0-9]+$ ]] && _vflag=--argjson
+        if jq_module_write "${module}" '.[$f] = $v' \
+               --arg f "${af}" "${_vflag}" v "${aactual}"; then
             converge_report "  ${GN}✓${CL} ${af}: adopted ${aactual} into config (was ${adesired}; the guest was already larger)"
             CONVERGE_APPLIED=$((CONVERGE_APPLIED + 1))
         else
