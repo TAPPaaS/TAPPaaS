@@ -20,9 +20,11 @@ from opnsense_controller.firewall_manager import (
     RuleAction,
 )
 from opnsense_controller.zone_manager import (
+    ORPHAN_SWEEP_LIMIT,
     Zone,
     ValidationMessage,
     ZoneManager,
+    select_orphan_ranges,
     _check_egress,
     discover_module_files,
     postflight_checks,
@@ -827,6 +829,86 @@ class TestZoneBootOptions(unittest.TestCase):
         self.assertEqual(result["boot"], "would_set")
         mgr.set_boot_entry.assert_not_called()
         mgr.create_set_option.assert_not_called()
+
+
+class TestOrphanRangeSweep(unittest.TestCase):
+    """The sweep that deleted seven live DHCP ranges in one second.
+
+    It is meant to clear what a zone RENAME leaves behind. It has no way to tell
+    a rename leftover from a range whose zone is missing only because the WRONG
+    zones file was loaded, so the batch size is the guard: one or two is a
+    rename, seven is a bad zone set.
+    """
+
+    def test_sweeps_a_rename_leftover(self):
+        orphans, refusal = select_orphan_ranges(
+            {"rossen DHCP": {}, "srv DHCP": {}}, {"rossen DHCP"}
+        )
+        self.assertEqual(orphans, ["srv DHCP"])
+        self.assertEqual(refusal, "")
+
+    def test_leaves_operator_ranges_alone(self):
+        """Only the "<name> DHCP" convention is swept."""
+        orphans, refusal = select_orphan_ranges(
+            {"lab range for printers": {}}, {"rossen DHCP"}
+        )
+        self.assertEqual(orphans, [])
+        self.assertEqual(refusal, "")
+
+    def test_refuses_a_batch_too_large_to_be_a_rename(self):
+        """The real incident: the repo template loaded instead of the site's."""
+        live = {
+            f"{z} DHCP": {}
+            for z in ("rossen", "home", "guest", "dmz", "iotLocal", "iotCloud", "iotCams")
+        }
+        orphans, refusal = select_orphan_ranges(live, {"srv DHCP"})
+        self.assertEqual(orphans, [], "nothing may be deleted when we refuse")
+        self.assertIn("Refusing to delete 7", refusal)
+        self.assertIn("/home/tappaas/config/zones.json", refusal)
+
+    def test_boundary_is_inclusive(self):
+        at_limit = {f"z{i} DHCP": {} for i in range(ORPHAN_SWEEP_LIMIT)}
+        orphans, refusal = select_orphan_ranges(at_limit, set())
+        self.assertEqual(len(orphans), ORPHAN_SWEEP_LIMIT)
+        self.assertEqual(refusal, "")
+
+        over = {f"z{i} DHCP": {} for i in range(ORPHAN_SWEEP_LIMIT + 1)}
+        _, refusal = select_orphan_ranges(over, set())
+        self.assertNotEqual(refusal, "")
+
+
+class TestZonesFileResolution(unittest.TestCase):
+    """`zone-manager` with no --zones-file must never pick the repo template
+    while the site's own zones.json exists — that substitution is what made
+    every live zone look orphaned."""
+
+    def test_live_config_beats_repo_template(self):
+        # The candidate ORDER is the contract, and it is cheaper and more honest
+        # to assert it than to fake a filesystem where both files exist.
+        import inspect
+
+        from opnsense_controller import rules_manager
+
+        src = inspect.getsource(rules_manager._find_zones_file)
+        live_at = src.index('Path("/home/tappaas/config/zones.json")')
+        tmpl_at = src.index("DEFAULT_ZONES_FILE")
+        self.assertLess(
+            live_at, tmpl_at, "the live config must be tried before the template"
+        )
+
+    def test_cli_uses_the_shared_resolver(self):
+        """zone_manager.main() must not carry a second, divergent search list."""
+        import inspect
+
+        from opnsense_controller import zone_manager
+
+        src = inspect.getsource(zone_manager.main)
+        self.assertIn("_find_zones_file", src)
+        self.assertNotIn(
+            'Path("src/foundation/tappaas-cicd/manager/network-manager/zones.json")',
+            src,
+            "the old template-only search list is back",
+        )
 
 
 if __name__ == "__main__":

@@ -232,6 +232,43 @@ class Zone:
 # ─────────────────────────────────────────────────────────────────────────────
 # pinhole-allowed-from validator (issue #163)
 #
+# A zone rename leaves ONE stale "<old> DHCP" range behind. More orphans than
+# this at once means the loaded zone set is wrong, not that zones were renamed.
+ORPHAN_SWEEP_LIMIT = 2
+
+def select_orphan_ranges(
+    existing_descriptions, known_descriptions
+) -> tuple[list[str], str]:
+    """Decide which DHCP ranges the orphan sweep may delete.
+
+    A range is a sweep candidate when its description follows the "<name> DHCP"
+    convention but <name> matches no zone we loaded — the leftover a zone RENAME
+    produces. An operator range named some other way is never a candidate.
+
+    Returns (orphans, refusal). When refusal is non-empty the caller must delete
+    NOTHING: the batch is too large to be a rename, which means the zone set we
+    loaded is not this site's and every real range now looks orphaned. That is
+    not hypothetical — the CLI's zones-file auto-detect once fell back to the
+    repo template and this sweep deleted seven live ranges in one second, taking
+    DHCP and per-zone DNS down site-wide. Refusing costs a stale range; not
+    refusing costs the network.
+    """
+    orphans = sorted(
+        d
+        for d in existing_descriptions
+        if d not in known_descriptions and d.endswith(" DHCP")
+    )
+    if len(orphans) > ORPHAN_SWEEP_LIMIT:
+        return [], (
+            f"Refusing to delete {len(orphans)} 'orphan' DHCP ranges "
+            f"({', '.join(orphans)}) — more than {ORPHAN_SWEEP_LIMIT} means the "
+            "zone set loaded is probably not this site's. Check --zones-file "
+            "(the live one is /home/tappaas/config/zones.json); "
+            "no ranges were removed."
+        )
+    return orphans, ""
+
+
 # zones.json declares, per zone, which OTHER zones may open per-module pinholes
 # INTO it via the "pinhole-allowed-from" list. The rules_manager enforces this
 # at compile time when a module is installed; this validator does the same
@@ -1276,9 +1313,12 @@ class ZoneManager:
             # matching the exact "<name> DHCP" convention are touched — a custom
             # operator range with a different naming style is left alone.
             known_descs = {z.dhcp_description for z in self.zones}
-            for desc, existing in existing_by_desc.items():
-                if desc in known_descs or not desc.endswith(" DHCP"):
-                    continue
+            orphans, refusal = select_orphan_ranges(existing_by_desc, known_descs)
+            if refusal:
+                error(f"{refusal} (zones file: {self.zones_file})")
+
+            for desc in orphans:
+                existing = existing_by_desc[desc]
                 iface = existing.get("interface") or "any"
                 if check_mode:
                     results[f"orphan:{desc}"] = {
@@ -2240,22 +2280,17 @@ def main():
     check_mode = not args.execute
 
     # Find zones.json file
-    zones_file = args.zones_file
-    if not zones_file:
-        # Try to find it relative to common locations
-        possible_paths = [
-            Path("zones.json"),
-            Path("src/foundation/tappaas-cicd/manager/network-manager/zones.json"),
-            Path("/home/tappaas/TAPPaaS/src/foundation/tappaas-cicd/manager/network-manager/zones.json"),
-        ]
-        for path in possible_paths:
-            if path.exists():
-                zones_file = str(path)
-                break
+    # Resolve through the SAME order rules_manager uses. The list that used to
+    # live here searched only the repo TEMPLATE — which ships the stock zone
+    # names (srv, work, ...) — and never /home/tappaas/config/zones.json, where
+    # a site's real zones live. So `zone-manager --execute` without an explicit
+    # --zones-file reconciled against a zone set the site does not have, and
+    # configure_dhcp's orphan sweep deleted every "<zone> DHCP" range whose zone
+    # was absent from the template: DHCP and the per-zone DNS domain went with
+    # them for the whole site. One resolution order, in one place, or it drifts.
+    from .rules_manager import _find_zones_file
 
-    if not zones_file:
-        error("Could not find zones.json. Use --zones-file to specify the path.")
-        sys.exit(1)
+    zones_file = str(_find_zones_file(args.zones_file))
 
     # Map --debug flag to environment variable so log module picks it up
     if args.debug:
