@@ -237,17 +237,6 @@ else
   warn "opnsense-ensure-patches not on PATH yet — skipping firewall patch ensure this run."
 fi
 
-# --- One-shot rename: zone keys hyphen → underscore (issue #237) ---
-# Marker-gated; runs exactly once per cluster, then becomes a no-op. Must run
-# BEFORE the merge below — otherwise the merge would see srv-home (current)
-# vs srvHome (source) as a possible-rename and flag both for review instead of
-# resolving them automatically.
-if [ -f /home/tappaas/bin/migrate-zone-keys-to-underscore.sh ] \
-   && [ -f /home/tappaas/config/zones.json ]; then
-  /home/tappaas/bin/migrate-zone-keys-to-underscore.sh \
-      || warn "  #237 zone-key migration reported issues — continuing"
-fi
-
 # --- Reconcile zones.json against upstream (rename-aware 3-way merge; #209 / ADR-007 Design A) ---
 # install.sh seeds /home/tappaas/config/zones.json on first install but never
 # revisits it. `network-manager merge` closes that gap (replacing the
