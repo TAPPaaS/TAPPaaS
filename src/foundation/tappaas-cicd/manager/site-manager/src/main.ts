@@ -25,6 +25,7 @@
 import { defaultConfigDir, defaultSchemaDir, loadRaw, loadSite, writeSite } from "./config";
 import { CliSiteClient } from "./client";
 import { HelpSpec, renderHelp } from "../../../lib/ts/src/help";
+import { evacuateNode, evacuateExitCode } from "./evacuate";
 import { DieError, GN, RD, YW, CL, die, guarded, info, preflightGuard, warn } from "../../../lib/ts/src/cli";
 import { applyPlan, computePlan } from "./reconcile";
 import { adoptNode, provisionNode } from "./provision";
@@ -61,6 +62,10 @@ const HELP: HelpSpec = {
     { usage: "repository modify <name> [--url <u>] [--branch <b>]",
       options: [["--url <u>", "Re-point the repo at a new forge/URL in place (e.g. github.com→codeberg.org)."],
                 ["--branch <b>", "Switch the checked-out branch."]] },
+    { usage: "evacuate <node> [--force]",
+      name: "evacuate",
+      note: "(ADR-019: clear a node for maintenance, via module-manager per module)",
+      options: [["--force", "authorize an OFFLINE move for guests that cannot migrate live"]] },
     { usage: "repository delete <name> [--force]",
       options: [["--force", "Forward to repository.sh remove --force."]] },
     { usage: "repository reconcile [--apply]",
@@ -590,6 +595,35 @@ function cmdRepository(o: Opts, client: SiteClient): void {
 // ── top-level lifecycle verbs ──────────────────────────────────────────
 
 // `validate` — validate site.json (= validate-site.sh).
+// evacuate <node> — clear a node for maintenance (ADR-019 scenario C).
+// The orchestration itself is in src/evacuate.ts so it is testable without a
+// cluster; this is the CLI shell around it.
+function cmdEvacuate(o: Opts, client: SiteClient): number {
+  const node = o.rest[0];
+  if (!node) die("evacuate: expected <node>");
+
+  const r = evacuateNode(node, client, o.force === true);
+  if (r.unreachable) {
+    warn(`${RD}Could not ask the cluster what runs on ${node} — is it reachable?${CL}`);
+    return 1;
+  }
+  if (r.considered.length === 0) {
+    info(`${node} has no guests — nothing to evacuate.`);
+    return 0;
+  }
+
+  info(`Evacuated ${r.moved.length}/${r.considered.length} guest(s) from ${node}`);
+  if (r.deferred.length > 0) {
+    warn(`Still on ${node}, needing downtime you have not authorized: ${r.deferred.join(", ")}`);
+    warn(`Re-run with --force to move them offline (they will stop and restart).`);
+  }
+  if (r.failed.length > 0) {
+    warn(`${RD}Failed to move: ${r.failed.join(", ")}${CL}`);
+  }
+  if (r.deferred.length === 0 && r.failed.length === 0) info(`${GN}${node} is clear.${CL}`);
+  return evacuateExitCode(r);
+}
+
 function cmdValidate(o: Opts, client: SiteClient): void {
   const siteFile = o.rest[0] ?? siteFileOf(o);
   const errs = client.validateSite(siteFile);
@@ -676,6 +710,8 @@ export function run(argv: string[], client: SiteClient): number {
         // create-site.sh has its own flag set — forward raw args, not parsed.
         cmdAdd(argv.slice(1), client);
         return 0;
+      case "evacuate":
+        return cmdEvacuate(o, client);
       case "validate":
         cmdValidate(o, client);
         return 0;

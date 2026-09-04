@@ -27,6 +27,10 @@
 
 set -euo pipefail
 
+# Where the sibling controller lives (the live-OK verdict, ADR-019).
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+readonly SCRIPT_DIR
+
 # ── Logging ──────────────────────────────────────────────────────────
 
 # Source for read_module_config (#207); local logging defs below override
@@ -60,12 +64,15 @@ die()   { error "$@"; exit 1; }
 
 # ── Configuration ────────────────────────────────────────────────────
 
-readonly CONFIG_DIR="/home/tappaas/config"
+# Overridable for the offline unit test, which needs a module fixture without a
+# real deployment; every other reader of TAPPaaS config honours this variable.
+readonly CONFIG_DIR="${TAPPAAS_CONFIG:-/home/tappaas/config}"
 readonly MGMT="mgmt"
 
 # Global state for HA save/restore
 _HA_RULE_NAME=""
 _HA_RULE_NODES=""
+_HA_RULES_JSON="[]"
 
 # ── Usage ────────────────────────────────────────────────────────────
 
@@ -81,7 +88,8 @@ Modes:
     --node <node-name>    Migrate all VMs that belong on <node> back to it
 
 Options:
-    --offline             Skip live migration attempt; use offline migration
+    --offline             Skip the live attempt; migrate offline (stops the guest)
+    --force               Authorize an OFFLINE move IF the guest cannot move live
     -h, --help            Show this help message
 
 Examples:
@@ -235,29 +243,59 @@ do_offline_migration() {
     return 0
 }
 
-# Save HA state (resource + affinity rule) for a VM before removing it.
-# Sets global variables: _HA_RULE_NAME, _HA_RULE_NODES
+# Save HA state (resource + EVERY rule) for a VM before removing it.
+#
+# Sets: _HA_RULE_NAME / _HA_RULE_NODES (the node-affinity rule, kept for the
+# ha_nodes_prefer re-preference on restore) and _HA_RULES_JSON (ALL rules
+# referencing this VM, verbatim).
+#
+# The whole object is saved, not just rule+nodes. Dropping the rest is a live
+# hazard, not an untidiness: `ha-network` on this estate carries
+#   strict=1
+#   comment="WAN-capable nodes only: … tappaas2 has no WAN cable."
+# and a save/restore that keeps only `nodes` silently downgrades that hard
+# constraint to a preference. HA is then free to place the firewall on a node
+# with no WAN cable, and the comment explaining why not is gone too. Anything
+# the API returns is carried back (ADR-019, "full rule round-trip").
 save_ha_state() {
     local vmid="$1"
     local any_node="$2"
 
     _HA_RULE_NAME=""
     _HA_RULE_NODES=""
+    _HA_RULES_JSON="[]"
 
-    # Find any HA affinity rule that references this VM
     local rule_json
     rule_json=$(ssh root@"${any_node}.${MGMT}.internal" \
         "pvesh get /cluster/ha/rules --output-format json" 2>/dev/null || echo "[]")
 
-    _HA_RULE_NAME=$(echo "${rule_json}" | jq -r \
-        --arg res "vm:${vmid}" \
-        '.[] | select(.resources == $res and .type == "node-affinity") | .rule // empty' 2>/dev/null || true)
+    # EVERY rule for this VM, not just the first node-affinity one — a guest may
+    # also carry a resource-affinity rule, and losing it is as silent as losing
+    # `strict`.
+    _HA_RULES_JSON=$(echo "${rule_json}" | jq -c \
+        --arg res "vm:${vmid}" '[.[] | select(.resources == $res)]' 2>/dev/null || echo "[]")
+
+    _HA_RULE_NAME=$(echo "${_HA_RULES_JSON}" | jq -r \
+        '.[] | select(.type == "node-affinity") | .rule // empty' 2>/dev/null | head -1 || true)
 
     if [[ -n "${_HA_RULE_NAME}" ]]; then
-        _HA_RULE_NODES=$(echo "${rule_json}" | jq -r \
+        _HA_RULE_NODES=$(echo "${_HA_RULES_JSON}" | jq -r \
             --arg name "${_HA_RULE_NAME}" \
             '.[] | select(.rule == $name) | .nodes // empty' 2>/dev/null || true)
-        info "  Saved HA rule: ${_HA_RULE_NAME} (nodes: ${_HA_RULE_NODES})"
+        local extra
+        extra=$(echo "${_HA_RULES_JSON}" | jq -r \
+            --arg name "${_HA_RULE_NAME}" \
+            '.[] | select(.rule == $name) | [ (if .strict then "strict=\(.strict)" else empty end),
+                                              (if .comment then "comment" else empty end) ] | join(", ")' 2>/dev/null || true)
+        info "  Saved HA rule: ${_HA_RULE_NAME} (nodes: ${_HA_RULE_NODES}${extra:+, ${extra}})"
+    fi
+    # `if`, not `[[ … ]] && …`: as the LAST statement of the function that form
+    # returns 1 whenever the test is false, and under `set -e` that aborts the
+    # migration before restore_ha ever runs — losing the HA rule it just saved.
+    local n
+    n=$(echo "${_HA_RULES_JSON}" | jq -r 'length' 2>/dev/null || echo 0)
+    if [[ "${n}" -gt 1 ]]; then
+        info "  Saved ${n} HA rule(s) for vm:${vmid} — all will be restored"
     fi
 }
 
@@ -314,14 +352,39 @@ restore_ha() {
     # the source node preferred, so the CRM immediately tries to move the VM
     # back — an online migration that cannot succeed on a CPU-heterogeneous
     # cluster, leaving the service stuck in 'migrate'. Higher priority wins.
-    if [[ -n "${_HA_RULE_NAME}" && -n "${_HA_RULE_NODES}" ]]; then
-        local nodes
-        nodes="$(ha_nodes_prefer "${_HA_RULE_NODES}" "${node}")"
-        info "  Restoring HA rule: ${_HA_RULE_NAME} (nodes: ${nodes})"
-        ssh root@"${node}.${MGMT}.internal" \
-            "pvesh create /cluster/ha/rules --rule ${_HA_RULE_NAME} --type node-affinity --resources vm:${vmid} --nodes '${nodes}'" 2>/dev/null || {
-            warn "Could not restore HA rule '${_HA_RULE_NAME}' — please recreate manually"
-        }
+    # Replay every saved rule with every property it had. Only `nodes` on the
+    # node-affinity rule is rewritten, to prefer where the VM now IS (#528) —
+    # everything else, `strict` and `comment` included, goes back verbatim.
+    local rules_n
+    rules_n=$(echo "${_HA_RULES_JSON:-[]}" | jq -r 'length' 2>/dev/null || echo 0)
+    if [[ "${rules_n}" -gt 0 ]]; then
+        local rule_obj rname rtype rnodes rstrict rcomment args
+        while IFS= read -r rule_obj; do
+            [[ -n "${rule_obj}" ]] || continue
+            rname=$(jq -r '.rule'          <<< "${rule_obj}")
+            rtype=$(jq -r '.type'          <<< "${rule_obj}")
+            rnodes=$(jq -r '.nodes   // ""' <<< "${rule_obj}")
+            rstrict=$(jq -r '.strict // ""' <<< "${rule_obj}")
+            rcomment=$(jq -r '.comment // ""' <<< "${rule_obj}")
+
+            args=(--rule "${rname}" --type "${rtype}" --resources "vm:${vmid}")
+            if [[ -n "${rnodes}" ]]; then
+                # Prefer the destination so the CRM does not immediately fail
+                # the guest back (#528 / PR #529).
+                rnodes="$(ha_nodes_prefer "${rnodes}" "${node}")"
+                args+=(--nodes "${rnodes}")
+            fi
+            [[ -n "${rstrict}"  ]] && args+=(--strict "${rstrict}")
+            [[ -n "${rcomment}" ]] && args+=(--comment "${rcomment}")
+
+            info "  Restoring HA rule: ${rname} (${rtype}${rnodes:+, nodes: ${rnodes}}${rstrict:+, strict=${rstrict}})"
+            # printf %q so a comment with spaces/quotes survives the remote shell
+            # intact — the WAN-pin comment is a sentence, not a token.
+            ssh root@"${node}.${MGMT}.internal" \
+                "pvesh create /cluster/ha/rules $(printf '%q ' "${args[@]}")" 2>/dev/null || {
+                warn "Could not restore HA rule '${rname}' — please recreate manually"
+            }
+        done < <(echo "${_HA_RULES_JSON}" | jq -c '.[]' 2>/dev/null)
     fi
 }
 
@@ -330,6 +393,7 @@ restore_ha() {
 migrate_module() {
     local module="$1"
     local force_offline="${2:-false}"
+    local allow_offline="${3:-false}"
     local module_json="${CONFIG_DIR}/${module}.json"
 
     if [[ ! -f "${module_json}" ]]; then
@@ -389,19 +453,50 @@ migrate_module() {
     echo ""
     info "${BOLD}Migrating ${BL}${vmname}${CL}${BOLD} (VMID ${vmid}): ${BL}${current_node}${CL} → ${BL}${target_node}${CL}${BOLD}${CL}"
 
+    # ADR-019: NO SILENT DISRUPTIVE FALLBACK.
+    #
+    # This used to attempt a live migration and, on any failure, "fall back to
+    # offline" — which stops the guest. An operator who asked to move a service
+    # got it stopped and restarted instead, learning only from the log. Downtime
+    # is now always an explicit decision:
+    #
+    #   --offline  do it offline, no live attempt (the operator has decided)
+    #   --force    authorize offline IF the guest cannot move live
+    #   neither    live only; if that is impossible, refuse and say why
+    #
+    # The verdict comes first, so the refusal happens BEFORE anything is touched
+    # rather than after a failed attempt has already disturbed the guest.
     if [[ "${force_offline}" == "true" ]]; then
-        info "  --offline flag set — skipping live migration attempt"
+        info "  --offline given — skipping the live attempt"
         do_offline_migration "${vmid}" "${current_node}" "${target_node}" "${vmname}"
-    else
-        # Try live migration first
+        return $?
+    fi
+
+    # Overridable so the offline unit test can script the verdict without a
+    # cluster — the same seam TAPPAAS_HAVM_EXEC provides for the CRM.
+    local liveok_bin="${TAPPAAS_LIVEOK_BIN:-${SCRIPT_DIR}/proxmox-controller}"
+    local live_rc=0
+    "${liveok_bin}" live-ok "${module}" "${target_node}" || live_rc=$?
+    if [[ "${live_rc}" -eq 0 ]]; then
         if try_live_migration "${vmid}" "${current_node}" "${target_node}"; then
             return 0
         fi
-
-        echo ""
-        info "  Falling back to offline migration..."
-        do_offline_migration "${vmid}" "${current_node}" "${target_node}" "${vmname}"
+        # Live was judged possible and still failed: that is a real fault, not a
+        # cue to stop the guest. Say so and stop — the operator decides whether
+        # an offline move is acceptable.
+        error "Live migration failed although the destination offers every CPU feature."
+        error "Not falling back to an offline move: that would stop ${vmname}."
+        error "Re-run with --force (or --offline) if downtime is acceptable."
+        return 1
     fi
+
+    if [[ "${allow_offline}" != "true" ]]; then
+        warn "${vmname} cannot move live to ${target_node} (see the verdict above)."
+        warn "An offline migration stops it. Re-run with --force to authorize that."
+        return 10
+    fi
+    info "  --force given — migrating OFFLINE (the guest will stop and restart)"
+    do_offline_migration "${vmid}" "${current_node}" "${target_node}" "${vmname}"
 }
 
 # Migrate all VMs that belong on the given node back to it.
@@ -508,6 +603,7 @@ main() {
     local mode=""            # "module" or "node"
     local target=""          # module name or node name
     local force_offline=false
+    local allow_offline=false
 
     # Parse arguments
     if [[ $# -eq 0 ]]; then
@@ -531,6 +627,13 @@ main() {
                 ;;
             --offline)
                 force_offline=true
+                shift
+                ;;
+            --force)
+                # Authorizes downtime IF the guest cannot move live; distinct
+                # from --offline, which skips the live attempt outright
+                # (ADR-019).
+                allow_offline=true
                 shift
                 ;;
             -*)
@@ -562,7 +665,7 @@ main() {
 
     case "${mode}" in
         module)
-            migrate_module "${target}" "${force_offline}"
+            migrate_module "${target}" "${force_offline}" "${allow_offline}"
             ;;
         node)
             migrate_to_node "${target}" "${force_offline}"

@@ -133,6 +133,12 @@ export type SnapshotAction =
 // The orchestration layer depends ONLY on this interface. Each method shells
 // out to the existing on-PATH script and returns its exit code. NO cluster
 // logic is reimplemented in TS for this first-pass port.
+export interface MigrateOptions {
+  // Authorizes an OFFLINE migration when the guest cannot move live. Never
+  // implied: a stop is downtime, and downtime is the operator's call (ADR-019).
+  force?: boolean;
+}
+
 export interface ModuleClient {
   // install-module.sh <module> [...]
   add(module: string, opts: AddOptions): number;
@@ -153,6 +159,10 @@ export interface ModuleClient {
   test(module: string, opts: TestOptions): number;
   // snapshot-vm.sh <module> [action]
   snapshot(module: string, action: SnapshotAction): number;
+  // migrate-vm.sh <module> [--force]  (ADR-019: realize the CURRENT declared
+  // placement — no node argument. On .node it moves to .HANode, on .HANode it
+  // moves back. Anywhere else is `modify --set node=…`, which changes intent.)
+  migrate(module: string, opts: MigrateOptions): number;
   // Cluster-wide running guests (pvesh /cluster/resources --type vm), used to
   // fold LIVE running-vs-config state into the default `list`. BEST-EFFORT: it
   // returns [] (never throws) when the cluster is unreachable, so `list` can

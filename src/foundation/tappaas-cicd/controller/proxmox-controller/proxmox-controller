@@ -62,6 +62,8 @@ Commands:
   trunks    [--apply]     Reconcile per-VM trunks= for all trunk-bearing VMs
   bridge-vids [--apply]   Reconcile node lan bridge-vids (apply is operator-gated)
   show <vmname>           Show resolved-vs-actual trunks for one VM
+  live-ok <vmname> <node> Can this guest LIVE-migrate to <node>? (ADR-019)
+                          0 = safe, 2 = would lose CPU features, 1 = unknown
 
 Without --apply, commands report drift only (dry-run). Exit code is non-zero if
 drift remains after the command (so callers/CI can gate on convergence).
@@ -86,6 +88,215 @@ _cluster_nodes() {
     ssh -o BatchMode=yes -o StrictHostKeyChecking=accept-new root@"${primary}" \
         "pvesh get /cluster/resources --type node --output-format json 2>/dev/null" \
         | jq -r '.[].node' 2>/dev/null
+}
+
+# ── live-migration compatibility (ADR-019) ───────────────────────────
+#
+# "Can this guest move A→B without stopping?" With `cpu: host` — which is the
+# schema default, so effectively every TAPPaaS guest — the guest's CPUID is the
+# SOURCE host's. Move it to a host missing a feature the guest may be executing
+# and it takes SIGILL. This estate is genuinely heterogeneous (Zen 4 / Zen 5 /
+# Zen 3), so the question is real, not theoretical.
+#
+# The answer must come from what the GUEST sees, not from /proc/cpuinfo. The
+# host flag list contains entries no guest is ever shown — `debug_swap`,
+# `v_vmsave_vmload` — and comparing those refuses safe migrations, which is
+# worse than not checking: an operator who is refused for no reason learns to
+# pass --force by habit.
+#
+# QEMU answers it directly. `query-cpu-model-expansion` with type "static"
+# expands `host` into the concrete, migration-stable feature set the guest is
+# given; it is supported on x86 (unlike query-cpu-model-comparison, which is
+# s390x-only). Comparing two expansions is the verdict.
+
+# Features whose ABSENCE at the destination is advisory, not disqualifying.
+#
+# The superset rule is right for instruction sets: a guest that has JITted
+# AVX-512 takes SIGILL the moment it lands on a host without it. It is wrong for
+# mitigation and virtualization-control bits, which a guest READS rather than
+# executes — losing `verw-clear` or `v-vmsave-vmload` changes security posture
+# or nested-virt capability, it does not crash anything.
+#
+# The distinction is not cosmetic. On a heterogeneous estate the strict rule
+# refuses EVERY direction over one such bit (here: verw-clear one way,
+# v-vmsave-vmload the other), and a verdict that always says no teaches
+# operators to pass --force without reading it — which is worse than not
+# checking at all.
+#
+# Deliberately a SHORT, explicit list. Anything not named here is treated as
+# disqualifying, so the failure mode of an unknown feature is to refuse, and
+# adding to this list is a reviewable decision rather than a silent widening.
+readonly CPU_ADVISORY_FEATURES="
+amd-no-ssb
+auto-ibrs
+flush-l1d
+ibpb
+ibrs
+ibrs-all
+md-clear
+pschange-mc-no
+rsba
+spec-ctrl
+ssb-no
+stibp
+v-vmsave-vmload
+verw-clear
+virt-ssbd
+"
+
+# Split missing features into (disqualifying, advisory).
+#   cpu_classify_missing <missing-file> <disqualifying-out> <advisory-out>
+# Pure — the unit test drives it with a canned list.
+cpu_classify_missing() {
+    local missing="$1" hard="$2" soft="$3" f
+    : > "${hard}"; : > "${soft}"
+    while read -r f; do
+        [[ -n "${f}" ]] || continue
+        if grep -qxF "${f}" <<< "${CPU_ADVISORY_FEATURES}"; then
+            printf '%s\n' "${f}" >> "${soft}"
+        else
+            printf '%s\n' "${f}" >> "${hard}"
+        fi
+    done < "${missing}"
+}
+
+# The features a QMP expansion says the guest gets: the props set to true.
+# Pure — the unit test feeds it canned QMP output.
+cpu_features_from_qmp() {
+    jq -r '.return.model.props // {} | to_entries[] | select(.value == true) | .key' 2>/dev/null | sort -u
+}
+
+# Features SRC has that DST lacks, one per line. Pure; empty output = live-safe.
+#   cpu_missing <src-features-file> <dst-features-file>
+cpu_missing() {
+    comm -23 "$1" "$2"
+}
+
+# Expand `host` on a node, via the QMP socket of any VM already running there.
+# Starting a throwaway QEMU just to ask would be a heavier operation than the
+# migration it is gating, so a node running nothing yields no answer — and "no
+# answer" is reported as UNKNOWN, never as safe.
+_node_cpu_features() {
+    local node="$1" vmid
+    vmid=$(_vm_node_map | awk -v n="${node}" -F'\t' '$2 == n {print $1; exit}')
+    [[ -n "${vmid}" ]] || return 1
+    ssh -o BatchMode=yes -o StrictHostKeyChecking=accept-new "root@${node}.mgmt.internal" \
+        "printf %s '{\"execute\":\"qmp_capabilities\"}{\"execute\":\"query-cpu-model-expansion\",\"arguments\":{\"type\":\"static\",\"model\":{\"name\":\"host\"}}}' \
+         | timeout 10 socat - UNIX-CONNECT:/var/run/qemu-server/${vmid}.qmp" 2>/dev/null \
+        | tail -1 | cpu_features_from_qmp
+}
+
+# The guest TYPE ("qemu" or "lxc") the cluster reports for a vmid. /cluster/
+# resources?type=vm returns containers as well as VMs, so this is not optional:
+# without it a container gets a CPU-feature verdict, which is meaningless — a
+# container shares the host kernel and Proxmox cannot live-migrate one at all.
+_guest_type_of() {
+    local vmid="$1" primary
+    primary=$(get_primary_node_fqdn 2>/dev/null || echo "tappaas1.mgmt.internal")
+    ssh -o BatchMode=yes -o StrictHostKeyChecking=accept-new root@"${primary}" \
+        "pvesh get /cluster/resources --type vm --output-format json 2>/dev/null" 2>/dev/null \
+        | jq -r --argjson v "${vmid}" '.[] | select(.vmid == $v) | .type' 2>/dev/null | head -1
+}
+
+# The vmid for a module/VM name, from its module config (flat or Pattern-A).
+_vmid_of() {
+    # Two statements, not one: bash expands every word of a `local` BEFORE the
+    # builtin assigns any of them, so `local name="$1" f="…${name}…"` reads an
+    # unbound `name` under `set -u`.
+    local name="$1"
+    local f="${CONFIG_DIR}/${name}.json"
+    [[ -f "${f}" ]] || return 1
+    local v; v=$(_mod_field "${f}" vmid)
+    [[ -n "${v}" && "${v}" != "null" ]] || return 1
+    printf '%s' "${v}"
+}
+
+# The cpu= a guest is actually running with. Read from the LIVE guest, not from
+# config: what matters for migration is the CPUID the guest was given, and an
+# undeclared cputype still resolves to something. Empty output means Proxmox
+# omitted the line, which is its default — kvm64, a named model.
+_vm_cputype() {
+    local vmid="$1" node="$2"
+    ssh -o BatchMode=yes -o StrictHostKeyChecking=accept-new "root@${node}.mgmt.internal" \
+        "qm config ${vmid} 2>/dev/null" 2>/dev/null | sed -n 's/^cpu: *//p' | cut -d, -f1
+}
+
+# Does <node> offer the named CPU model <model>?
+_node_supports_model() {
+    local node="$1" model="$2"
+    ssh -o BatchMode=yes -o StrictHostKeyChecking=accept-new "root@${node}.mgmt.internal" \
+        "pvesh get /nodes/${node}/capabilities/qemu/cpu --output-format json 2>/dev/null" 2>/dev/null \
+        | jq -e --arg m "${model}" 'any(.[]; .name == $m)' >/dev/null 2>&1
+}
+
+# live-ok <vmname> <dst-node>
+#   0  live migration is safe
+#   2  NOT live-safe — the destination lacks features the guest has
+#   1  cannot determine (unreachable node, no VM to ask through, unknown guest)
+live_ok() {
+    local vmname="$1" dst="$2"
+    local vmid src cputype
+    vmid=$(_vmid_of "${vmname}") || { error "live-ok: no vmid for ${vmname}"; return 1; }
+    src=$(_vm_node_map | awk -v v="${vmid}" -F'\t' '$1 == v {print $2; exit}')
+    [[ -n "${src}" ]] || { error "live-ok: VMID ${vmid} is not running on any node"; return 1; }
+    if [[ "${src}" == "${dst}" ]]; then
+        info "live-ok: ${vmname} is already on ${dst}"
+        return 0
+    fi
+
+    # Containers first: Proxmox has no live migration for LXC — a restart
+    # migration is the only option — so the CPU question does not arise. Saying
+    # so plainly beats a feature comparison that would be true but irrelevant.
+    if [[ "$(_guest_type_of "${vmid}")" == "lxc" ]]; then
+        warn "live-ok: ${vmname} (VMID ${vmid}) is a CONTAINER — Proxmox cannot live-migrate LXC."
+        warn "  Moving it is a restart migration: stop, move, start. That needs --force."
+        return 2
+    fi
+
+    # A NAMED model (not `host`) fixes the guest's CPUID independently of the
+    # host, so the only question is whether the destination can run that model.
+    cputype=$(_vm_cputype "${vmid}" "${src}")
+    if [[ -n "${cputype}" && "${cputype}" != "host" ]]; then
+        if _node_supports_model "${dst}" "${cputype}"; then
+            info "live-ok: ${vmname} runs cpu '${cputype}', which ${dst} supports — live-safe"
+            return 0
+        fi
+        error "live-ok: ${dst} does not support cpu model '${cputype}'"
+        return 2
+    fi
+
+    local sf df missing
+    sf=$(mktemp); df=$(mktemp)
+    # shellcheck disable=SC2064
+    trap "rm -f '${sf}' '${df}'" RETURN
+    _node_cpu_features "${src}" > "${sf}" || true
+    _node_cpu_features "${dst}" > "${df}" || true
+    if [[ ! -s "${sf}" || ! -s "${df}" ]]; then
+        error "live-ok: could not read the guest-visible CPU features of ${src} and/or ${dst}"
+        error "  (a node with no running VM cannot be asked; treat as unknown, not as safe)"
+        return 1
+    fi
+
+    local mf hard soft
+    mf=$(mktemp); hard=$(mktemp); soft=$(mktemp)
+    # shellcheck disable=SC2064
+    trap "rm -f '${sf}' '${df}' '${mf}' '${hard}' '${soft}'" RETURN
+    cpu_missing "${sf}" "${df}" > "${mf}"
+    cpu_classify_missing "${mf}" "${hard}" "${soft}"
+
+    if [[ -s "${soft}" ]]; then
+        warn "live-ok: ${dst} lacks $(wc -l < "${soft}") advisory CPU feature(s): $(tr '\n' ' ' < "${soft}")"
+        warn "  Mitigation/virt-control bits a guest reads rather than executes — not a crash risk."
+    fi
+    if [[ ! -s "${hard}" ]]; then
+        info "live-ok: ${dst} offers every instruction-set feature ${vmname} has on ${src} — live-safe"
+        return 0
+    fi
+    warn "live-ok: ${dst} lacks $(wc -l < "${hard}") instruction-set feature(s) ${vmname} has on ${src}:"
+    warn "  $(tr '\n' ' ' < "${hard}")"
+    warn "  A guest executing any of these takes SIGILL on arrival. Migrate offline"
+    warn "  (stop, move, start), which needs an explicit --force."
+    return 2
 }
 
 # Read a module-JSON field, tolerating both flat and Pattern-A (config.*) shapes.
@@ -360,6 +571,13 @@ main() {
         show)
             [[ -n "${vmname}" ]] || die "show requires a <vmname>"
             show_vm "${vmname}"
+            ;;
+        live-ok)
+            # Two positionals, so the generic loop above (which keeps only the
+            # last non-flag) is not enough — read them straight from "$@".
+            [[ $# -ge 2 ]] || die "live-ok requires <vmname> <dst-node>"
+            live_ok "$1" "$2"
+            exit $?
             ;;
         *)
             die "Unknown command: ${cmd} (try --help)"

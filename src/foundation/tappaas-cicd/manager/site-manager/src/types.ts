@@ -173,6 +173,19 @@ export interface SiteClient {
   // Returns the child manager's exit code.
   cascade(manager: "people" | "network", apply: boolean): number;
 
+  // (2b) ADR-019 evacuate — the FLEET verb.
+  //
+  // Guests the cluster reports on <node> right now. A cluster question, not a
+  // config one: a migrate or an HA failover deliberately leaves .node alone, so
+  // a guest may sit somewhere its config does not name — and those are exactly
+  // the ones an evacuation must move.
+  guestsOn(node: string): Array<{ vmid: number; name: string; type: string }> | null;
+  // Move ONE module via module-manager (never the controller directly — the
+  // layering is the point: module-manager owns per-module orchestration and the
+  // HA rule reconciliation that goes with it). Returns its exit code, where 10
+  // means "needs downtime that was not authorized".
+  migrateModule(module: string, force: boolean): number;
+
   // The environment names registered for this site (config/environments/*.json)
   // — drives the per-environment leg of the --deep cascade.
   listEnvironments(): string[];

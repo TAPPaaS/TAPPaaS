@@ -15,8 +15,7 @@ import {
   defaultNodeCandidates,
   queryClusterNodes,
   queryNodeTankPools,
-  reachableNodes,
-} from "../../../lib/ts/src/cluster";
+  reachableNodes, queryClusterGuests} from "../../../lib/ts/src/cluster";
 import { defaultConfigDir } from "../../../lib/ts/src/config-io";
 import { capture as run, captureResult, stream as runStreaming } from "../../../lib/ts/src/exec";
 import { loadRaw, writeSite } from "./config";
@@ -30,6 +29,7 @@ const GIT = (): string => process.env.SITE_GIT_BIN ?? "git";
 const VALIDATE_SITE = (): string => process.env.SITE_VALIDATE_BIN ?? "validate-site.sh";
 const PEOPLE_BIN = (): string => process.env.SITE_PEOPLE_BIN ?? "people-manager";
 const NETWORK_BIN = (): string => process.env.SITE_NETWORK_BIN ?? "network-manager";
+const MODULE_BIN = (): string => process.env.SITE_MODULE_BIN ?? "module-manager";
 // environment-manager exposes `reconcile <env> --deep` (verb-first, ADR-007).
 const ENVIRONMENT_BIN = (): string => process.env.SITE_ENVIRONMENT_BIN ?? "environment-manager";
 // The still-live bash tools `site add` / `repository <verb>` delegate to.
@@ -125,6 +125,20 @@ export class CliSiteClient implements SiteClient {
     // network — system-wide (all zones, all planes). This is THE network pass
     // for the whole cascade; the per-environment legs skip theirs (#461).
     return runStreaming(NETWORK_BIN(), apply ? ["reconcile", "--apply"] : ["reconcile"]);
+  }
+
+  guestsOn(node: string): Array<{ vmid: number; name: string; type: string }> | null {
+    const all = queryClusterGuests(node);
+    if (all === null) return null;
+    return all
+      .filter((g) => g.node === node && !g.template)
+      .map((g) => ({ vmid: g.vmid, name: g.name, type: g.type }));
+  }
+
+  migrateModule(module: string, force: boolean): number {
+    const args = ["module", "migrate", module];
+    if (force) args.push("--force");
+    return runStreaming(MODULE_BIN(), args);
   }
 
   listEnvironments(): string[] {

@@ -288,6 +288,52 @@ try {
   rmSync(root, { recursive: true, force: true });
 }
 
+// ── migrate: no node argument, ever (ADR-019) ──────────────────────────
+//
+// "migrate never invents a destination; modify never leaves config and reality
+// disagreeing." A migrate that accepted a node would be a SECOND way to place a
+// guest, and the two would drift — config saying one thing and the cluster
+// another, with nothing to say which was intended. The refusal is the feature,
+// and it names the verb that does change intent instead of merely saying no.
+{
+  const client = new FakeModuleClient();
+  const rc = run(["migrate", "demo"], client);
+  check(rc === 0, "migrate <module> is accepted");
+  check(
+    client.log.some((i) => i.verb === "migrate" && i.module === "demo"),
+    "…and reaches the client as a migrate",
+  );
+
+  // die() PRINTS the reason and then throws, so the message is on stderr, not
+  // on the exception — capture there.
+  const c2 = new FakeModuleClient();
+  let died = "";
+  const realErr = console.error;
+  console.error = (...a: unknown[]) => { died += a.join(" ") + "\n"; };
+  try {
+    run(["migrate", "demo", "tappaas3"], c2);
+  } catch (e) {
+    died += e instanceof Error ? e.message : String(e);
+  } finally {
+    console.error = realErr;
+  }
+  check(
+    !c2.log.some((i) => i.verb === "migrate"),
+    "migrate <module> <node> is REFUSED — it never invents a destination",
+  );
+  check(
+    /--set node=tappaas3/.test(died),
+    "…and the refusal names 'modify --set node=…', the verb that changes intent",
+  );
+
+  const c3 = new FakeModuleClient();
+  run(["migrate", "demo", "--force"], c3);
+  check(
+    c3.log.some((i) => i.verb === "migrate" && (i.opts as { force?: boolean }).force === true),
+    "--force is forwarded — an OFFLINE move is authorized explicitly, never implied",
+  );
+}
+
 console.log("");
 console.log(`Results: ${passed} passed, ${failed} failed`);
 process.exit(failed === 0 ? 0 : 1);

@@ -87,7 +87,7 @@ if run_ts "tsc -p '${UNIT_TSCONFIG}'" >/dev/null 2>&1; then
     ok "TypeScript unit tests compile"
     # tsconfig rootDir is the tappaas-cicd root (shared lib/ts base), so the
     # compiled tree mirrors manager/site-manager/ under dist-test.
-    for t in reconcile client; do
+    for t in reconcile client evacuate; do
         if run_ts "node '${DIST_TEST}/manager/site-manager/test/unit/${t}.test.js'" >/dev/null 2>&1; then
             ok "TypeScript ${t} unit tests pass"
         else

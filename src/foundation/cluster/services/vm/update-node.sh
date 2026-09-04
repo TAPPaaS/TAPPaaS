@@ -30,7 +30,7 @@
 #
 # Exit codes (the uniform hook protocol):
 #   0   migrated, already there, or deliberately left to cluster:ha
-#   10  would need downtime that is not authorized  [ADR-019, not yet reachable]
+#   10  would need downtime that is not authorized (ADR-019 live-OK verdict)
 #   20  refused
 #   1   error
 
@@ -47,6 +47,7 @@ SSH_OPTS=(-o ConnectTimeout=10 -o StrictHostKeyChecking=accept-new
           -o UserKnownHostsFile=/dev/null -o LogLevel=ERROR -o BatchMode=yes)
 
 MODULE=""
+FORCE=0
 UNIT_FILE=""
 CHECK=0
 DESIRED=""
@@ -55,7 +56,7 @@ while [[ $# -gt 0 ]]; do
     case "$1" in
         --unit)    UNIT_FILE="${2:-}"; shift ;;
         --check)   CHECK=1 ;;
-        --force)   : ;;  # see the ADR-019 seam above
+        --force)   FORCE=1 ;;  # authorizes an OFFLINE migrate (ADR-019)
         --field)   shift ;;
         --desired) DESIRED="${2:-}"; shift ;;
         --actual)  ACTUAL="${2:-}"; shift ;;
@@ -101,18 +102,57 @@ fi
 
 [[ -n "${ACTUAL}" ]] || { error "update-node.sh: the record carries no current node for ${MODULE}"; exit 1; }
 
+
+# ── Live-OK verdict (ADR-019) ────────────────────────────────────────
+# A STOPPED guest has no downtime to authorize — moving it is just a move. A
+# RUNNING one is the question: can it move without stopping?
+#
+# `proxmox-controller live-ok` answers from what the GUEST sees (QEMU's
+# query-cpu-model-expansion), not from host flags. Its exit codes:
+#   0  live-safe            → migrate --online 1
+#   2  would lose features  → an offline migrate is DOWNTIME
+#   1  cannot determine     → treat as downtime; unknown is never "safe"
+#
+# When downtime is needed and not authorized, return 10 rather than migrating
+# offline. That is the whole point: before ADR-019 this passed --online 1 and
+# let Proxmox decide, which on a rejection left the operator with a failed
+# migrate, and on a stopped-guest path took downtime nobody asked for.
+# Computed BEFORE the --check early return, so a dry run reports not just THAT
+# the guest would move but whether moving it costs downtime — which is the part
+# an operator plans around.
+online_flag=0
+live_rc=0
+if [[ "${STATUS}" == "running" ]]; then
+    proxmox-controller live-ok "${MODULE}" "${DESIRED}" >&2 || live_rc=$?
+    [[ "${live_rc}" -eq 0 ]] && online_flag=1
+fi
+
 if [[ "${CHECK}" == "1" ]]; then
-    info "  node: would migrate ${ACTUAL}→${DESIRED}"
+    if [[ "${STATUS}" != "running" ]]; then
+        info "  node: would migrate ${ACTUAL}→${DESIRED} (guest is ${STATUS}; no downtime to take)"
+    elif [[ "${online_flag}" == "1" ]]; then
+        info "  node: would migrate ${ACTUAL}→${DESIRED} LIVE — no downtime"
+    else
+        info "  node: would migrate ${ACTUAL}→${DESIRED}, but only OFFLINE — needs --force"
+    fi
     exit 0
 fi
 
-# ── Migrate ──────────────────────────────────────────────────────────
-# Online for a running guest, offline for a stopped one. ADR-019 will insert
-# the live-OK verdict here: when a live migration is not possible, an OFFLINE
-# migration is downtime, and downtime is never silent — that case returns 10.
-online_flag=0
-[[ "${STATUS}" == "running" ]] && online_flag=1
+if [[ "${STATUS}" == "running" ]]; then
+    case "${live_rc}" in
+        0)  : ;;
+        *)
+            if [[ "${FORCE}" != "1" ]]; then
+                warn "  node: ${ACTUAL}→${DESIRED} cannot be done live (see above)."
+                warn "  An offline migrate stops ${MODULE}. Re-run with --force to authorize it."
+                exit 10
+            fi
+            warn "  node: migrating ${MODULE} OFFLINE ${ACTUAL}→${DESIRED} (--force given)"
+            ;;
+    esac
+fi
 
+# ── Migrate ──────────────────────────────────────────────────────────
 debug "  Migrating VM ${VMID} ${ACTUAL}→${DESIRED} (online=${online_flag})..."
 ssh "${SSH_OPTS[@]}" "root@${ACTUAL}.${MGMT}.internal" \
     "qm migrate ${VMID} ${DESIRED} --online ${online_flag}" >/dev/null \

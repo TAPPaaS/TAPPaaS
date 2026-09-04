@@ -86,8 +86,12 @@ case "$cmd" in
         # ha_rule_nodes set => serve one node-affinity rule for the VM under
         # test, so save_ha_state/restore_ha are exercised (#528).
         if [[ -n "$(rd ha_rule_nodes)" ]]; then
-            printf '[{"rule":"ha-testvm","type":"node-affinity","resources":"vm:%s","nodes":"%s"}]' \
-                "$(rd vmid 130)" "$(rd ha_rule_nodes)"
+            # ha_rule_strict / ha_rule_comment model the ha-network shape: a HARD
+            # pin plus the sentence explaining it (ADR-019 full round-trip).
+            _st="$(rd ha_rule_strict)"; _cm="$(rd ha_rule_comment)"
+            printf '[{"rule":"ha-testvm","type":"node-affinity","resources":"vm:%s","nodes":"%s"%s%s}]' \
+                "$(rd vmid 130)" "$(rd ha_rule_nodes)" \
+                "${_st:+,\"strict\":${_st}}" "${_cm:+,\"comment\":\"${_cm}\"}"
         else
             echo "[]"
         fi ;;
@@ -109,6 +113,10 @@ case "$cmd" in
         [[ "$(rd migrate_fails 0)" == "1" ]] && exit 1
         printf '%s' "$(rd target)" > "$D/node" ;;
     "true") : ;;
+    # check_node_reachable passes ssh OPTIONS before the host, so the shim's
+    # "$1 is the host" assumption puts the whole probe in $2. Match it as the
+    # reachability check it is, rather than letting it fall to the catch-all.
+    *"BatchMode=yes root@"*" true") : ;;
     *) exit 1 ;;
 esac
 exit 0
@@ -246,6 +254,70 @@ run_migrate do_offline_migration 130 tappaas1 tappaas2 testvm >/dev/null 2>&1
 if logged "pvesh create /cluster/ha/rules"; then
     no "a VM without an affinity rule must not have one invented"
 else ok; fi
+
+# ── The FULL rule round-trip: strict and comment survive (ADR-019) ──────
+#
+# save/restore used to carry only rule+nodes. On this estate ha-network is
+#   strict=1, comment="WAN-capable nodes only: … tappaas2 has no WAN cable."
+# so a migration silently downgraded a HARD pin to a preference and discarded
+# the sentence saying why — after which HA is free to place the firewall on a
+# node with no WAN cable.
+setup "vm:130" started running
+printf 'tappaas1:2,tappaas2:1' > "${MV_TEST_DIR}/ha_rule_nodes"
+printf '1'                     > "${MV_TEST_DIR}/ha_rule_strict"
+printf 'WAN-capable nodes only: tappaas2 has no WAN cable.' > "${MV_TEST_DIR}/ha_rule_comment"
+printf 'tappaas1'              > "${MV_TEST_DIR}/node"
+printf 'tappaas2'              > "${MV_TEST_DIR}/target"
+run_migrate do_offline_migration 130 tappaas1 tappaas2 testvm >/dev/null 2>&1
+created="$(grep -o "pvesh create /cluster/ha/rules.*" "${MV_TEST_DIR}/log" | tail -1)"
+if grep -q 'strict' <<< "${created}"; then ok
+else no "a restored rule must carry strict= (got: ${created})"; fi
+# The comment reaches the remote shell through printf %q, so its spaces arrive
+# escaped ("no\ WAN\ cable") — that escaping is the point, it is what keeps a
+# sentence intact as one argument. Compare with the escapes removed.
+if grep -q 'no WAN cable' <<< "${created//\\/}"; then ok
+else no "a restored rule must carry its comment (got: ${created})"; fi
+if grep -q 'tappaas2:2' <<< "${created}"; then ok
+else no "the full round-trip must still prefer the TARGET (#528) (got: ${created})"; fi
+
+# ── No silent disruptive fallback (ADR-019) ─────────────────────────────
+#
+# migrate_module used to attempt a live migration and, on ANY failure, "fall
+# back to offline" — stopping the guest. An operator who asked to move a service
+# got it stopped and restarted, learning only from the log. Downtime is now
+# always an explicit decision, and the verdict is taken BEFORE anything is
+# touched so the refusal costs the guest nothing.
+cat > "${W}/liveok" <<'LOK'
+#!/usr/bin/env bash
+exit "$(cat "${MV_TEST_DIR}/liveok_rc" 2>/dev/null || echo 0)"
+LOK
+chmod +x "${W}/liveok"
+
+mkdir -p "${W}/cfg"
+printf '{"vmid":130,"vmname":"testvm","node":"tappaas1","HANode":"tappaas2"}' > "${W}/cfg/testvm.json"
+
+setup "vm:130" started running
+printf 'tappaas1' > "${MV_TEST_DIR}/node"; printf 'tappaas2' > "${MV_TEST_DIR}/target"
+printf '2'        > "${MV_TEST_DIR}/liveok_rc"      # not live-safe
+rc=0
+( export TAPPAAS_LIVEOK_BIN="${W}/liveok" TAPPAAS_CONFIG="${W}/cfg"
+  run_migrate migrate_module testvm false false ) >/dev/null 2>&1 || rc=$?
+if [[ "${rc}" -eq 10 ]]; then ok
+else no "a guest that cannot move live must exit 10, not migrate offline (got ${rc})"; fi
+if grep -qE 'qm (stop|shutdown) ' "${MV_TEST_DIR}/log"; then
+    no "the refusal must not have stopped the guest"
+else ok; fi
+
+# …and with --force the same move proceeds, offline. The flag is what turns a
+# refusal into an authorized stop — nothing else does.
+setup "vm:130" started running
+printf 'tappaas1' > "${MV_TEST_DIR}/node"; printf 'tappaas2' > "${MV_TEST_DIR}/target"
+printf '2'        > "${MV_TEST_DIR}/liveok_rc"
+rc=0
+( export TAPPAAS_LIVEOK_BIN="${W}/liveok" TAPPAAS_CONFIG="${W}/cfg"
+  run_migrate migrate_module testvm false true ) >/dev/null 2>&1 || rc=$?
+if grep -qE 'MIGRATE-WHILE-stopped' "${MV_TEST_DIR}/log"; then ok
+else no "--force must authorize the OFFLINE move (stop, migrate, start)"; fi
 
 echo "Results: ${pass} passed, ${fail} failed"
 [ "${fail}" -eq 0 ]

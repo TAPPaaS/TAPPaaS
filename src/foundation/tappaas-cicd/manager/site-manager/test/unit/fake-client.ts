@@ -71,6 +71,21 @@ export class FakeSiteClient implements SiteClient {
     this.log.push(`cascade ${manager} ${apply ? "apply" : "preview"}`);
     return this.cascadeRc.get(manager) ?? 0;
   }
+  // ADR-019 evacuate. `guests` is what the cluster reports on a node;
+  // `migrateRc` scripts per-module outcomes so a test can model "this one needs
+  // downtime" (10) without a cluster.
+  guests = new Map<string, Array<{ vmid: number; name: string; type: string }>>();
+  guestsUnreachable = false;
+  migrateRc = new Map<string, number>();
+  guestsOn(node: string): Array<{ vmid: number; name: string; type: string }> | null {
+    this.log.push(`guestsOn ${node}`);
+    if (this.guestsUnreachable) return null;
+    return this.guests.get(node) ?? [];
+  }
+  migrateModule(module: string, force: boolean): number {
+    this.log.push(`migrate ${module}${force ? " --force" : ""}`);
+    return this.migrateRc.get(module) ?? 0;
+  }
   listEnvironments(): string[] {
     return [...this.environments];
   }

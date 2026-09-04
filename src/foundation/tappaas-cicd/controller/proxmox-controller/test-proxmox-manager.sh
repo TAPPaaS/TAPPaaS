@@ -69,6 +69,40 @@ ck "_desired_bridge_vids = active set" "200 310 610"  "$(_desired_bridge_vids)"
 "${PM}" bogus-cmd >/dev/null 2>&1; ck_rc "unknown command exits non-zero" "1" "$?"
 "${PM}" show no-such-module >/dev/null 2>&1; ck_rc "show missing module exits non-zero" "1" "$?"
 
+# ── live-migration compatibility (ADR-019) ──────────────────────────
+#
+# The verdict behind `live-ok`. Everything here is pure: canned QMP output and
+# canned feature lists, no cluster. The live plumbing (which node, whose QMP
+# socket) is exercised by the deep tier.
+_W="$(mktemp -d)"
+trap 'rm -rf "${_W}"' EXIT
+
+# An expansion reports every feature as a boolean; only the true ones are given
+# to the guest.
+echo '{"return":{"model":{"props":{"avx512f":true,"gfni":false,"aes":true}}}}' > "${_W}/q"
+ck "expansion keeps only the features the guest gets" \
+   "aes avx512f " "$(cpu_features_from_qmp < "${_W}/q" | tr '\n' ' ')"
+
+printf 'aes\navx512f\ngfni\n' > "${_W}/src"; printf 'aes\n' > "${_W}/dst"
+ck "missing = what the source has and the destination does not" \
+   "avx512f gfni " "$(cpu_missing "${_W}/src" "${_W}/dst" | tr '\n' ' ')"
+
+# The distinction the whole verdict turns on: a guest EXECUTES an instruction
+# set and takes SIGILL without it; it merely READS a mitigation bit.
+printf 'avx512f\nverw-clear\nv-vmsave-vmload\ngfni\n' > "${_W}/m"
+cpu_classify_missing "${_W}/m" "${_W}/hard" "${_W}/soft"
+ck "losing an instruction set disqualifies live migration" \
+   "avx512f gfni " "$(tr '\n' ' ' < "${_W}/hard")"
+ck "losing a mitigation/virt-control bit is advisory only" \
+   "verw-clear v-vmsave-vmload " "$(tr '\n' ' ' < "${_W}/soft")"
+
+# The advisory list is a short allow-list, so anything unrecognised must land on
+# the refusing side. A new CPU feature must not become silently migratable.
+printf 'some-future-isa\n' > "${_W}/m2"
+cpu_classify_missing "${_W}/m2" "${_W}/hard2" "${_W}/soft2"
+ck "an unrecognised feature fails CLOSED (refuses, not allows)" \
+   "some-future-isa " "$(tr '\n' ' ' < "${_W}/hard2")"
+
 echo ""
 echo "test-proxmox-manager: ${PASS} passed, ${FAIL} failed"
 [[ "${FAIL}" -eq 0 ]]

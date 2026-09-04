@@ -133,6 +133,14 @@ const HELP: HelpSpec = {
       ],
     },
     {
+      usage: "migrate <module> [--force]",
+      name: "migrate",
+      note: "(ADR-019: realizes the DECLARED placement; takes no node argument)",
+      options: [
+        ["--force", "authorize an OFFLINE move when the guest cannot migrate live"],
+      ],
+    },
+    {
       usage: "reconcile <module> [--apply] [--force] [--environment ENV] [--no-snapshot] [--no-services]",
       name: "reconcile",
       options: [
@@ -825,6 +833,26 @@ function cmdReconcile(opts: Opts, client: ModuleClient): number {
   return client.reconcile(module, r);
 }
 
+// migrate — runtime placement only, within the already-declared {.node,.HANode}.
+//
+// Deliberately NO node argument (ADR-019). "migrate never invents a
+// destination; modify never leaves config and reality disagreeing." A verb that
+// took a node would be a second way to place a guest, and the two would drift:
+// the config would say one thing and the cluster another, with nothing to say
+// which was intended.
+function cmdMigrate(opts: Opts, client: ModuleClient): number {
+  const module = opts.rest[0];
+  if (!module) die("migrate: expected <module>");
+  if (opts.rest.length > 1) {
+    die(
+      `migrate takes no node argument (got '${opts.rest[1]}'). It moves the guest ` +
+        `between the .node/.HANode it already declares; to place it elsewhere use ` +
+        `'module modify ${module} --set node=${opts.rest[1]}'.`,
+    );
+  }
+  return client.migrate(module, { force: opts.force });
+}
+
 function cmdSnapshot(opts: Opts, client: ModuleClient): number {
   const module = opts.rest[0];
   if (!module) die("snapshot-vm: expected <module>");
@@ -868,6 +896,8 @@ function dispatch(verb: string, opts: Opts, client: ModuleClient): number {
       return cmdReconcile(opts, client);
     case "test":
       return cmdTest(opts, client);
+    case "migrate":
+      return cmdMigrate(opts, client);
     case "snapshot-vm":
       return cmdSnapshot(opts, client);
     default:

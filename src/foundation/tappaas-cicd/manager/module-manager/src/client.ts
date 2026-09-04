@@ -31,6 +31,7 @@ import {
   ReconcileOptions,
   RunningGuest,
   SnapshotAction,
+  MigrateOptions,
   TestOptions,
 } from "./types";
 
@@ -43,6 +44,7 @@ const BIN = {
   delete: process.env.MM_DELETE_BIN ?? "delete-module.sh",
   test: process.env.MM_TEST_BIN ?? "test-module.sh",
   snapshot: process.env.MM_SNAPSHOT_BIN ?? "snapshot-vm.sh",
+  migrate: process.env.MM_MIGRATE_BIN ?? "migrate-vm.sh",
 };
 
 // Streaming runner for the lifecycle verbs (lib/ts exec.stream: stdio inherit).
@@ -124,6 +126,12 @@ export class CliModuleClient implements ModuleClient {
     if (opts.zone0) args.push("--zone0", opts.zone0);
     args.push(module);
     return run(BIN.test, args);
+  }
+
+  migrate(module: string, opts: MigrateOptions): number {
+    const args: string[] = [module];
+    if (opts.force) args.push("--force");
+    return run(BIN.migrate, args);
   }
 
   snapshot(module: string, action: SnapshotAction): number {
