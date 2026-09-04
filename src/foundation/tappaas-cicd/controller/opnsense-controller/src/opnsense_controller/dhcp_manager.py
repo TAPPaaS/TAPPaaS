@@ -1,9 +1,12 @@
 """DHCP management operations for OPNsense Dnsmasq service."""
 
+import traceback
+
 from dataclasses import dataclass, field
 from oxl_opnsense_client import Client
 
 from .config import Config
+from .log import error, info
 
 
 def _convert_bools_to_int(params):

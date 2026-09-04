@@ -296,5 +296,62 @@ class TestListLeases(unittest.TestCase):
         self.assertEqual(leases[0]["hostname"], "")
 
 
+class TestListenSetShrinkGuard(unittest.TestCase):
+    """set_dnsmasq_interfaces must refuse an unintended shrink and, crucially,
+    reach that refusal WITHOUT crashing. c561d8a shipped the guard missing
+    `import traceback` and the logging import, so every shrink raised NameError
+    instead — invisible to the old tests because their mock returns [] for the
+    interface read, so the shrink branch never ran. This populates that read.
+    """
+
+    def _manager(self, current):
+        def run_module(module, **kwargs):
+            cmd = kwargs.get("params", {}).get("command")
+            if cmd == "get":
+                return {"result": {"response": {"dnsmasq": {"interface": ",".join(current)}}}}
+            if cmd == "set":
+                return {"result": {"response": {"status": "ok"}}}
+            if cmd == "reconfigure":
+                return {"result": {"response": {"status": "ok"}}}
+            return {"result": {"response": {}}}
+
+        m = DhcpManager(config=MagicMock())
+        m._client = MagicMock()
+        m._client.run_module.side_effect = run_module
+        return m
+
+    LIVE = ["lan", "opt1", "opt3", "opt4", "opt5", "opt7", "opt8", "opt9"]
+
+    def test_unintended_collapse_is_refused_without_crashing(self):
+        m = self._manager(self.LIVE)
+        result = m.set_dnsmasq_interfaces(["lan"])   # would have raised NameError
+        self.assertEqual(result["status"], "refused")
+        self.assertIn("caller", result)
+        self.assertEqual(result["interfaces"], self.LIVE)
+        # It must NOT have written: no `set` command reached the client.
+        sets = [c for c in m._client.run_module.call_args_list
+                if c.kwargs.get("params", {}).get("command") == "set"]
+        self.assertEqual(sets, [], "a refused shrink must write nothing")
+
+    def test_additive_write_passes_silently(self):
+        m = self._manager(self.LIVE)
+        result = m.set_dnsmasq_interfaces(self.LIVE + ["opt11"])
+        self.assertNotEqual(result.get("status"), "refused")
+        sets = [c for c in m._client.run_module.call_args_list
+                if c.kwargs.get("params", {}).get("command") == "set"]
+        self.assertEqual(len(sets), 1, "an additive write must go through")
+
+    def test_deliberate_shrink_with_allow_shrink_writes(self):
+        m = self._manager(self.LIVE)
+        # teardown removing its own interface — the legitimate shrink
+        result = m.set_dnsmasq_interfaces(
+            [i for i in self.LIVE if i != "opt9"], allow_shrink=True
+        )
+        self.assertNotEqual(result.get("status"), "refused")
+        sets = [c for c in m._client.run_module.call_args_list
+                if c.kwargs.get("params", {}).get("command") == "set"]
+        self.assertEqual(len(sets), 1, "an allowed shrink must go through")
+
+
 if __name__ == "__main__":
     unittest.main()
