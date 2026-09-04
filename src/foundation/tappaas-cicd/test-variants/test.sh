@@ -14,6 +14,13 @@
 
 set -uo pipefail
 
+# Accept --deep as well as TAPPAAS_TEST_DEEP=1. Every gate below reads the
+# variable, so exporting it here is all a flag needs to do — and exporting (not
+# just setting) is what carries it into any suite this one dispatches. Without
+# this, `test.sh --deep` silently ran the fast path.
+for _a in "$@"; do [[ "${_a}" == "--deep" ]] && export TAPPAAS_TEST_DEEP=1; done
+
+
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 readonly SCRIPT_DIR
 

@@ -2,6 +2,13 @@
 # test.sh — satellite-manager fast tests (schema/CLI/validation; no live host).
 # Deep/live tests (real provisioning) gate behind TAPPAAS_TEST_DEEP=1 (P2-P6).
 set -euo pipefail
+
+# Accept --deep as well as TAPPAAS_TEST_DEEP=1. Every gate below reads the
+# variable, so exporting it here is all a flag needs to do — and exporting (not
+# just setting) is what carries it into any suite this one dispatches. Without
+# this, `test.sh --deep` silently ran the fast path.
+for _a in "$@"; do [[ "${_a}" == "--deep" ]] && export TAPPAAS_TEST_DEEP=1; done
+
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 mgr="${here}/satellite-manager.sh"
 pass=0; fail=0

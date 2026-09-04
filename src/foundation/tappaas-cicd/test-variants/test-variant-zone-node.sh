@@ -120,10 +120,17 @@ fi
 
 # ── 1. create the dedicated zone (network-manager) + author the environment ──
 section "1. network-manager zone add ${VAR} --archetype ${FROM_ARCHETYPE} + author environment ${VAR}"
-if network-manager zone add "${VAR}" --archetype "${FROM_ARCHETYPE}" --variant "${VAR}" >/dev/null 2>&1; then
+# Output is CAPTURED, not discarded: this step aborts the whole test, so when it
+# fails the reason is the only thing worth having. Suppressing it left "zone add
+# failed" and nothing else to act on.
+_za_out="$(network-manager zone add "${VAR}" --archetype "${FROM_ARCHETYPE}" --variant "${VAR}" 2>&1)"
+_za_rc=$?
+if [[ ${_za_rc} -eq 0 ]]; then
     pass "dedicated zone '${VAR}' created"
 else
-    fail "network-manager zone add failed"; exit 1
+    fail "network-manager zone add failed (rc ${_za_rc})"
+    printf '%s\n' "${_za_out}" | sed 's/^/      /' >&2
+    exit 1
 fi
 # Author the environment file (the source of truth — no variant registry).
 mkdir -p "$(dirname "${ENV_FILE}")"

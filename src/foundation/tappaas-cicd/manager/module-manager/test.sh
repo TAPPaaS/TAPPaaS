@@ -13,6 +13,13 @@
 #
 set -uo pipefail
 
+# Accept --deep as well as TAPPAAS_TEST_DEEP=1. Every gate below reads the
+# variable, so exporting it here is all a flag needs to do — and exporting (not
+# just setting) is what carries it into any suite this one dispatches. Without
+# this, `test.sh --deep` silently ran the fast path.
+for _a in "$@"; do [[ "${_a}" == "--deep" ]] && export TAPPAAS_TEST_DEEP=1; done
+
+
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 INSTALL="${HERE}/install-module.sh"
 
@@ -270,12 +277,22 @@ cat > "$SBIN/copy-update-json.sh" <<'STUB'
 EFFECTIVE_MODULE="${1:-stub}"
 STUB
 # Stub common-install-routines.sh with just enough surface for Step 0/1.
+#
+# "Just enough" is a moving target: install-module.sh and delete-module.sh call
+# tappaas_require_operator (71207c0), which this stub did not define, so all
+# four tier/source cases died at line 54 with "command not found" and rc 127.
+# It is a no-op here on purpose — these cases assert the tier/source LINT, and
+# who the operator is has nothing to do with that. Anything the scripts under
+# test come to depend on must be listed here, or the case fails for a reason
+# that has nothing to do with what it is testing.
 cat > "$SBIN/common-install-routines.sh" <<'STUB'
 : "${BOLD:=}"; : "${BL:=}"; : "${GN:=}"; : "${CL:=}"; : "${YW:=}"
 info(){ :; }; debug(){ :; }; warn(){ echo "WARN:$*" >&2; }
 error(){ echo "ERROR:$*" >&2; }
+fatal(){ echo "FATAL:$*" >&2; }
 die(){ echo "DIE:$*" >&2; exit 1; }
 module_exists(){ return 1; }
+tappaas_require_operator(){ :; }
 STUB
 # Use the real lint (symlink or sibling); copy it next to the stub bin so the
 # install script's fallback finds it.
@@ -354,8 +371,13 @@ cat > "${DWORK}/sbin/common-install-routines.sh" <<'STUB'
 : "${BOLD:=}"; : "${BL:=}"; : "${GN:=}"; : "${CL:=}"; : "${YW:=}"
 info(){ :; }; debug(){ :; }; warn(){ echo "WARN:$*" >&2; }
 error(){ echo "ERROR:$*" >&2; }; die(){ echo "DIE:$*" >&2; exit 1; }
+fatal(){ echo "FATAL:$*" >&2; }
 read_module_config(){ cat "${CONFIG_DIR}/$1.json" 2>/dev/null; }
 find_vms_by_name(){ :; }
+# No-op, as in the install stub above: delete-module.sh calls this at line ~71
+# (71207c0) and these cases assert the foundation --force gate, not who is
+# running. Without it both die at "command not found" with rc 127.
+tappaas_require_operator(){ :; }
 STUB
 DSTUB="${WORK}/del-stub.sh"
 sed -e "s#/home/tappaas/bin/common-install-routines.sh#${DWORK}/sbin/common-install-routines.sh#g" \

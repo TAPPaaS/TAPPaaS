@@ -13,6 +13,7 @@
 //
 // Tiny assert harness (no test framework).
 
+import { proxmoxNeedsRecheck, proxmoxStatus } from "../../src/planes";
 import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, writeFileSync } from "fs";
 import { join } from "path";
 import { tmpdir } from "os";
@@ -1872,6 +1873,56 @@ function tmpZones(): string {
       "the plan writes a real array into the zone document",
     );
   }
+// ── the proxmox plane's status aggregation (#zone-add regression) ──────
+//
+// `reconcile --apply` applies per-VM trunks but only REPORTS node bridge-vids
+// drift; `bridge-vids --apply` is what applies it. Taking the worst of the two
+// meant a correctly-converged run still failed on reconcile's stale rc=2, so
+// EVERY zone add that widened a node's VLAN set reported failure after
+// succeeding. When applying, the verdict comes from a dry-run re-check taken
+// after both.
+{
+  const ok = (rc: number) => ({ rc, stdout: "", stderr: "", ran: true });
+  const gone = { rc: -1, stdout: "", stderr: "", ran: false };
+
+  check(
+    proxmoxNeedsRecheck(ok(2), ok(0), true) === true,
+    "a re-check is taken when applying and neither command hard-errored",
+  );
+  check(
+    proxmoxNeedsRecheck(ok(2), ok(0), false) === false,
+    "…but never in a dry-run, where drift is the answer, not a failure",
+  );
+  check(
+    proxmoxNeedsRecheck(ok(1), ok(0), true) === false,
+    "…nor after a hard error, which already decides the status",
+  );
+
+  // The regression itself: reconcile reports drift, bridge-vids fixes it, the
+  // re-check finds nothing left. That is convergence, not a failure.
+  check(
+    proxmoxStatus(ok(2), ok(0), ok(0), true) === "in-sync",
+    "reconcile's stale drift does not condemn a run that bridge-vids converged",
+  );
+  check(
+    proxmoxStatus(ok(2), ok(0), ok(2), true) === "needs-manual",
+    "drift that SURVIVES both applies is still needs-manual",
+  );
+  check(
+    proxmoxStatus(ok(0), ok(0), gone, true) === "error",
+    "a re-check that could not run is an error, not a silent pass",
+  );
+
+  // Dry-run keeps the old worst-wins aggregation: nothing was applied, so
+  // neither command's report is stale.
+  check(
+    proxmoxStatus(ok(2), ok(0), null, false) === "drift",
+    "a dry-run still reports drift by worst-wins",
+  );
+  check(
+    proxmoxStatus(ok(1), ok(0), null, true) === "error",
+    "a hard error from either command wins over the other's success",
+  );
 }
 
 console.log("");
