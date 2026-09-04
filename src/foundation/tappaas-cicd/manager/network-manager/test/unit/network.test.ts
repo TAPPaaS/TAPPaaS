@@ -1873,6 +1873,8 @@ function tmpZones(): string {
       "the plan writes a real array into the zone document",
     );
   }
+}
+
 // ── the proxmox plane's status aggregation (#zone-add regression) ──────
 //
 // `reconcile --apply` applies per-VM trunks but only REPORTS node bridge-vids
