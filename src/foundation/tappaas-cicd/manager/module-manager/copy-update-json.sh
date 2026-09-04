@@ -41,9 +41,6 @@ set -euo pipefail
 if ! declare -F info &>/dev/null; then
     if [[ -f /home/tappaas/bin/common-install-routines.sh ]]; then
         . /home/tappaas/bin/common-install-routines.sh
-
-# Composed, not the raw schema: definitions live per-service since #567.
-SCHEMA_FILE="$(tappaas_schema_file)"
     else
         # Minimal fallback for bootstrap before common-install-routines.sh exists
         info()  { echo -e "${DGN}[Info]${CL} $*"; }
@@ -51,6 +48,19 @@ SCHEMA_FILE="$(tappaas_schema_file)"
         error() { echo -e "${RD}[Error]${CL} $*" >&2; }
         die()   { error "$@"; exit 1; }
     fi
+fi
+
+# Composed, not the raw schema: definitions live per-service since #567.
+#
+# Unconditional, and AFTER the block above. It used to sit inside that block's
+# `then` arm, so a caller that had ALREADY loaded common-install-routines.sh
+# never reached it — install-module.sh sources this file, so every install died
+# on `SCHEMA_FILE: unbound variable` under `set -u`. The guard is on the
+# FUNCTION, not on whether we did the sourcing: bootstrap may have neither.
+if declare -F tappaas_schema_file &>/dev/null; then
+    : "${SCHEMA_FILE:=$(tappaas_schema_file)}"
+else
+    : "${SCHEMA_FILE:=${CONFIG_DIR}/module-fields.json}"
 fi
 
 usage() {

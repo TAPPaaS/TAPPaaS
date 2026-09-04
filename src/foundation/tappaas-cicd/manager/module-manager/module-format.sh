@@ -33,14 +33,24 @@ readonly HEADER_PINNED='["vmname","vmid","vmtag","node","zone0","zone1","mac0","
 
 # shellcheck source=common-install-routines.sh disable=SC1091
 . /home/tappaas/bin/common-install-routines.sh 2>/dev/null || {
-
-# Composed, not the raw schema: definitions live per-service since #567.
-readonly SCHEMA_FILE="$(tappaas_schema_file)"
     info()  { echo "[Info] $*"; }
     warn()  { echo "[Warning] $*" >&2; }
     error() { echo "[Error] $*" >&2; }
     die()   { error "$@"; exit 1; }
 }
+
+# Composed, not the raw schema: definitions live per-service since #567.
+#
+# After the sourcing block, not inside its `|| { ... }` fallback arm. In there it
+# was assigned ONLY when the source FAILED — which is precisely when
+# tappaas_schema_file does not exist — so it was wrong in both directions: unset
+# on the normal path (`set -u` kills the caller) and undefined on the fallback.
+if declare -F tappaas_schema_file &>/dev/null; then
+    SCHEMA_FILE="$(tappaas_schema_file)"
+else
+    SCHEMA_FILE="${TAPPAAS_SCHEMA_FILE:-${CONFIG_DIR:-/home/tappaas/config}/module-fields.json}"
+fi
+readonly SCHEMA_FILE
 
 usage() {
     cat << EOF
