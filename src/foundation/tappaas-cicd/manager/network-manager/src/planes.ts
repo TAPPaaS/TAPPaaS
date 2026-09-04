@@ -55,6 +55,39 @@ function runStreaming(bin: string, args: string[]): RunResult {
   return { rc: r.status ?? -1, stdout: r.stdout ?? "", stderr: r.stderr ?? "", ran: true };
 }
 
+// Is a post-apply re-check worth doing? Only when both commands ran and neither
+// hard-errored — otherwise the status is already decided.
+export function proxmoxNeedsRecheck(a: RunResult, b: RunResult, apply: boolean): boolean {
+  return apply && a.ran && b.ran && a.rc !== 1 && b.rc !== 1;
+}
+
+// The proxmox plane's status, given both commands and (when applying) a dry-run
+// re-check taken AFTER them.
+//
+// Aggregating the worst of `reconcile` and `bridge-vids` is wrong when applying,
+// because they are not independent: `reconcile` applies per-VM trunks but only
+// REPORTS node bridge-vids drift, and `bridge-vids` is what then applies it. So
+// a run that converges correctly still shows a.rc=2 ("drift remains") measured
+// BEFORE the command that remediates it — stale by construction. Every zone add
+// that widened a node's VLAN set therefore reported failure, having succeeded.
+//
+// When applying, ask the cluster instead of inferring: a dry-run reconcile after
+// both applies reports what is STILL drifted, across trunks and bridge-vids
+// alike. That is the question "did we converge?" asked directly.
+export function proxmoxStatus(
+  a: RunResult,
+  b: RunResult,
+  after: RunResult | null,
+  apply: boolean,
+): PlaneStatus {
+  if (after) {
+    if (!after.ran) return "error";
+    return classify(after.rc, false, true) === "in-sync" ? "in-sync" : "needs-manual";
+  }
+  // Dry-run, or a hard error from either command: the worst still wins.
+  return mergeRc(classify(a.rc, apply, a.ran), classify(b.ran ? b.rc : -1, apply, b.ran));
+}
+
 // Map a controller rc → PlaneStatus per the shared convention.
 //   0          → in-sync
 //   2 (dry)    → drift          (reported, NOT a failure)
@@ -117,11 +150,21 @@ export class CliPlaneClient implements PlaneClient {
     }
     const b = runStreaming(bin, ["bridge-vids", ...args]);
     const ran = a.ran && b.ran;
-    // Worst rc wins (error > needs-manual/drift > in-sync).
-    const worst = mergeRc(
-      classify(a.rc, apply, a.ran),
-      classify(b.ran ? b.rc : -1, apply, b.ran),
-    );
+
+    // Aggregating the worst of these two is WRONG when applying, because they
+    // are not independent: `reconcile` applies per-VM trunks but only REPORTS
+    // node bridge-vids drift, and `bridge-vids` is what then applies it. So a
+    // run that converges correctly still sees a.rc=2 ("drift remains") measured
+    // BEFORE the command that remediates it — stale by construction. Every zone
+    // add that widened a node's VLAN set therefore failed, having succeeded.
+    //
+    // Ask the cluster instead of inferring: a dry-run reconcile after both
+    // applies reports what is STILL drifted, across trunks and bridge-vids
+    // alike. That is the question "did we converge?" asked directly.
+    const after =
+      proxmoxNeedsRecheck(a, b, apply) ? runStreaming(bin, ["reconcile"]) : null;
+    const worst = proxmoxStatus(a, b, after, apply);
+
     return {
       plane: "proxmox",
       status: worst,
