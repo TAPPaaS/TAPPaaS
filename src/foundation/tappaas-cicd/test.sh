@@ -13,7 +13,7 @@
 # Usage: ./test.sh <module-name>
 #
 # Environment:
-#   TAPPAAS_TEST_DEEP=1  Run deep tests (VM creation suite)
+#   TAPPAAS_TEST_DEEP=1  Run deep tests (VM creation suite) — or pass --deep
 #   TAPPAAS_DEBUG=1      Show debug output
 #
 
@@ -25,6 +25,20 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 DEEP="${TAPPAAS_TEST_DEEP:-0}"
+
+# Honour --deep as well as the environment variable. Every "use --deep to run"
+# skip below said so already, but only the variable was read, so `test.sh --deep`
+# ran the FAST suite while reporting six deep tests as skipped — a run that looks
+# deep and is not. Exported, so the dispatched component suites inherit it (the
+# same contract test-module.sh --deep and network/test.sh already use).
+for _arg in "$@"; do
+    case "${_arg}" in
+        --deep)     DEEP=1 ;;
+        --help|-h)  echo "Usage: $0 [--deep]"; exit 0 ;;
+        *)          ;;
+    esac
+done
+[[ "${DEEP}" == "1" ]] && export TAPPAAS_TEST_DEEP=1
 PASS=0
 FAIL=0
 SKIP=0

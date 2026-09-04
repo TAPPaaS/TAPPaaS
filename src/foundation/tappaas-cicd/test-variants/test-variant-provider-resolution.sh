@@ -109,13 +109,18 @@ assert_eq "$(resolve_provider_module cluster mgmt)" "cluster" \
 
 # ── PR-08: the forwarding contract in install-module.sh ──────────────
 # The resolver was always correct; the defect was the caller passing "". Assert
-# the two call sites forward the environment, so a regression is caught here
-# rather than on a live multi-environment site.
+# that EVERY resolution call site forwards the environment, so a regression is
+# caught here rather than on a live multi-environment site.
+#
+# The count is 4, not the original 2: #501 (2886f41, integratesWith) added an
+# elif branch to the check_service_available site and a second
+# resolve_provider_module for the optional-integration provider. The assertion
+# was not updated with it, so this has been failing on main ever since.
 if [[ -r "${INSTALL_MODULE}" ]]; then
     _bad=$(grep -cE '(check_service_available|resolve_provider_module).*\$\{variant\}' "${INSTALL_MODULE}" || true)
     _good=$(grep -cE '(check_service_available|resolve_provider_module).*\$\{environment\}' "${INSTALL_MODULE}" || true)
     assert_eq "${_bad}"  "0" "PR-08a install-module.sh forwards no \${variant} to the resolution helpers"
-    assert_eq "${_good}" "2" "PR-08b install-module.sh forwards \${environment} at both call sites (Step 3 + Step 5)"
+    assert_eq "${_good}" "4" "PR-08b install-module.sh forwards \${environment} at every resolution call site"
 else
     fail "PR-08 install-module.sh not readable at ${INSTALL_MODULE}"
 fi
