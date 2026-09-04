@@ -193,7 +193,7 @@ if [[ "${INTERNODE_OK}" != "1" ]]; then
     skip "VM install on ${DEST_NODE} (the new VLAN can't traverse the switch — would just time out waiting for an IP)"
 else
     section "4. install ${MODULE} --environment ${VAR} --node ${DEST_NODE} → VM gets an IP"
-    INSTALL_LOG="${TAPPAAS_LOG_DIR:-/home/tappaas/log}/zone-node-install-${VAR}.log"
+    INSTALL_LOG="${TAPPAAS_LOG_DIR:-/home/tappaas/logs}/zone-node-install-${VAR}.log"
     if ( cd "${FIX}" && /home/tappaas/bin/install-module.sh "${MODULE}" --environment "${VAR}" --node "${DEST_NODE}" --vmid "${VMID}" ) >"${INSTALL_LOG}" 2>&1; then
         pass "install-module ${MODULE}-${VAR} on ${DEST_NODE} succeeded"
     else
