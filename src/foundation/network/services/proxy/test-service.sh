@@ -357,10 +357,18 @@ if [[ "${DEEP}" -eq 1 ]]; then
     fi
 
     # Test 5: Upstream reachable from firewall
-    info "  Check 5: Upstream reachability"
+    #
+    # Reached with the scheme the module DECLARES, not a hardcoded http://. A
+    # TLS-only backend — the OPNsense GUI on :8443 is the live case — answers
+    # nothing on plain HTTP, so this check returned 000 and failed every module
+    # with proxyUpstreamTls=true. Verified from the firewall: http:// -> 000,
+    # https:// -> 200, same host and port. Deep-only, which is why it went
+    # unnoticed; it is the same defect as Check 2 matching without the scheme
+    # (#580), one check further down.
+    info "  Check 5: Upstream reachability (${EXPECT_SCHEME}://)"
     upstream_code=$(ssh -o ConnectTimeout=10 -o BatchMode=yes -o LogLevel=ERROR \
         "root@${FIREWALL_FQDN}" \
-        "curl -sk -o /dev/null -w '%{http_code}' --max-time 10 http://${UPSTREAM}:${PROXY_PORT}/" \
+        "curl -sk -o /dev/null -w '%{http_code}' --max-time 10 ${EXPECT_SCHEME}://${UPSTREAM}:${PROXY_PORT}/" \
         2>/dev/null) || true
     if [[ "${upstream_code}" =~ ^[2-4][0-9][0-9]$ ]]; then
         pass "Upstream reachable from firewall (status ${upstream_code})"

@@ -51,6 +51,8 @@ import {
   resolveProviderModule,
 } from "./config";
 import { ReconcileOptions } from "./types";
+import { OutLine } from "./inspect";
+import { checkDependencyServices, serviceSummaryLines } from "./services";
 import { BL, BOLD, CL, GN, error, info, warn } from "./shlog";
 
 // die-equivalent: thrown to unwind to reconcileModule(), printed once there.
@@ -236,6 +238,8 @@ function doReconcile(moduleArg: string, opts: ReconcileOptions): void {
   // instance LESS converged than before the command ran. A re-apply must never
   // do that, so Step 3 always gets its chance and the failure is reported after.
   const depFailures: string[] = [];
+  // Coordinates whose apply script exited 0 — the ones Step 4 must then VERIFY.
+  const applied: string[] = [];
 
   // Converge one coordinate via its provider's update-service.sh. `optional`
   // (integratesWith) downgrades a not-installed provider from a warning to an
@@ -276,7 +280,13 @@ function doReconcile(moduleArg: string, opts: ReconcileOptions): void {
     const svcArgs = opts.force ? [module, "--force"] : [module];
     // Run from the module directory (#495) — same cwd update-module.sh uses.
     if (runScript(svcScript, svcArgs, moduleDir ?? undefined) === 0) {
-      info(`  ${GN}✓${CL} ${dep} converged`);
+      // "re-applied", NOT "converged" (#583). All this measures is that the
+      // apply script exited 0. Whether the live plane actually reached the
+      // declared state is what the provider's test-service.sh answers, and that
+      // runs in Step 4 — alfen:nat printed "converged" here while its own
+      // verifier reported both rules MISSING in the same run.
+      info(`  ${GN}✓${CL} ${dep} re-applied`);
+      applied.push(dep);
     } else {
       error(`  ✗ ${dep} re-apply failed`);
       depFailures.push(dep);
@@ -328,7 +338,59 @@ function doReconcile(moduleArg: string, opts: ReconcileOptions): void {
     warn("Cannot find module directory (no .location in config) — skipping in-VM re-apply");
   }
 
+  // ── Step 4: Verify the planes that were re-applied (#583) ─────────
+  //
+  // A converge that is not measured is a claim, not a result. `--apply` used to
+  // print "converged" off the apply script's exit code alone and never run the
+  // provider's verifier at all, so `reconcile <m> --apply` said converged and
+  // `reconcile <m>` immediately after said DRIFT — for the same coordinate, from
+  // the same state. Two services showed that shape (alfen:nat, network:proxy),
+  // which makes it a reconcile-level defect rather than a per-service one.
+  //
+  // Deliberately AFTER Step 3, not inside Step 2: several verifiers legitimately
+  // need the module itself to be up (network:proxy curls its endpoint), so
+  // checking between the service apply and the in-VM converge would fail modules
+  // that are converging correctly.
+  //
+  // Same verifier inspect uses — checkDependencyServices — so a coordinate
+  // cannot be clean under one verb and drifted under the other.
+  let verifyDrift = 0;
+  let verifyUnknown = 0;
+  if (applied.length > 0) {
+    console.log("");
+    info(`${BOLD}Step 4: Verify the re-applied services${CL}`);
+    const svc = checkDependencyServices(configDir, module, applied, moduleEnvironment);
+    for (const l of svc.lines as OutLine[]) {
+      if (l.kind === "raw") console.log(l.text);
+      else if (l.kind === "info") info(l.text);
+      else if (l.kind === "warn") warn(l.text);
+      else error(l.text);
+    }
+    for (const l of serviceSummaryLines(module, svc)) {
+      if (l.kind === "warn") warn(l.text);
+      else if (l.kind === "error") error(l.text);
+      else info(l.text);
+    }
+    verifyDrift = svc.drift;
+    verifyUnknown = svc.unknown;
+  }
+
   console.log("");
+  if (verifyDrift > 0 || verifyUnknown > 0) {
+    // The apply ran and returned 0; the plane still does not match. Reporting
+    // this as success is the whole of #583, so it is a failure — and it names
+    // the drift rather than the apply, because the apply is not what went wrong.
+    const parts: string[] = [];
+    if (verifyDrift > 0) parts.push(`${verifyDrift} drifted`);
+    if (verifyUnknown > 0) parts.push(`${verifyUnknown} unverifiable`);
+    fail(
+      `re-applied, but ${parts.join(" and ")} after the fact — reconcile of ` +
+        `'${module}' did NOT converge. The apply scripts returned success; the ` +
+        `providers' own test-service.sh disagree. A known cause for a NAT/proxy ` +
+        `plane is a firewall-wide precondition the apply cannot see (ADR-016: ` +
+        `source-NAT rules are inert while OPNsense snat_mode is 'automatic').`,
+    );
+  }
   if (depFailures.length > 0) {
     // Step 3 ran regardless, so the module's own converge has had its chance —
     // but the dependency planes did not converge, so this is still a failure.

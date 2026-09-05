@@ -3,13 +3,13 @@
 | | |
 |---|---|
 | **Status** | **Proposed** — draft (not yet implemented) |
-| **Version** | 0.1 |
+| **Version** | 0.2 |
 | **Date** | 2026-08-16 |
 | **Author** | Lars Rossen |
 | **Parent** | [ADR-009 Composition Meta-Model](<ADR-009 - Composition Meta-Model.md>) (`<module>:<service>` coordinates) |
 | **Refines** | [ADR-014 Zone ↔ Environment Lifecycle](<ADR-014 - Zone and Environment Lifecycle.md>) (zone-owned policy gates), ADR-002 (dynamic VLAN), [ADR-003 Dependency management](<ADR-003 - Dependency management in TAPPaaS.md>) (`dependsOn`-driven service hooks) |
 | **Related** | **#239** (origin: Alfen Eve Pro rejects cross-subnet sessions), **TAPPaaS/Community#3** (module NAT install-service does not verify its apply), **#285** (`network:nat` destination-NAT service — the precedent this mirrors); **owner:** `network-manager` (policy + command surface), `opnsense-controller` (push) |
-| **Changelog** | v0.1 — initial draft: zone-owned `snat-allowed-from` gate, module-local `snat.json`, `network-manager snat` verbs, `opnsense-controller` source-NAT push incl. the `snat_mode` prerequisite, module lifecycle hooks. |
+| **Changelog** | v0.2 — mode enum corrected to the API's spelling (`advanced`, not `manual`); the `snat_mode` read verified against a live OPNsense and its option-dict shape recorded (refutes the "not exposed" report in #583). v0.1 — initial draft: zone-owned `snat-allowed-from` gate, module-local `snat.json`, `network-manager snat` verbs, `opnsense-controller` source-NAT push incl. the `snat_mode` prerequisite, module lifecycle hooks. |
 
 ## Context
 
@@ -31,7 +31,8 @@ Three gaps make this more than a missing feature:
    module-scoped; the blast radius is the zone. The module has no device address to narrow
    it with — `alfen.json` carries no `ip` (it is a physical appliance, not a guest).
 3. **A firewall-global prerequisite nobody owns.** Source-NAT rules are only enforced when
-   OPNsense's outbound NAT mode is `hybrid` or `manual`. On `automatic` — the default, and
+   OPNsense's outbound NAT mode is `hybrid` or `advanced` (the API's spelling of the mode
+   the GUI labels "Manual"). On `automatic` — the default, and
    the live setting on the reference cluster — custom rules are accepted into config and
    silently excluded from the generated ruleset. No TAPPaaS tool can read or set this.
 
@@ -113,7 +114,7 @@ network-manager snat add <module> [--check]      # apply snat.json ∩ zone gate
 network-manager snat delete <module> [--check]   # remove this module's rules
 network-manager snat list [--json]               # live rules + owning module + reason
 network-manager snat verify <module>             # declared == live AND enforced
-network-manager snat mode [--set automatic|hybrid|manual]  # read/set the OPNsense prerequisite
+network-manager snat mode [--set automatic|hybrid|advanced]  # read/set the OPNsense prerequisite
 ```
 
 - `add` is idempotent — rules are keyed by description (D4) and matched before insert.
@@ -141,6 +142,31 @@ shape, different controller: `firewall/source_nat`.
 | delete | `POST firewall/source_nat/delRule/<uuid>` |
 | apply | `POST firewall/source_nat/apply` |
 | mode read | `GET firewall/source_nat/get` → `.filter.general.snat_mode` |
+
+**The mode read is verified against a live OPNsense (2026-09-05), not assumed.** It was
+reported in #583 as unreadable — "not exposed by `firewall/source_nat/get` (returns
+`{filter}` only)" — which is a stop one level too early: `filter` holds
+`general, rules, snatrules, npt, onetoone`, and the mode is `general.snat_mode`. It comes
+back as an OPNsense **option dict**, not a scalar:
+
+```json
+{"snat_mode": {"automatic": {"value": "Automatic Source NAT rule generation", "selected": 1},
+               "hybrid":    {"value": "Hybrid Source NAT rule generation",    "selected": 0},
+               "advanced":  {"value": "Manual Source NAT rule generation",    "selected": 0},
+               "disabled":  {"value": "Disable Source NAT rule generation",   "selected": 0}}}
+```
+
+Three consequences for the implementation:
+
+- **The current value is the key whose `selected` is `1`** — here `automatic`, which is the
+  live setting on the reference cluster and therefore the state in which every source-NAT
+  rule is accepted into `config.xml` and silently excluded from the generated ruleset. The
+  precondition check in D4 is implementable today; it needs no new endpoint.
+- **The API spells the "Manual" mode `advanced`.** The GUI label and the API key differ, and
+  a `--set manual` would fail. This document said `manual` throughout until this revision.
+- `opnsense-controller` already unwraps this exact shape — `_option_str()` in
+  `caddy_manager.py`, added for #580, where `HttpVersion` and `accesslist` arrive the same
+  way. Reuse it rather than writing a second unwrapper.
 | mode set | `POST firewall/source_nat/set` |
 
 Rule payload:
@@ -169,13 +195,13 @@ removes by the `tappaas-snat:<module>:` prefix, matching how `rules-manager` and
    risk. Report the flip in output; do not do it silently;
 3. **refuse** with a named error if it is `disabled` — an unusual, deliberate state,
    never touched automatically;
-4. proceed on `hybrid` or `manual`;
+4. proceed on `hybrid` or `advanced`;
 5. verify the rule is present *after* `apply`, and fail if it is not (the defect behind
    Community#3).
 
 Only the `automatic → hybrid` transition is safe to automate — it never removes existing
-rule generation. `manual` transitions stay **explicit, human-only** operator actions via
-`network-manager snat mode --set`, because `manual` *replaces* automatic generation
+rule generation. `advanced` transitions stay **explicit, human-only** operator actions via
+`network-manager snat mode --set`, because `advanced` *replaces* automatic generation
 entirely; moving into or out of it without accounting for every existing rule can break
 outbound connectivity site-wide. `hybrid` remains the recommended target: it keeps
 OPNsense's automatic per-interface rules and lets custom rules coexist.
@@ -266,7 +292,7 @@ than presence.
 - **`snat_mode` moves to `hybrid` automatically** the first time a module's request is
   applied, and **reverts to `automatic` automatically** once no TAPPaaS-owned request
   remains and no unowned rule blocks it — no explicit operator action needed for this
-  transition, only visibility (`snat mode`, `snat list`). `manual` stays a deliberate,
+  transition, only visibility (`snat mode`, `snat list`). `advanced` stays a deliberate,
   human-only choice, since it replaces automatic generation entirely rather than adding
   to it.
 - **Existing hand-made rules** (`tappaas-nat:alfen:*` on sites that ran the Community
@@ -290,6 +316,8 @@ than presence.
   each source zone.
 - **OPNsense firewall-log attribution** under SNAT (pre- vs post-translation addresses in
   the filter log shipped to `logging`) is unverified.
+- ~~Whether the mode is readable at all~~ — **closed**: verified live, see D4. The open
+  part is only the *write* path (`POST firewall/source_nat/set`), which is untested here.
 - **Whether `firewall/source_nat/searchRule` cleanly separates automatically-generated
   per-interface rules from manually/API-added custom ones** is assumed from OPNsense's
   documented Hybrid-mode semantics, not confirmed live against this instance — the rogue-
