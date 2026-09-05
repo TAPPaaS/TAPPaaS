@@ -164,7 +164,7 @@ people-manager bootstrap --org <slug> --user <slug> --email <email>
 ```
 
 Refuses a non-empty destination without `--force`, so install-time callers
-(`rest-of-foundation.sh`, `migrate-to-adr007.sh`) stay idempotent — they skip
+(`rest-of-foundation.sh`) stay idempotent — they skip
 the bootstrap once `config/people/` is populated. The result is validated for
 reference integrity (the `people-manager validate` gate); exit 0 = success,
 1 = error.

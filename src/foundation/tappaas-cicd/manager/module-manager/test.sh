@@ -1004,7 +1004,7 @@ fi
 # it warns and defaults to 'app' ("back-compat: untagged/legacy modules ...").
 # resolve-module.sh did not share that decision — it fell through to the
 # catalog and exited 1 with an empty result, so every caller had to invent its
-# own reading of the silence. migrate-to-adr007.sh:388 invented one and it was
+# own reading of the silence. An earlier migration invented one and it was
 # wrong for 22 of 47 deployed modules on a real site.
 RESOLVE="${HERE}/resolve-module.sh"
 TIERDIR="$(mktemp -d "${TMPDIR:-/tmp}/resolve-tier.XXXXXX")"

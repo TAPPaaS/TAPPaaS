@@ -10,7 +10,7 @@
 # retired from the fresh-install flow.
 #
 # Field mapping (CLI/discovery -> site.json), matching site-fields.json and the
-# migrate-configuration.sh target shape:
+# site.json target shape:
 #   name              <- --name (REQUIRED)   the neutral SITE CODE = Proxmox
 #                        cluster name (aligned at creation, informational after —
 #                        ADR-007d #426)                      [schema: name]
@@ -225,7 +225,7 @@ validate_inputs() {
 
 # ---------------------------------------------------------------------------
 # System-fact derivation (timezone / country / locale) — same logic and
-# fallbacks as migrate-configuration.sh, so create + migrate agree.
+# fallbacks the retired config->site migration used, kept for continuity.
 # ---------------------------------------------------------------------------
 detect_timezone() {
     local tz=""

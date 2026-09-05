@@ -77,13 +77,12 @@ src/types.ts,tappaas-cicd/manager/site-manager/,
 convert-json-to-config.sh,tappaas-cicd/manager/site-manager/,copy-update-json.sh
 create-configuration.sh,tappaas-cicd/manager/site-manager/,common-install-routines.sh; validate-configuration.sh
 create-site.sh,tappaas-cicd/manager/site-manager/,common-install-routines.sh; validate-site.sh
-migrate-configuration.sh,tappaas-cicd/manager/site-manager/,common-install-routines.sh
 repository.sh,tappaas-cicd/manager/site-manager/,module-catalog-lib.sh
 validate-configuration.sh,tappaas-cicd/manager/site-manager/,common-install-routines.sh
 validate-site.sh,tappaas-cicd/manager/site-manager/,common-install-routines.sh; validate-configuration.sh; site.json
 install.sh,tappaas-cicd/manager/site-manager/,site-manager; validate-site.sh
 test-create-site.sh,tappaas-cicd/manager/site-manager/,create-site.sh; validate-site.sh
-test.sh,tappaas-cicd/manager/site-manager/,migrate-configuration.sh; validate-site.sh
+test.sh,tappaas-cicd/manager/site-manager/,validate-site.sh
 update.sh,tappaas-cicd/manager/site-manager/,common-install-routines.sh
 #
 # === tappaas-cicd/manager/environment-manager (TS manager: environment-manager) ===

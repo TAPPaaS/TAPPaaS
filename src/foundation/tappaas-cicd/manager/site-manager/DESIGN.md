@@ -26,7 +26,7 @@
   Phase 7.1 (byte-identical duplicate).
 - **`update.sh`** re-runs `install.sh` (idempotent relink).
 - On-PATH entry points after install: `site-manager` (TS),
-  `migrate-configuration.sh`, `validate-site.sh`, plus the legacy
+  `validate-site.sh`, plus the legacy
   `create-configuration.sh`, `validate-configuration.sh`,
   `convert-json-to-config.sh`, `repository.sh`.
 
@@ -102,26 +102,23 @@ afterward. `repository.sh` validates module catalogs and writes the repository
 list into `configuration.json`. `convert-json-to-config.sh` is also sourced as a
 library by other module-JSON tooling.
 
-## Auto-migration hook
+## Auto-migration hook (retired)
 
-The mothership's pre-update step runs `migrate-configuration.sh` automatically
-when `configuration.json` exists and `site.json` does not (guarded, idempotent).
+Every installation has completed the configuration.json → site.json migration,
+so `migrate-configuration.sh` and the pre-update hook that ran it were removed
+(#462). Fresh installs author `site.json` directly via `create-site.sh`.
 
 ## Testing
 
-`test.sh` follows the fast/deep convention. **Fast (default):** migrate a fixture
-`configuration.json` on a temp copy and assert the schema, field mapping, dropped
-fields, idempotency, `--force` overwrite, the alias, and owner derivation. The
-live config is never touched (fixture: `test/fixtures/configuration.json`). There
-are **no deep/disruptive tests** for this manager.
+`test.sh` follows the fast/deep convention. **Fast (default):** the TS unit
+tests, plus a schema-validation case that a deliberately-bad `site.json` fails.
+`create-site.sh` has its own coverage in `test-create-site.sh`. There are **no
+deep/disruptive tests** for this manager.
 
 ## Pending / not yet implemented
 
-- **Phased migration, not flag-day.** `migrate-configuration.sh` deliberately
-  leaves `configuration.json` in place rather than deleting it; the legacy tools
-  (`create-configuration.sh`, `validate-configuration.sh`,
-  `convert-json-to-config.sh`, `repository.sh`) remain until a future flag-day
-  cutover removes them.
-- **Environment expansion deferred.** The migration writes `environments` as an
-  empty list (`[]`); populating it from the legacy variants is owned by
-  `environment-manager`, run separately.
+- **Legacy `configuration.json` tools** — the config → site.json migration is
+    complete on every installation and was retired (#462); the legacy helpers
+    (`create-configuration.sh`, `validate-configuration.sh`,
+    `convert-json-to-config.sh`, `repository.sh`) remain until a future
+    flag-day cutover removes them.

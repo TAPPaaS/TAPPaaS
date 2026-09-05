@@ -79,7 +79,7 @@ SITE="${CONFIG_DIR%/}/site.json"
 # compat: untagged/legacy modules + test fixtures install as apps"). This
 # resolver did not share that decision and fell through to `exit 1` with an
 # empty result, so each caller invented its own reading of the silence.
-# migrate-to-adr007.sh:388 invented one, and it was wrong for 22 of 47 deployed
+# an earlier migration invented one, and it was wrong for 22 of 47 deployed
 # modules on a real site (#561). The default is applied only AFTER the catalog
 # lookup below fails, so a catalogued tier still wins.
 TIER_DEFAULTABLE=0

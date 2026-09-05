@@ -4,8 +4,6 @@
 # site-manager (ADR-007 P2) is a bash component. It links every *.sh here
 # except the dispatcher verb scripts (install/update/test/validate.sh). That
 # covers the P2 entry points:
-#   migrate-configuration.sh         -> ~/bin/migrate-configuration.sh
-#   migrate-configuration-to-site.sh -> ~/bin/migrate-configuration-to-site.sh (alias)
 #   validate-site.sh                 -> ~/bin/validate-site.sh
 # plus the still-resident legacy site scripts (create-configuration.sh, ...).
 set -euo pipefail

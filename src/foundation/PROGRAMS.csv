@@ -43,7 +43,6 @@ validate-people.sh,/home/tappaas/bin/validate-people.sh,tappaas-cicd/manager/peo
 convert-json-to-config.sh,/home/tappaas/bin/convert-json-to-config.sh,tappaas-cicd/manager/site-manager/convert-json-to-config.sh,script
 create-configuration.sh,/home/tappaas/bin/create-configuration.sh,tappaas-cicd/manager/site-manager/create-configuration.sh,script
 create-site.sh,/home/tappaas/bin/create-site.sh,tappaas-cicd/manager/site-manager/create-site.sh,script
-migrate-configuration.sh,/home/tappaas/bin/migrate-configuration.sh,tappaas-cicd/manager/site-manager/migrate-configuration.sh,script
 repository.sh,/home/tappaas/bin/repository.sh,tappaas-cicd/manager/site-manager/repository.sh,script
 test-create-site.sh,/home/tappaas/bin/test-create-site.sh,tappaas-cicd/manager/site-manager/test-create-site.sh,script
 validate-configuration.sh,/home/tappaas/bin/validate-configuration.sh,tappaas-cicd/manager/site-manager/validate-configuration.sh,script

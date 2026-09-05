@@ -18,7 +18,7 @@
 // git/cluster I/O stays in the still-live bash tools, invoked as thin
 // delegations: `add` → create-site.sh; `repository add`/`delete` →
 // repository.sh; `validate` → validate-site.sh. The transitional migration
-// scripts (migrate-configuration*) are NOT ported and NOT wired here.
+// the legacy config->site migration is retired; not ported and not wired here.
 //
 // Exit codes: ok=0, error=1.
 

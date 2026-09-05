@@ -167,29 +167,6 @@ validate-site.sh
 
 These predate `site.json` and operate on the legacy `configuration.json`:
 
-### `migrate-configuration.sh` — configuration.json → site.json
-
-One-time, phased migration: it creates `site.json`, backs up
-`configuration.json` to `.bak`, and leaves `configuration.json` in place.
-Idempotent. (Migration tool — retired once the cutover completes and
-`configuration.json` is removed.)
-
-```
-migrate-configuration.sh [--config-dir DIR] [--input FILE] [--output FILE] [--force]
-```
-
-- `--config-dir DIR` — config directory (default `$TAPPAAS_CONFIG`).
-- `--input FILE` — input configuration.json (default `<config-dir>/configuration.json`).
-- `--output FILE` — output site.json (default `<config-dir>/site.json`).
-- `--force` — overwrite an existing `site.json`.
-
-(The former `migrate-configuration-to-site.sh` alias was retired in Phase 7.1 — it was a byte-identical duplicate.)
-
-```bash
-migrate-configuration.sh
-migrate-configuration.sh --force
-```
-
 ### `create-configuration.sh`
 
 Create/update `configuration.json` by discovering the running Proxmox cluster.

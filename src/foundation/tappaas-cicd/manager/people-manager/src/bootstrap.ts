@@ -33,7 +33,7 @@
 //
 // Guard (matches the retired bash): a non-empty destination is REFUSED unless
 // force — the caller-facing idempotency contract is "skip once populated"
-// (rest-of-foundation.sh / migrate-to-adr007.sh check emptiness before calling).
+// (the installer checks emptiness before calling).
 
 import { existsSync, readFileSync, readdirSync, statSync } from "fs";
 import { dirname, join } from "path";

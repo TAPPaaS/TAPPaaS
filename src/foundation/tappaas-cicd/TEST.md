@@ -4,7 +4,7 @@
 - Fast: `./test.sh <module-name>` (or via `test-module.sh tappaas-cicd`). Takes seconds.
 - Deep: `TAPPAAS_TEST_DEEP=1 ./test.sh tappaas-cicd` — gated solely on the `TAPPAAS_TEST_DEEP` env var (no `--deep` flag in this script). Takes minutes (creates real VMs).
 - `TAPPAAS_DEBUG=1` adds debug output.
-- Prerequisites: sources `/home/tappaas/bin/common-install-routines.sh`; needs `jq` and the toolbox bins on PATH. Several Standard tests degrade to skip when an optional bin (e.g. `people-manager`, `authentik-manager`, `network-manager`, `validate-people.sh`, `migrate-configuration.sh`) is not installed. SSH reachability to Proxmox nodes is exercised but a single reachable node suffices.
+- Prerequisites: sources `/home/tappaas/bin/common-install-routines.sh`; needs `jq` and the toolbox bins on PATH. Several Standard tests degrade to skip when an optional bin (e.g. `people-manager`, `authentik-manager`, `network-manager`, `validate-people.sh`) is not installed. SSH reachability to Proxmox nodes is exercised but a single reachable node suffices.
 
 ## Standard (fast) tests
 - **Test 1: Required scripts installed** — asserts all 17 core `~/bin` scripts exist (install/update/delete/test-module.sh, inspect/migrate/snapshot/resize helpers, setup-caddy, repository, create-configuration, common-install-routines, copy-update-json).
@@ -18,7 +18,7 @@
 - **Test 9: snapshot_retention reader & cleanup wiring (#353)** — unit-tests `snapshot_retention` against temp `site.json` (configured value honoured; unset/non-integer/zero/missing-file all fall back to 5).
 - **Test 9b: site.json/environments reader cutover (ADR-007 S3b)** — runs `lib/test-config-readers.sh` (NEW site.json/environments/cert-refids sources win, configuration.json fallback); asserts `update-module.sh` still invokes `snapshot-vm.sh --cleanup`.
 - **Test 10: P10 template/dispatch contract (ADR-007 S1)** — runs `scripts/test/test-template-contract.sh` (TEMPLATE skipped, manager has validate.sh, scaffold dispatches).
-- **Test 11: ADR-007 component smoke (lightweight, non-disruptive)** — sub-second sanity using already-built bins, NO compile/nix-build/live-Authentik/cluster: people schemas + `validate-people.sh` on minimal-org; `people-manager role list` loads + reads config; `authentik-manager --help` (identity-controller) loads; site-manager `migrate-configuration.sh`→`validate-site.sh` on a temp fixture; `network-manager zone list` reads zones.json read-only; `backup-manager resolve` cascade (site 7y→env 5y→mod 1y) on a temp fixture; `backup-controller --selftest` pure-function checks. Each degrades to skip if the bin is absent.
+- **Test 11: ADR-007 component smoke (lightweight, non-disruptive)** — sub-second sanity using already-built bins, NO compile/nix-build/live-Authentik/cluster: people schemas + `validate-people.sh` on minimal-org; `people-manager role list` loads + reads config; `authentik-manager --help` (identity-controller) loads; `network-manager zone list` reads zones.json read-only; `backup-manager resolve` cascade (site 7y→env 5y→mod 1y) on a temp fixture; `backup-controller --selftest` pure-function checks. Each degrades to skip if the bin is absent.
 
 ## Deep tests (live; TAPPAAS_TEST_DEEP=1)
 - **VM creation suite** — runs `test-vm-creation/test.sh` (real VM creation, several minutes). Exercises live Proxmox.

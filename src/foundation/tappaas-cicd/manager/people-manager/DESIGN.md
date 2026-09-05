@@ -142,6 +142,6 @@ Two overlapping paths exist:
 - **Per-module admin groups** (`<scope>-<module>-admins`) are created on demand at
   module-install time, not by this manager.
 - **Install-time wiring** of the initial identity install is DONE:
-  `rest-of-foundation.sh` (fresh install) and `migrate-to-adr007.sh` (upgrade)
-  run `people-manager bootstrap` then `reconcile --apply`, guarded to fire only
+  `rest-of-foundation.sh` (fresh install) runs `people-manager bootstrap`
+  then `reconcile --apply`, guarded to fire only
   when `config/people/` is empty.

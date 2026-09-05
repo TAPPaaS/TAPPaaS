@@ -164,8 +164,8 @@ environment-manager add [--name <N>] [--domain <D>] [--config-dir DIR] [--force]
 environment-manager add --name acme
 ```
 
-This is the single owner of the two bootstrap files (`install.sh` and
-`migrate-to-adr007.sh` call it) — downstream steps consume, they do not
+This is the single owner of the two bootstrap files (`install.sh` calls
+it) — downstream steps consume, they do not
 re-author them.
 
 ## Retired tooling (ADR-007 Phase D)
