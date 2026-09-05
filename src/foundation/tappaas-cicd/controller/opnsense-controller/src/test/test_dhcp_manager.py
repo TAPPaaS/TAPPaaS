@@ -353,5 +353,91 @@ class TestListenSetShrinkGuard(unittest.TestCase):
         self.assertEqual(len(sets), 1, "an allowed shrink must go through")
 
 
+class TestConfigureGeneralPartial(unittest.TestCase):
+    """configure_general must be a TRUE partial update (issue #575).
+
+    The old implementation went through the oxl dnsmasq_general module, whose
+    ansible-style defaults (interfaces=[], port=53, …) turned every
+    unspecified argument into a reset — a check-mode run against a live
+    firewall showed the listen set going from 13 entries to [] and the DNS
+    port from 53053 to 53 from a five-argument call. Now only the fields the
+    caller passes may appear in the raw settings payload, and an interfaces
+    change goes through the set_dnsmasq_interfaces shrink guard.
+    """
+
+    LIVE = ["lan", "opt1", "opt3", "opt4", "opt5", "opt7", "opt8", "opt9"]
+
+    def _manager(self, current=None):
+        current = current if current is not None else self.LIVE
+
+        def run_module(module, **kwargs):
+            cmd = kwargs.get("params", {}).get("command")
+            if cmd == "get":
+                return {"result": {"response": {"dnsmasq": {"interface": ",".join(current)}}}}
+            if cmd in ("set", "reconfigure"):
+                return {"result": {"response": {"status": "ok"}}}
+            return {"result": {"response": {}}}
+
+        m = DhcpManager(config=MagicMock())
+        m._client = MagicMock()
+        m._client.run_module.side_effect = run_module
+        return m
+
+    def _set_payloads(self, m):
+        return [c.kwargs["params"]["data"]["dnsmasq"]
+                for c in m._client.run_module.call_args_list
+                if c.kwargs.get("params", {}).get("command") == "set"]
+
+    def test_only_passed_fields_are_written(self):
+        m = self._manager()
+        m.configure_general(enabled=True, dhcp_authoritative=True)
+        payloads = self._set_payloads(m)
+        self.assertEqual(len(payloads), 1)
+        self.assertEqual(payloads[0],
+                         {"enable": "1", "dhcp": {"authoritative": "1"}})
+
+    def test_unmentioned_fields_never_appear_in_payload(self):
+        m = self._manager()
+        # the exact five-argument call from the issue's reproduction
+        m.configure_general(enabled=True, dhcp_authoritative=True,
+                            dhcp_fqdn=True, regdhcp=True, regdhcpstatic=True)
+        payload = self._set_payloads(m)[0]
+        for absent in ("interface", "port", "domain_needed",
+                       "no_private_reverse"):
+            self.assertNotIn(absent, payload)
+        self.assertNotIn("domain", payload.get("dhcp", {}))
+
+    def test_no_fields_writes_nothing(self):
+        m = self._manager()
+        result = m.configure_general()
+        self.assertFalse(result["changed"])
+        self.assertEqual(self._set_payloads(m), [])
+
+    def test_interfaces_go_through_the_shrink_guard(self):
+        m = self._manager()
+        result = m.configure_general(interfaces=["lan"])
+        self.assertEqual(result["interfaces_result"]["status"], "refused")
+        # the refused shrink must not have produced an interface write
+        self.assertEqual(self._set_payloads(m), [])
+
+    def test_check_mode_makes_no_api_calls(self):
+        m = self._manager()
+        result = m.configure_general(enabled=True, check_mode=True)
+        self.assertTrue(result["check_mode"])
+        self.assertEqual(m._client.run_module.call_args_list, [])
+
+    def test_enable_service_is_partial(self):
+        m = self._manager()
+        m.enable_service(dhcp_authoritative=True)
+        payload = self._set_payloads(m)[0]
+        self.assertEqual(payload,
+                         {"enable": "1", "dhcp": {"authoritative": "1"}})
+
+    def test_disable_service_touches_only_enable(self):
+        m = self._manager()
+        m.disable_service()
+        self.assertEqual(self._set_payloads(m), [{"enable": "0"}])
+
+
 if __name__ == "__main__":
     unittest.main()

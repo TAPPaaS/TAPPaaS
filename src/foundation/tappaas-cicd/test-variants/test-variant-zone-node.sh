@@ -194,11 +194,24 @@ if [[ "${INTERNODE_OK}" != "1" ]]; then
 else
     section "4. install ${MODULE} --environment ${VAR} --node ${DEST_NODE} → VM gets an IP"
     INSTALL_LOG="${TAPPAAS_LOG_DIR:-/home/tappaas/logs}/zone-node-install-${VAR}.log"
-    if ( cd "${FIX}" && /home/tappaas/bin/install-module.sh "${MODULE}" --environment "${VAR}" --node "${DEST_NODE}" --vmid "${VMID}" ) >"${INSTALL_LOG}" 2>&1; then
+    # --zone0 override: the tvbase fixture pins zone0=mgmt (other tests want it
+    # there), and an explicit module-JSON zone0 WINS over the environment's
+    # network.zone (install-module precedence, ADR-007 P5). Without the
+    # override the VM lands untagged on mgmt and can never lease ${SUBNET}.x —
+    # the #574 Symptom-B failure was exactly this, not a DHCP-side bug.
+    if ( cd "${FIX}" && /home/tappaas/bin/install-module.sh "${MODULE}" --environment "${VAR}" --zone0 "${VAR}" --node "${DEST_NODE}" --vmid "${VMID}" ) >"${INSTALL_LOG}" 2>&1; then
         pass "install-module ${MODULE}-${VAR} on ${DEST_NODE} succeeded"
     else
         fail "install-module failed despite a viable L2 path — see ${INSTALL_LOG}:"
         tail -n 12 "${INSTALL_LOG}" 2>/dev/null | sed 's/^/        | /' >&2
+    fi
+    # The NIC must be tagged onto the zone's VLAN — the sharp intermediate
+    # check that separates "VM placed in the wrong zone" from "DHCP broken".
+    if ssh -o ConnectTimeout=6 root@"${DEST_NODE}".mgmt.internal \
+            "qm config ${VMID} 2>/dev/null | grep '^net0:' | grep -qw 'tag=${VLAN}'"; then
+        pass "VM net0 is tagged onto VLAN ${VLAN}"
+    else
+        fail "VM net0 is NOT tagged onto VLAN ${VLAN} — placed outside zone '${VAR}' (zone0 precedence?)"
     fi
     VM_IP="$(ssh -o ConnectTimeout=6 root@"${DEST_NODE}".mgmt.internal \
         "qm guest cmd ${VMID} network-get-interfaces 2>/dev/null" \

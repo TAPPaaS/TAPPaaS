@@ -950,6 +950,34 @@ class TestDnsmasqListenSet(unittest.TestCase):
         self.assertEqual(ifaces, ["lan"])
         self.assertEqual(refusal, "")
 
+    def test_partial_resolve_is_additive_only(self):
+        """One zone unresolved (#574 ask 3): its interface must be KEPT and
+        the newly-resolved one merged in — a suspect read never drops."""
+        desired = ["lan", "opt1", "opt3", "opt4", "opt5", "opt7", "opt10"]
+        ifaces, refusal = plan_dnsmasq_interfaces(
+            self.LIVE, desired, 8, unresolved=2
+        )
+        self.assertEqual(refusal, "")
+        self.assertEqual(ifaces, self.LIVE + ["opt10"],
+                         "unresolved zones' interfaces stay; additions merge")
+
+    def test_full_resolve_still_allows_real_shrink(self):
+        """unresolved=0 keeps the genuine zone-disable shrink working."""
+        desired = ["lan", "opt1", "opt3", "opt4", "opt5", "opt7", "opt8"]
+        ifaces, refusal = plan_dnsmasq_interfaces(
+            self.LIVE, desired, 6, unresolved=0
+        )
+        self.assertEqual(ifaces, desired)
+        self.assertEqual(refusal, "")
+
+    def test_total_resolve_failure_still_refused_even_with_unresolved(self):
+        """The none-resolved collapse is refused before the additive rule."""
+        ifaces, refusal = plan_dnsmasq_interfaces(
+            self.LIVE, ["lan"], 7, unresolved=7
+        )
+        self.assertEqual(ifaces, self.LIVE)
+        self.assertIn("Refusing to drop 7", refusal)
+
 
 if __name__ == "__main__":
     unittest.main()

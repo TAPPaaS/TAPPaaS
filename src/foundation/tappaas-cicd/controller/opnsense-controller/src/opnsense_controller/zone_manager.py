@@ -19,6 +19,7 @@ import json
 import os
 import socket
 import sys
+import time
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -237,7 +238,7 @@ class Zone:
 ORPHAN_SWEEP_LIMIT = 2
 
 def plan_dnsmasq_interfaces(
-    current, desired, vlan_zones_expected: int
+    current, desired, vlan_zones_expected: int, unresolved: int = 0
 ) -> tuple[list[str], str]:
     """Decide what to write as the dnsmasq listen-interface set.
 
@@ -248,6 +249,14 @@ def plan_dnsmasq_interfaces(
     dropping every VLAN interface. dnsmasq then cannot serve the ranges bound to
     them, and the reconcile that follows deletes each range and fails to re-add
     it. That is not hypothetical: it took DHCP and per-zone DNS down site-wide.
+
+    ``unresolved`` is the number of enabled VLAN zones that failed to resolve
+    to an interface in this rebuild (#574 ask 3). When any zone is unresolved
+    the read is suspect, so the plan becomes ADDITIVE ONLY: the current set is
+    kept and resolved interfaces are merged in — nothing is dropped on the
+    strength of a read that already failed once. Removals happen only on a
+    rebuild where every enabled zone resolved (a complete read), which is the
+    genuine zone-disable/teardown case.
 
     Returns (interfaces, refusal). A non-empty refusal means write NOTHING and
     keep what is there. Dropping interfaces is legitimate when zones really were
@@ -266,6 +275,10 @@ def plan_dnsmasq_interfaces(
             "read of the interface assignments, not a zone change. Listen set "
             "left as it was."
         )
+    if unresolved:
+        # A partially-failed resolve must never translate into drops.
+        merged = list(current) + [i for i in desired if i not in current]
+        return merged, ""
     return desired, ""
 
 
@@ -823,6 +836,68 @@ class ZoneManager:
             # For untagged zones, use the bridge directly
             return zone.bridge.lower()
 
+    @staticmethod
+    def _match_assigned_vlan(assigned: list[dict], zone: Zone) -> str | None:
+        """Find a zone's interface identifier in an assigned-VLANs listing.
+
+        Same matching rules as get_zone_interface (tag first, then label —
+        both normalised, see issues #179/#237), factored out so batch
+        resolution uses one interfacesInfo read for all zones.
+        """
+        for v in assigned:
+            if str(v["vlan_tag"]) == str(zone.vlan_tag):
+                return v["identifier"]
+            if v.get("description", "").lower() == zone.name.lower():
+                return v["identifier"]
+        return None
+
+    def _resolve_zone_interfaces(
+        self, zones: list[Zone], retries: int = 2, delay: float = 2.0
+    ) -> tuple[dict[str, str], list[Zone]]:
+        """Resolve VLAN zones to interface identifiers in one read, with retry.
+
+        The interfacesInfo endpoint has returned incomplete during interface
+        churn (#574): a zone that fails to resolve on the first read may well
+        resolve on a re-read a moment later — especially the just-created zone
+        whose interface assignment is still being applied. So instead of one
+        VlanManager connection per zone (get_zone_interface), fetch the
+        assignment table ONCE, resolve every zone against it, and re-fetch up
+        to ``retries`` times for the stragglers before giving up on them.
+
+        Returns (resolved {zone-name: identifier}, unresolved [Zone]). Untagged
+        zones resolve to their bridge without touching the API.
+        """
+        resolved: dict[str, str] = {}
+        pending = []
+        for zone in zones:
+            if zone.needs_vlan:
+                pending.append(zone)
+            else:
+                resolved[zone.name] = zone.bridge.lower()
+        if not pending:
+            return resolved, []
+
+        with VlanManager(self.config) as vlan_mgr:
+            for attempt in range(retries + 1):
+                if attempt:
+                    time.sleep(delay)
+                assigned = vlan_mgr.get_assigned_vlans()
+                still: list[Zone] = []
+                for zone in pending:
+                    iface = self._match_assigned_vlan(assigned, zone)
+                    if iface:
+                        resolved[zone.name] = iface
+                    else:
+                        still.append(zone)
+                if attempt and pending and len(still) < len(pending):
+                    debug(f"  interface re-read resolved "
+                          f"{len(pending) - len(still)} straggler zone(s)")
+                pending = still
+                if not pending:
+                    break
+
+        return resolved, pending
+
     def get_destination_for_target(self, target: str) -> str:
         """Get the destination network for a firewall rule target.
 
@@ -1376,6 +1451,19 @@ class ZoneManager:
                     results[f"orphan:{desc}"] = {"status": "error", "error": str(e)}
                     error(f"orphan '{desc}': {e}")
 
+            # Resolve every VLAN zone's interface up front — one interfacesInfo
+            # read (with retry for stragglers, #574) instead of a connection
+            # per zone. A zone that stays unresolved gets an unbound range, as
+            # before, but the retry makes that the exception.
+            vlan_resolved, vlan_unresolved = self._resolve_zone_interfaces(
+                [z for z in dhcp_zones if z.needs_vlan]
+            )
+            if vlan_unresolved:
+                warn(f"  {len(vlan_unresolved)} DHCP zone(s) did not resolve "
+                     f"to an interface after retries "
+                     f"({', '.join(z.name for z in vlan_unresolved)}) — their "
+                     "ranges will be written unbound")
+
             # Then, create (or rebind) DHCP ranges for enabled zones with VLANs
             for zone in dhcp_zones:
                 dhcp_desc = zone.dhcp_description
@@ -1387,14 +1475,7 @@ class ZoneManager:
                 # OPNsense dnsmasq accepts identifiers like 'lan'/'wan'/'opt1'.
                 dhcp_interface = None
                 if zone.needs_vlan:
-                    # For VLAN zones, look up the assigned interface identifier.
-                    with VlanManager(self.config) as vlan_mgr:
-                        assigned = vlan_mgr.get_assigned_vlans()
-                        for v in assigned:
-                            # Normalise both sides — see issue #179.
-                            if str(v["vlan_tag"]) == str(zone.vlan_tag):
-                                dhcp_interface = v["identifier"]
-                                break
+                    dhcp_interface = vlan_resolved.get(zone.name)
                 else:
                     bridge_lower = zone.bridge.lower()
                     if bridge_lower in ("lan", "wan") or bridge_lower.startswith("opt"):
@@ -1917,14 +1998,22 @@ class ZoneManager:
         Returns:
             Result dictionary
         """
-        # Start with the base LAN interface
+        # Start with the base LAN interface, then every enabled VLAN zone's
+        # interface — resolved in one interfacesInfo read with retry, so a
+        # transiently-incomplete read (#574) gets a second chance instead of
+        # silently omitting a zone.
+        vlan_zones = self.get_vlan_zones()
+        resolved, unresolved = self._resolve_zone_interfaces(vlan_zones)
         interfaces = ["lan"]
-
-        # Add all enabled VLAN zone interfaces
-        for zone in self.get_vlan_zones():
-            iface = self.get_zone_interface(zone)
+        for zone in vlan_zones:
+            iface = resolved.get(zone.name)
             if iface and iface not in interfaces:
                 interfaces.append(iface)
+        if unresolved:
+            warn(f"  {len(unresolved)} enabled VLAN zone(s) did not resolve to "
+                 f"an interface after retries "
+                 f"({', '.join(z.name for z in unresolved)}) — treating the "
+                 "read as suspect: additions only, nothing will be dropped")
 
         debug(f"  Dnsmasq interfaces: {', '.join(interfaces)}")
 
@@ -1936,10 +2025,12 @@ class ZoneManager:
 
         try:
             with DhcpManager(self.config) as manager:
-                # Never write a set computed from a read that resolved nothing.
+                # Never write a set computed from a read that resolved nothing,
+                # and never drop interfaces on a partially-failed resolve.
                 current = manager.get_dnsmasq_interfaces()
                 interfaces, refusal = plan_dnsmasq_interfaces(
-                    current, interfaces, len(self.get_vlan_zones())
+                    current, interfaces, len(vlan_zones),
+                    unresolved=len(unresolved),
                 )
                 if refusal:
                     error(refusal)
