@@ -1610,18 +1610,42 @@ else
     # actually matters is that the pf table behind the FQDN alias holds an
     # address — that is the precondition for the auto-pinhole rule to match.
     # Verified by hand: flush tm_<mod> -> 0 entries, refresh -> 1 entry.
+    # BOTH remote commands run under `sh -c`. root's shell on OPNsense is
+    # opnsense-shell (csh), where `2>/dev/null` is not redirection syntax at all:
+    # csh answers "Ambiguous output redirect." and runs NOTHING. ssh still exits
+    # 0, so the `|| return 1` guard below never fired and the failure was
+    # invisible. The consequences were both halves of this helper:
+    #
+    #   refresh — configctl never ran, so nothing was ever poked;
+    #   poll    — `n` came back as the error text, and bash arithmetic scores a
+    #             non-numeric string as 0, so `-gt 0` was never true.
+    #
+    # So `_alias_refresh <name>` failed DETERMINISTICALLY after burning 30s, and
+    # the alias populated anyway on OPNsense's own schedule — which is why the
+    # traffic assertions immediately below it passed while this reported the
+    # table empty, and why it was misattributed to #386 (a real but different
+    # bug: block-private quick rules shadowing the auto-pinhole).
+    #
+    # The evidence block further down already ships a script and runs it with
+    # sh, for exactly this reason. This is the same fix, applied where the
+    # decision is actually made. Verified against the live firewall:
+    #   csh form   -> "Ambiguous output redirect."
+    #   sh -c form -> a count, and {"status": "ok"} from refresh_aliases
     _alias_refresh() {   # $1 = alias name to wait for (optional)
         local want="${1:-}" n
         ssh -o BatchMode=yes -o StrictHostKeyChecking=accept-new \
             root@"${FIREWALL_FQDN}" \
-            "configctl filter reload >/dev/null 2>&1; configctl filter refresh_aliases >/dev/null 2>&1" \
+            "sh -c 'configctl filter reload >/dev/null 2>&1; configctl filter refresh_aliases >/dev/null 2>&1'" \
             >/dev/null 2>&1 || return 1
         [[ -z "${want}" ]] && return 0
         for _ in 1 2 3 4 5 6; do
             n="$(ssh -o BatchMode=yes -o StrictHostKeyChecking=accept-new \
                     root@"${FIREWALL_FQDN}" \
-                    "pfctl -t ${want} -T show 2>/dev/null | wc -l" 2>/dev/null | tr -d ' ')"
-            [[ "${n:-0}" -gt 0 ]] && return 0
+                    "sh -c 'pfctl -t ${want} -T show 2>/dev/null | wc -l'" 2>/dev/null | tr -d ' ')"
+            # Guard the arithmetic: a non-numeric n (an error string, an empty
+            # reply) must read as "not populated", never as a silent 0 that
+            # looks like a clean answer.
+            [[ "${n}" =~ ^[0-9]+$ && "${n}" -gt 0 ]] && return 0
             sleep 5
         done
         return 1
