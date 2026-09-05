@@ -42,7 +42,16 @@ fail() { echo "  ✗ $*"; FAIL=$((FAIL + 1)); }
 # implementation and is present on the mothership; the `jsonschema` CLI is the
 # same library. Refuse rather than skip if neither is here: a validation test
 # that silently validates nothing is the #570 failure again.
-if python3 -c 'import jsonschema' 2>/dev/null; then
+#
+# The probe's stderr is CAPTURED, not discarded. This detector has twice fired
+# during an `update-tappaas` run — aborting the whole update at tappaas-cicd's
+# pre-update gate — while passing every time it is run by hand, and
+# `2>/dev/null` meant the one thing that would identify the cause (the actual
+# ImportError, or a python that failed to start at all) was thrown away each
+# time. Whatever the next occurrence is, it now says so.
+_js_probe="$(python3 -c 'import jsonschema' 2>&1)"
+_js_rc=$?
+if [ "${_js_rc}" -eq 0 ]; then
     validate() { # validate <schema> <instance>  → 0 valid
         python3 - "$1" "$2" <<'PY'
 import json, sys
@@ -57,7 +66,20 @@ sys.exit(1 if errs else 0)
 PY
     }
 else
-    echo "test-fields-schema.sh: no jsonschema module — cannot validate" >&2
+    {
+        echo "test-fields-schema.sh: no jsonschema module — cannot validate"
+        echo "  probe : python3 -c 'import jsonschema'  → exit ${_js_rc}"
+        echo "  error : ${_js_probe:-(no output)}"
+        echo "  python: $(command -v python3 || echo 'NOT ON PATH')"
+        echo "          -> $(readlink -f "$(command -v python3)" 2>/dev/null || echo '?')"
+        echo "  PATH  : ${PATH}"
+        # The nix python wrapper vars are inherited by every child of a
+        # nix-wrapped python app (update-tappaas is one), and point at THAT
+        # app's env — which does not carry jsonschema.
+        echo "  NIX_PYTHONPATH=${NIX_PYTHONPATH:-(unset)}"
+        echo "  NIX_PYTHONEXECUTABLE=${NIX_PYTHONEXECUTABLE:-(unset)}"
+        echo "  PYTHONPATH=${PYTHONPATH:-(unset)}  PYTHONHOME=${PYTHONHOME:-(unset)}"
+    } >&2
     exit 1
 fi
 

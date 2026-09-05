@@ -86,14 +86,27 @@ log_info() { [[ "$QUIET" == "false" ]] && info "$@" || true; }
 validation_error() { error "VALIDATION: $*"; ERRORS=$((ERRORS + 1)); }
 validation_warn()  { warn  "VALIDATION: $*"; WARNINGS=$((WARNINGS + 1)); }
 
+# The fallback this guards is a REAL downgrade (jq required-field checks only),
+# so when it engages the reason has to be recoverable. Discarding the probe's
+# stderr made "jsonschema not available" unexplainable — it has fired during an
+# update-tappaas run while passing every hand-run, and each time the actual
+# ImportError went to /dev/null. JSONSCHEMA_WHY carries it to the caller.
 HAVE_JSONSCHEMA=""
+JSONSCHEMA_WHY=""
 detect_jsonschema() {
     if [[ -z "$HAVE_JSONSCHEMA" ]]; then
-        if command -v python3 >/dev/null 2>&1 && \
-           python3 -c "import jsonschema" >/dev/null 2>&1; then
-            HAVE_JSONSCHEMA="yes"
-        else
+        local _out _rc
+        if ! command -v python3 >/dev/null 2>&1; then
             HAVE_JSONSCHEMA="no"
+            JSONSCHEMA_WHY="python3 not on PATH (PATH=${PATH})"
+        else
+            _out="$(python3 -c "import jsonschema" 2>&1)"; _rc=$?
+            if [[ "${_rc}" -eq 0 ]]; then
+                HAVE_JSONSCHEMA="yes"
+            else
+                HAVE_JSONSCHEMA="no"
+                JSONSCHEMA_WHY="python3 -c 'import jsonschema' exit ${_rc}: ${_out:-(no output)} [python3=$(readlink -f "$(command -v python3)" 2>/dev/null) NIX_PYTHONPATH=${NIX_PYTHONPATH:-unset} PYTHONPATH=${PYTHONPATH:-unset}]"
+            fi
         fi
     fi
     [[ "$HAVE_JSONSCHEMA" == "yes" ]]
@@ -159,7 +172,7 @@ main() {
     if ! jq empty "$SITE_FILE" >/dev/null 2>&1; then
         validation_error "$(basename "$SITE_FILE"): not valid JSON"
     else
-        detect_jsonschema || validation_warn "python3 jsonschema not available — falling back to jq required-field checks only"
+        detect_jsonschema || validation_warn "python3 jsonschema not available — falling back to jq required-field checks only (${JSONSCHEMA_WHY})"
         validate_against_schema "$SITE_FILE" "$schema" || true
     fi
 
