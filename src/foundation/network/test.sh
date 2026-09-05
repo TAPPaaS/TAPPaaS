@@ -714,6 +714,139 @@ else
     skip "opnsense_controller.test_network_manager not importable — skipping rule-model check"
 fi
 
+
+section "Standard 11: network:proxy drift reports both directions (issue #580)"
+
+# The drift verdict for network:proxy is this script's EXIT CODE and nothing
+# else: reconcile has no report-service.sh for the service and every field in
+# its manifest is apply:"reconcile", so the generic differ compares nothing
+# (converge.ts, needsActualState). That made the verifier the only thing
+# standing between "declared" and "actually provisioned" — and it reported
+# `no drift` for a module with zero domains and zero handlers, because Checks 1
+# and 2 downgraded a missing vhost to a warning whenever no cert refid resolved.
+#
+# So assert BOTH directions, which is what #580 asked for and what could not be
+# asserted while the only source of truth was the live OPNsense:
+#   A. vhost present  → Checks 1 and 2 pass
+#   B. vhost absent   → Checks 1 and 2 fail AND the script exits non-zero
+#   C. handler on the wrong port → reported as such, not as clean
+#
+# TAPPAAS_TEST_CADDY_LIST feeds test-service.sh a recorded `caddy-manager list`
+# instead of querying the firewall — the same NONE-mode fixture trick Standard 9
+# uses for the auto-pinhole compile.
+#
+# Self-calibrating: direction B runs FIRST against an empty listing, and the
+# domain/upstream:port it says it expected are what direction A's fixture is
+# built from. Nothing here hard-codes an estate's names.
+
+PROXY_TS="${SCRIPT_DIR}/services/proxy/test-service.sh"
+
+# Pick a deployed module that declares network:proxy. Any will do — the fixture
+# is derived from whatever that module resolves to.
+_p580_mod=""
+for f in "${CONFIG_DIR}"/*.json; do
+    [[ -f "${f}" ]] || continue
+    if jq -e '[(.dependsOn // []), (.integratesWith // [])] | flatten
+              | index("network:proxy")' "${f}" >/dev/null 2>&1; then
+        _p580_mod="$(basename "${f}" .json)"
+        break
+    fi
+done
+
+_p580_strip() { sed 's/\x1b\[[0-9;]*m//g'; }
+
+if [[ ! -f "${PROXY_TS}" ]]; then
+    fail "network:proxy test-service.sh not found at ${PROXY_TS}"
+elif [[ -z "${_p580_mod}" ]]; then
+    skip "no deployed module declares network:proxy — nothing to derive a fixture from"
+else
+    _p580_dir="$(mktemp -d)"
+    : > "${_p580_dir}/empty.list"
+    printf 'No Caddy reverse proxy entries configured\n' > "${_p580_dir}/empty.list"
+
+    # ── B. vhost absent → must report drift ──────────────────────────
+    _p580_out="${_p580_dir}/absent.out"
+    TAPPAAS_TEST_CADDY_LIST="${_p580_dir}/empty.list" \
+        bash "${PROXY_TS}" "${_p580_mod}" > "${_p580_out}" 2>&1 || true
+    _p580_txt="$(_p580_strip < "${_p580_out}")"
+
+    if grep -q "Domain .* not found in Caddy" <<<"${_p580_txt}" \
+       && grep -q "Handler for .* not found in Caddy" <<<"${_p580_txt}"; then
+        pass "vhost absent: Checks 1 and 2 both report the missing vhost (${_p580_mod})"
+    elif grep -q "no vhost expected" <<<"${_p580_txt}"; then
+        skip "'${_p580_mod}' has no domain for its environment — no vhost is expected either way"
+    else
+        fail "vhost absent: missing domain/handler NOT reported — the #580 false green is back"
+    fi
+
+    # Exit code is what reconcile actually reads (services.ts: rc 0 == clean).
+    if grep -q "no vhost expected" <<<"${_p580_txt}"; then
+        : # skipped above; rc is legitimately 0
+    else
+        TAPPAAS_TEST_CADDY_LIST="${_p580_dir}/empty.list" \
+            bash "${PROXY_TS}" "${_p580_mod}" >/dev/null 2>&1 && _p580_rc=0 || _p580_rc=$?
+        if [[ "${_p580_rc}" -ne 0 ]]; then
+            pass "vhost absent: exits ${_p580_rc} — reconcile reads this as DRIFT"
+        else
+            fail "vhost absent: exits 0 — reconcile would report 'no drift' (#580)"
+        fi
+    fi
+
+    # ── A. vhost present → must report clean ─────────────────────────
+    # Build the fixture from what direction B said it was looking for.
+    _p580_dom="$(sed -n "s/.*Domain '\([^']*\)' not found in Caddy.*/\1/p" <<<"${_p580_txt}" | head -1)"
+    _p580_up="$(sed -n "s/.*Handler for '\([^']*\)' not found in Caddy.*/\1/p" <<<"${_p580_txt}" | head -1)"
+
+    if [[ -z "${_p580_dom}" || -z "${_p580_up}" ]]; then
+        skip "could not derive a fixture for '${_p580_mod}' (no domain/handler expectation reported)"
+    else
+        cat > "${_p580_dir}/present.list" <<EOF
+Domains (1):
+  ${_p580_dom}                    [enabled]  (TAPPaaS: ${_p580_mod})  uuid=fixture-d
+
+Handlers (1):
+  -> ${_p580_up}     [enabled]  (TAPPaaS: ${_p580_mod})  uuid=fixture-h
+EOF
+        _p580_txt="$(TAPPAAS_TEST_CADDY_LIST="${_p580_dir}/present.list" \
+            bash "${PROXY_TS}" "${_p580_mod}" 2>&1 | _p580_strip || true)"
+
+        # Assert the two CHECKS, not the exit code: Check 3 curls the real
+        # endpoint and its verdict depends on whether public TLS is set up here,
+        # which is not what this section is about.
+        if grep -q "Domain '${_p580_dom}' exists in Caddy" <<<"${_p580_txt}" \
+           && grep -q "Handler for '${_p580_up}' exists in Caddy" <<<"${_p580_txt}"; then
+            pass "vhost present: Checks 1 and 2 both report clean (${_p580_mod})"
+        else
+            fail "vhost present: a provisioned vhost was NOT recognised — the check is too strict"
+        fi
+
+        # ── C. handler on the wrong port ─────────────────────────────
+        # Same upstream, a port the module did not declare. Must be called out,
+        # not passed: a handler pointing at the wrong port is a vhost that
+        # cannot serve the application, which is the failure #580 was filed on.
+        _p580_host="${_p580_up%:*}"
+        _p580_port="${_p580_up##*:}"
+        _p580_wrong=$(( _p580_port == 9 ? 10 : 9 ))
+        cat > "${_p580_dir}/wrongport.list" <<EOF
+Domains (1):
+  ${_p580_dom}                    [enabled]  (TAPPaaS: ${_p580_mod})  uuid=fixture-d
+
+Handlers (1):
+  -> ${_p580_host}:${_p580_wrong}     [enabled]  (TAPPaaS: ${_p580_mod})  uuid=fixture-h
+EOF
+        _p580_txt="$(TAPPAAS_TEST_CADDY_LIST="${_p580_dir}/wrongport.list" \
+            bash "${PROXY_TS}" "${_p580_mod}" 2>&1 | _p580_strip || true)"
+        if grep -q "not on port ${_p580_port}" <<<"${_p580_txt}"; then
+            pass "wrong upstream port reported as drift, not as clean"
+        else
+            fail "handler on port ${_p580_wrong} instead of ${_p580_port} was not reported"
+        fi
+    fi
+
+    rm -rf "${_p580_dir}"
+fi
+
+
 # ─────────────────────────────────────────────────────────────────────
 # Deep tests (--deep) — VM provisioning + inter-VM connectivity
 # ─────────────────────────────────────────────────────────────────────

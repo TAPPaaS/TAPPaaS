@@ -7,16 +7,29 @@
 #
 # Tests:
 #   1. Caddy domain entry exists for the module
-#   2. Caddy handler entry exists for the module
+#   2. Caddy handler entry exists, on the declared proxyPort
 #   3. HTTPS endpoint responds (curl from tappaas-cicd)
 #   Deep mode:
 #   4. TLS certificate is valid and not expired
 #   5. Upstream is reachable from the firewall
 #
+# Checks 1 and 2 are the DRIFT check: `module-manager reconcile` reports this
+# service's state from this script's exit code alone (the manifest is entirely
+# apply:"reconcile", so the generic differ compares nothing). They therefore fail
+# hard whenever a vhost is expected and absent — see VHOST_EXPECTED below for
+# what "expected" means, and #580 for the false green that came of gating them on
+# whether public TLS happened to be configured.
+#
 # Usage: test-service.sh <module-name>
 #
+# Env:
+#   TAPPAAS_TEST_DEEP=1        run the deep checks (4, 5)
+#   TAPPAAS_TEST_CADDY_LIST    file with a recorded `caddy-manager list` output
+#                              to use instead of querying the firewall (#580
+#                              regression fixtures; unset in production)
+#
 # Exit codes:
-#   0  All checks passed (or firewallType=NONE → skip)
+#   0  All checks passed (or firewallType=NONE / no domain for the env → skip)
 #   1  One or more checks failed
 #   2  Fatal error
 #
@@ -123,6 +136,39 @@ fi
 TLS_CONFIGURED=0
 [[ -n "${TLS_CERT_REFID}" ]] && TLS_CONFIGURED=1
 
+# Should this module have a reverse-proxy vhost AT ALL? This mirrors
+# update-service.sh's own early exits, so the test expects a vhost in exactly the
+# cases the updater would have created one:
+#
+#   firewallType=NONE               → updater prints manual instructions, exit 0
+#   no domain for the environment   → updater skips the reconcile entirely, exit 0
+#                                     (it tests TAPPAAS_DOMAIN, before proxyDomain
+#                                     is applied — so this does too, or a module
+#                                     with an explicit proxyDomain in a
+#                                     domain-less environment fails for a vhost
+#                                     nothing ever creates)
+#
+# Anything else and the updater ran `caddy-manager add-domain` + `add-handler`
+# UNCONDITIONALLY. A missing cert refid only decides whether --custom-certificate
+# is passed; it never decides whether the vhost exists. Checks 1 and 2 used to
+# downgrade a missing domain/handler to a warning whenever no refid resolved,
+# which made a declared-but-never-provisioned proxy report healthy forever —
+# `no drift` for a module with zero domains and zero handlers (#580). The refid
+# still gates Checks 3/4, where it genuinely is about public TLS.
+VHOST_EXPECTED=1
+[[ -z "${TAPPAAS_DOMAIN}" ]] && VHOST_EXPECTED=0
+
+# `caddy-manager list` renders one line per entry:
+#   Domains:   "  <fqdn padded 40> [enabled]  (<description>)  uuid=…"
+#   Handlers:  "  -> <upstream>:<port padded 5>  [enabled]  (<description>)  uuid=…"
+# Match those shapes rather than grepping the whole blob for a bare substring: an
+# unanchored needle also hits a DESCRIPTION, and an unescaped FQDN is a regex
+# whose dots match anything, so "a.b.org" matched "axbxorg" and any longer
+# domain ending in it.
+re_quote() { sed 's/[.[\*^$()+?{|]/\\&/g' <<<"$1"; }
+PROXY_DOMAIN_RE="$(re_quote "${PROXY_DOMAIN}")"
+UPSTREAM_RE="$(re_quote "${UPSTREAM}")"
+
 info "  ${BOLD}network:proxy tests for ${BL}${MODULE}${CL}"
 info "    Domain: ${PROXY_DOMAIN:-unknown}"
 
@@ -137,39 +183,55 @@ if ! command -v caddy-manager &>/dev/null; then
     exit 2
 fi
 
-# Get caddy-manager listing once
-caddy_list=$(caddy-manager list --no-ssl-verify 2>/dev/null) || true
+# Get caddy-manager listing once.
+#
+# TAPPAAS_TEST_CADDY_LIST names a FILE holding a recorded `caddy-manager list`
+# output, which then stands in for the live firewall. It exists so the drift
+# check can be exercised in BOTH directions offline — a module whose vhost is
+# present must report clean, one whose vhost is absent must report drift — which
+# is what #580 asked for and what nothing could assert while the only source of
+# truth was the real OPNsense. Mirrors the firewall-type NONE-mode trick the
+# auto-pinhole fixtures in network/test.sh already use.
+#
+# Opt-in and unset everywhere in production; the live path below is unchanged.
+if [[ -n "${TAPPAAS_TEST_CADDY_LIST:-}" ]]; then
+    caddy_list=$(cat "${TAPPAAS_TEST_CADDY_LIST}" 2>/dev/null) || true
+    info "    (fixture listing: ${TAPPAAS_TEST_CADDY_LIST})"
+else
+    caddy_list=$(caddy-manager list --no-ssl-verify 2>/dev/null) || true
+fi
 
 # ── Test 1: Domain exists in Caddy ──────────────────────────────────
 
 info "  Check 1: Caddy domain entry"
-if [[ -z "${PROXY_DOMAIN}" ]]; then
-    # No domain resolvable for this module's environment (see Check 3). An empty
-    # needle makes `grep -q ""` match every line, which reported a meaningless
-    # "Domain '' exists in Caddy" pass — check nothing rather than pass falsely.
-    warn "    No domain configured for this environment — skipping Caddy domain check"
-elif echo "${caddy_list}" | grep -q "${PROXY_DOMAIN}"; then
+if [[ "${VHOST_EXPECTED}" -eq 0 ]]; then
+    # No domain resolvable for this environment, so update-service.sh skipped the
+    # reconcile and there is no vhost to find. Check nothing rather than pass
+    # falsely — an empty needle makes `grep -q ""` match every line, which used to
+    # report a meaningless "Domain '' exists in Caddy".
+    warn "    No domain for this environment — updater skips the reconcile, no vhost expected"
+elif grep -qE "^[[:space:]]+${PROXY_DOMAIN_RE}[[:space:]]+\[" <<<"${caddy_list}"; then
     pass "Domain '${PROXY_DOMAIN}' exists in Caddy"
-elif [[ "${TLS_CONFIGURED}" == "1" ]]; then
-    # Public TLS IS set up (acme-setup.sh has run) → the reverse-proxy vhost
-    # should already exist, so a missing domain is a genuine regression.
-    fail "Domain '${PROXY_DOMAIN}' not found in Caddy"
 else
-    # Public TLS/proxy was never set up (no cert refid): the module has not been
-    # publicly exposed yet, so a missing Caddy vhost is expected — internal/LAN
-    # access is unaffected. Warn, never fail (mirrors the HTTPS/TLS checks below).
-    warn "    Domain '${PROXY_DOMAIN}' not in Caddy yet — public reverse proxy/TLS not set up (run acme-setup.sh); warning, not a failure"
+    fail "Domain '${PROXY_DOMAIN}' not found in Caddy — module declares network:proxy but has no vhost ('module-manager reconcile ${MODULE} --apply' creates it)"
 fi
 
 # ── Test 2: Handler exists in Caddy ─────────────────────────────────
 
+# The handler is checked WITH its port: a handler on the wrong upstream port is
+# the failure #580 was filed against (a vhost that cannot serve the application),
+# and matching the upstream alone reports it clean. `list` does not print which
+# domain a handler is bound to, so that binding stays unverified here — see the
+# README note.
 info "  Check 2: Caddy handler entry"
-if echo "${caddy_list}" | grep -q "${UPSTREAM}"; then
-    pass "Handler for '${UPSTREAM}' exists in Caddy"
-elif [[ "${TLS_CONFIGURED}" == "1" ]]; then
-    fail "Handler for '${UPSTREAM}' not found in Caddy"
+if [[ "${VHOST_EXPECTED}" -eq 0 ]]; then
+    warn "    No domain for this environment — updater skips the reconcile, no handler expected"
+elif grep -qE "^[[:space:]]*-> ${UPSTREAM_RE}:${PROXY_PORT}[[:space:]]" <<<"${caddy_list}"; then
+    pass "Handler for '${UPSTREAM}:${PROXY_PORT}' exists in Caddy"
+elif grep -qE "^[[:space:]]*-> ${UPSTREAM_RE}:" <<<"${caddy_list}"; then
+    fail "Handler for '${UPSTREAM}' is in Caddy but not on port ${PROXY_PORT} (declared proxyPort) — $(grep -E "^[[:space:]]*-> ${UPSTREAM_RE}:" <<<"${caddy_list}" | head -1 | sed 's/^[[:space:]]*//')"
 else
-    warn "    Handler for '${UPSTREAM}' not in Caddy yet — public reverse proxy/TLS not set up (run acme-setup.sh); warning, not a failure"
+    fail "Handler for '${UPSTREAM}:${PROXY_PORT}' not found in Caddy — module declares network:proxy but has no handler"
 fi
 
 # ── Test 3: HTTPS endpoint responds ─────────────────────────────────
