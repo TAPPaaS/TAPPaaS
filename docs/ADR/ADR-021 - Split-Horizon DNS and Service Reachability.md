@@ -2,14 +2,14 @@
 
 | | |
 |---|---|
-| **Status** | **Draft for review** — first stab, written to be argued with. The Decision section is a *proposal*; §Open questions lists what must be settled before it is Proposed. |
-| **Version** | 0.1 |
+| **Status** | **Draft for review** — the Decision is a proposal; §Open questions lists what remains. |
+| **Version** | 0.2 |
 | **Date** | 2026-09-05 |
 | **Author** | Lars Rossen |
 | **Parent** | [ADR-005 Variant/Domain Architecture](<ADR-005-variant-domain-architecture.md>) §6 (the split-horizon idea), [ADR-014 Zone and Environment Lifecycle](<ADR-014 - Zone and Environment Lifecycle.md>) (what a zone and an environment *are*) |
 | **Refines** | ADR-005 §6 — which stated the goal but never named the resolution rule, leaving three implementations to infer it differently. |
 | **Closes / addresses** | **#577** (wildcard split-horizon has two writers with different zone rules — three, in fact). Supersedes the interim reading of **#504** recorded in `acme-setup.sh` and `clients.ts`. Related: **#474** (a `redirect` zone permits local-data only at the apex), **#505** (wildcard supersedes per-service). |
-| **Changelog** | v0.1 first stab: the reachability invariant (D1), one resolver (D2), the three worked cases, and the zone-rule / module-rule tables per case. |
+| **Changelog** | v0.1 first stab: reachability invariant, one resolver, three cases. v0.2 (operator decision): the target is **the DMZ gateway, always** (D2), backed by a **zone invariant** (D3) — this replaces v0.1's client-zone-gateway rule, dissolves the one-apex-target problem, and answers three of v0.1's five open questions. Also: a wildcard **certificate** does not imply a wildcard **record** (D4), and R3's unpublished-service case is worked through as Case 4. |
 
 ## Context
 
@@ -22,15 +22,14 @@ The mechanism has three moving parts:
 
 | Part | Where it runs | Role |
 |---|---|---|
-| **Caddy** (`os-caddy`) | **on the OPNsense firewall** | terminates TLS for every published name and proxies to the service VM. It is reachable on **every** interface the firewall owns — i.e. at **each zone's gateway IP**. |
+| **Caddy** (`os-caddy`) | **on the OPNsense firewall** | terminates TLS for every published name, applies the identity gate, and proxies to the service VM. It listens on **every** interface the firewall owns — i.e. at **each zone's gateway IP**, `10.x.y.1`. |
 | **Unbound** | on the firewall, `10.0.0.1:53` | the internal resolver. Holds the *inside* answer as a host override. Dnsmasq cannot do this — it does not serve public domains and cannot express a wildcard. |
-| **Zone policy** | `zones.json` | `access-to` and `pinhole-allowed-from` decide which client zone may reach which target address. |
+| **Zone policy** | `zones.json` | `access-to` and `pinhole-allowed-from` decide which zone may reach which target address. |
 
-**Caddy living on the firewall is the fact that makes this tractable, and the fact all three
-current implementations lost sight of.** Because Caddy answers on every zone gateway, the
-inside answer does not have to be "the address of the service" or "the address of the DMZ" —
-it can be *the client's own gateway*, which is always reachable from that client, needs no
-`access-to` grant, and is the same Caddy.
+**Caddy living on the firewall, answering on every `10.x.y.1`, is the fact that makes this
+tractable** — and the fact all three current implementations lost sight of. The inside answer
+does not have to be the address of the service, or of the service's zone. It only has to be
+*some* Caddy listener the client may reach.
 
 ### The problem this ADR exists to fix
 
@@ -38,34 +37,28 @@ Three code paths write the internal answer, and they resolve it from different z
 
 | Writer | Record it owns | Zone it resolves | Cites |
 |---|---|---|---|
-| `network/services/proxy/update-service.sh` → `proxy_split_horizon_gateway()` | per-service `host.domain` | the authorized **client** zone (`home`→`work`→`mgmt`, or `proxyAllowedZones`) | #504, ADR-005 §6 |
+| `network/services/proxy/update-service.sh` → `proxy_split_horizon_gateway()` | per-service `host.domain` | the authorized **client** zone (`home`→`work`→`mgmt`) | #504, ADR-005 §6 |
 | `tappaas-cicd/scripts/acme-setup.sh` (wildcard mode) | the wildcard `*` | the environment's **service** zone, fallback **dmz** | #504, ADR-005 §6 |
 | `manager/environment-manager/src/clients.ts` → `wildcardDnsState()` | the wildcard `*` | the environment's **service** zone, fallback **dmz** | #504, ADR-005 §6 |
 
-All three cite the same authority and disagree. #577 read this as 1-vs-1; it is 2-vs-1, and the
-majority is wrong on reachability. On the reference site:
+All three cite the same authority and disagree. #577 read this as 1-vs-1; it is 2-vs-1. The live
+record set shows the drift plainly — 5 records on the dmz gateway, 3 on mgmt, 1 on a client-zone
+gateway — with no rule that explains all three.
 
-```
-home:   access-to=[internet]              pinhole-allowed-from=(none)
-dmz:    access-to=[internet]              pinhole-allowed-from=[internet]
-rossen: access-to=[internet,dmz]          pinhole-allowed-from=[dmz]   (type Service)
-```
+### Why the obvious fixes both fail
 
-A `home` client pointed at the **service** zone gateway (`10.2.0.1`) is denied; pointed at the
-**dmz** gateway (`10.6.0.1`) it is denied. Pointed at **its own** gateway (`10.3.10.1`) it
-reaches Caddy. So #504's stated goal — *"not the DMZ, which home/work cannot reach"* — is **not**
-achieved by the service-zone rule; that rule swapped one denied address for another.
+*Point the answer at the service zone* (what two of the three do): a `home` client is not
+authorized into a Service zone, so the answer is unreachable. This is what #504 was reacting
+against, and it did not fix it — it swapped one denied address for another.
 
-The live record set shows the drift plainly (5 × dmz, 3 × mgmt, 1 × home gateway), of which only
-the last matches the rule the proxy applies today.
+*Point the answer at the client's own zone gateway* (what the proxy does, and what v0.1 of this
+ADR proposed): always reachable, but it needs **one answer per client zone**. Unbound's wildcard
+installs `local-zone: "<domain>" redirect`, which has a **single apex target** — so a site with
+two client zones cannot express it, and service-to-service lookups have no defined answer at
+all.
 
-### Why one rule is not enough by itself
-
-Unbound's wildcard installs `local-zone: "<domain>" redirect`, which has **one apex target**.
-One address cannot be simultaneously correct for two client zones. Any rule must therefore say
-what happens when more than one client zone is authorized — today the proxy warns and picks the
-first, which is honest but arbitrary. This ADR makes that limit explicit and scopes the fix for
-it (D5).
+Both failures come from trying to encode *authorization* in the *address*. The decision below
+stops doing that.
 
 ---
 
@@ -82,64 +75,52 @@ Caddy is where TLS terminates *and* where the per-service identity gate lives �
 list. A DNS answer that points straight at the VM (`10.2.0.x:8080`) is not merely a different
 route to the same place: it **bypasses authentication entirely**.
 
-This turns a convenience into an invariant: *split-horizon exists so that internal clients get
-the same gated path as external ones, not so that they get a shortcut around it.* Any future
-optimisation that answers with a service address must be rejected on this ground alone.
-
-> Consequence for D2: every candidate in the resolution order is a firewall interface (a Caddy
-> listener) by construction. That is not a coincidence — it is the requirement.
+*Split-horizon exists so that internal clients get the same gated path as external ones, not so
+that they get a shortcut around it.* Any future optimisation that answers with a service address
+must be rejected on this ground alone.
 
 ### R2. Both certificate models must work, and neither may change the address
 
-A site runs one of two certificate strategies, and split-horizon must be identical under both:
+| Certificate strategy | Issued by | Covers |
+|---|---|---|
+| per-service (default) | Caddy, HTTP-01 | one name per published host |
+| wildcard | OPNsense ACME (`acme-setup.sh`), DNS-01 | `*.<domain>` |
 
-| `dnsMode` | Certificate | Who issues | Record shape |
-|---|---|---|---|
-| `per-service` (default) | one cert per published host | Caddy, HTTP-01 | `host.domain A <target>` |
-| `wildcard` | one `*.<domain>` cert | OPNsense ACME (`acme-setup.sh`), DNS-01 | `* .domain A <target>` + prune per-host |
-
-The certificate model decides **record shape and who issues the cert**. It MUST NOT decide the
-**address**. Today it does — flipping `dnsMode` moves clients from a client-zone gateway to a
-service-zone gateway — and that coupling is half of #577. R2 makes the address a function of
-zone authorization only (D2), and `dnsMode` a function of certificate strategy only (D3).
+The certificate strategy decides **who issues the cert and what it covers**. It MUST NOT decide
+the **address**, and — see D4 — it does not decide the **record shape** either.
 
 ### R3. A service with no external DNS entry degrades — it must not fail
 
-Not every service is published. A module may have no public DNS record at all — deliberately
-(internal-only), or transitionally (the record is not created yet, or the site has no public
-domain). ACME cannot issue for a name that does not resolve publicly, so there is no
-certificate and nothing for Caddy to serve that name on.
+A module may have no public DNS record at all — deliberately (internal-only), or transitionally
+(the record is not created yet, or the site has no public domain). ACME cannot issue for a name
+that does not resolve publicly, so there is no certificate and nothing for Caddy to serve.
 
-**This is a supported configuration, not an error.** The required behaviour:
+**This is a supported configuration, not an error.**
 
-| | Published service | **Unpublished service (no external DNS)** |
+| | Published service | **Unpublished service** |
 |---|---|---|
 | Reachable at | `service.example.org` | `<vmname>.<zone>.internal` **only** |
-| TLS | yes (Caddy, per-service or wildcard cert) | **none** — plain HTTP to the service port |
+| TLS | yes | **none** — plain HTTP to the service port |
 | Identity gate | yes (Caddy `forward_auth` → Authentik) | **none** — Caddy is not in the path |
-| Split-horizon record | client-zone gateway (D2) | **none** — nothing to resolve |
+| Split-horizon record | the DMZ gateway (D2) | **none** |
 | Install / converge | succeeds | **succeeds**, with one clear warning |
 
-So the degraded mode is explicitly *less* capable — no cert **and** no identity gating, because
-R1's gate lives in the Caddy path this service does not have. The install must say so once,
-plainly, rather than failing or (worse) silently leaving a half-configured proxy entry.
-
-The internal name `<vmname>.<zone>.internal` is already served by Dnsmasq from the DHCP
-reservation, so it needs no split-horizon record and no work from this ADR — the requirement is
-simply that the publishing path **detects the absence and stops cleanly**, and that
-`network-manager validate` reports the service as unpublished rather than broken.
+The degraded mode is explicitly *less* capable — no cert **and** no identity gating, because
+R1's gate lives in the Caddy path this service does not have. The internal name
+`<vmname>.<zone>.internal` is already served by Dnsmasq from the DHCP reservation, so it needs
+no work here; the requirement is that the publishing path **detects the absence and stops
+cleanly**.
 
 > Today `proxy_split_horizon_gateway` failing produces
 > `Could not derive a split-horizon gateway … — register DNS manually`, which conflates "this
 > service is deliberately unpublished" with "I could not work out the address for a service that
-> should be published". R3 requires these be different messages, only the second of which is a
-> problem.
+> should be published". R3 requires these be different messages, only the second a problem.
 
 ---
 
 ## Decision — the model
 
-### D1. The reachability invariant (the rule everything else serves)
+### D1. The reachability invariant
 
 > **The internal answer for a published name MUST be an address the asking client is permitted
 > to reach, and that address MUST be a Caddy listener.**
@@ -147,75 +128,77 @@ simply that the publishing path **detects the absence and stops cleanly**, and t
 The second half is **R1** — Caddy carries the identity gate, so an answer that routes around it
 is a security regression, not an optimisation. The first half is reachability. Both must hold.
 
-Corollary, and the reason the client-zone rule is right: *the client's own zone gateway always
-satisfies both halves.* It is self-traffic (no `access-to` grant needed) and it is Caddy.
+### D2. The target is the DMZ gateway — one answer, for everyone
 
-An answer that is merely "the right service" but unreachable is a **failure**, not a degradation
-— it presents as a hang or a TLS timeout with nothing in the service's own logs.
+> **Every split-horizon record for a published name resolves to the DMZ zone's gateway
+> (`10.6.0.1` on the reference site).**
 
-### D2. One resolver, one implementation
+There is no resolution *order*, no per-zone derivation, and nothing for three writers to infer
+differently. The DMZ gateway is a Caddy listener (R1 ✔) and, given D3, one every entitled client
+may reach (D1 ✔).
 
-There is exactly **one** function that answers *"what address should `<name>` resolve to
-inside?"*. All writers call it; none re-derives it.
+This is the choice v0.1 got wrong. Encoding *which client is allowed* into *which address is
+returned* is what produced both the drift and the one-apex-target dead end. Under D2:
 
-```
-split_horizon_target(domain, client_zone_set) -> (ip, zone, warning?)
-```
+- **DNS says "go to Caddy". Caddy says "you may / you may not".** Authorization moves entirely
+  out of the resolver and into the layer that can actually express it per-service.
+- A wildcard record becomes viable for any number of client zones, because there is only ever
+  one correct answer to put at the apex.
+- Service-to-service lookups need no special case: a VM in `srv` gets the same address.
+- An unauthorized client gets a **403 from Caddy** — legible — instead of a silent timeout into
+  a denied address.
 
-Resolution order:
+### D3. The zone invariant — entitlement is a zone grant, and it is enforced
 
-1. **The authorized client zone** — the first zone in the module's `proxyAllowedZones`
-   (declared order is intent), else the default order `home` → `work` → `mgmt`, that is
-   *Active* and has a subnet. → its gateway IP.
-2. **The environment's service zone** — only when no client zone resolves. Correct for
-   service-to-service traffic inside that zone, and honest about clients it cannot serve.
-3. **The dmz gateway** — last resort, where Caddy also listens.
-4. **Fail loudly — but only for a name that is meant to be published.** A service with no
-   external DNS entry is **not** an error (R3): the resolver is never asked, the publish path
-   skips cleanly. A name that *should* resolve and cannot is a real failure the caller reports,
-   not a warning it walks past. These are different outcomes and must read differently.
+> **Any zone that may resolve a published service MUST have `dmz` in its `access-to`**
+> (in addition to `internet`). The DMZ zone itself trivially satisfies this.
 
-It must be **one implementation**, not one rule transcribed into bash and TypeScript — that
-transcription is what produced #577. Concretely: a `network-manager split-horizon-target`
-subcommand (or equivalent) invoked by the proxy service, `acme-setup.sh`, and
-`environment-manager`.
+"May resolve a published service" is not a new flag — it is derivable from what already exists:
+a zone named in any module's effective `proxyAllowedZones`, which defaults to *every Active
+Service zone plus `home`, `work`, `mgmt` and the `netbird` overlay*.
 
-### D3. Per-service and wildcard are two renderings of the same answer
+`network-manager validate` checks this and reports a zone that is entitled but lacks the grant.
+That turns the old silent failure (a client pointed at an address the firewall drops) into a
+configuration error caught before it is a support call.
 
-This is **R2** made concrete. `dnsMode` decides the *shape* of the record and *who issues the
-certificate*, never the *address*:
+Zones deliberately **not** entitled — `guest`, the IoT segments, `wan`, unused overlays — need
+no grant and MUST NOT be given one by this rule. The invariant is scoped by entitlement, not
+applied to every zone.
 
-| `dnsMode` | Record | Written by |
+> **This is the cost of D2, stated plainly:** entitlement to reach published services becomes an
+> explicit, auditable `access-to: dmz` grant, rather than an implicit consequence of which
+> gateway DNS happened to return. #504 objected that *"home cannot reach the DMZ"* — the answer
+> is to grant it deliberately and visibly, not to route around it.
+
+### D4. A wildcard certificate does not imply a wildcard record
+
+`dnsMode` selects the **certificate strategy** (R2). It does **not** dictate the Unbound record
+shape. The two are independent, and under D2 the record shape no longer affects correctness at
+all — every record carries the same address, so `*` and per-host entries resolve identically.
+
+| Certificate | Record shape | Verdict |
 |---|---|---|
-| `per-service` (default) | `host.domain A <target>`, one per published module | `network:proxy` |
-| `wildcard` | `* .domain A <target>` + prune colliding per-host records (#505) | `acme-setup.sh` (at issuance) / `environment-manager` (on reconcile) |
+| wildcard (`*.example.org`) | wildcard `*` | valid — fewest records |
+| **wildcard** | **per-service** | **valid, and often preferable** — explicit records, no `redirect`-zone apex constraints (#474), no collision pruning (#505) |
+| per-service | per-service | valid — the default |
+| per-service | wildcard | valid but pointless — a wildcard record with no wildcard cert publishes names Caddy cannot serve |
 
-Flipping `dnsMode` today silently changes the address as well as the shape. Under D2 it changes
-only the shape.
+Keeping this as one field is deliberate: a second field would be one more thing to disagree
+with itself. The ADR's requirement is that the implementation **not infer record shape from
+certificate strategy**, and that the pairing above be documented where `dnsMode` is.
 
-### D4. Zone policy is the source of truth for "authorized"; DNS never widens it
+### D5. One resolver, one implementation
 
-The resolver *reads* `access-to` / `pinhole-allowed-from` and the module's `proxyAllowedZones`;
-it never assumes a grant. If a client zone is not authorized for a service, the fix is a zone
-rule or a module rule — **not** a DNS record pointing somewhere the firewall will drop.
+Even reduced to "return the DMZ gateway", this must be **one** function that all writers call —
+not one rule transcribed into bash and TypeScript, which is exactly what produced #577. It also
+owns the R3 decision (is this name published at all?) so that too is answered once.
 
-Caddy's own access-list (from `proxyAllowedZones`) remains the enforcement point. DNS decides
-*which Caddy listener you talk to*; the access-list decides *whether Caddy answers you*. Both
-must agree, and they are derived from the same `proxyAllowedZones` list.
+```
+split_horizon_target(domain) -> (ip, "dmz") | UNPUBLISHED | ERROR
+```
 
-### D5. One wildcard cannot serve two client zones — say so, and scope the fix
-
-When more than one client zone is authorized **and** `dnsMode: wildcard`, one apex target cannot
-serve both. Until Unbound **access-control-view** (per-subnet answers) is implemented:
-
-- the resolver returns the primary and emits **one** warning naming the zones that will not be
-  served;
-- `environment-manager validate` reports it as a **configuration warning**, so it is visible
-  before it is a support call;
-- `dnsMode: per-service` has no such limit (one record per host, each free to differ) and is
-  therefore the recommended mode for a multi-client-zone site.
-
-Implementing access-control-view is the follow-up this ADR deliberately does not take on.
+Concretely: a `network-manager split-horizon-target` subcommand invoked by
+`network/services/proxy`, `acme-setup.sh`, and `environment-manager`.
 
 ---
 
@@ -224,8 +207,6 @@ Implementing access-control-view is the follow-up this ADR deliberately does not
 Throughout: service module **`openwebui`**, published at **`openwebui.example.org`**, VM in a
 **Service** zone, Caddy on the firewall, Unbound at `10.0.0.1`.
 
-Reference addressing:
-
 | Zone | Type | Subnet | Gateway (= a Caddy listener) |
 |---|---|---|---|
 | `mgmt` | Management | `10.0.0.0/24` | `10.0.0.1` |
@@ -233,50 +214,48 @@ Reference addressing:
 | `work` | Client | `10.3.20.0/24` | `10.3.20.1` |
 | `srv` | Service | `10.2.0.0/24` | `10.2.0.1` |
 | `srv2` | Service | `10.2.1.0/24` | `10.2.1.1` |
-| `dmz` | DMZ | `10.6.0.0/24` | `10.6.0.1` |
+| **`dmz`** | DMZ | `10.6.0.0/24` | **`10.6.0.1`** ← the answer, in every case |
 
 ---
 
-### Case 1 — one environment, one client zone, `per-service`
+### Case 1 — one environment, one client zone
 
-The baseline install: environment `home-env` (domain `example.org`, `network.zone: srv`), one
-client zone `home`, `openwebui` deployed into `srv`.
+Environment `home-env` (domain `example.org`, `network.zone: srv`), client zone `home`,
+`openwebui` deployed into `srv`.
 
-**Information flow — same URL, four origins**
+**Information flow — same URL, four origins, one Caddy**
 
 ```
                           openwebui.example.org
                                   │
   ┌───────────────────────────────┼────────────────────────────────┐
-  │ external client               │ internal client (home)         │
-  │  public DNS → WAN IP          │  Unbound → 10.3.10.1           │
+  │ external client               │ internal client (any zone)     │
+  │  public DNS → WAN IP          │  Unbound → 10.6.0.1 (dmz gw)   │
   │        │                      │        │                       │
   │        ▼                      │        ▼                       │
   │  firewall WAN:443 ────────────┴──▶ CADDY (on the firewall)     │
-  │  (rule: allow WAN→wanip:443)      terminates TLS for           │
-  │                                    openwebui.example.org       │
+  │  (rule: allow WAN→wanip:443)      terminates TLS               │
   │                                            │                   │
-  │                                            │ access-list check │
-  │                                            │ (proxyAllowedZones)│
+  │                                            │ 1. access-list    │
+  │                                            │    (proxyAllowedZones)
+  │                                            │ 2. forward_auth   │
+  │                                            │    → Authentik    │
   │                                            ▼                   │
   │                                    upstream: openwebui.srv     │
   │                                    (10.2.0.x:8080)             │
   └────────────────────────────────────────────────────────────────┘
 ```
 
-The **same Caddy** serves all origins; only the *listener* differs. That is the whole trick:
-external traffic arrives on the WAN listener, `home` traffic on the `home` listener, `mgmt`
-traffic on the `mgmt` listener — and Caddy's upstream and access-list are identical for all.
-
 **Resolution per origin**
 
-| Client is in | Unbound answer | Why | Reaches Caddy? |
-|---|---|---|---|
-| `home` (client) | `10.3.10.1` | its own gateway (D2 step 1) | ✅ self-traffic |
-| `mgmt` | `10.3.10.1` | same record — mgmt is authorized *to* home | ✅ via `mgmt.access-to: home` |
-| `srv` (the service zone itself) | `10.3.10.1` | same record | ⚠️ **only if** `srv.access-to` includes `home` — see Open Q3 |
-| `dmz` | `10.3.10.1` | same record | ⚠️ same caveat |
-| external | *not Unbound* — public DNS → WAN IP | outside never sees the override | ✅ WAN rule |
+| Client is in | Unbound answer | Reaches Caddy? |
+|---|---|---|
+| `home` (client) | `10.6.0.1` | ✅ via `home.access-to: dmz` (D3) |
+| `mgmt` | `10.6.0.1` | ✅ already has `dmz` |
+| `srv` (the service zone) | `10.6.0.1` | ✅ Service zones already carry `dmz` |
+| `dmz` | `10.6.0.1` | ✅ own gateway |
+| `guest` / IoT | `10.6.0.1` | ❌ **by design** — not entitled, no grant, dropped |
+| external | *not Unbound* — public DNS → WAN IP | ✅ WAN rule |
 
 **Rules required**
 
@@ -284,10 +263,11 @@ traffic on the `mgmt` listener — and Caddy's upstream and access-list are iden
 
 | Zone | Setting | Value | Why |
 |---|---|---|---|
-| `home` | `access-to` | `[internet]` | no grant needed for its own gateway — self-traffic |
-| `srv` | `type` | `Service` | environment binds to a service segment (ADR-014) |
-| `srv` | `pinhole-allowed-from` | `[home, mgmt]` | lets Caddy's upstream hop reach the VM |
-| `dmz` | — | unchanged | not on the path in this case |
+| `home` | `access-to` | `[internet, dmz]` | **D3 invariant** — entitles it to reach Caddy |
+| `srv` | `type` | `Service` | environment binds a service segment (ADR-014) |
+| `srv` | `access-to` | `[internet, dmz]` | so the service zone can resolve published names too |
+| `srv` | `pinhole-allowed-from` | `[dmz]` | Caddy's upstream hop into the VM |
+| `guest`, IoT | `access-to` | unchanged (no `dmz`) | deliberately not entitled |
 
 *Module rules (`openwebui.json`)*
 
@@ -295,34 +275,25 @@ traffic on the `mgmt` listener — and Caddy's upstream and access-list are iden
 |---|---|---|
 | `zone0` | `srv` | the VM's zone |
 | `proxyDomain` | `openwebui.example.org` | the published name |
-| `proxyAllowedZones` | *unset* → default (`home`, `work`, `mgmt`, Active Service zones, **not** internet) | zero-trust default; resolver picks `home` first |
-| `proxyAllowedZones` | `[home, internet]` | **to publish externally** — `internet` disables the access-list; the resolver still returns `10.3.10.1` for the inside answer |
-
-> **Note the split**: `internet` in `proxyAllowedZones` changes only Caddy's *access-list*. The
-> internal record stays the client-zone gateway. External clients never consult Unbound.
+| `proxyAllowedZones` | *unset* → default (`home`, `work`, `mgmt`, Active Service zones, `netbird`) | zero-trust default; also the set D3 validates for the `dmz` grant |
+| `proxyAllowedZones` | `[home, internet]` | **to publish externally** — `internet` disables the access-list; the internal answer is unchanged |
 
 ---
 
 ### Case 2 — the same service in a second environment
 
-Add environment `work-env` (domain `work.example.org`, `network.zone: srv2`). `openwebui` is
-deployed a second time as `openwebui-work-env` (ADR-007 P5 naming), VM in `srv2`, published at
-`openwebui.work.example.org`.
+Add environment `work-env` (domain `work.example.org`, `network.zone: srv2`), deployed as
+`openwebui-work-env` (ADR-007 P5 naming), published at `openwebui.work.example.org`.
 
-Two independent names, two independent records, **one** resolver:
+| Deployment | Published name | Env service zone | Inside answer |
+|---|---|---|---|
+| `openwebui` | `openwebui.example.org` | `srv` | `10.6.0.1` |
+| `openwebui-work-env` | `openwebui.work.example.org` | `srv2` | `10.6.0.1` |
 
-| Deployment | Published name | Env service zone | Authorized client zone | Inside answer |
-|---|---|---|---|---|
-| `openwebui` | `openwebui.example.org` | `srv` | `home` | `10.3.10.1` |
-| `openwebui-work-env` | `openwebui.work.example.org` | `srv2` | `home` (default order) | `10.3.10.1` |
-
-**Both resolve to the same gateway — and that is correct.** The client's zone gateway is a
-Caddy listener; Caddy distinguishes the two deployments by **SNI / Host header**, not by
-address. `openwebui.example.org` → upstream in `srv`; `openwebui.work.example.org` → upstream in
-`srv2`.
-
-This is the point at which the service-zone rule visibly breaks down: it would answer `10.2.0.1`
-and `10.2.1.1`, two addresses a `home` client is authorized for neither.
+**Both resolve to the same address, and that is the point.** Caddy distinguishes the two
+deployments by **SNI / Host header**, not by address: `openwebui.example.org` → upstream in
+`srv`; `openwebui.work.example.org` → upstream in `srv2`. Adding an environment adds a Caddy
+handler and a DNS record; it adds no new address and no new zone grant.
 
 **Rules required** (delta from Case 1)
 
@@ -331,7 +302,8 @@ and `10.2.1.1`, two addresses a `home` client is authorized for neither.
 | Zone | Setting | Value | Why |
 |---|---|---|---|
 | `srv2` | `type` | `Service` | second environment's segment |
-| `srv2` | `pinhole-allowed-from` | `[home, mgmt]` | Caddy's upstream hop into `srv2` |
+| `srv2` | `access-to` | `[internet, dmz]` | D3 |
+| `srv2` | `pinhole-allowed-from` | `[dmz]` | Caddy's upstream hop into `srv2` |
 
 *Module rules* (`openwebui-work-env.json`)
 
@@ -339,30 +311,31 @@ and `10.2.1.1`, two addresses a `home` client is authorized for neither.
 |---|---|---|
 | `environment` | `work-env` | drives vmname + `zone0` from the env (`network.zone: srv2`) |
 | `proxyDomain` | `openwebui.work.example.org` | distinct name — the SNI Caddy routes on |
-| `proxyAllowedZones` | *unset* → default | same default; same client zone authorized |
-
-> **Naming is the isolation, not addressing.** Two environments sharing one client zone is
-> normal and needs no DNS distinction.
 
 ---
 
 ### Case 3 — two client zones, each authorized to a different environment
 
-`home` may reach `home-env` only; `work` may reach `work-env` only.
+`home` may use `home-env` only; `work` may use `work-env` only.
 
-| Deployment | Name | Authorized client zone | Inside answer |
-|---|---|---|---|
-| `openwebui` | `openwebui.example.org` | `home` | `10.3.10.1` |
-| `openwebui-work-env` | `openwebui.work.example.org` | `work` | `10.3.20.1` |
+Under D2 **both names resolve to `10.6.0.1` for both zones** — DNS carries no authorization.
+The isolation is enforced where it can be expressed per-service:
 
-Each name resolves to **the gateway of the client zone that is allowed to use it** — the two
-answers differ because the two authorizations differ, which is exactly the intent.
+| Layer | `home` → `openwebui.example.org` | `work` → `openwebui.example.org` |
+|---|---|---|
+| Unbound | `10.6.0.1` | `10.6.0.1` |
+| Firewall (D3 grant) | allowed to `dmz` | allowed to `dmz` |
+| **Caddy access-list** | **allow** (`home` ∈ proxyAllowedZones) | **403 deny** |
+| Caddy upstream | `srv` | — |
 
-**Failure mode this makes explicit:** a `work` client that asks for `openwebui.example.org`
-gets `10.3.10.1`, an address `work` is not authorized to reach → the connection is dropped by
-the firewall. That is the **correct** outcome (deny), but it presents as a timeout. D5's
-warning and Caddy's access-list (which would return **403** if the packet did arrive) are the
-diagnosable surface; see Open Q2 on making the deny legible.
+The `work` client gets a **clean 403 it can read**, not a timeout into a dropped packet. That is
+strictly better diagnostics than v0.1's per-zone-address scheme, which failed silently at the
+firewall — and it is why v0.1's Open Q2 ("should an unauthorized client get a deny it can
+read?") no longer needs answering.
+
+**And the wildcard works here.** One `*.example.org → 10.6.0.1` is correct for both client
+zones simultaneously, because the address does not encode who may use it. This case was
+*impossible* to express with a wildcard under v0.1.
 
 **Rules required**
 
@@ -370,35 +343,31 @@ diagnosable surface; see Open Q2 on making the deny legible.
 
 | Zone | Setting | Value | Why |
 |---|---|---|---|
-| `home` | `access-to` | `[internet]` | self-traffic to `10.3.10.1` needs no grant |
-| `work` | `access-to` | `[internet]` | same |
-| `srv` | `pinhole-allowed-from` | `[home, mgmt]` | **only** `home` — the authorization boundary |
-| `srv2` | `pinhole-allowed-from` | `[work, mgmt]` | **only** `work` |
+| `home` | `access-to` | `[internet, dmz]` | entitled to reach Caddy (D3) |
+| `work` | `access-to` | `[internet, dmz]` | same |
+| `srv` | `pinhole-allowed-from` | `[dmz]` | only Caddy reaches the VM — not clients directly |
+| `srv2` | `pinhole-allowed-from` | `[dmz]` | same |
 
-*Module rules*
+*Module rules* — this is where the isolation lives
 
 | Module | Field | Value | Why |
 |---|---|---|---|
-| `openwebui` | `proxyAllowedZones` | `[home, mgmt]` | resolver picks `home` (first, declared order = intent); Caddy 403s `work` |
-| `openwebui-work-env` | `proxyAllowedZones` | `[work, mgmt]` | resolver picks `work`; Caddy 403s `home` |
+| `openwebui` | `proxyAllowedZones` | `[home, mgmt]` | Caddy 403s `work` |
+| `openwebui-work-env` | `proxyAllowedZones` | `[work, mgmt]` | Caddy 403s `home` |
 
-> **`proxyAllowedZones` is doing double duty here, deliberately**: it is both the DNS resolution
-> input and the Caddy access-list. One declaration, so the two cannot drift apart (D4).
-
-**With `dnsMode: wildcard` this case cannot be fully served.** One `*.example.org` apex target
-must choose `home` *or* `work`. Per D5 the resolver picks the primary and warns. **Recommendation:
-a site with two mutually-exclusive client zones uses `per-service`.**
+> Note what moved: in v0.1 `proxyAllowedZones` did double duty (DNS address *and* access-list).
+> Under D2 it does **one** job — the access-list — and D3's `dmz` grant is the only zone-level
+> input. One declaration, one meaning.
 
 ---
 
 ### Case 4 — a service with no external DNS entry (R3)
 
-`openwebui` is deployed into `srv` but the site has **no public record** for
+`openwebui` is deployed into `srv` but there is **no public record** for
 `openwebui.example.org` — internal-only by choice, or the domain is not delegated yet.
 
-**Nothing to split.** There is no public answer to differ from, so there is no split-horizon
-record, no ACME certificate, and no Caddy handler. The service is reachable only at the name
-Dnsmasq already serves from its DHCP reservation:
+**Nothing to split.** No public answer to differ from, so no split-horizon record, no ACME
+certificate, no Caddy handler:
 
 ```
                     openwebui.example.org          <vmname>.<zone>.internal
@@ -412,35 +381,31 @@ Dnsmasq already serves from its DHCP reservation:
                                                     ── no identity gate (Caddy not in path)
 ```
 
-The degradation is real and must be stated to the operator: **losing the Caddy path loses the
-identity gate with it (R1)**. An unpublished service is reachable by anything the firewall lets
-onto its zone, with no authentication in front of it.
-
 **Required behaviour**
 
 | Step | Behaviour |
 |---|---|
 | `install-module.sh` / converge | **succeeds** |
-| `network:proxy` | detects "no public name" and **skips publishing cleanly** — no Caddy handler, no Unbound record, no ACME request |
+| `network:proxy` | detects "no public name", **skips publishing cleanly** — no Caddy handler, no Unbound record, no ACME request |
 | Operator message | exactly one, naming the consequence: *"`openwebui` is not published (no external DNS for `openwebui.example.org`) — reachable only at `openwebui.srv.internal`, without TLS and without the identity gate."* |
-| `network-manager validate` | reports it as **unpublished**, a distinct state from *misconfigured* |
-| Later, when DNS appears | the next converge publishes it — no manual repair, no stale half-state to clean up |
+| `network-manager validate` | reports it as **unpublished** — a distinct state from *misconfigured* |
+| Later, when DNS appears | the next converge publishes it — no manual repair, no stale half-state |
 
 **Rules required**
 
-*Zone rules* — unchanged from Case 1: the client zone needs `access-to` the **service** zone
-(or a pinhole) to reach the VM directly, because there is no Caddy hop to borrow reachability
-from. This is the one case where a client zone genuinely needs a grant into a service zone.
+*Zone rules* — this is the one case needing a **client → service zone** path, because there is
+no Caddy hop to borrow reachability from: the client zone needs `access-to` the service zone (or
+a pinhole). Note this also means the D3 `dmz` grant does nothing for an unpublished service.
 
 *Module rules*
 
 | Field | Value | Why |
 |---|---|---|
 | `proxyDomain` | *unset* | the explicit, intended form of "not published" |
-| `proxyDomain` | set, but the name does not resolve publicly | the **transitional** form — same degraded behaviour, but validate should flag it as *pending DNS*, since the operator's intent was to publish |
+| `proxyDomain` | set, but not publicly resolvable | the **transitional** form — same degraded behaviour, but validate flags it as *pending DNS* |
 
-> These two must not be conflated. An unset `proxyDomain` is a decision; a set-but-unresolvable
-> one is an unfinished job. Today both produce the same "register DNS manually" warning.
+> These must not be conflated. An unset `proxyDomain` is a decision; a set-but-unresolvable one
+> is an unfinished job. Today both produce the same "register DNS manually" warning.
 
 ---
 
@@ -448,54 +413,57 @@ from. This is the one case where a client zone genuinely needs a grant into a se
 
 **Good**
 
-- One rule, one implementation, three callers — the #577 drift vector is removed.
-- The answer is always reachable by construction (D1), instead of reachable by coincidence.
-- `dnsMode` becomes a pure record-shape choice; flipping it no longer re-points clients.
-- Case 3 shows the model expresses per-zone authorization without per-zone DNS.
+- One address, one rule, one implementation — the #577 drift vector is gone, and there is
+  nothing left for a fourth writer to infer differently.
+- The wildcard record becomes usable on multi-client-zone sites (impossible under v0.1).
+- Service-to-service and client traffic get the same answer — no special case.
+- Unauthorized access fails as a readable **403**, not a silent drop.
+- Authorization becomes auditable: an `access-to: dmz` grant you can see in `zones.json`, plus a
+  per-service `proxyAllowedZones`, instead of an emergent property of DNS.
 
 **Costs / risks**
 
-- **Existing records move.** On the reference site 8 of 9 records change target. That is a real
-  cutover: it must be a single reconcile that rewrites all of them, not a drip.
-- The wildcard limit (D5) becomes an explicit, warned-about restriction rather than an
-  unnoticed one — some sites will have to move to `per-service`.
-- A shared resolver invoked from bash is another process hop per published module.
+- **A deliberate widening.** Entitled client zones gain `dmz` in `access-to`. That is more
+  reachability than today, and it is the explicit price of putting Caddy in front of everything.
+  It is bounded by D3's scoping (guest/IoT/wan are *not* entitled) and by the fact that what
+  they reach is a reverse proxy with an access-list, not the service.
+- **A cutover.** On the reference site 4 of 9 records move (the 5 already on `10.6.0.1` are
+  correct as-is), and 3 zones need the `dmz` grant — `home`, `work`, `netbird`. Smaller than
+  v0.1's 8-of-9, but still a single deliberate migration.
+- The DMZ gateway becomes a single point of failure for *all* internal published-name traffic.
+  It already is for external traffic; this extends the blast radius inward.
 
 ---
 
-## Open questions (must be settled before this leaves Draft)
+## Open questions
 
-1. **Is the client-zone rule right for *service-to-service* traffic?** A VM in `srv` calling
-   `openwebui.example.org` gets the `home` gateway. Should service-origin lookups instead get
-   the service-zone gateway — and if so, can Unbound distinguish the caller without
-   access-control-view? (This is the strongest argument the service-zone rule had, and it
-   deserves a real answer rather than being dismissed.)
-2. **Should an unauthorized client get a deny it can read?** Today it is a timeout. Options:
-   let the packet reach Caddy and 403 (legible, but admits the packet), or keep the drop and
-   surface it in `network-manager validate`.
-3. **Case 1 row 3/4 caveat:** should a Service or DMZ zone be granted `access-to` its
-   environment's authorized client zone purely so the shared record resolves for it? That feels
-   backwards; the alternative is accepting that intra-service lookups follow Q1's answer.
-4. **Cutover mechanics** — one-shot migration command, or converge-on-next-reconcile with a
-   pre-flight report? Given 8/9 records move, I lean to an explicit command with a dry-run.
-5. **Does `mgmt` belong in the default order at all?** It is a Management zone, not a client
-   zone; ADR-014 is explicit that an environment binds a Service zone and a client zone
-   *consumes* one. Keeping `mgmt` third is pragmatic (the mothership is there) but muddies the
-   type model.
+v0.2's D2/D3 resolved three of v0.1's five (service-to-service, the deny-legibility question,
+and the client-zone/Management-zone type muddle). Remaining:
+
+1. **Cutover mechanics** — one-shot migration command with a dry-run, or converge-on-next-
+   reconcile with a pre-flight report? 4 records and 3 zone grants; the zone grants must land
+   *before* the records move, or entitled clients break in between.
+2. **Should `network-manager validate` fail or warn** on an entitled zone missing its `dmz`
+   grant? Warn is safer during cutover; fail is what stops it silently regressing afterwards.
+   Possibly warn now, fail once migrated.
+3. **`netbird` (overlay) entitlement** — it is in the default `proxyAllowedZones` but has no
+   `access-to` at all today. Does the D3 invariant apply to overlays as written, or do WireGuard
+   peers reach `10.6.0.1` by a different path that makes the grant unnecessary?
 
 ## Testing
 
-- **Unit (fast)** — the resolver as a pure function: table-driven over (zones.json,
-  proxyAllowedZones) → expected (ip, zone, warning). Must cover: no client zone resolvable;
-  multiple authorized; Inactive zone skipped; `internet`/`netbird` skipped.
-- **Contract (fast)** — every writer calls the shared resolver: a grep-style guard, in the
-  spirit of `test-tracked-exec-mode.sh`, that fails if a second implementation reappears.
-- **`--deep`** — for each case: register the record, then assert reachability *from the zone in
-  question* (the existing zone-node test already proves an L2 probe from a node can be placed
-  on an arbitrary VLAN, which is the harness this needs).
+- **Unit (fast)** — the resolver as a pure function: published name → `(dmz_ip, "dmz")`;
+  unpublished → `UNPUBLISHED`; no dmz zone → `ERROR`. Plus the D3 validator: entitled-zone set
+  derived from `proxyAllowedZones` defaults, each checked for the `dmz` grant.
+- **Contract (fast)** — a guard that fails if a second split-horizon implementation reappears,
+  in the spirit of `test-tracked-exec-mode.sh`.
+- **`--deep`** — per case, register the record then assert reachability *from the zone in
+  question*; and assert an unentitled zone (guest) is still denied. The existing zone-node test
+  already proves an L2 probe can be placed on an arbitrary VLAN, which is the harness this needs.
 
 ## Documentation impact (ADR-013)
 
 `docs/design/` network overview (split-horizon section), `src/foundation/network/README.md`
-(`network:proxy` behaviour), `manager/environment-manager/README.md` (`dnsMode` semantics —
-shape only, not address), and the `proxyAllowedZones` field docs (its double duty per D4).
+(`network:proxy` behaviour), `manager/environment-manager/README.md` (`dnsMode` = certificate
+strategy only, per D4), the `proxyAllowedZones` field docs (single meaning under D2), and
+`ZONES.md` (the D3 invariant).
