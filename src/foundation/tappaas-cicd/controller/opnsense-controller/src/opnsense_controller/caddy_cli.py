@@ -422,10 +422,28 @@ def list_all(manager: CaddyManager) -> bool:
         status = "enabled" if d.enabled else "disabled"
         print(f"  {d.domain:40} [{status}]  ({d.description})  uuid={d.uuid}")
 
+    # The upstream is rendered WITH its scheme (#580). A handler on the right
+    # host:port can still be proxying to https:// a port that speaks plain HTTP —
+    # which serves an index fine and fails the payload — and while this line
+    # showed only "host:port" no verifier could tell the two apart. Trailing
+    # flags mark the other applied settings that were equally invisible: a forced
+    # HTTP version (#339) and an attached access list (#206).
     print(f"\nHandlers ({len(handlers)}):")
     for h in handlers:
         status = "enabled" if h.enabled else "disabled"
-        print(f"  -> {h.upstream_domain}:{h.upstream_port:5}  [{status}]  ({h.description})  uuid={h.uuid}")
+        scheme = "https" if h.upstream_tls else "http"
+        flags = []
+        if h.directive != "reverse_proxy":
+            flags.append(h.directive)
+        if h.upstream_http_version:
+            flags.append(h.upstream_http_version)
+        if h.access_list_uuid:
+            flags.append("acl")
+        flag_s = f"  [{' '.join(flags)}]" if flags else ""
+        print(
+            f"  -> {scheme}://{h.upstream_domain}:{h.upstream_port:5}  [{status}]  "
+            f"({h.description}){flag_s}  uuid={h.uuid}"
+        )
 
     return True
 

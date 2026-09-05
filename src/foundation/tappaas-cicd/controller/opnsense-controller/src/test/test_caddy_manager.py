@@ -156,3 +156,100 @@ class TestPruneDomainsByDescription(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestHandlerInfoAppliedSettings(unittest.TestCase):
+    """The search row carries the applied settings; the model used to drop them (#580).
+
+    A handler on the right host:port can still be proxying to https:// a port
+    that speaks plain HTTP — which serves an index fine and 404s the payload —
+    and while CaddyHandlerInfo discarded HttpTls no verifier could see it.
+    Field names/shapes below are the ones a live os-caddy 2.1.0 searchHandle
+    returns.
+    """
+
+    def _row(self, **over):
+        row = {
+            "uuid": "u1", "reverse": "d1", "ToDomain": "app.srv.internal",
+            "ToPort": "80", "description": "TAPPaaS: app", "enabled": "1",
+            "HandleDirective": "reverse_proxy", "HttpTls": "0",
+            "HttpVersion": "", "accesslist": "",
+        }
+        row.update(over)
+        return row
+
+    def test_http_tls_flag_is_read(self):
+        from opnsense_controller.caddy_manager import CaddyHandlerInfo  # noqa: PLC0415
+        self.assertTrue(CaddyHandlerInfo.from_api_response(self._row(HttpTls="1")).upstream_tls)
+        self.assertFalse(CaddyHandlerInfo.from_api_response(self._row(HttpTls="0")).upstream_tls)
+
+    def test_absent_http_tls_is_not_tls(self):
+        from opnsense_controller.caddy_manager import CaddyHandlerInfo  # noqa: PLC0415
+        row = self._row()
+        del row["HttpTls"]
+        self.assertFalse(CaddyHandlerInfo.from_api_response(row).upstream_tls)
+
+    def test_option_dict_fields_are_unwrapped(self):
+        # OPNsense returns SELECT fields either as a plain string or as an
+        # option dict; HttpVersion and accesslist can arrive either way.
+        from opnsense_controller.caddy_manager import CaddyHandlerInfo  # noqa: PLC0415
+        info = CaddyHandlerInfo.from_api_response(
+            self._row(HttpVersion={"http1": {"selected": 1}, "http2": {"selected": 0}})
+        )
+        self.assertEqual(info.upstream_http_version, "http1")
+
+    def test_access_list_uuid_is_read(self):
+        from opnsense_controller.caddy_manager import CaddyHandlerInfo  # noqa: PLC0415
+        self.assertEqual(
+            CaddyHandlerInfo.from_api_response(self._row(accesslist="acl-uuid")).access_list_uuid,
+            "acl-uuid",
+        )
+
+
+class TestListAllRendersScheme(unittest.TestCase):
+    """`list` is the state source every verifier greps, so it must show the scheme."""
+
+    def _mgr(self, handlers):
+        from opnsense_controller.caddy_manager import (  # noqa: PLC0415
+            CaddyDomainInfo,
+            CaddyHandlerInfo,
+        )
+        mgr = CaddyManager(config=MagicMock())
+        mgr._client = MagicMock()  # noqa: SLF001
+        mgr.list_domains = MagicMock(  # noqa: SLF001
+            return_value=[CaddyDomainInfo("d1", "app.example.org", "TAPPaaS: app", True)]
+        )
+        mgr.list_handlers = MagicMock(return_value=handlers)  # noqa: SLF001
+        return mgr
+
+    def _handler(self, **over):
+        from opnsense_controller.caddy_manager import CaddyHandlerInfo  # noqa: PLC0415
+        kw = dict(
+            uuid="u1", domain_uuid="d1", upstream_domain="app.srv.internal",
+            upstream_port="80", description="TAPPaaS: app", enabled=True,
+        )
+        kw.update(over)
+        return CaddyHandlerInfo(**kw)
+
+    def _render(self, handler):
+        from opnsense_controller.caddy_cli import list_all  # noqa: PLC0415
+        import io as _io, contextlib  # noqa: PLC0415
+        buf = _io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            list_all(self._mgr([handler]))
+        return buf.getvalue()
+
+    def test_plain_upstream_renders_http(self):
+        self.assertIn("-> http://app.srv.internal:80", self._render(self._handler()))
+
+    def test_tls_upstream_renders_https(self):
+        self.assertIn(
+            "-> https://app.srv.internal:80",
+            self._render(self._handler(upstream_tls=True)),
+        )
+
+    def test_flags_mark_http_version_and_access_list(self):
+        out = self._render(
+            self._handler(upstream_http_version="http1", access_list_uuid="acl-uuid")
+        )
+        self.assertIn("[http1 acl]", out)

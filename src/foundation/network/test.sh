@@ -729,7 +729,8 @@ section "Standard 11: network:proxy drift reports both directions (issue #580)"
 # asserted while the only source of truth was the live OPNsense:
 #   A. vhost present  → Checks 1 and 2 pass
 #   B. vhost absent   → Checks 1 and 2 fail AND the script exits non-zero
-#   C. handler on the wrong port → reported as such, not as clean
+#   C. handler on the wrong port   → reported as such, not as clean
+#   D. handler on the wrong scheme → reported as such, not as clean
 #
 # TAPPAAS_TEST_CADDY_LIST feeds test-service.sh a recorded `caddy-manager list`
 # instead of querying the firewall — the same NONE-mode fixture trick Standard 9
@@ -824,6 +825,7 @@ EOF
         # Same upstream, a port the module did not declare. Must be called out,
         # not passed: a handler pointing at the wrong port is a vhost that
         # cannot serve the application, which is the failure #580 was filed on.
+        # _p580_up is "<scheme>://<host>:<port>" — split off the port only.
         _p580_host="${_p580_up%:*}"
         _p580_port="${_p580_up##*:}"
         _p580_wrong=$(( _p580_port == 9 ? 10 : 9 ))
@@ -836,10 +838,32 @@ Handlers (1):
 EOF
         _p580_txt="$(TAPPAAS_TEST_CADDY_LIST="${_p580_dir}/wrongport.list" \
             bash "${PROXY_TS}" "${_p580_mod}" 2>&1 | _p580_strip || true)"
-        if grep -q "not on port ${_p580_port}" <<<"${_p580_txt}"; then
+        if grep -q "not the declared proxyPort ${_p580_port}" <<<"${_p580_txt}"; then
             pass "wrong upstream port reported as drift, not as clean"
         else
             fail "handler on port ${_p580_wrong} instead of ${_p580_port} was not reported"
+        fi
+
+        # ── D. handler on the wrong SCHEME ───────────────────────────
+        # Right host, right port, but proxied as https:// to a port that speaks
+        # plain HTTP. Matching host:port alone reported this clean while the
+        # vhost could not serve the application behind it (#580 follow-up).
+        _p580_otherscheme="https"
+        [[ "${_p580_up}" == https://* ]] && _p580_otherscheme="http"
+        _p580_swapped="${_p580_otherscheme}://${_p580_up#*://}"
+        cat > "${_p580_dir}/wrongscheme.list" <<EOF
+Domains (1):
+  ${_p580_dom}                    [enabled]  (TAPPaaS: ${_p580_mod})  uuid=fixture-d
+
+Handlers (1):
+  -> ${_p580_swapped}     [enabled]  (TAPPaaS: ${_p580_mod})  uuid=fixture-h
+EOF
+        _p580_txt="$(TAPPAAS_TEST_CADDY_LIST="${_p580_dir}/wrongscheme.list" \
+            bash "${PROXY_TS}" "${_p580_mod}" 2>&1 | _p580_strip || true)"
+        if grep -q "proxies as ${_p580_otherscheme}://" <<<"${_p580_txt}"; then
+            pass "wrong upstream scheme reported as drift, not as clean"
+        else
+            fail "handler proxying as ${_p580_otherscheme}:// was not reported"
         fi
     fi
 

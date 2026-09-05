@@ -7,7 +7,7 @@
 #
 # Tests:
 #   1. Caddy domain entry exists for the module
-#   2. Caddy handler entry exists, on the declared proxyPort
+#   2. Caddy handler entry exists, on the declared proxyPort AND scheme
 #   3. HTTPS endpoint responds (curl from tappaas-cicd)
 #   Deep mode:
 #   4. TLS certificate is valid and not expired
@@ -160,7 +160,7 @@ VHOST_EXPECTED=1
 
 # `caddy-manager list` renders one line per entry:
 #   Domains:   "  <fqdn padded 40> [enabled]  (<description>)  uuid=…"
-#   Handlers:  "  -> <upstream>:<port padded 5>  [enabled]  (<description>)  uuid=…"
+#   Handlers:  "  -> <scheme>://<upstream>:<port padded 5>  [enabled]  (<desc>)  uuid=…"
 # Match those shapes rather than grepping the whole blob for a bare substring: an
 # unanchored needle also hits a DESCRIPTION, and an unescaped FQDN is a regex
 # whose dots match anything, so "a.b.org" matched "axbxorg" and any longer
@@ -218,20 +218,61 @@ fi
 
 # ── Test 2: Handler exists in Caddy ─────────────────────────────────
 
-# The handler is checked WITH its port: a handler on the wrong upstream port is
-# the failure #580 was filed against (a vhost that cannot serve the application),
-# and matching the upstream alone reports it clean. `list` does not print which
-# domain a handler is bound to, so that binding stays unverified here — see the
-# README note.
+# The handler is checked with its port AND its upstream scheme. Matching the
+# upstream host alone reported a handler clean whatever it actually did with it:
+# a vhost generated as `reverse_proxy https://<host>:80` — TLS toward a port that
+# speaks plain HTTP — passed, and so did Check 3, because the index page still
+# comes back 200 while the application's payload 404s through the proxy. Port and
+# scheme are the two ways a handler that EXISTS can still be unable to serve what
+# it fronts, and both are now asserted against what the module declares.
+#
+# `list` still does not print which domain a handler is bound to, so that binding
+# remains unverified here.
+#
+# The expected scheme comes from proxyUpstreamTls, read exactly as
+# update-service.sh reads it (`== "true"` on the string), so the check and the
+# applier cannot disagree about what the module asked for.
+PROXY_UPSTREAM_TLS=$(get_config_value 'proxyUpstreamTls' 'false')
+if [[ "${PROXY_UPSTREAM_TLS}" == "true" ]]; then
+    EXPECT_SCHEME="https"
+else
+    EXPECT_SCHEME="http"
+fi
+EXPECT_UPSTREAM="${EXPECT_SCHEME}://${UPSTREAM}:${PROXY_PORT}"
+
 info "  Check 2: Caddy handler entry"
 if [[ "${VHOST_EXPECTED}" -eq 0 ]]; then
     warn "    No domain for this environment — updater skips the reconcile, no handler expected"
-elif grep -qE "^[[:space:]]*-> ${UPSTREAM_RE}:${PROXY_PORT}[[:space:]]" <<<"${caddy_list}"; then
-    pass "Handler for '${UPSTREAM}:${PROXY_PORT}' exists in Caddy"
-elif grep -qE "^[[:space:]]*-> ${UPSTREAM_RE}:" <<<"${caddy_list}"; then
-    fail "Handler for '${UPSTREAM}' is in Caddy but not on port ${PROXY_PORT} (declared proxyPort) — $(grep -E "^[[:space:]]*-> ${UPSTREAM_RE}:" <<<"${caddy_list}" | head -1 | sed 's/^[[:space:]]*//')"
 else
-    fail "Handler for '${UPSTREAM}:${PROXY_PORT}' not found in Caddy — module declares network:proxy but has no handler"
+    # The handler for THIS upstream, whatever scheme and port it happens to carry.
+    # `|| true` is load-bearing: under `set -e` + `pipefail` a grep that matches
+    # nothing makes this assignment fail and aborts the whole script — which is
+    # exactly the "no handler at all" case this check exists to REPORT.
+    # The scheme prefix is OPTIONAL in this match, deliberately. caddy-manager
+    # only started rendering it alongside this change, and the two are deployed
+    # by separate mechanisms — a mothership whose opnsense-controller has not
+    # been rebuilt yet still emits the bare "-> host:port". Demanding the prefix
+    # would turn a deploy-ordering gap into a red handler on every module. When
+    # it is absent the port is still checked and the scheme is reported as NOT
+    # verified, with the remedy — a check that quietly stopped checking is the
+    # whole of #580.
+    handler_line="$(grep -E "^[[:space:]]*-> ([a-z]+://)?${UPSTREAM_RE}:[0-9]+[[:space:]]" <<<"${caddy_list}" | head -1 || true)"
+    if [[ -z "${handler_line}" ]]; then
+        fail "Handler for '${EXPECT_UPSTREAM}' not found in Caddy — module declares network:proxy but has no handler"
+    else
+        got_scheme="$(sed -nE 's#^[[:space:]]*-> ([a-z]+)://.*#\1#p' <<<"${handler_line}")"
+        got_port="$(sed -E 's#^[[:space:]]*-> ([a-z]+://)?[^:[:space:]]+:([0-9]+).*#\2#' <<<"${handler_line}")"
+        if [[ "${got_port}" != "${PROXY_PORT}" ]]; then
+            fail "Handler for '${UPSTREAM}' is on port ${got_port}, not the declared proxyPort ${PROXY_PORT}"
+        elif [[ -z "${got_scheme}" ]]; then
+            pass "Handler for '${UPSTREAM}:${PROXY_PORT}' exists in Caddy"
+            warn "    upstream scheme NOT verified — this caddy-manager predates the scheme in \`list\`; rebuild opnsense-controller to check it (#580)"
+        elif [[ "${got_scheme}" == "${EXPECT_SCHEME}" ]]; then
+            pass "Handler for '${EXPECT_UPSTREAM}' exists in Caddy"
+        else
+            fail "Handler for '${UPSTREAM}:${PROXY_PORT}' proxies as ${got_scheme}://, not ${EXPECT_SCHEME}:// (proxyUpstreamTls=${PROXY_UPSTREAM_TLS}) — TLS toward a port that does not speak it serves the index and fails the payload"
+        fi
+    fi
 fi
 
 # ── Test 3: HTTPS endpoint responds ─────────────────────────────────

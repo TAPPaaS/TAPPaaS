@@ -106,6 +106,19 @@ class CaddyDomainInfo:
         )
 
 
+# OPNsense search endpoints return SELECT fields either as a plain string or as
+# an option dict ({"http1": {"selected": 1}, ...}). HandleDirective already had
+# to cope with both; HttpVersion and accesslist can arrive the same way, so the
+# unwrapping lives in one place rather than three.
+def _option_str(v: object) -> str:
+    if isinstance(v, dict):
+        return next(
+            (k for k, o in v.items() if isinstance(o, dict) and o.get("selected") == 1),
+            "",
+        )
+    return str(v) if v is not None else ""
+
+
 @dataclass
 class CaddyHandlerInfo:
     """Information about an existing Caddy handler."""
@@ -118,6 +131,15 @@ class CaddyHandlerInfo:
     enabled: bool
     # "reverse_proxy" or "redir" (issue #270).
     directive: str = "reverse_proxy"
+    # Applied settings the search response carries and this model used to drop,
+    # so nothing downstream could verify them (#580). A handler reachable at the
+    # right host:port can still be wrong in three ways — proxying to https:// a
+    # port that speaks plain HTTP, negotiating an HTTP version the backend
+    # cannot carry a WebSocket over (#339), or having lost the access list that
+    # restricts it (#206) — and every one of those was invisible to the caller.
+    upstream_tls: bool = False
+    upstream_http_version: str = ""
+    access_list_uuid: str = ""
 
     @classmethod
     def from_api_response(cls, data: dict) -> "CaddyHandlerInfo":
@@ -130,6 +152,9 @@ class CaddyHandlerInfo:
                 (k for k, v in directive.items() if isinstance(v, dict) and v.get("selected") == 1),
                 "reverse_proxy",
             )
+        # searchHandle returns HttpTls as "0"/"1" and HttpVersion as a plain
+        # string (verified against a live os-caddy 2.1.0). accesslist is the
+        # UUID, empty when unrestricted.
         return cls(
             uuid=data.get("uuid", ""),
             domain_uuid=data.get("reverse", ""),
@@ -138,6 +163,9 @@ class CaddyHandlerInfo:
             description=data.get("description", ""),
             enabled=data.get("enabled") == "1",
             directive=directive or "reverse_proxy",
+            upstream_tls=str(data.get("HttpTls", "")) == "1",
+            upstream_http_version=_option_str(data.get("HttpVersion", "")),
+            access_list_uuid=_option_str(data.get("accesslist", "")),
         )
 
 
