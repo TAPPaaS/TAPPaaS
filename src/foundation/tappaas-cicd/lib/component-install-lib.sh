@@ -13,6 +13,17 @@
 # Deliberately tiny and side-effect free (unlike common-install-routines.sh,
 # which initialises module context when sourced).
 
+# Per-component build/link progress is DETAIL, not news: a routine update run
+# should show the dot-per-line build progress and nothing else, so the [Info]
+# lines that remain are the ones an operator acts on. These lines are therefore
+# emitted only under TAPPAAS_DEBUG=1. Defined locally (not taken from
+# common-install-routines.sh) to keep this lib side-effect free and usable on a
+# virgin checkout, before anything is linked into ~/bin.
+_cil_debug() {
+    [ "${TAPPAAS_DEBUG:-0}" = "1" ] || return 0
+    echo -e "\033[34m[Debug]\033[m $*"
+}
+
 # build_and_link_nix_component <component-dir> <name> [tool ...]
 #
 # Build the component as a flake package (<flake-root>#<name>) with a GC-rooted
@@ -28,12 +39,15 @@ build_and_link_nix_component() {
     local bin="${TAPPAAS_BIN:-/home/tappaas/bin}"
     local gcroots="${TAPPAAS_GCROOTS:-${HOME}/.tappaas-gcroots}"
     mkdir -p "${bin}" "${gcroots}"
-    echo "  building ${name} (nix build, flake-pinned)..."
+    _cil_debug "  building ${name} (nix build, flake-pinned)..."
     # nix build --print-out-paths writes the store path to stdout (captured into
     # $out) and the
     # BUILD LOG on stderr — dot-per-line it to the terminal (house style) and
     # keep the full log for post-mortem. The dot filter writes to fd 2 so the
     # captured stdout stays exactly the store path.
+    # The terminating newline belongs to the filter, and is emitted ONLY when a
+    # dot was actually printed: an already-built component logs nothing, and an
+    # unconditional newline left a stray blank line per cached component.
     # Build through the flake, not `nix-build default.nix`, so pkgs comes from
     # the nixpkgs pinned in flake.lock instead of the ambient <nixpkgs> search
     # path. That path is unset under systemd — so the nightly never built these
@@ -49,19 +63,19 @@ build_and_link_nix_component() {
     local out log="/tmp/tappaas-build-${name}.log"
     out="$(
         nix build "${flake_root}#${name}" --print-out-paths --out-link "${gcroots}/${name}" \
-            2> >(tee "${log}" | while IFS= read -r _; do printf '.' >&2; done)
+            2> >(tee "${log}" | { _dots=0
+                    while IFS= read -r _; do printf '.' >&2; _dots=1; done
+                    [ "${_dots}" -eq 1 ] && printf '\n' >&2; } )
     )" || {
-        echo "" >&2
         echo "  ERROR: nix build failed for ${name} — log tail (full log: ${log}):" >&2
         tail -8 "${log}" >&2 2>/dev/null || true
         return 1
     }
-    echo "" >&2
     local t
     for t in "${tools[@]}"; do
         if [ -e "${out}/bin/${t}" ]; then
             ln -sfn "${out}/bin/${t}" "${bin}/${t}"
-            echo "  linked ${bin}/${t} -> ${out}/bin/${t}"
+            _cil_debug "  linked ${bin}/${t} -> ${out}/bin/${t}"
         else
             echo "  ERROR: build did not produce ${t}" >&2
             return 1
