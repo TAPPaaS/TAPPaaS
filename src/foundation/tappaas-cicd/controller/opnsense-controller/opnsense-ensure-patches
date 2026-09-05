@@ -33,8 +33,12 @@ if [ "${1:-}" = "--firewall" ] && [ -n "${2:-}" ]; then
     FIREWALL_FQDN="$2"
 fi
 
-YW="\033[33m"; GN="\033[1;92m"; CL="\033[m"
-info() { echo -e "$*"; }
+YW="\033[33m"; GN="\033[1;92m"; DGN="\033[32m"; BL="\033[34m"; CL="\033[m"
+# House style: every line carries its level. This script is a CONVERGE — on a
+# healthy system every step is an idempotent no-op, so "ensured" chatter is
+# detail (debug) and only an actual mutation (a plugin being installed) is news.
+info()  { echo -e "${DGN}[Info]${CL} $*"; }
+debug() { [ "${TAPPAAS_DEBUG:-0}" = "1" ] || return 0; echo -e "${BL}[Debug]${CL} $*"; }
 warn() { echo -e "${YW}[Warning]${CL} $*"; }
 
 # ── 1. credentials skeleton (local; no firewall needed) ────────────────
@@ -64,10 +68,10 @@ if [ -f "${PATCH_DIR}/apply-caddy-isdnsname.sh" ]; then
     if ! ssh root@"${FIREWALL_FQDN}" "/bin/sh -c 'pkg info os-caddy'" >/dev/null 2>&1; then
         info "  os-caddy not installed yet (setup-caddy.sh installs + patches it) — skipping caddy patch"
     else
-        info "  ensuring os-caddy ToDomain underscore patch..."
+        debug "  ensuring os-caddy ToDomain underscore patch..."
         if scp -q "${PATCH_DIR}/apply-caddy-isdnsname.sh" root@"${FIREWALL_FQDN}":/tmp/apply-caddy-isdnsname.sh \
             && ssh root@"${FIREWALL_FQDN}" 'sh /tmp/apply-caddy-isdnsname.sh' >/dev/null 2>&1; then
-            info "  ${GN}✓${CL} os-caddy patch ensured"
+            debug "  ${GN}✓${CL} os-caddy patch ensured"
         else
             warn "  os-caddy patch reported an error — continuing"
             rc=1
@@ -77,12 +81,12 @@ fi
 
 # ── 3. InterfaceAssign controller patch + ACL ──────────────────────────
 if [ -f "${PATCH_DIR}/InterfaceAssignController.php" ]; then
-    info "  ensuring InterfaceAssign controller patch + ACL..."
+    debug "  ensuring InterfaceAssign controller patch + ACL..."
     if scp -q "${PATCH_DIR}/InterfaceAssignController.php" \
             root@"${FIREWALL_FQDN}":/usr/local/opnsense/mvc/app/controllers/OPNsense/Interfaces/Api/InterfaceAssignController.php \
         && scp -q "${PATCH_DIR}/ACL.xml" \
             root@"${FIREWALL_FQDN}":/usr/local/opnsense/mvc/app/models/OPNsense/Interfaces/ACL/ACL.xml; then
-        info "  ${GN}✓${CL} InterfaceAssign patch + ACL ensured"
+        debug "  ${GN}✓${CL} InterfaceAssign patch + ACL ensured"
     else
         warn "  InterfaceAssign patch copy failed — continuing"
         rc=1

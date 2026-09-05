@@ -187,10 +187,10 @@ if [ -x "./scripts/compose-fields.sh" ]; then
     # that used to precede it only opened a window with no schema on disk.
     chmod 644 "${_cf_tmp}" 2>/dev/null || true
     mv "${_cf_tmp}" /home/tappaas/config/module-fields.json
-    echo "  composed module-fields.json ($(jq -r '.fields|length' /home/tappaas/config/module-fields.json) fields)"
+    debug "  composed module-fields.json ($(jq -r '.fields|length' /home/tappaas/config/module-fields.json) fields)"
   else
     rm -f "${_cf_tmp}" 2>/dev/null || true
-    echo "  WARNING: could not compose module-fields.json — leaving the existing one" >&2
+    warn "could not compose module-fields.json — leaving the existing one"
   fi
 elif [ -f "../schemas/module-fields.json" ]; then
   rm -f /home/tappaas/config/module-fields.json 2>/dev/null || true
