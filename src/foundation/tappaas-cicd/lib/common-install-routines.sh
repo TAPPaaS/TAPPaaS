@@ -1297,7 +1297,11 @@ tappaas_schema_file() {
 
   # No composer (bare node, or a checkout without tappaas-cicd) — fall back to
   # whatever is already there rather than failing: a stale cache beats none.
-  if [[ ! -x "${composer}" ]]; then
+  #
+  # -f, not -x, and invoked through `bash` below: gating the composer on its
+  # executable bit made a tracked-mode slip indistinguishable from "no composer
+  # here", so a truncated schema was served silently (#579).
+  if [[ ! -f "${composer}" ]]; then
     printf '%s' "${cache}"
     return 0
   fi
@@ -1309,7 +1313,7 @@ tappaas_schema_file() {
                  -newer "${cache}" -print -quit 2>/dev/null || true)"
   if [[ ! -s "${cache}" || -n "${newest}" ]]; then
     local tmp; tmp="$(mktemp "${TMPDIR:-/tmp}/module-fields.XXXXXX.json")"
-    if "${composer}" "${foundation}" > "${tmp}" 2>/dev/null && [[ -s "${tmp}" ]]; then
+    if bash "${composer}" "${foundation}" > "${tmp}" 2>/dev/null && [[ -s "${tmp}" ]]; then
       # No rm before the mv. This used to be a symlink and the rm was there
       # to clear it, but mv replaces a symlink just as happily as a file — all
       # the rm added was a window in which the cache did not exist, and five
@@ -1318,6 +1322,10 @@ tappaas_schema_file() {
       chmod 644 "${tmp}" 2>/dev/null || true
       mv "${tmp}" "${cache}" 2>/dev/null || { printf '%s' "${tmp}"; return 0; }
     else
+      # >&2 is load-bearing: this function's stdout IS the returned path, and
+      # warn() prints to stdout. A composition that fails here leaves readers on
+      # a stale or truncated cache, so it must say so somewhere (#579).
+      warn "could not compose the module field schema — using ${cache} as-is" >&2
       rm -f "${tmp}" 2>/dev/null || true
     fi
   fi

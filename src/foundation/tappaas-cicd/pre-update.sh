@@ -180,9 +180,15 @@ done
 #
 # A real file, not a symlink: it is derived, and a symlink would point at a
 # document that is now only part of the answer.
-if [ -x "./scripts/compose-fields.sh" ]; then
+# Gated on EXISTENCE and invoked through `bash` — deliberately not on the
+# executable bit. `[ -x ]` over a repo file is a silent feature switch: tracked
+# 100644 the guard is false, control falls to the legacy branch below, and a
+# 19-field base tier gets installed over a good 74-field cache with nothing
+# said. That is #579, and #578 (an add rejecting its own --vmname) was its
+# symptom. 201dc45a fixed the mode; this removes the switch.
+if [ -f "./scripts/compose-fields.sh" ]; then
   _cf_tmp="$(mktemp)"
-  if ./scripts/compose-fields.sh "$(realpath ..)" > "${_cf_tmp}" 2>/dev/null && [ -s "${_cf_tmp}" ]; then
+  if bash ./scripts/compose-fields.sh "$(realpath ..)" > "${_cf_tmp}" 2>/dev/null && [ -s "${_cf_tmp}" ]; then
     # mv alone: it replaces the old symlink as readily as a file, and the rm
     # that used to precede it only opened a window with no schema on disk.
     chmod 644 "${_cf_tmp}" 2>/dev/null || true
@@ -193,6 +199,11 @@ if [ -x "./scripts/compose-fields.sh" ]; then
     warn "could not compose module-fields.json — leaving the existing one"
   fi
 elif [ -f "../schemas/module-fields.json" ]; then
+  # No composer in the tree at all — a pre-#567 checkout, where
+  # schemas/module-fields.json IS the whole document and the symlink is right.
+  # Announced regardless: post-#567 that same path holds only the base tier, so
+  # a substitution that halves the schema must never be silent (#579).
+  warn "no compose-fields.sh — linking schemas/module-fields.json ($(jq -r '.fields|length' ../schemas/module-fields.json 2>/dev/null || echo '?') fields) as the module schema"
   rm -f /home/tappaas/config/module-fields.json 2>/dev/null || true
   ln -s "$(realpath ../schemas/module-fields.json)" /home/tappaas/config/module-fields.json
 fi
