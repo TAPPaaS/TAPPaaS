@@ -340,7 +340,8 @@ def example_dhcp_configure_general(
     manager: DhcpManager,
     check_mode: bool = True,
 ) -> None:
-    """Configure general Dnsmasq settings."""
+    """Configure general Dnsmasq settings (partial update — only the fields
+    named here are written; everything else is left as-is, issue #575)."""
     print(f"\nConfiguring Dnsmasq general settings (check_mode={check_mode})...")
 
     result = manager.configure_general(

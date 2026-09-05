@@ -1078,33 +1078,21 @@ class DhcpManager:
         dhcp_authoritative: bool = True,
         check_mode: bool = False,
     ) -> dict:
-        """Enable and configure the Dnsmasq service.
+        """Enable the Dnsmasq service, leaving unspecified settings unchanged.
 
         Args:
-            interfaces: List of interface IDs to listen on (None for all)
+            interfaces: List of interface IDs to listen on (None = unchanged)
             dhcp_authoritative: Set to True if this is the only DHCP server
             check_mode: If True, perform dry-run without making changes
 
         Returns:
             Result dictionary from the API
         """
-        if check_mode:
-            return {"changed": True, "check_mode": True}
-
-        # Build minimal params - just what we need to change
-        params = {
-            "enabled": 1,  # Use 0/1 instead of True/False
-            "dhcp_authoritative": 1 if dhcp_authoritative else 0,
-        }
-
-        if interfaces:
-            params["interfaces"] = interfaces  # Pass as list, let the client handle it
-
-        # Use dnsmasq_general module
-        return self.client.run_module(
-            "dnsmasq_general",
-            check_mode=False,
-            params=params,
+        return self.configure_general(
+            enabled=True,
+            interfaces=interfaces,
+            dhcp_authoritative=dhcp_authoritative,
+            check_mode=check_mode,
         )
 
     def get_dnsmasq_interfaces(self) -> list[str]:
@@ -1219,7 +1207,7 @@ class DhcpManager:
         }
 
     def disable_service(self, check_mode: bool = False) -> dict:
-        """Disable the Dnsmasq service.
+        """Disable the Dnsmasq service, leaving all other settings unchanged.
 
         Args:
             check_mode: If True, perform dry-run without making changes
@@ -1227,63 +1215,99 @@ class DhcpManager:
         Returns:
             Result dictionary from the API
         """
-        params = {
-            "enabled": False,
-        }
-
-        # Convert booleans to 0/1 for OPNsense API compatibility
-        params = _convert_bools_to_int(params)
-
-        return self.client.run_module(
-            "dnsmasq_general",
-            check_mode=check_mode,
-            params=params,
-        )
+        return self.configure_general(enabled=False, check_mode=check_mode)
 
     def configure_general(
         self,
-        enabled: bool = True,
+        enabled: bool | None = None,
         interfaces: list[str] | None = None,
-        dhcp_authoritative: bool = False,
-        dhcp_fqdn: bool = False,
+        dhcp_authoritative: bool | None = None,
+        dhcp_fqdn: bool | None = None,
         dhcp_domain: str | None = None,
-        regdhcp: bool = False,
-        regdhcpstatic: bool = False,
+        regdhcp: bool | None = None,
+        regdhcpstatic: bool | None = None,
         check_mode: bool = False,
+        allow_shrink: bool = False,
     ) -> dict:
-        """Configure general Dnsmasq settings.
+        """Configure general Dnsmasq settings — a TRUE partial update.
+
+        Only the arguments actually passed (non-None) are written; everything
+        else keeps its current value on the firewall. This deliberately avoids
+        the oxl-opnsense-client ``dnsmasq_general`` module: that module gives
+        every field an ansible-style default (interfaces=[], port=53, …) and
+        reconciles ALL of them, so a partial call silently reset the fields it
+        did not mention — emptying the listen set among others (issue #575).
+        The raw ``settings set`` API merges partially, the same idiom as
+        set_dnsmasq_interfaces().
+
+        A change to ``interfaces`` is routed through set_dnsmasq_interfaces()
+        so the listen-set shrink guard applies here too.
 
         Args:
-            enabled: Enable/disable the service
-            interfaces: List of interface IDs to listen on
-            dhcp_authoritative: Set if this is the only DHCP server
-            dhcp_fqdn: Register DHCP client FQDNs in DNS
-            dhcp_domain: Domain for DHCP hostname registration
-            regdhcp: Register DHCP hostnames in DNS
-            regdhcpstatic: Register static DHCP mappings in DNS
+            enabled: Enable/disable the service (None = unchanged)
+            interfaces: List of interface IDs to listen on (None = unchanged)
+            dhcp_authoritative: Set if this is the only DHCP server (None = unchanged)
+            dhcp_fqdn: Register DHCP client FQDNs in DNS (None = unchanged)
+            dhcp_domain: Domain for DHCP hostname registration (None = unchanged)
+            regdhcp: Register DHCP hostnames in DNS (None = unchanged)
+            regdhcpstatic: Register static DHCP mappings in DNS (None = unchanged)
             check_mode: If True, perform dry-run without making changes
+            allow_shrink: Passed through to the listen-set shrink guard when
+                ``interfaces`` drops entries from the current set.
 
         Returns:
-            Result dictionary from the API
+            Result dictionary with the fields written (or would-write in
+            check_mode), plus the interface-write result when one happened.
         """
-        params = {
-            "enabled": enabled,
-            "dhcp_authoritative": dhcp_authoritative,
-            "dhcp_fqdn": dhcp_fqdn,
-            "regdhcp": regdhcp,
-            "regdhcpstatic": regdhcpstatic,
-        }
+        # OPNsense dnsmasq model field names (flat "dhcp.x" keys are nested).
+        def _b(v: bool) -> str:
+            return "1" if v else "0"
+
+        dnsmasq: dict = {}
+        dhcp: dict = {}
+        if enabled is not None:
+            dnsmasq["enable"] = _b(enabled)
+        if regdhcp is not None:
+            dnsmasq["regdhcp"] = _b(regdhcp)
+        if regdhcpstatic is not None:
+            dnsmasq["regdhcpstatic"] = _b(regdhcpstatic)
+        if dhcp_authoritative is not None:
+            dhcp["authoritative"] = _b(dhcp_authoritative)
+        if dhcp_fqdn is not None:
+            dhcp["fqdn"] = _b(dhcp_fqdn)
+        if dhcp_domain is not None:
+            dhcp["domain"] = dhcp_domain
+        if dhcp:
+            dnsmasq["dhcp"] = dhcp
+
+        result: dict = {"changed": False, "fields": dnsmasq}
+
+        if check_mode:
+            result.update({"changed": bool(dnsmasq) or interfaces is not None,
+                           "check_mode": True, "interfaces": interfaces})
+            return result
+
+        if dnsmasq:
+            set_result = self.client.run_module(
+                "raw",
+                params={
+                    "module": "dnsmasq",
+                    "controller": "settings",
+                    "command": "set",
+                    "action": "post",
+                    "data": {"dnsmasq": dnsmasq},
+                },
+            )
+            self.reconfigure()
+            result.update({"changed": True, "set_result": set_result})
 
         if interfaces is not None:
-            params["interfaces"] = interfaces
-        if dhcp_domain:
-            params["dhcp_domain"] = dhcp_domain
+            # Through the choke point, so the shrink guard + caller logging
+            # apply to this path exactly as to every other listen-set writer.
+            result["interfaces_result"] = self.set_dnsmasq_interfaces(
+                interfaces, allow_shrink=allow_shrink
+            )
+            if result["interfaces_result"].get("changed"):
+                result["changed"] = True
 
-        # Convert booleans to 0/1 for OPNsense API compatibility
-        params = _convert_bools_to_int(params)
-
-        return self.client.run_module(
-            "dnsmasq_general",
-            check_mode=check_mode,
-            params=params,
-        )
+        return result

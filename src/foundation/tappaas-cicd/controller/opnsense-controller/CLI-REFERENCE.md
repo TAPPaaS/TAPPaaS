@@ -1194,7 +1194,8 @@ with DhcpManager(config) as manager:
         dhcp_authoritative=True,
     )
 
-    # Configure general settings
+    # Configure general settings — a TRUE partial update (#575): only the
+    # arguments passed are written, everything else keeps its current value.
     manager.configure_general(
         enabled=True,
         dhcp_authoritative=True,
@@ -1220,9 +1221,9 @@ with DhcpManager(config) as manager:
 | `update_host(host, check_mode)` | Update an existing host reservation |
 | `delete_host(description, check_mode)` | Delete a host reservation by description |
 | `create_multiple_hosts(hosts, check_mode)` | Create multiple host reservations |
-| `enable_service(interfaces, dhcp_authoritative, check_mode)` | Enable Dnsmasq service |
-| `disable_service(check_mode)` | Disable Dnsmasq service |
-| `configure_general(...)` | Configure general Dnsmasq settings |
+| `enable_service(interfaces, dhcp_authoritative, check_mode)` | Enable Dnsmasq service (other settings untouched) |
+| `disable_service(check_mode)` | Disable Dnsmasq service (other settings untouched) |
+| `configure_general(...)` | Configure general Dnsmasq settings — partial update, unspecified fields left unchanged (#575) |
 
 ### DhcpRange Fields
 
