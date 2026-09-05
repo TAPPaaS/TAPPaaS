@@ -184,13 +184,30 @@ bkp_src="${here}/../../../satellite/debian/provision-backup.sh"
 # 18. provision-backup.sh parses
 if [[ -f "${bkp_src}" ]] && bash -n "${bkp_src}"; then ok "provision-backup.sh parses"; else no "provision-backup.sh syntax/missing"; fi
 
+# perm_bits <file> — the octal permission bits, GNU stat first then BSD.
+#
+# Order and structure both matter. `stat -f` is NOT "format" on GNU coreutils —
+# it is "display FILESYSTEM status", which prints seven lines of filesystem
+# detail to STDOUT and still exits non-zero. Written BSD-first as
+# `stat -f '%Lp' … || stat -c '%a' …` inside one command substitution, the
+# fallback therefore also ran and the two outputs CONCATENATED, so the compared
+# string was a block of filesystem stats with "600" on the end — never equal to
+# "600". The test failed on Linux for a reason that had nothing to do with the
+# code under test, which sets 0600 correctly.
+perm_bits() {
+    local f="$1" m
+    m="$(stat -c '%a' "$f" 2>/dev/null)" && [[ -n "$m" ]] && { printf '%s' "$m"; return 0; }
+    m="$(stat -f '%Lp' "$f" 2>/dev/null)" && [[ -n "$m" ]] && { printf '%s' "$m"; return 0; }
+    return 1
+}
+
 # 19. sat_gen_backup_config renders backup.env + a 0600 token when provided
 echo '{"name":"v","os":"debian","roles":["backup"],"host":{"operatorSshKeys":["k"]},"backup":{"pull":{"homePbsHost":"10.0.0.20","authId":"satellite@pbs!pull"}}}' > "${tmp}/vb.json"
 ( . "${here}/lib/provision.sh" >/dev/null 2>&1; TAPPAAS_SAT_PBS_TOKEN="S3CR" sat_gen_backup_config "${tmp}/vb.json" "${tmp}/vbo" )
 if grep -q 'HOME_PBS_HOST="10.0.0.20"' "${tmp}/vbo/backup.env" \
    && grep -q 'REMOVE_VANISHED="false"' "${tmp}/vbo/backup.env" \
    && [[ "$(cat "${tmp}/vbo/pbs-remote-token" 2>/dev/null)" == "S3CR" ]] \
-   && [[ "$(stat -f '%Lp' "${tmp}/vbo/pbs-remote-token" 2>/dev/null || stat -c '%a' "${tmp}/vbo/pbs-remote-token" 2>/dev/null)" == "600" ]]; then
+   && [[ "$(perm_bits "${tmp}/vbo/pbs-remote-token")" == "600" ]]; then
     ok "sat_gen_backup_config renders backup.env + 0600 token"
 else
     no "sat_gen_backup_config backup.env/token"

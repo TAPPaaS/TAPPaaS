@@ -29,6 +29,7 @@ here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 rc=0
 pass() { echo "  ✓ $*"; }
 fail() { echo "  ✗ $*"; rc=1; }
+skip() { echo "  ⊘ $* (skipped)"; }
 
 echo "== templates: config + service-script sanity (fast) =="
 command -v jq >/dev/null 2>&1 || { echo "[Error] jq required"; exit 2; }
@@ -49,17 +50,38 @@ fi
 
 if [[ "${TAPPAAS_TEST_DEEP:-0}" == "1" ]]; then
     echo "== templates (deep): template VMs present on the cluster =="
+    # Not every template is built on every site. The Windows Server template
+    # (8081) is explicitly OPTIONAL — INSTALL.md: "Windows Server 2025 template
+    # (VMID 8081, optional)" and "8080 (and 8081 if built)" — so a site that runs
+    # no Windows has no 8081, and failing on that reported a healthy cluster as
+    # broken on every deep run.
+    #
+    # The signal for "should exist" is the DEPLOYED CONFIG: a template installed
+    # via install-module.sh leaves ${CONFIG_DIR}/<name>.json behind. So:
+    #   VM present                      → pass
+    #   VM absent, module installed     → FAIL (installed but the VM is gone —
+    #                                      real drift, the case worth catching)
+    #   VM absent, module not installed → skip (never built here)
+    # A site with NO template VM at all still fails below: nothing could clone.
     node="$(get_node_hostname 0 2>/dev/null || echo tappaas1)"
+    _tmpl_found=0
     for j in "${here}"/*.json; do
         vmid="$(jq -r '.vmid // empty' "$j" 2>/dev/null)"
         [ -n "$vmid" ] || continue
+        _name="$(basename "$j" .json)"
         if ssh -o StrictHostKeyChecking=accept-new -o ConnectTimeout=8 \
                "root@${node}.mgmt.internal" "qm status ${vmid}" >/dev/null 2>&1; then
-            pass "template VM ${vmid} ($(basename "$j" .json)) present on ${node}"
+            pass "template VM ${vmid} (${_name}) present on ${node}"
+            _tmpl_found=$((_tmpl_found + 1))
+        elif [ -f "${CONFIG_DIR:-/home/tappaas/config}/${_name}.json" ]; then
+            fail "template VM ${vmid} (${_name}) NOT found on ${node} — but ${_name} IS installed (config present): the template VM was removed"
         else
-            fail "template VM ${vmid} ($(basename "$j" .json)) NOT found on ${node}"
+            skip "template VM ${vmid} (${_name}) not built on this site — install it with: install-module.sh ${_name}"
         fi
     done
+    if [ "${_tmpl_found}" -eq 0 ]; then
+        fail "no template VM found on ${node} — nothing for a module install to clone from"
+    fi
 else
     echo "  (deep tier skipped — set TAPPAAS_TEST_DEEP=1 to check template VMs on the cluster)"
 fi

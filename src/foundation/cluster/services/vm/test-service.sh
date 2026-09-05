@@ -55,7 +55,16 @@ SSH_ACCESS="$(get_config_value 'sshAccess' 'true')"
 # ~/.ssh/config identity + host alias (and the rest of TAPPaaS, via FIREWALL_FQDN)
 # are keyed. Match both module names through the transition and pin the host to
 # the firewall alias so the SSH identity resolves.
+# Decide ONCE whether this guest is the OPNsense firewall, and reuse the answer.
+# The ssh-identity branch below accepted both names (the module was renamed
+# firewall -> network by ADR-007) while the FreeBSD memory probe further down
+# still tested only "firewall" — so on every post-rename system the firewall took
+# the LINUX branch and was asked for /proc/meminfo, which FreeBSD does not have.
+# The probe returned nothing and the check reported "critically low: unknownMB".
+# One predicate, so the two cannot drift apart again.
+IS_FIREWALL=0
 if [[ "${VMNAME}" == "firewall" || "${VMNAME}" == "network" ]]; then
+    IS_FIREWALL=1
     SSH_USER="root"
     VM_HOST="firewall.${ZONE0NAME}.internal"
 else
@@ -67,6 +76,12 @@ readonly SSH_OPTS="-o ConnectTimeout=10 -o StrictHostKeyChecking=accept-new -o U
 DEEP="${TAPPAAS_TEST_DEEP:-0}"
 PASS=0
 FAIL=0
+
+# Resource floors/ceilings, named so the verdict can quote the threshold it
+# applied instead of burying it in the comparison. Overridable for a guest with
+# a legitimately different profile.
+MEM_MIN_MB="${TAPPAAS_TEST_MEM_MIN_MB:-50}"
+DISK_MAX_PCT="${TAPPAAS_TEST_DISK_MAX_PCT:-95}"
 
 pass() { info "    ${GN}✓${CL} $1"; PASS=$((PASS + 1)); }
 fail() { error "    ✗ $1"; FAIL=$((FAIL + 1)); }
@@ -139,17 +154,23 @@ if [[ "${DEEP}" -eq 1 ]]; then
     # shellcheck disable=SC2086
     disk_pct=$(ssh ${SSH_OPTS} "${SSH_USER}@${VM_HOST}" \
         "df / | tail -1 | awk '{gsub(/%/,\"\",\$5); print \$5}'" 2>/dev/null) || true
-    if [[ -n "${disk_pct}" && "${disk_pct}" -lt 95 ]]; then
-        pass "Disk usage at ${disk_pct}% (below 95%)"
+    # Same three-way split as the memory check below: an unread probe is a
+    # failed measurement, not a full disk.
+    if [[ -z "${disk_pct}" ]]; then
+        fail "Disk usage UNKNOWN — the probe returned nothing (VM unreachable, or df failed). This is a failed measurement, NOT a full disk."
+    elif [[ ! "${disk_pct}" =~ ^[0-9]+$ ]]; then
+        fail "Disk usage UNPARSEABLE — probe returned '${disk_pct}' (expected an integer percentage). Failed measurement, NOT a full disk."
+    elif [[ "${disk_pct}" -lt "${DISK_MAX_PCT}" ]]; then
+        pass "Disk usage at ${disk_pct}% (below ${DISK_MAX_PCT}%)"
     else
-        fail "Disk usage critical: ${disk_pct:-unknown}%"
+        fail "Disk usage critical: ${disk_pct}% (at or above the ${DISK_MAX_PCT}% ceiling)"
     fi
 
     # Test 5: Available memory
     # FreeBSD/OPNsense has no /proc/meminfo; use sysctl for free+inactive pages
     info "  Check 5: Available memory"
     # shellcheck disable=SC2086
-    if [[ "${VMNAME}" == "firewall" ]]; then
+    if [[ "${IS_FIREWALL}" -eq 1 ]]; then
         # OPNsense default shell is opnsense-shell; must invoke /bin/sh explicitly
         mem_avail_mb=$(ssh ${SSH_OPTS} "${SSH_USER}@${VM_HOST}" \
             "/bin/sh -c 'expr \( \$(sysctl -n vm.stats.vm.v_free_count) + \$(sysctl -n vm.stats.vm.v_inactive_count) \) \* \$(sysctl -n hw.pagesize) / 1048576'" 2>/dev/null) || true
@@ -157,10 +178,19 @@ if [[ "${DEEP}" -eq 1 ]]; then
         mem_avail_mb=$(ssh ${SSH_OPTS} "${SSH_USER}@${VM_HOST}" \
             "awk '/MemAvailable/ {printf \"%d\", \$2/1024}' /proc/meminfo" 2>/dev/null) || true
     fi
-    if [[ -n "${mem_avail_mb}" && "${mem_avail_mb}" -gt 50 ]]; then
-        pass "Available memory: ${mem_avail_mb}MB"
+    # A failed MEASUREMENT is not the same finding as low memory, and reporting
+    # it as "critically low: unknownMB" sent an operator hunting for memory
+    # pressure that did not exist — the probe had simply not returned (the ssh
+    # timed out under load, or the guest has neither /proc/meminfo nor sysctl).
+    # Three distinct outcomes, three distinct messages.
+    if [[ -z "${mem_avail_mb}" ]]; then
+        fail "Available memory UNKNOWN — the probe returned nothing (VM unreachable, or no /proc/meminfo|sysctl on this guest). This is a failed measurement, NOT low memory."
+    elif [[ ! "${mem_avail_mb}" =~ ^[0-9]+$ ]]; then
+        fail "Available memory UNPARSEABLE — probe returned '${mem_avail_mb}' (expected an integer MB). Failed measurement, NOT low memory."
+    elif [[ "${mem_avail_mb}" -gt "${MEM_MIN_MB}" ]]; then
+        pass "Available memory: ${mem_avail_mb}MB (above ${MEM_MIN_MB}MB)"
     else
-        fail "Available memory critically low: ${mem_avail_mb:-unknown}MB"
+        fail "Available memory critically low: ${mem_avail_mb}MB (at or below the ${MEM_MIN_MB}MB floor)"
     fi
 fi
 
