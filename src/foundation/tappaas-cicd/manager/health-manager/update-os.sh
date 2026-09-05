@@ -548,7 +548,10 @@ fix_dhcp_hostname() {
         #    DNS stays live, and OPNsense Unbound updates within a few seconds.
         #    (The older disconnect/connect approach caused a DNS blackout of 30-90 s
         #    that blocked subsequent identity:identity service updates — issue #376.)
-        if ssh "tappaas@${vm_ip}" "sudo ${nmcli_path} device reapply ${eth_device}" 2>/dev/null; then
+        # stdout too, not just stderr: nmcli prints "Connection successfully
+        # reapplied to device 'ensN'." on success, which surfaced untagged in the
+        # middle of a converge. The debug line below is this step's report.
+        if ssh "tappaas@${vm_ip}" "sudo ${nmcli_path} device reapply ${eth_device}" >/dev/null 2>&1; then
             debug "  DHCP hostname re-applied to: ${vmname} (reapply succeeded)"
         else
             warn "  nmcli device reapply failed — DHCP hostname may not be registered until next lease renewal"

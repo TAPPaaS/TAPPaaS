@@ -36,6 +36,24 @@ IDENTITY_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=lib/ensure-authentik-creds.sh disable=SC1091
 . "${IDENTITY_DIR}/lib/ensure-authentik-creds.sh"
 
+# authentik-manager and people-manager are operator CLIs too: their `==>` /
+# `[ok]` progress is right when a human runs them by hand, and noise when this
+# converge drives them. So the CALLER decides — pipe a call through this to give
+# every line a level. A [DRIFT]/WARNING:/ERROR: line is promoted to warn whatever
+# level was asked for: the detail may be demoted, but the finding inside it must
+# not be demoted with it.
+_tag() {
+    local _lvl="$1" _l
+    while IFS= read -r _l; do
+        [[ -n "${_l//[[:space:]]/}" ]] || continue
+        case "${_l}" in
+            *'[DRIFT]'*|WARNING:*|ERROR:*) warn "${_l}" ;;
+            *)                             "${_lvl}" "  ${_l}" ;;
+        esac
+    done
+    return 0
+}
+
 VMNAME="$(get_config_value 'vmname' "$1")"
 # F5 (defensive): vmid is display-only here; on a first install it may not be
 # written back to the module config yet, so default it rather than abort under
@@ -138,18 +156,25 @@ ssh -o StrictHostKeyChecking=accept-new "root@${FIREWALL_FQDN}" "/bin/sh -c 'con
 # expected public host BEFORE converging it, so a reconcile surfaces what a
 # domain change left stale (#474). Non-fatal: the ensures below fix it.
 info "${BOLD}Checking identity self-config for drift (expected ${IDENTITY_PUBLIC})${CL}"
+# Per-field findings go to stdout ([ok] when in sync, [DRIFT] when not) and the
+# drift summary to stderr. Only stdout is tagged: that keeps the in-sync case
+# quiet while _tag still promotes a [DRIFT] line to a warning, so the field that
+# actually moved is never hidden. stderr is deliberately left alone — it carries
+# the drift summary and any hard API failure, which must stay visible even
+# though this call is otherwise demoted to debug.
 authentik-manager check-self-config --external-host "${IDENTITY_PUBLIC}" \
+    | _tag debug \
     || info "  drift detected — the steps below converge it to ${IDENTITY_PUBLIC}"
 
-info "${BOLD}Configuring the Authentik embedded outpost (authentik_host=${IDENTITY_PUBLIC})${CL}"
-authentik-manager outpost-set-authentik-host "${IDENTITY_PUBLIC}"
+debug "  configuring the Authentik embedded outpost (authentik_host=${IDENTITY_PUBLIC})..."
+authentik-manager outpost-set-authentik-host "${IDENTITY_PUBLIC}" | _tag debug
 
-info "${BOLD}Registering the identity self-app (so the outpost endpoint works on identity.<domain>)${CL}"
+debug "  registering the identity self-app..."
 authentik-manager proxy-app-ensure identity \
     --name identity \
     --external-host "${IDENTITY_PUBLIC}" \
     --description "TAPPaaS identity self-app (#45)" \
-    --attach-outpost
+    --attach-outpost | _tag debug
 
 # ── Password recovery: flow + brand wiring ──────────────────────────────────
 # Authentik ships NO recovery flow, and `/core/users/<pk>/recovery/` returns a
@@ -160,8 +185,8 @@ authentik-manager proxy-app-ensure identity \
 # user, so there is no e-mail stage and nothing here waits on SMTP.
 # Non-fatal: a failure costs the link, not the install — user-set-password still
 # works.
-info "${BOLD}Ensuring the password-recovery flow (brand.flow_recovery)${CL}"
-if authentik-manager recovery-flow-ensure; then
+debug "  ensuring the password-recovery flow (brand.flow_recovery)..."
+if authentik-manager recovery-flow-ensure | _tag debug; then
     info "  ${GN}✓${CL} 'authentik-manager user-recovery-link <user>' returns a reset link"
 else
     warn "  recovery-flow-ensure failed — password resets fall back to 'authentik-manager user-set-password <user>'"
@@ -228,9 +253,14 @@ if [[ -d "${PEOPLE_DIR}/organizations" ]]; then
         if [[ ! -f "${PEOPLE_DIR}/groups/${AK_ADMIN_GROUP}.json" ]]; then
             people-manager group add "${AK_ADMIN_GROUP}" --no-reconcile \
                 --displayName "Authentik Admins" --type access-set --ownerOrg "${OWNER_ORG}" \
+                | _tag debug \
                 || warn "  people-manager group add '${AK_ADMIN_GROUP}' failed"
         fi
+        # people-manager reports the config write and advises running its own
+        # reconcile; both are incidental here (--no-reconcile is deliberate,
+        # #482) and the ✓ below is the line that matters.
         people-manager user modify "${OWNER_USER}" --add-groups "${AK_ADMIN_GROUP}" --no-reconcile \
+            | _tag debug \
             || warn "  people-manager user modify ${OWNER_USER} --add-groups failed"
         # Then converge just this membership in Authentik — the targeted call the
         # skipped reconcile would otherwise have made.
