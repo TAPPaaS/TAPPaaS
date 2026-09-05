@@ -49,11 +49,27 @@ fail() { echo "  ✗ $*"; FAIL=$((FAIL + 1)); }
 # `2>/dev/null` meant the one thing that would identify the cause (the actual
 # ImportError, or a python that failed to start at all) was thrown away each
 # time. Whatever the next occurrence is, it now says so.
-_js_probe="$(python3 -c 'import jsonschema' 2>&1)"
-_js_rc=$?
+# Resolved by CAPABILITY, not by PATH position. `python3` off PATH is not a safe
+# way to find an interpreter that has a library: update-tappaas's nix wrapper
+# prepends its own bare interpreter, so this test saw "no jsonschema" on every
+# update run and aborted the whole update at tappaas-cicd's pre-update gate,
+# while passing every hand-run. tappaas_python_with asks each candidate whether
+# it can import the module and takes the first that can (PATH still first).
+if ! declare -F tappaas_python_with >/dev/null 2>&1; then
+    # shellcheck source=/dev/null
+    . "${FOUNDATION_DIR}/tappaas-cicd/lib/common-install-routines.sh" >/dev/null 2>&1 || true
+fi
+if declare -F tappaas_python_with >/dev/null 2>&1; then
+    PY_BIN="$(tappaas_python_with jsonschema)" && _js_rc=0 || _js_rc=1
+    _js_probe="${TAPPAAS_PYTHON_WHY}"
+else
+    PY_BIN="$(command -v python3 || true)"
+    _js_probe="$([ -n "${PY_BIN}" ] && "${PY_BIN}" -c 'import jsonschema' 2>&1)"
+    _js_rc=$?
+fi
 if [ "${_js_rc}" -eq 0 ]; then
     validate() { # validate <schema> <instance>  → 0 valid
-        python3 - "$1" "$2" <<'PY'
+        "${PY_BIN}" - "$1" "$2" <<'PY'
 import json, sys
 from jsonschema import Draft202012Validator
 schema = json.load(open(sys.argv[1]))
@@ -68,7 +84,7 @@ PY
 else
     {
         echo "test-fields-schema.sh: no jsonschema module — cannot validate"
-        echo "  probe : python3 -c 'import jsonschema'  → exit ${_js_rc}"
+        echo "  probe : no candidate interpreter could 'import jsonschema'"
         echo "  error : ${_js_probe:-(no output)}"
         echo "  python: $(command -v python3 || echo 'NOT ON PATH')"
         echo "          -> $(readlink -f "$(command -v python3)" 2>/dev/null || echo '?')"

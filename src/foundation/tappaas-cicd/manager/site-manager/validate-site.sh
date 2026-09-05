@@ -93,10 +93,24 @@ validation_warn()  { warn  "VALIDATION: $*"; WARNINGS=$((WARNINGS + 1)); }
 # ImportError went to /dev/null. JSONSCHEMA_WHY carries it to the caller.
 HAVE_JSONSCHEMA=""
 JSONSCHEMA_WHY=""
+# JSONSCHEMA_PY is the interpreter that answered — use it, not `python3`, or the
+# validation runs under a different python than the one that proved capable.
+JSONSCHEMA_PY="python3"
 detect_jsonschema() {
     if [[ -z "$HAVE_JSONSCHEMA" ]]; then
         local _out _rc
-        if ! command -v python3 >/dev/null 2>&1; then
+        # Resolve by CAPABILITY, not PATH position. update-tappaas's nix wrapper
+        # prepends its own bare interpreter to PATH, so `python3` here was one
+        # with no site-packages and this reported "jsonschema not available" on
+        # every update run while passing every hand-run — downgrading validation
+        # to jq-only exactly when it mattered most.
+        if declare -F tappaas_python_with >/dev/null 2>&1; then
+            if _out="$(tappaas_python_with jsonschema)"; then
+                HAVE_JSONSCHEMA="yes"; JSONSCHEMA_PY="${_out}"
+            else
+                HAVE_JSONSCHEMA="no"; JSONSCHEMA_WHY="${TAPPAAS_PYTHON_WHY}"
+            fi
+        elif ! command -v python3 >/dev/null 2>&1; then
             HAVE_JSONSCHEMA="no"
             JSONSCHEMA_WHY="python3 not on PATH (PATH=${PATH})"
         else
@@ -116,7 +130,7 @@ validate_against_schema() {
     # $1 = instance file, $2 = schema file
     local instance="$1" schema="$2" out
     if detect_jsonschema; then
-        if out="$(python3 - "$schema" "$instance" << 'PY' 2>&1
+        if out="$("${JSONSCHEMA_PY}" - "$schema" "$instance" << 'PY' 2>&1
 import json, sys
 import jsonschema
 schema_path, instance_path = sys.argv[1], sys.argv[2]

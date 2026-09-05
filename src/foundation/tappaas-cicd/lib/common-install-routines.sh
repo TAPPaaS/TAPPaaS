@@ -1332,6 +1332,60 @@ tappaas_schema_file() {
   printf '%s' "${cache}"
 }
 
+# ── locating a python that can actually validate ──────────────────────
+#
+# `python3` off PATH is NOT a safe way to find an interpreter with a library.
+# update-tappaas is a nix-packaged Python app whose console-script wrapper
+# PREPENDS its own bare interpreter's bin to PATH, so every child it spawns —
+# validate-site.sh, people-manager validate.sh, test-fields-schema.sh — resolved
+# `python3` to an interpreter with no site-packages and concluded that jsonschema
+# was missing. It is not: /run/current-system/sw/bin/python3 has it. That is why
+# the probe fired on every update-tappaas run and passed on every hand-run, and
+# why it aborted the whole update at tappaas-cicd's pre-update gate.
+#
+# So resolve an interpreter by CAPABILITY rather than by PATH position: ask each
+# candidate whether it can import the module, and take the first that says yes.
+# PATH still goes first — a deliberately-chosen python must keep winning.
+#
+# tappaas_python_with <module>  → echoes an interpreter path, rc 0
+#                                 echoes nothing, rc 1 when none can import it
+# Diagnostics for the failing case go to TAPPAAS_PYTHON_WHY (never to stdout —
+# callers command-substitute this).
+# shellcheck disable=SC2034  # read by callers (validate-site.sh, test-fields-schema.sh)
+TAPPAAS_PYTHON_WHY=""
+tappaas_python_with() {
+  local module="${1:?tappaas_python_with <module>}"
+  local cand out rc first_rc="" first_out="" first_py=""
+  TAPPAAS_PYTHON_WHY=""
+  for cand in \
+      "$(command -v python3 2>/dev/null || true)" \
+      /run/current-system/sw/bin/python3 \
+      "${HOME:-/home/tappaas}/.nix-profile/bin/python3" \
+      "/etc/profiles/per-user/${USER:-tappaas}/bin/python3" \
+      /nix/var/nix/profiles/default/bin/python3 \
+      /usr/bin/python3
+  do
+    [[ -n "${cand}" && -x "${cand}" ]] || continue
+    out="$("${cand}" -c "import ${module}" 2>&1)"; rc=$?
+    if [[ "${rc}" -eq 0 ]]; then
+      printf '%s' "${cand}"
+      return 0
+    fi
+    # Keep the FIRST failure — that is the one the caller would have hit
+    # unaided, so it is the one worth reporting.
+    if [[ -z "${first_py}" ]]; then
+      first_py="${cand}"; first_rc="${rc}"; first_out="${out}"
+    fi
+  done
+  # shellcheck disable=SC2034  # read by callers (validate-site.sh, test-fields-schema.sh)
+  if [[ -z "${first_py}" ]]; then
+    TAPPAAS_PYTHON_WHY="no python3 found (PATH=${PATH})"
+  else
+    TAPPAAS_PYTHON_WHY="no python3 can 'import ${module}'; first tried ${first_py} -> exit ${first_rc}: ${first_out:-(no output)} [candidates checked: PATH, /run/current-system/sw/bin, ~/.nix-profile/bin, /etc/profiles/per-user, /nix/var/nix/profiles/default, /usr/bin]"
+  fi
+  return 1
+}
+
 # Validate a module JSON file against module-fields.json schema
 # Usage: check_json <json_file> [schema_file]
 # Returns: 0 if valid, 1 if errors found
