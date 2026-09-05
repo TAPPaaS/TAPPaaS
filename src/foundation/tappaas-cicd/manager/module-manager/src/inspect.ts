@@ -130,7 +130,12 @@ class Table {
     configVal: string,
     gitVal: string,
     actualVal: string,
-    opts: { cfgDefaulted?: boolean; gitDefaulted?: boolean; notTracking?: boolean } = {},
+    opts: {
+      cfgDefaulted?: boolean;
+      gitDefaulted?: boolean;
+      notTracking?: boolean;
+      droppedByRelease?: boolean;
+    } = {},
   ): void {
     let cfgColor = CL;
     let gitColor = CL;
@@ -140,9 +145,17 @@ class Table {
     // install (Desired ≠ .orig). Then the divergence is intentional and the
     // update path will not reconcile Desired back to Released, so it is annotated
     // rather than flagged as drift (#550, larsrossen's 3-way merge note).
+    //
+    // droppedByRelease is the case gitVal alone cannot express (#581): the
+    // release USED to declare this field (it is in .orig) and no longer does, so
+    // Released reads "-" and the plain comparison sees nothing to flag. It is
+    // real drift — the deployed config carries a value whose field no longer
+    // exists upstream — and it outranks notTracking, because "the field is gone"
+    // is a stronger fact than "you customized it".
     const wouldYellow = gitVal !== "" && configVal !== gitVal;
-    const suppressed = wouldYellow && !!opts.notTracking;
-    if (wouldYellow && !suppressed) {
+    const dropped = !!opts.droppedByRelease;
+    const suppressed = wouldYellow && !!opts.notTracking && !dropped;
+    if ((wouldYellow && !suppressed) || dropped) {
       cfgColor = YW;
       gitColor = YW;
       this.warnings++;
@@ -160,7 +173,11 @@ class Table {
     // value, so the brackets never read as drift (#550).
     const disp = (v: string, defaulted?: boolean): string =>
       v === "" ? "-" : defaulted ? `<${v}>` : v;
-    const note = suppressed ? "  desired state is not tracking release state on purpose" : "";
+    const note = dropped
+      ? "  removed from the release — 'module-manager modify' prunes it"
+      : suppressed
+        ? "  desired state is not tracking release state on purpose"
+        : "";
 
     this.raw(
       `  ${pad(field, 18)}  ${gitColor}${pad(disp(gitVal, opts.gitDefaulted), 20)}${CL}  ` +
@@ -179,8 +196,126 @@ export function gitSourceWarnings(gitFound: boolean, location: string): OutLine[
   ];
 }
 
+// ── schema-driven field sections (#581) ────────────────────────────────
+//
+// The field diff used to walk a hand-written list — 13 literals here, a
+// sequence of hand-written rows on the VM path — so `Config fields match git`
+// meant only "none of the rows I chose to emit differed". Of the 74 fields the
+// composed schema defines, 51 were never compared in either direction, every
+// service-owned one among them: a removed or changed proxyPort, natRules,
+// ingress or backup field was invisible to the report while it claimed a match.
+//
+// The schema is the authority on what a field IS and who uses it, so it decides
+// what gets compared. Grouping follows `usedBy`, the same discriminator
+// appliedDefault already uses to decide whether a default is even in scope:
+// generic fields first, then ONE SECTION PER COORDINATE THE MODULE DECLARES.
+// A module that does not declare network:proxy is never asked about proxyPort.
+
+// Fields the DEPLOYED config owns rather than the release. Diffing them against
+// git reports a difference on every module forever: `location` is a path on this
+// mothership, `installTime`/`updateTime` are stamps, `kind` is applied at
+// install (ADR-007 #3), and `config` is the Pattern A container, not a field.
+// The same judgement apply-json-merge.sh makes in AUTO_FIELDS, for the same
+// reason — a field the merge will not reconcile is not one to report as drift.
+const DEPLOYMENT_OWNED = new Set(["location", "installTime", "updateTime", "kind", "config"]);
+
+export interface FieldSection {
+  // "general", or the coordinate that owns these fields ("network:proxy").
+  title: string;
+  fields: string[];
+}
+
+// Group the schema fields this module actually has into their owning sections.
+// `exclude` drops fields another part of the report already renders (the VM
+// hardware table owns cores/memory/net0/… and shows them WITH an Actual column,
+// which these two-way rows cannot).
+export function fieldSectionsFor(
+  schema: ModuleFieldsSchema,
+  deps: string[],
+  exclude: ReadonlySet<string> = new Set(),
+): FieldSection[] {
+  const general: string[] = [];
+  const byCoord = new Map<string, string[]>();
+  for (const c of deps) byCoord.set(c, []);
+
+  for (const name of Object.keys(schema).sort()) {
+    if (DEPLOYMENT_OWNED.has(name) || exclude.has(name)) continue;
+    const fs = schema[name];
+    const usedBy = Array.isArray(fs?.usedBy) ? (fs.usedBy as string[]) : [];
+    if (usedBy.length === 0 || usedBy.includes("general")) {
+      general.push(name);
+      continue;
+    }
+    // First DECLARED coordinate wins — the rule copy-update-json.sh's
+    // field_destination uses to place a field in Pattern A, so the report groups
+    // a field where the config actually stores it. A field whose usedBy names
+    // only coordinates this module does not declare is not this module's field
+    // and is dropped entirely.
+    const owner = deps.find((d) => usedBy.includes(d));
+    if (owner) byCoord.get(owner)!.push(name);
+  }
+
+  const out: FieldSection[] = [];
+  if (general.length > 0) out.push({ title: "general", fields: general });
+  for (const c of deps) {
+    const f = byCoord.get(c);
+    if (f && f.length > 0) out.push({ title: c, fields: f });
+  }
+  return out;
+}
+
+// Emit the sections as rows on `t`. Two-way: Released vs Desired, Actual empty —
+// the live value for a service-owned field lives in Caddy or OPNsense, not in
+// `qm config`, and inventing a third column would be worse than an honest dash.
+//
+// A row is emitted only when at least one side DECLARES the field literally. A
+// schema default that neither side declared is not a difference, and rendering
+// it would put 74 rows in front of the operator to say nothing.
+function emitFieldSections(
+  t: Table,
+  sections: FieldSection[],
+  cfg: Record<string, unknown>,
+  git: Record<string, unknown> | null,
+  orig: Record<string, unknown> | null,
+  deps: string[],
+  schema: ModuleFieldsSchema,
+): void {
+  for (const sec of sections) {
+    const rows: Array<() => void> = [];
+    for (const f of sec.fields) {
+      const cfgLit = getField(cfg, f);
+      const gitLit = getField(git, f);
+      if (cfgLit === "" && gitLit === "") continue;
+      const c = resolveField(cfg, f, deps, schema);
+      const g = git ? resolveField(git, f, deps, schema) : { value: "", defaulted: false };
+      // The release dropped a field it used to declare: config has it, the
+      // release source no longer does, and the install-time pre-image shows it
+      // once did. Distinguishes that from an operator-added field, which is in
+      // config and in neither of the other two and is NOT drift.
+      const droppedByRelease =
+        git !== null && cfgLit !== "" && gitLit === "" && orig !== null && getField(orig, f) !== "";
+      rows.push(() =>
+        t.row(f, c.value, g.value, "", {
+          cfgDefaulted: c.defaulted,
+          gitDefaulted: g.defaulted,
+          notTracking: orig !== null && cfgLit !== getField(orig, f),
+          droppedByRelease,
+        }),
+      );
+    }
+    if (rows.length === 0) continue;
+    t.raw(`  ${BOLD}${sec.title}${CL}`);
+    for (const r of rows) r();
+  }
+}
+
 // Config-only fallback for a NON-VM module (no vmid): two-way Released-vs-
 // Desired diff, Actual column N/A. Always rc 0.
+//
+// Kept as the DEGRADED path only: used when no schema is available, so the
+// report says something rather than nothing. It is the old hand-written list,
+// and the report announces when it is in use — a silently narrower check is how
+// #581 went unnoticed.
 const CONFIG_ONLY_FIELDS = [
   "vmname", "node", "zone0", "zone1", "tier", "source", "status",
   "environment", "cores", "memory", "diskSize", "storage", "description",
@@ -191,6 +326,7 @@ export function buildConfigOnlyReport(
   cfg: Record<string, unknown>,
   git: Record<string, unknown> | null,
   svc: ServiceSection = buildServiceSection(serviceDepsOf(cfg), null),
+  opts: { schema?: ModuleFieldsSchema; orig?: Record<string, unknown> | null } = {},
 ): InspectReport {
   const t = new Table();
   t.lines.push({
@@ -199,12 +335,26 @@ export function buildConfigOnlyReport(
   });
   t.raw("");
   t.header();
-  for (const f of CONFIG_ONLY_FIELDS) {
-    const cfgV = getField(cfg, f);
-    const gitV = getField(git, f);
-    // Skip fields absent from BOTH config and git — keep the table tight.
-    if (!cfgV && !gitV) continue;
-    t.row(f, cfgV, gitV, "");
+
+  const schema = opts.schema ?? {};
+  const deps = serviceDepsOf(cfg);
+  const sections = Object.keys(schema).length > 0 ? fieldSectionsFor(schema, deps) : [];
+
+  if (sections.length > 0) {
+    emitFieldSections(t, sections, cfg, git, opts.orig ?? null, deps, schema);
+  } else {
+    // No schema on disk — fall back to the old hand-written list and SAY so.
+    // Reporting a narrower check as though it were the full one is #581.
+    for (const f of CONFIG_ONLY_FIELDS) {
+      const cfgV = getField(cfg, f);
+      const gitV = getField(git, f);
+      if (!cfgV && !gitV) continue;
+      t.row(f, cfgV, gitV, "");
+    }
+    t.lines.push({
+      kind: "warn",
+      text: "module-fields.json unavailable — field diff limited to a fixed list; service-owned fields NOT compared",
+    });
   }
   t.raw("");
   t.lines.push({
@@ -436,6 +586,24 @@ export function buildVmReport(inp: VmInspectInputs): InspectReport {
     t.row("vmtag", cTag.value, gTag.value, actualTags, tagOpts);
   }
 
+  // Service-owned fields (#581). The hardware rows above own the fields that
+  // have an Actual column; everything else the schema declares for the
+  // coordinates THIS module depends on is compared here, Released vs Desired.
+  // Without this a VM module's proxyPort, natRules, ingress or backup settings
+  // were never diffed at all, while the summary reported a match.
+  const shownAbove = new Set<string>([
+    "vmname", "vmid", "node", "cores", "memory", "diskSize", "storage",
+    "bios", "cputype", "status", "HANode", "description", "vmtag",
+    "bridge0", "bridge1", "zone0", "zone1", "trunks0", "trunks1", "mac0", "mac1",
+  ]);
+  const svcSections = Object.keys(schema).length > 0
+    ? fieldSectionsFor(schema, serviceDepsOf(cfg), shownAbove)
+    : [];
+  if (svcSections.length > 0) {
+    t.raw("");
+    emitFieldSections(t, svcSections, cfg, git, orig, serviceDepsOf(cfg), schema);
+  }
+
   t.raw("");
   t.lines.push(...svc.lines);
 
@@ -577,7 +745,7 @@ export function inspectModule(module: string, opts: InspectOptions = {}): number
   // of such a module, so the dependency-service section is the substance.
   if (!vmid) {
     const svc = serviceSection();
-    emit(buildConfigOnlyReport(module, cfg, git, svc).lines);
+    emit(buildConfigOnlyReport(module, cfg, git, svc, { schema, orig }).lines);
     return serviceExitCode(svc);
   }
 

@@ -17,7 +17,12 @@ import { join } from "path";
 // verbatim `qm config`/`pct config` output the old fixtures used, so the inputs
 // stay recognisable and the parsing rule under test is the reporter's, asserted
 // in cluster/lib/test-vm-net.sh.
-import { buildConfigOnlyReport, buildVmReport, guestTypeFromDeps } from "../../src/inspect";
+import {
+  buildConfigOnlyReport,
+  buildVmReport,
+  fieldSectionsFor,
+  guestTypeFromDeps,
+} from "../../src/inspect";
 // The resolver is no longer inspect's own (ADR-020 D1) — it lives in lib/ts and
 // inspect is one of its consumers. Importing it from its real home here is part
 // of the assertion: if these tests could still reach it through ../../src/inspect,
@@ -711,6 +716,133 @@ function reportShape(
   check(
     c5.log.length === 1 && c5.log[0].verb === "reconcile",
     "--apply still routes to the leaf converge",
+  );
+}
+
+// ── the schema-driven field diff (#581) ────────────────────────────────
+//
+// The old report walked a 13-name list, so `Config fields match git` meant only
+// "none of the rows I chose to emit differed" — 51 of the 74 schema fields, every
+// service-owned one among them, were never compared in either direction. These
+// assert the two properties that replaced it: the schema decides WHAT is
+// compared, and the module's own dependsOn decides WHICH services are reported.
+{
+  const SCHEMA = {
+    // generic — no usedBy, or usedBy: ["general"]
+    tier: { usedBy: ["general"] },
+    status: { usedBy: ["general"] },
+    // deployment-owned: must never be diffed against git
+    location: { usedBy: ["general"] },
+    installTime: { usedBy: ["general"] },
+    // service-owned
+    proxyPort: { usedBy: ["network:proxy"], default: "80" },
+    proxyUpstreamTls: { usedBy: ["network:proxy"], default: "false" },
+    natRules: { usedBy: ["network:nat"] },
+    // owned by a coordinate the fixtures below never declare
+    pbsStorageName: { usedBy: ["backup:vm"] },
+  } as never;
+
+  const sections = fieldSectionsFor(SCHEMA, ["network:proxy"]);
+  const titles = sections.map((x) => x.title);
+  check(
+    JSON.stringify(titles) === JSON.stringify(["general", "network:proxy"]),
+    "sections are the generic fields plus one per DECLARED coordinate",
+  );
+  const general = sections[0].fields;
+  check(
+    !general.includes("location") && !general.includes("installTime"),
+    "deployment-owned fields (location, installTime) are never diffed against git",
+  );
+  check(
+    general.includes("tier") && general.includes("status"),
+    "the generic fields that do come from the release are diffed",
+  );
+  check(
+    JSON.stringify(sections[1].fields) === JSON.stringify(["proxyPort", "proxyUpstreamTls"]),
+    "a declared coordinate gets exactly its own fields",
+  );
+  check(
+    !sections.some((x) => x.fields.includes("pbsStorageName")),
+    "a field owned by an UNdeclared coordinate is not this module's field",
+  );
+  check(
+    fieldSectionsFor(SCHEMA, []).every((x) => x.title === "general"),
+    "a module declaring nothing is asked about no service fields",
+  );
+  check(
+    !fieldSectionsFor(SCHEMA, ["network:proxy"], new Set(["proxyPort"]))
+      .some((x) => x.fields.includes("proxyPort")),
+    "`exclude` drops a field the hardware table already renders with an Actual column",
+  );
+
+  // The reported case: proxyUpstreamTls removed from the release source but
+  // still in the deployed config. This used to print "Config fields match git".
+  const cfg581 = {
+    vmname: "alfen",
+    dependsOn: ["network:proxy"],
+    tier: "app",
+    proxyPort: "80",
+    proxyUpstreamTls: "true",
+  };
+  const git581 = { vmname: "alfen", dependsOn: ["network:proxy"], tier: "app", proxyPort: "80" };
+  const r581 = buildConfigOnlyReport("alfen", cfg581, git581, undefined, { schema: SCHEMA });
+  const t581 = text(r581.lines);
+  check(
+    /proxyUpstreamTls/.test(t581),
+    "a service-owned field reaches the report at all (#581)",
+  );
+  check(
+    r581.warnings > 0 && !/Config fields match git/.test(t581),
+    "a field present in the config but dropped from the release reads as drift, not a match",
+  );
+  check(/network:proxy/.test(t581), "service-owned rows are grouped under their coordinate");
+
+  // Same config, same release → clean, and the proxy section still renders.
+  const rClean = buildConfigOnlyReport("alfen", cfg581, cfg581, undefined, { schema: SCHEMA });
+  check(
+    rClean.warnings === 0 && /proxyUpstreamTls/.test(text(rClean.lines)),
+    "an agreeing service-owned field is shown and counts as clean",
+  );
+
+  // A module that does not declare network:proxy is never asked about it.
+  const cfgNat = { vmname: "m", dependsOn: ["network:nat"], tier: "app", natRules: "x" };
+  const tNat = text(buildConfigOnlyReport("m", cfgNat, cfgNat, undefined, { schema: SCHEMA }).lines);
+  check(
+    /natRules/.test(tNat) && !/proxyPort/.test(tNat),
+    "only the services the module depends on are reported",
+  );
+
+  // The release DROPPED a field it used to declare. Released reads "-", so the
+  // plain Desired-vs-Released comparison sees nothing; only .orig proves the
+  // release once had it. Must still be drift — and must be told apart from an
+  // operator-added field, which looks identical without .orig.
+  const origHad = { ...git581, natRules: "old" };
+  const cfgDropped = { ...cfg581, natRules: "old", dependsOn: ["network:proxy", "network:nat"] };
+  const gitDropped = { ...git581, dependsOn: ["network:proxy", "network:nat"] };
+  const rDropped = buildConfigOnlyReport("alfen", cfgDropped, gitDropped, undefined, {
+    schema: SCHEMA,
+    orig: origHad,
+  });
+  check(
+    /removed from the release/.test(text(rDropped.lines)),
+    "a field the release dropped is flagged as drift, not silently kept (#581)",
+  );
+
+  // Same shape, but .orig never had it either → operator-added → NOT drift.
+  const rOperatorAdded = buildConfigOnlyReport("alfen", cfgDropped, gitDropped, undefined, {
+    schema: SCHEMA,
+    orig: gitDropped,
+  });
+  check(
+    !/removed from the release/.test(text(rOperatorAdded.lines)),
+    "an operator-added field is not mistaken for one the release dropped",
+  );
+
+  // No schema on disk → degraded, and it SAYS so rather than claiming a match.
+  const tNoSchema = text(buildConfigOnlyReport("alfen", cfg581, git581).lines);
+  check(
+    /field diff limited to a fixed list/.test(tNoSchema),
+    "a missing schema narrows the check out loud, never silently (#579's lesson)",
   );
 }
 

@@ -16,8 +16,14 @@
 #
 #   1. If path[0] in AUTO_FIELDS (location, installTime, updateTime,
 #      releaseDate, variant):                                keep current
-#   2. Else if path absent in source, present in current:    keep current
-#      (operator-added or variant-default)
+#   2. Else if path absent in source, present in current:
+#        2a. …and present in orig:                           DROP (#581)
+#            The release once defined it and no longer does — the author
+#            removed the field, so the deployed config must follow. Reported
+#            with the discarded value.
+#        2b. …and absent from orig:                          keep current
+#            Never in the release, so it is operator-added (or an .orig that
+#            predates the field) — the case this rule exists to protect.
 #   3. Else if path absent in current:                       adopt source
 #   4. Else if current == orig:                              adopt source
 #   5. Else:                                                 keep current (pinned)
@@ -214,7 +220,7 @@ apply_three_way_merge() {
         ( ($c | [leaves]) + ($o | [leaves]) + ($s | [leaves]) | unique ) as $paths
 
         | reduce $paths[] as $p (
-            { result: {}, adopted: [], pinned: [], added: [], kept: [] };
+            { result: {}, adopted: [], pinned: [], added: [], kept: [], removed: [] };
 
             ($p[0]) as $top
             | (try ($c | getpath($p)) catch null) as $cv
@@ -232,9 +238,31 @@ apply_three_way_merge() {
                     .result = (.result | setpath($p; $cv))
                 else . end
               elif ($in_s | not) and $in_c then
-                # Rule 2: source removed/absent, current has it → keep
-                .result = (.result | setpath($p; $cv))
-                | .kept += [$p | join(".")]
+                # Rule 2: the source does not define this path but the deployed
+                # config has it. Which of the two reasons applies is decided by
+                # ORIG, and only orig can decide it (#581):
+                #
+                #   in orig  → the release DID define it and now does not, i.e.
+                #              the module author removed the field. Keeping it
+                #              made the key unremovable: `modify` merged source
+                #              over deployed forever, so a stale value outlived
+                #              the field that gave it meaning, and reconcile
+                #              could not see the difference. Drop it.
+                #   not in orig → it was never in the release, so the operator
+                #              added it by hand — the case this rule exists for.
+                #              Keep, exactly as before.
+                #
+                # A missing .orig is backfilled from source upstream, so an
+                # absent path there also means "no evidence the release ever had
+                # it" and lands on the safe side: keep.
+                if $in_o then
+                    .removed += [{ field: ($p | join(".")),
+                                   was: $cv,
+                                   customized: ($cv != $ov) }]
+                else
+                    .result = (.result | setpath($p; $cv))
+                    | .kept += [$p | join(".")]
+                end
               elif ($in_c | not) and $in_s then
                 # Rule 3: new release field → adopt
                 .result = (.result | setpath($p; $sv))
@@ -271,13 +299,35 @@ apply_three_way_merge() {
     fi
 
     # Log a summary of what changed.
-    local n_adopted n_pinned n_added n_kept
+    local n_adopted n_pinned n_added n_kept n_removed
     n_adopted=$(jq '.adopted | length' <<<"${merged_with_report}")
     n_pinned=$(jq  '.pinned  | length' <<<"${merged_with_report}")
     n_added=$(jq   '.added   | length' <<<"${merged_with_report}")
     n_kept=$(jq    '.kept    | length' <<<"${merged_with_report}")
+    n_removed=$(jq '.removed | length' <<<"${merged_with_report}")
 
-    debug "  Merge: ${n_adopted} adopted, ${n_pinned} pinned, ${n_added} added, ${n_kept} kept (orphan)"
+    debug "  Merge: ${n_adopted} adopted, ${n_pinned} pinned, ${n_added} added, ${n_kept} kept (orphan), ${n_removed} removed"
+
+    # #581: a field the release dropped is DELETED from the deployed config, so
+    # say so with the value that went — never silently. A field the operator had
+    # also customized is a warn, not an info: their edit is being discarded
+    # because the field it applied to no longer exists, and `modify --set` is how
+    # they get it back if the removal was not what they wanted.
+    if [[ "${n_removed}" -gt 0 ]]; then
+        local _removed_line
+        while IFS= read -r _removed_line; do
+            case "${_removed_line}" in
+                CUSTOMIZED*) warn "  ${_removed_line#CUSTOMIZED }" ;;
+                *)           info "    ${_removed_line}" ;;
+            esac
+        done < <(jq -r '
+            .removed[]
+            | if .customized
+              then "CUSTOMIZED removed \(.field) (no longer in the release) — your customized value \(.was|tojson) was discarded"
+              else "removed (no longer in the release): \(.field) = \(.was|tojson)"
+              end
+        ' <<<"${merged_with_report}")
+    fi
     if [[ "${n_adopted}" -gt 0 ]]; then
         # #511: adopting a CHANGED released value is NOT silent — the module
         # author changed a field the operator never customized, and the operator

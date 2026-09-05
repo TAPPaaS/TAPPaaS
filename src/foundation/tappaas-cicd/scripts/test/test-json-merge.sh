@@ -51,69 +51,47 @@ fail() { echo "  ✗ $*"; FAIL=$((FAIL + 1)); }
 run_case() {
     local name="$1" cur="$2" orig="$3" src="$4" module="$5" mdir="$6" expect_filter="$7"
     echo "  Case: ${name}"
-    # Set up a fresh per-case CONFIG_DIR + module dir
+    # Fresh per-case CONFIG_DIR + module dir
     local cd="${WORKDIR}/${name}/config"
     local md="${WORKDIR}/${name}/${mdir}"
     mkdir -p "${cd}" "${md}"
-    if [[ -n "${cur}" ]]; then echo "${cur}" > "${cd}/${module}.json"; fi
+    if [[ -n "${cur}"  ]]; then echo "${cur}"  > "${cd}/${module}.json"; fi
     if [[ -n "${orig}" ]]; then echo "${orig}" > "${cd}/${module}.json.orig"; fi
-    if [[ -n "${src}" ]]; then echo "${src}" > "${md}/${module##*-}.json"; fi
-    # The merge helper hard-codes _MERGE_CONFIG_DIR=/home/tappaas/config — so for
-    # tabletop tests we replace it in a sub-shell by re-sourcing the script
-    # with the readonly override-via-pre-set.
-    (
-        TAPPAAS_SCHEMA_FILE="$(mktemp)"
-# Composed, not schemas/module-fields.json: since #567 that file holds only
-# the 19 generic fields, and these cases resolve service-owned ones.
-"${FOUNDATION_DIR}/tappaas-cicd/scripts/compose-fields.sh" "${FOUNDATION_DIR}" > "${TAPPAAS_SCHEMA_FILE}"
-export TAPPAAS_SCHEMA_FILE
-        # Re-execute the merge by calling the function directly. We can't
-        # change _MERGE_CONFIG_DIR (readonly), so we run via a worktree by
-        # symlinking the per-case config dir as /home/tappaas/config is not
-        # an option; instead invoke the algorithm inline.
-        :
-    )
-    # Simpler: read directly and call apply_three_way_merge by overriding paths.
-    # Since _MERGE_CONFIG_DIR is readonly, run the test by symlinking the case
-    # config into a per-test override via a wrapper that exposes the same names.
-    # To avoid that complexity, just exercise the per-leaf merge logic by
-    # calling jq directly with the same algorithm.
+    if [[ -n "${src}"  ]]; then echo "${src}"  > "${md}/${module##*-}.json"; fi
+
+    # Call the REAL apply_three_way_merge (#581).
+    #
+    # This used to re-implement the per-leaf jq inline, on the grounds that
+    # _MERGE_CONFIG_DIR is readonly and the file "hard-codes
+    # /home/tappaas/config". It does not: that readonly reads
+    # TAPPAAS_MERGE_CONFIG_DIR, which exists for exactly this. The duplicate was
+    # the worse bargain — it drifted out of step with the code it claimed to
+    # cover (its AUTO_FIELDS had lost "environment", and it never saw the Rule 2
+    # split), so twelve green cases attested to a copy nobody ships. readonly is
+    # per-shell, so each case gets its own subshell.
+    local out rc
+    out=$(
+        TAPPAAS_MERGE_CONFIG_DIR="${cd}" TAPPAAS_SCHEMA_FILE="${TAPPAAS_SCHEMA_FILE}" \
+        bash -c '
+            . "$1/tappaas-cicd/lib/common-install-routines.sh" >/dev/null 2>&1
+            . "$1/tappaas-cicd/lib/apply-json-merge.sh"
+            apply_three_way_merge "$2" "$3"
+        ' _ "${FOUNDATION_DIR}" "${module}" "${md}" 2>&1
+    ) && rc=0 || rc=$?
+    if [[ "${rc}" -ne 0 ]]; then
+        fail "${name} — apply_three_way_merge exited ${rc}: ${out}"
+        return
+    fi
+
+    # Assert against the FLAT view. The merge stores canonical Pattern A, and
+    # which service bucket a field lands in depends on the module's dependsOn —
+    # not what these cases are about.
     local merged
-    merged=$(jq -n \
-        --slurpfile c <(echo "${cur:-null}") \
-        --slurpfile o <(echo "${orig:-null}") \
-        --slurpfile s <(echo "${src:-null}") \
-        --argjson auto '["location","installTime","updateTime","releaseDate","variant"]' '
-        ($c[0]) as $c | ($o[0]) as $o | ($s[0]) as $s |
-        # Normalize flat (handle Pattern A inputs in test cases too)
-        def flat:
-            if (.config | type) == "object"
-            then reduce (.config | to_entries[]) as $svc (.; . * $svc.value) | del(.config)
-            else . end;
-        ($c | if . == null then {} else flat end) as $cn |
-        ($o | if . == null then null else flat end) as $on |
-        ($s | if . == null then null else flat end) as $sn |
-        def leaves:
-            paths(type != "object") | select(all(.[]; type == "string"));
-        ( ($cn | [leaves]) + (($on // {}) | [leaves]) + (($sn // {}) | [leaves]) | unique ) as $paths |
-        reduce $paths[] as $p (
-            {};
-            ($p[0]) as $top |
-            ($cn | [paths] | map(. == $p) | any) as $in_c |
-            (($sn // {}) | [paths] | map(. == $p) | any) as $in_s |
-            (($on // {}) | [paths] | map(. == $p) | any) as $in_o |
-            (try ($cn | getpath($p)) catch null) as $cv |
-            (try (($sn // {}) | getpath($p)) catch null) as $sv |
-            (try (($on // {}) | getpath($p)) catch null) as $ov |
-            if ($auto | index($top)) != null then
-                if $in_c then setpath($p; $cv) else . end
-            elif ($in_s | not) and $in_c then setpath($p; $cv)
-            elif ($in_c | not) and $in_s then setpath($p; $sv)
-            elif $in_o and ($cv == $ov) then setpath($p; $sv)
-            elif $in_c then setpath($p; $cv)
-            else . end
-        )
-    ')
+    merged=$(jq '
+        if (.config | type) == "object"
+        then reduce (.config | to_entries[]) as $svc (.; . * $svc.value) | del(.config)
+        else . end' "${cd}/${module}.json")
+
     if echo "${merged}" | jq -e "${expect_filter}" >/dev/null 2>&1; then
         pass "${name}"
     else
@@ -170,6 +148,27 @@ run_case "user-added-field" \
     '{"vmname":"a","cores":2}' \
     "a" "moda" \
     '.mySetting == "x"'
+
+# Case 6b: the release REMOVED a field it used to define → prune it (#581).
+# orig HAS it (so it was in the release at install time), source no longer does.
+# Keeping it is what made a key unremovable: modify merged source over deployed
+# forever, so a stale value outlived the field that gave it meaning.
+run_case "release-removed-field" \
+    '{"vmname":"a","cores":2,"proxyUpstreamTls":"true"}' \
+    '{"vmname":"a","cores":2,"proxyUpstreamTls":"true"}' \
+    '{"vmname":"a","cores":2}' \
+    "a" "moda" \
+    '(has("proxyUpstreamTls") | not) and .cores == 2'
+
+# Case 6c: same, but the operator had CUSTOMIZED the value before the release
+# dropped the field. Still pruned — the field it applied to is gone — and the
+# merge reports the discarded value rather than swallowing it.
+run_case "release-removed-customized" \
+    '{"vmname":"a","cores":2,"proxyUpstreamTls":"false"}' \
+    '{"vmname":"a","cores":2,"proxyUpstreamTls":"true"}' \
+    '{"vmname":"a","cores":2}' \
+    "a" "moda" \
+    '(has("proxyUpstreamTls") | not)'
 
 # Case 7: array pinned (whole-array equality)
 run_case "array-pinned" \
