@@ -904,6 +904,33 @@ cleanup_deep() {
                 || warn "  delete-module.sh ${vm} returned non-zero"
         fi
     done
+
+    # Drop the pf TABLE behind each fixture's alias, not just the alias.
+    #
+    # delete-module.sh removes the alias DEFINITION (verified: no tm_test_* in
+    # /conf/config.xml after a run), but pf does not garbage-collect a table when
+    # the rules referencing it go away — the kernel object survives, still
+    # holding the address it was populated with. Five per deep run, never
+    # removed, so a firewall accumulates dozens of dead tm_test_* tables over
+    # time. Harmless to traffic (referenced-by-rules=0) and purely cosmetic, but
+    # it reads exactly like a teardown that failed and cost one investigation
+    # already.
+    #
+    # `-T kill` targets one table by name: it cannot touch a live module's table
+    # the way a blanket `pfctl -F Tables` would. Best-effort — a table that was
+    # never created is not an error worth failing teardown over.
+    #
+    # sh -c, not bare: root's shell here is csh, where `2>/dev/null` is
+    # "Ambiguous output redirect." and the command never runs (see
+    # _alias_refresh).
+    for vm in test-fw-a test-fw-b test-fw-c; do
+        local _tbl
+        _tbl="tm_$(echo "${vm}" | tr '-' '_')"
+        ssh -o BatchMode=yes -o ConnectTimeout=10 -o StrictHostKeyChecking=accept-new \
+            root@"${FIREWALL_FQDN}" \
+            "sh -c 'pfctl -t ${_tbl} -T kill >/dev/null 2>&1'" >/dev/null 2>&1 \
+            || true
+    done
     # Tear the test zones back out of the DEPLOYED zones.json: first set them
     # Inactive and reconcile (so zone-manager removes their OPNsense VLAN
     # interfaces), then DELETE the keys entirely — leaving every other zone,
